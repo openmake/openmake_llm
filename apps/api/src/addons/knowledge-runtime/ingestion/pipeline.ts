@@ -17,7 +17,7 @@ import { embedTexts, type EmbedFn } from '../embedding/provider';
 import { readStoredFile } from '../documents/storage';
 import { chunkerFor, type ProducedChunk } from './chunker-registry';
 import { parserFor, supportedMimeTypes } from './parser-registry';
-import { KNOWLEDGE_RUNTIME } from '../constants';
+import { INDEX_PUBLISH_LOCK_KEY, KNOWLEDGE_RUNTIME } from '../constants';
 import { FAILURE_CODES, failureCodeOf, KnowledgeIngestError, type FailureCode } from './errors';
 
 const logger = createLogger('KnowledgeIngest');
@@ -159,45 +159,58 @@ export async function ingestVersion(versionId: string, deps: IngestDeps = {}): P
         });
         await replaceChunks(versionId, chunks);
 
-        // ── embedding ──
-        stage = 'embedding';
-        await setStage(versionId, stage);
-        const index = await ensureIndex();
-        const chunkRows = (await kdb().query<{ id: string; content: string }>(
-            `SELECT id, content FROM knowledge_chunks WHERE document_version_id = $1 ORDER BY sequence`,
-            [versionId],
-        )).rows;
-        const vectors = chunkRows.length > 0 ? await embed(chunkRows.map((r) => r.content)) : [];
-        if (vectors.length !== chunkRows.length) {
-            throw new KnowledgeIngestError(FAILURE_CODES.EMBEDDING, `임베딩 개수 불일치 (${vectors.length} vs ${chunkRows.length})`);
-        }
-        if (chunkRows.length > 0) {
-            await inTransaction(async (client) => {
-                await insertEmbeddings(client, index.id, chunkRows.map((r, i) => ({ chunkId: r.id, vector: vectors[i] })));
+        // 임베딩→검증→게시 — 게시 직전 활성 index 가 바뀌었으면(동시 reindex 전환) 새 index 로 다시 한다
+        for (let attempt = 0; ; attempt++) {
+            // ── embedding ──
+            stage = 'embedding';
+            await setStage(versionId, stage);
+            const index = await ensureIndex();
+            const chunkRows = (await kdb().query<{ id: string; content: string }>(
+                `SELECT id, content FROM knowledge_chunks WHERE document_version_id = $1 ORDER BY sequence`,
+                [versionId],
+            )).rows;
+            const vectors = chunkRows.length > 0 ? await embed(chunkRows.map((r) => r.content)) : [];
+            if (vectors.length !== chunkRows.length) {
+                throw new KnowledgeIngestError(FAILURE_CODES.EMBEDDING, `임베딩 개수 불일치 (${vectors.length} vs ${chunkRows.length})`);
+            }
+            if (chunkRows.length > 0) {
+                await inTransaction(async (client) => {
+                    await insertEmbeddings(client, index.id, chunkRows.map((r, i) => ({ chunkId: r.id, vector: vectors[i] })));
+                });
+            }
+
+            // ── verifying ──
+            stage = 'verifying';
+            await setStage(versionId, stage);
+            const embedded = await countEmbeddings(index.id, chunkRows.map((r) => r.id));
+            if (embedded !== chunkRows.length) {
+                throw new KnowledgeIngestError(FAILURE_CODES.VERIFICATION, `임베딩 검증 실패 (${embedded}/${chunkRows.length})`);
+            }
+
+            // ── 원자 게시 ── index 전환과 같은 잠금 아래에서, 임베딩한 index 가 여전히 활성일 때만 ready 로 바꾼다
+            const published = await inTransaction(async (client) => {
+                await client.query('SELECT pg_advisory_xact_lock($1)', [INDEX_PUBLISH_LOCK_KEY]);
+                const active = await client.query<{ id: string }>('SELECT id FROM knowledge_embedding_indexes WHERE is_active');
+                if (active.rows[0]?.id !== index.id) return false;
+                await client.query(
+                    `UPDATE knowledge_document_versions SET status = 'ready', chunker_profile_id = $2, progress = 100, failure_code = NULL, updated_at = NOW() WHERE id = $1`,
+                    [versionId, profiles.chunker.id],
+                );
+                await client.query(
+                    `UPDATE knowledge_documents SET current_version_id = $2, status = 'ready', updated_at = NOW() WHERE id = $1`,
+                    [ctx.documentId, versionId],
+                );
+                return true;
             });
+            if (published) {
+                logger.info(`수집 완료: version=${versionId} chunks=${chunkRows.length}`);
+                return { status: 'ready', chunkCount: chunkRows.length };
+            }
+            if (attempt >= KNOWLEDGE_RUNTIME.PUBLISH_INDEX_SWITCH_RETRIES) {
+                throw new KnowledgeIngestError(FAILURE_CODES.VERIFICATION, `게시 중 활성 index 가 계속 바뀜(${attempt + 1}회)`);
+            }
+            logger.info(`게시 직전 활성 index 변경 감지 — 새 index 로 다시 임베딩: version=${versionId}`);
         }
-
-        // ── verifying ──
-        stage = 'verifying';
-        await setStage(versionId, stage);
-        const embedded = await countEmbeddings(index.id, chunkRows.map((r) => r.id));
-        if (embedded !== chunkRows.length) {
-            throw new KnowledgeIngestError(FAILURE_CODES.VERIFICATION, `임베딩 검증 실패 (${embedded}/${chunkRows.length})`);
-        }
-
-        // ── 원자 게시 ──
-        await inTransaction(async (client) => {
-            await client.query(
-                `UPDATE knowledge_document_versions SET status = 'ready', chunker_profile_id = $2, progress = 100, failure_code = NULL, updated_at = NOW() WHERE id = $1`,
-                [versionId, profiles.chunker.id],
-            );
-            await client.query(
-                `UPDATE knowledge_documents SET current_version_id = $2, status = 'ready', updated_at = NOW() WHERE id = $1`,
-                [ctx.documentId, versionId],
-            );
-        });
-        logger.info(`수집 완료: version=${versionId} chunks=${chunkRows.length}`);
-        return { status: 'ready', chunkCount: chunkRows.length };
     } catch (err) {
         const code = failureCodeOf(err, STAGE[stage].fail);
         logger.warn(`수집 실패: version=${versionId} stage=${stage} code=${code} — ${err instanceof Error ? err.message : String(err)}`);

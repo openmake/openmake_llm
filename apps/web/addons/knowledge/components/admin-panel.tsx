@@ -28,10 +28,16 @@ function ProfileEditor({ profile }: { profile: KnowledgeProfile }) {
       setError(e instanceof Error ? e.message : t("admin.invalidJson"));
       return;
     }
+    // 프로필 config 는 JSON 객체여야 한다(배열·원시값 거절)
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      setError(t("admin.invalidJson"));
+      return;
+    }
+    const config = parsed as Record<string, unknown>;
     setBusy(true);
     setError(null);
     try {
-      await knowledgeApi.adminUpdateProfile(profile.id, parsed);
+      await knowledgeApi.adminUpdateProfile(profile.id, config);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       void queryClient.invalidateQueries({ queryKey: qk.adminProfiles() });

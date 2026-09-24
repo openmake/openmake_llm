@@ -81,7 +81,10 @@ export async function runMessagePipeline(svc: ChatService,
     } = req;
 
     const reqCtx: RequestContext = {
-        userContext: svc.buildUserContext(userId || 'guest', userRole),
+        userContext: {
+            ...svc.buildUserContext(userId || 'guest', userRole),
+            ...(req.sourceNumberBase ? { sourceNumberBase: req.sourceNumberBase } : {}),
+        },
         message: req.message,
         // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화(외부 서비스는 자체 도구 체계 사용)
         enabledTools: req.apiKeyId && !enabledTools ? {} : enabledTools,
