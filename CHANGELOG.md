@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.86.1](https://github.com/openmake/openmake_llm/compare/v1.86.0...v1.86.1) (2026-09-24)
+
+
+### 🐛 버그 수정
+
+* **knowledge:** 라우트 응답을 공유 계약에 맞춤 — Space 상세가 "찾을 수 없음"으로 뜨던 결함 + 라이브 검증 UI 보완 ([#998](https://github.com/openmake/openmake_llm/issues/998)) ([4d929cb](https://github.com/openmake/openmake_llm/commit/4d929cb7e147b51dea32c99f7f99c5dcbd2cea59))
+
 ## [1.86.0](https://github.com/openmake/openmake_llm/compare/v1.85.4...v1.86.0) (2026-09-23)
 
 
