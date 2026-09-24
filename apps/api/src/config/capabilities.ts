@@ -266,7 +266,12 @@ export const ORCHESTRATOR = {
      * bai p95 5,248ms(이상치 1건 22.9s 는 이제 fail-open). 느린 모델을 배정했다면 env 로 늘린다.
      */
     PLANNER_TIMEOUT_MS: parseInt(process.env.ORCHESTRATOR_PLANNER_TIMEOUT_MS || '15000', 10),
-    PLANNER_MAX_TOKENS: parseInt(process.env.ORCHESTRATOR_PLANNER_MAX_TOKENS || '400', 10),
+    /**
+     * Planner 출력 상한 토큰. 400 은 multi 계획(설계서·스타일 프롬프트를 instruction 에 옮겨 적는 경우)이 988자에서 잘려
+     * 재시도까지 전부 실패하고 fallback 으로 떨어졌다(2026-09-24 음악 요청 2회 실측). 800 은 외부 planner 실측 속도
+     * (약 90~120 tok/s)로 시간 상한 15초 안에 든다.
+     */
+    PLANNER_MAX_TOKENS: parseInt(process.env.ORCHESTRATOR_PLANNER_MAX_TOKENS || '800', 10),
     /** 계획 검증 실패 시 Planner 재시도 횟수 */
     PLANNER_RETRIES: parseInt(process.env.ORCHESTRATOR_PLANNER_RETRIES || '1', 10),
     /** 계획당 작업 수 상한 · 레벨당 병렬 상한 */
