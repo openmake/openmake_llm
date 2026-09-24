@@ -70,6 +70,14 @@ test('T07: 원문 길이가 계획값보다 우선하고, 원문에 없으면 �
     expect(normalizeMusicPlanInput(task({ extra: { duration: '60' } }), '발라드 만들어줘').extra).toEqual({ duration: '60' });
 });
 
+test('가사를 쓰는 앞 작업에 의존하면서 refs·가사가 비면 의존 작업을 refs 로 잇는다 (2026-09-24 연주곡이 된 결함)', () => {
+    expect(normalizeMusicPlanInput(task({ dependsOn: ['t1'] }), '노래 만들어줘').refs).toEqual(['t1']);
+    // 가사를 직접 받았거나 refs 가 이미 있으면 건드리지 않는다
+    expect(normalizeMusicPlanInput(task({ dependsOn: ['t1'], extra: { lyrics: '라라라' } }), '노래').refs).toEqual([]);
+    expect(normalizeMusicPlanInput(task({ dependsOn: ['t1', 't2'], refs: ['t2'] }), '노래').refs).toEqual(['t2']);
+    expect(normalizeMusicPlanInput(task(), '노래').refs).toEqual([]);
+});
+
 test('startMusicRuntime 은 music.generate 하나를 게시한다', async () => {
     const ids: string[] = [];
     await startMusicRuntime({ owner: { addonId: 'music-runtime', addonVersion: '1.0.0', source: 'builtin' }, registerCapabilities: (e) => { ids.push(...e.map((x) => x.definition.id)); } });

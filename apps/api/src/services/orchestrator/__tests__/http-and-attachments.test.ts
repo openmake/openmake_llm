@@ -179,6 +179,9 @@ describe('statedDurationSec·계획 인자 hook — Planner 가 duration 을 비
         expect(statedDurationSec('a 4 minute song')).toBe(240);
         expect(statedDurationSec('intro 10 seconds, total 3 mins')).toBe(180);
         expect(statedDurationSec('신나는 노래 만들어줘')).toBeUndefined();
+        // 음표 길이는 시간이 아니다 — 곡 설계서가 8분(480초) 곡이 된 결함 (2026-09-24)
+        expect(statedDurationSec('경쾌한 8분 리듬, 8분 음표의 바운스, 16분음표, 4분의 3박자, 2분 쉼표')).toBeUndefined();
+        expect(statedDurationSec('8분 음표 리듬으로 3분짜리 노래')).toBe(180);
     });
     it('소유 handler 의 hook 이 계획 인자에 적용된다 — 원문 길이 우선, 없으면 계획값 그대로', () => {
         expect(music('5분짜리 발라드 만들어줘')).toEqual({ duration: '300' });

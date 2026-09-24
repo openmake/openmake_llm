@@ -211,8 +211,9 @@ export const VIDEO_GEN_ASPECT_SIZES = { landscape: '1280x720', portrait: '720x12
  * 스키마에 인자 키를 선언한 뒤에도 "8초"·"6-second" 를 2/2 누락했다. 음악도 같다 — qwen3.8-27b Planner 가 music.generate 6건 중
  * 5건에서 duration 을 비워 전부 기본 30초가 됐다(2026-09-23). 길이는 여러 개면 가장 큰 값(장면 전환 시각 < 전체 길이).
  * 그룹: 1 = 분, 2 = 분 뒤의 초("3분 30초"), 3 = 초만.
+ * 음표 길이인 "8분 음표"·"8분 리듬"·"4분의 3박자" 는 시간이 아니다 — 곡 설계서가 8분(480초) 곡이 된 결함(2026-09-24).
  */
-export const MEDIA_DURATION_PATTERN = /(\d+(?:\.\d+)?)\s*(?:분|-?\s*min(?:ute)?s?\b)(?:\s*(\d+(?:\.\d+)?)\s*(?:초|-?\s*sec(?:ond)?s?\b))?|(\d+(?:\.\d+)?)\s*(?:초|秒|-?\s*sec(?:ond)?s?\b)/gi;
+export const MEDIA_DURATION_PATTERN = /(\d+(?:\.\d+)?)\s*(?:분(?!\s*(?:음표|쉼표|음|리듬|박|의))|-?\s*min(?:ute)?s?\b)(?:\s*(\d+(?:\.\d+)?)\s*(?:초|-?\s*sec(?:ond)?s?\b))?|(\d+(?:\.\d+)?)\s*(?:초|秒|-?\s*sec(?:ond)?s?\b)/gi;
 
 /**
  * provider 별 capability params 기본값 — 배정 params 가 없을 때. 실측 규격 차이 흡수
