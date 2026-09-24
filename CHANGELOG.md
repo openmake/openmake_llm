@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.86.3](https://github.com/openmake/openmake_llm/compare/v1.86.2...v1.86.3) (2026-09-24)
+
+
+### ♻️ 리팩터링
+
+* **models:** 역할별·기능별 모델 배정을 슬롯 단위 모델 배정으로 통합 + Planner 잘린 simple 계획 복구 ([#1003](https://github.com/openmake/openmake_llm/issues/1003)) ([496078a](https://github.com/openmake/openmake_llm/commit/496078a90ec63e3cb8f2938704fd19d47eb0588a))
+
 ## [1.86.2](https://github.com/openmake/openmake_llm/compare/v1.86.1...v1.86.2) (2026-09-24)
 
 
