@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.88.5](https://github.com/openmake/openmake_llm/compare/v1.88.4...v1.88.5) (2026-09-25)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** text.reason 로컬 모델 추론 끄기 + 구 모델 배정 3테이블 DROP(171) ([#1020](https://github.com/openmake/openmake_llm/issues/1020)) ([f03d2c7](https://github.com/openmake/openmake_llm/commit/f03d2c75f7766e37cf762b267039a93d57e690a4))
+
 ## [1.88.4](https://github.com/openmake/openmake_llm/compare/v1.88.3...v1.88.4) (2026-09-25)
 
 
