@@ -207,6 +207,12 @@ ${sanitizedMessage}
                 temperature: ROUTER_TEMPERATURE,
                 num_predict: ROUTER_NUM_PREDICT,
             }, undefined, {
+                format: {
+                    type: 'object',
+                    properties: { agent_id: { type: 'string' }, confidence: { type: 'number' } },
+                    required: ['agent_id', 'confidence'],
+                    additionalProperties: false,
+                },
                 // 라우터는 JSON expert-select 만 출력 — reasoning 토큰이 ROUTER_NUM_PREDICT 를
                 // 모두 소진하면 빈 응답 → '[LLMRouter] 타임아웃 - 폴백 사용' 패턴 재발 방지.
                 think: false,

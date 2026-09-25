@@ -123,7 +123,6 @@ export function buildReasoningPrompt(userLanguage: SupportedLanguageCode = 'en')
             type: 'structured',
             examples: content.examples
         })
-        .setThinkingEnabled(true)
         .build();
 }
 

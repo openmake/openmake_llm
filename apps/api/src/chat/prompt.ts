@@ -45,9 +45,7 @@ import type { PromptType } from './prompt-templates';
  * 2. 인식적 구배 (Epistemic Gradient) - 확실성 수준 구분
  * 3. 언어 및 보안 절대 규칙 (한국어/영어 일관성)
  * 4. 안전 및 윤리 가드레일 (Jailbreak 방어, PII 보호)
- * 5. 소프트 인터락 (답변 전 사고 프로세스)
- * 6. 응답 품질 지침 (서술형 스타일)
- * 7. 마크다운 형식 지침
+ * 5. 마크다운 형식 지침
  * 
  * @returns 공통 기반 시스템 프롬프트 문자열 (metadata + system_rules + instruction 섹션)
  */
