@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.88.4](https://github.com/openmake/openmake_llm/compare/v1.88.3...v1.88.4) (2026-09-25)
+
+
+### 🐛 버그 수정
+
+* **llm:** choices 없는 비스트림 응답을 재시도 가능한 502 로 처리 ([#1016](https://github.com/openmake/openmake_llm/issues/1016)) ([b186c03](https://github.com/openmake/openmake_llm/commit/b186c03b6f791158907227ae8b0de86fece96fb6))
+
 ## [1.88.3](https://github.com/openmake/openmake_llm/compare/v1.88.2...v1.88.3) (2026-09-24)
 
 
