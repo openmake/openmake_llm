@@ -17,7 +17,8 @@
         "declarationMap": true,
         "sourceMap": true,
         "noImplicitAny": true,
-        "strictNullChecks": true
+        "strictNullChecks": true,
+        "types": ["node", "jest"]
     },
     "include": [
         "src/**/*"

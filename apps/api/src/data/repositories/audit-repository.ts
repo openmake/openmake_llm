@@ -6,6 +6,7 @@
  * - 에이전트 사용 로그 기록 (agent_usage_logs)
  * - 감사 로그 생성/조회 (audit_logs)
  */
+import type { QueryResult } from 'pg';
 import { BaseRepository } from './base-repository';
 
 export class AuditRepository extends BaseRepository {
@@ -19,7 +20,7 @@ export class AuditRepository extends BaseRepository {
         tokensUsed?: number;
         success?: boolean;
         errorMessage?: string;
-    }) {
+    }): Promise<QueryResult> {
         return this.query(
             `INSERT INTO agent_usage_logs 
             (user_id, session_id, agent_id, query, response_preview, response_time_ms, tokens_used, success, error_message)
@@ -74,7 +75,7 @@ export class AuditRepository extends BaseRepository {
         details?: Record<string, unknown>;
         ipAddress?: string;
         userAgent?: string;
-    }) {
+    }): Promise<QueryResult> {
         return this.query(
             `INSERT INTO audit_logs 
             (action, user_id, resource_type, resource_id, details, ip_address, user_agent)

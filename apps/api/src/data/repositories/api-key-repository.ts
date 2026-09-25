@@ -7,11 +7,12 @@
  * - 일별 사용량 기록 (UPSERT — 요청 수, 토큰, 에러, 평균 응답 시간)
  * - 키 해시 기반 인증 조회, 사용자별 키 목록
  */
+import type { QueryResult } from 'pg';
 import { BaseRepository, QueryParam } from './base-repository';
 import type { UserApiKey } from '../models/unified-database.types';
 
 export class ApiKeyRepository extends BaseRepository {
-    async recordApiUsage(date: string, apiKeyId: string, requests: number, tokens: number, errors: number, avgResponseTime: number, models: Record<string, unknown>) {
+    async recordApiUsage(date: string, apiKeyId: string, requests: number, tokens: number, errors: number, avgResponseTime: number, models: Record<string, unknown>): Promise<QueryResult> {
         return this.query(
             `INSERT INTO api_usage (date, api_key_id, requests, tokens, errors, avg_response_time, models)
             VALUES ($1::date, $2, $3, $4, $5, $6, $7)
