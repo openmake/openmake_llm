@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.90.0](https://github.com/openmake/openmake_llm/compare/v1.89.0...v1.90.0) (2026-09-25)
+
+
+### ✨ 기능
+
+* **install:** OS 별 원샷 설치 — install_mac.sh·install_linux.sh + omk 운영 구성 옵션 ([#1028](https://github.com/openmake/openmake_llm/issues/1028)) ([7651b20](https://github.com/openmake/openmake_llm/commit/7651b20539f6d47a2accb3c6b540eafccfe21b25))
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** 붙여 넣은·직전 답변 가사로 음악 생성 — Planner 는 CONVERSATION 표시만, 외부 직결 요청 규칙, 계획 실패 안내 ([#1029](https://github.com/openmake/openmake_llm/issues/1029)) ([d219a43](https://github.com/openmake/openmake_llm/commit/d219a434a281c8eca5ff9d136ef5b0d08c829cc8))
+
 ## [1.89.0](https://github.com/openmake/openmake_llm/compare/v1.88.5...v1.89.0) (2026-09-25)
 
 
