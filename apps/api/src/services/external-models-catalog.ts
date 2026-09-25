@@ -23,6 +23,22 @@ function externalModelsCacheTtlMs(): number {
 }
 
 /**
+ * 라이브 조회 시간 상한 (EXTERNAL_MODELS_LIVE_TIMEOUT_MS, 기본 8s). provider 목록은 키별로 차례로 조회하므로
+ * 응답 없는 provider 하나가 모델 목록 전체와 그것을 기다리는 설정 화면을 멈춘다 — logfare `/v1/models` 무응답으로
+ * `/api/models` 가 102초 걸렸다(2026-09-25).
+ */
+function externalModelsLiveTimeoutMs(): number {
+    return parseInt(process.env.EXTERNAL_MODELS_LIVE_TIMEOUT_MS ?? '8000', 10);
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`${label} /v1/models 시간 초과(${ms}ms)`)), ms);
+        p.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+    });
+}
+
+/**
  * Provider 별 fallback 모델 목록 — 라이브 조회 실패 또는 빈 배열 반환 시
  * 사용자가 채팅을 시작할 수 있도록 제공하는 known 모델 카탈로그.
  *
@@ -47,7 +63,8 @@ export function getProviderFallbackModels(providerId: string): CachedModelRow[] 
  * 2. openai-compatible + baseUrl 이면 provider `/v1/models` 라이브 조회 → 비어 있지 않으면 캐시 저장
  * 3. 그 외(라이브 불가·빈 배열) → fallback 목록
  *
- * 라이브 조회 예외는 그대로 던진다 — 호출부가 provider 단위로 격리(warn + skip 또는 fallback)한다.
+ * 라이브 조회가 시간 초과·실패하면 만료된 이전 캐시를, 그것도 없으면 fallback 목록을 돌려준다(목록이 사라지지 않게).
+ * 둘 다 비면 예외를 던진다 — 호출부가 provider 단위로 격리(warn + skip)한다.
  * 복호화된 키가 없으면 null (호출부는 건너뛴다).
  */
 export async function resolveExternalModels(
@@ -70,7 +87,17 @@ export async function resolveExternalModels(
         plaintextKey,
         keyRow.authMethod === 'oauth' ? buildOAuthSessionPersist(repo, userId, keyRow.providerId) : undefined,
     );
-    const fresh = await provider.listModels();
+    let fresh;
+    try {
+        fresh = await withTimeout(provider.listModels(), externalModelsLiveTimeoutMs(), keyRow.providerId);
+    } catch (err) {
+        const stale = await repo.getCachedModelsRow(userId, keyRow.providerId).catch(() => null);
+        const staleList = Array.isArray(stale?.models) ? stale.models as CachedModelRow[] : [];
+        const substitute = staleList.length > 0 ? staleList : getProviderFallbackModels(keyRow.providerId);
+        if (substitute.length === 0) throw err;
+        logger.warn(`${keyRow.providerId} 라이브 조회 실패 — ${staleList.length > 0 ? '이전 캐시' : 'fallback'} ${substitute.length}개 사용: ${err instanceof Error ? err.message : String(err)}`);
+        return substitute;
+    }
     // 캐시 행 형태는 model-capabilities 의 단일점을 쓴다(capabilitiesInferred 유실 방지)
     const list = fresh.map(toCachedModelEntry);
     // 빈 배열은 캐싱 안 함 (stale 영구화 방지) + provider별 fallback 모델 보강
