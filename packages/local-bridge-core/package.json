@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node ../../scripts/tsc7.cjs -p tsconfig.json",
     "test": "jest"
   },
   "dependencies": {

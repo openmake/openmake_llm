@@ -20,6 +20,7 @@ export default [
       // build-info.js 와 동일 취급(앱 소스 아님).
       "scripts/resolve-ports.cjs",
       "scripts/audit-gate.cjs",
+      "scripts/tsc7.cjs",
       // CommonJS 로 dist 를 직접 로드하는 운영 스크립트(빌드 산출물 require 필요) —
       // build-info.js 와 동일 취급. 앱 소스가 아니라 lint 대상에서 제외한다.
       "scripts/eval/*.js",

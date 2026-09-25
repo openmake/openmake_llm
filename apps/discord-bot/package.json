@@ -4,7 +4,7 @@
     "description": "OpenMake LLM Discord gateway bot — Discord 메시지를 /api/v1/chat/completions 로 중계",
     "main": "dist/index.js",
     "scripts": {
-        "build": "tsc",
+        "build": "node ../../scripts/tsc7.cjs",
         "dev": "ts-node src/index.ts",
         "start": "node dist/index.js"
     },
@@ -17,6 +17,6 @@
     },
     "devDependencies": {
         "ts-node": "^10.9.2",
-        "typescript": "^6.0.3"
+        "typescript": "npm:@typescript/typescript6@^6.0.2"
     }
 }
