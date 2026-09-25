@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.89.0](https://github.com/openmake/openmake_llm/compare/v1.88.5...v1.89.0) (2026-09-25)
+
+
+### ✨ 기능
+
+* **knowledge:** 스페이스 지침·메모리 + 활성 index 모델 고정 임베딩 ([#1026](https://github.com/openmake/openmake_llm/issues/1026)) ([230cba8](https://github.com/openmake/openmake_llm/commit/230cba802a724ac4b50da3a2c8b66e4709f3d3e0))
+* **orchestrator:** audio·music·video 분석 capability 실행기 편입 ([#1023](https://github.com/openmake/openmake_llm/issues/1023)) ([14885ed](https://github.com/openmake/openmake_llm/commit/14885ed44aaaa4e7416afefd3f30608f0fa1b650))
+
+
+### 🐛 버그 수정
+
+* **build:** typescript 별칭을 실제 typescript@6 패키지로 — IDE 가 기본 lib 를 못 찾던 문제 ([#1025](https://github.com/openmake/openmake_llm/issues/1025)) ([f892b0d](https://github.com/openmake/openmake_llm/commit/f892b0df4579ea16ae35f3caf76c286a3d48d757))
+* **models:** 외부 provider /v1/models 라이브 조회에 시간 상한 — 무응답 시 이전 캐시·fallback ([#1022](https://github.com/openmake/openmake_llm/issues/1022)) ([89fabe7](https://github.com/openmake/openmake_llm/commit/89fabe7c4198533a96807603db96f44fcacf94a0))
+
 ## [1.88.5](https://github.com/openmake/openmake_llm/compare/v1.88.4...v1.88.5) (2026-09-25)
 
 
