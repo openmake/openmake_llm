@@ -245,6 +245,11 @@ export function findArtifactPlaceholderIds(content: string): string[] {
     return ids;
 }
 
+/** placeholder 를 lookup 이 돌려준 내용으로 펼친다 — lookup 이 undefined 면 표시를 그대로 둔다. */
+export function expandArtifactPlaceholders(content: string, lookup: (id: string) => string | undefined): string {
+    return content.replace(PLACEHOLDER_SCAN_PATTERN, (whole, id: string) => lookup(id) ?? whole);
+}
+
 /** 지정 id 들의 placeholder(`[[artifact:id]]`/`[[artifact:id:vN]]`)를 본문에서 제거. */
 export function stripArtifactPlaceholders(content: string, ids: readonly string[]): string {
     let out = content;

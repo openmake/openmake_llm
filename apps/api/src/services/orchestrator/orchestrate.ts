@@ -12,6 +12,8 @@
 import { ORCHESTRATOR, CAPABILITY_LABELS_KO, JOB_RESULT_INTENT_PATTERN, JOB_NOT_FOLLOWUP_PATTERN, MEDIA_DURATION_PATTERN, type Capability } from '../../config/capabilities';
 import { getPool } from '../../data/models/unified-database';
 import { OrchestratorRunsRepository } from '../../data/repositories/orchestrator-runs-repo';
+import { ArtifactRepository } from '../../data/repositories/artifact-repository';
+import { expandArtifactPlaceholders, findArtifactPlaceholderIds } from '../../llm/artifact-parser';
 import type { ChatMessageRequest } from '../chat-service-types';
 import { planRequest } from './planner';
 import { validatePlan, type ValidatedPlan } from './plan-schema';
@@ -173,6 +175,26 @@ function recentTurns(req: ChatMessageRequest): Array<{ role: string; content: st
     return turns.map((h) => ({ role: h.role, content: h.content.replace(/\s+/g, ' ').slice(0, 400) }));
 }
 
+/**
+ * 실행기용 최근 답변(최신 순). 답변 본문의 아티팩트는 `[[artifact:id]]` 표시로만 남으므로 같은 대화의 최신 내용으로 펼친다 —
+ * "이 가사로 노래 만들어줘" 의 가사가 직전 답변의 아티팩트에 있던 경우(2026-09-26 실측). 조회 실패는 표시를 그대로 둔다(fail-open).
+ */
+export async function recentAssistantMessages(req: ChatMessageRequest): Promise<string[]> {
+    const msgs = (req.history ?? []).filter((h) => h.role === 'assistant').slice(-ORCHESTRATOR.EXEC_RECENT_ASSISTANT_MESSAGES).reverse().map((h) => h.content);
+    const ids = new Set(msgs.flatMap((m) => findArtifactPlaceholderIds(m)));
+    const contents = new Map<string, string>();
+    if (ids.size > 0 && req.sessionId) {
+        try {
+            for (const row of await new ArtifactRepository(getPool()).listLatestBySession(req.sessionId)) {
+                if (ids.has(row.artifact_id)) contents.set(row.artifact_id, row.content);
+            }
+        } catch (e) {
+            logger.debug(`최근 답변 아티팩트 조회 실패(표시 유지): ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+    return msgs.map((m) => expandArtifactPlaceholders(m, (id) => contents.get(id)).slice(0, ORCHESTRATOR.EXEC_RECENT_MESSAGE_MAX_CHARS));
+}
+
 function buildResultBlock(results: TaskResult[], lang: string): string {
     const ko = lang === 'ko';
     const lines = results.map((r) => {
@@ -191,10 +213,14 @@ function buildResultBlock(results: TaskResult[], lang: string): string {
     return `${intro}\n\n${lines.join('\n\n')}`;
 }
 
+/**
+ * 계획 실패 턴의 시스템 안내. 종전 문구는 "다시 요청하면 된다고 안내하라"였는데, 계획 실패는 대개 같은 요청에서 같은 이유로
+ * 반복되어(긴 가사를 계획에 옮기다 시간 초과 — 2026-09-26 7회 연속) 사용자가 같은 요청만 되풀이했다. 사유를 알리고 반복을 권하지 않는다.
+ */
 function fallbackNote(lang: string, reason: string): string {
     return lang === 'ko'
-        ? `[시스템: 이번 턴에는 이미지·오디오·영상 등 미디어 기능이 실행되지 않았습니다(계획 단계 실패: ${reason.slice(0, 120)}). 텍스트로만 답하고, 미디어를 만들었다고 말하거나 파일 링크를 지어내지 마세요. 기능 자체는 있으니 "생성할 수 없다"고 말하지 말고, 다시 요청하면 된다고 안내하세요.]`
-        : `[System: media capabilities (image/audio/video) did not run this turn (planning failed: ${reason.slice(0, 120)}). Answer in text only; do not claim media was generated or invent file links. The capability itself exists — do not say it cannot be done; tell the user they can ask again.]`;
+        ? `[시스템: 이번 턴에는 이미지·오디오·영상 등 미디어 기능이 실행되지 않았습니다 — 작업 계획 단계가 실패했습니다(사유: ${reason.slice(0, 120)}). 텍스트로만 답하고, 미디어를 만들었다고 말하거나 파일 링크를 지어내지 마세요. 미디어가 만들어지지 않았다는 사실과 사유를 쉬운 말로 한 문장 알리세요. 같은 요청을 그대로 다시 보내라고 권하지 마세요 — 같은 이유로 다시 실패할 수 있습니다. 사유가 시간 초과면 요청을 짧게 나누는 방법을, 그 밖이면 관리자에게 모델 배정 확인을 권하세요.]`
+        : `[System: media capabilities (image/audio/video) did not run this turn — the task planning step failed (reason: ${reason.slice(0, 120)}). Answer in text only; do not claim media was generated or invent file links. Tell the user in one plain sentence that no media was produced and why. Do not suggest sending the same request again — it may fail for the same reason. If the reason is a timeout, suggest splitting the request into shorter parts; otherwise suggest asking an administrator to check the model assignment.]`;
 }
 
 /**
@@ -289,7 +315,10 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
     }
 
     onProgress?.({ type: 'orchestrator_status', phase: 'executing' });
-    const ctx: ExecContext = { userId, lang, userMessage: req.message ?? '', attachments, results: new Map(), signal: input.signal, onProgress, sessionId: req.sessionId };
+    const ctx: ExecContext = {
+        userId, lang, userMessage: req.message ?? '', recentAssistantMessages: await recentAssistantMessages(req),
+        attachments, results: new Map(), signal: input.signal, onProgress, sessionId: req.sessionId,
+    };
     // 실행 승인 경계 — 배정·키·어댑터·입력 종류·로컬 쿼터를 실행 전에 확정(거절 작업은 호출·과금 없음). 승인된 대상은 그대로 실행 대상
     const pre = await preflightPlan(plan, ctx);
     ctx.targets = pre.targets;
