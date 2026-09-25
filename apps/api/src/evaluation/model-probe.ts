@@ -7,7 +7,7 @@
  *
  * @module evaluation/model-probe
  */
-import { REASONING_EFFORT_LADDER, type ModelProfile, type ReasoningEffort } from '../config/model-profiles';
+import { REASONING_EFFORT_LADDER, type ModelCapabilities, type ModelProfile, type ReasoningEffort } from '../config/model-profiles';
 
 export interface ProbeHttpResult {
     status: number;
@@ -27,6 +27,16 @@ export interface ProbeObservations {
     tools: ProbeHttpResult;
     vision: ProbeHttpResult;
     efforts: Partial<Record<ReasoningEffort, ProbeHttpResult>>;
+    /** 오디오 입력 프로브 — CLI 로 샘플 파일을 넘겼을 때만 실행(input_audio 콘텐츠 파트) */
+    audio?: ProbeHttpResult;
+    /** 영상 입력 프로브 — CLI 로 샘플 파일을 넘겼을 때만 실행(video_url 콘텐츠 파트) */
+    video?: ProbeHttpResult;
+}
+
+/** 미디어 입력 프로브 페이로드 — 넘긴 것만 실행한다(정답을 함께 줘야 "내용 이해" 를 확정한다) */
+export interface ProbeMediaInput {
+    audio?: { base64: string; format: string; question: string; answer?: string };
+    video?: { dataUrl: string; question: string; answer?: string };
 }
 
 /** 도구 프로브의 함수 이름·비전 프로브의 정답 — 판정과 요청이 같은 값을 본다 */
@@ -66,7 +76,23 @@ export interface ProbeVerdict {
     unreachable: boolean;
 }
 
-export function judgeProbe(o: ProbeObservations, visionAnswer: string): ProbeVerdict {
+/**
+ * 오디오·영상 입력 프로브 판정 — vision 과 같은 엄격함이다. 정답을 맞혔을 때만 true(조용히 미디어를 버리고 200 을 주는
+ * 서버가 있다), 4xx 거절이면 false, 그 밖은 미확정(null). 정답을 안 주면 내용 이해를 확정할 수 없어 미확정으로 둔다.
+ * 프로브하지 않았으면(undefined) null 을 돌려주고 note 도 남기지 않는다.
+ */
+function mediaVerdict(label: 'audio' | 'video', r: ProbeHttpResult | undefined, expected: string | undefined, notes: string[]): boolean | null {
+    if (!r) return null;
+    if (rejected(r)) { notes.push(`${label}Input=false — 미디어가 있는 요청을 4xx 로 거절`); return false; }
+    if (!ok(r)) { notes.push(`${label}Input 미확정 — status ${r.status}${r.error ? ` (${r.error})` : ''}`); return null; }
+    const content = String(message(r)?.content ?? '');
+    if (!expected) { notes.push(`${label}Input 미확정 — 200 이지만 정답을 안 줘서 내용 이해를 확정할 수 없음(--${label}-answer)`); return null; }
+    if (content.includes(expected)) return true;
+    notes.push(`${label}Input 미확정 — status ${r.status}, 답 "${content.slice(0, 40)}"(정답 ${expected})`);
+    return null;
+}
+
+export function judgeProbe(o: ProbeObservations, visionAnswer: string, mediaAnswers: { audio?: string; video?: string } = {}): ProbeVerdict {
     const notes: string[] = [];
     if (!ok(o.basic)) {
         const why = o.basic.error ?? errorMessage(o.basic);
@@ -120,13 +146,21 @@ export function judgeProbe(o: ProbeObservations, visionAnswer: string): ProbeVer
         if (refused.length) notes.push(`reasoning_effort 거절: ${refused.join(', ')}`);
     }
 
+    // 미디어 입력(선택) — 프로브했을 때만 판정한다. 핵심 4값과 함께 capabilities 에 실려야 parseProfile 이 보존한다.
+    const audioInput = mediaVerdict('audio', o.audio, mediaAnswers.audio, notes);
+    const videoInput = mediaVerdict('video', o.video, mediaAnswers.video, notes);
+
     // capabilities 는 네 값이 전부 확정일 때만 — 프로필 항목은 네 필드를 함께 요구한다(parseProfile)
     const { toolCalling, thinking, vision, streaming } = verdicts;
     if (toolCalling !== null && thinking !== null && vision !== null && streaming !== null) {
-        profile.capabilities = { toolCalling, thinking, vision, streaming };
+        const caps: ModelCapabilities = { toolCalling, thinking, vision, streaming };
+        if (audioInput !== null) caps.audioInput = audioInput;
+        if (videoInput !== null) caps.videoInput = videoInput;
+        profile.capabilities = caps;
     } else {
         const open = Object.entries(verdicts).filter(([, v]) => v === null).map(([k]) => k);
         notes.push(`capabilities 는 프로필에 넣지 않음 — 미확정 ${open.join(', ')} (확정: ${Object.entries(verdicts).filter(([, v]) => v !== null).map(([k, v]) => `${k}=${v}`).join(', ') || '없음'})`);
+        if (audioInput !== null || videoInput !== null) notes.push('audio/video 입력은 확정했으나 핵심 능력이 미확정이라 함께 넣지 못함');
     }
     return { profile, notes, unreachable: false };
 }
@@ -141,6 +175,8 @@ export async function runProbe(
     effortExtra: Record<string, unknown> = {},
     /** 요청 사이 간격(ms) — 무료 티어는 연속 호출을 429 로 막는다(hasa 실측 2026-09-20) */
     delayMs = 0,
+    /** 오디오·영상 입력 프로브 — 넘긴 것만 실행한다(CLI 샘플 파일). 종전 프로브 8회는 media 없이 그대로 */
+    media?: ProbeMediaInput,
 ): Promise<ProbeObservations> {
     const rawPost = post;
     let first = true;
@@ -165,9 +201,15 @@ export async function runProbe(
         ...base,
         messages: user([{ type: 'text', text: visionQuestion }, { type: 'image_url', image_url: { url: `data:image/png;base64,${imageBase64}` } }]),
     });
+    const audio = media?.audio
+        ? await post({ ...base, messages: user([{ type: 'text', text: media.audio.question }, { type: 'input_audio', input_audio: { data: media.audio.base64, format: media.audio.format } }]) })
+        : undefined;
+    const video = media?.video
+        ? await post({ ...base, messages: user([{ type: 'text', text: media.video.question }, { type: 'video_url', video_url: { url: media.video.dataUrl } }]) })
+        : undefined;
     const efforts: ProbeObservations['efforts'] = {};
     for (const effort of REASONING_EFFORT_LADDER) {
         efforts[effort] = await post({ ...base, ...effortExtra, reasoning_effort: effort, messages: user('What is 17 * 23? Answer with the number only.') });
     }
-    return { basic, stream, tools, vision, efforts };
+    return { basic, stream, tools, vision, efforts, audio, video };
 }

@@ -47,12 +47,11 @@ export const PLANNABLE_CAPABILITIES: ReadonlyArray<Capability> = CAPABILITIES.fi
 
 /**
  * 검증된 provider 어댑터가 아직 없는 capability — 배정과 무관하게 실행 단계가 `unsupported` 로 명시 실패한다
- * (미배정 `unassigned` 와 구분). 편입 provider 5개 실측(2026-09-12)에 제공처 없음. 어댑터가 생기면 여기서 뺀다.
- * (music.generate 는 2026-09-22 DGX ACE-Step 으로 빠졌다 — 2026-09-23 부터 LiteLLM 경유 OpenAI 호환)
+ * (미배정 `unassigned` 와 구분). 어댑터가 생기면 여기서 뺀다.
+ * (music.generate 는 2026-09-22 DGX ACE-Step 으로, audio.analyze·music.analyze·video.analyze 는
+ *  네이티브 콘텐츠 파트(input_audio·video_url) 분석 실행기가 붙어 2026-09-25 빠졌다 — 현재 비어 있다.)
  */
-export const UNSUPPORTED_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([
-    'audio.analyze', 'music.analyze', 'video.analyze',
-]);
+export const UNSUPPORTED_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([]);
 
 export const GLOBAL_CAPABILITY_SCOPE = '__global__';
 
@@ -181,6 +180,13 @@ export const CAPABILITY_LIMITS = {
      *  넘으면 실패 — 영상과 달리 job 을 다음 턴으로 넘기지 않는다. */
     MUSIC_WAIT_MS: parseInt(process.env.CAPABILITY_MUSIC_WAIT_MS || '300000', 10),
     MUSIC_LYRICS_MAX_CHARS: parseInt(process.env.CAPABILITY_MUSIC_LYRICS_MAX_CHARS || '4000', 10),
+    /** audio.analyze·music.analyze·video.analyze — 네이티브 콘텐츠 파트를 chat/completions 로 보내는 비스트림 1회. */
+    MEDIA_ANALYZE_TIMEOUT_MS: parseInt(process.env.CAPABILITY_MEDIA_ANALYZE_TIMEOUT_MS || '180000', 10),
+    MEDIA_ANALYZE_MAX_TOKENS: parseInt(process.env.CAPABILITY_MEDIA_ANALYZE_MAX_TOKENS || '1500', 10),
+    /** 오디오(음악 포함) 입력 상한 — 전사(STT_MAX_BYTES 25MB)와 같은 급으로 둔다. */
+    MEDIA_ANALYZE_AUDIO_MAX_BYTES: parseInt(process.env.CAPABILITY_MEDIA_ANALYZE_AUDIO_MAX_BYTES || String(25 * 1024 * 1024), 10),
+    /** 영상 입력 상한 — base64 로 프롬프트에 실리므로 오케스트레이터 JSON 상한(24MB) 안에 둔다. */
+    MEDIA_ANALYZE_VIDEO_MAX_BYTES: parseInt(process.env.CAPABILITY_MEDIA_ANALYZE_VIDEO_MAX_BYTES || String(16 * 1024 * 1024), 10),
     /** params JSONB 허용 키 — capability 별 화이트리스트 */
     PARAM_KEYS: {
         'text.reason': ['temperature'], 'text.code': ['temperature'], 'text.synthesize': [], 'text.embed': ['dimensions'],
@@ -200,6 +206,17 @@ export const TTS_ALLOWED_FORMATS: ReadonlySet<string> = new Set(['mp3', 'wav', '
 export const TTS_DEFAULT_FORMAT = 'mp3';
 export const TTS_DEFAULT_VOICE = 'alloy';
 export const STT_ALLOWED_EXTS: ReadonlySet<string> = new Set(['mp3', 'wav', 'm4a', 'ogg', 'opus', 'flac', 'webm', 'mp4']);
+/**
+ * audio.analyze 의 `input_audio.format` — OpenAI 호환 오디오 콘텐츠 파트는 mime 이 아니라 형식 문자열을 요구한다.
+ * mime → format 룩업(if-chain 금지). 모르면 기본값.
+ */
+export const AUDIO_ANALYZE_FORMATS: Record<string, string> = {
+    'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav',
+    'audio/mpeg': 'mp3', 'audio/mp3': 'mp3',
+    'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac',
+    'audio/ogg': 'ogg', 'audio/opus': 'opus', 'audio/flac': 'flac', 'audio/webm': 'webm',
+};
+export const AUDIO_ANALYZE_DEFAULT_FORMAT = 'wav';
 /** 기존 결과를 묻는 발화 — 이것까지 맞아야 보정한다("다 됐어·완성·보여줘·어떻게 됐·결과·진행"). 언어 공통이라 모든 job capability 가 쓴다 */
 export const JOB_RESULT_INTENT_PATTERN = /다\s*됐|됐어|됐나|완성|끝났|보여|어떻게\s*됐|진행|결과|받아|확인|(is it|are they)\s+(done|ready|finished)|show\s+(me\s+)?(it|the)|status/i;
 /** 새 생성·설명 요청은 보정 금지 — Planner 판단(simple/새 생성)을 그대로 둔다. 언어 공통 */

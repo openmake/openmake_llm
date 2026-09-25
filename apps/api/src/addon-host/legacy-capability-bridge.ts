@@ -5,7 +5,8 @@
  * music → P06, video → P08)은 각 runtime add-on 으로 옮겨 가며 이 목록에서 빠진다 — 빠진 뒤 그 add-on 이 꺼지면
  * Registry 에 없으므로 Planner·토글·직접 API 세 경로 모두 명시 거절된다(T02·T23).
  * 정의(라벨·힌트·인자 키·상한)는 `config/capabilities.ts` 상수에서 만든다 — 이 PR 에서 그 파일은 줄이지 않는다.
- * 검증된 어댑터가 없는 분석 계열은 등록은 하되 실행이 `unsupported` 로 실패한다(등록됨 ≠ 실행기 있음).
+ * 분석 계열(audio·music·video .analyze)은 네이티브 콘텐츠 파트 실행기(media-analyze)로 실행된다(2026-09-25).
+ * `UNSUPPORTED_CAPABILITIES` 에 남은 것이 있으면 등록은 하되 실행이 `unsupported` 로 실패한다(등록됨 ≠ 실행기 있음).
  *
  * @module addon-host/legacy-capability-bridge
  */
@@ -20,6 +21,7 @@ import { UnsupportedCapabilityError } from '../services/orchestrator/executors/u
 import { textExecutor } from '../services/orchestrator/executors/text';
 import { visionExecutor } from '../services/orchestrator/executors/vision';
 import { audioTranscribeExecutor, audioSpeechExecutor } from '../services/orchestrator/executors/audio';
+import { mediaAnalyzeExecutor } from '../services/orchestrator/executors/media-analyze';
 import { webSearchExecutor } from '../services/orchestrator/executors/web';
 
 /** 종전 `executors/index.ts` 의 정적 표 그대로 */
@@ -30,6 +32,9 @@ const LEGACY_EXECUTORS: Partial<Record<Capability, CapabilityExecutor>> = {
     'vision.ocr': visionExecutor,
     'audio.transcribe': audioTranscribeExecutor,
     'audio.speech': audioSpeechExecutor,
+    'audio.analyze': mediaAnalyzeExecutor,
+    'music.analyze': mediaAnalyzeExecutor,
+    'video.analyze': mediaAnalyzeExecutor,
     'web.search': webSearchExecutor,
 };
 
@@ -49,6 +54,8 @@ const TIMEOUTS: Partial<Record<Capability, number>> = {
     'image.generate': CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, 'image.edit': CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS,
     'vision.describe': CAPABILITY_LIMITS.VISION_TIMEOUT_MS, 'vision.ocr': CAPABILITY_LIMITS.VISION_TIMEOUT_MS,
     'audio.speech': CAPABILITY_LIMITS.TTS_TIMEOUT_MS, 'audio.transcribe': CAPABILITY_LIMITS.STT_TIMEOUT_MS,
+    'audio.analyze': CAPABILITY_LIMITS.MEDIA_ANALYZE_TIMEOUT_MS, 'music.analyze': CAPABILITY_LIMITS.MEDIA_ANALYZE_TIMEOUT_MS,
+    'video.analyze': CAPABILITY_LIMITS.MEDIA_ANALYZE_TIMEOUT_MS,
     'video.generate': CAPABILITY_LIMITS.VIDEO_WAIT_MS, 'music.generate': CAPABILITY_LIMITS.MUSIC_WAIT_MS,
 };
 
@@ -90,7 +97,7 @@ function legacyHandler(id: Capability): CapabilityHandler {
 /**
  * Base 가 소유하는 capability — 전환이 끝난 미디어 생성 ID 는 여기서 빠진다(그 소유 add-on 만 등록한다).
  * P04 부터 image.generate·image.edit 은 image-runtime, P06 music.generate 는 music-runtime, P08 video.generate 는 video-runtime
- * 소유다(분석 계열 music.analyze·video.analyze 는 남는다) —
+ * 소유다(분석 계열 audio.analyze·music.analyze·video.analyze 는 Base 실행기로 남는다) —
  * 그 add-on 이 꺼지면 Registry 에 없어 세 경로 모두 거절된다.
  */
 export const LEGACY_BRIDGE_CAPABILITIES: readonly Capability[] = CAPABILITIES.filter(c => !c.startsWith('image.') && c !== 'music.generate' && c !== 'video.generate');

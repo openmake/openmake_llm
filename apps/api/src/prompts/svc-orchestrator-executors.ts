@@ -38,3 +38,24 @@ const DESCRIBE_DEFAULT_EN = 'Describe the attached image.';
 export function getVisionDescribeDefaultInstruction(lang: string): string {
     return lang === 'ko' ? DESCRIBE_DEFAULT_KO : DESCRIBE_DEFAULT_EN;
 }
+
+/**
+ * audio.analyze / music.analyze / video.analyze 하위 작업자 system prompt (ko/en).
+ * 종합 단계의 근거로 쓰이는 관찰 기록이다 — 전사(STT)가 아니라 소리·음악·장면의 특징을 분석적으로 서술한다.
+ * capability 별 룩업(if-chain 금지) — 없는 capability 는 오디오 분석을 기본으로 쓴다.
+ */
+const MEDIA_ANALYZE_WORKER_KO: Record<string, string> = {
+    'audio.analyze': '당신은 오케스트레이터의 하위 작업자입니다. 첨부 오디오를 들리는 대로 분석하세요 — 소리의 종류·음질·화자 수·감정·배경음·특징을 서술하되, 말을 글자로 옮기는 전사는 하지 마세요. 인사·서두 없이 본문만.',
+    'music.analyze': '당신은 오케스트레이터의 하위 작업자입니다. 첨부 음악을 분석하세요 — 장르·템포(BPM 추정)·조성/분위기·주요 악기·구성·보컬 유무를 서술하세요. 인사·서두 없이 본문만.',
+    'video.analyze': '당신은 오케스트레이터의 하위 작업자입니다. 첨부 영상을 분석하세요 — 장면·등장 대상·동작·시각 요소·시간 흐름을 순서대로 서술하세요. 인사·서두 없이 본문만.',
+};
+const MEDIA_ANALYZE_WORKER_EN: Record<string, string> = {
+    'audio.analyze': 'You are a sub-task worker of an orchestrator. Analyze the attached audio — describe the kinds of sounds, quality, number of speakers, mood, background, and notable features. Do not transcribe speech to text. Return plain text without preamble.',
+    'music.analyze': 'You are a sub-task worker of an orchestrator. Analyze the attached music — describe genre, tempo (estimated BPM), key/mood, main instruments, structure, and whether vocals are present. Return plain text without preamble.',
+    'video.analyze': 'You are a sub-task worker of an orchestrator. Analyze the attached video — describe scenes, subjects, actions, visual elements, and their progression over time. Return plain text without preamble.',
+};
+
+export function getMediaAnalyzeSystemPrompt(capability: string, lang: string): string {
+    const table = lang === 'ko' ? MEDIA_ANALYZE_WORKER_KO : MEDIA_ANALYZE_WORKER_EN;
+    return table[capability] ?? table['audio.analyze'];
+}

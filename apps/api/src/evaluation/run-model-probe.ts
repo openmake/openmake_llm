@@ -1,5 +1,5 @@
 /**
- * 모델 프로필 실측 프로브 CLI (S2) — 실제 요청을 보낸다(모델당 8회, 순차, 출력 256토큰 상한).
+ * 모델 프로필 실측 프로브 CLI (S2) — 실제 요청을 보낸다(모델당 8회 + --audio/--video 를 주면 각 1회, 순차, 출력 256토큰 상한).
  *
  *   npm run eval:probe -- --model qwen3.8-27b                      # 로컬(LiteLLM 게이트웨이)
  *   npm run eval:probe -- --model bai:glm-5.3-flash --user 3        # 외부 — 그 사용자의 BYOK 키로 provider 직결
@@ -17,12 +17,44 @@ if (require.main === module) {
     require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 }
 
+import { AUDIO_ANALYZE_DEFAULT_FORMAT, AUDIO_ANALYZE_FORMATS } from '../config/capabilities';
+import { mimeFromName } from '../services/orchestrator/media-io';
 import { IMAGE_FIXTURE_DIR } from './dataset-loader';
 import { parseListArg } from './matrix-reporter';
-import { judgeProbe, runProbe, type ProbeHttpResult, type ProbePost } from './model-probe';
+import { judgeProbe, runProbe, type ProbeHttpResult, type ProbeMediaInput, type ProbePost } from './model-probe';
 
 /** 비전 프로브 픽스처 — 숫자 한 글자 이미지와 그 정답 */
 const VISION_FIXTURE = { file: 'digit-7.png', answer: '7', question: 'Which single digit is shown in this image? Answer with the digit only.' };
+
+/** 미디어 프로브 기본 질문 — 정답(--audio-answer/--video-answer)이 함께 와야 "내용 이해" 를 확정한다 */
+const DEFAULT_AUDIO_QUESTION = 'What do you hear in this audio? Describe it briefly.';
+const DEFAULT_VIDEO_QUESTION = 'What happens in this video? Describe it briefly.';
+
+/** --audio/--video 로 넘긴 샘플 파일을 프로브 입력으로 읽는다(넘기지 않으면 undefined → 미디어 프로브 생략) */
+function readMediaInput(): ProbeMediaInput | undefined {
+    const audioPath = argValue('--audio');
+    const videoPath = argValue('--video');
+    if (!audioPath && !videoPath) return undefined;
+    const media: ProbeMediaInput = {};
+    if (audioPath) {
+        const mime = (mimeFromName(audioPath) || '').split(';')[0].trim().toLowerCase();
+        media.audio = {
+            base64: fs.readFileSync(audioPath).toString('base64'),
+            format: AUDIO_ANALYZE_FORMATS[mime] ?? AUDIO_ANALYZE_DEFAULT_FORMAT,
+            question: argValue('--audio-question') ?? DEFAULT_AUDIO_QUESTION,
+            answer: argValue('--audio-answer'),
+        };
+    }
+    if (videoPath) {
+        const mime = mimeFromName(videoPath) || 'video/mp4';
+        media.video = {
+            dataUrl: `data:${mime};base64,${fs.readFileSync(videoPath).toString('base64')}`,
+            question: argValue('--video-question') ?? DEFAULT_VIDEO_QUESTION,
+            answer: argValue('--video-answer'),
+        };
+    }
+    return media;
+}
 
 function argValue(flag: string): string | undefined {
     const i = process.argv.indexOf(flag);
@@ -87,19 +119,20 @@ async function resolveTarget(fullId: string, userId: string | undefined): Promis
 async function main(): Promise<void> {
     const models = parseListArg(argValue('--model') ?? argValue('--models'), []);
     if (models.length === 0) {
-        console.error('사용법: npm run eval:probe -- --model <id[,id…]> [--user <id>] (외부 모델은 provider:model + --user)');
+        console.error('사용법: npm run eval:probe -- --model <id[,id…]> [--user <id>] [--audio <path> --audio-answer <text>] [--video <path> --video-answer <text>] (외부 모델은 provider:model + --user)');
         process.exit(1);
     }
     const timeoutMs = Number(process.env.OMK_EVAL_PROBE_TIMEOUT_MS ?? '120000');
     const delayMs = Number(process.env.OMK_EVAL_PROBE_DELAY_MS ?? '3000');
     const image = fs.readFileSync(path.join(IMAGE_FIXTURE_DIR, VISION_FIXTURE.file)).toString('base64');
+    const media = readMediaInput();
     const fragment: Record<string, unknown> = {};
     let unreachable = 0;
     for (const fullId of models) {
         const target = await resolveTarget(fullId, argValue('--user'));
         console.log(`\n[probe] ${fullId} → ${new URL(target.endpoint).host}`);
-        const observations = await runProbe(httpPoster(target.endpoint, target.apiKey, timeoutMs), target.model, image, VISION_FIXTURE.question, target.effortExtra, delayMs);
-        const verdict = judgeProbe(observations, VISION_FIXTURE.answer);
+        const observations = await runProbe(httpPoster(target.endpoint, target.apiKey, timeoutMs), target.model, image, VISION_FIXTURE.question, target.effortExtra, delayMs, media);
+        const verdict = judgeProbe(observations, VISION_FIXTURE.answer, { audio: media?.audio?.answer, video: media?.video?.answer });
         for (const n of verdict.notes) console.log(`  - ${n}`);
         if (verdict.unreachable) { unreachable++; continue; }
         console.log(`  프로필: ${JSON.stringify(verdict.profile)}`);
