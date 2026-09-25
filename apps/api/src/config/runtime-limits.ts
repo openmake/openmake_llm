@@ -49,6 +49,8 @@ export const HISTORY_SUMMARIZER = {
  * API 응답, 로깅, 요약 시 텍스트를 자르는 최대 길이
  */
 export const TRUNCATION = {
+    /** choices 없는 LLM 응답 본문을 오류 메시지에 싣는 최대 길이 */
+    MALFORMED_LLM_RESPONSE_DETAIL_MAX: 300,
     /** 웹 페이지 콘텐츠 추출 최대 길이 */
     WEB_CONTENT_MAX: 3000,
     /** 웹 검색 결과 스니펫 길이 */
