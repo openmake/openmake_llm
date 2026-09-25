@@ -22,12 +22,14 @@ export function CreateSpaceDialog({
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => {
     setName("");
     setDescription("");
+    setInstructions("");
     setError(null);
   };
 
@@ -42,6 +44,7 @@ export function CreateSpaceDialog({
       const space = await knowledgeApi.createSpace({
         name: name.trim(),
         description: description.trim() || undefined,
+        instructions: instructions.trim() || undefined,
       });
       void queryClient.invalidateQueries({ queryKey: qk.spaces() });
       reset();
@@ -77,6 +80,16 @@ export function CreateSpaceDialog({
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             placeholder={t("create.descPlaceholder")}
+            className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-fg-2">{t("create.instructionsLabel")}</span>
+          <textarea
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            rows={3}
+            placeholder={t("create.instructionsPlaceholder")}
             className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent"
           />
         </label>

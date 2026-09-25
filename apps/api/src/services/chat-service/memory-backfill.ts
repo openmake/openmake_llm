@@ -10,6 +10,7 @@ import { getPool } from '../../data/models/unified-database';
 import { UserMemoryRepository } from '../../data/repositories/user-memory-repository';
 import { createClient } from '../../llm/client';
 import { extractLLMMemories, isDuplicateMemory, auditMemoryWrite } from './memory-extraction';
+import { isSessionMemoryIsolated } from './turn-integrations';
 import { MEMORY_EXTRACTION } from '../../config/memory-extraction';
 import { parallelBatch } from '../../workflow/graph-engine';
 import { createLogger } from '../../utils/logger';
@@ -46,7 +47,15 @@ export async function backfillUserMemories(
          LIMIT $2`,
         [userId, maxSessions],
     )).rows as Array<{ id: string; user_text: string }>;
-    const sessions = rows.filter((r) => (r.user_text || '').length >= minChars);
+
+    // 메모리 격리 세션(예: 문서 작업공간에 연결된 대화)은 백필 대상에서 제외 — 그 문맥이 전역 메모리로
+    // 새 나가지 않게 한다. fail-closed: 판정이 실패한 세션은 격리로 간주해 건너뛴다.
+    const isolation = await Promise.allSettled(rows.map((r) => isSessionMemoryIsolated(userId, r.id)));
+    const sessions = rows.filter((r, i) => {
+        const res = isolation[i];
+        const isolated = res.status === 'fulfilled' ? res.value : true;
+        return !isolated && (r.user_text || '').length >= minChars;
+    });
 
     const client = createClient();
     const perSession = await parallelBatch(

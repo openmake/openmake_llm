@@ -2596,28 +2596,30 @@
     "untitledConversation": "無題の会話",
     "noConversations": "紐づく会話がありません",
     "newConversation": "新しいチャット",
-    "sectionTitle": "Knowledge",
-    "sidebarEmpty": "まだ Knowledge がありません",
-    "viewAll": "すべての Knowledge を表示",
+    "sectionTitle": "プロジェクト",
+    "sidebarEmpty": "まだプロジェクトがありません",
+    "viewAll": "すべてのプロジェクトを表示",
     "listSubtitle": "資料を追加すると、会話がそれを根拠に回答します",
-    "newSpace": "新しい Knowledge",
-    "searchPlaceholder": "Knowledge を検索",
-    "empty": "まだ Knowledge がありません",
+    "newSpace": "新しいプロジェクト",
+    "searchPlaceholder": "プロジェクトを検索",
+    "empty": "まだプロジェクトがありません",
     "noResults": "結果がありません",
     "notFound": "見つかりません",
     "notReadyNotice": "埋め込みが未準備のため、新しい資料の処理が遅れる場合があります",
     "noDescription": "説明なし",
     "editDescription": "説明を編集",
-    "deleteSpace": "Knowledge を削除",
+    "deleteSpace": "プロジェクトを削除",
     "deleteSpaceConfirm": "'{name}' を削除しますか？資料と紐づけがすべて削除されます。",
     "create": {
-      "title": "Knowledge を作成",
+      "title": "プロジェクトを作成",
       "nameRequired": "名前を入力してください",
       "nameLabel": "名前",
       "namePlaceholder": "例: 製品ドキュメント",
       "descLabel": "説明（任意）",
-      "descPlaceholder": "この Knowledge の用途",
-      "submit": "作成"
+      "descPlaceholder": "このプロジェクトの用途",
+      "submit": "作成",
+      "instructionsLabel": "指示（任意）",
+      "instructionsPlaceholder": "このプロジェクトの会話に毎回適用する案内（例：口調・形式・重点）"
     },
     "card": {
       "documents": "ドキュメント {count} 件",
@@ -2664,11 +2666,11 @@
     },
     "bind": {
       "title": "既存の会話を追加",
-      "hint": "この Knowledge に紐づける会話を選択",
+      "hint": "このプロジェクトに紐づける会話を選択",
       "noChats": "最近の会話がありません"
     },
     "banner": {
-      "text": "この会話ではこの Knowledge の資料を利用できます"
+      "text": "この会話ではこのプロジェクトの資料を利用できます"
     },
     "citation": {
       "title": "引用",
@@ -2694,6 +2696,22 @@
     "sidebar": {
       "expandSpace": "{name} を展開",
       "collapseSpace": "{name} を折りたたむ"
+    },
+    "instructions": {
+      "title": "指示",
+      "edit": "指示を編集",
+      "empty": "まだ指示がありません",
+      "placeholder": "このプロジェクトの会話に毎回適用する案内"
+    },
+    "memory": {
+      "section": "メモリ {count} 件",
+      "add": "メモリを追加",
+      "hint": "このプロジェクトの会話に参考文脈として注入されます（手動・新しい順）。",
+      "placeholder": "覚えておく内容",
+      "save": "保存",
+      "empty": "まだメモリがありません",
+      "delete": "削除",
+      "deleteConfirm": "このメモリを削除しますか？"
     }
   },
   "modelAssignments": {

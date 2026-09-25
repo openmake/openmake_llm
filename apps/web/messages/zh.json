@@ -2596,28 +2596,30 @@
     "untitledConversation": "未命名对话",
     "noConversations": "没有关联的对话",
     "newConversation": "新对话",
-    "sectionTitle": "Knowledge",
-    "sidebarEmpty": "还没有 Knowledge",
-    "viewAll": "查看全部 Knowledge",
+    "sectionTitle": "项目",
+    "sidebarEmpty": "还没有项目",
+    "viewAll": "查看全部项目",
     "listSubtitle": "添加资料后，对话将基于这些资料作答",
-    "newSpace": "新建 Knowledge",
-    "searchPlaceholder": "搜索 Knowledge",
-    "empty": "还没有 Knowledge",
+    "newSpace": "新建项目",
+    "searchPlaceholder": "搜索项目",
+    "empty": "还没有项目",
     "noResults": "没有结果",
     "notFound": "未找到",
     "notReadyNotice": "嵌入尚未就绪，新资料的处理可能会延迟",
     "noDescription": "暂无描述",
     "editDescription": "编辑描述",
-    "deleteSpace": "删除 Knowledge",
+    "deleteSpace": "删除项目",
     "deleteSpaceConfirm": "删除“{name}”？所有资料和关联都会被移除。",
     "create": {
-      "title": "创建 Knowledge",
+      "title": "创建项目",
       "nameRequired": "请输入名称",
       "nameLabel": "名称",
       "namePlaceholder": "例如：产品文档",
       "descLabel": "描述（可选）",
-      "descPlaceholder": "此 Knowledge 的用途",
-      "submit": "创建"
+      "descPlaceholder": "此项目的用途",
+      "submit": "创建",
+      "instructionsLabel": "指令（可选）",
+      "instructionsPlaceholder": "应用于此项目每次对话的说明（例如语气、格式、重点）"
     },
     "card": {
       "documents": "{count} 个文档",
@@ -2664,11 +2666,11 @@
     },
     "bind": {
       "title": "添加已有对话",
-      "hint": "选择要关联到此 Knowledge 的对话",
+      "hint": "选择要关联到此项目的对话",
       "noChats": "没有最近的对话"
     },
     "banner": {
-      "text": "此对话可使用该 Knowledge 中的资料"
+      "text": "此对话可使用该项目中的资料"
     },
     "citation": {
       "title": "引用",
@@ -2694,6 +2696,22 @@
     "sidebar": {
       "expandSpace": "展开 {name}",
       "collapseSpace": "折叠 {name}"
+    },
+    "instructions": {
+      "title": "指令",
+      "edit": "编辑指令",
+      "empty": "还没有指令",
+      "placeholder": "应用于此项目每次对话的说明"
+    },
+    "memory": {
+      "section": "{count} 条记忆",
+      "add": "添加记忆",
+      "hint": "作为背景上下文注入此项目的对话（手动，最新在前）。",
+      "placeholder": "要记住的内容",
+      "save": "保存",
+      "empty": "还没有记忆",
+      "delete": "删除",
+      "deleteConfirm": "删除这条记忆？"
     }
   },
   "modelAssignments": {

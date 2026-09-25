@@ -185,15 +185,27 @@ export async function updateSessionTitleIfVersion(sessionId: string, title: stri
 }
 
 /** 폴더·태그 목록 필터(157) — folderId 'none' 은 미분류. 컬럼명은 고정, 값만 바인딩 */
-export interface SessionListFilter { folderId?: string; tag?: string }
+export interface SessionListFilter {
+    folderId?: string;
+    tag?: string;
+    /**
+     * 기본 목록에서 뺄 세션 id(통합이 숨기려는 것 — 예: 프로젝트에 연결된 대화). SQL WHERE 에서 걸러
+     * LIMIT 전에 적용되므로 페이지가 짧아지지 않는다. 빈 배열/미지정이면 아무것도 빼지 않는다.
+     */
+    excludeSessionIds?: string[];
+}
 
 /** PURE: 필터 → 추가 WHERE 절과 파라미터(시작 번호부터) */
-export function sessionFilterClause(filter: SessionListFilter | undefined, startIndex: number): { sql: string; params: string[] } {
+export function sessionFilterClause(filter: SessionListFilter | undefined, startIndex: number): { sql: string; params: unknown[] } {
     const parts: string[] = [];
-    const params: string[] = [];
+    const params: unknown[] = [];
     if (filter?.folderId === 'none') parts.push('cs.folder_id IS NULL');
     else if (filter?.folderId) { params.push(filter.folderId); parts.push(`cs.folder_id = $${startIndex + params.length - 1}`); }
     if (filter?.tag) { params.push(filter.tag); parts.push(`$${startIndex + params.length - 1} = ANY(cs.tags)`); }
+    if (filter?.excludeSessionIds && filter.excludeSessionIds.length > 0) {
+        params.push(filter.excludeSessionIds);
+        parts.push(`cs.id <> ALL($${startIndex + params.length - 1})`);
+    }
     return { sql: parts.map((p) => ` AND ${p}`).join(''), params };
 }
 

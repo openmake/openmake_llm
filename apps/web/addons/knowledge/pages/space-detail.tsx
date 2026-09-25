@@ -33,6 +33,7 @@ import { useSessionActions } from "../session-actions";
 import { DocumentList } from "../components/document-list";
 import { BindConversationDialog } from "../components/bind-picker";
 import { CitationPanel } from "../components/citation-panel";
+import { MemorySection } from "../components/memory-section";
 
 export function SpaceDetail({
   spaceId,
@@ -52,6 +53,7 @@ export function SpaceDetail({
   const [bindOpen, setBindOpen] = useState(false);
   const [editName, setEditName] = useState<string | null>(null);
   const [editDesc, setEditDesc] = useState<string | null>(null);
+  const [editInstructions, setEditInstructions] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [citationOpen, setCitationOpen] = useState<boolean>(!!(docId && chunkId));
@@ -91,6 +93,13 @@ export function SpaceDetail({
     await knowledgeApi.updateSpace(spaceId, { description: description || null });
     void invalidate();
     setEditDesc(null);
+  };
+
+  const saveInstructions = async () => {
+    const instructions = (editInstructions ?? "").trim();
+    await knowledgeApi.updateSpace(spaceId, { instructions: instructions || null });
+    void invalidate();
+    setEditInstructions(null);
   };
 
   const onPickFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -235,6 +244,41 @@ export function SpaceDetail({
             )}
           </section>
 
+          {/* 지침 — 이 프로젝트 대화에 매 턴 주입되는 소유자 안내 */}
+          <section className="space-y-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-fg">{t("instructions.title")}</h2>
+              {canEdit && editInstructions === null && (
+                <button
+                  type="button"
+                  aria-label={t("instructions.edit")}
+                  onClick={() => setEditInstructions(space?.instructions ?? "")}
+                  className="shrink-0 text-faint transition hover:text-fg"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            {editInstructions !== null ? (
+              <div className="space-y-2">
+                <textarea
+                  autoFocus
+                  value={editInstructions}
+                  onChange={(e) => setEditInstructions(e.target.value)}
+                  rows={4}
+                  placeholder={t("instructions.placeholder")}
+                  className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => void saveInstructions()}>{t("save")}</Button>
+                  <Button size="sm" variant="outline" onClick={() => setEditInstructions(null)}>{t("cancel")}</Button>
+                </div>
+              </div>
+            ) : (
+              <p className="whitespace-pre-wrap text-sm text-muted">{space?.instructions || t("instructions.empty")}</p>
+            )}
+          </section>
+
           {uploadError && <p className="text-sm text-danger">{uploadError}</p>}
           {caps && !caps.ready && (
             <p className="rounded-md border border-warn/40 bg-warn-soft/30 px-3 py-2 text-xs text-warn">
@@ -258,6 +302,9 @@ export function SpaceDetail({
             </div>
             {space && <DocumentList spaceId={spaceId} documents={space.documents} canEdit={canEdit} />}
           </section>
+
+          {/* 메모리 (수동) */}
+          <MemorySection spaceId={spaceId} canEdit={canEdit} />
 
           {/* 대화 */}
           <section className="space-y-3">

@@ -21,6 +21,7 @@ export interface SpaceSummaryRow extends SpaceScopeRow {
     name: string;
     description: string | null;
     icon: string | null;
+    instructions: string | null;
     last_used_at: string | null;
     updated_at: string;
     document_count: string;
@@ -31,7 +32,7 @@ export interface SpaceSummaryRow extends SpaceScopeRow {
 
 /** 요약 카운트 SELECT 목록 — 목록·상세가 공유. deleted/삭제 문서는 세지 않는다. */
 const SUMMARY_COLUMNS = `
-    s.id, s.name, s.description, s.icon, s.scope_type, s.scope_id, s.last_used_at, s.updated_at,
+    s.id, s.name, s.description, s.icon, s.instructions, s.scope_type, s.scope_id, s.last_used_at, s.updated_at,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status <> 'deleted') AS document_count,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status = 'processing') AS processing_count,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status = 'failed') AS failed_count,
@@ -84,15 +85,16 @@ export interface InsertSpaceInput {
     name: string;
     description: string | null;
     icon: string | null;
+    instructions: string | null;
 }
 
 /** Space 생성 — 생성한 id 를 돌려준다. config_profile_id 는 비워 두고 해석 시 기본 프로필을 쓴다. */
 export async function insertSpace(input: InsertSpaceInput): Promise<string> {
     const id = randomUUID();
     await kdb().query(
-        `INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name, description, icon, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')`,
-        [id, input.scopeType, input.scopeId, input.createdBy, input.name, input.description, input.icon],
+        `INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name, description, icon, instructions, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')`,
+        [id, input.scopeType, input.scopeId, input.createdBy, input.name, input.description, input.icon, input.instructions],
     );
     return id;
 }
@@ -101,13 +103,14 @@ export async function insertSpace(input: InsertSpaceInput): Promise<string> {
 export async function updateSpaceFields(
     actor: KnowledgeActor,
     id: string,
-    patch: { name?: string; description?: string | null; icon?: string | null },
+    patch: { name?: string; description?: string | null; icon?: string | null; instructions?: string | null },
 ): Promise<boolean> {
     const sets: string[] = [];
     const params: unknown[] = [id];
     if (patch.name !== undefined) { params.push(patch.name); sets.push(`name = $${params.length}`); }
     if (patch.description !== undefined) { params.push(patch.description); sets.push(`description = $${params.length}`); }
     if (patch.icon !== undefined) { params.push(patch.icon); sets.push(`icon = $${params.length}`); }
+    if (patch.instructions !== undefined) { params.push(patch.instructions); sets.push(`instructions = $${params.length}`); }
     if (sets.length === 0) return false;
     const pred = accessPredicate(actor, 'write', 'knowledge_spaces', params.length + 1);
     const r = await kdb().query(

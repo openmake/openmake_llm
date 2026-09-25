@@ -2596,28 +2596,30 @@
     "untitledConversation": "Unbenannte Unterhaltung",
     "noConversations": "Keine verknüpften Unterhaltungen",
     "newConversation": "Neuer Chat",
-    "sectionTitle": "Knowledge",
-    "sidebarEmpty": "Noch kein Knowledge",
-    "viewAll": "Alle Knowledge anzeigen",
+    "sectionTitle": "Projekte",
+    "sidebarEmpty": "Noch keine Projekte",
+    "viewAll": "Alle Projekte anzeigen",
     "listSubtitle": "Füge Materialien hinzu, dann antworten Unterhaltungen darauf gestützt",
-    "newSpace": "Neues Knowledge",
-    "searchPlaceholder": "Knowledge suchen",
-    "empty": "Noch kein Knowledge",
+    "newSpace": "Neues Projekt",
+    "searchPlaceholder": "Projekte suchen",
+    "empty": "Noch keine Projekte",
     "noResults": "Keine Ergebnisse",
     "notFound": "Nicht gefunden",
     "notReadyNotice": "Das Embedding ist noch nicht bereit; die Verarbeitung neuer Materialien kann sich verzögern",
     "noDescription": "Keine Beschreibung",
     "editDescription": "Beschreibung bearbeiten",
-    "deleteSpace": "Knowledge löschen",
+    "deleteSpace": "Projekt löschen",
     "deleteSpaceConfirm": "„{name}“ löschen? Alle Materialien und Verknüpfungen werden entfernt.",
     "create": {
-      "title": "Knowledge erstellen",
+      "title": "Projekt erstellen",
       "nameRequired": "Namen eingeben",
       "nameLabel": "Name",
       "namePlaceholder": "z. B. Produktdokumentation",
       "descLabel": "Beschreibung (optional)",
-      "descPlaceholder": "Wofür dieses Knowledge dient",
-      "submit": "Erstellen"
+      "descPlaceholder": "Wofür dieses Projekt dient",
+      "submit": "Erstellen",
+      "instructionsLabel": "Anweisungen (optional)",
+      "instructionsPlaceholder": "Vorgaben für jeden Chat in diesem Projekt (z. B. Ton, Format, Fokus)"
     },
     "card": {
       "documents": "{count} Dokumente",
@@ -2664,11 +2666,11 @@
     },
     "bind": {
       "title": "Vorhandenen Chat hinzufügen",
-      "hint": "Wähle eine Unterhaltung zum Verknüpfen mit diesem Knowledge",
+      "hint": "Wähle eine Unterhaltung zum Verknüpfen mit diesem Projekt",
       "noChats": "Keine aktuellen Chats"
     },
     "banner": {
-      "text": "Diese Unterhaltung kann Materialien aus diesem Knowledge nutzen"
+      "text": "Diese Unterhaltung kann Materialien aus diesem Projekt nutzen"
     },
     "citation": {
       "title": "Zitat",
@@ -2694,6 +2696,22 @@
     "sidebar": {
       "expandSpace": "{name} aufklappen",
       "collapseSpace": "{name} zuklappen"
+    },
+    "instructions": {
+      "title": "Anweisungen",
+      "edit": "Anweisungen bearbeiten",
+      "empty": "Noch keine Anweisungen",
+      "placeholder": "Vorgaben für jeden Chat in diesem Projekt"
+    },
+    "memory": {
+      "section": "{count} Notizen",
+      "add": "Notiz hinzufügen",
+      "hint": "Wird als Hintergrundkontext in die Chats dieses Projekts eingefügt (manuell, neueste zuerst).",
+      "placeholder": "Etwas zum Merken",
+      "save": "Speichern",
+      "empty": "Noch keine Notizen",
+      "delete": "Löschen",
+      "deleteConfirm": "Diese Notiz löschen?"
     }
   },
   "modelAssignments": {

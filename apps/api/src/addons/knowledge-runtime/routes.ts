@@ -12,8 +12,9 @@ import { success } from '../../utils/api-response';
 import { asyncHandler, ValidationError } from '../../utils/error-handler';
 import { resolveUserId, assertAdmin } from './http';
 import { getDefaultLimits } from './config/profiles';
-import { createSpaceSchema, updateSpaceSchema, updateProfileSchema } from './schemas';
+import { createSpaceSchema, updateSpaceSchema, updateProfileSchema, memoryInputSchema } from './schemas';
 import * as spaces from './spaces/service';
+import * as memories from './memories/service';
 import * as documents from './documents/service';
 import * as binding from './conversations/binding-service';
 import { getChunkPreview } from './preview';
@@ -95,6 +96,28 @@ knowledgeRouter.delete('/spaces/:id/documents/:docId', requireAuth, asyncHandler
 knowledgeRouter.post('/spaces/:id/documents/:docId/retry', requireAuth, asyncHandler(async (req, res) => {
     await documents.retryDocument(resolveUserId(req), req.params.id, req.params.docId);
     res.json(success({ retried: true }));
+}));
+
+// ── Space memories (수동 — 자동 추출 없음) ──
+knowledgeRouter.get('/spaces/:id/memories', requireAuth, asyncHandler(async (req, res) => {
+    res.json(success({ memories: await memories.listMemories(resolveUserId(req), req.params.id) }));
+}));
+
+knowledgeRouter.post('/spaces/:id/memories', requireAuth, asyncHandler(async (req, res) => {
+    const body = parse<import('./schemas').MemoryInputBody>(memoryInputSchema, req.body);
+    const memory = await memories.addMemory(resolveUserId(req), req.params.id, body.content);
+    res.status(201).json(success({ memory }));
+}));
+
+knowledgeRouter.patch('/spaces/:id/memories/:memId', requireAuth, asyncHandler(async (req, res) => {
+    const body = parse<import('./schemas').MemoryInputBody>(memoryInputSchema, req.body);
+    const memory = await memories.updateMemory(resolveUserId(req), req.params.id, req.params.memId, body.content);
+    res.json(success({ memory }));
+}));
+
+knowledgeRouter.delete('/spaces/:id/memories/:memId', requireAuth, asyncHandler(async (req, res) => {
+    await memories.deleteMemory(resolveUserId(req), req.params.id, req.params.memId);
+    res.status(204).end();
 }));
 
 // ── Conversation bindings ──

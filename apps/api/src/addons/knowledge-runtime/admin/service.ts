@@ -79,6 +79,6 @@ export async function rechunkSpace(spaceId: string): Promise<void> {
         `SELECT 1 FROM knowledge_spaces WHERE id = $1 AND deleted_at IS NULL`,
         [spaceId],
     );
-    if ((exists.rowCount ?? 0) === 0) throw new AppError('Knowledge Space', 404, true, 'NOT_FOUND');
+    if ((exists.rowCount ?? 0) === 0) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
     await enqueueJob({ kind: 'rechunk', spaceId });
 }

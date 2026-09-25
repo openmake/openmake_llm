@@ -10,6 +10,10 @@ export const KNOWLEDGE_VALIDATION = {
     NAME_MAX: 100,
     /** 설명 최대 길이(문자) */
     DESCRIPTION_MAX: 2_000,
+    /** Space 지침 최대 길이(문자) — 주입 토큰 예산(knowledge_profiles.limits.maxInstructionTokens)과 별개의 입력 하드 캡 */
+    INSTRUCTIONS_MAX: 8_000,
+    /** 메모리 1건 입력 하드 캡(문자) — 정책 상한(limits.maxMemoryCharsPerItem)은 서비스가 프로필로 다시 검사한다 */
+    MEMORY_CONTENT_MAX: 8_000,
     /** 아이콘 문자열 최대 길이 — 스키마 knowledge_spaces.icon VARCHAR(32) 와 짝 */
     ICON_MAX: 32,
     /** 프로필 이름 최대 길이 */

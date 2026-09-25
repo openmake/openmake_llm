@@ -63,6 +63,12 @@ export interface TurnContextContribution {
     contextBlock?: string;
     /** 이 턴의 출처 — 번호(n)는 sourceOffset+1 부터 연속이어야 한다 */
     sources?: import('../../tools/web-search/types').SearchSourceRef[];
+    /**
+     * 시스템 프롬프트에 붙일 조각(이 턴에만) — custom instructions 뒤(동적 경계 뒤)에 붙는다.
+     * 자료 근거(contextBlock)와 달리 사용자 메시지가 아니라 system 채널에 실리는 매 턴 고정 안내다.
+     * 통합이 문구를 소유하고, Base 는 이름·형식을 모른 채 문자열만 이어 붙인다.
+     */
+    systemPromptPart?: string;
 }
 
 export interface ChatTurnIntegration {
@@ -73,6 +79,18 @@ export interface ChatTurnIntegration {
      * 실패는 통합 스스로 처리해 안내 블록으로 돌려주는 것이 원칙이며, 던지면 Base 가 그 통합만 건너뛴다.
      */
     prepareTurnContext?(input: TurnContextInput): Promise<TurnContextContribution | undefined>;
+    /**
+     * 이 세션이 이 통합의 "메모리 격리" 세션인가 — true 면 그 대화의 사용자 메시지를 전역 메모리
+     * (`user_memories`)로 쓰지 않는다(자동 형성·과거 백필 모두). 예: 문서 작업공간에 연결된 대화의
+     * 문맥이 일반 채팅으로 새 나가지 않게 한다. 판정 실패는 호출부가 fail-closed 로 격리 처리한다.
+     */
+    isMemoryIsolatedSession?(userId: string, sessionId: string): Promise<boolean>;
+    /**
+     * 기본 대화 목록(사이드바 "최근 대화")에서 숨길 세션 id — 이 통합에 속한 대화를 일반 목록에서 빼고
+     * 그 통합의 전용 섹션(예: 프로젝트별 목록)에만 보이게 한다. /history·관리자 전체 목록은 숨기지 않는다
+     * (호출부가 명시적으로 요청할 때만 제외). 대화는 URL 로는 평소처럼 열리고 폴더·태그도 그대로 쓴다.
+     */
+    listHiddenSessionIds?(userId: string): Promise<string[]>;
     /** 이 턴이 통합의 의도 턴인가 — 프롬프트 지문·관측 플래그에 그대로 실린다 */
     detectIntent?(message: string): boolean;
     /** cap·relevance 선택과 무관하게 포함할 도구 (이름 부분 일치). 의도와 무관하게 메시지로 판정한다. */
@@ -173,15 +191,17 @@ export function collectContextRefs(msg: Record<string, unknown>): Record<string,
  */
 export async function collectTurnContexts(
     input: Omit<TurnContextInput, 'sourceOffset'> & { sourceOffset?: number },
-): Promise<{ contextBlock: string; sources: import('../../tools/web-search/types').SearchSourceRef[] }> {
+): Promise<{ contextBlock: string; sources: import('../../tools/web-search/types').SearchSourceRef[]; systemPromptPart: string }> {
     const sources: import('../../tools/web-search/types').SearchSourceRef[] = [];
     const blocks: string[] = [];
+    const systemPromptParts: string[] = [];
     let offset = input.sourceOffset ?? 0;
     for (const integration of getChatTurnIntegrations()) {
         if (!integration.prepareTurnContext) continue;
         try {
             const r = await withTurnContextTimeout(integration.prepareTurnContext({ ...input, sourceOffset: offset }), integration.id);
             if (r?.contextBlock) blocks.push(r.contextBlock);
+            if (r?.systemPromptPart) systemPromptParts.push(r.systemPromptPart);
             const own = (r?.sources ?? []).filter((s) => s.n > offset);
             sources.push(...own);
             offset = Math.max(offset, ...own.map((s) => s.n));
@@ -189,7 +209,44 @@ export async function collectTurnContexts(
             turnContextLog.warn(`[TurnContext] '${integration.id}' 컨텍스트 준비 실패 — 이 통합 없이 진행: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
-    return { contextBlock: blocks.join('\n\n'), sources };
+    return { contextBlock: blocks.join('\n\n'), sources, systemPromptPart: systemPromptParts.join('\n\n') };
+}
+
+/**
+ * 이 세션이 어느 통합의 메모리 격리 세션이면 true — 전역 메모리 쓰기(자동 형성·백필)를 건너뛴다.
+ * fail-closed: 판정 훅이 던지면 격리로 간주한다(누출 방지). 훅을 선언한 통합이 없으면 false(일반 채팅 무영향).
+ * userId·sessionId 가 없으면(게스트·새 대화 첫 턴) 격리 대상이 아니다.
+ */
+export async function isSessionMemoryIsolated(userId: string | undefined, sessionId: string | undefined): Promise<boolean> {
+    if (!userId || userId === 'guest' || !sessionId) return false;
+    for (const integration of getChatTurnIntegrations()) {
+        if (!integration.isMemoryIsolatedSession) continue;
+        try {
+            if (await integration.isMemoryIsolatedSession(userId, sessionId)) return true;
+        } catch (err) {
+            turnContextLog.warn(`[TurnContext] '${integration.id}' 메모리 격리 판정 실패 — 안전하게 격리로 간주(전역 메모리 미기록): ${err instanceof Error ? err.message : String(err)}`);
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * 통합들이 기본 대화 목록에서 숨기려는 세션 id 의 합집합. 통합이 없으면 빈 집합(일반 채팅 무영향).
+ * fail-open: 판정 훅이 던지면 그 통합의 숨김만 건너뛴다(사용자 본인 대화의 목록 배치일 뿐 교차 사용자 누출이 아니다).
+ */
+export async function collectHiddenSessionIds(userId: string | undefined): Promise<Set<string>> {
+    const out = new Set<string>();
+    if (!userId || userId === 'guest') return out;
+    for (const integration of getChatTurnIntegrations()) {
+        if (!integration.listHiddenSessionIds) continue;
+        try {
+            for (const id of await integration.listHiddenSessionIds(userId)) out.add(id);
+        } catch (err) {
+            turnContextLog.warn(`[TurnContext] '${integration.id}' 숨김 세션 목록 조회 실패(무시): ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    return out;
 }
 
 function withTurnContextTimeout<T>(p: Promise<T>, id: string): Promise<T> {

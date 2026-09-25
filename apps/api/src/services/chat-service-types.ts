@@ -66,6 +66,8 @@ export interface ChatMessageRequest {
     fileContext?: string;
     /** 이 턴 시작 때 이미 붙은 출처 수 — 도구 출처 번호의 기준(UserContext.sourceNumberBase) */
     sourceNumberBase?: number;
+    /** 턴 통합(add-on)이 이 턴에 붙이는 시스템 프롬프트 조각 — custom instructions 뒤(동적 경계 뒤)에 실린다. 통합이 문구를 소유한다 */
+    turnSystemPromptPart?: string;
     /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 executor 입력. doc-extractor 가 소거하기 전에 WS/REST 가 채운다 */
     mediaFiles?: MediaFileInput[];
     /** 켜진 채팅 모드 — add-on id → true. 일반 채팅 대신 그 모드가 턴을 가져간다(chat-modes.ts) */

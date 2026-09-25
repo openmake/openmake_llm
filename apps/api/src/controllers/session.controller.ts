@@ -15,6 +15,8 @@ import { historySummaryCache } from '../services/chat-service/history-summary-ca
 import { isAdminRole } from '../data/user-manager';
 import { parseSessionListFilter, sessionOrganizationSchema, normalizeTags } from '../schemas/conversation-organization.schema';
 import { isFolderOwnedBy } from '../data/conversation-folders';
+import { collectHiddenSessionIds } from '../services/chat-service/turn-integrations';
+import type { SessionListFilter } from '../data/conversation-sessions';
 import { PAGINATION } from '../config/http-data-limits';
 
 const log = createLogger('SessionController');
@@ -144,7 +146,14 @@ class SessionController {
                  log.info(`[Chat Sessions] 관리자 전체 조회: ${sessions.length}개 (offset=${offset}, total=${total})`);
              } else if (scope === 'user') {
                  // 🔐 로그인 사용자: 자신의 대화만 (관리자도 개인 화면에선 동일)
-                 sessions = await conversationDb.getSessionsByUserId(userIdStr!, limit, listFilter);
+                 // ?excludeHidden=true(사이드바 "최근 대화")면 통합이 숨기려는 세션(예: 프로젝트 연결 대화)을 뺀다.
+                 // 기본(미지정)은 전부 포함 — /history·관리자 목록은 그대로 보인다(플래그 없이 호출).
+                 let userFilter: SessionListFilter = listFilter;
+                 if (req.query.excludeHidden === 'true') {
+                     const hidden = await collectHiddenSessionIds(userIdStr);
+                     if (hidden.size > 0) userFilter = { ...listFilter, excludeSessionIds: [...hidden] };
+                 }
+                 sessions = await conversationDb.getSessionsByUserId(userIdStr!, limit, userFilter);
                  log.info(`[Chat Sessions] 사용자 ${userIdStr} 조회: ${sessions.length}개`);
              } else if (scope === 'anon') {
                  // 🔒 비로그인 사용자: 해당 익명 세션만

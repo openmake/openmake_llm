@@ -21,6 +21,14 @@ describe('대화 폴더·태그 입력(157)', () => {
         expect(sessionFilterClause(undefined, 3)).toEqual({ sql: '', params: [] });
     });
 
+    it('sessionFilterClause — excludeSessionIds 는 SQL WHERE(<> ALL)로 빼서 LIMIT 전에 적용된다', () => {
+        expect(sessionFilterClause({ excludeSessionIds: ['a', 'b'] }, 3)).toEqual({ sql: ' AND cs.id <> ALL($3)', params: [['a', 'b']] });
+        // 폴더·태그와 함께 쓰면 파라미터 번호가 이어진다
+        expect(sessionFilterClause({ folderId: 'f1', excludeSessionIds: ['x'] }, 3)).toEqual({ sql: ' AND cs.folder_id = $3 AND cs.id <> ALL($4)', params: ['f1', ['x']] });
+        // 빈 배열은 절을 만들지 않는다
+        expect(sessionFilterClause({ excludeSessionIds: [] }, 3)).toEqual({ sql: '', params: [] });
+    });
+
     it('스키마 — folderId null 허용(미분류로), 폴더 수정은 name·position 중 하나 필요', () => {
         expect(sessionOrganizationSchema.safeParse({ folderId: null }).success).toBe(true);
         expect(sessionOrganizationSchema.safeParse({ folderId: '' }).success).toBe(false);

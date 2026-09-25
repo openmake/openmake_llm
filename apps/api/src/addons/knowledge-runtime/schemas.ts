@@ -15,6 +15,7 @@ export const createSpaceSchema = z.object({
     name: z.string().trim().min(V.NAME_MIN).max(V.NAME_MAX),
     description: z.string().max(V.DESCRIPTION_MAX).optional(),
     icon: z.string().max(V.ICON_MAX).optional(),
+    instructions: z.string().max(V.INSTRUCTIONS_MAX).optional(),
     scopeType: scopeTypeEnum.optional(),
 });
 export type CreateSpaceBody = z.infer<typeof createSpaceSchema>;
@@ -24,9 +25,16 @@ export const updateSpaceSchema = z
         name: z.string().trim().min(V.NAME_MIN).max(V.NAME_MAX).optional(),
         description: z.string().max(V.DESCRIPTION_MAX).nullable().optional(),
         icon: z.string().max(V.ICON_MAX).nullable().optional(),
+        instructions: z.string().max(V.INSTRUCTIONS_MAX).nullable().optional(),
     })
     .refine((v) => Object.keys(v).length > 0, { message: '변경할 필드가 없습니다' });
 export type UpdateSpaceBody = z.infer<typeof updateSpaceSchema>;
+
+/** Space 메모리 입력 — 비지 않은 content(하드 캡). 정책 상한(항목당 문자 수)은 서비스가 프로필로 재검사한다. */
+export const memoryInputSchema = z.object({
+    content: z.string().trim().min(1).max(V.MEMORY_CONTENT_MAX),
+});
+export type MemoryInputBody = z.infer<typeof memoryInputSchema>;
 
 // ── 프로필 kind 별 config 스키마 (관리자 PUT /admin/profiles/:id) ──
 const chunkerConfig = z.object({
@@ -53,6 +61,12 @@ const limitsConfig = z.object({
     jobLeaseMs: z.number().int().positive(),
     jobMaxAttempts: z.number().int().positive(),
     orgWriteRoles: z.array(z.string().min(1)),
+    // Space 지침·메모리 주입 정책 — optional(구 시드 DB 호환). z.object 는 미선언 키를 버리므로
+    // 관리자 PUT 이 이 값을 삭제하지 않도록 반드시 선언해 둔다(admin/service updateProfile).
+    maxInstructionTokens: z.number().int().positive().optional(),
+    maxMemoryItems: z.number().int().positive().optional(),
+    maxMemoryCharsPerItem: z.number().int().positive().optional(),
+    maxMemoryTokens: z.number().int().positive().optional(),
 });
 const spaceConfig = z.object({
     chunker: z.string().min(1),

@@ -196,8 +196,10 @@ export function Sidebar() {
   const { data: sessions = [] } = useQuery<SessionRow[]>({
     queryKey: ["conversations"],
     queryFn: async () => {
+      // excludeHidden=true — 프로젝트(Knowledge)에 연결된 대화는 최근 대화 목록에서 빼고 프로젝트 섹션에만 둔다.
+      // 서버 측 필터라 페이지가 짧아지지 않는다. /history 는 이 플래그 없이 호출해 전부 보여준다.
       const res = await ApiClient.get<ApiSuccess<{ sessions?: SessionRow[] }>>(
-        appendAnonSessionId("/api/chat/conversations"),
+        appendAnonSessionId("/api/chat/conversations?excludeHidden=true"),
       );
       return res?.data?.sessions ?? [];
     },
