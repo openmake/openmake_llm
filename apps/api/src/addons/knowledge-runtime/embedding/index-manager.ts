@@ -11,7 +11,7 @@ import { createLogger } from '../../../utils/logger';
 import { kdb, inTransaction } from '../db';
 import { enqueueJob } from '../jobs/queue';
 import { INDEX_PUBLISH_LOCK_KEY } from '../constants';
-import { describeEmbeddingProvider, embedTexts, type EmbedFn } from './provider';
+import { describeEmbeddingProvider, makeIndexEmbedder, type EmbedFn } from './provider';
 
 const logger = createLogger('KnowledgeIndex');
 
@@ -149,9 +149,10 @@ export async function startReindex(): Promise<{ indexId: string }> {
  * 개수 검증 후 한 트랜잭션에서 활성 index 를 교체한다.
  */
 export async function runReindexJob(indexId: string, deps: { embed?: EmbedFn } = {}): Promise<void> {
-    const embed = deps.embed ?? embedTexts;
     const target = await getIndexById(indexId);
     if (!target) throw new Error(`reindex 대상 index 없음: ${indexId}`);
+    // 새(building) index 는 startReindex 에서 라이브 배정으로 기록됐다 — 그 기록 모델로 임베딩한다(= reindex 는 라이브 배정을 반영).
+    const embed = deps.embed ?? makeIndexEmbedder(target);
     if (target.status !== 'building') {
         logger.info(`reindex 건너뜀 — index ${indexId} 상태가 building 이 아님(${target.status})`);
         return;

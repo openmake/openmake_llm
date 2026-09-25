@@ -5,7 +5,7 @@
  *
  * @module addons/knowledge-runtime/embedding/provider
  */
-import { resolveCapabilityTarget, type CapabilityTarget } from '../../../services/orchestrator/capability-resolver';
+import { resolveCapabilityTarget, resolveCapabilityTargetForModel, type CapabilityTarget } from '../../../services/orchestrator/capability-resolver';
 import { callJson } from '../../../services/orchestrator/http-call';
 import { recordCost } from '../../../services/cost/cost-ledger-service';
 import type { CostOwner } from '../../../config/cost-kinds';
@@ -58,10 +58,10 @@ async function embedBatch(target: CapabilityTarget, texts: string[]): Promise<nu
     return out;
 }
 
-/** 여러 텍스트 임베딩 — limits.embedBatchSize 로 나눠 부른다. 비용은 원장 kind search.embed(호출 수) */
-export async function embedTexts(texts: string[]): Promise<number[][]> {
+/** 배치 임베딩 코어 — limits.embedBatchSize 로 나눠 부르고 비용을 원장 kind search.embed(호출 수)로 남긴다 */
+async function runEmbed(target: CapabilityTarget, texts: string[]): Promise<number[][]> {
     if (texts.length === 0) return [];
-    const [target, limits] = await Promise.all([resolveEmbedTarget(), getDefaultLimits()]);
+    const limits = await getDefaultLimits();
     const batchSize = Math.max(1, limits.embedBatchSize);
     const out: number[][] = [];
     let calls = 0;
@@ -78,15 +78,60 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     return out;
 }
 
+/**
+ * 라이브 배정으로 임베딩한다 — **새 index 생성/reindex 전용**.
+ * 활성 index 에 넣거나 검색할 때는 배정이 바뀌어도 안 되므로 makeIndexEmbedder 를 쓴다.
+ */
+export async function embedTexts(texts: string[]): Promise<number[][]> {
+    if (texts.length === 0) return [];
+    return runEmbed(await resolveEmbedTarget(), texts);
+}
+
+/** makeIndexEmbedder 가 필요로 하는 index 의 기록 모델(provider_ref·model_id·dimension) */
+export interface IndexEmbedModel {
+    providerRef: string;
+    modelId: string;
+    dimension: number;
+}
+
+/**
+ * 특정 index 의 **기록된 모델**로 임베딩하는 함수를 만든다.
+ * 라이브 `text.embed` 배정이 바뀌어도 활성 index 는 자기 모델로만 임베딩·검색된다
+ * (배정 변경은 reindex 경로로만 반영). 기록 모델을 해석할 수 없으면 조용히 폴백하지 않고 throw,
+ * 응답 벡터 차원이 index.dimension 과 다르면 throw(방어적 검증).
+ */
+export function makeIndexEmbedder(index: IndexEmbedModel): EmbedFn {
+    return async (texts) => {
+        if (texts.length === 0) return [];
+        const target = await resolveEmbedTargetForModel(index.providerRef);
+        if (target.model !== index.modelId) {
+            throw new Error(`index 임베딩 모델 불일치 — 기록 '${index.modelId}' vs 해석 '${target.model}' (provider_ref='${index.providerRef}')`);
+        }
+        const vectors = await runEmbed(target, texts);
+        for (const v of vectors) {
+            if (v.length !== index.dimension) {
+                throw new Error(`임베딩 차원 불일치 — index ${index.dimension} vs 응답 ${v.length} (모델 '${index.modelId}')`);
+            }
+        }
+        return vectors;
+    };
+}
+
+/** 기록된 provider_ref(fullId)로 임베딩 대상을 해석한다(배정 조회 없음, system scope) */
+async function resolveEmbedTargetForModel(providerRef: string): Promise<CapabilityTarget> {
+    return resolveCapabilityTargetForModel('text.embed', providerRef);
+}
+
 let infoCache: EmbeddingProviderInfo | null = null;
 
 /**
- * 임베딩 provider 설명 — 차원은 실제 임베딩 응답으로 측정해 캐시한다.
- * index-manager 가 첫 index 를 만들 때 이 값(model_id·dimension·provider_ref)을 index 행에 기록한다.
+ * 임베딩 provider 설명 — **라이브 배정**을 해석하고 차원은 실제 응답으로 측정한다.
+ * index-manager 가 새 index(첫 index·reindex)를 만들 때 이 값(model_id·dimension·provider_ref)을 index 행에 기록한다.
+ * 캐시는 해석된 라이브 배정(providerRef·modelId)에 묶는다 — 배정이 바뀌면 다시 측정해 stale 을 막는다.
  */
 export async function describeEmbeddingProvider(): Promise<EmbeddingProviderInfo> {
-    if (infoCache) return infoCache;
     const target = await resolveEmbedTarget();
+    if (infoCache && infoCache.providerRef === target.fullId && infoCache.modelId === target.model) return infoCache;
     const [probe] = await embedBatch(target, ['dimension probe']);
     if (!probe || probe.length === 0) throw new Error('임베딩 차원을 측정하지 못했습니다');
     infoCache = { providerRef: target.fullId, modelId: target.model, dimension: probe.length };

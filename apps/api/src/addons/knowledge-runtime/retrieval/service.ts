@@ -7,7 +7,7 @@
 import type { KnowledgeActor } from '../config/scope-policy';
 import { applyRetrievalOverride, resolveSpaceProfiles } from '../config/profiles';
 import { getActiveIndex, type KnowledgeIndex } from '../embedding/index-manager';
-import { embedTexts, type EmbedFn } from '../embedding/provider';
+import { makeIndexEmbedder, type EmbedFn } from '../embedding/provider';
 import { knowledgeNoEvidenceBlock } from '../prompts';
 import { buildKnowledgeContext, type BuiltContext } from './context-builder';
 import { searchChunks } from './search';
@@ -36,13 +36,14 @@ export interface RetrieveDeps {
 }
 
 export async function retrieve(params: RetrieveParams, deps: RetrieveDeps = {}): Promise<RetrieveResult> {
-    const embed = deps.embed ?? embedTexts;
     const activeIndex = deps.getActiveIndex ?? getActiveIndex;
     const noEvidence: RetrieveResult = { contextBlock: knowledgeNoEvidenceBlock(params.userLang), sources: [], hadEvidence: false };
 
     const index = await activeIndex();
     if (!index || params.spaceIds.length === 0) return noEvidence;
 
+    // 질의 임베딩은 라이브 배정이 아니라 **활성 index 에 기록된 모델**로 한다(배정이 바뀌어도 index 와 같은 벡터 공간).
+    const embed = deps.embed ?? makeIndexEmbedder(index);
     const profiles = await resolveSpaceProfiles(params.configProfileId);
     const retrieval = applyRetrievalOverride(profiles.retrieval, params.override);
 
