@@ -212,7 +212,7 @@ async function tryBuildExternalResolution(
     const baseUrl = keyRow.baseUrl || entry.defaultBaseUrl;
     return {
         client: throttleExternalClient(createClient({
-            baseUrl, apiKey: plaintextKey, model: modelId, userId,
+            baseUrl, apiKey: plaintextKey, model: modelId, userId, providerId,
             ...externalClientTiming(getConfig().llmTimeout),
             // 외부 BYOK 는 로컬 vLLM 용량을 쓰지 않으므로 토큰 쿼터 면제 (정책: LLMConfig.quotaExempt)
             quotaExempt: true,
@@ -269,7 +269,7 @@ async function tryBuildServerKeyResolution(
     const baseUrl = row.baseUrl || entry.defaultBaseUrl;
     return {
         client: throttleExternalClient(createClient({
-            baseUrl, apiKey: plaintextKey, model: modelId, userId,
+            baseUrl, apiKey: plaintextKey, model: modelId, userId, providerId,
             ...externalClientTiming(getConfig().llmTimeout),
             // 외부 provider — 로컬 쿼터 면제 (서버 키 자체 상한은 recordServerKeyUsage 가 별도 관리)
             quotaExempt: true,

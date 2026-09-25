@@ -61,6 +61,11 @@ export interface ExecContext {
     lang: string;
     /** 사용자 원문 — text.* 작업이 instruction 과 함께 본다 */
     userMessage: string;
+    /**
+     * 최근 답변 본문(최신 순, 같은 대화의 아티팩트 표시는 최신 내용으로 펼침). 계획 인자가 PLAN_CONVERSATION_TEXT_MARKER 로
+     * "대화에 이미 있는 텍스트"를 가리킬 때 실행기가 userMessage 다음으로 찾는 곳이다. 없으면 빈 목록으로 본다.
+     */
+    recentAssistantMessages?: readonly string[];
     attachments: Map<string, OrchestratorAttachment>;
     /** 앞선 작업 결과(refs 해석) */
     results: Map<string, TaskResult>;

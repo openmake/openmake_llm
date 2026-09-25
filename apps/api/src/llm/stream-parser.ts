@@ -28,8 +28,8 @@ import { extractCoTFromContent } from './cot-extractor';
 import { PseudoToolCallGate, stripPseudoToolCalls } from './pseudo-tool-call-parser';
 import { createLogger } from '../utils/logger';
 import { capPromptImages } from './prompt-image-cap';
-import { LLM_PROMPT_IMAGE_LIMITS, TRUNCATION } from '../config/runtime-limits';
-import { MalformedLLMResponseError } from '../errors/malformed-llm-response.error';
+import { LLM_PROMPT_IMAGE_LIMITS } from '../config/runtime-limits';
+import { coerceChatCompletion } from './nonstream-body';
 import { STREAM_TTFC_WARN_MS } from '../config/core-runtime-limits';
 import { resolveModelProfile } from '../config/model-profiles';
 import { LOCAL_PRESERVE_THINKING_ENABLED } from '../config/llm-parameters';
@@ -513,10 +513,8 @@ export async function nonStreamChat(
         ...(extraBody ?? {}),
     } as never, signal ? { signal } : undefined);
 
-    const r = response as unknown as OpenAIChatResponse & { error?: unknown };
-    if (!Array.isArray(r?.choices)) { // 200 인데 upstream 오류 객체 등 — TypeError 대신 재시도 가능한 502
-        throw new MalformedLLMResponseError(request.model, JSON.stringify(r?.error ?? r ?? null).slice(0, TRUNCATION.MALFORMED_LLM_RESPONSE_DETAIL_MAX));
-    }
+    // 200 인데 choices 없음·본문이 문자열(비JSON Content-Type) — 문자열은 파싱, 그래도 없으면 재시도 가능한 502 (nonstream-body)
+    const r = coerceChatCompletion<OpenAIChatResponse>(response, request.model);
     const choice0 = r.choices[0];
     const msg = choice0?.message ?? { content: '' };
     const finishReason = choice0?.finish_reason ?? undefined;

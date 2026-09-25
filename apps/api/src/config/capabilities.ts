@@ -249,6 +249,14 @@ export function providerParamDefaults(providerId: string, capability: Capability
  */
 export const PLAN_LYRICS_REF_MAX_CHARS = 60;
 
+/**
+ * 계획 인자에 "대화에 이미 있는 텍스트를 쓴다"를 적는 표시 (2026-09-26).
+ * Planner 가 사용자 메시지·직전 답변의 긴 텍스트(가사 등)를 계획 JSON 에 옮겨 적으면 출력 상한(PLANNER_MAX_TOKENS)과
+ * 시간 상한(PLANNER_TIMEOUT_MS)을 넘겨 계획 자체가 실패한다(697자 가사 → 로컬 27B 15초 초과, 라이브 재현). 원문 대신 이 표시만
+ * 적게 하고, 실행기가 ExecContext 의 userMessage·recentAssistantMessages 에서 원문을 찾는다.
+ */
+export const PLAN_CONVERSATION_TEXT_MARKER = 'CONVERSATION';
+
 export function isCapability(value: string): value is Capability {
     return (CAPABILITIES as readonly string[]).includes(value);
 }
@@ -306,6 +314,12 @@ export const ORCHESTRATOR = {
     /** Planner 에 넘기는 직전 대화 턴 수·메시지 절단 */
     PLANNER_HISTORY_TURNS: parseInt(process.env.ORCHESTRATOR_PLANNER_HISTORY_TURNS || '2', 10),
     PLANNER_MESSAGE_MAX_CHARS: parseInt(process.env.ORCHESTRATOR_PLANNER_MESSAGE_MAX_CHARS || '4000', 10),
+    /**
+     * 실행기에 넘기는 최근 답변 수·답변당 상한(아티팩트 표시는 같은 대화의 최신 내용으로 펼친다).
+     * PLAN_CONVERSATION_TEXT_MARKER 로 "직전 답변의 텍스트"를 가리킨 작업이 원문을 찾는 곳이다.
+     */
+    EXEC_RECENT_ASSISTANT_MESSAGES: parseInt(process.env.ORCHESTRATOR_EXEC_RECENT_ASSISTANT_MESSAGES || '3', 10),
+    EXEC_RECENT_MESSAGE_MAX_CHARS: parseInt(process.env.ORCHESTRATOR_EXEC_RECENT_MESSAGE_MAX_CHARS || '12000', 10),
     /** 종합 모델에 넘기는 작업 결과 텍스트 상한(작업당) */
     RESULT_MAX_CHARS: parseInt(process.env.ORCHESTRATOR_RESULT_MAX_CHARS || '12000', 10),
     /** 미완료 비동기 작업(영상) 을 Planner 첨부 목록에 싣는 조회 창(시간)·개수 */

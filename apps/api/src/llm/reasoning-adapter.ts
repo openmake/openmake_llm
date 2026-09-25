@@ -12,6 +12,7 @@
  * @module llm/reasoning-adapter
  */
 import { normalizeEffort, type ReasoningEffort } from '../config/reasoning-effort';
+import { REASONING_EFFORT_LADDER, resolveModelProfile } from '../config/model-profiles';
 import type { ThinkOption } from './types';
 
 /**
@@ -58,7 +59,9 @@ export function isThinkingEnabled(t: ThinkOption | undefined): boolean {
 export function buildExtraBody(
     t: ThinkOption | undefined,
     modelId?: string,
+    externalProviderId?: string,
 ): Record<string, unknown> | undefined {
+    if (externalProviderId) return buildExternalExtraBody(t, modelId, externalProviderId);
     const result: Record<string, unknown> = {};
 
     const reasoningEnabled = (process.env.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true';
@@ -91,3 +94,25 @@ export function buildExtraBody(
 
     return Object.keys(result).length > 0 ? result : undefined;
 }
+
+/**
+ * 외부 provider 직결 요청의 추론 파라미터 (2026-09-26).
+ * `chat_template_kwargs.enable_thinking` 은 vLLM/Qwen 채팅 템플릿 변수라 외부로는 보내지 않는다 — hasa gpt-oss-120b 는 이 값과
+ * JSON 스키마(response_format)를 함께 받으면 content:null 빈 답을 낸다(Planner 8/8 실패, 직결 재현). 추론을 끌 수 없는 모델
+ * (프로필에 reasoningEfforts 가 선언된 모델)은 think:false 를 지원 강도 중 가장 낮은 값으로 보낸다(같은 조건 재현에서 정상 JSON).
+ * 강도 지정(think:true·레벨)은 종전과 같다 — LLM_ENABLE_REASONING_EFFORT 가 켜져 있을 때 provider 기준으로 정규화해 보낸다.
+ */
+function buildExternalExtraBody(t: ThinkOption | undefined, modelId: string | undefined, providerId: string): Record<string, unknown> | undefined {
+    const declared = resolveModelProfile(modelId, providerId).reasoningEfforts;
+    let effort: ReasoningEffort | undefined;
+    if (t === false) {
+        effort = declared?.length
+            ? [...declared].sort((a, b) => REASONING_EFFORT_LADDER.indexOf(a) - REASONING_EFFORT_LADDER.indexOf(b))[0]
+            : undefined;
+    } else if ((process.env.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true') {
+        const requested = thinkToReasoningEffort(t);
+        effort = requested ? normalizeEffort(modelId, requested, providerId) : undefined;
+    }
+    return effort ? { reasoning_effort: effort } : undefined;
+}
+

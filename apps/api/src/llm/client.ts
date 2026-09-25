@@ -218,7 +218,7 @@ export class LLMClient {
         // 실제 라우팅된 모델 기준으로 reasoning_effort 를 정규화한다(모델별 지원값 상이).
         const cfg = getConfig();
         const extraBody = mergeExtraBody(
-            buildExtraBody(advancedOptions?.think, poolDecision.model),
+            buildExtraBody(advancedOptions?.think, poolDecision.model, this.config.providerId),
             buildSchedulingFields({
                 saltMode: cfg.llmPrefixCacheSaltMode, priorityEnabled: cfg.llmPriorityEnabled,
                 external: this.config.quotaExempt === true, userId: this.config.userId,
