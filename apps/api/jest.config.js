@@ -49,5 +49,7 @@ module.exports = {
     verbose: true,
     // Worker 메모리 제한 + 강제 종료 — worker leak 경고 해소
     workerIdleMemoryLimit: '512MB',
+    // 16GB 머신에서 기본 워커(ncpu-1=9개) 병렬 실행 시 메모리 고갈 → WindowServer 워치독 패닉 발생
+    maxWorkers: 2,
     forceExit: true
 };
