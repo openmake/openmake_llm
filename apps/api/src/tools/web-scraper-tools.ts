@@ -28,7 +28,7 @@ import { semanticCompact } from '../services/semantic-compactor';
 export const webScrapeTool: MCPToolDefinition = {
     tool: {
         name: 'web_scrape',
-        description: 'URL에서 웹 콘텐츠를 스크래핑합니다. 마크다운으로 추출하며, SPA 사이트도 지원합니다.',
+        description: '주어진 URL 한 페이지의 본문을 마크다운으로 추출합니다(제목·표·링크 구조 유지, SPA 렌더링 지원). 페이지의 서식이나 구조까지 필요할 때 사용하고, 태그를 뺀 본문 텍스트만 필요하면 extract_webpage 가 더 가볍습니다. URL 을 모르면 먼저 web_search 로 찾으세요. 내부망·사설 주소는 SSRF 가드로 거절됩니다.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -85,7 +85,7 @@ export const webScrapeTool: MCPToolDefinition = {
 export const webMapTool: MCPToolDefinition = {
     tool: {
         name: 'web_map',
-        description: '웹사이트의 모든 URL을 매핑하여 사이트 구조를 파악합니다.',
+        description: '사이트의 페이지 URL 목록만 수집합니다(sitemap.xml 우선, 없으면 시작 페이지의 링크). 본문은 가져오지 않습니다. 사이트 안에서 읽을 페이지를 고르려 할 때 사용하고, 고른 페이지는 web_scrape 나 extract_webpage 로 읽으세요. 결과는 최대 50개까지만 나열되고 나머지는 개수만 표시됩니다.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -144,7 +144,7 @@ export const webMapTool: MCPToolDefinition = {
 export const webCrawlTool: MCPToolDefinition = {
     tool: {
         name: 'web_crawl',
-        description: '웹사이트를 크롤링하여 여러 페이지의 콘텐츠를 수집합니다.',
+        description: '시작 URL 과 같은 origin 안에서 링크를 따라가며 여러 페이지의 본문을 수집합니다(limit·maxDepth 로 범위 제한). 페이지마다 제목·URL 과 본문 앞부분 약 1000자만 반환하므로, 한 페이지의 전문이 필요하면 web_scrape 를 쓰세요. 페이지 수만큼 느려지니 사이트 여러 페이지의 개요가 필요할 때만 사용하세요.',
         inputSchema: {
             type: 'object',
             properties: {
