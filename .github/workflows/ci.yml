@@ -89,10 +89,14 @@ jobs:
       - name: "Gate 0.5: Installer Lint"
         run: |
           bash -n install.sh
+          bash -n install_mac.sh
+          bash -n install_linux.sh
+          for f in scripts/setup/mac/*.sh; do bash -n "$f"; done
           bash -n openmake_llm.sh
           bash -n scripts/env/omk.sh
           bash -n scripts/env/omk.test.sh
-          shellcheck -S warning install.sh openmake_llm.sh scripts/env/omk.sh scripts/env/omk.test.sh
+          shellcheck -S warning install.sh install_mac.sh install_linux.sh scripts/setup/mac/*.sh \
+            openmake_llm.sh scripts/env/omk.sh scripts/env/omk.test.sh
           bash scripts/env/omk.test.sh
           echo "인스톨러 lint 통과 (bash -n + shellcheck + omk.test)"
 

@@ -252,18 +252,32 @@ bootstrap_source() {
     elif [[ -d "$target" ]] && [[ -n "$(ls -A "$target" 2>/dev/null)" ]]; then
         die "$target 이 비어있지 않은데 OpenMake LLM 소스가 아닙니다 — OMK_ROOT 로 다른 위치를 지정하세요."
     else
-        local repo_url="${OMK_REPO_URL:-$DEFAULT_REPO_URL}" ref="${OMK_REF:-}"
+        local repo_url="${OMK_REPO_URL:-$DEFAULT_REPO_URL}" ref="${OMK_REF:-}" tag=""
         # 클론에서 실행했으면 그 브랜치를 받는다 (원격에 있어야 한다).
         if [[ -z "$ref" && $in_repo -eq 1 ]] && git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD >/dev/null 2>&1; then
             ref="$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD)"
             [[ "$ref" == "HEAD" ]] && ref=""
         fi
-        ref="${ref:-main}"
         ensure_clt   # git 은 명령줄 도구가 있어야 진짜로 동작한다 (대체 실행 파일 함정)
+        # online 은 최신 릴리스 태그만 따른다(omk 규칙 — main HEAD 를 운영에 올리지 않는다). omk 와 같은 모양
+        # (로컬 브랜치 'release')으로 받아 두면 omk 가 설치 도중 이 소스를 다른 ref 로 옮기지 않는다.
+        if [[ -z "$ref" && "${inst:-$OMK_DEFAULT_ENV}" == "$OMK_DEFAULT_ENV" ]]; then
+            tag="$(git ls-remote --tags --refs "$repo_url" 2>/dev/null | sed 's#.*refs/tags/##' \
+                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)"
+        fi
+        ref="${ref:-main}"
         mkdir -p "$(dirname "$target")"
-        log_info "git clone --branch $ref $repo_url → $target"
+        log_info "git clone $repo_url → $target"
         git clone --branch "$ref" "$repo_url" "$target" \
             || die "git clone 실패 ($repo_url @ $ref) — 브랜치가 원격에 있는지 확인하세요 (OMK_REF 로 지정 가능)"
+        if [[ -n "$tag" ]]; then
+            if git -C "$target" cat-file -e "$tag:install_mac.sh" 2>/dev/null; then
+                git -C "$target" checkout -q -B release "$tag" || die "릴리스 $tag 체크아웃 실패"
+                log_ok "최신 릴리스 $tag (로컬 브랜치 release)"
+            else
+                log_warn "최신 릴리스 $tag 에 install_mac.sh 가 없어 $ref 로 설치합니다 — 이 환경은 릴리스 대신 $ref 를 따릅니다."
+            fi
+        fi
     fi
     log_ok "소스 준비 완료 → $target/install_mac.sh 로 재진입"
     exec bash "$target/install_mac.sh" "$@"

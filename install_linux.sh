@@ -64,7 +64,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]:-$0}" )" && pwd )"
 readonly SCRIPT_DIR
 readonly DEFAULT_REPO_URL="https://github.com/openmake/openmake_llm.git"
 readonly NODE_MAJOR_MIN=24
-readonly NODE_PINNED_VERSION="24.16.0"   # mise.toml / .node-version 과 동일
+readonly NODE_PINNED_VERSION="24.21.0"   # mise.toml / .node-version 과 동일
 readonly TOOLCHAIN_DIR="$SCRIPT_DIR/.openmake"
 readonly TOOLCHAIN_ENV="$TOOLCHAIN_DIR/toolchain.env"
 readonly HEALTH_RETRIES=45

@@ -191,6 +191,21 @@ llama.cpp 의 `llama-server`(OpenAI 호환 · CPU·Metal 에서 돈다 — vLLM 
   선택은 `~/.openmake/llamacpp/model.conf` 에 기억되어 다음부터는 옵션 없이도 유지되고, 서버는 새 모델로 다시 뜬다. 같은 서버를 쓰는
   다른 환경은 `omk env install <env>` 를 한 번 다시 돌려 게이트웨이의 모델 이름을 맞춘다.
 
+## 운영 구성 옵션 — 새 서버를 운영과 같게 (install_mac.sh 가 켠다)
+
+`install_mac.sh`(macOS 원샷 설치)는 macOS 사전 준비를 마친 뒤 `omk env install online` 에 아래 옵션을 넘긴다.
+omk 를 직접 쓸 때도 같은 옵션을 줄 수 있다. **주지 않으면 기존 동작 그대로**다.
+
+| 옵션 | 하는 일 | `.env` 표시 |
+|---|---|---|
+| `--ops-profile` | `scripts/setup/profiles/ops-features.env` 의 운영 기능 플래그 중 **없는 키만** 덧붙인다(에이전트 작업 큐·예약·서브에이전트, 메모리 추출, 보고서, 샌드박스 등 — 코드 기본값은 대부분 꺼짐). 웹 푸시 VAPID 키 생성, `TASK_SANDBOX_ROOT` 를 환경 디렉터리로, 스크래퍼 파이썬(curl_cffi) 가상환경. 런타임 이미지가 없으면 샌드박스 스위치를 끈다 | `OMK_OPS_PROFILE=1` (update 때 새 프로필 키를 덧붙인다) |
+| `--dgx-host H` | DGX vLLM `:8002`(채팅)·`:8003`(임베딩)·`:8005`(음악)을 게이트웨이 업스트림으로, 앱의 `LLM_TOKENIZE_URL`·`VLLM_METRICS_URLS`·`SSRF_ALLOWED_HOSTS`·기본 모델(`OMK_DGX_MODEL`, 기본 qwen3.8-27b), 연결 확인(HTTP 코드). 키는 `--vllm-api-key` | — |
+| `--https-host H` | 내부망 HTTPS — 프록시가 `:443` 에서 `caddy.d/<env>-https.caddy`(`tls internal`)로 같은 라우팅을 한다. 공개 주소·CORS·secure cookie 설정, 루트 인증서를 `$OMK_ROOT/https/openmake-internal-root.crt` 로 내보낸다(사용자 기기마다 1회 신뢰 등록) | `OMK_HTTPS_HOST` |
+| `--artifact-viewer` | 아티팩트 공유 뷰어(nginx 컨테이너 `:8088`, HTTPS 면 `:8443`). nginx.conf 가 백엔드 `:52416` 고정이라 기본 인스턴스 전용 | `OMK_ARTIFACT_VIEWER=1` |
+| `--discord-token T` | Discord 봇 빌드·등록. 앱 API 키(discord 스코프)는 설치 후 발급해 `DISCORD_BOT_API_KEY` 에 넣는다 — 운영 봇 토큰 재사용 금지(두 서버가 같은 봇으로 붙는다) | — |
+
+LiteLLM 버전은 `OMK_LITELLM_SPEC` 로 고정한다 — `install_mac.sh` 는 `litellm[proxy]==1.100.1`(1.102 지연 회귀로 운영이 고정한 버전)을 넘긴다.
+
 ## 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리
 
 레포에는 Dockerfile(`infra/mcp-runtime` ~1GB, `infra/task-runtime` ~6GB)만 있고 이미지는 호스트에서 빌드해야 한다 —
