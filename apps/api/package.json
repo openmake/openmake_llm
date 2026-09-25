@@ -1,6 +1,6 @@
 {
     "name": "openmake-api",
-    "version": "1.88.4",
+    "version": "1.88.5",
     "description": "OpenMake API Server",
     "main": "dist/server.js",
     "scripts": {
