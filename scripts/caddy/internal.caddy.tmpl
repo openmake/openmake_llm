@@ -1,0 +1,29 @@
+# ============================================================
+# OpenMake — 내부망 HTTPS 리버스 프록시 (install_mac.sh 가 렌더)
+# ============================================================
+# 이중 중괄호 자리표시자는 설치 때 채워진다. 결과는 ~/.openmake/caddy/<인스턴스>.caddy 로
+# 저장되고 brew 의 Caddyfile 이 그 디렉터리를 import 한다.
+#
+# 인증서: Caddy 내부 인증기관(tls internal)이 발급한다. 사용자 기기는 설치 스크립트가
+# 저장한 루트 인증서(~/.openmake/https/openmake-internal-root.crt)를 한 번 신뢰 등록해야 한다.
+#
+# 프론트 + REST + WebSocket 을 한 origin 으로 묶는다(운영 scripts/caddy/Caddyfile 과 같은 라우팅).
+# 백엔드 포트는 직접 노출하지 않는다.
+
+{{HOST}} {
+	tls internal
+
+	# 채팅 WebSocket upgrade → 백엔드. Next 의 /_next/* 는 제외.
+	@chatws {
+		header Connection *Upgrade*
+		header Upgrade    websocket
+		not path /_next/*
+	}
+	reverse_proxy @chatws localhost:{{API_PORT}}
+
+	# REST API → 백엔드 (X-Forwarded-* 자동 전달)
+	reverse_proxy /api/* localhost:{{API_PORT}}
+
+	# 그 외(Next 페이지·정적 자산·/generated rewrites)
+	reverse_proxy localhost:{{WEB_PORT}}
+}

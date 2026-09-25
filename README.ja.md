@@ -55,6 +55,8 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.
 
 Linux と macOS で動作します(Windows は WSL2 内で)。対話なしでインストールするには `bash -s -- --yes` を付けます。手動セットアップ、オプション、アップデート、リバースプロキシについては **[セルフホスティングガイド](https://openmake.cc/ja/docs/)** を参照してください。
 
+ワンライナーは OS に合ったインストーラーに引き継ぎます — Linux・WSL2 は `install_linux.sh`、macOS は `install_mac.sh`。新しいマシンでは最初に質問をまとめて受け付け、前提条件(macOS: Xcode コマンドラインツール・Homebrew・Docker Desktop · Linux: ディストリビューションのパッケージ・Docker Engine)とフルスタック(`scripts/env/omk.sh` — LiteLLM ゲートウェイ・SearXNG・サンドボックスイメージ・社内 HTTPS・バックアップ・再起動後の自動起動)をセットアップします。対話なしでインストールするには、モデルバックエンドも指定してください: `--yes --dgx-host <host> --vllm-api-key <key>` または `--yes --llm-provider <name> --llm-model <id> --llm-api-key <key>`。
+
 ---
 
 ## なぜ OpenMake か
