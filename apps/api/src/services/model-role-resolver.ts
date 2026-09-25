@@ -6,10 +6,10 @@
  * Role-based Multi-Agent Orchestration 의 정책 진입점.
  * 역할별 모델을 아래 우선순위로 해석해 실행용 LLMClient 를 만든다.
  *
- *   ① 사용자별 매핑 (user_model_roles, USER_MODEL_ROLES_ENABLED=true + userId 필요)
+ *   ① 사용자별 매핑 (model_assignments scope=userId, USER_MODEL_ROLES_ENABLED=true + userId 필요)
  *      — 외부 provider fullId 허용. 그 사용자의 BYOK 키(user_external_api_keys)로
  *        OpenAI 호환 endpoint 에 직결한 LLMClient 를 생성.
- *   ② 전역 DB 매핑 (global_model_roles — Admin UI, 60s 캐시. 외부 fullId 는
+ *   ② 전역 DB 매핑 (model_assignments scope=__global__ — Admin UI, 60s 캐시. 외부 fullId 는
  *      서버 공용 키(server_external_api_keys) 필요)
  *   ③ 전역 env (OMK_<ROLE>_MODEL — 외부 fullId 는 서버 공용 키 필요)
  *   ④ LLM_DEFAULT_MODEL (로컬 default)

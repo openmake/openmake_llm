@@ -27,7 +27,7 @@ export const CAPABILITY_CONTRACT_VERSION = 1 as const;
 export interface CapabilityDefinition {
     id: CapabilityId;
     contractVersion: typeof CAPABILITY_CONTRACT_VERSION;
-    /** 모델 배정 대상인가(설정 화면·capability_models) */
+    /** 모델 배정 대상인가(설정 화면·model_assignments) */
     assignable: boolean;
     /** Planner 가 계획에 쓸 수 있는가 */
     plannable: boolean;

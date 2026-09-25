@@ -142,7 +142,7 @@ export const envSchema = z
         LLM_ENABLE_REASONING_EFFORT: z.string().default('false'),
         /**
          * 사용자별 역할→모델 매핑 (Role-based Multi-Agent Orchestration) 토글.
-         * 'true' 면 로그인 사용자의 user_model_roles 매핑을 role 해석 1순위로 사용
+         * 'true' 면 로그인 사용자의 model_assignments(scope=userId) 매핑을 role 해석 1순위로 사용
          * (외부 모델은 BYOK 키 필요, 실패 시 전역 env → 로컬 default 로 fail-open 폴백).
          * 'false'(기본) 면 현행 동작과 동일 — 전역 env/default 만 사용.
          */

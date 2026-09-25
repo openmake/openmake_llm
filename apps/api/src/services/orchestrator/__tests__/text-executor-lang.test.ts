@@ -45,3 +45,19 @@ describe('textExecutor — 머리글 언어', () => {
         expect(userContent()).toContain('…(절단)');
     });
 });
+
+describe('textExecutor — 추론 끄기', () => {
+    function body(t: object) {
+        const task = { id: 't2', capability: 'text.reason', instruction: 'x', refs: [], attachments: [] };
+        const ctx = { lang: 'ko', userMessage: 'y', results: new Map(), attachments: new Map(), targets: new Map([['t2', t]]) };
+        return textExecutor(task as never, ctx as never).then(() => callJson.mock.calls[0][1].body);
+    }
+
+    it('로컬 모델은 enable_thinking=false 를 명시한다', async () => {
+        expect((await body({ ...target, providerId: 'local-llm' })).chat_template_kwargs).toEqual({ enable_thinking: false });
+    });
+
+    it('외부 provider 에는 싣지 않는다', async () => {
+        expect((await body({ fullId: 'hasa:m', model: 'hasa/m', providerId: 'hasa', params: {} })).chat_template_kwargs).toBeUndefined();
+    });
+});

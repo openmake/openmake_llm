@@ -4,7 +4,7 @@
  * ============================================================
  *
  * "어떤 기능을 어느 모델이 처리하는가". Planner(LLM)는 **capability 이름만** 내고, 모델은 이 레지스트리 +
- * `capability_models`(사용자 BYOK → 전역 → 코드 기본값)가 결정적으로 정한다 — Planner 가 모델명을 고르지 않는다.
+ * `model_assignments`(사용자 BYOK → 전역 → 코드 기본값)가 결정적으로 정한다 — Planner 가 모델명을 고르지 않는다.
  * 텍스트 종합(text.synthesize)은 사용자가 고른 채팅 모델이 맡으므로 배정 대상이 아니다.
  *
  * 호출은 전부 LiteLLM 게이트웨이 하나(로컬 alias·외부 `<provider>/<model>` + BYOK 헤더). 예외는 게이트웨이가
@@ -110,7 +110,7 @@ export const CAPABILITY_DEFAULTS: Partial<Record<Capability, string>> = {
     'vision.describe': envDefault('CAPABILITY_DEFAULT_VISION_DESCRIBE', 'local-llm:qwen3.8-27b'),
     'vision.ocr': envDefault('CAPABILITY_DEFAULT_VISION_OCR', 'local-llm:qwen3.8-27b'),
     // image.generate 는 코드 기본값 없음(2026-09-18) — 종전 로컬 기본값이 비상업 라이선스(최종 사용자와의 직접
-    // 상호작용 금지)라 제거했다. 쓰려면 라이선스를 확인한 뒤 env 나 capability_models 로 명시 배정한다.
+    // 상호작용 금지)라 제거했다. 쓰려면 라이선스를 확인한 뒤 env 나 model_assignments 로 명시 배정한다.
     'image.generate': envDefault('CAPABILITY_DEFAULT_IMAGE_GENERATE'),
     // music.generate — DGX ACE-Step 1.5(MIT, 생성 음악 상업 이용 허용). 다른 로컬 capability 와 같이 LiteLLM alias 다
     // (게이트웨이에 그 이름이 없으면 호출이 명시 실패한다 — 끄려면 `CAPABILITY_DEFAULT_MUSIC_GENERATE=`).

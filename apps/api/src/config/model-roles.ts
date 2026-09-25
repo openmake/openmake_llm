@@ -13,7 +13,7 @@
  *
  * ⚠️ 전역(env) 계층에는 **로컬 모델만** 허용합니다. 외부 provider fullId
  * ('openrouter:...' 등)는 서버 공용 키가 없어 동작할 수 없으므로 validateModels
- * 가 거부합니다. 외부 모델 배정은 사용자별 매핑(user_model_roles, BYOK 키 필요)
+ * 가 거부합니다. 외부 모델 배정은 사용자별 매핑(model_assignments scope=userId, BYOK 키 필요)
  * 에서만 가능합니다.
  *
  * @module config/model-roles
@@ -47,7 +47,7 @@ export type ModelRole = 'chat' | 'agent' | 'judge' | 'research' | 'spawn' | 'rev
 export const MODEL_ROLES: ReadonlyArray<ModelRole> = ['chat', 'agent', 'judge', 'research', 'spawn', 'review', 'router', 'summary', 'planner'];
 
 /**
- * 사용자별 매핑(user_model_roles) 배정을 허용하는 role.
+ * 사용자별 매핑(model_assignments scope=userId) 배정을 허용하는 role.
  * - chat 제외: 채팅은 요청별 모델 선택(ModelSelector)이 이미 존재 — 매핑과 중복/충돌
  * - router 제외: agents/llm-router 는 전역 싱글톤 클라이언트 — 사용자별 배정 불가
  */

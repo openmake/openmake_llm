@@ -1,7 +1,7 @@
 /**
  * @module services/orchestrator/executors/web
  * @description web.search — 기존 검색 오케스트레이터(SearXNG·네이버·구글 등)를 함수로 호출해 결과 요약 텍스트를 만든다.
- * 모델 배정 없음(capability_models 대상 아님).
+ * 모델 배정 없음(model_assignments 대상 아님).
  */
 import { ORCHESTRATOR } from '../../../config/capabilities';
 import { performWebSearch } from '../../../tools/web-search/search-orchestrator';

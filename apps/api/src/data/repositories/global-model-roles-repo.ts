@@ -4,7 +4,7 @@
  *
  * 2026-09-24 부터 이 저장소는 통합 테이블 `model_assignments`(scope='__global__', config/model-slots 슬롯)를 감싸는
  * **어댑터**다 — role 은 ROLE_SLOT 으로 슬롯에 대응하고, 돌려주는 row 는 요청한 role 이름을 그대로 유지한다.
- * 옛 global_model_roles 테이블은 더 읽지·쓰지 않는다(다음 배포에서 DROP — 2단계 삭제).
+ * 옛 global_model_roles 테이블은 없다(마이그레이션 171 에서 DROP).
  *
  * 해석 우선순위에서 사용자 매핑 다음, env 전역 이전에 조회된다.
  * @see data/repositories/model-assignments-repo · config/model-slots · db/migrations/170_model_assignments.sql

@@ -3,7 +3,7 @@
  * Orchestrator Planner Prompt — 질문 분석 → capability 작업 계획(JSON)
  * ============================================================
  *
- * Planner 는 **capability 이름만** 낸다. 모델명은 백엔드(capability_models)가 정하고, 계획은 Zod 로 검증된다.
+ * Planner 는 **capability 이름만** 낸다. 모델명은 백엔드(model_assignments)가 정하고, 계획은 Zod 로 검증된다.
  * 대부분의 질문은 `simple`(텍스트 하나) 이어야 한다 — 그러면 추가 모델 호출 없이 종전 채팅 경로로 간다.
  *
  * @module prompts/orchestrator-planner

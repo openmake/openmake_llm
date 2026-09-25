@@ -84,7 +84,7 @@ export interface EnvConfig {
     externalModelPolicy: string;
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
     llmEnableReasoningEffort: boolean;
-    /** 사용자별 역할→모델 매핑(user_model_roles) 사용 토글 (기본 false=전역 env/default 만). */
+    /** 사용자별 역할→모델 매핑(model_assignments scope=userId) 사용 토글 (기본 false=전역 env/default 만). */
     userModelRolesEnabled: boolean;
     /** thinking 요약 헤드라인 생성 토글 (기본 true — 'summary' role 모델 1회 호출). */
     thinkingSummaryEnabled: boolean;
