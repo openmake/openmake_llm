@@ -4,7 +4,7 @@
  *
  * 2026-09-24 부터 이 저장소는 통합 테이블 `model_assignments`(config/model-slots 슬롯)를 감싸는 **어댑터**다 —
  * capability 는 CAPABILITY_SLOT 으로 슬롯에 대응하고, 돌려주는 row 는 요청한 capability 이름을 그대로 유지한다.
- * 옛 capability_models 테이블은 더 읽지·쓰지 않는다(다음 배포에서 DROP — 2단계 삭제).
+ * 옛 capability_models 테이블은 없다(마이그레이션 171 에서 DROP).
  *
  * 합쳐진 슬롯: text.code ↔ 'code'(역할 review 와 공유), text.reason ↔ 'reasoning'(역할 research 와 공유).
  *

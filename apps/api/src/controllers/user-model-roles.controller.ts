@@ -15,7 +15,7 @@
  *     external-keys validate 와 동일한 저장-유지 정책)
  *
  * @see services/model-role-resolver — 해석(3단 폴백) 소비자
- * @see db/migrations/069_user_model_roles.sql
+ * @see db/migrations/170_model_assignments.sql
  */
 import { Router, Request } from 'express';
 import { z } from 'zod';

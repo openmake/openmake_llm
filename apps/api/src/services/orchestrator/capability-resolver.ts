@@ -5,7 +5,7 @@
  * "역할&모델"(model-role-resolver — 텍스트 LLM 을 누가 쓰는가)과 별개 축.
  * 결정적 매핑이라 LLM 판단 경계(A형)와 무관.
  *
- * 우선순위: 사용자 오버라이드(capability_models scope=userId, BYOK 필요)
+ * 우선순위: 사용자 오버라이드(model_assignments scope=userId, BYOK 필요)
  *         → 전역 DB(scope='__global__', 외부면 서버 공용 키 필요)
  *         → 코드 기본값(config/capabilities CAPABILITY_DEFAULTS, 로컬만)
  *
