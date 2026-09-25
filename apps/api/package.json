@@ -4,14 +4,14 @@
     "description": "OpenMake API Server",
     "main": "dist/server.js",
     "scripts": {
-        "build": "tsc && npm run copy-addons && npm run copy-report-templates && npm run build-info",
+        "build": "node ../../scripts/tsc7.cjs && npm run copy-addons && npm run copy-report-templates && npm run build-info",
         "copy-report-templates": "mkdir -p dist/report-templates && cp -R src/report-templates/. dist/report-templates/",
         "build-info": "node ../../scripts/build-info.js",
         "copy-addons": "rm -rf dist/addon-packs && cp -R addons dist/addon-packs",
         "dev": "ts-node --files src/server.ts",
         "addons:build": "ts-node --files src/addon-host/authoring/build-packs.ts",
         "start": "node dist/server.js",
-        "watch": "tsc --watch",
+        "watch": "node ../../scripts/tsc7.cjs --watch",
         "test": "jest",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
@@ -89,6 +89,6 @@
         "@types/ws": "^8.18.1",
         "ts-jest": "^29.4.12",
         "ts-node": "^10.9.2",
-        "typescript": "^6.0.3"
+        "typescript": "npm:@typescript/typescript6@^6.0.2"
     }
 }

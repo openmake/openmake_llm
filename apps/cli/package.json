@@ -8,7 +8,7 @@
         "openmake-code": "dist/index.js"
     },
     "scripts": {
-        "build": "tsc -p tsconfig.json",
+        "build": "node ../../scripts/tsc7.cjs -p tsconfig.json",
         "start": "node dist/index.js"
     },
     "dependencies": {
