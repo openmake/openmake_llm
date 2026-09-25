@@ -14,6 +14,7 @@ import type {
   KnowledgeDocument,
   KnowledgeSpaceCreateInput,
   KnowledgeSpaceDetail,
+  KnowledgeSpaceMemory,
   KnowledgeSpaceSummary,
   KnowledgeSpaceUpdateInput,
 } from "@openmake/shared-types";
@@ -96,6 +97,25 @@ export const knowledgeApi = {
       (r) => r.data,
     ),
 
+  // ── 프로젝트 메모리(수동) ────────────────────────────────
+  listMemories: (id: string) =>
+    ApiClient.get<Envelope<{ memories: KnowledgeSpaceMemory[] }>>(`${base}/spaces/${id}/memories`).then(
+      (r) => r.data.memories,
+    ),
+
+  addMemory: (id: string, content: string) =>
+    ApiClient.post<Envelope<{ memory: KnowledgeSpaceMemory }>>(`${base}/spaces/${id}/memories`, { content }).then(
+      (r) => r.data.memory,
+    ),
+
+  updateMemory: (id: string, memId: string, content: string) =>
+    ApiClient.patch<Envelope<{ memory: KnowledgeSpaceMemory }>>(`${base}/spaces/${id}/memories/${memId}`, { content }).then(
+      (r) => r.data.memory,
+    ),
+
+  deleteMemory: (id: string, memId: string) =>
+    ApiClient.del<Envelope<unknown>>(`${base}/spaces/${id}/memories/${memId}`),
+
   getChunk: (id: string, chunkId: string) =>
     ApiClient.get<Envelope<KnowledgeChunkPreview>>(`${base}/spaces/${id}/chunks/${chunkId}`).then(
       (r) => r.data,
@@ -122,4 +142,4 @@ export const knowledgeApi = {
     ApiClient.post<Envelope<unknown>>(`${base}/admin/spaces/${spaceId}/rechunk`),
 };
 
-export type { KnowledgeConversation };
+export type { KnowledgeConversation, KnowledgeSpaceMemory };

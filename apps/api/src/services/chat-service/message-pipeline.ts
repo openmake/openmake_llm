@@ -33,7 +33,7 @@ import { runProviderGate, servedModelLabel } from './provider-gate';
 import { checkUserQuota } from '../../llm/user-quota';
 import { QuotaExceededError } from '../../errors/quota-exceeded.error';
 import { resolveDegradeMap, resolveDegradeTarget } from '../../config/quota-degrade-policy';
-import { getChatTurnIntegrations } from './turn-integrations';
+import { getChatTurnIntegrations, isSessionMemoryIsolated } from './turn-integrations';
 import { applyAgentModelOverride } from './agent-model-override';
 import { resolveModeExternalClient } from './mode-external-client';
 import { buildUserContextBlocks } from './user-context-blocks';
@@ -379,7 +379,10 @@ export async function runMessagePipeline(svc: ChatService,
     // memoryLearning 토글은 "주입"뿐 아니라 "형성/저장"도 게이팅한다 — OFF 인데 저장이 계속되면
     // 사용자가 끈 것과 반대로 동작하는 프라이버시 이슈.
     if (memoryLearning) {
-        void autoFormMemories({ userId, message: req.message, client: svc.client });
+        // 메모리 격리 세션(예: 문서 작업공간에 연결된 대화)은 전역 메모리로 쓰지 않는다 — 일반 채팅으로의
+        // 간접 누출 방지. WS·REST 공유 경로라 두 경로 모두 적용된다. fail-closed(판정 실패 시 미기록).
+        const memoryIsolated = await isSessionMemoryIsolated(userId, req.sessionId).catch(() => true);
+        if (!memoryIsolated) void autoFormMemories({ userId, message: req.message, client: svc.client });
     }
 
     // Custom Agent (user_agents) 활성 시 산업 agent 라우팅 우회 + allowedSkills 주입.

@@ -25,6 +25,11 @@ export interface LimitsProfile {
     jobLeaseMs: number;
     jobMaxAttempts: number;
     orgWriteRoles: string[];
+    /** Space 지침·메모리 주입 정책 — 구 시드 DB 엔 없을 수 있어 optional. 폴백은 config/injection.ts. */
+    maxInstructionTokens?: number;
+    maxMemoryItems?: number;
+    maxMemoryCharsPerItem?: number;
+    maxMemoryTokens?: number;
 }
 export interface SpaceProfiles { chunker: ChunkerProfile; retrieval: RetrievalProfile; limits: LimitsProfile }
 

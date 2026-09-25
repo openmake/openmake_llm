@@ -26,6 +26,7 @@ function toSummary(row: repo.SpaceSummaryRow, actor: KnowledgeActor): KnowledgeS
         name: row.name,
         description: row.description,
         icon: row.icon,
+        instructions: row.instructions,
         scopeType: row.scope_type,
         canEdit: canEditScope(actor, row.scope_type, row.scope_id),
         documentCount: parseInt(row.document_count, 10),
@@ -59,22 +60,23 @@ export async function listSpaces(userId: string): Promise<KnowledgeSpaceSummary[
 
 export async function createSpace(
     userId: string,
-    input: { name: string; description?: string; icon?: string; scopeType?: KnowledgeScopeType },
+    input: { name: string; description?: string; icon?: string; instructions?: string; scopeType?: KnowledgeScopeType },
 ): Promise<KnowledgeSpaceSummary> {
     const actor = await actorFor(userId);
     const scopeType: KnowledgeScopeType = input.scopeType ?? 'user';
     const scopeId = creatableScopeId(actor, scopeType);
-    if (!scopeId) throw new AppError('이 범위에 Knowledge Space 를 만들 권한이 없습니다', 403, true, 'FORBIDDEN');
+    if (!scopeId) throw new AppError('이 범위에 프로젝트를 만들 권한이 없습니다', 403, true, 'FORBIDDEN');
 
     const limits = await getDefaultLimits();
     const existing = await repo.countActiveSpacesInScope(scopeType, scopeId);
     if (existing >= limits.maxSpacesPerScope) {
-        throw new AppError(`Space 수 상한(${limits.maxSpacesPerScope})을 초과했습니다`, 409, true, 'SPACE_LIMIT_EXCEEDED');
+        throw new AppError(`프로젝트 수 상한(${limits.maxSpacesPerScope})을 초과했습니다`, 409, true, 'SPACE_LIMIT_EXCEEDED');
     }
 
     const id = await repo.insertSpace({
         scopeType, scopeId, createdBy: userId,
         name: input.name, description: input.description ?? null, icon: input.icon ?? null,
+        instructions: input.instructions ?? null,
     });
     const row = await repo.getSpaceSummaryRow(actor, id);
     if (!row) throw new AppError('Space 생성 직후 조회에 실패했습니다', 500, true, 'INTERNAL_ERROR');
@@ -84,7 +86,7 @@ export async function createSpace(
 export async function getSpaceDetail(userId: string, id: string): Promise<KnowledgeSpaceDetail> {
     const actor = await actorFor(userId);
     const row = await repo.getSpaceSummaryRow(actor, id);
-    if (!row) throw new AppError('Knowledge Space', 404, true, 'NOT_FOUND');
+    if (!row) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
     const [docRows, convRows] = await Promise.all([
         listDocumentRowsForSpace(id),
         repo.listConversationsForSpace(id),
@@ -96,13 +98,13 @@ export async function getSpaceDetail(userId: string, id: string): Promise<Knowle
 export async function updateSpace(
     userId: string,
     id: string,
-    patch: { name?: string; description?: string | null; icon?: string | null },
+    patch: { name?: string; description?: string | null; icon?: string | null; instructions?: string | null },
 ): Promise<KnowledgeSpaceSummary> {
     const actor = await actorFor(userId);
     const ok = await repo.updateSpaceFields(actor, id, patch);
-    if (!ok) throw new AppError('Knowledge Space', 404, true, 'NOT_FOUND');
+    if (!ok) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
     const row = await repo.getSpaceSummaryRow(actor, id, 'write');
-    if (!row) throw new AppError('Knowledge Space', 404, true, 'NOT_FOUND');
+    if (!row) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
     return toSummary(row, actor);
 }
 
@@ -113,7 +115,7 @@ export async function deleteSpace(userId: string, id: string): Promise<void> {
     const runAfter = new Date(Date.now() + limits.purgeAfterDays * 24 * 60 * 60 * 1000);
     await inTransaction(async (client) => {
         const ok = await repo.tombstoneSpace(client, actor, id);
-        if (!ok) throw new AppError('Knowledge Space', 404, true, 'NOT_FOUND');
+        if (!ok) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
         await enqueueJob({ kind: 'cleanup', spaceId: id, runAfter }, client);
     });
 }

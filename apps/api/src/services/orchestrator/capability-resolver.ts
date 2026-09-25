@@ -295,3 +295,25 @@ export async function resolveCapabilityTarget(
     );
 }
 
+/**
+ * 배정을 조회하지 않고 **명시된 fullId** 로 capability 대상을 해석한다.
+ * (예: 기록된 임베딩 index 의 provider_ref 로 그 index 와 동일한 모델을 재현할 때)
+ * fullId 를 해석할 수 없으면(로컬 태그 아님·카탈로그 밖·키 없음) 조용히 폴백하지 않고 throw 한다.
+ * userId 를 주면 사용자 BYOK, 없으면 서버 공용 키(전역) 경로를 쓴다(로컬은 무관).
+ */
+export async function resolveCapabilityTargetForModel(
+    capability: Capability,
+    fullId: string,
+    userId?: string,
+    deps: Partial<ResolveDeps> = {},
+): Promise<CapabilityTarget> {
+    const d: ResolveDeps = { ...defaultDeps(), ...deps };
+    if (isExternalFullId(fullId)) {
+        return externalTarget(capability, fullId, {}, userId ? 'user' : 'global', userId, d);
+    }
+    if (!toLocalModelTag(fullId)) {
+        throw new CapabilityUnavailableError(`해석 불가한 모델 id: '${fullId}'`, 'CAPABILITY_PROVIDER_UNKNOWN');
+    }
+    return localTarget(capability, fullId, {}, 'default');
+}
+

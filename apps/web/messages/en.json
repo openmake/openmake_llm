@@ -2596,28 +2596,30 @@
     "untitledConversation": "Untitled conversation",
     "noConversations": "No linked conversations",
     "newConversation": "New chat",
-    "sectionTitle": "Knowledge",
-    "sidebarEmpty": "No Knowledge yet",
-    "viewAll": "View all Knowledge",
+    "sectionTitle": "Projects",
+    "sidebarEmpty": "No projects yet",
+    "viewAll": "View all projects",
     "listSubtitle": "Add materials and conversations will answer grounded in them",
-    "newSpace": "New Knowledge",
-    "searchPlaceholder": "Search Knowledge",
-    "empty": "No Knowledge yet",
+    "newSpace": "New project",
+    "searchPlaceholder": "Search projects",
+    "empty": "No projects yet",
     "noResults": "No results",
     "notFound": "Not found",
     "notReadyNotice": "Embedding is not ready yet; processing new materials may be delayed",
     "noDescription": "No description",
     "editDescription": "Edit description",
-    "deleteSpace": "Delete Knowledge",
+    "deleteSpace": "Delete project",
     "deleteSpaceConfirm": "Delete '{name}'? All materials and links will be removed.",
     "create": {
-      "title": "Create Knowledge",
+      "title": "Create project",
       "nameRequired": "Enter a name",
       "nameLabel": "Name",
       "namePlaceholder": "e.g. Product docs",
       "descLabel": "Description (optional)",
-      "descPlaceholder": "What this Knowledge is for",
-      "submit": "Create"
+      "descPlaceholder": "What this project is for",
+      "submit": "Create",
+      "instructionsLabel": "Instructions (optional)",
+      "instructionsPlaceholder": "Guidance applied to every chat in this project (e.g. tone, format, focus)"
     },
     "card": {
       "documents": "{count} documents",
@@ -2664,11 +2666,11 @@
     },
     "bind": {
       "title": "Add existing chat",
-      "hint": "Choose a conversation to link to this Knowledge",
+      "hint": "Choose a conversation to link to this project",
       "noChats": "No recent chats"
     },
     "banner": {
-      "text": "This conversation can use materials from this Knowledge"
+      "text": "This conversation can use materials from this project"
     },
     "citation": {
       "title": "Citation",
@@ -2694,6 +2696,22 @@
     "sidebar": {
       "expandSpace": "Expand {name}",
       "collapseSpace": "Collapse {name}"
+    },
+    "instructions": {
+      "title": "Instructions",
+      "edit": "Edit instructions",
+      "empty": "No instructions yet",
+      "placeholder": "Guidance applied to every chat in this project"
+    },
+    "memory": {
+      "section": "{count} memories",
+      "add": "Add memory",
+      "hint": "Injected as background context into this project's chats (manual, newest first).",
+      "placeholder": "Something to remember",
+      "save": "Save",
+      "empty": "No memories yet",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this memory?"
     }
   },
   "modelAssignments": {

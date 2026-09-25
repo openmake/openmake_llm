@@ -43,7 +43,7 @@ function resolveMime(file: UploadFile, allowed: readonly string[]): string | nul
 async function requireWritableSpace(userId: string, spaceId: string) {
     const actor = await actorFor(userId);
     const space = await getSpaceScopeRow(actor, spaceId, 'write');
-    if (!space) throw new AppError('Knowledge Space', 404, true, 'NOT_FOUND');
+    if (!space) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
     return space;
 }
 

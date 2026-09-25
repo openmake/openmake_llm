@@ -14,6 +14,8 @@ export interface KnowledgeSpaceSummary {
   description: string | null;
   icon: string | null;
   scopeType: KnowledgeScopeType;
+  /** Space 소유자가 적은 지침 — 이 Space 에 연결된 대화에 매 턴 주입된다(없으면 null) */
+  instructions: string | null;
   /** 현재 사용자가 이름·자료·삭제를 바꿀 수 있는가 (서버 판정) */
   canEdit: boolean;
   documentCount: number;
@@ -58,10 +60,30 @@ export interface KnowledgeSpaceCreateInput {
   name: string;
   description?: string;
   icon?: string;
+  instructions?: string;
   scopeType?: KnowledgeScopeType;
 }
 /** PATCH /api/knowledge/spaces/:id 입력 */
-export interface KnowledgeSpaceUpdateInput { name?: string; description?: string | null; icon?: string | null }
+export interface KnowledgeSpaceUpdateInput {
+  name?: string;
+  description?: string | null;
+  icon?: string | null;
+  instructions?: string | null;
+}
+
+/** Space 메모리(수동 항목) — GET/POST/PATCH /api/knowledge/spaces/:id/memories */
+export interface KnowledgeSpaceMemory {
+  id: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+/** GET /api/knowledge/spaces/:id/memories */
+export interface KnowledgeMemoryListResponse { memories: KnowledgeSpaceMemory[] }
+/** POST·PATCH /api/knowledge/spaces/:id/memories[/:memId] 입력 */
+export interface KnowledgeMemoryInput { content: string }
+/** POST·PATCH /api/knowledge/spaces/:id/memories[/:memId] 응답 */
+export interface KnowledgeMemoryResponse { memory: KnowledgeSpaceMemory }
 
 /** POST /api/knowledge/spaces/:id/conversations — 새 대화를 만들고 Space 에 연결한다 */
 export interface KnowledgeNewConversationResponse { sessionId: string }

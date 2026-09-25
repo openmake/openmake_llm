@@ -13,7 +13,7 @@ import { createLogger } from '../../../utils/logger';
 import { kdb, inTransaction } from '../db';
 import { resolveSpaceProfiles } from '../config/profiles';
 import { countEmbeddings, ensureActiveIndex, insertEmbeddings, type KnowledgeIndex } from '../embedding/index-manager';
-import { embedTexts, type EmbedFn } from '../embedding/provider';
+import { makeIndexEmbedder, type EmbedFn } from '../embedding/provider';
 import { readStoredFile } from '../documents/storage';
 import { chunkerFor, type ProducedChunk } from './chunker-registry';
 import { parserFor, supportedMimeTypes } from './parser-registry';
@@ -115,7 +115,7 @@ async function replaceChunks(versionId: string, chunks: ProducedChunk[]): Promis
  * 한 버전을 수집한다. 실패는 상태 전이로 남기고 예외를 던지지 않는다(worker 가 결과로 재시도 판단).
  */
 export async function ingestVersion(versionId: string, deps: IngestDeps = {}): Promise<IngestResult> {
-    const embed = deps.embed ?? embedTexts;
+    const embedOverride = deps.embed;
     const ensureIndex = deps.ensureIndex ?? ensureActiveIndex;
     const readFile = deps.readFile ?? readStoredFile;
     let stage: Stage = 'validating';
@@ -165,6 +165,8 @@ export async function ingestVersion(versionId: string, deps: IngestDeps = {}): P
             stage = 'embedding';
             await setStage(versionId, stage);
             const index = await ensureIndex();
+            // 활성 index 에 넣을 벡터는 그 index 에 기록된 모델로 임베딩한다(라이브 배정 변경이 활성 index 를 오염시키지 않게).
+            const embed = embedOverride ?? makeIndexEmbedder(index);
             const chunkRows = (await kdb().query<{ id: string; content: string }>(
                 `SELECT id, content FROM knowledge_chunks WHERE document_version_id = $1 ORDER BY sequence`,
                 [versionId],

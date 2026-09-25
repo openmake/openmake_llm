@@ -20,6 +20,7 @@ export const qk = {
   capabilities: () => ["knowledge", "capabilities"] as const,
   spaces: () => ["knowledge", "spaces"] as const,
   space: (id: string) => ["knowledge", "space", id] as const,
+  memories: (id: string) => ["knowledge", "memories", id] as const,
   binding: (sessionId: string) => ["knowledge", "binding", sessionId] as const,
   chunk: (spaceId: string, chunkId: string) => ["knowledge", "chunk", spaceId, chunkId] as const,
   adminStatus: () => ["knowledge", "admin", "status"] as const,

@@ -2596,28 +2596,30 @@
     "untitledConversation": "제목 없는 대화",
     "noConversations": "연결된 대화가 없습니다",
     "newConversation": "새 대화",
-    "sectionTitle": "Knowledge",
-    "sidebarEmpty": "아직 Knowledge 가 없습니다",
-    "viewAll": "모든 Knowledge 보기",
+    "sectionTitle": "프로젝트",
+    "sidebarEmpty": "아직 프로젝트가 없습니다",
+    "viewAll": "모든 프로젝트 보기",
     "listSubtitle": "자료를 올려 두면 대화에서 그 근거로 답합니다",
-    "newSpace": "새 Knowledge",
-    "searchPlaceholder": "Knowledge 검색",
-    "empty": "아직 Knowledge 가 없습니다",
+    "newSpace": "새 프로젝트",
+    "searchPlaceholder": "프로젝트 검색",
+    "empty": "아직 프로젝트가 없습니다",
     "noResults": "검색 결과가 없습니다",
     "notFound": "찾을 수 없음",
     "notReadyNotice": "임베딩이 아직 준비되지 않아 새 자료 처리가 지연될 수 있습니다",
     "noDescription": "설명 없음",
     "editDescription": "설명 편집",
-    "deleteSpace": "Knowledge 삭제",
+    "deleteSpace": "프로젝트 삭제",
     "deleteSpaceConfirm": "'{name}' 을(를) 삭제할까요? 자료와 연결이 모두 사라집니다.",
     "create": {
-      "title": "새 Knowledge 만들기",
+      "title": "새 프로젝트 만들기",
       "nameRequired": "이름을 입력하세요",
       "nameLabel": "이름",
       "namePlaceholder": "예: 제품 문서",
       "descLabel": "설명 (선택)",
-      "descPlaceholder": "이 Knowledge 의 용도",
-      "submit": "만들기"
+      "descPlaceholder": "이 프로젝트의 용도",
+      "submit": "만들기",
+      "instructionsLabel": "지침 (선택)",
+      "instructionsPlaceholder": "이 프로젝트 대화에 매번 적용할 안내 (예: 말투·형식·집중 주제)"
     },
     "card": {
       "documents": "문서 {count}개",
@@ -2664,11 +2666,11 @@
     },
     "bind": {
       "title": "기존 대화 추가",
-      "hint": "이 Knowledge 에 연결할 대화를 고르세요",
+      "hint": "이 프로젝트에 연결할 대화를 고르세요",
       "noChats": "최근 대화가 없습니다"
     },
     "banner": {
-      "text": "이 대화에서는 이 Knowledge 자료를 사용할 수 있습니다"
+      "text": "이 대화에서는 이 프로젝트 자료를 사용할 수 있습니다"
     },
     "citation": {
       "title": "인용",
@@ -2694,6 +2696,22 @@
     "sidebar": {
       "expandSpace": "{name} 펼치기",
       "collapseSpace": "{name} 접기"
+    },
+    "instructions": {
+      "title": "지침",
+      "edit": "지침 편집",
+      "empty": "아직 지침이 없습니다",
+      "placeholder": "이 프로젝트 대화에 매번 적용할 안내"
+    },
+    "memory": {
+      "section": "메모리 {count}개",
+      "add": "메모리 추가",
+      "hint": "이 프로젝트 대화에 참고 맥락으로 주입됩니다(수동, 최신순).",
+      "placeholder": "기억할 내용",
+      "save": "저장",
+      "empty": "아직 메모리가 없습니다",
+      "delete": "삭제",
+      "deleteConfirm": "이 메모리를 삭제할까요?"
     }
   },
   "modelAssignments": {

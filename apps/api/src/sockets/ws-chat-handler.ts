@@ -308,14 +308,14 @@ export async function handleChatMessage(
         // ChatRequestHandler.processChat으로 통합 처리
         const result = await ChatRequestHandler.processChat({
             message, originalMessage: rawMessage,
-            model: selectedModel,
-            nodeId,
+            model: selectedModel, nodeId,
             history,
             images: pdfVision.images.length > 0 ? [...(images ?? []), ...pdfVision.images] : images,
             sessionId: validSessionId,
             webSearchContext,
             fileContext: [effectiveAttachContext + pdfVision.note, turnContexts.contextBlock].filter(Boolean).join('\n\n') || undefined,
             sourceNumberBase: turnStartSources.length || undefined,
+            turnSystemPromptPart: turnContexts.systemPromptPart || undefined,
             ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
             modes: activeModes,
             imageMode: msg.imageMode === true,

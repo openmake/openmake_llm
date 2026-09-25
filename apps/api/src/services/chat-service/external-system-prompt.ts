@@ -95,6 +95,11 @@ export function buildExternalSystemPromptParts(params: ExternalSystemPromptParam
     if (ctx.customInstructionsBlock) {
         systemPromptParts.push(ctx.customInstructionsBlock.trim());
     }
+    // 턴 통합(add-on)의 시스템 프롬프트 조각 — custom instructions 바로 뒤(동적 경계 뒤)에 붙인다.
+    // Base 는 문구·형식을 모른 채 문자열만 싣는다(예: Knowledge Space 소유자 지침·메모리). WS 만 채운다(REST 미지원).
+    if (req.turnSystemPromptPart) {
+        systemPromptParts.push(req.turnSystemPromptPart.trim());
+    }
 
     const langCode = ctx.resolvedLanguage || req.userLanguagePreference;
 
