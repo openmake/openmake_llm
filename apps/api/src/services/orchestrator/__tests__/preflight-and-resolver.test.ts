@@ -90,23 +90,27 @@ describe('resolveCapabilityTarget', () => {
 
 describe('preflightPlan — 실행 승인 경계', () => {
     const ctx = (o: Partial<ExecContext> = {}): ExecContext => ({ lang: 'ko', userMessage: 'q', attachments: new Map(), results: new Map(), userId: 'u1', ...o });
-    it('미지원·입력 누락·미배정을 실행 전에 거절하고 나머지는 통과', async () => {
+    it('입력 누락·미배정을 실행 전에 거절하고 나머지(첨부 있는 분석 포함)는 통과', async () => {
+        // UNSUPPORTED_CAPABILITIES 가 비어(2026-09-25 분석 계열 실행기 편입) 미지원 거절 케이스는 없다 —
+        // video.analyze 는 영상 첨부가 있으면 통과하고, 없는 vision.describe 는 [input] 로 거절된다.
         const p = validatePlan({ complexity: 'multi', tasks: [
-            { id: 'm', capability: 'video.analyze', input: { instruction: 'x' } },
+            { id: 'm', capability: 'video.analyze', input: { instruction: 'x', attachments: ['vid1'] } },
             { id: 'v', capability: 'vision.describe', input: { instruction: 'x' } },
             { id: 't', capability: 'audio.speech', input: { text: 'hi' } },
             { id: 'i', capability: 'image.generate', input: { instruction: 'x' } },
             { id: 's', capability: 'web.search', input: { instruction: 'x' }, depends_on: ['i'] }, // 레벨 병렬 상한(4) 준수
-        ] }, new Set());
+        ] }, new Set(['vid1']));
         if (!p.ok) throw new Error(p.reason);
-        // 해석기는 실제 DB 를 안 쓰도록 audio.speech 만 미배정(기본값 없음), image.generate 는 코드 기본값(로컬)
+        // 해석기는 실제 DB 를 안 쓰도록 audio.speech 만 미배정(기본값 없음), image.generate·video.analyze 는 코드 기본값(로컬)
         jest.spyOn(require('../capability-resolver'), 'resolveCapabilityTarget').mockImplementation(async (...args: unknown[]) => { const cap = String(args[0]);
             if (cap === 'audio.speech') { const { CapabilityUnavailableError } = jest.requireActual('../capability-resolver'); throw new CapabilityUnavailableError('미배정', 'CAPABILITY_UNASSIGNED'); }
             return { providerId: 'local-llm', fullId: 'local-llm:x', model: 'x', baseUrl: 'http://gw', endpoint: '/v1/x', headers: {}, params: {}, source: 'default', transport: 'gateway', capability: cap };
         });
-        const r = await preflightPlan(p.plan, ctx());
-        expect([...r.rejected.keys()].sort()).toEqual(['m', 't', 'v']);
-        expect(r.rejected.get('m')).toMatch(/unsupported/); expect(r.rejected.get('v')).toMatch(/input/); expect(r.rejected.get('t')).toMatch(/unassigned/);
+        const videoAtt = new Map([['vid1', { id: 'vid1', kind: 'video' as const, name: 'clip.mp4', mime: 'video/mp4', base64: 'x' }]]);
+        const r = await preflightPlan(p.plan, ctx({ attachments: videoAtt }));
+        expect([...r.rejected.keys()].sort()).toEqual(['t', 'v']);
+        expect(r.rejected.get('v')).toMatch(/input/); expect(r.rejected.get('t')).toMatch(/unassigned/);
+        expect(r.targets.has('m')).toBe(true); // 영상 첨부가 있는 video.analyze 는 통과
         expect(r.hasLocal).toBe(true);
     });
 

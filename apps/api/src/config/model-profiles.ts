@@ -23,6 +23,10 @@ export interface ModelCapabilities {
     thinking: boolean;
     vision: boolean;
     streaming: boolean;
+    /** 오디오 입력(input_audio 콘텐츠 파트)을 이해하는가 — audio.analyze/music.analyze 프로브가 확정했을 때만. 없으면 미확정 */
+    audioInput?: boolean;
+    /** 영상 입력(video_url 콘텐츠 파트)을 이해하는가 — video.analyze 프로브가 확정했을 때만. 없으면 미확정 */
+    videoInput?: boolean;
 }
 
 export interface SamplingValues {
@@ -108,6 +112,7 @@ const DEFAULT_MODEL_PROFILES: Readonly<Record<string, ModelProfile>> = {
 };
 
 const CAPABILITY_KEYS = ['toolCalling', 'thinking', 'vision', 'streaming'] as const;
+const OPTIONAL_CAPABILITY_KEYS = ['audioInput', 'videoInput'] as const;
 const SAMPLING_KEYS = ['temperature', 'top_p', 'top_k', 'presence_penalty', 'repeat_penalty'] as const;
 
 function isEffort(v: unknown): v is ReasoningEffort {
@@ -131,7 +136,10 @@ function parseProfile(raw: unknown): ModelProfile {
     const r = raw as Record<string, unknown>;
     const caps = r.capabilities as Record<string, unknown> | undefined;
     if (caps && CAPABILITY_KEYS.every(k => typeof caps[k] === 'boolean')) {
-        out.capabilities = Object.fromEntries(CAPABILITY_KEYS.map(k => [k, caps[k]])) as unknown as ModelCapabilities;
+        const core = Object.fromEntries(CAPABILITY_KEYS.map(k => [k, caps[k]])) as unknown as ModelCapabilities;
+        // 오디오·영상 입력은 선택 필드 — 있으면 보존한다(구 프로필엔 없어 undefined). 없으면 미확정
+        for (const k of OPTIONAL_CAPABILITY_KEYS) if (typeof caps[k] === 'boolean') core[k] = caps[k] as boolean;
+        out.capabilities = core;
     }
     if (Array.isArray(r.reasoningEfforts) && r.reasoningEfforts.length > 0 && r.reasoningEfforts.every(isEffort)) {
         out.reasoningEfforts = r.reasoningEfforts as ReasoningEffort[];

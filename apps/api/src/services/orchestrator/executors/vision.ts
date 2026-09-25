@@ -2,7 +2,7 @@
  * @module services/orchestrator/executors/vision
  * @description vision.describe / vision.ocr — 배정 VLM 에 이미지를 image_url 블록으로 싣고 관찰 기록 텍스트를 받는다.
  * 역할(채팅) 모델을 바꿔치기하지 않는다 — 기록은 종합 단계의 근거로만 쓰인다.
- * (video.analyze·audio.analyze·music.analyze 는 검증된 provider 어댑터가 없어 `unsupported` — executors/index 참고)
+ * (audio.analyze·music.analyze·video.analyze 는 네이티브 콘텐츠 파트로 처리한다 — executors/media-analyze 참고)
  */
 import { CAPABILITY_LIMITS } from '../../../config/capabilities';
 import { resolveCapabilityTarget } from '../capability-resolver';
