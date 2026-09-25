@@ -16,7 +16,13 @@ on:
   schedule:
     # 매주 월요일 새벽(UTC 20:47 일요일 = KST 월 05:47) — :00/:30 회피 관례.
     - cron: '47 20 * * 0'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'minimal = 앱 본체(주간 기본) · full = 한 줄 설치 전체 스택(omk·LiteLLM·SearXNG·내부 HTTPS·자동 시작)'
+        type: choice
+        options: [minimal, full]
+        default: minimal
 
 concurrency:
   group: install-smoke
@@ -25,6 +31,7 @@ concurrency:
 jobs:
   smoke:
     name: Clean install → health
+    if: github.event_name == 'schedule' || inputs.mode != 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -74,3 +81,61 @@ jobs:
           echo "── docker ps ──"; docker ps -a || true
           echo "── compose logs ──"; docker compose --env-file .env -f infra/docker-compose.yml logs --tail 50 || true
           echo "── .env 키 목록(값 제외) ──"; grep -oE '^[A-Z_]+' .env | head -40 || true
+
+  # ── 전체 스택 (수동 · full) ─────────────────────────────────────────────────
+  # README 의 한 줄 설치를 **그대로** 실행한다(레포 밖에서 curl → OS 입구 → install_linux.sh → omk → --minimal).
+  # 사내 DGX 에는 닿지 않으므로 LLM 은 외부 provider(custom) 형식의 더미 주소로 설치하고(채팅 응답은 범위 밖),
+  # 런타임 이미지(~7GB)는 러너 디스크·시간 때문에 뺀다(빠지면 샌드박스 스위치를 끄는 가드까지 검증한다).
+  full:
+    name: One-line install (full stack) → verify
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      LLM_DIR: /home/runner/.openmake/online/llm
+    steps:
+      - name: One-line install from this ref (curl | bash)
+        working-directory: /tmp
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/install.sh" \
+            | OMK_REF="${{ github.ref_name }}" bash -s -- --yes \
+                --llm-provider custom --llm-base-url http://127.0.0.1:9/v1 --llm-model smoke-model \
+                --host 127.0.0.1 --no-sandbox-images
+
+      - name: Verify stack
+        run: |
+          set -euo pipefail
+          . "$LLM_DIR/.openmake/toolchain.env"
+          envv() { grep -E "^$1=" "$LLM_DIR/.env" | tail -1 | cut -d= -f2-; }
+          fail=0; check() { if eval "$2"; then echo "OK   $1"; else echo "FAIL $1"; fail=1; fi; }
+          check "API /health"                 'curl -fsS -m 5 http://127.0.0.1:$(envv PORT)/health >/dev/null'
+          check "HTTPS :443 — 루트 CA 신뢰(-k 없이)" 'curl -fsS -m 10 -o /dev/null https://127.0.0.1/'
+          check "HTTPS REST 라우팅(/api)"       '[ "$(curl -s -m 10 -o /dev/null -w "%{http_code}" https://127.0.0.1/api/models)" != "000" ]'
+          check "caddy :443 권한(setcap)"      'getcap "$(readlink -f "$(command -v caddy 2>/dev/null || echo "$HOME/.openmake/bin/caddy")")" | grep -q cap_net_bind_service'
+          check "루트 CA 파일"                  'test -s "$HOME/.openmake/https/openmake-internal-root.crt"'
+          check "LiteLLM liveliness"           'curl -fsS -m 5 http://127.0.0.1:$(envv OMK_LITELLM_PORT)/health/liveliness >/dev/null'
+          check "LiteLLM 기본 모델 등록"          'curl -fsS -m 10 -H "Authorization: Bearer $(envv LLM_API_KEY)" http://127.0.0.1:$(envv OMK_LITELLM_PORT)/v1/models | grep -q smoke-model'
+          check "LiteLLM 버전 고정 1.100.1"      '"$HOME/.openmake/online/litellm/venv/bin/python" -c "import importlib.metadata as m; assert m.version(\"litellm\")==\"1.100.1\""'
+          check "SearXNG"                       'curl -fsS -m 5 "$(envv SEARXNG_URL)/healthz" >/dev/null'
+          check "운영 프로필"                     '[ "$(envv OMK_OPS_PROFILE)" = 1 ] && [ "$(envv AGENT_TASK_QUEUE_ENABLED)" = true ]'
+          check "VAPID 키"                      '[ -n "$(envv VAPID_PUBLIC_KEY)" ]'
+          check "보안 쿠키(HTTPS)"               '[ "$(envv COOKIE_SECURE)" = true ] && [ "$(envv OMK_APP_URL)" = https://127.0.0.1 ]'
+          check "이미지 없음 → 샌드박스 끔"         '[ "$(envv TASK_SANDBOX_ENABLED)" = false ]'
+          check "스크래퍼 파이썬(curl_cffi)"       '"$(envv SCRAPER_PYTHON_BIN)" -c "import curl_cffi"'
+          check "PM2 앱(앱·게이트웨이·프록시·백업)"   'pm2 jlist | node -e "const l=JSON.parse(require(\"fs\").readFileSync(0,\"utf8\")).map(p=>p.name); for (const n of [\"openmake-llm\",\"openmake-next\",\"openmake-litellm\",\"omk-proxy\",\"omk-backup-online\"]) if(!l.includes(n)) process.exit(1)"'
+          check "pm2-logrotate"                 'pm2 ls -m | grep -q pm2-logrotate'
+          check "systemd 자동 시작(pm2)"          'systemctl is-enabled "pm2-$USER" >/dev/null'
+          check "tesseract 한국어·pdftoppm"        'tesseract --list-langs 2>/dev/null | grep -qx kor && command -v pdftoppm >/dev/null'
+          exit $fail
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          export PATH="$HOME/.openmake/node/bin:$HOME/.local/bin:$PATH"; . "$LLM_DIR/.openmake/toolchain.env" 2>/dev/null || true
+          echo "── pm2 ──"; pm2 ls || true
+          echo "── pm2 logs ──"; pm2 logs --nostream --lines 40 || true
+          echo "── docker ps ──"; docker ps -a || true
+          echo "── .env 키(값 제외) ──"; grep -oE '^[A-Z_]+' "$LLM_DIR/.env" | tr '\n' ' ' || true
+          echo; echo "── caddy.d ──"; ls -la "$HOME/.openmake/caddy/caddy.d" 2>/dev/null && cat "$HOME/.openmake/caddy/Caddyfile" 2>/dev/null || true
+

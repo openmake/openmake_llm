@@ -24,10 +24,21 @@ preflight_checks() {
 
 # 호스트 도구 — poppler(pdftoppm·pdftotext)·tesseract(+kor): 스캔 PDF OCR·PDF 비전·Knowledge PDF,
 # python3-venv: LiteLLM·스크래퍼 가상환경 폴백, setcap(libcap): 프록시의 :443 바인딩 권한.
+# 시스템 패키지는 배포판 관리자로만 설치한다 — linuxbrew 가 있으면 detect_platform 의 PKG 가 brew 로 잡히지만
+# (GitHub ubuntu 러너 실측) poppler·tesseract·libcap 은 배포판 패키지여야 한다.
+system_pkg_manager() {
+    local m
+    for m in apt-get:apt dnf:dnf yum:yum pacman:pacman zypper:zypper; do
+        has "${m%%:*}" && { printf '%s' "${m##*:}"; return 0; }
+    done
+    return 1
+}
+
 ensure_host_packages() {
-    log_step "호스트 패키지 ($PKG)"
-    local pkgs=""
-    case "$PKG" in
+    local mgr pkgs=""
+    mgr="$(system_pkg_manager || true)"
+    log_step "호스트 패키지 (${mgr:-없음})"
+    case "$mgr" in
         apt)    pkgs="curl git ca-certificates poppler-utils tesseract-ocr tesseract-ocr-kor python3 python3-venv libcap2-bin"
                 sudo apt-get update -qq || die "apt-get update 실패" ;;
         dnf)    pkgs="curl git ca-certificates poppler-utils tesseract tesseract-langpack-kor python3 libcap" ;;
@@ -38,7 +49,7 @@ ensure_host_packages() {
     esac
     # 단어 분할이 의도다 — 패키지 이름 목록.
     # shellcheck disable=SC2086
-    case "$PKG" in
+    case "$mgr" in
         apt)    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $pkgs ;;
         dnf)    sudo dnf install -y -q $pkgs ;;
         yum)    sudo yum install -y -q $pkgs ;;
