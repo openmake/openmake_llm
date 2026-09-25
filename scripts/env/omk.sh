@@ -37,6 +37,12 @@
 #   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng] [--no-runtime-images] [--tailscale] [--host H]…
 #                         [--no-litellm] [--no-default-model] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
+#                         [--ops-profile] [--dgx-host H] [--https-host H] [--artifact-viewer] [--discord-token T]
+#                         ↑ 운영 구성 옵션 (install_mac.sh 가 켠다 — 주지 않으면 기존 동작 그대로):
+#                           --ops-profile     운영 기능 플래그(scripts/setup/profiles/ops-features.env)·웹 푸시 키·작업 공간·스크래퍼 파이썬
+#                           --dgx-host H      DGX vLLM(:8002 채팅·:8003 임베딩·:8005 음악)을 게이트웨이 업스트림으로 + 연결 확인
+#                           --https-host H    내부망 HTTPS (Caddy tls internal · :443) — 사내 기기는 루트 인증서를 한 번 신뢰 등록
+#                           --artifact-viewer 아티팩트 공유 뷰어 (기본 인스턴스 전용) · --discord-token T  Discord 봇 (이 서버 전용 새 토큰)
 #   omk env update  <env> [--if-behind] [--no-backup]       # llm(ff-only→build→migrate→restart) → bench → proxy
 #   omk env reset   <env> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
 #   omk env status|start|stop|logs <env>
@@ -445,11 +451,17 @@ proxy_template() {
 }
 proxy_root_caddyfile() {
     local dir; dir="$(proxy_dir)"; mkdir -p "$dir/caddy.d"
-    [[ -f "$dir/Caddyfile" ]] && return 0
+    # 이미 있으면 그대로 — 단 omk 가 만든 옛 파일에 skip_install_trust 가 없으면 다시 쓴다(내부 HTTPS 의
+    # tls internal 이 PM2 아래에서 시스템 신뢰 저장소 설치를 시도하지 않게. 신뢰 등록은 설치 스크립트가 한다).
+    if [[ -f "$dir/Caddyfile" ]]; then
+        grep -q 'skip_install_trust' "$dir/Caddyfile" && return 0
+        head -1 "$dir/Caddyfile" | grep -q '^# omk 가 생성' || return 0
+    fi
     cat > "$dir/Caddyfile" <<EOF
 # omk 가 생성 — 환경별 블록은 caddy.d/<env>.caddy (omk proxy render <env>). 이 파일은 손대지 않는다.
 {
 	admin $OMK_CADDY_ADMIN
+	skip_install_trust
 }
 import $dir/caddy.d/*.caddy
 EOF
@@ -474,6 +486,7 @@ proxy_render() { # $1=env
         -e "s|{{WEB_PORT}}|$web|g" -e "s|{{BENCH_PORT}}|${bench_port:-0}|g" "$tmpl" > "$out"
     log_ok "프록시 설정 → $out (:$pport → api :$api / web :$web)"
     env_apply_origins "$ldir"
+    https_render "$env"
 }
 # 프록시 포트로 접속하면 브라우저의 Origin 은 http://<호스트>:<프록시포트> 이고 채팅 소켓도 그 주소로 붙는다
 # (use-chat-socket.ts). 서버는 CORS_ORIGINS 와 정확히 일치하는 Origin 만 받으므로 그 주소를 넣어 둔다 —
@@ -517,6 +530,7 @@ proxy_start_or_reload() {
 }
 proxy_remove() { # $1=env
     local f; f="$(proxy_dir)/caddy.d/$1.caddy"
+    rm -f "$(proxy_dir)/caddy.d/$1-https.caddy"
     [[ -f "$f" ]] || return 0
     rm -f "$f"; log_ok "프록시 설정 제거: $f"
     proxy_is_ours && { proxy_ensure_binary; "$CADDY_BIN" reload --config "$(proxy_dir)/Caddyfile" --adapter caddyfile --address "$OMK_CADDY_ADMIN" >/dev/null 2>&1 || true; }
@@ -629,7 +643,9 @@ searxng_count() { # $1=url → 실제 검색 결과 건수 (실패 0)
     printf '%s' "${n:-0}"
 }
 searxng_write_settings() { # $1=settings.yml — 기본 설정 위에 필요한 것만 덮는다
-    local key; key="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
+    local key
+    # openssl 우선 — PATH 에 다른 od 가 앞서면 -An 을 모른다(실측: ~/.local/bin/od).
+    if has openssl; then key="$(openssl rand -hex 32)"; else key="$(/usr/bin/od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"; fi
     # formats 에 json 이 없으면 Base 의 호출(/search?format=json)이 403 이다. limiter 는 loopback 전용이라 끈다.
     cat > "$1" <<EOF
 use_default_settings: true
@@ -641,6 +657,14 @@ search:
   formats:
     - html
     - json
+engines:
+  # 응답이 불안정해 결과 지연만 만드는 엔진 (운영 실측)
+  - name: brave
+    disabled: true
+  - name: startpage
+    disabled: true
+  - name: mojeek
+    disabled: true
 EOF
     chmod 644 "$1"   # 컨테이너 안의 비루트 사용자가 읽어야 한다
 }
@@ -873,7 +897,8 @@ litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key $6=
 set -euo pipefail
 set -a; . "$lenv"; set +a
 : "\${QWEN_VLLM_API_BASE:=http://127.0.0.1:9/v1}" "\${BGE_VLLM_API_BASE:=http://127.0.0.1:9/v1}" "\${VLLM_API_KEY:=unset}"
-export QWEN_VLLM_API_BASE BGE_VLLM_API_BASE VLLM_API_KEY
+: "\${ACESTEP_API_BASE:=http://127.0.0.1:9/v1}" "\${ACESTEP_CHAT_URL:=http://127.0.0.1:9/v1/chat/completions}"
+export QWEN_VLLM_API_BASE BGE_VLLM_API_BASE VLLM_API_KEY ACESTEP_API_BASE ACESTEP_CHAT_URL
 exec "$d/venv/bin/litellm" --config "$d/litellm.config.yaml" --host 127.0.0.1 --port $port
 LITELLM_START
     chmod 700 "$d/start_litellm.sh"
@@ -928,9 +953,211 @@ runtime_images_remove() { # $1=env — 환경별 태그만 지운다. :latest �
     local i; for i in $(runtime_image_names "$1"); do docker rmi "$i" >/dev/null 2>&1 && log_ok "이미지 $i 삭제" || true; done
 }
 
+# ==============================================================================
+# 운영 구성 옵션 — install_mac.sh 가 켠다. 주지 않으면 기존 동작 그대로다.
+# ==============================================================================
+# 운영 서버와 같은 구성을 새 호스트에 만들 때 필요한 것들이다. 전부 멱등이고, 실패는 설치를 멈추지 않는다.
+#   .env 키:  OMK_OPS_PROFILE=1      --ops-profile 로 설치한 환경 (update 때 프로필의 새 키를 덧붙인다)
+#            OMK_HTTPS_HOST=<host>   --https-host 로 켠 내부망 HTTPS (proxy_render 가 caddy.d/<env>-https.caddy 를 쓴다)
+#            OMK_ARTIFACT_VIEWER=1   --artifact-viewer 로 켠 환경
+readonly OPS_PROFILE_REL="scripts/setup/profiles/ops-features.env"
+readonly DGX_CHAT_PORT=8002 DGX_EMBED_PORT=8003 DGX_MUSIC_PORT=8005
+readonly OMK_DGX_MODEL="${OMK_DGX_MODEL:-qwen3.8-27b}"   # DGX 채팅 vLLM 의 served-model-name (LiteLLM 항목 이름과 같다)
+readonly VIEWER_PORT=8088 VIEWER_HTTPS_PORT=8443
+readonly VIEWER_API_PORT=52416   # infra/artifact-viewer/nginx.conf 의 인가 호출 대상 — 기본 인스턴스만 맞는다
+readonly HTTPS_PORT=443
+OPS_CHANGED=0
+
+# 웹 푸시 VAPID 키 쌍 (P-256, base64url) — 없을 때만 만든다.
+vapid_ensure() { # $1=.env
+    [[ -n "$(dotenv_get "$1" VAPID_PUBLIC_KEY)" && -n "$(dotenv_get "$1" VAPID_PRIVATE_KEY)" ]] && return 0
+    has node || { log_warn "node 가 없어 웹 푸시 키를 만들지 못했습니다"; return 0; }
+    local pair
+    pair="$(node -e '
+        const c = require("crypto"); const e = c.createECDH("prime256v1"); e.generateKeys();
+        const priv = Buffer.alloc(32); const raw = e.getPrivateKey(); raw.copy(priv, 32 - raw.length);
+        console.log(e.getPublicKey().toString("base64url") + " " + priv.toString("base64url"));' 2>/dev/null)" \
+        || { log_warn "웹 푸시 키 생성 실패"; return 0; }
+    dotenv_set "$1" VAPID_PUBLIC_KEY "${pair%% *}"
+    dotenv_set "$1" VAPID_PRIVATE_KEY "${pair##* }"
+    dotenv_ensure "$1" VAPID_SUBJECT "mailto:$(dotenv_get "$1" DEFAULT_ADMIN_EMAIL)"
+    log_ok "웹 푸시 VAPID 키 생성"
+}
+
+# 차단 우회 스크래핑(curl_cffi) 전용 파이썬 — SCRAPER_PYTHON_BIN
+scraper_venv_ensure() { # $1=.env $2=env
+    local d py; d="$(env_dir "$2")/venvs/scraper"; py="$d/bin/python3"
+    if ! "$py" -c 'import curl_cffi' >/dev/null 2>&1; then
+        if has uv; then uv venv -q --python 3.12 "$d" && uv pip install -q --python "$d/bin/python" curl_cffi
+        elif has python3; then python3 -m venv "$d" && "$d/bin/pip" install -q curl_cffi
+        else false; fi || { log_warn "스크래퍼 파이썬(curl_cffi) 설치 실패 — 차단 우회 스크래핑 없이 계속합니다"; return 0; }
+    fi
+    dotenv_set "$1" SCRAPER_PYTHON_BIN "$py"
+}
+
+# 운영 기능 프로필 — .env 에 없는 키만 덧붙인다(사용자가 고친 값은 건드리지 않는다).
+ops_profile_apply() { # $1=llm dir $2=env
+    local ldir="$1" env="$2" envf="$1/.env" prof line key added=0 before
+    prof="$ldir/$OPS_PROFILE_REL"
+    [[ -f "$prof" ]] || { log_warn "운영 기능 프로필이 없습니다: $prof — 건너뜁니다"; return 0; }
+    log_step "운영 기능 프로필"
+    before="$(cksum < "$envf")"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" || "$line" == \#* ]] && continue
+        key="${line%%=*}"
+        grep -qE "^${key}=" "$envf" || { printf '%s\n' "$line" >> "$envf"; added=$((added + 1)); }
+    done < "$prof"
+    dotenv_set "$envf" OMK_OPS_PROFILE 1
+    # 기본값(/tmp)은 재부팅 때 사라진다 — 환경 디렉터리 안에 둔다.
+    dotenv_ensure "$envf" TASK_SANDBOX_ROOT "$(env_dir "$env")/task-workspaces"
+    mkdir -p "$(dotenv_get "$envf" TASK_SANDBOX_ROOT)"
+    vapid_ensure "$envf"
+    scraper_venv_ensure "$envf" "$env"
+    [[ "$before" == "$(cksum < "$envf")" ]] || OPS_CHANGED=1
+    log_ok "운영 기능 프로필 적용 ($added 개 키 추가)"
+}
+
+# 프로필이 켠 샌드박스 스위치를, 런타임 이미지가 없으면 끈다 — 켜진 채 이미지가 없으면 호출마다 실패한다.
+ops_sandbox_guard() { # $1=llm dir
+    local envf="$1/.env" img k
+    [[ "$(dotenv_get "$envf" OMK_OPS_PROFILE)" == "1" ]] || return 0
+    img="$(dotenv_get "$envf" TASK_SANDBOX_IMAGE)"
+    if [[ "$(dotenv_get "$envf" OMK_RUNTIME_IMAGES)" == "off" ]] || ! { has docker && docker image inspect "$img" >/dev/null 2>&1; }; then
+        for k in MCP_SANDBOX_ENABLED TASK_SANDBOX_ENABLED ARTIFACT_EXEC_ENABLED ARTIFACT_EXPORT_ENABLED; do
+            [[ "$(dotenv_get "$envf" "$k")" == "false" ]] || { dotenv_set "$envf" "$k" false; OPS_CHANGED=1; }
+        done
+        log_warn "런타임 이미지($img)가 없어 샌드박스 기능을 껐습니다 — 이미지를 빌드한 뒤('omk env update') .env 에서 다시 켜세요"
+    fi
+    return 0
+}
+
+# ── DGX vLLM ─────────────────────────────────────────────────────────────────
+DGX_LINE=""
+dgx_http_code() { # $1=host $2=port $3=path $4=key → HTTP 코드 (000 = 연결 불가)
+    local a=(); [[ -n "${4:-}" ]] && a=(-H "Authorization: Bearer $4")
+    curl -s -m 6 -o /dev/null -w '%{http_code}' ${a[@]+"${a[@]}"} "http://$1:$2$3" 2>/dev/null || true
+}
+# 게이트웨이의 음악 주소 · 앱의 DGX 파생값(정확 토큰 재계산·GPU 지표·SSRF 허용) · 연결 확인.
+# 채팅·임베딩 주소는 호출자가 litellm_ensure 에 넘긴다(--qwen-vllm-base/--bge-vllm-base 와 같은 경로).
+dgx_apply() { # $1=llm dir $2=env $3=host $4=vLLM key
+    local envf="$1/.env" host="$3" key="${4:-}" d lenv chat embed music
+    log_step "DGX vLLM: $host"
+    d="$(litellm_dir "$2")"; lenv="$d/litellm.env"
+    mkdir -p "$d"; chmod 700 "$d"; [[ -f "$lenv" ]] || : > "$lenv"; chmod 600 "$lenv"
+    dotenv_set "$lenv" ACESTEP_API_BASE "http://$host:$DGX_MUSIC_PORT/v1"
+    dotenv_set "$lenv" ACESTEP_CHAT_URL "http://$host:$DGX_MUSIC_PORT/v1/chat/completions"
+    dotenv_set "$envf" LLM_DEFAULT_MODEL "$OMK_DGX_MODEL"
+    dotenv_set "$envf" LLM_TOKENIZE_URL "http://$host:$DGX_CHAT_PORT/tokenize"
+    [[ -z "$key" ]] || dotenv_set "$envf" LLM_TOKENIZE_API_KEY "$key"
+    dotenv_set "$envf" VLLM_METRICS_URLS "http://$host:$DGX_CHAT_PORT/metrics,http://$host:$DGX_EMBED_PORT/metrics"
+    dotenv_set "$envf" SSRF_ALLOWED_HOSTS "$(csv_union "$(dotenv_get "$envf" SSRF_ALLOWED_HOSTS)" "$host")"
+    chat="$(dgx_http_code "$host" "$DGX_CHAT_PORT" /v1/models "$key")"
+    embed="$(dgx_http_code "$host" "$DGX_EMBED_PORT" /v1/models "$key")"
+    music="$(dgx_http_code "$host" "$DGX_MUSIC_PORT" / "")"
+    DGX_LINE="채팅 :$DGX_CHAT_PORT=$chat · 임베딩 :$DGX_EMBED_PORT=$embed · 음악 :$DGX_MUSIC_PORT=$music"
+    case "$chat" in
+        200) log_ok "DGX 연결 확인 ($DGX_LINE)" ;;
+        401) log_warn "DGX vLLM 키 불일치(401) — --vllm-api-key 를 확인하세요 ($DGX_LINE)" ;;
+        *)   log_warn "DGX 채팅 모델에 연결하지 못했습니다 ($DGX_LINE) — LAN 이면 DGX vLLM 바인딩·방화벽, Tailscale 이면 ACL 을 확인하세요" ;;
+    esac
+    return 0
+}
+
+# ── 내부망 HTTPS (Caddy tls internal) ────────────────────────────────────────
+# 사내망에는 공인 인증서를 받을 도메인이 없다 — Caddy 의 내부 인증기관이 발급하고, 사용자 기기는 그 루트를
+# 한 번 신뢰 등록한다. 프록시(omk-proxy)가 :443 에서 같은 라우팅(웹·REST·WebSocket 한 origin)을 한다.
+https_template() { # $1=llm dir
+    local cand
+    for cand in "${SCRIPT_DIR:+$SCRIPT_DIR/../caddy/internal.caddy.tmpl}" "$1/scripts/caddy/internal.caddy.tmpl"; do
+        [[ -n "$cand" && -f "$cand" ]] && { printf '%s' "$cand"; return 0; }
+    done
+    return 1
+}
+caddy_root_ca() { # Caddy 가 사용자 권한(PM2)으로 돌 때 내부 인증기관 루트 위치
+    case "$(uname -s)" in
+        Darwin) printf '%s' "$HOME/Library/Application Support/Caddy/pki/authorities/local/root.crt" ;;
+        *)      printf '%s' "${XDG_DATA_HOME:-$HOME/.local/share}/caddy/pki/authorities/local/root.crt" ;;
+    esac
+}
+https_root_ca_out() { printf '%s/https/openmake-internal-root.crt' "$OMK_ROOT"; }
+https_render() { # $1=env — .env 의 OMK_HTTPS_HOST 가 있을 때만 caddy.d/<env>-https.caddy
+    local env="$1" ldir envf host tmpl out api web url
+    ldir="$(llm_dir "$env")"; envf="$ldir/.env"; out="$(proxy_dir)/caddy.d/$env-https.caddy"
+    host="$(dotenv_get "$envf" OMK_HTTPS_HOST)"
+    [[ -n "$host" ]] || { rm -f "$out"; return 0; }
+    tmpl="$(https_template "$ldir")" || { log_warn "internal.caddy.tmpl 을 찾을 수 없어 HTTPS 를 건너뜁니다"; return 0; }
+    if port_in_use "$HTTPS_PORT" && [[ ! -f "$out" ]] && ! proxy_is_ours; then
+        log_warn "포트 $HTTPS_PORT 을 다른 프로세스가 쓰고 있어 내부망 HTTPS 를 건너뜁니다 (brew services 의 caddy 등)"
+        return 0
+    fi
+    api="$(llm_api_port "$ldir")"; web="$(llm_web_port "$ldir")"
+    sed -e "s|{{HOST}}|$host|g" -e "s|{{API_PORT}}|$api|g" -e "s|{{WEB_PORT}}|$web|g" "$tmpl" > "$out"
+    if [[ "$(dotenv_get "$envf" OMK_ARTIFACT_VIEWER)" == "1" ]]; then
+        printf '\n# artifact-viewer — 별도 origin(포트)\n%s:%s {\n\ttls internal\n\treverse_proxy localhost:%s\n}\n' \
+            "$host" "$VIEWER_HTTPS_PORT" "$VIEWER_PORT" >> "$out"
+    fi
+    url="https://$host"
+    dotenv_set "$envf" OMK_APP_URL "$url"
+    dotenv_set "$envf" SWAGGER_BASE_URL "$url"
+    dotenv_set "$envf" CORS_ORIGINS "$(csv_union "$(dotenv_get "$envf" CORS_ORIGINS)" "$url")"
+    dotenv_set "$envf" COOKIE_SECURE true
+    dotenv_set "$envf" ALLOW_INSECURE_COOKIES false
+    log_ok "내부망 HTTPS 설정 → $out ($url → api :$api / web :$web)"
+}
+# 프록시가 인증서를 발급한 뒤 루트를 꺼내 둔다 — 사용자 기기에 나눠 줄 파일.
+https_export_root_ca() {
+    ls "$(proxy_dir)"/caddy.d/*-https.caddy >/dev/null 2>&1 || return 0
+    local src out i; src="$(caddy_root_ca)"; out="$(https_root_ca_out)"
+    for ((i = 0; i < 20; i++)); do [[ -f "$src" ]] && break; sleep 1; done
+    [[ -f "$src" ]] || { log_warn "Caddy 내부 인증기관 루트를 찾지 못했습니다: $src"; return 0; }
+    mkdir -p "$(dirname "$out")"; cp "$src" "$out"; chmod 644 "$out"
+    log_ok "내부 루트 인증서 → $out (사용자 기기마다 한 번 신뢰 등록)"
+}
+
+# ── artifact-viewer (선택) ───────────────────────────────────────────────────
+viewer_ensure() { # $1=llm dir
+    local ldir="$1" envf="$1/.env" host origin
+    [[ "$(dotenv_get "$envf" OMK_ARTIFACT_VIEWER)" == "1" ]] || return 0
+    if [[ "$(llm_api_port "$ldir")" != "$VIEWER_API_PORT" ]]; then
+        log_warn "artifact-viewer 는 백엔드 :$VIEWER_API_PORT 를 전제로 합니다(nginx.conf) — API :$(llm_api_port "$ldir") 인 이 환경은 건너뜁니다"
+        return 0
+    fi
+    has docker && docker info >/dev/null 2>&1 || { log_warn "docker 를 쓸 수 없어 artifact-viewer 를 건너뜁니다"; return 0; }
+    log_step "artifact-viewer"
+    ( cd "$ldir" && bash infra/artifact-viewer/fetch-vendor.sh >/dev/null ) || { log_warn "artifact-viewer 라이브러리 준비 실패 — 건너뜁니다"; return 0; }
+    ( cd "$ldir" && ARTIFACT_VIEWER_PORT="$VIEWER_PORT" docker compose -p openmake-artifact-viewer \
+        -f infra/artifact-viewer/docker-compose.yml up -d >/dev/null ) || { log_warn "artifact-viewer 기동 실패 — 건너뜁니다"; return 0; }
+    host="$(dotenv_get "$envf" OMK_HTTPS_HOST)"
+    if [[ -n "$host" ]]; then
+        origin="https://$host:$VIEWER_HTTPS_PORT"
+    else
+        host="$(dotenv_get "$envf" OMK_ENV_HOSTS | cut -d, -f1)"
+        origin="http://${host:-localhost}:$VIEWER_PORT"
+    fi
+    dotenv_set "$envf" ARTIFACT_VIEWER_ENABLED true
+    dotenv_set "$envf" ARTIFACT_VIEWER_ORIGIN "$origin"
+    dotenv_ensure "$envf" ARTIFACT_VIEWER_SIGNING_KEY "$(gen_secret)"
+    log_ok "artifact-viewer → $origin"
+}
+
+# ── Discord 봇 (선택) ────────────────────────────────────────────────────────
+# 앱 API 키(discord 스코프)는 앱이 떠야 발급할 수 있어 summary 가 할 일로 안내한다 — 키가 없으면 봇은
+# exit 78 로 스스로 내려가고 PM2 가 재시작하지 않는다(ecosystem stop_exit_codes).
+discord_ensure() { # $1=llm dir $2=env $3=token(선택)
+    local ldir="$1" envf="$1/.env" name
+    [[ -z "${3:-}" ]] || dotenv_set "$envf" DISCORD_BOT_TOKEN "$3"
+    [[ -n "$(dotenv_get "$envf" DISCORD_BOT_TOKEN)" ]] || return 0
+    name="openmake-discord$(env_suffix "$2")"
+    log_step "Discord 봇"
+    ( cd "$ldir" && npm run build:discord-bot >/dev/null ) || { log_warn "Discord 봇 빌드 실패 — 건너뜁니다"; return 0; }
+    ( cd "$ldir" && pm2 start ecosystem.config.js --only "$name" --update-env >/dev/null ) || log_warn "PM2 $name 등록 실패"
+    log_ok "PM2 $name"
+}
+
 cmd_env_install() {
     local env="$1"; shift
     local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=() expose_args=()
+    local ops=0 dgx_host="" https_host="" viewer=0 discord_token=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ref)          ref="${2:-}"; shift ;;
@@ -949,6 +1176,11 @@ cmd_env_install() {
             --vllm-api-key)   vllm_key="${2:-}"; shift ;;
             --autoupdate)   auto=1 ;;
             --no-autoupdate) auto=0 ;;
+            --ops-profile)  ops=1 ;;
+            --dgx-host)     dgx_host="${2:-}"; shift ;;
+            --https-host)   https_host="${2:-}"; shift ;;
+            --artifact-viewer) viewer=1 ;;
+            --discord-token) discord_token="${2:-}"; shift ;;
             # 게이트웨이 뒤에 둘 업스트림(OpenAI 호환 — Ollama·vLLM·외부 API). install.sh 에도 넘겨 LLM_DEFAULT_MODEL 을 맞춘다.
             --llm-base-url) up_base="${2:-}"; llm_args+=("$1" "${2:-}"); shift ;;
             --llm-api-key)  up_key="${2:-}";  llm_args+=("$1" "${2:-}"); shift ;;
@@ -963,6 +1195,9 @@ cmd_env_install() {
         bench_ref="${bench_ref:-main}"   # openmake_bench 는 릴리스 태그가 없다
     fi
     bench_ref="${bench_ref:-$ref}"
+    [[ -z "$dgx_host" || "$dgx_host" =~ ^[A-Za-z0-9._-]+$ ]] || usage_die "--dgx-host 형식이 올바르지 않습니다: $dgx_host"
+    [[ -z "$https_host" || "$https_host" =~ ^[A-Za-z0-9._-]+$ ]] || usage_die "--https-host 형식이 올바르지 않습니다: $https_host"
+    if [[ -n "$https_host" && $no_proxy -eq 1 ]]; then usage_die "--https-host 는 프록시가 필요합니다 (--no-proxy 와 함께 쓸 수 없음)"; fi
     # 배포는 수동이다 — staging·online 모두 사람이 `omk env update` 로 올린다. 자동 갱신은 명시적으로
     # 켠 환경만(--autoupdate 또는 `omk env autoupdate <env>`).
     [[ -n "$auto" ]] || auto=0
@@ -981,7 +1216,7 @@ cmd_env_install() {
     [[ -z "$track" ]] || [[ "$(git -C "$ldir" rev-parse --abbrev-ref HEAD)" == "release" ]] || release_checkout "$ldir" "$ref"
     restore_env_backup "$ldir" llm
     # 빈 배열 확장은 bash 4.4 미만에서 set -u 에 걸린다 — ${arr[@]+"${arr[@]}"} 관용구로 피한다.
-    ( cd "$ldir" && OMK_LOG_DIR="$(logs_dir "$env")" ./install.sh --yes ${suffix_flag[@]+"${suffix_flag[@]}"} \
+    ( cd "$ldir" && OMK_LOG_DIR="$(logs_dir "$env")" ./install.sh --yes --minimal ${suffix_flag[@]+"${suffix_flag[@]}"} \
         ${public_url:+--public-url "$public_url"} ${llm_args[@]+"${llm_args[@]}"} ) || die "install.sh 실패 ($env)"
     dotenv_ensure "$ldir/.env" OMK_LOG_DIR "$(logs_dir "$env")"
     [[ -z "$track" ]] || dotenv_set "$ldir/.env" OMK_TRACK release
@@ -990,12 +1225,23 @@ cmd_env_install() {
     # 1.5~1.7 은 .env 를 고친다 — 어느 단계든 내용이 바뀌었으면 끝에 API 를 한 번 재시작한다(단계별 플래그는 빠뜨리기 쉽다).
     local env_before; env_before="$(cksum < "$ldir/.env")"
 
+    # 1.4) 운영 구성 옵션 — 프로필·DGX·HTTPS·뷰어 표시는 뒤 단계(런타임 이미지·게이트웨이·프록시)가 읽는다.
+    OPS_CHANGED=0
+    [[ $ops -eq 1 ]] && ops_profile_apply "$ldir" "$env"
+    if [[ -n "$dgx_host" ]]; then
+        qwen_base="${qwen_base:-http://$dgx_host:$DGX_CHAT_PORT/v1}"; bge_base="${bge_base:-http://$dgx_host:$DGX_EMBED_PORT/v1}"
+        dgx_apply "$ldir" "$env" "$dgx_host" "$vllm_key"
+    fi
+    [[ -z "$https_host" ]] || dotenv_set "$ldir/.env" OMK_HTTPS_HOST "$https_host"
+    [[ $viewer -eq 0 ]] || dotenv_set "$ldir/.env" OMK_ARTIFACT_VIEWER 1
+
     # 1.5) 웹 검색 — .env 는 install.sh 가 만든 뒤에야 있다. 값이 바뀌면 API 만 다시 띄운다.
     [[ $no_searxng -eq 1 ]] && dotenv_set "$ldir/.env" OMK_SEARXNG off
     searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"
     # 1.6) 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리의 전제.
     [[ $no_images -eq 1 ]] && dotenv_set "$ldir/.env" OMK_RUNTIME_IMAGES off
     runtime_images_ensure "$ldir" "$env"
+    ops_sandbox_guard "$ldir"
     # 1.7) LiteLLM 게이트웨이 — 앱의 LLM_BASE_URL·LLM_API_KEY 를 채운다.
     [[ $no_litellm -eq 1 ]] && dotenv_set "$ldir/.env" OMK_LITELLM off
     # 업스트림을 주지 않았고 이 환경에 기억된 업스트림도 없으면 기본 모델(llama.cpp)을 게이트웨이 뒤에 둔다.
@@ -1019,8 +1265,15 @@ cmd_env_install() {
     # 2) openmake_bench
     [[ $no_bench -eq 1 ]] || bench_install "$env" "$bench_ref" "$ldir"
 
-    # 3) 리버스 프록시
-    [[ $no_proxy -eq 1 ]] || { proxy_render "$env"; proxy_start_or_reload; }
+    # 2.5) 선택 기능 — 뷰어 주소는 HTTPS 여부에 따라 정해진다(OMK_HTTPS_HOST 는 1.4 에서 기록).
+    local env_before_proxy; env_before_proxy="$(cksum < "$ldir/.env")"
+    viewer_ensure "$ldir"
+    discord_ensure "$ldir" "$env" "$discord_token"
+
+    # 3) 리버스 프록시 (--https-host 면 :443 내부망 HTTPS 블록도)
+    [[ $no_proxy -eq 1 ]] || { proxy_render "$env"; proxy_start_or_reload; https_export_root_ca; }
+    # 프록시·선택 기능이 .env(CORS·공개 주소·뷰어)를 바꿨으면 API 가 다시 읽게 한다.
+    [[ "$env_before_proxy" == "$(cksum < "$ldir/.env")" ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
 
     # 3.5) 다른 기기에서 보기 — 프록시가 있어야 의미가 있다.
     if [[ ${#expose_args[@]} -gt 0 && $no_proxy -eq 0 ]]; then cmd_env_expose "$env" "${expose_args[@]}" || log_warn "expose 실패 — 'omk env expose $env --tailscale'"; fi
@@ -1063,14 +1316,18 @@ cmd_env_update() {
     else
         ( cd "$ldir" && ./openmake_llm.sh update --yes < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
     fi
+    # 운영 프로필로 설치한 환경은 새 버전 프로필에 추가된 키를 덧붙인다(있는 값은 그대로).
+    OPS_CHANGED=0
+    [[ "$(dotenv_get "$ldir/.env" OMK_OPS_PROFILE)" != "1" ]] || ops_profile_apply "$ldir" "$env"
     # 새로 받은 Dockerfile 로 빌드한다(안 바뀌었으면 캐시로 수 초). .env 가 바뀐 경우에만 한 번 더 재시작.
     runtime_images_ensure "$ldir" "$env"
+    ops_sandbox_guard "$ldir"
     # 이미 게이트웨이가 있는 환경만 갱신한다(새 config 복사 + 재기동, litellm.env 는 그대로) — update 가 기존 환경의
     # LLM_BASE_URL 을 가로채지 않게. 새로 붙이려면 'omk env install <env>' 를 다시 실행한다(멱등).
     LITELLM_CHANGED=0; [[ ! -d "$(litellm_dir "$env")" ]] || litellm_ensure "$ldir" "$env"
-    [[ $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
+    [[ $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 && $OPS_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
     bench_update "$env"
-    [[ -f "$(proxy_dir)/caddy.d/$env.caddy" ]] && { proxy_render "$env"; proxy_start_or_reload; }
+    [[ -f "$(proxy_dir)/caddy.d/$env.caddy" ]] && { proxy_render "$env"; proxy_start_or_reload; https_export_root_ca; }
     log_ok "$env 갱신 완료"
 }
 
@@ -1154,8 +1411,11 @@ env_summary() { # $1=env
     [[ -n "$pport" ]] && echo "  proxy     http://localhost:$pport  (외부 공개는 터널/DNS 를 이 포트로: scripts/cloudflared/config.yml.example)"
     local eh; for eh in $(dotenv_get "$ldir/.env" OMK_ENV_HOSTS | tr ',' ' '); do [[ -z "$pport" ]] || echo "  다른 기기  http://$eh:$pport"; done
     [[ -n "$(dotenv_get "$ldir/.env" OMK_APP_URL | grep -E '^https?://' | grep -v localhost || true)" ]] && echo "  공개 주소  $(dotenv_get "$ldir/.env" OMK_APP_URL)"
+    [[ -z "$(dotenv_get "$ldir/.env" OMK_HTTPS_HOST)" ]] || echo "  HTTPS     https://$(dotenv_get "$ldir/.env" OMK_HTTPS_HOST)  (루트 인증서: $(https_root_ca_out))"
     echo "  웹 검색   $(search_line "$ldir")"
     [[ -z "$(litellm_line "$env" "$ldir")" ]] || echo "  LiteLLM   $(litellm_line "$env" "$ldir")"
+    [[ -z "$DGX_LINE" ]] || echo "  DGX       $DGX_LINE"
+    [[ "$(dotenv_get "$ldir/.env" ARTIFACT_VIEWER_ENABLED)" != "true" ]] || echo "  뷰어      $(dotenv_get "$ldir/.env" ARTIFACT_VIEWER_ORIGIN)"
     if [[ -n "$(default_model_base)" && "$(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_API_BASE)" == "$(default_model_base)" ]]; then
         echo "  모델      $(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_MODEL) (호스트 기본 모델 · llama.cpp) — 배선 확인·가벼운 대화용. 더 큰 모델: --llm-base-url … --llm-model … 로 재설치"
     fi
@@ -1167,6 +1427,10 @@ env_summary() { # $1=env
     if [[ -d "$bdir" && -z "$(dotenv_get "$bdir/.env" OMK_API_KEY)" ]]; then
         printf "  %s[할 일]%s bench 가 llm 모델을 부르려면 API 키가 필요합니다 (자동 발급 불가):\n" "$C_WARN" "$C_RESET"
         echo "         llm 웹 → 설정 → API 키 → chat 스코프 키 발급 → $bdir/.env 의 OMK_API_KEY 에 넣고 'omk env start $env'"
+    fi
+    if [[ -n "$(dotenv_get "$ldir/.env" DISCORD_BOT_TOKEN)" && -z "$(dotenv_get "$ldir/.env" DISCORD_BOT_API_KEY)" ]]; then
+        printf "  %s[할 일]%s Discord 봇: llm 웹 → 설정 → API 키 → discord 스코프 키 발급 → $ldir/.env 의\n" "$C_WARN" "$C_RESET"
+        echo "         DISCORD_BOT_API_KEY 에 넣고 'pm2 restart openmake-discord$(env_suffix "$env") --update-env'"
     fi
     if [[ "$(dotenv_get "$ldir/.env" LLM_BASE_URL)" == "http://localhost:4000" ]]; then
         printf "  %s[할 일]%s LLM 엔드포인트가 자리표시자입니다 — $ldir/.env 의 LLM_BASE_URL / LLM_API_KEY / LLM_DEFAULT_MODEL\n" "$C_WARN" "$C_RESET"
@@ -1315,7 +1579,7 @@ cmd_dev_setup() {
     # 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션까지. 빌드·PM2 는 개발 서버에 필요 없다.
     # 이미 준비된 클론은 .env 의 이름을 그대로 쓴다(install.sh 는 .env 와 다른 --instance 를 거부한다).
     dev_warn_legacy
-    ( cd "$DEV_LLM" && ./install.sh --yes --instance "$(dev_instance)" --skip-build --no-start ) || die "install.sh 실패"
+    ( cd "$DEV_LLM" && ./install.sh --yes --minimal --instance "$(dev_instance)" --skip-build --no-start ) || die "install.sh 실패"
     load_toolchain "$DEV_LLM"
     dev_build_packages
     [[ $no_searxng -eq 1 ]] && dotenv_set "$DEV_LLM/.env" OMK_SEARXNG off

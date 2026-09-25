@@ -215,5 +215,52 @@ eq "proxy port stable" "$(dotenv_get "$L/.env" OMK_PROXY_PORT)" "$PP"
 proxy_remove staging >/dev/null
 ok "proxy remove" "[[ ! -f '$OUT' ]]"
 
+# ── 운영 구성 옵션 (install_mac.sh 가 켠다) — 네트워크·docker·PM2 는 스텁 ──
+ok "root Caddyfile skip_install_trust" "grep -q 'skip_install_trust' '$OMK_ROOT/caddy/Caddyfile'"
+OL="$OMK_ROOT/opsenv/llm"; mkdir -p "$OL/scripts/setup/profiles"
+cp "$HERE/../setup/profiles/ops-features.env" "$OL/scripts/setup/profiles/"
+printf 'LOG_LEVEL=debug\nDEFAULT_ADMIN_EMAIL=admin@example.com\nCORS_ORIGINS=http://localhost:3000\nPORT=52416\nOMK_WEB_PORT=3000\n' > "$OL/.env"
+scraper_venv_ensure() { dotenv_set "$1" SCRAPER_PYTHON_BIN "/stub/python3"; }   # 실제 uv 설치 대신
+ops_profile_apply "$OL" opsenv >/dev/null
+eq "profile: 기존 값 존중"       "$(dotenv_get "$OL/.env" LOG_LEVEL)" "debug"
+eq "profile: 기능 플래그 추가"   "$(dotenv_get "$OL/.env" AGENT_TASK_QUEUE_ENABLED)" "true"
+eq "profile: JSON 값 보존"       "$(dotenv_get "$OL/.env" LLM_REASONING_EFFORTS_JSON)" '{"qwen3.8":["low","medium","xhigh"],"bai:glm-5.3":["low","high"]}'
+eq "profile: 표시"               "$(dotenv_get "$OL/.env" OMK_OPS_PROFILE)" "1"
+eq "profile: 작업 공간"          "$(dotenv_get "$OL/.env" TASK_SANDBOX_ROOT)" "$OMK_ROOT/opsenv/task-workspaces"
+eq "profile: 스크래퍼"           "$(dotenv_get "$OL/.env" SCRAPER_PYTHON_BIN)" "/stub/python3"
+if has node; then
+    ok "vapid: 공개키 87자"  "[[ \$(dotenv_get '$OL/.env' VAPID_PUBLIC_KEY | wc -c) -eq 87 ]]"
+    ok "vapid: 개인키 43자"  "[[ \$(dotenv_get '$OL/.env' VAPID_PRIVATE_KEY | wc -c) -eq 43 ]]"
+    eq "vapid: subject"      "$(dotenv_get "$OL/.env" VAPID_SUBJECT)" "mailto:admin@example.com"
+fi
+N1="$(grep -c '' "$OL/.env")"; ops_profile_apply "$OL" opsenv >/dev/null
+eq "profile: 재실행 멱등" "$(grep -c '' "$OL/.env")" "$N1"
+eq "profile: 중복 키 없음" "$(grep -oE '^[A-Z_0-9]+=' "$OL/.env" | sort | uniq -d | tr -d '\n')" ""
+dotenv_set "$OL/.env" OMK_RUNTIME_IMAGES off; OPS_CHANGED=0; ops_sandbox_guard "$OL" >/dev/null
+eq "sandbox guard: 이미지 없으면 끔" "$(dotenv_get "$OL/.env" TASK_SANDBOX_ENABLED)|$(dotenv_get "$OL/.env" ARTIFACT_EXPORT_ENABLED)|$OPS_CHANGED" "false|false|1"
+
+dgx_http_code() { printf '200'; }
+dgx_apply "$OL" opsenv 192.168.0.50 vkey >/dev/null
+eq "dgx: 기본 모델"   "$(dotenv_get "$OL/.env" LLM_DEFAULT_MODEL)" "qwen3.8-27b"
+eq "dgx: tokenize"    "$(dotenv_get "$OL/.env" LLM_TOKENIZE_URL)|$(dotenv_get "$OL/.env" LLM_TOKENIZE_API_KEY)" "http://192.168.0.50:8002/tokenize|vkey"
+eq "dgx: metrics"     "$(dotenv_get "$OL/.env" VLLM_METRICS_URLS)" "http://192.168.0.50:8002/metrics,http://192.168.0.50:8003/metrics"
+eq "dgx: 음악 주소"   "$(dotenv_get "$(litellm_dir opsenv)/litellm.env" ACESTEP_CHAT_URL)" "http://192.168.0.50:8005/v1/chat/completions"
+dotenv_set "$OL/.env" SSRF_ALLOWED_HOSTS "a.internal"; dgx_apply "$OL" opsenv 192.168.0.50 vkey >/dev/null
+eq "dgx: SSRF 합집합" "$(dotenv_get "$OL/.env" SSRF_ALLOWED_HOSTS)" "a.internal,192.168.0.50"
+ok "dgx: 연결 요약"   "[[ '$DGX_LINE' == *'채팅 :8002=200'* ]]"
+
+port_in_use() { return 1; }   # :443 점유 여부와 무관하게 렌더만 본다
+dotenv_set "$OL/.env" OMK_HTTPS_HOST mac-mini.local; dotenv_set "$OL/.env" OMK_ARTIFACT_VIEWER 1
+https_render opsenv >/dev/null
+HO="$OMK_ROOT/caddy/caddy.d/opsenv-https.caddy"
+ok "https: 사이트 블록"      "grep -q '^mac-mini.local {' '$HO' && grep -q 'tls internal' '$HO'"
+ok "https: 업스트림"         "grep -q 'reverse_proxy /api/\* localhost:52416' '$HO' && grep -q 'reverse_proxy localhost:3000' '$HO'"
+ok "https: 뷰어 블록"        "grep -q '^mac-mini.local:8443 {' '$HO'"
+ok "https: 자리표시자 없음"  "! grep -q '{{' '$HO'"
+eq "https: 공개 주소·쿠키"   "$(dotenv_get "$OL/.env" OMK_APP_URL)|$(dotenv_get "$OL/.env" COOKIE_SECURE)|$(dotenv_get "$OL/.env" ALLOW_INSECURE_COOKIES)" "https://mac-mini.local|true|false"
+ok "https: CORS"             "[[ '$(dotenv_get "$OL/.env" CORS_ORIGINS)' == *'https://mac-mini.local'* ]]"
+dotenv_unset "$OL/.env" OMK_HTTPS_HOST; https_render opsenv >/dev/null
+ok "https: 끄면 블록 제거"   "[[ ! -f '$HO' ]]"
+
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]
