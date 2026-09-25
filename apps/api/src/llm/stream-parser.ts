@@ -28,7 +28,8 @@ import { extractCoTFromContent } from './cot-extractor';
 import { PseudoToolCallGate, stripPseudoToolCalls } from './pseudo-tool-call-parser';
 import { createLogger } from '../utils/logger';
 import { capPromptImages } from './prompt-image-cap';
-import { LLM_PROMPT_IMAGE_LIMITS } from '../config/runtime-limits';
+import { LLM_PROMPT_IMAGE_LIMITS, TRUNCATION } from '../config/runtime-limits';
+import { MalformedLLMResponseError } from '../errors/malformed-llm-response.error';
 import { STREAM_TTFC_WARN_MS } from '../config/core-runtime-limits';
 import { resolveModelProfile } from '../config/model-profiles';
 import { LOCAL_PRESERVE_THINKING_ENABLED } from '../config/llm-parameters';
@@ -512,7 +513,10 @@ export async function nonStreamChat(
         ...(extraBody ?? {}),
     } as never, signal ? { signal } : undefined);
 
-    const r = response as unknown as OpenAIChatResponse;
+    const r = response as unknown as OpenAIChatResponse & { error?: unknown };
+    if (!Array.isArray(r?.choices)) { // 200 인데 upstream 오류 객체 등 — TypeError 대신 재시도 가능한 502
+        throw new MalformedLLMResponseError(request.model, JSON.stringify(r?.error ?? r ?? null).slice(0, TRUNCATION.MALFORMED_LLM_RESPONSE_DETAIL_MAX));
+    }
     const choice0 = r.choices[0];
     const msg = choice0?.message ?? { content: '' };
     const finishReason = choice0?.finish_reason ?? undefined;
