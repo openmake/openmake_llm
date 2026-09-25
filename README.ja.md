@@ -49,11 +49,11 @@
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 ```
 
-インストーラーがツールチェーン(Node.js 24、Docker、PM2)を確認し、新しいシークレットで `.env` を作成、PostgreSQL と Redis を起動し、OpenMake をビルドして PM2 で起動したうえで、ヘルスチェックまで行います。
+新しいマシンでは、インストーラーが前提条件とフルスタックまでセットアップします(下記参照)。`bash -s -- --minimal` を付けるとアプリのみをインストールします — ツールチェーン(Node.js 24、Docker、PM2)を確認し、新しいシークレットで `.env` を作成、PostgreSQL と Redis を起動し、OpenMake をビルドして PM2 で起動したうえで、ヘルスチェックまで行います。
 
 表示された URL を開いて管理者としてサインインし、モデルを接続してください — ローカルの vLLM・Ollama サーバー、または OpenAI 互換エンドポイントが使えます。
 
-Linux と macOS で動作します(Windows は WSL2 内で)。対話なしでインストールするには `bash -s -- --yes` を付けます。手動セットアップ、オプション、アップデート、リバースプロキシについては **[セルフホスティングガイド](https://openmake.cc/ja/docs/)** を参照してください。
+Linux と macOS で動作します(Windows は WSL2 内で)。手動セットアップ、オプション、アップデート、リバースプロキシについては **[セルフホスティングガイド](https://openmake.cc/ja/docs/)** を参照してください。
 
 ワンライナーは OS に合ったインストーラーに引き継ぎます — Linux・WSL2 は `install_linux.sh`、macOS は `install_mac.sh`。新しいマシンでは最初に質問をまとめて受け付け、前提条件(macOS: Xcode コマンドラインツール・Homebrew・Docker Desktop · Linux: ディストリビューションのパッケージ・Docker Engine)とフルスタック(`scripts/env/omk.sh` — LiteLLM ゲートウェイ・SearXNG・サンドボックスイメージ・社内 HTTPS・バックアップ・再起動後の自動起動)をセットアップします。対話なしでインストールするには、モデルバックエンドも指定してください: `--yes --dgx-host <host> --vllm-api-key <key>` または `--yes --llm-provider <name> --llm-model <id> --llm-api-key <key>`。
 

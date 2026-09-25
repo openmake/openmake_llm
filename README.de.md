@@ -49,11 +49,11 @@
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 ```
 
-Das Installationsskript prüft die Toolchain (Node.js 24, Docker, PM2), schreibt eine `.env` mit frisch erzeugten Secrets, startet PostgreSQL und Redis, baut OpenMake, startet es unter PM2 und führt einen Health-Check aus.
+Auf einem frischen Rechner richtet das Installationsskript die Voraussetzungen und den kompletten Stack ein (siehe unten). Mit `bash -s -- --minimal` installiert es nur die App: Es prüft die Toolchain (Node.js 24, Docker, PM2), schreibt eine `.env` mit frisch erzeugten Secrets, startet PostgreSQL und Redis, baut OpenMake, startet es unter PM2 und führt einen Health-Check aus.
 
 Öffnen Sie anschließend die ausgegebene URL, melden Sie sich als Administrator an und verbinden Sie ein Modell — einen lokalen vLLM- oder Ollama-Server oder einen beliebigen OpenAI-kompatiblen Endpunkt.
 
-Läuft unter Linux und macOS (Windows: in WSL2). Mit `bash -s -- --yes` läuft die Installation ohne Rückfragen. Manuelle Einrichtung, Optionen, Updates und Hinweise zum Reverse Proxy stehen im **[Self-Hosting-Leitfaden](https://openmake.cc/en/docs/)**.
+Läuft unter Linux und macOS (Windows: in WSL2). Manuelle Einrichtung, Optionen, Updates und Hinweise zum Reverse Proxy stehen im **[Self-Hosting-Leitfaden](https://openmake.cc/en/docs/)**.
 
 Der Einzeiler übergibt an das Installationsskript Ihres Betriebssystems — `install_linux.sh` unter Linux/WSL2, `install_mac.sh` unter macOS. Auf einem frischen Rechner stellt es seine Fragen einmal vorab und richtet dann die Voraussetzungen (macOS: Xcode Command Line Tools, Homebrew, Docker Desktop · Linux: Distributionspakete, Docker Engine) und den kompletten Stack über `scripts/env/omk.sh` ein: LiteLLM-Gateway, SearXNG, Sandbox-Images, internes HTTPS, Backups und Autostart nach einem Neustart. Für eine Installation ohne Rückfragen geben Sie auch das Modell-Backend an: `--yes --dgx-host <host> --vllm-api-key <key>` oder `--yes --llm-provider <name> --llm-model <id> --llm-api-key <key>`.
 
