@@ -48,11 +48,11 @@
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 ```
 
-安装脚本会检查工具链（Node.js 24、Docker、PM2），用新生成的密钥写入 `.env`，启动 PostgreSQL 和 Redis，构建 OpenMake，用 PM2 启动，并执行健康检查。
+在全新的机器上，安装脚本会安装前置条件和完整技术栈（见下文）。加上 `bash -s -- --minimal` 则只安装应用：检查工具链（Node.js 24、Docker、PM2），用新生成的密钥写入 `.env`，启动 PostgreSQL 和 Redis，构建 OpenMake，用 PM2 启动，并执行健康检查。
 
 然后打开它输出的地址，以管理员身份登录并连接模型——本地 vLLM 或 Ollama 服务器，或任何 OpenAI 兼容端点均可。
 
-支持 Linux 和 macOS（Windows 请在 WSL2 中运行）。加上 `bash -s -- --yes` 可进行非交互安装。手动安装、参数、更新和反向代理说明见 **[自托管指南](https://openmake.cc/zh/docs/)**。
+支持 Linux 和 macOS（Windows 请在 WSL2 中运行）。手动安装、参数、更新和反向代理说明见 **[自托管指南](https://openmake.cc/zh/docs/)**。
 
 这条命令会转交给对应操作系统的安装脚本——Linux 和 WSL2 使用 `install_linux.sh`，macOS 使用 `install_mac.sh`。在全新的机器上，它会先一次性提问，然后安装前置条件（macOS：Xcode 命令行工具、Homebrew、Docker Desktop · Linux：发行版软件包、Docker Engine）以及完整技术栈（`scripts/env/omk.sh`——LiteLLM 网关、SearXNG、沙箱镜像、内网 HTTPS、备份、重启后自动启动）。进行非交互安装时，还需指定模型后端：`--yes --dgx-host <host> --vllm-api-key <key>` 或 `--yes --llm-provider <name> --llm-model <id> --llm-api-key <key>`。
 
