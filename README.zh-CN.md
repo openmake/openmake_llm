@@ -54,7 +54,7 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.
 
 支持 Linux 和 macOS（Windows 请在 WSL2 中运行）。加上 `bash -s -- --yes` 可进行非交互安装。手动安装、参数、更新和反向代理说明见 **[自托管指南](https://openmake.cc/zh/docs/)**。
 
-这条命令会转交给对应操作系统的安装脚本——Linux 和 WSL2 使用 `install_linux.sh`，macOS 使用 `install_mac.sh`。在全新的 Mac 上，`install_mac.sh` 会先一次性提问，然后安装前置条件（Xcode 命令行工具、Homebrew、Docker Desktop）以及完整技术栈（`scripts/env/omk.sh`——LiteLLM 网关、SearXNG、沙箱镜像、内网 HTTPS、备份、重启后自动启动）。在 macOS 上进行非交互安装时，还需指定模型后端：`--yes --dgx-host <host> --vllm-api-key <key>` 或 `--yes --llm-provider <name> --llm-model <id> --llm-api-key <key>`。
+这条命令会转交给对应操作系统的安装脚本——Linux 和 WSL2 使用 `install_linux.sh`，macOS 使用 `install_mac.sh`。在全新的机器上，它会先一次性提问，然后安装前置条件（macOS：Xcode 命令行工具、Homebrew、Docker Desktop · Linux：发行版软件包、Docker Engine）以及完整技术栈（`scripts/env/omk.sh`——LiteLLM 网关、SearXNG、沙箱镜像、内网 HTTPS、备份、重启后自动启动）。进行非交互安装时，还需指定模型后端：`--yes --dgx-host <host> --vllm-api-key <key>` 或 `--yes --llm-provider <name> --llm-model <id> --llm-api-key <key>`。
 
 ---
 

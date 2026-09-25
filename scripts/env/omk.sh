@@ -38,7 +38,7 @@
 #                         [--no-litellm] [--no-default-model] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
 #                         [--ops-profile] [--dgx-host H] [--https-host H] [--artifact-viewer] [--discord-token T]
-#                         ↑ 운영 구성 옵션 (install_mac.sh 가 켠다 — 주지 않으면 기존 동작 그대로):
+#                         ↑ 운영 구성 옵션 (install_mac.sh · install_linux.sh 가 켠다 — 주지 않으면 기존 동작 그대로):
 #                           --ops-profile     운영 기능 플래그(scripts/setup/profiles/ops-features.env)·웹 푸시 키·작업 공간·스크래퍼 파이썬
 #                           --dgx-host H      DGX vLLM(:8002 채팅·:8003 임베딩·:8005 음악)을 게이트웨이 업스트림으로 + 연결 확인
 #                           --https-host H    내부망 HTTPS (Caddy tls internal · :443) — 사내 기기는 루트 인증서를 한 번 신뢰 등록

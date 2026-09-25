@@ -53,7 +53,7 @@ Then open the URL it prints, sign in as the administrator, and connect a model �
 
 Runs on Linux and macOS (Windows: inside WSL2). Add `bash -s -- --yes` for a non-interactive install. Manual setup, flags, updates, and reverse-proxy notes are in the **[self-hosting guide](https://openmake.cc/en/docs/)**.
 
-The one-liner hands off to the installer for your OS — `install_linux.sh` on Linux/WSL2, `install_mac.sh` on macOS. On a fresh Mac, `install_mac.sh` asks its questions once, then sets up the prerequisites (Xcode Command Line Tools, Homebrew, Docker Desktop) and the full stack through `scripts/env/omk.sh`: LiteLLM gateway, SearXNG, sandbox images, internal HTTPS, backups, and auto-start after reboot. For a non-interactive macOS install, pass the model backend too: `--yes --dgx-host <host> --vllm-api-key <key>` or `--yes --llm-provider <name> --llm-model <id> --llm-api-key <key>`.
+The one-liner hands off to the installer for your OS — `install_linux.sh` on Linux/WSL2, `install_mac.sh` on macOS. On a fresh machine it asks its questions once, then sets up the prerequisites (macOS: Xcode Command Line Tools, Homebrew, Docker Desktop · Linux: distro packages, Docker Engine) and the full stack through `scripts/env/omk.sh`: LiteLLM gateway, SearXNG, sandbox images, internal HTTPS, backups, and auto-start after reboot. For a non-interactive install, pass the model backend too: `--yes --dgx-host <host> --vllm-api-key <key>` or `--yes --llm-provider <name> --llm-model <id> --llm-api-key <key>`.
 
 ---
 

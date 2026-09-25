@@ -55,7 +55,7 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.
 
 Linux 와 macOS 에서 동작합니다(Windows 는 WSL2 안에서). 질문 없이 설치하려면 `bash -s -- --yes` 를 붙이세요. 수동 설치, 옵션, 업데이트, 리버스 프록시 설정은 **[셀프호스팅 가이드](https://openmake.cc/ko/docs/)** 에 있습니다.
 
-한 줄 명령은 OS 에 맞는 설치 스크립트로 넘어갑니다 — Linux·WSL2 는 `install_linux.sh`, macOS 는 `install_mac.sh`. 새 Mac 에서 `install_mac.sh` 는 질문을 처음에 한 번에 받은 뒤, 사전 준비(Xcode 명령줄 도구·Homebrew·Docker Desktop)와 전체 스택(`scripts/env/omk.sh` — LiteLLM 게이트웨이·SearXNG·샌드박스 이미지·내부망 HTTPS·백업·재부팅 자동 시작)을 설치합니다. macOS 에서 질문 없이 설치하려면 모델 백엔드도 함께 지정하세요: `--yes --dgx-host <주소> --vllm-api-key <키>` 또는 `--yes --llm-provider <이름> --llm-model <ID> --llm-api-key <키>`.
+한 줄 명령은 OS 에 맞는 설치 스크립트로 넘어갑니다 — Linux·WSL2 는 `install_linux.sh`, macOS 는 `install_mac.sh`. 새 머신에서는 질문을 처음에 한 번에 받은 뒤, 사전 준비(macOS: Xcode 명령줄 도구·Homebrew·Docker Desktop · Linux: 배포판 패키지·Docker Engine)와 전체 스택(`scripts/env/omk.sh` — LiteLLM 게이트웨이·SearXNG·샌드박스 이미지·내부망 HTTPS·백업·재부팅 자동 시작)을 설치합니다. 질문 없이 설치하려면 모델 백엔드도 함께 지정하세요: `--yes --dgx-host <주소> --vllm-api-key <키>` 또는 `--yes --llm-provider <이름> --llm-model <ID> --llm-api-key <키>`.
 
 ---
 

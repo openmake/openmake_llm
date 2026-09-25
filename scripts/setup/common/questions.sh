@@ -2,7 +2,8 @@
 # 이 파일의 전역은 다른 단계 파일·install_mac.sh 가 읽는다 (파일 간 사용).
 # shellcheck disable=SC2034
 # ==============================================================================
-# install_mac.sh 단계 — 설치 질문 (처음에 한 번에 받고 이후 무인 진행)
+# 공통 단계 (install_mac.sh · install_linux.sh) — 설치 질문 (처음에 한 번에 받고 이후 무인 진행)
+# OS 별 파일이 default_access_host 를 정의한다.
 # 플래그로 받은 값은 다시 묻지 않는다. --yes 면 묻지 않고 기본값·플래그만 쓴다.
 # ==============================================================================
 
@@ -80,7 +81,7 @@ ask_dgx() {
             echo ""
             echo "  DGX 에 어떻게 연결하나요?"
             echo "    1) 같은 LAN 에서 직접   — DGX 의 LAN IP (DGX vLLM 이 LAN 주소로 열려 있어야 함)"
-            echo "    2) Tailscale            — DGX 가 다른 네트워크에 있을 때 (이 Mac 에 Tailscale 설치)"
+            echo "    2) Tailscale            — DGX 가 다른 네트워크에 있을 때 (이 서버에 Tailscale 설치)"
             local choice=""
             ask choice "선택 [1-2]" "1"
             case "$choice" in 2) DGX_VIA="tailscale" ;; *) DGX_VIA="lan" ;; esac
@@ -117,9 +118,7 @@ ask_external() {
 }
 
 ask_access() {
-    local default_host
-    default_host="$(scutil --get LocalHostName 2>/dev/null || hostname -s).local"
-    [[ -n "$APP_HOST" ]] || ask APP_HOST "접속 주소 (사내 PC 에서 이 Mac 을 부를 이름 또는 고정 IP)" "$default_host"
+    [[ -n "$APP_HOST" ]] || ask APP_HOST "접속 주소 (사내 PC 에서 이 서버를 부를 이름 또는 고정 IP)" "$(default_access_host)"
     [[ "$APP_HOST" =~ ^[A-Za-z0-9._-]+$ ]] || die "접속 주소 형식이 올바르지 않습니다: $APP_HOST"
     if [[ -z "$HTTPS_MODE" ]]; then
         if confirm "HTTPS 로 접속하게 할까요? (권장 — HTTP 는 복사 버튼·웹 푸시 알림이 동작하지 않음)" y; then

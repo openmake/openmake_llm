@@ -54,7 +54,7 @@
 # 종료 코드: 0 성공 / 1 사용법·전제조건 오류 / 2 설치 단계 실패 / 3 health check 실패
 # ==============================================================================
 
-# 전역 변수는 scripts/setup/mac/*.sh(런타임 source)가 읽는다 — shellcheck 가 파일 간 사용을 못 본다.
+# 전역 변수는 scripts/setup/{common,mac}/*.sh(런타임 source)가 읽는다 — shellcheck 가 파일 간 사용을 못 본다.
 # shellcheck disable=SC2034
 set -euo pipefail
 
@@ -77,7 +77,7 @@ PG_PORT="${OMK_POSTGRES_PORT:-}"; RD_PORT="${OMK_REDIS_PORT:-}"
 INSTANCE="${OMK_INSTANCE:-}"
 APP_NAME=""; FRONT_APP_NAME=""; PG_CONTAINER=""; RD_CONTAINER=""
 
-# 질문 답 (20-questions.sh 가 채운다 — 플래그가 있으면 그 값을 쓴다)
+# 질문 답 (common/questions.sh 가 채운다 — 플래그가 있으면 그 값을 쓴다)
 LLM_MODE=""            # dgx | external | keep(기존 게이트웨이 설정 유지) | direct(--minimal)
 DGX_VIA=""             # lan | tailscale
 DGX_HOST=""; VLLM_API_KEY=""; TAILSCALE_AUTHKEY=""
@@ -232,6 +232,8 @@ ensure_clt() {
 # 다른 곳(curl 파이프·수동 클론)에서 실행되면 그 위치로 받고(있으면 재사용) 그 안의 사본으로 재진입한다.
 # --minimal(omk 가 부르는 앱 본체 설치)은 어디서 실행되든 그 자리에서 진행한다 (omk dev 는 작업 클론에서 부른다).
 bootstrap_source() {
+    # 다른 OS 면 소스를 받기 전에 멈춘다.
+    [[ "$(uname -s)" == "Darwin" ]] || { log_err "macOS 전용입니다 — Linux/WSL 은 ./install_linux.sh (또는 ./install.sh 가 자동 선택)"; exit 1; }
     local a prev="" inst="$INSTANCE" minimal=0
     for a in "$@"; do
         [[ "$prev" == "--instance" ]] && inst="$a"
@@ -369,10 +371,11 @@ check_platform() {
     log_ok "플랫폼: macOS $(sw_vers -productVersion) / $ARCH"
 }
 
-# 단계별 함수는 scripts/setup/mac/ 에 있다 — 부트스트랩 뒤(레포 안)에서만 불러온다.
+# 단계별 함수는 scripts/setup/common/(OS 공통)·scripts/setup/mac/ 에 있다 — 부트스트랩 뒤(레포 안)에서만 불러온다.
+readonly OS_LABEL="macOS"
 load_steps() {
     local f
-    for f in "$SCRIPT_DIR"/scripts/setup/mac/*.sh; do
+    for f in "$SCRIPT_DIR"/scripts/setup/common/*.sh "$SCRIPT_DIR"/scripts/setup/mac/*.sh; do
         # 단계 파일은 이 스크립트의 전역·도우미를 공유한다 (경로는 런타임 결정).
         # shellcheck source=/dev/null
         . "$f"
@@ -416,7 +419,7 @@ main() {
     fi
 
     preflight_checks          # FileVault·자동 로그인 안내            (10-prereqs)
-    ask_questions             # 질문 한 번에                          (20-questions)
+    ask_questions             # 질문 한 번에                          (common/questions)
     sudo_begin                # sudo 1회 입력 + 끝까지 유지
 
     ensure_clt
@@ -428,7 +431,7 @@ main() {
     ensure_docker
     setup_tailscale           # DGX 가 다른 네트워크에 있을 때         (40-network)
 
-    run_omk_install           # 스택 + 앱 본체 (omk → install_mac.sh --minimal)  (70-omk)
+    run_omk_install           # 스택 + 앱 본체 (omk → install_mac.sh --minimal)  (common/stack)
 
     host_finalize             # 인증서 신뢰 · 백업 · 로그 회전 · 자동 시작 (80-finish)
     summary

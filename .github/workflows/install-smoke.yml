@@ -40,7 +40,9 @@ jobs:
           node-version-file: '.node-version'
 
       - name: Run installer (non-interactive)
-        run: ./install.sh --yes
+        # --minimal: 앱 본체 설치 경로(omk 가 부르는 것과 같은 경로). 전체 스택(LiteLLM·런타임 이미지 ~7GB)은
+        # 러너 30분 한도를 넘기고 모델 백엔드가 필요해 이 스모크의 범위 밖이다.
+        run: ./install.sh --yes --minimal
 
       - name: Verify health + processes
         run: |

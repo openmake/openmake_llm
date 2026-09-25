@@ -1,61 +1,64 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# OpenMake LLM — 원샷 설치 스크립트 (Linux / Windows→WSL2)
-# macOS 는 install_mac.sh 를 쓴다 — install.sh(입구)가 OS 를 판별해 자동으로 넘긴다.
+# OpenMake LLM — Linux 원샷 설치 (단일 내부망 구성) · Windows 는 WSL2 안에서
 # ==============================================================================
-# 클론 직후 이 스크립트 하나만 실행하면 바로 쓸 수 있는 상태까지 만든다:
+# macOS 는 install_mac.sh 를 쓴다 — install.sh(입구)가 OS 를 판별해 자동으로 넘긴다.
+# 새 서버에서 이 스크립트 하나로 운영과 같은 구성을 만든다. 역할은 셋으로 나뉜다:
 #
-#   OS 판정(Linux/WSL/Windows) → toolchain 점검(Node 24 / Docker / PM2)
-#   → .env 생성 → 의존성 설치 → PostgreSQL·Redis 기동 → DB 마이그레이션
-#   → 빌드 → PM2 기동 → health check
+#   1) 이 스크립트  — Linux 사전 준비: 호스트 패키지(apt/dnf…) · uv · 절전 해제 · Node 24 · PM2
+#                     · Docker Engine(+ docker 그룹 재진입) · 질문(한 번에) · (선택) Tailscale
+#   2) omk          — 스택 (scripts/env/omk.sh env install): LiteLLM 게이트웨이 · SearXNG ·
+#                     샌드박스 이미지 · 운영 기능 프로필 · DGX 연결 · 내부망 HTTPS · 뷰어 · Discord
+#   3) 이 스크립트 --minimal — omk 가 부르는 앱 본체: .env · PostgreSQL/Redis(빈 DB) · 빌드 · PM2
+#   … 끝으로 호스트 마무리: :443 권한 · 루트 인증서 신뢰 · DB 백업 예약 · 로그 회전 · systemd 자동 시작
 #
-# Windows: 네이티브(Git Bash/PowerShell) 실행은 지원하지 않는다 — 스크립트가
-#   Windows 를 감지하면 WSL2(Ubuntu) 설치·실행 절차를 안내하고 종료한다.
-#   WSL2 안에서는 Linux 와 동일하게 이 스크립트 하나로 설치된다.
+# 전제: 서버·DGX·사용자 PC 가 하나의 내부망에 있고 외부에는 공개하지 않는다.
+#       설치·운영 중 인터넷으로 나가는 연결은 가능하다 (패키지·npm·Docker 이미지·검색).
+#       DGX 는 같은 LAN(직접) 또는 다른 네트워크(Tailscale) 둘 다 지원한다.
+#       소스는 omk 규칙 위치($OMK_ROOT/<환경>/llm, 기본 ~/.openmake/online/llm)에 둔다.
+# Windows: 네이티브(Git Bash/PowerShell)는 지원하지 않는다 — WSL2(Ubuntu) 설치 절차를 안내하고 종료한다.
 #
 # 사용:
-#   # curl 원라이너 — 클론 없이 한 줄. 레포 밖 실행을 감지하면 소스를
-#   # $HOME/.openmake/chat 으로 받아온 뒤 자동으로 재진입한다. 터미널에서
-#   # 실행하면 파이프여도 /dev/tty 로 질문한다 (CI 등 tty 없으면 자동 승인).
+#   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install_linux.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install_linux.sh | bash -s -- --yes
+#   ./install_linux.sh                       # 대화형 — 처음에 질문을 모두 받고 이후 무인 진행
+#   ./install_linux.sh --yes --dgx-host 192.168.0.50 --vllm-api-key <키>
+#   ./install_linux.sh --yes --llm-provider openrouter --llm-model qwen/qwen3-235b-a22b:free --llm-api-key sk-or-...
+#   ./install_linux.sh --minimal --yes       # 앱 본체만 (omk 가 부르는 모드 · CI 설치 스모크)
 #
-#   ./install_linux.sh                     # 대화형 (LLM 엔드포인트를 물어봄)
-#   ./install_linux.sh --yes               # 비대화형 (기본값으로 진행, 프롬프트 없음)
-#   ./install_linux.sh --llm-base-url https://openrouter.ai/api/v1 \
-#                --llm-api-key sk-or-... --llm-model qwen/qwen3-235b-a22b --yes
-#   ./install_linux.sh --instance NAME     # 두 번째 인스턴스 — 기본 설치본과 같은 호스트에 나란히 뜬다
-#                                    #   ($HOME/.openmake/chat-NAME · 포트 52417/3010 · DB/Redis/PM2 분리)
-#   ./install_linux.sh --public-url https://chat.example.com   # 공개 주소 (https 면 secure cookie 로 전환)
+# 옵션:
+#   -y, --yes                 모든 확인 자동 승인 (선택 항목은 끔 — 켜려면 --with-* 옵션)
+#   LLM (DGX vLLM — 기본):
+#     --dgx-host HOST         DGX 주소 (LAN IP 또는 Tailscale IP/이름)
+#     --dgx-via lan|tailscale DGX 연결 방식 (기본 lan)
+#     --vllm-api-key KEY      DGX vLLM API 키 (DGX /home/<user>/vllm/vllm.env 의 VLLM_API_KEY)
+#     --tailscale-authkey KEY Tailscale 무인 로그인 키 (없으면 로그인 URL 을 브라우저에서 승인)
+#   LLM (외부 provider — DGX 를 쓰지 않을 때):
+#     --llm-provider NAME     openrouter | ollama-cloud | nvidia | hasa | bai | orcarouter | custom
+#     --llm-model ID          기본 채팅 모델 ID (provider 가 쓰는 이름 그대로)
+#     --llm-api-key KEY       provider API 키 (서버 공용 키 — LiteLLM 에만 저장)
+#     --llm-base-url URL      custom 일 때 OpenAI 호환 주소 (--minimal 에서는 앱이 직접 쓸 주소)
+#   접속:
+#     --host NAME|IP          접속 주소 (기본 이 서버의 LAN IP)
+#     --http                  HTTPS 없이 HTTP 로만 (복사 버튼·웹 푸시가 동작하지 않음)
+#   선택 항목:
+#     --with-artifact-viewer  아티팩트 공유 뷰어 (별도 포트 origin)
+#     --with-discord          Discord 봇 (--discord-token 필요)
+#     --discord-token TOKEN   이 서버 전용 새 봇 토큰 (운영 봇 토큰 재사용 금지)
+#     --no-sandbox-images     MCP·작업 샌드박스 이미지 빌드 생략 (샌드박스 기능 꺼짐)
+#   기타:
+#     --instance NAME         환경 이름 (기본 online) — 같은 호스트에 나란히 설치
+#     --minimal               앱 본체만 (omk 가 부르는 모드)
+#     --public-url URL        (--minimal) 공개 주소 — OMK_APP_URL/CORS 반영, https 면 secure cookie
+#     --skip-docker · --skip-build · --no-start · --force-env · --port · --web-port · --postgres-port · --redis-port
 #
-# 부트스트랩 환경변수 (curl 원라이너일 때만 의미 있음):
-#   OMK_HOME       소스를 받을 위치 (기본 $HOME/.openmake/chat, --instance NAME 은 $HOME/.openmake/chat-NAME)
-#   OMK_REPO_URL   클론할 레포 (기본 https://github.com/openmake/openmake_llm.git)
-#   OMK_REF        브랜치/태그 (기본 main)
-#
-# 주요 옵션 (--help 로 전체 확인):
-#   --yes, -y            모든 확인을 자동 승인 (비대화형)
-#   --skip-docker        PostgreSQL/Redis 를 직접 운영 중일 때 (compose 건너뜀)
-#   --skip-build         빌드 산출물이 이미 있을 때
-#   --no-start           설치만 하고 PM2 기동은 하지 않음
-#   --force-env          기존 .env 를 백업하고 새로 생성
-#   --port / --web-port  API(52416) / 웹(3000) 포트 변경
-#   --postgres-port      PostgreSQL 포트 변경 (기본 5432 가 이미 점유된 경우)
-#   --redis-port         Redis 포트 변경 (기본 6379)
-#   --instance NAME      이름 있는 인스턴스 — PM2 앱·docker 컨테이너·볼륨에 "-NAME" 접미사,
-#                        .env 의 OMK_INSTANCE 로 고정. 기본 인스턴스와 같은 호스트에 나란히 뜬다.
-#                        기본 포트 52417/3010/5433/6380 (점유 시 자동으로 빈 포트로 이동)
-#   --public-url URL     외부 공개 주소 — OMK_APP_URL/CORS_ORIGINS 반영, https 면 COOKIE_SECURE=true
-#
-# 인스턴스 이름 규칙 (기본 인스턴스는 접미사 없음 — 기존 설치본과 동일):
-#   PM2      openmake-llm[-NAME] / openmake-next[-NAME]
-#   docker   openmake[-NAME]-postgres / openmake[-NAME]-redis, 볼륨 openmake[-NAME]_pgdata
-#
+# 환경변수: OMK_ROOT(~/.openmake) · OMK_REF(브랜치/태그) · OMK_REPO_URL
 # 재실행 안전(idempotent): 이미 된 단계는 건너뛰거나 갱신만 한다.
-#
-# 종료 코드:
-#   0 성공 / 1 사용법·전제조건 오류 / 2 설치 단계 실패 / 3 health check 실패
+# 종료 코드: 0 성공 / 1 사용법·전제조건 오류 / 2 설치 단계 실패 / 3 health check 실패
 # ==============================================================================
+
+# 전역 변수는 scripts/setup/{common,linux}/*.sh(런타임 source)가 읽는다 — shellcheck 가 파일 간 사용을 못 본다.
+# shellcheck disable=SC2034
 set -euo pipefail
 
 # curl | bash 파이프 실행에서는 BASH_SOURCE 가 비어 있다 — 이때 SCRIPT_DIR 는
@@ -69,6 +72,9 @@ readonly TOOLCHAIN_DIR="$SCRIPT_DIR/.openmake"
 readonly TOOLCHAIN_ENV="$TOOLCHAIN_DIR/toolchain.env"
 readonly HEALTH_RETRIES=45
 readonly HEALTH_INTERVAL=2
+OMK_ROOT="${OMK_ROOT:-$HOME/.openmake}"
+readonly OMK_DEFAULT_ENV="online"     # omk 의 기본(무접미사) 인스턴스
+readonly OS_LABEL="Linux"
 
 # 포트 — 빈 값이면 인스턴스별 기본값(resolve_instance)이 채운다. 셸 환경변수·플래그가 우선.
 APP_PORT="${OMK_PORT:-}"
@@ -90,6 +96,16 @@ FORCE_ENV=0
 LLM_BASE_URL=""
 LLM_API_KEY=""
 LLM_MODEL=""
+MINIMAL=0
+
+# 질문 답 (common/questions.sh 가 채운다 — 플래그가 있으면 그 값을 쓴다)
+LLM_MODE=""            # dgx | external | keep | direct(--minimal)
+DGX_VIA=""; DGX_HOST=""; VLLM_API_KEY=""; TAILSCALE_AUTHKEY=""; LLM_PROVIDER=""
+APP_HOST=""; HTTPS_MODE=""
+WITH_VIEWER=""; WITH_DISCORD=""; DISCORD_TOKEN=""
+SANDBOX_IMAGES=1
+TODO_LIST=""           # 설치 후 할 일 — summary 가 출력한다
+ORIG_ARGS=()           # docker 그룹 재진입용
 
 # ── 출력 ─────────────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -115,16 +131,54 @@ if [[ -t 0 ]] || { : < /dev/tty; } 2>/dev/null; then
 fi
 readonly TTY_DEV
 
-# y/N 확인. --yes 또는 비대화형(tty 없음)이면 자동 승인.
+interactive() { [[ $ASSUME_YES -eq 0 && -n "$TTY_DEV" ]]; }
+
+# y/N 확인 — confirm "질문" [y|n]. 기본값을 주지 않으면 종전 동작 그대로:
+# 비대화형(--yes·tty 없음)은 자동 승인, 대화형은 엔터가 N. 기본값을 주면 비대화형도 그 값으로 답한다.
 confirm() {
-    local prompt="$1"
-    if [[ $ASSUME_YES -eq 1 ]] || [[ -z "$TTY_DEV" ]]; then
-        log_info "$prompt → 자동 승인"
-        return 0
+    local prompt="$1" def="${2:-}" reply=""
+    if ! interactive; then
+        [[ "${def:-y}" == "y" ]] && log_info "$prompt → 자동 승인"
+        [[ "${def:-y}" == "y" ]]; return
     fi
-    local reply=""
-    read -r -p "$(printf '%s%s%s [y/N]: ' "$C_WARN" "$prompt" "$C_RESET")" reply < "$TTY_DEV" || true
+    local hint="[y/N]"; [[ "$def" == "y" ]] && hint="[Y/n]"
+    read -r -p "$(printf '%s%s%s %s: ' "$C_WARN" "$prompt" "$C_RESET" "$hint")" reply < "$TTY_DEV" || true
+    reply="${reply:-${def:-n}}"
     case "$reply" in [yY]|[yY][eE][sS]) return 0 ;; *) return 1 ;; esac
+}
+
+# 값 입력 — ask VAR "질문" "기본값". 비대화형이면 기본값.
+ask() {
+    local __var="$1" prompt="$2" def="${3:-}" reply=""
+    if interactive; then
+        read -r -p "  ${prompt}${def:+ [기본 $def]}: " reply < "$TTY_DEV" || true
+    fi
+    printf -v "$__var" '%s' "${reply:-$def}"
+}
+
+# 비밀값 입력 — 화면에 표시하지 않는다.
+ask_secret() {
+    local __var="$1" prompt="$2" reply=""
+    if interactive; then
+        read -r -s -p "  ${prompt}: " reply < "$TTY_DEV" || true
+        echo ""
+    fi
+    printf -v "$__var" '%s' "$reply"
+}
+
+add_todo() { TODO_LIST="${TODO_LIST}${TODO_LIST:+$'\n'}$*"; }
+omk_env_name() { printf '%s' "${INSTANCE:-$OMK_DEFAULT_ENV}"; }
+
+# sudo 비밀번호를 한 번 받고 설치가 끝날 때까지 유지한다 (기본 유효시간 < 설치 시간).
+SUDO_KEEPALIVE_PID=""
+sudo_begin() {
+    [[ -n "$SUDO_KEEPALIVE_PID" ]] && return 0
+    [[ $EUID -eq 0 ]] && return 0
+    log_info "관리자 권한(sudo)이 필요합니다. 비밀번호를 한 번만 입력하세요."
+    sudo -v || die "sudo 인증 실패"
+    ( while true; do sudo -n true 2>/dev/null; sleep 50; kill -0 "$$" 2>/dev/null || exit 0; done ) &
+    SUDO_KEEPALIVE_PID=$!
+    trap 'kill "$SUDO_KEEPALIVE_PID" 2>/dev/null || true' EXIT
 }
 
 has() { command -v "$1" >/dev/null 2>&1; }
@@ -134,55 +188,85 @@ usage() {
     # 헤더를 고쳐도 --help 가 자동으로 따라오도록 줄 번호를 하드코딩하지 않는다.
     local self="${BASH_SOURCE[0]:-}"
     if [[ -f "$self" ]]; then
-        sed -n '2,/^[^#]/p' "$self" | sed '$d' | sed 's/^# \{0,1\}//'
+        # 머리말 주석 블록만 — 첫 빈 줄이나 명령 줄에서 멈춘다.
+        sed -nE '2,/^([^#]|$)/p' "$self" | sed '$d' | sed 's/^# \{0,1\}//'
     else
         # 파이프 실행 등 원본 파일에 접근할 수 없는 경우의 짧은 폴백.
         echo "전체 도움말: 클론된 레포에서 ./install_linux.sh --help"
     fi
 }
 
-# ── 부트스트랩 (curl | bash) ─────────────────────────────────────────────────
-# 레포 밖에서 실행되면 (curl 파이프·단독 다운로드) 소스를 먼저 받아온 뒤
-# 그 안의 install_linux.sh 로 exec 재진입한다. 레포 안에서는 아무것도 하지 않는다.
-bootstrap_source() {
-    # 클론된 레포 안이면 할 일 없음 — 기존 ./install_linux.sh 경로 그대로.
-    [[ -f "$SCRIPT_DIR/package.json" && -f "$SCRIPT_DIR/openmake_llm.sh" ]] && return 0
-    # Windows 네이티브는 detect_platform 이 WSL2 안내 후 종료한다 — 클론 낭비 방지.
-    case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) return 0 ;; esac
+# ── 부트스트랩 ───────────────────────────────────────────────────────────────
+# 전체 설치는 소스를 omk 규칙 위치($OMK_ROOT/<환경>/llm)에서 실행한다 — omk 가 그 소스를 재사용한다.
+# 다른 곳(curl 파이프·수동 클론)에서 실행되면 그 위치로 받고(있으면 재사용) 그 안의 사본으로 재진입한다.
+# --minimal(omk 가 부르는 앱 본체 설치)은 어디서 실행되든 그 자리에서 진행한다 (omk dev 는 작업 클론에서 부른다).
+ensure_git_for_bootstrap() {
+    has git && return 0
+    log_info "git 설치 (sudo 필요)"
+    if   has apt-get; then sudo apt-get update -qq && sudo apt-get install -y -qq git ca-certificates curl
+    elif has dnf;     then sudo dnf install -y -q git
+    elif has yum;     then sudo yum install -y -q git
+    elif has pacman;  then sudo pacman -Sy --noconfirm git
+    elif has zypper;  then sudo zypper install -y git
+    fi >/dev/null || true
+    has git || die "git 을 설치할 수 없습니다 — 직접 설치한 뒤 다시 실행하세요."
+}
 
-    local repo_url="${OMK_REPO_URL:-$DEFAULT_REPO_URL}"
-    local ref="${OMK_REF:-main}"
-    # --instance 는 parse_args 전이라 여기서 미리 훑는다 — 기본 설치 위치가 인스턴스별로 다르다.
-    local inst="$INSTANCE" prev="" a
+bootstrap_source() {
+    # Windows 네이티브는 detect_platform 이 WSL2 안내 후 종료한다 — 클론 낭비 방지.
+    # macOS 는 소스를 받기 전에 멈춘다 (install_mac.sh 의 몫).
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*) return 0 ;;
+        Darwin) log_err "macOS 는 install_mac.sh 로 설치합니다:  ./install_mac.sh  (또는 ./install.sh 가 자동 선택)"; exit 1 ;;
+    esac
+    local a prev="" inst="$INSTANCE" minimal=0 help=0
     for a in "$@"; do
         [[ "$prev" == "--instance" ]] && inst="$a"
+        [[ "$a" == "--minimal" ]] && minimal=1
+        [[ "$a" == "-h" || "$a" == "--help" ]] && help=1
         prev="$a"
     done
-    local target="${OMK_HOME:-$HOME/.openmake/chat${inst:+-$inst}}"
+    local in_repo=0
+    [[ -f "$SCRIPT_DIR/package.json" && -f "$SCRIPT_DIR/openmake_llm.sh" ]] && in_repo=1
+    [[ $in_repo -eq 1 && ( $minimal -eq 1 || $help -eq 1 ) ]] && return 0
 
-    log_step "부트스트랩 — 소스 다운로드"
-    log_info "설치 위치: $target  (변경: OMK_HOME / 레포: OMK_REPO_URL / 브랜치·태그: OMK_REF)"
+    local target="$OMK_ROOT/${inst:-$OMK_DEFAULT_ENV}/llm"
+    [[ -d "$target" ]] && target="$( cd "$target" && pwd -P )"
+    [[ "$( cd "$SCRIPT_DIR" && pwd -P )" == "$target" ]] && return 0
 
-    if [[ -f "$target/package.json" && -f "$target/install_linux.sh" ]]; then
+    log_step "부트스트랩 — 소스 위치 $target"
+    if [[ -f "$target/package.json" && -f "$target/install_linux.sh" && -d "$target/.git" ]]; then
         log_ok "기존 소스 재사용 — 최신화하려면: git -C \"$target\" pull"
     elif [[ -d "$target" ]] && [[ -n "$(ls -A "$target" 2>/dev/null)" ]]; then
-        die "$target 이 비어있지 않은데 OpenMake LLM 소스가 아닙니다 — OMK_HOME 으로 다른 경로를 지정하세요."
-    elif has git; then
-        log_info "git clone --depth 1 --branch $ref $repo_url"
-        git clone --depth 1 --branch "$ref" "$repo_url" "$target" \
-            || die "git clone 실패 ($repo_url @ $ref)"
+        die "$target 이 비어있지 않은데 OpenMake LLM 소스가 아닙니다 — OMK_ROOT 로 다른 위치를 지정하세요."
     else
-        # git 없는 최소 환경 — GitHub tarball 폴백 (기본 레포일 때만 URL 을 안다).
-        [[ "$repo_url" == "$DEFAULT_REPO_URL" ]] \
-            || die "git 미설치 상태에서는 OMK_REPO_URL 을 지원하지 않습니다 — git 을 먼저 설치하세요."
-        has curl || die "git 과 curl 이 모두 없습니다 — 둘 중 하나를 설치한 뒤 재실행하세요."
-        local tarball="https://codeload.github.com/openmake/openmake_llm/tar.gz/$ref"
-        log_info "git 미설치 — GitHub tarball 로 대체: $tarball"
-        mkdir -p "$target"
-        curl -fsSL "$tarball" | tar -xz -C "$target" --strip-components=1 \
-            || die "tarball 다운로드/해제 실패 ($tarball)"
+        local repo_url="${OMK_REPO_URL:-$DEFAULT_REPO_URL}" ref="${OMK_REF:-}" tag=""
+        if [[ -z "$ref" && $in_repo -eq 1 ]] && git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD >/dev/null 2>&1; then
+            ref="$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD)"
+            [[ "$ref" == "HEAD" ]] && ref=""
+        fi
+        ensure_git_for_bootstrap
+        # online 은 최신 릴리스 태그만 따른다(omk 규칙). omk 와 같은 모양(로컬 브랜치 'release')으로 받아 두면
+        # omk 가 설치 도중 이 소스를 다른 ref 로 옮기지 않는다.
+        if [[ -z "$ref" && "${inst:-$OMK_DEFAULT_ENV}" == "$OMK_DEFAULT_ENV" ]]; then
+            tag="$(git ls-remote --tags --refs "$repo_url" 2>/dev/null | sed 's#.*refs/tags/##' \
+                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)"
+        fi
+        ref="${ref:-main}"
+        mkdir -p "$(dirname "$target")"
+        log_info "git clone $repo_url → $target"
+        git clone --branch "$ref" "$repo_url" "$target" \
+            || die "git clone 실패 ($repo_url @ $ref) — 브랜치가 원격에 있는지 확인하세요 (OMK_REF 로 지정 가능)"
+        if [[ -n "$tag" ]]; then
+            if git -C "$target" cat-file -e "$tag:install_linux.sh" 2>/dev/null \
+               && git -C "$target" cat-file -e "$tag:scripts/setup/linux" 2>/dev/null; then
+                git -C "$target" checkout -q -B release "$tag" || die "릴리스 $tag 체크아웃 실패"
+                log_ok "최신 릴리스 $tag (로컬 브랜치 release)"
+            else
+                log_warn "최신 릴리스 $tag 에 이 설치 스크립트가 없어 $ref 로 설치합니다 — 이 환경은 릴리스 대신 $ref 를 따릅니다."
+            fi
+        fi
     fi
-
     log_ok "소스 준비 완료 → $target/install_linux.sh 로 재진입"
     exec bash "$target/install_linux.sh" "$@"
 }
@@ -193,7 +277,18 @@ parse_args() {
         case "$1" in
             -y|--yes)        ASSUME_YES=1 ;;
             --skip-docker)   SKIP_DOCKER=1 ;;
-            --minimal)       ;;  # 호환용 — 이 인스톨러는 앱 본체만 설치한다 (omk 가 OS 무관하게 넘긴다)
+            --minimal)       MINIMAL=1 ;;
+            --dgx-host)      DGX_HOST="${2:-}"; LLM_MODE="dgx"; shift ;;
+            --dgx-via)       DGX_VIA="${2:-}"; shift ;;
+            --vllm-api-key)  VLLM_API_KEY="${2:-}"; shift ;;
+            --tailscale-authkey) TAILSCALE_AUTHKEY="${2:-}"; shift ;;
+            --llm-provider)  LLM_PROVIDER="${2:-}"; LLM_MODE="external"; shift ;;
+            --host)          APP_HOST="${2:-}"; shift ;;
+            --http)          HTTPS_MODE=0 ;;
+            --with-artifact-viewer) WITH_VIEWER=1 ;;
+            --with-discord)  WITH_DISCORD=1 ;;
+            --discord-token) DISCORD_TOKEN="${2:-}"; shift ;;
+            --no-sandbox-images) SANDBOX_IMAGES=0 ;;
             --skip-build)    SKIP_BUILD=1 ;;
             --no-start)      NO_START=1 ;;
             --force-env)     FORCE_ENV=1 ;;
@@ -211,6 +306,7 @@ parse_args() {
         esac
         shift
     done
+    case "$DGX_VIA" in ""|lan|tailscale) ;; *) log_err "--dgx-via 는 lan 또는 tailscale: $DGX_VIA"; exit 1 ;; esac
 }
 
 # ── 인스턴스 확정 ────────────────────────────────────────────────────────────
@@ -228,6 +324,7 @@ resolve_instance() {
     if [[ -n "$INSTANCE" ]] && ! [[ "$INSTANCE" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]]; then
         die "인스턴스 이름은 소문자·숫자·하이픈만 가능합니다 (예: test): '$INSTANCE'"
     fi
+    [[ "$INSTANCE" == "$OMK_DEFAULT_ENV" ]] && INSTANCE=""   # omk 의 online = 기본(무접미사) 인스턴스
     local suffix="${INSTANCE:+-$INSTANCE}"
     APP_NAME="openmake-llm$suffix"
     FRONT_APP_NAME="openmake-next$suffix"
@@ -603,6 +700,8 @@ ensure_docker() {
     fi
     has docker || install_docker
     has docker || die "docker 명령을 찾을 수 없습니다. 새 셸에서 재실행하세요."
+    # 방금 설치했으면 현재 셸이 docker 그룹이 아니다 — 데몬 대기(권한 오류로 실패) 전에 새 그룹으로 재진입한다.
+    reexec_with_docker_group
     ensure_docker_daemon
     detect_compose || die "docker compose 를 찾을 수 없습니다 (Docker Compose v2 필요)."
     log_ok "$(docker --version) / $($DOCKER_COMPOSE version --short 2>/dev/null || echo compose)"
@@ -812,6 +911,20 @@ env_value() {
     grep -E "^${key}=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- || true
 }
 
+# 키를 값으로 설정한다 — 있으면 그 줄을 바꾸고 없으면 덧붙인다. 파일 권한(600)은 유지.
+set_env() {
+    local envf="$SCRIPT_DIR/.env" key="$1" val="$2" tmp
+    [[ -f "$envf" ]] || die ".env 가 없습니다 ($envf)"
+    if grep -qE "^${key}=" "$envf"; then
+        tmp="$(mktemp)"
+        KEY="$key" VAL="$val" awk 'BEGIN { k = ENVIRON["KEY"] "=" }
+            index($0, k) == 1 { print k ENVIRON["VAL"]; next } { print }' "$envf" > "$tmp"
+        cat "$tmp" > "$envf"; rm -f "$tmp"
+    else
+        printf '%s=%s\n' "$key" "$val" >> "$envf"
+    fi
+}
+
 # ── 5. 의존성 설치 ───────────────────────────────────────────────────────────
 install_deps() {
     log_step "5/8 npm 의존성 설치 (workspaces)"
@@ -958,7 +1071,7 @@ prompt_external_access() {
 }
 
 # ── 마무리 안내 ──────────────────────────────────────────────────────────────
-summary() {
+summary_minimal() {
     local admin_pass admin_email llm_url
     admin_pass="$(env_value ADMIN_PASSWORD)"
     admin_email="$(env_value DEFAULT_ADMIN_EMAIL)"
@@ -1004,22 +1117,37 @@ summary() {
 }
 
 # ── main ─────────────────────────────────────────────────────────────────────
-main() {
-    # curl | bash 등 레포 밖 실행이면 소스를 받아 그 안의 install_linux.sh 로 exec 재진입.
-    # (--help 포함 모든 인자는 재진입한 스크립트가 처리한다.)
-    bootstrap_source "$@"
+# 단계별 함수는 scripts/setup/common/(OS 공통)·scripts/setup/linux/ 에 있다 — 부트스트랩 뒤(레포 안)에서만 불러온다.
+load_steps() {
+    local f
+    for f in "$SCRIPT_DIR"/scripts/setup/common/*.sh "$SCRIPT_DIR"/scripts/setup/linux/*.sh; do
+        # 단계 파일은 이 스크립트의 전역·도우미를 공유한다 (경로는 런타임 결정).
+        # shellcheck source=/dev/null
+        . "$f"
+    done
+}
 
-    parse_args "$@"
-    resolve_instance
+# get.docker.com 으로 방금 설치하면 현재 셸은 아직 docker 그룹이 아니라 docker 명령이 권한 오류다.
+# 재로그인 대신 새 그룹으로 이 스크립트를 다시 실행한다(질문 전이라 답을 다시 받을 일이 없다).
+reexec_with_docker_group() {
+    [[ $SKIP_DOCKER -eq 1 ]] && return 0
+    docker info >/dev/null 2>&1 && return 0
+    id -nG 2>/dev/null | tr ' ' '\n' | grep -qx docker && return 0   # 이미 그룹인데 실패 — 데몬 문제(아래에서 처리)
+    getent group docker 2>/dev/null | grep -qE "[:,]$USER(,|$)" || return 0
+    [[ -z "${OMK_DOCKER_REEXEC:-}" ]] || return 0
+    has sg || return 0
+    log_info "docker 그룹 반영을 위해 설치를 새 그룹으로 이어서 실행합니다 (재로그인 불필요)"
+    local cmd
+    cmd="$(printf '%q ' bash "$SCRIPT_DIR/install_linux.sh" ${ORIG_ARGS[@]+"${ORIG_ARGS[@]}"})"
+    OMK_DOCKER_REEXEC=1 exec sg docker -c "$cmd"
+}
 
+# omk 가 부르는 앱 본체 설치 — 종전 인스톨러 흐름 그대로
+main_minimal() {
     printf "\n%s╔══════════════════════════════════════════════════╗%s\n" "$C_INFO" "$C_RESET"
-    printf "%s║   OpenMake LLM — 원샷 설치 (Linux/WSL2)           ║%s\n" "$C_INFO" "$C_RESET"
+    printf "%s║   OpenMake LLM — 앱 본체 설치 (Linux/WSL2)        ║%s\n" "$C_INFO" "$C_RESET"
     printf "%s╚══════════════════════════════════════════════════╝%s\n" "$C_INFO" "$C_RESET"
-
-    # OS 판정이 가장 먼저다 — Windows 네이티브는 여기서 WSL2 안내 후 종료된다.
-    detect_platform
     ensure_basics
-
     ensure_node
     ensure_docker
     ensure_pm2
@@ -1031,6 +1159,42 @@ main() {
     build_app
     start_app
     prompt_external_access
+    summary_minimal
+}
+
+main() {
+    ORIG_ARGS=("$@")
+    bootstrap_source "$@"
+    parse_args "$@"
+    resolve_instance
+
+    # OS 판정이 가장 먼저다 — Windows 네이티브는 여기서 WSL2 안내 후 종료된다.
+    detect_platform
+    load_steps
+    if [[ $MINIMAL -eq 1 ]]; then
+        main_minimal
+        return 0
+    fi
+
+    printf "\n%s╔══════════════════════════════════════════════════╗%s\n" "$C_INFO" "$C_RESET"
+    printf "%s║   OpenMake LLM — Linux 원샷 설치 (내부망 구성)     ║%s\n" "$C_INFO" "$C_RESET"
+    printf "%s╚══════════════════════════════════════════════════╝%s\n" "$C_INFO" "$C_RESET"
+
+    preflight_checks          # systemd·디스크 점검                   (linux/10-prereqs)
+    sudo_begin                # sudo 1회 입력 + 끝까지 유지
+    ensure_host_packages      # git·poppler·tesseract·python3·setcap
+    ensure_uv
+    configure_power
+    ensure_node
+    ensure_docker             # Docker Engine — 방금 설치했으면 docker 그룹으로 재진입
+    ensure_pm2
+    ask_questions             # 질문 한 번에                          (common/questions)
+    setup_tailscale           # DGX 가 다른 네트워크에 있을 때         (linux/40-network)
+    prepare_https_proxy       # 프록시 :443 바인딩 권한                (linux/80-finish)
+
+    run_omk_install           # 스택 + 앱 본체 (omk → install_linux.sh --minimal)  (common/stack)
+
+    host_finalize             # 인증서 신뢰 · 백업 · 로그 회전 · 자동 시작 (linux/80-finish)
     summary
 }
 

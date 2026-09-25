@@ -55,7 +55,7 @@ Das Installationsskript prüft die Toolchain (Node.js 24, Docker, PM2), schreibt
 
 Läuft unter Linux und macOS (Windows: in WSL2). Mit `bash -s -- --yes` läuft die Installation ohne Rückfragen. Manuelle Einrichtung, Optionen, Updates und Hinweise zum Reverse Proxy stehen im **[Self-Hosting-Leitfaden](https://openmake.cc/en/docs/)**.
 
-Der Einzeiler übergibt an das Installationsskript Ihres Betriebssystems — `install_linux.sh` unter Linux/WSL2, `install_mac.sh` unter macOS. Auf einem frischen Mac stellt `install_mac.sh` seine Fragen einmal vorab und richtet dann die Voraussetzungen (Xcode Command Line Tools, Homebrew, Docker Desktop) und den kompletten Stack über `scripts/env/omk.sh` ein: LiteLLM-Gateway, SearXNG, Sandbox-Images, internes HTTPS, Backups und Autostart nach einem Neustart. Für eine Installation ohne Rückfragen unter macOS geben Sie auch das Modell-Backend an: `--yes --dgx-host <host> --vllm-api-key <key>` oder `--yes --llm-provider <name> --llm-model <id> --llm-api-key <key>`.
+Der Einzeiler übergibt an das Installationsskript Ihres Betriebssystems — `install_linux.sh` unter Linux/WSL2, `install_mac.sh` unter macOS. Auf einem frischen Rechner stellt es seine Fragen einmal vorab und richtet dann die Voraussetzungen (macOS: Xcode Command Line Tools, Homebrew, Docker Desktop · Linux: Distributionspakete, Docker Engine) und den kompletten Stack über `scripts/env/omk.sh` ein: LiteLLM-Gateway, SearXNG, Sandbox-Images, internes HTTPS, Backups und Autostart nach einem Neustart. Für eine Installation ohne Rückfragen geben Sie auch das Modell-Backend an: `--yes --dgx-host <host> --vllm-api-key <key>` oder `--yes --llm-provider <name> --llm-model <id> --llm-api-key <key>`.
 
 ---
 
