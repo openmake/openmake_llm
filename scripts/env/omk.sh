@@ -2,11 +2,11 @@
 # ==============================================================================
 # omk — OpenMake 환경 매니저 (dev / staging / online)
 # ==============================================================================
-# openmake_llm + openmake_bench 를 한 호스트에 여러 환경으로 나란히 설치·갱신·리셋한다.
+# openmake_llm 을 한 호스트에 여러 환경으로 나란히 설치·갱신·리셋한다 (openmake_bench 는 --bench 로 고를 때만).
 # 모든 무거운 일은 기존 도구에 위임한다 — install.sh(툴체인·.env·DB·빌드·PM2),
 # openmake_llm.sh(update/deploy/start/stop), uninstall.sh(역순 제거). 이 스크립트는
-# "어느 디렉터리에서, 어떤 인스턴스 이름으로, 어떤 브랜치를" 만 정하고 bench 와
-# 리버스 프록시(Caddy, PM2 로 운영)를 그 옆에 붙인다.
+# "어느 디렉터리에서, 어떤 인스턴스 이름으로, 어떤 브랜치를" 만 정하고 리버스 프록시
+# (Caddy, PM2 로 운영)와 고른 add-on(bench)을 그 옆에 붙인다.
 #
 # 원칙 — omk 는 값을 기억하지 않는다:
 #   · 포트는 install.sh 가 할당하고 omk 는 각 환경의 .env 를 읽기만 한다
@@ -34,7 +34,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
 #     | bash -s -- env install staging --public-url https://staging-chat.example.com
 #
-#   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng] [--no-runtime-images] [--tailscale] [--host H]…
+#   omk env install <env> [--ref BR] [--bench [--bench-ref BR]] [--public-url URL] [--no-proxy] [--no-searxng] [--no-runtime-images] [--tailscale] [--host H]…
 #                         [--no-litellm] [--no-default-model] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
 #                         [--ops-profile] [--dgx-host H] [--https-host H] [--artifact-viewer] [--discord-token T]
@@ -1156,12 +1156,14 @@ discord_ensure() { # $1=llm dir $2=env $3=token(선택)
 
 cmd_env_install() {
     local env="$1"; shift
-    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=() expose_args=()
+    local ref="" bench_ref="" public_url="" no_bench=1 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=() expose_args=()
     local ops=0 dgx_host="" https_host="" viewer=0 discord_token=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ref)          ref="${2:-}"; shift ;;
-            --bench-ref)    bench_ref="${2:-}"; shift ;;
+            # bench 는 add-on 이다 — 기본 설치에 넣지 않고 고를 때만 붙인다. --no-bench 는 예전 호출용(기본과 같다).
+            --bench)        no_bench=0 ;;
+            --bench-ref)    bench_ref="${2:-}"; no_bench=0; shift ;;
             --public-url)   public_url="${2:-}"; shift ;;
             --no-bench)     no_bench=1 ;;
             --no-proxy)     no_proxy=1 ;;
@@ -1262,7 +1264,7 @@ cmd_env_install() {
     litellm_ensure "$ldir" "$env" "$qwen_base" "$bge_base" "$vllm_key" "$up_base" "$up_key" "$up_model"
     [[ "$env_before" == "$(cksum < "$ldir/.env")" && $SEARCH_CHANGED -eq 0 && $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
 
-    # 2) openmake_bench
+    # 2) openmake_bench (add-on — --bench 로 고를 때만)
     [[ $no_bench -eq 1 ]] || bench_install "$env" "$bench_ref" "$ldir"
 
     # 2.5) 선택 기능 — 뷰어 주소는 HTTPS 여부에 따라 정해진다(OMK_HTTPS_HOST 는 1.4 에서 기록).
