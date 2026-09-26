@@ -28,7 +28,7 @@ run_omk_install() {
     local env args=()
     env="$(omk_env_name)"
     log_step "스택 설치 — omk env install $env"
-    # bench(평가 도구)는 운영 복제 범위 밖이다 — 필요하면 'omk env install <env>' 를 --no-bench 없이 다시.
+    # bench(평가 도구)는 add-on 이라 omk 기본 설치에 없다 — 필요하면 'omk env install <env> --bench'.
     args=(env install "$env" --yes --ref "$(current_ref)" --no-bench --ops-profile)
     case "$LLM_MODE" in
         dgx)
