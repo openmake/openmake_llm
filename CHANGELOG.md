@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.90.1](https://github.com/openmake/openmake_llm/compare/v1.90.0...v1.90.1) (2026-09-27)
+
+
+### 🐛 버그 수정
+
+* **deps:** 보안 권고 해소 — kordoc·sharp·qs 상향 + 범위 내 패치 갱신 ([#1034](https://github.com/openmake/openmake_llm/issues/1034)) ([9514d1b](https://github.com/openmake/openmake_llm/commit/9514d1b2f0251310f0ce5d2152dbf587e0efbc33))
+
 ## [1.90.0](https://github.com/openmake/openmake_llm/compare/v1.89.0...v1.90.0) (2026-09-25)
 
 
