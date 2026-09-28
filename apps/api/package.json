@@ -83,7 +83,7 @@
         "@types/jsdom": "^30.0.0",
         "@types/jsonwebtoken": "^9.0.10",
         "@types/multer": "^2.2.0",
-        "@types/node": "^24.0.0",
+        "@types/node": "^26.6.2",
         "@types/turndown": "^5.0.6",
         "@types/web-push": "^3.6.4",
         "@types/ws": "^8.18.1",
