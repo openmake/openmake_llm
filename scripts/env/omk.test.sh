@@ -262,5 +262,59 @@ ok "https: CORS"             "[[ '$(dotenv_get "$OL/.env" CORS_ORIGINS)' == *'ht
 dotenv_unset "$OL/.env" OMK_HTTPS_HOST; https_render opsenv >/dev/null
 ok "https: 끄면 블록 제거"   "[[ ! -f '$HO' ]]"
 
+# ── 릴리스 게이트: 확인한 커밋에서 나온 릴리스만 통과 (임시 저장소 — 네트워크·실제 원격 없음) ──
+GO="$TMP/gate-origin.git"; GW="$TMP/gate-work"; GC="$TMP/gate-online"
+gg() { git -C "$GW" -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false "$@"; }
+gate_release() { # $1=버전 — release-please 가 하는 것처럼 버전·CHANGELOG 만 고친다
+    sed -i.bak -E "s/\"version\": \"[0-9.]+\"/\"version\": \"$1\"/" "$GW/package.json" "$GW/apps/api/package.json" && rm -f "$GW/package.json.bak" "$GW/apps/api/package.json.bak"
+    printf '{\n  ".": "%s"\n}\n' "$1" > "$GW/.release-please-manifest.json"; printf '## %s\n' "$1" >> "$GW/CHANGELOG.md"
+    gg commit -qam "chore(main): release $1" && gg tag "v$1" && gg push -q origin main "v$1"
+}
+git init -q --bare "$GO"; git init -q "$GW"; gg checkout -q -b main; gg remote add origin "$GO"; mkdir -p "$GW/apps/api"
+printf '{\n  "packages": { ".": { "changelog-path": "CHANGELOG.md", "extra-files": [ { "type": "json", "path": "apps/api/package.json", "jsonpath": "$.version" } ] } }\n}\n' > "$GW/release-please-config.json"
+printf '{\n  "name": "x",\n  "version": "1.0.0",\n  "dependencies": {\n    "a": "1.0.0"\n  }\n}\n' > "$GW/package.json"; cp "$GW/package.json" "$GW/apps/api/package.json"
+printf '{\n  ".": "1.0.0"\n}\n' > "$GW/.release-please-manifest.json"; printf '# log\n' > "$GW/CHANGELOG.md"; printf 'a\n' > "$GW/app.txt"
+gg add -A; gg commit -qm "feat: a"; gg push -q origin main
+eq "meta: 설정의 extra-files 를 읽는다" "$(release_meta_paths "$GW" HEAD | LC_ALL=C sort | tr '\n' ' ')" ".release-please-manifest.json CHANGELOG.md CHANGELOG.md apps/api/package.json package-lock.json package.json "
+V1="$(gg rev-parse HEAD)"
+verified_push "$GW" origin >/dev/null 2>&1
+eq "verify: origin 에 기록" "$(git -C "$GO" rev-parse "refs/omk/verified/$V1" 2>/dev/null)" "$V1"
+ok "verify: 다시 해도 무해" 'verified_push "$GW" origin >/dev/null 2>&1'
+gate_release 1.0.1
+git clone -q "$GO" "$GC" 2>/dev/null
+ok "gate: 기록을 받기 전에는 거부" '! release_gate_check "$GC" v1.0.1'
+ok "gate: 이유 — 기록 없음"        '[[ "$GATE_REASON" == *"확인 기록이 없습니다"* ]]'
+release_gate_fetch "$GC"
+ok "gate: 확인한 커밋 + 릴리스 커밋 통과" 'release_gate_check "$GC" v1.0.1'
+eq "gate: 근거 커밋"                "$GATE_VERIFIED" "$V1"
+# 확인 뒤에 머지된 커밋이 릴리스에 들어갔다
+printf 'b\n' >> "$GW/app.txt"; gg commit -qam "fix: b"; gate_release 1.0.2
+git -C "$GC" fetch -q --tags; release_gate_fetch "$GC"
+ok "gate: 확인하지 않은 커밋이 있으면 거부" '! release_gate_check "$GC" v1.0.2'
+ok "gate: 이유에 커밋·경로"         '[[ "$GATE_REASON" == *"fix: b"* && "$GATE_REASON" == *"app.txt"* ]]'
+ok "gate: 이전 릴리스는 여전히 통과" 'release_gate_check "$GC" v1.0.1'
+# 태그 커밋 자체를 확인했으면(릴리스 뒤 staging 을 올려 확인) 그 태그는 통과한다
+gg checkout -q v1.0.2; verified_push "$GW" origin >/dev/null 2>&1; gg checkout -q main; release_gate_fetch "$GC"
+ok "gate: 태그 커밋을 확인했으면 통과" 'release_gate_check "$GC" v1.0.2'
+# 릴리스 커밋에 의존성 변경이 섞였다 — 경로는 허용 목록이지만 내용이 버전이 아니다
+verified_push "$GW" origin >/dev/null 2>&1
+sed -i.bak 's/"a": "1.0.0"/"a": "2.0.0"/' "$GW/package.json" && rm -f "$GW/package.json.bak"; gate_release 1.0.3
+git -C "$GC" fetch -q --tags; release_gate_fetch "$GC"
+ok "gate: 버전 외 변경이 섞이면 거부" '! release_gate_check "$GC" v1.0.3'
+ok "gate: 이유에 파일"               '[[ "$GATE_REASON" == *"package.json (버전 외 변경)"* ]]'
+# 확인하지 않은 커밋이 허용 목록을 넓혀도 소용없다 (목록은 확인한 커밋에서 읽는다)
+verified_push "$GW" origin >/dev/null 2>&1
+sed -i.bak 's#"apps/api/package.json"#"app.txt"#' "$GW/release-please-config.json" && rm -f "$GW/release-please-config.json.bak"
+printf 'c\n' >> "$GW/app.txt"; gate_release 1.0.4
+git -C "$GC" fetch -q --tags; release_gate_fetch "$GC"
+ok "gate: 허용 목록을 넓히는 커밋 거부" '! release_gate_check "$GC" v1.0.4'
+ok "gate: 없는 태그 거부"             '! release_gate_check "$GC" v9.9.9'
+# --force-unverified: 기록을 남기고 진행 / 없으면 종료 코드 2 로 끝낸다
+( release_gate_enforce gateenv "$GC" v1.0.4 0 ) >/dev/null 2>&1; eq "enforce: 거부는 종료 코드 2" "$?" "2"
+# shellcheck disable=SC2034  # confirm 이 읽는다
+( ASSUME_YES=1; release_gate_enforce gateenv "$GC" v1.0.4 1 ) >/dev/null 2>&1; eq "enforce: force 는 진행" "$?" "0"
+ok "enforce: force 기록"              "grep -q 'force-unverified v1.0.4' '$OMK_ROOT/gateenv/logs/release-gate.log'"
+( release_gate_enforce gateenv "$GC" v1.0.1 0 ) >/dev/null 2>&1; eq "enforce: 확인된 릴리스 진행" "$?" "0"
+
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]
