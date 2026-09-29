@@ -4,15 +4,17 @@
 # 8 게이트: Contract Drift → Installer Lint → Jest → TypeScript Build → File Size Guard → ESLint → Routing Eval → Response Eval
 # 로컬 `npm test`/`npm run build`/`npm run lint` 와 같은 스크립트로 돈다(별도 미러 스크립트 없음).
 # Docker 사용 없음 (프로젝트 방침 영구 제외)
+# 대상 브랜치: main(staging·릴리스가 따른다)과 dev(feature/* 가 모인다). dev 에 합칠 때도 같은 게이트를 지난다 —
+# 검사가 dev → main PR 에 몰리면 실패한 커밋을 찾기 어렵다.
 # ==============================================================
 
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 concurrency:
   group: ci-${{ github.ref }}

@@ -10,13 +10,13 @@ name: Desktop Native
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, dev]
     paths:
       - 'apps/desktop-native/**'
       - 'packages/local-bridge-core/**'
       - '.github/workflows/desktop-native.yml'
   pull_request:
-    branches: [main, develop]
+    branches: [main, dev]
     paths:
       - 'apps/desktop-native/**'
       - 'packages/local-bridge-core/**'
