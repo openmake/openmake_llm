@@ -342,5 +342,31 @@ eq "uses colima: 미설정"      "$( unset DOCKER_HOST; uses_colima && echo y ||
 eq "uses colima: 다른 데몬"   "$( DOCKER_HOST=unix:///var/run/docker.sock; uses_colima && echo y || echo n )" "n"
 eq "uses colima: 다른 프로필" "$( DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"; uses_colima && echo y || echo n )" "n"
 
+# ── 실행 로그: 설치·갱신·리셋은 파일로도 남긴다 (tee 를 붙이지 않아도) ──
+ok "log: env install"      'omk_log_wanted env install'
+ok "log: env update"       'omk_log_wanted env update'
+ok "log: env reset"        'omk_log_wanted env reset'
+ok "log: dev setup"        'omk_log_wanted dev setup'
+ok "log: dev reset"        'omk_log_wanted dev reset'
+ok "log: dev up 은 아님 (포그라운드 서버)" '! omk_log_wanted dev up'
+ok "log: env status 는 아님"  '! omk_log_wanted env status'
+ok "log: env logs 는 아님"    '! omk_log_wanted env logs'
+ok "log: 도움말은 아님"       '! omk_log_wanted help'
+ok "log: 끄기 OMK_LOG=off"   '! ( OMK_LOG=off; omk_log_wanted env install )'
+ok "log: 이미 기록 중이면 다시 감싸지 않는다" '! ( OMK_LOG_ACTIVE=1; omk_log_wanted env install )'
+eq "log path: 환경 이름 포함" "$(omk_log_path 20260929-170000 env install staging --ref x)" "$OMK_ROOT/logs/omk/20260929-170000-env-install-staging.log"
+eq "log path: 이름 없는 명령" "$(omk_log_path 20260929-170000 dev setup)"                  "$OMK_ROOT/logs/omk/20260929-170000-dev-setup.log"
+eq "log path: 옵션은 이름이 아니다" "$(omk_log_path 20260929-170000 dev setup --no-searxng)" "$OMK_ROOT/logs/omk/20260929-170000-dev-setup.log"
+eq "log path: 이상한 글자는 뺀다"  "$(omk_log_path 20260929-170000 env install '../x y')"   "$OMK_ROOT/logs/omk/20260929-170000-env-install-.._x_y.log"
+eq "strip: 색 코드 제거" "$(printf '\033[32m[OK]\033[0m done\n' | omk_log_strip)" "[OK] done"
+# 실제로 감싸 실행 — 화면 출력과 종료 코드는 그대로, 파일에는 색 없이
+LG="$TMP/lg.log"
+OUT="$( omk_log_run "$LG" bash -c 'printf "\033[32mhello\033[0m\n"; echo err >&2; exit 7' 2>&1 )"; RC=$?
+eq "run: 종료 코드 유지" "$RC" "7"
+ok "run: 화면에 출력"    '[[ "$OUT" == *hello* && "$OUT" == *err* ]]'
+for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q err "$LG" 2>/dev/null && break; sleep 0.2; done
+eq "run: 파일에 색 없이" "$(grep -c '^hello$' "$LG")|$(grep -c '^err$' "$LG")" "1|1"
+eq "run: 파일 권한 600" "$(stat -f '%Lp' "$LG" 2>/dev/null || stat -c '%a' "$LG")" "600"
+
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]

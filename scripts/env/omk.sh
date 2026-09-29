@@ -59,6 +59,7 @@
 #   OMK_AUTOUPDATE_CRON('*/10 * * * *')  OMK_DEV_LLM  OMK_DEV_BENCH  OMKB_PORT_BASE(9400)  OMK_PROXY_PORT_BASE(33000)
 #   OMK_SEARXNG_IMAGE(searxng/searxng:latest)  OMK_SEARXNG_PORT_BASE(8888)  OMK_NET_PROBE_URLS  OMK_SEARCH_PROBE_QUERY
 #   OMK_VERIFY_PUSH_URL(origin)   'omk env verify' 가 기록을 push 할 원격 (클론이 https 면 ssh 주소)
+#   OMK_LOG(켜짐)   설치·갱신·리셋의 출력을 $OMK_ROOT/logs/omk/ 에도 남긴다. 끄려면 off
 #   OMK_FORCE_FOREIGN=1   같은 인스턴스 이름을 쓰는 다른 설치본의 컨테이너·PM2 앱도 건드린다 (기본: 거부)
 #
 # 종료 코드: 0 성공 / 1 사용법·전제조건 / 2 단계 실패 / 3 health check 실패
@@ -106,7 +107,7 @@ SCRIPT_DIR=""
 
 # ── 출력 ─────────────────────────────────────────────────────────────────────
 C_INFO=$'\033[36m'; C_OK=$'\033[32m'; C_WARN=$'\033[33m'; C_ERR=$'\033[31m'; C_RESET=$'\033[0m'
-[[ -t 1 ]] || { C_INFO=""; C_OK=""; C_WARN=""; C_ERR=""; C_RESET=""; }
+[[ -t 1 || -n "${OMK_FORCE_COLOR:-}" ]] || { C_INFO=""; C_OK=""; C_WARN=""; C_ERR=""; C_RESET=""; }
 log_info() { printf "%s[INFO]%s  %s\n" "$C_INFO" "$C_RESET" "$*"; }
 log_ok()   { printf "%s[OK]%s    %s\n" "$C_OK"   "$C_RESET" "$*"; }
 log_warn() { printf "%s[WARN]%s  %s\n" "$C_WARN" "$C_RESET" "$*"; }
@@ -1796,8 +1797,43 @@ cmd_dev() {
 }
 
 # ==============================================================================
+# ── 실행 로그 ────────────────────────────────────────────────────────────────
+# 설치·갱신·리셋은 화면에 보이는 그대로를 파일로도 남긴다 — `| tee` 를 붙이지 않아도 실패를 나중에 볼 수 있다.
+# 자기 자신을 한 번 더 실행해 그 출력을 받아 적는다(종료 코드는 그대로). 끄려면 OMK_LOG=off.
+omk_log_wanted() { # $1=group $2=sub
+    [[ "${OMK_LOG:-}" != "off" && -z "${OMK_LOG_ACTIVE:-}" ]] || return 1
+    case "${1:-} ${2:-}" in
+        "env install"|"env update"|"env reset"|"dev setup"|"dev reset") return 0 ;;
+    esac
+    return 1
+}
+omk_log_path() { # $1=시각 $2=group $3=sub [$4=환경 이름 …]
+    local name="$2-$3" e="${4:-}"
+    [[ -z "$e" || "$e" == -* ]] || name="$name-$(printf '%s' "$e" | tr -c 'A-Za-z0-9._-' '_')"
+    printf '%s/logs/omk/%s-%s.log' "$OMK_ROOT" "$1" "$name"
+}
+omk_log_strip() { sed -E $'s/\033\\[[0-9;]*[A-Za-z]//g'; }   # 색 코드는 파일에 남기지 않는다
+omk_log_run() { # $1=로그 파일 $2…=명령 — 종료 코드는 명령의 것
+    local f="$1" rc had_e=0; shift
+    mkdir -p "$(dirname "$f")"; : > "$f"; chmod 600 "$f"
+    case "$-" in *e*) had_e=1; set +e ;; esac
+    "$@" 2>&1 | tee >(omk_log_strip >> "$f")
+    rc="${PIPESTATUS[0]}"
+    [[ $had_e -eq 0 ]] || set -e
+    return "$rc"
+}
+
 main() {
     platform_guard
+    # curl | bash 로 실행한 경우(SCRIPT_PATH 없음)는 다시 실행할 파일이 없어 로그를 남기지 않는다.
+    if omk_log_wanted "${1:-}" "${2:-}" && [[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" ]]; then
+        local logf rc=0 color=""
+        logf="$(omk_log_path "$(date +%Y%m%d-%H%M%S)" "$@")"
+        [[ ! -t 1 ]] || color=1
+        OMK_LOG_ACTIVE=1 OMK_FORCE_COLOR="$color" omk_log_run "$logf" bash "$SCRIPT_PATH" "$@" || rc=$?
+        log_info "실행 로그: $logf"
+        exit "$rc"
+    fi
     omk_docker_host
     local group="${1:-}"; shift || true
     case "$group" in

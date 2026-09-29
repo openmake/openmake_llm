@@ -483,6 +483,7 @@ omk env status online
 | `OMK_DEFAULT_MODEL_HF` / `_NAME` / `_CTX` | `Qwen/Qwen3-1.7B-GGUF:Q8_0` / `qwen3-1.7b` / `16384` | 기본 모델 — 준 값은 `~/.openmake/llamacpp/model.conf` 에 기억된다 |
 | `OMK_DGX_MODEL` | `retired-chat-model` | `--dgx-host` 일 때 앱의 기본 모델 이름 |
 | `OMK_DEV_LLM` / `OMK_DEV_BENCH` | 자동 탐지 | dev 작업 클론 위치 |
+| `OMK_LOG` | 켜짐 | 설치·갱신·리셋(`env install`·`env update`·`env reset`·`dev setup`·`dev reset`)의 출력을 `~/.openmake/logs/omk/<시각>-<명령>[-<환경>].log` 에도 남긴다. 끄려면 `off` |
 | `OMK_VERIFY_PUSH_URL` | `origin` | `omk env verify` 가 확인 기록을 push 할 원격 |
 | `OMK_RESTORE_ENV_FROM` | — | `reset --keep-env` 가 남긴 `.env` 백업 디렉터리 — 설치 전에 되돌린다 |
 | `OMK_FORCE_FOREIGN` | — | `1` 이면 소유권 가드를 끈다 |
