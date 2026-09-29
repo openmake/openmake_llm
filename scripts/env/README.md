@@ -5,13 +5,15 @@
 `openmake_llm` 을 세 환경으로 나눠 운영한다(`openmake_bench` 는 add-on — `--bench` 로 고른 환경에만 붙는다). 환경은 서로 **env 파일·docker·PM2 가 분리**되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 `scripts/env/omk.sh` 하나다.
 
 ```
-feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   staging-chat.<도메인>
-                                           │                     (기능 확인 → `omk env verify staging` 으로 확인한 커밋 기록)
-                                           └──(release-please 릴리스 직후) 사람이 `omk env update online`──▶ ~/.openmake/online   chat.<도메인>
-                                                                 (릴리스 게이트 → 스모크만)
+feature/<주제> ──머지──▶ dev ──PR(일반 머지 · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   staging-chat.<도메인>
+                                                            │                     (기능 확인 → `omk env verify staging` 으로 확인한 커밋 기록)
+                                                            └──(release-please 릴리스 직후) 사람이 `omk env update online`──▶ ~/.openmake/online   chat.<도메인>
+                                                                                  (릴리스 게이트 → 스모크만)
 ```
 
-장수 브랜치는 **`main` 하나**다. `dev`·`staging`·`online` 은 브랜치가 아니라 **환경 이름**이다 — staging 은 main 최신을, online 은 릴리스 직후의 main 을 사람이 올린다. 무거운 검증은 GitHub 러너의 CI 와 staging 에서 하고, online 에서는 스모크만 한다.
+장수 브랜치는 **`main` 과 `dev` 둘**이다. `dev` 는 `feature/*` 가 모이는 개발용 브랜치이고, `main` 은 staging·릴리스가 따르는 브랜치다.
+**브랜치 `dev` 와 환경 `dev` 는 이름만 같다** — 환경 `dev`·`staging`·`online` 은 브랜치가 아니라 설치본의 이름이고, 환경 `dev` 는 브랜치 `dev` 가 아니라
+`--ref` 로 준 `feature/*` 를 올린다. staging 은 main 최신을, online 은 릴리스 직후의 main 을 사람이 올린다. 무거운 검증은 GitHub 러너의 CI 와 staging 에서 하고, online 에서는 스모크만 한다.
 
 **online 과 외부 설치는 main 이 아니라 최신 릴리스 태그를 따른다.** main 은 공개 저장소이지만 개발이 모이는 곳이다 — staging 에서 확인하기
 전의 main 을 운영이나 외부 설치자가 받으면 안 된다. `omk env install online` 의 기본 ref 는 `release`(가장 높은 `vX.Y.Z` 태그)이고,
@@ -21,9 +23,10 @@ bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm �
 올리면서 bench 도 붙일 때는 `--bench --bench-ref main` 으로 준다(같은 이름의 브랜치가 없으면 bench 클론에서 설치가 멈춘다).
 
 **PR 을 시험하는 곳은 dev 다** — 머지 전에 `omk env install dev --ref <브랜치>`(또는 임시 환경 `omk env install pr-123 --ref <브랜치>`)로
-실제 설치를 확인하고, GitHub CI 가 같은 PR 을 검사한다. staging 은 PR 이 아니라 **머지된 main** 을 본다(여러 PR 이 합쳐진 결과, update·마이그레이션 경로).
+실제 설치를 확인한다. staging 은 PR 이 아니라 **머지된 main** 을 본다(여러 PR 이 합쳐진 결과, update·마이그레이션 경로).
 
-두 리포 모두 같은 브랜치 모델을 쓴다. CI 는 `main` 의 push/PR 에서 돈다.
+**CI 는 `main` 의 push/PR 에서만 돈다** — `feature/*` 를 `dev` 에 합칠 때는 돌지 않는다. 그래서 `dev` 에 합치기 전의 확인은 로컬 테스트와
+환경 dev 설치가 전부이고, 자동 검사는 `dev` 를 `main` 으로 올리는 PR 에서 처음 돈다. `openmake_bench` 는 `dev` 브랜치가 없다 — `main` 에서 따서 `main` 으로 합친다.
 
 ## 환경 규칙
 
@@ -55,9 +58,10 @@ bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm �
 
 | # | 어디서 | 무엇을 | 명령 |
 |---|---|---|---|
-| ① | 작업 클론 | main 에서 브랜치를 따 수정 → push | `git switch -c feature/<주제> origin/main` … `git push -u origin feature/<주제>` |
+| ① | 작업 클론 | 브랜치 `dev` 에서 브랜치를 따 수정 → 로컬 테스트 → push | `git switch -c feature/<주제> origin/dev` … `git push -u origin feature/<주제>` |
 | ② | **dev** | 그 브랜치가 실제로 설치되고 도는지 확인 | `omk env reset dev` → `omk env install dev --ref feature/<주제> --tailscale` (수정분만: `omk env update dev`) |
-| ③ | GitHub | PR → CI → 리뷰 → squash 머지 | `gh pr create` |
+| ③ | 작업 클론 · GitHub | 브랜치 `dev` 에 합친다 (일반 머지 · CI 없음) | `git switch dev && git merge --no-ff feature/<주제> && git push` 또는 `gh pr create --base dev` |
+| ③′ | GitHub | `dev` → `main` PR → CI → 리뷰 → **일반 머지** | `gh pr create --base main --head dev` |
 | ④ | **staging** | 머지된 main 을 기존 데이터 위에서 update 로 확인 | `omk env update staging` |
 | ⑤ | **staging** | 확인을 마친 커밋을 기록 | `omk env verify staging` |
 | ⑥ | GitHub | release-please 의 릴리스 PR 머지 → `vX.Y.Z` 태그 (⑤ 뒤에 main 에 머지된 것이 없을 때) | 릴리스 PR 머지 |
@@ -65,6 +69,9 @@ bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm �
 
 배포는 전부 **수동**이다 — 머지·릴리스만으로는 어떤 환경도 바뀌지 않는다. 앞 단계를 통과하기 전에는 다음 단계로 가지 않는다
 (dev 통과 전 머지 금지, staging 통과 전 릴리스 금지).
+
+`dev` 를 `main` 으로 올릴 때는 squash 하지 않는다 — squash 는 `dev` 와 `main` 의 연결을 끊어, 다음에 올릴 때마다 이미 올린 변경이 충돌한다.
+커밋 제목은 `feat(…):` · `fix(…):` 형식을 지킨다 — 일반 머지라 `dev` 의 커밋 제목이 그대로 `main` 에 들어가고, release-please 가 그것을 CHANGELOG 에 쓴다.
 
 ### dev — "내 브랜치가 실제 환경에서 도는가"
 
@@ -456,7 +463,7 @@ scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.en
 둘은 용도가 다르다: `omk dev up` 은 고치면서 바로 보는 핫 리로드, `omk env install dev --ref …` 는 "실제로 설치해도 도는가".
 예전에 `dev` 이름으로 준비한 작업 클론은 그대로 동작하지만 환경 dev 와 겹친다 — `omk dev reset` 이 이름을 `local` 로 옮겨 준다(그 뒤 `omk dev setup`).
 
-흐름: 클론 → 개발 → 주제별 `feature/*` 브랜치 → 테스트(`npm test`, `npm run lint`, `bash scripts/env/omk.test.sh`) → 원격 `feature/*` push → `main` 으로 PR.
+흐름: 클론 → 개발 → 주제별 `feature/*` 브랜치 → 테스트(`npm test`, `npm run lint`, `bash scripts/env/omk.test.sh`) → 원격 `feature/*` push → 환경 dev 에서 확인 → 브랜치 `dev` 에 합친다([개발에서 배포까지](#개발에서-배포까지--환경별로-할-것--하지-말-것)).
 
 ## 프록시와 도메인
 

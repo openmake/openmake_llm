@@ -163,12 +163,12 @@ Homebrew 의 기본 node 가 다른 버전이면 `export PATH="/opt/homebrew/opt
 
 ## 브랜치 운영
 
-`dev` 는 계속 쓰는 개발용 브랜치다(2026-09-29 결정). [README.md](README.md) 는 아직 "장수 브랜치는 `main` 하나"라고 적고 있다.
+`dev` 는 계속 쓰는 개발용 브랜치다(2026-09-29 결정). [README.md](README.md) 의 브랜치 설명은 여기에 맞춰 고쳤다.
 
 | 정해진 것 | 정해지지 않은 것 |
 |---|---|
-| 작업 기준은 `origin/dev` | CI(`ci.yml`)는 `main` 의 push/PR 에서만 돈다 — `dev` 로 가는 PR 은 검사되지 않는다 |
-| `dev` → `main` 은 squash 가 아니라 **일반 머지**로 올린다(squash 는 `dev` 와 `main` 의 연결을 끊어 올릴 때마다 충돌한다) | README 의 브랜치 설명 |
+| 작업 기준은 `origin/dev` | CI(`ci.yml`)는 `main` 의 push/PR 에서만 돈다 — `dev` 로 가는 머지는 검사되지 않는다. 브랜치 `dev` 는 보호 설정도 없다 |
+| `dev` → `main` 은 squash 가 아니라 **일반 머지**로 올린다(squash 는 `dev` 와 `main` 의 연결을 끊어 올릴 때마다 충돌한다) | `ios.yml` · `desktop-native.yml` 은 없는 브랜치 `develop` 을 가리킨다 — `dev` 에서 돌지 않는다 |
 | 커밋 제목은 `feat(…):` · `fix(…):` 형식을 지킨다 — release-please 가 그대로 CHANGELOG 에 쓴다 | |
 
 이 브랜치를 `dev` 에 합치면 `feat` 커밋이 있어 다음 릴리스는 minor 가 올라간다.

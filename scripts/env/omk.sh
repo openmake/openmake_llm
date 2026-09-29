@@ -192,7 +192,7 @@ bench_dir()  { printf '%s/%s/bench' "$OMK_ROOT" "$1"; }
 logs_dir()   { printf '%s/%s/logs' "$OMK_ROOT" "$1"; }
 proxy_dir()  { printf '%s/caddy' "$OMK_ROOT"; }
 env_suffix() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf '' || printf -- '-%s' "$1"; }
-# 기본 ref — 장수 브랜치는 main 하나다. staging 은 main HEAD 를, dev 는 --ref 로 feature/* 를 따른다.
+# 기본 ref — 환경이 따르는 브랜치는 main 이다(개발용 브랜치 dev 는 환경이 따르지 않는다). staging 은 main HEAD 를, 환경 dev 는 --ref 로 feature/* 를 따른다.
 # online(기본 인스턴스)은 **최신 릴리스 태그**를 따른다('release') — main 은 개발이 모이는 곳이고, staging 에서 확인하기 전의
 # main 을 운영·외부 설치자가 받지 않게 한다. 어느 환경이든 --ref release 로 같은 방식을 고를 수 있다.
 env_default_ref() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf 'release' || printf 'main'; }
