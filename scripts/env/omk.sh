@@ -148,6 +148,7 @@ platform_guard() {
 }
 # macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다.
 # 사용자의 기본 docker(Docker Desktop 등)는 건드리지 않는다. 이미 정해 둔 DOCKER_HOST 는 존중한다.
+# shellcheck disable=SC2120  # 인자는 omk.test.sh 가 준다 — 이 파일 안에서는 인자 없이 부른다
 omk_docker_host() { # [$1=uname -s] [$2=홈] — 인자는 테스트용
     local os="${1:-$(uname -s)}" sock="${2:-$HOME}/.colima/openmake/docker.sock"
     [[ "$os" == "Darwin" && -z "${DOCKER_HOST:-}" && -S "$sock" ]] || return 0
