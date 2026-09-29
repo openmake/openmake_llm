@@ -92,6 +92,14 @@ ensure_docker() {
         log_info "--skip-docker — PostgreSQL/Redis 는 직접 운영 중이라고 가정합니다."
         return 0
     fi
+    # 이미 동작하는 Docker(Colima·OrbStack 등)가 있으면 그대로 쓴다 — Docker Desktop 을 겹쳐 깔지 않는다.
+    # 재부팅 후 자동 기동은 그 Docker 의 설정을 따른다.
+    if has docker && docker info >/dev/null 2>&1; then
+        docker compose version >/dev/null 2>&1 || die "docker compose(v2)를 찾을 수 없습니다."
+        log_ok "기존 Docker 사용 — $(docker --version) / compose $(docker compose version --short 2>/dev/null)"
+        [[ -d "$DOCKER_APP" ]] && enable_docker_autostart
+        return 0
+    fi
     [[ -d "$DOCKER_APP" ]] || install_docker_desktop
     has docker || docker_path_fallback || die "docker CLI 를 찾을 수 없습니다 — 새 터미널에서 재실행하세요."
     wait_docker_daemon
