@@ -309,6 +309,11 @@ macOS 의 openmake 는 **자기 Colima VM**(프로필 `openmake`)에서만 컨�
 
 Linux·WSL2 는 지금처럼 Docker Engine 을 쓴다.
 
+**파일 공유의 1초 지연.** Colima(virtiofs)는 컨테이너가 방금 본 파일을 호스트가 덮어쓰면 약 1초 동안 예전 크기로 읽는다
+(연속 20회 중 18회 오독 — 2026-09-29 실측). 그래서 Colima 를 쓰는 호스트에서는 앱이 workspace 파일을 **컨테이너 안에서** 쓰고
+(`TASK_SANDBOX_WRITE_VIA_CONTAINER` — 접속처가 Colima 면 자동으로 켜진다), 쓰고 곧바로 실행하는 임시 파일은 호출마다 새 이름으로 만든다.
+workspace 를 밖에서 직접 고치는 도구를 붙일 때는 같은 점을 고려한다.
+
 개발 서버(`omk dev up`)에서 작업 샌드박스를 직접 켤 때는 `.env` 의 `TASK_SANDBOX_ROOT` 를 홈 아래 경로로 둔다 —
 Colima 는 홈 디렉터리만 VM 에 공유해, 기본값(`/tmp/…`)은 컨테이너에서 보이지 않는다.
 

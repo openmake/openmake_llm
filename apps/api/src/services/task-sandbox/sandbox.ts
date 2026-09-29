@@ -86,6 +86,14 @@ export function buildBrowserRunArgs(
 }
 
 /**
+ * PURE: 컨테이너 안에서 파일을 쓰는 `docker exec` 인자 (유닛테스트 대상). 내용은 stdin 으로 넘긴다.
+ * 경로는 셸 문자열에 넣지 않고 위치 인자($1)로 넘긴다 — 공백·메타문자가 있어도 명령으로 해석되지 않는다.
+ */
+export function buildWriteArgs(containerName: string, containerPath: string): string[] {
+    return ['exec', '-i', containerName, 'sh', '-c', 'mkdir -p "$(dirname "$1")" && cat > "$1"', 'sh', containerPath];
+}
+
+/**
  * PURE: workspace 내부로만 해석되는 안전 경로 반환 (유닛테스트 대상).
  * `..`/절대경로 표기 탈출을 차단하는 **어휘적(1차)** 가드 — 심링크는 해석하지 않으므로
  * 실제 파일 I/O 전에는 반드시 safeRealWorkspacePath 로 실경로까지 검증할 것.
@@ -155,7 +163,7 @@ export async function safeRealWorkspacePath(hostWorkdir: string, userPath: strin
 function runProcess(
     dockerPath: string,
     args: string[],
-    opts: { timeoutMs: number; outputCap: number; input?: string },
+    opts: { timeoutMs: number; outputCap: number; input?: string | Buffer },
 ): Promise<ExecResult> {
     return new Promise((resolvePromise) => {
         const started = Date.now();
@@ -198,6 +206,9 @@ function runProcess(
             });
         });
 
+        // 자식이 stdin 을 다 읽기 전에 끝나면 EPIPE 가 난다 — 결과는 종료 코드로 판정하므로 여기서는 삼킨다
+        // (처리하지 않으면 'error' 이벤트가 API 프로세스를 죽인다).
+        child.stdin.on('error', () => { /* 종료 코드로 판정 */ });
         if (opts.input !== undefined) { child.stdin.write(opts.input); }
         child.stdin.end();
     });
@@ -313,6 +324,15 @@ export class TaskSandbox implements TaskExecutor {
         const size = await dirSizeBytes(this.hostWorkdir, this.cfg.workspaceQuota + 1);
         if (size + Buffer.byteLength(content) > this.cfg.workspaceQuota) {
             throw new Error(`workspace 디스크 쿼터 초과(상한 ${Math.round(this.cfg.workspaceQuota / 1024 / 1024)}MB) — 불필요한 파일을 삭제한 후 다시 시도하세요.`);
+        }
+        if (this.created && this.cfg.writeViaContainer) {
+            // 컨테이너 안에서 쓴다 — 호스트가 쓰면 컨테이너가 약 1초 동안 예전 크기로 읽는다(Colima virtiofs).
+            // 경로 검사는 위에서 호스트 실경로로 마쳤다. 여기서는 같은 파일의 컨테이너 쪽 경로만 만든다.
+            const rel = relative(await realpath(resolve(this.hostWorkdir)), abs).split(sep).join('/');
+            const r = await runProcess(this.cfg.dockerPath, buildWriteArgs(this.containerName, `${WORKSPACE}/${rel}`),
+                { timeoutMs: this.cfg.execTimeoutMs, outputCap: 4096, input: content });
+            if (r.exitCode === 0) return;
+            logger.warn(`[${this.taskId}] 컨테이너 쓰기 실패 → 호스트에서 씁니다 (${relPath}): ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
         }
         await mkdir(dirname(abs), { recursive: true });
         await fsWriteFile(abs, content);

@@ -3,22 +3,34 @@ import type { TaskSandbox, ExecResult } from './sandbox';
 import type { MCPToolResult } from '../../tool-contract/types';
 
 /** 인메모리 가짜 샌드박스 — docker 없이 도구 로직만 검증. */
-function fakeSandbox({ browserEnabled = true }: { browserEnabled?: boolean } = {}): TaskSandbox & { files: Map<string, string>; lastCmd: string; lastBrowser: string } {
+type FakeSandbox = TaskSandbox & { files: Map<string, string>; lastCmd: string; lastBrowser: string; lastBrowserSpec: string; ranCode: string };
+function fakeSandbox({ browserEnabled = true }: { browserEnabled?: boolean } = {}): FakeSandbox {
     const files = new Map<string, string>();
     const ok = (stdout: string): ExecResult => ({ stdout, stderr: '', exitCode: 0, truncated: false, timedOut: false, durationMs: 1 });
     const sb = {
         files,
         lastCmd: '',
         lastBrowser: '',
+        lastBrowserSpec: '',   // 러너가 실행된 시점에 그 파일에 들어 있던 내용
+        ranCode: '',           // `python3 <파일>` 이 실행된 시점에 그 파일에 들어 있던 내용
         get isBrowserEnabled() { return browserEnabled; },
-        async exec(cmd: string) { (sb as { lastCmd: string }).lastCmd = cmd; return ok(`ran:${cmd}`); },
-        async runBrowser(rel: string) { (sb as { lastBrowser: string }).lastBrowser = rel; return ok('browser-ran'); },
+        async exec(cmd: string) {
+            (sb as { lastCmd: string }).lastCmd = cmd;
+            const m = /^python3 (\S+)$/.exec(cmd);
+            if (m) (sb as { ranCode: string }).ranCode = files.get(m[1]) ?? '';
+            return ok(`ran:${cmd}`);
+        },
+        async runBrowser(rel: string) {
+            (sb as { lastBrowser: string }).lastBrowser = rel;
+            (sb as { lastBrowserSpec: string }).lastBrowserSpec = files.get(rel) ?? '';
+            return ok('browser-ran');
+        },
         async writeFile(p: string, c: string) { files.set(p, c); },
         async readFile(p: string) { if (!files.has(p)) throw new Error('ENOENT'); return files.get(p) as string; },
         async listDir() { return [...files.keys()]; },
         async deleteFile(p: string) { files.delete(p); },
     };
-    return sb as unknown as TaskSandbox & { files: Map<string, string>; lastCmd: string; lastBrowser: string };
+    return sb as unknown as FakeSandbox;
 }
 
 function byName(tools: ReturnType<typeof createTaskTools>, name: string) {
@@ -76,7 +88,48 @@ describe('task-sandbox tools', () => {
         const sb = fakeSandbox();
         await byName(createTaskTools(sb), 'python_execute').handler({ code: 'print(1)' });
         expect(sb.files.get('_exec.py')).toBe('print(1)');
-        expect(sb.lastCmd).toBe('python3 _exec.py');
+        expect(sb.ranCode).toBe('print(1)');
+    });
+
+    // 호스트가 쓴 파일을 컨테이너가 곧바로 읽는다. 컨테이너가 방금 본 파일을 덮어쓰면 VM 의 파일 공유(virtiofs)가
+    // 약 1초 동안 예전 크기로 읽는다(2026-09-29 Colima 실측: 'node-written…' 이 'no' 로 읽혔다) — 실행은 매번 새 이름으로 한다.
+    describe('호스트가 쓰고 곧바로 실행하는 파일은 호출마다 새 이름', () => {
+        it('python_execute: 실행 파일 이름이 호출마다 다르고, 끝나면 지운다', async () => {
+            const sb = fakeSandbox();
+            const py = byName(createTaskTools(sb), 'python_execute');
+            await py.handler({ code: 'print(1)' });
+            const first = sb.lastCmd;
+            await py.handler({ code: 'print(22)' });
+            expect(first).toMatch(/^python3 \.run-[0-9a-f]{8}\.py$/);
+            expect(sb.lastCmd).toMatch(/^python3 \.run-[0-9a-f]{8}\.py$/);
+            expect(sb.lastCmd).not.toBe(first);
+            expect(sb.ranCode).toBe('print(22)');
+            expect([...sb.files.keys()]).toEqual(['_exec.py']);   // 임시 파일은 남지 않고, 산출물은 그대로
+            expect(sb.files.get('_exec.py')).toBe('print(22)');
+        });
+        it('python_execute: 하위 디렉터리의 파일은 같은 디렉터리에서 실행한다 (상대 import 유지)', async () => {
+            const sb = fakeSandbox();
+            await byName(createTaskTools(sb), 'python_execute').handler({ code: 'x=1', filename: 'src/job.py' });
+            expect(sb.lastCmd).toMatch(/^python3 src\/\.run-[0-9a-f]{8}\.py$/);
+            expect(sb.files.get('src/job.py')).toBe('x=1');
+        });
+        it('python_execute: 출력에는 임시 이름 대신 요청한 파일 이름을 보여 준다', async () => {
+            const sb = fakeSandbox();
+            const r = await byName(createTaskTools(sb), 'python_execute').handler({ code: 'x=1', filename: 'job.py' });
+            expect(txt(r)).toContain('ran:python3 job.py');
+            expect(txt(r)).not.toMatch(/\.run-[0-9a-f]{8}/);
+        });
+        it('browser: 액션 파일 이름이 호출마다 다르고, 끝나면 지운다', async () => {
+            const sb = fakeSandbox();
+            const br = byName(createTaskTools(sb), 'browser');
+            await br.handler({ actions: [{ type: 'goto', url: 'https://a.example' }] });
+            const first = sb.lastBrowser;
+            await br.handler({ actions: [{ type: 'goto', url: 'https://b.example' }] });
+            expect(first).toMatch(/^\.browser-actions-[0-9a-f]{8}\.json$/);
+            expect(sb.lastBrowser).not.toBe(first);
+            expect(JSON.parse(sb.lastBrowserSpec).actions[0].url).toBe('https://b.example');
+            expect([...sb.files.keys()]).toEqual([]);
+        });
     });
 
     it('python_execute filename 셸 메타문자·인자 주입 거절', async () => {
@@ -188,10 +241,10 @@ describe('task-sandbox tools', () => {
                 actions: [{ type: 'goto', url: 'https://example.com' }, { type: 'extractText' }],
                 allowlist: ['example.com'],
             });
-            const spec = JSON.parse(sb.files.get('.browser-actions.json') as string);
+            const spec = JSON.parse(sb.lastBrowserSpec);
             expect(spec.actions).toHaveLength(2);
             expect(spec.allowlist).toEqual(['example.com']);
-            expect(sb.lastBrowser).toBe('.browser-actions.json'); // 별도 일회성 컨테이너로 실행
+            expect(sb.lastBrowser).toMatch(/^\.browser-actions-[0-9a-f]{8}\.json$/); // 별도 일회성 컨테이너로 실행
             expect(txt(r)).toContain('browser-ran');
         });
         it('빈 actions 거절', async () => {
@@ -201,7 +254,7 @@ describe('task-sandbox tools', () => {
         it('단일 액션 객체는 배열로 감싼다', async () => {
             const sb = fakeSandbox();
             await byName(createTaskTools(sb), 'browser').handler({ actions: { type: 'goto', url: 'https://example.com' } });
-            const spec = JSON.parse(sb.files.get('.browser-actions.json') as string);
+            const spec = JSON.parse(sb.lastBrowserSpec);
             expect(spec.actions).toEqual([{ type: 'goto', url: 'https://example.com' }]);
         });
     });
