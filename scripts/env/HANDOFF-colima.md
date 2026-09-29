@@ -152,7 +152,7 @@ LaunchAgent 를 먼저 지운다 — 남아 있으면 다음 로그인 때 빈 V
 ## 테스트
 
 ```bash
-bash scripts/env/omk.test.sh                  # 202
+bash scripts/env/omk.test.sh                  # 205
 bash scripts/setup/mac-toolchain.test.sh      # 35 — scripts/setup/mac/ 안에 두지 않는다(설치기가 그 디렉터리의 *.sh 를 전부 source 한다)
 npm run build:packages
 npm test --workspace=apps/api -- src/services/task-sandbox src/addons/mcp-runtime
@@ -181,11 +181,12 @@ Homebrew 의 기본 node 가 다른 버전이면 `export PATH="/opt/homebrew/opt
 | 환경 dev 는 **브랜치 `dev` 를 따른다.** `feature/*` 를 브랜치 `dev` 에 합친 **뒤에** `omk env update dev` 로 확인하고, 통과하면 `dev` 를 `main` 으로 올린다 | `README.md` 의 흐름도·단계표·dev 할 것/하지 말 것 |
 | `omk env install dev` 의 기본 ref 가 `main` 에서 `dev` 로 바뀐다. 그때 bench 는 `main` 을 쓴다(브랜치 `dev` 가 없다) | `omk.sh` `env_default_ref` · `cmd_env_install`, `omk.test.sh` |
 | 머지 전에 따로 볼 브랜치는 임시 환경에 올린다 (`omk env install pr-123 --ref …`) | `README.md` |
+| 브랜치 `dev` 가 없는 저장소(포크 등)에서 `omk env install dev` 는 멈추고 `--ref main` 을 안내한다. 다른 브랜치로 넘어가지 않는다 | `omk.sh` `remote_has_branch` |
 | `feature/*` 는 **PR 로만** 브랜치 `dev` 에 합친다. CI 가 `dev` 의 push/PR 에서도 돈다 | `.github/workflows/ci.yml` · `README.md` |
 | `ios.yml` · `desktop-native.yml` 이 없는 브랜치 `develop` 을 가리키던 것을 `dev` 로 | `.github/workflows/` |
 | `main` 의 CI 가 의존성 감사(Gate 0.7)에서 실패하고 있었다 — `fast-uri` 3.1.6 의 high 권고 2건. 3.1.8 로 올렸다(lockfile 만) | `package-lock.json` |
 
-확인한 것(2026-09-30, 같은 Mac): `omk.test.sh` 202 통과, `npm run audit:gate` 통과, `omk dev setup` → `omk dev up` 뒤 `/api/health` 의 llm 이 online.
+확인한 것(2026-09-30, 같은 Mac): `omk.test.sh` 205 통과, `npm run audit:gate` 통과, `omk dev setup` → `omk dev up` 뒤 `/api/health` 의 llm 이 online.
 확인하지 못한 것: 워크플로 수정(GitHub 에서만 돈다), `omk env install dev` 가 브랜치 `dev` 를 받는 것(이 수정분이 `dev` 에 들어간 뒤에 의미가 있다).
 
 이 브랜치 자체는 아직 브랜치 `dev` 에 합치기 전이다 — 위 "남은 검증"의 1 은 환경 dev 가 아니라 임시 환경으로 해도 된다

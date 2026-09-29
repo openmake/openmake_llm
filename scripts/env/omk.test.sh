@@ -34,6 +34,11 @@ eq "ref staging"    "$(env_default_ref staging)" "main"
 eq "ref online"     "$(env_default_ref online)"  "release"
 eq "ref dev"        "$(env_default_ref dev)"     "dev"
 eq "ref 그 밖의 이름" "$(env_default_ref qa-1)"    "main"
+# 기본값으로 정해진 브랜치가 저장소에 있는가 — 로컬 저장소로 본다(네트워크 없음)
+RB="$TMP/rb"; git init -q "$RB" && git -C "$RB" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m x && git -C "$RB" branch -M main
+eq "remote branch: 있음"        "$(remote_has_branch "$RB" main >/dev/null 2>&1; echo $?)" "0"
+eq "remote branch: 없음"        "$(remote_has_branch "$RB" dev >/dev/null 2>&1; echo $?)"  "1"
+eq "remote branch: 읽지 못함"   "$(remote_has_branch "$TMP/없는-저장소" dev >/dev/null 2>&1; echo $?)" "2"
 ok "validate rejects local" '! ( validate_env local ) >/dev/null 2>&1'
 DV="$TMP/devclone"; mkdir -p "$DV"
 # shellcheck disable=SC2034  # dev_instance 가 읽는다

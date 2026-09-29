@@ -203,6 +203,10 @@ env_default_ref() {
         *)                  printf 'main' ;;
     esac
 }
+remote_has_branch() { # $1=리포 URL $2=브랜치 → 0 있음 / 1 없음 / 2 원격을 읽지 못함
+    local out; out="$(git ls-remote --heads "$1" "refs/heads/$2" 2>/dev/null)" || return 2
+    [[ -n "$out" ]]
+}
 latest_release_tag() { # $1=리포 URL 또는 클론 경로 → vX.Y.Z 중 가장 높은 것
     git ls-remote --tags --refs "$1" 2>/dev/null | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
 }
@@ -1349,6 +1353,7 @@ cmd_env_install() {
             *) usage_die "알 수 없는 옵션: $1" ;;
         esac; shift
     done
+    local ref_default=0; [[ -n "$ref" ]] || ref_default=1
     ref="${ref:-$(env_default_ref "$env")}"
     local track="" ; if [[ "$ref" == "release" ]]; then
         track="release"; ref="$(latest_release_tag "$OMK_REPO_URL")"; [[ -n "$ref" ]] || die "릴리스 태그(vX.Y.Z)를 찾을 수 없습니다: $OMK_REPO_URL — --ref main 으로 설치하세요"
@@ -1370,6 +1375,13 @@ cmd_env_install() {
     log_step "환경 설치: $env  (ref $ref · $(env_dir "$env"))"
     assert_env_owned "$env"
     ensure_git
+    # 기본값으로 정해진 브랜치 dev 가 저장소에 없으면(포크 등) clone 의 'Remote branch not found' 만 남는다 — 무엇을 하면
+    # 되는지 알려준다. 다른 브랜치로 넘어가지는 않는다(요청한 것과 다른 것을 설치하지 않는다). 이미 클론이 있는 환경은
+    # 그 클론을 쓰므로 보지 않고, 원격을 읽지 못한 것(오프라인 등)은 clone 이 알려준다.
+    if [[ $ref_default -eq 1 && "$ref" == "dev" && ! -d "$ldir/.git" ]]; then
+        local has=0; remote_has_branch "$OMK_REPO_URL" dev || has=$?
+        [[ $has -ne 1 ]] || die "브랜치 dev 를 찾을 수 없습니다: $OMK_REPO_URL — 환경 dev 는 브랜치 dev 를 따릅니다. 브랜치 dev 가 없는 저장소는 --ref main 으로 설치하세요"
+    fi
     mkdir -p "$(env_dir "$env")" "$(logs_dir "$env")"
 
     # 1) openmake_llm — 툴체인·.env·DB·마이그레이션·빌드·PM2 전부 install.sh 가 한다.

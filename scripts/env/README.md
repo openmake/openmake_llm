@@ -46,7 +46,7 @@ bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm �
 | | dev | staging | online |
 |---|---|---|---|
 | 위치 | `~/.openmake/dev/llm` | `~/.openmake/staging/llm` | `~/.openmake/online/llm` |
-| 따르는 것 | 브랜치 `dev` 최신 (다른 것을 올리려면 `--ref`) | `main` 최신 | **최신 릴리스 태그** (`release`) |
+| 따르는 것 | 브랜치 `dev` 최신 (브랜치 `dev` 가 없는 저장소는 `--ref main`) | `main` 최신 | **최신 릴리스 태그** (`release`) |
 | 인스턴스 | `dev` (이름 있음) | `staging` (이름 있음) | **기본(무접미사)** |
 | 포트 | install.sh 가 할당 | install.sh 가 할당 | **소스의 기본 포트** (52416 / 3000 / 5432 / 6379 / 9400 / 33000) |
 | PM2 | `openmake-{llm,next,litellm}-dev` | `openmake-{llm,next,litellm}-staging` | `openmake-{llm,next,litellm}` |
