@@ -144,6 +144,13 @@ platform_guard() {
             exit 1 ;;
     esac
 }
+# macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다.
+# 사용자의 기본 docker(Docker Desktop 등)는 건드리지 않는다. 이미 정해 둔 DOCKER_HOST 는 존중한다.
+omk_docker_host() { # [$1=uname -s] [$2=홈] — 인자는 테스트용
+    local os="${1:-$(uname -s)}" sock="${2:-$HOME}/.colima/openmake/docker.sock"
+    [[ "$os" == "Darwin" && -z "${DOCKER_HOST:-}" && -S "$sock" ]] || return 0
+    export DOCKER_HOST="unix://$sock"
+}
 
 # ── .env 읽기/쓰기 (source 하지 않는다 — 값의 공백/특수문자 안전) ──────────────
 dotenv_get() { # $1=file $2=key
@@ -1024,6 +1031,13 @@ litellm_line() { # $1=env $2=llm dir
 # 빌드 실패는 설치를 멈추지 않는다. 켜기/끄기 스위치(*_ENABLED)는 이미 값이 있으면 존중한다.
 runtime_image_tag()   { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf 'latest' || printf '%s' "$1"; }
 runtime_image_names() { local t; t="$(runtime_image_tag "$1")"; printf 'openmake-mcp-runtime:%s openmake-task-runtime:%s' "$t" "$t"; }
+# 작업 workspace 는 컨테이너에 bind mount 된다. 기본값(/tmp)은 재부팅 때 사라지고, macOS 의 Colima 는
+# 홈 디렉터리만 VM 에 공유해 /tmp 가 컨테이너에서 보이지 않는다 — 환경 디렉터리 안에 둔다.
+uses_colima() { [[ "${DOCKER_HOST:-}" == "unix://$HOME/.colima/openmake/docker.sock" ]]; }
+sandbox_root_ensure() { # $1=.env $2=env
+    dotenv_ensure "$1" TASK_SANDBOX_ROOT "$(env_dir "$2")/task-workspaces"
+    mkdir -p "$(dotenv_get "$1" TASK_SANDBOX_ROOT)"
+}
 RUNTIME_CHANGED=0
 runtime_images_ensure() { # $1=llm dir $2=env
     local ldir="$1" env="$2" envf="$1/.env" mcp task before after
@@ -1036,12 +1050,14 @@ runtime_images_ensure() { # $1=llm dir $2=env
         || { log_warn "$mcp 빌드 실패 — 건너뜁니다 (나중에 'omk env update $env')"; return 0; }
     docker build -q -t "$task" --build-arg "BASE_IMAGE=$mcp" "$ldir/infra/task-runtime" >/dev/null \
         || { log_warn "$task 빌드 실패 — 건너뜁니다 (나중에 'omk env update $env')"; return 0; }
-    before="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED)=' "$envf" 2>/dev/null | sort || true)"
+    before="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED|ROOT)=' "$envf" 2>/dev/null | sort || true)"
     dotenv_set "$envf" MCP_SANDBOX_IMAGE "$mcp";    dotenv_set "$envf" ARTIFACT_EXEC_IMAGE "$mcp"
     dotenv_set "$envf" TASK_SANDBOX_IMAGE "$task";  dotenv_set "$envf" ARTIFACT_EXPORT_IMAGE "$task"
     dotenv_ensure "$envf" MCP_SANDBOX_ENABLED true; dotenv_ensure "$envf" TASK_SANDBOX_ENABLED true
+    # 전용 Colima 를 쓰는 호스트만 — Linux·기존 설치본의 workspace 는 옮기지 않는다(진행 중인 작업 파일이 안 보이게 된다).
+    if uses_colima; then sandbox_root_ensure "$envf" "$env"; fi
     dotenv_ensure "$envf" ARTIFACT_EXPORT_ENABLED true   # 내보내기(PDF·DOCX 등)는 task-runtime 이미지에서 돈다 — 이미지가 있어야 켤 수 있다
-    after="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED)=' "$envf" | sort)"
+    after="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED|ROOT)=' "$envf" | sort)"
     [[ "$before" == "$after" ]] || RUNTIME_CHANGED=1
     log_ok "런타임 이미지 준비: $mcp · $task"
 }
@@ -1105,9 +1121,7 @@ ops_profile_apply() { # $1=llm dir $2=env
         grep -qE "^${key}=" "$envf" || { printf '%s\n' "$line" >> "$envf"; added=$((added + 1)); }
     done < "$prof"
     dotenv_set "$envf" OMK_OPS_PROFILE 1
-    # 기본값(/tmp)은 재부팅 때 사라진다 — 환경 디렉터리 안에 둔다.
-    dotenv_ensure "$envf" TASK_SANDBOX_ROOT "$(env_dir "$env")/task-workspaces"
-    mkdir -p "$(dotenv_get "$envf" TASK_SANDBOX_ROOT)"
+    sandbox_root_ensure "$envf" "$env"
     vapid_ensure "$envf"
     scraper_venv_ensure "$envf" "$env"
     [[ "$before" == "$(cksum < "$envf")" ]] || OPS_CHANGED=1
@@ -1318,6 +1332,7 @@ cmd_env_install() {
     # 빈 배열 확장은 bash 4.4 미만에서 set -u 에 걸린다 — ${arr[@]+"${arr[@]}"} 관용구로 피한다.
     ( cd "$ldir" && OMK_LOG_DIR="$(logs_dir "$env")" ./install.sh --yes --minimal ${suffix_flag[@]+"${suffix_flag[@]}"} \
         ${public_url:+--public-url "$public_url"} ${llm_args[@]+"${llm_args[@]}"} ) || die "install.sh 실패 ($env)"
+    omk_docker_host   # 첫 설치는 install.sh 가 방금 Colima 를 만들었다 — 이제 소켓이 있다
     dotenv_ensure "$ldir/.env" OMK_LOG_DIR "$(logs_dir "$env")"
     [[ -z "$track" ]] || dotenv_set "$ldir/.env" OMK_TRACK release
     [[ $gate -eq 0 ]] || dotenv_set "$ldir/.env" OMK_RELEASE_GATE 1
@@ -1686,6 +1701,7 @@ cmd_dev_setup() {
     # 이미 준비된 클론은 .env 의 이름을 그대로 쓴다(install.sh 는 .env 와 다른 --instance 를 거부한다).
     dev_warn_legacy
     ( cd "$DEV_LLM" && ./install.sh --yes --minimal --instance "$(dev_instance)" --skip-build --no-start ) || die "install.sh 실패"
+    omk_docker_host   # 첫 설치는 install.sh 가 방금 Colima 를 만들었다 — 이제 소켓이 있다
     load_toolchain "$DEV_LLM"
     dev_build_packages
     [[ $no_searxng -eq 1 ]] && dotenv_set "$DEV_LLM/.env" OMK_SEARXNG off
@@ -1782,6 +1798,7 @@ cmd_dev() {
 # ==============================================================================
 main() {
     platform_guard
+    omk_docker_host
     local group="${1:-}"; shift || true
     case "$group" in
         env)   cmd_env "$@" ;;

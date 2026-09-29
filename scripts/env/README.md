@@ -292,6 +292,63 @@ omk 를 직접 쓸 때도 같은 옵션을 줄 수 있다. **주지 않으면 �
 
 LiteLLM 버전은 `OMK_LITELLM_SPEC` 로 고정한다 — 설치 스크립트는 `litellm[proxy]==1.100.1`(1.102 지연 회귀로 운영이 고정한 버전)을 넘긴다.
 
+## Docker — macOS 는 전용 Colima
+
+macOS 의 openmake 는 **자기 Colima VM**(프로필 `openmake`)에서만 컨테이너를 돌린다. Docker Desktop 은
+로그인·약관·업데이트 창에서 사람을 기다리므로 서버에 맞지 않는다. Mac 에 Docker Desktop 이 있어도
+지우거나 설정을 바꾸지 않는다 — 터미널의 `docker` 는 계속 그쪽을 가리키고, openmake 만 Colima 를 쓴다.
+
+| | |
+|---|---|
+| 최소 사양 | Apple Silicon · RAM 16GB (Docker Desktop 을 함께 쓰면 32GB 권장) |
+| VM 크기 | 옵션 없이 설치하면 호스트에 맞춘다 — 메모리는 호스트의 절반(최대 8GB · 최소 2GB), CPU 는 코어 수(최대 4), 디스크 60GB. 직접 정하려면 처음 만들 때 `OMK_COLIMA_CPU`·`OMK_COLIMA_MEMORY`·`OMK_COLIMA_DISK` |
+| 접속 | `DOCKER_HOST=unix://$HOME/.colima/openmake/docker.sock` — omk·`openmake_llm.sh`·`uninstall.sh`·`db-backup.sh` 는 소켓이 있으면 스스로 설정하고, 앱은 `.env` 의 값을 쓴다 |
+| 자동 시작 | LaunchAgent `com.openmake.colima` (로그인 시). 로그는 `~/.openmake/logs/colima.log` |
+| 컨테이너 보기 | `omk env status <env>` 또는 `docker --context colima-openmake ps` (Docker Desktop 화면에는 나오지 않는다) |
+| VM 크기 바꾸기 | `colima stop --profile openmake` → `colima start --profile openmake --activate=false --memory 12` |
+
+Linux·WSL2 는 지금처럼 Docker Engine 을 쓴다.
+
+개발 서버(`omk dev up`)에서 작업 샌드박스를 직접 켤 때는 `.env` 의 `TASK_SANDBOX_ROOT` 를 홈 아래 경로로 둔다 —
+Colima 는 홈 디렉터리만 VM 에 공유해, 기본값(`/tmp/…`)은 컨테이너에서 보이지 않는다.
+
+### Docker Desktop 에서 옮기기
+
+이미 Docker Desktop(또는 다른 Docker)으로 운영 중인 호스트는 설치기를 다시 돌려도 옮기지 않는다 — DB 가 그쪽에 있다.
+**한 호스트는 한 Docker 만 쓴다** — 기본 Docker 에 `openmake[-<env>]-postgres` 컨테이너가 하나라도 남아 있으면 Colima 를 설치하지 않는다.
+
+옮기는 동안 **기본 Docker 는 켜 둔다**(꺼져 있으면 설치기가 컨테이너 유무를 볼 수 없어 멈춘다).
+`reset` 은 환경 디렉터리를 통째로 지운다 — DB 는 백업에서, `.env` 는 `--keep-env` 가 보존한 것에서 되살리고,
+그 밖에 남길 파일(업로드·생성 파일 등 `~/.openmake/<env>/llm` 아래의 것)은 먼저 다른 곳에 복사해 둔다.
+
+환경이 하나인 호스트:
+
+```bash
+omk env backup <env>                                   # 1. DB 백업 → ~/.openmake/backups/<env>/ (reset 에도 남는다)
+omk env reset <env> --keep-env --reinstall --yes       # 2. 정리 후 같은 .env 로 다시 설치 — 이제 Colima 로 간다
+cd ~/.openmake/<env>/llm && ./openmake_llm.sh db-restore ~/.openmake/backups/<env>/<백업 파일>   # 3. 복원
+```
+
+환경이 여럿인 호스트는 **전부 정리한 뒤에** 다시 설치한다:
+
+```bash
+omk env backup <env>                                   # 환경마다
+omk env reset <env> --keep-env --yes                   # 환경마다 — 끝에 보존한 .env 의 위치를 알려준다
+OMK_RESTORE_ENV_FROM="<그 위치>" omk env install <env>   # 환경마다 — .env 를 되살려야 암호화 키·비밀번호가 백업과 맞는다
+cd ~/.openmake/<env>/llm && ./openmake_llm.sh db-restore ~/.openmake/backups/<env>/<백업 파일>
+```
+
+`.env` 를 되살리지 않고 설치하면 암호화 키가 새로 만들어져, 복원한 DB 의 자격증명을 풀 수 없고 발급한 API 키가 통하지 않는다.
+
+### Colima 를 걷어낼 때
+
+```bash
+launchctl bootout gui/$(id -u)/com.openmake.colima; rm ~/Library/LaunchAgents/com.openmake.colima.plist
+colima delete --profile openmake        # VM 안의 컨테이너·볼륨(DB)·이미지가 모두 사라진다 — 먼저 백업
+```
+
+LaunchAgent 를 먼저 지운다 — 남아 있으면 다음 로그인 때 빈 VM 을 다시 만든다.
+
 ## 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리
 
 레포에는 Dockerfile(`infra/mcp-runtime` ~1GB, `infra/task-runtime` ~6GB)만 있고 이미지는 호스트에서 빌드해야 한다 —

@@ -316,5 +316,31 @@ ok "gate: 없는 태그 거부"             '! release_gate_check "$GC" v9.9.9'
 ok "enforce: force 기록"              "grep -q 'force-unverified v1.0.4' '$OMK_ROOT/gateenv/logs/release-gate.log'"
 ( release_gate_enforce gateenv "$GC" v1.0.1 0 ) >/dev/null 2>&1; eq "enforce: 확인된 릴리스 진행" "$?" "0"
 
+# ── docker 접속: macOS 의 전용 Colima (소켓이 있을 때만, 이미 정한 값은 존중) ──
+DH="$TMP/dh"; mkdir -p "$DH/.colima/openmake"
+eq "docker host: 소켓 없음"   "$( unset DOCKER_HOST; omk_docker_host Darwin "$DH"; echo "${DOCKER_HOST:-}" )" ""
+if python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])' "$DH/.colima/openmake/docker.sock" 2>/dev/null; then
+    eq "docker host: macOS + 소켓"  "$( unset DOCKER_HOST; omk_docker_host Darwin "$DH"; echo "${DOCKER_HOST:-}" )" "unix://$DH/.colima/openmake/docker.sock"
+    eq "docker host: Linux 는 그대로" "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "${DOCKER_HOST:-}" )" ""
+    eq "docker host: 정해 둔 값 존중" "$( DOCKER_HOST=tcp://x:1; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST" )" "tcp://x:1"
+    eq "docker host: 항상 0"        "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "$?" )" "0"
+else
+    FAIL=$((FAIL+1)); echo "FAIL docker host: 시험용 소켓을 만들지 못했다 (python3 없음 또는 경로가 너무 길다: $DH)"
+fi
+
+# ── 작업 workspace: 홈 아래(환경 디렉터리)로 — Colima 는 홈만 VM 에 공유한다 ──
+SR="$TMP/sr"; mkdir -p "$SR"; : > "$SR/.env"
+sandbox_root_ensure "$SR/.env" staging
+eq "sandbox root: 기록"        "$(dotenv_get "$SR/.env" TASK_SANDBOX_ROOT)" "$OMK_ROOT/staging/task-workspaces"
+ok "sandbox root: 디렉터리 생성" '[[ -d "$OMK_ROOT/staging/task-workspaces" ]]'
+printf 'TASK_SANDBOX_ROOT=%s\n' "$SR/custom" > "$SR/.env"; sandbox_root_ensure "$SR/.env" staging
+eq "sandbox root: 기존 값 존중"  "$(dotenv_get "$SR/.env" TASK_SANDBOX_ROOT)" "$SR/custom"
+ok "sandbox root: 그 값의 디렉터리" '[[ -d "$SR/custom" ]]'
+# 런타임 이미지 단계는 전용 Colima 를 쓰는 호스트에서만 workspace 를 옮긴다 — Linux·기존 설치본의 경로는 그대로
+eq "uses colima: 전용 소켓"   "$( DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"; uses_colima && echo y || echo n )" "y"
+eq "uses colima: 미설정"      "$( unset DOCKER_HOST; uses_colima && echo y || echo n )" "n"
+eq "uses colima: 다른 데몬"   "$( DOCKER_HOST=unix:///var/run/docker.sock; uses_colima && echo y || echo n )" "n"
+eq "uses colima: 다른 프로필" "$( DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"; uses_colima && echo y || echo n )" "n"
+
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]

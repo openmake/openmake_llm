@@ -53,6 +53,12 @@ readonly SCRIPT_DIR
 # shellcheck source=/dev/null
 [[ -f "$SCRIPT_DIR/.openmake/toolchain.env" ]] && . "$SCRIPT_DIR/.openmake/toolchain.env"
 
+# macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다
+# (scripts/env/omk.sh 의 omk_docker_host 와 같은 규칙). 이미 정해 둔 DOCKER_HOST 는 존중한다.
+if [[ "$(uname -s)" == "Darwin" && -z "${DOCKER_HOST:-}" && -S "$HOME/.colima/openmake/docker.sock" ]]; then
+    export DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"
+fi
+
 # .env 에서 키 하나만 추출한다 (전체 source 안 함 — 값에 공백/특수문자가 있어도 안전).
 # `|| true` 필수: 키가 없으면 grep 이 1 로 끝나고 pipefail+set -e 가 스크립트를 즉시 종료시킨다.
 env_line() {

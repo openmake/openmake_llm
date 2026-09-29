@@ -53,5 +53,7 @@ setup_env() {
         grep -qE '^COMPOSE_PROJECT_NAME=' "$ENV_FILE" || set_env COMPOSE_PROJECT_NAME "openmake-$INSTANCE"
     fi
     [[ -z "$PUBLIC_URL" ]] || apply_public_url "$PUBLIC_URL"
+    # 앱이 띄우는 docker 가 같은 데몬을 가리키게 한다 (ensure_docker 가 Colima 를 골랐을 때만 값이 있다).
+    [[ -z "${DOCKER_HOST:-}" ]] || set_env DOCKER_HOST "$DOCKER_HOST"
     log_ok ".env 준비 완료 ($ENV_FILE)"
 }

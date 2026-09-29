@@ -6,7 +6,7 @@
 # ==============================================================================
 # 자동 시작 구성:
 #   PM2(앱·게이트웨이·프록시·백업) → pm2 startup(launchd, 로그인 시) + pm2 save
-#   Docker Desktop                 → 로그인 시 자동 시작 (30-toolchain)
+#   Colima(전용 Docker)            → 로그인 시 자동 시작 (30-toolchain 의 LaunchAgent)
 #   Tailscale                      → sudo brew services (LaunchDaemon, 부팅 시)
 # 사용자 로그인이 전제라 FileVault 끄기 + 자동 로그인이 필요하다(10-prereqs 안내).
 
@@ -32,7 +32,7 @@ setup_autostart() {
             || log_warn "pm2 startup 등록 실패 — 'pm2 startup' 이 안내하는 명령을 직접 실행하세요."
     fi
     pm2 save >/dev/null || log_warn "pm2 save 실패"
-    log_ok "재부팅 자동 시작 (PM2 · Docker Desktop$([[ "$DGX_VIA" == "tailscale" ]] && echo ' · Tailscale'))"
+    log_ok "재부팅 자동 시작 (PM2 · Docker$([[ "$DGX_VIA" == "tailscale" ]] && echo ' · Tailscale'))"
 }
 
 host_finalize() {
