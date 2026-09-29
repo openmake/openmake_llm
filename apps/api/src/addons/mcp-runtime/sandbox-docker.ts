@@ -5,7 +5,7 @@
  *
  * 외부(import·승인) MCP 서버를 호스트 자식 프로세스로 직접 spawn 하던 것을,
  * `docker run` 으로 감싸 컨테이너(Linux)로 격리한다. bubblewrap 과 달리
- * **macOS(Docker Desktop) 포함 docker 가 있는 모든 호스트에서 실제 격리**가 동작한다.
+ * **macOS(Colima·Docker Desktop) 포함 docker 가 있는 모든 호스트에서 실제 격리**가 동작한다.
  * 단일 후킹: external-client createTransport 가 command/args 를 이 함수로 감싼다.
  *
  * 격리(컨테이너 기본):
@@ -76,6 +76,8 @@ export interface SandboxConfig {
      * (sandbox-bootstrap reapOrphanSandboxContainers)의 생존 판정 기준.
      */
     ownerPid: number;
+    /** docker 접속처(DOCKER_HOST). macOS 의 전용 Colima 처럼 기본 컨텍스트가 아닌 데몬을 쓸 때 설치기가 .env 에 적는다. */
+    dockerHost?: string;
 }
 
 /** MCP 샌드박스 컨테이너 식별 라벨 — ⚠️ task-sandbox(영속)·artifact-exec 와 절대 겹치면 안 됨 */
@@ -101,6 +103,7 @@ export function defaultSandboxConfig(): SandboxConfig {
         user: process.env.MCP_SANDBOX_USER || '1000:1000',
         readonly: process.env.MCP_SANDBOX_READONLY === 'true',
         ownerPid: process.pid,
+        dockerHost: process.env.DOCKER_HOST || undefined,
     };
 }
 
@@ -124,8 +127,21 @@ export function rewriteLoopback(s: string): string {
  */
 export function buildSandboxedEnv(input: SandboxInput): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(input.env ?? {})) {
+    for (const [k, v] of Object.entries(serverEnv(input))) {
         out[k] = rewriteLoopback(String(v));
+    }
+    return out;
+}
+
+/**
+ * 서버 설정의 env 중 docker CLI 가 읽는 키(DOCKER_HOST·DOCKER_CONTEXT·DOCKER_TLS_VERIFY …)를 뺀 것.
+ * 이 env 는 컨테이너에 가기 전에 호스트의 docker 프로세스를 거친다 — 서버 설정이 그 키를 주면
+ * docker 가 다른 데몬·컨텍스트로 접속한다. 컨테이너 안의 서버가 쓸 일도 없으므로 버린다.
+ */
+function serverEnv(input: SandboxInput): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(input.env ?? {})) {
+        if (!/^DOCKER_/i.test(k)) out[k] = v;
     }
     return out;
 }
@@ -167,7 +183,7 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     // 🔒 값은 인자에 넣지 않는다 — `-e KEY`(이름만) 형태면 docker 가 호출 프로세스의 env 에서
     //    값을 읽어 컨테이너로 전달하므로, `ps` 로 읽히는 커맨드라인에 비밀이 남지 않는다.
     //    값 자체는 buildSandboxedEnv() 가 돌려주고 호출자가 spawn env 로 넘긴다.
-    for (const k of Object.keys(input.env ?? {})) {
+    for (const k of Object.keys(serverEnv(input))) {
         a.push('-e', k);
     }
     a.push(cfg.image);
@@ -194,5 +210,8 @@ export function buildSandboxedCommand(input: SandboxInput, cfg: SandboxConfig = 
         throw new Error('MCP 샌드박스가 활성화(MCP_SANDBOX_ENABLED)됐으나 docker 바이너리를 찾을 수 없습니다. 비격리 실행을 거부합니다 — Docker 설치/실행을 확인하거나 sandbox_network=host 로 opt-out 하세요.');
     }
     const dockerArgs = buildDockerArgs(input, cfg);
-    return { command: cfg.dockerPath, args: dockerArgs, sandboxed: true, env: buildSandboxedEnv(input) };
+    // DOCKER_HOST 는 docker 프로세스까지만 간다 — 인자에는 `-e KEY` 로 이름을 준 변수만 있으므로 컨테이너에는 들어가지 않는다.
+    // 서버 설정의 DOCKER_* 는 buildSandboxedEnv 가 이미 버렸다 — 접속처는 호스트만 정한다.
+    const env = { ...buildSandboxedEnv(input), ...(cfg.dockerHost ? { DOCKER_HOST: cfg.dockerHost } : {}) };
+    return { command: cfg.dockerPath, args: dockerArgs, sandboxed: true, env };
 }
