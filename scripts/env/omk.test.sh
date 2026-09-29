@@ -407,7 +407,8 @@ eq "run: 종료 코드 유지" "$RC" "7"
 ok "run: 화면에 출력"    '[[ "$OUT" == *hello* && "$OUT" == *err* ]]'
 for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q err "$LG" 2>/dev/null && break; sleep 0.2; done
 eq "run: 파일에 색 없이" "$(grep -c '^hello$' "$LG")|$(grep -c '^err$' "$LG")" "1|1"
-eq "run: 파일 권한 600" "$(stat -f '%Lp' "$LG" 2>/dev/null || stat -c '%a' "$LG")" "600"
+# GNU 형식을 먼저 본다 — Linux 의 `stat -f` 는 실패하지 않고 파일시스템 정보를 출력한다(그러면 뒤의 대안으로 넘어가지 않는다).
+eq "run: 파일 권한 600" "$(stat -c '%a' "$LG" 2>/dev/null || stat -f '%Lp' "$LG")" "600"
 
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]
