@@ -174,6 +174,9 @@
   .flow .m { font-family:var(--mono); }
   .flow .sm { font-size:11.5px; fill:var(--mute); }
   .flow .lb { font-size:11.5px; fill:var(--ink-2); }
+  .flow .cmd rect { fill:var(--paper-2); stroke:var(--rule-2); stroke-width:1.2; }
+  .flow .cmd text { font-family:var(--mono); font-size:11.5px; fill:var(--ink); }
+  .flow .pl { font-size:12.5px; font-weight:600; fill:var(--ink-2); }
   .flow .ttl { font-size:14px; font-weight:700; }
   .flow .band { font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; fill:var(--mute); }
   .flow .edge { fill:none; stroke:var(--ink-2); stroke-width:1.6; }
@@ -240,7 +243,7 @@
     <a href="#overview"><span class="n">01</span>개요 · 전체 흐름</a>
     <a href="#steps"><span class="n">02</span>단계별 작업 순서</a>
     <div class="grp">어디서 무엇을</div>
-    <a href="#devserver" data-c="local"><span class="n">03</span>로컬 개발 (작업 클론)</a>
+    <a href="#local-dev" data-c="local"><span class="n">03</span>로컬 개발 (작업 클론)</a>
     <a href="#env-dev" data-c="dev"><span class="n">04</span>환경 dev</a>
     <a href="#env-staging" data-c="stg"><span class="n">05</span>환경 staging</a>
     <a href="#env-online" data-c="onl"><span class="n">06</span>환경 online</a>
@@ -264,16 +267,16 @@
 <section class="page" id="overview" data-title="개요 · 전체 흐름">
   <div class="eyebrow">01 · 개요</div>
   <h1>고친 코드가 실사용 환경에 닿기까지</h1>
-  <p class="lead">개인 장비에서 고치고(<strong>로컬 개발</strong>), 세 환경 — <strong>dev · staging · online</strong> — 을 차례로 거쳐 올린다. 환경은 서로 <code>.env</code>·docker·PM2 가 분리되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 <code>scripts/env/omk.sh</code> 하나다.</p>
+  <p class="lead">로컬 장비에서 고치고(<strong>로컬 개발</strong>), 세 환경 — <strong>dev · staging · online</strong> — 을 차례로 거쳐 올린다. 환경은 서로 <code>.env</code>·docker·PM2 가 분리되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 <code>scripts/env/omk.sh</code> 하나다.</p>
 
   <h2 id="terms">용어</h2>
   <div class="tw"><table>
-    <thead><tr><th>이름</th><th>어디서</th><th>무엇</th><th>무엇을 담나</th></tr></thead>
+    <thead><tr><th>이름</th><th>장소 · 경로</th><th>무엇</th><th>무엇을 담나</th></tr></thead>
     <tbody>
-      <tr><th class="c-local">로컬 개발</th><td>개인 장비의 작업 클론<br>(예: <code>~/openmake/openmake_llm</code>)</td><td><code>omk dev up</code> — 고치면서 바로 보는 핫 리로드. <strong>환경이 아니다</strong></td><td>지금 고치고 있는 소스 (커밋 전 포함)</td></tr>
-      <tr><th class="c-dev">환경 dev</th><td>개발 서버의 <code>~/.openmake/dev</code></td><td><code>omk env install dev</code> 로 설치한 배포본</td><td>브랜치 <code>dev</code></td></tr>
-      <tr><th class="c-stg">환경 staging</th><td><code>~/.openmake/staging</code></td><td>설치한 배포본. 데이터를 유지한다</td><td>브랜치 <code>main</code></td></tr>
-      <tr><th class="c-onl">환경 online</th><td><code>~/.openmake/online</code></td><td>실사용</td><td>최신 릴리스 태그</td></tr>
+      <tr><th class="c-local">로컬 개발</th><td>로컬 장비<br>작업 클론 (예: <code>~/openmake/openmake_llm</code>)</td><td><code>omk dev up</code> — 고치면서 바로 보는 핫 리로드. <strong>환경이 아니다</strong></td><td>지금 고치고 있는 소스 (커밋 전 포함)</td></tr>
+      <tr><th class="c-dev">환경 dev</th><td>개발 서버<br><code>~/.openmake/dev</code></td><td><code>omk env install dev</code> 로 설치한 배포본</td><td>브랜치 <code>dev</code></td></tr>
+      <tr><th class="c-stg">환경 staging</th><td>스테이징 서버<br><code>~/.openmake/staging</code></td><td>설치한 배포본. 데이터를 유지한다</td><td>브랜치 <code>main</code></td></tr>
+      <tr><th class="c-onl">환경 online</th><td>온라인 서버<br><code>~/.openmake/online</code></td><td>실사용</td><td>최신 릴리스 태그</td></tr>
     </tbody>
   </table></div>
   <div class="note p-dev">
@@ -282,7 +285,7 @@
   </div>
 
   <h2 id="flow">전체 흐름</h2>
-  <p>위 줄은 <strong>git</strong>(코드가 어디에 있는가), 아래 줄은 <strong>도는 곳</strong>이다. 번호는 <a href="#steps">단계별 작업 순서</a>의 번호와 같다.</p>
+  <p>위 줄은 <strong>git</strong>(코드가 어디에 있는가), 아래 줄은 <strong>도는 곳</strong>(이름 · 장소 · 경로)이다. 번호는 <a href="#steps">단계별 작업 순서</a>의 번호와 같다.</p>
 
   <div class="flow">
     <svg viewBox="0 0 1000 392" role="img" aria-label="로컬 개발에서 push 한 feature 브랜치가 dev 브랜치, main, 릴리스 태그로 이어지고, dev 는 환경 dev 에, main 은 환경 staging 에, 릴리스 태그는 환경 online 에 올라간다">
@@ -338,43 +341,43 @@
       <!-- 도는 곳 -->
       <g>
         <rect x="50" y="276" width="150" height="76" rx="8" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.8"/>
-        <text class="ttl" x="125" y="304" text-anchor="middle">로컬 개발</text>
-        <text class="sm m" x="125" y="323" text-anchor="middle">개인 장비 · 작업 클론</text>
-        <text class="sm" x="125" y="340" text-anchor="middle">핫 리로드</text>
+        <text class="ttl" x="125" y="302" text-anchor="middle">로컬 개발</text>
+        <text class="pl" x="125" y="322" text-anchor="middle">로컬 장비</text>
+        <text class="sm m" x="125" y="340" text-anchor="middle">작업 클론</text>
 
         <rect x="306" y="276" width="150" height="76" rx="8" fill="var(--dev-bg)" stroke="var(--dev)" stroke-width="1.8"/>
-        <text class="ttl" x="381" y="304" text-anchor="middle">환경 dev</text>
-        <text class="sm m" x="381" y="323" text-anchor="middle">~/.openmake/dev</text>
-        <text class="sm" x="381" y="340" text-anchor="middle">설치해도 도는가</text>
+        <text class="ttl" x="381" y="302" text-anchor="middle">환경 dev</text>
+        <text class="pl" x="381" y="322" text-anchor="middle">개발 서버</text>
+        <text class="sm m" x="381" y="340" text-anchor="middle">~/.openmake/dev</text>
 
         <rect x="552" y="276" width="150" height="76" rx="8" fill="var(--stg-bg)" stroke="var(--stg)" stroke-width="1.8"/>
-        <text class="ttl" x="627" y="304" text-anchor="middle">환경 staging</text>
-        <text class="sm m" x="627" y="323" text-anchor="middle">~/.openmake/staging</text>
-        <text class="sm" x="627" y="340" text-anchor="middle">올려도 되는가</text>
+        <text class="ttl" x="627" y="302" text-anchor="middle">환경 staging</text>
+        <text class="pl" x="627" y="322" text-anchor="middle">스테이징 서버</text>
+        <text class="sm m" x="627" y="340" text-anchor="middle">~/.openmake/staging</text>
 
         <rect x="804" y="276" width="150" height="76" rx="8" fill="var(--onl-bg)" stroke="var(--onl)" stroke-width="1.8"/>
-        <text class="ttl" x="879" y="304" text-anchor="middle">환경 online</text>
-        <text class="sm m" x="879" y="323" text-anchor="middle">~/.openmake/online</text>
-        <text class="sm" x="879" y="340" text-anchor="middle">실사용</text>
+        <text class="ttl" x="879" y="302" text-anchor="middle">환경 online</text>
+        <text class="pl" x="879" y="322" text-anchor="middle">온라인 서버</text>
+        <text class="sm m" x="879" y="340" text-anchor="middle">~/.openmake/online</text>
       </g>
 
       <!-- 로컬 개발 → feature (push) -->
       <path class="edge" d="M125 272 V144" marker-end="url(#ah)"/>
-      <text class="lb m" x="140" y="196">omk dev up → push</text>
-      <g class="num" transform="translate(125 216)"><circle r="11"/><text y="4" text-anchor="middle">1</text></g>
+      <g class="cmd"><rect x="53.5" y="178" width="143" height="22" rx="11"/><text x="125" y="193" text-anchor="middle">omk dev up → push</text></g>
+      <g class="num" transform="translate(125 222)"><circle r="11"/><text y="4" text-anchor="middle">1</text></g>
 
       <!-- git → 환경 -->
       <path class="edge" d="M381 140 V272" marker-end="url(#ah)"/>
-      <text class="lb m" x="368" y="196" text-anchor="end">env update dev</text>
-      <g class="num" transform="translate(381 216)"><circle r="11"/><text y="4" text-anchor="middle">3</text></g>
+      <g class="cmd"><rect x="306" y="178" width="150" height="22" rx="11"/><text x="381" y="193" text-anchor="middle">omk env update dev</text></g>
+      <g class="num" transform="translate(381 222)"><circle r="11"/><text y="4" text-anchor="middle">3</text></g>
 
       <path class="edge" d="M627 140 V272" marker-end="url(#ah)"/>
-      <text class="lb m" x="614" y="196" text-anchor="end">env update staging</text>
-      <g class="num" transform="translate(627 216)"><circle r="11"/><text y="4" text-anchor="middle">5</text></g>
+      <g class="cmd"><rect x="538" y="178" width="178" height="22" rx="11"/><text x="627" y="193" text-anchor="middle">omk env update staging</text></g>
+      <g class="num" transform="translate(627 222)"><circle r="11"/><text y="4" text-anchor="middle">5</text></g>
 
       <path class="edge" d="M879 140 V272" marker-end="url(#ah)"/>
-      <text class="lb m" x="868" y="196" text-anchor="end">env update online</text>
-      <g class="num" transform="translate(879 216)"><circle r="11"/><text y="4" text-anchor="middle">8</text></g>
+      <g class="cmd"><rect x="793.5" y="178" width="171" height="22" rx="11"/><text x="879" y="193" text-anchor="middle">omk env update online</text></g>
+      <g class="num" transform="translate(879 222)"><circle r="11"/><text y="4" text-anchor="middle">8</text></g>
 
       <!-- verify 기록 -->
       <path class="edge dash" d="M702 314 H800" marker-end="url(#ahd)"/>
@@ -430,7 +433,7 @@
   <ul>
     <li><strong>이름 있는 인스턴스의 포트</strong>는 한 칸 옆(52417 / 3010 / 5433 / 6380)부터 잡고, 쓰이고 있으면 옮긴다. omk 는 포트를 기억하지 않는다 — 실제 값은 <code>omk env status &lt;env&gt;</code> 로 본다.</li>
     <li>충돌 판정은 <strong>설치하는 순간 열려 있는 포트</strong>만 본다. 같은 장비에서 나란히 쓸 환경·로컬 개발은 띄워 둔 채 설치한다.</li>
-    <li>호스트 구성은 자유다. 환경들이 같은 호스트여도 되고 달라도 된다. 로컬 개발은 개발자마다 자기 장비에 둔다.</li>
+    <li>장소는 <strong>역할의 이름</strong>이다. 개발 서버·스테이징 서버·온라인 서버가 같은 호스트여도 되고 달라도 된다. 로컬 개발은 개발자마다 자기 로컬 장비에 둔다.</li>
   </ul>
 </section>
 
@@ -442,12 +445,12 @@
 
   <div class="note">
     <div class="h">omk 명령을 어떻게 부르나</div>
-    <p>환경이 설치된 호스트에서는 <code>omk …</code> 로 부른다(래퍼 <code>~/.openmake/bin/omk</code>). 래퍼는 online → staging → 그 밖의 환경 순으로 처음 찾은 환경의 스크립트를 실행한다. 환경이 하나도 없는 장비(로컬 개발만 하는 개인 장비)에서는 작업 클론의 스크립트를 직접 부른다: <code>scripts/env/omk.sh …</code></p>
+    <p>환경이 설치된 호스트에서는 <code>omk …</code> 로 부른다(래퍼 <code>~/.openmake/bin/omk</code>). 래퍼는 online → staging → 그 밖의 환경 순으로 처음 찾은 환경의 스크립트를 실행한다. 환경이 하나도 없는 장비(로컬 개발만 하는 로컬 장비)에서는 작업 클론의 스크립트를 직접 부른다: <code>scripts/env/omk.sh …</code></p>
   </div>
 
   <div class="step p-local" id="s1">
     <div class="no">1</div>
-    <div class="where">로컬 개발 · 개인 장비</div>
+    <div class="where">로컬 개발 · 로컬 장비</div>
     <h3>브랜치를 따서 고치고, 로컬에서 확인하고, push</h3>
     <p>브랜치는 <code>origin/dev</code> 에서 딴다. 핫 리로드로 고치면서 확인한다.</p>
     <div class="code"><pre><span class="cm"># 브랜치</span>
@@ -465,7 +468,7 @@ bash scripts/env/omk.test.sh        <span class="cm"># omk.sh 를 고쳤을 때<
 
 git push -u origin feature/<span class="ph">&lt;주제&gt;</span></pre></div>
     <p class="pass"><b>통과 조건</b>로컬 테스트·lint 통과, 로컬 개발에서 바꾼 기능이 동작, 원격에 push 됨</p>
-    <p>고친 것에 따라 무엇을 다시 해야 하는지는 <a href="#devserver/after-edit">로컬 개발 — 고친 뒤 할 일</a>.</p>
+    <p>고친 것에 따라 무엇을 다시 해야 하는지는 <a href="#local-dev/after-edit">로컬 개발 — 고친 뒤 할 일</a>.</p>
   </div>
 
   <div class="step" id="s2">
@@ -511,7 +514,7 @@ omk env status dev</pre></div>
 
   <div class="step p-stg" id="s5">
     <div class="no">5</div>
-    <div class="where">환경 staging</div>
+    <div class="where">환경 staging · 스테이징 서버</div>
     <h3>머지된 main 을 기존 데이터 위에서 update 로 확인</h3>
     <p>staging 은 <strong>머지된 main</strong> 을 본다 — 합쳐진 결과와, update·마이그레이션 경로. online 도 update 로 올라가므로 같은 길을 먼저 밟는다.</p>
     <div class="code"><pre>omk env update staging
@@ -522,7 +525,7 @@ omk env status staging</pre></div>
 
   <div class="step p-stg" id="s6">
     <div class="no">6</div>
-    <div class="where">환경 staging</div>
+    <div class="where">환경 staging · 스테이징 서버</div>
     <h3>확인을 마친 커밋을 기록</h3>
     <p>이 기록이 있는 커밋에서 나온 릴리스만 online 에 올라간다.</p>
     <div class="code"><pre>omk env verify staging
@@ -544,7 +547,7 @@ OMK_VERIFY_PUSH_URL=git@github.com:openmake/openmake_llm.git omk env verify stag
 
   <div class="step p-onl" id="s8">
     <div class="no">8</div>
-    <div class="where">환경 online</div>
+    <div class="where">환경 online · 온라인 서버</div>
     <h3>새 릴리스 태그로 올리고 스모크 확인</h3>
     <p>올리기 직전에 DB 백업을 한 번 뜬다(실패하면 올리지 않는다). 게이트가 켜져 있으면 ⑥ 의 기록을 본다.</p>
     <div class="code"><pre>omk env update online
@@ -556,10 +559,10 @@ omk env status online</pre></div>
 </section>
 
 <!-- ═══════════════════════════ 03 로컬 개발 ═══════════════════════════ -->
-<section class="page p-local" id="devserver" data-title="로컬 개발 (작업 클론)">
+<section class="page p-local" id="local-dev" data-title="로컬 개발 (작업 클론)">
   <div class="eyebrow">03 · 로컬 개발</div>
   <h1>로컬 개발 — 고치면서 바로 본다</h1>
-  <p class="lead">개인 장비의 작업 클론 안에서 쓴다. <strong>환경이 아니다</strong> — <code>~/.openmake</code> 아래에 두지 않고, 인스턴스 이름 <code>local</code> 로 앱이 PM2 없이 포그라운드에서 돈다.</p>
+  <p class="lead">로컬 장비의 작업 클론 안에서 쓴다. <strong>환경이 아니다</strong> — <code>~/.openmake</code> 아래에 두지 않고, 인스턴스 이름 <code>local</code> 로 앱이 PM2 없이 포그라운드에서 돈다.</p>
 
   <h2>명령</h2>
   <div class="code"><pre>scripts/env/omk.sh dev setup          <span class="cm"># 최초 1회 — 툴체인·.env·의존성·DB·마이그레이션·검색·런타임 이미지·게이트웨이·기본 모델</span>
@@ -750,11 +753,11 @@ omk env backup online --schedule  <span class="cm"># 매일 03:30 백업 — 한
   <h1>staging 에서 확인한 커밋만 online 에</h1>
   <p class="lead">릴리스 태그는 릴리스 PR 을 머지한 순간의 main 에 찍힌다. staging 을 마지막으로 올린 뒤에 머지된 PR 은 확인 없이 릴리스에 들어간다 — 게이트는 그 경우를 막는다.</p>
 
-  <div class="code"><pre><span class="cm"># staging 호스트 — 기능·마이그레이션 확인을 마친 뒤</span>
+  <div class="code"><pre><span class="cm"># 스테이징 서버 — 기능·마이그레이션 확인을 마친 뒤</span>
 omk env verify staging            <span class="cm"># 검사(깨끗한 작업 트리 · origin/main 에 있는 커밋 · health) → origin 에 기록</span>
 omk env verify staging --list
 
-<span class="cm"># online 호스트 — 한 번 켠다 (.env 에 OMK_RELEASE_GATE=1, 또는 설치할 때 --release-gate)</span>
+<span class="cm"># 온라인 서버 — 한 번 켠다 (.env 에 OMK_RELEASE_GATE=1, 또는 설치할 때 --release-gate)</span>
 omk env update online             <span class="cm"># 확인된 릴리스만 올라간다</span></pre></div>
 
   <div class="tw"><table>
@@ -767,7 +770,7 @@ omk env update online             <span class="cm"># 확인된 릴리스만 올�
     </tbody>
   </table></div>
 
-  <h2>staging 호스트의 쓰기 권한</h2>
+  <h2>스테이징 서버의 쓰기 권한</h2>
   <p><code>verify</code> 는 origin 에 push 한다. 설치된 클론의 origin 은 https(읽기 전용)이므로 push 할 주소를 따로 준다.</p>
   <div class="code"><pre>OMK_VERIFY_PUSH_URL=git@github.com:openmake/openmake_llm.git omk env verify staging</pre></div>
   <div class="tw"><table>

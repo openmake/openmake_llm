@@ -5,22 +5,24 @@
 `openmake_llm` 을 세 환경으로 나눠 운영한다(`openmake_bench` 는 add-on — `--bench` 로 고른 환경에만 붙는다). 환경은 서로 **env 파일·docker·PM2 가 분리**되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 `scripts/env/omk.sh` 하나다.
 
 ```
-로컬 개발(개인 장비 · `omk dev up`)
+로컬 개발(로컬 장비 · `omk dev up`)
    │ push
 feature/<주제> ──PR(CI 필수)──▶ dev ──사람이 `omk env update dev`──▶ ~/.openmake/dev       개발 서버
                           │                    (설치·기능 확인)
-                          └──PR(일반 머지 · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   staging-chat.<도메인>
+                          └──PR(일반 머지 · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   스테이징 서버 · staging-chat.<도메인>
                                                          │                     (기능 확인 → `omk env verify staging` 으로 확인한 커밋 기록)
-                                                         └──(release-please 릴리스 직후) 사람이 `omk env update online`──▶ ~/.openmake/online   chat.<도메인>
+                                                         └──(release-please 릴리스 직후) 사람이 `omk env update online`──▶ ~/.openmake/online   온라인 서버 · chat.<도메인>
                                                                                (릴리스 게이트 → 스모크만)
 ```
 
-| 이름 | 어디서 | 무엇 |
-|---|---|---|
-| **로컬 개발** | 개인 장비의 작업 클론 | `omk dev up` — 고치면서 바로 보는 핫 리로드. 환경이 아니다 |
-| **환경 dev** | 개발 서버의 `~/.openmake/dev` | `omk env install dev` 로 설치한 배포본. 브랜치 `dev` 를 따른다 |
-| **환경 staging** | `~/.openmake/staging` | `main` 을 따른다 |
-| **환경 online** | `~/.openmake/online` | 최신 릴리스 태그를 따른다 |
+| 이름 | 장소 | 경로 | 무엇 |
+|---|---|---|---|
+| **로컬 개발** | 로컬 장비 | 작업 클론 | `omk dev up` — 고치면서 바로 보는 핫 리로드. 환경이 아니다 |
+| **환경 dev** | 개발 서버 | `~/.openmake/dev` | `omk env install dev` 로 설치한 배포본. 브랜치 `dev` 를 따른다 |
+| **환경 staging** | 스테이징 서버 | `~/.openmake/staging` | 설치한 배포본. `main` 을 따른다 |
+| **환경 online** | 온라인 서버 | `~/.openmake/online` | 실사용. 최신 릴리스 태그를 따른다 |
+
+장소는 **역할의 이름**이다 — 한 대가 여러 역할을 맡아도 된다(예: 개발 서버와 스테이징 서버가 같은 호스트). 환경은 서로 분리되어 있다.
 
 장수 브랜치는 **`main` 과 `dev` 둘**이다. `dev` 는 `feature/*` 가 모이는 개발용 브랜치이고, `main` 은 staging·릴리스가 따르는 브랜치다.
 환경은 브랜치가 아니라 설치본의 이름이다 — **환경 dev 는 브랜치 `dev` 를, 환경 staging 은 `main` 을** 따르고, online 은 릴리스 직후의 main 을 사람이 올린다.
@@ -65,20 +67,20 @@ bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm �
 - 충돌 판정은 **설치하는 순간 열려 있는 포트**만 본다. 같은 호스트의 다른 환경이나 로컬 개발이 멈춰 있을 때 설치하면 같은 포트를 받을 수 있다 —
   나란히 쓸 환경은 띄워 둔 채 설치한다. 로컬 개발이 겹쳤으면 `omk dev setup` 을 다시 돌리면 옮겨진다. 환경끼리 겹친 것은 자동으로 옮기지 않는다
   (PM2 에 등록된 앱의 포트는 자기 것으로 본다) — 한쪽을 `omk env reset` 한 뒤, 다른 쪽을 띄워 둔 채 다시 설치한다.
-- 호스트 구성은 자유다. online 과 staging 이 같은 호스트여도 되고 달라도 된다. 환경 dev 는 개발 서버에, 로컬 개발은 개발자마다 자기 장비에 둔다.
+- 호스트 구성은 자유다. 개발 서버·스테이징 서버·온라인 서버가 같은 호스트여도 되고 달라도 된다. 로컬 개발은 개발자마다 자기 로컬 장비에 둔다.
 
 ## 개발에서 배포까지 — 환경별로 할 것 / 하지 말 것
 
 | # | 어디서 | 무엇을 | 명령 |
 |---|---|---|---|
-| ① | 로컬 개발 (개인 장비) | 브랜치 `dev` 에서 브랜치를 따 핫 리로드로 수정 → 로컬 테스트 → push | `git switch -c feature/<주제> origin/dev` · `omk dev up` … `git push -u origin feature/<주제>` |
+| ① | **로컬 개발** (로컬 장비) | 브랜치 `dev` 에서 브랜치를 따 핫 리로드로 수정 → 로컬 테스트 → push | `git switch -c feature/<주제> origin/dev` · `omk dev up` … `git push -u origin feature/<주제>` |
 | ② | GitHub | `feature/*` → `dev` PR → CI → **일반 머지** (직접 push 하지 않는다) | `gh pr create --base dev` |
 | ③ | **환경 dev** (개발 서버) | 합쳐진 `dev` 가 실제로 설치되고 도는지 확인 | `omk env update dev` (처음 한 번: `omk env install dev --tailscale`) |
 | ④ | GitHub | `dev` → `main` PR → CI → 리뷰 → **일반 머지** | `gh pr create --base main --head dev` |
-| ⑤ | **환경 staging** | 머지된 main 을 기존 데이터 위에서 update 로 확인 | `omk env update staging` |
-| ⑥ | **환경 staging** | 확인을 마친 커밋을 기록 | `omk env verify staging` |
+| ⑤ | **환경 staging** (스테이징 서버) | 머지된 main 을 기존 데이터 위에서 update 로 확인 | `omk env update staging` |
+| ⑥ | **환경 staging** (스테이징 서버) | 확인을 마친 커밋을 기록 | `omk env verify staging` |
 | ⑦ | GitHub | release-please 의 릴리스 PR 머지 → `vX.Y.Z` 태그 (⑥ 뒤에 main 에 머지된 것이 없을 때) | 릴리스 PR 머지 |
-| ⑧ | **환경 online** | 새 릴리스 태그로 올리고 스모크 확인 — 게이트가 ⑥ 의 기록을 본다 | `omk env update online` |
+| ⑧ | **환경 online** (온라인 서버) | 새 릴리스 태그로 올리고 스모크 확인 — 게이트가 ⑥ 의 기록을 본다 | `omk env update online` |
 
 배포는 전부 **수동**이다 — 머지·릴리스만으로는 어떤 환경도 바뀌지 않는다. 앞 단계를 통과하기 전에는 다음 단계로 가지 않는다
 (환경 dev 통과 전 `main` 으로 올리지 않는다, staging 통과 전 릴리스 금지).
@@ -132,11 +134,11 @@ bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm �
 게이트는 그 경우를 막는다. 브랜치를 늘리지 않고, 확인한 커밋과 릴리스 사이의 연결만 강제한다.
 
 ```bash
-# staging 호스트 — 기능·마이그레이션 확인을 마친 뒤
+# 스테이징 서버 — 기능·마이그레이션 확인을 마친 뒤
 omk env verify staging            # 검사(깨끗한 작업 트리 · origin/main 에 있는 커밋 · health) → origin 에 기록
 omk env verify staging --list     # 기록 보기 (어느 환경에서든)
 
-# online 호스트 — 한 번 켠다 (.env 에 OMK_RELEASE_GATE=1 을 적거나, 설치할 때 --release-gate)
+# 온라인 서버 — 한 번 켠다 (.env 에 OMK_RELEASE_GATE=1 을 적거나, 설치할 때 --release-gate)
 omk env update online             # 확인된 릴리스만 올라간다
 ```
 
@@ -148,7 +150,7 @@ omk env update online             # 확인된 릴리스만 올라간다
 - **급한 수정**은 `omk env update online --force-unverified` — 물어본 뒤 진행하고 `~/.openmake/online/logs/release-gate.log` 에 남긴다.
 - 게이트는 **켠 환경에서만** 동작한다. 외부 설치본은 기록을 쓸 권한도 staging 도 없으므로 기본은 꺼져 있다. `openmake_bench` 는 릴리스 태그가 없어 대상이 아니다.
 
-**staging 호스트의 쓰기 권한** — `verify` 는 origin 에 push 한다. 설치된 클론의 origin 은 https(읽기 전용)이므로 push 할 주소를 따로 준다.
+**스테이징 서버의 쓰기 권한** — `verify` 는 origin 에 push 한다. 설치된 클론의 origin 은 https(읽기 전용)이므로 push 할 주소를 따로 준다.
 
 ```bash
 OMK_VERIFY_PUSH_URL=git@github.com:openmake/openmake_llm.git omk env verify staging
@@ -473,7 +475,7 @@ scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.en
 웹과 bench 화면은 고치면 바로 반영되고, **API 는 감시 재시작이 없어** 고친 뒤 `dev up` 을 다시 띄운다. 인스턴스 이름은 **`local`**(컨테이너 `openmake-local-*`)이라
 같은 호스트의 **환경 `dev`**(`~/.openmake/dev` — 빌드된 배포본으로 브랜치를 확인하는 곳)·staging·online 과 컨테이너·볼륨 이름이 겹치지 않는다.
 포트는 설치할 때 열려 있던 것만 피한다([환경 규칙](#환경-규칙)).
-둘은 용도가 다르다: `omk dev up` 은 개인 장비에서 고치면서 바로 보는 핫 리로드, 환경 dev 는 개발 서버에서 "실제로 설치해도 도는가".
+둘은 용도가 다르다: `omk dev up` 은 로컬 장비에서 고치면서 바로 보는 핫 리로드, 환경 dev 는 개발 서버에서 "실제로 설치해도 도는가".
 예전에 `dev` 이름으로 준비한 작업 클론은 그대로 동작하지만 환경 dev 와 겹친다 — `omk dev reset` 이 이름을 `local` 로 옮겨 준다(그 뒤 `omk dev setup`).
 
 흐름: 클론 → 개발 → 주제별 `feature/*` 브랜치 → 테스트(`npm test`, `npm run lint`, `bash scripts/env/omk.test.sh`) → 원격 `feature/*` push → 브랜치 `dev` 에 합친다 → 환경 dev 에서 확인([개발에서 배포까지](#개발에서-배포까지--환경별로-할-것--하지-말-것)).

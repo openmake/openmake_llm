@@ -177,7 +177,7 @@ Homebrew 의 기본 node 가 다른 버전이면 `export PATH="/opt/homebrew/opt
 
 | 정한 것 | 바꾼 곳 |
 |---|---|
-| 개인 장비에서 `omk dev up` 으로 핫 리로드하는 것은 **로컬 개발**이라 부른다. "개발 서버"는 환경 dev 를 설치하는 호스트를 가리킨다 | `omk.sh`(주석·메시지) · `README.md` · 이 문서 |
+| 로컬 장비에서 `omk dev up` 으로 핫 리로드하는 것은 **로컬 개발**이라 부른다. 장소는 로컬 장비 · 개발 서버 · 스테이징 서버 · 온라인 서버라 부른다(역할의 이름 — 한 대가 여러 역할을 맡아도 된다) | `omk.sh`(주석·메시지) · `README.md` · 이 문서 |
 | 환경 dev 는 **브랜치 `dev` 를 따른다.** `feature/*` 를 브랜치 `dev` 에 합친 **뒤에** `omk env update dev` 로 확인하고, 통과하면 `dev` 를 `main` 으로 올린다 | `README.md` 의 흐름도·단계표·dev 할 것/하지 말 것 |
 | `omk env install dev` 의 기본 ref 가 `main` 에서 `dev` 로 바뀐다. 그때 bench 는 `main` 을 쓴다(브랜치 `dev` 가 없다) | `omk.sh` `env_default_ref` · `cmd_env_install`, `omk.test.sh` |
 | 머지 전에 따로 볼 브랜치는 임시 환경에 올린다 (`omk env install pr-123 --ref …`) | `README.md` |
