@@ -1827,6 +1827,7 @@ cmd_dev_setup() {
         mkdir -p "$DEV_BENCH/data"
         bench_ensure_env "$DEV_BENCH" "$(dev_instance)" "$(llm_api_port "$DEV_LLM")" "$(llm_web_port "$DEV_LLM")" 0 >/dev/null
     fi
+    install_wrapper   # 환경을 설치하지 않은 장비에서도 'omk dev …' 가 되도록
     log_ok "dev 준비 완료 — 'omk dev up' 으로 기동"
 }
 cmd_dev_up() {
