@@ -2,7 +2,7 @@
 
 > `omk` 사용 설명서. 스크립트는 이 디렉터리의 [`omk.sh`](omk.sh) 이고, Windows 진입점은 [`omk.ps1`](omk.ps1), 순수 함수 테스트는 [`omk.test.sh`](omk.test.sh) 다.
 
-`openmake_llm` 과 `openmake_bench` 를 세 환경으로 나눠 운영한다. 환경은 서로 **env 파일·docker·PM2 가 분리**되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 `scripts/env/omk.sh` 하나다.
+`openmake_llm` 을 세 환경으로 나눠 운영한다(`openmake_bench` 는 add-on — `--bench` 로 고른 환경에만 붙는다). 환경은 서로 **env 파일·docker·PM2 가 분리**되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 `scripts/env/omk.sh` 하나다.
 
 ```
 feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   staging-chat.<도메인>
@@ -17,6 +17,8 @@ feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `om
 전의 main 을 운영이나 외부 설치자가 받으면 안 된다. `omk env install online` 의 기본 ref 는 `release`(가장 높은 `vX.Y.Z` 태그)이고,
 `omk env update online` 은 새 릴리스 태그가 있을 때만 그 태그까지 fast-forward 한 뒤 `openmake_llm.sh deploy` 를 부른다. 어느 환경이든
 `--ref release` 로 같은 방식을 고를 수 있다(`.env` 의 `OMK_TRACK=release`). `openmake_bench` 는 릴리스 태그가 없어 main 을 쓴다.
+bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm 의 `--ref` 와 같은 이름**을 찾으므로, llm 에만 있는 `feature/*` 를
+올리면서 bench 도 붙일 때는 `--bench --bench-ref main` 으로 준다(같은 이름의 브랜치가 없으면 bench 클론에서 설치가 멈춘다).
 
 **PR 을 시험하는 곳은 dev 다** — 머지 전에 `omk env install dev --ref <브랜치>`(또는 임시 환경 `omk env install pr-123 --ref <브랜치>`)로
 실제 설치를 확인하고, GitHub CI 가 같은 PR 을 검사한다. staging 은 PR 이 아니라 **머지된 main** 을 본다(여러 PR 이 합쳐진 결과, update·마이그레이션 경로).
@@ -27,16 +29,25 @@ feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `om
 
 | | dev | staging | online |
 |---|---|---|---|
-| 위치 | 각자의 작업 클론 | `~/.openmake/staging/{llm,bench}` | `~/.openmake/online/{llm,bench}` |
-| 따르는 것 | `feature/*` (`--ref`) | `main` 최신 | **최신 릴리스 태그** (`release`) |
+| 위치 | `~/.openmake/dev/llm` | `~/.openmake/staging/llm` | `~/.openmake/online/llm` |
+| 따르는 것 | `feature/*` (`--ref`, 주지 않으면 `main`) | `main` 최신 | **최신 릴리스 태그** (`release`) |
 | 인스턴스 | `dev` (이름 있음) | `staging` (이름 있음) | **기본(무접미사)** |
 | 포트 | install.sh 가 할당 | install.sh 가 할당 | **소스의 기본 포트** (52416 / 3000 / 5432 / 6379 / 9400 / 33000) |
-| PM2 | 없음 (포그라운드) | `openmake-{llm,next,bench}-staging` | `openmake-{llm,next,bench}` |
+| PM2 | `openmake-{llm,next,litellm}-dev` | `openmake-{llm,next,litellm}-staging` | `openmake-{llm,next,litellm}` |
 | docker | `openmake-dev-*` | `openmake-staging-*` | `openmake-*` |
-| 배포 | — | **수동** `omk env update staging` | **수동** `omk env update online` |
+| 배포 | **수동** reset + install, 또는 `omk env update dev` | **수동** `omk env update staging` | **수동** `omk env update online` |
+
+`--bench` 로 설치한 환경은 `~/.openmake/<env>/bench` 와 PM2 `openmake-bench[-<env>]` 가 더 생긴다.
+
+**작업 클론의 개발 서버(`omk dev …`)는 환경이 아니다** — `~/.openmake` 아래에 두지 않고, 인스턴스 이름 `local`(docker `openmake-local-*`)로
+PM2 없이 포그라운드에서 돈다. 환경 `dev` 와 이름이 비슷하지만 별개다([개발 서버](#개발-서버--omk-dev-작업-클론--핫-리로드)).
 
 - **online 이 기본 인스턴스인 이유** — 소스(`install.sh`·`gen-env.mjs`·`resolve-ports.cjs`·문서)의 기본 포트와 이름이 곧 운영 값이다. online 을 기본 인스턴스로 두면 포트 표를 어디에도 다시 적을 필요가 없다.
-- **이름 있는 인스턴스의 포트**는 `install.sh` 규칙(한 칸 옆 52417/3010/5433/6380, 점유 시 빈 포트로 이동)을 따른다. **omk 는 포트를 기억하지 않고 각 환경의 `.env` 를 읽는다** — 실제 값은 `omk env status <env>` 로 본다.
+- **이름 있는 인스턴스의 포트**는 `install.sh` 규칙을 따른다 — 기본은 한 칸 옆(52417/3010/5433/6380)이고, 그 포트가 쓰이고 있으면 옮긴다
+  (API 는 다음 빈 포트, 웹 13000~, PostgreSQL 15432~, Redis 16379~). **omk 는 포트를 기억하지 않고 각 환경의 `.env` 를 읽는다** — 실제 값은 `omk env status <env>` 로 본다.
+- 충돌 판정은 **설치하는 순간 열려 있는 포트**만 본다. 같은 호스트의 다른 환경이나 개발 서버가 멈춰 있을 때 설치하면 같은 포트를 받을 수 있다 —
+  나란히 쓸 환경은 띄워 둔 채 설치한다. 개발 서버가 겹쳤으면 `omk dev setup` 을 다시 돌리면 옮겨진다. 환경끼리 겹친 것은 자동으로 옮기지 않는다
+  (PM2 에 등록된 앱의 포트는 자기 것으로 본다) — 한쪽을 `omk env reset` 한 뒤, 다른 쪽을 띄워 둔 채 다시 설치한다.
 - 호스트 구성은 자유다. online 과 staging 이 같은 호스트여도 되고 달라도 된다. dev 는 개발자마다 자기 호스트에서 돈다.
 
 ## 개발에서 배포까지 — 환경별로 할 것 / 하지 말 것
@@ -61,6 +72,7 @@ feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `om
 | `--ref <브랜치>` 로 설치해 **설치가 끝까지 되는지**부터 본다 | dev 를 건너뛰고 PR 을 머지하지 않는다 — CI 는 "설치해서 도는지"를 보지 않는다 |
 | 바꾼 기능 + 기본 동작(채팅·웹 검색·에이전트 작업·아티팩트 내보내기)을 확인한다 | dev 의 결과로 **답변 품질·에이전트 성공률**을 판단하지 않는다 — 기본 모델은 작다. dev 가 증명하는 것은 배선과 구조다 |
 | 꼬이면 망설이지 말고 `omk env reset dev` — 데이터는 버리는 것이다 | 남기고 싶은 데이터를 dev 에 두지 않는다 |
+| 다른 브랜치를 올릴 때는 **reset 부터** 한다 | 설치된 환경에 `--ref` 만 바꿔 다시 install 하지 않는다 — 이미 있는 클론은 그대로 재사용되어 **이전 브랜치가 설치된다**(로그의 "소스 재사용: … (브랜치)" 한 줄로만 드러난다) |
 | 무거운 실험(새 모델, 설정 변경, 일부러 깨뜨리기)은 여기서 한다 | 환경 디렉터리(`~/.openmake/dev/llm`)의 소스를 직접 고치지 않는다 — 작업 클론에서 고쳐 push → `omk env update dev` |
 | 남의 PR 은 dev 에 올리거나, 임시 환경을 만든다: `omk env install pr-123 --ref <브랜치>` → 끝나면 `omk env reset pr-123` | 임시 환경을 방치하지 않는다 — 환경마다 DB·게이트웨이·이미지가 따로 생긴다 |
 
@@ -143,30 +155,65 @@ irm https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk
 .\omk.ps1 env install staging --public-url https://staging-chat.example.com
 ```
 
-한 번에 되는 일: git 확인 → `openmake_llm` 클론 → **`install.sh`** (Node 24·Docker·PM2 준비, `.env` 시크릿 생성, PostgreSQL·Redis, 마이그레이션, 빌드, PM2 기동, health) → `openmake_bench` 클론·빌드·`.env`·PM2 → Caddy 프록시(PM2 `omk-proxy`) → `~/.openmake/bin/omk` 래퍼.
+한 번에 되는 일(순서대로):
+
+1. git 확인 → `openmake_llm` 클론
+2. **`install.sh --minimal`** — Node 24·Docker·PM2 준비, `.env` 시크릿 생성, PostgreSQL·Redis, 마이그레이션, 빌드, PM2 기동, health
+3. 웹 검색(SearXNG) → 런타임 이미지 → LiteLLM 게이트웨이(업스트림을 주지 않았으면 기본 모델까지)
+4. `--bench` 를 줬을 때만: `openmake_bench` 클론·빌드·`.env`·PM2
+5. Caddy 프록시(PM2 `omk-proxy`) → `--tailscale`/`--host` 를 줬으면 그 주소 허용
+6. `~/.openmake/bin/omk` 래퍼
+
+2 가 실패하면 설치가 멈춘다. 3 의 실패는 경고만 남기고 계속한다. 4 는 실패하면 멈춘다 — 뒤의 5·6 이 실행되지 않는다.
 
 **배포는 수동이다.** 머지만으로는 아무것도 바뀌지 않고, 사람이 `omk env update <env>` 를 실행해야 그 환경에 올라간다. 원하는 환경만 자동 갱신을 켤 수 있다(`omk env autoupdate <env>` — 원격이 앞서 있을 때만 갱신하는 PM2 cron 앱. 끄려면 `--off`).
 
-설치 후 사람이 채울 것 두 가지 — 끝에 안내가 나온다:
-1. `llm/.env` 의 `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_DEFAULT_MODEL` (또는 설치 시 `--llm-base-url …` 로 전달)
-2. `bench/.env` 의 `OMK_API_KEY` — llm 웹 → 설정 → API 키에서 **`chat` 스코프** 키를 발급해 넣는다 (자동 발급 불가)
+설치 후 사람이 채울 것 — 해당할 때만 요약 끝에 `[할 일]` 로 나온다:
+
+| 나오는 경우 | 할 일 |
+|---|---|
+| 게이트웨이는 떴는데 업스트림이 비어 있다 (`--no-default-model` 등) | `<env>/litellm/litellm.env` 의 `QWEN_VLLM_API_BASE` / `BGE_VLLM_API_BASE` / `VLLM_API_KEY` 를 넣고 `omk env start <env>` — 또는 `--llm-base-url … --llm-model …` 로 재설치 |
+| `--no-litellm` 으로 설치해 LLM 주소가 자리표시자다 | `llm/.env` 의 `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_DEFAULT_MODEL` |
+| bench 를 설치했다 | `bench/.env` 의 `OMK_API_KEY` — llm 웹 → 설정 → API 키에서 **`chat` 스코프** 키를 발급해 넣는다 (자동 발급 불가) |
+| Discord 봇 토큰을 줬다 | `llm/.env` 의 `DISCORD_BOT_API_KEY` — **`discord` 스코프** 키 |
+
+옵션 없이 설치하면 게이트웨이와 기본 모델이 채워져, 채울 것 없이 채팅까지 된다.
 
 Windows 네이티브는 지원하지 않는다. 설치기 전체가 bash 이고, WSL2 안에서는 Linux 와 100% 같은 코드로 돈다.
 
 ## 명령
 
 ```bash
-omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy]
+omk env install <env> [--ref BR] [--bench [--bench-ref BR]] [--public-url URL] [--no-proxy] [--no-searxng] [--no-runtime-images]
+                      [--tailscale] [--host H]… [--no-litellm] [--no-default-model]
+                      [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
                       [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate] [--release-gate]
-omk env update  <env> [--if-behind] [--force-unverified]   # llm(ff-only → build → migrate → restart) → bench → proxy
+                      [--ops-profile] [--dgx-host H] [--https-host H] [--artifact-viewer] [--discord-token T]
+omk env update  <env> [--if-behind] [--no-backup] [--force-unverified]   # llm(ff-only → build → migrate → restart) → bench → proxy
 omk env verify  <env> [--list]          # 확인을 마친 커밋을 origin 에 기록 (릴리스 게이트)
+omk env reset   <env> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
 omk env status|start|stop|logs <env>
+omk env expose  <env> [--tailscale] [--host H]…
+omk env backup  <env> [--schedule ['CRON']] [--off] [--list] [--dry-run]
 omk env autoupdate <env> [--every 'CRON'] [--off]
-omk env reset   <env> [--keep-data] [--keep-env] [--reinstall] [--yes]
 omk proxy status | reload | render <env>
+omk dev setup [--no-searxng]
+omk dev up [all|deps|api|web|bench] [--tailscale] [--host H]…
+omk dev down | status | reset [--keep-data]
 ```
 
-`staging`/`online` 외의 이름도 된다(`omk env install qa --ref feature/x`) — 이름 있는 인스턴스가 하나 더 생길 뿐이다.
+- **bench 는 기본으로 설치하지 않는다** — `--bench` 또는 `--bench-ref BR` 을 줄 때만 붙는다. `--no-bench` 는 예전 호출용으로 계속 받는다(기본과 같다).
+  이미 bench 가 있는 환경은 `update`·`start`·`reset --reinstall` 이 그대로 다룬다.
+- 종료 코드: `0` 성공 / `1` 사용법·전제조건 / `2` 단계 실패(릴리스 게이트 거부 포함) / `3` health check 실패.
+- `staging`/`online` 외의 이름도 된다(`omk env install qa --ref feature/x`) — 이름 있는 인스턴스가 하나 더 생길 뿐이다. `local` 은 개발 서버가 쓰는 이름이라 환경 이름으로 쓸 수 없다.
+
+**`omk` 명령이 실행하는 스크립트** — 래퍼 `~/.openmake/bin/omk` 는 `online` → `staging` → 그 밖의 환경 순서로 처음 찾은 환경의
+`llm/scripts/env/omk.sh` 를 실행한다. online 이 있는 호스트에서는 어느 환경을 다루든 **online 에 설치된 버전의 omk** 가 돈다.
+`omk.sh` 자체를 고친 브랜치를 시험할 때는 래퍼 대신 그 소스의 스크립트를 직접 부른다:
+
+```bash
+<작업 클론>/scripts/env/omk.sh env install dev --ref feature/<주제>
+```
 
 ## 웹 검색 — 설치하면 바로 된다
 
@@ -181,8 +228,9 @@ Postgres·Redis 와 같은 급의 **환경 인프라**로 기본 설치한다 (`
 | 컨테이너가 안 뜸 | 로그 5줄을 보여 주고 치운다. **죽은 주소는 `.env` 에 적지 않는다** | `SearXNG 없음 …` |
 | `SEARXNG_URL` 을 직접 넣어 둠 | 손대지 않는다 — omk 것은 `http://127.0.0.1:<OMK_SEARXNG_PORT>` 뿐. omk 가 띄운 뒤 주소만 바꿔도 되돌리지 않는다 | `동작 확인 …` / `결과 0건 …` |
 
-설정은 `<env>/searxng/settings.yml`(dev: `.openmake/searxng/`) — 기본 설정 위에 `formats: json`(없으면 Base 호출이 403),
-`limiter: false`, 무작위 `secret_key` 만 덮는다. `omk env reset` 은 이 컨테이너도 함께 지운다.
+설정은 `<env>/searxng/settings.yml`(개발 서버: 작업 클론의 `.openmake/searxng/`) — 기본 설정 위에 `formats: json`(없으면 Base 호출이 403),
+`limiter: false`, `image_proxy: false`, 무작위 `secret_key` 를 덮고, 응답이 불안정한 엔진(brave·startpage·mojeek)을 끈다.
+파일이 이미 있으면 다시 쓰지 않는다. `omk env reset` 은 이 컨테이너도 함께 지운다.
 검색 쪽 실패는 설치를 멈추지 않는다(경고 후 계속). 컨테이너는 `omk.owner_dir` 라벨이 이 설치본을 가리킬 때만 건드린다 —
 같은 이름을 다른 설치본·작업 클론이 쓰고 있으면 손대지 않는다. 뺀 뒤 다시 켜려면 `.env` 의 `OMK_SEARXNG=off` 줄을 지우고 `omk env update`.
 
@@ -285,10 +333,13 @@ omk env reset staging --keep-data            # DB 볼륨은 남김 (.env 도 함
 
 | 지우는 것 | staging 예 |
 |---|---|
-| PM2 | `openmake-llm-staging` `openmake-next-staging` `openmake-discord-staging` `openmake-bench-staging` `omk-updater-staging` |
-| docker | `openmake-staging-postgres` `openmake-staging-redis` + 볼륨 `openmake-staging_pgdata` `openmake-staging_redisdata` |
-| 프록시 | `~/.openmake/caddy/caddy.d/staging.caddy` (+ reload) |
-| 디렉터리 | `~/.openmake/staging` |
+| PM2 | `openmake-llm-staging` `openmake-next-staging` `openmake-discord-staging` `openmake-bench-staging` `openmake-litellm-staging` `omk-updater-staging` `omk-backup-staging` |
+| docker | `openmake-staging-postgres` `openmake-staging-redis` `openmake-staging-searxng` + 볼륨 `openmake-staging_pgdata` `openmake-staging_redisdata` (`--keep-data` 면 볼륨은 남긴다) |
+| 프록시 | `~/.openmake/caddy/caddy.d/staging.caddy` · `staging-https.caddy` (+ reload) |
+| 디렉터리 | `~/.openmake/staging` (게이트웨이 `litellm/`·SearXNG 설정 포함) |
+
+남기는 것: 런타임 이미지(`--purge-images` 로 지운다), DB 백업(`~/.openmake/backups/<env>`), 호스트 공용인 기본 모델 서버(`omk-llamacpp`)와 프록시(`omk-proxy`).
+`--reinstall` 은 지우기 전의 브랜치로 다시 설치한다(릴리스를 따르던 환경은 최신 릴리스 태그로).
 
 **소유권 가드** — 이름이 환경 이름에서 파생되기 때문에, omk 밖의 설치본이 같은 인스턴스 이름을 쓰고 있으면 위험하다. 예를 들어 예전 방식(`./install.sh --instance staging` → `~/.openmake/chat-staging`)으로 설치한 호스트에서 `omk env reset staging` 은 **그 설치본의 DB 볼륨**을 지우게 된다. 그래서 `install`·`reset` 은 컨테이너의 compose 라벨과 PM2 앱의 cwd 로 주인을 확인하고, `~/.openmake/<env>/` 밖의 것이면 거부한다. 기존 설치본을 omk 로 옮기려면 그 디렉터리에서 `./openmake_llm.sh db-dump` → `./uninstall.sh` → `omk env install <env>` → `db-restore` 순서로 한다. 가드를 끄는 것은 `OMK_FORCE_FOREIGN=1` 뿐이다.
 
@@ -302,19 +353,24 @@ omk env reset staging --keep-data            # DB 볼륨은 남김 (.env 도 함
 git clone https://github.com/openmake/openmake_llm.git && git clone https://github.com/openmake/openmake_bench.git
 cd openmake_llm && git checkout -b feature/<주제>
 
-scripts/env/omk.sh dev setup          # 최초 1회: 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션
-scripts/env/omk.sh dev up             # 전부: DB/Redis + api + web + bench (Ctrl+C 로 종료)
+scripts/env/omk.sh dev setup          # 최초 1회: 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션·SearXNG (빼려면 --no-searxng)
+scripts/env/omk.sh dev up             # 전부: DB/Redis/SearXNG + api + web (+ bench 클론이 있으면 bench) — Ctrl+C 로 종료
 scripts/env/omk.sh dev up api         # 개별: deps | api | web | bench
 scripts/env/omk.sh dev up --tailscale     # 다른 기기에서 보기 (또는 --host <이름|IP> 를 여러 번)
 scripts/env/omk.sh dev status
-scripts/env/omk.sh dev down           # DB/Redis 정지 (데이터 유지)
-scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.env 유지)
+scripts/env/omk.sh dev down           # DB/Redis/SearXNG 정지 (데이터 유지)
+scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.env 유지). --keep-data 면 볼륨은 남긴다
 ```
+
+`dev setup` 은 앱 빌드와 PM2 기동을 하지 않는다(`install.sh --minimal --skip-build --no-start`) — 워크스페이스 패키지(`packages/*/dist`)만 빌드한다.
+`.env` 나 `node_modules` 가 없으면 `dev up` 이 `dev setup` 을 먼저 돌린다.
 
 **다른 기기에서 보기.** 웹은 채팅 소켓을 "접속한 호스트명:API 포트"로 붙이고, 서버는 Origin 이 `CORS_ORIGINS` 와 정확히 일치할 때만 받는다(REST·WS 공통). 그래서 접속에 쓸 호스트를 알려줘야 한다 — `--tailscale` 은 `tailscale status` 에서 MagicDNS 짧은 이름·FQDN·IPv4 를 읽고, `--host` 는 직접 준다. omk 는 그 호스트를 세 곳에 넣는다: API 의 `CORS_ORIGINS`(호스트별 웹·API origin), Next dev 의 `allowedDevOrigins`(모르면 HMR 이 막혀 hydration 이 죽는다), bench vite 의 `allowedHosts`. 목록은 `.env` 의 `OMK_DEV_HOSTS` 에 기억되어 다음 `dev up` 부터는 옵션 없이도 유지된다. 허용하지 않은 호스트·Origin 은 계속 거부된다.
 
-개발 서버는 PM2 를 쓰지 않는다 — `tsx`/`next dev`/`vite` 가 포그라운드에서 돈다. 인스턴스 이름은 **`local`**(컨테이너 `openmake-local-*`)이라
-같은 호스트의 **환경 `dev`**(`~/.openmake/dev` — 빌드된 배포본으로 브랜치를 확인하는 곳)·staging·online 과 컨테이너·볼륨·포트가 겹치지 않는다.
+개발 서버는 PM2 를 쓰지 않는다 — `npm run dev:api`(`ts-node`)·`next dev`·bench 의 `vite` 가 `concurrently` 아래 포그라운드에서 돈다.
+웹과 bench 화면은 고치면 바로 반영되고, **API 는 감시 재시작이 없어** 고친 뒤 `dev up` 을 다시 띄운다. 인스턴스 이름은 **`local`**(컨테이너 `openmake-local-*`)이라
+같은 호스트의 **환경 `dev`**(`~/.openmake/dev` — 빌드된 배포본으로 브랜치를 확인하는 곳)·staging·online 과 컨테이너·볼륨 이름이 겹치지 않는다.
+포트는 설치할 때 열려 있던 것만 피한다([환경 규칙](#환경-규칙)).
 둘은 용도가 다르다: `omk dev up` 은 고치면서 바로 보는 핫 리로드, `omk env install dev --ref …` 는 "실제로 설치해도 도는가".
 예전에 `dev` 이름으로 준비한 작업 클론은 그대로 동작하지만 환경 dev 와 겹친다 — `omk dev reset` 이 이름을 `local` 로 옮겨 준다(그 뒤 `omk dev setup`).
 
@@ -353,10 +409,22 @@ omk env status online
 | `OMK_ROOT` | `~/.openmake` | 모든 환경의 루트 |
 | `OMK_REPO_URL` / `OMKB_REPO_URL` | GitHub 공식 리포 | 포크에서 설치할 때 |
 | `OMK_AUTOUPDATE_CRON` | `*/10 * * * *` | 자동 갱신 주기 |
+| `OMK_BACKUP_CRON` | `30 3 * * *` | `omk env backup --schedule` 의 기본 주기 |
 | `OMK_CADDY_VERSION` | 최신 릴리스 | caddy 버전 고정 (폐쇄망) |
 | `OMK_CADDY_ADMIN` | `localhost:2019` | caddy admin 주소 |
 | `OMKB_PORT_BASE` / `OMK_PROXY_PORT_BASE` / `OMK_LITELLM_PORT_BASE` | `9400` / `33000` / `13401` | bench·프록시·LiteLLM 빈 포트 탐색 시작점 |
+| `OMK_SEARXNG_PORT_BASE` / `OMK_LLAMACPP_PORT_BASE` | `8888` / `18080` | SearXNG·기본 모델 서버 빈 포트 탐색 시작점 |
+| `OMK_SEARXNG_IMAGE` | `searxng/searxng:latest` | SearXNG 이미지 |
+| `OMK_NET_PROBE_URLS` / `OMK_SEARCH_PROBE_QUERY` | DDG·Bing·Wikipedia / `wikipedia` | 외부 연결 점검 대상(하나라도 열리면 온라인) · 검색 동작 확인용 질의 |
+| `OMK_LITELLM_SPEC` | `litellm[proxy]` | LiteLLM pip 설치 대상 — 버전 고정에 쓴다 |
+| `OMK_LLAMACPP_TAG` | `b10964` | 기본 모델 서버(llama.cpp) 릴리스 태그 |
+| `OMK_DEFAULT_MODEL_HF` / `_NAME` / `_CTX` | `Qwen/Qwen3-1.7B-GGUF:Q8_0` / `qwen3-1.7b` / `16384` | 기본 모델 — 준 값은 `~/.openmake/llamacpp/model.conf` 에 기억된다 |
+| `OMK_DGX_MODEL` | `retired-chat-model` | `--dgx-host` 일 때 앱의 기본 모델 이름 |
 | `OMK_DEV_LLM` / `OMK_DEV_BENCH` | 자동 탐지 | dev 작업 클론 위치 |
 | `OMK_VERIFY_PUSH_URL` | `origin` | `omk env verify` 가 확인 기록을 push 할 원격 |
+| `OMK_RESTORE_ENV_FROM` | — | `reset --keep-env` 가 남긴 `.env` 백업 디렉터리 — 설치 전에 되돌린다 |
+| `OMK_FORCE_FOREIGN` | — | `1` 이면 소유권 가드를 끈다 |
 
-스크립트에 남은 하드코딩은 다섯 가지뿐이다: 두 리포의 기본 URL, 루트 디렉터리 이름, 기본 인스턴스로 매핑되는 환경 이름(`online`), PM2 프록시 앱 이름, 그리고 GitHub API 가 막힌 환경에서만 쓰는 caddy 폴백 버전.
+도메인·호스트 경로·키는 스크립트에 없다. 스크립트에 고정된 값은 이름과 규약뿐이다: 두 리포의 기본 URL, 기본 인스턴스로 매핑되는 환경 이름(`online`),
+개발 서버의 인스턴스 이름(`local`), PM2 앱 이름(`omk-proxy`·`omk-llamacpp`), 확인 기록의 ref 경로(`refs/omk/verified`), DGX vLLM 포트(8002·8003·8005),
+내부망 HTTPS 포트(443), artifact-viewer 포트(8088·8443), 그리고 GitHub API 가 막힌 환경에서만 쓰는 caddy 폴백 버전.
