@@ -26,6 +26,7 @@ import { ToolRouter } from './tool-router';
 import type { MCPServerConfig, MCPConnectionStatus } from '../../tool-contract/types';
 import type { UnifiedDatabase, MCPServerRow } from '../../data/models/unified-database';
 import { decryptToken } from '../../utils/token-crypto';
+import { MCP_GLOBAL_RECONNECT } from '../../config/timeouts';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('MCPRegistry');
@@ -97,6 +98,10 @@ export class MCPServerRegistry {
     private connections: Map<string, ExternalMCPClient> = new Map();
     /** 도구 라우터 참조 (도구 등록/해제용) */
     private toolRouter: ToolRouter;
+    /** 예약된 재연결 타이머: serverId → timer */
+    private reconnectTimers: Map<string, NodeJS.Timeout> = new Map();
+    /** 연속 재연결 시도 횟수: serverId → 횟수 */
+    private reconnectAttempts: Map<string, number> = new Map();
 
     /**
      * MCPServerRegistry 인스턴스를 생성합니다.
@@ -129,13 +134,22 @@ export class MCPServerRegistry {
                 // rowToConfig 도 try 안에서 호출한다 — env 복호화가 실패하면 그 서버만
                 // 건너뛰어야 하고, 루프 밖이면 예외가 바깥 catch 로 빠져 나머지 서버까지
                 // 통째로 초기화되지 않는다.
+                let config: MCPServerConfig;
                 try {
-                    const config = rowToConfig(server);
+                    config = rowToConfig(server);
+                } catch (error) {
+                    const msg = error instanceof Error ? error.message : String(error);
+                    logger.error(`Failed to connect "${server.name}" during init:`, msg);
+                    continue;
+                }
+                try {
                     await this.connectServer(config.id, config);
                 } catch (error) {
                     const msg = error instanceof Error ? error.message : String(error);
                     logger.error(`Failed to connect "${server.name}" during init:`, msg);
-                    // 초기화 실패는 전체를 중단하지 않음
+                    // 초기화 실패는 전체를 중단하지 않음 — 부팅 직후 Docker 미기동 등 일시 실패는 재시도한다.
+                    // (env 복호화 실패는 재시도로 풀리지 않으므로 위에서 건너뛴다)
+                    this.scheduleReconnect(config.id, config);
                 }
             }
         } catch (error) {
@@ -207,10 +221,14 @@ export class MCPServerRegistry {
      * @throws {Error} 연결 실패 시
      */
     async connectServer(serverId: string, config: MCPServerConfig): Promise<void> {
-        // 기존 연결이 있으면 먼저 해제
-        if (this.connections.has(serverId)) {
-            await this.disconnectServer(serverId);
-        }
+        this.cancelReconnect(serverId);
+        await this.openConnection(serverId, config);
+    }
+
+    /** connectServer 본체 — 재연결은 시도 횟수를 유지하려고 이 경로로 직접 들어온다 */
+    private async openConnection(serverId: string, config: MCPServerConfig): Promise<void> {
+        // 기존 연결이 있으면 먼저 해제 (재연결 예약·횟수는 건드리지 않는다)
+        await this.closeConnection(serverId);
 
         // {{env.KEY}} 자리표시자는 값을 argv 에 박지 않고 sh 변수 참조로 감싼다(env-placeholder-shell).
         // 유저풀(lifecycle-supervisor)만 감싸고 전역 경로(부팅 initializeFromDB·수동 connect)는 리터럴이
@@ -227,8 +245,20 @@ export class MCPServerRegistry {
         }
         const client = new ExternalMCPClient(effective);
         this.connections.set(serverId, client);
+        let connectedAt = 0;
+        // 예기치 않은 종료(stdio 자식·샌드박스 컨테이너 종료) — 도구를 내리고 재연결을 예약한다.
+        // 의도한 disconnect() 는 'exit' 를 내지 않는다(external-client handleUnexpectedClose).
+        client.on?.('exit', () => {
+            if (this.connections.get(serverId) !== client) return;
+            this.toolRouter.unregisterExternalTools(serverId);
+            if (connectedAt && Date.now() - connectedAt >= MCP_GLOBAL_RECONNECT.STABLE_MS) {
+                this.reconnectAttempts.delete(serverId);
+            }
+            this.scheduleReconnect(serverId, config);
+        });
 
         await client.connect();
+        connectedAt = Date.now();
 
         // 연결 성공 시 도구를 ToolRouter에 등록
         const tools = client.getTools();
@@ -246,6 +276,11 @@ export class MCPServerRegistry {
      * @param serverId - 해제할 서버 ID
      */
     async disconnectServer(serverId: string): Promise<void> {
+        this.cancelReconnect(serverId);
+        await this.closeConnection(serverId);
+    }
+
+    private async closeConnection(serverId: string): Promise<void> {
         const client = this.connections.get(serverId);
         if (client) {
             this.toolRouter.unregisterExternalTools(serverId);
@@ -260,6 +295,7 @@ export class MCPServerRegistry {
      * Promise.allSettled로 병렬 해제하며, 개별 실패는 경고만 출력합니다.
      */
     async disconnectAll(): Promise<void> {
+        for (const id of [...this.reconnectTimers.keys()]) this.cancelReconnect(id);
         const serverIds = [...this.connections.keys()];
         logger.info(`Disconnecting all ${serverIds.length} external servers...`);
 
@@ -273,6 +309,43 @@ export class MCPServerRegistry {
         }
 
         logger.info('All external servers disconnected');
+    }
+
+    /**
+     * 재연결 예약 — 지수 백오프(BASE·2^(n-1), 상한 MAX_DELAY), MAX_ATTEMPTS 를 넘기면 멈춘다.
+     * 이미 예약돼 있으면 중복 예약하지 않는다.
+     */
+    private scheduleReconnect(serverId: string, config: MCPServerConfig): void {
+        if (this.reconnectTimers.has(serverId)) return;
+        const attempt = (this.reconnectAttempts.get(serverId) ?? 0) + 1;
+        if (attempt > MCP_GLOBAL_RECONNECT.MAX_ATTEMPTS) {
+            if (MCP_GLOBAL_RECONNECT.MAX_ATTEMPTS > 0) {
+                logger.error(`"${config.name}" 재연결 ${MCP_GLOBAL_RECONNECT.MAX_ATTEMPTS}회 실패 — 자동 재연결 중단 (수동 연결 필요)`);
+            }
+            return;
+        }
+        this.reconnectAttempts.set(serverId, attempt);
+        const delay = Math.min(MCP_GLOBAL_RECONNECT.BASE_DELAY_MS * 2 ** (attempt - 1), MCP_GLOBAL_RECONNECT.MAX_DELAY_MS);
+        logger.warn(`"${config.name}" 재연결 예약 ${attempt}/${MCP_GLOBAL_RECONNECT.MAX_ATTEMPTS} — ${delay}ms 후`);
+        const timer = setTimeout(() => {
+            this.reconnectTimers.delete(serverId);
+            this.openConnection(serverId, config).then(() => {
+                this.reconnectAttempts.delete(serverId);
+                logger.info(`"${config.name}" 재연결 성공 (${attempt}회차)`);
+            }).catch(() => {
+                this.scheduleReconnect(serverId, config);
+            });
+        }, delay);
+        timer.unref?.();
+        this.reconnectTimers.set(serverId, timer);
+    }
+
+    /** 예약된 재연결과 시도 횟수를 지운다 — 수동 연결·해제·종료 시 */
+    private cancelReconnect(serverId: string): void {
+        const timer = this.reconnectTimers.get(serverId);
+        if (timer) clearTimeout(timer);
+        this.reconnectTimers.delete(serverId);
+        this.reconnectAttempts.delete(serverId);
     }
 
     /**
