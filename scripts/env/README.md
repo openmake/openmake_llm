@@ -5,15 +5,26 @@
 `openmake_llm` 을 세 환경으로 나눠 운영한다(`openmake_bench` 는 add-on — `--bench` 로 고른 환경에만 붙는다). 환경은 서로 **env 파일·docker·PM2 가 분리**되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 `scripts/env/omk.sh` 하나다.
 
 ```
-feature/<주제> ──머지──▶ dev ──PR(일반 머지 · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   staging-chat.<도메인>
-                                                            │                     (기능 확인 → `omk env verify staging` 으로 확인한 커밋 기록)
-                                                            └──(release-please 릴리스 직후) 사람이 `omk env update online`──▶ ~/.openmake/online   chat.<도메인>
-                                                                                  (릴리스 게이트 → 스모크만)
+로컬 개발(개인 장비 · `omk dev up`)
+   │ push
+feature/<주제> ──PR(CI 필수)──▶ dev ──사람이 `omk env update dev`──▶ ~/.openmake/dev       개발 서버
+                          │                    (설치·기능 확인)
+                          └──PR(일반 머지 · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   staging-chat.<도메인>
+                                                         │                     (기능 확인 → `omk env verify staging` 으로 확인한 커밋 기록)
+                                                         └──(release-please 릴리스 직후) 사람이 `omk env update online`──▶ ~/.openmake/online   chat.<도메인>
+                                                                               (릴리스 게이트 → 스모크만)
 ```
 
+| 이름 | 어디서 | 무엇 |
+|---|---|---|
+| **로컬 개발** | 개인 장비의 작업 클론 | `omk dev up` — 고치면서 바로 보는 핫 리로드. 환경이 아니다 |
+| **환경 dev** | 개발 서버의 `~/.openmake/dev` | `omk env install dev` 로 설치한 배포본. 브랜치 `dev` 를 따른다 |
+| **환경 staging** | `~/.openmake/staging` | `main` 을 따른다 |
+| **환경 online** | `~/.openmake/online` | 최신 릴리스 태그를 따른다 |
+
 장수 브랜치는 **`main` 과 `dev` 둘**이다. `dev` 는 `feature/*` 가 모이는 개발용 브랜치이고, `main` 은 staging·릴리스가 따르는 브랜치다.
-**브랜치 `dev` 와 환경 `dev` 는 이름만 같다** — 환경 `dev`·`staging`·`online` 은 브랜치가 아니라 설치본의 이름이고, 환경 `dev` 는 브랜치 `dev` 가 아니라
-`--ref` 로 준 `feature/*` 를 올린다. staging 은 main 최신을, online 은 릴리스 직후의 main 을 사람이 올린다. 무거운 검증은 GitHub 러너의 CI 와 staging 에서 하고, online 에서는 스모크만 한다.
+환경은 브랜치가 아니라 설치본의 이름이다 — **환경 dev 는 브랜치 `dev` 를, 환경 staging 은 `main` 을** 따르고, online 은 릴리스 직후의 main 을 사람이 올린다.
+무거운 검증은 GitHub 러너의 CI 와 staging 에서 하고, online 에서는 스모크만 한다.
 
 **online 과 외부 설치는 main 이 아니라 최신 릴리스 태그를 따른다.** main 은 공개 저장소이지만 개발이 모이는 곳이다 — staging 에서 확인하기
 전의 main 을 운영이나 외부 설치자가 받으면 안 된다. `omk env install online` 의 기본 ref 는 `release`(가장 높은 `vX.Y.Z` 태그)이고,
@@ -22,78 +33,80 @@ feature/<주제> ──머지──▶ dev ──PR(일반 머지 · CI 필수)�
 bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm 의 `--ref` 와 같은 이름**을 찾으므로, llm 에만 있는 `feature/*` 를
 올리면서 bench 도 붙일 때는 `--bench --bench-ref main` 으로 준다(같은 이름의 브랜치가 없으면 bench 클론에서 설치가 멈춘다).
 
-**PR 을 시험하는 곳은 dev 다** — 머지 전에 `omk env install dev --ref <브랜치>`(또는 임시 환경 `omk env install pr-123 --ref <브랜치>`)로
-실제 설치를 확인한다. staging 은 PR 이 아니라 **머지된 main** 을 본다(여러 PR 이 합쳐진 결과, update·마이그레이션 경로).
+**브랜치 `dev` 에 합친 것을 확인하는 곳은 환경 dev 다** — 머지한 뒤 `omk env update dev` 로 올려 실제 설치를 확인하고, 통과한 뒤에 `dev` 를 `main` 으로 올린다.
+머지 전에 따로 보고 싶은 브랜치는 임시 환경에 올린다(`omk env install pr-123 --ref <브랜치>`). staging 은 **머지된 main** 을 본다(여러 PR 이 합쳐진 결과, update·마이그레이션 경로).
 
-**CI 는 `main` 의 push/PR 에서만 돈다** — `feature/*` 를 `dev` 에 합칠 때는 돌지 않는다. 그래서 `dev` 에 합치기 전의 확인은 로컬 테스트와
-환경 dev 설치가 전부이고, 자동 검사는 `dev` 를 `main` 으로 올리는 PR 에서 처음 돈다. `openmake_bench` 는 `dev` 브랜치가 없다 — `main` 에서 따서 `main` 으로 합친다.
+**CI 는 `main` 과 `dev` 의 push/PR 에서 돈다.** `feature/*` 는 PR 로만 `dev` 에 합치고, CI 를 통과해야 머지한다 — 검사가 `dev` → `main` PR 에
+몰리면 실패한 커밋을 찾기 어렵다. CI 는 "설치해서 도는지"를 보지 않으므로, 그것은 머지 뒤에 환경 dev 에서 본다.
+리뷰 승인은 지금은 필수가 아니다(개발 인원이 늘면 브랜치 보호에서 켠다). `openmake_bench` 는 `dev` 브랜치가 없다 — `main` 에서 따서 `main` 으로 합치고,
+환경 dev 에 `--bench` 로 붙이면 bench 는 `main` 을 쓴다.
 
 ## 환경 규칙
 
 | | dev | staging | online |
 |---|---|---|---|
 | 위치 | `~/.openmake/dev/llm` | `~/.openmake/staging/llm` | `~/.openmake/online/llm` |
-| 따르는 것 | `feature/*` (`--ref`, 주지 않으면 `main`) | `main` 최신 | **최신 릴리스 태그** (`release`) |
+| 따르는 것 | 브랜치 `dev` 최신 (다른 것을 올리려면 `--ref`) | `main` 최신 | **최신 릴리스 태그** (`release`) |
 | 인스턴스 | `dev` (이름 있음) | `staging` (이름 있음) | **기본(무접미사)** |
 | 포트 | install.sh 가 할당 | install.sh 가 할당 | **소스의 기본 포트** (52416 / 3000 / 5432 / 6379 / 9400 / 33000) |
 | PM2 | `openmake-{llm,next,litellm}-dev` | `openmake-{llm,next,litellm}-staging` | `openmake-{llm,next,litellm}` |
 | docker | `openmake-dev-*` | `openmake-staging-*` | `openmake-*` |
-| 배포 | **수동** reset + install, 또는 `omk env update dev` | **수동** `omk env update staging` | **수동** `omk env update online` |
+| 배포 | **수동** `omk env update dev` | **수동** `omk env update staging` | **수동** `omk env update online` |
 
 `--bench` 로 설치한 환경은 `~/.openmake/<env>/bench` 와 PM2 `openmake-bench[-<env>]` 가 더 생긴다.
 
-**작업 클론의 개발 서버(`omk dev …`)는 환경이 아니다** — `~/.openmake` 아래에 두지 않고, 인스턴스 이름 `local`(docker `openmake-local-*`)로
+**작업 클론의 로컬 개발(`omk dev …`)은 환경이 아니다** — `~/.openmake` 아래에 두지 않고, 인스턴스 이름 `local`(docker `openmake-local-*`)로
 앱이 PM2 없이 포그라운드에서 돈다. 환경 `dev` 와 이름이 비슷하지만 별개다 — 다만 앱이 기대는 것(검색·런타임 이미지·게이트웨이·기본 모델)은
-환경 설치와 **같은 함수**로 준비한다([개발 서버](#개발-서버--omk-dev-작업-클론--핫-리로드)).
+환경 설치와 **같은 함수**로 준비한다([로컬 개발](#로컬-개발--omk-dev-작업-클론--핫-리로드)).
 
 - **online 이 기본 인스턴스인 이유** — 소스(`install.sh`·`gen-env.mjs`·`resolve-ports.cjs`·문서)의 기본 포트와 이름이 곧 운영 값이다. online 을 기본 인스턴스로 두면 포트 표를 어디에도 다시 적을 필요가 없다.
 - **이름 있는 인스턴스의 포트**는 `install.sh` 규칙을 따른다 — 기본은 한 칸 옆(52417/3010/5433/6380)이고, 그 포트가 쓰이고 있으면 옮긴다
   (API 는 다음 빈 포트, 웹 13000~, PostgreSQL 15432~, Redis 16379~). **omk 는 포트를 기억하지 않고 각 환경의 `.env` 를 읽는다** — 실제 값은 `omk env status <env>` 로 본다.
-- 충돌 판정은 **설치하는 순간 열려 있는 포트**만 본다. 같은 호스트의 다른 환경이나 개발 서버가 멈춰 있을 때 설치하면 같은 포트를 받을 수 있다 —
-  나란히 쓸 환경은 띄워 둔 채 설치한다. 개발 서버가 겹쳤으면 `omk dev setup` 을 다시 돌리면 옮겨진다. 환경끼리 겹친 것은 자동으로 옮기지 않는다
+- 충돌 판정은 **설치하는 순간 열려 있는 포트**만 본다. 같은 호스트의 다른 환경이나 로컬 개발이 멈춰 있을 때 설치하면 같은 포트를 받을 수 있다 —
+  나란히 쓸 환경은 띄워 둔 채 설치한다. 로컬 개발이 겹쳤으면 `omk dev setup` 을 다시 돌리면 옮겨진다. 환경끼리 겹친 것은 자동으로 옮기지 않는다
   (PM2 에 등록된 앱의 포트는 자기 것으로 본다) — 한쪽을 `omk env reset` 한 뒤, 다른 쪽을 띄워 둔 채 다시 설치한다.
-- 호스트 구성은 자유다. online 과 staging 이 같은 호스트여도 되고 달라도 된다. dev 는 개발자마다 자기 호스트에서 돈다.
+- 호스트 구성은 자유다. online 과 staging 이 같은 호스트여도 되고 달라도 된다. 환경 dev 는 개발 서버에, 로컬 개발은 개발자마다 자기 장비에 둔다.
 
 ## 개발에서 배포까지 — 환경별로 할 것 / 하지 말 것
 
 | # | 어디서 | 무엇을 | 명령 |
 |---|---|---|---|
-| ① | 작업 클론 | 브랜치 `dev` 에서 브랜치를 따 수정 → 로컬 테스트 → push | `git switch -c feature/<주제> origin/dev` … `git push -u origin feature/<주제>` |
-| ② | **dev** | 그 브랜치가 실제로 설치되고 도는지 확인 | `omk env reset dev` → `omk env install dev --ref feature/<주제> --tailscale` (수정분만: `omk env update dev`) |
-| ③ | 작업 클론 · GitHub | 브랜치 `dev` 에 합친다 (일반 머지 · CI 없음) | `git switch dev && git merge --no-ff feature/<주제> && git push` 또는 `gh pr create --base dev` |
-| ③′ | GitHub | `dev` → `main` PR → CI → 리뷰 → **일반 머지** | `gh pr create --base main --head dev` |
-| ④ | **staging** | 머지된 main 을 기존 데이터 위에서 update 로 확인 | `omk env update staging` |
-| ⑤ | **staging** | 확인을 마친 커밋을 기록 | `omk env verify staging` |
-| ⑥ | GitHub | release-please 의 릴리스 PR 머지 → `vX.Y.Z` 태그 (⑤ 뒤에 main 에 머지된 것이 없을 때) | 릴리스 PR 머지 |
-| ⑦ | **online** | 새 릴리스 태그로 올리고 스모크 확인 — 게이트가 ⑤ 의 기록을 본다 | `omk env update online` |
+| ① | 로컬 개발 (개인 장비) | 브랜치 `dev` 에서 브랜치를 따 핫 리로드로 수정 → 로컬 테스트 → push | `git switch -c feature/<주제> origin/dev` · `omk dev up` … `git push -u origin feature/<주제>` |
+| ② | GitHub | `feature/*` → `dev` PR → CI → **일반 머지** (직접 push 하지 않는다) | `gh pr create --base dev` |
+| ③ | **환경 dev** (개발 서버) | 합쳐진 `dev` 가 실제로 설치되고 도는지 확인 | `omk env update dev` (처음 한 번: `omk env install dev --tailscale`) |
+| ④ | GitHub | `dev` → `main` PR → CI → 리뷰 → **일반 머지** | `gh pr create --base main --head dev` |
+| ⑤ | **환경 staging** | 머지된 main 을 기존 데이터 위에서 update 로 확인 | `omk env update staging` |
+| ⑥ | **환경 staging** | 확인을 마친 커밋을 기록 | `omk env verify staging` |
+| ⑦ | GitHub | release-please 의 릴리스 PR 머지 → `vX.Y.Z` 태그 (⑥ 뒤에 main 에 머지된 것이 없을 때) | 릴리스 PR 머지 |
+| ⑧ | **환경 online** | 새 릴리스 태그로 올리고 스모크 확인 — 게이트가 ⑥ 의 기록을 본다 | `omk env update online` |
 
 배포는 전부 **수동**이다 — 머지·릴리스만으로는 어떤 환경도 바뀌지 않는다. 앞 단계를 통과하기 전에는 다음 단계로 가지 않는다
-(dev 통과 전 머지 금지, staging 통과 전 릴리스 금지).
+(환경 dev 통과 전 `main` 으로 올리지 않는다, staging 통과 전 릴리스 금지).
 
 `dev` 를 `main` 으로 올릴 때는 squash 하지 않는다 — squash 는 `dev` 와 `main` 의 연결을 끊어, 다음에 올릴 때마다 이미 올린 변경이 충돌한다.
 커밋 제목은 `feat(…):` · `fix(…):` 형식을 지킨다 — 일반 머지라 `dev` 의 커밋 제목이 그대로 `main` 에 들어가고, release-please 가 그것을 CHANGELOG 에 쓴다.
 
-### dev — "내 브랜치가 실제 환경에서 도는가"
+### dev — "합쳐진 dev 가 실제 환경에서 도는가"
 
 | 할 것 | 하지 말 것 |
 |---|---|
-| `--ref <브랜치>` 로 설치해 **설치가 끝까지 되는지**부터 본다 | dev 를 건너뛰고 PR 을 머지하지 않는다 — CI 는 "설치해서 도는지"를 보지 않는다 |
+| 브랜치 `dev` 에 머지될 때마다 `omk env update dev` — **설치가 끝까지 되는지**부터 본다 | 환경 dev 를 건너뛰고 `dev` 를 `main` 으로 올리지 않는다 — CI 는 "설치해서 도는지"를 보지 않는다 |
 | 바꾼 기능 + 기본 동작(채팅·웹 검색·에이전트 작업·아티팩트 내보내기)을 확인한다 | dev 의 결과로 **답변 품질·에이전트 성공률**을 판단하지 않는다 — 기본 모델은 작다. dev 가 증명하는 것은 배선과 구조다 |
-| 꼬이면 망설이지 말고 `omk env reset dev` — 데이터는 버리는 것이다 | 남기고 싶은 데이터를 dev 에 두지 않는다 |
-| 다른 브랜치를 올릴 때는 **reset 부터** 한다 | 설치된 환경에 `--ref` 만 바꿔 다시 install 하지 않는다 — 이미 있는 클론은 그대로 재사용되어 **이전 브랜치가 설치된다**(로그의 "소스 재사용: … (브랜치)" 한 줄로만 드러난다) |
-| 무거운 실험(새 모델, 설정 변경, 일부러 깨뜨리기)은 여기서 한다 | 환경 디렉터리(`~/.openmake/dev/llm`)의 소스를 직접 고치지 않는다 — 작업 클론에서 고쳐 push → `omk env update dev` |
-| 남의 PR 은 dev 에 올리거나, 임시 환경을 만든다: `omk env install pr-123 --ref <브랜치>` → 끝나면 `omk env reset pr-123` | 임시 환경을 방치하지 않는다 — 환경마다 DB·게이트웨이·이미지가 따로 생긴다 |
+| 꼬이면 망설이지 말고 `omk env reset dev --reinstall` — 데이터는 버리는 것이다 | 남기고 싶은 데이터를 dev 에 두지 않는다 |
+| 문제가 나오면 로컬 개발에서 고쳐 → push → 브랜치 `dev` 에 머지 → `omk env update dev` | 환경 디렉터리(`~/.openmake/dev/llm`)의 소스를 직접 고치지 않는다 |
+| 머지 전에 따로 볼 브랜치는 **임시 환경**에 올린다: `omk env install pr-123 --ref <브랜치>` → 끝나면 `omk env reset pr-123` | 환경 dev 에 `--ref` 만 바꿔 다시 install 하지 않는다 — 이미 있는 클론은 그대로 재사용되어 **이전 브랜치가 설치된다**(로그의 "소스 재사용: … (브랜치)" 한 줄로만 드러난다) |
+| 무거운 실험(새 모델, 설정 변경, 일부러 깨뜨리기)은 여기서 한다 | 임시 환경을 방치하지 않는다 — 환경마다 DB·게이트웨이·이미지가 따로 생긴다 |
 
 ### staging — "합쳐진 main 이 online 에 올라가도 되는가"
 
 | 할 것 | 하지 말 것 |
 |---|---|
-| **항상 main** (`--ref` 없이 설치). 머지될 때마다 `omk env update staging` | `--ref feature/*` 로 PR 을 시험하지 않는다 — 그것은 dev 의 일이다 (예외: 환경 매니저 자체를 바꾸는 브랜치의 공존 시험) |
+| **항상 main** (`--ref` 없이 설치). 머지될 때마다 `omk env update staging` | `--ref feature/*` 로 PR 을 시험하지 않는다 — 그것은 임시 환경의 일이다 (예외: 환경 매니저 자체를 바꾸는 브랜치의 공존 시험) |
 | **update 경로**로 올린다 — online 도 update 로 올라가므로 같은 길을 먼저 밟는다 | 습관적으로 reset → 재설치하지 않는다 — 마이그레이션이 기존 데이터에서 도는지 볼 수 없게 된다 |
 | 데이터를 **유지**한다(계정·대화·작업이 쌓여 있어야 마이그레이션 검증이 된다). reset 은 정말 꼬였을 때만 | 실사용 데이터·비밀값을 가져다 넣지 않는다 — 환경은 소스에서 설치한 것만으로 선다 |
 | 여러 PR 이 합쳐진 결과의 **기능 확인은 여기까지** 끝낸다 | 통과하기 전에 릴리스 PR 을 머지하지 않는다 |
 | 확인이 끝나면 `omk env verify staging` — 그 커밋에서 나온 릴리스만 online 에 올라간다 | 확인하지 않고 verify 하지 않는다. verify 뒤에 main 에 머지가 더 들어왔으면 update → 확인 → verify 를 다시 한다 |
-| 문제가 나오면 수정 PR(①부터) 또는 revert | staging 에서 직접 핫픽스하지 않는다 |
+| 문제가 나오면 수정(①부터) 또는 revert | staging 에서 직접 핫픽스하지 않는다 |
 
 ### online — "실사용"
 
@@ -108,7 +121,7 @@ bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm �
 
 | | dev | staging | online |
 |---|---|---|---|
-| 올리는 방식 | reset + install, 또는 update | **update 만** | **update 만** |
+| 올리는 방식 | update (꼬이면 reset + install) | **update 만** | **update 만** |
 | 데이터 | 버림 | 유지 | 절대 보존 |
 | 검증 깊이 | 기능 전부(배선·구조) | 기능 + update·마이그레이션 | 스모크만 |
 | 모델 | 호스트 기본 모델 또는 지정 | 같음 | 운영 모델 서버 (`--qwen-vllm-base …`) |
@@ -213,14 +226,14 @@ omk dev down | status | reset [--keep-data]
 - **bench 는 기본으로 설치하지 않는다** — `--bench` 또는 `--bench-ref BR` 을 줄 때만 붙는다. `--no-bench` 는 예전 호출용으로 계속 받는다(기본과 같다).
   이미 bench 가 있는 환경은 `update`·`start`·`reset --reinstall` 이 그대로 다룬다.
 - 종료 코드: `0` 성공 / `1` 사용법·전제조건 / `2` 단계 실패(릴리스 게이트 거부 포함) / `3` health check 실패.
-- `staging`/`online` 외의 이름도 된다(`omk env install qa --ref feature/x`) — 이름 있는 인스턴스가 하나 더 생길 뿐이다. `local` 은 개발 서버가 쓰는 이름이라 환경 이름으로 쓸 수 없다.
+- `staging`/`online` 외의 이름도 된다(`omk env install qa --ref feature/x`) — 이름 있는 인스턴스가 하나 더 생길 뿐이다. `local` 은 로컬 개발이 쓰는 이름이라 환경 이름으로 쓸 수 없다.
 
 **`omk` 명령이 실행하는 스크립트** — 래퍼 `~/.openmake/bin/omk` 는 `online` → `staging` → 그 밖의 환경 순서로 처음 찾은 환경의
 `llm/scripts/env/omk.sh` 를 실행한다. online 이 있는 호스트에서는 어느 환경을 다루든 **online 에 설치된 버전의 omk** 가 돈다.
 `omk.sh` 자체를 고친 브랜치를 시험할 때는 래퍼 대신 그 소스의 스크립트를 직접 부른다:
 
 ```bash
-<작업 클론>/scripts/env/omk.sh env install dev --ref feature/<주제>
+<작업 클론>/scripts/env/omk.sh env install pr-123 --ref feature/<주제>
 ```
 
 ## 웹 검색 — 설치하면 바로 된다
@@ -236,7 +249,7 @@ Postgres·Redis 와 같은 급의 **환경 인프라**로 기본 설치한다 (`
 | 컨테이너가 안 뜸 | 로그 5줄을 보여 주고 치운다. **죽은 주소는 `.env` 에 적지 않는다** | `SearXNG 없음 …` |
 | `SEARXNG_URL` 을 직접 넣어 둠 | 손대지 않는다 — omk 것은 `http://127.0.0.1:<OMK_SEARXNG_PORT>` 뿐. omk 가 띄운 뒤 주소만 바꿔도 되돌리지 않는다 | `동작 확인 …` / `결과 0건 …` |
 
-설정은 `<env>/searxng/settings.yml`(개발 서버: 작업 클론의 `.openmake/searxng/`) — 기본 설정 위에 `formats: json`(없으면 Base 호출이 403),
+설정은 `<env>/searxng/settings.yml`(로컬 개발: 작업 클론의 `.openmake/searxng/`) — 기본 설정 위에 `formats: json`(없으면 Base 호출이 403),
 `limiter: false`, `image_proxy: false`, 무작위 `secret_key` 를 덮고, 응답이 불안정한 엔진(brave·startpage·mojeek)을 끈다.
 파일이 이미 있으면 다시 쓰지 않는다. `omk env reset` 은 이 컨테이너도 함께 지운다.
 검색 쪽 실패는 설치를 멈추지 않는다(경고 후 계속). 컨테이너는 `omk.owner_dir` 라벨이 이 설치본을 가리킬 때만 건드린다 —
@@ -273,7 +286,7 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
 업스트림(`--llm-base-url`·`--qwen-vllm-base`)을 주지 않고 설치하면 omk 가 **최소 모델**을 게이트웨이 뒤에 둔다:
 llama.cpp 의 `llama-server`(OpenAI 호환 · CPU·Metal 에서 돈다 — vLLM 은 GPU 가 필요해 저사양·macOS 에서 못 쓴다) +
 `Qwen/Qwen3-1.7B-GGUF:Q8_0`(1.8GB, 도구 호출이 되는 가장 작은 선). 경로는 언제나 **앱 → 환경의 LiteLLM → 업스트림**이다.
-작업 클론의 개발 서버(`omk dev setup`)도 같다 — 게이트웨이는 `local` 것을 따로 두고 모델 서버는 같이 쓴다.
+작업 클론의 로컬 개발(`omk dev setup`)도 같다 — 게이트웨이는 `local` 것을 따로 두고 모델 서버는 같이 쓴다.
 
 - 호스트당 하나: PM2 `omk-llamacpp`, `127.0.0.1` 전용, `~/.openmake/llamacpp/{bin,models,start.sh,port}`. 환경들이 공유하고 `env reset` 에도 남는다.
   `llama-server` 가 PATH 에 있으면 그것을 쓰고, 없으면 공식 릴리스(`OMK_LLAMACPP_TAG`)를 받는다.
@@ -323,7 +336,7 @@ Linux·WSL2 는 지금처럼 Docker Engine 을 쓴다.
 (`TASK_SANDBOX_WRITE_VIA_CONTAINER` — 접속처가 Colima 면 자동으로 켜진다), 쓰고 곧바로 실행하는 임시 파일은 호출마다 새 이름으로 만든다.
 workspace 를 밖에서 직접 고치는 도구를 붙일 때는 같은 점을 고려한다.
 
-개발 서버도 같다 — `omk dev setup` 이 런타임 이미지를 빌드하면서 `TASK_SANDBOX_ROOT` 를 `~/.openmake/local/task-workspaces` 로 둔다.
+로컬 개발도 같다 — `omk dev setup` 이 런타임 이미지를 빌드하면서 `TASK_SANDBOX_ROOT` 를 `~/.openmake/local/task-workspaces` 로 둔다.
 `--no-runtime-images` 로 준비한 뒤 샌드박스를 직접 켤 때는 `.env` 의 `TASK_SANDBOX_ROOT` 를 홈 아래 경로로 둔다 —
 Colima 는 홈 디렉터리만 VM 에 공유해, 기본값(`/tmp/…`)은 컨테이너에서 보이지 않는다.
 
@@ -417,7 +430,7 @@ omk env reset staging --keep-data            # DB 볼륨은 남김 (.env 도 함
 
 손으로 하려면 위 표 그대로 `pm2 delete …` → `docker rm -f …` → `docker volume rm …` → `rm -rf ~/.openmake/staging`. 전역 도구(Node·Docker·PM2·Caddy)는 다른 환경이 쓰므로 건드리지 않는다.
 
-## 개발 서버 — `omk dev` (작업 클론 · 핫 리로드)
+## 로컬 개발 — `omk dev` (작업 클론 · 핫 리로드)
 
 작업 클론 안에서 쓴다. `openmake_bench` 가 옆 디렉터리(`../openmake_bench`)에 있으면 같이 띄운다 (`OMK_DEV_LLM` / `OMK_DEV_BENCH` 로 지정 가능).
 
@@ -439,7 +452,7 @@ scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.en
 
 **설치 직후 바로 채팅이 된다.** 검색·런타임 이미지·게이트웨이·기본 모델은 `omk env install` 과 같은 함수(`stack_ensure`)로 준비하고 옵션의 뜻도 같다 —
 `--no-searxng` · `--no-runtime-images`(약 7GB 빌드를 뺀다) · `--no-litellm` · `--no-default-model` · `--llm-base-url U --llm-model M`(예: 이미 있는 Ollama).
-개발 서버가 환경과 다른 것은 셋뿐이다: 앱을 빌드하지 않고, 앱을 PM2 에 올리지 않고, `.env` 의 `NODE_ENV` 가 `development` 다
+로컬 개발이 환경과 다른 것은 셋뿐이다: 앱을 빌드하지 않고, 앱을 PM2 에 올리지 않고, `.env` 의 `NODE_ENV` 가 `development` 다
 (`gen-env.mjs` 의 기본값 `production` 을 바꾼다. `test`·`staging` 처럼 직접 고른 값은 그대로 둔다).
 
 | 같이 쓰는 것 (호스트에 하나) | 따로 두는 것 (`local`) |
@@ -456,14 +469,14 @@ scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.en
 
 **다른 기기에서 보기.** 웹은 채팅 소켓을 "접속한 호스트명:API 포트"로 붙이고, 서버는 Origin 이 `CORS_ORIGINS` 와 정확히 일치할 때만 받는다(REST·WS 공통). 그래서 접속에 쓸 호스트를 알려줘야 한다 — `--tailscale` 은 `tailscale status` 에서 MagicDNS 짧은 이름·FQDN·IPv4 를 읽고, `--host` 는 직접 준다. omk 는 그 호스트를 세 곳에 넣는다: API 의 `CORS_ORIGINS`(호스트별 웹·API origin), Next dev 의 `allowedDevOrigins`(모르면 HMR 이 막혀 hydration 이 죽는다), bench vite 의 `allowedHosts`. 목록은 `.env` 의 `OMK_DEV_HOSTS` 에 기억되어 다음 `dev up` 부터는 옵션 없이도 유지된다. 허용하지 않은 호스트·Origin 은 계속 거부된다.
 
-개발 서버의 앱은 PM2 를 쓰지 않는다 — `npm run dev:api`(`ts-node`)·`next dev`·bench 의 `vite` 가 `concurrently` 아래 포그라운드에서 돈다.
+로컬 개발의 앱은 PM2 를 쓰지 않는다 — `npm run dev:api`(`ts-node`)·`next dev`·bench 의 `vite` 가 `concurrently` 아래 포그라운드에서 돈다.
 웹과 bench 화면은 고치면 바로 반영되고, **API 는 감시 재시작이 없어** 고친 뒤 `dev up` 을 다시 띄운다. 인스턴스 이름은 **`local`**(컨테이너 `openmake-local-*`)이라
 같은 호스트의 **환경 `dev`**(`~/.openmake/dev` — 빌드된 배포본으로 브랜치를 확인하는 곳)·staging·online 과 컨테이너·볼륨 이름이 겹치지 않는다.
 포트는 설치할 때 열려 있던 것만 피한다([환경 규칙](#환경-규칙)).
-둘은 용도가 다르다: `omk dev up` 은 고치면서 바로 보는 핫 리로드, `omk env install dev --ref …` 는 "실제로 설치해도 도는가".
+둘은 용도가 다르다: `omk dev up` 은 개인 장비에서 고치면서 바로 보는 핫 리로드, 환경 dev 는 개발 서버에서 "실제로 설치해도 도는가".
 예전에 `dev` 이름으로 준비한 작업 클론은 그대로 동작하지만 환경 dev 와 겹친다 — `omk dev reset` 이 이름을 `local` 로 옮겨 준다(그 뒤 `omk dev setup`).
 
-흐름: 클론 → 개발 → 주제별 `feature/*` 브랜치 → 테스트(`npm test`, `npm run lint`, `bash scripts/env/omk.test.sh`) → 원격 `feature/*` push → 환경 dev 에서 확인 → 브랜치 `dev` 에 합친다([개발에서 배포까지](#개발에서-배포까지--환경별로-할-것--하지-말-것)).
+흐름: 클론 → 개발 → 주제별 `feature/*` 브랜치 → 테스트(`npm test`, `npm run lint`, `bash scripts/env/omk.test.sh`) → 원격 `feature/*` push → 브랜치 `dev` 에 합친다 → 환경 dev 에서 확인([개발에서 배포까지](#개발에서-배포까지--환경별로-할-것--하지-말-것)).
 
 ## 프록시와 도메인
 
@@ -516,5 +529,5 @@ omk env status online
 | `OMK_FORCE_FOREIGN` | — | `1` 이면 소유권 가드를 끈다 |
 
 도메인·호스트 경로·키는 스크립트에 없다. 스크립트에 고정된 값은 이름과 규약뿐이다: 두 리포의 기본 URL, 기본 인스턴스로 매핑되는 환경 이름(`online`),
-개발 서버의 인스턴스 이름(`local`), PM2 앱 이름(`omk-proxy`·`omk-llamacpp`), 확인 기록의 ref 경로(`refs/omk/verified`), DGX vLLM 포트(8002·8003·8005),
+로컬 개발의 인스턴스 이름(`local`), PM2 앱 이름(`omk-proxy`·`omk-llamacpp`), 확인 기록의 ref 경로(`refs/omk/verified`), DGX vLLM 포트(8002·8003·8005),
 내부망 HTTPS 포트(443), artifact-viewer 포트(8088·8443), 그리고 GitHub API 가 막힌 환경에서만 쓰는 caddy 폴백 버전.

@@ -32,7 +32,8 @@ eq "bench pm2"      "$(bench_pm2_name staging)" "openmake-bench-staging"
 eq "dirs"           "$(llm_dir staging)|$(bench_dir staging)" "$OMK_ROOT/staging/llm|$OMK_ROOT/staging/bench"
 eq "ref staging"    "$(env_default_ref staging)" "main"
 eq "ref online"     "$(env_default_ref online)"  "release"
-eq "ref dev"        "$(env_default_ref dev)"     "main"
+eq "ref dev"        "$(env_default_ref dev)"     "dev"
+eq "ref 그 밖의 이름" "$(env_default_ref qa-1)"    "main"
 ok "validate rejects local" '! ( validate_env local ) >/dev/null 2>&1'
 DV="$TMP/devclone"; mkdir -p "$DV"
 # shellcheck disable=SC2034  # dev_instance 가 읽는다
@@ -115,7 +116,7 @@ eq "default model: 명시가 우선" "$( OMK_DEFAULT_MODEL_NAME=x; default_model
 rm -rf "$(llamacpp_dir)"
 eq "llamacpp dir" "$(llamacpp_dir)" "$OMK_ROOT/llamacpp"
 
-# ── 공통 단계: 환경 설치와 개발 서버가 같은 함수로 같은 단계를 밟는다 (docker·PM2 는 가짜) ──
+# ── 공통 단계: 환경 설치와 로컬 개발이 같은 함수로 같은 단계를 밟는다 (docker·PM2 는 가짜) ──
 ST="$TMP/st"; mkdir -p "$ST"
 stack_probe() { # $1=.env 내용 $2…=stack_ensure 의 $5 이후 → 불린 단계와 게이트웨이에 넘어간 업스트림(base|model)
     ( printf '%s' "$1" > "$ST/.env"; shift
@@ -135,7 +136,7 @@ eq "stack: --no-default-model"            "$(stack_probe '' 1 0)" "search images
 eq "stack: 게이트웨이를 끄면 모델도 없다" "$(stack_probe $'OMK_LITELLM=off\n' 0 0)" "search images guard gateway[|]"
 eq "stack: 직접 넣은 주소는 그대로"       "$(stack_probe $'LLM_BASE_URL=http://my:1\n' 0 1)|$(dotenv_get "$ST/.env" LLM_BASE_URL)" "search images guard |http://my:1"
 
-# ── 개발 서버의 .env: 실행 모드, 그리고 LLM 주소가 omk 것인가 ──
+# ── 로컬 개발의 .env: 실행 모드, 그리고 LLM 주소가 omk 것인가 ──
 printf 'NODE_ENV=production\n' > "$ST/d.env"; dev_env_defaults "$ST/d.env"
 eq "dev env: production 은 development 로" "$(dotenv_get "$ST/d.env" NODE_ENV)" "development"
 printf 'NODE_ENV=staging\n' > "$ST/d.env"; dev_env_defaults "$ST/d.env"

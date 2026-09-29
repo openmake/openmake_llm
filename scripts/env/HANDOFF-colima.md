@@ -73,16 +73,16 @@ Docker Desktop 에도 같은 현상이 있는지는 **확인하지 못했다.**
 - `TaskSandbox.writeFile` 이 컨테이너 안에서 쓴다 (`writeViaContainer` — docker 접속처가 Colima 일 때만 자동).
 - `python_execute` · `browser` · `skill_run` 은 실행 파일을 호출마다 새 이름으로 만든다 (`runFresh`).
 
-## 개발 서버도 환경과 같은 단계를 밟는다 — 2026-09-29 추가
+## 로컬 개발도 환경과 같은 단계를 밟는다 — 2026-09-29 추가
 
 Docker Desktop 이 함께 있는 Mac 에서 `omk dev setup` → `omk dev up` 을 돌리니 앱은 떴지만 LLM 이 offline 이었다.
 `.env` 가 `gen-env.mjs` 의 기본값(`LLM_BASE_URL=http://localhost:4000` · `retired-chat-model` · `NODE_ENV=production`) 그대로였고,
-게이트웨이와 기본 모델(1.7B)은 `omk env install` 에만 있었다. 개발 서버가 단계를 따로 나열하고 있어서 생긴 일이다.
+게이트웨이와 기본 모델(1.7B)은 `omk env install` 에만 있었다. 로컬 개발이 단계를 따로 나열하고 있어서 생긴 일이다.
 
 | 바꾼 것 | 위치 |
 |---|---|
 | 검색·런타임 이미지·게이트웨이·기본 모델을 `stack_ensure` 하나로 묶고 `cmd_env_install` 과 `cmd_dev_setup` 이 같이 부른다 | `omk.sh` |
-| 개발 서버의 `NODE_ENV=production` 을 `development` 로 (`dev_env_defaults`) | `omk.sh` |
+| 로컬 개발의 `NODE_ENV=production` 을 `development` 로 (`dev_env_defaults`) | `omk.sh` |
 | 직접 넣은 `LLM_BASE_URL` 은 건드리지 않는다 (`dev_llm_is_ours`) | `omk.sh` |
 | `dev up` 이 내려간 게이트웨이·모델 서버를 다시 띄우고(`dev_llm_up`), `dev down` 이 게이트웨이를 멈춘다 | `omk.sh` |
 | `dev status` 가 `.env` 의 인스턴스 이름으로 컨테이너를 찾는다 (전에는 `openmake-dev-*` 고정이라 비어 있었다) | `omk.sh` |
@@ -140,7 +140,7 @@ LaunchAgent 를 먼저 지운다 — 남아 있으면 다음 로그인 때 빈 V
 | `OMK_ROOT` 나 작업 클론이 홈 밖이면 마운트가 빈다 | Colima 는 홈만 공유한다 |
 | `.env.example` 의 주석 `macOS(Docker Desktop) 포함` | 표현만 옛것 |
 | 입력 첨부 복사(`importFile`)는 호스트에서 한다 | 같은 이름으로 다시 첨부하면 1초 지연 |
-| 개발 서버를 `--no-runtime-images` 로 준비하면 `TASK_SANDBOX_ROOT` 가 설정되지 않는다 | 그 뒤 샌드박스를 직접 켜면 workspace 가 VM 에 안 보인다. README 에 적어 두었다 |
+| 로컬 개발을 `--no-runtime-images` 로 준비하면 `TASK_SANDBOX_ROOT` 가 설정되지 않는다 | 그 뒤 샌드박스를 직접 켜면 workspace 가 VM 에 안 보인다. README 에 적어 두었다 |
 
 ## 이번 변경과 무관한 기존 문제
 
@@ -152,7 +152,7 @@ LaunchAgent 를 먼저 지운다 — 남아 있으면 다음 로그인 때 빈 V
 ## 테스트
 
 ```bash
-bash scripts/env/omk.test.sh                  # 188 + 13 (개발 서버 공통 단계)
+bash scripts/env/omk.test.sh                  # 202
 bash scripts/setup/mac-toolchain.test.sh      # 35 — scripts/setup/mac/ 안에 두지 않는다(설치기가 그 디렉터리의 *.sh 를 전부 source 한다)
 npm run build:packages
 npm test --workspace=apps/api -- src/services/task-sandbox src/addons/mcp-runtime
@@ -167,8 +167,26 @@ Homebrew 의 기본 node 가 다른 버전이면 `export PATH="/opt/homebrew/opt
 
 | 정해진 것 | 정해지지 않은 것 |
 |---|---|
-| 작업 기준은 `origin/dev` | CI(`ci.yml`)는 `main` 의 push/PR 에서만 돈다 — `dev` 로 가는 머지는 검사되지 않는다. 브랜치 `dev` 는 보호 설정도 없다 |
-| `dev` → `main` 은 squash 가 아니라 **일반 머지**로 올린다(squash 는 `dev` 와 `main` 의 연결을 끊어 올릴 때마다 충돌한다) | `ios.yml` · `desktop-native.yml` 은 없는 브랜치 `develop` 을 가리킨다 — `dev` 에서 돌지 않는다 |
+| 작업 기준은 `origin/dev` | 브랜치 `dev` 의 보호 설정(PR 필수 · CI Gate 필수 · force push·삭제 금지) — 워크플로 수정이 `dev` 에 들어가 CI 가 한 번 통과한 뒤에 건다 |
+| `dev` → `main` 은 squash 가 아니라 **일반 머지**로 올린다(squash 는 `dev` 와 `main` 의 연결을 끊어 올릴 때마다 충돌한다) | 리뷰 승인 필수 — 지금은 걸지 않는다(2명). 인원이 늘면 켠다 |
 | 커밋 제목은 `feat(…):` · `fix(…):` 형식을 지킨다 — release-please 가 그대로 CHANGELOG 에 쓴다 | |
 
 이 브랜치를 `dev` 에 합치면 `feat` 커밋이 있어 다음 릴리스는 minor 가 올라간다.
+
+### 용어와 순서, 자동 검사 — 2026-09-30 결정
+
+| 정한 것 | 바꾼 곳 |
+|---|---|
+| 개인 장비에서 `omk dev up` 으로 핫 리로드하는 것은 **로컬 개발**이라 부른다. "개발 서버"는 환경 dev 를 설치하는 호스트를 가리킨다 | `omk.sh`(주석·메시지) · `README.md` · 이 문서 |
+| 환경 dev 는 **브랜치 `dev` 를 따른다.** `feature/*` 를 브랜치 `dev` 에 합친 **뒤에** `omk env update dev` 로 확인하고, 통과하면 `dev` 를 `main` 으로 올린다 | `README.md` 의 흐름도·단계표·dev 할 것/하지 말 것 |
+| `omk env install dev` 의 기본 ref 가 `main` 에서 `dev` 로 바뀐다. 그때 bench 는 `main` 을 쓴다(브랜치 `dev` 가 없다) | `omk.sh` `env_default_ref` · `cmd_env_install`, `omk.test.sh` |
+| 머지 전에 따로 볼 브랜치는 임시 환경에 올린다 (`omk env install pr-123 --ref …`) | `README.md` |
+| `feature/*` 는 **PR 로만** 브랜치 `dev` 에 합친다. CI 가 `dev` 의 push/PR 에서도 돈다 | `.github/workflows/ci.yml` · `README.md` |
+| `ios.yml` · `desktop-native.yml` 이 없는 브랜치 `develop` 을 가리키던 것을 `dev` 로 | `.github/workflows/` |
+| `main` 의 CI 가 의존성 감사(Gate 0.7)에서 실패하고 있었다 — `fast-uri` 3.1.6 의 high 권고 2건. 3.1.8 로 올렸다(lockfile 만) | `package-lock.json` |
+
+확인한 것(2026-09-30, 같은 Mac): `omk.test.sh` 202 통과, `npm run audit:gate` 통과, `omk dev setup` → `omk dev up` 뒤 `/api/health` 의 llm 이 online.
+확인하지 못한 것: 워크플로 수정(GitHub 에서만 돈다), `omk env install dev` 가 브랜치 `dev` 를 받는 것(이 수정분이 `dev` 에 들어간 뒤에 의미가 있다).
+
+이 브랜치 자체는 아직 브랜치 `dev` 에 합치기 전이다 — 위 "남은 검증"의 1 은 환경 dev 가 아니라 임시 환경으로 해도 된다
+(`scripts/env/omk.sh env install colima --ref feature/colima-docker-runtime`).

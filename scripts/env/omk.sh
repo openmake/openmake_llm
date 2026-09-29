@@ -87,8 +87,8 @@ OMK_BACKUP_CRON="${OMK_BACKUP_CRON:-30 3 * * *}"          # omk env backup --sch
 OMK_LITELLM_PORT_BASE="${OMK_LITELLM_PORT_BASE:-13401}"  # LiteLLM 게이트웨이 빈 포트 탐색 시작점
 OMK_LITELLM_SPEC="${OMK_LITELLM_SPEC:-litellm[proxy]}"    # pip 설치 대상 — 버전 고정: 'litellm[proxy]==X.Y.Z'
 # 기본 모델 — 업스트림을 주지 않은 설치본도 바로 채팅이 되게 하는 최소 모델. 호스트당 llama.cpp 서버 하나(PM2), 환경들이 공유한다.
-# 작업 클론의 핫 리로드 개발 서버('omk dev up')가 쓰는 인스턴스 이름 — 환경 'dev'(~/.openmake/dev)와 컨테이너·볼륨·포트가
-# 겹치지 않게 따로 둔다. 같은 호스트에서 개발 서버와 환경 dev 를 동시에 쓸 수 있다.
+# 작업 클론의 로컬 개발('omk dev up' · 핫 리로드)이 쓰는 인스턴스 이름 — 환경 'dev'(~/.openmake/dev)와 컨테이너·볼륨·포트가
+# 겹치지 않게 따로 둔다. 같은 호스트에서 로컬 개발과 환경 dev 를 동시에 쓸 수 있다.
 OMK_LOCAL_INSTANCE="local"
 OMK_LLAMACPP_APP="omk-llamacpp"
 OMK_LLAMACPP_TAG="${OMK_LLAMACPP_TAG:-b10964}"                          # llama.cpp 릴리스 태그 (v0.4.1 에 대응)
@@ -184,7 +184,7 @@ dotenv_ensure() { # $1=file $2=key $3=default — 없을 때만 붙인다 (기�
 # ── 환경 이름 → 경로/이름 파생 ──────────────────────────────────────────────
 validate_env() {
     [[ "$1" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || usage_die "환경 이름은 소문자·숫자·하이픈 1~32자: '$1'"
-    [[ "$1" != "$OMK_LOCAL_INSTANCE" ]] || usage_die "'$1' 은 작업 클론의 개발 서버('omk dev …')가 쓰는 이름입니다 — 다른 환경 이름을 고르세요"
+    [[ "$1" != "$OMK_LOCAL_INSTANCE" ]] || usage_die "'$1' 은 작업 클론의 로컬 개발('omk dev …')이 쓰는 이름입니다 — 다른 환경 이름을 고르세요"
 }
 env_dir()    { printf '%s/%s' "$OMK_ROOT" "$1"; }
 llm_dir()    { printf '%s/%s/llm' "$OMK_ROOT" "$1"; }
@@ -192,10 +192,17 @@ bench_dir()  { printf '%s/%s/bench' "$OMK_ROOT" "$1"; }
 logs_dir()   { printf '%s/%s/logs' "$OMK_ROOT" "$1"; }
 proxy_dir()  { printf '%s/caddy' "$OMK_ROOT"; }
 env_suffix() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf '' || printf -- '-%s' "$1"; }
-# 기본 ref — 환경이 따르는 브랜치는 main 이다(개발용 브랜치 dev 는 환경이 따르지 않는다). staging 은 main HEAD 를, 환경 dev 는 --ref 로 feature/* 를 따른다.
+# 기본 ref — 환경 dev 는 브랜치 dev(feature/* 가 모이는 곳)를, staging 과 그 밖의 환경은 main HEAD 를 따른다.
+# 브랜치 dev 가 없는 포크에서는 --ref main 으로 준다. feature/* 를 머지 전에 따로 볼 때도 --ref 로 준다.
 # online(기본 인스턴스)은 **최신 릴리스 태그**를 따른다('release') — main 은 개발이 모이는 곳이고, staging 에서 확인하기 전의
 # main 을 운영·외부 설치자가 받지 않게 한다. 어느 환경이든 --ref release 로 같은 방식을 고를 수 있다.
-env_default_ref() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf 'release' || printf 'main'; }
+env_default_ref() {
+    case "$1" in
+        "$OMK_DEFAULT_ENV") printf 'release' ;;
+        dev)                printf 'dev' ;;
+        *)                  printf 'main' ;;
+    esac
+}
 latest_release_tag() { # $1=리포 URL 또는 클론 경로 → vX.Y.Z 중 가장 높은 것
     git ls-remote --tags --refs "$1" 2>/dev/null | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
 }
@@ -1270,8 +1277,8 @@ discord_ensure() { # $1=llm dir $2=env $3=token(선택)
 }
 
 # ── 공통 단계 — 웹 검색 · 런타임 이미지 · 게이트웨이(+기본 모델) ────────────────
-# 환경 설치('omk env install')와 개발 서버('omk dev setup')가 같은 함수를 쓴다 — 한쪽에만 단계를 더해 다른 쪽이
-# 빠지는 일을 막는다(개발 서버에 게이트웨이·기본 모델이 없어 설치 직후 채팅이 되지 않았다). .env 만 고치고
+# 환경 설치('omk env install')와 로컬 개발('omk dev setup')이 같은 함수를 쓴다 — 한쪽에만 단계를 더해 다른 쪽이
+# 빠지는 일을 막는다(로컬 개발에 게이트웨이·기본 모델이 없어 설치 직후 채팅이 되지 않았다). .env 만 고치고
 # 앱 재시작은 부른 쪽이 한다. 끄는 표시(OMK_SEARXNG · OMK_RUNTIME_IMAGES · OMK_LITELLM =off)는 부르기 전에 .env 에 적는다.
 # 업스트림을 주지 않았고 이 인스턴스에 기억된 업스트림도 없으면 기본 모델(llama.cpp)을 게이트웨이 뒤에 둔다.
 # 나중에 --llm-base-url/--qwen-vllm-base 로 다시 설치하거나 litellm.env 를 채우면 그쪽을 따른다.
@@ -1347,6 +1354,7 @@ cmd_env_install() {
         track="release"; ref="$(latest_release_tag "$OMK_REPO_URL")"; [[ -n "$ref" ]] || die "릴리스 태그(vX.Y.Z)를 찾을 수 없습니다: $OMK_REPO_URL — --ref main 으로 설치하세요"
         bench_ref="${bench_ref:-main}"   # openmake_bench 는 릴리스 태그가 없다
     fi
+    [[ "$ref" != "dev" ]] || bench_ref="${bench_ref:-main}"   # openmake_bench 는 브랜치 dev 도 없다
     bench_ref="${bench_ref:-$ref}"
     [[ -z "$dgx_host" || "$dgx_host" =~ ^[A-Za-z0-9._-]+$ ]] || usage_die "--dgx-host 형식이 올바르지 않습니다: $dgx_host"
     [[ -z "$https_host" || "$https_host" =~ ^[A-Za-z0-9._-]+$ ]] || usage_die "--https-host 형식이 올바르지 않습니다: $https_host"
@@ -1390,7 +1398,7 @@ cmd_env_install() {
     [[ -z "$https_host" ]] || dotenv_set "$ldir/.env" OMK_HTTPS_HOST "$https_host"
     [[ $viewer -eq 0 ]] || dotenv_set "$ldir/.env" OMK_ARTIFACT_VIEWER 1
 
-    # 1.5~1.7) 웹 검색 · 런타임 이미지 · 게이트웨이(+기본 모델) — 개발 서버('omk dev setup')와 같은 함수다.
+    # 1.5~1.7) 웹 검색 · 런타임 이미지 · 게이트웨이(+기본 모델) — 로컬 개발('omk dev setup')과 같은 함수다.
     # .env 는 install.sh 가 만든 뒤에야 있다. 값이 바뀌면 API 만 다시 띄운다.
     [[ $no_searxng -eq 1 ]] && dotenv_set "$ldir/.env" OMK_SEARXNG off
     [[ $no_images -eq 1 ]] && dotenv_set "$ldir/.env" OMK_RUNTIME_IMAGES off
@@ -1658,7 +1666,7 @@ cmd_env() {
 }
 
 # ==============================================================================
-# dev — 작업 클론에서 개발 서버를 띄운다 (앱은 PM2 아님, 포그라운드 concurrently)
+# dev — 로컬 개발: 개인 장비의 작업 클론에서 앱을 핫 리로드로 띄운다 (앱은 PM2 아님, 포그라운드 concurrently)
 # 앱이 기대는 것 — DB·Redis·SearXNG(docker)와 게이트웨이·기본 모델 서버(PM2) — 은 환경 설치와 같은 함수(stack_ensure)로 준비한다.
 # ==============================================================================
 DEV_LLM=""; DEV_BENCH=""
@@ -1715,7 +1723,7 @@ dev_warn_legacy() { # 예전에 'dev' 로 준비한 작업 클론 — 동작은 
 }
 dev_compose() { ( cd "$DEV_LLM" && docker compose --env-file .env -f infra/docker-compose.yml "$@" ); }
 dev_searxng() { searxng_ensure "$DEV_LLM" "$(dev_instance)" "$DEV_LLM/.openmake/searxng" "$DEV_LLM"; }
-# gen-env.mjs 의 기본값은 운영 설치용(NODE_ENV=production)이다. ts-node·next dev 로 도는 개발 서버에 그대로 두면
+# gen-env.mjs 의 기본값은 운영 설치용(NODE_ENV=production)이다. ts-node·next dev 로 도는 로컬 개발에 그대로 두면
 # 운영 수준 검사(시크릿·쿠키)가 걸린다. 사용자가 고른 다른 값(test·staging …)은 건드리지 않는다.
 dev_env_defaults() { # $1=.env
     [[ "$(dotenv_get "$1" NODE_ENV)" != "production" ]] || dotenv_set "$1" NODE_ENV development
@@ -1767,7 +1775,7 @@ cmd_dev_setup() {
     done
     if [[ -n "$up_base$up_model" ]] && [[ -z "$up_base" || -z "$up_model" ]]; then usage_die "--llm-base-url 과 --llm-model 은 함께 줍니다"; fi
     log_step "dev 준비: $DEV_LLM"
-    # 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션까지. 앱 빌드와 앱의 PM2 기동은 개발 서버에 필요 없다.
+    # 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션까지. 앱 빌드와 앱의 PM2 기동은 로컬 개발에 필요 없다.
     # 이미 준비된 클론은 .env 의 이름을 그대로 쓴다(install.sh 는 .env 와 다른 --instance 를 거부한다).
     dev_warn_legacy
     ( cd "$DEV_LLM" && ./install.sh --yes --minimal --instance "$(dev_instance)" --skip-build --no-start ) || die "install.sh 실패"
@@ -1853,7 +1861,7 @@ cmd_dev_down() {
     local inst n; inst="$(dev_instance)"; n="$(litellm_pm2_name "$inst")"
     dev_compose stop
     if searxng_owned "$(searxng_name "$inst")" "$DEV_LLM"; then docker stop "$(searxng_name "$inst")" >/dev/null 2>&1 || true; fi
-    # 게이트웨이는 개발 서버의 것이라 멈춘다. 기본 모델 서버는 호스트의 환경들이 같이 쓴다 — 남긴다.
+    # 게이트웨이는 로컬 개발의 것이라 멈춘다. 기본 모델 서버는 호스트의 환경들이 같이 쓴다 — 남긴다.
     if [[ "$inst" == "$OMK_LOCAL_INSTANCE" ]] && has pm2 && pm2 describe "$n" >/dev/null 2>&1; then pm2 stop "$n" >/dev/null 2>&1 || true; fi
     log_ok "dev DB/Redis/SearXNG/게이트웨이 정지 (데이터 유지)"
 }
