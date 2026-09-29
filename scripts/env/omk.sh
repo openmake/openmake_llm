@@ -36,14 +36,15 @@
 #
 #   omk env install <env> [--ref BR] [--bench [--bench-ref BR]] [--public-url URL] [--no-proxy] [--no-searxng] [--no-runtime-images] [--tailscale] [--host H]…
 #                         [--no-litellm] [--no-default-model] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
-#                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
+#                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate] [--release-gate]
 #                         [--ops-profile] [--dgx-host H] [--https-host H] [--artifact-viewer] [--discord-token T]
 #                         ↑ 운영 구성 옵션 (install_mac.sh · install_linux.sh 가 켠다 — 주지 않으면 기존 동작 그대로):
 #                           --ops-profile     운영 기능 플래그(scripts/setup/profiles/ops-features.env)·웹 푸시 키·작업 공간·스크래퍼 파이썬
 #                           --dgx-host H      DGX vLLM(:8002 채팅·:8003 임베딩·:8005 음악)을 게이트웨이 업스트림으로 + 연결 확인
 #                           --https-host H    내부망 HTTPS (Caddy tls internal · :443) — 사내 기기는 루트 인증서를 한 번 신뢰 등록
 #                           --artifact-viewer 아티팩트 공유 뷰어 (기본 인스턴스 전용) · --discord-token T  Discord 봇 (이 서버 전용 새 토큰)
-#   omk env update  <env> [--if-behind] [--no-backup]       # llm(ff-only→build→migrate→restart) → bench → proxy
+#   omk env update  <env> [--if-behind] [--no-backup] [--force-unverified]   # llm(ff-only→build→migrate→restart) → bench → proxy
+#   omk env verify  <env> [--list]                      # 확인을 마친 커밋을 origin 에 기록 — 릴리스 게이트(OMK_RELEASE_GATE=1)가 읽는다
 #   omk env reset   <env> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
 #   omk env status|start|stop|logs <env>
 #   omk env expose <env> [--tailscale] [--host H]…      # 다른 기기에서 프록시 포트로 보기 — 호스트를 CORS 에 허용(.env 에 기억)
@@ -57,6 +58,7 @@
 #   OMK_ROOT(~/.openmake)  OMK_REPO_URL  OMKB_REPO_URL  OMK_CADDY_VERSION  OMK_CADDY_ADMIN(localhost:2019)
 #   OMK_AUTOUPDATE_CRON('*/10 * * * *')  OMK_DEV_LLM  OMK_DEV_BENCH  OMKB_PORT_BASE(9400)  OMK_PROXY_PORT_BASE(33000)
 #   OMK_SEARXNG_IMAGE(searxng/searxng:latest)  OMK_SEARXNG_PORT_BASE(8888)  OMK_NET_PROBE_URLS  OMK_SEARCH_PROBE_QUERY
+#   OMK_VERIFY_PUSH_URL(origin)   'omk env verify' 가 기록을 push 할 원격 (클론이 https 면 ssh 주소)
 #   OMK_FORCE_FOREIGN=1   같은 인스턴스 이름을 쓰는 다른 설치본의 컨테이너·PM2 앱도 건드린다 (기본: 거부)
 #
 # 종료 코드: 0 성공 / 1 사용법·전제조건 / 2 단계 실패 / 3 health check 실패
@@ -128,7 +130,7 @@ usage() {
     if [[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" ]]; then
         sed -n '/^# 사용:/,/^# 종료 코드/p' "$SCRIPT_PATH" | sed 's/^# \{0,1\}//'
     else
-        echo "omk env install|update|reset|status|start|stop|logs|autoupdate <env> · omk proxy render|reload|status · omk dev setup|up|down|status|reset"
+        echo "omk env install|update|verify|reset|status|start|stop|logs|autoupdate <env> · omk proxy render|reload|status · omk dev setup|up|down|status|reset"
     fi
 }
 
@@ -199,6 +201,79 @@ release_behind() { # $1=dir → 새 릴리스가 있으면 0. RELEASE_TAG 에 �
     [[ "$(git -C "$1" rev-parse HEAD)" != "$(git -C "$1" rev-parse "$RELEASE_TAG^{commit}")" ]]
 }
 RELEASE_TAG=""
+
+# ── 릴리스 게이트 ────────────────────────────────────────────────────────────
+# staging 에서 확인한 커밋만 online 에 올린다. `omk env verify <env>` 가 확인한 커밋을 origin 의
+# refs/omk/verified/<sha> 로 남기고(환경들이 서로 다른 호스트에 있어도 읽힌다), 릴리스를 따르는 환경은 .env 의
+# OMK_RELEASE_GATE=1 일 때 올리기 전에 그 기록을 본다. 릴리스 커밋은 확인한 커밋 "뒤에" 생기므로 같은 커밋을
+# 요구할 수 없다 — 확인한 커밋이 태그의 조상이고, 그 사이에 바뀐 것이 릴리스 메타데이터(버전·CHANGELOG)뿐이면 통과.
+readonly OMK_VERIFIED_REFS="refs/omk/verified"
+OMK_VERIFY_PUSH_URL="${OMK_VERIFY_PUSH_URL:-origin}"   # 확인 기록을 push 할 원격 — 클론이 https 면 ssh 주소를 준다
+# 허용 경로는 "확인한 커밋"의 설정에서 읽는다 — 확인하지 않은 커밋이 목록을 넓힐 수 없다.
+release_meta_paths() { # $1=dir $2=커밋 → release-please 가 고치는 경로 (한 줄에 하나)
+    printf '%s\n' package.json package-lock.json .release-please-manifest.json CHANGELOG.md
+    git -C "$1" show "$2:release-please-config.json" 2>/dev/null \
+        | grep -oE '"(path|changelog-path)"[[:space:]]*:[[:space:]]*"[^"]+"' | sed -E 's/.*:[[:space:]]*"([^"]+)"$/\1/' || true
+}
+# 경로만 보면 릴리스 커밋에 섞인 의존성 변경이 통과한다 — JSON 은 바뀐 줄이 버전뿐인지도 본다.
+release_gate_offending() { # $1=dir $2=확인한 커밋 $3=태그 커밋 → 메타데이터가 아닌 변경 (한 줄에 하나, 없으면 빈 출력)
+    local allowed f bad
+    allowed="$(release_meta_paths "$1" "$2")"
+    while IFS= read -r f; do
+        [[ -n "$f" ]] || continue
+        if ! printf '%s\n' "$allowed" | grep -qxF -- "$f"; then printf '%s\n' "$f"; continue; fi
+        case "$f" in *.json)
+            bad="$(git -C "$1" diff -U0 "$2" "$3" -- "$f" | awk '/^@@/{h=1;next} h && /^[+-]/' \
+                | grep -vE '^[+-][[:space:]]*"(version|\.)"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+[^"]*",?[[:space:]]*$' || true)"
+            [[ -z "$bad" ]] || printf '%s (버전 외 변경)\n' "$f" ;;
+        esac
+    done < <(git -C "$1" diff --name-only "$2" "$3")
+}
+release_gate_fetch() { # $1=dir
+    git -C "$1" fetch -q --prune origin "+$OMK_VERIFIED_REFS/*:$OMK_VERIFIED_REFS/*" 2>/dev/null
+}
+GATE_VERIFIED=""; GATE_REASON=""
+release_gate_check() { # $1=dir $2=태그 → 0 통과(GATE_VERIFIED=근거 커밋) / 1 거부(GATE_REASON=이유)
+    local t v n near="" nearn=-1 off
+    GATE_VERIFIED=""; GATE_REASON=""
+    t="$(git -C "$1" rev-parse -q --verify "$2^{commit}" 2>/dev/null)" || { GATE_REASON="  $2 을(를) 찾을 수 없습니다"; return 1; }
+    for v in $(git -C "$1" for-each-ref --format='%(objectname)' "$OMK_VERIFIED_REFS/"); do
+        git -C "$1" merge-base --is-ancestor "$v" "$t" 2>/dev/null || continue
+        if [[ -z "$(release_gate_offending "$1" "$v" "$t")" ]]; then GATE_VERIFIED="$v"; return 0; fi
+        n="$(git -C "$1" rev-list --count "$v..$t")"
+        if [[ $nearn -lt 0 || $n -lt $nearn ]]; then near="$v"; nearn="$n"; fi
+    done
+    if [[ -z "$near" ]]; then
+        GATE_REASON="  $2 의 바탕이 되는 확인 기록이 없습니다 ($OMK_VERIFIED_REFS/*)"
+    else
+        off="$(release_gate_offending "$1" "$near" "$t" | sed 's/^/      /')"
+        GATE_REASON="  마지막으로 확인한 $(git -C "$1" rev-parse --short "$near") 뒤에 확인하지 않은 변경이 있습니다:
+$(git -C "$1" log --format='      %h %s' "$near..$t")
+    릴리스 메타데이터가 아닌 변경:
+$off"
+    fi
+    return 1
+}
+release_gate_enforce() { # $1=env $2=dir $3=태그 $4=force(1|0) — 거부면 아무것도 바꾸지 않고 끝낸다
+    release_gate_fetch "$2" || log_warn "확인 기록을 받지 못했습니다 — 이 클론이 가진 기록으로 판정합니다"
+    if release_gate_check "$2" "$3"; then
+        log_ok "릴리스 게이트: $3 은 확인된 $(git -C "$2" rev-parse --short "$GATE_VERIFIED") 기반 — 진행"; return 0
+    fi
+    log_err "릴리스 게이트: $3 을 올리지 않습니다"; printf '%s\n' "$GATE_REASON" >&2
+    if [[ "$4" -ne 1 ]]; then
+        log_info "staging 에서 'omk env update' → 확인 → 'omk env verify' 한 뒤 새 릴리스를 내세요. 급하면 --force-unverified"
+        exit 2
+    fi
+    confirm "확인하지 않은 $3 을 $1 에 올립니다. 계속할까요?" || exit 2
+    mkdir -p "$(logs_dir "$1")"
+    printf '%s force-unverified %s %s by %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$3" "$(git -C "$2" rev-parse --short "$3^{commit}")" "${USER:-?}" >> "$(logs_dir "$1")/release-gate.log"
+    log_warn "게이트를 건너뜁니다 — $(logs_dir "$1")/release-gate.log 에 남겼습니다"
+}
+verified_push() { # $1=dir $2=원격 → HEAD 를 확인 기록으로 남긴다 (이미 있으면 그대로)
+    local sha ref; sha="$(git -C "$1" rev-parse HEAD)"; ref="$OMK_VERIFIED_REFS/$sha"
+    if [[ -n "$(git -C "$1" ls-remote "$2" "$ref" 2>/dev/null)" ]]; then log_info "이미 기록되어 있습니다: $ref"; return 0; fi
+    git -C "$1" push -q "$2" "$sha:$ref"
+}
 
 # 이름 규칙은 install.sh / ecosystem.config.js / infra/docker-compose.yml 과 같다.
 pm2_names() { # $1=env → llm next discord bench litellm updater backup
@@ -607,6 +682,28 @@ cmd_env_backup() { # env [--schedule ['CRON']] [--off] [--list] [--dry-run]
                 --cron-restart "$cron" --time -- env backup "$env" >/dev/null ) || die "$name 등록 실패"
             log_ok "$name 등록 — '$cron' 마다 백업 → $(backup_dir "$env") (pm2 logs $name)" ;;
     esac
+}
+
+cmd_env_verify() { # env [--list]
+    local env="$1"; shift; local list=0
+    while [[ $# -gt 0 ]]; do case "$1" in --list) list=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
+    local ldir v; ldir="$(llm_dir "$env")"
+    [[ -d "$ldir/.git" ]] || die "$ldir 가 없습니다 — 'omk env install $env' 먼저"
+    if [[ $list -eq 1 ]]; then
+        release_gate_fetch "$ldir" || log_warn "확인 기록을 받지 못했습니다 — 이 클론이 가진 기록만 보여 줍니다"
+        for v in $(git -C "$ldir" for-each-ref --sort=-committerdate --format='%(objectname)' "$OMK_VERIFIED_REFS/"); do git -C "$ldir" log -1 --format='%h  %cs  %s' "$v"; done
+        return 0
+    fi
+    [[ "$(dotenv_get "$ldir/.env" OMK_TRACK)" != "release" ]] || die "$env 는 릴리스를 따르는 환경입니다 — 확인은 main 을 따르는 환경(staging)에서 합니다"
+    log_step "확인 기록: $env"
+    restore_lockfiles "$ldir"
+    [[ -z "$(git -C "$ldir" status --porcelain)" ]] || die "$ldir 에 커밋되지 않은 변경이 있습니다 — 확인한 것이 이 커밋이라고 할 수 없습니다"
+    git -C "$ldir" fetch -q origin || die "origin 을 받을 수 없습니다 ($ldir)"
+    git -C "$ldir" merge-base --is-ancestor HEAD refs/remotes/origin/main 2>/dev/null || die "HEAD 가 origin/main 에 없습니다 — 머지된 main 만 확인 대상입니다"
+    wait_http "http://localhost:$(llm_api_port "$ldir")/health" "llm" 5 || exit 3
+    confirm "$env 의 $(git -C "$ldir" log -1 --format='%h %s') 을(를) 확인 완료로 기록합니다. 계속할까요?" || return 0
+    verified_push "$ldir" "$OMK_VERIFY_PUSH_URL" || die "기록을 push 하지 못했습니다 ($OMK_VERIFY_PUSH_URL) — 쓰기 권한이 필요합니다 (README 의 '릴리스 게이트')"
+    log_ok "$(git -C "$ldir" rev-parse --short HEAD) 확인 완료 — 이 커밋에서 나온 릴리스만 게이트를 통과합니다"
 }
 
 cmd_env_autoupdate() { # env [--every CRON] [--off]
@@ -1157,7 +1254,7 @@ discord_ensure() { # $1=llm dir $2=env $3=token(선택)
 cmd_env_install() {
     local env="$1"; shift
     local ref="" bench_ref="" public_url="" no_bench=1 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=() expose_args=()
-    local ops=0 dgx_host="" https_host="" viewer=0 discord_token=""
+    local ops=0 dgx_host="" https_host="" viewer=0 discord_token="" gate=0
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ref)          ref="${2:-}"; shift ;;
@@ -1178,6 +1275,7 @@ cmd_env_install() {
             --vllm-api-key)   vllm_key="${2:-}"; shift ;;
             --autoupdate)   auto=1 ;;
             --no-autoupdate) auto=0 ;;
+            --release-gate) gate=1 ;;
             --ops-profile)  ops=1 ;;
             --dgx-host)     dgx_host="${2:-}"; shift ;;
             --https-host)   https_host="${2:-}"; shift ;;
@@ -1222,6 +1320,7 @@ cmd_env_install() {
         ${public_url:+--public-url "$public_url"} ${llm_args[@]+"${llm_args[@]}"} ) || die "install.sh 실패 ($env)"
     dotenv_ensure "$ldir/.env" OMK_LOG_DIR "$(logs_dir "$env")"
     [[ -z "$track" ]] || dotenv_set "$ldir/.env" OMK_TRACK release
+    [[ $gate -eq 0 ]] || dotenv_set "$ldir/.env" OMK_RELEASE_GATE 1
     load_toolchain "$ldir"
 
     # 1.5~1.7 은 .env 를 고친다 — 어느 단계든 내용이 바뀌었으면 끝에 API 를 한 번 재시작한다(단계별 플래그는 빠뜨리기 쉽다).
@@ -1288,8 +1387,8 @@ cmd_env_install() {
 }
 
 cmd_env_update() {
-    local env="$1"; shift; local if_behind=0 no_backup=0
-    while [[ $# -gt 0 ]]; do case "$1" in --no-backup) no_backup=1 ;; --if-behind) if_behind=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
+    local env="$1"; shift; local if_behind=0 no_backup=0 force_unverified=0
+    while [[ $# -gt 0 ]]; do case "$1" in --no-backup) no_backup=1 ;; --if-behind) if_behind=1 ;; --force-unverified) force_unverified=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
     local ldir bdir; ldir="$(llm_dir "$env")"; bdir="$(bench_dir "$env")"
     [[ -d "$ldir/.git" ]] || die "$ldir 가 없습니다 — 'omk env install $env' 먼저"
     load_toolchain "$ldir"
@@ -1299,6 +1398,10 @@ cmd_env_update() {
         if [[ "$track" == "release" ]]; then release_behind "$ldir" && need=1; else repo_behind "$ldir" && need=1; fi
         [[ -d "$bdir/.git" ]] && repo_behind "$bdir" && need=1
         [[ $need -eq 1 ]] || { log_info "$env 최신 — 갱신 없음"; return 0; }
+    fi
+    # 게이트는 무엇이든 바꾸기 전에 본다 — 거부되면 환경은 지금 버전 그대로 돈다.
+    if [[ "$track" == "release" && "$(dotenv_get "$ldir/.env" OMK_RELEASE_GATE)" == "1" ]] && release_behind "$ldir"; then
+        release_gate_enforce "$env" "$ldir" "$RELEASE_TAG" "$force_unverified"
     fi
     log_step "환경 갱신: $env"
     restore_lockfiles "$ldir"; [[ -d "$bdir/.git" ]] && restore_lockfiles "$bdir"
@@ -1500,11 +1603,12 @@ cmd_env_expose() { # env [--tailscale] [--host H]… — 다른 기기에서 프
 }
 cmd_env() {
     local sub="${1:-}" env="${2:-}"
-    [[ -n "$sub" && -n "$env" ]] || usage_die "omk env <install|update|reset|status|start|stop|logs|autoupdate> <env>"
+    [[ -n "$sub" && -n "$env" ]] || usage_die "omk env <install|update|verify|reset|status|start|stop|logs|autoupdate> <env>"
     validate_env "$env"; shift 2
     case "$sub" in
         install)    cmd_env_install "$env" "$@" ;;
         update)     cmd_env_update "$env" "$@" ;;
+        verify)     cmd_env_verify "$env" "$@" ;;
         reset)      cmd_env_reset "$env" "$@" ;;
         status)     cmd_env_status "$env" ;;
         start)      cmd_env_start "$env" ;;

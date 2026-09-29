@@ -6,9 +6,9 @@
 
 ```
 feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   staging-chat.<도메인>
-                                           │                     (기능 확인)
+                                           │                     (기능 확인 → `omk env verify staging` 으로 확인한 커밋 기록)
                                            └──(release-please 릴리스 직후) 사람이 `omk env update online`──▶ ~/.openmake/online   chat.<도메인>
-                                                                 (스모크만)
+                                                                 (릴리스 게이트 → 스모크만)
 ```
 
 장수 브랜치는 **`main` 하나**다. `dev`·`staging`·`online` 은 브랜치가 아니라 **환경 이름**이다 — staging 은 main 최신을, online 은 릴리스 직후의 main 을 사람이 올린다. 무거운 검증은 GitHub 러너의 CI 와 staging 에서 하고, online 에서는 스모크만 한다.
@@ -47,8 +47,9 @@ feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `om
 | ② | **dev** | 그 브랜치가 실제로 설치되고 도는지 확인 | `omk env reset dev` → `omk env install dev --ref feature/<주제> --tailscale` (수정분만: `omk env update dev`) |
 | ③ | GitHub | PR → CI → 리뷰 → squash 머지 | `gh pr create` |
 | ④ | **staging** | 머지된 main 을 기존 데이터 위에서 update 로 확인 | `omk env update staging` |
-| ⑤ | GitHub | release-please 의 릴리스 PR 머지 → `vX.Y.Z` 태그 | 릴리스 PR 머지 |
-| ⑥ | **online** | 새 릴리스 태그로 올리고 스모크 확인 | `omk env update online` |
+| ⑤ | **staging** | 확인을 마친 커밋을 기록 | `omk env verify staging` |
+| ⑥ | GitHub | release-please 의 릴리스 PR 머지 → `vX.Y.Z` 태그 (⑤ 뒤에 main 에 머지된 것이 없을 때) | 릴리스 PR 머지 |
+| ⑦ | **online** | 새 릴리스 태그로 올리고 스모크 확인 — 게이트가 ⑤ 의 기록을 본다 | `omk env update online` |
 
 배포는 전부 **수동**이다 — 머지·릴리스만으로는 어떤 환경도 바뀌지 않는다. 앞 단계를 통과하기 전에는 다음 단계로 가지 않는다
 (dev 통과 전 머지 금지, staging 통과 전 릴리스 금지).
@@ -71,6 +72,7 @@ feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `om
 | **update 경로**로 올린다 — online 도 update 로 올라가므로 같은 길을 먼저 밟는다 | 습관적으로 reset → 재설치하지 않는다 — 마이그레이션이 기존 데이터에서 도는지 볼 수 없게 된다 |
 | 데이터를 **유지**한다(계정·대화·작업이 쌓여 있어야 마이그레이션 검증이 된다). reset 은 정말 꼬였을 때만 | 실사용 데이터·비밀값을 가져다 넣지 않는다 — 환경은 소스에서 설치한 것만으로 선다 |
 | 여러 PR 이 합쳐진 결과의 **기능 확인은 여기까지** 끝낸다 | 통과하기 전에 릴리스 PR 을 머지하지 않는다 |
+| 확인이 끝나면 `omk env verify staging` — 그 커밋에서 나온 릴리스만 online 에 올라간다 | 확인하지 않고 verify 하지 않는다. verify 뒤에 main 에 머지가 더 들어왔으면 update → 확인 → verify 를 다시 한다 |
 | 문제가 나오면 수정 PR(①부터) 또는 revert | staging 에서 직접 핫픽스하지 않는다 |
 
 ### online — "실사용"
@@ -80,6 +82,7 @@ feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `om
 | 릴리스 직후 `omk env update online` — **최신 릴리스 태그**로만 올라간다(새 태그가 없으면 아무 일도 하지 않는다) | main HEAD·`feature/*` 를 올리지 않는다 (`--ref` 로 브랜치를 주지 않는다) |
 | **스모크만**: 접속 200 · 로그인 · 채팅 1회 · `omk env status online` | 부하 시험·대량 평가·동시 다발 요청 같은 **무거운 검증을 하지 않는다** — 운영 모델 서버를 공유한다. 그런 것은 CI 와 staging 에서 끝낸다 |
 | 매일 백업을 걸어 둔다(`omk env backup online --schedule`). `update` 는 올리기 직전에 한 번 더 뜬다 | `omk env reset online` 을 하지 않는다 — 볼륨(DB)까지 지운다. 옮길 때는 `db-dump` → `db-restore` |
+| 게이트를 켜 둔다(`.env` 의 `OMK_RELEASE_GATE=1`) — staging 에서 확인하지 않은 릴리스는 올라가지 않는다 | `--force-unverified` 를 습관적으로 쓰지 않는다 — 급한 수정에만, 쓴 기록은 `logs/release-gate.log` 에 남는다 |
 | 문제가 나면 수정 → 새 릴리스 → update. 급하면 이전 태그로 되돌리고 `./openmake_llm.sh deploy` | online 에서 실험·설정 시험·모델 교체 시험을 하지 않는다 |
 | 호스트별 값(도메인·모델 서버 주소·키)은 그 환경의 `.env`·`litellm.env` 에만 둔다 | 저장소에 호스트 경로·주소·키를 적지 않는다 |
 
@@ -89,6 +92,39 @@ feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `om
 | 데이터 | 버림 | 유지 | 절대 보존 |
 | 검증 깊이 | 기능 전부(배선·구조) | 기능 + update·마이그레이션 | 스모크만 |
 | 모델 | 호스트 기본 모델 또는 지정 | 같음 | 운영 모델 서버 (`--qwen-vllm-base …`) |
+
+## 릴리스 게이트 — staging 에서 확인한 커밋만 online 에
+
+릴리스 태그는 **릴리스 PR 을 머지한 순간의 main** 에 찍힌다. staging 을 마지막으로 올린 뒤에 머지된 PR 은 확인 없이 릴리스에 들어간다 —
+게이트는 그 경우를 막는다. 브랜치를 늘리지 않고, 확인한 커밋과 릴리스 사이의 연결만 강제한다.
+
+```bash
+# staging 호스트 — 기능·마이그레이션 확인을 마친 뒤
+omk env verify staging            # 검사(깨끗한 작업 트리 · origin/main 에 있는 커밋 · health) → origin 에 기록
+omk env verify staging --list     # 기록 보기 (어느 환경에서든)
+
+# online 호스트 — 한 번 켠다 (.env 에 OMK_RELEASE_GATE=1 을 적거나, 설치할 때 --release-gate)
+omk env update online             # 확인된 릴리스만 올라간다
+```
+
+- **기록**은 origin 의 `refs/omk/verified/<커밋>` 이다. 브랜치·태그가 아니라 GitHub 화면에는 보이지 않고, 환경들이 다른 호스트에 있어도 읽힌다.
+- **통과 조건** — 기록된 커밋이 릴리스 태그의 조상이고, 그 사이에 바뀐 것이 릴리스 메타데이터뿐이다: `release-please-config.json` 의 `extra-files`·
+  `changelog-path`, 루트 `package.json`·`package-lock.json`·`.release-please-manifest.json`. JSON 은 바뀐 줄이 버전뿐이어야 한다(릴리스 커밋에 섞인 의존성 변경은 거부).
+  허용 목록은 **확인한 커밋**의 설정에서 읽는다.
+- **거부되면** 아무것도 바꾸지 않고 종료 코드 2 로 끝난다 — 환경은 지금 버전 그대로 돈다. 확인하지 않은 커밋과 경로를 출력한다. `autoupdate` 도 같은 게이트를 지난다.
+- **급한 수정**은 `omk env update online --force-unverified` — 물어본 뒤 진행하고 `~/.openmake/online/logs/release-gate.log` 에 남긴다.
+- 게이트는 **켠 환경에서만** 동작한다. 외부 설치본은 기록을 쓸 권한도 staging 도 없으므로 기본은 꺼져 있다. `openmake_bench` 는 릴리스 태그가 없어 대상이 아니다.
+
+**staging 호스트의 쓰기 권한** — `verify` 는 origin 에 push 한다. 설치된 클론의 origin 은 https(읽기 전용)이므로 push 할 주소를 따로 준다.
+
+```bash
+OMK_VERIFY_PUSH_URL=git@github.com:openmake/openmake_llm.git omk env verify staging
+```
+
+| 방법 | 설명 |
+|---|---|
+| SSH agent forwarding (권장) | `ssh -A staging-host` 로 들어가 실행한다 — 확인한 사람의 키를 그때만 쓰고, 호스트에 자격 증명이 남지 않는다 |
+| 쓰기 권한 deploy key | 호스트에 저장해야 할 때. 그 키로 `main`·`v*` 태그를 고칠 수 없게 브랜치 보호·태그 ruleset 을 먼저 확인한다 |
 
 ## 설치 — 아무것도 없는 PC 에서 한 줄
 
@@ -121,8 +157,9 @@ Windows 네이티브는 지원하지 않는다. 설치기 전체가 bash 이고,
 
 ```bash
 omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy]
-                      [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
-omk env update  <env> [--if-behind]     # llm(ff-only → build → migrate → restart) → bench → proxy
+                      [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate] [--release-gate]
+omk env update  <env> [--if-behind] [--force-unverified]   # llm(ff-only → build → migrate → restart) → bench → proxy
+omk env verify  <env> [--list]          # 확인을 마친 커밋을 origin 에 기록 (릴리스 게이트)
 omk env status|start|stop|logs <env>
 omk env autoupdate <env> [--every 'CRON'] [--off]
 omk env reset   <env> [--keep-data] [--keep-env] [--reinstall] [--yes]
@@ -320,5 +357,6 @@ omk env status online
 | `OMK_CADDY_ADMIN` | `localhost:2019` | caddy admin 주소 |
 | `OMKB_PORT_BASE` / `OMK_PROXY_PORT_BASE` / `OMK_LITELLM_PORT_BASE` | `9400` / `33000` / `13401` | bench·프록시·LiteLLM 빈 포트 탐색 시작점 |
 | `OMK_DEV_LLM` / `OMK_DEV_BENCH` | 자동 탐지 | dev 작업 클론 위치 |
+| `OMK_VERIFY_PUSH_URL` | `origin` | `omk env verify` 가 확인 기록을 push 할 원격 |
 
 스크립트에 남은 하드코딩은 다섯 가지뿐이다: 두 리포의 기본 URL, 루트 디렉터리 이름, 기본 인스턴스로 매핑되는 환경 이름(`online`), PM2 프록시 앱 이름, 그리고 GitHub API 가 막힌 환경에서만 쓰는 caddy 폴백 버전.
