@@ -55,11 +55,11 @@
         "eslint": "^9.0.0",
         "jest": "^30.5.2",
         "playwright": "^1.58.0",
-        "supertest": "^7.2.2",
+        "supertest": "^7.3.0",
         "ts-json-schema-generator": "^2.9.0",
         "typescript": "^6.0.3",
         "typescript7": "npm:typescript@^7.0.2",
-        "typescript-eslint": "^8.70.0"
+        "typescript-eslint": "^8.70.1"
     },
     "overrides": {
         "js-yaml": "^4.2.0",
