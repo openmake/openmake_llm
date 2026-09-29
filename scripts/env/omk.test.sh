@@ -115,6 +115,41 @@ eq "default model: 명시가 우선" "$( OMK_DEFAULT_MODEL_NAME=x; default_model
 rm -rf "$(llamacpp_dir)"
 eq "llamacpp dir" "$(llamacpp_dir)" "$OMK_ROOT/llamacpp"
 
+# ── 공통 단계: 환경 설치와 개발 서버가 같은 함수로 같은 단계를 밟는다 (docker·PM2 는 가짜) ──
+ST="$TMP/st"; mkdir -p "$ST"
+stack_probe() { # $1=.env 내용 $2…=stack_ensure 의 $5 이후 → 불린 단계와 게이트웨이에 넘어간 업스트림(base|model)
+    ( printf '%s' "$1" > "$ST/.env"; shift
+      log_info() { :; }; log_warn() { :; }
+      searxng_ensure()        { printf 'search '; }
+      runtime_images_ensure() { printf 'images '; }
+      ops_sandbox_guard()     { printf 'guard '; }
+      # shellcheck disable=SC2034  # stack_ensure 가 읽는다
+      default_model_ensure()  { printf 'model '; DEFAULT_MODEL_BASE="http://127.0.0.1:18080/v1"; OMK_DEFAULT_MODEL_NAME="qwen3-1.7b"; }
+      litellm_ensure()        { printf 'gateway[%s|%s]' "${6:-}" "${8:-}"; }
+      stack_ensure "$ST" local "$ST/sx" "$ST" "$@" )
+}
+eq "stack: 업스트림이 없으면 기본 모델"   "$(stack_probe '' 0 0)" "search images guard model gateway[http://127.0.0.1:18080/v1|qwen3-1.7b]"
+eq "stack: 기본 모델 이름을 .env 에"      "$(dotenv_get "$ST/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$ST/.env" LLM_FAST_FAIL_TIMEOUT_MS)" "qwen3-1.7b|60000"
+eq "stack: 업스트림을 주면 그것을 따른다" "$(stack_probe '' 0 0 '' '' '' http://u/v1 k m)" "search images guard gateway[http://u/v1|m]"
+eq "stack: --no-default-model"            "$(stack_probe '' 1 0)" "search images guard gateway[|]"
+eq "stack: 게이트웨이를 끄면 모델도 없다" "$(stack_probe $'OMK_LITELLM=off\n' 0 0)" "search images guard gateway[|]"
+eq "stack: 직접 넣은 주소는 그대로"       "$(stack_probe $'LLM_BASE_URL=http://my:1\n' 0 1)|$(dotenv_get "$ST/.env" LLM_BASE_URL)" "search images guard |http://my:1"
+
+# ── 개발 서버의 .env: 실행 모드, 그리고 LLM 주소가 omk 것인가 ──
+printf 'NODE_ENV=production\n' > "$ST/d.env"; dev_env_defaults "$ST/d.env"
+eq "dev env: production 은 development 로" "$(dotenv_get "$ST/d.env" NODE_ENV)" "development"
+printf 'NODE_ENV=staging\n' > "$ST/d.env"; dev_env_defaults "$ST/d.env"
+eq "dev env: 고른 값은 그대로"            "$(dotenv_get "$ST/d.env" NODE_ENV)" "staging"
+llm_ours() { # $1=.env 내용 $2=4000 포트(0 열림 | 1 닫힘) → y|n
+    local busy="$2"
+    ( port_in_use() { return "$busy"; }; printf '%s' "$1" > "$ST/o.env"; dev_llm_is_ours "$ST/o.env" ) && echo y || echo n
+}
+eq "dev llm: 비어 있으면 omk 것"             "$(llm_ours '' 1)" "y"
+eq "dev llm: 자리표시자는 omk 것"            "$(llm_ours $'LLM_BASE_URL=http://localhost:4000\n' 1)" "y"
+eq "dev llm: 4000 에 실제 서버가 있으면 사용자 것" "$(llm_ours $'LLM_BASE_URL=http://localhost:4000\n' 0)" "n"
+eq "dev llm: omk 게이트웨이 주소는 omk 것"   "$(llm_ours $'LLM_BASE_URL=http://127.0.0.1:13401\nOMK_LITELLM_PORT=13401\n' 1)" "y"
+eq "dev llm: 직접 넣은 주소는 사용자 것"     "$(llm_ours $'LLM_BASE_URL=http://localhost:11434/v1\n' 1)" "n"
+
 # ── 런타임 이미지 태그: 환경별, 기본 인스턴스는 소스 기본값(:latest) ──
 eq "images dev"    "$(runtime_image_names dev)"    "openmake-mcp-runtime:dev openmake-task-runtime:dev"
 eq "images online" "$(runtime_image_names online)" "openmake-mcp-runtime:latest openmake-task-runtime:latest"

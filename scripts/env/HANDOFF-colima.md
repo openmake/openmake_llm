@@ -73,6 +73,29 @@ Docker Desktop 에도 같은 현상이 있는지는 **확인하지 못했다.**
 - `TaskSandbox.writeFile` 이 컨테이너 안에서 쓴다 (`writeViaContainer` — docker 접속처가 Colima 일 때만 자동).
 - `python_execute` · `browser` · `skill_run` 은 실행 파일을 호출마다 새 이름으로 만든다 (`runFresh`).
 
+## 개발 서버도 환경과 같은 단계를 밟는다 — 2026-09-29 추가
+
+Docker Desktop 이 함께 있는 Mac 에서 `omk dev setup` → `omk dev up` 을 돌리니 앱은 떴지만 LLM 이 offline 이었다.
+`.env` 가 `gen-env.mjs` 의 기본값(`LLM_BASE_URL=http://localhost:4000` · `retired-chat-model` · `NODE_ENV=production`) 그대로였고,
+게이트웨이와 기본 모델(1.7B)은 `omk env install` 에만 있었다. 개발 서버가 단계를 따로 나열하고 있어서 생긴 일이다.
+
+| 바꾼 것 | 위치 |
+|---|---|
+| 검색·런타임 이미지·게이트웨이·기본 모델을 `stack_ensure` 하나로 묶고 `cmd_env_install` 과 `cmd_dev_setup` 이 같이 부른다 | `omk.sh` |
+| 개발 서버의 `NODE_ENV=production` 을 `development` 로 (`dev_env_defaults`) | `omk.sh` |
+| 직접 넣은 `LLM_BASE_URL` 은 건드리지 않는다 (`dev_llm_is_ours`) | `omk.sh` |
+| `dev up` 이 내려간 게이트웨이·모델 서버를 다시 띄우고(`dev_llm_up`), `dev down` 이 게이트웨이를 멈춘다 | `omk.sh` |
+| `dev status` 가 `.env` 의 인스턴스 이름으로 컨테이너를 찾는다 (전에는 `openmake-dev-*` 고정이라 비어 있었다) | `omk.sh` |
+| 게이트웨이 포트가 `.env` 에 없으면 이미 준비된 게이트웨이의 포트를 이어 쓴다 | `omk.sh` `litellm_ensure` |
+
+환경 설치의 동작이 달라지는 곳은 하나다 — 전에 `--no-litellm` 으로 설치한 환경(`.env` 의 `OMK_LITELLM=off`)을 옵션 없이 다시 설치하면
+예전에는 기본 모델 서버를 띄웠고(게이트웨이가 없어 쓰이지 않았다), 이제는 띄우지 않는다.
+
+실측(같은 날, Docker Desktop 이 함께 있는 Mac · VM 메모리 8GB): 이미 준비된 작업 클론에서 `omk dev setup`(옵션 없음)이 약 5분에 끝났다.
+런타임 이미지 `:local` 빌드, 기본 모델 `qwen3-1.7b`(`:18080`), 게이트웨이(`:13401`)까지 `[ERR]`·`[WARN]` 없음. `.env` 는 `NODE_ENV=development` ·
+`LLM_BASE_URL=http://127.0.0.1:13401` 로 바뀌었다. 기본 docker 컨텍스트는 `desktop-linux` 그대로이고 기존 컨테이너도 그대로였다(남은 검증 7 의 설치 뒤 절반).
+아무것도 없는 Mac 에서의 첫 `dev setup` 시간은 재지 않았다 — 이미지(약 7GB)와 모델(1.8GB)을 받으므로 5분보다 길다. 이미지를 빼려면 `--no-runtime-images`.
+
 ## 남은 검증
 
 | # | 확인 | 방법 | 필요한 것 |
@@ -117,20 +140,19 @@ LaunchAgent 를 먼저 지운다 — 남아 있으면 다음 로그인 때 빈 V
 | `OMK_ROOT` 나 작업 클론이 홈 밖이면 마운트가 빈다 | Colima 는 홈만 공유한다 |
 | `.env.example` 의 주석 `macOS(Docker Desktop) 포함` | 표현만 옛것 |
 | 입력 첨부 복사(`importFile`)는 호스트에서 한다 | 같은 이름으로 다시 첨부하면 1초 지연 |
-| 개발 서버(`omk dev up`)는 `TASK_SANDBOX_ROOT` 를 설정하지 않는다 | 개발 서버에서 샌드박스를 켜면 workspace 가 VM 에 안 보인다. README 에 적어 두었다 |
+| 개발 서버를 `--no-runtime-images` 로 준비하면 `TASK_SANDBOX_ROOT` 가 설정되지 않는다 | 그 뒤 샌드박스를 직접 켜면 workspace 가 VM 에 안 보인다. README 에 적어 두었다 |
 
 ## 이번 변경과 무관한 기존 문제
 
 | 항목 | 내용 |
 |---|---|
-| `omk dev status` 의 docker 줄이 비어 있다 | 컨테이너를 `openmake-dev-*` 로 찾는데 개발 서버는 `openmake-local-*` 다 (`cmd_dev_status`) |
 | bench 의존성 설치 때 `better-sqlite3` · `esbuild` 의 설치 스크립트가 실행되지 않는다는 npm 경고 | bench 가 실행 시 실패할 수 있다. 확인하지 않았다 |
 | `uninstall.sh` 의 shellcheck 경고 (`C_ERR` 미사용) | CI lint 대상이 아니다 |
 
 ## 테스트
 
 ```bash
-bash scripts/env/omk.test.sh                  # 188
+bash scripts/env/omk.test.sh                  # 188 + 13 (개발 서버 공통 단계)
 bash scripts/setup/mac-toolchain.test.sh      # 35 — scripts/setup/mac/ 안에 두지 않는다(설치기가 그 디렉터리의 *.sh 를 전부 source 한다)
 npm run build:packages
 npm test --workspace=apps/api -- src/services/task-sandbox src/addons/mcp-runtime

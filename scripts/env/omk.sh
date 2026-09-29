@@ -51,7 +51,8 @@
 #   omk env backup  <env> [--schedule ['CRON']] [--off] [--list] [--dry-run]   # DB 덤프 → $OMK_ROOT/backups/<env> (reset 에도 남는다)
 #   omk env autoupdate <env> [--every 'CRON'] [--off]   # 선택 — 기본은 수동 배포. PM2 cron 앱 omk-updater-<env>
 #   omk proxy status|reload|render <env>
-#   omk dev setup [--no-searxng] · omk dev up|down|status|reset [api|web|bench|deps|all]
+#   omk dev setup [--no-searxng] [--no-runtime-images] [--no-litellm] [--no-default-model] [--llm-base-url U --llm-api-key K --llm-model M]
+#   omk dev up|down|status|reset [api|web|bench|deps|all]
 #   omk dev up [대상] [--tailscale] [--host H]…   # 다른 기기에서 보기 — 호스트를 CORS·Next·vite 에 허용(.env 에 기억)
 #
 # 환경변수:
@@ -995,6 +996,8 @@ litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key $6=
     fi
     litellm_render_config "$ldir/scripts/vllm/litellm.config.yaml" "$lenv" "$d/litellm.config.yaml"
     port="$(dotenv_get "$envf" OMK_LITELLM_PORT)"
+    # .env 에 없으면 이미 준비된 게이트웨이의 포트를 이어 쓴다 — 같은 게이트웨이를 쓰는 다른 설치본(작업 클론이 둘일 때)의 주소가 바뀌지 않게.
+    [[ -n "$port" ]] || port="$(sed -nE 's/.*--port ([0-9]+)$/\1/p' "$d/start_litellm.sh" 2>/dev/null | tail -1 || true)"
     if [[ -z "$port" ]]; then port="$(find_free_port "$OMK_LITELLM_PORT_BASE")" || { log_warn "LiteLLM 빈 포트 탐색 실패"; return 0; }; fi
     cat > "$d/start_litellm.sh" <<LITELLM_START
 #!/usr/bin/env bash
@@ -1266,6 +1269,41 @@ discord_ensure() { # $1=llm dir $2=env $3=token(선택)
     log_ok "PM2 $name"
 }
 
+# ── 공통 단계 — 웹 검색 · 런타임 이미지 · 게이트웨이(+기본 모델) ────────────────
+# 환경 설치('omk env install')와 개발 서버('omk dev setup')가 같은 함수를 쓴다 — 한쪽에만 단계를 더해 다른 쪽이
+# 빠지는 일을 막는다(개발 서버에 게이트웨이·기본 모델이 없어 설치 직후 채팅이 되지 않았다). .env 만 고치고
+# 앱 재시작은 부른 쪽이 한다. 끄는 표시(OMK_SEARXNG · OMK_RUNTIME_IMAGES · OMK_LITELLM =off)는 부르기 전에 .env 에 적는다.
+# 업스트림을 주지 않았고 이 인스턴스에 기억된 업스트림도 없으면 기본 모델(llama.cpp)을 게이트웨이 뒤에 둔다.
+# 나중에 --llm-base-url/--qwen-vllm-base 로 다시 설치하거나 litellm.env 를 채우면 그쪽을 따른다.
+stack_ensure() { # $1=llm dir $2=인스턴스 $3=SearXNG 설정 디렉터리 $4=소유 디렉터리 $5=기본 모델 끔(1|0) $6=LLM 주소 그대로(1|0)
+                 # [$7=QWEN base $8=BGE base $9=vLLM key $10=업스트림 base $11=업스트림 key $12=업스트림 model]
+    local ldir="$1" env="$2" no_default_model="${5:-0}" keep_llm="${6:-0}"
+    local qwen_base="${7:-}" bge_base="${8:-}" vllm_key="${9:-}" up_base="${10:-}" up_key="${11:-}" up_model="${12:-}" lenv_prev
+    searxng_ensure "$ldir" "$env" "$3" "$4"
+    # 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리의 전제.
+    runtime_images_ensure "$ldir" "$env"
+    ops_sandbox_guard "$ldir"
+    # LiteLLM 게이트웨이 — 앱의 LLM_BASE_URL·LLM_API_KEY 를 채운다.
+    LITELLM_CHANGED=0
+    if [[ "$keep_llm" -eq 1 ]]; then
+        log_info "LLM_BASE_URL 이 직접 지정돼 있습니다 ($(dotenv_get "$ldir/.env" LLM_BASE_URL)) — 그대로 씁니다"; return 0
+    fi
+    lenv_prev="$(litellm_dir "$env")/litellm.env"
+    if [[ "$(dotenv_get "$ldir/.env" OMK_LITELLM)" != "off" && "$no_default_model" -eq 0 && -z "$up_base$qwen_base" \
+          && -z "$(dotenv_get "$lenv_prev" QWEN_VLLM_API_BASE)" ]] \
+       && { [[ -z "$(dotenv_get "$lenv_prev" OMK_UPSTREAM_MODEL)" ]] || [[ "$(dotenv_get "$lenv_prev" OMK_UPSTREAM_API_BASE)" == "$(default_model_base)" ]]; }; then
+        if default_model_ensure; then
+            up_base="$DEFAULT_MODEL_BASE"; up_key="none"; up_model="$OMK_DEFAULT_MODEL_NAME"
+            dotenv_set "$ldir/.env" LLM_DEFAULT_MODEL "$up_model"
+            # CPU·Metal 의 작은 모델은 앱의 큰 프롬프트(수천 토큰)를 읽는 데만 10~20초가 든다 — 기본 fast-fail(5초+보정)에 걸려
+            # "LLM 호출 실패"가 된다. 값이 없을 때만 넉넉히 둔다(.env.example 도 단일 모델 운영에 30초 이상을 권장).
+            dotenv_ensure "$ldir/.env" LLM_FAST_FAIL_TIMEOUT_MS 60000
+            dotenv_ensure "$ldir/.env" LLM_FAST_FAIL_PREFILL_MS_PER_1K_TOKENS 4000
+        else log_warn "기본 모델을 준비하지 못했습니다 — 업스트림을 직접 지정하세요 (--llm-base-url … --llm-model …)"; fi
+    fi
+    litellm_ensure "$ldir" "$env" "$qwen_base" "$bge_base" "$vllm_key" "$up_base" "$up_key" "$up_model"
+}
+
 cmd_env_install() {
     local env="$1"; shift
     local ref="" bench_ref="" public_url="" no_bench=1 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=() expose_args=()
@@ -1352,31 +1390,13 @@ cmd_env_install() {
     [[ -z "$https_host" ]] || dotenv_set "$ldir/.env" OMK_HTTPS_HOST "$https_host"
     [[ $viewer -eq 0 ]] || dotenv_set "$ldir/.env" OMK_ARTIFACT_VIEWER 1
 
-    # 1.5) 웹 검색 — .env 는 install.sh 가 만든 뒤에야 있다. 값이 바뀌면 API 만 다시 띄운다.
+    # 1.5~1.7) 웹 검색 · 런타임 이미지 · 게이트웨이(+기본 모델) — 개발 서버('omk dev setup')와 같은 함수다.
+    # .env 는 install.sh 가 만든 뒤에야 있다. 값이 바뀌면 API 만 다시 띄운다.
     [[ $no_searxng -eq 1 ]] && dotenv_set "$ldir/.env" OMK_SEARXNG off
-    searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"
-    # 1.6) 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리의 전제.
     [[ $no_images -eq 1 ]] && dotenv_set "$ldir/.env" OMK_RUNTIME_IMAGES off
-    runtime_images_ensure "$ldir" "$env"
-    ops_sandbox_guard "$ldir"
-    # 1.7) LiteLLM 게이트웨이 — 앱의 LLM_BASE_URL·LLM_API_KEY 를 채운다.
     [[ $no_litellm -eq 1 ]] && dotenv_set "$ldir/.env" OMK_LITELLM off
-    # 업스트림을 주지 않았고 이 환경에 기억된 업스트림도 없으면 기본 모델(llama.cpp)을 게이트웨이 뒤에 둔다.
-    # 나중에 --llm-base-url/--qwen-vllm-base 로 다시 설치하거나 litellm.env 를 채우면 그쪽을 따른다.
-    local lenv_prev; lenv_prev="$(litellm_dir "$env")/litellm.env"
-    if [[ $no_litellm -eq 0 && $no_default_model -eq 0 && -z "$up_base$qwen_base" \
-          && -z "$(dotenv_get "$lenv_prev" QWEN_VLLM_API_BASE)" ]] \
-       && { [[ -z "$(dotenv_get "$lenv_prev" OMK_UPSTREAM_MODEL)" ]] || [[ "$(dotenv_get "$lenv_prev" OMK_UPSTREAM_API_BASE)" == "$(default_model_base)" ]]; }; then
-        if default_model_ensure; then
-            up_base="$DEFAULT_MODEL_BASE"; up_key="none"; up_model="$OMK_DEFAULT_MODEL_NAME"
-            dotenv_set "$ldir/.env" LLM_DEFAULT_MODEL "$up_model"
-            # CPU·Metal 의 작은 모델은 앱의 큰 프롬프트(수천 토큰)를 읽는 데만 10~20초가 든다 — 기본 fast-fail(5초+보정)에 걸려
-            # "LLM 호출 실패"가 된다. 값이 없을 때만 넉넉히 둔다(.env.example 도 단일 모델 운영에 30초 이상을 권장).
-            dotenv_ensure "$ldir/.env" LLM_FAST_FAIL_TIMEOUT_MS 60000
-            dotenv_ensure "$ldir/.env" LLM_FAST_FAIL_PREFILL_MS_PER_1K_TOKENS 4000
-        else log_warn "기본 모델을 준비하지 못했습니다 — 업스트림을 직접 지정하세요 (--llm-base-url … --llm-model …)"; fi
-    fi
-    litellm_ensure "$ldir" "$env" "$qwen_base" "$bge_base" "$vllm_key" "$up_base" "$up_key" "$up_model"
+    stack_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")" "$no_default_model" 0 \
+        "$qwen_base" "$bge_base" "$vllm_key" "$up_base" "$up_key" "$up_model"
     [[ "$env_before" == "$(cksum < "$ldir/.env")" && $SEARCH_CHANGED -eq 0 && $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
 
     # 2) openmake_bench (add-on — --bench 로 고를 때만)
@@ -1638,7 +1658,8 @@ cmd_env() {
 }
 
 # ==============================================================================
-# dev — 작업 클론에서 개발 서버를 띄운다 (PM2 아님, 포그라운드 concurrently)
+# dev — 작업 클론에서 개발 서버를 띄운다 (앱은 PM2 아님, 포그라운드 concurrently)
+# 앱이 기대는 것 — DB·Redis·SearXNG(docker)와 게이트웨이·기본 모델 서버(PM2) — 은 환경 설치와 같은 함수(stack_ensure)로 준비한다.
 # ==============================================================================
 DEV_LLM=""; DEV_BENCH=""
 dev_locate() {
@@ -1694,19 +1715,82 @@ dev_warn_legacy() { # 예전에 'dev' 로 준비한 작업 클론 — 동작은 
 }
 dev_compose() { ( cd "$DEV_LLM" && docker compose --env-file .env -f infra/docker-compose.yml "$@" ); }
 dev_searxng() { searxng_ensure "$DEV_LLM" "$(dev_instance)" "$DEV_LLM/.openmake/searxng" "$DEV_LLM"; }
+# gen-env.mjs 의 기본값은 운영 설치용(NODE_ENV=production)이다. ts-node·next dev 로 도는 개발 서버에 그대로 두면
+# 운영 수준 검사(시크릿·쿠키)가 걸린다. 사용자가 고른 다른 값(test·staging …)은 건드리지 않는다.
+dev_env_defaults() { # $1=.env
+    [[ "$(dotenv_get "$1" NODE_ENV)" != "production" ]] || dotenv_set "$1" NODE_ENV development
+}
+# 사용자가 직접 넣은 LLM 주소는 가로채지 않는다. omk 것은 둘뿐이다 — 자리표시자(gen-env 기본값인데 그 포트에 아무것도 없음)와
+# omk 가 넣은 게이트웨이 주소.
+dev_llm_is_ours() { # $1=.env → 0 이면 omk 가 관리한다
+    local url port; url="$(dotenv_get "$1" LLM_BASE_URL)"; port="$(dotenv_get "$1" OMK_LITELLM_PORT)"
+    [[ -n "$url" ]] || return 0
+    if [[ "$url" == "http://localhost:4000" ]] && ! port_in_use 4000; then return 0; fi
+    [[ -n "$port" && "$url" == "http://127.0.0.1:$port" ]]
+}
+# 재부팅 등으로 내려간 게이트웨이·기본 모델 서버를 다시 띄운다. 'dev setup' 이 준비한 적이 없으면 아무것도 하지 않는다.
+dev_llm_up() {
+    local inst d lenv n; inst="$(dev_instance)"; d="$(llamacpp_dir)"
+    [[ "$inst" == "$OMK_LOCAL_INSTANCE" && -x "$(litellm_dir "$inst")/start_litellm.sh" ]] || return 0
+    [[ -n "$(dotenv_get "$DEV_LLM/.env" OMK_LITELLM_PORT)" ]] || return 0
+    has pm2 || { log_warn "pm2 가 없어 게이트웨이를 확인하지 못했습니다 — 'omk dev setup'"; return 0; }
+    lenv="$(litellm_dir "$inst")/litellm.env"; n="$(litellm_pm2_name "$inst")"
+    if [[ -x "$d/start.sh" && -n "$(default_model_base)" && "$(dotenv_get "$lenv" OMK_UPSTREAM_API_BASE)" == "$(default_model_base)" \
+          && "$(pm2_status_of "$OMK_LLAMACPP_APP")" != "online" ]]; then
+        if pm2 describe "$OMK_LLAMACPP_APP" >/dev/null 2>&1 && [[ "$(pm2_app_cwd "$OMK_LLAMACPP_APP")" != "$d" ]]; then
+            log_warn "기본 모델 서버($OMK_LLAMACPP_APP)가 다른 OMK_ROOT 에서 돌고 있습니다 — 건드리지 않습니다"
+        else
+            pm2 describe "$OMK_LLAMACPP_APP" >/dev/null 2>&1 && pm2 delete "$OMK_LLAMACPP_APP" >/dev/null 2>&1 || true
+            pm2 start "$d/start.sh" --name "$OMK_LLAMACPP_APP" --cwd "$d" --interpreter bash --time >/dev/null \
+                && log_ok "PM2 $OMK_LLAMACPP_APP (모델을 읽는 동안 첫 응답이 늦을 수 있습니다)" || log_warn "PM2 $OMK_LLAMACPP_APP 기동 실패 — 'omk dev setup'"
+        fi
+    fi
+    [[ "$(pm2_status_of "$n")" == "online" ]] && return 0
+    mkdir -p "$(logs_dir "$inst")"
+    litellm_pm2_start "$inst" || true
+}
 cmd_dev_setup() {
     dev_locate; ensure_git
-    local no_searxng=0; [[ "${1:-}" == "--no-searxng" ]] && no_searxng=1
+    local no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 up_base="" up_key="" up_model="" keep_llm=0 inst
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --no-searxng)        no_searxng=1 ;;
+            --no-runtime-images) no_images=1 ;;
+            --no-litellm)        no_litellm=1 ;;
+            --no-default-model)  no_default_model=1 ;;
+            # 게이트웨이 뒤에 둘 업스트림(OpenAI 호환 — Ollama·vLLM·외부 API). 'omk env install' 과 같은 뜻이다.
+            --llm-base-url)      up_base="${2:-}"; shift ;;
+            --llm-api-key)       up_key="${2:-}"; shift ;;
+            --llm-model)         up_model="${2:-}"; shift ;;
+            *) usage_die "알 수 없는 옵션: $1" ;;
+        esac; shift
+    done
+    if [[ -n "$up_base$up_model" ]] && [[ -z "$up_base" || -z "$up_model" ]]; then usage_die "--llm-base-url 과 --llm-model 은 함께 줍니다"; fi
     log_step "dev 준비: $DEV_LLM"
-    # 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션까지. 빌드·PM2 는 개발 서버에 필요 없다.
+    # 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션까지. 앱 빌드와 앱의 PM2 기동은 개발 서버에 필요 없다.
     # 이미 준비된 클론은 .env 의 이름을 그대로 쓴다(install.sh 는 .env 와 다른 --instance 를 거부한다).
     dev_warn_legacy
     ( cd "$DEV_LLM" && ./install.sh --yes --minimal --instance "$(dev_instance)" --skip-build --no-start ) || die "install.sh 실패"
     omk_docker_host   # 첫 설치는 install.sh 가 방금 Colima 를 만들었다 — 이제 소켓이 있다
     load_toolchain "$DEV_LLM"
+    dev_env_defaults "$DEV_LLM/.env"
     dev_build_packages
+    inst="$(dev_instance)"
     [[ $no_searxng -eq 1 ]] && dotenv_set "$DEV_LLM/.env" OMK_SEARXNG off
-    dev_searxng
+    if [[ "$inst" != "$OMK_LOCAL_INSTANCE" ]]; then
+        # 옛 이름의 작업 클론 — 게이트웨이·작업 공간의 자리($OMK_ROOT/<이름>)와 이미지 태그가 같은 이름의 환경과 겹친다.
+        log_warn "인스턴스 이름이 '$inst' 라 게이트웨이·기본 모델·런타임 이미지를 준비하지 않습니다 — 'omk dev reset' 으로 이름을 옮긴 뒤 다시 실행하세요"
+        dev_searxng
+    else
+        # 환경 설치와 같은 단계 — 설치 직후 바로 채팅·에이전트 작업이 된다. 게이트웨이·기본 모델 서버는 PM2 로 뜬다.
+        [[ $no_images -eq 1 ]] && dotenv_set "$DEV_LLM/.env" OMK_RUNTIME_IMAGES off
+        [[ $no_litellm -eq 1 ]] && dotenv_set "$DEV_LLM/.env" OMK_LITELLM off
+        [[ -n "$up_base" ]] || dev_llm_is_ours "$DEV_LLM/.env" || keep_llm=1
+        [[ -z "$up_model" ]] || dotenv_set "$DEV_LLM/.env" LLM_DEFAULT_MODEL "$up_model"
+        mkdir -p "$(env_dir "$inst")" "$(logs_dir "$inst")"
+        stack_ensure "$DEV_LLM" "$inst" "$DEV_LLM/.openmake/searxng" "$DEV_LLM" "$no_default_model" "$keep_llm" \
+            "" "" "" "$up_base" "$up_key" "$up_model"
+    fi
     if [[ -n "$DEV_BENCH" ]]; then
         log_step "bench dev 준비: $DEV_BENCH"
         ( cd "$DEV_BENCH" && npm install --no-audit --no-fund && ( cd web && npm install --no-audit --no-fund ) ) || die "bench 의존성 설치 실패"
@@ -1734,7 +1818,7 @@ cmd_dev_up() {
     [[ $use_ts -eq 1 ]] && { local ts; ts="$(tailscale_hosts)"; [[ -n "$ts" ]] || die "tailscale 주소를 읽을 수 없습니다 (tailscale CLI·로그인 확인)"; hosts="$(csv_union "$hosts" "$ts")"; }
     hosts="$(csv_union "$hosts" "$hosts_arg")"
     dev_apply_hosts "$DEV_LLM" "$hosts"
-    [[ "$target" == "deps" || "$target" == "all" || "$target" == "api" ]] && { log_info "PostgreSQL/Redis 기동 (docker compose)"; dev_compose up -d; dev_searxng; }
+    [[ "$target" == "deps" || "$target" == "all" || "$target" == "api" ]] && { log_info "PostgreSQL/Redis 기동 (docker compose)"; dev_compose up -d; dev_searxng; dev_llm_up; }
     [[ "$target" == "deps" ]] && { cmd_dev_status; return 0; }
 
     # macOS 기본 bash 3.2 에는 case 의 ;;& 가 없어 if 로 나열한다.
@@ -1761,15 +1845,26 @@ cmd_dev_up() {
     if [[ -n "$hosts" ]]; then
         local h; for h in $(printf '%s' "$hosts" | tr ',' ' '); do log_info "다른 기기에서:  web http://$h:$web${bport:+   bench http://$h:9401}"; done
     fi
-    log_info "Ctrl+C 로 전부 종료. DB/Redis 는 남는다 → 'omk dev down'"
+    log_info "Ctrl+C 로 전부 종료. DB/Redis/SearXNG/게이트웨이는 남는다 → 'omk dev down'"
     "${conc[@]}" -k --prefix-colors auto -n "$names" "${cmds[@]}"
 }
-cmd_dev_down()   { dev_locate; dev_compose stop; if searxng_owned "$(searxng_name "$(dev_instance)")" "$DEV_LLM"; then docker stop "$(searxng_name "$(dev_instance)")" >/dev/null 2>&1 || true; fi; log_ok "dev DB/Redis/SearXNG 정지 (데이터 유지)"; }
+cmd_dev_down() {
+    dev_locate; load_toolchain "$DEV_LLM"
+    local inst n; inst="$(dev_instance)"; n="$(litellm_pm2_name "$inst")"
+    dev_compose stop
+    if searxng_owned "$(searxng_name "$inst")" "$DEV_LLM"; then docker stop "$(searxng_name "$inst")" >/dev/null 2>&1 || true; fi
+    # 게이트웨이는 개발 서버의 것이라 멈춘다. 기본 모델 서버는 호스트의 환경들이 같이 쓴다 — 남긴다.
+    if [[ "$inst" == "$OMK_LOCAL_INSTANCE" ]] && has pm2 && pm2 describe "$n" >/dev/null 2>&1; then pm2 stop "$n" >/dev/null 2>&1 || true; fi
+    log_ok "dev DB/Redis/SearXNG/게이트웨이 정지 (데이터 유지)"
+}
 cmd_dev_status() {
     dev_locate; load_toolchain "$DEV_LLM"
+    local inst n s; inst="$(dev_instance)"
     echo "dev  llm=$DEV_LLM  bench=${DEV_BENCH:-없음}"
     echo "  포트  api $(llm_api_port "$DEV_LLM")  web $(llm_web_port "$DEV_LLM")  pg $(dotenv_get "$DEV_LLM/.env" POSTGRES_PORT)  redis $(dotenv_get "$DEV_LLM/.env" REDIS_PORT)  bench $(dotenv_get "${DEV_BENCH:-/nonexistent}/.env" OMKB_PORT)"
-    has docker && { printf "  docker "; docker ps --format '{{.Names}}={{.Status}}' 2>/dev/null | grep -E "^($(docker_containers dev | tr ' ' '|'))=" | tr '\n' ' ' || true; echo ""; }
+    has docker && { printf "  docker "; docker ps --format '{{.Names}}={{.Status}}' 2>/dev/null | grep -E "^($(docker_containers "$inst" | tr ' ' '|'))=" | tr '\n' ' ' || true; echo ""; }
+    printf "  PM2   "; for n in "$(litellm_pm2_name "$inst")" "$OMK_LLAMACPP_APP"; do s="$(pm2_status_of "$n")"; [[ "$s" == "-" ]] || printf '%s=%s  ' "$n" "$s"; done; echo ""
+    echo "  LLM   $(dotenv_get "$DEV_LLM/.env" LLM_BASE_URL)  모델 $(dotenv_get "$DEV_LLM/.env" LLM_DEFAULT_MODEL)"
     echo "  검색  $(search_line "$DEV_LLM")"
 }
 cmd_dev_reset() {

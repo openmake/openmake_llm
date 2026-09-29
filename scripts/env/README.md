@@ -40,7 +40,8 @@ bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm �
 `--bench` 로 설치한 환경은 `~/.openmake/<env>/bench` 와 PM2 `openmake-bench[-<env>]` 가 더 생긴다.
 
 **작업 클론의 개발 서버(`omk dev …`)는 환경이 아니다** — `~/.openmake` 아래에 두지 않고, 인스턴스 이름 `local`(docker `openmake-local-*`)로
-PM2 없이 포그라운드에서 돈다. 환경 `dev` 와 이름이 비슷하지만 별개다([개발 서버](#개발-서버--omk-dev-작업-클론--핫-리로드)).
+앱이 PM2 없이 포그라운드에서 돈다. 환경 `dev` 와 이름이 비슷하지만 별개다 — 다만 앱이 기대는 것(검색·런타임 이미지·게이트웨이·기본 모델)은
+환경 설치와 **같은 함수**로 준비한다([개발 서버](#개발-서버--omk-dev-작업-클론--핫-리로드)).
 
 - **online 이 기본 인스턴스인 이유** — 소스(`install.sh`·`gen-env.mjs`·`resolve-ports.cjs`·문서)의 기본 포트와 이름이 곧 운영 값이다. online 을 기본 인스턴스로 두면 포트 표를 어디에도 다시 적을 필요가 없다.
 - **이름 있는 인스턴스의 포트**는 `install.sh` 규칙을 따른다 — 기본은 한 칸 옆(52417/3010/5433/6380)이고, 그 포트가 쓰이고 있으면 옮긴다
@@ -197,7 +198,7 @@ omk env expose  <env> [--tailscale] [--host H]…
 omk env backup  <env> [--schedule ['CRON']] [--off] [--list] [--dry-run]
 omk env autoupdate <env> [--every 'CRON'] [--off]
 omk proxy status | reload | render <env>
-omk dev setup [--no-searxng]
+omk dev setup [--no-searxng] [--no-runtime-images] [--no-litellm] [--no-default-model] [--llm-base-url U --llm-api-key K --llm-model M]
 omk dev up [all|deps|api|web|bench] [--tailscale] [--host H]…
 omk dev down | status | reset [--keep-data]
 ```
@@ -265,6 +266,7 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
 업스트림(`--llm-base-url`·`--qwen-vllm-base`)을 주지 않고 설치하면 omk 가 **최소 모델**을 게이트웨이 뒤에 둔다:
 llama.cpp 의 `llama-server`(OpenAI 호환 · CPU·Metal 에서 돈다 — vLLM 은 GPU 가 필요해 저사양·macOS 에서 못 쓴다) +
 `Qwen/Qwen3-1.7B-GGUF:Q8_0`(1.8GB, 도구 호출이 되는 가장 작은 선). 경로는 언제나 **앱 → 환경의 LiteLLM → 업스트림**이다.
+작업 클론의 개발 서버(`omk dev setup`)도 같다 — 게이트웨이는 `local` 것을 따로 두고 모델 서버는 같이 쓴다.
 
 - 호스트당 하나: PM2 `omk-llamacpp`, `127.0.0.1` 전용, `~/.openmake/llamacpp/{bin,models,start.sh,port}`. 환경들이 공유하고 `env reset` 에도 남는다.
   `llama-server` 가 PATH 에 있으면 그것을 쓰고, 없으면 공식 릴리스(`OMK_LLAMACPP_TAG`)를 받는다.
@@ -314,7 +316,8 @@ Linux·WSL2 는 지금처럼 Docker Engine 을 쓴다.
 (`TASK_SANDBOX_WRITE_VIA_CONTAINER` — 접속처가 Colima 면 자동으로 켜진다), 쓰고 곧바로 실행하는 임시 파일은 호출마다 새 이름으로 만든다.
 workspace 를 밖에서 직접 고치는 도구를 붙일 때는 같은 점을 고려한다.
 
-개발 서버(`omk dev up`)에서 작업 샌드박스를 직접 켤 때는 `.env` 의 `TASK_SANDBOX_ROOT` 를 홈 아래 경로로 둔다 —
+개발 서버도 같다 — `omk dev setup` 이 런타임 이미지를 빌드하면서 `TASK_SANDBOX_ROOT` 를 `~/.openmake/local/task-workspaces` 로 둔다.
+`--no-runtime-images` 로 준비한 뒤 샌드박스를 직접 켤 때는 `.env` 의 `TASK_SANDBOX_ROOT` 를 홈 아래 경로로 둔다 —
 Colima 는 홈 디렉터리만 VM 에 공유해, 기본값(`/tmp/…`)은 컨테이너에서 보이지 않는다.
 
 ### Docker Desktop 에서 옮기기
@@ -415,21 +418,38 @@ omk env reset staging --keep-data            # DB 볼륨은 남김 (.env 도 함
 git clone https://github.com/openmake/openmake_llm.git && git clone https://github.com/openmake/openmake_bench.git
 cd openmake_llm && git checkout -b feature/<주제>
 
-scripts/env/omk.sh dev setup          # 최초 1회: 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션·SearXNG (빼려면 --no-searxng)
-scripts/env/omk.sh dev up             # 전부: DB/Redis/SearXNG + api + web (+ bench 클론이 있으면 bench) — Ctrl+C 로 종료
+scripts/env/omk.sh dev setup          # 최초 1회: 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션·SearXNG·런타임 이미지·게이트웨이·기본 모델
+scripts/env/omk.sh dev up             # 전부: DB/Redis/SearXNG/게이트웨이 + api + web (+ bench 클론이 있으면 bench) — Ctrl+C 로 종료
 scripts/env/omk.sh dev up api         # 개별: deps | api | web | bench
 scripts/env/omk.sh dev up --tailscale     # 다른 기기에서 보기 (또는 --host <이름|IP> 를 여러 번)
 scripts/env/omk.sh dev status
-scripts/env/omk.sh dev down           # DB/Redis/SearXNG 정지 (데이터 유지)
+scripts/env/omk.sh dev down           # DB/Redis/SearXNG/게이트웨이 정지 (데이터 유지 · 기본 모델 서버는 남긴다)
 scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.env 유지). --keep-data 면 볼륨은 남긴다
 ```
 
-`dev setup` 은 앱 빌드와 PM2 기동을 하지 않는다(`install.sh --minimal --skip-build --no-start`) — 워크스페이스 패키지(`packages/*/dist`)만 빌드한다.
+`dev setup` 은 앱 빌드와 앱의 PM2 기동을 하지 않는다(`install.sh --minimal --skip-build --no-start`) — 워크스페이스 패키지(`packages/*/dist`)만 빌드한다.
 `.env` 나 `node_modules` 가 없으면 `dev up` 이 `dev setup` 을 먼저 돌린다.
+
+**설치 직후 바로 채팅이 된다.** 검색·런타임 이미지·게이트웨이·기본 모델은 `omk env install` 과 같은 함수(`stack_ensure`)로 준비하고 옵션의 뜻도 같다 —
+`--no-searxng` · `--no-runtime-images`(약 7GB 빌드를 뺀다) · `--no-litellm` · `--no-default-model` · `--llm-base-url U --llm-model M`(예: 이미 있는 Ollama).
+개발 서버가 환경과 다른 것은 셋뿐이다: 앱을 빌드하지 않고, 앱을 PM2 에 올리지 않고, `.env` 의 `NODE_ENV` 가 `development` 다
+(`gen-env.mjs` 의 기본값 `production` 을 바꾼다. `test`·`staging` 처럼 직접 고른 값은 그대로 둔다).
+
+| 같이 쓰는 것 (호스트에 하나) | 따로 두는 것 (`local`) |
+|---|---|
+| Docker 엔진 — macOS 는 Colima VM `openmake` | PostgreSQL·Redis (`openmake-local-*`) — 브랜치의 마이그레이션이 환경의 DB 를 바꾸지 않게 |
+| 기본 모델 서버 — PM2 `omk-llamacpp`, 모델 1.8GB 는 한 번만 받는다 | 게이트웨이 — PM2 `openmake-litellm-local`, `~/.openmake/local/litellm`. 환경이 설치돼 있지 않아도 채팅이 된다 |
+| 런타임 이미지의 레이어(Dockerfile 이 같으면 캐시 재사용) | 런타임 이미지의 태그(`:local`) · SearXNG · 작업 공간(`~/.openmake/local/task-workspaces`) |
+
+- `.env` 의 `LLM_BASE_URL` 을 **직접 넣어 둔 작업 클론은 건드리지 않는다.** omk 가 바꾸는 것은 비어 있거나, 자리표시자(`http://localhost:4000` 인데 그 포트에 아무것도 없음)이거나,
+  omk 가 넣은 게이트웨이 주소일 때뿐이다. 직접 넣은 주소를 게이트웨이 뒤로 옮기려면 `--llm-base-url … --llm-model …` 을 준다.
+- 게이트웨이와 기본 모델 서버는 PM2 로 뜬다 — `dev up` 의 Ctrl+C 뒤에도 남고, 재부팅 등으로 내려가 있으면 `dev up` 이 다시 띄운다.
+- 작업 클론이 여럿이면 게이트웨이 하나(`local`)를 같이 쓴다. 게이트웨이의 config 는 마지막으로 `dev setup` 을 돌린 클론의 것이다.
+- 옛 인스턴스 이름(`dev`)의 작업 클론에는 게이트웨이·기본 모델·런타임 이미지를 준비하지 않는다(환경 dev 의 것과 자리가 겹친다) — `omk dev reset` 으로 이름을 옮긴 뒤 다시 돌린다.
 
 **다른 기기에서 보기.** 웹은 채팅 소켓을 "접속한 호스트명:API 포트"로 붙이고, 서버는 Origin 이 `CORS_ORIGINS` 와 정확히 일치할 때만 받는다(REST·WS 공통). 그래서 접속에 쓸 호스트를 알려줘야 한다 — `--tailscale` 은 `tailscale status` 에서 MagicDNS 짧은 이름·FQDN·IPv4 를 읽고, `--host` 는 직접 준다. omk 는 그 호스트를 세 곳에 넣는다: API 의 `CORS_ORIGINS`(호스트별 웹·API origin), Next dev 의 `allowedDevOrigins`(모르면 HMR 이 막혀 hydration 이 죽는다), bench vite 의 `allowedHosts`. 목록은 `.env` 의 `OMK_DEV_HOSTS` 에 기억되어 다음 `dev up` 부터는 옵션 없이도 유지된다. 허용하지 않은 호스트·Origin 은 계속 거부된다.
 
-개발 서버는 PM2 를 쓰지 않는다 — `npm run dev:api`(`ts-node`)·`next dev`·bench 의 `vite` 가 `concurrently` 아래 포그라운드에서 돈다.
+개발 서버의 앱은 PM2 를 쓰지 않는다 — `npm run dev:api`(`ts-node`)·`next dev`·bench 의 `vite` 가 `concurrently` 아래 포그라운드에서 돈다.
 웹과 bench 화면은 고치면 바로 반영되고, **API 는 감시 재시작이 없어** 고친 뒤 `dev up` 을 다시 띄운다. 인스턴스 이름은 **`local`**(컨테이너 `openmake-local-*`)이라
 같은 호스트의 **환경 `dev`**(`~/.openmake/dev` — 빌드된 배포본으로 브랜치를 확인하는 곳)·staging·online 과 컨테이너·볼륨 이름이 겹치지 않는다.
 포트는 설치할 때 열려 있던 것만 피한다([환경 규칙](#환경-규칙)).
