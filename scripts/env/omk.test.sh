@@ -430,6 +430,7 @@ DS_ROOT="$TMP/dsroot"
     # shellcheck disable=SC2034  # cmd_dev_setup 이 읽는다
     dev_locate() { DEV_LLM="$WC"; DEV_BENCH=""; }
     ensure_git() { :; }; dev_warn_legacy() { :; }; load_toolchain() { :; }; dev_build_packages() { :; }; dev_searxng() { :; }
+    stack_ensure() { :; }; omk_docker_host() { :; }   # 실제 스택(SearXNG·이미지·기본 모델·PM2)을 띄우지 않는다
     cmd_dev_setup >/dev/null 2>&1
 )
 ok "dev setup: 래퍼 설치" '[[ -x "$DS_ROOT/bin/omk" ]]'
