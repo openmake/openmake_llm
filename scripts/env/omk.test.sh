@@ -409,6 +409,32 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q err "$LG" 2>/dev/null && break; sleep 
 eq "run: 파일에 색 없이" "$(grep -c '^hello$' "$LG")|$(grep -c '^err$' "$LG")" "1|1"
 # GNU 형식을 먼저 본다 — Linux 의 `stat -f` 는 실패하지 않고 파일시스템 정보를 출력한다(그러면 뒤의 대안으로 넘어가지 않는다).
 eq "run: 파일 권한 600" "$(stat -c '%a' "$LG" 2>/dev/null || stat -f '%Lp' "$LG")" "600"
+# ── 래퍼: 'omk dev …' 는 작업 클론(~/.openmake 밖) 안에서 치면 그 클론의 omk.sh, 나머지는 설치본 ──
+fake_omk() { mkdir -p "$1/scripts/env"; printf '#!/usr/bin/env bash\necho "%s $*"\n' "$2" > "$1/scripts/env/omk.sh"; }
+fake_omk "$OMK_ROOT/staging/llm" installed
+git init -q "$OMK_ROOT/staging/llm"; touch "$OMK_ROOT/staging/llm/openmake_llm.sh"
+WC="$TMP/work/openmake_llm"; fake_omk "$WC" clone; git init -q "$WC"; touch "$WC/openmake_llm.sh"; mkdir -p "$WC/apps/api"
+NC="$TMP/work/noscript"; mkdir -p "$NC"; git init -q "$NC"; touch "$NC/openmake_llm.sh"
+install_wrapper >/dev/null
+W="$OMK_ROOT/bin/omk"
+eq "wrapper: 클론 하위 폴더의 dev 는 클론 것"   "$(cd "$WC/apps/api" && bash "$W" dev up api)" "clone dev up api"
+eq "wrapper: 클론 안이라도 env 는 설치본"       "$(cd "$WC" && bash "$W" env status staging)" "installed env status staging"
+eq "wrapper: 클론 밖의 dev 는 설치본"           "$(cd "$TMP" && bash "$W" dev up)"            "installed dev up"
+eq "wrapper: ~/.openmake 안의 클론은 설치본"    "$(cd "$OMK_ROOT/staging/llm" && bash "$W" dev up)" "installed dev up"
+eq "wrapper: omk.sh 없는 클론은 설치본"         "$(cd "$NC" && bash "$W" dev up)"             "installed dev up"
+# 환경을 설치하지 않고 작업 클론만 쓰는 장비 — 'dev setup' 이 래퍼를 깐다 (무거운 단계는 가짜로)
+printf '#!/usr/bin/env bash\nexit 0\n' > "$WC/install.sh"; chmod +x "$WC/install.sh"
+DS_ROOT="$TMP/dsroot"
+(
+    OMK_ROOT="$DS_ROOT"
+    # shellcheck disable=SC2034  # cmd_dev_setup 이 읽는다
+    dev_locate() { DEV_LLM="$WC"; DEV_BENCH=""; }
+    ensure_git() { :; }; dev_warn_legacy() { :; }; load_toolchain() { :; }; dev_build_packages() { :; }; dev_searxng() { :; }
+    stack_ensure() { :; }; omk_docker_host() { :; }   # 실제 스택(SearXNG·이미지·기본 모델·PM2)을 띄우지 않는다
+    cmd_dev_setup >/dev/null 2>&1
+)
+ok "dev setup: 래퍼 설치" '[[ -x "$DS_ROOT/bin/omk" ]]'
+eq "dev setup 래퍼: 클론 안의 dev 는 클론 것" "$(cd "$WC" && OMK_ROOT="$DS_ROOT" bash "$DS_ROOT/bin/omk" dev up)" "clone dev up"
 
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]

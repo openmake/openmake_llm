@@ -651,7 +651,16 @@ install_wrapper() {
     cat > "$OMK_ROOT/bin/omk" <<'EOF'
 #!/usr/bin/env bash
 # omk 래퍼 — 설치된 환경(online → staging → 그 외)의 scripts/env/omk.sh 로 넘긴다. omk 가 생성.
+# 'omk dev …' 만은 작업 클론을 다루므로, openmake_llm 작업 클론 안(~/.openmake 밖)에서 치면 그 클론의 omk.sh 를 쓴다.
 root="${OMK_ROOT:-$HOME/.openmake}"
+if [[ "${1:-}" == dev ]]; then
+    top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    real="$(cd "$root" 2>/dev/null && pwd -P || true)"   # git 은 실제 경로를 준다(/tmp → /private/tmp 등)
+    case "$top/" in
+        /|"$root"/*|"${real:-$root}"/*) ;;
+        *) [[ -f "$top/openmake_llm.sh" && -f "$top/scripts/env/omk.sh" ]] && exec bash "$top/scripts/env/omk.sh" "$@" ;;
+    esac
+fi
 for e in online staging $(ls -1 "$root" 2>/dev/null); do
     s="$root/$e/llm/scripts/env/omk.sh"
     [[ -f "$s" ]] && exec bash "$s" "$@"
@@ -1818,6 +1827,7 @@ cmd_dev_setup() {
         mkdir -p "$DEV_BENCH/data"
         bench_ensure_env "$DEV_BENCH" "$(dev_instance)" "$(llm_api_port "$DEV_LLM")" "$(llm_web_port "$DEV_LLM")" 0 >/dev/null
     fi
+    install_wrapper   # 환경을 설치하지 않은 장비에서도 'omk dev …' 가 되도록
     log_ok "dev 준비 완료 — 'omk dev up' 으로 기동"
 }
 cmd_dev_up() {
