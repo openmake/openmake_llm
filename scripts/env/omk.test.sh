@@ -32,7 +32,13 @@ eq "bench pm2"      "$(bench_pm2_name staging)" "openmake-bench-staging"
 eq "dirs"           "$(llm_dir staging)|$(bench_dir staging)" "$OMK_ROOT/staging/llm|$OMK_ROOT/staging/bench"
 eq "ref staging"    "$(env_default_ref staging)" "main"
 eq "ref online"     "$(env_default_ref online)"  "release"
-eq "ref dev"        "$(env_default_ref dev)"     "main"
+eq "ref dev"        "$(env_default_ref dev)"     "dev"
+eq "ref 그 밖의 이름" "$(env_default_ref qa-1)"    "main"
+# 기본값으로 정해진 브랜치가 저장소에 있는가 — 로컬 저장소로 본다(네트워크 없음)
+RB="$TMP/rb"; git init -q "$RB" && git -C "$RB" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m x && git -C "$RB" branch -M main
+eq "remote branch: 있음"        "$(remote_has_branch "$RB" main >/dev/null 2>&1; echo $?)" "0"
+eq "remote branch: 없음"        "$(remote_has_branch "$RB" dev >/dev/null 2>&1; echo $?)"  "1"
+eq "remote branch: 읽지 못함"   "$(remote_has_branch "$TMP/없는-저장소" dev >/dev/null 2>&1; echo $?)" "2"
 ok "validate rejects local" '! ( validate_env local ) >/dev/null 2>&1'
 DV="$TMP/devclone"; mkdir -p "$DV"
 # shellcheck disable=SC2034  # dev_instance 가 읽는다
@@ -114,6 +120,41 @@ eq "default model: 기억된 선택" "$( default_model_resolve; echo "$OMK_DEFAU
 eq "default model: 명시가 우선" "$( OMK_DEFAULT_MODEL_NAME=x; default_model_resolve; echo "$OMK_DEFAULT_MODEL_NAME|$OMK_DEFAULT_MODEL_HF" )" "x|a/b:Q4"
 rm -rf "$(llamacpp_dir)"
 eq "llamacpp dir" "$(llamacpp_dir)" "$OMK_ROOT/llamacpp"
+
+# ── 공통 단계: 환경 설치와 로컬 개발이 같은 함수로 같은 단계를 밟는다 (docker·PM2 는 가짜) ──
+ST="$TMP/st"; mkdir -p "$ST"
+stack_probe() { # $1=.env 내용 $2…=stack_ensure 의 $5 이후 → 불린 단계와 게이트웨이에 넘어간 업스트림(base|model)
+    ( printf '%s' "$1" > "$ST/.env"; shift
+      log_info() { :; }; log_warn() { :; }
+      searxng_ensure()        { printf 'search '; }
+      runtime_images_ensure() { printf 'images '; }
+      ops_sandbox_guard()     { printf 'guard '; }
+      # shellcheck disable=SC2034  # stack_ensure 가 읽는다
+      default_model_ensure()  { printf 'model '; DEFAULT_MODEL_BASE="http://127.0.0.1:18080/v1"; OMK_DEFAULT_MODEL_NAME="qwen3-1.7b"; }
+      litellm_ensure()        { printf 'gateway[%s|%s]' "${6:-}" "${8:-}"; }
+      stack_ensure "$ST" local "$ST/sx" "$ST" "$@" )
+}
+eq "stack: 업스트림이 없으면 기본 모델"   "$(stack_probe '' 0 0)" "search images guard model gateway[http://127.0.0.1:18080/v1|qwen3-1.7b]"
+eq "stack: 기본 모델 이름을 .env 에"      "$(dotenv_get "$ST/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$ST/.env" LLM_FAST_FAIL_TIMEOUT_MS)" "qwen3-1.7b|60000"
+eq "stack: 업스트림을 주면 그것을 따른다" "$(stack_probe '' 0 0 '' '' '' http://u/v1 k m)" "search images guard gateway[http://u/v1|m]"
+eq "stack: --no-default-model"            "$(stack_probe '' 1 0)" "search images guard gateway[|]"
+eq "stack: 게이트웨이를 끄면 모델도 없다" "$(stack_probe $'OMK_LITELLM=off\n' 0 0)" "search images guard gateway[|]"
+eq "stack: 직접 넣은 주소는 그대로"       "$(stack_probe $'LLM_BASE_URL=http://my:1\n' 0 1)|$(dotenv_get "$ST/.env" LLM_BASE_URL)" "search images guard |http://my:1"
+
+# ── 로컬 개발의 .env: 실행 모드, 그리고 LLM 주소가 omk 것인가 ──
+printf 'NODE_ENV=production\n' > "$ST/d.env"; dev_env_defaults "$ST/d.env"
+eq "dev env: production 은 development 로" "$(dotenv_get "$ST/d.env" NODE_ENV)" "development"
+printf 'NODE_ENV=staging\n' > "$ST/d.env"; dev_env_defaults "$ST/d.env"
+eq "dev env: 고른 값은 그대로"            "$(dotenv_get "$ST/d.env" NODE_ENV)" "staging"
+llm_ours() { # $1=.env 내용 $2=4000 포트(0 열림 | 1 닫힘) → y|n
+    local busy="$2"
+    ( port_in_use() { return "$busy"; }; printf '%s' "$1" > "$ST/o.env"; dev_llm_is_ours "$ST/o.env" ) && echo y || echo n
+}
+eq "dev llm: 비어 있으면 omk 것"             "$(llm_ours '' 1)" "y"
+eq "dev llm: 자리표시자는 omk 것"            "$(llm_ours $'LLM_BASE_URL=http://localhost:4000\n' 1)" "y"
+eq "dev llm: 4000 에 실제 서버가 있으면 사용자 것" "$(llm_ours $'LLM_BASE_URL=http://localhost:4000\n' 0)" "n"
+eq "dev llm: omk 게이트웨이 주소는 omk 것"   "$(llm_ours $'LLM_BASE_URL=http://127.0.0.1:13401\nOMK_LITELLM_PORT=13401\n' 1)" "y"
+eq "dev llm: 직접 넣은 주소는 사용자 것"     "$(llm_ours $'LLM_BASE_URL=http://localhost:11434/v1\n' 1)" "n"
 
 # ── 런타임 이미지 태그: 환경별, 기본 인스턴스는 소스 기본값(:latest) ──
 eq "images dev"    "$(runtime_image_names dev)"    "openmake-mcp-runtime:dev openmake-task-runtime:dev"
@@ -315,6 +356,59 @@ ok "gate: 없는 태그 거부"             '! release_gate_check "$GC" v9.9.9'
 ( ASSUME_YES=1; release_gate_enforce gateenv "$GC" v1.0.4 1 ) >/dev/null 2>&1; eq "enforce: force 는 진행" "$?" "0"
 ok "enforce: force 기록"              "grep -q 'force-unverified v1.0.4' '$OMK_ROOT/gateenv/logs/release-gate.log'"
 ( release_gate_enforce gateenv "$GC" v1.0.1 0 ) >/dev/null 2>&1; eq "enforce: 확인된 릴리스 진행" "$?" "0"
+
+# ── docker 접속: macOS 의 전용 Colima (소켓이 있을 때만, 이미 정한 값은 존중) ──
+DH="$TMP/dh"; mkdir -p "$DH/.colima/openmake"
+eq "docker host: 소켓 없음"   "$( unset DOCKER_HOST; omk_docker_host Darwin "$DH"; echo "${DOCKER_HOST:-}" )" ""
+if python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])' "$DH/.colima/openmake/docker.sock" 2>/dev/null; then
+    eq "docker host: macOS + 소켓"  "$( unset DOCKER_HOST; omk_docker_host Darwin "$DH"; echo "${DOCKER_HOST:-}" )" "unix://$DH/.colima/openmake/docker.sock"
+    eq "docker host: Linux 는 그대로" "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "${DOCKER_HOST:-}" )" ""
+    eq "docker host: 정해 둔 값 존중" "$( DOCKER_HOST=tcp://x:1; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST" )" "tcp://x:1"
+    eq "docker host: 항상 0"        "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "$?" )" "0"
+else
+    FAIL=$((FAIL+1)); echo "FAIL docker host: 시험용 소켓을 만들지 못했다 (python3 없음 또는 경로가 너무 길다: $DH)"
+fi
+
+# ── 작업 workspace: 홈 아래(환경 디렉터리)로 — Colima 는 홈만 VM 에 공유한다 ──
+SR="$TMP/sr"; mkdir -p "$SR"; : > "$SR/.env"
+sandbox_root_ensure "$SR/.env" staging
+eq "sandbox root: 기록"        "$(dotenv_get "$SR/.env" TASK_SANDBOX_ROOT)" "$OMK_ROOT/staging/task-workspaces"
+ok "sandbox root: 디렉터리 생성" '[[ -d "$OMK_ROOT/staging/task-workspaces" ]]'
+printf 'TASK_SANDBOX_ROOT=%s\n' "$SR/custom" > "$SR/.env"; sandbox_root_ensure "$SR/.env" staging
+eq "sandbox root: 기존 값 존중"  "$(dotenv_get "$SR/.env" TASK_SANDBOX_ROOT)" "$SR/custom"
+ok "sandbox root: 그 값의 디렉터리" '[[ -d "$SR/custom" ]]'
+# 런타임 이미지 단계는 전용 Colima 를 쓰는 호스트에서만 workspace 를 옮긴다 — Linux·기존 설치본의 경로는 그대로
+eq "uses colima: 전용 소켓"   "$( DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"; uses_colima && echo y || echo n )" "y"
+eq "uses colima: 미설정"      "$( unset DOCKER_HOST; uses_colima && echo y || echo n )" "n"
+eq "uses colima: 다른 데몬"   "$( DOCKER_HOST=unix:///var/run/docker.sock; uses_colima && echo y || echo n )" "n"
+eq "uses colima: 다른 프로필" "$( DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"; uses_colima && echo y || echo n )" "n"
+
+# ── 실행 로그: 설치·갱신·리셋은 파일로도 남긴다 (tee 를 붙이지 않아도) ──
+ok "log: env install"      'omk_log_wanted env install'
+ok "log: env update"       'omk_log_wanted env update'
+ok "log: env reset"        'omk_log_wanted env reset'
+ok "log: dev setup"        'omk_log_wanted dev setup'
+ok "log: dev reset"        'omk_log_wanted dev reset'
+ok "log: dev up 은 아님 (포그라운드 서버)" '! omk_log_wanted dev up'
+ok "log: env status 는 아님"  '! omk_log_wanted env status'
+ok "log: env logs 는 아님"    '! omk_log_wanted env logs'
+ok "log: 도움말은 아님"       '! omk_log_wanted help'
+ok "log: 끄기 OMK_LOG=off"   '! ( OMK_LOG=off; omk_log_wanted env install )'
+ok "log: 이미 기록 중이면 다시 감싸지 않는다" '! ( OMK_LOG_ACTIVE=1; omk_log_wanted env install )'
+eq "log path: 환경 이름 포함" "$(omk_log_path 20260929-170000 env install staging --ref x)" "$OMK_ROOT/logs/omk/20260929-170000-env-install-staging.log"
+eq "log path: 이름 없는 명령" "$(omk_log_path 20260929-170000 dev setup)"                  "$OMK_ROOT/logs/omk/20260929-170000-dev-setup.log"
+eq "log path: 옵션은 이름이 아니다" "$(omk_log_path 20260929-170000 dev setup --no-searxng)" "$OMK_ROOT/logs/omk/20260929-170000-dev-setup.log"
+eq "log path: 이상한 글자는 뺀다"  "$(omk_log_path 20260929-170000 env install '../x y')"   "$OMK_ROOT/logs/omk/20260929-170000-env-install-.._x_y.log"
+eq "strip: 색 코드 제거" "$(printf '\033[32m[OK]\033[0m done\n' | omk_log_strip)" "[OK] done"
+# 실제로 감싸 실행 — 화면 출력과 종료 코드는 그대로, 파일에는 색 없이
+LG="$TMP/lg.log"
+OUT="$( omk_log_run "$LG" bash -c 'printf "\033[32mhello\033[0m\n"; echo err >&2; exit 7' 2>&1 )"; RC=$?
+eq "run: 종료 코드 유지" "$RC" "7"
+ok "run: 화면에 출력"    '[[ "$OUT" == *hello* && "$OUT" == *err* ]]'
+for _ in 1 2 3 4 5 6 7 8 9 10; do grep -q err "$LG" 2>/dev/null && break; sleep 0.2; done
+eq "run: 파일에 색 없이" "$(grep -c '^hello$' "$LG")|$(grep -c '^err$' "$LG")" "1|1"
+# GNU 형식을 먼저 본다 — Linux 의 `stat -f` 는 실패하지 않고 파일시스템 정보를 출력한다(그러면 뒤의 대안으로 넘어가지 않는다).
+eq "run: 파일 권한 600" "$(stat -c '%a' "$LG" 2>/dev/null || stat -f '%Lp' "$LG")" "600"
 
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]

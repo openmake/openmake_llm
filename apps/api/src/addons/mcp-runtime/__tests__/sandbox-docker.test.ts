@@ -127,4 +127,38 @@ describe('buildSandboxedCommand (gate)', () => {
         const imgIdx = r.args.indexOf('openmake-mcp-runtime:latest');
         expect(r.args.slice(imgIdx + 1)).toEqual(['npx', '-y', 'pkg']);
     });
+
+    it('dockerHost 가 있으면 docker 프로세스 env 로 넘긴다 — 컨테이너에는 넣지 않는다', () => {
+        const r = buildSandboxedCommand(
+            { ...input, env: { API_KEY: 'k1' } },
+            cfg({ dockerHost: 'unix:///Users/u/.colima/openmake/docker.sock' }),
+        );
+        expect(r.env).toEqual({ API_KEY: 'k1', DOCKER_HOST: 'unix:///Users/u/.colima/openmake/docker.sock' });
+        expect(r.args.join(' ')).not.toContain('DOCKER_HOST');
+    });
+
+    it('dockerHost 가 없으면 env 에 DOCKER_HOST 를 넣지 않는다', () => {
+        const r = buildSandboxedCommand({ ...input, env: { API_KEY: 'k1' } }, cfg());
+        expect(r.env).toEqual({ API_KEY: 'k1' });
+    });
+
+    it('서버 설정의 DOCKER_* 는 버린다 — 서버가 docker 접속처를 바꾸지 못하고, 컨테이너에도 들어가지 않는다', () => {
+        const r = buildSandboxedCommand(
+            { ...input, env: { DOCKER_HOST: 'tcp://evil:2375', DOCKER_CONTEXT: 'desktop-linux', docker_tls_verify: '0', API_KEY: 'k1' } },
+            cfg({ dockerHost: 'unix:///sock' }),
+        );
+        expect(r.env).toEqual({ API_KEY: 'k1', DOCKER_HOST: 'unix:///sock' });
+        const joined = r.args.join(' ');
+        expect(joined).toContain('-e API_KEY');
+        expect(joined).not.toMatch(/DOCKER_/i);
+    });
+
+    it('호스트 접속처가 없어도(Linux·기존 설치본) 서버 설정의 DOCKER_* 는 버린다', () => {
+        const r = buildSandboxedCommand(
+            { ...input, env: { DOCKER_HOST: 'tcp://evil:2375', DOCKER_CONTEXT: 'x' } },
+            cfg(),
+        );
+        expect(r.env).toEqual({});
+        expect(r.args.join(' ')).not.toMatch(/DOCKER_/i);
+    });
 });

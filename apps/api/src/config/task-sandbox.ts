@@ -109,6 +109,20 @@ export interface TaskSandboxConfig {
      * FS/셸 변경이 없는 조회류(web_search 등)만 등록할 것. 위험 도구 금지.
      */
     extraTools: string[];
+    /**
+     * workspace 파일 쓰기를 호스트가 아니라 컨테이너 안에서(`docker exec`) 한다.
+     * macOS 의 Colima(virtiofs)는 컨테이너가 방금 본 파일을 호스트가 덮어쓰면 약 1초 동안 예전 크기로 읽는다 —
+     * 컨테이너 안에서 쓰면 컨테이너도 호스트도 곧바로 정확히 읽는다. 기본: 전용 Colima 를 쓰는 호스트에서만 켠다.
+     */
+    writeViaContainer?: boolean;
+}
+
+/** PURE: writeViaContainer 기본값 — TASK_SANDBOX_WRITE_VIA_CONTAINER 가 있으면 그 값, 없으면 docker 접속처가 Colima 인지. */
+export function resolveWriteViaContainer(env: Record<string, string | undefined>): boolean {
+    const v = env.TASK_SANDBOX_WRITE_VIA_CONTAINER;
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    return /^unix:\/\/.*\/\.colima\//.test(env.DOCKER_HOST ?? '');
 }
 
 export function getTaskSandboxConfig(): TaskSandboxConfig {
@@ -146,6 +160,7 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         egressProxyContainer: process.env.TASK_SANDBOX_EGRESS_PROXY_CONTAINER || 'omk-egress-proxy',
         egressProxyPort: intEnv(process.env.TASK_SANDBOX_EGRESS_PROXY_PORT, 8888),
         codeDiffEnabled: process.env.TASK_SANDBOX_CODE_DIFF_ENABLED !== 'false',
+        writeViaContainer: resolveWriteViaContainer(process.env),
         extraTools: (process.env.TASK_SANDBOX_EXTRA_TOOLS ?? 'web_search')
             .split(',').map((s) => s.trim()).filter(Boolean),
     };

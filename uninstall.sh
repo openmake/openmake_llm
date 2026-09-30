@@ -28,6 +28,12 @@ log_warn() { printf "%s[WARN]%s  %s\n" "$C_WARN" "$C_RESET" "$*"; }
 log_step() { printf "\n%s━━ %s ━━%s\n" "$C_INFO" "$*" "$C_RESET"; }
 has() { command -v "$1" >/dev/null 2>&1; }
 
+# macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다
+# (scripts/env/omk.sh 의 omk_docker_host 와 같은 규칙). 이미 정해 둔 DOCKER_HOST 는 존중한다.
+if [[ "$(uname -s)" == "Darwin" && -z "${DOCKER_HOST:-}" && -S "$HOME/.colima/openmake/docker.sock" ]]; then
+    export DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"
+fi
+
 # 이름 계산보다 인자 파싱이 먼저다 — --instance 가 .env 의 OMK_INSTANCE 를 덮으므로
 # 플래그를 전부 읽기 전에는 어떤 인스턴스를 지울지 확정할 수 없다.
 ASSUME_YES=0; KEEP_DATA=0; KEEP_SOURCE=0; INSTANCE=""

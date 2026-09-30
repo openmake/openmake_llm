@@ -1,8 +1,8 @@
-import { mkdtemp, mkdir, writeFile, symlink, rm } from 'fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, symlink, rm, chmod } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, sep } from 'path';
-import { buildRunArgs, buildBrowserRunArgs, safeResolveWorkspacePath, safeRealWorkspacePath, sanitizeId, dirSizeBytes, listWorkspaceFilesAt, TaskSandbox } from './sandbox';
-import { getTaskSandboxConfig } from '../../config/task-sandbox';
+import { buildRunArgs, buildBrowserRunArgs, buildWriteArgs, safeResolveWorkspacePath, safeRealWorkspacePath, sanitizeId, dirSizeBytes, listWorkspaceFilesAt, TaskSandbox } from './sandbox';
+import { getTaskSandboxConfig, resolveWriteViaContainer } from '../../config/task-sandbox';
 
 describe('task-sandbox pure functions', () => {
     const cfg = getTaskSandboxConfig();
@@ -149,6 +149,127 @@ describe('task-sandbox pure functions', () => {
         it('.git·.verify_*·기타 dotfile 은 산출물 목록에서 제외', async () => {
             const files = await listWorkspaceFilesAt(base);
             expect(files).toEqual(['report.md', join('src', 'a.ts')]);
+        });
+    });
+
+    // workspace 는 호스트 디렉터리를 bind mount 한 것이다. macOS 의 Colima(virtiofs)는 컨테이너가 방금 본 파일을
+    // 호스트가 덮어쓰면 약 1초 동안 예전 크기로 읽는다(2026-09-29 실측: 연속 20회 중 18회 오독). 컨테이너 안에서
+    // 쓰면 컨테이너도 호스트도 곧바로 정확히 읽는다(같은 실측 20회 중 0회).
+    describe('컨테이너 안에서 쓰기 (writeViaContainer)', () => {
+        it('buildWriteArgs: 경로는 셸 문자열에 넣지 않고 위치 인자로 넘긴다', () => {
+            const a = buildWriteArgs('omk-task-abc', '/workspace/src/a b;rm -rf $HOME.py');
+            expect(a).toEqual(['exec', '-i', 'omk-task-abc', 'sh', '-c', 'mkdir -p "$(dirname "$1")" && cat > "$1"', 'sh', '/workspace/src/a b;rm -rf $HOME.py']);
+        });
+
+        it('resolveWriteViaContainer: 전용 Colima 를 쓰는 호스트에서만 켜진다', () => {
+            expect(resolveWriteViaContainer({ DOCKER_HOST: 'unix:///Users/u/.colima/openmake/docker.sock' })).toBe(true);
+            expect(resolveWriteViaContainer({})).toBe(false);                                            // Linux·기존 설치본
+            expect(resolveWriteViaContainer({ DOCKER_HOST: 'unix:///var/run/docker.sock' })).toBe(false);
+            expect(resolveWriteViaContainer({ DOCKER_HOST: 'tcp://10.0.0.1:2375' })).toBe(false);
+        });
+        it('resolveWriteViaContainer: 환경변수로 직접 정하면 그 값이 이긴다', () => {
+            expect(resolveWriteViaContainer({ TASK_SANDBOX_WRITE_VIA_CONTAINER: 'true' })).toBe(true);
+            expect(resolveWriteViaContainer({ TASK_SANDBOX_WRITE_VIA_CONTAINER: 'false', DOCKER_HOST: 'unix:///Users/u/.colima/openmake/docker.sock' })).toBe(false);
+        });
+
+        /** docker 대역 — 받은 인자를 기록하고, `exec -i … sh <경로>` 는 stdin 을 workspace 의 그 경로에 쓴다. */
+        async function fakeDocker(dir: string, opts: { execFails?: boolean } = {}): Promise<{ bin: string; log: string }> {
+            const bin = join(dir, 'docker'); const log = join(dir, 'docker.log');
+            await writeFile(bin, [
+                '#!/bin/sh',
+                `printf '%s\\n' "$*" >> '${log}'`,
+                'case "$1" in',
+                '  exec)',
+                opts.execFails ? '    echo "container is not running" >&2; exit 1 ;;' : [
+                    '    for last; do :; done',                       // 마지막 인자 = 컨테이너 경로
+                    '    rel="${last#/workspace/}"',
+                    '    mkdir -p "$(dirname "$FAKE_WS/$rel")" && cat > "$FAKE_WS/$rel" ;;',
+                ].join('\n'),
+                '  *) exit 0 ;;',
+                'esac',
+                '',
+            ].join('\n'), 'utf8');
+            await chmod(bin, 0o755);
+            return { bin, log };
+        }
+        const readLog = (p: string) => readFile(p, 'utf8').catch(() => '');
+
+        it('켜져 있으면 docker exec 로 쓴다 — 하위 디렉터리·바이너리 포함', async () => {
+            const base = await mkdtemp(join(tmpdir(), 'omk-wvc-'));
+            try {
+                const { bin, log } = await fakeDocker(base);
+                const sb = new TaskSandbox('t1', { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws'), dockerPath: bin, writeViaContainer: true });
+                process.env.FAKE_WS = sb.hostWorkdir;
+                await sb.create();
+                await sb.writeFile('src/a.py', 'print(1)\n');
+                await sb.writeFile('/workspace/b.bin', Buffer.from([0, 255, 10, 13, 0]));   // 컨테이너 절대경로 표기도 같은 파일
+                expect(await readFile(join(sb.hostWorkdir, 'src/a.py'), 'utf8')).toBe('print(1)\n');
+                expect([...await readFile(join(sb.hostWorkdir, 'b.bin'))]).toEqual([0, 255, 10, 13, 0]);
+                const l = await readLog(log);
+                expect(l).toContain('exec -i omk-task-t1 sh -c');
+                expect(l).toContain('/workspace/src/a.py');
+                expect(l).toContain('/workspace/b.bin');
+            } finally { delete process.env.FAKE_WS; await rm(base, { recursive: true, force: true }); }
+        });
+
+        it('꺼져 있으면(기본) 호스트에서 직접 쓴다 — docker exec 를 부르지 않는다', async () => {
+            const base = await mkdtemp(join(tmpdir(), 'omk-wvc-'));
+            try {
+                const { bin, log } = await fakeDocker(base);
+                const sb = new TaskSandbox('t2', { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws'), dockerPath: bin, writeViaContainer: false });
+                await sb.create();
+                await sb.writeFile('a.txt', 'host');
+                expect(await readFile(join(sb.hostWorkdir, 'a.txt'), 'utf8')).toBe('host');
+                expect(await readLog(log)).not.toContain('exec -i');
+            } finally { await rm(base, { recursive: true, force: true }); }
+        });
+
+        it('컨테이너를 만들기 전의 쓰기(입력 첨부)는 호스트에서 쓴다', async () => {
+            const base = await mkdtemp(join(tmpdir(), 'omk-wvc-'));
+            try {
+                const { bin, log } = await fakeDocker(base);
+                const sb = new TaskSandbox('t3', { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws'), dockerPath: bin, writeViaContainer: true });
+                await mkdir(sb.hostWorkdir, { recursive: true });
+                await sb.writeFile('uploads/in.txt', 'attached');
+                expect(await readFile(join(sb.hostWorkdir, 'uploads/in.txt'), 'utf8')).toBe('attached');
+                expect(await readLog(log)).not.toContain('exec -i');
+            } finally { await rm(base, { recursive: true, force: true }); }
+        });
+
+        it('docker exec 가 실패하면 호스트 쓰기로 넘어간다 — 도구 호출을 실패시키지 않는다', async () => {
+            const base = await mkdtemp(join(tmpdir(), 'omk-wvc-'));
+            try {
+                const { bin } = await fakeDocker(base, { execFails: true });
+                const sb = new TaskSandbox('t4', { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws'), dockerPath: bin, writeViaContainer: true });
+                await sb.create();
+                await sb.writeFile('a.txt', 'fallback');
+                expect(await readFile(join(sb.hostWorkdir, 'a.txt'), 'utf8')).toBe('fallback');
+            } finally { await rm(base, { recursive: true, force: true }); }
+        });
+
+        it('큰 내용을 쓰는 중에 docker 가 먼저 끝나도(EPIPE) 프로세스가 죽지 않고 호스트 쓰기로 넘어간다', async () => {
+            const base = await mkdtemp(join(tmpdir(), 'omk-wvc-'));
+            try {
+                const { bin } = await fakeDocker(base, { execFails: true });   // stdin 을 읽지 않고 끝난다
+                const sb = new TaskSandbox('t6', { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws'), dockerPath: bin, writeViaContainer: true });
+                await sb.create();
+                const big = 'x'.repeat(8 * 1024 * 1024);
+                await sb.writeFile('big.txt', big);
+                expect((await readFile(join(sb.hostWorkdir, 'big.txt'), 'utf8')).length).toBe(big.length);
+            } finally { await rm(base, { recursive: true, force: true }); }
+        });
+
+        it('경로 탈출과 쿼터 검사는 그대로 먼저 한다', async () => {
+            const base = await mkdtemp(join(tmpdir(), 'omk-wvc-'));
+            try {
+                const { bin, log } = await fakeDocker(base);
+                const sb = new TaskSandbox('t5', { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws'), dockerPath: bin, writeViaContainer: true, workspaceQuota: 10 });
+                process.env.FAKE_WS = sb.hostWorkdir;
+                await sb.create();
+                await expect(sb.writeFile('../escape.txt', 'x')).rejects.toThrow('탈출');
+                await expect(sb.writeFile('big.txt', 'x'.repeat(50))).rejects.toThrow('쿼터 초과');
+                expect(await readLog(log)).not.toContain('exec -i');
+            } finally { delete process.env.FAKE_WS; await rm(base, { recursive: true, force: true }); }
         });
     });
 

@@ -13,6 +13,7 @@
  *
  * @module services/task-sandbox/tools
  */
+import { randomUUID } from 'crypto';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import type { ContributedAgentTaskTool } from '../chat-service/turn-integrations';
 import type { TaskExecutor, ExecResult } from './executor';
@@ -54,6 +55,29 @@ function formatExec(r: ExecResult): MCPToolResult {
 }
 
 function str(v: unknown): string { return typeof v === 'string' ? v : ''; }
+
+/**
+ * 호스트가 쓰고 곧바로 컨테이너가 읽는 임시 파일을 **호출마다 새 이름으로** 만들어 실행하고, 끝나면 지운다.
+ *
+ * workspace 는 호스트 디렉터리를 컨테이너에 bind mount 한 것이다. macOS 의 Colima(virtiofs)는 컨테이너가
+ * 방금 본 파일을 호스트가 덮어쓰면 약 1초 동안 예전 크기로 읽는다 — 더 길어진 코드가 중간에 잘려 실행된다
+ * (2026-09-29 실측: 'node-written-longer-content' 가 'no' 로 읽혔다). 컨테이너가 처음 보는 파일에는 이 문제가 없다.
+ * 이름이 '.' 으로 시작해 산출물 목록에는 나오지 않는다.
+ */
+async function runFresh(
+    sandbox: TaskExecutor,
+    name: { dir?: string; prefix: string; ext: string },
+    content: string,
+    run: (relPath: string) => Promise<ExecResult>,
+): Promise<{ result: ExecResult; relPath: string }> {
+    const relPath = `${name.dir ? `${name.dir}/` : ''}${name.prefix}-${randomUUID().slice(0, 8)}${name.ext}`;
+    await sandbox.writeFile(relPath, content);
+    try {
+        return { result: await run(relPath), relPath };
+    } finally {
+        await sandbox.deleteFile(relPath).catch(() => { /* best-effort — 남아도 workspace 정리 때 함께 사라진다 */ });
+    }
+}
 
 /**
  * task별 도구 세트 생성. AgentTaskService 가 task 시작 시 TaskSandbox 와 함께 호출해
@@ -139,11 +163,24 @@ export function createTaskTools(
                 return textResult('filename 은 영숫자로 시작하고 영숫자·._/- 만 포함해야 합니다.', true);
             }
             try {
+                // 요청한 이름으로도 남긴다(산출물·재실행용). 실행은 같은 디렉터리의 새 이름으로 — runFresh 참조.
                 await sandbox.writeFile(filename, code);
+                const slash = filename.lastIndexOf('/');
+                const { result, relPath } = await runFresh(
+                    sandbox,
+                    { dir: slash > 0 ? filename.slice(0, slash) : undefined, prefix: '.run', ext: '.py' },
+                    code,
+                    (p) => sandbox.exec(`python3 ${p}`),
+                );
+                // traceback 등에 임시 이름이 나오면 모델이 없는 파일을 찾는다 — 요청한 이름으로 바꿔 보여 준다.
+                return formatExec({
+                    ...result,
+                    stdout: result.stdout.split(relPath).join(filename),
+                    stderr: result.stderr.split(relPath).join(filename),
+                });
             } catch (e) {
                 return textResult(`파일 쓰기 실패: ${e instanceof Error ? e.message : String(e)}`, true);
             }
-            return formatExec(await sandbox.exec(`python3 ${filename}`));
         },
     };
 
@@ -293,13 +330,16 @@ export function createTaskTools(
                 ...(Array.isArray(args.allowlist) ? { allowlist: args.allowlist } : {}),
                 ...(sandbox.browserStatePath ? { statePath: sandbox.browserStatePath } : {}),
             };
+            let r: ExecResult;
             try {
-                await sandbox.writeFile('.browser-actions.json', JSON.stringify(spec));
+                // 메인 샌드박스(network none)가 아닌 별도 일회성 컨테이너에서 실행.
+                ({ result: r } = await runFresh(
+                    sandbox, { prefix: '.browser-actions', ext: '.json' }, JSON.stringify(spec),
+                    (p) => sandbox.runBrowser(p),
+                ));
             } catch (e) {
                 return textResult(`액션 파일 쓰기 실패: ${e instanceof Error ? e.message : String(e)}`, true);
             }
-            // 메인 샌드박스(network none)가 아닌 별도 일회성 컨테이너에서 실행.
-            const r = await sandbox.runBrowser('.browser-actions.json');
             browserMetrics?.(r.stdout); // Stage 0 계측(fail-open)
             return formatExec(r);
         },
@@ -462,8 +502,10 @@ export function createTaskTools(
                         ...(Array.isArray(spec.allowlist) ? { allowlist: deepSub(spec.allowlist) } : {}),
                         ...(sandbox.browserStatePath ? { statePath: sandbox.browserStatePath } : {}),
                     };
-                    await sandbox.writeFile('.browser-actions.json', JSON.stringify(specOut));
-                    const r = await sandbox.runBrowser('.browser-actions.json');
+                    const { result: r } = await runFresh(
+                        sandbox, { prefix: '.browser-actions', ext: '.json' }, JSON.stringify(specOut),
+                        (p) => sandbox.runBrowser(p),
+                    );
                     browserMetrics?.(r.stdout); // Stage 0 계측(fail-open)
                     return formatExec(r);
                 }
@@ -471,8 +513,10 @@ export function createTaskTools(
                 const code = sub(spec.code ?? '');
                 if (!code) return textResult('재생할 코드가 비어 있습니다.', true);
                 if (spec.lang === 'python') {
-                    await sandbox.writeFile('.skill-run.py', code);
-                    return formatExec(await sandbox.exec('python3 .skill-run.py'));
+                    const { result } = await runFresh(
+                        sandbox, { prefix: '.skill-run', ext: '.py' }, code, (p) => sandbox.exec(`python3 ${p}`),
+                    );
+                    return formatExec(result);
                 }
                 return formatExec(await sandbox.exec(code));
             } catch (e) {

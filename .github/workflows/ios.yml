@@ -11,13 +11,13 @@ name: iOS
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, dev]
     paths:
       - 'apps/ios/**'
       - 'packages/api-contracts/**'
       - '.github/workflows/ios.yml'
   pull_request:
-    branches: [main, develop]
+    branches: [main, dev]
     paths:
       - 'apps/ios/**'
       - 'packages/api-contracts/**'
