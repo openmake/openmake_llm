@@ -427,6 +427,7 @@ printf '#!/usr/bin/env bash\nexit 0\n' > "$WC/install.sh"; chmod +x "$WC/install
 DS_ROOT="$TMP/dsroot"
 (
     OMK_ROOT="$DS_ROOT"
+    # shellcheck disable=SC2034  # cmd_dev_setup 이 읽는다
     dev_locate() { DEV_LLM="$WC"; DEV_BENCH=""; }
     ensure_git() { :; }; dev_warn_legacy() { :; }; load_toolchain() { :; }; dev_build_packages() { :; }; dev_searxng() { :; }
     cmd_dev_setup >/dev/null 2>&1
