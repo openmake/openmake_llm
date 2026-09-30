@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.91.0](https://github.com/openmake/openmake_llm/compare/v1.90.1...v1.91.0) (2026-09-30)
+
+
+### ✨ 기능
+
+* **install:** macOS 는 Docker Desktop 대신 전용 Colima 를 쓴다 ([4f88d90](https://github.com/openmake/openmake_llm/commit/4f88d902a07edac8a690a65bd119ae9934708940))
+* **omk:** 릴리스 게이트 — staging 에서 확인한 커밋만 online 에 올린다 ([810400e](https://github.com/openmake/openmake_llm/commit/810400eba8481e8a4096c58f74f78d6aa5571340))
+* **omk:** 설치·갱신·리셋의 출력을 파일로도 남긴다 ([d7dd81b](https://github.com/openmake/openmake_llm/commit/d7dd81bfff92359febc50bcce0a8a8d7a8cd43b3))
+* **omk:** 환경 dev 는 브랜치 dev 를 따른다 ([e701389](https://github.com/openmake/openmake_llm/commit/e701389327b15563aa616bd4a6e790ee57cebb62))
+
+
+### 🐛 버그 수정
+
+* **deps:** brace-expansion 을 올린다 — high 권고 2건 ([e9be66f](https://github.com/openmake/openmake_llm/commit/e9be66f4058283fad6640108022b40432db07f0a))
+* **deps:** brace-expansion 을 올린다 — high 권고 2건 ([c26a01b](https://github.com/openmake/openmake_llm/commit/c26a01bde87bcbef269b5dadd5b177fdc03102d6))
+* **deps:** fast-uri 를 3.1.8 로 올린다 — high 권고 2건 ([d292007](https://github.com/openmake/openmake_llm/commit/d292007b50dd0a768a83ca0b5751e5ed6b1d210b))
+* **install:** macOS — 이미 동작하는 Docker(Colima 등)가 있으면 Docker Desktop 을 깔지 않는다 ([#1032](https://github.com/openmake/openmake_llm/issues/1032)) ([a464450](https://github.com/openmake/openmake_llm/commit/a46445059c28b516db3aaefa70227995c3e7d9af))
+* **mcp:** 샌드박스가 docker 접속처를 넘기고, 서버 설정의 DOCKER_* 는 버린다 ([3efbb37](https://github.com/openmake/openmake_llm/commit/3efbb373871093b4a4d60a3d6db4abc6abf60ca4))
+* **omk:** shellcheck SC2120 — 인자는 테스트가 준다 ([cd58f2a](https://github.com/openmake/openmake_llm/commit/cd58f2a344b92ea8b7c0a53e145a5dad78263697))
+* **omk:** 개발 서버도 환경과 같은 단계로 준비한다 ([d7e8300](https://github.com/openmake/openmake_llm/commit/d7e83009e3c004be1601400584daae86a5197331))
+* **omk:** 브랜치 dev 가 없는 저장소에서 무엇을 하면 되는지 알려준다 ([fe77c32](https://github.com/openmake/openmake_llm/commit/fe77c32d92f85cf9b2c7b9296409ce0b71ee8986))
+* **omk:** 테스트의 stat 을 GNU 형식부터 본다 — Linux 에서 실패했다 ([ccc710f](https://github.com/openmake/openmake_llm/commit/ccc710f45a2d79946912493f974303c49f108e76))
+* **task-sandbox:** Colima 에서 호스트가 쓴 파일을 컨테이너가 잘라 읽던 문제 ([80fa876](https://github.com/openmake/openmake_llm/commit/80fa876939fc8acc1885780a12364504e6c6aad3))
+
 ## [1.90.1](https://github.com/openmake/openmake_llm/compare/v1.90.0...v1.90.1) (2026-09-27)
 
 
