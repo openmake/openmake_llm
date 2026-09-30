@@ -255,6 +255,22 @@ export const MCP_EXTERNAL_TOOL_LIMITS = {
 } as const;
 
 /**
+ * 전역 MCP 서버 자동 재연결 (2026-09-30).
+ *
+ * 재부팅 직후 앱이 Docker 보다 먼저 떠서, 부팅 때 붙은 전역 서버(샌드박스 컨테이너)가 Docker 재기동과
+ * 함께 끊긴 뒤 다시 붙지 않았다 — 유저풀은 LifecycleSupervisor 가 다시 띄우지만 전역 registry 엔
+ * 복구 경로가 없었다. 부팅 연결 실패·예기치 않은 종료 모두 지수 백오프로 재시도한다.
+ * MAX_ATTEMPTS=0 이면 끈다. STABLE_MS 이상 붙어 있던 연결이 끊기면 시도 횟수를 초기화한다
+ * (open-design 처럼 유휴 종료하는 서버가 상한에 누적되지 않게, 곧바로 죽는 서버는 상한에서 멈춘다).
+ */
+export const MCP_GLOBAL_RECONNECT = {
+    BASE_DELAY_MS: parseInt(process.env.MCP_GLOBAL_RECONNECT_BASE_DELAY_MS || '5000', 10),
+    MAX_DELAY_MS: parseInt(process.env.MCP_GLOBAL_RECONNECT_MAX_DELAY_MS || '60000', 10),
+    MAX_ATTEMPTS: parseInt(process.env.MCP_GLOBAL_RECONNECT_MAX_ATTEMPTS || '10', 10),
+    STABLE_MS: parseInt(process.env.MCP_GLOBAL_RECONNECT_STABLE_MS || '60000', 10),
+} as const;
+
+/**
  * HTTP 서버 keep-alive (2026-08-27 운영 실측).
  *
  * Node 의 기본 keepAliveTimeout 은 5초라, Caddy(리버스 프록시)가 풀에 둔 유휴 업스트림 커넥션을
