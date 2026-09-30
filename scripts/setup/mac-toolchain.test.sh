@@ -109,5 +109,33 @@ ok "기존: 컨테이너가 많아도 (pipefail)" '( set -o pipefail; installed_
 DOCKER_NAMES=""
 eq "판정은 DOCKER_HOST 를 빼고 조회" "$( export DOCKER_HOST=unix:///colima; DOCKER_NAMES=openmake-postgres; rm -f "$E"; installed_on_other_docker "$E" 2>&1; echo "$?" )" "0"
 
+# ── 포트 충돌: 이 클론의 개발 서버('omk dev up', PM2 아님)가 잡은 포트는 옮기지 않는다 ──
+PC="$TMP/clone"; mkdir -p "$PC/apps/api" "$PC/apps/web"
+PT_ENV="$TMP/ports.env"
+pt_run() { # $1=포트:cwd … (LISTEN 중인 포트와 그 프로세스 작업 폴더) → 옮긴 뒤의 "PORT|OMK_WEB_PORT"
+    (
+        SCRIPT_DIR="$PC"; ENV_FILE="$PT_ENV"; SKIP_DOCKER=1; APP_PORT=0; WEB_PORT=0; APP_NAME=a; FRONT_APP_NAME=w
+        HAS_LIST=" docker lsof "
+        printf 'PORT=52417\nOMK_WEB_PORT=3010\n' > "$ENV_FILE"
+        PT_BUSY=" $* "
+        env_value() { grep -E "^${1}=" "$ENV_FILE" | tail -1 | cut -d= -f2-; }
+        set_env() { local t; t="$(grep -vE "^${1}=" "$ENV_FILE")"; printf '%s\n%s=%s\n' "$t" "$1" "$2" > "$ENV_FILE"; }
+        pm2_has_app() { return 1; }
+        port_in_use() { [[ "$PT_BUSY" == *" $1:"* ]]; }
+        lsof() { # lsof -nP -iTCP:<p> -sTCP:LISTEN -t → pid(=포트) · lsof -a -p <pid> -d cwd -Fn → n<cwd>
+            case "$*" in
+                *-iTCP:*) local p="${2#-iTCP:}"; port_in_use "$p" && echo "$p" ;;
+                *"-d cwd"*) local e="${PT_BUSY#* $3:}"; printf 'p%s\nn%s\n' "$3" "${e%% *}" ;;
+            esac
+        }
+        ensure_ports >/dev/null 2>&1
+        printf '%s|%s' "$(env_value PORT)" "$(env_value OMK_WEB_PORT)"
+    )
+}
+eq "ports: 비어 있으면 그대로"          "$(pt_run)"                                                  "52417|3010"
+eq "ports: 이 클론의 dev 서버면 그대로" "$(pt_run "52417:$PC/apps/api" "3010:$PC/apps/web")"         "52417|3010"
+eq "ports: 남의 프로세스면 옮긴다"      "$(pt_run "52417:/elsewhere/api" "3010:/elsewhere/web")"     "52418|13000"
+eq "ports: 이름만 비슷한 폴더는 남의 것" "$(pt_run "52417:${PC}-other/apps/api")"                     "52418|3010"
+
 echo ""; echo "toolchain.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]
