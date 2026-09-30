@@ -11,7 +11,7 @@ preflight_checks() {
     log_step "사전 점검"
     if fdesetup status 2>/dev/null | grep -q "On"; then
         log_warn "FileVault 가 켜져 있습니다 — 재부팅 후 로그인 화면에서 멈춰, 로그인하기 전까지"
-        log_warn "PM2·Docker Desktop 이 올라오지 않습니다(서비스 중단). 서버로 쓰려면"
+        log_warn "PM2·Docker 가 올라오지 않습니다(서비스 중단). 서버로 쓰려면"
         log_warn "시스템 설정 → 개인정보 보호 및 보안 → FileVault 끄기, 사용자 및 그룹 → 자동 로그인 켜기."
         add_todo "FileVault 끄기 + 자동 로그인 켜기 (재부팅 후 서비스 자동 복구에 필요)"
         confirm "그래도 설치를 계속할까요?" y || exit 1
@@ -25,6 +25,11 @@ preflight_checks() {
     free_gb="$(df -g "$HOME" | awk 'NR==2 {print $4}')"
     if [[ -n "$free_gb" && "$free_gb" -lt 40 ]]; then
         log_warn "여유 디스크 ${free_gb}GB — 이미지·빌드에 40GB 이상을 권장합니다."
+    fi
+    local ram_gb
+    ram_gb="$(host_ram_gb)"
+    if [[ "$ram_gb" -gt 0 && "$ram_gb" -lt 16 ]]; then
+        log_warn "메모리 ${ram_gb}GB — 16GB 이상을 권장합니다. 컨테이너 VM 을 ${OMK_COLIMA_MEMORY}GB 로 줄여 만듭니다(에이전트 작업을 동시에 여럿 돌리기 어렵습니다)."
     fi
 }
 

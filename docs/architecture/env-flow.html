@@ -1,0 +1,1062 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenMake — 환경 운영 흐름 (dev · staging · online)</title>
+<!--
+  dev → staging → online 흐름을 한 파일로 정리한 안내서.
+  기준 문서는 scripts/env/README.md 다 — 내용이 어긋나면 README 와 omk.sh 가 맞다.
+  명령·옵션·단계가 바뀌면 README 를 먼저 고치고 이 파일을 맞춘다.
+
+  한 파일로 열린다(빌드 없음). 글꼴만 밖에서 받고, 받지 못하면 시스템 글꼴로 보인다.
+  스크립트가 꺼져 있으면 모든 페이지가 이어서 보인다.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper:#f3f0e8; --paper-2:#ebe7dc; --card:#fbfaf6; --ink:#16191d; --ink-2:#3d444d; --mute:#737a84;
+    --rule:#d6d0c2; --rule-2:#c3bcab; --code-bg:#1b1f24; --code-ink:#e6e2d6; --code-mute:#8d94a0;
+    --local:#5b6472; --dev:#c2500c; --stg:#0c7a70; --onl:#1f4fbf; --git:#16191d; --warn:#a8321f;
+    --local-bg:#e6e7e9; --dev-bg:#f7e3d3; --stg-bg:#d5ece8; --onl-bg:#dbe4f8; --warn-bg:#f6dcd6;
+    --grid:rgba(22,25,29,.045);
+    --sans:"IBM Plex Sans KR","Pretendard","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    --mono:"IBM Plex Mono","JetBrains Mono","SF Mono",Menlo,Consolas,monospace;
+    --side:272px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#121417; --paper-2:#181b1f; --card:#1b1e23; --ink:#ebe7dc; --ink-2:#c2beb3; --mute:#8b919b;
+      --rule:#2c3036; --rule-2:#3a3f47; --code-bg:#0c0e10; --code-ink:#e6e2d6; --code-mute:#7d848f;
+      --local:#9aa3b0; --dev:#f08a45; --stg:#3fc2b4; --onl:#7ea2ff; --git:#ebe7dc; --warn:#f0806c;
+      --local-bg:#25292f; --dev-bg:#3a2415; --stg-bg:#10302d; --onl-bg:#172544; --warn-bg:#3a1b16;
+      --grid:rgba(235,231,220,.035);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#121417; --paper-2:#181b1f; --card:#1b1e23; --ink:#ebe7dc; --ink-2:#c2beb3; --mute:#8b919b;
+    --rule:#2c3036; --rule-2:#3a3f47; --code-bg:#0c0e10; --code-ink:#e6e2d6; --code-mute:#7d848f;
+    --local:#9aa3b0; --dev:#f08a45; --stg:#3fc2b4; --onl:#7ea2ff; --git:#ebe7dc; --warn:#f0806c;
+    --local-bg:#25292f; --dev-bg:#3a2415; --stg-bg:#10302d; --onl-bg:#172544; --warn-bg:#3a1b16;
+    --grid:rgba(235,231,220,.035);
+  }
+
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; color:var(--ink); font:400 15.5px/1.72 var(--sans); -webkit-font-smoothing:antialiased;
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0/28px 28px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/28px 28px,
+      var(--paper);
+  }
+  a { color:inherit; text-decoration-color:var(--rule-2); text-underline-offset:3px; }
+  a:hover { text-decoration-color:currentColor; }
+  code, kbd, pre, .mono { font-family:var(--mono); }
+  :focus-visible { outline:2px solid var(--onl); outline-offset:2px; border-radius:3px; }
+
+  /* ── 틀 ─────────────────────────────────────────────── */
+  .shell { display:grid; grid-template-columns:var(--side) minmax(0,1fr); min-height:100vh; }
+  .side {
+    position:sticky; top:0; height:100vh; overflow-y:auto; padding:26px 0 20px;
+    border-right:1px solid var(--rule); background:var(--paper-2);
+    display:flex; flex-direction:column;
+  }
+  .brand { padding:0 24px 20px; border-bottom:1px solid var(--rule); }
+  .brand .k { font:600 10.5px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--mute); }
+  .brand .t { margin-top:9px; font-weight:700; font-size:18px; line-height:1.3; letter-spacing:-.02em; }
+  .line { display:flex; gap:0; margin-top:14px; height:6px; border-radius:3px; overflow:hidden; }
+  .line i { flex:1; } .line .l { background:var(--local); } .line .d { background:var(--dev); }
+  .line .s { background:var(--stg); } .line .o { background:var(--onl); }
+
+  nav { padding:14px 12px; flex:1; }
+  nav .grp { margin:16px 12px 6px; font:600 10.5px/1 var(--mono); letter-spacing:.14em; text-transform:uppercase; color:var(--mute); }
+  nav a {
+    display:flex; align-items:baseline; gap:10px; padding:7px 12px; border-radius:6px;
+    text-decoration:none; color:var(--ink-2); font-size:14.5px; line-height:1.4; border-left:3px solid transparent;
+  }
+  nav a .n { font:500 11px/1 var(--mono); color:var(--mute); width:18px; flex:none; }
+  nav a:hover { background:var(--card); color:var(--ink); }
+  nav a[aria-current="page"] { background:var(--card); color:var(--ink); font-weight:600; border-left-color:var(--c, var(--ink)); }
+  nav a[data-c="local"] { --c:var(--local); } nav a[data-c="dev"] { --c:var(--dev); }
+  nav a[data-c="stg"] { --c:var(--stg); } nav a[data-c="onl"] { --c:var(--onl); } nav a[data-c="warn"] { --c:var(--warn); }
+
+  .side-foot { padding:14px 24px 0; border-top:1px solid var(--rule); font-size:12px; color:var(--mute); line-height:1.6; }
+  .side-foot button {
+    margin-top:10px; font:500 11.5px/1 var(--mono); padding:7px 10px; border:1px solid var(--rule-2);
+    background:transparent; color:var(--ink-2); border-radius:5px; cursor:pointer;
+  }
+  .side-foot button:hover { background:var(--card); }
+
+  main { padding:56px clamp(22px,5vw,72px) 96px; max-width:1080px; }
+  .menu-btn { display:none; }
+
+  /* ── 페이지 ────────────────────────────────────────── */
+  .js .page { display:none; }
+  .js .page.on { display:block; animation:rise .32s ease both; }
+  @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce) { .js .page.on { animation:none; } html { scroll-behavior:auto; } }
+  .page + .page { margin-top:72px; } .js .page + .page { margin-top:0; }
+
+  .eyebrow { font:600 11px/1 var(--mono); letter-spacing:.16em; text-transform:uppercase; color:var(--c, var(--mute)); }
+  h1 { margin:12px 0 0; font-size:clamp(30px,4.4vw,44px); line-height:1.16; letter-spacing:-.035em; font-weight:700; }
+  .lead { margin:16px 0 0; max-width:64ch; font-size:17px; line-height:1.7; color:var(--ink-2); }
+  h2 {
+    margin:54px 0 0; padding-top:18px; border-top:2px solid var(--ink);
+    font-size:21px; line-height:1.35; letter-spacing:-.02em; font-weight:700; scroll-margin-top:24px;
+  }
+  h3 { margin:30px 0 0; font-size:16.5px; letter-spacing:-.01em; scroll-margin-top:24px; }
+  p { margin:12px 0 0; max-width:74ch; }
+  ul, ol { margin:12px 0 0; padding-left:1.25em; max-width:74ch; }
+  li { margin:5px 0; }
+  li::marker { color:var(--mute); }
+  strong { font-weight:600; }
+  :not(pre) > code {
+    font-size:.86em; padding:1.5px 5px; border-radius:4px; background:var(--paper-2);
+    border:1px solid var(--rule); white-space:nowrap;
+  }
+  td code, thead th code { white-space:normal; word-break:break-word; }
+  tbody th code { white-space:nowrap; }
+
+  .p-local { --c:var(--local); --cb:var(--local-bg); } .p-dev { --c:var(--dev); --cb:var(--dev-bg); }
+  .p-stg { --c:var(--stg); --cb:var(--stg-bg); } .p-onl { --c:var(--onl); --cb:var(--onl-bg); }
+  .p-warn { --c:var(--warn); --cb:var(--warn-bg); }
+
+  /* ── 표 ────────────────────────────────────────────── */
+  .tw { margin:18px 0 0; overflow-x:auto; border:1px solid var(--rule); border-radius:8px; background:var(--card); }
+  table { width:100%; border-collapse:collapse; font-size:14.2px; line-height:1.6; }
+  th, td { padding:10px 14px; text-align:left; vertical-align:top; border-bottom:1px solid var(--rule); }
+  tr:last-child > td { border-bottom:0; }
+  thead th {
+    font:600 11px/1.3 var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--mute);
+    background:var(--paper-2); border-bottom:1px solid var(--rule-2); white-space:nowrap;
+  }
+  tbody th { font-weight:600; color:var(--ink-2); white-space:nowrap; width:1%; }
+  th.c-local { color:var(--local); } th.c-dev { color:var(--dev); } th.c-stg { color:var(--stg); } th.c-onl { color:var(--onl); }
+  .dd thead th:first-child { color:var(--stg); } .dd thead th:last-child { color:var(--warn); }
+  .dd td { width:50%; }
+
+  /* ── 코드 ──────────────────────────────────────────── */
+  .code { position:relative; margin:16px 0 0; border-radius:8px; background:var(--code-bg); border:1px solid #000; }
+  .code pre { margin:0; padding:16px 18px; overflow-x:auto; font-size:13px; line-height:1.7; color:var(--code-ink); tab-size:2; }
+  .code .cm { color:var(--code-mute); }
+  .code .ph { color:#e9b872; }
+  .code button {
+    position:absolute; top:8px; right:8px; font:500 10.5px/1 var(--mono); letter-spacing:.06em;
+    padding:6px 8px; border-radius:4px; border:1px solid #3a3f47; background:#23272d; color:#b9bec7; cursor:pointer;
+    opacity:0; transition:opacity .15s;
+  }
+  .code:hover button, .code button:focus-visible { opacity:1; }
+  .code button.ok { color:#7fd6a3; border-color:#2f6b4a; }
+
+  /* ── 알림 ──────────────────────────────────────────── */
+  .note {
+    margin:18px 0 0; padding:14px 18px 15px; border-left:4px solid var(--c, var(--ink));
+    background:var(--cb, var(--card)); border-radius:0 8px 8px 0; max-width:78ch;
+  }
+  .note > :first-child { margin-top:0; }
+  .note .h { font:600 11px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--c, var(--ink)); margin-bottom:8px; }
+  .note p { max-width:none; }
+
+  /* ── 원칙 카드 ─────────────────────────────────────── */
+  .rules { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-top:20px; }
+  .rule { padding:18px 18px 19px; border:1px solid var(--rule); border-top:3px solid var(--ink); border-radius:0 0 8px 8px; background:var(--card); }
+  .rule .k { font:600 11px/1 var(--mono); letter-spacing:.12em; color:var(--mute); }
+  .rule .t { margin-top:9px; font-weight:700; font-size:16px; line-height:1.4; letter-spacing:-.015em; }
+  .rule p { margin-top:7px; font-size:14px; line-height:1.62; color:var(--ink-2); }
+
+  /* ── 흐름도 ────────────────────────────────────────── */
+  .flow { margin:22px 0 0; border:1px solid var(--rule); border-radius:10px; background:var(--card); overflow-x:auto; }
+  .flow svg { display:block; min-width:860px; width:100%; height:auto; }
+  .flow text { font-family:var(--sans); fill:var(--ink); }
+  .flow .m { font-family:var(--mono); }
+  .flow .sm { font-size:11.5px; fill:var(--mute); }
+  .flow .lb { font-size:11.5px; fill:var(--ink-2); }
+  .flow .cmd rect { fill:var(--paper-2); stroke:var(--rule-2); stroke-width:1.2; }
+  .flow .cmd text { font-family:var(--mono); font-size:11.5px; fill:var(--ink); }
+  .flow .pl { font-size:12.5px; font-weight:600; fill:var(--ink-2); }
+  .flow .ttl { font-size:14px; font-weight:700; }
+  .flow .band { font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; fill:var(--mute); }
+  .flow .edge { fill:none; stroke:var(--ink-2); stroke-width:1.6; }
+  .flow .edge.dash { stroke-dasharray:5 5; stroke:var(--mute); }
+  .flow .git { fill:var(--card); stroke:var(--git); stroke-width:1.8; }
+  .flow .num circle { fill:var(--ink); } .flow .num text { fill:var(--paper); font-family:var(--mono); font-size:11px; font-weight:600; }
+  .legend { display:flex; flex-wrap:wrap; gap:8px 20px; padding:12px 18px; border-top:1px solid var(--rule); font-size:12.5px; color:var(--ink-2); }
+  .legend span { display:inline-flex; align-items:center; gap:7px; }
+  .legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+
+  /* ── 단계 ──────────────────────────────────────────── */
+  .step { position:relative; margin:30px 0 0; padding:0 0 0 58px; scroll-margin-top:24px; }
+  .step::before { content:""; position:absolute; left:19px; top:44px; bottom:-30px; width:2px; background:var(--rule-2); }
+  .step:last-of-type::before { display:none; }
+  .step .no {
+    position:absolute; left:0; top:0; width:40px; height:40px; border-radius:50%;
+    display:grid; place-items:center; font:600 15px/1 var(--mono); color:var(--paper); background:var(--c, var(--ink));
+  }
+  .step .where { font:600 11px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--c, var(--mute)); padding-top:4px; }
+  .step h3 { margin:8px 0 0; font-size:18.5px; letter-spacing:-.02em; }
+  .step .pass { margin-top:14px; font-size:14.2px; color:var(--ink-2); }
+  .step .pass b { font:600 11px/1 var(--mono); letter-spacing:.1em; text-transform:uppercase; color:var(--c, var(--ink)); margin-right:8px; }
+
+  .pager { display:flex; justify-content:space-between; gap:14px; margin-top:64px; padding-top:20px; border-top:1px solid var(--rule); }
+  .pager a { text-decoration:none; font-size:14px; color:var(--ink-2); max-width:48%; }
+  .pager a span { display:block; font:600 10.5px/1 var(--mono); letter-spacing:.12em; text-transform:uppercase; color:var(--mute); margin-bottom:7px; }
+  .pager a:hover { color:var(--ink); }
+  .pager a.next { text-align:right; margin-left:auto; }
+  .no-js-hide { display:none; } .js .no-js-hide { display:flex; }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns:minmax(0,1fr); }
+    .side { position:fixed; inset:0 auto 0 0; width:min(84vw,300px); z-index:20; transform:translateX(-102%); transition:transform .2s ease; box-shadow:0 0 40px rgba(0,0,0,.25); }
+    .side.open { transform:none; }
+    .menu-btn {
+      display:inline-flex; position:fixed; top:12px; right:12px; z-index:30; font:600 11.5px/1 var(--mono); letter-spacing:.08em;
+      padding:10px 12px; border-radius:6px; border:1px solid var(--rule-2); background:var(--card); color:var(--ink); cursor:pointer;
+    }
+    main { padding-top:64px; }
+    .step { padding-left:50px; }
+  }
+  @media print {
+    .side, .menu-btn, .pager, .code button { display:none !important; }
+    .shell { display:block; } body { background:#fff; }
+    .js .page { display:block !important; page-break-before:always; } .js .page:first-of-type { page-break-before:auto; }
+    .code { background:#f4f4f4; border-color:#ccc; } .code pre { color:#111; white-space:pre-wrap; } .code .cm { color:#666; } .code .ph { color:#8a4b00; }
+  }
+</style>
+<script>document.documentElement.className = 'js';</script>
+</head>
+<body>
+
+<button class="menu-btn" type="button" aria-controls="side" aria-expanded="false">목차</button>
+
+<div class="shell">
+<aside class="side" id="side">
+  <div class="brand">
+    <div class="k">OpenMake · omk</div>
+    <div class="t">환경 운영 흐름</div>
+    <div class="line" aria-hidden="true"><i class="l"></i><i class="d"></i><i class="s"></i><i class="o"></i></div>
+  </div>
+  <nav aria-label="페이지 목록">
+    <div class="grp">시작</div>
+    <a href="#overview"><span class="n">01</span>개요 · 전체 흐름</a>
+    <a href="#steps"><span class="n">02</span>단계별 작업 순서</a>
+    <div class="grp">어디서 무엇을</div>
+    <a href="#local-dev" data-c="local"><span class="n">03</span>로컬 개발 (작업 클론)</a>
+    <a href="#env-dev" data-c="dev"><span class="n">04</span>환경 dev</a>
+    <a href="#env-staging" data-c="stg"><span class="n">05</span>환경 staging</a>
+    <a href="#env-online" data-c="onl"><span class="n">06</span>환경 online</a>
+    <div class="grp">참고</div>
+    <a href="#gate"><span class="n">07</span>릴리스 게이트</a>
+    <a href="#install"><span class="n">08</span>새 호스트에 설치</a>
+    <a href="#trouble"><span class="n">09</span>꼬였을 때 · 백업</a>
+    <a href="#commands"><span class="n">10</span>명령 모음</a>
+    <a href="#gaps" data-c="warn"><span class="n">11</span>자동 검사 · 브랜치 보호</a>
+  </nav>
+  <div class="side-foot">
+    기준 문서 <code>scripts/env/README.md</code><br>
+    정리 2026-09-30
+    <div><button type="button" id="theme">밝게 / 어둡게</button></div>
+  </div>
+</aside>
+
+<main>
+
+<!-- ═══════════════════════════ 01 개요 ═══════════════════════════ -->
+<section class="page" id="overview" data-title="개요 · 전체 흐름">
+  <div class="eyebrow">01 · 개요</div>
+  <h1>고친 코드가 실사용 환경에 닿기까지</h1>
+  <p class="lead">로컬 장비에서 고치고(<strong>로컬 개발</strong>), 세 환경 — <strong>dev · staging · online</strong> — 을 차례로 거쳐 올린다. 환경은 서로 <code>.env</code>·docker·PM2 가 분리되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 <code>scripts/env/omk.sh</code> 하나다.</p>
+
+  <h2 id="terms">용어</h2>
+  <div class="tw"><table>
+    <thead><tr><th>이름</th><th>장소 · 경로</th><th>무엇</th><th>무엇을 담나</th></tr></thead>
+    <tbody>
+      <tr><th class="c-local">로컬 개발</th><td>로컬 장비<br>작업 클론 (예: <code>~/openmake/openmake_llm</code>)</td><td><code>omk dev up</code> — 고치면서 바로 보는 핫 리로드. <strong>환경이 아니다</strong></td><td>지금 고치고 있는 소스 (커밋 전 포함)</td></tr>
+      <tr><th class="c-dev">환경 dev</th><td>개발 서버<br><code>~/.openmake/dev</code></td><td><code>omk env install dev</code> 로 설치한 배포본</td><td>브랜치 <code>dev</code></td></tr>
+      <tr><th class="c-stg">환경 staging</th><td>스테이징 서버<br><code>~/.openmake/staging</code></td><td>설치한 배포본. 데이터를 유지한다</td><td>브랜치 <code>main</code></td></tr>
+      <tr><th class="c-onl">환경 online</th><td>온라인 서버<br><code>~/.openmake/online</code></td><td>실사용</td><td>최신 릴리스 태그</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note p-dev">
+    <div class="h">dev 는 브랜치 이름이기도 하고 환경 이름이기도 하다</div>
+    <p><strong>브랜치 <code>dev</code></strong> 는 <code>feature/*</code> 가 모이는 git 브랜치이고, <strong>환경 dev</strong> 는 그 브랜치를 설치해 돌리는 곳이다. staging 이 <code>main</code> 을 따르는 것과 같은 관계다.</p>
+  </div>
+
+  <h2 id="flow">전체 흐름</h2>
+  <p>위 줄은 <strong>git</strong>(코드가 어디에 있는가), 아래 줄은 <strong>도는 곳</strong>(이름 · 장소 · 경로)이다. 번호는 <a href="#steps">단계별 작업 순서</a>의 번호와 같다.</p>
+
+  <div class="flow">
+    <svg viewBox="0 0 1000 392" role="img" aria-label="로컬 개발에서 push 한 feature 브랜치가 dev 브랜치, main, 릴리스 태그로 이어지고, dev 는 환경 dev 에, main 은 환경 staging 에, 릴리스 태그는 환경 online 에 올라간다">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--ink-2)"/>
+        </marker>
+        <marker id="ahd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--mute)"/>
+        </marker>
+      </defs>
+
+      <text class="band" x="24" y="34">GIT — 코드가 있는 곳</text>
+      <line x1="24" y1="44" x2="976" y2="44" stroke="var(--rule)" />
+      <text class="band" x="24" y="262">도는 곳</text>
+      <line x1="24" y1="242" x2="976" y2="242" stroke="var(--rule)" />
+
+      <!-- git 노드 -->
+      <g>
+        <rect class="git" x="40"  y="78" width="170" height="62" rx="31"/>
+        <text class="ttl m" x="125" y="106" text-anchor="middle">feature/&lt;주제&gt;</text>
+        <text class="sm" x="125" y="125" text-anchor="middle">작업 브랜치</text>
+
+        <rect class="git" x="306" y="78" width="150" height="62" rx="31"/>
+        <text class="ttl m" x="381" y="106" text-anchor="middle">dev</text>
+        <text class="sm" x="381" y="125" text-anchor="middle">개발용 브랜치</text>
+
+        <rect class="git" x="552" y="78" width="150" height="62" rx="31"/>
+        <text class="ttl m" x="627" y="106" text-anchor="middle">main</text>
+        <text class="sm" x="627" y="125" text-anchor="middle">staging·릴리스가 따른다</text>
+
+        <rect class="git" x="798" y="78" width="162" height="62" rx="31"/>
+        <text class="ttl m" x="879" y="106" text-anchor="middle">vX.Y.Z</text>
+        <text class="sm" x="879" y="125" text-anchor="middle">릴리스 태그</text>
+      </g>
+
+      <!-- git 간선 -->
+      <path class="edge" d="M210 109 H302" marker-end="url(#ah)"/>
+      <text class="lb" x="256" y="98" text-anchor="middle">PR</text>
+      <text class="sm" x="256" y="162" text-anchor="middle">CI · 일반 머지</text>
+      <g class="num" transform="translate(256 132)"><circle r="11"/><text y="4" text-anchor="middle">2</text></g>
+
+      <path class="edge" d="M456 109 H548" marker-end="url(#ah)"/>
+      <text class="lb" x="502" y="98" text-anchor="middle">PR</text>
+      <text class="sm" x="502" y="162" text-anchor="middle">CI · 일반 머지</text>
+      <g class="num" transform="translate(502 132)"><circle r="11"/><text y="4" text-anchor="middle">4</text></g>
+
+      <path class="edge" d="M702 109 H794" marker-end="url(#ah)"/>
+      <text class="lb" x="748" y="98" text-anchor="middle">릴리스 PR</text>
+      <text class="sm" x="748" y="162" text-anchor="middle">release-please</text>
+      <g class="num" transform="translate(748 132)"><circle r="11"/><text y="4" text-anchor="middle">7</text></g>
+
+      <!-- 도는 곳 -->
+      <g>
+        <rect x="50" y="276" width="150" height="76" rx="8" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.8"/>
+        <text class="ttl" x="125" y="302" text-anchor="middle">로컬 개발</text>
+        <text class="pl" x="125" y="322" text-anchor="middle">로컬 장비</text>
+        <text class="sm m" x="125" y="340" text-anchor="middle">작업 클론</text>
+
+        <rect x="306" y="276" width="150" height="76" rx="8" fill="var(--dev-bg)" stroke="var(--dev)" stroke-width="1.8"/>
+        <text class="ttl" x="381" y="302" text-anchor="middle">환경 dev</text>
+        <text class="pl" x="381" y="322" text-anchor="middle">개발 서버</text>
+        <text class="sm m" x="381" y="340" text-anchor="middle">~/.openmake/dev</text>
+
+        <rect x="552" y="276" width="150" height="76" rx="8" fill="var(--stg-bg)" stroke="var(--stg)" stroke-width="1.8"/>
+        <text class="ttl" x="627" y="302" text-anchor="middle">환경 staging</text>
+        <text class="pl" x="627" y="322" text-anchor="middle">스테이징 서버</text>
+        <text class="sm m" x="627" y="340" text-anchor="middle">~/.openmake/staging</text>
+
+        <rect x="804" y="276" width="150" height="76" rx="8" fill="var(--onl-bg)" stroke="var(--onl)" stroke-width="1.8"/>
+        <text class="ttl" x="879" y="302" text-anchor="middle">환경 online</text>
+        <text class="pl" x="879" y="322" text-anchor="middle">온라인 서버</text>
+        <text class="sm m" x="879" y="340" text-anchor="middle">~/.openmake/online</text>
+      </g>
+
+      <!-- 로컬 개발 → feature (push) -->
+      <path class="edge" d="M125 272 V144" marker-end="url(#ah)"/>
+      <g class="cmd"><rect x="53.5" y="178" width="143" height="22" rx="11"/><text x="125" y="193" text-anchor="middle">omk dev up → push</text></g>
+      <g class="num" transform="translate(125 222)"><circle r="11"/><text y="4" text-anchor="middle">1</text></g>
+
+      <!-- git → 환경 -->
+      <path class="edge" d="M381 140 V272" marker-end="url(#ah)"/>
+      <g class="cmd"><rect x="306" y="178" width="150" height="22" rx="11"/><text x="381" y="193" text-anchor="middle">omk env update dev</text></g>
+      <g class="num" transform="translate(381 222)"><circle r="11"/><text y="4" text-anchor="middle">3</text></g>
+
+      <path class="edge" d="M627 140 V272" marker-end="url(#ah)"/>
+      <g class="cmd"><rect x="538" y="178" width="178" height="22" rx="11"/><text x="627" y="193" text-anchor="middle">omk env update staging</text></g>
+      <g class="num" transform="translate(627 222)"><circle r="11"/><text y="4" text-anchor="middle">5</text></g>
+
+      <path class="edge" d="M879 140 V272" marker-end="url(#ah)"/>
+      <g class="cmd"><rect x="793.5" y="178" width="171" height="22" rx="11"/><text x="879" y="193" text-anchor="middle">omk env update online</text></g>
+      <g class="num" transform="translate(879 222)"><circle r="11"/><text y="4" text-anchor="middle">8</text></g>
+
+      <!-- verify 기록 -->
+      <path class="edge dash" d="M702 314 H800" marker-end="url(#ahd)"/>
+      <text class="sm" x="751" y="372" text-anchor="middle">확인 기록 → 게이트</text>
+      <g class="num" transform="translate(751 338)"><circle r="11"/><text y="4" text-anchor="middle">6</text></g>
+    </svg>
+    <div class="legend">
+      <span><i style="background:var(--local)"></i>로컬 개발 — 고치면서 바로 본다</span>
+      <span><i style="background:var(--dev)"></i>dev — 합쳐진 dev 가 설치되고 도는가</span>
+      <span><i style="background:var(--stg)"></i>staging — 합쳐진 main 이 올라가도 되는가</span>
+      <span><i style="background:var(--onl)"></i>online — 실사용</span>
+    </div>
+  </div>
+
+  <h2 id="principles">세 가지 원칙</h2>
+  <div class="rules">
+    <div class="rule"><div class="k">원칙 1</div><div class="t">배포는 전부 수동이다</div><p>머지·릴리스만으로는 어떤 환경도 바뀌지 않는다. 사람이 <code>omk env update &lt;env&gt;</code> 를 실행해야 올라간다.</p></div>
+    <div class="rule"><div class="k">원칙 2</div><div class="t">앞 단계를 통과해야 다음으로 간다</div><p>환경 dev 통과 전에는 <code>main</code> 으로 올리지 않는다. staging 통과 전에는 릴리스하지 않는다.</p></div>
+    <div class="rule"><div class="k">원칙 3</div><div class="t">online 은 릴리스 태그만 따른다</div><p><code>main</code> 은 개발이 모이는 곳이다. staging 에서 확인하기 전의 <code>main</code> 을 운영이 받지 않는다.</p></div>
+  </div>
+
+  <h2 id="glance">한눈에 보는 단계</h2>
+  <div class="tw"><table>
+    <thead><tr><th>#</th><th>어디서</th><th>무엇을</th><th>명령</th></tr></thead>
+    <tbody>
+      <tr><th class="c-local">①</th><td><strong>로컬 개발</strong></td><td>브랜치 <code>dev</code> 에서 브랜치를 따 핫 리로드로 수정 → 로컬 테스트 → push</td><td><code>omk dev up</code></td></tr>
+      <tr><th>②</th><td>GitHub</td><td><code>feature/*</code> → <code>dev</code> PR → CI → 일반 머지</td><td><code>gh pr create --base dev</code></td></tr>
+      <tr><th class="c-dev">③</th><td><strong>환경 dev</strong></td><td>합쳐진 <code>dev</code> 가 실제로 설치되고 도는지 확인</td><td><code>omk env update dev</code></td></tr>
+      <tr><th>④</th><td>GitHub</td><td><code>dev</code> → <code>main</code> PR → CI → 리뷰 → 일반 머지</td><td><code>gh pr create --base main --head dev</code></td></tr>
+      <tr><th class="c-stg">⑤</th><td><strong>환경 staging</strong></td><td>머지된 main 을 기존 데이터 위에서 update 로 확인</td><td><code>omk env update staging</code></td></tr>
+      <tr><th class="c-stg">⑥</th><td><strong>환경 staging</strong></td><td>확인을 마친 커밋을 기록</td><td><code>omk env verify staging</code></td></tr>
+      <tr><th>⑦</th><td>GitHub</td><td>릴리스 PR 머지 → <code>vX.Y.Z</code> 태그</td><td>릴리스 PR 머지</td></tr>
+      <tr><th class="c-onl">⑧</th><td><strong>환경 online</strong></td><td>새 릴리스 태그로 올리고 스모크 확인</td><td><code>omk env update online</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 id="rules">환경 규칙</h2>
+  <div class="tw"><table>
+    <thead><tr><th></th><th class="c-dev">dev</th><th class="c-stg">staging</th><th class="c-onl">online</th></tr></thead>
+    <tbody>
+      <tr><th>위치</th><td><code>~/.openmake/dev/llm</code></td><td><code>~/.openmake/staging/llm</code></td><td><code>~/.openmake/online/llm</code></td></tr>
+      <tr><th>따르는 것</th><td>브랜치 <code>dev</code> 최신</td><td><code>main</code> 최신</td><td><strong>최신 릴리스 태그</strong></td></tr>
+      <tr><th>인스턴스</th><td><code>dev</code></td><td><code>staging</code></td><td><strong>기본 (접미사 없음)</strong></td></tr>
+      <tr><th>포트</th><td>install.sh 가 할당</td><td>install.sh 가 할당</td><td>소스의 기본 포트<br>52416 / 3000 / 5432 / 6379</td></tr>
+      <tr><th>PM2</th><td><code>openmake-{llm,next,litellm}-dev</code></td><td><code>openmake-{llm,next,litellm}-staging</code></td><td><code>openmake-{llm,next,litellm}</code></td></tr>
+      <tr><th>docker</th><td><code>openmake-dev-*</code></td><td><code>openmake-staging-*</code></td><td><code>openmake-*</code></td></tr>
+      <tr><th>올리는 방식</th><td>update (꼬이면 reset + install)</td><td><strong>update 만</strong></td><td><strong>update 만</strong></td></tr>
+      <tr><th>데이터</th><td>버림</td><td>유지</td><td>절대 보존</td></tr>
+      <tr><th>검증 깊이</th><td>기능 전부 (배선·구조)</td><td>기능 + update·마이그레이션</td><td>스모크만</td></tr>
+      <tr><th>모델</th><td>호스트 기본 모델 또는 지정</td><td>같음</td><td>운영 모델 서버</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><strong>이름 있는 인스턴스의 포트</strong>는 한 칸 옆(52417 / 3010 / 5433 / 6380)부터 잡고, 쓰이고 있으면 옮긴다. omk 는 포트를 기억하지 않는다 — 실제 값은 <code>omk env status &lt;env&gt;</code> 로 본다.</li>
+    <li>충돌 판정은 <strong>설치하는 순간 열려 있는 포트</strong>만 본다. 같은 장비에서 나란히 쓸 환경·로컬 개발은 띄워 둔 채 설치한다.</li>
+    <li>장소는 <strong>역할의 이름</strong>이다. 개발 서버·스테이징 서버·온라인 서버가 같은 호스트여도 되고 달라도 된다. 로컬 개발은 개발자마다 자기 로컬 장비에 둔다.</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════ 02 단계 ═══════════════════════════ -->
+<section class="page" id="steps" data-title="단계별 작업 순서">
+  <div class="eyebrow">02 · 작업 순서</div>
+  <h1>단계별 작업 순서</h1>
+  <p class="lead">브랜치를 따는 것부터 online 에 올리는 것까지. 각 단계 끝의 <strong>통과 조건</strong>을 채운 뒤 다음으로 간다.</p>
+
+  <div class="note">
+    <div class="h">omk 명령을 어떻게 부르나</div>
+    <p>환경이 설치된 호스트에서는 <code>omk …</code> 로 부른다(래퍼 <code>~/.openmake/bin/omk</code>). 래퍼는 online → staging → 그 밖의 환경 순으로 처음 찾은 환경의 스크립트를 실행한다. 환경이 하나도 없는 장비(로컬 개발만 하는 로컬 장비)에서는 작업 클론의 스크립트를 직접 부른다: <code>scripts/env/omk.sh …</code></p>
+  </div>
+
+  <div class="step p-local" id="s1">
+    <div class="no">1</div>
+    <div class="where">로컬 개발 · 로컬 장비</div>
+    <h3>브랜치를 따서 고치고, 로컬에서 확인하고, push</h3>
+    <p>브랜치는 <code>origin/dev</code> 에서 딴다. 핫 리로드로 고치면서 확인한다.</p>
+    <div class="code"><pre><span class="cm"># 브랜치</span>
+git fetch origin
+git switch -c feature/<span class="ph">&lt;주제&gt;</span> origin/dev
+
+<span class="cm"># 로컬 개발 — 최초 1회 준비, 그 뒤로는 up 만</span>
+scripts/env/omk.sh dev setup
+scripts/env/omk.sh dev up
+
+<span class="cm"># 고친 뒤 — CI 는 40분쯤 걸린다. 올리기 전에 여기서 먼저 돌린다</span>
+npm test
+npm run lint
+bash scripts/env/omk.test.sh        <span class="cm"># omk.sh 를 고쳤을 때</span>
+
+git push -u origin feature/<span class="ph">&lt;주제&gt;</span></pre></div>
+    <p class="pass"><b>통과 조건</b>로컬 테스트·lint 통과, 로컬 개발에서 바꾼 기능이 동작, 원격에 push 됨</p>
+    <p>고친 것에 따라 무엇을 다시 해야 하는지는 <a href="#local-dev/after-edit">로컬 개발 — 고친 뒤 할 일</a>.</p>
+  </div>
+
+  <div class="step" id="s2">
+    <div class="no">2</div>
+    <div class="where">GitHub</div>
+    <h3>PR 로 브랜치 dev 에 합친다</h3>
+    <p><code>dev</code> 에는 직접 push 하지 않는다. PR 을 열면 <strong>CI 가 돌고, 통과해야 머지할 수 있다.</strong> 일반 머지로 합친다.</p>
+    <div class="code"><pre>gh pr create --base dev
+gh pr checks --watch               <span class="cm"># CI 진행 보기</span>
+gh pr merge --merge                <span class="cm"># 일반 머지 (squash 아님)</span></pre></div>
+    <p>CI 는 테스트·빌드·lint 를 본다. "설치해서 도는지"는 보지 않는다 — 그것은 다음 단계다.</p>
+    <p class="pass"><b>통과 조건</b>CI Gate 통과, <code>origin/dev</code> 에 합쳐짐</p>
+  </div>
+
+  <div class="step p-dev" id="s3">
+    <div class="no">3</div>
+    <div class="where">환경 dev · 개발 서버</div>
+    <h3>합쳐진 dev 가 실제로 설치되고 도는지 확인</h3>
+    <p>브랜치 <code>dev</code> 를 받아 <strong>빌드하고 PM2 로 띄운다.</strong> 로컬 개발에서 되던 것이 여기서 안 될 수 있다 — 빌드 실패, push 에서 빠진 파일, PM2 기동 문제는 여기서만 드러난다.</p>
+    <div class="code"><pre><span class="cm"># 처음 한 번 — 기본으로 브랜치 dev 를 설치한다</span>
+omk env install dev --tailscale
+
+<span class="cm"># 그 뒤로는 dev 에 머지될 때마다</span>
+omk env update dev
+omk env status dev</pre></div>
+    <p>확인할 것: 설치가 끝까지 되는가 → 바꾼 기능 → 기본 동작(채팅 · 웹 검색 · 에이전트 작업 · 아티팩트 내보내기).</p>
+    <p class="pass"><b>통과 조건</b>요약에 <code>[ERR]</code> 없음, <code>omk env status dev</code> 의 health 가 OK, 위 기능 확인</p>
+    <p>문제가 나오면 ① 로 돌아가 고친다. 자세한 것은 <a href="#env-dev">환경 dev</a>.</p>
+  </div>
+
+  <div class="step" id="s4">
+    <div class="no">4</div>
+    <div class="where">GitHub</div>
+    <h3>dev 를 main 으로 올린다</h3>
+    <p><code>dev</code> 에 쌓인 것을 한꺼번에 올린다. CI 를 다시 지나고 <strong>일반 머지</strong>한다.</p>
+    <div class="code"><pre>gh pr create --base main --head dev</pre></div>
+    <div class="note p-warn">
+      <div class="h">squash 하지 않는다</div>
+      <p>squash 는 <code>dev</code> 와 <code>main</code> 의 연결을 끊어, 다음에 올릴 때마다 이미 올린 변경이 충돌한다. 일반 머지라 <code>dev</code> 의 커밋 제목이 그대로 <code>main</code> 에 들어가고 release-please 가 그것을 CHANGELOG 에 쓴다 — 커밋 제목은 <code>feat(…):</code> · <code>fix(…):</code> 형식을 지킨다.</p>
+    </div>
+    <p class="pass"><b>통과 조건</b>③ 환경 dev 통과, CI Gate 통과, <code>main</code> 에 머지됨</p>
+  </div>
+
+  <div class="step p-stg" id="s5">
+    <div class="no">5</div>
+    <div class="where">환경 staging · 스테이징 서버</div>
+    <h3>머지된 main 을 기존 데이터 위에서 update 로 확인</h3>
+    <p>staging 은 <strong>머지된 main</strong> 을 본다 — 합쳐진 결과와, update·마이그레이션 경로. online 도 update 로 올라가므로 같은 길을 먼저 밟는다.</p>
+    <div class="code"><pre>omk env update staging
+omk env status staging</pre></div>
+    <p class="pass"><b>통과 조건</b>update 가 끝까지 됨, 마이그레이션이 기존 데이터에서 통과, 합쳐진 기능 확인</p>
+    <p>자세한 것은 <a href="#env-staging">환경 staging</a>.</p>
+  </div>
+
+  <div class="step p-stg" id="s6">
+    <div class="no">6</div>
+    <div class="where">환경 staging · 스테이징 서버</div>
+    <h3>확인을 마친 커밋을 기록</h3>
+    <p>이 기록이 있는 커밋에서 나온 릴리스만 online 에 올라간다.</p>
+    <div class="code"><pre>omk env verify staging
+omk env verify staging --list      <span class="cm"># 기록 보기</span>
+
+<span class="cm"># 설치된 클론의 origin 은 https(읽기 전용)다 — push 할 주소를 준다</span>
+OMK_VERIFY_PUSH_URL=git@github.com:openmake/openmake_llm.git omk env verify staging</pre></div>
+    <p class="pass"><b>통과 조건</b>기록이 origin 에 남음. verify 뒤에 main 에 머지가 더 들어왔으면 ⑤ 부터 다시</p>
+    <p>자세한 것은 <a href="#gate">릴리스 게이트</a>.</p>
+  </div>
+
+  <div class="step" id="s7">
+    <div class="no">7</div>
+    <div class="where">GitHub</div>
+    <h3>릴리스 PR 을 머지해 태그를 만든다</h3>
+    <p>release-please 가 만든 릴리스 PR 을 머지하면 <code>vX.Y.Z</code> 태그가 찍힌다. 태그는 <strong>머지한 순간의 main</strong> 에 찍히므로, ⑥ 뒤에 main 에 들어온 것이 없을 때 머지한다.</p>
+    <p class="pass"><b>통과 조건</b>새 <code>vX.Y.Z</code> 태그</p>
+  </div>
+
+  <div class="step p-onl" id="s8">
+    <div class="no">8</div>
+    <div class="where">환경 online · 온라인 서버</div>
+    <h3>새 릴리스 태그로 올리고 스모크 확인</h3>
+    <p>올리기 직전에 DB 백업을 한 번 뜬다(실패하면 올리지 않는다). 게이트가 켜져 있으면 ⑥ 의 기록을 본다.</p>
+    <div class="code"><pre>omk env update online
+omk env status online</pre></div>
+    <p>스모크: 접속 200 · 로그인 · 채팅 1회 · <code>omk env status online</code>. 무거운 검증은 하지 않는다.</p>
+    <p class="pass"><b>통과 조건</b>스모크 통과</p>
+    <p>자세한 것은 <a href="#env-online">환경 online</a>.</p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ 03 로컬 개발 ═══════════════════════════ -->
+<section class="page p-local" id="local-dev" data-title="로컬 개발 (작업 클론)">
+  <div class="eyebrow">03 · 로컬 개발</div>
+  <h1>로컬 개발 — 고치면서 바로 본다</h1>
+  <p class="lead">로컬 장비의 작업 클론 안에서 쓴다. <strong>환경이 아니다</strong> — <code>~/.openmake</code> 아래에 두지 않고, 인스턴스 이름 <code>local</code> 로 앱이 PM2 없이 포그라운드에서 돈다.</p>
+
+  <h2>명령</h2>
+  <div class="code"><pre>scripts/env/omk.sh dev setup          <span class="cm"># 최초 1회 — 툴체인·.env·의존성·DB·마이그레이션·검색·런타임 이미지·게이트웨이·기본 모델</span>
+scripts/env/omk.sh dev up             <span class="cm"># DB/Redis/SearXNG/게이트웨이 + api + web (+ bench) — Ctrl+C 로 종료</span>
+scripts/env/omk.sh dev up api         <span class="cm"># 개별: deps | api | web | bench</span>
+scripts/env/omk.sh dev up --tailscale <span class="cm"># 다른 기기에서 보기 (또는 --host &lt;이름|IP&gt;)</span>
+scripts/env/omk.sh dev status
+scripts/env/omk.sh dev down           <span class="cm"># DB/Redis/SearXNG/게이트웨이 정지 (데이터 유지)</span>
+scripts/env/omk.sh dev reset          <span class="cm"># 컨테이너·볼륨 삭제 (소스·.env 유지). --keep-data 면 볼륨은 남긴다</span></pre></div>
+  <p><code>openmake_bench</code> 가 옆 디렉터리(<code>../openmake_bench</code>)에 있으면 같이 띄운다.</p>
+
+  <h3>setup 옵션</h3>
+  <p>환경 설치(<code>omk env install</code>)와 이름도 뜻도 같다.</p>
+  <div class="tw"><table>
+    <thead><tr><th>옵션</th><th>하는 일</th></tr></thead>
+    <tbody>
+      <tr><th><code>--no-runtime-images</code></th><td>런타임 이미지(약 7GB) 빌드를 뺀다. 에이전트 작업·아티팩트 내보내기는 동작하지 않는다</td></tr>
+      <tr><th><code>--no-searxng</code></th><td>웹 검색 컨테이너를 뺀다</td></tr>
+      <tr><th><code>--no-litellm</code></th><td>게이트웨이를 뺀다 — <code>.env</code> 의 LLM 주소를 직접 채워야 한다</td></tr>
+      <tr><th><code>--no-default-model</code></th><td>기본 모델(1.7B)을 띄우지 않는다</td></tr>
+      <tr><th><code>--llm-base-url U --llm-model M</code></th><td>게이트웨이 뒤에 둘 업스트림. 이미 있는 Ollama 등 (<code>--llm-api-key K</code> 는 선택)</td></tr>
+    </tbody>
+  </table></div>
+  <div class="code"><pre><span class="cm"># 예 — 이미 있는 Ollama 를 쓰고, 이미지 빌드는 뺀다</span>
+scripts/env/omk.sh dev setup --no-runtime-images \
+  --llm-base-url http://localhost:11434/v1 --llm-model <span class="ph">&lt;모델 이름&gt;</span></pre></div>
+
+  <h2 id="after-edit">고친 뒤 할 일</h2>
+  <p><strong>코드만 고쳤으면 <code>dev up</code> 재시작, 설치되는 것이 바뀌었으면 <code>dev setup</code>.</strong></p>
+  <div class="tw"><table>
+    <thead><tr><th>고친 것</th><th>할 일</th></tr></thead>
+    <tbody>
+      <tr><th>웹 화면 <code>apps/web</code></th><td>없음 — 저장하면 바로 반영</td></tr>
+      <tr><th>API <code>apps/api</code></th><td><code>dev up</code> 을 끄고 다시 띄운다 — API 는 감시 재시작이 없다</td></tr>
+      <tr><th>공용 패키지 <code>packages/*</code></th><td><code>npm run build:packages</code> → <code>dev up</code> 재시작</td></tr>
+      <tr><th>의존성 <code>package.json</code></th><td><code>dev setup</code></td></tr>
+      <tr><th>DB 마이그레이션</th><td><code>dev setup</code></td></tr>
+      <tr><th>런타임 이미지 Dockerfile</th><td><code>dev setup</code></td></tr>
+      <tr><th><code>omk.sh</code> · 설치 스크립트</th><td><code>dev setup</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="note">
+    <div class="h">setup 을 다시 돌릴 때</div>
+    <p><code>dev up</code> 을 먼저 끈다 — <code>.env</code> 가 바뀌면 API 를 어차피 다시 띄워야 한다. <code>dev setup</code> 은 지우지 않는다: DB 볼륨과 <code>.env</code> 의 기존 값(비밀번호·암호화 키)은 그대로 두고 없는 것만 채운다. 지우는 것은 <code>dev reset</code> 이다.</p>
+  </div>
+
+  <h2>환경과 같은 것, 다른 것</h2>
+  <p>검색·런타임 이미지·게이트웨이·기본 모델은 환경 설치와 <strong>같은 함수</strong>(<code>stack_ensure</code>)로 준비한다. 그래서 설치 직후 바로 채팅이 된다. 다른 것은 셋뿐이다.</p>
+  <ul>
+    <li>앱을 빌드하지 않는다 — <code>ts-node</code> · <code>next dev</code> 로 돈다</li>
+    <li>앱을 PM2 에 올리지 않는다 — <code>concurrently</code> 아래 포그라운드</li>
+    <li><code>.env</code> 의 <code>NODE_ENV</code> 가 <code>development</code> 다</li>
+  </ul>
+
+  <h3>호스트의 환경들과 같이 쓰는 것, 따로 두는 것</h3>
+  <div class="tw"><table>
+    <thead><tr><th>같이 쓰는 것 (호스트에 하나)</th><th>따로 두는 것 (<code>local</code>)</th></tr></thead>
+    <tbody>
+      <tr><td>Docker 엔진 — macOS 는 Colima VM <code>openmake</code></td><td>PostgreSQL · Redis (<code>openmake-local-*</code>) — 브랜치의 마이그레이션이 환경의 DB 를 바꾸지 않게</td></tr>
+      <tr><td>기본 모델 서버 — PM2 <code>omk-llamacpp</code>. 모델 1.8GB 는 한 번만 받는다</td><td>게이트웨이 — PM2 <code>openmake-litellm-local</code>. 환경이 없어도 채팅이 된다</td></tr>
+      <tr><td>런타임 이미지의 레이어 (캐시 재사용)</td><td>런타임 이미지의 태그 <code>:local</code> · SearXNG · 작업 공간</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><code>.env</code> 의 <code>LLM_BASE_URL</code> 을 <strong>직접 넣어 둔 작업 클론은 건드리지 않는다.</strong> omk 가 바꾸는 것은 비어 있거나, 자리표시자(<code>http://localhost:4000</code> 인데 그 포트에 아무것도 없음)이거나, omk 가 넣은 게이트웨이 주소일 때뿐이다.</li>
+    <li>게이트웨이와 기본 모델 서버는 <code>dev up</code> 의 Ctrl+C 뒤에도 남는다. 재부팅 등으로 내려가 있으면 <code>dev up</code> 이 다시 띄운다.</li>
+    <li>작업 클론이 여럿이면 게이트웨이 하나(<code>local</code>)를 같이 쓴다.</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════ 04 환경 dev ═══════════════════════════ -->
+<section class="page p-dev" id="env-dev" data-title="환경 dev">
+  <div class="eyebrow">04 · 환경 dev</div>
+  <h1>"합쳐진 dev 가 실제 환경에서 도는가"</h1>
+  <p class="lead">개발 서버에 설치한 배포본이다. 브랜치 <code>dev</code> 를 따르고, <code>main</code> 으로 올리기 전에 거친다. 데이터는 버리는 것이다 — 꼬이면 망설이지 말고 reset.</p>
+
+  <h2>명령</h2>
+  <div class="code"><pre>omk env install dev --tailscale      <span class="cm"># 처음 한 번 — 기본으로 브랜치 dev 를 설치한다</span>
+omk env update dev                   <span class="cm"># dev 에 머지될 때마다</span>
+omk env status dev
+omk env logs dev
+omk env reset dev --reinstall        <span class="cm"># 꼬였을 때</span></pre></div>
+
+  <h3>머지 전에 따로 보고 싶은 브랜치 — 임시 환경</h3>
+  <p>위험한 변경이나 남의 PR 은 환경 dev 를 건드리지 않고 임시 환경에 올린다. 끝나면 지운다.</p>
+  <div class="code"><pre>omk env install pr-123 --ref feature/<span class="ph">&lt;주제&gt;</span>
+omk env reset pr-123</pre></div>
+  <p><code>omk.sh</code> 자체를 고친 브랜치는 래퍼 대신 그 소스의 스크립트를 직접 부른다: <code>&lt;작업 클론&gt;/scripts/env/omk.sh env install pr-123 --ref feature/&lt;주제&gt;</code></p>
+
+  <div class="note p-dev">
+    <div class="h">브랜치 dev 가 없는 저장소</div>
+    <p>포크처럼 브랜치 <code>dev</code> 가 없는 저장소에서는 <code>--ref main</code> 을 준다. <code>openmake_bench</code> 도 브랜치 <code>dev</code> 가 없다 — 환경 dev 에 <code>--bench</code> 로 붙이면 bench 는 <code>main</code> 을 쓴다.</p>
+  </div>
+
+  <h2>확인할 것</h2>
+  <ol>
+    <li>설치·update 가 <strong>끝까지</strong> 되는가</li>
+    <li>바꾼 기능</li>
+    <li>기본 동작 — 채팅 · 웹 검색 · 에이전트 작업 · 아티팩트 내보내기</li>
+  </ol>
+  <p>dev 가 증명하는 것은 <strong>배선과 구조</strong>다. 기본 모델(1.7B)은 작다 — 답변 품질과 에이전트 성공률은 판단하지 않는다.</p>
+
+  <h2>할 것 / 하지 말 것</h2>
+  <div class="tw"><table class="dd">
+    <thead><tr><th>할 것</th><th>하지 말 것</th></tr></thead>
+    <tbody>
+      <tr><td>브랜치 <code>dev</code> 에 머지될 때마다 <code>omk env update dev</code> — 설치가 끝까지 되는지부터 본다</td><td>환경 dev 를 건너뛰고 <code>dev</code> 를 <code>main</code> 으로 올리지 않는다 — CI 는 "설치해서 도는지"를 보지 않는다</td></tr>
+      <tr><td>바꾼 기능 + 기본 동작을 확인한다</td><td>dev 의 결과로 답변 품질·에이전트 성공률을 판단하지 않는다</td></tr>
+      <tr><td>꼬이면 <code>omk env reset dev --reinstall</code></td><td>남기고 싶은 데이터를 dev 에 두지 않는다</td></tr>
+      <tr><td>문제가 나오면 로컬 개발에서 고쳐 → push → 브랜치 <code>dev</code> 에 머지 → <code>omk env update dev</code></td><td>환경 디렉터리(<code>~/.openmake/dev/llm</code>)의 소스를 직접 고치지 않는다</td></tr>
+      <tr><td>머지 전에 따로 볼 브랜치는 <strong>임시 환경</strong>에 올린다</td><td>환경 dev 에 <code>--ref</code> 만 바꿔 다시 install 하지 않는다 — 이미 있는 클론이 재사용되어 <strong>이전 브랜치가 설치된다</strong></td></tr>
+      <tr><td>무거운 실험(새 모델, 설정 변경, 일부러 깨뜨리기)은 여기서 한다</td><td>임시 환경을 방치하지 않는다 — 환경마다 DB·게이트웨이·이미지가 따로 생긴다</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ═══════════════════════════ 05 staging ═══════════════════════════ -->
+<section class="page p-stg" id="env-staging" data-title="환경 staging">
+  <div class="eyebrow">05 · 환경 staging</div>
+  <h1>"합쳐진 main 이 online 에 올라가도 되는가"</h1>
+  <p class="lead">항상 <code>main</code> 을 따른다. 데이터를 유지한 채 <strong>update 경로</strong>로 올려, online 이 밟을 길을 먼저 밟는다.</p>
+
+  <h2>명령</h2>
+  <div class="code"><pre>omk env update staging            <span class="cm"># main 에 머지될 때마다</span>
+omk env status staging
+omk env verify staging            <span class="cm"># 확인을 마친 뒤</span></pre></div>
+
+  <h2>확인할 것</h2>
+  <ol>
+    <li>update 가 끝까지 되는가 (ff-only → build → migrate → restart)</li>
+    <li>마이그레이션이 <strong>기존 데이터</strong>에서 도는가</li>
+    <li>여러 PR 이 합쳐진 결과의 기능 — <strong>기능 확인은 여기까지 끝낸다</strong></li>
+  </ol>
+
+  <h2>할 것 / 하지 말 것</h2>
+  <div class="tw"><table class="dd">
+    <thead><tr><th>할 것</th><th>하지 말 것</th></tr></thead>
+    <tbody>
+      <tr><td><strong>항상 main</strong> (<code>--ref</code> 없이 설치). 머지될 때마다 <code>omk env update staging</code></td><td><code>--ref feature/*</code> 로 PR 을 시험하지 않는다 — 그것은 임시 환경의 일이다</td></tr>
+      <tr><td><strong>update 경로</strong>로 올린다</td><td>습관적으로 reset → 재설치하지 않는다 — 마이그레이션이 기존 데이터에서 도는지 볼 수 없게 된다</td></tr>
+      <tr><td>데이터를 <strong>유지</strong>한다. reset 은 정말 꼬였을 때만</td><td>실사용 데이터·비밀값을 가져다 넣지 않는다</td></tr>
+      <tr><td>여러 PR 이 합쳐진 결과의 기능 확인은 여기까지 끝낸다</td><td>통과하기 전에 릴리스 PR 을 머지하지 않는다</td></tr>
+      <tr><td>확인이 끝나면 <code>omk env verify staging</code></td><td>확인하지 않고 verify 하지 않는다. verify 뒤에 머지가 더 들어왔으면 update → 확인 → verify 를 다시 한다</td></tr>
+      <tr><td>문제가 나오면 수정(① 부터) 또는 revert</td><td>staging 에서 직접 핫픽스하지 않는다</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ═══════════════════════════ 06 online ═══════════════════════════ -->
+<section class="page p-onl" id="env-online" data-title="환경 online">
+  <div class="eyebrow">06 · 환경 online</div>
+  <h1>"실사용"</h1>
+  <p class="lead">최신 릴리스 태그로만 올라간다. 확인은 스모크만 한다 — 무거운 검증은 CI 와 staging 에서 끝났어야 한다.</p>
+
+  <h2>명령</h2>
+  <div class="code"><pre>omk env update online             <span class="cm"># 새 릴리스 태그가 있을 때만 올라간다. 직전에 DB 백업</span>
+omk env status online
+omk env backup online --schedule  <span class="cm"># 매일 03:30 백업 — 한 번 걸어 둔다</span></pre></div>
+
+  <h2>스모크</h2>
+  <ol>
+    <li>접속 200</li>
+    <li>로그인</li>
+    <li>채팅 1회</li>
+    <li><code>omk env status online</code></li>
+  </ol>
+
+  <h2>문제가 났을 때</h2>
+  <p>수정 → 새 릴리스 → update 가 기본이다. 급하면 이전 태그로 되돌리고 그 환경 디렉터리에서 <code>./openmake_llm.sh deploy</code>.</p>
+
+  <h2>할 것 / 하지 말 것</h2>
+  <div class="tw"><table class="dd">
+    <thead><tr><th>할 것</th><th>하지 말 것</th></tr></thead>
+    <tbody>
+      <tr><td>릴리스 직후 <code>omk env update online</code></td><td>main HEAD · <code>feature/*</code> 를 올리지 않는다 (<code>--ref</code> 로 브랜치를 주지 않는다)</td></tr>
+      <tr><td><strong>스모크만</strong> 한다</td><td>부하 시험·대량 평가·동시 다발 요청을 하지 않는다 — 운영 모델 서버를 공유한다</td></tr>
+      <tr><td>매일 백업을 걸어 둔다</td><td><code>omk env reset online</code> 을 하지 않는다 — 볼륨(DB)까지 지운다</td></tr>
+      <tr><td>게이트를 켜 둔다 (<code>.env</code> 의 <code>OMK_RELEASE_GATE=1</code>)</td><td><code>--force-unverified</code> 를 습관적으로 쓰지 않는다</td></tr>
+      <tr><td>호스트별 값(도메인·모델 서버 주소·키)은 그 환경의 <code>.env</code> · <code>litellm.env</code> 에만 둔다</td><td>저장소에 호스트 경로·주소·키를 적지 않는다</td></tr>
+      <tr><td>문제가 나면 수정 → 새 릴리스 → update</td><td>online 에서 실험·설정 시험·모델 교체 시험을 하지 않는다</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ═══════════════════════════ 07 게이트 ═══════════════════════════ -->
+<section class="page" id="gate" data-title="릴리스 게이트">
+  <div class="eyebrow">07 · 릴리스 게이트</div>
+  <h1>staging 에서 확인한 커밋만 online 에</h1>
+  <p class="lead">릴리스 태그는 릴리스 PR 을 머지한 순간의 main 에 찍힌다. staging 을 마지막으로 올린 뒤에 머지된 PR 은 확인 없이 릴리스에 들어간다 — 게이트는 그 경우를 막는다.</p>
+
+  <div class="code"><pre><span class="cm"># 스테이징 서버 — 기능·마이그레이션 확인을 마친 뒤</span>
+omk env verify staging            <span class="cm"># 검사(깨끗한 작업 트리 · origin/main 에 있는 커밋 · health) → origin 에 기록</span>
+omk env verify staging --list
+
+<span class="cm"># 온라인 서버 — 한 번 켠다 (.env 에 OMK_RELEASE_GATE=1, 또는 설치할 때 --release-gate)</span>
+omk env update online             <span class="cm"># 확인된 릴리스만 올라간다</span></pre></div>
+
+  <div class="tw"><table>
+    <tbody>
+      <tr><th>기록</th><td>origin 의 <code>refs/omk/verified/&lt;커밋&gt;</code>. 브랜치·태그가 아니라 GitHub 화면에는 보이지 않는다. 환경들이 다른 호스트에 있어도 읽힌다</td></tr>
+      <tr><th>통과 조건</th><td>기록된 커밋이 릴리스 태그의 조상이고, 그 사이에 바뀐 것이 <strong>릴리스 메타데이터뿐</strong>이다 (버전·CHANGELOG). 릴리스 커밋에 섞인 의존성 변경은 거부한다</td></tr>
+      <tr><th>거부되면</th><td>아무것도 바꾸지 않고 종료 코드 2. 환경은 지금 버전 그대로 돈다</td></tr>
+      <tr><th>급한 수정</th><td><code>omk env update online --force-unverified</code> — 물어본 뒤 진행하고 <code>~/.openmake/online/logs/release-gate.log</code> 에 남긴다</td></tr>
+      <tr><th>범위</th><td>게이트는 <strong>켠 환경에서만</strong> 동작한다. 외부 설치본은 기본으로 꺼져 있다</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>스테이징 서버의 쓰기 권한</h2>
+  <p><code>verify</code> 는 origin 에 push 한다. 설치된 클론의 origin 은 https(읽기 전용)이므로 push 할 주소를 따로 준다.</p>
+  <div class="code"><pre>OMK_VERIFY_PUSH_URL=git@github.com:openmake/openmake_llm.git omk env verify staging</pre></div>
+  <div class="tw"><table>
+    <thead><tr><th>방법</th><th>설명</th></tr></thead>
+    <tbody>
+      <tr><th>SSH agent forwarding (권장)</th><td><code>ssh -A staging-host</code> 로 들어가 실행한다 — 호스트에 자격 증명이 남지 않는다</td></tr>
+      <tr><th>쓰기 권한 deploy key</th><td>호스트에 저장해야 할 때. 그 키로 <code>main</code> · <code>v*</code> 태그를 고칠 수 없게 브랜치 보호를 먼저 확인한다</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ═══════════════════════════ 08 설치 ═══════════════════════════ -->
+<section class="page" id="install" data-title="새 호스트에 설치">
+  <div class="eyebrow">08 · 설치</div>
+  <h1>아무것도 없는 호스트에서 한 줄</h1>
+  <p class="lead">옵션 없이 설치하면 게이트웨이와 기본 모델까지 채워져, 채울 것 없이 채팅이 된다.</p>
+
+  <div class="code"><pre><span class="cm"># macOS / Linux / WSL2</span>
+curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
+  | bash -s -- env install staging --public-url https://staging-chat.example.com
+
+curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
+  | bash -s -- env install online  --public-url https://chat.example.com</pre></div>
+  <p>Windows 네이티브는 지원하지 않는다 — WSL2(Ubuntu) 안에서 같은 스크립트를 쓴다(<code>omk.ps1</code>).</p>
+
+  <h2>한 번에 되는 일</h2>
+  <ol>
+    <li>git 확인 → <code>openmake_llm</code> 클론</li>
+    <li><code>install.sh --minimal</code> — Node 24 · Docker · PM2, <code>.env</code> 시크릿, PostgreSQL · Redis, 마이그레이션, 빌드, PM2 기동, health</li>
+    <li>웹 검색(SearXNG) → 런타임 이미지 → LiteLLM 게이트웨이 (업스트림을 주지 않았으면 기본 모델까지)</li>
+    <li><code>--bench</code> 를 줬을 때만: <code>openmake_bench</code></li>
+    <li>Caddy 프록시 → <code>--tailscale</code> / <code>--host</code> 를 줬으면 그 주소 허용</li>
+    <li><code>~/.openmake/bin/omk</code> 래퍼</li>
+  </ol>
+  <p>2 가 실패하면 설치가 멈춘다. 3 의 실패는 경고만 남기고 계속한다. 4 는 실패하면 멈춘다.</p>
+
+  <h2>설치 후 사람이 채울 것</h2>
+  <p>해당할 때만 요약 끝에 <code>[할 일]</code> 로 나온다.</p>
+  <div class="tw"><table>
+    <thead><tr><th>나오는 경우</th><th>할 일</th></tr></thead>
+    <tbody>
+      <tr><td>게이트웨이는 떴는데 업스트림이 비어 있다</td><td><code>&lt;env&gt;/litellm/litellm.env</code> 를 채우고 <code>omk env start &lt;env&gt;</code> — 또는 <code>--llm-base-url … --llm-model …</code> 로 재설치</td></tr>
+      <tr><td><code>--no-litellm</code> 으로 설치했다</td><td><code>llm/.env</code> 의 <code>LLM_BASE_URL</code> / <code>LLM_API_KEY</code> / <code>LLM_DEFAULT_MODEL</code></td></tr>
+      <tr><td>bench 를 설치했다</td><td><code>bench/.env</code> 의 <code>OMK_API_KEY</code> — llm 웹 → 설정 → API 키에서 <code>chat</code> 스코프 키를 발급</td></tr>
+      <tr><td>Discord 봇 토큰을 줬다</td><td><code>llm/.env</code> 의 <code>DISCORD_BOT_API_KEY</code> — <code>discord</code> 스코프 키</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>macOS — 전용 Colima</h2>
+  <p>macOS 의 openmake 는 자기 Colima VM(프로필 <code>openmake</code>)에서만 컨테이너를 돌린다. Docker Desktop 이 있어도 지우거나 설정을 바꾸지 않는다 — 터미널의 <code>docker</code> 는 계속 그쪽을 가리킨다.</p>
+  <div class="code"><pre>docker --context colima-openmake ps      <span class="cm"># openmake 의 컨테이너 보기</span>
+colima status --profile openmake</pre></div>
+</section>
+
+<!-- ═══════════════════════════ 09 꼬였을 때 ═══════════════════════════ -->
+<section class="page" id="trouble" data-title="꼬였을 때 · 백업">
+  <div class="eyebrow">09 · 복구</div>
+  <h1>꼬였을 때 — 지우고 다시</h1>
+  <p class="lead"><code>reset</code> 은 환경 이름만으로 지울 대상을 계산한다. <code>.env</code> 가 깨졌어도 동작한다.</p>
+
+  <div class="note p-warn">
+    <div class="h">online 에는 쓰지 않는다</div>
+    <p><code>omk env reset online</code> 은 DB 볼륨까지 지운다. 옮길 때는 <code>db-dump</code> → <code>db-restore</code>.</p>
+  </div>
+
+  <div class="code"><pre>omk env reset staging --reinstall            <span class="cm"># 전부 지우고 같은 브랜치로 재설치</span>
+omk env reset staging --keep-env --reinstall <span class="cm"># .env(LLM 키·API 키)는 백업했다가 복원</span>
+omk env reset staging --keep-data            <span class="cm"># DB 볼륨은 남김 (.env 도 함께 보존)</span></pre></div>
+
+  <div class="tw"><table>
+    <thead><tr><th>지우는 것</th><th>staging 예</th></tr></thead>
+    <tbody>
+      <tr><th>PM2</th><td><code>openmake-llm-staging</code> <code>openmake-next-staging</code> <code>openmake-litellm-staging</code> <code>openmake-bench-staging</code> …</td></tr>
+      <tr><th>docker</th><td><code>openmake-staging-postgres</code> <code>openmake-staging-redis</code> <code>openmake-staging-searxng</code> + 볼륨</td></tr>
+      <tr><th>프록시</th><td><code>~/.openmake/caddy/caddy.d/staging.caddy</code></td></tr>
+      <tr><th>디렉터리</th><td><code>~/.openmake/staging</code></td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>남기는 것</strong>: 런타임 이미지(<code>--purge-images</code> 로 지운다), DB 백업, 호스트 공용인 기본 모델 서버와 프록시.</p>
+
+  <h2>DB 백업</h2>
+  <div class="code"><pre>omk env backup <span class="ph">&lt;env&gt;</span>                 <span class="cm"># 지금 한 번 → ~/.openmake/backups/&lt;env&gt;/</span>
+omk env backup <span class="ph">&lt;env&gt;</span> --list
+omk env backup <span class="ph">&lt;env&gt;</span> --schedule      <span class="cm"># 매일 03:30</span>
+omk env backup <span class="ph">&lt;env&gt;</span> --off
+
+<span class="cm"># 복원 — 그 환경 디렉터리에서</span>
+cd ~/.openmake/<span class="ph">&lt;env&gt;</span>/llm &amp;&amp; ./openmake_llm.sh db-restore <span class="ph">&lt;파일&gt;</span></pre></div>
+  <p>백업은 환경 디렉터리 밖에 쌓인다 — <code>reset</code> 으로 환경을 지워도 남는다.</p>
+
+  <h2>무엇이 잘못됐는지 볼 때</h2>
+  <div class="tw"><table>
+    <thead><tr><th>볼 것</th><th>어디</th></tr></thead>
+    <tbody>
+      <tr><th>설치·갱신·리셋의 출력</th><td><code>~/.openmake/logs/omk/&lt;시각&gt;-&lt;명령&gt;[-&lt;환경&gt;].log</code></td></tr>
+      <tr><th>환경의 상태</th><td><code>omk env status &lt;env&gt;</code> — 포트 · PM2 · docker · health · 검색</td></tr>
+      <tr><th>앱 로그</th><td><code>omk env logs &lt;env&gt;</code></td></tr>
+      <tr><th>로컬 개발의 상태</th><td><code>scripts/env/omk.sh dev status</code></td></tr>
+      <tr><th>Colima (macOS)</th><td><code>~/.openmake/logs/colima.log</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>설치가 도는 동안에는 스크립트를 고치지 않는다 — bash 는 실행하면서 파일을 읽으므로, 도중에 바뀌면 엉뚱한 곳에서 실패한다.</p>
+</section>
+
+<!-- ═══════════════════════════ 10 명령 ═══════════════════════════ -->
+<section class="page" id="commands" data-title="명령 모음">
+  <div class="eyebrow">10 · 명령</div>
+  <h1>명령 모음</h1>
+  <p class="lead">종료 코드: <code>0</code> 성공 · <code>1</code> 사용법·전제조건 · <code>2</code> 단계 실패(게이트 거부 포함) · <code>3</code> health check 실패.</p>
+
+  <h2>환경</h2>
+  <div class="code"><pre>omk env install <span class="ph">&lt;env&gt;</span> [--ref BR] [--bench [--bench-ref BR]] [--public-url URL] [--no-proxy]
+                      [--no-searxng] [--no-runtime-images] [--no-litellm] [--no-default-model]
+                      [--tailscale] [--host H]…
+                      [--llm-base-url U --llm-api-key K --llm-model M]
+                      [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
+                      [--autoupdate|--no-autoupdate] [--release-gate]
+                      [--ops-profile] [--dgx-host H] [--https-host H] [--artifact-viewer] [--discord-token T]
+omk env update  <span class="ph">&lt;env&gt;</span> [--if-behind] [--no-backup] [--force-unverified]
+omk env verify  <span class="ph">&lt;env&gt;</span> [--list]
+omk env reset   <span class="ph">&lt;env&gt;</span> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
+omk env status | start | stop | logs <span class="ph">&lt;env&gt;</span>
+omk env expose  <span class="ph">&lt;env&gt;</span> [--tailscale] [--host H]…
+omk env backup  <span class="ph">&lt;env&gt;</span> [--schedule ['CRON']] [--off] [--list] [--dry-run]
+omk env autoupdate <span class="ph">&lt;env&gt;</span> [--every 'CRON'] [--off]
+omk proxy status | reload | render <span class="ph">&lt;env&gt;</span></pre></div>
+
+  <h2>로컬 개발</h2>
+  <div class="code"><pre>omk dev setup [--no-searxng] [--no-runtime-images] [--no-litellm] [--no-default-model]
+              [--llm-base-url U --llm-api-key K --llm-model M]
+omk dev up [all|deps|api|web|bench] [--tailscale] [--host H]…
+omk dev down | status | reset [--keep-data]</pre></div>
+
+  <h2>알아 둘 것</h2>
+  <ul>
+    <li><code>staging</code> / <code>online</code> 외의 이름도 된다 (<code>omk env install qa --ref feature/x</code>). <code>local</code> 은 로컬 개발이 쓰는 이름이라 환경 이름으로 쓸 수 없다.</li>
+    <li>환경 이름을 생략한 <code>omk env …</code> 는 오류다.</li>
+    <li>bench 는 기본으로 설치하지 않는다 — <code>--bench</code> 를 줄 때만 붙는다.</li>
+  </ul>
+
+  <h2>자주 쓰는 환경변수</h2>
+  <div class="tw"><table>
+    <thead><tr><th>변수</th><th>기본값</th><th>용도</th></tr></thead>
+    <tbody>
+      <tr><th><code>OMK_ROOT</code></th><td><code>~/.openmake</code></td><td>모든 환경의 루트</td></tr>
+      <tr><th><code>OMK_DEV_LLM</code> / <code>OMK_DEV_BENCH</code></th><td>자동 탐지</td><td>작업 클론 위치</td></tr>
+      <tr><th><code>OMK_DEFAULT_MODEL_HF</code> / <code>_NAME</code> / <code>_CTX</code></th><td><code>Qwen/Qwen3-1.7B-GGUF:Q8_0</code> / <code>qwen3-1.7b</code> / <code>16384</code></td><td>기본 모델. 준 값은 기억된다</td></tr>
+      <tr><th><code>OMK_VERIFY_PUSH_URL</code></th><td><code>origin</code></td><td><code>verify</code> 가 기록을 push 할 원격</td></tr>
+      <tr><th><code>OMK_RESTORE_ENV_FROM</code></th><td>—</td><td><code>reset --keep-env</code> 가 남긴 <code>.env</code> 를 설치 전에 되돌린다</td></tr>
+      <tr><th><code>OMK_LOG</code></th><td>켜짐</td><td>설치·갱신·리셋의 출력을 파일로도 남긴다. 끄려면 <code>off</code></td></tr>
+      <tr><th><code>OMK_FORCE_FOREIGN</code></th><td>—</td><td><code>1</code> 이면 소유권 가드를 끈다</td></tr>
+    </tbody>
+  </table></div>
+  <p>전체 목록은 <code>scripts/env/README.md</code> 의 "환경변수" 절.</p>
+</section>
+
+<!-- ═══════════════════════════ 11 공백 ═══════════════════════════ -->
+<section class="page p-warn" id="gaps" data-title="자동 검사 · 브랜치 보호">
+  <div class="eyebrow">11 · 자동 검사</div>
+  <h1>무엇이 자동으로 막아 주는가</h1>
+  <p class="lead">개발 인원이 늘어도 흐름이 지켜지려면, 사람이 기억하는 규칙이 아니라 저장소가 막아야 한다. 아래는 어디에서 무엇이 검사되는지다.</p>
+
+  <h2>어디서 무엇을 검사하나</h2>
+  <div class="tw"><table>
+    <thead><tr><th>단계</th><th>검사</th><th>보는 것</th><th>누가</th></tr></thead>
+    <tbody>
+      <tr><th class="c-local">① 로컬 개발</th><td>로컬 테스트</td><td>테스트 · lint</td><td>개발자</td></tr>
+      <tr><th>② <code>feature/*</code> → <code>dev</code></th><td><strong>CI Gate</strong></td><td>계약 · 의존성 감사 · 테스트 · 빌드 · 크기 · lint</td><td>자동</td></tr>
+      <tr><th class="c-dev">③ 환경 dev</th><td>설치 확인</td><td>설치해서 도는가, 기능</td><td>사람</td></tr>
+      <tr><th>④ <code>dev</code> → <code>main</code></th><td><strong>CI Gate</strong></td><td>② 와 같음</td><td>자동</td></tr>
+      <tr><th class="c-stg">⑤⑥ 환경 staging</th><td>update 확인 · verify</td><td>마이그레이션, 합쳐진 기능</td><td>사람</td></tr>
+      <tr><th class="c-onl">⑧ 환경 online</th><td>릴리스 게이트 · 스모크</td><td>⑥ 의 기록이 있는 릴리스인가</td><td>자동 + 사람</td></tr>
+    </tbody>
+  </table></div>
+  <p>CI 는 한 번에 40분쯤 걸린다. 그래서 ① 에서 로컬 테스트를 먼저 돌린다.</p>
+
+  <h2>브랜치 보호</h2>
+  <div class="tw"><table>
+    <thead><tr><th></th><th><code>main</code></th><th><code>dev</code></th></tr></thead>
+    <tbody>
+      <tr><th>PR 로만 합친다</th><td>예</td><td>예</td></tr>
+      <tr><th>CI Gate 통과 필수</th><td>예</td><td>예</td></tr>
+      <tr><th>force push · 삭제</th><td>금지</td><td>금지</td></tr>
+      <tr><th>리뷰 승인 필수</th><td>아니오</td><td>아니오 — 인원이 늘면 켠다</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note p-warn">
+    <div class="h">이 표는 목표 상태다</div>
+    <p>브랜치 보호는 저장소 파일이 아니라 GitHub 설정이다. <code>dev</code> 의 보호는 워크플로 수정이 <code>dev</code> 에 들어가 CI 가 한 번 통과한 <strong>뒤에</strong> 건다 — 먼저 걸면 아무도 머지할 수 없다. 지금 상태는 아래 명령으로 본다.</p>
+  </div>
+  <div class="code"><pre>gh api repos/openmake/openmake_llm/branches/dev/protection
+gh api repos/openmake/openmake_llm/branches/main/protection</pre></div>
+
+  <h2>CI 가 보지 않는 것</h2>
+  <ul>
+    <li><strong>설치해서 도는가</strong> — 빌드 뒤 PM2 기동, docker, 게이트웨이 연결. ③ 환경 dev 에서 본다.</li>
+    <li><strong>기존 데이터 위의 마이그레이션</strong> — ⑤ 환경 staging 에서 본다.</li>
+    <li><strong><code>openmake_bench</code></strong> — 브랜치 <code>dev</code> 가 없다. <code>main</code> 에서 따서 <code>main</code> 으로 합친다.</li>
+  </ul>
+
+  <h2>의존성 감사에 걸렸을 때</h2>
+  <p>CI 의 <code>Gate 0.7</code> 은 운영 의존성에 high 이상 보안 권고가 새로 생기면 실패한다. 내 변경과 무관하게 어느 날 갑자기 실패할 수 있다.</p>
+  <div class="code"><pre>npm run audit:gate                                   <span class="cm"># 무엇이 걸렸는지</span>
+npm ls <span class="ph">&lt;패키지&gt;</span> --omit=dev                          <span class="cm"># 누가 끌어오는지</span>
+npm update <span class="ph">&lt;패키지&gt;</span> --package-lock-only             <span class="cm"># 고친 버전이 있으면 lockfile 만 올린다</span>
+npm run audit:gate</pre></div>
+  <p>당장 올릴 수 없으면 사유와 만료일을 적어 <code>.audit-allowlist.json</code> 에 넣는다. 만료가 지나면 다시 실패한다.</p>
+</section>
+
+<div class="pager no-js-hide" id="pager"></div>
+
+</main>
+</div>
+
+<script>
+(function () {
+  var pages = Array.prototype.slice.call(document.querySelectorAll('.page'));
+  var links = Array.prototype.slice.call(document.querySelectorAll('nav a'));
+  var side = document.getElementById('side');
+  var menu = document.querySelector('.menu-btn');
+  var pager = document.getElementById('pager');
+  var ids = pages.map(function (p) { return p.id; });
+
+  function show(hash, scroll) {
+    var parts = (hash || '').replace(/^#/, '').split('/');
+    var id = ids.indexOf(parts[0]) >= 0 ? parts[0] : ids[0];
+    var i = ids.indexOf(id);
+    pages.forEach(function (p) { p.classList.toggle('on', p.id === id); });
+    links.forEach(function (a) {
+      if (a.getAttribute('href') === '#' + id) a.setAttribute('aria-current', 'page');
+      else a.removeAttribute('aria-current');
+    });
+    document.title = pages[i].getAttribute('data-title') + ' — OpenMake 환경 운영 흐름';
+
+    var prev = pages[i - 1], next = pages[i + 1], html = '';
+    if (prev) html += '<a class="prev" href="#' + prev.id + '"><span>← 이전</span>' + prev.getAttribute('data-title') + '</a>';
+    if (next) html += '<a class="next" href="#' + next.id + '"><span>다음 →</span>' + next.getAttribute('data-title') + '</a>';
+    pager.innerHTML = html;
+
+    side.classList.remove('open');
+    if (menu) menu.setAttribute('aria-expanded', 'false');
+
+    if (!scroll) return;
+    var target = parts[1] && document.getElementById(parts[1]);
+    if (target && pages[i].contains(target)) target.scrollIntoView();
+    else window.scrollTo(0, 0);
+  }
+
+  window.addEventListener('hashchange', function () { show(location.hash, true); });
+  show(location.hash, !!location.hash);
+
+  // 코드 블록 복사
+  Array.prototype.forEach.call(document.querySelectorAll('.code'), function (box) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.textContent = '복사';
+    b.addEventListener('click', function () {
+      var text = box.querySelector('pre').innerText;
+      var done = function () { b.textContent = '복사됨'; b.classList.add('ok'); setTimeout(function () { b.textContent = '복사'; b.classList.remove('ok'); }, 1400); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { b.textContent = '실패'; });
+      } else {
+        var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
+        try { document.execCommand('copy'); done(); } catch (e) { b.textContent = '실패'; }
+        document.body.removeChild(t);
+      }
+    });
+    box.appendChild(b);
+  });
+
+  // 밝게 / 어둡게
+  var root = document.documentElement, KEY = 'omk-env-flow-theme';
+  try { var saved = localStorage.getItem(KEY); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  document.getElementById('theme').addEventListener('click', function () {
+    var cur = root.getAttribute('data-theme') ||
+      (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  });
+
+  // 좁은 화면의 목차
+  if (menu) menu.addEventListener('click', function () {
+    var open = side.classList.toggle('open');
+    menu.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+})();
+</script>
+</body>
+</html>
