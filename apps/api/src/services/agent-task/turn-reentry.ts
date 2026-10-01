@@ -49,6 +49,52 @@ export function findDanglingToolCalls(conversation: ChatMessage[]): DanglingTurn
     return { calls: remaining, content: String(conversation[i].content ?? '') };
 }
 
+/**
+ * PURE: 새 턴 호출의 id 를 작업 안에서 유일하게 맞춘다. 저널은 task_id + tool_call_id 로만 조회하므로,
+ * 턴마다 0 부터 다시 매기는 합성 id(rec_0, pseudo_call_0, call_0 …)가 겹치면 재개 때 이전 턴 결과를 재사용한다.
+ * 대화에 이미 쓰였거나 없는 id 만 `<id>_t<turn>` 으로 바꾸고, 겹치지 않는 id(대개 네이티브)는 그대로 둔다.
+ */
+export function ensureUniqueToolCallIds(calls: ToolCall[], conversation: ChatMessage[], turn: number): ToolCall[] {
+    const used = new Set<string>();
+    for (const m of conversation) {
+        if (m.tool_call_id) used.add(m.tool_call_id);
+        for (const tc of m.tool_calls ?? []) if (tc.id) used.add(tc.id);
+    }
+    return calls.map((tc) => {
+        const base = `${tc.id ?? 'call'}_t${turn}`;
+        let id = tc.id && !used.has(tc.id) ? tc.id : base;
+        for (let n = 1; used.has(id); n++) id = `${base}_${n}`;
+        used.add(id);
+        return id === tc.id ? tc : { ...tc, id };
+    });
+}
+
+/**
+ * PURE: 실행 중 표식(172)이 결과 없는 호출 중 하나를 가리키고 그 결과가 저널에 없으면 — 실행 도중 끊긴 호출이다.
+ * 결과 스텝을 쓴 뒤 표식 해제 전에 끊긴 경우는 저널에 있으므로 제외된다.
+ */
+export function resolveUnknownOutcome(inFlightId: string | null, calls: ToolCall[], journal: Map<string, string>): string | undefined {
+    if (!inFlightId || journal.has(inFlightId)) return undefined;
+    return calls.some((tc) => tc.id === inFlightId) ? inFlightId : undefined;
+}
+
+/** 실행 중 표식 기록·해제(null) — 실패해도 실행을 막지 않는다(그 호출만 종전의 최소 1회 재실행으로 돌아간다). */
+export async function markToolCallInFlight(taskId: string, toolCallId: string | null): Promise<void> {
+    try {
+        await new AgentTaskRepository(getPool()).setInFlightToolCall(taskId, toolCallId);
+    } catch (e) {
+        logger.warn(`[${taskId}] 실행 중 표식 ${toolCallId ? '기록' : '해제'} 실패 (무시):`, e);
+    }
+}
+
+/** 턴 중간 재개에 필요한 상태 — 저널 + 결과 불명 호출 id(표식 조회 실패는 없음으로 본다). */
+export async function loadReentryState(taskId: string, calls: ToolCall[]): Promise<{ journal: Map<string, string>; unknownOutcomeId?: string }> {
+    const journal = await loadToolCallJournal(taskId, calls);
+    if (!AGENT_TASK_LIMITS.REENTRY_UNKNOWN_OUTCOME_ENABLED) return { journal };
+    const inFlight = await new AgentTaskRepository(getPool()).getInFlightToolCall(taskId).catch(() => null);
+    return { journal, unknownOutcomeId: resolveUnknownOutcome(inFlight, calls, journal) };
+}
+
 /** 저널 조회 — tool_call_id → 결과 본문. 행이 없으면 빈 Map(전부 실행). */
 export async function loadToolCallJournal(taskId: string, calls: ToolCall[]): Promise<Map<string, string>> {
     const ids = calls.map((tc) => tc.id).filter((id): id is string => typeof id === 'string');

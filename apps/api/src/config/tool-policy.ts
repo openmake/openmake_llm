@@ -98,6 +98,12 @@ export function classifyToolRisk(toolName: string, args: Record<string, unknown>
     return typeof rule === 'function' ? rule(args) : rule;
 }
 
+/** PURE: 다시 실행하면 부작용이 겹칠 수 있는 호출인가 — 읽기·제어 등급이 아니면 그렇다(표 밖 도구는 external). */
+export function hasSideEffects(toolName: string, args: Record<string, unknown> = {}): boolean {
+    const risk = classifyToolRisk(toolName, args);
+    return risk !== 'read' && risk !== 'control';
+}
+
 /**
  * 승인 정책·task 자동승인과 무관하게 **항상 사람의 응답을 기다리는** 도구 — 질문 자체가 목적이다.
  * approval-gate 의 자동승인 예외·HITL 무응답 강등 제거 대상이 이 집합을 쓴다(F13.10 에서 mcp_elicit 추가).

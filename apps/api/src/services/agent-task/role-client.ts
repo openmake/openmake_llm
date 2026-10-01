@@ -54,7 +54,11 @@ export function isTransientLLMError(err: unknown): boolean {
         return status >= 500 || status === 408 || status === 429;
     }
     const msg = err instanceof Error ? err.message : String(err);
-    return /connection error|request timed out|econnrefused|econnreset|etimedout|socket hang up|fetch failed/i.test(msg);
+    // 스트림·본문을 받는 도중 연결이 끊기면 undici 가 TypeError('terminated') 를 던지고 원인은 cause 에 싣는다
+    // (SocketError 'other side closed', code UND_ERR_SOCKET) — 가짜 LLM 서버 테스트로 확인(2026-10-01).
+    const cause = (err as { cause?: { message?: unknown; code?: unknown } }).cause;
+    const detail = `${msg} ${String(cause?.message ?? '')} ${String(cause?.code ?? '')}`;
+    return /connection error|request timed out|econnrefused|econnreset|etimedout|socket hang up|fetch failed|^terminated\b|other side closed|und_err_socket/i.test(detail);
 }
 
 /** abort 가능 대기 — 재시도 백오프 중 사용자 취소/예산 소진이 오면 즉시 중단. */

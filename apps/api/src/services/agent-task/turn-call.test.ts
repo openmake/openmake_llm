@@ -57,6 +57,22 @@ describe('callAgentTurnWithBudget', () => {
         expect((err as AgentTaskTurnTimeout).partialContent).toBe('보고서 초안');
     });
 
+    it('재시도가 일어나면 이전 시도의 부분 본문을 버린다(끊긴 뒤 다시 받은 출력과 겹치지 않게)', async () => {
+        chat.mockImplementation((_s, p: { signal: AbortSignal; onToken?: (t: string) => void; onRetry?: (i: unknown) => void }) =>
+            new Promise((_res, rej) => {
+                p.onToken?.('절반만');                       // 1차 시도 — 스트림 도중 끊김
+                p.onRetry?.({ attempt: 1, maxAttempts: 2, error: 'terminated' });
+                p.onToken?.('전체 답변');                    // 재시도 — 처음부터 다시 받는다
+                p.signal.addEventListener('abort', () => rej(new Error('Request was aborted.')), { once: true });
+            }));
+        const onRetry = jest.fn();
+        const settled = callAgentTurnWithBudget({ ...base(), totalTimeoutMs: 10_000, elapsedActiveMs: 9_000, finalTurn: true, onRetry }).catch((e) => e);
+        await jest.advanceTimersByTimeAsync(5_100);
+        const err = await settled;
+        expect((err as AgentTaskTurnTimeout).partialContent).toBe('전체 답변');
+        expect(onRetry).toHaveBeenCalledTimes(1);
+    });
+
     it('도구 턴은 스트리밍하지 않는다(onToken 미전달) — 종전 비스트림 경로 유지', async () => {
         chat.mockResolvedValue({ role: 'assistant', content: 'ok' });
         const { result, callSignal } = await callAgentTurnWithBudget(base());

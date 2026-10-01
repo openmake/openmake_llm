@@ -292,6 +292,16 @@ export class AgentTaskRepository extends BaseRepository {
         return new Map(r.rows.map((row) => [row.tool_call_id, row.content ?? '']));
     }
 
+    /** 실행 중 표식(172) — 부작용 도구 실행 직전에 id 를, 결과 스텝 기록 뒤 null 을 쓴다. */
+    async setInFlightToolCall(taskId: string, toolCallId: string | null): Promise<void> {
+        await this.query(`UPDATE agent_tasks SET in_flight_tool_call_id = $2 WHERE id = $1`, [taskId, toolCallId]);
+    }
+
+    async getInFlightToolCall(taskId: string): Promise<string | null> {
+        const r = await this.query<{ in_flight_tool_call_id: string | null }>(`SELECT in_flight_tool_call_id FROM agent_tasks WHERE id = $1`, [taskId]);
+        return r.rows[0]?.in_flight_tool_call_id ?? null;
+    }
+
     async addAgentTaskStep(params: {
         taskId: string;
         stepNumber: number;

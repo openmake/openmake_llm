@@ -7,7 +7,8 @@ jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: 
 jest.mock('../../PushService', () => ({ getPushService: () => ({ sendPush: async () => undefined }) }));
 jest.mock('../../task-sandbox/tools', () => ({ TASK_TERMINATE_SENTINEL: '__TERMINATE__' }));
 const request = jest.fn();
-jest.mock('../../task-sandbox/approval-gate', () => ({ requiresApproval: () => false, getApprovalRegistry: () => ({ request, isAutoApprove: () => false }) }));
+const requiresApproval = jest.fn((..._a: unknown[]) => false);
+jest.mock('../../task-sandbox/approval-gate', () => ({ requiresApproval: (...a: unknown[]) => requiresApproval(...a), getApprovalRegistry: () => ({ request, isAutoApprove: () => false }) }));
 jest.mock('../../task-sandbox/planning', () => ({ currentPlanStepIndex: () => undefined }));
 const runTool = jest.fn();
 jest.mock('../task-steps', () => ({ runTool: (...a: unknown[]) => runTool(...a), isSearchTool: () => false }));
@@ -22,7 +23,8 @@ jest.mock('../../../runtime-ports/tool-runtime', () => ({
     }),
 }));
 const writeTurnCheckpoint = jest.fn(async () => undefined);
-jest.mock('../turn-reentry', () => ({ writeTurnCheckpoint: (...a: unknown[]) => writeTurnCheckpoint(...(a as [])) }));
+const markToolCallInFlight = jest.fn(async (..._a: unknown[]) => undefined);
+jest.mock('../turn-reentry', () => ({ writeTurnCheckpoint: (...a: unknown[]) => writeTurnCheckpoint(...(a as [])), markToolCallInFlight: (...a: unknown[]) => markToolCallInFlight(...a) }));
 const markParked = jest.fn(async () => undefined);
 jest.mock('../../../data/repositories/agent-task-repository', () => ({ AgentTaskRepository: jest.fn().mockImplementation(() => ({ markParked })) }));
 
@@ -88,6 +90,24 @@ describe('executeTurnToolCalls — 주차', () => {
         expect(addAgentTaskStep).not.toHaveBeenCalled();
         expect(update).not.toHaveBeenCalledWith({ status: 'running' });
         expect(markParked).toHaveBeenCalledWith('t1');
+        // 실행 직전 남긴 표식은 주차 전에 지운다 — 재개 때 결과 불명이 아니라 다시 실행돼야 한다
+        expect(markToolCallInFlight.mock.calls).toEqual([['t1', 'c1'], ['t1', null]]);
+    });
+
+    it('승인 필요 extra 도구가 주차되면 실행하지 않고 체크포인트·주차한다', async () => {
+        requiresApproval.mockReturnValue(true);
+        request.mockResolvedValue({ decision: 'rejected', reason: 'parked', waitedMs: 5 });
+        const { args, conversation, update } = input({
+            extraToolNames: new Set(['web_fetch']),
+            toolCalls: [{ id: 'c1', function: { name: 'web_fetch', arguments: { url: 'https://x' } } }],
+        });
+        await expect(executeTurnToolCalls(args)).rejects.toBeInstanceOf(AgentTaskParked);
+        expect(request).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'web_fetch' }), expect.objectContaining({ parkable: true }));
+        expect(runTool).not.toHaveBeenCalled();
+        expect(conversation.some((m) => m.role === 'tool')).toBe(false);
+        expect(update).toHaveBeenCalledWith({ status: 'paused' });
+        expect(markParked).toHaveBeenCalledWith('t1');
+        requiresApproval.mockReturnValue(false);
     });
 
     it('주차 표식 기록이 실패하면 AgentTaskParked 대신 그 오류가 올라간다(표식 없는 paused 방지)', async () => {
