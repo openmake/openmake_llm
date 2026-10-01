@@ -95,7 +95,8 @@ export class ApiClient {
         return (json as { data?: T })?.data ?? (json as T);
     }
 
-    createTask(goal: string, deviceId: string): Promise<{ task: ApiTask }> {
+    /** deduplicated: 같은 Idempotency-Key 로 이미 만든 작업을 서버가 돌려줬다(새로 만들지 않음). */
+    createTask(goal: string, deviceId: string): Promise<{ task: ApiTask; deduplicated?: boolean }> {
         // 중복 생성 방지 — 같은 요청이 재전송돼도 서버는 작업을 한 번만 만든다
         return this.req('POST', '/api/agent-tasks', { goal, executor: 'local', deviceId }, { 'Idempotency-Key': randomUUID() });
     }

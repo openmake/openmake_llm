@@ -15,6 +15,7 @@ import { sessionPaths } from './paths-sessions';
 import { modelPaths } from './paths-models';
 import { modelAssignmentPaths } from './paths-model-assignments';
 import { userAgentPaths } from './paths-user-agents';
+import { agentTaskPaths } from './paths-agent-tasks';
 import { coreSchemas } from './schemas-core';
 
 /** API 설명 — Swagger UI 와 계약 산출물 공통 */
@@ -61,6 +62,7 @@ export const specPaths = {
     ...modelPaths,
     ...modelAssignmentPaths,
     ...userAgentPaths,
+    ...agentTaskPaths,
 };
 
 export const specComponents = {

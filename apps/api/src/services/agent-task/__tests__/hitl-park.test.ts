@@ -76,7 +76,8 @@ describe('sweepParkedTasks', () => {
         getAgentTask.mockResolvedValue(parkedTask);
         await expect(sweepParkedTasks()).resolves.toEqual({ resumed: 1, expired: 1, touched: 1 });
         expect(expirePendingForTask).toHaveBeenCalledWith('t2', 'expired');
-        expect(updateAgentTask).toHaveBeenCalledWith('t2', { status: 'failed', error: AGENT_TASK_PARK_EXPIRED_ERROR });
+        // 실행 루프 밖의 종료 — 알림 표식을 남겨 주기 점검이 사용자에게 알리게 한다(174)
+        expect(updateAgentTask).toHaveBeenCalledWith('t2', { status: 'failed', error: AGENT_TASK_PARK_EXPIRED_ERROR, terminalNotifyPending: true });
         expect(utimes).toHaveBeenCalledWith('/ws/t3', expect.any(Date), expect.any(Date));
     });
 

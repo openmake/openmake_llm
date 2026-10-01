@@ -59,7 +59,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
                 // 재개 지점이 없음. restart 마킹(failed)은 이미 정리된 상태이므로 건드리지 않고,
                 // 잔존 running/paused 만 실패(interrupted)로 정리(완료 오표시·영구 polling 방지).
                 if (task.status === 'running' || task.status === 'paused') {
-                    await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted', checkpoint: null });
+                    await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted', checkpoint: null, terminalNotifyPending: true });
                     failed++;
                     logger.info(`[BootRecovery] checkpoint 없음 → failed(interrupted): ${task.id}`);
                 }
@@ -72,7 +72,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
             // 막고, 사용자가 디바이스 재연결 후 /resume 으로 수동 재개하게 한다.
             if (task.executor === 'local') {
                 if (task.status === 'running' || task.status === 'paused' || wasQueued) {
-                    await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted_local_device' });
+                    await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted_local_device', terminalNotifyPending: true });
                     failed++;
                     logger.info(`[BootRecovery] 로컬 실행 작업 자동재개 보류 → failed(디바이스 재연결 후 수동 resume): ${task.id}`);
                 }

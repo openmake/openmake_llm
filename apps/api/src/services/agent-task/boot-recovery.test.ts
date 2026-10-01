@@ -54,7 +54,8 @@ describe('recoverInterruptedAgentTasks — queued 고아', () => {
         interrupted.push({ ...base, status: 'running', checkpoint: null });
         const r = await recoverInterruptedAgentTasks();
         expect(r).toEqual({ resumed: 0, failed: 1 });
-        expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'failed', error: 'interrupted' }));
+        // 재시작으로 중단돼 실패 처리 — 알림 표식을 남긴다(174)
+        expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'failed', error: 'interrupted', terminalNotifyPending: true }));
         expect(execute).not.toHaveBeenCalled();
     });
 
