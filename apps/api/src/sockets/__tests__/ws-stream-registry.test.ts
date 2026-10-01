@@ -292,3 +292,84 @@ describe('InFlightStreamRegistry', () => {
         expect(normalizeStreamLane(undefined)).toBeNull();
     });
 });
+
+/**
+ * 송신 백프레셔 — 느린 클라이언트 하나의 송신 버퍼(ws.bufferedAmount)가 서버 메모리를 계속 차지하지 않게 한다.
+ * 임계를 넘으면 그 소켓을 끊고(terminate) 스트림은 detach — 생성은 유예 동안 이어지고 재연결 시 스냅샷으로 잇는다.
+ */
+describe('InFlightStreamRegistry — 송신 백프레셔', () => {
+    beforeEach(() => { jest.useFakeTimers(); });
+    afterEach(() => { jest.useRealTimers(); });
+
+    function slowWs(buffered: number): ExtendedWebSocket & { sent: unknown[]; terminated: number; bufferedAmount: number } {
+        const ws = fakeWs() as ExtendedWebSocket & { sent: unknown[]; terminated: number; bufferedAmount: number };
+        ws.bufferedAmount = buffered;
+        ws.terminated = 0;
+        (ws as unknown as { terminate: () => void }).terminate = () => { ws.terminated += 1; (ws as unknown as { readyState: number }).readyState = 3; };
+        return ws;
+    }
+
+    it('버퍼가 임계 이하면 종전대로 바로 보낸다', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096, 2000, 1024);
+        const ws = slowWs(1024);
+        const entry = reg.open('u:u1', ws, new AbortController());
+        reg.send(entry, { type: 'token', token: 'a', messageId: 'm1' });
+        expect(ws.sent).toHaveLength(1);
+        expect(ws.terminated).toBe(0);
+        expect(entry.ws).toBe(ws);
+    });
+
+    it('버퍼가 임계를 넘으면 보내지 않고 소켓을 끊으며, 생성은 중단하지 않는다', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096, 2000, 1024);
+        const ws = slowWs(0);
+        const ac = new AbortController();
+        const entry = reg.open('u:u1', ws, ac);
+        reg.send(entry, { type: 'token', token: '안녕', messageId: 'm1' });
+        ws.bufferedAmount = 1025;
+        reg.send(entry, { type: 'token', token: '하세요' });
+
+        expect(ws.sent).toHaveLength(1);
+        expect(ws.terminated).toBe(1);
+        expect(entry.ws).toBeNull();
+        expect(ws._abortController).toBeNull();
+        expect(ac.signal.aborted).toBe(false);
+        // 이미 분리됐으므로 close 핸들러의 detach 는 false — 종전 abort 경로로 떨어져도 끊을 컨트롤러가 없다
+        expect(reg.detach(ws)).toBe(false);
+    });
+
+    it('끊긴 뒤 이벤트는 버퍼에 쌓였다가 재연결 소켓에 스냅샷+재생으로 이어진다', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096, 2000, 1024);
+        const ws1 = slowWs(0);
+        const entry = reg.open('u:u1', ws1, new AbortController());
+        reg.send(entry, { type: 'token', token: '안녕', messageId: 'm1' });
+        ws1.bufferedAmount = 5000;
+        reg.send(entry, { type: 'token', token: '하세요' });
+        reg.send(entry, { type: 'artifact_start', artifact: { id: 'a1' } });
+        expect(ws1.terminated).toBe(1); // 한 번만 끊는다
+
+        const ws2 = slowWs(0);
+        expect(reg.attach('u:u1', ws2)).toBe(true);
+        expect(plain(ws2.sent[0])).toMatchObject({ type: 'stream_resume', content: '안녕하세요', finished: false });
+        expect(ws2.sent.slice(1).map(plain)).toEqual([{ type: 'artifact_start', artifact: { id: 'a1' } }]);
+    });
+
+    it('재연결이 없으면 유예 뒤 생성을 중단한다(종전 detach 규약과 동일)', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096, 2000, 1024);
+        const ws = slowWs(2000);
+        const ac = new AbortController();
+        const entry = reg.open('u:u1', ws, ac);
+        reg.send(entry, { type: 'token', token: 'x' });
+        expect(ac.signal.aborted).toBe(false);
+        jest.advanceTimersByTime(1001);
+        expect(ac.signal.aborted).toBe(true);
+    });
+
+    it('임계 0 이면 검사하지 않는다(롤백 스위치)', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096, 2000, 0);
+        const ws = slowWs(10_000_000);
+        const entry = reg.open('u:u1', ws, new AbortController());
+        reg.send(entry, { type: 'token', token: 'x' });
+        expect(ws.sent).toHaveLength(1);
+        expect(ws.terminated).toBe(0);
+    });
+});

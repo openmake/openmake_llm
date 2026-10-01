@@ -22,6 +22,7 @@ import type { UserContext } from '../../tool-contract/types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AgentTaskService } from '../AgentTaskService';
 import { dispatchAgentTask } from '../agent-task/task-queue';
+import { claimDelegatedTask, releaseDelegatedTask } from '../agent-task/create-idempotency';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import { isAdminRole } from '../../data/user-manager';
@@ -91,8 +92,15 @@ async function runDelegateAgentTask(params: {
         ? Math.min(Math.floor(rawTurns), AGENT_TASK_LIMITS.MAX_TURNS_CEILING)
         : AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS;
 
+    let claimed = false;
     try {
         const taskId = randomUUID();
+        // 모델이 한 턴에 같은 위임을 반복 호출해도 작업은 한 번만 만든다
+        const priorTaskId = claimDelegatedTask(userId, goal, maxTurns, taskId);
+        if (priorTaskId) {
+            return JSON.stringify({ task_id: priorTaskId, status: 'duplicate', note: '같은 목표의 작업을 방금 위임했습니다 — 새로 만들지 않고 기존 작업을 사용합니다.' });
+        }
+        claimed = true;
         const db = getUnifiedDatabase();
         await db.createAgentTask({ id: taskId, userId, goal, maxTurns });
         const service = new AgentTaskService();
@@ -116,6 +124,7 @@ async function runDelegateAgentTask(params: {
         });
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        if (claimed) releaseDelegatedTask(userId, goal, maxTurns);
         logger.warn(`[delegate_agent_task] 실패: ${msg}`);
         return `Error: 작업 위임 실패 — ${msg}`;
     }

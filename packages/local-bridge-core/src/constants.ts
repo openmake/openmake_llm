@@ -3,7 +3,10 @@ import * as path from 'path';
 
 export const EXEC_TIMEOUT_MS = 120000;
 export const MAX_BUFFER = 1024 * 1024;
+/** 재연결 기준 간격(ms) — 실제 대기는 이 값의 절반~전체 구간에서 흩어지고(jitter), 실패가 이어지면 두 배씩 늘어난다. */
 export const RECONNECT_MS = 10000;
+/** 재연결 간격 상한(ms) — 서버가 오래 내려가 있어도 이보다 드물게 두드리지 않는다. */
+export const RECONNECT_MAX_MS = 60000;
 export const PATH_PROBE_TIMEOUT_MS = 5000;
 /** git 디렉터리 탐지(rev-parse) 프로브 타임아웃(ms). */
 export const GIT_PROBE_TIMEOUT_MS = 5000;

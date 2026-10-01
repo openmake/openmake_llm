@@ -21,6 +21,8 @@ export interface LlmFixture {
     baseURL: string;
     /** 받은 요청 본문(순서대로). */
     requests: Record<string, unknown>[];
+    /** 받은 요청 헤더(순서대로, 소문자 키) — 게이트웨이 인증 계약 검증용. */
+    headers: Record<string, string | string[] | undefined>[];
     close(): Promise<void>;
 }
 
@@ -35,6 +37,7 @@ export function sseChunk(delta: Record<string, unknown>, extra: { finish_reason?
 
 export async function startLlmFixture(reply: (index: number, body: Record<string, unknown>) => FixtureReply): Promise<LlmFixture> {
     const requests: Record<string, unknown>[] = [];
+    const headers: Record<string, string | string[] | undefined>[] = [];
     const server: Server = createServer((req, res) => {
         let raw = '';
         req.on('data', (c) => { raw += c; });
@@ -42,6 +45,7 @@ export async function startLlmFixture(reply: (index: number, body: Record<string
             const body = raw ? JSON.parse(raw) as Record<string, unknown> : {};
             const index = requests.length;
             requests.push(body);
+            headers.push({ ...req.headers });
             const r = reply(index, body);
             if (r.kind === 'error') {
                 res.writeHead(r.status, { 'Content-Type': 'application/json', ...(r.headers ?? {}) });
@@ -69,6 +73,7 @@ export async function startLlmFixture(reply: (index: number, body: Record<string
     return {
         baseURL: `http://127.0.0.1:${port}/v1`,
         requests,
+        headers,
         close: () => new Promise<void>((resolve) => { server.closeAllConnections(); server.close(() => resolve()); }),
     };
 }
