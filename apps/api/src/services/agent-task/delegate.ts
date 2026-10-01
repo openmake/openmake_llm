@@ -16,8 +16,20 @@ import type { DelegateFn } from '../task-sandbox/tools';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
+import { createHash } from 'crypto';
 import { runSubagent } from './subagent';
 import { SubagentTrace, newTraceId, subagentLabel } from './subagent-trace';
+import { getUnifiedDatabase } from '../../data/models/unified-database';
+import { AgentTaskSubagentStepRepository } from '../../data/repositories/agent-task-subagent-step-repository';
+import type { ChatMessage } from '../../llm/types';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('AgentTaskDelegate');
+
+/** PURE: 위임 식별 키 — 재개된 부모가 같은 delegate 호출(같은 목표·역할)을 다시 실행할 때 주차된 서브 대화를 찾는다. */
+export function subagentCheckpointKey(subgoal: string, role: string | undefined): string {
+    return createHash('sha256').update(`delegate|${role ?? ''}|${subgoal}`).digest('hex');
+}
 
 export interface DelegateFactoryParams {
     client: LLMClient;
@@ -44,17 +56,33 @@ export function buildDelegateFn(p: DelegateFactoryParams): DelegateFn {
             const subTools = p.sandboxCfg.extraTools
                 .map((n) => p.mcpTools.find((t) => t.function.name === n))
                 .filter((t): t is ToolDefinition => !!t);
-            const trace = new SubagentTrace(p.taskId, newTraceId(), 'delegate', 0,
-                subagentLabel(role ?? selection.primaryAgent, subgoal));
-            trace.queued(subgoal);
-            trace.started();
-            return runSubagent({
+            // 승인 주차(173): 주차된 서브 대화가 있으면 그 지점에서 잇는다. 조회 실패는 처음부터 실행(fail-open).
+            const repo = new AgentTaskSubagentStepRepository(getUnifiedDatabase().getPool());
+            const ckptKey = subagentCheckpointKey(subgoal, role);
+            const saved = await repo.loadCheckpoint(p.taskId, ckptKey).catch((e) => {
+                logger.warn(`[${p.taskId}] 서브에이전트 체크포인트 조회 실패 — 처음부터 실행: ${e instanceof Error ? e.message : e}`);
+                return null;
+            });
+            const trace = new SubagentTrace(p.taskId, saved?.trace_id ?? newTraceId(), 'delegate', 0,
+                subagentLabel(role ?? selection.primaryAgent, subgoal), saved?.trace_seq ?? 0);
+            if (!saved) { trace.queued(subgoal); trace.started(); }
+            const result = await runSubagent({
                 trace,
                 client: p.client, personaPrompt: prompt, subgoal,
                 tools: subTools, userCtx: p.userCtx, taskId: p.taskId,
                 sandboxCfg: p.sandboxCfg, signal: p.signal,
                 onTokens: p.onTokens, onPausedMs: p.onPausedMs,
+                park: {
+                    ...(saved ? { restored: { conversation: saved.conversation as ChatMessage[], turn: saved.turn, tokens: saved.tokens } } : {}),
+                    save: (s) => repo.saveCheckpoint({
+                        task_id: p.taskId, ckpt_key: ckptKey, conversation: s.conversation, turn: s.turn, tokens: s.tokens,
+                        trace_id: trace.position.traceId, trace_seq: trace.position.nextSeq,
+                    }),
+                },
             });
+            // 서브가 끝났다 — 주차로 던져진 경우(AgentTaskParked)는 여기 오지 않아 체크포인트가 남는다.
+            await repo.deleteCheckpoint(p.taskId, ckptKey).catch(() => { /* 남아도 같은 위임이 다시 올 때만 쓰인다 */ });
+            return result;
         }
         const r = await p.client.chat(
             [{ role: 'system', content: prompt }, { role: 'user', content: subgoal }],

@@ -272,6 +272,7 @@ export class TaskRuntime {
             });
             return this.appendShellToolHint(name, resultToString(typed));
         } catch (e) {
+            if (e instanceof AgentTaskParked) throw e; // delegate 안의 승인 주차(173) — 오류 결과로 삼키지 않는다
             const msg = e instanceof Error ? e.message : String(e);
             logger.warn(`[${this.taskId}] task 도구 실행 실패 (${name}): ${msg}`);
             return `Error: ${msg}`;

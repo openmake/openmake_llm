@@ -34,7 +34,12 @@ export class SubagentTrace {
         private readonly origin: SubagentOrigin,
         private readonly subIndex: number,
         private readonly label: string | null,
-    ) {}
+        /** 주차 뒤 재개(173) — 같은 trace 를 이어 쓸 때 다음 순번. */
+        startSeq = 0,
+    ) { this.seq = startSeq; }
+
+    /** 재개 때 같은 trace 를 잇기 위한 식별값 — 체크포인트에 함께 저장한다. */
+    get position(): { traceId: string; nextSeq: number } { return { traceId: this.traceId, nextSeq: this.seq }; }
 
     /** 기록(비동기, 대기하지 않음). 본문은 상한으로 자른다 — 도구 결과 전문이 두 번 저장되는 것 방지. */
     record(stepType: SubagentStepType, content: string, toolName?: string): void {

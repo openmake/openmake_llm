@@ -119,6 +119,15 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         spy.mockRestore();
     });
 
+    it('delegate 안에서 올라온 주차(AgentTaskParked)는 오류 문자열로 삼키지 않고 그대로 던진다', async () => {
+        const delegate = jest.fn(async () => { throw new AgentTaskParked(); });
+        const rt = new TaskRuntime('t-delegate-park', 'u1', cfgNone, delegate);
+        await expect(rt.executeTaskTool('delegate', { subgoal: '조사' })).rejects.toBeInstanceOf(AgentTaskParked);
+        // 일반 예외는 종전대로 오류 결과로 흡수한다
+        delegate.mockImplementationOnce(async () => { throw new Error('boom'); });
+        await expect(rt.executeTaskTool('delegate', { subgoal: '조사' })).resolves.toContain('boom');
+    });
+
     it('ask_human 거절 시 대안 유도 메시지', async () => {
         const rt = new TaskRuntime('t-ask-rej', 'u1', cfgAll);
         let approvalId = '';
