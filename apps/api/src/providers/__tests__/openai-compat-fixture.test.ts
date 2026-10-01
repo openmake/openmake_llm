@@ -117,3 +117,42 @@ describe('사용자 중단', () => {
         expect(fixture.requests).toHaveLength(0);
     });
 });
+
+/**
+ * Google AI(Gemini API) 직결 — Google 의 OpenAI 호환 주소는 모르는 필드를 무시하지 않고 400 으로 거절한다.
+ * (2026-10-02 라이브: `Unknown name "reasoning"`, `Unknown name "generation_config" at 'extra_body'`, `Unknown name "thinking" at 'extra_body'`)
+ * 종전의 Gemini thinking 차단 필드는 OpenRouter·LiteLLM 경유용이라 provider id 가 `gemini` 일 때는 보내면 안 된다.
+ */
+describe('Google AI(gemini) 요청 본문', () => {
+    function gemini(): OpenAICompatProvider {
+        return new OpenAICompatProvider({
+            providerId: 'gemini', apiKey: 'AIza-test', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+            gateway: { url: fixture.baseURL.replace(/\/v1$/, ''), masterKey: 'gateway-master', modelPrefix: 'gemini' },
+        });
+    }
+
+    it('Google 이 거절하는 필드(reasoning·extra_body)를 보내지 않는다', async () => {
+        reply = () => ({ kind: 'stream', chunks: [sseChunk({ content: 'ok' }, { finish_reason: 'stop' })] });
+        await gemini().streamChat({ messages, modelId: 'gemini-2.5-flash' }, {});
+        const body = fixture.requests[0];
+        expect(body).toMatchObject({ model: 'gemini/gemini-2.5-flash', stream: true });
+        expect(body).not.toHaveProperty('reasoning');
+        expect(body).not.toHaveProperty('extra_body');
+        expect(body).not.toHaveProperty('generation_config');
+        expect(body).not.toHaveProperty('thinking');
+    });
+
+    it('thinking 을 지정해도 거절되는 필드는 없다', async () => {
+        reply = () => ({ kind: 'stream', chunks: [sseChunk({ content: 'ok' }, { finish_reason: 'stop' })] });
+        await gemini().streamChat({ messages, modelId: 'gemini-2.5-flash', thinking: true }, {});
+        const body = fixture.requests[0];
+        expect(body).not.toHaveProperty('reasoning');
+        expect(body).not.toHaveProperty('extra_body');
+    });
+
+    it('다른 provider 를 거쳐 가는 gemini-* 모델은 종전대로 thinking 차단 필드를 보낸다', async () => {
+        reply = () => ({ kind: 'stream', chunks: [sseChunk({ content: 'ok' }, { finish_reason: 'stop' })] });
+        await provider().streamChat({ messages, modelId: 'gemini-2.5-flash' }, {});
+        expect(fixture.requests[0]).toHaveProperty('reasoning');
+    });
+});

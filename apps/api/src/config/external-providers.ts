@@ -5,8 +5,8 @@
  * 사용자 BYO Key 등록 화면에서 노출할 provider 목록과 각 provider 의 SDK 종류,
  * 기본 base URL, 검증 endpoint 등을 정의합니다.
  *
- * 활성: 로컬 LLM (vLLM via LiteLLM, 키 불필요) + BYO key provider 4종 —
- * openrouter / ollama-cloud / nvidia (모두 OpenAI 호환 endpoint).
+ * 활성: 로컬 LLM (vLLM via LiteLLM, 키 불필요) + BYO key provider —
+ * openrouter / gemini / ollama-cloud / nvidia 등 (모두 OpenAI 호환 endpoint).
  * 2026-05-08 마이그레이션 018 로 openrouter 만 남겼다가, ollama 2종은 2026-07-04,
  * nvidia 는 2026-07-14 에 재도입됨 (018 은 기존 키 행 정리용 — 스키마는 유지).
  *
@@ -149,6 +149,36 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         fallbackModels: [
             { id: 'gpt-5.4',      displayName: 'GPT-5.4 (ChatGPT)',      isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true } },
             { id: 'gpt-5.4-mini', displayName: 'GPT-5.4 Mini (ChatGPT)', isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true } },
+        ],
+    },
+    {
+        id: 'gemini',
+        displayName: 'Google AI (Gemini API)',
+        sdkType: 'openai-compatible',
+        // Gemini API 의 OpenAI 호환 주소 — 인증은 `Authorization: Bearer <AI Studio 키>`.
+        // (2026-10-02 실측: 잘못된 키로 /models·/chat/completions 모두 400 "Please pass a valid API key")
+        defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        keyPrefixPattern: 'AIza',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 30,
+        helpText:
+            'Google AI Studio (https://aistudio.google.com/apikey) 에서 발급한 Gemini API 키(AIza 로 시작)를 입력하세요. ' +
+            'Gemini 모델을 OpenAI 호환 API 로 사용합니다. 모델 ID 는 "gemini-2.5-flash" 처럼 접두사 없는 형식입니다. ' +
+            '무료 등급은 분당·일일 요청 한도가 낮아(초과 시 429) 긴 작업에는 유료 등급을 쓰세요. ' +
+            'Vertex AI 키가 아니라 AI Studio(Gemini API) 키여야 합니다.',
+        homepage: 'https://ai.google.dev',
+        keyUrl: 'https://aistudio.google.com/apikey',
+        logo: '/images/providers/gemini.svg',
+        authMethods: ['api_key'] as const,
+        // 2026-10-02 실측(AI Studio 키, gemini-2.5-flash): 채팅 스트리밍·도구 호출·이미지 입력(512px PNG)·thinking 지정 호출
+        // 모두 200, 게이트웨이(LiteLLM openai/* → Google) 경유 채팅·임베딩(gemini-embedding-001, 3072차원)도 200.
+        // /models 는 61개를 'models/…' 접두사로 준다(어댑터가 뗀다) — 목록 조회가 되면 이 폴백은 쓰이지 않는다.
+        // ⚠️ pro·flash-lite 는 실호출하지 않았다(같은 계열 기준). thinking 은 응답의 별도 채널로 오지 않는다(본문에도 섞이지 않음).
+        fallbackModels: [
+            { id: 'gemini-2.5-pro',        displayName: 'Gemini 2.5 Pro',        isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true } },
+            { id: 'gemini-2.5-flash',      displayName: 'Gemini 2.5 Flash',      isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true } },
+            { id: 'gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash-Lite', isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: false } },
         ],
     },
     {

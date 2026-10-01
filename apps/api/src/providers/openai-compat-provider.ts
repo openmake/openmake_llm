@@ -47,6 +47,8 @@ const DEFAULT_MAX_TOKENS = 4096;
  */
 const FALLBACK_CONTEXT_WINDOW_TOKENS = 32_000;
 const FALLBACK_OUTPUT_LIMIT_TOKENS = 8_000;
+/** 모델 목록의 리소스 경로 접두사(Gemini API) — 모델 id 에서는 뗀다. */
+const MODEL_RESOURCE_PREFIX = 'models/';
 /** OpenRouter pricing.{prompt,completion} 은 토큰당 USD — 1M 토큰 단위로 변환. */
 const PER_TOKEN_TO_PER_MILLION = 1_000_000;
 
@@ -281,15 +283,19 @@ export class OpenAICompatProvider implements IProvider {
         }
         try {
             const list = await this.catalogClient.models.list();
-            return list.data.map((m) => ({
-                id: m.id,
-                fullId: buildFullModelId(this.id, m.id),
-                displayName: m.id,
-                contextWindow: FALLBACK_CONTEXT_WINDOW_TOKENS,
-                outputLimit: FALLBACK_OUTPUT_LIMIT_TOKENS,
-                capabilities: inferCapabilitiesFromModelId(this.id, m.id),
-                capabilitiesInferred: true,
-            }));
+            return list.data.map((m) => {
+                // Gemini API 는 목록에서 id 를 'models/gemini-…' 로 준다 — 호출·표시에 쓰는 id 는 접두사 없는 형식이다.
+                const id = m.id.startsWith(MODEL_RESOURCE_PREFIX) ? m.id.slice(MODEL_RESOURCE_PREFIX.length) : m.id;
+                return {
+                    id,
+                    fullId: buildFullModelId(this.id, id),
+                    displayName: id,
+                    contextWindow: FALLBACK_CONTEXT_WINDOW_TOKENS,
+                    outputLimit: FALLBACK_OUTPUT_LIMIT_TOKENS,
+                    capabilities: inferCapabilitiesFromModelId(this.id, id),
+                    capabilitiesInferred: true,
+                };
+            });
         } catch (err) {
             logger.warn(`OpenAI 호환 모델 목록 조회 실패 (${this.baseUrl}): ${err}`);
             return [];
@@ -414,8 +420,12 @@ export class OpenAICompatProvider implements IProvider {
             // delta.content 에 합침. LiteLLM proxy 경유 시 extra_body 형식이 vendor
             // 별로 다름. OpenRouter spec 의 reasoning.exclude 와 LiteLLM 의 Gemini
             // 매핑 두 가지 동시 시도 — 모르는 옵션은 vendor 가 무시하므로 안전.
-            const isGemini = this.id === 'gemini' || /^gemini-/.test(opts.modelId);
-            const geminiThinkingDisable = isGemini ? {
+            // 단, Google 자체의 OpenAI 호환 주소(provider id 'gemini')는 모르는 필드를 무시하지 않고 400 으로 거절하고
+            // (2026-10-02 라이브: Unknown name "reasoning" / "generation_config" at 'extra_body'), thinking 을 본문에 섞지도 않는다
+            // — 그 경로에는 아래 필드를 보내지 않는다. 다른 provider 를 거쳐 가는 gemini-* 모델만 대상이다.
+            const isGoogleDirect = this.id === 'gemini';
+            const isGemini = isGoogleDirect || /^gemini-/.test(opts.modelId);
+            const geminiThinkingDisable = isGemini && !isGoogleDirect ? {
                 // OpenRouter / 표준 reasoning 비활성화
                 reasoning: { exclude: true, max_tokens: 0 },
                 // LiteLLM Gemini passthrough — generation_config.thinking_config
