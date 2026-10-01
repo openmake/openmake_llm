@@ -1842,6 +1842,8 @@ cmd_dev_up() {
         esac; shift
     done
     [[ -f "$DEV_LLM/.env" && -d "$DEV_LLM/node_modules" ]] || cmd_dev_setup
+    # ~/.openmake 를 지워도 .env·node_modules 는 클론에 남아 setup 을 건너뛴다 — 래퍼는 여기서 되살린다.
+    [[ -x "$OMK_ROOT/bin/omk" ]] || install_wrapper
     load_toolchain "$DEV_LLM"
     [[ -d "$DEV_LLM/packages/shared-types/dist" ]] || dev_build_packages
     # 접속 호스트 — 이번에 준 것(--host·--tailscale)을 .env 에 기억된 것과 합친다. 한 번 주면 다음부터는 생략 가능.

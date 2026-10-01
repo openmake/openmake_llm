@@ -435,6 +435,21 @@ DS_ROOT="$TMP/dsroot"
 )
 ok "dev setup: 래퍼 설치" '[[ -x "$DS_ROOT/bin/omk" ]]'
 eq "dev setup 래퍼: 클론 안의 dev 는 클론 것" "$(cd "$WC" && OMK_ROOT="$DS_ROOT" bash "$DS_ROOT/bin/omk" dev up)" "clone dev up"
+# ~/.openmake 를 지운 뒤 'dev up' 만 실행해도 래퍼가 돌아온다 — .env·node_modules 가 남아 있으면 setup 을 건너뛰기 때문
+DU_ROOT="$TMP/duroot"
+mkdir -p "$WC/node_modules"; : > "$WC/.env"
+DU_SETUP_RAN="$(
+    OMK_ROOT="$DU_ROOT"
+    # shellcheck disable=SC2034  # cmd_dev_up 이 읽는다
+    dev_locate() { DEV_LLM="$WC"; DEV_BENCH=""; }
+    dev_warn_legacy() { :; }; load_toolchain() { :; }; dev_build_packages() { :; }; dev_apply_hosts() { :; }
+    dev_compose() { :; }; dev_searxng() { :; }; dev_llm_up() { :; }; cmd_dev_status() { :; }   # 실제 스택을 띄우지 않는다
+    cmd_dev_setup() { echo setup; }
+    cmd_dev_up deps 2>/dev/null | grep -c '^setup$'
+)"
+eq "dev up: 준비된 클론이면 setup 을 건너뛴다" "$DU_SETUP_RAN" "0"
+ok "dev up: 래퍼가 없으면 설치" '[[ -x "$DU_ROOT/bin/omk" ]]'
+eq "dev up 래퍼: 클론 안의 dev 는 클론 것" "$(cd "$WC" && OMK_ROOT="$DU_ROOT" bash "$DU_ROOT/bin/omk" dev up 2>/dev/null)" "clone dev up"
 
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]
