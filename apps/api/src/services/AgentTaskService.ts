@@ -25,7 +25,7 @@ import { emitAgentTaskProgress } from '../utils/event-bus';
 import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
-import { getPushService } from './PushService';
+import { isTerminalStatus, notifyTaskTerminal } from './agent-task/terminal-notify';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../tool-contract/types';
 import { buildDelegateFn } from './agent-task/delegate';
@@ -146,21 +146,13 @@ export class AgentTaskService {
             curProgress = u.progress ?? curProgress;
             curTurn = u.currentTurn ?? curTurn;
             // terminal 전이 시 누적 토큰 영속(4-4) — 목록/상세 UI 의 비용 가시화에 사용.
-            if (u.status === 'completed' || u.status === 'failed' || u.status === 'cancelled') {
-                u = { ...u, totalTokens };
-            }
+            // 알림 표식(174)도 같은 쓰기로 남긴다 — 저장 직후 죽어도 주기 점검이 종료 알림을 다시 보낸다.
+            const terminal = isTerminalStatus(u.status);
+            if (terminal) u = { ...u, totalTokens, terminalNotifyPending: true };
             await db.updateAgentTask(taskId, u);
             emitAgentTaskProgress({ userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn });
-            // terminal 상태 → web push (페이지가 닫혀 있어도 알림). fire-and-forget, VAPID 미설정 시 no-op.
-            if (u.status === 'completed' || u.status === 'failed' || u.status === 'cancelled') {
-                const label = u.status === 'completed' ? '완료' : u.status === 'failed' ? '실패' : '취소';
-                const shortGoal = goal.length > 60 ? goal.slice(0, 60) + '…' : goal;
-                void getPushService().sendPush(userId, {
-                    title: 'OpenMake 에이전트 작업',
-                    body: `작업이 ${label}되었습니다: ${shortGoal}`,
-                    url: '/agent-tasks',
-                }).catch(() => { /* noop */ });
-            }
+            // terminal 상태 → web push (페이지가 닫혀 있어도 알림) 후 표식 정리. fire-and-forget.
+            if (terminal) notifyTaskTerminal({ userId, taskId, goal, status: curStatus, progress: curProgress, currentTurn: curTurn }, undefined, { emit: false });
         };
 
         // cancel 레이스 봉쇄: 어떤 await 보다 먼저 레지스트리에 등록해 /cancel 이 항상

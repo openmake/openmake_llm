@@ -175,6 +175,15 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('Agent Task 부팅 복구 실패(무시):', err);
     }
 
+    // 8-B'. 종료 알림 유실 재전송(174) — 결과는 저장됐는데 알림 전에 죽은 작업을 부팅 직후와 주기 점검으로 다시 알린다.
+    //       부팅 복구 뒤에 둔다 — 복구가 다시 살린 작업은 종료 상태가 아니라 대상에서 빠진다.
+    try {
+        const { startTerminalNotifySweep } = await import('../services/agent-task/terminal-notify');
+        startTerminalNotifySweep();
+    } catch (err) {
+        logger.warn('종료 알림 재전송 등록 실패(무시):', err);
+    }
+
     // 8-C. Agent Task 스케줄/반복 트리거 — 플래그 ON 시 cron/interval due 스캔(tick 주기).
     try {
         const { startAgentTaskScheduleScheduler } = await import('../services/agent-task/schedule-runner');

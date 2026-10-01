@@ -41,7 +41,9 @@ export class AgentTaskRepository extends BaseRepository {
         deviceId?: string;
         /** 로컬 실행 대상 폴더 (102) — 연결 루트 기준 상대경로. 미지정은 루트 */
         folderRel?: string;
-    }): Promise<void> {
+        /** 생성 요청의 Idempotency-Key (174) — 같은 사용자·같은 키의 행이 이미 있으면 만들지 않는다 */
+        idempotencyKey?: string;
+    }): Promise<boolean> {
         // input_files/input_images 는 값이 있을 때만 컬럼에 포함 — 056/057 마이그레이션
         // 미적용 배포에서도 해당 값 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
         const cols = ['id', 'user_id', 'goal', 'max_turns', 'model'];
@@ -66,10 +68,56 @@ export class AgentTaskRepository extends BaseRepository {
             cols.push('folder_rel');
             values.push(params.folderRel);
         }
-        await this.query(
-            `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`,
+        // 멱등 키도 값이 있을 때만 — 키 없는 생성 경로(스케줄·트리거·분기)는 174 미적용 배포에서도 그대로 돈다.
+        if (params.idempotencyKey !== undefined) {
+            cols.push('create_idempotency_key');
+            values.push(params.idempotencyKey);
+        }
+        const insert = `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`;
+        if (params.idempotencyKey === undefined) {
+            await this.query(insert, values);
+            return true;
+        }
+        // 같은 (user_id, key) 가 이미 있으면 아무것도 넣지 않는다 — 반환 행이 없으면 중복(호출부가 기존 작업을 돌려준다).
+        const result = await this.query<{ id: string }>(
+            `${insert} ON CONFLICT (user_id, create_idempotency_key) WHERE create_idempotency_key IS NOT NULL DO NOTHING RETURNING id`,
             values
         );
+        return result.rows.length > 0;
+    }
+
+    /** 생성 멱등 키로 작업 조회(174) — 재시작·다른 서버가 만든 작업도 찾는다. */
+    async findAgentTaskByCreateKey(userId: string, key: string): Promise<AgentTask | undefined> {
+        const result = await this.query<AgentTask>(
+            'SELECT * FROM agent_tasks WHERE user_id = $1 AND create_idempotency_key = $2', [userId, key]);
+        return result.rows[0];
+    }
+
+    /** 종료 알림을 보냈다 — 표식을 지운다(174). updated_at 은 건드리지 않는다. */
+    async clearTerminalNotifyPending(taskId: string): Promise<void> {
+        await this.query('UPDATE agent_tasks SET terminal_notify_pending = FALSE WHERE id = $1 AND terminal_notify_pending', [taskId]);
+    }
+
+    /**
+     * 알림을 못 보낸 종료 작업을 가져오면서 표식을 지운다(174) — 한 문장이라 여러 프로세스가 같은 행을 두 번 가져가지 않는다.
+     * graceMs: 정상 경로가 방금 쓴 행을 가로채지 않게 두는 여유. windowMs: 이보다 오래된 것은 다시 보내지 않는다.
+     */
+    async claimPendingTerminalNotifications(opts: { graceMs: number; windowMs: number; limit: number }): Promise<Array<Pick<AgentTask, 'id' | 'user_id' | 'goal' | 'status' | 'progress' | 'current_turn'>>> {
+        const result = await this.query<Pick<AgentTask, 'id' | 'user_id' | 'goal' | 'status' | 'progress' | 'current_turn'>>(
+            `UPDATE agent_tasks SET terminal_notify_pending = FALSE
+             WHERE id IN (
+                 SELECT id FROM agent_tasks
+                 WHERE terminal_notify_pending
+                   AND status IN ('completed', 'failed', 'cancelled')
+                   AND updated_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')
+                   AND updated_at > NOW() - ($2::bigint * INTERVAL '1 millisecond')
+                 ORDER BY updated_at
+                 LIMIT $3
+                 FOR UPDATE SKIP LOCKED
+             )
+             RETURNING id, user_id, goal, status, progress, current_turn`,
+            [opts.graceMs, opts.windowMs, opts.limit]);
+        return result.rows;
     }
 
     async getAgentTask(taskId: string): Promise<AgentTask | undefined> {
@@ -97,6 +145,8 @@ export class AgentTaskRepository extends BaseRepository {
         transitionReason?: string;
         /** 큐 우선순위(131) */
         priority?: number;
+        /** 종료 알림 표식(174) — 종료 상태와 같은 쓰기로 true, 알림을 보낸 뒤 clearTerminalNotifyPending */
+        terminalNotifyPending?: boolean;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -111,6 +161,10 @@ export class AgentTaskRepository extends BaseRepository {
             // 실패 분류(131) — failed 전이에서만 채우고, 다른 전이(재실행·재개)는 지운다
             sets.push(updates.status === 'failed' ? `failure_class = $${paramIdx++}` : 'failure_class = NULL');
             if (updates.status === 'failed') params.push(classifyAgentTaskFailure(updates.error));
+        }
+        if (updates.terminalNotifyPending !== undefined) {
+            sets.push(`terminal_notify_pending = $${paramIdx++}`);
+            params.push(updates.terminalNotifyPending);
         }
         if (updates.progress !== undefined) {
             sets.push(`progress = $${paramIdx++}`);

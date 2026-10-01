@@ -4,7 +4,7 @@
  */
 import { EventEmitter } from 'events';
 import {
-    resolveDuplicateCreate, claimDelegatedTask, releaseDelegatedTask, resetCreateIdempotencyForTest,
+    resolveDuplicateCreate, normalizedCreateKey, claimDelegatedTask, releaseDelegatedTask, resetCreateIdempotencyForTest,
 } from '../create-idempotency';
 
 function fakeRes(): EventEmitter & { statusCode: number } {
@@ -66,6 +66,54 @@ describe('resolveDuplicateCreate', () => {
         res.emit('finish');
         const again = await resolveDuplicateCreate({ userId: 'u1', rawKey: KEY, taskId: 't2', res: fakeRes(), loadTask: async () => ({ id: 't1' }) });
         expect(again).toEqual({ kind: 'duplicate', task: { id: 't1' } });
+    });
+});
+
+describe('resolveDuplicateCreate — DB 에 남은 키(재시작·다른 서버)', () => {
+    it('메모리에는 없지만 DB 에 같은 키의 작업이 있으면 그 작업을 돌려준다', async () => {
+        const stored = { id: 'old', status: 'completed' };
+        const r = await resolveDuplicateCreate({
+            userId: 'u1', rawKey: KEY, taskId: 't-new', res: fakeRes(), loadTask: jest.fn(),
+            findByKey: async (userId, key) => (userId === 'u1' && key === KEY ? stored : null),
+        });
+        expect(r).toEqual({ kind: 'duplicate', task: stored });
+    });
+
+    it('DB 에서 찾은 뒤에는 같은 키의 다음 요청도 그 작업으로 답한다(새 id 를 기억하지 않는다)', async () => {
+        const stored = { id: 'old' };
+        await resolveDuplicateCreate({ userId: 'u1', rawKey: KEY, taskId: 't-new', res: fakeRes(), loadTask: jest.fn(), findByKey: async () => stored });
+        const again = await resolveDuplicateCreate({ userId: 'u1', rawKey: KEY, taskId: 't-3', res: fakeRes(), loadTask: async (id) => (id === 'old' ? stored : null) });
+        expect(again).toEqual({ kind: 'duplicate', task: stored });
+    });
+
+    it('DB 에도 없으면 그대로 생성 진행', async () => {
+        const find = jest.fn(async () => null);
+        expect(await resolveDuplicateCreate({ userId: 'u1', rawKey: KEY, taskId: 't1', res: fakeRes(), loadTask: jest.fn(), findByKey: find })).toBeNull();
+        expect(find).toHaveBeenCalledWith('u1', KEY);
+    });
+
+    it('DB 조회 중에 같은 키의 요청이 또 와도 새로 만들지 않는다(조회 전에 먼저 기억)', async () => {
+        let release: (v: null) => void = () => undefined;
+        const slow = new Promise<null>((r) => { release = r; });
+        const a = resolveDuplicateCreate({ userId: 'u1', rawKey: KEY, taskId: 't1', res: fakeRes(), loadTask: jest.fn(), findByKey: () => slow });
+        const b = await resolveDuplicateCreate({ userId: 'u1', rawKey: KEY, taskId: 't2', res: fakeRes(), loadTask: async () => null, findByKey: async () => null });
+        expect(b).toEqual({ kind: 'in_flight', taskId: 't1' });
+        release(null);
+        expect(await a).toBeNull();
+    });
+
+    it('키 형식이 틀리면 DB 를 조회하지 않는다', async () => {
+        const find = jest.fn();
+        await resolveDuplicateCreate({ userId: 'u1', rawKey: 'bad', taskId: 't1', res: fakeRes(), loadTask: jest.fn(), findByKey: find });
+        expect(find).not.toHaveBeenCalled();
+    });
+});
+
+describe('normalizedCreateKey', () => {
+    it('형식이 맞는 키만 돌려준다 — 저장·조회에 같은 값을 쓴다', () => {
+        expect(normalizedCreateKey(` ${KEY} `)).toBe(KEY);
+        expect(normalizedCreateKey('short')).toBeUndefined();
+        expect(normalizedCreateKey(undefined)).toBeUndefined();
     });
 });
 

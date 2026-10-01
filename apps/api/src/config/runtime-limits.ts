@@ -1765,6 +1765,18 @@ export const AGENT_TASK_CREATE_IDEMPOTENCY = {
         ? Math.max(0, Number(process.env.AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS) || 0) : 60 * 1000,
 } as const;
 
+/**
+ * 종료 알림 유실 재전송(174) — 종료 상태는 저장됐는데 알림(화면 이벤트·푸시)을 못 보낸 작업을 주기 점검이 다시 알린다.
+ * SWEEP_MS: 점검 주기. GRACE_MS: 정상 경로가 방금 쓴 행을 가로채지 않게 두는 여유. WINDOW_MS: 이보다 오래된 것은 보내지 않는다.
+ * AGENT_TASK_TERMINAL_NOTIFY_SWEEP_MS / _GRACE_MS / _WINDOW_MS / _BATCH
+ */
+export const AGENT_TASK_TERMINAL_NOTIFY = {
+    SWEEP_MS: parseInt(process.env.AGENT_TASK_TERMINAL_NOTIFY_SWEEP_MS || String(60 * 1000), 10),
+    GRACE_MS: parseInt(process.env.AGENT_TASK_TERMINAL_NOTIFY_GRACE_MS || String(30 * 1000), 10),
+    WINDOW_MS: parseInt(process.env.AGENT_TASK_TERMINAL_NOTIFY_WINDOW_MS || String(24 * 60 * 60 * 1000), 10),
+    BATCH: parseInt(process.env.AGENT_TASK_TERMINAL_NOTIFY_BATCH || '50', 10),
+} as const;
+
 /** 세션 복제·트리(F08 PR-6) — 복제 메시지 상한·조상 탐색 깊이. SESSION_CLONE_MAX_MESSAGES / SESSION_TREE_MAX_DEPTH */
 export const SESSION_BRANCH = {
     CLONE_MAX_MESSAGES: parseInt(process.env.SESSION_CLONE_MAX_MESSAGES || '500', 10),
