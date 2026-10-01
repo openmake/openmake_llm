@@ -114,6 +114,13 @@ export async function initSchema(pool: Pool): Promise<void> {
     await pool.query(
         `UPDATE agent_tasks SET failure_class = 'interrupted' WHERE status = 'failed' AND error = 'server restarted' AND failure_class IS NULL`,
     ).catch(() => { /* 131 적용 전 */ });
+    // 종료 알림 표식(174) — 방금 위에서 재시작으로 실패 처리한 작업을 사용자에게 알리게 한다(주기 점검이 보낸다).
+    // 부팅 복구가 다시 살린 작업은 종료 상태가 아니게 되어 대상에서 빠진다. 과거 재시작이 남긴 오래된 실패는 다시 알리지 않는다.
+    // 컬럼이 아직 없으면(174 적용 전 부팅) 조용히 건너뛴다 — 위 마킹과 한 문장에 넣지 않는 이유는 131 과 같다.
+    await pool.query(
+        `UPDATE agent_tasks SET terminal_notify_pending = TRUE
+         WHERE status = 'failed' AND error = 'server restarted' AND completed_at > NOW() - INTERVAL '1 minute'`,
+    ).catch(() => { /* 174 적용 전 */ });
 
     // 좀비 리서치 정리: Deep Research 는 큐·워커 없이 in-process 파이프라인으로 돌기 때문에
     // (세션 생성 직후 같은 흐름에서 running 으로 전이) 이전 프로세스의 pending/running 세션은

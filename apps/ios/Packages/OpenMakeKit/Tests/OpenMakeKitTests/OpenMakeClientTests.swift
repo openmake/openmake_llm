@@ -303,6 +303,27 @@ final class OpenMakeClientTests: XCTestCase {
         XCTAssertEqual(json["approvalPolicy"], "high-risk")
     }
 
+    func testAgentTaskCreateDecodesDeduplicatedResponse() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        // 같은 Idempotency-Key 의 재요청 — 서버가 이미 실행 중인 기존 작업을 200 으로 돌려준다
+        MockURLProtocol.script("/api/agent-tasks", .init(status: 200, json:
+            #"{"success":true,"data":{"task":{"id":"t1","goal":"앱을 점검해줘","status":"running","progress":10,"current_turn":1,"max_turns":10,"created_at":"2026-08-16T00:00:00.000Z","updated_at":"2026-08-16T00:00:00.000Z","resumable":false},"deduplicated":true,"concurrentActive":0,"warnings":[]},"meta":\#(Self.meta)}"#))
+
+        let created = try await client.createAgentTask(goal: "앱을 점검해줘")
+        XCTAssertTrue(created.deduplicated)
+        XCTAssertTrue(created.alreadyStarted)
+    }
+
+    func testAgentTaskCreateWithoutDeduplicatedFieldIsNotStarted() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        MockURLProtocol.script("/api/agent-tasks", .init(status: 201, json:
+            #"{"success":true,"data":{"task":{"id":"t1","goal":"g","status":"pending","progress":0,"current_turn":0,"max_turns":10,"created_at":"2026-08-16T00:00:00.000Z","updated_at":"2026-08-16T00:00:00.000Z","resumable":false},"concurrentActive":0,"warnings":[]},"meta":\#(Self.meta)}"#))
+
+        let created = try await client.createAgentTask(goal: "g")
+        XCTAssertFalse(created.deduplicated)
+        XCTAssertFalse(created.alreadyStarted)
+    }
+
     func testAgentTaskDetailDecodesSteps() async throws {
         store.save(AuthTokens(access: "at", refresh: "rt"))
         MockURLProtocol.script("/api/agent-tasks/t1", .init(status: 200, json:

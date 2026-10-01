@@ -113,6 +113,11 @@ function taskOf(r: { task?: ApiTask } | ApiTask): ApiTask {
 }
 
 /** 서버 승인 자동화 여부 — --yes 또는 비대화형(비-TTY). 셸 확인은 별개(디바이스 confirmExec). */
+/** 서버가 중복 요청으로 판정해 기존 작업을 돌려줬고 그 작업이 이미 시작됐으면 execute 를 건너뛴다(다시 부르면 400). */
+function shouldSkipExecute(deduplicated: boolean | undefined, status: string): boolean {
+    return deduplicated === true && status !== 'pending';
+}
+
 function shouldAutoApprove(autoApprove: boolean): boolean {
     // --yes 또는 비대화형(비-TTY)이면 서버 승인을 작업 단위로 자동화한다 — 그렇지 않으면
     // 파일 쓰기류 서버 HITL 이 매번 y/N 을 요구해 헤드리스/CI 실행이 막힌다. 셸/파이썬은
@@ -145,13 +150,16 @@ async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<
     const bridge = await connectAndRegister(cfg, api, folder);
 
     console.log(`\x1b[32m✓ 연결됨\x1b[0m — 작업을 생성합니다.`);
-    const created = taskOf(await api.createTask(goal, deviceId()));
+    const creation = await api.createTask(goal, deviceId());
+    const created = taskOf(creation);
     const taskId = created.id;
+    // 재전송으로 서버가 기존 작업을 돌려줬고 이미 시작된 상태면 다시 실행하지 않고 진행만 따라간다.
+    const alreadyStarted = shouldSkipExecute(creation.deduplicated, created.status);
     if (serverAutoApprove) {
         await api.setAutoApprove(taskId, true);
         console.log('\x1b[2m서버 승인 자동화 활성(--yes/비대화형) — 파일 쓰기류 HITL 자동 승인\x1b[0m');
     }
-    await api.executeTask(taskId);
+    if (!alreadyStarted) await api.executeTask(taskId);
     console.log(`\x1b[36m작업 ${taskId} 실행 중…\x1b[0m (Ctrl+C 로 CLI 종료)`);
     await followTask(api, bridge, taskId);
 }
