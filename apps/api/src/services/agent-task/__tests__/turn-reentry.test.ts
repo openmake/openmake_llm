@@ -4,7 +4,7 @@
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({}), getPool: () => ({}) }));
 jest.mock('../../../data/repositories/agent-task-repository', () => ({ AgentTaskRepository: jest.fn() }));
 
-import { findDanglingToolCalls } from '../turn-reentry';
+import { ensureUniqueToolCallIds, findDanglingToolCalls, resolveUnknownOutcome } from '../turn-reentry';
 import type { ChatMessage } from '../../../llm/types';
 
 const call = (id: string, name = 'bash') => ({ type: 'function' as const, id, function: { name, arguments: {} } });
@@ -41,5 +41,47 @@ describe('findDanglingToolCalls', () => {
     it('도구 호출 없는 assistant 로 끝나면 null', () => {
         expect(findDanglingToolCalls([{ role: 'assistant', content: '답' }])).toBeNull();
         expect(findDanglingToolCalls([])).toBeNull();
+    });
+});
+
+describe('ensureUniqueToolCallIds', () => {
+    it('겹치지 않는 id 는 그대로 둔다(네이티브 id 보존)', () => {
+        const calls = [call('chatcmpl-tool-abc')];
+        const r = ensureUniqueToolCallIds(calls, [{ role: 'assistant', content: '', tool_calls: [call('x')] }], 3);
+        expect(r[0]).toBe(calls[0]);
+    });
+
+    it('이전 턴에 쓰인 합성 id 는 턴 접미사로 바꾼다', () => {
+        const conversation: ChatMessage[] = [
+            { role: 'assistant', content: '', tool_calls: [call('rec_0')] },
+            { role: 'tool', content: 'ok', tool_name: 'bash', tool_call_id: 'rec_0' },
+        ];
+        const r = ensureUniqueToolCallIds([call('rec_0'), call('rec_1')], conversation, 2);
+        expect(r.map((c) => c.id)).toEqual(['rec_0_t2', 'rec_1']);
+    });
+
+    it('접미사까지 겹치면 번호를 더 붙이고, 같은 턴 안의 중복·누락 id 도 유일하게 만든다', () => {
+        const conversation: ChatMessage[] = [{ role: 'assistant', content: '', tool_calls: [call('c'), call('c_t1')] }];
+        const r = ensureUniqueToolCallIds([call('c'), call('c'), { type: 'function', function: { name: 'bash', arguments: {} } }], conversation, 1);
+        const ids = r.map((c) => c.id);
+        expect(ids).toEqual(['c_t1_1', 'c_t1_2', 'call_t1']);
+        expect(new Set(ids).size).toBe(3);
+    });
+});
+
+describe('resolveUnknownOutcome', () => {
+    const calls = [call('a'), call('b')];
+
+    it('실행 중 표식이 결과 없는 호출을 가리키고 저널에 없으면 그 id 가 결과 불명', () => {
+        expect(resolveUnknownOutcome('b', calls, new Map())).toBe('b');
+    });
+
+    it('표식이 가리키는 호출이 저널에 있으면(결과 기록 뒤 해제 전에 끊김) 결과 불명이 아니다', () => {
+        expect(resolveUnknownOutcome('b', calls, new Map([['b', 'ok']]))).toBeUndefined();
+    });
+
+    it('표식이 없거나 남은 호출과 무관하면 결과 불명이 아니다', () => {
+        expect(resolveUnknownOutcome(null, calls, new Map())).toBeUndefined();
+        expect(resolveUnknownOutcome('zzz', calls, new Map())).toBeUndefined();
     });
 });

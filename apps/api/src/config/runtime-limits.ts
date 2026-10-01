@@ -1255,6 +1255,10 @@ export const AGENT_TASK_LIMITS = {
     HITL_PARK_MAX_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_MAX_MS || '', 10) || 7 * 24 * 60 * 60 * 1000,
     /** 주차 스윕 주기(ms) — 결정이 왔는데 재개되지 못한 작업(로컬 디바이스 미연결 등) 재시도·상한 초과 정리·workspace 유지. AGENT_TASK_HITL_PARK_SWEEP_MS(기본 10분) */
     HITL_PARK_SWEEP_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_SWEEP_MS || '', 10) || 10 * 60 * 1000,
+    /** 승인 대기 유예(ms) — 이 시간을 넘긴 승인 대기는 도구 종류와 무관하게 주차해 실행 슬롯을 반납한다(한 사용자의
+     *  늦은 승인이 다른 사용자의 작업을 막지 않게). 서브에이전트 승인은 재개 지점이 없어 제외. 0 이면 비활성(종전 동작).
+     *  AGENT_TASK_HITL_PARK_GRACE_MS(기본 0, 권장 60000) */
+    HITL_PARK_GRACE_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_GRACE_MS || '0', 10) || 0,
     /**
      * 마무리 턴 강제(2026-08-03) — 자원 상한에 **닿기 전에** 도구를 끊고 종합 답변을 받는다.
      *
@@ -1473,6 +1477,10 @@ export const AGENT_TASK_LIMITS = {
      *  기본 ON(124) — 턴 중간 재개(turn-reentry)와 도구 호출 저널은 이 체크포인트가 있어야 남은
      *  호출을 구분할 수 있다. 운영도 2026-08 부터 ON 이었다. AGENT_TASK_MIDTURN_CHECKPOINT=false 로 끈다. */
     MIDTURN_CHECKPOINT_ENABLED: process.env.AGENT_TASK_MIDTURN_CHECKPOINT !== 'false',
+    /** 실행 중 표식(172) — 부작용 도구는 실행 직전 tool_call id 를 남기고, 재개 때 그 호출이 저널에 없으면
+     *  다시 실행하지 않고 "결과 불명" 안내를 도구 결과로 준다(중복 부작용 방지). 기본 ON.
+     *  AGENT_TASK_REENTRY_UNKNOWN_OUTCOME=false 면 종전처럼 결과 없는 호출을 모두 다시 실행한다. */
+    REENTRY_UNKNOWN_OUTCOME_ENABLED: process.env.AGENT_TASK_REENTRY_UNKNOWN_OUTCOME !== 'false',
     /** 실행 중 중간 지시(steering) — 실행 중 task 에 사용자가 방향 지시를 주입하면 다음 턴 경계에서
      *  conversation 에 user 메시지로 반영(취소·재시작 없이 교정). steering 은 사용자가 명시적으로
      *  보낼 때만 동작하므로 기본 ON. AGENT_TASK_STEERING=false 로 비활성. */

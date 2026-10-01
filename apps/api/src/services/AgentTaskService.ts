@@ -43,7 +43,7 @@ import { finalizeTask, finalizeMaxTurnsExhausted } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { initWorkspaceBaseline } from './agent-task/code-diff';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
-import { findDanglingToolCalls, loadToolCallJournal, writeTurnCheckpoint } from './agent-task/turn-reentry';
+import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint } from './agent-task/turn-reentry';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
@@ -305,11 +305,11 @@ export class AgentTaskService {
             for (let turn = startTurn; turn < turnCeiling; turn++) {
                 assertWithinLimits(signal, startedAt, pausedMs, totalTokens, totalTimeoutMs);
                 if (reentry) {
-                    const journal = await loadToolCallJournal(taskId, reentry.calls);
+                    const { journal, unknownOutcomeId } = await loadReentryState(taskId, reentry.calls);
                     logger.info(`[AgentTask] 턴 중간 재개: ${taskId} (turn ${turn + 1}, 남은 호출 ${reentry.calls.length}건, 저널 재사용 ${journal.size}건)`);
                     await update({ currentTurn: turn + 1 });
                     const re = await executeTurnToolCalls({
-                        toolCalls: reentry.calls, journal, taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
+                        toolCalls: reentry.calls, journal, unknownOutcomeId, taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
                         userId: String(userId), taskId, turn, conversation, usedTools, signal,
                         stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts, getCurStatus: () => curStatus, update, emitStep,
                     });
@@ -432,6 +432,16 @@ export class AgentTaskService {
                     result.tool_calls = undefined;
                 }
 
+                // qwen 결함 보정: 구조화 tool_calls 없이 도구 호출을 XML 텍스트로 뱉으면 실행이 안 돼
+                // 파일이 안 만들어진다(→ 다운로드할 산출물 없음) — 파싱해 실 tool_calls 로 승격 후 실행.
+                // 마무리 턴은 위 도구 차단 가드에서 이미 continue 로 처리되므로 여기 도달하지 않는다.
+                // 대화 기록 **전에** 승격해야 assistant.tool_calls 에 남아 tool 결과와 짝이 맞고 턴 중간 재개가 된다.
+                if ((!result.tool_calls || result.tool_calls.length === 0) && result.content) {
+                    const recovered = recoverTextToolCalls(result.content);
+                    if (recovered.length > 0) { result.tool_calls = recovered; result.content = ''; }
+                }
+                if (result.tool_calls?.length) result.tool_calls = ensureUniqueToolCallIds(result.tool_calls, conversation, turn);
+
                 conversation.push({
                     role: 'assistant',
                     content: result.content,
@@ -456,13 +466,6 @@ export class AgentTaskService {
                     stuckNotified = false;
                 }
 
-                // qwen 결함 보정: 구조화 tool_calls 없이 도구 호출을 XML 텍스트로 뱉으면 실행이 안 돼
-                // 파일이 안 만들어진다(→ 다운로드할 산출물 없음) — 파싱해 실 tool_calls 로 승격 후 실행.
-                // 마무리 턴은 위 도구 차단 가드에서 이미 continue 로 처리되므로 여기 도달하지 않는다.
-                if ((!result.tool_calls || result.tool_calls.length === 0) && result.content) {
-                    const recovered = recoverTextToolCalls(result.content);
-                    if (recovered.length > 0) { result.tool_calls = recovered; result.content = ''; }
-                }
                 const hasToolCalls = !!result.tool_calls && result.tool_calls.length > 0;
 
                 // 최종 답변 턴이면 deliverable(<artifact> 태그) 추출 — 스텝/result 는

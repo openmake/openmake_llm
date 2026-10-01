@@ -61,7 +61,9 @@ export async function callAgentTurnWithBudget(p: TurnCallInput): Promise<TurnCal
     try {
         const result = await chatTurnWithRoleFallback(p.roleState, {
             conversation: p.conversation, tools: p.tools, signal: callSignal,
-            taskId: p.taskId, userId: p.userId, onToken, onRetry: p.onRetry,
+            taskId: p.taskId, userId: p.userId, onToken,
+            // 재시도는 처음부터 다시 받는다 — 끊긴 시도의 부분 본문을 버려 겹치지 않게 한다.
+            onRetry: (info) => { partialContent = ''; p.onRetry?.(info); },
         });
         return { result, callSignal };
     } catch (err) {

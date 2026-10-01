@@ -57,6 +57,22 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         expect(out).toContain('승인하지 않았습니다');
     });
 
+    it('onBeforeExecute 는 승인 뒤·핸들러 앞에서 불리고, 거절이면 불리지 않는다', async () => {
+        const before = jest.fn(async () => undefined);
+        await new TaskRuntime('t-before', 'u1', cfgNone).executeTaskTool('terminate', { status: 'success', summary: 'done' }, { onBeforeExecute: before });
+        expect(before).toHaveBeenCalledTimes(1);
+
+        const rejectedBefore = jest.fn(async () => undefined);
+        let approvalId = '';
+        const exec = new TaskRuntime('t-before-rej', 'u1', cfgAll).executeTaskTool('bash', { command: 'ls' }, {
+            onApprovalPending: (p) => { approvalId = p.approvalId; }, onBeforeExecute: rejectedBefore,
+        });
+        await new Promise((r) => setImmediate(r));
+        getApprovalRegistry().reject(approvalId);
+        await exec;
+        expect(rejectedBefore).not.toHaveBeenCalled();
+    });
+
     it('제어 시그널(terminate)은 승인 불요 — 즉시 실행', async () => {
         const rt = new TaskRuntime('t-term', 'u1', cfgAll);
         const out = await rt.executeTaskTool('terminate', { status: 'success', summary: 'done' });
@@ -89,6 +105,17 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
             .rejects.toBeInstanceOf(AgentTaskParked);
         expect(waited).toHaveBeenCalledWith(3);
         expect(rejected).not.toHaveBeenCalled(); // 무응답 강등 카운트 대상이 아니다
+        spy.mockRestore();
+    });
+
+    it('승인 필요 task 도구가 주차(parked)되면 결과 대신 AgentTaskParked 를 던지고, 주차 가능으로 요청한다', async () => {
+        const rt = new TaskRuntime('t-tool-park', 'u1', cfgAll);
+        const request = jest.fn(async () => ({ decision: 'rejected', reason: 'parked', waitedMs: 4 }));
+        const spy = jest.spyOn(approvalGate, 'getApprovalRegistry').mockReturnValue({ request } as unknown as ReturnType<typeof approvalGate.getApprovalRegistry>);
+        const rejected = jest.fn();
+        await expect(rt.executeTaskTool('bash', { command: 'ls' }, { onApprovalRejected: rejected })).rejects.toBeInstanceOf(AgentTaskParked);
+        expect(request).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'bash' }), expect.objectContaining({ parkable: true }));
+        expect(rejected).not.toHaveBeenCalled();
         spy.mockRestore();
     });
 
