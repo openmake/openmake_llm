@@ -97,4 +97,122 @@ describe('runSubagent — 승인 주차', () => {
         await expect(runSubagent({ ...base, park: { save: async () => { throw new Error('db down'); } } } as never))
             .rejects.toBeInstanceOf(AgentTaskParked);
     });
+
+    it('주차하면 활동 기록에 parked 를 남기고(저장 전 — 재개 순번에 포함), 재개하면 resumed 를 남긴다', async () => {
+        const { base } = setup([{ content: '', tool_calls: [call('s2', 'web_fetch')] }]);
+        request.mockResolvedValue({ decision: 'rejected', reason: 'parked', waitedMs: 1 });
+        const order: string[] = [];
+        const trace = { record: jest.fn((type: string) => { order.push(type); }) };
+        await expect(runSubagent({ ...base, trace, park: { save: async () => { order.push('save'); } } } as never))
+            .rejects.toBeInstanceOf(AgentTaskParked);
+        expect(trace.record).toHaveBeenCalledWith('parked', 'web_fetch');
+        expect(order).toEqual(['tool_call', 'parked', 'save']);
+
+        const again = setup([{ content: '최종 답변' }]);
+        const restored: SubagentResumeState = {
+            turn: 0, tokens: 5,
+            conversation: [
+                { role: 'system', content: 'persona' }, { role: 'user', content: '하위 목표' },
+                { role: 'assistant', content: '', tool_calls: [call('s2', 'web_fetch')] },
+            ] as ChatMessage[],
+        };
+        request.mockResolvedValue({ decision: 'approved', waitedMs: 0 });
+        runTool.mockResolvedValue('본문');
+        const resumedTrace = { record: jest.fn() };
+        await runSubagent({ ...again.base, trace: resumedTrace, park: { restored, save: jest.fn() } } as never);
+        expect(resumedTrace.record.mock.calls.map((c) => c[0])).toEqual(['resumed', 'tool_result', 'final']);
+    });
+});
+
+describe('runSubagent — 유예 안 승인 대기의 부모 상태 알림', () => {
+    const hooks = () => ({ onApprovalPending: jest.fn(), onApprovalDecided: jest.fn() });
+    /** 레지스트리 대역 — 대기 진입(onPending)을 알린 뒤 결과를 돌려준다. */
+    const pendThen = (result: Record<string, unknown>) =>
+        async (input: { toolName: string }, opts: { onPending?: (p: { toolName: string }) => void }) => {
+            opts.onPending?.({ toolName: input.toolName });
+            return result;
+        };
+
+    it('승인이 대기에 들어가면 onApprovalPending, 유예 안에 승인되면 onApprovalDecided 를 도구 실행 전에 부른다', async () => {
+        const { base } = setup([{ content: '', tool_calls: [call('s2', 'web_fetch')] }, { content: '끝' }]);
+        const h = hooks();
+        request.mockImplementation(pendThen({ decision: 'approved', waitedMs: 3 }));
+        runTool.mockImplementation(async () => { expect(h.onApprovalDecided).toHaveBeenCalledTimes(1); return '본문'; });
+        await runSubagent({ ...base, ...h, park: { save: jest.fn() } } as never);
+        expect(h.onApprovalPending).toHaveBeenCalledWith('web_fetch');
+        expect(runTool).toHaveBeenCalledTimes(1);
+    });
+
+    it('유예 안에 거절돼도 onApprovalDecided 를 부른다(서브는 계속 진행)', async () => {
+        const { base } = setup([{ content: '', tool_calls: [call('s2', 'web_fetch')] }, { content: '끝' }]);
+        const h = hooks();
+        request.mockImplementation(pendThen({ decision: 'rejected', reason: 'user', waitedMs: 3 }));
+        await expect(runSubagent({ ...base, ...h, park: { save: jest.fn() } } as never)).resolves.toBe('끝');
+        expect(h.onApprovalDecided).toHaveBeenCalledTimes(1);
+        expect(runTool).not.toHaveBeenCalled();
+    });
+
+    it('주차되면 onApprovalDecided 를 부르지 않는다(부모는 paused 로 남는다)', async () => {
+        const { base } = setup([{ content: '', tool_calls: [call('s2', 'web_fetch')] }]);
+        const h = hooks();
+        request.mockImplementation(pendThen({ decision: 'rejected', reason: 'parked', waitedMs: 3 }));
+        await expect(runSubagent({ ...base, ...h, park: { save: async () => undefined } } as never)).rejects.toBeInstanceOf(AgentTaskParked);
+        expect(h.onApprovalPending).toHaveBeenCalledTimes(1);
+        expect(h.onApprovalDecided).not.toHaveBeenCalled();
+    });
+
+    it('대기 없이 끝난 승인(자동 승인·이어받은 결정)은 상태를 건드리지 않는다', async () => {
+        const { base } = setup([{ content: '', tool_calls: [call('s2', 'web_fetch')] }, { content: '끝' }]);
+        const h = hooks();
+        request.mockResolvedValue({ decision: 'approved', waitedMs: 0 });
+        runTool.mockResolvedValue('본문');
+        await runSubagent({ ...base, ...h, park: { save: jest.fn() } } as never);
+        expect(h.onApprovalPending).not.toHaveBeenCalled();
+        expect(h.onApprovalDecided).not.toHaveBeenCalled();
+    });
+
+    it('채팅 경로(훅·주차 없음)는 onPending 을 넘기지 않는다', async () => {
+        const { base } = setup([{ content: '', tool_calls: [call('s2', 'web_fetch')] }, { content: '끝' }]);
+        request.mockResolvedValue({ decision: 'approved', waitedMs: 0 });
+        runTool.mockResolvedValue('본문');
+        await runSubagent(base as never);
+        expect(request.mock.calls[0][1].onPending).toBeUndefined();
+    });
+
+});
+
+describe('runSubagent — 유예 안 승인 대기를 활동 기록에 남긴다', () => {
+    const pendThen = (result: Record<string, unknown>) =>
+        async (input: { toolName: string }, opts: { onPending?: (p: { toolName: string }) => void }) => {
+            opts.onPending?.({ toolName: input.toolName });
+            return result;
+        };
+    const typesOf = (trace: { record: jest.Mock }) => trace.record.mock.calls.map((c) => c[0] as string);
+
+    it('대기 진입에 awaiting, 유예 안 결정에 resumed 를 도구 결과 앞에 남긴다', async () => {
+        const { base } = setup([{ content: '', tool_calls: [call('s2', 'web_fetch')] }, { content: '끝' }]);
+        request.mockImplementation(pendThen({ decision: 'approved', waitedMs: 3 }));
+        runTool.mockResolvedValue('본문');
+        const trace = { record: jest.fn() };
+        await runSubagent({ ...base, trace, park: { save: jest.fn() } } as never);
+        expect(trace.record).toHaveBeenCalledWith('awaiting', expect.any(String), 'web_fetch');
+        expect(typesOf(trace)).toEqual(['tool_call', 'awaiting', 'resumed', 'tool_result', 'final']);
+    });
+
+    it('주차되면 awaiting 뒤에 parked 만 남긴다(resumed 없음)', async () => {
+        const { base } = setup([{ content: '', tool_calls: [call('s2', 'web_fetch')] }]);
+        request.mockImplementation(pendThen({ decision: 'rejected', reason: 'parked', waitedMs: 3 }));
+        const trace = { record: jest.fn() };
+        await expect(runSubagent({ ...base, trace, park: { save: async () => undefined } } as never)).rejects.toBeInstanceOf(AgentTaskParked);
+        expect(typesOf(trace)).toEqual(['tool_call', 'awaiting', 'parked']);
+    });
+
+    it('대기 없이 끝난 승인은 awaiting 을 남기지 않는다', async () => {
+        const { base } = setup([{ content: '', tool_calls: [call('s2', 'web_fetch')] }, { content: '끝' }]);
+        request.mockResolvedValue({ decision: 'approved', waitedMs: 0 });
+        runTool.mockResolvedValue('본문');
+        const trace = { record: jest.fn() };
+        await runSubagent({ ...base, trace, park: { save: jest.fn() } } as never);
+        expect(typesOf(trace)).toEqual(['tool_call', 'tool_result', 'final']);
+    });
 });

@@ -964,6 +964,7 @@
       "status": {
         "queued": "In Warteschlange",
         "running": "Läuft",
+        "awaiting_approval": "Wartet auf Freigabe",
         "completed": "Abgeschlossen",
         "failed": "Fehlgeschlagen",
         "interrupted": "Unterbrochen"

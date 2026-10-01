@@ -61,6 +61,10 @@ interface SubagentParams {
      * AgentTaskParked 를 던져 부모가 delegate 호출 지점에서 주차된다. restored 가 있으면 그 대화에서 이어간다.
      */
     park?: { restored?: SubagentResumeState; save: (state: SubagentResumeState) => Promise<void> };
+    /** 승인이 대기에 들어감 — delegate 경로만 넘긴다(부모 작업 paused + 알림, 부모 턴의 승인과 같은 발행). */
+    onApprovalPending?: (toolName: string) => void;
+    /** 그 대기가 유예 안에 결정(승인·거절)됨 — 부모 작업을 running 으로 되돌린다. 주차되면 부르지 않는다. */
+    onApprovalDecided?: () => void;
 }
 
 /** 주차된 서브에이전트의 재개 지점 — 결과 없는 tool_call 로 끝나는 대화 + 그 턴·누적 토큰. */
@@ -101,11 +105,14 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
     // 재개: 저장된 턴은 LLM 을 다시 부르지 않고 결과 없는 호출만 이어서 실행한다(이미 끝난 호출은 대화에 결과가 있다).
     let resumeCalls: ToolCall[] | null = restored ? (findDanglingToolCalls(conversation)?.calls ?? null) : null;
     /** 승인 대기가 유예를 넘김 → 대화를 남기고 부모 주차. 저장 실패는 주차를 막지 않는다(재개 때 처음부터). */
-    const parkHere = async (turn: number): Promise<never> => {
+    const parkHere = async (turn: number, toolName: string): Promise<never> => {
+        p.trace?.record('parked', toolName); // 저장 전에 남긴다 — 체크포인트의 다음 순번에 포함
         await p.park!.save({ conversation, turn, tokens })
             .catch((e) => logger.warn(`[Subagent] 주차 대화 저장 실패 — 재개 때 처음부터 다시: ${e instanceof Error ? e.message : e}`));
         throw new AgentTaskParked();
     };
+
+    if (restored) p.trace?.record('resumed', '');
 
     try {
         for (let turn = restored?.turn ?? 0; turn < maxTurns; turn++) {
@@ -205,12 +212,22 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 // 부모와 동일한 승인 게이트 — 정책 우회 없음(자동승인 task 면 즉시 approved).
                 let approved = true;
                 if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
+                    let pended = false;
                     const r = await getApprovalRegistry().request(
                         { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
-                        { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, parkable: !!p.park },
+                        {
+                            timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, parkable: !!p.park,
+                            // 대기 진입 — 활동 기록에 awaiting(유예 구간도 "승인 대기"로 보이게) + 부모 paused·알림.
+                            ...(p.onApprovalPending || p.trace ? { onPending: (pa) => {
+                                pended = true;
+                                p.trace?.record('awaiting', JSON.stringify(args), name);
+                                p.onApprovalPending?.(pa.toolName);
+                            } } : {}),
+                        },
                     );
                     p.onPausedMs?.(r.waitedMs);
-                    if (r.reason === 'parked' && p.park) await parkHere(turn);
+                    if (r.reason === 'parked' && p.park) await parkHere(turn, name);
+                    if (pended) { p.trace?.record('resumed', ''); p.onApprovalDecided?.(); }
                     approved = r.decision === 'approved';
                 }
                 const toolResult = approved

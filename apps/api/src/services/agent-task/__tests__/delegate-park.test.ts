@@ -58,4 +58,18 @@ describe('buildDelegateFn — 서브에이전트 체크포인트', () => {
         expect(repo.saveCheckpoint).toHaveBeenCalledWith(expect.objectContaining({ task_id: 't1', ckpt_key: subagentCheckpointKey('목표', undefined), turn: 0, tokens: 1 }));
         expect(repo.deleteCheckpoint).not.toHaveBeenCalled();
     });
+
+    it('승인 대기 훅을 서브에이전트에 그대로 넘긴다(부모 상태 paused↔running)', async () => {
+        repo.loadCheckpoint.mockResolvedValue(null);
+        runSubagent.mockResolvedValue('결과');
+        const onApprovalPending = jest.fn();
+        const onApprovalDecided = jest.fn();
+        await buildDelegateFn({
+            client: {} as never, userId: 'u1', taskId: 't1', userCtx: { userId: 'u1' } as never,
+            sandboxCfg: { extraTools: [] } as never, mcpTools: [], signal: new AbortController().signal,
+            onTokens: () => undefined, onPausedMs: () => undefined, onApprovalPending, onApprovalDecided,
+        })('목표');
+        expect(runSubagent.mock.calls[0][0]).toMatchObject({ onApprovalPending, onApprovalDecided });
+    });
+
 });

@@ -29,6 +29,7 @@ import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../tool-contract/types';
 import { buildDelegateFn } from './agent-task/delegate';
+import { buildSubagentApprovalHooks } from './agent-task/approval-pending';
 import { buildTaskSpawnFn } from './agent-spawn/spawn-agents';
 import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
@@ -225,6 +226,7 @@ export class AgentTaskService {
                         client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
                         onTokens: (n) => { totalTokens += n; },
                         onPausedMs: (ms) => { pausedMs += ms; },
+                        ...buildSubagentApprovalHooks({ userId, taskId, update, getCurStatus: () => curStatus, getTaskRuntime: () => taskRuntime }),
                     });
                     // 병렬 fan-out(spawn_agents) — 플래그 ON 시에만 도구 노출(undefined 면 미노출).
                     const spawnFn = AGENT_SPAWN.ENABLED

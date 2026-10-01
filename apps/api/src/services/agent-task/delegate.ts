@@ -44,6 +44,10 @@ export interface DelegateFactoryParams {
     onTokens: (n: number) => void;
     /** 승인 대기 시간을 부모 pausedMs 에 합산(4-1 pause-aware 일관). */
     onPausedMs: (ms: number) => void;
+    /** 서브 안의 승인이 대기에 들어감 — 부모 작업 paused + 알림(부모 턴의 승인과 같은 발행). */
+    onApprovalPending?: (toolName: string) => void;
+    /** 그 대기가 유예 안에 결정됨 — 부모 작업을 running 으로 되돌린다. */
+    onApprovalDecided?: () => void;
 }
 
 /** delegate 도구 핸들러 생성 — TaskRuntime 에 주입. */
@@ -72,6 +76,7 @@ export function buildDelegateFn(p: DelegateFactoryParams): DelegateFn {
                 tools: subTools, userCtx: p.userCtx, taskId: p.taskId,
                 sandboxCfg: p.sandboxCfg, signal: p.signal,
                 onTokens: p.onTokens, onPausedMs: p.onPausedMs,
+                onApprovalPending: p.onApprovalPending, onApprovalDecided: p.onApprovalDecided,
                 park: {
                     ...(saved ? { restored: { conversation: saved.conversation as ChatMessage[], turn: saved.turn, tokens: saved.tokens } } : {}),
                     save: (s) => repo.saveCheckpoint({
