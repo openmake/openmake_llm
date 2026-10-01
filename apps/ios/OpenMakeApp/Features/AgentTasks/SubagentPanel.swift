@@ -60,7 +60,7 @@ struct SubagentPanel: View {
         switch status {
         case "completed": Instrument.success
         case "failed": Instrument.danger
-        case "interrupted": Instrument.warn
+        case "interrupted", "awaiting_approval": Instrument.warn
         case "running": Instrument.accent
         default: Instrument.faint
         }

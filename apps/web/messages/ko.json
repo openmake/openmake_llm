@@ -964,6 +964,7 @@
       "status": {
         "queued": "대기 중",
         "running": "실행 중",
+        "awaiting_approval": "승인 대기",
         "completed": "완료",
         "failed": "실패",
         "interrupted": "중단됨"

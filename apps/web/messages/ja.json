@@ -964,6 +964,7 @@
       "status": {
         "queued": "待機中",
         "running": "実行中",
+        "awaiting_approval": "承認待ち",
         "completed": "完了",
         "failed": "失敗",
         "interrupted": "中断"

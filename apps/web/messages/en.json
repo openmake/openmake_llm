@@ -964,6 +964,7 @@
       "status": {
         "queued": "Queued",
         "running": "Running",
+        "awaiting_approval": "Awaiting approval",
         "completed": "Completed",
         "failed": "Failed",
         "interrupted": "Interrupted"

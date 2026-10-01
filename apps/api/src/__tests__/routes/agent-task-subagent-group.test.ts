@@ -72,3 +72,32 @@ describe('groupSubagentSteps — 상태·종료 시각', () => {
         expect(g[0].status).toBe('completed');
     });
 });
+
+describe('승인 대기 주차(173) — parked/resumed', () => {
+    test('마지막 수명 마킹이 parked 면 승인 대기, resumed 가 뒤따르면 다시 실행 중', () => {
+        expect(deriveSubagentStatus(['queued', 'started', 'tool_call', 'parked'])).toBe('awaiting_approval');
+        expect(deriveSubagentStatus(['queued', 'started', 'tool_call', 'parked', 'resumed'])).toBe('running');
+        expect(deriveSubagentStatus(['queued', 'started', 'tool_call', 'parked', 'resumed', 'tool_result', 'tool_call', 'parked'])).toBe('awaiting_approval');
+        expect(deriveSubagentStatus(['queued', 'started', 'tool_call', 'parked', 'resumed', 'tool_result', 'final'])).toBe('completed');
+    });
+
+    test('부모가 끝났으면 승인 대기 서브도 중단으로 읽고, 주차 중(paused)이면 승인 대기로 남는다', () => {
+        const rows = [row('d', 0, 0, 'queued', '01'), row('d', 0, 1, 'started', '02'), row('d', 0, 2, 'parked', '03')];
+        expect(groupSubagentSteps(rows, 'paused')[0].status).toBe('awaiting_approval');
+        expect(groupSubagentSteps(rows, 'cancelled')[0].status).toBe('interrupted');
+    });
+});
+
+describe('유예 안 승인 대기 — awaiting', () => {
+    test('승인 대기에 들어가면(주차 전 유예 구간) 승인 대기, 결정되면 다시 실행 중', () => {
+        expect(deriveSubagentStatus(['queued', 'started', 'tool_call', 'awaiting'])).toBe('awaiting_approval');
+        expect(deriveSubagentStatus(['queued', 'started', 'tool_call', 'awaiting', 'resumed'])).toBe('running');
+        expect(deriveSubagentStatus(['queued', 'started', 'tool_call', 'awaiting', 'resumed', 'tool_result', 'final'])).toBe('completed');
+    });
+
+    test('유예를 넘겨 주차돼도 승인 대기로 이어지고, 재개 뒤 다시 대기에 들어가면 승인 대기', () => {
+        expect(deriveSubagentStatus(['queued', 'started', 'tool_call', 'awaiting', 'parked'])).toBe('awaiting_approval');
+        expect(deriveSubagentStatus(['queued', 'started', 'tool_call', 'awaiting', 'parked', 'resumed'])).toBe('running');
+        expect(deriveSubagentStatus(['queued', 'started', 'tool_call', 'awaiting', 'parked', 'resumed', 'awaiting'])).toBe('awaiting_approval');
+    });
+});

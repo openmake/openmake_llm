@@ -9,7 +9,6 @@
  */
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { getToolRuntime, TOOL_USER_INPUT_APPROVAL_NAME, type ToolRuntime, type ToolUserInputContext } from '../../runtime-ports/tool-runtime';
-import { getPushService } from '../PushService';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { TASK_TERMINATE_SENTINEL } from '../task-sandbox/tools';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
@@ -17,6 +16,7 @@ import { currentPlanStepIndex } from '../task-sandbox/planning';
 import { runTool, isSearchTool } from './task-steps';
 import { prepareToolArgs } from './tool-args';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
+import { notifyApprovalPending } from './approval-pending';
 
 import { AgentTaskAbort, AgentTaskParked } from './types';
 import { writeTurnCheckpoint, markToolCallInFlight } from './turn-reentry';
@@ -93,18 +93,8 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     // 도구 실행 + 체크포인트
     let terminated = false;
     let terminateSummary = '';
-    // 승인 대기 진입 콜백 — task 도구·extra 도구 공용(status='paused' + 알림).
-    // 알림은 두 채널: 웹 푸시(설정에서 켠 사용자만 — 운영 구독 0건이던 opt-in) + 로컬 실행 작업이면
-    // 실행 디바이스(컴패니언 네이티브 알림, 2026-09-11). 링크는 작업 상세로 바로 연다.
-    const onApprovalPending = (toolName: string) => {
-        void update({ status: 'paused' }).catch(() => { /* noop */ });
-        void getPushService().sendPush(userId, {
-            title: 'OpenMake 에이전트 — 승인 필요',
-            body: `도구 실행 승인을 기다립니다: ${toolName}`,
-            url: `/agent-tasks?task=${encodeURIComponent(taskId)}`,
-        }).catch(() => { /* noop */ });
-        try { taskRuntime?.notifyApprovalPending(toolName); } catch { /* 알림 실패는 작업에 영향 없음 */ }
-    };
+    // 승인 대기 진입 콜백 — task 도구·extra 도구 공용(status='paused' + 알림). 발행 내용은 approval-pending 참고.
+    const onApprovalPending = (toolName: string) => notifyApprovalPending({ userId, taskId, update, taskRuntime }, toolName);
     // 질문형 승인 만료 → 주차(F16.7): 질문 호출은 결과 없이 남겨 체크포인트하고 주차 표식 후 실행을 끝낸다.
     // 답이 오면 hitl-park 가 재개하고, turn-reentry 가 같은 호출을 다시 실행해 결정을 이어받는다(이미 끝난 호출은 저널 재사용).
     let parkRequested = false;
