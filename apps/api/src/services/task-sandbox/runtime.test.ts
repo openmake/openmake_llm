@@ -163,4 +163,24 @@ describe('도구 이름 교정 (P0-b)', () => {
         const out = await rt.executeTaskTool('zzzzzzzzzzzz', {});
         expect(out).toBe('Error: 알 수 없는 task 도구 zzzzzzzzzzzz');
     });
+
+    it('작업이 취소되면 실행 중인 샌드박스 명령을 중단시킨다(타임아웃까지 기다리지 않는다)', async () => {
+        let finish: (r: unknown) => void = () => undefined;
+        const abortRunning = jest.fn(() => finish({ stdout: '', stderr: '', exitCode: 137, truncated: false, timedOut: false, durationMs: 1 }));
+        const executor = { exec: () => new Promise((r) => { finish = r; }), abortRunning, isBrowserEnabled: false };
+        const rt = new TaskRuntime('t-abort', 'u1', cfgNone, undefined, undefined, executor as never);
+        const ac = new AbortController();
+        const run = rt.executeTaskTool('bash', { command: 'sleep 999' }, { signal: ac.signal });
+        await new Promise((r) => setImmediate(r));
+        expect(abortRunning).not.toHaveBeenCalled();
+        ac.abort();
+        await run;
+        expect(abortRunning).toHaveBeenCalledTimes(1);
+
+        // 끝난 호출 뒤의 취소는 실행기를 건드리지 않는다
+        const ac2 = new AbortController();
+        await rt.executeTaskTool('terminate', { status: 'success', summary: 'done' }, { signal: ac2.signal });
+        ac2.abort();
+        expect(abortRunning).toHaveBeenCalledTimes(1);
+    });
 });

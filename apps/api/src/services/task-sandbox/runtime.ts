@@ -259,6 +259,9 @@ export class TaskRuntime {
             }
         }
 
+        // 작업 취소 → 실행 중인 샌드박스 명령 중단(도구 핸들러는 signal 을 받지 않는다).
+        const onAbort = (): void => this.executor.abortRunning?.();
+        opts.signal?.addEventListener('abort', onAbort, { once: true });
         try {
             await opts.onBeforeExecute?.();
             const r = await handler(args, { userId: this.userId, role: 'user' });
@@ -276,6 +279,8 @@ export class TaskRuntime {
             const msg = e instanceof Error ? e.message : String(e);
             logger.warn(`[${this.taskId}] task 도구 실행 실패 (${name}): ${msg}`);
             return `Error: ${msg}`;
+        } finally {
+            opts.signal?.removeEventListener('abort', onAbort);
         }
     }
 }

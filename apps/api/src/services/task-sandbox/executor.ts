@@ -91,6 +91,9 @@ export interface TaskExecutor {
     /** 셸 명령 실행 — bash 도구의 실행 백엔드. */
     exec(command: string): Promise<ExecResult>;
 
+    /** 실행 중인 명령 중단(작업 취소) — 지원하는 실행기만 구현한다. 미구현이면 명령은 타임아웃까지 돈다. */
+    abortRunning?(): void;
+
     /** 브라우저 액션 배치 실행 (actions JSON 은 workspace 상대경로에 사전 기록). */
     runBrowser(actionsRelPath: string): Promise<ExecResult>;
 
