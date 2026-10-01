@@ -336,8 +336,13 @@ export class UnifiedDatabase {
         executor?: 'sandbox' | 'local';
         deviceId?: string;
         folderRel?: string;
-    }): Promise<void> {
+        idempotencyKey?: string;
+    }): Promise<boolean> {
         return this.agentTaskRepository.createAgentTask(params);
+    }
+
+    async findAgentTaskByCreateKey(userId: string, key: string): Promise<AgentTask | undefined> {
+        return this.agentTaskRepository.findAgentTaskByCreateKey(userId, key);
     }
 
     async getAgentTask(taskId: string): Promise<AgentTask | undefined> {

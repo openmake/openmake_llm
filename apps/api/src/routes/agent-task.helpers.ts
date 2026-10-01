@@ -70,8 +70,9 @@ export function filterTaskList<T extends { executor?: string | null; device_id?:
 }
 
 export function toPublicTask(t: Record<string, unknown>) {
-    const { checkpoint, input_files, input_images, ...rest } = t;
+    const { checkpoint, input_files, input_images, create_idempotency_key, terminal_notify_pending, ...rest } = t;
     void input_images; // dataURL 배열 — 응답에서 제외(팽창 방지)
+    void create_idempotency_key; void terminal_notify_pending; // 내부 운영 컬럼(174) — 응답에서 제외
     const fileMetas = Array.isArray(input_files)
         ? (input_files as AgentTaskInputFile[]).map((f) => ({ name: f?.name, type: f?.type, size: f?.size }))
         : undefined;

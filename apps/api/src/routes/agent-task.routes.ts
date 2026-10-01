@@ -52,7 +52,7 @@ import {
 } from '../services/agent-task/upload-store';
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
-import { resolveDuplicateCreate } from '../services/agent-task/create-idempotency';
+import { resolveDuplicateCreate, normalizedCreateKey, rememberCreatedTask } from '../services/agent-task/create-idempotency';
 import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 import { approvalsRouter } from './agent-task-approvals.routes';
 import { forkRouter } from './agent-task-fork.routes';
@@ -152,7 +152,8 @@ router.post('/', (req: Request, res: Response, next) => {
     }
 
     // 중복 생성 방지 — 같은 Idempotency-Key 의 재요청(더블 클릭·재전송)은 처음 만든 작업을 돌려준다. 첫 await 전에 판정한다.
-    const dup = await resolveDuplicateCreate({ userId, rawKey: req.get('Idempotency-Key'), taskId, res, loadTask: (id) => db.getAgentTask(id) });
+    const createKey = normalizedCreateKey(req.get('Idempotency-Key'));
+    const dup = await resolveDuplicateCreate({ userId, rawKey: createKey, taskId, res, loadTask: (id) => db.getAgentTask(id), findByKey: (u, k) => db.findAgentTaskByCreateKey(u, k) });
     if (dup) {
         await discardTmpFiles(parts.map((p) => p.path));
         if (dup.kind === 'in_flight') return res.status(409).json(conflict('같은 작업 생성 요청을 처리하고 있습니다'));
@@ -236,10 +237,11 @@ router.post('/', (req: Request, res: Response, next) => {
         ? [`진행 중인 에이전트 작업이 ${active.length}건 있습니다. 중복 실행이 아닌지 확인하세요.`]
         : [];
 
-    await db.createAgentTask({
+    const created = await db.createAgentTask({
         id: taskId,
         userId,
         goal,
+        idempotencyKey: createKey,
         // 대형 첨부는 기본 턴 상향(LARGE_INPUT_MAX_TURNS) — resolveDefaultMaxTurns 주석 참고
         maxTurns: resolveDefaultMaxTurns(maxTurns, inputFiles),
         inputFiles,
@@ -248,6 +250,14 @@ router.post('/', (req: Request, res: Response, next) => {
         deviceId: executor === 'local' ? deviceId : undefined,
         folderRel: executor === 'local' ? folderRel : undefined,
     });
+    if (!created && createKey) {
+        // 같은 키의 작업을 다른 서버(또는 재시작 전 프로세스)가 먼저 만들었다 — 방금 받은 첨부를 치우고 그 작업을 돌려준다.
+        await removeTaskFiles(taskId);
+        const existing = await db.findAgentTaskByCreateKey(userId, createKey);
+        if (!existing) return res.status(409).json(conflict('같은 작업 생성 요청을 처리하고 있습니다'));
+        rememberCreatedTask(userId, createKey, existing.id);
+        return res.status(200).json(success({ task: toPublicTask(existing as unknown as Record<string, unknown>), deduplicated: true, concurrentActive: 0, warnings: [] }));
+    }
 
     // 로컬 실행 작업 생성 감사 (helpers — 위임 이력, fire-and-forget)
     if (executor === 'local') await auditLocalTaskCreate(userId, taskId, deviceId, folderRel);
