@@ -312,8 +312,10 @@ public extension OpenMakeClient {
             maxTurns: maxTurns,
             files: files.isEmpty ? nil : files,
             images: images.isEmpty ? nil : images)
+        // 중복 생성 방지 — 재전송(401 갱신 뒤 재시도 등)돼도 서버는 작업을 한 번만 만든다
         let (data, _) = try await authorizedSend(
-            method: "POST", path: "/api/agent-tasks", body: request)
+            method: "POST", path: "/api/agent-tasks", body: request,
+            extraHeaders: ["Idempotency-Key": UUID().uuidString])
         let payload = try decodeContract(Envelope.self, from: data).data
         return AgentTaskCreation(
             task: payload.task,

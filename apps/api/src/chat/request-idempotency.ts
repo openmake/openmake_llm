@@ -34,6 +34,9 @@ export class RequestIdempotencyRegistry {
         m.set(requestId, { messageId, at: now });
     }
 
+    /** 기억을 지운다 — 처리에 실패한 요청의 재시도가 새로 시작할 수 있게 한다. */
+    forget(owner: string, requestId: string): void { this.byOwner.get(owner)?.delete(requestId); }
+
     clear(): void { this.byOwner.clear(); }
 }
 

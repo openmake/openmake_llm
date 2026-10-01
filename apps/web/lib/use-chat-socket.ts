@@ -710,7 +710,10 @@ export function useChatSocket() {
         // 파일별로 조각 업로드 후 uploadId 참조만 담은 JSON 으로 작업을 생성한다.
         const binaryParts = (files ?? []).filter((f) => f.rawFile);
         const totalBinaryBytes = binaryParts.reduce((sum, f) => sum + (f.rawFile?.size ?? 0), 0);
-        let created: { data?: { task?: { id?: string } } } | null;
+        let created: { data?: { task?: { id?: string; status?: string }; deduplicated?: boolean } } | null;
+        // 중복 생성 방지 — 이 제출의 키. 재전송(401 갱신 후 재시도 등)되어도 서버는 작업을 한 번만 만든다.
+        const idempotencyHeaders: Record<string, string> =
+          typeof crypto !== "undefined" && "randomUUID" in crypto ? { "Idempotency-Key": crypto.randomUUID() } : {};
         if (totalBinaryBytes > CHUNKED_UPLOAD_THRESHOLD_BYTES) {
           const uploadRefs = [];
           for (const f of binaryParts) {
@@ -726,6 +729,7 @@ export function useChatSocket() {
               ...(images && images.length > 0 ? { images } : {}),
               ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}), ...(localDeviceId && localFolderRel ? { folderRel: localFolderRel } : {}) } : {}),
             },
+            { headers: idempotencyHeaders },
           );
         } else if (binaryParts.length > 0) {
           const payloadFiles = (files ?? [])
@@ -742,7 +746,7 @@ export function useChatSocket() {
           const resp = await fetch("/api/agent-tasks", {
             method: "POST",
             credentials: "include",
-            headers: { ...(await csrfHeaders()) },
+            headers: { ...(await csrfHeaders()), ...idempotencyHeaders },
             body: fd,
           });
           const body = await resp.json().catch(() => null);
@@ -750,7 +754,7 @@ export function useChatSocket() {
             const detail = (body as { error?: { message?: string } } | null)?.error?.message;
             throw new Error(detail || `HTTP ${resp.status}`);
           }
-          created = body as { data?: { task?: { id?: string } } };
+          created = body as { data?: { task?: { id?: string; status?: string }; deduplicated?: boolean } };
         } else {
           created = await ApiClient.post<{ data: { task: { id: string } } }>(
             "/api/agent-tasks",
@@ -762,6 +766,7 @@ export function useChatSocket() {
               ...(images && images.length > 0 ? { images } : {}),
               ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}), ...(localDeviceId && localFolderRel ? { folderRel: localFolderRel } : {}) } : {}),
             },
+            { headers: idempotencyHeaders },
           );
         }
         const taskId = created?.data?.task?.id;
@@ -777,8 +782,10 @@ export function useChatSocket() {
           content: "",
           agentTask: { goal, status: "pending", currentTurn: 0, progress: 0 },
         });
+        // 서버가 중복 요청으로 판정해 기존 작업을 돌려줬고 이미 시작된 상태면 다시 실행하지 않는다.
+        const alreadyStarted = created?.data?.deduplicated === true && created.data.task?.status !== "pending";
         // 승인 3모드 — all(기본)이면 전역 정책이므로 미전송, 그 외만 이 실행에 override 전달.
-        await ApiClient.post(
+        if (!alreadyStarted) await ApiClient.post(
           `/api/agent-tasks/${taskId}/execute`,
           approvalPolicy && approvalPolicy !== "all" ? { approvalPolicy } : {},
         );

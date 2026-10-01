@@ -71,11 +71,20 @@ export function broadcastWithBackpressure(
     }
 }
 
-/** 지정 연결 집합에 메시지 전송 (OPEN 만). 연결이 없으면 no-op. */
+/**
+ * 지정 연결 집합에 메시지 전송 (OPEN 만). 연결이 없으면 no-op.
+ * slowClientCounters 를 주면 브로드캐스트와 같은 백프레셔 정책을 쓴다 — 송신 버퍼가 임계를 넘은 연결은
+ * 건너뛰고, 연속으로 넘으면 끊는다. (에이전트 작업 진행 이벤트는 유실돼도 REST 조회로 보완된다.)
+ */
 export function sendToConnections(
     connections: Iterable<WebSocket>,
     data: Record<string, unknown>,
+    slowClientCounters?: WeakMap<WebSocket, number>,
 ): void {
+    if (slowClientCounters) {
+        broadcastWithBackpressure(connections, slowClientCounters, data);
+        return;
+    }
     const message = JSON.stringify(data);
     for (const client of connections) {
         if (client.readyState === WebSocket.OPEN) {

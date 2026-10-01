@@ -590,6 +590,6 @@ export class WebSocketHandler {
         if (!userId) return;
         const connections = this.guard.getUserConnections(userId);
         if (connections.size === 0) return;
-        sendToConnections(connections, data);
+        sendToConnections(connections, data, this.slowClientCounters);
     }
 }

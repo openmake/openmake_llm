@@ -1753,6 +1753,18 @@ export const IDEMPOTENCY = {
     MAX_PER_OWNER: parseInt(process.env.IDEMPOTENCY_MAX_PER_OWNER || '200', 10),
 } as const;
 
+/**
+ * 에이전트 작업 생성 중복 방지 — 같은 Idempotency-Key 의 재요청(더블 클릭·네트워크 재전송)은 새로 만들지 않는다.
+ * TTL_MS: 키 기억 시간. DELEGATE_WINDOW_MS: 채팅에서 위임한 작업(delegate_agent_task)은 키가 없어 같은 사용자·목표·턴 수를
+ * 이 창 안에서 한 번만 만든다(0 이면 끔). AGENT_TASK_CREATE_IDEMPOTENCY_TTL_MS / _MAX_PER_OWNER / AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS
+ */
+export const AGENT_TASK_CREATE_IDEMPOTENCY = {
+    TTL_MS: parseInt(process.env.AGENT_TASK_CREATE_IDEMPOTENCY_TTL_MS || String(10 * 60 * 1000), 10),
+    MAX_PER_OWNER: parseInt(process.env.AGENT_TASK_CREATE_IDEMPOTENCY_MAX_PER_OWNER || '200', 10),
+    DELEGATE_WINDOW_MS: process.env.AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS !== undefined && process.env.AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS !== ''
+        ? Math.max(0, Number(process.env.AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS) || 0) : 60 * 1000,
+} as const;
+
 /** 세션 복제·트리(F08 PR-6) — 복제 메시지 상한·조상 탐색 깊이. SESSION_CLONE_MAX_MESSAGES / SESSION_TREE_MAX_DEPTH */
 export const SESSION_BRANCH = {
     CLONE_MAX_MESSAGES: parseInt(process.env.SESSION_CLONE_MAX_MESSAGES || '500', 10),

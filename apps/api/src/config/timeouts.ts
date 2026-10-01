@@ -235,6 +235,14 @@ export const WS_LIMITS = {
      * 기본 5회 — 일시적 네트워크 spike 는 허용, 만성적 stall 은 정리.
      */
     BROADCAST_BACKPRESSURE_TERMINATE_AFTER: Number(process.env.WS_BROADCAST_BACKPRESSURE_TERMINATE_AFTER) || 5,
+    /**
+     * 채팅 스트림 송신 백프레셔 임계 (bytes). 스트림을 받는 소켓의 bufferedAmount 가 이 값을 넘으면
+     * 그 소켓을 끊고 스트림은 detach 한다 — 생성은 유예(STREAM_DETACH_GRACE_MS) 동안 이어지고 재연결 시
+     * 스냅샷으로 잇는다. 느린 클라이언트 하나가 서버 메모리를 계속 차지하는 것을 막는다.
+     * 기본 8MB — 토큰 프레임(수백 B)이 수만 개 밀린 수준이라 정상 클라이언트는 닿지 않는다. 0 이면 검사 안 함(롤백).
+     */
+    STREAM_BACKPRESSURE_THRESHOLD_BYTES: process.env.WS_STREAM_BACKPRESSURE_THRESHOLD_BYTES !== undefined && process.env.WS_STREAM_BACKPRESSURE_THRESHOLD_BYTES !== ''
+        ? Math.max(0, Number(process.env.WS_STREAM_BACKPRESSURE_THRESHOLD_BYTES) || 0) : 8 * 1024 * 1024,
     /** artifact_chunk 스트리밍 throttle 윈도우(ms) — 토큰 단위 delta 를 합쳐 메시지 폭주 방지. */
     ARTIFACT_CHUNK_FLUSH_MS: parseInt(process.env.WS_ARTIFACT_CHUNK_FLUSH_MS || '50', 10),
 } as const;

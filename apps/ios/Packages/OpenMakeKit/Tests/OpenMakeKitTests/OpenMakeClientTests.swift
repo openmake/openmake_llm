@@ -293,6 +293,10 @@ final class OpenMakeClientTests: XCTestCase {
         let execution = try await client.executeAgentTask(id: "t1", approvalPolicy: .highRisk)
         XCTAssertFalse(execution.queued)
 
+        // 중복 생성 방지 — 생성 요청마다 Idempotency-Key 를 보낸다(재전송돼도 서버는 한 번만 만든다)
+        let createKey = MockURLProtocol.requests(to: "/api/agent-tasks").first?.value(forHTTPHeaderField: "Idempotency-Key")
+        XCTAssertNotNil(UUID(uuidString: try XCTUnwrap(createKey)))
+
         let request = MockURLProtocol.requests(to: "/api/agent-tasks/t1/execute").first
         let body = try XCTUnwrap(bodyData(from: request))
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
