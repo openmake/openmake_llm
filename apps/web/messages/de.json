@@ -336,6 +336,13 @@
       "low": "Reasoning: Niedrig",
       "medium": "Reasoning: Mittel",
       "high": "Reasoning: Hoch"
+    },
+    "followupQueue": {
+      "hint": "Wird der Reihe nach gesendet, sobald die Antwort fertig ist",
+      "paused": "Nachrichten in der Warteschlange — werden nach der nächsten Antwort gesendet",
+      "remove": "Aus der Warteschlange entfernen",
+      "add": "Zur Warteschlange hinzufügen",
+      "full": "Warteschlange ist voll (max. {max})"
     }
   },
   "chat": {

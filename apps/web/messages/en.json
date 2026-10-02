@@ -336,6 +336,13 @@
       "low": "Reasoning: Low",
       "medium": "Reasoning: Medium",
       "high": "Reasoning: High"
+    },
+    "followupQueue": {
+      "hint": "Sent in order when the answer finishes",
+      "paused": "Queued messages — sent after the next answer finishes",
+      "remove": "Remove from queue",
+      "add": "Add to queue",
+      "full": "Queue is full (max {max})"
     }
   },
   "chat": {

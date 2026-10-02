@@ -6,6 +6,7 @@ import type {
   SearchSourceRef,
   UserRole,
 } from "@openmake/shared-types";
+import { enqueueFollowup, removeFollowup, type QueuedFollowup } from "./followup-queue";
 
 /**
  * 채팅 메시지 (기존 state.js chatHistory 항목 대응).
@@ -192,6 +193,8 @@ interface AppState {
    * fromIndex 이후 히스토리를 잘라낸 뒤 content/images 를 재전송한다.
    */
   resendRequest: { fromIndex: number; content: string; images?: string[] } | null;
+  /** 답변 중에 보낸 후속 메시지 대기열 — 답변이 끝나면 use-chat-socket 이 순서대로 하나씩 보낸다(lib/followup-queue) */
+  followupQueue: QueuedFollowup[];
 
   // 아티팩트
   artifacts: Artifact[];
@@ -261,6 +264,9 @@ interface AppState {
   /** orchestrator_task 이벤트 — 같은 id 의 작업 상태를 갱신(plan 을 못 받았으면 추가). */
   updateOrchestratorTask: (task: OrchestratorTaskInfo) => void;
   setActiveTool: (t: string | null) => void;
+  /** 대기열에 넣는다 — 빈 메시지·상한 초과면 false */
+  enqueueFollowup: (text: string) => boolean;
+  removeFollowup: (id: string) => void;
   requestResend: (r: { fromIndex: number; content: string; images?: string[] }) => void;
   clearResendRequest: () => void;
   setPrivacyPrefs: (patch: { saveHistory?: boolean; memoryLearning?: boolean }) => void;
@@ -324,7 +330,7 @@ function newStreamingAssistant(s: { pendingServedModel: string | null }, fields:
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
   chatHistory: [],
   currentSessionId: null,
   isGenerating: false,
@@ -338,6 +344,7 @@ export const useAppStore = create<AppState>()(
   pendingServedModel: null,
   activeTool: null,
   resendRequest: null,
+  followupQueue: [],
 
   artifacts: [],
   activeArtifactId: null,
@@ -515,6 +522,12 @@ export const useAppStore = create<AppState>()(
       return { orchestratorProgress: { ...cur, tasks } };
     }),
   setActiveTool: (t) => set({ activeTool: t }),
+  enqueueFollowup: (text) => {
+    const r = enqueueFollowup(get().followupQueue, text, typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now()));
+    if (r.accepted) set({ followupQueue: r.queue });
+    return r.accepted;
+  },
+  removeFollowup: (id) => set((s) => ({ followupQueue: removeFollowup(s.followupQueue, id) })),
   requestResend: (r) => set({ resendRequest: r }),
   clearResendRequest: () => set({ resendRequest: null }),
   clearChat: () =>
@@ -529,6 +542,7 @@ export const useAppStore = create<AppState>()(
       pendingServedModel: null,
       activeTool: null,
       resendRequest: null,
+      followupQueue: [],
       artifacts: [],
       activeArtifactId: null,
       artifactPanelOpen: false,

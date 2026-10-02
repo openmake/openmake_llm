@@ -5,6 +5,7 @@ import { WEB_CHAT_MODES } from "@/addons/registry";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile, WsStreamEnvelope } from "@openmake/shared-types";
+import { nextFollowup } from "./followup-queue";
 import { acceptStreamEvent, cursorAfterResume, resumeCursorFields, EMPTY_STREAM_CURSOR, type StreamCursor } from "./ws-seq";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "./store";
 import { ApiClient, csrfHeaders } from "./api-client";
@@ -133,6 +134,16 @@ export function useChatSocket() {
   // 에이전트 작업 진행 이벤트의 마지막 순번 — 재연결 때 agent_task_resume 에 실어 놓친 이벤트만 다시 받는다
   // (서버 agent-task-progress-log 와 페어). 순번이 없는 서버(구버전)면 null 로 남아 종전처럼 동작한다.
   const lastTaskSeqRef = useRef<number | null>(null);
+  // 답변이 정상 종료되면 대기열(답변 중에 보낸 후속 메시지)의 첫 항목을 보낸다 — sendChat 은 아래에서 정의되므로 ref 경유.
+  // 전송에 성공했을 때만 대기열에서 뺀다(소켓이 닫혀 실패하면 남는다).
+  const sendChatRef = useRef<(message: string, images?: string[], files?: AttachedFileUI[], contextRefs?: Record<string, { id: string; title: string }>) => boolean>(() => false);
+  const sendNextFollowup = () => {
+    const s = useAppStore.getState();
+    const next = nextFollowup(s.followupQueue, "done");
+    if (!next) return;
+    // 가로채기 모드(토론/딥리서치)는 컨텍스트 참조를 보내지 않는다 — Composer 의 직접 전송과 같은 규칙
+    if (sendChatRef.current(next.text, undefined, undefined, s.activeChatMode ? undefined : s.contextRefs)) s.removeFollowup(next.id);
+  };
   // MCP 도구 결과 resource — 스트리밍 중 append 하면 응답이 조각나므로(appendToken 이 카드를
   // 마지막 메시지로 오인) 버퍼에 모았다가 스트림 종료 시 flush 한다.
   const pendingMcpResourcesRef = useRef<McpResourcePayload[]>([]);
@@ -378,6 +389,7 @@ export function useChatSocket() {
           setActiveTool(null);
           flushPendingMcpResources();
           runDeferredAfterStream();
+          sendNextFollowup();
           break;
         case "aborted":
           setStreaming(false);
@@ -830,6 +842,8 @@ export function useChatSocket() {
     },
     [appendMessage],
   );
+
+  useEffect(() => { sendChatRef.current = sendChat; }, [sendChat]);
 
   return { connected, sendChat, abort, startAgentTask };
 }
