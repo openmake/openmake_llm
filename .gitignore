@@ -57,6 +57,7 @@ backend/api/cache/
 /data/
 !/data/.gitkeep
 backend/api/data/
+apps/api/data/
 
 # Legacy backup files
 bak/
