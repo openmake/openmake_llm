@@ -10,7 +10,7 @@
  */
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Circle, CircleCheck, CircleX, CircleDot, CircleMinus, ChevronRight, type LucideIcon } from "lucide-react";
+import { Circle, CircleCheck, CircleX, CircleDot, CircleMinus, CirclePause, ChevronRight, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 import type { ApiSuccess } from "@openmake/shared-types";
@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 /** 진행 중 갱신 주기(ms) — 작업 상세 폴링과 같은 리듬. */
 const LIVE_POLL_MS = 2500;
 
-export type SubagentStatus = "queued" | "running" | "completed" | "failed" | "interrupted";
+export type SubagentStatus = "queued" | "running" | "awaiting_approval" | "completed" | "failed" | "interrupted";
 
 /** 서브에이전트 활동(109) — delegate/spawn 서브 1개 = trace 1개 */
 export interface SubagentTraceView {
@@ -36,6 +36,7 @@ export interface SubagentTraceView {
 const STATUS_ICON: Record<SubagentStatus, LucideIcon> = {
   queued: Circle,
   running: CircleDot,
+  awaiting_approval: CirclePause,
   completed: CircleCheck,
   failed: CircleX,
   interrupted: CircleMinus,
@@ -44,6 +45,7 @@ const STATUS_ICON: Record<SubagentStatus, LucideIcon> = {
 const STATUS_TONE: Record<SubagentStatus, "neutral" | "accent" | "success" | "danger" | "warn"> = {
   queued: "neutral",
   running: "accent",
+  awaiting_approval: "warn",
   completed: "success",
   failed: "danger",
   interrupted: "warn",
@@ -52,6 +54,7 @@ const STATUS_TONE: Record<SubagentStatus, "neutral" | "accent" | "success" | "da
 const STATUS_COLOR: Record<SubagentStatus, string> = {
   queued: "text-faint",
   running: "text-accent",
+  awaiting_approval: "text-warn",
   completed: "text-success",
   failed: "text-danger",
   interrupted: "text-warn",
@@ -61,7 +64,7 @@ const STATUS_COLOR: Record<SubagentStatus, string> = {
 function lastActivity(tr: SubagentTraceView): { tool: string | null; text: string } | null {
   for (let i = tr.steps.length - 1; i >= 0; i--) {
     const s = tr.steps[i];
-    if (s.type === "queued" || s.type === "started") continue;
+    if (s.type === "queued" || s.type === "started" || s.type === "awaiting" || s.type === "parked" || s.type === "resumed") continue;
     return { tool: s.tool, text: (s.content ?? "").replace(/\s+/g, " ").trim() };
   }
   return null;

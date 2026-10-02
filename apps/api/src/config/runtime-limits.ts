@@ -948,6 +948,12 @@ export const MCP_HIDDEN_TOOL_ARGS: ReadonlySet<string> = new Set(
 );
 
 /**
+ * 외부 MCP 도구 호출에 멱등 키를 싣는 `_meta` 키(175) — 에이전트 작업이 같은 호출을 다시 실행해도 값이 같다.
+ * 키를 모르는 서버는 `_meta` 를 무시한다(MCP 규격). 지원하는 서버는 이 값으로 중복 부작용을 막을 수 있다.
+ */
+export const MCP_IDEMPOTENCY_META_KEY = 'openmake/idempotencyKey';
+
+/**
  * 외부 provider 도구 루프 messages 토큰 예산 — external-provider 경로는 LLMClient.chat 의
  * model-pool context-fit 안전망을 우회(provider.streamChat 직접 호출)하므로, 큰 누적
  * 컨텍스트가 그대로 provider 로 전달돼 모델이 텍스트 없이 도구만 호출하고 끝나는 빈 응답을
@@ -1255,6 +1261,10 @@ export const AGENT_TASK_LIMITS = {
     HITL_PARK_MAX_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_MAX_MS || '', 10) || 7 * 24 * 60 * 60 * 1000,
     /** 주차 스윕 주기(ms) — 결정이 왔는데 재개되지 못한 작업(로컬 디바이스 미연결 등) 재시도·상한 초과 정리·workspace 유지. AGENT_TASK_HITL_PARK_SWEEP_MS(기본 10분) */
     HITL_PARK_SWEEP_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_SWEEP_MS || '', 10) || 10 * 60 * 1000,
+    /** 승인 대기 유예(ms) — 이 시간을 넘긴 승인 대기는 도구 종류와 무관하게 주차해 실행 슬롯을 반납한다(한 사용자의
+     *  늦은 승인이 다른 사용자의 작업을 막지 않게). 서브에이전트 승인은 재개 지점이 없어 제외. 0 이면 비활성(종전 동작).
+     *  AGENT_TASK_HITL_PARK_GRACE_MS(기본 0, 권장 60000) */
+    HITL_PARK_GRACE_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_GRACE_MS || '0', 10) || 0,
     /**
      * 마무리 턴 강제(2026-08-03) — 자원 상한에 **닿기 전에** 도구를 끊고 종합 답변을 받는다.
      *
@@ -1323,6 +1333,13 @@ export const AGENT_TASK_LIMITS = {
      *  보유 + 최근 window 내 task. checkpoint 없으면 failed 유지(기존 수동 UX 그대로).
      *  AGENT_TASK_BOOT_RECOVERY=false 로 비활성(기본 on). */
     BOOT_RECOVERY_ENABLED: process.env.AGENT_TASK_BOOT_RECOVERY !== 'false',
+    /** 실행 소유권(lease, 176) — 실행 중인 작업은 소유권을 주기적으로 연장하고, 소유권이 지난 작업은 주기 점검이 가져가
+     *  이어서 실행한다(서버가 죽어도 다른 서버·같은 서버가 복구). AGENT_TASK_LEASE_ENABLED=false 로 끈다(종전: 부팅 때만 복구). */
+    LEASE_ENABLED: process.env.AGENT_TASK_LEASE_ENABLED !== 'false',
+    /** 소유권 길이(ms) — 이 시간 동안 연장이 없으면 죽은 것으로 본다. 연장 주기는 1/3. AGENT_TASK_LEASE_MS(기본 60초) */
+    LEASE_MS: parseInt(process.env.AGENT_TASK_LEASE_MS || '', 10) || 60_000,
+    /** 지난 소유권 점검 주기(ms). AGENT_TASK_LEASE_SWEEP_MS(기본 30초) */
+    LEASE_SWEEP_MS: parseInt(process.env.AGENT_TASK_LEASE_SWEEP_MS || '', 10) || 30_000,
     /** 부팅 복구 인정 window(ms) — '이번 재시작'으로 마킹된 task 만 자동 resume 하고, 과거
      *  재시작이 남긴 오래된 failed('server restarted') 는 건드리지 않는다(수동 resume 대상).
      *  AGENT_TASK_BOOT_RECOVERY_WINDOW_MS 로 오버라이드(기본 15분). */
@@ -1473,6 +1490,13 @@ export const AGENT_TASK_LIMITS = {
      *  기본 ON(124) — 턴 중간 재개(turn-reentry)와 도구 호출 저널은 이 체크포인트가 있어야 남은
      *  호출을 구분할 수 있다. 운영도 2026-08 부터 ON 이었다. AGENT_TASK_MIDTURN_CHECKPOINT=false 로 끈다. */
     MIDTURN_CHECKPOINT_ENABLED: process.env.AGENT_TASK_MIDTURN_CHECKPOINT !== 'false',
+    /** 실행 중 표식(172) — 부작용 도구는 실행 직전 tool_call id 를 남기고, 재개 때 그 호출이 저널에 없으면
+     *  다시 실행하지 않고 "결과 불명" 안내를 도구 결과로 준다(중복 부작용 방지). 기본 ON.
+     *  AGENT_TASK_REENTRY_UNKNOWN_OUTCOME=false 면 종전처럼 결과 없는 호출을 모두 다시 실행한다. */
+    REENTRY_UNKNOWN_OUTCOME_ENABLED: process.env.AGENT_TASK_REENTRY_UNKNOWN_OUTCOME !== 'false',
+    /** 결과 불명 호출을 만나면 사용자에게 묻는다(질문 채널) — 승인하면 다시 실행, 거절·무응답이면 안내만 주고 다시 실행하지 않는다.
+     *  기본 ON. AGENT_TASK_REENTRY_UNKNOWN_OUTCOME_ASK=false 면 묻지 않고 안내만 준다(172 의 처음 동작). */
+    REENTRY_UNKNOWN_OUTCOME_ASK: process.env.AGENT_TASK_REENTRY_UNKNOWN_OUTCOME_ASK !== 'false',
     /** 실행 중 중간 지시(steering) — 실행 중 task 에 사용자가 방향 지시를 주입하면 다음 턴 경계에서
      *  conversation 에 user 메시지로 반영(취소·재시작 없이 교정). steering 은 사용자가 명시적으로
      *  보낼 때만 동작하므로 기본 ON. AGENT_TASK_STEERING=false 로 비활성. */
@@ -1743,6 +1767,50 @@ export const APPROVAL_RECENT_WINDOW_MS = parseInt(process.env.APPROVAL_RECENT_WI
 export const IDEMPOTENCY = {
     TTL_MS: parseInt(process.env.IDEMPOTENCY_TTL_MS || String(10 * 60 * 1000), 10),
     MAX_PER_OWNER: parseInt(process.env.IDEMPOTENCY_MAX_PER_OWNER || '200', 10),
+} as const;
+
+/**
+ * 채팅의 도구 카드 — 도구 호출이 끝날 때마다 화면으로 보내는 요약의 길이 상한(글자). 결과 전문은 보내지 않는다.
+ * CHAT_TOOL_CARD_PREVIEW_CHARS(결과 미리보기, 기본 600) / CHAT_TOOL_CARD_ARGS_CHARS(인자 요약, 기본 400).
+ */
+export const CHAT_TOOL_CARD = {
+    PREVIEW_CHARS: parseInt(process.env.CHAT_TOOL_CARD_PREVIEW_CHARS || '600', 10),
+    ARGS_CHARS: parseInt(process.env.CHAT_TOOL_CARD_ARGS_CHARS || '400', 10),
+} as const;
+
+/**
+ * 에이전트 작업 진행 이벤트 보관(순번·재전송) — 재연결한 클라이언트에 놓친 이벤트를 다시 주기 위해 사용자별로 잠깐 둔다.
+ * AGENT_TASK_PROGRESS_LOG_MAX_EVENTS(사용자당 개수, 기본 200) / AGENT_TASK_PROGRESS_LOG_TTL_MS(보관 시간, 기본 10분).
+ * SWEEP_EVERY_APPENDS: 이만큼 기록할 때마다 이벤트가 없어진 사용자 기록을 정리한다.
+ */
+export const AGENT_TASK_PROGRESS_LOG = {
+    MAX_EVENTS_PER_USER: parseInt(process.env.AGENT_TASK_PROGRESS_LOG_MAX_EVENTS || '200', 10),
+    TTL_MS: parseInt(process.env.AGENT_TASK_PROGRESS_LOG_TTL_MS || String(10 * 60 * 1000), 10),
+    SWEEP_EVERY_APPENDS: 500,
+} as const;
+
+/**
+ * 에이전트 작업 생성 중복 방지 — 같은 Idempotency-Key 의 재요청(더블 클릭·네트워크 재전송)은 새로 만들지 않는다.
+ * TTL_MS: 키 기억 시간. DELEGATE_WINDOW_MS: 채팅에서 위임한 작업(delegate_agent_task)은 키가 없어 같은 사용자·목표·턴 수를
+ * 이 창 안에서 한 번만 만든다(0 이면 끔). AGENT_TASK_CREATE_IDEMPOTENCY_TTL_MS / _MAX_PER_OWNER / AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS
+ */
+export const AGENT_TASK_CREATE_IDEMPOTENCY = {
+    TTL_MS: parseInt(process.env.AGENT_TASK_CREATE_IDEMPOTENCY_TTL_MS || String(10 * 60 * 1000), 10),
+    MAX_PER_OWNER: parseInt(process.env.AGENT_TASK_CREATE_IDEMPOTENCY_MAX_PER_OWNER || '200', 10),
+    DELEGATE_WINDOW_MS: process.env.AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS !== undefined && process.env.AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS !== ''
+        ? Math.max(0, Number(process.env.AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS) || 0) : 60 * 1000,
+} as const;
+
+/**
+ * 종료 알림 유실 재전송(174) — 종료 상태는 저장됐는데 알림(화면 이벤트·푸시)을 못 보낸 작업을 주기 점검이 다시 알린다.
+ * SWEEP_MS: 점검 주기. GRACE_MS: 정상 경로가 방금 쓴 행을 가로채지 않게 두는 여유. WINDOW_MS: 이보다 오래된 것은 보내지 않는다.
+ * AGENT_TASK_TERMINAL_NOTIFY_SWEEP_MS / _GRACE_MS / _WINDOW_MS / _BATCH
+ */
+export const AGENT_TASK_TERMINAL_NOTIFY = {
+    SWEEP_MS: parseInt(process.env.AGENT_TASK_TERMINAL_NOTIFY_SWEEP_MS || String(60 * 1000), 10),
+    GRACE_MS: parseInt(process.env.AGENT_TASK_TERMINAL_NOTIFY_GRACE_MS || String(30 * 1000), 10),
+    WINDOW_MS: parseInt(process.env.AGENT_TASK_TERMINAL_NOTIFY_WINDOW_MS || String(24 * 60 * 60 * 1000), 10),
+    BATCH: parseInt(process.env.AGENT_TASK_TERMINAL_NOTIFY_BATCH || '50', 10),
 } as const;
 
 /** 세션 복제·트리(F08 PR-6) — 복제 메시지 상한·조상 탐색 깊이. SESSION_CLONE_MAX_MESSAGES / SESSION_TREE_MAX_DEPTH */

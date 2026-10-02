@@ -94,7 +94,8 @@ export async function sweepParkedTasks(): Promise<{ resumed: number; expired: nu
                 if (await resumeParkedTask(t.id)) out.resumed++;
             } else if (!t.has_live_pending) {
                 await new AgentTaskApprovalRepository(getPool()).expirePendingForTask(t.id, 'expired');
-                await getUnifiedDatabase().updateAgentTask(t.id, { status: 'failed', error: AGENT_TASK_PARK_EXPIRED_ERROR });
+                // 알림 표식(174) — 실행 루프 밖의 종료라 여기서는 알리지 않고, 주기 점검이 사용자에게 알린다.
+                await getUnifiedDatabase().updateAgentTask(t.id, { status: 'failed', error: AGENT_TASK_PARK_EXPIRED_ERROR, terminalNotifyPending: true });
                 out.expired++;
             } else if (t.workspace_path) {
                 await utimes(t.workspace_path, now, now);

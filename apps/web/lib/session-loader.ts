@@ -14,6 +14,7 @@ export async function loadSessionIntoStore(sid: string): Promise<void> {
   st.setArtifacts([]);
   st.setCurrentSessionId(sid);
   st.clearContextRefs();
+  useAppStore.setState({ followupQueue: [] }); // 다른 대화의 대기 메시지가 이 대화로 나가지 않게
   try {
     const res = await ApiClient.get<ApiSuccess<{ messages?: WireMessage[] }>>(appendAnonSessionId(`/api/chat/sessions/${sid}/messages`));
     const msgs = res?.data?.messages ?? [];

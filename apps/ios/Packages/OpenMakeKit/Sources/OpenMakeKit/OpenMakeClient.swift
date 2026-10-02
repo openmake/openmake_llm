@@ -150,17 +150,18 @@ public actor OpenMakeClient {
     // MARK: - Transport
 
     /// Bearer 요청 + 401 시 refresh 1회 후 재시도
+    /// extraHeaders 는 재시도에도 그대로 실린다(예: Idempotency-Key — 401 갱신 뒤 재전송이 같은 요청으로 인식되게).
     func authorizedSend(
-        method: String, path: String, body: (any Encodable)? = nil
+        method: String, path: String, body: (any Encodable)? = nil, extraHeaders: [String: String] = [:]
     ) async throws -> (Data, HTTPURLResponse) {
         guard let tokens = tokenStore.load() else { throw OpenMakeAPIError.notAuthenticated }
         do {
-            return try await perform(method: method, path: path, body: body, bearer: tokens.access)
+            return try await perform(method: method, path: path, body: body, bearer: tokens.access, extraHeaders: extraHeaders)
         } catch let error as OpenMakeAPIError {
             guard case .server(401, _, _) = error else { throw error }
             try await refresh()
             guard let rotated = tokenStore.load() else { throw OpenMakeAPIError.notAuthenticated }
-            return try await perform(method: method, path: path, body: body, bearer: rotated.access)
+            return try await perform(method: method, path: path, body: body, bearer: rotated.access, extraHeaders: extraHeaders)
         }
     }
 
@@ -189,7 +190,8 @@ public actor OpenMakeClient {
         path: String,
         body: (any Encodable)? = nil,
         bearer: String? = nil,
-        csrf: String? = nil
+        csrf: String? = nil,
+        extraHeaders: [String: String] = [:]
     ) async throws -> (Data, HTTPURLResponse) {
         // 주의: URL.appending(path:) 는 '?' 를 percent-encode 하므로 쿼리 포함 path 는 relative 해석
         guard let url = URL(string: path, relativeTo: config.serverURL) else {
@@ -203,6 +205,9 @@ public actor OpenMakeClient {
         }
         if let csrf {
             request.setValue(csrf, forHTTPHeaderField: "X-CSRF-Token")
+        }
+        for (name, value) in extraHeaders {
+            request.setValue(value, forHTTPHeaderField: name)
         }
         if let body {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")

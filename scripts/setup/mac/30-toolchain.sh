@@ -225,6 +225,16 @@ ensure_docker() {
 # ── 포트 충돌 회피 ───────────────────────────────────────────────────────────
 port_in_use() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 port_owned_by() { has docker && docker port "$1" 2>/dev/null | grep -q ":$2\$"; }
+# 이 클론의 프로세스(작업 폴더가 클론 안)가 LISTEN 중인가 — 'omk dev up' 의 개발 서버는 PM2 가 아니다
+port_owned_by_clone() { # $1=포트 $2=클론 경로(실제 경로)
+    has lsof || return 1
+    local pid cwd
+    for pid in $(lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null); do
+        cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')"
+        case "$cwd/" in "$2"/*) return 0 ;; esac
+    done
+    return 1
+}
 
 find_free_port() {
     local p
@@ -253,13 +263,13 @@ ensure_ports() {
     v="$(env_value PORT)";          [[ -n "$v" ]] && APP_PORT="$v"
     v="$(env_value OMK_WEB_PORT)";  [[ -n "$v" ]] && WEB_PORT="$v"
 
-    if port_in_use "$APP_PORT" && ! pm2_has_app "$APP_NAME"; then
+    if port_in_use "$APP_PORT" && ! pm2_has_app "$APP_NAME" && ! port_owned_by_clone "$APP_PORT" "$SCRIPT_DIR"; then
         alt="$(find_free_port $((APP_PORT + 1)))" || die "API 대체 포트 탐색 실패 — --port 로 지정하세요."
         log_warn "포트 $APP_PORT 사용 중 — API 를 $alt 로 옮깁니다."
         [[ -f "$ENV_FILE" ]] && set_env PORT "$alt"
         APP_PORT="$alt"
     fi
-    if port_in_use "$WEB_PORT" && ! pm2_has_app "$FRONT_APP_NAME"; then
+    if port_in_use "$WEB_PORT" && ! pm2_has_app "$FRONT_APP_NAME" && ! port_owned_by_clone "$WEB_PORT" "$SCRIPT_DIR"; then
         alt="$(find_free_port 13000)" || die "웹 대체 포트 탐색 실패 — --web-port 로 지정하세요."
         log_warn "포트 $WEB_PORT 사용 중 — 웹 UI 를 $alt 로 옮깁니다."
         [[ -f "$ENV_FILE" ]] && set_env OMK_WEB_PORT "$alt"

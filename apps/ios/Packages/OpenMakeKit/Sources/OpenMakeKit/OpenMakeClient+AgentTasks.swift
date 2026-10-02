@@ -150,6 +150,11 @@ public struct AgentTaskCreation: Sendable, Equatable {
     public let task: AgentTask
     public let concurrentActive: Int
     public let warnings: [String]
+    /// 같은 Idempotency-Key 로 이미 만든 작업을 서버가 돌려줬다(새로 만들지 않음)
+    public let deduplicated: Bool
+
+    /// 서버가 기존 작업을 돌려줬고 그 작업이 이미 시작됐다 — 다시 execute 하면 400 이므로 건너뛴다
+    public var alreadyStarted: Bool { deduplicated && task.status != .pending }
 }
 
 public struct AgentTaskExecution: Sendable, Equatable {
@@ -303,6 +308,7 @@ public extension OpenMakeClient {
             let task: AgentTask
             let concurrentActive: Int
             let warnings: [String]
+            let deduplicated: Bool?
         }
         struct Envelope: Decodable {
             let data: Payload
@@ -312,13 +318,16 @@ public extension OpenMakeClient {
             maxTurns: maxTurns,
             files: files.isEmpty ? nil : files,
             images: images.isEmpty ? nil : images)
+        // 중복 생성 방지 — 재전송(401 갱신 뒤 재시도 등)돼도 서버는 작업을 한 번만 만든다
         let (data, _) = try await authorizedSend(
-            method: "POST", path: "/api/agent-tasks", body: request)
+            method: "POST", path: "/api/agent-tasks", body: request,
+            extraHeaders: ["Idempotency-Key": UUID().uuidString])
         let payload = try decodeContract(Envelope.self, from: data).data
         return AgentTaskCreation(
             task: payload.task,
             concurrentActive: payload.concurrentActive,
-            warnings: payload.warnings)
+            warnings: payload.warnings,
+            deduplicated: payload.deduplicated ?? false)
     }
 
     func executeAgentTask(

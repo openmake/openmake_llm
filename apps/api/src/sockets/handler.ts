@@ -53,6 +53,7 @@ import { handleBridgeMessage } from './ws-bridge-handler';
 import { withSpan } from '../observability/otel';
 import { getAnalyticsSystem } from '../monitoring/analytics';
 import { getEventBus, AGENT_TASK_PROGRESS, type AgentTaskProgressEvent } from '../utils/event-bus';
+import { sequenceAgentTaskProgress, replayAgentTaskProgress } from './agent-task-progress-log';
 import { runWithRequestContext } from '../utils/request-context';
 import { isOriginAllowed } from '../security/cors-policy';
 import { WsConnectionGuard } from './ws-connection-guard';
@@ -331,6 +332,12 @@ export class WebSocketHandler {
             return;
         }
 
+        // 에이전트 작업 진행 이벤트 이어받기 — 재연결한 클라이언트가 마지막으로 받은 순번을 보낸다(agent-task-progress-log).
+        if (typedMsg.type === 'agent_task_resume') {
+            replayAgentTaskProgress(ws, (ws as ExtendedWebSocket)._authenticatedUserId ?? undefined, typedMsg.afterSeq);
+            return;
+        }
+
         const validTypes: WSMessage['type'][] = ['refresh', 'request_agents', 'chat', 'abort', 'resume'];
         if (!validTypes.includes(typedMsg.type)) {
             log.debug(`[WS] 알 수 없는 메시지 타입: ${typedMsg.type}`);
@@ -567,18 +574,7 @@ export class WebSocketHandler {
      */
     private subscribeAgentTaskEvents(): void {
         getEventBus().on(AGENT_TASK_PROGRESS, (ev: AgentTaskProgressEvent) => {
-            this.sendToUser(ev.userId, {
-                type: 'agent_task_progress',
-                taskId: ev.taskId,
-                status: ev.status,
-                progress: ev.progress,
-                currentTurn: ev.currentTurn,
-                // 방금 기록된 스텝 요약(4-5) — 채팅 인라인 카드의 "현재 단계" 실시간 표시.
-                ...(ev.step ? { step: ev.step } : {}),
-                // 승인 이관·에스컬레이션·철회·계획 편집 알림(HITL 2단계) — 받은 쪽은 승인함을 재조회한다.
-                ...(ev.approvalId ? { approvalId: ev.approvalId } : {}),
-                ...(ev.reason ? { reason: ev.reason } : {}),
-            });
+            this.sendToUser(ev.userId, sequenceAgentTaskProgress(ev));
         });
     }
 
@@ -590,6 +586,6 @@ export class WebSocketHandler {
         if (!userId) return;
         const connections = this.guard.getUserConnections(userId);
         if (connections.size === 0) return;
-        sendToConnections(connections, data);
+        sendToConnections(connections, data, this.slowClientCounters);
     }
 }

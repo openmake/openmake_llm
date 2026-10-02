@@ -15,7 +15,7 @@
  * @module services/agent-task/subagent
  */
 import type { LLMClient } from '../../llm';
-import type { ChatMessage, ToolDefinition } from '../../llm/types';
+import type { ChatMessage, ToolCall, ToolDefinition } from '../../llm/types';
 import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
@@ -24,6 +24,8 @@ import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-
 import { runTool } from './task-steps';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import type { SubagentTrace } from './subagent-trace';
+import { AgentTaskParked } from './types';
+import { findDanglingToolCalls } from './turn-reentry';
 import { createLogger } from '../../utils/logger';
 import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE } from '../../prompts/subagent-system';
 
@@ -54,6 +56,22 @@ interface SubagentParams {
     onPausedMs?: (ms: number) => void;
     /** 활동 기록(109) — 에이전트 작업 경로만 넘긴다. 채팅 경로는 작업 행이 없어 무기록. */
     trace?: SubagentTrace;
+    /**
+     * 승인 주차(173) — 에이전트 작업의 delegate 경로만 넘긴다. 승인 대기가 유예를 넘기면 대화를 save 로 남기고
+     * AgentTaskParked 를 던져 부모가 delegate 호출 지점에서 주차된다. restored 가 있으면 그 대화에서 이어간다.
+     */
+    park?: { restored?: SubagentResumeState; save: (state: SubagentResumeState) => Promise<void> };
+    /** 승인이 대기에 들어감 — delegate 경로만 넘긴다(부모 작업 paused + 알림, 부모 턴의 승인과 같은 발행). */
+    onApprovalPending?: (toolName: string) => void;
+    /** 그 대기가 유예 안에 결정(승인·거절)됨 — 부모 작업을 running 으로 되돌린다. 주차되면 부르지 않는다. */
+    onApprovalDecided?: () => void;
+}
+
+/** 주차된 서브에이전트의 재개 지점 — 결과 없는 tool_call 로 끝나는 대화 + 그 턴·누적 토큰. */
+export interface SubagentResumeState {
+    conversation: ChatMessage[];
+    turn: number;
+    tokens: number;
 }
 
 /**
@@ -62,7 +80,8 @@ interface SubagentParams {
 export async function runSubagent(p: SubagentParams): Promise<string> {
     const maxTurns = AGENT_TASK_LIMITS.SUBAGENT_MAX_TURNS;
     const mcp = getToolRuntime();
-    let tokens = 0;
+    const restored = p.park?.restored;
+    let tokens = restored?.tokens ?? 0;
 
     // role-client.ts 의 부모 턴과 같은 이유 — 기본 LLM_TIMEOUT(120s)은 채팅용이라,
     // 서브의 마지막 턴(도구 없이 장문 최종 답변)이 넘기면 "Request timed out" 으로 죽는다.
@@ -76,17 +95,49 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
         maxRetries: 0,
     });
 
-    const conversation: ChatMessage[] = [
+    const conversation: ChatMessage[] = restored ? [...restored.conversation] : [
         {
             role: 'system',
             content: p.personaPrompt + '\n\n' + buildSubagentDelegationRules(maxTurns),
         },
         { role: 'user', content: p.subgoal },
     ];
+    // 재개: 저장된 턴은 LLM 을 다시 부르지 않고 결과 없는 호출만 이어서 실행한다(이미 끝난 호출은 대화에 결과가 있다).
+    let resumeCalls: ToolCall[] | null = restored ? (findDanglingToolCalls(conversation)?.calls ?? null) : null;
+    /** 승인 대기가 유예를 넘김 → 대화를 남기고 부모 주차. 저장 실패는 주차를 막지 않는다(재개 때 처음부터). */
+    const parkHere = async (turn: number, toolName: string): Promise<never> => {
+        p.trace?.record('parked', toolName); // 저장 전에 남긴다 — 체크포인트의 다음 순번에 포함
+        await p.park!.save({ conversation, turn, tokens })
+            .catch((e) => logger.warn(`[Subagent] 주차 대화 저장 실패 — 재개 때 처음부터 다시: ${e instanceof Error ? e.message : e}`));
+        throw new AgentTaskParked();
+    };
+
+    if (restored) p.trace?.record('resumed', '');
 
     try {
-        for (let turn = 0; turn < maxTurns; turn++) {
+        for (let turn = restored?.turn ?? 0; turn < maxTurns; turn++) {
             if (p.signal?.aborted) return 'Error: 상위 작업이 중단되었습니다.';
+            const toolCalls = resumeCalls ?? await llmTurn(turn);
+            resumeCalls = null;
+            if (typeof toolCalls === 'string') return toolCalls;
+            await runCalls(toolCalls, turn);
+        }
+        // 턴 소진 — 마지막 assistant 내용 반환.
+        const last = [...conversation].reverse().find((m) => m.role === 'assistant');
+        const exhausted = stripRawToolCallXml((last?.content as string) || '') || '(서브에이전트가 턴 상한에 도달했습니다)';
+        p.trace?.record('final', `[턴 상한 도달] ${exhausted}`);
+        return exhausted;
+    } catch (e) {
+        if (e instanceof AgentTaskParked) throw e; // 주차는 실패가 아니다 — 부모가 받아 주차한다
+        const msg = e instanceof Error ? e.message : String(e);
+        p.trace?.record('error', msg);
+        logger.warn(`[Subagent] 실행 실패: ${msg}`);
+        return `Error: 서브에이전트 실행 실패 — ${msg}`;
+    }
+
+    /** LLM 1턴 — 도구 호출이 있으면 그 목록, 없으면(또는 상한) 최종 텍스트. */
+    async function llmTurn(turn: number): Promise<ToolCall[] | string> {
+        {
             // 마지막 턴엔 도구를 제거해 최종 답변을 강제(도구 호출로 끝나 결과가 없는 상황 방지).
             const lastTurn = turn === maxTurns - 1;
             // 마지막 턴 진입을 모델에게 명시 — 안내문·배경은 prompts/subagent-system.ts 참고.
@@ -121,7 +172,14 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             for (const tc of result.tool_calls) {
                 p.trace?.record('tool_call', JSON.stringify(tc.function.arguments ?? {}), tc.function.name);
             }
+            return result.tool_calls;
+        }
+    }
 
+    /** 도구 호출 실행 — 승인이 주차되면 그 호출 앞에서 대화를 남기고 던진다. */
+    async function runCalls(calls: ToolCall[], turn: number): Promise<void> {
+        {
+            const result = { tool_calls: calls };
             // 읽기 전용 도구 병렬 선실행 — 승인 필요 호출은 자동 승인 작업에서만(부모 루프와 같은 규칙).
             const prefetched = await prefetchReadOnlyCalls(
                 result.tool_calls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
@@ -154,11 +212,22 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 // 부모와 동일한 승인 게이트 — 정책 우회 없음(자동승인 task 면 즉시 approved).
                 let approved = true;
                 if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
+                    let pended = false;
                     const r = await getApprovalRegistry().request(
                         { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
-                        { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal },
+                        {
+                            timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, parkable: !!p.park,
+                            // 대기 진입 — 활동 기록에 awaiting(유예 구간도 "승인 대기"로 보이게) + 부모 paused·알림.
+                            ...(p.onApprovalPending || p.trace ? { onPending: (pa) => {
+                                pended = true;
+                                p.trace?.record('awaiting', JSON.stringify(args), name);
+                                p.onApprovalPending?.(pa.toolName);
+                            } } : {}),
+                        },
                     );
                     p.onPausedMs?.(r.waitedMs);
+                    if (r.reason === 'parked' && p.park) await parkHere(turn, name);
+                    if (pended) { p.trace?.record('resumed', ''); p.onApprovalDecided?.(); }
                     approved = r.decision === 'approved';
                 }
                 const toolResult = approved
@@ -168,15 +237,5 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 conversation.push({ role: 'tool', content: toolResult, tool_name: name, tool_call_id: tc.id });
             }
         }
-        // 턴 소진 — 마지막 assistant 내용 반환.
-        const last = [...conversation].reverse().find((m) => m.role === 'assistant');
-        const exhausted = stripRawToolCallXml((last?.content as string) || '') || '(서브에이전트가 턴 상한에 도달했습니다)';
-        p.trace?.record('final', `[턴 상한 도달] ${exhausted}`);
-        return exhausted;
-    } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        p.trace?.record('error', msg);
-        logger.warn(`[Subagent] 실행 실패: ${msg}`);
-        return `Error: 서브에이전트 실행 실패 — ${msg}`;
     }
 }

@@ -14,7 +14,7 @@ import { resolveCleanedContent } from './ws-chat-completion';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
-import { claimClientRequest } from '../chat/request-idempotency';
+import { claimClientRequestShared } from '../chat/request-idempotency';
 import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
 import { ProviderError } from '../providers/provider-errors';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
@@ -231,7 +231,7 @@ export async function handleChatMessage(
         const messageId = crypto.randomUUID
             ? crypto.randomUUID()
             : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const { clientRequestId, priorMessageId } = claimClientRequest(extWs._authenticatedUserId ? `u:${extWs._authenticatedUserId}` : `a:${anonSessionId ?? ''}`, msg.clientRequestId, messageId);
+        const { clientRequestId, priorMessageId } = await claimClientRequestShared(extWs._authenticatedUserId ? `u:${extWs._authenticatedUserId}` : `a:${anonSessionId ?? ''}`, msg.clientRequestId, messageId);
         if (priorMessageId) { out({ type: 'done', messageId: priorMessageId, deduplicated: true, metrics: { tokensPerSec: '0.00', tokenCount: 0 } }); return; }
         const turnStartSources = [...(injectedSources ?? []), ...turnContexts.sources]; // 도구 출처는 이 뒤 번호로 이어 붙는다
         emitSearchSources(out, messageId, turnStartSources); // 사전 주입 검색·통합 출처(F19.4)
@@ -369,11 +369,11 @@ export async function handleChatMessage(
             // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
             onMcpToolResult: (event) => {
                 emitSearchSources(out, messageId, [...turnStartSources, ...(event.sources ?? [])]); // web_search 도구 출처(F19.4)
-                if (!event.resources.length) return;
+                if (!event.resources.length && !event.summary) return;
                 out({
                     type: 'mcp_tool_result',
                     toolName: event.toolName,
-                    resources: event.resources,
+                    ...(event.resources.length ? { resources: event.resources } : {}), ...(event.summary ? { summary: event.summary } : {}), // summary: 도구 카드
                     messageId,
                 });
             },

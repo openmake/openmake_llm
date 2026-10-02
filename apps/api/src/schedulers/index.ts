@@ -164,6 +164,18 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('주차 스윕 등록 실패(무시):', err);
     }
 
+    // 7-c. 지난 실행 소유권 점검(176) — 소유권 연장이 끊긴 실행 중 작업(그 서버가 죽음)을 가져와 체크포인트에서 이어 실행한다.
+    //       부팅 복구(아래) 뒤부터 주기로만 돈다 — 부팅 직후의 내 작업은 부팅 복구가 처리한다.
+    try {
+        const { AGENT_TASK_LIMITS } = await import('../config/runtime-limits');
+        if (AGENT_TASK_LIMITS.LEASE_ENABLED) {
+            const { sweepExpiredTaskLeases } = await import('../services/agent-task/boot-recovery');
+            setInterval(() => { void sweepExpiredTaskLeases(); }, AGENT_TASK_LIMITS.LEASE_SWEEP_MS).unref();
+        }
+    } catch (err) {
+        logger.warn('실행 소유권 점검 등록 실패(무시):', err);
+    }
+
     // 8-B. Agent Task 부팅 자동 복구 — 재시작으로 running/paused 로 박제된 task 를 스윕.
     //      샌드박스 플래그와 무관하게 실행(비-샌드박스 task 도 좀비가 된다). 반드시 위
     //      reapOrphanTaskSandboxes() 이후 — 먼저 돌면 resume 이 만든 컨테이너를 reap 이 죽인다.
@@ -173,6 +185,15 @@ export async function startAllSchedulers(): Promise<void> {
         if (resumed || failed) logger.info(`Agent Task 부팅 복구: 재개 ${resumed} / 실패정리 ${failed}`);
     } catch (err) {
         logger.warn('Agent Task 부팅 복구 실패(무시):', err);
+    }
+
+    // 8-B'. 종료 알림 유실 재전송(174) — 결과는 저장됐는데 알림 전에 죽은 작업을 부팅 직후와 주기 점검으로 다시 알린다.
+    //       부팅 복구 뒤에 둔다 — 복구가 다시 살린 작업은 종료 상태가 아니라 대상에서 빠진다.
+    try {
+        const { startTerminalNotifySweep } = await import('../services/agent-task/terminal-notify');
+        startTerminalNotifySweep();
+    } catch (err) {
+        logger.warn('종료 알림 재전송 등록 실패(무시):', err);
     }
 
     // 8-C. Agent Task 스케줄/반복 트리거 — 플래그 ON 시 cron/interval due 스캔(tick 주기).

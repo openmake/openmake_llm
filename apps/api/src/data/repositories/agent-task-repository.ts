@@ -41,7 +41,9 @@ export class AgentTaskRepository extends BaseRepository {
         deviceId?: string;
         /** 로컬 실행 대상 폴더 (102) — 연결 루트 기준 상대경로. 미지정은 루트 */
         folderRel?: string;
-    }): Promise<void> {
+        /** 생성 요청의 Idempotency-Key (174) — 같은 사용자·같은 키의 행이 이미 있으면 만들지 않는다 */
+        idempotencyKey?: string;
+    }): Promise<boolean> {
         // input_files/input_images 는 값이 있을 때만 컬럼에 포함 — 056/057 마이그레이션
         // 미적용 배포에서도 해당 값 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
         const cols = ['id', 'user_id', 'goal', 'max_turns', 'model'];
@@ -66,10 +68,56 @@ export class AgentTaskRepository extends BaseRepository {
             cols.push('folder_rel');
             values.push(params.folderRel);
         }
-        await this.query(
-            `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`,
+        // 멱등 키도 값이 있을 때만 — 키 없는 생성 경로(스케줄·트리거·분기)는 174 미적용 배포에서도 그대로 돈다.
+        if (params.idempotencyKey !== undefined) {
+            cols.push('create_idempotency_key');
+            values.push(params.idempotencyKey);
+        }
+        const insert = `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`;
+        if (params.idempotencyKey === undefined) {
+            await this.query(insert, values);
+            return true;
+        }
+        // 같은 (user_id, key) 가 이미 있으면 아무것도 넣지 않는다 — 반환 행이 없으면 중복(호출부가 기존 작업을 돌려준다).
+        const result = await this.query<{ id: string }>(
+            `${insert} ON CONFLICT (user_id, create_idempotency_key) WHERE create_idempotency_key IS NOT NULL DO NOTHING RETURNING id`,
             values
         );
+        return result.rows.length > 0;
+    }
+
+    /** 생성 멱등 키로 작업 조회(174) — 재시작·다른 서버가 만든 작업도 찾는다. */
+    async findAgentTaskByCreateKey(userId: string, key: string): Promise<AgentTask | undefined> {
+        const result = await this.query<AgentTask>(
+            'SELECT * FROM agent_tasks WHERE user_id = $1 AND create_idempotency_key = $2', [userId, key]);
+        return result.rows[0];
+    }
+
+    /** 종료 알림을 보냈다 — 표식을 지운다(174). updated_at 은 건드리지 않는다. */
+    async clearTerminalNotifyPending(taskId: string): Promise<void> {
+        await this.query('UPDATE agent_tasks SET terminal_notify_pending = FALSE WHERE id = $1 AND terminal_notify_pending', [taskId]);
+    }
+
+    /**
+     * 알림을 못 보낸 종료 작업을 가져오면서 표식을 지운다(174) — 한 문장이라 여러 프로세스가 같은 행을 두 번 가져가지 않는다.
+     * graceMs: 정상 경로가 방금 쓴 행을 가로채지 않게 두는 여유. windowMs: 이보다 오래된 것은 다시 보내지 않는다.
+     */
+    async claimPendingTerminalNotifications(opts: { graceMs: number; windowMs: number; limit: number }): Promise<Array<Pick<AgentTask, 'id' | 'user_id' | 'goal' | 'status' | 'progress' | 'current_turn'>>> {
+        const result = await this.query<Pick<AgentTask, 'id' | 'user_id' | 'goal' | 'status' | 'progress' | 'current_turn'>>(
+            `UPDATE agent_tasks SET terminal_notify_pending = FALSE
+             WHERE id IN (
+                 SELECT id FROM agent_tasks
+                 WHERE terminal_notify_pending
+                   AND status IN ('completed', 'failed', 'cancelled')
+                   AND updated_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')
+                   AND updated_at > NOW() - ($2::bigint * INTERVAL '1 millisecond')
+                 ORDER BY updated_at
+                 LIMIT $3
+                 FOR UPDATE SKIP LOCKED
+             )
+             RETURNING id, user_id, goal, status, progress, current_turn`,
+            [opts.graceMs, opts.windowMs, opts.limit]);
+        return result.rows;
     }
 
     async getAgentTask(taskId: string): Promise<AgentTask | undefined> {
@@ -97,6 +145,8 @@ export class AgentTaskRepository extends BaseRepository {
         transitionReason?: string;
         /** 큐 우선순위(131) */
         priority?: number;
+        /** 종료 알림 표식(174) — 종료 상태와 같은 쓰기로 true, 알림을 보낸 뒤 clearTerminalNotifyPending */
+        terminalNotifyPending?: boolean;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -111,6 +161,10 @@ export class AgentTaskRepository extends BaseRepository {
             // 실패 분류(131) — failed 전이에서만 채우고, 다른 전이(재실행·재개)는 지운다
             sets.push(updates.status === 'failed' ? `failure_class = $${paramIdx++}` : 'failure_class = NULL');
             if (updates.status === 'failed') params.push(classifyAgentTaskFailure(updates.error));
+        }
+        if (updates.terminalNotifyPending !== undefined) {
+            sets.push(`terminal_notify_pending = $${paramIdx++}`);
+            params.push(updates.terminalNotifyPending);
         }
         if (updates.progress !== undefined) {
             sets.push(`progress = $${paramIdx++}`);
@@ -292,6 +346,16 @@ export class AgentTaskRepository extends BaseRepository {
         return new Map(r.rows.map((row) => [row.tool_call_id, row.content ?? '']));
     }
 
+    /** 실행 중 표식(172) — 부작용 도구 실행 직전에 id 를, 결과 스텝 기록 뒤 null 을 쓴다. */
+    async setInFlightToolCall(taskId: string, toolCallId: string | null): Promise<void> {
+        await this.query(`UPDATE agent_tasks SET in_flight_tool_call_id = $2 WHERE id = $1`, [taskId, toolCallId]);
+    }
+
+    async getInFlightToolCall(taskId: string): Promise<string | null> {
+        const r = await this.query<{ in_flight_tool_call_id: string | null }>(`SELECT in_flight_tool_call_id FROM agent_tasks WHERE id = $1`, [taskId]);
+        return r.rows[0]?.in_flight_tool_call_id ?? null;
+    }
+
     async addAgentTaskStep(params: {
         taskId: string;
         stepNumber: number;
@@ -394,16 +458,59 @@ export class AgentTaskRepository extends BaseRepository {
      * 'queued' 로 남아 UI 가 영구 '대기 중' 을 그리고 아무도 실행하지 않았다(2026-08-25 발견).
      * queued 는 시작한 적이 없으므로 checkpoint 없이 처음부터 다시 디스패치한다.
      */
-    async getInterruptedAgentTasks(windowMs: number): Promise<AgentTask[]> {
+    async getInterruptedAgentTasks(windowMs: number, leaseOwner?: string): Promise<AgentTask[]> {
+        // 실행 소유권(176) — 다른 서버가 살아 있는 소유권으로 실행 중인 작업은 중단된 것이 아니다. owner 없이 부르면 종전 조회.
+        const notOthers = leaseOwner ? ' AND (lease_owner IS NULL OR lease_owner = $2 OR lease_until < NOW())' : '';
         const result = await this.query<AgentTask>(
             `SELECT * FROM agent_tasks
-             WHERE (status IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('agent_tasks')})
+             WHERE (status IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('agent_tasks')}${notOthers})
                 OR (status = 'failed' AND error = 'server restarted'
                     AND completed_at > NOW() - make_interval(secs => $1))
              ORDER BY updated_at ASC`,
-            [windowMs / 1000]
+            leaseOwner ? [windowMs / 1000, leaseOwner] : [windowMs / 1000]
         );
         return result.rows;
+    }
+
+    /** 실행 소유권(176) 잡기 — 소유권이 없거나, 내 것이거나, 지났을 때만. 다른 서버의 살아 있는 소유권이면 false. */
+    async acquireLease(taskId: string, owner: string, leaseMs: number): Promise<boolean> {
+        const r = await this.query(
+            `UPDATE agent_tasks SET lease_owner = $2, lease_until = NOW() + make_interval(secs => $3)
+             WHERE id = $1 AND (lease_owner IS NULL OR lease_owner = $2 OR lease_until < NOW())`,
+            [taskId, owner, leaseMs / 1000]);
+        return (r.rowCount ?? 0) > 0;
+    }
+
+    /** 실행 소유권 연장 — 여전히 내 것일 때만. 0행이면 다른 서버가 가져갔다. */
+    async renewLease(taskId: string, owner: string, leaseMs: number): Promise<boolean> {
+        const r = await this.query(
+            `UPDATE agent_tasks SET lease_until = NOW() + make_interval(secs => $3) WHERE id = $1 AND lease_owner = $2`,
+            [taskId, owner, leaseMs / 1000]);
+        return (r.rowCount ?? 0) > 0;
+    }
+
+    /** 실행 소유권 반납 — 내 것일 때만. */
+    async releaseLease(taskId: string, owner: string): Promise<void> {
+        await this.query(`UPDATE agent_tasks SET lease_owner = NULL, lease_until = NULL WHERE id = $1 AND lease_owner = $2`, [taskId, owner]);
+    }
+
+    /** 소유권이 지난 실행 중 작업(주차 제외) — 소유권을 잡아 본 적 없는 작업(lease_until NULL)은 대상이 아니다. */
+    async listExpiredLeaseTasks(): Promise<AgentTask[]> {
+        const r = await this.query<AgentTask>(
+            `SELECT * FROM agent_tasks
+             WHERE status IN ('running', 'paused') AND lease_until IS NOT NULL AND lease_until < NOW()
+               AND NOT ${parkedTaskCondition('agent_tasks')}
+             ORDER BY lease_until ASC LIMIT 50`);
+        return r.rows;
+    }
+
+    /** 지난 소유권을 원자적으로 가져온다 — 여러 서버가 동시에 시도해도 한 곳만 성공한다. */
+    async takeOverExpiredLease(taskId: string, owner: string, leaseMs: number): Promise<boolean> {
+        const r = await this.query(
+            `UPDATE agent_tasks SET lease_owner = $2, lease_until = NOW() + make_interval(secs => $3)
+             WHERE id = $1 AND status IN ('running', 'paused') AND lease_until IS NOT NULL AND lease_until < NOW()`,
+            [taskId, owner, leaseMs / 1000]);
+        return (r.rowCount ?? 0) > 0;
     }
 
     /**

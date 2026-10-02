@@ -13,7 +13,8 @@
 import { createLogger } from '../../utils/logger';
 import { getChatTurnIntegrations } from './turn-integrations';
 import { recordLlmCost } from '../cost/cost-ledger-service';
-import { MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
+import { MAX_TOOL_RESULT_CHARS, CHAT_TOOL_CARD } from '../../config/runtime-limits';
+import { prepareToolArgs } from '../agent-task/tool-args';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import { isPersistableUserId } from '../../utils/user-id-validation';
@@ -22,13 +23,53 @@ import type { ExternalProviderDeps } from './external-provider-types';
 
 const logger = createLogger('ChatExternalProvider');
 
+type ToolResources = Array<{ uri: string; mimeType?: string; text?: string }>;
+interface ToolSideOutput { resources: ToolResources; sources?: import('../../tools/web-search/types').SearchSourceRef[] }
+
+/** PURE: 화면에 보낼 길이로 자른다 — 넘으면 말줄임표를 붙인다. */
+function clip(text: string, max: number): string {
+    return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
 /**
- * 외부 LLM Tool Calling — MCP 도구 실행 + user sandbox.
+ * PURE: 도구 호출 한 번의 요약 — 채팅의 도구 카드가 보여 준다(성공·실패, 걸린 시간, 인자, 결과 앞부분).
+ * 인자는 에이전트 작업과 같은 가림 규칙(prepareToolArgs)을 거친다. 결과 전문은 싣지 않는다.
+ */
+export function summarizeToolCall(toolArgs: Record<string, unknown>, resultText: string, durationMs: number): { ok: boolean; durationMs: number; args?: string; preview?: string } {
+    const masked = prepareToolArgs(toolArgs);
+    const args = masked === undefined ? undefined : clip(JSON.stringify(masked), CHAT_TOOL_CARD.ARGS_CHARS);
+    const preview = resultText.trim() ? clip(resultText.trim(), CHAT_TOOL_CARD.PREVIEW_CHARS) : undefined;
+    return { ok: !resultText.startsWith('Error:'), durationMs, ...(args ? { args } : {}), ...(preview ? { preview } : {}) };
+}
+
+/**
+ * 외부 LLM Tool Calling — MCP 도구 실행 + user sandbox. 끝나면 결과 요약(+리소스·출처)을 콜백으로 한 번 알린다.
  */
 export async function executeExternalTool(
     deps: ExternalProviderDeps,
     toolName: string,
     toolArgs: Record<string, unknown>,
+): Promise<string> {
+    const startedAt = Date.now();
+    const side: ToolSideOutput = { resources: [] };
+    const text = await runExternalTool(deps, toolName, toolArgs, side);
+    if (deps.mcpToolResultCallback) {
+        try {
+            deps.mcpToolResultCallback({
+                toolName, resources: side.resources, ...(side.sources ? { sources: side.sources } : {}),
+                summary: summarizeToolCall(toolArgs, text, Date.now() - startedAt),
+            });
+        } catch (e) { logger.warn(`onMcpToolResult 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
+    }
+    return text;
+}
+
+/** 도구 실행 본체 — 결과를 LLM 컨텍스트 문자열로 돌려주고, 리소스·출처는 side 에 담는다. 절대 throw 하지 않는다. */
+async function runExternalTool(
+    deps: ExternalProviderDeps,
+    toolName: string,
+    toolArgs: Record<string, unknown>,
+    side: ToolSideOutput,
 ): Promise<string> {
     try {
         const mcpClient = getToolRuntime();
@@ -45,17 +86,13 @@ export async function executeExternalTool(
 
         const result = await mcpClient.executeTool(toolName, toolArgs, userCtx);
 
-        if (deps.mcpToolResultCallback && Array.isArray(result.content)) {
-            const resources = result.content
+        if (Array.isArray(result.content)) {
+            side.resources = result.content
                 .filter((c): c is { type: 'resource'; resource: { uri: string; mimeType?: string; text?: string } } =>
                     c.type === 'resource' && !!c.resource && typeof c.resource.uri === 'string')
                 .map(c => ({ uri: c.resource.uri, mimeType: c.resource.mimeType, text: c.resource.text }));
             // 웹검색류 도구의 구조화 출처(F19.4)도 같은 통로로 — 모델에게는 text 만 간다
-            const sources = Array.isArray(result.sources) && result.sources.length > 0 ? result.sources : undefined;
-            if (resources.length > 0 || sources) {
-                try { deps.mcpToolResultCallback({ toolName, resources, ...(sources ? { sources } : {}) }); }
-                catch (e) { logger.warn(`onMcpToolResult 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
-            }
+            if (Array.isArray(result.sources) && result.sources.length > 0) side.sources = result.sources;
         }
 
         if (result.isError) {

@@ -57,6 +57,22 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         expect(out).toContain('승인하지 않았습니다');
     });
 
+    it('onBeforeExecute 는 승인 뒤·핸들러 앞에서 불리고, 거절이면 불리지 않는다', async () => {
+        const before = jest.fn(async () => undefined);
+        await new TaskRuntime('t-before', 'u1', cfgNone).executeTaskTool('terminate', { status: 'success', summary: 'done' }, { onBeforeExecute: before });
+        expect(before).toHaveBeenCalledTimes(1);
+
+        const rejectedBefore = jest.fn(async () => undefined);
+        let approvalId = '';
+        const exec = new TaskRuntime('t-before-rej', 'u1', cfgAll).executeTaskTool('bash', { command: 'ls' }, {
+            onApprovalPending: (p) => { approvalId = p.approvalId; }, onBeforeExecute: rejectedBefore,
+        });
+        await new Promise((r) => setImmediate(r));
+        getApprovalRegistry().reject(approvalId);
+        await exec;
+        expect(rejectedBefore).not.toHaveBeenCalled();
+    });
+
     it('제어 시그널(terminate)은 승인 불요 — 즉시 실행', async () => {
         const rt = new TaskRuntime('t-term', 'u1', cfgAll);
         const out = await rt.executeTaskTool('terminate', { status: 'success', summary: 'done' });
@@ -90,6 +106,26 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         expect(waited).toHaveBeenCalledWith(3);
         expect(rejected).not.toHaveBeenCalled(); // 무응답 강등 카운트 대상이 아니다
         spy.mockRestore();
+    });
+
+    it('승인 필요 task 도구가 주차(parked)되면 결과 대신 AgentTaskParked 를 던지고, 주차 가능으로 요청한다', async () => {
+        const rt = new TaskRuntime('t-tool-park', 'u1', cfgAll);
+        const request = jest.fn(async () => ({ decision: 'rejected', reason: 'parked', waitedMs: 4 }));
+        const spy = jest.spyOn(approvalGate, 'getApprovalRegistry').mockReturnValue({ request } as unknown as ReturnType<typeof approvalGate.getApprovalRegistry>);
+        const rejected = jest.fn();
+        await expect(rt.executeTaskTool('bash', { command: 'ls' }, { onApprovalRejected: rejected })).rejects.toBeInstanceOf(AgentTaskParked);
+        expect(request).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'bash' }), expect.objectContaining({ parkable: true }));
+        expect(rejected).not.toHaveBeenCalled();
+        spy.mockRestore();
+    });
+
+    it('delegate 안에서 올라온 주차(AgentTaskParked)는 오류 문자열로 삼키지 않고 그대로 던진다', async () => {
+        const delegate = jest.fn(async () => { throw new AgentTaskParked(); });
+        const rt = new TaskRuntime('t-delegate-park', 'u1', cfgNone, delegate);
+        await expect(rt.executeTaskTool('delegate', { subgoal: '조사' })).rejects.toBeInstanceOf(AgentTaskParked);
+        // 일반 예외는 종전대로 오류 결과로 흡수한다
+        delegate.mockImplementationOnce(async () => { throw new Error('boom'); });
+        await expect(rt.executeTaskTool('delegate', { subgoal: '조사' })).resolves.toContain('boom');
     });
 
     it('ask_human 거절 시 대안 유도 메시지', async () => {
@@ -126,5 +162,25 @@ describe('도구 이름 교정 (P0-b)', () => {
         const rt = new TaskRuntime('t-none', 'u1', cfgNone);
         const out = await rt.executeTaskTool('zzzzzzzzzzzz', {});
         expect(out).toBe('Error: 알 수 없는 task 도구 zzzzzzzzzzzz');
+    });
+
+    it('작업이 취소되면 실행 중인 샌드박스 명령을 중단시킨다(타임아웃까지 기다리지 않는다)', async () => {
+        let finish: (r: unknown) => void = () => undefined;
+        const abortRunning = jest.fn(() => finish({ stdout: '', stderr: '', exitCode: 137, truncated: false, timedOut: false, durationMs: 1 }));
+        const executor = { exec: () => new Promise((r) => { finish = r; }), abortRunning, isBrowserEnabled: false };
+        const rt = new TaskRuntime('t-abort', 'u1', cfgNone, undefined, undefined, executor as never);
+        const ac = new AbortController();
+        const run = rt.executeTaskTool('bash', { command: 'sleep 999' }, { signal: ac.signal });
+        await new Promise((r) => setImmediate(r));
+        expect(abortRunning).not.toHaveBeenCalled();
+        ac.abort();
+        await run;
+        expect(abortRunning).toHaveBeenCalledTimes(1);
+
+        // 끝난 호출 뒤의 취소는 실행기를 건드리지 않는다
+        const ac2 = new AbortController();
+        await rt.executeTaskTool('terminate', { status: 'success', summary: 'done' }, { signal: ac2.signal });
+        ac2.abort();
+        expect(abortRunning).toHaveBeenCalledTimes(1);
     });
 });

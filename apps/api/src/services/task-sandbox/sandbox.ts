@@ -15,9 +15,11 @@
  * @module services/task-sandbox/sandbox
  */
 import { spawn } from 'child_process';
+import { existsSync } from 'fs';
+import { randomUUID } from 'crypto';
 import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, lstat, realpath, copyFile as fsCopyFile } from 'fs/promises';
 import { resolve, sep, join, dirname, basename, relative } from 'path';
-import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
+import { getTaskSandboxConfig, BROWSER_SESSION, type TaskSandboxConfig } from '../../config/task-sandbox';
 import type { TaskExecutor, ExecResult } from './executor';
 import { SANDBOX_WORKSPACE_DIR, stripWorkspacePrefix } from './workspace-path';
 import { createLogger } from '../../utils/logger';
@@ -159,11 +161,27 @@ export async function safeRealWorkspacePath(hostWorkdir: string, userPath: strin
     }
 }
 
+/** exec 한 번을 식별하는 환경변수 — 그 명령이 띄운 프로세스(백그라운드·데몬 포함)가 모두 물려받는다. */
+const EXEC_ID_ENV = 'OMK_EXEC_ID';
+
+/**
+ * PURE: 실행 id 꼬리표가 붙은 컨테이너 안 프로세스를 모두 죽이는 `docker exec` 인자 (유닛테스트 대상).
+ * `docker exec` CLI 를 죽여도 컨테이너 안 프로세스는 남는다(실측) — 타임아웃·취소 때 이걸로 정리한다.
+ * 죽이는 사이 새로 생긴 자식을 잡으려고 남은 것이 없을 때까지 최대 3회 훑는다. 이미지에 ps/pkill 이 없어 /proc 을 읽는다.
+ */
+export function buildKillExecArgs(containerName: string, execId: string): string[] {
+    const script = 'for i in 1 2 3; do n=0; for p in /proc/[0-9]*; do '
+        + `if { tr '\\0' '\\n' < "$p/environ"; } 2>/dev/null | grep -qx "${EXEC_ID_ENV}=$1"; then kill -9 "\${p#/proc/}" 2>/dev/null; n=1; fi; `
+        + 'done; [ "$n" = 0 ] && break; done; exit 0';
+    return ['exec', containerName, 'sh', '-c', script, 'sh', execId];
+}
+
 /** 자식 프로세스를 실행하고 출력 캡/timeout 을 적용 (docker CLI 호출 공용). */
-function runProcess(
+export function runProcess(
     dockerPath: string,
     args: string[],
-    opts: { timeoutMs: number; outputCap: number; input?: string | Buffer },
+    /** signal·onStop — 타임아웃/중단으로 끝낼 때 CLI 를 죽이기 전에 onStop 으로 컨테이너 안 프로세스를 정리한다. */
+    opts: { timeoutMs: number; outputCap: number; input?: string | Buffer; signal?: AbortSignal; onStop?: () => Promise<unknown> },
 ): Promise<ExecResult> {
     return new Promise((resolvePromise) => {
         const started = Date.now();
@@ -183,13 +201,18 @@ function runProcess(
         child.stdout.on('data', (b) => onData(b, 'out'));
         child.stderr.on('data', (b) => onData(b, 'err'));
 
+        const stop = (): void => {
+            void Promise.resolve(opts.onStop?.()).catch(() => { /* 정리 실패해도 CLI 는 끝낸다 */ }).finally(() => child.kill('SIGKILL'));
+        };
         const timer = setTimeout(() => {
             timedOut = true;
-            child.kill('SIGKILL');
+            stop();
         }, opts.timeoutMs);
+        opts.signal?.addEventListener('abort', stop, { once: true });
 
         child.on('close', (code) => {
             clearTimeout(timer);
+            opts.signal?.removeEventListener('abort', stop);
             resolvePromise({
                 stdout, stderr,
                 exitCode: code ?? -1,
@@ -225,6 +248,8 @@ export class TaskSandbox implements TaskExecutor {
     readonly hostWorkdir: string;
     private readonly cfg: TaskSandboxConfig;
     private created = false;
+    /** 실행 중인 exec — abortRunning 이 중단시킨다. */
+    private readonly running = new Set<AbortController>();
 
     constructor(taskId: string, cfg: TaskSandboxConfig = getTaskSandboxConfig()) {
         this.taskId = taskId;
@@ -273,11 +298,24 @@ export class TaskSandbox implements TaskExecutor {
                 exitCode: -1, truncated: false, timedOut: false, durationMs: 0,
             };
         }
-        return runProcess(
-            this.cfg.dockerPath,
-            ['exec', this.containerName, 'sh', '-c', command],
-            { timeoutMs: this.cfg.execTimeoutMs, outputCap: this.cfg.outputCap },
-        );
+        const execId = randomUUID();
+        const ac = new AbortController();
+        this.running.add(ac);
+        try {
+            return await runProcess(
+                this.cfg.dockerPath,
+                ['exec', '-e', `${EXEC_ID_ENV}=${execId}`, this.containerName, 'sh', '-c', command],
+                {
+                    timeoutMs: this.cfg.execTimeoutMs, outputCap: this.cfg.outputCap, signal: ac.signal,
+                    onStop: () => runProcess(this.cfg.dockerPath, buildKillExecArgs(this.containerName, execId), { timeoutMs: 10_000, outputCap: 4096 }),
+                },
+            );
+        } finally { this.running.delete(ac); }
+    }
+
+    /** TaskExecutor.abortRunning — 실행 중인 명령을 타임아웃을 기다리지 않고 끝낸다(작업 취소). */
+    abortRunning(): void {
+        for (const ac of this.running) ac.abort();
     }
 
     /** workspace 사용량이 쿼터를 넘었는지 (쿼터+1 에서 조기 중단하는 walk). */
@@ -295,8 +333,13 @@ export class TaskSandbox implements TaskExecutor {
     /** 브라우저 도구 활성 여부. */
     get isBrowserEnabled(): boolean { return this.cfg.browserEnabled; }
 
-    /** 세션 지속(#2 Part A) ON 이면 storageState 파일명, OFF 면 null. */
-    get browserStatePath(): string | null { return this.cfg.browserPersist ? '.browser-state.json' : null; }
+    /**
+     * 세션 지속(#2 Part A) ON 이면 storageState 파일명, OFF 면 null.
+     * 사용자가 브라우저를 넘겨받아 남긴 상태 파일이 있으면 설정이 꺼져 있어도 이어받는다 — 그러려고 넘겨받은 것이다.
+     */
+    get browserStatePath(): string | null {
+        return this.cfg.browserPersist || existsSync(join(this.hostWorkdir, BROWSER_SESSION.STATE_FILE)) ? BROWSER_SESSION.STATE_FILE : null;
+    }
 
     /**
      * 브라우저 액션을 별도 일회성 컨테이너(browserNetwork)에서 실행 — 메인 컨테이너(network none)와
@@ -304,6 +347,11 @@ export class TaskSandbox implements TaskExecutor {
      */
     async runBrowser(actionsRelPath: string): Promise<ExecResult> {
         this.assertCreated();
+        // 사용자가 넘겨받은 동안에는 실행하지 않는다 — 같은 상태 파일을 두 브라우저가 쓰면 돌려줄 때 덮어쓴다.
+        const { isBrowserSessionActive, BROWSER_SESSION_BUSY_MESSAGE } = await import('./browser-session');
+        if (await isBrowserSessionActive(this.taskId, this.cfg)) {
+            return { stdout: '', stderr: BROWSER_SESSION_BUSY_MESSAGE, exitCode: -1, truncated: false, timedOut: false, durationMs: 0 };
+        }
         // egress 프록시 ON: internal 망 + 프록시 보장 후 그 URL 을 브라우저에 주입.
         let proxyUrl: string | undefined;
         if (this.cfg.egressProxyEnabled) {
@@ -383,6 +431,11 @@ export class TaskSandbox implements TaskExecutor {
      * false 면 산출물 회수(다운로드)를 위해 workspace 를 보존하고 컨테이너만 제거한다.
      */
     async cleanup(removeWorkspace = true): Promise<void> {
+        // 작업 공간을 지울 때만 넘겨받은 브라우저 세션을 내린다(세션이 그 공간을 쓴다). 보존할 때는 두고 유휴 상한에 맡긴다 —
+        // 승인 대기로 주차될 때도 이 정리가 도는데, 그때가 바로 사용자가 넘겨받아 조작하는 때다.
+        if (removeWorkspace) {
+            await import('./browser-session').then((m) => m.stopBrowserSession(this.taskId, this.cfg)).catch(() => { /* best-effort */ });
+        }
         await runProcess(this.cfg.dockerPath, ['stop', '-t', '5', this.containerName],
             { timeoutMs: 15_000, outputCap: 4096 });
         await runProcess(this.cfg.dockerPath, ['rm', '-f', this.containerName],

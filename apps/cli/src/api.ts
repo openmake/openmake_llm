@@ -2,6 +2,8 @@
  * OpenMake Code CLI — REST API 클라이언트 (에이전트 작업 생성·폴링·승인).
  * API key(omk_live_*) 를 X-API-Key 헤더로 인증한다. Node18+ 내장 fetch 사용.
  */
+import { randomUUID } from 'crypto';
+
 export interface ApiTask {
     id: string;
     status: string;
@@ -73,12 +75,13 @@ interface PendingApproval {
 export class ApiClient {
     constructor(private readonly serverUrl: string, private readonly apiKey: string) {}
 
-    private async req<T>(method: string, path: string, body?: unknown): Promise<T> {
+    private async req<T>(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}): Promise<T> {
         const res = await fetch(`${this.serverUrl}${path}`, {
             method,
             headers: {
                 'X-API-Key': this.apiKey,
                 ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+                ...extraHeaders,
             },
             body: body !== undefined ? JSON.stringify(body) : undefined,
         });
@@ -92,8 +95,10 @@ export class ApiClient {
         return (json as { data?: T })?.data ?? (json as T);
     }
 
-    createTask(goal: string, deviceId: string): Promise<{ task: ApiTask }> {
-        return this.req('POST', '/api/agent-tasks', { goal, executor: 'local', deviceId });
+    /** deduplicated: 같은 Idempotency-Key 로 이미 만든 작업을 서버가 돌려줬다(새로 만들지 않음). */
+    createTask(goal: string, deviceId: string): Promise<{ task: ApiTask; deduplicated?: boolean }> {
+        // 중복 생성 방지 — 같은 요청이 재전송돼도 서버는 작업을 한 번만 만든다
+        return this.req('POST', '/api/agent-tasks', { goal, executor: 'local', deviceId }, { 'Idempotency-Key': randomUUID() });
     }
     getTask(taskId: string): Promise<{ task?: ApiTask } | ApiTask> {
         return this.req('GET', `/api/agent-tasks/${taskId}`);

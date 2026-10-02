@@ -20,7 +20,7 @@
 import { resolveEffectivePolicy, strictestApprovalPolicy } from '../services/org/effective-policy';
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound } from '../utils/api-response';
+import { success, badRequest, notFound, conflict } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuthOrApiKeyScope } from '../middlewares/api-key-auth';
 import { API_KEY_SCOPES } from '../config/api-key-scopes';
@@ -52,9 +52,11 @@ import {
 } from '../services/agent-task/upload-store';
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
+import { resolveDuplicateCreate, normalizedCreateKey, rememberCreatedTask } from '../services/agent-task/create-idempotency';
 import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 import { approvalsRouter } from './agent-task-approvals.routes';
 import { forkRouter } from './agent-task-fork.routes';
+import { browserSessionRouter } from './agent-task-browser-session.routes';
 import { getPlanEditRegistry } from '../services/agent-task/plan-edits';
 import { TaskPlan, type PlanStepInput } from '../services/task-sandbox/planning';
 import { getPool } from '../data/models/unified-database';
@@ -150,6 +152,15 @@ router.post('/', (req: Request, res: Response, next) => {
         }
     }
 
+    // 중복 생성 방지 — 같은 Idempotency-Key 의 재요청(더블 클릭·재전송)은 처음 만든 작업을 돌려준다. 첫 await 전에 판정한다.
+    const createKey = normalizedCreateKey(req.get('Idempotency-Key'));
+    const dup = await resolveDuplicateCreate({ userId, rawKey: createKey, taskId, res, loadTask: (id) => db.getAgentTask(id), findByKey: (u, k) => db.findAgentTaskByCreateKey(u, k) });
+    if (dup) {
+        await discardTmpFiles(parts.map((p) => p.path));
+        if (dup.kind === 'in_flight') return res.status(409).json(conflict('같은 작업 생성 요청을 처리하고 있습니다'));
+        return res.status(200).json(success({ task: toPublicTask(dup.task as unknown as Record<string, unknown>), deduplicated: true, concurrentActive: 0, warnings: [] }));
+    }
+
     // 입력 첨부(JSON 경로): 바이너리 문서(base64 data)는 지금 텍스트로 추출해 저장한다 —
     // 실행은 detached 백그라운드라 여기서 추출해야 실패를 생성 응답에서 인지 가능하다.
     // base64 원본도 함께 보존해 실행 시 샌드박스 uploads/ 에 원본 바이트로 기록
@@ -227,10 +238,11 @@ router.post('/', (req: Request, res: Response, next) => {
         ? [`진행 중인 에이전트 작업이 ${active.length}건 있습니다. 중복 실행이 아닌지 확인하세요.`]
         : [];
 
-    await db.createAgentTask({
+    const created = await db.createAgentTask({
         id: taskId,
         userId,
         goal,
+        idempotencyKey: createKey,
         // 대형 첨부는 기본 턴 상향(LARGE_INPUT_MAX_TURNS) — resolveDefaultMaxTurns 주석 참고
         maxTurns: resolveDefaultMaxTurns(maxTurns, inputFiles),
         inputFiles,
@@ -239,6 +251,14 @@ router.post('/', (req: Request, res: Response, next) => {
         deviceId: executor === 'local' ? deviceId : undefined,
         folderRel: executor === 'local' ? folderRel : undefined,
     });
+    if (!created && createKey) {
+        // 같은 키의 작업을 다른 서버(또는 재시작 전 프로세스)가 먼저 만들었다 — 방금 받은 첨부를 치우고 그 작업을 돌려준다.
+        await removeTaskFiles(taskId);
+        const existing = await db.findAgentTaskByCreateKey(userId, createKey);
+        if (!existing) return res.status(409).json(conflict('같은 작업 생성 요청을 처리하고 있습니다'));
+        rememberCreatedTask(userId, createKey, existing.id);
+        return res.status(200).json(success({ task: toPublicTask(existing as unknown as Record<string, unknown>), deduplicated: true, concurrentActive: 0, warnings: [] }));
+    }
 
     // 로컬 실행 작업 생성 감사 (helpers — 위임 이력, fire-and-forget)
     if (executor === 'local') await auditLocalTaskCreate(userId, taskId, deviceId, folderRel);
@@ -573,7 +593,7 @@ router.put('/:taskId/plan', validate(updatePlanSchema), asyncHandler(async (req:
 
 // 승인(HITL) 라우트는 agent-task-approvals.routes.ts (600줄 게이트로 분리, 2026-09-17) — 라우트 순서(answer → :decision)는 그 파일이 지킨다.
 router.use(approvalsRouter);
-// 체크포인트 이력·분기(141)는 agent-task-fork.routes.ts
-router.use(forkRouter);
+// 체크포인트 이력·분기(141)는 agent-task-fork.routes.ts, 브라우저 넘겨받기는 agent-task-browser-session.routes.ts
+router.use(forkRouter, browserSessionRouter);
 
 export default router;

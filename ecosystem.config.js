@@ -20,6 +20,7 @@
  */
 const { execSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 /**
@@ -55,6 +56,43 @@ function resolveNextBin(webDir) {
         return './node_modules/next/dist/bin/next'; // 마지막 수단 — 기존 동작
     }
 }
+
+/**
+ * PM2 가 앱을 띄울 node 인터프리터.
+ *
+ * PM2 는 인터프리터를 안 주면 자기 process.execPath 를 쓰는데, 경로에 'node@' 가 들어 있으면
+ * 그것을 nvm 버전 지정(`node@22`)으로 읽고 `nvm install <'@' 뒤>` 를 실행해 기동이 죽는다
+ * (pm2 lib/Common.js resolveInterpreter). Homebrew keg-only `node@24`
+ * (/opt/homebrew/Cellar/node@24/…/bin/node) 가 정확히 이 모양이다 — macOS 설치기가 그 node 를
+ * PATH 앞에 올리므로 `omk env install` 이 "PM2 기동 실패" 로 멈췄다.
+ *
+ * 'node@' 가 없는 경로(nvm·mise·시스템 node·Linux)는 undefined — PM2 기본 동작 그대로.
+ * 있으면 '@' 없는 심볼릭 링크($OMK_ROOT/pm2-node/node)를 만들어 그것을 준다. 링크는 brew 의 안정 경로
+ * (/opt/homebrew/opt/node@24) 를 가리켜, brew 업그레이드로 Cellar 버전 디렉터리가 바뀌어도 끊기지 않는다.
+ * PATH 에 올리는 디렉터리($OMK_ROOT/bin)와 따로 둔다 — 거기에 'node' 를 두면 전역 node 를 가린다.
+ */
+function resolveNodeInterpreter() {
+    const exe = process.execPath;
+    if (!exe.includes('node@')) return undefined;
+    const stable = exe.replace(/\/Cellar\/(node@[^/]+)\/[^/]+\//, '/opt/$1/');
+    const target = fs.existsSync(stable) ? stable : exe;
+    const dir = path.join(process.env.OMK_ROOT || path.join(os.homedir(), '.openmake'), 'pm2-node');
+    const link = path.join(dir, 'node');
+    try {
+        fs.mkdirSync(dir, { recursive: true });
+        let current = null;
+        try { current = fs.readlinkSync(link); } catch { /* 없음 */ }
+        if (current !== target) {
+            if (current !== null || fs.existsSync(link)) fs.rmSync(link, { force: true });
+            fs.symlinkSync(target, link);
+        }
+        return link;
+    } catch {
+        return undefined; // 링크를 못 만들면 PM2 기본 동작 — 지금까지와 같다
+    }
+}
+const NODE_INTERPRETER = resolveNodeInterpreter();
+const INTERPRETER = NODE_INTERPRETER ? { interpreter: NODE_INTERPRETER } : {};
 
 /**
  * JVM 위치를 크로스플랫폼으로 탐지한다 (opendataloader-pdf 의 PDF 텍스트 추출에 필요).
@@ -93,6 +131,7 @@ const DISCORD_ENTRY = path.join(__dirname, 'apps/discord-bot/dist/index.js');
 const apps = [{
         name: `openmake-llm${INSTANCE_SUFFIX}`,
         script: 'apps/api/dist/cli.js',
+        ...INTERPRETER,
         args: `cluster --port ${API_PORT}`,
         cwd: __dirname,
 
@@ -153,6 +192,7 @@ const apps = [{
         // npm 을 fork 하면 pm2 ProcessContainerFork 가 crash → next 바이너리를 직접 node 로 실행.
         // (workspaces hoist 때문에 경로는 require.resolve 로 찾는다 — resolveNextBin 주석 참고)
         script: resolveNextBin(WEB_DIR),
+        ...INTERPRETER,
         // keep-alive 를 Caddy 유휴 상한(90s)보다 길게 — API 서버와 같은 근거(config/timeouts HTTP_SERVER_TIMEOUTS).
         args: `start -p ${WEB_PORT} --keepAliveTimeout ${process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS || '100000'}`,
         env: {
@@ -187,6 +227,7 @@ if (fs.existsSync(DISCORD_ENTRY)) {
         // 설정 미비 시 exit 78 로 스스로 내려가며 stop_exit_codes 가 재시작 루프를 막는다.
         name: `openmake-discord${INSTANCE_SUFFIX}`,
         script: 'apps/discord-bot/dist/index.js',
+        ...INTERPRETER,
         cwd: __dirname,
         env: {
             NODE_ENV: 'production',

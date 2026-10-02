@@ -102,6 +102,7 @@ export class InFlightStreamRegistry {
         private readonly retentionMs: number = WEBSOCKET_TIMEOUTS.STREAM_RESULT_RETENTION_MS,
         private readonly bufferMaxBytes: number = WS_LIMITS.DETACHED_STREAM_BUFFER_MAX_BYTES,
         private readonly ringMax: number = WS_LIMITS.STREAM_EVENT_RING_MAX,
+        private readonly backpressureBytes: number = WS_LIMITS.STREAM_BACKPRESSURE_THRESHOLD_BYTES,
     ) {}
 
     get size(): number { return this.entries.size; }
@@ -139,7 +140,14 @@ export class InFlightStreamRegistry {
         const seq = entry.seq;
         const serialized = JSON.stringify({ ...payload, streamId: entry.streamId, seq });
         let delivered = false;
-        const ws = entry.ws;
+        let ws = entry.ws;
+        if (ws && ws.readyState === ws.OPEN && this.backpressureBytes > 0 && ws.bufferedAmount > this.backpressureBytes) {
+            // 느린 클라이언트 — 더 쌓지 않고 끊는다. 스트림은 detach 라 생성은 이어지고, 재연결하면 스냅샷으로 잇는다.
+            log.warn(`[WsStream] 송신 버퍼 초과 → 소켓 종료, 스트림 detach: key=${entry.key} buffered=${ws.bufferedAmount}B (임계 ${this.backpressureBytes}B)`);
+            this.detach(ws);
+            try { ws.terminate(); } catch (e) { log.warn('[WsStream] terminate 실패:', e); }
+            ws = null;
+        }
         if (ws && ws.readyState === ws.OPEN) {
             try {
                 ws.send(serialized);

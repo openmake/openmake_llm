@@ -34,6 +34,25 @@
     },
     "pendingApprovals": "{count} ausstehende Freigabe(n) — Agentenaufgaben warten auf Ihre Freigabe"
   },
+  "activity": {
+    "title": "Aktivität",
+    "badge": "{needs} warten auf Eingabe · {running} laufen",
+    "empty": "Derzeit läuft nichts",
+    "needsInput": "Eingabe erforderlich",
+    "running": "In Arbeit",
+    "recent": "Kürzlich beendet",
+    "chatGenerating": "Chat-Antwort wird erzeugt",
+    "approvalFor": "{tool} genehmigen",
+    "status": {
+      "running": "Läuft",
+      "queued": "In Warteschlange",
+      "paused": "Pausiert (wartet auf Eingabe)",
+      "pending": "Wartet auf Start",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen"
+    }
+  },
   "sidebar": {
     "newChat": "Neuer Chat",
     "searchPlaceholder": "Suchen …",
@@ -336,6 +355,13 @@
       "low": "Reasoning: Niedrig",
       "medium": "Reasoning: Mittel",
       "high": "Reasoning: Hoch"
+    },
+    "followupQueue": {
+      "hint": "Wird der Reihe nach gesendet, sobald die Antwort fertig ist",
+      "paused": "Nachrichten in der Warteschlange — werden nach der nächsten Antwort gesendet",
+      "remove": "Aus der Warteschlange entfernen",
+      "add": "Zur Warteschlange hinzufügen",
+      "full": "Warteschlange ist voll (max. {max})"
     }
   },
   "chat": {
@@ -491,6 +517,16 @@
       "generating": "Antwort wird erstellt",
       "toolRunning": "{tool} wird ausgeführt",
       "done": "Antwort fertig"
+    },
+    "jumpToLatest": "Zum Neuesten",
+    "toolCards": {
+      "label": "Tool-Aufrufe",
+      "running": "Läuft",
+      "done": "Fertig",
+      "failed": "Fehlgeschlagen",
+      "duration": "{seconds} s",
+      "args": "Argumente",
+      "result": "Ergebnis"
     }
   },
   "compare": {
@@ -964,6 +1000,7 @@
       "status": {
         "queued": "In Warteschlange",
         "running": "Läuft",
+        "awaiting_approval": "Wartet auf Freigabe",
         "completed": "Abgeschlossen",
         "failed": "Fehlgeschlagen",
         "interrupted": "Unterbrochen"
@@ -1033,6 +1070,27 @@
       "delete": "Löschen",
       "deleteConfirm": "Diesen Trigger löschen?",
       "failed": "Fehlgeschlagen: {message}"
+    },
+    "takeover": {
+      "start": "Browser übernehmen",
+      "reopen": "Übernommenen Browser öffnen",
+      "hint": "Übernehmen Sie den Browser des Agenten für Schritte, die Sie selbst ausführen müssen, etwa Anmeldung oder CAPTCHA.",
+      "activeHint": "Sie steuern den Browser. Geben Sie ihn zurück, wenn Sie fertig sind.",
+      "title": "Browser übernehmen",
+      "notice": "Solange Sie steuern, kann der Agent den Browser nicht nutzen. Nach 10 Minuten ohne Eingabe wird er automatisch zurückgegeben.",
+      "hide": "Ausblenden",
+      "release": "Zurückgeben",
+      "back": "Zurück",
+      "go": "Öffnen",
+      "addressPlaceholder": "Adresse",
+      "screen": "Browserbildschirm",
+      "textPlaceholder": "Zusammengesetzte Eingaben (z. B. Koreanisch) hier schreiben und senden",
+      "sendText": "Eingabe senden",
+      "released": "Browser zurückgegeben. Der Agent fährt mit diesem Anmeldestatus fort.",
+      "ended": "Die Browsersitzung wurde beendet (keine Eingabe oder Aufgabe beendet).",
+      "startFailed": "Browser konnte nicht übernommen werden: {error}",
+      "inputFailed": "Eingabe wurde nicht zugestellt: {error}",
+      "releaseFailed": "Zurückgeben fehlgeschlagen: {error}"
     }
   },
   "customAgents": {

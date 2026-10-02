@@ -8,12 +8,31 @@ export const AGENT_TASK_CHANGED_EVENT = "omk:agent-task-changed";
 export interface AgentTaskChange {
   taskId: string;
   approvalId?: string;
-  reason: "assigned" | "escalated" | "revoked" | "plan_edited";
+  /** resync — 진행 이벤트를 놓쳤고 서버에 남아 있지 않다(taskId 는 빈 문자열). 보고 있는 것을 전부 다시 읽는다. */
+  reason: "assigned" | "escalated" | "revoked" | "plan_edited" | "resync";
 }
 
 export function announceAgentTaskChange(change: AgentTaskChange): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<AgentTaskChange>(AGENT_TASK_CHANGED_EVENT, { detail: change }));
+}
+
+/**
+ * 작업 상세 열기 요청 — 작업 화면은 `?task=` 를 마운트 때만 읽으므로, 이미 그 화면에 있을 때 링크만으로는 열리지 않는다.
+ * 통합 상태 패널이 항목을 누를 때 함께 알린다.
+ */
+export const AGENT_TASK_OPEN_EVENT = "omk:agent-task-open";
+
+export function requestOpenAgentTask(taskId: string): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<string>(AGENT_TASK_OPEN_EVENT, { detail: taskId }));
+}
+
+export function onOpenAgentTask(handler: (taskId: string) => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const listener = (e: Event) => handler((e as CustomEvent<string>).detail);
+  window.addEventListener(AGENT_TASK_OPEN_EVENT, listener);
+  return () => window.removeEventListener(AGENT_TASK_OPEN_EVENT, listener);
 }
 
 /** 구독 — 반환값으로 해제(useEffect cleanup 에 그대로 돌려준다) */

@@ -196,6 +196,12 @@ export class ApprovalRegistry {
         return HITL_ALWAYS_WAIT_TOOLS.has(toolName) && getConfig().agentTaskHitlParkOnTimeout && !!this.store?.extendPending;
     }
 
+    /** 유예 후 주차 시각(ms) — 호출부가 재개 지점이 있다고 알린(parkable) 대기만. 0 이면 유예 없음(종전 만료 경로). */
+    private parkGraceMs(parkable: boolean | undefined, timeoutMs: number): number {
+        const grace = AGENT_TASK_LIMITS.HITL_PARK_GRACE_MS;
+        return parkable && grace > 0 && this.store?.extendPending ? Math.min(grace, timeoutMs) : 0;
+    }
+
     clearAutoApprove(taskId: string): void { this.autoApproveTasks.delete(taskId); }
 
     /**
@@ -205,7 +211,8 @@ export class ApprovalRegistry {
      */
     async request(
         input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown>; preview?: string },
-        opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void },
+        /** parkable — 부모 작업의 턴 실행 경로처럼 주차 후 같은 호출로 재개할 수 있는 대기(유예 후 주차 대상). */
+        opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void; parkable?: boolean },
     ): Promise<ApprovalResult> {
         if (this.autoApproveTasks.has(input.taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)) {
             return { decision: 'approved', waitedMs: 0 };
@@ -248,7 +255,10 @@ export class ApprovalRegistry {
                     r.text, undefined, true));
                 resolvePromise({ ...r, waitedMs: Date.now() - pending.createdAt });
             };
-            const timer = setTimeout(() => settle({ decision: 'rejected', reason: this.canPark(input.toolName) ? 'parked' : 'timeout' }), opts.timeoutMs);
+            const graceMs = this.parkGraceMs(opts.parkable, opts.timeoutMs);
+            const timer = graceMs > 0
+                ? setTimeout(() => settle({ decision: 'rejected', reason: 'parked' }), graceMs)
+                : setTimeout(() => settle({ decision: 'rejected', reason: this.canPark(input.toolName) ? 'parked' : 'timeout' }), opts.timeoutMs);
             this.waiters.set(approvalId, { pending, resolve: (r) => settle(r), timer });
             if (opts.signal) {
                 if (opts.signal.aborted) { settle({ decision: 'rejected', reason: 'abort' }); return; }

@@ -247,7 +247,9 @@ private struct NewAgentTaskSheet: View {
         defer { isSubmitting = false }
         do {
             let creation = try await model.client.createAgentTask(goal: trimmed)
-            _ = try await model.client.executeAgentTask(id: creation.task.id, approvalPolicy: policy)
+            if !creation.alreadyStarted {
+                _ = try await model.client.executeAgentTask(id: creation.task.id, approvalPolicy: policy)
+            }
             await NotificationManager.shared.requestAuthorization()
             await onCreated()
             dismiss()

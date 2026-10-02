@@ -16,7 +16,7 @@ public struct SubagentTrace: Decodable, Identifiable, Sendable, Equatable {
     public let origin: String
     public let subIndex: Int
     public let label: String?
-    /// queued | running | completed | failed | interrupted
+    /// queued | running | awaiting_approval | completed | failed | interrupted
     public let status: String
     public let startedAt: String
     public let finishedAt: String?
@@ -32,6 +32,7 @@ public struct SubagentTrace: Decodable, Identifiable, Sendable, Equatable {
         switch status {
         case "queued": "대기 중"
         case "running": "실행 중"
+        case "awaiting_approval": "승인 대기"
         case "completed": "완료"
         case "failed": "실패"
         case "interrupted": "중단됨"

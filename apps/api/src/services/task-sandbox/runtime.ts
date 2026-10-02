@@ -56,6 +56,8 @@ interface ExecuteTaskToolOpts {
     onApprovalWaited?: (ms: number) => void;
     /** 승인 거절 시 사유 통지 — 호출부가 무응답('timeout') 연속 횟수를 세어 HITL 강등 판단. */
     onApprovalRejected?: (info: { toolName: string; reason: ApprovalRejectReason }) => void;
+    /** 승인을 통과해 핸들러를 부르기 직전 — 호출부가 실행 중 표식(172)을 남긴다. */
+    onBeforeExecute?: () => Promise<void>;
 }
 
 export class TaskRuntime {
@@ -222,7 +224,7 @@ export class TaskRuntime {
             const question = String(args.question ?? '');
             const { decision, reason, text, waitedMs } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args },
-                { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
+                { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending, parkable: true },
             );
             opts.onApprovalWaited?.(waitedMs);
             if (reason === 'parked') throw new AgentTaskParked(); // 만료 → 주차(F16.7): 답이 오면 같은 호출로 재개
@@ -245,9 +247,10 @@ export class TaskRuntime {
                 : null;
             const { decision, reason, waitedMs } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args, preview: preview ?? undefined },
-                { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
+                { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending, parkable: true },
             );
             opts.onApprovalWaited?.(waitedMs);
+            if (reason === 'parked') throw new AgentTaskParked(); // 유예 초과 → 주차: 결정이 오면 같은 호출로 재개(실행 전이라 부작용 없음)
             if (decision !== 'approved') {
                 opts.onApprovalRejected?.({ toolName: name, reason: reason ?? 'user' });
                 return reason === 'timeout'
@@ -256,7 +259,11 @@ export class TaskRuntime {
             }
         }
 
+        // 작업 취소 → 실행 중인 샌드박스 명령 중단(도구 핸들러는 signal 을 받지 않는다).
+        const onAbort = (): void => this.executor.abortRunning?.();
+        opts.signal?.addEventListener('abort', onAbort, { once: true });
         try {
+            await opts.onBeforeExecute?.();
             const r = await handler(args, { userId: this.userId, role: 'user' });
             const typed = r as { content: Array<{ text?: string }>; isError?: boolean };
             // G3 셰도우 계측 — task 도구는 turn-executor 의 runTool 을 타지 않아(이 경로가 캡 지점)
@@ -268,9 +275,12 @@ export class TaskRuntime {
             });
             return this.appendShellToolHint(name, resultToString(typed));
         } catch (e) {
+            if (e instanceof AgentTaskParked) throw e; // delegate 안의 승인 주차(173) — 오류 결과로 삼키지 않는다
             const msg = e instanceof Error ? e.message : String(e);
             logger.warn(`[${this.taskId}] task 도구 실행 실패 (${name}): ${msg}`);
             return `Error: ${msg}`;
+        } finally {
+            opts.signal?.removeEventListener('abort', onAbort);
         }
     }
 }

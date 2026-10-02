@@ -9,7 +9,6 @@
  */
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { getToolRuntime, TOOL_USER_INPUT_APPROVAL_NAME, type ToolRuntime, type ToolUserInputContext } from '../../runtime-ports/tool-runtime';
-import { getPushService } from '../PushService';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { TASK_TERMINATE_SENTINEL } from '../task-sandbox/tools';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
@@ -17,9 +16,14 @@ import { currentPlanStepIndex } from '../task-sandbox/planning';
 import { runTool, isSearchTool } from './task-steps';
 import { prepareToolArgs } from './tool-args';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
+import { notifyApprovalPending } from './approval-pending';
 
 import { AgentTaskAbort, AgentTaskParked } from './types';
-import { writeTurnCheckpoint } from './turn-reentry';
+import { writeTurnCheckpoint, markToolCallInFlight } from './turn-reentry';
+import { hasSideEffects } from '../../config/tool-policy';
+import { needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from './tool-receipt';
+import { runWithToolCallContext } from '../../utils/tool-call-context';
+import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice } from '../../prompts/agent-task-prompt';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
@@ -55,6 +59,8 @@ interface TurnToolExecInput {
     getCurStatus: () => string;
     update: (u: AgentTaskUpdatePayload) => Promise<void>;
     emitStep: (stepType: string, toolName?: string, content?: string | null) => void;
+    /** 턴 중간 재개(172): 실행 도중 끊겨 결과를 알 수 없는 호출 id — 다시 실행하지 않고 안내를 결과로 기록한다. */
+    unknownOutcomeId?: string;
     /** 턴 중간 재개(124): tool_call_id → 이미 실행된 결과. 있는 호출은 재실행하지 않고 결과만 대화에 싣는다. */
     journal?: Map<string, string>;
 }
@@ -89,22 +95,15 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     // 도구 실행 + 체크포인트
     let terminated = false;
     let terminateSummary = '';
-    // 승인 대기 진입 콜백 — task 도구·extra 도구 공용(status='paused' + 알림).
-    // 알림은 두 채널: 웹 푸시(설정에서 켠 사용자만 — 운영 구독 0건이던 opt-in) + 로컬 실행 작업이면
-    // 실행 디바이스(컴패니언 네이티브 알림, 2026-09-11). 링크는 작업 상세로 바로 연다.
-    const onApprovalPending = (toolName: string) => {
-        void update({ status: 'paused' }).catch(() => { /* noop */ });
-        void getPushService().sendPush(userId, {
-            title: 'OpenMake 에이전트 — 승인 필요',
-            body: `도구 실행 승인을 기다립니다: ${toolName}`,
-            url: `/agent-tasks?task=${encodeURIComponent(taskId)}`,
-        }).catch(() => { /* noop */ });
-        try { taskRuntime?.notifyApprovalPending(toolName); } catch { /* 알림 실패는 작업에 영향 없음 */ }
-    };
+    // 승인 대기 진입 콜백 — task 도구·extra 도구 공용(status='paused' + 알림). 발행 내용은 approval-pending 참고.
+    const onApprovalPending = (toolName: string) => notifyApprovalPending({ userId, taskId, update, taskRuntime }, toolName);
     // 질문형 승인 만료 → 주차(F16.7): 질문 호출은 결과 없이 남겨 체크포인트하고 주차 표식 후 실행을 끝낸다.
     // 답이 오면 hitl-park 가 재개하고, turn-reentry 가 같은 호출을 다시 실행해 결정을 이어받는다(이미 끝난 호출은 저널 재사용).
     let parkRequested = false;
+    // 실행 중 표식(172)을 남긴 호출인가 — 결과 스텝 뒤(또는 주차 전)에 지운다.
+    let inFlightMarked = false;
     const park = async (): Promise<never> => {
+        if (inFlightMarked) await markToolCallInFlight(taskId, null); // 주차된 호출은 재개 때 다시 실행된다
         await writeTurnCheckpoint(taskId, conversation, turn - 1, taskRuntime);
         await update({ status: 'paused' });
         await new AgentTaskRepository(getPool()).markParked(taskId);
@@ -116,7 +115,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         ask: async (args) => {
             const r = await getApprovalRegistry().request(
                 { taskId, userId, toolName: TOOL_USER_INPUT_APPROVAL_NAME, args },
-                { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName) },
+                { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true },
             );
             pausedMs += r.waitedMs;
             if (r.reason === 'parked') { parkRequested = true; return r; } // 서버엔 cancel, 도구가 끝나면 주차
@@ -125,8 +124,30 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             return r;
         },
     };
+    // 결과 불명 호출(172) — 사용자에게 묻는다: 승인 = 다시 실행(undefined), 그 밖은 다시 실행하지 않고 돌려줄 도구 결과.
+    // 유예가 지나면 다른 승인처럼 주차하되 표식은 남긴다 — 재개 때 같은 질문으로 결정을 이어받는다.
+    const resolveUnknownOutcome = async (name: string, toolCallId: string): Promise<string | undefined> => {
+        if (!AGENT_TASK_LIMITS.REENTRY_UNKNOWN_OUTCOME_ASK) return getAgentTaskUnknownOutcomeNotice(name);
+        const r = await getApprovalRegistry().request(
+            { taskId, userId, toolName: 'ask_human', args: { question: getAgentTaskUnknownOutcomeQuestion(name), toolName: name, toolCallId } },
+            { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true },
+        );
+        pausedMs += r.waitedMs;
+        if (r.reason === 'parked') await park();
+        if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
+        if (r.decision === 'approved') return r.text?.trim() ? getAgentTaskUnknownOutcomeAnswerNotice(name, r.text.trim()) : undefined;
+        return r.reason === 'user' ? getAgentTaskUnknownOutcomeDeclinedNotice(name) : getAgentTaskUnknownOutcomeNotice(name);
+    };
     const execTool = (name: string, args: Record<string, unknown>): Promise<string> =>
         getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx));
+    // 외부 도구(175) — 영수증을 남기고 멱등 키를 호출 문맥에 실어 실행한다(외부 MCP 클라이언트가 읽어 서버에 보낸다).
+    let receiptOpen = false;
+    const execWithReceipt = async (name: string, args: Record<string, unknown>, toolCallId: string | undefined): Promise<string> => {
+        if (!AGENT_TASK_LIMITS.REENTRY_UNKNOWN_OUTCOME_ENABLED || toolCallId === undefined || !needsReceipt(name, args)) return execTool(name, args);
+        const idempotencyKey = await startReceipt(taskId, toolCallId, name, args);
+        receiptOpen = true;
+        return runWithToolCallContext({ idempotencyKey }, () => execTool(name, args));
+    };
     // 읽기 전용 extra 도구(web_search 등) 병렬 선실행. 승인이 필요한 호출은 **자동 승인 작업에서만**
     // 포함한다 — 아니면 승인 창이 동시에 N개 뜬다(HITL fan-in). 결과·스텝 영속은 아래 루프가
     // 원래 순서로 처리하므로 체크포인트 계약은 그대로다.
@@ -160,12 +181,24 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         if (name === 'browser') browserCalls++;
         const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
         let toolResult: string;
+        inFlightMarked = false;
+        receiptOpen = false;
+        // 부작용 도구는 승인 뒤·실행 직전에 표식을 남긴다 — 재개 때 저널에 없으면 결과 불명(다시 실행하지 않음).
+        const beforeExecute = AGENT_TASK_LIMITS.REENTRY_UNKNOWN_OUTCOME_ENABLED && tc.id !== undefined && hasSideEffects(name, args)
+            ? async (): Promise<void> => { inFlightMarked = true; await markToolCallInFlight(taskId, tc.id!); }
+            : undefined;
         const journaled = tc.id !== undefined ? journal.get(tc.id) : undefined;
         const pre = tc.id !== undefined ? prefetched.get(tc.id) : undefined;
+        const unknownResult = journaled === undefined && tc.id !== undefined && tc.id === input.unknownOutcomeId
+            ? await resolveUnknownOutcome(name, tc.id)
+            : undefined;
         if (journaled !== undefined) {
             // 저널 재사용(124) — 결과는 이미 스텝에 있으므로 대화에만 싣고 스텝·체크포인트는 건너뛴다.
             conversation.push({ role: 'tool', content: journaled, tool_name: name, tool_call_id: tc.id });
             continue;
+        } else if (unknownResult !== undefined) {
+            toolResult = unknownResult;
+            inFlightMarked = true; // 남아 있는 표식을 아래에서 지운다
         } else if (pre !== undefined) {
             toolResult = pre;
         } else if (taskRuntime?.isTaskTool(name)) {
@@ -176,6 +209,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 onApprovalPending: (p) => onApprovalPending(p.toolName),
                 onApprovalWaited: (ms) => { pausedMs += ms; },
                 onApprovalRejected,
+                onBeforeExecute: beforeExecute,
             }).catch((e: unknown) => (e instanceof AgentTaskParked ? park() : Promise.reject(e)));
             if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             if (toolResult.includes(TASK_TERMINATE_SENTINEL)) {
@@ -191,21 +225,24 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             if (requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
                 const r = await getApprovalRegistry().request(
                     { taskId, userId, toolName: name, args },
-                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName) },
+                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true },
                 );
                 decision = r.decision;
                 rejectReason = r.reason;
                 pausedMs += r.waitedMs; // 4-1 pause-aware
+                if (rejectReason === 'parked') await park(); // 유예 초과 → 주차: 실행 전이라 결과 없이 체크포인트, 재개 때 결정 이어받음
                 if (decision === 'rejected') onApprovalRejected({ toolName: name, reason: rejectReason ?? 'user' });
             }
             if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
+            if (decision === 'approved') await beforeExecute?.();
             toolResult = decision === 'approved'
-                ? await execTool(name, args)
+                ? await execWithReceipt(name, args, tc.id)
                 : rejectReason === 'timeout'
                     ? `Error: 승인 대기 시간이 초과되었습니다(무응답, ${name}). 사용자가 자리를 비운 것으로 보입니다 — 승인이 필요 없는 방법으로 진행하거나, 지금까지 확보한 결과로 최종 산출물을 작성하세요.`
                     : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
         } else {
-            toolResult = await execTool(name, args);
+            await beforeExecute?.();
+            toolResult = await execWithReceipt(name, args, tc.id);
         }
         if (parkRequested) await park(); // mcp_elicit 주차 — 결과(cancel 응답)는 기록하지 않는다
         conversation.push({
@@ -227,6 +264,10 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             // 도구 호출 저널(124) — 재개 시 이 id 가 있는 호출은 재실행하지 않는다.
             toolCallId: tc.id,
         });
+        // 영수증 종료(175) — 실행했으면 결과대로, 결과 불명인데 다시 실행하지 않았으면 outcome_unknown 으로 닫는다.
+        if (receiptOpen) await finishReceipt(taskId, tc.id!, receiptStatusOf(toolResult));
+        else if (unknownResult !== undefined && needsReceipt(name, args)) await finishReceipt(taskId, tc.id!, 'outcome_unknown');
+        if (inFlightMarked) await markToolCallInFlight(taskId, null);
         emitStep('tool_result', name, toolResult);
         // 턴 중간 체크포인트(6-4, opt-in): 도구 결과 단위로 저장 — 이 시점 conversation 은
         // assistant(tool_calls)+실행된 tool 결과들로 유효하며, resume 이 같은 턴(fromTurn=turn)

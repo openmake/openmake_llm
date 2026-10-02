@@ -258,7 +258,7 @@ export class ChatService {
         onSkillsActivated?: (skillNames: string[]) => void,
         onThinking?: (thinking: string) => void,
         onSystemEvent?: SystemEventCallback,
-        onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../tools/web-search/types').SearchSourceRef[] }) => void,
+        onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../tools/web-search/types').SearchSourceRef[]; /** 도구 호출 요약 — 채팅의 도구 카드 */ summary?: { ok: boolean; durationMs: number; args?: string; preview?: string } }) => void,
         onMcpToolStart?: (event: { toolName: string }) => void,
     ): Promise<string> {
         // MCP tool resource content 콜백을 인스턴스 상태로 저장 — executeExternalTool 및 strategy 가 공유

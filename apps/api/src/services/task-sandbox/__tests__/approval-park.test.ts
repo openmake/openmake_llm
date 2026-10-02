@@ -52,3 +52,43 @@ describe('ApprovalRegistry — 만료 주차(F16.7)', () => {
         await expect(new ApprovalRegistry().request(input('ask_human'), { timeoutMs: 5 })).resolves.toMatchObject({ reason: 'timeout' });
     });
 });
+
+describe('ApprovalRegistry — 짧은 유예 후 주차', () => {
+    const limits = AGENT_TASK_LIMITS as { HITL_PARK_GRACE_MS: number };
+    const original = limits.HITL_PARK_GRACE_MS;
+    afterEach(() => { limits.HITL_PARK_GRACE_MS = original; });
+
+    it('유예를 켜면 주차 가능한 도구 승인(bash)이 만료 전 유예 시간에 parked — 행은 연장된다', async () => {
+        limits.HITL_PARK_GRACE_MS = 5;
+        const s = store();
+        const r = await new ApprovalRegistry(s).request(input('bash'), { timeoutMs: 60_000, parkable: true });
+        expect(r).toMatchObject({ decision: 'rejected', reason: 'parked' });
+        await flush();
+        expect(s.extendPending).toHaveBeenCalledWith(expect.stringContaining('apv_t1_'), AGENT_TASK_LIMITS.HITL_PARK_MAX_MS);
+        expect(s.markDecided).not.toHaveBeenCalled();
+    });
+
+    it('유예 안에 승인하면 주차하지 않고 approved', async () => {
+        limits.HITL_PARK_GRACE_MS = 60_000;
+        const s = store();
+        const reg = new ApprovalRegistry(s);
+        let approvalId = '';
+        const pending = reg.request(input('bash'), { timeoutMs: 120_000, parkable: true, onPending: (p) => { approvalId = p.approvalId; } });
+        await flush();
+        await reg.approve(approvalId);
+        await expect(pending).resolves.toMatchObject({ decision: 'approved' });
+        expect(s.extendPending).not.toHaveBeenCalled();
+    });
+
+    it('주차 가능 표시가 없으면(서브에이전트) 유예를 켜도 종전대로 timeout', async () => {
+        limits.HITL_PARK_GRACE_MS = 1;
+        const s = store();
+        await expect(new ApprovalRegistry(s).request(input('bash'), { timeoutMs: 20 })).resolves.toMatchObject({ reason: 'timeout' });
+        expect(s.extendPending).not.toHaveBeenCalled();
+    });
+
+    it('유예를 끄면(0) 주차 가능 표시가 있어도 도구 승인은 종전대로 timeout', async () => {
+        limits.HITL_PARK_GRACE_MS = 0;
+        await expect(new ApprovalRegistry(store()).request(input('bash'), { timeoutMs: 5, parkable: true })).resolves.toMatchObject({ reason: 'timeout' });
+    });
+});

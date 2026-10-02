@@ -34,6 +34,25 @@
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
   },
+  "activity": {
+    "title": "現在の作業",
+    "badge": "入力待ち {needs}件 · 進行中 {running}件",
+    "empty": "進行中の作業はありません",
+    "needsInput": "入力が必要",
+    "running": "進行中",
+    "recent": "最近完了",
+    "chatGenerating": "チャットの回答を生成中",
+    "approvalFor": "{tool} の実行承認",
+    "status": {
+      "running": "実行中",
+      "queued": "キュー待ち",
+      "paused": "一時停止(入力待ち)",
+      "pending": "開始待ち",
+      "completed": "完了",
+      "failed": "失敗",
+      "cancelled": "キャンセル済み"
+    }
+  },
   "sidebar": {
     "newChat": "新しいチャット",
     "searchPlaceholder": "検索...",
@@ -336,6 +355,13 @@
       "low": "推論: 低",
       "medium": "推論: 中",
       "high": "推論: 高"
+    },
+    "followupQueue": {
+      "hint": "回答が終わると順番に送信します",
+      "paused": "待機中のメッセージ — 次の回答が終わると続けて送信します",
+      "remove": "キューから外す",
+      "add": "キューに追加",
+      "full": "キューがいっぱいです(最大{max}件)"
     }
   },
   "chat": {
@@ -491,6 +517,16 @@
       "generating": "応答を生成しています",
       "toolRunning": "{tool} を実行中",
       "done": "応答が完了しました"
+    },
+    "jumpToLatest": "最新へ",
+    "toolCards": {
+      "label": "ツール呼び出し",
+      "running": "実行中",
+      "done": "完了",
+      "failed": "失敗",
+      "duration": "{seconds}秒",
+      "args": "引数",
+      "result": "結果"
     }
   },
   "compare": {
@@ -964,6 +1000,7 @@
       "status": {
         "queued": "待機中",
         "running": "実行中",
+        "awaiting_approval": "承認待ち",
         "completed": "完了",
         "failed": "失敗",
         "interrupted": "中断"
@@ -1033,6 +1070,27 @@
       "delete": "削除",
       "deleteConfirm": "このトリガーを削除しますか?",
       "failed": "処理に失敗しました: {message}"
+    },
+    "takeover": {
+      "start": "ブラウザーを引き継ぐ",
+      "reopen": "引き継いだブラウザーを開く",
+      "hint": "ログインや CAPTCHA など自分で行う必要がある手順で、エージェントのブラウザーを引き継いで操作します。",
+      "activeHint": "ブラウザーを引き継いでいます。終わったら返してください。",
+      "title": "ブラウザーを引き継ぐ",
+      "notice": "引き継いでいる間、エージェントはブラウザーを使えません。操作がなければ 10 分後に自動で返します。",
+      "hide": "隠す",
+      "release": "返す",
+      "back": "戻る",
+      "go": "移動",
+      "addressPlaceholder": "アドレス",
+      "screen": "ブラウザー画面",
+      "textPlaceholder": "日本語などの変換入力はここに書いて送信",
+      "sendText": "入力を送信",
+      "released": "ブラウザーを返しました。エージェントはこのログイン状態で続行します。",
+      "ended": "ブラウザーセッションが終了しました(操作がなかったか、タスクが終了しました)。",
+      "startFailed": "ブラウザーを引き継げませんでした: {error}",
+      "inputFailed": "操作が届きませんでした: {error}",
+      "releaseFailed": "返せませんでした: {error}"
     }
   },
   "customAgents": {

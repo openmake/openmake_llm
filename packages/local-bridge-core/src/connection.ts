@@ -8,7 +8,7 @@
  * 무시한다. 알림은 검증을 통과한 것만 호스트(onNotice)에 넘길 뿐 아무 동작도 일으키지 않는다.
  */
 import WebSocket from 'ws';
-import { NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MS, TASK_ID_RE } from './constants';
+import { NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
 import type { BridgeCore } from './core';
 import type { BridgeMsg, BridgeNotice, BridgeResult, BridgeStatusCode } from './types';
 
@@ -28,7 +28,27 @@ export interface BridgeConnectionOptions {
     onOpen?: (ws: WebSocket) => (() => void) | void;
     /** 재연결 여부 — 데스크톱은 폴더 연결 상태, CLI 는 disconnect() 호출 여부로 판단. */
     shouldReconnect?: () => boolean;
+    /** 재연결 기준 간격(ms) — 기본 RECONNECT_MS. 실제 대기는 reconnectDelayMs 로 흩고 늘린다. */
     reconnectMs?: number;
+    /** 재연결 간격 상한(ms) — 기본 RECONNECT_MAX_MS */
+    reconnectMaxMs?: number;
+    /** 간격 분산용 난수(0 이상 1 미만) — 테스트 주입용, 기본 Math.random */
+    random?: () => number;
+    /** 재연결 대기를 건 직후 알림(ms) — 진단·테스트용 */
+    onReconnectScheduled?: (delayMs: number) => void;
+}
+
+/**
+ * 재연결 대기 시간(ms). 서버가 재시작하면 모든 디바이스가 같은 순간에 끊기므로, 고정 간격이면 정확히 같은 시각에
+ * 한꺼번에 재접속한다. 구간 [d/2, d] 안에서 흩고(equal jitter), 실패가 이어지면 d 를 두 배씩 늘려 상한에서 멈춘다.
+ * attempt 는 연속 실패 횟수(0 부터) — 연결에 성공하면 0 으로 되돌린다.
+ */
+export function reconnectDelayMs(attempt: number, baseMs: number, maxMs: number, random: () => number = Math.random): number {
+    const cap = Math.max(baseMs, maxMs);
+    const exp = Math.min(Math.max(0, attempt), 30); // 2^30 이후는 어차피 상한 — 넘침 방지
+    const d = Math.min(cap, baseMs * 2 ** exp);
+    const r = Math.min(1, Math.max(0, random()));
+    return Math.round(d / 2 + (d / 2) * r);
 }
 
 /** 제어문자(0x00~0x1f, 0x7f) 제거 — 서버 발 텍스트를 알림에 그대로 싣지 않는다. */
@@ -56,6 +76,8 @@ export class BridgeConnection {
     private reconnectTimer: NodeJS.Timeout | null = null;
     private openCleanup: (() => void) | null = null;
     private closed = false;
+    /** 연속 재연결 실패 횟수 — bridge_ready 를 받으면 0 */
+    private reconnectAttempt = 0;
 
     constructor(private readonly opts: BridgeConnectionOptions) {}
 
@@ -96,7 +118,7 @@ export class BridgeConnection {
         this.ws.on('message', (d: WebSocket.RawData) => {
             let m: BridgeMsg;
             try { m = JSON.parse(d.toString()) as BridgeMsg; } catch { return; }
-            if (m.type === 'bridge_ready') { this.status(`연결됨: ${folderName}`, 'connected', folderName); return; }
+            if (m.type === 'bridge_ready') { this.reconnectAttempt = 0; this.status(`연결됨: ${folderName}`, 'connected', folderName); return; }
             if (m.type === 'error') { this.status(`서버 오류: ${m.message ?? ''}`, 'server_error', m.message ?? ''); return; }
             if (m.type === 'bridge_notice') {
                 const n = parseNotice(m);
@@ -127,13 +149,17 @@ export class BridgeConnection {
             }
             this.status('끊김 — 재연결 대기', 'reconnecting');
             if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-            this.reconnectTimer = setTimeout(() => { void this.connect(); }, this.opts.reconnectMs ?? RECONNECT_MS);
+            const delay = reconnectDelayMs(this.reconnectAttempt, this.opts.reconnectMs ?? RECONNECT_MS, this.opts.reconnectMaxMs ?? RECONNECT_MAX_MS, this.opts.random);
+            this.reconnectAttempt += 1;
+            this.reconnectTimer = setTimeout(() => { void this.connect(); }, delay);
+            this.opts.onReconnectScheduled?.(delay);
         });
         this.ws.on('error', () => { /* close 가 후속 처리 */ });
     }
 
     disconnect(): void {
         this.closed = true;
+        this.reconnectAttempt = 0;
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
         this.opts.core.clearAutoApprove(); // 연결이 끊기면 일괄 승인도 회수한다(다음 연결로 새지 않게).
         try { if (this.ws) this.ws.close(); } catch { /* noop */ }

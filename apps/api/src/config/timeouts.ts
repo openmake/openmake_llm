@@ -235,6 +235,14 @@ export const WS_LIMITS = {
      * 기본 5회 — 일시적 네트워크 spike 는 허용, 만성적 stall 은 정리.
      */
     BROADCAST_BACKPRESSURE_TERMINATE_AFTER: Number(process.env.WS_BROADCAST_BACKPRESSURE_TERMINATE_AFTER) || 5,
+    /**
+     * 채팅 스트림 송신 백프레셔 임계 (bytes). 스트림을 받는 소켓의 bufferedAmount 가 이 값을 넘으면
+     * 그 소켓을 끊고 스트림은 detach 한다 — 생성은 유예(STREAM_DETACH_GRACE_MS) 동안 이어지고 재연결 시
+     * 스냅샷으로 잇는다. 느린 클라이언트 하나가 서버 메모리를 계속 차지하는 것을 막는다.
+     * 기본 8MB — 토큰 프레임(수백 B)이 수만 개 밀린 수준이라 정상 클라이언트는 닿지 않는다. 0 이면 검사 안 함(롤백).
+     */
+    STREAM_BACKPRESSURE_THRESHOLD_BYTES: process.env.WS_STREAM_BACKPRESSURE_THRESHOLD_BYTES !== undefined && process.env.WS_STREAM_BACKPRESSURE_THRESHOLD_BYTES !== ''
+        ? Math.max(0, Number(process.env.WS_STREAM_BACKPRESSURE_THRESHOLD_BYTES) || 0) : 8 * 1024 * 1024,
     /** artifact_chunk 스트리밍 throttle 윈도우(ms) — 토큰 단위 delta 를 합쳐 메시지 폭주 방지. */
     ARTIFACT_CHUNK_FLUSH_MS: parseInt(process.env.WS_ARTIFACT_CHUNK_FLUSH_MS || '50', 10),
 } as const;
@@ -252,6 +260,22 @@ export const MCP_EXTERNAL_TOOL_LIMITS = {
     STDERR_TAIL_MAX_CHARS: Number(process.env.MCP_EXTERNAL_STDERR_TAIL_MAX_CHARS) || 2000,
     /** 기본 post 훅(audit-timing)이 경고를 남기는 도구 호출 소요 시간(ms) — MCP_SLOW_TOOL_WARN_MS */
     SLOW_TOOL_WARN_MS: Number(process.env.MCP_SLOW_TOOL_WARN_MS) || 15_000,
+} as const;
+
+/**
+ * 전역 MCP 서버 자동 재연결 (2026-09-30).
+ *
+ * 재부팅 직후 앱이 Docker 보다 먼저 떠서, 부팅 때 붙은 전역 서버(샌드박스 컨테이너)가 Docker 재기동과
+ * 함께 끊긴 뒤 다시 붙지 않았다 — 유저풀은 LifecycleSupervisor 가 다시 띄우지만 전역 registry 엔
+ * 복구 경로가 없었다. 부팅 연결 실패·예기치 않은 종료 모두 지수 백오프로 재시도한다.
+ * MAX_ATTEMPTS=0 이면 끈다. STABLE_MS 이상 붙어 있던 연결이 끊기면 시도 횟수를 초기화한다
+ * (open-design 처럼 유휴 종료하는 서버가 상한에 누적되지 않게, 곧바로 죽는 서버는 상한에서 멈춘다).
+ */
+export const MCP_GLOBAL_RECONNECT = {
+    BASE_DELAY_MS: parseInt(process.env.MCP_GLOBAL_RECONNECT_BASE_DELAY_MS || '5000', 10),
+    MAX_DELAY_MS: parseInt(process.env.MCP_GLOBAL_RECONNECT_MAX_DELAY_MS || '60000', 10),
+    MAX_ATTEMPTS: parseInt(process.env.MCP_GLOBAL_RECONNECT_MAX_ATTEMPTS || '10', 10),
+    STABLE_MS: parseInt(process.env.MCP_GLOBAL_RECONNECT_STABLE_MS || '60000', 10),
 } as const;
 
 /**

@@ -243,9 +243,15 @@ final class ChatSessionModel {
                 files: files,
                 images: images)
             activeAgentTask = AgentTaskDetail(task: creation.task, steps: [])
-            let execution = try await client.executeAgentTask(id: creation.task.id)
+            // 재전송으로 서버가 이미 시작된 기존 작업을 돌려줬으면 다시 실행하지 않고 진행만 따라간다
+            let queued: Bool
+            if creation.alreadyStarted {
+                queued = creation.task.status == .queued
+            } else {
+                queued = try await client.executeAgentTask(id: creation.task.id).queued
+            }
             await NotificationManager.shared.requestAuthorization()
-            statusText = execution.queued
+            statusText = queued
                 ? "에이전트 작업이 실행 대기 중이에요"
                 : "에이전트가 첫 단계를 준비하고 있어요"
             agentPollTask?.cancel()

@@ -7,6 +7,7 @@
  */
 import type { Pool } from 'pg';
 import { initSchema } from '../schema-initializer';
+import { leaseOwner } from '../../../services/agent-task/task-lease';
 
 function fakePool(): { pool: Pool; queries: string[] } {
     const queries: string[] = [];
@@ -41,5 +42,31 @@ describe('initSchema — 부팅 시 좀비 정리', () => {
         expect(sql).toBeDefined();
         expect(sql).toContain("status = 'failed'");
         expect(sql).toContain("status IN ('pending', 'running')");
+    });
+});
+
+describe('initSchema — 실행 소유권(176)이 있으면 다른 서버의 실행 중 작업은 건드리지 않는다', () => {
+    it('소유권이 없거나, 내 것이거나, 지난 작업만 failed 로 마킹한다', async () => {
+        const { pool, queries } = fakePool();
+        await initSchema(pool);
+        const sql = queries.find(q => q.includes('UPDATE agent_tasks') && q.includes("'server restarted'"))!;
+        expect(sql).toContain('lease_owner IS NULL');
+        expect(sql).toContain(`lease_owner = '${leaseOwner()}'`);
+        expect(sql).toContain('lease_until < NOW()');
+    });
+
+    it('소유권 컬럼이 아직 없으면(176 적용 전 부팅) 종전 조건으로 마킹한다', async () => {
+        const queries: string[] = [];
+        const pool = {
+            query: jest.fn(async (sql: unknown) => {
+                queries.push(String(sql));
+                if (String(sql).includes('SELECT lease_owner')) throw new Error('column "lease_owner" does not exist');
+                return { rowCount: 0, rows: [] };
+            }),
+        } as unknown as Pool;
+        await initSchema(pool);
+        const sql = queries.find(q => q.includes('UPDATE agent_tasks') && q.includes("'server restarted'"))!;
+        expect(sql).toBeDefined();
+        expect(sql).not.toContain('lease_owner');
     });
 });

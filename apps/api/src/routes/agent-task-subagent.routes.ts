@@ -23,8 +23,9 @@ export const agentTaskSubagentRouter = Router();
 /** 부모 작업이 이 상태면 더 이상 서브가 진행될 수 없다 — 미완 서브는 중단으로 읽는다. */
 const TERMINAL_TASK_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 
-/** 서브에이전트 1개의 진행 상태. `interrupted` 는 부모가 끝났는데 마무리 기록이 없는 경우. */
-type SubagentStatus = 'queued' | 'running' | 'completed' | 'failed' | 'interrupted';
+/** 서브에이전트 1개의 진행 상태. `interrupted` 는 부모가 끝났는데 마무리 기록이 없는 경우,
+ *  `awaiting_approval` 은 승인 결정을 기다리는 경우(유예 중이거나 주차됨, 173). */
+type SubagentStatus = 'queued' | 'running' | 'awaiting_approval' | 'completed' | 'failed' | 'interrupted';
 
 interface SubagentTraceView {
     traceId: string;
@@ -48,6 +49,8 @@ interface SubagentTraceView {
 export function deriveSubagentStatus(stepTypes: string[]): SubagentStatus {
     if (stepTypes.includes('error')) return 'failed';
     if (stepTypes.includes('final')) return 'completed';
+    // 대기 진입(awaiting)·주차(parked) 뒤 재개(resumed) 기록이 없으면 아직 승인을 기다리는 중이다.
+    if (Math.max(stepTypes.lastIndexOf('awaiting'), stepTypes.lastIndexOf('parked')) > stepTypes.lastIndexOf('resumed')) return 'awaiting_approval';
     if (stepTypes.some((t) => t !== 'queued')) return 'running';
     return 'queued';
 }
@@ -73,7 +76,7 @@ export function groupSubagentSteps(rows: SubagentStepRow[], taskStatus?: string)
         const end = v.steps.find((s) => s.type === 'final' || s.type === 'error');
         v.finishedAt = end ? end.at : null;
         // 부모가 끝났는데 마무리 기록이 없으면 그 서브는 되살아나지 않는다 — 영원한 "실행 중" 차단.
-        if (parentDone && (v.status === 'running' || v.status === 'queued')) v.status = 'interrupted';
+        if (parentDone && (v.status === 'running' || v.status === 'queued' || v.status === 'awaiting_approval')) v.status = 'interrupted';
     }
     return [...map.values()].sort((a, b) => a.startedAt.localeCompare(b.startedAt) || a.subIndex - b.subIndex);
 }

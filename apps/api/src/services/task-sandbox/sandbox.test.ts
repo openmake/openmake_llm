@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, writeFile, readFile, symlink, rm, chmod } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, sep } from 'path';
-import { buildRunArgs, buildBrowserRunArgs, buildWriteArgs, safeResolveWorkspacePath, safeRealWorkspacePath, sanitizeId, dirSizeBytes, listWorkspaceFilesAt, TaskSandbox } from './sandbox';
+import { buildRunArgs, buildBrowserRunArgs, buildWriteArgs, buildKillExecArgs, safeResolveWorkspacePath, safeRealWorkspacePath, sanitizeId, dirSizeBytes, listWorkspaceFilesAt, TaskSandbox } from './sandbox';
 import { getTaskSandboxConfig, resolveWriteViaContainer } from '../../config/task-sandbox';
 
 describe('task-sandbox pure functions', () => {
@@ -322,5 +322,79 @@ describe('task-sandbox pure functions', () => {
             expect(j).toContain('--network omk-egress-internal'); // bridge 아님(직접 인터넷 차단)
             expect(j).toContain('-e BROWSER_PROXY=http://omk-egress-proxy:8888');
         });
+    });
+});
+
+describe('exec 타임아웃·취소 — 컨테이너 안 프로세스 정리', () => {
+    /** docker 대역 — 인자를 기록한다. 꼬리표(OMK_EXEC_ID)가 붙은 exec 는 오래 도는 명령처럼 멈춰 있는다. */
+    async function hangingDocker(dir: string): Promise<{ bin: string; log: string }> {
+        const bin = join(dir, 'docker'); const log = join(dir, 'docker.log');
+        await writeFile(bin, [
+            '#!/bin/sh',
+            `printf '%s\\n' "$*" >> '${log}'`,
+            'case "$*" in',
+            '  *"-e OMK_EXEC_ID="*HANG*) exec sleep 30 ;;',
+            '  *) exit 0 ;;',
+            'esac',
+            '',
+        ].join('\n'), 'utf8');
+        await chmod(bin, 0o755);
+        return { bin, log };
+    }
+    const lines = async (p: string) => (await readFile(p, 'utf8').catch(() => '')).split('\n').filter(Boolean);
+    const execIdOf = (l: string[]) => /-e OMK_EXEC_ID=(\S+)/.exec(l.find((x) => x.includes('HANG')) ?? '')?.[1];
+    const killLineOf = (l: string[], id: string | undefined) => l.find((x) => !x.includes('-e OMK_EXEC_ID=') && !!id && x.endsWith(` sh ${id}`));
+
+    it('buildKillExecArgs: 실행 id 는 셸 문자열에 넣지 않고 위치 인자로 넘긴다', () => {
+        const a = buildKillExecArgs('omk-task-abc', 'id-1');
+        expect(a.slice(0, 4)).toEqual(['exec', 'omk-task-abc', 'sh', '-c']);
+        expect(a[4]).toContain('OMK_EXEC_ID=$1');
+        expect(a[4]).toContain('kill -9');
+        expect(a.slice(5)).toEqual(['sh', 'id-1']);
+    });
+
+    it('타임아웃이면 같은 실행 id 의 컨테이너 안 프로세스를 죽인다', async () => {
+        const base = await mkdtemp(join(tmpdir(), 'omk-exec-'));
+        try {
+            const { bin, log } = await hangingDocker(base);
+            const sb = new TaskSandbox('k1', { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws'), dockerPath: bin, execTimeoutMs: 300 });
+            await sb.create();
+            const r = await sb.exec('HANG');
+            expect(r.timedOut).toBe(true);
+            const l = await lines(log);
+            expect(execIdOf(l)).toBeTruthy();
+            expect(killLineOf(l, execIdOf(l))).toBeTruthy();
+        } finally { await rm(base, { recursive: true, force: true }); }
+    });
+
+    it('abortRunning 은 실행 중인 명령을 타임아웃을 기다리지 않고 끝내고 컨테이너 안 프로세스를 죽인다', async () => {
+        const base = await mkdtemp(join(tmpdir(), 'omk-exec-'));
+        try {
+            const { bin, log } = await hangingDocker(base);
+            const sb = new TaskSandbox('k2', { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws'), dockerPath: bin, execTimeoutMs: 20_000 });
+            await sb.create();
+            const started = Date.now();
+            const pending = sb.exec('HANG');
+            await new Promise((r) => setTimeout(r, 300));
+            sb.abortRunning();
+            const r = await pending;
+            expect(Date.now() - started).toBeLessThan(5_000);
+            expect(r.timedOut).toBe(false);
+            expect(r.exitCode).not.toBe(0);
+            const l = await lines(log);
+            expect(killLineOf(l, execIdOf(l))).toBeTruthy();
+        } finally { await rm(base, { recursive: true, force: true }); }
+    });
+
+    it('정상 종료한 명령에는 정리 호출을 하지 않는다', async () => {
+        const base = await mkdtemp(join(tmpdir(), 'omk-exec-'));
+        try {
+            const { bin, log } = await hangingDocker(base);
+            const sb = new TaskSandbox('k3', { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws'), dockerPath: bin });
+            await sb.create();
+            expect((await sb.exec('echo ok')).exitCode).toBe(0);
+            sb.abortRunning(); // 끝난 명령은 대상이 아니다
+            expect((await lines(log)).filter((x) => x.includes('kill -9'))).toHaveLength(0);
+        } finally { await rm(base, { recursive: true, force: true }); }
     });
 });

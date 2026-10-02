@@ -14,6 +14,7 @@
  * @module services/task-sandbox/tools
  */
 import { randomUUID } from 'crypto';
+import { AgentTaskParked } from '../agent-task/types';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import type { ContributedAgentTaskTool } from '../chat-service/turn-integrations';
 import type { TaskExecutor, ExecResult } from './executor';
@@ -372,6 +373,7 @@ export function createTaskTools(
                 const advice = await delegate(subgoal, str(args.role) || undefined);
                 return textResult(advice);
             } catch (e) {
+                if (e instanceof AgentTaskParked) throw e; // 서브에이전트 승인 주차(173) — 부모가 받아 주차한다
                 return textResult(`전문가 위임 실패: ${e instanceof Error ? e.message : String(e)}`, true);
             }
         },

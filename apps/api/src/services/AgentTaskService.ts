@@ -25,10 +25,11 @@ import { emitAgentTaskProgress } from '../utils/event-bus';
 import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
-import { getPushService } from './PushService';
+import { isTerminalStatus, notifyTaskTerminal } from './agent-task/terminal-notify';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../tool-contract/types';
 import { buildDelegateFn } from './agent-task/delegate';
+import { buildSubagentApprovalHooks } from './agent-task/approval-pending';
 import { buildTaskSpawnFn } from './agent-spawn/spawn-agents';
 import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
@@ -43,7 +44,8 @@ import { finalizeTask, finalizeMaxTurnsExhausted } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { initWorkspaceBaseline } from './agent-task/code-diff';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
-import { findDanglingToolCalls, loadToolCallJournal, writeTurnCheckpoint } from './agent-task/turn-reentry';
+import { beginTaskLease } from './agent-task/task-lease';
+import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint } from './agent-task/turn-reentry';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
@@ -81,6 +83,8 @@ export class AgentTaskService {
         svc.abort();
         return true;
     }
+
+    static isRunning(taskId: string): boolean { return AgentTaskService.running.has(taskId); } // 소유권 점검이 자기 작업을 가져가지 않게
 
     /** 외부에서 작업 취소 */
     abort(): void {
@@ -140,31 +144,27 @@ export class AgentTaskService {
 
         // DB 갱신 + 진행상황 발행(fire-and-forget). ws 계층이 구독해 owner user 에게 relay.
         // ws 를 직접 참조하지 않으므로 소켓 연결 여부와 무관하게 실행은 끝까지 진행된다.
+        let leaseLost = false; // 소유권을 잃음(176) — 다른 서버가 가져갔다. 이후로는 상태를 쓰지 않는다(새 소유자의 것)
         const update = async (u: Parameters<typeof db.updateAgentTask>[1]): Promise<void> => {
+            if (leaseLost) return;
             curStatus = (u.status ?? curStatus) as string;
             curProgress = u.progress ?? curProgress;
             curTurn = u.currentTurn ?? curTurn;
             // terminal 전이 시 누적 토큰 영속(4-4) — 목록/상세 UI 의 비용 가시화에 사용.
-            if (u.status === 'completed' || u.status === 'failed' || u.status === 'cancelled') {
-                u = { ...u, totalTokens };
-            }
+            // 알림 표식(174)도 같은 쓰기로 남긴다 — 저장 직후 죽어도 주기 점검이 종료 알림을 다시 보낸다.
+            const terminal = isTerminalStatus(u.status);
+            if (terminal) u = { ...u, totalTokens, terminalNotifyPending: true };
             await db.updateAgentTask(taskId, u);
             emitAgentTaskProgress({ userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn });
-            // terminal 상태 → web push (페이지가 닫혀 있어도 알림). fire-and-forget, VAPID 미설정 시 no-op.
-            if (u.status === 'completed' || u.status === 'failed' || u.status === 'cancelled') {
-                const label = u.status === 'completed' ? '완료' : u.status === 'failed' ? '실패' : '취소';
-                const shortGoal = goal.length > 60 ? goal.slice(0, 60) + '…' : goal;
-                void getPushService().sendPush(userId, {
-                    title: 'OpenMake 에이전트 작업',
-                    body: `작업이 ${label}되었습니다: ${shortGoal}`,
-                    url: '/agent-tasks',
-                }).catch(() => { /* noop */ });
-            }
+            // terminal 상태 → web push (페이지가 닫혀 있어도 알림) 후 표식 정리. fire-and-forget.
+            if (terminal) notifyTaskTerminal({ userId, taskId, goal, status: curStatus, progress: curProgress, currentTurn: curTurn }, undefined, { emit: false });
         };
 
         // cancel 레이스 봉쇄: 어떤 await 보다 먼저 레지스트리에 등록해 /cancel 이 항상
         // AbortController 에 도달하게 한다 (기존엔 스킬 조회 await 사이의 취소가 유실됐다).
         AgentTaskService.running.set(taskId, this);
+        const lease = await beginTaskLease(taskId, () => { leaseLost = true; this.abortController.abort(); }); // 실행 소유권(176): 잃으면 루프를 멈춘다
+        if (!lease.acquired) { AgentTaskService.running.delete(taskId); return; }
         try {
             // 레지스트리 등록 전(detached 스케줄링 창)에 접수된 취소는 DB 에만 기록됨 — 시작 전 존중.
             // 단 resume 은 "취소됐던 작업을 이어가는 것" 자체라 영속 상태 cancelled 를 취소 요청으로
@@ -225,6 +225,7 @@ export class AgentTaskService {
                         client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
                         onTokens: (n) => { totalTokens += n; },
                         onPausedMs: (ms) => { pausedMs += ms; },
+                        ...buildSubagentApprovalHooks({ userId, taskId, update, getCurStatus: () => curStatus, getTaskRuntime: () => taskRuntime }),
                     });
                     // 병렬 fan-out(spawn_agents) — 플래그 ON 시에만 도구 노출(undefined 면 미노출).
                     const spawnFn = AGENT_SPAWN.ENABLED
@@ -305,11 +306,11 @@ export class AgentTaskService {
             for (let turn = startTurn; turn < turnCeiling; turn++) {
                 assertWithinLimits(signal, startedAt, pausedMs, totalTokens, totalTimeoutMs);
                 if (reentry) {
-                    const journal = await loadToolCallJournal(taskId, reentry.calls);
+                    const { journal, unknownOutcomeId } = await loadReentryState(taskId, reentry.calls);
                     logger.info(`[AgentTask] 턴 중간 재개: ${taskId} (turn ${turn + 1}, 남은 호출 ${reentry.calls.length}건, 저널 재사용 ${journal.size}건)`);
                     await update({ currentTurn: turn + 1 });
                     const re = await executeTurnToolCalls({
-                        toolCalls: reentry.calls, journal, taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
+                        toolCalls: reentry.calls, journal, unknownOutcomeId, taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
                         userId: String(userId), taskId, turn, conversation, usedTools, signal,
                         stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts, getCurStatus: () => curStatus, update, emitStep,
                     });
@@ -432,6 +433,16 @@ export class AgentTaskService {
                     result.tool_calls = undefined;
                 }
 
+                // qwen 결함 보정: 구조화 tool_calls 없이 도구 호출을 XML 텍스트로 뱉으면 실행이 안 돼
+                // 파일이 안 만들어진다(→ 다운로드할 산출물 없음) — 파싱해 실 tool_calls 로 승격 후 실행.
+                // 마무리 턴은 위 도구 차단 가드에서 이미 continue 로 처리되므로 여기 도달하지 않는다.
+                // 대화 기록 **전에** 승격해야 assistant.tool_calls 에 남아 tool 결과와 짝이 맞고 턴 중간 재개가 된다.
+                if ((!result.tool_calls || result.tool_calls.length === 0) && result.content) {
+                    const recovered = recoverTextToolCalls(result.content);
+                    if (recovered.length > 0) { result.tool_calls = recovered; result.content = ''; }
+                }
+                if (result.tool_calls?.length) result.tool_calls = ensureUniqueToolCallIds(result.tool_calls, conversation, turn);
+
                 conversation.push({
                     role: 'assistant',
                     content: result.content,
@@ -456,13 +467,6 @@ export class AgentTaskService {
                     stuckNotified = false;
                 }
 
-                // qwen 결함 보정: 구조화 tool_calls 없이 도구 호출을 XML 텍스트로 뱉으면 실행이 안 돼
-                // 파일이 안 만들어진다(→ 다운로드할 산출물 없음) — 파싱해 실 tool_calls 로 승격 후 실행.
-                // 마무리 턴은 위 도구 차단 가드에서 이미 continue 로 처리되므로 여기 도달하지 않는다.
-                if ((!result.tool_calls || result.tool_calls.length === 0) && result.content) {
-                    const recovered = recoverTextToolCalls(result.content);
-                    if (recovered.length > 0) { result.tool_calls = recovered; result.content = ''; }
-                }
                 const hasToolCalls = !!result.tool_calls && result.tool_calls.length > 0;
 
                 // 최종 답변 턴이면 deliverable(<artifact> 태그) 추출 — 스텝/result 는
@@ -573,6 +577,7 @@ export class AgentTaskService {
             // signal.aborted 가 true 면 client.chat() 호출 도중 던져진 AbortError
             // ("Request was aborted") 도 사용자 취소로 분류 — 턴 사이 abort 뿐 아니라
             // LLM 호출 중간 취소도 cancelled 로 일관 처리.
+            if (leaseLost) { logger.warn(`[AgentTask] 소유권을 잃어 실행 중단: ${taskId}`); return; } // 취소·실패가 아니다 — 상태는 새 소유자가 쓴다
             const aborted = signal.aborted || (err instanceof AgentTaskAbort && err.kind === 'aborted');
             const kind = aborted ? 'aborted' : (err instanceof AgentTaskAbort ? err.kind : 'failed');
             const msg = err instanceof Error ? err.message : String(err);
@@ -587,8 +592,9 @@ export class AgentTaskService {
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             AgentTaskService.running.delete(taskId);
-            // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup
-            await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber });
+            await lease.end();
+            // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup. 소유권을 잃었으면 새 소유자가 쓰고 있어 건너뛴다.
+            if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber });
         }
     }
 }

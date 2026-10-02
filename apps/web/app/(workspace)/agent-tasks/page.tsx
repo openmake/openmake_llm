@@ -45,8 +45,9 @@ import { SteeringInput } from "@/components/chat/steering-input";
 import { SharePanel } from "@/components/agent-tasks/share-panel";
 import { DiffView } from "@/components/chat/diff-view";
 import { PlanEditor } from "@/components/agent-tasks/plan-editor";
+import { BrowserTakeover } from "@/components/agent-tasks/browser-takeover";
 import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
-import { onAgentTaskChange } from "@/lib/agent-task-change";
+import { onAgentTaskChange, onOpenAgentTask } from "@/lib/agent-task-change";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -634,7 +635,7 @@ function TaskDetailModal({
   const [editingPlan, setEditingPlan] = useState(false);
   // 다른 창·기기의 계획 편집·승인 변경 → 재조회. 편집 중엔 건너뛴다 — 재조회가 planVersion 을 올려
   // 이 편집기의 낙관적 잠금(expectedVersion)을 무력화하면 남의 편집을 조용히 덮어쓴다.
-  useEffect(() => onAgentTaskChange((c) => { if (c.taskId === taskId && !editingPlan) reload(); }), [taskId, editingPlan]);
+  useEffect(() => onAgentTaskChange((c) => { if ((c.taskId === taskId || c.reason === "resync") && !editingPlan) reload(); }), [taskId, editingPlan]);
   const planEditable = !!detail && detail.task.status !== "completed";
   // 체크포인트 분기(141) — 실행 중이 아닐 때 이력을 불러와 턴을 고른다. fork → resume → 새 작업 열기.
   const [checkpoints, setCheckpoints] = useState<Array<{ turn: number; messages: number }>>([]);
@@ -717,6 +718,11 @@ function TaskDetailModal({
           {/* 실행 중/일시정지 시 방향 지시(steering) — 취소·재시작 없이 교정. */}
           {(detail.task.status === "running" || detail.task.status === "paused") && (
             <SteeringInput taskId={taskId} />
+          )}
+
+          {/* 브라우저 넘겨받기 — 로그인·CAPTCHA 처럼 사람이 해야 하는 단계. 샌드박스 실행 작업만(대상이 아니면 스스로 숨는다). */}
+          {(detail.task.status === "running" || detail.task.status === "paused") && detail.task.executor !== "local" && (
+            <BrowserTakeover taskId={taskId} />
           )}
 
           {/* 체크포인트 분기(141) — 완료·실패·취소·일시정지 작업에서 지난 턴으로 갈라내기 */}
@@ -1207,6 +1213,8 @@ export default function AgentTasksPage() {
     const id = new URLSearchParams(window.location.search).get("task");
     if (id) setDetailTaskId(id);
   }, []);
+  // 이미 이 화면에 있을 때 통합 상태 패널에서 작업을 누른 경우 — 주소만 바뀌므로 알림으로 연다.
+  useEffect(() => onOpenAgentTask(setDetailTaskId), []);
 
   async function handleCancel(task: AgentTask) {
     if (!window.confirm(t("cancelConfirm", { goal: task.goal.slice(0, 40) }))) return;
