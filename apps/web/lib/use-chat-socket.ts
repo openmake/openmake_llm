@@ -388,6 +388,7 @@ export function useChatSocket() {
           setOrchestratorProgress(null);
           setActiveTool(null);
           flushPendingMcpResources();
+          useAppStore.getState().commitTurnToolCalls();
           runDeferredAfterStream();
           sendNextFollowup();
           break;
@@ -397,6 +398,7 @@ export function useChatSocket() {
           setOrchestratorProgress(null);
           setActiveTool(null);
           flushPendingMcpResources();
+          useAppStore.getState().commitTurnToolCalls();
           runDeferredAfterStream();
           break;
         case "error": {
@@ -418,12 +420,14 @@ export function useChatSocket() {
           setModeProgress(null);
           setOrchestratorProgress(null);
           setActiveTool(null);
+          useAppStore.getState().commitTurnToolCalls();
           runDeferredAfterStream();
           break;
         }
         case "mcp_tool_start":
           // 도구 실행 시작 — "🔍 {도구} 실행 중" 인디케이터(스트리밍 멈춘 듯한 혼선 해소).
           setActiveTool(data.toolName);
+          useAppStore.getState().toolCallStarted(data.toolName); // 도구 카드
           break;
         case "search_sources":
           // 웹검색 출처(F19.4) — 본문 [N] 인용 칩. 같은 턴에 여러 번 오면 마지막 목록이 이긴다
@@ -432,6 +436,7 @@ export function useChatSocket() {
         case "mcp_tool_result":
           // 도구 결과 도착 — 인디케이터 해제(다음 도구 시작 시 다시 표시).
           setActiveTool(null);
+          useAppStore.getState().toolCallFinished(data.toolName, data.summary); // 도구 카드(성공·실패, 시간, 인자·결과 앞부분)
           // resource content 가 있으면 폐기하지 않고 버퍼링 → 스트림 종료 시 카드로 렌더.
           if (Array.isArray(data.resources) && data.resources.length > 0) {
             pendingMcpResourcesRef.current.push({
@@ -665,6 +670,7 @@ export function useChatSocket() {
       appendMessage({ role: "user", content: displayContent, images, ...(hasFiles ? { hasAttachments: true } : {}) });
       setActiveAgent(null); // 새 질문 — 이전 에이전트/스킬 표시 초기화
       setActiveSkills([]);
+      useAppStore.setState({ turnToolCalls: [] }); // 새 질문 — 이전 답변의 미확정 도구 표시를 비운다
       setStreaming(true); // assistant placeholder 는 첫 token 에서 생성, isGenerating=true
 
       const payload: WsChatRequest = {

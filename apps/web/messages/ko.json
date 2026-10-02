@@ -499,7 +499,16 @@
       "toolRunning": "{tool} 실행 중",
       "done": "응답이 완료되었습니다"
     },
-    "jumpToLatest": "최신으로"
+    "jumpToLatest": "최신으로",
+    "toolCards": {
+      "label": "도구 호출",
+      "running": "실행 중",
+      "done": "완료",
+      "failed": "실패",
+      "duration": "{seconds}초",
+      "args": "인자",
+      "result": "결과"
+    }
   },
   "compare": {
     "title": "모델 비교",

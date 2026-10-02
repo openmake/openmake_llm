@@ -499,7 +499,16 @@
       "toolRunning": "Running {tool}",
       "done": "Response complete"
     },
-    "jumpToLatest": "Jump to latest"
+    "jumpToLatest": "Jump to latest",
+    "toolCards": {
+      "label": "Tool calls",
+      "running": "Running",
+      "done": "Done",
+      "failed": "Failed",
+      "duration": "{seconds}s",
+      "args": "Arguments",
+      "result": "Result"
+    }
   },
   "compare": {
     "title": "Model comparison",

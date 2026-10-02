@@ -499,7 +499,16 @@
       "toolRunning": "正在运行 {tool}",
       "done": "回答已完成"
     },
-    "jumpToLatest": "回到最新"
+    "jumpToLatest": "回到最新",
+    "toolCards": {
+      "label": "工具调用",
+      "running": "运行中",
+      "done": "完成",
+      "failed": "失败",
+      "duration": "{seconds}秒",
+      "args": "参数",
+      "result": "结果"
+    }
   },
   "compare": {
     "title": "模型对比",

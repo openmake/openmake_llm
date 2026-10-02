@@ -7,12 +7,15 @@ import type {
   UserRole,
 } from "@openmake/shared-types";
 import { enqueueFollowup, removeFollowup, type QueuedFollowup } from "./followup-queue";
+import { startToolCall, finishToolCall, settleToolCalls, type ToolCallView, type ToolCallSummary } from "./tool-calls";
 
 /**
  * 채팅 메시지 (기존 state.js chatHistory 항목 대응).
  * shared-types ChatMessage 를 기반으로 store 고유 필드(streaming)만 확장한다.
  */
 interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" | "images"> {
+  /** 이 답변을 만들며 모델이 부른 도구(lib/tool-calls) — 새로고침하면 남지 않는다(서버가 저장하지 않는 표시용 요약) */
+  toolCalls?: ToolCallView[];
   /** 서버 messageId (WS done 이벤트) — 메시지 피드백(👍/👎) 전송용 (assistant 메시지). */
   id?: string;
   /** 히스토리에서 불러온 DB 메시지 id — "여기서 분기"(clone uptoMessageId) 기준점. 스트리밍 중 메시지엔 없다. */
@@ -195,6 +198,8 @@ interface AppState {
   resendRequest: { fromIndex: number; content: string; images?: string[] } | null;
   /** 답변 중에 보낸 후속 메시지 대기열 — 답변이 끝나면 use-chat-socket 이 순서대로 하나씩 보낸다(lib/followup-queue) */
   followupQueue: QueuedFollowup[];
+  /** 지금 답변에서 모델이 부른 도구 — 답변이 끝나면 그 답변 메시지의 toolCalls 로 옮긴다 */
+  turnToolCalls: ToolCallView[];
 
   // 아티팩트
   artifacts: Artifact[];
@@ -267,6 +272,10 @@ interface AppState {
   /** 대기열에 넣는다 — 빈 메시지·상한 초과면 false */
   enqueueFollowup: (text: string) => boolean;
   removeFollowup: (id: string) => void;
+  toolCallStarted: (toolName: string) => void;
+  toolCallFinished: (toolName: string, summary?: ToolCallSummary) => void;
+  /** 답변 종료 — 남은 실행 중 항목을 닫고 마지막 답변 메시지에 붙인다(답변 메시지가 없으면 버린다) */
+  commitTurnToolCalls: () => void;
   requestResend: (r: { fromIndex: number; content: string; images?: string[] }) => void;
   clearResendRequest: () => void;
   setPrivacyPrefs: (patch: { saveHistory?: boolean; memoryLearning?: boolean }) => void;
@@ -345,6 +354,7 @@ export const useAppStore = create<AppState>()(
   activeTool: null,
   resendRequest: null,
   followupQueue: [],
+  turnToolCalls: [],
 
   artifacts: [],
   activeArtifactId: null,
@@ -528,6 +538,18 @@ export const useAppStore = create<AppState>()(
     return r.accepted;
   },
   removeFollowup: (id) => set((s) => ({ followupQueue: removeFollowup(s.followupQueue, id) })),
+  toolCallStarted: (toolName) => set((s) => ({ turnToolCalls: startToolCall(s.turnToolCalls, toolName) })),
+  toolCallFinished: (toolName, summary) => set((s) => ({ turnToolCalls: finishToolCall(s.turnToolCalls, toolName, summary) })),
+  commitTurnToolCalls: () =>
+    set((s) => {
+      if (s.turnToolCalls.length === 0) return {};
+      const hist = [...s.chatHistory];
+      const i = hist.length - 1;
+      // 이번 답변의 메시지 — 마지막 메시지가 답변일 때만(오류 안내로 끝났으면 그 앞의 답변)
+      const target = hist[i]?.role === "assistant" ? i : hist[i - 1]?.role === "assistant" ? i - 1 : -1;
+      if (target >= 0) hist[target] = { ...hist[target], toolCalls: settleToolCalls(s.turnToolCalls) };
+      return { chatHistory: hist, turnToolCalls: [] };
+    }),
   requestResend: (r) => set({ resendRequest: r }),
   clearResendRequest: () => set({ resendRequest: null }),
   clearChat: () =>
@@ -543,6 +565,7 @@ export const useAppStore = create<AppState>()(
       activeTool: null,
       resendRequest: null,
       followupQueue: [],
+      turnToolCalls: [],
       artifacts: [],
       activeArtifactId: null,
       artifactPanelOpen: false,

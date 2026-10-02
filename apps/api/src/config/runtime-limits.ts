@@ -1770,6 +1770,15 @@ export const IDEMPOTENCY = {
 } as const;
 
 /**
+ * 채팅의 도구 카드 — 도구 호출이 끝날 때마다 화면으로 보내는 요약의 길이 상한(글자). 결과 전문은 보내지 않는다.
+ * CHAT_TOOL_CARD_PREVIEW_CHARS(결과 미리보기, 기본 600) / CHAT_TOOL_CARD_ARGS_CHARS(인자 요약, 기본 400).
+ */
+export const CHAT_TOOL_CARD = {
+    PREVIEW_CHARS: parseInt(process.env.CHAT_TOOL_CARD_PREVIEW_CHARS || '600', 10),
+    ARGS_CHARS: parseInt(process.env.CHAT_TOOL_CARD_ARGS_CHARS || '400', 10),
+} as const;
+
+/**
  * 에이전트 작업 진행 이벤트 보관(순번·재전송) — 재연결한 클라이언트에 놓친 이벤트를 다시 주기 위해 사용자별로 잠깐 둔다.
  * AGENT_TASK_PROGRESS_LOG_MAX_EVENTS(사용자당 개수, 기본 200) / AGENT_TASK_PROGRESS_LOG_TTL_MS(보관 시간, 기본 10분).
  * SWEEP_EVERY_APPENDS: 이만큼 기록할 때마다 이벤트가 없어진 사용자 기록을 정리한다.

@@ -499,7 +499,16 @@
       "toolRunning": "{tool} wird ausgeführt",
       "done": "Antwort fertig"
     },
-    "jumpToLatest": "Zum Neuesten"
+    "jumpToLatest": "Zum Neuesten",
+    "toolCards": {
+      "label": "Tool-Aufrufe",
+      "running": "Läuft",
+      "done": "Fertig",
+      "failed": "Fehlgeschlagen",
+      "duration": "{seconds} s",
+      "args": "Argumente",
+      "result": "Ergebnis"
+    }
   },
   "compare": {
     "title": "Modellvergleich",

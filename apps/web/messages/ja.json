@@ -499,7 +499,16 @@
       "toolRunning": "{tool} を実行中",
       "done": "応答が完了しました"
     },
-    "jumpToLatest": "最新へ"
+    "jumpToLatest": "最新へ",
+    "toolCards": {
+      "label": "ツール呼び出し",
+      "running": "実行中",
+      "done": "完了",
+      "failed": "失敗",
+      "duration": "{seconds}秒",
+      "args": "引数",
+      "result": "結果"
+    }
   },
   "compare": {
     "title": "モデル比較",

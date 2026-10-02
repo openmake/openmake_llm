@@ -19,6 +19,7 @@ import { LiveSubagentPanel } from "@/components/agent-tasks/subagent-panel";
 import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
 import { ServedModelBadge } from "./served-model-badge";
+import { ToolCallCards } from "./tool-call-cards";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
 import { isNearBottom } from "@/lib/chat-scroll";
@@ -648,6 +649,7 @@ export function MessageList() {
   const modeProgress = useAppStore((s) => s.modeProgress);
   const orchestratorProgress = useAppStore((s) => s.orchestratorProgress);
   const activeTool = useAppStore((s) => s.activeTool);
+  const turnToolCalls = useAppStore((s) => s.turnToolCalls);
   const bottomRef = useRef<HTMLDivElement>(null);
   // 따라가기 — 사용자가 맨 아래 근처에 있을 때만 새 내용을 따라간다. 위로 올려 과거 대화를 읽는 중이면
   // 답변이 흘러도 자리를 지키고 "최신으로" 버튼을 띄운다(lib/chat-scroll).
@@ -701,6 +703,7 @@ export function MessageList() {
     activeAgent,
     activeSkills,
     activeTool,
+    turnToolCalls,
     chatHistory,
     modeProgress,
     orchestratorProgress,
@@ -856,6 +859,7 @@ export function MessageList() {
                   </span>
                 </div>
               )}
+              {m.toolCalls && m.toolCalls.length > 0 && <ToolCallCards calls={m.toolCalls} />}
               {m.reasoning && (
                 <ThinkingTimeline
                   reasoning={m.reasoning}
@@ -906,7 +910,11 @@ export function MessageList() {
       )}
       {modeProgress && <ModeProgressBanner />}
       {orchestratorProgress && <OrchestratorProgressBanner />}
-      {activeTool && <ToolIndicator />}
+      {turnToolCalls.length > 0 ? (
+        <div className="pl-10"><ToolCallCards calls={turnToolCalls} /></div>
+      ) : (
+        activeTool && <ToolIndicator />
+      )}
       {showThinking && <ThinkingIndicator agent={activeAgent} skills={activeSkills} />}
       {showJump && (
         <div className="pointer-events-none sticky bottom-3 flex justify-center">

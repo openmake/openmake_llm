@@ -318,7 +318,14 @@ export type WsServerEvent =
     }
   // MCP 도구 호출 진행 (백엔드 ws-chat-handler onMcpToolStart/onMcpToolResult)
   | { type: "mcp_tool_start"; toolName: string; messageId?: string }
-  | { type: "mcp_tool_result"; toolName: string; resources?: McpToolResource[]; messageId?: string }
+  | {
+      type: "mcp_tool_result";
+      toolName: string;
+      resources?: McpToolResource[];
+      /** 도구 호출 요약 — 채팅의 도구 카드가 보여 준다. 결과 전문이 아니라 앞부분(서버가 자름)이다 */
+      summary?: { ok: boolean; durationMs: number; args?: string; preview?: string };
+      messageId?: string;
+    }
   // 토론 모드 진행 (백엔드 ws-chat-handler onDiscussionProgress → DiscussionProgress)
   | {
       type: "discussion_progress";

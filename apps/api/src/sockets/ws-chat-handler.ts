@@ -369,11 +369,12 @@ export async function handleChatMessage(
             // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
             onMcpToolResult: (event) => {
                 emitSearchSources(out, messageId, [...turnStartSources, ...(event.sources ?? [])]); // web_search 도구 출처(F19.4)
-                if (!event.resources.length) return;
+                if (!event.resources.length && !event.summary) return;
                 out({
                     type: 'mcp_tool_result',
                     toolName: event.toolName,
-                    resources: event.resources,
+                    ...(event.resources.length ? { resources: event.resources } : {}),
+                    ...(event.summary ? { summary: event.summary } : {}), // 도구 카드(성공·실패, 시간, 인자·결과 앞부분)
                     messageId,
                 });
             },
