@@ -948,6 +948,12 @@ export const MCP_HIDDEN_TOOL_ARGS: ReadonlySet<string> = new Set(
 );
 
 /**
+ * 외부 MCP 도구 호출에 멱등 키를 싣는 `_meta` 키(175) — 에이전트 작업이 같은 호출을 다시 실행해도 값이 같다.
+ * 키를 모르는 서버는 `_meta` 를 무시한다(MCP 규격). 지원하는 서버는 이 값으로 중복 부작용을 막을 수 있다.
+ */
+export const MCP_IDEMPOTENCY_META_KEY = 'openmake/idempotencyKey';
+
+/**
  * 외부 provider 도구 루프 messages 토큰 예산 — external-provider 경로는 LLMClient.chat 의
  * model-pool context-fit 안전망을 우회(provider.streamChat 직접 호출)하므로, 큰 누적
  * 컨텍스트가 그대로 provider 로 전달돼 모델이 텍스트 없이 도구만 호출하고 끝나는 빈 응답을
@@ -1481,6 +1487,9 @@ export const AGENT_TASK_LIMITS = {
      *  다시 실행하지 않고 "결과 불명" 안내를 도구 결과로 준다(중복 부작용 방지). 기본 ON.
      *  AGENT_TASK_REENTRY_UNKNOWN_OUTCOME=false 면 종전처럼 결과 없는 호출을 모두 다시 실행한다. */
     REENTRY_UNKNOWN_OUTCOME_ENABLED: process.env.AGENT_TASK_REENTRY_UNKNOWN_OUTCOME !== 'false',
+    /** 결과 불명 호출을 만나면 사용자에게 묻는다(질문 채널) — 승인하면 다시 실행, 거절·무응답이면 안내만 주고 다시 실행하지 않는다.
+     *  기본 ON. AGENT_TASK_REENTRY_UNKNOWN_OUTCOME_ASK=false 면 묻지 않고 안내만 준다(172 의 처음 동작). */
+    REENTRY_UNKNOWN_OUTCOME_ASK: process.env.AGENT_TASK_REENTRY_UNKNOWN_OUTCOME_ASK !== 'false',
     /** 실행 중 중간 지시(steering) — 실행 중 task 에 사용자가 방향 지시를 주입하면 다음 턴 경계에서
      *  conversation 에 user 메시지로 반영(취소·재시작 없이 교정). steering 은 사용자가 명시적으로
      *  보낼 때만 동작하므로 기본 ON. AGENT_TASK_STEERING=false 로 비활성. */
