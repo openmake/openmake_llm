@@ -62,7 +62,13 @@ export interface ModelDescriptor {
  * provider 지원 판정. `direct` 는 게이트웨이가 프록시하지 못하는 provider API 라 앱이 사용자/서버 키로 provider 에 직결해야 함을
  * 선언한다(P08 — 종전 resolver 의 영상 전용 분기를 driver descriptor 로). 주소는 서버 통제 값(카탈로그 기본 URL·등록 base URL)뿐이다.
  */
-export type SupportVerdict = { supported: true; direct?: { endpoint: string } } | { supported: false; reason: string };
+export type SupportVerdict = { supported: true; direct?: DirectTransport } | { supported: false; reason: string };
+
+/**
+ * 직결 선언. `api: 'native'` 는 provider 의 OpenAI 호환 주소가 아니라 **카탈로그에 고정된 네이티브 API**(`nativeApi` — 주소·인증 헤더)를
+ * 쓴다는 뜻이다(Gemini `/interactions` 등). add-on 은 "네이티브를 쓴다"만 고르고 주소·헤더 이름은 정하지 못한다.
+ */
+export interface DirectTransport { endpoint: string; api?: 'native' }
 
 /**
  * Add-on handler 가 받는 실행 문맥(P04) — 승인 handle · 제한 호출 포트 · scoped Artifact 포트. 종전 `ExecContext` 에서

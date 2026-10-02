@@ -1,5 +1,5 @@
 /** capability-resolver(우선순위·게이트웨이 불변식·BYOK 상태·조회 장애) + preflight(미지원·입력·미배정·쿼터) */
-const mockConfig = { llmBaseUrl: 'http://127.0.0.1:13401/', llmApiKey: 'master', llmGatewayProviders: ['openrouter', 'hasa'] };
+const mockConfig = { llmBaseUrl: 'http://127.0.0.1:13401/', llmApiKey: 'master', llmGatewayProviders: ['openrouter', 'hasa', 'gemini'] };
 jest.mock('../../../config', () => ({ getConfig: () => mockConfig }));
 jest.mock('../../../config/capabilities', () => ({ ...jest.requireActual('../../../config/capabilities'), CAPABILITY_DEFAULTS: { ...jest.requireActual('../../../config/capabilities').CAPABILITY_DEFAULTS, 'image.generate': 'local-llm:img-gen' } })); // 코드 기본값이 없어졌으므로 테스트는 고정값을 주입한다
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) }));
@@ -67,6 +67,18 @@ describe('resolveCapabilityTarget', () => {
         expect(v.headers).toEqual({ Authorization: 'Bearer byok' });
         const o = await resolveCapabilityTarget('video.generate', undefined, deps({ global: [row('__global__', 'video.generate', 'openrouter:sora')], serverKey: 's' }));
         expect(o).toMatchObject({ transport: 'gateway', endpoint: '/v1/videos', model: 'openrouter/sora' });
+    });
+
+    it('Lyria(gemini) 음악: 카탈로그의 네이티브 주소로 직결하고 키는 그 provider 의 헤더로 — 사용자가 등록한 base URL 은 쓰지 않는다', async () => {
+        const t = await resolveCapabilityTarget('music.generate', 'u1', deps({
+            user: [row('u1', 'music.generate', 'gemini:lyria-3.5')], userKey: 'AIza-byok',
+            keyRow: { isActive: true, authMethod: 'api_key', baseUrl: 'https://proxy.example/v1' },
+        }));
+        expect(t).toMatchObject({ transport: 'direct', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', endpoint: '/interactions', model: 'lyria-3.5', costOwner: 'user' });
+        expect(t.headers).toEqual({ 'x-goog-api-key': 'AIza-byok' });
+        // 배정 단계: lyria 가 아닌 gemini 모델은 거절
+        expect(await validateCapabilityAssignment('u1', 'gemini:gemini-2.5-flash', deps({ userKey: 'k' }), 'music.generate')).toMatch(/Lyria/);
+        expect(await validateCapabilityAssignment('u1', 'gemini:lyria-3.5', deps({ userKey: 'k' }), 'music.generate')).toBeNull();
     });
 
     it('음악 생성: 게이트웨이 base + master key, 경로만 pass-through (전용 주소·겉키 없음, 2026-09-23)', async () => {
