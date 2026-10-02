@@ -4,12 +4,14 @@
  * This is intentionally shared across guest conversations so the backend can
  * list and claim all anonymous sessions owned by the same browser profile.
  */
+import { uuid } from "./local-id";
+
 export function getAnonSessionId(): string {
   try {
     const KEY = "omk_anon_session";
     let id = localStorage.getItem(KEY);
     if (!id) {
-      id = (crypto?.randomUUID?.() ?? `anon-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+      id = uuid(); // 서버의 세션 이관(claim)은 UUID v4 형식만 받는다
       localStorage.setItem(KEY, id);
     }
     return id;
