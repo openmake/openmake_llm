@@ -15,6 +15,7 @@ import { gaEvent, GA_EVENTS } from "./analytics";
 import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
 import { announceAgentTaskChange } from "./agent-task-change";
+import { AUTH_RESTORED_EVENT } from "./auth-sync";
 import { encodeMcpResources, type McpResourcePayload } from "@/components/chat/mcp-resource-card";
 
 // 배포 감지·토큰 갱신 상태는 소켓 재연결/훅 재마운트 간에도 유지되어야 하므로 모듈 레벨에 둔다.
@@ -656,6 +657,21 @@ export function useChatSocket() {
       wsRef.current?.close();
     };
   }, [connect]);
+
+  // 세션 복원(auth-sync 의 refresh) 뒤 재핸드셰이크 — 쿠키 없이 붙은 게스트 소켓을 새 쿠키로 다시 연다.
+  // 스트리밍 중이면 종료 후로 미룬다(token_warning 갱신과 같은 규칙).
+  useEffect(() => {
+    const onAuthRestored = () => {
+      if (useAppStore.getState().isGenerating) {
+        reconnectAfterRefreshRef.current = true;
+        return;
+      }
+      reconnectRef.current = 0;
+      wsRef.current?.close();
+    };
+    window.addEventListener(AUTH_RESTORED_EVENT, onAuthRestored);
+    return () => window.removeEventListener(AUTH_RESTORED_EVENT, onAuthRestored);
+  }, []);
 
   // 반환값: 실제 전송 여부 — 재생성(resend) 경로가 히스토리 되감기 원복 판단에 사용.
   const sendChat = useCallback(

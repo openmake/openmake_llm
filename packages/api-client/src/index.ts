@@ -64,7 +64,8 @@ const SKIP_REFRESH_ENDPOINTS = ["/api/auth/refresh", "/api/auth/login"];
  */
 let refreshInFlight: Promise<boolean> | null = null;
 
-function refreshOnce(): Promise<boolean> {
+/** 401 인터셉트 밖에서 refresh 가 필요한 호출처(마운트 시 세션 복원 등)도 이 single-flight 를 쓴다. */
+export function refreshOnce(): Promise<boolean> {
   if (!refreshInFlight) {
     // CSRF_PROTECTION=enforce 에서 헤더 없는 refresh 는 403 — 만료 후 첫 401 인터셉트가
     // 항상 실패해 /login 으로 원복되던 결함 (2026-08-15). 헤더를 붙여 호출한다.

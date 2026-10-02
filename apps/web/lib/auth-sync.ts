@@ -1,5 +1,5 @@
 import type { ApiSuccess, MePayload } from "@openmake/shared-types";
-import { ApiClient, ApiError, csrfHeaders } from "./api-client";
+import { ApiClient, ApiError, refreshOnce } from "./api-client";
 import { getAnonSessionId } from "./anon-session";
 import { flushOAuthLoginPending, gaSetVisitor } from "./analytics";
 import { useAppStore } from "./store";
@@ -26,15 +26,20 @@ export function clearHadSession(): void {
   try { localStorage.removeItem(HAD_SESSION_KEY); } catch { /* noop */ }
 }
 
-/** refresh 1회 시도(CSRF 이중제출 포함) — 성공 시 새 auth_token 쿠키가 심긴다. */
-async function tryRefresh(): Promise<boolean> {
-  try {
-    const headers = await csrfHeaders();
-    const r = await fetch("/api/auth/refresh", { method: "POST", credentials: "include", headers });
-    return r.ok;
-  } catch {
-    return false;
-  }
+/**
+ * 마운트 동기화가 refresh 로 세션을 되살렸다는 알림 — 채팅 소켓은 마운트 때 한 번 핸드셰이크하므로,
+ * auth_token 쿠키가 없던 순간에 붙은 소켓은 게스트로 남는다(2026-10-03 재현: 화면은 로그인 상태인데
+ * 소켓만 게스트, 새로고침해야 풀림). 소켓 훅이 이 이벤트를 받아 새 쿠키로 다시 핸드셰이크한다.
+ */
+export const AUTH_RESTORED_EVENT = "omk:auth-restored";
+
+/**
+ * refresh 1회 시도 — 성공 시 새 auth_token 쿠키가 심긴다. ApiClient 의 401 인터셉트와 같은 single-flight 를
+ * 쓴다: 따로 fetch 하면 동시에 난 두 refresh 중 늦은 쪽이 이미 회전된 토큰으로 401 을 받고 서버가 세션
+ * 쿠키를 지워 로그아웃된다(2026-10-03 재현: 7ms 간격 두 호출 → 로그인 화면).
+ */
+function tryRefresh(): Promise<boolean> {
+  return refreshOnce();
 }
 
 /**
@@ -71,6 +76,7 @@ async function syncAuthInner(): Promise<boolean> {
       // 로그인 흔적이 있는데 게스트로 왔다 = auth_token 쿠키가 만료-purge 된 상태일 수 있다.
       // refresh_token(7일) 이 살아 있으면 1회 선시도로 세션을 복원한다(위 HAD_SESSION_KEY 주석).
       if (await tryRefresh()) {
+        window.dispatchEvent(new Event(AUTH_RESTORED_EVENT));
         res = await fetchMe();
         u = res?.data?.user;
       } else {
