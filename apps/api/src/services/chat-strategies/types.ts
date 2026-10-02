@@ -34,6 +34,8 @@ export interface ChatContext {
         resources: Array<{ uri: string; mimeType?: string; text?: string }>;
         /** 웹검색 구조화 출처(F19.4) — 있으면 ws-chat-handler 가 search_sources 로 emit */
         sources?: import('../../tools/web-search/types').SearchSourceRef[];
+        /** 도구 호출 요약 — 채팅의 도구 카드 */
+        summary?: { ok: boolean; durationMs: number; args?: string; preview?: string };
     }) => void;
     /**
      * MCP tool 호출이 시작될 때 호출되는 콜백.

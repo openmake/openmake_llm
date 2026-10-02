@@ -63,7 +63,8 @@ public struct WsServerEvent: Codable {
     public let token: String?
     public let type: WsServerEventType
     public let messageID: String?
-    public let summary: String?
+    /// 도구 호출 요약 — 채팅의 도구 카드가 보여 준다. 결과 전문이 아니라 앞부분(서버가 자름)이다
+    public let summary: SummaryUnion?
     public let issues: String?
     public let sessionID: String?
     public let model: String?
@@ -174,7 +175,7 @@ public struct WsServerEvent: Codable {
         case ts = "ts"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, approvalID: String?, currentTurn: Double?, reason: Reason?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, approvalID: String?, currentTurn: Double?, reason: Reason?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -247,7 +248,7 @@ public extension WsServerEvent {
         token: String?? = nil,
         type: WsServerEventType? = nil,
         messageID: String?? = nil,
-        summary: String?? = nil,
+        summary: SummaryUnion?? = nil,
         issues: String?? = nil,
         sessionID: String?? = nil,
         model: String?? = nil,
@@ -930,6 +931,98 @@ public extension Step {
             preview: preview ?? self.preview,
             stepType: stepType ?? self.stepType,
             toolName: toolName ?? self.toolName
+        )
+    }
+
+    func jsonData() throws -> Data {
+        return try newJSONEncoder().encode(self)
+    }
+
+    func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
+        return String(data: try self.jsonData(), encoding: encoding)
+    }
+}
+
+public enum SummaryUnion: Codable {
+    case string(String)
+    case summaryClass(SummaryClass)
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let x = try? container.decode(String.self) {
+            self = .string(x)
+            return
+        }
+        if let x = try? container.decode(SummaryClass.self) {
+            self = .summaryClass(x)
+            return
+        }
+        throw DecodingError.typeMismatch(SummaryUnion.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for SummaryUnion"))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let x):
+            try container.encode(x)
+        case .summaryClass(let x):
+            try container.encode(x)
+        }
+    }
+}
+
+/// 도구 호출 요약 — 채팅의 도구 카드가 보여 준다. 결과 전문이 아니라 앞부분(서버가 자름)이다
+// MARK: - SummaryClass
+public struct SummaryClass: Codable {
+    public let args: String?
+    public let durationMS: Double
+    public let ok: Bool
+    public let preview: String?
+
+    public enum CodingKeys: String, CodingKey {
+        case args = "args"
+        case durationMS = "durationMs"
+        case ok = "ok"
+        case preview = "preview"
+    }
+
+    public init(args: String?, durationMS: Double, ok: Bool, preview: String?) {
+        self.args = args
+        self.durationMS = durationMS
+        self.ok = ok
+        self.preview = preview
+    }
+}
+
+// MARK: SummaryClass convenience initializers and mutators
+
+public extension SummaryClass {
+    init(data: Data) throws {
+        self = try newJSONDecoder().decode(SummaryClass.self, from: data)
+    }
+
+    init(_ json: String, using encoding: String.Encoding = .utf8) throws {
+        guard let data = json.data(using: encoding) else {
+            throw NSError(domain: "JSONDecoding", code: 0, userInfo: nil)
+        }
+        try self.init(data: data)
+    }
+
+    init(fromURL url: URL) throws {
+        try self.init(data: try Data(contentsOf: url))
+    }
+
+    func with(
+        args: String?? = nil,
+        durationMS: Double? = nil,
+        ok: Bool? = nil,
+        preview: String?? = nil
+    ) -> SummaryClass {
+        return SummaryClass(
+            args: args ?? self.args,
+            durationMS: durationMS ?? self.durationMS,
+            ok: ok ?? self.ok,
+            preview: preview ?? self.preview
         )
     }
 

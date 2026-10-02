@@ -34,6 +34,25 @@
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
   },
+  "activity": {
+    "title": "当前活动",
+    "badge": "需要输入 {needs} 项 · 进行中 {running} 项",
+    "empty": "当前没有进行中的任务",
+    "needsInput": "需要输入",
+    "running": "进行中",
+    "recent": "最近结束",
+    "chatGenerating": "正在生成聊天回复",
+    "approvalFor": "批准执行 {tool}",
+    "status": {
+      "running": "运行中",
+      "queued": "排队中",
+      "paused": "已暂停(等待输入)",
+      "pending": "等待开始",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    }
+  },
   "sidebar": {
     "newChat": "新对话",
     "searchPlaceholder": "搜索...",
@@ -336,6 +355,13 @@
       "low": "推理: 低",
       "medium": "推理: 中",
       "high": "推理: 高"
+    },
+    "followupQueue": {
+      "hint": "回答结束后按顺序发送",
+      "paused": "排队中的消息 — 下一次回答结束后继续发送",
+      "remove": "从队列中移除",
+      "add": "加入队列",
+      "full": "队列已满(最多 {max} 条)"
     }
   },
   "chat": {
@@ -491,6 +517,16 @@
       "generating": "正在生成回答",
       "toolRunning": "正在运行 {tool}",
       "done": "回答已完成"
+    },
+    "jumpToLatest": "回到最新",
+    "toolCards": {
+      "label": "工具调用",
+      "running": "运行中",
+      "done": "完成",
+      "failed": "失败",
+      "duration": "{seconds}秒",
+      "args": "参数",
+      "result": "结果"
     }
   },
   "compare": {
@@ -1034,6 +1070,27 @@
       "delete": "删除",
       "deleteConfirm": "要删除此触发器吗？",
       "failed": "处理失败: {message}"
+    },
+    "takeover": {
+      "start": "接管浏览器",
+      "reopen": "打开已接管的浏览器",
+      "hint": "在登录、验证码等需要亲自完成的步骤中接管代理的浏览器并操作。",
+      "activeHint": "你正在控制浏览器。用完后请交还。",
+      "title": "接管浏览器",
+      "notice": "接管期间代理无法使用浏览器。10 分钟无操作将自动交还。",
+      "hide": "隐藏",
+      "release": "交还",
+      "back": "后退",
+      "go": "前往",
+      "addressPlaceholder": "地址",
+      "screen": "浏览器画面",
+      "textPlaceholder": "中文等输入法文字请在此输入后发送",
+      "sendText": "发送输入",
+      "released": "已交还浏览器。代理将以此登录状态继续。",
+      "ended": "浏览器会话已结束(无操作或任务已结束)。",
+      "startFailed": "无法接管浏览器:{error}",
+      "inputFailed": "操作未送达:{error}",
+      "releaseFailed": "无法交还:{error}"
     }
   },
   "customAgents": {

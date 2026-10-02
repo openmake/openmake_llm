@@ -34,6 +34,25 @@
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
   },
+  "activity": {
+    "title": "지금 하는 일",
+    "badge": "입력 필요 {needs}건 · 진행 중 {running}건",
+    "empty": "지금 진행 중인 일이 없습니다",
+    "needsInput": "입력 필요",
+    "running": "진행 중",
+    "recent": "최근 끝남",
+    "chatGenerating": "채팅 답변 생성 중",
+    "approvalFor": "{tool} 실행 승인",
+    "status": {
+      "running": "실행 중",
+      "queued": "대기열",
+      "paused": "멈춤(입력 대기)",
+      "pending": "시작 대기",
+      "completed": "완료",
+      "failed": "실패",
+      "cancelled": "취소됨"
+    }
+  },
   "sidebar": {
     "newChat": "새 대화",
     "searchPlaceholder": "검색...",
@@ -336,6 +355,13 @@
       "low": "추론 낮음",
       "medium": "추론 보통",
       "high": "추론 높음"
+    },
+    "followupQueue": {
+      "hint": "답변이 끝나면 순서대로 보냅니다",
+      "paused": "대기 중인 메시지 — 다음 답변이 끝나면 이어서 보냅니다",
+      "remove": "대기열에서 빼기",
+      "add": "대기열에 추가",
+      "full": "대기열이 가득 찼습니다(최대 {max}개)"
     }
   },
   "chat": {
@@ -491,6 +517,16 @@
       "generating": "응답을 생성하고 있습니다",
       "toolRunning": "{tool} 실행 중",
       "done": "응답이 완료되었습니다"
+    },
+    "jumpToLatest": "최신으로",
+    "toolCards": {
+      "label": "도구 호출",
+      "running": "실행 중",
+      "done": "완료",
+      "failed": "실패",
+      "duration": "{seconds}초",
+      "args": "인자",
+      "result": "결과"
     }
   },
   "compare": {
@@ -1034,6 +1070,27 @@
       "delete": "삭제",
       "deleteConfirm": "이 트리거를 삭제할까요?",
       "failed": "처리 실패: {message}"
+    },
+    "takeover": {
+      "start": "브라우저 넘겨받기",
+      "reopen": "넘겨받은 브라우저 열기",
+      "hint": "로그인·보안 문자처럼 직접 해야 하는 단계에서 에이전트의 브라우저를 넘겨받아 조작합니다.",
+      "activeHint": "브라우저를 넘겨받은 상태입니다. 다 쓰면 돌려주세요.",
+      "title": "브라우저 넘겨받기",
+      "notice": "넘겨받은 동안 에이전트는 브라우저를 쓰지 못합니다. 조작이 없으면 10분 뒤 자동으로 돌려줍니다.",
+      "hide": "숨기기",
+      "release": "돌려주기",
+      "back": "뒤로",
+      "go": "이동",
+      "addressPlaceholder": "주소",
+      "screen": "브라우저 화면",
+      "textPlaceholder": "한글 등 조합 입력은 여기에 써서 보내세요",
+      "sendText": "입력 보내기",
+      "released": "브라우저를 돌려줬습니다. 에이전트가 이 로그인 상태로 이어갑니다.",
+      "ended": "브라우저 세션이 끝났습니다(조작이 없었거나 작업이 끝났습니다).",
+      "startFailed": "브라우저를 넘겨받지 못했습니다: {error}",
+      "inputFailed": "조작이 전달되지 않았습니다: {error}",
+      "releaseFailed": "돌려주지 못했습니다: {error}"
     }
   },
   "customAgents": {

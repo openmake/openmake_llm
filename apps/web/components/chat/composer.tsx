@@ -14,7 +14,7 @@ import {
   X,
   Lock,
   Plus,
-  FolderOpen, ShieldCheck } from "lucide-react";
+  FolderOpen, ShieldCheck, ListPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { AttachedFileUI } from "@/lib/use-chat-socket";
@@ -31,6 +31,7 @@ import {
 } from "@/lib/skills-api";
 import { SlashSkillMenu } from "@/components/chat/slash-skill-menu";
 import { cn } from "@/lib/utils";
+import { canQueueFollowup, FOLLOWUP_QUEUE_MAX } from "@/lib/followup-queue";
 import { detectFileTaskIntent, detectPresentationChatIntent } from "@/lib/file-task-intent";
 import { detectReportTaskIntent } from "@/lib/report-task-intent";
 import { SLASH_COMMAND_DEBOUNCE_MS } from "@/lib/constants/ui-limits";
@@ -367,7 +368,19 @@ export function Composer() {
     }
   }, [resendRequest, sendChat]);
 
+  const followupQueue = useAppStore((s) => s.followupQueue);
+  const removeFollowup = useAppStore((s) => s.removeFollowup);
+  // 답변 중에 보낸 텍스트 메시지는 대기열에 넣는다 — 답변이 끝나면 순서대로 나간다(lib/followup-queue).
+  const queueable = canQueueFollowup({ isGenerating, text, hasAttachments: files.length > 0 || images.length > 0, agentTaskMode });
+  const queueFull = followupQueue.length >= FOLLOWUP_QUEUE_MAX;
+
   const submit = () => {
+    if (queueable) {
+      if (!useAppStore.getState().enqueueFollowup(text)) return; // 가득 참 — 입력은 그대로 둔다
+      setText("");
+      if (taRef.current) taRef.current.style.height = "auto";
+      return;
+    }
     if ((!text.trim() && files.length === 0 && images.length === 0) || isGenerating) return;
     if (agentTaskMode) {
       // 에이전트 토글 ON — 메시지를 목표로 자율 에이전트 작업 실행 (REST).
@@ -777,6 +790,32 @@ export function Composer() {
           </div>
         )}
 
+        {/* 후속 메시지 대기열 — 답변이 끝나면 위에서부터 하나씩 보낸다 */}
+        {followupQueue.length > 0 && (
+          <div className="px-3 pt-2">
+            <p className="mb-1 text-[11px] text-muted">
+              {isGenerating ? t("followupQueue.hint") : t("followupQueue.paused")}
+            </p>
+            <ul className="space-y-1">
+              {followupQueue.map((q, i) => (
+                <li key={q.id} className="flex items-center gap-2 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs text-fg-2">
+                  <span className="shrink-0 font-mono text-[10px] text-faint">{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate" title={q.text}>{q.text}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeFollowup(q.id)}
+                    aria-label={t("followupQueue.remove")}
+                    title={t("followupQueue.remove")}
+                    className="grid h-5 w-5 shrink-0 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* 첨부 칩 — 이미지 썸네일 + 텍스트/파일 칩 */}
         {(files.length > 0 || images.length > 0) && (
           <div className="flex flex-wrap gap-1.5 px-3 pt-2">
@@ -999,11 +1038,22 @@ export function Composer() {
             })()}
           </span>
 
+          {queueable && (
+            <button
+              onClick={submit}
+              disabled={queueFull}
+              title={queueFull ? t("followupQueue.full", { max: FOLLOWUP_QUEUE_MAX }) : t("followupQueue.add")}
+              aria-label={t("followupQueue.add")}
+              className="ml-auto grid h-8 w-8 place-items-center rounded-md bg-accent-soft text-accent transition hover:bg-accent hover:text-accent-fg disabled:opacity-40"
+            >
+              <ListPlus className="h-4 w-4" />
+            </button>
+          )}
           {isGenerating ? (
             <button
               onClick={abort}
               aria-label={t("stop")}
-              className="ml-auto grid h-8 w-8 place-items-center rounded-md bg-surface-3 text-fg transition hover:bg-border-strong"
+              className={cn(!queueable && "ml-auto", "grid h-8 w-8 place-items-center rounded-md bg-surface-3 text-fg transition hover:bg-border-strong")}
             >
               <Square className="h-3.5 w-3.5 fill-current" />
             </button>

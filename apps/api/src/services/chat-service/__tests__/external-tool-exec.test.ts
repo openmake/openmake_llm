@@ -14,7 +14,7 @@ jest.mock('../../../runtime-ports/tool-runtime', () => ({
 jest.mock('../../tool-result-truncation-recorder', () => ({ recordToolResultTruncation }));
 
 import { executeExternalTool } from '../external-tool-exec';
-import { MAX_TOOL_RESULT_CHARS } from '../../../config/runtime-limits';
+import { MAX_TOOL_RESULT_CHARS, CHAT_TOOL_CARD } from '../../../config/runtime-limits';
 
 const deps = { currentUserContext: { userId: '3', role: 'user' }, allowedTools: [] } as never;
 
@@ -85,13 +85,63 @@ describe('executeExternalTool — 웹검색 출처 전달(F19.4)', () => {
         executeTool.mockResolvedValue({ content: [{ type: 'text', text: '[1] T' }], sources });
         const out = await executeExternalTool({ ...(deps as object), mcpToolResultCallback } as never, 'web_search', { query: 'q' });
         expect(out).toBe('[1] T');
-        expect(mcpToolResultCallback).toHaveBeenCalledWith({ toolName: 'web_search', resources: [], sources });
+        expect(mcpToolResultCallback).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'web_search', resources: [], sources }));
     });
 
-    it('sources·resource 둘 다 없으면 콜백하지 않는다', async () => {
+    it('sources·resource 둘 다 없으면 출처 없이 요약만 알린다', async () => {
         const mcpToolResultCallback = jest.fn();
         executeTool.mockResolvedValue({ content: [{ type: 'text', text: 'plain' }], sources: [] });
         await executeExternalTool({ ...(deps as object), mcpToolResultCallback } as never, 'x', {});
-        expect(mcpToolResultCallback).not.toHaveBeenCalled();
+        expect(mcpToolResultCallback).toHaveBeenCalledTimes(1);
+        const event = mcpToolResultCallback.mock.calls[0][0] as Record<string, unknown>;
+        expect(event).not.toHaveProperty('sources');
+        expect(event.resources).toEqual([]);
+    });
+});
+
+describe('executeExternalTool — 도구 결과 요약(채팅의 도구 카드)', () => {
+    const run = async (result: unknown, args: Record<string, unknown> = { query: '날씨' }) => {
+        executeTool.mockResolvedValue(result);
+        const events: Array<{ toolName: string; resources: unknown[]; summary?: { ok: boolean; durationMs: number; args?: string; preview?: string } }> = [];
+        const d = { currentUserContext: { userId: '3', role: 'user' }, allowedTools: [], mcpToolResultCallback: (e: never) => { events.push(e); } } as never;
+        await executeExternalTool(d, 'web_search', args);
+        return events;
+    };
+
+    it('리소스가 없는 결과도 요약과 함께 한 번 알린다', async () => {
+        const events = await run({ content: [{ type: 'text', text: '서울 맑음' }] });
+        expect(events).toHaveLength(1);
+        expect(events[0]).toMatchObject({ toolName: 'web_search', resources: [], summary: { ok: true, preview: '서울 맑음' } });
+        expect(events[0].summary!.args).toContain('날씨');
+        expect(events[0].summary!.durationMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('도구가 오류를 돌려주면 ok=false', async () => {
+        const events = await run({ isError: true, content: '권한 없음' });
+        expect(events[0].summary).toMatchObject({ ok: false });
+        expect(events[0].summary!.preview).toContain('권한 없음');
+    });
+
+    it('도구 실행이 예외로 끝나도 ok=false 로 알린다', async () => {
+        executeTool.mockRejectedValue(new Error('연결 실패'));
+        const events: Array<{ summary?: { ok: boolean; preview?: string } }> = [];
+        const d = { currentUserContext: { userId: '3', role: 'user' }, allowedTools: [], mcpToolResultCallback: (e: never) => { events.push(e); } } as never;
+        await executeExternalTool(d, 'web_search', {});
+        expect(events).toHaveLength(1);
+        expect(events[0].summary).toMatchObject({ ok: false });
+        expect(events[0].summary!.preview).toContain('연결 실패');
+    });
+
+    it('미리보기는 상한에서 자른다 — 결과 전문을 화면으로 보내지 않는다', async () => {
+        const events = await run({ content: [{ type: 'text', text: '가'.repeat(5000) }] });
+        expect(events[0].summary!.preview!.length).toBeLessThanOrEqual(CHAT_TOOL_CARD.PREVIEW_CHARS + 1);
+        expect(events[0].summary!.preview!.endsWith('…')).toBe(true);
+    });
+
+    it('리소스·출처가 있으면 종전처럼 함께 싣는다(이벤트는 한 번)', async () => {
+        const events = await run({ content: [{ type: 'resource', resource: { uri: 'openmake://x/1', text: 't' } }, { type: 'text', text: 'ok' }] });
+        expect(events).toHaveLength(1);
+        expect(events[0].resources).toEqual([{ uri: 'openmake://x/1', mimeType: undefined, text: 't' }]);
+        expect(events[0].summary).toMatchObject({ ok: true });
     });
 });

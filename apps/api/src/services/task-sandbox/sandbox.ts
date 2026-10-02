@@ -15,10 +15,11 @@
  * @module services/task-sandbox/sandbox
  */
 import { spawn } from 'child_process';
+import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, lstat, realpath, copyFile as fsCopyFile } from 'fs/promises';
 import { resolve, sep, join, dirname, basename, relative } from 'path';
-import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
+import { getTaskSandboxConfig, BROWSER_SESSION, type TaskSandboxConfig } from '../../config/task-sandbox';
 import type { TaskExecutor, ExecResult } from './executor';
 import { SANDBOX_WORKSPACE_DIR, stripWorkspacePrefix } from './workspace-path';
 import { createLogger } from '../../utils/logger';
@@ -176,7 +177,7 @@ export function buildKillExecArgs(containerName: string, execId: string): string
 }
 
 /** 자식 프로세스를 실행하고 출력 캡/timeout 을 적용 (docker CLI 호출 공용). */
-function runProcess(
+export function runProcess(
     dockerPath: string,
     args: string[],
     /** signal·onStop — 타임아웃/중단으로 끝낼 때 CLI 를 죽이기 전에 onStop 으로 컨테이너 안 프로세스를 정리한다. */
@@ -332,8 +333,13 @@ export class TaskSandbox implements TaskExecutor {
     /** 브라우저 도구 활성 여부. */
     get isBrowserEnabled(): boolean { return this.cfg.browserEnabled; }
 
-    /** 세션 지속(#2 Part A) ON 이면 storageState 파일명, OFF 면 null. */
-    get browserStatePath(): string | null { return this.cfg.browserPersist ? '.browser-state.json' : null; }
+    /**
+     * 세션 지속(#2 Part A) ON 이면 storageState 파일명, OFF 면 null.
+     * 사용자가 브라우저를 넘겨받아 남긴 상태 파일이 있으면 설정이 꺼져 있어도 이어받는다 — 그러려고 넘겨받은 것이다.
+     */
+    get browserStatePath(): string | null {
+        return this.cfg.browserPersist || existsSync(join(this.hostWorkdir, BROWSER_SESSION.STATE_FILE)) ? BROWSER_SESSION.STATE_FILE : null;
+    }
 
     /**
      * 브라우저 액션을 별도 일회성 컨테이너(browserNetwork)에서 실행 — 메인 컨테이너(network none)와
@@ -341,6 +347,11 @@ export class TaskSandbox implements TaskExecutor {
      */
     async runBrowser(actionsRelPath: string): Promise<ExecResult> {
         this.assertCreated();
+        // 사용자가 넘겨받은 동안에는 실행하지 않는다 — 같은 상태 파일을 두 브라우저가 쓰면 돌려줄 때 덮어쓴다.
+        const { isBrowserSessionActive, BROWSER_SESSION_BUSY_MESSAGE } = await import('./browser-session');
+        if (await isBrowserSessionActive(this.taskId, this.cfg)) {
+            return { stdout: '', stderr: BROWSER_SESSION_BUSY_MESSAGE, exitCode: -1, truncated: false, timedOut: false, durationMs: 0 };
+        }
         // egress 프록시 ON: internal 망 + 프록시 보장 후 그 URL 을 브라우저에 주입.
         let proxyUrl: string | undefined;
         if (this.cfg.egressProxyEnabled) {
@@ -420,6 +431,11 @@ export class TaskSandbox implements TaskExecutor {
      * false 면 산출물 회수(다운로드)를 위해 workspace 를 보존하고 컨테이너만 제거한다.
      */
     async cleanup(removeWorkspace = true): Promise<void> {
+        // 작업 공간을 지울 때만 넘겨받은 브라우저 세션을 내린다(세션이 그 공간을 쓴다). 보존할 때는 두고 유휴 상한에 맡긴다 —
+        // 승인 대기로 주차될 때도 이 정리가 도는데, 그때가 바로 사용자가 넘겨받아 조작하는 때다.
+        if (removeWorkspace) {
+            await import('./browser-session').then((m) => m.stopBrowserSession(this.taskId, this.cfg)).catch(() => { /* best-effort */ });
+        }
         await runProcess(this.cfg.dockerPath, ['stop', '-t', '5', this.containerName],
             { timeoutMs: 15_000, outputCap: 4096 });
         await runProcess(this.cfg.dockerPath, ['rm', '-f', this.containerName],

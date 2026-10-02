@@ -174,3 +174,32 @@ export const APPROVAL_PREVIEW = {
     /** diff 상한(chars) — 넘으면 절단 표시 */
     DIFF_MAX_CHARS: parseInt(process.env.APPROVAL_PREVIEW_DIFF_MAX_CHARS || '32768', 10),
 } as const;
+
+/**
+ * 브라우저 넘겨받기(Take control) — 사용자가 에이전트의 브라우저 세션을 직접 조작한다.
+ * 세션은 작업별 컨테이너 하나이고, 명령은 `docker exec` 로만 전달한다(호스트로 포트를 열지 않는다).
+ */
+export const BROWSER_SESSION = {
+    /** 입력이 없으면 세션을 내리는 시간(ms) — 로그인 상태를 저장한 뒤 종료한다. */
+    IDLE_MS: intEnv(process.env.TASK_SANDBOX_BROWSER_SESSION_IDLE_MS, 10 * 60_000),
+    /** 컨테이너 안 루프백 포트 */
+    PORT: 9333,
+    /** 화면 크기 — 클릭 좌표 검증과 스크린샷의 기준 */
+    VIEWPORT: { width: 1280, height: 800 },
+    /** 스크린샷 JPEG 품질 */
+    JPEG_QUALITY: 60,
+    /** 한 번에 보낼 수 있는 글자 수 */
+    TEXT_MAX: 2000,
+    /** 한 번에 스크롤할 수 있는 거리(px) */
+    SCROLL_MAX: 5000,
+    /** 에이전트 browser 도구와 함께 쓰는 로그인 상태 파일(workspace 상대경로) */
+    STATE_FILE: '.browser-state.json',
+    /** workspace 에 써 두고 실행하는 세션 스크립트(이미지 재빌드 없이 배포) */
+    SCRIPT_FILE: '.omk-browser-session.mjs',
+    /** 세션이 뜰 때까지 기다리는 시간(ms) */
+    READY_TIMEOUT_MS: 30_000,
+    /** 명령 하나의 상한(ms) */
+    COMMAND_TIMEOUT_MS: 30_000,
+    /** 명령 응답 크기 상한(byte) — 스크린샷(base64)이 실린다 */
+    OUTPUT_CAP: 4 * 1024 * 1024,
+} as const;

@@ -847,6 +847,28 @@
                 "$ref": "#/definitions/McpToolResource"
               }
             },
+            "summary": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "durationMs": {
+                  "type": "number"
+                },
+                "args": {
+                  "type": "string"
+                },
+                "preview": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "ok",
+                "durationMs"
+              ],
+              "description": "도구 호출 요약 — 채팅의 도구 카드가 보여 준다. 결과 전문이 아니라 앞부분(서버가 자름)이다"
+            },
             "messageId": {
               "type": "string"
             }
