@@ -35,6 +35,7 @@ import { canQueueFollowup, FOLLOWUP_QUEUE_MAX } from "@/lib/followup-queue";
 import { detectFileTaskIntent, detectPresentationChatIntent } from "@/lib/file-task-intent";
 import { detectReportTaskIntent } from "@/lib/report-task-intent";
 import { SLASH_COMMAND_DEBOUNCE_MS } from "@/lib/constants/ui-limits";
+import { uuid } from "@/lib/local-id";
 
 // 슬래시 스킬 호출: "/" + 공백없는 단일 토큰일 때만 드롭다운 표시.
 const SLASH_PATTERN = /^\/(\S*)$/;
@@ -153,14 +154,14 @@ export function Composer() {
         if (nextImages.length >= MAX_IMAGES) continue;
         const dataUrl = await readFileDataURL(file);
         if (!dataUrl) continue;
-        nextImages.push({ id: crypto.randomUUID(), name: file.name.slice(0, 200), dataUrl });
+        nextImages.push({ id: uuid(), name: file.name.slice(0, 200), dataUrl });
       } else if (BINARY_EXTS.includes(extOf(file.name))) {
         // 문서(PDF/Word/Excel/PPT 등)·오디오·영상 — File 원본을 유지해 에이전트 작업은 multipart 로
         // 스트리밍 전송. 추출 상한 이하만 base64 를 병행(채팅 WS 경로에서 백엔드 텍스트 추출용).
         if (nextFiles.length >= MAX_FILES) continue;
         const data = file.size <= MAX_INLINE_DOC_BYTES ? await readFileBase64(file) : undefined;
         nextFiles.push({
-          id: crypto.randomUUID(),
+          id: uuid(),
           name: file.name.slice(0, 200),
           type: file.type || "application/octet-stream",
           ...(data ? { data } : {}),
@@ -181,7 +182,7 @@ export function Composer() {
         }
         total += content.length;
         nextFiles.push({
-          id: crypto.randomUUID(),
+          id: uuid(),
           name: file.name.slice(0, 200),
           type: file.type || "text/plain",
           content,
