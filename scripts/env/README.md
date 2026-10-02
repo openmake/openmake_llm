@@ -221,6 +221,7 @@ omk env backup  <env> [--schedule ['CRON']] [--off] [--list] [--dry-run]
 omk env autoupdate <env> [--every 'CRON'] [--off]
 omk proxy status | reload | render <env>
 omk dev setup [--no-searxng] [--no-runtime-images] [--no-litellm] [--no-default-model] [--llm-base-url U --llm-api-key K --llm-model M]
+              [--dgx-host H [--vllm-api-key K]]
 omk dev up [all|deps|api|web|bench] [--tailscale] [--host H]…
 omk dev down | status | reset [--keep-data]
 ```

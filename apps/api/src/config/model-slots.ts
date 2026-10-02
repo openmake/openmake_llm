@@ -14,6 +14,7 @@
  */
 import type { Capability } from './capabilities';
 import type { ModelRole } from './model-roles';
+import type { LocalModelRole } from './local-models';
 
 export type ModelSlotGroup = 'agents' | 'quality' | 'multimodal';
 export type ModelSlotKind = 'text' | 'modality';
@@ -75,3 +76,27 @@ export function getModelSlot(id: string): ModelSlotDef | undefined {
 
 /** 사용자가 배정할 수 있는 슬롯(화면 순서) */
 export const USER_ASSIGNABLE_SLOTS: readonly ModelSlotDef[] = MODEL_SLOTS.filter((s) => s.userAssignable);
+
+/** 결과물을 만들어 내는 슬롯 — 채팅 모델로는 돌지 않는다(전용 모델이 필요) */
+const GENERATIVE_SLOTS: ReadonlySet<string> = new Set(['image.generate', 'image.edit', 'music.generate', 'video.generate', 'audio.speech']);
+const EMBEDDING_SLOT = 'text.embed';
+
+/**
+ * 슬롯과 모델 종류가 어긋나면 사유, 맞거나 **종류를 모르면** null.
+ * 종류는 로컬 모델만 안다(게이트웨이 발견 — chat·embedding·capability). 외부 모델 목록에는 종류 정보가 없어
+ * (능력 값이 전부 추정) 대조하지 않는다 — 틀린 거절을 만드는 것보다 종전처럼 통과시키는 쪽이 안전하다.
+ */
+export function slotKindMismatch(slot: ModelSlotDef, modelId: string, localRole: LocalModelRole | undefined): string | null {
+    if (!localRole) return null;
+    if (slot.id === EMBEDDING_SLOT) {
+        return localRole === 'embedding' ? null : `'${modelId}' 는 임베딩 모델이 아니라 이 슬롯에 배정할 수 없습니다`;
+    }
+    if (localRole === 'embedding') return `'${modelId}' 는 임베딩 전용 모델이라 이 슬롯에 배정할 수 없습니다`;
+    if (slot.kind === 'text') {
+        return localRole === 'chat' ? null : `'${modelId}' 는 기능 전용 모델(음악·이미지 등)이라 대화형 슬롯에 배정할 수 없습니다`;
+    }
+    if (GENERATIVE_SLOTS.has(slot.id) && localRole === 'chat') {
+        return `'${modelId}' 는 채팅 모델이라 생성 슬롯(${slot.id})에 배정할 수 없습니다 — 그 기능 전용 모델을 고르세요`;
+    }
+    return null;
+}

@@ -17,7 +17,7 @@
  *  - 예외: jobs-v1 영상(video-runtime 이 describeProviderSupport().direct 로 선언 — hasa)은 게이트웨이가 프록시하지
  *    못하는 커스텀 API 라 사용자 키로 provider 직결(`transport: 'direct'`, 도구가 SSRF 고정 fetch 사용).
  *  - 로컬 음악 생성(ACE-Step)은 2026-09-23 부터 다른 로컬 capability 와 같은 LiteLLM 경로다(전용 주소 없음).
- *    다만 로컬 전용 모델이라 외부 모델 배정은 배정 단계에서 거절한다.
+ *    외부는 Gemini 의 Lyria 만 받는다 — 네이티브 API(`direct.api: 'native'`, 카탈로그 `nativeApi` 의 고정 주소·헤더)로 직결한다.
  *
  * 실패는 조용히 폴백하지 않고 CapabilityUnavailableError(code) 로 명시한다 — 도구가
  * 사용자에게 사유를 안내해야 "이미지가 안 나온다" 가 설정 문제임을 알 수 있다.
@@ -40,6 +40,7 @@ import { ServerExternalKeysRepository } from '../../data/repositories/server-ext
 import { checkServerKeyBudget } from '../server-key-quota';
 import { AppError } from '../../utils/error-handler';
 import { createLogger } from '../../utils/logger';
+import type { DirectTransport } from '../../capability-contract/types';
 
 const logger = createLogger('CapabilityResolver');
 
@@ -142,7 +143,7 @@ async function getGlobalRow(repo: CapabilityModelsRepository, capability: Capabi
 }
 
 /** capability 소유 handler 가 선언한 direct transport(P08) — 없으면 게이트웨이 경로 */
-async function directTransportFor(capability: Capability, fullId: string, providerId: string): Promise<{ endpoint: string } | null> {
+async function directTransportFor(capability: Capability, fullId: string, providerId: string): Promise<DirectTransport | null> {
     const { getCapabilityRegistry } = await import('../../runtime-ports/capability-runtime');
     const verdict = getCapabilityRegistry().get(capability)?.handler.describeProviderSupport?.({ fullId, providerId, isExternal: true });
     return verdict?.supported && verdict.direct ? verdict.direct : null;
@@ -217,11 +218,16 @@ async function externalTarget(
     const direct = await directTransportFor(capability, fullId, providerId);
     if (direct) {
         // 게이트웨이가 프록시 못 하는 provider API(소유 handler 가 선언) — 사용자/서버 키로 provider 직결(SSRF 고정 fetch)
+        // native: 카탈로그에 고정된 네이티브 주소·인증 헤더만 쓴다(등록 base URL 은 OpenAI 호환 주소용이라 쓰지 않는다)
+        if (direct.api === 'native' && !entry.nativeApi) {
+            throw new CapabilityUnavailableError(`provider '${providerId}' 는 네이티브 API 직결을 지원하지 않습니다 (${capability})`, 'CAPABILITY_UNSUPPORTED');
+        }
+        const native = direct.api === 'native' ? entry.nativeApi : undefined;
         return {
             capability, fullId, providerId, model: modelId,
-            baseUrl: (userBaseUrl || entry.defaultBaseUrl).replace(/\/+$/, ''),
+            baseUrl: (native ? native.baseUrl : (userBaseUrl || entry.defaultBaseUrl)).replace(/\/+$/, ''),
             endpoint: direct.endpoint,
-            headers: { Authorization: `Bearer ${apiKey}` },
+            headers: native ? { [native.authHeader]: apiKey } : { Authorization: `Bearer ${apiKey}` },
             params, source, costOwner, transport: 'direct', ...(serverBudget ? { serverBudget } : {}),
         };
     }

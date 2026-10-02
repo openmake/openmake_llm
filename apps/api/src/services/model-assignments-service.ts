@@ -11,13 +11,14 @@ import type {
     ModelSlotInfo, ModelSlotAssignment, ModelSlotEffective, ModelAssignmentsResponse,
 } from '@openmake/shared-types';
 import {
-    MODEL_SLOTS, USER_ASSIGNABLE_SLOTS, getModelSlot, type ModelSlotDef,
+    MODEL_SLOTS, USER_ASSIGNABLE_SLOTS, getModelSlot, slotKindMismatch, type ModelSlotDef,
 } from '../config/model-slots';
 import {
     CAPABILITY_LIMITS, UNSUPPORTED_CAPABILITIES, GLOBAL_CAPABILITY_SCOPE,
     sanitizeCapabilityParams, type Capability,
 } from '../config/capabilities';
 import { isExternalFullId, toLocalModelTag } from '../config/model-roles';
+import { findLocalModel } from '../config/local-models';
 import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
 import { getPool } from '../data/models/unified-database';
 import { ModelAssignmentsRepository } from '../data/repositories/model-assignments-repo';
@@ -129,6 +130,13 @@ export async function putAssignment(input: PutAssignmentInput): Promise<{ assign
     const fullId = input.model.trim();
     const cap: Capability | undefined = slot.capabilities[0];
     let params: Record<string, string> = {};
+
+    // 슬롯과 모델 종류 대조 — 종류를 아는 로컬 모델만(임베딩 모델을 대화 슬롯에, 채팅 모델을 음악 슬롯에 넣는 실수)
+    if (!isExternalFullId(fullId)) {
+        const tag = toLocalModelTag(fullId);
+        const mismatch = tag ? slotKindMismatch(slot, tag, findLocalModel(tag)?.role) : null;
+        if (mismatch) throw new AppError(mismatch, 400, true, 'ASSIGNMENT_INVALID');
+    }
 
     if (slot.kind === 'text') {
         const reason = await validateTextSlotAssignment(input.scope, fullId);

@@ -21,7 +21,7 @@ import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 import { createLogger } from '../utils/logger';
 import { logChatSuccessMetrics } from './chat-metrics-log';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
-import { WS_ERROR_MESSAGES, WS_PROVIDER_ERROR_MESSAGES, getLocalizedTemplate } from './ws-chat-locales';
+import { WS_ERROR_MESSAGES, providerErrorMessage, getLocalizedTemplate } from './ws-chat-locales';
 import { systemSkillNamesEn } from '../agents/system-skill-names';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { applySlashCommand, mergeActivatedSkillNames, languageDetectionInput } from '../chat/slash-command';
@@ -544,10 +544,9 @@ export async function handleChatMessage(
                 ? `${error.cause.message}${(error.cause as { status?: number }).status ? ` [status=${(error.cause as { status?: number }).status}]` : ''}`
                 : (error.cause ? JSON.stringify(error.cause).slice(0, 300) : '');
             log.warn(`[Chat] 외부 provider 에러 (${error.code}): ${error.message} | cause: ${causeDetail}`);
-            const localizedTable = getLocalizedTemplate(WS_PROVIDER_ERROR_MESSAGES, userLang);
             safeSend({
                 type: 'error',
-                message: localizedTable[error.code],
+                message: providerErrorMessage(userLang, error.code, (error as { status?: number }).status),
                 errorType: error.code.toLowerCase(),
             });
         } else {
