@@ -4,7 +4,7 @@
  */
 import { EventEmitter } from 'events';
 import {
-    resolveDuplicateCreate, normalizedCreateKey, claimDelegatedTask, releaseDelegatedTask, resetCreateIdempotencyForTest,
+    resolveDuplicateCreate, normalizedCreateKey, claimDelegatedTask, claimDelegatedTaskDurable, releaseDelegatedTask, resetCreateIdempotencyForTest,
 } from '../create-idempotency';
 
 function fakeRes(): EventEmitter & { statusCode: number } {
@@ -140,5 +140,63 @@ describe('claimDelegatedTask — 채팅에서 위임한 작업', () => {
         claimDelegatedTask('u1', '엑셀 만들어줘', 12, 't1', 1000);
         releaseDelegatedTask('u1', '엑셀 만들어줘', 12);
         expect(claimDelegatedTask('u1', '엑셀 만들어줘', 12, 't2', 1100)).toBeNull();
+    });
+});
+
+describe('claimDelegatedTaskDurable — DB 에 남은 위임 키(재시작 뒤·다른 서버)', () => {
+    const WINDOW = 60 * 1000; // AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS 기본값
+    const NOW = 100 * WINDOW + 5000; // 구간 100 의 5초 지점
+    const base = { userId: 'u1', goal: '엑셀 만들어줘', maxTurns: 12 };
+    type Row = { id: string; created_at: Date };
+
+    it('메모리에 있으면 DB 를 보지 않고 처음 작업 id 를 돌려준다', async () => {
+        const findByKey = jest.fn(async () => null);
+        await claimDelegatedTaskDurable({ ...base, taskId: 't1', findByKey, now: NOW });
+        findByKey.mockClear();
+        const r = await claimDelegatedTaskDurable({ ...base, taskId: 't2', findByKey, now: NOW + 100 });
+        expect(r.priorTaskId).toBe('t1');
+        expect(findByKey).not.toHaveBeenCalled();
+    });
+
+    it('처음이면 저장에 쓸 키를 돌려준다 — 같은 구간·같은 위임이면 같은 키', async () => {
+        const a = await claimDelegatedTaskDurable({ ...base, taskId: 't1', findByKey: async () => null, now: NOW });
+        resetCreateIdempotencyForTest();
+        const b = await claimDelegatedTaskDurable({ ...base, taskId: 't2', findByKey: async () => null, now: NOW + 1000 });
+        expect(a.priorTaskId).toBeNull();
+        expect(a.createKey).toMatch(/^dlg-[a-f0-9]{32}-100$/);
+        expect(b.createKey).toBe(a.createKey);
+    });
+
+    it('메모리가 비어도(재시작·다른 서버) DB 에 같은 구간 키가 있으면 그 작업을 돌려준다', async () => {
+        const first = await claimDelegatedTaskDurable({ ...base, taskId: 't1', findByKey: async () => null, now: NOW });
+        resetCreateIdempotencyForTest(); // 재시작
+        const stored: Record<string, Row> = { [first.createKey!]: { id: 't1', created_at: new Date(NOW) } };
+        const r = await claimDelegatedTaskDurable({ ...base, taskId: 't2', findByKey: async (_u, k) => stored[k] ?? null, now: NOW + 2000 });
+        expect(r.priorTaskId).toBe('t1');
+        // 찾은 뒤에는 메모리에도 기억한다
+        expect(claimDelegatedTask('u1', '엑셀 만들어줘', 12, 't3', NOW + 3000)).toBe('t1');
+    });
+
+    it('구간 경계를 넘어도 창 안이면 직전 구간 키로 찾는다', async () => {
+        const first = await claimDelegatedTaskDurable({ ...base, taskId: 't1', findByKey: async () => null, now: 101 * WINDOW - 1000 });
+        resetCreateIdempotencyForTest();
+        const stored: Record<string, Row> = { [first.createKey!]: { id: 't1', created_at: new Date(101 * WINDOW - 1000) } };
+        const r = await claimDelegatedTaskDurable({ ...base, taskId: 't2', findByKey: async (_u, k) => stored[k] ?? null, now: 101 * WINDOW + 1000 });
+        expect(r.priorTaskId).toBe('t1');
+    });
+
+    it('직전 구간 키가 있어도 창보다 오래됐으면 새 작업이다', async () => {
+        const first = await claimDelegatedTaskDurable({ ...base, taskId: 't1', findByKey: async () => null, now: 100 * WINDOW + 1000 });
+        resetCreateIdempotencyForTest();
+        const stored: Record<string, Row> = { [first.createKey!]: { id: 't1', created_at: new Date(100 * WINDOW + 1000) } };
+        const r = await claimDelegatedTaskDurable({ ...base, taskId: 't2', findByKey: async (_u, k) => stored[k] ?? null, now: 101 * WINDOW + 30 * 1000 });
+        expect(r.priorTaskId).toBeNull();
+        expect(r.createKey).toMatch(/-101$/);
+    });
+
+    it('DB 조회가 실패해도 위임을 막지 않는다', async () => {
+        const r = await claimDelegatedTaskDurable({ ...base, taskId: 't1', findByKey: async () => { throw new Error('db down'); }, now: NOW });
+        expect(r.priorTaskId).toBeNull();
+        expect(r.createKey).toBeDefined();
     });
 });
