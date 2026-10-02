@@ -9,7 +9,7 @@ import { nextFollowup } from "./followup-queue";
 import { acceptStreamEvent, cursorAfterResume, resumeCursorFields, EMPTY_STREAM_CURSOR, type StreamCursor } from "./ws-seq";
 import { discardOnReset, discardOnSend, filterStreamEvent, EMPTY_DISCARD, type StreamDiscardState } from "./stream-discard";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "./store";
-import { ApiClient, csrfHeaders } from "./api-client";
+import { ApiClient, csrfHeaders, refreshOnce } from "./api-client";
 
 import { gaEvent, GA_EVENTS } from "./analytics";
 import { getAnonSessionId } from "./anon-session";
@@ -316,13 +316,13 @@ export function useChatSocket() {
     const refreshAndReconnect = () => {
       if (moduleTokenRefreshing) return;
       moduleTokenRefreshing = true;
-      void ApiClient.post("/api/auth/refresh", undefined, { redirectOnUnauthorized: false })
-        .then(() => {
+      // 만료 경고는 같은 토큰을 쓰는 모든 탭에 동시에 온다 — 탭 간 잠금이 걸린 refreshOnce 로 보낸다.
+      void refreshOnce()
+        .then((ok) => {
+          // 갱신 실패(세션 만료 등)면 재연결하지 않는다 — 다음 만료 경고/REST 401 인터셉트 흐름에 위임
+          if (!ok) return;
           if (useAppStore.getState().isGenerating) reconnectAfterRefreshRef.current = true;
           else reconnectNow();
-        })
-        .catch(() => {
-          /* 갱신 실패(세션 만료 등) — 다음 만료 경고/REST 401 인터셉트 흐름에 위임 */
         })
         .finally(() => {
           moduleTokenRefreshing = false;

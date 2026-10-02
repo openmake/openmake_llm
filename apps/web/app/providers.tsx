@@ -4,7 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { syncAuthFromServer } from "@/lib/auth-sync";
-import { ApiClient } from "@/lib/api-client";
+import { refreshOnce } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { CLIENT_TIMING } from "@/lib/config";
 
@@ -26,10 +26,10 @@ function AuthSync() {
   useEffect(() => {
     if (!isLoggedIn) return;
     const timer = setInterval(() => {
-      void ApiClient.post("/api/auth/refresh", undefined, { redirectOnUnauthorized: false }).catch(() => {
+      void refreshOnce().then((ok) => {
         // refresh 실패(세션 수명 종료) — 서버 판정으로 store 를 갱신한다(게스트면 currentUser 해제 →
         // 배지 폴링 등 로그인 전제 타이머가 멈춘다). 종전엔 무시해 만료 탭이 영원히 폴링했다.
-        void syncAuthFromServer();
+        if (!ok) void syncAuthFromServer();
       });
     }, CLIENT_TIMING.TOKEN_REFRESH_INTERVAL_MS);
     return () => clearInterval(timer);

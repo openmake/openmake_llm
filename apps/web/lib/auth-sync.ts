@@ -3,6 +3,7 @@ import { ApiClient, ApiError, refreshOnce } from "./api-client";
 import { getAnonSessionId } from "./anon-session";
 import { flushOAuthLoginPending, gaSetVisitor } from "./analytics";
 import { useAppStore } from "./store";
+import { CLIENT_TIMING } from "./config";
 
 /**
  * "이 브라우저에서 로그인한 적 있음" 흔적 — 만료된 auth_token 쿠키는 브라우저가 purge 해
@@ -60,6 +61,8 @@ function fetchMe(): Promise<ApiSuccess<MePayload>> {
  * 사이드바가 게스트로 남는다. 로그인 여부를 반환한다.
  */
 export async function syncAuthFromServer(): Promise<boolean> {
+  // 이 호출이 곧 새 시도다 — 예약해 둔 재시도는 거둔다(겹쳐 돌지 않게).
+  if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
   try {
     return await syncAuthInner();
   } finally {
@@ -68,69 +71,29 @@ export async function syncAuthFromServer(): Promise<boolean> {
   }
 }
 
+/**
+ * 서버 오류·네트워크 실패는 "게스트"가 아니라 "아직 모름"이다 — 잠시 뒤 다시 묻는다. 종전엔 한 번 실패하면
+ * 그대로 게스트로 굳어, 서버가 뜨는 도중 열린(다시 로드된) 탭이 쿠키가 멀쩡한데도 "로그인 안 됨"으로 남았다
+ * (2026-10-03 재현: 재기동 중 /api/auth/me 프록시 실패 → 새로고침해야 풀림).
+ */
+let retryAttempt = 0;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRetry(): void {
+  if (retryTimer || retryAttempt >= CLIENT_TIMING.AUTH_SYNC_RETRY_LIMIT) return;
+  const delay = Math.min(CLIENT_TIMING.AUTH_SYNC_RETRY_BASE_MS * 2 ** retryAttempt, CLIENT_TIMING.AUTH_SYNC_RETRY_MAX_MS);
+  retryAttempt += 1;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void syncAuthFromServer();
+  }, delay);
+}
+
 async function syncAuthInner(): Promise<boolean> {
   try {
-    let res = await fetchMe();
-    let u = res?.data?.user;
-    if (!u && hadSession()) {
-      // 로그인 흔적이 있는데 게스트로 왔다 = auth_token 쿠키가 만료-purge 된 상태일 수 있다.
-      // refresh_token(7일) 이 살아 있으면 1회 선시도로 세션을 복원한다(위 HAD_SESSION_KEY 주석).
-      if (await tryRefresh()) {
-        window.dispatchEvent(new Event(AUTH_RESTORED_EVENT));
-        res = await fetchMe();
-        u = res?.data?.user;
-      } else {
-        clearHadSession(); // refresh 수명도 끝 — 다음 마운트부터 헛 시도 없음
-      }
-    }
-    if (!u) {
-      // 비로그인은 200 + user:null 로 온다(401 아님) — 게스트 라벨링은 이 분기가 본선.
-      // ⚠️ store 도 게스트로 되돌린다. 종전엔 라벨만 바꾸고 currentUser 를 남겨서, 세션이 만료된
-      // 탭이 "로그인 상태"로 보이는 채 사이드바 배지가 30초마다 4개 요청을 만료 토큰으로
-      // 영원히 두드렸다(2026-08-27 실측: 24h `jwt expired` 5,471건).
-      const cur = useAppStore.getState().auth;
-      if (cur.currentUser) useAppStore.getState().setAuth({ currentUser: null, isGuestMode: true });
-      gaSetVisitor(null, "guest");
-      return false;
-    }
-    markHadSession();
-    useAppStore.getState().setAuth({
-      currentUser: {
-        id: String(u.id),
-        email: u.email,
-        name: u.username,
-        role: u.role ?? "user",
-        activeOrgId: res?.data?.activeOrganization?.orgId ?? null,
-        activeOrgRole: res?.data?.activeOrganization?.orgRole ?? null,
-      },
-      isGuestMode: false,
-    });
-    // GA4 방문자 식별 — user_id + user_type(admin/user/guest). OAuth 복귀 시 login 이벤트 flush.
-    const role = u.role === "admin" || u.role === "guest" ? u.role : "user";
-    gaSetVisitor(String(u.id), role);
-    flushOAuthLoginPending();
-    void ApiClient.post("/api/chat/sessions/claim", { anonSessionId: getAnonSessionId() }).catch(() => {
-      /* 익명 세션이 없거나 이미 이관됨 */
-    });
-    // 개인정보 설정(saveHistory/memoryLearning)을 앱 마운트 시 store 에 로드 — 설정 페이지를
-    // 방문하지 않아도 채팅 WS 메시지가 사용자의 저장/학습 설정을 존중하도록.
-    void ApiClient.get<{ data: { preferences: Record<string, unknown> } }>("/api/users/me/preferences")
-      .then((pres) => {
-        const p = pres?.data?.preferences ?? {};
-        const patch: { saveHistory?: boolean; memoryLearning?: boolean } = {};
-        if (typeof p.saveHistory === "boolean") patch.saveHistory = p.saveHistory;
-        if (typeof p.memoryLearning === "boolean") patch.memoryLearning = p.memoryLearning;
-        if (Object.keys(patch).length > 0) useAppStore.getState().setPrivacyPrefs(patch);
-        // 기본 모델도 서버가 SoT — 종전엔 설정 페이지를 열 때만 복원돼, 로그아웃 중 컴포저가
-        // 로컬 기본값으로 덮어쓴 selectedModel 이 재로그인 뒤에도 그대로였다(2026-09-08 신고).
-        if (typeof p.defaultModel === "string" && p.defaultModel.length > 0) {
-          useAppStore.getState().setSelectedModel(p.defaultModel);
-        }
-      })
-      .catch(() => {
-        /* 미설정/실패 — 기본값(true) 유지 */
-      });
-    return true;
+    const signedIn = await syncAuthOnce();
+    retryAttempt = 0; // 서버가 답했다(로그인이든 게스트든) — 다음 장애 때 처음부터 다시 센다
+    return signedIn;
   } catch (e) {
     // `/api/auth/me` 가 만료 토큰에 **401** 을 돌려주는 경우(서버가 쿠키를 정리하기 전) — 게스트
     // (200, user:null)와 같은 뜻이다. 종전엔 라벨만 바꾸고 store 를 두어 만료 탭이 한 사이클 더
@@ -138,8 +101,74 @@ async function syncAuthInner(): Promise<boolean> {
     if (e instanceof ApiError && e.status === 401) {
       clearHadSession();
       if (useAppStore.getState().auth.currentUser) useAppStore.getState().setAuth({ currentUser: null, isGuestMode: true });
+    } else if (!(e instanceof ApiError) || e.status >= 500) {
+      scheduleRetry();
     }
     gaSetVisitor(null, "guest");
     return false;
   }
+}
+
+async function syncAuthOnce(): Promise<boolean> {
+  let res = await fetchMe();
+  let u = res?.data?.user;
+  if (!u && hadSession()) {
+    // 로그인 흔적이 있는데 게스트로 왔다 = auth_token 쿠키가 만료-purge 된 상태일 수 있다.
+    // refresh_token(7일) 이 살아 있으면 1회 선시도로 세션을 복원한다(위 HAD_SESSION_KEY 주석).
+    if (await tryRefresh()) {
+      window.dispatchEvent(new Event(AUTH_RESTORED_EVENT));
+      res = await fetchMe();
+      u = res?.data?.user;
+    } else {
+      clearHadSession(); // refresh 수명도 끝 — 다음 마운트부터 헛 시도 없음
+    }
+  }
+  if (!u) {
+    // 비로그인은 200 + user:null 로 온다(401 아님) — 게스트 라벨링은 이 분기가 본선.
+    // ⚠️ store 도 게스트로 되돌린다. 종전엔 라벨만 바꾸고 currentUser 를 남겨서, 세션이 만료된
+    // 탭이 "로그인 상태"로 보이는 채 사이드바 배지가 30초마다 4개 요청을 만료 토큰으로
+    // 영원히 두드렸다(2026-08-27 실측: 24h `jwt expired` 5,471건).
+    const cur = useAppStore.getState().auth;
+    if (cur.currentUser) useAppStore.getState().setAuth({ currentUser: null, isGuestMode: true });
+    gaSetVisitor(null, "guest");
+    return false;
+  }
+  markHadSession();
+  useAppStore.getState().setAuth({
+    currentUser: {
+      id: String(u.id),
+      email: u.email,
+      name: u.username,
+      role: u.role ?? "user",
+      activeOrgId: res?.data?.activeOrganization?.orgId ?? null,
+      activeOrgRole: res?.data?.activeOrganization?.orgRole ?? null,
+    },
+    isGuestMode: false,
+  });
+  // GA4 방문자 식별 — user_id + user_type(admin/user/guest). OAuth 복귀 시 login 이벤트 flush.
+  const role = u.role === "admin" || u.role === "guest" ? u.role : "user";
+  gaSetVisitor(String(u.id), role);
+  flushOAuthLoginPending();
+  void ApiClient.post("/api/chat/sessions/claim", { anonSessionId: getAnonSessionId() }).catch(() => {
+    /* 익명 세션이 없거나 이미 이관됨 */
+  });
+  // 개인정보 설정(saveHistory/memoryLearning)을 앱 마운트 시 store 에 로드 — 설정 페이지를
+  // 방문하지 않아도 채팅 WS 메시지가 사용자의 저장/학습 설정을 존중하도록.
+  void ApiClient.get<{ data: { preferences: Record<string, unknown> } }>("/api/users/me/preferences")
+    .then((pres) => {
+      const p = pres?.data?.preferences ?? {};
+      const patch: { saveHistory?: boolean; memoryLearning?: boolean } = {};
+      if (typeof p.saveHistory === "boolean") patch.saveHistory = p.saveHistory;
+      if (typeof p.memoryLearning === "boolean") patch.memoryLearning = p.memoryLearning;
+      if (Object.keys(patch).length > 0) useAppStore.getState().setPrivacyPrefs(patch);
+      // 기본 모델도 서버가 SoT — 종전엔 설정 페이지를 열 때만 복원돼, 로그아웃 중 컴포저가
+      // 로컬 기본값으로 덮어쓴 selectedModel 이 재로그인 뒤에도 그대로였다(2026-09-08 신고).
+      if (typeof p.defaultModel === "string" && p.defaultModel.length > 0) {
+        useAppStore.getState().setSelectedModel(p.defaultModel);
+      }
+    })
+    .catch(() => {
+      /* 미설정/실패 — 기본값(true) 유지 */
+    });
+  return true;
 }

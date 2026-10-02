@@ -24,6 +24,12 @@ export const CLIENT_TIMING = {
   /** 로그인 세션 선제 토큰 갱신 주기(ms) — 액세스 토큰 수명(기본 15분)보다 짧게.
    *  REST 를 안 쓰는 WS 채팅 전용 사용 중에도 쿠키를 신선하게 유지해 재연결 인증 보장. */
   TOKEN_REFRESH_INTERVAL_MS: envNum(process.env.NEXT_PUBLIC_TOKEN_REFRESH_INTERVAL_MS, 10 * 60 * 1000),
+  /** 로그인 확인(/api/auth/me)이 서버 오류·네트워크로 실패했을 때 재시도 backoff 기본값(ms) — base * 2^attempt */
+  AUTH_SYNC_RETRY_BASE_MS: envNum(process.env.NEXT_PUBLIC_AUTH_SYNC_RETRY_BASE_MS, 1000),
+  /** 위 재시도 backoff 상한(ms) */
+  AUTH_SYNC_RETRY_MAX_MS: envNum(process.env.NEXT_PUBLIC_AUTH_SYNC_RETRY_MAX_MS, 10_000),
+  /** 위 재시도 최대 횟수 — 기본값이면 약 1분 동안 다시 묻는다 */
+  AUTH_SYNC_RETRY_LIMIT: envNum(process.env.NEXT_PUBLIC_AUTH_SYNC_RETRY_LIMIT, 9),
   /** WebSocket 재연결 backoff 상한(ms) */
   WS_RECONNECT_MAX_MS: envNum(process.env.NEXT_PUBLIC_WS_RECONNECT_MAX_MS, 10_000),
   /** react-query staleTime(ms) */

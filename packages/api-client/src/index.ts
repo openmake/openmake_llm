@@ -61,17 +61,29 @@ const SKIP_REFRESH_ENDPOINTS = ["/api/auth/refresh", "/api/auth/login"];
  * 서버 토큰 로테이션이 경합(첫 호출이 회전·기존 토큰 블랙리스트 → 나머지는 블랙리스트된
  * 토큰으로 401 → clearTokenCookie 로 세션 쿠키 wipe)해 세션이 죽는다.
  * 진행 중인 refresh 가 있으면 그 Promise 를 공유해 /refresh 가 단 1회만 나가도록 한다.
+ *
+ * 탭마다 모듈이 따로라 위 공유는 한 탭 안에서만 통한다. 탭 사이는 Web Locks 로 직렬화한다 —
+ * 두 탭의 요청이 5ms 간격으로 나가면 늦은 쪽이 401 을 받고 로그아웃됐다(2026-10-03 재현).
+ * 잠금을 기다린 탭은 앞 탭이 받은 새 쿠키로 요청하므로 성공한다. Web Locks 는 보안 컨텍스트
+ * (https·localhost)에서만 있다 — 없으면 종전처럼 잠금 없이 보낸다.
  */
+const REFRESH_LOCK_NAME = "omk-auth-refresh";
+
 let refreshInFlight: Promise<boolean> | null = null;
+
+function sendRefresh(): Promise<boolean> {
+  // CSRF_PROTECTION=enforce 에서 헤더 없는 refresh 는 403 — 만료 후 첫 401 인터셉트가
+  // 항상 실패해 /login 으로 원복되던 결함 (2026-08-15). 헤더를 붙여 호출한다.
+  return csrfHeaders()
+    .then((headers) => fetch("/api/auth/refresh", { method: "POST", credentials: "include", headers }))
+    .then((r) => r.ok);
+}
 
 /** 401 인터셉트 밖에서 refresh 가 필요한 호출처(마운트 시 세션 복원 등)도 이 single-flight 를 쓴다. */
 export function refreshOnce(): Promise<boolean> {
   if (!refreshInFlight) {
-    // CSRF_PROTECTION=enforce 에서 헤더 없는 refresh 는 403 — 만료 후 첫 401 인터셉트가
-    // 항상 실패해 /login 으로 원복되던 결함 (2026-08-15). 헤더를 붙여 호출한다.
-    refreshInFlight = csrfHeaders()
-      .then((headers) => fetch("/api/auth/refresh", { method: "POST", credentials: "include", headers }))
-      .then((r) => r.ok)
+    const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+    refreshInFlight = (locks ? locks.request(REFRESH_LOCK_NAME, sendRefresh) : sendRefresh())
       .catch(() => false)
       .finally(() => {
         refreshInFlight = null;
