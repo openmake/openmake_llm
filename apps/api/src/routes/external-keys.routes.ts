@@ -221,7 +221,13 @@ router.post('/:providerId',
                         t.unref?.();
                     }),
                 ]);
-                if (list.length > 0) {
+                // 목록이 나와도 키가 유효하다는 뜻은 아니다(목록 조회가 키를 안 따지는 provider 가 있다) —
+                // 1토큰 호출까지 본다. 키 거절만 실패로 돌아온다.
+                const credential = list.length > 0 ? await provider.validateCredentials() : null;
+                if (credential && !credential.ok) {
+                    validationError = credential.error ?? 'API 키가 거절되었습니다';
+                    logger.warn(`외부 키 즉시 검증 실패: provider=${providerId} — 키 거절`);
+                } else if (list.length > 0) {
                     validated = true;
                     logger.info(`외부 키 즉시 검증 OK: provider=${providerId} models=${list.length}`);
                 } else {
