@@ -145,7 +145,10 @@ public struct ChatStreamState: Sendable {
             setActivity("답변을 생각하고 있어요", kind: .thinking)
         case .thinkingSummary:
             isThinking = true
-            setActivity(event.summary ?? event.message ?? "생각을 정리하고 있어요", kind: .thinking)
+            // summary 는 이벤트에 따라 문자열(생각 요약) 또는 객체(도구 호출 요약)다 — 여기서는 문자열만 쓴다.
+            var summaryText: String?
+            if case .string(let text)? = event.summary { summaryText = text }
+            setActivity(summaryText ?? event.message ?? "생각을 정리하고 있어요", kind: .thinking)
         case .agentSelected:
             let name = event.agent?.name.trimmingCharacters(in: .whitespacesAndNewlines)
             if let name, !name.isEmpty {

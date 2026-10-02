@@ -1,6 +1,6 @@
 /**
  * 브라우저 넘겨받기 라우트 — 소유자만, 샌드박스 실행 작업만, 입력은 검증된 것만 세션으로 간다.
- * asyncHandler 는 promise 를 기다리지 않으므로 라우터 스택의 핸들러를 직접 await 한다.
+ * asyncHandler 는 promise 를 기다리지 않으므로 응답(res.json)이 쓰일 때까지 기다린다.
  */
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
@@ -30,12 +30,14 @@ type Method = 'get' | 'post' | 'delete';
 function handler(method: Method, path: string) {
     const layer = (browserSessionRouter as any).stack.find((l: any) => l.route?.path === path && l.route.methods[method]);
     const h = layer.route.stack[0].handle as (req: any, res: any, next: any) => void;
-    return async (req: any, res: any) => { h(req, res, jest.fn()); for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r)); };
+    // 핸들러는 실제 파일 조회(stat)를 거친다 — 틱 수를 세지 않고 응답이 쓰일 때까지 기다린다(CI 에서 틱 수 대기는 모자랐다).
+    return async (req: any, res: any) => { h(req, res, jest.fn()); await res.done; };
 }
 function mockRes() {
     const res: any = { statusCode: 200, body: undefined };
+    res.done = new Promise<void>((resolve) => { res.finish = resolve; });
     res.status = (c: number) => { res.statusCode = c; return res; };
-    res.json = (b: unknown) => { res.body = b; return res; };
+    res.json = (b: unknown) => { res.body = b; res.finish(); return res; };
     return res;
 }
 const BASE = '/:taskId/browser-session';
