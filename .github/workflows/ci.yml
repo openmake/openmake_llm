@@ -154,6 +154,10 @@ jobs:
       - name: "Gate 4: ESLint (apps/web)"
         run: npm run lint --workspace=apps/web
 
+      # 번역 키 일치 + 문구 형식(ICU 파싱, 따옴표로 감싼 변수) — 화면에서 터지기 전에 잡는다.
+      - name: "Gate 4: i18n (apps/web)"
+        run: npm run check:i18n --workspace=apps/web
+
       # ─── Gate 5: Routing Evaluation ───
       # 키워드 라우터 정확도 회귀 검출. 베이스라인 50% 임계값 미만 시 차단.
       # eval:augmented는 Ollama embedding 호출 필요로 CI에서 제외 (수동/스테이징 실행)
