@@ -150,6 +150,10 @@ jobs:
       - name: "Gate 4: ESLint"
         run: npm run lint
 
+      # 루트 eslint 설정은 apps/web/** 를 제외한다 — web 은 자체 설정(eslint-config-next)으로 따로 돈다.
+      - name: "Gate 4: ESLint (apps/web)"
+        run: npm run lint --workspace=apps/web
+
       # ─── Gate 5: Routing Evaluation ───
       # 키워드 라우터 정확도 회귀 검출. 베이스라인 50% 임계값 미만 시 차단.
       # eval:augmented는 Ollama embedding 호출 필요로 CI에서 제외 (수동/스테이징 실행)
