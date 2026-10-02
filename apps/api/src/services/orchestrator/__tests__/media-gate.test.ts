@@ -37,3 +37,34 @@ describe('runMediaGateShadow', () => {
         expect(r).toEqual({ gateModel: DECISION.MODEL, gateMs: 3000, gateError: 'timeout' });
     });
 });
+
+describe('shouldSkipPlanner', () => {
+    it('기본값(꺼짐)에서는 판정이 아무리 낮아도 생략하지 않는다', async () => {
+        const { shouldSkipPlanner } = await import('../media-gate');
+        expect(shouldSkipPlanner({ gateModel: 'm', gatePTrue: 0.0001 }, 0)).toBe(false);
+    });
+
+    describe('켰을 때', () => {
+        let skip: typeof import('../media-gate').shouldSkipPlanner;
+        beforeAll(async () => {
+            process.env.ORCHESTRATOR_GATE_SKIP_ENABLED = 'true';
+            jest.resetModules();
+            skip = (await import('../media-gate')).shouldSkipPlanner;
+        });
+        afterAll(() => { delete process.env.ORCHESTRATOR_GATE_SKIP_ENABLED; jest.resetModules(); });
+
+        it('임계 미만이고 첨부가 없으면 생략한다', () => {
+            expect(skip({ gateModel: 'm', gatePTrue: 0.01 }, 0)).toBe(true);
+        });
+        it('임계 이상이면 Planner 로 보낸다', () => {
+            expect(skip({ gateModel: 'm', gatePTrue: 0.2 }, 0)).toBe(false);
+        });
+        it('첨부·진행 중 작업이 있으면 항상 Planner 로 보낸다', () => {
+            expect(skip({ gateModel: 'm', gatePTrue: 0.001 }, 1)).toBe(false);
+        });
+        it('판정이 없거나 실패했으면 Planner 로 보낸다', () => {
+            expect(skip(undefined, 0)).toBe(false);
+            expect(skip({ gateModel: 'm', gateError: 'timeout' }, 0)).toBe(false);
+        });
+    });
+});

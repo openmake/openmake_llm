@@ -8,6 +8,7 @@ import type {
 } from "@openmake/shared-types";
 import { enqueueFollowup, removeFollowup, type QueuedFollowup } from "./followup-queue";
 import { startToolCall, finishToolCall, settleToolCalls, type ToolCallView, type ToolCallSummary } from "./tool-calls";
+import { uuid } from "./local-id";
 
 /**
  * 채팅 메시지 (기존 state.js chatHistory 항목 대응).
@@ -536,7 +537,7 @@ export const useAppStore = create<AppState>()(
     }),
   setActiveTool: (t) => set({ activeTool: t }),
   enqueueFollowup: (text) => {
-    const r = enqueueFollowup(get().followupQueue, text, typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now()));
+    const r = enqueueFollowup(get().followupQueue, text, uuid());
     if (r.accepted) set({ followupQueue: r.queue });
     return r.accepted;
   },

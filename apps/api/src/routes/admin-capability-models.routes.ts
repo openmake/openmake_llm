@@ -29,6 +29,7 @@ import { describeEffectiveCapabilities } from '../controllers/capability-models.
 import { getConfig } from '../config';
 import { getAuditService } from '../services/AuditService';
 import { createLogger } from '../utils/logger';
+import { slotKindReason } from '../services/model-assignments-service';
 
 const logger = createLogger('AdminCapabilityModelsRoutes');
 
@@ -75,7 +76,7 @@ adminCapabilityModelsRouter.put('/capability-models/:capability', validate(putSc
     }
     const body = req.body as z.infer<typeof putSchema>;
     const fullId = body.model.trim();
-    const reason = await validateCapabilityAssignment(GLOBAL_CAPABILITY_SCOPE, fullId, {}, capability);
+    const reason = slotKindReason(capability, fullId) ?? await validateCapabilityAssignment(GLOBAL_CAPABILITY_SCOPE, fullId, {}, capability);
     if (reason) { res.status(400).json(badRequest(reason)); return; }
 
     const repo = new CapabilityModelsRepository(getPool());

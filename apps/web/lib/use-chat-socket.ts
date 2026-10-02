@@ -16,6 +16,7 @@ import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
 import { announceAgentTaskChange } from "./agent-task-change";
 import { AUTH_RESTORED_EVENT } from "./auth-sync";
+import { uuid } from "./local-id";
 import { encodeMcpResources, type McpResourcePayload } from "@/components/chat/mcp-resource-card";
 
 // 배포 감지·토큰 갱신 상태는 소켓 재연결/훅 재마운트 간에도 유지되어야 하므로 모듈 레벨에 둔다.
@@ -127,6 +128,8 @@ export function useChatSocket() {
   // 구조화 답변(REST) 진행 중 AbortController — abort() 가 취소할 수 있게 보관
   // token_warning 갱신이 스트리밍 중 도착하면 스트림 종료 후 재연결하기 위한 예약 플래그.
   const reconnectAfterRefreshRef = useRef(false);
+  // 스트림 이벤트가 알려 준 세션 id 를 적는 중인지 — 사용자의 대화 전환(같은 store 필드를 바꾼다)과 구분한다.
+  const adoptingSessionIdRef = useRef(false);
   // 스트리밍 도중 소켓이 끊겼음(탭 백그라운드·절전 등) — 재연결 직후 서버에 resume 을 보내
   // 서버가 계속 생성해 둔 답변을 이어받는다(서버 ws-stream-registry 와 페어).
   const pendingResumeRef = useRef(false);
@@ -186,6 +189,15 @@ export function useChatSocket() {
 
     const ws = new WebSocket(resolveWsUrl());
     wsRef.current = ws;
+
+    const adoptStreamSessionId = (id: string) => {
+      adoptingSessionIdRef.current = true;
+      try {
+        setCurrentSessionId(id);
+      } finally {
+        adoptingSessionIdRef.current = false;
+      }
+    };
 
     ws.onopen = () => {
       // 언마운트 후 뒤늦게 열린 소켓이면 즉시 닫아 좀비를 방지.
@@ -374,12 +386,12 @@ export function useChatSocket() {
           if (typeof data.issues === "string" && data.issues) setVerificationIssues(data.issues);
           break;
         case "session_created":
-          if (data.sessionId) setCurrentSessionId(data.sessionId);
+          if (data.sessionId) adoptStreamSessionId(data.sessionId);
           break;
         case "stream_resume":
           // 끊긴 사이 서버가 계속 생성한 답변 스냅샷 — 마지막 assistant 본문을 통째로 되돌리고
           // 다시 스트리밍 상태로 둔다(후속 token/done 이 그대로 이어진다).
-          if (data.sessionId) setCurrentSessionId(data.sessionId);
+          if (data.sessionId) adoptStreamSessionId(data.sessionId);
           resumeAssistant(data.content, data.thinking);
           // 링에서 밀려났을 수 있는 served_model 을 스냅샷으로 복원
           if (typeof data.servedModel === "string" && data.servedModel) setServedModel(data.servedModel);
@@ -708,7 +720,7 @@ export function useChatSocket() {
       discardRef.current = discardOnSend(discardRef.current);
       const payload: WsChatRequest = {
         // 멱등 키(140) — 전송마다 새로 발급. 재생성(regenerate)도 의도된 새 요청이라 새 id.
-        clientRequestId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : undefined,
+        clientRequestId: uuid(), // http 접속에서도 발급한다(randomUUID 는 보안 컨텍스트 전용 — lib/local-id)
         type: "chat",
         message,
         model: s.selectedModel,
@@ -764,10 +776,16 @@ export function useChatSocket() {
   }, []);
 
   // 답변이 흐르는 도중 대화를 지우면(새 대화 등) 서버 생성을 멈추고, 이미 오고 있는 그 답변의 이벤트는 버린다.
+  // 다른 기존 대화로 전환할 때도 같다 — 전환은 세션 id 만 바꾸고 chatEpoch 는 그대로라, 이전 대화의 답변이
+  // 전환한 대화 화면에 이어서 그려졌다(2026-10-03 재현). 스트림이 자기 대화의 id 를 받아 적는 것(adoptStreamSessionId)은 전환이 아니다.
   useEffect(() => useAppStore.subscribe((state, prev) => {
-    if (state.chatEpoch === prev.chatEpoch) return;
+    const cleared = state.chatEpoch !== prev.chatEpoch;
+    const switched = prev.isGenerating && state.currentSessionId !== null
+      && state.currentSessionId !== prev.currentSessionId && !adoptingSessionIdRef.current;
+    if (!cleared && !switched) return;
     discardRef.current = discardOnReset(discardRef.current, prev.isGenerating, activeStreamIdRef.current);
     if (prev.isGenerating && wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify({ type: "abort" }));
+    if (switched) useAppStore.getState().setStreaming(false); // 지우기는 clearChat 이 이미 끈다
   }), []);
 
   // 에이전트 토글 ON: 메시지를 목표(goal)로 자율 에이전트 작업을 생성·실행한다.
@@ -801,7 +819,7 @@ export function useChatSocket() {
         let created: { data?: { task?: { id?: string; status?: string }; deduplicated?: boolean } } | null;
         // 중복 생성 방지 — 이 제출의 키. 재전송(401 갱신 후 재시도 등)되어도 서버는 작업을 한 번만 만든다.
         const idempotencyHeaders: Record<string, string> =
-          typeof crypto !== "undefined" && "randomUUID" in crypto ? { "Idempotency-Key": crypto.randomUUID() } : {};
+          { "Idempotency-Key": uuid() };
         if (totalBinaryBytes > CHUNKED_UPLOAD_THRESHOLD_BYTES) {
           const uploadRefs = [];
           for (const f of binaryParts) {

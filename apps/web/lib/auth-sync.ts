@@ -1,6 +1,6 @@
 import type { ApiSuccess, MePayload } from "@openmake/shared-types";
 import { ApiClient, ApiError, refreshOnce } from "./api-client";
-import { getAnonSessionId } from "./anon-session";
+import { getAnonSessionId, resetAnonSessionId } from "./anon-session";
 import { isUuid } from "./local-id";
 import { flushOAuthLoginPending, gaSetVisitor } from "./analytics";
 import { useAppStore } from "./store";
@@ -150,14 +150,14 @@ async function syncAuthOnce(): Promise<boolean> {
   const role = u.role === "admin" || u.role === "guest" ? u.role : "user";
   gaSetVisitor(String(u.id), role);
   flushOAuthLoginPending();
-  // 예전에 http 접속에서 만들어진 id(`anon-…`)는 서버가 형식 검증에서 400 으로 거절한다 — 보내지 않는다.
-  // (저장된 id 는 바꾸지 않는다: 그 id 로 만든 게스트 대화가 목록에서 사라지기 때문)
+  // 예전에 http 접속에서 만들어진 id(`anon-…`)도 서버가 받는다. 이관이 끝나면 그 id 로 남은 게스트 대화가 없으므로
+  // UUID 로 바꿔 예전 형식을 정리한다(이관 전에 바꾸면 그 대화가 목록에서 사라진다).
   const anonSessionId = getAnonSessionId();
-  if (isUuid(anonSessionId)) {
-    void ApiClient.post("/api/chat/sessions/claim", { anonSessionId }).catch(() => {
+  void ApiClient.post("/api/chat/sessions/claim", { anonSessionId })
+    .then(() => { if (!isUuid(anonSessionId)) resetAnonSessionId(); })
+    .catch(() => {
       /* 익명 세션이 없거나 이미 이관됨 */
     });
-  }
   // 개인정보 설정(saveHistory/memoryLearning)을 앱 마운트 시 store 에 로드 — 설정 페이지를
   // 방문하지 않아도 채팅 WS 메시지가 사용자의 저장/학습 설정을 존중하도록.
   void ApiClient.get<{ data: { preferences: Record<string, unknown> } }>("/api/users/me/preferences")

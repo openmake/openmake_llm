@@ -35,6 +35,7 @@ import {
 import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
 import { getAuditService } from '../services/AuditService';
 import { createLogger } from '../utils/logger';
+import { slotKindReason } from '../services/model-assignments-service';
 
 const logger = createLogger('AdminModelRolesRoutes');
 
@@ -114,6 +115,9 @@ adminModelRolesRouter.put('/model-roles/:role', validate(putRoleSchema), asyncHa
         res.status(400).json(badRequest(`해석 불가한 모델 id: '${fullId}'`));
         return;
     }
+
+    const kindReason = slotKindReason(role, fullId);
+    if (kindReason) { res.status(400).json(badRequest(kindReason)); return; }
 
     const repo = new GlobalModelRolesRepository(getPool());
     // previous 는 upsert 트랜잭션에서 원자적으로 캡처된다 — 2026-08-08 배정 소실 사건의 복원 근거.

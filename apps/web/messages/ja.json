@@ -936,7 +936,7 @@
       "title": "タスクテンプレート",
       "create": "新規テンプレート",
       "namePlaceholder": "テンプレート名",
-      "goalPlaceholder": "目標テンプレート… ({{パラメータ}} 使用可)",
+      "goalPlaceholder": "目標テンプレート… ('{{パラメータ}}' 使用可)",
       "add": "追加",
       "empty": "テンプレートはありません。",
       "run": "このテンプレートで実行",
@@ -1925,7 +1925,7 @@
     "description": "グローバルなモデル割り当て(全ユーザーの既定値)とサーバー共有外部キーを管理します。",
     "loadError": "読み込みに失敗しました。",
     "saveFailed": "保存に失敗しました。",
-    "keyDeleteConfirm": "'{provider}' のサーバーキーを削除しますか?このプロバイダーのグローバル割り当てはローカルモデルにフォールバックします。",
+    "keyDeleteConfirm": "''{provider}'' のサーバーキーを削除しますか?このプロバイダーのグローバル割り当てはローカルモデルにフォールバックします。",
     "serverKeys": {
       "title": "サーバー共有外部キー",
       "description": "運用者所有のキー — グローバルロール割り当てでのみ使用されます(ユーザー別割り当てとチャットは個人のBYOKキーを使用)。日次トークン上限を超えるとローカルモデルへ自動フォールバックします。",
@@ -1983,7 +1983,7 @@
     "save": "保存",
     "reset": "リセット",
     "resetHelp": "DB の値を削除し、.env／デフォルトに戻します。",
-    "resetConfirm": "'{key}' を削除して env／デフォルトに戻しますか？",
+    "resetConfirm": "''{key}'' を削除して env／デフォルトに戻しますか？",
     "byokLinked": "自分のキーと連動中",
     "issueLink": "発行ページ",
     "sourceDb": "DB 設定済み",
@@ -2396,8 +2396,8 @@
     "secretNote": "MCP の認証情報は出力しません — キー名のみ $'{KEY}' プレースホルダーとして含まれ、インストールする人が値を入れます。",
     "shareToGallery": "ギャラリーに共有（オフなら自分の拡張にのみ保存）",
     "publish": "公開（{n}件）",
-    "publishedShared": "'{name}' をギャラリーに公開しました",
-    "publishedPrivate": "'{name}' を自分の拡張に保存しました（非公開）",
+    "publishedShared": "''{name}'' をギャラリーに公開しました",
+    "publishedPrivate": "''{name}'' を自分の拡張に保存しました（非公開）",
     "publishedDetail": "ファイル {files}件 · 同名で再公開すると更新されます",
     "missing": "一部の項目は所有・有効条件を満たさずスキップされました。"
   },
@@ -2667,7 +2667,7 @@
     "noDescription": "説明なし",
     "editDescription": "説明を編集",
     "deleteSpace": "プロジェクトを削除",
-    "deleteSpaceConfirm": "'{name}' を削除しますか？資料と紐づけがすべて削除されます。",
+    "deleteSpaceConfirm": "''{name}'' を削除しますか？資料と紐づけがすべて削除されます。",
     "create": {
       "title": "プロジェクトを作成",
       "nameRequired": "名前を入力してください",
@@ -2706,7 +2706,7 @@
     "doc": {
       "section": "ドキュメント {count} 件",
       "empty": "資料がまだありません。ファイルを追加してください。",
-      "deleteConfirm": "'{name}' を削除しますか？",
+      "deleteConfirm": "''{name}'' を削除しますか？",
       "pages": "{count} ページ",
       "retry": "再試行",
       "delete": "削除"

@@ -38,7 +38,6 @@ coverage/
 test-results/
 
 # Runtime cache artifacts
-backend/api/cache/
 
 # Vite
 .vite/
@@ -63,7 +62,6 @@ bak/
 backup/
 
 # User uploaded files (sensitive user data)
-backend/uploads/
 uploads/
 
 # OCR trained data (large binary, download separately)
@@ -78,7 +76,6 @@ __pycache__/
 
 # Runtime config (auto-generated)
 .ollama-cluster.json
-backend/api/.ollama-cluster.json
 
 # Screenshots (may contain personal info)
 *.png

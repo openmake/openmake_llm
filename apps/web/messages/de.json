@@ -936,7 +936,7 @@
       "title": "Aufgabenvorlagen",
       "create": "Neue Vorlage",
       "namePlaceholder": "Vorlagenname",
-      "goalPlaceholder": "Zielvorlage… ({{param}} unterstützt)",
+      "goalPlaceholder": "Zielvorlage… ('{{param}}' unterstützt)",
       "add": "Hinzufügen",
       "empty": "Noch keine Vorlagen.",
       "run": "Aus dieser Vorlage ausführen",
