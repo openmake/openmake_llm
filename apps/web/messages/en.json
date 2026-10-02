@@ -1070,6 +1070,27 @@
       "delete": "Delete",
       "deleteConfirm": "Delete this trigger?",
       "failed": "Failed: {message}"
+    },
+    "takeover": {
+      "start": "Take control of browser",
+      "reopen": "Open the browser you control",
+      "hint": "Take over the agent's browser for steps you must do yourself, such as sign-in or CAPTCHA.",
+      "activeHint": "You are controlling the browser. Hand it back when you are done.",
+      "title": "Take control of browser",
+      "notice": "The agent cannot use the browser while you control it. It is handed back automatically after 10 minutes without input.",
+      "hide": "Hide",
+      "release": "Hand back",
+      "back": "Back",
+      "go": "Go",
+      "addressPlaceholder": "Address",
+      "screen": "Browser screen",
+      "textPlaceholder": "Type composed text (e.g. Korean) here and send",
+      "sendText": "Send text",
+      "released": "Browser handed back. The agent continues with this sign-in state.",
+      "ended": "The browser session ended (no input, or the task finished).",
+      "startFailed": "Could not take control of the browser: {error}",
+      "inputFailed": "Input was not delivered: {error}",
+      "releaseFailed": "Could not hand back: {error}"
     }
   },
   "customAgents": {

@@ -1070,6 +1070,27 @@
       "delete": "Löschen",
       "deleteConfirm": "Diesen Trigger löschen?",
       "failed": "Fehlgeschlagen: {message}"
+    },
+    "takeover": {
+      "start": "Browser übernehmen",
+      "reopen": "Übernommenen Browser öffnen",
+      "hint": "Übernehmen Sie den Browser des Agenten für Schritte, die Sie selbst ausführen müssen, etwa Anmeldung oder CAPTCHA.",
+      "activeHint": "Sie steuern den Browser. Geben Sie ihn zurück, wenn Sie fertig sind.",
+      "title": "Browser übernehmen",
+      "notice": "Solange Sie steuern, kann der Agent den Browser nicht nutzen. Nach 10 Minuten ohne Eingabe wird er automatisch zurückgegeben.",
+      "hide": "Ausblenden",
+      "release": "Zurückgeben",
+      "back": "Zurück",
+      "go": "Öffnen",
+      "addressPlaceholder": "Adresse",
+      "screen": "Browserbildschirm",
+      "textPlaceholder": "Zusammengesetzte Eingaben (z. B. Koreanisch) hier schreiben und senden",
+      "sendText": "Eingabe senden",
+      "released": "Browser zurückgegeben. Der Agent fährt mit diesem Anmeldestatus fort.",
+      "ended": "Die Browsersitzung wurde beendet (keine Eingabe oder Aufgabe beendet).",
+      "startFailed": "Browser konnte nicht übernommen werden: {error}",
+      "inputFailed": "Eingabe wurde nicht zugestellt: {error}",
+      "releaseFailed": "Zurückgeben fehlgeschlagen: {error}"
     }
   },
   "customAgents": {

@@ -1070,6 +1070,27 @@
       "delete": "删除",
       "deleteConfirm": "要删除此触发器吗？",
       "failed": "处理失败: {message}"
+    },
+    "takeover": {
+      "start": "接管浏览器",
+      "reopen": "打开已接管的浏览器",
+      "hint": "在登录、验证码等需要亲自完成的步骤中接管代理的浏览器并操作。",
+      "activeHint": "你正在控制浏览器。用完后请交还。",
+      "title": "接管浏览器",
+      "notice": "接管期间代理无法使用浏览器。10 分钟无操作将自动交还。",
+      "hide": "隐藏",
+      "release": "交还",
+      "back": "后退",
+      "go": "前往",
+      "addressPlaceholder": "地址",
+      "screen": "浏览器画面",
+      "textPlaceholder": "中文等输入法文字请在此输入后发送",
+      "sendText": "发送输入",
+      "released": "已交还浏览器。代理将以此登录状态继续。",
+      "ended": "浏览器会话已结束(无操作或任务已结束)。",
+      "startFailed": "无法接管浏览器:{error}",
+      "inputFailed": "操作未送达:{error}",
+      "releaseFailed": "无法交还:{error}"
     }
   },
   "customAgents": {

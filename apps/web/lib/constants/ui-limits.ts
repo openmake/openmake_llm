@@ -33,3 +33,12 @@ export const ACTIVITY_POLL_MS = 30_000;
 
 /** 통합 상태 표시 패널을 열어 보고 있을 때 폴링 주기(ms). */
 export const ACTIVITY_OPEN_POLL_MS = 5_000;
+
+/** 브라우저 넘겨받기 — 스크린샷 폴링 주기(ms). */
+export const BROWSER_TAKEOVER_POLL_MS = 1000;
+
+/** 브라우저 넘겨받기 — 입력을 보낸 뒤 화면을 다시 받기까지 대기(ms). */
+export const BROWSER_TAKEOVER_INPUT_SETTLE_MS = 250;
+
+/** 브라우저 넘겨받기 — 휠 스크롤을 모아 보내는 간격(ms). */
+export const BROWSER_TAKEOVER_SCROLL_FLUSH_MS = 150;

@@ -1070,6 +1070,27 @@
       "delete": "삭제",
       "deleteConfirm": "이 트리거를 삭제할까요?",
       "failed": "처리 실패: {message}"
+    },
+    "takeover": {
+      "start": "브라우저 넘겨받기",
+      "reopen": "넘겨받은 브라우저 열기",
+      "hint": "로그인·보안 문자처럼 직접 해야 하는 단계에서 에이전트의 브라우저를 넘겨받아 조작합니다.",
+      "activeHint": "브라우저를 넘겨받은 상태입니다. 다 쓰면 돌려주세요.",
+      "title": "브라우저 넘겨받기",
+      "notice": "넘겨받은 동안 에이전트는 브라우저를 쓰지 못합니다. 조작이 없으면 10분 뒤 자동으로 돌려줍니다.",
+      "hide": "숨기기",
+      "release": "돌려주기",
+      "back": "뒤로",
+      "go": "이동",
+      "addressPlaceholder": "주소",
+      "screen": "브라우저 화면",
+      "textPlaceholder": "한글 등 조합 입력은 여기에 써서 보내세요",
+      "sendText": "입력 보내기",
+      "released": "브라우저를 돌려줬습니다. 에이전트가 이 로그인 상태로 이어갑니다.",
+      "ended": "브라우저 세션이 끝났습니다(조작이 없었거나 작업이 끝났습니다).",
+      "startFailed": "브라우저를 넘겨받지 못했습니다: {error}",
+      "inputFailed": "조작이 전달되지 않았습니다: {error}",
+      "releaseFailed": "돌려주지 못했습니다: {error}"
     }
   },
   "customAgents": {

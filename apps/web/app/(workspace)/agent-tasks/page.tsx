@@ -45,6 +45,7 @@ import { SteeringInput } from "@/components/chat/steering-input";
 import { SharePanel } from "@/components/agent-tasks/share-panel";
 import { DiffView } from "@/components/chat/diff-view";
 import { PlanEditor } from "@/components/agent-tasks/plan-editor";
+import { BrowserTakeover } from "@/components/agent-tasks/browser-takeover";
 import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
 import { onAgentTaskChange } from "@/lib/agent-task-change";
 
@@ -717,6 +718,11 @@ function TaskDetailModal({
           {/* 실행 중/일시정지 시 방향 지시(steering) — 취소·재시작 없이 교정. */}
           {(detail.task.status === "running" || detail.task.status === "paused") && (
             <SteeringInput taskId={taskId} />
+          )}
+
+          {/* 브라우저 넘겨받기 — 로그인·CAPTCHA 처럼 사람이 해야 하는 단계. 샌드박스 실행 작업만(대상이 아니면 스스로 숨는다). */}
+          {(detail.task.status === "running" || detail.task.status === "paused") && detail.task.executor !== "local" && (
+            <BrowserTakeover taskId={taskId} />
           )}
 
           {/* 체크포인트 분기(141) — 완료·실패·취소·일시정지 작업에서 지난 턴으로 갈라내기 */}

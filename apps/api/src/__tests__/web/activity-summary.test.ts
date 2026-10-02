@@ -1,5 +1,6 @@
 /** 통합 상태 표시 집계(apps/web/lib/activity-summary.ts) — 순수 함수라 api Jest 에서 검증한다. */
 // apps/api tsconfig rootDir 밖 파일이라 require 로 런타임만 불러온다(ts-jest 가 변환)
+export {}; // 모듈로 만들어 다른 테스트 파일의 전역 타입 이름과 겹치지 않게 한다
 interface Task { id: string; goal: string; status: string; progress?: number; completed_at?: string; created_at?: string }
 interface Approval { approvalId: string; taskId: string; toolName: string; args?: Record<string, unknown> }
 interface Summary {
