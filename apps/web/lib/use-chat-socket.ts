@@ -654,7 +654,10 @@ export function useChatSocket() {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
       }
-      wsRef.current?.close();
+      // 아직 연결 중인 소켓은 여기서 닫지 않는다 — 닫으면 브라우저가 "closed before the connection is
+      // established" 를 찍는다(개발 모드 StrictMode 가 effect 를 정리했다 다시 실행할 때마다 발생).
+      // 진짜 언마운트면 onopen 이 unmountedRef 를 보고 닫고, 재실행이면 connect() 가 이 소켓을 그대로 쓴다.
+      if (wsRef.current?.readyState !== WebSocket.CONNECTING) wsRef.current?.close();
     };
   }, [connect]);
 
