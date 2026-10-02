@@ -84,10 +84,7 @@ export class AgentTaskService {
         return true;
     }
 
-    /** 이 프로세스가 지금 실행 중인 작업인가 — 소유권 점검이 자기 작업을 가져가지 않게 한다. */
-    static isRunning(taskId: string): boolean {
-        return AgentTaskService.running.has(taskId);
-    }
+    static isRunning(taskId: string): boolean { return AgentTaskService.running.has(taskId); } // 소유권 점검이 자기 작업을 가져가지 않게
 
     /** 외부에서 작업 취소 */
     abort(): void {
@@ -147,8 +144,7 @@ export class AgentTaskService {
 
         // DB 갱신 + 진행상황 발행(fire-and-forget). ws 계층이 구독해 owner user 에게 relay.
         // ws 를 직접 참조하지 않으므로 소켓 연결 여부와 무관하게 실행은 끝까지 진행된다.
-        // 소유권을 잃었는가(176) — 다른 서버가 이 작업을 가져갔다. 이후로는 상태를 쓰지 않는다(새 소유자의 것이다).
-        let leaseLost = false;
+        let leaseLost = false; // 소유권을 잃음(176) — 다른 서버가 가져갔다. 이후로는 상태를 쓰지 않는다(새 소유자의 것)
         const update = async (u: Parameters<typeof db.updateAgentTask>[1]): Promise<void> => {
             if (leaseLost) return;
             curStatus = (u.status ?? curStatus) as string;
@@ -167,8 +163,7 @@ export class AgentTaskService {
         // cancel 레이스 봉쇄: 어떤 await 보다 먼저 레지스트리에 등록해 /cancel 이 항상
         // AbortController 에 도달하게 한다 (기존엔 스킬 조회 await 사이의 취소가 유실됐다).
         AgentTaskService.running.set(taskId, this);
-        // 실행 소유권(176) — 다른 서버가 실행 중이면 여기서 물러난다. 실행 도중 잃으면 중단 신호로 루프를 멈춘다.
-        const lease = await beginTaskLease(taskId, () => { leaseLost = true; this.abortController.abort(); });
+        const lease = await beginTaskLease(taskId, () => { leaseLost = true; this.abortController.abort(); }); // 실행 소유권(176): 잃으면 루프를 멈춘다
         if (!lease.acquired) { AgentTaskService.running.delete(taskId); return; }
         try {
             // 레지스트리 등록 전(detached 스케줄링 창)에 접수된 취소는 DB 에만 기록됨 — 시작 전 존중.
@@ -582,8 +577,7 @@ export class AgentTaskService {
             // signal.aborted 가 true 면 client.chat() 호출 도중 던져진 AbortError
             // ("Request was aborted") 도 사용자 취소로 분류 — 턴 사이 abort 뿐 아니라
             // LLM 호출 중간 취소도 cancelled 로 일관 처리.
-            // 소유권을 잃어 멈춘 것 — 취소·실패가 아니다. 상태는 새 소유자가 쓴다.
-            if (leaseLost) { logger.warn(`[AgentTask] 소유권을 잃어 실행 중단: ${taskId}`); return; }
+            if (leaseLost) { logger.warn(`[AgentTask] 소유권을 잃어 실행 중단: ${taskId}`); return; } // 취소·실패가 아니다 — 상태는 새 소유자가 쓴다
             const aborted = signal.aborted || (err instanceof AgentTaskAbort && err.kind === 'aborted');
             const kind = aborted ? 'aborted' : (err instanceof AgentTaskAbort ? err.kind : 'failed');
             const msg = err instanceof Error ? err.message : String(err);
@@ -599,8 +593,7 @@ export class AgentTaskService {
         } finally {
             AgentTaskService.running.delete(taskId);
             await lease.end();
-            // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup.
-            // 소유권을 잃었으면 건너뛴다 — 승인 행·작업 공간은 새 소유자가 쓰고 있다(이 서버에 남은 컨테이너는 부팅 정리가 치운다).
+            // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup. 소유권을 잃었으면 새 소유자가 쓰고 있어 건너뛴다.
             if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber });
         }
     }

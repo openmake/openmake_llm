@@ -12,7 +12,7 @@
  */
 import { createHash } from 'crypto';
 import { getPool } from '../../data/models/unified-database';
-import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
+import { AgentTaskToolReceiptRepository } from '../../data/repositories/agent-task-tool-receipt-repository';
 import { classifyToolRisk } from '../../config/tool-policy';
 import { createLogger } from '../../utils/logger';
 
@@ -40,7 +40,7 @@ export function receiptStatusOf(toolResult: string): ToolReceiptStatus {
 export async function startReceipt(taskId: string, toolCallId: string, toolName: string, args: Record<string, unknown>): Promise<string> {
     const idempotencyKey = toolIdempotencyKey(taskId, toolCallId);
     try {
-        await new AgentTaskRepository(getPool()).startToolReceipt({
+        await new AgentTaskToolReceiptRepository(getPool()).startToolReceipt({
             taskId, toolCallId, toolName, idempotencyKey,
             argsHash: createHash('sha256').update(JSON.stringify(args ?? {})).digest('hex'),
         });
@@ -52,7 +52,7 @@ export async function startReceipt(taskId: string, toolCallId: string, toolName:
 
 export async function finishReceipt(taskId: string, toolCallId: string, status: ToolReceiptStatus): Promise<void> {
     try {
-        await new AgentTaskRepository(getPool()).finishToolReceipt(taskId, toolCallId, status);
+        await new AgentTaskToolReceiptRepository(getPool()).finishToolReceipt(taskId, toolCallId, status);
     } catch (e) {
         logger.warn(`[${taskId}] 실행 영수증 종료 기록 실패 (무시): ${e instanceof Error ? e.message : e}`);
     }

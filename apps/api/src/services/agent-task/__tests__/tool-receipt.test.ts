@@ -4,8 +4,8 @@
 const startToolReceipt = jest.fn(async () => undefined);
 const finishToolReceipt = jest.fn(async () => undefined);
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) }));
-jest.mock('../../../data/repositories/agent-task-repository', () => ({
-    AgentTaskRepository: jest.fn(() => ({ startToolReceipt, finishToolReceipt })),
+jest.mock('../../../data/repositories/agent-task-tool-receipt-repository', () => ({
+    AgentTaskToolReceiptRepository: jest.fn(() => ({ startToolReceipt, finishToolReceipt })),
 }));
 
 import { toolIdempotencyKey, needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from '../tool-receipt';

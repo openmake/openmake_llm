@@ -15,6 +15,7 @@
  * @module sockets/agent-task-progress-log
  */
 import { AGENT_TASK_PROGRESS_LOG } from '../config/runtime-limits';
+import type { AgentTaskProgressEvent } from '../utils/event-bus';
 
 export type SequencedEvent<T> = T & { seq: number; ts: number };
 
@@ -107,4 +108,20 @@ export function replayAgentTaskProgress(
     const { events, gap } = log.replay(userId, afterSeq);
     if (gap) ws.send(JSON.stringify({ type: 'agent_task_resync' }));
     for (const e of events) ws.send(JSON.stringify(e));
+}
+
+/** 이벤트 버스의 진행 이벤트 → 소켓 메시지. 순번·시각을 붙여 잠깐 보관한다 — 소켓이 끊긴 사이의 이벤트는 재연결 때 다시 준다. */
+export function sequenceAgentTaskProgress(ev: AgentTaskProgressEvent, log: AgentTaskProgressLog = getAgentTaskProgressLog()): Record<string, unknown> {
+    return log.append(ev.userId, {
+        type: 'agent_task_progress',
+        taskId: ev.taskId,
+        status: ev.status,
+        progress: ev.progress,
+        currentTurn: ev.currentTurn,
+        // 방금 기록된 스텝 요약(4-5) — 채팅 인라인 카드의 "현재 단계" 실시간 표시.
+        ...(ev.step ? { step: ev.step } : {}),
+        // 승인 이관·에스컬레이션·철회·계획 편집 알림(HITL 2단계) — 받은 쪽은 승인함을 재조회한다.
+        ...(ev.approvalId ? { approvalId: ev.approvalId } : {}),
+        ...(ev.reason ? { reason: ev.reason } : {}),
+    });
 }
