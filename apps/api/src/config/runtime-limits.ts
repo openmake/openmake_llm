@@ -1763,6 +1763,17 @@ export const IDEMPOTENCY = {
 } as const;
 
 /**
+ * 에이전트 작업 진행 이벤트 보관(순번·재전송) — 재연결한 클라이언트에 놓친 이벤트를 다시 주기 위해 사용자별로 잠깐 둔다.
+ * AGENT_TASK_PROGRESS_LOG_MAX_EVENTS(사용자당 개수, 기본 200) / AGENT_TASK_PROGRESS_LOG_TTL_MS(보관 시간, 기본 10분).
+ * SWEEP_EVERY_APPENDS: 이만큼 기록할 때마다 이벤트가 없어진 사용자 기록을 정리한다.
+ */
+export const AGENT_TASK_PROGRESS_LOG = {
+    MAX_EVENTS_PER_USER: parseInt(process.env.AGENT_TASK_PROGRESS_LOG_MAX_EVENTS || '200', 10),
+    TTL_MS: parseInt(process.env.AGENT_TASK_PROGRESS_LOG_TTL_MS || String(10 * 60 * 1000), 10),
+    SWEEP_EVERY_APPENDS: 500,
+} as const;
+
+/**
  * 에이전트 작업 생성 중복 방지 — 같은 Idempotency-Key 의 재요청(더블 클릭·네트워크 재전송)은 새로 만들지 않는다.
  * TTL_MS: 키 기억 시간. DELEGATE_WINDOW_MS: 채팅에서 위임한 작업(delegate_agent_task)은 키가 없어 같은 사용자·목표·턴 수를
  * 이 창 안에서 한 번만 만든다(0 이면 끔). AGENT_TASK_CREATE_IDEMPOTENCY_TTL_MS / _MAX_PER_OWNER / AGENT_TASK_DELEGATE_DEDUPE_WINDOW_MS
