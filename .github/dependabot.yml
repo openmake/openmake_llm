@@ -1,9 +1,12 @@
 # Dependabot (F28.8, 2026-09-17) — 운영 의존성 보안·버전 갱신 PR.
 # npm workspaces 는 루트 lockfile 하나라 디렉토리는 "/" 만 둔다. minor/patch 는 묶어서 PR 수를 줄인다.
+# PR 은 dev 로 올린다(target-branch) — 지정하지 않으면 기본 브랜치(main)로 올라와 feature → dev → main 흐름을 건너뛴다
+# (2026-10-03 #1038 eslint 10 이 main 에 바로 들어가 dev 와 어긋났다). 이 파일은 기본 브랜치의 것이 적용된다.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: "/"
+    target-branch: dev
     schedule:
       interval: weekly
       day: monday
@@ -16,6 +19,7 @@ updates:
         exclude-patterns: ["@opentelemetry/*"]
   - package-ecosystem: github-actions
     directory: "/"
+    target-branch: dev
     schedule:
       interval: weekly
       day: monday
