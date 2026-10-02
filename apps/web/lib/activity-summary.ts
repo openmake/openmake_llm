@@ -44,7 +44,7 @@ export interface ActivitySummary {
   running: Array<{ id: string; goal: string; status: string; progress: number }>;
   recent: Array<{ id: string; goal: string; status: string }>;
   chatGenerating: boolean;
-  /** 사이드바 버튼에 띄울 숫자 — 입력 필요 + 진행 중(채팅 생성 포함) */
+  /** 사이드바 버튼에 띄울 숫자 — 입력 필요 + 진행 중(채팅 생성 포함). 입력을 기다리며 멈춘 작업은 입력 필요로만 센다 */
   badge: number;
 }
 
@@ -81,11 +81,15 @@ export function summarizeActivity(input: {
     .slice(0, ACTIVITY_RECENT_MAX)
     .map(({ task }) => ({ id: task.id, goal: task.goal, status: task.status }));
 
+  // 승인·질문에서 멈춘 작업은 목록에는 두되 숫자는 "입력 필요"로만 센다(같은 일을 두 번 세지 않게)
+  const waiting = new Set(approvals.map((a) => a.taskId));
+  const runningCount = running.filter((r) => !waiting.has(r.id)).length;
+
   return {
     needsInput,
     running,
     recent,
     chatGenerating,
-    badge: needsInput.length + running.length + (chatGenerating ? 1 : 0),
+    badge: needsInput.length + runningCount + (chatGenerating ? 1 : 0),
   };
 }

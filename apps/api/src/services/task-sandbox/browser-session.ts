@@ -56,6 +56,23 @@ export type BrowserSessionInput = z.infer<typeof browserSessionInputSchema>;
 
 export const browserSessionStartSchema = z.object({ url: httpUrl.optional() });
 
+/**
+ * PURE: 에이전트가 browser 도구로 마지막에 연 주소(goto) — 넘겨받을 때 그 화면에서 시작하게 한다.
+ * 스텝은 시간순. http(s) 가 아니거나 없으면 undefined.
+ */
+export function lastBrowserUrl(steps: Array<{ tool_name?: string | null; tool_args?: unknown }>): string | undefined {
+    for (let i = steps.length - 1; i >= 0; i--) {
+        if (steps[i].tool_name !== 'browser') continue;
+        const actions = (steps[i].tool_args as { actions?: unknown } | null | undefined)?.actions;
+        if (!Array.isArray(actions)) continue;
+        for (let j = actions.length - 1; j >= 0; j--) {
+            const a = actions[j] as { type?: unknown; url?: unknown } | null;
+            if (a?.type === 'goto' && httpUrl.safeParse(a.url).success) return a.url as string;
+        }
+    }
+    return undefined;
+}
+
 export interface BrowserSessionReply {
     ok: boolean;
     error?: string;

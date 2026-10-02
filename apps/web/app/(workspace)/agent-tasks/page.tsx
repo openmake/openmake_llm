@@ -47,7 +47,7 @@ import { DiffView } from "@/components/chat/diff-view";
 import { PlanEditor } from "@/components/agent-tasks/plan-editor";
 import { BrowserTakeover } from "@/components/agent-tasks/browser-takeover";
 import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
-import { onAgentTaskChange } from "@/lib/agent-task-change";
+import { onAgentTaskChange, onOpenAgentTask } from "@/lib/agent-task-change";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -1213,6 +1213,8 @@ export default function AgentTasksPage() {
     const id = new URLSearchParams(window.location.search).get("task");
     if (id) setDetailTaskId(id);
   }, []);
+  // 이미 이 화면에 있을 때 통합 상태 패널에서 작업을 누른 경우 — 주소만 바뀌므로 알림으로 연다.
+  useEffect(() => onOpenAgentTask(setDetailTaskId), []);
 
   async function handleCancel(task: AgentTask) {
     if (!window.confirm(t("cancelConfirm", { goal: task.goal.slice(0, 40) }))) return;

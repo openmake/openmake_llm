@@ -6,7 +6,7 @@ import { Activity, ChevronDown, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAppStore } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
-import { onAgentTaskChange } from "@/lib/agent-task-change";
+import { onAgentTaskChange, requestOpenAgentTask } from "@/lib/agent-task-change";
 import { summarizeActivity, type ActivityApproval, type ActivityTask } from "@/lib/activity-summary";
 import { ACTIVITY_OPEN_POLL_MS, ACTIVITY_POLL_MS } from "@/lib/constants/ui-limits";
 import { cn } from "@/lib/utils";
@@ -68,7 +68,7 @@ export function ActivityStatus() {
               "ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white",
               summary.needsInput.length > 0 ? "bg-warn" : "bg-accent",
             )}
-            title={t("badge", { needs: summary.needsInput.length, running: summary.running.length + (chatGenerating ? 1 : 0) })}
+            title={t("badge", { needs: summary.needsInput.length, running: summary.badge - summary.needsInput.length })}
           >
             {summary.badge}
           </span>
@@ -97,7 +97,7 @@ export function ActivityStatus() {
               <p className="px-2 pt-1 text-[11px] font-medium text-accent">{t("running")}</p>
               {chatGenerating && <Link href="/" className={itemClass}>{t("chatGenerating")}</Link>}
               {summary.running.map((r) => (
-                <Link key={r.id} href={`/agent-tasks?task=${encodeURIComponent(r.id)}`} className={itemClass}>
+                <Link key={r.id} href={`/agent-tasks?task=${encodeURIComponent(r.id)}`} onClick={() => requestOpenAgentTask(r.id)} className={itemClass}>
                   <span className="line-clamp-2">{r.goal}</span>
                   <span className="block text-[11px] text-faint">
                     {t(`status.${r.status}`)}{r.progress > 0 ? ` · ${Math.round(r.progress)}%` : ""}
@@ -111,7 +111,7 @@ export function ActivityStatus() {
             <section>
               <p className="px-2 pt-1 text-[11px] font-medium text-faint">{t("recent")}</p>
               {summary.recent.map((r) => (
-                <Link key={r.id} href={`/agent-tasks?task=${encodeURIComponent(r.id)}`} className={itemClass}>
+                <Link key={r.id} href={`/agent-tasks?task=${encodeURIComponent(r.id)}`} onClick={() => requestOpenAgentTask(r.id)} className={itemClass}>
                   <span className="line-clamp-2">{r.goal}</span>
                   <span className={cn("block text-[11px]", r.status === "completed" ? "text-success" : r.status === "failed" ? "text-danger" : "text-faint")}>
                     {t(`status.${r.status}`)}

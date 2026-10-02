@@ -7,7 +7,8 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 const getAgentTask = jest.fn();
-jest.mock('../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getAgentTask }) }));
+const getAgentTaskSteps = jest.fn(async (): Promise<unknown[]> => []);
+jest.mock('../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getAgentTask, getAgentTaskSteps }) }));
 jest.mock('../../auth/ownership', () => ({ assertResourceOwnerOrAdmin: jest.fn() }));
 jest.mock('../../services/AuditService', () => ({ getAuditService: () => ({ logAudit: jest.fn(async () => undefined) }) }));
 const startBrowserSession = jest.fn(async () => undefined);
@@ -74,6 +75,16 @@ describe('POST 넘겨받기', () => {
         await handler('post', BASE)(req({ url: 'https://example.com/login' }), res);
         expect(res.statusCode).toBe(201);
         expect(startBrowserSession).toHaveBeenCalledWith('t1', workdir, { startUrl: 'https://example.com/login' });
+    });
+    it('주소를 주지 않으면 에이전트가 마지막으로 연 주소에서 시작한다', async () => {
+        getAgentTaskSteps.mockResolvedValueOnce([
+            { tool_name: 'browser', tool_args: { actions: [{ type: 'goto', url: 'https://a.example/1' }] } },
+            { tool_name: 'bash', tool_args: { command: 'ls' } },
+            { tool_name: 'browser', tool_args: { actions: [{ type: 'goto', url: 'https://b.example/login' }, { type: 'extractText' }] } },
+        ]);
+        const res = mockRes();
+        await handler('post', BASE)(req({}), res);
+        expect(startBrowserSession).toHaveBeenCalledWith('t1', workdir, { startUrl: 'https://b.example/login' });
     });
     it('http(s) 가 아닌 시작 주소는 400', async () => {
         const res = mockRes();

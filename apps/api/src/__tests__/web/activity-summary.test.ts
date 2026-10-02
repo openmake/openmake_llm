@@ -56,12 +56,22 @@ describe('summarizeActivity', () => {
 
     it('배지는 입력 필요 + 진행 중(채팅 생성 포함) 개수', () => {
         const s = summarizeActivity({
-            tasks: [t('a', 'running'), t('b', 'completed', { completed_at: new Date(NOW - 1000).toISOString() })],
-            approvals: [{ approvalId: 'p1', taskId: 'a', toolName: 'bash' }],
+            tasks: [t('a', 'running'), t('c', 'paused'), t('b', 'completed', { completed_at: new Date(NOW - 1000).toISOString() })],
+            approvals: [{ approvalId: 'p1', taskId: 'c', toolName: 'bash' }],
             chatGenerating: true, now: NOW,
         });
         expect(s.chatGenerating).toBe(true);
-        expect(s.badge).toBe(3); // 승인 1 + 작업 1 + 채팅 1
+        expect(s.badge).toBe(3); // 승인 1 + 작업 1(a) + 채팅 1
+    });
+
+    it('입력을 기다리며 멈춘 작업은 배지에서 한 번만 센다(목록에는 둘 다 나온다)', () => {
+        const s = summarizeActivity({
+            tasks: [t('a', 'paused')],
+            approvals: [{ approvalId: 'p1', taskId: 'a', toolName: 'bash' }, { approvalId: 'p2', taskId: 'a', toolName: 'browser' }],
+            chatGenerating: false, now: NOW,
+        });
+        expect(s.running.map((r) => r.id)).toEqual(['a']);
+        expect(s.badge).toBe(2); // 승인 2건 — 멈춘 작업 a 는 따로 세지 않는다
     });
 
     it('아무 일도 없으면 전부 비어 있고 배지는 0', () => {

@@ -1,6 +1,6 @@
 import {
     browserSessionContainerName, buildBrowserSessionRunArgs, buildBrowserSessionExecArgs,
-    browserSessionInputSchema, browserSessionStartSchema, BROWSER_SESSION_SCRIPT,
+    browserSessionInputSchema, browserSessionStartSchema, BROWSER_SESSION_SCRIPT, lastBrowserUrl,
 } from './browser-session';
 import { getTaskSandboxConfig, BROWSER_SESSION } from '../../config/task-sandbox';
 
@@ -82,6 +82,16 @@ describe('browser-session (사용자가 넘겨받는 브라우저)', () => {
             expect(ok({ op: 'type', text: 'a'.repeat(BROWSER_SESSION.TEXT_MAX + 1) })).toBe(false);
             expect(ok({ op: 'key', key: 'Enter; rm -rf' })).toBe(false);
         });
+    });
+
+    it('lastBrowserUrl — 마지막 browser 호출의 마지막 goto, http(s) 만', () => {
+        expect(lastBrowserUrl([])).toBeUndefined();
+        expect(lastBrowserUrl([{ tool_name: 'browser', tool_args: { actions: [{ type: 'goto', url: 'file:///etc/passwd' }] } }])).toBeUndefined();
+        expect(lastBrowserUrl([
+            { tool_name: 'browser', tool_args: { actions: [{ type: 'goto', url: 'https://a.example' }, { type: 'goto', url: 'https://b.example' }] } },
+            { tool_name: 'browser', tool_args: { actions: 'bad' } },
+            { tool_name: 'bash', tool_args: null },
+        ])).toBe('https://b.example');
     });
 
     it('browserSessionStartSchema — 시작 주소는 선택, 있으면 http(s)', () => {
