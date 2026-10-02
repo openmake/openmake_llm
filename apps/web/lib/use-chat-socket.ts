@@ -9,12 +9,13 @@ import { nextFollowup } from "./followup-queue";
 import { acceptStreamEvent, cursorAfterResume, resumeCursorFields, EMPTY_STREAM_CURSOR, type StreamCursor } from "./ws-seq";
 import { discardOnReset, discardOnSend, filterStreamEvent, EMPTY_DISCARD, type StreamDiscardState } from "./stream-discard";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "./store";
-import { ApiClient, csrfHeaders } from "./api-client";
+import { ApiClient, csrfHeaders, refreshOnce } from "./api-client";
 
 import { gaEvent, GA_EVENTS } from "./analytics";
 import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
 import { announceAgentTaskChange } from "./agent-task-change";
+import { AUTH_RESTORED_EVENT } from "./auth-sync";
 import { encodeMcpResources, type McpResourcePayload } from "@/components/chat/mcp-resource-card";
 
 // 배포 감지·토큰 갱신 상태는 소켓 재연결/훅 재마운트 간에도 유지되어야 하므로 모듈 레벨에 둔다.
@@ -315,13 +316,13 @@ export function useChatSocket() {
     const refreshAndReconnect = () => {
       if (moduleTokenRefreshing) return;
       moduleTokenRefreshing = true;
-      void ApiClient.post("/api/auth/refresh", undefined, { redirectOnUnauthorized: false })
-        .then(() => {
+      // 만료 경고는 같은 토큰을 쓰는 모든 탭에 동시에 온다 — 탭 간 잠금이 걸린 refreshOnce 로 보낸다.
+      void refreshOnce()
+        .then((ok) => {
+          // 갱신 실패(세션 만료 등)면 재연결하지 않는다 — 다음 만료 경고/REST 401 인터셉트 흐름에 위임
+          if (!ok) return;
           if (useAppStore.getState().isGenerating) reconnectAfterRefreshRef.current = true;
           else reconnectNow();
-        })
-        .catch(() => {
-          /* 갱신 실패(세션 만료 등) — 다음 만료 경고/REST 401 인터셉트 흐름에 위임 */
         })
         .finally(() => {
           moduleTokenRefreshing = false;
@@ -656,6 +657,21 @@ export function useChatSocket() {
       wsRef.current?.close();
     };
   }, [connect]);
+
+  // 세션 복원(auth-sync 의 refresh) 뒤 재핸드셰이크 — 쿠키 없이 붙은 게스트 소켓을 새 쿠키로 다시 연다.
+  // 스트리밍 중이면 종료 후로 미룬다(token_warning 갱신과 같은 규칙).
+  useEffect(() => {
+    const onAuthRestored = () => {
+      if (useAppStore.getState().isGenerating) {
+        reconnectAfterRefreshRef.current = true;
+        return;
+      }
+      reconnectRef.current = 0;
+      wsRef.current?.close();
+    };
+    window.addEventListener(AUTH_RESTORED_EVENT, onAuthRestored);
+    return () => window.removeEventListener(AUTH_RESTORED_EVENT, onAuthRestored);
+  }, []);
 
   // 반환값: 실제 전송 여부 — 재생성(resend) 경로가 히스토리 되감기 원복 판단에 사용.
   const sendChat = useCallback(

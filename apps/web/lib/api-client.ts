@@ -8,3 +8,5 @@
 export { ApiClient, ApiError } from "@openmake/api-client";
 // SSE 등 ApiClient 로 처리 못 하는 직접 fetch 에서 CSRF 헤더 주입용(enforce 모드 대비).
 export { csrfHeaders } from "@openmake/api-client";
+// 401 인터셉트와 같은 single-flight refresh — 따로 fetch 하면 토큰 로테이션이 경합해 세션이 지워진다.
+export { refreshOnce } from "@openmake/api-client";
