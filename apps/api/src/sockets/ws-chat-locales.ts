@@ -142,7 +142,27 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
     },
 };
 
+/**
+ * 외부 provider 가 요청 자체를 거절한 응답(HTTP 400) — 다시 시도해도 같으므로 "일시적 오류·잠시 후 다시 시도" 안내를 쓰지 않는다.
+ * (400 은 로컬로 폴백하지 않아 이 문구가 사용자에게 그대로 보인다.)
+ */
+export const WS_PROVIDER_REJECTED_MESSAGES: Record<string, string> = {
+    ko: '선택한 모델이 이 요청을 처리할 수 없다고 응답했습니다. 다시 시도해도 같은 결과이니 다른 모델을 선택하거나 요청 내용을 바꿔 주세요.',
+    en: 'The selected model rejected this request. Retrying will give the same result — choose another model or change the request.',
+    ja: '選択したモデルがこのリクエストを処理できないと応答しました。再試行しても同じ結果になるため、別のモデルを選ぶかリクエスト内容を変更してください。',
+    zh: '所选模型表示无法处理此请求。重试结果相同,请选择其他模型或修改请求内容。',
+    es: 'El modelo seleccionado rechazó esta solicitud. Reintentar dará el mismo resultado: elija otro modelo o cambie la solicitud.',
+    de: 'Das ausgewählte Modell hat diese Anfrage abgelehnt. Ein erneuter Versuch führt zum selben Ergebnis – wählen Sie ein anderes Modell oder ändern Sie die Anfrage.',
+    fr: 'Le modèle sélectionné a rejeté cette requête. Réessayer donnera le même résultat : choisissez un autre modèle ou modifiez la requête.',
+};
+
 /** 언어 코드로 템플릿 맵에서 값을 조회 — 미지원 언어는 en, 그것도 없으면 첫 항목 fallback */
 export function getLocalizedTemplate<T>(map: Record<string, T>, lang: string): T {
     return map[lang] || map['en'] || Object.values(map)[0];
+}
+
+/** 외부 provider 오류의 사용자 안내 — 코드별 문구, 단 요청이 거절된 400(UPSTREAM_ERROR + status 400)은 거절 안내 */
+export function providerErrorMessage(lang: string, code: ProviderErrorCode, status?: number): string {
+    if (code === 'UPSTREAM_ERROR' && status === 400) return getLocalizedTemplate(WS_PROVIDER_REJECTED_MESSAGES, lang);
+    return getLocalizedTemplate(WS_PROVIDER_ERROR_MESSAGES, lang)[code];
 }

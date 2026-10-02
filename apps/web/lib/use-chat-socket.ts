@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile, WsStreamEnvelope } from "@openmake/shared-types";
 import { nextFollowup } from "./followup-queue";
 import { acceptStreamEvent, cursorAfterResume, resumeCursorFields, EMPTY_STREAM_CURSOR, type StreamCursor } from "./ws-seq";
+import { discardOnReset, discardOnSend, filterStreamEvent, EMPTY_DISCARD, type StreamDiscardState } from "./stream-discard";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "./store";
 import { ApiClient, csrfHeaders } from "./api-client";
 
@@ -131,6 +132,9 @@ export function useChatSocket() {
   // 이어받기 커서(F19.11) — 마지막으로 받은 스트림 이벤트의 streamId·seq. resume 에 실어 중복 없이 이어받고,
   // 재생·재연결로 다시 온 seq <= lastSeq 이벤트는 무시한다(서버 ws-stream-registry 와 페어).
   const streamCursorRef = useRef<StreamCursor>(EMPTY_STREAM_CURSOR);
+  // 대화를 지운 시점에 흐르던 답변 걸러내기 — 이번 요청의 스트림 id 와 버릴 스트림
+  const activeStreamIdRef = useRef<string | null>(null);
+  const discardRef = useRef<StreamDiscardState>(EMPTY_DISCARD);
   // 에이전트 작업 진행 이벤트의 마지막 순번 — 재연결 때 agent_task_resume 에 실어 놓친 이벤트만 다시 받는다
   // (서버 agent-task-progress-log 와 페어). 순번이 없는 서버(구버전)면 null 로 남아 종전처럼 동작한다.
   const lastTaskSeqRef = useRef<number | null>(null);
@@ -330,6 +334,14 @@ export function useChatSocket() {
         data = JSON.parse(ev.data) as WsServerEvent;
       } catch {
         return;
+      }
+      // 대화를 지운 뒤에 도착한 그 답변의 이벤트(종료 포함)는 버린다 — 빈 새 대화에 이전 답변이 써지지 않게
+      {
+        const streamId = (data as WsStreamEnvelope).streamId;
+        const filtered = filterStreamEvent(discardRef.current, streamId);
+        discardRef.current = filtered.state;
+        if (filtered.drop) return;
+        if (typeof streamId === "string") activeStreamIdRef.current = streamId;
       }
       if (data.type === "stream_resume") {
         streamCursorRef.current = cursorAfterResume(streamCursorRef.current, data);
@@ -673,6 +685,8 @@ export function useChatSocket() {
       useAppStore.setState({ turnToolCalls: [] }); // 새 질문 — 이전 답변의 미확정 도구 표시를 비운다
       setStreaming(true); // assistant placeholder 는 첫 token 에서 생성, isGenerating=true
 
+      activeStreamIdRef.current = null; // 이번 요청의 스트림 id 는 첫 이벤트에서 안다
+      discardRef.current = discardOnSend(discardRef.current);
       const payload: WsChatRequest = {
         // 멱등 키(140) — 전송마다 새로 발급. 재생성(regenerate)도 의도된 새 요청이라 새 id.
         clientRequestId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : undefined,
@@ -729,6 +743,13 @@ export function useChatSocket() {
   const abort = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ type: "abort" }));
   }, []);
+
+  // 답변이 흐르는 도중 대화를 지우면(새 대화 등) 서버 생성을 멈추고, 이미 오고 있는 그 답변의 이벤트는 버린다.
+  useEffect(() => useAppStore.subscribe((state, prev) => {
+    if (state.chatEpoch === prev.chatEpoch) return;
+    discardRef.current = discardOnReset(discardRef.current, prev.isGenerating, activeStreamIdRef.current);
+    if (prev.isGenerating && wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify({ type: "abort" }));
+  }), []);
 
   // 에이전트 토글 ON: 메시지를 목표(goal)로 자율 에이전트 작업을 생성·실행한다.
   // (채팅 WS 가 아니라 REST POST /api/agent-tasks + /execute — 진행상황은 '에이전트 작업' 페이지)
