@@ -56,7 +56,6 @@ backend/api/cache/
 # Runtime data (databases, user data, usage stats)
 /data/
 !/data/.gitkeep
-backend/api/data/
 apps/api/data/
 
 # Legacy backup files
