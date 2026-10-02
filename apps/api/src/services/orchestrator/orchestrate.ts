@@ -16,6 +16,7 @@ import { ArtifactRepository } from '../../data/repositories/artifact-repository'
 import { expandArtifactPlaceholders, findArtifactPlaceholderIds } from '../../llm/artifact-parser';
 import type { ChatMessageRequest } from '../chat-service-types';
 import { planRequest } from './planner';
+import { runMediaGateShadow } from './media-gate';
 import { validatePlan, type ValidatedPlan } from './plan-schema';
 import { executePlan } from './executor';
 import { preflightPlan } from './preflight';
@@ -287,12 +288,16 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
     await collectPendingJobs(userId, req.sessionId, attachments);
     onProgress?.({ type: 'orchestrator_status', phase: 'planning' });
 
+    // 미디어 게이트(셰도우) — Planner 와 나란히 돌린다. 결과는 기록에만 쓰고 기다리지 않는다(답변 시작을 늦추지 않음).
+    const gate = runMediaGateShadow({ message: req.message ?? '', attachmentKinds: [...attachments.values()].map((a) => a.kind), signal: input.signal })
+        .catch(() => undefined);
     const planned = await planRequest({
         message: req.message ?? '', attachments: toPlannerMeta(attachments), recentTurns: recentTurns(req), lang, userId, signal: input.signal,
     });
     const record = (partial: Parameters<OrchestratorRunsRepository['insert']>[0]) => {
         if (!ORCHESTRATOR.SHADOW_ENABLED) return;
-        void new OrchestratorRunsRepository(getPool()).insert(partial).catch((e) => logger.debug(`셰도우 기록 실패: ${e instanceof Error ? e.message : String(e)}`));
+        void gate.then((g) => new OrchestratorRunsRepository(getPool()).insert({ ...partial, ...g }))
+            .catch((e) => logger.debug(`셰도우 기록 실패: ${e instanceof Error ? e.message : String(e)}`));
     };
 
     if (planned.error === 'cancelled') {

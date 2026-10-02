@@ -24,7 +24,8 @@ const NON_CHAT_MODES: ReadonlySet<string> = new Set([
 const EMBEDDING_ID_PATTERNS = ['bge', 'embed', 'embedding'];
 // ⚠️ acestep(음악 생성)은 `/v1/chat/completions` 를 받지만 호출 한 번이 곧 음악 생성이다 —
 //    role='capability' 로 분류해 프로브 ping 대상에서 빼야 한다(`local-models.ts` 프로브 루프).
-const NON_CHAT_ID_PATTERNS = ['rerank', 'sdxl', 'stable-diffusion', 'dall-e', 'dalle', 'whisper', 'tts', 'clip', 'acestep'];
+// ⚠️ jev-decision(의사결정 어댑터)은 글을 쓰지 않고 선택지 logprob 만 낸다 — 채팅 목록에 뜨면 안 된다(`config/decision.ts`).
+const NON_CHAT_ID_PATTERNS = ['rerank', 'sdxl', 'stable-diffusion', 'dall-e', 'dalle', 'whisper', 'tts', 'clip', 'acestep', 'jev-decision'];
 
 function upstreamBasename(model: string | undefined): string | undefined {
     if (!model) return undefined;

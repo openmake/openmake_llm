@@ -25,6 +25,16 @@ model_list:
       api_base: os.environ/QWEN_VLLM_API_BASE      # http://<VLLM_TAILSCALE_HOST>:8002/v1
       api_key: os.environ/VLLM_API_KEY
 
+  # 의사결정 (JEV-27B-VL LoRA 어댑터, DGX :8002 — qwen 과 같은 엔진·같은 포트). 텍스트를 생성하지 않는다:
+  # /v1/completions 에 max_tokens 1 · logprobs · allowed_token_ids 로 불러 선택지별 logprob 을 받는다.
+  # 앱은 이 모델을 role='capability' 로 분류해 채팅 목록과 주기 프로브에서 뺀다. 서빙하지 않는 호스트에서는
+  # 호출이 실패할 뿐이다(앱의 판정은 fail-open).
+  - model_name: jev-decision
+    litellm_params:
+      model: openai/jev-decision
+      api_base: os.environ/QWEN_VLLM_API_BASE      # http://<VLLM_TAILSCALE_HOST>:8002/v1
+      api_key: os.environ/VLLM_API_KEY
+
   - model_name: bge-m3
     litellm_params:
       model: openai/bge-m3
