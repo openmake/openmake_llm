@@ -373,8 +373,7 @@ export async function handleChatMessage(
                 out({
                     type: 'mcp_tool_result',
                     toolName: event.toolName,
-                    ...(event.resources.length ? { resources: event.resources } : {}),
-                    ...(event.summary ? { summary: event.summary } : {}), // 도구 카드(성공·실패, 시간, 인자·결과 앞부분)
+                    ...(event.resources.length ? { resources: event.resources } : {}), ...(event.summary ? { summary: event.summary } : {}), // summary: 도구 카드
                     messageId,
                 });
             },
