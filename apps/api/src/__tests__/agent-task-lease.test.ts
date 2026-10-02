@@ -7,7 +7,7 @@ type ChatAdvanced = { tools?: unknown[] };
 const chatCalls: { conversation: { role: string; content?: unknown }[]; advanced: ChatAdvanced }[] = [];
 
 /** 매 턴 도구를 호출해 terminate 없이 상한까지 소진시킨다. 토큰량은 테스트별로 조절. */
-let tokensPerTurn = 5;
+const tokensPerTurn = 5;
 const mockChat = jest.fn(async (
     conversation: { role: string; content?: unknown }[],
     _model?: unknown, _opts?: unknown, advanced?: ChatAdvanced,
