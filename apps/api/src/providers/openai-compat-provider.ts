@@ -34,6 +34,7 @@ import { createPinnedFetch } from '../security/ssrf-guard';
 import { needsExplicitPromptCache, toOpenAIMessages, toOpenAITools } from './openai-compat-mapping';
 import { ToolNameCodec } from './tool-name-codec';
 import { PseudoToolCallGate } from '../llm/pseudo-tool-call-parser';
+import { pingCredential } from './credential-ping';
 
 const logger = createLogger('OpenAICompatProvider');
 
@@ -384,14 +385,12 @@ export class OpenAICompatProvider implements IProvider {
     async validateCredentials(): Promise<{ ok: boolean; error?: string; latencyMs?: number }> {
         const start = Date.now();
         try {
-            await this.catalogClient.models.list();
-            return { ok: true, latencyMs: Date.now() - start };
+            const list = await this.catalogClient.models.list();
+            // 목록 조회만으로는 키를 확인하지 못한다 — 1토큰 호출로 키 거절 여부를 본다(providers/credential-ping)
+            const rejected = await pingCredential(this.catalogClient, this.id, list.data.map((m) => m.id), mapOpenAIError);
+            return rejected ? { ok: false, error: rejected, latencyMs: Date.now() - start } : { ok: true, latencyMs: Date.now() - start };
         } catch (err) {
-            return {
-                ok: false,
-                error: err instanceof Error ? err.message : String(err),
-                latencyMs: Date.now() - start,
-            };
+            return { ok: false, error: err instanceof Error ? err.message : String(err), latencyMs: Date.now() - start };
         }
     }
 

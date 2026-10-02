@@ -16,6 +16,8 @@
  * LLM 호출 및 에이전트 관련 타임아웃
  */
 export const LLM_TIMEOUTS = {
+    /** 외부 키 검증의 1토큰 확인 호출 상한 (ms). 넘으면 "키 문제 아님"으로 본다. EXTERNAL_KEY_PING_TIMEOUT_MS */
+    CREDENTIAL_PING_TIMEOUT_MS: parseInt(process.env.EXTERNAL_KEY_PING_TIMEOUT_MS || '15000', 10),
     /** LLM 라우터 응답 대기 타임아웃 (ms) */
     ROUTING_TIMEOUT_MS: 5000,
     /** Deep Research 개별 스크래핑 타임아웃 (ms) */
