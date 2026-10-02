@@ -431,8 +431,11 @@ export class TaskSandbox implements TaskExecutor {
      * false 면 산출물 회수(다운로드)를 위해 workspace 를 보존하고 컨테이너만 제거한다.
      */
     async cleanup(removeWorkspace = true): Promise<void> {
-        // 넘겨받은 브라우저 세션이 남아 있으면 함께 내린다(작업이 끝났는데 컨테이너가 유휴 상한까지 남지 않게).
-        await import('./browser-session').then((m) => m.stopBrowserSession(this.taskId, this.cfg)).catch(() => { /* best-effort */ });
+        // 작업 공간을 지울 때만 넘겨받은 브라우저 세션을 내린다(세션이 그 공간을 쓴다). 보존할 때는 두고 유휴 상한에 맡긴다 —
+        // 승인 대기로 주차될 때도 이 정리가 도는데, 그때가 바로 사용자가 넘겨받아 조작하는 때다.
+        if (removeWorkspace) {
+            await import('./browser-session').then((m) => m.stopBrowserSession(this.taskId, this.cfg)).catch(() => { /* best-effort */ });
+        }
         await runProcess(this.cfg.dockerPath, ['stop', '-t', '5', this.containerName],
             { timeoutMs: 15_000, outputCap: 4096 });
         await runProcess(this.cfg.dockerPath, ['rm', '-f', this.containerName],

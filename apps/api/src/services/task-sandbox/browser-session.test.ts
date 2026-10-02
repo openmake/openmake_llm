@@ -104,6 +104,25 @@ describe('browser-session (사용자가 넘겨받는 브라우저)', () => {
         await rm(root, { recursive: true, force: true });
     });
 
+    it('작업 공간을 보존하는 정리(승인 대기 주차 등)는 넘겨받은 세션을 내리지 않는다 — 지울 때만 내린다', async () => {
+        const { mkdtemp, writeFile, readFile, chmod, rm } = await import('fs/promises');
+        const { tmpdir } = await import('os');
+        const { join } = await import('path');
+        const { TaskSandbox } = await import('./sandbox');
+        const root = await mkdtemp(join(tmpdir(), 'omk-bs-clean-'));
+        // docker 대역 — 받은 인자를 기록하고, inspect 에는 "돌고 있다"고 답한다
+        const fake = join(root, 'docker.sh');
+        const log = join(root, 'calls.log');
+        await writeFile(fake, `#!/bin/sh\necho "$@" >> "${log}"\n[ "$1" = inspect ] && echo true\nexit 0\n`);
+        await chmod(fake, 0o755);
+        const sb = new TaskSandbox('t1', { ...cfg, workspaceRoot: join(root, 'ws'), dockerPath: fake });
+        await sb.cleanup(false);
+        expect(await readFile(log, 'utf8')).not.toContain('omk-browser-t1');
+        await sb.cleanup(true);
+        expect(await readFile(log, 'utf8')).toContain('omk-browser-t1');
+        await rm(root, { recursive: true, force: true });
+    }, 30_000);
+
     it('세션 스크립트는 문법이 맞는 ES 모듈이다', async () => {
         const { mkdtemp, writeFile, rm } = await import('fs/promises');
         const { tmpdir } = await import('os');
