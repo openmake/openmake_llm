@@ -1190,7 +1190,8 @@ dgx_apply() { # $1=llm dir $2=env $3=host $4=vLLM key
     dotenv_set "$envf" SSRF_ALLOWED_HOSTS "$(csv_union "$(dotenv_get "$envf" SSRF_ALLOWED_HOSTS)" "$host")"
     chat="$(dgx_http_code "$host" "$DGX_CHAT_PORT" /v1/models "$key")"
     embed="$(dgx_http_code "$host" "$DGX_EMBED_PORT" /v1/models "$key")"
-    music="$(dgx_http_code "$host" "$DGX_MUSIC_PORT" / "")"
+    # ACE-Step 은 루트(/)에 핸들러가 없어 404 를 준다 — 살아 있어도 "음악 :8005=404" 로 찍혔다. /health 로 본다.
+    music="$(dgx_http_code "$host" "$DGX_MUSIC_PORT" /health "")"
     DGX_LINE="채팅 :$DGX_CHAT_PORT=$chat · 임베딩 :$DGX_EMBED_PORT=$embed · 음악 :$DGX_MUSIC_PORT=$music"
     case "$chat" in
         200) log_ok "DGX 연결 확인 ($DGX_LINE)" ;;

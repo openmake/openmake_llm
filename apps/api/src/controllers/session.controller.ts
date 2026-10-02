@@ -18,6 +18,7 @@ import { isFolderOwnedBy } from '../data/conversation-folders';
 import { collectHiddenSessionIds } from '../services/chat-service/turn-integrations';
 import type { SessionListFilter } from '../data/conversation-sessions';
 import { PAGINATION } from '../config/http-data-limits';
+import { isClaimableAnonSessionId } from '../utils/anon-session-id';
 
 const log = createLogger('SessionController');
 
@@ -204,9 +205,8 @@ class SessionController {
              }
 
              // 🔒 Phase 3 보안 패치: anonSessionId 형식 검증
-             // UUID v4 형식만 허용하여 무작위 대입 공격 방지
-             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-             if (!uuidRegex.test(anonSessionId)) {
+             // UUID v4(+ 예전 웹 클라이언트 형식)만 허용하여 무작위 대입 공격 방지 — utils/anon-session-id
+             if (!isClaimableAnonSessionId(anonSessionId)) {
                  res.status(400).json(badRequest('유효하지 않은 세션 ID 형식입니다'));
                  return;
              }

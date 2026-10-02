@@ -18,6 +18,8 @@ import { planJsonSchemaFor, plannerCapabilityLines, type ExecutionSnapshot } fro
 import type { ChatMessage, FormatOption } from '../../llm/types';
 import { createLogger } from '../../utils/logger';
 import { combineSignals } from './http-call';
+import { createClient } from '../../llm';
+import { getConfig } from '../../config/env';
 
 const logger = createLogger('OrchestratorPlanner');
 
@@ -59,7 +61,26 @@ async function defaultLlmCall(userId: string | undefined): Promise<{ call: Plann
     return { call, model: resolved.fullId };
 }
 
-export async function planRequest(input: PlannerInput, llm?: { call: PlannerLlmCall; model: string }, snapshot?: ExecutionSnapshot): Promise<PlannerOutcome> {
+/** 전송 오류 때 넘어갈 로컬 기본 모델 — 꺼져 있으면 null */
+async function localFallbackCall(userId: string | undefined): Promise<{ call: PlannerLlmCall; model: string } | null> {
+    if (!ORCHESTRATOR.PLANNER_LOCAL_FALLBACK) return null;
+    const tag = getConfig().llmDefaultModel;
+    const client = createClient({ model: tag, userId });
+    const call: PlannerLlmCall = async (messages, format, signal) => {
+        const r = await client.chat(
+            messages,
+            { num_predict: ORCHESTRATOR.PLANNER_MAX_TOKENS, temperature: ORCHESTRATOR_PLANNER.TEMPERATURE },
+            undefined,
+            { think: false, format, signal },
+        );
+        return r.content ?? '';
+    };
+    return { call, model: `local-llm:${tag}` };
+}
+
+type PlannerFallback = () => Promise<{ call: PlannerLlmCall; model: string } | null>;
+
+export async function planRequest(input: PlannerInput, llm?: { call: PlannerLlmCall; model: string }, snapshot?: ExecutionSnapshot, fallback?: PlannerFallback): Promise<PlannerOutcome> {
     const startedAt = Date.now();
     const deadline = startedAt + ORCHESTRATOR.PLANNER_TOTAL_DEADLINE_MS;
     // 한 요청의 프롬프트·schema·검증은 이 스냅샷 하나를 본다(P03)
@@ -89,7 +110,10 @@ export async function planRequest(input: PlannerInput, llm?: { call: PlannerLlmC
 
     let lastError = '';
     let attempts = 0;
-    const maxAttempts = 1 + Math.max(0, ORCHESTRATOR.PLANNER_RETRIES);
+    let maxAttempts = 1 + Math.max(0, ORCHESTRATOR.PLANNER_RETRIES);
+    // 주입된 LLM(테스트)에는 기본 폴백을 붙이지 않는다 — 실제 모델을 부르게 된다
+    const fallbackFn: PlannerFallback | null = fallback ?? (llm ? null : () => localFallbackCall(input.userId));
+    let fellBack = false;
     while (attempts < maxAttempts) {
         // 매 시도 전 취소·전체 deadline 검사 — 사용자 취소는 timeout/fallback 과 구분해 새 호출을 시작하지 않는다
         if (input.signal?.aborted) return { plan: null, model: resolved.model, ms: Date.now() - startedAt, error: 'cancelled', attempts, ...meta };
@@ -129,6 +153,15 @@ export async function planRequest(input: PlannerInput, llm?: { call: PlannerLlmC
             // 시간 초과·전송 오류는 같은 모델에 다시 물어도 대개 같다(과부하·다운) — 재시도는 계획 검증 실패에만 쓴다.
             // 실측(2026-09-12~15): 로컬 planner 실패 3건이 전부 timeout → 재시도 timeout 으로 30초 deadline 을 다 썼고,
             // nvidia planner 는 20초 timeout 뒤 재시도가 503 과부하였다.
+            // 다른 모델(로컬 기본)로는 한 번 넘겨 본다 — 외부 planner 장애 한 번에 미디어 기능이 통째로 빠지지 않게.
+            if (!fellBack && fallbackFn) {
+                const fb = await fallbackFn().catch(() => null);
+                if (fb && fb.model !== resolved.model) {
+                    logger.warn(`[Planner] attempt ${attempts} 실패: ${lastError} — ${fb.model} 로 한 번 더`);
+                    fellBack = true; resolved = fb; messages.length = 2; maxAttempts++;
+                    continue;
+                }
+            }
             logger.warn(`[Planner] attempt ${attempts} 실패: ${lastError} — 재시도 없이 종전 경로`);
             break;
         }

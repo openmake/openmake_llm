@@ -72,3 +72,29 @@ describe('출력 상한에 잘린 계획 (2026-09-24 — logfare:gemma-4-26b 파
         expect(r.error).toMatch(/JSON 파싱 실패\(출력 \d+자\)/);
     });
 });
+
+it('전송 오류면 대체 모델로 한 번 넘겨 계획한다 — 결과에는 실제로 계획한 모델이 남는다', async () => {
+    const failing: PlannerLlmCall = async () => { throw new Error('503 overloaded'); };
+    const ok: PlannerLlmCall = async () => '{"complexity":"simple","tasks":[{"id":"t1","capability":"text.reason"}]}';
+    let fallbackCalls = 0;
+    const r = await planRequest(input, { call: failing, model: 'ext:m' }, undefined, async () => { fallbackCalls++; return { call: ok, model: 'local-llm:q' }; });
+    expect(fallbackCalls).toBe(1);
+    expect(r.plan?.complexity).toBe('simple');
+    expect(r.model).toBe('local-llm:q');
+});
+
+it('대체 모델도 전송 오류면 더 넘기지 않고 fail-open', async () => {
+    const failing: PlannerLlmCall = async () => { throw new Error('503 overloaded'); };
+    let fallbackCalls = 0;
+    const r = await planRequest(input, { call: failing, model: 'ext:m' }, undefined, async () => { fallbackCalls++; return { call: failing, model: 'local-llm:q' }; });
+    expect(fallbackCalls).toBe(1);
+    expect(r.plan).toBeNull();
+});
+
+it('대체 모델이 원래 모델과 같으면 다시 부르지 않는다', async () => {
+    let n = 0;
+    const failing: PlannerLlmCall = async () => { n++; throw new Error('timeout'); };
+    const r = await planRequest(input, { call: failing, model: 'local-llm:q' }, undefined, async () => ({ call: failing, model: 'local-llm:q' }));
+    expect(n).toBe(1);
+    expect(r.plan).toBeNull();
+});
