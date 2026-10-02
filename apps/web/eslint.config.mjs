@@ -6,6 +6,10 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
+    // eslint-plugin-react 7.37.5 의 버전 자동 감지("detect")는 ESLint 10 에서 제거된
+    // context.getFilename() 을 불러 lint 자체가 죽는다 — 버전을 직접 적어 감지를 건너뛴다.
+    // (플러그인이 ESLint 10 을 지원하면 이 settings 를 지울 것)
+    settings: { react: { version: "19" } },
     rules: {
       // React Compiler 기반 규칙 — await 이후 setState까지 이행 추적해, 데이터 페칭
       // 라이브러리 없이 쓰는 표준 "mount 시 load() → setState" 관용구(현재 13개 페이지,
