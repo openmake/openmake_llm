@@ -33,6 +33,8 @@ const ROLE_MODEL_EXCLUDE_PATTERNS: readonly string[] = (
            'flux', 'phoenix-1', 'lucid-origin', 'aura-2', 'nova-3',
            // 2026-09-23 DGX 음악 생성 — chat/completions 를 받지만 응답이 오디오다
            'acestep',
+           // 2026-10-03 DGX 의사결정 어댑터 — 글을 쓰지 않고 선택지 logprob 만 낸다(config/decision.ts)
+           'jev-decision',
            // 2026-10-02 Google AI(Gemini API) 카탈로그 — 영상(Veo)·음악(Lyria)·근거 답변(AQA) 모델
            // (임베딩·Imagen·TTS 는 위 'embed'·'image'·'tts' 가 이미 거른다)
            'veo-', 'lyria', ':aqa', 'native-audio', '-live', 'robotics', 'computer-use']

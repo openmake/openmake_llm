@@ -87,6 +87,10 @@ describe('isChatCapableModel (chatOnly — 컴포저/설정 기본 모델 목록
             expect(isChatCapableModel({ modelId: `logfare:${id}` })).toBe(true);
         }
     });
+    it('의사결정 어댑터(jev-decision)는 글을 쓰지 않으므로 제외', () => {
+        expect(isChatCapableModel({ modelId: 'local-llm:jev-decision' })).toBe(false);
+        expect(isChatCapableModel({ modelId: 'local-llm:retired-chat-model' })).toBe(true);
+    });
     it('20B 이하 소형 채팅 모델은 유지 — usableOnly 와 다른 점', () => {
         expect(isChatCapableModel({ modelId: 'openrouter:meta-llama/llama-3.2-1b-instruct' })).toBe(true);
         expect(isChatCapableModel({ modelId: 'bai:qwen3.8-flash' })).toBe(true);
