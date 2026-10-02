@@ -65,9 +65,59 @@ const SKIP_REFRESH_ENDPOINTS = ["/api/auth/refresh", "/api/auth/login"];
  * 탭마다 모듈이 따로라 위 공유는 한 탭 안에서만 통한다. 탭 사이는 Web Locks 로 직렬화한다 —
  * 두 탭의 요청이 5ms 간격으로 나가면 늦은 쪽이 401 을 받고 로그아웃됐다(2026-10-03 재현).
  * 잠금을 기다린 탭은 앞 탭이 받은 새 쿠키로 요청하므로 성공한다. Web Locks 는 보안 컨텍스트
- * (https·localhost)에서만 있다 — 없으면 종전처럼 잠금 없이 보낸다.
+ * (https·localhost)에서만 있다 — http 로 접속한 화면(사내망·tailscale)에서는 localStorage 임대 잠금으로 대신한다.
  */
 const REFRESH_LOCK_NAME = "omk-auth-refresh";
+
+/**
+ * localStorage 임대 잠금 — Web Locks 가 없는 화면용. "쓰고 → 잠깐 기다린 뒤 → 내 것이 남아 있는지 확인".
+ * 두 탭이 동시에 쓰면 나중에 쓴 쪽만 남으므로 한 탭만 통과한다. 탭이 죽어도 임대 만료로 풀린다.
+ * storage 를 못 쓰거나(사생활 보호 모드) 대기 상한을 넘기면 잠금 없이 진행한다 — 갱신을 막지는 않는다.
+ */
+const STORAGE_LOCK_KEY = "omk_auth_refresh_lock";
+const STORAGE_LOCK_LEASE_MS = 10_000;
+const STORAGE_LOCK_SETTLE_MS = 40;
+const STORAGE_LOCK_POLL_MS = 50;
+const STORAGE_LOCK_WAIT_MAX_MS = 15_000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function readStorageLock(): { id: string; exp: number } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(STORAGE_LOCK_KEY) ?? "null") as { id?: unknown; exp?: unknown } | null;
+    return v && typeof v.id === "string" && typeof v.exp === "number" ? { id: v.id, exp: v.exp } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function withStorageLock<T>(fn: () => Promise<T>): Promise<T> {
+  const me = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const deadline = Date.now() + STORAGE_LOCK_WAIT_MAX_MS;
+  try {
+    while (Date.now() < deadline) {
+      const cur = readStorageLock();
+      if (cur && cur.exp > Date.now()) {
+        await sleep(STORAGE_LOCK_POLL_MS);
+        continue;
+      }
+      localStorage.setItem(STORAGE_LOCK_KEY, JSON.stringify({ id: me, exp: Date.now() + STORAGE_LOCK_LEASE_MS }));
+      await sleep(STORAGE_LOCK_SETTLE_MS + Math.random() * STORAGE_LOCK_SETTLE_MS);
+      if (readStorageLock()?.id === me) break;
+    }
+  } catch {
+    /* storage 불가 — 잠금 없이 진행 */
+  }
+  try {
+    return await fn();
+  } finally {
+    try {
+      if (readStorageLock()?.id === me) localStorage.removeItem(STORAGE_LOCK_KEY);
+    } catch {
+      /* noop */
+    }
+  }
+}
 
 let refreshInFlight: Promise<boolean> | null = null;
 
@@ -83,7 +133,7 @@ function sendRefresh(): Promise<boolean> {
 export function refreshOnce(): Promise<boolean> {
   if (!refreshInFlight) {
     const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
-    refreshInFlight = (locks ? locks.request(REFRESH_LOCK_NAME, sendRefresh) : sendRefresh())
+    refreshInFlight = (locks ? locks.request(REFRESH_LOCK_NAME, sendRefresh) : withStorageLock(sendRefresh))
       .catch(() => false)
       .finally(() => {
         refreshInFlight = null;

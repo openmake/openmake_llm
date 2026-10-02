@@ -120,6 +120,19 @@ export interface PutAssignmentInput {
     params?: Record<string, unknown>;
 }
 
+/**
+ * 슬롯과 모델 종류 대조 — 종류를 아는 로컬 모델만(임베딩 모델을 대화 슬롯에, 채팅 모델을 음악 슬롯에 넣는 실수).
+ * 구 역할·기능 배정 엔드포인트도 이 함수를 거친다(role·capability id 가 곧 슬롯 id) — 종전엔 새 슬롯 엔드포인트만
+ * 검사해, 구 경로로는 임베딩·기능 전용 모델을 대화형 역할에 넣을 수 있었다.
+ * @returns 어긋나면 사유, 맞거나 판단할 수 없으면(외부 모델·모르는 슬롯) null
+ */
+export function slotKindReason(slotId: string, fullId: string): string | null {
+    const slot = getModelSlot(slotId);
+    if (!slot || isExternalFullId(fullId)) return null;
+    const tag = toLocalModelTag(fullId);
+    return tag ? slotKindMismatch(slot, tag, findLocalModel(tag)?.role) : null;
+}
+
 /** 슬롯 배정 저장 — 검증 실패는 AppError(400). 전역 스코프면 캐시를 무효화한다. 감사용 previous 를 함께 반환. */
 export async function putAssignment(input: PutAssignmentInput): Promise<{ assignment: ModelSlotAssignment; previous: string | null }> {
     const slot = getModelSlot(input.slotId);
@@ -131,12 +144,8 @@ export async function putAssignment(input: PutAssignmentInput): Promise<{ assign
     const cap: Capability | undefined = slot.capabilities[0];
     let params: Record<string, string> = {};
 
-    // 슬롯과 모델 종류 대조 — 종류를 아는 로컬 모델만(임베딩 모델을 대화 슬롯에, 채팅 모델을 음악 슬롯에 넣는 실수)
-    if (!isExternalFullId(fullId)) {
-        const tag = toLocalModelTag(fullId);
-        const mismatch = tag ? slotKindMismatch(slot, tag, findLocalModel(tag)?.role) : null;
-        if (mismatch) throw new AppError(mismatch, 400, true, 'ASSIGNMENT_INVALID');
-    }
+    const mismatch = slotKindReason(slot.id, fullId);
+    if (mismatch) throw new AppError(mismatch, 400, true, 'ASSIGNMENT_INVALID');
 
     if (slot.kind === 'text') {
         const reason = await validateTextSlotAssignment(input.scope, fullId);

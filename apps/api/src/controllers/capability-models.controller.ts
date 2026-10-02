@@ -30,6 +30,7 @@ import { getAuditService } from '../services/AuditService';
 import { buildCapabilityCatalog } from '../services/capability-catalog';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, badRequest, notFound } from '../utils/api-response';
+import { slotKindReason } from '../services/model-assignments-service';
 
 const log = createLogger('CapabilityModelsController');
 
@@ -108,7 +109,7 @@ export function createCapabilityModelsController(): Router {
         try {
             const body = req.body as z.infer<typeof putSchema>;
             const fullId = body.model.trim();
-            const reason = await validateCapabilityAssignment(userId, fullId, {}, capability);
+            const reason = slotKindReason(capability, fullId) ?? await validateCapabilityAssignment(userId, fullId, {}, capability);
             if (reason) { res.status(400).json(badRequest(reason)); return; }
 
             const params = sanitizeCapabilityParams(capability, body.params);

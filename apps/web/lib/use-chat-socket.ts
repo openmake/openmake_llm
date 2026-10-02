@@ -16,6 +16,7 @@ import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
 import { announceAgentTaskChange } from "./agent-task-change";
 import { AUTH_RESTORED_EVENT } from "./auth-sync";
+import { uuid } from "./local-id";
 import { encodeMcpResources, type McpResourcePayload } from "@/components/chat/mcp-resource-card";
 
 // 배포 감지·토큰 갱신 상태는 소켓 재연결/훅 재마운트 간에도 유지되어야 하므로 모듈 레벨에 둔다.
@@ -708,7 +709,7 @@ export function useChatSocket() {
       discardRef.current = discardOnSend(discardRef.current);
       const payload: WsChatRequest = {
         // 멱등 키(140) — 전송마다 새로 발급. 재생성(regenerate)도 의도된 새 요청이라 새 id.
-        clientRequestId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : undefined,
+        clientRequestId: uuid(), // http 접속에서도 발급한다(randomUUID 는 보안 컨텍스트 전용 — lib/local-id)
         type: "chat",
         message,
         model: s.selectedModel,
@@ -801,7 +802,7 @@ export function useChatSocket() {
         let created: { data?: { task?: { id?: string; status?: string }; deduplicated?: boolean } } | null;
         // 중복 생성 방지 — 이 제출의 키. 재전송(401 갱신 후 재시도 등)되어도 서버는 작업을 한 번만 만든다.
         const idempotencyHeaders: Record<string, string> =
-          typeof crypto !== "undefined" && "randomUUID" in crypto ? { "Idempotency-Key": crypto.randomUUID() } : {};
+          { "Idempotency-Key": uuid() };
         if (totalBinaryBytes > CHUNKED_UPLOAD_THRESHOLD_BYTES) {
           const uploadRefs = [];
           for (const f of binaryParts) {
