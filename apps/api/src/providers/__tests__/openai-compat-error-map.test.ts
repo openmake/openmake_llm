@@ -44,3 +44,16 @@ describe('mapOpenAIError — 잔액 부족 분류', () => {
         expect(mapOpenAIError(httpErr(403, 'forbidden')).code).toBe('INVALID_API_KEY');
     });
 });
+
+describe('mapOpenAIError — 분류되지 않은 400', () => {
+    it('요청 자체를 거절한 400 은 status 400 을 지닌다 — 폴백 판정이 "재시도 무의미"로 보게', () => {
+        const e = mapOpenAIError(httpErr(400, "Unsupported parameter: 'temperature'"));
+        expect(e.code).toBe('UPSTREAM_ERROR');
+        expect((e as { status?: number }).status).toBe(400);
+    });
+    it('잔액 부족·5xx·연결 오류에는 status 를 붙이지 않는다(종전 폴백 규약 유지)', () => {
+        expect((mapOpenAIError(httpErr(400, 'credit insufficient balance')) as { status?: number }).status).toBeUndefined();
+        expect((mapOpenAIError(httpErr(503, 'overloaded')) as { status?: number }).status).toBeUndefined();
+        expect((mapOpenAIError(new Error('ECONNRESET')) as { status?: number }).status).toBeUndefined();
+    });
+});

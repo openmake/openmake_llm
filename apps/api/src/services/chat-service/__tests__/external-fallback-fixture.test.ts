@@ -72,14 +72,14 @@ describe('채팅 provider 흐름 — 실제 전송', () => {
         expect(r.served).toHaveLength(1); // 실제 답한 모델(로컬)을 통지
     });
 
-    // 폴백 판정의 "400 제외"는 우리 코드가 status 400 으로 던진 오류(vision 게이트 등)에만 걸린다. 업스트림이 돌려준 400 은
-    // 어댑터가 status 없는 ProviderError(UPSTREAM_ERROR)로 감싸므로 폴백 대상이다 — 가짜 함수 테스트로는 보이지 않던 실제 동작.
-    it('업스트림이 HTTP 400 을 돌려주면 UPSTREAM_ERROR 로 분류돼 로컬로 폴백한다', async () => {
+    // 폴백 판정의 "400 제외"는 업스트림이 돌려준 400 에도 걸린다 — 요청 자체를 거절한 것이라 로컬로 바꿔 답하면
+    // 사용자가 고른 모델이 이유 없이 바뀐다. (종전에는 어댑터가 status 없는 오류로 감싸 이 규칙을 비켜 갔다.)
+    it('업스트림이 HTTP 400 을 돌려주면 폴백하지 않고 오류로 끝난다', async () => {
         externalReply = () => ({ kind: 'error', status: 400 });
         const r = run();
-        await expect(r.out).resolves.toContain('로컬응답');
-        expect(local.requests).toHaveLength(1);
-        expect(r.events[0].metadata).toMatchObject({ from: 'hasa:big-model', code: 'UPSTREAM_ERROR' });
+        await expect(r.out).rejects.toMatchObject({ code: 'UPSTREAM_ERROR', status: 400 });
+        expect(local.requests).toHaveLength(0);
+        expect(r.events).toHaveLength(0);
     });
 
     it('첫 토큰 전에 연결이 끊기면 로컬로 폴백한다', async () => {
