@@ -491,7 +491,8 @@
       "generating": "Antwort wird erstellt",
       "toolRunning": "{tool} wird ausgeführt",
       "done": "Antwort fertig"
-    }
+    },
+    "jumpToLatest": "Zum Neuesten"
   },
   "compare": {
     "title": "Modellvergleich",

@@ -491,7 +491,8 @@
       "generating": "응답을 생성하고 있습니다",
       "toolRunning": "{tool} 실행 중",
       "done": "응답이 완료되었습니다"
-    }
+    },
+    "jumpToLatest": "최신으로"
   },
   "compare": {
     "title": "모델 비교",

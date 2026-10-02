@@ -491,7 +491,8 @@
       "generating": "応答を生成しています",
       "toolRunning": "{tool} を実行中",
       "done": "応答が完了しました"
-    }
+    },
+    "jumpToLatest": "最新へ"
   },
   "compare": {
     "title": "モデル比較",

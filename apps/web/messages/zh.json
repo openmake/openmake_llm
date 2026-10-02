@@ -491,7 +491,8 @@
       "generating": "正在生成回答",
       "toolRunning": "正在运行 {tool}",
       "done": "回答已完成"
-    }
+    },
+    "jumpToLatest": "回到最新"
   },
   "compare": {
     "title": "模型对比",

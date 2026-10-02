@@ -6,7 +6,7 @@ import type { SearchSourceRef } from "@openmake/shared-types";
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw, Columns2, Workflow, Circle, GitBranch } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw, Columns2, Workflow, Circle, GitBranch, ArrowDown } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
@@ -21,6 +21,7 @@ import { StructuredAnswer } from "./structured-answer";
 import { ServedModelBadge } from "./served-model-badge";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
+import { isNearBottom } from "@/lib/chat-scroll";
 import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 
 const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
@@ -648,10 +649,46 @@ export function MessageList() {
   const orchestratorProgress = useAppStore((s) => s.orchestratorProgress);
   const activeTool = useAppStore((s) => s.activeTool);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // 따라가기 — 사용자가 맨 아래 근처에 있을 때만 새 내용을 따라간다. 위로 올려 과거 대화를 읽는 중이면
+  // 답변이 흘러도 자리를 지키고 "최신으로" 버튼을 띄운다(lib/chat-scroll).
+  const stickRef = useRef(true);
+  const [showJump, setShowJump] = useState(false);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
   }, []);
+  const followBottom = useCallback(() => {
+    if (stickRef.current) scrollToBottom();
+  }, [scrollToBottom]);
+  const jumpToLatest = useCallback(() => {
+    stickRef.current = true;
+    setShowJump(false);
+    scrollToBottom();
+  }, [scrollToBottom]);
+
+  // 스크롤 영역(이 목록을 감싼 overflow 컨테이너)의 위치를 따라가기 상태로 옮긴다.
+  const isEmpty = chatHistory.length === 0;
+  useEffect(() => {
+    let el: HTMLElement | null = bottomRef.current?.parentElement ?? null;
+    while (el && !/(auto|scroll)/.test(getComputedStyle(el).overflowY)) el = el.parentElement;
+    if (!el) return;
+    const scroller = el;
+    const onScroll = () => {
+      const near = isNearBottom(scroller);
+      stickRef.current = near;
+      setShowJump(!near);
+    };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => scroller.removeEventListener("scroll", onScroll);
+    // 빈 화면 ↔ 대화 화면 전환 때 bottomRef 가 새로 붙으므로 다시 건다
+  }, [isEmpty]);
+
+  // 내가 메시지를 보내면 다시 맨 아래로 — 위로 올려 둔 상태였어도 새 질문과 답변을 본다.
+  const lastRole = chatHistory[chatHistory.length - 1]?.role;
+  const historyLength = chatHistory.length;
+  useEffect(() => {
+    if (lastRole === "user") jumpToLatest();
+  }, [historyLength, lastRole, jumpToLatest]);
 
   // 응답이 진행 중인데 아직 스트리밍 중인 assistant 메시지가 없으면(첫 토큰 전) "분석 중" 표시
   const last = chatHistory[chatHistory.length - 1];
@@ -659,7 +696,7 @@ export function MessageList() {
     isGenerating && !(last?.role === "assistant" && last?.streaming);
 
   useEffect(() => {
-    scrollToBottom();
+    followBottom();
   }, [
     activeAgent,
     activeSkills,
@@ -667,7 +704,7 @@ export function MessageList() {
     chatHistory,
     modeProgress,
     orchestratorProgress,
-    scrollToBottom,
+    followBottom,
     showThinking,
   ]);
 
@@ -677,7 +714,7 @@ export function MessageList() {
     let frame = 0;
     const handleResize = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(scrollToBottom);
+      frame = requestAnimationFrame(followBottom);
     };
 
     window.visualViewport.addEventListener("resize", handleResize);
@@ -685,7 +722,7 @@ export function MessageList() {
       window.visualViewport?.removeEventListener("resize", handleResize);
       cancelAnimationFrame(frame);
     };
-  }, [isGenerating, scrollToBottom]);
+  }, [isGenerating, followBottom]);
 
   // 마지막 assistant 메시지만 재생성 대상 — 중간 메시지 재생성은 이후 문맥을 무효화하므로 미허용.
   // 직전 user 메시지에 파일 첨부가 있었으면(hasAttachments) 제외 — 첨부 원본은 히스토리에
@@ -871,6 +908,18 @@ export function MessageList() {
       {orchestratorProgress && <OrchestratorProgressBanner />}
       {activeTool && <ToolIndicator />}
       {showThinking && <ThinkingIndicator agent={activeAgent} skills={activeSkills} />}
+      {showJump && (
+        <div className="pointer-events-none sticky bottom-3 flex justify-center">
+          <button
+            type="button"
+            onClick={jumpToLatest}
+            className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs font-medium text-fg shadow-md transition hover:bg-surface-3"
+          >
+            <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+            {t("jumpToLatest")}
+          </button>
+        </div>
+      )}
       <div ref={bottomRef} className={cn("h-px")} />
     </div>
   );

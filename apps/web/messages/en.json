@@ -491,7 +491,8 @@
       "generating": "Generating a response",
       "toolRunning": "Running {tool}",
       "done": "Response complete"
-    }
+    },
+    "jumpToLatest": "Jump to latest"
   },
   "compare": {
     "title": "Model comparison",
