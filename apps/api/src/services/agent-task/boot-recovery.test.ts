@@ -10,6 +10,9 @@ const getAgentTaskSteps = jest.fn(async () => []);
 const getUserById = jest.fn(async () => ({ role: 'user' }));
 const claim = jest.fn(async () => true);
 const interrupted: unknown[] = [];
+const expired: unknown[] = [];
+const takeOver = jest.fn(async () => true);
+const runningHere = new Set<string>();
 
 jest.mock('../../data/models/unified-database', () => ({
     getUnifiedDatabase: () => ({ updateAgentTask, getAgentTaskSteps, getUserById }),
@@ -19,21 +22,26 @@ jest.mock('../../data/repositories/agent-task-repository', () => ({
     AgentTaskRepository: jest.fn().mockImplementation(() => ({
         getInterruptedAgentTasks: async () => interrupted,
         claimAgentTaskForRecovery: claim,
+        listExpiredLeaseTasks: async () => expired,
+        takeOverExpiredLease: takeOver,
     })),
 }));
 // 나머지 export(LOG_REDACT 등 — logger 가 읽는다)는 실제 값을 유지한다
 jest.mock('../../config/runtime-limits', () => ({
     ...jest.requireActual('../../config/runtime-limits'),
-    AGENT_TASK_LIMITS: { BOOT_RECOVERY_ENABLED: true, BOOT_RECOVERY_WINDOW_MS: 60_000 },
+    AGENT_TASK_LIMITS: { BOOT_RECOVERY_ENABLED: true, BOOT_RECOVERY_WINDOW_MS: 60_000, LEASE_ENABLED: true, LEASE_MS: 60_000 },
 }));
 const execute = jest.fn(async () => undefined);
-jest.mock('../AgentTaskService', () => ({ AgentTaskService: jest.fn().mockImplementation(() => ({ execute })) }));
+jest.mock('../AgentTaskService', () => ({
+    AgentTaskService: Object.assign(jest.fn().mockImplementation(() => ({ execute })), { isRunning: (id: string) => runningHere.has(id) }),
+}));
 const dispatch = jest.fn(async (entry: { run: () => Promise<void> }) => { await entry.run(); return 'started'; });
 jest.mock('./task-queue', () => ({ dispatchAgentTask: (e: never) => dispatch(e) }));
 
-import { recoverInterruptedAgentTasks } from './boot-recovery';
+import { recoverInterruptedAgentTasks, sweepExpiredTaskLeases } from './boot-recovery';
+import { leaseOwner } from './task-lease';
 
-beforeEach(() => { interrupted.length = 0; jest.clearAllMocks(); });
+beforeEach(() => { interrupted.length = 0; expired.length = 0; runningHere.clear(); jest.clearAllMocks(); takeOver.mockResolvedValue(true); claim.mockResolvedValue(true); });
 
 const base = { id: 't1', user_id: 'u1', goal: '목표', max_turns: 10, executor: 'server', input_files: null, input_images: null };
 
@@ -80,5 +88,65 @@ describe('recoverInterruptedAgentTasks — queued 고아', () => {
         const r = await recoverInterruptedAgentTasks();
         expect(r).toEqual({ resumed: 0, failed: 0 });
         expect(execute).not.toHaveBeenCalled();
+    });
+});
+
+describe('sweepExpiredTaskLeases — 소유권이 지난 작업을 가져와 이어 실행한다', () => {
+    const cp = { conversation: [{ role: 'user', content: '목표' }], completedTurn: 2 };
+
+    it('체크포인트가 있으면 소유권을 가져온 뒤 그 지점에서 재개한다', async () => {
+        expired.push({ ...base, status: 'running', checkpoint: cp });
+        const r = await sweepExpiredTaskLeases();
+        expect(r).toEqual({ resumed: 1, failed: 0 });
+        expect(takeOver).toHaveBeenCalledWith('t1', leaseOwner(), 60_000);
+        expect(claim).toHaveBeenCalledWith('t1');
+        const input = (execute.mock.calls[0] as unknown[])[0] as { resume?: { fromTurn: number } };
+        expect(input.resume?.fromTurn).toBe(3);
+    });
+
+    it('체크포인트가 없으면 failed(interrupted)로 닫고 알림 표식을 남긴다', async () => {
+        expired.push({ ...base, status: 'running', checkpoint: null });
+        const r = await sweepExpiredTaskLeases();
+        expect(r).toEqual({ resumed: 0, failed: 1 });
+        expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'failed', error: 'interrupted', terminalNotifyPending: true }));
+        expect(execute).not.toHaveBeenCalled();
+    });
+
+    it('다른 서버가 먼저 가져갔으면(가져오기 0행) 건드리지 않는다', async () => {
+        takeOver.mockResolvedValue(false);
+        expired.push({ ...base, status: 'running', checkpoint: cp });
+        const r = await sweepExpiredTaskLeases();
+        expect(r).toEqual({ resumed: 0, failed: 0 });
+        expect(claim).not.toHaveBeenCalled();
+        expect(execute).not.toHaveBeenCalled();
+        expect(updateAgentTask).not.toHaveBeenCalled();
+    });
+
+    it('이 프로세스가 실행 중인 작업은 가져오지 않는다(연장이 잠깐 밀린 것 — 다음 연장이 복구한다)', async () => {
+        runningHere.add('t1');
+        expired.push({ ...base, status: 'running', checkpoint: cp });
+        const r = await sweepExpiredTaskLeases();
+        expect(r).toEqual({ resumed: 0, failed: 0 });
+        expect(takeOver).not.toHaveBeenCalled();
+    });
+
+    it('조회가 실패해도 던지지 않는다', async () => {
+        const { AgentTaskRepository } = jest.requireMock('../../data/repositories/agent-task-repository') as { AgentTaskRepository: jest.Mock };
+        AgentTaskRepository.mockImplementationOnce(() => ({ listExpiredLeaseTasks: async () => { throw new Error('db down'); } }));
+        await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 0 });
+    });
+});
+
+describe('recoverInterruptedAgentTasks — 소유권 컬럼이 아직 없는 DB(176 적용 전)', () => {
+    it('소유권 조건이 붙은 조회가 실패하면 종전 조회로 다시 시도해 복구를 이어간다', async () => {
+        const { AgentTaskRepository } = jest.requireMock('../../data/repositories/agent-task-repository') as { AgentTaskRepository: jest.Mock };
+        const getInterruptedAgentTasks = jest.fn(async (_w: number, owner?: string) => {
+            if (owner) throw new Error('column "lease_owner" does not exist');
+            return [{ ...base, status: 'queued', checkpoint: null }];
+        });
+        AgentTaskRepository.mockImplementationOnce(() => ({ getInterruptedAgentTasks, claimAgentTaskForRecovery: claim }));
+        const r = await recoverInterruptedAgentTasks();
+        expect(getInterruptedAgentTasks).toHaveBeenCalledTimes(2);
+        expect(r).toEqual({ resumed: 1, failed: 0 });
     });
 });

@@ -1333,6 +1333,13 @@ export const AGENT_TASK_LIMITS = {
      *  보유 + 최근 window 내 task. checkpoint 없으면 failed 유지(기존 수동 UX 그대로).
      *  AGENT_TASK_BOOT_RECOVERY=false 로 비활성(기본 on). */
     BOOT_RECOVERY_ENABLED: process.env.AGENT_TASK_BOOT_RECOVERY !== 'false',
+    /** 실행 소유권(lease, 176) — 실행 중인 작업은 소유권을 주기적으로 연장하고, 소유권이 지난 작업은 주기 점검이 가져가
+     *  이어서 실행한다(서버가 죽어도 다른 서버·같은 서버가 복구). AGENT_TASK_LEASE_ENABLED=false 로 끈다(종전: 부팅 때만 복구). */
+    LEASE_ENABLED: process.env.AGENT_TASK_LEASE_ENABLED !== 'false',
+    /** 소유권 길이(ms) — 이 시간 동안 연장이 없으면 죽은 것으로 본다. 연장 주기는 1/3. AGENT_TASK_LEASE_MS(기본 60초) */
+    LEASE_MS: parseInt(process.env.AGENT_TASK_LEASE_MS || '', 10) || 60_000,
+    /** 지난 소유권 점검 주기(ms). AGENT_TASK_LEASE_SWEEP_MS(기본 30초) */
+    LEASE_SWEEP_MS: parseInt(process.env.AGENT_TASK_LEASE_SWEEP_MS || '', 10) || 30_000,
     /** 부팅 복구 인정 window(ms) — '이번 재시작'으로 마킹된 task 만 자동 resume 하고, 과거
      *  재시작이 남긴 오래된 failed('server restarted') 는 건드리지 않는다(수동 resume 대상).
      *  AGENT_TASK_BOOT_RECOVERY_WINDOW_MS 로 오버라이드(기본 15분). */

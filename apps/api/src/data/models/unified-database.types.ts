@@ -121,6 +121,9 @@ export interface ResearchStep {
 export type AgentTaskStatus = 'pending' | 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
 export interface AgentTask {
+    /** 실행 소유권(176) — 지금 이 작업을 실행 중인 프로세스와 소유권 만료 시각 */
+    lease_owner?: string | null;
+    lease_until?: string | Date | null;
     id: string;
     user_id?: string;
     goal: string;
