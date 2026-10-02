@@ -31,6 +31,15 @@ export const DECISION = {
 export const MEDIA_GATE = {
     /** 셰도우 판정 on/off. 결정 모델이 로컬 카탈로그에 없으면 켜져 있어도 호출하지 않는다. ORCHESTRATOR_GATE_SHADOW_ENABLED */
     SHADOW_ENABLED: process.env.ORCHESTRATOR_GATE_SHADOW_ENABLED !== 'false',
+    /**
+     * Planner 생략 — 판정이 "미디어 작업 아님"으로 확실하면(확률 < SKIP_THRESHOLD) Planner 를 부르지 않고 종전 단일 경로로 간다.
+     * **기본 꺼짐.** 근거(2026-10-03): 의도 기준 라벨 60건에서 미디어 요청 최저 0.755 · 비미디어 최고 0.407 로 겹치지 않았고
+     * 임계 0.05 에서 놓친 미디어 요청 0/28, 생략 가능한 단순 턴 23/32. 다만 표본이 손으로 만든 것이고 실사용 셰도우 기록이
+     * 10건뿐이라, 운영 기록으로 놓침 0 을 확인한 뒤 켠다. 첨부·진행 중 작업이 있는 턴은 항상 Planner 로 보낸다.
+     * ORCHESTRATOR_GATE_SKIP_ENABLED / ORCHESTRATOR_GATE_SKIP_THRESHOLD
+     */
+    SKIP_ENABLED: process.env.ORCHESTRATOR_GATE_SKIP_ENABLED === 'true',
+    SKIP_THRESHOLD: Number(process.env.ORCHESTRATOR_GATE_SKIP_THRESHOLD) || 0.05,
     /** 어댑터에 묻는 질문(영문 고정 — 어댑터 학습 형식) */
     QUESTION: 'Does the user want an image, music/audio, or video to be generated or edited in this turn?',
 } as const;

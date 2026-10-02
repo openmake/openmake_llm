@@ -28,6 +28,12 @@ export function buildMediaGateState(message: string, attachmentKinds: string[]):
     return `User message: "${text}"\nAttachments: ${attachmentKinds.length ? attachmentKinds.join(', ') : 'none'}`;
 }
 
+/** PURE: 이 판정으로 Planner 를 생략해도 되는가 — 켜져 있고, 첨부·진행 중 작업이 없고, 판정이 임계 미만일 때만 */
+export function shouldSkipPlanner(gate: MediaGateRecord | undefined, attachmentCount: number): boolean {
+    if (!MEDIA_GATE.SKIP_ENABLED || attachmentCount > 0) return false;
+    return gate?.gatePTrue !== undefined && gate.gatePTrue < MEDIA_GATE.SKIP_THRESHOLD;
+}
+
 /** @returns 기록할 판정. 셰도우가 꺼져 있거나 결정 모델이 없으면 undefined(호출 없음) */
 export async function runMediaGateShadow(
     input: { message: string; attachmentKinds: string[]; signal?: AbortSignal },
