@@ -130,6 +130,9 @@ export function useChatSocket() {
   // 이어받기 커서(F19.11) — 마지막으로 받은 스트림 이벤트의 streamId·seq. resume 에 실어 중복 없이 이어받고,
   // 재생·재연결로 다시 온 seq <= lastSeq 이벤트는 무시한다(서버 ws-stream-registry 와 페어).
   const streamCursorRef = useRef<StreamCursor>(EMPTY_STREAM_CURSOR);
+  // 에이전트 작업 진행 이벤트의 마지막 순번 — 재연결 때 agent_task_resume 에 실어 놓친 이벤트만 다시 받는다
+  // (서버 agent-task-progress-log 와 페어). 순번이 없는 서버(구버전)면 null 로 남아 종전처럼 동작한다.
+  const lastTaskSeqRef = useRef<number | null>(null);
   // MCP 도구 결과 resource — 스트리밍 중 append 하면 응답이 조각나므로(appendToken 이 카드를
   // 마지막 메시지로 오인) 버퍼에 모았다가 스트림 종료 시 flush 한다.
   const pendingMcpResourcesRef = useRef<McpResourcePayload[]>([]);
@@ -179,6 +182,9 @@ export function useChatSocket() {
       if (pendingResumeRef.current) {
         pendingResumeRef.current = false;
         ws.send(JSON.stringify({ type: "resume", anonSessionId: getAnonSessionId(), ...resumeCursorFields(streamCursorRef.current) }));
+      }
+      if (lastTaskSeqRef.current !== null) {
+        ws.send(JSON.stringify({ type: "agent_task_resume", afterSeq: lastTaskSeqRef.current }));
       }
     };
 
@@ -481,7 +487,31 @@ export function useChatSocket() {
         case "artifact_end":
           endArtifact(data.id);
           break;
+        case "agent_task_resync": {
+          // 놓친 진행 이벤트가 서버에 남아 있지 않다 — 승인함·배지·작업 상세가 다시 읽고, 채팅 카드는 작업 상태를 다시 가져온다.
+          announceAgentTaskChange({ taskId: "", reason: "resync" });
+          const open = useAppStore.getState().chatHistory.filter(
+            (m) => m.taskId && !["completed", "failed", "cancelled"].includes(m.agentTask?.status ?? ""),
+          );
+          for (const m of open) {
+            void ApiClient.get<{ data: { task: { status: string; progress: number; current_turn: number } } }>(`/api/agent-tasks/${m.taskId}`)
+              .then((r) => {
+                const task = r?.data?.task;
+                if (!task) return;
+                setChatHistory((prev) => prev.map((x) => (x.taskId === m.taskId
+                  ? { ...x, agentTask: { goal: x.agentTask?.goal ?? "", ...(x.agentTask ?? {}), status: task.status, progress: task.progress, currentTurn: task.current_turn } as AgentTaskState }
+                  : x)));
+              })
+              .catch(() => { /* 조회 실패 — 다음 이벤트가 맞춘다 */ });
+          }
+          break;
+        }
         case "agent_task_progress": {
+          // 재연결 재생으로 다시 온 이벤트(이미 받은 순번)는 건너뛴다.
+          if (typeof data.seq === "number") {
+            if (lastTaskSeqRef.current !== null && data.seq <= lastTaskSeqRef.current) break;
+            lastTaskSeqRef.current = data.seq;
+          }
           // 에이전트 작업 진행을 구조화 상태(agentTask)로 갱신 → AgentTaskCard 가 벡터 아이콘으로 렌더.
           const { taskId, status, progress, currentTurn, step } = data;
           // 승인 이관·에스컬레이션·철회·계획 편집 알림 — 승인함·배지·작업 상세가 다시 읽는다.

@@ -292,6 +292,21 @@ export function getAgentTaskUnknownOutcomeNotice(toolName: string): string {
     return `이 도구 호출(${toolName})은 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없습니다. 이미 일부 또는 전부 반영됐을 수 있으니 같은 호출을 바로 반복하지 마세요. 먼저 현재 상태(파일·작업 디렉터리·대상 시스템)를 확인하고, 반영되지 않은 부분만 이어서 수행하세요. 확인할 방법이 없으면 사용자에게 물어보세요(ask_human).`;
 }
 
+/** 결과 불명 호출을 사용자에게 묻는 질문 — 승인은 "다시 실행", 거절은 "다시 실행하지 않음" 이다. */
+export function getAgentTaskUnknownOutcomeQuestion(toolName: string): string {
+    return `도구 호출(${toolName})이 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없습니다. 이미 일부 또는 전부 반영됐을 수 있습니다. 다시 실행할까요? 승인하면 같은 호출을 다시 실행하고, 거절하면 다시 실행하지 않고 현재 상태를 확인한 뒤 이어갑니다. 이미 끝났다면 그 내용을 답변으로 적어 주세요.`;
+}
+
+/** 사용자가 결과 불명 호출의 재실행을 거절했을 때의 도구 결과. */
+export function getAgentTaskUnknownOutcomeDeclinedNotice(toolName: string): string {
+    return `이 도구 호출(${toolName})은 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없고, 사용자가 다시 실행하지 않기로 했습니다. 같은 호출을 반복하지 마세요. 현재 상태(파일·작업 디렉터리·대상 시스템)를 확인하고, 반영되지 않은 부분이 있으면 사용자에게 알리거나 다른 방법으로 이어가세요.`;
+}
+
+/** 사용자가 결과 불명 호출에 텍스트로 답했을 때의 도구 결과 — 다시 실행하지 않고 답변을 근거로 이어간다. */
+export function getAgentTaskUnknownOutcomeAnswerNotice(toolName: string, answer: string): string {
+    return `이 도구 호출(${toolName})은 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없어 사용자에게 물었습니다. 사용자 답변: ${answer}\n같은 호출을 바로 반복하지 말고, 이 답변을 근거로 이어서 수행하세요.`;
+}
+
 /** browser 도구 호출 한도 도달 시 주입 — 더 이상 탐색하지 말고 수집한 정보로 종합·작성 유도. */
 export function getAgentTaskBrowserLimitNudge(): string {
     return '브라우저 탐색 횟수 한도에 도달했습니다. 더 이상 웹을 탐색하지 말고, 지금까지 수집한 정보만으로 최종 결과물을 완성해 작성하세요.';

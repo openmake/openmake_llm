@@ -24,8 +24,83 @@ import { AgentTaskService, type AgentTaskInputFile } from '../AgentTaskService';
 import { dispatchAgentTask } from './task-queue';
 import type { ChatMessage } from '../../llm/types';
 import type { AgentTaskUserRole } from './types';
+import { leaseOwner } from './task-lease';
+import type { AgentTask } from '../../data/models/unified-database.types';
 
 const logger = createLogger('AgentTaskBootRecovery');
+
+/**
+ * 중단된 작업 하나를 복구한다 — 체크포인트가 있으면 원자적 claim 후 재개, 없으면 실행 중이던 것만 failed(interrupted).
+ * 부팅 복구와 지난 소유권 점검(176)이 같이 쓴다. 예외는 호출부로.
+ */
+async function recoverTask(
+    task: AgentTask,
+    db: ReturnType<typeof getUnifiedDatabase>,
+    taskRepo: AgentTaskRepository,
+): Promise<'resumed' | 'failed' | 'skipped'> {
+    const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;
+    const hasCheckpoint = !!cp && Array.isArray(cp.conversation) && cp.conversation.length > 0;
+    // 'queued' 는 인메모리 대기열에 있다가 재시작으로 증발한 것 — 시작한 적이 없으니
+    // checkpoint 도 없다. 처음부터 다시 디스패치한다(로컬 실행은 아래 규칙대로 보류).
+    const wasQueued = task.status === 'queued';
+    if (!hasCheckpoint && !wasQueued) {
+        // 재개 지점이 없음. restart 마킹(failed)은 이미 정리된 상태이므로 건드리지 않고,
+        // 잔존 running/paused 만 실패(interrupted)로 정리(완료 오표시·영구 polling 방지).
+        if (task.status === 'running' || task.status === 'paused') {
+            await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted', checkpoint: null, terminalNotifyPending: true });
+            logger.info(`[BootRecovery] checkpoint 없음 → failed(interrupted): ${task.id}`);
+        }
+        return task.status === 'running' || task.status === 'paused' || wasQueued ? 'failed' : 'skipped';
+    }
+
+    // 로컬 실행 작업은 자동 재개하지 않는다 — 부팅 시점엔 브리지 디바이스가 아직
+    // 연결되지 않아(CLI/데스크톱은 서버 기동 후 재접속) RemoteExecutor.create 가
+    // 미연결로 실패한다. 상태만 failed(interrupted)로 정리해 완료 오표시·영구 polling 을
+    // 막고, 사용자가 디바이스 재연결 후 /resume 으로 수동 재개하게 한다.
+    if (task.executor === 'local') {
+        if (task.status === 'running' || task.status === 'paused' || wasQueued) {
+            await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted_local_device', terminalNotifyPending: true });
+            logger.info(`[BootRecovery] 로컬 실행 작업 자동재개 보류 → failed(디바이스 재연결 후 수동 resume): ${task.id}`);
+        }
+        return task.status === 'running' || task.status === 'paused' || wasQueued ? 'failed' : 'skipped';
+    }
+
+    // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀.
+    const claimed = await taskRepo.claimAgentTaskForRecovery(task.id);
+    if (!claimed) return 'skipped';
+
+    const role = await resolveUserRole(db, task.user_id);
+    const steps = await db.getAgentTaskSteps(task.id);
+
+    // detached 재개 — /resume 라우트와 동일 계약. 큐(3-B) 활성 시 상한 초과분은 'queued' 로 대기.
+    const service = new AgentTaskService();
+    await dispatchAgentTask({
+        taskId: task.id,
+        userId: String(task.user_id),
+        priority: task.priority, // 증발한 대기열의 순위를 그대로(131)
+        run: () => service.execute({
+            taskId: task.id,
+            goal: task.goal,
+            userId: String(task.user_id),
+            userRole: role,
+            maxTurns: task.max_turns,
+            files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
+            images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
+            ...(hasCheckpoint ? {
+                resume: {
+                    conversation: cp!.conversation as ChatMessage[],
+                    fromTurn: (cp!.completedTurn ?? 0) + 1,
+                    fromStep: steps.length,
+                    plan: task.plan,
+                },
+            } : {}),
+        }),
+    });
+    logger.info(hasCheckpoint
+        ? `[BootRecovery] 자동 재개: ${task.id} (turn ${(cp!.completedTurn ?? 0) + 1})`
+        : `[BootRecovery] 대기열 증발분 재디스패치: ${task.id}`);
+    return 'resumed';
+}
 
 /**
  * 부팅 시 중단된 task 복구. 실패해도 서버 기동을 막지 않도록 절대 throw 하지 않는다.
@@ -38,7 +113,11 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
 
     let interrupted;
     try {
-        interrupted = await taskRepo.getInterruptedAgentTasks(AGENT_TASK_LIMITS.BOOT_RECOVERY_WINDOW_MS);
+        const windowMs = AGENT_TASK_LIMITS.BOOT_RECOVERY_WINDOW_MS;
+        // 소유권(176)이 켜져 있으면 다른 서버의 실행 중 작업을 뺀다. 컬럼이 아직 없으면(176 적용 전) 종전 조회로 다시 시도한다.
+        interrupted = AGENT_TASK_LIMITS.LEASE_ENABLED
+            ? await taskRepo.getInterruptedAgentTasks(windowMs, leaseOwner()).catch(() => taskRepo.getInterruptedAgentTasks(windowMs))
+            : await taskRepo.getInterruptedAgentTasks(windowMs);
     } catch (e) {
         logger.warn(`[BootRecovery] 중단 task 조회 실패 — 건너뜀: ${e instanceof Error ? e.message : e}`);
         return { resumed: 0, failed: 0 };
@@ -50,76 +129,49 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
     let failed = 0;
     for (const task of interrupted) {
         try {
-            const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;
-            const hasCheckpoint = !!cp && Array.isArray(cp.conversation) && cp.conversation.length > 0;
-            // 'queued' 는 인메모리 대기열에 있다가 재시작으로 증발한 것 — 시작한 적이 없으니
-            // checkpoint 도 없다. 처음부터 다시 디스패치한다(로컬 실행은 아래 규칙대로 보류).
-            const wasQueued = task.status === 'queued';
-            if (!hasCheckpoint && !wasQueued) {
-                // 재개 지점이 없음. restart 마킹(failed)은 이미 정리된 상태이므로 건드리지 않고,
-                // 잔존 running/paused 만 실패(interrupted)로 정리(완료 오표시·영구 polling 방지).
-                if (task.status === 'running' || task.status === 'paused') {
-                    await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted', checkpoint: null, terminalNotifyPending: true });
-                    failed++;
-                    logger.info(`[BootRecovery] checkpoint 없음 → failed(interrupted): ${task.id}`);
-                }
-                continue;
-            }
-
-            // 로컬 실행 작업은 자동 재개하지 않는다 — 부팅 시점엔 브리지 디바이스가 아직
-            // 연결되지 않아(CLI/데스크톱은 서버 기동 후 재접속) RemoteExecutor.create 가
-            // 미연결로 실패한다. 상태만 failed(interrupted)로 정리해 완료 오표시·영구 polling 을
-            // 막고, 사용자가 디바이스 재연결 후 /resume 으로 수동 재개하게 한다.
-            if (task.executor === 'local') {
-                if (task.status === 'running' || task.status === 'paused' || wasQueued) {
-                    await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted_local_device', terminalNotifyPending: true });
-                    failed++;
-                    logger.info(`[BootRecovery] 로컬 실행 작업 자동재개 보류 → failed(디바이스 재연결 후 수동 resume): ${task.id}`);
-                }
-                continue;
-            }
-
-            // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀.
-            const claimed = await taskRepo.claimAgentTaskForRecovery(task.id);
-            if (!claimed) continue;
-
-            const role = await resolveUserRole(db, task.user_id);
-            const steps = await db.getAgentTaskSteps(task.id);
-
-            // detached 재개 — /resume 라우트와 동일 계약. 큐(3-B) 활성 시 상한 초과분은 'queued' 로 대기.
-            const service = new AgentTaskService();
-            await dispatchAgentTask({
-                taskId: task.id,
-                userId: String(task.user_id),
-                priority: task.priority, // 증발한 대기열의 순위를 그대로(131)
-                run: () => service.execute({
-                    taskId: task.id,
-                    goal: task.goal,
-                    userId: String(task.user_id),
-                    userRole: role,
-                    maxTurns: task.max_turns,
-                    files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
-                    images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
-                    ...(hasCheckpoint ? {
-                        resume: {
-                            conversation: cp!.conversation as ChatMessage[],
-                            fromTurn: (cp!.completedTurn ?? 0) + 1,
-                            fromStep: steps.length,
-                            plan: task.plan,
-                        },
-                    } : {}),
-                }),
-            });
-            resumed++;
-            logger.info(hasCheckpoint
-                ? `[BootRecovery] 자동 재개: ${task.id} (turn ${(cp!.completedTurn ?? 0) + 1})`
-                : `[BootRecovery] 대기열 증발분 재디스패치: ${task.id}`);
+            const outcome = await recoverTask(task, db, taskRepo);
+            if (outcome === 'resumed') resumed++;
+            else if (outcome === 'failed') failed++;
         } catch (e) {
             logger.warn(`[BootRecovery] task 복구 실패(건너뜀): ${task.id} — ${e instanceof Error ? e.message : e}`);
         }
     }
     logger.info(`[BootRecovery] 복구 완료 — 재개 ${resumed}건, 실패정리 ${failed}건`);
     return { resumed, failed };
+}
+
+/**
+ * 지난 소유권 점검(176, 주기) — 실행 중(running·paused, 주차 제외)인데 소유권이 지난 작업은 그 서버가 죽은 것이다.
+ * 소유권을 원자적으로 가져온 뒤 부팅 복구와 같은 규칙으로 이어 실행한다. 이 프로세스가 실행 중인 작업은 건너뛴다
+ * (연장이 잠깐 밀렸을 뿐 — 다음 연장이 소유권을 되살린다). 절대 throw 하지 않는다.
+ */
+export async function sweepExpiredTaskLeases(): Promise<{ resumed: number; failed: number }> {
+    const out = { resumed: 0, failed: 0 };
+    if (!AGENT_TASK_LIMITS.LEASE_ENABLED) return out;
+    const db = getUnifiedDatabase();
+    let taskRepo: AgentTaskRepository;
+    let expired: AgentTask[];
+    try {
+        taskRepo = new AgentTaskRepository(getPool());
+        expired = await taskRepo.listExpiredLeaseTasks();
+    } catch (e) {
+        logger.warn(`[LeaseSweep] 지난 소유권 조회 실패 — 건너뜀: ${e instanceof Error ? e.message : e}`);
+        return out;
+    }
+    for (const task of expired) {
+        try {
+            if (AgentTaskService.isRunning(task.id)) continue;
+            if (!(await taskRepo.takeOverExpiredLease(task.id, leaseOwner(), AGENT_TASK_LIMITS.LEASE_MS))) continue;
+            logger.info(`[LeaseSweep] 소유권이 지난 작업을 가져옴: ${task.id} (이전 소유자 ${task.lease_owner ?? '-'})`);
+            const outcome = await recoverTask(task, db, taskRepo);
+            if (outcome === 'resumed') out.resumed++;
+            else if (outcome === 'failed') out.failed++;
+        } catch (e) {
+            logger.warn(`[LeaseSweep] 작업 복구 실패(다음 주기에 재시도): ${task.id} — ${e instanceof Error ? e.message : e}`);
+        }
+    }
+    if (out.resumed || out.failed) logger.info(`[LeaseSweep] 재개 ${out.resumed}건, 실패정리 ${out.failed}건`);
+    return out;
 }
 
 /** task 소유자의 역할을 조회 — 부팅 컨텍스트엔 req.user 가 없어 users 테이블에서 직접 조회. */

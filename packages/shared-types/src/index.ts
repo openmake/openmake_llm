@@ -190,6 +190,13 @@ export interface WsStreamEnvelope {
   seq?: number;
 }
 
+/** 재연결 후 놓친 에이전트 작업 진행 이벤트 요청 — 서버는 afterSeq 뒤 이벤트를 다시 보내고, 남아 있지 않으면 `agent_task_resync` 를 보낸다. */
+export interface WsAgentTaskResumeRequest {
+  type: "agent_task_resume";
+  /** 마지막으로 받은 agent_task_progress 의 seq */
+  afterSeq: number;
+}
+
 /** 재연결 후 끊긴 스트림 이어받기 요청 — 커서가 없거나 다른 스트림이면 서버는 미전달 이벤트만 재생한다(종전 동작). */
 export interface WsResumeRequest {
   type: "resume";
@@ -268,6 +275,11 @@ export type WsServerEvent =
   /** resume 요청에 이어받을 스트림이 없음 — 클라는 대기 상태를 풀면 된다. */
   | { type: "resume_none" }
   /**
+   * 에이전트 작업 진행 이벤트를 일부 놓쳤고 서버에 더는 남아 있지 않다(보관 범위 초과·서버 재시작) —
+   * 클라이언트는 보고 있는 작업·승인함을 REST 로 다시 읽는다. `agent_task_resume` 의 응답으로만 온다.
+   */
+  | { type: "agent_task_resync" }
+  /**
    * 이 답변의 웹검색 출처(F19.4) — 사전 주입 검색은 생성 시작 전, web_search 도구는 호출 직후 온다.
    * 같은 턴에 여러 번 오면 마지막 목록이 본문 [N] 의 번호 체계다(서버도 마지막 목록을 저장한다).
    */
@@ -337,6 +349,10 @@ export type WsServerEvent =
       approvalId?: string;
       /** 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다 */
       reason?: "assigned" | "escalated" | "revoked" | "plan_edited";
+      /** 사용자별 순번(증가) — 재연결 때 `agent_task_resume{afterSeq}` 로 보내면 그 뒤 이벤트만 다시 받는다 */
+      seq?: number;
+      /** 서버가 이벤트를 낸 시각(epoch ms) */
+      ts?: number;
     }
   // 딥리서치 진행상황 (백엔드 ws-chat-handler onResearchProgress)
   | {

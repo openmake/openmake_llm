@@ -12,6 +12,7 @@ const row = {
     id: 't1', user_id: 'u1', goal: 'g', status: 'failed',
     checkpoint: { conversation: [] }, input_files: [{ name: 'a.txt', type: 'text/plain', size: 3, content: '비밀', data: 'AAAA' }], input_images: ['data:image/png;base64,AAAA'],
     create_idempotency_key: '3f2b8c1e-0000-4000-8000-aaaaaaaaaaaa', terminal_notify_pending: true,
+    lease_owner: 'host-a:0', lease_until: '2026-10-02T00:00:00Z', in_flight_tool_call_id: 'c1',
 };
 
 describe('toPublicTask', () => {
@@ -20,6 +21,13 @@ describe('toPublicTask', () => {
         expect(pub).not.toHaveProperty('create_idempotency_key');
         expect(pub).not.toHaveProperty('terminal_notify_pending');
         expect(JSON.stringify(pub)).not.toContain('3f2b8c1e');
+    });
+
+    it('실행 소유권·실행 중 표식(서버 이름이 드러나는 내부 컬럼)을 내보내지 않는다', () => {
+        const pub = toPublicTask(row) as Record<string, unknown>;
+        expect(pub).not.toHaveProperty('lease_owner');
+        expect(pub).not.toHaveProperty('lease_until');
+        expect(pub).not.toHaveProperty('in_flight_tool_call_id');
     });
 
     it('종전 계약은 그대로 — 체크포인트·이미지·첨부 본문 제외, 첨부 메타와 resumable 포함', () => {

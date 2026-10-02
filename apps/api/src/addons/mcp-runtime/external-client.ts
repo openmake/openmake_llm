@@ -30,7 +30,8 @@ import { isConnectionDeathError } from '../../tool-contract/tool-error-classifie
 import { createLogger } from '../../utils/logger';
 import { createPinnedFetch } from '../../security/ssrf-guard';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../../config/timeouts';
-import { MCP_HIDDEN_TOOL_ARGS, MCP_ELICITATION_ENABLED } from '../../config/runtime-limits';
+import { MCP_HIDDEN_TOOL_ARGS, MCP_ELICITATION_ENABLED, MCP_IDEMPOTENCY_META_KEY } from '../../config/runtime-limits';
+import { getToolCallIdempotencyKey } from '../../utils/tool-call-context';
 import { ElicitationCallTracker } from './elicitation-bridge';
 import { getConfig } from '../../config/env';
 
@@ -337,7 +338,10 @@ export class ExternalMCPClient extends EventEmitter {
 
         try {
             const client = this.client;
-            const call = (opts?: { signal: AbortSignal; timeout: number }) => (opts ? client.callTool({ name, arguments: args }, opts) : client.callTool({ name, arguments: args })) as Promise<SDKCallToolResult>;
+            // 멱등 키(175) — 에이전트 작업의 외부 도구 호출이면 문맥에 키가 있다. 같은 호출의 재실행도 같은 키다.
+            const idempotencyKey = getToolCallIdempotencyKey();
+            const params = { name, arguments: args, ...(idempotencyKey ? { _meta: { [MCP_IDEMPOTENCY_META_KEY]: idempotencyKey } } : {}) };
+            const call = (opts?: { signal: AbortSignal; timeout: number }) => (opts ? client.callTool(params, opts) : client.callTool(params)) as Promise<SDKCallToolResult>;
             const result = this.elicitation ? await this.elicitation.call(call) : await call();
             return this.sdkResultToMCPToolResult(result);
         } catch (error) {

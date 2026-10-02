@@ -948,6 +948,12 @@ export const MCP_HIDDEN_TOOL_ARGS: ReadonlySet<string> = new Set(
 );
 
 /**
+ * 외부 MCP 도구 호출에 멱등 키를 싣는 `_meta` 키(175) — 에이전트 작업이 같은 호출을 다시 실행해도 값이 같다.
+ * 키를 모르는 서버는 `_meta` 를 무시한다(MCP 규격). 지원하는 서버는 이 값으로 중복 부작용을 막을 수 있다.
+ */
+export const MCP_IDEMPOTENCY_META_KEY = 'openmake/idempotencyKey';
+
+/**
  * 외부 provider 도구 루프 messages 토큰 예산 — external-provider 경로는 LLMClient.chat 의
  * model-pool context-fit 안전망을 우회(provider.streamChat 직접 호출)하므로, 큰 누적
  * 컨텍스트가 그대로 provider 로 전달돼 모델이 텍스트 없이 도구만 호출하고 끝나는 빈 응답을
@@ -1327,6 +1333,13 @@ export const AGENT_TASK_LIMITS = {
      *  보유 + 최근 window 내 task. checkpoint 없으면 failed 유지(기존 수동 UX 그대로).
      *  AGENT_TASK_BOOT_RECOVERY=false 로 비활성(기본 on). */
     BOOT_RECOVERY_ENABLED: process.env.AGENT_TASK_BOOT_RECOVERY !== 'false',
+    /** 실행 소유권(lease, 176) — 실행 중인 작업은 소유권을 주기적으로 연장하고, 소유권이 지난 작업은 주기 점검이 가져가
+     *  이어서 실행한다(서버가 죽어도 다른 서버·같은 서버가 복구). AGENT_TASK_LEASE_ENABLED=false 로 끈다(종전: 부팅 때만 복구). */
+    LEASE_ENABLED: process.env.AGENT_TASK_LEASE_ENABLED !== 'false',
+    /** 소유권 길이(ms) — 이 시간 동안 연장이 없으면 죽은 것으로 본다. 연장 주기는 1/3. AGENT_TASK_LEASE_MS(기본 60초) */
+    LEASE_MS: parseInt(process.env.AGENT_TASK_LEASE_MS || '', 10) || 60_000,
+    /** 지난 소유권 점검 주기(ms). AGENT_TASK_LEASE_SWEEP_MS(기본 30초) */
+    LEASE_SWEEP_MS: parseInt(process.env.AGENT_TASK_LEASE_SWEEP_MS || '', 10) || 30_000,
     /** 부팅 복구 인정 window(ms) — '이번 재시작'으로 마킹된 task 만 자동 resume 하고, 과거
      *  재시작이 남긴 오래된 failed('server restarted') 는 건드리지 않는다(수동 resume 대상).
      *  AGENT_TASK_BOOT_RECOVERY_WINDOW_MS 로 오버라이드(기본 15분). */
@@ -1481,6 +1494,9 @@ export const AGENT_TASK_LIMITS = {
      *  다시 실행하지 않고 "결과 불명" 안내를 도구 결과로 준다(중복 부작용 방지). 기본 ON.
      *  AGENT_TASK_REENTRY_UNKNOWN_OUTCOME=false 면 종전처럼 결과 없는 호출을 모두 다시 실행한다. */
     REENTRY_UNKNOWN_OUTCOME_ENABLED: process.env.AGENT_TASK_REENTRY_UNKNOWN_OUTCOME !== 'false',
+    /** 결과 불명 호출을 만나면 사용자에게 묻는다(질문 채널) — 승인하면 다시 실행, 거절·무응답이면 안내만 주고 다시 실행하지 않는다.
+     *  기본 ON. AGENT_TASK_REENTRY_UNKNOWN_OUTCOME_ASK=false 면 묻지 않고 안내만 준다(172 의 처음 동작). */
+    REENTRY_UNKNOWN_OUTCOME_ASK: process.env.AGENT_TASK_REENTRY_UNKNOWN_OUTCOME_ASK !== 'false',
     /** 실행 중 중간 지시(steering) — 실행 중 task 에 사용자가 방향 지시를 주입하면 다음 턴 경계에서
      *  conversation 에 user 메시지로 반영(취소·재시작 없이 교정). steering 은 사용자가 명시적으로
      *  보낼 때만 동작하므로 기본 ON. AGENT_TASK_STEERING=false 로 비활성. */
@@ -1751,6 +1767,17 @@ export const APPROVAL_RECENT_WINDOW_MS = parseInt(process.env.APPROVAL_RECENT_WI
 export const IDEMPOTENCY = {
     TTL_MS: parseInt(process.env.IDEMPOTENCY_TTL_MS || String(10 * 60 * 1000), 10),
     MAX_PER_OWNER: parseInt(process.env.IDEMPOTENCY_MAX_PER_OWNER || '200', 10),
+} as const;
+
+/**
+ * 에이전트 작업 진행 이벤트 보관(순번·재전송) — 재연결한 클라이언트에 놓친 이벤트를 다시 주기 위해 사용자별로 잠깐 둔다.
+ * AGENT_TASK_PROGRESS_LOG_MAX_EVENTS(사용자당 개수, 기본 200) / AGENT_TASK_PROGRESS_LOG_TTL_MS(보관 시간, 기본 10분).
+ * SWEEP_EVERY_APPENDS: 이만큼 기록할 때마다 이벤트가 없어진 사용자 기록을 정리한다.
+ */
+export const AGENT_TASK_PROGRESS_LOG = {
+    MAX_EVENTS_PER_USER: parseInt(process.env.AGENT_TASK_PROGRESS_LOG_MAX_EVENTS || '200', 10),
+    TTL_MS: parseInt(process.env.AGENT_TASK_PROGRESS_LOG_TTL_MS || String(10 * 60 * 1000), 10),
+    SWEEP_EVERY_APPENDS: 500,
 } as const;
 
 /**
