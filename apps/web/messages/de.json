@@ -34,6 +34,25 @@
     },
     "pendingApprovals": "{count} ausstehende Freigabe(n) — Agentenaufgaben warten auf Ihre Freigabe"
   },
+  "activity": {
+    "title": "Aktivität",
+    "badge": "{needs} warten auf Eingabe · {running} laufen",
+    "empty": "Derzeit läuft nichts",
+    "needsInput": "Eingabe erforderlich",
+    "running": "In Arbeit",
+    "recent": "Kürzlich beendet",
+    "chatGenerating": "Chat-Antwort wird erzeugt",
+    "approvalFor": "{tool} genehmigen",
+    "status": {
+      "running": "Läuft",
+      "queued": "In Warteschlange",
+      "paused": "Pausiert (wartet auf Eingabe)",
+      "pending": "Wartet auf Start",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen"
+    }
+  },
   "sidebar": {
     "newChat": "Neuer Chat",
     "searchPlaceholder": "Suchen …",

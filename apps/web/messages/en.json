@@ -34,6 +34,25 @@
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
   },
+  "activity": {
+    "title": "Activity",
+    "badge": "{needs} need input · {running} in progress",
+    "empty": "Nothing in progress right now",
+    "needsInput": "Needs input",
+    "running": "In progress",
+    "recent": "Recently finished",
+    "chatGenerating": "Generating chat reply",
+    "approvalFor": "Approve {tool}",
+    "status": {
+      "running": "Running",
+      "queued": "Queued",
+      "paused": "Paused (waiting for input)",
+      "pending": "Waiting to start",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    }
+  },
   "sidebar": {
     "newChat": "New chat",
     "searchPlaceholder": "Search...",

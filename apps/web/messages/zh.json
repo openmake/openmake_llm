@@ -34,6 +34,25 @@
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
   },
+  "activity": {
+    "title": "当前活动",
+    "badge": "需要输入 {needs} 项 · 进行中 {running} 项",
+    "empty": "当前没有进行中的任务",
+    "needsInput": "需要输入",
+    "running": "进行中",
+    "recent": "最近结束",
+    "chatGenerating": "正在生成聊天回复",
+    "approvalFor": "批准执行 {tool}",
+    "status": {
+      "running": "运行中",
+      "queued": "排队中",
+      "paused": "已暂停(等待输入)",
+      "pending": "等待开始",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    }
+  },
   "sidebar": {
     "newChat": "新对话",
     "searchPlaceholder": "搜索...",

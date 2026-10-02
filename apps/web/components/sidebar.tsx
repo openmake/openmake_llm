@@ -28,6 +28,7 @@ import { syncAuthFromServer, clearHadSession } from "@/lib/auth-sync";
 import { onAgentTaskChange } from "@/lib/agent-task-change";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
+import { ActivityStatus } from "./activity-status";
 import { cn } from "@/lib/utils";
 import { useEnabledWebAddons } from "@/addons/registry";
 
@@ -265,6 +266,8 @@ export function Sidebar() {
           />
         </div>
       </div>
+
+      {user && <ActivityStatus />}
 
       <nav className="mt-3 flex-1 overflow-y-auto px-3 pb-3">
         <ul className="space-y-0.5 pt-1">

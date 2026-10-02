@@ -27,3 +27,9 @@ export const AGENT_TASK_REFRESH_DELAY_MS = 2000;
 
 /** Blob object URL 해제까지 대기(ms) — 다운로드 트리거 후 정리. */
 export const OBJECT_URL_REVOKE_DELAY_MS = 1000;
+
+/** 통합 상태 표시(사이드바) 폴링 주기(ms) — 닫혀 있을 때. */
+export const ACTIVITY_POLL_MS = 30_000;
+
+/** 통합 상태 표시 패널을 열어 보고 있을 때 폴링 주기(ms). */
+export const ACTIVITY_OPEN_POLL_MS = 5_000;

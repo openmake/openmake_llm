@@ -34,6 +34,25 @@
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
   },
+  "activity": {
+    "title": "지금 하는 일",
+    "badge": "입력 필요 {needs}건 · 진행 중 {running}건",
+    "empty": "지금 진행 중인 일이 없습니다",
+    "needsInput": "입력 필요",
+    "running": "진행 중",
+    "recent": "최근 끝남",
+    "chatGenerating": "채팅 답변 생성 중",
+    "approvalFor": "{tool} 실행 승인",
+    "status": {
+      "running": "실행 중",
+      "queued": "대기열",
+      "paused": "멈춤(입력 대기)",
+      "pending": "시작 대기",
+      "completed": "완료",
+      "failed": "실패",
+      "cancelled": "취소됨"
+    }
+  },
   "sidebar": {
     "newChat": "새 대화",
     "searchPlaceholder": "검색...",

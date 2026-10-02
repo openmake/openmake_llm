@@ -34,6 +34,25 @@
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
   },
+  "activity": {
+    "title": "現在の作業",
+    "badge": "入力待ち {needs}件 · 進行中 {running}件",
+    "empty": "進行中の作業はありません",
+    "needsInput": "入力が必要",
+    "running": "進行中",
+    "recent": "最近完了",
+    "chatGenerating": "チャットの回答を生成中",
+    "approvalFor": "{tool} の実行承認",
+    "status": {
+      "running": "実行中",
+      "queued": "キュー待ち",
+      "paused": "一時停止(入力待ち)",
+      "pending": "開始待ち",
+      "completed": "完了",
+      "failed": "失敗",
+      "cancelled": "キャンセル済み"
+    }
+  },
   "sidebar": {
     "newChat": "新しいチャット",
     "searchPlaceholder": "検索...",
