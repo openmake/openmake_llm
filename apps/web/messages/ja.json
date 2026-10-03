@@ -960,7 +960,11 @@
       "max_turns_exhausted": "ターン・リソース上限に到達",
       "interrupted": "サーバー再起動により中断",
       "resumableHint": "再開できます",
-      "aborted": "ユーザーによる取り消し"
+      "aborted": "ユーザーによる取り消し",
+      "token_limit": "トークン上限に到達",
+      "timeout": "時間上限を超過",
+      "hitl_park_expired": "質問への回答待ちがタイムアウト",
+      "interrupted_local_device": "ローカル端末の切断により中断"
     },
     "planNode": "ステップ{n}",
     "startedLabel": "開始",

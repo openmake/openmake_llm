@@ -960,7 +960,11 @@
       "max_turns_exhausted": "Turn/resource limit reached",
       "interrupted": "Interrupted by server restart",
       "resumableHint": "Can be resumed",
-      "aborted": "Cancelled by user"
+      "aborted": "Cancelled by user",
+      "token_limit": "Token limit reached",
+      "timeout": "Time limit exceeded",
+      "hitl_park_expired": "Timed out waiting for your answer",
+      "interrupted_local_device": "Interrupted: local device disconnected"
     },
     "planNode": "Step {n}",
     "startedLabel": "Started",
