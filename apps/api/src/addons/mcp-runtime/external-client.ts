@@ -33,6 +33,7 @@ import { MCP_EXTERNAL_TOOL_LIMITS } from '../../config/timeouts';
 import { MCP_HIDDEN_TOOL_ARGS, MCP_ELICITATION_ENABLED, MCP_IDEMPOTENCY_META_KEY } from '../../config/runtime-limits';
 import { getToolCallIdempotencyKey } from '../../utils/tool-call-context';
 import { sdkToolToMCPTool, type SDKTool } from './tool-schema';
+import { offloadMediaBlocks } from './media-content';
 import { ElicitationCallTracker } from './elicitation-bridge';
 import { getConfig } from '../../config/env';
 
@@ -318,7 +319,7 @@ export class ExternalMCPClient extends EventEmitter {
             const params = { name, arguments: args, ...(idempotencyKey ? { _meta: { [MCP_IDEMPOTENCY_META_KEY]: idempotencyKey } } : {}) };
             const call = (opts?: { signal: AbortSignal; timeout: number }) => (opts ? client.callTool(params, opts) : client.callTool(params)) as Promise<SDKCallToolResult>;
             const result = this.elicitation ? await this.elicitation.call(call) : await call();
-            return this.sdkResultToMCPToolResult(result);
+            return this.sdkResultToMCPToolResult(await offloadMediaBlocks(result, name));
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             // self-heal: 연결 사망(컨테이너 死/세션 무효 — "Not connected"/"Session not found")

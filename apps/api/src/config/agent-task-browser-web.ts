@@ -86,3 +86,32 @@ export const MCP_TOOL_SCHEMA = {
     /** 참조 안의 참조를 따라가는 깊이 상한 — 넘으면 그 참조는 풀지 않는다(스키마가 부풀지 않게). */
     REF_MAX_DEPTH: intEnv(process.env.MCP_SCHEMA_REF_MAX_DEPTH, 8),
 } as const;
+
+/** MCP 결과의 이미지·오디오 블록 처리(addons/mcp-runtime/media-content). */
+export const MCP_MEDIA = {
+    /**
+     * 이미지·오디오 블록의 base64 를 도구 결과 본문에 싣지 않는다 — 작업 공간이 있으면 파일로 저장해 경로를 적고,
+     * 없으면 건수·종류·크기만 적는다. MCP_MEDIA_OFFLOAD_ENABLED=false 로 끈다(종전 동작).
+     */
+    OFFLOAD_ENABLED: process.env.MCP_MEDIA_OFFLOAD_ENABLED !== 'false',
+    /** 저장하는 작업 공간 하위 디렉터리 — 숨김이 아니라 산출물 목록에 나온다(도구가 만든 이미지는 결과물이다). */
+    DIR: 'mcp-media',
+    /** 파일 하나의 저장 상한(byte) — 넘으면 저장하지 않고 생략 안내만 적는다(작업 공간 쿼터 보호). */
+    MAX_SAVE_BYTES: intEnv(process.env.MCP_MEDIA_MAX_SAVE_BYTES, 20 * 1024 * 1024),
+    /** MIME → 확장자. 표에 없으면 bin. */
+    EXT_BY_MIME: {
+        'image/png': 'png',
+        'image/jpeg': 'jpg',
+        'image/gif': 'gif',
+        'image/webp': 'webp',
+        'image/svg+xml': 'svg',
+        'audio/wav': 'wav',
+        'audio/x-wav': 'wav',
+        'audio/mpeg': 'mp3',
+        'audio/mp3': 'mp3',
+        'audio/ogg': 'ogg',
+        'audio/flac': 'flac',
+        'audio/webm': 'webm',
+        'audio/mp4': 'm4a',
+    } as Readonly<Record<string, string>>,
+} as const;
