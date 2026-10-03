@@ -220,14 +220,17 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
 /** 실패 사유 코드 — i18n 번역 대상. 그 외 값은 자유 텍스트로 원문 표시. */
 // "aborted" 는 사용자 취소 시 error 컬럼에 들어간다 — 번역 대상에 없어 원문이 그대로
 // 노출되고 있었다(결과 블록이 취소 사유를 표시하면서 드러남).
-const KNOWN_ERROR_CODES = new Set(["goal_incomplete", "max_turns_exhausted", "interrupted", "aborted"]);
+const KNOWN_ERROR_CODES = new Set(["goal_incomplete", "max_turns_exhausted", "interrupted", "aborted", "token_limit", "timeout", "hitl_park_expired", "interrupted_local_device"]);
+/** 같은 뜻의 다른 표기 — 서버가 재시작 정리 때 쓰는 문구를 번역 키로 맞춘다. */
+const ERROR_CODE_ALIASES: Record<string, string> = { "server restarted": "interrupted" };
 /** 재개 가능한 사유 — resume 버튼과 시각적으로 연결. */
 const RESUMABLE_ERROR_CODES = new Set(["max_turns_exhausted", "interrupted"]);
 
 /** 실패 사유 라벨: 알려진 코드는 번역, 그 외는 원문 축약(전문은 tooltip). */
 function errorReasonLabel(tr: TFn, error: string): string {
-  return KNOWN_ERROR_CODES.has(error)
-    ? tr(`errorReason.${error}`)
+  const code = ERROR_CODE_ALIASES[error] ?? error;
+  return KNOWN_ERROR_CODES.has(code)
+    ? tr(`errorReason.${code}`)
     : error.length > 48 ? `${error.slice(0, 48)}…` : error;
 }
 

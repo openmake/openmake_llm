@@ -960,7 +960,11 @@
       "max_turns_exhausted": "已达轮次/资源上限",
       "interrupted": "因服务器重启而中断",
       "resumableHint": "可继续执行",
-      "aborted": "用户已取消"
+      "aborted": "用户已取消",
+      "token_limit": "已达到令牌上限",
+      "timeout": "超出时间上限",
+      "hitl_park_expired": "等待回答超时",
+      "interrupted_local_device": "本地设备断开连接而中断"
     },
     "planNode": "步骤{n}",
     "startedLabel": "开始",

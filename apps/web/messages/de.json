@@ -960,7 +960,11 @@
       "max_turns_exhausted": "Runden-/Ressourcenlimit erreicht",
       "interrupted": "Durch Serverneustart unterbrochen",
       "resumableHint": "Kann fortgesetzt werden",
-      "aborted": "Vom Benutzer abgebrochen"
+      "aborted": "Vom Benutzer abgebrochen",
+      "token_limit": "Token-Limit erreicht",
+      "timeout": "Zeitlimit überschritten",
+      "hitl_park_expired": "Zeitüberschreitung beim Warten auf Ihre Antwort",
+      "interrupted_local_device": "Unterbrochen: lokales Gerät getrennt"
     },
     "planNode": "Schritt {n}",
     "startedLabel": "Gestartet",
