@@ -306,3 +306,17 @@ npm --workspace apps/api run eval:trajectory -- --spec 명세.json --task <작�
 - 명세 필드: `requiredTools`·`allowedTools`·`forbiddenTools`(선택), `expectedArgs`(인자, 값은 정확 일치 또는 `{ "regex": "..." }`), `order`(`before` 의 첫 호출이 `after` 의 첫 호출보다 앞), `maxCalls`(도구별 횟수 상한). 모르는 필드는 거절한다.
 - 필수 도구가 아예 안 쓰였으면 그 도구의 인자·순서 검사는 실패가 아니라 건너뜀(`-`)으로 찍힌다 — 원인 하나가 여러 실패로 부풀지 않게.
 - 범위 밖: 결과의 의미 판정(goal judge), 과제 묶음·기준선·CI 게이트. 명세 라벨은 다른 골든셋과 같이 **사용자 의도 기준**으로 쓴다.
+
+## 프롬프트 규칙 제거 실험 (ablation, real 전용)
+
+수작업 규칙이 실제로 도움이 되는지 규칙 유무로 잰다. 과제마다 조건(variant)별로 에이전트 작업을 **실제로** 실행한다 — 샌드박스에서 실제 모델이 도구를 쓴다. 운영 코드는 바꾸지 않고 실행 프로세스 안에서만 시스템 프롬프트의 지정 규칙을 뺀다(`prompt-ablation.ts`).
+
+```bash
+npm --workspace apps/api run eval:ablation -- --repeats 3            # golden-agent-tasks.json 전체
+npm --workspace apps/api run eval:ablation -- --limit 1              # 과제 1개만(시범)
+```
+
+- 전제: `.env` 의 DB·모델 접속, 샌드박스(`TASK_SANDBOX_ENABLED=true`, docker). 승인은 이 실행에 한해 끈다 — 과제는 네트워크 없는 샌드박스 안에서만 끝나는 것으로 고른다. 실행 사용자는 `OMK_EVAL_ABLATION_USER_ID`(기본 관리자 시드 계정)이고, 작업 행은 DB 에 남는다.
+- 과제 묶음 `golden-agent-tasks.json`(v1.0.0): 과제 3개(계산·파일 편집·표 집계)와 기대 과정(검색·브라우저 미사용, 실행 도구 호출 상한), 조건 2개(`baseline`, 절차·예산류 규칙 4개를 뺀 `no-budget-rules`). 조건의 `dropRules` 는 규칙 문구의 부분 문자열이고, 프롬프트에 없는 문구면 실행 전에 실패한다.
+- 결과: 조건별 완료율·과정 검사 통과율·평균 토큰·턴·도구 호출 수를 찍고 `logs/prompt-ablation-*.json` 에 실행별 값을 남긴다. **통과/실패 관문이 아니다.**
+- 첫 측정(2026-10-03, retired-chat-model, 과제 3 × 조건 2 × 3회 = 18건): `baseline` 완료 9/9·평균 36,519토큰·3.0턴, `no-budget-rules` 완료 8/9·평균 33,828토큰·2.8턴. 과정 검사는 양쪽 모두 18/18 통과. 규칙을 뺀 조건의 토큰 감소는 표 집계 과제에서 한 턴 일찍 `terminate` 로 끝낸 두 건에서 나왔고, 그중 한 건은 답에 표가 빠져 judge 가 미달성으로 판정했다. 나머지 과제는 조건 간 차이가 1% 안팎이다. **표본이 작아(조건당 9건) 결론으로 읽지 말 것** — 이 과제들에서는 규칙을 빼서 얻는 이득이 보이지 않았다는 정도다. 검색이 필요한 과제는 묶음에 없어 검색 규칙의 효과는 재지 못했다.
