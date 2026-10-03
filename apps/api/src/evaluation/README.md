@@ -288,15 +288,19 @@ routing + response(mock) + response `--real --limit 30`(전체 — limit 은 앞
 1. ~~라우터 실패 27건 개선~~ — 2026-09-02 해소(키워드 보강 + 토픽 패턴 협소화). ⚠️ 한글 2자 키워드는 조사 결합 때문에 단어 완전 일치 규칙에서 사실상 죽는다 — 부분 일치로 열면 범용어 오염+가드 붕괴(실측 반려), 2자어가 신호면 구(phrase) 키워드로 커버할 것
 2. **Phase 2.5 Prompt DB Registry** — 프롬프트 핫스왑 인프라
 3. **trajectory 평가** — judge_shadow 적재분 + 2026-09-08 judge 재측정 결과를 본 뒤 증분 결정
-   - 결정적 과정 검사는 들어왔다(`trajectory-evaluator.ts`, 아래 "궤적 과정 검사"). 남은 것은 고정 과제 묶음·real 실행기·CI 게이트와, 의미 판정(judge)을 여기에 붙일지의 결정이다.
+   - 결정적 과정 검사는 들어왔다(`trajectory-evaluator.ts`, 아래 "궤적 과정 검사"): 검사기, 검사기 자체 검증용 골든 묶음(CI Gate 10), 실제 작업 기록 한 건을 검사하는 `--task`. 남은 것은 **운영 과제별 명세 묶음**(과제마다 기대 과정을 사용자 의도 기준으로 라벨링)과 그것을 실모델로 돌리는 nightly, 의미 판정(judge)을 여기에 붙일지의 결정이다.
 
 ## 궤적 과정 검사 (trajectory, 결정적)
 
 에이전트 작업 한 건의 스텝 기록을 명세와 대조한다. 최종 답이 맞아도 과정이 틀린 실행(필수 도구 생략, 허용 밖 도구, 인자·순서·호출 횟수 위반)을 잡는 용도다. LLM·DB 를 쓰지 않는다.
 
 ```bash
-npm --workspace apps/api run eval:trajectory -- --spec 명세.json --steps 스텝.json
+npm --workspace apps/api run eval:trajectory                                      # mock(CI Gate 10) — 골든 묶음으로 검사기 자체 검증
+npm --workspace apps/api run eval:trajectory -- --spec 명세.json --steps 스텝.json   # 파일로 내보낸 스텝 기록 한 건
+npm --workspace apps/api run eval:trajectory -- --spec 명세.json --task <작업 id>    # DB 의 실제 작업 기록 한 건(.env 필요)
 ```
+
+- 골든 묶음 `golden-trajectory.json`(v1.0.0, 8건): 정상 2 · 필수 도구 생략 · 허용 밖 도구 · 금지 도구 · 인자 불일치 · 순서 위반 · 호출 횟수 초과. 케이스마다 기대 판정과 실패해야 할 검사 id 를 적는다. 검사기 규칙을 바꾸면 이 묶음이 먼저 깨져야 한다.
 
 - 스텝 파일: `agent_task_steps` 행의 JSON 배열(`step_number`·`step_type`·`tool_name`·`tool_args`). 도구 호출은 `tool_result` 스텝에서 읽는다.
 - 명세 필드: `requiredTools`·`allowedTools`·`forbiddenTools`(선택), `expectedArgs`(인자, 값은 정확 일치 또는 `{ "regex": "..." }`), `order`(`before` 의 첫 호출이 `after` 의 첫 호출보다 앞), `maxCalls`(도구별 횟수 상한). 모르는 필드는 거절한다.

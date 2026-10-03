@@ -109,3 +109,31 @@ describe('parseTrajectorySpec', () => {
         expect(parseTrajectorySpec(SPEC)).toEqual(SPEC);
     });
 });
+
+describe('골든 묶음 — 채점기 자체 검증', () => {
+    const { loadTrajectoryGolden, runTrajectoryGolden } = jest.requireActual('../trajectory-evaluator') as typeof import('../trajectory-evaluator');
+
+    it('기본 골든 묶음은 전부 기대와 일치한다(정상은 통과, 불량은 지목한 검사에서 실패)', () => {
+        const summary = runTrajectoryGolden(loadTrajectoryGolden());
+        expect(summary.failures).toEqual([]);
+        expect(summary.total).toBeGreaterThanOrEqual(6);
+        expect(summary.passed).toBe(summary.total);
+    });
+
+    it('기대와 다른 판정이 나오면 그 케이스를 실패로 보고한다', () => {
+        const summary = runTrajectoryGolden({
+            version: 't', description: '',
+            cases: [{ id: 'wrong-label', spec: { id: 's', requiredTools: ['bash'] }, steps: [], expect: { passed: true } }],
+        });
+        expect(summary.passed).toBe(0);
+        expect(summary.failures[0]).toMatchObject({ id: 'wrong-label' });
+    });
+
+    it('불량 케이스는 실패한 검사 id 까지 맞아야 한다', () => {
+        const summary = runTrajectoryGolden({
+            version: 't', description: '',
+            cases: [{ id: 'wrong-root', spec: { id: 's', requiredTools: ['bash'] }, steps: [], expect: { passed: false, rootFailures: ['forbidden:bash'] } }],
+        });
+        expect(summary.passed).toBe(0);
+    });
+});

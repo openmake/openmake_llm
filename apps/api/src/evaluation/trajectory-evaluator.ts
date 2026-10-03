@@ -10,6 +10,8 @@
  *
  * @module evaluation/trajectory-evaluator
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import { z } from 'zod';
 
 const argMatcher = z.union([z.string(), z.number(), z.boolean(), z.object({ regex: z.string().min(1) }).strict()]);
@@ -141,4 +143,59 @@ export function stepsToTrajectory(steps: readonly TrajectoryStepRow[]): Trajecto
             if (typeof args === 'string') { try { args = JSON.parse(args); } catch { args = {}; } }
             return { name: s.tool_name as string, args: args && typeof args === 'object' ? args as Record<string, unknown> : {} };
         });
+}
+
+// ─── 골든 묶음 — 채점기 자체 검증 ───
+// 알려진 정상·불량 궤적을 검사기에 넣어 기대한 판정이 나오는지 본다. 검사기를 고치다 판정이 느슨해지거나
+// 엉뚱한 검사가 실패하는 회귀를 CI 에서 잡는다(채점기를 먼저 검증한다 — ASCEND 2609.32868 의 교훈).
+
+const stepRowSchema = z.object({
+    step_number: z.number().int(),
+    step_type: z.string(),
+    tool_name: z.string().nullable(),
+    tool_args: z.unknown(),
+});
+
+const goldenSchema = z.object({
+    version: z.string().min(1),
+    description: z.string(),
+    cases: z.array(z.object({
+        id: z.string().min(1),
+        note: z.string().optional(),
+        spec: specSchema,
+        steps: z.array(stepRowSchema),
+        expect: z.object({ passed: z.boolean(), rootFailures: z.array(z.string()).optional() }).strict(),
+    }).strict()).min(1),
+});
+
+export type TrajectoryGolden = z.infer<typeof goldenSchema>;
+export const DEFAULT_TRAJECTORY_GOLDEN = path.resolve(__dirname, 'golden-trajectory.json');
+
+export function loadTrajectoryGolden(filePath: string = DEFAULT_TRAJECTORY_GOLDEN): TrajectoryGolden {
+    const golden = goldenSchema.parse(JSON.parse(fs.readFileSync(filePath, 'utf8')));
+    for (const c of golden.cases) parseTrajectorySpec(c.spec);
+    return golden;
+}
+
+export interface TrajectoryGoldenSummary {
+    version: string;
+    total: number;
+    passed: number;
+    failures: Array<{ id: string; reason: string }>;
+}
+
+/** PURE: 골든 묶음의 각 케이스에서 검사기 판정이 기대(통과 여부·실패 검사 id)와 같은지 본다. */
+export function runTrajectoryGolden(golden: TrajectoryGolden): TrajectoryGoldenSummary {
+    const failures: TrajectoryGoldenSummary['failures'] = [];
+    for (const c of golden.cases) {
+        const r = evaluateTrajectory(c.spec, stepsToTrajectory(c.steps as TrajectoryStepRow[]));
+        const want = [...(c.expect.rootFailures ?? [])].sort();
+        const got = [...r.rootFailures].sort();
+        if (r.passed !== c.expect.passed) {
+            failures.push({ id: c.id, reason: `기대 ${c.expect.passed ? '통과' : '실패'}, 실제 ${r.passed ? '통과' : `실패(${got.join(', ')})`}` });
+        } else if (c.expect.rootFailures && JSON.stringify(want) !== JSON.stringify(got)) {
+            failures.push({ id: c.id, reason: `실패 검사 불일치 — 기대 [${want.join(', ')}], 실제 [${got.join(', ')}]` });
+        }
+    }
+    return { version: golden.version, total: golden.cases.length, passed: golden.cases.length - failures.length, failures };
 }
