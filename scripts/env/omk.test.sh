@@ -245,6 +245,7 @@ OUT="$OMK_ROOT/caddy/caddy.d/staging.caddy"
 ok "render file exists"   "[[ -f '$OUT' ]]"
 ok "no placeholders left" "! grep -q '{{' '$OUT'"
 ok "api upstream"         "grep -q 'reverse_proxy /api/\* localhost:52417' '$OUT'"
+ok "generated upstream"   "grep -q 'reverse_proxy /generated/\* localhost:52417' '$OUT'"
 ok "web upstream"         "grep -q 'reverse_proxy localhost:3010' '$OUT'"
 PP="$(dotenv_get "$L/.env" OMK_PROXY_PORT)"
 ok "proxy port recorded"  "[[ '$PP' =~ ^[0-9]+$ && $PP -ge $OMK_PROXY_PORT_BASE ]]"
@@ -296,6 +297,7 @@ https_render opsenv >/dev/null
 HO="$OMK_ROOT/caddy/caddy.d/opsenv-https.caddy"
 ok "https: 사이트 블록"      "grep -q '^mac-mini.local {' '$HO' && grep -q 'tls internal' '$HO'"
 ok "https: 업스트림"         "grep -q 'reverse_proxy /api/\* localhost:52416' '$HO' && grep -q 'reverse_proxy localhost:3000' '$HO'"
+ok "https: 생성 파일"       "grep -q 'reverse_proxy /generated/\* localhost:52416' '$HO'"
 ok "https: 뷰어 블록"        "grep -q '^mac-mini.local:8443 {' '$HO'"
 ok "https: 자리표시자 없음"  "! grep -q '{{' '$HO'"
 eq "https: 공개 주소·쿠키"   "$(dotenv_get "$OL/.env" OMK_APP_URL)|$(dotenv_get "$OL/.env" COOKIE_SECURE)|$(dotenv_get "$OL/.env" ALLOW_INSECURE_COOKIES)" "https://mac-mini.local|true|false"
@@ -450,6 +452,104 @@ DU_SETUP_RAN="$(
 eq "dev up: 준비된 클론이면 setup 을 건너뛴다" "$DU_SETUP_RAN" "0"
 ok "dev up: 래퍼가 없으면 설치" '[[ -x "$DU_ROOT/bin/omk" ]]'
 eq "dev up 래퍼: 클론 안의 dev 는 클론 것" "$(cd "$WC" && OMK_ROOT="$DU_ROOT" bash "$DU_ROOT/bin/omk" dev up 2>/dev/null)" "clone dev up"
+
+# ── 웹 빌드: Next 는 rewrites(/api · /generated)의 대상을 빌드 때 굳힌다 — 빌드가 그 환경의 API 포트를 받아야 한다 ──
+# (실행 때 넣은 API_PROXY_TARGET 은 이미 굳은 빌드본에 닿지 않는다. 기본 포트가 아닌 환경에서 생성 이미지가 500 이던 원인.)
+BT="$TMP/buildtarget"; mkdir -p "$BT/bin"
+cp "$HERE/../../openmake_llm.sh" "$BT/"
+printf 'PORT=52417\n' > "$BT/.env"
+printf '#!/usr/bin/env bash\nprintf "%%s" "${API_PROXY_TARGET:-}" > "%s/seen"\n' "$BT" > "$BT/bin/npm"; chmod +x "$BT/bin/npm"
+( unset PORT API_PROXY_TARGET; PATH="$BT/bin:$PATH" bash "$BT/openmake_llm.sh" build --no-restart >/dev/null 2>&1 )
+eq "build: API 포트를 프록시 대상으로 넘긴다" "$(cat "$BT/seen" 2>/dev/null)" "http://localhost:52417"
+for f in install_linux.sh scripts/setup/mac/60-app.sh; do
+    ok "build: $f 도 빌드에 넘긴다" "grep -q 'API_PROXY_TARGET=\"http://localhost:\$APP_PORT\" npm run build' '$HERE/../../$f'"
+done
+
+# ── 스모크: 갱신 직후 설치본이 실제로 도는지 사람 없이 본다 (네트워크는 건드리지 않는다 — smoke_code 를 갈아 끼운다) ──
+SM="$OMK_ROOT/smk/llm"; mkdir -p "$SM/apps/web/.next"
+printf 'PORT=52417\nOMK_WEB_PORT=3010\n' > "$SM/.env"
+printf '{"rewrites":{"beforeFiles":[],"afterFiles":[{"source":"/api/:path*","destination":"http://localhost:52417/api/:path*"},{"source":"/generated/:path*","destination":"http://localhost:52417/generated/:path*"}],"fallback":[]}}' > "$SM/apps/web/.next/routes-manifest.json"
+eq "smoke: 빌드본의 API 포트를 읽는다"   "$(web_manifest_api_port "$SM")" "52417"
+eq "smoke: 빌드본이 없으면 빈 값"        "$(web_manifest_api_port "$TMP/없는-설치본")" ""
+ok "smoke: 빌드본 포트가 .env 와 같으면 통과" 'smoke_check_manifest "$SM"'
+printf 'PORT=52418\nOMK_WEB_PORT=3010\n' > "$SM/.env"
+ok "smoke: 빌드본 포트가 다르면 실패"    '! smoke_check_manifest "$SM"'
+ok "smoke: 실패 이유에 두 포트를 적는다" '[[ "$SMOKE_WHY" == *52417* && "$SMOKE_WHY" == *52418* ]]'
+printf 'PORT=52417\nOMK_WEB_PORT=3010\n' > "$SM/.env"
+eq "smoke: JSON 문자열 이스케이프" "$(json_str 'a"b\c')" '"a\"b\\c"'
+ok "smoke: 계정이 없으면 로그인 실패"    '! smoke_check_login "$SM"'
+ok "smoke: 계정이 없다고 이유를 적는다"  '[[ "$SMOKE_WHY" == *OMK_SMOKE_EMAIL* ]]'
+ok "smoke: 로그인 없이는 채팅을 건너뛴다" '! ( SMOKE_TOKEN=""; smoke_check_chat "$SM" )'
+# /generated 는 웹 포트로 묻는다 — API 까지 닿으면 없는 파일은 404, 빌드본이 엉뚱한 포트를 보면 500 이다.
+eq "smoke: /generated 404 는 통과" "$( smoke_code() { printf 404; }; smoke_check_generated "$SM" && echo ok )" "ok"
+eq "smoke: /generated 500 은 실패" "$( smoke_code() { printf 500; }; smoke_check_generated "$SM" || echo fail )" "fail"
+eq "smoke: /generated 는 웹 포트로 묻는다" "$( smoke_code() { printf '%s' "$2" > "$TMP/gen-url"; printf 404; }; smoke_check_generated "$SM"; cat "$TMP/gen-url" )" "http://localhost:3010/generated/omk-smoke-none.png"
+git init -q "$SM" && git -C "$SM" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m x
+SM_SHA="$(git -C "$SM" rev-parse HEAD)"
+SM_RC="$(
+    load_toolchain() { :; }
+    smoke_check_health() { return 0; }; smoke_check_manifest() { return 0; }; smoke_check_generated() { return 0; }
+    smoke_check_login() { return 0; }; smoke_check_chat() { return 0; }
+    cmd_env_smoke smk >/dev/null 2>&1; echo $?
+)"
+eq "smoke: 전부 통과하면 0" "$SM_RC" "0"
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+SM_OUT="$(
+    load_toolchain() { :; }
+    smoke_check_health() { return 0; }; smoke_check_manifest() { SMOKE_WHY=포트; return 1; }; smoke_check_generated() { echo ran-generated; return 0; }
+    smoke_check_login() { return 0; }; smoke_check_chat() { return 0; }
+    cmd_env_smoke smk 2>&1; echo "rc=$?"
+)"
+ok "smoke: 하나라도 실패하면 3"        '[[ "$SM_OUT" == *rc=3* ]]'
+ok "smoke: 실패해도 나머지 항목을 본다" '[[ "$SM_OUT" == *ran-generated* ]]'
+
+# ── 결과 표지: 확인한 커밋에 GitHub 커밋 상태를 붙인다 (dev → main 자동 머지의 필수 체크가 읽는다) ──
+eq "status: https 원격"  "$( git -C "$SM" remote add origin https://github.com/openmake/openmake_llm.git; status_repo_slug "$SM" )" "openmake/openmake_llm"
+eq "status: ssh 원격"    "$( git -C "$SM" remote set-url origin git@github.com:openmake/openmake_llm.git; status_repo_slug "$SM" )" "openmake/openmake_llm"
+eq "status: 표지 이름"   "$(status_context staging)" "omk/env-staging"
+ok "status: 토큰이 없으면 붙이지 않는다" '! status_post "$SM" smk "$SM_SHA" success ok >/dev/null 2>&1'
+printf 'OMK_STATUS_TOKEN=t0ken\n' >> "$SM/.env"
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+ST_ARGS="$( curl() { printf '%s\n' "$@" > "$TMP/st-args"; printf 201; }; status_post "$SM" smk "$SM_SHA" failure "채팅 실패" >/dev/null 2>&1; cat "$TMP/st-args" )"
+ok "status: 그 커밋의 statuses 로 보낸다" '[[ "$ST_ARGS" == *"/repos/openmake/openmake_llm/statuses/$SM_SHA"* ]]'
+ok "status: 표지 이름과 결과를 담는다"    '[[ "$ST_ARGS" == *"\"context\":\"omk/env-smk\""* && "$ST_ARGS" == *"\"state\":\"failure\""* ]]'
+ok "status: 토큰을 헤더로 보낸다"         '[[ "$ST_ARGS" == *"Authorization: Bearer t0ken"* ]]'
+ok "status: 201 이 아니면 실패"           '! ( curl() { printf 403; }; status_post "$SM" smk "$SM_SHA" success ok >/dev/null 2>&1 )'
+ST_N="$(
+    status_post() { echo post; }
+    status_report smk "$SM_SHA" success ok; status_report smk "$SM_SHA" success ok; status_report smk "$SM_SHA" failure 실패
+)"
+eq "status: 같은 커밋·같은 결과는 한 번만" "$(printf '%s\n' "$ST_N" | grep -c post)" "2"
+rm -f "$(status_marker smk)"
+( status_post() { return 1; }; status_report smk "$SM_SHA" success ok ) >/dev/null 2>&1
+ok "status: 못 붙였으면 기억하지 않는다" '[[ ! -f "$(status_marker smk)" ]]'
+
+# ── 갱신 → 스모크 → 표지 (autoupdate 가 부른다) ──
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+UR="$(
+    cmd_env_update() { return 2; }; status_report() { echo "report $2 $3"; }; cmd_env_smoke() { echo smoke; }
+    env_update_report smk --if-behind >/dev/null 2>&1; echo "rc=$?"
+    env_update_report smk --if-behind 2>/dev/null
+)"
+ok "report: 갱신 실패는 실패 표지"       '[[ "$UR" == *"report $SM_SHA failure"* ]]'
+ok "report: 갱신 실패면 스모크를 돌리지 않는다" '[[ "$UR" != *smoke* ]]'
+ok "report: 갱신 실패의 종료 코드를 넘긴다" '[[ "$UR" == *rc=2* ]]'
+rm -f "$(status_marker smk)"
+eq "report: 갱신 뒤 스모크를 표지와 함께" "$( cmd_env_update() { :; }; cmd_env_smoke() { echo "smoke $*"; }; env_update_report smk --if-behind 2>/dev/null )" "smoke smk --report"
+printf '%s success' "$SM_SHA" > "$(status_marker smk)"
+eq "report: 통과를 기록한 커밋은 다시 보지 않는다" "$( cmd_env_update() { :; }; cmd_env_smoke() { echo smoke; }; env_update_report smk --if-behind 2>/dev/null )" ""
+printf '%s failure' "$SM_SHA" > "$(status_marker smk)"
+eq "report: 실패로 남은 커밋은 다시 본다" "$( cmd_env_update() { :; }; cmd_env_smoke() { echo smoke; }; env_update_report smk --if-behind 2>/dev/null )" "smoke"
+rm -f "$(status_marker smk)"
+# autoupdate: 표지 토큰을 넣은 환경만 갱신 뒤 스모크·표지까지 간다 — 토큰이 없으면 지금까지와 같다.
+mkdir -p "$SM/scripts/env"; : > "$SM/scripts/env/omk.sh"
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+AU="$( load_toolchain() { :; }; require_pm2() { :; }; pm2() { [[ "$1" != start ]] || printf '%s ' "$@" > "$TMP/pm2-args"; [[ "$1" != describe ]]; }; cmd_env_autoupdate smk >/dev/null 2>&1; cat "$TMP/pm2-args" )"
+ok "autoupdate: 토큰이 있으면 --report"  '[[ "$AU" == *"env update smk --if-behind --yes --report"* ]]'
+printf 'PORT=52417\n' > "$SM/.env"
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+AU="$( load_toolchain() { :; }; require_pm2() { :; }; pm2() { [[ "$1" != start ]] || printf '%s ' "$@" > "$TMP/pm2-args"; [[ "$1" != describe ]]; }; cmd_env_autoupdate smk >/dev/null 2>&1; cat "$TMP/pm2-args" )"
+ok "autoupdate: 토큰이 없으면 예전 그대로" '[[ "$AU" == *"--if-behind --yes "* && "$AU" != *--report* ]]'
 
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]

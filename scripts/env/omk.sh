@@ -43,13 +43,16 @@
 #                           --dgx-host H      DGX vLLM(:8002 채팅·:8003 임베딩·:8005 음악)을 게이트웨이 업스트림으로 + 연결 확인
 #                           --https-host H    내부망 HTTPS (Caddy tls internal · :443) — 사내 기기는 루트 인증서를 한 번 신뢰 등록
 #                           --artifact-viewer 아티팩트 공유 뷰어 (기본 인스턴스 전용) · --discord-token T  Discord 봇 (이 서버 전용 새 토큰)
-#   omk env update  <env> [--if-behind] [--no-backup] [--force-unverified]   # llm(ff-only→build→migrate→restart) → bench → proxy
+#   omk env update  <env> [--if-behind] [--no-backup] [--force-unverified] [--report]   # llm(ff-only→build→migrate→restart) → bench → proxy
+#                                                       # --report: 갱신 → 스모크 → 그 커밋에 결과 표지(autoupdate 가 쓴다)
+#   omk env smoke   <env> [--report]                    # health · 빌드본의 API 포트 · /generated · 로그인 · 채팅 1회. 실패하면 종료 코드 3
 #   omk env verify  <env> [--list]                      # 확인을 마친 커밋을 origin 에 기록 — 릴리스 게이트(OMK_RELEASE_GATE=1)가 읽는다
 #   omk env reset   <env> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
 #   omk env status|start|stop|logs <env>
 #   omk env expose <env> [--tailscale] [--host H]…      # 다른 기기에서 프록시 포트로 보기 — 호스트를 CORS 에 허용(.env 에 기억)
 #   omk env backup  <env> [--schedule ['CRON']] [--off] [--list] [--dry-run]   # DB 덤프 → $OMK_ROOT/backups/<env> (reset 에도 남는다)
 #   omk env autoupdate <env> [--every 'CRON'] [--off]   # 선택 — 기본은 수동 배포. PM2 cron 앱 omk-updater-<env>
+#                                                       # .env 에 OMK_STATUS_TOKEN 이 있으면 갱신 뒤 스모크·결과 표지까지 간다
 #   omk proxy status|reload|render <env>
 #   omk dev setup [--no-searxng] [--no-runtime-images] [--no-litellm] [--no-default-model] [--llm-base-url U --llm-api-key K --llm-model M]
 #                 [--dgx-host H [--vllm-api-key K]]
@@ -61,6 +64,7 @@
 #   OMK_AUTOUPDATE_CRON('*/10 * * * *')  OMK_DEV_LLM  OMK_DEV_BENCH  OMKB_PORT_BASE(9400)  OMK_PROXY_PORT_BASE(33000)
 #   OMK_SEARXNG_IMAGE(searxng/searxng:latest)  OMK_SEARXNG_PORT_BASE(8888)  OMK_NET_PROBE_URLS  OMK_SEARCH_PROBE_QUERY
 #   OMK_VERIFY_PUSH_URL(origin)   'omk env verify' 가 기록을 push 할 원격 (클론이 https 면 ssh 주소)
+#   OMK_SMOKE_TIMEOUT(120)  OMK_GITHUB_API(https://api.github.com)
 #   OMK_LOG(켜짐)   설치·갱신·리셋의 출력을 $OMK_ROOT/logs/omk/ 에도 남긴다. 끄려면 off
 #   OMK_FORCE_FOREIGN=1   같은 인스턴스 이름을 쓰는 다른 설치본의 컨테이너·PM2 앱도 건드린다 (기본: 거부)
 #
@@ -82,6 +86,8 @@ OMKB_PORT_BASE="${OMKB_PORT_BASE:-9400}"          # bench 빈 포트 탐색 시�
 OMK_PROXY_PORT_BASE="${OMK_PROXY_PORT_BASE:-33000}"
 OMK_CADDY_ADMIN="${OMK_CADDY_ADMIN:-localhost:2019}"
 OMK_AUTOUPDATE_CRON="${OMK_AUTOUPDATE_CRON:-*/10 * * * *}"
+OMK_SMOKE_TIMEOUT="${OMK_SMOKE_TIMEOUT:-120}"             # 스모크 요청 하나의 제한 시간(초) — 채팅 1회가 가장 길다
+OMK_GITHUB_API="${OMK_GITHUB_API:-https://api.github.com}"   # 결과 표지(커밋 상태)를 올릴 API
 OMK_SEARXNG_IMAGE="${OMK_SEARXNG_IMAGE:-searxng/searxng:latest}"
 OMK_SEARXNG_PORT_BASE="${OMK_SEARXNG_PORT_BASE:-8888}"   # .env.example 의 SEARXNG_URL 예시 포트. 점유 시 다음 빈 포트
 OMK_BACKUP_CRON="${OMK_BACKUP_CRON:-30 3 * * *}"          # omk env backup --schedule 의 기본 주기 (매일 03:30)
@@ -133,7 +139,7 @@ usage() {
     if [[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" ]]; then
         sed -n '/^# 사용:/,/^# 종료 코드/p' "$SCRIPT_PATH" | sed 's/^# \{0,1\}//'
     else
-        echo "omk env install|update|verify|reset|status|start|stop|logs|autoupdate <env> · omk proxy render|reload|status · omk dev setup|up|down|status|reset"
+        echo "omk env install|update|smoke|verify|reset|status|start|stop|logs|autoupdate <env> · omk proxy render|reload|status · omk dev setup|up|down|status|reset"
     fi
 }
 
@@ -748,10 +754,125 @@ cmd_env_autoupdate() { # env [--every CRON] [--off]
     fi
     [[ -f "$ldir/scripts/env/omk.sh" ]] || die "$ldir 에 omk.sh 가 없습니다 (브랜치가 오래됐을 수 있음)"
     pm2 describe "$name" >/dev/null 2>&1 && pm2 delete "$name" >/dev/null 2>&1 || true
+    # 표지 토큰을 넣은 환경만 갱신 뒤 스모크·결과 표지까지 간다 — 토큰이 없으면 갱신만 한다.
+    local report=""; [[ -z "$(dotenv_get "$ldir/.env" OMK_STATUS_TOKEN)" ]] || report="--report"
     # autorestart 끄고 cron 으로만 깨운다 — 한 번 돌고 종료하는 one-shot 잡.
+    # shellcheck disable=SC2086  # $report 는 비어 있으면 인자가 되지 않아야 한다
     ( cd "$ldir" && pm2 start "$ldir/scripts/env/omk.sh" --name "$name" --interpreter bash --no-autorestart \
-        --cron-restart "$cron" --time -- env update "$env" --if-behind --yes >/dev/null ) || die "$name 등록 실패"
-    log_ok "$name 등록 — '$cron' 마다 원격이 앞서면 갱신 (pm2 logs $name)"
+        --cron-restart "$cron" --time -- env update "$env" --if-behind --yes $report >/dev/null ) || die "$name 등록 실패"
+    log_ok "$name 등록 — '$cron' 마다 원격이 앞서면 갱신${report:+ → 스모크 → 결과 표지 $(status_context "$env")} (pm2 logs $name)"
+}
+
+# ==============================================================================
+# 스모크 · 결과 표지 — 갱신한 설치본이 실제로 도는지 사람 없이 보고, 그 커밋에 결과를 붙인다
+# ==============================================================================
+# 스스로 갱신하는 환경은 "누가 확인했는가"가 비므로, 갱신 뒤 스모크를 돌려 그 커밋에 GitHub 커밋 상태
+# omk/env-<env> 를 남긴다. dev → main 자동 머지는 이 표지를 필수 체크로 읽는다 — 표지는 확인한 커밋에 붙으므로
+# 환경이 아직 받지 않은 커밋은 저절로 기다린다.
+#   .env 키:  OMK_SMOKE_EMAIL / OMK_SMOKE_PASSWORD   스모크가 로그인할 그 환경의 계정
+#            OMK_STATUS_TOKEN                        커밋 상태 쓰기 권한만 있는 토큰
+SMOKE_WHY=""     # 방금 실패한 항목의 이유
+SMOKE_TOKEN=""   # 로그인이 받은 토큰 — 채팅이 쓴다
+json_str() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; printf '"%s"' "$s"; }
+smoke_code() { # $1=본문을 받을 파일 $2=url [curl 인자…] → HTTP 코드 (연결 실패 000)
+    local out="$1" url="$2" c; shift 2
+    c="$(curl -sS -o "$out" -w '%{http_code}' --max-time "$OMK_SMOKE_TIMEOUT" "$@" "$url" 2>/dev/null)" || c=000
+    printf '%s' "${c:-000}"
+}
+# Next 는 rewrites(/api · /generated)의 대상을 빌드 때 굳힌다 — 빌드본이 본 포트가 지금 .env 의 API 포트여야 한다.
+web_manifest_api_port() { # $1=llm dir → 빌드본이 가리키는 API 포트 (빌드본이 없으면 빈 값)
+    grep -o 'localhost:[0-9]*/generated/' "$1/apps/web/.next/routes-manifest.json" 2>/dev/null | head -1 | tr -cd '0-9' || true
+}
+smoke_check_health() { # $1=llm dir
+    local c; c="$(smoke_code /dev/null "http://localhost:$(llm_api_port "$1")/health")"
+    [[ "$c" == 200 ]] || { SMOKE_WHY="/health → $c"; return 1; }
+}
+smoke_check_manifest() {
+    local built api; built="$(web_manifest_api_port "$1")"; api="$(llm_api_port "$1")"
+    [[ "$built" == "$api" ]] || { SMOKE_WHY="빌드본은 API 포트 ${built:-없음} 을 보는데 .env 는 $api 입니다 — 다시 빌드해야 합니다"; return 1; }
+}
+smoke_check_generated() { # 웹 포트로 묻는다 — API 까지 닿으면 없는 파일은 404 다
+    local c; c="$(smoke_code /dev/null "http://localhost:$(llm_web_port "$1")/generated/omk-smoke-none.png")"
+    [[ "$c" == 404 ]] || { SMOKE_WHY="웹의 /generated → $c (API 에 닿으면 404)"; return 1; }
+}
+smoke_check_login() {
+    local email pass body c
+    email="$(dotenv_get "$1/.env" OMK_SMOKE_EMAIL)"; pass="$(dotenv_get "$1/.env" OMK_SMOKE_PASSWORD)"
+    [[ -n "$email" && -n "$pass" ]] || { SMOKE_WHY=".env 에 OMK_SMOKE_EMAIL / OMK_SMOKE_PASSWORD 가 없습니다"; return 1; }
+    body="$(mktemp)"
+    # 로그인은 CSRF 검사를 받는다(쿠키와 헤더의 토큰이 같아야 한다) — 브라우저처럼 먼저 발급받아 둘 다에 싣는다.
+    local csrf; smoke_code "$body" "http://localhost:$(llm_api_port "$1")/api/csrf-token" >/dev/null
+    csrf="$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' "$body" | head -1)"
+    c="$(smoke_code "$body" "http://localhost:$(llm_api_port "$1")/api/auth/login" -H 'Content-Type: application/json' \
+        -H "X-CSRF-Token: $csrf" -H "Cookie: csrf_token=$csrf" \
+        -d "{\"email\":$(json_str "$email"),\"password\":$(json_str "$pass")}")"
+    SMOKE_TOKEN="$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' "$body" | head -1)"; rm -f "$body"
+    [[ "$c" == 200 && -n "$SMOKE_TOKEN" ]] || { SMOKE_WHY="로그인 → $c"; return 1; }
+}
+smoke_check_chat() {
+    [[ -n "$SMOKE_TOKEN" ]] || { SMOKE_WHY="로그인하지 못해 건너뜀"; return 1; }
+    local body c good=0; body="$(mktemp)"
+    c="$(smoke_code "$body" "http://localhost:$(llm_api_port "$1")/api/chat" -H 'Content-Type: application/json' \
+        -H "Authorization: Bearer $SMOKE_TOKEN" -d '{"message":"ping"}')"
+    grep -q '"success":true' "$body" 2>/dev/null && good=1; rm -f "$body"
+    [[ "$c" == 200 && $good -eq 1 ]] || { SMOKE_WHY="채팅 1회 → $c"; return 1; }
+}
+cmd_env_smoke() { # env [--report]
+    local env="$1"; shift; local report=0
+    while [[ $# -gt 0 ]]; do case "$1" in --report) report=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
+    local ldir c failed=""; ldir="$(llm_dir "$env")"
+    [[ -d "$ldir/.git" ]] || die "$ldir 가 없습니다 — 'omk env install $env' 먼저"
+    log_step "스모크: $env"
+    SMOKE_TOKEN=""
+    for c in health manifest generated login chat; do
+        SMOKE_WHY=""
+        if "smoke_check_$c" "$ldir"; then log_ok "$c"; else log_err "$c — $SMOKE_WHY"; failed="$failed $c"; fi
+    done
+    SMOKE_TOKEN=""
+    if [[ $report -eq 1 ]]; then
+        local state=success desc="스모크 통과"; [[ -z "$failed" ]] || { state=failure; desc="스모크 실패:$failed"; }
+        status_report "$env" "$(git -C "$ldir" rev-parse HEAD)" "$state" "$desc" || log_warn "결과 표지를 붙이지 못했습니다"
+    fi
+    [[ -z "$failed" ]] || { log_err "$env 스모크 실패:$failed"; return 3; }
+    log_ok "$env 스모크 통과"
+}
+
+status_context()   { printf 'omk/env-%s' "$1"; }
+status_marker()    { printf '%s/.omk-status' "$(env_dir "$1")"; }   # 마지막으로 붙인 "<커밋> <결과>"
+status_repo_slug() { # $1=dir → owner/repo
+    git -C "$1" remote get-url origin 2>/dev/null | sed -E 's#^(https?://[^/]+/|ssh://[^/]+/|[^@/]+@[^:/]+:)##; s#\.git$##'
+}
+status_post() { # $1=llm dir $2=env $3=커밋 $4=success|failure $5=설명
+    local token slug c
+    token="$(dotenv_get "$1/.env" OMK_STATUS_TOKEN)"; slug="$(status_repo_slug "$1")"
+    [[ -n "$token" && -n "$slug" ]] || { log_warn ".env 에 OMK_STATUS_TOKEN 이 없어 결과 표지를 붙이지 않습니다"; return 1; }
+    c="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -X POST "$OMK_GITHUB_API/repos/$slug/statuses/$3" \
+        -H "Authorization: Bearer $token" -H 'Accept: application/vnd.github+json' \
+        -d "{\"state\":\"$4\",\"context\":\"$(status_context "$2")\",\"description\":$(json_str "$5")}" 2>/dev/null)" || c=000
+    [[ "$c" == 201 ]] || { log_warn "결과 표지 실패 ($c) — 토큰의 커밋 상태 쓰기 권한을 확인하세요"; return 1; }
+    log_ok "결과 표지 $(status_context "$2")=$4 → ${3:0:8}"
+}
+status_report() { # $1=env $2=커밋 $3=결과 $4=설명 — 같은 커밋·같은 결과는 다시 올리지 않는다
+    local m; m="$(status_marker "$1")"
+    [[ "$(cat "$m" 2>/dev/null)" != "$2 $3" ]] || return 0
+    status_post "$(llm_dir "$1")" "$1" "$2" "$3" "$4" || return 1
+    printf '%s %s' "$2" "$3" > "$m"
+}
+# 갱신 → 스모크 → 그 커밋에 결과 표지. 갱신이 실패하면 받으려던 커밋에 실패를 붙인다.
+env_update_report() { # env [update 인자…]
+    local env="$1"; shift; local ldir sha a rc=0 had_e=0 args=(); ldir="$(llm_dir "$env")"
+    for a in "$@"; do [[ "$a" == --report ]] || args+=("$a"); done
+    # 갱신은 errexit 아래에서 돌아야 한다 — `||` 뒤에 두면 안쪽 실패가 묻힌다.
+    [[ $- != *e* ]] || had_e=1; set +e
+    ( set -e; cmd_env_update "$env" ${args[@]+"${args[@]}"} ); rc=$?
+    [[ $had_e -eq 0 ]] || set -e
+    sha="$(git -C "$ldir" rev-parse HEAD)"
+    if [[ $rc -ne 0 ]]; then
+        status_report "$env" "$(git -C "$ldir" rev-parse --verify -q '@{u}' || printf '%s' "$sha")" failure "update 실패 (종료 코드 $rc)" || true
+        return "$rc"
+    fi
+    [[ "$(cat "$(status_marker "$env")" 2>/dev/null)" != "$sha success" ]] || return 0   # 이미 통과를 기록한 커밋
+    cmd_env_smoke "$env" --report
 }
 
 # ==============================================================================
@@ -1456,6 +1577,8 @@ cmd_env_install() {
 
 cmd_env_update() {
     local env="$1"; shift; local if_behind=0 no_backup=0 force_unverified=0
+    local a report=0; for a in "$@"; do [[ "$a" != --report ]] || report=1; done
+    if [[ $report -eq 1 ]]; then env_update_report "$env" "$@"; return; fi
     while [[ $# -gt 0 ]]; do case "$1" in --no-backup) no_backup=1 ;; --if-behind) if_behind=1 ;; --force-unverified) force_unverified=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
     local ldir bdir; ldir="$(llm_dir "$env")"; bdir="$(bench_dir "$env")"
     [[ -d "$ldir/.git" ]] || die "$ldir 가 없습니다 — 'omk env install $env' 먼저"
@@ -1671,12 +1794,13 @@ cmd_env_expose() { # env [--tailscale] [--host H]… — 다른 기기에서 프
 }
 cmd_env() {
     local sub="${1:-}" env="${2:-}"
-    [[ -n "$sub" && -n "$env" ]] || usage_die "omk env <install|update|verify|reset|status|start|stop|logs|autoupdate> <env>"
+    [[ -n "$sub" && -n "$env" ]] || usage_die "omk env <install|update|smoke|verify|reset|status|start|stop|logs|autoupdate> <env>"
     validate_env "$env"; shift 2
     case "$sub" in
         install)    cmd_env_install "$env" "$@" ;;
         update)     cmd_env_update "$env" "$@" ;;
         verify)     cmd_env_verify "$env" "$@" ;;
+        smoke)      cmd_env_smoke "$env" "$@" ;;
         reset)      cmd_env_reset "$env" "$@" ;;
         status)     cmd_env_status "$env" ;;
         start)      cmd_env_start "$env" ;;

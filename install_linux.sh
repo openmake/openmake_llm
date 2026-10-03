@@ -990,8 +990,9 @@ build_app() {
     log_info "npm run build (백엔드 tsc + 프론트 Next.js) — 수 분 걸릴 수 있습니다"
     # NEXT_PUBLIC_* 는 Next 빌드 시점에 번들로 인라인된다 — 포트 충돌 회피로
     # 3000/52416 이 옮겨진 경우 프론트의 WS 직접 연결 판정이 따라오도록 주입.
+    # API_PROXY_TARGET 도 빌드 때 굳는다(rewrites /api, /generated) — 기동 때만 넘기면 기본 포트가 박힌다.
     ( cd "$SCRIPT_DIR" && NEXT_PUBLIC_WEB_PORT="$WEB_PORT" NEXT_PUBLIC_WS_PORT="$APP_PORT" \
-        npm run build ) || die "빌드 실패"
+        API_PROXY_TARGET="http://localhost:$APP_PORT" npm run build ) || die "빌드 실패"
     log_ok "빌드 완료"
 }
 

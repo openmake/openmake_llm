@@ -61,8 +61,8 @@ struct CompareView: View {
 
     private var pickers: some View {
         HStack(spacing: 8) {
-            ModelPickerMenu(label: "A", selection: $modelA, catalog: model.modelCatalog)
-            ModelPickerMenu(label: "B", selection: $modelB, catalog: model.modelCatalog)
+            ModelPickerMenu(label: "A", selection: $modelA, catalog: model.chatModelCatalog)
+            ModelPickerMenu(label: "B", selection: $modelB, catalog: model.chatModelCatalog)
             Button {
                 thinking.toggle()
             } label: {

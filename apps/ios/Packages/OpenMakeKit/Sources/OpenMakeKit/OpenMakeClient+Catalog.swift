@@ -17,8 +17,10 @@ public extension OpenMakeClient {
     typealias UserAgent = Components.Schemas.UserAgent
 
     /// 사용 가능 모델 목록 (기본 모델이 첫 entry — 계약 규약)
-    func modelCatalog() async throws -> ModelCatalog {
-        let (data, _) = try await authorizedSend(method: "GET", path: "/api/models")
+    /// - Parameter chatOnly: true 면 채팅에 쓸 수 있는 모델만(임베딩·음악·판정 모델 제외 — 웹 컴포저와 같은 `?chatOnly=1`).
+    ///   설정의 모델 배정 화면은 기능 전용 모델도 골라야 하므로 false(전체)를 쓴다.
+    func modelCatalog(chatOnly: Bool = false) async throws -> ModelCatalog {
+        let (data, _) = try await authorizedSend(method: "GET", path: chatOnly ? "/api/models?chatOnly=1" : "/api/models")
         let payload = try decodeContract(
             Operations.get_sol_api_sol_models.Output.Ok.Body.jsonPayload.self, from: data)
         return ModelCatalog(

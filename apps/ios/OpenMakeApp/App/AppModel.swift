@@ -18,6 +18,8 @@ final class AppModel {
 
     // 모델/에이전트 선택 (축 3 Step 5) — nil = 서버 기본/에이전트 미지정
     private(set) var modelCatalog: ModelCatalog?
+    /// 채팅·비교 화면의 모델 선택지 — 비채팅 모델(임베딩·음악·판정)을 뺀 목록. 못 받으면 전체 목록으로 대신한다.
+    private(set) var chatModelCatalog: ModelCatalog?
     private(set) var agents: [OpenMakeClient.UserAgent] = []
     var selectedModelId: String?
     var selectedAgentId: String?
@@ -129,8 +131,10 @@ final class AppModel {
     /// 모델/에이전트 카탈로그 로드 — 실패해도 채팅은 서버 기본으로 동작 (fail-open)
     func loadCatalog() async {
         async let catalogTask = client.modelCatalog()
+        async let chatCatalogTask = client.modelCatalog(chatOnly: true)
         async let agentsTask = client.userAgents()
         modelCatalog = try? await catalogTask
+        chatModelCatalog = (try? await chatCatalogTask) ?? modelCatalog
         agents = (try? await agentsTask) ?? []
     }
 }

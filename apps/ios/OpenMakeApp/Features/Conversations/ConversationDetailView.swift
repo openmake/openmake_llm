@@ -94,7 +94,7 @@ struct ModelAgentMenu: View {
 
     var body: some View {
         Menu {
-            if let catalog = model.modelCatalog {
+            if let catalog = model.chatModelCatalog {
                 Section("모델") {
                     ForEach(catalog.models.filter { $0.available != false }, id: \.modelId) { entry in
                         Button {

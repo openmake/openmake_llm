@@ -47,7 +47,7 @@
     ],
     "devDependencies": {
         "@playwright/test": "^1.63.0",
-        "@types/node": "^26.6.2",
+        "@types/node": "^26.6.3",
         "@types/nodemailer": "^8.0.2",
         "@types/supertest": "^7.2.1",
         "concurrently": "^10.0.5",
@@ -59,7 +59,7 @@
         "ts-json-schema-generator": "^2.9.0",
         "typescript": "^6.0.3",
         "typescript7": "npm:typescript@^7.0.2",
-        "typescript-eslint": "^8.70.1"
+        "typescript-eslint": "^8.71.0"
     },
     "overrides": {
         "js-yaml": "^4.2.0",
