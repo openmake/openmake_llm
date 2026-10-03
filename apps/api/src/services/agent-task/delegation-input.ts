@@ -9,8 +9,14 @@
  */
 import {
     AGENT_DELEGATION, DELEGATION_PLACEHOLDER_GOAL_RE, DELEGATION_TEMPLATE_MARKER_RE, DELEGATION_CONTEXT_DEPENDENT_RES,
+    DELEGATION_WIDE_CHAR_RE,
 } from '../../config/agent-task-delegation';
 import { getDelegationGoalProblem } from '../../prompts/agent-task-delegation';
+
+/** PURE: 환산 글자 수 — 한글·한자·가나는 한 글자를 WIDE_CHAR_WEIGHT 로 센다. */
+function weightedLength(text: string): number {
+    return text.length + (text.match(DELEGATION_WIDE_CHAR_RE)?.length ?? 0) * (AGENT_DELEGATION.WIDE_CHAR_WEIGHT - 1);
+}
 
 /**
  * PURE: 목표가 위임할 만한지 — 문제가 있으면 이유 문장, 없으면 null.
@@ -25,8 +31,6 @@ export function checkDelegationGoal(goal: string, opts: { batch: boolean }): str
     if (text.length <= AGENT_DELEGATION.CONTEXT_DEPENDENT_MAX_CHARS && DELEGATION_CONTEXT_DEPENDENT_RES.some((re) => re.test(text))) {
         return getDelegationGoalProblem('context');
     }
-    if (opts.batch && text.length < AGENT_DELEGATION.MIN_GOAL_CHARS) {
-        return getDelegationGoalProblem('short', `${text.length}자, 최소 ${AGENT_DELEGATION.MIN_GOAL_CHARS}자`);
-    }
+    if (opts.batch && weightedLength(text) < AGENT_DELEGATION.MIN_GOAL_CHARS) return getDelegationGoalProblem('short', `${text.length}자`);
     return null;
 }

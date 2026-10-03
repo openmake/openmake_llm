@@ -26,11 +26,11 @@ beforeEach(() => {
 
 describe('runSpawnAgents — 위임 입력 품질 검사', () => {
     it('빈 껍데기 태스크가 섞여 있으면 아무것도 돌리지 않고 태스크별 이유를 돌려준다', async () => {
-        const out = await runSpawnAgents({ ...base, args: { tasks: [{ prompt: GOOD }, { prompt: '위 작업 계속' }, { prompt: '환율 조사' }] } });
+        const out = await runSpawnAgents({ ...base, args: { tasks: [{ prompt: GOOD }, { prompt: '위 작업 계속' }, { prompt: '환율' }] } });
         expect(runSubagentMock).not.toHaveBeenCalled();
         expect(out).toMatch(/^Error:/);
         expect(out).toMatch(/태스크 2: .*맥락/);
-        expect(out).toMatch(/태스크 3: .*5자/);
+        expect(out).toMatch(/태스크 3: .*2자/);
         expect(out).not.toContain('태스크 1:');
     });
 
