@@ -881,6 +881,7 @@
       "everyMinutes": "{min}分ごと",
       "nextRun": "次回 {time}",
       "disabled": "無効",
+      "autoDisabled": "自動的に無効化されました — {reason}",
       "disable": "停止",
       "enable": "有効化",
       "runNow": "今すぐ実行",

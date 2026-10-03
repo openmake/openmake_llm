@@ -881,6 +881,7 @@
       "everyMinutes": "{min}분마다",
       "nextRun": "다음 실행 {time}",
       "disabled": "비활성",
+      "autoDisabled": "자동으로 꺼짐 — {reason}",
       "disable": "중지",
       "enable": "활성화",
       "runNow": "지금 실행",
