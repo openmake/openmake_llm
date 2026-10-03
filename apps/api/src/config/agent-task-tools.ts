@@ -38,7 +38,7 @@ export const QUOTE_EQUIVALENTS: Readonly<Record<string, string>> = {
  * 종료 코드 해석 — 셸 결과에서 0 이 아닌 코드가 오류가 아닌 잘 알려진 경우.
  * 키는 명령 이름(경로는 떼고 본다) 또는 "명령 하위명령", 값은 코드 → 뜻(문구는 prompts/agent-task-tools 의 EXIT_CODE_NOTES).
  * 여러 명령을 &&·;·|| 로 이은 경우는 어느 명령의 코드인지 알 수 없어 해석하지 않는다. 파이프는 마지막 명령으로 본다.
- * 파이프로 가려진 실패 경고는 넣지 않았다 — 오탐이 더 많다.
+ * 파이프로 가려진 실패는 명령 글자로 추정하지 않고 단계별 종료 코드를 받아 알린다(아래 PIPE_STATUS_HINT).
  * AGENT_TASK_EXIT_CODE_HINT=false 로 끄면 종전처럼 0 이 아닌 코드는 모두 오류로 표시한다.
  */
 export const EXIT_CODE_HINT_ENABLED = process.env.AGENT_TASK_EXIT_CODE_HINT !== 'false';
@@ -54,6 +54,21 @@ export const EXIT_CODE_MEANINGS: Readonly<Record<string, Readonly<Record<number,
     diff: DIFFER, cmp: DIFFER, 'git diff': DIFFER,
     test: FALSE, '[': FALSE, '[[': FALSE,
 };
+
+/**
+ * 파이프에 가려진 실패 경고 — Docker 샌드박스의 bash 도구가 마지막 파이프라인의 앞 단계마다 종료 코드를 받아 와,
+ * 전체 종료 코드는 0 인데 앞 단계가 0 이 아닐 때 결과에 한 줄을 붙인다(`npm test | tail -5`).
+ * 위 표에 있는 실패가 아닌 코드(grep 1)와 IGNORED_EXIT_CODES 는 알리지 않는다. 여러 줄·here-doc·백그라운드·명령 치환처럼
+ * 안전하게 가를 수 없는 명령은 감싸지 않고 종전대로 실행한다(task-sandbox/pipe-status). 로컬 실행기는 대상이 아니다.
+ * AGENT_TASK_PIPE_STATUS_HINT=false 로 끄면 명령을 감싸지 않는다.
+ */
+export const PIPE_STATUS_HINT = {
+    ENABLED: process.env.AGENT_TASK_PIPE_STATUS_HINT !== 'false',
+    /** 실패로 보지 않는 앞 단계 종료 코드 — 141 = SIGPIPE(뒤 명령이 먼저 읽기를 끝냈다, `yes | head -1`). */
+    IGNORED_EXIT_CODES: [141] as readonly number[],
+    /** 경고에 싣는 단계 명령의 최대 글자 수. */
+    COMMAND_MAX_CHARS: 80,
+} as const;
 
 /**
  * 검색 무일치 원인 안내 — grep_code 가 0건일 때 대소문자, 이스케이프 안 된 정규식 문자, 숨김·무시 대상 파일을

@@ -239,6 +239,25 @@ describe('task-sandbox tools', () => {
         });
     });
 
+    describe('bash 파이프에 가려진 실패 경고', () => {
+        it('단계별 종료 코드를 요청하고, 앞 단계가 실패했으면 [exit=0] 뒤에 한 줄을 붙인다(오류 표시는 아니다)', async () => {
+            const sb = fakeSandbox();
+            let asked: unknown;
+            (sb as unknown as { exec: (c: string, o?: unknown) => Promise<ExecResult> }).exec = async (_c, o) => {
+                asked = o;
+                return { stdout: 'ok', stderr: '', exitCode: 0, truncated: false, timedOut: false, durationMs: 1, pipeStages: [{ index: 1, command: 'npm test', exitCode: 1 }] };
+            };
+            const r = await byName(createTaskTools(sb), 'bash').handler({ command: 'npm test | tail -5' });
+            expect(asked).toEqual({ pipeStatus: true });
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toMatch(/\[exit=0 [^\n]*\n\(주의: 파이프라인의 앞 명령 1번째\(`npm test`\)가 종료 코드 1 /);
+        });
+        it('단계 정보가 없으면(로컬 실행기·감싸지 않은 명령) 종전과 같다', async () => {
+            const r = await byName(createTaskTools(fakeSandbox()), 'bash').handler({ command: 'npm test | tail -5' });
+            expect(txt(r)).not.toContain('주의');
+        });
+    });
+
     describe('str_replace_editor', () => {
         it('view: 큰 파일은 줄 구간으로 보이고 start_line 으로 뒤쪽을 이어 본다', async () => {
             const sb = fakeSandbox();

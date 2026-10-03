@@ -31,6 +31,17 @@ export function ablatePrompt(prompt: string, dropPatterns: readonly string[]): s
     return out.join('\n');
 }
 
+/**
+ * PURE: 돌릴 과제 고르기 — only(id 목록)로 지목한 과제만 묶음의 순서대로 남기고, 그 뒤에 limit(앞에서 N개)을 적용한다.
+ * 묶음에 없는 id 는 던진다 — 오타로 아무것도 돌지 않는 일을 막는다.
+ */
+export function selectCases<T extends { id: string }>(cases: readonly T[], opts: { only?: readonly string[]; limit?: number }): T[] {
+    const unknown = (opts.only ?? []).filter((id) => !cases.some((c) => c.id === id));
+    if (unknown.length > 0) throw new Error(`--only 에 맞는 과제가 없습니다: ${unknown.join(', ')}`);
+    const picked = opts.only ? cases.filter((c) => opts.only?.includes(c.id)) : [...cases];
+    return picked.slice(0, opts.limit ?? picked.length);
+}
+
 /** 실험 실행 한 건의 결과 */
 export interface AblationRun {
     variant: string;
@@ -43,6 +54,10 @@ export interface AblationRun {
     totalTokens: number;
     toolCalls: number;
     durationMs: number;
+    /** 정답 문자열 판정이 있는 과제(브라우저 과제)만 — 최종 답변에 정답이 들어 있는지. */
+    answerPassed?: boolean;
+    /** 브라우저 과제만 — browser 도구 호출 수. */
+    browserCalls?: number;
 }
 
 export interface AblationVariantSummary {
@@ -55,7 +70,7 @@ export interface AblationVariantSummary {
     meanToolCalls: number;
 }
 
-/** PURE: 조건별 요약 — 완료율, 과정 검사 통과율, 평균 토큰·턴·도구 호출. */
+/** PURE: 조건별 요약 — 완료율, 과정 검사 통과율, 평균 토큰·턴·도구 호출. 정답 판정이 있는 과제는 정답이 맞아야 완료다. */
 export function summarizeAblation(runs: readonly AblationRun[]): AblationVariantSummary[] {
     const variants = [...new Set(runs.map((r) => r.variant))];
     const mean = (xs: number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
@@ -63,7 +78,7 @@ export function summarizeAblation(runs: readonly AblationRun[]): AblationVariant
         const rs = runs.filter((r) => r.variant === variant);
         return {
             variant, runs: rs.length,
-            completedRate: mean(rs.map((r) => (r.status === 'completed' ? 1 : 0))),
+            completedRate: mean(rs.map((r) => (r.status === 'completed' && r.answerPassed !== false ? 1 : 0))),
             processPassRate: mean(rs.map((r) => (r.processPassed ? 1 : 0))),
             meanTokens: mean(rs.map((r) => r.totalTokens)),
             meanTurns: mean(rs.map((r) => r.turns)),

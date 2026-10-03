@@ -398,3 +398,71 @@ describe('exec 타임아웃·취소 — 컨테이너 안 프로세스 정리', (
         } finally { await rm(base, { recursive: true, force: true }); }
     });
 });
+
+describe('exec — 파이프라인 단계별 종료 코드(pipe-status)', () => {
+    /** docker 대역 — `exec -e … <이름> sh -c <명령>` 은 호스트의 sh 로 그 명령을 workspace 에서 실제로 돌린다. 나머지는 성공. */
+    async function shellDocker(dir: string, cwd: string): Promise<string> {
+        const bin = join(dir, 'docker');
+        await writeFile(bin, ['#!/bin/sh', 'case "$1 $2" in', `  "exec -e") shift 4; cd '${cwd}' && exec "$@" ;;`, '  *) exit 0 ;;', 'esac', ''].join('\n'), 'utf8');
+        await chmod(bin, 0o755);
+        return bin;
+    }
+    async function withSandbox(id: string, fn: (sb: TaskSandbox, ws: string) => Promise<void>): Promise<void> {
+        const base = await mkdtemp(join(tmpdir(), 'omk-pipe-'));
+        try {
+            const sb = new TaskSandbox(id, { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws'), dockerPath: await shellDocker(base, join(base, 'ws', id)) });
+            await sb.create();
+            await fn(sb, join(base, 'ws', id));
+        } finally { await rm(base, { recursive: true, force: true }); }
+    }
+
+    it('요청하면 앞 단계의 종료 코드를 싣고, 표식은 stderr 에 남기지 않는다', async () => {
+        await withSandbox('p1', async (sb) => {
+            const r = await sb.exec('sh -c "echo out; echo err >&2; exit 3" | cat', { pipeStatus: true });
+            expect(r.exitCode).toBe(0);
+            expect(r.stdout).toBe('out\n');
+            expect(r.stderr).toBe('err\n');
+            expect(r.pipeStages).toEqual([{ index: 1, command: 'sh -c "echo out; echo err >&2; exit 3"', exitCode: 3 }]);
+        });
+    });
+
+    it('요청하지 않으면(다른 도구의 내부 실행) 감싸지 않는다', async () => {
+        await withSandbox('p2', async (sb) => {
+            const r = await sb.exec('false | true');
+            expect(r.pipeStages).toBeUndefined();
+        });
+    });
+
+    it('감싸도 명령의 출력·종료 코드·부수 효과가 같다', async () => {
+        await withSandbox('p3', async (sb, ws) => {
+            const commands = [
+                'printf "a\\nb\\nc\\n" | grep b | wc -l',
+                'mkdir -p sub && cd sub && pwd | sed "s|.*/||"',                 // 작업 디렉터리
+                'FOO=bar; export FOO; env | grep "^FOO="',                         // 환경변수 유지
+                'X=1 sh -c "echo $X-in" | cat',
+                'echo "a | b && c; d" | cat',                                      // 따옴표 안 연산자
+                'false | true',
+                'true | false',
+                'set -e; false | true; echo after',                                // set -e
+                'set -e; false | true',
+                'set -e; echo one | cat; false; echo never',
+                'echo hi | cat > out.txt; cat out.txt',                            // 리다이렉션
+                'ls /nonexistent-omk 2>&1 | wc -l',
+                'echo a | cat;',
+                'true && echo x | tr x y || echo no',
+                'printf "l1\\nl2\\n" |\tcat',
+                'echo one | cat\necho two | cat',                                  // 여러 줄(감싸지 않음)
+                'cat <<EOF | tr a-z A-Z\nhello\nEOF',                              // here-doc(감싸지 않음)
+                'sleep 0 | cat & wait; echo bg-done',                              // 백그라운드(감싸지 않음)
+                'echo $(echo a | cat) | cat',                                      // 명령 치환(감싸지 않음)
+            ];
+            for (const c of commands) {
+                const plain = await sb.exec(c);
+                const wrapped = await sb.exec(c, { pipeStatus: true });
+                expect({ c, out: wrapped.stdout, err: wrapped.stderr, code: wrapped.exitCode })
+                    .toEqual({ c, out: plain.stdout, err: plain.stderr, code: plain.exitCode });
+            }
+            expect(await readFile(join(ws, 'out.txt'), 'utf8')).toBe('hi\n');
+        });
+    });
+});
