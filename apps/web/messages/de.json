@@ -2358,6 +2358,7 @@
       "tool": "Tool-Ausführung",
       "openTask": "Aufgabe öffnen",
       "answerPlaceholder": "Antwort eingeben",
+      "rejectReasonPlaceholder": "Grund der Ablehnung (optional) – wird an den Agenten weitergegeben",
       "sendAnswer": "Antwort senden",
       "actionFailed": "Aktion fehlgeschlagen: {error}",
       "risk": {

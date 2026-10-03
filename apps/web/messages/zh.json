@@ -2358,6 +2358,7 @@
       "tool": "工具执行",
       "openTask": "打开任务",
       "answerPlaceholder": "请输入回复",
+      "rejectReasonPlaceholder": "拒绝理由(可选)— 填写后会转达给智能体",
       "sendAnswer": "发送回复",
       "actionFailed": "操作失败：{error}",
       "risk": {

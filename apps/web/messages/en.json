@@ -2358,6 +2358,7 @@
       "tool": "Tool run",
       "openTask": "Open task",
       "answerPlaceholder": "Type your answer",
+      "rejectReasonPlaceholder": "Reason for rejecting (optional) — passed on to the agent",
       "sendAnswer": "Send answer",
       "actionFailed": "Action failed: {error}",
       "risk": {

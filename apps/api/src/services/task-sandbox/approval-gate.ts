@@ -67,7 +67,7 @@ interface ApprovalResult {
     decision: ApprovalDecision;
     /** rejected 인 경우에만 채워짐 — 무응답 만료/명시 거절/실행 중단 구분. */
     reason?: ApprovalRejectReason;
-    /** answer() 로 해소된 경우에만 채워짐 — ask_human 질문에 대한 사용자 자유텍스트 답변. */
+    /** answer() 로 해소되면 ask_human 질문에 대한 사용자 자유텍스트 답변, 사유를 적은 거절이면 그 사유. */
     text?: string;
     /** 승인 대기에 소요된 시간(ms) — pause-aware 타임아웃(4-1)이 총 예산에서 제외하는 데 사용. */
     waitedMs: number;
@@ -234,7 +234,7 @@ export class ApprovalRegistry {
             logger.info(`[${input.taskId}] 재시작 전 결정 이어받음(${prior.status}): ${input.toolName}`);
             return prior.status === 'approved'
                 ? { decision: 'approved', waitedMs: 0, ...(prior.answer_text ? { text: prior.answer_text } : {}) }
-                : { decision: 'rejected', reason: 'user', waitedMs: 0 };
+                : { decision: 'rejected', reason: 'user', waitedMs: 0, ...(prior.answer_text ? { text: prior.answer_text } : {}) };
         }
         const approvalId = prior?.approval_id ?? `apv_${input.taskId}_${Date.now().toString(36)}_${this.seq++}`;
         const riskClass = classifyToolRisk(input.toolName, input.args);
@@ -327,10 +327,10 @@ export class ApprovalRegistry {
         return this.persist((s) => s.recordEvent!(approvalId, kind, actorId ?? null, detail)).then(() => undefined);
     }
 
-    /** REST 거절. */
-    reject(approvalId: string, actorId?: string): Promise<boolean> {
+    /** REST 거절 — reasonText 는 사용자가 적은 사유(선택). 답변과 같은 칸(answer_text)에 남아 재시작 뒤에도 모델에 전달된다. */
+    reject(approvalId: string, actorId?: string, reasonText?: string): Promise<boolean> {
         void this.event(approvalId, 'rejected', actorId);
-        return this.settleOrPersist(approvalId, { decision: 'rejected', reason: 'user' });
+        return this.settleOrPersist(approvalId, { decision: 'rejected', reason: 'user', ...(reasonText ? { text: reasonText } : {}) });
     }
 
     /**

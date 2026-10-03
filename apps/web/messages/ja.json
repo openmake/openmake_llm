@@ -2358,6 +2358,7 @@
       "tool": "ツール実行",
       "openTask": "作業を開く",
       "answerPlaceholder": "回答を入力してください",
+      "rejectReasonPlaceholder": "拒否の理由(任意)— 入力するとエージェントに伝わります",
       "sendAnswer": "回答を送信",
       "actionFailed": "処理に失敗しました: {error}",
       "risk": {

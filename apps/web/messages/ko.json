@@ -2358,6 +2358,7 @@
       "tool": "도구 실행",
       "openTask": "작업 열기",
       "answerPlaceholder": "답변을 입력하세요",
+      "rejectReasonPlaceholder": "거절 사유(선택) — 적으면 에이전트에 전달됩니다",
       "sendAnswer": "답변 보내기",
       "actionFailed": "처리 실패: {error}",
       "risk": {
