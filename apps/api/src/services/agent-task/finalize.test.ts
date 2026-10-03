@@ -83,6 +83,16 @@ beforeEach(() => {
 });
 
 describe('finalizeTask — 완료 관문 단일화(091)', () => {
+    it('goal judge 호출은 그 작업의 비용 귀속 문맥 안에서 돈다', async () => {
+        const { getCostSessionId } = jest.requireActual('../../utils/cost-attribution-context') as typeof import('../../utils/cost-attribution-context');
+        const seen: Array<string | undefined> = [];
+        judgeMock.mockImplementation(async () => { seen.push(getCostSessionId()); return { achieved: true, reason: 'ok', raw: '' }; });
+
+        await finalizeTask(input());
+
+        expect(seen).toEqual(['task-1']);
+    });
+
     it('terminate 경로도 goal judge 를 거친다 (종전엔 우회)', async () => {
         judgeMock.mockResolvedValue({ achieved: true, reason: '파일이 생성됨', raw: '' });
         const i = input({ path: 'terminate', terminateSummary: '완료했습니다.' });

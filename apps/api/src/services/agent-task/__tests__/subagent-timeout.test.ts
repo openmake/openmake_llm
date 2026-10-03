@@ -53,6 +53,19 @@ function params(client: unknown) {
     } as never;
 }
 
+describe('서브에이전트 — 비용 귀속', () => {
+    it('서브 LLM 호출은 부모 작업의 비용 귀속 문맥 안에서 돈다', async () => {
+        const { getCostSessionId } = jest.requireActual('../../../utils/cost-attribution-context') as typeof import('../../../utils/cost-attribution-context');
+        const seen: Array<string | undefined> = [];
+        const chat = jest.fn().mockImplementation(async () => { seen.push(getCostSessionId()); return { content: '완료', metrics: {} }; });
+        const client = { requestTimeout: 120_000, derive: jest.fn(() => ({ chat })), chat: jest.fn() };
+
+        await runSubagent(params(client));
+
+        expect(seen).toEqual(['task-1']);
+    });
+});
+
 describe('서브에이전트 SDK 타임아웃 배선', () => {
     it('로컬 기본 타임아웃(120s)을 작업 예산까지 끌어올린다', async () => {
         const { client, derive } = makeClient(120_000);

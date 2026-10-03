@@ -18,6 +18,7 @@ import { COST_RATE_WILDCARD, isCostKind, type CostKind, type CostOwner, type Cos
 import { LOCAL_LLM_COST, STORAGE_GENERATED_COST } from '../../config/cost-defaults';
 import { getModelPricing } from '../../config/external-pricing';
 import { getRequestId } from '../../utils/request-context';
+import { getCostSessionId } from '../../utils/cost-attribution-context';
 import { activeOrgFor } from '../org/membership-cache';
 import { getKeyValueStore } from '../../storage';
 import { costMonthKey, COST_MONTH_TTL_MS } from '../../llm/user-quota';
@@ -117,7 +118,7 @@ export async function recordCostAsync(entry: CostEntry, now: number = Date.now()
     const row: CostLedgerInsert = {
         userId, orgId, kind: entry.kind, rateKey: entry.rateKey, unit: entry.unit, quantity: entry.quantity,
         usdMicrosPerUnit: rate, costUsdMicros: cost, costOwner: entry.costOwner,
-        agentId: entry.ctx?.agentId ?? null, sessionId: entry.ctx?.sessionId ?? null,
+        agentId: entry.ctx?.agentId ?? null, sessionId: entry.ctx?.sessionId ?? getCostSessionId() ?? null,
         requestId: entry.ctx?.requestId ?? getRequestId() ?? null, feature: entry.ctx?.feature ?? null,
         meta: entry.meta, idempotencyKey: entry.idempotencyKey ?? null,
     };
