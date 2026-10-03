@@ -2373,6 +2373,7 @@
       "autoApproveOff": "自動承認を解除",
       "autoApproveOffHint": "この作業の自動承認を無効にします",
       "preview": "実行前の変更プレビュー",
+      "fullArgs": "全文を表示（{chars}文字）",
       "assignedToMe": "自分に移管",
       "assignedAway": "移管済み",
       "reassign": "移管",

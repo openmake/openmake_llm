@@ -2373,6 +2373,7 @@
       "autoApproveOff": "关闭自动批准",
       "autoApproveOffHint": "关闭此任务的自动批准",
       "preview": "执行前变更预览",
+      "fullArgs": "查看全部内容（{chars} 个字符）",
       "assignedToMe": "已转交给我",
       "assignedAway": "已转交",
       "reassign": "转交",

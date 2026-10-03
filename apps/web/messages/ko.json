@@ -2373,6 +2373,7 @@
       "autoApproveOff": "자동 승인 해제",
       "autoApproveOffHint": "이 작업의 자동 승인을 끕니다",
       "preview": "실행 전 변경 미리보기",
+      "fullArgs": "전체 내용 보기 ({chars}자)",
       "assignedToMe": "나에게 이관됨",
       "assignedAway": "이관됨",
       "reassign": "이관",

@@ -2373,6 +2373,7 @@
       "autoApproveOff": "Auto-Freigabe aus",
       "autoApproveOffHint": "Auto-Freigabe für diese Aufgabe deaktivieren",
       "preview": "Änderungen vor Ausführung ansehen",
+      "fullArgs": "Vollständigen Inhalt anzeigen ({chars} Zeichen)",
       "assignedToMe": "Mir zugewiesen",
       "assignedAway": "Weitergegeben",
       "reassign": "Weitergeben",

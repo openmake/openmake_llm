@@ -51,16 +51,18 @@ interface PendingItem {
 
 interface OrgMember { user_id: string; role: string }
 
-/** 인자 요약 — 어떤 작업을 승인하는지 한 줄로 보인다(장문은 잘라낸다). */
-function summarizeArgs(args?: Record<string, unknown>): string {
-  if (!args) return "";
+const ARGS_SUMMARY_MAX_CHARS = 300;
+
+/** 인자 요약 — 어떤 작업을 승인하는지 한 줄로 보인다. 잘린 경우 full 에 전문을 함께 돌려준다(잘린 뒤쪽을 못 보고 승인하지 않게). */
+function summarizeArgs(args?: Record<string, unknown>): { text: string; full?: string } {
+  if (!args) return { text: "" };
   const raw =
     typeof args.question === "string"
       ? args.question
       : typeof args.command === "string"
         ? args.command
-        : JSON.stringify(args);
-  return raw.length > 300 ? `${raw.slice(0, 300)}…` : raw;
+        : JSON.stringify(args, null, 2);
+  return raw.length > ARGS_SUMMARY_MAX_CHARS ? { text: `${raw.slice(0, ARGS_SUMMARY_MAX_CHARS)}…`, full: raw } : { text: raw };
 }
 
 export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => void }) {
@@ -169,6 +171,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
       {items.map((a) => {
         const isQuestion = isQuestionApproval(a.toolName);
         const elicit = elicitationHint(a.toolName, a.args);
+        const summary = summarizeArgs(a.args);
         const acting = busy === a.approvalId;
         return (
           <Card key={a.approvalId} className="p-4">
@@ -202,7 +205,13 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
               </Link>
             </div>
 
-            <p className="whitespace-pre-wrap break-words text-sm text-fg">{summarizeArgs(a.args)}</p>
+            <p className="whitespace-pre-wrap break-words text-sm text-fg">{summary.text}</p>
+            {summary.full && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-accent">{t("tasks.fullArgs", { chars: summary.full.length })}</summary>
+                <pre className="mt-1 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-surface p-2 font-mono text-xs text-fg">{summary.full}</pre>
+              </details>
+            )}
             {elicit && (
               <p className="mt-1 text-xs text-muted">
                 {t("tasks.elicitHint", { server: elicit.server, fields: elicit.fields || "-" })}

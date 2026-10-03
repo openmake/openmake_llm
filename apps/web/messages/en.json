@@ -2373,6 +2373,7 @@
       "autoApproveOff": "Turn off auto-approve",
       "autoApproveOffHint": "Disable auto-approve for this task",
       "preview": "Preview changes before running",
+      "fullArgs": "Show full content ({chars} chars)",
       "assignedToMe": "Assigned to me",
       "assignedAway": "Reassigned",
       "reassign": "Reassign",
