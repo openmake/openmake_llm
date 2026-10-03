@@ -103,6 +103,8 @@ export async function runTool(
     name: string,
     args: Record<string, unknown>,
     userCtx: UserContext,
+    /** 상한을 넘는 결과를 작업 공간 파일로 보관(TaskRuntime.spillLargeResult) — 없거나 null 을 돌려주면 종전대로 절단한다. */
+    spill?: (toolName: string, raw: string) => Promise<string | null>,
 ): Promise<string> {
     try {
         const r = await mcp.executeTool(name, args, userCtx);
@@ -113,7 +115,7 @@ export async function runTool(
         recordToolResultTruncation({
             path: 'agent_task', toolName: name, rawChars: raw.length, capChars: MAX_TOOL_RESULT_CHARS,
         });
-        const text = truncateToolResult(raw, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION.HEAD_RATIO);
+        const text = (await spill?.(name, raw)) ?? truncateToolResult(raw, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION.HEAD_RATIO);
         return r.isError ? `Error: ${text}` : text;
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

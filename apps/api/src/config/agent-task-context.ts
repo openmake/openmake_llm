@@ -99,3 +99,20 @@ export const CONTEXT_OVERFLOW_RETRY = {
         /exceeds? (?:the )?(?:model'?s? )?(?:maximum )?context/i,
     ] as readonly RegExp[],
 } as const;
+
+/** 큰 도구 결과를 작업 공간 파일로 보관 — services/agent-task/tool-result-spill. */
+export const TOOL_RESULT_SPILL = {
+    /**
+     * 상한(MAX_TOOL_RESULT_CHARS)을 넘는 도구 결과를 버리지 않고 작업 공간의 파일로 쓴다. 모델에는 앞·뒤 미리보기와
+     * 경로를 준다. 서버 샌드박스 작업에서만 돈다(로컬 실행기는 사용자 폴더라 쓰지 않는다).
+     * 기본 꺼짐 — 절단 발동률이 2.2%(실측)라 효과가 작을 수 있고, 모델이 보관 파일을 실제로 다시 여는지는 실측 전이다.
+     * AGENT_TASK_TOOL_RESULT_SPILL=true 로 켠다.
+     */
+    ENABLED: process.env.AGENT_TASK_TOOL_RESULT_SPILL === 'true',
+    /** 보관 디렉터리(작업 공간 상대). '.' 으로 시작해 산출물 목록에 나오지 않는다. AGENT_TASK_TOOL_RESULT_SPILL_DIR */
+    DIR: process.env.AGENT_TASK_TOOL_RESULT_SPILL_DIR || '.tool-results',
+    /** 이보다 큰 결과는 보관하지 않고 종전대로 절단한다(작업 공간 디스크 보호). AGENT_TASK_TOOL_RESULT_SPILL_MAX_CHARS */
+    MAX_FILE_CHARS: intEnv('AGENT_TASK_TOOL_RESULT_SPILL_MAX_CHARS', 2_000_000),
+    /** 결과가 이미 작업 공간 파일의 내용인 도구 — 사본을 만들지 않는다(원본을 줄 구간으로 보면 된다). */
+    SKIP_TOOLS: ['str_replace_editor', 'file_ops'] as readonly string[],
+} as const;

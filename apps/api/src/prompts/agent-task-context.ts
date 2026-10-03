@@ -42,3 +42,13 @@ export const HANDOFF_OMITTED_LINE = '- … 더 오래된 항목은 생략';
 export function getHandoffGenericCall(toolName: string, failed: boolean, errorLine: string): string {
     return failed ? getToolDigestLine(toolName, '호출', TOOL_DIGEST_OUTCOME.error, errorLine) : getToolDigestLine(toolName, '호출', TOOL_DIGEST_OUTCOME.ok);
 }
+
+/**
+ * 큰 도구 결과를 파일로 보관했을 때 미리보기 뒤에 붙이는 안내.
+ * ⚠️ 도구를 "다시 호출하라"고 쓰지 않는다 — 같은 명령을 반복해 읽는 루프를 만든다(context-fold 의 2026-09-09 기록).
+ * 보관 파일의 필요한 구간만 보게 한다.
+ */
+export function getToolResultSpillNotice(path: string, totalChars: number, totalLines: number, resumeLine: number): string {
+    return `[전체 결과 보관] 위는 앞·뒤 미리보기입니다. 전체 ${totalChars}자(${totalLines}줄)는 ${path} 에 있습니다. `
+        + `생략된 구간이 필요하면 str_replace_editor 의 command:view, path:"${path}", start_line:${resumeLine} 으로 필요한 만큼만 보세요.`;
+}
