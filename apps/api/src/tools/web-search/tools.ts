@@ -12,6 +12,7 @@ import { TRUNCATION } from '../../config/runtime-limits';
 import { WEB_SEARCH_TOOL_LIMITS } from '../../config/addon-tool-limits';
 import { safeFetch } from '../../security/ssrf-guard';
 import { performWebSearch } from './search-orchestrator';
+import { memoizedWebSearch } from './search-memo';
 import { formatSearchSources, toSourceRefs } from './format-sources';
 
 /**
@@ -36,7 +37,7 @@ const webSearchTool: MCPToolDefinition = {
     },
     handler: async (args, context): Promise<MCPToolResult> => {
         const query = args.query as string;
-        const results = await performWebSearch(query, { costUserId: context?.userId !== undefined ? String(context.userId) : undefined });
+        const results = await memoizedWebSearch(context, query, () => performWebSearch(query, { costUserId: context?.userId !== undefined ? String(context.userId) : undefined }));
 
         if (results.length === 0) {
             return { content: [{ type: 'text', text: `검색 결과 없음: "${query}"` }] };

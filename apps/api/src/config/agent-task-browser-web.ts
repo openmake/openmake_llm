@@ -115,3 +115,13 @@ export const MCP_MEDIA = {
         'audio/mp4': 'm4a',
     } as Readonly<Record<string, string>>,
 } as const;
+
+/** web_search 결과 메모(tools/web-search/search-memo) — 프로세스 메모리, 사용자·조직 범위. */
+export const WEB_SEARCH_MEMO = {
+    /** 같은 사용자·같은 질의를 기억하고 동시 호출을 합친다. WEB_SEARCH_MEMO_ENABLED=false 로 끈다. */
+    ENABLED: process.env.WEB_SEARCH_MEMO_ENABLED !== 'false',
+    /** 기억하는 시간(ms) — 기본 20분. 길수록 뉴스·시세 같은 질의가 낡은 결과를 받는다. */
+    TTL_MS: intEnv(process.env.WEB_SEARCH_MEMO_TTL_MS, 20 * 60_000),
+    /** 기억하는 질의 수 상한 — 넘으면 오래된 것부터 버린다. */
+    MAX_ENTRIES: intEnv(process.env.WEB_SEARCH_MEMO_MAX_ENTRIES, 200),
+} as const;
