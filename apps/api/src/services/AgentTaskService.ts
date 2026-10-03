@@ -22,7 +22,7 @@ import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskEmptyResponseNudge, AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
+import { getAgentTaskStuckNudge, getAgentTaskEmptyResponseNudge, AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { isTerminalStatus, notifyTaskTerminal } from './agent-task/terminal-notify';
@@ -40,13 +40,15 @@ import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { AgentTaskTurnTimeout } from './agent-task/turn-call';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
-import { finalizeTask, finalizeMaxTurnsExhausted } from './agent-task/finalize';
+import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { initWorkspaceBaseline } from './agent-task/code-diff';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
 import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint, usedToolNamesFrom } from './agent-task/turn-reentry';
 import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
+import { nextTurnProgress } from './agent-task/turn-progress';
+import { pickNoToolNudge } from './agent-task/turn-stall';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
@@ -137,7 +139,9 @@ export class AgentTaskService {
         const recentSignatures: string[] = [];
         let stuckNotified = false;
         let emptyRetries = 0;
+        let stallNudges = 0; // 행동 예고 재촉 횟수(turn-stall)
         let verifyRetries = 0;
+        const verifyHold: VerifyHold = {}; // 검증이 보류한 답변 — 턴 상한에 걸리면 결과로 쓴다(finalize)
         // 5-3(b): 실제 사용한 도구 추적 — goal judge 의 실행 컨텍스트(수행 흔적)로 전달.
         const usedTools = usedToolNamesFrom(input.resume?.conversation); // 재개면 이전 실행분을 복원
         // 스텝→플랜 노드 귀속(088): 기록 시점의 in_progress 단계 인덱스(결정적, 추정 귀속 없음).
@@ -322,7 +326,7 @@ export class AgentTaskService {
                     if (re.terminated) {
                         const fin = await finalizeTask({
                             taskId, goal, userId: String(userId), path: 'terminate', rawContent: content, terminateSummary: re.terminateSummary,
-                            taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries,
+                            taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
                             signal, update, emitStep,
                         });
                         stepNumber = fin.stepNumber;
@@ -334,20 +338,8 @@ export class AgentTaskService {
                     continue;
                 }
 
-                // 진행률: 에이전트가 plan 을 세웠으면 실제 단계 완료율(completed/total)을 진척으로 쓴다
-                // — "3/7 단계"처럼 실제 진행을 반영(1-C). plan 이 없으면(턴0·비플래닝 작업) 총 턴 수를
-                // 알 수 없으므로 남은 거리의 고정 비율을 매 턴 채우는 점근 곡선으로 폴백(상한 90, 완료 100 은
-                // 종료 경로가 설정). 둘 다 curProgress 아래로는 내려가지 않게 단조 증가 보장.
-                const planSteps = taskRuntime?.getPlanSnapshot() ?? [];
-                let nextProgress: number;
-                if (planSteps.length > 0) {
-                    const done = planSteps.filter((s) => s.status === 'completed').length;
-                    const planPct = Math.round((done / planSteps.length) * 90);
-                    nextProgress = Math.max(curProgress, Math.min(90, Math.max(2, planPct)));
-                } else {
-                    nextProgress = Math.min(90, curProgress + Math.max(4, Math.round((90 - curProgress) * 0.25)));
-                }
-                await update({ currentTurn: turn + 1, progress: nextProgress });
+                // 진행률 — plan 단계 완료율, 없으면 점근 곡선(agent-task/turn-progress).
+                await update({ currentTurn: turn + 1, progress: nextTurnProgress(taskRuntime?.getPlanSnapshot() ?? [], curProgress) });
 
                 // 턴 자원 가드(검색/브라우저 cap·마무리 턴·HITL 무응답 강등) — 도구 세트 축소 +
                 // 최초 발동 시 nudge 주입·스텝 기록. 판정 근거는 agent-task/turn-gate 참고.
@@ -374,12 +366,11 @@ export class AgentTaskService {
                     taskId, userId: String(userId), turn,
                     totalTimeoutMs, elapsedActiveMs: Date.now() - startedAt - pausedMs,
                     finalTurn: !!finalTurnReason,
-                    // 일시적 오류 재시도를 스텝으로 남긴다 — 발동 빈도·사유를 DB 로 집계(fail-open).
-                    onRetry: ({ attempt, maxAttempts, error }) => {
-                        const note = `일시적 LLM 오류 — 재시도 ${attempt}/${maxAttempts}: ${error}`;
-                        void db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: note, planStepIndex: planIdx() })
+                    // 재시도·컨텍스트 절단·출력 반복을 스텝으로 남긴다 — 발동 빈도·사유를 DB 로 집계(fail-open).
+                    onNote: (stepType, note) => {
+                        void db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType, content: note, planStepIndex: planIdx() })
                             .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
-                        emitStep('retry', undefined, note);
+                        emitStep(stepType, undefined, note);
                     },
                 });
                 this.client = roleState.client;
@@ -494,20 +485,20 @@ export class AgentTaskService {
                 emitStep(stepType, turnToolNames, stepContent);
 
                 if (!hasToolCalls) {
-                    // 턴 0 계획-만 가드: 도구가 필요 없는 목표에서 모델이 계획만 쓰고 멈추면
-                    // 결과물 없이 종료된다 — deliverable(artifact) 이 없으면 1회 재촉 후 계속.
-                    // 단 모델이 수행 불가를 선언(마커)했으면 재촉하지 않고 관문으로 보낸다
-                    // (재촉이 불가 선언을 뭉개면 미달성이 completed 로 흘러간다).
-                    if (turn === startTurn && extracted!.artifacts.length === 0
-                        && !(stepContent && stepContent.includes(AGENT_TASK_INCOMPLETE_MARKER))) {
-                        conversation.push({ role: 'user', content: getAgentTaskDeliverableNudge() });
+                    // 계획만 쓰고 멈춘 첫 턴(산출물 없음)은 1회, 이후 턴의 "이제 ~하겠습니다"식 행동 예고는 상한까지 재촉하고 계속한다.
+                    // 수행 불가 선언(마커)은 재촉하지 않고 관문으로 보낸다 — 판정은 agent-task/turn-stall.
+                    const stall = pickNoToolNudge({ firstTurn: turn === startTurn, content: stepContent, artifactCount: extracted!.artifacts.length,
+                        canAct: !finalTurnReason && turn < turnCeiling - 1, stallNudges });
+                    if (stall) {
+                        if (stall.note) { stallNudges++; await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: stall.note, planStepIndex: planIdx() }); }
+                        conversation.push({ role: 'user', content: stall.nudge });
                         continue;
                     }
                     // 완료 판정은 finalizeTask 단일 관문 — 마커·verify·judge·산출물 영속(091).
                     const fin = await finalizeTask({
                         taskId, goal, userId: String(userId), path: 'final_answer',
                         rawContent: result.content ?? '',
-                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries,
+                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
                         signal: callSignal, update, emitStep,
                     });
                     stepNumber = fin.stepNumber;
@@ -545,7 +536,7 @@ export class AgentTaskService {
                     const fin = await finalizeTask({
                         taskId, goal, userId: String(userId), path: 'terminate',
                         rawContent: result.content ?? '', terminateSummary,
-                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries,
+                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
                         signal: callSignal, update, emitStep,
                     });
                     stepNumber = fin.stepNumber;
@@ -562,7 +553,7 @@ export class AgentTaskService {
             }
 
             // 턴 상한 도달 — 완주가 아니라 failed + checkpoint 보존(이어하기 가능). 근거는 finalize.
-            await finalizeMaxTurnsExhausted({ taskId, userId, turnCeiling, conversation, taskRuntime, sandboxCfg, stepNumber, update, emitStep });
+            await finalizeMaxTurnsExhausted({ taskId, userId, turnCeiling, conversation, taskRuntime, sandboxCfg, stepNumber, update, emitStep, held: verifyHold.answer });
         } catch (err) {
             // 질문 응답 대기 주차(F16.7) — 체크포인트·표식은 turn-executor 가 남겼다. 실행만 끝내 슬롯을 반납한다(재개는 hitl-park)
             if (err instanceof AgentTaskParked && !signal.aborted) { parked = true; logger.info(`[AgentTask] 질문 응답 대기로 주차: ${taskId}`); return; }

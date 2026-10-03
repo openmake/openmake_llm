@@ -162,11 +162,12 @@ export async function persistJudgeStep(
  * 검증 건너뜀 기록 — 검증 실패가 재시도 상한을 넘으면 완료 관문은 그 검증을 다시 돌리지 않고 완료시킨다
  * (무한루프 방지). 종전엔 흔적이 없어 검증된 완료와 구분되지 않았다. 완료 흐름은 그대로 두고(fail-open)
  * 어떤 검증을 건너뛰었는지만 스텝으로 남긴다 — 상세 화면에 그대로 보인다.
+ * message 를 주면 그 문구를 쓴다(턴 상한에서 꺼낸 보류 답변처럼 사유가 다른 미검증 완료).
  */
-export async function persistVerifySkippedStep(taskId: string, stepNumber: number, gates: readonly string[]): Promise<number> {
+export async function persistVerifySkippedStep(taskId: string, stepNumber: number, gates: readonly string[], message?: string): Promise<number> {
     try {
         await getUnifiedDatabase().addAgentTaskStep({
-            taskId, stepNumber, stepType: 'verify_skipped', content: verifySkippedMessage(gates),
+            taskId, stepNumber, stepType: 'verify_skipped', content: message ?? verifySkippedMessage(gates),
         });
         return stepNumber + 1;
     } catch (e) {

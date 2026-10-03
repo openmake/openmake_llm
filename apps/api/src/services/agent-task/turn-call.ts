@@ -12,6 +12,9 @@
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { chatTurnWithRoleFallback, TurnCallCapExceeded, type AgentRoleState } from './role-client';
 import { AgentTaskAbort } from './types';
+import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
+import { detectOutputRepetition } from './output-repetition';
+import { getContextTrimNote, getTransientRetryNote, getOutputRepetitionNote } from '../../prompts/agent-task-turn-loop';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
 /** 시간 예산으로 끊긴 턴 — 마무리 턴이었으면 스트리밍으로 받은 부분 본문을 함께 전달. */
@@ -35,7 +38,8 @@ interface TurnCallInput {
     elapsedActiveMs: number;
     /** 마무리 턴 여부 — 최소 시간 보장 + 스트리밍 부분 본문 보존이 켜진다. */
     finalTurn: boolean;
-    onRetry?: (info: { attempt: number; maxAttempts: number; error: string }) => void;
+    /** 이 호출에서 생긴 일을 단계 기록으로 남기는 훅(stepType, 본문) — 일시적 오류 재시도·컨텍스트 절단·출력 반복. 동기 호출, 실패해도 호출을 막지 않을 것. */
+    onNote?: (stepType: string, note: string) => void;
 }
 
 /**
@@ -64,9 +68,21 @@ export async function callAgentTurnWithBudget(p: TurnCallInput): Promise<TurnCal
             taskId: p.taskId, userId: p.userId, onToken,
             // 도구 턴만 호출당 상한을 건다 — 마무리 턴은 장문 생성이라 위의 최소 보장을 따른다.
             callTimeoutMs: p.finalTurn ? undefined : AGENT_TASK_LIMITS.TURN_CALL_TIMEOUT_MS,
+            // 짧은 재시도가 소진된 일시적 오류는 이 호출의 남은 예산 안에서 더 기다린다(turn-recovery).
+            recoveryBudgetMs: remainingMs,
             // 재시도는 처음부터 다시 받는다 — 끊긴 시도의 부분 본문을 버려 겹치지 않게 한다.
-            onRetry: (info) => { partialContent = ''; p.onRetry?.(info); },
+            onRetry: (info) => { partialContent = ''; p.onNote?.('retry', getTransientRetryNote(info.attempt, info.maxAttempts, info.error)); },
         });
+        // 창 초과로 요청 사본에서 오래된 메시지가 잘렸으면 단계 기록으로 남긴다 — 종전엔 로그 한 줄뿐이었다.
+        const dropped = result.metrics?.context_dropped_messages ?? 0;
+        if (dropped > 0 && AGENT_TASK_TURN_LOOP.CONTEXT_TRIM_STEP_ENABLED) {
+            try { p.onNote?.('context_trim', getContextTrimNote(dropped, p.conversation.length)); } catch { /* 관측 실패 무시 */ }
+        }
+        // 본문의 짧은 구간 반복(모델 반복 루프의 흔적)도 기록만 한다 — 응답은 그대로 쓴다.
+        const repetition = AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_STEP_ENABLED ? detectOutputRepetition(result.content) : null;
+        if (repetition) {
+            try { p.onNote?.('output_repetition', getOutputRepetitionNote(repetition.repeats, AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_WINDOW_CHARS, repetition.sample)); } catch { /* 관측 실패 무시 */ }
+        }
         return { result, callSignal };
     } catch (err) {
         if ((callTimeout.aborted && !p.signal.aborted) || err instanceof TurnCallCapExceeded) {
