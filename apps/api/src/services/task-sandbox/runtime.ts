@@ -15,7 +15,8 @@ import { TaskSandbox, type ExecResult } from './sandbox';
 import type { TaskExecutor } from './executor';
 import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } from './tools';
 import { recordBrowserMetric } from './browser-metrics';
-import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
+import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION } from '../../config/runtime-limits';
+import { truncateToolResult } from '../agent-task/tool-result-truncate';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { bindSkillRunApproval } from './skill-run-binding';
 import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
@@ -42,10 +43,13 @@ export function toLLMTool(def: MCPToolDefinition): ToolDefinition {
     };
 }
 
-function resultToString(r: { content: Array<{ text?: string }>; isError?: boolean }, cap = MAX_TOOL_RESULT_CHARS): string {
+export function resultToString(r: { content: Array<{ text?: string }>; isError?: boolean }, cap = MAX_TOOL_RESULT_CHARS): string {
     // NUL(0x00) 제거 — 바이너리 파일을 도구로 열람하면 결과에 0x00 이 섞일 수 있고, 이는 모델
     // 컨텍스트/스텝 저장(Postgres TEXT·JSON)으로 흘러가면 "invalid byte sequence" 로 태스크를 깨뜨린다.
-    const text = r.content.map((c) => c.text ?? '').join('\n').replace(/\u0000/g, '').slice(0, cap);
+    // 상한을 넘으면 앞·뒤를 남긴다 — 셸 결과의 stderr·종료 코드 줄은 끝에 있다(tool-result-truncate).
+    const text = truncateToolResult(
+        r.content.map((c) => c.text ?? '').join('\n').replace(/\u0000/g, ''), cap, TOOL_RESULT_TRUNCATION.HEAD_RATIO,
+    );
     return r.isError ? `Error: ${text}` : text;
 }
 

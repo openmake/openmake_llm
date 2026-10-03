@@ -8,7 +8,8 @@ import type { UserContext } from '../../tool-contract/types';
 import type { ExtractedArtifact } from '../../llm/artifact-parser';
 import type { ArtifactKind } from '../../data/repositories/artifact-repository';
 import { takeReportSource } from '../chat-service/report-block';
-import { MAX_TOOL_RESULT_CHARS, AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { MAX_TOOL_RESULT_CHARS, AGENT_TASK_LIMITS, TOOL_RESULT_TRUNCATION } from '../../config/runtime-limits';
+import { truncateToolResult } from './tool-result-truncate';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { createLogger } from '../../utils/logger';
 
@@ -112,9 +113,7 @@ export async function runTool(
         recordToolResultTruncation({
             path: 'agent_task', toolName: name, rawChars: raw.length, capChars: MAX_TOOL_RESULT_CHARS,
         });
-        const text = raw.length > MAX_TOOL_RESULT_CHARS
-            ? raw.slice(0, MAX_TOOL_RESULT_CHARS) + '\n...[결과가 길어 잘렸습니다]'
-            : raw;
+        const text = truncateToolResult(raw, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION.HEAD_RATIO);
         return r.isError ? `Error: ${text}` : text;
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

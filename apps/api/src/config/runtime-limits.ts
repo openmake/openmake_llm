@@ -599,6 +599,24 @@ export const TOOL_RESULT_COMPACTION = {
 /** 도구 결과를 LLM 컨텍스트로 주입할 때 단일 결과 최대 문자 수 (외부 provider · agent task 공용). */
 export const MAX_TOOL_RESULT_CHARS = parseInt(process.env.MAX_TOOL_RESULT_CHARS || '8000', 10);
 
+/**
+ * 에이전트 작업의 도구 결과 절단 방식 — 상한(MAX_TOOL_RESULT_CHARS)을 넘으면 앞·뒤를 남기고 가운데를 생략한다
+ * (services/agent-task/tool-result-truncate). 채팅 경로는 종전대로 앞부분만 남긴다.
+ */
+export const TOOL_RESULT_TRUNCATION = {
+    /**
+     * 남기는 분량 중 앞쪽 비율(0~1). 나머지는 뒤쪽. AGENT_TASK_TOOL_RESULT_HEAD_RATIO
+     *
+     * 기본 0.5 의 근거(2026-10-04 실측, retired-chat-model, 상한 8000자): 샌드박스 이미지에서 실제로 만든 긴 결과 8종
+     * (테스트 실패·근본 원인이 앞에 있는 로그·빌드 스택·검색·CSV·설치 로그·파일 보기·서브에이전트 묶음, 9천~2만7천자)에
+     * 질문 29개를 던졌다. 앞만 남기면(종전) 13/29, 뒤만 남기면 20/29, 앞:뒤 80:20~20:80 은 모두 25/29 로 같았다 —
+     * 앞·뒤를 함께 남긴 방식에서는 남은 구간에 근거가 있으면 전부 맞혔고(150건 중 오답 0), 없으면 지어내지 않았다. 근거의 깊이는 앞에서 최대 ~730자
+     * (파일 머리), 뒤에서 최대 ~1,020자(실패 3건의 traceback)였다. 즉 비율은 10~85% 사이에서 결과를 바꾸지 않고,
+     * 양쪽에 1천 자 이상만 남으면 된다. 어느 쪽으로 기울일 근거가 없어 가운데 값으로 둔다.
+     */
+    HEAD_RATIO: parseFloat(process.env.AGENT_TASK_TOOL_RESULT_HEAD_RATIO || '0.5'),
+} as const;
+
 /** Git-ingest 컨벤션 검사 시 LLM 입력 truncation 캡. */
 export const CONVENTION_CHECK_LIMITS = {
     MANIFEST_YAML_MAX_CHARS: parseInt(process.env.CONVENTION_CHECK_YAML_MAX || '4000', 10),
