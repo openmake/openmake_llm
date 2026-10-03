@@ -20,7 +20,8 @@ import { Check, X, Loader2, MessageCircleQuestion, Wrench, ExternalLink } from "
 import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
-import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
+import { isQuestionApproval, elicitationHint, structuredQuestions } from "@/lib/hitl-question";
+import { QuestionChoices } from "./question-choices";
 import { onAgentTaskChange } from "@/lib/agent-task-change";
 
 interface RecentDecision {
@@ -163,6 +164,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
       {items.map((a) => {
         const isQuestion = isQuestionApproval(a.toolName);
         const elicit = elicitationHint(a.toolName, a.args);
+        const structured = structuredQuestions(a.toolName, a.args);
         const summary = summarizeApprovalArgs(a.args, ARGS_SUMMARY_MAX_CHARS);
         const acting = busy === a.approvalId;
         return (
@@ -197,8 +199,16 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
               </Link>
             </div>
 
-            <p className="whitespace-pre-wrap break-words text-sm text-fg">{summary.text}</p>
-            <ApprovalArgsFull full={summary.full} label={t("tasks.fullArgs", { chars: summary.full?.length ?? 0 })} />
+            {/* 구조화 질문 — 선택지를 버튼으로. 고르면 아래 답변 입력란이 채워진다(고쳐 쓸 수 있다). */}
+            {structured ? (
+              <QuestionChoices intro={structured.intro} questions={structured.questions} disabled={acting} recommendedLabel={t("tasks.recommended")}
+                onAnswerAction={(text) => setAnswers((p) => ({ ...p, [a.approvalId]: text }))} />
+            ) : (
+              <>
+                <p className="whitespace-pre-wrap break-words text-sm text-fg">{summary.text}</p>
+                <ApprovalArgsFull full={summary.full} label={t("tasks.fullArgs", { chars: summary.full?.length ?? 0 })} />
+              </>
+            )}
             {elicit && (
               <p className="mt-1 text-xs text-muted">
                 {t("tasks.elicitHint", { server: elicit.server, fields: elicit.fields || "-" })}

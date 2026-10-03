@@ -326,7 +326,7 @@ export class AgentTaskService {
                     if (re.terminated) {
                         const fin = await finalizeTask({
                             taskId, goal, userId: String(userId), path: 'terminate', rawContent: content, terminateSummary: re.terminateSummary,
-                            taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
+                            taskRuntime, sandboxCfg, usedTools, conversation, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
                             signal, update, emitStep,
                         });
                         stepNumber = fin.stepNumber;
@@ -498,7 +498,7 @@ export class AgentTaskService {
                     const fin = await finalizeTask({
                         taskId, goal, userId: String(userId), path: 'final_answer',
                         rawContent: result.content ?? '',
-                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
+                        taskRuntime, sandboxCfg, usedTools, conversation, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
                         signal: callSignal, update, emitStep,
                     });
                     stepNumber = fin.stepNumber;
@@ -536,7 +536,7 @@ export class AgentTaskService {
                     const fin = await finalizeTask({
                         taskId, goal, userId: String(userId), path: 'terminate',
                         rawContent: result.content ?? '', terminateSummary,
-                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
+                        taskRuntime, sandboxCfg, usedTools, conversation, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
                         signal: callSignal, update, emitStep,
                     });
                     stepNumber = fin.stepNumber;

@@ -194,6 +194,21 @@ describe('task-sandbox tools', () => {
             const r = await byName(createTaskTools(fakeSandbox()), 'file_ops').handler({ op: 'write', path: 'a.ts', content: 'x' });
             expect(txt(r)).toBe('기록됨: a.ts');
         });
+
+        it('진단 미지원 실행기(샌드박스)는 쓰기 뒤 문법 검사 결과를 덧붙인다', async () => {
+            const sb = fakeSandbox();
+            const r = await byName(createTaskTools(sb), 'file_ops').handler({ op: 'write', path: 'cfg.json', content: '{"a":' });
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('기록됨: cfg.json');
+            expect(txt(r)).toContain('문법 오류');
+        });
+
+        it('str_replace 는 편집 전부터 깨져 있던 파일의 오류는 알리지 않는다', async () => {
+            const sb = fakeSandbox();
+            await sb.writeFile('cfg.json', '{"a": 1,, "b": 2}');
+            const r = await byName(createTaskTools(sb), 'str_replace_editor').handler({ command: 'str_replace', path: 'cfg.json', old_str: '"b": 2', new_str: '"b": 3' });
+            expect(txt(r)).toBe('치환 완료: cfg.json');
+        });
     });
 
     it('browser: 막아야 할 주소가 있으면 브라우저를 실행하지 않는다', async () => {
@@ -203,6 +218,25 @@ describe('task-sandbox tools', () => {
         expect(r.isError).toBe(true);
         expect(txt(r)).toContain('169.254.169.254');
         expect(sb.lastBrowser).toBe('');
+    });
+
+    describe('bash 종료 코드 해석', () => {
+        const withExit = (exitCode: number): FakeSandbox => {
+            const sb = fakeSandbox();
+            (sb as unknown as { exec: (c: string) => Promise<ExecResult> }).exec = async () => ({ stdout: '', stderr: '', exitCode, truncated: false, timedOut: false, durationMs: 1 });
+            return sb;
+        };
+        it('grep 의 1 은 오류로 표시하지 않고 뜻을 덧붙인다', async () => {
+            const r = await byName(createTaskTools(withExit(1)), 'bash').handler({ command: 'grep -rn foo src' });
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('[exit=1 ');
+            expect(txt(r)).toContain('일치 없음');
+        });
+        it('뜻을 모르는 0 아닌 코드는 종전대로 오류다', async () => {
+            const r = await byName(createTaskTools(withExit(1)), 'bash').handler({ command: 'npm test' });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).not.toContain('일치 없음');
+        });
     });
 
     describe('str_replace_editor', () => {
@@ -244,6 +278,24 @@ describe('task-sandbox tools', () => {
             await ed.handler({ command: 'create', path: 'a.txt', file_text: 'foo bar' });
             await ed.handler({ command: 'str_replace', path: 'a.txt', old_str: 'bar', new_str: 'baz' });
             expect(sb.files.get('a.txt')).toBe('foo baz');
+        });
+        it('str_replace 는 줄 끝 공백만 다른 old_str 를 유일할 때 적용한다', async () => {
+            const sb = fakeSandbox();
+            const ed = byName(createTaskTools(sb), 'str_replace_editor');
+            await ed.handler({ command: 'create', path: 'a.py', file_text: 'def f():\n    return 1  \nx = 2\n' });
+            const r = await ed.handler({ command: 'str_replace', path: 'a.py', old_str: '    return 1\nx = 2', new_str: '    return 3\nx = 2' });
+            expect(r.isError).toBeFalsy();
+            expect(sb.files.get('a.py')).toBe('def f():\n    return 3\nx = 2\n');
+            expect(txt(r)).toContain('2번 줄');
+        });
+        it('str_replace 실패 안내에 가장 비슷한 줄과 줄 번호가 들어간다', async () => {
+            const sb = fakeSandbox();
+            const ed = byName(createTaskTools(sb), 'str_replace_editor');
+            await ed.handler({ command: 'create', path: 'a.js', file_text: 'const a = 1;\nfunction renderHeader(title) {\n}\n' });
+            const miss = await ed.handler({ command: 'str_replace', path: 'a.js', old_str: 'function renderHeader(titel) {', new_str: 'x' });
+            expect(miss.isError).toBe(true);
+            expect(txt(miss)).toContain('2| function renderHeader(title) {');
+            expect(sb.files.get('a.js')).toContain('renderHeader(title)');
         });
     });
 
@@ -455,5 +507,13 @@ describe('task-sandbox tools', () => {
             expect(r.isError).toBeFalsy();
             expect(txt(r)).toContain('echo hi');
         });
+    });
+    it('ask_human 은 질문 하나(question) 또는 여러 개(questions: 선택지·권장안)를 받는다', async () => {
+        const ask = byName(createTaskTools(fakeSandbox()), 'ask_human');
+        const props = (ask.tool.inputSchema as { properties: Record<string, { type: string }> }).properties;
+        expect(props.question.type).toBe('string');
+        expect(props.questions.type).toBe('array');
+        expect(txt(await ask.handler({ question: '계속할까요?' }))).toBe(`${TASK_ASK_HUMAN_SENTINEL} 계속할까요?`);
+        expect(txt(await ask.handler({ questions: [{ question: '색은?', options: ['빨강', '파랑'] }] }))).toContain('빨강');
     });
 });
