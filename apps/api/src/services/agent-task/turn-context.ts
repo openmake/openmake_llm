@@ -8,11 +8,13 @@
  *     종전에는 LLMClient 안전망이 요청 사본에서 말없이 잘라냈다. 판정은 도구 호출 인자와 도구 스키마까지
  *     세고, 직전 호출의 실제 사용량으로 보정한다(context-estimate).
  *  3. 턴 호출(turn-call) — 끝나면 이번 추정과 실제 사용량을 다음 판정용으로 적어 둔다.
+ *  4. 그래도 모델 서버가 창 초과 4xx 를 돌려주면 한 번 더 줄여(최근 턴만 남기고 접기 → 인계 요약) 같은 턴을
+ *     다시 호출한다. 종전에는 4xx 가 재시도 대상이 아니라 작업이 바로 실패했다. 다시 실패하면 그 오류로 끝낸다.
  *
  * @module services/agent-task/turn-context
  */
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
-import { CONTEXT_HANDOFF } from '../../config/agent-task-context';
+import { CONTEXT_HANDOFF, CONTEXT_OVERFLOW_RETRY } from '../../config/agent-task-context';
 import { MODEL_POOL_CONFIG, resolveEffectiveContext } from '../../config/model-pool';
 import { foldOldToolResults } from './context-fold';
 import { compactWithHandoff } from './context-handoff';
@@ -58,6 +60,29 @@ function fitToWindow(conversation: ChatMessage[], tools: ToolDefinition[], model
     return compactWithHandoff(conversation, target, (msgs) => estimateConversationTokens(msgs) * scale).dropped;
 }
 
+/** PURE: 창 초과 오류인가 — 모델 서버의 4xx 중 문구가 맞는 것, 또는 LLMClient 안전망의 ContextOverflowError. */
+export function isContextOverflowError(err: unknown): boolean {
+    if (!(err instanceof Error)) return false;
+    if (err.name === 'ContextOverflowError') return true;
+    const status = (err as { status?: number }).status;
+    return typeof status === 'number' && status >= 400 && status < 500
+        && CONTEXT_OVERFLOW_RETRY.MESSAGE_PATTERNS.some((re) => re.test(err.message));
+}
+
+/** 창 초과 오류 뒤 줄이기 — 최근 턴만 남기고 접은 뒤, 그래도 목표보다 크면 인계 요약으로 바꾼다. 줄었으면 true. */
+function shrinkAfterOverflow(conversation: ChatMessage[], tools: ToolDefinition[]): boolean {
+    const toolTokens = estimateToolSchemaTokens(tools);
+    const target = Math.floor((estimateConversationTokens(conversation) + toolTokens) * CONTEXT_OVERFLOW_RETRY.SHRINK_RATIO) - toolTokens;
+    const fold = foldOldToolResults(conversation, {
+        keepTurns: CONTEXT_OVERFLOW_RETRY.FOLD_KEEP_TURNS,
+        minChars: AGENT_TASK_LIMITS.CONTEXT_FOLD_MIN_CHARS,
+        headChars: AGENT_TASK_LIMITS.CONTEXT_FOLD_HEAD_CHARS,
+        minBatchSavedChars: 0,
+    });
+    const { dropped } = compactWithHandoff(conversation, target, estimateConversationTokens);
+    return fold.folded > 0 || dropped > 0;
+}
+
 export async function callAgentTurnWithContext(p: TurnContextInput): ReturnType<typeof callAgentTurnWithBudget> {
     if (AGENT_TASK_LIMITS.CONTEXT_FOLD_ENABLED) {
         const fold = foldOldToolResults(p.conversation, {
@@ -69,8 +94,20 @@ export async function callAgentTurnWithContext(p: TurnContextInput): ReturnType<
     }
     const dropped = fitToWindow(p.conversation, p.tools, p.roleState.client.model);
     if (dropped > 0) logger.info(`[AgentTask] 창 초과 — 인계 요약으로 정리: ${p.taskId} (turn ${p.turn + 1}, 메시지 ${dropped}개)`);
-    const estimated = estimateConversationTokens(p.conversation) + estimateToolSchemaTokens(p.tools);
-    const out = await callAgentTurnWithBudget(p);
+    let estimated = estimateConversationTokens(p.conversation) + estimateToolSchemaTokens(p.tools);
+    const startedAt = Date.now();
+    let out: Awaited<ReturnType<typeof callAgentTurnWithBudget>>;
+    try {
+        out = await callAgentTurnWithBudget(p);
+    } catch (err) {
+        if (!CONTEXT_OVERFLOW_RETRY.ENABLED || p.signal.aborted || !isContextOverflowError(err)
+            || !shrinkAfterOverflow(p.conversation, p.tools)) throw err;
+        const after = estimateConversationTokens(p.conversation) + estimateToolSchemaTokens(p.tools);
+        logger.warn(`[AgentTask] 창 초과 오류 — 줄여서 같은 턴 재호출: ${p.taskId} (turn ${p.turn + 1}, 추정 ~${estimated} → ~${after}토큰)`);
+        estimated = after;
+        // 첫 호출에 쓴 시간만큼 남은 예산을 줄여 다시 건다.
+        out = await callAgentTurnWithBudget({ ...p, elapsedActiveMs: p.elapsedActiveMs + (Date.now() - startedAt) });
+    }
     const actual = out.result.metrics?.prompt_tokens ?? 0;
     if (actual > 0) lastUsage.set(p.conversation, { estimated, actual });
     return out;

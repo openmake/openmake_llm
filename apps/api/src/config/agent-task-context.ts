@@ -75,3 +75,27 @@ export const CONTEXT_ESTIMATE = {
      */
     MAX_SCALE: Math.max(1, parseFloat(process.env.AGENT_TASK_CONTEXT_CALIBRATION_MAX_SCALE || '') || 4),
 } as const;
+
+/** 창 초과 오류 뒤 복구 — services/agent-task/turn-context. */
+export const CONTEXT_OVERFLOW_RETRY = {
+    /** 모델 서버가 창 초과 4xx 를 돌려주면 대화를 줄여 같은 턴을 한 번 다시 호출한다. AGENT_TASK_CONTEXT_OVERFLOW_RETRY=false 로 끈다. */
+    ENABLED: process.env.AGENT_TASK_CONTEXT_OVERFLOW_RETRY !== 'false',
+    /** 복구 때 원문으로 남기는 최근 턴 수 — 평소 접기(CONTEXT_FOLD_KEEP_TURNS)보다 적게. AGENT_TASK_CONTEXT_OVERFLOW_KEEP_TURNS */
+    FOLD_KEEP_TURNS: Math.max(1, intEnv('AGENT_TASK_CONTEXT_OVERFLOW_KEEP_TURNS', 1)),
+    /**
+     * 복구 때 목표 크기 — 실패한 요청 추정치의 이 비율까지 줄인다(0~1). 서버가 넘었다고 한 만큼 추정이
+     * 낮았다는 뜻이라 넉넉히 줄인다. AGENT_TASK_CONTEXT_OVERFLOW_SHRINK_RATIO
+     */
+    SHRINK_RATIO: Math.min(0.95, Math.max(0.1, parseFloat(process.env.AGENT_TASK_CONTEXT_OVERFLOW_SHRINK_RATIO || '') || 0.6)),
+    /**
+     * 창 초과로 볼 오류 문구(4xx 일 때만 본다). vLLM "maximum context length", LiteLLM
+     * "ContextWindowExceededError", OpenAI 계열 "context_length_exceeded", Anthropic "prompt is too long".
+     */
+    MESSAGE_PATTERNS: [
+        /maximum context length/i,
+        /context[ _]?(?:length|window)[ _]?exceeded/i,
+        /contextwindowexceeded/i,
+        /prompt is too long/i,
+        /exceeds? (?:the )?(?:model'?s? )?(?:maximum )?context/i,
+    ] as readonly RegExp[],
+} as const;

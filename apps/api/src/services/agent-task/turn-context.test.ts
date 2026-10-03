@@ -11,7 +11,7 @@ jest.mock('../../config/model-pool', () => {
 });
 jest.mock('./turn-call', () => ({ callAgentTurnWithBudget: jest.fn() }));
 
-import { callAgentTurnWithContext } from './turn-context';
+import { callAgentTurnWithContext, isContextOverflowError } from './turn-context';
 import { callAgentTurnWithBudget } from './turn-call';
 import { isHandoffSummary } from './context-handoff';
 import { isFoldedToolResult } from './context-fold';
@@ -93,5 +93,59 @@ describe('callAgentTurnWithContext', () => {
         // 같은 대화인데 실제는 3배였다 — 다음 턴에는 넘는 것으로 판정해 줄인다.
         await callAgentTurnWithContext(base(c));
         expect(c.some((m) => isHandoffSummary(m.content))).toBe(true);
+    });
+});
+
+describe('창 초과 오류 뒤 복구', () => {
+    const overflow = () => Object.assign(new Error("400 This model's maximum context length is 32768 tokens. However, you requested 40000 tokens"), { status: 400 });
+    const ok = () => ({ result: { role: 'assistant', content: 'ok' }, callSignal: new AbortController().signal });
+
+    it('창 초과 4xx 를 알아본다 — 다른 4xx·5xx 는 아니다', () => {
+        expect(isContextOverflowError(overflow())).toBe(true);
+        expect(isContextOverflowError(Object.assign(new Error('litellm.ContextWindowExceededError: too long'), { status: 400 }))).toBe(true);
+        expect(isContextOverflowError(Object.assign(new Error('400 `tools` must not be an empty array'), { status: 400 }))).toBe(false);
+        expect(isContextOverflowError(Object.assign(new Error('maximum context length'), { status: 500 }))).toBe(false);
+        expect(isContextOverflowError(Object.assign(new Error('메시지가 모델 컨텍스트 한계를 초과했습니다'), { name: 'ContextOverflowError' }))).toBe(true);
+        expect(isContextOverflowError(new Error('boom'))).toBe(false);
+    });
+
+    it('창 초과면 대화를 줄여 같은 턴을 한 번 다시 호출한다', async () => {
+        // 외부 모델이라 사전 판정이 없다 — 서버 오류로만 알 수 있다.
+        const c = conv(8, 3000);
+        const before = JSON.stringify(c).length;
+        call.mockRejectedValueOnce(overflow()).mockResolvedValueOnce(ok());
+        const out = await callAgentTurnWithContext(base(c, 'external-model'));
+        expect(out.result.content).toBe('ok');
+        expect(call).toHaveBeenCalledTimes(2);
+        expect(JSON.stringify(c).length).toBeLessThan(before * 0.7);
+        expect(c[1].content).toContain('목표');
+        expect(c[c.length - 1].tool_call_id).toBe('c7');
+    });
+
+    it('다시 호출해도 창 초과면 그 오류로 끝낸다(1회만)', async () => {
+        const c = conv(8, 3000);
+        call.mockRejectedValue(overflow());
+        await expect(callAgentTurnWithContext(base(c, 'external-model'))).rejects.toThrow('maximum context length');
+        expect(call).toHaveBeenCalledTimes(2);
+    });
+
+    it('더 줄일 것이 없으면 다시 호출하지 않는다', async () => {
+        const c: ChatMessage[] = [{ role: 'system', content: 'sys' }, { role: 'user', content: '목표' }];
+        call.mockRejectedValue(overflow());
+        await expect(callAgentTurnWithContext(base(c, 'external-model'))).rejects.toThrow('maximum context length');
+        expect(call).toHaveBeenCalledTimes(1);
+    });
+
+    it('창 초과가 아닌 오류는 그대로 던진다', async () => {
+        call.mockRejectedValue(Object.assign(new Error('400 bad tools'), { status: 400 }));
+        await expect(callAgentTurnWithContext(base(conv(8, 3000), 'external-model'))).rejects.toThrow('bad tools');
+        expect(call).toHaveBeenCalledTimes(1);
+    });
+
+    it('취소된 작업은 다시 호출하지 않는다', async () => {
+        const ac = new AbortController();
+        call.mockImplementation(async () => { ac.abort(); throw overflow(); });
+        await expect(callAgentTurnWithContext({ ...base(conv(8, 3000), 'external-model'), signal: ac.signal })).rejects.toThrow();
+        expect(call).toHaveBeenCalledTimes(1);
     });
 });
