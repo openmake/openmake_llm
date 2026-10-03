@@ -22,10 +22,13 @@ import { ServedModelBadge } from "./served-model-badge";
 import { ToolCallCards } from "./tool-call-cards";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
+import { ApprovalArgsFull, summarizeApprovalArgs } from "@/components/approvals/approval-args";
 import { isNearBottom } from "@/lib/chat-scroll";
 import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 
 const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
+/** 채팅 인라인 승인의 인자 요약 길이 — 넘으면 전문 펼쳐 보기가 붙는다. */
+const INLINE_ARGS_SUMMARY_MAX_CHARS = 90;
 
 /** 에이전트 작업 승인 대기 — 채팅 인라인 승인/거절 버튼 (paused task). */
 function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
@@ -121,11 +124,13 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
             </div>
           );
         }
+        const summary = summarizeApprovalArgs(a.args, INLINE_ARGS_SUMMARY_MAX_CHARS);
         return (
           <div key={a.approvalId} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-1 p-2">
             <div className="min-w-0">
               <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
-              <span className="ml-2 break-all text-xs text-muted">{JSON.stringify(a.args).slice(0, 90)}</span>
+              <span className="ml-2 break-all text-xs text-muted">{summary.text}</span>
+              <ApprovalArgsFull full={summary.full} label={t("approvals.fullArgs", { chars: summary.full?.length ?? 0 })} />
               {a.preview && (
                 <details className="mt-1">
                   <summary className="cursor-pointer text-[11px] text-accent">{t("approvals.preview")}</summary>
