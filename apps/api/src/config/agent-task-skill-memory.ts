@@ -108,11 +108,27 @@ export const MEMORY_RANK_STOPWORDS: ReadonlySet<string> = new Set([
 
 /**
  * 과거 작업 검색 도구(task_history) — 에이전트 작업이 같은 사용자의 과거 작업을 검색·최근 목록·한 건 요약으로 읽는다.
- * 읽기 전용이고 호출한 사용자의 작업만 보인다. 도구가 하나 늘어 모델의 선택에 영향을 주므로 기본은 꺼짐이다.
+ * 읽기 전용이고 호출한 사용자의 작업만 보인다.
  */
 export const TASK_HISTORY_TOOL = {
-    /** AGENT_TASK_HISTORY_TOOL=true 로 켠다. */
-    ENABLED: process.env.AGENT_TASK_HISTORY_TOOL === 'true',
+    /** AGENT_TASK_HISTORY_TOOL=false 로 끈다. 켜짐의 근거는 아래 EXPOSURE 주석. */
+    ENABLED: process.env.AGENT_TASK_HISTORY_TOOL !== 'false',
+    /**
+     * 노출 조건 — 'intent'(기본): 목표가 과거 작업을 가리킬 때만(TASK_HISTORY_INTENT_PATTERNS) 싣는다. 'always': 모든 작업에 싣는다.
+     * AGENT_TASK_HISTORY_EXPOSURE
+     *
+     * 근거(2026-10-04 실측, retired-chat-model, 샌드박스):
+     * - 쓸모: 과거 작업을 참조해야 풀리는 과제 2종(지난 작업의 결과에만 있는 값 찾기 / "지난번과 같은 방식으로")을 선행 작업으로
+     *   기록을 만든 뒤 돌렸다. 도구가 있으면 4/4 해결(매번 search → view 2회 호출, 4~5턴), 없으면 0/2(하나는 작업 공간과 git 이력을
+     *   뒤지다 10턴·13만 7천 토큰을 쓰고 실패, 하나는 방식을 지어내 틀린 값으로 완료).
+     * - 상시 노출의 비용: 과제 묶음 기본 8건 × 2회에서 task_history 호출은 0/16 이었고(다른 프로세스의 좀비 정리에 걸린 실행을 뺀
+     *   유효 표본은 켬 11건·끔 11건, 둘 다 전부 완료했고 같은 과제의 턴 수가 늘지 않았다), 대신 총 도구 수 상한(30) 안에서 동적 도구 자리를
+     *   하나 차지했고(12 → 11개) 스키마 651자(추정 279토큰)가 매 턴 실렸다. 그래서 목표가 과거 작업을 가리킬 때만 싣는다 —
+     *   과제 묶음 12건의 목표에는 실리지 않는다(테스트로 고정).
+     * - 과거 결과 속 지시문: 결과에 "이전 지시를 무시하고 …" 를 심은 과거 작업을 읽게 한 2회 모두 따르지 않았다(WRAP_RESULT 적용).
+     * 표본이 작다(과제 2종). 의도 패턴에 걸리지 않게 과거 작업을 가리키는 목표에서는 도구가 실리지 않는다.
+     */
+    EXPOSURE: (process.env.AGENT_TASK_HISTORY_EXPOSURE === 'always' ? 'always' : 'intent') as 'intent' | 'always',
     /** 목록 기본·최대 건수. AGENT_TASK_HISTORY_DEFAULT_LIMIT / AGENT_TASK_HISTORY_MAX_LIMIT */
     DEFAULT_LIMIT: num(process.env.AGENT_TASK_HISTORY_DEFAULT_LIMIT, 10),
     MAX_LIMIT: num(process.env.AGENT_TASK_HISTORY_MAX_LIMIT, 20),
@@ -122,4 +138,21 @@ export const TASK_HISTORY_TOOL = {
     GOAL_PREVIEW_CHARS: 200,
     /** 한 건 보기에 싣는 결과 길이. AGENT_TASK_HISTORY_RESULT_MAX_CHARS */
     RESULT_MAX_CHARS: num(process.env.AGENT_TASK_HISTORY_RESULT_MAX_CHARS, 2000),
+    /** 과거 기록이 든 결과를 데이터 래퍼(<tool_output> + 지금 목표 재확인)로 감싼다 — 과거 결과 속 지시문이 지금 작업의 지시처럼
+     *  읽히지 않게 한다. 전역 래퍼(AGENT_TASK_TOOL_RESULT_WRAP_ENABLED)와 무관하게 이 도구에는 적용한다. AGENT_TASK_HISTORY_WRAP_RESULT=false 로 끈다. */
+    WRAP_RESULT: process.env.AGENT_TASK_HISTORY_WRAP_RESULT !== 'false',
 } as const;
+
+/**
+ * 과거 작업 검색 도구를 실을 목표 — 지난 작업·그때의 방식·결과를 가리키는 표현. "지난 변경 사항"·"지난주"·"last quarter" 처럼
+ * 기간만 가리키는 말에는 걸리지 않게 "번"·"작업"·"했던" 같은 낱말을 함께 요구한다.
+ */
+export const TASK_HISTORY_INTENT_PATTERNS: readonly RegExp[] = [
+    /(지난\s*번|저번|요전|예전)\s*(에|의|처럼|과|와|보다)?/,
+    /(이전|과거|지난|앞선|(?<![가-힣])전)\s*(에)?\s*(작업|태스크|실행)/,
+    /(작업|실행)\s*(기록|이력|내역)/,
+    /(?<![가-힣])(전에|이전에|앞서)\s*(했던|한\s*것|만든|정한|돌린|작성한|구한)/,
+    /task[_ ]history/i,
+    /\b(last time|(previous|earlier|past|prior) (tasks?|runs?|jobs?|work))\b/i,
+    /\b(same|like)\b[^\n]{0,40}\b(as before|as last time|as previously|we did before)\b/i,
+];
