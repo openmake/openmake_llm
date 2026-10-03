@@ -309,7 +309,7 @@ export class AgentTaskService {
                     const { journal, unknownOutcomeId } = await loadReentryState(taskId, reentry.calls);
                     logger.info(`[AgentTask] 턴 중간 재개: ${taskId} (turn ${turn + 1}, 남은 호출 ${reentry.calls.length}건, 저널 재사용 ${journal.size}건)`);
                     await update({ currentTurn: turn + 1 });
-                    const re = await executeTurnToolCalls({
+                    const re = await executeTurnToolCalls({ goal,
                         toolCalls: reentry.calls, journal, unknownOutcomeId, taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
                         userId: String(userId), taskId, turn, conversation, usedTools, signal,
                         stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts, getCurStatus: () => curStatus, update, emitStep,
@@ -531,7 +531,7 @@ export class AgentTaskService {
                 // LLM 재호출 없이 같은 호출을 이어가게 한다(승인 이어받기의 args_hash 도 그래야 맞는다).
                 if (AGENT_TASK_LIMITS.MIDTURN_CHECKPOINT_ENABLED) await writeTurnCheckpoint(taskId, conversation, turn - 1, taskRuntime).catch(() => { /* fail-open */ });
                 // 도구 실행 + 체크포인트 — 승인 게이트·terminate 감지·스텝 영속은 agent-task/turn-executor.
-                const turnExec = await executeTurnToolCalls({
+                const turnExec = await executeTurnToolCalls({ goal,
                     toolCalls: result.tool_calls!,
                     taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
                     userId: String(userId), taskId, turn, conversation, usedTools, signal,
