@@ -18,6 +18,8 @@ import { dispatchAgentTask } from './task-queue';
 import { publishScheduleOutput } from './schedule-publish';
 import { computeNextRun } from './schedule-cron';
 import { scheduleFireKey, isPreviousRunActive } from './schedule-fire';
+import { applyScheduleOutcome } from './schedule-outcome';
+import { AGENT_TASK_SCHEDULE } from '../../config/agent-task-schedule';
 import type { AgentTaskUserRole } from './types';
 import { isAdminRole } from '../../data/user-manager';
 
@@ -63,6 +65,8 @@ async function publishCompleted(taskId: string, s: AgentTaskSchedule): Promise<v
 async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSchedule, nowMs: number): Promise<void> {
     const timing = { cron: s.cron, intervalSeconds: s.interval_seconds };
     const nextRunAtMs = computeNextRun(timing, nowMs);
+    // 연속 실패를 실행 결과로 세면(schedule-outcome) 제출 성공만으로는 카운터를 풀지 않는다.
+    const resetOnSubmit = !AGENT_TASK_SCHEDULE.RUN_OUTCOME_ENABLED;
     try {
         const db = getUnifiedDatabase();
         // 이전 실행이 아직 돌고 있으면 이번 발화는 건너뛴다 — 같은 리포트의 중복 생성·게시 파일 덮어쓰기 방지(schedule-fire).
@@ -79,7 +83,7 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
         const created = await db.createAgentTask({ id: taskId, userId: s.user_id, goal: s.goal, maxTurns: s.max_turns, idempotencyKey: fireKey });
         if (!created) {
             const existing = await db.findAgentTaskByCreateKey(String(s.user_id), fireKey);
-            await repo.markRun(s.id, nextRunAtMs, existing?.id ?? taskId);
+            await repo.markRun(s.id, nextRunAtMs, existing?.id ?? taskId, resetOnSubmit);
             logger.warn(`[Schedule] 같은 발화의 작업이 이미 있어 다시 만들지 않음: ${s.id} → ${existing?.id ?? '(조회 실패)'}`);
             return;
         }
@@ -98,13 +102,15 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
                     approvalPolicy: AGENT_TASK_LIMITS.SCHEDULE_APPROVAL_POLICY,
                     // 무거운 리포트 생성은 대화형 10분을 넘길 수 있어 예약 전용 총 예산(기본 20분) 부여.
                     totalTimeoutMs: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS,
+                    // 종료 결과를 예약에 반영 — 같은 실패는 한 번만 알리고 연속 실패면 예약을 끈다.
+                    ...(AGENT_TASK_SCHEDULE.RUN_OUTCOME_ENABLED ? { onTerminal: (t) => applyScheduleOutcome(repo, s.id, t) } : {}),
                 });
                 // 산출물 게시 — 무인 실행은 채팅 세션도 아티팩트도 없어 이 경로가 유일한 도달 수단이다.
                 // 게시 실패가 task 성공을 뒤집지 않게 격리(산출물은 workspace 에 그대로 남는다).
                 await publishCompleted(taskId, s);
             },
         });
-        await repo.markRun(s.id, nextRunAtMs, taskId);
+        await repo.markRun(s.id, nextRunAtMs, taskId, resetOnSubmit);
         // 발화 이력(6-2) — 실패해도 발화 자체를 막지 않음.
         await repo.recordRun({ scheduleId: s.id, userId: s.user_id, taskId, outcome: 'fired' }).catch(() => { /* noop */ });
         logger.info(`[Schedule] 실행: ${s.id} → task ${taskId} (next=${nextRunAtMs ? new Date(nextRunAtMs).toISOString() : '비활성'})`);

@@ -40,9 +40,11 @@ export function isTerminalStatus(status: string | undefined): boolean {
 }
 
 /** 화면 이벤트 + 푸시. 어떤 실패도 밖으로 던지지 않는다 — 알림은 부가 동작이라 작업의 종료 처리를 깨면 안 된다. */
-async function send(n: TerminalNotice, emit: boolean): Promise<void> {
+async function send(n: TerminalNotice, emit: boolean, push?: Promise<boolean>): Promise<void> {
     try {
         if (emit) emitAgentTaskProgress({ userId: n.userId, taskId: n.taskId, status: n.status, progress: n.progress, currentTurn: n.currentTurn });
+        // 푸시 여부를 호출부가 정한다(예약 실행의 같은 실패 반복 등). 판단이 실패하면 보낸다.
+        if (push && !(await push.catch(() => true))) return;
         const shortGoal = n.goal.length > PUSH_GOAL_MAX_CHARS ? `${n.goal.slice(0, PUSH_GOAL_MAX_CHARS)}…` : n.goal;
         // 페이지가 닫혀 있어도 알림. VAPID 미설정·구독 없음은 PushService 가 no-op 으로 끝낸다.
         await getPushService().sendPush(n.userId, {
@@ -56,9 +58,10 @@ async function send(n: TerminalNotice, emit: boolean): Promise<void> {
 /**
  * 종료 알림을 보내고 표식을 지운다(fire-and-forget — 실행 루프를 기다리게 하지 않고, 던지지도 않는다).
  * opts.emit=false: 호출부가 화면 이벤트를 이미 발행했을 때. repo 미지정이면 기본 저장소를 알림 뒤에 만든다.
+ * opts.push: false 로 풀리면 푸시만 생략한다(표식은 지운다).
  */
-export function notifyTaskTerminal(n: TerminalNotice, repo?: TerminalNotifyRepo, opts: { emit?: boolean } = {}): void {
-    void send(n, opts.emit !== false)
+export function notifyTaskTerminal(n: TerminalNotice, repo?: TerminalNotifyRepo, opts: { emit?: boolean; push?: Promise<boolean> } = {}): void {
+    void send(n, opts.emit !== false, opts.push)
         .then(() => (repo ?? defaultRepo()).clearTerminalNotifyPending(n.taskId))
         .catch((err) => { logger.warn(`종료 알림 표식 정리 실패(다음 점검이 다시 보낸다): ${n.taskId} — ${err instanceof Error ? err.message : String(err)}`); });
 }

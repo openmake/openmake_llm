@@ -52,6 +52,15 @@ export interface AgentTaskInputFile extends AttachedFileInput {
     storedPath?: string;
 }
 
+/** 종료 상태(completed·failed·cancelled)를 쓸 때의 요약 — onTerminal 이 받는다. */
+export interface AgentTaskTerminalInfo {
+    status?: string;
+    error?: string | null;
+    result?: string | null;
+    /** 그때까지 누적된 모델 토큰 — 0 이면 모델 응답을 한 번도 받지 못했다. */
+    totalTokens?: number;
+}
+
 export interface AgentTaskRunInput {
     taskId: string;
     goal: string;
@@ -80,6 +89,8 @@ export interface AgentTaskRunInput {
     deviceId?: string;
     /** 로컬 실행 대상 폴더(102, 폴더 선택) — 연결 루트 기준 상대경로. 미지정=루트. */
     folderRel?: string;
+    /** 종료 상태를 쓴 직후 불린다 — 예약 실행이 결과를 예약에 반영한다(schedule-outcome). false 로 풀리면 종료 푸시를 생략한다. */
+    onTerminal?: (t: AgentTaskTerminalInfo) => Promise<boolean>;
     /** resume(이어하기): 기존 end-of-turn checkpoint 에서 복원 */
     resume?: {
         conversation: ChatMessage[];
