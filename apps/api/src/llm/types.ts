@@ -77,6 +77,11 @@ export interface UsageMetrics {
      * "length" 가 발생하면 max_tokens 한도에서 절단 — reasoning 모델은 본문 미생성 위험.
      */
     finish_reason?: string;
+    /**
+     * 컨텍스트 창에 맞추려고 요청 사본에서 잘라낸 오래된 메시지 수(model-pool) — 잘라냈을 때만 있다.
+     * 호출자의 대화 원본은 그대로라, 호출자가 알아야 기록하거나 대응할 수 있다.
+     */
+    context_dropped_messages?: number;
 }
 
 /**
@@ -184,6 +189,11 @@ export interface ToolCall {
      * Mismatch 시 vLLM hermes/granite 등의 chat_template 렌더링이 깨지거나 spec 위반.
      */
     id?: string;
+    /**
+     * 인자 JSON 이 깨져(출력 절단 등) arguments 가 {} 로 강등된 호출 — 그럴 때만 true.
+     * 요청으로 내보낼 때는 싣지 않는다. 에이전트 작업은 이 호출을 실행하지 않고 오류 결과를 돌려준다.
+     */
+    argumentsInvalid?: boolean;
     /** 호출할 함수 정보 */
     function: {
         /** 스트리밍 시 도구 호출 인덱스 (순서 식별용) */

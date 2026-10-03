@@ -12,6 +12,7 @@
 import type { ChatMessage } from '../../llm/types';
 import { hashApprovalArgs } from '../../data/repositories/agent-task-approval-repository';
 import { getToolLoopBlockedResult, getToolLoopFailureNote, getToolLoopSameResultNote } from '../../prompts/agent-task-prompt';
+import { DUPLICATE_TOOL_CALL_PREFIX } from '../../prompts/agent-task-turn-loop';
 
 interface PriorRepetition {
     /** 직전까지 같은 이름·인자로 연속 실패한 횟수. */
@@ -34,6 +35,9 @@ function isErrorResult(content: string): boolean {
     return /^(?:<tool_output>\s*)?Error:/.test(content);
 }
 
+/** 중복 호출 안내 결과 — 데이터 래퍼(<tool_output>)에 싸여 있어도 본다. */
+const DUPLICATE_TOOL_CALL_RE = new RegExp(`^(?:<tool_output>\\s*)?${DUPLICATE_TOOL_CALL_PREFIX.replace(/[[\]]/g, '\\$&')}`);
+
 const signature = (name: string, args: unknown): string => `${name}:${hashApprovalArgs((args ?? {}) as Record<string, unknown>)}`;
 
 /**
@@ -47,7 +51,10 @@ export function priorRepetition(conversation: readonly ChatMessage[], name: stri
         if (m.role === 'assistant') {
             for (const tc of m.tool_calls ?? []) if (tc.id) sigById.set(tc.id, signature(tc.function.name, tc.function.arguments));
         } else if (m.role === 'tool' && m.tool_call_id && sigById.has(m.tool_call_id)) {
-            done.push({ sig: sigById.get(m.tool_call_id)!, content: typeof m.content === 'string' ? m.content : '' });
+            const content = typeof m.content === 'string' ? m.content : '';
+            // 한 응답 안의 중복 호출에 준 짧은 결과는 실행 결과가 아니다 — 집계에서 뺀다(같은 결과 연속이 끊기지 않게).
+            if (DUPLICATE_TOOL_CALL_RE.test(content)) continue;
+            done.push({ sig: sigById.get(m.tool_call_id)!, content });
         }
     }
     const want = signature(name, args);

@@ -25,6 +25,8 @@ import { hasSideEffects } from '../../config/tool-policy';
 import { priorRepetition, repetitionVerdict } from './tool-loop-guard';
 import { needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from './tool-receipt';
 import { runWithToolCallContext } from '../../utils/tool-call-context';
+import { isRejectedCall, findDuplicateCalls } from './turn-call-guards';
+import { getMalformedToolArgsResult, getDuplicateToolCallResult } from '../../prompts/agent-task-turn-loop';
 import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice } from '../../prompts/agent-task-prompt';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
@@ -149,7 +151,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             ? wrapUntrustedToolResult(result, input.goal)
             : result;
     const execTool = (name: string, args: Record<string, unknown>): Promise<string> =>
-        getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx));
+        getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx, taskRuntime?.spillLargeResult));
     // 외부 도구(175) — 영수증을 남기고 멱등 키를 호출 문맥에 실어 실행한다(외부 MCP 클라이언트가 읽어 서버에 보낸다).
     let receiptOpen = false;
     const execWithReceipt = async (name: string, args: Record<string, unknown>, toolCallId: string | undefined): Promise<string> => {
@@ -162,8 +164,10 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     // 포함한다 — 아니면 승인 창이 동시에 N개 뜬다(HITL fan-in). 결과·스텝 영속은 아래 루프가
     // 원래 순서로 처리하므로 체크포인트 계약은 그대로다.
     const journal = input.journal ?? new Map<string, string>();
+    // 한 응답 안의 같은 읽기 호출 — 첫 호출만 실행하고 나머지는 그 호출을 가리키는 짧은 결과로 답한다(turn-call-guards).
+    const duplicateOf = findDuplicateCalls(toolCalls);
     const prefetched = await prefetchReadOnlyCalls(
-        toolCalls.filter((tc) => tc.id === undefined || !journal.has(tc.id)).map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
+        toolCalls.filter((tc) => (tc.id === undefined || !journal.has(tc.id)) && !isRejectedCall(tc) && !duplicateOf.has(tc)).map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
         ({ name, tc }) => !taskRuntime?.isTaskTool(name)
             && (!requiresApproval(sandboxCfg.approvalPolicy, name, (tc.function.arguments ?? {}) as Record<string, unknown>)
                 || getApprovalRegistry().autoApproves(taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>)),
@@ -186,9 +190,14 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         if (signal.aborted) throw new AgentTaskAbort('aborted');
         if (parkRequested) await park(); // 선실행(prefetch) 중 주차 — 이 턴 호출은 재개 때 다시 실행된다
         const name = tc.function.name;
-        usedTools.add(name);
-        if (isSearchTool(name)) searchCalls++;
-        if (name === 'browser') browserCalls++;
+        // 인자 JSON 이 깨진 호출·한 응답 안의 중복 호출 — 실행하지 않으므로 사용 도구·검색/브라우저 횟수에 세지 않는다(turn-call-guards).
+        const malformed = isRejectedCall(tc);
+        const original = duplicateOf.get(tc);
+        if (!malformed && !original) {
+            usedTools.add(name);
+            if (isSearchTool(name)) searchCalls++;
+            if (name === 'browser') browserCalls++;
+        }
         const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
         let toolResult: string;
         inFlightMarked = false;
@@ -203,7 +212,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             ? await resolveUnknownOutcome(name, tc.id)
             : undefined;
         // 반복 가드 — 같은 호출의 연속 실패·같은 결과 반복을 대화에서 세어 안내하거나 실행하지 않는다(tool-loop-guard).
-        const loop = AGENT_TASK_LIMITS.TOOL_LOOP_GUARD_ENABLED && journaled === undefined && unknownResult === undefined
+        const loop = AGENT_TASK_LIMITS.TOOL_LOOP_GUARD_ENABLED && journaled === undefined && unknownResult === undefined && !original
             ? repetitionVerdict(priorRepetition(conversation, name, args), { readOnly: !hasSideEffects(name, args), toolName: name }, {
                 warnFailures: AGENT_TASK_LIMITS.TOOL_LOOP_WARN_FAILURES, blockFailures: AGENT_TASK_LIMITS.TOOL_LOOP_BLOCK_FAILURES,
                 warnSameResult: AGENT_TASK_LIMITS.TOOL_LOOP_WARN_SAME_RESULT, blockSameResult: AGENT_TASK_LIMITS.TOOL_LOOP_BLOCK_SAME_RESULT,
@@ -216,6 +225,10 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         } else if (unknownResult !== undefined) {
             toolResult = unknownResult;
             inFlightMarked = true; // 남아 있는 표식을 아래에서 지운다
+        } else if (malformed) {
+            toolResult = getMalformedToolArgsResult(name);
+        } else if (original) {
+            toolResult = getDuplicateToolCallResult(name, original.id);
         } else if (loop?.block) {
             toolResult = loop.blockedResult;
         } else if (pre !== undefined) {
