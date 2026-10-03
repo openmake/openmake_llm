@@ -17,6 +17,7 @@ import { loadOwnedTask } from './agent-task.helpers';
 import { buildForkNotice } from '../prompts/agent-task-prompt';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { findDanglingToolCalls } from '../services/agent-task/turn-reentry';
+import { stripOneShotNotices } from '../services/agent-task/one-shot-notice';
 import type { ChatMessage } from '../llm/types';
 
 const logger = createLogger('AgentTaskForkRoutes');
@@ -46,7 +47,8 @@ forkRouter.post('/:taskId/fork', asyncHandler(async (req: Request, res: Response
     const notice = buildForkNotice({
         restoreEnabled: AGENT_TASK_LIMITS.FORK_WORKSPACE_RESTORE_ENABLED, newGoal: goal !== src.goal ? goal : undefined,
     });
-    const conversation = [...base.slice(0, cut), { role: 'user', content: notice }];
+    // 일회성 안내(검색 한도·마무리 턴 등)는 원 실행의 자원 상태라 뺀다 — 새 작업은 횟수·예산이 다시 시작한다.
+    const conversation = [...stripOneShotNotices(base.slice(0, cut)), { role: 'user', content: notice }];
 
     const db = getUnifiedDatabase();
     const id = uuidv4();
