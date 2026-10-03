@@ -194,6 +194,21 @@ describe('task-sandbox tools', () => {
             const r = await byName(createTaskTools(fakeSandbox()), 'file_ops').handler({ op: 'write', path: 'a.ts', content: 'x' });
             expect(txt(r)).toBe('기록됨: a.ts');
         });
+
+        it('진단 미지원 실행기(샌드박스)는 쓰기 뒤 문법 검사 결과를 덧붙인다', async () => {
+            const sb = fakeSandbox();
+            const r = await byName(createTaskTools(sb), 'file_ops').handler({ op: 'write', path: 'cfg.json', content: '{"a":' });
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('기록됨: cfg.json');
+            expect(txt(r)).toContain('문법 오류');
+        });
+
+        it('str_replace 는 편집 전부터 깨져 있던 파일의 오류는 알리지 않는다', async () => {
+            const sb = fakeSandbox();
+            await sb.writeFile('cfg.json', '{"a": 1,, "b": 2}');
+            const r = await byName(createTaskTools(sb), 'str_replace_editor').handler({ command: 'str_replace', path: 'cfg.json', old_str: '"b": 2', new_str: '"b": 3' });
+            expect(txt(r)).toBe('치환 완료: cfg.json');
+        });
     });
 
     it('browser: 막아야 할 주소가 있으면 브라우저를 실행하지 않는다', async () => {

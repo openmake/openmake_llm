@@ -228,11 +228,11 @@ export function createTaskTools(
                         const relaxed = resolveMissedStrReplace(content, oldStr, str(args.new_str), path);
                         if (relaxed.content === undefined) return textResult(relaxed.message, true);
                         await sandbox.writeFile(path, relaxed.content);
-                        return withDiagnostics(sandbox, path, relaxed.message);
+                        return withDiagnostics(sandbox, path, relaxed.message, content);
                     }
                     if (count > 1) return textResult(`old_str 가 ${count}회 중복 — 유일해야 합니다.`, true);
                     await sandbox.writeFile(path, content.replace(oldStr, str(args.new_str)));
-                    return withDiagnostics(sandbox, path, `치환 완료: ${path}`);
+                    return withDiagnostics(sandbox, path, `치환 완료: ${path}`, content);
                 }
                 if (command === 'insert') {
                     const content = await sandbox.readFile(path);
@@ -240,7 +240,7 @@ export function createTaskTools(
                     const at = Math.max(0, Math.min(lines.length, Number(args.insert_line) || 0));
                     lines.splice(at, 0, str(args.new_str));
                     await sandbox.writeFile(path, lines.join('\n'));
-                    return withDiagnostics(sandbox, path, `삽입 완료: ${path}:${at}`);
+                    return withDiagnostics(sandbox, path, `삽입 완료: ${path}:${at}`, content);
                 }
                 return textResult(`알 수 없는 command: ${command}`, true);
             } catch (e) {

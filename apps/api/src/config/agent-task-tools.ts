@@ -61,3 +61,21 @@ export const EXIT_CODE_MEANINGS: Readonly<Record<string, Readonly<Record<number,
  * AGENT_TASK_GREP_MISS_HINT=false 로 끄면 종전처럼 "일치 없음"만 준다.
  */
 export const GREP_MISS_HINT_ENABLED = process.env.AGENT_TASK_GREP_MISS_HINT !== 'false';
+
+/**
+ * 편집 후 문법 검사 — 진단을 못 주는 실행기(Docker 샌드박스)에서 파일 쓰기 직후, 이미지에 이미 있는 인터프리터로
+ * 문법만 본다(코드를 실행하지 않는다). 로컬 실행기는 자체 진단이 있어 대상이 아니다.
+ * AGENT_TASK_EDIT_SYNTAX_CHECK=false 로 끈다.
+ */
+export const EDIT_SYNTAX_CHECK = {
+    ENABLED: process.env.AGENT_TASK_EDIT_SYNTAX_CHECK !== 'false',
+    /** 결과에 싣는 오류 출력의 최대 글자 수(끝부분을 남긴다 — 오류 줄이 끝에 있다). */
+    REPORT_MAX_CHARS: num(process.env.AGENT_TASK_EDIT_SYNTAX_REPORT_MAX_CHARS, 600),
+    /** 인터프리터가 없을 때의 셸 종료 코드 — 검사하지 못한 것으로 보고 넘어간다. */
+    EXIT_NOT_FOUND: 127,
+} as const;
+
+/** 확장자 → 검사기. node·python 은 이미지에 있는 것만 쓴다(설치하지 않는다). json 은 서버에서 파싱한다. */
+export const EDIT_SYNTAX_CHECKERS: Readonly<Record<string, 'node' | 'python' | 'json'>> = {
+    js: 'node', mjs: 'node', cjs: 'node', py: 'python', json: 'json',
+};

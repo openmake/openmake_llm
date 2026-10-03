@@ -43,3 +43,8 @@ export const GREP_MISS_HINTS = {
     literal: (escaped: string) => ` — 패턴의 정규식 문자를 문자 그대로 보면 일치하는 줄이 있습니다. 이스케이프해서 다시 찾으세요: ${escaped}`,
     hidden: (file: string) => ` — 숨김 또는 .gitignore 대상 파일에는 일치하는 줄이 있습니다(예: ${file}). 그 파일이나 폴더를 path 로 지목해 다시 찾으세요.`,
 } as const;
+
+/** 편집 후 문법 검사 — 쓰기 결과 뒤에 붙는다. tool 은 검사한 도구 이름, report 는 오류 출력 끝부분. */
+export function getEditSyntaxErrorNote(path: string, tool: string, report: string): string {
+    return `[문법 오류 — 방금 쓴 ${path} 가 ${tool} 문법 검사를 통과하지 못했습니다. 파일은 저장됐습니다. 다음 작업 전에 고치세요]\n${report}`;
+}
