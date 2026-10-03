@@ -9,6 +9,7 @@ jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) 
 jest.mock('../../org/membership-cache', () => ({ activeOrgFor: async () => ({ orgId: 'o1', orgRole: 'member' }) }));
 
 import { resolveRateFromTable, fallbackRate, recordCostAsync, clearCostRateCache } from '../cost-ledger-service';
+import { runWithCostSession } from '../../../utils/cost-attribution-context';
 
 describe('resolveRateFromTable', () => {
     const table = new Map<string, number>([['llm.local|retired-chat-model|token_in', 0.5], ['llm.local|*|token_out', 1.5]]);
@@ -41,5 +42,15 @@ describe('recordCostAsync', () => {
         expect(insert).not.toHaveBeenCalled();
         await recordCostAsync({ userId: 'guest', kind: 'llm.local', rateKey: 'm', unit: 'token_in', quantity: 5, costOwner: 'user' });
         expect(insert).toHaveBeenCalledWith(expect.objectContaining({ userId: null, orgId: null }));
+    });
+    test('비용 귀속 문맥 안에서 적재하면 그 세션 id 가 붙는다 — 외부 모델 사용분처럼 호출부가 세션을 모르는 경로', async () => {
+        await runWithCostSession('task-1', () => recordCostAsync({ userId: 'u1', kind: 'llm.external', rateKey: 'openrouter:x', unit: 'token_out', quantity: 10, costOwner: 'byok', ctx: { feature: 'role:agent' } }));
+        expect(insert).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'task-1', feature: 'role:agent' }));
+    });
+    test('호출부가 준 세션 id 가 문맥보다 우선하고, 문맥 밖이면 null', async () => {
+        await runWithCostSession('task-1', () => recordCostAsync({ userId: 'u1', kind: 'llm.local', rateKey: 'm', unit: 'token_in', quantity: 5, costOwner: 'user', ctx: { sessionId: 'explicit' } }));
+        expect(insert).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'explicit' }));
+        await recordCostAsync({ userId: 'u1', kind: 'llm.local', rateKey: 'm', unit: 'token_in', quantity: 5, costOwner: 'user' });
+        expect(insert).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: null }));
     });
 });

@@ -219,4 +219,17 @@ describe('Agent Task — 비용 원장 귀속', () => {
             costContext: { feature: 'agent_task', sessionId: 't1' },
         }));
     });
+
+    it('턴 호출은 비용 귀속 문맥 안에서 돈다 — 외부 모델 사용분도 같은 작업 id 로 묶인다', async () => {
+        const { getCostSessionId } = jest.requireActual('../utils/cost-attribution-context') as typeof import('../utils/cost-attribution-context');
+        const seen: Array<string | undefined> = [];
+        mockChat.mockImplementationOnce(async () => {
+            seen.push(getCostSessionId());
+            return { role: 'assistant', content: '끝', metrics: { prompt_tokens: 1, completion_tokens: 0 } } as never;
+        });
+
+        await new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '한 턴 작업', maxTurns: 2 } as never);
+
+        expect(seen).toEqual(['t1']);
+    });
 });
