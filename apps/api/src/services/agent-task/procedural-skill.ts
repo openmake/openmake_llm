@@ -20,6 +20,7 @@ import { createLogger } from '../../utils/logger';
 import { getSkillRuntime } from '../../runtime-ports/skill-runtime';
 import { PROCEDURAL_SKILL } from '../../config/procedural-skill';
 export { findPlaintextSecrets } from './procedural-secrets';
+import { dropDormantSkills } from './procedural-dormancy';
 import { PROCEDURAL_SAVE_HINT_LINES, PROCEDURAL_REUSE_LINES } from '../../prompts/procedural-skill-prompt';
 
 const logger = createLogger('ProceduralSkill');
@@ -141,12 +142,13 @@ export async function resolveProceduralSpec(userId: string, idOrName: string): P
         .searchSkills({ userId, category: PROCEDURAL_CATEGORY, status: 'active', limit: PROCEDURAL_SKILL.SEARCH_LIMIT })
         .catch(() => null);
     if (!res || res.skills.length === 0) return null;
+    const candidates = await dropDormantSkills(res.skills);
     const q = idOrName.toLowerCase().replace(/[_-]/g, ' ').trim();
     const words = q.split(/\s+/).filter((w) => w.length > 2);
     let best: ResolvedProcedure | null = null;
     let bestScore = 0;
     const stem = PROCEDURAL_SKILL.STEM_PREFIX_CHARS;
-    for (const s of res.skills) {
+    for (const s of candidates) {
         const spec = parseSpec(s.content);
         if (!spec) continue;
         const hay = `${s.name} ${spec.goal ?? ''}`.toLowerCase();
@@ -166,7 +168,7 @@ async function findMatchingSkills(userId: string, goal: string): Promise<Matched
         .searchSkills({ userId, category: PROCEDURAL_CATEGORY, status: 'active', limit: PROCEDURAL_SKILL.SEARCH_LIMIT })
         .catch(() => null);
     if (!res) return [];
-    return res.skills
+    return (await dropDormantSkills(res.skills))
         .map((s) => {
             const spec = parseSpec(s.content);
             const g = spec?.goal || s.description || s.name;
