@@ -20,6 +20,10 @@ export const AGENT_DELEGATION = {
     /** 에이전트 작업의 spawn_agents 에서 서브가 끝나는 즉시 결과를 기록하고, 같은 호출이 다시 오면(재시작 뒤 재개) 재사용한다 —
      *  기본 켜짐. AGENT_DELEGATION_RESULT_REUSE=false 로 끈다. */
     RESULT_REUSE_ENABLED: process.env.AGENT_DELEGATION_RESULT_REUSE !== 'false',
+    /** 기록된 서브 결과를 재사용하는 최대 나이(ms) — 중단된 fan-out 의 기록은 지워지지 않고 남으므로, 같은 작업에서
+     *  같은 지시가 한참 뒤에 다시 오면 낡은 결과가 쓰인다. 기록 시각에서 이만큼 지난 기록은 버리고 다시 돌린다.
+     *  기본 6시간. AGENT_DELEGATION_RESULT_REUSE_MAX_AGE_MS */
+    RESULT_REUSE_MAX_AGE_MS: num(process.env.AGENT_DELEGATION_RESULT_REUSE_MAX_AGE_MS, 6 * 60 * 60 * 1000),
     /** 위임 입력 품질 검사(delegate·spawn_agents) — 빈 껍데기 목표를 실행 전에 거부한다. 기본 켜짐.
      *  AGENT_DELEGATION_INPUT_CHECK=false 로 끈다. */
     INPUT_CHECK_ENABLED: process.env.AGENT_DELEGATION_INPUT_CHECK !== 'false',

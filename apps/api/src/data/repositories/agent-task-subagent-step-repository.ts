@@ -28,6 +28,8 @@ export interface SubagentCheckpointRow {
     tokens: number;
     trace_id: string | null;
     trace_seq: number;
+    /** 기록 시각 — 읽을 때만 채워진다(저장은 DB 가 NOW() 로 적는다). */
+    created_at?: Date;
 }
 
 export class AgentTaskSubagentStepRepository extends BaseRepository {
@@ -44,7 +46,7 @@ export class AgentTaskSubagentStepRepository extends BaseRepository {
 
     async loadCheckpoint(taskId: string, ckptKey: string): Promise<SubagentCheckpointRow | null> {
         const r = await this.query<SubagentCheckpointRow>(
-            `SELECT task_id, ckpt_key, conversation, turn, tokens, trace_id, trace_seq
+            `SELECT task_id, ckpt_key, conversation, turn, tokens, trace_id, trace_seq, created_at
              FROM agent_task_subagent_checkpoints WHERE task_id = $1 AND ckpt_key = $2`,
             [taskId, ckptKey],
         );
