@@ -79,3 +79,23 @@ export const EDIT_SYNTAX_CHECK = {
 export const EDIT_SYNTAX_CHECKERS: Readonly<Record<string, 'node' | 'python' | 'json'>> = {
     js: 'node', mjs: 'node', cjs: 'node', py: 'python', json: 'json',
 };
+
+/**
+ * 파일 변경 실패 각주 — 편집 도구(str_replace_editor·file_ops)의 쓰기가 실패했고 그 뒤로 같은 경로에 성공한
+ * 기록이 없으면, 완료한 답변 뒤에 그 경로를 덧붙인다. 대화 기록에서 센다(재개 뒤에도 같다).
+ * AGENT_TASK_WRITE_FAILURE_FOOTNOTE=false 로 끈다.
+ */
+export const WRITE_FAILURE_FOOTNOTE = {
+    ENABLED: process.env.AGENT_TASK_WRITE_FAILURE_FOOTNOTE !== 'false',
+    /** 각주에 적는 경로 최대 개수 — 넘으면 나머지는 개수로만 알린다. */
+    MAX_PATHS: num(process.env.AGENT_TASK_WRITE_FAILURE_FOOTNOTE_MAX_PATHS, 10),
+} as const;
+
+/** 파일을 바꾸는 편집 호출 — 도구 이름 → { 동작을 담은 인자 이름, 파일을 바꾸는 동작 값 }. */
+export const FILE_MUTATING_CALLS: Readonly<Record<string, { arg: string; values: readonly string[] }>> = {
+    str_replace_editor: { arg: 'command', values: ['create', 'str_replace', 'insert'] },
+    file_ops: { arg: 'op', values: ['write', 'delete'] },
+};
+
+/** 임의 코드를 실행하는 도구 — 인자에 실패한 경로가 나오고 성공했으면 그 경로를 다른 방법으로 고친 것으로 본다. */
+export const CODE_EXEC_TOOLS: readonly string[] = ['bash', 'python_execute'];

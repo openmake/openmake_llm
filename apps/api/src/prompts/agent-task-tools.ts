@@ -48,3 +48,8 @@ export const GREP_MISS_HINTS = {
 export function getEditSyntaxErrorNote(path: string, tool: string, report: string): string {
     return `[문법 오류 — 방금 쓴 ${path} 가 ${tool} 문법 검사를 통과하지 못했습니다. 파일은 저장됐습니다. 다음 작업 전에 고치세요]\n${report}`;
 }
+
+/** 파일 변경 실패 각주 — 완료한 답변 뒤에 붙는다. rest 는 상한을 넘어 적지 못한 경로 수. */
+export function getWriteFailureFootnote(paths: readonly string[], rest: number): string {
+    return `---\n참고: 다음 파일은 변경을 시도했지만 실패했고, 그 뒤로 성공한 기록이 없습니다 — ${paths.join(', ')}${rest > 0 ? ` 외 ${rest}개` : ''}`;
+}

@@ -39,6 +39,7 @@ import { verifyWorkspaceTests } from './workspace-test-verify';
 import { AGENT_TASK_INCOMPLETE_MARKER } from '../../prompts/agent-task-prompt';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
+import type { ChatMessage } from '../../llm/types';
 
 const judgeMock = judgeGoal as jest.MockedFunction<typeof judgeGoal>;
 const judgeStepMock = persistJudgeStep as jest.MockedFunction<typeof persistJudgeStep>;
@@ -311,5 +312,32 @@ describe('finalizeTask — workspace 테스트 게이트(2026-09-06)', () => {
 
         expect(testsMock).toHaveBeenCalledTimes(1);
         expect(out.kind).toBe('completed');
+    });
+});
+
+describe('finalizeTask — 파일 변경 실패 각주', () => {
+    const failedEdit: ChatMessage[] = [
+        { role: 'assistant', content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'str_replace_editor', arguments: { command: 'str_replace', path: 'src/a.ts', old_str: 'x', new_str: 'y' } } }] },
+        { role: 'tool', content: 'Error: old_str 를 찾을 수 없습니다: src/a.ts', tool_name: 'str_replace_editor', tool_call_id: 'c1' },
+    ];
+
+    it('끝까지 실패한 쓰기가 있으면 완료 결과 뒤에 경로를 덧붙인다', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+        const i = input({ path: 'terminate', terminateSummary: '수정했습니다.', conversation: failedEdit });
+
+        expect((await finalizeTask(i)).kind).toBe('completed');
+
+        const result = String(lastUpdate(i).result);
+        expect(result.startsWith('수정했습니다.')).toBe(true);
+        expect(result).toContain('src/a.ts');
+    });
+
+    it('실패한 쓰기가 없으면 결과는 그대로다', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+        const i = input({ path: 'terminate', terminateSummary: '수정했습니다.', conversation: [] });
+
+        await finalizeTask(i);
+
+        expect(lastUpdate(i).result).toBe('수정했습니다.');
     });
 });

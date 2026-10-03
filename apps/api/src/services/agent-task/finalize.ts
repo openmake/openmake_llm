@@ -33,6 +33,7 @@ import { verifyWorkspaceTests } from './workspace-test-verify';
 import { persistArtifactSteps, persistJudgeStep, persistVerifySkippedStep, verifySkippedMessage } from './task-steps';
 import { maybePersistCodeDiff } from './code-diff';
 import { judgeClientFor } from './role-client';
+import { withWriteFailureFootnote } from './write-failure-footnote';
 import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
 import type { TaskRuntime } from '../task-sandbox/runtime';
@@ -65,6 +66,8 @@ export interface FinalizeInput {
     usedTools: ReadonlySet<string>;
     /** 최근 도구 실행 결과 요약(buildJudgeToolEvidence) — judge false negative 완화용 수행 증거. */
     toolEvidence?: string;
+    /** 작업 대화 — 도구 호출 기록에서 끝까지 실패한 파일 쓰기를 찾는다(write-failure-footnote). 없으면 생략. */
+    conversation?: readonly ChatMessage[];
     /** 0-base 턴 인덱스. */
     turn: number;
     stepNumber: number;
@@ -221,7 +224,8 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     await update({
         status: 'completed',
         progress: 100,
-        result: body,
+        // 끝까지 성공하지 못한 파일 쓰기가 있으면 경로를 각주로 덧붙인다 — 모델이 실패를 놓치고 끝낸 경우를 사용자가 알 수 있게.
+        result: withWriteFailureFootnote(body, input.conversation),
         // 이전 시도의 실패 사유를 지운다 — resume/재실행으로 완료된 작업에 'aborted'·'goal_incomplete'
         // 가 남아 목록·CLI 가 성공을 실패처럼 보여줬다(2026-08-26 resume E2E 에서 실측).
         error: null,
