@@ -15,8 +15,16 @@ jest.mock('../../config/runtime-limits', () => ({
         MAX_TASKS_PER_CALL: 3,
         MAX_CALLS_PER_MESSAGE: 1,
         SUB_TOOL_KEYWORDS: ['search', 'extract', 'scrape'],
+        RESULT_BUDGET_CHARS: 8000,
     },
 }));
+
+// 끝난 결과 재사용은 저장소(DB)를 쓴다 — 여기서는 끄고 spawn-result-store.test.ts 에서 본다.
+jest.mock('../../config/agent-task-delegation', () => {
+    const actual = jest.requireActual('../../config/agent-task-delegation');
+    // 입력 품질 검사도 끈다 — 아래 테스트들은 'a'·'x' 같은 한 글자 지시로 배선만 본다(검사는 spawn-input-check.test.ts).
+    return { ...actual, AGENT_DELEGATION: { ...actual.AGENT_DELEGATION, RESULT_REUSE_ENABLED: false, INPUT_CHECK_ENABLED: false } };
+});
 
 const autoApproveMock = jest.fn((_taskId: string) => false);
 jest.mock('../task-sandbox/approval-gate', () => ({
@@ -215,6 +223,20 @@ describe('runSpawnAgents 병렬 실행', () => {
     });
 });
 
+describe('runSpawnAgents 종료 사유 전달', () => {
+    it('태스크마다 종료 사유를 머리말 아래에 싣는다 — 실패·시간 초과·부분 결과를 부모가 구분한다', async () => {
+        runSubagentMock.mockImplementation(async (p: { subgoal: string; onExit?: (r: string) => void }) => {
+            if (p.subgoal === 'crash') throw new Error('subagent crashed');
+            p.onExit?.(p.subgoal === 'slow' ? 'timeout' : 'completed');
+            return `RESULT<${p.subgoal}>`;
+        });
+        const out = await runSpawnAgents({ ...baseParams, args: { tasks: [{ prompt: 'fine' }, { prompt: 'slow' }, { prompt: 'crash' }] } });
+        expect(out).toContain('fine\n[종료 사유: 정상 완료]\nRESULT<fine>');
+        expect(out).toContain('slow\n[종료 사유: 시간 초과]\nRESULT<slow>');
+        expect(out).toContain('crash\n[종료 사유: 오류]\nError: 서브에이전트 실패');
+    });
+});
+
 describe('buildSpawnSubagentTools — depth=1 재귀 가드', () => {
     it('spawn_agents·delegate 계열을 서브셋에서 제외한다', () => {
         const subset = buildSpawnSubagentTools([
@@ -319,6 +341,13 @@ describe('buildTaskSpawnFn — 에이전트 작업 경로', () => {
         expect(passed).toEqual(['web_search', 'browser']);
         expect(autoApproveMock).toHaveBeenCalledWith('task-1');
         expect(out).not.toContain('도구 없이 답했습니다');
+    });
+
+    it('자동 승인 상태여도 바닥 호출(외부 MCP 도구)은 서브에 주지 않는다 — 계속 묻는 호출이라 병렬 대기가 생긴다', async () => {
+        autoApproveMock.mockReturnValue(true);
+        const spawn = buildTaskSpawnFn(makeFactoryParams('all', ['web_search', 'notion::search']));
+        await spawn({ tasks: [{ prompt: 'x' }] });
+        expect(runSubagentMock.mock.calls[0][0].tools.map((t: ToolDefinition) => t.function.name)).toEqual(['web_search']);
     });
 
     it('작업 경로는 서브에 활동 기록기(trace)를 넘기고, 채팅 경로는 넘기지 않는다', async () => {

@@ -8,7 +8,8 @@ import type { UserContext } from '../../tool-contract/types';
 import type { ExtractedArtifact } from '../../llm/artifact-parser';
 import type { ArtifactKind } from '../../data/repositories/artifact-repository';
 import { takeReportSource } from '../chat-service/report-block';
-import { MAX_TOOL_RESULT_CHARS, AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { MAX_TOOL_RESULT_CHARS, AGENT_TASK_LIMITS, TOOL_RESULT_TRUNCATION } from '../../config/runtime-limits';
+import { truncateToolResult } from './tool-result-truncate';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { createLogger } from '../../utils/logger';
 
@@ -102,6 +103,8 @@ export async function runTool(
     name: string,
     args: Record<string, unknown>,
     userCtx: UserContext,
+    /** 상한을 넘는 결과를 작업 공간 파일로 보관(TaskRuntime.spillLargeResult) — 없거나 null 을 돌려주면 종전대로 절단한다. */
+    spill?: (toolName: string, raw: string) => Promise<string | null>,
 ): Promise<string> {
     try {
         const r = await mcp.executeTool(name, args, userCtx);
@@ -112,9 +115,7 @@ export async function runTool(
         recordToolResultTruncation({
             path: 'agent_task', toolName: name, rawChars: raw.length, capChars: MAX_TOOL_RESULT_CHARS,
         });
-        const text = raw.length > MAX_TOOL_RESULT_CHARS
-            ? raw.slice(0, MAX_TOOL_RESULT_CHARS) + '\n...[결과가 길어 잘렸습니다]'
-            : raw;
+        const text = (await spill?.(name, raw)) ?? truncateToolResult(raw, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION.HEAD_RATIO);
         return r.isError ? `Error: ${text}` : text;
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -161,11 +162,12 @@ export async function persistJudgeStep(
  * 검증 건너뜀 기록 — 검증 실패가 재시도 상한을 넘으면 완료 관문은 그 검증을 다시 돌리지 않고 완료시킨다
  * (무한루프 방지). 종전엔 흔적이 없어 검증된 완료와 구분되지 않았다. 완료 흐름은 그대로 두고(fail-open)
  * 어떤 검증을 건너뛰었는지만 스텝으로 남긴다 — 상세 화면에 그대로 보인다.
+ * message 를 주면 그 문구를 쓴다(턴 상한에서 꺼낸 보류 답변처럼 사유가 다른 미검증 완료).
  */
-export async function persistVerifySkippedStep(taskId: string, stepNumber: number, gates: readonly string[]): Promise<number> {
+export async function persistVerifySkippedStep(taskId: string, stepNumber: number, gates: readonly string[], message?: string): Promise<number> {
     try {
         await getUnifiedDatabase().addAgentTaskStep({
-            taskId, stepNumber, stepType: 'verify_skipped', content: verifySkippedMessage(gates),
+            taskId, stepNumber, stepType: 'verify_skipped', content: message ?? verifySkippedMessage(gates),
         });
         return stepNumber + 1;
     } catch (e) {

@@ -13,7 +13,16 @@
  *
  * @module services/task-sandbox/tools
  */
-import { procedureChecksum, SKILL_RUN_CHECKSUM_ARG } from './skill-run-binding';
+import { findBlockedBrowserUrls } from './browser-url-guard';
+import { BROWSER_URL_GUARD_ENABLED } from '../../config/task-sandbox';
+import { getBrowserUrlBlockedMessage } from '../../prompts/agent-task-prompt';
+import { viewWindow } from './file-view';
+import { resolveMissedStrReplace } from './str-replace-match';
+import { interpretExitCode } from './exit-code';
+import { ASK_HUMAN_STRUCTURED_SCHEMA, normalizeAskHuman } from './ask-human';
+import { ASK_HUMAN } from '../../config/agent-task-tools';
+import { ASK_HUMAN_STRUCTURED_DESCRIPTION } from '../../prompts/agent-task-tools';
+import { FILE_VIEW_MAX_CHARS } from '../../config/runtime-limits';
 import { randomUUID } from 'crypto';
 import { AgentTaskParked } from '../agent-task/types';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
@@ -47,13 +56,25 @@ function textResult(text: string, isError = false): MCPToolResult {
     return { content: [{ type: 'text', text }], isError };
 }
 
-/** exec 결과를 LLM 친화 텍스트로 포맷. */
-function formatExec(r: ExecResult): MCPToolResult {
+/**
+ * 브라우저가 이동하려는 주소 중 막아야 할 것이 있으면 오류 문구, 없으면 null(browser-url-guard).
+ * TASK_SANDBOX_BROWSER_URL_GUARD=false 로 끈다.
+ */
+async function browserUrlBlock(actions: readonly unknown[]): Promise<string | null> {
+    if (!BROWSER_URL_GUARD_ENABLED) return null;
+    const blocked = await findBlockedBrowserUrls(actions);
+    return blocked.length > 0 ? getBrowserUrlBlockedMessage(blocked.map((b) => b.url)) : null;
+}
+
+/** exec 결과를 LLM 친화 텍스트로 포맷. command 를 주면 오류가 아닌 종료 코드(grep 1 등)에 뜻을 덧붙인다(exit-code). */
+function formatExec(r: ExecResult, command?: string): MCPToolResult {
     const parts: string[] = [];
     if (r.stdout) parts.push(`[stdout]\n${r.stdout}`);
     if (r.stderr) parts.push(`[stderr]\n${r.stderr}`);
     parts.push(`[exit=${r.exitCode}${r.timedOut ? ' TIMEOUT' : ''}${r.truncated ? ' TRUNCATED' : ''} ${r.durationMs}ms]`);
-    return textResult(parts.join('\n'), r.exitCode !== 0 || r.timedOut);
+    const note = command !== undefined && !r.timedOut ? interpretExitCode(command, r.exitCode) : null;
+    if (note) parts.push(note);
+    return textResult(parts.join('\n'), (r.exitCode !== 0 && !note) || r.timedOut);
 }
 
 function str(v: unknown): string { return typeof v === 'string' ? v : ''; }
@@ -88,29 +109,8 @@ async function runFresh(
 /** 전문가 자문 콜백 — subgoal 을 적합 산업 전문가(페르소나)에게 1회 위임해 응답을 받는다. */
 export type DelegateFn = (subgoal: string, role?: string) => Promise<string>;
 
-/** 절차 스킬(save/load) 훅 — userId·repo 를 아는 TaskRuntime 이 바인딩한다.
- *  재생(실행)은 sandbox 를 가진 tools.ts 가 수행하므로 여기선 저장/조회만 노출한다. */
-export interface ProceduralHooks {
-    /** 성공한 절차를 저장 → skill id. */
-    save: (input: {
-        name: string;
-        description: string;
-        kind: 'browser' | 'script';
-        actions?: unknown[];
-        allowlist?: string[];
-        lang?: 'bash' | 'python';
-        code?: string;
-        params?: string[];
-    }) => Promise<string>;
-    /** id 로 저장된 절차 스펙 조회(소유자 격리는 훅 내부에서 적용). */
-    load: (skillId: string) => Promise<{
-        kind: 'browser' | 'script';
-        actions?: unknown[];
-        allowlist?: string[];
-        lang?: 'bash' | 'python';
-        code?: string;
-    } | null>;
-}
+import { createProceduralTools, type ProceduralHooks } from './tools-procedural';
+export type { ProceduralHooks } from './tools-procedural';
 
 export function createTaskTools(
     sandbox: TaskExecutor,
@@ -138,7 +138,7 @@ export function createTaskTools(
         handler: async (args): Promise<MCPToolResult> => {
             const command = str(args.command).trim();
             if (!command) return textResult('command 가 필요합니다.', true);
-            return formatExec(await sandbox.exec(command));
+            return formatExec(await sandbox.exec(command), command);
         },
     };
 
@@ -200,6 +200,8 @@ export function createTaskTools(
                     old_str: { type: 'string', description: 'str_replace 시 찾을 문자열(유일해야 함)' },
                     new_str: { type: 'string', description: 'str_replace/insert 시 새 문자열' },
                     insert_line: { type: 'number', description: 'insert 시 이 라인 뒤에 삽입(0=맨 앞)' },
+                    start_line: { type: 'number', description: 'view 시 이 줄부터 보기(1부터). 큰 파일은 결과 첫 줄이 이어 볼 줄 번호를 알려 줍니다' },
+                    line_count: { type: 'number', description: 'view 시 볼 줄 수(생략하면 들어가는 만큼)' },
                 },
                 required: ['command', 'path'],
             },
@@ -215,17 +217,25 @@ export function createTaskTools(
                 }
                 if (command === 'view') {
                     const content = await sandbox.readFile(path);
-                    return textResult(content);
+                    // 큰 파일은 줄 구간으로 나눠 본다 — 결과 상한을 넘는 뒷부분도 start_line 으로 볼 수 있다(file-view).
+                    const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+                    return textResult(viewWindow(content, path, { startLine: num(args.start_line), lineCount: num(args.line_count) }, FILE_VIEW_MAX_CHARS));
                 }
                 if (command === 'str_replace') {
                     const oldStr = str(args.old_str);
                     if (!oldStr) return textResult('old_str 가 필요합니다.', true);
                     const content = await sandbox.readFile(path);
                     const count = content.split(oldStr).length - 1;
-                    if (count === 0) return textResult(`old_str 를 찾을 수 없습니다: ${path} — old_str 는 공백·들여쓰기까지 파일 내용과 정확히 일치해야 합니다. command:view 로 현재 내용을 확인한 뒤 그대로 복사해 쓰세요.`, true);
+                    if (count === 0) {
+                        // 공백·따옴표만 다른 경우는 유일할 때 적용하고, 아니면 가장 비슷한 줄을 알린다(str-replace-match).
+                        const relaxed = resolveMissedStrReplace(content, oldStr, str(args.new_str), path);
+                        if (relaxed.content === undefined) return textResult(relaxed.message, true);
+                        await sandbox.writeFile(path, relaxed.content);
+                        return withDiagnostics(sandbox, path, relaxed.message, content);
+                    }
                     if (count > 1) return textResult(`old_str 가 ${count}회 중복 — 유일해야 합니다.`, true);
                     await sandbox.writeFile(path, content.replace(oldStr, str(args.new_str)));
-                    return withDiagnostics(sandbox, path, `치환 완료: ${path}`);
+                    return withDiagnostics(sandbox, path, `치환 완료: ${path}`, content);
                 }
                 if (command === 'insert') {
                     const content = await sandbox.readFile(path);
@@ -233,7 +243,7 @@ export function createTaskTools(
                     const at = Math.max(0, Math.min(lines.length, Number(args.insert_line) || 0));
                     lines.splice(at, 0, str(args.new_str));
                     await sandbox.writeFile(path, lines.join('\n'));
-                    return withDiagnostics(sandbox, path, `삽입 완료: ${path}:${at}`);
+                    return withDiagnostics(sandbox, path, `삽입 완료: ${path}:${at}`, content);
                 }
                 return textResult(`알 수 없는 command: ${command}`, true);
             } catch (e) {
@@ -327,6 +337,8 @@ export function createTaskTools(
                     true,
                 );
             }
+            const urlBlock = await browserUrlBlock(actions);
+            if (urlBlock) return textResult(urlBlock, true);
             const spec = {
                 actions,
                 ...(Array.isArray(args.allowlist) ? { allowlist: args.allowlist } : {}),
@@ -411,127 +423,9 @@ export function createTaskTools(
         },
     }));
 
-    // ── #1 절차 스킬: 성공한 실행 절차를 저장(save)하고 LLM 재추론 없이 재생(run) ──
-    const skillSave: MCPToolDefinition = {
-        tool: {
-            name: 'skill_save',
-            description: '성공한 실행 절차를 재사용 가능한 스킬로 저장합니다. 같은 유형의 작업을 나중에 skill_run 으로 ' +
-                'LLM 재추론 없이 재생할 수 있습니다. kind=browser 면 actions(browser 도구와 동일한 액션 배열), ' +
-                'kind=script 면 lang+code 를 저장합니다. 반복되는 값(도시·기간 등)은 {{param}} 로 두고 params 에 이름을 나열하세요.',
-            inputSchema: {
-                type: 'object',
-                properties: {
-                    name: { type: 'string', description: '스킬 이름(짧게)' },
-                    description: { type: 'string', description: '이 절차가 달성하는 목표(매칭에 사용)' },
-                    kind: { type: 'string', description: 'browser | script' },
-                    actions: { type: 'array', description: 'kind=browser: browser 도구와 동일한 액션 배열' },
-                    allowlist: { type: 'array', description: 'kind=browser: 허용 도메인 목록' },
-                    lang: { type: 'string', description: 'kind=script: bash | python' },
-                    code: { type: 'string', description: 'kind=script: 실행 코드({{param}} 치환 지원)' },
-                    params: { type: 'array', description: '치환 파라미터 이름 목록(예: ["city","year"])' },
-                },
-                required: ['name', 'kind'],
-            },
-        },
-        handler: async (args): Promise<MCPToolResult> => {
-            if (!procedural) return textResult('절차 스킬 저장이 비활성화되어 있습니다 (AGENT_TASK_PROCEDURAL_SKILLS=false).', true);
-            const name = str(args.name).trim();
-            const kind = str(args.kind);
-            if (!name) return textResult('name 이 필요합니다.', true);
-            if (kind !== 'browser' && kind !== 'script') return textResult('kind 는 browser | script 여야 합니다.', true);
-            if (kind === 'browser' && !Array.isArray(args.actions)) return textResult('kind=browser 는 actions 배열이 필요합니다.', true);
-            if (kind === 'script' && !str(args.code)) return textResult('kind=script 는 code 가 필요합니다.', true);
-            const lang = args.lang === 'python' ? 'python' : args.lang === 'bash' ? 'bash' : undefined;
-            try {
-                const id = await procedural.save({
-                    name,
-                    description: str(args.description),
-                    kind,
-                    actions: Array.isArray(args.actions) ? args.actions : undefined,
-                    allowlist: Array.isArray(args.allowlist) ? (args.allowlist as unknown[]).filter((d): d is string => typeof d === 'string') : undefined,
-                    lang,
-                    code: str(args.code) || undefined,
-                    params: Array.isArray(args.params) ? (args.params as unknown[]).filter((p): p is string => typeof p === 'string') : undefined,
-                });
-                return textResult(`절차 스킬 저장됨: skill_id=${id}. 다음에 skill_run 으로 재생하세요.`);
-            } catch (e) {
-                return textResult(`스킬 저장 실패: ${e instanceof Error ? e.message : String(e)}`, true);
-            }
-        },
-    };
+    // ── #1 절차 스킬(skill_save / skill_run) — tools-procedural.ts ──
+    const [skillSave, skillRun] = createProceduralTools(sandbox, procedural, browserMetrics, { textResult, str, formatExec, runFresh, browserUnavailable: BROWSER_UNAVAILABLE, browserUrlBlock });
 
-    const skillRun: MCPToolDefinition = {
-        tool: {
-            name: 'skill_run',
-            description: '저장된 절차 스킬을 skill_id 로 즉시 재생합니다(LLM 재추론 없이 전체 시퀀스 1회 실행). ' +
-                'params 로 {{param}} 를 치환합니다. kind=browser 는 브라우저 액션을, kind=script 는 저장된 코드를 실행하고 결과를 반환합니다. ' +
-                '재생 결과가 목표와 다르면 수동으로 진행하세요.',
-            inputSchema: {
-                type: 'object',
-                properties: {
-                    skill_id: { type: 'string', description: '재생할 절차 스킬 id(정확한 skill_id 권장). 미스 시 스킬 이름/설명으로도 매칭됩니다.' },
-                    params: { type: 'object', description: '{{param}} 치환값 (예: {"city":"부산","year":"2026"})' },
-                },
-                required: ['skill_id'],
-            },
-        },
-        handler: async (args): Promise<MCPToolResult> => {
-            if (!procedural) return textResult('절차 스킬 재생이 비활성화되어 있습니다 (AGENT_TASK_PROCEDURAL_SKILLS=false).', true);
-            const skillId = str(args.skill_id).trim();
-            if (!skillId) return textResult('skill_id 가 필요합니다.', true);
-            const spec = await procedural.load(skillId).catch(() => null);
-            if (!spec) return textResult(`절차 스킬을 찾지 못했습니다(또는 접근 불가): ${skillId}`, true);
-            // 승인 결속 — 승인 때 본 절차와 지금 절차가 다르면 실행하지 않는다(skill-run-binding).
-            const bound = args[SKILL_RUN_CHECKSUM_ARG];
-            if (typeof bound === 'string' && bound !== procedureChecksum(spec)) {
-                return textResult(`승인 뒤 절차 스킬 내용이 바뀌었습니다: ${skillId} — skill_run 을 다시 호출해 바뀐 내용으로 승인받으세요.`, true);
-            }
-            const params: Record<string, string> = {};
-            if (args.params && typeof args.params === 'object') {
-                for (const [k, v] of Object.entries(args.params as Record<string, unknown>)) params[k] = String(v);
-            }
-            const sub = (t: string): string => t.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (m, k) => (k in params ? params[k] : m));
-            const deepSub = (v: unknown): unknown => {
-                if (typeof v === 'string') return sub(v);
-                if (Array.isArray(v)) return v.map(deepSub);
-                if (v && typeof v === 'object') {
-                    const o: Record<string, unknown> = {};
-                    for (const k of Object.keys(v as Record<string, unknown>)) o[k] = deepSub((v as Record<string, unknown>)[k]);
-                    return o;
-                }
-                return v;
-            };
-            try {
-                if (spec.kind === 'browser') {
-                    if (!sandbox.isBrowserEnabled) return textResult(BROWSER_UNAVAILABLE, true);
-                    const renderedActions = deepSub(spec.actions ?? []);
-                    const specOut = {
-                        actions: renderedActions,
-                        ...(Array.isArray(spec.allowlist) ? { allowlist: deepSub(spec.allowlist) } : {}),
-                        ...(sandbox.browserStatePath ? { statePath: sandbox.browserStatePath } : {}),
-                    };
-                    const { result: r } = await runFresh(
-                        sandbox, { prefix: '.browser-actions', ext: '.json' }, JSON.stringify(specOut),
-                        (p) => sandbox.runBrowser(p),
-                    );
-                    browserMetrics?.(r.stdout); // Stage 0 계측(fail-open)
-                    return formatExec(r);
-                }
-                // kind === 'script'
-                const code = sub(spec.code ?? '');
-                if (!code) return textResult('재생할 코드가 비어 있습니다.', true);
-                if (spec.lang === 'python') {
-                    const { result } = await runFresh(
-                        sandbox, { prefix: '.skill-run', ext: '.py' }, code, (p) => sandbox.exec(`python3 ${p}`),
-                    );
-                    return formatExec(result);
-                }
-                return formatExec(await sandbox.exec(code));
-            } catch (e) {
-                return textResult(`스킬 재생 실패: ${e instanceof Error ? e.message : String(e)}`, true);
-            }
-        },
-    };
 
     // ── B 흡수: 제어 시그널 도구 (sandbox 무관) ──
     const terminate: MCPToolDefinition = {
@@ -554,16 +448,18 @@ export function createTaskTools(
     const askHuman: MCPToolDefinition = {
         tool: {
             name: 'ask_human',
-            description: '진행에 사용자 확인이 필요할 때 호출합니다. task 가 일시정지되고 사용자에게 알림이 가며, ' +
-                '사용자는 승인(계속 진행) 또는 거절로만 응답할 수 있습니다 — 예/아니오로 답할 수 있게 질문하세요.',
-            inputSchema: {
+            description: '진행에 사용자 확인이나 정보가 필요할 때 호출합니다. task 가 일시정지되고 사용자에게 알림이 가며, ' +
+                '사용자는 글로 답하거나 답 없이 거절할 수 있습니다 — 한 번에 답할 수 있게 필요한 것을 구체적으로 물으세요.' +
+                (ASK_HUMAN.STRUCTURED_ENABLED ? ASK_HUMAN_STRUCTURED_DESCRIPTION : ''),
+            // 구조화 질문(ask-human) — 질문 여러 개·선택지·권장안. 끄면 종전처럼 question 하나만 받는다.
+            inputSchema: ASK_HUMAN.STRUCTURED_ENABLED ? ASK_HUMAN_STRUCTURED_SCHEMA : {
                 type: 'object',
                 properties: { question: { type: 'string', description: '사용자에게 물을 질문' } },
                 required: ['question'],
             },
         },
         handler: async (args): Promise<MCPToolResult> =>
-            textResult(`${TASK_ASK_HUMAN_SENTINEL} ${str(args.question)}`),
+            textResult(`${TASK_ASK_HUMAN_SENTINEL} ${normalizeAskHuman(args).question}`),
     };
 
     return [bash, pythonExecute, strReplaceEditor, fileOps, ...createCodeNavTools(sandbox), ...(sandbox.isBrowserEnabled ? [browser] : []), planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), ...contributedTools, ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];

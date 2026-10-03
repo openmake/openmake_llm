@@ -15,6 +15,7 @@
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { snapshotWorkspaceTurn } from './fork-workspace';
+import { handoffUsedToolNames } from './context-handoff';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { ChatMessage, ToolCall } from '../../llm/types';
@@ -27,6 +28,21 @@ export interface DanglingTurn {
     calls: ToolCall[];
     /** 그 assistant 메시지의 본문 — terminate 경로의 rawContent 로 쓴다. */
     content: string;
+}
+
+/**
+ * PURE: 체크포인트 대화에서 이미 실행한 도구 이름을 모은다 — 재개한 실행의 usedTools 초깃값.
+ * 실행마다 빈 집합으로 시작하면, 재개 전에 파일을 고친 작업이 재개 뒤 테스트 검증(쓰기 도구 사용이 조건)과
+ * judge 의 "사용 도구" 증거에서 빠진다.
+ */
+export function usedToolNamesFrom(conversation: readonly ChatMessage[] | undefined): Set<string> {
+    const names = new Set<string>();
+    for (const m of conversation ?? []) {
+        if (m.role === 'tool' && typeof m.tool_name === 'string' && m.tool_name.length > 0) names.add(m.tool_name);
+        // 창 초과로 인계 요약 하나로 바뀐 구간 — tool 메시지는 사라졌고 이름은 요약이 지닌다.
+        if (m.role === 'user' && typeof m.content === 'string') for (const name of handoffUsedToolNames(m.content)) names.add(name);
+    }
+    return names;
 }
 
 /**

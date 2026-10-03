@@ -18,6 +18,11 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { goalSimilarity } from './task-learning';
 import { createLogger } from '../../utils/logger';
 import { getSkillRuntime } from '../../runtime-ports/skill-runtime';
+import { PROCEDURAL_SKILL } from '../../config/procedural-skill';
+export { findPlaintextSecrets } from './procedural-secrets';
+import { proceduralSkillExistsMessage, proceduralRevertUnavailableMessage } from '../../prompts/agent-task-skill-memory';
+import { dropDormantSkills } from './procedural-dormancy';
+import { PROCEDURAL_SAVE_HINT_LINES, PROCEDURAL_REUSE_LINES } from '../../prompts/procedural-skill-prompt';
 
 const logger = createLogger('ProceduralSkill');
 
@@ -37,6 +42,10 @@ export interface ProceduralSpec {
     /** kind='script': 언어 + 코드. */
     lang?: 'bash' | 'python';
     code?: string;
+    /** 저장 버전 — 고쳐 쓸 때마다 오른다(없으면 1). */
+    version?: number;
+    /** 직전 본문(한 단계만) — 되돌리기용. */
+    previous?: ProceduralSpec;
 }
 
 interface MatchedSkill {
@@ -83,17 +92,54 @@ export function parseSpec(content: string): ProceduralSpec | null {
     }
 }
 
-/** 절차 스킬 저장 → skill id. spec.goal 미지정 시 description 으로 채운다. */
+/** 저장 결과 — updated 면 기존 행을 고쳐 쓴 것. */
+export interface ProceduralSaveResult {
+    id: string;
+    version: number;
+    updated: boolean;
+}
+
+/** 같은 이름(대소문자·앞뒤 공백 무시)의 본인 절차 스킬 — 최신 것 하나. 휴면·보관 상태도 포함한다. */
+async function findOwnByName(repo: SkillRepository, userId: string, name: string): Promise<{ id: string; name: string; description: string; spec: ProceduralSpec | null } | null> {
+    const key = name.trim().toLowerCase();
+    const res = await repo.searchSkills({ userId, category: PROCEDURAL_CATEGORY, status: 'all', search: name.trim(), limit: PROCEDURAL_SKILL.SEARCH_LIMIT });
+    const hit = res.skills.find((s) => s.createdBy === userId && s.name.trim().toLowerCase() === key);
+    return hit ? { id: hit.id, name: hit.name, description: hit.description, spec: parseSpec(hit.content) } : null;
+}
+
+/** 직전 본문으로 보존할 사본 — 한 단계만 남긴다. */
+function withoutPrevious(spec: ProceduralSpec): ProceduralSpec {
+    const { previous: _dropped, ...rest } = spec;
+    return rest;
+}
+
+/**
+ * 절차 스킬 저장. spec.goal 미지정 시 description 으로 채운다.
+ * 같은 이름의 본인 스킬이 있으면 새 행을 넣지 않는다 — opts.update 면 그 행을 고쳐 쓰고(버전 올림, 직전 본문 보존),
+ * 아니면 기존 스킬을 알리는 오류를 던진다.
+ */
 export async function saveProceduralSkill(
     userId: string,
     name: string,
     description: string,
     spec: ProceduralSpec,
-): Promise<string> {
-    const desc = (description || spec.goal || name).slice(0, 500);
-    const stored: ProceduralSpec = { ...spec, goal: spec.goal || desc };
-    const skill = await getRepo().createSkill({
-        name: name.slice(0, 120),
+    opts: { update?: boolean } = {},
+    repo: SkillRepository = getRepo(),
+): Promise<ProceduralSaveResult> {
+    const storedName = name.trim().slice(0, PROCEDURAL_SKILL.NAME_MAX_CHARS);
+    const desc = (description || spec.goal || name).slice(0, PROCEDURAL_SKILL.DESCRIPTION_MAX_CHARS);
+    const existing = await findOwnByName(repo, userId, storedName);
+    if (existing) {
+        const version = existing.spec?.version ?? 1;
+        if (!opts.update) throw new Error(proceduralSkillExistsMessage({ id: existing.id, name: existing.name, version }));
+        const next: ProceduralSpec = { ...spec, goal: spec.goal || desc, version: version + 1, ...(existing.spec ? { previous: withoutPrevious(existing.spec) } : {}) };
+        await repo.updateSkill(existing.id, { description: desc, content: JSON.stringify(next) });
+        logger.info(`[Procedural] 갱신: "${existing.name}" v${next.version} (user ${userId}, id ${existing.id})`);
+        return { id: existing.id, version: version + 1, updated: true };
+    }
+    const stored: ProceduralSpec = { ...spec, goal: spec.goal || desc, version: 1 };
+    const skill = await repo.createSkill({
+        name: storedName,
         description: desc,
         content: JSON.stringify(stored),
         category: PROCEDURAL_CATEGORY,
@@ -101,18 +147,42 @@ export async function saveProceduralSkill(
         createdBy: userId,
     });
     logger.info(`[Procedural] 저장: "${skill.name}" (user ${userId}, kind ${spec.kind}, id ${skill.id})`);
-    return skill.id;
+    return { id: skill.id, version: 1, updated: false };
 }
 
-/** id 로 절차 스펙 로드 — 본인 소유(또는 public) 이고 category='procedural' 인 경우만. */
-async function loadProceduralSpec(userId: string, skillId: string): Promise<ProceduralSpec | null> {
+/** 직전 본문으로 되돌린다 — 되돌리기 전 본문이 다시 직전 본문이 된다(버전은 계속 오른다). */
+export async function revertProceduralSkill(userId: string, name: string, repo: SkillRepository = getRepo()): Promise<ProceduralSaveResult> {
+    const existing = await findOwnByName(repo, userId, name);
+    if (!existing) throw new Error(proceduralRevertUnavailableMessage(name, 'not_found'));
+    const previous = existing.spec?.previous;
+    if (!existing.spec || !previous) throw new Error(proceduralRevertUnavailableMessage(name, 'no_previous'));
+    const version = (existing.spec.version ?? 1) + 1;
+    const next: ProceduralSpec = { ...previous, version, previous: withoutPrevious(existing.spec) };
+    await repo.updateSkill(existing.id, { description: (next.goal || existing.description).slice(0, PROCEDURAL_SKILL.DESCRIPTION_MAX_CHARS), content: JSON.stringify(next) });
+    logger.info(`[Procedural] 되돌림: "${existing.name}" v${version} (user ${userId}, id ${existing.id})`);
+    return { id: existing.id, version, updated: true };
+}
+
+/** 해석된 절차 — 스펙에 스킬 id 를 붙인다(재생 결과 기록용). */
+export type ResolvedProcedure = ProceduralSpec & { id: string };
+
+/** id 로 절차 스펙 로드 — 본인 소유(또는 public) 이고 category='procedural' 인 경우만. 조회는 기록하지 않는다. */
+async function loadProceduralSpec(userId: string, skillId: string): Promise<ResolvedProcedure | null> {
     const skill = await getRepo().getSkillById(skillId).catch(() => null);
     if (!skill || skill.category !== PROCEDURAL_CATEGORY) return null;
     if (skill.createdBy && skill.createdBy !== userId && !skill.isPublic) return null;
     const spec = parseSpec(skill.content);
-    // 재생 시도 기록 — skill_run 도구의 load 훅이 이 경로로 들어온다 (skill_audit_log)
-    if (spec) getSkillRuntime().recordUsage([{ skillId: skill.id, kind: 'skill_run', userId, args: { kind: spec.kind } }]);
-    return spec;
+    return spec ? { ...spec, id: skill.id } : null;
+}
+
+/**
+ * 재생 결과 기록(skill_audit_log) — 재생이 끝난 뒤 한 번만 부른다.
+ * 종전에는 조회 때 기록해, 승인 결속과 실행이 각각 조회하면서 재생 1회에 2건이 남고 성공·실패도 알 수 없었다.
+ */
+export function recordProceduralRun(userId: string, run: { skillId: string; kind: ProceduralSpec['kind']; status: 'ok' | 'error'; durationMs: number }): void {
+    getSkillRuntime().recordUsage([{
+        skillId: run.skillId, kind: 'skill_run', userId, args: { kind: run.kind }, status: run.status, durationMs: run.durationMs,
+    }]);
 }
 
 /**
@@ -120,38 +190,40 @@ async function loadProceduralSpec(userId: string, skillId: string): Promise<Proc
  * 라이브 관찰: 모델이 주입된 exact skill_id 대신 의미 이름("square" 등)을 지어내 호출 →
  * 퍼지 폴백이 없으면 재생이 전부 실패한다.
  */
-export async function resolveProceduralSpec(userId: string, idOrName: string): Promise<ProceduralSpec | null> {
+export async function resolveProceduralSpec(userId: string, idOrName: string): Promise<ResolvedProcedure | null> {
     const exact = await loadProceduralSpec(userId, idOrName);
     if (exact) return exact;
     const res = await getRepo()
-        .searchSkills({ userId, category: PROCEDURAL_CATEGORY, status: 'active', limit: 50 })
+        .searchSkills({ userId, category: PROCEDURAL_CATEGORY, status: 'active', limit: PROCEDURAL_SKILL.SEARCH_LIMIT })
         .catch(() => null);
     if (!res || res.skills.length === 0) return null;
+    const candidates = await dropDormantSkills(res.skills);
     const q = idOrName.toLowerCase().replace(/[_-]/g, ' ').trim();
     const words = q.split(/\s+/).filter((w) => w.length > 2);
-    let best: ProceduralSpec | null = null;
+    let best: ResolvedProcedure | null = null;
     let bestScore = 0;
-    for (const s of res.skills) {
+    const stem = PROCEDURAL_SKILL.STEM_PREFIX_CHARS;
+    for (const s of candidates) {
         const spec = parseSpec(s.content);
         if (!spec) continue;
         const hay = `${s.name} ${spec.goal ?? ''}`.toLowerCase();
         const hayWords = hay.split(/\s+/).filter((w) => w.length > 2);
         // 부분일치 또는 형태변형(접두 5자 공유: square↔squaring) 매칭.
         const contains = hay.includes(q) || words.some((w) =>
-            hay.includes(w) || hayWords.some((hw) => hw.slice(0, 5) === w.slice(0, 5) && w.length >= 5));
-        const score = Math.max(goalSimilarity(idOrName, spec.goal ?? s.name), contains ? 0.5 : 0);
-        if (score > bestScore) { bestScore = score; best = spec; }
+            hay.includes(w) || hayWords.some((hw) => w.length >= stem && hw.slice(0, stem) === w.slice(0, stem)));
+        const score = Math.max(goalSimilarity(idOrName, spec.goal ?? s.name), contains ? PROCEDURAL_SKILL.FUZZY_CONTAINS_SCORE : 0);
+        if (score > bestScore) { bestScore = score; best = { ...spec, id: s.id }; }
     }
-    return bestScore >= 0.3 ? best : null;
+    return bestScore >= PROCEDURAL_SKILL.FUZZY_MIN_SCORE ? best : null;
 }
 
 /** goal 유사 절차 스킬 상위 N(임계 이상). */
 async function findMatchingSkills(userId: string, goal: string): Promise<MatchedSkill[]> {
     const res = await getRepo()
-        .searchSkills({ userId, category: PROCEDURAL_CATEGORY, status: 'active', limit: 50 })
+        .searchSkills({ userId, category: PROCEDURAL_CATEGORY, status: 'active', limit: PROCEDURAL_SKILL.SEARCH_LIMIT })
         .catch(() => null);
     if (!res) return [];
-    return res.skills
+    return (await dropDormantSkills(res.skills))
         .map((s) => {
             const spec = parseSpec(s.content);
             const g = spec?.goal || s.description || s.name;
@@ -168,13 +240,7 @@ async function findMatchingSkills(userId: string, goal: string): Promise<Matched
  */
 export async function buildProceduralSkillBlock(userId: string, goal: string): Promise<string> {
     if (!AGENT_TASK_LIMITS.PROCEDURAL_SKILLS_ENABLED) return '';
-    // 저장 유도(항상) — 반복 가능한 절차를 완료하면 skill_save 로 저장해 다음에 재사용하게 한다.
-    const saveHint = [
-        '',
-        '## 절차 재사용 (Procedural Skill)',
-        '브라우저/스크립트로 반복 가능한 작업을 성공적으로 마쳤다면, 그 액션 시퀀스를 skill_save 로 저장하세요',
-        '(반복되는 값은 {{param}} 로 일반화). 다음에 유사 작업에서 skill_run 으로 재추론 없이 재생할 수 있습니다.',
-    ];
+    const saveHint = PROCEDURAL_SAVE_HINT_LINES;
     try {
         const matches = await findMatchingSkills(userId, goal);
         if (matches.length === 0) return saveHint.join('\n');
@@ -184,11 +250,7 @@ export async function buildProceduralSkillBlock(userId: string, goal: string): P
         );
         return [
             ...saveHint,
-            '',
-            '### 지금 재사용 가능한 절차 (skill_run 으로 즉시 재생)',
-            '아래는 과거에 성공해 저장된 실행 절차입니다. 목표에 부합하면 처음부터 다시 추론하지 말고',
-            'skill_run 을 아래 정확한 skill_id(권장) 또는 스킬 이름과 params 로 호출해 그대로 재생하세요.',
-            '재생 결과가 목표와 다르면 수동으로 진행하세요.',
+            ...PROCEDURAL_REUSE_LINES,
             ...lines,
         ].join('\n');
     } catch (e) {

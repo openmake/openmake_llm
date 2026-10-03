@@ -71,6 +71,25 @@ describe('notifyTaskTerminal', () => {
     });
 });
 
+describe('notifyTaskTerminal — 푸시 여부를 호출부가 정한다', () => {
+    const n = { userId: 'u1', taskId: 't1', goal: 'g', status: 'failed', progress: 40, currentTurn: 2 };
+
+    it('push 가 false 로 풀리면 푸시는 생략하고 표식은 지운다', async () => {
+        const r = repo();
+        notifyTaskTerminal(n, r, { push: Promise.resolve(false) });
+        await flush();
+        expect(sendPush).not.toHaveBeenCalled();
+        expect(emit).toHaveBeenCalledTimes(1);
+        expect(r.cleared).toEqual(['t1']);
+    });
+
+    it('push 판단이 실패하면 푸시를 보낸다', async () => {
+        notifyTaskTerminal(n, repo(), { push: Promise.reject(new Error('boom')) });
+        await flush();
+        expect(sendPush).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe('resendMissedTerminalNotifications', () => {
     it('표식이 남은 종료 작업을 가져와 다시 알린다', async () => {
         const r = repo([

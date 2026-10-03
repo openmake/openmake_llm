@@ -13,7 +13,7 @@ jest.mock('../../task-sandbox/planning', () => ({ currentPlanStepIndex: () => un
 const runTool = jest.fn();
 jest.mock('../task-steps', () => ({ runTool: (...a: unknown[]) => runTool(...a), isSearchTool: () => false }));
 jest.mock('../tool-args', () => ({ prepareToolArgs: (a: unknown) => a }));
-jest.mock('../../tool-parallel', () => ({ prefetchReadOnlyCalls: async () => new Map() }));
+jest.mock('../../tool-parallel', () => ({ ...jest.requireActual('../../tool-parallel'), prefetchReadOnlyCalls: async () => new Map() }));
 // 도구가 사용자에게 묻는 문맥(구 MCP elicitation)은 이제 도구 런타임 포트가 연다 — 그 문맥을 낚아챈다.
 let elicitCtx: { ask(args: Record<string, unknown>): Promise<unknown> } | undefined;
 jest.mock('../../../runtime-ports/tool-runtime', () => ({

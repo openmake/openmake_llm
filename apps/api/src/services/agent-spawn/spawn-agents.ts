@@ -25,18 +25,28 @@ import { type LLMClient } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
-import { AGENT_SPAWN } from '../../config/runtime-limits';
+import { AGENT_SPAWN, TOOL_RESULT_TRUNCATION } from '../../config/runtime-limits';
+import { composeSpawnResult } from './spawn-result';
 import { resolveRoleClientForUser } from '../model-role-resolver';
 import { parallelBatch } from '../../workflow/graph-engine';
 import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
+import { approvalFloorReason } from '../task-sandbox/approval-floor';
 import { runSubagent } from '../agent-task/subagent';
 import { SubagentTrace, newTraceId, subagentLabel } from '../agent-task/subagent-trace';
 import type { DelegateFactoryParams } from '../agent-task/delegate';
 import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
 import { ASK_USER_TOOL_NAME } from '../chat-service/ask-user';
 import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
+import { AGENT_DELEGATION, SUBAGENT_REUSABLE_EXITS, exitReasonForError, type SubagentExitReason } from '../../config/agent-task-delegation';
+import {
+    getSubagentStatusLine, SUBAGENT_REUSED_NOTE, getDelegationRejection, DELEGATION_SELF_REPORT_NOTICE,
+    SPAWN_OUTPUT_SCHEMA_PARAM_DESCRIPTION, getOutputSchemaCorrection, OUTPUT_SCHEMA_VALID_NOTE, getOutputSchemaFailedNote,
+} from '../../prompts/agent-task-delegation';
+import { compileOutputContract, type OutputContract } from './output-schema';
+import { checkDelegationGoal } from '../agent-task/delegation-input';
+import { SpawnResultStore } from './spawn-result-store';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentSpawn');
@@ -56,6 +66,8 @@ const spawnAgentsArgsSchema = z.object({
         role: z.string().trim().min(1).optional(),
         /** 사용자 Custom Agent id — 지정 시 그 에이전트의 페르소나+model 로 실행 (Phase C) */
         agentId: z.string().trim().min(1).optional(),
+        /** 결과 형식 계약(JSON Schema) — AGENT_DELEGATION.OUTPUT_SCHEMA_ENABLED 일 때만 쓴다. */
+        outputSchema: z.record(z.string(), z.unknown()).optional(),
     })).min(1),
 });
 
@@ -113,31 +125,38 @@ export const SPAWN_PROMPT_GUIDE =
     + '자기완결적으로 서술하고, 결과를 받은 뒤 직접 종합해 답하세요.\n'
     + '- 하위 작업으로 나눌 수 없는 순차 작업이면 평소처럼 직접 수행하세요.';
 
-/** spawn_agents 파라미터 JSON Schema — task-sandbox MCP 도구 정의(inputSchema)와 공유. */
-export const SPAWN_AGENTS_PARAMETERS_SCHEMA: {
+/** PURE: spawn_agents 파라미터 JSON Schema — outputSchema 인자는 결과 형식 계약이 켜져 있을 때만 드러낸다. */
+export function buildSpawnParametersSchema(): {
     type: 'object';
     properties: Record<string, unknown>;
     required: string[];
-} = {
-    type: 'object',
-    properties: {
-        tasks: {
-            type: 'array',
-            minItems: 1,
-            description: '병렬 수행할 독립 하위 작업 목록 (2개 이상 권장)',
-            items: {
-                type: 'object',
-                properties: {
-                    prompt: { type: 'string', description: '하위 작업의 자기완결적 지시문' },
-                    role: { type: 'string', description: '원하는 전문 분야(선택, 예: finance/legal/engineering)' },
-                    agentId: { type: 'string', description: '사용자가 명시적으로 특정 커스텀 에이전트로 수행을 요청한 경우에만 그 에이전트 id (선택 — 임의 추측 금지)' },
+} {
+    return {
+        type: 'object',
+        properties: {
+            tasks: {
+                type: 'array',
+                minItems: 1,
+                description: '병렬 수행할 독립 하위 작업 목록 (2개 이상 권장)',
+                items: {
+                    type: 'object',
+                    properties: {
+                        prompt: { type: 'string', description: '하위 작업의 자기완결적 지시문' },
+                        role: { type: 'string', description: '원하는 전문 분야(선택, 예: finance/legal/engineering)' },
+                        agentId: { type: 'string', description: '사용자가 명시적으로 특정 커스텀 에이전트로 수행을 요청한 경우에만 그 에이전트 id (선택 — 임의 추측 금지)' },
+                        ...(AGENT_DELEGATION.OUTPUT_SCHEMA_ENABLED
+                            ? { outputSchema: { type: 'object', description: SPAWN_OUTPUT_SCHEMA_PARAM_DESCRIPTION } } : {}),
+                    },
+                    required: ['prompt'],
                 },
-                required: ['prompt'],
             },
         },
-    },
-    required: ['tasks'],
-};
+        required: ['tasks'],
+    };
+}
+
+/** spawn_agents 파라미터 JSON Schema — task-sandbox MCP 도구 정의(inputSchema)와 공유. */
+export const SPAWN_AGENTS_PARAMETERS_SCHEMA = buildSpawnParametersSchema();
 
 /** PURE: 채팅 도구 루프에 노출할 spawn_agents 도구 정의. */
 export function buildSpawnAgentsTool(): ToolDefinition {
@@ -255,6 +274,18 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     const requested = parsed.data.tasks;
     const tasks = requested.slice(0, AGENT_SPAWN.MAX_TASKS_PER_CALL);
     const droppedCount = requested.length - tasks.length;
+    // 결과 형식 계약(선택 인자) — 꺼져 있으면 outputSchema 를 무시한다(현행과 같음).
+    const contracts: Array<OutputContract | null> = [];
+    // 빈 껍데기 태스크·잘못된 스키마가 하나라도 있으면 전체를 돌려보낸다 — 일부만 돌리면 모델이 나머지를 고쳐 다시 부르지 않는다.
+    const problems: string[] = [];
+    tasks.forEach((task, i) => {
+        const goalProblem = AGENT_DELEGATION.INPUT_CHECK_ENABLED ? checkDelegationGoal(task.prompt, { batch: tasks.length >= 2 }) : null;
+        if (goalProblem) problems.push(`태스크 ${i + 1}: ${goalProblem}`);
+        const compiled = AGENT_DELEGATION.OUTPUT_SCHEMA_ENABLED && task.outputSchema ? compileOutputContract(task.outputSchema) : null;
+        if (compiled && 'error' in compiled) problems.push(`태스크 ${i + 1}: ${compiled.error}`);
+        contracts.push(compiled && !('error' in compiled) ? compiled : null);
+    });
+    if (problems.length > 0) return getDelegationRejection(problems);
     const subTools = buildSpawnSubagentTools(p.tools);
     const userId = String(p.userCtx.userId);
     const started = Date.now();
@@ -280,22 +311,40 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
         })
         : null;
     let results: Array<string | null>;
+    /** 태스크별 종료 사유 — 서브가 알려 온 값. 모델 해석 단계에서 죽은 태스크는 여기서 채운다. */
+    const exits: Array<SubagentExitReason | undefined> = tasks.map(() => undefined);
+    // 끝난 서브 결과의 즉시 기록·재사용 — 작업 행이 있는 경로만(채팅은 재개가 없다).
+    const store = traceId && AGENT_DELEGATION.RESULT_REUSE_ENABLED ? new SpawnResultStore(p.taskId) : null;
+    const reused = new Set<number>();
     try {
         results = await parallelBatch(
             tasks,
             async (task, idx) => {
                 const trace = traces?.[idx];
                 trace?.started();
+                const contract = contracts[idx];
                 try {
+                    const saved = await store?.load(task);
+                    if (saved) {
+                        logger.info(`[AgentSpawn] 태스크 ${idx + 1} 끝난 결과 재사용 (${saved.exit})`);
+                        exits[idx] = saved.exit;
+                        reused.add(idx);
+                        trace?.record('final', `[${SUBAGENT_REUSED_NOTE}] ${saved.result}`);
+                        return saved.result;
+                    }
                     const exec = await resolveTaskExecution(task, userId, p.client);
                     if (exec.modelNote) {
                         logger.info(`[AgentSpawn] 태스크 ${idx + 1} custom agent 모델: ${exec.modelNote}`);
                     }
-                    return await runSubagent({
+                    const result = await runSubagent({
                         ...(trace ? { trace } : {}),
                         client: exec.client,
                         personaPrompt: exec.persona,
-                        subgoal: task.prompt,
+                        subgoal: contract ? task.prompt + contract.instruction : task.prompt,
+                        ...(contract ? { finalCheck: (text: string) => {
+                            const problem = contract.check(text);
+                            return problem ? getOutputSchemaCorrection(problem) : null;
+                        } } : {}),
                         tools: subTools,
                         userCtx: p.userCtx,
                         taskId: p.taskId,
@@ -304,9 +353,14 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
                         ...(p.onTokens ? { onTokens: p.onTokens } : {}),
                         ...(p.remainingTokens ? { remainingTokens: p.remainingTokens } : {}),
                         ...(p.onPausedMs ? { onPausedMs: p.onPausedMs } : {}),
+                        onExit: (reason) => { exits[idx] = reason; },
                     });
+                    const exit = exits[idx];
+                    if (store && exit && SUBAGENT_REUSABLE_EXITS.includes(exit)) await store.save(task, { result, exit });
+                    return result;
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
+                    exits[idx] = exitReasonForError(msg);
                     logger.warn(`[AgentSpawn] 태스크 ${idx + 1} 실패: ${msg}`);
                     // runSubagent 안에서 죽으면 그쪽이 기록하지만, 모델 해석(resolveTaskExecution)
                     // 단계 실패는 여기서만 보인다 — 안 남기면 그 서브가 영영 "실행 중"으로 남는다.
@@ -321,23 +375,30 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
         return 'Error: 병렬 서브에이전트 실행이 중단되었습니다.';
     }
 
+    // fan-out 이 끝났다 — 기록을 지워 뒤의 다른 호출이 낡은 결과를 쓰지 않게 한다. 도중에 중단된 경우는 남겨 재개 때 쓴다.
+    if (store && !p.signal?.aborted) await store.clear(tasks);
     logger.info(`[AgentSpawn] fan-out 완료 (${Date.now() - started}ms, tasks=${tasks.length}, `
         + `결과길이=[${results.map((r) => r?.length ?? 0).join(',')}])`);
     // 서브 결과 품질 관측용 프리뷰(스텁/메타서술 감지) — Phase 2 관측성 배선 전 임시 가시성.
     results.forEach((r, i) => logger.info(
         `[AgentSpawn] 태스크 ${i + 1} 결과 프리뷰: ${(r ?? '(null)').slice(0, 160).replace(/\n/g, ' ')}`));
-    const sections = tasks.map((task, i) => {
-        const header = `### 태스크 ${i + 1}/${tasks.length}${task.role ? ` (role: ${task.role})` : ''}: ${task.prompt.slice(0, 80)}`;
-        return `${header}\n${results[i] ?? 'Error: 서브에이전트가 결과를 반환하지 못했습니다.'}`;
+    // 태스크별 예산 분배 — 모든 결과와 끝의 종합 지시가 상한 안에 들어가게 한다(spawn-result).
+    /** 상태 줄에 덧붙일 표시 — 재사용 여부, 형식 검증 판정(계약이 있는 태스크만). */
+    const statusExtras = (i: number): string[] => {
+        const problem = contracts[i]?.check(results[i] ?? '');
+        return [
+            ...(reused.has(i) ? [SUBAGENT_REUSED_NOTE] : []),
+            ...(contracts[i] ? [problem ? getOutputSchemaFailedNote(problem) : OUTPUT_SCHEMA_VALID_NOTE] : []),
+        ];
+    };
+    const statusLines = AGENT_DELEGATION.EXIT_REASON_ENABLED
+        ? exits.map((reason, i) => (reason ? getSubagentStatusLine(reason, statusExtras(i)) : undefined))
+        : undefined;
+    return composeSpawnResult({
+        tasks, results, ...(statusLines ? { statusLines } : {}),
+        noToolsNotice: `${AGENT_DELEGATION.SELF_REPORT_NOTICE_ENABLED ? `${DELEGATION_SELF_REPORT_NOTICE}\n\n` : ''}${noToolsNotice}`, droppedCount, maxTasks: AGENT_SPAWN.MAX_TASKS_PER_CALL,
+        budgetChars: AGENT_SPAWN.RESULT_BUDGET_CHARS, headRatio: TOOL_RESULT_TRUNCATION.HEAD_RATIO,
     });
-    const truncationNote = droppedCount > 0
-        ? `\n\n(주의: 태스크 상한 ${AGENT_SPAWN.MAX_TASKS_PER_CALL}개 초과분 ${droppedCount}개는 수행되지 않았습니다.)`
-        : '';
-    // 종합 강제 넛지 — 라이브 관측: qwen 이 spawn 결과를 받고도 같은 주제를 재검색하며
-    // 턴 예산을 소진해 최종 종합 턴이 사라짐. 도구 결과 말미의 결정적 지시로 차단.
-    const synthesisNudge = '\n\n지시: 위 서브에이전트 결과만으로 지금 바로 최종 답변을 종합해 작성하세요. '
-        + '같은 주제를 다시 검색하거나 추가 도구를 호출하지 마세요.';
-    return `[병렬 서브에이전트 결과 — ${tasks.length}개 태스크]\n\n${noToolsNotice}${sections.join('\n\n')}${truncationNote}${synthesisNudge}`;
 }
 
 /**
@@ -385,8 +446,9 @@ export function buildTaskSpawnFn(p: DelegateFactoryParams): SpawnFn {
         // (자동 승인은 실행 중에도 켜진다). 운영 정책 all 에서 이 판정이 없으면 도구가 전부
         // 걷혀 서브가 기억으로만 답한다(2026-08-26 라이브 실측).
         const autoApproved = getApprovalRegistry().isAutoApprove(p.taskId);
+        // 자동 승인이어도 바닥 호출(외부 MCP 도구 등)은 계속 묻는다 — 그런 도구는 병렬 서브에 주지 않는다.
         const subTools = autoApproved
-            ? whitelisted
+            ? whitelisted.filter((t) => approvalFloorReason(t.function.name, {}) === null)
             : whitelisted.filter((t) => !requiresApproval(p.sandboxCfg.approvalPolicy, t.function.name, {}));
         const stripped = whitelisted.length - subTools.length;
         const noToolsReason = subTools.length === 0

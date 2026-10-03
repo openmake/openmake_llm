@@ -20,8 +20,10 @@ import { Check, X, Loader2, MessageCircleQuestion, Wrench, ExternalLink } from "
 import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
-import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
+import { isQuestionApproval, elicitationHint, structuredQuestions } from "@/lib/hitl-question";
+import { QuestionChoices } from "./question-choices";
 import { onAgentTaskChange } from "@/lib/agent-task-change";
+import { REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
 
 interface RecentDecision {
   approvalId: string;
@@ -59,6 +61,8 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // 거절 사유(선택) — 적으면 에이전트에 그대로 전달된다.
+  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
   // 최근 결정(138) — 프로세스가 내려간 사이 내린 승인은 아직 실행되지 않았으므로 철회할 수 있다.
   const [recent, setRecent] = useState<RecentDecision[]>([]);
   // 이관 대상(138) — 활성 조직 멤버. 조직이 없으면 이관 UI 를 숨긴다.
@@ -159,6 +163,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
       {items.map((a) => {
         const isQuestion = isQuestionApproval(a.toolName);
         const elicit = elicitationHint(a.toolName, a.args);
+        const structured = structuredQuestions(a.toolName, a.args);
         const summary = summarizeApprovalArgs(a.args, ARGS_SUMMARY_MAX_CHARS);
         const acting = busy === a.approvalId;
         return (
@@ -193,8 +198,16 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
               </Link>
             </div>
 
-            <p className="whitespace-pre-wrap break-words text-sm text-fg">{summary.text}</p>
-            <ApprovalArgsFull full={summary.full} label={t("tasks.fullArgs", { chars: summary.full?.length ?? 0 })} />
+            {/* 구조화 질문 — 선택지를 버튼으로. 고르면 아래 답변 입력란이 채워진다(고쳐 쓸 수 있다). */}
+            {structured ? (
+              <QuestionChoices intro={structured.intro} questions={structured.questions} disabled={acting} recommendedLabel={t("tasks.recommended")}
+                onAnswerAction={(text) => setAnswers((p) => ({ ...p, [a.approvalId]: text }))} />
+            ) : (
+              <>
+                <p className="whitespace-pre-wrap break-words text-sm text-fg">{summary.text}</p>
+                <ApprovalArgsFull full={summary.full} label={t("tasks.fullArgs", { chars: summary.full?.length ?? 0 })} />
+              </>
+            )}
             {elicit && (
               <p className="mt-1 text-xs text-muted">
                 {t("tasks.elicitHint", { server: elicit.server, fields: elicit.fields || "-" })}
@@ -208,6 +221,17 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 value={answers[a.approvalId] ?? ""}
                 onChange={(e) => setAnswers((p) => ({ ...p, [a.approvalId]: e.target.value }))}
                 placeholder={t("tasks.answerPlaceholder")}
+                className="mt-3 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+              />
+            )}
+
+            {!isQuestion && (
+              <input
+                value={rejectReasons[a.approvalId] ?? ""}
+                onChange={(e) => setRejectReasons((p) => ({ ...p, [a.approvalId]: e.target.value }))}
+                placeholder={t("tasks.rejectReasonPlaceholder")}
+                aria-label={t("tasks.rejectReasonPlaceholder")}
+                maxLength={REJECT_REASON_MAX_CHARS}
                 className="mt-3 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent"
               />
             )}
@@ -266,7 +290,8 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 disabled={acting}
                 onClick={() =>
                   void run(a.approvalId, () =>
-                    ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/reject`, {}),
+                    ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/reject`,
+                      !isQuestion && (rejectReasons[a.approvalId] ?? "").trim() ? { reason: rejectReasons[a.approvalId].trim() } : {}),
                   )
                 }
               >

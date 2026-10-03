@@ -42,3 +42,6 @@ export const BROWSER_TAKEOVER_INPUT_SETTLE_MS = 250;
 
 /** 브라우저 넘겨받기 — 휠 스크롤을 모아 보내는 간격(ms). */
 export const BROWSER_TAKEOVER_SCROLL_FLUSH_MS = 150;
+
+/** 승인 거절 사유 입력 상한(자) — 서버(AGENT_TASK_APPROVAL_REJECT_REASON_MAX_CHARS 기본값)와 같다. 넘는 분량은 서버가 자른다. */
+export const REJECT_REASON_MAX_CHARS = 500;

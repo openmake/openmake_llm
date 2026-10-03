@@ -96,6 +96,7 @@ export interface SkillSearchOptions {
      * 자동 주입되므로 load_skill 카탈로그에 실으면 중복이다 (2026-09-11 실측: 101줄 ≈ 2.2K 토큰/턴).
      */
     excludeAgentPersonas?: boolean;
+    excludeCategories?: readonly string[]; // 이 범주를 뺀다 — 절차 스킬(JSON 본문)이 지침 스킬 목록에 섞이지 않게
 }
 
 export interface SkillSearchResult {
@@ -314,6 +315,7 @@ export class SkillRepository extends BaseRepository {
             paramIdx += 1;
         }
 
+        if (options.excludeCategories?.length) { conditions.push(`COALESCE(category, '') <> ALL($${paramIdx++}::text[])`); params.push([...options.excludeCategories]); }
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
         const sortMap: Record<NonNullable<SkillSearchOptions['sortBy']>, string> = {

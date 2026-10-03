@@ -323,7 +323,7 @@ npm --workspace apps/api run eval:ablation -- --limit 1              # 과제 1�
 
 ## 에이전트 작업 과제 묶음 (eval:agent-tasks, real 전용)
 
-모델이나 프롬프트를 바꿨을 때 에이전트 작업이 나빠졌는지 보는 회귀 감시다. `golden-agent-tasks.json`(v1.1.0)의 과제 8개를 기준 조건으로 한 번씩 **실제로** 실행하고(샌드박스 + 실모델), 완료율과 궤적 과정 검사 통과율이 임계 미만이면 종료 코드 1.
+모델이나 프롬프트를 바꿨을 때 에이전트 작업이 나빠졌는지 보는 회귀 감시다. `golden-agent-tasks.json`(v1.2.0)의 과제 12개(대표 사용 8 + 함정 4)를 기준 조건으로 한 번씩 **실제로** 실행하고(샌드박스 + 실모델), 완료율과 궤적 과정 검사 통과율이 임계 미만이면 종료 코드 1.
 
 ```bash
 npm --workspace apps/api run eval:agent-tasks     # = eval:ablation -- --variants baseline --gate
@@ -331,6 +331,7 @@ NIGHTLY_EVAL_AGENT_TASKS=1 scripts/nightly-eval.sh # 야간 실행에 포함(기
 ```
 
 - 과제: 계산·파일 편집·CSV 집계·엑셀·워드·한글 PDF·업로드 HTML 요약·파이썬 버그 수정. 제품이 안내하는 대표 사용을 네트워크 없이 끝나는 작은 과제로 옮긴 것이다. 기대 과정(`spec`)은 사용자 의도 기준: 검색·브라우저 미사용, 실행 도구 호출 상한. 과제에 `files` 를 주면 `uploads/` 에 놓인다.
+- 함정 과제(v1.2.0, `trap` 필드): 운영에서 턴을 낭비하게 만든 상황을 과제 자료로 재현한 것이다 — `error-after-long-output`(출력이 도구 결과 상한을 넘고 오류는 맨 끝), `tail-of-large-file`(답이 한 번에 보이는 구간 밖에 있고 앞쪽에 다른 ERROR 줄), `repeated-failing-call`(샌드박스에서 고칠 수 없는 같은 실패), `whitespace-str-replace`(탭 들여쓰기·줄 끝 공백). 채점은 다른 과제와 같다(완료 여부 + `spec.maxCalls` 의 도구별 호출 상한). 과제 자료가 함정을 실제로 담고 있는지는 `__tests__/golden-agent-tasks.test.ts` 가 정의만으로 검사한다(모델을 돌리지 않는다). **함정 과제를 넣은 뒤의 실제 실행 결과는 아직 없다** — 첫 실행에서 완료율·과정 통과율을 보고 임계나 호출 상한을 조정할 것.
 - 임계: `OMK_EVAL_AGENT_TASK_COMPLETED_THRESHOLD`(기본 0.8), `OMK_EVAL_AGENT_TASK_PROCESS_THRESHOLD`(기본 0.9).
 - 전제: `.env` 의 DB·모델 접속, 샌드박스(`TASK_SANDBOX_ENABLED=true`, docker, task-runtime 이미지). Colima 는 홈 아래만 마운트하므로 `TASK_SANDBOX_ROOT` 를 홈 아래로 둔다. 작업 행은 DB 에 남는다(실행 사용자 `OMK_EVAL_ABLATION_USER_ID`).
 - 첫 실행(2026-10-03, retired-chat-model): 완료 7/8, 과정 통과 8/8, 평균 40,274토큰·3.1턴. 실패 1건(`sum-of-squares`)은 judge 가 달성으로 판정했는데 완료 기록 직전에 작업 상태가 이미 `failed` 여서 전이가 거부됐다. 원인은 실행 스크립트가 스키마 초기화를 기다리지 않아, 초기화의 좀비 정리(`running` → `failed`)가 방금 시작한 첫 과제를 건드린 것이다 — 지금은 첫 과제 전에 `ensureReady()` 를 기다린다. 같은 과제는 앞선 실험 9회에서 모두 완료됐다.

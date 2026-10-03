@@ -27,12 +27,18 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { extractAndStripArtifacts } from '../../llm/artifact-parser';
 import { applyReportRender } from '../chat-service/report-block';
 import { AGENT_TASK_INCOMPLETE_MARKER, getAgentTaskVerifyFailedNudge, getAgentTaskTestsFailedNudge } from '../../prompts/agent-task-prompt';
+import { getVerifyHeldAnswerNote } from '../../prompts/agent-task-turn-loop';
+import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
 import { judgeGoal, buildJudgeExecutionContext, buildJudgeArtifactSummary } from './goal-judge';
 import { verifyCodeArtifacts } from './deliverable-verify';
 import { verifyWorkspaceTests } from './workspace-test-verify';
 import { persistArtifactSteps, persistJudgeStep, persistVerifySkippedStep, verifySkippedMessage } from './task-steps';
 import { maybePersistCodeDiff } from './code-diff';
 import { judgeClientFor } from './role-client';
+import { withWriteFailureFootnote } from './write-failure-footnote';
+import { collectVerificationEvidence } from './verification-evidence';
+import { VERIFY_EVIDENCE } from '../../config/agent-task-tools';
+import { VERIFY_EVIDENCE_SKIP_NOTES } from '../../prompts/agent-task-tools';
 import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
 import type { TaskRuntime } from '../task-sandbox/runtime';
@@ -65,6 +71,8 @@ export interface FinalizeInput {
     usedTools: ReadonlySet<string>;
     /** 최근 도구 실행 결과 요약(buildJudgeToolEvidence) — judge false negative 완화용 수행 증거. */
     toolEvidence?: string;
+    /** 작업 대화 — 도구 호출 기록에서 끝까지 실패한 파일 쓰기를 찾는다(write-failure-footnote). 없으면 생략. */
+    conversation?: readonly ChatMessage[];
     /** 0-base 턴 인덱스. */
     turn: number;
     stepNumber: number;
@@ -73,6 +81,15 @@ export interface FinalizeInput {
     signal: AbortSignal;
     update: (u: AgentTaskUpdatePayload) => Promise<void>;
     emitStep: (stepType: string, toolName?: string, content?: string | null) => void;
+    /** 검증 실패로 되돌려 보낼 때 이 답변을 여기에 들고 있는다 — 턴 상한에 걸리면 finalizeMaxTurnsExhausted 가 쓴다. */
+    hold?: VerifyHold;
+    /** 들고 있던 답변을 턴 상한에서 꺼내 쓰는 호출 — 실패했던 검증을 다시 돌리지 않고 "검증 미통과"로 표시해 완료한다. */
+    verifyHeld?: boolean;
+}
+
+/** 검증이 보류한 답변 — 턴 루프가 소유하고 완료 관문이 제자리 갱신한다(가장 최근 것만 남는다). */
+export interface VerifyHold {
+    answer?: FinalizeInput;
 }
 
 type FinalizeOutcome =
@@ -99,7 +116,14 @@ export async function finalizeMaxTurnsExhausted(p: {
     taskId: string; userId: string; turnCeiling: number; conversation: ChatMessage[];
     taskRuntime: TaskRuntime | null; sandboxCfg: TaskSandboxConfig; stepNumber: number;
     update: FinalizeInput['update']; emitStep: FinalizeInput['emitStep'];
+    /** 검증이 보류한 직전 완성 답변 — 있으면 버리지 않고 미검증 완료로 남긴다(판정·산출물 영속은 완료 관문 그대로). */
+    held?: FinalizeInput;
 }): Promise<void> {
+    if (p.held && AGENT_TASK_TURN_LOOP.KEEP_HELD_ANSWER) {
+        logger.info(`[AgentTask] 턴 상한 도달 — 검증이 보류한 답변을 결과로 사용: ${p.taskId} (${p.turnCeiling} 턴)`);
+        await finalizeTask({ ...p.held, stepNumber: p.stepNumber, hold: undefined, verifyHeld: true });
+        return;
+    }
     const lastAssistant = [...p.conversation].reverse().find((m) => m.role === 'assistant');
     const lastRaw = (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)';
     const lastExtracted = extractAndStripArtifacts(applyReportRender(lastRaw));
@@ -139,18 +163,21 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
 
     // 2. 산출물 실행 검증(결정적) — 코드 deliverable 이 컴파일되지 않으면 판정 전에 자가수정.
     //    재시도 상한을 넘어 건너뛴 검증은 이름을 모아 두었다가 완료 직전에 스텝으로 남긴다.
+    //    턴 상한에서 꺼낸 보류 답변(verifyHeld)은 더 고칠 턴이 없으므로 상한을 넘긴 것과 같이 다룬다.
+    const verifyRetries = input.verifyHeld ? Number.POSITIVE_INFINITY : input.verifyRetries;
     const skippedGates: string[] = [];
     if (taskRuntime && AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_ENABLED && artifacts.length > 0
-        && input.verifyRetries >= AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES) skippedGates.push('deliverable');
+        && verifyRetries >= AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES) skippedGates.push('deliverable');
     if (taskRuntime && AGENT_TASK_LIMITS.WORKSPACE_TEST_GATE_ENABLED
-        && input.verifyRetries >= AGENT_TASK_LIMITS.WORKSPACE_TEST_MAX_RETRIES) skippedGates.push('workspace_tests');
+        && verifyRetries >= AGENT_TASK_LIMITS.WORKSPACE_TEST_MAX_RETRIES) skippedGates.push('workspace_tests');
     if (taskRuntime
         && AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_ENABLED
-        && input.verifyRetries < AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES
+        && verifyRetries < AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES
         && artifacts.length > 0) {
         const verify = await verifyCodeArtifacts(taskRuntime, artifacts, signal);
         if (!verify.ok) {
             logger.info(`[AgentTask] 산출물 검증 실패 → 자가수정 유도: ${taskId} (재시도 ${input.verifyRetries + 1})`);
+            if (input.hold) input.hold.answer = input;
             return { kind: 'verify_retry', stepNumber, nudge: getAgentTaskVerifyFailedNudge(verify.report) };
         }
     }
@@ -158,12 +185,14 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     // 재시도 카운터는 deliverable 검증과 공유(둘 다 verifyRetries++) — 합산 상한으로 무한루프 방지.
     if (taskRuntime
         && AGENT_TASK_LIMITS.WORKSPACE_TEST_GATE_ENABLED
-        && input.verifyRetries < AGENT_TASK_LIMITS.WORKSPACE_TEST_MAX_RETRIES) {
+        && verifyRetries < AGENT_TASK_LIMITS.WORKSPACE_TEST_MAX_RETRIES
+        && !testGateUnneeded(input.conversation, taskId, emitStep)) {
         const tests = await verifyWorkspaceTests(taskRuntime, taskId, usedTools, stepNumber, signal);
         stepNumber = tests.stepNumber;
         emitStepIfRan(tests, emitStep);
         if (tests.ran && !tests.ok) {
             logger.info(`[AgentTask] 테스트 게이트 실패 → 수정 유도: ${taskId} (${tests.runner}, 재시도 ${input.verifyRetries + 1})`);
+            if (input.hold) input.hold.answer = input;
             return { kind: 'verify_retry', stepNumber, nudge: getAgentTaskTestsFailedNudge(tests.runner ?? 'test', tests.report) };
         }
     }
@@ -212,16 +241,18 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     }
 
     // 4. 산출물 영속 후 완료.
-    if (skippedGates.length > 0) {
-        stepNumber = await persistVerifySkippedStep(taskId, stepNumber, skippedGates);
-        emitStep('verify_skipped', undefined, verifySkippedMessage(skippedGates));
+    if (skippedGates.length > 0 || input.verifyHeld) {
+        const skippedNote = input.verifyHeld ? getVerifyHeldAnswerNote(skippedGates) : verifySkippedMessage(skippedGates);
+        stepNumber = await persistVerifySkippedStep(taskId, stepNumber, skippedGates, skippedNote);
+        emitStep('verify_skipped', undefined, skippedNote);
     }
     stepNumber = await persistArtifactSteps(taskId, artifacts, stepNumber, userId);
     stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
     await update({
         status: 'completed',
         progress: 100,
-        result: body,
+        // 끝까지 성공하지 못한 파일 쓰기가 있으면 경로를 각주로 덧붙인다 — 모델이 실패를 놓치고 끝낸 경우를 사용자가 알 수 있게.
+        result: withWriteFailureFootnote(body, input.conversation),
         // 이전 시도의 실패 사유를 지운다 — resume/재실행으로 완료된 작업에 'aborted'·'goal_incomplete'
         // 가 남아 목록·CLI 가 성공을 실패처럼 보여줬다(2026-08-26 resume E2E 에서 실측).
         error: null,
@@ -231,6 +262,23 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     });
     logger.info(`[AgentTask] 완료: ${taskId} (${turn + 1} 턴, ${path}, judge=${verdict}, 아티팩트 ${artifacts.length}개)`);
     return { kind: 'completed', stepNumber };
+}
+
+/**
+ * 검증 증거 원장(기본 꺼짐, VERIFY_EVIDENCE.ENABLED) — 대화 기록상 테스트 게이트를 돌릴 필요가 없으면 true.
+ * 파일을 바꾼 흔적이 없거나, 마지막 변경 이후 성공한 검증 기록이 있을 때다. 꺼져 있거나 대화가 없으면 false(종전대로 돌린다).
+ */
+function testGateUnneeded(
+    conversation: FinalizeInput['conversation'], taskId: string, emitStep: FinalizeInput['emitStep'],
+): boolean {
+    if (!VERIFY_EVIDENCE.ENABLED || !conversation) return false;
+    const ev = collectVerificationEvidence(conversation);
+    const note = !ev.mutated ? VERIFY_EVIDENCE_SKIP_NOTES.no_change()
+        : ev.freshPass ? VERIFY_EVIDENCE_SKIP_NOTES.fresh_pass(ev.freshPass) : null;
+    if (note === null) return false;
+    logger.info(`[AgentTask] ${note}: ${taskId}`);
+    emitStep('test_verify', undefined, note);
+    return true;
 }
 
 function emitStepIfRan(

@@ -11,18 +11,37 @@ import { USER_CONTEXT_LIMITS } from '../../config/runtime-limits';
 
 const logger = createLogger('UserContextBlocks');
 
+/** 순위 매김에 쓰는 메모리 행의 칸. */
+interface MemoryRow {
+    content: string;
+    source: 'explicit' | 'candidate' | 'batch';
+    confidence: number | null;
+    created_at: string;
+}
+
 /**
  * Semantic tier — 사용자 cross-conversation 메모리 블록('' 이면 미주입). 토큰 cap 적용.
  * 채팅(buildUserContextBlocks)과 Agent Task(system 조립) 양쪽에서 재사용(#3 3-tier 배선).
  * 실패 시 '' graceful. 인증 사용자만(guest 는 호출부에서 걸러짐).
  */
-export async function buildUserMemoryBlock(userId: string): Promise<string> {
+export async function buildUserMemoryBlock(
+    userId: string,
+    /** 에이전트 작업의 순위 매김(agent-task/memory-rank) — 미지정이면 최신순 50건 그대로. */
+    opts: { poolSize?: number; rank?: <T extends MemoryRow>(memories: T[]) => T[] } = {},
+): Promise<string> {
     try {
         const { UserMemoryRepository } = await import('../../data/repositories/user-memory-repository');
         const { getPool } = await import('../../data/models/unified-database');
         const memRepo = new UserMemoryRepository(getPool());
-        const memories = await memRepo.listActiveByUser(userId, 50);
+        let memories = await memRepo.listActiveByUser(userId, opts.poolSize ?? 50);
         if (memories.length === 0) return '';
+        if (opts.rank) {
+            try {
+                memories = opts.rank(memories);
+            } catch (e) {
+                logger.warn('메모리 순위 매김 실패 — 최신순으로 주입:', e);
+            }
+        }
         const maxMem = USER_CONTEXT_LIMITS.MAX_MEMORY_TOKENS;
         const kept: typeof memories = [];
         let usedTokens = 0;

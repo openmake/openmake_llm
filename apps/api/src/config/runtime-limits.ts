@@ -599,6 +599,31 @@ export const TOOL_RESULT_COMPACTION = {
 /** 도구 결과를 LLM 컨텍스트로 주입할 때 단일 결과 최대 문자 수 (외부 provider · agent task 공용). */
 export const MAX_TOOL_RESULT_CHARS = parseInt(process.env.MAX_TOOL_RESULT_CHARS || '8000', 10);
 
+/**
+ * 에이전트 작업의 도구 결과 절단 방식 — 상한(MAX_TOOL_RESULT_CHARS)을 넘으면 앞·뒤를 남기고 가운데를 생략한다
+ * (services/agent-task/tool-result-truncate). 채팅 경로는 종전대로 앞부분만 남긴다.
+ */
+export const TOOL_RESULT_TRUNCATION = {
+    /**
+     * 남기는 분량 중 앞쪽 비율(0~1). 나머지는 뒤쪽. AGENT_TASK_TOOL_RESULT_HEAD_RATIO
+     *
+     * 기본 0.5 의 근거(2026-10-04 실측, retired-chat-model, 상한 8000자): 샌드박스 이미지에서 실제로 만든 긴 결과 8종
+     * (테스트 실패·근본 원인이 앞에 있는 로그·빌드 스택·검색·CSV·설치 로그·파일 보기·서브에이전트 묶음, 9천~2만7천자)에
+     * 질문 29개를 던졌다. 앞만 남기면(종전) 13/29, 뒤만 남기면 20/29, 앞:뒤 80:20~20:80 은 모두 25/29 로 같았다 —
+     * 앞·뒤를 함께 남긴 방식에서는 남은 구간에 근거가 있으면 전부 맞혔고(150건 중 오답 0), 없으면 지어내지 않았다. 근거의 깊이는 앞에서 최대 ~730자
+     * (파일 머리), 뒤에서 최대 ~1,020자(실패 3건의 traceback)였다. 즉 비율은 10~85% 사이에서 결과를 바꾸지 않고,
+     * 양쪽에 1천 자 이상만 남으면 된다. 어느 쪽으로 기울일 근거가 없어 가운데 값으로 둔다.
+     */
+    HEAD_RATIO: parseFloat(process.env.AGENT_TASK_TOOL_RESULT_HEAD_RATIO || '0.5'),
+} as const;
+
+/**
+ * 파일 보기(str_replace_editor view) 한 번에 보이는 최대 글자 수 — 도구 결과 상한보다 조금 작게 잡아
+ * 보기 결과가 절단되지 않게 한다. 넘는 파일은 줄 구간으로 나눠 본다(services/task-sandbox/file-view).
+ * AGENT_TASK_FILE_VIEW_MAX_CHARS
+ */
+export const FILE_VIEW_MAX_CHARS = parseInt(process.env.AGENT_TASK_FILE_VIEW_MAX_CHARS || '', 10) || Math.max(1000, MAX_TOOL_RESULT_CHARS - 500);
+
 /** Git-ingest 컨벤션 검사 시 LLM 입력 truncation 캡. */
 export const CONVENTION_CHECK_LIMITS = {
     MANIFEST_YAML_MAX_CHARS: parseInt(process.env.CONVENTION_CHECK_YAML_MAX || '4000', 10),
@@ -1230,6 +1255,16 @@ export const AGENT_TASK_LIMITS = {
      *  0 이면 비활성. 사용자 취소·예산 소진(signal abort)은 재시도하지 않는다.
      *  AGENT_TASK_TURN_RETRY_MAX 로 오버라이드(기본 2). */
     TURN_RETRY_MAX: parseInt(process.env.AGENT_TASK_TURN_RETRY_MAX || '2', 10),
+    /** 도구 턴의 모델 호출 한 번의 상한(ms). 넘으면 끊고 다시 시도한다. 0 이면 끔(남은 총 예산만 적용).
+     *  종전에는 호출 상한이 "남은 총 예산"뿐이라 멈춘 호출 하나가 16~20분을 태운 뒤 재시도 없이 실패했다.
+     *  기본 5분의 근거(2026-10-04 로컬 실측, agent_turn 207건): p50 5초 · p95 12초 · p99 21초 · 최대 221초(4,341토큰 출력).
+     *  마무리 턴에는 적용하지 않는다(장문 생성 — FINAL_TURN_MIN_MS 가 따로 보장). AGENT_TASK_TURN_CALL_TIMEOUT_MS */
+    TURN_CALL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_MS || '', 10) >= 0
+        ? parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_MS as string, 10) : 5 * 60 * 1000,
+    /** 호출 상한에 걸린 호출을 다시 시도하는 횟수(정상적으로 긴 생성이 되풀이되지 않게 작게 둔다). AGENT_TASK_TURN_CALL_TIMEOUT_RETRY_MAX */
+    TURN_CALL_TIMEOUT_RETRY_MAX: parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_RETRY_MAX || '1', 10),
+    /** 빈 응답(본문·도구 호출 없음)을 되묻는 횟수. 넘으면 종전대로 완료 관문으로 보낸다. AGENT_TASK_EMPTY_RESPONSE_MAX_RETRIES */
+    EMPTY_RESPONSE_MAX_RETRIES: parseInt(process.env.AGENT_TASK_EMPTY_RESPONSE_MAX_RETRIES || '2', 10),
     /** 턴 재시도 지수 백오프 기저(ms) — n번째 재시도 전 기저 × 2^(n-1) 대기(abort 시 즉시 중단).
      *  AGENT_TASK_TURN_RETRY_BACKOFF_MS 로 오버라이드(기본 2초). */
     TURN_RETRY_BACKOFF_MS: parseInt(process.env.AGENT_TASK_TURN_RETRY_BACKOFF_MS || '', 10) || 2_000,
@@ -1302,6 +1337,16 @@ export const AGENT_TASK_LIMITS = {
     /** stuck 감지 — 동일 assistant 응답이 이 횟수만큼 연속되면 전략변경 프롬프트 주입(무한루프 방지).
      *  OpenManus BaseAgent.is_stuck 패턴. AGENT_STUCK_THRESHOLD 로 오버라이드(기본 3). */
     STUCK_THRESHOLD: parseInt(process.env.AGENT_STUCK_THRESHOLD || '3', 10),
+    /** 도구 호출 반복 가드(tool-loop-guard) — 같은 이름·인자의 호출이 연속 실패하거나 같은 결과만 돌려줄 때 안내·차단한다.
+     *  AGENT_TASK_TOOL_LOOP_GUARD=false 로 끈다. 임계값은 실측이 아니다 — 로컬 기록(도구 결과 44건)에 반복 사례가 없어
+     *  hermes-agent 의 값(경고 2·차단 5)을 한 단계 보수적으로 잡았다. 발동은 결과 문구로 스텝에 남으니 운영 집계 뒤 조정한다. */
+    TOOL_LOOP_GUARD_ENABLED: process.env.AGENT_TASK_TOOL_LOOP_GUARD !== 'false',
+    /** 같은 호출 연속 실패: 이 횟수부터 안내 / 이 횟수를 넘겨 다시 부르면 실행하지 않음. */
+    TOOL_LOOP_WARN_FAILURES: parseInt(process.env.AGENT_TASK_TOOL_LOOP_WARN_FAILURES || '2', 10),
+    TOOL_LOOP_BLOCK_FAILURES: parseInt(process.env.AGENT_TASK_TOOL_LOOP_BLOCK_FAILURES || '4', 10),
+    /** 읽기 호출의 같은 결과 연속: 이 횟수부터 안내 / 이 횟수를 넘겨 다시 부르면 실행하지 않음. */
+    TOOL_LOOP_WARN_SAME_RESULT: parseInt(process.env.AGENT_TASK_TOOL_LOOP_WARN_SAME_RESULT || '3', 10),
+    TOOL_LOOP_BLOCK_SAME_RESULT: parseInt(process.env.AGENT_TASK_TOOL_LOOP_BLOCK_SAME_RESULT || '5', 10),
     /** 목표 달성 judge — 아티팩트 없는 최종 답변 완료 시 판정 전용 LLM 1회 호출로 목표 달성
      *  여부를 검증(마커 미준수 보완). 미달성 판정 시 completed 대신 failed(goal_incomplete).
      *  판정 실패/파싱 불가는 fail-open(완료 유지). AGENT_TASK_GOAL_JUDGE=false 로 비활성. */
@@ -1382,7 +1427,7 @@ export const AGENT_TASK_LIMITS = {
     /** 오래된 도구 결과 접기(2026-09-06) — 매 턴 전체 대화를 재전송하므로 비용이 턴 수에 O(n²)로
      *  붙는다(30일 실측: 완료 작업 평균 43만 토큰, 스텝 본문 총량의 ~18배). 최근 KEEP_TURNS 개
      *  assistant 턴보다 오래된 tool 메시지 중 MIN_CHARS 를 넘는 것을 앞부분 HEAD_CHARS 만 남긴
-     *  스텁으로 치환한다(원문은 스텝 DB 에 그대로 — 모델은 필요 시 같은 도구를 다시 호출).
+     *  스텁으로 치환한다(원문은 스텝 DB 에 그대로. 스텁은 다시 읽지 말라고 안내한다 — context-fold.ts 의 반복 읽기 사고 기록).
      *  AGENT_TASK_CONTEXT_FOLD=false 로 비활성. */
     CONTEXT_FOLD_ENABLED: process.env.AGENT_TASK_CONTEXT_FOLD !== 'false',
     CONTEXT_FOLD_KEEP_TURNS: parseInt(process.env.AGENT_TASK_CONTEXT_FOLD_KEEP_TURNS || '4', 10),
@@ -1427,6 +1472,9 @@ export const AGENT_TASK_LIMITS = {
     SCHEDULE_MIN_INTERVAL_SEC: parseInt(process.env.AGENT_TASK_SCHEDULE_MIN_INTERVAL_SEC || '300', 10),
     /** 연속 실패 이 횟수 도달 시 스케줄 자동 비활성(폭주 차단). AGENT_TASK_SCHEDULE_DISABLE_AFTER_FAILURES(기본 5). */
     SCHEDULE_DISABLE_AFTER_FAILURES: parseInt(process.env.AGENT_TASK_SCHEDULE_DISABLE_AFTER_FAILURES || '5', 10),
+    /** 이전 실행이 진행 중 상태로 남았어도 이 시간(ms) 넘게 갱신이 없으면 멈춘 표시로 보고 발화를 막지 않는다.
+     *  기본 40분 = 예약 총 예산(20분)의 두 배. AGENT_TASK_SCHEDULE_OVERLAP_STALE_MS */
+    SCHEDULE_OVERLAP_STALE_MS: parseInt(process.env.AGENT_TASK_SCHEDULE_OVERLAP_STALE_MS || '', 10) || 40 * 60 * 1000,
     /** 예약 실행 승인정책 — 예약 task 는 무인(사람 승인 불가)이므로 기본 'none'(전부 자동).
      *  전역 TASK_SANDBOX_APPROVAL_POLICY='all' 이면 예약 task 가 첫 도구서 pause 되어 멈추므로 분리한다.
      *  AGENT_TASK_SCHEDULE_APPROVAL_POLICY(기본 'none' | 'high-risk' | 'all'). */
@@ -1550,6 +1598,9 @@ export const AGENT_SPAWN = {
     MAX_PARALLEL: parseInt(process.env.AGENT_SPAWN_MAX_PARALLEL || '2', 10),
     /** 1회 호출당 태스크 상한(기본 4) — 초과분은 잘라내고 결과에 명시(silent cap 금지). AGENT_SPAWN_MAX_TASKS. */
     MAX_TASKS_PER_CALL: parseInt(process.env.AGENT_SPAWN_MAX_TASKS || '4', 10),
+    /** spawn_agents 결과 전체의 글자 예산 — 태스크 수로 나눠 각 결과를 앞·뒤로 줄인다(spawn-result).
+     *  기본은 도구 결과 상한과 같다(그 안에 들면 하류 절단이 걸리지 않는다). AGENT_SPAWN_RESULT_BUDGET_CHARS. */
+    RESULT_BUDGET_CHARS: parseInt(process.env.AGENT_SPAWN_RESULT_BUDGET_CHARS || '', 10) || MAX_TOOL_RESULT_CHARS,
     /** 채팅 메시지당 호출 캡(기본 1) — CHAT_SUBAGENT.MAX_CALLS 관행(남용·지연 억제). AGENT_SPAWN_MAX_CALLS. */
     MAX_CALLS_PER_MESSAGE: parseInt(process.env.AGENT_SPAWN_MAX_CALLS || '1', 10),
     /** 채팅 경로 서브 도구 이름 키워드 필터(CSV) — 부모 활성 도구 중 이름에 이 키워드가 포함된

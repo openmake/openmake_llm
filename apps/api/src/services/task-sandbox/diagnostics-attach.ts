@@ -16,6 +16,7 @@
  */
 import type { TaskExecutor } from './executor';
 import type { MCPToolResult } from '../../tool-contract/types';
+import { checkEditSyntax } from './edit-syntax-check';
 
 function textResult(text: string): MCPToolResult {
     return { content: [{ type: 'text', text }], isError: false };
@@ -25,13 +26,19 @@ function textResult(text: string): MCPToolResult {
  * @param sandbox 실행 백엔드 — `diagnostics` 를 구현한 실행기(로컬 브리지)만 진단을 붙인다.
  * @param relPath 방금 편집한 workspace 상대경로
  * @param text 원래 도구 결과 문구(`기록됨: a.ts` 등)
+ * @param before 편집 전 내용(부분 편집일 때) — 문법 검사가 이번 편집이 만든 오류만 알리는 데 쓴다
  */
 export async function withDiagnostics(
     sandbox: TaskExecutor,
     relPath: string,
     text: string,
+    before?: string,
 ): Promise<MCPToolResult> {
-    if (!sandbox.diagnostics) return textResult(text);
+    if (!sandbox.diagnostics) {
+        // 진단이 없는 실행기(Docker 샌드박스) — 이미지에 있는 인터프리터로 문법만 본다(edit-syntax-check, fail-open).
+        const note = await checkEditSyntax(sandbox, relPath, before);
+        return textResult(note ? `${text}\n${note}` : text);
+    }
     try {
         const d = await sandbox.diagnostics([relPath]);
         return textResult(d ? `${text}\n${d.text}` : text);

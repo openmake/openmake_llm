@@ -16,9 +16,14 @@ jest.mock('../../data/repositories/agent-task-repository', () => ({
     AgentTaskRepository: jest.fn().mockImplementation(() => ({ getCheckpoint, listCheckpoints, markForked })),
 }));
 jest.mock('../../auth/ownership', () => ({ assertResourceOwnerOrAdmin: jest.fn() }));
+// 작업 공간 복원 플래그는 .env 에 좌우되므로 꺼진 상태로 고정한다.
+jest.mock('../../config/runtime-limits', () => {
+    const actual = jest.requireActual('../../config/runtime-limits');
+    return { ...actual, AGENT_TASK_LIMITS: { ...actual.AGENT_TASK_LIMITS, FORK_WORKSPACE_RESTORE_ENABLED: false } };
+});
 
 import { forkRouter } from '../agent-task-fork.routes';
-import { FORK_WORKSPACE_NOTICE } from '../../prompts/agent-task-prompt';
+import { FORK_WORKSPACE_NOTICE, buildForkNotice } from '../../prompts/agent-task-prompt';
 
 function handler(method: 'get' | 'post', path: string) {
     const layer = (forkRouter as any).stack.find((l: any) => l.route?.path === path && l.route.methods[method]);
@@ -74,7 +79,8 @@ describe('POST /:taskId/fork', () => {
         const upd = updateAgentTask.mock.calls[0] as unknown as [string, { checkpoint: { conversation: unknown[]; completedTurn: number }; plan: unknown }];
         expect(upd[0]).toBe(newId);
         expect(upd[1].checkpoint.completedTurn).toBe(2);
-        expect(upd[1].checkpoint.conversation).toEqual([{ role: 'user', content: 'hi' }, { role: 'user', content: FORK_WORKSPACE_NOTICE }]);
+        // 목표를 바꿔 분기했으므로 안내에 새 목표가 실린다
+        expect(upd[1].checkpoint.conversation).toEqual([{ role: 'user', content: 'hi' }, { role: 'user', content: buildForkNotice({ restoreEnabled: false, newGoal: '새 목표' }) }]);
         expect(upd[1].plan).toEqual([{ step: 1 }]);
         expect(markForked).toHaveBeenCalledWith(newId, 'src', 2);
         expect(res.body.data.next).toBe(`/api/agent-tasks/${newId}/resume`);
@@ -101,6 +107,15 @@ describe('POST /:taskId/fork', () => {
             { role: 'user', content: 'goal' }, { role: 'user', content: FORK_WORKSPACE_NOTICE },
         ]);
     });
+    it('목표를 바꿔 분기하면 대화 끝 안내에 새 목표가 실린다 — 재개는 옛 대화를 그대로 쓰기 때문이다', async () => {
+        getCheckpoint.mockResolvedValue({ conversation: [{ role: 'user', content: '원래 목표' }], plan: null });
+        const res = mockRes();
+        await handler('post', '/:taskId/fork')(req({ fromTurn: 1, goal: '새 목표로 진행' }), res, jest.fn());
+        expect(res.statusCode).toBe(201);
+        const conv = ((updateAgentTask.mock.calls.at(-1) as unknown[])[1] as { checkpoint: { conversation: Array<{ content: string }> } }).checkpoint.conversation;
+        expect(conv.at(-1)!.content).toContain('새 목표로 진행');
+    });
+
     it('goal 을 생략하면 원 작업 목표를 쓰고 markForked 실패는 삼킨다', async () => {
         getCheckpoint.mockResolvedValue({ conversation: [], plan: null });
         markForked.mockRejectedValueOnce(new Error('db'));
@@ -109,5 +124,16 @@ describe('POST /:taskId/fork', () => {
         expect(res.statusCode).toBe(201);
         expect(createAgentTask).toHaveBeenCalledWith(expect.objectContaining({ goal: '원래 목표' }));
         expect((updateAgentTask.mock.calls[0] as unknown[])[1]).not.toHaveProperty('plan');
+    });
+    it('일회성 안내(검색 한도 등)는 fork 한 대화에서 뺀다 — 새 작업은 횟수가 다시 시작한다', async () => {
+        getCheckpoint.mockResolvedValue({ conversation: [
+            { role: 'user', content: '원래 목표' },
+            { role: 'user', content: '검색 횟수 한도에 도달했습니다.', oneShot: true },
+            { role: 'assistant', content: '정리 중' },
+        ] });
+        const res = mockRes();
+        await handler('post', '/:taskId/fork')(req({ fromTurn: 3 }), res, jest.fn());
+        const upd = updateAgentTask.mock.calls[0] as unknown as [string, { checkpoint: { conversation: Array<{ content: string }> } }];
+        expect(upd[1].checkpoint.conversation.map((m) => m.content)).toEqual(['원래 목표', '정리 중', FORK_WORKSPACE_NOTICE]);
     });
 });
