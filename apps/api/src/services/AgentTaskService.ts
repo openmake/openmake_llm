@@ -22,7 +22,7 @@ import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskEmptyResponseNudge, AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
+import { getAgentTaskStuckNudge, getAgentTaskEmptyResponseNudge, AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { isTerminalStatus, notifyTaskTerminal } from './agent-task/terminal-notify';
@@ -48,6 +48,7 @@ import { beginTaskLease } from './agent-task/task-lease';
 import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint, usedToolNamesFrom } from './agent-task/turn-reentry';
 import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
 import { nextTurnProgress } from './agent-task/turn-progress';
+import { pickNoToolNudge } from './agent-task/turn-stall';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
@@ -138,6 +139,7 @@ export class AgentTaskService {
         const recentSignatures: string[] = [];
         let stuckNotified = false;
         let emptyRetries = 0;
+        let stallNudges = 0; // 행동 예고 재촉 횟수(turn-stall)
         let verifyRetries = 0;
         // 5-3(b): 실제 사용한 도구 추적 — goal judge 의 실행 컨텍스트(수행 흔적)로 전달.
         const usedTools = usedToolNamesFrom(input.resume?.conversation); // 재개면 이전 실행분을 복원
@@ -491,13 +493,13 @@ export class AgentTaskService {
                 emitStep(stepType, turnToolNames, stepContent);
 
                 if (!hasToolCalls) {
-                    // 턴 0 계획-만 가드: 도구가 필요 없는 목표에서 모델이 계획만 쓰고 멈추면
-                    // 결과물 없이 종료된다 — deliverable(artifact) 이 없으면 1회 재촉 후 계속.
-                    // 단 모델이 수행 불가를 선언(마커)했으면 재촉하지 않고 관문으로 보낸다
-                    // (재촉이 불가 선언을 뭉개면 미달성이 completed 로 흘러간다).
-                    if (turn === startTurn && extracted!.artifacts.length === 0
-                        && !(stepContent && stepContent.includes(AGENT_TASK_INCOMPLETE_MARKER))) {
-                        conversation.push({ role: 'user', content: getAgentTaskDeliverableNudge() });
+                    // 계획만 쓰고 멈춘 첫 턴(산출물 없음)은 1회, 이후 턴의 "이제 ~하겠습니다"식 행동 예고는 상한까지 재촉하고 계속한다.
+                    // 수행 불가 선언(마커)은 재촉하지 않고 관문으로 보낸다 — 판정은 agent-task/turn-stall.
+                    const stall = pickNoToolNudge({ firstTurn: turn === startTurn, content: stepContent, artifactCount: extracted!.artifacts.length,
+                        canAct: !finalTurnReason && turn < turnCeiling - 1, stallNudges });
+                    if (stall) {
+                        if (stall.note) { stallNudges++; await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: stall.note, planStepIndex: planIdx() }); }
+                        conversation.push({ role: 'user', content: stall.nudge });
                         continue;
                     }
                     // 완료 판정은 finalizeTask 단일 관문 — 마커·verify·judge·산출물 영속(091).

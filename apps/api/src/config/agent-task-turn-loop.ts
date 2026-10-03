@@ -19,4 +19,24 @@ export const AGENT_TASK_TURN_LOOP = {
     RECOVERY_WAIT_MAX_CYCLES: num(process.env.AGENT_TASK_RECOVERY_WAIT_MAX_CYCLES, 5),
     RECOVERY_WAIT_BASE_MS: num(process.env.AGENT_TASK_RECOVERY_WAIT_BASE_MS, 15_000),
     RECOVERY_WAIT_CAP_MS: num(process.env.AGENT_TASK_RECOVERY_WAIT_CAP_MS, 60_000),
+    /** 말만 하고 멈춘 턴 재촉 — 도구 호출 없이 다음 행동 예고로 끝난 짧은 응답을 최종 답변으로 받지 않고 되묻는 횟수(작업당).
+     *  첫 턴의 계획-만 재촉과 별개다. 0 이면 끈다. AGENT_TASK_STALL_NUDGE_MAX */
+    STALL_NUDGE_MAX: num(process.env.AGENT_TASK_STALL_NUDGE_MAX, 2),
+    /** 이보다 긴 응답은 실질 답변으로 보고 재촉하지 않는다 / 예고를 찾는 끝부분 길이. 실측이 아니라 hermes-agent 의 값이다. */
+    STALL_MAX_CHARS: num(process.env.AGENT_TASK_STALL_MAX_CHARS, 400),
+    STALL_TAIL_CHARS: 160,
 };
+
+/**
+ * 응답 끝의 행동 예고 — "이제/다음으로/먼저 … 하겠습니다", "Now I'll …", "Let me now …".
+ * 순서를 알리는 말이 같은 문장에 있어야 한다: "더 도와드리겠습니다" 같은 맺음 인사는 걸리지 않는다.
+ * AGENT_TASK_STALL_INTENT_PATTERN 으로 바꾼다(대소문자 무시).
+ */
+export const AGENT_TASK_STALL_INTENT_RE = new RegExp(
+    process.env.AGENT_TASK_STALL_INTENT_PATTERN
+        || '(?:(?:이제|이어서|다음으로|다음에는?|다음 단계로|먼저|우선|곧바로|지금부터)[^.!?。\n]{0,100}(?:겠습니다|겠어요|게요)'
+            + "|\\b(?:(?:now|next|first)[,:]?\\s+(?:let me|i(?:'|’)ll|i will|i am going to|i'm going to)"
+            + "|(?:let me|i(?:'|’)ll|i will)\\s+(?:now|next|first|go ahead and|proceed to|start by))\\b[^.!?\n]{0,100})"
+            + '[.:…]?\\s*$',
+    'i',
+);
