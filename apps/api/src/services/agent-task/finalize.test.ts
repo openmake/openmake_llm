@@ -26,12 +26,14 @@ jest.mock('./role-client', () => ({ judgeClientFor: jest.fn(async () => ({})) })
 jest.mock('./task-steps', () => ({
     persistArtifactSteps: jest.fn(async (_t: string, _a: unknown[], n: number) => n + 1),
     persistJudgeStep: jest.fn(async (_t: string, n: number) => n + 1),
+    persistVerifySkippedStep: jest.fn(async (_t: string, n: number) => n + 1),
+    verifySkippedMessage: jest.fn((gates: readonly string[]) => `skipped: ${gates.join(',')}`),
 }));
 jest.mock('./code-diff', () => ({ maybePersistCodeDiff: jest.fn(async (_r: unknown, _c: unknown, _t: string, n: number) => n) }));
 
 import { finalizeTask, type FinalizeInput } from './finalize';
 import { judgeGoal } from './goal-judge';
-import { persistJudgeStep } from './task-steps';
+import { persistJudgeStep, persistVerifySkippedStep } from './task-steps';
 import { verifyCodeArtifacts } from './deliverable-verify';
 import { verifyWorkspaceTests } from './workspace-test-verify';
 import { AGENT_TASK_INCOMPLETE_MARKER } from '../../prompts/agent-task-prompt';
@@ -40,6 +42,7 @@ import type { TaskSandboxConfig } from '../../config/task-sandbox';
 
 const judgeMock = judgeGoal as jest.MockedFunction<typeof judgeGoal>;
 const judgeStepMock = persistJudgeStep as jest.MockedFunction<typeof persistJudgeStep>;
+const skippedStepMock = persistVerifySkippedStep as jest.MockedFunction<typeof persistVerifySkippedStep>;
 const verifyMock = verifyCodeArtifacts as jest.MockedFunction<typeof verifyCodeArtifacts>;
 const testsMock = verifyWorkspaceTests as jest.MockedFunction<typeof verifyWorkspaceTests>;
 
@@ -80,6 +83,16 @@ beforeEach(() => {
 });
 
 describe('finalizeTask — 완료 관문 단일화(091)', () => {
+    it('goal judge 호출은 그 작업의 비용 귀속 문맥 안에서 돈다', async () => {
+        const { getCostSessionId } = jest.requireActual('../../utils/cost-attribution-context') as typeof import('../../utils/cost-attribution-context');
+        const seen: Array<string | undefined> = [];
+        judgeMock.mockImplementation(async () => { seen.push(getCostSessionId()); return { achieved: true, reason: 'ok', raw: '' }; });
+
+        await finalizeTask(input());
+
+        expect(seen).toEqual(['task-1']);
+    });
+
     it('terminate 경로도 goal judge 를 거친다 (종전엔 우회)', async () => {
         judgeMock.mockResolvedValue({ achieved: true, reason: '파일이 생성됨', raw: '' });
         const i = input({ path: 'terminate', terminateSummary: '완료했습니다.' });
@@ -223,6 +236,36 @@ describe('finalizeTask — 완료 관문 단일화(091)', () => {
 
         expect(verifyMock).not.toHaveBeenCalled();
         expect(out.kind).toBe('completed');
+    });
+
+    it('검증을 건너뛴 완료는 그 사실을 스텝으로 남기고 WS 로도 알린다 (조용한 통과 금지)', async () => {
+        const emitted: string[] = [];
+        const i = input({ rawContent: WITH_ARTIFACT, verifyRetries: 1, emitStep: (t) => { emitted.push(t); } });
+
+        const out = await finalizeTask(i);
+
+        expect(out.kind).toBe('completed');
+        expect(skippedStepMock).toHaveBeenCalledTimes(1);
+        expect(skippedStepMock.mock.calls[0][2]).toEqual(['deliverable']);
+        expect(emitted).toContain('verify_skipped');
+    });
+
+    it('검증을 건너뛰지 않은 완료에는 건너뜀 스텝이 없다', async () => {
+        const i = input({ rawContent: WITH_ARTIFACT });
+
+        await finalizeTask(i);
+
+        expect(verifyMock).toHaveBeenCalledTimes(1);
+        expect(skippedStepMock).not.toHaveBeenCalled();
+    });
+
+    it('산출물이 없으면 산출물 검증은 대상이 아니므로 건너뜀으로 적지 않는다', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+        const i = input({ verifyRetries: 1 });
+
+        await finalizeTask(i);
+
+        expect(skippedStepMock).not.toHaveBeenCalled();
     });
 
     it('terminate summary 가 결과 본문이 된다', async () => {

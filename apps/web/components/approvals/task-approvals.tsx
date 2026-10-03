@@ -12,6 +12,7 @@
  *
  * @see app/(workspace)/approvals/page.tsx
  */
+import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "./approval-args";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -19,7 +20,6 @@ import { Check, X, Loader2, MessageCircleQuestion, Wrench, ExternalLink } from "
 import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
-import { DiffView } from "@/components/chat/diff-view";
 import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
 import { onAgentTaskChange } from "@/lib/agent-task-change";
 
@@ -51,17 +51,7 @@ interface PendingItem {
 
 interface OrgMember { user_id: string; role: string }
 
-/** 인자 요약 — 어떤 작업을 승인하는지 한 줄로 보인다(장문은 잘라낸다). */
-function summarizeArgs(args?: Record<string, unknown>): string {
-  if (!args) return "";
-  const raw =
-    typeof args.question === "string"
-      ? args.question
-      : typeof args.command === "string"
-        ? args.command
-        : JSON.stringify(args);
-  return raw.length > 300 ? `${raw.slice(0, 300)}…` : raw;
-}
+const ARGS_SUMMARY_MAX_CHARS = 300;
 
 export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => void }) {
   const t = useTranslations("approvals");
@@ -169,6 +159,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
       {items.map((a) => {
         const isQuestion = isQuestionApproval(a.toolName);
         const elicit = elicitationHint(a.toolName, a.args);
+        const summary = summarizeApprovalArgs(a.args, ARGS_SUMMARY_MAX_CHARS);
         const acting = busy === a.approvalId;
         return (
           <Card key={a.approvalId} className="p-4">
@@ -202,19 +193,15 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
               </Link>
             </div>
 
-            <p className="whitespace-pre-wrap break-words text-sm text-fg">{summarizeArgs(a.args)}</p>
+            <p className="whitespace-pre-wrap break-words text-sm text-fg">{summary.text}</p>
+            <ApprovalArgsFull full={summary.full} label={t("tasks.fullArgs", { chars: summary.full?.length ?? 0 })} />
             {elicit && (
               <p className="mt-1 text-xs text-muted">
                 {t("tasks.elicitHint", { server: elicit.server, fields: elicit.fields || "-" })}
                 {elicit.jsonExample && <> · {t("tasks.elicitJsonHint", { example: elicit.jsonExample })}</>}
               </p>
             )}
-            {a.preview && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs text-accent">{t("tasks.preview")}</summary>
-                <div className="mt-1"><DiffView text={a.preview} /></div>
-              </details>
-            )}
+            <ApprovalPreview toolName={a.toolName} preview={a.preview} diffLabel={t("tasks.preview")} procedureLabel={t("tasks.procedurePreview")} />
 
             {isQuestion && (
               <input

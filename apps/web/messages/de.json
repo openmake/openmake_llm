@@ -378,6 +378,8 @@
       "autoApprove": "Rest freigeben",
       "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen ausgenommen)",
       "preview": "Änderungsvorschau",
+      "procedurePreview": "Auszuführende Prozedur ansehen",
+      "fullArgs": "Vollständigen Inhalt anzeigen ({chars} Zeichen)",
       "elicitHint": "Eingabeanfrage von {server} · Felder: {fields}",
       "elicitJsonHint": "Bei mehreren Feldern bitte als JSON antworten: {example}"
     },
@@ -2373,6 +2375,8 @@
       "autoApproveOff": "Auto-Freigabe aus",
       "autoApproveOffHint": "Auto-Freigabe für diese Aufgabe deaktivieren",
       "preview": "Änderungen vor Ausführung ansehen",
+      "procedurePreview": "Auszuführende Prozedur ansehen",
+      "fullArgs": "Vollständigen Inhalt anzeigen ({chars} Zeichen)",
       "assignedToMe": "Mir zugewiesen",
       "assignedAway": "Weitergegeben",
       "reassign": "Weitergeben",

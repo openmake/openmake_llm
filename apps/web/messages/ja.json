@@ -378,6 +378,8 @@
       "autoApprove": "残りをすべて承認",
       "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）",
       "preview": "変更プレビュー",
+      "procedurePreview": "実行される手順を表示",
+      "fullArgs": "全文を表示（{chars}文字）",
       "elicitHint": "{server} サーバーからの入力リクエスト · 項目: {fields}",
       "elicitJsonHint": "項目が複数ある場合は JSON で回答してください: {example}"
     },
@@ -2373,6 +2375,8 @@
       "autoApproveOff": "自動承認を解除",
       "autoApproveOffHint": "この作業の自動承認を無効にします",
       "preview": "実行前の変更プレビュー",
+      "procedurePreview": "実行される手順を表示",
+      "fullArgs": "全文を表示（{chars}文字）",
       "assignedToMe": "自分に移管",
       "assignedAway": "移管済み",
       "reassign": "移管",

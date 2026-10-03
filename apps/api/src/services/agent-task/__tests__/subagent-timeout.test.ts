@@ -53,6 +53,19 @@ function params(client: unknown) {
     } as never;
 }
 
+describe('서브에이전트 — 비용 귀속', () => {
+    it('서브 LLM 호출은 부모 작업의 비용 귀속 문맥 안에서 돈다', async () => {
+        const { getCostSessionId } = jest.requireActual('../../../utils/cost-attribution-context') as typeof import('../../../utils/cost-attribution-context');
+        const seen: Array<string | undefined> = [];
+        const chat = jest.fn().mockImplementation(async () => { seen.push(getCostSessionId()); return { content: '완료', metrics: {} }; });
+        const client = { requestTimeout: 120_000, derive: jest.fn(() => ({ chat })), chat: jest.fn() };
+
+        await runSubagent(params(client));
+
+        expect(seen).toEqual(['task-1']);
+    });
+});
+
 describe('서브에이전트 SDK 타임아웃 배선', () => {
     it('로컬 기본 타임아웃(120s)을 작업 예산까지 끌어올린다', async () => {
         const { client, derive } = makeClient(120_000);
@@ -85,5 +98,40 @@ describe('서브에이전트 SDK 타임아웃 배선', () => {
 
         expect(chat).toHaveBeenCalledTimes(1);
         expect((client as { chat: jest.Mock }).chat).not.toHaveBeenCalled();
+    });
+});
+
+describe('서브에이전트 — 부모 잔여 토큰 예산', () => {
+    /** 매 턴 도구를 부르며 10 토큰씩 쓰는 클라이언트 — 스스로는 끝내지 않는다. */
+    function busyClient() {
+        const chat = jest.fn().mockResolvedValue({
+            content: '진행 중', metrics: { prompt_tokens: 10, completion_tokens: 0 },
+            tool_calls: [{ id: 'c1', type: 'function', function: { name: 'web_search', arguments: {} } }],
+        });
+        return { client: { requestTimeout: 120_000, derive: jest.fn(() => ({ chat })), chat: jest.fn() }, chat };
+    }
+
+    it('부모 잔여가 바닥나면 다음 턴으로 가지 않고 그때까지의 결과로 끝낸다', async () => {
+        const { client, chat } = busyClient();
+        let parentRemaining = 5; // 첫 호출(10 토큰)로 이미 초과
+        const out = await runSubagent({
+            ...(params(client) as object),
+            onTokens: (n: number) => { parentRemaining -= n; },
+            remainingTokens: () => parentRemaining,
+        } as never);
+
+        expect(chat).toHaveBeenCalledTimes(1);
+        expect(out).toContain('진행 중');
+    });
+
+    it('부모 잔여가 넉넉하면 종전대로 턴 상한까지 간다', async () => {
+        const { client, chat } = busyClient();
+        const { prefetchReadOnlyCalls } = jest.requireMock('../../tool-parallel') as { prefetchReadOnlyCalls: jest.Mock };
+        const { runTool } = jest.requireMock('../task-steps') as { runTool: jest.Mock };
+        prefetchReadOnlyCalls.mockResolvedValue(new Map());
+        runTool.mockResolvedValue('결과');
+        await runSubagent({ ...(params(client) as object), remainingTokens: () => 1_000_000 } as never);
+
+        expect(chat).toHaveBeenCalledTimes(AGENT_TASK_LIMITS.SUBAGENT_MAX_TURNS);
     });
 });

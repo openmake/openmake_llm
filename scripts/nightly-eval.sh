@@ -22,7 +22,9 @@
 #   6) eval:redteam --real     — 레드팀 12건(프롬프트·비밀값 유출, 관리자 도구 사칭, 첨부 문서 간접 인젝션 — 도구 dry-run)
 #   6.5) eval:packs --real    — 팩이 동봉한 response 케이스(팩 × 모델) → 관리 화면 "검증된 모델"
 #   7) eval:matrix (선택)      — NIGHTLY_EVAL_MATRIX=1 일 때 모델 × variant 비교(기본 retired-chat-model × base,concise × 10건)
-# 모든 단계 결과는 eval_runs(146)에 기록된다(NIGHTLY_EVAL_RECORD_DB=false 로 끔).
+#   8) eval:agent-tasks (선택) — NIGHTLY_EVAL_AGENT_TASKS=1 일 때 에이전트 작업 과제 8건을 실제로 실행(샌드박스 + 실모델)해
+#      완료율·궤적 과정 검사 통과율이 임계 미만이면 실패. 샌드박스(TASK_SANDBOX_ENABLED=true, docker)가 있는 호스트에서만 켠다.
+# 모든 단계 결과는 eval_runs(146)에 기록된다(OMK_EVAL_RECORD_DB=true 고정). eval:agent-tasks 는 logs/ 의 JSON 으로만 남는다.
 # 실패 시 OPERATOR_WEBHOOK_URL(.env) 로 통지 — pm2 cron 은 앱 env 를 상속하지
 # 않으므로 .env 에서 직접 읽는다 (daily-routing-report.sh 와 같은 이유).
 set -uo pipefail
@@ -45,8 +47,8 @@ fi
 
 REAL_LIMIT="${NIGHTLY_EVAL_REAL_LIMIT:-30}"
 # 실행 이력을 eval_runs(146)에 남긴다 — 관리자 /admin/evaluations·SLO eval_pass 가 읽는다.
-# mock 러너는 .env 를 읽지 않으므로 DATABASE_URL 을 여기서 넘긴다(끄기: NIGHTLY_EVAL_RECORD_DB=false).
-export OMK_EVAL_RECORD_DB="${NIGHTLY_EVAL_RECORD_DB:-true}"
+# mock 러너는 .env 를 읽지 않으므로 DATABASE_URL 을 여기서 넘긴다. nightly 는 항상 기록한다.
+export OMK_EVAL_RECORD_DB=true
 if [ -z "${DATABASE_URL:-}" ]; then
     DATABASE_URL="$(grep -E "^DATABASE_URL=" "$REPO/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"')"
     export DATABASE_URL
@@ -88,6 +90,10 @@ run_step "eval:packs"          npm --workspace apps/api run eval:packs -- --real
 if [ "${NIGHTLY_EVAL_MATRIX:-0}" = "1" ]; then
     run_step "eval:matrix" npm --workspace apps/api run eval:matrix -- --real \
         --models "${NIGHTLY_EVAL_MATRIX_MODELS:-retired-chat-model}" --variants "${NIGHTLY_EVAL_MATRIX_VARIANTS:-base,concise}" --limit "${NIGHTLY_EVAL_MATRIX_LIMIT:-10}"
+fi
+# 에이전트 작업 과제 묶음(선택) — 과제마다 작업을 실제로 실행하므로(8건 약 4분) 기본 꺼짐. 샌드박스가 있는 호스트에서만 켠다.
+if [ "${NIGHTLY_EVAL_AGENT_TASKS:-0}" = "1" ]; then
+    run_step "eval:agent-tasks" npm --workspace apps/api run eval:agent-tasks
 fi
 
 echo >> "$OUT"

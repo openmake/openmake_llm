@@ -192,3 +192,33 @@ describe('executeTurnToolCalls — 외부 도구 실행 영수증·멱등 키', 
         expect(finishReceipt).toHaveBeenCalledWith('t1', 'c1', 'outcome_unknown');
     });
 });
+
+describe('executeTurnToolCalls — 도구 결과 데이터 래퍼', () => {
+    const calls = [{ id: 'c1', function: { name: 'web_search', arguments: { query: 'x' } } }];
+    const toolMessage = (conversation: ChatMessage[]) => conversation.find((m) => m.role === 'tool');
+    afterEach(() => { jest.restoreAllMocks(); });
+
+    it('켜져 있으면 호스트 도구 결과를 감싸 대화에 싣고, 스텝 기록은 원문 그대로 둔다', async () => {
+        jest.replaceProperty(AGENT_TASK_LIMITS, 'TOOL_RESULT_WRAP_ENABLED', true);
+        const { args, conversation } = input({ toolCalls: calls, goal: '가격을 조사한다' });
+        await executeTurnToolCalls(args);
+        const content = String(toolMessage(conversation)?.content);
+        expect(content).toContain('<tool_output>\n도구 결과\n</tool_output>');
+        expect(content).toContain('가격을 조사한다');
+        expect(addAgentTaskStep).toHaveBeenCalledWith(expect.objectContaining({ stepType: 'tool_result', content: '도구 결과' }));
+    });
+
+    it('꺼져 있으면(기본) 결과를 그대로 싣는다', async () => {
+        const { args, conversation } = input({ toolCalls: calls, goal: '가격을 조사한다' });
+        await executeTurnToolCalls(args);
+        expect(toolMessage(conversation)?.content).toBe('도구 결과');
+    });
+
+    it('샌드박스 도구(bash) 결과는 감싸지 않는다', async () => {
+        jest.replaceProperty(AGENT_TASK_LIMITS, 'TOOL_RESULT_WRAP_ENABLED', true);
+        const taskRuntime = { isTaskTool: () => true, executeTaskTool: jest.fn(async () => 'ok'), getPlanSnapshot: () => [], notifyApprovalPending: jest.fn() };
+        const { args, conversation } = input({ taskRuntime, goal: '목표', toolCalls: [{ id: 'c1', function: { name: 'bash', arguments: { command: 'ls' } } }] });
+        await executeTurnToolCalls(args);
+        expect(toolMessage(conversation)?.content).toBe('ok');
+    });
+});

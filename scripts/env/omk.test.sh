@@ -541,6 +541,21 @@ eq "report: 통과를 기록한 커밋은 다시 보지 않는다" "$( cmd_env_u
 printf '%s failure' "$SM_SHA" > "$(status_marker smk)"
 eq "report: 실패로 남은 커밋은 다시 본다" "$( cmd_env_update() { :; }; cmd_env_smoke() { echo smoke; }; env_update_report smk --if-behind 2>/dev/null )" "smoke"
 rm -f "$(status_marker smk)"
+# pull 은 됐는데 빌드가 실패한 커밋은 HEAD 가 이미 원격과 같다 — 다음 주기에 "최신이면 건너뛰기"를 그대로 두면
+# 갱신 없이 예전 빌드본을 스모크해 그 커밋에 통과를 붙인다. 지난 갱신이 실패했으면 건너뛰지 않고 다시 갱신한다.
+( cmd_env_update() { return 2; }; status_report() { :; }; env_update_report smk --if-behind --yes ) >/dev/null 2>&1
+ok "report: 갱신 실패를 기억한다" '[[ -f "$(update_failed_marker smk)" ]]'
+eq "report: 지난 갱신이 실패했으면 건너뛰지 않고 다시 갱신한다" \
+    "$( cmd_env_update() { echo "update $*"; }; cmd_env_smoke() { :; }; env_update_report smk --if-behind --yes 2>/dev/null )" "update smk --yes"
+( cmd_env_update() { :; }; cmd_env_smoke() { :; }; env_update_report smk --if-behind --yes ) >/dev/null 2>&1
+ok "report: 갱신이 되면 기억을 지운다" '[[ ! -f "$(update_failed_marker smk)" ]]'
+eq "report: 평소에는 최신이면 건너뛴다" \
+    "$( cmd_env_update() { echo "update $*"; }; cmd_env_smoke() { :; }; env_update_report smk --if-behind --yes 2>/dev/null )" "update smk --if-behind --yes"
+rm -f "$(status_marker smk)"
+# 승격 워크플로: main 의 필수 체크에 환경 dev 의 표지가 없으면 자동 머지를 걸지 않는다 — 걸면 CI 만으로 main 에 들어간다.
+PW="$HERE/../../.github/workflows/promote.yml"
+ok "promote: 필수 체크에 omk/env-dev 가 있는지 본다" "grep -q 'required_status_checks.contexts' '$PW' && grep -q 'index(\"omk/env-dev\")' '$PW'"
+ok "promote: 그 확인이 자동 머지보다 앞에 있다" "[[ \$(grep -n 'index(\"omk/env-dev\")' '$PW' | head -1 | cut -d: -f1) -lt \$(grep -n 'gh pr merge' '$PW' | head -1 | cut -d: -f1) ]]"
 # autoupdate: 표지 토큰을 넣은 환경만 갱신 뒤 스모크·표지까지 간다 — 토큰이 없으면 지금까지와 같다.
 mkdir -p "$SM/scripts/env"; : > "$SM/scripts/env/omk.sh"
 # shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다

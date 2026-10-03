@@ -131,3 +131,34 @@ describe('verifyCitations', () => {
         expect(DEEP_RESEARCH_CITATION.TARGET_COVERAGE).toBeLessThanOrEqual(1);
     });
 });
+
+describe('verifyCitations — 읽은 출처와 읽지 못한 출처', () => {
+    const report = [
+        '첫 주장은 본문을 읽은 출처를 인용한다 [출처 1].',
+        '둘째 주장은 검색 요약만 있는 출처를 인용한다 [출처 2].',
+        '셋째 주장은 읽은 출처와 못 읽은 출처를 함께 인용한다 [출처 1, 출처 3].',
+        '넷째 주장은 인용이 없다고 볼 수 있는 문장이다.',
+    ].join('\n');
+
+    test('주장을 원문 확인·미입수·미인용으로 나눠 센다', () => {
+        const r = verifyCitations(report, 3, new Set([1]));
+        expect(r.claimStatus).toEqual({ read: 2, unreadOnly: 1, uncited: 1 });
+        expect(r.unreadCitations).toEqual([2, 3]);
+        // 기존 지표는 그대로다 — 커버리지는 인용 유무만 본다
+        expect(r.citedClaims).toBe(3);
+        expect(r.coverage).toBe(0.75);
+    });
+
+    test('읽은 출처 정보를 주지 않으면 상태를 계산하지 않는다(종전 호출과 호환)', () => {
+        const r = verifyCitations(report, 3);
+        expect(r.claimStatus).toBeUndefined();
+        expect(r.unreadCitations).toBeUndefined();
+    });
+
+    test('범위 밖 인용은 미입수가 아니라 invalid 로만 센다', () => {
+        const r = verifyCitations('이 주장은 없는 출처를 인용한다 [출처 9].', 3, new Set([1]));
+        expect(r.invalidCitations).toEqual([9]);
+        expect(r.unreadCitations).toEqual([]);
+        expect(r.claimStatus).toEqual({ read: 0, unreadOnly: 1, uncited: 0 });
+    });
+});

@@ -30,9 +30,10 @@ import { AGENT_TASK_INCOMPLETE_MARKER, getAgentTaskVerifyFailedNudge, getAgentTa
 import { judgeGoal, buildJudgeExecutionContext, buildJudgeArtifactSummary } from './goal-judge';
 import { verifyCodeArtifacts } from './deliverable-verify';
 import { verifyWorkspaceTests } from './workspace-test-verify';
-import { persistArtifactSteps, persistJudgeStep } from './task-steps';
+import { persistArtifactSteps, persistJudgeStep, persistVerifySkippedStep, verifySkippedMessage } from './task-steps';
 import { maybePersistCodeDiff } from './code-diff';
 import { judgeClientFor } from './role-client';
+import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
@@ -137,6 +138,12 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     }
 
     // 2. 산출물 실행 검증(결정적) — 코드 deliverable 이 컴파일되지 않으면 판정 전에 자가수정.
+    //    재시도 상한을 넘어 건너뛴 검증은 이름을 모아 두었다가 완료 직전에 스텝으로 남긴다.
+    const skippedGates: string[] = [];
+    if (taskRuntime && AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_ENABLED && artifacts.length > 0
+        && input.verifyRetries >= AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES) skippedGates.push('deliverable');
+    if (taskRuntime && AGENT_TASK_LIMITS.WORKSPACE_TEST_GATE_ENABLED
+        && input.verifyRetries >= AGENT_TASK_LIMITS.WORKSPACE_TEST_MAX_RETRIES) skippedGates.push('workspace_tests');
     if (taskRuntime
         && AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_ENABLED
         && input.verifyRetries < AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES
@@ -172,9 +179,11 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         && (judgeApplies || AGENT_TASK_LIMITS.GOAL_JUDGE_SHADOW_ENABLED)) {
         const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence);
         // 셰도우 경로에선 ANSWER 에서 떨어져 나간 산출물을 함께 싣는다(적용 경로는 아티팩트 0 이라 빈 값).
-        const outcome = await judgeGoal(
-            await judgeClientFor(userId), goal, body ?? '', signal, execCtx,
-            artifacts.length > 0 ? buildJudgeArtifactSummary(artifacts) : undefined);
+        const judgeClient = await judgeClientFor(userId);
+        // 원장 귀속 — 판정 호출의 비용도 이 작업 id 로 묶는다.
+        const outcome = await runWithCostSession(taskId, () => judgeGoal(
+            judgeClient, goal, body ?? '', signal, execCtx,
+            artifacts.length > 0 ? buildJudgeArtifactSummary(artifacts) : undefined));
         const achieved = outcome.achieved;
         const judged: JudgeVerdict = achieved === null ? 'unknown' : achieved ? 'achieved' : 'not_achieved';
         // 판정·사유·입력 요약을 스텝으로 남긴다 — 오판 사후 규명용(관측 전용, fail-open).
@@ -203,6 +212,10 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     }
 
     // 4. 산출물 영속 후 완료.
+    if (skippedGates.length > 0) {
+        stepNumber = await persistVerifySkippedStep(taskId, stepNumber, skippedGates);
+        emitStep('verify_skipped', undefined, verifySkippedMessage(skippedGates));
+    }
     stepNumber = await persistArtifactSteps(taskId, artifacts, stepNumber, userId);
     stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
     await update({

@@ -378,6 +378,8 @@
       "autoApprove": "나머지 모두 승인",
       "autoApproveHint": "이 작업의 이후 도구 실행을 승인 없이 진행합니다 (질문 제외)",
       "preview": "실행 전 변경 미리보기",
+      "procedurePreview": "실행될 절차 보기",
+      "fullArgs": "전체 내용 보기 ({chars}자)",
       "elicitHint": "{server} 서버의 입력 요청 · 항목: {fields}",
       "elicitJsonHint": "항목이 둘 이상이면 JSON 으로 답하세요: {example}"
     },
@@ -2373,6 +2375,8 @@
       "autoApproveOff": "자동 승인 해제",
       "autoApproveOffHint": "이 작업의 자동 승인을 끕니다",
       "preview": "실행 전 변경 미리보기",
+      "procedurePreview": "실행될 절차 보기",
+      "fullArgs": "전체 내용 보기 ({chars}자)",
       "assignedToMe": "나에게 이관됨",
       "assignedAway": "이관됨",
       "reassign": "이관",

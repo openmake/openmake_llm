@@ -14,6 +14,7 @@ import { TASK_TERMINATE_SENTINEL } from '../task-sandbox/tools';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { currentPlanStepIndex } from '../task-sandbox/planning';
 import { runTool, isSearchTool } from './task-steps';
+import { wrapUntrustedToolResult } from './tool-result-wrap';
 import { prepareToolArgs } from './tool-args';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import { notifyApprovalPending } from './approval-pending';
@@ -44,6 +45,8 @@ interface TurnToolExecInput {
     userCtx: UserContext;
     userId: string;
     taskId: string;
+    /** 작업 목표 — 도구 결과 래퍼(tool-result-wrap)가 결과 뒤에 다시 적는다. 없으면 래퍼를 쓰지 않는다. */
+    goal?: string;
     turn: number;
     conversation: ChatMessage[];
     /** 실제 사용한 도구 추적 (goal judge 실행 컨텍스트) — 제자리 갱신. */
@@ -138,6 +141,11 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         if (r.decision === 'approved') return r.text?.trim() ? getAgentTaskUnknownOutcomeAnswerNotice(name, r.text.trim()) : undefined;
         return r.reason === 'user' ? getAgentTaskUnknownOutcomeDeclinedNotice(name) : getAgentTaskUnknownOutcomeNotice(name);
     };
+    // 모델에 보이는 도구 결과 — 샌드박스 밖에서 온 결과(호스트·외부 도구)와 browser 는 데이터로 감싼다(플래그 ON·목표가 있을 때만).
+    const forModel = (name: string, result: string): string =>
+        AGENT_TASK_LIMITS.TOOL_RESULT_WRAP_ENABLED && input.goal && (name === 'browser' || !taskRuntime?.isTaskTool(name))
+            ? wrapUntrustedToolResult(result, input.goal)
+            : result;
     const execTool = (name: string, args: Record<string, unknown>): Promise<string> =>
         getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx));
     // 외부 도구(175) — 영수증을 남기고 멱등 키를 호출 문맥에 실어 실행한다(외부 MCP 클라이언트가 읽어 서버에 보낸다).
@@ -163,7 +171,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 // 자동 승인 작업만 여기 온다 — 감사·집계를 위해 같은 레지스트리를 거친다(즉시 approved).
                 const r = await getApprovalRegistry().request(
                     { taskId, userId, toolName: name, args },
-                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal },
+                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, policy: sandboxCfg.approvalPolicy },
                 );
                 pausedMs += r.waitedMs;
                 if (r.decision !== 'approved') return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
@@ -194,7 +202,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             : undefined;
         if (journaled !== undefined) {
             // 저널 재사용(124) — 결과는 이미 스텝에 있으므로 대화에만 싣고 스텝·체크포인트는 건너뛴다.
-            conversation.push({ role: 'tool', content: journaled, tool_name: name, tool_call_id: tc.id });
+            conversation.push({ role: 'tool', content: forModel(name, journaled), tool_name: name, tool_call_id: tc.id });
             continue;
         } else if (unknownResult !== undefined) {
             toolResult = unknownResult;
@@ -225,7 +233,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             if (requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
                 const r = await getApprovalRegistry().request(
                     { taskId, userId, toolName: name, args },
-                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true },
+                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true, policy: sandboxCfg.approvalPolicy },
                 );
                 decision = r.decision;
                 rejectReason = r.reason;
@@ -247,7 +255,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         if (parkRequested) await park(); // mcp_elicit 주차 — 결과(cancel 응답)는 기록하지 않는다
         conversation.push({
             role: 'tool',
-            content: toolResult,
+            content: forModel(name, toolResult),
             tool_name: name,
             tool_call_id: tc.id,
         });

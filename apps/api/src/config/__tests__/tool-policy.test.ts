@@ -1,7 +1,7 @@
 /**
  * 도구 정책 등급표(2단계) — 분류와 정책 매핑. 현행 승인 판정과의 동일성은 approval-gate.test 가 고정한다.
  */
-import { classifyToolRisk, policyRequiresApproval } from '../tool-policy';
+import { classifyToolRisk, policyRequiresApproval, isThirdPartyTool } from '../tool-policy';
 
 describe('classifyToolRisk', () => {
     it('샌드박스 도구를 등급으로 나눈다', () => {
@@ -48,5 +48,50 @@ describe('policyRequiresApproval', () => {
         expect(policyRequiresApproval('high-risk', 'write', true)).toBe(true);
         expect(policyRequiresApproval('high-risk', 'read')).toBe(false);
         expect(policyRequiresApproval('high-risk', 'external')).toBe(false);
+    });
+    it('high-risk 는 외부 MCP 서버 도구(thirdParty)도 승인 — none 은 그대로 자동', () => {
+        expect(policyRequiresApproval('high-risk', 'external', false, true)).toBe(true);
+        expect(policyRequiresApproval('none', 'external', false, true)).toBe(false);
+    });
+});
+
+describe('isThirdPartyTool', () => {
+    it('server::tool 이름만 외부 MCP 서버 도구로 본다', () => {
+        expect(isThirdPartyTool('notion::create_page')).toBe(true);
+        expect(isThirdPartyTool('web_search')).toBe(false);
+        expect(isThirdPartyTool('bash')).toBe(false);
+    });
+});
+
+describe('TOOL_RISK_OVERRIDES_JSON', () => {
+    const prev = process.env.TOOL_RISK_OVERRIDES_JSON;
+    afterEach(() => {
+        if (prev === undefined) delete process.env.TOOL_RISK_OVERRIDES_JSON; else process.env.TOOL_RISK_OVERRIDES_JSON = prev;
+        jest.resetModules();
+        jest.dontMock('../../utils/logger');
+    });
+    function loadWith(raw: string): { warn: jest.Mock; classify: typeof classifyToolRisk } {
+        const warn = jest.fn();
+        process.env.TOOL_RISK_OVERRIDES_JSON = raw;
+        jest.resetModules();
+        jest.doMock('../../utils/logger', () => ({ createLogger: () => ({ warn, info: jest.fn(), error: jest.fn(), debug: jest.fn() }) }));
+        const mod = require('../tool-policy') as typeof import('../tool-policy');
+        return { warn, classify: mod.classifyToolRisk };
+    }
+    it('깨진 JSON 은 표를 그대로 쓰되 경고를 남긴다', () => {
+        const { warn, classify } = loadWith('{not json');
+        expect(classify('bash')).toBe('exec');
+        expect(warn).toHaveBeenCalledTimes(1);
+    });
+    it('모르는 등급은 버리고 어떤 도구인지 경고에 적는다', () => {
+        const { warn, classify } = loadWith('{"bash":"harmless","browser":"read"}');
+        expect(classify('bash')).toBe('exec');
+        expect(classify('browser')).toBe('read');
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(String(warn.mock.calls[0][0])).toContain('bash');
+    });
+    it('올바른 재정의에는 경고가 없다', () => {
+        const { warn } = loadWith('{"browser":"read"}');
+        expect(warn).not.toHaveBeenCalled();
     });
 });

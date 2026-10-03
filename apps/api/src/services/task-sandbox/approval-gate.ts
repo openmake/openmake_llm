@@ -18,10 +18,10 @@ import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { isSensitivePath } from './sensitive-paths';
 import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
-import { classifyToolRisk, policyRequiresApproval, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
+import { classifyToolRisk, policyRequiresApproval, isThirdPartyTool, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
 import { AgentTaskApprovalRepository, hashApprovalArgs, type ApprovalRow } from '../../data/repositories/agent-task-approval-repository';
 import { getConfig } from '../../config/env';
-import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { AGENT_TASK_LIMITS, APPROVAL_RECENT_WINDOW_MS } from '../../config/runtime-limits';
 
 const logger = createLogger('TaskApprovalGate');
 
@@ -45,7 +45,7 @@ export function requiresApproval(
     opts: { deviceGatesShell?: boolean } = {},
 ): boolean {
     if (opts.deviceGatesShell && DEVICE_GATED_SHELL.has(toolName)) return false;
-    return policyRequiresApproval(policy, classifyToolRisk(toolName, args), isSensitiveWrite(toolName, args));
+    return policyRequiresApproval(policy, classifyToolRisk(toolName, args), isSensitiveWrite(toolName, args), isThirdPartyTool(toolName));
 }
 
 /** PURE: 이 호출이 자격증명 파일을 바꾸려 하는가. args 미지({})면 false(보수 판정 — 강등 계산과 동일 계약). */
@@ -212,7 +212,8 @@ export class ApprovalRegistry {
     async request(
         input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown>; preview?: string },
         /** parkable — 부모 작업의 턴 실행 경로처럼 주차 후 같은 호출로 재개할 수 있는 대기(유예 후 주차 대상). */
-        opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void; parkable?: boolean },
+        /** policy — 이 호출을 승인 대상으로 올린 정책. 요청 이벤트에 남겨 "왜 물었는지"를 나중에 되짚는다(정책은 env·작업별로 달라진다). */
+        opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void; parkable?: boolean; policy?: TaskSandboxApprovalPolicy },
     ): Promise<ApprovalResult> {
         if (this.autoApproveTasks.has(input.taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)) {
             return { decision: 'approved', waitedMs: 0 };
@@ -221,7 +222,14 @@ export class ApprovalRegistry {
         // 살아 있는 pending 이 있으면 그 id 를 그대로 써서 승인함의 항목이 바뀌지 않게 한다.
         const argsHash = hashApprovalArgs(input.args);
         // 저장소가 없으면(테스트·비영속) 대기 등록까지 동기적으로 끝낸다 — 호출 직후 list() 가 보이도록.
-        const prior = this.store ? await this.persist((s) => s.takeoverForCall(input.taskId, input.toolName, argsHash)) : undefined;
+        let prior = this.store ? await this.persist((s) => s.takeoverForCall(input.taskId, input.toolName, argsHash)) : undefined;
+        // 오래된 미소비 승인은 쓰지 않고 다시 묻는다 — 승인함 "최근 결정" 창을 벗어나면 사용자가 볼 수도 철회할 수도 없다.
+        // 질문 도구의 답은 권한이 아니라 사용자의 답이라 그대로 이어받는다. 이어받기가 이미 소비 표시를 했으므로 행은 다시 쓰이지 않는다.
+        if (prior?.status === 'approved' && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)
+            && prior.decided_at && Date.now() - new Date(prior.decided_at).getTime() > APPROVAL_RECENT_WINDOW_MS) {
+            logger.info(`[${input.taskId}] 오래된 승인이라 다시 묻습니다: ${input.toolName}`);
+            prior = undefined;
+        }
         if (prior && prior.status !== 'pending') {
             logger.info(`[${input.taskId}] 재시작 전 결정 이어받음(${prior.status}): ${input.toolName}`);
             return prior.status === 'approved'
@@ -238,7 +246,7 @@ export class ApprovalRegistry {
         };
         if (!prior && this.store) {
             await this.persist((s) => s.insertPending({ approvalId, ...core, argsHash, riskClass, timeoutMs: opts.timeoutMs, preview }));
-            void this.event(approvalId, 'requested', null, { toolName: input.toolName, riskClass });
+            void this.event(approvalId, 'requested', null, { toolName: input.toolName, riskClass, ...(opts.policy ? { policy: opts.policy } : {}) });
         }
         return new Promise<ApprovalResult>((resolvePromise) => {
             const settle = (r: Omit<ApprovalResult, 'waitedMs'>) => {

@@ -288,3 +288,50 @@ routing + response(mock) + response `--real --limit 30`(전체 — limit 은 앞
 1. ~~라우터 실패 27건 개선~~ — 2026-09-02 해소(키워드 보강 + 토픽 패턴 협소화). ⚠️ 한글 2자 키워드는 조사 결합 때문에 단어 완전 일치 규칙에서 사실상 죽는다 — 부분 일치로 열면 범용어 오염+가드 붕괴(실측 반려), 2자어가 신호면 구(phrase) 키워드로 커버할 것
 2. **Phase 2.5 Prompt DB Registry** — 프롬프트 핫스왑 인프라
 3. **trajectory 평가** — judge_shadow 적재분 + 2026-09-08 judge 재측정 결과를 본 뒤 증분 결정
+   - 결정적 과정 검사는 들어왔다(`trajectory-evaluator.ts`, 아래 "궤적 과정 검사"): 검사기, 검사기 자체 검증용 골든 묶음(CI Gate 10), 실제 작업 기록 한 건을 검사하는 `--task`. 남은 것은 **운영 과제별 명세 묶음**(과제마다 기대 과정을 사용자 의도 기준으로 라벨링)과 그것을 실모델로 돌리는 nightly, 의미 판정(judge)을 여기에 붙일지의 결정이다.
+
+## 궤적 과정 검사 (trajectory, 결정적)
+
+에이전트 작업 한 건의 스텝 기록을 명세와 대조한다. 최종 답이 맞아도 과정이 틀린 실행(필수 도구 생략, 허용 밖 도구, 인자·순서·호출 횟수 위반)을 잡는 용도다. LLM·DB 를 쓰지 않는다.
+
+```bash
+npm --workspace apps/api run eval:trajectory                                      # mock(CI Gate 10) — 골든 묶음으로 검사기 자체 검증
+npm --workspace apps/api run eval:trajectory -- --spec 명세.json --steps 스텝.json   # 파일로 내보낸 스텝 기록 한 건
+npm --workspace apps/api run eval:trajectory -- --spec 명세.json --task <작업 id>    # DB 의 실제 작업 기록 한 건(.env 필요)
+```
+
+- 골든 묶음 `golden-trajectory.json`(v1.0.0, 8건): 정상 2 · 필수 도구 생략 · 허용 밖 도구 · 금지 도구 · 인자 불일치 · 순서 위반 · 호출 횟수 초과. 케이스마다 기대 판정과 실패해야 할 검사 id 를 적는다. 검사기 규칙을 바꾸면 이 묶음이 먼저 깨져야 한다.
+
+- 스텝 파일: `agent_task_steps` 행의 JSON 배열(`step_number`·`step_type`·`tool_name`·`tool_args`). 도구 호출은 `tool_result` 스텝에서 읽는다.
+- 명세 필드: `requiredTools`·`allowedTools`·`forbiddenTools`(선택), `expectedArgs`(인자, 값은 정확 일치 또는 `{ "regex": "..." }`), `order`(`before` 의 첫 호출이 `after` 의 첫 호출보다 앞), `maxCalls`(도구별 횟수 상한). 모르는 필드는 거절한다.
+- 필수 도구가 아예 안 쓰였으면 그 도구의 인자·순서 검사는 실패가 아니라 건너뜀(`-`)으로 찍힌다 — 원인 하나가 여러 실패로 부풀지 않게.
+- 범위 밖: 결과의 의미 판정(goal judge), 과제 묶음·기준선·CI 게이트. 명세 라벨은 다른 골든셋과 같이 **사용자 의도 기준**으로 쓴다.
+
+## 프롬프트 규칙 제거 실험 (ablation, real 전용)
+
+수작업 규칙이 실제로 도움이 되는지 규칙 유무로 잰다. 과제마다 조건(variant)별로 에이전트 작업을 **실제로** 실행한다 — 샌드박스에서 실제 모델이 도구를 쓴다. 운영 코드는 바꾸지 않고 실행 프로세스 안에서만 시스템 프롬프트의 지정 규칙을 뺀다(`prompt-ablation.ts`).
+
+```bash
+npm --workspace apps/api run eval:ablation -- --repeats 3            # golden-agent-tasks.json 전체
+npm --workspace apps/api run eval:ablation -- --limit 1              # 과제 1개만(시범)
+```
+
+- 전제: `.env` 의 DB·모델 접속, 샌드박스(`TASK_SANDBOX_ENABLED=true`, docker). 승인은 이 실행에 한해 끈다 — 과제는 네트워크 없는 샌드박스 안에서만 끝나는 것으로 고른다. 실행 사용자는 `OMK_EVAL_ABLATION_USER_ID`(기본 관리자 시드 계정)이고, 작업 행은 DB 에 남는다.
+- 과제 묶음 `golden-agent-tasks.json`(v1.0.0): 과제 3개(계산·파일 편집·표 집계)와 기대 과정(검색·브라우저 미사용, 실행 도구 호출 상한), 조건 2개(`baseline`, 절차·예산류 규칙 4개를 뺀 `no-budget-rules`). 조건의 `dropRules` 는 규칙 문구의 부분 문자열이고, 프롬프트에 없는 문구면 실행 전에 실패한다.
+- 결과: 조건별 완료율·과정 검사 통과율·평균 토큰·턴·도구 호출 수를 찍고 `logs/prompt-ablation-*.json` 에 실행별 값을 남긴다. **통과/실패 관문이 아니다.**
+- 첫 측정(2026-10-03, retired-chat-model, 과제 3 × 조건 2 × 3회 = 18건): `baseline` 완료 9/9·평균 36,519토큰·3.0턴, `no-budget-rules` 완료 8/9·평균 33,828토큰·2.8턴. 과정 검사는 양쪽 모두 18/18 통과. 규칙을 뺀 조건의 토큰 감소는 표 집계 과제에서 한 턴 일찍 `terminate` 로 끝낸 두 건에서 나왔고, 그중 한 건은 답에 표가 빠져 judge 가 미달성으로 판정했다. 나머지 과제는 조건 간 차이가 1% 안팎이다. **표본이 작아(조건당 9건) 결론으로 읽지 말 것** — 이 과제들에서는 규칙을 빼서 얻는 이득이 보이지 않았다는 정도다. 검색이 필요한 과제는 묶음에 없어 검색 규칙의 효과는 재지 못했다.
+
+## 에이전트 작업 과제 묶음 (eval:agent-tasks, real 전용)
+
+모델이나 프롬프트를 바꿨을 때 에이전트 작업이 나빠졌는지 보는 회귀 감시다. `golden-agent-tasks.json`(v1.1.0)의 과제 8개를 기준 조건으로 한 번씩 **실제로** 실행하고(샌드박스 + 실모델), 완료율과 궤적 과정 검사 통과율이 임계 미만이면 종료 코드 1.
+
+```bash
+npm --workspace apps/api run eval:agent-tasks     # = eval:ablation -- --variants baseline --gate
+NIGHTLY_EVAL_AGENT_TASKS=1 scripts/nightly-eval.sh # 야간 실행에 포함(기본 꺼짐)
+```
+
+- 과제: 계산·파일 편집·CSV 집계·엑셀·워드·한글 PDF·업로드 HTML 요약·파이썬 버그 수정. 제품이 안내하는 대표 사용을 네트워크 없이 끝나는 작은 과제로 옮긴 것이다. 기대 과정(`spec`)은 사용자 의도 기준: 검색·브라우저 미사용, 실행 도구 호출 상한. 과제에 `files` 를 주면 `uploads/` 에 놓인다.
+- 임계: `OMK_EVAL_AGENT_TASK_COMPLETED_THRESHOLD`(기본 0.8), `OMK_EVAL_AGENT_TASK_PROCESS_THRESHOLD`(기본 0.9).
+- 전제: `.env` 의 DB·모델 접속, 샌드박스(`TASK_SANDBOX_ENABLED=true`, docker, task-runtime 이미지). Colima 는 홈 아래만 마운트하므로 `TASK_SANDBOX_ROOT` 를 홈 아래로 둔다. 작업 행은 DB 에 남는다(실행 사용자 `OMK_EVAL_ABLATION_USER_ID`).
+- 첫 실행(2026-10-03, retired-chat-model): 완료 7/8, 과정 통과 8/8, 평균 40,274토큰·3.1턴. 실패 1건(`sum-of-squares`)은 judge 가 달성으로 판정했는데 완료 기록 직전에 작업 상태가 이미 `failed` 여서 전이가 거부됐다. 원인은 실행 스크립트가 스키마 초기화를 기다리지 않아, 초기화의 좀비 정리(`running` → `failed`)가 방금 시작한 첫 과제를 건드린 것이다 — 지금은 첫 과제 전에 `ensureReady()` 를 기다린다. 같은 과제는 앞선 실험 9회에서 모두 완료됐다.
+- 과제는 운영 사용 기록이 아니라 제품 안내와 로컬 기록 1건(업로드 HTML 분석)에서 골랐다. 운영에서 자주 쓰이는 과제가 따로 있으면 이 파일에 더한다.

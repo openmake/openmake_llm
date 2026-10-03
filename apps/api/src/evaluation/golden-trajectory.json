@@ -1,0 +1,612 @@
+{
+  "version": "1.0.0",
+  "description": "궤적 과정 검사기의 자체 검증용 — 알려진 정상·불량 궤적과 기대 판정. 검사기 규칙을 바꾸면 이 묶음이 먼저 깨져야 한다.",
+  "cases": [
+    {
+      "id": "good",
+      "note": "정상 궤적",
+      "spec": {
+        "id": "csv-report",
+        "requiredTools": [
+          "file_ops",
+          "python_execute"
+        ],
+        "allowedTools": [
+          "file_ops",
+          "python_execute",
+          "str_replace_editor",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser"
+        ],
+        "expectedArgs": [
+          {
+            "tool": "file_ops",
+            "args": {
+              "op": "read",
+              "path": {
+                "regex": "\\.csv$"
+              }
+            }
+          }
+        ],
+        "order": [
+          {
+            "before": "file_ops",
+            "after": "python_execute"
+          }
+        ],
+        "maxCalls": {
+          "python_execute": 2
+        }
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "step_type": "tool_result",
+          "tool_name": "file_ops",
+          "tool_args": {
+            "op": "read",
+            "path": "uploads/sales.csv"
+          }
+        },
+        {
+          "step_number": 2,
+          "step_type": "tool_result",
+          "tool_name": "python_execute",
+          "tool_args": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "step_number": 3,
+          "step_type": "judge",
+          "tool_name": null,
+          "tool_args": null
+        },
+        {
+          "step_number": 9,
+          "step_type": "tool_result",
+          "tool_name": "terminate",
+          "tool_args": {
+            "summary": "완료"
+          }
+        }
+      ],
+      "expect": {
+        "passed": true
+      }
+    },
+    {
+      "id": "missing-required",
+      "note": "필수 도구 생략 — 딸린 순서 검사는 건너뜀이어야 한다",
+      "spec": {
+        "id": "csv-report",
+        "requiredTools": [
+          "file_ops",
+          "python_execute"
+        ],
+        "allowedTools": [
+          "file_ops",
+          "python_execute",
+          "str_replace_editor",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser"
+        ],
+        "expectedArgs": [
+          {
+            "tool": "file_ops",
+            "args": {
+              "op": "read",
+              "path": {
+                "regex": "\\.csv$"
+              }
+            }
+          }
+        ],
+        "order": [
+          {
+            "before": "file_ops",
+            "after": "python_execute"
+          }
+        ],
+        "maxCalls": {
+          "python_execute": 2
+        }
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "step_type": "tool_result",
+          "tool_name": "file_ops",
+          "tool_args": {
+            "op": "read",
+            "path": "uploads/sales.csv"
+          }
+        },
+        {
+          "step_number": 9,
+          "step_type": "tool_result",
+          "tool_name": "terminate",
+          "tool_args": {
+            "summary": "완료"
+          }
+        }
+      ],
+      "expect": {
+        "passed": false,
+        "rootFailures": [
+          "required:python_execute"
+        ]
+      }
+    },
+    {
+      "id": "outside-allowlist",
+      "note": "허용 목록 밖 도구",
+      "spec": {
+        "id": "csv-report",
+        "requiredTools": [
+          "file_ops",
+          "python_execute"
+        ],
+        "allowedTools": [
+          "file_ops",
+          "python_execute",
+          "str_replace_editor",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser"
+        ],
+        "expectedArgs": [
+          {
+            "tool": "file_ops",
+            "args": {
+              "op": "read",
+              "path": {
+                "regex": "\\.csv$"
+              }
+            }
+          }
+        ],
+        "order": [
+          {
+            "before": "file_ops",
+            "after": "python_execute"
+          }
+        ],
+        "maxCalls": {
+          "python_execute": 2
+        }
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "step_type": "tool_result",
+          "tool_name": "file_ops",
+          "tool_args": {
+            "op": "read",
+            "path": "uploads/sales.csv"
+          }
+        },
+        {
+          "step_number": 2,
+          "step_type": "tool_result",
+          "tool_name": "python_execute",
+          "tool_args": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "step_number": 3,
+          "step_type": "tool_result",
+          "tool_name": "web_search",
+          "tool_args": {
+            "query": "x"
+          }
+        },
+        {
+          "step_number": 9,
+          "step_type": "tool_result",
+          "tool_name": "terminate",
+          "tool_args": {
+            "summary": "완료"
+          }
+        }
+      ],
+      "expect": {
+        "passed": false,
+        "rootFailures": [
+          "allowed"
+        ]
+      }
+    },
+    {
+      "id": "forbidden-tool",
+      "note": "금지 도구 사용(허용 목록에도 없다)",
+      "spec": {
+        "id": "csv-report",
+        "requiredTools": [
+          "file_ops",
+          "python_execute"
+        ],
+        "allowedTools": [
+          "file_ops",
+          "python_execute",
+          "str_replace_editor",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser"
+        ],
+        "expectedArgs": [
+          {
+            "tool": "file_ops",
+            "args": {
+              "op": "read",
+              "path": {
+                "regex": "\\.csv$"
+              }
+            }
+          }
+        ],
+        "order": [
+          {
+            "before": "file_ops",
+            "after": "python_execute"
+          }
+        ],
+        "maxCalls": {
+          "python_execute": 2
+        }
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "step_type": "tool_result",
+          "tool_name": "file_ops",
+          "tool_args": {
+            "op": "read",
+            "path": "uploads/sales.csv"
+          }
+        },
+        {
+          "step_number": 2,
+          "step_type": "tool_result",
+          "tool_name": "python_execute",
+          "tool_args": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "step_number": 3,
+          "step_type": "tool_result",
+          "tool_name": "browser",
+          "tool_args": {
+            "action": "open"
+          }
+        },
+        {
+          "step_number": 9,
+          "step_type": "tool_result",
+          "tool_name": "terminate",
+          "tool_args": {
+            "summary": "완료"
+          }
+        }
+      ],
+      "expect": {
+        "passed": false,
+        "rootFailures": [
+          "allowed",
+          "forbidden:browser"
+        ]
+      }
+    },
+    {
+      "id": "wrong-args",
+      "note": "읽지 않고 지웠다",
+      "spec": {
+        "id": "csv-report",
+        "requiredTools": [
+          "file_ops",
+          "python_execute"
+        ],
+        "allowedTools": [
+          "file_ops",
+          "python_execute",
+          "str_replace_editor",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser"
+        ],
+        "expectedArgs": [
+          {
+            "tool": "file_ops",
+            "args": {
+              "op": "read",
+              "path": {
+                "regex": "\\.csv$"
+              }
+            }
+          }
+        ],
+        "order": [
+          {
+            "before": "file_ops",
+            "after": "python_execute"
+          }
+        ],
+        "maxCalls": {
+          "python_execute": 2
+        }
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "step_type": "tool_result",
+          "tool_name": "file_ops",
+          "tool_args": {
+            "op": "delete",
+            "path": "uploads/sales.csv"
+          }
+        },
+        {
+          "step_number": 2,
+          "step_type": "tool_result",
+          "tool_name": "python_execute",
+          "tool_args": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "step_number": 9,
+          "step_type": "tool_result",
+          "tool_name": "terminate",
+          "tool_args": {
+            "summary": "완료"
+          }
+        }
+      ],
+      "expect": {
+        "passed": false,
+        "rootFailures": [
+          "args:file_ops#0"
+        ]
+      }
+    },
+    {
+      "id": "wrong-order",
+      "note": "파일을 읽기 전에 계산했다",
+      "spec": {
+        "id": "csv-report",
+        "requiredTools": [
+          "file_ops",
+          "python_execute"
+        ],
+        "allowedTools": [
+          "file_ops",
+          "python_execute",
+          "str_replace_editor",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser"
+        ],
+        "expectedArgs": [
+          {
+            "tool": "file_ops",
+            "args": {
+              "op": "read",
+              "path": {
+                "regex": "\\.csv$"
+              }
+            }
+          }
+        ],
+        "order": [
+          {
+            "before": "file_ops",
+            "after": "python_execute"
+          }
+        ],
+        "maxCalls": {
+          "python_execute": 2
+        }
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "step_type": "tool_result",
+          "tool_name": "python_execute",
+          "tool_args": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "step_number": 2,
+          "step_type": "tool_result",
+          "tool_name": "file_ops",
+          "tool_args": {
+            "op": "read",
+            "path": "uploads/sales.csv"
+          }
+        },
+        {
+          "step_number": 9,
+          "step_type": "tool_result",
+          "tool_name": "terminate",
+          "tool_args": {
+            "summary": "완료"
+          }
+        }
+      ],
+      "expect": {
+        "passed": false,
+        "rootFailures": [
+          "order:file_ops>python_execute"
+        ]
+      }
+    },
+    {
+      "id": "too-many-calls",
+      "note": "같은 도구를 상한보다 많이 호출",
+      "spec": {
+        "id": "csv-report",
+        "requiredTools": [
+          "file_ops",
+          "python_execute"
+        ],
+        "allowedTools": [
+          "file_ops",
+          "python_execute",
+          "str_replace_editor",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser"
+        ],
+        "expectedArgs": [
+          {
+            "tool": "file_ops",
+            "args": {
+              "op": "read",
+              "path": {
+                "regex": "\\.csv$"
+              }
+            }
+          }
+        ],
+        "order": [
+          {
+            "before": "file_ops",
+            "after": "python_execute"
+          }
+        ],
+        "maxCalls": {
+          "python_execute": 2
+        }
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "step_type": "tool_result",
+          "tool_name": "file_ops",
+          "tool_args": {
+            "op": "read",
+            "path": "uploads/sales.csv"
+          }
+        },
+        {
+          "step_number": 2,
+          "step_type": "tool_result",
+          "tool_name": "python_execute",
+          "tool_args": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "step_number": 3,
+          "step_type": "tool_result",
+          "tool_name": "python_execute",
+          "tool_args": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "step_number": 4,
+          "step_type": "tool_result",
+          "tool_name": "python_execute",
+          "tool_args": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "step_number": 9,
+          "step_type": "tool_result",
+          "tool_name": "terminate",
+          "tool_args": {
+            "summary": "완료"
+          }
+        }
+      ],
+      "expect": {
+        "passed": false,
+        "rootFailures": [
+          "max:python_execute"
+        ]
+      }
+    },
+    {
+      "id": "args-as-json-string",
+      "note": "tool_args 가 JSON 문자열로 저장된 행",
+      "spec": {
+        "id": "csv-report",
+        "requiredTools": [
+          "file_ops",
+          "python_execute"
+        ],
+        "allowedTools": [
+          "file_ops",
+          "python_execute",
+          "str_replace_editor",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser"
+        ],
+        "expectedArgs": [
+          {
+            "tool": "file_ops",
+            "args": {
+              "op": "read",
+              "path": {
+                "regex": "\\.csv$"
+              }
+            }
+          }
+        ],
+        "order": [
+          {
+            "before": "file_ops",
+            "after": "python_execute"
+          }
+        ],
+        "maxCalls": {
+          "python_execute": 2
+        }
+      },
+      "steps": [
+        {
+          "step_number": 1,
+          "step_type": "tool_result",
+          "tool_name": "file_ops",
+          "tool_args": "{\"op\": \"read\", \"path\": \"a.csv\"}"
+        },
+        {
+          "step_number": 2,
+          "step_type": "tool_result",
+          "tool_name": "python_execute",
+          "tool_args": {
+            "code": "print(1)"
+          }
+        },
+        {
+          "step_number": 9,
+          "step_type": "tool_result",
+          "tool_name": "terminate",
+          "tool_args": {
+            "summary": "완료"
+          }
+        }
+      ],
+      "expect": {
+        "passed": true
+      }
+    }
+  ]
+}

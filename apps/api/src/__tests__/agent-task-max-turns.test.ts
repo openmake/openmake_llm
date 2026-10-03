@@ -183,3 +183,53 @@ describe('Agent Task — 마무리 턴 강제', () => {
         expect(String(nudge?.content)).toContain('토큰 예산이 거의 소진');
     });
 });
+
+describe('Agent Task — 누적 토큰 영속', () => {
+    beforeEach(() => {
+        updateAgentTask.mockClear(); mockChat.mockClear();
+        chatCalls.length = 0; tokensPerTurn = 5;
+    });
+
+    it('종료 때만이 아니라 턴 진행 갱신에도 실린다 — 주차·중단 뒤 재개가 이어서 센다', async () => {
+        await new AgentTaskService().execute({
+            taskId: 't1', userId: 'u1', goal: '끝나지 않는 작업', maxTurns: 3,
+        } as never);
+
+        // 두 번째 턴 시작 갱신(currentTurn=2)은 종료 전이인데도 첫 턴의 토큰을 담고 있어야 한다.
+        const turn2 = updateAgentTask.mock.calls
+            .map(([, u]) => u as { currentTurn?: number; status?: string; totalTokens?: number })
+            .find(u => u.currentTurn === 2 && u.status === undefined);
+
+        expect(turn2).toBeDefined();
+        expect(turn2?.totalTokens).toBe(tokensPerTurn);
+    });
+});
+
+describe('Agent Task — 비용 원장 귀속', () => {
+    it('턴 호출은 작업 id 를 원장 귀속 컨텍스트로 싣는다 — 작업 단위로 비용을 모을 수 있게', async () => {
+        const { createClient } = jest.requireMock('../llm') as { createClient: () => { derive: jest.Mock } };
+        const derive = createClient().derive;
+        derive.mockClear();
+
+        await new AgentTaskService().execute({
+            taskId: 't1', userId: 'u1', goal: '끝나지 않는 작업', maxTurns: 2,
+        } as never);
+
+        expect(derive).toHaveBeenCalledWith(expect.objectContaining({
+            costContext: { feature: 'agent_task', sessionId: 't1' },
+        }));
+    });
+
+    it('턴 호출은 비용 귀속 문맥 안에서 돈다 — 외부 모델 사용분도 같은 작업 id 로 묶인다', async () => {
+        const { getCostSessionId } = jest.requireActual('../utils/cost-attribution-context') as typeof import('../utils/cost-attribution-context');
+        const seen: Array<string | undefined> = [];
+        mockChat.mockImplementationOnce(async () => {
+            seen.push(getCostSessionId());
+            return { role: 'assistant', content: '끝', metrics: { prompt_tokens: 1, completion_tokens: 0 } } as never;
+        });
+
+        await new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '한 턴 작업', maxTurns: 2 } as never);
+
+        expect(seen).toEqual(['t1']);
+    });
+});

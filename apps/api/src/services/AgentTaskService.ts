@@ -150,10 +150,10 @@ export class AgentTaskService {
             curStatus = (u.status ?? curStatus) as string;
             curProgress = u.progress ?? curProgress;
             curTurn = u.currentTurn ?? curTurn;
-            // terminal 전이 시 누적 토큰 영속(4-4) — 목록/상세 UI 의 비용 가시화에 사용.
-            // 알림 표식(174)도 같은 쓰기로 남긴다 — 저장 직후 죽어도 주기 점검이 종료 알림을 다시 보낸다.
+            // 누적 토큰 영속(4-4) — 매 갱신에 싣는다: 종료 때만 쓰면 주차·중단된 작업은 값이 안 남아 재개가 0 부터 다시 셌다.
+            // terminal 전이엔 알림 표식(174)도 같은 쓰기로 남긴다 — 저장 직후 죽어도 주기 점검이 종료 알림을 다시 보낸다.
             const terminal = isTerminalStatus(u.status);
-            if (terminal) u = { ...u, totalTokens, terminalNotifyPending: true };
+            u = { ...u, totalTokens, ...(terminal ? { terminalNotifyPending: true } : {}) };
             await db.updateAgentTask(taskId, u);
             emitAgentTaskProgress({ userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn });
             // terminal 상태 → web push (페이지가 닫혀 있어도 알림) 후 표식 정리. fire-and-forget.
@@ -223,7 +223,7 @@ export class AgentTaskService {
                     // 토큰·승인대기는 부모 누적에 합산되어 runaway 가드·pause-aware 타임아웃 공유).
                     const delegateFn = buildDelegateFn({
                         client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
-                        onTokens: (n) => { totalTokens += n; },
+                        onTokens: (n) => { totalTokens += n; }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
                         onPausedMs: (ms) => { pausedMs += ms; },
                         ...buildSubagentApprovalHooks({ userId, taskId, update, getCurStatus: () => curStatus, getTaskRuntime: () => taskRuntime }),
                     });
@@ -231,7 +231,7 @@ export class AgentTaskService {
                     const spawnFn = AGENT_SPAWN.ENABLED
                         ? buildTaskSpawnFn({
                             client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
-                            onTokens: (n) => { totalTokens += n; },
+                            onTokens: (n) => { totalTokens += n; }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
                             onPausedMs: (ms) => { pausedMs += ms; },
                         })
                         : undefined;
@@ -280,7 +280,7 @@ export class AgentTaskService {
                 }
             }
             // 코드 작업 diff 캡처(openmake_code v1) — 첨부까지 기록된 시점을 git baseline 스냅샷(멱등·fail-open).
-            if (taskRuntime && sandboxCfg.codeDiffEnabled) await initWorkspaceBaseline(taskRuntime);
+            if (taskRuntime && sandboxCfg.codeDiffEnabled) await initWorkspaceBaseline(taskRuntime, preTask);
 
             // LLM 에 전달할 도구 세트 조립(샌드박스 도구 + extraTools + 2-A 동적 도구). 상세는
             // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
@@ -309,7 +309,7 @@ export class AgentTaskService {
                     const { journal, unknownOutcomeId } = await loadReentryState(taskId, reentry.calls);
                     logger.info(`[AgentTask] 턴 중간 재개: ${taskId} (turn ${turn + 1}, 남은 호출 ${reentry.calls.length}건, 저널 재사용 ${journal.size}건)`);
                     await update({ currentTurn: turn + 1 });
-                    const re = await executeTurnToolCalls({
+                    const re = await executeTurnToolCalls({ goal,
                         toolCalls: reentry.calls, journal, unknownOutcomeId, taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
                         userId: String(userId), taskId, turn, conversation, usedTools, signal,
                         stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts, getCurStatus: () => curStatus, update, emitStep,
@@ -531,7 +531,7 @@ export class AgentTaskService {
                 // LLM 재호출 없이 같은 호출을 이어가게 한다(승인 이어받기의 args_hash 도 그래야 맞는다).
                 if (AGENT_TASK_LIMITS.MIDTURN_CHECKPOINT_ENABLED) await writeTurnCheckpoint(taskId, conversation, turn - 1, taskRuntime).catch(() => { /* fail-open */ });
                 // 도구 실행 + 체크포인트 — 승인 게이트·terminate 감지·스텝 영속은 agent-task/turn-executor.
-                const turnExec = await executeTurnToolCalls({
+                const turnExec = await executeTurnToolCalls({ goal,
                     toolCalls: result.tool_calls!,
                     taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
                     userId: String(userId), taskId, turn, conversation, usedTools, signal,

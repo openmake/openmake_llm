@@ -1352,6 +1352,12 @@ export const AGENT_TASK_LIMITS = {
     /** 동적 도구 포함 시 LLM 에 노출하는 총 도구 수 상한(샌드박스+extra+동적). 보수적 기본(30) —
      *  실측 후 상향. AGENT_TASK_DYNAMIC_TOOLS_BUDGET 로 오버라이드. */
     DYNAMIC_TOOLS_BUDGET: parseInt(process.env.AGENT_TASK_DYNAMIC_TOOLS_BUDGET || '30', 10),
+    /** 도구 결과 데이터 래퍼 — 호스트·외부 도구(검색·MCP)와 browser 결과를 <tool_output> 으로 감싸고 뒤에 작업 목표를
+     *  다시 적는다(간접 프롬프트 주입 완화, Meta-SecAlign 2507.02735 의 학습 없는 방어). 대화에 싣는 내용만 바뀌고 스텝 기록은 원문.
+     *  기본 OFF — 도구 결과마다 토큰이 늘므로 레드팀 평가(evaluation/redteam)로 효과를 잰 뒤 켠다. AGENT_TASK_TOOL_RESULT_WRAP_ENABLED=true. */
+    TOOL_RESULT_WRAP_ENABLED: process.env.AGENT_TASK_TOOL_RESULT_WRAP_ENABLED === 'true',
+    /** 래퍼 뒤에 다시 적는 작업 목표의 최대 글자 수. AGENT_TASK_TOOL_RESULT_WRAP_GOAL_MAX_CHARS */
+    TOOL_RESULT_WRAP_GOAL_MAX_CHARS: parseInt(process.env.AGENT_TASK_TOOL_RESULT_WRAP_GOAL_MAX_CHARS || '300', 10),
     /** 산출물 실행 검증(Phase 2-B) — 샌드박스 활성 시 코드 deliverable 을 완료 전 문법/컴파일
      *  검사(py_compile·node --check, 코드 미실행). 실패 시 오류 리포트를 주입해 1회 자가수정 유도.
      *  AGENT_TASK_VERIFY_DELIVERABLE=false 로 비활성(기본 on, 단 샌드박스 활성 시에만 동작). */
@@ -1366,6 +1372,11 @@ export const AGENT_TASK_LIMITS = {
     WORKSPACE_TEST_GATE_ENABLED: process.env.AGENT_TASK_WORKSPACE_TEST_GATE !== 'false',
     /** 테스트 실패 시 수정 턴 최대 횟수 — verifyRetries 카운터를 deliverable 검증과 공유한다. */
     WORKSPACE_TEST_MAX_RETRIES: parseInt(process.env.AGENT_TASK_WORKSPACE_TEST_MAX_RETRIES || '2', 10),
+    /** fork 작업 공간 복원(agent-task/fork-workspace) — 턴 체크포인트마다 작업 공간을 git ref 로 남기고, 갈라져 나온 작업이
+     *  그 시점 파일로 시작한다. 코드 diff 기준점(TASK_SANDBOX code diff)이 켜진 docker 샌드박스에서만 동작한다.
+     *  기본 OFF — 턴마다 git 스냅숏 비용이 들고 원 작업 공간이 남아 있을 때만 복원되므로 운영 관찰 후 켠다.
+     *  AGENT_TASK_FORK_WORKSPACE_RESTORE_ENABLED=true. */
+    FORK_WORKSPACE_RESTORE_ENABLED: process.env.AGENT_TASK_FORK_WORKSPACE_RESTORE_ENABLED === 'true',
     /** 테스트 실패 출력 중 모델에 주입할 최대 글자(끝부분 우선 — 실패 요약은 보통 마지막에 있다). */
     WORKSPACE_TEST_REPORT_MAX_CHARS: parseInt(process.env.AGENT_TASK_WORKSPACE_TEST_REPORT_MAX_CHARS || '3000', 10),
     /** 오래된 도구 결과 접기(2026-09-06) — 매 턴 전체 대화를 재전송하므로 비용이 턴 수에 O(n²)로

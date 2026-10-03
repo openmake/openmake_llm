@@ -17,6 +17,7 @@ import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } 
 import { recordBrowserMetric } from './browser-metrics';
 import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
+import { bindSkillRunApproval } from './skill-run-binding';
 import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
@@ -68,6 +69,8 @@ export class TaskRuntime {
     private readonly plan = new TaskPlan({ autoAdvance: AGENT_TASK_LIMITS.PLAN_AUTO_ADVANCE });
     private readonly handlers = new Map<string, MCPToolDefinition['handler']>();
     private readonly defs: MCPToolDefinition[];
+    /** 절차 스킬 조회 — skill_run 승인 결속(skill-run-binding)이 승인 전에 절차를 불러올 때 쓴다. 플래그 OFF 면 없음. */
+    private readonly loadProcedure?: ProceduralHooks['load'];
     /** 이 작업에 실제로 노출된 도구 이름(task + MCP + 내장). 이름 교정·셸 오용 감지에만 쓴다. */
     private knownToolNames: string[] = [];
 
@@ -97,6 +100,7 @@ export class TaskRuntime {
                 load: (id) => resolveProceduralSpec(this.userId, id),
             }
             : undefined;
+        this.loadProcedure = procedural?.load;
         // Computer Use Stage 0: browser 액션 계측을 taskId/userId 로 바인딩해 주입(fire-and-forget).
         const browserMetrics = AGENT_TASK_LIMITS.BROWSER_METRICS_ENABLED
             ? (stdout: string) => recordBrowserMetric(this.taskId, this.userId, stdout)
@@ -240,14 +244,16 @@ export class TaskRuntime {
                 : `사용자가 승인했습니다(계속 진행). 질문: ${question}`;
         }
 
+        // skill_run — 승인 전에 절차를 불러 인자에 체크섬을 묶는다. 승인 카드에는 절차 본문을 싣고, 실행 단계가 같은 절차인지 확인한다.
+        const skillPreview = name === 'skill_run' && this.loadProcedure ? await bindSkillRunApproval(args, this.loadProcedure) : null;
         if (requiresApproval(this.cfg.approvalPolicy, name, args, { deviceGatesShell: this.cfg.deviceGatesShell })) {
             // 실행 전 미리보기(138) — 파일 쓰기 도구는 현재 파일과 인자로 diff 를 만들어 승인 카드에 싣는다(fail-open)
-            const preview = APPROVAL_PREVIEW.ENABLED
+            const preview = skillPreview ?? (APPROVAL_PREVIEW.ENABLED
                 ? await buildApprovalPreview(name, args, (p) => this.executor.readFile(p)).catch(() => null)
-                : null;
+                : null);
             const { decision, reason, waitedMs } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args, preview: preview ?? undefined },
-                { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending, parkable: true },
+                { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending, parkable: true, policy: this.cfg.approvalPolicy },
             );
             opts.onApprovalWaited?.(waitedMs);
             if (reason === 'parked') throw new AgentTaskParked(); // 유예 초과 → 주차: 결정이 오면 같은 호출로 재개(실행 전이라 부작용 없음)

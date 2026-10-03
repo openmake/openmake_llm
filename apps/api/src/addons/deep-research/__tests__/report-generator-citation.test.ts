@@ -121,6 +121,17 @@ describe('generateReport — A3 인용검증 통합 (런타임)', () => {
         expect(payload.uncitedSamples).toContain('많은 기업이 이를 도입하는 추세이다.');
     });
 
+    test('본문을 읽은 출처와 검색 요약뿐인 출처를 구분해 주장 상태를 기록한다', async () => {
+        const db = makeDb();
+        const sources = SOURCES.map((src, i) => (i === 0 ? { ...src, fullContent: '가져와 읽은 본문' } : src));
+        await generateReport({ ...baseParams(makeClient(REPORT_OK)), sources });
+
+        const payload = JSON.parse(citationStep(db)!.result as string);
+        // [출처 1] 만 본문을 읽었다 — [출처 2] 를 인용한 주장은 미입수, 인용 없는 주장은 미인용
+        expect(payload.claimStatus).toEqual({ read: 1, unreadOnly: 1, uncited: 1 });
+        expect(payload.unreadCitations).toEqual([2]);
+    });
+
     test('fallback/실패 메시지 보고서 → skipped → step 1000 미기록', async () => {
         const db = makeDb();
         // 합성결과는 의미있지만 LLM 보고서 본문이 실패 메시지 → verifyCitations.skipped

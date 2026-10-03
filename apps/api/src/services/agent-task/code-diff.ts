@@ -13,6 +13,7 @@
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { getTaskSandboxConfig } from '../../config/task-sandbox';
 import type { TaskRuntime } from '../task-sandbox/runtime';
+import { restoreForkedWorkspace, type ForkOrigin } from './fork-workspace';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
@@ -28,9 +29,11 @@ const GIT = 'git -c safe.directory=/workspace -c user.email=agent@openmake.local
  * (resume 재진입 시 이전 실행의 에이전트 변경분이 baseline 에 흡수되어 diff 에서 사라지는
  * 것을 막는다.) 입력 첨부(uploads/) 기록 후에 호출해 첨부가 baseline 에 포함되게 한다.
  */
-export async function initWorkspaceBaseline(runtime: TaskRuntime): Promise<void> {
+export async function initWorkspaceBaseline(runtime: TaskRuntime, forkOrigin?: ForkOrigin): Promise<void> {
     // 로컬 실행기(D1a): 사용자 폴더에 git init/commit 을 만들면 안 된다 — diff 캡처 자체를 생략.
     if (runtime.localWorkdir === null) return;
+    // fork 한 작업이면 기준점을 만들기 전에 원 작업의 그 시점 파일을 복원한다 — 복원분이 기준점에 들어가 diff 가 자기 변경분만 담는다.
+    await restoreForkedWorkspace(runtime, forkOrigin);
     try {
         const r = await runtime.execRaw(
             `[ -d .git ] || { ${GIT} init -q && ${GIT} add -A && ${GIT} commit -q --allow-empty -m baseline; }`,

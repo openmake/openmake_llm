@@ -378,6 +378,8 @@
       "autoApprove": "Approve rest",
       "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)",
       "preview": "Preview changes",
+      "procedurePreview": "View the procedure to run",
+      "fullArgs": "Show full content ({chars} chars)",
       "elicitHint": "Input requested by {server} · fields: {fields}",
       "elicitJsonHint": "For more than one field, answer in JSON: {example}"
     },
@@ -2373,6 +2375,8 @@
       "autoApproveOff": "Turn off auto-approve",
       "autoApproveOffHint": "Disable auto-approve for this task",
       "preview": "Preview changes before running",
+      "procedurePreview": "View the procedure to run",
+      "fullArgs": "Show full content ({chars} chars)",
       "assignedToMe": "Assigned to me",
       "assignedAway": "Reassigned",
       "reassign": "Reassign",

@@ -19,6 +19,11 @@ describe('requiresApproval', () => {
         expect(requiresApproval('high-risk', 'file_ops', { op: 'read' })).toBe(false);
         expect(requiresApproval('high-risk', 'str_replace_editor', {})).toBe(false);
     });
+    it('정책 high-risk — 외부 MCP 서버 도구(server::tool)는 승인, 내장 도구는 종전대로 자동', async () => {
+        expect(requiresApproval('high-risk', 'notion::create_page', {})).toBe(true);
+        expect(requiresApproval('high-risk', 'web_search', {})).toBe(false);
+        expect(requiresApproval('none', 'notion::create_page', {})).toBe(false);
+    });
     it('deviceGatesShell — 로컬 브리지: 코드 실행은 디바이스가 게이트하므로 서버 승인 skip', async () => {
         // exec 계열은 정책 all 이어도 서버 승인 불요(디바이스 confirmExec 가 담당) — 이중 프롬프트 제거
         expect(requiresApproval('all', 'bash', {}, { deviceGatesShell: true })).toBe(false);

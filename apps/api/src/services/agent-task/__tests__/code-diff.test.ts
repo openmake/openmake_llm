@@ -6,6 +6,8 @@ import { initWorkspaceBaseline, captureWorkspaceDiff, persistDiffStep, captureDi
 import type { TaskRuntime } from '../../task-sandbox/runtime';
 import type { ExecResult } from '../../task-sandbox/sandbox';
 
+const restoreForkedWorkspace = jest.fn(async (..._a: unknown[]) => false);
+jest.mock('../fork-workspace', () => ({ restoreForkedWorkspace: (...a: unknown[]) => restoreForkedWorkspace(...a) }));
 const addAgentTaskStep = jest.fn();
 jest.mock('../../../data/models/unified-database', () => ({
     getUnifiedDatabase: () => ({ addAgentTaskStep }),
@@ -35,6 +37,16 @@ describe('code-diff', () => {
             expect(cmd).toContain('[ -d .git ] ||');
             expect(cmd).toContain('git -c safe.directory=/workspace');
             expect(cmd).toContain('commit -q --allow-empty -m baseline');
+        });
+
+        it('fork 출처를 받으면 기준점을 만들기 전에 작업 공간 복원을 먼저 부른다', async () => {
+            const order: string[] = [];
+            restoreForkedWorkspace.mockImplementationOnce(async () => { order.push('restore'); return true; });
+            const execRaw = jest.fn().mockImplementation(async () => { order.push('baseline'); return ok(''); });
+            const origin = { forked_from_task_id: 'src', forked_from_turn: 1 };
+            await initWorkspaceBaseline(fakeRuntime(execRaw), origin);
+            expect(order).toEqual(['restore', 'baseline']);
+            expect(restoreForkedWorkspace).toHaveBeenCalledWith(expect.anything(), origin);
         });
 
         it('exec 실패는 throw 하지 않음 (fail-open)', async () => {

@@ -21,6 +21,7 @@ import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
+import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { runTool } from './task-steps';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import type { SubagentTrace } from './subagent-trace';
@@ -52,6 +53,8 @@ interface SubagentParams {
     signal?: AbortSignal;
     /** 서브 LLM 호출 토큰을 부모 누적에 합산. */
     onTokens?: (n: number) => void;
+    /** 부모 작업의 남은 토큰 예산 — 0 이하가 되면 다음 턴으로 가지 않는다(형제 서브의 사용분도 onTokens 로 반영된 값). */
+    remainingTokens?: () => number;
     /** 승인 대기 시간을 부모 pausedMs 에 합산(4-1 pause-aware 일관). */
     onPausedMs?: (ms: number) => void;
     /** 활동 기록(109) — 에이전트 작업 경로만 넘긴다. 채팅 경로는 작업 행이 없어 무기록. */
@@ -144,16 +147,19 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             if (lastTurn && turn > 0 && p.tools.length > 0) {
                 conversation.push({ role: 'user', content: SUBAGENT_FINAL_TURN_NOTICE });
             }
-            const result = await client.chat(conversation, undefined, undefined, {
+            // 원장 귀속 — 부모 작업의 id 로 묶는다. 채팅 경로의 식별용 가짜 id(`__…__`)는 작업이 아니므로 싣지 않는다.
+            const callLlm = () => client.chat(conversation, undefined, undefined, {
                 tools: lastTurn || p.tools.length === 0 ? undefined : p.tools,
                 signal: p.signal,
                 think: false,
                 requestClass: 'fanout',
             });
+            const result = await (p.taskId.startsWith('__') ? callLlm() : runWithCostSession(p.taskId, callLlm));
             const used = (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);
             tokens += used;
             p.onTokens?.(used);
-            if (tokens > AGENT_TASK_LIMITS.SUBAGENT_MAX_TOKENS) {
+            // 위임당 고정 상한 + 부모 잔여 — 종전엔 서브가 부모의 남은 예산과 무관하게 고정 상한까지 썼다.
+            if (tokens > AGENT_TASK_LIMITS.SUBAGENT_MAX_TOKENS || (p.remainingTokens !== undefined && p.remainingTokens() <= 0)) {
                 logger.warn(`[Subagent] 토큰 상한 초과 — 조기 종료 (${tokens})`);
                 p.trace?.record('final', `[토큰 상한 ${tokens}] ${result.content || '(부분 결과 없음)'}`);
                 return result.content || '(서브에이전트 토큰 상한 도달 — 부분 결과 없음)';
@@ -191,7 +197,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                     if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
                         const r = await getApprovalRegistry().request(
                             { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
-                            { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal },
+                            { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, policy: p.sandboxCfg.approvalPolicy },
                         );
                         p.onPausedMs?.(r.waitedMs);
                         if (r.decision !== 'approved') return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
@@ -216,7 +222,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                     const r = await getApprovalRegistry().request(
                         { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
                         {
-                            timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, parkable: !!p.park,
+                            timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, parkable: !!p.park, policy: p.sandboxCfg.approvalPolicy,
                             // 대기 진입 — 활동 기록에 awaiting(유예 구간도 "승인 대기"로 보이게) + 부모 paused·알림.
                             ...(p.onApprovalPending || p.trace ? { onPending: (pa) => {
                                 pended = true;

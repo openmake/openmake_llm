@@ -204,6 +204,13 @@ jobs:
         working-directory: apps/api
         run: npm run eval:redteam
 
+      # ─── Gate 10: Trajectory Process Checks (mock) ───
+      # 궤적 과정 검사기 자체를 검증한다: 알려진 정상·불량 궤적(golden-trajectory.json)에서 기대한 판정이 나오는지.
+      # 검사기 규칙이 느슨해지거나 엉뚱한 검사가 실패하는 회귀를 잡는다. LLM·DB 를 쓰지 않는다.
+      - name: "Gate 10: Trajectory Process Checks (mock)"
+        working-directory: apps/api
+        run: npm run eval:trajectory
+
       # 평가 결과 아티팩트 업로드 (PR 회귀 추적용)
       - name: Upload evaluation artifacts
         if: always()

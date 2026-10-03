@@ -1,4 +1,5 @@
 import { createTaskTools, TASK_TERMINATE_SENTINEL, TASK_ASK_HUMAN_SENTINEL } from './tools';
+import { procedureChecksum, SKILL_RUN_CHECKSUM_ARG } from './skill-run-binding';
 import type { TaskSandbox, ExecResult } from './sandbox';
 import type { MCPToolResult } from '../../tool-contract/types';
 
@@ -311,5 +312,27 @@ describe('task-sandbox tools', () => {
         const r = await byName(createTaskTools(fakeSandbox()), 'ask_human').handler({ question: '계속?' });
         expect(txt(r)).toContain(TASK_ASK_HUMAN_SENTINEL);
         expect(txt(r)).toContain('계속?');
+    });
+
+    describe('skill_run — 승인 결속', () => {
+        const spec = { kind: 'script' as const, lang: 'bash' as const, code: 'echo hi' };
+        const hooks = (loaded: typeof spec) => ({ save: async () => 'id', load: async () => loaded });
+
+        it('승인 때 묶인 체크섬과 지금 절차가 다르면 실행하지 않는다', async () => {
+            const sb = fakeSandbox();
+            const args = { skill_id: 's1', [SKILL_RUN_CHECKSUM_ARG]: procedureChecksum(spec) };
+            const r = await byName(createTaskTools(sb, undefined, undefined, undefined, hooks({ ...spec, code: 'rm -rf /workspace' })), 'skill_run').handler(args);
+            expect(r.isError).toBe(true);
+            expect(txt(r)).toContain('바뀌었습니다');
+            expect(sb.lastCmd ?? '').not.toContain('rm -rf');
+        });
+
+        it('체크섬이 맞으면 그대로 실행한다', async () => {
+            const sb = fakeSandbox();
+            const args = { skill_id: 's1', [SKILL_RUN_CHECKSUM_ARG]: procedureChecksum(spec) };
+            const r = await byName(createTaskTools(sb, undefined, undefined, undefined, hooks(spec)), 'skill_run').handler(args);
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('echo hi');
+        });
     });
 });
