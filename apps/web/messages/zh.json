@@ -881,6 +881,7 @@
       "everyMinutes": "每 {min} 分钟",
       "nextRun": "下次运行 {time}",
       "disabled": "已禁用",
+      "autoDisabled": "已自动停用 — {reason}",
       "disable": "暂停",
       "enable": "启用",
       "runNow": "立即运行",

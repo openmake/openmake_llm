@@ -881,6 +881,7 @@
       "everyMinutes": "alle {min} Min.",
       "nextRun": "nächste Ausführung {time}",
       "disabled": "deaktiviert",
+      "autoDisabled": "Automatisch deaktiviert — {reason}",
       "disable": "Pausieren",
       "enable": "Aktivieren",
       "runNow": "Jetzt ausführen",

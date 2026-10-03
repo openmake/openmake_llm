@@ -878,6 +878,8 @@ interface ApiSchedule {
   next_run_at: string;
   last_run_at?: string | null;
   consecutive_failures: number;
+  /** 연속 실패로 자동으로 꺼졌을 때의 사유(181) — 다시 켜면 서버가 지운다 */
+  disabled_reason?: string | null;
 }
 type SchedulesResponse = ApiSuccess<{ schedules: ApiSchedule[]; total: number }>;
 
@@ -1001,6 +1003,11 @@ function SchedulesPanel() {
                   {t("schedules.nextRun", { time: new Date(s.next_run_at).toLocaleString() })}
                   {!s.enabled && ` · ${t("schedules.disabled")}`}
                 </p>
+                {!s.enabled && s.disabled_reason && (
+                  <p className="text-xs text-warn" role="status">
+                    {t("schedules.autoDisabled", { reason: s.disabled_reason })}
+                  </p>
+                )}
               </div>
               <div className="flex shrink-0 gap-1">
                 <Button size="sm" variant="outline" disabled={busy === s.id || !s.enabled} onClick={() => runNow(s)} title={t("schedules.runNow")}>

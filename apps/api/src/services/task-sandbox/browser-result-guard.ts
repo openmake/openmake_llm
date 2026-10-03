@@ -44,20 +44,26 @@ export function visitedUrls(stdout: string): string[] {
 
 /**
  * PURE: 결과 본문이 봇 차단·캡차 확인 화면으로 보이는가 — 결정적 패턴만 쓴다(LLM 판단 아님).
- * 본문 텍스트는 짧을 때만 본다(차단 화면은 짧다 — 긴 기사에 같은 낱말이 있는 경우를 거른다).
+ * 본문 텍스트는 짧을 때만 보고(차단 화면은 짧다), 차단 화면에만 나오는 문구가 있거나 첫 줄이 차단 화면의 제목이면서
+ * 본문이 더 짧을 때 차단으로 본다 — captcha 같은 낱말 하나로는 판정하지 않는다.
  * HTML 은 제목과 차단 서비스의 표지(스크립트 경로 등)로 판정한다. 출력이 잘려 JSON 이 깨졌으면 판정하지 않는다.
  */
 export function looksBotBlocked(stdout: string): boolean {
     let results: unknown;
     try { results = (JSON.parse(stdout) as { results?: unknown } | null)?.results; } catch { return false; }
     if (!Array.isArray(results)) return false;
-    const matches = (text: string): boolean => BROWSER_BOT_BLOCK.TEXT_PATTERNS.some((p) => p.test(text));
+    const { TEXT_PATTERNS, HEADING_PATTERNS, HTML_MARKERS, SHORT_TEXT_MAX_CHARS, HEADING_TEXT_MAX_CHARS } = BROWSER_BOT_BLOCK;
+    const matches = (text: string): boolean => TEXT_PATTERNS.some((p) => p.test(text));
+    const isHeading = (line: string): boolean => HEADING_PATTERNS.some((p) => p.test(line.trim()));
     for (const r of results) {
         const { text, html } = (r ?? {}) as { text?: unknown; html?: unknown };
-        if (typeof text === 'string' && text.length <= BROWSER_BOT_BLOCK.SHORT_TEXT_MAX_CHARS && matches(text)) return true;
+        if (typeof text === 'string' && text.length <= SHORT_TEXT_MAX_CHARS) {
+            if (matches(text)) return true;
+            if (text.length <= HEADING_TEXT_MAX_CHARS && isHeading(text.trim().split('\n', 1)[0])) return true;
+        }
         if (typeof html === 'string') {
             const title = /<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1] ?? '';
-            if (matches(title) || BROWSER_BOT_BLOCK.HTML_MARKERS.some((p) => p.test(html))) return true;
+            if (matches(title) || isHeading(title) || HTML_MARKERS.some((p) => p.test(html))) return true;
         }
     }
     return false;

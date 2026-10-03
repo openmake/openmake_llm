@@ -29,6 +29,7 @@ interface AdminSchedule {
   cron?: string | null;
   interval_seconds?: number | null;
   enabled: boolean;
+  disabled_reason?: string | null;
   next_run_at: string;
   last_run_at?: string | null;
   last_task_status: string | null;
@@ -136,6 +137,9 @@ export default function AdminSchedulesPage() {
                       <Badge tone={s.enabled ? "success" : "neutral"}>
                         {s.enabled ? t("status.enabled") : t("status.disabled")}
                       </Badge>
+                      {!s.enabled && s.disabled_reason && (
+                        <span className="mt-1 block max-w-[220px] text-xs text-muted">{s.disabled_reason}</span>
+                      )}
                     </Td>
                     <Td className="whitespace-nowrap">{fmtDateTime(s.next_run_at)}</Td>
                     <Td className="whitespace-nowrap">{fmtDateTime(s.last_run_at)}</Td>

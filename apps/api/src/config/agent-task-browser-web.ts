@@ -47,24 +47,40 @@ export const BROWSER_RESULT_GUARD = {
 export const BROWSER_BOT_BLOCK = {
     /** 감지되면 결과 뒤에 경고를 붙인다. TASK_SANDBOX_BROWSER_BOT_NOTICE=false 로 끈다. */
     NOTICE_ENABLED: process.env.TASK_SANDBOX_BROWSER_BOT_NOTICE !== 'false',
-    /** 본문 텍스트는 이 길이 이하일 때만 본다 — 차단 화면은 짧고, 긴 글에 같은 낱말이 있는 경우를 거른다. */
+    /** 본문 텍스트는 이 길이 이하일 때만 본다 — 차단 화면은 짧고, 긴 글에 같은 문구가 있는 경우를 거른다. */
     SHORT_TEXT_MAX_CHARS: intEnv(process.env.TASK_SANDBOX_BROWSER_BOT_TEXT_MAX_CHARS, 1500),
-    /** 차단·확인 화면의 문구 — 짧은 본문과 HTML 제목에 적용한다. */
+    /** 첫 줄(제목 자리) 문구로 판정할 때의 본문 길이 상한 — 제목만으로는 약한 근거라 더 짧은 본문에만 쓴다. */
+    HEADING_TEXT_MAX_CHARS: intEnv(process.env.TASK_SANDBOX_BROWSER_BOT_HEADING_MAX_CHARS, 400),
+    /**
+     * 차단·확인 화면에만 나오는 문구 — 짧은 본문 어디에 있든, HTML 제목에 있든 차단으로 본다.
+     * captcha·access denied 같은 낱말 하나는 넣지 않는다(캡차 설명 글·오류 안내 문서·로그인 폼이 걸린다).
+     */
     TEXT_PATTERNS: [
-        /just a moment/i,
         /checking your browser/i,
-        /attention required/i,
-        /verify (that )?you are (a )?human/i,
-        /are you a robot/i,
+        /verify(ing)? (that )?you are (a )?human/i,
+        /are you a robot\?/i,
         /unusual traffic/i,
-        /access (to this page has been )?denied/i,
-        /bot detected/i,
-        /ddos protection/i,
-        /captcha/i,
-        /로봇이 아닙니다/,
-        /보안 ?문자/,
-        /자동 ?입력 ?방지/,
+        /access to this page has been denied/i,
+        /press (&|and) hold/i,
+        /complete the security check to access/i,
+        /ddos protection by/i,
+        /incapsula incident id/i,
+        // Akamai 차단 화면의 참조 번호
+        /access denied[\s\S]{0,300}reference\s*#\s*[0-9a-f]+\.[0-9a-f]+\./i,
         /비정상적인 (접근|트래픽)/,
+    ] as readonly RegExp[],
+    /**
+     * 제목 자리의 문구 — HTML 제목이거나, 본문의 첫 줄이면서 본문이 HEADING_TEXT_MAX_CHARS 이하일 때만 차단으로 본다.
+     * 영문은 줄 전체가 맞아야 한다("Access Denied errors explained" 같은 문서 제목을 거른다).
+     */
+    HEADING_PATTERNS: [
+        /^just a moment[.…]*$/i,
+        /^attention required!?(\s*\|\s*cloudflare)?$/i,
+        /^access denied[.!]?$/i,
+        /^one more step$/i,
+        /^bot detected[.!]?$/i,
+        /^로봇이 아닙니다/,
+        /^(보안 ?문자|자동 ?입력 ?방지)/,
     ] as readonly RegExp[],
     /** 차단 서비스가 확인 화면에 넣는 표지(HTML 어디에 있든) — 일반 로그인 폼의 캡차 위젯(g-recaptcha 등)은 넣지 않는다. */
     HTML_MARKERS: [
