@@ -428,5 +428,76 @@
         }
       ]
     }
+  ],
+  "browserCases": [
+    {
+      "id": "browser-page-heading",
+      "note": "브라우저 과제(정답 문자열 판정) — 야간 실행 묶음에 넣지 않는다. 정답은 외부 페이지(iana.org, 2026-10-04 확인)에 달려 있다",
+      "goal": "브라우저로 https://www.iana.org/help/example-domains 를 열어 페이지의 큰 제목(h1)을 그대로 알려 주세요.",
+      "maxTurns": 8,
+      "spec": {
+        "id": "browser-page-heading",
+        "requiredTools": [
+          "browser"
+        ],
+        "allowedTools": [
+          "browser",
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "web_search"
+        ],
+        "maxCalls": {
+          "browser": 5
+        }
+      },
+      "expectedAnswer": {
+        "includes": [
+          "Example Domains"
+        ]
+      }
+    },
+    {
+      "id": "browser-extract-list",
+      "note": "브라우저 과제(정답 문자열 판정) — 본문 목록에서 값을 뽑는다. 정답은 외부 페이지(iana.org, 2026-10-04 확인)에 달려 있다",
+      "goal": "브라우저로 https://www.iana.org/help/example-domains 를 열어 'Further Reading' 목록에 적힌 RFC 번호를 모두 알려 주세요.",
+      "maxTurns": 8,
+      "spec": {
+        "id": "browser-extract-list",
+        "requiredTools": [
+          "browser"
+        ],
+        "allowedTools": [
+          "browser",
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "web_search"
+        ],
+        "maxCalls": {
+          "browser": 5
+        }
+      },
+      "expectedAnswer": {
+        "includes": [
+          "6761",
+          "2606"
+        ]
+      }
+    }
   ]
 }

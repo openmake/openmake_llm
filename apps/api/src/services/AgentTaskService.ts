@@ -163,7 +163,7 @@ export class AgentTaskService {
             await db.updateAgentTask(taskId, u);
             emitAgentTaskProgress({ userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn });
             // terminal 상태 → web push (페이지가 닫혀 있어도 알림) 후 표식 정리. fire-and-forget.
-            if (terminal) notifyTaskTerminal({ userId, taskId, goal, status: curStatus, progress: curProgress, currentTurn: curTurn }, undefined, { emit: false });
+            if (terminal) notifyTaskTerminal({ userId, taskId, goal, status: curStatus, progress: curProgress, currentTurn: curTurn }, undefined, { emit: false, push: input.onTerminal?.(u) });
         };
 
         // cancel 레이스 봉쇄: 어떤 await 보다 먼저 레지스트리에 등록해 /cancel 이 항상

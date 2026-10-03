@@ -125,4 +125,15 @@ describe('POST /:taskId/fork', () => {
         expect(createAgentTask).toHaveBeenCalledWith(expect.objectContaining({ goal: '원래 목표' }));
         expect((updateAgentTask.mock.calls[0] as unknown[])[1]).not.toHaveProperty('plan');
     });
+    it('일회성 안내(검색 한도 등)는 fork 한 대화에서 뺀다 — 새 작업은 횟수가 다시 시작한다', async () => {
+        getCheckpoint.mockResolvedValue({ conversation: [
+            { role: 'user', content: '원래 목표' },
+            { role: 'user', content: '검색 횟수 한도에 도달했습니다.', oneShot: true },
+            { role: 'assistant', content: '정리 중' },
+        ] });
+        const res = mockRes();
+        await handler('post', '/:taskId/fork')(req({ fromTurn: 3 }), res, jest.fn());
+        const upd = updateAgentTask.mock.calls[0] as unknown as [string, { checkpoint: { conversation: Array<{ content: string }> } }];
+        expect(upd[1].checkpoint.conversation.map((m) => m.content)).toEqual(['원래 목표', '정리 중', FORK_WORKSPACE_NOTICE]);
+    });
 });

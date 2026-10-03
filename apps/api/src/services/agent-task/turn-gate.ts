@@ -12,6 +12,7 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { getAgentTaskBrowserLimitNudge, getAgentTaskFinalTurnNudge, getAgentTaskApprovalTimeoutNudge } from '../../prompts/agent-task-prompt';
 import { stripApprovalGatedTools } from '../task-sandbox/approval-gate';
 import { isSearchTool } from './task-steps';
+import { oneShotNotice } from './one-shot-notice';
 import { createLogger } from '../../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
@@ -105,7 +106,7 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
         : cappedTools;
 
     if (finalTurnReason && !flags.finalTurnNotified) {
-        conversation.push({ role: 'user', content: getAgentTaskFinalTurnNudge(finalTurnReason) });
+        conversation.push(oneShotNotice(getAgentTaskFinalTurnNudge(finalTurnReason)));
         flags.finalTurnNotified = true;
         const note = `자원 상한 임박(${finalTurnReason === 'tokens' ? '토큰 예산' : '남은 턴'})`
             + ` — 도구를 중단하고 최종 정리로 전환 (턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`;
@@ -116,7 +117,7 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
             + `턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`);
     }
     if (hitlDegraded && !flags.approvalDegradeNotified) {
-        conversation.push({ role: 'user', content: getAgentTaskApprovalTimeoutNudge() });
+        conversation.push(oneShotNotice(getAgentTaskApprovalTimeoutNudge()));
         flags.approvalDegradeNotified = true;
         const note = `승인 무응답 ${p.approvalTimeouts}회 — 승인 필요 도구를 제거하고 확보한 정보로 마무리 전환 (턴 ${turn + 1}/${turnCeiling})`;
         await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'hitl_degrade', content: note })
@@ -125,14 +126,13 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
         logger.info(`[AgentTask] HITL 무응답 강등: ${taskId} (timeouts=${p.approvalTimeouts}, 턴 ${turn + 1})`);
     }
     if (overSearchLimit && !flags.searchLimitNotified) {
-        conversation.push({
-            role: 'user',
-            content: '검색 횟수 한도에 도달했습니다. 더 이상 검색하지 말고, 지금까지 수집한 정보만으로 최종 결과물(예: 블로그 초안)을 완성해 작성하세요.',
-        });
+        conversation.push(oneShotNotice(
+            '검색 횟수 한도에 도달했습니다. 더 이상 검색하지 말고, 지금까지 수집한 정보만으로 최종 결과물(예: 블로그 초안)을 완성해 작성하세요.',
+        ));
         flags.searchLimitNotified = true;
     }
     if (overBrowserLimit && !flags.browserLimitNotified) {
-        conversation.push({ role: 'user', content: getAgentTaskBrowserLimitNudge() });
+        conversation.push(oneShotNotice(getAgentTaskBrowserLimitNudge()));
         flags.browserLimitNotified = true;
     }
 

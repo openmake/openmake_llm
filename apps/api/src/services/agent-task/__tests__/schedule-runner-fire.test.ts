@@ -56,7 +56,7 @@ describe('runScheduleTick — 발화', () => {
         await runScheduleTick(NOW);
         expect(createAgentTask).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1', idempotencyKey: scheduleFireKey('s1', s.next_run_at) }));
         expect(dispatchAgentTask).toHaveBeenCalledTimes(1);
-        expect(repo.markRun).toHaveBeenCalledWith('s1', expect.any(Number), dispatchAgentTask.mock.calls[0][0].taskId);
+        expect(repo.markRun).toHaveBeenCalledWith('s1', expect.any(Number), dispatchAgentTask.mock.calls[0][0].taskId, false);
         expect(repo.recordRun).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'fired' }));
     });
 
@@ -77,7 +77,7 @@ describe('runScheduleTick — 발화', () => {
         findAgentTaskByCreateKey.mockResolvedValue({ id: 'existing-task' });
         await runScheduleTick(NOW);
         expect(dispatchAgentTask).not.toHaveBeenCalled();
-        expect(repo.markRun).toHaveBeenCalledWith('s1', expect.any(Number), 'existing-task');
+        expect(repo.markRun).toHaveBeenCalledWith('s1', expect.any(Number), 'existing-task', false);
         expect(repo.markFailure).not.toHaveBeenCalled();
     });
 
@@ -86,5 +86,57 @@ describe('runScheduleTick — 발화', () => {
         repo.getLastTaskState.mockResolvedValue({ status: 'running', updatedAt: new Date(NOW - 3 * 60 * 60_000) });
         await runScheduleTick(NOW);
         expect(dispatchAgentTask).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('runScheduleTick — 실행 결과 반영', () => {
+    it('제출 성공만으로는 연속 실패를 풀지 않고, 작업에 종료 결과 통로를 넘긴다', async () => {
+        repo.getDue.mockResolvedValue([schedule()]);
+        repo.getLastTaskState.mockResolvedValue(null);
+        const execute = jest.fn(async (_input: { onTerminal?: unknown }) => undefined);
+        (jest.requireMock('../../AgentTaskService').AgentTaskService as jest.Mock).mockImplementation(() => ({ execute }));
+        dispatchAgentTask.mockImplementationOnce(async (p: { taskId: string; run?: () => Promise<void> }) => { await p.run?.(); });
+        await runScheduleTick(NOW);
+        expect(repo.markRun).toHaveBeenCalledWith('s1', expect.any(Number), expect.any(String), false);
+        expect(typeof execute.mock.calls[0][0].onTerminal).toBe('function');
+    });
+});
+
+describe('runScheduleTick — 모델 미도달 재실행 발화', () => {
+    it('정규 발화 시각은 그대로 두고, 정규 발화와 다른 멱등 키로 작업을 만든다', async () => {
+        const s = schedule({ next_run_at: '2026-10-04T02:00:00.000Z', retry_at: '2026-10-04T00:59:00.000Z' });
+        repo.getDue.mockResolvedValue([s]);
+        repo.getLastTaskState.mockResolvedValue({ status: 'failed', updatedAt: new Date(NOW) });
+        await runScheduleTick(NOW);
+        const key = createAgentTask.mock.calls[0][0].idempotencyKey as string;
+        expect(key).not.toBe(scheduleFireKey('s1', s.next_run_at));
+        expect(key).toContain('retry');
+        expect(repo.markRun).toHaveBeenCalledWith('s1', Date.parse(s.next_run_at as string), expect.any(String), false);
+    });
+});
+
+describe('runScheduleTick — "보고할 것 없음" 안내', () => {
+    const run = async (): Promise<string> => {
+        repo.getDue.mockResolvedValue([schedule()]);
+        repo.getLastTaskState.mockResolvedValue(null);
+        const execute = jest.fn(async (_input: { goal: string }) => undefined);
+        (jest.requireMock('../../AgentTaskService').AgentTaskService as jest.Mock).mockImplementation(() => ({ execute }));
+        dispatchAgentTask.mockImplementationOnce(async (p: { taskId: string; run?: () => Promise<void> }) => { await p.run?.(); });
+        await runScheduleTick(NOW);
+        return execute.mock.calls[0][0].goal;
+    };
+
+    it('기본(꺼짐)은 목표를 그대로 넘긴다', async () => {
+        expect(await run()).toBe('일일 보고');
+    });
+
+    it('켜면 목표 뒤에 표식 안내를 붙인다', async () => {
+        const cfg = jest.requireActual('../../../config/agent-task-schedule').AGENT_TASK_SCHEDULE;
+        const restore = jest.replaceProperty(cfg, 'SILENT_ENABLED', true);
+        try {
+            const goal = await run();
+            expect(goal.startsWith('일일 보고')).toBe(true);
+            expect(goal).toContain('[NOTHING_TO_REPORT]');
+        } finally { restore.restore(); }
     });
 });
