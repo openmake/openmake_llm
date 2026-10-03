@@ -54,3 +54,10 @@ export const EXIT_CODE_MEANINGS: Readonly<Record<string, Readonly<Record<number,
     diff: DIFFER, cmp: DIFFER, 'git diff': DIFFER,
     test: FALSE, '[': FALSE, '[[': FALSE,
 };
+
+/**
+ * 검색 무일치 원인 안내 — grep_code 가 0건일 때 대소문자, 이스케이프 안 된 정규식 문자, 숨김·무시 대상 파일을
+ * 같은 검색을 조건만 바꿔 다시 돌려 확인하고, 처음 확인된 원인 하나를 결과 줄에 덧붙인다(확인당 결과 1줄만 읽는다).
+ * AGENT_TASK_GREP_MISS_HINT=false 로 끄면 종전처럼 "일치 없음"만 준다.
+ */
+export const GREP_MISS_HINT_ENABLED = process.env.AGENT_TASK_GREP_MISS_HINT !== 'false';

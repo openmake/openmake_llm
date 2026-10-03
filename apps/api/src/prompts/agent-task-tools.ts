@@ -36,3 +36,10 @@ export const EXIT_CODE_NOTES = {
     differ: '(종료 코드 1 = 차이 있음 — 오류가 아닙니다)',
     false: '(종료 코드 1 = 조건이 거짓 — 오류가 아닙니다)',
 } as const;
+
+/** 검색 무일치 원인 — "(일치 없음: …)" 바로 뒤에 같은 줄로 붙는다. */
+export const GREP_MISS_HINTS = {
+    ignoreCase: () => ' — 대소문자를 무시하면 일치하는 줄이 있습니다. ignore_case:true 로 다시 찾으세요.',
+    literal: (escaped: string) => ` — 패턴의 정규식 문자를 문자 그대로 보면 일치하는 줄이 있습니다. 이스케이프해서 다시 찾으세요: ${escaped}`,
+    hidden: (file: string) => ` — 숨김 또는 .gitignore 대상 파일에는 일치하는 줄이 있습니다(예: ${file}). 그 파일이나 폴더를 path 로 지목해 다시 찾으세요.`,
+} as const;
