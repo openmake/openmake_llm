@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "@/components/approvals/approval-args";
 import { QuestionChoices } from "@/components/approvals/question-choices";
 import { isNearBottom } from "@/lib/chat-scroll";
-import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
+import { COPY_FEEDBACK_RESET_MS, REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
 
 const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
 /** 채팅 인라인 승인의 인자 요약 길이 — 넘으면 전문 펼쳐 보기가 붙는다. */
@@ -34,9 +34,12 @@ const INLINE_ARGS_SUMMARY_MAX_CHARS = 90;
 /** 에이전트 작업 승인 대기 — 채팅 인라인 승인/거절 버튼 (paused task). */
 function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
   const t = useTranslations("chat");
+  const tApprovals = useTranslations("approvals");
   const setChatHistory = useAppStore((s) => s.setChatHistory);
   const [busy, setBusy] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // 거절 사유(선택) — 적으면 에이전트에 그대로 전달된다. 승인함(/approvals)과 같은 방식.
+  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
   if (approvals.length === 0) return null;
 
   // 낙관적 제거 — 해당 approval 을 메시지에서 뺀다(진행 시 agent_task_progress 가 곧 갱신).
@@ -62,8 +65,10 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
     }
   }
 
-  const decide = (a: PendingApproval, decision: "approve" | "reject") =>
-    run(a, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/${decision}`, {}));
+  const decide = (a: PendingApproval, decision: "approve" | "reject") => {
+    const reason = decision === "reject" && !isQuestionApproval(a.toolName) ? (rejectReasons[a.approvalId] ?? "").trim() : "";
+    return run(a, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/${decision}`, reason ? { reason } : {}));
+  };
   const answer = (a: PendingApproval) =>
     run(a, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/answer`, { text: answers[a.approvalId] ?? "" }));
   // task 자동승인(4-2) — 이후 이 작업의 도구 호출은 승인 없이 진행(ask_human 제외). 대기 중 승인도 즉시 해소.
@@ -133,25 +138,36 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
         }
         const summary = summarizeApprovalArgs(a.args, INLINE_ARGS_SUMMARY_MAX_CHARS);
         return (
-          <div key={a.approvalId} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-1 p-2">
-            <div className="min-w-0">
-              <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
-              <span className="ml-2 break-all text-xs text-muted">{summary.text}</span>
-              <ApprovalArgsFull full={summary.full} label={t("approvals.fullArgs", { chars: summary.full?.length ?? 0 })} />
-              <ApprovalPreview toolName={a.toolName} preview={a.preview} diffLabel={t("approvals.preview")} procedureLabel={t("approvals.procedurePreview")} compact />
+          <div key={a.approvalId} className="space-y-1.5 rounded-md border border-border bg-surface-1 p-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
+                <span className="ml-2 break-all text-xs text-muted">{summary.text}</span>
+                <ApprovalArgsFull full={summary.full} label={t("approvals.fullArgs", { chars: summary.full?.length ?? 0 })} />
+                <ApprovalPreview toolName={a.toolName} preview={a.preview} diffLabel={t("approvals.preview")} procedureLabel={t("approvals.procedurePreview")} compact />
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <button
+                  disabled={busy === a.approvalId}
+                  onClick={() => decide(a, "reject")}
+                  className="rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-2 disabled:opacity-50"
+                >{t("approvals.reject")}</button>
+                <button
+                  disabled={busy === a.approvalId}
+                  onClick={() => decide(a, "approve")}
+                  className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
+                >{t("approvals.approve")}</button>
+              </div>
             </div>
-            <div className="flex shrink-0 gap-1">
-              <button
-                disabled={busy === a.approvalId}
-                onClick={() => decide(a, "reject")}
-                className="rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-2 disabled:opacity-50"
-              >{t("approvals.reject")}</button>
-              <button
-                disabled={busy === a.approvalId}
-                onClick={() => decide(a, "approve")}
-                className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
-              >{t("approvals.approve")}</button>
-            </div>
+            <input
+              value={rejectReasons[a.approvalId] ?? ""}
+              onChange={(e) => setRejectReasons((prev) => ({ ...prev, [a.approvalId]: e.target.value }))}
+              placeholder={tApprovals("tasks.rejectReasonPlaceholder")}
+              aria-label={tApprovals("tasks.rejectReasonPlaceholder")}
+              maxLength={REJECT_REASON_MAX_CHARS}
+              disabled={busy === a.approvalId}
+              className="w-full rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs text-fg-1 outline-none focus:border-accent disabled:opacity-50"
+            />
           </div>
         );
       })}
