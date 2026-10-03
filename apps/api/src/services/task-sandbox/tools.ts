@@ -13,6 +13,7 @@
  *
  * @module services/task-sandbox/tools
  */
+import { procedureChecksum, SKILL_RUN_CHECKSUM_ARG } from './skill-run-binding';
 import { randomUUID } from 'crypto';
 import { AgentTaskParked } from '../agent-task/types';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
@@ -480,6 +481,11 @@ export function createTaskTools(
             if (!skillId) return textResult('skill_id 가 필요합니다.', true);
             const spec = await procedural.load(skillId).catch(() => null);
             if (!spec) return textResult(`절차 스킬을 찾지 못했습니다(또는 접근 불가): ${skillId}`, true);
+            // 승인 결속 — 승인 때 본 절차와 지금 절차가 다르면 실행하지 않는다(skill-run-binding).
+            const bound = args[SKILL_RUN_CHECKSUM_ARG];
+            if (typeof bound === 'string' && bound !== procedureChecksum(spec)) {
+                return textResult(`승인 뒤 절차 스킬 내용이 바뀌었습니다: ${skillId} — skill_run 을 다시 호출해 바뀐 내용으로 승인받으세요.`, true);
+            }
             const params: Record<string, string> = {};
             if (args.params && typeof args.params === 'object') {
                 for (const [k, v] of Object.entries(args.params as Record<string, unknown>)) params[k] = String(v);
