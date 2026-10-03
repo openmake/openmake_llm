@@ -21,7 +21,7 @@ import { getPool } from '../../data/models/unified-database';
 import { classifyToolRisk, policyRequiresApproval, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
 import { AgentTaskApprovalRepository, hashApprovalArgs, type ApprovalRow } from '../../data/repositories/agent-task-approval-repository';
 import { getConfig } from '../../config/env';
-import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { AGENT_TASK_LIMITS, APPROVAL_RECENT_WINDOW_MS } from '../../config/runtime-limits';
 
 const logger = createLogger('TaskApprovalGate');
 
@@ -221,7 +221,14 @@ export class ApprovalRegistry {
         // 살아 있는 pending 이 있으면 그 id 를 그대로 써서 승인함의 항목이 바뀌지 않게 한다.
         const argsHash = hashApprovalArgs(input.args);
         // 저장소가 없으면(테스트·비영속) 대기 등록까지 동기적으로 끝낸다 — 호출 직후 list() 가 보이도록.
-        const prior = this.store ? await this.persist((s) => s.takeoverForCall(input.taskId, input.toolName, argsHash)) : undefined;
+        let prior = this.store ? await this.persist((s) => s.takeoverForCall(input.taskId, input.toolName, argsHash)) : undefined;
+        // 오래된 미소비 승인은 쓰지 않고 다시 묻는다 — 승인함 "최근 결정" 창을 벗어나면 사용자가 볼 수도 철회할 수도 없다.
+        // 질문 도구의 답은 권한이 아니라 사용자의 답이라 그대로 이어받는다. 이어받기가 이미 소비 표시를 했으므로 행은 다시 쓰이지 않는다.
+        if (prior?.status === 'approved' && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)
+            && prior.decided_at && Date.now() - new Date(prior.decided_at).getTime() > APPROVAL_RECENT_WINDOW_MS) {
+            logger.info(`[${input.taskId}] 오래된 승인이라 다시 묻습니다: ${input.toolName}`);
+            prior = undefined;
+        }
         if (prior && prior.status !== 'pending') {
             logger.info(`[${input.taskId}] 재시작 전 결정 이어받음(${prior.status}): ${input.toolName}`);
             return prior.status === 'approved'

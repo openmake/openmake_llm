@@ -4,6 +4,7 @@
  */
 import { ApprovalRegistry, type ApprovalStore } from '../approval-gate';
 import type { ApprovalRow } from '../../../data/repositories/agent-task-approval-repository';
+import { APPROVAL_RECENT_WINDOW_MS } from '../../../config/runtime-limits';
 
 function fakeStore() {
     const rows = new Map<string, ApprovalRow>();
@@ -76,6 +77,29 @@ describe('ApprovalRegistry + 저장소', () => {
         await expect(p).resolves.toMatchObject({ decision: 'rejected', reason: 'user' });
     });
 
+    it('오래된 미소비 승인(최근 결정 창 밖)은 이어받지 않고 다시 묻는다', async () => {
+        const store = fakeStore();
+        const reg = new ApprovalRegistry(store);
+        const stale = new Date(Date.now() - APPROVAL_RECENT_WINDOW_MS - 60_000).toISOString();
+        store.seed({ approval_id: 'apv_stale', args_hash: hashOf(input.args), status: 'approved', decided_at: stale });
+        let id = '';
+        const p = reg.request(input, { timeoutMs: 5000, onPending: (pa) => { id = pa.approvalId; } });
+        await new Promise((r) => setImmediate(r));
+        expect(id).not.toBe('');
+        expect(id).not.toBe('apv_stale');
+        expect(await reg.reject(id)).toBe(true);
+        await expect(p).resolves.toMatchObject({ decision: 'rejected' });
+    });
+
+    it('질문 도구(ask_human)의 답은 오래돼도 이어받는다 — 권한이 아니라 사용자의 답이다', async () => {
+        const store = fakeStore();
+        const reg = new ApprovalRegistry(store);
+        const q = { taskId: 't1', userId: 'u1', toolName: 'ask_human', args: { question: '어느 쪽?' } };
+        const stale = new Date(Date.now() - APPROVAL_RECENT_WINDOW_MS - 60_000).toISOString();
+        store.seed({ approval_id: 'apv_answer', tool_name: 'ask_human', args: q.args, args_hash: hashOf(q.args), status: 'approved', answer_text: 'A', decided_at: stale });
+        await expect(reg.request(q, { timeoutMs: 5000 })).resolves.toMatchObject({ decision: 'approved', text: 'A', waitedMs: 0 });
+    });
+
     it('저장소 오류는 삼켜지고 메모리 흐름은 그대로 동작한다(fail-open)', async () => {
         const broken = { ...fakeStore(), insertPending: async () => { throw new Error('db down'); }, takeoverForCall: async () => { throw new Error('db down'); } };
         const reg = new ApprovalRegistry(broken);
@@ -93,6 +117,16 @@ describe('ApprovalRegistry + 저장소', () => {
         reg.closeTask('t1');
         await new Promise((r) => setImmediate(r));
         expect(store.rows.get('apv_left')?.status).toBe('aborted');
+    });
+});
+
+describe('hashApprovalArgs', () => {
+    it('키 순서만 다른 인자는 같은 해시다(중첩 객체 포함)', () => {
+        expect(hashOf({ a: 1, b: { x: 1, y: [1, { p: 1, q: 2 }] } })).toBe(hashOf({ b: { y: [1, { q: 2, p: 1 }], x: 1 }, a: 1 }));
+    });
+    it('값이나 배열 순서가 다르면 다른 해시다', () => {
+        expect(hashOf({ command: 'ls' })).not.toBe(hashOf({ command: 'ls && rm -rf x' }));
+        expect(hashOf({ files: ['a', 'b'] })).not.toBe(hashOf({ files: ['b', 'a'] }));
     });
 });
 
