@@ -1,5 +1,5 @@
 /**
- * 위임·서브에이전트(delegate / spawn_agents) 계약 설정 — 종료 사유 전달, 끝난 결과 재사용, 입력 품질 검사.
+ * 위임·서브에이전트(delegate / spawn_agents) 계약 설정 — 종료 사유 전달, 끝난 결과 재사용, 입력 품질 검사, 결과 형식 계약.
  * 병렬 위임 자체의 on/off·동시 수·결과 예산은 AGENT_SPAWN(runtime-limits)에 있다.
  *
  * @module config/agent-task-delegation
@@ -32,6 +32,14 @@ export const AGENT_DELEGATION = {
     /** 부모에게 가는 위임 결과에 "자가 보고이니 중요한 사실은 확인하라"는 안내를 붙인다. 기본 켜짐.
      *  AGENT_DELEGATION_SELF_REPORT_NOTICE=false 로 끈다. */
     SELF_REPORT_NOTICE_ENABLED: process.env.AGENT_DELEGATION_SELF_REPORT_NOTICE !== 'false',
+    /** spawn_agents 태스크의 선택 인자 outputSchema(JSON Schema) — 결과를 결정적으로 검증하고 어긋나면 1회만 교정을 요청한다.
+     *  기본 꺼짐: 로컬 모델의 스키마 준수율이 실측 전이다(꺼져 있으면 인자가 도구 스키마에 드러나지 않고, 줘도 무시한다).
+     *  AGENT_DELEGATION_OUTPUT_SCHEMA=true 로 켠다. */
+    OUTPUT_SCHEMA_ENABLED: process.env.AGENT_DELEGATION_OUTPUT_SCHEMA === 'true',
+    /** outputSchema 의 JSON 글자 수 상한 — 스키마는 서브에이전트 지시문에 그대로 실린다. AGENT_DELEGATION_OUTPUT_SCHEMA_MAX_CHARS */
+    OUTPUT_SCHEMA_MAX_CHARS: num(process.env.AGENT_DELEGATION_OUTPUT_SCHEMA_MAX_CHARS, 4000),
+    /** 형식 검증 실패 사유에 싣는 항목 수 상한. */
+    OUTPUT_SCHEMA_MAX_ISSUES: 5,
 } as const;
 
 /** 재개 때 다시 돌리지 않을 종료 사유 — 오류·시간 초과로 끝난 서브는 기록하지 않아 재개 때 다시 돈다. */

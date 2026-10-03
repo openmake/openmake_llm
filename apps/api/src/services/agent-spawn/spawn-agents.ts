@@ -39,7 +39,11 @@ import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
 import { ASK_USER_TOOL_NAME } from '../chat-service/ask-user';
 import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
 import { AGENT_DELEGATION, SUBAGENT_REUSABLE_EXITS, exitReasonForError, type SubagentExitReason } from '../../config/agent-task-delegation';
-import { getSubagentStatusLine, SUBAGENT_REUSED_NOTE, getDelegationRejection, DELEGATION_SELF_REPORT_NOTICE } from '../../prompts/agent-task-delegation';
+import {
+    getSubagentStatusLine, SUBAGENT_REUSED_NOTE, getDelegationRejection, DELEGATION_SELF_REPORT_NOTICE,
+    SPAWN_OUTPUT_SCHEMA_PARAM_DESCRIPTION, getOutputSchemaCorrection, OUTPUT_SCHEMA_VALID_NOTE, getOutputSchemaFailedNote,
+} from '../../prompts/agent-task-delegation';
+import { compileOutputContract, type OutputContract } from './output-schema';
 import { checkDelegationGoal } from '../agent-task/delegation-input';
 import { SpawnResultStore } from './spawn-result-store';
 import { createLogger } from '../../utils/logger';
@@ -61,6 +65,8 @@ const spawnAgentsArgsSchema = z.object({
         role: z.string().trim().min(1).optional(),
         /** 사용자 Custom Agent id — 지정 시 그 에이전트의 페르소나+model 로 실행 (Phase C) */
         agentId: z.string().trim().min(1).optional(),
+        /** 결과 형식 계약(JSON Schema) — AGENT_DELEGATION.OUTPUT_SCHEMA_ENABLED 일 때만 쓴다. */
+        outputSchema: z.record(z.string(), z.unknown()).optional(),
     })).min(1),
 });
 
@@ -118,31 +124,38 @@ export const SPAWN_PROMPT_GUIDE =
     + '자기완결적으로 서술하고, 결과를 받은 뒤 직접 종합해 답하세요.\n'
     + '- 하위 작업으로 나눌 수 없는 순차 작업이면 평소처럼 직접 수행하세요.';
 
-/** spawn_agents 파라미터 JSON Schema — task-sandbox MCP 도구 정의(inputSchema)와 공유. */
-export const SPAWN_AGENTS_PARAMETERS_SCHEMA: {
+/** PURE: spawn_agents 파라미터 JSON Schema — outputSchema 인자는 결과 형식 계약이 켜져 있을 때만 드러낸다. */
+export function buildSpawnParametersSchema(): {
     type: 'object';
     properties: Record<string, unknown>;
     required: string[];
-} = {
-    type: 'object',
-    properties: {
-        tasks: {
-            type: 'array',
-            minItems: 1,
-            description: '병렬 수행할 독립 하위 작업 목록 (2개 이상 권장)',
-            items: {
-                type: 'object',
-                properties: {
-                    prompt: { type: 'string', description: '하위 작업의 자기완결적 지시문' },
-                    role: { type: 'string', description: '원하는 전문 분야(선택, 예: finance/legal/engineering)' },
-                    agentId: { type: 'string', description: '사용자가 명시적으로 특정 커스텀 에이전트로 수행을 요청한 경우에만 그 에이전트 id (선택 — 임의 추측 금지)' },
+} {
+    return {
+        type: 'object',
+        properties: {
+            tasks: {
+                type: 'array',
+                minItems: 1,
+                description: '병렬 수행할 독립 하위 작업 목록 (2개 이상 권장)',
+                items: {
+                    type: 'object',
+                    properties: {
+                        prompt: { type: 'string', description: '하위 작업의 자기완결적 지시문' },
+                        role: { type: 'string', description: '원하는 전문 분야(선택, 예: finance/legal/engineering)' },
+                        agentId: { type: 'string', description: '사용자가 명시적으로 특정 커스텀 에이전트로 수행을 요청한 경우에만 그 에이전트 id (선택 — 임의 추측 금지)' },
+                        ...(AGENT_DELEGATION.OUTPUT_SCHEMA_ENABLED
+                            ? { outputSchema: { type: 'object', description: SPAWN_OUTPUT_SCHEMA_PARAM_DESCRIPTION } } : {}),
+                    },
+                    required: ['prompt'],
                 },
-                required: ['prompt'],
             },
         },
-    },
-    required: ['tasks'],
-};
+        required: ['tasks'],
+    };
+}
+
+/** spawn_agents 파라미터 JSON Schema — task-sandbox MCP 도구 정의(inputSchema)와 공유. */
+export const SPAWN_AGENTS_PARAMETERS_SCHEMA = buildSpawnParametersSchema();
 
 /** PURE: 채팅 도구 루프에 노출할 spawn_agents 도구 정의. */
 export function buildSpawnAgentsTool(): ToolDefinition {
@@ -260,14 +273,18 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     const requested = parsed.data.tasks;
     const tasks = requested.slice(0, AGENT_SPAWN.MAX_TASKS_PER_CALL);
     const droppedCount = requested.length - tasks.length;
-    if (AGENT_DELEGATION.INPUT_CHECK_ENABLED) {
-        // 빈 껍데기 태스크가 하나라도 있으면 전체를 돌려보낸다 — 일부만 돌리면 모델이 나머지를 고쳐 다시 부르지 않는다.
-        const problems = tasks.flatMap((task, i) => {
-            const problem = checkDelegationGoal(task.prompt, { batch: tasks.length >= 2 });
-            return problem ? [`태스크 ${i + 1}: ${problem}`] : [];
-        });
-        if (problems.length > 0) return getDelegationRejection(problems);
-    }
+    // 결과 형식 계약(선택 인자) — 꺼져 있으면 outputSchema 를 무시한다(현행과 같음).
+    const contracts: Array<OutputContract | null> = [];
+    // 빈 껍데기 태스크·잘못된 스키마가 하나라도 있으면 전체를 돌려보낸다 — 일부만 돌리면 모델이 나머지를 고쳐 다시 부르지 않는다.
+    const problems: string[] = [];
+    tasks.forEach((task, i) => {
+        const goalProblem = AGENT_DELEGATION.INPUT_CHECK_ENABLED ? checkDelegationGoal(task.prompt, { batch: tasks.length >= 2 }) : null;
+        if (goalProblem) problems.push(`태스크 ${i + 1}: ${goalProblem}`);
+        const compiled = AGENT_DELEGATION.OUTPUT_SCHEMA_ENABLED && task.outputSchema ? compileOutputContract(task.outputSchema) : null;
+        if (compiled && 'error' in compiled) problems.push(`태스크 ${i + 1}: ${compiled.error}`);
+        contracts.push(compiled && !('error' in compiled) ? compiled : null);
+    });
+    if (problems.length > 0) return getDelegationRejection(problems);
     const subTools = buildSpawnSubagentTools(p.tools);
     const userId = String(p.userCtx.userId);
     const started = Date.now();
@@ -304,6 +321,7 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
             async (task, idx) => {
                 const trace = traces?.[idx];
                 trace?.started();
+                const contract = contracts[idx];
                 try {
                     const saved = await store?.load(task);
                     if (saved) {
@@ -321,7 +339,11 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
                         ...(trace ? { trace } : {}),
                         client: exec.client,
                         personaPrompt: exec.persona,
-                        subgoal: task.prompt,
+                        subgoal: contract ? task.prompt + contract.instruction : task.prompt,
+                        ...(contract ? { finalCheck: (text: string) => {
+                            const problem = contract.check(text);
+                            return problem ? getOutputSchemaCorrection(problem) : null;
+                        } } : {}),
                         tools: subTools,
                         userCtx: p.userCtx,
                         taskId: p.taskId,
@@ -360,8 +382,16 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     results.forEach((r, i) => logger.info(
         `[AgentSpawn] 태스크 ${i + 1} 결과 프리뷰: ${(r ?? '(null)').slice(0, 160).replace(/\n/g, ' ')}`));
     // 태스크별 예산 분배 — 모든 결과와 끝의 종합 지시가 상한 안에 들어가게 한다(spawn-result).
+    /** 상태 줄에 덧붙일 표시 — 재사용 여부, 형식 검증 판정(계약이 있는 태스크만). */
+    const statusExtras = (i: number): string[] => {
+        const problem = contracts[i]?.check(results[i] ?? '');
+        return [
+            ...(reused.has(i) ? [SUBAGENT_REUSED_NOTE] : []),
+            ...(contracts[i] ? [problem ? getOutputSchemaFailedNote(problem) : OUTPUT_SCHEMA_VALID_NOTE] : []),
+        ];
+    };
     const statusLines = AGENT_DELEGATION.EXIT_REASON_ENABLED
-        ? exits.map((reason, i) => (reason ? getSubagentStatusLine(reason, reused.has(i) ? [SUBAGENT_REUSED_NOTE] : []) : undefined))
+        ? exits.map((reason, i) => (reason ? getSubagentStatusLine(reason, statusExtras(i)) : undefined))
         : undefined;
     return composeSpawnResult({
         tasks, results, ...(statusLines ? { statusLines } : {}),

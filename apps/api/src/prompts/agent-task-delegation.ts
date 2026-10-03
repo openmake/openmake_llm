@@ -44,3 +44,34 @@ export function getDelegationRejection(problems: readonly string[]): string {
 export const DELEGATION_SELF_REPORT_NOTICE =
     '[안내] 서브에이전트의 결과는 자가 보고이며 검증된 사실이 아닙니다. 결론을 좌우하는 수치·출처·"완료했다"는 주장은 '
     + '확인하고, 확인하지 못한 내용은 서브에이전트 보고임을 밝히세요.';
+
+/** spawn_agents 태스크의 outputSchema 인자 설명(도구 스키마에 실린다 — 기능이 켜져 있을 때만). */
+export const SPAWN_OUTPUT_SCHEMA_PARAM_DESCRIPTION =
+    '결과가 따라야 할 JSON Schema(선택). 주면 서브에이전트의 최종 답을 이 스키마로 검증하고 어긋나면 한 번 고쳐 쓰게 합니다. '
+    + '결과를 표·계산·코드에 바로 쓸 때만 주세요.';
+
+/** 서브에이전트 지시문 뒤에 붙는 결과 형식 안내. */
+export function getOutputSchemaInstruction(schemaJson: string): string {
+    return `\n\n[결과 형식]\n최종 답은 아래 JSON Schema 를 따르는 JSON 값 하나만 출력하세요. JSON 앞뒤에 설명을 덧붙이지 마세요.\n${schemaJson}`;
+}
+
+/** 형식이 어긋난 최종 답에 대한 교정 요청(1회). */
+export function getOutputSchemaCorrection(problem: string): string {
+    return `방금 답은 요구한 결과 형식에 맞지 않습니다 — ${problem}\n`
+        + '같은 내용을 스키마에 맞는 JSON 값 하나로만 다시 출력하세요. 도구는 더 쓸 수 없습니다.';
+}
+
+export const OUTPUT_SCHEMA_NO_JSON = '답에서 JSON 을 찾지 못했습니다';
+export const OUTPUT_SCHEMA_VALID_NOTE = '형식 검증 통과';
+
+export function getOutputSchemaFailedNote(problem: string): string {
+    return `형식 검증 실패(${problem})`;
+}
+
+export function getOutputSchemaTooLarge(chars: number, maxChars: number): string {
+    return `outputSchema 가 너무 큽니다 (${chars}자, 최대 ${maxChars}자)`;
+}
+
+export function getOutputSchemaInvalid(detail: string): string {
+    return `outputSchema 가 올바른 JSON Schema 가 아닙니다 (${detail})`;
+}
