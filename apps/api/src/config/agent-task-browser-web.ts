@@ -75,3 +75,14 @@ export const BROWSER_BOT_BLOCK = {
         /_Incapsula_Resource/,
     ] as readonly RegExp[],
 } as const;
+
+/** 외부 MCP 도구 스키마 정규화(addons/mcp-runtime/tool-schema). */
+export const MCP_TOOL_SCHEMA = {
+    /**
+     * 스키마의 로컬 `$ref` 를 최상위 정의(`$defs`·`definitions`) 내용으로 풀어 넣는다 — 내부 스키마는 최상위 정의를
+     * 싣지 않아, 풀지 않으면 참조가 끊긴다. MCP_SCHEMA_INLINE_REFS=false 로 끈다(종전 동작).
+     */
+    INLINE_REFS_ENABLED: process.env.MCP_SCHEMA_INLINE_REFS !== 'false',
+    /** 참조 안의 참조를 따라가는 깊이 상한 — 넘으면 그 참조는 풀지 않는다(스키마가 부풀지 않게). */
+    REF_MAX_DEPTH: intEnv(process.env.MCP_SCHEMA_REF_MAX_DEPTH, 8),
+} as const;
