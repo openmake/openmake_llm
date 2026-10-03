@@ -42,4 +42,20 @@ describe('run-prompt-ablation', () => {
         expect(await exited).toBe(0);
         expect(order).toEqual(['ready', 'create', 'execute']);
     });
+
+    it('--only 로 지목한 과제만 돌린다', async () => {
+        process.argv = ['node', 'run-prompt-ablation.ts', '--variants', 'baseline', '--only', 'trap-tail-of-large-file,edit-notes'];
+        jest.spyOn(console, 'log').mockImplementation(() => undefined);
+        const exited = new Promise<number | undefined>((resolve) => {
+            jest.spyOn(process, 'exit').mockImplementation(((code?: number) => { resolve(code); }) as never);
+        });
+        db.createAgentTask.mockClear();
+
+        jest.isolateModules(() => { require('../run-prompt-ablation'); });
+
+        expect(await exited).toBe(0);
+        const goals = (db.createAgentTask.mock.calls as unknown as Array<[{ goal: string }]>).map((c) => c[0].goal);
+        const dataset = jest.requireActual('../golden-agent-tasks.json') as { cases: Array<{ id: string; goal: string }> };
+        expect(goals).toEqual(['edit-notes', 'trap-tail-of-large-file'].map((id) => dataset.cases.find((c) => c.id === id)?.goal));
+    });
 });

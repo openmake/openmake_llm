@@ -31,6 +31,17 @@ export function ablatePrompt(prompt: string, dropPatterns: readonly string[]): s
     return out.join('\n');
 }
 
+/**
+ * PURE: 돌릴 과제 고르기 — only(id 목록)로 지목한 과제만 묶음의 순서대로 남기고, 그 뒤에 limit(앞에서 N개)을 적용한다.
+ * 묶음에 없는 id 는 던진다 — 오타로 아무것도 돌지 않는 일을 막는다.
+ */
+export function selectCases<T extends { id: string }>(cases: readonly T[], opts: { only?: readonly string[]; limit?: number }): T[] {
+    const unknown = (opts.only ?? []).filter((id) => !cases.some((c) => c.id === id));
+    if (unknown.length > 0) throw new Error(`--only 에 맞는 과제가 없습니다: ${unknown.join(', ')}`);
+    const picked = opts.only ? cases.filter((c) => opts.only?.includes(c.id)) : [...cases];
+    return picked.slice(0, opts.limit ?? picked.length);
+}
+
 /** 실험 실행 한 건의 결과 */
 export interface AblationRun {
     variant: string;

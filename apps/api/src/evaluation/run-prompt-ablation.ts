@@ -3,6 +3,7 @@
  *
  *   npm run eval:ablation                         # golden-agent-tasks.json 의 모든 과제 × 모든 조건 × 1회
  *   npm run eval:ablation -- --repeats 3 --limit 2
+ *   npm run eval:ablation -- --variants baseline --only fix-python-bug,edit-notes   # 지목한 과제만(묶음의 순서대로)
  *   npm run eval:agent-tasks                      # 기준 조건만 1회 + 관문(야간 회귀 감시): --variants baseline --gate
  *
  * 과제마다 조건(variant)별로 에이전트 작업을 실제로 실행한다: 샌드박스에서 실제 모델이 도구를 쓴다.
@@ -23,7 +24,7 @@ import { randomUUID } from 'crypto';
 
 require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 
-import { ablatePrompt, summarizeAblation, gateAgentTaskSuite, type AblationRun } from './prompt-ablation';
+import { ablatePrompt, summarizeAblation, gateAgentTaskSuite, selectCases, type AblationRun } from './prompt-ablation';
 import { evaluateTrajectory, parseTrajectorySpec, stepsToTrajectory, type TrajectorySpec, type TrajectoryStepRow } from './trajectory-evaluator';
 
 interface AblationDataset {
@@ -45,7 +46,8 @@ function argValue(flag: string): string | undefined {
 async function main(): Promise<void> {
     const dataset = JSON.parse(fs.readFileSync(argValue('--dataset') ?? path.resolve(__dirname, 'golden-agent-tasks.json'), 'utf8')) as AblationDataset;
     const repeats = Number(argValue('--repeats') ?? '1');
-    const cases = dataset.cases.slice(0, Number(argValue('--limit') ?? dataset.cases.length));
+    const limit = argValue('--limit');
+    const cases = selectCases(dataset.cases, { only: argValue('--only')?.split(',').map((x) => x.trim()).filter(Boolean), ...(limit !== undefined ? { limit: Number(limit) } : {}) });
     for (const c of cases) parseTrajectorySpec(c.spec);
     const only = argValue('--variants')?.split(',');
     if (only) dataset.variants = dataset.variants.filter((v) => only.includes(v.id));
