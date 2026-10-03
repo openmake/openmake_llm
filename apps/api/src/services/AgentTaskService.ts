@@ -150,10 +150,10 @@ export class AgentTaskService {
             curStatus = (u.status ?? curStatus) as string;
             curProgress = u.progress ?? curProgress;
             curTurn = u.currentTurn ?? curTurn;
-            // terminal 전이 시 누적 토큰 영속(4-4) — 목록/상세 UI 의 비용 가시화에 사용.
-            // 알림 표식(174)도 같은 쓰기로 남긴다 — 저장 직후 죽어도 주기 점검이 종료 알림을 다시 보낸다.
+            // 누적 토큰 영속(4-4) — 매 갱신에 싣는다: 종료 때만 쓰면 주차·중단된 작업은 값이 안 남아 재개가 0 부터 다시 셌다.
+            // terminal 전이엔 알림 표식(174)도 같은 쓰기로 남긴다 — 저장 직후 죽어도 주기 점검이 종료 알림을 다시 보낸다.
             const terminal = isTerminalStatus(u.status);
-            if (terminal) u = { ...u, totalTokens, terminalNotifyPending: true };
+            u = { ...u, totalTokens, ...(terminal ? { terminalNotifyPending: true } : {}) };
             await db.updateAgentTask(taskId, u);
             emitAgentTaskProgress({ userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn });
             // terminal 상태 → web push (페이지가 닫혀 있어도 알림) 후 표식 정리. fire-and-forget.

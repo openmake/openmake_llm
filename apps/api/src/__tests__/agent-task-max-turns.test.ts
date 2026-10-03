@@ -183,3 +183,24 @@ describe('Agent Task — 마무리 턴 강제', () => {
         expect(String(nudge?.content)).toContain('토큰 예산이 거의 소진');
     });
 });
+
+describe('Agent Task — 누적 토큰 영속', () => {
+    beforeEach(() => {
+        updateAgentTask.mockClear(); mockChat.mockClear();
+        chatCalls.length = 0; tokensPerTurn = 5;
+    });
+
+    it('종료 때만이 아니라 턴 진행 갱신에도 실린다 — 주차·중단 뒤 재개가 이어서 센다', async () => {
+        await new AgentTaskService().execute({
+            taskId: 't1', userId: 'u1', goal: '끝나지 않는 작업', maxTurns: 3,
+        } as never);
+
+        // 두 번째 턴 시작 갱신(currentTurn=2)은 종료 전이인데도 첫 턴의 토큰을 담고 있어야 한다.
+        const turn2 = updateAgentTask.mock.calls
+            .map(([, u]) => u as { currentTurn?: number; status?: string; totalTokens?: number })
+            .find(u => u.currentTurn === 2 && u.status === undefined);
+
+        expect(turn2).toBeDefined();
+        expect(turn2?.totalTokens).toBe(tokensPerTurn);
+    });
+});
