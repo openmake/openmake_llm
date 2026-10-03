@@ -88,3 +88,18 @@ describe('buildUserContextBlocks — 토글·guest', () => {
         expect(r.memoryBlock).toContain('TypeScript');
     });
 });
+
+describe('buildUserMemoryBlock — 순위 매김(에이전트 작업)', () => {
+    it('rank 를 주면 더 넓은 후보를 읽어 그 순서대로 싣는다', async () => {
+        repoMock.listActiveByUser.mockResolvedValue([{ id: 'a', content: '첫째' }, { id: 'b', content: '둘째' }]);
+        const block = await buildUserMemoryBlock('u1', { poolSize: 200, rank: (ms) => [...ms].reverse() });
+        expect(repoMock.listActiveByUser).toHaveBeenCalledWith('u1', 200);
+        expect(block.indexOf('둘째')).toBeLessThan(block.indexOf('첫째'));
+    });
+
+    it('rank 가 던지면 최신순 그대로 싣는다', async () => {
+        repoMock.listActiveByUser.mockResolvedValue([{ id: 'a', content: '첫째' }, { id: 'b', content: '둘째' }]);
+        const block = await buildUserMemoryBlock('u1', { rank: () => { throw new Error('x'); } });
+        expect(block.indexOf('첫째')).toBeLessThan(block.indexOf('둘째'));
+    });
+});

@@ -13,7 +13,7 @@ jest.mock('../../task-sandbox/planning', () => ({ currentPlanStepIndex: () => un
 const runTool = jest.fn(async (): Promise<string> => 'Error: 404 not found');
 jest.mock('../task-steps', () => ({ runTool: (...a: unknown[]) => runTool(...(a as [])), isSearchTool: () => false }));
 jest.mock('../tool-args', () => ({ prepareToolArgs: (a: unknown) => a }));
-jest.mock('../../tool-parallel', () => ({ prefetchReadOnlyCalls: async () => new Map() }));
+jest.mock('../../tool-parallel', () => ({ ...jest.requireActual('../../tool-parallel'), prefetchReadOnlyCalls: async () => new Map() }));
 jest.mock('../../../runtime-ports/tool-runtime', () => ({
     ...jest.requireActual('../../../runtime-ports/tool-runtime'),
     getToolRuntime: () => ({ runWithUserInputContext: (_c: unknown, fn: () => Promise<unknown>) => fn() }),

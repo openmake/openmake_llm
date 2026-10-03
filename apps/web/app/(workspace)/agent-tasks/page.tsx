@@ -48,6 +48,7 @@ import { PlanEditor } from "@/components/agent-tasks/plan-editor";
 import { BrowserTakeover } from "@/components/agent-tasks/browser-takeover";
 import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
 import { onAgentTaskChange, onOpenAgentTask } from "@/lib/agent-task-change";
+import { failureLabelKey, failureNextKey } from "@/lib/agent-task-failure";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -80,6 +81,8 @@ interface AgentTask {
   folderRel?: string;
   /** 실패 사유 — 코드(goal_incomplete/max_turns_exhausted/interrupted) 또는 자유 텍스트. */
   error?: string;
+  /** 서버가 남긴 실패 분류(failure_class) — 자유 텍스트 사유의 라벨과 다음 행동 문구를 고른다. */
+  failureClass?: string | null;
   /** 소유자 id — admin 전체 보기(viewAll)에서 타 사용자 작업 뱃지 표시용. */
   ownerId?: string;
   /** 큐 우선순위(131) — 0 이 아니면 목록에 뱃지 */
@@ -121,6 +124,8 @@ interface ApiAgentTask {
   folder_rel?: string | null;
   /** 실패 사유 (toPublicTask 가 노출하는 error 컬럼) */
   error?: string;
+  /** 실패 분류 (failure_class 컬럼, 7종) */
+  failure_class?: string | null;
   /** 최종 답변 본문 — toPublicTask 가 ...rest 로 그대로 노출한다(취소 작업은 null). */
   result?: string | null;
   /** 소유자 (toPublicTask 가 user_id 그대로 노출 — admin viewAll 에서 소유자 뱃지용) */
@@ -212,26 +217,19 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     executor: t.executor,
     folderRel: t.folder_rel || undefined,
     error: t.error || undefined,
+    failureClass: t.failure_class,
     ownerId: t.user_id != null ? String(t.user_id) : undefined,
     priority: typeof t.priority === "number" && t.priority !== 0 ? t.priority : undefined,
   };
 }
 
-/** 실패 사유 코드 — i18n 번역 대상. 그 외 값은 자유 텍스트로 원문 표시. */
-// "aborted" 는 사용자 취소 시 error 컬럼에 들어간다 — 번역 대상에 없어 원문이 그대로
-// 노출되고 있었다(결과 블록이 취소 사유를 표시하면서 드러남).
-const KNOWN_ERROR_CODES = new Set(["goal_incomplete", "max_turns_exhausted", "interrupted", "aborted", "token_limit", "timeout", "hitl_park_expired", "interrupted_local_device"]);
-/** 같은 뜻의 다른 표기 — 서버가 재시작 정리 때 쓰는 문구를 번역 키로 맞춘다. */
-const ERROR_CODE_ALIASES: Record<string, string> = { "server restarted": "interrupted" };
 /** 재개 가능한 사유 — resume 버튼과 시각적으로 연결. */
 const RESUMABLE_ERROR_CODES = new Set(["max_turns_exhausted", "interrupted"]);
 
-/** 실패 사유 라벨: 알려진 코드는 번역, 그 외는 원문 축약(전문은 tooltip). */
-function errorReasonLabel(tr: TFn, error: string): string {
-  const code = ERROR_CODE_ALIASES[error] ?? error;
-  return KNOWN_ERROR_CODES.has(code)
-    ? tr(`errorReason.${code}`)
-    : error.length > 48 ? `${error.slice(0, 48)}…` : error;
+/** 실패 사유 라벨: 알려진 코드·분류는 번역(lib/agent-task-failure), 그 외는 원문 축약(전문은 tooltip). */
+function errorReasonLabel(tr: TFn, error: string, failureClass?: string | null): string {
+  const key = failureLabelKey(error, failureClass);
+  return key ? tr(key) : error.length > 48 ? `${error.slice(0, 48)}…` : error;
 }
 
 const STATUS_META: Record<TaskStatus, { labelKey: string; tone: "accent" | "success" | "neutral" }> = {
@@ -701,10 +699,14 @@ function TaskDetailModal({
                   className="inline-flex items-center rounded-md border border-danger/40 bg-danger-soft px-2 py-0.5 font-medium text-danger"
                   title={detail.task.error}
                 >
-                  {errorReasonLabel(t, detail.task.error)}
+                  {errorReasonLabel(t, detail.task.error, detail.task.failure_class)}
                 </span>
                 {RESUMABLE_ERROR_CODES.has(detail.task.error) && (
                   <span className="text-faint">{t("errorReason.resumableHint")}</span>
+                )}
+                {/* 다음 행동 — 분류마다 한 문장(사용자 취소는 분류가 없어 생략) */}
+                {detail.task.error !== "aborted" && (
+                  <span className="basis-full text-muted">{t(failureNextKey(detail.task.error, detail.task.failure_class))}</span>
                 )}
               </div>
             )}
@@ -1395,7 +1397,7 @@ export default function AgentTasksPage() {
                         className="inline-flex items-center rounded-md border border-danger/40 bg-danger-soft px-2 py-0.5 font-medium text-danger"
                         title={task.error}
                       >
-                        {errorReasonLabel(t, task.error)}
+                        {errorReasonLabel(t, task.error, task.failureClass)}
                       </span>
                       {RESUMABLE_ERROR_CODES.has(task.error) && task.resumable && (
                         <span className="text-faint">{t("errorReason.resumableHint")}</span>

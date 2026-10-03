@@ -17,6 +17,11 @@ import { findBlockedBrowserUrls } from './browser-url-guard';
 import { BROWSER_URL_GUARD_ENABLED } from '../../config/task-sandbox';
 import { getBrowserUrlBlockedMessage } from '../../prompts/agent-task-prompt';
 import { viewWindow } from './file-view';
+import { resolveMissedStrReplace } from './str-replace-match';
+import { interpretExitCode } from './exit-code';
+import { ASK_HUMAN_STRUCTURED_SCHEMA, normalizeAskHuman } from './ask-human';
+import { ASK_HUMAN } from '../../config/agent-task-tools';
+import { ASK_HUMAN_STRUCTURED_DESCRIPTION } from '../../prompts/agent-task-tools';
 import { FILE_VIEW_MAX_CHARS } from '../../config/runtime-limits';
 import { randomUUID } from 'crypto';
 import { AgentTaskParked } from '../agent-task/types';
@@ -61,13 +66,15 @@ async function browserUrlBlock(actions: readonly unknown[]): Promise<string | nu
     return blocked.length > 0 ? getBrowserUrlBlockedMessage(blocked.map((b) => b.url)) : null;
 }
 
-/** exec 결과를 LLM 친화 텍스트로 포맷. */
-function formatExec(r: ExecResult): MCPToolResult {
+/** exec 결과를 LLM 친화 텍스트로 포맷. command 를 주면 오류가 아닌 종료 코드(grep 1 등)에 뜻을 덧붙인다(exit-code). */
+function formatExec(r: ExecResult, command?: string): MCPToolResult {
     const parts: string[] = [];
     if (r.stdout) parts.push(`[stdout]\n${r.stdout}`);
     if (r.stderr) parts.push(`[stderr]\n${r.stderr}`);
     parts.push(`[exit=${r.exitCode}${r.timedOut ? ' TIMEOUT' : ''}${r.truncated ? ' TRUNCATED' : ''} ${r.durationMs}ms]`);
-    return textResult(parts.join('\n'), r.exitCode !== 0 || r.timedOut);
+    const note = command !== undefined && !r.timedOut ? interpretExitCode(command, r.exitCode) : null;
+    if (note) parts.push(note);
+    return textResult(parts.join('\n'), (r.exitCode !== 0 && !note) || r.timedOut);
 }
 
 function str(v: unknown): string { return typeof v === 'string' ? v : ''; }
@@ -131,7 +138,7 @@ export function createTaskTools(
         handler: async (args): Promise<MCPToolResult> => {
             const command = str(args.command).trim();
             if (!command) return textResult('command 가 필요합니다.', true);
-            return formatExec(await sandbox.exec(command));
+            return formatExec(await sandbox.exec(command), command);
         },
     };
 
@@ -219,10 +226,16 @@ export function createTaskTools(
                     if (!oldStr) return textResult('old_str 가 필요합니다.', true);
                     const content = await sandbox.readFile(path);
                     const count = content.split(oldStr).length - 1;
-                    if (count === 0) return textResult(`old_str 를 찾을 수 없습니다: ${path} — old_str 는 공백·들여쓰기까지 파일 내용과 정확히 일치해야 합니다. command:view 로 현재 내용을 확인한 뒤 그대로 복사해 쓰세요.`, true);
+                    if (count === 0) {
+                        // 공백·따옴표만 다른 경우는 유일할 때 적용하고, 아니면 가장 비슷한 줄을 알린다(str-replace-match).
+                        const relaxed = resolveMissedStrReplace(content, oldStr, str(args.new_str), path);
+                        if (relaxed.content === undefined) return textResult(relaxed.message, true);
+                        await sandbox.writeFile(path, relaxed.content);
+                        return withDiagnostics(sandbox, path, relaxed.message, content);
+                    }
                     if (count > 1) return textResult(`old_str 가 ${count}회 중복 — 유일해야 합니다.`, true);
                     await sandbox.writeFile(path, content.replace(oldStr, str(args.new_str)));
-                    return withDiagnostics(sandbox, path, `치환 완료: ${path}`);
+                    return withDiagnostics(sandbox, path, `치환 완료: ${path}`, content);
                 }
                 if (command === 'insert') {
                     const content = await sandbox.readFile(path);
@@ -230,7 +243,7 @@ export function createTaskTools(
                     const at = Math.max(0, Math.min(lines.length, Number(args.insert_line) || 0));
                     lines.splice(at, 0, str(args.new_str));
                     await sandbox.writeFile(path, lines.join('\n'));
-                    return withDiagnostics(sandbox, path, `삽입 완료: ${path}:${at}`);
+                    return withDiagnostics(sandbox, path, `삽입 완료: ${path}:${at}`, content);
                 }
                 return textResult(`알 수 없는 command: ${command}`, true);
             } catch (e) {
@@ -436,15 +449,17 @@ export function createTaskTools(
         tool: {
             name: 'ask_human',
             description: '진행에 사용자 확인이나 정보가 필요할 때 호출합니다. task 가 일시정지되고 사용자에게 알림이 가며, ' +
-                '사용자는 글로 답하거나 답 없이 거절할 수 있습니다 — 한 번에 답할 수 있게 필요한 것을 구체적으로 물으세요.',
-            inputSchema: {
+                '사용자는 글로 답하거나 답 없이 거절할 수 있습니다 — 한 번에 답할 수 있게 필요한 것을 구체적으로 물으세요.' +
+                (ASK_HUMAN.STRUCTURED_ENABLED ? ASK_HUMAN_STRUCTURED_DESCRIPTION : ''),
+            // 구조화 질문(ask-human) — 질문 여러 개·선택지·권장안. 끄면 종전처럼 question 하나만 받는다.
+            inputSchema: ASK_HUMAN.STRUCTURED_ENABLED ? ASK_HUMAN_STRUCTURED_SCHEMA : {
                 type: 'object',
                 properties: { question: { type: 'string', description: '사용자에게 물을 질문' } },
                 required: ['question'],
             },
         },
         handler: async (args): Promise<MCPToolResult> =>
-            textResult(`${TASK_ASK_HUMAN_SENTINEL} ${str(args.question)}`),
+            textResult(`${TASK_ASK_HUMAN_SENTINEL} ${normalizeAskHuman(args).question}`),
     };
 
     return [bash, pythonExecute, strReplaceEditor, fileOps, ...createCodeNavTools(sandbox), ...(sandbox.isBrowserEnabled ? [browser] : []), planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), ...contributedTools, ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];

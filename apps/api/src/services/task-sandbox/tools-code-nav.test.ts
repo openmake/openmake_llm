@@ -96,6 +96,60 @@ describe('grep_code', () => {
     });
 });
 
+describe('grep_code 무일치 원인 안내', () => {
+    const grepOf = (sandbox: TaskExecutor) => createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+
+    it('대소문자를 무시하면 맞는 경우 ignore_case 를 알린다', async () => {
+        const { sandbox } = fakeSandbox((cmd) => (cmd.includes(' -i ') ? exec('a.ts:3:const UserName = 1') : exec('')));
+        const r = await grepOf(sandbox).handler({ pattern: 'username' });
+        expect(r.isError).toBeFalsy();
+        expect(text(r).split('\n')).toHaveLength(1);
+        expect(text(r)).toContain('일치 없음');
+        expect(text(r)).toContain('ignore_case');
+    });
+
+    it('정규식 문자를 문자 그대로 보면 맞는 경우 이스케이프한 패턴을 알린다', async () => {
+        const { sandbox } = fakeSandbox((cmd) => (cmd.includes(String.raw`-e 'render\(a\.b\)'`) ? exec('a.ts:1:render(a.b)') : exec('')));
+        const r = await grepOf(sandbox).handler({ pattern: 'render(a.b)' });
+        expect(text(r)).toContain(String.raw`render\(a\.b\)`);
+        expect(text(r)).toContain('정규식');
+    });
+
+    it('숨김·무시 대상 파일에만 있으면 그 파일을 path 로 지목하라고 알린다', async () => {
+        const { sandbox } = fakeSandbox((cmd) => (cmd.includes('--hidden') ? exec('.github/workflows/ci.yml:4:deploy') : exec('')));
+        const r = await grepOf(sandbox).handler({ pattern: 'deploy' });
+        expect(text(r)).toContain('.github/workflows/ci.yml');
+        expect(text(r)).toContain('path');
+    });
+
+    it('원인을 찾지 못하면 종전 문구 그대로다', async () => {
+        const { sandbox } = fakeSandbox(() => exec(''));
+        const r = await grepOf(sandbox).handler({ pattern: 'nothing' });
+        expect(text(r)).toBe('(일치 없음: nothing)');
+    });
+
+    it('이미 ignore_case 로 찾았고 정규식 문자가 없으면 그 확인은 돌리지 않는다', async () => {
+        const { sandbox, cmds } = fakeSandbox(() => exec(''));
+        await grepOf(sandbox).handler({ pattern: 'nothing', ignore_case: true });
+        expect(cmds).toHaveLength(2); // 본 검색 + 숨김 확인
+    });
+
+    it('네이티브 탐색이 실패해 셸로 떨어진 실행기에서는 추가 명령을 돌리지 않는다(승인 창이 뜬다)', async () => {
+        const { sandbox, cmds } = nativeSandbox(() => null);
+        const r = await grepOf(sandbox).handler({ pattern: 'username' });
+        expect(text(r)).toContain('일치 없음');
+        expect(cmds).toHaveLength(1);
+    });
+
+    it('네이티브 탐색에서는 대소문자·정규식 확인만 한다', async () => {
+        const { sandbox, specs, cmds } = nativeSandbox((spec) => ({ matches: spec.ignoreCase ? ['a.ts:1:UserName'] : [] }));
+        const r = await grepOf(sandbox).handler({ pattern: 'username' });
+        expect(text(r)).toContain('ignore_case');
+        expect(specs).toHaveLength(2);
+        expect(cmds).toHaveLength(0);
+    });
+});
+
 describe('repo_map', () => {
     it('파일 목록을 디렉토리 요약·파일·심볼로 조립한다', async () => {
         const { sandbox } = fakeSandbox((cmd) => cmd.startsWith('find')

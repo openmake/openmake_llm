@@ -23,6 +23,9 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AgentTaskSubagentStepRepository } from '../../data/repositories/agent-task-subagent-step-repository';
 import type { ChatMessage } from '../../llm/types';
 import { createLogger } from '../../utils/logger';
+import { AGENT_DELEGATION } from '../../config/agent-task-delegation';
+import { getDelegationRejection, DELEGATION_SELF_REPORT_NOTICE } from '../../prompts/agent-task-delegation';
+import { checkDelegationGoal } from './delegation-input';
 
 const logger = createLogger('AgentTaskDelegate');
 
@@ -54,7 +57,12 @@ export interface DelegateFactoryParams {
 
 /** delegate 도구 핸들러 생성 — TaskRuntime 에 주입. */
 export function buildDelegateFn(p: DelegateFactoryParams): DelegateFn {
+    /** 부모에게 가는 결과에 자가 보고 안내를 붙인다. */
+    const withNotice = (result: string): string =>
+        (AGENT_DELEGATION.SELF_REPORT_NOTICE_ENABLED ? `${result}\n\n${DELEGATION_SELF_REPORT_NOTICE}` : result);
     return async (subgoal: string, role?: string): Promise<string> => {
+        const problem = AGENT_DELEGATION.INPUT_CHECK_ENABLED ? checkDelegationGoal(subgoal, { batch: false }) : null;
+        if (problem) return getDelegationRejection([problem]);
         const selection = await routeToAgent(role ? `[${role}] ${subgoal}` : subgoal);
         const { prompt } = await getAgentSystemMessage(selection, p.userId);
         if (AGENT_TASK_LIMITS.SUBAGENT_ENABLED) {
@@ -90,12 +98,12 @@ export function buildDelegateFn(p: DelegateFactoryParams): DelegateFn {
             });
             // 서브가 끝났다 — 주차로 던져진 경우(AgentTaskParked)는 여기 오지 않아 체크포인트가 남는다.
             await repo.deleteCheckpoint(p.taskId, ckptKey).catch(() => { /* 남아도 같은 위임이 다시 올 때만 쓰인다 */ });
-            return result;
+            return withNotice(result);
         }
         const r = await p.client.chat(
             [{ role: 'system', content: prompt }, { role: 'user', content: subgoal }],
             undefined, undefined, { think: false, signal: p.signal },
         );
-        return r.content ?? '';
+        return withNotice(r.content ?? '');
     };
 }

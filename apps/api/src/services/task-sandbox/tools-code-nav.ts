@@ -17,6 +17,8 @@
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import type { TaskExecutor, ExecResult, CodeNavSpec } from './executor';
 import { TASK_CODE_NAV } from '../../config/runtime-limits';
+import { GREP_MISS_HINT_ENABLED } from '../../config/agent-task-tools';
+import { diagnoseNoMatch } from './grep-miss-hint';
 
 const PATTERN_MAX_CHARS = 500;
 const EXIT_NOT_FOUND = 127;
@@ -122,6 +124,8 @@ interface GrepOutcome {
 /** grep 한 번 — 네이티브 우선, 아니면 셸(rg→grep). 캡·줄 절단은 이 함수가 단일 적용한다. */
 async function runGrep(sandbox: TaskExecutor, o: {
     pattern: string; rel: string; glob?: string; ignoreCase?: boolean; max: number;
+    /** 숨김·.gitignore 대상 파일도 본다(rg 전용 — 무일치 원인 확인용). */
+    hidden?: boolean;
 }): Promise<GrepOutcome> {
     const native = await tryNative(sandbox, {
         op: 'grep', path: o.rel, pattern: o.pattern, maxResults: o.max,
@@ -135,7 +139,7 @@ async function runGrep(sandbox: TaskExecutor, o: {
     const ic = o.ignoreCase === true;
     const tail = `; ${countSkippedShell(o.rel)}`;
     const rgCmd = `rg -n --no-heading --color never --no-messages -m ${TASK_CODE_NAV.GREP_PER_FILE_MAX}`
-        + `${ic ? ' -i' : ''} ${excludeGlobsRg()}${o.glob ? ` -g ${shq(o.glob)}` : ''} -e ${shq(o.pattern)} -- ${shq(o.rel)} | ${head}${tail}`;
+        + `${ic ? ' -i' : ''}${o.hidden ? ' --hidden --no-ignore' : ''} ${excludeGlobsRg()}${o.glob ? ` -g ${shq(o.glob)}` : ''} -e ${shq(o.pattern)} -- ${shq(o.rel)} | ${head}${tail}`;
     const grepCmd = `grep -rnI -E${ic ? 'i' : ''} ${excludeDirsGrep()}${o.glob ? ` --include=${shq(o.glob.replace(/^.*\//, ''))}` : ''}`
         + ` -e ${shq(o.pattern)} -- ${shq(o.rel)} | ${head}${tail}`;
     const { r, via } = await execWithGrepFallback(sandbox, rgCmd, grepCmd);
@@ -186,7 +190,15 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
             ));
             const out = await runGrep(sandbox, { pattern, rel, max, ...(glob ? { glob } : {}), ...(ic ? { ignoreCase: true } : {}) });
             if (out.error) return textResult(out.error, true);
-            if (out.lines.length === 0) return textResult(`(일치 없음: ${pattern})${skippedNote(out.skipped)}`);
+            if (out.lines.length === 0) {
+                // 흔한 원인(대소문자·정규식 문자·숨김 파일)을 확인해 알린다(grep-miss-hint). 네이티브 탐색이 안 돼 셸로 떨어진
+                // 로컬 실행기에서는 하지 않는다 — 셸 명령마다 디바이스 승인 창이 뜬다.
+                const cause = GREP_MISS_HINT_ENABLED && (out.via === 'native' || !sandbox.codeNav)
+                    ? await diagnoseNoMatch({ pattern, ignoreCase: ic, canProbeHidden: out.via === 'rg' }, async (p) =>
+                        (await runGrep(sandbox, { pattern: p.pattern, rel, max: 1, ...(glob ? { glob } : {}), ...(p.ignoreCase ? { ignoreCase: true } : {}), ...(p.hidden ? { hidden: true } : {}) })).lines[0] ?? null)
+                    : '';
+                return textResult(`(일치 없음: ${pattern})${cause}${skippedNote(out.skipped)}`);
+            }
             const note = out.overflow ? `\n… ${max}줄에서 잘림 — pattern/path/glob 으로 좁히세요.` : '';
             return textResult(`${out.lines.join('\n')}${note}${skippedNote(out.skipped)}${out.via === 'grep' ? '\n(rg 미설치 — grep 사용)' : ''}`);
         },

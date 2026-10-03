@@ -30,6 +30,27 @@ describe('composeSpawnResult — 태스크별 예산 분배', () => {
     });
 });
 
+describe('composeSpawnResult — 태스크별 상태 줄', () => {
+    it('상태 줄이 있으면 머리말 바로 아래에 싣고, 없는 태스크는 종전 형식 그대로다', () => {
+        const out = composeSpawnResult({
+            tasks: tasks(2), results: ['첫 결과', '둘째 결과'], statusLines: ['[종료 사유: 시간 초과]', undefined],
+            noToolsNotice: '', droppedCount: 0, maxTasks: 4, budgetChars: 8000, headRatio: 0.5,
+        });
+        expect(out).toContain('### 태스크 1/2: 조사 1\n[종료 사유: 시간 초과]\n첫 결과');
+        expect(out).toContain('### 태스크 2/2: 조사 2\n둘째 결과');
+    });
+
+    it('예산을 넘겨 본문을 줄여도 상태 줄은 남는다', () => {
+        const out = composeSpawnResult({
+            tasks: tasks(2), results: ['a'.repeat(9000), 'b'.repeat(9000)], statusLines: ['[종료 사유: 정상 완료]', '[종료 사유: 오류]'],
+            noToolsNotice: '', droppedCount: 0, maxTasks: 4, budgetChars: 8000, headRatio: 0.5,
+        });
+        expect(out.length).toBeLessThanOrEqual(8000);
+        expect(out).toContain('[종료 사유: 정상 완료]');
+        expect(out).toContain('[종료 사유: 오류]');
+    });
+});
+
 describe('partialSubagentResult — 상한에 걸린 부분 결과 표시', () => {
     it('부모가 완주와 구분할 수 있게 머리말을 붙인다', () => {
         expect(partialSubagentResult('turns', '중간 정리')).toMatch(/^\[서브에이전트 상태: 턴 상한 도달 — 부분 결과\]\n중간 정리$/);

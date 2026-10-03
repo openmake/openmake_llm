@@ -68,12 +68,12 @@ describe('callAgentTurnWithBudget', () => {
                 p.onToken?.('전체 답변');                    // 재시도 — 처음부터 다시 받는다
                 p.signal.addEventListener('abort', () => rej(new Error('Request was aborted.')), { once: true });
             }));
-        const onRetry = jest.fn();
-        const settled = callAgentTurnWithBudget({ ...base(), totalTimeoutMs: 10_000, elapsedActiveMs: 9_000, finalTurn: true, onRetry }).catch((e) => e);
+        const onNote = jest.fn();
+        const settled = callAgentTurnWithBudget({ ...base(), totalTimeoutMs: 10_000, elapsedActiveMs: 9_000, finalTurn: true, onNote }).catch((e) => e);
         await jest.advanceTimersByTimeAsync(5_100);
         const err = await settled;
         expect((err as AgentTaskTurnTimeout).partialContent).toBe('전체 답변');
-        expect(onRetry).toHaveBeenCalledTimes(1);
+        expect(onNote.mock.calls).toEqual([['retry', '일시적 LLM 오류 — 재시도 1/2: terminated']]);
     });
 
     it('도구 턴은 스트리밍하지 않는다(onToken 미전달) — 종전 비스트림 경로 유지', async () => {
@@ -112,5 +112,52 @@ describe('callAgentTurnWithBudget', () => {
     it('예산 밖의 일반 오류는 그대로 전파된다', async () => {
         chat.mockRejectedValue(new Error('boom'));
         await expect(callAgentTurnWithBudget(base())).rejects.toThrow('boom');
+    });
+});
+
+describe('callAgentTurnWithBudget — 재시도 소진 뒤 대기 예산', () => {
+    it('이 호출의 남은 예산을 넘겨 준다 — 그 안에서만 더 기다리게', async () => {
+        chat.mockResolvedValue({ content: 'ok' });
+        await callAgentTurnWithBudget({ ...base(), totalTimeoutMs: 10_000, elapsedActiveMs: 4_000 });
+        expect((chat.mock.calls[0][1] as { recoveryBudgetMs?: number }).recoveryBudgetMs).toBe(6_000);
+    });
+});
+
+describe('callAgentTurnWithBudget — 컨텍스트 절단 기록', () => {
+    it('창 초과로 오래된 메시지가 잘린 호출은 단계 기록을 남긴다', async () => {
+        chat.mockResolvedValue({ content: 'ok', metrics: { prompt_tokens: 9, context_dropped_messages: 4 } });
+        const onNote = jest.fn();
+        await callAgentTurnWithBudget({ ...base(), onNote });
+        expect(onNote).toHaveBeenCalledTimes(1);
+        expect(onNote.mock.calls[0][0]).toBe('context_trim');
+        expect(onNote.mock.calls[0][1]).toContain('4건');
+    });
+
+    it('잘리지 않은 호출은 기록하지 않는다', async () => {
+        chat.mockResolvedValue({ content: 'ok', metrics: { prompt_tokens: 9 } });
+        const onNote = jest.fn();
+        await callAgentTurnWithBudget({ ...base(), onNote });
+        expect(onNote).not.toHaveBeenCalled();
+    });
+});
+
+describe('callAgentTurnWithBudget — 출력 반복 기록', () => {
+    const loop = '같은 문장을 계속 되풀이하는 모델 출력입니다. 설정을 확인하고 다시 시도하겠습니다. 잠시만 기다려 주세요. ';
+
+    it('본문에서 짧은 구간이 여러 번 반복되면 단계 기록만 남기고 응답은 그대로 돌려준다', async () => {
+        chat.mockResolvedValue({ content: loop.repeat(8) });
+        const onNote = jest.fn();
+        const { result } = await callAgentTurnWithBudget({ ...base(), onNote });
+        expect(result.content).toBe(loop.repeat(8));
+        expect(onNote).toHaveBeenCalledTimes(1);
+        expect(onNote.mock.calls[0][0]).toBe('output_repetition');
+        expect(onNote.mock.calls[0][1]).toContain('반복');
+    });
+
+    it('반복이 없으면 기록하지 않는다', async () => {
+        chat.mockResolvedValue({ content: '작업을 마쳤습니다.' });
+        const onNote = jest.fn();
+        await callAgentTurnWithBudget({ ...base(), onNote });
+        expect(onNote).not.toHaveBeenCalled();
     });
 });
