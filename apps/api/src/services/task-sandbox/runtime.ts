@@ -29,6 +29,7 @@ import type { PlanStepInput } from './planning';
 import { APPROVAL_PREVIEW } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskParked } from '../agent-task/types';
+import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 
 const logger = createLogger('TaskRuntime');
 
@@ -266,7 +267,7 @@ export class TaskRuntime {
             const preview = skillPreview ?? (APPROVAL_PREVIEW.ENABLED
                 ? await buildApprovalPreview(name, args, (p) => this.executor.readFile(p)).catch(() => null)
                 : null);
-            const { decision, reason, waitedMs } = await getApprovalRegistry().request(
+            const { decision, reason, text: rejectText, waitedMs } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args, preview: preview ?? undefined },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending, parkable: true, policy: this.cfg.approvalPolicy },
             );
@@ -274,9 +275,7 @@ export class TaskRuntime {
             if (reason === 'parked') throw new AgentTaskParked(); // 유예 초과 → 주차: 결정이 오면 같은 호출로 재개(실행 전이라 부작용 없음)
             if (decision !== 'approved') {
                 opts.onApprovalRejected?.({ toolName: name, reason: reason ?? 'user' });
-                return reason === 'timeout'
-                    ? `Error: 승인 대기 시간이 초과되었습니다(무응답, ${name}). 사용자가 자리를 비운 것으로 보입니다 — 승인이 필요 없는 방법으로 진행하거나, 지금까지 확보한 결과로 최종 산출물을 작성하세요.`
-                    : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
+                return getApprovalRejectedNotice(name, reason, rejectText);
             }
         }
 

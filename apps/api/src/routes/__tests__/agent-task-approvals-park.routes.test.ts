@@ -15,6 +15,7 @@ jest.mock('../../services/agent-task/hitl-park', () => ({ resumeParkedTask: (id:
 jest.mock('../../data/models/unified-database', () => ({ getPool: () => ({}) }));
 
 import { approvalsRouter as router } from '../agent-task-approvals.routes';
+import { APPROVAL_REJECT_REASON_MAX_CHARS } from '../../config/agent-task-approval';
 
 function handler(path: string) {
     const layer = (router as any).stack.find((l: any) => l.route?.path === path);
@@ -48,6 +49,18 @@ describe('승인 결정 후 주차 작업 재개', () => {
         await handler('/approvals/:approvalId/:decision')({ params: { approvalId: 'apv1', decision: 'reject' }, body: {}, user }, res, jest.fn());
         expect(registry.reject).toHaveBeenCalled();
         expect(res.body.data).toEqual({ approvalId: 'apv1', decision: 'reject', resumed: false });
+    });
+
+    it('reject 는 본문의 사유를 다듬어 넘기고(상한에서 자름), approve 는 사유를 넘기지 않는다', async () => {
+        resumeParkedTask.mockResolvedValue(false);
+        await handler('/approvals/:approvalId/:decision')({ params: { approvalId: 'apv1', decision: 'reject' }, body: { reason: '  운영 DB 는 건드리지 마  ' }, user }, mockRes(), jest.fn());
+        expect(registry.reject).toHaveBeenLastCalledWith('apv1', 'u1', '운영 DB 는 건드리지 마');
+        await handler('/approvals/:approvalId/:decision')({ params: { approvalId: 'apv1', decision: 'reject' }, body: { reason: 'x'.repeat(5000) }, user }, mockRes(), jest.fn());
+        expect((registry.reject.mock.calls.at(-1) as unknown[])[2]).toHaveLength(APPROVAL_REJECT_REASON_MAX_CHARS);
+        await handler('/approvals/:approvalId/:decision')({ params: { approvalId: 'apv1', decision: 'reject' }, body: { reason: 42 }, user }, mockRes(), jest.fn());
+        expect(registry.reject).toHaveBeenLastCalledWith('apv1', 'u1', undefined);
+        await handler('/approvals/:approvalId/:decision')({ params: { approvalId: 'apv1', decision: 'approve' }, body: { reason: '무시' }, user }, mockRes(), jest.fn());
+        expect(registry.approve).toHaveBeenLastCalledWith('apv1', 'u1');
     });
 
     it('결정 저장에 실패하면 재개하지 않는다', async () => {

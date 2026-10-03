@@ -7,7 +7,7 @@
  *   GET  /api/agent-tasks/approvals/recent                 (138)
  *   POST /api/agent-tasks/approvals/:approvalId/reassign · /escalate  (138, `/:decision` 보다 먼저)
  *   POST /api/agent-tasks/approvals/:approvalId/answer     ← `/:decision` 보다 먼저
- *   POST /api/agent-tasks/approvals/:approvalId/:decision  (approve | reject)
+ *   POST /api/agent-tasks/approvals/:approvalId/:decision  (approve | reject { reason? })
  *
  * @module routes/agent-task-approvals
  */
@@ -29,6 +29,7 @@ import type { PendingApproval } from '../services/task-sandbox/approval-gate';
 import { resumeParkedTask } from '../services/agent-task/hitl-park';
 import { notifyApprovalChange } from '../services/agent-task/approval-change-notify';
 import { PAGINATION } from '../config/http-data-limits';
+import { APPROVAL_REJECT_REASON_MAX_CHARS } from '../config/agent-task-approval';
 
 /** 결정·이관 권한(138): 소유자 OR 현재 담당자 OR 시스템 admin. */
 function assertApprovalActor(pending: PendingApproval, user: { id?: string | number; role?: string }): void {
@@ -190,6 +191,7 @@ router.post('/approvals/:approvalId/answer', asyncHandler(async (req: Request, r
 /**
  * POST /api/agent-tasks/approvals/:approvalId/:decision  (decision = approve | reject)
  * 대기 중인 도구 호출을 승인/거절 — 해당 approval 의 owner 만 가능.
+ * reject 는 본문 { reason? } 로 사유를 받는다(선택, 상한에서 자름) — 모델에 그대로 전달된다.
  */
 router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request, res: Response) => {
     const { approvalId, decision } = req.params;
@@ -201,7 +203,9 @@ router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request
     if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     assertApprovalActor(pending, req.user!);
 
-    const ok = await (decision === 'approve' ? registry.approve(approvalId, String(req.user!.id)) : registry.reject(approvalId, String(req.user!.id)));
+    const rawReason = (req.body as { reason?: unknown } | undefined)?.reason;
+    const reason = typeof rawReason === 'string' ? rawReason.trim().slice(0, APPROVAL_REJECT_REASON_MAX_CHARS) || undefined : undefined;
+    const ok = await (decision === 'approve' ? registry.approve(approvalId, String(req.user!.id)) : registry.reject(approvalId, String(req.user!.id), reason));
     if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     res.json(success({ approvalId, decision, resumed: await resumeIfParked(pending.taskId) }));
 }));

@@ -32,6 +32,7 @@ import { parallelBatch } from '../../workflow/graph-engine';
 import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
+import { approvalFloorReason } from '../task-sandbox/approval-floor';
 import { runSubagent } from '../agent-task/subagent';
 import { SubagentTrace, newTraceId, subagentLabel } from '../agent-task/subagent-trace';
 import type { DelegateFactoryParams } from '../agent-task/delegate';
@@ -379,8 +380,9 @@ export function buildTaskSpawnFn(p: DelegateFactoryParams): SpawnFn {
         // (자동 승인은 실행 중에도 켜진다). 운영 정책 all 에서 이 판정이 없으면 도구가 전부
         // 걷혀 서브가 기억으로만 답한다(2026-08-26 라이브 실측).
         const autoApproved = getApprovalRegistry().isAutoApprove(p.taskId);
+        // 자동 승인이어도 바닥 호출(외부 MCP 도구 등)은 계속 묻는다 — 그런 도구는 병렬 서브에 주지 않는다.
         const subTools = autoApproved
-            ? whitelisted
+            ? whitelisted.filter((t) => approvalFloorReason(t.function.name, {}) === null)
             : whitelisted.filter((t) => !requiresApproval(p.sandboxCfg.approvalPolicy, t.function.name, {}));
         const stripped = whitelisted.length - subTools.length;
         const noToolsReason = subTools.length === 0

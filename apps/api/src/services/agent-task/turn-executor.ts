@@ -28,6 +28,7 @@ import { runWithToolCallContext } from '../../utils/tool-call-context';
 import { isRejectedCall, findDuplicateCalls } from './turn-call-guards';
 import { getMalformedToolArgsResult, getDuplicateToolCallResult } from '../../prompts/agent-task-turn-loop';
 import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice } from '../../prompts/agent-task-prompt';
+import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
@@ -169,7 +170,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         toolCalls.filter((tc) => (tc.id === undefined || !journal.has(tc.id)) && !isRejectedCall(tc) && !duplicateOf.has(tc)).map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
         ({ name, tc }) => !taskRuntime?.isTaskTool(name)
             && (!requiresApproval(sandboxCfg.approvalPolicy, name, (tc.function.arguments ?? {}) as Record<string, unknown>)
-                || getApprovalRegistry().isAutoApprove(taskId)),
+                || getApprovalRegistry().autoApproves(taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>)),
         async ({ name, tc }) => {
             const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
             if (extraToolNames.has(name) && requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
@@ -179,7 +180,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                     { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, policy: sandboxCfg.approvalPolicy },
                 );
                 pausedMs += r.waitedMs;
-                if (r.decision !== 'approved') return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
+                if (r.decision !== 'approved') return getApprovalRejectedNotice(name, r.reason, r.text);
             }
             return execTool(name, args);
         },
@@ -253,6 +254,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             // extraToolNames 는 샌드박스 ENABLED(활성·degrade) 일 때만 채워지므로 legacy OFF 경로엔 영향 없음.
             let decision: 'approved' | 'rejected' = 'approved';
             let rejectReason: string | undefined;
+            let rejectText: string | undefined;
             if (requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
                 const r = await getApprovalRegistry().request(
                     { taskId, userId, toolName: name, args },
@@ -260,6 +262,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 );
                 decision = r.decision;
                 rejectReason = r.reason;
+                rejectText = r.text;
                 pausedMs += r.waitedMs; // 4-1 pause-aware
                 if (rejectReason === 'parked') await park(); // 유예 초과 → 주차: 실행 전이라 결과 없이 체크포인트, 재개 때 결정 이어받음
                 if (decision === 'rejected') onApprovalRejected({ toolName: name, reason: rejectReason ?? 'user' });
@@ -268,9 +271,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             if (decision === 'approved') await beforeExecute?.();
             toolResult = decision === 'approved'
                 ? await execWithReceipt(name, args, tc.id)
-                : rejectReason === 'timeout'
-                    ? `Error: 승인 대기 시간이 초과되었습니다(무응답, ${name}). 사용자가 자리를 비운 것으로 보입니다 — 승인이 필요 없는 방법으로 진행하거나, 지금까지 확보한 결과로 최종 산출물을 작성하세요.`
-                    : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
+                : getApprovalRejectedNotice(name, rejectReason, rejectText);
         } else {
             await beforeExecute?.();
             toolResult = await execWithReceipt(name, args, tc.id);
