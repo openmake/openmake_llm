@@ -21,6 +21,7 @@ import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, s
 import { resolve, sep, join, dirname, basename, relative } from 'path';
 import { getTaskSandboxConfig, BROWSER_SESSION, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { BROWSER_RUN } from '../../config/agent-task-browser-web';
+import { BROWSER_TAKEOVER_DISCARDED_MESSAGE } from '../../prompts/agent-task-browser-web';
 import type { TaskExecutor, ExecResult } from './executor';
 import { SANDBOX_WORKSPACE_DIR, stripWorkspacePrefix } from './workspace-path';
 import { createLogger } from '../../utils/logger';
@@ -368,12 +369,17 @@ export class TaskSandbox implements TaskExecutor {
         }
         const name = browserRunContainerName(this.taskId);
         const args = buildBrowserRunArgs(this.hostWorkdir, actionsRelPath, this.cfg, proxyUrl, name);
-        return runProcess(this.cfg.dockerPath, args, {
+        const r = await runProcess(this.cfg.dockerPath, args, {
             timeoutMs: Math.max(this.cfg.execTimeoutMs, BROWSER_RUN.MIN_TIMEOUT_MS),
             outputCap: this.cfg.outputCap,
             // 시간 초과 — CLI 만 죽이면 컨테이너(chromium)는 계속 돈다. 이름으로 컨테이너까지 지운다.
             onStop: () => runProcess(this.cfg.dockerPath, ['rm', '-f', name], { timeoutMs: 10_000, outputCap: 4096 }),
         });
+        // 실행 중에 사용자가 넘겨받았으면 결과를 버린다 — 시작 전 확인만으로는 그 사이의 넘겨받기를 놓친다.
+        if (BROWSER_RUN.TAKEOVER_RECHECK_ENABLED && await isBrowserSessionActive(this.taskId, this.cfg)) {
+            return { ...r, stdout: '', stderr: BROWSER_TAKEOVER_DISCARDED_MESSAGE, exitCode: -1 };
+        }
+        return r;
     }
 
     /** workspace 내 파일 쓰기 (호스트 bind-mount 직접). 경로 가드(어휘+실경로) + 디스크 쿼터 적용.

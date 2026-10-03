@@ -8,7 +8,7 @@ import { join } from 'path';
 
 jest.mock('../../config/agent-task-browser-web', () => ({
     ...jest.requireActual('../../config/agent-task-browser-web'),
-    BROWSER_RUN: { CONTAINER_PREFIX: 'omk-brun-', MIN_TIMEOUT_MS: 300 },
+    BROWSER_RUN: { ...jest.requireActual('../../config/agent-task-browser-web').BROWSER_RUN, MIN_TIMEOUT_MS: 300 },
 }));
 
 import { buildBrowserRunArgs, browserRunContainerName, reapOrphanTaskSandboxes, TaskSandbox } from './sandbox';

@@ -21,4 +21,9 @@ export const BROWSER_RUN = {
     CONTAINER_PREFIX: 'omk-brun-',
     /** 브라우저 한 번 실행의 최소 상한(ms) — 명령 상한(TASK_SANDBOX_EXEC_TIMEOUT_MS)이 더 짧아도 이만큼은 준다. */
     MIN_TIMEOUT_MS: intEnv(process.env.TASK_SANDBOX_BROWSER_MIN_TIMEOUT_MS, 90_000),
+    /**
+     * 실행이 끝난 뒤 넘겨받기(Take control) 여부를 다시 확인해, 그 사이 사용자가 넘겨받았으면 결과를 버린다.
+     * 호출마다 `docker inspect` 한 번이 더 든다. TASK_SANDBOX_BROWSER_TAKEOVER_RECHECK=false 로 끈다.
+     */
+    TAKEOVER_RECHECK_ENABLED: process.env.TASK_SANDBOX_BROWSER_TAKEOVER_RECHECK !== 'false',
 } as const;
