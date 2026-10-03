@@ -282,6 +282,11 @@ export function getAgentTaskSteeringInjection(text: string): string {
     ].join('\n');
 }
 
+/** 브라우저 목적지 검사(browser-url-guard) — 막힌 주소가 있어 실행하지 않았을 때의 결과. */
+export function getBrowserUrlBlockedMessage(urls: readonly string[]): string {
+    return `브라우저를 실행하지 않았습니다 — 내부망·로컬·메타데이터 주소이거나 http(s) 가 아닌 주소로는 이동할 수 없습니다: ${urls.join(', ')}. 공개 웹 주소만 사용하세요.`;
+}
+
 /** stuck(동일 응답 반복) 감지 시 주입 — 전략 변경 유도(OpenManus handle_stuck_state 패턴). */
 export function getAgentTaskStuckNudge(): string {
     return '같은 시도를 반복하고 있습니다. 접근 방식을 바꾸세요: 다른 도구나 다른 입력을 시도하거나, 막혔다면 지금까지의 결과로 작업을 마무리(terminate)하거나 사용자에게 도움을 요청(ask_human)하세요.';

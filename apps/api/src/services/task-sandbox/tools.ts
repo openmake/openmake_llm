@@ -13,6 +13,9 @@
  *
  * @module services/task-sandbox/tools
  */
+import { findBlockedBrowserUrls } from './browser-url-guard';
+import { BROWSER_URL_GUARD_ENABLED } from '../../config/task-sandbox';
+import { getBrowserUrlBlockedMessage } from '../../prompts/agent-task-prompt';
 import { randomUUID } from 'crypto';
 import { AgentTaskParked } from '../agent-task/types';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
@@ -44,6 +47,16 @@ export const TASK_ASK_HUMAN_SENTINEL = '__TASK_ASK_HUMAN__';
 
 function textResult(text: string, isError = false): MCPToolResult {
     return { content: [{ type: 'text', text }], isError };
+}
+
+/**
+ * 브라우저가 이동하려는 주소 중 막아야 할 것이 있으면 오류 문구, 없으면 null(browser-url-guard).
+ * TASK_SANDBOX_BROWSER_URL_GUARD=false 로 끈다.
+ */
+async function browserUrlBlock(actions: readonly unknown[]): Promise<string | null> {
+    if (!BROWSER_URL_GUARD_ENABLED) return null;
+    const blocked = await findBlockedBrowserUrls(actions);
+    return blocked.length > 0 ? getBrowserUrlBlockedMessage(blocked.map((b) => b.url)) : null;
 }
 
 /** exec 결과를 LLM 친화 텍스트로 포맷. */
@@ -305,6 +318,8 @@ export function createTaskTools(
                     true,
                 );
             }
+            const urlBlock = await browserUrlBlock(actions);
+            if (urlBlock) return textResult(urlBlock, true);
             const spec = {
                 actions,
                 ...(Array.isArray(args.allowlist) ? { allowlist: args.allowlist } : {}),
@@ -390,7 +405,8 @@ export function createTaskTools(
     }));
 
     // ── #1 절차 스킬(skill_save / skill_run) — tools-procedural.ts ──
-    const [skillSave, skillRun] = createProceduralTools(sandbox, procedural, browserMetrics, { textResult, str, formatExec, runFresh, browserUnavailable: BROWSER_UNAVAILABLE });
+    const [skillSave, skillRun] = createProceduralTools(sandbox, procedural, browserMetrics, { textResult, str, formatExec, runFresh, browserUnavailable: BROWSER_UNAVAILABLE, browserUrlBlock });
+
 
     // ── B 흡수: 제어 시그널 도구 (sandbox 무관) ──
     const terminate: MCPToolDefinition = {
