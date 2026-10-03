@@ -295,6 +295,22 @@ export function getAgentTaskEmptyResponseNudge(): string {
     return '방금 응답이 비어 있었습니다. 목표가 끝났으면 최종 답변을 작성하고, 남은 일이 있으면 필요한 도구를 호출해 이어서 진행하세요.';
 }
 
+/** 도구 호출 반복 가드(tool-loop-guard) — 같은 인자로 연속 실패했을 때 결과 뒤에 붙이는 안내. */
+export function getToolLoopFailureNote(count: number): string {
+    return `\n\n[반복 안내] 같은 인자의 같은 호출이 ${count}번 연속 실패했습니다. 같은 호출을 되풀이하지 말고, 오류 내용을 읽고 인자나 접근 방식을 바꾸세요.`;
+}
+
+/** 도구 호출 반복 가드 — 읽기 호출이 같은 결과만 돌려줄 때 결과 뒤에 붙이는 안내. */
+export function getToolLoopSameResultNote(count: number): string {
+    return `\n\n[반복 안내] 이 호출은 ${count}번 연속 같은 결과를 돌려줬습니다. 이미 가진 정보이니 다음 단계로 넘어가세요.`;
+}
+
+/** 도구 호출 반복 가드 — 임계를 넘어 실행하지 않았을 때의 결과. */
+export function getToolLoopBlockedResult(toolName: string, count: number, kind: 'failure' | 'same_result'): string {
+    const why = kind === 'failure' ? `같은 인자로 ${count}번 연속 실패해` : `같은 결과를 ${count}번 연속 돌려줘`;
+    return `Error: 이 호출(${toolName})은 ${why} 실행하지 않았습니다. 다른 인자나 다른 방법을 쓰고, 더 진행할 수 없으면 지금까지의 결과로 마무리하세요.`;
+}
+
 /** stuck(동일 응답 반복) 감지 시 주입 — 전략 변경 유도(OpenManus handle_stuck_state 패턴). */
 export function getAgentTaskStuckNudge(): string {
     return '같은 시도를 반복하고 있습니다. 접근 방식을 바꾸세요: 다른 도구나 다른 입력을 시도하거나, 막혔다면 지금까지의 결과로 작업을 마무리(terminate)하거나 사용자에게 도움을 요청(ask_human)하세요.';
