@@ -24,6 +24,9 @@
 	# REST API → 백엔드 (X-Forwarded-* 자동 전달)
 	reverse_proxy /api/* localhost:{{API_PORT}}
 
-	# 그 외(Next 페이지·정적 자산·/generated rewrites)
+	# 생성 파일(이미지 등) → 백엔드. Next rewrites 는 대상 포트를 빌드 때 굳히므로 프록시가 직접 보낸다.
+	reverse_proxy /generated/* localhost:{{API_PORT}}
+
+	# 그 외(Next 페이지·정적 자산)
 	reverse_proxy localhost:{{WEB_PORT}}
 }

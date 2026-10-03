@@ -55,7 +55,9 @@ build_app() {
         return 0
     fi
     log_info "npm run build (백엔드 + 프론트) — 수 분 걸릴 수 있습니다"
-    ( cd "$SCRIPT_DIR" && NEXT_PUBLIC_WEB_PORT="$WEB_PORT" NEXT_PUBLIC_WS_PORT="$APP_PORT" npm run build ) \
+    # API_PROXY_TARGET 도 빌드 때 굳는다(rewrites /api, /generated) — 기동 때만 넘기면 기본 포트가 박힌다.
+    ( cd "$SCRIPT_DIR" && NEXT_PUBLIC_WEB_PORT="$WEB_PORT" NEXT_PUBLIC_WS_PORT="$APP_PORT" \
+        API_PROXY_TARGET="http://localhost:$APP_PORT" npm run build ) \
         || die "빌드 실패"
     log_ok "빌드 완료"
 }
