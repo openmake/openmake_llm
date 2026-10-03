@@ -26,6 +26,8 @@ export interface ExecResult {
     truncated: boolean;
     timedOut: boolean;
     durationMs: number;
+    /** 마지막 파이프라인의 앞 단계별 종료 코드 — 실행기가 받아 왔을 때만 있다(Docker 샌드박스, pipe-status). */
+    pipeStages?: Array<{ index: number; command: string; exitCode: number }>;
 }
 
 /**
@@ -88,8 +90,8 @@ export interface TaskExecutor {
      */
     captureDiff?(): Promise<string | null>;
 
-    /** 셸 명령 실행 — bash 도구의 실행 백엔드. */
-    exec(command: string): Promise<ExecResult>;
+    /** 셸 명령 실행 — bash 도구의 실행 백엔드. pipeStatus 는 파이프라인 단계별 종료 코드 요청(지원하는 실행기만 따른다). */
+    exec(command: string, opts?: { pipeStatus?: boolean }): Promise<ExecResult>;
 
     /** 실행 중인 명령 중단(작업 취소) — 지원하는 실행기만 구현한다. 미구현이면 명령은 타임아웃까지 돈다. */
     abortRunning?(): void;
