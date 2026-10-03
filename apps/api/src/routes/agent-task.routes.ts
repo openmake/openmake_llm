@@ -20,7 +20,7 @@
 import { resolveEffectivePolicy, strictestApprovalPolicy } from '../services/org/effective-policy';
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, conflict } from '../utils/api-response';
+import { success, badRequest, conflict } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuthOrApiKeyScope } from '../middlewares/api-key-auth';
 import { API_KEY_SCOPES } from '../config/api-key-scopes';
@@ -41,8 +41,7 @@ import { extractAttachedDocuments } from '../services/chat-service/doc-extractor
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getSteeringRegistry } from '../services/agent-task/steering';
 import { dispatchAgentTask, resolveQueuePriority, getAgentTaskQueue } from '../services/agent-task/task-queue';
-import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
-import { basename, relative } from 'path';
+import { listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import multer from 'multer';
 import * as fs from 'fs/promises';
 import { AGENT_TASK_LIMITS, FILE_ATTACH_LIMITS, DOC_EXTRACT_LIMITS } from '../config/runtime-limits';
@@ -53,7 +52,7 @@ import {
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 import { resolveDuplicateCreate, normalizedCreateKey, rememberCreatedTask } from '../services/agent-task/create-idempotency';
-import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
+import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, sendWorkspaceFile, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 import { approvalsRouter } from './agent-task-approvals.routes';
 import { forkRouter } from './agent-task-fork.routes';
 import { browserSessionRouter } from './agent-task-browser-session.routes';
@@ -551,23 +550,7 @@ router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Res
     const wp = (task as { workspace_path?: string }).workspace_path;
     const rel = String(req.query.path || '');
     if (!wp || !rel) return res.status(400).json(badRequest('path 가 필요합니다.'));
-    let abs: string;
-    try {
-        // 실경로 검증 — 에이전트가 workspace 안에 만든 심링크를 따라 호스트 파일이 유출되는 것을 차단.
-        abs = await safeRealWorkspacePath(wp, rel);
-    } catch {
-        return res.status(400).json(badRequest('잘못된 경로입니다.'));
-    }
-    // 전역 setupSecurity 가 /api 응답에 Content-Type: application/json 을 미리 박아두므로,
-    // res.download(sendFile)이 확장자 기반 MIME 으로 덮어쓰지 못한다(이미 설정된 헤더는 유지).
-    // 헤더를 제거해 sendFile 의 확장자 자동 감지(.xlsx/.pdf 등)를 복원한다.
-    res.removeHeader('Content-Type');
-    // root 를 주고 workspace 상대경로로 넘긴다 — root 없이 절대경로를 넘기면 send 가 경로의 모든 조각에서
-    // 점 파일을 찾아, 설치본의 workspace 조상 폴더(`~/.openmake/…`) 때문에 모든 파일이 404 가 된다.
-    const root = await fs.realpath(wp);
-    res.download(relative(root, abs), basename(rel), { root }, (err) => {
-        if (err && !res.headersSent) res.status(404).json(notFound('파일을 찾을 수 없습니다.'));
-    });
+    await sendWorkspaceFile(res, wp, rel);
 }));
 
 /**

@@ -4,7 +4,10 @@
  * @module routes/agent-task.helpers
  */
 import { Request, Response } from 'express';
-import { notFound } from '../utils/api-response';
+import { realpath } from 'fs/promises';
+import { basename, relative } from 'path';
+import { badRequest, notFound } from '../utils/api-response';
+import { safeRealWorkspacePath } from '../services/task-sandbox/sandbox';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
@@ -31,6 +34,28 @@ export function validateLocalExecutorInput(userId: string, deviceId?: string, fo
         }
     }
     return null;
+}
+
+/** workspace 내 단일 파일을 첨부로 내려보낸다 — 경로 탈출이면 400, 파일이 없으면 404. */
+export async function sendWorkspaceFile(res: Response, wp: string, rel: string): Promise<void> {
+    let abs: string;
+    try {
+        // 실경로 검증 — 에이전트가 workspace 안에 만든 심링크를 따라 호스트 파일이 유출되는 것을 차단.
+        abs = await safeRealWorkspacePath(wp, rel);
+    } catch {
+        res.status(400).json(badRequest('잘못된 경로입니다.'));
+        return;
+    }
+    // 전역 setupSecurity 가 /api 응답에 Content-Type: application/json 을 미리 박아두므로,
+    // res.download(sendFile)이 확장자 기반 MIME 으로 덮어쓰지 못한다(이미 설정된 헤더는 유지).
+    // 헤더를 제거해 sendFile 의 확장자 자동 감지(.xlsx/.pdf 등)를 복원한다.
+    res.removeHeader('Content-Type');
+    // root 를 주고 workspace 상대경로로 넘긴다 — root 없이 절대경로를 넘기면 send 가 경로의 모든 조각에서
+    // 점 파일을 찾아, 설치본의 workspace 조상 폴더(`~/.openmake/…`) 때문에 모든 파일이 404 가 된다.
+    const root = await realpath(wp);
+    res.download(relative(root, abs), basename(rel), { root }, (err) => {
+        if (err && !res.headersSent) res.status(404).json(notFound('파일을 찾을 수 없습니다.'));
+    });
 }
 
 /** 소유권 검증 후 작업 반환 — 없거나 권한 없으면 응답 종료하고 undefined 반환 */
