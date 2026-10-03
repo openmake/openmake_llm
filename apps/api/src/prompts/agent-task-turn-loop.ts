@@ -28,3 +28,8 @@ export function getAgentTaskStallNote(count: number, max: number): string {
 export function getContextTrimNote(dropped: number, total: number): string {
     return `컨텍스트 창 초과 — 이번 모델 호출에서 대화 ${total}건 중 오래된 메시지 ${dropped}건을 빼고 보냈습니다. 모델이 앞선 내용을 보지 못했을 수 있습니다.`;
 }
+
+/** 인자 JSON 이 깨진 도구 호출에 돌려주는 결과 — 실행하지 않았음을 알리고 다시 호출하게 한다. */
+export function getMalformedToolArgsResult(toolName: string): string {
+    return `Error: ${toolName} 호출의 인자가 올바른 JSON 이 아니어서 실행하지 않았습니다(출력이 중간에 잘렸을 수 있습니다). 인자를 완전한 JSON 으로 다시 작성해 호출하세요. 내용이 길면 여러 번에 나눠 호출하세요.`;
+}

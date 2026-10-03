@@ -189,6 +189,11 @@ export interface ToolCall {
      * Mismatch 시 vLLM hermes/granite 등의 chat_template 렌더링이 깨지거나 spec 위반.
      */
     id?: string;
+    /**
+     * 인자 JSON 이 깨져(출력 절단 등) arguments 가 {} 로 강등된 호출 — 그럴 때만 true.
+     * 요청으로 내보낼 때는 싣지 않는다. 에이전트 작업은 이 호출을 실행하지 않고 오류 결과를 돌려준다.
+     */
+    argumentsInvalid?: boolean;
     /** 호출할 함수 정보 */
     function: {
         /** 스트리밍 시 도구 호출 인덱스 (순서 식별용) */

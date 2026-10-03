@@ -28,6 +28,9 @@ export const AGENT_TASK_TURN_LOOP = {
     /** 컨텍스트 절단 기록 — 창 초과로 요청 사본에서 오래된 메시지를 잘라낸 호출을 단계 기록(context_trim)으로 남긴다.
      *  기록만 한다(대응은 발동 빈도를 본 뒤). AGENT_TASK_CONTEXT_TRIM_STEP=false 로 끈다. */
     CONTEXT_TRIM_STEP_ENABLED: process.env.AGENT_TASK_CONTEXT_TRIM_STEP !== 'false',
+    /** 잘린 도구 호출을 실행하지 않기 — 인자 JSON 파싱이 실패한 호출을 빈 인자로 실행하지 않고 오류 결과를 돌려준다.
+     *  AGENT_TASK_REJECT_MALFORMED_TOOL_ARGS=false 면 종전처럼 빈 인자로 실행한다. */
+    REJECT_MALFORMED_TOOL_ARGS: process.env.AGENT_TASK_REJECT_MALFORMED_TOOL_ARGS !== 'false',
 };
 
 /**

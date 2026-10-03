@@ -25,6 +25,8 @@ import { hasSideEffects } from '../../config/tool-policy';
 import { priorRepetition, repetitionVerdict } from './tool-loop-guard';
 import { needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from './tool-receipt';
 import { runWithToolCallContext } from '../../utils/tool-call-context';
+import { isRejectedCall } from './turn-call-guards';
+import { getMalformedToolArgsResult } from '../../prompts/agent-task-turn-loop';
 import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice } from '../../prompts/agent-task-prompt';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { TaskRuntime } from '../task-sandbox/runtime';
@@ -162,7 +164,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     // 원래 순서로 처리하므로 체크포인트 계약은 그대로다.
     const journal = input.journal ?? new Map<string, string>();
     const prefetched = await prefetchReadOnlyCalls(
-        toolCalls.filter((tc) => tc.id === undefined || !journal.has(tc.id)).map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
+        toolCalls.filter((tc) => (tc.id === undefined || !journal.has(tc.id)) && !isRejectedCall(tc)).map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
         ({ name, tc }) => !taskRuntime?.isTaskTool(name)
             && (!requiresApproval(sandboxCfg.approvalPolicy, name, (tc.function.arguments ?? {}) as Record<string, unknown>)
                 || getApprovalRegistry().isAutoApprove(taskId)),
@@ -185,9 +187,13 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         if (signal.aborted) throw new AgentTaskAbort('aborted');
         if (parkRequested) await park(); // 선실행(prefetch) 중 주차 — 이 턴 호출은 재개 때 다시 실행된다
         const name = tc.function.name;
-        usedTools.add(name);
-        if (isSearchTool(name)) searchCalls++;
-        if (name === 'browser') browserCalls++;
+        // 인자 JSON 이 깨진 호출 — 실행하지 않으므로 사용 도구·검색/브라우저 횟수에 세지 않는다(turn-call-guards).
+        const malformed = isRejectedCall(tc);
+        if (!malformed) {
+            usedTools.add(name);
+            if (isSearchTool(name)) searchCalls++;
+            if (name === 'browser') browserCalls++;
+        }
         const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
         let toolResult: string;
         inFlightMarked = false;
@@ -215,6 +221,8 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         } else if (unknownResult !== undefined) {
             toolResult = unknownResult;
             inFlightMarked = true; // 남아 있는 표식을 아래에서 지운다
+        } else if (malformed) {
+            toolResult = getMalformedToolArgsResult(name);
         } else if (loop?.block) {
             toolResult = loop.blockedResult;
         } else if (pre !== undefined) {

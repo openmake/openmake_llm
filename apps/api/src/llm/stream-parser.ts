@@ -26,6 +26,7 @@ import { parseReasoningTags } from './reasoning-tag-parser';
 import { ArtifactStreamParser, type ArtifactStreamCallbacks } from './artifact-parser';
 import { extractCoTFromContent } from './cot-extractor';
 import { PseudoToolCallGate, stripPseudoToolCalls } from './pseudo-tool-call-parser';
+import { parseToolCallArguments } from './tool-call-args';
 import { createLogger } from '../utils/logger';
 import { capPromptImages } from './prompt-image-cap';
 import { LLM_PROMPT_IMAGE_LIMITS } from '../config/runtime-limits';
@@ -390,16 +391,10 @@ export async function streamChat(
 
     const toolCalls: ChatMessage['tool_calls'] = [];
     for (const buf of toolBuffers.values()) {
-        let args: Record<string, unknown> = {};
-        try {
-            args = buf.jsonBuffer ? JSON.parse(buf.jsonBuffer) : {};
-        } catch {
-            // 인자 JSON 절단/불량 — {} 로 강등하되 반드시 관측 로그를 남긴다.
-            // (silent 강등 시 "모델이 인자를 안 보낸 것"과 구분 불가 — 2026-07-17 web_search 사건)
-            log.warn(`tool call 인자 JSON 파싱 실패 — {} 로 강등: tool=${buf.name} raw=${buf.jsonBuffer.slice(0, 200)}`);
-        }
+        // 인자 JSON 절단/불량은 {} 로 강등 + 관측 로그 + 표식(argumentsInvalid) — tool-call-args.
+        const { args, invalid } = parseToolCallArguments(buf.jsonBuffer, buf.name);
         // vLLM 발급 id 보존 — agent-loop 다음 턴에서 tool 메시지 tool_call_id 와 일치 필요.
-        toolCalls.push({ type: 'function', id: buf.id, function: { name: buf.name, arguments: args } });
+        toolCalls.push({ type: 'function', id: buf.id, ...(invalid && { argumentsInvalid: true }), function: { name: buf.name, arguments: args } });
     }
 
     // 네이티브 tool_calls 가 하나도 없을 때만 텍스트 툴콜을 승격한다 — 정상 파싱된 호출과
@@ -519,15 +514,10 @@ export async function nonStreamChat(
     const msg = choice0?.message ?? { content: '' };
     const finishReason = choice0?.finish_reason ?? undefined;
     const toolCalls: ChatMessage['tool_calls'] = (msg.tool_calls ?? []).map((tc) => {
-        let args: Record<string, unknown> = {};
-        try {
-            args = JSON.parse(tc.function.arguments);
-        } catch {
-            // 인자 JSON 불량 — {} 강등 + 관측 로그 (스트리밍 경로와 동일 원칙)
-            log.warn(`tool call 인자 JSON 파싱 실패 — {} 로 강등: tool=${tc.function.name} raw=${String(tc.function.arguments).slice(0, 200)}`);
-        }
+        // 인자 JSON 불량 — {} 강등 + 관측 로그 + 표식 (스트리밍 경로와 동일 원칙)
+        const { args, invalid } = parseToolCallArguments(tc.function.arguments, tc.function.name);
         // vLLM 발급 id 보존 — non-stream 응답에서도 동일 원칙.
-        return { type: 'function' as const, id: tc.id, function: { name: tc.function.name, arguments: args } };
+        return { type: 'function' as const, id: tc.id, ...(invalid && { argumentsInvalid: true as const }), function: { name: tc.function.name, arguments: args } };
     });
 
     // Defensive client-side reasoning-tag split (non-stream 동일 원칙):
