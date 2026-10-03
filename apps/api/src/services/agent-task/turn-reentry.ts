@@ -14,6 +14,7 @@
  */
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { snapshotWorkspaceTurn } from './fork-workspace';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { ChatMessage, ToolCall } from '../../llm/types';
@@ -115,4 +116,6 @@ export async function writeTurnCheckpoint(taskId: string, conversation: ChatMess
     } catch (e) {
         logger.warn(`[${taskId}] 체크포인트 이력 기록 실패 (무시):`, e);
     }
+    // 작업 공간도 같은 턴 번호로 남긴다 — fork 가 그 시점 파일로 시작할 수 있게(플래그 OFF·기준점 없음이면 no-op).
+    if (taskRuntime) await snapshotWorkspaceTurn(taskRuntime, completedTurn);
 }
