@@ -114,3 +114,11 @@ describe('callAgentTurnWithBudget', () => {
         await expect(callAgentTurnWithBudget(base())).rejects.toThrow('boom');
     });
 });
+
+describe('callAgentTurnWithBudget — 재시도 소진 뒤 대기 예산', () => {
+    it('이 호출의 남은 예산을 넘겨 준다 — 그 안에서만 더 기다리게', async () => {
+        chat.mockResolvedValue({ content: 'ok' });
+        await callAgentTurnWithBudget({ ...base(), totalTimeoutMs: 10_000, elapsedActiveMs: 4_000 });
+        expect((chat.mock.calls[0][1] as { recoveryBudgetMs?: number }).recoveryBudgetMs).toBe(6_000);
+    });
+});
