@@ -33,7 +33,7 @@ export const AGENT_DELEGATION = {
     /** 맥락 의존 표현("위 작업 계속")을 이 글자 수 이하의 지시에서만 문제로 본다 — 그보다 길면 지시 안에
      *  내용이 함께 적혀 있을 수 있다. AGENT_DELEGATION_CONTEXT_DEPENDENT_MAX_CHARS */
     CONTEXT_DEPENDENT_MAX_CHARS: num(process.env.AGENT_DELEGATION_CONTEXT_DEPENDENT_MAX_CHARS, 40),
-    /** 부모에게 가는 위임 결과에 "자가 보고이니 중요한 사실은 확인하라"는 안내를 붙인다. 기본 켜짐.
+    /** 부모에게 가는 위임 결과에 "자가 보고이니 단정하지 말고 출처를 구분하라"는 안내를 붙인다. 기본 켜짐.
      *  AGENT_DELEGATION_SELF_REPORT_NOTICE=false 로 끈다. */
     SELF_REPORT_NOTICE_ENABLED: process.env.AGENT_DELEGATION_SELF_REPORT_NOTICE !== 'false',
     /** spawn_agents 태스크의 선택 인자 outputSchema(JSON Schema) — 결과를 결정적으로 검증하고 어긋나면 1회만 교정을 요청한다.

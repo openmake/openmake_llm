@@ -45,10 +45,19 @@ describe('runSpawnAgents — 위임 입력 품질 검사', () => {
 });
 
 describe('runSpawnAgents — 자가 보고 안내', () => {
-    it('결과 머리에 "자가 보고이니 중요한 사실은 확인하라"는 안내를 싣는다', async () => {
+    it('결과 머리에 "자가 보고이니 단정하지 말고 출처를 구분하라"는 안내를 싣는다', async () => {
         const out = await runSpawnAgents({ ...base, args: { tasks: [{ prompt: GOOD }] } });
         expect(out).toContain('자가 보고');
         expect(out.indexOf('자가 보고')).toBeLessThan(out.indexOf('### 태스크 1/1'));
+    });
+
+    it('안내가 끝의 "추가 도구를 호출하지 마세요" 지시와 충돌하지 않는다 — 확인(재검색)을 시키지 않는다', async () => {
+        const out = await runSpawnAgents({ ...base, args: { tasks: [{ prompt: GOOD }] } });
+        expect(out).toContain('추가 도구를 호출하지 마세요');
+        const notice = out.slice(out.indexOf('[안내]'), out.indexOf('### 태스크 1/1'));
+        expect(notice).not.toMatch(/확인하|검증하세요|다시 (?:검색|조사)/);
+        expect(notice).toMatch(/단정하지/);
+        expect(notice).toMatch(/구분/);
     });
 
     it('끄면 싣지 않는다', async () => {
