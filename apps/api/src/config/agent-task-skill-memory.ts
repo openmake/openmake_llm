@@ -57,3 +57,18 @@ export const LEARNING_FILTER = {
     SKIP_FAILURE_CLASSES: (process.env.AGENT_TASK_LEARNING_SKIP_FAILURE_CLASSES ?? 'interrupted,llm_error')
         .split(',').map((c) => c.trim()).filter(Boolean) as readonly string[],
 } as const;
+
+/**
+ * 에이전트 작업의 메모리 주입 순서 — 최신순 대신 관련도(목표와의 키워드 겹침) × 신뢰도 × 시간 감쇠로 순위를 매긴다.
+ * 효과가 실측에 달려 기본은 꺼짐(현행 최신순 50건)이다. LLM·임베딩 호출 없이 결정적으로 계산한다.
+ */
+export const MEMORY_RANKING = {
+    /** AGENT_TASK_MEMORY_RANKING=true 로 켠다. */
+    ENABLED: process.env.AGENT_TASK_MEMORY_RANKING === 'true',
+    /** 순위를 매길 후보 수(최신순으로 읽는다). AGENT_TASK_MEMORY_RANK_POOL */
+    POOL_SIZE: num(process.env.AGENT_TASK_MEMORY_RANK_POOL, 200),
+    /** 목표와 겹치는 낱말이 없는 메모리의 관련도 바닥값 — 0 이면 무관한 메모리끼리 신뢰도·최신 순서가 사라진다. */
+    RELEVANCE_FLOOR: num(process.env.AGENT_TASK_MEMORY_RANK_RELEVANCE_FLOOR, 0.1),
+    /** 시간 감쇠 반감기(일) — 이만큼 지나면 점수가 절반. AGENT_TASK_MEMORY_RANK_HALF_LIFE_DAYS */
+    HALF_LIFE_DAYS: num(process.env.AGENT_TASK_MEMORY_RANK_HALF_LIFE_DAYS, 180),
+} as const;
