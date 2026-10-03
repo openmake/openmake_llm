@@ -42,6 +42,11 @@ function maskValue(value: unknown, depth: number): unknown {
     );
 }
 
+/** 민감 키의 값만 가린 사본(크기 캡 없음) — 승인 저장본(task-sandbox/approval-redact)이 같은 기준을 쓴다. */
+export function maskSensitiveKeys(value: unknown): unknown {
+    return maskValue(value, 0);
+}
+
 /**
  * 도구 인자를 영속 가능한 형태로 정규화한다. 절대 throw 하지 않는다(관측이 실행을 막지 않음).
  *

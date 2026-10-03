@@ -16,6 +16,7 @@
  */
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { isSensitivePath } from './sensitive-paths';
+import { redactApprovalArgs, redactApprovalPreview } from './approval-redact';
 import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
 import { classifyToolRisk, policyRequiresApproval, isThirdPartyTool, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
@@ -94,6 +95,7 @@ export interface PendingApproval {
     taskId: string;
     userId: string;
     toolName: string;
+    /** 승인함에 보이는 사본 — 비밀 값은 가려져 있다(approval-redact). 실행은 호출부가 가진 원래 인자로 한다. */
     args: Record<string, unknown>;
     createdAt: number;
     /** 위험 등급(config/tool-policy) — 승인함이 "왜 승인이 필요한지"를 보여 주는 근거(125). */
@@ -238,7 +240,9 @@ export class ApprovalRegistry {
         }
         const approvalId = prior?.approval_id ?? `apv_${input.taskId}_${Date.now().toString(36)}_${this.seq++}`;
         const riskClass = classifyToolRisk(input.toolName, input.args);
-        const { preview, ...core } = input;
+        // 저장·표시는 가린 사본으로 — 결속(argsHash)·위험 판정은 위에서 원래 인자로 끝냈다.
+        const core = { taskId: input.taskId, userId: input.userId, toolName: input.toolName, args: redactApprovalArgs(input.toolName, input.args) };
+        const preview = redactApprovalPreview(input.preview);
         const pending: PendingApproval = {
             approvalId, ...core, createdAt: prior ? new Date(prior.created_at).getTime() : Date.now(),
             riskClass, sensitive: isSensitiveWrite(input.toolName, input.args),
