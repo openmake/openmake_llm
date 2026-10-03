@@ -280,7 +280,7 @@ export class AgentTaskService {
                 }
             }
             // 코드 작업 diff 캡처(openmake_code v1) — 첨부까지 기록된 시점을 git baseline 스냅샷(멱등·fail-open).
-            if (taskRuntime && sandboxCfg.codeDiffEnabled) await initWorkspaceBaseline(taskRuntime);
+            if (taskRuntime && sandboxCfg.codeDiffEnabled) await initWorkspaceBaseline(taskRuntime, preTask);
 
             // LLM 에 전달할 도구 세트 조립(샌드박스 도구 + extraTools + 2-A 동적 도구). 상세는
             // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
