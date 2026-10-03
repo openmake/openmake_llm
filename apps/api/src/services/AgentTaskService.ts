@@ -40,7 +40,7 @@ import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { callAgentTurnWithBudget, AgentTaskTurnTimeout } from './agent-task/turn-call';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
-import { finalizeTask, finalizeMaxTurnsExhausted } from './agent-task/finalize';
+import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { initWorkspaceBaseline } from './agent-task/code-diff';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
@@ -141,6 +141,7 @@ export class AgentTaskService {
         let emptyRetries = 0;
         let stallNudges = 0; // 행동 예고 재촉 횟수(turn-stall)
         let verifyRetries = 0;
+        const verifyHold: VerifyHold = {}; // 검증이 보류한 답변 — 턴 상한에 걸리면 결과로 쓴다(finalize)
         // 5-3(b): 실제 사용한 도구 추적 — goal judge 의 실행 컨텍스트(수행 흔적)로 전달.
         const usedTools = usedToolNamesFrom(input.resume?.conversation); // 재개면 이전 실행분을 복원
         // 스텝→플랜 노드 귀속(088): 기록 시점의 in_progress 단계 인덱스(결정적, 추정 귀속 없음).
@@ -325,7 +326,7 @@ export class AgentTaskService {
                     if (re.terminated) {
                         const fin = await finalizeTask({
                             taskId, goal, userId: String(userId), path: 'terminate', rawContent: content, terminateSummary: re.terminateSummary,
-                            taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries,
+                            taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
                             signal, update, emitStep,
                         });
                         stepNumber = fin.stepNumber;
@@ -505,7 +506,7 @@ export class AgentTaskService {
                     const fin = await finalizeTask({
                         taskId, goal, userId: String(userId), path: 'final_answer',
                         rawContent: result.content ?? '',
-                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries,
+                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
                         signal: callSignal, update, emitStep,
                     });
                     stepNumber = fin.stepNumber;
@@ -543,7 +544,7 @@ export class AgentTaskService {
                     const fin = await finalizeTask({
                         taskId, goal, userId: String(userId), path: 'terminate',
                         rawContent: result.content ?? '', terminateSummary,
-                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries,
+                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries, hold: verifyHold,
                         signal: callSignal, update, emitStep,
                     });
                     stepNumber = fin.stepNumber;
@@ -560,7 +561,7 @@ export class AgentTaskService {
             }
 
             // 턴 상한 도달 — 완주가 아니라 failed + checkpoint 보존(이어하기 가능). 근거는 finalize.
-            await finalizeMaxTurnsExhausted({ taskId, userId, turnCeiling, conversation, taskRuntime, sandboxCfg, stepNumber, update, emitStep });
+            await finalizeMaxTurnsExhausted({ taskId, userId, turnCeiling, conversation, taskRuntime, sandboxCfg, stepNumber, update, emitStep, held: verifyHold.answer });
         } catch (err) {
             // 질문 응답 대기 주차(F16.7) — 체크포인트·표식은 turn-executor 가 남겼다. 실행만 끝내 슬롯을 반납한다(재개는 hitl-park)
             if (err instanceof AgentTaskParked && !signal.aborted) { parked = true; logger.info(`[AgentTask] 질문 응답 대기로 주차: ${taskId}`); return; }

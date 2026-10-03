@@ -46,3 +46,8 @@ export function getDuplicateToolCallResult(toolName: string, originalCallId: str
 export function getOutputRepetitionNote(repeats: number, windowChars: number, sample: string): string {
     return `출력 반복 감지(기록만) — 응답 본문에서 ${windowChars}자 구간이 ${repeats}회 반복됐습니다: "${sample}"`;
 }
+
+/** 검증이 보류한 답변을 턴 상한에서 결과로 쓸 때 남기는 표시 — 단계 기록과 진행 알림이 같은 문장을 쓴다. */
+export function getVerifyHeldAnswerNote(gates: readonly string[]): string {
+    return `검증 미통과: 검증 실패를 고치던 중 턴 상한에 도달해, 검증을 통과하지 못한 직전 답변을 결과로 남겼습니다${gates.length > 0 ? ` (통과하지 못했거나 다시 돌리지 않은 검증: ${gates.join(', ')})` : ''}. 결과를 직접 확인하세요.`;
+}

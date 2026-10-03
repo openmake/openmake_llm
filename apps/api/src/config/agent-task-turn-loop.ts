@@ -44,6 +44,10 @@ export const AGENT_TASK_TURN_LOOP = {
     /** 긴 응답은 끝에서 이만큼만 검사한다(검사 비용 상한) / 창 안의 글자 종류가 이보다 적으면 구분선·공백으로 보고 건너뛴다. */
     OUTPUT_REPETITION_SCAN_TAIL_CHARS: 20_000,
     OUTPUT_REPETITION_MIN_DISTINCT_CHARS: 8,
+    /** 검증이 보류한 답변 보존 — 검증 실패로 턴을 이어가다 턴 상한에 걸리면, 들고 있던 직전 완성 답변을 버리지 않고
+     *  "검증 미통과" 표시(verify_skipped 스텝)와 함께 결과로 남긴다. 판정(마커·goal judge)은 그대로 거친다.
+     *  AGENT_TASK_KEEP_HELD_ANSWER=false 면 종전처럼 max_turns_exhausted 실패로 끝난다. */
+    KEEP_HELD_ANSWER: process.env.AGENT_TASK_KEEP_HELD_ANSWER !== 'false',
 };
 
 /**
