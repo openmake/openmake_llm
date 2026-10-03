@@ -163,3 +163,34 @@ describe('출력 반복으로 잘린 최종 답변', () => {
         expect(conversation[before + 1].role).toBe('user');
     });
 });
+
+describe('컨텍스트 절단 횟수 집계(마무리 전환 판정용)', () => {
+    const { contextTrimCount } = jest.requireActual('./context-pressure') as typeof import('./context-pressure');
+
+    it('인계 요약으로 줄인 호출을 센다', async () => {
+        const c = conv(8, 6000);
+        await callAgentTurnWithContext(base(c));
+        expect(contextTrimCount(c)).toBe(1);
+    });
+
+    it('안전망이 요청 사본에서 메시지를 잘라낸 호출을 센다', async () => {
+        const c = conv(2, 10);
+        call.mockResolvedValueOnce({ result: { role: 'assistant', content: 'ok', metrics: { context_dropped_messages: 3 } }, callSignal: new AbortController().signal });
+        await callAgentTurnWithContext(base(c));
+        expect(contextTrimCount(c)).toBe(1);
+    });
+
+    it('창 초과 오류 뒤 줄여 다시 부른 호출을 센다 — 한 턴에 한 번만', async () => {
+        const c = conv(8, 3000);
+        call.mockRejectedValueOnce(Object.assign(new Error("400 This model's maximum context length is 32768 tokens. However, you requested 40000 tokens"), { status: 400 }))
+            .mockResolvedValueOnce({ result: { role: 'assistant', content: 'ok', metrics: { context_dropped_messages: 1 } }, callSignal: new AbortController().signal });
+        await callAgentTurnWithContext(base(c, 'external-model'));
+        expect(contextTrimCount(c)).toBe(1);
+    });
+
+    it('줄이지 않은 호출은 세지 않는다', async () => {
+        const c = conv(2, 10);
+        await callAgentTurnWithContext(base(c));
+        expect(contextTrimCount(c)).toBe(0);
+    });
+});

@@ -21,6 +21,7 @@ import { compactWithHandoff } from './context-handoff';
 import { estimateConversationTokens, estimateToolSchemaTokens, calibrationScale, type UsageSample } from './context-estimate';
 import { callAgentTurnWithBudget } from './turn-call';
 import { retryRepeatedAnswer } from './output-repetition';
+import { noteContextTrim } from './context-pressure';
 import { createLogger } from '../../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
@@ -95,6 +96,7 @@ export async function callAgentTurnWithContext(p: TurnContextInput): ReturnType<
     }
     const dropped = fitToWindow(p.conversation, p.tools, p.roleState.client.model);
     if (dropped > 0) logger.info(`[AgentTask] 창 초과 — 인계 요약으로 정리: ${p.taskId} (turn ${p.turn + 1}, 메시지 ${dropped}개)`);
+    let trimmed = dropped > 0;
     let estimated = estimateConversationTokens(p.conversation) + estimateToolSchemaTokens(p.tools);
     const startedAt = Date.now();
     let out: Awaited<ReturnType<typeof callAgentTurnWithBudget>>;
@@ -106,9 +108,12 @@ export async function callAgentTurnWithContext(p: TurnContextInput): ReturnType<
         const after = estimateConversationTokens(p.conversation) + estimateToolSchemaTokens(p.tools);
         logger.warn(`[AgentTask] 창 초과 오류 — 줄여서 같은 턴 재호출: ${p.taskId} (turn ${p.turn + 1}, 추정 ~${estimated} → ~${after}토큰)`);
         estimated = after;
+        trimmed = true;
         // 첫 호출에 쓴 시간만큼 남은 예산을 줄여 다시 건다.
         out = await callAgentTurnWithBudget({ ...p, elapsedActiveMs: p.elapsedActiveMs + (Date.now() - startedAt) });
     }
+    // 이 턴에서 대화를 줄였으면(인계 요약·창 초과 뒤 줄이기·안전망 절단) 센다 — 되풀이되면 다음 턴이 마무리 턴이 된다(context-pressure).
+    if (trimmed || (out.result.metrics?.context_dropped_messages ?? 0) > 0) noteContextTrim(p.conversation);
     const actual = out.result.metrics?.prompt_tokens ?? 0;
     if (actual > 0) lastUsage.set(p.conversation, { estimated, actual });
     // 출력 반복으로 잘린 최종 답변은 한 번 다시 요청한다(output-repetition) — 앞선 호출에 쓴 시간만큼 남은 예산을 줄인다.

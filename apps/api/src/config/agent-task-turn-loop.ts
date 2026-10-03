@@ -26,8 +26,13 @@ export const AGENT_TASK_TURN_LOOP = {
     STALL_MAX_CHARS: num(process.env.AGENT_TASK_STALL_MAX_CHARS, 400),
     STALL_TAIL_CHARS: 160,
     /** 컨텍스트 절단 기록 — 창 초과로 요청 사본에서 오래된 메시지를 잘라낸 호출을 단계 기록(context_trim)으로 남긴다.
-     *  기록만 한다(대응은 발동 빈도를 본 뒤). AGENT_TASK_CONTEXT_TRIM_STEP=false 로 끈다. */
+     *  AGENT_TASK_CONTEXT_TRIM_STEP=false 로 기록을 끈다(반복 시 마무리 전환은 아래 FINALIZE 가 따로 켠다). */
     CONTEXT_TRIM_STEP_ENABLED: process.env.AGENT_TASK_CONTEXT_TRIM_STEP !== 'false',
+    /** 컨텍스트 절단 반복 시 마무리 전환 — 창 초과로 대화를 줄인 턴(인계 요약·창 초과 오류 뒤 줄이기·안전망 절단)이 작업 안에서
+     *  이 횟수에 닿으면, 다음 턴부터 도구를 막고 지금까지의 결과로 답을 마무리하게 한다(턴 상한 직전의 마무리 턴과 같은 경로).
+     *  횟수 2는 실측이 아니다. AGENT_TASK_CONTEXT_TRIM_FINALIZE=false 로 끈다(종전처럼 기록만). AGENT_TASK_CONTEXT_TRIM_FINALIZE_AFTER */
+    CONTEXT_TRIM_FINALIZE_ENABLED: process.env.AGENT_TASK_CONTEXT_TRIM_FINALIZE !== 'false',
+    CONTEXT_TRIM_FINALIZE_AFTER: num(process.env.AGENT_TASK_CONTEXT_TRIM_FINALIZE_AFTER, 2),
     /** 잘린 도구 호출을 실행하지 않기 — 인자 JSON 파싱이 실패한 호출을 빈 인자로 실행하지 않고 오류 결과를 돌려준다.
      *  AGENT_TASK_REJECT_MALFORMED_TOOL_ARGS=false 면 종전처럼 빈 인자로 실행한다. */
     REJECT_MALFORMED_TOOL_ARGS: process.env.AGENT_TASK_REJECT_MALFORMED_TOOL_ARGS !== 'false',

@@ -29,6 +29,19 @@ export function getContextTrimNote(dropped: number, total: number): string {
     return `컨텍스트 창 초과 — 이번 모델 호출에서 대화 ${total}건 중 오래된 메시지 ${dropped}건을 빼고 보냈습니다. 모델이 앞선 내용을 보지 못했을 수 있습니다.`;
 }
 
+/** 컨텍스트 절단 반복 — 마무리 턴 전환 단계 기록의 사유 이름. */
+export const CONTEXT_FINAL_TURN_LABEL = '컨텍스트 절단 반복';
+
+/** 컨텍스트 절단이 되풀이되어 마무리 턴으로 돌릴 때 주입 — 도구를 더 쓰지 말고 지금까지의 결과로 답을 마무리하게 한다. */
+export function getContextFinalTurnNudge(): string {
+    return [
+        '대화가 모델의 컨텍스트 창을 여러 번 넘어 오래된 내용이 요약으로 바뀌었고, 더 줄일 여지가 거의 없습니다. 도구는 더 이상 사용할 수 없습니다.',
+        '추가 조사·실행·검증을 시도하지 말고, 지금 보이는 요약과 최근 결과를 근거로 최종 답변을 지금 작성하세요.',
+        '이미 만든 산출물(파일·아티팩트·게시물)이 있다면 무엇을 어디에 만들었는지 명시하세요.',
+        '목표를 달성하지 못했다면 첫 줄에 [GOAL_INCOMPLETE] 를 쓰고, 무엇까지 했고 무엇이 남았는지 적으세요.',
+    ].join('\n');
+}
+
 /** 인자 JSON 이 깨진 도구 호출에 돌려주는 결과 — 실행하지 않았음을 알리고 다시 호출하게 한다. */
 export function getMalformedToolArgsResult(toolName: string): string {
     return `Error: ${toolName} 호출의 인자가 올바른 JSON 이 아니어서 실행하지 않았습니다(출력이 중간에 잘렸을 수 있습니다). 인자를 완전한 JSON 으로 다시 작성해 호출하세요. 내용이 길면 여러 번에 나눠 호출하세요.`;
