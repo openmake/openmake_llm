@@ -42,7 +42,7 @@ import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getSteeringRegistry } from '../services/agent-task/steering';
 import { dispatchAgentTask, resolveQueuePriority, getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
-import { basename } from 'path';
+import { basename, relative } from 'path';
 import multer from 'multer';
 import * as fs from 'fs/promises';
 import { AGENT_TASK_LIMITS, FILE_ATTACH_LIMITS, DOC_EXTRACT_LIMITS } from '../config/runtime-limits';
@@ -562,7 +562,10 @@ router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Res
     // res.download(sendFile)이 확장자 기반 MIME 으로 덮어쓰지 못한다(이미 설정된 헤더는 유지).
     // 헤더를 제거해 sendFile 의 확장자 자동 감지(.xlsx/.pdf 등)를 복원한다.
     res.removeHeader('Content-Type');
-    res.download(abs, basename(rel), (err) => {
+    // root 를 주고 workspace 상대경로로 넘긴다 — root 없이 절대경로를 넘기면 send 가 경로의 모든 조각에서
+    // 점 파일을 찾아, 설치본의 workspace 조상 폴더(`~/.openmake/…`) 때문에 모든 파일이 404 가 된다.
+    const root = await fs.realpath(wp);
+    res.download(relative(root, abs), basename(rel), { root }, (err) => {
         if (err && !res.headersSent) res.status(404).json(notFound('파일을 찾을 수 없습니다.'));
     });
 }));
