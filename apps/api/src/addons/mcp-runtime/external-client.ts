@@ -32,36 +32,12 @@ import { createPinnedFetch } from '../../security/ssrf-guard';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../../config/timeouts';
 import { MCP_HIDDEN_TOOL_ARGS, MCP_ELICITATION_ENABLED, MCP_IDEMPOTENCY_META_KEY } from '../../config/runtime-limits';
 import { getToolCallIdempotencyKey } from '../../utils/tool-call-context';
+import { sdkToolToMCPTool, type SDKTool } from './tool-schema';
+import { offloadMediaBlocks } from './media-content';
 import { ElicitationCallTracker } from './elicitation-bridge';
 import { getConfig } from '../../config/env';
 
 const logger = createLogger('ExternalMCP');
-
-/**
- * SDK Tool 타입
- *
- * MCP 클라이언트가 반환하는 도구 형식입니다.
- * sdkToolToMCPTool()에서 MCPTool로 변환합니다.
- *
- * @interface SDKTool
- */
-interface SDKTool {
-    /** 도구 이름 */
-    name: string;
-    /** 도구 설명 */
-    description?: string;
-    /** 입력 파라미터 스키마 */
-    inputSchema?: {
-        /** 스키마 타입 */
-        type: string;
-        /** 파라미터 속성 정의 */
-        properties?: Record<string, unknown>;
-        /** 필수 파라미터 목록 */
-        required?: string[];
-        /** 추가 스키마 속성 */
-        [key: string]: unknown;
-    };
-}
 
 /**
  * SDK callTool 결과 타입
@@ -197,7 +173,7 @@ export class ExternalMCPClient extends EventEmitter {
 
             // 도구 목록 검색
             const toolsResult = await this.client.listTools();
-            this.discoveredTools = (toolsResult.tools || []).map((t: SDKTool) => this.sdkToolToMCPTool(t));
+            this.discoveredTools = (toolsResult.tools || []).map((t: SDKTool) => sdkToolToMCPTool(t));
             this.toolsRefreshedAt = Date.now();
 
             this.status = 'connected';
@@ -273,7 +249,7 @@ export class ExternalMCPClient extends EventEmitter {
     /** 도구 목록 교체 + 'tools_changed' 발행(F13.12). 스냅샷(getTools 복사본)을 쥔 호출자는 영향 없음. */
     private applyTools(tools: SDKTool[], source: 'list_changed' | 'stale'): void {
         const before = this.discoveredTools.map((t) => t.name).join(',');
-        this.discoveredTools = tools.map((t) => this.sdkToolToMCPTool(t));
+        this.discoveredTools = tools.map((t) => sdkToolToMCPTool(t));
         this.toolsRefreshedAt = Date.now();
         const after = this.discoveredTools.map((t) => t.name).join(',');
         if (before !== after || source === 'list_changed') {
@@ -343,7 +319,7 @@ export class ExternalMCPClient extends EventEmitter {
             const params = { name, arguments: args, ...(idempotencyKey ? { _meta: { [MCP_IDEMPOTENCY_META_KEY]: idempotencyKey } } : {}) };
             const call = (opts?: { signal: AbortSignal; timeout: number }) => (opts ? client.callTool(params, opts) : client.callTool(params)) as Promise<SDKCallToolResult>;
             const result = this.elicitation ? await this.elicitation.call(call) : await call();
-            return this.sdkResultToMCPToolResult(result);
+            return this.sdkResultToMCPToolResult(await offloadMediaBlocks(result, name));
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             // self-heal: 연결 사망(컨테이너 死/세션 무효 — "Not connected"/"Session not found")
@@ -517,31 +493,6 @@ export class ExternalMCPClient extends EventEmitter {
             default:
                 throw new Error(`Unknown transport type: ${this.config.transport_type}`);
         }
-    }
-
-    /**
-     * SDK Tool → MCPTool 변환
-     *
-     * MCP 클라이언트의 도구 형식을 내부 MCPTool 형식으로 변환합니다.
-     *
-     * @param sdkTool - SDK 도구 객체
-     * @returns MCPTool 형식의 도구 정의
-     */
-    private sdkToolToMCPTool(sdkTool: SDKTool): MCPTool {
-        // 호스트 프로토콜용 인자(MCP_HIDDEN_TOOL_ARGS)는 모델에게 보이지 않게 뺀다 — 보이면 지어낸다.
-        const properties = Object.fromEntries(
-            Object.entries((sdkTool.inputSchema?.properties as Record<string, unknown>) || {})
-                .filter(([key]) => !MCP_HIDDEN_TOOL_ARGS.has(key)),
-        );
-        return {
-            name: sdkTool.name,
-            description: sdkTool.description || '',
-            inputSchema: {
-                type: 'object',
-                properties,
-                required: (sdkTool.inputSchema?.required || []).filter((key) => !MCP_HIDDEN_TOOL_ARGS.has(key)),
-            },
-        };
     }
 
     /**

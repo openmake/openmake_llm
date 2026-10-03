@@ -25,6 +25,7 @@ import { hasSideEffects } from '../../config/tool-policy';
 import { priorRepetition, repetitionVerdict } from './tool-loop-guard';
 import { needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from './tool-receipt';
 import { runWithToolCallContext } from '../../utils/tool-call-context';
+import { runWithToolMediaSink, toolMediaSinkFor } from '../../utils/tool-media-sink';
 import { isRejectedCall, findDuplicateCalls } from './turn-call-guards';
 import { getMalformedToolArgsResult, getDuplicateToolCallResult } from '../../prompts/agent-task-turn-loop';
 import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice } from '../../prompts/agent-task-prompt';
@@ -151,7 +152,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             ? wrapUntrustedToolResult(result, input.goal)
             : result;
     const execTool = (name: string, args: Record<string, unknown>): Promise<string> =>
-        getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx, taskRuntime?.spillLargeResult));
+        runWithToolMediaSink(toolMediaSinkFor(taskRuntime), () => getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx, taskRuntime?.spillLargeResult)));
     // 외부 도구(175) — 영수증을 남기고 멱등 키를 호출 문맥에 실어 실행한다(외부 MCP 클라이언트가 읽어 서버에 보낸다).
     let receiptOpen = false;
     const execWithReceipt = async (name: string, args: Record<string, unknown>, toolCallId: string | undefined): Promise<string> => {
