@@ -47,6 +47,7 @@ import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
 import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint, usedToolNamesFrom } from './agent-task/turn-reentry';
 import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
+import { nextTurnProgress } from './agent-task/turn-progress';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
@@ -334,20 +335,8 @@ export class AgentTaskService {
                     continue;
                 }
 
-                // 진행률: 에이전트가 plan 을 세웠으면 실제 단계 완료율(completed/total)을 진척으로 쓴다
-                // — "3/7 단계"처럼 실제 진행을 반영(1-C). plan 이 없으면(턴0·비플래닝 작업) 총 턴 수를
-                // 알 수 없으므로 남은 거리의 고정 비율을 매 턴 채우는 점근 곡선으로 폴백(상한 90, 완료 100 은
-                // 종료 경로가 설정). 둘 다 curProgress 아래로는 내려가지 않게 단조 증가 보장.
-                const planSteps = taskRuntime?.getPlanSnapshot() ?? [];
-                let nextProgress: number;
-                if (planSteps.length > 0) {
-                    const done = planSteps.filter((s) => s.status === 'completed').length;
-                    const planPct = Math.round((done / planSteps.length) * 90);
-                    nextProgress = Math.max(curProgress, Math.min(90, Math.max(2, planPct)));
-                } else {
-                    nextProgress = Math.min(90, curProgress + Math.max(4, Math.round((90 - curProgress) * 0.25)));
-                }
-                await update({ currentTurn: turn + 1, progress: nextProgress });
+                // 진행률 — plan 단계 완료율, 없으면 점근 곡선(agent-task/turn-progress).
+                await update({ currentTurn: turn + 1, progress: nextTurnProgress(taskRuntime?.getPlanSnapshot() ?? [], curProgress) });
 
                 // 턴 자원 가드(검색/브라우저 cap·마무리 턴·HITL 무응답 강등) — 도구 세트 축소 +
                 // 최초 발동 시 nudge 주입·스텝 기록. 판정 근거는 agent-task/turn-gate 참고.
