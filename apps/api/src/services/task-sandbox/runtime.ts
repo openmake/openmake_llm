@@ -20,7 +20,8 @@ import { truncateToolResult } from '../agent-task/tool-result-truncate';
 import { spillToolResult } from '../agent-task/tool-result-spill';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { bindSkillRunApproval } from './skill-run-binding';
-import { saveProceduralSkill, resolveProceduralSpec, recordProceduralRun } from '../agent-task/procedural-skill';
+import { createTaskHistoryTools } from '../agent-task/task-history-tool';
+import { saveProceduralSkill, revertProceduralSkill, resolveProceduralSpec, recordProceduralRun } from '../agent-task/procedural-skill';
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
 import { withToolNameSuggestions, detectShellToolMisuse, formatShellToolMisuseHint } from '../../tool-contract/tool-name-suggest';
@@ -102,7 +103,8 @@ export class TaskRuntime {
                 save: (i) => saveProceduralSkill(this.userId, i.name, i.description, {
                     kind: i.kind, goal: i.description, params: i.params,
                     actions: i.actions, allowlist: i.allowlist, lang: i.lang, code: i.code,
-                }),
+                }, { update: i.update }),
+                revert: (name) => revertProceduralSkill(this.userId, name),
                 load: (id) => resolveProceduralSpec(this.userId, id),
                 recordRun: (run) => recordProceduralRun(this.userId, run),
             }
@@ -116,7 +118,7 @@ export class TaskRuntime {
         // 작업 도구는 고정 관리되며 기여분만큼 늘어난다. 통합 모듈은 AgentTaskService 를 끌어올 수 있어
         // 정적 import 하면 순환이 된다 — 생성 시점 require 로 끊는다.
         const { getChatTurnIntegrations } = require('../chat-service/turn-integrations') as typeof import('../chat-service/turn-integrations');
-        const contributed = getChatTurnIntegrations().flatMap((i) => i.agentTaskTools?.() ?? []);
+        const contributed = [...getChatTurnIntegrations().flatMap((i) => i.agentTaskTools?.() ?? []), ...createTaskHistoryTools(taskId)];
         this.defs = createTaskTools(this.executor, this.plan, delegate, spawn, procedural, browserMetrics, contributed, { userId: this.userId });
         for (const d of this.defs) this.handlers.set(d.tool.name, d.handler);
     }

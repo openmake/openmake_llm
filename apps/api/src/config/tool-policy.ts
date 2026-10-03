@@ -57,6 +57,8 @@ const TOOL_RISK: Readonly<Record<string, RiskRule>> = {
     mcp_list_resources: 'read',
     mcp_read_resource: 'read',
     mcp_get_prompt: 'read',
+    // 과거 작업 검색(agent-task/task-history-tool) — 본인 작업 읽기 전용
+    task_history: 'read',
     skill_save: 'write',
     // 제어·플래닝·위임 — 부작용 없음
     terminate: 'control',
