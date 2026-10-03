@@ -38,3 +38,29 @@ export const CONTEXT_FOLD_BATCH = {
      */
     MIN_SAVED_CHARS: intEnv('AGENT_TASK_CONTEXT_FOLD_MIN_BATCH_CHARS', 0),
 } as const;
+
+/** 창 초과로 오래된 메시지를 버릴 때 남기는 인계 요약 — services/agent-task/context-handoff. */
+export const CONTEXT_HANDOFF = {
+    /**
+     * 켜면 작업 루프가 호출 전에 창 초과를 판정해 오래된 메시지를 요약 하나로 바꾼다(LLM 없음).
+     * 끄면 종전대로 LLMClient 의 안전망이 요청 사본에서 말없이 잘라낸다. AGENT_TASK_CONTEXT_HANDOFF=false
+     */
+    ENABLED: process.env.AGENT_TASK_CONTEXT_HANDOFF !== 'false',
+    /** 요약 전체 글자 수 상한 — 예산 계산에서 이만큼을 요약 몫으로 떼어 둔다. AGENT_TASK_CONTEXT_HANDOFF_MAX_CHARS */
+    SUMMARY_MAX_CHARS: intEnv('AGENT_TASK_CONTEXT_HANDOFF_MAX_CHARS', 6000),
+    /** 원래 요청에서 싣는 글자 수. AGENT_TASK_CONTEXT_HANDOFF_REQUEST_MAX_CHARS */
+    REQUEST_MAX_CHARS: intEnv('AGENT_TASK_CONTEXT_HANDOFF_REQUEST_MAX_CHARS', 600),
+    /** 도구 호출 목록 상한(최근 것부터 남긴다). AGENT_TASK_CONTEXT_HANDOFF_MAX_CALLS */
+    MAX_CALLS: intEnv('AGENT_TASK_CONTEXT_HANDOFF_MAX_CALLS', 40),
+    /** 관련 파일 목록 상한. AGENT_TASK_CONTEXT_HANDOFF_MAX_FILES */
+    MAX_FILES: intEnv('AGENT_TASK_CONTEXT_HANDOFF_MAX_FILES', 30),
+    /** 오류 목록 상한. AGENT_TASK_CONTEXT_HANDOFF_MAX_ERRORS */
+    MAX_ERRORS: intEnv('AGENT_TASK_CONTEXT_HANDOFF_MAX_ERRORS', 10),
+    /**
+     * 줄인 뒤의 목표 크기 — 입력 예산의 이 비율까지 줄인다(0~1). 예산에 딱 맞추면 다음 턴에 또 넘쳐
+     * 매 턴 과거가 바뀐다. AGENT_TASK_CONTEXT_HANDOFF_TARGET_RATIO
+     */
+    TARGET_RATIO: Math.min(1, Math.max(0.1, parseFloat(process.env.AGENT_TASK_CONTEXT_HANDOFF_TARGET_RATIO || '') || 0.7)),
+    /** 파일 경로로 볼 인자 이름. */
+    PATH_ARG_KEYS: ['path', 'filename'] as readonly string[],
+} as const;

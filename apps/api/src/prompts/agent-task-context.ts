@@ -17,3 +17,28 @@ export const TOOL_DIGEST_OUTCOME = {
 export function getToolDigestLine(toolName: string, subject: string, outcome: string, detail?: string): string {
     return `${toolName} ${subject} → ${outcome}${detail ? ` (${detail})` : ''}`;
 }
+
+/** 인계 요약 메시지의 머리 표지 — 이 표지로 시작하는 user 메시지는 시스템이 만든 요약이다. */
+export const HANDOFF_SUMMARY_MARKER = '[인계 요약]';
+
+/** 인계 요약의 절 제목 — 앞선 요약을 이어받을 때 이 제목으로 절을 다시 읽는다. */
+export const HANDOFF_SECTIONS = {
+    request: '## 원래 요청',
+    calls: '## 수행한 도구 호출 (오래된 순)',
+    files: '## 관련 파일',
+    errors: '## 오류',
+} as const;
+
+/** 인계 요약 첫 줄 — 정리했다는 사실과 이어서 할 일. */
+export function getHandoffSummaryHeader(droppedMessages: number): string {
+    return `${HANDOFF_SUMMARY_MARKER} 대화가 길어져 오래된 메시지 ${droppedMessages}개를 정리했습니다. `
+        + '아래는 그 구간의 기록에서 그대로 뽑은 것입니다. 이미 한 일을 되풀이하지 말고 이어서 진행하세요.';
+}
+
+/** 목록이 상한을 넘어 앞쪽을 뺐을 때의 한 줄. */
+export const HANDOFF_OMITTED_LINE = '- … 더 오래된 항목은 생략';
+
+/** 요약에 싣는 도구 호출 한 줄 — 도구별 한 줄(tool-digest)이 없는 도구용. */
+export function getHandoffGenericCall(toolName: string, failed: boolean, errorLine: string): string {
+    return failed ? getToolDigestLine(toolName, '호출', TOOL_DIGEST_OUTCOME.error, errorLine) : getToolDigestLine(toolName, '호출', TOOL_DIGEST_OUTCOME.ok);
+}

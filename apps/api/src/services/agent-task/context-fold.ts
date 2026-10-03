@@ -45,15 +45,33 @@ export function isFoldedToolResult(content: string): boolean {
     return content.startsWith(FOLD_MARKER);
 }
 
+/** 스텁 첫 줄에서 한 줄 요약과 나머지 안내를 가르는 표지 — foldedDigestOf 가 이 앞까지를 읽는다. */
+const DIGEST_SEPARATOR = ' · 결과 ';
+
 function buildStub(toolName: string | undefined, original: string, headChars: number, digest: string | null): string {
     const head = original.slice(0, headChars).replace(/\s+$/, '');
     const ellipsis = original.length > headChars ? '…' : '';
     // ⚠️ "원문이 필요하면 다시 호출하세요" 류 문구 금지 — 2026-09-09 실측(10770ab5): 그 문구가
     // 같은 파일을 25턴 동안 반복해 읽는 루프를 유도했다(접힌 구간을 매번 다시 읽고 또 접힘).
     // 이미 처리한 내용임을 알리고, 필요한 요점은 메모로 남기게 한다.
-    return `${FOLD_MARKER} ${digest ? `${digest} · 결과` : `${toolName ?? 'tool'} 결과`} ${original.length}자 — 이미 읽고 처리한 내용이라 앞부분만 남김. `
+    return `${FOLD_MARKER} ${digest ? `${digest}${DIGEST_SEPARATOR}` : `${toolName ?? 'tool'} 결과 `}${original.length}자 — 이미 읽고 처리한 내용이라 앞부분만 남김. `
         + '같은 내용을 다시 읽지 마세요. 나중에 필요한 요점은 지금 메모 파일(예: notes.md)에 적어 두세요.\n'
         + head + ellipsis;
+}
+
+/** PURE: 접힌 스텁에 실린 도구별 한 줄(tool-digest). 스텁이 아니거나 한 줄이 없으면 null. */
+export function foldedDigestOf(content: string): string | null {
+    if (!isFoldedToolResult(content)) return null;
+    const first = content.split('\n', 1)[0];
+    const at = first.lastIndexOf(DIGEST_SEPARATOR);
+    return at < 0 ? null : first.slice(FOLD_MARKER.length, at).trim();
+}
+
+/** PURE: 접힌 스텁에 남은 원문 앞부분(안내 줄 다음). 스텁이 아니면 원문 그대로. */
+export function foldedHeadOf(content: string): string {
+    if (!isFoldedToolResult(content)) return content;
+    const nl = content.indexOf('\n');
+    return nl < 0 ? '' : content.slice(nl + 1);
 }
 
 /**

@@ -37,6 +37,11 @@ function errorLine(result: string): string {
     return oneLine(result.replace(ERROR_HEAD, '').split('\n')[0] ?? '', TOOL_DIGEST.ERROR_MAX_CHARS);
 }
 
+/** PURE: 오류 결과면 그 첫 줄, 아니면 null. */
+export function toolErrorLine(result: string): string | null {
+    return ERROR_HEAD.test(result) ? errorLine(result) : null;
+}
+
 function genericOutcome(toolName: string, subject: string, result: string): string {
     return ERROR_HEAD.test(result)
         ? getToolDigestLine(toolName, subject, TOOL_DIGEST_OUTCOME.error, errorLine(result))
