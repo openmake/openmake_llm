@@ -45,3 +45,15 @@ export const PROCEDURAL_STRUCTURE = {
         extractHtml: [],
     } as Readonly<Record<string, readonly string[]>>,
 } as const;
+
+/**
+ * 교훈(과거 유사 작업) 조회 조건 — 사람이 시킨 작업의 결과만 교훈 후보로 삼는다.
+ * 예약 실행은 같은 목표가 반복돼 최근 N건을 채우고, 환경 탓 실패(서버 재시작·모델 호출 오류)는 작업 방식의 교훈이 아니다.
+ */
+export const LEARNING_FILTER = {
+    /** 예약이 만든 작업(agent_task_schedule_runs 에 기록된 것)을 뺀다. AGENT_TASK_LEARNING_SKIP_SCHEDULED=false 로 끈다. */
+    SKIP_SCHEDULED: process.env.AGENT_TASK_LEARNING_SKIP_SCHEDULED !== 'false',
+    /** 교훈 후보에서 빼는 실패 분류(config/agent-task-failure-class). 빈 값이면 빼지 않는다. AGENT_TASK_LEARNING_SKIP_FAILURE_CLASSES */
+    SKIP_FAILURE_CLASSES: (process.env.AGENT_TASK_LEARNING_SKIP_FAILURE_CLASSES ?? 'interrupted,llm_error')
+        .split(',').map((c) => c.trim()).filter(Boolean) as readonly string[],
+} as const;

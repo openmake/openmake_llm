@@ -13,7 +13,9 @@
  */
 import { getPool } from '../../data/models/unified-database';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
+import { AgentTaskHistoryRepository } from '../../data/repositories/agent-task-history-repository';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { LEARNING_FILTER } from '../../config/agent-task-skill-memory';
 import { tokenizeGoal } from './tool-selector';
 import { createLogger } from '../../utils/logger';
 
@@ -55,7 +57,10 @@ export async function buildLearningBlock(userId: string, goal: string, excludeTa
     if (!AGENT_TASK_LIMITS.LEARNING_ENABLED) return '';
     try {
         const repo = new AgentTaskRepository(getPool());
-        const recent = await repo.getRecentTerminalTaskMetas(userId, AGENT_TASK_LIMITS.LEARNING_LOOKBACK);
+        // 사람이 시킨 작업만 — 예약 실행과 환경 탓 실패(서버 재시작·모델 호출 오류)는 교훈 후보가 아니다.
+        const recent = await new AgentTaskHistoryRepository(getPool()).getLessonCandidates(userId, AGENT_TASK_LIMITS.LEARNING_LOOKBACK, {
+            skipScheduled: LEARNING_FILTER.SKIP_SCHEDULED, skipFailureClasses: LEARNING_FILTER.SKIP_FAILURE_CLASSES,
+        });
         const scored = recent
             .filter((t) => t.id !== excludeTaskId)
             .map((t) => ({ t, sim: goalSimilarity(goal, t.goal) }))
