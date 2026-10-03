@@ -964,7 +964,17 @@
       "token_limit": "Token limit reached",
       "timeout": "Time limit exceeded",
       "hitl_park_expired": "Timed out waiting for your answer",
-      "interrupted_local_device": "Interrupted: local device disconnected"
+      "interrupted_local_device": "Interrupted: local device disconnected",
+      "llm_error": "Model call failed",
+      "next": {
+        "goal_incomplete": "Review the result, then spell out what is missing in the goal and run it again.",
+        "max_turns": "Resume to continue the remaining work, or split the goal into smaller tasks and run again.",
+        "timeout": "Split the task into smaller parts or raise the time limit, then run it again.",
+        "token_limit": "Narrow the goal or reduce the input material, then run it again.",
+        "llm_error": "Try again in a moment. If it keeps failing, pick another model or tell your administrator.",
+        "interrupted": "Resume to pick up from where it stopped.",
+        "unknown": "Check the full failure reason. If it fails the same way again, tell your administrator."
+      }
     },
     "planNode": "Step {n}",
     "startedLabel": "Started",

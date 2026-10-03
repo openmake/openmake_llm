@@ -964,7 +964,17 @@
       "token_limit": "Token-Limit erreicht",
       "timeout": "Zeitlimit überschritten",
       "hitl_park_expired": "Zeitüberschreitung beim Warten auf Ihre Antwort",
-      "interrupted_local_device": "Unterbrochen: lokales Gerät getrennt"
+      "interrupted_local_device": "Unterbrochen: lokales Gerät getrennt",
+      "llm_error": "Fehler beim Modellaufruf",
+      "next": {
+        "goal_incomplete": "Prüfen Sie das Ergebnis, beschreiben Sie im Ziel genau, was fehlt, und starten Sie erneut.",
+        "max_turns": "Setzen Sie die Aufgabe fort oder teilen Sie das Ziel in kleinere Aufgaben und starten Sie erneut.",
+        "timeout": "Teilen Sie die Aufgabe in kleinere Teile oder erhöhen Sie das Zeitlimit und starten Sie erneut.",
+        "token_limit": "Grenzen Sie das Ziel ein oder verringern Sie das Eingabematerial und starten Sie erneut.",
+        "llm_error": "Versuchen Sie es gleich noch einmal. Wenn es weiter fehlschlägt, wählen Sie ein anderes Modell oder informieren Sie Ihren Administrator.",
+        "interrupted": "Setzen Sie die Aufgabe fort, um an der unterbrochenen Stelle weiterzumachen.",
+        "unknown": "Prüfen Sie den vollständigen Fehlergrund. Tritt er erneut auf, informieren Sie Ihren Administrator."
+      }
     },
     "planNode": "Schritt {n}",
     "startedLabel": "Gestartet",

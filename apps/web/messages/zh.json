@@ -964,7 +964,17 @@
       "token_limit": "已达到令牌上限",
       "timeout": "超出时间上限",
       "hitl_park_expired": "等待回答超时",
-      "interrupted_local_device": "本地设备断开连接而中断"
+      "interrupted_local_device": "本地设备断开连接而中断",
+      "llm_error": "模型调用出错",
+      "next": {
+        "goal_incomplete": "请查看结果，把缺少的部分具体写进目标后重新运行。",
+        "max_turns": "请继续运行以完成剩余部分，或把目标拆小后重新运行。",
+        "timeout": "请把任务拆小或调高时间上限后重新运行。",
+        "token_limit": "请缩小目标范围或减少输入资料后重新运行。",
+        "llm_error": "请稍后重新运行。如果仍然失败，请换一个模型或联系管理员。",
+        "interrupted": "请继续运行，从中断的位置接着做。",
+        "unknown": "请查看完整的失败原因；重新运行后仍然相同时请联系管理员。"
+      }
     },
     "planNode": "步骤{n}",
     "startedLabel": "开始",
