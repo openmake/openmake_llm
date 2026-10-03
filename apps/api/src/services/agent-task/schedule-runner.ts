@@ -17,6 +17,7 @@ import { getPushService } from '../PushService';
 import { dispatchAgentTask } from './task-queue';
 import { publishScheduleOutput } from './schedule-publish';
 import { computeNextRun } from './schedule-cron';
+import { scheduleFireKey, isPreviousRunActive } from './schedule-fire';
 import type { AgentTaskUserRole } from './types';
 import { isAdminRole } from '../../data/user-manager';
 
@@ -64,8 +65,24 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
     const nextRunAtMs = computeNextRun(timing, nowMs);
     try {
         const db = getUnifiedDatabase();
+        // 이전 실행이 아직 돌고 있으면 이번 발화는 건너뛴다 — 같은 리포트의 중복 생성·게시 파일 덮어쓰기 방지(schedule-fire).
+        const last = await repo.getLastTaskState(s.last_task_id).catch(() => null);
+        if (isPreviousRunActive(last, nowMs, AGENT_TASK_LIMITS.SCHEDULE_OVERLAP_STALE_MS)) {
+            await repo.markSkipped(s.id, nextRunAtMs);
+            await repo.recordRun({ scheduleId: s.id, userId: s.user_id, taskId: s.last_task_id ?? undefined, outcome: 'skipped', error: '이전 실행이 아직 진행 중' }).catch(() => { /* noop */ });
+            logger.info(`[Schedule] 건너뜀: ${s.id} — 이전 실행(${s.last_task_id}) 진행 중`);
+            return;
+        }
         const taskId = uuidv4();
-        await db.createAgentTask({ id: taskId, userId: s.user_id, goal: s.goal, maxTurns: s.max_turns });
+        // 발화 멱등 키 — 작업을 만든 뒤 markRun 전에 죽었다면, 재시작 뒤 같은 발화는 작업을 다시 만들지 않는다.
+        const fireKey = scheduleFireKey(s.id, s.next_run_at);
+        const created = await db.createAgentTask({ id: taskId, userId: s.user_id, goal: s.goal, maxTurns: s.max_turns, idempotencyKey: fireKey });
+        if (!created) {
+            const existing = await db.findAgentTaskByCreateKey(String(s.user_id), fireKey);
+            await repo.markRun(s.id, nextRunAtMs, existing?.id ?? taskId);
+            logger.warn(`[Schedule] 같은 발화의 작업이 이미 있어 다시 만들지 않음: ${s.id} → ${existing?.id ?? '(조회 실패)'}`);
+            return;
+        }
         const role = await resolveRole(s.user_id);
         const service = new AgentTaskService();
         await dispatchAgentTask({

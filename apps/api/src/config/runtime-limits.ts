@@ -1427,6 +1427,9 @@ export const AGENT_TASK_LIMITS = {
     SCHEDULE_MIN_INTERVAL_SEC: parseInt(process.env.AGENT_TASK_SCHEDULE_MIN_INTERVAL_SEC || '300', 10),
     /** 연속 실패 이 횟수 도달 시 스케줄 자동 비활성(폭주 차단). AGENT_TASK_SCHEDULE_DISABLE_AFTER_FAILURES(기본 5). */
     SCHEDULE_DISABLE_AFTER_FAILURES: parseInt(process.env.AGENT_TASK_SCHEDULE_DISABLE_AFTER_FAILURES || '5', 10),
+    /** 이전 실행이 진행 중 상태로 남았어도 이 시간(ms) 넘게 갱신이 없으면 멈춘 표시로 보고 발화를 막지 않는다.
+     *  기본 40분 = 예약 총 예산(20분)의 두 배. AGENT_TASK_SCHEDULE_OVERLAP_STALE_MS */
+    SCHEDULE_OVERLAP_STALE_MS: parseInt(process.env.AGENT_TASK_SCHEDULE_OVERLAP_STALE_MS || '', 10) || 40 * 60 * 1000,
     /** 예약 실행 승인정책 — 예약 task 는 무인(사람 승인 불가)이므로 기본 'none'(전부 자동).
      *  전역 TASK_SANDBOX_APPROVAL_POLICY='all' 이면 예약 task 가 첫 도구서 pause 되어 멈추므로 분리한다.
      *  AGENT_TASK_SCHEDULE_APPROVAL_POLICY(기본 'none' | 'high-risk' | 'all'). */
