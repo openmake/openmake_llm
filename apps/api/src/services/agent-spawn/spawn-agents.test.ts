@@ -19,6 +19,13 @@ jest.mock('../../config/runtime-limits', () => ({
     },
 }));
 
+// 끝난 결과 재사용은 저장소(DB)를 쓴다 — 여기서는 끄고 spawn-result-store.test.ts 에서 본다.
+jest.mock('../../config/agent-task-delegation', () => {
+    const actual = jest.requireActual('../../config/agent-task-delegation');
+    // 입력 품질 검사도 끈다 — 아래 테스트들은 'a'·'x' 같은 한 글자 지시로 배선만 본다(검사는 spawn-input-check.test.ts).
+    return { ...actual, AGENT_DELEGATION: { ...actual.AGENT_DELEGATION, RESULT_REUSE_ENABLED: false, INPUT_CHECK_ENABLED: false } };
+});
+
 const autoApproveMock = jest.fn((_taskId: string) => false);
 jest.mock('../task-sandbox/approval-gate', () => ({
     ...jest.requireActual('../task-sandbox/approval-gate'),
@@ -213,6 +220,20 @@ describe('runSpawnAgents 병렬 실행', () => {
         });
         expect(peak).toBeLessThanOrEqual(2);
         expect(runSubagentMock).toHaveBeenCalledTimes(3);
+    });
+});
+
+describe('runSpawnAgents 종료 사유 전달', () => {
+    it('태스크마다 종료 사유를 머리말 아래에 싣는다 — 실패·시간 초과·부분 결과를 부모가 구분한다', async () => {
+        runSubagentMock.mockImplementation(async (p: { subgoal: string; onExit?: (r: string) => void }) => {
+            if (p.subgoal === 'crash') throw new Error('subagent crashed');
+            p.onExit?.(p.subgoal === 'slow' ? 'timeout' : 'completed');
+            return `RESULT<${p.subgoal}>`;
+        });
+        const out = await runSpawnAgents({ ...baseParams, args: { tasks: [{ prompt: 'fine' }, { prompt: 'slow' }, { prompt: 'crash' }] } });
+        expect(out).toContain('fine\n[종료 사유: 정상 완료]\nRESULT<fine>');
+        expect(out).toContain('slow\n[종료 사유: 시간 초과]\nRESULT<slow>');
+        expect(out).toContain('crash\n[종료 사유: 오류]\nError: 서브에이전트 실패');
     });
 });
 
