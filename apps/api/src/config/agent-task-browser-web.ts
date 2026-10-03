@@ -6,6 +6,8 @@
  * @module config/agent-task-browser-web
  */
 
+import { BROWSER_URL_GUARD_ENABLED } from './task-sandbox';
+
 function intEnv(raw: string | undefined, def: number): number {
     const n = parseInt(raw ?? '', 10);
     return Number.isFinite(n) && n > 0 ? n : def;
@@ -26,4 +28,14 @@ export const BROWSER_RUN = {
      * 호출마다 `docker inspect` 한 번이 더 든다. TASK_SANDBOX_BROWSER_TAKEOVER_RECHECK=false 로 끈다.
      */
     TAKEOVER_RECHECK_ENABLED: process.env.TASK_SANDBOX_BROWSER_TAKEOVER_RECHECK !== 'false',
+} as const;
+
+/** 브라우저 실행 결과 검사(services/task-sandbox/browser-result-guard). */
+export const BROWSER_RESULT_GUARD = {
+    /**
+     * 도착한 주소(리다이렉트 뒤)를 목적지 가드로 다시 검사해, 막힌 주소면 결과 본문을 모델에 주지 않는다.
+     * 실행 전 검사(TASK_SANDBOX_BROWSER_URL_GUARD)가 꺼져 있으면 같이 꺼진다.
+     * TASK_SANDBOX_BROWSER_REDIRECT_GUARD=false 로 이것만 끈다.
+     */
+    REDIRECT_GUARD_ENABLED: BROWSER_URL_GUARD_ENABLED && process.env.TASK_SANDBOX_BROWSER_REDIRECT_GUARD !== 'false',
 } as const;

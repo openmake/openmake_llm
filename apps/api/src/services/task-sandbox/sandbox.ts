@@ -22,6 +22,7 @@ import { resolve, sep, join, dirname, basename, relative } from 'path';
 import { getTaskSandboxConfig, BROWSER_SESSION, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { BROWSER_RUN } from '../../config/agent-task-browser-web';
 import { BROWSER_TAKEOVER_DISCARDED_MESSAGE } from '../../prompts/agent-task-browser-web';
+import { guardBrowserResult } from './browser-result-guard';
 import type { TaskExecutor, ExecResult } from './executor';
 import { SANDBOX_WORKSPACE_DIR, stripWorkspacePrefix } from './workspace-path';
 import { createLogger } from '../../utils/logger';
@@ -379,7 +380,7 @@ export class TaskSandbox implements TaskExecutor {
         if (BROWSER_RUN.TAKEOVER_RECHECK_ENABLED && await isBrowserSessionActive(this.taskId, this.cfg)) {
             return { ...r, stdout: '', stderr: BROWSER_TAKEOVER_DISCARDED_MESSAGE, exitCode: -1 };
         }
-        return r;
+        return guardBrowserResult(r);
     }
 
     /** workspace 내 파일 쓰기 (호스트 bind-mount 직접). 경로 가드(어휘+실경로) + 디스크 쿼터 적용.
