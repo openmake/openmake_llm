@@ -82,11 +82,38 @@ bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm �
 | ⑦ | GitHub | release-please 의 릴리스 PR 머지 → `vX.Y.Z` 태그 (⑥ 뒤에 main 에 머지된 것이 없을 때) | 릴리스 PR 머지 |
 | ⑧ | **환경 online** (온라인 서버) | 새 릴리스 태그로 올리고 스모크 확인 — 게이트가 ⑥ 의 기록을 본다 | `omk env update online` |
 
-배포는 전부 **수동**이다 — 머지·릴리스만으로는 어떤 환경도 바뀌지 않는다. 앞 단계를 통과하기 전에는 다음 단계로 가지 않는다
-(환경 dev 통과 전 `main` 으로 올리지 않는다, staging 통과 전 릴리스 금지).
+기본은 전부 **수동**이다 — 머지·릴리스만으로는 어떤 환경도 바뀌지 않는다. 앞 단계를 통과하기 전에는 다음 단계로 가지 않는다
+(환경 dev 통과 전 `main` 으로 올리지 않는다, staging 통과 전 릴리스 금지). ②~⑤ 를 사람 없이 잇는 방법은 아래 [자동 승격](#자동-승격--staging-까지-사람-없이-선택).
 
 `dev` 를 `main` 으로 올릴 때는 squash 하지 않는다 — squash 는 `dev` 와 `main` 의 연결을 끊어, 다음에 올릴 때마다 이미 올린 변경이 충돌한다.
 커밋 제목은 `feat(…):` · `fix(…):` 형식을 지킨다 — 일반 머지라 `dev` 의 커밋 제목이 그대로 `main` 에 들어가고, release-please 가 그것을 CHANGELOG 에 쓴다.
+
+### 자동 승격 — staging 까지 사람 없이 (선택)
+
+환경이 스스로 갱신하고, 갱신한 커밋에 결과를 붙이고, 그 결과가 다음 단계를 연다. 사람의 관문은 staging 확인과 `verify` 부터다(⑥~⑧ 은 그대로).
+
+```
+feature PR → dev (CI 통과 시 자동 머지)
+  → 환경 dev 가 주기마다 dev 를 받아 update → 스모크 → 그 커밋에 표지 omk/env-dev
+  → dev → main PR 자동 생성 · CI 와 omk/env-dev 가 모두 통과하면 자동 머지 (일반 머지)
+  → 환경 staging 이 주기마다 main 을 받아 update → 스모크 → 표지 omk/env-staging
+  → 사람: staging 확인 → verify → 릴리스 PR → online
+```
+
+| 조각 | 하는 일 | 켜는 곳 |
+|---|---|---|
+| `omk env smoke <env>` | health · 빌드본의 API 포트 · 웹의 `/generated` 경로 · 로그인 · 채팅 1회. 하나라도 실패하면 종료 코드 3 | 그 환경 `.env` 의 `OMK_SMOKE_EMAIL` · `OMK_SMOKE_PASSWORD` (스모크가 로그인할 계정) |
+| 결과 표지 | 갱신 → 스모크 뒤 그 커밋에 GitHub 커밋 상태 `omk/env-<env>` 를 붙인다. 갱신이 실패해도 실패로 붙인다 | 그 환경 `.env` 의 `OMK_STATUS_TOKEN` (커밋 상태 쓰기 권한만) → `omk env autoupdate <env>` 를 다시 실행 |
+| `promote` 워크플로 | dev 에 push 될 때 dev → main PR 을 만들고(있으면 그대로) 자동 머지를 건다 | 저장소 시크릿 `OMK_PROMOTE_TOKEN` · 저장소 설정 "Allow auto-merge" |
+| main 보호 규칙 | 필수 체크에 `omk/env-dev` 를 더한다 — 환경 dev 가 확인하지 않은 커밋은 main 에 들어가지 못한다 | 저장소 설정 |
+
+- 표지는 **확인한 커밋**에 붙는다. PR 의 최신 커밋을 환경이 아직 받지 않았으면 표지가 없어 자동 머지가 기다린다.
+- 실패하면 표지가 실패로 남고 다음 단계가 열리지 않는다. 환경은 이전 버전 그대로 돈다. 실패로 남은 커밋은 다음 주기에 스모크를 다시 본다 —
+  바로 다시 보려면 `omk env smoke <env> --report`.
+- 통과를 기록한 커밋은 다시 보지 않는다 — 스모크의 채팅 1회는 그 계정에 대화 기록을 한 건 남긴다.
+- `OMK_STATUS_TOKEN` 이 없는 환경의 autoupdate 는 지금까지처럼 갱신만 한다. `OMK_PROMOTE_TOKEN` 이 없으면 `promote` 는 아무것도 하지 않는다.
+- `OMK_PROMOTE_TOKEN` 은 기본 `GITHUB_TOKEN` 이 아니어야 한다 — 기본 토큰으로 만든 PR·머지는 CI 와 release-please 를 깨우지 않는다.
+- 릴리스를 따르는 환경(online)은 대상이 아니다 — 릴리스 게이트가 `verify` 기록을 본다.
 
 ### dev — "합쳐진 dev 가 실제 환경에서 도는가"
 
@@ -189,7 +216,7 @@ irm https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk
 
 2 가 실패하면 설치가 멈춘다. 3 의 실패는 경고만 남기고 계속한다. 4 는 실패하면 멈춘다 — 뒤의 5·6 이 실행되지 않는다.
 
-**배포는 수동이다.** 머지만으로는 아무것도 바뀌지 않고, 사람이 `omk env update <env>` 를 실행해야 그 환경에 올라간다. 원하는 환경만 자동 갱신을 켤 수 있다(`omk env autoupdate <env>` — 원격이 앞서 있을 때만 갱신하는 PM2 cron 앱. 끄려면 `--off`).
+**배포는 기본이 수동이다.** 머지만으로는 아무것도 바뀌지 않고, 사람이 `omk env update <env>` 를 실행해야 그 환경에 올라간다. 원하는 환경만 자동 갱신을 켤 수 있다(`omk env autoupdate <env>` — 원격이 앞서 있을 때만 갱신하는 PM2 cron 앱. 끄려면 `--off`). 갱신 뒤 스모크와 결과 표지까지 잇는 방법은 [자동 승격](#자동-승격--staging-까지-사람-없이-선택).
 
 설치 후 사람이 채울 것 — 해당할 때만 요약 끝에 `[할 일]` 로 나온다:
 
@@ -212,7 +239,8 @@ omk env install <env> [--ref BR] [--bench [--bench-ref BR]] [--public-url URL] [
                       [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
                       [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate] [--release-gate]
                       [--ops-profile] [--dgx-host H] [--https-host H] [--artifact-viewer] [--discord-token T]
-omk env update  <env> [--if-behind] [--no-backup] [--force-unverified]   # llm(ff-only → build → migrate → restart) → bench → proxy
+omk env update  <env> [--if-behind] [--no-backup] [--force-unverified] [--report]   # llm(ff-only → build → migrate → restart) → bench → proxy
+omk env smoke   <env> [--report]        # health · 빌드본의 API 포트 · /generated · 로그인 · 채팅 1회 (--report: 그 커밋에 결과 표지)
 omk env verify  <env> [--list]          # 확인을 마친 커밋을 origin 에 기록 (릴리스 게이트)
 omk env reset   <env> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
 omk env status|start|stop|logs <env>
@@ -515,6 +543,7 @@ omk env status online
 | `OMK_REPO_URL` / `OMKB_REPO_URL` | GitHub 공식 리포 | 포크에서 설치할 때 |
 | `OMK_AUTOUPDATE_CRON` | `*/10 * * * *` | 자동 갱신 주기 |
 | `OMK_BACKUP_CRON` | `30 3 * * *` | `omk env backup --schedule` 의 기본 주기 |
+| `OMK_SMOKE_TIMEOUT` / `OMK_GITHUB_API` | `120` / `https://api.github.com` | 스모크 요청 하나의 제한 시간(초) · 결과 표지를 올릴 API |
 | `OMK_CADDY_VERSION` | 최신 릴리스 | caddy 버전 고정 (폐쇄망) |
 | `OMK_CADDY_ADMIN` | `localhost:2019` | caddy admin 주소 |
 | `OMKB_PORT_BASE` / `OMK_PROXY_PORT_BASE` / `OMK_LITELLM_PORT_BASE` | `9400` / `33000` / `13401` | bench·프록시·LiteLLM 빈 포트 탐색 시작점 |
