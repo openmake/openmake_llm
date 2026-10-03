@@ -378,6 +378,7 @@
       "autoApprove": "Rest freigeben",
       "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen ausgenommen)",
       "preview": "Änderungsvorschau",
+      "fullArgs": "Vollständigen Inhalt anzeigen ({chars} Zeichen)",
       "elicitHint": "Eingabeanfrage von {server} · Felder: {fields}",
       "elicitJsonHint": "Bei mehreren Feldern bitte als JSON antworten: {example}"
     },

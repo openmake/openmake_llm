@@ -378,6 +378,7 @@
       "autoApprove": "Approve rest",
       "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)",
       "preview": "Preview changes",
+      "fullArgs": "Show full content ({chars} chars)",
       "elicitHint": "Input requested by {server} · fields: {fields}",
       "elicitJsonHint": "For more than one field, answer in JSON: {example}"
     },
