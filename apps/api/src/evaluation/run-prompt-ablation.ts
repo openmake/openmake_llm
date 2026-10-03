@@ -5,6 +5,11 @@
  *   npm run eval:ablation -- --repeats 3 --limit 2
  *   npm run eval:ablation -- --variants baseline --only fix-python-bug,edit-notes   # 지목한 과제만(묶음의 순서대로)
  *   npm run eval:agent-tasks                      # 기준 조건만 1회 + 관문(야간 회귀 감시): --variants baseline --gate
+ *   npm run eval:agent-tasks:browser              # 브라우저 과제만(browserCases): --variants baseline --browser only
+ *
+ * --browser 를 주면 브라우저 과제(browserCases)를 묶음 뒤에 더해 돌리고, `--browser only` 면 브라우저 과제만 돌린다.
+ * 브라우저 과제는 외부 사이트에 달려 있어 기본 실행(야간 회귀 감시)에는 넣지 않는다. 완료는 작업 상태에 더해
+ * 최종 답변에 정답 문자열이 들어 있는지(agent-task-dataset.judgeExpectedAnswer)로 채점한다.
  *
  * 과제마다 조건(variant)별로 에이전트 작업을 실제로 실행한다: 샌드박스에서 실제 모델이 도구를 쓴다.
  * 조건은 시스템 프롬프트에서 지정한 규칙을 뺀 것이다(prompt-ablation.ablatePrompt) — 운영 코드는 바꾸지 않고
@@ -25,12 +30,21 @@ import { randomUUID } from 'crypto';
 require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 
 import { ablatePrompt, summarizeAblation, gateAgentTaskSuite, selectCases, type AblationRun } from './prompt-ablation';
+import { judgeExpectedAnswer } from './agent-task-dataset';
 import { evaluateTrajectory, parseTrajectorySpec, stepsToTrajectory, type TrajectorySpec, type TrajectoryStepRow } from './trajectory-evaluator';
+
+interface AblationCase {
+    id: string; goal: string; maxTurns: number; spec: TrajectorySpec;
+    files?: Array<{ name: string; type?: string; content: string }>;
+    /** 브라우저 과제만 — 최종 답변에 모두 들어 있어야 하는 정답 문자열. */
+    expectedAnswer?: { includes: string[] };
+}
 
 interface AblationDataset {
     version: string;
     variants: Array<{ id: string; dropRules: string[] }>;
-    cases: Array<{ id: string; goal: string; maxTurns: number; spec: TrajectorySpec; files?: Array<{ name: string; type?: string; content: string }> }>;
+    cases: AblationCase[];
+    browserCases?: AblationCase[];
 }
 
 const LOGS_DIR = path.join(__dirname, '../../logs');
@@ -47,7 +61,10 @@ async function main(): Promise<void> {
     const dataset = JSON.parse(fs.readFileSync(argValue('--dataset') ?? path.resolve(__dirname, 'golden-agent-tasks.json'), 'utf8')) as AblationDataset;
     const repeats = Number(argValue('--repeats') ?? '1');
     const limit = argValue('--limit');
-    const cases = selectCases(dataset.cases, { only: argValue('--only')?.split(',').map((x) => x.trim()).filter(Boolean), ...(limit !== undefined ? { limit: Number(limit) } : {}) });
+    const browser = process.argv.includes('--browser');
+    if (browser && !dataset.browserCases?.length) throw new Error('--browser: 과제 묶음에 browserCases 가 없습니다');
+    const pool = !browser ? dataset.cases : argValue('--browser') === 'only' ? dataset.browserCases ?? [] : [...dataset.cases, ...(dataset.browserCases ?? [])];
+    const cases = selectCases(pool, { only: argValue('--only')?.split(',').map((x) => x.trim()).filter(Boolean), ...(limit !== undefined ? { limit: Number(limit) } : {}) });
     for (const c of cases) parseTrajectorySpec(c.spec);
     const only = argValue('--variants')?.split(',');
     if (only) dataset.variants = dataset.variants.filter((v) => only.includes(v.id));
@@ -89,10 +106,15 @@ async function main(): Promise<void> {
                     processPassed: check.passed, rootFailures: check.rootFailures,
                     turns: Number(task?.current_turn ?? 0), totalTokens: Number(task?.total_tokens ?? 0),
                     toolCalls: calls.length, durationMs: Date.now() - started,
+                    ...(c.expectedAnswer ? {
+                        answerPassed: judgeExpectedAnswer(c.expectedAnswer, typeof task?.result === 'string' ? task.result : null),
+                        browserCalls: calls.filter((x) => x.name === 'browser').length,
+                    } : {}),
                 };
                 runs.push(run);
                 console.log(`  ${c.id} / ${v.id}: ${run.status}, 과정 ${run.processPassed ? '통과' : `실패(${run.rootFailures.join(', ')})`}, `
-                    + `${run.turns}턴, ${run.totalTokens}토큰, 도구 ${run.toolCalls}회, ${(run.durationMs / 1000).toFixed(0)}초`);
+                    + `${run.turns}턴, ${run.totalTokens}토큰, 도구 ${run.toolCalls}회, ${(run.durationMs / 1000).toFixed(0)}초`
+                    + (run.answerPassed === undefined ? '' : `, 정답 ${run.answerPassed ? '일치' : '불일치'}, 브라우저 ${run.browserCalls}회`));
             }
         }
     }
@@ -112,8 +134,8 @@ async function main(): Promise<void> {
             completed: Number(process.env.OMK_EVAL_AGENT_TASK_COMPLETED_THRESHOLD ?? COMPLETED_THRESHOLD_DEFAULT),
             process: Number(process.env.OMK_EVAL_AGENT_TASK_PROCESS_THRESHOLD ?? PROCESS_THRESHOLD_DEFAULT),
         });
-        for (const r of runs.filter((x) => x.status !== 'completed' || !x.processPassed)) {
-            console.log(`  ✗ ${r.caseId}: ${r.status}${r.processPassed ? '' : `, 과정 실패(${r.rootFailures.join(', ')})`} — 작업 ${r.taskId}`);
+        for (const r of runs.filter((x) => x.status !== 'completed' || !x.processPassed || x.answerPassed === false)) {
+            console.log(`  ✗ ${r.caseId}: ${r.status}${r.processPassed ? '' : `, 과정 실패(${r.rootFailures.join(', ')})`}${r.answerPassed === false ? ', 정답 불일치' : ''} — 작업 ${r.taskId}`);
         }
         console.log(`결과: ${gate.ok ? '통과' : `실패 (${gate.failures.join('; ')})`}`);
         if (!gate.ok) process.exit(1);

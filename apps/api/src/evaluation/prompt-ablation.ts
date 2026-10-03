@@ -54,6 +54,10 @@ export interface AblationRun {
     totalTokens: number;
     toolCalls: number;
     durationMs: number;
+    /** 정답 문자열 판정이 있는 과제(브라우저 과제)만 — 최종 답변에 정답이 들어 있는지. */
+    answerPassed?: boolean;
+    /** 브라우저 과제만 — browser 도구 호출 수. */
+    browserCalls?: number;
 }
 
 export interface AblationVariantSummary {
@@ -66,7 +70,7 @@ export interface AblationVariantSummary {
     meanToolCalls: number;
 }
 
-/** PURE: 조건별 요약 — 완료율, 과정 검사 통과율, 평균 토큰·턴·도구 호출. */
+/** PURE: 조건별 요약 — 완료율, 과정 검사 통과율, 평균 토큰·턴·도구 호출. 정답 판정이 있는 과제는 정답이 맞아야 완료다. */
 export function summarizeAblation(runs: readonly AblationRun[]): AblationVariantSummary[] {
     const variants = [...new Set(runs.map((r) => r.variant))];
     const mean = (xs: number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
@@ -74,7 +78,7 @@ export function summarizeAblation(runs: readonly AblationRun[]): AblationVariant
         const rs = runs.filter((r) => r.variant === variant);
         return {
             variant, runs: rs.length,
-            completedRate: mean(rs.map((r) => (r.status === 'completed' ? 1 : 0))),
+            completedRate: mean(rs.map((r) => (r.status === 'completed' && r.answerPassed !== false ? 1 : 0))),
             processPassRate: mean(rs.map((r) => (r.processPassed ? 1 : 0))),
             meanTokens: mean(rs.map((r) => r.totalTokens)),
             meanTurns: mean(rs.map((r) => r.turns)),

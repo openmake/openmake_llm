@@ -53,6 +53,17 @@ describe('summarizeAblation', () => {
     });
 });
 
+describe('summarizeAblation — 정답 문자열 판정이 있는 과제(브라우저)', () => {
+    const run = (over: Partial<AblationRun>): AblationRun => ({
+        variant: 'baseline', taskId: 't', caseId: 'c', status: 'completed', processPassed: true, rootFailures: [], turns: 2, totalTokens: 1000, toolCalls: 3, durationMs: 1000, ...over,
+    });
+
+    it('작업이 completed 여도 정답이 답변에 없으면 완료로 세지 않는다', () => {
+        const s = summarizeAblation([run({ answerPassed: true }), run({ answerPassed: false }), run({}), run({ status: 'failed', answerPassed: true })]);
+        expect(s[0]).toMatchObject({ runs: 4, completedRate: 0.5 });
+    });
+});
+
 describe('gateAgentTaskSuite', () => {
     const summary = (completedRate: number, processPassRate: number) => [{ variant: 'baseline', runs: 8, completedRate, processPassRate, meanTokens: 1, meanTurns: 1, meanToolCalls: 1 }];
     const thresholds = { completed: 0.8, process: 0.9 };
