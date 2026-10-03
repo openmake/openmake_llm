@@ -187,6 +187,8 @@ interface SpawnAgentsParams {
     sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs'>;
     signal?: AbortSignal;
     onTokens?: (n: number) => void;
+    /** 부모 작업의 남은 토큰 예산(에이전트 작업 경로만) — 병렬 서브의 합이 이를 넘지 않게 한다. */
+    remainingTokens?: () => number;
     onPausedMs?: (ms: number) => void;
 }
 
@@ -300,6 +302,7 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
                         sandboxCfg: p.sandboxCfg,
                         ...(p.signal ? { signal: p.signal } : {}),
                         ...(p.onTokens ? { onTokens: p.onTokens } : {}),
+                        ...(p.remainingTokens ? { remainingTokens: p.remainingTokens } : {}),
                         ...(p.onPausedMs ? { onPausedMs: p.onPausedMs } : {}),
                     });
                 } catch (e) {
@@ -401,6 +404,7 @@ export function buildTaskSpawnFn(p: DelegateFactoryParams): SpawnFn {
             sandboxCfg: p.sandboxCfg,
             signal: p.signal,
             onTokens: p.onTokens,
+            ...(p.remainingTokens ? { remainingTokens: p.remainingTokens } : {}),
             onPausedMs: p.onPausedMs,
         });
     };

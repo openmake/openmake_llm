@@ -53,6 +53,8 @@ interface SubagentParams {
     signal?: AbortSignal;
     /** 서브 LLM 호출 토큰을 부모 누적에 합산. */
     onTokens?: (n: number) => void;
+    /** 부모 작업의 남은 토큰 예산 — 0 이하가 되면 다음 턴으로 가지 않는다(형제 서브의 사용분도 onTokens 로 반영된 값). */
+    remainingTokens?: () => number;
     /** 승인 대기 시간을 부모 pausedMs 에 합산(4-1 pause-aware 일관). */
     onPausedMs?: (ms: number) => void;
     /** 활동 기록(109) — 에이전트 작업 경로만 넘긴다. 채팅 경로는 작업 행이 없어 무기록. */
@@ -156,7 +158,8 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             const used = (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);
             tokens += used;
             p.onTokens?.(used);
-            if (tokens > AGENT_TASK_LIMITS.SUBAGENT_MAX_TOKENS) {
+            // 위임당 고정 상한 + 부모 잔여 — 종전엔 서브가 부모의 남은 예산과 무관하게 고정 상한까지 썼다.
+            if (tokens > AGENT_TASK_LIMITS.SUBAGENT_MAX_TOKENS || (p.remainingTokens !== undefined && p.remainingTokens() <= 0)) {
                 logger.warn(`[Subagent] 토큰 상한 초과 — 조기 종료 (${tokens})`);
                 p.trace?.record('final', `[토큰 상한 ${tokens}] ${result.content || '(부분 결과 없음)'}`);
                 return result.content || '(서브에이전트 토큰 상한 도달 — 부분 결과 없음)';
