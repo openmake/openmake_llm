@@ -4,7 +4,7 @@
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({}), getPool: () => ({}) }));
 jest.mock('../../../data/repositories/agent-task-repository', () => ({ AgentTaskRepository: jest.fn() }));
 
-import { ensureUniqueToolCallIds, findDanglingToolCalls, resolveUnknownOutcome } from '../turn-reentry';
+import { ensureUniqueToolCallIds, findDanglingToolCalls, resolveUnknownOutcome , usedToolNamesFrom } from '../turn-reentry';
 import type { ChatMessage } from '../../../llm/types';
 
 const call = (id: string, name = 'bash') => ({ type: 'function' as const, id, function: { name, arguments: {} } });
@@ -83,5 +83,22 @@ describe('resolveUnknownOutcome', () => {
     it('표식이 없거나 남은 호출과 무관하면 결과 불명이 아니다', () => {
         expect(resolveUnknownOutcome(null, calls, new Map())).toBeUndefined();
         expect(resolveUnknownOutcome('zzz', calls, new Map())).toBeUndefined();
+    });
+});
+
+describe('usedToolNamesFrom — 재개 때 사용 도구 목록 복원', () => {
+    it('체크포인트 대화의 도구 결과에서 도구 이름을 모은다', () => {
+        const names = usedToolNamesFrom([
+            { role: 'system', content: 's' },
+            { role: 'user', content: 'g' },
+            { role: 'assistant', content: '', tool_calls: [{ id: 'a', type: 'function', function: { name: 'str_replace_editor', arguments: {} } }] },
+            { role: 'tool', content: 'ok', tool_name: 'str_replace_editor', tool_call_id: 'a' },
+            { role: 'tool', content: 'ok', tool_name: 'bash', tool_call_id: 'b' },
+        ] as never);
+        expect([...names].sort()).toEqual(['bash', 'str_replace_editor']);
+    });
+
+    it('대화가 없으면(새 실행) 비어 있다', () => {
+        expect(usedToolNamesFrom(undefined).size).toBe(0);
     });
 });

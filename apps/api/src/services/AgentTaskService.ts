@@ -45,7 +45,7 @@ import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { initWorkspaceBaseline } from './agent-task/code-diff';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
-import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint } from './agent-task/turn-reentry';
+import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint, usedToolNamesFrom } from './agent-task/turn-reentry';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
@@ -137,7 +137,7 @@ export class AgentTaskService {
         let stuckNotified = false;
         let verifyRetries = 0;
         // 5-3(b): 실제 사용한 도구 추적 — goal judge 의 실행 컨텍스트(수행 흔적)로 전달.
-        const usedTools = new Set<string>();
+        const usedTools = usedToolNamesFrom(input.resume?.conversation); // 재개면 이전 실행분을 복원
         // 스텝→플랜 노드 귀속(088): 기록 시점의 in_progress 단계 인덱스(결정적, 추정 귀속 없음).
         const planIdx = (): number | undefined =>
             taskRuntime ? currentPlanStepIndex(taskRuntime.getPlanSnapshot()) : undefined;

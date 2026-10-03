@@ -14,7 +14,8 @@ import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
 import { AgentTaskRepository } from '../data/repositories/agent-task-repository';
 import { loadOwnedTask } from './agent-task.helpers';
-import { FORK_WORKSPACE_NOTICE } from '../prompts/agent-task-prompt';
+import { buildForkNotice } from '../prompts/agent-task-prompt';
+import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { findDanglingToolCalls } from '../services/agent-task/turn-reentry';
 import type { ChatMessage } from '../llm/types';
 
@@ -42,7 +43,10 @@ forkRouter.post('/:taskId/fork', asyncHandler(async (req: Request, res: Response
     // 안내는 user 역할로 붙인다(대화 중간 system 메시지는 vLLM 이 400 으로 거절한다 — 계획 편집·steering 과 같은 방식).
     const base = cp.conversation as ChatMessage[];
     const cut = findDanglingToolCalls(base) ? base.map((m) => m.role).lastIndexOf('assistant') : base.length;
-    const conversation = [...base.slice(0, cut), { role: 'user', content: FORK_WORKSPACE_NOTICE }];
+    const notice = buildForkNotice({
+        restoreEnabled: AGENT_TASK_LIMITS.FORK_WORKSPACE_RESTORE_ENABLED, newGoal: goal !== src.goal ? goal : undefined,
+    });
+    const conversation = [...base.slice(0, cut), { role: 'user', content: notice }];
 
     const db = getUnifiedDatabase();
     const id = uuidv4();

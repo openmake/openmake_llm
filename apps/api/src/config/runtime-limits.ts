@@ -1400,7 +1400,7 @@ export const AGENT_TASK_LIMITS = {
     /** 오래된 도구 결과 접기(2026-09-06) — 매 턴 전체 대화를 재전송하므로 비용이 턴 수에 O(n²)로
      *  붙는다(30일 실측: 완료 작업 평균 43만 토큰, 스텝 본문 총량의 ~18배). 최근 KEEP_TURNS 개
      *  assistant 턴보다 오래된 tool 메시지 중 MIN_CHARS 를 넘는 것을 앞부분 HEAD_CHARS 만 남긴
-     *  스텁으로 치환한다(원문은 스텝 DB 에 그대로 — 모델은 필요 시 같은 도구를 다시 호출).
+     *  스텁으로 치환한다(원문은 스텝 DB 에 그대로. 스텁은 다시 읽지 말라고 안내한다 — context-fold.ts 의 반복 읽기 사고 기록).
      *  AGENT_TASK_CONTEXT_FOLD=false 로 비활성. */
     CONTEXT_FOLD_ENABLED: process.env.AGENT_TASK_CONTEXT_FOLD !== 'false',
     CONTEXT_FOLD_KEEP_TURNS: parseInt(process.env.AGENT_TASK_CONTEXT_FOLD_KEEP_TURNS || '4', 10),
