@@ -1230,6 +1230,16 @@ export const AGENT_TASK_LIMITS = {
      *  0 이면 비활성. 사용자 취소·예산 소진(signal abort)은 재시도하지 않는다.
      *  AGENT_TASK_TURN_RETRY_MAX 로 오버라이드(기본 2). */
     TURN_RETRY_MAX: parseInt(process.env.AGENT_TASK_TURN_RETRY_MAX || '2', 10),
+    /** 도구 턴의 모델 호출 한 번의 상한(ms). 넘으면 끊고 다시 시도한다. 0 이면 끔(남은 총 예산만 적용).
+     *  종전에는 호출 상한이 "남은 총 예산"뿐이라 멈춘 호출 하나가 16~20분을 태운 뒤 재시도 없이 실패했다.
+     *  기본 5분의 근거(2026-10-04 로컬 실측, agent_turn 207건): p50 5초 · p95 12초 · p99 21초 · 최대 221초(4,341토큰 출력).
+     *  마무리 턴에는 적용하지 않는다(장문 생성 — FINAL_TURN_MIN_MS 가 따로 보장). AGENT_TASK_TURN_CALL_TIMEOUT_MS */
+    TURN_CALL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_MS || '', 10) >= 0
+        ? parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_MS as string, 10) : 5 * 60 * 1000,
+    /** 호출 상한에 걸린 호출을 다시 시도하는 횟수(정상적으로 긴 생성이 되풀이되지 않게 작게 둔다). AGENT_TASK_TURN_CALL_TIMEOUT_RETRY_MAX */
+    TURN_CALL_TIMEOUT_RETRY_MAX: parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_RETRY_MAX || '1', 10),
+    /** 빈 응답(본문·도구 호출 없음)을 되묻는 횟수. 넘으면 종전대로 완료 관문으로 보낸다. AGENT_TASK_EMPTY_RESPONSE_MAX_RETRIES */
+    EMPTY_RESPONSE_MAX_RETRIES: parseInt(process.env.AGENT_TASK_EMPTY_RESPONSE_MAX_RETRIES || '2', 10),
     /** 턴 재시도 지수 백오프 기저(ms) — n번째 재시도 전 기저 × 2^(n-1) 대기(abort 시 즉시 중단).
      *  AGENT_TASK_TURN_RETRY_BACKOFF_MS 로 오버라이드(기본 2초). */
     TURN_RETRY_BACKOFF_MS: parseInt(process.env.AGENT_TASK_TURN_RETRY_BACKOFF_MS || '', 10) || 2_000,

@@ -22,7 +22,7 @@ import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
+import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskEmptyResponseNudge, AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { isTerminalStatus, notifyTaskTerminal } from './agent-task/terminal-notify';
@@ -46,6 +46,7 @@ import { initWorkspaceBaseline } from './agent-task/code-diff';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
 import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint } from './agent-task/turn-reentry';
+import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
@@ -135,6 +136,7 @@ export class AgentTaskService {
         let parked = false; // 질문 응답 대기 주차(F16.7) — finally 가 승인·workspace 를 남긴다
         const recentSignatures: string[] = [];
         let stuckNotified = false;
+        let emptyRetries = 0;
         let verifyRetries = 0;
         // 5-3(b): 실제 사용한 도구 추적 — goal judge 의 실행 컨텍스트(수행 흔적)로 전달.
         const usedTools = new Set<string>();
@@ -443,29 +445,27 @@ export class AgentTaskService {
                 }
                 if (result.tool_calls?.length) result.tool_calls = ensureUniqueToolCallIds(result.tool_calls, conversation, turn);
 
+                // 빈 응답(본문·도구 호출 없음)은 최종 답변으로 받지 않고 되묻는다 — 일시적 빈 응답 한 번으로 작업이 끝나지 않게(turn-guards).
+                if (isEmptyTurn(result) && emptyRetries < AGENT_TASK_LIMITS.EMPTY_RESPONSE_MAX_RETRIES) {
+                    emptyRetries++;
+                    conversation.push({ role: 'assistant', content: AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER }, { role: 'user', content: getAgentTaskEmptyResponseNudge() });
+                    await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: `빈 응답 — 되묻기 ${emptyRetries}/${AGENT_TASK_LIMITS.EMPTY_RESPONSE_MAX_RETRIES}`, planStepIndex: planIdx() });
+                    continue;
+                }
+
                 conversation.push({
                     role: 'assistant',
                     content: result.content,
                     ...(result.tool_calls && { tool_calls: result.tool_calls }),
                 });
 
-                // stuck 감지 — 동일 응답(내용+도구호출)이 STUCK_THRESHOLD 회 연속되면 전략변경 유도.
-                // (OpenManus BaseAgent.is_stuck → handle_stuck_state 패턴. 무한루프/제자리맴돔 방지.)
-                const sig = JSON.stringify({
-                    c: result.content ?? '',
-                    t: (result.tool_calls ?? []).map((x) => ({ n: x.function.name, a: x.function.arguments })),
-                });
-                recentSignatures.push(sig);
-                if (recentSignatures.length > AGENT_TASK_LIMITS.STUCK_THRESHOLD) recentSignatures.shift();
-                const stuck = recentSignatures.length >= AGENT_TASK_LIMITS.STUCK_THRESHOLD
-                    && recentSignatures.every((s) => s === sig);
+                // stuck 감지 — 동일 응답(내용+도구호출)이 STUCK_THRESHOLD 회 연속되면 전략변경 유도(turn-guards).
+                const stuck = pushStuckSignature(recentSignatures, result, AGENT_TASK_LIMITS.STUCK_THRESHOLD);
                 if (stuck && !stuckNotified) {
                     conversation.push({ role: 'user', content: getAgentTaskStuckNudge() });
                     stuckNotified = true;
                     logger.info(`[AgentTask] stuck 감지 → 전략변경 주입: ${taskId} (turn ${turn + 1})`);
-                } else if (!stuck) {
-                    stuckNotified = false;
-                }
+                } else if (!stuck) stuckNotified = false;
 
                 const hasToolCalls = !!result.tool_calls && result.tool_calls.length > 0;
 

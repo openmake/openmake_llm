@@ -62,6 +62,14 @@ export function isTransientLLMError(err: unknown): boolean {
     return /connection error|request timed out|econnrefused|econnreset|etimedout|socket hang up|fetch failed|^terminated\b|other side closed|und_err_socket/i.test(detail);
 }
 
+/** 모델 호출이 호출당 상한을 다시 시도한 뒤에도 넘겼다 — 작업은 timeout 으로 끝난다(turn-call 이 변환). */
+export class TurnCallCapExceeded extends Error {
+    constructor(public readonly capMs: number) {
+        super(`LLM call exceeded per-call cap (${capMs}ms)`);
+        this.name = 'TurnCallCapExceeded';
+    }
+}
+
 /** abort 가능 대기 — 재시도 백오프 중 사용자 취소/예산 소진이 오면 즉시 중단. */
 function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -96,6 +104,8 @@ export async function chatTurnWithRoleFallback(
         onRetry?: (info: { attempt: number; maxAttempts: number; error: string }) => void;
         /** 스트리밍 토큰 훅 — 호출이 중간에 끊겨도(시간 예산 abort) 부분 본문을 건지기 위한 관측 경로. */
         onToken?: (token: string) => void;
+        /** 호출 한 번의 상한(ms) — 넘으면 그 시도만 끊고 TURN_CALL_TIMEOUT_RETRY_MAX 회 다시 시도한다. 미지정·0 이면 p.signal 만 쓴다. */
+        callTimeoutMs?: number;
     },
 ): Promise<Awaited<ReturnType<LLMClient['chat']>>> {
     // openai SDK 요청 타임아웃을 task 총 예산에 맞춰 늘린다(파생 클라이언트, baseUrl/model 유지).
@@ -104,17 +114,28 @@ export async function chatTurnWithRoleFallback(
     // SDK 요청 타임아웃 상한은 최대 예산(예약)에 맞춘다 — 실제 한계는 p.signal(잔여 예산)이 governor.
     // 원장 귀속(F25): 비용 행에 작업 id 를 실어 작업 단위로 모을 수 있게 한다. 로컬 토큰은 costContext 로,
     // 외부 role 모델(resolver 의 onUsage 가 `role:agent` 로 기록)은 비용 귀속 문맥으로 같은 id 가 붙는다.
-    const call = () => runWithCostSession(p.taskId, () => state.client
+    const call = (signal: AbortSignal) => runWithCostSession(p.taskId, () => state.client
         .derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS, costContext: { feature: 'agent_task', sessionId: p.taskId } })
         .chat(p.conversation, undefined, p.onToken, {
-            tools: p.tools, signal: p.signal, think: false, requestClass: 'agent_turn',
+            tools: p.tools, signal, think: false, requestClass: 'agent_turn',
         }));
     const maxRetries = Math.max(0, AGENT_TASK_LIMITS.TURN_RETRY_MAX);
     let attempt = 0;
+    let capRetries = 0;
     for (;;) {
+        // 시도마다 상한을 새로 건다 — 멈춘 호출 하나가 남은 예산 전부를 태우지 못하게 한다.
+        const cap = p.callTimeoutMs && p.callTimeoutMs > 0 ? AbortSignal.timeout(p.callTimeoutMs) : null;
         try {
-            return await call();
+            return await call(cap ? AbortSignal.any([p.signal, cap]) : p.signal);
         } catch (chatErr) {
+            if (cap?.aborted && !p.signal.aborted) {
+                if (capRetries >= Math.max(0, AGENT_TASK_LIMITS.TURN_CALL_TIMEOUT_RETRY_MAX)) throw new TurnCallCapExceeded(p.callTimeoutMs!);
+                capRetries++;
+                const note = `호출 상한(${Math.round(p.callTimeoutMs! / 1000)}초) 초과 — 다시 시도`;
+                logger.warn(`[AgentTask] ${p.taskId} ${note} ${capRetries}/${AGENT_TASK_LIMITS.TURN_CALL_TIMEOUT_RETRY_MAX}`);
+                try { p.onRetry?.({ attempt: capRetries, maxAttempts: AGENT_TASK_LIMITS.TURN_CALL_TIMEOUT_RETRY_MAX, error: note }); } catch { /* 관측 실패 무시 */ }
+                continue;
+            }
             const status = (chatErr as { status?: number }).status;
             const msg = chatErr instanceof Error ? chatErr.message : String(chatErr);
             // 외부 role 모델 4xx → 로컬 강등(작업당 1회) 후 즉시 같은 턴 재호출.

@@ -7,6 +7,7 @@ jest.mock('../../config/runtime-limits', () => {
             ...actual.AGENT_TASK_LIMITS,
             TURN_RETRY_MAX: 2,
             TURN_RETRY_BACKOFF_MS: 1,
+            TURN_CALL_TIMEOUT_RETRY_MAX: 1,
         },
     };
 });
@@ -14,7 +15,7 @@ jest.mock('../../config/runtime-limits', () => {
 jest.mock('../../llm', () => ({ createClient: jest.fn() }));
 jest.mock('../model-role-resolver', () => ({ resolveRoleClientForUser: jest.fn() }));
 
-import { chatTurnWithRoleFallback, isTransientLLMError, type AgentRoleState } from './role-client';
+import { chatTurnWithRoleFallback, isTransientLLMError, TurnCallCapExceeded, type AgentRoleState } from './role-client';
 import type { LLMClient } from '../../llm';
 
 /** status 를 가진 오류 생성(openai SDK APIError 형태 흉내). */
@@ -104,5 +105,49 @@ describe('chatTurnWithRoleFallback 재시도', () => {
         ]);
         await expect(chatTurnWithRoleFallback(state, params(ac.signal))).rejects.toThrow('Connection error.');
         expect(calls()).toBe(1);
+    });
+});
+
+describe('chatTurnWithRoleFallback 호출당 상한', () => {
+    /** signal 이 abort 될 때까지 끝나지 않는 호출(멈춘 모델 서버 흉내). */
+    const hang = (seen: AbortSignal[]) => jest.fn((_c: unknown, _o: unknown, _t: unknown, opts: { signal: AbortSignal }) => new Promise((_res, rej) => {
+        seen.push(opts.signal);
+        opts.signal.addEventListener('abort', () => rej(new Error('Request was aborted.')), { once: true });
+    }));
+    const stateWith = (chat: jest.Mock): AgentRoleState => ({ client: { derive: () => ({ chat }) } as unknown as LLMClient, external: false, fallbackDone: true });
+
+    it('상한을 넘긴 호출을 끊고 한 번 다시 시도해 성공하면 그 결과를 돌려준다', async () => {
+        const seen: AbortSignal[] = [];
+        const stuck = hang(seen);
+        let n = 0;
+        const chat = jest.fn((...a: unknown[]) => (n++ === 0 ? (stuck as unknown as (...x: unknown[]) => Promise<unknown>)(...a) : Promise.resolve({ content: 'ok' })));
+        const onRetry = jest.fn();
+        const r = await chatTurnWithRoleFallback(stateWith(chat), { ...params(), callTimeoutMs: 20, onRetry });
+        expect(r).toEqual({ content: 'ok' });
+        expect(chat).toHaveBeenCalledTimes(2);
+        expect(onRetry).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('호출 상한') }));
+    });
+
+    it('다시 시도해도 상한을 넘기면 TurnCallCapExceeded 를 던진다', async () => {
+        const chat = hang([]);
+        await expect(chatTurnWithRoleFallback(stateWith(chat), { ...params(), callTimeoutMs: 20 })).rejects.toBeInstanceOf(TurnCallCapExceeded);
+        expect(chat).toHaveBeenCalledTimes(2);
+    });
+
+    it('작업 전체 signal 로 끊긴 호출은 다시 시도하지 않는다', async () => {
+        const ac = new AbortController();
+        const chat = hang([]);
+        const p = chatTurnWithRoleFallback(stateWith(chat), { ...params(ac.signal), callTimeoutMs: 10_000 });
+        ac.abort();
+        await expect(p).rejects.toThrow('aborted');
+        expect(chat).toHaveBeenCalledTimes(1);
+    });
+
+    it('상한을 주지 않으면(마무리 턴) 종전처럼 작업 signal 만 쓴다', async () => {
+        const seen: AbortSignal[] = [];
+        const ac = new AbortController();
+        const chat = jest.fn((_c: unknown, _o: unknown, _t: unknown, opts: { signal: AbortSignal }) => { seen.push(opts.signal); return Promise.resolve({ content: 'ok' }); });
+        await chatTurnWithRoleFallback(stateWith(chat), params(ac.signal));
+        expect(seen[0]).toBe(ac.signal);
     });
 });

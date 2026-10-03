@@ -282,6 +282,14 @@ export function getAgentTaskSteeringInjection(text: string): string {
     ].join('\n');
 }
 
+/** 빈 응답 자리에 남기는 assistant 본문 — 빈 문자열 assistant 메시지는 역할 순서만 차지하고 모델에 단서를 주지 않는다. */
+export const AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER = '(빈 응답)';
+
+/** 빈 응답 뒤에 주입 — 이어서 진행하게 한다. */
+export function getAgentTaskEmptyResponseNudge(): string {
+    return '방금 응답이 비어 있었습니다. 목표가 끝났으면 최종 답변을 작성하고, 남은 일이 있으면 필요한 도구를 호출해 이어서 진행하세요.';
+}
+
 /** stuck(동일 응답 반복) 감지 시 주입 — 전략 변경 유도(OpenManus handle_stuck_state 패턴). */
 export function getAgentTaskStuckNudge(): string {
     return '같은 시도를 반복하고 있습니다. 접근 방식을 바꾸세요: 다른 도구나 다른 입력을 시도하거나, 막혔다면 지금까지의 결과로 작업을 마무리(terminate)하거나 사용자에게 도움을 요청(ask_human)하세요.';
