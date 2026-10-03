@@ -20,6 +20,7 @@ import { foldOldToolResults } from './context-fold';
 import { compactWithHandoff } from './context-handoff';
 import { estimateConversationTokens, estimateToolSchemaTokens, calibrationScale, type UsageSample } from './context-estimate';
 import { callAgentTurnWithBudget } from './turn-call';
+import { retryRepeatedAnswer } from './output-repetition';
 import { createLogger } from '../../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
@@ -110,5 +111,6 @@ export async function callAgentTurnWithContext(p: TurnContextInput): ReturnType<
     }
     const actual = out.result.metrics?.prompt_tokens ?? 0;
     if (actual > 0) lastUsage.set(p.conversation, { estimated, actual });
-    return out;
+    // 출력 반복으로 잘린 최종 답변은 한 번 다시 요청한다(output-repetition) — 앞선 호출에 쓴 시간만큼 남은 예산을 줄인다.
+    return retryRepeatedAnswer(p, out, () => callAgentTurnWithBudget({ ...p, elapsedActiveMs: p.elapsedActiveMs + (Date.now() - startedAt) }));
 }

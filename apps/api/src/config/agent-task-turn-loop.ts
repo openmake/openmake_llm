@@ -34,9 +34,14 @@ export const AGENT_TASK_TURN_LOOP = {
     /** 한 턴 내 중복 호출 제거 — 한 응답 안에 이름·인자가 같은 읽기·검색 호출이 여럿이면 한 번만 실행하고
      *  나머지에는 앞선 호출을 가리키는 짧은 결과를 준다. 부작용 있는 도구는 대상이 아니다. AGENT_TASK_DEDUPE_TOOL_CALLS=false 로 끈다. */
     DEDUPE_TOOL_CALLS: process.env.AGENT_TASK_DEDUPE_TOOL_CALLS !== 'false',
-    /** 출력 반복 기록 — 응답 본문에서 같은 구간(창)이 여러 번 되풀이되면 단계 기록(output_repetition)을 남긴다.
-     *  차단하지 않는다: 빈도 근거가 없어 먼저 기록으로 발동률을 본다. AGENT_TASK_OUTPUT_REPETITION_STEP=false 로 끈다. */
+    /** 출력 반복 기록 — 응답 본문에서 같은 구간(창)이 같은 간격으로, 사이의 글까지 같게 되풀이되면 단계 기록(output_repetition)을 남긴다.
+     *  AGENT_TASK_OUTPUT_REPETITION_STEP=false 로 기록을 끈다(자르기는 아래 CUT 이 따로 켠다). */
     OUTPUT_REPETITION_STEP_ENABLED: process.env.AGENT_TASK_OUTPUT_REPETITION_STEP !== 'false',
+    /** 출력 반복 대응 — 반복이 감지된 응답은 반복이 시작된 뒤를 잘라 대화에 넣는다(도구 호출이 함께 오면 본문만 자르고 호출은 실행).
+     *  최종 답이 될 응답이었으면 작업당 RETRY_MAX 회 다시 요청한다(0 이면 다시 요청하지 않음).
+     *  AGENT_TASK_OUTPUT_REPETITION_CUT=false 면 종전처럼 기록만 한다. AGENT_TASK_OUTPUT_REPETITION_RETRY_MAX */
+    OUTPUT_REPETITION_CUT_ENABLED: process.env.AGENT_TASK_OUTPUT_REPETITION_CUT !== 'false',
+    OUTPUT_REPETITION_RETRY_MAX: num(process.env.AGENT_TASK_OUTPUT_REPETITION_RETRY_MAX, 1),
     /** 창 길이(자)·반복 횟수 임계 — 60자 창이 5회 이상. 실측이 아니라 hermes-agent 의 값이다.
      *  AGENT_TASK_OUTPUT_REPETITION_WINDOW_CHARS / _MIN_REPEATS */
     OUTPUT_REPETITION_WINDOW_CHARS: num(process.env.AGENT_TASK_OUTPUT_REPETITION_WINDOW_CHARS, 60),

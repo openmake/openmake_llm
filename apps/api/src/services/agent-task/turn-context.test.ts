@@ -149,3 +149,17 @@ describe('창 초과 오류 뒤 복구', () => {
         expect(call).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('출력 반복으로 잘린 최종 답변', () => {
+    it('도구 호출 없는 응답이 잘렸으면 잘린 본문과 안내를 대화에 넣고 같은 턴을 한 번 다시 호출한다', async () => {
+        const conversation = conv(1, 10);
+        const before = conversation.length;
+        call.mockResolvedValueOnce({ result: { role: 'assistant', content: '잘린 답' }, callSignal: new AbortController().signal, repetitionCut: true });
+        const out = await callAgentTurnWithContext(base(conversation));
+        expect(call).toHaveBeenCalledTimes(2);
+        expect(out.result.content).toBe('ok');
+        expect(conversation).toHaveLength(before + 2);
+        expect(conversation[before]).toEqual({ role: 'assistant', content: '잘린 답' });
+        expect(conversation[before + 1].role).toBe('user');
+    });
+});

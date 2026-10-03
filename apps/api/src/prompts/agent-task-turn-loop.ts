@@ -60,9 +60,22 @@ export function getRereadNote(): string {
     return `${TOOL_LOOP_NOTE_MARKER} 이미 읽은 구간이고 그 뒤로 파일이 바뀌지 않았습니다. 다시 읽지 말고 이 내용으로 다음 단계를 진행하세요. 다른 부분이 필요하면 start_line 을 바꿔 읽으세요.`;
 }
 
-/** 출력 반복 — 단계 기록에 남기는 문구(차단하지 않고 기록만 한다). */
-export function getOutputRepetitionNote(repeats: number, windowChars: number, sample: string): string {
-    return `출력 반복 감지(기록만) — 응답 본문에서 ${windowChars}자 구간이 ${repeats}회 반복됐습니다: "${sample}"`;
+/** 출력 반복 — 단계 기록에 남기는 문구. cut 이면 반복이 시작된 뒤를 잘라 냈다. */
+export function getOutputRepetitionNote(repeats: number, windowChars: number, sample: string, cut = false): string {
+    return `출력 반복 감지(${cut ? '반복이 시작된 뒤를 잘라 냄' : '기록만'}) — 응답 본문에서 ${windowChars}자 구간이 ${repeats}회 반복됐습니다: "${sample}"`;
+}
+
+/** 출력 반복 — 잘라 낸 자리에 붙이는 생략 표시(대화와, 그대로 최종 답이 되면 결과에 남는다). */
+export const OUTPUT_REPETITION_CUT_MARKER = '\n\n[같은 내용이 되풀이되어 이후 출력을 생략했습니다]';
+
+/** 출력 반복 — 최종 답이 될 응답이 반복으로 잘렸을 때 주입해 한 번 다시 받는다. 횟수는 대화에 남은 이 문구로 센다. */
+export function getOutputRepetitionRetryNudge(): string {
+    return '방금 응답은 같은 내용이 되풀이되어 뒤를 잘라 냈습니다. 같은 문장을 반복하지 말고, 최종 답변을 처음부터 한 번만 간결하게 다시 작성하세요.';
+}
+
+/** 출력 반복 다시 요청 — 단계 기록에 남기는 문구. */
+export function getOutputRepetitionRetryNote(count: number, max: number): string {
+    return `출력 반복으로 잘린 답변 — 다시 요청 ${count}/${max}`;
 }
 
 /** 검증이 보류한 답변을 턴 상한에서 결과로 쓸 때 남기는 표시 — 단계 기록과 진행 알림이 같은 문장을 쓴다. */
