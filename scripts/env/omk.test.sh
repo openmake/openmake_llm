@@ -245,6 +245,7 @@ OUT="$OMK_ROOT/caddy/caddy.d/staging.caddy"
 ok "render file exists"   "[[ -f '$OUT' ]]"
 ok "no placeholders left" "! grep -q '{{' '$OUT'"
 ok "api upstream"         "grep -q 'reverse_proxy /api/\* localhost:52417' '$OUT'"
+ok "generated upstream"   "grep -q 'reverse_proxy /generated/\* localhost:52417' '$OUT'"
 ok "web upstream"         "grep -q 'reverse_proxy localhost:3010' '$OUT'"
 PP="$(dotenv_get "$L/.env" OMK_PROXY_PORT)"
 ok "proxy port recorded"  "[[ '$PP' =~ ^[0-9]+$ && $PP -ge $OMK_PROXY_PORT_BASE ]]"
@@ -296,6 +297,7 @@ https_render opsenv >/dev/null
 HO="$OMK_ROOT/caddy/caddy.d/opsenv-https.caddy"
 ok "https: 사이트 블록"      "grep -q '^mac-mini.local {' '$HO' && grep -q 'tls internal' '$HO'"
 ok "https: 업스트림"         "grep -q 'reverse_proxy /api/\* localhost:52416' '$HO' && grep -q 'reverse_proxy localhost:3000' '$HO'"
+ok "https: 생성 파일"       "grep -q 'reverse_proxy /generated/\* localhost:52416' '$HO'"
 ok "https: 뷰어 블록"        "grep -q '^mac-mini.local:8443 {' '$HO'"
 ok "https: 자리표시자 없음"  "! grep -q '{{' '$HO'"
 eq "https: 공개 주소·쿠키"   "$(dotenv_get "$OL/.env" OMK_APP_URL)|$(dotenv_get "$OL/.env" COOKIE_SECURE)|$(dotenv_get "$OL/.env" ALLOW_INSECURE_COOKIES)" "https://mac-mini.local|true|false"
@@ -450,6 +452,18 @@ DU_SETUP_RAN="$(
 eq "dev up: 준비된 클론이면 setup 을 건너뛴다" "$DU_SETUP_RAN" "0"
 ok "dev up: 래퍼가 없으면 설치" '[[ -x "$DU_ROOT/bin/omk" ]]'
 eq "dev up 래퍼: 클론 안의 dev 는 클론 것" "$(cd "$WC" && OMK_ROOT="$DU_ROOT" bash "$DU_ROOT/bin/omk" dev up 2>/dev/null)" "clone dev up"
+
+# ── 웹 빌드: Next 는 rewrites(/api · /generated)의 대상을 빌드 때 굳힌다 — 빌드가 그 환경의 API 포트를 받아야 한다 ──
+# (실행 때 넣은 API_PROXY_TARGET 은 이미 굳은 빌드본에 닿지 않는다. 기본 포트가 아닌 환경에서 생성 이미지가 500 이던 원인.)
+BT="$TMP/buildtarget"; mkdir -p "$BT/bin"
+cp "$HERE/../../openmake_llm.sh" "$BT/"
+printf 'PORT=52417\n' > "$BT/.env"
+printf '#!/usr/bin/env bash\nprintf "%%s" "${API_PROXY_TARGET:-}" > "%s/seen"\n' "$BT" > "$BT/bin/npm"; chmod +x "$BT/bin/npm"
+( unset PORT API_PROXY_TARGET; PATH="$BT/bin:$PATH" bash "$BT/openmake_llm.sh" build --no-restart >/dev/null 2>&1 )
+eq "build: API 포트를 프록시 대상으로 넘긴다" "$(cat "$BT/seen" 2>/dev/null)" "http://localhost:52417"
+for f in install_linux.sh scripts/setup/mac/60-app.sh; do
+    ok "build: $f 도 빌드에 넘긴다" "grep -q 'API_PROXY_TARGET=\"http://localhost:\$APP_PORT\" npm run build' '$HERE/../../$f'"
+done
 
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]

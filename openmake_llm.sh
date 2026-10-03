@@ -341,7 +341,7 @@ start_app() {
     if [[ ! -f "$SCRIPT_DIR/apps/api/dist/cli.js" ]] || [[ ! -f "$SCRIPT_DIR/apps/web/.next/BUILD_ID" ]]; then
         log_warn "빌드 산출물 없음(backend dist/cli.js 또는 frontend apps/web/.next/BUILD_ID) — 'npm run build' 먼저 실행 필요"
         log_info "수행 중: cd $SCRIPT_DIR && npm run build"
-        ( cd "$SCRIPT_DIR" && npm run build ) || {
+        ( cd "$SCRIPT_DIR" && API_PROXY_TARGET="http://localhost:$APP_PORT" npm run build ) || {
             log_err "빌드 실패"
             return 2
         }
@@ -543,7 +543,9 @@ cmd_build() {
     fi
 
     log_step "npm run build (backend tsc + apps/web Next.js 빌드)"
-    if ! ( cd "$SCRIPT_DIR" && npm run build ); then
+    # API_PROXY_TARGET: Next 는 rewrites(/api, /generated)의 대상을 빌드 때 굳힌다 — 실행 때 넣어서는 닿지 않는다.
+    # 이 환경의 API 포트를 넘기지 않으면 기본 포트(52416)가 박혀, 다른 포트의 설치본에서 생성 파일이 500 이 된다.
+    if ! ( cd "$SCRIPT_DIR" && API_PROXY_TARGET="http://localhost:$APP_PORT" npm run build ); then
         log_err "빌드 실패 — 후속 작업 중단"
         return 2
     fi
