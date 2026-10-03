@@ -25,7 +25,8 @@ import { type LLMClient } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
-import { AGENT_SPAWN } from '../../config/runtime-limits';
+import { AGENT_SPAWN, TOOL_RESULT_TRUNCATION } from '../../config/runtime-limits';
+import { composeSpawnResult } from './spawn-result';
 import { resolveRoleClientForUser } from '../model-role-resolver';
 import { parallelBatch } from '../../workflow/graph-engine';
 import { routeToAgent } from '../../agents/keyword-router';
@@ -326,18 +327,11 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     // 서브 결과 품질 관측용 프리뷰(스텁/메타서술 감지) — Phase 2 관측성 배선 전 임시 가시성.
     results.forEach((r, i) => logger.info(
         `[AgentSpawn] 태스크 ${i + 1} 결과 프리뷰: ${(r ?? '(null)').slice(0, 160).replace(/\n/g, ' ')}`));
-    const sections = tasks.map((task, i) => {
-        const header = `### 태스크 ${i + 1}/${tasks.length}${task.role ? ` (role: ${task.role})` : ''}: ${task.prompt.slice(0, 80)}`;
-        return `${header}\n${results[i] ?? 'Error: 서브에이전트가 결과를 반환하지 못했습니다.'}`;
+    // 태스크별 예산 분배 — 모든 결과와 끝의 종합 지시가 상한 안에 들어가게 한다(spawn-result).
+    return composeSpawnResult({
+        tasks, results, noToolsNotice, droppedCount, maxTasks: AGENT_SPAWN.MAX_TASKS_PER_CALL,
+        budgetChars: AGENT_SPAWN.RESULT_BUDGET_CHARS, headRatio: TOOL_RESULT_TRUNCATION.HEAD_RATIO,
     });
-    const truncationNote = droppedCount > 0
-        ? `\n\n(주의: 태스크 상한 ${AGENT_SPAWN.MAX_TASKS_PER_CALL}개 초과분 ${droppedCount}개는 수행되지 않았습니다.)`
-        : '';
-    // 종합 강제 넛지 — 라이브 관측: qwen 이 spawn 결과를 받고도 같은 주제를 재검색하며
-    // 턴 예산을 소진해 최종 종합 턴이 사라짐. 도구 결과 말미의 결정적 지시로 차단.
-    const synthesisNudge = '\n\n지시: 위 서브에이전트 결과만으로 지금 바로 최종 답변을 종합해 작성하세요. '
-        + '같은 주제를 다시 검색하거나 추가 도구를 호출하지 마세요.';
-    return `[병렬 서브에이전트 결과 — ${tasks.length}개 태스크]\n\n${noToolsNotice}${sections.join('\n\n')}${truncationNote}${synthesisNudge}`;
 }
 
 /**

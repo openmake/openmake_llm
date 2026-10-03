@@ -15,6 +15,7 @@ jest.mock('../../config/runtime-limits', () => ({
         MAX_TASKS_PER_CALL: 3,
         MAX_CALLS_PER_MESSAGE: 1,
         SUB_TOOL_KEYWORDS: ['search', 'extract', 'scrape'],
+        RESULT_BUDGET_CHARS: 8000,
     },
 }));
 

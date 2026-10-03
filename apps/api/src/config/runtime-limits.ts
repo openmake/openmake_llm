@@ -1568,6 +1568,9 @@ export const AGENT_SPAWN = {
     MAX_PARALLEL: parseInt(process.env.AGENT_SPAWN_MAX_PARALLEL || '2', 10),
     /** 1회 호출당 태스크 상한(기본 4) — 초과분은 잘라내고 결과에 명시(silent cap 금지). AGENT_SPAWN_MAX_TASKS. */
     MAX_TASKS_PER_CALL: parseInt(process.env.AGENT_SPAWN_MAX_TASKS || '4', 10),
+    /** spawn_agents 결과 전체의 글자 예산 — 태스크 수로 나눠 각 결과를 앞·뒤로 줄인다(spawn-result).
+     *  기본은 도구 결과 상한과 같다(그 안에 들면 하류 절단이 걸리지 않는다). AGENT_SPAWN_RESULT_BUDGET_CHARS. */
+    RESULT_BUDGET_CHARS: parseInt(process.env.AGENT_SPAWN_RESULT_BUDGET_CHARS || '', 10) || MAX_TOOL_RESULT_CHARS,
     /** 채팅 메시지당 호출 캡(기본 1) — CHAT_SUBAGENT.MAX_CALLS 관행(남용·지연 억제). AGENT_SPAWN_MAX_CALLS. */
     MAX_CALLS_PER_MESSAGE: parseInt(process.env.AGENT_SPAWN_MAX_CALLS || '1', 10),
     /** 채팅 경로 서브 도구 이름 키워드 필터(CSV) — 부모 활성 도구 중 이름에 이 키워드가 포함된

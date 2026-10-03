@@ -30,3 +30,34 @@ export function buildSubagentDelegationRules(maxTurns: number): string {
  */
 export const SUBAGENT_FINAL_TURN_NOTICE =
     '이제 도구를 더 사용할 수 없습니다. 지금까지 수집한 내용만으로 최종 결과를 바로 작성하세요.';
+
+/** spawn_agents 결과의 제목. */
+export function getSpawnResultTitle(taskCount: number): string {
+    return `[병렬 서브에이전트 결과 — ${taskCount}개 태스크]`;
+}
+
+/** 결과를 반환하지 못한 태스크 자리에 넣는 문구. */
+export const SPAWN_MISSING_RESULT = 'Error: 서브에이전트가 결과를 반환하지 못했습니다.';
+
+/** 태스크 상한 초과분 안내(silent cap 금지). */
+export function getSpawnDroppedNote(maxTasks: number, droppedCount: number): string {
+    return `\n\n(주의: 태스크 상한 ${maxTasks}개 초과분 ${droppedCount}개는 수행되지 않았습니다.)`;
+}
+
+/**
+ * 종합 강제 넛지 — 라이브 관측: qwen 이 spawn 결과를 받고도 같은 주제를 재검색하며
+ * 턴 예산을 소진해 최종 종합 턴이 사라짐. 도구 결과 말미의 결정적 지시로 차단.
+ */
+export function getSpawnSynthesisNudge(): string {
+    return '\n\n지시: 위 서브에이전트 결과만으로 지금 바로 최종 답변을 종합해 작성하세요. '
+        + '같은 주제를 다시 검색하거나 추가 도구를 호출하지 마세요.';
+}
+
+/**
+ * 상한(턴·토큰)에 걸려 끝난 서브에이전트의 결과 — 부모가 완주한 결과와 구분할 수 있게 머리말을 붙인다.
+ * 종전에는 표식이 활동 기록에만 남고 부모에게는 정상 결과처럼 돌아갔다.
+ */
+export function partialSubagentResult(reason: 'turns' | 'tokens', text: string): string {
+    const why = reason === 'turns' ? '턴 상한 도달' : '토큰 상한 도달';
+    return `[서브에이전트 상태: ${why} — 부분 결과]\n${text || '(부분 결과 없음)'}`;
+}

@@ -28,7 +28,8 @@ import type { SubagentTrace } from './subagent-trace';
 import { AgentTaskParked } from './types';
 import { findDanglingToolCalls } from './turn-reentry';
 import { createLogger } from '../../utils/logger';
-import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE } from '../../prompts/subagent-system';
+import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE, partialSubagentResult } from '../../prompts/subagent-system';
+import { prepareToolArgs } from './tool-args';
 
 const logger = createLogger('AgentTaskSubagent');
 
@@ -129,7 +130,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
         const last = [...conversation].reverse().find((m) => m.role === 'assistant');
         const exhausted = stripRawToolCallXml((last?.content as string) || '') || '(서브에이전트가 턴 상한에 도달했습니다)';
         p.trace?.record('final', `[턴 상한 도달] ${exhausted}`);
-        return exhausted;
+        return partialSubagentResult('turns', exhausted);
     } catch (e) {
         if (e instanceof AgentTaskParked) throw e; // 주차는 실패가 아니다 — 부모가 받아 주차한다
         const msg = e instanceof Error ? e.message : String(e);
@@ -162,7 +163,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             if (tokens > AGENT_TASK_LIMITS.SUBAGENT_MAX_TOKENS || (p.remainingTokens !== undefined && p.remainingTokens() <= 0)) {
                 logger.warn(`[Subagent] 토큰 상한 초과 — 조기 종료 (${tokens})`);
                 p.trace?.record('final', `[토큰 상한 ${tokens}] ${result.content || '(부분 결과 없음)'}`);
-                return result.content || '(서브에이전트 토큰 상한 도달 — 부분 결과 없음)';
+                return partialSubagentResult('tokens', result.content || '');
             }
 
             conversation.push({
@@ -176,7 +177,8 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 return finalText || '(서브에이전트가 빈 응답을 반환했습니다)';
             }
             for (const tc of result.tool_calls) {
-                p.trace?.record('tool_call', JSON.stringify(tc.function.arguments ?? {}), tc.function.name);
+                // 활동 기록에는 민감 키를 가린 인자를 남긴다(부모 경로의 스텝 기록과 같은 기준).
+                p.trace?.record('tool_call', JSON.stringify(prepareToolArgs(tc.function.arguments ?? {})), tc.function.name);
             }
             return result.tool_calls;
         }
@@ -226,7 +228,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                             // 대기 진입 — 활동 기록에 awaiting(유예 구간도 "승인 대기"로 보이게) + 부모 paused·알림.
                             ...(p.onApprovalPending || p.trace ? { onPending: (pa) => {
                                 pended = true;
-                                p.trace?.record('awaiting', JSON.stringify(args), name);
+                                p.trace?.record('awaiting', JSON.stringify(prepareToolArgs(args)), name);
                                 p.onApprovalPending?.(pa.toolName);
                             } } : {}),
                         },
