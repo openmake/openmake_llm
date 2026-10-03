@@ -6,7 +6,7 @@ import { __setChatTurnIntegrationsForTest } from '../chat-service/turn-integrati
 beforeAll(() => __setChatTurnIntegrationsForTest([]));
 afterAll(() => __setChatTurnIntegrationsForTest(null));
 
-import { toLLMTool, TaskRuntime } from './runtime';
+import { toLLMTool, TaskRuntime, resultToString } from './runtime';
 import * as approvalGate from './approval-gate';
 import { getApprovalRegistry } from './approval-gate';
 import { AgentTaskParked } from '../agent-task/types';
@@ -182,5 +182,20 @@ describe('도구 이름 교정 (P0-b)', () => {
         await rt.executeTaskTool('terminate', { status: 'success', summary: 'done' }, { signal: ac2.signal });
         ac2.abort();
         expect(abortRunning).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('resultToString — 상한을 넘는 결과', () => {
+    it('셸 결과의 stderr 끝과 종료 코드 줄을 남기고 생략 표시를 넣는다', () => {
+        const text = `[stdout]\n${'compiled module\n'.repeat(2000)}[stderr]\nTypeError: Cannot read properties of undefined\n[exit=1 1280ms]`;
+        const out = resultToString({ content: [{ text }], isError: true }, 8000);
+        expect(out.startsWith('Error: [stdout]')).toBe(true);
+        expect(out).toContain('TypeError: Cannot read properties of undefined');
+        expect(out.endsWith('[exit=1 1280ms]')).toBe(true);
+        expect(out).toMatch(/가운데 \d+자 생략 — 전체 \d+자/);
+    });
+
+    it('상한 이하의 결과는 바꾸지 않는다', () => {
+        expect(resultToString({ content: [{ text: '[stdout]\nok\n[exit=0 3ms]' }] }, 8000)).toBe('[stdout]\nok\n[exit=0 3ms]');
     });
 });
