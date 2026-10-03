@@ -5,10 +5,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseTrajectorySpec } from '../trajectory-evaluator';
-import { FILE_VIEW_MAX_CHARS, MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
+import { createHash } from 'crypto';
+import { FILE_VIEW_MAX_CHARS, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION } from '../../config/runtime-limits';
+import { judgeExpectedAnswer } from '../agent-task-dataset';
 
 interface GoldenFile { name: string; type?: string; content: string }
-interface GoldenCase { id: string; goal: string; maxTurns: number; spec: unknown; note?: string; trap?: string; files?: GoldenFile[] }
+interface GoldenCase { id: string; goal: string; maxTurns: number; spec: unknown; note?: string; trap?: string; files?: GoldenFile[]; expectedAnswer?: { includes: string[] } }
 interface GoldenSet { version: string; variants: Array<{ id: string; dropRules: string[] }>; cases: GoldenCase[] }
 
 const dataset = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../golden-agent-tasks.json'), 'utf8')) as GoldenSet;
@@ -49,9 +51,71 @@ describe('golden-agent-tasks.json — 과제 정의', () => {
 });
 
 describe('golden-agent-tasks.json — 함정 과제', () => {
-    it('함정 유형 네 가지가 하나씩 있다', () => {
+    it('함정 유형 여섯 가지가 하나씩 있다', () => {
         expect(dataset.cases.filter((c) => c.trap).map((c) => c.trap).sort())
-            .toEqual(['error-after-long-output', 'repeated-failing-call', 'tail-of-large-file', 'whitespace-str-replace']);
+            .toEqual(['answer-mid-long-output', 'answer-mid-slow-output', 'error-after-long-output', 'repeated-failing-call', 'tail-of-large-file', 'whitespace-str-replace']);
+    });
+
+    /**
+     * 답이 긴 출력의 가운데에 있는 과제 — 스크립트의 상수를 읽어 출력을 그대로 다시 만들고, 답 줄이 앞·뒤 절단으로 남는
+     * 구간 밖에 있는지와 정답 문자열(expectedAnswer)이 스크립트가 실제로 찍는 값인지 본다.
+     */
+    const midOutput = (c: GoldenCase, name: string): { total: number; answerAt: number; answerLine: string; script: string; value: string; marker: string } => {
+        const script = file(c, name);
+        const total = Number(/^TOTAL = (\d+)$/m.exec(script)?.[1]);
+        const target = Number(/^TARGET = (\d+)$/m.exec(script)?.[1]);
+        const salt = /^SALT = "([a-z-]+)"$/m.exec(script)?.[1];
+        // 줄 양식은 base64 로 들어 있다 — 소스를 읽고 처음부터 걸러 받는 지름길을 막는다(속을 볼 수 없는 도구의 출력을 흉내)
+        const tpl = (key: string): string | undefined => {
+            const b64 = new RegExp(`^${key} = "([A-Za-z0-9+/=]+)"$`, 'm').exec(script)?.[1];
+            return b64 ? Buffer.from(b64, 'base64').toString('utf8') : undefined;
+        };
+        const okLine = tpl('OK_LINE');
+        const hitLine = tpl('HIT_LINE');
+        expect(total > 0 && target > 0 && Boolean(salt) && Boolean(okLine) && Boolean(hitLine)).toBe(true);
+        const value = parseInt(createHash('sha1').update(`${salt}-${target}`).digest('hex').slice(0, 6), 16) % 9000 + 1000;
+        const fill = (tpl: string, i: number): string => tpl.replace('{i}', String(i).padStart(5, '0')).replace('{v}', String(value));
+        let out = '';
+        let answerAt = -1;
+        for (let i = 1; i <= total; i++) {
+            if (i === target) answerAt = out.length;
+            out += `${fill(i === target ? hitLine! : okLine!, i)}\n`;
+        }
+        return { total: out.length, answerAt, answerLine: fill(hitLine!, target), script, value: String(value), marker: /=([A-Za-z]+)/.exec(hitLine!.replace(okLine!.split('=')[0], ''))?.[1] ?? '' };
+    };
+
+    it.each([
+        ['answer-mid-long-output', 'audit.py'],
+        ['answer-mid-slow-output', 'sync.py'],
+    ])('긴 출력의 가운데에 답 (%s) — 답 줄이 앞·뒤 절단으로 남는 구간 밖에 있고, 정답 문자열이 그 줄에 있다', (trap, name) => {
+        const c = byTrap(trap);
+        const o = midOutput(c, name);
+        const head = Math.floor(MAX_TOOL_RESULT_CHARS * TOOL_RESULT_TRUNCATION.HEAD_RATIO);
+        // 상한의 몇 배가 넘는 출력이고, 답은 남는 앞부분·뒷부분 어디에도 걸리지 않는다(상한 전체를 한쪽에 줘도 안 보인다)
+        expect(o.total).toBeGreaterThan(MAX_TOOL_RESULT_CHARS * 4);
+        expect(o.answerAt).toBeGreaterThan(Math.max(head, MAX_TOOL_RESULT_CHARS));
+        expect(o.answerAt).toBeLessThan(o.total - MAX_TOOL_RESULT_CHARS);
+        // 샌드박스 실행 출력 상한(기본 256KB) 안이라 실행 단계에서 잘리지 않는다
+        expect(o.total).toBeLessThan(200 * 1024);
+        // 정답은 스크립트를 읽어서는 알 수 없고(해시로 계산) 실제 출력의 답 줄에만 있다
+        expect(c.expectedAnswer?.includes.length).toBeGreaterThan(0);
+        expect(judgeExpectedAnswer(c.expectedAnswer!, o.answerLine)).toBe(true);
+        expect(c.expectedAnswer!.includes.some((x) => x.includes(o.value))).toBe(true);
+        expect(o.script).not.toContain(o.value);
+        // 소스에는 답 줄을 가려낼 낱말(답 줄에만 있는 값)이 평문으로 없다
+        expect(o.marker.length).toBeGreaterThan(3);
+        expect(o.script).not.toContain(o.marker);
+        expect(c.goal).not.toContain(o.marker);
+    });
+
+    it('긴 출력의 가운데에 답(느린 실행) — 다시 실행하면 그만큼 기다려야 한다', () => {
+        const script = file(byTrap('answer-mid-slow-output'), 'sync.py');
+        const total = Number(/^TOTAL = (\d+)$/m.exec(script)?.[1]);
+        const every = Number(/^PAUSE_EVERY = (\d+)$/m.exec(script)?.[1]);
+        const pause = Number(/^PAUSE_SECONDS = (\d+)$/m.exec(script)?.[1]);
+        const seconds = Math.floor(total / every) * pause;
+        expect(seconds).toBeGreaterThanOrEqual(15);
+        expect(seconds).toBeLessThanOrEqual(40); // 샌드박스 실행 제한(기본 120초)에 한참 못 미친다
     });
 
     it('긴 출력 뒤 오류 — 스크립트의 출력이 도구 결과 상한을 넘고, 오류는 맨 끝에 나온다', () => {
