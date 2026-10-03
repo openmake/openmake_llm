@@ -2,7 +2,7 @@
  * Procedural Skill 순수 함수 유닛 테스트 (#1).
  * DB 를 타는 save/load/find 는 통합 검증(라이브)로 다루고, 여기선 결정적 순수 로직만.
  */
-import { applyParams, deepApplyParams, parseSpec, PROCEDURAL_CATEGORY, type ProceduralSpec } from './procedural-skill';
+import { applyParams, deepApplyParams, parseSpec, findPlaintextSecrets, PROCEDURAL_CATEGORY, type ProceduralSpec } from './procedural-skill';
 
 describe('procedural-skill pure helpers', () => {
     describe('applyParams', () => {
@@ -60,4 +60,36 @@ describe('procedural-skill pure helpers', () => {
     });
 
     // resolveProceduralSpec 의 DB 무관 로직은 라이브에서 검증(fuzzy 매칭 실측). 여기선 순수부만.
+});
+
+describe('findPlaintextSecrets — 저장 전에 평문 비밀 값을 찾는다', () => {
+    it('비밀번호 입력란에 넣은 평문을 찾는다', () => {
+        const hits = findPlaintextSecrets({ kind: 'browser', goal: 'g', actions: [
+            { type: 'goto', url: 'https://example.com/login' },
+            { type: 'fill', selector: 'input[name=email]', text: 'a@example.com' },
+            { type: 'fill', selector: 'input[type=password]', text: 'hunter2!' },
+        ] });
+        expect(hits).toHaveLength(1);
+        expect(hits[0]).toContain('input[type=password]');
+        expect(hits[0]).not.toContain('hunter2!');
+    });
+
+    it('{{param}} 으로 일반화한 값은 통과시킨다', () => {
+        expect(findPlaintextSecrets({ kind: 'browser', goal: 'g', actions: [
+            { type: 'fill', selector: '#password', text: '{{password}}' },
+            { type: 'smartFill', label: '비밀번호', text: '{{ pw }}' },
+        ] })).toEqual([]);
+    });
+
+    it('라벨로 찾는 입력(smartFill)도 본다', () => {
+        expect(findPlaintextSecrets({ kind: 'browser', goal: 'g', actions: [
+            { type: 'smartFill', label: 'API Token', text: 'abcd1234' },
+        ] })).toHaveLength(1);
+    });
+
+    it('스크립트에 박힌 키·토큰을 찾는다', () => {
+        expect(findPlaintextSecrets({ kind: 'script', goal: 'g', lang: 'bash',
+            code: 'curl -H "Authorization: Bearer abcdefghijklmnop1234" https://api.example.com' })).toHaveLength(1);
+        expect(findPlaintextSecrets({ kind: 'script', goal: 'g', lang: 'bash', code: 'echo $((1+1))' })).toEqual([]);
+    });
 });

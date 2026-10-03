@@ -40,3 +40,21 @@ describe('SkillRepository.searchSkills excludeAgentPersonas', () => {
         }
     });
 });
+
+describe('SkillRepository.searchSkills excludeCategories', () => {
+    it('지정한 범주를 count·data 쿼리 모두에서 뺀다', async () => {
+        const { query, repo } = setup();
+        await repo.searchSkills({ status: 'active', userId: 'u3', excludeCategories: ['procedural'] });
+
+        for (const [sql, params] of query.mock.calls) {
+            expect(sql).toMatch(/COALESCE\(category, ''\) <> ALL\(\$3::text\[\]\)/);
+            expect(params[2]).toEqual(['procedural']);
+        }
+    });
+
+    it('비어 있으면 조건을 붙이지 않는다', async () => {
+        const { query, repo } = setup();
+        await repo.searchSkills({ status: 'active', userId: 'u3', excludeCategories: [] });
+        for (const [sql] of query.mock.calls) expect(sql).not.toMatch(/<> ALL/);
+    });
+});

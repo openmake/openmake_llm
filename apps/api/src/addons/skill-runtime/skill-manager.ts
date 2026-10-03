@@ -40,7 +40,7 @@ import { shouldInjectManifestSkill } from './manifest-injection-filter';
 import { planManifestInjection, buildManifestOfferBlock } from './manifest-injection-plan';
 import { SKILL_VERSION_LATEST_ORDER_SQL } from '../../data/repositories/skill-manifest-sync';
 import { SKILL_MANIFEST_INJECT_MAX_CHARS, SKILL_MANIFEST_PER_SKILL_MAX_CHARS } from '../../config/runtime-limits';
-import { SKILL_CATALOG_MAX_ITEMS, SKILL_CATALOG_EXCLUDE_PERSONAS, formatSkillCatalog, warnIfCatalogTruncated } from './skill-catalog';
+import { SKILL_CATALOG_MAX_ITEMS, SKILL_CATALOG_EXCLUDE_PERSONAS, SKILL_CATALOG_EXCLUDE_CATEGORIES, formatSkillCatalog, warnIfCatalogTruncated } from './skill-catalog';
 
 const logger = createLogger('SkillManager');
 
@@ -305,6 +305,7 @@ export class SkillManager {
         const result = await repo.searchSkills({
             status: 'active', sortBy: 'name', limit: SKILL_CATALOG_MAX_ITEMS, userId: opts.userId,
             excludeAgentPersonas: SKILL_CATALOG_EXCLUDE_PERSONAS,
+            excludeCategories: SKILL_CATALOG_EXCLUDE_CATEGORIES,
         });
         warnIfCatalogTruncated(result);
         return formatSkillCatalog(result.skills, opts.excludeIds);
@@ -324,6 +325,7 @@ export class SkillManager {
         // 페르소나 제외도 카탈로그와 같게 둔다 — 카탈로그에 보이는 스킬이 상한(200)에 밀려 못 불러오는 일이 없게.
         const result = await repo.searchSkills({
             status: 'active', limit: SKILL_CATALOG_MAX_ITEMS, userId, excludeAgentPersonas: SKILL_CATALOG_EXCLUDE_PERSONAS,
+            excludeCategories: SKILL_CATALOG_EXCLUDE_CATEGORIES,
         });
         const wanted = names.slice(0, Math.max(1, topK)).map((n) => String(n).toLowerCase().trim()).filter(Boolean);
         const seen = new Set<string>();
