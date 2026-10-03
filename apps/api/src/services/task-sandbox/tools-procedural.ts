@@ -9,7 +9,9 @@ import type { TaskExecutor, ExecResult } from './executor';
 import { procedureChecksum, SKILL_RUN_CHECKSUM_ARG } from './skill-run-binding';
 import { findPlaintextSecrets } from '../agent-task/procedural-secrets';
 import { proceduralSecretRejection } from '../../prompts/procedural-skill-prompt';
-import { SKILL_SAVE_UPDATE_ARG_DESCRIPTION, SKILL_SAVE_REVERT_ARG_DESCRIPTION, proceduralSavedMessage } from '../../prompts/agent-task-skill-memory';
+import { findStructureProblems, staticGotoActions } from '../agent-task/procedural-structure';
+import { PROCEDURAL_STRUCTURE } from '../../config/agent-task-skill-memory';
+import { SKILL_SAVE_UPDATE_ARG_DESCRIPTION, SKILL_SAVE_REVERT_ARG_DESCRIPTION, proceduralSavedMessage, proceduralStructureRejection, PROCEDURAL_URL_REJECTION_PREFIX } from '../../prompts/agent-task-skill-memory';
 
 /** 절차 스킬(save/load) 훅 — userId·repo 를 아는 TaskRuntime 이 바인딩한다.
  *  재생(실행)은 sandbox 를 가진 tools.ts 가 수행하므로 여기선 저장/조회만 노출한다. */
@@ -106,6 +108,13 @@ export function createProceduralTools(
             // 평문 비밀 값은 저장하지 않는다 — {{param}} 으로 일반화해 다시 저장하게 돌려준다.
             const secrets = findPlaintextSecrets({ kind, actions: Array.isArray(args.actions) ? args.actions : undefined, code: h.str(args.code) || undefined });
             if (secrets.length > 0) return h.textResult(proceduralSecretRejection(secrets), true);
+            // 구조 검사 — 재생하면 반드시 실패할 본문과 막힌 이동 주소는 저장하지 않고 고쳐서 다시 저장하게 돌려준다.
+            if (PROCEDURAL_STRUCTURE.ENABLED) {
+                const problems = findStructureProblems({ kind, actions: Array.isArray(args.actions) ? args.actions : undefined, code: h.str(args.code) });
+                if (problems.length > 0) return h.textResult(proceduralStructureRejection(problems), true);
+                const urlBlock = kind === 'browser' ? await h.browserUrlBlock(staticGotoActions(args.actions as unknown[])) : null;
+                if (urlBlock) return h.textResult(`${PROCEDURAL_URL_REJECTION_PREFIX}\n${urlBlock}`, true);
+            }
             try {
                 const saved = await procedural.save({
                     name,

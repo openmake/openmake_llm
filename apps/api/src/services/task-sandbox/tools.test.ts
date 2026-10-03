@@ -387,6 +387,35 @@ describe('task-sandbox tools', () => {
         });
     });
 
+    describe('skill_save — 구조 검사', () => {
+        const run = async (args: Record<string, unknown>) => {
+            const save = jest.fn(async () => ({ id: 'id', version: 1, updated: false }));
+            const r = await byName(createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save, load: async () => null }), 'skill_save').handler(args);
+            return { r, save };
+        };
+
+        it('알 수 없는 액션이 있으면 저장하지 않고 위치를 알린다', async () => {
+            const { r, save } = await run({ name: 's', kind: 'browser', actions: [{ type: 'goto', url: 'https://example.com' }, { type: 'hover', selector: '#a' }] });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).toContain('actions[1]');
+            expect(save).not.toHaveBeenCalled();
+        });
+
+        it('사설망·메타데이터 주소로 이동하는 절차는 저장하지 않는다', async () => {
+            findBlockedBrowserUrls.mockResolvedValueOnce([{ index: 0, url: 'http://169.254.169.254/latest/meta-data', reason: 'blocked' }]);
+            const { r, save } = await run({ name: 's', kind: 'browser', actions: [{ type: 'goto', url: 'http://169.254.169.254/latest/meta-data' }, { type: 'extractText' }] });
+            expect(r.isError).toBe(true);
+            expect(findBlockedBrowserUrls).toHaveBeenLastCalledWith([{ type: 'goto', url: 'http://169.254.169.254/latest/meta-data' }]);
+            expect(save).not.toHaveBeenCalled();
+        });
+
+        it('{{param}} 주소와 정상 액션은 저장한다', async () => {
+            const { r, save } = await run({ name: 's', kind: 'browser', actions: [{ type: 'goto', url: 'https://{{host}}/x' }, { type: 'extractText' }], params: ['host'] });
+            expect(r.isError).toBeFalsy();
+            expect(save).toHaveBeenCalled();
+        });
+    });
+
     describe('skill_run — 재생 결과 기록', () => {
         const spec = { id: 'skill-1', kind: 'script' as const, lang: 'bash' as const, code: 'echo hi' };
 

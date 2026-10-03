@@ -29,3 +29,20 @@ export function proceduralSavedMessage(r: { id: string; version: number; updated
         ? `절차 스킬을 고쳐 썼습니다: skill_id=${r.id} (v${r.version}, 직전 본문 보존 — revert=true 로 되돌릴 수 있습니다).`
         : `절차 스킬 저장됨: skill_id=${r.id}. 다음에 skill_run 으로 재생하세요.`;
 }
+
+/** 절차 구조 검사 — 문제 한 줄(위치 포함). */
+export const PROCEDURAL_STRUCTURE_PROBLEMS = {
+    noActions: () => 'actions 가 비어 있습니다 — 재생할 단계가 없습니다',
+    emptyStep: (i: number) => `actions[${i}] 가 빈 단계입니다(type 이 있는 객체여야 합니다)`,
+    unknownAction: (i: number, type: string, known: readonly string[]) => `actions[${i}] 의 type "${type}" 은 알 수 없는 액션입니다 — 쓸 수 있는 액션: ${known.join(', ')}`,
+    missingField: (i: number, type: string, field: string) => `actions[${i}] (${type}) 에 ${field} 가 없습니다`,
+    emptyCode: () => 'code 가 비어 있습니다',
+} as const;
+
+/** skill_save 거절 — 절차 본문 구조에 문제가 있다. */
+export function proceduralStructureRejection(problems: readonly string[]): string {
+    return ['저장하지 않았습니다 — 절차 본문에 문제가 있습니다:', ...problems.map((p) => `- ${p}`), '고쳐서 다시 skill_save 하세요.'].join('\n');
+}
+
+/** skill_save 거절 — 이동 주소가 막힌 대상(사설망 등)이다. 뒤에 주소 가드의 안내가 붙는다. */
+export const PROCEDURAL_URL_REJECTION_PREFIX = '저장하지 않았습니다 — 이 절차는 재생해도 이동이 막힙니다.';

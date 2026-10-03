@@ -21,3 +21,27 @@ export const PROCEDURAL_DORMANCY = {
     /** 저장·갱신·재생이 모두 이 일수보다 오래됐으면 휴면. AGENT_TASK_PROCEDURAL_DORMANT_STALE_DAYS */
     STALE_DAYS: num(process.env.AGENT_TASK_PROCEDURAL_DORMANT_STALE_DAYS, 90),
 } as const;
+
+/**
+ * 절차 스킬 저장 시 구조 검사 — 브라우저 러너(infra/task-runtime/browser-runner.mjs)가 아는 액션과 액션별 필수 값.
+ * 러너에 액션이 늘면 여기도 맞춘다(모르는 액션은 러너가 재생 때 '알 수 없는 action' 으로 실패한다).
+ */
+export const PROCEDURAL_STRUCTURE = {
+    /** AGENT_TASK_PROCEDURAL_STRUCTURE_CHECK=false 로 끈다. */
+    ENABLED: process.env.AGENT_TASK_PROCEDURAL_STRUCTURE_CHECK !== 'false',
+    /** 액션 종류 → 비어 있으면 안 되는 문자열 필드. */
+    ACTION_REQUIRED_FIELDS: {
+        goto: ['url'],
+        click: ['selector'],
+        fill: ['selector'],
+        snapshot: [],
+        smartClick: ['role'],
+        smartFill: ['role'],
+        press: ['key'],
+        wait: [],
+        waitFor: ['selector'],
+        screenshot: [],
+        extractText: [],
+        extractHtml: [],
+    } as Readonly<Record<string, readonly string[]>>,
+} as const;
