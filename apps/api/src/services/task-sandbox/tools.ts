@@ -554,8 +554,8 @@ export function createTaskTools(
     const askHuman: MCPToolDefinition = {
         tool: {
             name: 'ask_human',
-            description: '진행에 사용자 확인이 필요할 때 호출합니다. task 가 일시정지되고 사용자에게 알림이 가며, ' +
-                '사용자는 승인(계속 진행) 또는 거절로만 응답할 수 있습니다 — 예/아니오로 답할 수 있게 질문하세요.',
+            description: '진행에 사용자 확인이나 정보가 필요할 때 호출합니다. task 가 일시정지되고 사용자에게 알림이 가며, ' +
+                '사용자는 글로 답하거나 답 없이 거절할 수 있습니다 — 한 번에 답할 수 있게 필요한 것을 구체적으로 물으세요.',
             inputSchema: {
                 type: 'object',
                 properties: { question: { type: 'string', description: '사용자에게 물을 질문' } },

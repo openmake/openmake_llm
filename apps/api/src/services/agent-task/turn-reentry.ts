@@ -30,6 +30,19 @@ export interface DanglingTurn {
 }
 
 /**
+ * PURE: 체크포인트 대화에서 이미 실행한 도구 이름을 모은다 — 재개한 실행의 usedTools 초깃값.
+ * 실행마다 빈 집합으로 시작하면, 재개 전에 파일을 고친 작업이 재개 뒤 테스트 검증(쓰기 도구 사용이 조건)과
+ * judge 의 "사용 도구" 증거에서 빠진다.
+ */
+export function usedToolNamesFrom(conversation: readonly ChatMessage[] | undefined): Set<string> {
+    const names = new Set<string>();
+    for (const m of conversation ?? []) {
+        if (m.role === 'tool' && typeof m.tool_name === 'string' && m.tool_name.length > 0) names.add(m.tool_name);
+    }
+    return names;
+}
+
+/**
  * PURE: 마지막 assistant 메시지의 tool_calls 중 이어지는 tool 메시지가 없는 것들.
  * 마지막 assistant 이후에 user 메시지(nudge·steering)가 있으면 이미 다음 턴으로 넘어간
  * 것이므로 null.
