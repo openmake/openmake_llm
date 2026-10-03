@@ -5,13 +5,14 @@
  * - 연속 N회 실패하면 예약을 끄고 사유를 남긴다.
  * - 성공하면 실패 기록을 푼다.
  * - 모델에 닿지 못한 실행(모델 응답 0회 + 연결 실패·5xx)은 실패로 세지 않고 5·15·30분 뒤 다시 돌린다.
+ * - "보고할 것 없음" 표식으로 시작하는 최종 응답은 종료 알림을 생략한다(기본 꺼짐). 완료 판정은 건드리지 않는다.
  * 작업이 종료 상태를 쓸 때(AgentTaskService 의 onTerminal) 불리고, 돌려준 값이 종료 푸시 여부다.
  *
  * @module services/agent-task/schedule-outcome
  */
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
 import { AGENT_TASK_SCHEDULE, SCHEDULE_UNCOUNTED_FAILURE_CLASSES, SCHEDULE_UNREACHABLE_ERROR_RE } from '../../config/agent-task-schedule';
-import { getScheduleDisabledReason, getScheduleDisabledPush } from '../../prompts/agent-task-schedule';
+import { getScheduleDisabledReason, getScheduleDisabledPush, AGENT_TASK_SCHEDULE_SILENT_MARKER } from '../../prompts/agent-task-schedule';
 import type { AgentTaskScheduleRepository } from '../../data/repositories/agent-task-schedule-repository';
 import { getPushService } from '../PushService';
 import { createLogger } from '../../utils/logger';
@@ -35,6 +36,8 @@ export interface ScheduleOutcomeConfig {
     /** 재실행 대기 목록 — 없으면 재실행하지 않는다. */
     retryDelaysMs?: readonly number[];
     nowMs?: number;
+    /** "보고할 것 없음" 표식 — 없으면 이 기능은 꺼져 있다. */
+    silentMarker?: string;
 }
 
 export type ScheduleOutcomeDecision =
@@ -56,8 +59,11 @@ export function failureSignature(error: string | null | undefined): string {
 export function decideScheduleOutcome(
     state: ScheduleRunState, t: AgentTaskTerminalInfo, cfg: ScheduleOutcomeConfig,
 ): ScheduleOutcomeDecision {
-    if (t.status === 'completed') return { kind: 'success', push: true };
+    const silent = !!cfg.silentMarker && (t.result ?? '').trimStart().startsWith(cfg.silentMarker);
+    if (t.status === 'completed') return { kind: 'success', push: !silent };
     const failureClass = classifyAgentTaskFailure(t.error);
+    // 완료 판정(goal judge)이 표식뿐인 응답을 미달성으로 돌릴 수 있다 — 판정은 그대로 두고 알림만 생략하며, 예약의 실패로 세지도 않는다.
+    if (silent && t.status === 'failed' && failureClass === 'goal_incomplete') return { kind: 'ignore', push: false };
     if (t.status !== 'failed' || SCHEDULE_UNCOUNTED_FAILURE_CLASSES.has(failureClass)) return { kind: 'ignore', push: true };
     const attempt = state.retryAttempt ?? 0;
     const delay = cfg.retryDelaysMs?.[attempt];
@@ -83,6 +89,7 @@ export async function applyScheduleOutcome(
     cfg: ScheduleOutcomeConfig = {
         disableAfter: AGENT_TASK_SCHEDULE.RUN_FAILURE_DISABLE_AFTER,
         ...(AGENT_TASK_SCHEDULE.UNREACHABLE_RETRY_ENABLED ? { retryDelaysMs: AGENT_TASK_SCHEDULE.UNREACHABLE_RETRY_DELAYS_MS } : {}),
+        ...(AGENT_TASK_SCHEDULE.SILENT_ENABLED ? { silentMarker: AGENT_TASK_SCHEDULE_SILENT_MARKER } : {}),
     },
 ): Promise<boolean> {
     try {
@@ -108,6 +115,7 @@ export async function applyScheduleOutcome(
                 void getPushService().sendPush(String(s.user_id), getScheduleDisabledPush(s.goal, d.failures)).catch(() => { /* noop */ });
             }
         }
+        if (!d.push && d.kind !== 'failure' && d.kind !== 'retry') logger.info(`[Schedule] 보고할 것 없음 — 종료 알림 생략: ${scheduleId}`);
         return d.push;
     } catch (e) {
         logger.warn(`[Schedule] 실행 결과 반영 실패: ${scheduleId} — ${e instanceof Error ? e.message : e}`);

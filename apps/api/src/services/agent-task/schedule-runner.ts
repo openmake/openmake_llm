@@ -19,6 +19,7 @@ import { publishScheduleOutput } from './schedule-publish';
 import { computeNextRun } from './schedule-cron';
 import { scheduleFireKey, isPreviousRunActive, isRetryFire } from './schedule-fire';
 import { applyScheduleOutcome } from './schedule-outcome';
+import { getScheduleSilentNote } from '../../prompts/agent-task-schedule';
 import { AGENT_TASK_SCHEDULE } from '../../config/agent-task-schedule';
 import type { AgentTaskUserRole } from './types';
 import { isAdminRole } from '../../data/user-manager';
@@ -91,6 +92,8 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
         }
         const role = await resolveRole(s.user_id);
         const service = new AgentTaskService();
+        // "보고할 것 없음" 선언(기본 꺼짐) — 켜면 목표 뒤에 표식 안내를 붙인다. 결과 반영이 꺼져 있으면 표식을 읽을 곳이 없어 붙이지 않는다.
+        const runGoal = AGENT_TASK_SCHEDULE.RUN_OUTCOME_ENABLED && AGENT_TASK_SCHEDULE.SILENT_ENABLED ? s.goal + getScheduleSilentNote() : s.goal;
         await dispatchAgentTask({
             taskId,
             userId: String(s.user_id),
@@ -98,7 +101,7 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
             priority: AGENT_TASK_LIMITS.QUEUE_PRIORITY_SCHEDULED,
             run: async () => {
                 await service.execute({
-                    taskId, goal: s.goal, userId: String(s.user_id), userRole: role, maxTurns: s.max_turns,
+                    taskId, goal: runGoal, userId: String(s.user_id), userRole: role, maxTurns: s.max_turns,
                     // 예약 task 는 무인 실행 — 사람이 승인할 수 없으므로 승인정책을 분리(기본 none).
                     // 전역 approvalPolicy='all' 이면 첫 도구서 pause 되어 예약이 영영 멈추는 것을 방지.
                     approvalPolicy: AGENT_TASK_LIMITS.SCHEDULE_APPROVAL_POLICY,

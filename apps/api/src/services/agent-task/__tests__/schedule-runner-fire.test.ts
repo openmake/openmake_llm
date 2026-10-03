@@ -101,3 +101,29 @@ describe('runScheduleTick — 모델 미도달 재실행 발화', () => {
         expect(repo.markRun).toHaveBeenCalledWith('s1', Date.parse(s.next_run_at as string), expect.any(String), false);
     });
 });
+
+describe('runScheduleTick — "보고할 것 없음" 안내', () => {
+    const run = async (): Promise<string> => {
+        repo.getDue.mockResolvedValue([schedule()]);
+        repo.getLastTaskState.mockResolvedValue(null);
+        const execute = jest.fn(async (_input: { goal: string }) => undefined);
+        (jest.requireMock('../../AgentTaskService').AgentTaskService as jest.Mock).mockImplementation(() => ({ execute }));
+        dispatchAgentTask.mockImplementationOnce(async (p: { taskId: string; run?: () => Promise<void> }) => { await p.run?.(); });
+        await runScheduleTick(NOW);
+        return execute.mock.calls[0][0].goal;
+    };
+
+    it('기본(꺼짐)은 목표를 그대로 넘긴다', async () => {
+        expect(await run()).toBe('일일 보고');
+    });
+
+    it('켜면 목표 뒤에 표식 안내를 붙인다', async () => {
+        const cfg = jest.requireActual('../../../config/agent-task-schedule').AGENT_TASK_SCHEDULE;
+        const restore = jest.replaceProperty(cfg, 'SILENT_ENABLED', true);
+        try {
+            const goal = await run();
+            expect(goal.startsWith('일일 보고')).toBe(true);
+            expect(goal).toContain('[NOTHING_TO_REPORT]');
+        } finally { restore.restore(); }
+    });
+});

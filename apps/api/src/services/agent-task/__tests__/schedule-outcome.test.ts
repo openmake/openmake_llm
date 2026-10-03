@@ -129,3 +129,25 @@ describe('모델 미도달 — 보류와 재실행', () => {
         expect(r.recordRunFailure).not.toHaveBeenCalled();
     });
 });
+
+describe('"보고할 것 없음" 선언', () => {
+    const SCFG = { disableAfter: 3, silentMarker: '[NOTHING_TO_REPORT]' };
+    const st = { consecutiveFailures: 1, lastFailureSignature: null };
+
+    it('완료된 최종 응답이 표식이면 종료 알림을 생략한다(성공으로는 센다)', () => {
+        expect(decideScheduleOutcome(st, { status: 'completed', result: ' [NOTHING_TO_REPORT]\n' }, SCFG)).toEqual({ kind: 'success', push: false });
+        expect(decideScheduleOutcome(st, { status: 'completed', result: '[NOTHING_TO_REPORT] 변동 없음' }, SCFG)).toEqual({ kind: 'success', push: false });
+    });
+
+    it('완료 판정이 표식 응답을 미달성으로 돌려도 판정은 두고 알림만 생략한다 — 실패로 세지도 않는다', () => {
+        expect(decideScheduleOutcome(st, { status: 'failed', error: 'goal_incomplete', result: '[NOTHING_TO_REPORT]' }, SCFG)).toEqual({ kind: 'ignore', push: false });
+    });
+
+    it('표식이 본문 중간에 있으면 보통 응답이다', () => {
+        expect(decideScheduleOutcome(st, { status: 'completed', result: '보고서입니다. [NOTHING_TO_REPORT]' }, SCFG)).toEqual({ kind: 'success', push: true });
+    });
+
+    it('꺼져 있으면(표식 설정 없음) 표식 응답도 알린다', () => {
+        expect(decideScheduleOutcome(st, { status: 'completed', result: '[NOTHING_TO_REPORT]' }, { disableAfter: 3 })).toEqual({ kind: 'success', push: true });
+    });
+});
