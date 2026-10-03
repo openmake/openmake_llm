@@ -35,6 +35,8 @@ const base = (conversation: ChatMessage[], model = 'pool-model') => ({
 });
 
 beforeEach(() => {
+    // 접기 묶음은 끄고 본다(기본 8000자 — 여기 대화의 접기는 그보다 작다). 묶음은 '접기 묶음과 창 초과 판정'이 따로 켠다.
+    (CONTEXT_FOLD_BATCH as { MIN_SAVED_CHARS: number }).MIN_SAVED_CHARS = 0;
     call.mockReset();
     call.mockResolvedValue({ result: { role: 'assistant', content: 'ok' }, callSignal: new AbortController().signal });
 });
@@ -98,9 +100,7 @@ describe('callAgentTurnWithContext', () => {
 });
 
 describe('접기 묶음과 창 초과 판정', () => {
-    const original = CONTEXT_FOLD_BATCH.MIN_SAVED_CHARS;
     const setBatch = (n: number): void => { (CONTEXT_FOLD_BATCH as { MIN_SAVED_CHARS: number }).MIN_SAVED_CHARS = n; };
-    afterEach(() => setBatch(original));
     const folded = (c: ChatMessage[]): number => c.filter((m) => m.role === 'tool' && isFoldedToolResult(m.content)).length;
 
     it('창 안이면 임계에 못 미치는 접기는 미룬다 — 과거 메시지가 그대로다', async () => {

@@ -1,8 +1,10 @@
 import { foldOldToolResults, foldedDigestOf, foldedHeadOf, isFoldedToolResult, FOLD_MARKER } from './context-fold';
 import { getToolResultSpillNotice } from '../../prompts/agent-task-context';
+import { CONTEXT_FOLD_BATCH } from '../../config/agent-task-context';
 import type { ChatMessage } from '../../llm/types';
 
-const OPTS = { keepTurns: 2, minChars: 100, headChars: 40 };
+// 묶음 임계는 0 으로 고정한다(기본값은 8000 — 여기 대화는 그보다 작다). 묶음 동작은 아래 '묶음 임계' 테스트가 따로 본다.
+const OPTS = { keepTurns: 2, minChars: 100, headChars: 40, minBatchSavedChars: 0 };
 const big = (tag: string) => `${tag} ` + 'x'.repeat(500);
 
 function conv(turns: number, resultChars = 500): ChatMessage[] {
@@ -112,8 +114,12 @@ describe('foldOldToolResults', () => {
         expect(c.filter((m) => m.role === 'tool' && isFoldedToolResult(m.content)).length).toBeGreaterThan(0);
     });
 
-    it('묶음 임계 기본값(0)은 종전 동작과 같다', () => {
-        const c = conv(3);
-        expect(foldOldToolResults(c, OPTS).folded).toBe(1);
+    it('묶음 임계를 주지 않으면 설정 기본값(8000자)을 쓴다 — 작은 회수는 미루고, 넘으면 접는다', () => {
+        const { minBatchSavedChars: _unused, ...noBatch } = OPTS;
+        expect(CONTEXT_FOLD_BATCH.MIN_SAVED_CHARS).toBe(8000);
+        const small = conv(3);
+        expect(foldOldToolResults(small, noBatch).folded).toBe(0);
+        const large = conv(5, 3000); // 오래된 3건 × 약 2,900자 회수 = 8,000자 초과
+        expect(foldOldToolResults(large, noBatch).folded).toBe(3);
     });
 });
