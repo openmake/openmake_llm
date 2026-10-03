@@ -1,7 +1,7 @@
 /**
  * 프롬프트 규칙 제거(ablation) — 시스템 프롬프트에서 지정한 규칙 묶음만 빼고 나머지는 그대로 두는지.
  */
-import { ablatePrompt, summarizeAblation, type AblationRun } from '../prompt-ablation';
+import { ablatePrompt, summarizeAblation, gateAgentTaskSuite, type AblationRun } from '../prompt-ablation';
 
 const PROMPT = [
     'You are an agent.',
@@ -50,5 +50,21 @@ describe('summarizeAblation', () => {
         ]);
         expect(s.find((v) => v.variant === 'baseline')).toMatchObject({ runs: 2, completedRate: 0.5, processPassRate: 0.5, meanTokens: 2000, meanTurns: 2 });
         expect(s.find((v) => v.variant === 'drop')).toMatchObject({ runs: 1, completedRate: 1, meanTokens: 500, meanTurns: 1 });
+    });
+});
+
+describe('gateAgentTaskSuite', () => {
+    const summary = (completedRate: number, processPassRate: number) => [{ variant: 'baseline', runs: 8, completedRate, processPassRate, meanTokens: 1, meanTurns: 1, meanToolCalls: 1 }];
+    const thresholds = { completed: 0.8, process: 0.9 };
+
+    it('완료율과 과정 통과율이 모두 임계 이상이면 통과', () => {
+        expect(gateAgentTaskSuite(summary(0.875, 1), thresholds)).toEqual({ ok: true, failures: [] });
+    });
+    it('어느 한쪽이 임계 미만이면 실패하고 어느 쪽인지 밝힌다', () => {
+        expect(gateAgentTaskSuite(summary(0.75, 1), thresholds).failures).toEqual([expect.stringContaining('완료율')]);
+        expect(gateAgentTaskSuite(summary(1, 0.5), thresholds).failures).toEqual([expect.stringContaining('과정')]);
+    });
+    it('실행이 한 건도 없으면 실패다 — 돌지 않은 평가가 통과로 보이지 않게', () => {
+        expect(gateAgentTaskSuite([], thresholds).ok).toBe(false);
     });
 });

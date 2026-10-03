@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "description": "프롬프트 규칙 제거 실험용 과제 — 샌드박스 안에서만 끝나는(네트워크·검색 불필요) 작은 과제와 기대 과정. 라벨은 사용자 의도 기준: 검색·브라우저를 쓰지 않고, 같은 실행 도구를 과하게 반복하지 않는다.",
+  "version": "1.1.0",
+  "description": "에이전트 작업 과제 묶음 — 제품이 안내하는 대표 사용(계산, 파일 편집, 표 집계, 오피스·PDF 산출물, 업로드 파일 분석, 코드 수정)을 네트워크 없이 샌드박스 안에서 끝나는 작은 과제로 옮긴 것. 기대 과정은 사용자 의도 기준: 검색·브라우저를 쓰지 않고, 실행 도구를 과하게 반복하지 않는다. 야간 회귀 감시(eval:agent-tasks)와 프롬프트 규칙 제거 실험(eval:ablation)이 함께 쓴다.",
   "variants": [
     {
       "id": "baseline",
@@ -44,7 +44,8 @@
           "bash": 8,
           "python_execute": 8
         }
-      }
+      },
+      "note": "단순 계산과 파일 저장"
     },
     {
       "id": "edit-notes",
@@ -72,7 +73,8 @@
           "bash": 8,
           "python_execute": 8
         }
-      }
+      },
+      "note": "파일 생성 뒤 부분 수정"
     },
     {
       "id": "region-average",
@@ -100,7 +102,172 @@
           "bash": 8,
           "python_execute": 8
         }
+      },
+      "note": "CSV 생성과 집계"
+    },
+    {
+      "id": "xlsx-summary",
+      "note": "오피스 산출물(openpyxl)",
+      "goal": "다음 데이터로 sales.xlsx 엑셀 파일을 만들고, 마지막 행에 합계를 넣어 주세요: 1월 100, 2월 150, 3월 250.",
+      "maxTurns": 12,
+      "spec": {
+        "id": "xlsx-summary",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 10,
+          "python_execute": 10
+        }
       }
+    },
+    {
+      "id": "docx-minutes",
+      "note": "오피스 산출물(python-docx)",
+      "goal": "회의록.docx 워드 문서를 만들어 주세요. 제목은 '주간 회의록', 본문에는 안건 두 개(일정 점검, 예산 검토)와 결정 사항 한 줄을 넣습니다.",
+      "maxTurns": 12,
+      "spec": {
+        "id": "docx-minutes",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 10,
+          "python_execute": 10
+        }
+      }
+    },
+    {
+      "id": "pdf-korean",
+      "note": "한글 PDF — 번들 폰트 등록이 필요",
+      "goal": "'분기 보고서'라는 제목과 한글 문장 두 줄이 들어간 report.pdf 를 만들어 주세요. 한글이 깨지지 않아야 합니다.",
+      "maxTurns": 12,
+      "spec": {
+        "id": "pdf-korean",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 10,
+          "python_execute": 10
+        }
+      }
+    },
+    {
+      "id": "uploaded-html-summary",
+      "note": "업로드 파일 분석 — 2026-10 로컬 실사용 과제. 당시 32턴·bash 30회를 썼다",
+      "goal": "업로드한 html 파일 내용을 분석해서 핵심을 세 줄로 정리해 주세요.",
+      "maxTurns": 12,
+      "spec": {
+        "id": "uploaded-html-summary",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 6,
+          "python_execute": 6
+        }
+      },
+      "files": [
+        {
+          "name": "report.html",
+          "type": "text/html",
+          "content": "<html><head><title>3분기 매출 보고</title></head><body><h1>3분기 매출 보고</h1><p>서울 지점 매출은 1,200만원으로 전 분기보다 20% 늘었다.</p><p>부산 지점 매출은 800만원으로 전 분기와 같다.</p><h2>다음 분기 계획</h2><ul><li>대구 지점 신설</li><li>온라인 판매 채널 추가</li></ul></body></html>"
+        }
+      ]
+    },
+    {
+      "id": "fix-python-bug",
+      "note": "코드 수정과 검증",
+      "goal": "uploads 의 calc.py 에 버그가 있어 test_calc.py 가 실패합니다. 버그를 고치고 테스트가 통과하는지 확인해 주세요.",
+      "maxTurns": 12,
+      "spec": {
+        "id": "fix-python-bug",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 10,
+          "python_execute": 10
+        }
+      },
+      "files": [
+        {
+          "name": "calc.py",
+          "type": "text/x-python",
+          "content": "def average(values):\n    return sum(values) / (len(values) - 1)\n"
+        },
+        {
+          "name": "test_calc.py",
+          "type": "text/x-python",
+          "content": "from calc import average\n\ndef test_average():\n    assert average([2, 4, 6]) == 4\n\nif __name__ == '__main__':\n    test_average()\n    print('ok')\n"
+        }
+      ]
     }
   ]
 }

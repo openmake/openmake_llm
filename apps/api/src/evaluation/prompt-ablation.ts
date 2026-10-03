@@ -71,3 +71,21 @@ export function summarizeAblation(runs: readonly AblationRun[]): AblationVariant
         };
     });
 }
+
+/**
+ * PURE: 과제 묶음 관문 — 기준 조건(첫 조건)의 완료율·과정 통과율이 임계 이상인지. 야간 회귀 감시용(run-prompt-ablation --gate).
+ * 실행이 없으면 실패다 — 돌지 않은 평가가 통과로 보이지 않게.
+ */
+export function gateAgentTaskSuite(
+    summary: readonly AblationVariantSummary[],
+    thresholds: { completed: number; process: number },
+): { ok: boolean; failures: string[] } {
+    const base = summary[0];
+    if (!base || base.runs === 0) return { ok: false, failures: ['실행된 과제가 없습니다'] };
+    const failures: string[] = [];
+    const pct = (x: number): string => `${(x * 100).toFixed(0)}%`;
+    if (base.completedRate < thresholds.completed) failures.push(`완료율 ${pct(base.completedRate)} < 임계 ${pct(thresholds.completed)}`);
+    if (base.processPassRate < thresholds.process) failures.push(`과정 검사 통과율 ${pct(base.processPassRate)} < 임계 ${pct(thresholds.process)}`);
+    return { ok: failures.length === 0, failures };
+}
+
