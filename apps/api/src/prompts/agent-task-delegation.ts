@@ -14,6 +14,9 @@ const EXIT_REASON_LABELS: Record<SubagentExitReason, string> = {
     timeout: '시간 초과',
 };
 
+/** 재개 때 다시 돌리지 않고 기록된 결과를 쓴 태스크의 표시 — 상태 줄과 활동 기록에 싣는다. */
+export const SUBAGENT_REUSED_NOTE = '이전 실행 결과 재사용';
+
 /** 태스크 머리말 아래의 상태 줄 — 종료 사유와 덧붙일 표시(있으면)를 한 줄로. */
 export function getSubagentStatusLine(reason: SubagentExitReason, extras: readonly string[] = []): string {
     return `[종료 사유: ${[EXIT_REASON_LABELS[reason], ...extras].join(' · ')}]`;

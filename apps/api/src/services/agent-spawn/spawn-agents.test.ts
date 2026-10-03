@@ -19,6 +19,12 @@ jest.mock('../../config/runtime-limits', () => ({
     },
 }));
 
+// 끝난 결과 재사용은 저장소(DB)를 쓴다 — 여기서는 끄고 spawn-result-store.test.ts 에서 본다.
+jest.mock('../../config/agent-task-delegation', () => {
+    const actual = jest.requireActual('../../config/agent-task-delegation');
+    return { ...actual, AGENT_DELEGATION: { ...actual.AGENT_DELEGATION, RESULT_REUSE_ENABLED: false } };
+});
+
 const autoApproveMock = jest.fn((_taskId: string) => false);
 jest.mock('../task-sandbox/approval-gate', () => ({
     ...jest.requireActual('../task-sandbox/approval-gate'),

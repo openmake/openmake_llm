@@ -38,8 +38,9 @@ import type { DelegateFactoryParams } from '../agent-task/delegate';
 import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
 import { ASK_USER_TOOL_NAME } from '../chat-service/ask-user';
 import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
-import { AGENT_DELEGATION, exitReasonForError, type SubagentExitReason } from '../../config/agent-task-delegation';
-import { getSubagentStatusLine } from '../../prompts/agent-task-delegation';
+import { AGENT_DELEGATION, SUBAGENT_REUSABLE_EXITS, exitReasonForError, type SubagentExitReason } from '../../config/agent-task-delegation';
+import { getSubagentStatusLine, SUBAGENT_REUSED_NOTE } from '../../prompts/agent-task-delegation';
+import { SpawnResultStore } from './spawn-result-store';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentSpawn');
@@ -285,6 +286,9 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     let results: Array<string | null>;
     /** 태스크별 종료 사유 — 서브가 알려 온 값. 모델 해석 단계에서 죽은 태스크는 여기서 채운다. */
     const exits: Array<SubagentExitReason | undefined> = tasks.map(() => undefined);
+    // 끝난 서브 결과의 즉시 기록·재사용 — 작업 행이 있는 경로만(채팅은 재개가 없다).
+    const store = traceId && AGENT_DELEGATION.RESULT_REUSE_ENABLED ? new SpawnResultStore(p.taskId) : null;
+    const reused = new Set<number>();
     try {
         results = await parallelBatch(
             tasks,
@@ -292,11 +296,19 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
                 const trace = traces?.[idx];
                 trace?.started();
                 try {
+                    const saved = await store?.load(task);
+                    if (saved) {
+                        logger.info(`[AgentSpawn] 태스크 ${idx + 1} 끝난 결과 재사용 (${saved.exit})`);
+                        exits[idx] = saved.exit;
+                        reused.add(idx);
+                        trace?.record('final', `[${SUBAGENT_REUSED_NOTE}] ${saved.result}`);
+                        return saved.result;
+                    }
                     const exec = await resolveTaskExecution(task, userId, p.client);
                     if (exec.modelNote) {
                         logger.info(`[AgentSpawn] 태스크 ${idx + 1} custom agent 모델: ${exec.modelNote}`);
                     }
-                    return await runSubagent({
+                    const result = await runSubagent({
                         ...(trace ? { trace } : {}),
                         client: exec.client,
                         personaPrompt: exec.persona,
@@ -311,6 +323,9 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
                         ...(p.onPausedMs ? { onPausedMs: p.onPausedMs } : {}),
                         onExit: (reason) => { exits[idx] = reason; },
                     });
+                    const exit = exits[idx];
+                    if (store && exit && SUBAGENT_REUSABLE_EXITS.includes(exit)) await store.save(task, { result, exit });
+                    return result;
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
                     exits[idx] = exitReasonForError(msg);
@@ -328,6 +343,8 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
         return 'Error: 병렬 서브에이전트 실행이 중단되었습니다.';
     }
 
+    // fan-out 이 끝났다 — 기록을 지워 뒤의 다른 호출이 낡은 결과를 쓰지 않게 한다. 도중에 중단된 경우는 남겨 재개 때 쓴다.
+    if (store && !p.signal?.aborted) await store.clear(tasks);
     logger.info(`[AgentSpawn] fan-out 완료 (${Date.now() - started}ms, tasks=${tasks.length}, `
         + `결과길이=[${results.map((r) => r?.length ?? 0).join(',')}])`);
     // 서브 결과 품질 관측용 프리뷰(스텁/메타서술 감지) — Phase 2 관측성 배선 전 임시 가시성.
@@ -335,7 +352,7 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
         `[AgentSpawn] 태스크 ${i + 1} 결과 프리뷰: ${(r ?? '(null)').slice(0, 160).replace(/\n/g, ' ')}`));
     // 태스크별 예산 분배 — 모든 결과와 끝의 종합 지시가 상한 안에 들어가게 한다(spawn-result).
     const statusLines = AGENT_DELEGATION.EXIT_REASON_ENABLED
-        ? exits.map((reason) => (reason ? getSubagentStatusLine(reason) : undefined))
+        ? exits.map((reason, i) => (reason ? getSubagentStatusLine(reason, reused.has(i) ? [SUBAGENT_REUSED_NOTE] : []) : undefined))
         : undefined;
     return composeSpawnResult({
         tasks, results, ...(statusLines ? { statusLines } : {}), noToolsNotice, droppedCount, maxTasks: AGENT_SPAWN.MAX_TASKS_PER_CALL,
