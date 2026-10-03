@@ -233,3 +233,38 @@ describe('Agent Task — 비용 원장 귀속', () => {
         expect(seen).toEqual(['t1']);
     });
 });
+
+describe('Agent Task — 빈 응답 되묻기', () => {
+    beforeEach(() => {
+        updateAgentTask.mockClear(); mockChat.mockClear();
+        chatCalls.length = 0; tokensPerTurn = 5;
+    });
+
+    const empty = { role: 'assistant', content: '', metrics: { prompt_tokens: 5, completion_tokens: 0 } };
+
+    it('본문도 도구 호출도 없는 응답은 최종 답변으로 받지 않고 되물은 뒤 다음 턴으로 간다', async () => {
+        const record = (conversation: { role: string; content?: unknown }[], advanced?: ChatAdvanced) => { chatCalls.push({ conversation: [...conversation], advanced: advanced ?? {} }); };
+        mockChat
+            .mockImplementationOnce(async (c, _m, _o, a) => { record(c, a); return { role: 'assistant', content: '', tool_calls: [{ type: 'function', id: 'c1', function: { name: 'web_search', arguments: { query: 'x' } } }], metrics: { prompt_tokens: 5, completion_tokens: 0 } }; })
+            .mockImplementationOnce(async (c, _m, _o, a) => { record(c, a); return empty as never; });
+
+        await new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '조사해서 알려 줘', maxTurns: 6 } as never);
+
+        // 세 번째 호출(되물은 뒤)의 대화에 빈 응답 자리와 되묻는 안내가 들어 있다.
+        expect(chatCalls.length).toBeGreaterThanOrEqual(3);
+        const third = chatCalls[2].conversation;
+        expect(third.some((m) => m.role === 'assistant' && m.content === '(빈 응답)')).toBe(true);
+        expect(String(third[third.length - 1].content)).toContain('응답이 비어 있었습니다');
+    });
+
+    it('되묻기 상한을 넘으면 더 묻지 않는다(무한 되묻기 방지)', async () => {
+        mockChat.mockImplementation(async (c: { role: string; content?: unknown }[], _m?: unknown, _o?: unknown, a?: ChatAdvanced) => {
+            chatCalls.push({ conversation: [...c], advanced: a ?? {} });
+            return empty as never;
+        });
+        await new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '조사해서 알려 줘', maxTurns: 10 } as never);
+        const nudges = chatCalls[chatCalls.length - 1].conversation.filter((m) => String(m.content).includes('응답이 비어 있었습니다')).length;
+        expect(nudges).toBeLessThanOrEqual(AGENT_TASK_LIMITS.EMPTY_RESPONSE_MAX_RETRIES);
+        expect(chatCalls.length).toBeLessThan(10);
+    });
+});
