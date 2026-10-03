@@ -19,7 +19,7 @@ import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION } from
 import { truncateToolResult } from '../agent-task/tool-result-truncate';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { bindSkillRunApproval } from './skill-run-binding';
-import { saveProceduralSkill, resolveProceduralSpec, recordProceduralRun } from '../agent-task/procedural-skill';
+import { saveProceduralSkill, revertProceduralSkill, resolveProceduralSpec, recordProceduralRun } from '../agent-task/procedural-skill';
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
 import { withToolNameSuggestions, detectShellToolMisuse, formatShellToolMisuseHint } from '../../tool-contract/tool-name-suggest';
@@ -100,7 +100,8 @@ export class TaskRuntime {
                 save: (i) => saveProceduralSkill(this.userId, i.name, i.description, {
                     kind: i.kind, goal: i.description, params: i.params,
                     actions: i.actions, allowlist: i.allowlist, lang: i.lang, code: i.code,
-                }),
+                }, { update: i.update }),
+                revert: (name) => revertProceduralSkill(this.userId, name),
                 load: (id) => resolveProceduralSpec(this.userId, id),
                 recordRun: (run) => recordProceduralRun(this.userId, run),
             }

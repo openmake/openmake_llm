@@ -9,6 +9,7 @@ import type { TaskExecutor, ExecResult } from './executor';
 import { procedureChecksum, SKILL_RUN_CHECKSUM_ARG } from './skill-run-binding';
 import { findPlaintextSecrets } from '../agent-task/procedural-secrets';
 import { proceduralSecretRejection } from '../../prompts/procedural-skill-prompt';
+import { SKILL_SAVE_UPDATE_ARG_DESCRIPTION, SKILL_SAVE_REVERT_ARG_DESCRIPTION, proceduralSavedMessage } from '../../prompts/agent-task-skill-memory';
 
 /** 절차 스킬(save/load) 훅 — userId·repo 를 아는 TaskRuntime 이 바인딩한다.
  *  재생(실행)은 sandbox 를 가진 tools.ts 가 수행하므로 여기선 저장/조회만 노출한다. */
@@ -23,7 +24,11 @@ export interface ProceduralHooks {
         lang?: 'bash' | 'python';
         code?: string;
         params?: string[];
-    }) => Promise<string>;
+        /** 같은 이름의 스킬이 있으면 고쳐 쓴다(없으면 거절). */
+        update?: boolean;
+    }) => Promise<{ id: string; version: number; updated: boolean }>;
+    /** 이름의 스킬을 직전 본문으로 되돌린다. */
+    revert?: (name: string) => Promise<{ id: string; version: number; updated: boolean }>;
     /** id 로 저장된 절차 스펙 조회(소유자 격리는 훅 내부에서 적용). */
     load: (skillId: string) => Promise<{
         /** 해석된 스킬 id — 재생 결과 기록에 쓴다(이름으로 매칭된 경우에도 실제 id). */
@@ -76,8 +81,10 @@ export function createProceduralTools(
                     lang: { type: 'string', description: 'kind=script: bash | python' },
                     code: { type: 'string', description: 'kind=script: 실행 코드({{param}} 치환 지원)' },
                     params: { type: 'array', description: '치환 파라미터 이름 목록(예: ["city","year"])' },
+                    update: { type: 'boolean', description: SKILL_SAVE_UPDATE_ARG_DESCRIPTION },
+                    revert: { type: 'boolean', description: SKILL_SAVE_REVERT_ARG_DESCRIPTION },
                 },
-                required: ['name', 'kind'],
+                required: ['name'],
             },
         },
         handler: async (args): Promise<MCPToolResult> => {
@@ -85,6 +92,13 @@ export function createProceduralTools(
             const name = h.str(args.name).trim();
             const kind = h.str(args.kind);
             if (!name) return h.textResult('name 이 필요합니다.', true);
+            if (args.revert === true && procedural.revert) {
+                try {
+                    return h.textResult(proceduralSavedMessage(await procedural.revert(name), true));
+                } catch (e) {
+                    return h.textResult(e instanceof Error ? e.message : String(e), true);
+                }
+            }
             if (kind !== 'browser' && kind !== 'script') return h.textResult('kind 는 browser | script 여야 합니다.', true);
             if (kind === 'browser' && !Array.isArray(args.actions)) return h.textResult('kind=browser 는 actions 배열이 필요합니다.', true);
             if (kind === 'script' && !h.str(args.code)) return h.textResult('kind=script 는 code 가 필요합니다.', true);
@@ -93,7 +107,7 @@ export function createProceduralTools(
             const secrets = findPlaintextSecrets({ kind, actions: Array.isArray(args.actions) ? args.actions : undefined, code: h.str(args.code) || undefined });
             if (secrets.length > 0) return h.textResult(proceduralSecretRejection(secrets), true);
             try {
-                const id = await procedural.save({
+                const saved = await procedural.save({
                     name,
                     description: h.str(args.description),
                     kind,
@@ -102,8 +116,9 @@ export function createProceduralTools(
                     lang,
                     code: h.str(args.code) || undefined,
                     params: Array.isArray(args.params) ? (args.params as unknown[]).filter((p): p is string => typeof p === 'string') : undefined,
+                    update: args.update === true,
                 });
-                return h.textResult(`절차 스킬 저장됨: skill_id=${id}. 다음에 skill_run 으로 재생하세요.`);
+                return h.textResult(proceduralSavedMessage(saved));
             } catch (e) {
                 return h.textResult(`스킬 저장 실패: ${e instanceof Error ? e.message : String(e)}`, true);
             }

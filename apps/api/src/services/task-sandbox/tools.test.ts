@@ -340,7 +340,7 @@ describe('task-sandbox tools', () => {
 
     describe('skill_save — 평문 비밀 값', () => {
         it('비밀번호 입력값이 평문이면 저장하지 않고 {{param}} 으로 바꾸라고 답한다', async () => {
-            const save = jest.fn(async () => 'id');
+            const save = jest.fn(async () => ({ id: 'id', version: 1, updated: false }));
             const r = await byName(createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save, load: async () => null }), 'skill_save').handler({
                 name: 'login', kind: 'browser',
                 actions: [{ type: 'fill', selector: 'input[type=password]', text: 'hunter2!' }],
@@ -352,12 +352,47 @@ describe('task-sandbox tools', () => {
         });
     });
 
+    describe('skill_save — 고쳐 쓰기·되돌리기', () => {
+        const saved = { id: 'skill-1', version: 2, updated: true };
+
+        it('update 를 저장 훅에 넘기고 갱신 결과(버전)를 알린다', async () => {
+            const save = jest.fn(async () => saved);
+            const r = await byName(createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save, load: async () => null }), 'skill_save').handler({
+                name: 'square', kind: 'script', code: 'echo 2', update: true,
+            });
+            expect(save).toHaveBeenCalledWith(expect.objectContaining({ name: 'square', update: true }));
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('v2');
+        });
+
+        it('같은 이름이 있어 거절되면 그 안내를 오류로 돌려준다', async () => {
+            const save = jest.fn(async () => { throw new Error('같은 이름의 절차 스킬이 이미 있습니다: skill_id=skill-1'); });
+            const r = await byName(createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save, load: async () => null }), 'skill_save').handler({
+                name: 'square', kind: 'script', code: 'echo 2',
+            });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).toContain('skill_id=skill-1');
+        });
+
+        it('revert 면 저장하지 않고 직전 본문으로 되돌린다(name 만 필요)', async () => {
+            const save = jest.fn(async () => saved);
+            const revert = jest.fn(async () => ({ id: 'skill-1', version: 3, updated: true }));
+            const r = await byName(createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save, revert, load: async () => null }), 'skill_save').handler({
+                name: 'square', revert: true,
+            });
+            expect(revert).toHaveBeenCalledWith('square');
+            expect(save).not.toHaveBeenCalled();
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('v3');
+        });
+    });
+
     describe('skill_run — 재생 결과 기록', () => {
         const spec = { id: 'skill-1', kind: 'script' as const, lang: 'bash' as const, code: 'echo hi' };
 
         it('재생이 끝나면 결과와 함께 한 번만 기록한다', async () => {
             const recordRun = jest.fn();
-            const tools = createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save: async () => 'id', load: async () => spec, recordRun });
+            const tools = createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save: async () => ({ id: 'id', version: 1, updated: false }), load: async () => spec, recordRun });
             await byName(tools, 'skill_run').handler({ skill_id: 'skill-1' });
             expect(recordRun).toHaveBeenCalledTimes(1);
             expect(recordRun).toHaveBeenCalledWith(expect.objectContaining({ skillId: 'skill-1', kind: 'script', status: 'ok' }));
@@ -365,7 +400,7 @@ describe('task-sandbox tools', () => {
 
         it('절차를 찾지 못하면 기록하지 않는다', async () => {
             const recordRun = jest.fn();
-            const tools = createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save: async () => 'id', load: async () => null, recordRun });
+            const tools = createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save: async () => ({ id: 'id', version: 1, updated: false }), load: async () => null, recordRun });
             await byName(tools, 'skill_run').handler({ skill_id: 'nope' });
             expect(recordRun).not.toHaveBeenCalled();
         });
@@ -373,7 +408,7 @@ describe('task-sandbox tools', () => {
 
     describe('skill_run — 승인 결속', () => {
         const spec = { kind: 'script' as const, lang: 'bash' as const, code: 'echo hi' };
-        const hooks = (loaded: typeof spec) => ({ save: async () => 'id', load: async () => loaded });
+        const hooks = (loaded: typeof spec) => ({ save: async () => ({ id: 'id', version: 1, updated: false }), load: async () => loaded });
 
         it('승인 때 묶인 체크섬과 지금 절차가 다르면 실행하지 않는다', async () => {
             const sb = fakeSandbox();
