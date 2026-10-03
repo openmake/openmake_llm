@@ -10,7 +10,7 @@
  * @module services/agent-task/turn-call
  */
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
-import { chatTurnWithRoleFallback, type AgentRoleState } from './role-client';
+import { chatTurnWithRoleFallback, TurnCallCapExceeded, type AgentRoleState } from './role-client';
 import { AgentTaskAbort } from './types';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
@@ -62,12 +62,14 @@ export async function callAgentTurnWithBudget(p: TurnCallInput): Promise<TurnCal
         const result = await chatTurnWithRoleFallback(p.roleState, {
             conversation: p.conversation, tools: p.tools, signal: callSignal,
             taskId: p.taskId, userId: p.userId, onToken,
+            // 도구 턴만 호출당 상한을 건다 — 마무리 턴은 장문 생성이라 위의 최소 보장을 따른다.
+            callTimeoutMs: p.finalTurn ? undefined : AGENT_TASK_LIMITS.TURN_CALL_TIMEOUT_MS,
             // 재시도는 처음부터 다시 받는다 — 끊긴 시도의 부분 본문을 버려 겹치지 않게 한다.
             onRetry: (info) => { partialContent = ''; p.onRetry?.(info); },
         });
         return { result, callSignal };
     } catch (err) {
-        if (callTimeout.aborted && !p.signal.aborted) {
+        if ((callTimeout.aborted && !p.signal.aborted) || err instanceof TurnCallCapExceeded) {
             throw new AgentTaskTurnTimeout(partialContent.trim() || null);
         }
         throw err;

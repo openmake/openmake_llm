@@ -8,10 +8,13 @@ jest.mock('../../config/runtime-limits', () => {
         AGENT_TASK_LIMITS: { ...actual.AGENT_TASK_LIMITS, FINAL_TURN_MIN_MS: 5_000, TURN_RETRY_MAX: 0 },
     };
 });
-jest.mock('./role-client', () => ({ chatTurnWithRoleFallback: jest.fn() }));
+jest.mock('./role-client', () => ({
+    chatTurnWithRoleFallback: jest.fn(),
+    TurnCallCapExceeded: class TurnCallCapExceeded extends Error {},
+}));
 
 import { callAgentTurnWithBudget, AgentTaskTurnTimeout } from './turn-call';
-import { chatTurnWithRoleFallback } from './role-client';
+import { chatTurnWithRoleFallback, TurnCallCapExceeded } from './role-client';
 import { AgentTaskAbort } from './types';
 
 const chat = chatTurnWithRoleFallback as jest.Mock;
@@ -90,6 +93,20 @@ describe('callAgentTurnWithBudget', () => {
         const err = await settled;
         expect(err).not.toBeInstanceOf(AgentTaskAbort);
         expect(err.message).toBe('Request was aborted.');
+    });
+
+    it('호출당 상한 초과(재시도 뒤에도)는 timeout 으로 분류된다', async () => {
+        chat.mockRejectedValue(new (TurnCallCapExceeded as unknown as new () => Error)());
+        const err = await callAgentTurnWithBudget(base()).catch((e) => e);
+        expect(err).toBeInstanceOf(AgentTaskTurnTimeout);
+    });
+
+    it('도구 턴에는 호출당 상한을 넘기고, 마무리 턴에는 넘기지 않는다', async () => {
+        chat.mockResolvedValue({ content: 'ok' });
+        await callAgentTurnWithBudget(base());
+        expect((chat.mock.calls[0][1] as { callTimeoutMs?: number }).callTimeoutMs).toBeGreaterThan(0);
+        await callAgentTurnWithBudget({ ...base(), finalTurn: true });
+        expect((chat.mock.calls[1][1] as { callTimeoutMs?: number }).callTimeoutMs).toBeUndefined();
     });
 
     it('예산 밖의 일반 오류는 그대로 전파된다', async () => {
