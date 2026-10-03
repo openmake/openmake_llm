@@ -374,6 +374,7 @@
       "question": "에이전트가 질문합니다",
       "answerPlaceholder": "답변을 입력하세요…",
       "sendAnswer": "답변 전송",
+      "recommended": "권장",
       "skip": "건너뛰기",
       "autoApprove": "나머지 모두 승인",
       "autoApproveHint": "이 작업의 이후 도구 실행을 승인 없이 진행합니다 (질문 제외)",
@@ -2369,6 +2370,7 @@
       "openTask": "작업 열기",
       "answerPlaceholder": "답변을 입력하세요",
       "sendAnswer": "답변 보내기",
+      "recommended": "권장",
       "actionFailed": "처리 실패: {error}",
       "risk": {
         "read": "읽기",

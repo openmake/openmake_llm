@@ -134,3 +134,19 @@ export const READ_ONLY_COMMAND_RES: readonly RegExp[] = [
     /^git\s+(?:status|log|diff|show|branch|rev-parse|ls-files|blame|remote)\b/,
     /^(?:node|python3?|npm|go|cargo)\s+(?:-v|-V|--version|version)\b/,
 ];
+
+/**
+ * 구조화 질문 — ask_human 이 질문 여러 개와 선택지·권장안을 한 호출로 받는다(`questions`).
+ * 문자열 하나짜리 호출(`question`)은 그대로 동작한다. 구조를 모르는 클라이언트(CLI·iOS)를 위해 서버가
+ * 질문과 선택지를 줄글로 엮어 `question` 에도 넣는다.
+ * AGENT_TASK_ASK_HUMAN_STRUCTURED=false 로 끄면 도구 스키마가 종전(question 하나)으로 돌아가고 questions 는 무시한다.
+ */
+export const ASK_HUMAN = {
+    STRUCTURED_ENABLED: process.env.AGENT_TASK_ASK_HUMAN_STRUCTURED !== 'false',
+    /** 한 호출에 받는 질문 수 상한 — 넘는 것은 버린다. */
+    MAX_QUESTIONS: num(process.env.AGENT_TASK_ASK_HUMAN_MAX_QUESTIONS, 5),
+    /** 질문 하나의 선택지 수 상한. */
+    MAX_OPTIONS: num(process.env.AGENT_TASK_ASK_HUMAN_MAX_OPTIONS, 6),
+    /** 선택지 한 개의 최대 글자 수. */
+    OPTION_MAX_CHARS: 200,
+} as const;

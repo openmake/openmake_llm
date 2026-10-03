@@ -59,3 +59,21 @@ export const VERIFY_EVIDENCE_SKIP_NOTES = {
     no_change: () => '테스트 게이트: 파일을 바꾼 기록이 없어 돌리지 않음',
     fresh_pass: (command: string) => `테스트 게이트: 마지막 변경 이후 성공한 검증 기록이 있어 다시 돌리지 않음 (${command})`,
 } as const;
+
+/** ask_human 도구 설명·인자 설명(구조화 질문). 기본 설명 뒤에 붙는다. */
+export const ASK_HUMAN_STRUCTURED_DESCRIPTION =
+    ' 질문이 하나면 question 을, 여러 개이거나 고를 선택지가 있으면 questions 를 쓰세요 — 따로따로 여러 번 묻지 말고 한 번에 모아 물으세요.';
+export const ASK_HUMAN_ARG_DESCRIPTIONS = {
+    question: '사용자에게 물을 질문(하나일 때). questions 와 함께 쓰면 질문들 앞의 설명이 됩니다',
+    questions: '질문 목록 — 여러 개를 한 번에 묻거나 선택지를 줄 때',
+    itemQuestion: '질문 문장',
+    options: '사용자가 고를 선택지(짧은 문구). 사용자는 선택지 밖의 답을 글로 쓸 수도 있습니다',
+    recommended: '권장하는 선택지 — options 중 하나와 같은 문구',
+} as const;
+
+/** 구조를 모르는 클라이언트와 모델 결과에 쓰는 줄글 — 질문 한 줄에 선택지와 권장안을 덧붙인다. */
+export function formatAskHumanLine(question: string, options: readonly string[], recommended: string | undefined, index: number | null): string {
+    const head = index === null ? question : `${index}) ${question}`;
+    if (options.length === 0) return head;
+    return `${head} — 선택지: ${options.join(' / ')}${recommended ? ` (권장: ${recommended})` : ''}`;
+}

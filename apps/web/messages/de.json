@@ -374,6 +374,7 @@
       "question": "Der Agent fragt",
       "answerPlaceholder": "Antwort eingeben …",
       "sendAnswer": "Antwort senden",
+      "recommended": "Empfohlen",
       "skip": "Überspringen",
       "autoApprove": "Rest freigeben",
       "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen ausgenommen)",
@@ -2369,6 +2370,7 @@
       "openTask": "Aufgabe öffnen",
       "answerPlaceholder": "Antwort eingeben",
       "sendAnswer": "Antwort senden",
+      "recommended": "Empfohlen",
       "actionFailed": "Aktion fehlgeschlagen: {error}",
       "risk": {
         "read": "Lesen",

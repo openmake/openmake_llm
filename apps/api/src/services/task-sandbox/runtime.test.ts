@@ -94,6 +94,28 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         expect(out).not.toContain('__TASK_ASK_HUMAN__'); // sentinel 이 대화로 새지 않음
     });
 
+    it('ask_human 구조화 질문 — 승인 항목에 줄글 질문과 구조가 함께 실리고, 답변이 모델에 돌아간다', async () => {
+        const rt = new TaskRuntime('t-ask-structured', 'u1', cfgNone);
+        let pending: { approvalId: string; args?: Record<string, unknown> } | undefined;
+        const exec = rt.executeTaskTool('ask_human', {
+            questions: [{ question: '어느 리전을 쓸까요?', options: ['서울', '도쿄'], recommended: '서울' }, { question: '예산 상한은요?' }],
+        }, { onApprovalPending: (p) => { pending = p; } });
+        await new Promise((r) => setImmediate(r));
+        expect(pending).toBeDefined();
+        // 구조를 모르는 클라이언트(CLI·iOS)는 question 문자열만 읽는다 — 질문과 선택지가 줄글로 들어 있어야 한다
+        expect(String(pending!.args?.question)).toContain('1) 어느 리전을 쓸까요?');
+        expect(String(pending!.args?.question)).toContain('권장: 서울');
+        expect(pending!.args?.questions).toEqual([
+            { question: '어느 리전을 쓸까요?', options: ['서울', '도쿄'], recommended: '서울' },
+            { question: '예산 상한은요?' },
+        ]);
+        getApprovalRegistry().answer(pending!.approvalId, '1) 서울; 2) 월 10만원');
+        const out = await exec;
+        expect(out).toContain('사용자 답변');
+        expect(out).toContain('1) 서울; 2) 월 10만원');
+        expect(out).toContain('어느 리전을 쓸까요?');
+    });
+
     it('ask_human 만료가 주차(parked)면 결과 대신 AgentTaskParked 를 던진다(F16.7)', async () => {
         const rt = new TaskRuntime('t-ask-park', 'u1', cfgNone);
         const spy = jest.spyOn(approvalGate, 'getApprovalRegistry').mockReturnValue({

@@ -19,6 +19,7 @@ import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION } from
 import { truncateToolResult } from '../agent-task/tool-result-truncate';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { bindSkillRunApproval } from './skill-run-binding';
+import { normalizeAskHuman } from './ask-human';
 import { saveProceduralSkill, resolveProceduralSpec, recordProceduralRun } from '../agent-task/procedural-skill';
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
@@ -230,9 +231,11 @@ export class TaskRuntime {
         // ask_human 은 승인 정책·자동승인과 무관하게 항상 사용자 응답을 대기한다 — 도구의 목적
         // 자체가 HITL 이므로 승인 레지스트리(pause + push + REST approve/reject/answer)를 응답 채널로 사용.
         if (name === 'ask_human') {
-            const question = String(args.question ?? '');
+            // 질문 여러 개·선택지는 구조로 싣고, 구조를 모르는 클라이언트용으로 줄글 question 도 함께 싣는다(ask-human).
+            const asked = normalizeAskHuman(args);
+            const question = asked.question;
             const { decision, reason, text, waitedMs } = await getApprovalRegistry().request(
-                { taskId: this.taskId, userId: this.userId, toolName: name, args },
+                { taskId: this.taskId, userId: this.userId, toolName: name, args: asked },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending, parkable: true },
             );
             opts.onApprovalWaited?.(waitedMs);

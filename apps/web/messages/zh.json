@@ -374,6 +374,7 @@
       "question": "智能体提问",
       "answerPlaceholder": "请输入您的回答…",
       "sendAnswer": "发送回答",
+      "recommended": "推荐",
       "skip": "跳过",
       "autoApprove": "批准其余全部",
       "autoApproveHint": "此任务后续的工具调用将无需批准直接执行（提问除外）",
@@ -2369,6 +2370,7 @@
       "openTask": "打开任务",
       "answerPlaceholder": "请输入回复",
       "sendAnswer": "发送回复",
+      "recommended": "推荐",
       "actionFailed": "操作失败：{error}",
       "risk": {
         "read": "读取",

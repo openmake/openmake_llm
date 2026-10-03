@@ -374,6 +374,7 @@
       "question": "エージェントからの質問",
       "answerPlaceholder": "回答を入力してください…",
       "sendAnswer": "回答を送信",
+      "recommended": "おすすめ",
       "skip": "スキップ",
       "autoApprove": "残りをすべて承認",
       "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）",
@@ -2369,6 +2370,7 @@
       "openTask": "作業を開く",
       "answerPlaceholder": "回答を入力してください",
       "sendAnswer": "回答を送信",
+      "recommended": "おすすめ",
       "actionFailed": "処理に失敗しました: {error}",
       "risk": {
         "read": "読み取り",

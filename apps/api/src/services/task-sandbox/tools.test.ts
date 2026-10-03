@@ -444,4 +444,12 @@ describe('task-sandbox tools', () => {
             expect(txt(r)).toContain('echo hi');
         });
     });
+    it('ask_human 은 질문 하나(question) 또는 여러 개(questions: 선택지·권장안)를 받는다', async () => {
+        const ask = byName(createTaskTools(fakeSandbox()), 'ask_human');
+        const props = (ask.tool.inputSchema as { properties: Record<string, { type: string }> }).properties;
+        expect(props.question.type).toBe('string');
+        expect(props.questions.type).toBe('array');
+        expect(txt(await ask.handler({ question: '계속할까요?' }))).toBe(`${TASK_ASK_HUMAN_SENTINEL} 계속할까요?`);
+        expect(txt(await ask.handler({ questions: [{ question: '색은?', options: ['빨강', '파랑'] }] }))).toContain('빨강');
+    });
 });

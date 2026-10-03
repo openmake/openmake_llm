@@ -19,6 +19,9 @@ import { getBrowserUrlBlockedMessage } from '../../prompts/agent-task-prompt';
 import { viewWindow } from './file-view';
 import { resolveMissedStrReplace } from './str-replace-match';
 import { interpretExitCode } from './exit-code';
+import { ASK_HUMAN_STRUCTURED_SCHEMA, normalizeAskHuman } from './ask-human';
+import { ASK_HUMAN } from '../../config/agent-task-tools';
+import { ASK_HUMAN_STRUCTURED_DESCRIPTION } from '../../prompts/agent-task-tools';
 import { FILE_VIEW_MAX_CHARS } from '../../config/runtime-limits';
 import { randomUUID } from 'crypto';
 import { AgentTaskParked } from '../agent-task/types';
@@ -446,15 +449,17 @@ export function createTaskTools(
         tool: {
             name: 'ask_human',
             description: '진행에 사용자 확인이나 정보가 필요할 때 호출합니다. task 가 일시정지되고 사용자에게 알림이 가며, ' +
-                '사용자는 글로 답하거나 답 없이 거절할 수 있습니다 — 한 번에 답할 수 있게 필요한 것을 구체적으로 물으세요.',
-            inputSchema: {
+                '사용자는 글로 답하거나 답 없이 거절할 수 있습니다 — 한 번에 답할 수 있게 필요한 것을 구체적으로 물으세요.' +
+                (ASK_HUMAN.STRUCTURED_ENABLED ? ASK_HUMAN_STRUCTURED_DESCRIPTION : ''),
+            // 구조화 질문(ask-human) — 질문 여러 개·선택지·권장안. 끄면 종전처럼 question 하나만 받는다.
+            inputSchema: ASK_HUMAN.STRUCTURED_ENABLED ? ASK_HUMAN_STRUCTURED_SCHEMA : {
                 type: 'object',
                 properties: { question: { type: 'string', description: '사용자에게 물을 질문' } },
                 required: ['question'],
             },
         },
         handler: async (args): Promise<MCPToolResult> =>
-            textResult(`${TASK_ASK_HUMAN_SENTINEL} ${str(args.question)}`),
+            textResult(`${TASK_ASK_HUMAN_SENTINEL} ${normalizeAskHuman(args).question}`),
     };
 
     return [bash, pythonExecute, strReplaceEditor, fileOps, ...createCodeNavTools(sandbox), ...(sandbox.isBrowserEnabled ? [browser] : []), planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), ...contributedTools, ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];

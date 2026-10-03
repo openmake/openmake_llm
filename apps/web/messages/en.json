@@ -374,6 +374,7 @@
       "question": "The agent is asking",
       "answerPlaceholder": "Type your answer…",
       "sendAnswer": "Send answer",
+      "recommended": "Recommended",
       "skip": "Skip",
       "autoApprove": "Approve rest",
       "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)",
@@ -2369,6 +2370,7 @@
       "openTask": "Open task",
       "answerPlaceholder": "Type your answer",
       "sendAnswer": "Send answer",
+      "recommended": "Recommended",
       "actionFailed": "Action failed: {error}",
       "risk": {
         "read": "Read",
