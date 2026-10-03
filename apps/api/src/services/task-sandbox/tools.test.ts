@@ -193,6 +193,17 @@ describe('task-sandbox tools', () => {
     });
 
     describe('str_replace_editor', () => {
+        it('view: 큰 파일은 줄 구간으로 보이고 start_line 으로 뒤쪽을 이어 본다', async () => {
+            const sb = fakeSandbox();
+            const body = Array.from({ length: 2000 }, (_, i) => `row ${i + 1}`).join('\n');
+            await sb.writeFile('big.txt', body);
+            const ed = byName(createTaskTools(sb), 'str_replace_editor');
+            const first = txt(await ed.handler({ command: 'view', path: 'big.txt' }));
+            expect(first.split('\n')[0]).toMatch(/전체 2000줄 · 1-\d+줄 표시 — 이어서 보려면 start_line=\d+/);
+            const tail = txt(await ed.handler({ command: 'view', path: 'big.txt', start_line: 1999 }));
+            expect(tail.split('\n')).toEqual([expect.stringContaining('1999-2000줄 표시'), 'row 1999', 'row 2000']);
+        });
+
         it('create → view 왕복', async () => {
             const sb = fakeSandbox();
             const ed = byName(createTaskTools(sb), 'str_replace_editor');

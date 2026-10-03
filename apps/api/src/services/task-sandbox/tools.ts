@@ -14,6 +14,8 @@
  * @module services/task-sandbox/tools
  */
 import { procedureChecksum, SKILL_RUN_CHECKSUM_ARG } from './skill-run-binding';
+import { viewWindow } from './file-view';
+import { FILE_VIEW_MAX_CHARS } from '../../config/runtime-limits';
 import { randomUUID } from 'crypto';
 import { AgentTaskParked } from '../agent-task/types';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
@@ -200,6 +202,8 @@ export function createTaskTools(
                     old_str: { type: 'string', description: 'str_replace 시 찾을 문자열(유일해야 함)' },
                     new_str: { type: 'string', description: 'str_replace/insert 시 새 문자열' },
                     insert_line: { type: 'number', description: 'insert 시 이 라인 뒤에 삽입(0=맨 앞)' },
+                    start_line: { type: 'number', description: 'view 시 이 줄부터 보기(1부터). 큰 파일은 결과 첫 줄이 이어 볼 줄 번호를 알려 줍니다' },
+                    line_count: { type: 'number', description: 'view 시 볼 줄 수(생략하면 들어가는 만큼)' },
                 },
                 required: ['command', 'path'],
             },
@@ -215,7 +219,9 @@ export function createTaskTools(
                 }
                 if (command === 'view') {
                     const content = await sandbox.readFile(path);
-                    return textResult(content);
+                    // 큰 파일은 줄 구간으로 나눠 본다 — 결과 상한을 넘는 뒷부분도 start_line 으로 볼 수 있다(file-view).
+                    const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+                    return textResult(viewWindow(content, path, { startLine: num(args.start_line), lineCount: num(args.line_count) }, FILE_VIEW_MAX_CHARS));
                 }
                 if (command === 'str_replace') {
                     const oldStr = str(args.old_str);

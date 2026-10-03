@@ -282,6 +282,19 @@ export function getAgentTaskSteeringInjection(text: string): string {
     ].join('\n');
 }
 
+/** 파일 보기 창(file-view)의 머리말 — 전체 줄 수, 지금 보이는 구간, 이어 볼 줄 번호(next 가 null 이면 끝). */
+export function getFileViewHeader(path: string, total: number, start: number, end: number, next: number | null): string {
+    return `[${path}: 전체 ${total}줄 · ${start}-${end}줄 표시${next !== null ? ` — 이어서 보려면 start_line=${next}` : ''}]`;
+}
+
+/** 파일 보기 창 — start_line 이 파일 끝을 넘었을 때. */
+export function getFileViewOutOfRange(path: string, total: number, start: number): string {
+    return `[${path}: 전체 ${total}줄 — start_line=${start} 은 범위를 벗어납니다]`;
+}
+
+/** 파일 보기 창 — 한 줄이 예산보다 길어 그 줄의 앞부분만 보였을 때. */
+export const FILE_VIEW_LONG_LINE_NOTE = '[한 줄이 길어 앞부분만 표시했습니다]';
+
 /** stuck(동일 응답 반복) 감지 시 주입 — 전략 변경 유도(OpenManus handle_stuck_state 패턴). */
 export function getAgentTaskStuckNudge(): string {
     return '같은 시도를 반복하고 있습니다. 접근 방식을 바꾸세요: 다른 도구나 다른 입력을 시도하거나, 막혔다면 지금까지의 결과로 작업을 마무리(terminate)하거나 사용자에게 도움을 요청(ask_human)하세요.';
