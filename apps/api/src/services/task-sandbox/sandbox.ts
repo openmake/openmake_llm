@@ -20,6 +20,7 @@ import { randomUUID } from 'crypto';
 import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, lstat, realpath, copyFile as fsCopyFile } from 'fs/promises';
 import { resolve, sep, join, dirname, basename, relative } from 'path';
 import { getTaskSandboxConfig, BROWSER_SESSION, type TaskSandboxConfig } from '../../config/task-sandbox';
+import { BROWSER_RUN } from '../../config/agent-task-browser-web';
 import type { TaskExecutor, ExecResult } from './executor';
 import { SANDBOX_WORKSPACE_DIR, stripWorkspacePrefix } from './workspace-path';
 import { createLogger } from '../../utils/logger';
@@ -72,8 +73,10 @@ export function buildBrowserRunArgs(
     actionsRelPath: string,
     cfg: TaskSandboxConfig,
     proxyUrl?: string,
+    /** 시간 초과 때 지울 수 있게 붙이는 이름(browserRunContainerName). */
+    containerName?: string,
 ): string[] {
-    const a: string[] = ['run', '--rm', '--init'];
+    const a: string[] = ['run', '--rm', '--init', ...(containerName ? ['--name', containerName] : [])];
     // egress 프록시 ON: internal 망(인터넷 직접 차단) + 프록시 env. OFF: browserNetwork(bridge).
     a.push('--network', proxyUrl ? cfg.egressNetwork : (cfg.browserNetwork || 'bridge'));
     a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
@@ -85,6 +88,11 @@ export function buildBrowserRunArgs(
     if (proxyUrl) a.push('-e', `BROWSER_PROXY=${proxyUrl}`);
     a.push(cfg.image, 'node', '/opt/browser/browser-runner.mjs', actionsRelPath);
     return a;
+}
+
+/** 일회성 브라우저 컨테이너 이름 — 접두 + 작업 id + 호출마다 다른 꼬리(같은 작업의 호출이 겹쳐도 충돌하지 않는다). */
+export function browserRunContainerName(taskId: string): string {
+    return `${BROWSER_RUN.CONTAINER_PREFIX}${sanitizeId(taskId)}-${randomUUID().slice(0, 8)}`;
 }
 
 /**
@@ -358,10 +366,13 @@ export class TaskSandbox implements TaskExecutor {
             const { ensureEgressProxy } = await import('./egress-proxy');
             proxyUrl = await ensureEgressProxy(this.cfg);
         }
-        const args = buildBrowserRunArgs(this.hostWorkdir, actionsRelPath, this.cfg, proxyUrl);
+        const name = browserRunContainerName(this.taskId);
+        const args = buildBrowserRunArgs(this.hostWorkdir, actionsRelPath, this.cfg, proxyUrl, name);
         return runProcess(this.cfg.dockerPath, args, {
-            timeoutMs: Math.max(this.cfg.execTimeoutMs, 90_000),
+            timeoutMs: Math.max(this.cfg.execTimeoutMs, BROWSER_RUN.MIN_TIMEOUT_MS),
             outputCap: this.cfg.outputCap,
+            // 시간 초과 — CLI 만 죽이면 컨테이너(chromium)는 계속 돈다. 이름으로 컨테이너까지 지운다.
+            onStop: () => runProcess(this.cfg.dockerPath, ['rm', '-f', name], { timeoutMs: 10_000, outputCap: 4096 }),
         });
     }
 
@@ -531,12 +542,15 @@ export async function reapStaleWorkspaces(
 }
 
 /**
- * 부팅 시 고아 task 컨테이너(omk-task-*) 청소 — 비정상 종료로 남은 컨테이너 회수.
+ * 부팅 시 고아 task 컨테이너(omk-task-*)와 일회성 브라우저 컨테이너(omk-brun-*) 청소 — 비정상 종료로 남은 컨테이너 회수.
  */
 export async function reapOrphanTaskSandboxes(cfg: TaskSandboxConfig = getTaskSandboxConfig()): Promise<number> {
-    const list = await runProcess(cfg.dockerPath,
-        ['ps', '-aq', '--filter', `name=${CONTAINER_PREFIX}`], { timeoutMs: 10_000, outputCap: 65536 });
-    const ids = list.stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+    const ids: string[] = [];
+    for (const prefix of [CONTAINER_PREFIX, BROWSER_RUN.CONTAINER_PREFIX]) {
+        const list = await runProcess(cfg.dockerPath,
+            ['ps', '-aq', '--filter', `name=${prefix}`], { timeoutMs: 10_000, outputCap: 65536 });
+        ids.push(...list.stdout.split('\n').map((s) => s.trim()).filter(Boolean));
+    }
     for (const id of ids) {
         await runProcess(cfg.dockerPath, ['rm', '-f', id], { timeoutMs: 10_000, outputCap: 4096 });
     }
