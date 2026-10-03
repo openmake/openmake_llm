@@ -1,4 +1,4 @@
-import { scheduleFireKey, isPreviousRunActive } from './schedule-fire';
+import { scheduleFireKey, isPreviousRunActive, isRetryFire } from './schedule-fire';
 
 describe('scheduleFireKey — 발화마다 같은 키', () => {
     it('예약 id 와 예정 시각으로 만든다(문자열·Date 모두 같은 키)', () => {
@@ -27,5 +27,18 @@ describe('isPreviousRunActive — 이전 실행이 아직 도는가', () => {
 
     it('진행 중으로 남았어도 오래 갱신이 없으면(멈춘 표시) 거짓 — 예약이 영영 막히지 않게', () => {
         expect(isPreviousRunActive({ status: 'running', updatedAt: new Date(now - stale - 1) }, now, stale)).toBe(false);
+    });
+});
+
+describe('isRetryFire', () => {
+    const now = Date.parse('2026-10-04T01:00:00Z');
+    it('재실행 시각이 지났고 정규 발화는 아직이면 재실행 발화다', () => {
+        expect(isRetryFire({ retry_at: '2026-10-04T00:59:00Z', next_run_at: '2026-10-04T02:00:00Z' }, now)).toBe(true);
+    });
+    it('정규 발화 시각도 지났으면 정규 발화로 본다', () => {
+        expect(isRetryFire({ retry_at: '2026-10-04T00:59:00Z', next_run_at: '2026-10-04T01:00:00Z' }, now)).toBe(false);
+    });
+    it('재실행 예정이 없으면 아니다', () => {
+        expect(isRetryFire({ retry_at: null, next_run_at: '2026-10-04T01:00:00Z' }, now)).toBe(false);
     });
 });

@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0",
-  "description": "에이전트 작업 과제 묶음 — 제품이 안내하는 대표 사용(계산, 파일 편집, 표 집계, 오피스·PDF 산출물, 업로드 파일 분석, 코드 수정)을 네트워크 없이 샌드박스 안에서 끝나는 작은 과제로 옮긴 것. 기대 과정은 사용자 의도 기준: 검색·브라우저를 쓰지 않고, 실행 도구를 과하게 반복하지 않는다. 야간 회귀 감시(eval:agent-tasks)와 프롬프트 규칙 제거 실험(eval:ablation)이 함께 쓴다.",
+  "version": "1.2.0",
+  "description": "에이전트 작업 과제 묶음 — 제품이 안내하는 대표 사용(계산, 파일 편집, 표 집계, 오피스·PDF 산출물, 업로드 파일 분석, 코드 수정)을 네트워크 없이 샌드박스 안에서 끝나는 작은 과제로 옮긴 것과, 운영에서 턴을 낭비하게 만든 상황을 재현한 함정 과제(trap 필드: 긴 출력 뒤 오류, 큰 파일의 뒤쪽 줄, 같은 실패 호출 반복, 공백이 다른 문자열 치환). 기대 과정은 사용자 의도 기준: 검색·브라우저를 쓰지 않고, 실행 도구를 과하게 반복하지 않는다. 야간 회귀 감시(eval:agent-tasks)와 프롬프트 규칙 제거 실험(eval:ablation)이 함께 쓴다.",
   "variants": [
     {
       "id": "baseline",
@@ -268,6 +268,236 @@
           "content": "from calc import average\n\ndef test_average():\n    assert average([2, 4, 6]) == 4\n\nif __name__ == '__main__':\n    test_average()\n    print('ok')\n"
         }
       ]
+    },
+    {
+      "id": "trap-error-after-long-output",
+      "trap": "error-after-long-output",
+      "note": "함정 — 긴 출력 뒤 오류. 출력이 도구 결과 상한을 넘고 오류는 맨 끝(stderr)에 나온다. 앞부분만 보면 원인을 못 찾고 같은 실행을 되풀이한다",
+      "goal": "uploads/build.py 를 실행하면 실패합니다. 원인을 찾아 고친 뒤 다시 실행해서 성공하는지 확인해 주세요.",
+      "maxTurns": 10,
+      "spec": {
+        "id": "trap-error-after-long-output",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 6,
+          "python_execute": 6,
+          "str_replace_editor": 6
+        }
+      },
+      "files": [
+        {
+          "name": "build.py",
+          "type": "text/x-python",
+          "content": "import json\nimport os\nimport sys\n\nfor i in range(1200):\n    print(f\"step {i:04d}: compiled module ok\")\n\nhere = os.path.dirname(os.path.abspath(__file__))\nwith open(os.path.join(here, 'settings.json')) as f:\n    settings = json.load(f)\nif 'region' not in settings:\n    print(\"ConfigError: settings.json 에 'region' 키가 없습니다 (예: \\\"region\\\": \\\"seoul\\\")\", file=sys.stderr)\n    sys.exit(2)\nprint(f\"BUILD OK region={settings['region']}\")\n"
+        },
+        {
+          "name": "settings.json",
+          "type": "application/json",
+          "content": "{\n  \"name\": \"demo\",\n  \"version\": 3\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "trap-tail-of-large-file",
+      "trap": "tail-of-large-file",
+      "note": "함정 — 큰 파일의 뒤쪽 줄 보기. 답은 한 번에 보이는 구간 밖(301번째 줄)에 있고, 앞쪽에 다른 ERROR 줄이 있어 첫 구간만 읽으면 틀린다",
+      "goal": "uploads/server.log 에서 마지막 ERROR 줄에 적힌 오류 코드(code=...)를 알려 주세요.",
+      "maxTurns": 8,
+      "spec": {
+        "id": "trap-tail-of-large-file",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 4,
+          "python_execute": 3,
+          "str_replace_editor": 4,
+          "file_ops": 3,
+          "grep_code": 4
+        }
+      },
+      "files": [
+        {
+          "name": "server.log",
+          "type": "text/plain",
+          "content": "2026-09-30T10:00:01Z INFO  auth-service: request 0001 handled in 17ms\n2026-09-30T10:00:02Z INFO  order-service: request 0002 handled in 24ms\n2026-09-30T10:00:03Z INFO  payment-service: request 0003 handled in 31ms\n2026-09-30T10:00:04Z INFO  search-service: request 0004 handled in 38ms\n2026-09-30T10:00:05Z INFO  api-gateway: request 0005 handled in 45ms\n2026-09-30T10:00:06Z INFO  auth-service: request 0006 handled in 52ms\n2026-09-30T10:00:07Z INFO  order-service: request 0007 handled in 59ms\n2026-09-30T10:00:08Z INFO  payment-service: request 0008 handled in 66ms\n2026-09-30T10:00:09Z INFO  search-service: request 0009 handled in 73ms\n2026-09-30T10:00:10Z INFO  api-gateway: request 0010 handled in 80ms\n2026-09-30T10:00:11Z INFO  auth-service: request 0011 handled in 87ms\n2026-09-30T10:00:12Z ERROR auth-service: token expired code=E1007\n2026-09-30T10:00:13Z INFO  payment-service: request 0013 handled in 11ms\n2026-09-30T10:00:14Z INFO  search-service: request 0014 handled in 18ms\n2026-09-30T10:00:15Z INFO  api-gateway: request 0015 handled in 25ms\n2026-09-30T10:00:16Z INFO  auth-service: request 0016 handled in 32ms\n2026-09-30T10:00:17Z INFO  order-service: request 0017 handled in 39ms\n2026-09-30T10:00:18Z INFO  payment-service: request 0018 handled in 46ms\n2026-09-30T10:00:19Z INFO  search-service: request 0019 handled in 53ms\n2026-09-30T10:00:20Z INFO  api-gateway: request 0020 handled in 60ms\n2026-09-30T10:00:21Z INFO  auth-service: request 0021 handled in 67ms\n2026-09-30T10:00:22Z INFO  order-service: request 0022 handled in 74ms\n2026-09-30T10:00:23Z INFO  payment-service: request 0023 handled in 81ms\n2026-09-30T10:00:24Z INFO  search-service: request 0024 handled in 88ms\n2026-09-30T10:00:25Z INFO  api-gateway: request 0025 handled in 95ms\n2026-09-30T10:00:26Z INFO  auth-service: request 0026 handled in 12ms\n2026-09-30T10:00:27Z INFO  order-service: request 0027 handled in 19ms\n2026-09-30T10:00:28Z INFO  payment-service: request 0028 handled in 26ms\n2026-09-30T10:00:29Z INFO  search-service: request 0029 handled in 33ms\n2026-09-30T10:00:30Z INFO  api-gateway: request 0030 handled in 40ms\n2026-09-30T10:00:31Z INFO  auth-service: request 0031 handled in 47ms\n2026-09-30T10:00:32Z INFO  order-service: request 0032 handled in 54ms\n2026-09-30T10:00:33Z INFO  payment-service: request 0033 handled in 61ms\n2026-09-30T10:00:34Z INFO  search-service: request 0034 handled in 68ms\n2026-09-30T10:00:35Z INFO  api-gateway: request 0035 handled in 75ms\n2026-09-30T10:00:36Z INFO  auth-service: request 0036 handled in 82ms\n2026-09-30T10:00:37Z WARN  order-service: slow response 937ms on request 0037\n2026-09-30T10:00:38Z INFO  payment-service: request 0038 handled in 96ms\n2026-09-30T10:00:39Z INFO  search-service: request 0039 handled in 13ms\n2026-09-30T10:00:40Z INFO  api-gateway: request 0040 handled in 20ms\n2026-09-30T10:00:41Z INFO  auth-service: request 0041 handled in 27ms\n2026-09-30T10:00:42Z INFO  order-service: request 0042 handled in 34ms\n2026-09-30T10:00:43Z INFO  payment-service: request 0043 handled in 41ms\n2026-09-30T10:00:44Z INFO  search-service: request 0044 handled in 48ms\n2026-09-30T10:00:45Z INFO  api-gateway: request 0045 handled in 55ms\n2026-09-30T10:00:46Z INFO  auth-service: request 0046 handled in 62ms\n2026-09-30T10:00:47Z INFO  order-service: request 0047 handled in 69ms\n2026-09-30T10:00:48Z INFO  payment-service: request 0048 handled in 76ms\n2026-09-30T10:00:49Z INFO  search-service: request 0049 handled in 83ms\n2026-09-30T10:00:50Z INFO  api-gateway: request 0050 handled in 90ms\n2026-09-30T10:00:51Z INFO  auth-service: request 0051 handled in 97ms\n2026-09-30T10:00:52Z INFO  order-service: request 0052 handled in 14ms\n2026-09-30T10:00:53Z INFO  payment-service: request 0053 handled in 21ms\n2026-09-30T10:00:54Z INFO  search-service: request 0054 handled in 28ms\n2026-09-30T10:00:55Z INFO  api-gateway: request 0055 handled in 35ms\n2026-09-30T10:00:56Z INFO  auth-service: request 0056 handled in 42ms\n2026-09-30T10:00:57Z INFO  order-service: request 0057 handled in 49ms\n2026-09-30T10:00:58Z INFO  payment-service: request 0058 handled in 56ms\n2026-09-30T10:00:59Z INFO  search-service: request 0059 handled in 63ms\n2026-09-30T10:01:00Z INFO  api-gateway: request 0060 handled in 70ms\n2026-09-30T10:01:01Z INFO  auth-service: request 0061 handled in 77ms\n2026-09-30T10:01:02Z INFO  order-service: request 0062 handled in 84ms\n2026-09-30T10:01:03Z INFO  payment-service: request 0063 handled in 91ms\n2026-09-30T10:01:04Z INFO  search-service: request 0064 handled in 98ms\n2026-09-30T10:01:05Z INFO  api-gateway: request 0065 handled in 15ms\n2026-09-30T10:01:06Z INFO  auth-service: request 0066 handled in 22ms\n2026-09-30T10:01:07Z INFO  order-service: request 0067 handled in 29ms\n2026-09-30T10:01:08Z INFO  payment-service: request 0068 handled in 36ms\n2026-09-30T10:01:09Z INFO  search-service: request 0069 handled in 43ms\n2026-09-30T10:01:10Z INFO  api-gateway: request 0070 handled in 50ms\n2026-09-30T10:01:11Z INFO  auth-service: request 0071 handled in 57ms\n2026-09-30T10:01:12Z INFO  order-service: request 0072 handled in 64ms\n2026-09-30T10:01:13Z INFO  payment-service: request 0073 handled in 71ms\n2026-09-30T10:01:14Z WARN  search-service: slow response 974ms on request 0074\n2026-09-30T10:01:15Z INFO  api-gateway: request 0075 handled in 85ms\n2026-09-30T10:01:16Z INFO  auth-service: request 0076 handled in 92ms\n2026-09-30T10:01:17Z INFO  order-service: request 0077 handled in 99ms\n2026-09-30T10:01:18Z INFO  payment-service: request 0078 handled in 16ms\n2026-09-30T10:01:19Z INFO  search-service: request 0079 handled in 23ms\n2026-09-30T10:01:20Z INFO  api-gateway: request 0080 handled in 30ms\n2026-09-30T10:01:21Z INFO  auth-service: request 0081 handled in 37ms\n2026-09-30T10:01:22Z INFO  order-service: request 0082 handled in 44ms\n2026-09-30T10:01:23Z INFO  payment-service: request 0083 handled in 51ms\n2026-09-30T10:01:24Z INFO  search-service: request 0084 handled in 58ms\n2026-09-30T10:01:25Z INFO  api-gateway: request 0085 handled in 65ms\n2026-09-30T10:01:26Z INFO  auth-service: request 0086 handled in 72ms\n2026-09-30T10:01:27Z INFO  order-service: request 0087 handled in 79ms\n2026-09-30T10:01:28Z INFO  payment-service: request 0088 handled in 86ms\n2026-09-30T10:01:29Z INFO  search-service: request 0089 handled in 93ms\n2026-09-30T10:01:30Z INFO  api-gateway: request 0090 handled in 10ms\n2026-09-30T10:01:31Z INFO  auth-service: request 0091 handled in 17ms\n2026-09-30T10:01:32Z INFO  order-service: request 0092 handled in 24ms\n2026-09-30T10:01:33Z INFO  payment-service: request 0093 handled in 31ms\n2026-09-30T10:01:34Z INFO  search-service: request 0094 handled in 38ms\n2026-09-30T10:01:35Z INFO  api-gateway: request 0095 handled in 45ms\n2026-09-30T10:01:36Z INFO  auth-service: request 0096 handled in 52ms\n2026-09-30T10:01:37Z INFO  order-service: request 0097 handled in 59ms\n2026-09-30T10:01:38Z INFO  payment-service: request 0098 handled in 66ms\n2026-09-30T10:01:39Z INFO  search-service: request 0099 handled in 73ms\n2026-09-30T10:01:40Z INFO  api-gateway: request 0100 handled in 80ms\n2026-09-30T10:01:41Z INFO  auth-service: request 0101 handled in 87ms\n2026-09-30T10:01:42Z INFO  order-service: request 0102 handled in 94ms\n2026-09-30T10:01:43Z INFO  payment-service: request 0103 handled in 11ms\n2026-09-30T10:01:44Z INFO  search-service: request 0104 handled in 18ms\n2026-09-30T10:01:45Z INFO  api-gateway: request 0105 handled in 25ms\n2026-09-30T10:01:46Z INFO  auth-service: request 0106 handled in 32ms\n2026-09-30T10:01:47Z INFO  order-service: request 0107 handled in 39ms\n2026-09-30T10:01:48Z INFO  payment-service: request 0108 handled in 46ms\n2026-09-30T10:01:49Z INFO  search-service: request 0109 handled in 53ms\n2026-09-30T10:01:50Z INFO  api-gateway: request 0110 handled in 60ms\n2026-09-30T10:01:51Z WARN  auth-service: slow response 1011ms on request 0111\n2026-09-30T10:01:52Z INFO  order-service: request 0112 handled in 74ms\n2026-09-30T10:01:53Z INFO  payment-service: request 0113 handled in 81ms\n2026-09-30T10:01:54Z INFO  search-service: request 0114 handled in 88ms\n2026-09-30T10:01:55Z INFO  api-gateway: request 0115 handled in 95ms\n2026-09-30T10:01:56Z INFO  auth-service: request 0116 handled in 12ms\n2026-09-30T10:01:57Z INFO  order-service: request 0117 handled in 19ms\n2026-09-30T10:01:58Z INFO  payment-service: request 0118 handled in 26ms\n2026-09-30T10:01:59Z INFO  search-service: request 0119 handled in 33ms\n2026-09-30T10:02:00Z INFO  api-gateway: request 0120 handled in 40ms\n2026-09-30T10:02:01Z INFO  auth-service: request 0121 handled in 47ms\n2026-09-30T10:02:02Z INFO  order-service: request 0122 handled in 54ms\n2026-09-30T10:02:03Z INFO  payment-service: request 0123 handled in 61ms\n2026-09-30T10:02:04Z INFO  search-service: request 0124 handled in 68ms\n2026-09-30T10:02:05Z INFO  api-gateway: request 0125 handled in 75ms\n2026-09-30T10:02:06Z INFO  auth-service: request 0126 handled in 82ms\n2026-09-30T10:02:07Z INFO  order-service: request 0127 handled in 89ms\n2026-09-30T10:02:08Z INFO  payment-service: request 0128 handled in 96ms\n2026-09-30T10:02:09Z INFO  search-service: request 0129 handled in 13ms\n2026-09-30T10:02:10Z INFO  api-gateway: request 0130 handled in 20ms\n2026-09-30T10:02:11Z INFO  auth-service: request 0131 handled in 27ms\n2026-09-30T10:02:12Z INFO  order-service: request 0132 handled in 34ms\n2026-09-30T10:02:13Z INFO  payment-service: request 0133 handled in 41ms\n2026-09-30T10:02:14Z INFO  search-service: request 0134 handled in 48ms\n2026-09-30T10:02:15Z INFO  api-gateway: request 0135 handled in 55ms\n2026-09-30T10:02:16Z INFO  auth-service: request 0136 handled in 62ms\n2026-09-30T10:02:17Z INFO  order-service: request 0137 handled in 69ms\n2026-09-30T10:02:18Z INFO  payment-service: request 0138 handled in 76ms\n2026-09-30T10:02:19Z INFO  search-service: request 0139 handled in 83ms\n2026-09-30T10:02:20Z INFO  api-gateway: request 0140 handled in 90ms\n2026-09-30T10:02:21Z INFO  auth-service: request 0141 handled in 97ms\n2026-09-30T10:02:22Z INFO  order-service: request 0142 handled in 14ms\n2026-09-30T10:02:23Z INFO  payment-service: request 0143 handled in 21ms\n2026-09-30T10:02:24Z INFO  search-service: request 0144 handled in 28ms\n2026-09-30T10:02:25Z INFO  api-gateway: request 0145 handled in 35ms\n2026-09-30T10:02:26Z INFO  auth-service: request 0146 handled in 42ms\n2026-09-30T10:02:27Z INFO  order-service: request 0147 handled in 49ms\n2026-09-30T10:02:28Z WARN  payment-service: slow response 1048ms on request 0148\n2026-09-30T10:02:29Z INFO  search-service: request 0149 handled in 63ms\n2026-09-30T10:02:30Z INFO  api-gateway: request 0150 handled in 70ms\n2026-09-30T10:02:31Z INFO  auth-service: request 0151 handled in 77ms\n2026-09-30T10:02:32Z INFO  order-service: request 0152 handled in 84ms\n2026-09-30T10:02:33Z INFO  payment-service: request 0153 handled in 91ms\n2026-09-30T10:02:34Z INFO  search-service: request 0154 handled in 98ms\n2026-09-30T10:02:35Z INFO  api-gateway: request 0155 handled in 15ms\n2026-09-30T10:02:36Z INFO  auth-service: request 0156 handled in 22ms\n2026-09-30T10:02:37Z INFO  order-service: request 0157 handled in 29ms\n2026-09-30T10:02:38Z INFO  payment-service: request 0158 handled in 36ms\n2026-09-30T10:02:39Z INFO  search-service: request 0159 handled in 43ms\n2026-09-30T10:02:40Z INFO  api-gateway: request 0160 handled in 50ms\n2026-09-30T10:02:41Z INFO  auth-service: request 0161 handled in 57ms\n2026-09-30T10:02:42Z INFO  order-service: request 0162 handled in 64ms\n2026-09-30T10:02:43Z INFO  payment-service: request 0163 handled in 71ms\n2026-09-30T10:02:44Z INFO  search-service: request 0164 handled in 78ms\n2026-09-30T10:02:45Z INFO  api-gateway: request 0165 handled in 85ms\n2026-09-30T10:02:46Z INFO  auth-service: request 0166 handled in 92ms\n2026-09-30T10:02:47Z INFO  order-service: request 0167 handled in 99ms\n2026-09-30T10:02:48Z INFO  payment-service: request 0168 handled in 16ms\n2026-09-30T10:02:49Z INFO  search-service: request 0169 handled in 23ms\n2026-09-30T10:02:50Z INFO  api-gateway: request 0170 handled in 30ms\n2026-09-30T10:02:51Z INFO  auth-service: request 0171 handled in 37ms\n2026-09-30T10:02:52Z INFO  order-service: request 0172 handled in 44ms\n2026-09-30T10:02:53Z INFO  payment-service: request 0173 handled in 51ms\n2026-09-30T10:02:54Z INFO  search-service: request 0174 handled in 58ms\n2026-09-30T10:02:55Z INFO  api-gateway: request 0175 handled in 65ms\n2026-09-30T10:02:56Z INFO  auth-service: request 0176 handled in 72ms\n2026-09-30T10:02:57Z INFO  order-service: request 0177 handled in 79ms\n2026-09-30T10:02:58Z INFO  payment-service: request 0178 handled in 86ms\n2026-09-30T10:02:59Z INFO  search-service: request 0179 handled in 93ms\n2026-09-30T10:03:00Z INFO  api-gateway: request 0180 handled in 10ms\n2026-09-30T10:03:01Z INFO  auth-service: request 0181 handled in 17ms\n2026-09-30T10:03:02Z INFO  order-service: request 0182 handled in 24ms\n2026-09-30T10:03:03Z INFO  payment-service: request 0183 handled in 31ms\n2026-09-30T10:03:04Z INFO  search-service: request 0184 handled in 38ms\n2026-09-30T10:03:05Z WARN  api-gateway: slow response 1085ms on request 0185\n2026-09-30T10:03:06Z INFO  auth-service: request 0186 handled in 52ms\n2026-09-30T10:03:07Z INFO  order-service: request 0187 handled in 59ms\n2026-09-30T10:03:08Z INFO  payment-service: request 0188 handled in 66ms\n2026-09-30T10:03:09Z INFO  search-service: request 0189 handled in 73ms\n2026-09-30T10:03:10Z INFO  api-gateway: request 0190 handled in 80ms\n2026-09-30T10:03:11Z INFO  auth-service: request 0191 handled in 87ms\n2026-09-30T10:03:12Z INFO  order-service: request 0192 handled in 94ms\n2026-09-30T10:03:13Z INFO  payment-service: request 0193 handled in 11ms\n2026-09-30T10:03:14Z INFO  search-service: request 0194 handled in 18ms\n2026-09-30T10:03:15Z INFO  api-gateway: request 0195 handled in 25ms\n2026-09-30T10:03:16Z INFO  auth-service: request 0196 handled in 32ms\n2026-09-30T10:03:17Z INFO  order-service: request 0197 handled in 39ms\n2026-09-30T10:03:18Z INFO  payment-service: request 0198 handled in 46ms\n2026-09-30T10:03:19Z INFO  search-service: request 0199 handled in 53ms\n2026-09-30T10:03:20Z INFO  api-gateway: request 0200 handled in 60ms\n2026-09-30T10:03:21Z INFO  auth-service: request 0201 handled in 67ms\n2026-09-30T10:03:22Z INFO  order-service: request 0202 handled in 74ms\n2026-09-30T10:03:23Z INFO  payment-service: request 0203 handled in 81ms\n2026-09-30T10:03:24Z INFO  search-service: request 0204 handled in 88ms\n2026-09-30T10:03:25Z INFO  api-gateway: request 0205 handled in 95ms\n2026-09-30T10:03:26Z INFO  auth-service: request 0206 handled in 12ms\n2026-09-30T10:03:27Z INFO  order-service: request 0207 handled in 19ms\n2026-09-30T10:03:28Z INFO  payment-service: request 0208 handled in 26ms\n2026-09-30T10:03:29Z INFO  search-service: request 0209 handled in 33ms\n2026-09-30T10:03:30Z INFO  api-gateway: request 0210 handled in 40ms\n2026-09-30T10:03:31Z INFO  auth-service: request 0211 handled in 47ms\n2026-09-30T10:03:32Z INFO  order-service: request 0212 handled in 54ms\n2026-09-30T10:03:33Z INFO  payment-service: request 0213 handled in 61ms\n2026-09-30T10:03:34Z INFO  search-service: request 0214 handled in 68ms\n2026-09-30T10:03:35Z INFO  api-gateway: request 0215 handled in 75ms\n2026-09-30T10:03:36Z INFO  auth-service: request 0216 handled in 82ms\n2026-09-30T10:03:37Z INFO  order-service: request 0217 handled in 89ms\n2026-09-30T10:03:38Z INFO  payment-service: request 0218 handled in 96ms\n2026-09-30T10:03:39Z INFO  search-service: request 0219 handled in 13ms\n2026-09-30T10:03:40Z INFO  api-gateway: request 0220 handled in 20ms\n2026-09-30T10:03:41Z INFO  auth-service: request 0221 handled in 27ms\n2026-09-30T10:03:42Z WARN  order-service: slow response 1122ms on request 0222\n2026-09-30T10:03:43Z INFO  payment-service: request 0223 handled in 41ms\n2026-09-30T10:03:44Z INFO  search-service: request 0224 handled in 48ms\n2026-09-30T10:03:45Z INFO  api-gateway: request 0225 handled in 55ms\n2026-09-30T10:03:46Z INFO  auth-service: request 0226 handled in 62ms\n2026-09-30T10:03:47Z INFO  order-service: request 0227 handled in 69ms\n2026-09-30T10:03:48Z INFO  payment-service: request 0228 handled in 76ms\n2026-09-30T10:03:49Z INFO  search-service: request 0229 handled in 83ms\n2026-09-30T10:03:50Z INFO  api-gateway: request 0230 handled in 90ms\n2026-09-30T10:03:51Z INFO  auth-service: request 0231 handled in 97ms\n2026-09-30T10:03:52Z INFO  order-service: request 0232 handled in 14ms\n2026-09-30T10:03:53Z INFO  payment-service: request 0233 handled in 21ms\n2026-09-30T10:03:54Z INFO  search-service: request 0234 handled in 28ms\n2026-09-30T10:03:55Z INFO  api-gateway: request 0235 handled in 35ms\n2026-09-30T10:03:56Z INFO  auth-service: request 0236 handled in 42ms\n2026-09-30T10:03:57Z INFO  order-service: request 0237 handled in 49ms\n2026-09-30T10:03:58Z INFO  payment-service: request 0238 handled in 56ms\n2026-09-30T10:03:59Z INFO  search-service: request 0239 handled in 63ms\n2026-09-30T10:04:00Z INFO  api-gateway: request 0240 handled in 70ms\n2026-09-30T10:04:01Z INFO  auth-service: request 0241 handled in 77ms\n2026-09-30T10:04:02Z INFO  order-service: request 0242 handled in 84ms\n2026-09-30T10:04:03Z INFO  payment-service: request 0243 handled in 91ms\n2026-09-30T10:04:04Z INFO  search-service: request 0244 handled in 98ms\n2026-09-30T10:04:05Z INFO  api-gateway: request 0245 handled in 15ms\n2026-09-30T10:04:06Z INFO  auth-service: request 0246 handled in 22ms\n2026-09-30T10:04:07Z INFO  order-service: request 0247 handled in 29ms\n2026-09-30T10:04:08Z INFO  payment-service: request 0248 handled in 36ms\n2026-09-30T10:04:09Z INFO  search-service: request 0249 handled in 43ms\n2026-09-30T10:04:10Z INFO  api-gateway: request 0250 handled in 50ms\n2026-09-30T10:04:11Z INFO  auth-service: request 0251 handled in 57ms\n2026-09-30T10:04:12Z INFO  order-service: request 0252 handled in 64ms\n2026-09-30T10:04:13Z INFO  payment-service: request 0253 handled in 71ms\n2026-09-30T10:04:14Z INFO  search-service: request 0254 handled in 78ms\n2026-09-30T10:04:15Z INFO  api-gateway: request 0255 handled in 85ms\n2026-09-30T10:04:16Z INFO  auth-service: request 0256 handled in 92ms\n2026-09-30T10:04:17Z INFO  order-service: request 0257 handled in 99ms\n2026-09-30T10:04:18Z INFO  payment-service: request 0258 handled in 16ms\n2026-09-30T10:04:19Z WARN  search-service: slow response 1159ms on request 0259\n2026-09-30T10:04:20Z INFO  api-gateway: request 0260 handled in 30ms\n2026-09-30T10:04:21Z INFO  auth-service: request 0261 handled in 37ms\n2026-09-30T10:04:22Z INFO  order-service: request 0262 handled in 44ms\n2026-09-30T10:04:23Z INFO  payment-service: request 0263 handled in 51ms\n2026-09-30T10:04:24Z INFO  search-service: request 0264 handled in 58ms\n2026-09-30T10:04:25Z INFO  api-gateway: request 0265 handled in 65ms\n2026-09-30T10:04:26Z INFO  auth-service: request 0266 handled in 72ms\n2026-09-30T10:04:27Z INFO  order-service: request 0267 handled in 79ms\n2026-09-30T10:04:28Z INFO  payment-service: request 0268 handled in 86ms\n2026-09-30T10:04:29Z INFO  search-service: request 0269 handled in 93ms\n2026-09-30T10:04:30Z INFO  api-gateway: request 0270 handled in 10ms\n2026-09-30T10:04:31Z INFO  auth-service: request 0271 handled in 17ms\n2026-09-30T10:04:32Z INFO  order-service: request 0272 handled in 24ms\n2026-09-30T10:04:33Z INFO  payment-service: request 0273 handled in 31ms\n2026-09-30T10:04:34Z INFO  search-service: request 0274 handled in 38ms\n2026-09-30T10:04:35Z INFO  api-gateway: request 0275 handled in 45ms\n2026-09-30T10:04:36Z INFO  auth-service: request 0276 handled in 52ms\n2026-09-30T10:04:37Z INFO  order-service: request 0277 handled in 59ms\n2026-09-30T10:04:38Z INFO  payment-service: request 0278 handled in 66ms\n2026-09-30T10:04:39Z INFO  search-service: request 0279 handled in 73ms\n2026-09-30T10:04:40Z INFO  api-gateway: request 0280 handled in 80ms\n2026-09-30T10:04:41Z INFO  auth-service: request 0281 handled in 87ms\n2026-09-30T10:04:42Z INFO  order-service: request 0282 handled in 94ms\n2026-09-30T10:04:43Z INFO  payment-service: request 0283 handled in 11ms\n2026-09-30T10:04:44Z INFO  search-service: request 0284 handled in 18ms\n2026-09-30T10:04:45Z INFO  api-gateway: request 0285 handled in 25ms\n2026-09-30T10:04:46Z INFO  auth-service: request 0286 handled in 32ms\n2026-09-30T10:04:47Z INFO  order-service: request 0287 handled in 39ms\n2026-09-30T10:04:48Z INFO  payment-service: request 0288 handled in 46ms\n2026-09-30T10:04:49Z INFO  search-service: request 0289 handled in 53ms\n2026-09-30T10:04:50Z INFO  api-gateway: request 0290 handled in 60ms\n2026-09-30T10:04:51Z INFO  auth-service: request 0291 handled in 67ms\n2026-09-30T10:04:52Z INFO  order-service: request 0292 handled in 74ms\n2026-09-30T10:04:53Z INFO  payment-service: request 0293 handled in 81ms\n2026-09-30T10:04:54Z INFO  search-service: request 0294 handled in 88ms\n2026-09-30T10:04:55Z INFO  api-gateway: request 0295 handled in 95ms\n2026-09-30T10:04:56Z WARN  auth-service: slow response 1196ms on request 0296\n2026-09-30T10:04:57Z INFO  order-service: request 0297 handled in 19ms\n2026-09-30T10:04:58Z INFO  payment-service: request 0298 handled in 26ms\n2026-09-30T10:04:59Z INFO  search-service: request 0299 handled in 33ms\n2026-09-30T10:05:00Z INFO  api-gateway: request 0300 handled in 40ms\n2026-09-30T10:05:01Z ERROR payment-service: card declined code=E4521\n2026-09-30T10:05:02Z INFO  order-service: request 0302 handled in 54ms\n2026-09-30T10:05:03Z INFO  payment-service: request 0303 handled in 61ms\n2026-09-30T10:05:04Z INFO  search-service: request 0304 handled in 68ms\n2026-09-30T10:05:05Z INFO  api-gateway: request 0305 handled in 75ms\n2026-09-30T10:05:06Z INFO  auth-service: request 0306 handled in 82ms\n2026-09-30T10:05:07Z INFO  order-service: request 0307 handled in 89ms\n2026-09-30T10:05:08Z INFO  payment-service: request 0308 handled in 96ms\n2026-09-30T10:05:09Z INFO  search-service: request 0309 handled in 13ms\n2026-09-30T10:05:10Z INFO  api-gateway: request 0310 handled in 20ms\n2026-09-30T10:05:11Z INFO  auth-service: request 0311 handled in 27ms\n2026-09-30T10:05:12Z INFO  order-service: request 0312 handled in 34ms\n2026-09-30T10:05:13Z INFO  payment-service: request 0313 handled in 41ms\n2026-09-30T10:05:14Z INFO  search-service: request 0314 handled in 48ms\n2026-09-30T10:05:15Z INFO  api-gateway: request 0315 handled in 55ms\n2026-09-30T10:05:16Z INFO  auth-service: request 0316 handled in 62ms\n2026-09-30T10:05:17Z INFO  order-service: request 0317 handled in 69ms\n2026-09-30T10:05:18Z INFO  payment-service: request 0318 handled in 76ms\n2026-09-30T10:05:19Z INFO  search-service: request 0319 handled in 83ms\n2026-09-30T10:05:20Z INFO  api-gateway: request 0320 handled in 90ms\n"
+        }
+      ]
+    },
+    {
+      "id": "trap-repeated-failing-call",
+      "trap": "repeated-failing-call",
+      "note": "함정 — 같은 실패 호출 반복 유도. 사내 전용 모듈이 없어 실행이 매번 같은 오류로 실패하고, 네트워크가 없어 설치로도 고칠 수 없다. 같은 실행·설치를 되풀이하지 않고 필요한 것을 알려야 한다",
+      "goal": "uploads/report.py 를 실행해서 출력되는 합계를 알려 주세요. 실행할 수 없으면 무엇이 필요한지 알려 주세요.",
+      "maxTurns": 8,
+      "spec": {
+        "id": "trap-repeated-failing-call",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 5,
+          "python_execute": 4
+        }
+      },
+      "files": [
+        {
+          "name": "report.py",
+          "type": "text/x-python",
+          "content": "import acme_internal_sdk\n\nrows = acme_internal_sdk.load_rows('sales')\nprint('합계', sum(r['amount'] for r in rows))\n"
+        }
+      ]
+    },
+    {
+      "id": "trap-whitespace-str-replace",
+      "trap": "whitespace-str-replace",
+      "note": "함정 — 공백이 다른 문자열 치환. 대상 줄이 탭으로 들여쓰이고 줄 끝에 공백이 있어, 보이는 대로 옮겨 적은 old_str 는 정확히 일치하지 않는다",
+      "goal": "uploads/settings.py 의 TIMEOUT 값을 30 에서 60 으로 바꿔 주세요. 다른 줄은 그대로 두세요.",
+      "maxTurns": 8,
+      "spec": {
+        "id": "trap-whitespace-str-replace",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 4,
+          "python_execute": 3,
+          "str_replace_editor": 5,
+          "file_ops": 4
+        }
+      },
+      "files": [
+        {
+          "name": "settings.py",
+          "type": "text/x-python",
+          "content": "SETTINGS = {\n\t\"HOST\": \"0.0.0.0\",  \n\t\"PORT\": 8080,\n\t\"TIMEOUT\": 30,  \n\t\"RETRIES\": 3,\n}\n"
+        }
+      ]
+    }
+  ],
+  "browserCases": [
+    {
+      "id": "browser-page-heading",
+      "note": "브라우저 과제(정답 문자열 판정) — 야간 실행 묶음에 넣지 않는다. 정답은 외부 페이지(iana.org, 2026-10-04 확인)에 달려 있다",
+      "goal": "브라우저로 https://www.iana.org/help/example-domains 를 열어 페이지의 큰 제목(h1)을 그대로 알려 주세요.",
+      "maxTurns": 8,
+      "spec": {
+        "id": "browser-page-heading",
+        "requiredTools": [
+          "browser"
+        ],
+        "allowedTools": [
+          "browser",
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "web_search"
+        ],
+        "maxCalls": {
+          "browser": 5
+        }
+      },
+      "expectedAnswer": {
+        "includes": [
+          "Example Domains"
+        ]
+      }
+    },
+    {
+      "id": "browser-extract-list",
+      "note": "브라우저 과제(정답 문자열 판정) — 본문 목록에서 값을 뽑는다. 정답은 외부 페이지(iana.org, 2026-10-04 확인)에 달려 있다",
+      "goal": "브라우저로 https://www.iana.org/help/example-domains 를 열어 'Further Reading' 목록에 적힌 RFC 번호를 모두 알려 주세요.",
+      "maxTurns": 8,
+      "spec": {
+        "id": "browser-extract-list",
+        "requiredTools": [
+          "browser"
+        ],
+        "allowedTools": [
+          "browser",
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "web_search"
+        ],
+        "maxCalls": {
+          "browser": 5
+        }
+      },
+      "expectedAnswer": {
+        "includes": [
+          "6761",
+          "2606"
+        ]
+      }
     }
   ]
 }

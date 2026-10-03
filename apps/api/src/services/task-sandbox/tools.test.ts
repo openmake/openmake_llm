@@ -194,6 +194,21 @@ describe('task-sandbox tools', () => {
             const r = await byName(createTaskTools(fakeSandbox()), 'file_ops').handler({ op: 'write', path: 'a.ts', content: 'x' });
             expect(txt(r)).toBe('기록됨: a.ts');
         });
+
+        it('진단 미지원 실행기(샌드박스)는 쓰기 뒤 문법 검사 결과를 덧붙인다', async () => {
+            const sb = fakeSandbox();
+            const r = await byName(createTaskTools(sb), 'file_ops').handler({ op: 'write', path: 'cfg.json', content: '{"a":' });
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('기록됨: cfg.json');
+            expect(txt(r)).toContain('문법 오류');
+        });
+
+        it('str_replace 는 편집 전부터 깨져 있던 파일의 오류는 알리지 않는다', async () => {
+            const sb = fakeSandbox();
+            await sb.writeFile('cfg.json', '{"a": 1,, "b": 2}');
+            const r = await byName(createTaskTools(sb), 'str_replace_editor').handler({ command: 'str_replace', path: 'cfg.json', old_str: '"b": 2', new_str: '"b": 3' });
+            expect(txt(r)).toBe('치환 완료: cfg.json');
+        });
     });
 
     it('browser: 막아야 할 주소가 있으면 브라우저를 실행하지 않는다', async () => {
@@ -203,6 +218,25 @@ describe('task-sandbox tools', () => {
         expect(r.isError).toBe(true);
         expect(txt(r)).toContain('169.254.169.254');
         expect(sb.lastBrowser).toBe('');
+    });
+
+    describe('bash 종료 코드 해석', () => {
+        const withExit = (exitCode: number): FakeSandbox => {
+            const sb = fakeSandbox();
+            (sb as unknown as { exec: (c: string) => Promise<ExecResult> }).exec = async () => ({ stdout: '', stderr: '', exitCode, truncated: false, timedOut: false, durationMs: 1 });
+            return sb;
+        };
+        it('grep 의 1 은 오류로 표시하지 않고 뜻을 덧붙인다', async () => {
+            const r = await byName(createTaskTools(withExit(1)), 'bash').handler({ command: 'grep -rn foo src' });
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('[exit=1 ');
+            expect(txt(r)).toContain('일치 없음');
+        });
+        it('뜻을 모르는 0 아닌 코드는 종전대로 오류다', async () => {
+            const r = await byName(createTaskTools(withExit(1)), 'bash').handler({ command: 'npm test' });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).not.toContain('일치 없음');
+        });
     });
 
     describe('str_replace_editor', () => {
@@ -244,6 +278,24 @@ describe('task-sandbox tools', () => {
             await ed.handler({ command: 'create', path: 'a.txt', file_text: 'foo bar' });
             await ed.handler({ command: 'str_replace', path: 'a.txt', old_str: 'bar', new_str: 'baz' });
             expect(sb.files.get('a.txt')).toBe('foo baz');
+        });
+        it('str_replace 는 줄 끝 공백만 다른 old_str 를 유일할 때 적용한다', async () => {
+            const sb = fakeSandbox();
+            const ed = byName(createTaskTools(sb), 'str_replace_editor');
+            await ed.handler({ command: 'create', path: 'a.py', file_text: 'def f():\n    return 1  \nx = 2\n' });
+            const r = await ed.handler({ command: 'str_replace', path: 'a.py', old_str: '    return 1\nx = 2', new_str: '    return 3\nx = 2' });
+            expect(r.isError).toBeFalsy();
+            expect(sb.files.get('a.py')).toBe('def f():\n    return 3\nx = 2\n');
+            expect(txt(r)).toContain('2번 줄');
+        });
+        it('str_replace 실패 안내에 가장 비슷한 줄과 줄 번호가 들어간다', async () => {
+            const sb = fakeSandbox();
+            const ed = byName(createTaskTools(sb), 'str_replace_editor');
+            await ed.handler({ command: 'create', path: 'a.js', file_text: 'const a = 1;\nfunction renderHeader(title) {\n}\n' });
+            const miss = await ed.handler({ command: 'str_replace', path: 'a.js', old_str: 'function renderHeader(titel) {', new_str: 'x' });
+            expect(miss.isError).toBe(true);
+            expect(txt(miss)).toContain('2| function renderHeader(title) {');
+            expect(sb.files.get('a.js')).toContain('renderHeader(title)');
         });
     });
 
@@ -340,7 +392,7 @@ describe('task-sandbox tools', () => {
 
     describe('skill_save — 평문 비밀 값', () => {
         it('비밀번호 입력값이 평문이면 저장하지 않고 {{param}} 으로 바꾸라고 답한다', async () => {
-            const save = jest.fn(async () => 'id');
+            const save = jest.fn(async () => ({ id: 'id', version: 1, updated: false }));
             const r = await byName(createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save, load: async () => null }), 'skill_save').handler({
                 name: 'login', kind: 'browser',
                 actions: [{ type: 'fill', selector: 'input[type=password]', text: 'hunter2!' }],
@@ -352,12 +404,76 @@ describe('task-sandbox tools', () => {
         });
     });
 
+    describe('skill_save — 고쳐 쓰기·되돌리기', () => {
+        const saved = { id: 'skill-1', version: 2, updated: true };
+
+        it('update 를 저장 훅에 넘기고 갱신 결과(버전)를 알린다', async () => {
+            const save = jest.fn(async () => saved);
+            const r = await byName(createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save, load: async () => null }), 'skill_save').handler({
+                name: 'square', kind: 'script', code: 'echo 2', update: true,
+            });
+            expect(save).toHaveBeenCalledWith(expect.objectContaining({ name: 'square', update: true }));
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('v2');
+        });
+
+        it('같은 이름이 있어 거절되면 그 안내를 오류로 돌려준다', async () => {
+            const save = jest.fn(async () => { throw new Error('같은 이름의 절차 스킬이 이미 있습니다: skill_id=skill-1'); });
+            const r = await byName(createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save, load: async () => null }), 'skill_save').handler({
+                name: 'square', kind: 'script', code: 'echo 2',
+            });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).toContain('skill_id=skill-1');
+        });
+
+        it('revert 면 저장하지 않고 직전 본문으로 되돌린다(name 만 필요)', async () => {
+            const save = jest.fn(async () => saved);
+            const revert = jest.fn(async () => ({ id: 'skill-1', version: 3, updated: true }));
+            const r = await byName(createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save, revert, load: async () => null }), 'skill_save').handler({
+                name: 'square', revert: true,
+            });
+            expect(revert).toHaveBeenCalledWith('square');
+            expect(save).not.toHaveBeenCalled();
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('v3');
+        });
+    });
+
+    describe('skill_save — 구조 검사', () => {
+        const run = async (args: Record<string, unknown>) => {
+            const save = jest.fn(async () => ({ id: 'id', version: 1, updated: false }));
+            const r = await byName(createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save, load: async () => null }), 'skill_save').handler(args);
+            return { r, save };
+        };
+
+        it('알 수 없는 액션이 있으면 저장하지 않고 위치를 알린다', async () => {
+            const { r, save } = await run({ name: 's', kind: 'browser', actions: [{ type: 'goto', url: 'https://example.com' }, { type: 'hover', selector: '#a' }] });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).toContain('actions[1]');
+            expect(save).not.toHaveBeenCalled();
+        });
+
+        it('사설망·메타데이터 주소로 이동하는 절차는 저장하지 않는다', async () => {
+            findBlockedBrowserUrls.mockResolvedValueOnce([{ index: 0, url: 'http://169.254.169.254/latest/meta-data', reason: 'blocked' }]);
+            const { r, save } = await run({ name: 's', kind: 'browser', actions: [{ type: 'goto', url: 'http://169.254.169.254/latest/meta-data' }, { type: 'extractText' }] });
+            expect(r.isError).toBe(true);
+            expect(findBlockedBrowserUrls).toHaveBeenLastCalledWith([{ type: 'goto', url: 'http://169.254.169.254/latest/meta-data' }]);
+            expect(save).not.toHaveBeenCalled();
+        });
+
+        it('{{param}} 주소와 정상 액션은 저장한다', async () => {
+            const { r, save } = await run({ name: 's', kind: 'browser', actions: [{ type: 'goto', url: 'https://{{host}}/x' }, { type: 'extractText' }], params: ['host'] });
+            expect(r.isError).toBeFalsy();
+            expect(save).toHaveBeenCalled();
+        });
+    });
+
     describe('skill_run — 재생 결과 기록', () => {
         const spec = { id: 'skill-1', kind: 'script' as const, lang: 'bash' as const, code: 'echo hi' };
 
         it('재생이 끝나면 결과와 함께 한 번만 기록한다', async () => {
             const recordRun = jest.fn();
-            const tools = createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save: async () => 'id', load: async () => spec, recordRun });
+            const tools = createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save: async () => ({ id: 'id', version: 1, updated: false }), load: async () => spec, recordRun });
             await byName(tools, 'skill_run').handler({ skill_id: 'skill-1' });
             expect(recordRun).toHaveBeenCalledTimes(1);
             expect(recordRun).toHaveBeenCalledWith(expect.objectContaining({ skillId: 'skill-1', kind: 'script', status: 'ok' }));
@@ -365,7 +481,7 @@ describe('task-sandbox tools', () => {
 
         it('절차를 찾지 못하면 기록하지 않는다', async () => {
             const recordRun = jest.fn();
-            const tools = createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save: async () => 'id', load: async () => null, recordRun });
+            const tools = createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save: async () => ({ id: 'id', version: 1, updated: false }), load: async () => null, recordRun });
             await byName(tools, 'skill_run').handler({ skill_id: 'nope' });
             expect(recordRun).not.toHaveBeenCalled();
         });
@@ -373,7 +489,7 @@ describe('task-sandbox tools', () => {
 
     describe('skill_run — 승인 결속', () => {
         const spec = { kind: 'script' as const, lang: 'bash' as const, code: 'echo hi' };
-        const hooks = (loaded: typeof spec) => ({ save: async () => 'id', load: async () => loaded });
+        const hooks = (loaded: typeof spec) => ({ save: async () => ({ id: 'id', version: 1, updated: false }), load: async () => loaded });
 
         it('승인 때 묶인 체크섬과 지금 절차가 다르면 실행하지 않는다', async () => {
             const sb = fakeSandbox();
@@ -391,5 +507,13 @@ describe('task-sandbox tools', () => {
             expect(r.isError).toBeFalsy();
             expect(txt(r)).toContain('echo hi');
         });
+    });
+    it('ask_human 은 질문 하나(question) 또는 여러 개(questions: 선택지·권장안)를 받는다', async () => {
+        const ask = byName(createTaskTools(fakeSandbox()), 'ask_human');
+        const props = (ask.tool.inputSchema as { properties: Record<string, { type: string }> }).properties;
+        expect(props.question.type).toBe('string');
+        expect(props.questions.type).toBe('array');
+        expect(txt(await ask.handler({ question: '계속할까요?' }))).toBe(`${TASK_ASK_HUMAN_SENTINEL} 계속할까요?`);
+        expect(txt(await ask.handler({ questions: [{ question: '색은?', options: ['빨강', '파랑'] }] }))).toContain('빨강');
     });
 });

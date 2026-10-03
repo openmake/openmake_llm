@@ -424,19 +424,6 @@ export class AgentTaskRepository extends BaseRepository {
         return result.rows;
     }
 
-    /** 크로스-task 학습(5-2)용 — 유저 최근 terminal task 의 경량 메타만 조회(checkpoint 등 대형 컬럼 제외). */
-    async getRecentTerminalTaskMetas(userId: string, limit: number): Promise<Array<
-        Pick<AgentTask, 'id' | 'goal' | 'status' | 'error' | 'current_turn'>
-    >> {
-        const result = await this.query<Pick<AgentTask, 'id' | 'goal' | 'status' | 'error' | 'current_turn'>>(
-            `SELECT id, goal, status, error, current_turn FROM agent_tasks
-             WHERE user_id = $1 AND status IN ('completed', 'failed', 'cancelled')
-             ORDER BY created_at DESC LIMIT $2`,
-            [userId, limit]
-        );
-        return result.rows;
-    }
-
     /** 크로스-task 학습(5-2)용 — task 가 실제 사용한 도구 이름 목록(distinct). */
     async getTaskToolNames(taskId: string): Promise<string[]> {
         const result = await this.query<{ tool_name: string }>(

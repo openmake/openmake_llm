@@ -89,6 +89,14 @@ describe('ApprovalRegistry', () => {
         await expect(p).resolves.toMatchObject({ decision: 'rejected', reason: 'user' });
     });
 
+    it('reject 에 사유를 주면 결과에 실린다', async () => {
+        const reg = new ApprovalRegistry();
+        let id = '';
+        const p = reg.request(baseInput, { timeoutMs: 5000, onPending: (pa) => { id = pa.approvalId; } });
+        expect(await reg.reject(id, 'u1', '운영 서버에서는 실행하지 마')).toBe(true);
+        await expect(p).resolves.toMatchObject({ decision: 'rejected', reason: 'user', text: '운영 서버에서는 실행하지 마' });
+    });
+
     it('answer 시 approved + 자유텍스트로 resolve', async () => {
         const reg = new ApprovalRegistry();
         let id = '';

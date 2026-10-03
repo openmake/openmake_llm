@@ -33,3 +33,47 @@ export function elicitationHint(
     jsonExample: keys.length > 1 ? JSON.stringify(example) : null,
   };
 }
+
+/** 구조화 질문 한 건 — 백엔드 `services/task-sandbox/ask-human.ts` 의 AskHumanQuestion 과 짝이다. */
+export interface StructuredQuestion {
+  question: string;
+  options?: string[];
+  /** options 중 하나. */
+  recommended?: string;
+}
+
+/**
+ * ask_human 인자의 `questions`(질문 여러 개·선택지·권장안)를 읽는다. 없거나 모양이 다르면 null —
+ * 호출부는 종전처럼 `question` 문자열을 보여 준다(서버가 같은 내용을 줄글로 넣어 둔다).
+ */
+export function structuredQuestions(
+  toolName: string,
+  args?: Record<string, unknown>,
+): { intro: string; questions: StructuredQuestion[] } | null {
+  if (toolName !== "ask_human" || !args || !Array.isArray(args.questions)) return null;
+  const questions: StructuredQuestion[] = [];
+  for (const raw of args.questions) {
+    const r = raw as { question?: unknown; options?: unknown; recommended?: unknown } | null;
+    if (!r || typeof r.question !== "string" || !r.question) return null;
+    const options = Array.isArray(r.options) ? r.options.filter((o): o is string => typeof o === "string" && o.length > 0) : [];
+    questions.push({
+      question: r.question,
+      ...(options.length > 0 ? { options } : {}),
+      ...(typeof r.recommended === "string" && options.includes(r.recommended) ? { recommended: r.recommended } : {}),
+    });
+  }
+  if (questions.length === 0) return null;
+  return { intro: typeof args.intro === "string" ? args.intro : "", questions };
+}
+
+/** 질문별로 고른 답(질문 순번 → 답)을 답변 글 하나로 엮는다 — 답변 채널은 글 하나다. 질문이 하나면 답 그대로. */
+export function composeStructuredAnswer(
+  questions: readonly StructuredQuestion[],
+  picks: Readonly<Record<number, string>>,
+): string {
+  if (questions.length === 1) return picks[0] ?? "";
+  return questions
+    .map((_, i) => (picks[i] ? `${i + 1}) ${picks[i]}` : ""))
+    .filter((s) => s.length > 0)
+    .join("; ");
+}

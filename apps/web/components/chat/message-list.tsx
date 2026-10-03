@@ -14,7 +14,7 @@ import { loadSessionIntoStore } from "@/lib/session-loader";
 import { appendAnonSessionId } from "@/lib/anon-session";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
-import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
+import { isQuestionApproval, elicitationHint, structuredQuestions } from "@/lib/hitl-question";
 import { LiveSubagentPanel } from "@/components/agent-tasks/subagent-panel";
 import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
@@ -23,6 +23,7 @@ import { ToolCallCards } from "./tool-call-cards";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
 import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "@/components/approvals/approval-args";
+import { QuestionChoices } from "@/components/approvals/question-choices";
 import { isNearBottom } from "@/lib/chat-scroll";
 import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 
@@ -90,11 +91,17 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
         if (isQuestionApproval(a.toolName)) {
           const question = typeof a.args?.question === "string" ? a.args.question : "";
           const elicit = elicitationHint(a.toolName, a.args);
+          const structured = structuredQuestions(a.toolName, a.args);
           const text = answers[a.approvalId] ?? "";
           return (
             <div key={a.approvalId} className="space-y-1.5 rounded-md border border-border bg-surface-1 p-2">
               <p className="text-xs font-semibold text-fg-2">{t("approvals.question")}</p>
-              {question && <p className="break-words text-xs text-fg-1">{question}</p>}
+              {structured ? (
+                <QuestionChoices intro={structured.intro} questions={structured.questions} disabled={busy === a.approvalId} recommendedLabel={t("approvals.recommended")}
+                  onAnswerAction={(picked) => setAnswers((prev) => ({ ...prev, [a.approvalId]: picked }))} />
+              ) : (
+                question && <p className="break-words text-xs text-fg-1">{question}</p>
+              )}
               {elicit && (
                 <p className="break-words text-[11px] text-muted">
                   {t("approvals.elicitHint", { server: elicit.server, fields: elicit.fields || "-" })}

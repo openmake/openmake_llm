@@ -28,3 +28,9 @@ export function isPreviousRunActive(
     const updated = last.updatedAt ? new Date(last.updatedAt).getTime() : NaN;
     return Number.isNaN(updated) || nowMs - updated <= staleMs;
 }
+
+/** PURE: 모델 미도달 재실행 발화인가 — 재실행 시각은 지났고 정규 발화 시각은 아직인 경우. 둘 다 지났으면 정규 발화가 재실행을 겸한다. */
+export function isRetryFire(s: { retry_at?: string | Date | null; next_run_at: string | Date }, nowMs: number): boolean {
+    if (!s.retry_at) return false;
+    return new Date(s.retry_at).getTime() <= nowMs && new Date(s.next_run_at).getTime() > nowMs;
+}

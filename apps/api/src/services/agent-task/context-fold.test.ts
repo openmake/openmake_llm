@@ -67,4 +67,21 @@ describe('foldOldToolResults', () => {
         expect(c[1].content.startsWith('goal ')).toBe(true);
         expect(c[1].content.length).toBe(1005);
     });
+
+    it('묶음 임계 — 회수량이 임계보다 적으면 과거 메시지를 고치지 않고, 쌓여서 넘으면 한꺼번에 접는다', () => {
+        const c = conv(3); // 접을 수 있는 결과 1건(약 500자)
+        const before = JSON.stringify(c);
+        expect(foldOldToolResults(c, { ...OPTS, minBatchSavedChars: 600 })).toEqual({ folded: 0, savedChars: 0 });
+        expect(JSON.stringify(c)).toBe(before);
+        c.push({ role: 'assistant', content: '', tool_calls: [{ id: 'c9', type: 'function', function: { name: 'bash', arguments: {} } }] });
+        c.push({ role: 'tool', content: big('turn9'), tool_name: 'bash', tool_call_id: 'c9' });
+        const st = foldOldToolResults(c, { ...OPTS, minBatchSavedChars: 600 });
+        expect(st.folded).toBe(2);
+        expect(st.savedChars).toBeGreaterThanOrEqual(600);
+    });
+
+    it('묶음 임계 기본값(0)은 종전 동작과 같다', () => {
+        const c = conv(3);
+        expect(foldOldToolResults(c, OPTS).folded).toBe(1);
+    });
 });

@@ -29,7 +29,9 @@ import { AgentTaskParked } from './types';
 import { findDanglingToolCalls } from './turn-reentry';
 import { createLogger } from '../../utils/logger';
 import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE, partialSubagentResult } from '../../prompts/subagent-system';
+import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { prepareToolArgs } from './tool-args';
+import { exitReasonForError, type SubagentExitReason } from '../../config/agent-task-delegation';
 
 const logger = createLogger('AgentTaskSubagent');
 
@@ -69,6 +71,10 @@ interface SubagentParams {
     onApprovalPending?: (toolName: string) => void;
     /** 그 대기가 유예 안에 결정(승인·거절)됨 — 부모 작업을 running 으로 되돌린다. 주차되면 부르지 않는다. */
     onApprovalDecided?: () => void;
+    /** 종료 사유 — 결과 문자열을 돌려주기 직전에 한 번 부른다. 주차(AgentTaskParked)는 종료가 아니라 부르지 않는다. */
+    onExit?: (reason: SubagentExitReason) => void;
+    /** 최종 답 검사 — 교정 요청문을 돌려주면 그 문장을 대화에 싣고 도구 없이 한 번만 더 부른다. null 이면 그대로 끝낸다. */
+    finalCheck?: (text: string) => string | null;
 }
 
 /** 주차된 서브에이전트의 재개 지점 — 결과 없는 tool_call 로 끝나는 대화 + 그 턴·누적 토큰. */
@@ -120,7 +126,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
 
     try {
         for (let turn = restored?.turn ?? 0; turn < maxTurns; turn++) {
-            if (p.signal?.aborted) return 'Error: 상위 작업이 중단되었습니다.';
+            if (p.signal?.aborted) { p.onExit?.('error'); return 'Error: 상위 작업이 중단되었습니다.'; }
             const toolCalls = resumeCalls ?? await llmTurn(turn);
             resumeCalls = null;
             if (typeof toolCalls === 'string') return toolCalls;
@@ -130,27 +136,29 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
         const last = [...conversation].reverse().find((m) => m.role === 'assistant');
         const exhausted = stripRawToolCallXml((last?.content as string) || '') || '(서브에이전트가 턴 상한에 도달했습니다)';
         p.trace?.record('final', `[턴 상한 도달] ${exhausted}`);
+        p.onExit?.('turns');
         return partialSubagentResult('turns', exhausted);
     } catch (e) {
         if (e instanceof AgentTaskParked) throw e; // 주차는 실패가 아니다 — 부모가 받아 주차한다
         const msg = e instanceof Error ? e.message : String(e);
         p.trace?.record('error', msg);
         logger.warn(`[Subagent] 실행 실패: ${msg}`);
+        p.onExit?.(exitReasonForError(msg));
         return `Error: 서브에이전트 실행 실패 — ${msg}`;
     }
 
     /** LLM 1턴 — 도구 호출이 있으면 그 목록, 없으면(또는 상한) 최종 텍스트. */
-    async function llmTurn(turn: number): Promise<ToolCall[] | string> {
+    async function llmTurn(turn: number, correcting = false): Promise<ToolCall[] | string> {
         {
             // 마지막 턴엔 도구를 제거해 최종 답변을 강제(도구 호출로 끝나 결과가 없는 상황 방지).
             const lastTurn = turn === maxTurns - 1;
             // 마지막 턴 진입을 모델에게 명시 — 안내문·배경은 prompts/subagent-system.ts 참고.
-            if (lastTurn && turn > 0 && p.tools.length > 0) {
+            if (!correcting && lastTurn && turn > 0 && p.tools.length > 0) {
                 conversation.push({ role: 'user', content: SUBAGENT_FINAL_TURN_NOTICE });
             }
             // 원장 귀속 — 부모 작업의 id 로 묶는다. 채팅 경로의 식별용 가짜 id(`__…__`)는 작업이 아니므로 싣지 않는다.
             const callLlm = () => client.chat(conversation, undefined, undefined, {
-                tools: lastTurn || p.tools.length === 0 ? undefined : p.tools,
+                tools: correcting || lastTurn || p.tools.length === 0 ? undefined : p.tools,
                 signal: p.signal,
                 think: false,
                 requestClass: 'fanout',
@@ -163,6 +171,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             if (tokens > AGENT_TASK_LIMITS.SUBAGENT_MAX_TOKENS || (p.remainingTokens !== undefined && p.remainingTokens() <= 0)) {
                 logger.warn(`[Subagent] 토큰 상한 초과 — 조기 종료 (${tokens})`);
                 p.trace?.record('final', `[토큰 상한 ${tokens}] ${result.content || '(부분 결과 없음)'}`);
+                p.onExit?.('tokens');
                 return partialSubagentResult('tokens', result.content || '');
             }
 
@@ -171,9 +180,15 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 content: result.content,
                 ...(result.tool_calls && { tool_calls: result.tool_calls }),
             });
-            if (!result.tool_calls || result.tool_calls.length === 0) {
+            if (correcting || !result.tool_calls || result.tool_calls.length === 0) {
                 const finalText = stripRawToolCallXml(result.content || '');
+                const correction = correcting ? null : p.finalCheck?.(finalText);
+                if (correction) {
+                    conversation.push({ role: 'user', content: correction });
+                    return llmTurn(turn, true);
+                }
                 p.trace?.record('final', finalText || '(빈 응답)');
+                p.onExit?.('completed');
                 return finalText || '(서브에이전트가 빈 응답을 반환했습니다)';
             }
             for (const tc of result.tool_calls) {
@@ -193,7 +208,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 result.tool_calls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
                 ({ name, tc }) => !requiresApproval(p.sandboxCfg.approvalPolicy, name,
                     (tc.function.arguments ?? {}) as Record<string, unknown>, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })
-                    || getApprovalRegistry().isAutoApprove(p.taskId),
+                    || getApprovalRegistry().autoApproves(p.taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>),
                 async ({ name, tc }) => {
                     const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
                     if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
@@ -202,7 +217,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                             { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, policy: p.sandboxCfg.approvalPolicy },
                         );
                         p.onPausedMs?.(r.waitedMs);
-                        if (r.decision !== 'approved') return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
+                        if (r.decision !== 'approved') return getApprovalRejectedNotice(name, r.reason, r.text);
                     }
                     return runTool(mcp, name, args, p.userCtx);
                 },
@@ -219,6 +234,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 }
                 // 부모와 동일한 승인 게이트 — 정책 우회 없음(자동승인 task 면 즉시 approved).
                 let approved = true;
+                let rejected: { reason?: string; text?: string } = {};
                 if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
                     let pended = false;
                     const r = await getApprovalRegistry().request(
@@ -237,10 +253,11 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                     if (r.reason === 'parked' && p.park) await parkHere(turn, name);
                     if (pended) { p.trace?.record('resumed', ''); p.onApprovalDecided?.(); }
                     approved = r.decision === 'approved';
+                    rejected = r;
                 }
                 const toolResult = approved
                     ? await runTool(mcp, name, args, p.userCtx)
-                    : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
+                    : getApprovalRejectedNotice(name, rejected.reason, rejected.text);
                 p.trace?.record('tool_result', toolResult, name);
                 conversation.push({ role: 'tool', content: toolResult, tool_name: name, tool_call_id: tc.id });
             }
