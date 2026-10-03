@@ -191,7 +191,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                     if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
                         const r = await getApprovalRegistry().request(
                             { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
-                            { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal },
+                            { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, policy: p.sandboxCfg.approvalPolicy },
                         );
                         p.onPausedMs?.(r.waitedMs);
                         if (r.decision !== 'approved') return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
@@ -216,7 +216,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                     const r = await getApprovalRegistry().request(
                         { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
                         {
-                            timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, parkable: !!p.park,
+                            timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, parkable: !!p.park, policy: p.sandboxCfg.approvalPolicy,
                             // 대기 진입 — 활동 기록에 awaiting(유예 구간도 "승인 대기"로 보이게) + 부모 paused·알림.
                             ...(p.onApprovalPending || p.trace ? { onPending: (pa) => {
                                 pended = true;
