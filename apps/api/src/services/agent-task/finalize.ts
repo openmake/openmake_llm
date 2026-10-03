@@ -33,6 +33,7 @@ import { verifyWorkspaceTests } from './workspace-test-verify';
 import { persistArtifactSteps, persistJudgeStep } from './task-steps';
 import { maybePersistCodeDiff } from './code-diff';
 import { judgeClientFor } from './role-client';
+import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
@@ -172,9 +173,11 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         && (judgeApplies || AGENT_TASK_LIMITS.GOAL_JUDGE_SHADOW_ENABLED)) {
         const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence);
         // 셰도우 경로에선 ANSWER 에서 떨어져 나간 산출물을 함께 싣는다(적용 경로는 아티팩트 0 이라 빈 값).
-        const outcome = await judgeGoal(
-            await judgeClientFor(userId), goal, body ?? '', signal, execCtx,
-            artifacts.length > 0 ? buildJudgeArtifactSummary(artifacts) : undefined);
+        const judgeClient = await judgeClientFor(userId);
+        // 원장 귀속 — 판정 호출의 비용도 이 작업 id 로 묶는다.
+        const outcome = await runWithCostSession(taskId, () => judgeGoal(
+            judgeClient, goal, body ?? '', signal, execCtx,
+            artifacts.length > 0 ? buildJudgeArtifactSummary(artifacts) : undefined));
         const achieved = outcome.achieved;
         const judged: JudgeVerdict = achieved === null ? 'unknown' : achieved ? 'achieved' : 'not_achieved';
         // 판정·사유·입력 요약을 스텝으로 남긴다 — 오판 사후 규명용(관측 전용, fail-open).

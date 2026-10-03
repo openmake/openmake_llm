@@ -21,6 +21,7 @@ import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
+import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { runTool } from './task-steps';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import type { SubagentTrace } from './subagent-trace';
@@ -144,12 +145,14 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             if (lastTurn && turn > 0 && p.tools.length > 0) {
                 conversation.push({ role: 'user', content: SUBAGENT_FINAL_TURN_NOTICE });
             }
-            const result = await client.chat(conversation, undefined, undefined, {
+            // 원장 귀속 — 부모 작업의 id 로 묶는다. 채팅 경로의 식별용 가짜 id(`__…__`)는 작업이 아니므로 싣지 않는다.
+            const callLlm = () => client.chat(conversation, undefined, undefined, {
                 tools: lastTurn || p.tools.length === 0 ? undefined : p.tools,
                 signal: p.signal,
                 think: false,
                 requestClass: 'fanout',
             });
+            const result = await (p.taskId.startsWith('__') ? callLlm() : runWithCostSession(p.taskId, callLlm));
             const used = (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);
             tokens += used;
             p.onTokens?.(used);
