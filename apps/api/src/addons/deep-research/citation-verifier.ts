@@ -9,6 +9,9 @@
  *   - coverage: 인용을 가진 주장 문장 비율
  *   - invalidCitations: 소스 범위(1..sourceCount) 밖을 가리키는 인용 번호
  *
+ *   - claimStatus(읽은 출처 정보가 주어질 때): 주장을 원문 확인·미입수·미인용으로 나눈 수.
+ *     본문을 가져와 읽은 출처와 검색 요약만 있는 출처를 구분한다.
+ *
  * 측정하지 않는 것:
  *   - groundedness(인용된 소스가 실제로 주장을 뒷받침하는지) → LLM-as-judge 영역, A3 범위 밖.
  *
@@ -38,6 +41,13 @@ export interface CitationReport {
     skipReason?: string;
     /** 목표 커버리지 충족 여부 (coverage >= TARGET). skipped 면 null */
     meetsTarget: boolean | null;
+    /**
+     * 주장 상태별 수 — readSources 를 준 호출만. read: 본문을 읽은 출처를 하나 이상 인용,
+     * unreadOnly: 인용은 있으나 본문을 읽은 출처가 없음(검색 요약뿐이거나 범위 밖), uncited: 인용 없음.
+     */
+    claimStatus?: { read: number; unreadOnly: number; uncited: number };
+    /** 본문을 읽지 못한 출처를 가리키는 유효 인용 번호 (중복 제거, readSources 를 준 호출만) */
+    unreadCitations?: number[];
 }
 
 /**
@@ -155,9 +165,10 @@ function isFallbackReport(bodyText: string, claimCount: number): boolean {
  *
  * @param reportText - 최종 보고서 마크다운 (report-generator 의 summary/content)
  * @param sourceCount - 유효 소스 수 (인용 번호는 1..sourceCount 범위여야 유효)
+ * @param readSources - 본문을 실제로 가져와 읽은 출처 번호(1 기준). 주면 claimStatus·unreadCitations 를 함께 계산한다.
  * @returns CitationReport
  */
-export function verifyCitations(reportText: string, sourceCount: number): CitationReport {
+export function verifyCitations(reportText: string, sourceCount: number, readSources?: ReadonlySet<number>): CitationReport {
     const emptyReport = (skipReason: string): CitationReport => ({
         coverage: null,
         totalClaims: 0,
@@ -186,6 +197,8 @@ export function verifyCitations(reportText: string, sourceCount: number): Citati
     let citationCount = 0;
     const invalid = new Set<number>();
     const uncited: string[] = [];
+    const unread = new Set<number>();
+    const status = { read: 0, unreadOnly: 0, uncited: 0 };
 
     for (const claim of claims) {
         const nums = extractCitationNumbers(claim);
@@ -194,9 +207,13 @@ export function verifyCitations(reportText: string, sourceCount: number): Citati
             citationCount += nums.length;
             for (const n of nums) {
                 if (n < 1 || n > sourceCount) invalid.add(n);
+                else if (readSources && !readSources.has(n)) unread.add(n);
             }
-        } else if (uncited.length < DEEP_RESEARCH_CITATION.MAX_UNCITED_SAMPLES) {
-            uncited.push(claim);
+            if (readSources && nums.some((n) => readSources.has(n))) status.read++;
+            else status.unreadOnly++;
+        } else {
+            status.uncited++;
+            if (uncited.length < DEEP_RESEARCH_CITATION.MAX_UNCITED_SAMPLES) uncited.push(claim);
         }
     }
 
@@ -212,5 +229,6 @@ export function verifyCitations(reportText: string, sourceCount: number): Citati
         uncitedSamples: uncited,
         skipped: false,
         meetsTarget: coverage === null ? null : coverage >= DEEP_RESEARCH_CITATION.TARGET_COVERAGE,
+        ...(readSources ? { claimStatus: status, unreadCitations: Array.from(unread).sort((a, b) => a - b) } : {}),
     };
 }

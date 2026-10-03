@@ -240,7 +240,9 @@ export async function generateReport(params: {
 
         // A3: 인용 커버리지 측정 (결정적, LLM 비용 0). 본문은 변형하지 않고 메타만 기록.
         try {
-            const citation = verifyCitations(content, uniqueSources.length);
+            // 본문을 가져와 읽은 출처(fullContent)와 검색 요약만 있는 출처를 구분해 주장 상태를 함께 기록한다.
+            const readSources = new Set(uniqueSources.flatMap((s, i) => (s.fullContent ? [i + 1] : [])));
+            const citation = verifyCitations(content, uniqueSources.length, readSources);
             if (!citation.skipped) {
                 const pct = citation.coverage !== null ? (citation.coverage * 100).toFixed(1) : 'N/A';
                 const belowTarget = citation.meetsTarget === false;
@@ -265,6 +267,8 @@ export async function generateReport(params: {
                         invalidCitations: citation.invalidCitations,
                         meetsTarget: citation.meetsTarget,
                         uncitedSamples: citation.uncitedSamples,
+                        claimStatus: citation.claimStatus,
+                        unreadCitations: citation.unreadCitations,
                     }),
                     status: belowTarget && DEEP_RESEARCH_CITATION.ENFORCE ? 'failed' : 'completed'
                 });
