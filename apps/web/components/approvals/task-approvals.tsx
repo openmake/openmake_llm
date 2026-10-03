@@ -23,6 +23,7 @@ import { useAppStore } from "@/lib/store";
 import { isQuestionApproval, elicitationHint, structuredQuestions } from "@/lib/hitl-question";
 import { QuestionChoices } from "./question-choices";
 import { onAgentTaskChange } from "@/lib/agent-task-change";
+import { REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
 
 interface RecentDecision {
   approvalId: string;
@@ -53,8 +54,6 @@ interface PendingItem {
 interface OrgMember { user_id: string; role: string }
 
 const ARGS_SUMMARY_MAX_CHARS = 300;
-/** 거절 사유 입력 상한 — 서버(AGENT_TASK_APPROVAL_REJECT_REASON_MAX_CHARS 기본값)와 같다. 넘는 분량은 서버가 자른다. */
-const REJECT_REASON_MAX_CHARS = 500;
 
 export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => void }) {
   const t = useTranslations("approvals");

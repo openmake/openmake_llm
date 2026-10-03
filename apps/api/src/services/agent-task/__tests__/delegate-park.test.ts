@@ -71,6 +71,9 @@ describe('buildDelegateFn — 서브에이전트 체크포인트', () => {
         const out = await fn()('목표');
         expect(out.startsWith('결과\n\n')).toBe(true);
         expect(out).toContain('자가 보고');
+        // spawn_agents 쪽과 같은 취지 — 확인(추가 도구 호출)을 시키지 않고 출처 구분만 요구한다.
+        expect(out).not.toMatch(/확인하/);
+        expect(out).toMatch(/단정하지/);
     });
 
     it('승인 대기 훅을 서브에이전트에 그대로 넘긴다(부모 상태 paused↔running)', async () => {

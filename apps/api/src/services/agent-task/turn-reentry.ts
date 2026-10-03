@@ -15,6 +15,7 @@
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { snapshotWorkspaceTurn } from './fork-workspace';
+import { handoffUsedToolNames } from './context-handoff';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { ChatMessage, ToolCall } from '../../llm/types';
@@ -38,6 +39,8 @@ export function usedToolNamesFrom(conversation: readonly ChatMessage[] | undefin
     const names = new Set<string>();
     for (const m of conversation ?? []) {
         if (m.role === 'tool' && typeof m.tool_name === 'string' && m.tool_name.length > 0) names.add(m.tool_name);
+        // 창 초과로 인계 요약 하나로 바뀐 구간 — tool 메시지는 사라졌고 이름은 요약이 지닌다.
+        if (m.role === 'user' && typeof m.content === 'string') for (const name of handoffUsedToolNames(m.content)) names.add(name);
     }
     return names;
 }

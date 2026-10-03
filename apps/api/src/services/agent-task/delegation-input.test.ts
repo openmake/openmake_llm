@@ -29,7 +29,21 @@ describe('checkDelegationGoal — 빈 껍데기 위임 목표 거부', () => {
     });
 
     it('너무 짧은 목표는 여러 태스크를 한 번에 맡길 때만 거부한다 — 단일 위임의 짧은 목표는 정당할 수 있다', () => {
-        expect(checkDelegationGoal('환율 조사', { batch: true })).toMatch(/5자/);
-        expect(checkDelegationGoal('환율 조사', { batch: false })).toBeNull();
+        expect(checkDelegationGoal('환율', { batch: true })).toMatch(/2자/);
+        expect(checkDelegationGoal('fix bug', { batch: true })).toMatch(/7자/);
+        expect(checkDelegationGoal('환율', { batch: false })).toBeNull();
+    });
+
+    it('한글·한자·가나는 글자당 정보량이 커 짧아도 정당한 지시가 통과한다', () => {
+        for (const goal of ['서울 날씨 조사', '로그 요약', '환율 조사', '東京の天気を調査', '日志摘要']) {
+            expect(checkDelegationGoal(goal, { batch: true })).toBeNull();
+        }
+    });
+
+    it('내용이 없는 짧은 지시는 여전히 거부한다', () => {
+        for (const goal of ['계속', '위와 같이', 'ㅇㅇ', '요약', 'ok']) {
+            expect(checkDelegationGoal(goal, { batch: true })).not.toBeNull();
+        }
+        expect(checkDelegationGoal('위와 같이', { batch: true })).toMatch(/맥락/);
     });
 });

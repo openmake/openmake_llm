@@ -40,10 +40,14 @@ export function getDelegationRejection(problems: readonly string[]): string {
         + `지시문 안에 모두 적어 다시 호출하세요.\n${problems.map((p) => `- ${p}`).join('\n')}`;
 }
 
-/** 부모에게 가는 위임 결과에 붙는 안내 — 서브에이전트가 "했다"고 쓴 것과 실제로 한 것은 다를 수 있다. */
+/**
+ * 부모에게 가는 위임 결과에 붙는 안내 — 서브에이전트가 "했다"고 쓴 것과 실제로 한 것은 다를 수 있다.
+ * ⚠️ "확인하라"고 쓰지 않는다 — spawn 결과 끝의 종합 지시("추가 도구를 호출하지 마세요", subagent-system)와 충돌해
+ * 같은 주제를 다시 검색하게 만든다. 단정하지 말고 출처를 구분하라는 요구만 둔다.
+ */
 export const DELEGATION_SELF_REPORT_NOTICE =
-    '[안내] 서브에이전트의 결과는 자가 보고이며 검증된 사실이 아닙니다. 결론을 좌우하는 수치·출처·"완료했다"는 주장은 '
-    + '확인하고, 확인하지 못한 내용은 서브에이전트 보고임을 밝히세요.';
+    '[안내] 이 서브에이전트 결과는 자가 보고입니다. 검증된 사실로 단정하지 말고, 최종 답에서 수치·출처·"완료했다"는 주장이 '
+    + '서브에이전트 보고에서 온 것임을 구분해 밝히세요.';
 
 /** spawn_agents 태스크의 outputSchema 인자 설명(도구 스키마에 실린다 — 기능이 켜져 있을 때만). */
 export const SPAWN_OUTPUT_SCHEMA_PARAM_DESCRIPTION =

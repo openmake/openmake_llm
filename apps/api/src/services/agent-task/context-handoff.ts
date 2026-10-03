@@ -3,14 +3,14 @@
  *
  * 종전에는 LLMClient 의 안전망(model-pool)이 요청 사본에서 오래된 메시지를 말없이 잘라냈다. 버렸다는
  * 표시도 요약도 없어, 모델은 이미 한 일을 모른 채 같은 일을 되풀이할 수 있었다.
- * 요약은 LLM 없이 기록에서 그대로 뽑는다: 원래 요청, 수행한 도구 호출(도구별 한 줄), 관련 파일 경로, 오류.
+ * 요약은 LLM 없이 기록에서 그대로 뽑는다: 사용한 도구 이름(전체), 원래 요청, 수행한 도구 호출(도구별 한 줄), 관련 파일 경로, 오류.
  * 원문은 agent_task_steps 에 그대로 남는다(대화만 줄인다).
  *
  * @module services/agent-task/context-handoff
  */
 import { CONTEXT_HANDOFF, TOOL_DIGEST } from '../../config/agent-task-context';
 import {
-    HANDOFF_SUMMARY_MARKER, HANDOFF_SECTIONS, HANDOFF_OMITTED_LINE, TOOL_DIGEST_OUTCOME,
+    HANDOFF_SUMMARY_MARKER, HANDOFF_SECTIONS, HANDOFF_OMITTED_LINE, HANDOFF_USED_TOOLS_PREFIX, TOOL_DIGEST_OUTCOME,
     getHandoffSummaryHeader, getHandoffGenericCall,
 } from '../../prompts/agent-task-context';
 import { foldedDigestOf, foldedHeadOf } from './context-fold';
@@ -19,6 +19,19 @@ import type { ChatMessage } from '../../llm/types';
 
 export function isHandoffSummary(content: string): boolean {
     return content.startsWith(HANDOFF_SUMMARY_MARKER);
+}
+
+/**
+ * PURE: 인계 요약 본문에서 정리된 구간의 도구 이름을 읽는다(첫 절 앞의 "사용한 도구" 줄). 요약이 아니면 빈 목록.
+ * 요약으로 바뀐 구간의 tool 메시지는 대화에서 사라지므로, 재개 때 사용 도구 복원은 이 줄에 기댄다.
+ */
+export function handoffUsedToolNames(content: string): string[] {
+    if (!isHandoffSummary(content)) return [];
+    for (const line of content.split('\n')) {
+        if (line.startsWith('## ')) break;
+        if (line.startsWith(HANDOFF_USED_TOOLS_PREFIX)) return line.slice(HANDOFF_USED_TOOLS_PREFIX.length).split(',').map((n) => n.trim()).filter(Boolean);
+    }
+    return [];
 }
 
 const ITEM = '- ';
@@ -62,9 +75,11 @@ export function buildHandoffSummary(dropped: ChatMessage[], request: string): st
     const calls: string[] = [];
     const files: string[] = [];
     const errors: string[] = [];
+    const tools = new Set<string>();
     let messages = 0;
     dropped.forEach((m, i) => {
         if (m.role === 'user' && isHandoffSummary(m.content)) {
+            for (const name of handoffUsedToolNames(m.content)) tools.add(name);
             calls.push(...sectionItems(m.content, HANDOFF_SECTIONS.calls));
             files.push(...sectionItems(m.content, HANDOFF_SECTIONS.files));
             errors.push(...sectionItems(m.content, HANDOFF_SECTIONS.errors));
@@ -81,6 +96,7 @@ export function buildHandoffSummary(dropped: ChatMessage[], request: string): st
             }
         }
         if (m.role !== 'tool') return;
+        if (m.tool_name) tools.add(m.tool_name);
         const line = callLine(dropped, i);
         calls.push(line);
         if (FAILED.some((f) => line.includes(f))) errors.push(line);
@@ -89,6 +105,7 @@ export function buildHandoffSummary(dropped: ChatMessage[], request: string): st
     const req = request.replace(/\s+/g, ' ').trim().slice(0, CONTEXT_HANDOFF.REQUEST_MAX_CHARS);
     return [
         getHandoffSummaryHeader(messages),
+        ...(tools.size > 0 ? [`${HANDOFF_USED_TOOLS_PREFIX}${[...tools].join(', ')}`] : []),
         ...(req ? [HANDOFF_SECTIONS.request, req] : []),
         ...section(HANDOFF_SECTIONS.calls, calls, CONTEXT_HANDOFF.MAX_CALLS),
         ...section(HANDOFF_SECTIONS.files, uniqueFiles, CONTEXT_HANDOFF.MAX_FILES),
