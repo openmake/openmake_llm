@@ -148,7 +148,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             ? wrapUntrustedToolResult(result, input.goal)
             : result;
     const execTool = (name: string, args: Record<string, unknown>): Promise<string> =>
-        getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx));
+        getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx, taskRuntime?.spillLargeResult));
     // 외부 도구(175) — 영수증을 남기고 멱등 키를 호출 문맥에 실어 실행한다(외부 MCP 클라이언트가 읽어 서버에 보낸다).
     let receiptOpen = false;
     const execWithReceipt = async (name: string, args: Record<string, unknown>, toolCallId: string | undefined): Promise<string> => {
