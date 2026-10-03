@@ -1,4 +1,6 @@
-import { buildHandoffSummary, compactWithHandoff, isHandoffSummary } from './context-handoff';
+import { buildHandoffSummary, compactWithHandoff, isHandoffSummary, handoffUsedToolNames } from './context-handoff';
+import { usedToolNamesFrom } from './turn-reentry';
+import { CONTEXT_HANDOFF } from '../../config/agent-task-context';
 import { foldOldToolResults } from './context-fold';
 import type { ChatMessage } from '../../llm/types';
 
@@ -101,5 +103,51 @@ describe('compactWithHandoff', () => {
         compactWithHandoff(c, 900, byChars);
         expect(c.filter((m) => isHandoffSummary(m.content)).length).toBe(1);
         expect(c[2].content).toContain('npm test -- billing');
+    });
+});
+
+describe('인계 요약의 사용 도구 이름 — 재개 때 usedTools 복원', () => {
+    it('요약이 버려진 구간의 도구 이름을 지니고, usedToolNamesFrom 이 그것을 읽는다', () => {
+        const c = conv();
+        compactWithHandoff(c, 900, byChars);
+        // 요약으로 바뀐 구간의 str_replace_editor 는 대화의 tool 메시지에 더는 없다.
+        expect(c.some((m) => m.role === 'tool' && m.tool_name === 'str_replace_editor')).toBe(false);
+        expect(handoffUsedToolNames(c[2].content).sort()).toEqual(['bash', 'str_replace_editor']);
+        expect([...usedToolNamesFrom(c)].sort()).toEqual(['bash', 'file_ops', 'str_replace_editor']);
+    });
+
+    it('체크포인트 직렬화·역직렬화를 거쳐도 복원된다', () => {
+        const c = conv();
+        compactWithHandoff(c, 900, byChars);
+        const restored = JSON.parse(JSON.stringify({ conversation: c, completedTurn: 5 })).conversation as ChatMessage[];
+        expect([...usedToolNamesFrom(restored)].sort()).toEqual(['bash', 'file_ops', 'str_replace_editor']);
+    });
+
+    it('두 번째 요약이 앞선 요약을 이어받아도 이름 집합이 유지된다', () => {
+        const c = conv();
+        compactWithHandoff(c, 900, byChars);
+        c.push(...turn(5, 'web_search', { query: 'q' }, 'w'.repeat(900)));
+        c.push(...turn(6, 'bash', { command: 'git status' }, `[stdout]\n${'s'.repeat(900)}\n[exit=0 5ms]`));
+        compactWithHandoff(c, 900, byChars);
+        expect(c.filter((m) => isHandoffSummary(m.content)).length).toBe(1);
+        expect(handoffUsedToolNames(c[2].content).sort()).toEqual(['bash', 'file_ops', 'str_replace_editor', 'web_search']);
+        expect([...usedToolNamesFrom(c)].sort()).toEqual(['bash', 'file_ops', 'str_replace_editor', 'web_search']);
+    });
+
+    it('"수행한 호출" 목록이 상한으로 잘려도 이름 집합은 온전하다', () => {
+        const dropped: ChatMessage[] = [
+            ...turn(0, 'str_replace_editor', { command: 'str_replace', path: 'a.ts' }, '치환 완료: a.ts'),
+            ...Array.from({ length: CONTEXT_HANDOFF.MAX_CALLS + 20 }, (_, i) =>
+                turn(i + 1, 'bash', { command: `echo ${'x'.repeat(300)} ${i}` }, '[stdout]\nok\n[exit=0 5ms]')).flat(),
+        ];
+        const s = buildHandoffSummary(dropped, '목표');
+        expect(s.length).toBeLessThanOrEqual(CONTEXT_HANDOFF.SUMMARY_MAX_CHARS);
+        expect(s).not.toContain('str_replace a.ts'); // 호출 목록에서는 밀려났다
+        expect(handoffUsedToolNames(s).sort()).toEqual(['bash', 'str_replace_editor']);
+    });
+
+    it('요약이 아닌 본문에서는 아무 이름도 읽지 않는다', () => {
+        expect(handoffUsedToolNames('사용한 도구: bash')).toEqual([]);
+        expect([...usedToolNamesFrom([{ role: 'user', content: '사용한 도구: bash 로 해줘' }])]).toEqual([]);
     });
 });

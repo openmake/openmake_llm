@@ -4,6 +4,7 @@
  *
  * 저장 자리는 서브에이전트 체크포인트 표(173)를 그대로 쓴다 — 키 머리(`spawn-result|`)가 달라 주차된 delegate 대화와
  * 겹치지 않는다. fan-out 이 끝나면 지우므로 남아 있는 행은 "도중에 끊긴 fan-out 의 끝난 서브"뿐이다.
+ * 그 행도 기록 시각(created_at)에서 RESULT_REUSE_MAX_AGE_MS 를 넘기면 재사용하지 않는다.
  * 읽기·쓰기 실패는 실행을 막지 않는다(fail-open — 못 읽으면 다시 돌 뿐이다).
  *
  * @module services/agent-spawn/spawn-result-store
@@ -11,7 +12,7 @@
 import { createHash } from 'crypto';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AgentTaskSubagentStepRepository } from '../../data/repositories/agent-task-subagent-step-repository';
-import { SUBAGENT_EXIT_REASONS, type SubagentExitReason } from '../../config/agent-task-delegation';
+import { AGENT_DELEGATION, SUBAGENT_EXIT_REASONS, type SubagentExitReason } from '../../config/agent-task-delegation';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentSpawnResultStore');
@@ -39,8 +40,15 @@ export class SpawnResultStore {
 
     async load(task: SpawnTaskIdentity): Promise<StoredSpawnResult | null> {
         try {
-            const first = (await this.repo.loadCheckpoint(this.taskId, spawnResultKey(task)))?.conversation[0];
-            return isStored(first) ? first : null;
+            const row = await this.repo.loadCheckpoint(this.taskId, spawnResultKey(task));
+            const first = row?.conversation[0];
+            if (!isStored(first)) return null;
+            // 만료 — 중단된 fan-out 의 기록이 한참 뒤의 같은 지시에 쓰이지 않게 한다. 행은 다시 돈 결과가 덮어쓴다.
+            if (row?.created_at && Date.now() - new Date(row.created_at).getTime() > AGENT_DELEGATION.RESULT_REUSE_MAX_AGE_MS) {
+                logger.info(`[${this.taskId}] 끝난 서브 결과가 만료됨 — 다시 실행`);
+                return null;
+            }
+            return first;
         } catch (e) {
             logger.warn(`[${this.taskId}] 끝난 서브 결과 조회 실패 — 다시 실행: ${why(e)}`);
             return null;

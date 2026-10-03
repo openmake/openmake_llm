@@ -35,6 +35,12 @@ export function getHandoffSummaryHeader(droppedMessages: number): string {
         + '아래는 그 구간의 기록에서 그대로 뽑은 것입니다. 이미 한 일을 되풀이하지 말고 이어서 진행하세요.';
 }
 
+/**
+ * 인계 요약의 둘째 줄 머리 — 정리된 구간에서 쓴 도구 이름 전체(쉼표로 구분). 호출 목록은 상한으로 잘리지만 이 줄은 온전하다.
+ * 재개 때 이 줄에서 사용 도구를 복원한다(context-handoff 의 handoffUsedToolNames) — 머리 문구를 바꾸면 그 전의 체크포인트는 읽히지 않는다.
+ */
+export const HANDOFF_USED_TOOLS_PREFIX = '사용한 도구: ';
+
 /** 목록이 상한을 넘어 앞쪽을 뺐을 때의 한 줄. */
 export const HANDOFF_OMITTED_LINE = '- … 더 오래된 항목은 생략';
 
