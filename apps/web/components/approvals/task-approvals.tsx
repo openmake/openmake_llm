@@ -12,7 +12,7 @@
  *
  * @see app/(workspace)/approvals/page.tsx
  */
-import { ApprovalArgsFull, summarizeApprovalArgs } from "./approval-args";
+import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "./approval-args";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -20,7 +20,6 @@ import { Check, X, Loader2, MessageCircleQuestion, Wrench, ExternalLink } from "
 import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
-import { DiffView } from "@/components/chat/diff-view";
 import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
 import { onAgentTaskChange } from "@/lib/agent-task-change";
 
@@ -202,12 +201,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 {elicit.jsonExample && <> · {t("tasks.elicitJsonHint", { example: elicit.jsonExample })}</>}
               </p>
             )}
-            {a.preview && (
-              <details className="mt-2">
-                <summary className="cursor-pointer text-xs text-accent">{t("tasks.preview")}</summary>
-                <div className="mt-1"><DiffView text={a.preview} /></div>
-              </details>
-            )}
+            <ApprovalPreview toolName={a.toolName} preview={a.preview} diffLabel={t("tasks.preview")} procedureLabel={t("tasks.procedurePreview")} />
 
             {isQuestion && (
               <input

@@ -22,7 +22,7 @@ import { ServedModelBadge } from "./served-model-badge";
 import { ToolCallCards } from "./tool-call-cards";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
-import { ApprovalArgsFull, summarizeApprovalArgs } from "@/components/approvals/approval-args";
+import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "@/components/approvals/approval-args";
 import { isNearBottom } from "@/lib/chat-scroll";
 import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 
@@ -131,12 +131,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
               <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
               <span className="ml-2 break-all text-xs text-muted">{summary.text}</span>
               <ApprovalArgsFull full={summary.full} label={t("approvals.fullArgs", { chars: summary.full?.length ?? 0 })} />
-              {a.preview && (
-                <details className="mt-1">
-                  <summary className="cursor-pointer text-[11px] text-accent">{t("approvals.preview")}</summary>
-                  <div className="mt-1"><DiffView text={a.preview} /></div>
-                </details>
-              )}
+              <ApprovalPreview toolName={a.toolName} preview={a.preview} diffLabel={t("approvals.preview")} procedureLabel={t("approvals.procedurePreview")} compact />
             </div>
             <div className="flex shrink-0 gap-1">
               <button
@@ -344,7 +339,7 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
       </div>
       <div className="flex flex-col gap-2.5 px-3.5 py-3">
         {task.goal && (
-          <p className="text-xs text-muted"><span className="font-semibold text-fg-2">{t("agentTask.goal")}</span>&nbsp; {task.goal}</p>
+          <p className="break-words text-xs text-muted"><span className="font-semibold text-fg-2">{t("agentTask.goal")}</span>&nbsp; {task.goal}</p>
         )}
         {showProgress && (
           <div className="flex items-center gap-2.5">
