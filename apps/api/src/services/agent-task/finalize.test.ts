@@ -372,9 +372,10 @@ describe('finalizeTask — 검증 증거 원장', () => {
             await run(ls());
             expect(testsMock).toHaveBeenCalledTimes(1);
         });
-        it('편집 뒤 테스트가 통과한 기록이 있어도 다시 돌린다', async () => {
+        it('편집 뒤 테스트가 통과한 기록이 있어도 다시 돌린다(증거를 넘기지 않는다)', async () => {
             await run([...edit(), ...testPass()]);
             expect(testsMock).toHaveBeenCalledTimes(1);
+            expect(testsMock.mock.calls[0][5]).toBeUndefined();
         });
     });
 
@@ -386,12 +387,23 @@ describe('finalizeTask — 검증 증거 원장', () => {
             expect(testsMock).not.toHaveBeenCalled();
             expect(out.kind).toBe('completed');
         });
-        it('마지막 편집 이후 테스트가 통과했으면 다시 돌리지 않고, 그 사실을 진행 표시로 남긴다', async () => {
+        it('마지막 편집 이후 전체 테스트가 통과했으면 그 러너를 게이트에 넘기고, 게이트가 건너뛰면 그 사실을 진행 표시로 남긴다', async () => {
             const emitStep = jest.fn();
+            testsMock.mockImplementationOnce(async (_r, _t, _u, n) => ({ ran: false, ok: true, report: '', stepNumber: n, runner: 'npm', provenSkip: true }));
             const out = await run([...edit(), ...testPass()], emitStep);
-            expect(testsMock).not.toHaveBeenCalled();
+            expect(testsMock.mock.calls[0][5]).toBe('npm');
             expect(out.kind).toBe('completed');
             expect(emitStep).toHaveBeenCalledWith('test_verify', undefined, expect.stringContaining('npm test'));
+        });
+        it('증거가 있어도 게이트가 다른 러너를 감지해 돌렸고 실패했으면 수정 턴을 준다', async () => {
+            testsMock.mockImplementationOnce(async (_r, _t, _u, n) => ({ ran: true, ok: false, report: 'FAIL', stepNumber: n + 1, runner: 'pytest' }));
+            const out = await run([...edit(), ...testPass()]);
+            expect(out.kind).toBe('verify_retry');
+        });
+        it('일부 테스트만 돌린 기록은 증거로 넘기지 않는다', async () => {
+            await run([...edit(), ...call('bash', { command: 'npx jest a.test.ts' }, '[stdout]\nPASS\n[exit=0 900ms]')]);
+            expect(testsMock).toHaveBeenCalledTimes(1);
+            expect(testsMock.mock.calls[0][5]).toBeUndefined();
         });
         it('테스트 뒤에 다시 편집했으면(낡은 증거) 돌린다', async () => {
             await run([...edit(), ...testPass(), ...edit()]);

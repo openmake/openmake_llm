@@ -57,7 +57,7 @@ export function getWriteFailureFootnote(paths: readonly string[], rest: number):
 /** 검증 증거 원장 — 테스트 게이트를 돌리지 않은 이유(진행 표시·로그). */
 export const VERIFY_EVIDENCE_SKIP_NOTES = {
     no_change: () => '테스트 게이트: 파일을 바꾼 기록이 없어 돌리지 않음',
-    fresh_pass: (command: string) => `테스트 게이트: 마지막 변경 이후 성공한 검증 기록이 있어 다시 돌리지 않음 (${command})`,
+    fresh_pass: (command: string) => `테스트 게이트: 마지막 변경 이후 통과한 전체 테스트 실행 기록이 있어 다시 돌리지 않음 (${command})`,
 } as const;
 
 /** ask_human 도구 설명·인자 설명(구조화 질문). 기본 설명 뒤에 붙는다. */

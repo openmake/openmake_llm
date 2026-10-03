@@ -183,12 +183,14 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     }
     // workspace 테스트 게이트 — 레포에 이미 있는 러너만 1회 실행(없으면 no-op). 파일을 편집한 작업 한정.
     // 재시도 카운터는 deliverable 검증과 공유(둘 다 verifyRetries++) — 합산 상한으로 무한루프 방지.
+    const evidence = VERIFY_EVIDENCE.ENABLED && input.conversation ? collectVerificationEvidence(input.conversation) : null;
     if (taskRuntime
         && AGENT_TASK_LIMITS.WORKSPACE_TEST_GATE_ENABLED
         && verifyRetries < AGENT_TASK_LIMITS.WORKSPACE_TEST_MAX_RETRIES
-        && !testGateUnneeded(input.conversation, taskId, emitStep)) {
-        const tests = await verifyWorkspaceTests(taskRuntime, taskId, usedTools, stepNumber, signal);
+        && !noteTestGateSkip(evidence && !evidence.mutated ? VERIFY_EVIDENCE_SKIP_NOTES.no_change() : null, taskId, emitStep)) {
+        const tests = await verifyWorkspaceTests(taskRuntime, taskId, usedTools, stepNumber, signal, evidence?.freshPass?.runner);
         stepNumber = tests.stepNumber;
+        noteTestGateSkip(tests.provenSkip && evidence?.freshPass ? VERIFY_EVIDENCE_SKIP_NOTES.fresh_pass(evidence.freshPass.command) : null, taskId, emitStep);
         emitStepIfRan(tests, emitStep);
         if (tests.ran && !tests.ok) {
             logger.info(`[AgentTask] 테스트 게이트 실패 → 수정 유도: ${taskId} (${tests.runner}, 재시도 ${input.verifyRetries + 1})`);
@@ -265,16 +267,10 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
 }
 
 /**
- * 검증 증거 원장(기본 꺼짐, VERIFY_EVIDENCE.ENABLED) — 대화 기록상 테스트 게이트를 돌릴 필요가 없으면 true.
- * 파일을 바꾼 흔적이 없거나, 마지막 변경 이후 성공한 검증 기록이 있을 때다. 꺼져 있거나 대화가 없으면 false(종전대로 돌린다).
+ * 검증 증거 원장(VERIFY_EVIDENCE.ENABLED) — 테스트 게이트를 돌리지 않은 이유(note)를 로그와 진행 표시로 남긴다. 남겼으면 true.
+ * 이유는 둘이다: 파일을 바꾼 흔적이 없거나(게이트를 부르지 않는다), 마지막 변경 이후 같은 러너의 전체 실행이 통과했거나(게이트가 러너를 확인한 뒤 건너뛴다).
  */
-function testGateUnneeded(
-    conversation: FinalizeInput['conversation'], taskId: string, emitStep: FinalizeInput['emitStep'],
-): boolean {
-    if (!VERIFY_EVIDENCE.ENABLED || !conversation) return false;
-    const ev = collectVerificationEvidence(conversation);
-    const note = !ev.mutated ? VERIFY_EVIDENCE_SKIP_NOTES.no_change()
-        : ev.freshPass ? VERIFY_EVIDENCE_SKIP_NOTES.fresh_pass(ev.freshPass) : null;
+function noteTestGateSkip(note: string | null, taskId: string, emitStep: FinalizeInput['emitStep']): boolean {
     if (note === null) return false;
     logger.info(`[AgentTask] ${note}: ${taskId}`);
     emitStep('test_verify', undefined, note);

@@ -103,32 +103,42 @@ export const CODE_EXEC_TOOLS: readonly string[] = ['bash', 'python_execute'];
 /**
  * 검증 증거 원장 — 완료 관문의 workspace 테스트 게이트가 대화 기록을 보고 재실행 여부를 정한다.
  *   - 파일을 바꾼 흔적이 없으면(읽기만 한 작업, `ls` 만 한 bash) 게이트를 돌리지 않는다.
- *   - 마지막 변경 이후에 테스트·빌드 명령이 성공한 기록이 있으면 다시 돌리지 않는다. 변경보다 오래된 기록은 낡은 것이다.
- * 판정을 느슨하게 만드는 변경이라 **기본 꺼짐**이다 — 꺼져 있으면 종전대로 쓰기 도구를 쓴 작업은 무조건 다시 돌린다.
- * 모델이 일부 테스트만 돌린 것(`npx jest a.test.ts`)도 증거로 치므로, 켜기 전에 운영 기록으로 생략 건을 확인할 것.
+ *   - 마지막 변경 이후에 **게이트가 돌릴 것과 같은 테스트 실행**이 성공한 기록이 있으면 다시 돌리지 않는다.
+ *     변경보다 오래된 기록은 낡은 것이다.
+ * 증거로 치는 것은 좁다(FULL_TEST_RUN_RES): 작업 공간 루트에서, 게이트의 러너(npm·pytest·go)를, 대상을 고르는 인자 없이
+ * 전체로 돌려 종료 코드 0 으로 끝난 명령뿐이다. 일부 테스트 실행·빌드·린트·다른 러너는 증거가 아니고, 감지된 러너가
+ * 증거의 러너와 다르면 게이트를 그대로 돌린다(workspace-test-verify).
  * AGENT_TASK_VERIFY_EVIDENCE=true 로 켠다.
  */
 export const VERIFY_EVIDENCE = {
     ENABLED: process.env.AGENT_TASK_VERIFY_EVIDENCE === 'true',
     /** 실행만으로 파일을 바꿨을 수 있다고 보는 도구(성공·실패 무관). bash 는 명령을 보고 가른다. */
-    MUTATING_TOOLS: ['python_execute', 'skill_run', 'spawn_agents'] as readonly string[],
+    MUTATING_TOOLS: ['python_execute', 'skill_run', 'spawn_agents', 'delegate'] as readonly string[],
+    /** 증거가 되는 명령 앞에 붙어도 되는 환경변수 — 실행 범위를 바꾸지 않는 것만(PYTEST_ADDOPTS 같은 것은 대상을 고른다). */
+    EVIDENCE_ENV_RE: /^CI=\S+$/,
+    /** 작업 공간 루트로 가는 cd. 다른 곳으로 간 뒤의 테스트는 게이트(루트에서 실행)와 범위가 달라 증거가 아니다. */
+    ROOT_CD_RE: /^cd\s+(?:\/workspace\/?|\.\/?)$/,
 } as const;
 
-/** 검증(테스트·빌드·타입 검사) 명령 — 한 명령(&& 로 이은 한 토막)의 앞머리에 맞춘다. */
-export const VERIFY_COMMAND_RES: readonly RegExp[] = [
-    /^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|build|lint|typecheck|check)\b/,
-    /^(?:npx\s+)?(?:jest|vitest|mocha|tsc|eslint)\b/,
-    /^(?:python3?\s+-m\s+)?pytest\b/,
-    /^python3?\s+-m\s+unittest\b/,
-    /^go\s+(?:test|build|vet)\b/,
-    /^cargo\s+(?:test|build|check)\b/,
-    /^make\s+(?:test|build|check)\b/,
-    /^(?:mvn|gradle|\.\/gradlew)\s+(?:test|build)\b/,
-];
+/** 테스트 게이트의 러너(workspace-test-verify 의 RUNNER_COMMANDS 와 같은 키). */
+export type GateTestRunner = 'npm' | 'pytest' | 'go';
+
+/**
+ * 전체 실행 형태의 테스트 명령 — 한 토막 전체에 맞춘다(끝까지). 대상을 고르거나(-k, 경로, -run, `-- 인자`) 아무것도 돌리지 않을 수
+ * 있는 인자(--collect-only, --if-present, --passWithNoTests)가 붙으면 맞지 않는다. 허용하는 것은 출력 모양만 바꾸는 인자다.
+ */
+export const FULL_TEST_RUN_RES: Readonly<Record<GateTestRunner, RegExp>> = {
+    npm: /^(?:npm|pnpm|yarn)\s+(?:run\s+)?test(?:\s+(?:--silent|-s))*$/,
+    pytest: /^(?:python3?\s+-m\s+)?pytest(?:\s+(?:-q+|-v+|-x|-s|-ra|--no-header|--tb=\w+|--color=\w+|-p\s+no:cacheprovider))*$/,
+    go: /^go\s+test(?:\s+(?:-v|-count=1))*\s+\.\/\.\.\.$/,
+};
 
 /** 파일을 바꾸지 않는 셸 명령 — 한 토막의 앞머리에 맞춘다. 여기에 없으면 바꿨을 수 있다고 본다. */
 export const READ_ONLY_COMMAND_RES: readonly RegExp[] = [
-    /^(?:ls|cat|head|tail|grep|egrep|fgrep|rg|pwd|wc|echo|printf|which|file|stat|tree|du|df|date|env|whoami|sort|uniq|cut|diff|cmp|test|\[|true|cd|nl|basename|dirname|realpath)\b/,
+    /^(?:ls|cat|head|tail|grep|egrep|fgrep|rg|pwd|wc|echo|printf|which|file|stat|tree|du|df|date|whoami|cut|diff|cmp|test|\[|true|cd|nl|basename|dirname|realpath)\b/,
+    /^env$/, // 인자가 붙은 env 는 다른 명령을 실행한다
+    /^sort\b(?!.*\s(?:-o|--output)\b)/,
+    /^uniq(?:\s+-\S+)*(?:\s+[^-\s]\S*)?$/, // 파일 인자가 둘이면 둘째는 출력 파일이다
     /^find\b(?!.*\s-(?:delete|exec|execdir|ok|fprint)\b)/,
     /^sed\s+-n\b(?!.*\s-i)/,
     /^git\s+(?:status|log|diff|show|branch|rev-parse|ls-files|blame|remote)\b/,
