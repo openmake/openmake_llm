@@ -15,6 +15,7 @@ import { createLogger } from '../../utils/logger';
 import { AgentTaskService } from '../AgentTaskService';
 import { getPushService } from '../PushService';
 import { dispatchAgentTask } from './task-queue';
+import { getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { publishScheduleOutput } from './schedule-publish';
 import { computeNextRun } from './schedule-cron';
 import { scheduleFireKey, isPreviousRunActive } from './schedule-fire';
@@ -91,6 +92,8 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
             // 무인 예약은 사람이 기다리는 실행보다 뒤로(131)
             priority: AGENT_TASK_LIMITS.QUEUE_PRIORITY_SCHEDULED,
             run: async () => {
+                // 무인 표시 — 정책을 올린 예약에서 승인이 필요한 호출을 30분 기다리지 않고 설정된 결론으로 끝낸다(config/agent-task-approval).
+                getApprovalRegistry().setUnattended(taskId, true);
                 await service.execute({
                     taskId, goal: s.goal, userId: String(s.user_id), userRole: role, maxTurns: s.max_turns,
                     // 예약 task 는 무인 실행 — 사람이 승인할 수 없으므로 승인정책을 분리(기본 none).

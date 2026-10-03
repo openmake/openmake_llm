@@ -24,6 +24,7 @@ import { classifyToolRisk, policyRequiresApproval, isThirdPartyTool, HITL_ALWAYS
 import { AgentTaskApprovalRepository, hashApprovalArgs, type ApprovalRow } from '../../data/repositories/agent-task-approval-repository';
 import { getConfig } from '../../config/env';
 import { AGENT_TASK_LIMITS, APPROVAL_RECENT_WINDOW_MS } from '../../config/runtime-limits';
+import { UNATTENDED_APPROVAL_OUTCOME, resolveUnattendedOutcome } from '../../config/agent-task-approval';
 
 const logger = createLogger('TaskApprovalGate');
 
@@ -59,8 +60,9 @@ type ApprovalDecision = 'approved' | 'rejected';
 /** 거절 사유 — 'timeout'(무응답 만료) 은 사용자 부재 신호로, 명시 거절('user')과 달리
  *  HITL 무응답 강등(연속 N회 시 승인 필요 도구 제거 → 산출물 유도)의 카운트 대상이다.
  *  'parked'(F16.7): 질문형 승인이 만료됐지만 AGENT_TASK_HITL_PARK_ON_TIMEOUT 이라 저장소에 pending 으로 남긴 경우 —
- *  호출부는 작업을 주차(AgentTaskParked)하고, 답이 오면 재개된 작업이 같은 호출에서 결정을 이어받는다. */
-export type ApprovalRejectReason = 'timeout' | 'user' | 'abort' | 'parked';
+ *  호출부는 작업을 주차(AgentTaskParked)하고, 답이 오면 재개된 작업이 같은 호출에서 결정을 이어받는다.
+ *  'unattended': 무인 작업(예약 실행)이라 기다리지 않고 설정된 결론으로 끝낸 경우 — 사용자의 거절이 아니다. */
+export type ApprovalRejectReason = 'timeout' | 'user' | 'abort' | 'parked' | 'unattended';
 
 /** 승인 요청의 해소 결과 — 결정 + (ask_human 자유텍스트 응답 시) 사용자 답변 본문. */
 interface ApprovalResult {
@@ -143,6 +145,8 @@ export class ApprovalRegistry {
     private seq = 0;
     /** task 자동승인(4-2) — 사용자가 "나머지 모두 승인"을 누른 task 집합. 종료 시 해제. */
     private autoApproveTasks = new Set<string>();
+    /** 무인 작업(예약 실행) — 승인할 사람이 없어 승인 요청을 기다리지 않고 설정된 결론으로 끝낸다. 메모리뿐이라 재시작 뒤 재개분은 종전처럼 기다린다. */
+    private unattendedTasks = new Set<string>();
 
     constructor(private readonly store?: ApprovalStore) {}
 
@@ -195,6 +199,11 @@ export class ApprovalRegistry {
 
     isAutoApprove(taskId: string): boolean { return this.autoApproveTasks.has(taskId); }
 
+    /** 무인 작업 표시 — 예약 실행이 시작 전에 켠다. 작업 종료(closeTask) 때 풀린다. */
+    setUnattended(taskId: string, enabled: boolean): void {
+        if (enabled) this.unattendedTasks.add(taskId); else this.unattendedTasks.delete(taskId);
+    }
+
     /** 이 호출이 자동승인으로 대기 없이 통과하는가 — 바닥 검사가 전체 허용보다 먼저다. 선실행·서브 도구 선별도 이 판정을 쓴다. */
     autoApproves(taskId: string, toolName: string, args: Record<string, unknown>): boolean {
         return this.autoApproveTasks.has(taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(toolName) && approvalFloorReason(toolName, args) === null;
@@ -226,6 +235,14 @@ export class ApprovalRegistry {
     ): Promise<ApprovalResult> {
         if (this.autoApproves(input.taskId, input.toolName, input.args)) {
             return { decision: 'approved', waitedMs: 0 };
+        }
+        // 무인 작업 — 기다려도 승인할 사람이 없다. 질문 도구는 종전대로 답을 기다린다(예약의 기본 동작을 바꾸지 않는다).
+        if (this.unattendedTasks.has(input.taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)) {
+            const outcome = resolveUnattendedOutcome(UNATTENDED_APPROVAL_OUTCOME, approvalFloorReason(input.toolName, input.args) !== null);
+            if (outcome !== 'wait') {
+                logger.info(`[${input.taskId}] 무인 실행 — 승인 대기 없이 ${outcome === 'approve' ? '통과' : '거절'}: ${input.toolName}`);
+                return outcome === 'approve' ? { decision: 'approved', waitedMs: 0 } : { decision: 'rejected', reason: 'unattended', waitedMs: 0 };
+            }
         }
         // 재시작 후 이어받기(124): 같은 호출에 이미 내려진 결정이 있으면 대기 없이 소비하고,
         // 살아 있는 pending 이 있으면 그 id 를 그대로 써서 승인함의 항목이 바뀌지 않게 한다.
@@ -357,6 +374,7 @@ export class ApprovalRegistry {
     /** 작업 종료 시 저장소에 남은 pending 정리(124) — 메모리 waiter 는 signal abort 가 이미 해소했다. */
     closeTask(taskId: string): void {
         this.autoApproveTasks.delete(taskId);
+        this.unattendedTasks.delete(taskId);
         void this.persist((s) => s.expirePendingForTask(taskId));
     }
 }

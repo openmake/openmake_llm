@@ -43,3 +43,27 @@ export const APPROVAL_FLOOR: ReadonlySet<ApprovalFloorKind> = new Set(parseAppro
 export const INSTRUCTION_FILE_PATTERNS: readonly string[] = (process.env.AGENT_TASK_INSTRUCTION_FILE_PATTERNS
     ?? 'AGENTS.md,AGENTS.override.md,CLAUDE.md,CLAUDE.local.md,GEMINI.md,.cursorrules,.windsurfrules,.clinerules,.github/copilot-instructions.md,.cursor/rules/**,.claude/**')
     .split(',').map((s) => s.trim()).filter(Boolean);
+
+/**
+ * 무인 실행(예약 실행)의 승인 결론 — 승인할 사람이 없는 작업에서 승인이 필요한 호출을 어떻게 끝낼지.
+ *   reject  기다리지 않고 거절하고 이유를 모델에 알린다(기본)
+ *   approve 기다리지 않고 통과시킨다. 바닥 호출(위 APPROVAL_FLOOR)은 이때도 거절한다
+ *   wait    종전 동작 — 승인 대기 상한(TASK_SANDBOX_APPROVAL_TIMEOUT_MS, 기본 30분)까지 사람을 기다린다
+ * 예약의 기본 승인 정책은 none(전부 자동)이라 승인 자체가 생기지 않는다 — 정책을 올린 예약
+ * (AGENT_TASK_SCHEDULE_APPROVAL_POLICY=high-risk|all)에서만 달라진다. 질문 도구(ask_human·mcp_elicit)는 대상이 아니다.
+ * AGENT_TASK_UNATTENDED_APPROVAL 로 고른다.
+ */
+export type UnattendedApprovalOutcome = 'reject' | 'approve' | 'wait';
+
+/** PURE: 환경변수 값 → 결론. 모르는 값은 reject. */
+export function parseUnattendedApprovalOutcome(raw: string | undefined): UnattendedApprovalOutcome {
+    const v = raw?.trim().toLowerCase();
+    return v === 'approve' || v === 'wait' ? v : 'reject';
+}
+
+/** PURE: 호출 하나의 결론 — 바닥 호출은 approve 설정에서도 거절한다(바닥 검사가 전체 허용보다 먼저). */
+export function resolveUnattendedOutcome(mode: UnattendedApprovalOutcome, isFloorCall: boolean): UnattendedApprovalOutcome {
+    return mode === 'approve' && isFloorCall ? 'reject' : mode;
+}
+
+export const UNATTENDED_APPROVAL_OUTCOME = parseUnattendedApprovalOutcome(process.env.AGENT_TASK_UNATTENDED_APPROVAL);
