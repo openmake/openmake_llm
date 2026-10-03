@@ -25,6 +25,8 @@ import { ApiClient, type ApiTask, type ApiTaskStep, type ShareDocument } from '.
 const BRIDGE_REGISTER_POLL_MS = 500;
 /** 브리지 등록 확인 최대 시도 횟수(간격 × 횟수 ≈ 대기 상한). */
 const BRIDGE_REGISTER_MAX_ATTEMPTS = 20;
+/** 실행 확인 창에 먼저 보이는 명령 글자 수 — 넘으면 전체 보기(v)를 안내한다. */
+const CONFIRM_PREVIEW_CHARS = 800;
 /** 작업 진행 상태 폴링 간격(ms). */
 const TASK_POLL_INTERVAL_MS = 2000;
 
@@ -36,11 +38,17 @@ function prompt(q: string): Promise<string> {
 /** 터미널 confirmExec — 대화형이면 y/a/n, 비대화형(TTY 아님)이면 자동 거부(fail-safe). */
 const terminalConfirm: ConfirmFn = async (command, taskId, folderRoot) => {
     if (!process.stdin.isTTY) return 'no';
-    process.stdout.write(`\n\x1b[33m⚠ 에이전트가 셸 명령을 실행하려 합니다\x1b[0m (폴더: ${folderRoot})\n  ${command.slice(0, 800)}\n`);
-    const opt = taskId ? 'y=실행 / a=이 작업 동안 모두 / n=거부' : 'y=실행 / n=거부';
-    const ans = (await prompt(`  ${opt}: `)).toLowerCase();
-    if (ans === 'a' && taskId) return 'all';
-    return ans === 'y' || ans === 'yes' ? 'yes' : 'no';
+    // 긴 명령은 앞부분만 보이되 잘렸음을 알리고, 전문을 본 뒤 정하게 한다 — 뒤쪽을 못 본 채 허용하지 않게.
+    const cut = command.length > CONFIRM_PREVIEW_CHARS;
+    const shown = cut ? `${command.slice(0, CONFIRM_PREVIEW_CHARS)}\n  \x1b[33m… 전체 ${command.length}자 중 ${CONFIRM_PREVIEW_CHARS}자만 표시 (v=전체 보기)\x1b[0m` : command;
+    process.stdout.write(`\n\x1b[33m⚠ 에이전트가 셸 명령을 실행하려 합니다\x1b[0m (폴더: ${folderRoot})\n  ${shown}\n`);
+    const opt = `${taskId ? 'y=실행 / a=이 작업 동안 모두 / n=거부' : 'y=실행 / n=거부'}${cut ? ' / v=전체 보기' : ''}`;
+    for (;;) {
+        const ans = (await prompt(`  ${opt}: `)).toLowerCase();
+        if (ans === 'v' && cut) { process.stdout.write(`\n${command}\n\n`); continue; }
+        if (ans === 'a' && taskId) return 'all';
+        return ans === 'y' || ans === 'yes' ? 'yes' : 'no';
+    }
 };
 
 async function cmdLogin(): Promise<void> {
