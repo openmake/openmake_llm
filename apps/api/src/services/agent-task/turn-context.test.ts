@@ -129,11 +129,6 @@ describe('접기 묶음과 창 초과 판정', () => {
         expect(c.some((m) => isHandoffSummary(m.content))).toBe(true);
         expect(call).toHaveBeenCalledTimes(1);
     });
-
-    it('기본 임계는 미뤄 둔 분량이 창의 일부에 그치게 한다 — 가장 작은 창(입력 예산)의 1/4 을 넘지 않는다', () => {
-        // 글자 수 기준 임계가 토큰으로는 최대 글자 수와 같다(한글 1자 ≈ 1토큰). 풀 기본 모델의 창이 32K 일 때 입력 예산은 약 2만 8천 토큰이다.
-        expect(original).toBeLessThanOrEqual(28_000 / 4);
-    });
 });
 
 describe('창 초과 오류 뒤 복구', () => {

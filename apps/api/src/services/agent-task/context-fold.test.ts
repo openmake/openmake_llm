@@ -1,4 +1,5 @@
-import { foldOldToolResults, isFoldedToolResult, FOLD_MARKER } from './context-fold';
+import { foldOldToolResults, foldedDigestOf, foldedHeadOf, isFoldedToolResult, FOLD_MARKER } from './context-fold';
+import { getToolResultSpillNotice } from '../../prompts/agent-task-context';
 import type { ChatMessage } from '../../llm/types';
 
 const OPTS = { keepTurns: 2, minChars: 100, headChars: 40 };
@@ -31,6 +32,23 @@ describe('foldOldToolResults', () => {
         // 재읽기 유도 금지 — "다시 호출하세요" 문구가 같은 파일 25턴 반복 읽기를 유도했다(2026-09-09 실측)
         expect(tools[0].content).not.toContain('다시 호출');
         expect(tools[0].content).toContain('다시 읽지 마세요');
+    });
+
+    it('파일로 보관한 결과(미리보기 + 경로 안내)를 접어도 보관 경로는 스텁에 남는다', () => {
+        const c = conv(4);
+        const path = '.tool-results/bash-1a2b3c4d.txt';
+        const tool = c.filter((m) => m.role === 'tool')[0];
+        tool.content = `[stdout]\n${'row\n'.repeat(300)}[exit=0 5ms]\n${getToolResultSpillNotice(path, 132015, 6002, 180)}`;
+        foldOldToolResults(c, OPTS);
+        expect(isFoldedToolResult(tool.content)).toBe(true);
+        expect(tool.content.split('\n')[0]).toContain(path);
+        // 다시 실행하라고 하지 않는다(재읽기 루프 방지 문구는 그대로)
+        expect(tool.content).not.toContain('다시 호출');
+        // 스텁의 다른 읽기(한 줄 요약·앞부분)는 그대로 동작한다
+        expect(foldedHeadOf(tool.content).startsWith('[stdout]')).toBe(true);
+        expect(foldedDigestOf(tool.content) ?? '').not.toContain(path);
+        // 보관하지 않은 결과의 스텁에는 경로 문구가 없다
+        expect(c.filter((m) => m.role === 'tool')[1].content).not.toContain('.tool-results');
     });
 
     it('아직 keepTurns 를 넘는 턴이 없으면 아무 것도 접지 않는다', () => {
@@ -78,6 +96,20 @@ describe('foldOldToolResults', () => {
         const st = foldOldToolResults(c, { ...OPTS, minBatchSavedChars: 600 });
         expect(st.folded).toBe(2);
         expect(st.savedChars).toBeGreaterThanOrEqual(600);
+    });
+
+    it('묶음 임계 — 미뤄 둔 분량은 언제나 임계 미만이다(대화가 임계보다 더 부풀지 않는다)', () => {
+        const threshold = 1500;
+        const c = conv(0);
+        for (let t = 0; t < 20; t++) {
+            c.push({ role: 'assistant', content: '', tool_calls: [{ id: `c${t}`, type: 'function', function: { name: 'bash', arguments: {} } }] });
+            c.push({ role: 'tool', content: `turn${t} ` + 'y'.repeat(300 + (t % 4) * 200), tool_name: 'bash', tool_call_id: `c${t}` });
+            foldOldToolResults(c, { ...OPTS, minBatchSavedChars: threshold });
+            // 지금 임계 없이 접으면 회수될 분량 = 미뤄 둔 분량
+            const deferred = foldOldToolResults(c.map((m) => ({ ...m })), { ...OPTS, minBatchSavedChars: 0 }).savedChars;
+            expect(deferred).toBeLessThan(threshold);
+        }
+        expect(c.filter((m) => m.role === 'tool' && isFoldedToolResult(m.content)).length).toBeGreaterThan(0);
     });
 
     it('묶음 임계 기본값(0)은 종전 동작과 같다', () => {
