@@ -62,6 +62,9 @@ async function main(): Promise<void> {
     const { getUnifiedDatabase } = await import('../data/models/unified-database');
     const { AgentTaskService } = await import('../services/AgentTaskService');
     const db = getUnifiedDatabase();
+    // 스키마 초기화의 좀비 정리(running → failed 'server restarted')가 끝난 뒤에 첫 과제를 시작한다 —
+    // 기다리지 않으면 방금 running 이 된 첫 과제가 정리 대상이 되어 완료 기록이 거부된다.
+    await db.ensureReady();
     const runs: AblationRun[] = [];
 
     for (let rep = 0; rep < repeats; rep++) {

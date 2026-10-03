@@ -333,5 +333,5 @@ NIGHTLY_EVAL_AGENT_TASKS=1 scripts/nightly-eval.sh # 야간 실행에 포함(기
 - 과제: 계산·파일 편집·CSV 집계·엑셀·워드·한글 PDF·업로드 HTML 요약·파이썬 버그 수정. 제품이 안내하는 대표 사용을 네트워크 없이 끝나는 작은 과제로 옮긴 것이다. 기대 과정(`spec`)은 사용자 의도 기준: 검색·브라우저 미사용, 실행 도구 호출 상한. 과제에 `files` 를 주면 `uploads/` 에 놓인다.
 - 임계: `OMK_EVAL_AGENT_TASK_COMPLETED_THRESHOLD`(기본 0.8), `OMK_EVAL_AGENT_TASK_PROCESS_THRESHOLD`(기본 0.9).
 - 전제: `.env` 의 DB·모델 접속, 샌드박스(`TASK_SANDBOX_ENABLED=true`, docker, task-runtime 이미지). Colima 는 홈 아래만 마운트하므로 `TASK_SANDBOX_ROOT` 를 홈 아래로 둔다. 작업 행은 DB 에 남는다(실행 사용자 `OMK_EVAL_ABLATION_USER_ID`).
-- 첫 실행(2026-10-03, retired-chat-model): 완료 7/8, 과정 통과 8/8, 평균 40,274토큰·3.1턴. 실패 1건(`sum-of-squares`)은 judge 가 달성으로 판정했는데 완료 기록 직전에 작업 상태가 이미 `failed` 여서 전이가 거부됐다 — 같은 DB 를 쓰는 개발 API 서버가 떠 있는 상태에서 돌린 실행이었고, 원인은 확인하지 못했다. 같은 과제는 앞선 실험 9회에서 모두 완료됐다.
+- 첫 실행(2026-10-03, retired-chat-model): 완료 7/8, 과정 통과 8/8, 평균 40,274토큰·3.1턴. 실패 1건(`sum-of-squares`)은 judge 가 달성으로 판정했는데 완료 기록 직전에 작업 상태가 이미 `failed` 여서 전이가 거부됐다. 원인은 실행 스크립트가 스키마 초기화를 기다리지 않아, 초기화의 좀비 정리(`running` → `failed`)가 방금 시작한 첫 과제를 건드린 것이다 — 지금은 첫 과제 전에 `ensureReady()` 를 기다린다. 같은 과제는 앞선 실험 9회에서 모두 완료됐다.
 - 과제는 운영 사용 기록이 아니라 제품 안내와 로컬 기록 1건(업로드 HTML 분석)에서 골랐다. 운영에서 자주 쓰이는 과제가 따로 있으면 이 파일에 더한다.
