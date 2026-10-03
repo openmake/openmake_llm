@@ -34,6 +34,16 @@ export const AGENT_TASK_TURN_LOOP = {
     /** 한 턴 내 중복 호출 제거 — 한 응답 안에 이름·인자가 같은 읽기·검색 호출이 여럿이면 한 번만 실행하고
      *  나머지에는 앞선 호출을 가리키는 짧은 결과를 준다. 부작용 있는 도구는 대상이 아니다. AGENT_TASK_DEDUPE_TOOL_CALLS=false 로 끈다. */
     DEDUPE_TOOL_CALLS: process.env.AGENT_TASK_DEDUPE_TOOL_CALLS !== 'false',
+    /** 출력 반복 기록 — 응답 본문에서 같은 구간(창)이 여러 번 되풀이되면 단계 기록(output_repetition)을 남긴다.
+     *  차단하지 않는다: 빈도 근거가 없어 먼저 기록으로 발동률을 본다. AGENT_TASK_OUTPUT_REPETITION_STEP=false 로 끈다. */
+    OUTPUT_REPETITION_STEP_ENABLED: process.env.AGENT_TASK_OUTPUT_REPETITION_STEP !== 'false',
+    /** 창 길이(자)·반복 횟수 임계 — 60자 창이 5회 이상. 실측이 아니라 hermes-agent 의 값이다.
+     *  AGENT_TASK_OUTPUT_REPETITION_WINDOW_CHARS / _MIN_REPEATS */
+    OUTPUT_REPETITION_WINDOW_CHARS: num(process.env.AGENT_TASK_OUTPUT_REPETITION_WINDOW_CHARS, 60),
+    OUTPUT_REPETITION_MIN_REPEATS: num(process.env.AGENT_TASK_OUTPUT_REPETITION_MIN_REPEATS, 5),
+    /** 긴 응답은 끝에서 이만큼만 검사한다(검사 비용 상한) / 창 안의 글자 종류가 이보다 적으면 구분선·공백으로 보고 건너뛴다. */
+    OUTPUT_REPETITION_SCAN_TAIL_CHARS: 20_000,
+    OUTPUT_REPETITION_MIN_DISTINCT_CHARS: 8,
 };
 
 /**

@@ -41,3 +41,8 @@ export const DUPLICATE_TOOL_CALL_PREFIX = '[중복 호출]';
 export function getDuplicateToolCallResult(toolName: string, originalCallId: string | undefined): string {
     return `${DUPLICATE_TOOL_CALL_PREFIX} 같은 응답 안의 앞선 ${toolName} 호출${originalCallId ? `(${originalCallId})` : ''}과 이름·인자가 같아 다시 실행하지 않았습니다. 그 호출의 결과를 쓰세요.`;
 }
+
+/** 출력 반복 — 단계 기록에 남기는 문구(차단하지 않고 기록만 한다). */
+export function getOutputRepetitionNote(repeats: number, windowChars: number, sample: string): string {
+    return `출력 반복 감지(기록만) — 응답 본문에서 ${windowChars}자 구간이 ${repeats}회 반복됐습니다: "${sample}"`;
+}

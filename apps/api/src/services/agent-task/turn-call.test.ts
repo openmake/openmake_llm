@@ -140,3 +140,24 @@ describe('callAgentTurnWithBudget — 컨텍스트 절단 기록', () => {
         expect(onNote).not.toHaveBeenCalled();
     });
 });
+
+describe('callAgentTurnWithBudget — 출력 반복 기록', () => {
+    const loop = '같은 문장을 계속 되풀이하는 모델 출력입니다. 설정을 확인하고 다시 시도하겠습니다. 잠시만 기다려 주세요. ';
+
+    it('본문에서 짧은 구간이 여러 번 반복되면 단계 기록만 남기고 응답은 그대로 돌려준다', async () => {
+        chat.mockResolvedValue({ content: loop.repeat(8) });
+        const onNote = jest.fn();
+        const { result } = await callAgentTurnWithBudget({ ...base(), onNote });
+        expect(result.content).toBe(loop.repeat(8));
+        expect(onNote).toHaveBeenCalledTimes(1);
+        expect(onNote.mock.calls[0][0]).toBe('output_repetition');
+        expect(onNote.mock.calls[0][1]).toContain('반복');
+    });
+
+    it('반복이 없으면 기록하지 않는다', async () => {
+        chat.mockResolvedValue({ content: '작업을 마쳤습니다.' });
+        const onNote = jest.fn();
+        await callAgentTurnWithBudget({ ...base(), onNote });
+        expect(onNote).not.toHaveBeenCalled();
+    });
+});
