@@ -48,6 +48,8 @@ interface ProceduralToolHelpers {
         run: (relPath: string) => Promise<ExecResult>,
     ) => Promise<{ result: ExecResult; relPath: string }>;
     browserUnavailable: string;
+    /** 브라우저가 이동하려는 주소 중 막아야 할 것이 있으면 오류 문구, 없으면 null(browser-url-guard). */
+    browserUrlBlock: (actions: readonly unknown[]) => Promise<string | null>;
 }
 
 /** [skill_save, skill_run] 정의 — procedural 훅이 없으면(플래그 OFF) 핸들러가 비활성 안내를 돌려준다. */
@@ -155,6 +157,8 @@ export function createProceduralTools(
                 if (spec.kind === 'browser') {
                     if (!sandbox.isBrowserEnabled) return h.textResult(h.browserUnavailable, true);
                     const renderedActions = deepSub(spec.actions ?? []);
+                    const urlBlock = await h.browserUrlBlock(Array.isArray(renderedActions) ? renderedActions : []);
+                    if (urlBlock) return h.textResult(urlBlock, true);
                     const specOut = {
                         actions: renderedActions,
                         ...(Array.isArray(spec.allowlist) ? { allowlist: deepSub(spec.allowlist) } : {}),

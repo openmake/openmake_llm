@@ -1,3 +1,7 @@
+// 브라우저 목적지 검사는 실제 DNS 를 타므로 여기서는 가짜로 바꾼다(검사 자체는 browser-url-guard.test.ts).
+const findBlockedBrowserUrls = jest.fn(async (_actions: readonly unknown[]): Promise<Array<{ index: number; url: string; reason: string }>> => []);
+jest.mock('./browser-url-guard', () => ({ findBlockedBrowserUrls: (a: readonly unknown[]) => findBlockedBrowserUrls(a) }));
+
 import { createTaskTools, TASK_TERMINATE_SENTINEL, TASK_ASK_HUMAN_SENTINEL } from './tools';
 import { procedureChecksum, SKILL_RUN_CHECKSUM_ARG } from './skill-run-binding';
 import type { TaskSandbox, ExecResult } from './sandbox';
@@ -190,6 +194,15 @@ describe('task-sandbox tools', () => {
             const r = await byName(createTaskTools(fakeSandbox()), 'file_ops').handler({ op: 'write', path: 'a.ts', content: 'x' });
             expect(txt(r)).toBe('기록됨: a.ts');
         });
+    });
+
+    it('browser: 막아야 할 주소가 있으면 브라우저를 실행하지 않는다', async () => {
+        findBlockedBrowserUrls.mockResolvedValueOnce([{ index: 0, url: 'http://169.254.169.254/', reason: 'blocked' }]);
+        const sb = fakeSandbox();
+        const r = await byName(createTaskTools(sb), 'browser').handler({ actions: [{ type: 'goto', url: 'http://169.254.169.254/' }] });
+        expect(r.isError).toBe(true);
+        expect(txt(r)).toContain('169.254.169.254');
+        expect(sb.lastBrowser).toBe('');
     });
 
     describe('str_replace_editor', () => {

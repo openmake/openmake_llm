@@ -203,3 +203,10 @@ export const BROWSER_SESSION = {
     /** 명령 응답 크기 상한(byte) — 스크린샷(base64)이 실린다 */
     OUTPUT_CAP: 4 * 1024 * 1024,
 } as const;
+
+/**
+ * 브라우저 도구 목적지 검사 — goto 주소가 사설망·루프백·메타데이터로 해석되면 실행하지 않는다
+ * (services/task-sandbox/browser-url-guard, 호스트 쪽 SSRF 가드와 같은 기준·같은 허용 예외).
+ * TASK_SANDBOX_BROWSER_URL_GUARD=false 로 끈다.
+ */
+export const BROWSER_URL_GUARD_ENABLED = process.env.TASK_SANDBOX_BROWSER_URL_GUARD !== 'false';
