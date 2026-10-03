@@ -19,6 +19,7 @@ import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION } from
 import { truncateToolResult } from '../agent-task/tool-result-truncate';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { bindSkillRunApproval } from './skill-run-binding';
+import { createTaskHistoryTools } from '../agent-task/task-history-tool';
 import { saveProceduralSkill, revertProceduralSkill, resolveProceduralSpec, recordProceduralRun } from '../agent-task/procedural-skill';
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
@@ -115,7 +116,7 @@ export class TaskRuntime {
         // 작업 도구는 고정 관리되며 기여분만큼 늘어난다. 통합 모듈은 AgentTaskService 를 끌어올 수 있어
         // 정적 import 하면 순환이 된다 — 생성 시점 require 로 끊는다.
         const { getChatTurnIntegrations } = require('../chat-service/turn-integrations') as typeof import('../chat-service/turn-integrations');
-        const contributed = getChatTurnIntegrations().flatMap((i) => i.agentTaskTools?.() ?? []);
+        const contributed = [...getChatTurnIntegrations().flatMap((i) => i.agentTaskTools?.() ?? []), ...createTaskHistoryTools(taskId)];
         this.defs = createTaskTools(this.executor, this.plan, delegate, spawn, procedural, browserMetrics, contributed, { userId: this.userId });
         for (const d of this.defs) this.handlers.set(d.tool.name, d.handler);
     }

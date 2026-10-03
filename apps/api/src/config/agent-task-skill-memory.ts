@@ -72,3 +72,21 @@ export const MEMORY_RANKING = {
     /** 시간 감쇠 반감기(일) — 이만큼 지나면 점수가 절반. AGENT_TASK_MEMORY_RANK_HALF_LIFE_DAYS */
     HALF_LIFE_DAYS: num(process.env.AGENT_TASK_MEMORY_RANK_HALF_LIFE_DAYS, 180),
 } as const;
+
+/**
+ * 과거 작업 검색 도구(task_history) — 에이전트 작업이 같은 사용자의 과거 작업을 검색·최근 목록·한 건 요약으로 읽는다.
+ * 읽기 전용이고 호출한 사용자의 작업만 보인다. 도구가 하나 늘어 모델의 선택에 영향을 주므로 기본은 꺼짐이다.
+ */
+export const TASK_HISTORY_TOOL = {
+    /** AGENT_TASK_HISTORY_TOOL=true 로 켠다. */
+    ENABLED: process.env.AGENT_TASK_HISTORY_TOOL === 'true',
+    /** 목록 기본·최대 건수. AGENT_TASK_HISTORY_DEFAULT_LIMIT / AGENT_TASK_HISTORY_MAX_LIMIT */
+    DEFAULT_LIMIT: num(process.env.AGENT_TASK_HISTORY_DEFAULT_LIMIT, 10),
+    MAX_LIMIT: num(process.env.AGENT_TASK_HISTORY_MAX_LIMIT, 20),
+    /** 검색어에서 쓰는 낱말 수 상한(낱말마다 조건이 하나 붙는다). */
+    MAX_QUERY_WORDS: 5,
+    /** 목록에 싣는 목표 길이. */
+    GOAL_PREVIEW_CHARS: 200,
+    /** 한 건 보기에 싣는 결과 길이. AGENT_TASK_HISTORY_RESULT_MAX_CHARS */
+    RESULT_MAX_CHARS: num(process.env.AGENT_TASK_HISTORY_RESULT_MAX_CHARS, 2000),
+} as const;
