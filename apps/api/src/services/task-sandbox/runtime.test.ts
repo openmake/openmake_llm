@@ -57,6 +57,18 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         expect(out).toContain('승인하지 않았습니다');
     });
 
+    it('거절 사유가 있으면 모델에 전달하고, 같은 결과를 다른 경로로 시도하지 말라고 한다', async () => {
+        const rt = new TaskRuntime('t-reject-reason', 'u1', cfgAll);
+        let approvalId = '';
+        const exec = rt.executeTaskTool('bash', { command: 'rm -rf build' }, { onApprovalPending: (p) => { approvalId = p.approvalId; } });
+        await new Promise((r) => setImmediate(r));
+        getApprovalRegistry().reject(approvalId, 'u1', 'build 폴더는 지우지 마세요');
+        const out = await exec;
+        expect(out).toContain('build 폴더는 지우지 마세요');
+        expect(out).toContain('같은 결과를 다른 경로');
+        expect(out).not.toContain('다른 방법을 시도');
+    });
+
     it('onBeforeExecute 는 승인 뒤·핸들러 앞에서 불리고, 거절이면 불리지 않는다', async () => {
         const before = jest.fn(async () => undefined);
         await new TaskRuntime('t-before', 'u1', cfgNone).executeTaskTool('terminate', { status: 'success', summary: 'done' }, { onBeforeExecute: before });

@@ -16,9 +16,12 @@ jest.mock('../../../data/models/unified-database', () => ({
     getPool: () => ({}),
     getUnifiedDatabase: () => ({ createAgentTask, findAgentTaskByCreateKey, getUserById: async () => ({ role: 'user' }) }),
 }));
-const dispatchAgentTask = jest.fn(async (_p: { taskId: string }) => undefined);
-jest.mock('../task-queue', () => ({ dispatchAgentTask: (p: { taskId: string }) => dispatchAgentTask(p) }));
-jest.mock('../../AgentTaskService', () => ({ AgentTaskService: jest.fn(() => ({ execute: async () => undefined })) }));
+const dispatchAgentTask = jest.fn(async (_p: { taskId: string; run: () => Promise<void> }) => undefined);
+jest.mock('../task-queue', () => ({ dispatchAgentTask: (p: { taskId: string; run: () => Promise<void> }) => dispatchAgentTask(p) }));
+const calls: string[] = [];
+jest.mock('../../AgentTaskService', () => ({ AgentTaskService: jest.fn(() => ({ execute: async () => { calls.push('execute'); } })) }));
+const setUnattended = jest.fn((_taskId: string, _on: boolean) => { calls.push('unattended'); });
+jest.mock('../../task-sandbox/approval-gate', () => ({ getApprovalRegistry: () => ({ setUnattended }) }));
 jest.mock('../../PushService', () => ({ getPushService: () => ({ sendPush: async () => undefined }) }));
 jest.mock('../schedule-publish', () => ({ publishScheduleOutput: async () => undefined }));
 jest.mock('../../../data/user-manager', () => ({ isAdminRole: () => false, getUserManager: () => ({ getUserById: async () => ({ role: 'user' }) }) }));
@@ -55,6 +58,16 @@ describe('runScheduleTick — 발화', () => {
         expect(dispatchAgentTask).toHaveBeenCalledTimes(1);
         expect(repo.markRun).toHaveBeenCalledWith('s1', expect.any(Number), dispatchAgentTask.mock.calls[0][0].taskId);
         expect(repo.recordRun).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'fired' }));
+    });
+
+    it('예약 실행은 시작 전에 무인 작업으로 표시한다 — 승인이 필요한 호출을 기다리지 않게', async () => {
+        repo.getDue.mockResolvedValue([schedule()]);
+        repo.getLastTaskState.mockResolvedValue(null);
+        calls.length = 0;
+        dispatchAgentTask.mockImplementationOnce(async (p) => { await p.run(); return undefined; });
+        await runScheduleTick(NOW);
+        expect(setUnattended).toHaveBeenCalledWith(dispatchAgentTask.mock.calls[0][0].taskId, true);
+        expect(calls).toEqual(['unattended', 'execute']);
     });
 
     it('같은 발화의 작업이 이미 있으면(재시작 뒤) 다시 만들거나 제출하지 않고 발화 기록만 맞춘다', async () => {

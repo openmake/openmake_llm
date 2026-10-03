@@ -29,6 +29,7 @@ import { AgentTaskParked } from './types';
 import { findDanglingToolCalls } from './turn-reentry';
 import { createLogger } from '../../utils/logger';
 import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE, partialSubagentResult } from '../../prompts/subagent-system';
+import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { prepareToolArgs } from './tool-args';
 import { exitReasonForError, type SubagentExitReason } from '../../config/agent-task-delegation';
 
@@ -207,7 +208,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 result.tool_calls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
                 ({ name, tc }) => !requiresApproval(p.sandboxCfg.approvalPolicy, name,
                     (tc.function.arguments ?? {}) as Record<string, unknown>, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })
-                    || getApprovalRegistry().isAutoApprove(p.taskId),
+                    || getApprovalRegistry().autoApproves(p.taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>),
                 async ({ name, tc }) => {
                     const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
                     if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
@@ -216,7 +217,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                             { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, policy: p.sandboxCfg.approvalPolicy },
                         );
                         p.onPausedMs?.(r.waitedMs);
-                        if (r.decision !== 'approved') return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
+                        if (r.decision !== 'approved') return getApprovalRejectedNotice(name, r.reason, r.text);
                     }
                     return runTool(mcp, name, args, p.userCtx);
                 },
@@ -233,6 +234,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 }
                 // 부모와 동일한 승인 게이트 — 정책 우회 없음(자동승인 task 면 즉시 approved).
                 let approved = true;
+                let rejected: { reason?: string; text?: string } = {};
                 if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
                     let pended = false;
                     const r = await getApprovalRegistry().request(
@@ -251,10 +253,11 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                     if (r.reason === 'parked' && p.park) await parkHere(turn, name);
                     if (pended) { p.trace?.record('resumed', ''); p.onApprovalDecided?.(); }
                     approved = r.decision === 'approved';
+                    rejected = r;
                 }
                 const toolResult = approved
                     ? await runTool(mcp, name, args, p.userCtx)
-                    : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
+                    : getApprovalRejectedNotice(name, rejected.reason, rejected.text);
                 p.trace?.record('tool_result', toolResult, name);
                 conversation.push({ role: 'tool', content: toolResult, tool_name: name, tool_call_id: tc.id });
             }

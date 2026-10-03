@@ -65,6 +65,16 @@ describe('ApprovalRegistry + 저장소', () => {
         expect(id2).not.toBe('apv_old');
     });
 
+    it('프로세스가 내려간 동안 적은 거절 사유는 저장소에 남고, 재개된 작업이 사유와 함께 이어받는다', async () => {
+        const store = fakeStore();
+        const reg = new ApprovalRegistry(store);
+        store.seed({ approval_id: 'apv_rej', args_hash: hashOf(input.args) });
+        expect(await reg.reject('apv_rej', 'u1', '이 폴더는 지우지 마')).toBe(true);
+        expect(store.rows.get('apv_rej')).toMatchObject({ status: 'rejected', answer_text: '이 폴더는 지우지 마' });
+        const r = await reg.request(input, { timeoutMs: 5000 });
+        expect(r).toMatchObject({ decision: 'rejected', reason: 'user', text: '이 폴더는 지우지 마', waitedMs: 0 });
+    });
+
     it('재개된 작업이 아직 pending 인 행을 만나면 그 id 를 그대로 이어받아 대기한다', async () => {
         const store = fakeStore();
         const reg = new ApprovalRegistry(store);
