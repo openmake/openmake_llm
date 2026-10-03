@@ -204,3 +204,19 @@ describe('Agent Task — 누적 토큰 영속', () => {
         expect(turn2?.totalTokens).toBe(tokensPerTurn);
     });
 });
+
+describe('Agent Task — 비용 원장 귀속', () => {
+    it('턴 호출은 작업 id 를 원장 귀속 컨텍스트로 싣는다 — 작업 단위로 비용을 모을 수 있게', async () => {
+        const { createClient } = jest.requireMock('../llm') as { createClient: () => { derive: jest.Mock } };
+        const derive = createClient().derive;
+        derive.mockClear();
+
+        await new AgentTaskService().execute({
+            taskId: 't1', userId: 'u1', goal: '끝나지 않는 작업', maxTurns: 2,
+        } as never);
+
+        expect(derive).toHaveBeenCalledWith(expect.objectContaining({
+            costContext: { feature: 'agent_task', sessionId: 't1' },
+        }));
+    });
+});

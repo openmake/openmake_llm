@@ -101,7 +101,8 @@ export async function chatTurnWithRoleFallback(
     // 기본 LLM_TIMEOUT(120s)은 채팅용이라, 리포트·디자인 등 장문 생성 턴이 단일 요청에서 120s 를
     // 넘기면 "Request timed out" 으로 task 가 죽는다. 실제 한계는 p.signal(잔여 예산)이 governor.
     // SDK 요청 타임아웃 상한은 최대 예산(예약)에 맞춘다 — 실제 한계는 p.signal(잔여 예산)이 governor.
-    const call = () => state.client.derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS })
+    // 원장 귀속(F25): 로컬 토큰 비용 행에 작업 id 를 실어 작업 단위로 모을 수 있게 한다(외부 role 모델은 resolver 의 onUsage 가 `role:agent` 로 기록).
+    const call = () => state.client.derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS, costContext: { feature: 'agent_task', sessionId: p.taskId } })
         .chat(p.conversation, undefined, p.onToken, {
             tools: p.tools, signal: p.signal, think: false, requestClass: 'agent_turn',
         });
