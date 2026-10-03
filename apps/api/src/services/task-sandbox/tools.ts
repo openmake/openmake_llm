@@ -18,6 +18,7 @@ import { BROWSER_URL_GUARD_ENABLED } from '../../config/task-sandbox';
 import { getBrowserUrlBlockedMessage } from '../../prompts/agent-task-prompt';
 import { viewWindow } from './file-view';
 import { resolveMissedStrReplace } from './str-replace-match';
+import { interpretExitCode } from './exit-code';
 import { FILE_VIEW_MAX_CHARS } from '../../config/runtime-limits';
 import { randomUUID } from 'crypto';
 import { AgentTaskParked } from '../agent-task/types';
@@ -62,13 +63,15 @@ async function browserUrlBlock(actions: readonly unknown[]): Promise<string | nu
     return blocked.length > 0 ? getBrowserUrlBlockedMessage(blocked.map((b) => b.url)) : null;
 }
 
-/** exec 결과를 LLM 친화 텍스트로 포맷. */
-function formatExec(r: ExecResult): MCPToolResult {
+/** exec 결과를 LLM 친화 텍스트로 포맷. command 를 주면 오류가 아닌 종료 코드(grep 1 등)에 뜻을 덧붙인다(exit-code). */
+function formatExec(r: ExecResult, command?: string): MCPToolResult {
     const parts: string[] = [];
     if (r.stdout) parts.push(`[stdout]\n${r.stdout}`);
     if (r.stderr) parts.push(`[stderr]\n${r.stderr}`);
     parts.push(`[exit=${r.exitCode}${r.timedOut ? ' TIMEOUT' : ''}${r.truncated ? ' TRUNCATED' : ''} ${r.durationMs}ms]`);
-    return textResult(parts.join('\n'), r.exitCode !== 0 || r.timedOut);
+    const note = command !== undefined && !r.timedOut ? interpretExitCode(command, r.exitCode) : null;
+    if (note) parts.push(note);
+    return textResult(parts.join('\n'), (r.exitCode !== 0 && !note) || r.timedOut);
 }
 
 function str(v: unknown): string { return typeof v === 'string' ? v : ''; }
@@ -132,7 +135,7 @@ export function createTaskTools(
         handler: async (args): Promise<MCPToolResult> => {
             const command = str(args.command).trim();
             if (!command) return textResult('command 가 필요합니다.', true);
-            return formatExec(await sandbox.exec(command));
+            return formatExec(await sandbox.exec(command), command);
         },
     };
 

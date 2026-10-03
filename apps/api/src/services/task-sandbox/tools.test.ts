@@ -205,6 +205,25 @@ describe('task-sandbox tools', () => {
         expect(sb.lastBrowser).toBe('');
     });
 
+    describe('bash 종료 코드 해석', () => {
+        const withExit = (exitCode: number): FakeSandbox => {
+            const sb = fakeSandbox();
+            (sb as unknown as { exec: (c: string) => Promise<ExecResult> }).exec = async () => ({ stdout: '', stderr: '', exitCode, truncated: false, timedOut: false, durationMs: 1 });
+            return sb;
+        };
+        it('grep 의 1 은 오류로 표시하지 않고 뜻을 덧붙인다', async () => {
+            const r = await byName(createTaskTools(withExit(1)), 'bash').handler({ command: 'grep -rn foo src' });
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('[exit=1 ');
+            expect(txt(r)).toContain('일치 없음');
+        });
+        it('뜻을 모르는 0 아닌 코드는 종전대로 오류다', async () => {
+            const r = await byName(createTaskTools(withExit(1)), 'bash').handler({ command: 'npm test' });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).not.toContain('일치 없음');
+        });
+    });
+
     describe('str_replace_editor', () => {
         it('view: 큰 파일은 줄 구간으로 보이고 start_line 으로 뒤쪽을 이어 본다', async () => {
             const sb = fakeSandbox();

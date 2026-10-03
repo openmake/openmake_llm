@@ -29,3 +29,10 @@ export const STR_REPLACE_RELAXED_LABELS = {
     quotes: '따옴표 종류',
     'indent+quotes': '들여쓰기·따옴표 종류',
 } as const;
+
+/** 종료 코드 해석 — 셸 결과의 [exit=N] 줄 바로 뒤에 붙는다. 키는 config 의 ExitCodeMeaning. */
+export const EXIT_CODE_NOTES = {
+    no_match: '(종료 코드 1 = 일치 없음 — 오류가 아닙니다)',
+    differ: '(종료 코드 1 = 차이 있음 — 오류가 아닙니다)',
+    false: '(종료 코드 1 = 조건이 거짓 — 오류가 아닙니다)',
+} as const;

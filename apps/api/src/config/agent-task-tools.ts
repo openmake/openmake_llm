@@ -33,3 +33,24 @@ export const STR_REPLACE_MATCH = {
 export const QUOTE_EQUIVALENTS: Readonly<Record<string, string>> = {
     '‘': "'", '’': "'", '“': "'", '”': "'", '"': "'",
 };
+
+/**
+ * 종료 코드 해석 — 셸 결과에서 0 이 아닌 코드가 오류가 아닌 잘 알려진 경우.
+ * 키는 명령 이름(경로는 떼고 본다) 또는 "명령 하위명령", 값은 코드 → 뜻(문구는 prompts/agent-task-tools 의 EXIT_CODE_NOTES).
+ * 여러 명령을 &&·;·|| 로 이은 경우는 어느 명령의 코드인지 알 수 없어 해석하지 않는다. 파이프는 마지막 명령으로 본다.
+ * 파이프로 가려진 실패 경고는 넣지 않았다 — 오탐이 더 많다.
+ * AGENT_TASK_EXIT_CODE_HINT=false 로 끄면 종전처럼 0 이 아닌 코드는 모두 오류로 표시한다.
+ */
+export const EXIT_CODE_HINT_ENABLED = process.env.AGENT_TASK_EXIT_CODE_HINT !== 'false';
+
+export type ExitCodeMeaning = 'no_match' | 'differ' | 'false';
+
+const NO_MATCH: Readonly<Record<number, ExitCodeMeaning>> = { 1: 'no_match' };
+const DIFFER: Readonly<Record<number, ExitCodeMeaning>> = { 1: 'differ' };
+const FALSE: Readonly<Record<number, ExitCodeMeaning>> = { 1: 'false' };
+
+export const EXIT_CODE_MEANINGS: Readonly<Record<string, Readonly<Record<number, ExitCodeMeaning>>>> = {
+    grep: NO_MATCH, egrep: NO_MATCH, fgrep: NO_MATCH, rg: NO_MATCH, 'git grep': NO_MATCH,
+    diff: DIFFER, cmp: DIFFER, 'git diff': DIFFER,
+    test: FALSE, '[': FALSE, '[[': FALSE,
+};
