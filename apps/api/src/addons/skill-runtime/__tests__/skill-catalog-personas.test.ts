@@ -78,3 +78,15 @@ describe('카탈로그 상한 초과 경고', () => {
         expect(capWarnings()).toHaveLength(0);
     });
 });
+
+describe('카탈로그에서 절차 스킬 제외', () => {
+    it('카탈로그와 load_skill 조회 모두 절차 스킬(JSON 본문)을 빼고 검색한다', async () => {
+        const { mgr, searchSkills } = managerWith(SkillManager, [skill('s1', 'A')]);
+        await mgr.buildSkillCatalog({ userId: 'u3' });
+        await mgr.buildSkillPromptForNames(['A'], 'u3');
+
+        for (const call of searchSkills.mock.calls as unknown as Array<[Record<string, unknown>]>) {
+            expect(call[0]).toEqual(expect.objectContaining({ excludeCategories: ['procedural'] }));
+        }
+    });
+});

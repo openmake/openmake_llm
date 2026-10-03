@@ -12,6 +12,11 @@ export const SKILL_CATALOG_MAX_ITEMS = Number(process.env.SKILL_CATALOG_MAX_ITEM
 export const SKILL_CATALOG_DESC_MAX = Number(process.env.SKILL_CATALOG_DESC_MAX) || 120;
 /** 페르소나 스킬("○○ 전문 스킬")을 카탈로그·load_skill 대상에서 제외 — 기본 on, 'false' 면 종전 동작(롤백용). */
 export const SKILL_CATALOG_EXCLUDE_PERSONAS = process.env.SKILL_CATALOG_EXCLUDE_PERSONAS !== 'false';
+/**
+ * 카탈로그·load_skill 에서 빼는 범주 — 절차 스킬(skill_save 가 만든 JSON 본문)은 지침이 아니라 skill_run 으로 재생하는 것이다.
+ * 섞이면 목록 상한을 잠식하고, load_skill 이 JSON 을 지침으로 돌려준다.
+ */
+export const SKILL_CATALOG_EXCLUDE_CATEGORIES: readonly string[] = ['procedural'];
 
 /**
  * manifest 합계 상한을 넘은 턴에 후보를 목록으로 넘겨 모델이 load_skill 로 고르게 할지.

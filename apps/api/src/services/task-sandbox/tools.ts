@@ -14,6 +14,8 @@
  * @module services/task-sandbox/tools
  */
 import { procedureChecksum, SKILL_RUN_CHECKSUM_ARG } from './skill-run-binding';
+import { findPlaintextSecrets } from '../agent-task/procedural-secrets';
+import { proceduralSecretRejection } from '../../prompts/procedural-skill-prompt';
 import { randomUUID } from 'crypto';
 import { AgentTaskParked } from '../agent-task/types';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
@@ -104,12 +106,16 @@ export interface ProceduralHooks {
     }) => Promise<string>;
     /** id 로 저장된 절차 스펙 조회(소유자 격리는 훅 내부에서 적용). */
     load: (skillId: string) => Promise<{
+        /** 해석된 스킬 id — 재생 결과 기록에 쓴다(이름으로 매칭된 경우에도 실제 id). */
+        id?: string;
         kind: 'browser' | 'script';
         actions?: unknown[];
         allowlist?: string[];
         lang?: 'bash' | 'python';
         code?: string;
     } | null>;
+    /** 재생이 끝난 뒤 결과를 한 번 기록한다(관측용 — 실패해도 재생을 막지 않는다). */
+    recordRun?: (run: { skillId: string; kind: 'browser' | 'script'; status: 'ok' | 'error'; durationMs: number }) => void;
 }
 
 export function createTaskTools(
@@ -442,6 +448,9 @@ export function createTaskTools(
             if (kind === 'browser' && !Array.isArray(args.actions)) return textResult('kind=browser 는 actions 배열이 필요합니다.', true);
             if (kind === 'script' && !str(args.code)) return textResult('kind=script 는 code 가 필요합니다.', true);
             const lang = args.lang === 'python' ? 'python' : args.lang === 'bash' ? 'bash' : undefined;
+            // 평문 비밀 값은 저장하지 않는다 — {{param}} 으로 일반화해 다시 저장하게 돌려준다.
+            const secrets = findPlaintextSecrets({ kind, actions: Array.isArray(args.actions) ? args.actions : undefined, code: str(args.code) || undefined });
+            if (secrets.length > 0) return textResult(proceduralSecretRejection(secrets), true);
             try {
                 const id = await procedural.save({
                     name,
@@ -501,6 +510,8 @@ export function createTaskTools(
                 }
                 return v;
             };
+            const started = Date.now();
+            const replay = async (): Promise<MCPToolResult> => {
             try {
                 if (spec.kind === 'browser') {
                     if (!sandbox.isBrowserEnabled) return textResult(BROWSER_UNAVAILABLE, true);
@@ -530,6 +541,13 @@ export function createTaskTools(
             } catch (e) {
                 return textResult(`스킬 재생 실패: ${e instanceof Error ? e.message : String(e)}`, true);
             }
+            };
+            const out = await replay();
+            // 재생 결과 기록 — 조회가 아니라 재생이 끝난 뒤 한 번(성공·실패, 소요 시간).
+            try {
+                procedural.recordRun?.({ skillId: spec.id ?? skillId, kind: spec.kind, status: out.isError ? 'error' : 'ok', durationMs: Date.now() - started });
+            } catch { /* 기록 실패는 재생 결과에 영향 없음 */ }
+            return out;
         },
     };
 
