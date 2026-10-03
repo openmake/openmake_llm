@@ -151,7 +151,20 @@ export class AgentTaskScheduleRepository extends BaseRepository {
     }
 
     /** 발화 이력 기록(6-2) — tick 1회 발화당 1행. 기록 실패는 발화를 막지 않는다(호출부 catch). */
-    async recordRun(p: { scheduleId: string; userId?: string; taskId?: string; outcome: 'fired' | 'error'; error?: string }): Promise<void> {
+    /** 발화를 건너뛴다(이전 실행 진행 중) — next_run_at 만 민다. 연속 실패·last_task 는 건드리지 않는다. */
+    async markSkipped(id: string, nextRunAtMs: number | null): Promise<void> {
+        if (nextRunAtMs === null) return;
+        await this.query('UPDATE agent_task_schedules SET next_run_at = to_timestamp($2), updated_at = NOW() WHERE id = $1', [id, nextRunAtMs / 1000]);
+    }
+
+    /** 이전 실행 작업의 상태 — 겹침 판단용. 작업이 없으면 null. */
+    async getLastTaskState(taskId: string | null | undefined): Promise<{ status: string; updatedAt: Date } | null> {
+        if (!taskId) return null;
+        const r = await this.query<{ status: string; updated_at: Date }>('SELECT status, updated_at FROM agent_tasks WHERE id = $1', [taskId]);
+        return r.rows[0] ? { status: r.rows[0].status, updatedAt: r.rows[0].updated_at } : null;
+    }
+
+    async recordRun(p: { scheduleId: string; userId?: string; taskId?: string; outcome: 'fired' | 'error' | 'skipped'; error?: string }): Promise<void> {
         await this.query(
             `INSERT INTO agent_task_schedule_runs (schedule_id, user_id, task_id, outcome, error)
              VALUES ($1, $2, $3, $4, $5)`,
