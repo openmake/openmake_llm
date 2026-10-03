@@ -17,6 +17,7 @@ import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } 
 import { recordBrowserMetric } from './browser-metrics';
 import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION } from '../../config/runtime-limits';
 import { truncateToolResult } from '../agent-task/tool-result-truncate';
+import { spillToolResult } from '../agent-task/tool-result-spill';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { bindSkillRunApproval } from './skill-run-binding';
 import { createTaskHistoryTools } from '../agent-task/task-history-tool';
@@ -29,6 +30,7 @@ import type { PlanStepInput } from './planning';
 import { APPROVAL_PREVIEW } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskParked } from '../agent-task/types';
+import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 
 const logger = createLogger('TaskRuntime');
 
@@ -135,6 +137,15 @@ export class TaskRuntime {
 
     /** 호스트 workspace 경로 or null(원격 실행기) — 호스트측 소비자(diff·git·영속)의 가드 기준. */
     get localWorkdir(): string | null { return this.executor.localWorkdir; }
+
+    /**
+     * 상한을 넘는 도구 결과를 작업 공간 파일로 보관하고 미리보기 + 경로 안내를 돌려준다(tool-result-spill, 기본 꺼짐).
+     * 서버 샌드박스에서만 — 로컬 실행기의 작업 공간은 사용자 폴더라 쓰지 않는다. 보관하지 않았으면 null(호출부가 종전 절단).
+     */
+    readonly spillLargeResult = (toolName: string, raw: string): Promise<string | null> => spillToolResult(toolName, raw, {
+        cap: MAX_TOOL_RESULT_CHARS, headRatio: TOOL_RESULT_TRUNCATION.HEAD_RATIO,
+        target: this.executor.localWorkdir !== null ? this.executor : null,
+    });
 
     /** 실행기 자체 diff(로컬 worktree). 미지원이면 null → 호출부가 workspace git 캡처로 폴백. */
     async captureExecutorDiff(): Promise<string | null> {
@@ -258,7 +269,7 @@ export class TaskRuntime {
             const preview = skillPreview ?? (APPROVAL_PREVIEW.ENABLED
                 ? await buildApprovalPreview(name, args, (p) => this.executor.readFile(p)).catch(() => null)
                 : null);
-            const { decision, reason, waitedMs } = await getApprovalRegistry().request(
+            const { decision, reason, text: rejectText, waitedMs } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args, preview: preview ?? undefined },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending, parkable: true, policy: this.cfg.approvalPolicy },
             );
@@ -266,9 +277,7 @@ export class TaskRuntime {
             if (reason === 'parked') throw new AgentTaskParked(); // 유예 초과 → 주차: 결정이 오면 같은 호출로 재개(실행 전이라 부작용 없음)
             if (decision !== 'approved') {
                 opts.onApprovalRejected?.({ toolName: name, reason: reason ?? 'user' });
-                return reason === 'timeout'
-                    ? `Error: 승인 대기 시간이 초과되었습니다(무응답, ${name}). 사용자가 자리를 비운 것으로 보입니다 — 승인이 필요 없는 방법으로 진행하거나, 지금까지 확보한 결과로 최종 산출물을 작성하세요.`
-                    : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
+                return getApprovalRejectedNotice(name, reason, rejectText);
             }
         }
 
@@ -286,7 +295,8 @@ export class TaskRuntime {
                 rawChars: typed.content.map((c) => c.text ?? '').join('\n').length,
                 capChars: MAX_TOOL_RESULT_CHARS,
             });
-            return this.appendShellToolHint(name, resultToString(typed));
+            const spilled = await this.spillLargeResult(name, resultToString(typed, Number.MAX_SAFE_INTEGER));
+            return this.appendShellToolHint(name, spilled ?? resultToString(typed));
         } catch (e) {
             if (e instanceof AgentTaskParked) throw e; // delegate 안의 승인 주차(173) — 오류 결과로 삼키지 않는다
             const msg = e instanceof Error ? e.message : String(e);

@@ -52,6 +52,8 @@ interface PendingItem {
 interface OrgMember { user_id: string; role: string }
 
 const ARGS_SUMMARY_MAX_CHARS = 300;
+/** 거절 사유 입력 상한 — 서버(AGENT_TASK_APPROVAL_REJECT_REASON_MAX_CHARS 기본값)와 같다. 넘는 분량은 서버가 자른다. */
+const REJECT_REASON_MAX_CHARS = 500;
 
 export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => void }) {
   const t = useTranslations("approvals");
@@ -59,6 +61,8 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // 거절 사유(선택) — 적으면 에이전트에 그대로 전달된다.
+  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
   // 최근 결정(138) — 프로세스가 내려간 사이 내린 승인은 아직 실행되지 않았으므로 철회할 수 있다.
   const [recent, setRecent] = useState<RecentDecision[]>([]);
   // 이관 대상(138) — 활성 조직 멤버. 조직이 없으면 이관 UI 를 숨긴다.
@@ -212,6 +216,17 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
               />
             )}
 
+            {!isQuestion && (
+              <input
+                value={rejectReasons[a.approvalId] ?? ""}
+                onChange={(e) => setRejectReasons((p) => ({ ...p, [a.approvalId]: e.target.value }))}
+                placeholder={t("tasks.rejectReasonPlaceholder")}
+                aria-label={t("tasks.rejectReasonPlaceholder")}
+                maxLength={REJECT_REASON_MAX_CHARS}
+                className="mt-3 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+              />
+            )}
+
             <div className="mt-3 flex flex-wrap gap-2">
               {isQuestion && (
                 <Button
@@ -266,7 +281,8 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 disabled={acting}
                 onClick={() =>
                   void run(a.approvalId, () =>
-                    ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/reject`, {}),
+                    ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/reject`,
+                      !isQuestion && (rejectReasons[a.approvalId] ?? "").trim() ? { reason: rejectReasons[a.approvalId].trim() } : {}),
                   )
                 }
               >
