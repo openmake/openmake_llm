@@ -86,3 +86,46 @@ describe('applyScheduleOutcome', () => {
         await expect(applyScheduleOutcome(r, 's1', { status: 'failed', error: 'timeout' }, CFG)).resolves.toBe(true);
     });
 });
+
+describe('모델 미도달 — 보류와 재실행', () => {
+    const NOW = Date.parse('2026-10-04T01:00:00Z');
+    const MIN = 60_000;
+    const RCFG = { disableAfter: 3, retryDelaysMs: [5 * MIN, 15 * MIN, 30 * MIN], nowMs: NOW };
+    const st = (over: Record<string, unknown> = {}) => ({ consecutiveFailures: 0, lastFailureSignature: null, retryAttempt: 0, nextRunAtMs: NOW + 24 * 60 * MIN, ...over });
+    const unreachable = { status: 'failed', error: 'Connection error.', totalTokens: 0 };
+
+    it('모델 호출 0회 + 일시 오류면 실패로 세지 않고 5분 뒤 다시 돌린다(알림 없음)', () => {
+        expect(decideScheduleOutcome(st(), unreachable, RCFG)).toEqual({ kind: 'retry', push: false, retryAtMs: NOW + 5 * MIN, attempt: 1 });
+        expect(decideScheduleOutcome(st({ retryAttempt: 1 }), { ...unreachable, error: '503 Service Unavailable' }, RCFG))
+            .toEqual({ kind: 'retry', push: false, retryAtMs: NOW + 15 * MIN, attempt: 2 });
+        expect(decideScheduleOutcome(st({ retryAttempt: 2 }), unreachable, RCFG)).toMatchObject({ kind: 'retry', retryAtMs: NOW + 30 * MIN, attempt: 3 });
+    });
+
+    it('3회를 다 쓰면 실패로 센다', () => {
+        expect(decideScheduleOutcome(st({ retryAttempt: 3 }), unreachable, RCFG)).toMatchObject({ kind: 'failure', failures: 1 });
+    });
+
+    it('다음 정규 발화와 겹치면 재실행하지 않는다', () => {
+        expect(decideScheduleOutcome(st({ nextRunAtMs: NOW + 5 * MIN }), unreachable, RCFG)).toMatchObject({ kind: 'failure' });
+    });
+
+    it('모델이 한 번이라도 답했거나 일시 오류가 아니면 재실행하지 않는다', () => {
+        expect(decideScheduleOutcome(st(), { ...unreachable, totalTokens: 1200 }, RCFG)).toMatchObject({ kind: 'failure' });
+        expect(decideScheduleOutcome(st(), { status: 'failed', error: '400 Bad Request', totalTokens: 0 }, RCFG)).toMatchObject({ kind: 'failure' });
+        expect(decideScheduleOutcome(st(), { status: 'failed', error: 'goal_incomplete', totalTokens: 0 }, RCFG)).toMatchObject({ kind: 'failure' });
+    });
+
+    it('재실행 설정이 없으면(꺼짐) 종전대로 실패로 센다', () => {
+        expect(decideScheduleOutcome(st(), unreachable, { disableAfter: 3 })).toMatchObject({ kind: 'failure' });
+    });
+
+    it('재실행을 예약에 기록하고 종료 알림을 막는다', async () => {
+        const r = {
+            get: jest.fn(async () => ({ id: 's1', user_id: 'u1', goal: 'g', consecutive_failures: 0, retry_attempt: 0, next_run_at: new Date(NOW + 60 * MIN).toISOString() })),
+            recordRunSuccess: jest.fn(), recordRunFailure: jest.fn(), scheduleRetry: jest.fn(async () => undefined),
+        } as unknown as jest.Mocked<ScheduleOutcomeRepo>;
+        await expect(applyScheduleOutcome(r, 's1', unreachable, RCFG)).resolves.toBe(false);
+        expect(r.scheduleRetry).toHaveBeenCalledWith('s1', NOW + 5 * MIN, 1);
+        expect(r.recordRunFailure).not.toHaveBeenCalled();
+    });
+});

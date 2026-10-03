@@ -17,7 +17,7 @@ import { getPushService } from '../PushService';
 import { dispatchAgentTask } from './task-queue';
 import { publishScheduleOutput } from './schedule-publish';
 import { computeNextRun } from './schedule-cron';
-import { scheduleFireKey, isPreviousRunActive } from './schedule-fire';
+import { scheduleFireKey, isPreviousRunActive, isRetryFire } from './schedule-fire';
 import { applyScheduleOutcome } from './schedule-outcome';
 import { AGENT_TASK_SCHEDULE } from '../../config/agent-task-schedule';
 import type { AgentTaskUserRole } from './types';
@@ -64,7 +64,9 @@ async function publishCompleted(taskId: string, s: AgentTaskSchedule): Promise<v
 /** 단일 due 스케줄을 실행 — task 생성 + 큐 제출 + next_run_at 갱신. */
 async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSchedule, nowMs: number): Promise<void> {
     const timing = { cron: s.cron, intervalSeconds: s.interval_seconds };
-    const nextRunAtMs = computeNextRun(timing, nowMs);
+    // 모델 미도달 재실행 발화(schedule-outcome)는 정규 발화 시각을 건드리지 않는다.
+    const retry = isRetryFire(s, nowMs);
+    const nextRunAtMs = retry ? new Date(s.next_run_at).getTime() : computeNextRun(timing, nowMs);
     // 연속 실패를 실행 결과로 세면(schedule-outcome) 제출 성공만으로는 카운터를 풀지 않는다.
     const resetOnSubmit = !AGENT_TASK_SCHEDULE.RUN_OUTCOME_ENABLED;
     try {
@@ -79,7 +81,7 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
         }
         const taskId = uuidv4();
         // 발화 멱등 키 — 작업을 만든 뒤 markRun 전에 죽었다면, 재시작 뒤 같은 발화는 작업을 다시 만들지 않는다.
-        const fireKey = scheduleFireKey(s.id, s.next_run_at);
+        const fireKey = retry ? `${scheduleFireKey(s.id, s.retry_at!)}:retry` : scheduleFireKey(s.id, s.next_run_at);
         const created = await db.createAgentTask({ id: taskId, userId: s.user_id, goal: s.goal, maxTurns: s.max_turns, idempotencyKey: fireKey });
         if (!created) {
             const existing = await db.findAgentTaskByCreateKey(String(s.user_id), fireKey);

@@ -24,6 +24,10 @@ export interface AgentTaskSchedule {
     last_failure_signature?: string | null;
     /** 자동으로 꺼진 사유(181). 다시 켜면 지운다. */
     disabled_reason?: string | null;
+    /** 모델 미도달 재실행 예정 시각(181) — 지나면 정규 발화와 별개로 한 번 더 돈다. */
+    retry_at?: string | null;
+    /** 이번 정규 발화에서 쓴 재실행 횟수(181). */
+    retry_attempt?: number;
     /** 설정 시 완료 산출물을 정적 공개 경로(<slug>/latest.html)로 게시. NULL 이면 게시 안 함. */
     publish_slug?: string | null;
     created_at: string;
@@ -89,10 +93,11 @@ export class AgentTaskScheduleRepository extends BaseRepository {
         return parseInt(r.rows[0]?.count ?? '0', 10);
     }
 
-    /** 실행 대상 — enabled + next_run_at 이 지난 스케줄. */
+    /** 실행 대상 — enabled + next_run_at 또는 재실행 시각(retry_at)이 지난 스케줄. */
     async getDue(nowMs: number): Promise<AgentTaskSchedule[]> {
         const r = await this.query<AgentTaskSchedule>(
-            'SELECT * FROM agent_task_schedules WHERE enabled = true AND next_run_at <= to_timestamp($1) ORDER BY next_run_at ASC',
+            `SELECT * FROM agent_task_schedules WHERE enabled = true
+               AND (next_run_at <= to_timestamp($1) OR retry_at <= to_timestamp($1)) ORDER BY next_run_at ASC`,
             [nowMs / 1000]);
         return r.rows;
     }
@@ -115,7 +120,7 @@ export class AgentTaskScheduleRepository extends BaseRepository {
         if (updates.maxTurns !== undefined) { sets.push(`max_turns = $${i++}`); params.push(updates.maxTurns); }
         if (updates.enabled !== undefined) { sets.push(`enabled = $${i++}`); params.push(updates.enabled); }
         // 다시 켜면 실패 기록을 지운다 — 남겨 두면 다음 실패 한 번에 다시 꺼진다.
-        if (updates.enabled === true) sets.push('consecutive_failures = 0', 'last_failure_signature = NULL', 'disabled_reason = NULL');
+        if (updates.enabled === true) sets.push('consecutive_failures = 0', 'last_failure_signature = NULL', 'disabled_reason = NULL', 'retry_at = NULL', 'retry_attempt = 0');
         if (updates.nextRunAtMs !== undefined) { sets.push(`next_run_at = to_timestamp($${i++})`); params.push(updates.nextRunAtMs / 1000); }
         params.push(id);
         await this.query(`UPDATE agent_task_schedules SET ${sets.join(', ')} WHERE id = $${i}`, params as never[]);
@@ -129,20 +134,20 @@ export class AgentTaskScheduleRepository extends BaseRepository {
         if (nextRunAtMs === null) {
             await this.query(
                 `UPDATE agent_task_schedules SET enabled = false, last_run_at = NOW(),
-                    last_task_id = $2, ${failures}updated_at = NOW() WHERE id = $1`,
+                    last_task_id = $2, retry_at = NULL, ${failures}updated_at = NOW() WHERE id = $1`,
                 [id, taskId]);
             return;
         }
         await this.query(
             `UPDATE agent_task_schedules SET next_run_at = to_timestamp($2), last_run_at = NOW(),
-                last_task_id = $3, ${failures}updated_at = NOW() WHERE id = $1`,
+                last_task_id = $3, retry_at = NULL, ${failures}updated_at = NOW() WHERE id = $1`,
             [id, nextRunAtMs / 1000, taskId]);
     }
 
     /** 실행 성공 반영(181) — 연속 실패와 오류 서명을 푼다. */
     async recordRunSuccess(id: string): Promise<void> {
         await this.query(
-            'UPDATE agent_task_schedules SET consecutive_failures = 0, last_failure_signature = NULL, updated_at = NOW() WHERE id = $1', [id]);
+            'UPDATE agent_task_schedules SET consecutive_failures = 0, last_failure_signature = NULL, retry_at = NULL, retry_attempt = 0, updated_at = NOW() WHERE id = $1', [id]);
     }
 
     /** 실행 실패 반영(181) — 연속 실패 횟수·오류 서명을 남기고, disable 이면 사유와 함께 끈다. */
@@ -150,9 +155,17 @@ export class AgentTaskScheduleRepository extends BaseRepository {
         await this.query(
             `UPDATE agent_task_schedules SET consecutive_failures = $2, last_failure_signature = $3,
                 enabled = CASE WHEN $4 THEN false ELSE enabled END,
-                disabled_reason = CASE WHEN $4 THEN $5 ELSE disabled_reason END, updated_at = NOW()
+                disabled_reason = CASE WHEN $4 THEN $5 ELSE disabled_reason END,
+                retry_at = NULL, retry_attempt = 0, updated_at = NOW()
              WHERE id = $1`,
             [id, p.failures, p.signature, p.disable, p.reason]);
+    }
+
+    /** 모델 미도달 재실행 예약(181) — 연속 실패는 건드리지 않는다. */
+    async scheduleRetry(id: string, retryAtMs: number, attempt: number): Promise<void> {
+        await this.query(
+            'UPDATE agent_task_schedules SET retry_at = to_timestamp($2), retry_attempt = $3, updated_at = NOW() WHERE id = $1',
+            [id, retryAtMs / 1000, attempt]);
     }
 
     /** 실행 실패 반영 — 연속실패 +1, 임계 도달 시 비활성. next_run_at 은 갱신해 무한 재시도 방지. */
@@ -162,6 +175,7 @@ export class AgentTaskScheduleRepository extends BaseRepository {
                 consecutive_failures = consecutive_failures + 1,
                 enabled = (consecutive_failures + 1 < $2),
                 next_run_at = COALESCE(to_timestamp($3), next_run_at),
+                retry_at = NULL,
                 updated_at = NOW()
              WHERE id = $1`,
             [id, disableThreshold, nextRunAtMs === null ? null : nextRunAtMs / 1000]);
@@ -178,7 +192,7 @@ export class AgentTaskScheduleRepository extends BaseRepository {
     /** 발화를 건너뛴다(이전 실행 진행 중) — next_run_at 만 민다. 연속 실패·last_task 는 건드리지 않는다. */
     async markSkipped(id: string, nextRunAtMs: number | null): Promise<void> {
         if (nextRunAtMs === null) return;
-        await this.query('UPDATE agent_task_schedules SET next_run_at = to_timestamp($2), updated_at = NOW() WHERE id = $1', [id, nextRunAtMs / 1000]);
+        await this.query('UPDATE agent_task_schedules SET next_run_at = to_timestamp($2), retry_at = NULL, updated_at = NOW() WHERE id = $1', [id, nextRunAtMs / 1000]);
     }
 
     /** 이전 실행 작업의 상태 — 겹침 판단용. 작업이 없으면 null. */

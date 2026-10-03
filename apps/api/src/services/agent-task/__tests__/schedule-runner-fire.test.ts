@@ -88,3 +88,16 @@ describe('runScheduleTick — 실행 결과 반영', () => {
         expect(typeof execute.mock.calls[0][0].onTerminal).toBe('function');
     });
 });
+
+describe('runScheduleTick — 모델 미도달 재실행 발화', () => {
+    it('정규 발화 시각은 그대로 두고, 정규 발화와 다른 멱등 키로 작업을 만든다', async () => {
+        const s = schedule({ next_run_at: '2026-10-04T02:00:00.000Z', retry_at: '2026-10-04T00:59:00.000Z' });
+        repo.getDue.mockResolvedValue([s]);
+        repo.getLastTaskState.mockResolvedValue({ status: 'failed', updatedAt: new Date(NOW) });
+        await runScheduleTick(NOW);
+        const key = createAgentTask.mock.calls[0][0].idempotencyKey as string;
+        expect(key).not.toBe(scheduleFireKey('s1', s.next_run_at));
+        expect(key).toContain('retry');
+        expect(repo.markRun).toHaveBeenCalledWith('s1', Date.parse(s.next_run_at as string), expect.any(String), false);
+    });
+});
