@@ -25,6 +25,9 @@ export const AGENT_TASK_TURN_LOOP = {
     /** 이보다 긴 응답은 실질 답변으로 보고 재촉하지 않는다 / 예고를 찾는 끝부분 길이. 실측이 아니라 hermes-agent 의 값이다. */
     STALL_MAX_CHARS: num(process.env.AGENT_TASK_STALL_MAX_CHARS, 400),
     STALL_TAIL_CHARS: 160,
+    /** 컨텍스트 절단 기록 — 창 초과로 요청 사본에서 오래된 메시지를 잘라낸 호출을 단계 기록(context_trim)으로 남긴다.
+     *  기록만 한다(대응은 발동 빈도를 본 뒤). AGENT_TASK_CONTEXT_TRIM_STEP=false 로 끈다. */
+    CONTEXT_TRIM_STEP_ENABLED: process.env.AGENT_TASK_CONTEXT_TRIM_STEP !== 'false',
 };
 
 /**

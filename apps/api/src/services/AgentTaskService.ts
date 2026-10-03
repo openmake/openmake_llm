@@ -373,12 +373,11 @@ export class AgentTaskService {
                     taskId, userId: String(userId),
                     totalTimeoutMs, elapsedActiveMs: Date.now() - startedAt - pausedMs,
                     finalTurn: !!finalTurnReason,
-                    // 일시적 오류 재시도를 스텝으로 남긴다 — 발동 빈도·사유를 DB 로 집계(fail-open).
-                    onRetry: ({ attempt, maxAttempts, error }) => {
-                        const note = `일시적 LLM 오류 — 재시도 ${attempt}/${maxAttempts}: ${error}`;
-                        void db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: note, planStepIndex: planIdx() })
+                    // 재시도·컨텍스트 절단을 스텝으로 남긴다 — 발동 빈도·사유를 DB 로 집계(fail-open).
+                    onNote: (stepType, note) => {
+                        void db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType, content: note, planStepIndex: planIdx() })
                             .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
-                        emitStep('retry', undefined, note);
+                        emitStep(stepType, undefined, note);
                     },
                 });
                 this.client = roleState.client;

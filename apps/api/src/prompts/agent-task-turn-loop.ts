@@ -4,6 +4,11 @@
  * @module prompts/agent-task-turn-loop
  */
 
+/** 일시적 LLM 오류 재시도 — 단계 기록에 남기는 문구. */
+export function getTransientRetryNote(attempt: number, maxAttempts: number, error: string): string {
+    return `일시적 LLM 오류 — 재시도 ${attempt}/${maxAttempts}: ${error}`;
+}
+
 /** 재시도 소진 뒤 대기 — 단계 기록에 남기는 사유(오류 원문 + 기다리는 시간). */
 export function getRecoveryWaitNote(error: string, waitMs: number): string {
     return `${error} — 짧은 재시도 소진, ${Math.round(waitMs / 1000)}초 기다린 뒤 다시 시도`;
@@ -17,4 +22,9 @@ export function getAgentTaskStallNudge(): string {
 /** 행동 예고 재촉 — 단계 기록에 남기는 문구. */
 export function getAgentTaskStallNote(count: number, max: number): string {
     return `행동 예고만 하고 멈춤 — 재촉 ${count}/${max}`;
+}
+
+/** 컨텍스트 절단 — 단계 기록에 남기는 문구. */
+export function getContextTrimNote(dropped: number, total: number): string {
+    return `컨텍스트 창 초과 — 이번 모델 호출에서 대화 ${total}건 중 오래된 메시지 ${dropped}건을 빼고 보냈습니다. 모델이 앞선 내용을 보지 못했을 수 있습니다.`;
 }

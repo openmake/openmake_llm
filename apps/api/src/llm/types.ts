@@ -77,6 +77,11 @@ export interface UsageMetrics {
      * "length" 가 발생하면 max_tokens 한도에서 절단 — reasoning 모델은 본문 미생성 위험.
      */
     finish_reason?: string;
+    /**
+     * 컨텍스트 창에 맞추려고 요청 사본에서 잘라낸 오래된 메시지 수(model-pool) — 잘라냈을 때만 있다.
+     * 호출자의 대화 원본은 그대로라, 호출자가 알아야 기록하거나 대응할 수 있다.
+     */
+    context_dropped_messages?: number;
 }
 
 /**
