@@ -46,7 +46,7 @@ export async function snapshotWorkspaceTurn(runtime: TaskRuntime, turn: number):
 }
 
 /** fork 출처 — agent_tasks 의 forked_from_* 열(141). */
-interface ForkOrigin { forked_from_task_id?: string | null; forked_from_turn?: number | null }
+export interface ForkOrigin { forked_from_task_id?: string | null; forked_from_turn?: number | null }
 
 /**
  * 갈라져 나온 작업의 작업 공간 복원 — 기준점이 아직 없는 첫 실행에서만. 복원했으면 true.

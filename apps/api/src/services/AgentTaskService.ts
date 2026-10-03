@@ -43,7 +43,6 @@ import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { initWorkspaceBaseline } from './agent-task/code-diff';
-import { restoreForkedWorkspace } from './agent-task/fork-workspace';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
 import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint } from './agent-task/turn-reentry';
@@ -281,7 +280,7 @@ export class AgentTaskService {
                 }
             }
             // 코드 작업 diff 캡처(openmake_code v1) — 첨부까지 기록된 시점을 git baseline 스냅샷(멱등·fail-open).
-            if (taskRuntime && sandboxCfg.codeDiffEnabled) { await restoreForkedWorkspace(taskRuntime, preTask); await initWorkspaceBaseline(taskRuntime); }
+            if (taskRuntime && sandboxCfg.codeDiffEnabled) await initWorkspaceBaseline(taskRuntime, preTask);
 
             // LLM 에 전달할 도구 세트 조립(샌드박스 도구 + extraTools + 2-A 동적 도구). 상세는
             // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
