@@ -21,3 +21,26 @@ export const SUBAGENT_REUSED_NOTE = '이전 실행 결과 재사용';
 export function getSubagentStatusLine(reason: SubagentExitReason, extras: readonly string[] = []): string {
     return `[종료 사유: ${[EXIT_REASON_LABELS[reason], ...extras].join(' · ')}]`;
 }
+
+const GOAL_PROBLEMS: Record<'placeholder' | 'template' | 'context' | 'short', string> = {
+    placeholder: '자리 표시뿐인 목표입니다',
+    template: '채워지지 않은 틀 표시가 있습니다',
+    context: '이 대화의 맥락에 기대는 지시입니다',
+    short: '지시가 너무 짧습니다',
+};
+
+/** 위임 목표가 거부된 이유 한 줄 — detail 은 걸린 부분(자리 표시·글자 수). */
+export function getDelegationGoalProblem(kind: keyof typeof GOAL_PROBLEMS, detail?: string): string {
+    return detail ? `${GOAL_PROBLEMS[kind]} (${detail})` : GOAL_PROBLEMS[kind];
+}
+
+/** 위임을 실행하지 않고 돌려보낼 때의 결과 — 무엇을 고쳐 다시 부를지 알린다. problems 는 이유 줄 목록. */
+export function getDelegationRejection(problems: readonly string[]): string {
+    return 'Error: 위임을 실행하지 않았습니다. 서브에이전트는 이 대화를 볼 수 없으므로, 대상·범위·원하는 결과를 '
+        + `지시문 안에 모두 적어 다시 호출하세요.\n${problems.map((p) => `- ${p}`).join('\n')}`;
+}
+
+/** 부모에게 가는 위임 결과에 붙는 안내 — 서브에이전트가 "했다"고 쓴 것과 실제로 한 것은 다를 수 있다. */
+export const DELEGATION_SELF_REPORT_NOTICE =
+    '[안내] 서브에이전트의 결과는 자가 보고이며 검증된 사실이 아닙니다. 결론을 좌우하는 수치·출처·"완료했다"는 주장은 '
+    + '확인하고, 확인하지 못한 내용은 서브에이전트 보고임을 밝히세요.';

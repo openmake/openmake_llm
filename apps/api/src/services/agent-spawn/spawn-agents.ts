@@ -39,7 +39,8 @@ import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
 import { ASK_USER_TOOL_NAME } from '../chat-service/ask-user';
 import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
 import { AGENT_DELEGATION, SUBAGENT_REUSABLE_EXITS, exitReasonForError, type SubagentExitReason } from '../../config/agent-task-delegation';
-import { getSubagentStatusLine, SUBAGENT_REUSED_NOTE } from '../../prompts/agent-task-delegation';
+import { getSubagentStatusLine, SUBAGENT_REUSED_NOTE, getDelegationRejection, DELEGATION_SELF_REPORT_NOTICE } from '../../prompts/agent-task-delegation';
+import { checkDelegationGoal } from '../agent-task/delegation-input';
 import { SpawnResultStore } from './spawn-result-store';
 import { createLogger } from '../../utils/logger';
 
@@ -259,6 +260,14 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     const requested = parsed.data.tasks;
     const tasks = requested.slice(0, AGENT_SPAWN.MAX_TASKS_PER_CALL);
     const droppedCount = requested.length - tasks.length;
+    if (AGENT_DELEGATION.INPUT_CHECK_ENABLED) {
+        // 빈 껍데기 태스크가 하나라도 있으면 전체를 돌려보낸다 — 일부만 돌리면 모델이 나머지를 고쳐 다시 부르지 않는다.
+        const problems = tasks.flatMap((task, i) => {
+            const problem = checkDelegationGoal(task.prompt, { batch: tasks.length >= 2 });
+            return problem ? [`태스크 ${i + 1}: ${problem}`] : [];
+        });
+        if (problems.length > 0) return getDelegationRejection(problems);
+    }
     const subTools = buildSpawnSubagentTools(p.tools);
     const userId = String(p.userCtx.userId);
     const started = Date.now();
@@ -355,7 +364,8 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
         ? exits.map((reason, i) => (reason ? getSubagentStatusLine(reason, reused.has(i) ? [SUBAGENT_REUSED_NOTE] : []) : undefined))
         : undefined;
     return composeSpawnResult({
-        tasks, results, ...(statusLines ? { statusLines } : {}), noToolsNotice, droppedCount, maxTasks: AGENT_SPAWN.MAX_TASKS_PER_CALL,
+        tasks, results, ...(statusLines ? { statusLines } : {}),
+        noToolsNotice: `${AGENT_DELEGATION.SELF_REPORT_NOTICE_ENABLED ? `${DELEGATION_SELF_REPORT_NOTICE}\n\n` : ''}${noToolsNotice}`, droppedCount, maxTasks: AGENT_SPAWN.MAX_TASKS_PER_CALL,
         budgetChars: AGENT_SPAWN.RESULT_BUDGET_CHARS, headRatio: TOOL_RESULT_TRUNCATION.HEAD_RATIO,
     });
 }
