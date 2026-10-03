@@ -31,6 +31,9 @@ export const AGENT_TASK_TURN_LOOP = {
     /** 잘린 도구 호출을 실행하지 않기 — 인자 JSON 파싱이 실패한 호출을 빈 인자로 실행하지 않고 오류 결과를 돌려준다.
      *  AGENT_TASK_REJECT_MALFORMED_TOOL_ARGS=false 면 종전처럼 빈 인자로 실행한다. */
     REJECT_MALFORMED_TOOL_ARGS: process.env.AGENT_TASK_REJECT_MALFORMED_TOOL_ARGS !== 'false',
+    /** 한 턴 내 중복 호출 제거 — 한 응답 안에 이름·인자가 같은 읽기·검색 호출이 여럿이면 한 번만 실행하고
+     *  나머지에는 앞선 호출을 가리키는 짧은 결과를 준다. 부작용 있는 도구는 대상이 아니다. AGENT_TASK_DEDUPE_TOOL_CALLS=false 로 끈다. */
+    DEDUPE_TOOL_CALLS: process.env.AGENT_TASK_DEDUPE_TOOL_CALLS !== 'false',
 };
 
 /**

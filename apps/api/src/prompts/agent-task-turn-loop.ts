@@ -33,3 +33,11 @@ export function getContextTrimNote(dropped: number, total: number): string {
 export function getMalformedToolArgsResult(toolName: string): string {
     return `Error: ${toolName} 호출의 인자가 올바른 JSON 이 아니어서 실행하지 않았습니다(출력이 중간에 잘렸을 수 있습니다). 인자를 완전한 JSON 으로 다시 작성해 호출하세요. 내용이 길면 여러 번에 나눠 호출하세요.`;
 }
+
+/** 한 응답 안의 중복 호출에 주는 결과의 머리말 — 반복 가드(tool-loop-guard)가 이 결과를 집계에서 빼는 데 쓴다. */
+export const DUPLICATE_TOOL_CALL_PREFIX = '[중복 호출]';
+
+/** 한 응답 안에서 앞선 호출과 이름·인자가 같은 호출에 주는 짧은 결과 — 다시 실행하지 않았고 어느 결과를 보면 되는지 알린다. */
+export function getDuplicateToolCallResult(toolName: string, originalCallId: string | undefined): string {
+    return `${DUPLICATE_TOOL_CALL_PREFIX} 같은 응답 안의 앞선 ${toolName} 호출${originalCallId ? `(${originalCallId})` : ''}과 이름·인자가 같아 다시 실행하지 않았습니다. 그 호출의 결과를 쓰세요.`;
+}
