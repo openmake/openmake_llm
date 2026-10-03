@@ -1,0 +1,106 @@
+{
+  "version": "1.0.0",
+  "description": "프롬프트 규칙 제거 실험용 과제 — 샌드박스 안에서만 끝나는(네트워크·검색 불필요) 작은 과제와 기대 과정. 라벨은 사용자 의도 기준: 검색·브라우저를 쓰지 않고, 같은 실행 도구를 과하게 반복하지 않는다.",
+  "variants": [
+    {
+      "id": "baseline",
+      "dropRules": []
+    },
+    {
+      "id": "no-budget-rules",
+      "note": "절차·예산류 규칙(도구 호출 수·검색 횟수 지시)을 뺀 조건",
+      "dropRules": [
+        "Do NOT call tools unnecessarily",
+        "Scale tool calls to goal complexity",
+        "For search tools",
+        "For research / information-gathering goals"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "sum-of-squares",
+      "goal": "1부터 100까지 정수의 제곱의 합을 계산해서 result.txt 파일에 저장하고, 그 값을 알려 주세요.",
+      "maxTurns": 10,
+      "spec": {
+        "id": "sum-of-squares",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 8,
+          "python_execute": 8
+        }
+      }
+    },
+    {
+      "id": "edit-notes",
+      "goal": "notes.md 파일을 만들어 '회의 요약'이라는 제목과 항목 세 개를 적은 다음, 두 번째 항목을 '수정됨'으로 바꾸고 최종 내용을 보여 주세요.",
+      "maxTurns": 10,
+      "spec": {
+        "id": "edit-notes",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 8,
+          "python_execute": 8
+        }
+      }
+    },
+    {
+      "id": "region-average",
+      "goal": "다음 데이터로 sales.csv 를 만들고 지역별 평균을 계산해 표로 알려 주세요: 서울 10, 서울 20, 부산 30, 부산 50.",
+      "maxTurns": 10,
+      "spec": {
+        "id": "region-average",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 8,
+          "python_execute": 8
+        }
+      }
+    }
+  ]
+}
