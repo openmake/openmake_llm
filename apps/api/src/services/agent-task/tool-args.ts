@@ -27,24 +27,27 @@ function isSensitiveKey(key: string): boolean {
     return SENSITIVE_KEY_PATTERNS.some((p) => lk.includes(p));
 }
 
-function maskValue(value: unknown, depth: number): unknown {
+function maskValue(value: unknown, depth: number, sensitive: (key: string, value: unknown) => boolean = isSensitiveKey): unknown {
     if (depth > MAX_DEPTH) return '[DEPTH_LIMIT]';
     if (value === null || typeof value !== 'object') return value;
     if (Array.isArray(value)) {
-        const head = value.slice(0, MAX_ARRAY_ITEMS).map((v) => maskValue(v, depth + 1));
+        const head = value.slice(0, MAX_ARRAY_ITEMS).map((v) => maskValue(v, depth + 1, sensitive));
         return value.length > MAX_ARRAY_ITEMS
             ? [...head, `[+${value.length - MAX_ARRAY_ITEMS} more]`]
             : head;
     }
     return Object.fromEntries(
         Object.entries(value as Record<string, unknown>).map(([k, v]) =>
-            isSensitiveKey(k) ? [k, REDACTED] : [k, maskValue(v, depth + 1)]),
+            sensitive(k, v) ? [k, REDACTED] : [k, maskValue(v, depth + 1, sensitive)]),
     );
 }
 
-/** 민감 키의 값만 가린 사본(크기 캡 없음) — 승인 저장본(task-sandbox/approval-redact)이 같은 기준을 쓴다. */
-export function maskSensitiveKeys(value: unknown): unknown {
-    return maskValue(value, 0);
+/**
+ * 민감 키의 값만 가린 사본(크기 캡 없음). 판정을 넘기지 않으면 스텝 기록과 같은 조각 일치 기준이다.
+ * 승인 저장본(task-sandbox/approval-redact)은 사용자가 읽어야 하는 사본이라 낱말 단위의 좁은 판정을 넘긴다.
+ */
+export function maskSensitiveKeys(value: unknown, sensitive?: (key: string, value: unknown) => boolean): unknown {
+    return maskValue(value, 0, sensitive);
 }
 
 /**

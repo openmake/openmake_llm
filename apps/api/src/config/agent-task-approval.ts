@@ -15,6 +15,30 @@ export const APPROVAL_REJECT_REASON_MAX_CHARS = parseInt(process.env.AGENT_TASK_
 export const APPROVAL_REDACT_STORED_ARGS = process.env.AGENT_TASK_APPROVAL_REDACT_ARGS !== 'false';
 
 /**
+ * 승인 저장본의 키 이름 판정 낱말 — 키 이름을 낱말(스네이크·케밥·카멜 분해)로 보고 비밀을 뜻할 때만 가린다.
+ * 조각 일치(`keywords`·`max_tokens`·브라우저 `key: "Enter"` 까지 가림)로는 사용자가 승인할 내용을 못 본다.
+ * 스텝 기록의 마스킹(agent-task/tool-args)은 사람이 읽고 결정하는 사본이 아니라 종전의 넓은 기준 그대로다.
+ */
+export const APPROVAL_SECRET_KEY_WORDS = {
+    /** 낱말 안에 들어 있기만 해도 비밀(붙여 쓴 `clientsecret`·`apikey` 포함). */
+    stems: ['password', 'passwd', 'passphrase', 'secret', 'credential', 'authorization', 'cookie', 'apikey', 'privatekey', 'accesskey', 'sessionid'],
+    /** 낱말 전체가 같을 때만 비밀 — `author`·`oauth_provider` 같은 이름과 구분한다. */
+    exact: ['pwd', 'auth'],
+    /** `session` 은 단독이거나 이 낱말과 함께일 때만 비밀(`session_name`·`session_timeout` 은 남긴다). */
+    sessionWith: ['id', 'token', 'key', 'cookie'],
+    /** `token(s)` 옆에 있으면 수량·종류·페이지 표식이라 비밀이 아니다. 값이 숫자·불리언일 때도 남긴다. */
+    tokenPlain: ['max', 'min', 'count', 'limit', 'budget', 'usage', 'used', 'num', 'number', 'total', 'estimate', 'estimated', 'remaining',
+        'input', 'output', 'prompt', 'completion', 'per', 'size', 'length', 'type', 'page', 'next', 'prev', 'continuation'],
+    /** `key(s)` 옆에 있으면 정렬·조회용 이름이라 비밀이 아니다. 그 밖의 `*_key` 는 가린다(모르는 서비스의 키일 수 있다). */
+    keyPlain: ['sort', 'order', 'primary', 'foreign', 'partition', 'cache', 'idempotency', 'dedupe', 'lookup', 'object', 'row', 'group',
+        'field', 'column', 'index', 'name', 'names', 'id', 'type', 'code', 'press', 'pressed', 'keyboard', 'hot', 'shortcut', 'path', 'file'],
+    /** 단독 `key`·`keys` 의 값이 이 이름(또는 한 글자·F1~F24)을 `+` 로 이은 것이면 키보드 입력이라 남긴다. */
+    keyboardKeys: ['enter', 'return', 'tab', 'escape', 'esc', 'backspace', 'delete', 'insert', 'space', 'home', 'end', 'pageup', 'pagedown',
+        'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'up', 'down', 'left', 'right', 'control', 'ctrl', 'shift', 'alt', 'meta', 'cmd',
+        'command', 'option', 'controlormeta', 'capslock'],
+} as const;
+
+/**
  * 자동승인의 바닥 — 작업의 "나머지 모두 승인"에서도 계속 묻는 호출 종류.
  *   credential_write  자격증명 파일(SENSITIVE_FILE_PATTERNS)을 만들거나 고치거나 지우는 호출
  *   third_party_tool  외부 MCP 서버 도구(`server::tool`) — 제3자 코드가 호스트 밖으로 나간다
