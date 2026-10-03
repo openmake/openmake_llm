@@ -216,6 +216,20 @@ describe('runSpawnAgents 병렬 실행', () => {
     });
 });
 
+describe('runSpawnAgents 종료 사유 전달', () => {
+    it('태스크마다 종료 사유를 머리말 아래에 싣는다 — 실패·시간 초과·부분 결과를 부모가 구분한다', async () => {
+        runSubagentMock.mockImplementation(async (p: { subgoal: string; onExit?: (r: string) => void }) => {
+            if (p.subgoal === 'crash') throw new Error('subagent crashed');
+            p.onExit?.(p.subgoal === 'slow' ? 'timeout' : 'completed');
+            return `RESULT<${p.subgoal}>`;
+        });
+        const out = await runSpawnAgents({ ...baseParams, args: { tasks: [{ prompt: 'fine' }, { prompt: 'slow' }, { prompt: 'crash' }] } });
+        expect(out).toContain('fine\n[종료 사유: 정상 완료]\nRESULT<fine>');
+        expect(out).toContain('slow\n[종료 사유: 시간 초과]\nRESULT<slow>');
+        expect(out).toContain('crash\n[종료 사유: 오류]\nError: 서브에이전트 실패');
+    });
+});
+
 describe('buildSpawnSubagentTools — depth=1 재귀 가드', () => {
     it('spawn_agents·delegate 계열을 서브셋에서 제외한다', () => {
         const subset = buildSpawnSubagentTools([

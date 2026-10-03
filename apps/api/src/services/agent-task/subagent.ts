@@ -30,6 +30,7 @@ import { findDanglingToolCalls } from './turn-reentry';
 import { createLogger } from '../../utils/logger';
 import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE, partialSubagentResult } from '../../prompts/subagent-system';
 import { prepareToolArgs } from './tool-args';
+import { exitReasonForError, type SubagentExitReason } from '../../config/agent-task-delegation';
 
 const logger = createLogger('AgentTaskSubagent');
 
@@ -69,6 +70,8 @@ interface SubagentParams {
     onApprovalPending?: (toolName: string) => void;
     /** 그 대기가 유예 안에 결정(승인·거절)됨 — 부모 작업을 running 으로 되돌린다. 주차되면 부르지 않는다. */
     onApprovalDecided?: () => void;
+    /** 종료 사유 — 결과 문자열을 돌려주기 직전에 한 번 부른다. 주차(AgentTaskParked)는 종료가 아니라 부르지 않는다. */
+    onExit?: (reason: SubagentExitReason) => void;
 }
 
 /** 주차된 서브에이전트의 재개 지점 — 결과 없는 tool_call 로 끝나는 대화 + 그 턴·누적 토큰. */
@@ -120,7 +123,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
 
     try {
         for (let turn = restored?.turn ?? 0; turn < maxTurns; turn++) {
-            if (p.signal?.aborted) return 'Error: 상위 작업이 중단되었습니다.';
+            if (p.signal?.aborted) { p.onExit?.('error'); return 'Error: 상위 작업이 중단되었습니다.'; }
             const toolCalls = resumeCalls ?? await llmTurn(turn);
             resumeCalls = null;
             if (typeof toolCalls === 'string') return toolCalls;
@@ -130,12 +133,14 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
         const last = [...conversation].reverse().find((m) => m.role === 'assistant');
         const exhausted = stripRawToolCallXml((last?.content as string) || '') || '(서브에이전트가 턴 상한에 도달했습니다)';
         p.trace?.record('final', `[턴 상한 도달] ${exhausted}`);
+        p.onExit?.('turns');
         return partialSubagentResult('turns', exhausted);
     } catch (e) {
         if (e instanceof AgentTaskParked) throw e; // 주차는 실패가 아니다 — 부모가 받아 주차한다
         const msg = e instanceof Error ? e.message : String(e);
         p.trace?.record('error', msg);
         logger.warn(`[Subagent] 실행 실패: ${msg}`);
+        p.onExit?.(exitReasonForError(msg));
         return `Error: 서브에이전트 실행 실패 — ${msg}`;
     }
 
@@ -163,6 +168,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             if (tokens > AGENT_TASK_LIMITS.SUBAGENT_MAX_TOKENS || (p.remainingTokens !== undefined && p.remainingTokens() <= 0)) {
                 logger.warn(`[Subagent] 토큰 상한 초과 — 조기 종료 (${tokens})`);
                 p.trace?.record('final', `[토큰 상한 ${tokens}] ${result.content || '(부분 결과 없음)'}`);
+                p.onExit?.('tokens');
                 return partialSubagentResult('tokens', result.content || '');
             }
 
@@ -174,6 +180,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             if (!result.tool_calls || result.tool_calls.length === 0) {
                 const finalText = stripRawToolCallXml(result.content || '');
                 p.trace?.record('final', finalText || '(빈 응답)');
+                p.onExit?.('completed');
                 return finalText || '(서브에이전트가 빈 응답을 반환했습니다)';
             }
             for (const tc of result.tool_calls) {

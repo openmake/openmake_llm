@@ -38,6 +38,8 @@ import type { DelegateFactoryParams } from '../agent-task/delegate';
 import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
 import { ASK_USER_TOOL_NAME } from '../chat-service/ask-user';
 import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
+import { AGENT_DELEGATION, exitReasonForError, type SubagentExitReason } from '../../config/agent-task-delegation';
+import { getSubagentStatusLine } from '../../prompts/agent-task-delegation';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentSpawn');
@@ -281,6 +283,8 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
         })
         : null;
     let results: Array<string | null>;
+    /** 태스크별 종료 사유 — 서브가 알려 온 값. 모델 해석 단계에서 죽은 태스크는 여기서 채운다. */
+    const exits: Array<SubagentExitReason | undefined> = tasks.map(() => undefined);
     try {
         results = await parallelBatch(
             tasks,
@@ -305,9 +309,11 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
                         ...(p.onTokens ? { onTokens: p.onTokens } : {}),
                         ...(p.remainingTokens ? { remainingTokens: p.remainingTokens } : {}),
                         ...(p.onPausedMs ? { onPausedMs: p.onPausedMs } : {}),
+                        onExit: (reason) => { exits[idx] = reason; },
                     });
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
+                    exits[idx] = exitReasonForError(msg);
                     logger.warn(`[AgentSpawn] 태스크 ${idx + 1} 실패: ${msg}`);
                     // runSubagent 안에서 죽으면 그쪽이 기록하지만, 모델 해석(resolveTaskExecution)
                     // 단계 실패는 여기서만 보인다 — 안 남기면 그 서브가 영영 "실행 중"으로 남는다.
@@ -328,8 +334,11 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     results.forEach((r, i) => logger.info(
         `[AgentSpawn] 태스크 ${i + 1} 결과 프리뷰: ${(r ?? '(null)').slice(0, 160).replace(/\n/g, ' ')}`));
     // 태스크별 예산 분배 — 모든 결과와 끝의 종합 지시가 상한 안에 들어가게 한다(spawn-result).
+    const statusLines = AGENT_DELEGATION.EXIT_REASON_ENABLED
+        ? exits.map((reason) => (reason ? getSubagentStatusLine(reason) : undefined))
+        : undefined;
     return composeSpawnResult({
-        tasks, results, noToolsNotice, droppedCount, maxTasks: AGENT_SPAWN.MAX_TASKS_PER_CALL,
+        tasks, results, ...(statusLines ? { statusLines } : {}), noToolsNotice, droppedCount, maxTasks: AGENT_SPAWN.MAX_TASKS_PER_CALL,
         budgetChars: AGENT_SPAWN.RESULT_BUDGET_CHARS, headRatio: TOOL_RESULT_TRUNCATION.HEAD_RATIO,
     });
 }
