@@ -245,6 +245,24 @@ describe('task-sandbox tools', () => {
             await ed.handler({ command: 'str_replace', path: 'a.txt', old_str: 'bar', new_str: 'baz' });
             expect(sb.files.get('a.txt')).toBe('foo baz');
         });
+        it('str_replace 는 줄 끝 공백만 다른 old_str 를 유일할 때 적용한다', async () => {
+            const sb = fakeSandbox();
+            const ed = byName(createTaskTools(sb), 'str_replace_editor');
+            await ed.handler({ command: 'create', path: 'a.py', file_text: 'def f():\n    return 1  \nx = 2\n' });
+            const r = await ed.handler({ command: 'str_replace', path: 'a.py', old_str: '    return 1\nx = 2', new_str: '    return 3\nx = 2' });
+            expect(r.isError).toBeFalsy();
+            expect(sb.files.get('a.py')).toBe('def f():\n    return 3\nx = 2\n');
+            expect(txt(r)).toContain('2번 줄');
+        });
+        it('str_replace 실패 안내에 가장 비슷한 줄과 줄 번호가 들어간다', async () => {
+            const sb = fakeSandbox();
+            const ed = byName(createTaskTools(sb), 'str_replace_editor');
+            await ed.handler({ command: 'create', path: 'a.js', file_text: 'const a = 1;\nfunction renderHeader(title) {\n}\n' });
+            const miss = await ed.handler({ command: 'str_replace', path: 'a.js', old_str: 'function renderHeader(titel) {', new_str: 'x' });
+            expect(miss.isError).toBe(true);
+            expect(txt(miss)).toContain('2| function renderHeader(title) {');
+            expect(sb.files.get('a.js')).toContain('renderHeader(title)');
+        });
     });
 
     describe('file_ops', () => {

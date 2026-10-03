@@ -17,6 +17,7 @@ import { findBlockedBrowserUrls } from './browser-url-guard';
 import { BROWSER_URL_GUARD_ENABLED } from '../../config/task-sandbox';
 import { getBrowserUrlBlockedMessage } from '../../prompts/agent-task-prompt';
 import { viewWindow } from './file-view';
+import { resolveMissedStrReplace } from './str-replace-match';
 import { FILE_VIEW_MAX_CHARS } from '../../config/runtime-limits';
 import { randomUUID } from 'crypto';
 import { AgentTaskParked } from '../agent-task/types';
@@ -219,7 +220,13 @@ export function createTaskTools(
                     if (!oldStr) return textResult('old_str 가 필요합니다.', true);
                     const content = await sandbox.readFile(path);
                     const count = content.split(oldStr).length - 1;
-                    if (count === 0) return textResult(`old_str 를 찾을 수 없습니다: ${path} — old_str 는 공백·들여쓰기까지 파일 내용과 정확히 일치해야 합니다. command:view 로 현재 내용을 확인한 뒤 그대로 복사해 쓰세요.`, true);
+                    if (count === 0) {
+                        // 공백·따옴표만 다른 경우는 유일할 때 적용하고, 아니면 가장 비슷한 줄을 알린다(str-replace-match).
+                        const relaxed = resolveMissedStrReplace(content, oldStr, str(args.new_str), path);
+                        if (relaxed.content === undefined) return textResult(relaxed.message, true);
+                        await sandbox.writeFile(path, relaxed.content);
+                        return withDiagnostics(sandbox, path, relaxed.message);
+                    }
                     if (count > 1) return textResult(`old_str 가 ${count}회 중복 — 유일해야 합니다.`, true);
                     await sandbox.writeFile(path, content.replace(oldStr, str(args.new_str)));
                     return withDiagnostics(sandbox, path, `치환 완료: ${path}`);
