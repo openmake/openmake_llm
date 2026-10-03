@@ -55,6 +55,11 @@ export function getToolLoopCycleBlockedResult(toolName: string, period: number, 
     return `Error: 이 호출(${toolName})은 서로 다른 호출 ${period}개가 같은 결과로 ${laps}바퀴 되풀이된 주기를 이어가는 것이어서 실행하지 않았습니다. 다른 인자나 다른 방법을 쓰고, 더 진행할 수 없으면 지금까지의 결과로 마무리하세요.`;
 }
 
+/** 같은 구간 다시 읽기 — 바뀌지 않은 같은 파일·같은 구간을 다시 읽었을 때 결과 뒤에 붙이는 안내(내용은 그대로 돌려준다). */
+export function getRereadNote(): string {
+    return `${TOOL_LOOP_NOTE_MARKER} 이미 읽은 구간이고 그 뒤로 파일이 바뀌지 않았습니다. 다시 읽지 말고 이 내용으로 다음 단계를 진행하세요. 다른 부분이 필요하면 start_line 을 바꿔 읽으세요.`;
+}
+
 /** 출력 반복 — 단계 기록에 남기는 문구(차단하지 않고 기록만 한다). */
 export function getOutputRepetitionNote(repeats: number, windowChars: number, sample: string): string {
     return `출력 반복 감지(기록만) — 응답 본문에서 ${windowChars}자 구간이 ${repeats}회 반복됐습니다: "${sample}"`;

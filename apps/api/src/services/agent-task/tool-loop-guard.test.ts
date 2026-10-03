@@ -1,4 +1,4 @@
-import { priorRepetition, repetitionVerdict, cycleVerdict } from './tool-loop-guard';
+import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote } from './tool-loop-guard';
 import { getDuplicateToolCallResult } from '../../prompts/agent-task-turn-loop';
 import type { ChatMessage } from '../../llm/types';
 
@@ -172,5 +172,62 @@ describe('cycleVerdict — 서로 다른 호출이 번갈아 되풀이되는 주
         round(conv, 'bash', B, `Error: no network${cycleVerdict(conv, 'bash', B).noteFor('Error: no network')}`);
         round(conv, 'bash', A, 'Error: no module\n\n[반복 안내] x');
         expect(cycleVerdict(conv, 'bash', B).noteFor('Error: no network')).toContain('3바퀴');
+    });
+});
+
+describe('rereadNote — 바뀌지 않은 같은 파일·같은 구간 다시 읽기', () => {
+    const view = { command: 'view', path: 'uploads/server.log', start_line: 1, line_count: 100 };
+
+    it('두 번째로 읽으면 바로 안내한다', () => {
+        const conv = base();
+        round(conv, 'str_replace_editor', view, '[줄 1-100]\n내용');
+        const note = rereadNote(conv, 'str_replace_editor', view, '[줄 1-100]\n내용');
+        expect(note).toContain('[반복 안내]');
+        expect(note).toContain('이미 읽은');
+        expect(note.trim().split('\n')).toHaveLength(1);
+    });
+
+    it('사이에 읽기 호출만 있었으면 안내한다', () => {
+        const conv = base();
+        round(conv, 'str_replace_editor', view, '내용');
+        round(conv, 'grep_code', { pattern: 'ERROR' }, 'hit');
+        round(conv, 'str_replace_editor', { ...view, start_line: 101 }, '다른 구간');
+        expect(rereadNote(conv, 'str_replace_editor', view, '내용')).not.toBe('');
+    });
+
+    it('처음 읽거나 구간이 다르면 안내하지 않는다', () => {
+        const conv = base();
+        expect(rereadNote(conv, 'str_replace_editor', view, '내용')).toBe('');
+        round(conv, 'str_replace_editor', view, '내용');
+        expect(rereadNote(conv, 'str_replace_editor', { ...view, start_line: 101 }, '다음 구간')).toBe('');
+        expect(rereadNote(conv, 'str_replace_editor', { ...view, path: 'uploads/other.log' }, '내용')).toBe('');
+    });
+
+    it('그 사이에 파일을 고칠 수 있는 호출(편집·bash)이 있었으면 안내하지 않는다', () => {
+        for (const [name, args] of [
+            ['str_replace_editor', { command: 'str_replace', path: 'uploads/server.log', old_str: 'a', new_str: 'b' }],
+            ['bash', { command: 'sed -i s/a/b/ uploads/server.log' }],
+        ] as const) {
+            const conv = base();
+            round(conv, 'str_replace_editor', view, '내용');
+            round(conv, name, args, 'ok');
+            expect(rereadNote(conv, 'str_replace_editor', view, '내용')).toBe('');
+        }
+    });
+
+    it('내용이 달라졌거나, 앞선 결과가 접혀 모델이 볼 수 없거나, 이번 읽기가 실패면 안내하지 않는다', () => {
+        const conv = base();
+        round(conv, 'str_replace_editor', view, '내용');
+        expect(rereadNote(conv, 'str_replace_editor', view, '바뀐 내용')).toBe('');
+        expect(rereadNote(conv, 'str_replace_editor', view, 'Error: 파일이 없습니다')).toBe('');
+        const folded = base();
+        round(folded, 'str_replace_editor', view, '[접힘] 앞부분만…');
+        expect(rereadNote(folded, 'str_replace_editor', view, '내용')).toBe('');
+    });
+
+    it('보기가 아닌 호출에는 붙이지 않는다', () => {
+        const conv = base();
+        round(conv, 'bash', { command: 'cat a' }, '내용');
+        expect(rereadNote(conv, 'bash', { command: 'cat a' }, '내용')).toBe('');
     });
 });

@@ -118,3 +118,30 @@ describe('executeTurnToolCalls — 주기 반복(A-B-A-B)', () => {
         expect(out).toContain('주기');
     });
 });
+
+describe('executeTurnToolCalls — 같은 구간 다시 읽기', () => {
+    const view = { name: 'str_replace_editor', args: { command: 'view', path: 'a.log', start_line: 1, line_count: 50 } };
+
+    it('바뀌지 않은 같은 구간을 두 번째로 읽으면 내용은 그대로 돌려주고 안내를 붙인다', async () => {
+        runTool.mockResolvedValueOnce('line1\nline2');
+        const out = await runAfter([{ ...view, result: 'line1\nline2' }], view);
+        expect(out.startsWith('line1\nline2')).toBe(true);
+        expect(out).toContain('이미 읽은 구간');
+        expect(runTool).toHaveBeenCalledTimes(1);
+    });
+
+    it('그 사이에 편집이 있었으면 안내하지 않는다', async () => {
+        runTool.mockResolvedValueOnce('line1\nline2');
+        const edit = { name: 'str_replace_editor', args: { command: 'str_replace', path: 'a.log', old_str: 'x', new_str: 'y' }, result: 'ok' };
+        expect(await runAfter([{ ...view, result: 'line1\nline2' }, edit], view)).toBe('line1\nline2');
+    });
+
+    it('세 번째부터는 종전의 같은 결과 안내가 붙는다(다시 읽기 안내가 연속 집계를 끊지 않는다)', async () => {
+        runTool.mockResolvedValueOnce('line1\nline2');
+        const second = await runAfter([{ ...view, result: 'line1\nline2' }], view);
+        runTool.mockResolvedValueOnce('line1\nline2');
+        const out = await runAfter([{ ...view, result: 'line1\nline2' }, { ...view, result: second }], view);
+        expect(out).toContain('3번 연속 같은 결과');
+        expect(out).not.toContain('이미 읽은 구간');
+    });
+});

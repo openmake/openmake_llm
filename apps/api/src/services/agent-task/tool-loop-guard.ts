@@ -13,8 +13,9 @@
 import type { ChatMessage } from '../../llm/types';
 import { hashApprovalArgs } from '../../data/repositories/agent-task-approval-repository';
 import { getToolLoopBlockedResult, getToolLoopFailureNote, getToolLoopSameResultNote } from '../../prompts/agent-task-prompt';
-import { DUPLICATE_TOOL_CALL_PREFIX, TOOL_LOOP_NOTE_MARKER, getToolLoopCycleNote, getToolLoopCycleBlockedResult } from '../../prompts/agent-task-turn-loop';
+import { DUPLICATE_TOOL_CALL_PREFIX, TOOL_LOOP_NOTE_MARKER, getToolLoopCycleNote, getToolLoopCycleBlockedResult, getRereadNote } from '../../prompts/agent-task-turn-loop';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
+import { hasSideEffects } from '../../config/tool-policy';
 
 interface PriorRepetition {
     /** 직전까지 같은 이름·인자로 연속 실패한 횟수. */
@@ -152,4 +153,22 @@ export function cycleVerdict(
             cycle.laps + 1 >= AGENT_TASK_TURN_LOOP.TOOL_LOOP_CYCLE_WARN && stripLoopNotes(result) === cycle.expected
                 ? getToolLoopCycleNote(cycle.period, cycle.laps + 1) : '',
     };
+}
+
+/**
+ * PURE: 같은 구간 다시 읽기 — 파일 보기(str_replace_editor view)가 앞서 읽은 같은 파일·같은 구간을 같은 내용으로 다시 돌려줬고,
+ * 그 사이에 파일을 고칠 수 있는 호출(편집·셸 등 부작용 있는 호출)이 없었으면 결과 뒤에 붙일 짧은 안내를, 아니면 '' 를 돌려준다.
+ * 같은 결과 반복 안내(3회째)를 기다리지 않고 2회째에 알린다. 내용은 그대로 돌려준다(차단하지 않는다).
+ * 앞선 결과가 접히거나 인계 요약으로 바뀌어 모델이 볼 수 없으면 내용이 일치하지 않아 안내하지 않는다 — 그때의 다시 읽기는 정당하다.
+ */
+export function rereadNote(conversation: readonly ChatMessage[], name: string, args: unknown, result: string): string {
+    const a = (args ?? {}) as Record<string, unknown>;
+    if (!AGENT_TASK_TURN_LOOP.REREAD_NOTE_ENABLED || name !== 'str_replace_editor' || a.command !== 'view' || isErrorResult(result)) return '';
+    const done = doneCalls(conversation);
+    const want = signature(name, args);
+    for (let i = done.length - 1; i >= 0; i--) {
+        if (done[i].sig === want) return done[i].content === stripLoopNotes(result) ? getRereadNote() : '';
+        if (hasSideEffects(done[i].name, done[i].args)) return '';
+    }
+    return '';
 }

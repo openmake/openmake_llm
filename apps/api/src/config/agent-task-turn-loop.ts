@@ -52,6 +52,10 @@ export const AGENT_TASK_TURN_LOOP = {
     TOOL_LOOP_CYCLE_WARN: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_WARN, 2),
     TOOL_LOOP_CYCLE_BLOCK: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_BLOCK, 3),
     TOOL_LOOP_CYCLE_MAX_PERIOD: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_MAX_PERIOD, 3),
+    /** 같은 구간 다시 읽기 안내 — 파일 보기(str_replace_editor view)가 바뀌지 않은 같은 파일·같은 구간을 다시 읽으면 2회째에 바로
+     *  "이미 읽은 구간"이라는 한 줄을 결과에 붙인다(내용은 그대로, 차단 없음). 그 사이에 편집·셸 호출이 있었으면 붙이지 않는다.
+     *  AGENT_TASK_REREAD_NOTE=false 로 끈다. */
+    REREAD_NOTE_ENABLED: process.env.AGENT_TASK_REREAD_NOTE !== 'false',
     /** 검증이 보류한 답변 보존 — 검증 실패로 턴을 이어가다 턴 상한에 걸리면, 들고 있던 직전 완성 답변을 버리지 않고
      *  "검증 미통과" 표시(verify_skipped 스텝)와 함께 결과로 남긴다. 판정(마커·goal judge)은 그대로 거친다.
      *  AGENT_TASK_KEEP_HELD_ANSWER=false 면 종전처럼 max_turns_exhausted 실패로 끝난다. */

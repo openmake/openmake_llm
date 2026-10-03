@@ -22,7 +22,7 @@ import { notifyApprovalPending } from './approval-pending';
 import { AgentTaskAbort, AgentTaskParked } from './types';
 import { writeTurnCheckpoint, markToolCallInFlight } from './turn-reentry';
 import { hasSideEffects } from '../../config/tool-policy';
-import { priorRepetition, repetitionVerdict, cycleVerdict } from './tool-loop-guard';
+import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote } from './tool-loop-guard';
 import { needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from './tool-receipt';
 import { runWithToolCallContext } from '../../utils/tool-call-context';
 import { runWithToolMediaSink, toolMediaSinkFor } from '../../utils/tool-media-sink';
@@ -282,7 +282,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             toolResult = await execWithReceipt(name, args, tc.id);
         }
         if (parkRequested) await park(); // mcp_elicit 주차 — 결과(cancel 응답)는 기록하지 않는다
-        if (loop && !loop.block && !cycle?.block) toolResult += loop.noteFor(toolResult) || cycle!.noteFor(forModel(name, toolResult));
+        if (loop && !loop.block && !cycle?.block) toolResult += loop.noteFor(toolResult) || cycle!.noteFor(forModel(name, toolResult)) || rereadNote(conversation, name, args, toolResult);
         conversation.push({
             role: 'tool',
             content: forModel(name, toolResult),
