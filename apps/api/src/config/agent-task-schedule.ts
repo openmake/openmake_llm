@@ -21,10 +21,18 @@ export const AGENT_TASK_SCHEDULE = {
     UNREACHABLE_RETRY_ENABLED: process.env.AGENT_TASK_SCHEDULE_UNREACHABLE_RETRY_ENABLED !== 'false',
     /** 재실행 대기(ms) — 실패한 때부터 5·15·30분 뒤, 이 길이가 곧 최대 횟수(3회). 모델 서버 재기동이 보통 이 안에 끝난다. */
     UNREACHABLE_RETRY_DELAYS_MS: [5 * 60_000, 15 * 60_000, 30 * 60_000] as readonly number[],
-    /** "보고할 것 없음" 선언 — 예약 작업의 최종 응답이 표식(prompts/agent-task-schedule)으로 시작하면 종료 알림을 생략한다.
-     *  기본 꺼짐: 모델이 표식을 남용하면 보고가 조용히 사라지므로 실측 뒤에 켠다. AGENT_TASK_SCHEDULE_SILENT_ENABLED=true.
-     *  실행 결과 반영(RUN_OUTCOME_ENABLED)이 꺼져 있으면 동작하지 않는다. */
-    SILENT_ENABLED: process.env.AGENT_TASK_SCHEDULE_SILENT_ENABLED === 'true',
+    /**
+     * "보고할 것 없음" 선언 — 예약 작업의 최종 응답이 표식(prompts/agent-task-schedule)으로 시작하면 종료 알림을 생략한다.
+     * AGENT_TASK_SCHEDULE_SILENT_ENABLED=false 로 끈다. 실행 결과 반영(RUN_OUTCOME_ENABLED)이 꺼져 있으면 동작하지 않는다.
+     *
+     * 기본 켜짐의 근거(2026-10-04 실측, retired-chat-model, 샌드박스 — 예약 실행과 같은 형태: 목표 + 안내, 무인, 승인 없음):
+     * 작업 공간 파일로 상황을 고정한 목표 10종을 각 2회 돌렸다(다른 프로세스의 좀비 정리에 걸린 3건은 빼고 그 조건을 다시 돌려
+     * 유효 21건). 보고할 것이 있는 상황 5종(로그의 오류·재고 부족·가격 변경·무조건 요약·입력 파일 없음) 11건에서 표식을 쓴 것은
+     * 0건 — 입력 파일이 없는 경우에도 표식으로 숨기지 않고 없다고 보고했다. 보고할 변화가 없는 상황 5종 10건에서는 5건이 표식을 썼고
+     * (나머지 5건은 "해당 없음"을 글로 답해 종전처럼 알림이 나간다). 표식뿐인 응답 5건은 완료 판정이 모두 완료로 받았다.
+     * 남용 0/11 은 표본이 작다(실제 남용률이 0 이라는 뜻이 아니다) — 알림이 사라졌다는 신고가 오면 먼저 이 값을 끈다.
+     */
+    SILENT_ENABLED: process.env.AGENT_TASK_SCHEDULE_SILENT_ENABLED !== 'false',
 } as const;
 
 /** 모델에 닿지 못한 오류 문구 — 연결 실패와 5xx 만. 4xx·시간 초과·목표 미달성은 다시 돌려도 같다. */
