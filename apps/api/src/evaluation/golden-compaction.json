@@ -1,0 +1,623 @@
+{
+  "version": "1.0.0",
+  "description": "접기 뒤 회상 평가의 각본 — 긴 작업 대화와, 줄인 뒤에도 남아야 하는 사실(required)·본문 속 내용(그 밖). 라벨은 사용자 의도 기준이다: 스텁·요약 규칙을 바꿔 사실이 사라지면 라벨이 아니라 규칙을 고친다.",
+  "scenarios": [
+    {
+      "id": "bugfix-rounding",
+      "description": "코드 수정 — 실패한 테스트에서 시작해 원인을 찾고 고친 뒤 다시 돌린다",
+      "goal": "결제 모듈의 반올림 오류를 고치고 테스트를 통과시켜 주세요",
+      "turns": [
+        {
+          "tool": "bash",
+          "args": {
+            "command": "npm test -- billing"
+          },
+          "result": "Error: [stdout]\n> jest billing\n{{filler:3000}}\n[stderr]\nSCALE_CONST=100 was applied twice\n{{filler:3000}}\nAssertionError: expected 10.5 received 10.4\n[exit=1 9120ms]",
+          "facts": [
+            {
+              "id": "test-cmd",
+              "text": "npm test -- billing",
+              "required": true
+            },
+            {
+              "id": "test-exit",
+              "text": [
+                "npm test -- billing",
+                "exit=1"
+              ],
+              "required": true
+            },
+            {
+              "id": "test-error",
+              "text": [
+                "npm test -- billing",
+                "expected 10.5 received 10.4"
+              ],
+              "required": true
+            },
+            {
+              "id": "test-mid-detail",
+              "text": "SCALE_CONST=100 was applied twice"
+            }
+          ]
+        },
+        {
+          "tool": "grep_code",
+          "args": {
+            "pattern": "roundHalfUp",
+            "path": "src/billing"
+          },
+          "result": "src/billing/round.ts:12:export function roundHalfUp(v: number)\n{{filler:3000}}\nsrc/billing/legacy/tax.ts:88:  return roundHalfUp(total)",
+          "facts": [
+            {
+              "id": "grep-pattern",
+              "text": "roundHalfUp",
+              "required": true
+            },
+            {
+              "id": "grep-scope",
+              "text": [
+                "roundHalfUp",
+                "src/billing"
+              ],
+              "required": true
+            },
+            {
+              "id": "grep-last-hit",
+              "text": "src/billing/legacy/tax.ts:88"
+            }
+          ]
+        },
+        {
+          "tool": "str_replace_editor",
+          "args": {
+            "command": "view",
+            "path": "src/billing/round.ts"
+          },
+          "result": "import { Decimal } from './decimal';\n{{filler:3000}}\nconst EPSILON_GUARD = 1e-9;\n{{filler:3000}}",
+          "facts": [
+            {
+              "id": "view-path",
+              "text": [
+                "view src/billing/round.ts",
+                "성공"
+              ],
+              "required": true
+            },
+            {
+              "id": "view-detail",
+              "text": "EPSILON_GUARD = 1e-9"
+            }
+          ]
+        },
+        {
+          "tool": "str_replace_editor",
+          "args": {
+            "command": "str_replace",
+            "path": "src/billing/round.ts",
+            "old_str": "Math.round(v * 100) / 100",
+            "new_str": "Number(new Decimal(v).toFixed(2))"
+          },
+          "result": "치환 완료: src/billing/round.ts",
+          "facts": [
+            {
+              "id": "edit-path",
+              "text": [
+                "str_replace src/billing/round.ts",
+                "성공"
+              ],
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "npx tsc --noEmit -p ."
+          },
+          "result": "Error: [stderr]\n{{filler:3000}}\nsrc/billing/round.ts(14,9): error TS2304: Cannot find name 'Decimal'\n[exit=2 15300ms]",
+          "facts": [
+            {
+              "id": "tsc-cmd",
+              "text": "npx tsc --noEmit -p .",
+              "required": true
+            },
+            {
+              "id": "tsc-exit",
+              "text": [
+                "npx tsc --noEmit -p .",
+                "exit=2"
+              ],
+              "required": true
+            },
+            {
+              "id": "tsc-error",
+              "text": [
+                "npx tsc --noEmit -p .",
+                "error TS2304: Cannot find name 'Decimal'"
+              ],
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "str_replace_editor",
+          "args": {
+            "command": "insert",
+            "path": "src/billing/round.ts",
+            "insert_line": 0,
+            "new_str": "import { Decimal } from 'decimal.js';"
+          },
+          "result": "삽입 완료: src/billing/round.ts:0",
+          "facts": [
+            {
+              "id": "insert-path",
+              "text": "insert src/billing/round.ts",
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "npm test -- billing --coverage"
+          },
+          "result": "[stdout]\n{{filler:3000}}\nTests: 42 passed, 42 total\n[exit=0 8800ms]",
+          "facts": [
+            {
+              "id": "retest-cmd",
+              "text": "npm test -- billing --coverage",
+              "required": true
+            },
+            {
+              "id": "retest-ok",
+              "text": [
+                "npm test -- billing --coverage",
+                "exit=0"
+              ],
+              "required": true
+            },
+            {
+              "id": "retest-count",
+              "text": "42 passed"
+            }
+          ]
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "sleep 600 && npm run e2e"
+          },
+          "result": "Error: [stdout]\n{{filler:3000}}\n[exit=-1 TIMEOUT 120000ms]",
+          "facts": [
+            {
+              "id": "e2e-cmd",
+              "text": "sleep 600 && npm run e2e",
+              "required": true
+            },
+            {
+              "id": "e2e-timeout",
+              "text": [
+                "sleep 600 && npm run e2e",
+                "시간 초과"
+              ],
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "file_ops",
+          "args": {
+            "op": "write",
+            "path": "notes.md",
+            "content": "반올림은 Decimal 로 고침"
+          },
+          "result": "기록됨: notes.md",
+          "facts": [
+            {
+              "id": "notes-path",
+              "text": "write notes.md",
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "git status --short"
+          },
+          "result": "[stdout]\n M src/billing/round.ts\n{{filler:3000}}\n[exit=0 40ms]"
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "git diff --stat"
+          },
+          "result": "[stdout]\n{{filler:3000}}\n[exit=0 35ms]"
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "npm run lint -- src/billing"
+          },
+          "result": "[stdout]\n{{filler:3000}}\n[exit=0 4100ms]"
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "npm run build"
+          },
+          "result": "[stdout]\n{{filler:3000}}\n[exit=0 22000ms]"
+        }
+      ]
+    },
+    {
+      "id": "research-report",
+      "description": "조사 — 검색과 브라우저로 모은 뒤 보고서를 쓴다",
+      "goal": "2026년 전기차 보조금 제도를 조사해 report.md 로 정리해 주세요",
+      "turns": [
+        {
+          "tool": "web_search",
+          "args": {
+            "query": "2026 전기차 보조금 개편안"
+          },
+          "result": "1. 환경부 보도자료 — 2026년 전기차 구매 보조금 개편\n{{filler:3000}}\n국고 보조금 상한 580만원\n{{filler:3000}}",
+          "facts": [
+            {
+              "id": "search-query",
+              "text": "2026 전기차 보조금 개편안",
+              "required": true
+            },
+            {
+              "id": "search-figure",
+              "text": "국고 보조금 상한 580만원"
+            }
+          ]
+        },
+        {
+          "tool": "browser",
+          "args": {
+            "actions": [
+              {
+                "type": "goto",
+                "url": "https://me.go.kr/ev/2026-subsidy"
+              },
+              {
+                "type": "waitFor",
+                "selector": "article"
+              },
+              {
+                "type": "extractText",
+                "selector": "article"
+              }
+            ]
+          },
+          "result": "{\"ok\":true,\"results\":[\"전기차 보조금 업무처리지침\\n{{filler:3000}}\\n차량 가격 5,300만원 미만 전액 지원\\n{{filler:3000}}\"]}",
+          "facts": [
+            {
+              "id": "browser-url",
+              "text": "goto https://me.go.kr/ev/2026-subsidy",
+              "required": true
+            },
+            {
+              "id": "browser-extract",
+              "text": [
+                "goto https://me.go.kr/ev/2026-subsidy",
+                "extractText"
+              ],
+              "required": true
+            },
+            {
+              "id": "browser-figure",
+              "text": "5,300만원 미만 전액 지원"
+            }
+          ]
+        },
+        {
+          "tool": "web_search",
+          "args": {
+            "query": "지자체 전기차 보조금 서울 2026"
+          },
+          "result": "Error: 검색 제공자 응답 시간 초과 (upstream 504)\n{{filler:3000}}",
+          "facts": [
+            {
+              "id": "search2-query",
+              "text": "지자체 전기차 보조금 서울 2026",
+              "required": true
+            },
+            {
+              "id": "search2-error",
+              "text": [
+                "지자체 전기차 보조금 서울 2026",
+                "검색 제공자 응답 시간 초과 (upstream 504)"
+              ],
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "browser",
+          "args": {
+            "actions": [
+              {
+                "type": "goto",
+                "url": "https://ev.seoul.go.kr/notice/31"
+              },
+              {
+                "type": "click",
+                "selector": "a.download"
+              }
+            ]
+          },
+          "result": "Error: {\"ok\":false,\"error\":\"click: selector a.download not found\"}\n{{filler:3000}}",
+          "facts": [
+            {
+              "id": "browser2-url",
+              "text": "goto https://ev.seoul.go.kr/notice/31",
+              "required": true
+            },
+            {
+              "id": "browser2-failed",
+              "text": [
+                "goto https://ev.seoul.go.kr/notice/31",
+                "오류"
+              ],
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "file_ops",
+          "args": {
+            "op": "write",
+            "path": "report.md",
+            "content": "# 2026 전기차 보조금\n..."
+          },
+          "result": "기록됨: report.md",
+          "facts": [
+            {
+              "id": "report-path",
+              "text": "write report.md",
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "web_search",
+          "args": {
+            "query": "전기차 보조금 배터리 효율 계수"
+          },
+          "result": "1. 배터리 효율 계수\n{{filler:3000}}"
+        },
+        {
+          "tool": "web_search",
+          "args": {
+            "query": "전기차 보조금 사후관리 계수"
+          },
+          "result": "1. 사후관리 계수\n{{filler:3000}}"
+        },
+        {
+          "tool": "browser",
+          "args": {
+            "actions": [
+              {
+                "type": "goto",
+                "url": "https://me.go.kr/ev/faq"
+              },
+              {
+                "type": "extractText"
+              }
+            ]
+          },
+          "result": "{\"ok\":true,\"results\":[\"{{filler:3000}}\"]}"
+        },
+        {
+          "tool": "str_replace_editor",
+          "args": {
+            "command": "view",
+            "path": "report.md"
+          },
+          "result": "# 2026 전기차 보조금\n{{filler:3000}}"
+        },
+        {
+          "tool": "file_ops",
+          "args": {
+            "op": "write",
+            "path": "report.md",
+            "content": "# 2026 전기차 보조금 (최종)\n..."
+          },
+          "result": "기록됨: report.md"
+        }
+      ]
+    },
+    {
+      "id": "data-analysis",
+      "description": "데이터 분석 — 파일을 읽고 스크립트를 돌려 결과를 낸다",
+      "goal": "uploads/sales.csv 의 월별 매출을 집계해 chart.png 와 요약을 만들어 주세요",
+      "turns": [
+        {
+          "tool": "file_ops",
+          "args": {
+            "op": "read",
+            "path": "uploads/sales.csv"
+          },
+          "result": "month,region,amount\n2026-01,서울,1200\n{{filler:3000}}\n2026-09,부산,98765\n{{filler:3000}}",
+          "facts": [
+            {
+              "id": "read-path",
+              "text": "read uploads/sales.csv",
+              "required": true
+            },
+            {
+              "id": "csv-row",
+              "text": "2026-09,부산,98765"
+            }
+          ]
+        },
+        {
+          "tool": "python_execute",
+          "args": {
+            "code": "import pandas as pd\ndf = pd.read_csv('uploads/sales.csv')\nprint(df.groupby('month').amount.sum())",
+            "filename": "analyze.py"
+          },
+          "result": "Error: [stderr]\nTraceback (most recent call last):\n{{filler:3000}}\nModuleNotFoundError: No module named 'pandas'\n[exit=1 310ms]",
+          "facts": [
+            {
+              "id": "py-file",
+              "text": "analyze.py",
+              "required": true
+            },
+            {
+              "id": "py-exit",
+              "text": [
+                "analyze.py",
+                "exit=1"
+              ],
+              "required": true
+            },
+            {
+              "id": "py-error",
+              "text": [
+                "analyze.py",
+                "ModuleNotFoundError: No module named 'pandas'"
+              ],
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "pip install pandas matplotlib"
+          },
+          "result": "[stdout]\n{{filler:3000}}\nSuccessfully installed pandas-2.2.3 matplotlib-3.9.2\n[exit=0 41200ms]",
+          "facts": [
+            {
+              "id": "pip-cmd",
+              "text": "pip install pandas matplotlib",
+              "required": true
+            },
+            {
+              "id": "pip-ok",
+              "text": [
+                "pip install pandas matplotlib",
+                "exit=0"
+              ],
+              "required": true
+            },
+            {
+              "id": "pip-version",
+              "text": "pandas-2.2.3"
+            }
+          ]
+        },
+        {
+          "tool": "python_execute",
+          "args": {
+            "code": "import pandas as pd\n...",
+            "filename": "analyze.py"
+          },
+          "result": "[stdout]\nmonth\n2026-01    48210\n{{filler:3000}}\n2026-09    131977\n[exit=0 2200ms]",
+          "facts": [
+            {
+              "id": "py2-file",
+              "text": "analyze.py",
+              "required": true
+            },
+            {
+              "id": "py2-ok",
+              "text": [
+                "analyze.py",
+                "exit=0"
+              ],
+              "required": true
+            },
+            {
+              "id": "py2-total",
+              "text": "2026-09    131977"
+            }
+          ]
+        },
+        {
+          "tool": "grep_code",
+          "args": {
+            "pattern": "환불",
+            "path": "uploads",
+            "glob": "*.csv"
+          },
+          "result": "(일치 없음: 환불)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ",
+          "facts": [
+            {
+              "id": "grep-pattern",
+              "text": "환불",
+              "required": true
+            },
+            {
+              "id": "grep-nomatch",
+              "text": [
+                "환불",
+                "일치 없음"
+              ],
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "python_execute",
+          "args": {
+            "code": "import matplotlib\n...",
+            "filename": "chart.py"
+          },
+          "result": "[stdout]\nsaved chart.png\n{{filler:3000}}\n[exit=0 3900ms]",
+          "facts": [
+            {
+              "id": "chart-file",
+              "text": [
+                "chart.py",
+                "exit=0"
+              ],
+              "required": true
+            }
+          ]
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "ls -la"
+          },
+          "result": "[stdout]\n{{filler:3000}}\n[exit=0 12ms]"
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "wc -l uploads/sales.csv"
+          },
+          "result": "[stdout]\n{{filler:3000}}\n[exit=0 9ms]"
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "head -5 uploads/sales.csv"
+          },
+          "result": "[stdout]\n{{filler:3000}}\n[exit=0 8ms]"
+        },
+        {
+          "tool": "bash",
+          "args": {
+            "command": "python3 -c 'print(1)'"
+          },
+          "result": "[stdout]\n{{filler:3000}}\n[exit=0 60ms]"
+        },
+        {
+          "tool": "file_ops",
+          "args": {
+            "op": "write",
+            "path": "summary.md",
+            "content": "월별 매출 요약"
+          },
+          "result": "기록됨: summary.md"
+        }
+      ]
+    }
+  ]
+}

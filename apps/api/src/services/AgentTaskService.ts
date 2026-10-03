@@ -38,7 +38,7 @@ import { currentPlanStepIndex } from './task-sandbox/planning';
 import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, type TurnGateFlags } from './agent-task/turn-gate';
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
-import { callAgentTurnWithBudget, AgentTaskTurnTimeout } from './agent-task/turn-call';
+import { AgentTaskTurnTimeout } from './agent-task/turn-call';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
@@ -55,7 +55,7 @@ import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
 import { prepareToolArgs } from './agent-task/tool-args';
 import { assembleAgentTools } from './agent-task/tool-assembly';
-import { foldOldToolResults } from './agent-task/context-fold';
+import { callAgentTurnWithContext } from './agent-task/turn-context';
 import { buildAgentTaskSystemContent, resolveSkillToolBindings } from './agent-task/skill-block';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
@@ -355,23 +355,15 @@ export class AgentTaskService {
                 // user 메시지로 주입해 방향을 조정한다. 턴 경계 소비라 tool_call_id 매칭이 유지되고
                 // 다음 checkpoint 에 자연 포함된다(resume 안전). 스텝으로 기록해 상세/카드에 노출. 계획 편집(139)도 여기서.
                 stepNumber = await applyPendingSteering(taskId, turn, conversation, stepNumber, emitStep, taskRuntime);
-                // 오래된 도구 결과 접기 — 재전송 O(n²) 완화. 원문은 스텝 DB 에 남고 최근 턴은 유지(context-fold).
-                if (AGENT_TASK_LIMITS.CONTEXT_FOLD_ENABLED) {
-                    const fold = foldOldToolResults(conversation, {
-                        keepTurns: AGENT_TASK_LIMITS.CONTEXT_FOLD_KEEP_TURNS,
-                        minChars: AGENT_TASK_LIMITS.CONTEXT_FOLD_MIN_CHARS,
-                        headChars: AGENT_TASK_LIMITS.CONTEXT_FOLD_HEAD_CHARS,
-                    });
-                    if (fold.folded > 0) logger.info(`[AgentTask] 도구 결과 접기: ${taskId} (turn ${turn + 1}, ${fold.folded}건, -${fold.savedChars}자)`);
-                }
+                // 오래된 도구 결과 접기·창 초과 사전 판정(인계 요약)은 호출 직전에 한다 — agent-task/turn-context
 
                 // per-call abort: 작업 잔여 예산을 호출에도 바인딩 — 응답이 hang 되면
                 // 턴 사이 assertWithinLimits 까지 도달하지 못하므로 호출 자체를 끊는다.
                 // 승인 대기 누적(pausedMs)은 예산에서 제외(4-1 pause-aware).
                 // 시간 예산 바인딩·마무리 턴 최소 보장·부분 본문 보존 — agent-task/turn-call
-                const { result, callSignal } = await callAgentTurnWithBudget({
+                const { result, callSignal } = await callAgentTurnWithContext({
                     roleState, conversation, tools: effectiveTools, signal,
-                    taskId, userId: String(userId),
+                    taskId, userId: String(userId), turn,
                     totalTimeoutMs, elapsedActiveMs: Date.now() - startedAt - pausedMs,
                     finalTurn: !!finalTurnReason,
                     // 재시도·컨텍스트 절단·출력 반복을 스텝으로 남긴다 — 발동 빈도·사유를 DB 로 집계(fail-open).
