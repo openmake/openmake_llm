@@ -1302,6 +1302,16 @@ export const AGENT_TASK_LIMITS = {
     /** stuck 감지 — 동일 assistant 응답이 이 횟수만큼 연속되면 전략변경 프롬프트 주입(무한루프 방지).
      *  OpenManus BaseAgent.is_stuck 패턴. AGENT_STUCK_THRESHOLD 로 오버라이드(기본 3). */
     STUCK_THRESHOLD: parseInt(process.env.AGENT_STUCK_THRESHOLD || '3', 10),
+    /** 도구 호출 반복 가드(tool-loop-guard) — 같은 이름·인자의 호출이 연속 실패하거나 같은 결과만 돌려줄 때 안내·차단한다.
+     *  AGENT_TASK_TOOL_LOOP_GUARD=false 로 끈다. 임계값은 실측이 아니다 — 로컬 기록(도구 결과 44건)에 반복 사례가 없어
+     *  hermes-agent 의 값(경고 2·차단 5)을 한 단계 보수적으로 잡았다. 발동은 결과 문구로 스텝에 남으니 운영 집계 뒤 조정한다. */
+    TOOL_LOOP_GUARD_ENABLED: process.env.AGENT_TASK_TOOL_LOOP_GUARD !== 'false',
+    /** 같은 호출 연속 실패: 이 횟수부터 안내 / 이 횟수를 넘겨 다시 부르면 실행하지 않음. */
+    TOOL_LOOP_WARN_FAILURES: parseInt(process.env.AGENT_TASK_TOOL_LOOP_WARN_FAILURES || '2', 10),
+    TOOL_LOOP_BLOCK_FAILURES: parseInt(process.env.AGENT_TASK_TOOL_LOOP_BLOCK_FAILURES || '4', 10),
+    /** 읽기 호출의 같은 결과 연속: 이 횟수부터 안내 / 이 횟수를 넘겨 다시 부르면 실행하지 않음. */
+    TOOL_LOOP_WARN_SAME_RESULT: parseInt(process.env.AGENT_TASK_TOOL_LOOP_WARN_SAME_RESULT || '3', 10),
+    TOOL_LOOP_BLOCK_SAME_RESULT: parseInt(process.env.AGENT_TASK_TOOL_LOOP_BLOCK_SAME_RESULT || '5', 10),
     /** 목표 달성 judge — 아티팩트 없는 최종 답변 완료 시 판정 전용 LLM 1회 호출로 목표 달성
      *  여부를 검증(마커 미준수 보완). 미달성 판정 시 completed 대신 failed(goal_incomplete).
      *  판정 실패/파싱 불가는 fail-open(완료 유지). AGENT_TASK_GOAL_JUDGE=false 로 비활성. */
