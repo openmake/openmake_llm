@@ -163,7 +163,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 // 자동 승인 작업만 여기 온다 — 감사·집계를 위해 같은 레지스트리를 거친다(즉시 approved).
                 const r = await getApprovalRegistry().request(
                     { taskId, userId, toolName: name, args },
-                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal },
+                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, policy: sandboxCfg.approvalPolicy },
                 );
                 pausedMs += r.waitedMs;
                 if (r.decision !== 'approved') return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
@@ -225,7 +225,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             if (requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
                 const r = await getApprovalRegistry().request(
                     { taskId, userId, toolName: name, args },
-                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true },
+                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true, policy: sandboxCfg.approvalPolicy },
                 );
                 decision = r.decision;
                 rejectReason = r.reason;

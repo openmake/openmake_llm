@@ -212,7 +212,8 @@ export class ApprovalRegistry {
     async request(
         input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown>; preview?: string },
         /** parkable — 부모 작업의 턴 실행 경로처럼 주차 후 같은 호출로 재개할 수 있는 대기(유예 후 주차 대상). */
-        opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void; parkable?: boolean },
+        /** policy — 이 호출을 승인 대상으로 올린 정책. 요청 이벤트에 남겨 "왜 물었는지"를 나중에 되짚는다(정책은 env·작업별로 달라진다). */
+        opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void; parkable?: boolean; policy?: TaskSandboxApprovalPolicy },
     ): Promise<ApprovalResult> {
         if (this.autoApproveTasks.has(input.taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)) {
             return { decision: 'approved', waitedMs: 0 };
@@ -245,7 +246,7 @@ export class ApprovalRegistry {
         };
         if (!prior && this.store) {
             await this.persist((s) => s.insertPending({ approvalId, ...core, argsHash, riskClass, timeoutMs: opts.timeoutMs, preview }));
-            void this.event(approvalId, 'requested', null, { toolName: input.toolName, riskClass });
+            void this.event(approvalId, 'requested', null, { toolName: input.toolName, riskClass, ...(opts.policy ? { policy: opts.policy } : {}) });
         }
         return new Promise<ApprovalResult>((resolvePromise) => {
             const settle = (r: Omit<ApprovalResult, 'waitedMs'>) => {

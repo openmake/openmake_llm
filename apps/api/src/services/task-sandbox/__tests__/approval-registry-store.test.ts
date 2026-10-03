@@ -100,6 +100,18 @@ describe('ApprovalRegistry + 저장소', () => {
         await expect(reg.request(q, { timeoutMs: 5000 })).resolves.toMatchObject({ decision: 'approved', text: 'A', waitedMs: 0 });
     });
 
+    it('요청 이벤트에 당시 승인 정책을 남긴다 — 왜 물었는지 나중에 되짚을 수 있게', async () => {
+        const events: Array<{ kind: string; detail?: Record<string, unknown> }> = [];
+        const store = { ...fakeStore(), recordEvent: async (_id: string, kind: string, _actor: string | null, detail?: Record<string, unknown>) => { events.push({ kind, detail }); } };
+        const reg = new ApprovalRegistry(store as ApprovalStore);
+        let id = '';
+        const p = reg.request(input, { timeoutMs: 5000, policy: 'high-risk', onPending: (pa) => { id = pa.approvalId; } });
+        await new Promise((r) => setImmediate(r));
+        expect(events.find((e) => e.kind === 'requested')?.detail).toMatchObject({ toolName: 'bash', policy: 'high-risk' });
+        await reg.approve(id);
+        await p;
+    });
+
     it('저장소 오류는 삼켜지고 메모리 흐름은 그대로 동작한다(fail-open)', async () => {
         const broken = { ...fakeStore(), insertPending: async () => { throw new Error('db down'); }, takeoverForCall: async () => { throw new Error('db down'); } };
         const reg = new ApprovalRegistry(broken);
