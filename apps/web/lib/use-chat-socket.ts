@@ -7,13 +7,16 @@ import { useLocale, useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile, WsStreamEnvelope } from "@openmake/shared-types";
 import { nextFollowup } from "./followup-queue";
 import { acceptStreamEvent, cursorAfterResume, resumeCursorFields, EMPTY_STREAM_CURSOR, type StreamCursor } from "./ws-seq";
+import { discardOnReset, discardOnSend, filterStreamEvent, EMPTY_DISCARD, type StreamDiscardState } from "./stream-discard";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "./store";
-import { ApiClient, csrfHeaders } from "./api-client";
+import { ApiClient, csrfHeaders, refreshOnce } from "./api-client";
 
 import { gaEvent, GA_EVENTS } from "./analytics";
 import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
 import { announceAgentTaskChange } from "./agent-task-change";
+import { AUTH_RESTORED_EVENT } from "./auth-sync";
+import { uuid } from "./local-id";
 import { encodeMcpResources, type McpResourcePayload } from "@/components/chat/mcp-resource-card";
 
 // 배포 감지·토큰 갱신 상태는 소켓 재연결/훅 재마운트 간에도 유지되어야 하므로 모듈 레벨에 둔다.
@@ -125,12 +128,17 @@ export function useChatSocket() {
   // 구조화 답변(REST) 진행 중 AbortController — abort() 가 취소할 수 있게 보관
   // token_warning 갱신이 스트리밍 중 도착하면 스트림 종료 후 재연결하기 위한 예약 플래그.
   const reconnectAfterRefreshRef = useRef(false);
+  // 스트림 이벤트가 알려 준 세션 id 를 적는 중인지 — 사용자의 대화 전환(같은 store 필드를 바꾼다)과 구분한다.
+  const adoptingSessionIdRef = useRef(false);
   // 스트리밍 도중 소켓이 끊겼음(탭 백그라운드·절전 등) — 재연결 직후 서버에 resume 을 보내
   // 서버가 계속 생성해 둔 답변을 이어받는다(서버 ws-stream-registry 와 페어).
   const pendingResumeRef = useRef(false);
   // 이어받기 커서(F19.11) — 마지막으로 받은 스트림 이벤트의 streamId·seq. resume 에 실어 중복 없이 이어받고,
   // 재생·재연결로 다시 온 seq <= lastSeq 이벤트는 무시한다(서버 ws-stream-registry 와 페어).
   const streamCursorRef = useRef<StreamCursor>(EMPTY_STREAM_CURSOR);
+  // 대화를 지운 시점에 흐르던 답변 걸러내기 — 이번 요청의 스트림 id 와 버릴 스트림
+  const activeStreamIdRef = useRef<string | null>(null);
+  const discardRef = useRef<StreamDiscardState>(EMPTY_DISCARD);
   // 에이전트 작업 진행 이벤트의 마지막 순번 — 재연결 때 agent_task_resume 에 실어 놓친 이벤트만 다시 받는다
   // (서버 agent-task-progress-log 와 페어). 순번이 없는 서버(구버전)면 null 로 남아 종전처럼 동작한다.
   const lastTaskSeqRef = useRef<number | null>(null);
@@ -181,6 +189,15 @@ export function useChatSocket() {
 
     const ws = new WebSocket(resolveWsUrl());
     wsRef.current = ws;
+
+    const adoptStreamSessionId = (id: string) => {
+      adoptingSessionIdRef.current = true;
+      try {
+        setCurrentSessionId(id);
+      } finally {
+        adoptingSessionIdRef.current = false;
+      }
+    };
 
     ws.onopen = () => {
       // 언마운트 후 뒤늦게 열린 소켓이면 즉시 닫아 좀비를 방지.
@@ -311,13 +328,13 @@ export function useChatSocket() {
     const refreshAndReconnect = () => {
       if (moduleTokenRefreshing) return;
       moduleTokenRefreshing = true;
-      void ApiClient.post("/api/auth/refresh", undefined, { redirectOnUnauthorized: false })
-        .then(() => {
+      // 만료 경고는 같은 토큰을 쓰는 모든 탭에 동시에 온다 — 탭 간 잠금이 걸린 refreshOnce 로 보낸다.
+      void refreshOnce()
+        .then((ok) => {
+          // 갱신 실패(세션 만료 등)면 재연결하지 않는다 — 다음 만료 경고/REST 401 인터셉트 흐름에 위임
+          if (!ok) return;
           if (useAppStore.getState().isGenerating) reconnectAfterRefreshRef.current = true;
           else reconnectNow();
-        })
-        .catch(() => {
-          /* 갱신 실패(세션 만료 등) — 다음 만료 경고/REST 401 인터셉트 흐름에 위임 */
         })
         .finally(() => {
           moduleTokenRefreshing = false;
@@ -330,6 +347,14 @@ export function useChatSocket() {
         data = JSON.parse(ev.data) as WsServerEvent;
       } catch {
         return;
+      }
+      // 대화를 지운 뒤에 도착한 그 답변의 이벤트(종료 포함)는 버린다 — 빈 새 대화에 이전 답변이 써지지 않게
+      {
+        const streamId = (data as WsStreamEnvelope).streamId;
+        const filtered = filterStreamEvent(discardRef.current, streamId);
+        discardRef.current = filtered.state;
+        if (filtered.drop) return;
+        if (typeof streamId === "string") activeStreamIdRef.current = streamId;
       }
       if (data.type === "stream_resume") {
         streamCursorRef.current = cursorAfterResume(streamCursorRef.current, data);
@@ -361,12 +386,12 @@ export function useChatSocket() {
           if (typeof data.issues === "string" && data.issues) setVerificationIssues(data.issues);
           break;
         case "session_created":
-          if (data.sessionId) setCurrentSessionId(data.sessionId);
+          if (data.sessionId) adoptStreamSessionId(data.sessionId);
           break;
         case "stream_resume":
           // 끊긴 사이 서버가 계속 생성한 답변 스냅샷 — 마지막 assistant 본문을 통째로 되돌리고
           // 다시 스트리밍 상태로 둔다(후속 token/done 이 그대로 이어진다).
-          if (data.sessionId) setCurrentSessionId(data.sessionId);
+          if (data.sessionId) adoptStreamSessionId(data.sessionId);
           resumeAssistant(data.content, data.thinking);
           // 링에서 밀려났을 수 있는 served_model 을 스냅샷으로 복원
           if (typeof data.servedModel === "string" && data.servedModel) setServedModel(data.servedModel);
@@ -641,9 +666,27 @@ export function useChatSocket() {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
       }
-      wsRef.current?.close();
+      // 아직 연결 중인 소켓은 여기서 닫지 않는다 — 닫으면 브라우저가 "closed before the connection is
+      // established" 를 찍는다(개발 모드 StrictMode 가 effect 를 정리했다 다시 실행할 때마다 발생).
+      // 진짜 언마운트면 onopen 이 unmountedRef 를 보고 닫고, 재실행이면 connect() 가 이 소켓을 그대로 쓴다.
+      if (wsRef.current?.readyState !== WebSocket.CONNECTING) wsRef.current?.close();
     };
   }, [connect]);
+
+  // 세션 복원(auth-sync 의 refresh) 뒤 재핸드셰이크 — 쿠키 없이 붙은 게스트 소켓을 새 쿠키로 다시 연다.
+  // 스트리밍 중이면 종료 후로 미룬다(token_warning 갱신과 같은 규칙).
+  useEffect(() => {
+    const onAuthRestored = () => {
+      if (useAppStore.getState().isGenerating) {
+        reconnectAfterRefreshRef.current = true;
+        return;
+      }
+      reconnectRef.current = 0;
+      wsRef.current?.close();
+    };
+    window.addEventListener(AUTH_RESTORED_EVENT, onAuthRestored);
+    return () => window.removeEventListener(AUTH_RESTORED_EVENT, onAuthRestored);
+  }, []);
 
   // 반환값: 실제 전송 여부 — 재생성(resend) 경로가 히스토리 되감기 원복 판단에 사용.
   const sendChat = useCallback(
@@ -673,9 +716,11 @@ export function useChatSocket() {
       useAppStore.setState({ turnToolCalls: [] }); // 새 질문 — 이전 답변의 미확정 도구 표시를 비운다
       setStreaming(true); // assistant placeholder 는 첫 token 에서 생성, isGenerating=true
 
+      activeStreamIdRef.current = null; // 이번 요청의 스트림 id 는 첫 이벤트에서 안다
+      discardRef.current = discardOnSend(discardRef.current);
       const payload: WsChatRequest = {
         // 멱등 키(140) — 전송마다 새로 발급. 재생성(regenerate)도 의도된 새 요청이라 새 id.
-        clientRequestId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : undefined,
+        clientRequestId: uuid(), // http 접속에서도 발급한다(randomUUID 는 보안 컨텍스트 전용 — lib/local-id)
         type: "chat",
         message,
         model: s.selectedModel,
@@ -730,6 +775,19 @@ export function useChatSocket() {
     wsRef.current?.send(JSON.stringify({ type: "abort" }));
   }, []);
 
+  // 답변이 흐르는 도중 대화를 지우면(새 대화 등) 서버 생성을 멈추고, 이미 오고 있는 그 답변의 이벤트는 버린다.
+  // 다른 기존 대화로 전환할 때도 같다 — 전환은 세션 id 만 바꾸고 chatEpoch 는 그대로라, 이전 대화의 답변이
+  // 전환한 대화 화면에 이어서 그려졌다(2026-10-03 재현). 스트림이 자기 대화의 id 를 받아 적는 것(adoptStreamSessionId)은 전환이 아니다.
+  useEffect(() => useAppStore.subscribe((state, prev) => {
+    const cleared = state.chatEpoch !== prev.chatEpoch;
+    const switched = prev.isGenerating && state.currentSessionId !== null
+      && state.currentSessionId !== prev.currentSessionId && !adoptingSessionIdRef.current;
+    if (!cleared && !switched) return;
+    discardRef.current = discardOnReset(discardRef.current, prev.isGenerating, activeStreamIdRef.current);
+    if (prev.isGenerating && wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify({ type: "abort" }));
+    if (switched) useAppStore.getState().setStreaming(false); // 지우기는 clearChat 이 이미 끈다
+  }), []);
+
   // 에이전트 토글 ON: 메시지를 목표(goal)로 자율 에이전트 작업을 생성·실행한다.
   // (채팅 WS 가 아니라 REST POST /api/agent-tasks + /execute — 진행상황은 '에이전트 작업' 페이지)
   // 첨부 files 는 백엔드가 텍스트 추출 후 작업 샌드박스 workspace 에 주입,
@@ -761,7 +819,7 @@ export function useChatSocket() {
         let created: { data?: { task?: { id?: string; status?: string }; deduplicated?: boolean } } | null;
         // 중복 생성 방지 — 이 제출의 키. 재전송(401 갱신 후 재시도 등)되어도 서버는 작업을 한 번만 만든다.
         const idempotencyHeaders: Record<string, string> =
-          typeof crypto !== "undefined" && "randomUUID" in crypto ? { "Idempotency-Key": crypto.randomUUID() } : {};
+          { "Idempotency-Key": uuid() };
         if (totalBinaryBytes > CHUNKED_UPLOAD_THRESHOLD_BYTES) {
           const uploadRefs = [];
           for (const f of binaryParts) {

@@ -126,8 +126,10 @@ jobs:
           CI: 'true'
 
       # ─── Gate 2: TypeScript Build ───
+      # 웹 빌드는 next/font/google 로 Google 에서 폰트를 받는다 — 그 다운로드가 한 번 실패하면 코드와 무관하게
+      # 빌드 전체가 깨진다(2026-10-03 #1069 실측: 재실행으로 통과). 일시 실패만 한 번 다시 시도한다.
       - name: "Gate 2: TypeScript Build"
-        run: npm run build
+        run: npm run build || { echo "::warning::빌드 실패 — 30초 뒤 한 번 재시도합니다"; sleep 30; npm run build; }
 
       # ─── Gate 3: File Size Guard (max 600 lines) ───
       - name: "Gate 3: File Size Guard"
@@ -149,6 +151,14 @@ jobs:
       # ─── Gate 4: ESLint ───
       - name: "Gate 4: ESLint"
         run: npm run lint
+
+      # 루트 eslint 설정은 apps/web/** 를 제외한다 — web 은 자체 설정(eslint-config-next)으로 따로 돈다.
+      - name: "Gate 4: ESLint (apps/web)"
+        run: npm run lint --workspace=apps/web
+
+      # 번역 키 일치 + 문구 형식(ICU 파싱, 따옴표로 감싼 변수) — 화면에서 터지기 전에 잡는다.
+      - name: "Gate 4: i18n (apps/web)"
+        run: npm run check:i18n --workspace=apps/web
 
       # ─── Gate 5: Routing Evaluation ───
       # 키워드 라우터 정확도 회귀 검출. 베이스라인 50% 임계값 미만 시 차단.

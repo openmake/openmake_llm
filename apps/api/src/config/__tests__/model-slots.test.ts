@@ -70,3 +70,37 @@ describe('model-slots', () => {
         }
     });
 });
+
+describe('slotKindMismatch — 종류를 아는(로컬) 모델만 슬롯과 대조한다', () => {
+    // 테스트 전용 import — 파일 머리의 import 묶음과 섞지 않는다
+    const { slotKindMismatch, getModelSlot: slot } = require('../model-slots') as typeof import('../model-slots');
+    const s = (id: string) => slot(id)!;
+
+    it('대화형 슬롯에는 채팅 모델만', () => {
+        expect(slotKindMismatch(s('agent'), 'retired-chat-model', 'chat')).toBeNull();
+        expect(slotKindMismatch(s('agent'), 'bge-m3', 'embedding')).toMatch(/임베딩/);
+        expect(slotKindMismatch(s('summary'), 'acestep-v15-xl-turbo', 'capability')).toMatch(/기능 전용/);
+    });
+    it('임베딩 슬롯에는 임베딩 모델만', () => {
+        expect(slotKindMismatch(s('text.embed'), 'bge-m3', 'embedding')).toBeNull();
+        expect(slotKindMismatch(s('text.embed'), 'retired-chat-model', 'chat')).toMatch(/임베딩 모델/);
+    });
+    it('생성 슬롯(이미지·음악·영상·음성)에는 채팅·임베딩 모델을 배정할 수 없다', () => {
+        for (const id of ['image.generate', 'image.edit', 'music.generate', 'video.generate', 'audio.speech']) {
+            expect(slotKindMismatch(s(id), 'acestep-v15-xl-turbo', 'capability')).toBeNull();
+            expect(slotKindMismatch(s(id), 'retired-chat-model', 'chat')).toMatch(/채팅 모델/);
+            expect(slotKindMismatch(s(id), 'bge-m3', 'embedding')).toMatch(/임베딩/);
+        }
+    });
+    it('이해 슬롯(비전·분석·전사)은 채팅 모델도 받는다(멀티모달) — 임베딩만 거절', () => {
+        for (const id of ['vision.describe', 'vision.ocr', 'audio.analyze', 'audio.transcribe', 'music.analyze', 'video.analyze']) {
+            expect(slotKindMismatch(s(id), 'retired-chat-model', 'chat')).toBeNull();
+            expect(slotKindMismatch(s(id), 'whisper', 'capability')).toBeNull();
+            expect(slotKindMismatch(s(id), 'bge-m3', 'embedding')).toMatch(/임베딩/);
+        }
+    });
+    it('종류를 모르면(외부·미등록 모델) 통과 — 틀린 거절을 만들지 않는다', () => {
+        expect(slotKindMismatch(s('agent'), 'some-model', undefined)).toBeNull();
+        expect(slotKindMismatch(s('music.generate'), 'some-model', undefined)).toBeNull();
+    });
+});

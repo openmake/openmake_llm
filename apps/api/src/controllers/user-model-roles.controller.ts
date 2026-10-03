@@ -28,6 +28,7 @@ import { validateModelAssignment } from '../services/model-assignment-validation
 import { getAuditService } from '../services/AuditService';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, badRequest, notFound } from '../utils/api-response';
+import { slotKindReason } from '../services/model-assignments-service';
 
 const log = createLogger('UserModelRolesController');
 
@@ -105,7 +106,7 @@ export function createUserModelRolesController(): Router {
             const { model } = req.body as z.infer<typeof putSchema>;
             const fullId = model.trim();
 
-            const reason = await validateModelAssignment(userId, fullId);
+            const reason = slotKindReason(role, fullId) ?? await validateModelAssignment(userId, fullId);
             if (reason) {
                 res.status(400).json(badRequest(reason));
                 return;

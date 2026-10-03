@@ -44,6 +44,8 @@ export default function GlobalError({
               >
                 Try again
               </button>
+              {/* root layout 이 깨진 상태라 클라이언트 라우팅(Link)이 아니라 전체 새로고침으로 돌아가야 복구된다 */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a
                 href="/"
                 className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-surface px-4 text-sm font-medium text-fg transition hover:bg-surface-2"

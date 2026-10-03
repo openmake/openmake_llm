@@ -12,6 +12,8 @@ import { safeFetch } from '../../security/ssrf-guard';
 import type { CapabilityTarget } from './capability-resolver';
 import { classifyLlmError, recordLlmRequestMetric } from '../../llm/request-metrics';
 
+import { isProviderKeyRejection, KEY_REJECTION_SCAN_CHARS } from '../../config/provider-key-rejection';
+
 export const HTTP_CALL_LIMITS = {
     /** JSON 응답 본문 상한 (b64 이미지 포함 — 1024² PNG ≈ 3MB×1.37) */
     JSON_MAX_BYTES: parseInt(process.env.ORCHESTRATOR_JSON_MAX_BYTES || String(24 * 1024 * 1024), 10),
@@ -92,14 +94,27 @@ async function measured<T>(target: CapabilityTarget, run: () => Promise<T>): Pro
     }
 }
 
-/** JSON 응답 호출 — 슬롯 안에서 본문까지 읽는다. 실패는 HttpCallError(status·앞 160자) */
+/**
+ * HTTP 실패 문구 — 종합 모델이 이 문구로 사용자에게 사유를 알린다.
+ * 키 거절은 본문 앞 160자에 사유가 없을 수 있어 따로 판정하고, 무엇을 해야 하는지까지 적는다
+ * (같은 키로 다시 시도하면 provider 가 차단 시간을 늘리는 경우가 있다 — hasa 실측).
+ */
+function httpFailureMessage(target: CapabilityTarget, status: number, buf: Buffer): string {
+    const text = buf.toString('utf8', 0, KEY_REJECTION_SCAN_CHARS);
+    if (isProviderKeyRejection(status, text)) {
+        return `HTTP ${status} provider '${target.providerId}' 가 API 키를 거절했습니다(무효 또는 만료). 설정 > 외부 API 키에서 '${target.providerId}' 키를 새 키로 교체해야 합니다. 같은 키로 다시 시도하지 마세요.`;
+    }
+    return `HTTP ${status} ${text.slice(0, 160).replace(/\s+/g, ' ')}`;
+}
+
+/** JSON 응답 호출 — 슬롯 안에서 본문까지 읽는다. 실패는 HttpCallError(status·앞 160자, 키 거절은 전용 문구) */
 export async function callJson<T>(target: CapabilityTarget, opts: CallOptions): Promise<T> {
     const signal = combineSignals(opts.signal, AbortSignal.timeout(opts.timeoutMs));
     return measured(target, () => withProviderSlot(target.providerId, async () => {
         if (signal.aborted) throw new HttpCallError('취소됨', undefined, 'aborted');
         const res = await fetchFor(target)(opts.url ?? `${target.baseUrl}${target.endpoint}`, buildInit(target, opts, signal));
         const buf = await readCapped(res, HTTP_CALL_LIMITS.JSON_MAX_BYTES);
-        if (!res.ok) throw new HttpCallError(`HTTP ${res.status} ${buf.toString('utf8', 0, 160).replace(/\s+/g, ' ')}`, res.status);
+        if (!res.ok) throw new HttpCallError(httpFailureMessage(target, res.status, buf), res.status);
         try { return JSON.parse(buf.toString('utf8')) as T; } catch { throw new HttpCallError('JSON 파싱 실패', res.status, 'type'); }
     }, signal));
 }
@@ -112,7 +127,7 @@ export async function callBinary(target: CapabilityTarget, opts: CallOptions): P
         const res = await fetchFor(target)(opts.url ?? `${target.baseUrl}${target.endpoint}`, buildInit(target, opts, signal));
         if (!res.ok) {
             const buf = await readCapped(res, 64 * 1024);
-            throw new HttpCallError(`HTTP ${res.status} ${buf.toString('utf8', 0, 160).replace(/\s+/g, ' ')}`, res.status);
+            throw new HttpCallError(httpFailureMessage(target, res.status, buf), res.status);
         }
         const bytes = await readCapped(res, HTTP_CALL_LIMITS.BINARY_MAX_BYTES);
         return { bytes, contentType: (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase() };

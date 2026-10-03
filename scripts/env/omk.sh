@@ -52,6 +52,7 @@
 #   omk env autoupdate <env> [--every 'CRON'] [--off]   # 선택 — 기본은 수동 배포. PM2 cron 앱 omk-updater-<env>
 #   omk proxy status|reload|render <env>
 #   omk dev setup [--no-searxng] [--no-runtime-images] [--no-litellm] [--no-default-model] [--llm-base-url U --llm-api-key K --llm-model M]
+#                 [--dgx-host H [--vllm-api-key K]]
 #   omk dev up|down|status|reset [api|web|bench|deps|all]
 #   omk dev up [대상] [--tailscale] [--host H]…   # 다른 기기에서 보기 — 호스트를 CORS·Next·vite 에 허용(.env 에 기억)
 #
@@ -1189,7 +1190,8 @@ dgx_apply() { # $1=llm dir $2=env $3=host $4=vLLM key
     dotenv_set "$envf" SSRF_ALLOWED_HOSTS "$(csv_union "$(dotenv_get "$envf" SSRF_ALLOWED_HOSTS)" "$host")"
     chat="$(dgx_http_code "$host" "$DGX_CHAT_PORT" /v1/models "$key")"
     embed="$(dgx_http_code "$host" "$DGX_EMBED_PORT" /v1/models "$key")"
-    music="$(dgx_http_code "$host" "$DGX_MUSIC_PORT" / "")"
+    # ACE-Step 은 루트(/)에 핸들러가 없어 404 를 준다 — 살아 있어도 "음악 :8005=404" 로 찍혔다. /health 로 본다.
+    music="$(dgx_http_code "$host" "$DGX_MUSIC_PORT" /health "")"
     DGX_LINE="채팅 :$DGX_CHAT_PORT=$chat · 임베딩 :$DGX_EMBED_PORT=$embed · 음악 :$DGX_MUSIC_PORT=$music"
     case "$chat" in
         200) log_ok "DGX 연결 확인 ($DGX_LINE)" ;;
@@ -1782,6 +1784,7 @@ dev_llm_up() {
 cmd_dev_setup() {
     dev_locate; ensure_git
     local no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 up_base="" up_key="" up_model="" keep_llm=0 inst
+    local dgx_host="" vllm_key="" qwen_base="" bge_base=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --no-searxng)        no_searxng=1 ;;
@@ -1792,10 +1795,14 @@ cmd_dev_setup() {
             --llm-base-url)      up_base="${2:-}"; shift ;;
             --llm-api-key)       up_key="${2:-}"; shift ;;
             --llm-model)         up_model="${2:-}"; shift ;;
+            # DGX vLLM(채팅·임베딩·음악)을 게이트웨이 업스트림으로 — 'omk env install --dgx-host' 와 같은 뜻이다.
+            --dgx-host)          dgx_host="${2:-}"; shift ;;
+            --vllm-api-key)      vllm_key="${2:-}"; shift ;;
             *) usage_die "알 수 없는 옵션: $1" ;;
         esac; shift
     done
     if [[ -n "$up_base$up_model" ]] && [[ -z "$up_base" || -z "$up_model" ]]; then usage_die "--llm-base-url 과 --llm-model 은 함께 줍니다"; fi
+    [[ -z "$dgx_host" || "$dgx_host" =~ ^[A-Za-z0-9._-]+$ ]] || usage_die "--dgx-host 형식이 올바르지 않습니다: $dgx_host"
     log_step "dev 준비: $DEV_LLM"
     # 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션까지. 앱 빌드와 앱의 PM2 기동은 로컬 개발에 필요 없다.
     # 이미 준비된 클론은 .env 의 이름을 그대로 쓴다(install.sh 는 .env 와 다른 --instance 를 거부한다).
@@ -1818,8 +1825,13 @@ cmd_dev_setup() {
         [[ -n "$up_base" ]] || dev_llm_is_ours "$DEV_LLM/.env" || keep_llm=1
         [[ -z "$up_model" ]] || dotenv_set "$DEV_LLM/.env" LLM_DEFAULT_MODEL "$up_model"
         mkdir -p "$(env_dir "$inst")" "$(logs_dir "$inst")"
+        if [[ -n "$dgx_host" ]]; then
+            # 게이트웨이의 음악 주소(ACESTEP_*)와 앱의 DGX 파생값은 dgx_apply 만 채운다 — 빠뜨리면 음악 생성이 연결 불가 주소로 간다.
+            qwen_base="http://$dgx_host:$DGX_CHAT_PORT/v1"; bge_base="http://$dgx_host:$DGX_EMBED_PORT/v1"
+            dgx_apply "$DEV_LLM" "$inst" "$dgx_host" "$vllm_key"
+        fi
         stack_ensure "$DEV_LLM" "$inst" "$DEV_LLM/.openmake/searxng" "$DEV_LLM" "$no_default_model" "$keep_llm" \
-            "" "" "" "$up_base" "$up_key" "$up_model"
+            "$qwen_base" "$bge_base" "$vllm_key" "$up_base" "$up_key" "$up_model"
     fi
     if [[ -n "$DEV_BENCH" ]]; then
         log_step "bench dev 준비: $DEV_BENCH"

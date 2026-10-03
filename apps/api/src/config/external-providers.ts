@@ -34,6 +34,11 @@ interface ExternalProviderCatalogEntry {
     keyPrefixPattern?: string;
     /** 검증 endpoint (validateCredentials 에서 사용) — base_url 기준 상대 경로 */
     validatePath: string;
+    /**
+     * OpenAI 호환 주소로는 닿지 않는 provider 고유 API — capability 직결(`direct.api: 'native'`)이 쓴다.
+     * 주소는 여기 고정값만 쓰고(사용자가 등록한 base URL 은 쓰지 않는다 — 키가 다른 호스트로 나가지 않게), 키는 authHeader 에 그대로 싣는다.
+     */
+    nativeApi?: { baseUrl: string; authHeader: string };
     /** Phase 1 시점 활성 여부 — false 면 UI 노출만, 실제 호출은 NOT_SUPPORTED */
     enabled: boolean;
     /** UI 노출 정렬 순서 (낮을수록 위) */
@@ -158,6 +163,8 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         // Gemini API 의 OpenAI 호환 주소 — 인증은 `Authorization: Bearer <AI Studio 키>`.
         // (2026-10-02 실측: 잘못된 키로 /models·/chat/completions 모두 400 "Please pass a valid API key")
         defaultBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        // Lyria 음악 등 OpenAI 호환에 없는 기능 — `POST /interactions`, 인증은 `x-goog-api-key`(Bearer 는 OAuth 토큰용)
+        nativeApi: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta', authHeader: 'x-goog-api-key' },
         keyPrefixPattern: 'AIza',
         validatePath: '/models',
         enabled: true,

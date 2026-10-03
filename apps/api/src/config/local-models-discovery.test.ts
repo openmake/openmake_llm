@@ -29,6 +29,14 @@ describe('selectLocalEntriesFromModelInfo', () => {
         expect(out.map((m) => `${m.id}:${m.role}`)).toEqual(['acestep-v15-xl-turbo:capability']);
     });
 
+    it('의사결정 어댑터(jev-decision)는 글을 쓰지 않는다 — role=capability 로 채팅 목록·프로브에서 빠져야 한다', () => {
+        const out = selectLocalEntriesFromModelInfo([
+            { model_name: 'retired-chat-model', litellm_params: { model: 'openai/retired-chat-model', api_base: 'http://vllm-host:8002/v1' }, model_info: {} },
+            { model_name: 'jev-decision', litellm_params: { model: 'openai/jev-decision', api_base: 'http://vllm-host:8002/v1' }, model_info: {} },
+        ]);
+        expect(out.map((m) => `${m.id}:${m.role}`)).toEqual(['retired-chat-model:chat', 'jev-decision:capability']);
+    });
+
     it('vLLM 이 두 이름을 서빙해도 LiteLLM upstream 이 다르면 별개 항목 — 접는 기준은 upstream 동일성', () => {
         // qwen3.6-35b-a3b 는 upstream 이름도 다르므로(vLLM 측 alias) 게이트웨이 정보만으로는 합칠 수 없다.
         const out = selectLocalEntriesFromModelInfo(LIVE_SAMPLE);

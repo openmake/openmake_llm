@@ -1,7 +1,8 @@
 /**
  * music-runtime — music.generate handler (Base·Add-on 통합 P06, 2026-09-23).
  * 종전 `services/orchestrator/executors/music.ts` 의 의미(가사 우선순위·길이·응답 파싱·저장) 그대로. 차이는 호출 경계뿐 —
- * provider 호출은 `ctx.model`(pass-through 연산), 저장은 `ctx.artifacts`. 로컬 전용 제약은 `describeProviderSupport` 로 선언한다(정책 확대 없음).
+ * provider 호출은 `ctx.model`(pass-through 연산), 저장은 `ctx.artifacts`. 받는 모델은 `describeProviderSupport` 로 선언한다 —
+ * 로컬 음악 서버(ACE-Step)와 Gemini 의 Lyria(네이티브 API 직결, providers/lyria). 그 밖의 외부 모델은 배정·실행 모두 거절한다.
  * @module addons/music-runtime/generate
  */
 import { detectLanguage } from '../../chat/language-policy';
@@ -12,6 +13,7 @@ import { sniffAudioExt } from '../../services/orchestrator/media-io';
 import type { PlanTask } from '../../services/orchestrator/plan-schema';
 import { createLogger } from '../../utils/logger';
 import { buildAceRequest, decodeAudioDataUrl, musicDuration, MUSIC_GEN_FORMAT, type AceChatResponse } from './providers/acestep';
+import { buildLyriaRequest, extractLyriaAudio, extractLyriaText, isLyriaModel, LYRIA_ENDPOINT, LYRIA_OPERATION, LYRIA_OPERATIONS } from './providers/lyria';
 import { normalizeMusicPlanInput } from './plan-input';
 import { conversationLyrics, extractLyrics } from './lyrics-source';
 
@@ -32,21 +34,61 @@ function resolveLyrics(task: PlanTask, ctx: CapabilityContext): string {
     return found.lyrics;
 }
 
+/** `provider:model` 의 model 부분 */
+function modelIdOf(fullId: string): string {
+    return fullId.slice(fullId.indexOf(':') + 1);
+}
+
+/** Lyria — 설명·가사·길이를 한 문장으로 보내고 응답의 오디오 블록을 저장한다 */
+async function executeLyria(task: PlanTask, ctx: CapabilityContext, prompt: string, lyrics: string): Promise<{ bytes: Buffer; mime: string; duration: number | null }> {
+    const target = ctx.model.describe();
+    // 길이는 사용자가 말했을 때만 적는다 — 말하지 않으면 모델이 곡에 맞게 정한다(ACE-Step 의 기본 30초를 강요하지 않는다)
+    const asked = task.extra.duration || target.params.duration;
+    const duration = asked ? musicDuration(asked) : null;
+    logger.info(`[Music] 요청 (${target.fullId}${duration ? `, ${duration}s` : ''}${lyrics ? '' : ', instrumental'})`);
+    const res = await ctx.model.invokeJson<unknown>({
+        operation: LYRIA_OPERATION, payload: buildLyriaRequest(target.model, prompt, lyrics, duration),
+        timeoutMs: CAPABILITY_LIMITS.MUSIC_WAIT_MS, signal: ctx.signal,
+    });
+    const audio = extractLyriaAudio(res);
+    if (!audio) {
+        const hint = extractLyriaText(res).slice(0, 160);
+        // 응답 규격은 문서로만 확인했다(2026-10-02: 무료 등급 키로는 Lyria 가 429 라 실측 불가) — 규격이 다르면 여기서 구조가 보이게 남긴다
+        logger.warn(`[Music] ${target.fullId} 응답에 오디오 블록이 없음 — 최상위 키: ${Object.keys((res ?? {}) as object).join(',') || '(없음)'}`);
+        throw new Error(`음악 생성 응답에 오디오가 없습니다${hint ? ` — ${hint}` : ''}`);
+    }
+    return { ...audio, duration };
+}
+
 export const musicGenerateHandler: CapabilityHandler = {
+    operations: LYRIA_OPERATIONS,
     describeProviderSupport(model) {
-        return model.isExternal
-            ? { supported: false, reason: `음악 생성은 로컬 음악 서버(ACE-Step)만 지원합니다 — '${model.fullId}' 는 배정할 수 없습니다` }
-            : { supported: true };
+        if (!model.isExternal) return { supported: true };
+        return isLyriaModel(model.providerId, modelIdOf(model.fullId))
+            ? { supported: true, direct: { endpoint: LYRIA_ENDPOINT, api: 'native' } }
+            : { supported: false, reason: `음악 생성은 로컬 음악 서버(ACE-Step)와 Gemini 의 Lyria 모델만 지원합니다 — '${model.fullId}' 는 배정할 수 없습니다` };
     },
     normalizePlanInput: normalizeMusicPlanInput,
     async execute(task: PlanTask, ctx: CapabilityContext) {
         const target = ctx.model.describe();
-        if (target.providerId !== 'local-llm') throw new Error(`music.generate: 외부 provider(${target.providerId}) 음악 생성은 지원하지 않습니다 — 로컬 음악 서버만 가능`);
+        const lyria = isLyriaModel(target.providerId, target.model);
+        if (target.providerId !== 'local-llm' && !lyria) throw new Error(`music.generate: 외부 provider(${target.providerId}) 음악 생성은 지원하지 않습니다 — 로컬 음악 서버와 Gemini Lyria 만 가능`);
         const ko = ctx.lang === 'ko';
         const prompt = (task.instruction || ctx.userMessage).trim();
         if (!prompt) throw new Error('music.generate: instruction(음악 설명)이 비어 있습니다');
         const lyrics = resolveLyrics(task, ctx);
         if (lyrics.length > CAPABILITY_LIMITS.MUSIC_LYRICS_MAX_CHARS) throw new Error(`가사가 너무 깁니다 (${lyrics.length}자 > ${CAPABILITY_LIMITS.MUSIC_LYRICS_MAX_CHARS}자)`);
+        if (lyria) {
+            const out = await executeLyria(task, ctx, prompt, lyrics);
+            const ext = sniffAudioExt(out.bytes, out.mime.includes('wav') ? 'wav' : MUSIC_GEN_FORMAT);
+            const ref = await ctx.artifacts.save({ kind: 'audio', prefix: 'tts', ext, bytes: out.bytes, mime: `audio/${ext === 'mp3' ? 'mpeg' : ext}` });
+            const media: TaskMedia = { kind: 'audio', urlPath: ref.urlPath, markdown: `[🔊 ${ko ? '음악 듣기' : 'Listen'}](${ref.urlPath})` };
+            const notes = [out.duration ? (ko ? `${out.duration}초 요청` : `${out.duration}s requested`) : '', lyrics ? '' : (ko ? '연주곡' : 'instrumental')].filter(Boolean).join(', ');
+            return {
+                ok: true, media: [media], model: target.fullId,
+                text: ko ? `음악 생성 완료${notes ? ` (${notes})` : ''}: ${media.urlPath}` : `Music generated${notes ? ` (${notes})` : ''}: ${media.urlPath}`,
+            };
+        }
         const duration = musicDuration(task.extra.duration || target.params.duration);
         const body = buildAceRequest(target.model, prompt, lyrics, duration, lyrics ? detectLanguage(lyrics).language : null);
 

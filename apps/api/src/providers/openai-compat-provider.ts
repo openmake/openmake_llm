@@ -34,6 +34,7 @@ import { createPinnedFetch } from '../security/ssrf-guard';
 import { needsExplicitPromptCache, toOpenAIMessages, toOpenAITools } from './openai-compat-mapping';
 import { ToolNameCodec } from './tool-name-codec';
 import { PseudoToolCallGate } from '../llm/pseudo-tool-call-parser';
+import { pingCredential } from './credential-ping';
 
 const logger = createLogger('OpenAICompatProvider');
 
@@ -172,6 +173,11 @@ export function mapOpenAIError(err: unknown): ProviderError {
         if (status === 400 && INVALID_TOOL_NAME_PATTERN.test(message)) {
             // 코덱이 있어도 신규 provider 가 다른 제약을 걸 수 있다 — 폴백 대상(RETRYABLE_CODES) 밖 코드로 드러낸다.
             return new ProviderError('NOT_SUPPORTED', `provider 가 도구 정의를 거절: ${message}`, err);
+        }
+        if (status === 400) {
+            // 요청 자체를 거절한 응답 — 재시도해도 같다. status 를 남겨 채팅 폴백 판정(external-fallback 의 "400 제외")이
+            // 그대로 걸리게 한다. status 없이 감싸면 로컬로 폴백해 사용자가 고른 모델이 이유 없이 바뀐다.
+            return Object.assign(new ProviderError('UPSTREAM_ERROR', `OpenAI 호환 호출 실패: ${message}`, err), { status: 400 });
         }
     }
     return new ProviderError('UPSTREAM_ERROR', `OpenAI 호환 호출 실패: ${message}`, err);
@@ -379,14 +385,12 @@ export class OpenAICompatProvider implements IProvider {
     async validateCredentials(): Promise<{ ok: boolean; error?: string; latencyMs?: number }> {
         const start = Date.now();
         try {
-            await this.catalogClient.models.list();
-            return { ok: true, latencyMs: Date.now() - start };
+            const list = await this.catalogClient.models.list();
+            // 목록 조회만으로는 키를 확인하지 못한다 — 1토큰 호출로 키 거절 여부를 본다(providers/credential-ping)
+            const rejected = await pingCredential(this.catalogClient, this.id, list.data.map((m) => m.id), mapOpenAIError);
+            return rejected ? { ok: false, error: rejected, latencyMs: Date.now() - start } : { ok: true, latencyMs: Date.now() - start };
         } catch (err) {
-            return {
-                ok: false,
-                error: err instanceof Error ? err.message : String(err),
-                latencyMs: Date.now() - start,
-            };
+            return { ok: false, error: err instanceof Error ? err.message : String(err), latencyMs: Date.now() - start };
         }
     }
 

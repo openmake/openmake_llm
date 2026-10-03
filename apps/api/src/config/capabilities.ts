@@ -298,6 +298,12 @@ export const ORCHESTRATOR = {
      * (약 90~120 tok/s)로 시간 상한 15초 안에 든다.
      */
     PLANNER_MAX_TOKENS: parseInt(process.env.ORCHESTRATOR_PLANNER_MAX_TOKENS || '800', 10),
+    /**
+     * Planner 가 전송 오류(과부하 503·시간 초과)로 실패하면 로컬 기본 모델로 한 번 더 계획한다.
+     * 같은 모델 재시도는 대개 같은 결과라 하지 않지만(아래), 외부 planner 장애 한 번에 미디어 기능이 통째로
+     * 빠지는 것은 다른 모델로 넘기면 피할 수 있다(2026-10-02 gemini 503 로 37턴 중 16턴 fallback). ORCHESTRATOR_PLANNER_LOCAL_FALLBACK
+     */
+    PLANNER_LOCAL_FALLBACK: process.env.ORCHESTRATOR_PLANNER_LOCAL_FALLBACK !== 'false',
     /** 계획 검증 실패 시 Planner 재시도 횟수 */
     PLANNER_RETRIES: parseInt(process.env.ORCHESTRATOR_PLANNER_RETRIES || '1', 10),
     /** 계획당 작업 수 상한 · 레벨당 병렬 상한 */

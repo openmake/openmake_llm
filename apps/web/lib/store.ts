@@ -8,6 +8,7 @@ import type {
 } from "@openmake/shared-types";
 import { enqueueFollowup, removeFollowup, type QueuedFollowup } from "./followup-queue";
 import { startToolCall, finishToolCall, settleToolCalls, type ToolCallView, type ToolCallSummary } from "./tool-calls";
+import { uuid } from "./local-id";
 
 /**
  * 채팅 메시지 (기존 state.js chatHistory 항목 대응).
@@ -174,6 +175,8 @@ interface AppState {
   chatHistory: ChatMessage[];
   currentSessionId: string | null;
   isGenerating: boolean;
+  /** 대화를 지울 때마다 1 늘어난다(clearChat) — 지운 시점에 흐르던 답변을 소켓 훅이 중단·무시하는 신호 */
+  chatEpoch: number;
   /** empty state 빠른 시작 카드 → composer prefill 용 드래프트 */
   inputDraft: string;
   /** 현재 응답에 선택된 에이전트 + 활성 스킬 (ws agent_selected / skills_activated) */
@@ -343,6 +346,7 @@ export const useAppStore = create<AppState>()(
   chatHistory: [],
   currentSessionId: null,
   isGenerating: false,
+  chatEpoch: 0,
   inputDraft: "",
   activeAgent: null,
   activeSkills: [],
@@ -533,7 +537,7 @@ export const useAppStore = create<AppState>()(
     }),
   setActiveTool: (t) => set({ activeTool: t }),
   enqueueFollowup: (text) => {
-    const r = enqueueFollowup(get().followupQueue, text, typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now()));
+    const r = enqueueFollowup(get().followupQueue, text, uuid());
     if (r.accepted) set({ followupQueue: r.queue });
     return r.accepted;
   },
@@ -553,7 +557,10 @@ export const useAppStore = create<AppState>()(
   requestResend: (r) => set({ resendRequest: r }),
   clearResendRequest: () => set({ resendRequest: null }),
   clearChat: () =>
-    set({
+    set((s) => ({
+      // 흐르던 답변은 버린다 — 소켓 훅이 chatEpoch 변화를 보고 서버에 중단을 보내고 남은 이벤트를 거른다
+      chatEpoch: s.chatEpoch + 1,
+      isGenerating: false,
       chatHistory: [],
       currentSessionId: null,
       activeAgent: null,
@@ -569,7 +576,7 @@ export const useAppStore = create<AppState>()(
       artifacts: [],
       activeArtifactId: null,
       artifactPanelOpen: false,
-    }),
+    })),
 
   startArtifact: (meta) =>
     set((s) => {

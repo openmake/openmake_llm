@@ -47,6 +47,20 @@ describe('callJson', () => {
         await expect(cj(target as never, { timeoutMs: 1000 })).rejects.toMatchObject({ status: 502 });
         delete process.env.ORCHESTRATOR_JSON_MAX_BYTES;
     });
+    it('provider 가 API 키를 거절하면 사유를 그대로 알린다 — 앞 160자에서 잘려 "보안 차단"으로 읽히지 않게', async () => {
+        // 2026-10-03 실측 본문(hasa → LiteLLM): 핵심 문구가 160자 뒤에 있었다
+        const body = JSON.stringify({ error: { message: "litellm.APIError: APIError: OpenAIException - Error code: 403 - {'error': 'security_policy_blocked', 'message': '[경고 8/10] 유효하지 않거나 만료된 API Key를 사용했습니다. 10회 초과부터 차단 시간이 1→2→4→16→32분 으로 늘어납니다. (model=Qwen-Image)', 'violation_code': 'invalid_api_key'}" } });
+        global.fetch = (async () => resp(body, { status: 403 })) as unknown as typeof fetch;
+        const err = await callJson(target as never, { timeoutMs: 1000 }).catch((e: Error) => e) as Error & { status?: number };
+        expect(err.status).toBe(403);
+        expect(err.message).toContain('API 키를 거절');
+        expect(err.message).toContain(String((target as { providerId: string }).providerId));
+    });
+    it('키와 무관한 HTTP 오류는 종전 문구 그대로', async () => {
+        global.fetch = (async () => resp('upstream exploded', { status: 502 })) as unknown as typeof fetch;
+        const err = await callJson(target as never, { timeoutMs: 1000 }).catch((e: Error) => e) as Error;
+        expect(err.message).toBe('HTTP 502 upstream exploded');
+    });
     it('이미 취소된 signal 이면 호출하지 않는다', async () => {
         const ac = new AbortController(); ac.abort();
         global.fetch = jest.fn() as unknown as typeof fetch;

@@ -2,7 +2,7 @@
  * 테스트 전용 — add-on 소유 미디어 capability(image.generate·image.edit·music.generate·video.generate)를 Base 스텁으로 Registry 에 세운다.
  * P04·P06·P08 부터 이 ID 들은 각 runtime add-on 소유라 Base bridge 에 없고, Base 테스트는 add-on 모듈을 import 하지 않는다
  * (eslint no-restricted-imports). 실행 결과는 각 add-on 테스트가 검증하고, 여기서는 Base 가 읽는 계약 필드만 흉내 낸다:
- * 로컬 전용 음악 제약·hasa 영상 직결(describeProviderSupport)과 영상 결과 조회 주제어(jobFollowupTopic).
+ * 음악의 로컬·Lyria(gemini 네이티브 직결) 제약·hasa 영상 직결(describeProviderSupport)과 영상 결과 조회 주제어(jobFollowupTopic).
  */
 import { getCapabilityRegistry, resetCapabilityRuntimeForTest } from '../../../../runtime-ports/capability-runtime';
 import { ensureLegacyCapabilityBridge, legacyCapabilityDefinition, resetLegacyCapabilityBridgeForTest } from '../../../../addon-host/legacy-capability-bridge';
@@ -17,9 +17,12 @@ export function registerMediaStubForTest(): void {
     tx.register(legacyCapabilityDefinition('image.edit'), { execute: stubExecute });
     tx.register(legacyCapabilityDefinition('music.generate'), {
         execute: stubExecute,
-        describeProviderSupport: (m) => (m.isExternal
-            ? { supported: false, reason: `음악 생성은 로컬 음악 서버(ACE-Step)만 지원합니다 — '${m.fullId}' 는 배정할 수 없습니다` }
-            : { supported: true }),
+        describeProviderSupport: (m) => {
+            if (!m.isExternal) return { supported: true };
+            return m.providerId === 'gemini' && /^gemini:lyria-(?!realtime)/.test(m.fullId)
+                ? { supported: true, direct: { endpoint: '/interactions', api: 'native' } }
+                : { supported: false, reason: `음악 생성은 로컬 음악 서버(ACE-Step)와 Gemini 의 Lyria 모델만 지원합니다 — '${m.fullId}' 는 배정할 수 없습니다` };
+        },
     });
     tx.register(legacyCapabilityDefinition('video.generate'), {
         execute: stubExecute,
