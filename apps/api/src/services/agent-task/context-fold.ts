@@ -18,6 +18,7 @@
  */
 import type { ChatMessage } from '../../llm/types';
 import { runCompactionHooks } from './compaction-hooks';
+import { digestToolCall, findToolCallArgs } from './tool-digest';
 
 export const FOLD_MARKER = '[접힌 도구 결과]';
 
@@ -41,13 +42,13 @@ export function isFoldedToolResult(content: string): boolean {
     return content.startsWith(FOLD_MARKER);
 }
 
-function buildStub(toolName: string | undefined, original: string, headChars: number): string {
+function buildStub(toolName: string | undefined, original: string, headChars: number, digest: string | null): string {
     const head = original.slice(0, headChars).replace(/\s+$/, '');
     const ellipsis = original.length > headChars ? '…' : '';
     // ⚠️ "원문이 필요하면 다시 호출하세요" 류 문구 금지 — 2026-09-09 실측(10770ab5): 그 문구가
     // 같은 파일을 25턴 동안 반복해 읽는 루프를 유도했다(접힌 구간을 매번 다시 읽고 또 접힘).
     // 이미 처리한 내용임을 알리고, 필요한 요점은 메모로 남기게 한다.
-    return `${FOLD_MARKER} ${toolName ?? 'tool'} 결과 ${original.length}자 — 이미 읽고 처리한 내용이라 앞부분만 남김. `
+    return `${FOLD_MARKER} ${digest ? `${digest} · 결과` : `${toolName ?? 'tool'} 결과`} ${original.length}자 — 이미 읽고 처리한 내용이라 앞부분만 남김. `
         + '같은 내용을 다시 읽지 마세요. 나중에 필요한 요점은 지금 메모 파일(예: notes.md)에 적어 두세요.\n'
         + head + ellipsis;
 }
@@ -76,7 +77,8 @@ export function foldOldToolResults(conversation: ChatMessage[], opts: FoldOption
         if (m.role !== 'tool') continue;
         const content = typeof m.content === 'string' ? m.content : '';
         if (content.length <= opts.minChars || isFoldedToolResult(content)) continue;
-        const stub = buildStub(m.tool_name, content, opts.headChars);
+        // 도구별 한 줄(무엇을 했고 결과가 어땠나) — 접힌 뒤에도 명령과 성패가 남는다(tool-digest).
+        const stub = buildStub(m.tool_name, content, opts.headChars, digestToolCall(m.tool_name, findToolCallArgs(conversation, i), content));
         if (stub.length >= content.length) continue; // 접어서 이득이 없으면 원문 유지
         m.content = stub;
         stats.folded++;
