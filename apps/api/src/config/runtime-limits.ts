@@ -617,6 +617,13 @@ export const TOOL_RESULT_TRUNCATION = {
     HEAD_RATIO: parseFloat(process.env.AGENT_TASK_TOOL_RESULT_HEAD_RATIO || '0.5'),
 } as const;
 
+/**
+ * 파일 보기(str_replace_editor view) 한 번에 보이는 최대 글자 수 — 도구 결과 상한보다 조금 작게 잡아
+ * 보기 결과가 절단되지 않게 한다. 넘는 파일은 줄 구간으로 나눠 본다(services/task-sandbox/file-view).
+ * AGENT_TASK_FILE_VIEW_MAX_CHARS
+ */
+export const FILE_VIEW_MAX_CHARS = parseInt(process.env.AGENT_TASK_FILE_VIEW_MAX_CHARS || '', 10) || Math.max(1000, MAX_TOOL_RESULT_CHARS - 500);
+
 /** Git-ingest 컨벤션 검사 시 LLM 입력 truncation 캡. */
 export const CONVENTION_CHECK_LIMITS = {
     MANIFEST_YAML_MAX_CHARS: parseInt(process.env.CONVENTION_CHECK_YAML_MAX || '4000', 10),
