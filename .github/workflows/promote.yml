@@ -7,6 +7,8 @@
 #
 # 머지는 일반 머지다(squash 금지) — dev 의 커밋이 main 에 그대로 남아야 release-please 가 버전을 정한다.
 #
+# main 의 필수 체크에 omk/env-dev 가 있어야 자동 머지를 건다 — 없으면 PR 만 만든다(CI 만으로 main 에 들어가지 않게).
+#
 # 시크릿 OMK_PROMOTE_TOKEN 이 필요하다 — 기본 GITHUB_TOKEN 으로 만든 PR·머지는 다른 워크플로(CI · release-please)를
 # 깨우지 않는다. 시크릿이 없으면 아무것도 하지 않고 끝난다(수동 승격 그대로).
 name: promote
@@ -50,6 +52,13 @@ jobs:
             number="${url##*/}"
           fi
           echo "PR #$number"
+
+          # main 의 필수 체크에 환경 dev 의 표지가 없으면 자동 머지를 걸지 않는다 — 걸면 CI 만 통과해도 main 에 들어간다.
+          required="$(gh api "repos/$GH_REPO/branches/main" --jq '.protection.required_status_checks.contexts // [] | index("omk/env-dev")')"
+          if [[ -z "$required" || "$required" == "null" ]]; then
+            echo "::warning::main 의 필수 체크에 omk/env-dev 가 없어 자동 머지를 걸지 않습니다 — 보호 규칙에 추가한 뒤 다시 실행하세요"
+            exit 0
+          fi
 
           gh pr merge "$number" --auto --merge \
             || echo "::warning::자동 머지를 걸지 못했습니다 — 저장소 설정의 'Allow auto-merge' 와 main 보호 규칙을 확인하세요"
