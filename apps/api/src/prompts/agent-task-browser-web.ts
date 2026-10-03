@@ -17,3 +17,9 @@ export function getBrowserRedirectBlockedMessage(urls: readonly string[]): strin
     return `브라우저 결과를 전달하지 않았습니다 — 페이지가 내부망·로컬·메타데이터 주소로 이동했습니다(리다이렉트): ${urls.join(', ')}. `
         + '이 주소의 내용은 읽을 수 없습니다. 같은 주소로 다시 시도하지 말고 다른 공개 출처를 쓰세요.';
 }
+
+/** 브라우저 결과가 봇 차단·캡차 확인 화면으로 보일 때 결과 뒤에 붙이는 경고(browser-result-guard). */
+export const BROWSER_BOT_BLOCK_NOTICE =
+    '[경고] 이 페이지는 봇 차단·캡차 확인 화면으로 보입니다 — 추출된 내용은 요청한 페이지의 실제 내용이 아닐 수 있습니다. '
+    + '같은 요청을 되풀이하지 말고 다른 공개 출처를 찾으세요. 이 사이트가 꼭 필요하면 ask_human 으로 사용자에게 '
+    + '브라우저를 넘겨받아 확인을 통과해 달라고 요청하세요.';

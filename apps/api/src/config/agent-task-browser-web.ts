@@ -39,3 +39,39 @@ export const BROWSER_RESULT_GUARD = {
      */
     REDIRECT_GUARD_ENABLED: BROWSER_URL_GUARD_ENABLED && process.env.TASK_SANDBOX_BROWSER_REDIRECT_GUARD !== 'false',
 } as const;
+
+/**
+ * 봇 차단·캡차 확인 화면 감지(browser-result-guard.looksBotBlocked) — 결정적 패턴.
+ * 러너는 페이지 제목을 돌려주지 않으므로 추출된 본문(extractText·extractHtml)에서 본다.
+ */
+export const BROWSER_BOT_BLOCK = {
+    /** 감지되면 결과 뒤에 경고를 붙인다. TASK_SANDBOX_BROWSER_BOT_NOTICE=false 로 끈다. */
+    NOTICE_ENABLED: process.env.TASK_SANDBOX_BROWSER_BOT_NOTICE !== 'false',
+    /** 본문 텍스트는 이 길이 이하일 때만 본다 — 차단 화면은 짧고, 긴 글에 같은 낱말이 있는 경우를 거른다. */
+    SHORT_TEXT_MAX_CHARS: intEnv(process.env.TASK_SANDBOX_BROWSER_BOT_TEXT_MAX_CHARS, 1500),
+    /** 차단·확인 화면의 문구 — 짧은 본문과 HTML 제목에 적용한다. */
+    TEXT_PATTERNS: [
+        /just a moment/i,
+        /checking your browser/i,
+        /attention required/i,
+        /verify (that )?you are (a )?human/i,
+        /are you a robot/i,
+        /unusual traffic/i,
+        /access (to this page has been )?denied/i,
+        /bot detected/i,
+        /ddos protection/i,
+        /captcha/i,
+        /로봇이 아닙니다/,
+        /보안 ?문자/,
+        /자동 ?입력 ?방지/,
+        /비정상적인 (접근|트래픽)/,
+    ] as readonly RegExp[],
+    /** 차단 서비스가 확인 화면에 넣는 표지(HTML 어디에 있든) — 일반 로그인 폼의 캡차 위젯(g-recaptcha 등)은 넣지 않는다. */
+    HTML_MARKERS: [
+        /cf-chl-/,
+        /\/cdn-cgi\/challenge-platform\//,
+        /px-captcha/,
+        /captcha-delivery\.com/,
+        /_Incapsula_Resource/,
+    ] as readonly RegExp[],
+} as const;
