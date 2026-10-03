@@ -12,6 +12,11 @@ jest.mock('../../config/runtime-limits', () => {
         },
     };
 });
+// 검증 증거 원장은 기본 꺼짐 — 테스트가 켜고 끌 수 있게 값을 바꿀 수 있는 사본으로 둔다.
+jest.mock('../../config/agent-task-tools', () => {
+    const actual = jest.requireActual('../../config/agent-task-tools');
+    return { ...actual, VERIFY_EVIDENCE: { ...actual.VERIFY_EVIDENCE, ENABLED: false } };
+});
 // 산출물 렌더(buildJudgeArtifactSummary)는 실제 구현을 쓴다 — judge 에 실제로 무엇이
 // 도달하는지가 검증 대상이라 mock 으로 대체하면 의미가 없다.
 jest.mock('./goal-judge', () => ({
@@ -40,6 +45,7 @@ import { AGENT_TASK_INCOMPLETE_MARKER } from '../../prompts/agent-task-prompt';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import type { ChatMessage } from '../../llm/types';
+import { VERIFY_EVIDENCE } from '../../config/agent-task-tools';
 
 const judgeMock = judgeGoal as jest.MockedFunction<typeof judgeGoal>;
 const judgeStepMock = persistJudgeStep as jest.MockedFunction<typeof persistJudgeStep>;
@@ -339,5 +345,65 @@ describe('finalizeTask — 파일 변경 실패 각주', () => {
         await finalizeTask(i);
 
         expect(lastUpdate(i).result).toBe('수정했습니다.');
+    });
+});
+
+describe('finalizeTask — 검증 증거 원장', () => {
+    let n = 0;
+    const call = (name: string, args: Record<string, unknown>, result: string): ChatMessage[] => {
+        const id = `e${++n}`;
+        return [
+            { role: 'assistant', content: '', tool_calls: [{ id, type: 'function', function: { name, arguments: args } }] },
+            { role: 'tool', content: result, tool_name: name, tool_call_id: id },
+        ];
+    };
+    const ls = (): ChatMessage[] => call('bash', { command: 'ls -la' }, '[stdout]\na.ts\n[exit=0 3ms]');
+    const edit = (): ChatMessage[] => call('str_replace_editor', { command: 'create', path: 'a.ts', file_text: 'x' }, '생성됨: a.ts');
+    const testPass = (): ChatMessage[] => call('bash', { command: 'npm test' }, '[stdout]\nPASS\n[exit=0 900ms]');
+    const setEnabled = (on: boolean): void => { (VERIFY_EVIDENCE as { ENABLED: boolean }).ENABLED = on; };
+    const run = async (conversation: ChatMessage[] | undefined, emitStep: FinalizeInput['emitStep'] = () => { /* noop */ }) => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+        return finalizeTask(input({ path: 'terminate', terminateSummary: '완료', conversation, emitStep }));
+    };
+    afterEach(() => setEnabled(false));
+
+    describe('꺼짐(기본) — 종전 동작', () => {
+        it('bash 로 ls 만 한 작업도 테스트 게이트를 부른다', async () => {
+            await run(ls());
+            expect(testsMock).toHaveBeenCalledTimes(1);
+        });
+        it('편집 뒤 테스트가 통과한 기록이 있어도 다시 돌린다', async () => {
+            await run([...edit(), ...testPass()]);
+            expect(testsMock).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('켜짐', () => {
+        beforeEach(() => setEnabled(true));
+
+        it('파일을 바꾼 흔적이 없으면 테스트 게이트를 돌리지 않고 완료한다', async () => {
+            const out = await run(ls());
+            expect(testsMock).not.toHaveBeenCalled();
+            expect(out.kind).toBe('completed');
+        });
+        it('마지막 편집 이후 테스트가 통과했으면 다시 돌리지 않고, 그 사실을 진행 표시로 남긴다', async () => {
+            const emitStep = jest.fn();
+            const out = await run([...edit(), ...testPass()], emitStep);
+            expect(testsMock).not.toHaveBeenCalled();
+            expect(out.kind).toBe('completed');
+            expect(emitStep).toHaveBeenCalledWith('test_verify', undefined, expect.stringContaining('npm test'));
+        });
+        it('테스트 뒤에 다시 편집했으면(낡은 증거) 돌린다', async () => {
+            await run([...edit(), ...testPass(), ...edit()]);
+            expect(testsMock).toHaveBeenCalledTimes(1);
+        });
+        it('편집만 하고 테스트 기록이 없으면 돌린다', async () => {
+            await run(edit());
+            expect(testsMock).toHaveBeenCalledTimes(1);
+        });
+        it('대화를 받지 못했으면 종전대로 돌린다', async () => {
+            await run(undefined);
+            expect(testsMock).toHaveBeenCalledTimes(1);
+        });
     });
 });

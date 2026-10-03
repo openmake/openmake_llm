@@ -34,6 +34,9 @@ import { persistArtifactSteps, persistJudgeStep, persistVerifySkippedStep, verif
 import { maybePersistCodeDiff } from './code-diff';
 import { judgeClientFor } from './role-client';
 import { withWriteFailureFootnote } from './write-failure-footnote';
+import { collectVerificationEvidence } from './verification-evidence';
+import { VERIFY_EVIDENCE } from '../../config/agent-task-tools';
+import { VERIFY_EVIDENCE_SKIP_NOTES } from '../../prompts/agent-task-tools';
 import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
 import type { TaskRuntime } from '../task-sandbox/runtime';
@@ -161,7 +164,8 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     // 재시도 카운터는 deliverable 검증과 공유(둘 다 verifyRetries++) — 합산 상한으로 무한루프 방지.
     if (taskRuntime
         && AGENT_TASK_LIMITS.WORKSPACE_TEST_GATE_ENABLED
-        && input.verifyRetries < AGENT_TASK_LIMITS.WORKSPACE_TEST_MAX_RETRIES) {
+        && input.verifyRetries < AGENT_TASK_LIMITS.WORKSPACE_TEST_MAX_RETRIES
+        && !testGateUnneeded(input.conversation, taskId, emitStep)) {
         const tests = await verifyWorkspaceTests(taskRuntime, taskId, usedTools, stepNumber, signal);
         stepNumber = tests.stepNumber;
         emitStepIfRan(tests, emitStep);
@@ -235,6 +239,23 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     });
     logger.info(`[AgentTask] 완료: ${taskId} (${turn + 1} 턴, ${path}, judge=${verdict}, 아티팩트 ${artifacts.length}개)`);
     return { kind: 'completed', stepNumber };
+}
+
+/**
+ * 검증 증거 원장(기본 꺼짐, VERIFY_EVIDENCE.ENABLED) — 대화 기록상 테스트 게이트를 돌릴 필요가 없으면 true.
+ * 파일을 바꾼 흔적이 없거나, 마지막 변경 이후 성공한 검증 기록이 있을 때다. 꺼져 있거나 대화가 없으면 false(종전대로 돌린다).
+ */
+function testGateUnneeded(
+    conversation: FinalizeInput['conversation'], taskId: string, emitStep: FinalizeInput['emitStep'],
+): boolean {
+    if (!VERIFY_EVIDENCE.ENABLED || !conversation) return false;
+    const ev = collectVerificationEvidence(conversation);
+    const note = !ev.mutated ? VERIFY_EVIDENCE_SKIP_NOTES.no_change()
+        : ev.freshPass ? VERIFY_EVIDENCE_SKIP_NOTES.fresh_pass(ev.freshPass) : null;
+    if (note === null) return false;
+    logger.info(`[AgentTask] ${note}: ${taskId}`);
+    emitStep('test_verify', undefined, note);
+    return true;
 }
 
 function emitStepIfRan(

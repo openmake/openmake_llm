@@ -99,3 +99,38 @@ export const FILE_MUTATING_CALLS: Readonly<Record<string, { arg: string; values:
 
 /** 임의 코드를 실행하는 도구 — 인자에 실패한 경로가 나오고 성공했으면 그 경로를 다른 방법으로 고친 것으로 본다. */
 export const CODE_EXEC_TOOLS: readonly string[] = ['bash', 'python_execute'];
+
+/**
+ * 검증 증거 원장 — 완료 관문의 workspace 테스트 게이트가 대화 기록을 보고 재실행 여부를 정한다.
+ *   - 파일을 바꾼 흔적이 없으면(읽기만 한 작업, `ls` 만 한 bash) 게이트를 돌리지 않는다.
+ *   - 마지막 변경 이후에 테스트·빌드 명령이 성공한 기록이 있으면 다시 돌리지 않는다. 변경보다 오래된 기록은 낡은 것이다.
+ * 판정을 느슨하게 만드는 변경이라 **기본 꺼짐**이다 — 꺼져 있으면 종전대로 쓰기 도구를 쓴 작업은 무조건 다시 돌린다.
+ * 모델이 일부 테스트만 돌린 것(`npx jest a.test.ts`)도 증거로 치므로, 켜기 전에 운영 기록으로 생략 건을 확인할 것.
+ * AGENT_TASK_VERIFY_EVIDENCE=true 로 켠다.
+ */
+export const VERIFY_EVIDENCE = {
+    ENABLED: process.env.AGENT_TASK_VERIFY_EVIDENCE === 'true',
+    /** 실행만으로 파일을 바꿨을 수 있다고 보는 도구(성공·실패 무관). bash 는 명령을 보고 가른다. */
+    MUTATING_TOOLS: ['python_execute', 'skill_run', 'spawn_agents'] as readonly string[],
+} as const;
+
+/** 검증(테스트·빌드·타입 검사) 명령 — 한 명령(&& 로 이은 한 토막)의 앞머리에 맞춘다. */
+export const VERIFY_COMMAND_RES: readonly RegExp[] = [
+    /^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|build|lint|typecheck|check)\b/,
+    /^(?:npx\s+)?(?:jest|vitest|mocha|tsc|eslint)\b/,
+    /^(?:python3?\s+-m\s+)?pytest\b/,
+    /^python3?\s+-m\s+unittest\b/,
+    /^go\s+(?:test|build|vet)\b/,
+    /^cargo\s+(?:test|build|check)\b/,
+    /^make\s+(?:test|build|check)\b/,
+    /^(?:mvn|gradle|\.\/gradlew)\s+(?:test|build)\b/,
+];
+
+/** 파일을 바꾸지 않는 셸 명령 — 한 토막의 앞머리에 맞춘다. 여기에 없으면 바꿨을 수 있다고 본다. */
+export const READ_ONLY_COMMAND_RES: readonly RegExp[] = [
+    /^(?:ls|cat|head|tail|grep|egrep|fgrep|rg|pwd|wc|echo|printf|which|file|stat|tree|du|df|date|env|whoami|sort|uniq|cut|diff|cmp|test|\[|true|cd|nl|basename|dirname|realpath)\b/,
+    /^find\b(?!.*\s-(?:delete|exec|execdir|ok|fprint)\b)/,
+    /^sed\s+-n\b(?!.*\s-i)/,
+    /^git\s+(?:status|log|diff|show|branch|rev-parse|ls-files|blame|remote)\b/,
+    /^(?:node|python3?|npm|go|cargo)\s+(?:-v|-V|--version|version)\b/,
+];
