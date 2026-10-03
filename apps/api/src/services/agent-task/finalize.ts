@@ -30,7 +30,7 @@ import { AGENT_TASK_INCOMPLETE_MARKER, getAgentTaskVerifyFailedNudge, getAgentTa
 import { judgeGoal, buildJudgeExecutionContext, buildJudgeArtifactSummary } from './goal-judge';
 import { verifyCodeArtifacts } from './deliverable-verify';
 import { verifyWorkspaceTests } from './workspace-test-verify';
-import { persistArtifactSteps, persistJudgeStep } from './task-steps';
+import { persistArtifactSteps, persistJudgeStep, persistVerifySkippedStep, verifySkippedMessage } from './task-steps';
 import { maybePersistCodeDiff } from './code-diff';
 import { judgeClientFor } from './role-client';
 import { createLogger } from '../../utils/logger';
@@ -137,6 +137,12 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     }
 
     // 2. 산출물 실행 검증(결정적) — 코드 deliverable 이 컴파일되지 않으면 판정 전에 자가수정.
+    //    재시도 상한을 넘어 건너뛴 검증은 이름을 모아 두었다가 완료 직전에 스텝으로 남긴다.
+    const skippedGates: string[] = [];
+    if (taskRuntime && AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_ENABLED && artifacts.length > 0
+        && input.verifyRetries >= AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES) skippedGates.push('deliverable');
+    if (taskRuntime && AGENT_TASK_LIMITS.WORKSPACE_TEST_GATE_ENABLED
+        && input.verifyRetries >= AGENT_TASK_LIMITS.WORKSPACE_TEST_MAX_RETRIES) skippedGates.push('workspace_tests');
     if (taskRuntime
         && AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_ENABLED
         && input.verifyRetries < AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES
@@ -203,6 +209,10 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     }
 
     // 4. 산출물 영속 후 완료.
+    if (skippedGates.length > 0) {
+        stepNumber = await persistVerifySkippedStep(taskId, stepNumber, skippedGates);
+        emitStep('verify_skipped', undefined, verifySkippedMessage(skippedGates));
+    }
     stepNumber = await persistArtifactSteps(taskId, artifacts, stepNumber, userId);
     stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
     await update({
