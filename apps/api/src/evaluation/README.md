@@ -288,3 +288,17 @@ routing + response(mock) + response `--real --limit 30`(전체 — limit 은 앞
 1. ~~라우터 실패 27건 개선~~ — 2026-09-02 해소(키워드 보강 + 토픽 패턴 협소화). ⚠️ 한글 2자 키워드는 조사 결합 때문에 단어 완전 일치 규칙에서 사실상 죽는다 — 부분 일치로 열면 범용어 오염+가드 붕괴(실측 반려), 2자어가 신호면 구(phrase) 키워드로 커버할 것
 2. **Phase 2.5 Prompt DB Registry** — 프롬프트 핫스왑 인프라
 3. **trajectory 평가** — judge_shadow 적재분 + 2026-09-08 judge 재측정 결과를 본 뒤 증분 결정
+   - 결정적 과정 검사는 들어왔다(`trajectory-evaluator.ts`, 아래 "궤적 과정 검사"). 남은 것은 고정 과제 묶음·real 실행기·CI 게이트와, 의미 판정(judge)을 여기에 붙일지의 결정이다.
+
+## 궤적 과정 검사 (trajectory, 결정적)
+
+에이전트 작업 한 건의 스텝 기록을 명세와 대조한다. 최종 답이 맞아도 과정이 틀린 실행(필수 도구 생략, 허용 밖 도구, 인자·순서·호출 횟수 위반)을 잡는 용도다. LLM·DB 를 쓰지 않는다.
+
+```bash
+npm --workspace apps/api run eval:trajectory -- --spec 명세.json --steps 스텝.json
+```
+
+- 스텝 파일: `agent_task_steps` 행의 JSON 배열(`step_number`·`step_type`·`tool_name`·`tool_args`). 도구 호출은 `tool_result` 스텝에서 읽는다.
+- 명세 필드: `requiredTools`·`allowedTools`·`forbiddenTools`(선택), `expectedArgs`(인자, 값은 정확 일치 또는 `{ "regex": "..." }`), `order`(`before` 의 첫 호출이 `after` 의 첫 호출보다 앞), `maxCalls`(도구별 횟수 상한). 모르는 필드는 거절한다.
+- 필수 도구가 아예 안 쓰였으면 그 도구의 인자·순서 검사는 실패가 아니라 건너뜀(`-`)으로 찍힌다 — 원인 하나가 여러 실패로 부풀지 않게.
+- 범위 밖: 결과의 의미 판정(goal judge), 과제 묶음·기준선·CI 게이트. 명세 라벨은 다른 골든셋과 같이 **사용자 의도 기준**으로 쓴다.
