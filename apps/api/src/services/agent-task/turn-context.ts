@@ -14,7 +14,7 @@
  * @module services/agent-task/turn-context
  */
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
-import { CONTEXT_HANDOFF, CONTEXT_OVERFLOW_RETRY } from '../../config/agent-task-context';
+import { CONTEXT_FOLD_BATCH, CONTEXT_HANDOFF, CONTEXT_OVERFLOW_RETRY } from '../../config/agent-task-context';
 import { MODEL_POOL_CONFIG, resolveEffectiveContext } from '../../config/model-pool';
 import { foldOldToolResults } from './context-fold';
 import { compactWithHandoff } from './context-handoff';
@@ -42,6 +42,13 @@ function inputBudgetFor(model: string): number | null {
     return resolveEffectiveContext(model) - MODEL_POOL_CONFIG.routingMaxTokensDefault - SAFETY_BUFFER;
 }
 
+/** 평소 접기의 설정값(묶음 임계는 context-fold 가 설정에서 읽는다). */
+const FOLD_OPTIONS = (): { keepTurns: number; minChars: number; headChars: number } => ({
+    keepTurns: AGENT_TASK_LIMITS.CONTEXT_FOLD_KEEP_TURNS,
+    minChars: AGENT_TASK_LIMITS.CONTEXT_FOLD_MIN_CHARS,
+    headChars: AGENT_TASK_LIMITS.CONTEXT_FOLD_HEAD_CHARS,
+});
+
 /**
  * 직전 호출의 추정·실제 — 작업의 대화 배열을 열쇠로 둔다(작업이 끝나 배열이 사라지면 함께 사라진다).
  * 재개하면 배열이 새로 만들어져 첫 턴은 보정 없이 판정한다.
@@ -55,7 +62,13 @@ function fitToWindow(conversation: ChatMessage[], tools: ToolDefinition[], model
     if (budget === null) return 0;
     const scale = calibrationScale(lastUsage.get(conversation));
     const toolTokens = estimateToolSchemaTokens(tools);
-    if ((estimateConversationTokens(conversation) + toolTokens) * scale <= budget) return 0;
+    const over = (): boolean => (estimateConversationTokens(conversation) + toolTokens) * scale > budget;
+    if (!over()) return 0;
+    // 묶음(CONTEXT_FOLD_BATCH)으로 미뤄 둔 접기가 있으면 먼저 접는다 — 접으면 들어가는 대화를 요약으로 버리지 않는다.
+    if (AGENT_TASK_LIMITS.CONTEXT_FOLD_ENABLED && CONTEXT_FOLD_BATCH.MIN_SAVED_CHARS > 0) {
+        foldOldToolResults(conversation, { ...FOLD_OPTIONS(), minBatchSavedChars: 0 });
+        if (!over()) return 0;
+    }
     const target = Math.floor(budget * CONTEXT_HANDOFF.TARGET_RATIO - toolTokens * scale);
     return compactWithHandoff(conversation, target, (msgs) => estimateConversationTokens(msgs) * scale).dropped;
 }
@@ -85,11 +98,7 @@ function shrinkAfterOverflow(conversation: ChatMessage[], tools: ToolDefinition[
 
 export async function callAgentTurnWithContext(p: TurnContextInput): ReturnType<typeof callAgentTurnWithBudget> {
     if (AGENT_TASK_LIMITS.CONTEXT_FOLD_ENABLED) {
-        const fold = foldOldToolResults(p.conversation, {
-            keepTurns: AGENT_TASK_LIMITS.CONTEXT_FOLD_KEEP_TURNS,
-            minChars: AGENT_TASK_LIMITS.CONTEXT_FOLD_MIN_CHARS,
-            headChars: AGENT_TASK_LIMITS.CONTEXT_FOLD_HEAD_CHARS,
-        });
+        const fold = foldOldToolResults(p.conversation, FOLD_OPTIONS());
         if (fold.folded > 0) logger.info(`[AgentTask] 도구 결과 접기: ${p.taskId} (turn ${p.turn + 1}, ${fold.folded}건, -${fold.savedChars}자)`);
     }
     const dropped = fitToWindow(p.conversation, p.tools, p.roleState.client.model);

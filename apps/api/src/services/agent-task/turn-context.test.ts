@@ -15,6 +15,7 @@ import { callAgentTurnWithContext, isContextOverflowError } from './turn-context
 import { callAgentTurnWithBudget } from './turn-call';
 import { isHandoffSummary } from './context-handoff';
 import { isFoldedToolResult } from './context-fold';
+import { CONTEXT_FOLD_BATCH } from '../../config/agent-task-context';
 import type { ChatMessage } from '../../llm/types';
 
 const call = callAgentTurnWithBudget as jest.Mock;
@@ -93,6 +94,45 @@ describe('callAgentTurnWithContext', () => {
         // 같은 대화인데 실제는 3배였다 — 다음 턴에는 넘는 것으로 판정해 줄인다.
         await callAgentTurnWithContext(base(c));
         expect(c.some((m) => isHandoffSummary(m.content))).toBe(true);
+    });
+});
+
+describe('접기 묶음과 창 초과 판정', () => {
+    const original = CONTEXT_FOLD_BATCH.MIN_SAVED_CHARS;
+    const setBatch = (n: number): void => { (CONTEXT_FOLD_BATCH as { MIN_SAVED_CHARS: number }).MIN_SAVED_CHARS = n; };
+    afterEach(() => setBatch(original));
+    const folded = (c: ChatMessage[]): number => c.filter((m) => m.role === 'tool' && isFoldedToolResult(m.content)).length;
+
+    it('창 안이면 임계에 못 미치는 접기는 미룬다 — 과거 메시지가 그대로다', async () => {
+        setBatch(50_000);
+        const c = conv(6, 2000); // 접을 수 있는 것은 2건(약 3,400자) — 임계 미만
+        const before = JSON.stringify(c);
+        await callAgentTurnWithContext(base(c));
+        expect(JSON.stringify(c)).toBe(before);
+    });
+
+    it('미뤄 둔 접기 때문에 창을 넘게 되면 임계와 상관없이 접는다 — 접으면 들어가는 대화를 인계 요약으로 버리지 않는다', async () => {
+        setBatch(50_000);
+        // 9턴 × 3,000자 = 약 27,000토큰으로 창(20,000)을 넘는다. 오래된 5건을 접으면 약 14,000토큰이라 들어간다.
+        const c = conv(9, 3000);
+        const n = c.length;
+        await callAgentTurnWithContext(base(c));
+        expect(folded(c)).toBe(5);
+        expect(c.length).toBe(n);
+        expect(c.some((m) => isHandoffSummary(m.content))).toBe(false);
+    });
+
+    it('접어도 창을 넘으면 접은 뒤에 인계 요약으로 줄인다', async () => {
+        setBatch(50_000);
+        const c = conv(8, 6000); // 최근 4턴만으로 창을 넘는다
+        await callAgentTurnWithContext(base(c));
+        expect(c.some((m) => isHandoffSummary(m.content))).toBe(true);
+        expect(call).toHaveBeenCalledTimes(1);
+    });
+
+    it('기본 임계는 미뤄 둔 분량이 창의 일부에 그치게 한다 — 가장 작은 창(입력 예산)의 1/4 을 넘지 않는다', () => {
+        // 글자 수 기준 임계가 토큰으로는 최대 글자 수와 같다(한글 1자 ≈ 1토큰). 풀 기본 모델의 창이 32K 일 때 입력 예산은 약 2만 8천 토큰이다.
+        expect(original).toBeLessThanOrEqual(28_000 / 4);
     });
 });
 
