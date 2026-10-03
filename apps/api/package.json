@@ -24,6 +24,7 @@
         "eval:tools": "ts-node src/evaluation/run-tool-selection-evaluation.ts",
         "eval:trajectory": "ts-node src/evaluation/run-trajectory-evaluation.ts",
         "eval:ablation": "ts-node src/evaluation/run-prompt-ablation.ts",
+        "eval:agent-tasks": "ts-node src/evaluation/run-prompt-ablation.ts --variants baseline --gate",
         "eval:matrix": "ts-node src/evaluation/run-matrix-evaluation.ts",
         "eval:probe": "ts-node src/evaluation/run-model-probe.ts",
         "eval:redteam": "ts-node src/evaluation/redteam/run-redteam-evaluation.ts",
