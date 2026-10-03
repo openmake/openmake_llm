@@ -17,6 +17,7 @@
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { isSensitivePath } from './sensitive-paths';
 import { redactApprovalArgs, redactApprovalPreview } from './approval-redact';
+import { approvalFloorReason, writeTargetPath } from './approval-floor';
 import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
 import { classifyToolRisk, policyRequiresApproval, isThirdPartyTool, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
@@ -26,9 +27,6 @@ import { AGENT_TASK_LIMITS, APPROVAL_RECENT_WINDOW_MS } from '../../config/runti
 
 const logger = createLogger('TaskApprovalGate');
 
-/** 파일을 바꾸는 작업 — 대상이 자격증명 파일이면 high-risk 로 올린다(아래 판정). */
-const FILE_WRITE_OPS = new Set(['write', 'delete']);
-const EDITOR_WRITE_COMMANDS = new Set(['create', 'str_replace', 'insert']);
 /** 디바이스(로컬 브리지)가 실행 직전 자체 확인하는 코드 실행 도구 — 서버 승인 중복이라 skip 대상. */
 const DEVICE_GATED_SHELL = new Set(['bash', 'python_execute']);
 
@@ -51,9 +49,8 @@ export function requiresApproval(
 
 /** PURE: 이 호출이 자격증명 파일을 바꾸려 하는가. args 미지({})면 false(보수 판정 — 강등 계산과 동일 계약). */
 export function isSensitiveWrite(toolName: string, args: Record<string, unknown>): boolean {
-    if (toolName === 'file_ops') return FILE_WRITE_OPS.has(String(args.op)) && isSensitivePath(args.path);
-    if (toolName === 'str_replace_editor') return EDITOR_WRITE_COMMANDS.has(String(args.command)) && isSensitivePath(args.path);
-    return false;
+    const target = writeTargetPath(toolName, args);
+    return target !== null && isSensitivePath(target);
 }
 
 type ApprovalDecision = 'approved' | 'rejected';
@@ -112,6 +109,8 @@ interface Waiter {
     pending: PendingApproval;
     resolve: (r: ApprovalResult) => void;
     timer: NodeJS.Timeout;
+    /** 자동승인에서도 묻는 바닥 호출(approval-floor) — 요청 시점의 원래 인자로 판정해 둔다. */
+    floor: boolean;
 }
 
 /** 영속 저장소 계약(124) — 테스트는 생략(메모리만), 운영은 AgentTaskApprovalRepository. */
@@ -171,7 +170,8 @@ export class ApprovalRegistry {
 
     /**
      * task 자동승인 설정(4-2) — 이후 이 task 의 승인 요청은 즉시 approved 로 해소된다.
-     * ⚠️ ask_human·mcp_elicit(HITL_ALWAYS_WAIT_TOOLS)은 제외(질문의 목적 자체가 사람 응답). 현재 대기 중인 동일 task 의
+     * ⚠️ ask_human·mcp_elicit(HITL_ALWAYS_WAIT_TOOLS)은 제외(질문의 목적 자체가 사람 응답). 바닥 호출(approval-floor —
+     * 자격증명 파일 쓰기·외부 MCP 도구)도 제외 — 전체 허용에서도 계속 묻는다. 현재 대기 중인 동일 task 의
      * 승인들도 즉시 해소한다. task 종료 시 clearAutoApprove 로 해제(잔존 방지).
      */
     setAutoApprove(taskId: string, enabled: boolean): void {
@@ -180,18 +180,23 @@ export class ApprovalRegistry {
         // 살아 있는 waiter 는 아래서 즉시 해소되고, 저장소의 pending 도 승인으로 닫는다(승인함 잔존 방지).
         void this.persist(async (s) => {
             for (const r of await s.listPending([...this.waiters.values()].find((w) => w.pending.taskId === taskId)?.pending.userId ?? '')) {
-                if (r.task_id === taskId && !HITL_ALWAYS_WAIT_TOOLS.has(r.tool_name)) await s.markDecided(r.approval_id, 'approved');
+                if (r.task_id === taskId && !HITL_ALWAYS_WAIT_TOOLS.has(r.tool_name) && approvalFloorReason(r.tool_name, r.args ?? {}) === null) await s.markDecided(r.approval_id, 'approved');
             }
         });
         for (const w of [...this.waiters.values()]) {
-            if (w.pending.taskId === taskId && !HITL_ALWAYS_WAIT_TOOLS.has(w.pending.toolName)) {
+            if (w.pending.taskId === taskId && !HITL_ALWAYS_WAIT_TOOLS.has(w.pending.toolName) && !w.floor) {
                 w.resolve({ decision: 'approved', waitedMs: Date.now() - w.pending.createdAt });
             }
         }
-        logger.info(`[${taskId}] 자동승인 활성 — 이후 도구 호출은 승인 없이 진행 (ask_human·mcp_elicit 제외)`);
+        logger.info(`[${taskId}] 자동승인 활성 — 이후 도구 호출은 승인 없이 진행 (ask_human·mcp_elicit·바닥 호출 제외)`);
     }
 
     isAutoApprove(taskId: string): boolean { return this.autoApproveTasks.has(taskId); }
+
+    /** 이 호출이 자동승인으로 대기 없이 통과하는가 — 바닥 검사가 전체 허용보다 먼저다. 선실행·서브 도구 선별도 이 판정을 쓴다. */
+    autoApproves(taskId: string, toolName: string, args: Record<string, unknown>): boolean {
+        return this.autoApproveTasks.has(taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(toolName) && approvalFloorReason(toolName, args) === null;
+    }
 
     /** 만료 시 주차할 수 있는가(F16.7) — 질문형 도구 + 플래그 ON + 대기 연장을 영속할 저장소(없으면 재개할 근거가 없다). */
     private canPark(toolName: string): boolean {
@@ -209,7 +214,7 @@ export class ApprovalRegistry {
     /**
      * 승인을 요청하고 결정(approved/rejected)을 await. timeout/abort 시 'rejected'.
      * onPending 콜백으로 호출부가 알림(web-push/WS)·상태('paused')를 발행한다.
-     * 자동승인 task(HITL_ALWAYS_WAIT_TOOLS 제외)는 대기 없이 즉시 approved.
+     * 자동승인 task(HITL_ALWAYS_WAIT_TOOLS·바닥 호출 제외)는 대기 없이 즉시 approved.
      */
     async request(
         input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown>; preview?: string },
@@ -217,7 +222,7 @@ export class ApprovalRegistry {
         /** policy — 이 호출을 승인 대상으로 올린 정책. 요청 이벤트에 남겨 "왜 물었는지"를 나중에 되짚는다(정책은 env·작업별로 달라진다). */
         opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void; parkable?: boolean; policy?: TaskSandboxApprovalPolicy },
     ): Promise<ApprovalResult> {
-        if (this.autoApproveTasks.has(input.taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)) {
+        if (this.autoApproves(input.taskId, input.toolName, input.args)) {
             return { decision: 'approved', waitedMs: 0 };
         }
         // 재시작 후 이어받기(124): 같은 호출에 이미 내려진 결정이 있으면 대기 없이 소비하고,
@@ -271,7 +276,7 @@ export class ApprovalRegistry {
             const timer = graceMs > 0
                 ? setTimeout(() => settle({ decision: 'rejected', reason: 'parked' }), graceMs)
                 : setTimeout(() => settle({ decision: 'rejected', reason: this.canPark(input.toolName) ? 'parked' : 'timeout' }), opts.timeoutMs);
-            this.waiters.set(approvalId, { pending, resolve: (r) => settle(r), timer });
+            this.waiters.set(approvalId, { pending, resolve: (r) => settle(r), timer, floor: approvalFloorReason(input.toolName, input.args) !== null });
             if (opts.signal) {
                 if (opts.signal.aborted) { settle({ decision: 'rejected', reason: 'abort' }); return; }
                 opts.signal.addEventListener('abort', () => settle({ decision: 'rejected', reason: 'abort' }), { once: true });

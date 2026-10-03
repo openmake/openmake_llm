@@ -322,6 +322,13 @@ describe('buildTaskSpawnFn — 에이전트 작업 경로', () => {
         expect(out).not.toContain('도구 없이 답했습니다');
     });
 
+    it('자동 승인 상태여도 바닥 호출(외부 MCP 도구)은 서브에 주지 않는다 — 계속 묻는 호출이라 병렬 대기가 생긴다', async () => {
+        autoApproveMock.mockReturnValue(true);
+        const spawn = buildTaskSpawnFn(makeFactoryParams('all', ['web_search', 'notion::search']));
+        await spawn({ tasks: [{ prompt: 'x' }] });
+        expect(runSubagentMock.mock.calls[0][0].tools.map((t: ToolDefinition) => t.function.name)).toEqual(['web_search']);
+    });
+
     it('작업 경로는 서브에 활동 기록기(trace)를 넘기고, 채팅 경로는 넘기지 않는다', async () => {
         const spawn = buildTaskSpawnFn(makeFactoryParams('none', ['web_search']));
         await spawn({ tasks: [{ prompt: 'x' }] });

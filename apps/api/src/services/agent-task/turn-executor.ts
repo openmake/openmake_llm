@@ -166,7 +166,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         toolCalls.filter((tc) => tc.id === undefined || !journal.has(tc.id)).map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
         ({ name, tc }) => !taskRuntime?.isTaskTool(name)
             && (!requiresApproval(sandboxCfg.approvalPolicy, name, (tc.function.arguments ?? {}) as Record<string, unknown>)
-                || getApprovalRegistry().isAutoApprove(taskId)),
+                || getApprovalRegistry().autoApproves(taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>)),
         async ({ name, tc }) => {
             const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
             if (extraToolNames.has(name) && requiresApproval(sandboxCfg.approvalPolicy, name, args)) {

@@ -194,7 +194,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 result.tool_calls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
                 ({ name, tc }) => !requiresApproval(p.sandboxCfg.approvalPolicy, name,
                     (tc.function.arguments ?? {}) as Record<string, unknown>, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })
-                    || getApprovalRegistry().isAutoApprove(p.taskId),
+                    || getApprovalRegistry().autoApproves(p.taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>),
                 async ({ name, tc }) => {
                     const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
                     if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
