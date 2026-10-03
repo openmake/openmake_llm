@@ -36,7 +36,8 @@ const DEVICE_GATED_SHELL = new Set(['bash', 'python_execute']);
  *  실행 직전 사용자 확인을 강제하므로 서버측 승인을 skip 한다(이중 프롬프트 제거). 파일/기타
  *  도구는 디바이스가 다이얼로그를 띄우지 않으므로 정책대로 서버 승인을 유지한다.
  *  자격증명 파일 쓰기(isSensitiveWrite)는 high-risk 에서도 승인 — 종전엔 `.env`·키 파일 덮어쓰기가
- *  서버 승인도 디바이스 확인도 없이 통과했다(로컬 브리지의 write kind 는 confirmExec 대상이 아니다). */
+ *  서버 승인도 디바이스 확인도 없이 통과했다(로컬 브리지의 write kind 는 confirmExec 대상이 아니다).
+ *  바닥 호출(approval-floor — 지시 파일 쓰기 포함)도 high-risk 에서 승인한다: 자동승인에서도 묻는 호출이 정책에서 빠지면 안 된다. */
 export function requiresApproval(
     policy: TaskSandboxApprovalPolicy,
     toolName: string,
@@ -44,7 +45,8 @@ export function requiresApproval(
     opts: { deviceGatesShell?: boolean } = {},
 ): boolean {
     if (opts.deviceGatesShell && DEVICE_GATED_SHELL.has(toolName)) return false;
-    return policyRequiresApproval(policy, classifyToolRisk(toolName, args), isSensitiveWrite(toolName, args), isThirdPartyTool(toolName));
+    return policyRequiresApproval(policy, classifyToolRisk(toolName, args),
+        isSensitiveWrite(toolName, args) || approvalFloorReason(toolName, args) !== null, isThirdPartyTool(toolName));
 }
 
 /** PURE: 이 호출이 자격증명 파일을 바꾸려 하는가. args 미지({})면 false(보수 판정 — 강등 계산과 동일 계약). */
