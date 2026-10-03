@@ -21,12 +21,17 @@
  *   all       → control 제외 전부
  *
  * 재분류는 배포 없이 env `TOOL_RISK_OVERRIDES_JSON`('{"도구명":"등급"}') 으로(L1). 표 밖 도구는
- * `external`(정책 all 에서만 승인) — 종전과 같다.
+ * `external` 이다. 그중 외부 MCP 서버 도구(`server::tool`)는 제3자 코드라 high-risk 에서도 승인하고,
+ * 내장 도구는 종전대로 정책 all 에서만 승인한다.
  *
  * @module config/tool-policy
  */
 import type { TaskSandboxApprovalPolicy } from './task-sandbox';
 import { contributedToolRisk } from '../addon-host/contributions';
+import { MCP_NAMESPACE_SEPARATOR } from '../tool-contract/types';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ToolPolicy');
 
 export type ToolRiskClass = 'read' | 'write' | 'destructive' | 'exec' | 'network' | 'external' | 'control';
 
@@ -65,18 +70,24 @@ const TOOL_RISK: Readonly<Record<string, RiskRule>> = {
     spawn_agents: 'control',
 };
 
-/** env 재분류 — 잘못된 JSON·모르는 등급은 무시하고 로그 없이 표를 그대로 쓴다(부팅을 막지 않음). */
+/** env 재분류 — 잘못된 JSON·모르는 등급은 무시하고 표를 그대로 쓴다(부팅을 막지 않음). 무시한 것은 경고로 남긴다. */
 function loadOverrides(): Record<string, ToolRiskClass> {
     const raw = process.env.TOOL_RISK_OVERRIDES_JSON;
     if (!raw) return {};
     try {
         const parsed = JSON.parse(raw) as Record<string, unknown>;
         const out: Record<string, ToolRiskClass> = {};
+        const ignored: string[] = [];
         for (const [name, cls] of Object.entries(parsed)) {
             if (typeof cls === 'string' && (TOOL_RISK_CLASSES as readonly string[]).includes(cls)) out[name] = cls as ToolRiskClass;
+            else ignored.push(name);
         }
+        if (ignored.length > 0) logger.warn(`TOOL_RISK_OVERRIDES_JSON: 모르는 등급이라 무시한 도구 — ${ignored.join(', ')}`);
         return out;
-    } catch { return {}; }
+    } catch (e) {
+        logger.warn(`TOOL_RISK_OVERRIDES_JSON 을 읽지 못해 재분류 없이 진행합니다: ${e instanceof Error ? e.message : String(e)}`);
+        return {};
+    }
 }
 const OVERRIDES = loadOverrides();
 
@@ -110,15 +121,21 @@ export function hasSideEffects(toolName: string, args: Record<string, unknown> =
  */
 export const HITL_ALWAYS_WAIT_TOOLS: ReadonlySet<string> = new Set(['ask_human', 'mcp_elicit']);
 
+/** PURE: 외부 MCP 서버가 제공한 도구인가 — 이름이 `server::tool` 꼴이다(tool-router 와 같은 판정). */
+export function isThirdPartyTool(toolName: string): boolean {
+    return toolName.includes(MCP_NAMESPACE_SEPARATOR);
+}
+
 /** high-risk 정책이 승인으로 올리는 등급. */
 const HIGH_RISK_CLASSES: ReadonlySet<ToolRiskClass> = new Set(['exec', 'network', 'destructive']);
 
 /**
  * PURE: 정책 × 등급 → 승인 필요 여부.
  * sensitiveWrite: 자격증명 파일을 바꾸는 호출(approval-gate 가 경로로 판정) — high-risk 에서도 승인.
+ * thirdParty: 외부 MCP 서버 도구(isThirdPartyTool) — high-risk 에서도 승인.
  */
-export function policyRequiresApproval(policy: TaskSandboxApprovalPolicy, risk: ToolRiskClass, sensitiveWrite = false): boolean {
+export function policyRequiresApproval(policy: TaskSandboxApprovalPolicy, risk: ToolRiskClass, sensitiveWrite = false, thirdParty = false): boolean {
     if (policy === 'none' || risk === 'control') return false;
     if (policy === 'all') return true;
-    return HIGH_RISK_CLASSES.has(risk) || sensitiveWrite;
+    return HIGH_RISK_CLASSES.has(risk) || sensitiveWrite || thirdParty;
 }

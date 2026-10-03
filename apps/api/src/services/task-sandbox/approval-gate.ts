@@ -18,7 +18,7 @@ import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { isSensitivePath } from './sensitive-paths';
 import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
-import { classifyToolRisk, policyRequiresApproval, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
+import { classifyToolRisk, policyRequiresApproval, isThirdPartyTool, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
 import { AgentTaskApprovalRepository, hashApprovalArgs, type ApprovalRow } from '../../data/repositories/agent-task-approval-repository';
 import { getConfig } from '../../config/env';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
@@ -45,7 +45,7 @@ export function requiresApproval(
     opts: { deviceGatesShell?: boolean } = {},
 ): boolean {
     if (opts.deviceGatesShell && DEVICE_GATED_SHELL.has(toolName)) return false;
-    return policyRequiresApproval(policy, classifyToolRisk(toolName, args), isSensitiveWrite(toolName, args));
+    return policyRequiresApproval(policy, classifyToolRisk(toolName, args), isSensitiveWrite(toolName, args), isThirdPartyTool(toolName));
 }
 
 /** PURE: 이 호출이 자격증명 파일을 바꾸려 하는가. args 미지({})면 false(보수 판정 — 강등 계산과 동일 계약). */
