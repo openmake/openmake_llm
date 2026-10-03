@@ -10,6 +10,9 @@ import { resolveRoleClientForUser } from '../model-role-resolver';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
+import { recoveryWaitMs } from './turn-recovery';
+import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
+import { getRecoveryWaitNote } from '../../prompts/agent-task-turn-loop';
 
 const logger = createLogger('AgentTaskService');
 
@@ -91,6 +94,9 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
  * 일시적 오류(isTransientLLMError)는 지수 백오프로 TURN_RETRY_MAX 회 재시도 —
  * 후향 실측(failed 20건 중 6~7건이 timeout/connection 류)에 근거한 노드 retry 정책.
  * signal abort(사용자 취소·예산 소진)는 재시도하지 않는다. 그 외 에러는 기존 경로대로 throw.
+ *
+ * 짧은 재시도가 소진되면 더 긴 간격으로 몇 번 더 기다린다(turn-recovery) — 모델 서버 재기동처럼 수십 초 걸리는
+ * 장애를 넘기기 위함. 호출자가 남은 예산(recoveryBudgetMs)을 준 경우에만, 그 예산 안에서만 기다린다.
  */
 export async function chatTurnWithRoleFallback(
     state: AgentRoleState,
@@ -106,6 +112,8 @@ export async function chatTurnWithRoleFallback(
         onToken?: (token: string) => void;
         /** 호출 한 번의 상한(ms) — 넘으면 그 시도만 끊고 TURN_CALL_TIMEOUT_RETRY_MAX 회 다시 시도한다. 미지정·0 이면 p.signal 만 쓴다. */
         callTimeoutMs?: number;
+        /** 이 호출을 시작할 때 남은 작업 시간 예산(ms) — 주면 짧은 재시도 소진 뒤 이 예산 안에서 더 기다린다. */
+        recoveryBudgetMs?: number;
     },
 ): Promise<Awaited<ReturnType<LLMClient['chat']>>> {
     // openai SDK 요청 타임아웃을 task 총 예산에 맞춰 늘린다(파생 클라이언트, baseUrl/model 유지).
@@ -122,6 +130,8 @@ export async function chatTurnWithRoleFallback(
     const maxRetries = Math.max(0, AGENT_TASK_LIMITS.TURN_RETRY_MAX);
     let attempt = 0;
     let capRetries = 0;
+    let recoveryCycles = 0;
+    const startedAt = Date.now();
     for (;;) {
         // 시도마다 상한을 새로 건다 — 멈춘 호출 하나가 남은 예산 전부를 태우지 못하게 한다.
         const cap = p.callTimeoutMs && p.callTimeoutMs > 0 ? AbortSignal.timeout(p.callTimeoutMs) : null;
@@ -148,8 +158,16 @@ export async function chatTurnWithRoleFallback(
                 state.client = createClient({ model: getModelForRole('agent'), userId: p.userId });
                 continue;
             }
-            if (p.signal.aborted || !isTransientLLMError(chatErr) || attempt >= maxRetries) {
-                throw chatErr;
+            if (p.signal.aborted || !isTransientLLMError(chatErr)) throw chatErr;
+            if (attempt >= maxRetries) {
+                const waitMs = recoveryWaitMs(recoveryCycles + 1,
+                    p.recoveryBudgetMs === undefined ? undefined : p.recoveryBudgetMs - (Date.now() - startedAt));
+                if (waitMs === null) throw chatErr;
+                recoveryCycles++;
+                logger.warn(`[AgentTask] ${p.taskId} 재시도 소진 — ${waitMs}ms 기다린 뒤 다시 시도 ${recoveryCycles}/${AGENT_TASK_TURN_LOOP.RECOVERY_WAIT_MAX_CYCLES}: ${msg}`);
+                try { p.onRetry?.({ attempt: recoveryCycles, maxAttempts: AGENT_TASK_TURN_LOOP.RECOVERY_WAIT_MAX_CYCLES, error: getRecoveryWaitNote(msg, waitMs) }); } catch { /* 관측 실패 무시 */ }
+                await abortableDelay(waitMs, p.signal);
+                continue;
             }
             attempt++;
             const delayMs = AGENT_TASK_LIMITS.TURN_RETRY_BACKOFF_MS * 2 ** (attempt - 1);

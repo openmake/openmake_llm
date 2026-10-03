@@ -10,6 +10,8 @@ import { getReportGuideForTask } from '../../prompts/report-guide';
 import { REPORT_PIPELINE, REPORT_INTENT_PATTERNS, AGENT_SPAWN } from '../../config/runtime-limits';
 import { buildLearningBlock } from './task-learning';
 import { buildProceduralSkillBlock } from './procedural-skill';
+import { rankMemoriesForGoal } from './memory-rank';
+import { MEMORY_RANKING } from '../../config/agent-task-skill-memory';
 import { buildUserMemoryBlock } from '../chat-service/user-context-blocks';
 import { resolveMemoryLearning } from '../chat-service/memory-policy';
 import { buildArtifactGuideBlock } from '../chat-service/artifact-guide-block';
@@ -46,7 +48,10 @@ async function buildSkillPromptBlock(userId: string): Promise<string> {
  */
 export async function buildAgentTaskSystemContent(userId: string, goal: string, taskId: string): Promise<string> {
     // 설정 "장기 기억" OFF 는 에이전트 작업에도 적용(memory-policy — 그전엔 채팅 경로만 게이팅).
-    const memory = (await resolveMemoryLearning(userId)) ? await buildUserMemoryBlock(userId) : '';
+    // 순위 매김(기본 꺼짐)이 켜지면 최신순 대신 목표 관련도 × 신뢰도 × 시간 감쇠 순으로 싣는다(memory-rank).
+    const memory = (await resolveMemoryLearning(userId))
+        ? await buildUserMemoryBlock(userId, MEMORY_RANKING.ENABLED ? { poolSize: MEMORY_RANKING.POOL_SIZE, rank: (ms) => rankMemoriesForGoal(goal, ms) } : {})
+        : '';
     // 보고서 파이프라인 (P1 Phase 2): goal 이 보고서 의도면 reportdata 계약 가이드를 주입한다.
     // 최종 답변의 reportdata 블록은 AgentTaskService 가 applyReportRender 로 렌더해 아티팩트화.
     const goalLang = /[가-힣]/.test(goal) ? 'ko' : 'en';

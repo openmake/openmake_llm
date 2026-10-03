@@ -58,6 +58,27 @@ describe('streamChat — 정상 스트림', () => {
     });
 });
 
+describe('도구 호출 인자 JSON 이 깨진 응답', () => {
+    it('스트림: 닫히지 않은 인자는 {} 로 두되 깨졌다는 표식을 남긴다', async () => {
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ tool_calls: [{ index: 0, id: 'call_a', function: { name: 'file_ops', arguments: '{"op":"write","content":"절반' } }] }, { finish_reason: 'length' }),
+        ] });
+        const r = await streamChat(client(), request, () => undefined, NO_THINK);
+        expect(r.tool_calls).toEqual([{ type: 'function', id: 'call_a', argumentsInvalid: true, function: { name: 'file_ops', arguments: {} } }]);
+    });
+
+    it('비스트림: 깨진 인자에 표식을 남기고, 정상 인자와 빈 인자에는 남기지 않는다', async () => {
+        const call = (id: string, args: string) => ({ id, type: 'function', function: { name: 'bash', arguments: args } });
+        reply = () => ({ kind: 'json', body: { choices: [{ finish_reason: 'tool_calls', message: { role: 'assistant', content: '', tool_calls: [
+            call('a', '{"command":"ls"'), call('b', '{"command":"ls"}'), call('c', ''),
+        ] } }] } });
+        const r = await nonStreamChat(client(), request);
+        expect(r.tool_calls?.map((tc) => [tc.id, tc.argumentsInvalid, tc.function.arguments])).toEqual([
+            ['a', true, {}], ['b', undefined, { command: 'ls' }], ['c', undefined, {}],
+        ]);
+    });
+});
+
 describe('streamChat — 장애', () => {
     it('부분 출력 뒤 연결이 끊기면 실패하고, 그 오류는 재시도 대상(일시적)으로 분류된다', async () => {
         reply = () => ({ kind: 'stream', dropAfter: 1, chunks: [sseChunk({ content: '절반만' }), sseChunk({ content: ' 도착' })] });

@@ -16,6 +16,8 @@ const MIN_PER_TASK_CHARS = 300;
 export function composeSpawnResult(p: {
     tasks: ReadonlyArray<{ prompt: string; role?: string }>;
     results: ReadonlyArray<string | null | undefined>;
+    /** 태스크별 상태 줄(종료 사유 등) — 머리말 바로 아래에 싣는다. 없는 태스크는 줄을 넣지 않는다. */
+    statusLines?: ReadonlyArray<string | undefined>;
     noToolsNotice: string;
     droppedCount: number;
     maxTasks: number;
@@ -23,7 +25,8 @@ export function composeSpawnResult(p: {
     headRatio: number;
 }): string {
     const n = p.tasks.length;
-    const headers = p.tasks.map((task, i) => `### 태스크 ${i + 1}/${n}${task.role ? ` (role: ${task.role})` : ''}: ${task.prompt.slice(0, 80)}`);
+    const headers = p.tasks.map((task, i) => `### 태스크 ${i + 1}/${n}${task.role ? ` (role: ${task.role})` : ''}: ${task.prompt.slice(0, 80)}`
+        + (p.statusLines?.[i] ? `\n${p.statusLines[i]}` : ''));
     const title = `${getSpawnResultTitle(n)}\n\n${p.noToolsNotice}`;
     const tail = `${p.droppedCount > 0 ? getSpawnDroppedNote(p.maxTasks, p.droppedCount) : ''}${getSpawnSynthesisNudge()}`;
     const bodies = p.results.slice(0, n).map((r) => r ?? SPAWN_MISSING_RESULT);

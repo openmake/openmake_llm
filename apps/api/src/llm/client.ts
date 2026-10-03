@@ -268,6 +268,8 @@ export class LLMClient {
                 span.setAttribute('llm.prompt_tokens', result.metrics?.prompt_tokens ?? 0);
                 span.setAttribute('llm.completion_tokens', result.metrics?.completion_tokens ?? 0);
                 span.setAttribute('llm.response_chars', (result.content ?? '').length);
+                // 컨텍스트 절단을 호출자에게 알린다 — 종전엔 위 로그 한 줄뿐이라 호출자는 대화가 잘린 줄 몰랐다.
+                if (poolDecision.droppedMessages) result.metrics = { ...result.metrics, context_dropped_messages: poolDecision.droppedMessages };
                 return result;
             },
             {

@@ -35,7 +35,7 @@ describe('buildDelegateFn — 서브에이전트 체크포인트', () => {
     it('체크포인트가 없으면 처음부터 실행하고, 끝나면 체크포인트를 지운다', async () => {
         repo.loadCheckpoint.mockResolvedValue(null);
         runSubagent.mockResolvedValue('결과');
-        await expect(fn()('목표', 'finance')).resolves.toBe('결과');
+        await expect(fn()('목표', 'finance')).resolves.toContain('결과');
         expect(runSubagent.mock.calls[0][0].park.restored).toBeUndefined();
         expect(repo.deleteCheckpoint).toHaveBeenCalledWith('t1', subagentCheckpointKey('목표', 'finance'));
     });
@@ -57,6 +57,20 @@ describe('buildDelegateFn — 서브에이전트 체크포인트', () => {
         await expect(fn()('목표')).rejects.toBeInstanceOf(AgentTaskParked);
         expect(repo.saveCheckpoint).toHaveBeenCalledWith(expect.objectContaining({ task_id: 't1', ckpt_key: subagentCheckpointKey('목표', undefined), turn: 0, tokens: 1 }));
         expect(repo.deleteCheckpoint).not.toHaveBeenCalled();
+    });
+
+    it('빈 껍데기 목표는 서브를 돌리지 않고 이유를 돌려준다', async () => {
+        await expect(fn()('위 작업 계속')).resolves.toMatch(/^Error: [\s\S]*맥락/);
+        expect(runSubagent).not.toHaveBeenCalled();
+        expect(repo.loadCheckpoint).not.toHaveBeenCalled();
+    });
+
+    it('결과 끝에 자가 보고 안내를 붙인다', async () => {
+        repo.loadCheckpoint.mockResolvedValue(null);
+        runSubagent.mockResolvedValue('결과');
+        const out = await fn()('목표');
+        expect(out.startsWith('결과\n\n')).toBe(true);
+        expect(out).toContain('자가 보고');
     });
 
     it('승인 대기 훅을 서브에이전트에 그대로 넘긴다(부모 상태 paused↔running)', async () => {

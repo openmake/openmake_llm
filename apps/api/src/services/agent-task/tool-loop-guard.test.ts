@@ -1,4 +1,5 @@
 import { priorRepetition, repetitionVerdict } from './tool-loop-guard';
+import { getDuplicateToolCallResult } from '../../prompts/agent-task-turn-loop';
 import type { ChatMessage } from '../../llm/types';
 
 let seq = 0;
@@ -40,6 +41,16 @@ describe('priorRepetition — 대화에서 직전까지의 같은 호출 반복�
         const conv = base();
         round(conv, 'web_search', { query: 'x' }, '<tool_output>\nError: timeout\n</tool_output>\n목표: ...');
         expect(priorRepetition(conv, 'web_search', { query: 'x' }).failures).toBe(1);
+    });
+});
+
+describe('priorRepetition — 중복 호출 안내 결과', () => {
+    it('한 응답 안의 중복 호출에 준 짧은 결과는 반복 집계에서 뺀다(같은 결과 연속이 끊기지 않게)', () => {
+        const conv = base();
+        round(conv, 'grep_code', { pattern: 'x' }, '결과 A');
+        round(conv, 'grep_code', { pattern: 'x' }, getDuplicateToolCallResult('grep_code', 'c0'));
+        round(conv, 'grep_code', { pattern: 'x' }, '결과 A');
+        expect(priorRepetition(conv, 'grep_code', { pattern: 'x' })).toEqual(expect.objectContaining({ sameResult: 2, lastResult: '결과 A' }));
     });
 });
 
