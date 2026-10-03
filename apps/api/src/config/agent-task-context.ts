@@ -64,3 +64,14 @@ export const CONTEXT_HANDOFF = {
     /** 파일 경로로 볼 인자 이름. */
     PATH_ARG_KEYS: ['path', 'filename'] as readonly string[],
 } as const;
+
+/** 작업 루프의 토큰 추정 보정 — services/agent-task/context-estimate. */
+export const CONTEXT_ESTIMATE = {
+    /** 직전 호출의 실제 사용량(prompt_tokens)으로 다음 판정을 올려 잡는다. AGENT_TASK_CONTEXT_CALIBRATION=false 로 끈다. */
+    CALIBRATION_ENABLED: process.env.AGENT_TASK_CONTEXT_CALIBRATION !== 'false',
+    /**
+     * 보정 계수 상한 — 실측상 문자 추정이 가장 낮게 나온 경우가 실제의 30%(hex)라 3.3배면 덮인다.
+     * 그보다 큰 비율은 측정 이상으로 보고 묶는다. AGENT_TASK_CONTEXT_CALIBRATION_MAX_SCALE
+     */
+    MAX_SCALE: Math.max(1, parseFloat(process.env.AGENT_TASK_CONTEXT_CALIBRATION_MAX_SCALE || '') || 4),
+} as const;

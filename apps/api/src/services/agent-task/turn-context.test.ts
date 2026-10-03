@@ -73,4 +73,25 @@ describe('callAgentTurnWithContext', () => {
         await callAgentTurnWithContext(base(c, 'external-model'));
         expect(c.length).toBe(n);
     });
+
+    it('도구 호출 인자와 도구 스키마까지 세어 판정한다', async () => {
+        // 본문만 세면 창 안(약 2,000토큰)이지만 호출 인자(파일 쓰기 내용 5,000자 × 4턴)를 세면 넘는다.
+        const c: ChatMessage[] = [{ role: 'system', content: 'sys' }, { role: 'user', content: '목표' }];
+        for (let t = 0; t < 8; t++) {
+            c.push({ role: 'assistant', content: '', tool_calls: [{ id: `c${t}`, type: 'function', function: { name: 'file_ops', arguments: { op: 'write', path: `f${t}.md`, content: '가'.repeat(5000) } } }] });
+            c.push({ role: 'tool', content: `기록됨: f${t}.md`, tool_name: 'file_ops', tool_call_id: `c${t}` });
+        }
+        await callAgentTurnWithContext(base(c));
+        expect(c.some((m) => isHandoffSummary(m.content))).toBe(true);
+    });
+
+    it('직전 호출의 실제 사용량이 추정보다 크면 다음 판정을 그 비율로 올린다', async () => {
+        const c = conv(4, 2500); // 추정 약 10,000토큰 — 창(20,000) 안
+        call.mockResolvedValue({ result: { role: 'assistant', content: 'ok', metrics: { prompt_tokens: 30_000 } }, callSignal: new AbortController().signal });
+        await callAgentTurnWithContext(base(c));
+        expect(c.some((m) => isHandoffSummary(m.content))).toBe(false);
+        // 같은 대화인데 실제는 3배였다 — 다음 턴에는 넘는 것으로 판정해 줄인다.
+        await callAgentTurnWithContext(base(c));
+        expect(c.some((m) => isHandoffSummary(m.content))).toBe(true);
+    });
 });
