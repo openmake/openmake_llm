@@ -44,6 +44,14 @@ export const AGENT_TASK_TURN_LOOP = {
     /** 긴 응답은 끝에서 이만큼만 검사한다(검사 비용 상한) / 창 안의 글자 종류가 이보다 적으면 구분선·공백으로 보고 건너뛴다. */
     OUTPUT_REPETITION_SCAN_TAIL_CHARS: 20_000,
     OUTPUT_REPETITION_MIN_DISTINCT_CHARS: 8,
+    /** 주기 반복 가드 — 서로 다른 도구 호출 2~MAX_PERIOD 개가 이름·인자도 결과도 같게 번갈아 되풀이되면(A-B-A-B) 안내하고,
+     *  임계를 넘으면 실행하지 않는다. 같은 호출의 연속 반복(AGENT_TASK_TOOL_LOOP_*)이 못 잡는 경우다. AGENT_TASK_TOOL_LOOP_CYCLE=false 로 끈다. */
+    TOOL_LOOP_CYCLE_ENABLED: process.env.AGENT_TASK_TOOL_LOOP_CYCLE !== 'false',
+    /** 같은 주기가 이 바퀴째 같은 결과로 끝나면 안내 / 이 바퀴를 다 돈 뒤 주기를 이어가는 호출은 실행하지 않음 / 보는 주기 길이 상한.
+     *  실측이 아니다 — hermes-agent 는 주기 4까지 본다. AGENT_TASK_TOOL_LOOP_CYCLE_WARN / _BLOCK / _MAX_PERIOD */
+    TOOL_LOOP_CYCLE_WARN: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_WARN, 2),
+    TOOL_LOOP_CYCLE_BLOCK: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_BLOCK, 3),
+    TOOL_LOOP_CYCLE_MAX_PERIOD: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_MAX_PERIOD, 3),
     /** 검증이 보류한 답변 보존 — 검증 실패로 턴을 이어가다 턴 상한에 걸리면, 들고 있던 직전 완성 답변을 버리지 않고
      *  "검증 미통과" 표시(verify_skipped 스텝)와 함께 결과로 남긴다. 판정(마커·goal judge)은 그대로 거친다.
      *  AGENT_TASK_KEEP_HELD_ANSWER=false 면 종전처럼 max_turns_exhausted 실패로 끝난다. */

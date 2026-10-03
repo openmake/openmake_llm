@@ -42,6 +42,19 @@ export function getDuplicateToolCallResult(toolName: string, originalCallId: str
     return `${DUPLICATE_TOOL_CALL_PREFIX} 같은 응답 안의 앞선 ${toolName} 호출${originalCallId ? `(${originalCallId})` : ''}과 이름·인자가 같아 다시 실행하지 않았습니다. 그 호출의 결과를 쓰세요.`;
 }
 
+/** 도구 결과 뒤에 붙이는 반복 안내의 머리말 — 반복 가드(tool-loop-guard)가 앞선 결과를 비교할 때 이 줄을 뺀다. 안내는 한 줄이어야 한다. */
+export const TOOL_LOOP_NOTE_MARKER = '\n\n[반복 안내]';
+
+/** 주기 반복 가드 — 서로 다른 호출이 같은 결과로 번갈아 되풀이될 때 결과 뒤에 붙이는 안내. */
+export function getToolLoopCycleNote(period: number, laps: number): string {
+    return `${TOOL_LOOP_NOTE_MARKER} 서로 다른 호출 ${period}개가 같은 결과로 번갈아 ${laps}바퀴 되풀이됐습니다. 같은 순서를 반복해도 결과는 바뀌지 않습니다 — 접근을 바꾸거나, 더 진행할 수 없으면 지금까지의 결과로 마무리하세요.`;
+}
+
+/** 주기 반복 가드 — 임계를 넘어 실행하지 않았을 때의 결과. */
+export function getToolLoopCycleBlockedResult(toolName: string, period: number, laps: number): string {
+    return `Error: 이 호출(${toolName})은 서로 다른 호출 ${period}개가 같은 결과로 ${laps}바퀴 되풀이된 주기를 이어가는 것이어서 실행하지 않았습니다. 다른 인자나 다른 방법을 쓰고, 더 진행할 수 없으면 지금까지의 결과로 마무리하세요.`;
+}
+
 /** 출력 반복 — 단계 기록에 남기는 문구(차단하지 않고 기록만 한다). */
 export function getOutputRepetitionNote(repeats: number, windowChars: number, sample: string): string {
     return `출력 반복 감지(기록만) — 응답 본문에서 ${windowChars}자 구간이 ${repeats}회 반복됐습니다: "${sample}"`;
