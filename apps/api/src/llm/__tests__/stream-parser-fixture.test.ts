@@ -34,6 +34,30 @@ describe('streamChat — 정상 스트림', () => {
         expect(fixture.requests[0]).toMatchObject({ stream: true, model: 'fixture' });
     });
 
+    it('usage 의 캐시 적중 토큰을 싣는다 — 서버가 주지 않으면 필드가 없다(0 으로 꾸미지 않는다)', async () => {
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ content: '답' }, { finish_reason: 'stop' }),
+            { ...sseChunk({}), choices: [], usage: { prompt_tokens: 70, completion_tokens: 3, prompt_tokens_details: { cached_tokens: 64 } } },
+        ] });
+        const hit = await streamChat(client(), request, () => undefined, NO_THINK);
+        expect(hit.metrics?.cached_prompt_tokens).toBe(64);
+
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ content: '답' }, { finish_reason: 'stop' }),
+            { ...sseChunk({}), choices: [], usage: { prompt_tokens: 70, completion_tokens: 3 } },
+        ] });
+        const none = await streamChat(client(), request, () => undefined, NO_THINK);
+        expect(none.metrics).not.toHaveProperty('cached_prompt_tokens');
+    });
+
+    it('비스트림 응답도 캐시 적중 토큰을 싣는다 — Anthropic 형식 포함', async () => {
+        const body = (usage: Record<string, unknown>) => ({ kind: 'json' as const, body: { choices: [{ message: { content: '답' }, finish_reason: 'stop' }], usage } });
+        reply = () => body({ prompt_tokens: 70, completion_tokens: 3, cache_read_input_tokens: 50, cache_creation_input_tokens: 20 });
+        expect((await nonStreamChat(client(), request)).metrics?.cached_prompt_tokens).toBe(50);
+        reply = () => body({ prompt_tokens: 70, completion_tokens: 3 });
+        expect((await nonStreamChat(client(), request)).metrics).not.toHaveProperty('cached_prompt_tokens');
+    });
+
     it('청크 경계에 걸친 </think> 를 본문으로 흘리지 않고 thinking/content 로 나눈다', async () => {
         reply = () => ({ kind: 'stream', chunks: [
             sseChunk({ content: '계획을 세운다</th' }),

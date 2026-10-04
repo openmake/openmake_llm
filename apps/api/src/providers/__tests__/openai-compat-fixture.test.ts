@@ -52,6 +52,22 @@ describe('정상 스트림', () => {
         expect(usage).toMatchObject({ prompt_tokens: 7, completion_tokens: 3 });
     });
 
+    it('사용량에 캐시 적중 토큰을 싣는다 — provider 가 주지 않으면 필드가 없다', async () => {
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ content: '답' }, { finish_reason: 'stop' }),
+            { ...sseChunk({}), choices: [], usage: { prompt_tokens: 70, completion_tokens: 3, prompt_tokens_details: { cached_tokens: 0 } } },
+        ] });
+        const zero = await provider().streamChat({ messages, modelId: 'm' }, {});
+        expect(zero.usage?.cached_prompt_tokens).toBe(0);
+
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ content: '답' }, { finish_reason: 'stop' }),
+            { ...sseChunk({}), choices: [], usage: { prompt_tokens: 70, completion_tokens: 3 } },
+        ] });
+        const none = await provider().streamChat({ messages, modelId: 'm' }, {});
+        expect(none.usage).not.toHaveProperty('cached_prompt_tokens');
+    });
+
     it('reasoning 델타는 본문이 아니라 thinking 으로 전달한다', async () => {
         reply = () => ({ kind: 'stream', chunks: [
             sseChunk({ reasoning: '생각 중' }),

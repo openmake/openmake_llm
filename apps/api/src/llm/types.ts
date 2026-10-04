@@ -67,6 +67,11 @@ export interface UsageMetrics {
     /** 출력(생성) 토큰 수 */
     completion_tokens?: number;
     /**
+     * 입력 토큰 중 서버의 프롬프트 캐시에서 읽은 양(llm/cached-prompt-tokens).
+     * undefined 는 서버가 값을 주지 않았다는 뜻이다 — 적중 0 과 구분한다.
+     */
+    cached_prompt_tokens?: number;
+    /**
      * 호출 비용 (USD micros — 1 USD = 1,000,000 micros).
      * OpenRouter 가 응답에 포함시키는 직접 cost — 카탈로그 fallback 보다 정확.
      * cost 미제공 provider 는 undefined.
