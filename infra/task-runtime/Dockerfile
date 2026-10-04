@@ -38,8 +38,8 @@ RUN mkdir -p /home/node/.cache \
     && chown -R node:node /home/node/.cache
 
 # 브라우저 액션 러너 — `node /opt/browser/browser-runner.mjs <actions.json>`.
-COPY browser-runner.mjs guard-proxy.mjs dialog-policy.mjs /opt/browser/
-RUN chmod a+r /opt/browser/browser-runner.mjs /opt/browser/guard-proxy.mjs /opt/browser/dialog-policy.mjs
+COPY browser-runner.mjs guard-proxy.mjs dialog-policy.mjs field-value.mjs /opt/browser/
+RUN chmod a+r /opt/browser/browser-runner.mjs /opt/browser/guard-proxy.mjs /opt/browser/dialog-policy.mjs /opt/browser/field-value.mjs
 
 # 리포트 디자인 템플릿(Open Design ai-trend-daily) + 렌더러 — 픽셀-정합 재현용.
 # network=none 샌드박스라 런타임 fetch 불가 → 고정 디자인을 이미지에 베이킹. 에이전트는
