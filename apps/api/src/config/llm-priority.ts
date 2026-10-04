@@ -3,6 +3,7 @@
  *
  * - `priority` 는 vLLM `--scheduling-policy priority` 에서만 의미가 있다(값이 작을수록 먼저). DGX 가 이 정책으로
  *   뜨기 전에는 켜도 스케줄 순서가 바뀌지 않는다 — 켜는 스위치는 system_settings `LLM_PRIORITY_ENABLED`.
+ *   이 정책은 대기 순서만 바꾼다 — 실행 슬롯(`--max-num-seqs`)이 찬 뒤 온 요청은 priority 가 앞서도 슬롯이 빌 때까지 기다린다.
  * - `cache_salt` 는 같은 salt 끼리만 prefix cache 를 공유하게 한다(사용자 간 캐시 타이밍 추론 차단). 사용자별로
  *   나누면 공용 시스템 프롬프트 prefix 도 사용자마다 따로 쌓여 첫 토큰 지연이 늘 수 있다 — 켜기 전 TTFT 를 잴 것.
  *
