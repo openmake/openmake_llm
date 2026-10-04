@@ -138,7 +138,7 @@ export class AgentTaskService {
         let taskRuntime: TaskRuntime | null = null;
         let parked = false; // 질문 응답 대기 주차(F16.7) — finally 가 승인·workspace 를 남긴다
         const recentSignatures: string[] = [];
-        let stuckNotified = false;
+        let stuckNotified = false, stuckPending = false;
         let emptyRetries = 0;
         let stallNudges = 0; // 행동 예고 재촉 횟수(turn-stall)
         let verifyRetries = 0;
@@ -446,7 +446,8 @@ export class AgentTaskService {
                 // stuck 감지 — 동일 응답(내용+도구호출)이 STUCK_THRESHOLD 회 연속되면 전략변경 유도(turn-guards).
                 const stuck = pushStuckSignature(recentSignatures, result, AGENT_TASK_LIMITS.STUCK_THRESHOLD);
                 if (stuck && !stuckNotified) {
-                    conversation.push(replyNudge(getAgentTaskStuckNudge()));
+                    // 도구 호출이 있으면 결과 뒤에 넣는다 — 호출과 결과 사이에 끼우면 짝이 깨져 턴 중간 재개·fork 가 매달린 호출을 못 찾는다.
+                    if (result.tool_calls?.length) stuckPending = true; else conversation.push(replyNudge(getAgentTaskStuckNudge()));
                     stuckNotified = true;
                     logger.info(`[AgentTask] stuck 감지 → 전략변경 주입: ${taskId} (turn ${turn + 1})`);
                 } else if (!stuck) stuckNotified = false;
@@ -529,6 +530,7 @@ export class AgentTaskService {
                 pausedMs = turnExec.pausedMs;
                 approvalTimeouts = turnExec.approvalTimeouts;
                 const { terminated, terminateSummary } = turnExec;
+                if (stuckPending) { conversation.push(replyNudge(getAgentTaskStuckNudge())); stuckPending = false; }
 
                 // terminate 도구 호출 — 깔끔한 완료 시그널(max_turns 소진 아님).
                 // 종전엔 이 경로가 판정 없이 바로 completed 였다(빈 terminate 로 산출물 0 완료가
