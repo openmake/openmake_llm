@@ -15,12 +15,10 @@ const runTool = jest.fn();
 jest.mock('../task-steps', () => ({ runTool: (...a: unknown[]) => runTool(...a), isSearchTool: () => false }));
 jest.mock('../tool-args', () => ({ prepareToolArgs: (a: unknown) => a }));
 jest.mock('../../tool-parallel', () => ({ ...jest.requireActual('../../tool-parallel'), prefetchReadOnlyCalls: async () => new Map() }));
-// 도구가 사용자에게 묻는 문맥(구 MCP elicitation)은 이제 도구 런타임 포트가 연다 — 그 문맥을 낚아챈다.
-let elicitCtx: { ask(args: Record<string, unknown>): Promise<unknown> } | undefined;
 jest.mock('../../../runtime-ports/tool-runtime', () => ({
     ...jest.requireActual('../../../runtime-ports/tool-runtime'),
     getToolRuntime: () => ({
-        runWithUserInputContext: (ctx: typeof elicitCtx, fn: () => Promise<unknown>) => { elicitCtx = ctx; return fn(); },
+        runWithUserInputContext: (_ctx: unknown, fn: () => Promise<unknown>) => fn(),
     }),
 }));
 const writeTurnCheckpoint = jest.fn(async () => undefined);
@@ -48,7 +46,7 @@ function input(overrides: Record<string, unknown>) {
     };
 }
 
-beforeEach(() => { jest.clearAllMocks(); elicitCtx = undefined; });
+beforeEach(() => { jest.clearAllMocks(); });
 
 
 function runtime(results: Record<string, string>, losses: Record<string, 'rerunnable' | 'unknown' | null>) {
