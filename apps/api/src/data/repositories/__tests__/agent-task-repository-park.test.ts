@@ -3,6 +3,7 @@
  */
 import type { Pool } from 'pg';
 import { AgentTaskRepository, parkedTaskCondition } from '../agent-task-repository';
+import { AgentTaskParkRepository } from '../agent-task-park-repository';
 
 function fakePool(results: Array<{ rows: unknown[]; rowCount?: number }>) {
     const calls: Array<{ sql: string; params: unknown[] }> = [];
@@ -32,7 +33,7 @@ describe('AgentTaskRepository — 주차(F16.7)', () => {
 
     it('listDeviceWaitTaskIds — 그 사용자의 기기 대기 작업만', async () => {
         const { pool, calls } = fakePool([{ rows: [{ id: 't1' }, { id: 't2' }] }]);
-        await expect(new AgentTaskRepository(pool).listDeviceWaitTaskIds('u1')).resolves.toEqual(['t1', 't2']);
+        await expect(new AgentTaskParkRepository(pool).listDeviceWaitTaskIds('u1')).resolves.toEqual(['t1', 't2']);
         expect(calls[0].sql).toContain('t.user_id = $1');
         expect(calls[0].params).toEqual(['u1', 'device_wait', 50]);
     });

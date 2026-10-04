@@ -10,7 +10,7 @@ import { badRequest, notFound } from '../utils/api-response';
 import { safeRealWorkspacePath } from '../services/task-sandbox/sandbox';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
-import { AgentTaskRepository } from '../data/repositories/agent-task-repository';
+import { AgentTaskParkRepository } from '../data/repositories/agent-task-park-repository';
 import { getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
@@ -110,7 +110,7 @@ export function queuePositionOf(t: { id?: unknown; status?: unknown }): { queueP
 export async function waitReasonOf(t: { id?: unknown; status?: unknown }): Promise<{ waitReason?: string }> {
     if (t.status !== 'paused' || typeof t.id !== 'string') return {};
     try {
-        const reason = await new AgentTaskRepository(getPool()).getParkReason(t.id);
+        const reason = await new AgentTaskParkRepository(getPool()).getParkReason(t.id);
         return reason ? { waitReason: reason } : {};
     } catch { return {}; } // 표시용 — 조회 실패가 상세 응답을 막지 않는다
 }
