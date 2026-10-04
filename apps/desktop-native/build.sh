@@ -69,6 +69,12 @@ codesign --force --deep --sign - "$APP"
 # 6) dmg (파일명은 서버 FILE_PATTERN ^OpenMake-[A-Za-z0-9.-]+\.dmg$ 준수)
 DMG="$OUT/OpenMake-Companion-$VERSION-arm64.dmg"
 rm -f "$DMG"
-hdiutil create -volname "$APP_NAME" -srcfolder "$APP" -ov -format UDZO "$DMG" >/dev/null
+# hdiutil 은 GitHub macOS 실행기에서 "No space left on device" 로 간헐 실패한다(2026-10-05 하루 두 번, 디스크 여유와 무관 — 다시 돌리면 통과).
+# 몇 번 다시 시도하고, 끝내 실패하면 빌드를 실패시킨다.
+for attempt in 1 2 3; do
+  hdiutil create -volname "$APP_NAME" -srcfolder "$APP" -ov -format UDZO "$DMG" >/dev/null && break
+  [ "$attempt" = 3 ] && { echo "dmg 생성 실패(3회 시도)"; exit 1; }
+  echo "dmg 생성 실패 — 다시 시도 ($attempt/3)"; rm -f "$DMG"; sleep 5
+done
 shasum -a 256 "$DMG"
 echo "빌드 완료: $DMG"
