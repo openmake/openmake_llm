@@ -2394,7 +2394,8 @@
         "network": "네트워크 접근",
         "external": "외부 도구",
         "control": "제어",
-        "sensitive": "자격증명 파일"
+        "sensitive": "자격증명 파일",
+        "memory": "메모리에 저장"
       },
       "recentTitle": "최근 결정(30분)",
       "revoked": "철회됨",

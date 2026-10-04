@@ -2394,7 +2394,8 @@
         "network": "ネットワークアクセス",
         "external": "外部ツール",
         "control": "制御",
-        "sensitive": "認証情報ファイル"
+        "sensitive": "認証情報ファイル",
+        "memory": "メモリに保存"
       },
       "recentTitle": "最近の決定（30分）",
       "revoked": "取り消し済み",

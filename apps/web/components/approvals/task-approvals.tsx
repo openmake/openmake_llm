@@ -12,7 +12,7 @@
  *
  * @see app/(workspace)/approvals/page.tsx
  */
-import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "./approval-args";
+import { ApprovalArgsFull, ApprovalPreview, isMemorySaveApproval, summarizeApprovalArgs } from "./approval-args";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -167,7 +167,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
         const isQuestion = isQuestionApproval(a.toolName);
         const elicit = elicitationHint(a.toolName, a.args);
         const structured = structuredQuestions(a.toolName, a.args);
-        const summary = summarizeApprovalArgs(a.args, ARGS_SUMMARY_MAX_CHARS);
+        const summary = summarizeApprovalArgs(a.args, ARGS_SUMMARY_MAX_CHARS, a.toolName);
         const acting = busy === a.approvalId;
         return (
           <Card key={a.approvalId} className="p-4">
@@ -185,7 +185,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
               </span>
               {!isQuestion && a.riskClass && (
                 <Badge tone={a.riskClass === "exec" || a.riskClass === "destructive" || a.sensitive ? "warn" : "neutral"}>
-                  {t(`tasks.risk.${a.riskClass}`)}
+                  {isMemorySaveApproval(a.toolName) ? t("tasks.risk.memory") : t(`tasks.risk.${a.riskClass}`)}
                   {a.sensitive ? ` · ${t("tasks.risk.sensitive")}` : ""}
                 </Badge>
               )}

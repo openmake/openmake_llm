@@ -142,7 +142,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
             </div>
           );
         }
-        const summary = summarizeApprovalArgs(a.args, INLINE_ARGS_SUMMARY_MAX_CHARS);
+        const summary = summarizeApprovalArgs(a.args, INLINE_ARGS_SUMMARY_MAX_CHARS, a.toolName);
         return (
           <div key={a.approvalId} className="space-y-1.5 rounded-md border border-border bg-surface-1 p-2">
             <div className="flex items-center justify-between gap-2">

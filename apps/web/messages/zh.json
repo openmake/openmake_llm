@@ -2394,7 +2394,8 @@
         "network": "网络访问",
         "external": "外部工具",
         "control": "控制",
-        "sensitive": "凭据文件"
+        "sensitive": "凭据文件",
+        "memory": "保存到记忆"
       },
       "recentTitle": "最近决定（30 分钟）",
       "revoked": "已撤销",
