@@ -19,9 +19,9 @@ import { Store } from './store.mjs';
 import { pickWindowsUpdate, sha256Of } from './update.mjs';
 
 const SMOKE = process.env.OMK_DESKTOP_SMOKE === '1';
-// 16×16 단색 점 — 별도 아이콘 파일 없이 트레이에 올린다(정식 아이콘은 패키징 단계에서 교체).
-const TRAY_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKElEQVR42mNgGAWjYBSMglEwCkYBNQAj'
-  + 'A8P/BgYGhv8MDAwMo2AUjAIAUOQCAVcVpZ8AAAAASUVORK5CYII=';
+// 앱 아이콘(OpenMake 로고) — build.mjs 가 dist 로 복사한다. 트레이는 작게 줄여 쓴다(Windows 는 고해상도 배율을 위해 32px).
+const ICON_PATH = path.join(__dirname, 'icon.png');
+const TRAY_ICON_PX = process.platform === 'win32' ? 32 : 18;
 
 let store;
 let locale = 'ko';
@@ -187,7 +187,7 @@ async function checkForUpdates(manual) {
 function openSettings() {
   if (settingsWin) { settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
-    width: 480, height: 380, resizable: false, title: t('settings.title'), autoHideMenuBar: true,
+    width: 480, height: 380, resizable: false, title: t('settings.title'), autoHideMenuBar: true, icon: ICON_PATH,
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   settingsWin.on('closed', () => { settingsWin = null; });
@@ -233,9 +233,10 @@ if (!app.requestSingleInstanceLock()) {
     locale = pickLocale(app.getLocale());
     if (process.platform === 'darwin') app.dock?.hide();
     registerIpc();
-    tray = new Tray(nativeImage.createFromDataURL(TRAY_ICON));
+    const trayIcon = nativeImage.createFromPath(ICON_PATH).resize({ width: TRAY_ICON_PX, height: TRAY_ICON_PX });
+    tray = new Tray(trayIcon);
     rebuildMenu();
-    emit({ ev: 'ready', locale });
+    emit({ ev: 'ready', locale, trayIcon: !trayIcon.isEmpty() });
     const startFolders = process.env.OMK_DESKTOP_FOLDER ? [process.env.OMK_DESKTOP_FOLDER] : settings().folders;
     if (apiKey()) for (const f of startFolders) connectFolder(f);
     // Windows 에서만 자동으로 확인한다 — 다른 OS 에서 이 앱은 개발용이다. 검증 실행 중에는 확인 창을 띄우지 않는다.
