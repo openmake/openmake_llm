@@ -93,6 +93,34 @@ describe('TaskRuntime — 로컬 브라우저 사이트 정책', () => {
         }
     });
 
+    it('정책 high-risk(자동) — 읽기·허용 목록 쓰기는 묻지 않고, 목록 밖 쓰기는 묻는다', async () => {
+        for (const actions of [ON_LIST, READ_ONLY]) {
+            const { executor, runBrowserSpec } = localExecutor();
+            const out = await runtime(`t-site-auto-${actions.length}-${Math.random()}`, 'high-risk', executor).executeTaskTool('browser', { actions }, { onApprovalPending: () => { throw new Error('묻지 않아야 한다'); } });
+            expect(out).not.toMatch(/^Error/);
+            expect(runBrowserSpec).toHaveBeenCalledTimes(1);
+        }
+        const { executor, runBrowserSpec } = localExecutor();
+        let pending: PendingApproval | undefined;
+        const exec = runtime('t-site-auto-write', 'high-risk', executor).executeTaskTool('browser', { actions: OFF_LIST }, { onApprovalPending: (p) => { pending = p; } });
+        await tick(); await tick();
+        expect(pending).toBeDefined();
+        await getApprovalRegistry().reject(pending!.approvalId, 'u1');
+        await exec;
+        expect(runBrowserSpec).not.toHaveBeenCalled();
+    });
+
+    it('정책 all(수동) — 읽기도 종전대로 묻는다', async () => {
+        const { executor, runBrowserSpec } = localExecutor();
+        let pending: PendingApproval | undefined;
+        const exec = runtime('t-site-manual-read', 'all', executor).executeTaskTool('browser', { actions: READ_ONLY }, { onApprovalPending: (p) => { pending = p; } });
+        await tick(); await tick();
+        expect(pending).toBeDefined();
+        await getApprovalRegistry().reject(pending!.approvalId, 'u1');
+        await exec;
+        expect(runBrowserSpec).not.toHaveBeenCalled();
+    });
+
     it('모델이 offListWrites 를 빈 배열로 넣어 와도 서버 계산값으로 덮어쓴다', async () => {
         const { executor, runBrowserSpec } = localExecutor();
         const rt = runtime('t-site-spoof', 'none', executor);
@@ -120,6 +148,12 @@ describe('승인 바닥·결속 (PURE)', () => {
         expect(requiresApproval('none', 'browser', args)).toBe(true);
         expect(approvalFloorReason('browser', { actions: ON_LIST })).toBeNull();
         expect(requiresApproval('none', 'browser', { actions: ON_LIST })).toBe(false);
+    });
+    it('siteGoverned 는 high-risk 의 browser 에만 듣는다 — 서버 샌드박스 브라우저(표식 없음)·다른 도구·정책 all 은 종전대로', () => {
+        expect(requiresApproval('high-risk', 'browser', { actions: READ_ONLY }, { siteGoverned: true })).toBe(false);
+        expect(requiresApproval('high-risk', 'browser', { actions: READ_ONLY })).toBe(true);
+        expect(requiresApproval('all', 'browser', { actions: READ_ONLY }, { siteGoverned: true })).toBe(true);
+        expect(requiresApproval('high-risk', 'bash', {}, { siteGoverned: true })).toBe(true);
     });
     it('다른 도구의 같은 이름 필드는 바닥이 아니다', () => {
         expect(hasOffListSiteWrites('bash', { offListWrites: [{}] })).toBe(false);
