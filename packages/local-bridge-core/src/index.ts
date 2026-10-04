@@ -16,6 +16,7 @@ export { gitRun, handleWorktree } from './worktree';
 export { runCodeNav, walkFiles, globToRegExp } from './code-nav';
 export { BridgeCore } from './core';
 export { BridgeConnection, type BridgeConnectionOptions } from './connection';
+export { discoverEndpoints, resolveEndpoints, normalizeServerAddress, isPlainRemoteHttp, DESKTOP_CONFIG_PATH, type ServerEndpoints } from './endpoints';
 export { findChrome } from './browser/chrome';
 export { bulkApprovalAllowed, folderNameOf, pathListSeparator, shellInvocation } from './platform';
 export { LocalBrowser } from './browser/local-browser';
