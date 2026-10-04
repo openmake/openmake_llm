@@ -156,6 +156,17 @@ describe('callAgentTurnWithBudget — 출력 반복 기록', () => {
         expect(onNote.mock.calls[0][1]).toContain('반복');
     });
 
+    it('작업 목표가 반복 출력을 요청했으면 자르지 않는다 — 기록은 남긴다', async () => {
+        chat.mockResolvedValue({ content: loop.repeat(8) });
+        const onNote = jest.fn();
+        const conversation = [{ role: 'system', content: 's' }, { role: 'user', content: `다음 문장을 8번 반복해서 써 줘: ${loop}` }];
+        const out = await callAgentTurnWithBudget({ ...base(), conversation: conversation as never, onNote });
+        expect(out.result.content).toBe(loop.repeat(8));
+        expect(out.repetitionCut).toBeFalsy();
+        expect(onNote.mock.calls[0][0]).toBe('output_repetition');
+        expect(onNote.mock.calls[0][1]).toContain('기록만');
+    });
+
     it('도구 호출이 함께 온 응답은 본문만 자르고 호출은 그대로 둔다', async () => {
         const tool_calls = [{ id: 'c1', type: 'function', function: { name: 'bash', arguments: { command: 'ls' } } }];
         chat.mockResolvedValue({ content: loop.repeat(8), tool_calls });

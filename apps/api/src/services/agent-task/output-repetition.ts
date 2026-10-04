@@ -39,6 +39,20 @@ export function detectOutputRepetition(text: string | null | undefined): { repea
     return null;
 }
 
+/**
+ * PURE: 사용자가 일부러 반복 출력을 시킨 작업인가 — 그런 작업의 반복은 모델의 반복 루프가 아니라 요청한 결과다.
+ * 목표(대화의 첫 사용자 메시지)만 본다. 뒤에 주입되는 안내·재촉에도 "N번 반복" 같은 말이 들어 있어 섞어 보면 오탐한다.
+ */
+export function goalRequestsRepetition(conversation: readonly ChatMessage[]): boolean {
+    if (!AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_RESPECT_REQUEST) return false;
+    const goal = conversation.find((m) => m.role === 'user')?.content;
+    if (typeof goal !== 'string') return false;
+    return AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_REQUEST_PATTERNS.some((re) => [...goal.matchAll(re)].some((m) => {
+        const n = m.groups?.n ?? '';
+        return /^\d+$/.test(n) ? Number(n) >= AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_MIN_REPEATS : n !== '';
+    }));
+}
+
 /** PURE: 반복이 시작된 뒤를 잘라 내고 생략 표시를 붙인다 — 모델이 자기 반복을 다시 읽고 이어가지 않게 한다. */
 export function cutRepeatedOutput(text: string, cutAt: number): string {
     return `${text.slice(0, cutAt).trimEnd()}${OUTPUT_REPETITION_CUT_MARKER}`;

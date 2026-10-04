@@ -1,4 +1,4 @@
-import { detectOutputRepetition, cutRepeatedOutput, retryRepeatedAnswer } from './output-repetition';
+import { detectOutputRepetition, cutRepeatedOutput, retryRepeatedAnswer, goalRequestsRepetition } from './output-repetition';
 import { OUTPUT_REPETITION_CUT_MARKER, getOutputRepetitionRetryNudge } from '../../prompts/agent-task-turn-loop';
 import type { ChatMessage } from '../../llm/types';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
@@ -90,5 +90,36 @@ describe('retryRepeatedAnswer — 반복으로 잘린 최종 답변은 한 번 �
         const plain = { result: { role: 'assistant' as const, content: '보통 답' } };
         expect(await retryRepeatedAnswer({ conversation: conv() }, plain, recall)).toBe(plain);
         expect(recall).not.toHaveBeenCalled();
+    });
+});
+
+describe('goalRequestsRepetition — 사용자가 일부러 반복 출력을 시켰는가', () => {
+    const goal = (content: string): ChatMessage[] => [{ role: 'system', content: 's' }, { role: 'user', content }];
+
+    it('횟수를 붙여 반복·출력을 시킨 목표는 요청으로 본다', () => {
+        for (const g of [
+            "'안녕하세요'를 100번 써 줘",
+            '이 문장을 20회 반복해서 출력해',
+            '같은 줄을 열 번 되풀이해 줘',
+            '반복해서 50번 적어 줘',
+            'Repeat the sentence 30 times',
+            'print "hello" 12 times',
+        ]) expect(goalRequestsRepetition(goal(g))).toBe(true);
+    });
+
+    it('반복 임계보다 적은 횟수와, 번호를 가리키는 말은 요청으로 보지 않는다', () => {
+        for (const g of [
+            '3번 파일을 읽고 요약을 써 줘',
+            '테스트를 2번 돌려서 결과를 출력해',
+            '보고서를 써 줘',
+            '실패하면 반복하지 말고 알려 줘',
+        ]) expect(goalRequestsRepetition(goal(g))).toBe(false);
+    });
+
+    it('목표(첫 사용자 메시지)만 본다 — 뒤에 주입된 안내 문구는 보지 않는다', () => {
+        const conv = goal('보고서를 써 줘');
+        conv.push({ role: 'user', content: '같은 호출을 10번 반복했습니다. 다른 방법을 쓰세요.' });
+        expect(goalRequestsRepetition(conv)).toBe(false);
+        expect(goalRequestsRepetition([])).toBe(false);
     });
 });
