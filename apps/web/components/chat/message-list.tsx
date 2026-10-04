@@ -72,8 +72,24 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
   const answer = (a: PendingApproval) =>
     run(a, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/answer`, { text: answers[a.approvalId] ?? "" }));
   // task 자동승인(4-2) — 이후 이 작업의 도구 호출은 승인 없이 진행(ask_human 제외). 대기 중 승인도 즉시 해소.
-  const autoApprove = (a: PendingApproval) =>
-    run(a, () => ApiClient.post(`/api/agent-tasks/${a.taskId}/approvals/auto-approve`, {}));
+  // 계속 물어야 하는 호출(외부 MCP·지시 파일·메모리 쓰기 등)은 자동 승인 뒤에도 대기로 남는다 — 누른 카드를 낙관적으로 지우지 않고
+  // 서버에 남은 승인만 다시 그린다(지워 버리면 승인할 곳이 화면에서 사라져 작업이 멈춘 것처럼 보인다).
+  const autoApprove = async (a: PendingApproval) => {
+    setBusy(a.approvalId);
+    try {
+      await ApiClient.post(`/api/agent-tasks/${a.taskId}/approvals/auto-approve`, {});
+      const res = await ApiClient.get<{ data: { pending: { approvalId: string }[] } }>("/api/agent-tasks/approvals/pending").catch(() => null);
+      if (!res?.data?.pending) return;
+      const still = new Set(res.data.pending.map((p) => p.approvalId));
+      setChatHistory((prev) =>
+        prev.map((m) => (m.taskId === a.taskId ? { ...m, approvals: (m.approvals ?? []).filter((x) => still.has(x.approvalId)) } : m)),
+      );
+    } catch (e) {
+      alert(t("approvals.processFailed", { error: e instanceof Error ? e.message : t("approvals.errorFallback") }));
+    } finally {
+      setBusy(null);
+    }
+  };
   const hasToolApproval = approvals.some((a) => !isQuestionApproval(a.toolName));
 
   return (
