@@ -3,7 +3,7 @@
 # ==============================================================
 # path-filter: apps/desktop-native 또는 브리지 코어(packages/local-bridge-core) 변경 시에만 실행.
 # 코어가 바뀌었는데 헬퍼 번들/하네스가 깨지는 커밋을 여기서 잡는다 (iOS ci 패턴 준용).
-# ad-hoc 서명·dmg 게시는 로컬 수동(scripts/publish-desktop.sh) — CI 는 빌드 검증만.
+# CI 는 빌드 검증 뒤 ad-hoc 서명 dmg 를 만들어 실행 결과로 남긴다. 서버 게시는 수동(scripts/publish-desktop.sh).
 # ==============================================================
 
 name: Desktop Native
@@ -58,3 +58,16 @@ jobs:
       # ─── Gate 2: Swift 릴리스 빌드 (무서명) ───
       - name: "Gate 2: Swift build"
         run: swift build -c release --package-path apps/desktop-native/OpenMakeCompanion
+
+      # ─── Gate 3: .app 조립 + ad-hoc 서명 + dmg ───
+      # build.sh 가 Gate 1·2 를 다시 돌린 뒤 dmg 까지 만든다(이미 빌드돼 있어 빠르다). 서버 게시는 수동(scripts/publish-desktop.sh).
+      - name: "Gate 3: dmg"
+        run: bash apps/desktop-native/build.sh
+
+      - name: Upload dmg
+        uses: actions/upload-artifact@v7
+        with:
+          name: OpenMake-Companion-dmg
+          path: apps/desktop-native/dist/OpenMake-Companion-*.dmg
+          if-no-files-found: error
+          retention-days: 30
