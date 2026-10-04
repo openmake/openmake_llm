@@ -55,6 +55,11 @@ q "SELECT 'p50 '||lpad(round(percentile_cont(0.5) WITHIN GROUP (ORDER BY total_t
 q "SELECT '총 '||sum(total_tokens)||' 토큰 / '||count(*)||'건'||
    '   (200K 초과 '||count(*) FILTER (WHERE total_tokens>200000)||'건, 400K 초과 '||count(*) FILTER (WHERE total_tokens>400000)||'건)'
    FROM agent_tasks WHERE created_at > now()-interval '$DAYS days';"
+# 캐시 적중률(182) — 모델 서버가 값을 준 작업만 센다. 한 건도 없으면 서버가 값을 주지 않는 것(vLLM: --enable-prompt-tokens-details).
+q "SELECT '캐시 적중 '||coalesce(round(100.0*sum(cached_prompt_tokens)/nullif(sum(cache_reported_prompt_tokens),0))::text||'%','-')
+   ||'  (입력 '||coalesce(sum(cache_reported_prompt_tokens)::text,'0')||' 토큰 중 '||coalesce(sum(cached_prompt_tokens)::text,'0')
+   ||', 값이 있는 작업 '||count(*) FILTER (WHERE cached_prompt_tokens IS NOT NULL)||'/'||count(*)||'건)'
+   FROM agent_tasks WHERE created_at > now()-interval '$DAYS days';"
 echo
 
 echo "## 4. 상위 소비 작업 10건"

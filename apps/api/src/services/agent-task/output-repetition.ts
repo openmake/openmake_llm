@@ -59,7 +59,7 @@ export function cutRepeatedOutput(text: string, cutAt: number): string {
 }
 
 interface TurnOut {
-    result: { content?: string | null; tool_calls?: unknown[]; metrics?: { prompt_tokens?: number; completion_tokens?: number } };
+    result: { content?: string | null; tool_calls?: unknown[]; metrics?: { prompt_tokens?: number; completion_tokens?: number; cached_prompt_tokens?: number } };
     /** 이 응답의 본문을 반복 때문에 잘랐는가(turn-call 이 채운다). */
     repetitionCut?: boolean;
 }
@@ -82,5 +82,8 @@ export async function retryRepeatedAnswer<T extends TurnOut>(
     const again = await recall();
     const sum = (k: 'prompt_tokens' | 'completion_tokens'): number => (out.result.metrics?.[k] ?? 0) + (again.result.metrics?.[k] ?? 0);
     again.result.metrics = { ...again.result.metrics, prompt_tokens: sum('prompt_tokens'), completion_tokens: sum('completion_tokens') };
+    // 캐시 적중 토큰도 합친다 — 두 호출 모두 서버가 값을 주지 않았으면 없는 채로 둔다(0 으로 꾸미지 않는다).
+    const cached = [out, again].map((o) => o.result.metrics?.cached_prompt_tokens).filter((n): n is number => n !== undefined);
+    if (cached.length > 0) again.result.metrics.cached_prompt_tokens = cached.reduce((a, b) => a + b, 0);
     return again;
 }

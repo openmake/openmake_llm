@@ -16,6 +16,8 @@ const chatCalls: { conversation: { role: string; content?: unknown }[]; advanced
 
 /** 매 턴 도구를 호출해 terminate 없이 상한까지 소진시킨다. 토큰량은 테스트별로 조절. */
 let tokensPerTurn = 5;
+/** 서버가 돌려준 캐시 적중 토큰 — undefined 는 "서버가 값을 주지 않음". */
+let cachedPerTurn: number | undefined;
 const mockChat = jest.fn(async (
     conversation: { role: string; content?: unknown }[],
     _model?: unknown, _opts?: unknown, advanced?: ChatAdvanced,
@@ -25,7 +27,7 @@ const mockChat = jest.fn(async (
         role: 'assistant',
         content: '조사를 계속합니다',
         tool_calls: [{ type: 'function', id: 'c1', function: { name: 'web_search', arguments: { query: 'x' } } }],
-        metrics: { prompt_tokens: tokensPerTurn, completion_tokens: 0 },
+        metrics: { prompt_tokens: tokensPerTurn, completion_tokens: 0, ...(cachedPerTurn !== undefined ? { cached_prompt_tokens: cachedPerTurn } : {}) },
     };
 });
 jest.mock('../llm', () => {
@@ -202,6 +204,30 @@ describe('Agent Task — 누적 토큰 영속', () => {
 
         expect(turn2).toBeDefined();
         expect(turn2?.totalTokens).toBe(tokensPerTurn);
+    });
+});
+
+describe('Agent Task — 캐시 적중 토큰 영속', () => {
+    type Update = { currentTurn?: number; status?: string; cachedPromptTokens?: number; cacheReportedPromptTokens?: number };
+    const turn2 = (): Update | undefined => updateAgentTask.mock.calls
+        .map(([, u]) => u as Update).find(u => u.currentTurn === 2 && u.status === undefined);
+    beforeEach(() => {
+        updateAgentTask.mockClear(); mockChat.mockClear();
+        chatCalls.length = 0; tokensPerTurn = 100; cachedPerTurn = undefined;
+    });
+    afterAll(() => { cachedPerTurn = undefined; });
+
+    it('서버가 준 적중 토큰을 턴 진행 갱신에 누적해 싣는다', async () => {
+        cachedPerTurn = 60;
+        await new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '끝나지 않는 작업', maxTurns: 3 } as never);
+        expect(turn2()).toMatchObject({ cachedPromptTokens: 60, cacheReportedPromptTokens: 100 });
+    });
+
+    it('서버가 값을 주지 않으면 아무것도 싣지 않는다(0 으로 꾸미지 않는다)', async () => {
+        await new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '끝나지 않는 작업', maxTurns: 3 } as never);
+        expect(turn2()).toBeDefined();
+        expect(turn2()).not.toHaveProperty('cachedPromptTokens');
+        expect(turn2()).not.toHaveProperty('cacheReportedPromptTokens');
     });
 });
 

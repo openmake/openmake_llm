@@ -152,6 +152,10 @@ export interface AgentTask {
     folder_rel?: string;
     /** 누적 LLM 토큰(prompt+completion) — terminal 전이 시 기록(066), resume 은 통산 */
     total_tokens?: number;
+    /** 캐시 적중 입력 토큰 누적(182) — NULL 은 모델 서버가 값을 주지 않음(적중 0 과 구분) */
+    cached_prompt_tokens?: number | null;
+    /** 캐시 값을 돌려준 호출의 입력 토큰 누적(182) — 적중률의 분모 */
+    cache_reported_prompt_tokens?: number | null;
     /** "나머지 모두 승인" 플래그 영속(124) — 재개 시 승인 레지스트리에 복원 */
     auto_approve?: boolean;
     /** 완료 출구 구분(091) — 'final_answer' | 'terminate'. 미완료/기존 행은 NULL */
