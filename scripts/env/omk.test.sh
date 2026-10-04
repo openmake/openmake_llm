@@ -161,6 +161,26 @@ eq "images dev"    "$(runtime_image_names dev)"    "openmake-mcp-runtime:dev ope
 eq "images online" "$(runtime_image_names online)" "openmake-mcp-runtime:latest openmake-task-runtime:latest"
 RX="$TMP/rx"; mkdir -p "$RX"; printf 'OMK_RUNTIME_IMAGES=off\n' > "$RX/.env"
 runtime_images_ensure "$RX" dev >/dev/null; eq "images: off 면 아무것도 안 함" "$RUNTIME_CHANGED|$(dotenv_get "$RX/.env" MCP_SANDBOX_IMAGE)" "0|"
+# egress 프록시 이미지 — docker 는 가짜. 떠 있는 컨테이너가 옛 이미지일 때만 지운다.
+egress_calls() { # $1=.env 내용 $2=컨테이너의 이미지 ID(없으면 빈 값) $3=빌드 종료 코드
+    ( EG="$TMP/eg"; rm -rf "$EG"; mkdir -p "$EG"; printf '%s' "$1" > "$EG/.env"
+      docker() {
+          case "$1 ${2:-}" in
+              "build -q")          printf 'build %s %s;' "$4" "${5#"$EG"/}" >> "$EG/calls"; return "$EG_RC" ;;
+              "container inspect") [[ -n "$EG_CUR" ]] && printf '%s' "$EG_CUR" || return 1 ;;
+              "image inspect")     printf 'sha256:new' ;;
+              "rm -f")             printf 'rm %s;' "$3" >> "$EG/calls" ;;
+          esac
+      }
+      EG_CUR="$2" EG_RC="$3"; egress_proxy_image_ensure "$EG" >/dev/null 2>&1; cat "$EG/calls" 2>/dev/null )
+}
+eq "egress: 컨테이너 없으면 빌드만"        "$(egress_calls '' '' 0)"           "build openmake-egress-proxy:latest infra/egress-proxy;"
+eq "egress: 옛 이미지 컨테이너는 지운다"   "$(egress_calls '' 'sha256:old' 0)" "build openmake-egress-proxy:latest infra/egress-proxy;rm omk-egress-proxy;"
+eq "egress: 같은 이미지면 그대로 둔다"     "$(egress_calls '' 'sha256:new' 0)" "build openmake-egress-proxy:latest infra/egress-proxy;"
+eq "egress: 빌드 실패면 컨테이너를 안 건드린다" "$(egress_calls '' 'sha256:old' 1)" "build openmake-egress-proxy:latest infra/egress-proxy;"
+eq "egress: .env 의 이미지·컨테이너 이름을 따른다" \
+   "$(egress_calls $'TASK_SANDBOX_EGRESS_PROXY_IMAGE=my/proxy:1\nTASK_SANDBOX_EGRESS_PROXY_CONTAINER=my-proxy\n' 'sha256:old' 0)" \
+   "build my/proxy:1 infra/egress-proxy;rm my-proxy;"
 
 # ── 소유권 가드: 환경 디렉터리 밖의 경로는 남의 것 ──
 ok "own: infra under env"     '! is_foreign_path "$OMK_ROOT/staging/llm/infra" "$OMK_ROOT/staging"'

@@ -1194,6 +1194,20 @@ sandbox_root_ensure() { # $1=.env $2=env
     dotenv_ensure "$1" TASK_SANDBOX_ROOT "$(env_dir "$2")/task-workspaces"
     mkdir -p "$(dotenv_get "$1" TASK_SANDBOX_ROOT)"
 }
+# egress 프록시 이미지(수십 MB) — 브라우저 컨테이너의 네트워크 레벨 allowlist(TASK_SANDBOX_EGRESS_PROXY_ENABLED, 기본 꺼짐).
+# 태그·컨테이너 이름은 .env 값(없으면 소스 기본값)을 그대로 쓴다 — .env 는 고치지 않는다. API 는 떠 있는 프록시
+# 컨테이너를 재사용하므로, 옛 이미지로 떠 있으면 지운다 — 다음 브라우저 작업 때 API 가 새 이미지로 다시 띄운다.
+egress_proxy_image_ensure() { # $1=llm dir
+    local envf="$1/.env" img ctr cur new
+    img="$(dotenv_get "$envf" TASK_SANDBOX_EGRESS_PROXY_IMAGE)"; img="${img:-openmake-egress-proxy:latest}"
+    ctr="$(dotenv_get "$envf" TASK_SANDBOX_EGRESS_PROXY_CONTAINER)"; ctr="${ctr:-omk-egress-proxy}"
+    docker build -q -t "$img" "$1/infra/egress-proxy" >/dev/null \
+        || { log_warn "$img 빌드 실패 — 건너뜁니다 (egress 프록시를 켠 환경이면 고친 뒤 'omk env update')"; return 0; }
+    cur="$(docker container inspect -f '{{.Image}}' "$ctr" 2>/dev/null || true)"
+    new="$(docker image inspect -f '{{.Id}}' "$img" 2>/dev/null || true)"
+    [[ -n "$cur" && "$cur" != "$new" ]] || return 0
+    docker rm -f "$ctr" >/dev/null 2>&1 && log_ok "옛 이미지의 egress 프록시 컨테이너 $ctr 제거 (다음 작업 때 새 이미지로 뜬다)" || true
+}
 RUNTIME_CHANGED=0
 runtime_images_ensure() { # $1=llm dir $2=env
     local ldir="$1" env="$2" envf="$1/.env" mcp task before after
@@ -1216,6 +1230,7 @@ runtime_images_ensure() { # $1=llm dir $2=env
     after="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED|ROOT)=' "$envf" | sort)"
     [[ "$before" == "$after" ]] || RUNTIME_CHANGED=1
     log_ok "런타임 이미지 준비: $mcp · $task"
+    egress_proxy_image_ensure "$ldir"
 }
 runtime_images_remove() { # $1=env — 환경별 태그만 지운다. :latest 는 omk 밖에서도 쓰므로 남긴다.
     [[ "$1" != "$OMK_DEFAULT_ENV" ]] && has docker || return 0
