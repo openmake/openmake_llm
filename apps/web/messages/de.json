@@ -485,7 +485,7 @@
     },
     "steering": {
       "label": "Diese Aufgabe steuern",
-      "placeholder": "Senden Sie eine neue Anweisung, um die Richtung anzupassen … (Cmd/Ctrl+Enter)",
+      "placeholder": "Senden Sie eine neue Anweisung, um die Richtung anzupassen … (Enter zum Senden · Shift+Enter für neue Zeile)",
       "sent": "Gesendet",
       "failed": "Anweisung konnte nicht gesendet werden: {error}"
     },

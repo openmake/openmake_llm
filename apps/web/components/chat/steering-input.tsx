@@ -11,6 +11,7 @@ import { Send } from "lucide-react";
 import { ApiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { STEERING_SENT_RESET_MS } from "@/lib/constants/ui-limits";
+import { shouldSubmitOnEnter } from "@/lib/approval-input";
 
 export function SteeringInput({ taskId }: { taskId?: string }) {
   const t = useTranslations("chat");
@@ -42,7 +43,8 @@ export function SteeringInput({ taskId }: { taskId?: string }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); }
+            // Enter 로 전송, Shift+Enter 는 줄바꿈(채팅 입력창·질문 카드와 같은 규칙). 한글 조합 중의 Enter 는 제외.
+            if (shouldSubmitOnEnter({ key: e.key, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, { multiline: true })) { e.preventDefault(); void send(); }
           }}
           placeholder={t("steering.placeholder")}
           rows={2}

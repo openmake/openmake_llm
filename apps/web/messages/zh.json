@@ -485,7 +485,7 @@
     },
     "steering": {
       "label": "引导此任务",
-      "placeholder": "发送新指令以调整方向… (Cmd/Ctrl+Enter)",
+      "placeholder": "发送新指令以调整方向… (Enter 发送 · Shift+Enter 换行)",
       "sent": "已发送",
       "failed": "发送指令失败: {error}"
     },
