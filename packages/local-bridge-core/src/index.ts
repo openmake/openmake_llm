@@ -18,3 +18,4 @@ export { BridgeCore } from './core';
 export { BridgeConnection, type BridgeConnectionOptions } from './connection';
 export { findChrome } from './browser/chrome';
 export { bulkApprovalAllowed, folderNameOf, pathListSeparator, shellInvocation } from './platform';
+export { LocalBrowser } from './browser/local-browser';
