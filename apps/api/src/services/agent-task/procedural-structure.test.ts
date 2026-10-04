@@ -7,6 +7,9 @@ describe('findStructureProblems', () => {
     it('정상 브라우저 절차는 문제 없음', () => {
         expect(findStructureProblems({ kind: 'browser', actions: [{ type: 'goto', url: 'https://example.com/{{q}}' }, { type: 'fill', selector: '#q', text: '{{q}}' }, { type: 'extractText' }] })).toEqual([]);
     });
+    it('확인창 정책 액션(dialog)은 러너가 아는 액션이다', () => {
+        expect(findStructureProblems({ kind: 'browser', actions: [{ type: 'goto', url: 'https://example.com' }, { type: 'dialog', accept: true }, { type: 'click', selector: '#del' }] })).toEqual([]);
+    });
     it('액션이 하나도 없으면 문제', () => {
         expect(findStructureProblems({ kind: 'browser', actions: [] })).toHaveLength(1);
     });

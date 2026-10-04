@@ -19,7 +19,7 @@ import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, lstat, realpath, copyFile as fsCopyFile } from 'fs/promises';
 import { resolve, sep, join, dirname, basename, relative } from 'path';
-import { getTaskSandboxConfig, BROWSER_SESSION, type TaskSandboxConfig } from '../../config/task-sandbox';
+import { getTaskSandboxConfig, BROWSER_SESSION, browserDestGuardEnv, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { BROWSER_RUN } from '../../config/agent-task-browser-web';
 import { BROWSER_TAKEOVER_DISCARDED_MESSAGE } from '../../prompts/agent-task-browser-web';
 import { guardBrowserResult } from './browser-result-guard';
@@ -78,6 +78,8 @@ export function buildBrowserRunArgs(
     proxyUrl?: string,
     /** 시간 초과 때 지울 수 있게 붙이는 이름(browserRunContainerName). */
     containerName?: string,
+    /** 러너의 목적지 검사 설정(`KEY=값`). */
+    guardEnv: readonly string[] = browserDestGuardEnv(),
 ): string[] {
     const a: string[] = ['run', '--rm', '--init', ...(containerName ? ['--name', containerName] : [])];
     // egress 프록시 ON: internal 망(인터넷 직접 차단) + 프록시 env. OFF: browserNetwork(bridge).
@@ -89,6 +91,7 @@ export function buildBrowserRunArgs(
     a.push('-v', `${hostWorkdir}:${WORKSPACE}:rw`);
     a.push('-w', WORKSPACE);
     if (proxyUrl) a.push('-e', `BROWSER_PROXY=${proxyUrl}`);
+    for (const kv of guardEnv) a.push('-e', kv);
     a.push(cfg.image, 'node', '/opt/browser/browser-runner.mjs', actionsRelPath);
     return a;
 }

@@ -10,6 +10,6 @@
 FROM node:22-slim
 USER node
 WORKDIR /app
-COPY proxy.mjs /app/proxy.mjs
+COPY proxy.mjs guard-proxy.mjs /app/
 EXPOSE 8888
 CMD ["node", "/app/proxy.mjs"]
