@@ -1,11 +1,14 @@
 #!/bin/bash
 # OpenMake Companion 빌드 — 헬퍼 번들 + Swift 빌드 + .app 조립 + ad-hoc 서명 + dmg.
 # 사전: npm run build:packages (local-bridge-core dist 필요)
-# 사용: bash apps/desktop-native/build.sh [버전]   (기본 버전: 0.1.0)
+# 사용: bash apps/desktop-native/build.sh [버전]   (기본 버전: VERSION 파일)
+# 버전을 주지 않으면 VERSION 파일의 값을 쓴다 — 종전 기본값 0.1.0 은 서버에 게시된 버전(0.2.8)보다 낮아,
+# CI 가 만든 새 빌드가 게시본을 "새 버전"으로 보고 구버전으로 되돌아갔다(2026-10-05).
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(cd ../.. && pwd)"
-VERSION="${1:-0.1.0}"
+VERSION="${1:-$(tr -d '[:space:]' < VERSION)}"
+[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "버전 형식이 잘못됐습니다: $VERSION"; exit 1; }
 APP_NAME="OpenMake Companion"
 BUNDLE_ID="cc.openmake.companion"
 OUT="dist"

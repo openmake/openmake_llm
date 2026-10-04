@@ -52,6 +52,12 @@ final class Updater: ObservableObject {
                 if interactive { info(L("update.latest.title"), L("update.latest.body", currentVersion)) }
                 return
             }
+            // 교체는 앱 옆에 새 버전을 복사해 바꿔치기한다 — 그 폴더에 쓸 수 없으면(디스크 이미지에서 바로 실행 등) 받지 않고 안내만 한다.
+            // 종전엔 내려받은 뒤 교체 스크립트가 "Read-only file system" 으로 실패했다(2026-10-05).
+            guard canReplaceInPlace() else {
+                info(L("update.readOnly.title", version, currentVersion), L("update.readOnly.body"))
+                return
+            }
             // 테스트 훅(개발/E2E 전용): 다이얼로그 없이 즉시 진행 — OMK_COMPANION_* env 훅 계열.
             if ProcessInfo.processInfo.environment["OMK_COMPANION_AUTO_UPDATE"] != "1" {
                 let alert = NSAlert()
@@ -91,6 +97,12 @@ final class Updater: ObservableObject {
     private func isSecureOrigin(_ s: String) -> Bool {
         guard let u = URL(string: s), let host = u.host else { return false }
         return u.scheme == "https" || host == "localhost" || host == "127.0.0.1"
+    }
+
+    /** 앱이 놓인 폴더에 쓸 수 있는가 — 읽기 전용 볼륨(dmg)·App Translocation 경로에서는 거짓. */
+    private func canReplaceInPlace() -> Bool {
+        let parent = (Bundle.main.bundlePath as NSString).deletingLastPathComponent
+        return FileManager.default.isWritableFile(atPath: parent)
     }
 
     /** 단순 수치 버전 비교 (a > b) — 자리수 다르면 부족분 0 취급. */

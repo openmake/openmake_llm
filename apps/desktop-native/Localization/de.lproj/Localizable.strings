@@ -72,6 +72,8 @@
 "update.available.body" = "Jetzt herunterladen und installieren? Die App wird während der Installation kurz beendet und danach wieder geöffnet.";
 "update.install" = "Aktualisieren";
 "update.later" = "Später";
+"update.readOnly.title" = "Version v%1$@ ist verfügbar (aktuell v%2$@)";
+"update.readOnly.body" = "Die App kann an diesem Ort nicht ersetzt werden (z. B. wenn sie direkt aus einem Disk-Image gestartet wurde). Verschieben Sie die App in den Ordner „Programme“, öffnen Sie sie erneut und aktualisieren Sie dann.";
 "update.badDownload" = "Ungültige Download-Adresse";
 "update.checksum" = "Integritätsprüfung des Downloads fehlgeschlagen (sha256 stimmt nicht überein)";
 "update.noBundle" = "App-Bundle-Pfad nicht gefunden (Updates sind in Entwicklungsläufen nicht verfügbar)";
