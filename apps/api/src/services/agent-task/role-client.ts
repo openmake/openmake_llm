@@ -23,6 +23,8 @@ export interface AgentRoleState {
     external: boolean;
     /** 폴백은 작업당 1회 — true 면 더 이상 강등하지 않음 */
     fallbackDone: boolean;
+    /** 내부 전용 정책으로 쓰지 않은 외부 모델 id — 감사 기록용(없으면 차단한 것이 없다) */
+    blockedExternal?: string;
 }
 
 /**
@@ -33,12 +35,19 @@ export async function initAgentRoleState(
     taskId: string,
     userId: string,
     explicitClient?: LLMClient,
+    /** internalOnly: 내부 전용 실행(config/internal-only-policy) — 외부 제공자로 해석돼도 내부 모델을 쓴다 */
+    opts: { internalOnly?: boolean } = {},
 ): Promise<AgentRoleState> {
     if (explicitClient) {
         return { client: explicitClient, external: false, fallbackDone: true };
     }
     const resolved = await resolveRoleClientForUser('agent', userId);
     const external = resolved.providerId !== 'local-llm';
+    if (external && opts.internalOnly) {
+        // 내부 모델이 응답하지 못하면 작업은 실패한다 — 외부로 넘기는 경로는 없다(fallbackDone 으로 강등 로직도 닫는다).
+        logger.info(`[AgentTask] ${taskId} 내부 전용 — 외부 모델 ${resolved.fullId} 대신 내부 모델 사용`);
+        return { client: createClient({ model: getModelForRole('agent'), userId }), external: false, fallbackDone: true, blockedExternal: resolved.fullId };
+    }
     if (resolved.degraded) {
         logger.warn(`[AgentTask] ${taskId} agent role 폴백: ${resolved.degraded}`);
     } else if (external) {
@@ -179,8 +188,11 @@ export async function chatTurnWithRoleFallback(
 }
 
 /** 'judge' role 별도 해석 — agent 실행 모델과 판정 모델을 분리 배정 가능. */
-export async function judgeClientFor(userId: string): Promise<LLMClient> {
-    return (await resolveRoleClientForUser('judge', userId)).client;
+export async function judgeClientFor(userId: string, opts: { internalOnly?: boolean } = {}): Promise<LLMClient> {
+    const resolved = await resolveRoleClientForUser('judge', userId);
+    // 내부 전용 실행은 판정에도 외부 모델을 쓰지 않는다 — 판정 입력에 작업 결과(사용자 PC 의 자료)가 들어간다.
+    if (opts.internalOnly && resolved.providerId !== 'local-llm') return createClient({ model: getModelForRole('judge'), userId });
+    return resolved.client;
 }
 
 /** 생성자 기본 클라이언트 — model 미지정 시 'agent' role 전역 티어. */

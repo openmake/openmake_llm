@@ -11,6 +11,7 @@ import type { ToolDefinition } from '../../llm/types';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { splitInternalOnlyTools } from '../../config/internal-only-policy';
 import { getSkillRuntime, LOAD_SKILL_TOOL_NAME } from '../../runtime-ports/skill-runtime';
 import { selectRelevantTools } from './tool-selector';
 import { selectRelevantToolsEmbedding } from './tool-selector-embedding';
@@ -20,6 +21,8 @@ const logger = createLogger('AgentTaskService');
 
 interface AssembledTools {
     tools: ToolDefinition[];
+    /** 내부 전용 실행에서 목록에서 뺀 추가 도구 이름 — 감사 기록용(내부 전용이 아니면 빈 배열) */
+    removedForInternalOnly: string[];
     /** 호스트에서 실행되는 비-샌드박스 도구 이름(extra + 동적) — 디스패치가 승인 게이트 적용. */
     extraToolNames: Set<string>;
 }
@@ -41,8 +44,14 @@ export async function assembleAgentTools(params: {
     /** 작업 소유자 id — 본인 소유 비공개 스킬(확장 설치분 등)을 카탈로그에 포함. */
     userId?: string;
 }): Promise<AssembledTools> {
-    const { mcpTools, taskRuntime, sandboxCfg, goal, injectedSkillIds, userId } = params;
+    const { taskRuntime, sandboxCfg, goal, injectedSkillIds, userId } = params;
     const extraToolNames = new Set<string>();
+    // 내부 전용 실행(config/internal-only-policy) — 호스트에서 도는 추가 도구는 허용 목록만 남긴다. 카탈로그 자체를 좁혀
+    // 정적·동적·degrade·legacy 어느 분기에서도 외부 도구가 모델에 보이지 않게 한다(작업 도구는 taskRuntime 이 따로 준다).
+    const split = sandboxCfg.internalOnly ? splitInternalOnlyTools(params.mcpTools) : { kept: params.mcpTools, removed: [] as string[] };
+    const mcpTools = split.kept;
+    const removedForInternalOnly = split.removed;
+    if (removedForInternalOnly.length > 0) logger.info(`[AgentTask] 내부 전용 — 추가 도구 ${removedForInternalOnly.length}개 제외`);
 
     /**
      * 조립된 도구 세트에 load_skill(스킬 카탈로그 포함)을 합류시킨다.
@@ -80,6 +89,7 @@ export async function assembleAgentTools(params: {
             }
             const tool = mcpTools.find((t) => t.function.name === name);
             if (!tool) {
+                if (removedForInternalOnly.includes(name)) continue; // 내부 전용으로 뺀 것 — 설정 오류가 아니다
                 logger.warn(`[AgentTask] extraTools '${name}' 를 도구 카탈로그에서 찾지 못함 — 노출 생략`);
                 continue;
             }
@@ -110,7 +120,7 @@ export async function assembleAgentTools(params: {
         }
         return {
             tools: await withSkillCatalog([...staticExtra, ...dynamicExtra, ...sandboxTools]),
-            extraToolNames,
+            extraToolNames, removedForInternalOnly,
         };
     }
 
@@ -119,10 +129,10 @@ export async function assembleAgentTools(params: {
         // 화이트리스트 도구만으로 진행 — 셸 작업은 불가하나 검색·이미지·작성 작업은 계속 가능.
         const tools = buildExtra(new Set<string>());
         logger.warn(`[AgentTask] 샌드박스 미가용 — extraTools(${extraToolNames.size}개)만으로 진행 (전체 카탈로그 미전달)`);
-        return { tools: await withSkillCatalog(tools), extraToolNames };
+        return { tools: await withSkillCatalog(tools), extraToolNames, removedForInternalOnly };
     }
 
     // 샌드박스 OFF(legacy) 경로 — 기존대로 전체 MCP 도구 사용.
     // 이 경로엔 이미 전체 카탈로그(load_skill 포함)가 들어있으므로 카탈로그 주입만 적용.
-    return { tools: await withSkillCatalog(mcpTools), extraToolNames };
+    return { tools: await withSkillCatalog(mcpTools), extraToolNames, removedForInternalOnly };
 }

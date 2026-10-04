@@ -39,6 +39,8 @@ import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, withMemorySaveExpos
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { parkForMissingDevice } from './agent-task/device-wait';
+import { isInternalOnlyRun } from '../config/internal-only-policy';
+import { auditInternalOnly } from './agent-task/internal-only-audit';
 import { AgentTaskTurnTimeout } from './agent-task/turn-call';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
@@ -117,7 +119,7 @@ export class AgentTaskService {
         const userCtx: UserContext = { userId, role: userRole };
 
         // 'agent' role 해석 — 상세는 agent-task/role-client (생성자 model 명시 시 그대로 사용)
-        const roleState = await initAgentRoleState(taskId, String(userId), this.explicitModel ? this.client : undefined);
+        const roleState = await initAgentRoleState(taskId, String(userId), this.explicitModel ? this.client : undefined, { internalOnly: isInternalOnlyRun(input) });
         this.client = roleState.client;
 
         let stepNumber = input.resume?.fromStep ?? 0;
@@ -305,11 +307,12 @@ export class AgentTaskService {
             // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
             // injectedSkillIds: 시스템 프롬프트로 전문 주입된 스킬은 load_skill 카탈로그에서 제외
             // (채팅 경로가 활성 바인딩을 제외하는 것과 동일 규칙 — 중복 노출 방지).
-            const { tools, extraToolNames } = await assembleAgentTools({
+            const { tools, extraToolNames, removedForInternalOnly } = await assembleAgentTools({
                 mcpTools, taskRuntime, sandboxCfg, goal,
                 injectedSkillIds: new Set(skillBindings.map((b) => b.skill_id)),
                 userId,
             });
+            void auditInternalOnly({ taskId, userId: String(userId), blockedModel: roleState.blockedExternal, removedTools: removedForInternalOnly });
 
             // 턴 중간 재개(124): 결과 없는 tool_call 로 끝난 체크포인트는 LLM 재호출 없이 남은 호출만 실행(turn-reentry).
             let reentry = input.resume ? findDanglingToolCalls(conversation) : null;
