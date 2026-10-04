@@ -11,6 +11,8 @@ import { execFileSync } from 'child_process';
 import { PATH_PROBE_TIMEOUT_MS } from './constants';
 
 export function resolveExecPath(folderRoot: string | null): string {
+    // Windows — 로그인 셸·Homebrew·mise 관행이 없다. 프로세스의 PATH 를 그대로 쓴다.
+    if (process.platform === 'win32') return process.env.PATH || process.env.Path || '';
     const parts: string[] = [];
     try {
         parts.push(...execFileSync(process.env.SHELL || '/bin/zsh', ['-lc', 'echo -n "$PATH"'],

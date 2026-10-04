@@ -28,6 +28,7 @@ import { detectGitDir, writeSandboxProfile } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
 import { findChrome } from './browser/chrome';
+import { bulkApprovalAllowed, shellInvocation } from './platform';
 import { LocalBrowser } from './browser/local-browser';
 import type { BridgeCoreOptions, BridgeMsg, BridgeResult } from './types';
 
@@ -86,6 +87,8 @@ export class BridgeCore {
         if (taskId && this.autoApproveTasks.has(taskId)) return true;
         // 확인 창엔 유효 실행 폴더(base)를 보여준다 — 어느 폴더에서 도는지 투명하게.
         const ans = await this.opts.confirm(command, taskId, base);
+        // 일괄 승인은 명령을 샌드박스로 가둘 수 있는 OS 에서만 받는다 — Windows 는 이번 명령만 허용으로 낮춘다.
+        if (ans === 'all' && !bulkApprovalAllowed()) return true;
         if (ans === 'all' && taskId) {
             this.autoApproveTasks.add(taskId);
             this.opts.onAutoApproveChange?.();
@@ -166,7 +169,9 @@ export class BridgeCore {
                 if (SANDBOX_ENABLED && this.sandboxProfilePath) {
                     execFile(SANDBOX_BIN, ['-f', this.sandboxProfilePath, '/bin/bash', '-c', String(m.command)], opts, cb);
                 } else {
-                    execFile('/bin/bash', ['-c', String(m.command)], opts, cb);
+                    // 샌드박스가 없는 OS — Windows 는 cmd.exe, 그 밖은 bash (platform.ts)
+                    const sh = shellInvocation(String(m.command));
+                    execFile(sh.file, sh.args, { ...opts, windowsVerbatimArguments: process.platform === 'win32' }, cb);
                 }
                 return;
             }
