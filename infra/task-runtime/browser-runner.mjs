@@ -19,6 +19,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createGuardProxy, parseAllowedHosts } from './guard-proxy.mjs';
 import { createDialogPolicy } from './dialog-policy.mjs';
+import { filledValue, readTextOrValue } from './field-value.mjs';
 
 const WORKSPACE = '/workspace';
 const MAX_ACTIONS = 40;
@@ -168,7 +169,8 @@ try {
                     results.push({ i, type: a.type, ok: true }); break;
                 case 'fill':
                     await page.fill(a.selector, String(a.text ?? ''), { timeout });
-                    results.push({ i, type: a.type, ok: true }); break;
+                    // 실제 값을 돌려준다 — 확인하려고 같은 입력을 되풀이하지 않게(field-value.mjs).
+                    results.push({ i, type: a.type, ok: true, ...(await filledValue(page.locator(a.selector).first())) }); break;
                 case 'snapshot': {
                     // 2단 폴백 발견: 상호작용 요소를 {role,name,index} 목록으로 반환 →
                     // 에이전트가 CSS 대신 안정적인 role/name 으로 smartClick/smartFill 지정.
@@ -180,10 +182,11 @@ try {
                     // role/name 으로 요소 재해석 후 클릭(CSS 무관). nth 로 동명 요소 구분.
                     await page.getByRole(a.role, { name: a.name }).nth(Number(a.nth) || 0).click({ timeout });
                     results.push({ i, type: a.type, ok: true }); break;
-                case 'smartFill':
-                    await page.getByRole(a.role, { name: a.name }).nth(Number(a.nth) || 0)
-                        .fill(String(a.text ?? ''), { timeout });
-                    results.push({ i, type: a.type, ok: true }); break;
+                case 'smartFill': {
+                    const field = page.getByRole(a.role, { name: a.name }).nth(Number(a.nth) || 0);
+                    await field.fill(String(a.text ?? ''), { timeout });
+                    results.push({ i, type: a.type, ok: true, ...(await filledValue(field)) }); break;
+                }
                 case 'dialog':
                     dialogPolicy.set(a);
                     results.push({ i, type: a.type, ok: true }); break;
@@ -203,7 +206,7 @@ try {
                 }
                 case 'extractText': {
                     const text = a.selector
-                        ? await page.locator(a.selector).first().innerText({ timeout })
+                        ? await page.locator(a.selector).first().evaluate(readTextOrValue, undefined, { timeout }) // 입력 칸은 현재 값
                         : await page.evaluate(() => document.body.innerText);
                     results.push({ i, type: a.type, ok: true, text: String(text).slice(0, 8000) }); break;
                 }
