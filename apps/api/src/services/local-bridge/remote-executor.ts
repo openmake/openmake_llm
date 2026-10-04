@@ -17,6 +17,8 @@ import { stripWorkspacePrefix } from '../task-sandbox/workspace-path';
 import { getLocalBridgeRegistry, type BridgeKind, type BridgeResult, type BridgeRequestPayload } from './registry';
 import { getLocalBridgeUnknownOutcomeNotice } from '../../prompts/agent-task-prompt';
 import { LocalDeviceUnavailableError, type DeviceLoss } from './device-errors';
+import { classifyBrowserAction, planBrowserActions, type BrowserSitePlan } from '@openmake/config';
+import { resolveEffectivePolicy } from '../org/effective-policy';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { readFile as fsReadFile, stat } from 'fs/promises';
 import { createLogger } from '../../utils/logger';
@@ -25,6 +27,12 @@ const logger = createLogger('RemoteExecutor');
 
 /** 응답 없이 끝나면 "결과 불명"으로 다루는 요청 종류 — 기기의 상태를 바꾸는 것(쓰기·실행). 나머지는 읽기라 재시도 가능. */
 const UNKNOWN_OUTCOME_KINDS: ReadonlySet<BridgeKind> = new Set<BridgeKind>(['exec', 'write', 'delete']);
+
+/** PURE: 이 요청이 응답 없이 끝나면 결과 불명인가 — 쓰기·실행, 그리고 읽기가 아닌 액션이 든 브라우저 요청. */
+function isUnknownOutcomeRequest(payload: BridgeRequestPayload): boolean {
+    if (payload.kind === 'browser') return (payload.actions ?? []).some((a) => classifyBrowserAction(a) !== 'observe');
+    return UNKNOWN_OUTCOME_KINDS.has(payload.kind);
+}
 
 /** 디바이스가 돌려줄 수 있는 test_runner 값 — 그 밖의 문자열은 믿지 않는다. */
 const TEST_RUNNER_TOKENS: readonly string[] = ['npm', 'pytest', 'go', 'none'];
@@ -44,13 +52,17 @@ export class RemoteExecutor implements TaskExecutor {
     readonly taskId: string;
     readonly localWorkdir = null;
     /**
-     * 로컬 브라우저(D3) 폐기 — 항상 false (2026-08-23). 이 기능을 구현하던 것은 Electron
-     * 데스크톱 셸뿐이었고 그 앱이 제거되면서 구현 디바이스가 사라졌다(Companion·CLI 는
-     * 애초에 미지원). tools.ts 의 browser 핸들러가 진입 단계에서 막으므로 에이전트는
-     * 로컬 실행 작업에서 브라우저 도구를 쓸 수 없다 — 컨테이너 샌드박스 경로는 무관하게 유지된다.
+     * 로컬 브라우저(Companion P2, 2026-10-04 재도입) — 게이트(LOCAL_BRIDGE_BROWSER_ENABLED)가 켜져 있고 연결된 기기가
+     * 능력 목록에 browser 를 알렸을 때만 참이다. 구버전 Companion·CLI 는 알리지 않으므로 도구가 노출되지 않는다.
+     * (2026-08-23 에 폐기됐던 것은 구 Electron 앱의 구현이다 — 지금은 공용 코어가 전용 프로필 Chrome 을 CDP 로 제어한다.)
      */
-    readonly isBrowserEnabled = false;
+    get isBrowserEnabled(): boolean {
+        return LOCAL_BRIDGE.BROWSER_ENABLED && getLocalBridgeRegistry().supports(this.userId, this.deviceId, 'browser');
+    }
+    /** 로그인 상태는 기기의 전용 프로필에 남는다 — 서버가 상태 파일을 다루지 않는다. */
     readonly browserStatePath = null;
+    /** 기기가 마지막으로 알려 준 탭 주소 — 다음 호출의 사이트 정책 판정 시작점. 기기는 실제 주소로 다시 판정한다. */
+    private lastBrowserUrl: string | null = null;
     private readonly userId: string;
     /** 라우팅 대상 디바이스(101, 다중 디바이스) — undefined 는 최근 접속 디바이스 폴백. */
     private readonly deviceId?: string;
@@ -109,10 +121,10 @@ export class RemoteExecutor implements TaskExecutor {
     private async req(payload: BridgeRequestPayload, timeoutMs?: number): Promise<BridgeResult> {
         const withFolder = this.folderRel ? { ...payload, folder: this.folderRel } : payload;
         const r = await getLocalBridgeRegistry().request(this.userId, withFolder, timeoutMs, this.deviceId);
-        this.noteDeviceLoss(payload.kind, r);
+        this.noteDeviceLoss(isUnknownOutcomeRequest(payload), r);
         // 쓰기·실행 요청을 보낸 뒤 응답을 못 받았다 — 기기에서 실행됐을 수 있다. 일반 오류로 돌려주면 모델이 같은 호출을
         // 다시 보내 두 번 실행될 수 있으므로, 상태부터 확인하라는 안내로 바꾼다. 읽기 계열은 다시 시도해도 되므로 그대로 둔다.
-        if (!r.ok && UNKNOWN_OUTCOME_KINDS.has(payload.kind) && (r.transport === 'timeout' || r.transport === 'disconnected')) {
+        if (!r.ok && isUnknownOutcomeRequest(payload) && (r.transport === 'timeout' || r.transport === 'disconnected')) {
             logger.warn(`[${this.taskId}] 로컬 ${payload.kind} 결과 불명 (${r.transport})`);
             return { ...r, error: getLocalBridgeUnknownOutcomeNotice(payload.kind, r.transport) };
         }
@@ -120,9 +132,9 @@ export class RemoteExecutor implements TaskExecutor {
     }
 
     /** 기기가 사라져 끝난 요청을 기억한다 — unknown(쓰기·실행을 보낸 뒤 끊김)이 rerunnable 보다 우선한다. */
-    private noteDeviceLoss(kind: BridgeKind, r: BridgeResult): void {
+    private noteDeviceLoss(unknownOutcome: boolean, r: BridgeResult): void {
         if (r.ok || !LOCAL_BRIDGE.DEVICE_WAIT_ENABLED) return;
-        if (r.transport === 'disconnected' && UNKNOWN_OUTCOME_KINDS.has(kind)) this.deviceLoss = 'unknown';
+        if (r.transport === 'disconnected' && unknownOutcome) this.deviceLoss = 'unknown';
         else if ((r.transport === 'no_device' || r.transport === 'send_failed' || r.transport === 'disconnected') && this.deviceLoss !== 'unknown') this.deviceLoss = 'rerunnable';
     }
 
@@ -248,15 +260,34 @@ export class RemoteExecutor implements TaskExecutor {
     }
 
     /**
-     * 폐기된 로컬 브라우저(D3) — TaskExecutor 계약을 만족시키기 위한 거절 스텁.
-     * isBrowserEnabled=false 라 tools.ts 가 먼저 막지만, 다른 경로로 호출돼도 브리지에
-     * browser 요청을 내보내지 않는다(프로토콜 kind 화이트리스트에서도 제거됨).
+     * 파일 경로로 받는 컨테이너용 계약은 쓰지 않는다 — 로컬 브라우저는 runBrowserSpec 으로만 실행한다
+     * (액션 파일을 사용자 폴더에 썼다 지우지 않는다). 이 경로로 들어오면 브리지 요청 없이 거절한다.
      */
     async runBrowser(_actionsRelPath: string): Promise<ExecResult> {
         return {
             stdout: '', exitCode: -1, truncated: false, timedOut: false, durationMs: 0,
-            stderr: '로컬 실행기는 브라우저를 지원하지 않습니다 (2026-08-23 폐기). 서버 샌드박스 작업으로 실행하세요.',
+            stderr: '로컬 실행기의 브라우저는 이 경로로 실행할 수 없습니다(runBrowserSpec 사용).',
         };
+    }
+
+    /** 사이트 정책으로 액션을 훑는다 — 정책은 호출마다 읽는다(관리자가 허용 목록을 바꾸면 다음 호출부터 반영). */
+    async planBrowserSitePolicy(actions: readonly unknown[]): Promise<BrowserSitePlan> {
+        const { browserSite } = await resolveEffectivePolicy(this.userId);
+        return planBrowserActions(actions, this.lastBrowserUrl, browserSite);
+    }
+
+    async runBrowserSpec(spec: { actions: unknown[]; approvedHosts: string[] }): Promise<ExecResult> {
+        const { browserSite } = await resolveEffectivePolicy(this.userId);
+        const r = await this.req(
+            { kind: 'browser', actions: spec.actions, sitePolicy: browserSite, approvedHosts: spec.approvedHosts, taskId: this.taskId },
+            LOCAL_BRIDGE.BROWSER_TIMEOUT_MS,
+        );
+        // 기기가 돌려준 현재 주소를 기억한다 — 실패·차단으로 끝나도 주소는 온다.
+        try {
+            const out = JSON.parse(r.stdout ?? '') as { finalUrl?: unknown };
+            if (typeof out.finalUrl === 'string') this.lastBrowserUrl = out.finalUrl;
+        } catch { /* 결과가 JSON 이 아니다(전송 실패 등) — 주소는 그대로 둔다 */ }
+        return toExecResult(r);
     }
 
     async writeFile(relPath: string, content: string | Buffer): Promise<void> {

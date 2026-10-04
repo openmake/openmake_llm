@@ -194,7 +194,7 @@ export function getTaskSandboxGuidance(): string {
  * 네트워크 차단)는 없다. 컨테이너 안내를 그대로 넣으면 모델이 `cd /workspace` 같은 없는 경로로
  * 턴을 버린다(2026-09-15 CLI 라이브 실측). 공용 문단은 샌드박스 안내와 같은 문구를 쓴다.
  */
-export function getLocalExecutorGuidance(): string {
+export function getLocalExecutorGuidance(opts: { browser?: boolean } = {}): string {
     return [
         '',
         '## 작업 환경 (사용자 로컬 폴더)',
@@ -203,7 +203,9 @@ export function getLocalExecutorGuidance(): string {
         '- 파일 도구는 이 폴더 밖 경로를 거부합니다. 셸 명령은 사용자 머신에서 실행되며 실행 전 사용자 확인을',
         '  받을 수 있고, 폴더 밖 쓰기(전역 설치 등)는 차단됩니다.',
         '- 설치된 언어·도구는 사용자 환경마다 다릅니다 — 필요한 명령이 있는지 먼저 확인하세요(예: `command -v node`).',
-        '- 이 환경에는 browser 도구가 없습니다.',
+        opts.browser
+            ? '- browser 도구는 사용자 PC 의 전용 Chrome 창을 조작합니다(탭·로그인 유지). 허용된 사이트 밖에서의 입력은 사용자 승인이 필요하고, 업무 자료를 외부 사이트에 입력하지 않습니다.'
+            : '- 이 환경에는 browser 도구가 없습니다.',
         '- bash/python_execute/str_replace_editor/file_ops 로 파일을 만들고 실행하고 편집하세요.',
         ...TASK_TOOL_USAGE_GUIDANCE,
         ...TASK_APPROVAL_AND_PLAN_GUIDANCE,
@@ -288,6 +290,28 @@ export function getAgentTaskSteeringInjection(text: string): string {
 /** 브라우저 목적지 검사(browser-url-guard) — 막힌 주소가 있어 실행하지 않았을 때의 결과. */
 export function getBrowserUrlBlockedMessage(urls: readonly string[]): string {
     return `브라우저를 실행하지 않았습니다 — 내부망·로컬·메타데이터 주소이거나 http(s) 가 아닌 주소로는 이동할 수 없습니다: ${urls.join(', ')}. 공개 웹 주소만 사용하세요.`;
+}
+
+/** 로컬 브라우저 — http(s) 가 아닌 주소로의 이동이 있어 실행하지 않았을 때의 결과. */
+export function getBrowserLocalBlockedMessage(urls: readonly string[]): string {
+    return `브라우저를 실행하지 않았습니다 — http·https 가 아닌 주소(file:·javascript:·data: 등)로는 이동할 수 없습니다: ${urls.join(', ')}. 로컬 파일은 파일 도구로 읽으세요.`;
+}
+
+/** 로컬 브라우저 — 허용 목록 밖 사이트에 대한 쓰기가 승인 경로를 거치지 않았을 때의 결과(정상 경로에서는 나오지 않는다). */
+export function getBrowserSiteApprovalRequiredMessage(): string {
+    return '브라우저를 실행하지 않았습니다 — 허용 목록에 없는 사이트에 대한 입력·누르기는 사용자 승인이 필요합니다. 이 호출 경로에서는 승인을 받을 수 없으니, 읽기(extractText·snapshot)만 하거나 사용자에게 직접 요청하세요.';
+}
+
+/** 로컬 브라우저(사용자 PC 의 전용 Chrome) 도구 설명 — 서버 샌드박스 브라우저와 달리 탭이 유지되고 사이트 정책이 적용된다. */
+export function getLocalBrowserToolDescription(): string {
+    return '사용자 PC 의 전용 Chrome 창에서 웹 브라우저를 조작합니다. 탭과 로그인 상태가 호출 사이에 유지되므로 이전 호출의 페이지에서 이어서 작업할 수 있습니다(처음에는 goto 로 페이지를 여세요). '
+        + 'actions 배열을 순서대로 실행: goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · '
+        + 'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. '
+        + '페이지가 띄운 확인창은 그 액션 결과의 dialogs 에 실립니다 — confirm·prompt 는 기본으로 취소되고, 수락하려면 확인창을 띄우는 액션 앞에 dialog{accept:true,promptText?} 를 넣으세요. '
+        + 'CSS 셀렉터(click/fill)가 실패하면 snapshot 으로 상호작용 요소를 {role,name,index} 목록으로 얻은 뒤 smartClick{role,name,nth?}·smartFill{role,name,text,nth?} 로 재시도하세요. '
+        + '읽기(extractText·snapshot·screenshot)는 어느 사이트에서든 됩니다. 관리자가 허용한 사이트 밖에서의 입력·누르기와 검색어를 실은 주소로의 이동은 사용자 승인을 받은 뒤 실행됩니다 — '
+        + '업무 자료를 외부 사이트(검색·번역·웹메일 등)에 입력하지 마세요. 사용자가 브라우저를 직접 조작하는 중이면 실행되지 않으니, 그때는 기다렸다가 현재 페이지를 다시 관찰하세요. '
+        + 'http·https 주소만 열 수 있습니다.';
 }
 
 /** 빈 응답 자리에 남기는 assistant 본문 — 빈 문자열 assistant 메시지는 역할 순서만 차지하고 모델에 단서를 주지 않는다. */

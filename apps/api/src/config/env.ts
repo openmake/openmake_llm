@@ -82,6 +82,8 @@ export interface EnvConfig {
     llmWeeklyTokenLimit: number;
     /** 외부 모델 정책 원문(JSON, Control Plane 기초) — config/external-model-policy 가 파싱 */
     externalModelPolicy: string;
+    /** 로컬 브라우저 사이트 허용 목록 원문(JSON {allow,deny}) — @openmake/config parseBrowserSitePolicy 가 파싱 */
+    browserSitePolicy: string;
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
     llmEnableReasoningEffort: boolean;
     /** 사용자별 역할→모델 매핑(model_assignments scope=userId) 사용 토글 (기본 false=전역 env/default 만). */
@@ -254,6 +256,7 @@ export function loadConfig(): EnvConfig {
         SLO_EVAL_PASS_TARGET: env('SLO_EVAL_PASS_TARGET'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         EXTERNAL_MODEL_POLICY: env('EXTERNAL_MODEL_POLICY'),
+        BROWSER_SITE_POLICY: env('BROWSER_SITE_POLICY'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
         USER_MODEL_ROLES_ENABLED: env('USER_MODEL_ROLES_ENABLED'),
         THINKING_SUMMARY_ENABLED: env('THINKING_SUMMARY_ENABLED'),
@@ -375,6 +378,7 @@ export function loadConfig(): EnvConfig {
         sloEvalPassTargetPct: parsed.SLO_EVAL_PASS_TARGET,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         externalModelPolicy: parsed.EXTERNAL_MODEL_POLICY ?? DEFAULT_CONFIG.externalModelPolicy,
+        browserSitePolicy: parsed.BROWSER_SITE_POLICY ?? DEFAULT_CONFIG.browserSitePolicy,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
         userModelRolesEnabled: (parsed.USER_MODEL_ROLES_ENABLED ?? 'false').toLowerCase() === 'true',
         thinkingSummaryEnabled: (parsed.THINKING_SUMMARY_ENABLED ?? 'true').toLowerCase() === 'true',

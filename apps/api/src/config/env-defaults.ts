@@ -57,6 +57,7 @@ export const DEFAULT_CONFIG: EnvConfig = {
     sloChatTtftP95Ms: 15_000,
     llmWeeklyTokenLimit: 5000000,
     externalModelPolicy: '',
+    browserSitePolicy: '',
     llmEnableReasoningEffort: false,
     userModelRolesEnabled: false,
     thinkingSummaryEnabled: true,

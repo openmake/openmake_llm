@@ -110,4 +110,9 @@ describe('normalizeCapabilities', () => {
     test('현행 12종 목록', () => {
         expect(LEGACY_BRIDGE_KINDS).toHaveLength(12);
     });
+
+    test('browser 는 능력 목록으로 알린 기기만 지원한다 — 구버전 기본 목록에는 없다', () => {
+        expect(LEGACY_BRIDGE_KINDS).not.toContain('browser');
+        expect(normalizeCapabilities(['read', 'browser'])?.has('browser')).toBe(true);
+    });
 });

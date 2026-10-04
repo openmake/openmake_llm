@@ -273,7 +273,7 @@ export class AgentTaskService {
                     });
                     // 새 대화(resume 아님)면 system 에 작업환경 안내 주입 — 로컬 실행기는 연결 폴더 기준(컨테이너 안내는 /workspace·브라우저 전제).
                     if (!input.resume && conversation[0]?.role === 'system') {
-                        conversation[0].content += remoteExecutor ? getLocalExecutorGuidance() : getTaskSandboxGuidance();
+                        conversation[0].content += remoteExecutor ? getLocalExecutorGuidance({ browser: remoteExecutor.isBrowserEnabled }) : getTaskSandboxGuidance();
                         // 로컬 실행기 worktree 격리가 걸렸으면 작업 브랜치를 알린다(사용자 검토 지점).
                         const isolated = remoteExecutor?.isolatedBranch;
                         if (isolated) conversation[0].content += getWorktreeIsolationNote(isolated);
