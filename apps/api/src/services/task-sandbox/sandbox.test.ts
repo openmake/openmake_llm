@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile, readFile, symlink, rm, chmod } from 'fs/prom
 import { tmpdir } from 'os';
 import { join, sep } from 'path';
 import { buildRunArgs, buildBrowserRunArgs, buildWriteArgs, buildKillExecArgs, safeResolveWorkspacePath, safeRealWorkspacePath, sanitizeId, dirSizeBytes, listWorkspaceFilesAt, TaskSandbox } from './sandbox';
-import { getTaskSandboxConfig, resolveWriteViaContainer } from '../../config/task-sandbox';
+import { getTaskSandboxConfig, resolveWriteViaContainer, browserDestGuardEnv } from '../../config/task-sandbox';
 
 describe('task-sandbox pure functions', () => {
     const cfg = getTaskSandboxConfig();
@@ -321,6 +321,26 @@ describe('task-sandbox pure functions', () => {
             const j = r.join(' ');
             expect(j).toContain('--network omk-egress-internal'); // bridge 아님(직접 인터넷 차단)
             expect(j).toContain('-e BROWSER_PROXY=http://omk-egress-proxy:8888');
+        });
+        it('목적지 검사 설정을 컨테이너 env 로 넘긴다', () => {
+            const r = buildBrowserRunArgs('/tmp/ws/abc', '.browser-actions.json', cfg, undefined, undefined,
+                ['BROWSER_GUARD_ALLOWED_HOSTS=rag.internal,127.0.0.1:9100']);
+            expect(r.join(' ')).toContain('-e BROWSER_GUARD_ALLOWED_HOSTS=rag.internal,127.0.0.1:9100');
+            expect(r.slice(-4)).toEqual([cfg.image, 'node', '/opt/browser/browser-runner.mjs', '.browser-actions.json']);
+        });
+    });
+
+    describe('browserDestGuardEnv', () => {
+        it('기본은 넘길 것이 없다(러너의 검사는 켜져 있고 예외는 없다)', () => {
+            expect(browserDestGuardEnv({})).toEqual([]);
+        });
+        it('호스트의 허용 예외(SSRF_ALLOWED_HOSTS)를 러너에 넘긴다', () => {
+            expect(browserDestGuardEnv({ SSRF_ALLOWED_HOSTS: ' rag.internal,10.1.0.0/16 ' }))
+                .toEqual(['BROWSER_GUARD_ALLOWED_HOSTS=rag.internal,10.1.0.0/16']);
+        });
+        it('실행 전 검사를 끄면 러너의 검사도 끈다', () => {
+            expect(browserDestGuardEnv({ TASK_SANDBOX_BROWSER_URL_GUARD: 'false', SSRF_ALLOWED_HOSTS: 'a.internal' }))
+                .toEqual(['BROWSER_DEST_GUARD=off']);
         });
     });
 });

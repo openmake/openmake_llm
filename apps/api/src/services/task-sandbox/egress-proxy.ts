@@ -26,6 +26,19 @@ function run(docker: string, args: string[]): Promise<{ code: number; stdout: st
     });
 }
 
+/** PURE: 프록시 컨테이너 실행 인자 — internal 망, 권한 축소, 허용 도메인·허용 포트. */
+export function buildEgressProxyRunArgs(cfg: TaskSandboxConfig): string[] {
+    return [
+        'run', '-d', '--name', cfg.egressProxyContainer,
+        '--network', cfg.egressNetwork,
+        '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--read-only',
+        '-e', `EGRESS_ALLOWLIST=${cfg.egressAllowlist.join(',')}`,
+        '-e', `EGRESS_ALLOWED_PORTS=${cfg.egressAllowedPorts.join(',')}`,
+        '-e', `EGRESS_PROXY_PORT=${cfg.egressProxyPort}`,
+        cfg.egressProxyImage,
+    ];
+}
+
 /** internal 네트워크 + 프록시 컨테이너를 보장하고 프록시 base URL 을 반환. 멱등. */
 export async function ensureEgressProxy(cfg: TaskSandboxConfig): Promise<string> {
     const d = cfg.dockerPath;
@@ -43,14 +56,7 @@ export async function ensureEgressProxy(cfg: TaskSandboxConfig): Promise<string>
     const running = await run(d, ['inspect', '-f', '{{.State.Running}}', cfg.egressProxyContainer]);
     if (running.stdout !== 'true') {
         await run(d, ['rm', '-f', cfg.egressProxyContainer]); // 잔존 제거
-        const create = await run(d, [
-            'run', '-d', '--name', cfg.egressProxyContainer,
-            '--network', cfg.egressNetwork,
-            '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--read-only',
-            '-e', `EGRESS_ALLOWLIST=${cfg.egressAllowlist.join(',')}`,
-            '-e', `EGRESS_PROXY_PORT=${cfg.egressProxyPort}`,
-            cfg.egressProxyImage,
-        ]);
+        const create = await run(d, buildEgressProxyRunArgs(cfg));
         if (create.code !== 0) throw new Error(`egress 프록시 컨테이너 생성 실패: ${create.stderr}`);
         // 프록시는 bridge 에도 연결 — 외부(allowlist 도메인) 도달용.
         const connect = await run(d, ['network', 'connect', 'bridge', cfg.egressProxyContainer]);

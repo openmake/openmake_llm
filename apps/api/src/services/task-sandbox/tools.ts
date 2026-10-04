@@ -303,6 +303,8 @@ export function createTaskTools(
             description: '일회성 컨테이너의 chromium 으로 웹 브라우저를 자동화합니다(G2). 호출마다 빈 페이지(about:blank)에서 새로 시작하므로(쿠키·로그인만 유지) goto 와 이어지는 액션을 한 actions 배열에 함께 넣으세요. actions 배열을 순서대로 실행: ' +
                 'goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · ' +
                 'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. ' +
+                '페이지가 띄운 확인창은 그 액션 결과의 dialogs 에 실립니다 — confirm·prompt 는 기본으로 취소되고, 수락하려면 ' +
+                '확인창을 띄우는 액션 앞에 dialog{accept:true,promptText?} 를 넣으세요. ' +
                 'CSS 셀렉터(click/fill)가 실패하면 snapshot 으로 상호작용 요소를 {role,name,index} 목록으로 얻은 뒤 ' +
                 'smartClick{role,name,nth?}·smartFill{role,name,text,nth?} 로 재시도하세요(CSS 변동에 견고). ' +
                 '네트워크는 샌드박스 정책(none/restricted)에 따라 제한됩니다.',
