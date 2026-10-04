@@ -151,3 +151,75 @@ describe('chatTurnWithRoleFallback 호출당 상한', () => {
         expect(seen[0]).toBe(ac.signal);
     });
 });
+
+describe('chatTurnWithRoleFallback 무응답 감지', () => {
+    type Opts = { signal: AbortSignal; onChunk?: () => void };
+    const stateWith = (chat: jest.Mock, external = false): AgentRoleState => ({ client: { derive: () => ({ chat }) } as unknown as LLMClient, external, fallbackDone: true });
+    /** 청크를 everyMs 간격으로 count 번 흘린 뒤 멈추는 호출 — signal 이 abort 되면 실패한다. */
+    const stalls = (everyMs: number, count: number) => (_c: unknown, _o: unknown, _t: unknown, opts: Opts) => new Promise((_res, rej) => {
+        let sent = 0;
+        const timer = setInterval(() => { if (sent++ < count) opts.onChunk?.(); else clearInterval(timer); }, everyMs);
+        opts.signal.addEventListener('abort', () => { clearInterval(timer); rej(new Error('Request was aborted.')); }, { once: true });
+    });
+    const idle = { firstChunkMs: 40, gapMs: 30 };
+
+    it('첫 청크가 오지 않으면 끊고 일시적 오류처럼 다시 시도한다', async () => {
+        let n = 0;
+        const chat = jest.fn((...a: unknown[]) => (n++ === 0 ? (stalls(5, 0) as (...x: unknown[]) => Promise<unknown>)(...a) : Promise.resolve({ content: 'ok' })));
+        const onRetry = jest.fn();
+        const r = await chatTurnWithRoleFallback(stateWith(chat), { ...params(), idle, onRetry });
+        expect(r).toEqual({ content: 'ok' });
+        expect(chat).toHaveBeenCalledTimes(2);
+        expect(onRetry).toHaveBeenCalledWith(expect.objectContaining({ error: expect.stringContaining('응답 없음') }));
+    });
+
+    it('청크가 오다가 멈춰도 끊고 다시 시도한다', async () => {
+        let n = 0;
+        const chat = jest.fn((...a: unknown[]) => (n++ === 0 ? (stalls(5, 3) as (...x: unknown[]) => Promise<unknown>)(...a) : Promise.resolve({ content: 'ok' })));
+        expect(await chatTurnWithRoleFallback(stateWith(chat), { ...params(), idle })).toEqual({ content: 'ok' });
+        expect(chat).toHaveBeenCalledTimes(2);
+    });
+
+    it('청크가 간격 안에 계속 오면 첫 청크 기한보다 오래 걸려도 끊지 않는다', async () => {
+        const chat = jest.fn((_c: unknown, _o: unknown, _t: unknown, opts: Opts) => new Promise((res, rej) => {
+            let sent = 0;
+            const timer = setInterval(() => { opts.onChunk?.(); if (++sent === 12) { clearInterval(timer); res({ content: 'long' }); } }, 10);
+            opts.signal.addEventListener('abort', () => { clearInterval(timer); rej(new Error('Request was aborted.')); }, { once: true });
+        }));
+        expect(await chatTurnWithRoleFallback(stateWith(chat), { ...params(), idle })).toEqual({ content: 'long' });
+        expect(chat).toHaveBeenCalledTimes(1);
+    });
+
+    it('감시 중에는 호출 상한을 걸지 않는다 — 청크가 오는 긴 생성은 상한을 넘겨도 끝까지 받는다', async () => {
+        const chat = jest.fn((_c: unknown, _o: unknown, _t: unknown, opts: Opts) => new Promise((res, rej) => {
+            let sent = 0;
+            const timer = setInterval(() => { opts.onChunk?.(); if (++sent === 12) { clearInterval(timer); res({ content: 'long' }); } }, 10);
+            opts.signal.addEventListener('abort', () => { clearInterval(timer); rej(new Error('Request was aborted.')); }, { once: true });
+        }));
+        expect(await chatTurnWithRoleFallback(stateWith(chat), { ...params(), idle, callTimeoutMs: 30 })).toEqual({ content: 'long' });
+        expect(chat).toHaveBeenCalledTimes(1);
+    });
+
+    it('감시를 켜면 스트리밍으로 부른다(onToken 을 넘긴다) — 끄면 종전대로 넘기지 않는다', async () => {
+        const chat = jest.fn(() => Promise.resolve({ content: 'ok' }));
+        await chatTurnWithRoleFallback(stateWith(chat), { ...params(), idle });
+        await chatTurnWithRoleFallback(stateWith(chat), params());
+        const calls = chat.mock.calls as unknown as Array<[unknown, unknown, unknown, Opts]>;
+        expect(typeof calls[0][2]).toBe('function');
+        expect(typeof calls[0][3].onChunk).toBe('function');
+        expect(calls[1][2]).toBeUndefined();
+    });
+
+    it('외부 모델에는 걸지 않는다 — 청크 신호를 주지 않는 클라이언트가 있다', async () => {
+        const chat = jest.fn(() => new Promise((res) => setTimeout(() => res({ content: 'slow' }), 80)));
+        expect(await chatTurnWithRoleFallback(stateWith(chat, true), { ...params(), idle })).toEqual({ content: 'slow' });
+        expect(chat).toHaveBeenCalledTimes(1);
+        expect((chat.mock.calls as unknown as Array<[unknown, unknown, unknown]>)[0][2]).toBeUndefined();
+    });
+
+    it('다시 시도를 다 써도 응답이 없으면 실패로 끝난다', async () => {
+        const chat = jest.fn(stalls(5, 0) as (...x: unknown[]) => Promise<unknown>);
+        await expect(chatTurnWithRoleFallback(stateWith(chat), { ...params(), idle })).rejects.toThrow('응답 없음');
+        expect(chat).toHaveBeenCalledTimes(3);
+    });
+});
