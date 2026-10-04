@@ -95,16 +95,24 @@ export class TurnCallIdle extends Error {
  * 호출당 상한(callTimeoutMs)은 정상적인 긴 생성을 끊지 않도록 길게 둘 수밖에 없어, 응답이 유실된 호출이 그 상한을 다 채웠다
  * (2026-10-05 실측: 모델 서버는 정상 완료, 응답만 유실 → 5분 뒤에야 재시도).
  */
-function idleWatch(idle: { firstChunkMs: number; gapMs: number }): { signal: AbortSignal; onChunk: () => void; stop: () => void; firedMs: () => number | null } {
+function idleWatch(idle: { firstChunkMs: number; gapMs: number }): { signal: AbortSignal; onChunk: () => void; stop: () => void; firedMs: () => number | null; maxGapMs: () => number } {
     const ac = new AbortController();
     let fired: number | null = null;
+    let last: number | null = null;
+    let maxGap = 0;
     const arm = (ms: number): NodeJS.Timeout => setTimeout(() => { fired = ms; ac.abort(); }, ms);
     let timer = arm(idle.firstChunkMs);
     return {
         signal: ac.signal,
-        onChunk: () => { clearTimeout(timer); if (fired === null) timer = arm(idle.gapMs); },
+        onChunk: () => {
+            const now = Date.now();
+            if (last !== null) maxGap = Math.max(maxGap, now - last);
+            last = now;
+            clearTimeout(timer); if (fired === null) timer = arm(idle.gapMs);
+        },
         stop: () => clearTimeout(timer),
         firedMs: () => fired,
+        maxGapMs: () => maxGap,
     };
 }
 
@@ -178,7 +186,10 @@ export async function chatTurnWithRoleFallback(
         const signals = [p.signal, ...(cap ? [cap] : []), ...(watch ? [watch.signal] : [])];
         let chatErr: unknown;
         try {
-            return await call(signals.length > 1 ? AbortSignal.any(signals) : p.signal, watch?.onChunk);
+            const out = await call(signals.length > 1 ? AbortSignal.any(signals) : p.signal, watch?.onChunk);
+            // 끊기지는 않았지만 기한의 절반을 넘긴 간격 — 기한(AGENT_TASK_TURN_STREAM_IDLE_MS)을 조정할 근거로 남긴다.
+            if (watch && watch.maxGapMs() > p.idle!.gapMs / 2) logger.warn(`[AgentTask] ${p.taskId} 청크 간격 ${watch.maxGapMs()}ms — 무응답 기한 ${p.idle!.gapMs}ms 의 절반 초과`);
+            return out;
         } catch (err) {
             chatErr = err;
         } finally {
