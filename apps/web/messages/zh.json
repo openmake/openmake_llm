@@ -918,6 +918,8 @@
     "goalLabel": "目标",
     "stateLabel": "状态:",
     "turnLabel": "回合:",
+    "queuePosition": "排队第 {position} 位 — 前面的任务完成后自动开始",
+    "waitingDevice": "正在等待本地设备连接 — 连接 Companion 后继续执行",
     "planLabel": "计划 ({completed}/{total})",
     "outputsLabel": "{count} 个产出",
     "noSteps": "暂无步骤记录。",

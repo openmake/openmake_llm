@@ -918,6 +918,8 @@
     "goalLabel": "Ziel",
     "stateLabel": "Status:",
     "turnLabel": "Runde:",
+    "queuePosition": "Warteposition {position} — startet automatisch, sobald frühere Aufgaben fertig sind",
+    "waitingDevice": "Warten auf Ihr lokales Gerät — verbinden Sie Companion, um fortzufahren",
     "planLabel": "Plan ({completed}/{total})",
     "outputsLabel": "{count} Ausgabe(n)",
     "noSteps": "Keine Schrittaufzeichnungen.",

@@ -129,6 +129,10 @@ interface ApiAgentTask {
   executor?: "sandbox" | "local";
   /** 폴더 선택(102) — 연결 루트 기준 실행 폴더 (folder_rel 컬럼) */
   folder_rel?: string | null;
+  /** 대기열 순번(1 부터) — 대기 중일 때만 */
+  queuePosition?: number;
+  /** 멈춘 작업이 기다리는 것 — device_wait(로컬 기기 연결) · hitl_parked(사용자 답). 상세 응답에만 온다 */
+  waitReason?: string;
   /** 실패 사유 (toPublicTask 가 노출하는 error 컬럼) */
   error?: string;
   /** 실패 분류 (failure_class 컬럼, 7종) */
@@ -700,6 +704,13 @@ function TaskDetailModal({
               </span>
               <span>{t("turnLabel")} {detail.task.current_turn ?? 0}/{detail.task.max_turns ?? 0}</span>
             </div>
+            {/* 대기 안내(Companion P1) — 대기열 순번·로컬 기기 연결 대기 */}
+            {detail.task.status === "queued" && typeof detail.task.queuePosition === "number" && (
+              <p className="mt-2 text-xs text-muted">{t("queuePosition", { position: detail.task.queuePosition })}</p>
+            )}
+            {detail.task.status === "paused" && detail.task.waitReason === "device_wait" && (
+              <p className="mt-2 text-xs text-muted">{t("waitingDevice")}</p>
+            )}
             {/* 실패 사유 — 상세에도 노출(카드와 동일 규칙) */}
             {detail.task.status === "failed" && detail.task.error && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">

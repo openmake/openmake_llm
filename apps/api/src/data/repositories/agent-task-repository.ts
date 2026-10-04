@@ -331,6 +331,17 @@ export class AgentTaskRepository extends BaseRepository {
         );
     }
 
+    /** 주차 중인 작업의 사유(hitl_parked·device_wait) — 주차가 아니면 null. 화면이 "무엇을 기다리는지" 보여 주는 데 쓴다. */
+    async getParkReason(taskId: string): Promise<string | null> {
+        const r = await this.query<{ reason: string | null }>(
+            `SELECT (SELECT e.reason FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1) AS reason
+               FROM agent_tasks t WHERE t.id = $1 AND t.status = 'paused'`,
+            [taskId],
+        );
+        const reason = r.rows[0]?.reason ?? null;
+        return reason && AGENT_TASK_PARK_REASONS.includes(reason) ? reason : null;
+    }
+
     /** 기기 대기(device_wait)로 주차된 그 사용자의 작업 id — 기기가 등록되면 재개를 시도한다. */
     async listDeviceWaitTaskIds(userId: string, limit = 50): Promise<string[]> {
         const r = await this.query<{ id: string }>(

@@ -55,6 +55,23 @@ export class AgentTaskQueue {
         return true;
     }
 
+    /**
+     * 대기 순번(1 부터) — 꺼낼 때와 같은 순서(우선순위 높은 순, 같으면 등록 순)에서 몇 번째인가. 대기 중이 아니면 null.
+     * 사용자별 상한 때문에 실제 시작 순서는 달라질 수 있어 "앞에 최대 몇 건"의 안내값이다.
+     */
+    position(taskId: string): number | null {
+        const i = this.pending.findIndex((e) => e.taskId === taskId);
+        if (i < 0) return null;
+        const mine = this.pending[i].priority ?? 0;
+        let ahead = 0;
+        for (let j = 0; j < this.pending.length; j++) {
+            if (j === i) continue;
+            const p = this.pending[j].priority ?? 0;
+            if (p > mine || (p === mine && j < i)) ahead++;
+        }
+        return ahead + 1;
+    }
+
     /** 관측용 스냅샷 — byPriority 는 대기 중 항목의 우선순위별 개수. */
     stats(): { globalActive: number; pending: number; byPriority: Record<string, number> } {
         const byPriority: Record<string, number> = {};

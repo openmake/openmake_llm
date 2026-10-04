@@ -918,6 +918,8 @@
     "goalLabel": "目標",
     "stateLabel": "ステータス:",
     "turnLabel": "ターン:",
+    "queuePosition": "待機順 {position} 番 — 先のタスクが終わると自動で開始します",
+    "waitingDevice": "ローカルデバイスの接続待ち — Companion を接続すると続行します",
     "planLabel": "計画 ({completed}/{total})",
     "outputsLabel": "成果物 {count}件",
     "noSteps": "ステップ記録がありません。",
