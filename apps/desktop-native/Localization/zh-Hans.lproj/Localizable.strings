@@ -72,6 +72,8 @@
 "update.available.body" = "现在下载并安装吗？安装期间应用会短暂退出，然后重新打开。";
 "update.install" = "更新";
 "update.later" = "稍后";
+"update.readOnly.title" = "有新版本 v%1$@（当前 v%2$@）";
+"update.readOnly.body" = "无法在此位置替换应用（例如直接从磁盘映像运行时）。请将应用移到“应用程序”文件夹并重新打开，然后再更新。";
 "update.badDownload" = "下载地址无效";
 "update.checksum" = "下载完整性校验失败（sha256 不匹配）";
 "update.noBundle" = "找不到应用包路径（开发运行时无法更新）";

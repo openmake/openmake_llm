@@ -28,10 +28,13 @@ build.sh                 # helper 번들(esbuild) → 하네스 → l10n 게이�
 
 ```bash
 npm run build:packages                      # local-bridge-core dist 선행
-bash apps/desktop-native/build.sh 0.1.1     # dist/OpenMake-Companion-<v>-arm64.dmg
-bash scripts/publish-desktop.sh apps/desktop-native/dist/OpenMake-Companion-0.1.1-arm64.dmg
+bash apps/desktop-native/build.sh           # dist/OpenMake-Companion-<v>-arm64.dmg — 버전은 VERSION 파일(인자로 덮어쓸 수 있다)
+bash scripts/publish-desktop.sh apps/desktop-native/dist/OpenMake-Companion-<v>-arm64.dmg
 # → latest.json 을 { native } 로 다시 쓴다 (컴패니언 dmg 가 아니면 거부)
 ```
+
+- **버전**: `VERSION` 파일이 기준이다. 앱은 서버에 게시된 버전이 자기보다 높으면 업데이트를 권하므로, 기능을 더한 빌드는 게시본보다 높은 버전이어야 한다(낮으면 업데이트가 구버전으로 되돌린다).
+- 업데이트는 앱이 놓인 폴더에 새 버전을 복사해 교체한다. 디스크 이미지(dmg)에서 바로 실행한 앱처럼 그 폴더에 쓸 수 없으면 받지 않고 "응용 프로그램 폴더로 옮긴 뒤 다시 시도"를 안내한다.
 
 ## 개발/E2E 전용 env 훅 (정식 경로는 Keychain·NSOpenPanel·다이얼로그만)
 

@@ -72,6 +72,8 @@
 "update.available.body" = "지금 받아서 설치할까요? 설치 중 앱이 잠시 종료됐다가 다시 열립니다.";
 "update.install" = "업데이트";
 "update.later" = "나중에";
+"update.readOnly.title" = "새 버전 v%1$@ 이 있습니다 (현재 v%2$@)";
+"update.readOnly.body" = "이 위치에서는 앱을 교체할 수 없습니다(디스크 이미지에서 바로 실행한 경우 등). 앱을 응용 프로그램 폴더로 옮겨 다시 연 뒤 업데이트하세요.";
 "update.badDownload" = "잘못된 다운로드 주소";
 "update.checksum" = "다운로드 무결성 검증 실패(sha256 불일치)";
 "update.noBundle" = "앱 번들 경로를 찾지 못했습니다(개발 실행에서는 업데이트 불가)";
