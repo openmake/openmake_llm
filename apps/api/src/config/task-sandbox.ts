@@ -93,6 +93,8 @@ export interface TaskSandboxConfig {
     egressProxyContainer: string;
     /** egress 프록시 포트. */
     egressProxyPort: number;
+    /** egress 프록시가 연결을 허용하는 목적지 포트. 허용 도메인이라도 이 밖의 포트는 거절한다. */
+    egressAllowedPorts: number[];
     /**
      * 코드 작업 diff 캡처(openmake_code v1) 활성 여부(기본 true — 샌드박스 ON 일 때만 유효).
      * ON: 실행 시작 시 workspace 를 git baseline 으로 스냅샷하고, 완료 시 에이전트 변경분을
@@ -159,6 +161,8 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         egressNetwork: process.env.TASK_SANDBOX_EGRESS_NETWORK || 'omk-egress-internal',
         egressProxyContainer: process.env.TASK_SANDBOX_EGRESS_PROXY_CONTAINER || 'omk-egress-proxy',
         egressProxyPort: intEnv(process.env.TASK_SANDBOX_EGRESS_PROXY_PORT, 8888),
+        egressAllowedPorts: (process.env.TASK_SANDBOX_EGRESS_ALLOWED_PORTS || '80,443')
+            .split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0 && n <= 65535),
         codeDiffEnabled: process.env.TASK_SANDBOX_CODE_DIFF_ENABLED !== 'false',
         writeViaContainer: resolveWriteViaContainer(process.env),
         extraTools: (process.env.TASK_SANDBOX_EXTRA_TOOLS ?? 'web_search')
@@ -234,3 +238,14 @@ export const BROWSER_SESSION = {
  * TASK_SANDBOX_BROWSER_URL_GUARD=false 로 끈다.
  */
 export const BROWSER_URL_GUARD_ENABLED = process.env.TASK_SANDBOX_BROWSER_URL_GUARD !== 'false';
+
+/**
+ * 브라우저 컨테이너에 넘기는 목적지 검사 설정(`-e` 값 목록) — 러너(infra/task-runtime/browser-runner.mjs)가
+ * 컨테이너 안에서 리다이렉트·하위 요청까지 같은 기준으로 막는다. 실행 전 검사와 같은 스위치·같은 허용 예외를 쓴다.
+ * egress 프록시를 켠 배포에서는 러너가 이 값을 쓰지 않는다(프록시가 검사한다).
+ */
+export function browserDestGuardEnv(env: NodeJS.ProcessEnv = process.env): string[] {
+    if (env.TASK_SANDBOX_BROWSER_URL_GUARD === 'false') return ['BROWSER_DEST_GUARD=off'];
+    const allowed = (env.SSRF_ALLOWED_HOSTS ?? '').trim();
+    return allowed ? [`BROWSER_GUARD_ALLOWED_HOSTS=${allowed}`] : [];
+}

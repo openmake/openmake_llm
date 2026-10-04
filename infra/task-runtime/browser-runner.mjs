@@ -8,10 +8,17 @@
  *
  * egress 제어: allowlist 가 있으면 context.route 로 비허용 호스트 요청을 abort
  *   (브라우저 레벨 도메인 화이트리스트 — 컨테이너 network=bridge 의 over-reach 를 좁힘).
+ * 목적지 검사: egress 프록시(BROWSER_PROXY)가 없으면 컨테이너 안 루프백에 guard-proxy 를 띄워 chromium 의 모든
+ *   연결(리다이렉트·하위 요청 포함)을 지나게 하고, 사설망·루프백·메타데이터로 풀리는 목적지를 막는다.
+ *   BROWSER_GUARD_ALLOWED_HOSTS(호스트의 SSRF_ALLOWED_HOSTS)는 통과시키고, BROWSER_DEST_GUARD=off 로 끈다.
+ * 확인창: 뜬 확인창을 그 액션의 결과(dialogs)에 싣는다. 기본은 confirm·prompt 취소, dialog{accept,promptText?}
+ *   액션으로 이후의 것을 수락하게 바꾼다(dialog-policy.mjs).
  */
 import { chromium } from 'playwright';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createGuardProxy, parseAllowedHosts } from './guard-proxy.mjs';
+import { createDialogPolicy } from './dialog-policy.mjs';
 
 const WORKSPACE = '/workspace';
 const MAX_ACTIONS = 40;
@@ -88,16 +95,38 @@ function hostAllowed(url) {
     } catch { return false; }
 }
 
+/** 목적지 검사에 걸린 연결을 액션 오류에 덧붙인다 — 브라우저가 내는 오류(ERR_TUNNEL_CONNECTION_FAILED)만으로는 이유를 알 수 없다. */
+function withDenied(message, denied) {
+    // egress 프록시가 거절한 HTTPS 연결은 이유가 여기까지 오지 않는다 — 어디를 볼지만 알린다.
+    if (process.env.BROWSER_PROXY && /ERR_TUNNEL_CONNECTION_FAILED/.test(message)) {
+        return `${message} — egress 프록시가 연결을 거절했습니다(허용 도메인·허용 포트 밖이거나 사설 주소)`;
+    }
+    if (denied.length === 0) return message;
+    return `${message} — 목적지 차단: ${[...new Set(denied.map((d) => d.reason))].slice(0, 3).join(' / ')}`;
+}
+
 const results = [];
 let finalUrl = '';
 let browser;
+let guard;
+const denied = [];
+const dialogPolicy = createDialogPolicy();
 try {
     // egress 프록시(BROWSER_PROXY) 가 주입되면 chromium 의 모든 트래픽을 프록시 경유 — 프록시가
     // 네트워크 레벨 도메인 allowlist 를 강제(page.route 앱-레벨 위의 이중방어).
-    const proxyServer = process.env.BROWSER_PROXY || spec.proxy;
+    let proxy = process.env.BROWSER_PROXY || spec.proxy ? { server: process.env.BROWSER_PROXY || spec.proxy } : null;
+    if (!proxy && process.env.BROWSER_DEST_GUARD !== 'off') {
+        guard = createGuardProxy({
+            exempt: parseAllowedHosts(process.env.BROWSER_GUARD_ALLOWED_HOSTS),
+            onDeny: (d) => denied.push(d),
+        });
+        await new Promise((ok, fail) => { guard.once('error', fail); guard.listen(0, '127.0.0.1', ok); });
+        // chromium 은 루프백을 프록시 없이 직접 연결한다 — <-loopback> 으로 루프백도 프록시를 지나게 한다.
+        proxy = { server: `http://127.0.0.1:${guard.address().port}`, bypass: '<-loopback>' };
+    }
     browser = await chromium.launch({
         headless: spec.headless !== false,
-        ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
+        ...(proxy ? { proxy } : {}),
     });
     // 이전 세션 상태가 있으면 복원(로그인 유지). 손상 파일은 무시하고 새 세션으로.
     const restore = statePath && existsSync(statePath) ? { storageState: statePath } : {};
@@ -109,16 +138,30 @@ try {
             else route.abort();
         });
     }
+    context.on('dialog', async (dialog) => {
+        const decision = dialogPolicy.decide(dialog.type());
+        dialogPolicy.record(dialog.type(), dialog.message(), decision);
+        try {
+            if (decision.accept) await dialog.accept(decision.promptText);
+            else await dialog.dismiss();
+        } catch { /* 이미 닫힌 확인창 */ }
+    });
     const page = await context.newPage();
 
     for (let i = 0; i < actions.length; i++) {
         const a = actions[i];
+        denied.length = 0;
+        let failed = false;
         try {
             if (PAGE_ACTIONS.has(a?.type) && page.url() === 'about:blank') throw new Error(BLANK_PAGE_ERROR);
             switch (a.type) {
                 case 'goto':
                     if (!hostAllowed(a.url)) throw new Error(`allowlist 차단: ${a.url} — 허용 목록(${allowlist.join(', ')})에 없는 호스트입니다. 목록에 도메인을 추가하거나 allowlist 인자를 생략하세요`);
-                    await page.goto(a.url, { waitUntil: a.waitUntil || 'domcontentloaded', timeout });
+                    {
+                        const res = await page.goto(a.url, { waitUntil: a.waitUntil || 'domcontentloaded', timeout });
+                        // 평문 HTTP 는 프록시의 403 본문이 페이지로 뜬다 — 성공으로 돌리지 않는다.
+                        if (res?.headers()['x-guard-proxy'] === 'denied') throw new Error(`이동하지 못했습니다: ${page.url()}`);
+                    }
                     results.push({ i, type: a.type, ok: true, url: page.url() }); break;
                 case 'click':
                     await page.click(a.selector, { timeout });
@@ -140,6 +183,9 @@ try {
                 case 'smartFill':
                     await page.getByRole(a.role, { name: a.name }).nth(Number(a.nth) || 0)
                         .fill(String(a.text ?? ''), { timeout });
+                    results.push({ i, type: a.type, ok: true }); break;
+                case 'dialog':
+                    dialogPolicy.set(a);
                     results.push({ i, type: a.type, ok: true }); break;
                 case 'press':
                     await page.keyboard.press(a.key);
@@ -171,9 +217,12 @@ try {
                     results.push({ i, type: a.type, ok: false, error: '알 수 없는 action' });
             }
         } catch (e) {
-            results.push({ i, type: a?.type, ok: false, error: e.message });
-            break; // 액션 실패 시 중단
+            results.push({ i, type: a?.type, ok: false, error: withDenied(e.message, denied) });
+            failed = true;
         }
+        const dialogs = dialogPolicy.drain();
+        if (dialogs.length) results[results.length - 1].dialogs = dialogs;
+        if (failed) break; // 액션 실패 시 중단
     }
     finalUrl = page.url();
     // 세션 상태 저장(로그인 등) — 액션 일부 실패로 중단됐어도 이전까지의 상태는 보존.
@@ -183,4 +232,5 @@ try {
     out({ ok: false, error: e.message, results });
 } finally {
     if (browser) await browser.close().catch(() => {});
+    if (guard) guard.close();
 }

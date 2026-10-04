@@ -38,6 +38,7 @@ export const PROCEDURAL_STRUCTURE = {
         smartClick: ['role'],
         smartFill: ['role'],
         press: ['key'],
+        dialog: [],
         wait: [],
         waitFor: ['selector'],
         screenshot: [],
