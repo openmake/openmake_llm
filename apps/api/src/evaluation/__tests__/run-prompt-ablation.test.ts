@@ -60,6 +60,13 @@ describe('run-prompt-ablation', () => {
         expect(order).toEqual(['ready', 'create', 'execute']);
     });
 
+    it('실행 소유권 이름을 서버와 다르게 잡는다 — 부팅 정리가 서로의 실행 중 작업을 건드리지 않게', async () => {
+        delete process.env.OMK_LEASE_INSTANCE;
+        await runCli(['--variants', 'baseline', '--limit', '1']);
+        expect(process.env.OMK_LEASE_INSTANCE).toBe(`eval-${process.pid}`);
+        delete process.env.OMK_LEASE_INSTANCE;
+    });
+
     it('--only 로 지목한 과제만 돌린다', async () => {
         process.argv = ['node', 'run-prompt-ablation.ts', '--variants', 'baseline', '--only', 'trap-tail-of-large-file,edit-notes'];
         jest.spyOn(console, 'log').mockImplementation(() => undefined);
