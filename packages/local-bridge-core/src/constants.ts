@@ -134,6 +134,8 @@ export const BROWSER_EXTRACT_MAX_CHARS = 8000;
 export const BROWSER_SNAPSHOT_MAX_ELEMENTS = 100;
 /** snapshot 요소 이름 길이 상한 */
 export const BROWSER_SNAPSHOT_NAME_MAX = 120;
+/** 입력 뒤 결과에 되돌려 주는 값의 길이 상한 — 모델이 "들어갔는지" 확인하는 용도라 앞부분이면 충분하다 */
+export const BROWSER_FILL_ECHO_MAX_CHARS = 200;
 /** CDP 명령 1회 응답 상한(ms) */
 export const BROWSER_CDP_TIMEOUT_MS = 30000;
 /** Chrome 기동 후 디버깅 포트가 열릴 때까지의 대기 상한(ms) */

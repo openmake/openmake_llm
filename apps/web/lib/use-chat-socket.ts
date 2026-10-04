@@ -898,7 +898,16 @@ export function useChatSocket() {
         if (!alreadyStarted) await ApiClient.post(
           `/api/agent-tasks/${taskId}/execute`,
           approvalPolicy && approvalPolicy !== "all" ? { approvalPolicy } : {},
-        );
+        ).catch((e: unknown) => {
+          // 실행 요청이 거절됐다(기기 연결이 막 끊김 등) — 카드를 "대기"로 남기지 않고 실패로 바꾸고, 만들어 둔 작업은 취소한다.
+          // 그대로 두면 카드가 끝없이 대기로 보이고 서버에는 시작되지 않을 작업이 남는다.
+          const error = e instanceof Error ? e.message : String(e);
+          useAppStore.getState().setChatHistory((prev) => prev.map((m) => (m.taskId === taskId && m.agentTask
+            ? { ...m, agentTask: { ...m.agentTask, status: "failed", error } }
+            : m)));
+          void ApiClient.post(`/api/agent-tasks/${taskId}/cancel`, {}).catch(() => { /* 취소 실패 — 작업 목록에서 정리할 수 있다 */ });
+          throw e;
+        });
       } catch (e) {
         appendMessage({
           role: "assistant",

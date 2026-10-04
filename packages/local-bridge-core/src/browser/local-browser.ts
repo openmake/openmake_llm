@@ -17,7 +17,7 @@ import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, type Browser
 import {
     BROWSER_ACTION_TIMEOUT_MS, BROWSER_CLICK_SETTLE_MS, BROWSER_EXIT_WAIT_MS, BROWSER_DIALOG_MESSAGE_MAX, BROWSER_DIALOG_RECORD_MAX,
     BROWSER_EXTRACT_MAX_CHARS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_TABS, BROWSER_POLL_MS,
-    BROWSER_SNAPSHOT_MAX_ELEMENTS, BROWSER_SNAPSHOT_NAME_MAX, BROWSER_WAIT_MAX_MS,
+    BROWSER_SNAPSHOT_MAX_ELEMENTS, BROWSER_SNAPSHOT_NAME_MAX, BROWSER_WAIT_MAX_MS, BROWSER_FILL_ECHO_MAX_CHARS,
 } from '../constants';
 import { CdpClient } from './cdp';
 import { launchChrome, readDevToolsEndpoint } from './chrome';
@@ -70,6 +70,11 @@ interface Tab {
 
 const PAGE_ACTIONS = new Set(['click', 'fill', 'snapshot', 'smartClick', 'smartFill', 'press', 'waitFor', 'screenshot', 'extractText', 'extractHtml']);
 const BLANK_PAGE_ERROR = '빈 페이지(about:blank)에서 실행됨 — 먼저 goto 로 페이지를 여세요';
+/** 페이지 안에서 도는 조각 — 요소의 현재 값. 입력 칸은 value, 편집 가능한 영역은 보이는 글. 비밀번호 칸과 없는 요소는 null. */
+const FIELD_VALUE_JS = `(el) => { if (!el) return null; if (el instanceof HTMLInputElement && el.type === 'password') return null; return 'value' in el && typeof el.value === 'string' ? el.value : (el.isContentEditable ? el.innerText : null); }`;
+/** 페이지 안에서 도는 조각 — el 이 값(value)을 가진 양식 요소인가. 이런 요소는 보이는 글(innerText)이 비어 있다. */
+const FIELD_IS_FORM_JS = `(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement)`;
+
 export const BROWSER_USER_CONTROL_ERROR = '사용자가 브라우저를 직접 조작하는 중이라 실행하지 않았습니다. 사용자가 제어권을 돌려주면 현재 페이지를 다시 관찰(snapshot·extractText)한 뒤 이어가세요.';
 const STOPPED_ERROR = '사용자가 브라우저 작업을 중지했습니다';
 const DEFAULT_TAB = '_default';
@@ -323,6 +328,15 @@ export class LocalBrowser {
         if (!(await loaded)) throw new Error('페이지 이동 시간 초과');
     }
 
+    /**
+     * 입력 뒤 결과에 실을 값 — 요소에 실제로 들어간 내용을 되돌려 준다. 결과가 ok 뿐이면 모델이 확인하려고 칸을 읽는데,
+     * 타이핑한 값은 HTML 에 나타나지 않아 "안 들어갔다"고 보고 같은 입력을 되풀이했다(2026-10-05 실측, 승인도 그만큼 늘었다).
+     * 비밀번호 칸은 싣지 않는다 — 결과는 모델 대화와 작업 기록에 남는다.
+     */
+    private echoed(value: unknown): { value?: string } {
+        return typeof value === 'string' ? { value: value.slice(0, BROWSER_FILL_ECHO_MAX_CHARS) } : {};
+    }
+
     /** 접근성 트리에서 상호작용 요소를 고른다 — snapshot·smartClick·smartFill 공용. */
     private async interactiveNodes(cdp: CdpClient, tab: Tab): Promise<Array<{ role: string; name: string; backendNodeId: number }>> {
         const { nodes } = await cdp.send('Accessibility.getFullAXTree', {}, tab.sessionId) as {
@@ -430,7 +444,8 @@ export class LocalBrowser {
                 })()`), `요소를 찾지 못했습니다: ${str(a.selector)}`);
                 if (kind !== 'ok') throw new Error(`입력할 수 없는 요소입니다: ${str(a.selector)}`);
                 await this.typeText(cdp, tab, str(a.text));
-                return { i, type: a.type, ok: true };
+                const entered = await this.evaluate<string | null>(cdp, tab, `(${FIELD_VALUE_JS})(document.querySelector(${sel}))`);
+                return { i, type: a.type, ok: true, ...this.echoed(entered) };
             }
             case 'snapshot': {
                 const elements = (await this.interactiveNodes(cdp, tab)).slice(0, BROWSER_SNAPSHOT_MAX_ELEMENTS)
@@ -451,7 +466,11 @@ export class LocalBrowser {
                     functionDeclaration: 'function () { if (typeof this.select === "function") this.select(); else getSelection().selectAllChildren(this); }',
                 }, tab.sessionId);
                 await this.typeText(cdp, tab, str(a.text));
-                return { i, type: a.type, ok: true };
+                const { result } = await cdp.send('Runtime.callFunctionOn', {
+                    objectId: object.objectId, returnByValue: true,
+                    functionDeclaration: `function () { return (${FIELD_VALUE_JS})(this); }`,
+                }, tab.sessionId) as { result?: { value?: unknown } };
+                return { i, type: a.type, ok: true, ...this.echoed(result?.value) };
             }
             case 'dialog':
                 if (typeof a.accept !== 'boolean') throw new Error('dialog 액션에는 accept(true/false)가 필요합니다');
@@ -476,7 +495,7 @@ export class LocalBrowser {
             }
             case 'extractText': {
                 const text = await (a.selector
-                    ? this.poll(() => this.evaluate<string | null>(cdp, tab, `(() => { const el = document.querySelector(${sel}); return el ? el.innerText : null; })()`),
+                    ? this.poll(() => this.evaluate<string | null>(cdp, tab, `(() => { const el = document.querySelector(${sel}); if (!el) return null; const v = (${FIELD_VALUE_JS})(el); return ${FIELD_IS_FORM_JS} ? (v ?? '') : el.innerText; })()`),
                         `요소를 찾지 못했습니다: ${str(a.selector)}`)
                     : this.evaluate<string>(cdp, tab, 'document.body ? document.body.innerText : ""'));
                 return { i, type: a.type, ok: true, text: str(text).slice(0, BROWSER_EXTRACT_MAX_CHARS) };
