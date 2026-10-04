@@ -109,6 +109,15 @@ export const CODE_EXEC_TOOLS: readonly string[] = ['bash', 'python_execute'];
  * 전체로 돌려 종료 코드 0 으로 끝난 명령뿐이다. 일부 테스트 실행·빌드·린트·다른 러너는 증거가 아니고, 감지된 러너가
  * 증거의 러너와 다르면 게이트를 그대로 돌린다(workspace-test-verify).
  * AGENT_TASK_VERIFY_EVIDENCE=true 로 켠다.
+ *
+ * 기본 꺼짐의 근거(2026-10-04 실측, retired-chat-model, 실제 Docker 샌드박스): 아낄 것이 거의 없다.
+ *   - 과제 묶음의 읽기 과제 3종(켬·끔 각 6회)과 fix-python-bug(각 3회)에서는 게이트가 한 번도 테스트를 돌리지 않았다 —
+ *     첨부가 uploads/ 에 있어 루트에 러너가 감지되지 않는다. 켬·끔의 턴·토큰이 같다(fix-python-bug 4턴·5.5만 토큰).
+ *   - 테스트를 루트로 옮겨 게이트가 도는 과제(각 6회)에서 게이트 통과 1회는 272~486ms 였다(10회). 건너뛰어 아끼는 시간이 그만큼이다.
+ *     켠 조건에서 "모델이 직접 테스트를 돌린" 3회 중 건너뛴 것은 0회 — 모델이 `rm … && pytest`·`pytest --import-mode=…` 처럼
+ *     변경이나 다른 인자를 붙여 돌려 증거로 치지 않았고, 그중 1회는 게이트가 실제 실패(수집 오류)를 잡았다.
+ *   - 놓침: 고치고 테스트를 안 돌린 실행(켬 3회)은 모두 게이트가 돌았다. 각본 대화(일부 실행·재수정·종료 코드 가리기)는 테스트로 고정.
+ * 판정을 느슨하게 하는 변경인데 얻는 것이 작업당 0.5초 이하라 켜지 않는다. 테스트가 오래 걸리는 저장소 작업이 많아지면 다시 잴 것.
  */
 export const VERIFY_EVIDENCE = {
     ENABLED: process.env.AGENT_TASK_VERIFY_EVIDENCE === 'true',
