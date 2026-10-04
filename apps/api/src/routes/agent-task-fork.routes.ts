@@ -17,7 +17,8 @@ import { loadOwnedTask } from './agent-task.helpers';
 import { buildForkNotice } from '../prompts/agent-task-prompt';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { findDanglingToolCalls } from '../services/agent-task/turn-reentry';
-import { stripOneShotNotices } from '../services/agent-task/one-shot-notice';
+import { cleanConversationForFork } from '../services/agent-task/one-shot-notice';
+import { AGENT_TASK_SCHEDULE } from '../config/agent-task-schedule';
 import type { ChatMessage } from '../llm/types';
 
 const logger = createLogger('AgentTaskForkRoutes');
@@ -42,13 +43,14 @@ forkRouter.post('/:taskId/fork', asyncHandler(async (req: Request, res: Response
     const goal = typeof body.goal === 'string' && body.goal.trim() ? body.goal.trim() : src.goal;
     // 턴 중간 체크포인트는 결과 없는 tool_call 이 매달려 있다 — 그 assistant 부터 잘라 새 워크스페이스에서 그 턴을 다시 수행한다.
     // 안내는 user 역할로 붙인다(대화 중간 system 메시지는 vLLM 이 400 으로 거절한다 — 계획 편집·steering 과 같은 방식).
-    const base = cp.conversation as ChatMessage[];
+    // 일회성 안내(검색 한도·마무리 턴 등)는 원 실행의 자원 상태라 뺀다 — 새 작업은 횟수·예산이 다시 시작한다. 모델 응답에 대한
+    // 되묻기도 그 응답과 짝으로 뺀다. 자르기 전에 정리해야 호출과 결과 사이에 낀 안내(stuck)가 매달린 호출을 가리지 않는다.
+    const base = cleanConversationForFork(cp.conversation as ChatMessage[], { stripReplies: AGENT_TASK_SCHEDULE.FORK_STRIP_REPLY_NUDGES_ENABLED });
     const cut = findDanglingToolCalls(base) ? base.map((m) => m.role).lastIndexOf('assistant') : base.length;
     const notice = buildForkNotice({
         restoreEnabled: AGENT_TASK_LIMITS.FORK_WORKSPACE_RESTORE_ENABLED, newGoal: goal !== src.goal ? goal : undefined,
     });
-    // 일회성 안내(검색 한도·마무리 턴 등)는 원 실행의 자원 상태라 뺀다 — 새 작업은 횟수·예산이 다시 시작한다.
-    const conversation = [...stripOneShotNotices(base.slice(0, cut)), { role: 'user', content: notice }];
+    const conversation = [...base.slice(0, cut), { role: 'user', content: notice }];
 
     const db = getUnifiedDatabase();
     const id = uuidv4();

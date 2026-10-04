@@ -13,7 +13,8 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { chatTurnWithRoleFallback, TurnCallCapExceeded, type AgentRoleState } from './role-client';
 import { AgentTaskAbort } from './types';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
-import { detectOutputRepetition } from './output-repetition';
+import { detectOutputRepetition, cutRepeatedOutput } from './output-repetition';
+import { recoverTextToolCalls } from './text-tool-calls';
 import { getContextTrimNote, getTransientRetryNote, getOutputRepetitionNote } from '../../prompts/agent-task-turn-loop';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
@@ -51,6 +52,8 @@ interface TurnCallResult {
     result: Awaited<ReturnType<typeof chatTurnWithRoleFallback>>;
     /** 이 턴의 예산 바인딩 signal — 뒤따르는 finalize(judge·검증)도 같은 예산에 묶는다. */
     callSignal: AbortSignal;
+    /** 본문을 출력 반복 때문에 잘랐는가 — 최종 답이 될 응답이면 turn-context 가 한 번 다시 요청한다. */
+    repetitionCut?: boolean;
 }
 
 export async function callAgentTurnWithBudget(p: TurnCallInput): Promise<TurnCallResult> {
@@ -78,12 +81,16 @@ export async function callAgentTurnWithBudget(p: TurnCallInput): Promise<TurnCal
         if (dropped > 0 && AGENT_TASK_TURN_LOOP.CONTEXT_TRIM_STEP_ENABLED) {
             try { p.onNote?.('context_trim', getContextTrimNote(dropped, p.conversation.length)); } catch { /* 관측 실패 무시 */ }
         }
-        // 본문의 짧은 구간 반복(모델 반복 루프의 흔적)도 기록만 한다 — 응답은 그대로 쓴다.
-        const repetition = AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_STEP_ENABLED ? detectOutputRepetition(result.content) : null;
-        if (repetition) {
-            try { p.onNote?.('output_repetition', getOutputRepetitionNote(repetition.repeats, AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_WINDOW_CHARS, repetition.sample)); } catch { /* 관측 실패 무시 */ }
+        // 본문의 구간 반복(모델 반복 루프의 흔적) — 기록하고, 반복이 시작된 뒤를 잘라 낸다(모델이 자기 반복을 다시 읽고 이어가지 않게).
+        // 도구 호출은 건드리지 않는다. 본문 자체가 텍스트 도구 호출이면 자르지 않는다(호출문이 깨진다).
+        const { OUTPUT_REPETITION_STEP_ENABLED: noteOn, OUTPUT_REPETITION_CUT_ENABLED: cutOn } = AGENT_TASK_TURN_LOOP;
+        const repetition = noteOn || cutOn ? detectOutputRepetition(result.content) : null;
+        const repetitionCut = !!repetition && cutOn && recoverTextToolCalls(result.content ?? '').length === 0;
+        if (repetition && noteOn) {
+            try { p.onNote?.('output_repetition', getOutputRepetitionNote(repetition.repeats, AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_WINDOW_CHARS, repetition.sample, repetitionCut)); } catch { /* 관측 실패 무시 */ }
         }
-        return { result, callSignal };
+        if (repetition && repetitionCut) result.content = cutRepeatedOutput(result.content ?? '', repetition.cutAt);
+        return { result, callSignal, repetitionCut };
     } catch (err) {
         if ((callTimeout.aborted && !p.signal.aborted) || err instanceof TurnCallCapExceeded) {
             throw new AgentTaskTurnTimeout(partialContent.trim() || null);

@@ -25,6 +25,9 @@ export const AGENT_TASK_SCHEDULE = {
      *  기본 꺼짐: 모델이 표식을 남용하면 보고가 조용히 사라지므로 실측 뒤에 켠다. AGENT_TASK_SCHEDULE_SILENT_ENABLED=true.
      *  실행 결과 반영(RUN_OUTCOME_ENABLED)이 꺼져 있으면 동작하지 않는다. */
     SILENT_ENABLED: process.env.AGENT_TASK_SCHEDULE_SILENT_ENABLED === 'true',
+    /** fork 때 모델 응답에 대한 되묻기(빈 응답·검증 실패·stuck·행동 예고 재촉)도 대화에서 뺀다(one-shot-notice).
+     *  AGENT_TASK_FORK_STRIP_REPLY_NUDGES_ENABLED=false 로 끈다(종전: 일회성 자원 안내만 뺀다). */
+    FORK_STRIP_REPLY_NUDGES_ENABLED: process.env.AGENT_TASK_FORK_STRIP_REPLY_NUDGES_ENABLED !== 'false',
 } as const;
 
 /** 모델에 닿지 못한 오류 문구 — 연결 실패와 5xx 만. 4xx·시간 초과·목표 미달성은 다시 돌려도 같다. */

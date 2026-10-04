@@ -135,6 +135,10 @@ export class ApiClient {
     answerApproval(approvalId: string, decision: 'approve' | 'reject'): Promise<unknown> {
         return this.req('POST', `/api/agent-tasks/approvals/${approvalId}/${decision}`);
     }
+    /** ask_human 질문에 글로 답한다 — 진행으로 해소되고 답변이 에이전트에 전달된다. */
+    answerQuestion(approvalId: string, text: string): Promise<unknown> {
+        return this.req('POST', `/api/agent-tasks/approvals/${approvalId}/answer`, { text });
+    }
     /** 현재 공유 상태(없으면 null). */
     getShare(taskId: string): Promise<{ share: ShareState | null }> {
         return this.req('GET', `/api/agent-tasks/${taskId}/share`);
