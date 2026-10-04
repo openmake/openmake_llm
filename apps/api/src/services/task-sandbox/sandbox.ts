@@ -253,6 +253,14 @@ export function runProcess(
  * 파일 I/O 는 bind-mount 된 호스트 workdir 에 직접 수행(빠르고 docker cp 불요).
  * TaskExecutor 의 Docker 구현체 (D0 — 원격 실행기는 D1 에서 같은 계약으로 추가).
  */
+/** 동시 샌드박스 상한에 걸려 만들지 못했다 — 일시적이라 호출부가 기다렸다 다시 시도한다. */
+export class TaskSandboxCapacityError extends Error {
+    constructor(readonly active: number, readonly max: number) {
+        super(`동시 task 샌드박스 상한 도달 (${active}/${max})`);
+        this.name = 'TaskSandboxCapacityError';
+    }
+}
+
 export class TaskSandbox implements TaskExecutor {
     readonly taskId: string;
     readonly containerName: string;
@@ -277,12 +285,12 @@ export class TaskSandbox implements TaskExecutor {
             logger.warn(`[${this.taskId}] network=restricted 는 메인 샌드박스 enforcement 미구현 → fail-safe none 으로 실행`);
         }
         // 동시 실행 상한 — 실행 중인 omk-task-* 컨테이너 수가 ground truth (재시작에도 정확).
-        // 초과 시 throw → AgentTaskService 가 샌드박스 없이 graceful degrade 로 진행.
+        // 초과 시 throw → AgentTaskService 가 자리를 기다리고, 끝내 없으면 정책대로 처리(agent-task/sandbox-unavailable).
         const ps = await runProcess(this.cfg.dockerPath,
             ['ps', '-q', '--filter', `name=${CONTAINER_PREFIX}`], { timeoutMs: 10_000, outputCap: 65536 });
         const active = ps.stdout.split('\n').filter(Boolean).length;
         if (active >= this.cfg.maxConcurrent) {
-            throw new Error(`동시 task 샌드박스 상한 도달 (${active}/${this.cfg.maxConcurrent})`);
+            throw new TaskSandboxCapacityError(active, this.cfg.maxConcurrent);
         }
         await mkdir(this.hostWorkdir, { recursive: true, mode: 0o777 });
         // 동명 잔존 컨테이너 제거(이전 비정상 종료 대비).

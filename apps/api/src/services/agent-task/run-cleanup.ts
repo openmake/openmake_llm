@@ -3,6 +3,7 @@
  *
  * - 승인: 자동승인 해제 + 저장소의 남은 pending 만료. 주차(F16.7)는 질문 승인을 **남긴다**(답이 오면 재개 근거).
  * - steering: 미소비 지시 정리(다음 동명 실행으로 새지 않게).
+ * - 실행 환경 없음 표식(sandbox-unavailable): 지운다(다음 실행의 결과에 각주가 따라붙지 않게).
  * - 샌드박스: 완료·주차는 workspace 보존(다운로드·재개), 그 외는 삭제 직전 코드 diff 캡처 후 삭제.
  *
  * @module services/agent-task/run-cleanup
@@ -10,6 +11,7 @@
 import { getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { getSteeringRegistry } from './steering';
 import { captureDiffOnCleanup } from './code-diff';
+import { clearSandboxUnavailable } from './sandbox-unavailable';
 import { createLogger } from '../../utils/logger';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 
@@ -28,6 +30,7 @@ export async function cleanupTaskRun(opts: {
     if (parked) getApprovalRegistry().clearAutoApprove(taskId);
     else getApprovalRegistry().closeTask(taskId);
     getSteeringRegistry().clear(taskId);
+    clearSandboxUnavailable(taskId);
     if (!taskRuntime) return;
     const keepWorkspace = opts.status === 'completed' || parked;
     if (!keepWorkspace) await captureDiffOnCleanup(taskRuntime, taskId, stepNumber).catch(() => { /* fail-open */ });

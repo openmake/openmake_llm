@@ -32,7 +32,7 @@ describe('web agent-task-failure', () => {
     });
 
     it('서버가 코드로 남기는 사유는 웹도 같은 분류로 읽는다', () => {
-        for (const code of ['goal_incomplete', 'max_turns_exhausted', 'token_limit', 'timeout', 'hitl_park_expired', 'interrupted', 'interrupted_local_device', 'server restarted']) {
+        for (const code of ['goal_incomplete', 'max_turns_exhausted', 'token_limit', 'timeout', 'hitl_park_expired', 'interrupted', 'interrupted_local_device', 'server restarted', 'sandbox_unavailable']) {
             expect(lib.failureClassOf(code, null)).toBe(classifyAgentTaskFailure(code));
         }
     });
@@ -59,6 +59,17 @@ describe('web agent-task-failure', () => {
             const next = at(m, lib.failureNextKey(samples[cls], cls));
             expect(typeof next).toBe('string');
             expect((next as string).length).toBeGreaterThan(0);
+        }
+    });
+
+    it.each(LOCALES)('%s: 실행 환경을 받지 못한 실패는 코드별 라벨과 따로 둔 다음 행동 문구를 쓴다', (locale) => {
+        const m = messages(locale);
+        expect(lib.failureLabelKey('sandbox_unavailable', 'interrupted')).toBe('errorReason.sandbox_unavailable');
+        expect(lib.failureNextKey('sandbox_unavailable', 'interrupted')).toBe('errorReason.next.sandbox_unavailable');
+        expect(lib.failureNextKey('interrupted', 'interrupted')).toBe('errorReason.next.interrupted');
+        for (const key of ['errorReason.sandbox_unavailable', 'errorReason.next.sandbox_unavailable']) {
+            expect(typeof at(m, key)).toBe('string');
+            expect((at(m, key) as string).length).toBeGreaterThan(0);
         }
     });
 });

@@ -52,6 +52,7 @@ import { replyNudge } from './agent-task/one-shot-notice';
 import { pickNoToolNudge } from './agent-task/turn-stall';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
+import { createSandboxWaiting, handleSandboxUnavailable } from './agent-task/sandbox-unavailable';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
 import { prepareToolArgs } from './agent-task/tool-args';
@@ -219,7 +220,15 @@ export class AgentTaskService {
                 userId, allTools, ...(allowedSkills ? { allowedSkills } : {}),
             });
 
-            // 영속 샌드박스(Manus화, 플래그 ON 시만). 생성 실패는 샌드박스 없이 진행(graceful degrade).
+            // 스텝 실시간 발행(4-5) — DB 기록 직후 요약을 WS 로 브로드캐스트(채팅 인라인 카드의 "현재 단계").
+            const emitStep = (stepType: string, toolName?: string, content?: string | null): void => {
+                emitAgentTaskProgress({
+                    userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn,
+                    step: { stepType, ...(toolName ? { toolName } : {}), preview: (content ?? '').slice(0, 200) },
+                });
+            };
+
+            // 영속 샌드박스(Manus화, 플래그 ON 시만). 생성 실패는 상한이면 기다리고, 끝내 못 만들면 정책대로 알리거나 끝낸다(agent-task/sandbox-unavailable).
             // 설정은 한 번만 읽어 스냅샷 공유. 승인 3모드는 input.approvalPolicy 로 이 실행에만 override
             // (비영속, resume은 전역 폴백; requiresApproval 호출부 2곳이 이 cfg 를 읽어 단일 지점 주입).
             // Cowork D1a: 실행 백엔드(docker/local)·승인 정책 결정 — 상세는 agent-task/executor-select.
@@ -252,7 +261,7 @@ export class AgentTaskService {
                     } catch (e) {
                         logger.warn(`[${taskId}] 도구 이름 교정 목록 주입 실패(무시): ${e instanceof Error ? e.message : String(e)}`);
                     }
-                    await taskRuntime.create();
+                    stepNumber = await createSandboxWaiting(taskRuntime, { taskId, signal, stepNumber, emitStep, conversation });
                     await db.updateAgentTask(taskId, {
                         sandboxContainerId: taskRuntime.containerName,
                         workspacePath: taskRuntime.localWorkdir ?? undefined,
@@ -266,8 +275,7 @@ export class AgentTaskService {
                     }
                     logger.info(`[AgentTask] 샌드박스 활성 (${taskId}, ${taskRuntime.containerName})`);
                 } catch (e) {
-                    logger.warn(`[AgentTask] 샌드박스 생성 실패 — 미사용 진행: ${e instanceof Error ? e.message : e}`);
-                    taskRuntime = null;
+                    taskRuntime = null; stepNumber = await handleSandboxUnavailable(e, { taskId, signal, stepNumber, emitStep, conversation, remote: !!remoteExecutor });
                 }
             }
             // 입력 첨부 주입 — 파일은 샌드박스 있으면 workspace(uploads/)에 기록(셸/파이썬으로 읽음), 없으면
@@ -298,14 +306,6 @@ export class AgentTaskService {
                 injectedSkillIds: new Set(skillBindings.map((b) => b.skill_id)),
                 userId,
             });
-
-            // 스텝 실시간 발행(4-5) — DB 기록 직후 요약을 WS 로 브로드캐스트(채팅 인라인 카드의 "현재 단계").
-            const emitStep = (stepType: string, toolName?: string, content?: string | null): void => {
-                emitAgentTaskProgress({
-                    userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn,
-                    step: { stepType, ...(toolName ? { toolName } : {}), preview: (content ?? '').slice(0, 200) },
-                });
-            };
 
             // 턴 중간 재개(124): 결과 없는 tool_call 로 끝난 체크포인트는 LLM 재호출 없이 남은 호출만 실행(turn-reentry).
             let reentry = input.resume ? findDanglingToolCalls(conversation) : null;

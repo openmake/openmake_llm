@@ -166,6 +166,30 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
     };
 }
 
+/** 샌드박스를 쓰기로 한 작업이 샌드박스를 받지 못했을 때의 처리 — notify: 알리고 진행(기본), fail: 작업을 실패로 끝냄, silent: 종전처럼 조용히 진행. */
+export type SandboxUnavailablePolicy = 'notify' | 'fail' | 'silent';
+
+function nonNegIntEnv(raw: string | undefined, def: number): number {
+    const n = parseInt(raw ?? '', 10);
+    return Number.isFinite(n) && n >= 0 ? n : def;
+}
+
+/**
+ * 샌드박스 생성 실패 처리(services/agent-task/sandbox-unavailable). 호출 때마다 env 를 읽는다.
+ * 동시 상한(TASK_SANDBOX_MAX_CONCURRENT)에 걸린 것은 일시적이라 capacityWaitMs 동안 capacityWaitIntervalMs 간격으로 다시 시도한다
+ * (0 이면 기다리지 않는다). 그래도 못 만들면 policy 대로 한다. silent 는 대기까지 끈다(종전 동작 전체).
+ */
+export function getSandboxUnavailableConfig(env: Record<string, string | undefined> = process.env): {
+    policy: SandboxUnavailablePolicy; capacityWaitMs: number; capacityWaitIntervalMs: number;
+} {
+    const raw = env.TASK_SANDBOX_UNAVAILABLE_POLICY;
+    return {
+        policy: raw === 'fail' || raw === 'silent' ? raw : 'notify',
+        capacityWaitMs: nonNegIntEnv(env.TASK_SANDBOX_CAPACITY_WAIT_MS, 60_000),
+        capacityWaitIntervalMs: intEnv(env.TASK_SANDBOX_CAPACITY_WAIT_INTERVAL_MS, 3_000),
+    };
+}
+
 /** 승인 미리보기 diff(F18 PR-2, 138) 크기 캡. 기본 켜짐(APPROVAL_PREVIEW_ENABLED=false 로 끔). */
 export const APPROVAL_PREVIEW = {
     ENABLED: process.env.APPROVAL_PREVIEW_ENABLED !== 'false',

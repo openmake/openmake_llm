@@ -4,6 +4,7 @@
  *
  * @module prompts/agent-task-tools
  */
+import { AGENT_TASK_INCOMPLETE_MARKER } from './agent-task-prompt';
 
 /** str_replace — 차이를 무시하고 한 곳에 맞아 적용했다. 다음 편집이 파일의 실제 표기를 따르도록 알린다. */
 export function getStrReplaceFuzzyAppliedNote(path: string, line: number, relaxed: string): string {
@@ -82,4 +83,43 @@ export function formatAskHumanLine(question: string, options: readonly string[],
     const head = index === null ? question : `${index}) ${question}`;
     if (options.length === 0) return head;
     return `${head} — 선택지: ${options.join(' / ')}${recommended ? ` (권장: ${recommended})` : ''}`;
+}
+
+/** 샌드박스 상한 대기 — 단계 기록·진행 표시(한 번). */
+export function getSandboxWaitNote(active: number, max: number, waitSec: number): string {
+    return `실행 환경 대기 — 동시 샌드박스 상한(${active}/${max})에 걸려 자리가 날 때까지 최대 ${waitSec}초 기다립니다`;
+}
+
+/** 샌드박스를 받지 못함 — 단계 기록·진행 표시. capacity 는 상한에 걸린 경우(그 밖의 생성 실패는 undefined), failing 은 정책이 fail 인 경우. */
+export function getSandboxUnavailableStepNote(capacity: { active: number; max: number } | undefined, failing: boolean): string {
+    const why = capacity
+        ? `동시 샌드박스 상한(${capacity.active}/${capacity.max})에 걸려 자리가 나지 않았습니다`
+        : '샌드박스를 만드는 데 실패했습니다';
+    return `실행 환경 없음 — ${why}. ${failing
+        ? '실행 환경 없이는 진행하지 않도록 설정돼 있어 작업을 끝냅니다.'
+        : '셸·파일·브라우저 도구 없이 진행합니다.'}`;
+}
+
+/** 샌드박스를 받지 못함 — 시스템 프롬프트 끝에 붙는 안내. 실행 없이 지어낸 답을 막는다. */
+export function getSandboxUnavailableSystemNotice(): string {
+    return [
+        '',
+        '',
+        '## 실행 환경 없음',
+        '- 이번 실행에서는 실행 환경(샌드박스)을 준비하지 못했습니다. 셸(bash)·python 실행·파일 읽기/쓰기·브라우저를 쓸 수 없습니다.',
+        '- 명령 실행, 코드 실행, 파일 작업, 웹 페이지 조작 없이는 목표를 이룰 수 없으면 결과를 추측하거나 지어내지 마세요.',
+        `  실행하지 않은 것을 실행한 것처럼 쓰지 말고, 최종 답변 첫 줄을 ${AGENT_TASK_INCOMPLETE_MARKER} 로 시작해`,
+        '  실행 환경이 없어 수행하지 못했다는 사실과 잠시 뒤 다시 실행하면 된다는 점을 알리세요.',
+        '- 실행 없이도 답할 수 있는 목표면 남은 도구로 수행하세요.',
+    ].join('\n');
+}
+
+/** 샌드박스를 받지 못함 — 완료한 답변 뒤에 붙는 각주. */
+export function getSandboxUnavailableFootnote(): string {
+    return '---\n참고: 이 작업은 실행 환경(샌드박스) 없이 수행됐습니다 — 명령·코드 실행과 파일 작업을 하지 못했으므로, 실행 결과처럼 보이는 내용은 확인된 것이 아닙니다. 실행이 필요한 작업이면 잠시 뒤 다시 실행하세요.';
+}
+
+/** 샌드박스를 받지 못함 — 완료 판정(goal judge)의 EXECUTION 에 붙는 한 줄. */
+export function getSandboxUnavailableJudgeNote(): string {
+    return '실행 환경: 없음 — 샌드박스를 준비하지 못해 셸·코드 실행·파일 작업·브라우저를 쓸 수 없었다. 목표가 그런 실행을 요구하는데 ANSWER 가 실행한 것처럼 결과를 제시하면 달성으로 보지 않는다.';
 }
