@@ -59,7 +59,8 @@ export const BROWSER_BOT_BLOCK = {
         /checking your browser/i,
         /verify(ing)? (that )?you are (a )?human/i,
         /are you a robot\?/i,
-        /unusual traffic/i,
+        // "unusual traffic" 만으로는 그 메시지를 설명하는 고객센터 글의 제목이 걸린다(2026-10-04 실측) — 확인 화면의 문장으로 좁힌다
+        /detected unusual traffic/i,
         /access to this page has been denied/i,
         /press (&|and) hold/i,
         /complete the security check to access/i,
@@ -67,7 +68,9 @@ export const BROWSER_BOT_BLOCK = {
         /incapsula incident id/i,
         // Akamai 차단 화면의 참조 번호
         /access denied[\s\S]{0,300}reference\s*#\s*[0-9a-f]+\.[0-9a-f]+\./i,
-        /비정상적인 (접근|트래픽)/,
+        /비정상적인 (접근|트래픽)(이|을)? ?감지/,
+        // DataDome 확인 화면의 본문(2026-10-04 실측)
+        /please enable js and disable any ad blocker/i,
     ] as readonly RegExp[],
     /**
      * 제목 자리의 문구 — HTML 제목이거나, 본문의 첫 줄이면서 본문이 HEADING_TEXT_MAX_CHARS 이하일 때만 차단으로 본다.
@@ -85,7 +88,8 @@ export const BROWSER_BOT_BLOCK = {
     /** 차단 서비스가 확인 화면에 넣는 표지(HTML 어디에 있든) — 일반 로그인 폼의 캡차 위젯(g-recaptcha 등)은 넣지 않는다. */
     HTML_MARKERS: [
         /cf-chl-/,
-        /\/cdn-cgi\/challenge-platform\//,
+        // 확인 화면의 스크립트 경로만 — 같은 폴더의 scripts/jsd/main.js 는 Cloudflare 뒤의 정상 페이지에도 붙는다(2026-10-04 실측)
+        /\/cdn-cgi\/challenge-platform\/h\/[a-z]\/orchestrate\//,
         /px-captcha/,
         /captcha-delivery\.com/,
         /_Incapsula_Resource/,

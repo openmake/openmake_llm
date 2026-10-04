@@ -211,6 +211,20 @@ jobs:
         working-directory: apps/api
         run: npm run eval:trajectory
 
+      # ─── Gate 11: Compaction Recall (mock) ───
+      # 긴 대화 각본을 접기·인계 요약에 통과시켜, 사라지는 구간의 "무엇을 했고 결과가 어땠나"가 남는지 채점한다.
+      # 접힌 결과의 한 줄 요약이나 인계 요약이 정보를 잃는 회귀를 잡는다. LLM·DB 를 쓰지 않는다.
+      - name: "Gate 11: Compaction Recall (mock)"
+        working-directory: apps/api
+        run: npm run eval:compaction
+
+      # ─── Gate 12: Memory Ranking Recall (mock) ───
+      # 가상 메모리 묶음(golden-memory-rank.json)에서 토큰 상한 안에 실려야 할 메모리가 실리는 비율을 최신순과 비교한다.
+      # 순위 방식이 기본 켜짐이므로, 규칙을 바꿔 최신순보다 나빠지면 걸린다. LLM·DB 를 쓰지 않는다.
+      - name: "Gate 12: Memory Ranking Recall (mock)"
+        working-directory: apps/api
+        run: npm run eval:memory-rank
+
       # 평가 결과 아티팩트 업로드 (PR 회귀 추적용)
       - name: Upload evaluation artifacts
         if: always()

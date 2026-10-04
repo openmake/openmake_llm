@@ -10,6 +10,7 @@
  *
  * @module evaluation/run-compaction-evaluation
  */
+import './load-env';
 import { loadCompactionGolden, runCompactionGolden } from './compaction-recall-evaluator';
 
 function argValue(flag: string): string | undefined {
