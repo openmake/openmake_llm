@@ -35,6 +35,7 @@ import { needsExplicitPromptCache, toOpenAIMessages, toOpenAITools } from './ope
 import { ToolNameCodec } from './tool-name-codec';
 import { PseudoToolCallGate } from '../llm/pseudo-tool-call-parser';
 import { pingCredential } from './credential-ping';
+import { readCachedPromptTokens } from '../llm/cached-prompt-tokens';
 
 const logger = createLogger('OpenAICompatProvider');
 
@@ -470,6 +471,7 @@ export class OpenAICompatProvider implements IProvider {
             // OpenRouter 응답은 표준 OpenAI usage 필드 + 'cost' (USD float) 를 추가로 노출 가능.
             // 이를 캐치해서 UsageMetrics.cost_usd_micros 로 전달 — 카탈로그 fallback 우회.
             let directCostUsd: number | undefined;
+            let cachedPromptTokens: number | undefined;
 
             for await (const chunk of stream as unknown as AsyncIterable<{
                 choices: Array<{
@@ -525,6 +527,7 @@ export class OpenAICompatProvider implements IProvider {
                     if (chunk.usage.prompt_tokens) promptTokens = chunk.usage.prompt_tokens;
                     if (chunk.usage.completion_tokens) completionTokens = chunk.usage.completion_tokens;
                     if (typeof chunk.usage.cost === 'number') directCostUsd = chunk.usage.cost;
+                    cachedPromptTokens = readCachedPromptTokens(chunk.usage) ?? cachedPromptTokens;
                 }
             }
 
@@ -565,6 +568,8 @@ export class OpenAICompatProvider implements IProvider {
             const usage: UsageMetrics = {
                 prompt_tokens: promptTokens || undefined,
                 completion_tokens: completionTokens || undefined,
+                // 캐시 적중 토큰(관측용) — provider 가 주지 않으면 싣지 않는다
+                ...(cachedPromptTokens !== undefined ? { cached_prompt_tokens: cachedPromptTokens } : {}),
                 // OpenRouter 직접 cost (USD) → micros 변환. Math.round 로 정수화 (DB 컬럼이 BIGINT).
                 ...(directCostUsd !== undefined
                     ? { cost_usd_micros: Math.round(directCostUsd * 1_000_000) }

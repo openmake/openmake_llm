@@ -186,3 +186,45 @@ describe('reapOrphanSandboxContainers', () => {
         expect(result.errors.length).toBe(1);
     });
 });
+
+describe('removeSandboxCacheVolume — 서버를 지우면 그 서버의 캐시 볼륨도 치운다', () => {
+    const { removeSandboxCacheVolume } = require('../sandbox-bootstrap');
+    const docker = '/usr/local/bin/docker';
+    const noWait = async () => undefined;
+
+    it('서버별 볼륨 이름(prefix-서버ID)으로 volume rm 을 부른다 — 다른 서버의 볼륨은 건드리지 않는다', async () => {
+        const calls: string[][] = [];
+        const removed = await removeSandboxCacheVolume('mcp_3/x y', {
+            resolveDockerPath: () => docker, dockerExec: async (_d: string, args: string[]) => { calls.push(args); return ''; }, sleep: noWait,
+        });
+        expect(removed).toBe(true);
+        expect(calls).toEqual([['volume', 'rm', 'openmake-mcp-cache-mcp_3_x_y']]);
+    });
+
+    it('컨테이너가 아직 내려가는 중(사용 중)이면 잠시 뒤 다시 시도한다', async () => {
+        let n = 0;
+        const removed = await removeSandboxCacheVolume('srv', {
+            resolveDockerPath: () => docker, sleep: noWait,
+            dockerExec: async () => { if (++n < 3) throw new Error('volume is in use'); return ''; },
+        });
+        expect(removed).toBe(true);
+        expect(n).toBe(3);
+    });
+
+    it('볼륨이 없으면(샌드박스로 띄운 적 없는 서버) 다시 시도하지 않고 넘어간다', async () => {
+        let n = 0;
+        const removed = await removeSandboxCacheVolume('srv', {
+            resolveDockerPath: () => docker, sleep: noWait,
+            dockerExec: async () => { n++; throw new Error('Error response from daemon: get openmake-mcp-cache-srv: no such volume'); },
+        });
+        expect(removed).toBe(false);
+        expect(n).toBe(1);
+    });
+
+    it('docker 부재·계속 실패해도 throw 하지 않는다(삭제 요청을 막지 않는다)', async () => {
+        expect(await removeSandboxCacheVolume('srv', { resolveDockerPath: () => null })).toBe(false);
+        expect(await removeSandboxCacheVolume('srv', {
+            resolveDockerPath: () => docker, sleep: noWait, dockerExec: async () => { throw new Error('daemon hang'); },
+        })).toBe(false);
+    });
+});

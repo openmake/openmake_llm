@@ -485,7 +485,7 @@
     },
     "steering": {
       "label": "Diese Aufgabe steuern",
-      "placeholder": "Senden Sie eine neue Anweisung, um die Richtung anzupassen … (Cmd/Ctrl+Enter)",
+      "placeholder": "Senden Sie eine neue Anweisung, um die Richtung anzupassen … (Enter zum Senden · Shift+Enter für neue Zeile)",
       "sent": "Gesendet",
       "failed": "Anweisung konnte nicht gesendet werden: {error}"
     },
@@ -896,6 +896,15 @@
       "completed": "Abgeschlossen",
       "pending": "Ausstehend"
     },
+    "statusRaw": {
+      "pending": "Ausstehend",
+      "queued": "In Warteschlange",
+      "running": "In Bearbeitung",
+      "paused": "Pausiert",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen"
+    },
     "failedTag": "Fehlgeschlagen",
     "cancelledTag": "Abgebrochen",
     "turnShort": "Runde {current}/{max}",
@@ -936,6 +945,8 @@
     "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen, Schreibzugriffe auf Zugangsdaten- oder Anweisungsdateien und externe MCP-Tools fragen weiterhin nach)",
     "tokensUsed": "{count} Token",
     "tokensUsedHint": "Insgesamt von dieser Aufgabe verbrauchte LLM-Token",
+    "cacheHitLabel": "Cache-Treffer",
+    "cacheHitHint": "{cached} von {prompt} Eingabe-Token wurden aus dem Cache des Modellservers gelesen",
     "templates": {
       "title": "Aufgabenvorlagen",
       "create": "Neue Vorlage",
@@ -2363,6 +2374,7 @@
       "link": "Agentenliste öffnen"
     },
     "tasks": {
+      "reject": "Ablehnen",
       "title": "Freigaben für Agentenaufgaben",
       "hint": "Hochriskante Tool-Ausführungen und Fragen des Agents benötigen eine Freigabe, bevor die Aufgabe fortgesetzt wird. Sie können auch direkt im Chat antworten.",
       "empty": "Keine Agentenaufgaben, die auf Freigabe warten.",
@@ -2384,7 +2396,8 @@
         "network": "Netzwerkzugriff",
         "external": "Externes Tool",
         "control": "Steuerung",
-        "sensitive": "Anmeldedatei"
+        "sensitive": "Anmeldedatei",
+        "memory": "In Erinnerungen speichern"
       },
       "recentTitle": "Letzte Entscheidungen (30 Min.)",
       "revoked": "widerrufen",

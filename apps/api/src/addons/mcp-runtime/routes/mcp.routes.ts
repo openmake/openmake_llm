@@ -33,6 +33,7 @@ import { asyncHandler } from '../../../utils/error-handler';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
 import type { MCPTransportType, MCPConnectionStatus } from '../../../tool-contract/types';
 import { getLifecycleSupervisor } from '../lifecycle-supervisor';
+import { removeSandboxCacheVolume } from '../sandbox-bootstrap';
 import { createLogger } from '../../../utils/logger';
 import { classifyConnectError, parseConnectError } from '../connect-error';
 import { validate, validateWithSecurity } from '../../../middlewares/validation';
@@ -271,6 +272,8 @@ export const mcpRouter = Router();
       }
       const registry = getUnifiedMCPClient().getServerRegistry();
       await registry.unregisterServer(id, db);
+      // 서버별 캐시 볼륨도 치운다 — 컨테이너가 내려가는 동안 재시도하므로 응답을 기다리게 하지 않는다.
+      void removeSandboxCacheVolume(id).then((removed) => { if (removed) logger.info(`MCP 캐시 볼륨 제거: ${id}`); });
       res.json(success({ deleted: true }));
   }));
 

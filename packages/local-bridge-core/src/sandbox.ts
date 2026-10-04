@@ -21,7 +21,8 @@ import { CACHE_SUBPATHS, GIT_PROBE_TIMEOUT_MS, SECRET_SUBPATHS, sbq, sbSub } fro
 export function detectGitDir(root: string): string | null {
     try {
         return execFileSync('git', ['rev-parse', '--absolute-git-dir'],
-            { cwd: root, encoding: 'utf8', timeout: GIT_PROBE_TIMEOUT_MS }).trim() || null;
+            // stderr 를 버린다 — 기본값은 부모 터미널로 물려줘 레포가 아닌 폴더에서 git 의 "fatal: not a git repository" 가 찍혔다.
+            { cwd: root, encoding: 'utf8', timeout: GIT_PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
     } catch { return null; }
 }
 

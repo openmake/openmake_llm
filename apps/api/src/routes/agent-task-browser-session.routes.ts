@@ -19,12 +19,13 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import { loadOwnedTask } from './agent-task.helpers';
 import {
     startBrowserSession, stopBrowserSession, isBrowserSessionActive, sendBrowserSessionCommand,
-    browserSessionInputSchema, browserSessionStartSchema, lastBrowserUrl,
+    browserSessionInputSchema, browserSessionStartSchema, lastBrowserUrl, isBlockedSessionUrl,
 } from '../services/task-sandbox/browser-session';
 
 const logger = createLogger('AgentTaskBrowserSessionRoutes');
 export const browserSessionRouter = Router();
 
+const BLOCKED_URL = '내부망·로컬 주소로는 이동할 수 없습니다. 공개 웹 주소만 열 수 있습니다.';
 const NO_SESSION = '넘겨받은 브라우저 세션이 없습니다(유휴 상한이 지나 종료됐을 수 있습니다).';
 
 /** 소유자·실행 방식·작업 공간 검증 후 작업 공간 경로 반환 — 실패하면 응답을 끝내고 undefined. */
@@ -66,10 +67,12 @@ browserSessionRouter.post('/:taskId/browser-session', asyncHandler(async (req: R
     if (!target) return;
     const body = browserSessionStartSchema.safeParse(req.body ?? {});
     if (!body.success) return res.status(400).json(badRequest(body.error.issues[0]?.message ?? '잘못된 요청입니다.'));
+    if (body.data.url && await isBlockedSessionUrl(body.data.url)) return res.status(400).json(badRequest(BLOCKED_URL));
     try {
-        // 주소를 주지 않으면 에이전트가 마지막으로 연 곳에서 시작한다(막힌 화면을 바로 보게). 조회 실패는 빈 화면으로.
-        const startUrl = body.data.url
-            ?? lastBrowserUrl(await getUnifiedDatabase().getAgentTaskSteps(target.taskId).catch(() => []));
+        // 주소를 주지 않으면 에이전트가 마지막으로 연 곳에서 시작한다(막힌 화면을 바로 보게). 조회 실패·막힌 주소는 빈 화면으로.
+        const last = body.data.url ? undefined
+            : lastBrowserUrl(await getUnifiedDatabase().getAgentTaskSteps(target.taskId).catch(() => []));
+        const startUrl = body.data.url ?? (last && !(await isBlockedSessionUrl(last)) ? last : undefined);
         await startBrowserSession(target.taskId, target.workdir, { startUrl });
     } catch (e) {
         logger.warn(`[${target.taskId}] 브라우저 세션 시작 실패: ${e instanceof Error ? e.message : String(e)}`);
@@ -96,6 +99,7 @@ browserSessionRouter.post('/:taskId/browser-session/input', asyncHandler(async (
     if (!target) return;
     const input = browserSessionInputSchema.safeParse(req.body);
     if (!input.success) return res.status(400).json(badRequest(input.error.issues[0]?.message ?? '잘못된 입력입니다.'));
+    if (input.data.op === 'goto' && await isBlockedSessionUrl(input.data.url)) return res.status(400).json(badRequest(BLOCKED_URL));
     const r = await sendBrowserSessionCommand(target.taskId, input.data);
     if (!r.ok && !(await isBrowserSessionActive(target.taskId))) return res.status(409).json(conflict(NO_SESSION));
     // 세션은 살아 있는데 조작이 실패한 경우(이동 시간 초과 등)는 화면에 사유를 보여 준다

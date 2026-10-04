@@ -146,11 +146,16 @@ function serverEnv(input: SandboxInput): Record<string, unknown> {
     return out;
 }
 
+/** PURE: 서버별 캐시 볼륨 이름 — 만들 때(buildDockerArgs)와 지울 때(removeSandboxCacheVolume)가 같은 규칙을 쓴다. */
+export function sandboxCacheVolumeName(serverId: string, cacheVolumePrefix: string): string {
+    return `${cacheVolumePrefix}-${sanitizeId(serverId)}`;
+}
+
 /** PURE: docker run 인자 조립 (유닛테스트 대상). */
 export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string[] {
     const net = (input.network ?? 'full') === 'none' ? 'none' : 'bridge';
     // per-server 캐시 볼륨 — 컨테이너 간 캐시(공급망) 상호 오염 차단.
-    const cacheVol = `${cfg.cacheVolume}-${sanitizeId(input.serverId)}`;
+    const cacheVol = sandboxCacheVolumeName(input.serverId, cfg.cacheVolume);
     // 내부 서비스(127.0.0.1/localhost) 를 참조하는 서버에만 host.docker.internal 부여 —
     // 그 외 서버가 호스트 내부 서비스에 도달하는 over-grant 차단.
     const referencesLoopback = LOOPBACK_TEST.test(

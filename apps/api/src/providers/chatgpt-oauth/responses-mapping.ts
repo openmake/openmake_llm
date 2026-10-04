@@ -20,6 +20,7 @@ import { inferImageMime } from '../../utils/image-mime';
 // Codex 가 "Chat Completions 보다 엄격하다" 던 종전 전제는 NVIDIA NIM 실측으로 반증됐다 —
 // OpenAI 함수 이름 규약을 그대로 검증하는 Chat Completions 호환 endpoint 가 있다.
 import { ToolNameCodec } from '../tool-name-codec';
+import { readCachedPromptTokens } from '../../llm/cached-prompt-tokens';
 export { ToolNameCodec };
 
 /* ── 요청 변환 ─────────────────────────────────────────────── */
@@ -161,7 +162,7 @@ export interface ResponsesStreamEvent {
     response?: {
         status?: string;
         incomplete_details?: { reason?: string } | null;
-        usage?: { input_tokens?: number; output_tokens?: number };
+        usage?: { input_tokens?: number; output_tokens?: number; input_tokens_details?: { cached_tokens?: number } | null };
         error?: { message?: string } | null;
     };
 }
@@ -240,9 +241,11 @@ export class ResponsesStreamCollector {
             case 'response.completed':
             case 'response.incomplete': {
                 const usage = event.response?.usage;
+                const cached = readCachedPromptTokens(usage);
                 this.usage = {
                     prompt_tokens: usage?.input_tokens || undefined,
                     completion_tokens: usage?.output_tokens || undefined,
+                    ...(cached !== undefined ? { cached_prompt_tokens: cached } : {}),
                 };
                 if (event.response?.incomplete_details?.reason === 'max_output_tokens') {
                     this.finishReason = 'length';

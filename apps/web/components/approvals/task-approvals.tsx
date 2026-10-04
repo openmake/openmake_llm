@@ -12,7 +12,7 @@
  *
  * @see app/(workspace)/approvals/page.tsx
  */
-import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "./approval-args";
+import { ApprovalArgsFull, ApprovalPreview, isMemorySaveApproval, summarizeApprovalArgs } from "./approval-args";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -24,6 +24,7 @@ import { isQuestionApproval, elicitationHint, structuredQuestions } from "@/lib/
 import { QuestionChoices } from "./question-choices";
 import { onAgentTaskChange } from "@/lib/agent-task-change";
 import { REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
+import { shouldSubmitOnEnter } from "@/lib/approval-input";
 
 interface RecentDecision {
   approvalId: string;
@@ -100,6 +101,9 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
   // 다른 사람이 이관·에스컬레이션했거나 철회된 승인 — 목록을 즉시 다시 읽는다.
   useEffect(() => onAgentTaskChange((c) => { if (c.reason !== "plan_edited") void load(); }), [load]);
 
+  const sendAnswer = (id: string) =>
+    void run(id, () => ApiClient.post(`/api/agent-tasks/approvals/${id}/answer`, { text: answers[id] ?? "" }));
+
   async function run(id: string, fn: () => Promise<unknown>) {
     setBusy(id);
     try {
@@ -164,7 +168,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
         const isQuestion = isQuestionApproval(a.toolName);
         const elicit = elicitationHint(a.toolName, a.args);
         const structured = structuredQuestions(a.toolName, a.args);
-        const summary = summarizeApprovalArgs(a.args, ARGS_SUMMARY_MAX_CHARS);
+        const summary = summarizeApprovalArgs(a.args, ARGS_SUMMARY_MAX_CHARS, a.toolName);
         const acting = busy === a.approvalId;
         return (
           <Card key={a.approvalId} className="p-4">
@@ -182,7 +186,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
               </span>
               {!isQuestion && a.riskClass && (
                 <Badge tone={a.riskClass === "exec" || a.riskClass === "destructive" || a.sensitive ? "warn" : "neutral"}>
-                  {t(`tasks.risk.${a.riskClass}`)}
+                  {isMemorySaveApproval(a.toolName) ? t("tasks.risk.memory") : t(`tasks.risk.${a.riskClass}`)}
                   {a.sensitive ? ` · ${t("tasks.risk.sensitive")}` : ""}
                 </Badge>
               )}
@@ -220,6 +224,11 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
               <input
                 value={answers[a.approvalId] ?? ""}
                 onChange={(e) => setAnswers((p) => ({ ...p, [a.approvalId]: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (!shouldSubmitOnEnter({ key: e.key, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode })) return;
+                  e.preventDefault();
+                  if (!acting && (answers[a.approvalId] ?? "").trim()) sendAnswer(a.approvalId);
+                }}
                 placeholder={t("tasks.answerPlaceholder")}
                 className="mt-3 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent"
               />
@@ -241,13 +250,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 <Button
                   size="sm"
                   disabled={acting || !(answers[a.approvalId] ?? "").trim()}
-                  onClick={() =>
-                    void run(a.approvalId, () =>
-                      ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/answer`, {
-                        text: answers[a.approvalId] ?? "",
-                      }),
-                    )
-                  }
+                  onClick={() => sendAnswer(a.approvalId)}
                 >
                   {acting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                   {t("tasks.sendAnswer")}
@@ -296,7 +299,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 }
               >
                 <X className="h-3.5 w-3.5" />
-                {t("reject")}
+                {t("tasks.reject")}
               </Button>
               {activeOrgId && (
                 <>

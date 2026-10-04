@@ -21,6 +21,9 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('RemoteExecutor');
 
+/** 디바이스가 돌려줄 수 있는 test_runner 값 — 그 밖의 문자열은 믿지 않는다. */
+const TEST_RUNNER_TOKENS: readonly string[] = ['npm', 'pytest', 'go', 'none'];
+
 function toExecResult(r: BridgeResult): ExecResult {
     return {
         stdout: (r.stdout ?? '').slice(0, LOCAL_BRIDGE.OUTPUT_CAP),
@@ -157,6 +160,15 @@ export class RemoteExecutor implements TaskExecutor {
             ...(r.codeNav.truncated ? { truncated: true } : {}),
             ...(r.codeNav.skipped ? { skipped: r.codeNav.skipped } : {}),
         };
+    }
+
+    /**
+     * 테스트 러너 탐지 — 디바이스가 셸 없이 폴더를 보고 답한다(확인 창 없음). 격리 중이면 worktree 에서 본다.
+     * 구 디바이스("지원하지 않는 kind")·실패·모르는 값은 **null** → 호출측이 셸 프로브로 폴백한다.
+     */
+    async detectTestRunner(): Promise<string | null> {
+        const r = await this.req({ kind: 'test_runner', path: this.scoped('.') }).catch(() => ({ ok: false }) as BridgeResult);
+        return r.ok && r.testRunner && TEST_RUNNER_TOKENS.includes(r.testRunner) ? r.testRunner : null;
     }
 
     /**

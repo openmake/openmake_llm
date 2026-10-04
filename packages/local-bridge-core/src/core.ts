@@ -21,6 +21,7 @@ import {
 } from './constants';
 import { collectDiagnostics } from './diagnostics';
 import { runCodeNav } from './code-nav';
+import { detectTestRunner } from './test-runner';
 import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { detectGitDir, writeSandboxProfile } from './sandbox';
@@ -206,6 +207,13 @@ export class BridgeCore {
                 if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
                 const r = await collectDiagnostics(base, abs, this.execPathCache);
                 done({ ok: true, ...r }); return;
+            }
+            case 'test_runner': {
+                // 테스트 러너 탐지 — 읽기 전용이라 confirmExec 대상이 아니다(서버 문자열을 실행하지 않는다, test-runner.ts).
+                // 탐지된 테스트의 실행은 exec 로 따로 오고 사용자 확인을 거친다.
+                const dirAbs = await safeFromAsync(base, m.path || '.');
+                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
+                done({ ok: true, testRunner: await detectTestRunner(dirAbs, this.execPathCache) }); return;
             }
             case 'code_nav': {
                 // 읽기 전용 코드 탐색(grep_code·repo_map) — lsp_diagnostics 와 같은 이유로

@@ -137,6 +137,10 @@ export class AgentTaskRepository extends BaseRepository {
         workspacePath?: string;
         plan?: unknown;
         totalTokens?: number;
+        /** 캐시 적중 입력 토큰 누적(182) — 모델 서버가 값을 준 적이 없으면 넘기지 않는다(칸은 NULL 로 남는다) */
+        cachedPromptTokens?: number;
+        /** 캐시 값을 돌려준 호출의 입력 토큰 누적(182) — 적중률의 분모 */
+        cacheReportedPromptTokens?: number;
         /** 완료 출구 구분(091) — 'final_answer' | 'terminate'. 완료 판정 관측용 */
         completionPath?: string;
         /** goal judge 결과(091) — 'achieved' | 'not_achieved' | 'unknown' | 'skipped' */
@@ -203,6 +207,14 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.totalTokens !== undefined) {
             sets.push(`total_tokens = $${paramIdx++}`);
             params.push(updates.totalTokens);
+        }
+        if (updates.cachedPromptTokens !== undefined) {
+            sets.push(`cached_prompt_tokens = $${paramIdx++}`);
+            params.push(updates.cachedPromptTokens);
+        }
+        if (updates.cacheReportedPromptTokens !== undefined) {
+            sets.push(`cache_reported_prompt_tokens = $${paramIdx++}`);
+            params.push(updates.cacheReportedPromptTokens);
         }
         if (updates.completionPath !== undefined) {
             sets.push(`completion_path = $${paramIdx++}`);

@@ -54,6 +54,16 @@ export const AGENT_TASK_TURN_LOOP = {
     /** 긴 응답은 끝에서 이만큼만 검사한다(검사 비용 상한) / 창 안의 글자 종류가 이보다 적으면 구분선·공백으로 보고 건너뛴다. */
     OUTPUT_REPETITION_SCAN_TAIL_CHARS: 20_000,
     OUTPUT_REPETITION_MIN_DISTINCT_CHARS: 8,
+    /** 의도된 반복 — 작업 목표가 횟수를 붙여 반복 출력을 시켰으면("100번 써 줘") 자르지 않고 기록만 한다.
+     *  횟수는 이름 붙은 그룹 n — 숫자면 MIN_REPEATS 이상일 때만 요청으로 본다("3번 파일" 같은 번호는 제외), 한글 수사는 그대로 요청으로 본다.
+     *  AGENT_TASK_OUTPUT_REPETITION_RESPECT_REQUEST=false 면 종전처럼 항상 자른다. */
+    OUTPUT_REPETITION_RESPECT_REQUEST: process.env.AGENT_TASK_OUTPUT_REPETITION_RESPECT_REQUEST !== 'false',
+    OUTPUT_REPETITION_REQUEST_PATTERNS: [
+        /(?<n>\d+|열|스무|서른|마흔|쉰|백|천|수십|수백)\s*(?:번|회|차례|줄)[^.\n]{0,40}?(?:반복|되풀이|써|쓰|적어|적으|출력|나열)/g,
+        /(?:반복|되풀이)[^.\n]{0,40}?(?<n>\d+|열|스무|서른|마흔|쉰|백|천|수십|수백)\s*(?:번|회|차례|줄)/g,
+        /\b(?:repeat|print|write|output|say)\b[^.\n]{0,80}?\b(?<n>\d+)\s*(?:times|x)\b/gi,
+        /\b(?<n>\d+)\s*times\b[^.\n]{0,80}?\b(?:repeat|print|write|output)/gi,
+    ] as readonly RegExp[],
     /** 주기 반복 가드 — 서로 다른 도구 호출 2~MAX_PERIOD 개가 이름·인자도 결과도 같게 번갈아 되풀이되면(A-B-A-B) 안내하고,
      *  임계를 넘으면 실행하지 않는다. 같은 호출의 연속 반복(AGENT_TASK_TOOL_LOOP_*)이 못 잡는 경우다. AGENT_TASK_TOOL_LOOP_CYCLE=false 로 끈다. */
     TOOL_LOOP_CYCLE_ENABLED: process.env.AGENT_TASK_TOOL_LOOP_CYCLE !== 'false',

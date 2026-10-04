@@ -11,6 +11,15 @@ const getAgentTaskSteps = jest.fn(async (): Promise<unknown[]> => []);
 jest.mock('../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getAgentTask, getAgentTaskSteps }) }));
 jest.mock('../../auth/ownership', () => ({ assertResourceOwnerOrAdmin: jest.fn() }));
 jest.mock('../../services/AuditService', () => ({ getAuditService: () => ({ logAudit: jest.fn(async () => undefined) }) }));
+// 주소 검사는 이름 풀이(DNS)를 한다 — 테스트에서는 막힐 호스트만 정해 둔다(실제 판정은 ssrf-guard 의 테스트가 본다).
+const BLOCKED_HOSTS = new Set(['127.0.0.1', '169.254.169.254', 'intra.example']);
+jest.mock('../../security/ssrf-guard', () => ({
+    ...jest.requireActual('../../security/ssrf-guard'),
+    validateOutboundUrl: jest.fn(async (u: string) => {
+        if (BLOCKED_HOSTS.has(new URL(u).hostname)) throw new Error('blocked');
+        return new URL(u);
+    }),
+}));
 const startBrowserSession = jest.fn(async () => undefined);
 const stopBrowserSession = jest.fn(async () => undefined);
 const isBrowserSessionActive = jest.fn(async () => true);
@@ -94,6 +103,21 @@ describe('POST 넘겨받기', () => {
         expect(res.statusCode).toBe(400);
         expect(startBrowserSession).not.toHaveBeenCalled();
     });
+    it('내부망·로컬 주소로는 시작하지 않는다(400) — 에이전트 브라우저와 같은 기준', async () => {
+        const res = mockRes();
+        await handler('post', BASE)(req({ url: 'http://169.254.169.254/latest/meta-data/' }), res);
+        expect(res.statusCode).toBe(400);
+        expect(startBrowserSession).not.toHaveBeenCalled();
+    });
+    it('에이전트가 마지막으로 연 주소가 막힌 주소면 빈 화면에서 시작한다', async () => {
+        getAgentTaskSteps.mockResolvedValueOnce([
+            { tool_name: 'browser', tool_args: { actions: [{ type: 'goto', url: 'http://intra.example/admin' }] } },
+        ]);
+        const res = mockRes();
+        await handler('post', BASE)(req({}), res);
+        expect(res.statusCode).toBe(201);
+        expect(startBrowserSession).toHaveBeenCalledWith('t1', workdir, { startUrl: undefined });
+    });
     it('시작 실패는 409', async () => {
         startBrowserSession.mockRejectedValueOnce(new Error('docker 없음'));
         const res = mockRes();
@@ -113,6 +137,12 @@ describe('POST 입력', () => {
     it('허용되지 않은 명령은 400 — 세션에 닿지 않는다', async () => {
         const res = mockRes();
         await handler('post', `${BASE}/input`)(req({ op: 'close' }), res);
+        expect(res.statusCode).toBe(400);
+        expect(sendBrowserSessionCommand).not.toHaveBeenCalled();
+    });
+    it('내부망·로컬 주소로 이동하는 입력은 400 — 세션에 닿지 않는다', async () => {
+        const res = mockRes();
+        await handler('post', `${BASE}/input`)(req({ op: 'goto', url: 'http://127.0.0.1:52418/api/admin' }), res);
         expect(res.statusCode).toBe(400);
         expect(sendBrowserSessionCommand).not.toHaveBeenCalled();
     });

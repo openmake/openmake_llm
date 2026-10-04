@@ -485,7 +485,7 @@
     },
     "steering": {
       "label": "Steer this task",
-      "placeholder": "Send a new instruction to adjust direction… (Cmd/Ctrl+Enter)",
+      "placeholder": "Send a new instruction to adjust direction… (Enter to send · Shift+Enter for a new line)",
       "sent": "Sent",
       "failed": "Failed to send instruction: {error}"
     },
@@ -896,6 +896,15 @@
       "completed": "Completed",
       "pending": "Pending"
     },
+    "statusRaw": {
+      "pending": "Pending",
+      "queued": "Queued",
+      "running": "In progress",
+      "paused": "Paused",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
     "failedTag": "Failed",
     "cancelledTag": "Cancelled",
     "turnShort": "Turn {current}/{max}",
@@ -936,6 +945,8 @@
     "autoApproveHint": "Run remaining tool calls of this task without approval (questions, writes to credential or agent-instruction files, and external MCP tools still ask)",
     "tokensUsed": "{count} tokens",
     "tokensUsedHint": "Total LLM tokens used by this task",
+    "cacheHitLabel": "Cache hit",
+    "cacheHitHint": "{cached} of {prompt} input tokens were read from the model server's cache",
     "templates": {
       "title": "Task templates",
       "create": "New template",
@@ -2363,6 +2374,7 @@
       "link": "Open agent list"
     },
     "tasks": {
+      "reject": "Reject",
       "title": "Agent task approvals",
       "hint": "High-risk tool runs and agent questions need approval before the task continues. You can also answer inline in chat.",
       "empty": "No agent tasks awaiting approval.",
@@ -2384,7 +2396,8 @@
         "network": "Network access",
         "external": "External tool",
         "control": "Control",
-        "sensitive": "Credential file"
+        "sensitive": "Credential file",
+        "memory": "Save to memory"
       },
       "recentTitle": "Recent decisions (30 min)",
       "revoked": "revoked",

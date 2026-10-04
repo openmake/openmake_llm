@@ -485,7 +485,7 @@
     },
     "steering": {
       "label": "작업 방향 지시",
-      "placeholder": "방향을 조정할 새 지시를 보내세요… (Cmd/Ctrl+Enter)",
+      "placeholder": "방향을 조정할 새 지시를 보내세요… (Enter 전송 · Shift+Enter 줄바꿈)",
       "sent": "전송됨",
       "failed": "지시 전송 실패: {error}"
     },
@@ -896,6 +896,15 @@
       "completed": "완료",
       "pending": "대기"
     },
+    "statusRaw": {
+      "pending": "대기",
+      "queued": "대기열",
+      "running": "진행중",
+      "paused": "일시 중지",
+      "completed": "완료",
+      "failed": "실패",
+      "cancelled": "취소됨"
+    },
     "failedTag": "실패",
     "cancelledTag": "취소됨",
     "turnShort": "턴 {current}/{max}",
@@ -936,6 +945,8 @@
     "autoApproveHint": "이 작업의 이후 도구 실행을 승인 없이 진행합니다 (질문, 자격증명·지시 파일 쓰기, 외부 MCP 도구는 계속 묻습니다)",
     "tokensUsed": "{count} 토큰",
     "tokensUsedHint": "이 작업이 사용한 누적 LLM 토큰",
+    "cacheHitLabel": "캐시 적중",
+    "cacheHitHint": "입력 토큰 {prompt} 중 {cached} 토큰을 모델 서버가 캐시에서 읽었습니다",
     "templates": {
       "title": "작업 템플릿",
       "create": "새 템플릿",
@@ -2363,6 +2374,7 @@
       "link": "에이전트 목록 열기"
     },
     "tasks": {
+      "reject": "거절",
       "title": "에이전트 작업 승인",
       "hint": "고위험 도구 실행과 에이전트의 질문은 승인해야 작업이 이어집니다. 채팅 안에서도 바로 답할 수 있습니다.",
       "empty": "승인 대기 중인 작업이 없습니다.",
@@ -2384,7 +2396,8 @@
         "network": "네트워크 접근",
         "external": "외부 도구",
         "control": "제어",
-        "sensitive": "자격증명 파일"
+        "sensitive": "자격증명 파일",
+        "memory": "메모리에 저장"
       },
       "recentTitle": "최근 결정(30분)",
       "revoked": "철회됨",

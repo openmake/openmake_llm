@@ -1,7 +1,7 @@
 /**
  * 자동승인의 바닥 — PURE.
  *
- * 작업의 "나머지 모두 승인"은 질문 도구만 빼고 전부 통과시켰다. 자격증명 파일 쓰기, 에이전트 지시 파일 쓰기, 외부 MCP 도구처럼
+ * 작업의 "나머지 모두 승인"은 질문 도구만 빼고 전부 통과시켰다. 자격증명 파일 쓰기, 에이전트 지시 파일 쓰기, 외부 MCP 도구, 사용자 메모리 쓰기처럼
  * 한 번의 통과가 되돌리기 어려운 호출은 전체 허용에서도 계속 묻는다. 어떤 종류를 바닥으로 둘지는
  * `config/agent-task-approval` 의 APPROVAL_FLOOR.
  *
@@ -12,6 +12,7 @@
  */
 import { APPROVAL_FLOOR, INSTRUCTION_FILE_PATTERNS, type ApprovalFloorKind } from '../../config/agent-task-approval';
 import { isThirdPartyTool } from '../../config/tool-policy';
+import { MEMORY_SAVE_TOOL_NAME } from '../../config/agent-task-skill-memory';
 import { isSensitivePath } from './sensitive-paths';
 
 /** 파일을 바꾸는 작업 — 도구별 인자 이름과 값. */
@@ -75,6 +76,7 @@ export function isInstructionPath(normalizedPath: string): boolean {
 /** PURE: 이 호출이 자동승인에서도 물어야 하는 바닥 호출이면 그 종류, 아니면 null. */
 export function approvalFloorReason(toolName: string, args: Record<string, unknown>): ApprovalFloorKind | null {
     if (APPROVAL_FLOOR.has('third_party_tool') && isThirdPartyTool(toolName)) return 'third_party_tool';
+    if (APPROVAL_FLOOR.has('memory_write') && toolName === MEMORY_SAVE_TOOL_NAME) return 'memory_write';
     const target = writeTargetPath(toolName, args);
     if (target === null) return null;
     if (APPROVAL_FLOOR.has('credential_write') && isSensitivePath(target)) return 'credential_write';

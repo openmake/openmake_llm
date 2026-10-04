@@ -76,6 +76,8 @@ export interface BridgeResult {
     serverKind?: string;
     /** code_nav 결과. */
     codeNav?: BridgeCodeNav;
+    /** test_runner 결과 — 'npm' | 'pytest' | 'go' | 'none'. */
+    testRunner?: string;
 }
 
 /**

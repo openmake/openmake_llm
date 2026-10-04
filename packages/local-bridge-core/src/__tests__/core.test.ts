@@ -49,6 +49,16 @@ describe('BridgeCore', () => {
         expect(fs.existsSync(path.join(base, 'sub/new.txt'))).toBe(false);
     });
 
+    it('test_runner: 러너 탐지는 확인 창 없이 처리한다(읽기 전용 — 서버 명령을 실행하지 않는다)', async () => {
+        const confirm = jest.fn<ReturnType<ConfirmFn>, Parameters<ConfirmFn>>();
+        const core = makeCore(base, { confirm });
+        expect(await run(core, { kind: 'test_runner', path: '.' })).toMatchObject({ ok: true, testRunner: 'none' });
+        fs.writeFileSync(path.join(base, 'sub/package.json'), JSON.stringify({ scripts: { test: 'node --test' } }));
+        expect(await run(core, { kind: 'test_runner', path: 'sub' })).toMatchObject({ ok: true, testRunner: 'npm' });
+        expect(confirm).not.toHaveBeenCalled();
+        await expect(run(core, { kind: 'test_runner', path: '../..' })).rejects.toThrow(/스코프 밖/);
+    });
+
     it('연결 폴더 루트 삭제는 거부된다 (done 밖 throw → 호출부 catch 계약)', async () => {
         const core = makeCore(base);
         await expect(run(core, { kind: 'delete', path: '.' })).rejects.toThrow(/루트는 삭제할 수 없습니다/);

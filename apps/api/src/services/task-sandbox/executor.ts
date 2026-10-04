@@ -135,6 +135,13 @@ export interface TaskExecutor {
     codeNav?(spec: CodeNavSpec): Promise<CodeNavData | null>;
 
     /**
+     * 테스트 러너 탐지의 네이티브 백엔드 — codeNav 와 같은 이유로 로컬 브리지가 구현한다(exec 로 보내면 읽기 전용
+     * 탐지인데도 디바이스 확인 창이 뜬다). 'npm' | 'pytest' | 'go' | 'none' 을 돌려주고, 실패·구 디바이스는
+     * **null** 을 돌려 호출측(workspace-test-verify)이 셸 프로브로 폴백한다.
+     */
+    detectTestRunner?(): Promise<string | null>;
+
+    /**
      * 승인 대기 알림 — 실행기가 사용자 디바이스에 닿아 있으면 구현한다(로컬 브리지: 컴패니언이
      * 네이티브 알림을 띄운다). 웹 푸시는 사용자가 설정에서 켜야 하는 opt-in 이라 운영 구독 0건이던
      * 실측(2026-09-11)을 메우는 채널이다. 전송 실패는 조용히 넘긴다(fail-open, 작업 무영향).

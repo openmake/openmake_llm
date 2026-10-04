@@ -49,6 +49,7 @@ import { BrowserTakeover } from "@/components/agent-tasks/browser-takeover";
 import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
 import { onAgentTaskChange, onOpenAgentTask } from "@/lib/agent-task-change";
 import { failureLabelKey, failureNextKey } from "@/lib/agent-task-failure";
+import { taskStatusLabelKey } from "@/lib/approval-input";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -75,6 +76,10 @@ interface AgentTask {
   resumable?: boolean;
   /** 누적 LLM 토큰(4-4) — terminal 시 기록. */
   totalTokens?: number;
+  /** 캐시 적중 입력 토큰(182) — 모델 서버가 값을 주지 않으면 undefined(적중 0 과 구분). */
+  cachedPromptTokens?: number;
+  /** 캐시 값을 돌려준 호출의 입력 토큰(182) — 적중률의 분모. */
+  cacheReportedPromptTokens?: number;
   /** Cowork D2: 'local' 이면 데스크톱 브리지 폴더에서 실행 */
   executor?: "sandbox" | "local";
   /** 폴더 선택(102): 연결 루트 기준 실행 폴더 — 미지정은 루트 */
@@ -118,6 +123,8 @@ interface ApiAgentTask {
   forked_from_task_id?: string | null;
   forked_from_turn?: number | null;
   total_tokens?: number | null;
+  cached_prompt_tokens?: number | null;
+  cache_reported_prompt_tokens?: number | null;
   /** Cowork D2: 실행 백엔드 — 'local' 이면 데스크톱 브리지 폴더에서 실행됨 */
   executor?: "sandbox" | "local";
   /** 폴더 선택(102) — 연결 루트 기준 실행 폴더 (folder_rel 컬럼) */
@@ -214,6 +221,8 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     checklist: [],
     resumable: t.resumable,
     totalTokens: typeof t.total_tokens === "number" ? t.total_tokens : undefined,
+    cachedPromptTokens: typeof t.cached_prompt_tokens === "number" ? t.cached_prompt_tokens : undefined,
+    cacheReportedPromptTokens: typeof t.cache_reported_prompt_tokens === "number" ? t.cache_reported_prompt_tokens : undefined,
     executor: t.executor,
     folderRel: t.folder_rel || undefined,
     error: t.error || undefined,
@@ -684,7 +693,7 @@ function TaskDetailModal({
             )}
             <div className="mt-2 flex items-center gap-3 text-xs text-faint">
               <span className="flex items-center gap-1">
-                {t("stateLabel")} {detail.task.status}
+                {t("stateLabel")} {(() => { const k = taskStatusLabelKey(detail.task.status); return k ? t(k) : detail.task.status; })()}
                 {(detail.task.status === "running" || detail.task.status === "paused") && (
                   <LoaderCircle className="h-3 w-3 animate-spin" />
                 )}
@@ -1486,6 +1495,21 @@ export default function AgentTasksPage() {
                           : "—"}
                       </dd>
                     </div>
+                    {/* 캐시 적중률 — 모델 서버가 값을 준 작업에만 그린다(안 주면 줄 자체가 없다). */}
+                    {typeof task.cachedPromptTokens === "number" && (task.cacheReportedPromptTokens ?? 0) > 0 && (
+                      <div
+                        className="flex items-baseline justify-between gap-2"
+                        title={t("cacheHitHint", {
+                          cached: task.cachedPromptTokens.toLocaleString(),
+                          prompt: (task.cacheReportedPromptTokens ?? 0).toLocaleString(),
+                        })}
+                      >
+                        <dt className="text-faint">{t("cacheHitLabel")}</dt>
+                        <dd className="truncate font-mono tabular-nums text-fg-2">
+                          {Math.min(100, Math.round((task.cachedPromptTokens / (task.cacheReportedPromptTokens ?? 1)) * 100))}%
+                        </dd>
+                      </div>
+                    )}
                   </dl>
 
                   {/* 4) 액션 — 종전엔 메타와 한 줄을 다퉈 좁은 카드에서 넘쳤다. 별도 줄로 내리고 우측 정렬. */}

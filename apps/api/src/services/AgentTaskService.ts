@@ -35,7 +35,7 @@ import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { getApprovalRegistry } from './task-sandbox/approval-gate';
 import { currentPlanStepIndex } from './task-sandbox/planning';
-import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, type TurnGateFlags } from './agent-task/turn-gate';
+import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { AgentTaskTurnTimeout } from './agent-task/turn-call';
@@ -58,6 +58,7 @@ import { executeTurnToolCalls } from './agent-task/turn-executor';
 import { prepareToolArgs } from './agent-task/tool-args';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { callAgentTurnWithContext } from './agent-task/turn-context';
+import { CacheUsageTally } from './agent-task/cache-usage';
 import { buildAgentTaskSystemContent, resolveSkillToolBindings } from './agent-task/skill-block';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
@@ -120,6 +121,7 @@ export class AgentTaskService {
 
         let stepNumber = input.resume?.fromStep ?? 0;
         let totalTokens = 0;
+        const cacheUsage = new CacheUsageTally(); // 캐시 적중 토큰 누적(182, 관측용) — 서버가 값을 안 주면 아무것도 저장하지 않는다
         // pause-aware 타임아웃(4-1): 승인 대기 시간 누적 — 총 타임아웃 예산에서 제외한다.
         // HITL 이 켜져 있을수록(승인 대기가 길수록) task 가 timeout 으로 죽던 역설 해소.
         // 개별 대기는 approvalTimeoutMs 가 별도 상한이므로 무한 연장은 불가.
@@ -161,7 +163,7 @@ export class AgentTaskService {
             // 누적 토큰 영속(4-4) — 매 갱신에 싣는다: 종료 때만 쓰면 주차·중단된 작업은 값이 안 남아 재개가 0 부터 다시 셌다.
             // terminal 전이엔 알림 표식(174)도 같은 쓰기로 남긴다 — 저장 직후 죽어도 주기 점검이 종료 알림을 다시 보낸다.
             const terminal = isTerminalStatus(u.status);
-            u = { ...u, totalTokens, ...(terminal ? { terminalNotifyPending: true } : {}) };
+            u = { ...u, totalTokens, ...cacheUsage.snapshot(), ...(terminal ? { terminalNotifyPending: true } : {}) };
             await db.updateAgentTask(taskId, u);
             emitAgentTaskProgress({ userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn });
             // terminal 상태 → web push (페이지가 닫혀 있어도 알림) 후 표식 정리. fire-and-forget.
@@ -182,7 +184,7 @@ export class AgentTaskService {
             if (signal.aborted || (!input.resume && preTask?.status === 'cancelled')) throw new AgentTaskAbort('aborted');
             // resume: 이전 실행분 토큰을 이어서 누적(4-4) — runaway 토큰 가드도 통산 기준으로 동작.
             // "나머지 모두 승인" 도 함께 복원(124) — 종전엔 메모리뿐이라 재시작 후 다시 물었다.
-            if (input.resume) totalTokens = Number(preTask?.total_tokens ?? 0);
+            if (input.resume) { totalTokens = Number(preTask?.total_tokens ?? 0); cacheUsage.restore(preTask); }
             if (input.resume && preTask?.auto_approve) getApprovalRegistry().setAutoApprove(taskId, true);
 
             // resume 은 checkpoint(end-of-turn conversation)에서 복원, 새 시작은 system 에 활성 스킬
@@ -239,7 +241,7 @@ export class AgentTaskService {
                     // 토큰·승인대기는 부모 누적에 합산되어 runaway 가드·pause-aware 타임아웃 공유).
                     const delegateFn = buildDelegateFn({
                         client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
-                        onTokens: (n) => { totalTokens += n; }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
+                        onTokens: (n, m) => { totalTokens += n; cacheUsage.add(m); }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
                         onPausedMs: (ms) => { pausedMs += ms; },
                         ...buildSubagentApprovalHooks({ userId, taskId, update, getCurStatus: () => curStatus, getTaskRuntime: () => taskRuntime }),
                     });
@@ -247,7 +249,7 @@ export class AgentTaskService {
                     const spawnFn = AGENT_SPAWN.ENABLED
                         ? buildTaskSpawnFn({
                             client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
-                            onTokens: (n) => { totalTokens += n; }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
+                            onTokens: (n, m) => { totalTokens += n; cacheUsage.add(m); }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
                             onPausedMs: (ms) => { pausedMs += ms; },
                         })
                         : undefined;
@@ -363,7 +365,7 @@ export class AgentTaskService {
                 // 승인 대기 누적(pausedMs)은 예산에서 제외(4-1 pause-aware).
                 // 시간 예산 바인딩·마무리 턴 최소 보장·부분 본문 보존 — agent-task/turn-call
                 const { result, callSignal } = await callAgentTurnWithContext({
-                    roleState, conversation, tools: effectiveTools, signal,
+                    roleState, conversation, tools: withMemorySaveExposure(effectiveTools, conversation), signal,
                     taskId, userId: String(userId), turn,
                     totalTimeoutMs, elapsedActiveMs: Date.now() - startedAt - pausedMs,
                     finalTurn: !!finalTurnReason,
@@ -377,6 +379,7 @@ export class AgentTaskService {
                 this.client = roleState.client;
                 totalTokens +=
                     (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);
+                cacheUsage.add(result.metrics);
                 // 토큰 상한을 호출 직후 즉시 검사 — 큰 도구 결과로 컨텍스트가 부풀어
                 // 한도를 넘겼을 때 다음 턴까지 기다리지 않고 바로 중단(runaway 방어 강화).
                 if (totalTokens > AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS) {

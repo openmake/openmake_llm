@@ -42,6 +42,8 @@ export interface ContributedOrchestrationTool {
 export interface ContributedAgentTaskTool {
     tool: { name: string; description: string; inputSchema: { type: 'object'; properties: Record<string, unknown>; required?: string[] } };
     run(args: Record<string, unknown>, ctx: { userId: string }): Promise<{ text: string; isError?: boolean }>;
+    /** 승인을 묻기 전 검사(선택) — 실행해도 거절될 호출이면 그 사유를 돌려준다. 사유가 있으면 승인 카드를 띄우지 않고 오류 결과로 끝낸다. */
+    precheck?(args: Record<string, unknown>, ctx: { userId: string }): Promise<string | null>;
 }
 
 /** 턴 전 컨텍스트 준비 입력 — 세션·사용자 문맥이 필요한 통합(문서 검색 등)이 쓴다 */

@@ -35,6 +35,7 @@ import { STREAM_TTFC_WARN_MS } from '../config/core-runtime-limits';
 import { resolveModelProfile } from '../config/model-profiles';
 import { LOCAL_PRESERVE_THINKING_ENABLED } from '../config/llm-parameters';
 import { FALLBACK_REASONING_ONLY_NOTICE, shouldPromoteReasoningOnly } from './reasoning-only-recovery';
+import { readCachedPromptTokens } from './cached-prompt-tokens';
 
 const log = createLogger('StreamParser');
 
@@ -255,6 +256,7 @@ export async function streamChat(
         : null;
     let promptTokens: number | undefined;
     let completionTokens: number | undefined;
+    let cachedPromptTokens: number | undefined;
     let finishReason: string | null = null;
 
     // Streaming-time `</think>` boundary split (vLLM `--reasoning-parser` 미설정 환경 대응).
@@ -363,6 +365,7 @@ export async function streamChat(
         if (raw.usage) {
             promptTokens = raw.usage.prompt_tokens ?? promptTokens;
             completionTokens = raw.usage.completion_tokens ?? completionTokens;
+            cachedPromptTokens = readCachedPromptTokens(raw.usage) ?? cachedPromptTokens;
         }
     }
 
@@ -485,6 +488,7 @@ export async function streamChat(
         metrics: {
             prompt_tokens: promptTokens,
             completion_tokens: completionTokens,
+            ...(cachedPromptTokens !== undefined && { cached_prompt_tokens: cachedPromptTokens }),
             ...(finishReason && { finish_reason: finishReason }),
         },
     };
@@ -513,6 +517,7 @@ export async function nonStreamChat(
     const choice0 = r.choices[0];
     const msg = choice0?.message ?? { content: '' };
     const finishReason = choice0?.finish_reason ?? undefined;
+    const cachedPromptTokens = readCachedPromptTokens(r.usage);
     const toolCalls: ChatMessage['tool_calls'] = (msg.tool_calls ?? []).map((tc) => {
         // 인자 JSON 불량 — {} 강등 + 관측 로그 + 표식 (스트리밍 경로와 동일 원칙)
         const { args, invalid } = parseToolCallArguments(tc.function.arguments, tc.function.name);
@@ -582,6 +587,7 @@ export async function nonStreamChat(
         metrics: {
             prompt_tokens: r.usage?.prompt_tokens,
             completion_tokens: r.usage?.completion_tokens,
+            ...(cachedPromptTokens !== undefined && { cached_prompt_tokens: cachedPromptTokens }),
             ...(finishReason && { finish_reason: finishReason }),
         },
     };
