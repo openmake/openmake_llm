@@ -362,27 +362,43 @@ export function getAgentTaskUnknownOutcomeNotice(toolName: string): string {
 }
 
 /**
+ * 로컬 기기 결과 불명 안내에 들어가는 고정 문장 — 대화에서 "결과 불명으로 끝난 호출"을 찾는 표식으로도 쓴다
+ * (tool-loop-guard 의 isRetryAfterUnknownOutcome). 문장을 바꾸면 이전 대화의 표식과 맞지 않게 되니 유의.
+ */
+export const LOCAL_BRIDGE_UNKNOWN_OUTCOME_MARKER = '기기에서 이미 일부 또는 전부 실행됐을 수 있으니';
+
+/**
  * 로컬 기기로 보낸 쓰기·실행 요청이 응답 없이 끝났을 때(연결 끊김·시간 초과)의 도구 결과 — 기기에서 실행됐을 수 있으므로
  * 모델이 같은 호출을 바로 반복하지 않고 상태부터 확인하게 한다 (Companion P1).
  */
 export function getLocalBridgeUnknownOutcomeNotice(action: string, cause: 'timeout' | 'disconnected'): string {
     const why = cause === 'timeout' ? '기기의 응답이 제시간에 오지 않아' : '기기와의 연결이 끊겨';
-    return `이 요청(${action})은 ${why} 결과를 알 수 없습니다. 기기에서 이미 일부 또는 전부 실행됐을 수 있으니 같은 호출을 바로 반복하지 마세요. 먼저 현재 상태(파일·작업 디렉터리·대상 시스템)를 읽어서 확인하고, 반영되지 않은 부분만 이어서 수행하세요. 확인할 방법이 없으면 사용자에게 물어보세요(ask_human).`;
+    return `이 요청(${action})은 ${why} 결과를 알 수 없습니다. ${LOCAL_BRIDGE_UNKNOWN_OUTCOME_MARKER} 같은 호출을 바로 반복하지 마세요. 먼저 현재 상태(파일·작업 디렉터리·대상 시스템)를 읽어서 확인하고, 반영되지 않은 부분만 이어서 수행하세요. 확인할 방법이 없으면 사용자에게 물어보세요(ask_human).`;
 }
 
+/** 결과 불명 질문·거절·답변 안내에 공통으로 들어가는 구절 — 대화에서 "결과 불명으로 처리된 호출"을 찾는 표식. */
+export const UNKNOWN_OUTCOME_PHRASE = '실행 도중 끊겨 결과를 알 수 없';
+
+/** 사용자가 다시 실행하지 않기로 한 안내에 들어가는 구절 — 같은 쓰기를 또 하려 하면 묻지 않고 바로 막는 표식. */
+export const UNKNOWN_OUTCOME_DECLINED_PHRASE = '사용자가 다시 실행하지 않기로 했습니다';
+
+/** 결과 불명의 원인 — 질문·안내 문구에 들어간다. device 는 로컬 기기와의 연결이 끊긴 경우(Companion). */
+export type UnknownOutcomeCause = 'restart' | 'device';
+const UNKNOWN_OUTCOME_WHY: Record<UnknownOutcomeCause, string> = { restart: '서버 재시작으로', device: '기기와의 연결 문제로' };
+
 /** 결과 불명 호출을 사용자에게 묻는 질문 — 승인은 "다시 실행", 거절은 "다시 실행하지 않음" 이다. */
-export function getAgentTaskUnknownOutcomeQuestion(toolName: string): string {
-    return `도구 호출(${toolName})이 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없습니다. 이미 일부 또는 전부 반영됐을 수 있습니다. 다시 실행할까요? 승인하면 같은 호출을 다시 실행하고, 거절하면 다시 실행하지 않고 현재 상태를 확인한 뒤 이어갑니다. 이미 끝났다면 그 내용을 답변으로 적어 주세요.`;
+export function getAgentTaskUnknownOutcomeQuestion(toolName: string, cause: UnknownOutcomeCause = 'restart'): string {
+    return `도구 호출(${toolName})이 ${UNKNOWN_OUTCOME_WHY[cause]} ${UNKNOWN_OUTCOME_PHRASE}습니다. 이미 일부 또는 전부 반영됐을 수 있습니다. 다시 실행할까요? 승인하면 같은 호출을 다시 실행하고, 거절하면 다시 실행하지 않고 현재 상태를 확인한 뒤 이어갑니다. 이미 끝났다면 그 내용을 답변으로 적어 주세요.`;
 }
 
 /** 사용자가 결과 불명 호출의 재실행을 거절했을 때의 도구 결과. */
-export function getAgentTaskUnknownOutcomeDeclinedNotice(toolName: string): string {
-    return `이 도구 호출(${toolName})은 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없고, 사용자가 다시 실행하지 않기로 했습니다. 같은 호출을 반복하지 마세요. 현재 상태(파일·작업 디렉터리·대상 시스템)를 확인하고, 반영되지 않은 부분이 있으면 사용자에게 알리거나 다른 방법으로 이어가세요.`;
+export function getAgentTaskUnknownOutcomeDeclinedNotice(toolName: string, cause: UnknownOutcomeCause = 'restart'): string {
+    return `이 도구 호출(${toolName})은 ${UNKNOWN_OUTCOME_WHY[cause]} ${UNKNOWN_OUTCOME_PHRASE}고, ${UNKNOWN_OUTCOME_DECLINED_PHRASE}. 같은 호출을 반복하지 마세요. 현재 상태(파일·작업 디렉터리·대상 시스템)를 확인하고, 반영되지 않은 부분이 있으면 사용자에게 알리거나 다른 방법으로 이어가세요.`;
 }
 
 /** 사용자가 결과 불명 호출에 텍스트로 답했을 때의 도구 결과 — 다시 실행하지 않고 답변을 근거로 이어간다. */
-export function getAgentTaskUnknownOutcomeAnswerNotice(toolName: string, answer: string): string {
-    return `이 도구 호출(${toolName})은 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없어 사용자에게 물었습니다. 사용자 답변: ${answer}\n같은 호출을 바로 반복하지 말고, 이 답변을 근거로 이어서 수행하세요.`;
+export function getAgentTaskUnknownOutcomeAnswerNotice(toolName: string, answer: string, cause: UnknownOutcomeCause = 'restart'): string {
+    return `이 도구 호출(${toolName})은 ${UNKNOWN_OUTCOME_WHY[cause]} ${UNKNOWN_OUTCOME_PHRASE}어 사용자에게 물었습니다. 사용자 답변: ${answer}\n같은 호출을 바로 반복하지 말고, 이 답변을 근거로 이어서 수행하세요.`;
 }
 
 /** browser 도구 호출 한도 도달 시 주입 — 더 이상 탐색하지 말고 수집한 정보로 종합·작성 유도. */

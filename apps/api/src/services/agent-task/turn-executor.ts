@@ -22,13 +22,13 @@ import { notifyApprovalPending } from './approval-pending';
 import { AgentTaskAbort, AgentTaskParked, AGENT_TASK_DEVICE_WAIT_REASON } from './types';
 import { writeTurnCheckpoint, markToolCallInFlight } from './turn-reentry';
 import { hasSideEffects } from '../../config/tool-policy';
-import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote } from './tool-loop-guard';
+import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote, retryAfterUnknownOutcome } from './tool-loop-guard';
 import { needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from './tool-receipt';
 import { runWithToolCallContext } from '../../utils/tool-call-context';
 import { runWithToolMediaSink, toolMediaSinkFor } from '../../utils/tool-media-sink';
 import { isRejectedCall, findDuplicateCalls } from './turn-call-guards';
 import { getMalformedToolArgsResult, getDuplicateToolCallResult } from '../../prompts/agent-task-turn-loop';
-import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice } from '../../prompts/agent-task-prompt';
+import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice, type UnknownOutcomeCause } from '../../prompts/agent-task-prompt';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { TaskRuntime } from '../task-sandbox/runtime';
@@ -136,17 +136,17 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     };
     // 결과 불명 호출(172) — 사용자에게 묻는다: 승인 = 다시 실행(undefined), 그 밖은 다시 실행하지 않고 돌려줄 도구 결과.
     // 유예가 지나면 다른 승인처럼 주차하되 표식은 남긴다 — 재개 때 같은 질문으로 결정을 이어받는다.
-    const resolveUnknownOutcome = async (name: string, toolCallId: string): Promise<string | undefined> => {
+    const resolveUnknownOutcome = async (name: string, toolCallId: string, cause: UnknownOutcomeCause = 'restart'): Promise<string | undefined> => {
         if (!AGENT_TASK_LIMITS.REENTRY_UNKNOWN_OUTCOME_ASK) return getAgentTaskUnknownOutcomeNotice(name);
         const r = await getApprovalRegistry().request(
-            { taskId, userId, toolName: 'ask_human', args: { question: getAgentTaskUnknownOutcomeQuestion(name), toolName: name, toolCallId } },
+            { taskId, userId, toolName: 'ask_human', args: { question: getAgentTaskUnknownOutcomeQuestion(name, cause), toolName: name, toolCallId } },
             { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true },
         );
         pausedMs += r.waitedMs;
         if (r.reason === 'parked') await park();
         if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
-        if (r.decision === 'approved') return r.text?.trim() ? getAgentTaskUnknownOutcomeAnswerNotice(name, r.text.trim()) : undefined;
-        return r.reason === 'user' ? getAgentTaskUnknownOutcomeDeclinedNotice(name) : getAgentTaskUnknownOutcomeNotice(name);
+        if (r.decision === 'approved') return r.text?.trim() ? getAgentTaskUnknownOutcomeAnswerNotice(name, r.text.trim(), cause) : undefined;
+        return r.reason === 'user' ? getAgentTaskUnknownOutcomeDeclinedNotice(name, cause) : getAgentTaskUnknownOutcomeNotice(name);
     };
     // 모델에 보이는 도구 결과 — 샌드박스 밖에서 온 결과(호스트·외부 도구)와 browser 는 데이터로 감싼다(플래그 ON·목표가 있을 때만).
     const forModel = (name: string, result: string): string =>
@@ -213,9 +213,14 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             : undefined;
         const journaled = tc.id !== undefined ? journal.get(tc.id) : undefined;
         const pre = tc.id !== undefined ? prefetched.get(tc.id) : undefined;
+        // 기기와 끊겨 결과 불명으로 끝난 쓰기를 다시 하려 하는가 — 두 번 나가지 않게 사용자에게 묻고(승인하면 다시 실행),
+        // 이미 다시 실행하지 않기로 한 쓰기는 묻지 않고 막는다.
+        const deviceRetry = journaled === undefined && tc.id !== undefined && !malformed && hasSideEffects(name, args)
+            ? retryAfterUnknownOutcome(conversation, name, args) : null;
         const unknownResult = journaled === undefined && tc.id !== undefined && tc.id === input.unknownOutcomeId
             ? await resolveUnknownOutcome(name, tc.id)
-            : undefined;
+            : deviceRetry === 'ask' ? await resolveUnknownOutcome(name, tc.id!, 'device')
+                : deviceRetry === 'declined' ? getAgentTaskUnknownOutcomeDeclinedNotice(name, 'device') : undefined;
         // 반복 가드 — 같은 호출의 연속 실패·같은 결과 반복을 대화에서 세어 안내하거나 실행하지 않는다(tool-loop-guard).
         const loop = AGENT_TASK_LIMITS.TOOL_LOOP_GUARD_ENABLED && journaled === undefined && unknownResult === undefined && !original
             ? repetitionVerdict(priorRepetition(conversation, name, args), { readOnly: !hasSideEffects(name, args), toolName: name }, {

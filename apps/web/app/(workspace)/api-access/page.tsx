@@ -42,12 +42,18 @@ interface ApiKeyRow {
   created_at: string;
   last_used_at: string | null;
   total_requests: number;
+  scopes?: string[];
 }
 
 interface CreatedKey {
   key: string;
   quick_start?: { curl: string; models_url: string; docs_url: string };
+  /** 브리지(CLI·Companion) 전용 키 — 추론 API 예시 대신 연결 안내를 보인다(화면에서 정한다) */
+  bridgeOnly?: boolean;
 }
+
+/** PURE: 브리지 스코프만 가진 키인가 — 이런 키는 추론 API 를 부를 수 없다. */
+const isBridgeOnly = (scopes: readonly string[] | undefined): boolean => !!scopes && scopes.length > 0 && scopes.every((x) => x === "bridge");
 
 function formatDate(iso: string | null | undefined, locale: string) {
   if (!iso) return "-";
@@ -115,7 +121,7 @@ export default function ApiAccessPage() {
         name: newName.trim(),
         scopes,
       });
-      setRevealed(res.data);
+      setRevealed({ ...res.data, bridgeOnly: isBridgeOnly(scopes) });
       setNewName("");
       setNewScope("full");
       await load();
@@ -145,7 +151,7 @@ export default function ApiAccessPage() {
     setError(null);
     try {
       const res = await ApiClient.post<ApiSuccess<CreatedKey>>(`/api/api-keys/${k.id}/rotate`);
-      setRevealed(res.data);
+      setRevealed({ ...res.data, bridgeOnly: isBridgeOnly(k.scopes) });
       await load();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t("rotateFailed"));
@@ -219,7 +225,8 @@ export default function ApiAccessPage() {
                   {copied === "key" ? t("reveal.copied") : t("reveal.copyKey")}
                 </Button>
               </div>
-              {revealed.quick_start && (
+              {revealed.bridgeOnly && <p className="text-xs text-fg-2">{t("reveal.bridgeHint")}</p>}
+              {revealed.quick_start && !revealed.bridgeOnly && (
                 <div>
                   <p className="mb-1 text-xs font-medium text-fg-2">{t("reveal.curlTitle")}</p>
                   <div className="relative">

@@ -242,6 +242,7 @@
       "dismiss": "Schließen",
       "copyKey": "Schlüssel kopieren",
       "copied": "Kopiert",
+      "bridgeHint": "Dieser Schlüssel verbindet nur Companion und die CLI. Geben Sie ihn in den Companion-Einstellungen oder bei der CLI-Anmeldung (openmake-code login) ein. Er kann die Inferenz-API nicht aufrufen.",
       "curlTitle": "Schnellstart (curl)",
       "copyCurl": "curl kopieren"
     },
@@ -425,6 +426,7 @@
     },
     "agentTask": {
       "title": "Agentenaufgabe",
+      "queuePosition": "Position {position} in der Warteschlange — startet automatisch, sobald frühere Aufgaben fertig sind",
       "turn": "Runde {turn}",
       "goal": "Ziel",
       "outputs": "Ausgaben",
@@ -993,6 +995,7 @@
         "llm_error": "Versuchen Sie es gleich noch einmal. Wenn es weiter fehlschlägt, wählen Sie ein anderes Modell oder informieren Sie Ihren Administrator.",
         "interrupted": "Setzen Sie die Aufgabe fort, um an der unterbrochenen Stelle weiterzumachen.",
         "unknown": "Prüfen Sie den vollständigen Fehlergrund. Tritt er erneut auf, informieren Sie Ihren Administrator.",
+        "device_wait_expired": "Verbinden Sie Companion (oder die CLI) und führen Sie die Aufgabe erneut aus.",
         "sandbox_unavailable": "Starten Sie in Kürze erneut. Sobald weniger Aufgaben gleichzeitig laufen, wird eine Ausführungsumgebung frei. Wenn es weiter auftritt, informieren Sie die Administration."
       }
     },

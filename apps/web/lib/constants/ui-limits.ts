@@ -45,3 +45,8 @@ export const BROWSER_TAKEOVER_SCROLL_FLUSH_MS = 150;
 
 /** 승인 거절 사유 입력 상한(자) — 서버(AGENT_TASK_APPROVAL_REJECT_REASON_MAX_CHARS 기본값)와 같다. 넘는 분량은 서버가 자른다. */
 export const REJECT_REASON_MAX_CHARS = 500;
+
+/** 채팅 카드가 대기 순번을 다시 읽는 주기(ms) — 줄을 선 동안만 돈다. */
+export const QUEUE_POSITION_POLL_MS = 5000;
+/** 번역 라벨이 없는 실패 사유 원문을 카드에 보일 때의 길이 상한. */
+export const FAILURE_REASON_MAX_CHARS = 120;

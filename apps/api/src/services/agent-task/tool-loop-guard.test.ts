@@ -1,4 +1,5 @@
-import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote } from './tool-loop-guard';
+import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote, retryAfterUnknownOutcome } from './tool-loop-guard';
+import { getLocalBridgeUnknownOutcomeNotice, getAgentTaskUnknownOutcomeDeclinedNotice } from '../../prompts/agent-task-prompt';
 import { getDuplicateToolCallResult } from '../../prompts/agent-task-turn-loop';
 import type { ChatMessage } from '../../llm/types';
 
@@ -229,5 +230,64 @@ describe('rereadNote — 바뀌지 않은 같은 파일·같은 구간 다시 �
         const conv = base();
         round(conv, 'bash', { command: 'cat a' }, '내용');
         expect(rereadNote(conv, 'bash', { command: 'cat a' }, '내용')).toBe('');
+    });
+});
+
+describe('retryAfterUnknownOutcome — 결과 불명으로 끝난 쓰기를 다시 하려는가', () => {
+    const unknown = getLocalBridgeUnknownOutcomeNotice('browser', 'disconnected');
+    const submit = { actions: [{ type: 'goto', url: 'https://a.example/form' }, { type: 'fill', selector: '#name', text: '홍길동' }, { type: 'click', selector: '#submit' }] };
+
+    it('같은 호출의 마지막 결과가 결과 불명이면 참 — 사이에 상태 확인이 끼어도', () => {
+        const conv = base();
+        round(conv, 'browser', submit, unknown);
+        round(conv, 'browser', { actions: [{ type: 'snapshot' }] }, 'about:blank');
+        expect(retryAfterUnknownOutcome(conv, 'browser', submit)).toBe('ask');
+    });
+
+    it('브라우저는 쓰기 액션이 같으면 같은 호출이다 — 읽기 액션을 덧붙여도 참', () => {
+        const conv = base();
+        round(conv, 'browser', submit, `<tool_output>${unknown}</tool_output>`);
+        expect(retryAfterUnknownOutcome(conv, 'browser', { actions: [...submit.actions, { type: 'screenshot' }] })).toBe('ask');
+    });
+
+    it('호출을 쪼개 일부 쓰기만 다시 해도 참 — 액션 단위로 본다', () => {
+        const conv = base();
+        round(conv, 'browser', submit, unknown);
+        expect(retryAfterUnknownOutcome(conv, 'browser', { actions: [submit.actions[0], submit.actions[1]] })).toBe('ask');
+        expect(retryAfterUnknownOutcome(conv, 'browser', { actions: [submit.actions[2]] })).toBe('ask');
+    });
+
+    it('주소 이동·읽기만 다시 하는 것은 거짓(되풀이해도 해가 없다)', () => {
+        const conv = base();
+        round(conv, 'browser', submit, unknown);
+        expect(retryAfterUnknownOutcome(conv, 'browser', { actions: [submit.actions[0], { type: 'snapshot' }] })).toBeNull();
+    });
+
+    it('쓰기 내용이 다르면 거짓', () => {
+        const conv = base();
+        round(conv, 'browser', submit, unknown);
+        expect(retryAfterUnknownOutcome(conv, 'browser', { actions: [{ type: 'fill', selector: '#name', text: '다른 값' }] })).toBeNull();
+    });
+
+    it('그 뒤에 같은 호출이 정상으로 끝났으면 거짓(한 번 물은 뒤에는 다시 묻지 않는다)', () => {
+        const conv = base();
+        round(conv, 'browser', submit, unknown);
+        round(conv, 'browser', submit, '{"ok":true}');
+        expect(retryAfterUnknownOutcome(conv, 'browser', submit)).toBeNull();
+    });
+
+    it('사용자가 다시 실행하지 않기로 한 뒤 같은 쓰기를 또 하려 하면 declined — 다시 묻지 않고 막는다', () => {
+        const conv = base();
+        round(conv, 'browser', submit, unknown);
+        round(conv, 'browser', submit, getAgentTaskUnknownOutcomeDeclinedNotice('browser', 'device'));
+        expect(retryAfterUnknownOutcome(conv, 'browser', submit)).toBe('declined');
+        expect(retryAfterUnknownOutcome(conv, 'browser', { actions: [submit.actions[1]] })).toBe('declined');
+    });
+
+    it('브라우저가 아닌 도구는 이름·인자가 같아야 한다', () => {
+        const conv = base();
+        round(conv, 'file_ops', { op: 'write', path: 'a.txt', content: 'x' }, unknown);
+        expect(retryAfterUnknownOutcome(conv, 'file_ops', { op: 'write', path: 'a.txt', content: 'x' })).toBe('ask');
+        expect(retryAfterUnknownOutcome(conv, 'file_ops', { op: 'write', path: 'b.txt', content: 'x' })).toBeNull();
     });
 });
