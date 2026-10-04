@@ -26,6 +26,7 @@ import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "@/comp
 import { QuestionChoices } from "@/components/approvals/question-choices";
 import { isNearBottom } from "@/lib/chat-scroll";
 import { COPY_FEEDBACK_RESET_MS, REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
+import { shouldSubmitOnEnter, keepStillPending } from "@/lib/approval-input";
 
 const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
 /** 채팅 인라인 승인의 인자 요약 길이 — 넘으면 전문 펼쳐 보기가 붙는다. */
@@ -79,10 +80,8 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
     try {
       await ApiClient.post(`/api/agent-tasks/${a.taskId}/approvals/auto-approve`, {});
       const res = await ApiClient.get<{ data: { pending: { approvalId: string }[] } }>("/api/agent-tasks/approvals/pending").catch(() => null);
-      if (!res?.data?.pending) return;
-      const still = new Set(res.data.pending.map((p) => p.approvalId));
       setChatHistory((prev) =>
-        prev.map((m) => (m.taskId === a.taskId ? { ...m, approvals: (m.approvals ?? []).filter((x) => still.has(x.approvalId)) } : m)),
+        prev.map((m) => (m.taskId === a.taskId ? { ...m, approvals: keepStillPending(m.approvals ?? [], res?.data?.pending) } : m)),
       );
     } catch (e) {
       alert(t("approvals.processFailed", { error: e instanceof Error ? e.message : t("approvals.errorFallback") }));
@@ -133,8 +132,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
                 value={text}
                 onChange={(e) => setAnswers((prev) => ({ ...prev, [a.approvalId]: e.target.value }))}
                 onKeyDown={(e) => {
-                  // Enter 로 답변 전송, Shift+Enter 는 줄바꿈(채팅 입력창과 같은 규칙). keyCode 229 는 WebKit 조합 커밋 보강.
-                  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || e.keyCode === 229) return;
+                  if (!shouldSubmitOnEnter({ key: e.key, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, { multiline: true })) return;
                   e.preventDefault();
                   if (busy !== a.approvalId && text.trim()) void answer(a);
                 }}

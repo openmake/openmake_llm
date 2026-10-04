@@ -24,6 +24,7 @@ import { isQuestionApproval, elicitationHint, structuredQuestions } from "@/lib/
 import { QuestionChoices } from "./question-choices";
 import { onAgentTaskChange } from "@/lib/agent-task-change";
 import { REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
+import { shouldSubmitOnEnter } from "@/lib/approval-input";
 
 interface RecentDecision {
   approvalId: string;
@@ -224,8 +225,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 value={answers[a.approvalId] ?? ""}
                 onChange={(e) => setAnswers((p) => ({ ...p, [a.approvalId]: e.target.value }))}
                 onKeyDown={(e) => {
-                  // Enter 로 답변 전송. keyCode 229 는 isComposing 이 false 로 오는 WebKit 조합 커밋 보강.
-                  if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229) return;
+                  if (!shouldSubmitOnEnter({ key: e.key, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode })) return;
                   e.preventDefault();
                   if (!acting && (answers[a.approvalId] ?? "").trim()) sendAnswer(a.approvalId);
                 }}

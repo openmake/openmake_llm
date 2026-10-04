@@ -49,6 +49,7 @@ import { BrowserTakeover } from "@/components/agent-tasks/browser-takeover";
 import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
 import { onAgentTaskChange, onOpenAgentTask } from "@/lib/agent-task-change";
 import { failureLabelKey, failureNextKey } from "@/lib/agent-task-failure";
+import { taskStatusLabelKey } from "@/lib/approval-input";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -692,7 +693,7 @@ function TaskDetailModal({
             )}
             <div className="mt-2 flex items-center gap-3 text-xs text-faint">
               <span className="flex items-center gap-1">
-                {t("stateLabel")} {t(`statusRaw.${detail.task.status}`)}
+                {t("stateLabel")} {(() => { const k = taskStatusLabelKey(detail.task.status); return k ? t(k) : detail.task.status; })()}
                 {(detail.task.status === "running" || detail.task.status === "paused") && (
                   <LoaderCircle className="h-3 w-3 animate-spin" />
                 )}
