@@ -108,7 +108,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
     const conversation: ChatMessage[] = restored ? [...restored.conversation] : [
         {
             role: 'system',
-            content: p.personaPrompt + '\n\n' + buildSubagentDelegationRules(maxTurns),
+            content: p.personaPrompt + '\n\n' + buildSubagentDelegationRules(maxTurns, p.tools.map((t) => t.function.name)),
         },
         { role: 'user', content: p.subgoal },
     ];

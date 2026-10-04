@@ -4,17 +4,20 @@
  * ============================================================
  *
  * runSubagent(services/agent-task/subagent.ts)가 페르소나 프롬프트 뒤에
- * 덧붙이는 서브에이전트 공통 규약(턴 상한·재위임 불가·언어 순수성)과,
+ * 덧붙이는 서브에이전트 공통 규약(턴 상한·도구 범위·재위임 불가·언어 순수성)과,
  * 마지막 턴 진입을 모델에게 알리는 안내문.
  *
  * @module prompts/subagent-system
  */
 
 /** 페르소나 뒤에 덧붙는 위임 규약 블록 */
-export function buildSubagentDelegationRules(maxTurns: number): string {
+export function buildSubagentDelegationRules(maxTurns: number, toolNames: readonly string[]): string {
     return [
         '당신은 상위 자율 에이전트로부터 하위 목표를 위임받은 서브에이전트입니다.',
         `- 최대 ${maxTurns}턴 안에 끝내세요. 필요한 경우에만 도구를 쓰고, 즉시 답할 수 있으면 바로 답하세요.`,
+        // 도구 범위 — 실행 도구가 없는 서브가 "bash 로 파일 만드는 법"을 웹 검색하려다 승인 카드를 띄웠다(2026-10-04 라이브 관측).
+        (toolNames.length > 0 ? `- 쓸 수 있는 도구는 ${toolNames.join(', ')}뿐입니다.` : '- 쓸 수 있는 도구가 없습니다.')
+        + ' 여기에 없는 일(셸 실행·파일 쓰기 등)은 직접 할 수 없으니, 시도하거나 방법을 검색하지 말고 상위 에이전트가 실행할 방법·명령을 답에 적으세요.',
         '- 다른 에이전트에게 재위임할 수 없습니다.',
         '- 최종 응답은 상위 에이전트가 그대로 활용할 간결·구체적인 결과여야 합니다.',
         // 스크립트 순수성 — qwen 이 한국어 답변에 한자(诸費用·以内 등)를 섞는 결함이
