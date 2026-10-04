@@ -87,6 +87,8 @@ __pycache__/
 !frontend/web/public/**/*.jpg
 # iOS 앱 아이콘/에셋 카탈로그 — 커밋 필수 (없으면 CI/다른 머신 빌드에서 빈 아이콘)
 !apps/ios/OpenMakeApp/Assets.xcassets/**/*.png
+# Windows Companion 아이콘(트레이·설치 파일) — 커밋 필수 (없으면 번들 단계가 실패한다)
+!apps/desktop-windows/assets/*.png
 !frontend/web/public/**/*.jpeg
 !apps/web/public/**/*.png
 !apps/web/public/**/*.jpg
