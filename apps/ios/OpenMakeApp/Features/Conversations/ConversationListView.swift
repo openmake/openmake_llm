@@ -161,6 +161,11 @@ struct ConversationListView: View {
                     autoChatFired = true
                     selectedSession = sessions[index]
                 }
+                // 시뮬레이터 스모크: 에이전트 작업 화면 자동 열기 (승인·질문 카드 렌더 검증용)
+                if ProcessInfo.processInfo.environment["OPENMAKE_UITEST_AGENT_TASKS"] == "1", !autoChatFired {
+                    autoChatFired = true
+                    showAgentTasks = true
+                }
                 #endif
             }
             .onReceive(NotificationCenter.default.publisher(for: .openMakeNotificationURL)) { notification in
