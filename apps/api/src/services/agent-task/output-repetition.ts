@@ -6,6 +6,7 @@
  */
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
 import { OUTPUT_REPETITION_CUT_MARKER, getOutputRepetitionRetryNudge, getOutputRepetitionRetryNote } from '../../prompts/agent-task-turn-loop';
+import { AGENT_TASK_STEERING_MARKER } from '../../prompts/agent-task-prompt';
 import type { ChatMessage } from '../../llm/types';
 
 /**
@@ -41,16 +42,19 @@ export function detectOutputRepetition(text: string | null | undefined): { repea
 
 /**
  * PURE: 사용자가 일부러 반복 출력을 시킨 작업인가 — 그런 작업의 반복은 모델의 반복 루프가 아니라 요청한 결과다.
- * 목표(대화의 첫 사용자 메시지)만 본다. 뒤에 주입되는 안내·재촉에도 "N번 반복" 같은 말이 들어 있어 섞어 보면 오탐한다.
+ * 사용자가 직접 쓴 글만 본다 — 목표(대화의 첫 사용자 메시지)와 작업 도중 보낸 지시(steering).
+ * 시스템이 주입하는 안내·재촉에도 "N번 반복" 같은 말이 들어 있어 섞어 보면 오탐한다.
  */
 export function goalRequestsRepetition(conversation: readonly ChatMessage[]): boolean {
     if (!AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_RESPECT_REQUEST) return false;
-    const goal = conversation.find((m) => m.role === 'user')?.content;
-    if (typeof goal !== 'string') return false;
-    return AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_REQUEST_PATTERNS.some((re) => [...goal.matchAll(re)].some((m) => {
+    const goalAt = conversation.findIndex((m) => m.role === 'user');
+    const fromUser = conversation
+        .filter((m, i) => m.role === 'user' && typeof m.content === 'string' && (i === goalAt || m.content.startsWith(AGENT_TASK_STEERING_MARKER)))
+        .map((m) => m.content as string);
+    return fromUser.some((text) => AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_REQUEST_PATTERNS.some((re) => [...text.matchAll(re)].some((m) => {
         const n = m.groups?.n ?? '';
         return /^\d+$/.test(n) ? Number(n) >= AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_MIN_REPEATS : n !== '';
-    }));
+    })));
 }
 
 /** PURE: 반복이 시작된 뒤를 잘라 내고 생략 표시를 붙인다 — 모델이 자기 반복을 다시 읽고 이어가지 않게 한다. */

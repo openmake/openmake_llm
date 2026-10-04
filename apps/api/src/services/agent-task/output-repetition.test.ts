@@ -1,5 +1,6 @@
 import { detectOutputRepetition, cutRepeatedOutput, retryRepeatedAnswer, goalRequestsRepetition } from './output-repetition';
 import { OUTPUT_REPETITION_CUT_MARKER, getOutputRepetitionRetryNudge } from '../../prompts/agent-task-turn-loop';
+import { getAgentTaskSteeringInjection } from '../../prompts/agent-task-prompt';
 import type { ChatMessage } from '../../llm/types';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
 
@@ -116,7 +117,13 @@ describe('goalRequestsRepetition — 사용자가 일부러 반복 출력을 시
         ]) expect(goalRequestsRepetition(goal(g))).toBe(false);
     });
 
-    it('목표(첫 사용자 메시지)만 본다 — 뒤에 주입된 안내 문구는 보지 않는다', () => {
+    it('작업 도중 사용자가 보낸 지시(steering)도 본다', () => {
+        const conv = goal('보고서를 써 줘');
+        conv.push({ role: 'assistant', content: '진행 중' }, { role: 'user', content: getAgentTaskSteeringInjection("마지막에 '감사합니다'를 30번 써 줘") });
+        expect(goalRequestsRepetition(conv)).toBe(true);
+    });
+
+    it('목표와 사용자 지시만 본다 — 시스템이 주입한 안내 문구는 보지 않는다', () => {
         const conv = goal('보고서를 써 줘');
         conv.push({ role: 'user', content: '같은 호출을 10번 반복했습니다. 다른 방법을 쓰세요.' });
         expect(goalRequestsRepetition(conv)).toBe(false);
