@@ -945,6 +945,8 @@
     "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen, Schreibzugriffe auf Zugangsdaten- oder Anweisungsdateien und externe MCP-Tools fragen weiterhin nach)",
     "tokensUsed": "{count} Token",
     "tokensUsedHint": "Insgesamt von dieser Aufgabe verbrauchte LLM-Token",
+    "cacheHitLabel": "Cache-Treffer",
+    "cacheHitHint": "{cached} von {prompt} Eingabe-Token wurden aus dem Cache des Modellservers gelesen",
     "templates": {
       "title": "Aufgabenvorlagen",
       "create": "Neue Vorlage",

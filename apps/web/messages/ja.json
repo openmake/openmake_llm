@@ -945,6 +945,8 @@
     "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問、認証情報・指示ファイルへの書き込み、外部MCPツールは引き続き確認します）",
     "tokensUsed": "{count} トークン",
     "tokensUsedHint": "このタスクが使用した累計LLMトークン",
+    "cacheHitLabel": "キャッシュヒット",
+    "cacheHitHint": "入力トークン {prompt} のうち {cached} トークンをモデルサーバーがキャッシュから読み込みました",
     "templates": {
       "title": "タスクテンプレート",
       "create": "新規テンプレート",
