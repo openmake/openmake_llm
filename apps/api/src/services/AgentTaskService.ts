@@ -35,7 +35,7 @@ import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { getApprovalRegistry } from './task-sandbox/approval-gate';
 import { currentPlanStepIndex } from './task-sandbox/planning';
-import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, type TurnGateFlags } from './agent-task/turn-gate';
+import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { AgentTaskTurnTimeout } from './agent-task/turn-call';
@@ -365,7 +365,7 @@ export class AgentTaskService {
                 // 승인 대기 누적(pausedMs)은 예산에서 제외(4-1 pause-aware).
                 // 시간 예산 바인딩·마무리 턴 최소 보장·부분 본문 보존 — agent-task/turn-call
                 const { result, callSignal } = await callAgentTurnWithContext({
-                    roleState, conversation, tools: effectiveTools, signal,
+                    roleState, conversation, tools: withMemorySaveExposure(effectiveTools, conversation), signal,
                     taskId, userId: String(userId), turn,
                     totalTimeoutMs, elapsedActiveMs: Date.now() - startedAt - pausedMs,
                     finalTurn: !!finalTurnReason,

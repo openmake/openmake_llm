@@ -105,12 +105,10 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
                 return true;
             })
             : p.tools;
-    // 메모리 저장 도구는 사용자가 저장을 청한 작업에서만 보여 준다(목표 또는 작업 도중 지시) — 등록은 늘 돼 있다.
-    const exposedTools = withMemorySaveExposure(cappedTools, conversation);
     const effectiveTools = hitlDegraded
-        ? stripApprovalGatedTools(exposedTools, p.sandboxCfg.approvalPolicy,
+        ? stripApprovalGatedTools(cappedTools, p.sandboxCfg.approvalPolicy,
             { deviceGatesShell: p.sandboxCfg.deviceGatesShell })
-        : exposedTools;
+        : cappedTools;
 
     if (finalTurnReason && !flags.finalTurnNotified) {
         conversation.push(oneShotNotice(finalTurnReason === 'context' ? getContextFinalTurnNudge() : getAgentTaskFinalTurnNudge(finalTurnReason)));
@@ -168,7 +166,10 @@ export function shouldAdoptFinalTurnAnswer(p: {
     return p.answerLength >= AGENT_TASK_LIMITS.FINAL_TURN_MIN_ANSWER_CHARS;
 }
 
-/** PURE: 사용자가 저장을 청하지 않은 대화면 도구 목록에서 memory_save 를 뺀다(memory-save-tool 의 memorySaveExposed). */
+/**
+ * PURE: 사용자가 저장을 청하지 않은 대화면 도구 목록에서 memory_save 를 뺀다(memory-save-tool 의 memorySaveExposed).
+ * 호출부는 이 턴의 중간 지시(steering)를 대화에 넣은 **뒤에** 부른다 — 관문 안에서 거르면 지시가 온 바로 그 턴에는 도구가 안 보인다.
+ */
 export function withMemorySaveExposure(tools: ToolDefinition[], conversation: readonly ChatMessage[]): ToolDefinition[] {
     return memorySaveExposed(conversation) ? tools : tools.filter((t) => t.function.name !== MEMORY_SAVE_TOOL_NAME);
 }
