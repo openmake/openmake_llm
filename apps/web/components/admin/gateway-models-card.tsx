@@ -83,8 +83,9 @@ export function GatewayModelsCard() {
                 </tr>
               </thead>
               <tbody>
-                {payload.models.map((m) => (
-                  <tr key={m.name}>
+                {/* 게이트웨이는 같은 이름으로 배포를 여럿 등록할 수 있다 — 이름만으로는 행이 겹친다 */}
+                {payload.models.map((m, i) => (
+                  <tr key={`${m.name}:${i}`}>
                     <Td className="font-mono text-xs">
                       <span className="flex flex-wrap items-center gap-1.5">
                         {m.name}
