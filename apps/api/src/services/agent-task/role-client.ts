@@ -180,9 +180,11 @@ export async function chatTurnWithRoleFallback(
     const startedAt = Date.now();
     for (;;) {
         // 시도마다 상한을 새로 건다 — 멈춘 호출 하나가 남은 예산 전부를 태우지 못하게 한다.
-        const cap = p.callTimeoutMs && p.callTimeoutMs > 0 ? AbortSignal.timeout(p.callTimeoutMs) : null;
         // 외부 모델 클라이언트 중에는 청크 신호를 주지 않는 구현이 있다 — 내부 모델 호출에만 건다.
         const watch = p.idle && p.idle.gapMs > 0 && p.idle.firstChunkMs > 0 && !state.external ? idleWatch(p.idle) : null;
+        // 무응답 감시가 멈춘 호출을 잡으므로 그때는 호출 상한을 걸지 않는다 — 청크가 오는 긴 생성을 상한이 끊지 않게
+        // (2026-10-05 실측: 5,145토큰 파일 쓰기 호출이 290초로 상한 300초에 닿았다). 길이는 출력 토큰 상한과 작업 시간 예산(p.signal)이 막는다.
+        const cap = !watch && p.callTimeoutMs && p.callTimeoutMs > 0 ? AbortSignal.timeout(p.callTimeoutMs) : null;
         const signals = [p.signal, ...(cap ? [cap] : []), ...(watch ? [watch.signal] : [])];
         let chatErr: unknown;
         try {

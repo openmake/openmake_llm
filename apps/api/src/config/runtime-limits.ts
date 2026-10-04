@@ -1264,6 +1264,8 @@ export const AGENT_TASK_LIMITS = {
     /** 도구 턴 모델 호출의 무응답 감시(ms) — 청크 사이 간격이 이 값을 넘으면 호출을 끊고 일시적 오류처럼 다시 시도한다. 0 이면 끔(종전처럼 비스트림).
      *  켜면 도구 턴도 스트리밍으로 부른다(내부 모델만). 근거(2026-10-05 05:00 실측): 모델 서버는 정상 완료했는데 응답이 네트워크에서 유실돼
      *  호출 상한 5분을 다 채운 뒤에야 재시도했다. 상한을 줄이면 정상적인 긴 생성(최대 221초)이 끊기므로 "진행 여부"로 판별한다.
+     *  감시가 걸린 호출에는 호출 상한(TURN_CALL_TIMEOUT_MS)을 적용하지 않는다 — 청크가 오는 긴 생성을 끊지 않게.
+     *  실측(2026-10-05, retired-chat-model): 5,145토큰 도구 인자 생성 290초 동안 청크 간격은 4초 미만이었다.
      *  AGENT_TASK_TURN_STREAM_IDLE_MS (기본 60초) */
     TURN_STREAM_IDLE_MS: parseInt(process.env.AGENT_TASK_TURN_STREAM_IDLE_MS || '', 10) >= 0
         ? parseInt(process.env.AGENT_TASK_TURN_STREAM_IDLE_MS as string, 10) : 60_000,

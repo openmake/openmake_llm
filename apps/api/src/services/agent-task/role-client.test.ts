@@ -190,6 +190,16 @@ describe('chatTurnWithRoleFallback 무응답 감지', () => {
         expect(chat).toHaveBeenCalledTimes(1);
     });
 
+    it('감시 중에는 호출 상한을 걸지 않는다 — 청크가 오는 긴 생성은 상한을 넘겨도 끝까지 받는다', async () => {
+        const chat = jest.fn((_c: unknown, _o: unknown, _t: unknown, opts: Opts) => new Promise((res, rej) => {
+            let sent = 0;
+            const timer = setInterval(() => { opts.onChunk?.(); if (++sent === 12) { clearInterval(timer); res({ content: 'long' }); } }, 10);
+            opts.signal.addEventListener('abort', () => { clearInterval(timer); rej(new Error('Request was aborted.')); }, { once: true });
+        }));
+        expect(await chatTurnWithRoleFallback(stateWith(chat), { ...params(), idle, callTimeoutMs: 30 })).toEqual({ content: 'long' });
+        expect(chat).toHaveBeenCalledTimes(1);
+    });
+
     it('감시를 켜면 스트리밍으로 부른다(onToken 을 넘긴다) — 끄면 종전대로 넘기지 않는다', async () => {
         const chat = jest.fn(() => Promise.resolve({ content: 'ok' }));
         await chatTurnWithRoleFallback(stateWith(chat), { ...params(), idle });
