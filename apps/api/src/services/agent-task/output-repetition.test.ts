@@ -80,7 +80,7 @@ describe('retryRepeatedAnswer — 반복으로 잘린 최종 답변은 한 번 �
         const first = cut('잘린 답');
         (first.result.metrics as Metrics).cached_prompt_tokens = 60;
         const again: Metrics = { prompt_tokens: 150, completion_tokens: 10, cached_prompt_tokens: 140 };
-        const recall = jest.fn(async () => ({ result: { role: 'assistant' as const, content: '정리된 답', metrics: again } }));
+        const recall = jest.fn(async () => ({ result: { role: 'assistant' as const, content: '정리된 답', metrics: again }, repetitionCut: false }));
         const out = await retryRepeatedAnswer({ conversation: conv() }, first, recall);
         expect(out.result.metrics).toEqual(expect.objectContaining({ prompt_tokens: 250, cached_prompt_tokens: 200 }));
 

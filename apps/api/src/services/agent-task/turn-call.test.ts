@@ -13,7 +13,7 @@ jest.mock('./role-client', () => ({
     TurnCallCapExceeded: class TurnCallCapExceeded extends Error {},
 }));
 
-import { callAgentTurnWithBudget, AgentTaskTurnTimeout } from './turn-call';
+import { callAgentTurnWithBudget, AgentTaskTurnTimeout, partialResultOf } from './turn-call';
 import { chatTurnWithRoleFallback, TurnCallCapExceeded } from './role-client';
 import { AgentTaskAbort } from './types';
 import { OUTPUT_REPETITION_CUT_MARKER } from '../../prompts/agent-task-turn-loop';
@@ -188,5 +188,13 @@ describe('callAgentTurnWithBudget — 출력 반복 기록', () => {
         const onNote = jest.fn();
         await callAgentTurnWithBudget({ ...base(), onNote });
         expect(onNote).not.toHaveBeenCalled();
+    });
+});
+
+describe('partialResultOf', () => {
+    it('시간 예산으로 끊긴 마무리 턴의 부분 본문만 결과로 남긴다', () => {
+        expect(partialResultOf(new AgentTaskTurnTimeout('보고서 초안')).result).toContain('보고서 초안');
+        expect(partialResultOf(new AgentTaskTurnTimeout(null))).toEqual({});
+        expect(partialResultOf(new Error('x'))).toEqual({});
     });
 });

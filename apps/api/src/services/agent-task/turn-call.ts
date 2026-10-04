@@ -26,6 +26,12 @@ export class AgentTaskTurnTimeout extends AgentTaskAbort {
     }
 }
 
+/** 시간 예산으로 끊긴 마무리 턴의 부분 본문을 작업 결과로 남기는 갱신 조각 — 해당 없으면 빈 객체(종전엔 result NULL). */
+export function partialResultOf(err: unknown): { result?: string } {
+    return err instanceof AgentTaskTurnTimeout && err.partialContent
+        ? { result: `[시간 예산 초과로 중단된 부분 답변]\n\n${err.partialContent}` } : {};
+}
+
 interface TurnCallInput {
     roleState: AgentRoleState;
     conversation: ChatMessage[];
