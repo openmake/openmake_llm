@@ -309,6 +309,7 @@ export function getLocalBrowserToolDescription(): string {
         + 'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. '
         + '페이지가 띄운 확인창은 그 액션 결과의 dialogs 에 실립니다 — confirm·prompt 는 기본으로 취소되고, 수락하려면 확인창을 띄우는 액션 앞에 dialog{accept:true,promptText?} 를 넣으세요. '
         + 'CSS 셀렉터(click/fill)가 실패하면 snapshot 으로 상호작용 요소를 {role,name,index} 목록으로 얻은 뒤 smartClick{role,name,nth?}·smartFill{role,name,text,nth?} 로 재시도하세요. '
+        + 'fill·smartFill 결과의 value 가 칸에 실제로 들어간 값입니다 — 그것으로 확인하고 같은 입력을 되풀이하지 마세요(입력 칸에 extractText 를 쓰면 현재 값이 나옵니다. 비밀번호 칸의 값은 돌려주지 않습니다). '
         + '읽기(extractText·snapshot·screenshot)는 어느 사이트에서든 됩니다. 관리자가 허용한 사이트 밖에서의 입력·누르기와 검색어를 실은 주소로의 이동은 사용자 승인을 받은 뒤 실행됩니다 — '
         + '업무 자료를 외부 사이트(검색·번역·웹메일 등)에 입력하지 마세요. 사용자가 브라우저를 직접 조작하는 중이면 실행되지 않으니, 그때는 기다렸다가 현재 페이지를 다시 관찰하세요. '
         + 'http·https 주소만 열 수 있습니다.';

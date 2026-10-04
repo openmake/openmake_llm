@@ -19,6 +19,7 @@ const PAGES: Record<string, string> = {
     '/form': `<html><body><form action="/done" method="get">
         <label>이름 <input id="name" name="name" aria-label="이름"></label>
         <textarea id="memo" name="memo" aria-label="메모"></textarea>
+        <input id="pw" type="password" name="pw" aria-label="비밀번호">
         <div id="rich" contenteditable="true" style="min-height:20px;border:1px solid"></div>
         <button id="send" type="submit">보내기</button></form>
         <button id="ask" onclick="document.getElementById('out').textContent = confirm('정말 삭제할까요?') ? '삭제함' : '취소함'">삭제</button>
@@ -99,6 +100,23 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
         const got = decodeURIComponent(String(r.results[6].text).replace(/\+/g, ' ')); // 폼 전송은 공백을 + 로 싣는다
         expect(got).toContain('name=바꾼 이름');   // 두 번째 fill 이 기존 값을 대체했다
         expect(got).toContain('memo=첫째 줄');
+    }, 60000);
+
+    it('입력 결과에 들어간 값을 돌려주고, 입력 칸을 읽으면 그 값이 나온다 — 모델이 확인하려고 같은 입력을 되풀이하지 않게', async () => {
+        const r = await browser.run({ actions: [
+            { type: 'goto', url: `${origin}/form` },
+            { type: 'fill', selector: '#name', text: '홍길동' }, { type: 'smartFill', role: 'textbox', name: '메모', text: '둘째 줄' },
+            { type: 'extractText', selector: '#name' }, { type: 'extractText', selector: '#memo' },
+            { type: 'fill', selector: '#pw', text: 'secret-123' }, { type: 'extractText', selector: '#pw' },
+        ], sitePolicy: allowAll() }, opts());
+        expect(r.results.map((x) => x.ok)).toEqual([true, true, true, true, true, true, true]);
+        expect(r.results[1].value).toBe('홍길동');
+        expect(r.results[2].value).toBe('둘째 줄');
+        expect(r.results[3].text).toBe('홍길동');
+        expect(r.results[4].text).toBe('둘째 줄');
+        // 비밀번호 칸의 값은 결과에 싣지 않는다 — 모델 대화와 작업 기록에 남는다
+        expect(r.results[5].value).toBeUndefined();
+        expect(r.results[6].text).toBe('');
     }, 60000);
 
     it('smartClick·smartFill — role·name 으로 요소를 찾는다, press Enter 로 제출', async () => {
