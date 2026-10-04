@@ -1,7 +1,7 @@
 /**
  * 에이전트 작업 진행 이벤트 기록 — 사용자별 순번·시각을 붙여 잠깐 보관하고, 재연결한 클라이언트에 놓친 것만 다시 준다.
  */
-import { AgentTaskProgressLog, replayAgentTaskProgress } from '../agent-task-progress-log';
+import { AgentTaskProgressLog, replayAgentTaskProgress, sequenceAgentTaskProgress } from '../agent-task-progress-log';
 
 const ev = (taskId: string, progress: number) => ({ type: 'agent_task_progress', taskId, status: 'running', progress, currentTurn: 1 });
 
@@ -108,5 +108,14 @@ describe('replayAgentTaskProgress — 재연결한 소켓에 놓친 진행 이�
         replayAgentTaskProgress(ws, 'u1', 'abc', log);
         replayAgentTaskProgress(ws, 'u1', -1, log);
         expect(ws.sent).toEqual([]);
+    });
+});
+
+describe('sequenceAgentTaskProgress — 소켓으로 나가는 필드', () => {
+    it('대기 사유(waitReason)를 싣는다 — 채팅 카드가 기기 연결 대기를 승인 대기와 구분한다', () => {
+        const log = new AgentTaskProgressLog({ startSeq: 100, maxEvents: 10, ttlMs: 60_000 });
+        const out = sequenceAgentTaskProgress({ userId: 'u1', taskId: 't1', status: 'paused', progress: 10, currentTurn: 2, waitReason: 'device_wait' }, log);
+        expect(out).toMatchObject({ type: 'agent_task_progress', status: 'paused', waitReason: 'device_wait' });
+        expect(sequenceAgentTaskProgress({ userId: 'u1', taskId: 't1', status: 'running', progress: 10, currentTurn: 2 }, log)).not.toHaveProperty('waitReason');
     });
 });

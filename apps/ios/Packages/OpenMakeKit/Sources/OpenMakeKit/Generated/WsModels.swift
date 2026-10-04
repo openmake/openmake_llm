@@ -124,6 +124,8 @@ public struct WsServerEvent: Codable {
     public let taskID: String?
     /// 서버가 이벤트를 낸 시각(epoch ms)
     public let ts: Double?
+    /// 멈춘 작업이 기다리는 것 — "device_wait" 는 로컬 기기 연결 대기, "hitl_parked" 는 사용자 답 대기
+    public let waitReason: String?
 
     public enum CodingKeys: String, CodingKey {
         case token = "token"
@@ -173,9 +175,10 @@ public struct WsServerEvent: Codable {
         case step = "step"
         case taskID = "taskId"
         case ts = "ts"
+        case waitReason = "waitReason"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, approvalID: String?, currentTurn: Double?, reason: Reason?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, approvalID: String?, currentTurn: Double?, reason: Reason?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -223,6 +226,7 @@ public struct WsServerEvent: Codable {
         self.step = step
         self.taskID = taskID
         self.ts = ts
+        self.waitReason = waitReason
     }
 }
 
@@ -291,7 +295,8 @@ public extension WsServerEvent {
         status: String?? = nil,
         step: Step?? = nil,
         taskID: String?? = nil,
-        ts: Double?? = nil
+        ts: Double?? = nil,
+        waitReason: String?? = nil
     ) -> WsServerEvent {
         return WsServerEvent(
             token: token ?? self.token,
@@ -340,7 +345,8 @@ public extension WsServerEvent {
             status: status ?? self.status,
             step: step ?? self.step,
             taskID: taskID ?? self.taskID,
-            ts: ts ?? self.ts
+            ts: ts ?? self.ts,
+            waitReason: waitReason ?? self.waitReason
         )
     }
 

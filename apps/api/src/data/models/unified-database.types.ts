@@ -156,6 +156,8 @@ export interface AgentTask {
     cached_prompt_tokens?: number | null;
     /** 캐시 값을 돌려준 호출의 입력 토큰 누적(182) — 적중률의 분모 */
     cache_reported_prompt_tokens?: number | null;
+    /** 시작 요청의 승인 정책(183) — 주차 재개 때 복원. NULL 은 지정 없음 */
+    approval_policy?: string | null;
     /** "나머지 모두 승인" 플래그 영속(124) — 재개 시 승인 레지스트리에 복원 */
     auto_approve?: boolean;
     /** 완료 출구 구분(091) — 'final_answer' | 'terminate'. 미완료/기존 행은 NULL */

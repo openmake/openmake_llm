@@ -381,6 +381,7 @@
       "preview": "Änderungsvorschau",
       "procedurePreview": "Auszuführende Prozedur ansehen",
       "fullArgs": "Vollständigen Inhalt anzeigen ({chars} Zeichen)",
+      "siteWrites": "Sendet an eine Website außerhalb der Zulassungsliste",
       "elicitHint": "Eingabeanfrage von {server} · Felder: {fields}",
       "elicitJsonHint": "Bei mehreren Feldern bitte als JSON antworten: {example}"
     },
@@ -417,6 +418,7 @@
       "pending": "Ausstehend",
       "running": "Wird ausgeführt",
       "paused": "Wartet auf Freigabe",
+      "waitingDevice": "Warten auf Gerät",
       "completed": "Abgeschlossen",
       "failed": "Fehlgeschlagen",
       "cancelled": "Abgebrochen"
@@ -2413,6 +2415,7 @@
       "preview": "Änderungen vor Ausführung ansehen",
       "procedurePreview": "Auszuführende Prozedur ansehen",
       "fullArgs": "Vollständigen Inhalt anzeigen ({chars} Zeichen)",
+      "siteWrites": "Sendet an eine Website außerhalb der Zulassungsliste",
       "assignedToMe": "Mir zugewiesen",
       "assignedAway": "Weitergegeben",
       "reassign": "Weitergeben",
