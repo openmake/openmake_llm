@@ -80,3 +80,34 @@ describe('GET /api/desktop/download/:file', () => {
         expect((await request(app).get('/api/desktop/download/latest.json')).status).toBe(400);
     });
 });
+
+describe('Windows 설치 파일 (Companion P4)', () => {
+    const WIN = { version: '0.1.0', file: 'OpenMake-Companion-Setup-0.1.0.exe', sha256: 'c'.repeat(64) };
+    beforeAll(() => fs.writeFileSync(path.join(DIR, WIN.file), 'windows-installer'));
+
+    it('windows 블록을 함께 싣고, 최상위 값은 종전대로 macOS 컴패니언이다', async () => {
+        writeManifest({ native: NATIVE, windows: WIN });
+        const res = await request(app).get('/api/desktop/latest');
+        expect(res.body.data.version).toBe(NATIVE.version);
+        expect(res.body.data.windows).toEqual({ ...WIN, url: `/api/desktop/download/${WIN.file}` });
+    });
+
+    it('windows 블록만 있어도 응답한다 — 최상위(macOS) 값은 없다', async () => {
+        writeManifest({ windows: WIN });
+        const res = await request(app).get('/api/desktop/latest');
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual({ windows: { ...WIN, url: `/api/desktop/download/${WIN.file}` } });
+    });
+
+    it('파일명이 패턴에 맞지 않는 windows 블록은 싣지 않는다', async () => {
+        writeManifest({ native: NATIVE, windows: { ...WIN, file: '..\\evil.exe' } });
+        const res = await request(app).get('/api/desktop/latest');
+        expect(res.body.data.windows).toBeUndefined();
+    });
+
+    it('설치 파일은 내려받을 수 있고, 다른 exe 는 거부한다', async () => {
+        expect((await request(app).get(`/api/desktop/download/${WIN.file}`)).status).toBe(200);
+        expect((await request(app).get('/api/desktop/download/evil.exe')).status).toBe(400);
+        expect((await request(app).get('/api/desktop/download/OpenMake-Companion-Setup-1.0.0.exe')).status).toBe(404);
+    });
+});

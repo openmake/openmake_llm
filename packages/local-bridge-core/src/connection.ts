@@ -10,6 +10,7 @@
 import WebSocket from 'ws';
 import { NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
 import { RequestGuard } from './request-guard';
+import { folderNameOf } from './platform';
 import type { BridgeCore } from './core';
 import type { BridgeMsg, BridgeNotice, BridgeResult, BridgeStatusCode } from './types';
 
@@ -108,7 +109,7 @@ export class BridgeConnection {
         }
         this.ws = new WebSocket(wsUrl, { headers });
         this.status('연결 중…', 'connecting');
-        const folderName = this.opts.core.folderRoot.split('/').filter(Boolean).pop() || '/';
+        const folderName = folderNameOf(this.opts.core.folderRoot);
 
         this.ws.on('open', () => setTimeout(() => {
             // 서버가 연결을 등록하고 메시지 리스너를 부착할 때까지 대기(라이브 확인 300ms).

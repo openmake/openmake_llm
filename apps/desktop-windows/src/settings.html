@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<style>
+  body{font:14px/1.6 'Segoe UI','Malgun Gothic',sans-serif;margin:20px;color:#172d32;background:#f5f3eb}
+  label{display:block;margin:14px 0 4px;font-weight:600}
+  input[type=text],input[type=password]{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid #b9c4bd;border-radius:4px;font:inherit}
+  .row{display:flex;align-items:center;gap:8px;margin-top:16px}.row label{margin:0;font-weight:400}
+  button{margin-top:20px;padding:8px 18px;border:0;border-radius:4px;background:#087b70;color:#fff;font:inherit;cursor:pointer}
+  #msg{margin-left:12px;font-size:13px}
+</style></head>
+<body>
+  <label id="l-server" for="server"></label><input id="server" type="text" spellcheck="false">
+  <label id="l-key" for="key"></label><input id="key" type="password" autocomplete="off" spellcheck="false">
+  <div class="row"><input id="browser" type="checkbox"><label id="l-browser" for="browser"></label></div>
+  <button id="save"></button><span id="msg"></span>
+<script>
+(async () => {
+  const s = await window.companion.getSettings();
+  const $ = (id) => document.getElementById(id);
+  document.title = s.text['settings.title'];
+  $('l-server').textContent = s.text['settings.server'];
+  $('l-key').textContent = s.text['settings.apiKey'];
+  $('l-browser').textContent = s.text['settings.browser'];
+  $('save').textContent = s.text['settings.save'];
+  $('server').value = s.server;
+  $('browser').checked = s.browserEnabled;
+  if (s.hasApiKey) $('key').placeholder = '••••••••';
+  $('save').addEventListener('click', async () => {
+    const r = await window.companion.saveSettings({ server: $('server').value.trim(), apiKey: $('key').value, browserEnabled: $('browser').checked });
+    $('msg').textContent = r.ok ? s.text['settings.saved'] : s.text['settings.noEncryption'];
+    $('msg').style.color = r.ok ? '#087b70' : '#bd5d25';
+    if (r.ok) $('key').value = '';
+  });
+})();
+</script></body></html>
