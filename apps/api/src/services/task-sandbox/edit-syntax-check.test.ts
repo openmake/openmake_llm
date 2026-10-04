@@ -1,3 +1,6 @@
+// 비교용 임시 파일 이름(.syntax-prev-<8자>.js)이 'a' 로 끝나게 고정한다 — 가짜 실행기가 파일을 부분 문자열로 찾던 때
+// "…a.js" 가 'a.js' 로 잘못 잡혀 16번에 한 번 실패했다(CI 에서 두 번 관측). 그 경우를 늘 지나가게 한다.
+jest.mock('crypto', () => ({ ...jest.requireActual('crypto'), randomUUID: () => 'aaaaaaaa-0000-4000-8000-000000000000' }));
 import { checkEditSyntax } from './edit-syntax-check';
 import type { TaskExecutor, ExecResult } from './executor';
 
@@ -11,7 +14,7 @@ function fakeExecutor(files: Record<string, string>, exec?: (cmd: string) => Exe
         exec: jest.fn(async (cmd: string) => {
             cmds.push(cmd);
             if (exec) return exec(cmd);
-            const file = [...store.keys()].find((f) => cmd.includes(f));
+            const file = [...store.keys()].find((f) => cmd.includes(`'${f}'`)); // 따옴표째 대조 — 이름이 다른 파일의 끝과 겹쳐도 틀리지 않게
             return file && store.get(file)!.includes('BAD') ? res(1, `${file}:3\nSyntaxError: Unexpected token`) : res(0);
         }),
         readFile: jest.fn(async (p: string) => { if (!store.has(p)) throw new Error('ENOENT'); return store.get(p)!; }),
