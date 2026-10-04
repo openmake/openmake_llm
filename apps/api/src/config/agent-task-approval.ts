@@ -43,10 +43,12 @@ export const APPROVAL_SECRET_KEY_WORDS = {
  *   credential_write  자격증명 파일(SENSITIVE_FILE_PATTERNS)을 만들거나 고치거나 지우는 호출
  *   third_party_tool  외부 MCP 서버 도구(`server::tool`) — 제3자 코드가 호스트 밖으로 나간다
  *   instruction_write 에이전트 지시 파일(아래 INSTRUCTION_FILE_PATTERNS)을 만들거나 고치거나 지우는 호출
- * 바닥 검사는 자동승인보다 먼저 돈다. 승인 정책 none(승인 자체가 없음)에는 적용되지 않는다.
+ *   memory_write      사용자 메모리에 쓰는 호출(memory_save) — 다음 대화·작업의 프롬프트에 계속 실린다
+ * 바닥 검사는 자동승인보다 먼저 돈다. 승인 정책 none(승인 자체가 없음)에는 적용되지 않는다 — memory_write 만 예외로
+ * 정책 none 에서도 묻는다(approval-gate 의 requiresApproval). memory_write 를 바닥에서 빼면 memory_save 도구는 실리지 않는다.
  * AGENT_TASK_APPROVAL_FLOOR(쉼표 구분)로 고른다. 빈 값이나 none 이면 바닥 없음(종전 동작).
  */
-export const APPROVAL_FLOOR_KINDS = ['credential_write', 'third_party_tool', 'instruction_write'] as const;
+export const APPROVAL_FLOOR_KINDS = ['credential_write', 'third_party_tool', 'instruction_write', 'memory_write'] as const;
 export type ApprovalFloorKind = typeof APPROVAL_FLOOR_KINDS[number];
 
 /** PURE: 환경변수 값 → 바닥 종류. 미지정이면 전부, 모르는 이름은 버린다. */

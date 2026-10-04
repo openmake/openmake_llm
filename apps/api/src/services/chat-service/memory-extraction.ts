@@ -59,7 +59,7 @@ export async function extractLLMMemories(client: LLMClient, text: string): Promi
  * cli.ts 가 반환 직후 `process.exit(0)` 을 호출해 미완 INSERT 가 통째로 사라진다(/code-review 지적, 2026-09-07).
  */
 export async function auditMemoryWrite(
-    action: 'memory.auto_created' | 'memory.backfilled',
+    action: 'memory.auto_created' | 'memory.backfilled' | 'memory.agent_task_created',
     userId: string,
     details: Record<string, unknown>,
 ): Promise<void> {

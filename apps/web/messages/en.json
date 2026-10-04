@@ -2396,7 +2396,8 @@
         "network": "Network access",
         "external": "External tool",
         "control": "Control",
-        "sensitive": "Credential file"
+        "sensitive": "Credential file",
+        "memory": "Save to memory"
       },
       "recentTitle": "Recent decisions (30 min)",
       "revoked": "revoked",
