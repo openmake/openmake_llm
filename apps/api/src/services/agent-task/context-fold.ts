@@ -20,6 +20,7 @@ import type { ChatMessage } from '../../llm/types';
 import { runCompactionHooks } from './compaction-hooks';
 import { digestToolCall, findToolCallArgs } from './tool-digest';
 import { CONTEXT_FOLD_BATCH } from '../../config/agent-task-context';
+import { getFoldedSpillRef, spilledResultPathOf } from '../../prompts/agent-task-context';
 
 export const FOLD_MARKER = '[접힌 도구 결과]';
 
@@ -51,11 +52,14 @@ const DIGEST_SEPARATOR = ' · 결과 ';
 function buildStub(toolName: string | undefined, original: string, headChars: number, digest: string | null): string {
     const head = original.slice(0, headChars).replace(/\s+$/, '');
     const ellipsis = original.length > headChars ? '…' : '';
+    const spilled = spilledResultPathOf(original);
     // ⚠️ "원문이 필요하면 다시 호출하세요" 류 문구 금지 — 2026-09-09 실측(10770ab5): 그 문구가
     // 같은 파일을 25턴 동안 반복해 읽는 루프를 유도했다(접힌 구간을 매번 다시 읽고 또 접힘).
     // 이미 처리한 내용임을 알리고, 필요한 요점은 메모로 남기게 한다.
     return `${FOLD_MARKER} ${digest ? `${digest}${DIGEST_SEPARATOR}` : `${toolName ?? 'tool'} 결과 `}${original.length}자 — 이미 읽고 처리한 내용이라 앞부분만 남김. `
-        + '같은 내용을 다시 읽지 마세요. 나중에 필요한 요점은 지금 메모 파일(예: notes.md)에 적어 두세요.\n'
+        + '같은 내용을 다시 읽지 마세요. 나중에 필요한 요점은 지금 메모 파일(예: notes.md)에 적어 두세요.'
+        // 파일로 보관한 결과(tool-result-spill)는 경로를 남긴다 — 안내가 미리보기 끝에 있어 접으면 사라진다.
+        + (spilled ? getFoldedSpillRef(spilled) : '') + '\n'
         + head + ellipsis;
 }
 

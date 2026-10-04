@@ -13,7 +13,7 @@ it('접기가 일어난 뒤 1회 호출되고, 예외는 삼킨다', () => {
     const seen = jest.fn();
     registerCompactionHook('boom', () => { throw new Error('x'); });
     registerCompactionHook('obs', seen);
-    const st = foldOldToolResults(c, { keepTurns: 1, minChars: 100, headChars: 50 });
+    const st = foldOldToolResults(c, { keepTurns: 1, minChars: 100, headChars: 50, minBatchSavedChars: 0 });
     expect(st.folded).toBe(1);
     expect(seen).toHaveBeenCalledWith(expect.objectContaining({ folded: 1, conversation: c }));
 });

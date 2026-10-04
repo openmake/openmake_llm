@@ -43,7 +43,7 @@ describe('buildHandoffSummary', () => {
 
     it('이미 접힌 스텁에서도 한 줄을 읽는다', () => {
         const c = conv();
-        foldOldToolResults(c, { keepTurns: 1, minChars: 100, headChars: 40 });
+        foldOldToolResults(c, { keepTurns: 1, minChars: 100, headChars: 40, minBatchSavedChars: 0 });
         const s = buildHandoffSummary(c.slice(2, 8), c[1].content);
         expect(s).toContain('npm test -- billing');
         expect(s).toContain('expected 10.5 received 10.4');

@@ -70,6 +70,20 @@ describe('verifyWorkspaceTests', () => {
         expect((await verifyWorkspaceTests(rt, 't1', WROTE, 0)).ok).toBe(false);
     });
 
+    it('증거의 러너가 감지된 러너와 같으면 실행하지 않는다(프로브만) — provenSkip', async () => {
+        const { rt, cmds } = runtime((cmd) => cmd === DETECT_PROBE ? exec('pytest') : exec('3 passed'));
+        const r = await verifyWorkspaceTests(rt, 't1', WROTE, 5, undefined, 'pytest');
+        expect(r).toEqual({ ran: false, ok: true, report: '', stepNumber: 5, runner: 'pytest', provenSkip: true });
+        expect(cmds).toEqual([DETECT_PROBE]);
+    });
+
+    it('증거의 러너가 감지된 러너와 다르면 그대로 실행한다(pytest 를 돌렸지만 게이트는 npm test)', async () => {
+        const { rt, cmds } = runtime((cmd) => cmd === DETECT_PROBE ? exec('npm') : exec('FAIL', 1));
+        const r = await verifyWorkspaceTests(rt, 't1', WROTE, 5, undefined, 'pytest');
+        expect(r.ran).toBe(true); expect(r.ok).toBe(false); expect(r.provenSkip).toBeUndefined();
+        expect(cmds[1]).toBe(RUNNER_COMMANDS.npm);
+    });
+
     it('인프라 오류는 fail-open', async () => {
         const { rt } = runtime(() => { throw new Error('docker down'); });
         expect(await verifyWorkspaceTests(rt, 't1', WROTE, 2)).toEqual({ ran: false, ok: true, report: '', stepNumber: 2 });

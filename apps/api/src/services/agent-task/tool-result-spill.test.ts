@@ -76,8 +76,8 @@ describe('spillToolResult', () => {
 });
 
 describe('TOOL_RESULT_SPILL 설정', () => {
-    it('기본값은 꺼짐', () => {
+    it('기본값은 켜짐(실측 근거는 설정 파일 주석)', () => {
         const actual = jest.requireActual('../../config/agent-task-context') as typeof import('../../config/agent-task-context');
-        expect(actual.TOOL_RESULT_SPILL.ENABLED).toBe(false);
+        expect(actual.TOOL_RESULT_SPILL.ENABLED).toBe(true);
     });
 });
