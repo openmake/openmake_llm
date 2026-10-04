@@ -242,6 +242,7 @@
       "dismiss": "閉じる",
       "copyKey": "キーをコピー",
       "copied": "コピー済み",
+      "bridgeHint": "このキーは Companion と CLI の接続専用です。Companion の設定または CLI のログイン(openmake-code login)に入力してください。推論 API の呼び出しには使えません。",
       "curlTitle": "クイックスタート (curl)",
       "copyCurl": "curl をコピー"
     },
@@ -425,6 +426,7 @@
     },
     "agentTask": {
       "title": "エージェントタスク",
+      "queuePosition": "待機順 {position} 番 — 前のタスクが終わると自動で開始します",
       "turn": "ターン {turn}",
       "goal": "目標",
       "outputs": "成果物",
@@ -993,6 +995,7 @@
         "llm_error": "しばらくしてから再実行してください。続く場合は別のモデルを選ぶか、管理者に連絡してください。",
         "interrupted": "再開して、中断した地点から続けてください。",
         "unknown": "失敗理由の全文を確認し、再実行しても同じ場合は管理者に連絡してください。",
+        "device_wait_expired": "Companion(または CLI)を接続してから、もう一度実行してください。",
         "sandbox_unavailable": "しばらくしてから再実行してください。同時に動いているタスクが減ると実行環境を確保できます。続く場合は管理者に連絡してください。"
       }
     },

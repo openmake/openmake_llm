@@ -12,7 +12,8 @@
  */
 import type { ChatMessage } from '../../llm/types';
 import { hashApprovalArgs } from '../../data/repositories/agent-task-approval-repository';
-import { getToolLoopBlockedResult, getToolLoopFailureNote, getToolLoopSameResultNote } from '../../prompts/agent-task-prompt';
+import { getToolLoopBlockedResult, getToolLoopFailureNote, getToolLoopSameResultNote, LOCAL_BRIDGE_UNKNOWN_OUTCOME_MARKER, UNKNOWN_OUTCOME_PHRASE, UNKNOWN_OUTCOME_DECLINED_PHRASE } from '../../prompts/agent-task-prompt';
+import { classifyBrowserAction } from '@openmake/config';
 import { DUPLICATE_TOOL_CALL_PREFIX, TOOL_LOOP_NOTE_MARKER, getToolLoopCycleNote, getToolLoopCycleBlockedResult, getRereadNote } from '../../prompts/agent-task-turn-loop';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
 import { hasSideEffects } from '../../config/tool-policy';
@@ -66,6 +67,45 @@ function doneCalls(conversation: readonly ChatMessage[]): DoneCall[] {
         }
     }
     return done;
+}
+
+/** 결과 불명 쓰기를 다시 하려 할 때의 처리 — ask: 사용자에게 묻는다, declined: 이미 다시 실행하지 않기로 했으니 묻지 않고 막는다. */
+export type UnknownOutcomeRetry = 'ask' | 'declined';
+
+/** PURE: 호출 결과가 결과 불명 처리의 어느 단계인가 — 사용자가 거절한 안내 / 결과 불명 안내 / 그 밖(정상 결과). */
+function unknownOutcomeStage(content: string): UnknownOutcomeRetry | null {
+    if (content.includes(UNKNOWN_OUTCOME_DECLINED_PHRASE)) return 'declined';
+    return content.includes(LOCAL_BRIDGE_UNKNOWN_OUTCOME_MARKER) || content.includes(UNKNOWN_OUTCOME_PHRASE) ? 'ask' : null;
+}
+
+/**
+ * PURE: 한 호출이 "바꾸는 것"의 목록(키). 브라우저는 입력·누르기 액션 하나하나가 키다 — 읽기와 주소 이동은 뺀다
+ * (같은 주소로 다시 가는 것은 되풀이해도 해가 없다). 그 밖의 도구는 호출 전체가 키 하나다.
+ */
+function effectKeys(name: string, args: unknown): string[] {
+    const actions = name === 'browser' ? (args as { actions?: unknown } | null)?.actions : undefined;
+    if (!Array.isArray(actions)) return [signature(name, args)];
+    return actions
+        .filter((a) => { const c = classifyBrowserAction(a); return c === 'write' || c === 'click'; })
+        .map((a) => signature(name, a));
+}
+
+/**
+ * PURE: 지금 하려는 호출이, 로컬 기기와 끊겨 **결과 불명으로 끝난 쓰기**를 다시 하려는 것인가 — 그렇다면 어떻게 다룰지.
+ * 같은 쓰기의 가장 최근 결과로 정한다: 결과 불명 안내면 'ask'(사용자에게 묻는다), 사용자가 다시 실행하지 않기로 한 안내면
+ * 'declined'(묻지 않고 막는다 — 같은 질문을 되풀이하지 않는다), 정상 결과면(사용자가 다시 실행을 승인했다) null.
+ * 브라우저는 액션 단위로 본다: 모델이 호출을 쪼개거나 읽기를 덧붙여 다시 불러도 같은 입력·누르기가 하나라도 들어 있으면 해당한다.
+ * 기기가 다시 연결되면 브라우저 탭 같은 상태가 초기화되어 모델이 "반영되지 않았다"고 보고 같은 쓰기를 되풀이하기 쉽다.
+ * 제출처럼 되돌릴 수 없는 쓰기가 두 번 나가지 않게 한다.
+ */
+export function retryAfterUnknownOutcome(conversation: readonly ChatMessage[], name: string, args: unknown): UnknownOutcomeRetry | null {
+    const stage = new Map<string, UnknownOutcomeRetry | null>(); // 쓰기 키 → 가장 최근 결과의 단계
+    for (const c of doneCalls(conversation)) {
+        const st = unknownOutcomeStage(c.content);
+        for (const k of effectKeys(c.name, c.args)) stage.set(k, st);
+    }
+    const mine = effectKeys(name, args).map((k) => stage.get(k) ?? null);
+    return mine.includes('ask') ? 'ask' : mine.includes('declined') ? 'declined' : null;
 }
 
 /**

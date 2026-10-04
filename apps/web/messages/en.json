@@ -242,6 +242,7 @@
       "dismiss": "Dismiss",
       "copyKey": "Copy key",
       "copied": "Copied",
+      "bridgeHint": "This key only connects Companion and the CLI. Enter it in Companion settings or in the CLI login (openmake-code login). It cannot call the inference API.",
       "curlTitle": "Quick start (curl)",
       "copyCurl": "Copy curl"
     },
@@ -425,6 +426,7 @@
     },
     "agentTask": {
       "title": "Agent task",
+      "queuePosition": "Position {position} in the queue — starts automatically when earlier tasks finish",
       "turn": "Turn {turn}",
       "goal": "Goal",
       "outputs": "Outputs",
@@ -993,6 +995,7 @@
         "llm_error": "Try again in a moment. If it keeps failing, pick another model or tell your administrator.",
         "interrupted": "Resume to pick up from where it stopped.",
         "unknown": "Check the full failure reason. If it fails the same way again, tell your administrator.",
+        "device_wait_expired": "Connect Companion (or the CLI), then run the task again.",
         "sandbox_unavailable": "Run it again in a little while. An execution environment frees up once fewer tasks are running. If it keeps happening, tell your administrator."
       }
     },
