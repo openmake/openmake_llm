@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BRIDGE_KINDS, SANDBOX_ENABLED } from '../constants';
+import { BRIDGE_KINDS, BROWSER_KIND, SANDBOX_ENABLED } from '../constants';
 import { BridgeCore } from '../core';
 import type { BridgeMsg, BridgeResult, ConfirmFn } from '../types';
 
@@ -135,12 +135,6 @@ describe('BridgeCore', () => {
         await expect(run(core, { kind: 'read', path: 'x', folder: '../..' })).rejects.toThrow(/스코프 밖/);
     });
 
-    it('폐기된 browser kind 는 화이트리스트에서 빠져 거부된다 (2026-08-23)', async () => {
-        const r = await run(makeCore(base), { kind: 'browser' } as BridgeMsg);
-        expect(r.ok).toBe(false);
-        expect(r.error).toContain('지원하지 않는 kind');
-    });
-
     it('알 수 없는 kind 는 거부한다 (화이트리스트)', async () => {
         const r = await run(makeCore(base), { kind: 'evil_rpc' });
         expect(r.ok).toBe(false);
@@ -151,6 +145,15 @@ describe('BridgeCore', () => {
         const src = fs.readFileSync(path.join(__dirname, '..', 'core.ts'), 'utf8');
         const body = src.slice(src.indexOf('switch (m.kind)'));
         const cases = [...body.matchAll(/case '([a-z_A-Z]+)'/g)].map((m) => m[1]);
-        expect([...cases].sort()).toEqual([...BRIDGE_KINDS].sort());
+        // browser 는 능력 목록에 조건부로 들어간다(전용 프로필 + Chrome) — 기본 목록에는 없다
+        expect([...cases].sort()).toEqual([...BRIDGE_KINDS, BROWSER_KIND].sort());
+    });
+
+    it('전용 프로필을 주지 않으면 브라우저를 알리지도 처리하지도 않는다', async () => {
+        const core = makeCore(base);
+        expect(core.capabilities()).toEqual([...BRIDGE_KINDS]);
+        const r = await run(core, { kind: 'browser', actions: [{ type: 'goto', url: 'https://example.com' }] });
+        expect(r.ok).toBe(false);
+        expect(r.error).toContain('브라우저를 쓸 수 없습니다');
     });
 });

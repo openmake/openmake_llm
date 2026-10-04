@@ -8,7 +8,7 @@
  * 무시한다. 알림은 검증을 통과한 것만 호스트(onNotice)에 넘길 뿐 아무 동작도 일으키지 않는다.
  */
 import WebSocket from 'ws';
-import { BRIDGE_KINDS, NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
+import { NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
 import { RequestGuard } from './request-guard';
 import type { BridgeCore } from './core';
 import type { BridgeMsg, BridgeNotice, BridgeResult, BridgeStatusCode } from './types';
@@ -120,7 +120,7 @@ export class BridgeConnection {
                 label: this.opts.label,
                 folderName,
                 ...(this.opts.hostId ? { hostId: this.opts.hostId } : {}),
-                capabilities: BRIDGE_KINDS,
+                capabilities: this.opts.core.capabilities(),
             }));
             this.openCleanup = this.opts.onOpen?.(this.ws) ?? null;
         }, 300));
