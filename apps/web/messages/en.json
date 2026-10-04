@@ -896,6 +896,15 @@
       "completed": "Completed",
       "pending": "Pending"
     },
+    "statusRaw": {
+      "pending": "Pending",
+      "queued": "Queued",
+      "running": "In progress",
+      "paused": "Paused",
+      "completed": "Completed",
+      "failed": "Failed",
+      "cancelled": "Cancelled"
+    },
     "failedTag": "Failed",
     "cancelledTag": "Cancelled",
     "turnShort": "Turn {current}/{max}",
@@ -2363,6 +2372,7 @@
       "link": "Open agent list"
     },
     "tasks": {
+      "reject": "Reject",
       "title": "Agent task approvals",
       "hint": "High-risk tool runs and agent questions need approval before the task continues. You can also answer inline in chat.",
       "empty": "No agent tasks awaiting approval.",

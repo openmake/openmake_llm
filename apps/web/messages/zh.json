@@ -896,6 +896,15 @@
       "completed": "已完成",
       "pending": "待处理"
     },
+    "statusRaw": {
+      "pending": "待处理",
+      "queued": "排队中",
+      "running": "进行中",
+      "paused": "已暂停",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    },
     "failedTag": "失败",
     "cancelledTag": "已取消",
     "turnShort": "回合 {current}/{max}",
@@ -2363,6 +2372,7 @@
       "link": "打开智能体列表"
     },
     "tasks": {
+      "reject": "拒绝",
       "title": "代理任务审批",
       "hint": "高风险工具执行和代理提问需经批准后任务才会继续。也可以直接在聊天中回复。",
       "empty": "没有待审批的代理任务。",

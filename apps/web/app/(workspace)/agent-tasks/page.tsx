@@ -684,7 +684,7 @@ function TaskDetailModal({
             )}
             <div className="mt-2 flex items-center gap-3 text-xs text-faint">
               <span className="flex items-center gap-1">
-                {t("stateLabel")} {detail.task.status}
+                {t("stateLabel")} {t(`statusRaw.${detail.task.status}`)}
                 {(detail.task.status === "running" || detail.task.status === "paused") && (
                   <LoaderCircle className="h-3 w-3 animate-spin" />
                 )}

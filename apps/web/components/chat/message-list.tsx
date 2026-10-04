@@ -116,6 +116,12 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
               <textarea
                 value={text}
                 onChange={(e) => setAnswers((prev) => ({ ...prev, [a.approvalId]: e.target.value }))}
+                onKeyDown={(e) => {
+                  // Enter 로 답변 전송, Shift+Enter 는 줄바꿈(채팅 입력창과 같은 규칙). keyCode 229 는 WebKit 조합 커밋 보강.
+                  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || e.keyCode === 229) return;
+                  e.preventDefault();
+                  if (busy !== a.approvalId && text.trim()) void answer(a);
+                }}
                 placeholder={t("approvals.answerPlaceholder")}
                 rows={2}
                 disabled={busy === a.approvalId}

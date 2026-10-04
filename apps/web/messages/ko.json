@@ -896,6 +896,15 @@
       "completed": "완료",
       "pending": "대기"
     },
+    "statusRaw": {
+      "pending": "대기",
+      "queued": "대기열",
+      "running": "진행중",
+      "paused": "일시 중지",
+      "completed": "완료",
+      "failed": "실패",
+      "cancelled": "취소됨"
+    },
     "failedTag": "실패",
     "cancelledTag": "취소됨",
     "turnShort": "턴 {current}/{max}",
@@ -2363,6 +2372,7 @@
       "link": "에이전트 목록 열기"
     },
     "tasks": {
+      "reject": "거절",
       "title": "에이전트 작업 승인",
       "hint": "고위험 도구 실행과 에이전트의 질문은 승인해야 작업이 이어집니다. 채팅 안에서도 바로 답할 수 있습니다.",
       "empty": "승인 대기 중인 작업이 없습니다.",

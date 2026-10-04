@@ -896,6 +896,15 @@
       "completed": "完了",
       "pending": "待機"
     },
+    "statusRaw": {
+      "pending": "待機",
+      "queued": "順番待ち",
+      "running": "実行中",
+      "paused": "一時停止",
+      "completed": "完了",
+      "failed": "失敗",
+      "cancelled": "キャンセル済み"
+    },
     "failedTag": "失敗",
     "cancelledTag": "キャンセル済み",
     "turnShort": "ターン {current}/{max}",
@@ -2363,6 +2372,7 @@
       "link": "エージェント一覧を開く"
     },
     "tasks": {
+      "reject": "拒否",
       "title": "エージェント作業の承認",
       "hint": "高リスクなツール実行とエージェントからの質問は、承認しないと作業が進みません。チャット内でも回答できます。",
       "empty": "承認待ちの作業はありません。",

@@ -896,6 +896,15 @@
       "completed": "Abgeschlossen",
       "pending": "Ausstehend"
     },
+    "statusRaw": {
+      "pending": "Ausstehend",
+      "queued": "In Warteschlange",
+      "running": "In Bearbeitung",
+      "paused": "Pausiert",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen"
+    },
     "failedTag": "Fehlgeschlagen",
     "cancelledTag": "Abgebrochen",
     "turnShort": "Runde {current}/{max}",
@@ -2363,6 +2372,7 @@
       "link": "Agentenliste öffnen"
     },
     "tasks": {
+      "reject": "Ablehnen",
       "title": "Freigaben für Agentenaufgaben",
       "hint": "Hochriskante Tool-Ausführungen und Fragen des Agents benötigen eine Freigabe, bevor die Aufgabe fortgesetzt wird. Sie können auch direkt im Chat antworten.",
       "empty": "Keine Agentenaufgaben, die auf Freigabe warten.",
