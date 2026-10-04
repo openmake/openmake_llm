@@ -16,7 +16,7 @@ const dispatchAgentTask = jest.fn(async (e: { run: () => Promise<void> }) => { a
 jest.mock('../task-queue', () => ({ dispatchAgentTask: (e: { run: () => Promise<void> }) => dispatchAgentTask(e) }));
 jest.mock('../boot-recovery', () => ({ resolveUserRole: async () => 'user' }));
 let bridgeEnabled = true;
-jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { get ENABLED() { return bridgeEnabled; } } }));
+jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { get ENABLED() { return bridgeEnabled; }, DEVICE_WAIT_ENABLED: true, DEVICE_WAIT_MAX_MS: 60_000 } }));
 const getDevice = jest.fn();
 jest.mock('../../local-bridge/registry', () => ({ getLocalBridgeRegistry: () => ({ getDevice }) }));
 const utimes = jest.fn(async () => undefined);
@@ -87,5 +87,49 @@ describe('sweepParkedTasks', () => {
         listParkedTasks.mockResolvedValueOnce([{ id: 't2', workspace_path: null, has_decision: false, has_live_pending: false }]);
         expirePendingForTask.mockRejectedValueOnce(new Error('boom'));
         await expect(sweepParkedTasks()).resolves.toEqual({ resumed: 0, expired: 0, touched: 0 });
+    });
+});
+
+describe('기기 대기(device_wait) 재개·스윕', () => {
+    const waiting = { ...parkedTask, executor: 'local', device_id: 'd1' };
+
+    it('체크포인트가 없는 기기 대기 작업은 기기가 연결되면 처음부터 다시 시작한다', async () => {
+        getAgentTask.mockResolvedValue({ ...waiting, checkpoint: null });
+        getDevice.mockReturnValue({ deviceId: 'd1' });
+        await expect(resumeParkedTask('t1')).resolves.toBe(true);
+        const arg = (execute.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+        expect(arg).toMatchObject({ taskId: 't1', executor: 'local', deviceId: 'd1' });
+        expect('resume' in arg).toBe(false);
+    });
+
+    it('체크포인트가 없는 서버 샌드박스 작업은 종전대로 재개하지 않는다', async () => {
+        getAgentTask.mockResolvedValue({ ...parkedTask, checkpoint: null });
+        await expect(resumeParkedTask('t1')).resolves.toBe(false);
+    });
+
+    it('스윕 — 기기가 연결됐으면 재개한다(승인 여부와 무관)', async () => {
+        listParkedTasks.mockResolvedValue([{ id: 't1', workspace_path: null, reason: 'device_wait', waited_ms: '5000', has_decision: false, has_live_pending: false }]);
+        getAgentTask.mockResolvedValue(waiting);
+        getDevice.mockReturnValue({ deviceId: 'd1' });
+        await expect(sweepParkedTasks()).resolves.toMatchObject({ resumed: 1, expired: 0 });
+        expect(expirePendingForTask).not.toHaveBeenCalled();
+        expect(updateAgentTask).not.toHaveBeenCalled();
+    });
+
+    it('스윕 — 기기가 없고 상한 안이면 그대로 둔다(승인 만료로 실패시키지 않는다)', async () => {
+        listParkedTasks.mockResolvedValue([{ id: 't1', workspace_path: null, reason: 'device_wait', waited_ms: '5000', has_decision: false, has_live_pending: false }]);
+        getAgentTask.mockResolvedValue(waiting);
+        getDevice.mockReturnValue(undefined);
+        await expect(sweepParkedTasks()).resolves.toMatchObject({ resumed: 0, expired: 0 });
+        expect(updateAgentTask).not.toHaveBeenCalled();
+        expect(expirePendingForTask).not.toHaveBeenCalled();
+    });
+
+    it('스윕 — 기기가 없는 채 상한을 넘기면 device_wait_expired 로 실패시킨다', async () => {
+        listParkedTasks.mockResolvedValue([{ id: 't1', workspace_path: null, reason: 'device_wait', waited_ms: '60001', has_decision: false, has_live_pending: false }]);
+        getAgentTask.mockResolvedValue(waiting);
+        getDevice.mockReturnValue(undefined);
+        await expect(sweepParkedTasks()).resolves.toMatchObject({ resumed: 0, expired: 1 });
+        expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'failed', error: 'device_wait_expired' }));
     });
 });

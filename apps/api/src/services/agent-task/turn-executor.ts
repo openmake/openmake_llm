@@ -19,7 +19,7 @@ import { prepareToolArgs } from './tool-args';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import { notifyApprovalPending } from './approval-pending';
 
-import { AgentTaskAbort, AgentTaskParked } from './types';
+import { AgentTaskAbort, AgentTaskParked, AGENT_TASK_DEVICE_WAIT_REASON } from './types';
 import { writeTurnCheckpoint, markToolCallInFlight } from './turn-reentry';
 import { hasSideEffects } from '../../config/tool-policy';
 import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote } from './tool-loop-guard';
@@ -110,12 +110,14 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     let parkRequested = false;
     // 실행 중 표식(172)을 남긴 호출인가 — 결과 스텝 뒤(또는 주차 전)에 지운다.
     let inFlightMarked = false;
-    const park = async (): Promise<never> => {
+    // reason 을 주면 그 사유로 표식한다(기기 대기) — 생략은 질문 응답 대기.
+    const park = async (reason?: string): Promise<never> => {
         if (inFlightMarked) await markToolCallInFlight(taskId, null); // 주차된 호출은 재개 때 다시 실행된다
         await writeTurnCheckpoint(taskId, conversation, turn - 1, taskRuntime);
         await update({ status: 'paused' });
-        await new AgentTaskRepository(getPool()).markParked(taskId);
-        throw new AgentTaskParked();
+        if (reason) await new AgentTaskRepository(getPool()).markParked(taskId, reason);
+        else await new AgentTaskRepository(getPool()).markParked(taskId);
+        throw new AgentTaskParked(reason);
     };
     // 외부 MCP 서버의 사용자 입력 요청(F13.10) — ask_human 과 같은 채널로 묻는다(자동승인·정책 무관, 대기는 pause-aware).
     const elicitCtx: ToolUserInputContext = {
@@ -201,6 +203,8 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         }
         const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
         let toolResult: string;
+        // 기기 대기(P1-4) — 이 호출의 결과를 기록한 뒤 주차한다(쓰기·실행을 보낸 뒤 끊겨 결과 불명).
+        let parkForDeviceAfterRecord = false;
         inFlightMarked = false;
         receiptOpen = false;
         // 부작용 도구는 승인 뒤·실행 직전에 표식을 남긴다 — 재개 때 저널에 없으면 결과 불명(다시 실행하지 않음).
@@ -248,6 +252,10 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 onApprovalRejected,
                 onBeforeExecute: beforeExecute,
             }).catch((e: unknown) => (e instanceof AgentTaskParked ? park() : Promise.reject(e)));
+            // 로컬 기기가 사라졌다 — 닿지 않은 호출은 결과 없이 주차(재개 때 다시 실행), 결과 불명은 안내를 남기고 주차.
+            const deviceLoss = taskRuntime.consumeDeviceLoss?.() ?? null;
+            if (deviceLoss === 'rerunnable') await park(AGENT_TASK_DEVICE_WAIT_REASON);
+            parkForDeviceAfterRecord = deviceLoss === 'unknown';
             if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             if (toolResult.includes(TASK_TERMINATE_SENTINEL)) {
                 terminated = true;
@@ -315,6 +323,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 checkpoint: { conversation, completedTurn: turn - 1 },
             }).catch(() => { /* checkpoint 실패는 실행을 막지 않음 */ });
         }
+        if (parkForDeviceAfterRecord) await park(AGENT_TASK_DEVICE_WAIT_REASON);
     }
 
     return { terminated, terminateSummary, stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts };

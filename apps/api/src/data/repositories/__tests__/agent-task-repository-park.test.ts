@@ -11,12 +11,30 @@ function fakePool(results: Array<{ rows: unknown[]; rowCount?: number }>) {
 }
 
 describe('AgentTaskRepository — 주차(F16.7)', () => {
-    it('parkedTaskCondition 은 paused + 마지막 이벤트 사유 hitl_parked', () => {
+    it('parkedTaskCondition 은 paused + 마지막 이벤트 사유가 주차 사유(질문 응답 대기·기기 대기)', () => {
         const c = parkedTaskCondition('t');
         expect(c).toContain("t.status = 'paused'");
         expect(c).toContain('ORDER BY e.id DESC LIMIT 1');
         expect(c).toContain('COALESCE('); // NULL 사유에서 NOT(조건) 이 NULL 이 되지 않게(부팅 마킹 누락 방지)
-        expect(c).toContain("= 'hitl_parked'");
+        expect(c).toContain("IN ('hitl_parked', 'device_wait')");
+    });
+
+    it('markParked 는 사유를 받아 표식한다 — 기본은 질문 응답 대기, 모르는 사유는 거절', async () => {
+        const { pool, calls } = fakePool([{ rows: [] }, { rows: [] }]);
+        const repo = new AgentTaskRepository(pool);
+        await repo.markParked('t1');
+        await repo.markParked('t1', 'device_wait');
+        expect(calls[0].params).toEqual(['t1', 'hitl_parked']);
+        expect(calls[1].params).toEqual(['t1', 'device_wait']);
+        await expect(repo.markParked('t1', "x'; DROP TABLE agent_tasks; --")).rejects.toThrow('모르는 주차 사유');
+        expect(calls).toHaveLength(2);
+    });
+
+    it('listDeviceWaitTaskIds — 그 사용자의 기기 대기 작업만', async () => {
+        const { pool, calls } = fakePool([{ rows: [{ id: 't1' }, { id: 't2' }] }]);
+        await expect(new AgentTaskRepository(pool).listDeviceWaitTaskIds('u1')).resolves.toEqual(['t1', 't2']);
+        expect(calls[0].sql).toContain('t.user_id = $1');
+        expect(calls[0].params).toEqual(['u1', 'device_wait', 50]);
     });
 
     it('markParked 는 오류를 삼키지 않는다', async () => {

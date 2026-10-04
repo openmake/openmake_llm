@@ -154,3 +154,55 @@ describe('RemoteExecutor 결과 불명 — 보낸 뒤 응답을 못 받은 쓰�
     });
 });
 
+
+describe('RemoteExecutor 기기 유실 신호 — 기기 대기 판단용', () => {
+    afterEach(() => jest.restoreAllMocks());
+    const reply = (r: Record<string, unknown>) => jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue(r as never);
+
+    it('기기에 닿지 않은 실패는 rerunnable, 한 번 읽으면 지워진다', async () => {
+        reply({ ok: false, error: 'x', transport: 'no_device' });
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await ex.exec('ls');
+        expect(ex.consumeDeviceLoss()).toBe('rerunnable');
+        expect(ex.consumeDeviceLoss()).toBeNull();
+    });
+
+    it('읽기 요청이 보낸 뒤 끊긴 것도 rerunnable — 다시 읽으면 된다', async () => {
+        reply({ ok: false, error: 'x', transport: 'disconnected' });
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await ex.readFile('a').catch(() => undefined);
+        expect(ex.consumeDeviceLoss()).toBe('rerunnable');
+    });
+
+    it('쓰기·실행 요청이 보낸 뒤 끊기면 unknown, rerunnable 보다 우선한다', async () => {
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        reply({ ok: false, error: 'x', transport: 'no_device' });
+        await ex.readFile('a').catch(() => undefined);
+        jest.restoreAllMocks();
+        reply({ ok: false, error: 'x', transport: 'disconnected' });
+        await ex.writeFile('a', 'b').catch(() => undefined);
+        expect(ex.consumeDeviceLoss()).toBe('unknown');
+    });
+
+    it('시간 초과는 기기 유실이 아니다 — 기기는 연결돼 있다', async () => {
+        reply({ ok: false, error: 'x', transport: 'timeout' });
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await ex.exec('sleep 999');
+        expect(ex.consumeDeviceLoss()).toBeNull();
+    });
+
+    it('정상 응답·기기가 돌려준 실패는 신호가 없다', async () => {
+        reply({ ok: false, error: '파일 없음' });
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await ex.readFile('a').catch(() => undefined);
+        expect(ex.consumeDeviceLoss()).toBeNull();
+    });
+
+    it('기기 대기가 꺼져 있으면 신호를 내지 않는다', async () => {
+        jest.replaceProperty(LOCAL_BRIDGE, 'DEVICE_WAIT_ENABLED', false);
+        reply({ ok: false, error: 'x', transport: 'no_device' });
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await ex.exec('ls');
+        expect(ex.consumeDeviceLoss()).toBeNull();
+    });
+});

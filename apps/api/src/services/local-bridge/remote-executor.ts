@@ -16,6 +16,7 @@ import type { TaskExecutor, ExecResult, CodeNavSpec, CodeNavData } from '../task
 import { stripWorkspacePrefix } from '../task-sandbox/workspace-path';
 import { getLocalBridgeRegistry, type BridgeKind, type BridgeResult, type BridgeRequestPayload } from './registry';
 import { getLocalBridgeUnknownOutcomeNotice } from '../../prompts/agent-task-prompt';
+import { LocalDeviceUnavailableError, type DeviceLoss } from './device-errors';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { readFile as fsReadFile, stat } from 'fs/promises';
 import { createLogger } from '../../utils/logger';
@@ -61,6 +62,7 @@ export class RemoteExecutor implements TaskExecutor {
     private worktreeRel: string | null = null;
     /** worktree 작업 브랜치명 — 사용자 안내·결과 보고용. */
     private worktreeBranch: string | null = null;
+    private deviceLoss: DeviceLoss | null = null;
 
     /**
      * 폴더 선택(102) — 연결 루트 기준 상대경로. 지정 시 모든 브리지 요청에 folder 로 첨부되어
@@ -86,7 +88,7 @@ export class RemoteExecutor implements TaskExecutor {
      */
     async create(): Promise<void> {
         const dev = getLocalBridgeRegistry().getDevice(this.userId, this.deviceId);
-        if (!dev) throw new Error('연결된 로컬 디바이스가 없습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 먼저 연결하세요.');
+        if (!dev) throw new LocalDeviceUnavailableError();
         this.deviceLabel = `${dev.label}`;
         // folderRel(폴더 선택, 102)까지 남긴다 — 로그만으로 "어느 폴더에서 돌았는지" 추적 가능해야
         // 한다(DB folder_rel 조회 없이 사고 분석·감사가 되도록).
@@ -107,6 +109,7 @@ export class RemoteExecutor implements TaskExecutor {
     private async req(payload: BridgeRequestPayload, timeoutMs?: number): Promise<BridgeResult> {
         const withFolder = this.folderRel ? { ...payload, folder: this.folderRel } : payload;
         const r = await getLocalBridgeRegistry().request(this.userId, withFolder, timeoutMs, this.deviceId);
+        this.noteDeviceLoss(payload.kind, r);
         // 쓰기·실행 요청을 보낸 뒤 응답을 못 받았다 — 기기에서 실행됐을 수 있다. 일반 오류로 돌려주면 모델이 같은 호출을
         // 다시 보내 두 번 실행될 수 있으므로, 상태부터 확인하라는 안내로 바꾼다. 읽기 계열은 다시 시도해도 되므로 그대로 둔다.
         if (!r.ok && UNKNOWN_OUTCOME_KINDS.has(payload.kind) && (r.transport === 'timeout' || r.transport === 'disconnected')) {
@@ -114,6 +117,23 @@ export class RemoteExecutor implements TaskExecutor {
             return { ...r, error: getLocalBridgeUnknownOutcomeNotice(payload.kind, r.transport) };
         }
         return r;
+    }
+
+    /** 기기가 사라져 끝난 요청을 기억한다 — unknown(쓰기·실행을 보낸 뒤 끊김)이 rerunnable 보다 우선한다. */
+    private noteDeviceLoss(kind: BridgeKind, r: BridgeResult): void {
+        if (r.ok || !LOCAL_BRIDGE.DEVICE_WAIT_ENABLED) return;
+        if (r.transport === 'disconnected' && UNKNOWN_OUTCOME_KINDS.has(kind)) this.deviceLoss = 'unknown';
+        else if ((r.transport === 'no_device' || r.transport === 'send_failed' || r.transport === 'disconnected') && this.deviceLoss !== 'unknown') this.deviceLoss = 'rerunnable';
+    }
+
+    /**
+     * 마지막으로 읽은 뒤 기기가 사라져 끝난 요청이 있었는가 — 읽으면 지워진다. 턴 실행기가 도구 호출마다 읽어
+     * 기기 대기 주차를 판단한다(agent-task/device-wait). 시간 초과는 포함하지 않는다(기기는 연결돼 있다).
+     */
+    consumeDeviceLoss(): DeviceLoss | null {
+        const loss = this.deviceLoss;
+        this.deviceLoss = null;
+        return loss;
     }
 
     /**

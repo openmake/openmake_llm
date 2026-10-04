@@ -99,6 +99,9 @@ export interface TaskExecutor {
     /** 브라우저 액션 배치 실행 (actions JSON 은 workspace 상대경로에 사전 기록). */
     runBrowser(actionsRelPath: string): Promise<ExecResult>;
 
+    /** 로컬 기기 유실 신호(원격 실행기만 구현) — 읽으면 지워진다. 기기 대기 주차 판단용(agent-task/device-wait). */
+    consumeDeviceLoss?(): import('../local-bridge/device-errors').DeviceLoss | null;
+
     /** workspace 상대경로에 파일 쓰기 — 경로 가드 + 디스크 쿼터 적용. */
     writeFile(relPath: string, content: string | Buffer): Promise<void>;
 

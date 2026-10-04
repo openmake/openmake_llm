@@ -977,6 +977,7 @@
       "token_limit": "已达到令牌上限",
       "timeout": "超出时间上限",
       "hitl_park_expired": "等待回答超时",
+      "device_wait_expired": "等待设备重新连接超时",
       "interrupted_local_device": "本地设备断开连接而中断",
       "llm_error": "模型调用出错",
       "sandbox_unavailable": "未能准备执行环境",

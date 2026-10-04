@@ -977,6 +977,7 @@
       "token_limit": "토큰 상한 도달",
       "timeout": "시간 상한 초과",
       "hitl_park_expired": "질문 응답 대기 시간 초과",
+      "device_wait_expired": "기기 연결 대기 시간 초과",
       "interrupted_local_device": "로컬 기기 연결이 끊겨 중단",
       "llm_error": "모델 호출 오류",
       "sandbox_unavailable": "실행 환경을 준비하지 못함",

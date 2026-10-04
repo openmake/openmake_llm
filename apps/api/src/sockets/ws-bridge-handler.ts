@@ -52,6 +52,8 @@ export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promis
             return;
         }
         ws.send(JSON.stringify({ type: 'bridge_ready', deviceId }));
+        // 이 기기를 기다리던 작업을 이어서 실행한다 — 등록 응답을 막지 않는다(실패는 주차 스윕이 다시 시도).
+        void import('../services/agent-task/device-wait').then((m) => m.resumeDeviceWaitingTasks(userId)).catch(() => undefined);
         return;
     }
     // bridge_result — reqId 상관관계 해소 (소유 검증은 레지스트리가 수행). 발신 소켓의

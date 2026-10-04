@@ -977,6 +977,7 @@
       "token_limit": "Token limit reached",
       "timeout": "Time limit exceeded",
       "hitl_park_expired": "Timed out waiting for your answer",
+      "device_wait_expired": "Timed out waiting for your device to reconnect",
       "interrupted_local_device": "Interrupted: local device disconnected",
       "llm_error": "Model call failed",
       "sandbox_unavailable": "Execution environment unavailable",

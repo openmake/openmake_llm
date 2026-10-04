@@ -33,6 +33,7 @@ import type { ContributedAgentTaskTool } from '../chat-service/turn-integrations
 import { APPROVAL_PREVIEW } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskParked } from '../agent-task/types';
+import type { DeviceLoss } from '../local-bridge/device-errors';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 
 const logger = createLogger('TaskRuntime');
@@ -143,6 +144,9 @@ export class TaskRuntime {
 
     /** 관측/영속(sandboxContainerId)용 실행기 라벨 — docker: 컨테이너명, 원격(D1): 디바이스 라벨. */
     get containerName(): string { return this.executor.label; }
+
+    /** 로컬 기기 유실 신호(원격 실행기만) — 읽으면 지워진다. 서버 샌드박스는 항상 null. */
+    consumeDeviceLoss(): DeviceLoss | null { return this.executor.consumeDeviceLoss?.() ?? null; }
 
     /** 호스트 workspace 경로 or null(원격 실행기) — 호스트측 소비자(diff·git·영속)의 가드 기준. */
     get localWorkdir(): string | null { return this.executor.localWorkdir; }

@@ -33,6 +33,15 @@ export const LOCAL_BRIDGE = {
     FOLDERS_MAX_ENTRIES: parseInt(process.env.BRIDGE_FOLDERS_MAX_ENTRIES || '200', 10),
 
     /**
+     * 기기 대기 — 로컬 실행 작업이 쓸 기기가 연결돼 있지 않으면 실패시키지 않고 멈춰 두었다가(paused + device_wait),
+     * 기기가 다시 연결되면 이어서 실행한다. 기본 ON — LOCAL_EXECUTOR_ENABLED 자체가 기본 OFF 라 이 값만으로 동작이 바뀌지 않는다.
+     */
+    DEVICE_WAIT_ENABLED: process.env.LOCAL_BRIDGE_DEVICE_WAIT !== 'false',
+
+    /** 기기 대기 상한(ms) — 넘기면 작업을 실패(device_wait_expired)로 끝낸다. LOCAL_BRIDGE_DEVICE_WAIT_MAX_MS(기본 24시간) */
+    DEVICE_WAIT_MAX_MS: parseInt(process.env.LOCAL_BRIDGE_DEVICE_WAIT_MAX_MS || '', 10) || 24 * 60 * 60 * 1000,
+
+    /**
      * worktree 격리 — 연결 폴더가 git 레포면 별도 worktree(디렉토리+브랜치)를 만들어 그 안에서만
      * 작업한다. 사용자의 현재 작업트리·브랜치가 오염되지 않고, 작업 결과를 `git diff HEAD` 로
      * 정확히 캡처할 수 있다(샌드박스와 달리 인위적 baseline 커밋이 필요 없다 — 레포의 실제

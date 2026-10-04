@@ -38,6 +38,7 @@ import { currentPlanStepIndex } from './task-sandbox/planning';
 import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
+import { parkForMissingDevice } from './agent-task/device-wait';
 import { AgentTaskTurnTimeout } from './agent-task/turn-call';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
@@ -277,6 +278,7 @@ export class AgentTaskService {
                     }
                     logger.info(`[AgentTask] 샌드박스 활성 (${taskId}, ${taskRuntime.containerName})`);
                 } catch (e) {
+                    await parkForMissingDevice(e, { taskId, update }); // 로컬 기기 미연결이면 주차(던진다, agent-task/device-wait)
                     taskRuntime = null; stepNumber = await handleSandboxUnavailable(e, { taskId, signal, stepNumber, emitStep, conversation, remote: !!remoteExecutor });
                 }
             }
