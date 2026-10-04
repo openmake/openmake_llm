@@ -16,6 +16,7 @@ jest.mock('./role-client', () => ({
 import { callAgentTurnWithBudget, AgentTaskTurnTimeout } from './turn-call';
 import { chatTurnWithRoleFallback, TurnCallCapExceeded } from './role-client';
 import { AgentTaskAbort } from './types';
+import { OUTPUT_REPETITION_CUT_MARKER } from '../../prompts/agent-task-turn-loop';
 
 const chat = chatTurnWithRoleFallback as jest.Mock;
 const base = () => ({
@@ -144,14 +145,31 @@ describe('callAgentTurnWithBudget — 컨텍스트 절단 기록', () => {
 describe('callAgentTurnWithBudget — 출력 반복 기록', () => {
     const loop = '같은 문장을 계속 되풀이하는 모델 출력입니다. 설정을 확인하고 다시 시도하겠습니다. 잠시만 기다려 주세요. ';
 
-    it('본문에서 짧은 구간이 여러 번 반복되면 단계 기록만 남기고 응답은 그대로 돌려준다', async () => {
-        chat.mockResolvedValue({ content: loop.repeat(8) });
+    it('본문에서 짧은 구간이 여러 번 반복되면 단계 기록을 남기고, 반복이 시작된 뒤를 잘라 돌려준다', async () => {
+        chat.mockResolvedValue({ content: `결과입니다.\n${loop.repeat(8)}` });
         const onNote = jest.fn();
-        const { result } = await callAgentTurnWithBudget({ ...base(), onNote });
-        expect(result.content).toBe(loop.repeat(8));
+        const out = await callAgentTurnWithBudget({ ...base(), onNote });
+        expect(out.result.content).toBe(`결과입니다.\n${loop.trimEnd()}${OUTPUT_REPETITION_CUT_MARKER}`);
+        expect(out.repetitionCut).toBe(true);
         expect(onNote).toHaveBeenCalledTimes(1);
         expect(onNote.mock.calls[0][0]).toBe('output_repetition');
         expect(onNote.mock.calls[0][1]).toContain('반복');
+    });
+
+    it('도구 호출이 함께 온 응답은 본문만 자르고 호출은 그대로 둔다', async () => {
+        const tool_calls = [{ id: 'c1', type: 'function', function: { name: 'bash', arguments: { command: 'ls' } } }];
+        chat.mockResolvedValue({ content: loop.repeat(8), tool_calls });
+        const out = await callAgentTurnWithBudget({ ...base(), onNote: jest.fn() });
+        expect(out.result.content).toBe(`${loop.trimEnd()}${OUTPUT_REPETITION_CUT_MARKER}`);
+        expect(out.result.tool_calls).toBe(tool_calls);
+    });
+
+    it('본문이 텍스트 도구 호출(XML)이면 자르지 않는다 — 호출문이 깨지지 않게', async () => {
+        const xml = `<tool_call>\n{"name": "bash", "arguments": {"command": "echo ${loop.repeat(8)}"}}\n</tool_call>`;
+        chat.mockResolvedValue({ content: xml });
+        const out = await callAgentTurnWithBudget({ ...base(), onNote: jest.fn() });
+        expect(out.result.content).toBe(xml);
+        expect(out.repetitionCut).toBeFalsy();
     });
 
     it('반복이 없으면 기록하지 않는다', async () => {
