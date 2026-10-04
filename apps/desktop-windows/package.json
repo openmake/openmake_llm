@@ -1,0 +1,16 @@
+{
+  "name": "openmake-companion-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenMake Companion — Windows 트레이 앱(Electron). 브리지 보안 로직은 @openmake/local-bridge-core 를 그대로 쓴다",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "bundle": "node build.mjs",
+    "start": "npm run bundle && electron .",
+    "test": "node --test test/*.test.mjs",
+    "smoke": "npm run bundle && node test/smoke.cjs"
+  },
+  "devDependencies": {
+    "electron": "^38.2.0"
+  }
+}

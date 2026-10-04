@@ -1,0 +1,61 @@
+// 화면 문구 — 웹·macOS Companion 과 같은 5개 언어. 키가 언어마다 같아야 한다(test/i18n.test.mjs 가 확인).
+export const MESSAGES = {
+  ko: {
+    'tray.tooltip': 'OpenMake Companion', 'menu.status': '상태: {0}', 'menu.connectFolder': '작업 폴더 연결…', 'menu.addFolder': '작업 폴더 추가…',
+    'menu.disconnect': '연결 해제', 'menu.disconnectAll': '모두 연결 해제', 'menu.openWeb': '웹에서 열기', 'menu.settings': '설정…', 'menu.quit': '종료',
+    'menu.browser.takeover': '브라우저 넘겨받기 (에이전트 일시 정지)', 'menu.browser.release': '브라우저 돌려주기 (에이전트 재개)', 'menu.browser.stop': '브라우저 작업 중지',
+    'status.idle': '연결된 폴더 없음', 'status.needKey': 'API key 필요 — 설정에서 입력', 'status.connected': '연결됨', 'status.connecting': '연결 중…', 'status.reconnecting': '끊김 — 재연결 대기', 'status.serverError': '서버 오류: {0}',
+    'confirm.title': '명령 실행 확인', 'confirm.message': '에이전트가 이 PC 에서 명령을 실행하려 합니다.', 'confirm.detail': '폴더: {0}\n\n{1}', 'confirm.allow': '허용', 'confirm.allowAll': '이 작업 동안 모두 허용', 'confirm.deny': '거부',
+    'notice.approval.title': '승인 대기', 'notice.approval.body': '작업이 승인을 기다립니다: {0}',
+    'settings.title': 'OpenMake Companion 설정', 'settings.server': '서버 주소', 'settings.apiKey': 'API key (bridge 스코프)', 'settings.browser': '에이전트의 브라우저 사용 허용 (전용 Chrome 프로필)', 'settings.save': '저장', 'settings.saved': '저장됨', 'settings.noEncryption': '이 PC 에서 자격증명 암호화를 쓸 수 없어 API key 를 저장하지 않았습니다',
+  },
+  en: {
+    'tray.tooltip': 'OpenMake Companion', 'menu.status': 'Status: {0}', 'menu.connectFolder': 'Connect Work Folder…', 'menu.addFolder': 'Add Work Folder…',
+    'menu.disconnect': 'Disconnect', 'menu.disconnectAll': 'Disconnect All', 'menu.openWeb': 'Open on the Web', 'menu.settings': 'Settings…', 'menu.quit': 'Quit',
+    'menu.browser.takeover': 'Take Over Browser (Pause Agent)', 'menu.browser.release': 'Hand Back Browser (Resume Agent)', 'menu.browser.stop': 'Stop Browser Task',
+    'status.idle': 'No folder connected', 'status.needKey': 'API key required — enter it in Settings', 'status.connected': 'Connected', 'status.connecting': 'Connecting…', 'status.reconnecting': 'Disconnected — waiting to reconnect', 'status.serverError': 'Server error: {0}',
+    'confirm.title': 'Confirm Command', 'confirm.message': 'The agent wants to run a command on this PC.', 'confirm.detail': 'Folder: {0}\n\n{1}', 'confirm.allow': 'Allow', 'confirm.allowAll': 'Allow All for This Task', 'confirm.deny': 'Deny',
+    'notice.approval.title': 'Approval Needed', 'notice.approval.body': 'A task is waiting for approval: {0}',
+    'settings.title': 'OpenMake Companion Settings', 'settings.server': 'Server URL', 'settings.apiKey': 'API key (bridge scope)', 'settings.browser': 'Allow the agent to use a browser (dedicated Chrome profile)', 'settings.save': 'Save', 'settings.saved': 'Saved', 'settings.noEncryption': 'Credential encryption is unavailable on this PC, so the API key was not saved',
+  },
+  ja: {
+    'tray.tooltip': 'OpenMake Companion', 'menu.status': '状態: {0}', 'menu.connectFolder': '作業フォルダを接続…', 'menu.addFolder': '作業フォルダを追加…',
+    'menu.disconnect': '接続解除', 'menu.disconnectAll': 'すべて接続解除', 'menu.openWeb': 'Web で開く', 'menu.settings': '設定…', 'menu.quit': '終了',
+    'menu.browser.takeover': 'ブラウザを引き継ぐ（エージェントを一時停止）', 'menu.browser.release': 'ブラウザを戻す（エージェントを再開）', 'menu.browser.stop': 'ブラウザ作業を停止',
+    'status.idle': '接続中のフォルダなし', 'status.needKey': 'API key が必要です — 設定で入力してください', 'status.connected': '接続済み', 'status.connecting': '接続中…', 'status.reconnecting': '切断 — 再接続待ち', 'status.serverError': 'サーバーエラー: {0}',
+    'confirm.title': 'コマンド実行の確認', 'confirm.message': 'エージェントがこの PC でコマンドを実行しようとしています。', 'confirm.detail': 'フォルダ: {0}\n\n{1}', 'confirm.allow': '許可', 'confirm.allowAll': 'このタスク中はすべて許可', 'confirm.deny': '拒否',
+    'notice.approval.title': '承認待ち', 'notice.approval.body': 'タスクが承認を待っています: {0}',
+    'settings.title': 'OpenMake Companion 設定', 'settings.server': 'サーバーアドレス', 'settings.apiKey': 'API key（bridge スコープ）', 'settings.browser': 'エージェントのブラウザ使用を許可（専用 Chrome プロファイル）', 'settings.save': '保存', 'settings.saved': '保存しました', 'settings.noEncryption': 'この PC では資格情報の暗号化を使えないため、API key を保存しませんでした',
+  },
+  zh: {
+    'tray.tooltip': 'OpenMake Companion', 'menu.status': '状态：{0}', 'menu.connectFolder': '连接工作文件夹…', 'menu.addFolder': '添加工作文件夹…',
+    'menu.disconnect': '断开连接', 'menu.disconnectAll': '全部断开', 'menu.openWeb': '在网页中打开', 'menu.settings': '设置…', 'menu.quit': '退出',
+    'menu.browser.takeover': '接管浏览器（暂停代理）', 'menu.browser.release': '交还浏览器（恢复代理）', 'menu.browser.stop': '停止浏览器任务',
+    'status.idle': '未连接文件夹', 'status.needKey': '需要 API key — 请在设置中输入', 'status.connected': '已连接', 'status.connecting': '连接中…', 'status.reconnecting': '已断开 — 等待重连', 'status.serverError': '服务器错误：{0}',
+    'confirm.title': '确认执行命令', 'confirm.message': '代理想在这台电脑上执行命令。', 'confirm.detail': '文件夹：{0}\n\n{1}', 'confirm.allow': '允许', 'confirm.allowAll': '本任务期间全部允许', 'confirm.deny': '拒绝',
+    'notice.approval.title': '等待批准', 'notice.approval.body': '任务正在等待批准：{0}',
+    'settings.title': 'OpenMake Companion 设置', 'settings.server': '服务器地址', 'settings.apiKey': 'API key（bridge 范围）', 'settings.browser': '允许代理使用浏览器（专用 Chrome 配置文件）', 'settings.save': '保存', 'settings.saved': '已保存', 'settings.noEncryption': '这台电脑无法使用凭据加密，因此没有保存 API key',
+  },
+  de: {
+    'tray.tooltip': 'OpenMake Companion', 'menu.status': 'Status: {0}', 'menu.connectFolder': 'Arbeitsordner verbinden…', 'menu.addFolder': 'Arbeitsordner hinzufügen…',
+    'menu.disconnect': 'Trennen', 'menu.disconnectAll': 'Alle trennen', 'menu.openWeb': 'Im Web öffnen', 'menu.settings': 'Einstellungen…', 'menu.quit': 'Beenden',
+    'menu.browser.takeover': 'Browser übernehmen (Agent pausieren)', 'menu.browser.release': 'Browser zurückgeben (Agent fortsetzen)', 'menu.browser.stop': 'Browser-Aufgabe stoppen',
+    'status.idle': 'Kein Ordner verbunden', 'status.needKey': 'API key erforderlich — in den Einstellungen eingeben', 'status.connected': 'Verbunden', 'status.connecting': 'Verbinden…', 'status.reconnecting': 'Getrennt — warte auf Wiederverbindung', 'status.serverError': 'Serverfehler: {0}',
+    'confirm.title': 'Befehl bestätigen', 'confirm.message': 'Der Agent möchte auf diesem PC einen Befehl ausführen.', 'confirm.detail': 'Ordner: {0}\n\n{1}', 'confirm.allow': 'Erlauben', 'confirm.allowAll': 'Für diese Aufgabe alle erlauben', 'confirm.deny': 'Ablehnen',
+    'notice.approval.title': 'Genehmigung erforderlich', 'notice.approval.body': 'Eine Aufgabe wartet auf Genehmigung: {0}',
+    'settings.title': 'OpenMake Companion – Einstellungen', 'settings.server': 'Serveradresse', 'settings.apiKey': 'API key (bridge-Bereich)', 'settings.browser': 'Dem Agenten die Browsernutzung erlauben (eigenes Chrome-Profil)', 'settings.save': 'Speichern', 'settings.saved': 'Gespeichert', 'settings.noEncryption': 'Auf diesem PC ist keine Verschlüsselung für Zugangsdaten verfügbar – der API key wurde nicht gespeichert',
+  },
+};
+export const DEFAULT_LOCALE = 'ko';
+
+/** OS 언어(예: 'ko-KR', 'zh-CN') → 지원 언어. 모르면 기본 언어. */
+export function pickLocale(osLocale) {
+  const base = String(osLocale || '').toLowerCase().split(/[-_]/)[0];
+  return Object.prototype.hasOwnProperty.call(MESSAGES, base) ? base : DEFAULT_LOCALE;
+}
+
+/** 문구 조회 — {0}·{1} 자리에 인자를 넣는다. 없는 키는 키 그대로(누락이 화면에서 드러나게). */
+export function translate(locale, key, ...args) {
+  const text = (MESSAGES[locale] ?? MESSAGES[DEFAULT_LOCALE])[key] ?? key;
+  return text.replace(/\{(\d+)\}/g, (_m, i) => String(args[Number(i)] ?? ''));
+}
