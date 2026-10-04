@@ -176,6 +176,20 @@ export class ToolRouter implements ExternalToolDispatch {
     }
 
     /**
+     * 전역(visibility=global) 외부 서버를 서버별로 묶는다 — 도구는 원본 이름·설명·입력 스키마.
+     * mcp_list_tools·mcp_call 이 사용자 풀과 함께 본다(사용자 풀만 보면 전역 서버를 "없다"고 답한다).
+     */
+    getGlobalToolGroups(): Array<{ displayName: string; tools: Array<{ tool: string; description: string; inputSchema: MCPTool['inputSchema'] }> }> {
+        const byServer = new Map<string, ReturnType<ToolRouter['getGlobalToolGroups']>[number]>();
+        for (const e of this.externalTools.values()) {
+            const g = byServer.get(e.serverId) ?? { displayName: e.serverName, tools: [] };
+            g.tools.push({ tool: e.originalName, description: e.tool.description, inputSchema: e.tool.inputSchema });
+            byServer.set(e.serverId, g);
+        }
+        return [...byServer.values()];
+    }
+
+    /**
      * 사용자 풀(설치한 user MCP 서버) 도구의 네임스페이스 적용 이름 집합.
      * 채팅에서 "설치=기본 ON" 자동 노출 판별에 사용 (global 외부 도구는 제외).
      */
