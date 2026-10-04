@@ -25,6 +25,7 @@ bash ../../scripts/publish-desktop-windows.sh     # 서버 배포 폴더에 복�
 ```
 
 - 앱은 `GET /api/desktop/latest` 의 `windows` 블록으로 새 버전을 확인하고, 받은 설치 파일의 sha256 을 대조한 뒤에만 실행한다(`src/update.mjs`).
+- CI(`.github/workflows/desktop-windows.yml`)가 Windows 실행기에서 테스트·기동 검증을 돌리고 설치 파일을 만들어 실행 결과에 `OpenMake-Companion-Setup` 으로 남긴다(30일 보관). 서버 게시는 그 파일을 받아 위 스크립트로 한다.
 - **설치 파일(NSIS)은 Windows 나 x64 장비에서 만든다.** Apple Silicon Mac 에서는 앱 폴더(`release/win-unpacked`)까지만 만들어지고, 번들된 `makensis` 가 x64 실행 파일이라 마지막 단계가 실패한다(Rosetta 없음, 2026-10-04 확인).
 - 사용자용 설치 안내는 `INSTALL.md`.
 
