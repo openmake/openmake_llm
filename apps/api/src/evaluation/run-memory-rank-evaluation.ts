@@ -11,6 +11,7 @@
  *
  * @module evaluation/run-memory-rank-evaluation
  */
+import './load-env';
 import { loadMemoryRankGolden, runMemoryRankGolden, MEMORY_RANK_CAP_RATIOS } from './memory-rank-evaluator';
 import { USER_CONTEXT_LIMITS } from '../config/runtime-limits';
 
