@@ -36,6 +36,7 @@ import { persistArtifactSteps, persistJudgeStep, persistVerifySkippedStep, verif
 import { maybePersistCodeDiff } from './code-diff';
 import { judgeClientFor } from './role-client';
 import { withWriteFailureFootnote } from './write-failure-footnote';
+import { withSandboxUnavailableFootnote, withSandboxUnavailableJudgeNote } from './sandbox-unavailable';
 import { collectVerificationEvidence } from './verification-evidence';
 import { VERIFY_EVIDENCE } from '../../config/agent-task-tools';
 import { VERIFY_EVIDENCE_SKIP_NOTES } from '../../prompts/agent-task-tools';
@@ -208,7 +209,9 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     const judgeApplies = artifacts.length === 0;
     if (AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED
         && (judgeApplies || AGENT_TASK_LIMITS.GOAL_JUDGE_SHADOW_ENABLED)) {
-        const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence);
+        // 실행 환경 없이 진행한 작업이면 그 사실을 판정에 알린다(sandbox-unavailable).
+        const execCtx = withSandboxUnavailableJudgeNote(
+            buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence), taskId);
         // 셰도우 경로에선 ANSWER 에서 떨어져 나간 산출물을 함께 싣는다(적용 경로는 아티팩트 0 이라 빈 값).
         const judgeClient = await judgeClientFor(userId);
         // 원장 귀속 — 판정 호출의 비용도 이 작업 id 로 묶는다.
@@ -254,7 +257,8 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         status: 'completed',
         progress: 100,
         // 끝까지 성공하지 못한 파일 쓰기가 있으면 경로를 각주로 덧붙인다 — 모델이 실패를 놓치고 끝낸 경우를 사용자가 알 수 있게.
-        result: withWriteFailureFootnote(body, input.conversation),
+        // 실행 환경(샌드박스) 없이 진행한 작업이면 그 사실도 각주로 남긴다.
+        result: withSandboxUnavailableFootnote(withWriteFailureFootnote(body, input.conversation), taskId),
         // 이전 시도의 실패 사유를 지운다 — resume/재실행으로 완료된 작업에 'aborted'·'goal_incomplete'
         // 가 남아 목록·CLI 가 성공을 실패처럼 보여줬다(2026-08-26 resume E2E 에서 실측).
         error: null,

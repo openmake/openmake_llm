@@ -62,6 +62,17 @@ describe('code-diff', () => {
             await expect(captureWorkspaceDiff(fakeRuntime(execRaw))).resolves.toBe(diff);
         });
 
+        it('내부 파일(브라우저 상태·python_execute 임시 스크립트)은 변경분에 넣지 않는다 — 사용자 산출물이 아니다', async () => {
+            const execRaw = jest.fn().mockResolvedValue(ok('diff --git a/a.txt b/a.txt'));
+            await captureWorkspaceDiff(fakeRuntime(execRaw));
+            const cmd = String(execRaw.mock.calls[0][0]);
+            // 추적하지 않게 제외 목록에 적은 뒤에 add 한다.
+            expect(cmd).toContain('.git/info/exclude');
+            expect(cmd).toContain('.browser-state.json');
+            expect(cmd).toContain('_exec.py');
+            expect(cmd.indexOf('.git/info/exclude')).toBeLessThan(cmd.indexOf('add -A'));
+        });
+
         it('빈 diff 는 null', async () => {
             const execRaw = jest.fn().mockResolvedValue(ok('\n'));
             await expect(captureWorkspaceDiff(fakeRuntime(execRaw))).resolves.toBeNull();

@@ -184,3 +184,12 @@ export const ASK_HUMAN = {
     /** 선택지 한 개의 최대 글자 수. */
     OPTION_MAX_CHARS: 200,
 } as const;
+
+/**
+ * 작업 변경분(diff)에서 빼는 내부 파일 — 제품이 작업 공간에 스스로 쓰는 파일이라 사용자 산출물이 아니다.
+ * 브라우저 로그인 상태 파일(config/task-sandbox BROWSER_SESSION.STATE_FILE·SCRIPT_FILE)과 python_execute 가 파일명 없이
+ * 실행할 때 쓰는 임시 스크립트. 2026-10-04 라이브 시험에서 이 파일들이 산출물 diff 에 섞여 나왔다.
+ * AGENT_TASK_DIFF_INTERNAL_FILES 로 바꾼다(쉼표 구분, .gitignore 패턴).
+ */
+export const CODE_DIFF_INTERNAL_FILES: readonly string[] = (process.env.AGENT_TASK_DIFF_INTERNAL_FILES
+    ?? '/.browser-state.json,/.omk-browser-session.mjs,/_exec.py').split(',').map((s) => s.trim()).filter(Boolean);
