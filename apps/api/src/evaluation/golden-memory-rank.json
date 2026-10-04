@@ -1,0 +1,791 @@
+{
+  "version": "1.0.0",
+  "description": "에이전트 작업의 메모리 주입 순서 평가 — 가상 사용자 한 명의 메모리 84건(주제 12개, 한국어·영어, 0~670일 전, 출처·신뢰도 다양)과 작업 목표 20개. expected 는 그 목표를 수행할 때 실려 있어야 하는 메모리를 사람 기준으로 단 것이다(낱말이 겹치지 않아도 내용상 필요하면 넣었다 — 구현 출력에 맞춰 고치지 않는다). always 는 목표와 무관하게 늘 실려야 하는 응답 방식 선호로, 따로 센다. 날짜는 주제를 돌아가며 배정해 주제와 나이가 상관되지 않게 했다.",
+  "now": "2026-10-04T00:00:00Z",
+  "memories": [
+    {
+      "id": "r1",
+      "content": "보고서는 결론을 맨 앞에 두고 근거를 뒤에 붙이는 형식을 선호한다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 0
+    },
+    {
+      "id": "c1",
+      "content": "사용자는 TypeScript 를 주로 쓰고 any 타입 사용을 싫어한다",
+      "source": "candidate",
+      "confidence": null,
+      "daysAgo": 11
+    },
+    {
+      "id": "w1",
+      "content": "사용자는 물류 스타트업 '루트라인'의 백엔드 개발 리드다",
+      "source": "batch",
+      "confidence": 0.9,
+      "daysAgo": 22
+    },
+    {
+      "id": "m1",
+      "content": "사용자는 서울 시간대(KST)를 쓰고 오전 10시 이전 회의를 피한다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 26
+    },
+    {
+      "id": "t1",
+      "content": "여행 갈 때 창가 좌석과 아침 비행기를 선호한다",
+      "source": "candidate",
+      "confidence": 0.6,
+      "daysAgo": 37
+    },
+    {
+      "id": "f1",
+      "content": "사용자는 땅콩 알레르기가 있다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 41
+    },
+    {
+      "id": "p1",
+      "content": "사용자의 이름은 김도윤이고 호칭은 '도윤님'을 선호한다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 52,
+      "always": true
+    },
+    {
+      "id": "b1",
+      "content": "금액은 원화로 표기하고 천 단위 쉼표를 넣는다",
+      "source": "candidate",
+      "confidence": 0.5,
+      "daysAgo": 56
+    },
+    {
+      "id": "d1",
+      "content": "차트는 막대 그래프를 선호하고 원 그래프는 쓰지 않는다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 67
+    },
+    {
+      "id": "l1",
+      "content": "답변은 항상 한국어 존댓말로 해 달라고 했다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 78,
+      "always": true
+    },
+    {
+      "id": "i1",
+      "content": "운영 서버는 AWS 서울 리전에 있고 쿠버네티스로 배포한다",
+      "source": "candidate",
+      "confidence": 0.95,
+      "daysAgo": 82
+    },
+    {
+      "id": "h1",
+      "content": "주말에는 통기타를 연습하고 핑거스타일 곡을 좋아한다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 93
+    },
+    {
+      "id": "r2",
+      "content": "주간 보고서는 매주 금요일 오후에 팀장에게 제출한다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 96
+    },
+    {
+      "id": "c2",
+      "content": "Python code should follow black formatting with 100-character lines",
+      "source": "explicit",
+      "confidence": 0.9,
+      "daysAgo": 107
+    },
+    {
+      "id": "w2",
+      "content": "주요 고객사는 한빛유통과 Daesung Logistics 두 곳이다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 118
+    },
+    {
+      "id": "m2",
+      "content": "스프린트 회의는 격주 월요일 오후 2시에 한다",
+      "source": "explicit",
+      "confidence": 0.6,
+      "daysAgo": 122
+    },
+    {
+      "id": "t2",
+      "content": "User has a Marriott Bonvoy membership and prefers those hotels",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 133
+    },
+    {
+      "id": "f2",
+      "content": "User is cutting back on caffeine and drinks decaf after noon",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 137
+    },
+    {
+      "id": "p2",
+      "content": "아내 이름은 서연이고 생일은 5월 12일이다",
+      "source": "explicit",
+      "confidence": 0.5,
+      "daysAgo": 148
+    },
+    {
+      "id": "b2",
+      "content": "User invests monthly in an S&P 500 index ETF",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 152
+    },
+    {
+      "id": "d2",
+      "content": "User wants CSV exports encoded in UTF-8 with BOM for Excel",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 163
+    },
+    {
+      "id": "l2",
+      "content": "User prefers concise answers without long preambles",
+      "source": "explicit",
+      "confidence": 0.95,
+      "daysAgo": 174,
+      "always": true
+    },
+    {
+      "id": "i2",
+      "content": "Staging deploys happen automatically on merge to the dev branch",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 178
+    },
+    {
+      "id": "h2",
+      "content": "User is learning Japanese and is at JLPT N4 level",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 189
+    },
+    {
+      "id": "r3",
+      "content": "User wants executive summaries limited to five bullet points",
+      "source": "explicit",
+      "confidence": 0.9,
+      "daysAgo": 192
+    },
+    {
+      "id": "c3",
+      "content": "테스트는 jest 로 작성하고 구현보다 먼저 쓴다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 203
+    },
+    {
+      "id": "w3",
+      "content": "The team has six engineers and one designer",
+      "source": "batch",
+      "confidence": 0.6,
+      "daysAgo": 214
+    },
+    {
+      "id": "m3",
+      "content": "Friday afternoons are reserved for focused work, no meetings",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 218
+    },
+    {
+      "id": "t3",
+      "content": "일본 여행을 좋아하고 특히 후쿠오카를 자주 간다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 229
+    },
+    {
+      "id": "f3",
+      "content": "매운 음식을 좋아하지만 고수는 못 먹는다",
+      "source": "batch",
+      "confidence": 0.5,
+      "daysAgo": 233
+    },
+    {
+      "id": "p3",
+      "content": "User has a seven-year-old daughter named Hana who likes dinosaurs",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 244
+    },
+    {
+      "id": "b3",
+      "content": "월 생활비 예산은 350만원이고 식비가 가장 큰 항목이다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 248
+    },
+    {
+      "id": "d3",
+      "content": "엑셀 파일에는 첫 행 고정과 필터를 걸어 둔다",
+      "source": "batch",
+      "confidence": 0.95,
+      "daysAgo": 259
+    },
+    {
+      "id": "l3",
+      "content": "이메일은 두괄식으로 쓰고 끝인사는 '감사합니다'로 맺는다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 270
+    },
+    {
+      "id": "i3",
+      "content": "데이터베이스는 PostgreSQL 16 이고 읽기 복제본이 하나 있다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 274
+    },
+    {
+      "id": "h3",
+      "content": "SF 소설을 즐겨 읽고 테드 창을 가장 좋아한다",
+      "source": "batch",
+      "confidence": 0.9,
+      "daysAgo": 285
+    },
+    {
+      "id": "r4",
+      "content": "문서 제목에는 날짜를 YYYY-MM-DD 형식으로 붙인다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 288
+    },
+    {
+      "id": "c4",
+      "content": "커밋 메시지는 한국어 conventional commit 형식으로 쓴다",
+      "source": "explicit",
+      "confidence": 0.6,
+      "daysAgo": 299
+    },
+    {
+      "id": "w4",
+      "content": "회사 제품은 배송 경로 최적화 SaaS 이고 요금제는 월 구독이다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 310
+    },
+    {
+      "id": "m4",
+      "content": "미국 고객과의 통화는 한국 시간 오전 8시에 잡는 것이 관례다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 314
+    },
+    {
+      "id": "t4",
+      "content": "출장 숙소는 1박 15만원 이내로 잡아야 회사 규정에 맞는다",
+      "source": "explicit",
+      "confidence": 0.5,
+      "daysAgo": 325
+    },
+    {
+      "id": "f4",
+      "content": "주 3회 아침에 5km 달리기를 한다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 329
+    },
+    {
+      "id": "p4",
+      "content": "고양이 두 마리를 키우며 이름은 모카와 라떼다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 340
+    },
+    {
+      "id": "b4",
+      "content": "팀 클라우드 비용 예산은 월 2천만원이다",
+      "source": "explicit",
+      "confidence": 0.95,
+      "daysAgo": 344
+    },
+    {
+      "id": "d4",
+      "content": "데이터 분석은 pandas 로 하고 결과는 소수 둘째 자리까지 표시한다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 355
+    },
+    {
+      "id": "l4",
+      "content": "English emails to customers should be formal and avoid contractions",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 366
+    },
+    {
+      "id": "i4",
+      "content": "배포는 화요일과 목요일 오전에만 한다",
+      "source": "explicit",
+      "confidence": 0.9,
+      "daysAgo": 370
+    },
+    {
+      "id": "h4",
+      "content": "보드게임 모임에 한 달에 한 번 나간다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 381
+    },
+    {
+      "id": "r5",
+      "content": "표가 들어가는 문서는 워드보다 PDF 로 받는 것을 좋아한다",
+      "source": "explicit",
+      "confidence": 0.6,
+      "daysAgo": 384
+    },
+    {
+      "id": "c5",
+      "content": "User prefers pnpm over npm for new JavaScript projects",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 395
+    },
+    {
+      "id": "w5",
+      "content": "경쟁사는 FleetPilot 과 무브온이다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 406
+    },
+    {
+      "id": "m5",
+      "content": "일정 초대는 구글 캘린더로 보내고 회의는 30분을 기본으로 한다",
+      "source": "explicit",
+      "confidence": 0.5,
+      "daysAgo": 410
+    },
+    {
+      "id": "t5",
+      "content": "User gets motion sickness on boats and avoids ferries",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 421
+    },
+    {
+      "id": "f5",
+      "content": "User follows a mostly vegetarian diet on weekdays",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 425
+    },
+    {
+      "id": "p5",
+      "content": "부모님은 부산에 사시고 명절마다 내려간다",
+      "source": "explicit",
+      "confidence": 0.95,
+      "daysAgo": 436
+    },
+    {
+      "id": "b5",
+      "content": "User's fiscal year starts in January",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 440
+    },
+    {
+      "id": "d5",
+      "content": "Dashboards should show week-over-week change next to each metric",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 451
+    },
+    {
+      "id": "l5",
+      "content": "번역할 때 기술 용어는 영어 원문을 괄호로 함께 적는다",
+      "source": "explicit",
+      "confidence": 0.9,
+      "daysAgo": 462
+    },
+    {
+      "id": "i5",
+      "content": "Docker images are built with multi-stage builds and pushed to ECR",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 466
+    },
+    {
+      "id": "h5",
+      "content": "User is training for a half marathon in November",
+      "source": "batch",
+      "confidence": 0.6,
+      "daysAgo": 477
+    },
+    {
+      "id": "r6",
+      "content": "Slide decks should use the company template with dark blue headers",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 480
+    },
+    {
+      "id": "c6",
+      "content": "함수는 50줄을 넘기지 않게 나누는 것을 원한다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 491
+    },
+    {
+      "id": "w6",
+      "content": "분기 OKR 의 핵심 지표는 배송 지연율 5% 이하다",
+      "source": "batch",
+      "confidence": 0.5,
+      "daysAgo": 502
+    },
+    {
+      "id": "m6",
+      "content": "User takes vacation in the first week of August every year",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 506
+    },
+    {
+      "id": "t6",
+      "content": "여권은 2029년 3월에 만료된다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 517
+    },
+    {
+      "id": "f6",
+      "content": "무릎 부상 이력이 있어 스쿼트 같은 하체 운동은 조심해야 한다",
+      "source": "batch",
+      "confidence": 0.95,
+      "daysAgo": 521
+    },
+    {
+      "id": "p6",
+      "content": "User lives in Seongsu-dong, Seoul, in an apartment",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 532
+    },
+    {
+      "id": "b6",
+      "content": "세금 계산서는 매월 말일에 발행한다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 536
+    },
+    {
+      "id": "d6",
+      "content": "이상치는 제거하지 말고 따로 표시해 달라고 했다",
+      "source": "batch",
+      "confidence": 0.9,
+      "daysAgo": 547
+    },
+    {
+      "id": "l6",
+      "content": "이모지는 쓰지 않는 것을 원한다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 558,
+      "always": true
+    },
+    {
+      "id": "i6",
+      "content": "장애 알림은 슬랙 #ops-alert 채널로 받는다",
+      "source": "explicit",
+      "confidence": 0.6,
+      "daysAgo": 562
+    },
+    {
+      "id": "h6",
+      "content": "사진 촬영이 취미이고 후지필름 카메라를 쓴다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 573
+    },
+    {
+      "id": "r7",
+      "content": "회의록은 결정 사항과 담당자, 기한 세 가지를 꼭 적는다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 576
+    },
+    {
+      "id": "c7",
+      "content": "SQL queries must use parameter binding, never string concatenation",
+      "source": "explicit",
+      "confidence": 0.5,
+      "daysAgo": 587
+    },
+    {
+      "id": "w7",
+      "content": "User reports to the CTO, whose name is Park Jiho",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 598
+    },
+    {
+      "id": "m7",
+      "content": "점심 시간은 12시 반부터 한 시간이며 그때는 연락을 받지 않는다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 602
+    },
+    {
+      "id": "t7",
+      "content": "렌터카보다 대중교통으로 다니는 여행을 좋아한다",
+      "source": "explicit",
+      "confidence": 0.95,
+      "daysAgo": 613
+    },
+    {
+      "id": "f7",
+      "content": "저녁은 보통 7시 전에 먹고 야식은 하지 않는다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 617
+    },
+    {
+      "id": "p7",
+      "content": "결혼기념일은 10월 20일이다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 628
+    },
+    {
+      "id": "b7",
+      "content": "주택담보대출 금리는 고정 3.9% 이다",
+      "source": "explicit",
+      "confidence": 0.9,
+      "daysAgo": 632
+    },
+    {
+      "id": "d7",
+      "content": "매출 데이터의 기준 통화는 원화이고 부가세 제외 금액을 쓴다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 643
+    },
+    {
+      "id": "l7",
+      "content": "블로그 글은 1,500자 안팎에 소제목 세 개 구성을 선호한다",
+      "source": "explicit",
+      "confidence": 0.6,
+      "daysAgo": 654
+    },
+    {
+      "id": "i7",
+      "content": "로그는 Grafana Loki 에 30일 보관한다",
+      "source": "explicit",
+      "confidence": null,
+      "daysAgo": 658
+    },
+    {
+      "id": "h7",
+      "content": "Rust 를 독학 중이며 소유권 개념을 어려워한다",
+      "source": "batch",
+      "confidence": null,
+      "daysAgo": 669
+    }
+  ],
+  "goals": [
+    {
+      "id": "goal-01",
+      "goal": "이번 주 주간 보고서 초안을 작성해 주세요. 배송 지연율 수치를 포함합니다.",
+      "expected": [
+        "r1",
+        "r2",
+        "r4",
+        "w6"
+      ]
+    },
+    {
+      "id": "goal-02",
+      "goal": "sales.csv 의 월별 매출을 분석해서 엑셀 파일과 차트로 정리해 주세요",
+      "expected": [
+        "d1",
+        "d3",
+        "d4",
+        "d6",
+        "d7",
+        "b1"
+      ]
+    },
+    {
+      "id": "goal-03",
+      "goal": "Write a Python script that exports the orders table to CSV",
+      "expected": [
+        "c2",
+        "c7",
+        "d2",
+        "i3"
+      ]
+    },
+    {
+      "id": "goal-04",
+      "goal": "다음 달 후쿠오카 3박 4일 가족 여행 일정을 짜 주세요",
+      "expected": [
+        "t1",
+        "t2",
+        "t3",
+        "t5",
+        "t7",
+        "p3",
+        "f1"
+      ]
+    },
+    {
+      "id": "goal-05",
+      "goal": "Plan a business trip to Busan next week, including hotel booking options",
+      "expected": [
+        "t1",
+        "t2",
+        "t4",
+        "t7"
+      ]
+    },
+    {
+      "id": "goal-06",
+      "goal": "새 TypeScript 프로젝트의 뼈대를 만들고 테스트 설정까지 해 주세요",
+      "expected": [
+        "c1",
+        "c3",
+        "c5"
+      ]
+    },
+    {
+      "id": "goal-07",
+      "goal": "지난 변경 사항을 커밋하고 dev 브랜치에 병합할 PR 설명을 써 주세요",
+      "expected": [
+        "c4",
+        "i2"
+      ]
+    },
+    {
+      "id": "goal-08",
+      "goal": "한빛유통 담당자에게 보낼 배송 지연 사과 이메일을 써 주세요",
+      "expected": [
+        "l3",
+        "w2"
+      ]
+    },
+    {
+      "id": "goal-09",
+      "goal": "Draft an English email to Daesung Logistics about the pricing change",
+      "expected": [
+        "l4",
+        "w2",
+        "w4"
+      ]
+    },
+    {
+      "id": "goal-10",
+      "goal": "다음 주 미국 고객과의 회의 시간을 제안하고 캘린더 초대 문안을 만들어 주세요",
+      "expected": [
+        "m1",
+        "m3",
+        "m4",
+        "m5"
+      ]
+    },
+    {
+      "id": "goal-11",
+      "goal": "아내 생일 선물 아이디어 다섯 가지와 저녁 식당 후보를 추천해 주세요",
+      "expected": [
+        "p2",
+        "f1",
+        "f3"
+      ]
+    },
+    {
+      "id": "goal-12",
+      "goal": "Create a weekly meal plan with a grocery list",
+      "expected": [
+        "f1",
+        "f3",
+        "f5",
+        "f7"
+      ]
+    },
+    {
+      "id": "goal-13",
+      "goal": "하프 마라톤 대비 8주 훈련 계획을 세워 주세요",
+      "expected": [
+        "h5",
+        "f4",
+        "f6"
+      ]
+    },
+    {
+      "id": "goal-14",
+      "goal": "운영 서버 배포 절차를 점검표로 만들어 주세요",
+      "expected": [
+        "i1",
+        "i2",
+        "i4",
+        "i5"
+      ]
+    },
+    {
+      "id": "goal-15",
+      "goal": "Investigate why the database queries are slow and propose fixes",
+      "expected": [
+        "i3",
+        "i7"
+      ]
+    },
+    {
+      "id": "goal-16",
+      "goal": "이번 분기 팀 클라우드 비용을 정리해서 CTO 에게 보고할 자료를 만들어 주세요",
+      "expected": [
+        "b1",
+        "b4",
+        "r1",
+        "r3",
+        "w7"
+      ]
+    },
+    {
+      "id": "goal-17",
+      "goal": "Translate the product onboarding guide into Korean",
+      "expected": [
+        "l5",
+        "w4"
+      ]
+    },
+    {
+      "id": "goal-18",
+      "goal": "경쟁사 대비 우리 제품의 강점을 소개하는 블로그 글을 써 주세요",
+      "expected": [
+        "l7",
+        "w4",
+        "w5"
+      ]
+    },
+    {
+      "id": "goal-19",
+      "goal": "딸과 주말에 할 만한 실내 활동을 추천해 주세요",
+      "expected": [
+        "p3",
+        "p6"
+      ]
+    },
+    {
+      "id": "goal-20",
+      "goal": "Build a dashboard summarizing delivery delay metrics for the last quarter",
+      "expected": [
+        "d1",
+        "d5",
+        "w6"
+      ]
+    }
+  ]
+}

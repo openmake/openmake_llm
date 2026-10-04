@@ -49,9 +49,21 @@ describe('compileOutputContract', () => {
 });
 
 describe('runSpawnAgents — 결과 형식 계약', () => {
-    afterEach(() => { flags.OUTPUT_SCHEMA_ENABLED = false; });
+    afterEach(() => { flags.OUTPUT_SCHEMA_ENABLED = true; });
 
-    it('기본은 꺼짐 — outputSchema 를 줘도 현행과 같고, 도구 스키마에도 드러나지 않는다', async () => {
+    it('기본은 켜짐 — 인자를 주지 않은 태스크는 현행과 같다(지시문 그대로, 최종 답 검사 없음)', async () => {
+        expect(AGENT_DELEGATION.OUTPUT_SCHEMA_ENABLED).toBe(true);
+        expect(JSON.stringify(buildSpawnParametersSchema())).toContain('outputSchema');
+        runSubagentMock.mockResolvedValue('자유 형식 결과');
+        const out = await runSpawnAgents({ ...base, args: { tasks: [{ prompt: PROMPT }] } });
+        const p = runSubagentMock.mock.calls[0][0];
+        expect(p.subgoal).toBe(PROMPT);
+        expect(p.finalCheck).toBeUndefined();
+        expect(out).not.toContain('형식 검증');
+    });
+
+    it('끄면 — outputSchema 를 줘도 무시하고, 도구 스키마에도 드러나지 않는다', async () => {
+        flags.OUTPUT_SCHEMA_ENABLED = false;
         runSubagentMock.mockResolvedValue('자유 형식 결과');
         await runSpawnAgents({ ...base, args: { tasks: [{ prompt: PROMPT, outputSchema: SCHEMA }] } });
         const p = runSubagentMock.mock.calls[0][0];

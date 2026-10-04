@@ -40,10 +40,18 @@ export const AGENT_DELEGATION = {
     /** 부모에게 가는 위임 결과에 "자가 보고이니 단정하지 말고 출처를 구분하라"는 안내를 붙인다. 기본 켜짐.
      *  AGENT_DELEGATION_SELF_REPORT_NOTICE=false 로 끈다. */
     SELF_REPORT_NOTICE_ENABLED: process.env.AGENT_DELEGATION_SELF_REPORT_NOTICE !== 'false',
-    /** spawn_agents 태스크의 선택 인자 outputSchema(JSON Schema) — 결과를 결정적으로 검증하고 어긋나면 1회만 교정을 요청한다.
-     *  기본 꺼짐: 로컬 모델의 스키마 준수율이 실측 전이다(꺼져 있으면 인자가 도구 스키마에 드러나지 않고, 줘도 무시한다).
-     *  AGENT_DELEGATION_OUTPUT_SCHEMA=true 로 켠다. */
-    OUTPUT_SCHEMA_ENABLED: process.env.AGENT_DELEGATION_OUTPUT_SCHEMA === 'true',
+    /**
+     * spawn_agents 태스크의 선택 인자 outputSchema(JSON Schema) — 결과를 결정적으로 검증하고 어긋나면 1회만 교정을 요청한다.
+     * 인자를 주지 않은 태스크는 종전과 같다. AGENT_DELEGATION_OUTPUT_SCHEMA=false 로 끈다(인자가 도구 스키마에서 빠지고, 줘도 무시한다).
+     *
+     * 기본 켜짐의 근거(2026-10-04 실측, retired-chat-model): 스키마 5종(단순 객체·객체 배열·중첩 객체·enum 과 범위·필수 필드 10개)을
+     * 서브에이전트 실행 경로(runSubagent, 도구 없이 최종 답 단계)로 각 4회 돌렸다. 첫 응답 준수 19/20, 교정 1회 뒤 20/20.
+     * 어긋난 1건은 배열을 객체로 감싼 답이었고 교정 요청으로 고쳐졌다. 첫 응답 20건 중 17건은 JSON 만, 3건은 코드 울타리에
+     * 담겨 왔다(둘 다 추출된다). 도구를 쓴 뒤의 최종 답과 큰 스키마(상한 4000자 근처)는 재지 않았다.
+     * 도구 스키마 증가: spawn_agents 정의가 736자 → 887자(추정 +88토큰) — 병렬 위임(AGENT_SPAWN_ENABLED, 기본 꺼짐)이
+     * 켜져 있을 때만 실린다.
+     */
+    OUTPUT_SCHEMA_ENABLED: process.env.AGENT_DELEGATION_OUTPUT_SCHEMA !== 'false',
     /** outputSchema 의 JSON 글자 수 상한 — 스키마는 서브에이전트 지시문에 그대로 실린다. AGENT_DELEGATION_OUTPUT_SCHEMA_MAX_CHARS */
     OUTPUT_SCHEMA_MAX_CHARS: num(process.env.AGENT_DELEGATION_OUTPUT_SCHEMA_MAX_CHARS, 4000),
     /** 형식 검증 실패 사유에 싣는 항목 수 상한. */
