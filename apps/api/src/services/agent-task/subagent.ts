@@ -28,6 +28,7 @@ import type { SubagentTrace } from './subagent-trace';
 import { AgentTaskParked } from './types';
 import { findDanglingToolCalls } from './turn-reentry';
 import { createLogger } from '../../utils/logger';
+import { detectLanguage, LANGUAGE_DISPLAY_NAMES } from '../../chat/language-policy';
 import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE, partialSubagentResult } from '../../prompts/subagent-system';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { prepareToolArgs } from './tool-args';
@@ -108,7 +109,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
     const conversation: ChatMessage[] = restored ? [...restored.conversation] : [
         {
             role: 'system',
-            content: p.personaPrompt + '\n\n' + buildSubagentDelegationRules(maxTurns, p.tools.map((t) => t.function.name)),
+            content: p.personaPrompt + '\n\n' + buildSubagentDelegationRules(maxTurns, p.tools.map((t) => t.function.name), LANGUAGE_DISPLAY_NAMES[detectLanguage(p.subgoal).language]),
         },
         { role: 'user', content: p.subgoal },
     ];

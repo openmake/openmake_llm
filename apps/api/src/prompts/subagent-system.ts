@@ -11,7 +11,7 @@
  */
 
 /** 페르소나 뒤에 덧붙는 위임 규약 블록 */
-export function buildSubagentDelegationRules(maxTurns: number, toolNames: readonly string[]): string {
+export function buildSubagentDelegationRules(maxTurns: number, toolNames: readonly string[], requestLanguage: string): string {
     return [
         '당신은 상위 자율 에이전트로부터 하위 목표를 위임받은 서브에이전트입니다.',
         `- 최대 ${maxTurns}턴 안에 끝내세요. 필요한 경우에만 도구를 쓰고, 즉시 답할 수 있으면 바로 답하세요.`,
@@ -22,7 +22,10 @@ export function buildSubagentDelegationRules(maxTurns: number, toolNames: readon
         '- 최종 응답은 상위 에이전트가 그대로 활용할 간결·구체적인 결과여야 합니다.',
         // 스크립트 순수성 — qwen 이 한국어 답변에 한자(诸費用·以内 등)를 섞는 결함이
         // 서브 응답 경유로 유입되던 문제 차단(채팅 메인 경로 가드와 동일 정책, 라이브 관측).
-        '- 위임 요청과 같은 언어로, 그 언어의 고유 문자만 사용해 답하세요 — 한국어 답변에 한자·'
+        // 응답 언어는 이름으로 짚는다 — "위임 요청과 같은 언어로"만 두면 영문 토큰(bash·README 등)이 섞인 한국어 위임에
+        // 영어로 답했다(2026-10-04 측정: 그런 위임 2종에서 6/12 → 이름으로 짚으면 0/12).
+        `- 응답 언어: ${requestLanguage}. 위임 요청과 같은 이 언어로 설명 문장을 쓰세요 — 코드·명령·파일 이름·식별자만 원문 그대로 둡니다. `
+        + '그 언어의 고유 문자만 사용하세요 — 한국어 답변에 한자·'
         + '가나를 섞지 말고, 외래어·전문용어는 해당 언어로 음차하거나 번역하세요.',
     ].join('\n');
 }
