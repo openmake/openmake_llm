@@ -14,6 +14,7 @@
  */
 import { getPool } from '../../data/models/unified-database';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
+import { AgentTaskParkRepository } from '../../data/repositories/agent-task-park-repository';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { LocalDeviceUnavailableError } from '../local-bridge/device-errors';
 import { createLogger } from '../../utils/logger';
@@ -50,7 +51,7 @@ export async function resumeDeviceWaitingTasks(userId: string): Promise<number> 
     if (!LOCAL_BRIDGE.DEVICE_WAIT_ENABLED) return 0;
     let resumed = 0;
     try {
-        const ids = await new AgentTaskRepository(getPool()).listDeviceWaitTaskIds(userId);
+        const ids = await new AgentTaskParkRepository(getPool()).listDeviceWaitTaskIds(userId);
         if (ids.length === 0) return 0;
         // hitl-park 는 AgentTaskService 를 끌어온다 — 등록 경로(소켓)에서 정적으로 묶지 않는다.
         const { resumeParkedTask } = await import('./hitl-park');
