@@ -58,6 +58,8 @@ function argValue(flag: string): string | undefined {
 }
 
 async function main(): Promise<void> {
+    // 실행 소유권 이름을 서버와 다르게 잡는다 — 같은 호스트의 서버·다른 평가 실행이 부팅 정리로 서로의 실행 중 작업을 failed 로 바꾸지 않게(config/lease-owner).
+    process.env.OMK_LEASE_INSTANCE ??= `eval-${process.pid}`;
     const dataset = JSON.parse(fs.readFileSync(argValue('--dataset') ?? path.resolve(__dirname, 'golden-agent-tasks.json'), 'utf8')) as AblationDataset;
     const repeats = Number(argValue('--repeats') ?? '1');
     const limit = argValue('--limit');
