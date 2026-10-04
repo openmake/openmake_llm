@@ -485,7 +485,7 @@
     },
     "steering": {
       "label": "Steer this task",
-      "placeholder": "Send a new instruction to adjust direction… (Cmd/Ctrl+Enter)",
+      "placeholder": "Send a new instruction to adjust direction… (Enter to send · Shift+Enter for a new line)",
       "sent": "Sent",
       "failed": "Failed to send instruction: {error}"
     },
