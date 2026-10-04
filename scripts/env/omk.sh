@@ -1197,15 +1197,18 @@ sandbox_root_ensure() { # $1=.env $2=env
 # egress 프록시 이미지(수십 MB) — 브라우저 컨테이너의 네트워크 레벨 allowlist(TASK_SANDBOX_EGRESS_PROXY_ENABLED, 기본 꺼짐).
 # 태그·컨테이너 이름은 .env 값(없으면 소스 기본값)을 그대로 쓴다 — .env 는 고치지 않는다. API 는 떠 있는 프록시
 # 컨테이너를 재사용하므로, 옛 이미지로 떠 있으면 지운다 — 다음 브라우저 작업 때 API 가 새 이미지로 다시 띄운다.
+egress_proxy_src_hash() { cat "$1"/infra/egress-proxy/* 2>/dev/null | cksum | tr ' ' '-'; }   # $1=llm dir
 egress_proxy_image_ensure() { # $1=llm dir
-    local envf="$1/.env" img ctr cur new
+    local envf="$1/.env" img ctr src cur
     img="$(dotenv_get "$envf" TASK_SANDBOX_EGRESS_PROXY_IMAGE)"; img="${img:-openmake-egress-proxy:latest}"
     ctr="$(dotenv_get "$envf" TASK_SANDBOX_EGRESS_PROXY_CONTAINER)"; ctr="${ctr:-omk-egress-proxy}"
-    docker build -q -t "$img" "$1/infra/egress-proxy" >/dev/null \
+    # 옛 이미지인지는 소스 해시 라벨로 가린다(컨테이너는 이미지의 라벨을 물려받는다). 이미지 ID 로는 못 가린다 —
+    # containerd 이미지 저장소에서는 같은 내용도 빌드마다 ID 가 바뀌고, 태그를 빼앗긴 옛 ID 는 조회도 되지 않는다.
+    src="$(egress_proxy_src_hash "$1")"
+    docker build -q -t "$img" --label "omk.src=$src" "$1/infra/egress-proxy" >/dev/null \
         || { log_warn "$img 빌드 실패 — 건너뜁니다 (egress 프록시를 켠 환경이면 고친 뒤 'omk env update')"; return 0; }
-    cur="$(docker container inspect -f '{{.Image}}' "$ctr" 2>/dev/null || true)"
-    new="$(docker image inspect -f '{{.Id}}' "$img" 2>/dev/null || true)"
-    [[ -n "$cur" && "$cur" != "$new" ]] || return 0
+    cur="$(docker container inspect -f '{{index .Config.Labels "omk.src"}}' "$ctr" 2>/dev/null)" || return 0   # 컨테이너 없음
+    [[ "$cur" != "$src" ]] || return 0
     docker rm -f "$ctr" >/dev/null 2>&1 && log_ok "옛 이미지의 egress 프록시 컨테이너 $ctr 제거 (다음 작업 때 새 이미지로 뜬다)" || true
 }
 RUNTIME_CHANGED=0
