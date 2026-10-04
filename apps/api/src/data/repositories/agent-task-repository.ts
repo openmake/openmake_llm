@@ -14,32 +14,19 @@ import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentTask, AgentTaskStatus, AgentTaskStep } from '../models/unified-database.types';
 import { allowedSources, AgentTaskTransitionError } from '../../services/agent-task/task-state';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
-import { AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_PARKED_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
+import { AGENT_TASK_PARKED_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
+import type { ParkedTaskRow } from './agent-task-park-repository';
 
 /**
  * 주차(F16.7) 판정 SQL — paused 이고 마지막 전이 이벤트 사유가 주차 사유(hitl_parked·device_wait). 부팅 마킹·복구·재개 claim·스윕이 같은 조건을 쓴다.
  * 주차는 이미 paused 인 작업에 걸리므로 paused→paused 이벤트로 표식한다(markParked).
  */
-/** 주차 사유 목록의 SQL 리터럴 — 값은 코드 상수뿐이라(사용자 입력 아님) 그대로 넣는다. 형식은 아래 검사가 고정한다. */
-const PARK_REASONS_SQL = AGENT_TASK_PARK_REASONS.map((r) => {
-    if (!/^[a-z_]+$/.test(r)) throw new Error(`주차 사유 형식 오류: ${r}`);
-    return `'${r}'`;
-}).join(', ');
+/** 주차 사유 목록의 SQL 리터럴 — 값은 코드 상수뿐이고(사용자 입력 아님) 소문자·밑줄만 남긴다. */
+const PARK_REASONS_SQL = AGENT_TASK_PARK_REASONS.map((r) => `'${r.replace(/[^a-z_]/g, '')}'`).join(', ');
 
 export function parkedTaskCondition(alias: string): string {
     // COALESCE 필수 — 사유가 NULL 인(일반 승인 대기) paused 에서 비교가 NULL 이 되면 `NOT (…)` 도 NULL 이라 부팅 마킹·복구에서 빠진다
     return `(${alias}.status = 'paused' AND COALESCE((SELECT e.reason FROM agent_task_events e WHERE e.task_id = ${alias}.id ORDER BY e.id DESC LIMIT 1), '') IN (${PARK_REASONS_SQL}))`;
-}
-
-/** 주차 스윕이 보는 행 — reason·waited_ms 는 마지막 전이 이벤트(주차 표식) 기준. */
-export interface ParkedTaskRow {
-    id: string;
-    workspace_path: string | null;
-    reason: string | null;
-    /** bigint 라 pg 가 문자열로 준다 */
-    waited_ms: string | number | null;
-    has_decision: boolean;
-    has_live_pending: boolean;
 }
 
 export class AgentTaskRepository extends BaseRepository {
@@ -329,29 +316,6 @@ export class AgentTaskRepository extends BaseRepository {
             `INSERT INTO agent_task_events (task_id, from_status, to_status, reason) VALUES ($1, 'paused', 'paused', $2)`,
             [taskId, reason],
         );
-    }
-
-    /** 주차 중인 작업의 사유(hitl_parked·device_wait) — 주차가 아니면 null. 화면이 "무엇을 기다리는지" 보여 주는 데 쓴다. */
-    async getParkReason(taskId: string): Promise<string | null> {
-        const r = await this.query<{ reason: string | null }>(
-            `SELECT (SELECT e.reason FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1) AS reason
-               FROM agent_tasks t WHERE t.id = $1 AND t.status = 'paused'`,
-            [taskId],
-        );
-        const reason = r.rows[0]?.reason ?? null;
-        return reason && AGENT_TASK_PARK_REASONS.includes(reason) ? reason : null;
-    }
-
-    /** 기기 대기(device_wait)로 주차된 그 사용자의 작업 id — 기기가 등록되면 재개를 시도한다. */
-    async listDeviceWaitTaskIds(userId: string, limit = 50): Promise<string[]> {
-        const r = await this.query<{ id: string }>(
-            `SELECT t.id FROM agent_tasks t
-              WHERE t.user_id = $1 AND t.status = 'paused'
-                AND COALESCE((SELECT e.reason FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1), '') = $2
-              ORDER BY t.updated_at ASC LIMIT $3`,
-            [userId, AGENT_TASK_DEVICE_WAIT_REASON, limit],
-        );
-        return r.rows.map((row) => row.id);
     }
 
     /** 주차 작업 재개 claim — 주차 중일 때만 pending 으로(동시 답변·스윕 중복 재개 방지). */
