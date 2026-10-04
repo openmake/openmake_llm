@@ -294,7 +294,7 @@ export class TaskRuntime {
             ? await this.executor.planBrowserSitePolicy(Array.isArray(args.actions) ? args.actions : [args.actions])
             : null;
         const gateArgs = sitePlan ? withSitePlan(args, sitePlan) : args;
-        if (requiresApproval(this.cfg.approvalPolicy, name, gateArgs, { deviceGatesShell: this.cfg.deviceGatesShell })) {
+        if (requiresApproval(this.cfg.approvalPolicy, name, gateArgs, { deviceGatesShell: this.cfg.deviceGatesShell, siteGoverned: sitePlan !== null })) {
             // 실행 전 미리보기(138) — 파일 쓰기 도구는 현재 파일과 인자로 diff 를 만들어 승인 카드에 싣는다(fail-open)
             const preview = skillPreview ?? (APPROVAL_PREVIEW.ENABLED
                 ? await buildApprovalPreview(name, args, (p) => this.executor.readFile(p)).catch(() => null)
