@@ -30,9 +30,15 @@ describe('buildSchedulingFields — 플래그 기본 OFF', () => {
     });
 
     it('priority 는 요청 클래스 맵을 따르고 미지정은 unspecified', () => {
-        expect(buildSchedulingFields({ ...base, priorityEnabled: true, requestClass: 'interactive' })).toEqual({ priority: 0 });
-        expect(buildSchedulingFields({ ...base, priorityEnabled: true, requestClass: 'background' })).toEqual({ priority: 3 });
-        expect(buildSchedulingFields({ ...base, priorityEnabled: true })).toEqual({ priority: LLM_REQUEST_PRIORITY.unspecified });
+        expect(buildSchedulingFields({ ...base, priorityEnabled: true, requestClass: 'interactive' }).priority).toBe(0);
+        expect(buildSchedulingFields({ ...base, priorityEnabled: true, requestClass: 'background' }).priority).toBe(3);
+        expect(buildSchedulingFields({ ...base, priorityEnabled: true }).priority).toBe(LLM_REQUEST_PRIORITY.unspecified);
+    });
+
+    it('priority 는 extra_body 에도 싣는다 — LiteLLM 은 최상위 값을 자체 대기열에만 쓰고 vLLM 으로 넘기지 않는다', () => {
+        expect(buildSchedulingFields({ ...base, priorityEnabled: true, requestClass: 'background' }))
+            .toEqual({ priority: 3, extra_body: { priority: 3 } });
+        expect(buildSchedulingFields(base)).not.toHaveProperty('extra_body');
     });
 
     it('모든 요청 클래스에 정수 priority 가 있고 채팅이 가장 앞선다', () => {
