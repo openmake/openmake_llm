@@ -23,7 +23,10 @@ cp "$DMG" "$DIR/$FILE"
 VERSION="$VERSION" FILE="$FILE" SHA="$SHA" MANIFEST="$DIR/latest.json" node -e '
 const fs = require("fs");
 const { VERSION, FILE, SHA, MANIFEST } = process.env;
-fs.writeFileSync(MANIFEST, JSON.stringify({ native: { version: VERSION, file: FILE, sha256: SHA } }) + "\n");
+// Windows 블록(publish-desktop-windows.sh 가 쓴다)이 이미 있으면 남긴다 — macOS 게시가 Windows 배포 정보를 지우지 않게.
+let prev = {};
+try { prev = JSON.parse(fs.readFileSync(MANIFEST, "utf8")); } catch { /* 첫 게시 */ }
+fs.writeFileSync(MANIFEST, JSON.stringify({ native: { version: VERSION, file: FILE, sha256: SHA }, ...(prev.windows ? { windows: prev.windows } : {}) }) + "\n");
 '
 echo "게시됨(native): v$VERSION → $DIR/$FILE"
 cat "$DIR/latest.json"

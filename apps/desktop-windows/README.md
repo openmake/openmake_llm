@@ -17,8 +17,18 @@ npm run smoke                     # 실제 Electron 을 띄워 가짜 서버에 
 npm start                         # 개발 실행
 ```
 
+## 설치 파일과 게시
+
+```bash
+npm run dist:win                                  # release/OpenMake-Companion-Setup-<버전>.exe (NSIS)
+bash ../../scripts/publish-desktop-windows.sh     # 서버 배포 폴더에 복사 + latest.json 의 windows 블록 갱신
+```
+
+- 앱은 `GET /api/desktop/latest` 의 `windows` 블록으로 새 버전을 확인하고, 받은 설치 파일의 sha256 을 대조한 뒤에만 실행한다(`src/update.mjs`).
+- **설치 파일(NSIS)은 Windows 나 x64 장비에서 만든다.** Apple Silicon Mac 에서는 앱 폴더(`release/win-unpacked`)까지만 만들어지고, 번들된 `makensis` 가 x64 실행 파일이라 마지막 단계가 실패한다(Rosetta 없음, 2026-10-04 확인).
+- 사용자용 설치 안내는 `INSTALL.md`.
+
 ## 아직 하지 않은 것
 
 - **실제 Windows 에서 실행해 보지 않았다.** 기동 검증(`npm run smoke`)은 macOS 의 Electron 으로 돌렸다.
-- 설치 파일(패키징)·자동 업데이트·정식 아이콘 — 설치 파일은 `electron-builder` 로 만들 예정이고, 서버의 `/api/desktop/latest` 에 Windows 블록이 필요하다.
-- 설치 안내 문서(서명 없는 앱의 SmartScreen 경고 해제 절차).
+- 설치 파일을 실제로 만들어 설치·업데이트해 보지 않았다. 정식 아이콘도 없다(트레이는 임시 점 아이콘).

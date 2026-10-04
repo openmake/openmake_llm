@@ -16,6 +16,7 @@ import * as path from 'node:path';
 import { BridgeConnection, BridgeCore, bulkApprovalAllowed } from '@openmake/local-bridge-core';
 import { pickLocale, translate } from './i18n.mjs';
 import { Store } from './store.mjs';
+import { pickWindowsUpdate, sha256Of } from './update.mjs';
 
 const SMOKE = process.env.OMK_DESKTOP_SMOKE === '1';
 // 16×16 단색 점 — 별도 아이콘 파일 없이 트레이에 올린다(정식 아이콘은 패키징 단계에서 교체).
@@ -141,10 +142,46 @@ function rebuildMenu() {
   }
   items.push({ type: 'separator' },
     { label: t('menu.openWeb'), click: () => { void shell.openExternal(webUrl()); } },
+    { label: t('menu.checkUpdates'), click: () => { void checkForUpdates(true); } },
     { label: t('menu.settings'), click: openSettings },
     { label: t('menu.quit'), click: () => app.quit() });
   tray.setContextMenu(Menu.buildFromTemplate(items));
   tray.setToolTip(`${t('tray.tooltip')} — ${statusText()}`);
+}
+
+/**
+ * 업데이트 확인 — 서버의 Windows 블록이 현재보다 새 버전이면 묻고, 설치 파일을 받아 sha256 을 대조한 뒤에만 실행한다.
+ * manual=true(메뉴에서 실행)면 "최신"·실패도 알린다. 기동 때의 자동 확인은 새 버전이 있을 때만 묻는다.
+ */
+async function checkForUpdates(manual) {
+  try {
+    const server = settings().server;
+    const res = await fetch(`${server}/api/desktop/latest`);
+    const update = res.ok ? pickWindowsUpdate((await res.json())?.data, app.getVersion()) : null;
+    if (!update) {
+      if (manual) await dialog.showMessageBox({ type: 'info', title: t('update.title'), message: t('update.none') });
+      return;
+    }
+    const { response } = await dialog.showMessageBox({
+      type: 'question', title: t('update.title'), message: t('update.available', update.version),
+      buttons: [t('update.install'), t('update.later')], defaultId: 0, cancelId: 1, noLink: true,
+    });
+    if (response !== 0) return;
+    const file = await fetch(`${server}${update.path}`);
+    if (!file.ok) throw new Error(`HTTP ${file.status}`);
+    const data = Buffer.from(await file.arrayBuffer());
+    if (sha256Of(data) !== update.sha256) {
+      await dialog.showMessageBox({ type: 'error', title: t('update.title'), message: t('update.badHash') });
+      return;
+    }
+    const target = path.join(app.getPath('temp'), update.file);
+    fs.writeFileSync(target, data);
+    const failed = await shell.openPath(target); // 설치 프로그램 실행 — 빈 문자열이면 성공
+    if (failed) throw new Error(failed);
+    app.quit();
+  } catch (e) {
+    if (manual) await dialog.showMessageBox({ type: 'error', title: t('update.title'), message: t('update.failed', e instanceof Error ? e.message : String(e)) });
+  }
 }
 
 function openSettings() {
@@ -201,5 +238,7 @@ if (!app.requestSingleInstanceLock()) {
     emit({ ev: 'ready', locale });
     const startFolders = process.env.OMK_DESKTOP_FOLDER ? [process.env.OMK_DESKTOP_FOLDER] : settings().folders;
     if (apiKey()) for (const f of startFolders) connectFolder(f);
+    // Windows 에서만 자동으로 확인한다 — 다른 OS 에서 이 앱은 개발용이다. 검증 실행 중에는 확인 창을 띄우지 않는다.
+    if (process.platform === 'win32' && !SMOKE) void checkForUpdates(false);
   });
 }

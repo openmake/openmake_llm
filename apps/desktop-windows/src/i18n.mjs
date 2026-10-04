@@ -1,6 +1,7 @@
 // 화면 문구 — 웹·macOS Companion 과 같은 5개 언어. 키가 언어마다 같아야 한다(test/i18n.test.mjs 가 확인).
 export const MESSAGES = {
   ko: {
+    'menu.checkUpdates': '업데이트 확인', 'update.title': '업데이트', 'update.available': '새 버전 {0} 이 있습니다. 지금 내려받아 설치할까요?', 'update.install': '내려받아 설치', 'update.later': '나중에', 'update.none': '최신 버전입니다.', 'update.failed': '업데이트를 받지 못했습니다: {0}', 'update.badHash': '내려받은 파일이 게시된 것과 다릅니다(무결성 확인 실패). 설치하지 않았습니다.',
     'tray.tooltip': 'OpenMake Companion', 'menu.status': '상태: {0}', 'menu.connectFolder': '작업 폴더 연결…', 'menu.addFolder': '작업 폴더 추가…',
     'menu.disconnect': '연결 해제', 'menu.disconnectAll': '모두 연결 해제', 'menu.openWeb': '웹에서 열기', 'menu.settings': '설정…', 'menu.quit': '종료',
     'menu.browser.takeover': '브라우저 넘겨받기 (에이전트 일시 정지)', 'menu.browser.release': '브라우저 돌려주기 (에이전트 재개)', 'menu.browser.stop': '브라우저 작업 중지',
@@ -10,6 +11,7 @@ export const MESSAGES = {
     'settings.title': 'OpenMake Companion 설정', 'settings.server': '서버 주소', 'settings.apiKey': 'API key (bridge 스코프)', 'settings.browser': '에이전트의 브라우저 사용 허용 (전용 Chrome 프로필)', 'settings.save': '저장', 'settings.saved': '저장됨', 'settings.noEncryption': '이 PC 에서 자격증명 암호화를 쓸 수 없어 API key 를 저장하지 않았습니다',
   },
   en: {
+    'menu.checkUpdates': 'Check for Updates', 'update.title': 'Update', 'update.available': 'Version {0} is available. Download and install it now?', 'update.install': 'Download and Install', 'update.later': 'Later', 'update.none': 'You are up to date.', 'update.failed': 'Could not get the update: {0}', 'update.badHash': 'The downloaded file does not match the published one (integrity check failed). It was not installed.',
     'tray.tooltip': 'OpenMake Companion', 'menu.status': 'Status: {0}', 'menu.connectFolder': 'Connect Work Folder…', 'menu.addFolder': 'Add Work Folder…',
     'menu.disconnect': 'Disconnect', 'menu.disconnectAll': 'Disconnect All', 'menu.openWeb': 'Open on the Web', 'menu.settings': 'Settings…', 'menu.quit': 'Quit',
     'menu.browser.takeover': 'Take Over Browser (Pause Agent)', 'menu.browser.release': 'Hand Back Browser (Resume Agent)', 'menu.browser.stop': 'Stop Browser Task',
@@ -19,6 +21,7 @@ export const MESSAGES = {
     'settings.title': 'OpenMake Companion Settings', 'settings.server': 'Server URL', 'settings.apiKey': 'API key (bridge scope)', 'settings.browser': 'Allow the agent to use a browser (dedicated Chrome profile)', 'settings.save': 'Save', 'settings.saved': 'Saved', 'settings.noEncryption': 'Credential encryption is unavailable on this PC, so the API key was not saved',
   },
   ja: {
+    'menu.checkUpdates': 'アップデートを確認', 'update.title': 'アップデート', 'update.available': '新しいバージョン {0} があります。今すぐダウンロードしてインストールしますか？', 'update.install': 'ダウンロードしてインストール', 'update.later': '後で', 'update.none': '最新バージョンです。', 'update.failed': 'アップデートを取得できませんでした: {0}', 'update.badHash': 'ダウンロードしたファイルが公開されたものと一致しません（整合性確認に失敗）。インストールしませんでした。',
     'tray.tooltip': 'OpenMake Companion', 'menu.status': '状態: {0}', 'menu.connectFolder': '作業フォルダを接続…', 'menu.addFolder': '作業フォルダを追加…',
     'menu.disconnect': '接続解除', 'menu.disconnectAll': 'すべて接続解除', 'menu.openWeb': 'Web で開く', 'menu.settings': '設定…', 'menu.quit': '終了',
     'menu.browser.takeover': 'ブラウザを引き継ぐ（エージェントを一時停止）', 'menu.browser.release': 'ブラウザを戻す（エージェントを再開）', 'menu.browser.stop': 'ブラウザ作業を停止',
@@ -28,6 +31,7 @@ export const MESSAGES = {
     'settings.title': 'OpenMake Companion 設定', 'settings.server': 'サーバーアドレス', 'settings.apiKey': 'API key（bridge スコープ）', 'settings.browser': 'エージェントのブラウザ使用を許可（専用 Chrome プロファイル）', 'settings.save': '保存', 'settings.saved': '保存しました', 'settings.noEncryption': 'この PC では資格情報の暗号化を使えないため、API key を保存しませんでした',
   },
   zh: {
+    'menu.checkUpdates': '检查更新', 'update.title': '更新', 'update.available': '有新版本 {0}。现在下载并安装吗？', 'update.install': '下载并安装', 'update.later': '稍后', 'update.none': '已是最新版本。', 'update.failed': '无法获取更新：{0}', 'update.badHash': '下载的文件与发布的不一致（完整性校验失败），未安装。',
     'tray.tooltip': 'OpenMake Companion', 'menu.status': '状态：{0}', 'menu.connectFolder': '连接工作文件夹…', 'menu.addFolder': '添加工作文件夹…',
     'menu.disconnect': '断开连接', 'menu.disconnectAll': '全部断开', 'menu.openWeb': '在网页中打开', 'menu.settings': '设置…', 'menu.quit': '退出',
     'menu.browser.takeover': '接管浏览器（暂停代理）', 'menu.browser.release': '交还浏览器（恢复代理）', 'menu.browser.stop': '停止浏览器任务',
@@ -37,6 +41,7 @@ export const MESSAGES = {
     'settings.title': 'OpenMake Companion 设置', 'settings.server': '服务器地址', 'settings.apiKey': 'API key（bridge 范围）', 'settings.browser': '允许代理使用浏览器（专用 Chrome 配置文件）', 'settings.save': '保存', 'settings.saved': '已保存', 'settings.noEncryption': '这台电脑无法使用凭据加密，因此没有保存 API key',
   },
   de: {
+    'menu.checkUpdates': 'Nach Updates suchen', 'update.title': 'Update', 'update.available': 'Version {0} ist verfügbar. Jetzt herunterladen und installieren?', 'update.install': 'Herunterladen und installieren', 'update.later': 'Später', 'update.none': 'Sie sind auf dem neuesten Stand.', 'update.failed': 'Update konnte nicht abgerufen werden: {0}', 'update.badHash': 'Die heruntergeladene Datei stimmt nicht mit der veröffentlichten überein (Integritätsprüfung fehlgeschlagen). Sie wurde nicht installiert.',
     'tray.tooltip': 'OpenMake Companion', 'menu.status': 'Status: {0}', 'menu.connectFolder': 'Arbeitsordner verbinden…', 'menu.addFolder': 'Arbeitsordner hinzufügen…',
     'menu.disconnect': 'Trennen', 'menu.disconnectAll': 'Alle trennen', 'menu.openWeb': 'Im Web öffnen', 'menu.settings': 'Einstellungen…', 'menu.quit': 'Beenden',
     'menu.browser.takeover': 'Browser übernehmen (Agent pausieren)', 'menu.browser.release': 'Browser zurückgeben (Agent fortsetzen)', 'menu.browser.stop': 'Browser-Aufgabe stoppen',
