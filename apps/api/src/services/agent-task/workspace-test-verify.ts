@@ -65,10 +65,15 @@ function hasWriteTool(usedTools: ReadonlySet<string>): boolean {
     return WRITE_TOOL_NAMES.some((t) => usedTools.has(t));
 }
 
+const isRunner = (token: string | null | undefined): token is TestRunner => token === 'npm' || token === 'pytest' || token === 'go';
+
 export async function detectWorkspaceTestRunner(runtime: TaskRuntime): Promise<TestRunner | null> {
+    // 실행기가 직접 알아낼 수 있으면(로컬 브리지) 그 답을 쓴다 — 셸 프로브를 보내면 사용자가 시키지 않은 명령의 확인 창이 뜬다.
+    const native = await runtime.detectTestRunnerNative();
+    if (native !== null) return isRunner(native) ? native : null;
     const r = await runtime.execRaw(DETECT_PROBE);
     const token = r.stdout.trim().split('\n').pop()?.trim();
-    return token === 'npm' || token === 'pytest' || token === 'go' ? token : null;
+    return isRunner(token) ? token : null;
 }
 
 /** 출력 끝부분 우선 절단 — 실패 요약(FAIL/Error/N failed)은 보통 마지막에 있다. */

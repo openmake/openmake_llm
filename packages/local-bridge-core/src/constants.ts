@@ -10,6 +10,8 @@ export const RECONNECT_MAX_MS = 60000;
 export const PATH_PROBE_TIMEOUT_MS = 5000;
 /** git 디렉터리 탐지(rev-parse) 프로브 타임아웃(ms). */
 export const GIT_PROBE_TIMEOUT_MS = 5000;
+/** 테스트 러너 탐지에서 `python3 -c "import pytest"` 한 번에 주는 시간. */
+export const TEST_RUNNER_PROBE_TIMEOUT_MS = 5000;
 
 export const SANDBOX_BIN = '/usr/bin/sandbox-exec';
 /** sandbox-exec 는 macOS 전용 — 타 플랫폼은 게이트 자체가 꺼진다(데스크톱은 mac 전용 앱이라 등가). */

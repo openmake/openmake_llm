@@ -14,7 +14,10 @@ function exec(stdout: string, exitCode = 0, stderr = '', timedOut = false): Exec
 }
 function runtime(impl: (cmd: string) => ExecResult | Promise<ExecResult>): { rt: TaskRuntime; cmds: string[] } {
     const cmds: string[] = [];
-    const rt = { execRaw: jest.fn(async (cmd: string) => { cmds.push(cmd); return impl(cmd); }) } as unknown as TaskRuntime;
+    const rt = {
+        execRaw: jest.fn(async (cmd: string) => { cmds.push(cmd); return impl(cmd); }),
+        detectTestRunnerNative: async () => null, // 서버 샌드박스 — 전용 탐지 없음
+    } as unknown as TaskRuntime;
     return { rt, cmds };
 }
 const WROTE = new Set(['bash', 'str_replace_editor']);
@@ -30,6 +33,27 @@ describe('detectWorkspaceTestRunner', () => {
         expect(DETECT_PROBE).toContain('no test specified');
         expect(DETECT_PROBE).toContain('existsSync("node_modules")');
         expect(DETECT_PROBE).toContain('import pytest');
+    });
+});
+
+describe('detectWorkspaceTestRunner — 실행기 전용 탐지(로컬 브리지)', () => {
+    function native(answer: string | null, impl: (cmd: string) => ExecResult = () => exec('none')): { rt: TaskRuntime; cmds: string[] } {
+        const r = runtime(impl);
+        (r.rt as unknown as { detectTestRunnerNative: () => Promise<string | null> }).detectTestRunnerNative = async () => answer;
+        return r;
+    }
+    it('실행기가 답하면 셸 프로브를 보내지 않는다(디바이스 확인 창이 뜨지 않는다)', async () => {
+        const found = native('pytest');
+        expect(await detectWorkspaceTestRunner(found.rt)).toBe('pytest');
+        expect(found.cmds).toEqual([]);
+        const none = native('none', () => exec('npm'));
+        expect(await detectWorkspaceTestRunner(none.rt)).toBeNull();
+        expect(none.cmds).toEqual([]);
+    });
+    it('실행기가 답하지 못하면(null) 종전 셸 프로브로 묻는다', async () => {
+        const { rt, cmds } = native(null, () => exec('go'));
+        expect(await detectWorkspaceTestRunner(rt)).toBe('go');
+        expect(cmds).toEqual([DETECT_PROBE]);
     });
 });
 

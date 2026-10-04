@@ -153,6 +153,11 @@ export class TaskRuntime {
         return this.executor.captureDiff ? this.executor.captureDiff() : null;
     }
 
+    /** 실행기 전용 테스트 러너 탐지(로컬 브리지 — 디바이스 확인 창 없이). 'none' 은 러너 없음, null 은 미지원·실패 → 호출부가 셸 프로브로 폴백. */
+    async detectTestRunnerNative(): Promise<string | null> {
+        return this.executor.detectTestRunner ? this.executor.detectTestRunner() : null;
+    }
+
     /** 승인 대기 알림을 실행기 채널로(로컬 브리지 → 디바이스 네이티브 알림). 미지원 실행기(docker)는 no-op. */
     notifyApprovalPending(toolName: string): void { this.executor.notifyApprovalPending?.(toolName); }
 

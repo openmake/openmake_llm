@@ -39,6 +39,31 @@ describe('RemoteExecutor 경로 — 컨테이너 표기(/workspace) 정규화', 
     });
 });
 
+describe('RemoteExecutor detectTestRunner (확인 창 없는 러너 탐지)', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('test_runner kind 로 묻고 exec(셸)을 쓰지 않는다', async () => {
+        const spy = jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: true, testRunner: 'npm' });
+        expect(await new RemoteExecutor('task-1', 'user-1').detectTestRunner()).toBe('npm');
+        expect(spy).toHaveBeenCalledWith('user-1', expect.objectContaining({ kind: 'test_runner', path: '.' }), undefined, undefined);
+        expect(spy.mock.calls.every(([, payload]) => (payload as { kind: string }).kind !== 'exec')).toBe(true);
+    });
+
+    it("러너가 없으면 'none' 을 그대로 돌려준다(셸 프로브로 다시 묻지 않게)", async () => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: true, testRunner: 'none' });
+        expect(await new RemoteExecutor('task-1', 'user-1').detectTestRunner()).toBe('none');
+    });
+
+    it('구 디바이스(미지원 kind)·실패·모르는 값은 null → 호출측이 셸 프로브로 폴백', async () => {
+        const spy = jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: false, error: '지원하지 않는 kind: test_runner' });
+        expect(await new RemoteExecutor('task-1', 'user-1').detectTestRunner()).toBeNull();
+        spy.mockRejectedValue(new Error('timeout'));
+        expect(await new RemoteExecutor('task-1', 'user-1').detectTestRunner()).toBeNull();
+        spy.mockResolvedValue({ ok: true, testRunner: 'rm -rf' });
+        expect(await new RemoteExecutor('task-1', 'user-1').detectTestRunner()).toBeNull();
+    });
+});
+
 describe('RemoteExecutor codeNav (읽기 전용 코드 탐색)', () => {
     afterEach(() => jest.restoreAllMocks());
 
