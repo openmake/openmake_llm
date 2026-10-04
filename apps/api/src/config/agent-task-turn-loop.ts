@@ -26,17 +26,27 @@ export const AGENT_TASK_TURN_LOOP = {
     STALL_MAX_CHARS: num(process.env.AGENT_TASK_STALL_MAX_CHARS, 400),
     STALL_TAIL_CHARS: 160,
     /** 컨텍스트 절단 기록 — 창 초과로 요청 사본에서 오래된 메시지를 잘라낸 호출을 단계 기록(context_trim)으로 남긴다.
-     *  기록만 한다(대응은 발동 빈도를 본 뒤). AGENT_TASK_CONTEXT_TRIM_STEP=false 로 끈다. */
+     *  AGENT_TASK_CONTEXT_TRIM_STEP=false 로 기록을 끈다(반복 시 마무리 전환은 아래 FINALIZE 가 따로 켠다). */
     CONTEXT_TRIM_STEP_ENABLED: process.env.AGENT_TASK_CONTEXT_TRIM_STEP !== 'false',
+    /** 컨텍스트 절단 반복 시 마무리 전환 — 창 초과로 대화를 줄인 턴(인계 요약·창 초과 오류 뒤 줄이기·안전망 절단)이 작업 안에서
+     *  이 횟수에 닿으면, 다음 턴부터 도구를 막고 지금까지의 결과로 답을 마무리하게 한다(턴 상한 직전의 마무리 턴과 같은 경로).
+     *  횟수 2는 실측이 아니다. AGENT_TASK_CONTEXT_TRIM_FINALIZE=false 로 끈다(종전처럼 기록만). AGENT_TASK_CONTEXT_TRIM_FINALIZE_AFTER */
+    CONTEXT_TRIM_FINALIZE_ENABLED: process.env.AGENT_TASK_CONTEXT_TRIM_FINALIZE !== 'false',
+    CONTEXT_TRIM_FINALIZE_AFTER: num(process.env.AGENT_TASK_CONTEXT_TRIM_FINALIZE_AFTER, 2),
     /** 잘린 도구 호출을 실행하지 않기 — 인자 JSON 파싱이 실패한 호출을 빈 인자로 실행하지 않고 오류 결과를 돌려준다.
      *  AGENT_TASK_REJECT_MALFORMED_TOOL_ARGS=false 면 종전처럼 빈 인자로 실행한다. */
     REJECT_MALFORMED_TOOL_ARGS: process.env.AGENT_TASK_REJECT_MALFORMED_TOOL_ARGS !== 'false',
     /** 한 턴 내 중복 호출 제거 — 한 응답 안에 이름·인자가 같은 읽기·검색 호출이 여럿이면 한 번만 실행하고
      *  나머지에는 앞선 호출을 가리키는 짧은 결과를 준다. 부작용 있는 도구는 대상이 아니다. AGENT_TASK_DEDUPE_TOOL_CALLS=false 로 끈다. */
     DEDUPE_TOOL_CALLS: process.env.AGENT_TASK_DEDUPE_TOOL_CALLS !== 'false',
-    /** 출력 반복 기록 — 응답 본문에서 같은 구간(창)이 여러 번 되풀이되면 단계 기록(output_repetition)을 남긴다.
-     *  차단하지 않는다: 빈도 근거가 없어 먼저 기록으로 발동률을 본다. AGENT_TASK_OUTPUT_REPETITION_STEP=false 로 끈다. */
+    /** 출력 반복 기록 — 응답 본문에서 같은 구간(창)이 같은 간격으로, 사이의 글까지 같게 되풀이되면 단계 기록(output_repetition)을 남긴다.
+     *  AGENT_TASK_OUTPUT_REPETITION_STEP=false 로 기록을 끈다(자르기는 아래 CUT 이 따로 켠다). */
     OUTPUT_REPETITION_STEP_ENABLED: process.env.AGENT_TASK_OUTPUT_REPETITION_STEP !== 'false',
+    /** 출력 반복 대응 — 반복이 감지된 응답은 반복이 시작된 뒤를 잘라 대화에 넣는다(도구 호출이 함께 오면 본문만 자르고 호출은 실행).
+     *  최종 답이 될 응답이었으면 작업당 RETRY_MAX 회 다시 요청한다(0 이면 다시 요청하지 않음).
+     *  AGENT_TASK_OUTPUT_REPETITION_CUT=false 면 종전처럼 기록만 한다. AGENT_TASK_OUTPUT_REPETITION_RETRY_MAX */
+    OUTPUT_REPETITION_CUT_ENABLED: process.env.AGENT_TASK_OUTPUT_REPETITION_CUT !== 'false',
+    OUTPUT_REPETITION_RETRY_MAX: num(process.env.AGENT_TASK_OUTPUT_REPETITION_RETRY_MAX, 1),
     /** 창 길이(자)·반복 횟수 임계 — 60자 창이 5회 이상. 실측이 아니라 hermes-agent 의 값이다.
      *  AGENT_TASK_OUTPUT_REPETITION_WINDOW_CHARS / _MIN_REPEATS */
     OUTPUT_REPETITION_WINDOW_CHARS: num(process.env.AGENT_TASK_OUTPUT_REPETITION_WINDOW_CHARS, 60),
@@ -44,6 +54,18 @@ export const AGENT_TASK_TURN_LOOP = {
     /** 긴 응답은 끝에서 이만큼만 검사한다(검사 비용 상한) / 창 안의 글자 종류가 이보다 적으면 구분선·공백으로 보고 건너뛴다. */
     OUTPUT_REPETITION_SCAN_TAIL_CHARS: 20_000,
     OUTPUT_REPETITION_MIN_DISTINCT_CHARS: 8,
+    /** 주기 반복 가드 — 서로 다른 도구 호출 2~MAX_PERIOD 개가 이름·인자도 결과도 같게 번갈아 되풀이되면(A-B-A-B) 안내하고,
+     *  임계를 넘으면 실행하지 않는다. 같은 호출의 연속 반복(AGENT_TASK_TOOL_LOOP_*)이 못 잡는 경우다. AGENT_TASK_TOOL_LOOP_CYCLE=false 로 끈다. */
+    TOOL_LOOP_CYCLE_ENABLED: process.env.AGENT_TASK_TOOL_LOOP_CYCLE !== 'false',
+    /** 같은 주기가 이 바퀴째 같은 결과로 끝나면 안내 / 이 바퀴를 다 돈 뒤 주기를 이어가는 호출은 실행하지 않음 / 보는 주기 길이 상한.
+     *  실측이 아니다 — hermes-agent 는 주기 4까지 본다. AGENT_TASK_TOOL_LOOP_CYCLE_WARN / _BLOCK / _MAX_PERIOD */
+    TOOL_LOOP_CYCLE_WARN: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_WARN, 2),
+    TOOL_LOOP_CYCLE_BLOCK: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_BLOCK, 3),
+    TOOL_LOOP_CYCLE_MAX_PERIOD: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_MAX_PERIOD, 3),
+    /** 같은 구간 다시 읽기 안내 — 파일 보기(str_replace_editor view)가 바뀌지 않은 같은 파일·같은 구간을 다시 읽으면 2회째에 바로
+     *  "이미 읽은 구간"이라는 한 줄을 결과에 붙인다(내용은 그대로, 차단 없음). 그 사이에 편집·셸 호출이 있었으면 붙이지 않는다.
+     *  AGENT_TASK_REREAD_NOTE=false 로 끈다. */
+    REREAD_NOTE_ENABLED: process.env.AGENT_TASK_REREAD_NOTE !== 'false',
     /** 검증이 보류한 답변 보존 — 검증 실패로 턴을 이어가다 턴 상한에 걸리면, 들고 있던 직전 완성 답변을 버리지 않고
      *  "검증 미통과" 표시(verify_skipped 스텝)와 함께 결과로 남긴다. 판정(마커·goal judge)은 그대로 거친다.
      *  AGENT_TASK_KEEP_HELD_ANSWER=false 면 종전처럼 max_turns_exhausted 실패로 끝난다. */

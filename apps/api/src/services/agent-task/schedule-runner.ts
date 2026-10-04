@@ -93,7 +93,7 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
         }
         const role = await resolveRole(s.user_id);
         const service = new AgentTaskService();
-        // "보고할 것 없음" 선언(기본 꺼짐) — 켜면 목표 뒤에 표식 안내를 붙인다. 결과 반영이 꺼져 있으면 표식을 읽을 곳이 없어 붙이지 않는다.
+        // "보고할 것 없음" 선언(기본 켜짐) — 목표 뒤에 표식 안내를 붙인다. 결과 반영이 꺼져 있으면 표식을 읽을 곳이 없어 붙이지 않는다.
         const runGoal = AGENT_TASK_SCHEDULE.RUN_OUTCOME_ENABLED && AGENT_TASK_SCHEDULE.SILENT_ENABLED ? s.goal + getScheduleSilentNote() : s.goal;
         await dispatchAgentTask({
             taskId,

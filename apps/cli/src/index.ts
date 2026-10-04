@@ -20,6 +20,7 @@ import * as readline from 'readline';
 import { loadConfig, saveConfig, deviceId } from './config';
 import { CliBridge, type ConfirmFn } from './bridge';
 import { ApiClient, type ApiTask, type ApiTaskStep, type ShareDocument } from './api';
+import { structuredQuestions, approvalQuestionText, renderQuestion, renderInputHint, interpretAnswer, composeAnswer, type StructuredQuestion } from './ask-human';
 
 /** 브리지 등록 확인 폴링 간격(ms). */
 const BRIDGE_REGISTER_POLL_MS = 500;
@@ -172,6 +173,21 @@ async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<
     await followTask(api, bridge, taskId);
 }
 
+/** 구조화 질문을 차례로 묻는다 — 번호로 고르거나 직접 입력, Enter 는 권장안. 답들을 글 하나로 엮어 돌려준다. */
+async function askStructured(asked: { intro: string; questions: StructuredQuestion[] }): Promise<string> {
+    console.log(`\n\x1b[33m질문\x1b[0m${asked.intro ? `: ${asked.intro}` : ''}`);
+    const picks: string[] = [];
+    for (const [i, q] of asked.questions.entries()) {
+        console.log(renderQuestion(q, i, asked.questions.length));
+        for (;;) {
+            const got = interpretAnswer(q, await prompt(`  ${renderInputHint(q)}`));
+            if (got.ok) { picks.push(got.answer); break; }
+            console.log(`  ${got.message}`);
+        }
+    }
+    return composeAnswer(asked.questions, picks);
+}
+
 /**
  * 진행 폴링 — run/resume 공용. 승인 대기(pending)는 터미널에서 즉시 처리, 상태는 변할 때만 출력.
  * 종료 상태에 도달하면 브리지를 끊고 프로세스를 종료한다(completed=0, 그 외 1).
@@ -196,7 +212,10 @@ async function followTask(api: ApiClient, bridge: CliBridge, taskId: string): Pr
             const { pending } = await api.listPending();
             for (const p of pending.filter((p) => p.taskId === taskId && !seenApprovals.has(p.approvalId))) {
                 seenApprovals.add(p.approvalId);
-                const desc = p.question || `${p.toolName}${p.kind ? ` (${p.kind})` : ''}`;
+                // 구조화 질문(선택지·권장안)은 번호 목록으로 묻고 글로 답한다. 구조가 없으면 종전 y/n.
+                const asked = process.stdin.isTTY ? structuredQuestions(p.toolName, p.args) : null;
+                if (asked) { await api.answerQuestion(p.approvalId, await askStructured(asked)); continue; }
+                const desc = p.question || approvalQuestionText(p.args) || `${p.toolName}${p.kind ? ` (${p.kind})` : ''}`;
                 const ans = process.stdin.isTTY ? (await prompt(`\n\x1b[33m승인 필요\x1b[0m: ${desc}\n  y=승인 / n=거부: `)).toLowerCase() : 'n';
                 await api.answerApproval(p.approvalId, ans === 'y' || ans === 'yes' ? 'approve' : 'reject');
             }

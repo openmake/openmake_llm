@@ -76,7 +76,7 @@ describe('접힌 스텁', () => {
             c.push({ role: 'assistant', content: '', tool_calls: [{ id: `c${t}`, type: 'function', function: { name: 'bash', arguments: { command: `make step${t}` } } }] });
             c.push({ role: 'tool', content: `Error: [stdout]\n${'y'.repeat(600)}\n[stderr]\nstep${t} failed badly\n[exit=3 10ms]`, tool_name: 'bash', tool_call_id: `c${t}` });
         }
-        foldOldToolResults(c, { keepTurns: 2, minChars: 100, headChars: 40 });
+        foldOldToolResults(c, { keepTurns: 2, minChars: 100, headChars: 40, minBatchSavedChars: 0 });
         const first = c.filter((m) => m.role === 'tool')[0].content.split('\n')[0];
         expect(first).toContain('make step0');
         expect(first).toContain('exit=3');

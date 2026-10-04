@@ -55,6 +55,20 @@ export function getHandoffGenericCall(toolName: string, failed: boolean, errorLi
  * 보관 파일의 필요한 구간만 보게 한다.
  */
 export function getToolResultSpillNotice(path: string, totalChars: number, totalLines: number, resumeLine: number): string {
-    return `[전체 결과 보관] 위는 앞·뒤 미리보기입니다. 전체 ${totalChars}자(${totalLines}줄)는 ${path} 에 있습니다. `
+    return `${TOOL_RESULT_SPILL_MARKER} 위는 앞·뒤 미리보기입니다. 전체 ${totalChars}자(${totalLines}줄)는 ${path} 에 있습니다. `
         + `생략된 구간이 필요하면 str_replace_editor 의 command:view, path:"${path}", start_line:${resumeLine} 으로 필요한 만큼만 보세요.`;
+}
+
+/** 보관 안내의 머리 표지 — 이 표지가 있는 결과는 전체가 파일로 남아 있다. */
+const TOOL_RESULT_SPILL_MARKER = '[전체 결과 보관]';
+
+/** PURE: 도구 결과에 붙은 보관 안내에서 파일 경로를 읽는다. 안내가 없으면 null. (위 안내 문구와 짝 — 함께 고칠 것) */
+export function spilledResultPathOf(content: string): string | null {
+    const at = content.lastIndexOf(TOOL_RESULT_SPILL_MARKER);
+    return at < 0 ? null : /path:"([^"]+)"/.exec(content.slice(at))?.[1] ?? null;
+}
+
+/** 접힌 스텁에 남기는 보관 경로 — 미리보기가 접혀도 전체 결과가 어디 있는지는 남는다. */
+export function getFoldedSpillRef(path: string): string {
+    return ` 전체 결과는 ${path} 에 남아 있습니다.`;
 }

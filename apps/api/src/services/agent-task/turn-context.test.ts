@@ -15,6 +15,7 @@ import { callAgentTurnWithContext, isContextOverflowError } from './turn-context
 import { callAgentTurnWithBudget } from './turn-call';
 import { isHandoffSummary } from './context-handoff';
 import { isFoldedToolResult } from './context-fold';
+import { CONTEXT_FOLD_BATCH } from '../../config/agent-task-context';
 import type { ChatMessage } from '../../llm/types';
 
 const call = callAgentTurnWithBudget as jest.Mock;
@@ -34,6 +35,8 @@ const base = (conversation: ChatMessage[], model = 'pool-model') => ({
 });
 
 beforeEach(() => {
+    // 접기 묶음은 끄고 본다(기본 8000자 — 여기 대화의 접기는 그보다 작다). 묶음은 '접기 묶음과 창 초과 판정'이 따로 켠다.
+    (CONTEXT_FOLD_BATCH as { MIN_SAVED_CHARS: number }).MIN_SAVED_CHARS = 0;
     call.mockReset();
     call.mockResolvedValue({ result: { role: 'assistant', content: 'ok' }, callSignal: new AbortController().signal });
 });
@@ -96,6 +99,38 @@ describe('callAgentTurnWithContext', () => {
     });
 });
 
+describe('접기 묶음과 창 초과 판정', () => {
+    const setBatch = (n: number): void => { (CONTEXT_FOLD_BATCH as { MIN_SAVED_CHARS: number }).MIN_SAVED_CHARS = n; };
+    const folded = (c: ChatMessage[]): number => c.filter((m) => m.role === 'tool' && isFoldedToolResult(m.content)).length;
+
+    it('창 안이면 임계에 못 미치는 접기는 미룬다 — 과거 메시지가 그대로다', async () => {
+        setBatch(50_000);
+        const c = conv(6, 2000); // 접을 수 있는 것은 2건(약 3,400자) — 임계 미만
+        const before = JSON.stringify(c);
+        await callAgentTurnWithContext(base(c));
+        expect(JSON.stringify(c)).toBe(before);
+    });
+
+    it('미뤄 둔 접기 때문에 창을 넘게 되면 임계와 상관없이 접는다 — 접으면 들어가는 대화를 인계 요약으로 버리지 않는다', async () => {
+        setBatch(50_000);
+        // 9턴 × 3,000자 = 약 27,000토큰으로 창(20,000)을 넘는다. 오래된 5건을 접으면 약 14,000토큰이라 들어간다.
+        const c = conv(9, 3000);
+        const n = c.length;
+        await callAgentTurnWithContext(base(c));
+        expect(folded(c)).toBe(5);
+        expect(c.length).toBe(n);
+        expect(c.some((m) => isHandoffSummary(m.content))).toBe(false);
+    });
+
+    it('접어도 창을 넘으면 접은 뒤에 인계 요약으로 줄인다', async () => {
+        setBatch(50_000);
+        const c = conv(8, 6000); // 최근 4턴만으로 창을 넘는다
+        await callAgentTurnWithContext(base(c));
+        expect(c.some((m) => isHandoffSummary(m.content))).toBe(true);
+        expect(call).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe('창 초과 오류 뒤 복구', () => {
     const overflow = () => Object.assign(new Error("400 This model's maximum context length is 32768 tokens. However, you requested 40000 tokens"), { status: 400 });
     const ok = () => ({ result: { role: 'assistant', content: 'ok' }, callSignal: new AbortController().signal });
@@ -147,5 +182,50 @@ describe('창 초과 오류 뒤 복구', () => {
         call.mockImplementation(async () => { ac.abort(); throw overflow(); });
         await expect(callAgentTurnWithContext({ ...base(conv(8, 3000), 'external-model'), signal: ac.signal })).rejects.toThrow();
         expect(call).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('출력 반복으로 잘린 최종 답변', () => {
+    it('도구 호출 없는 응답이 잘렸으면 잘린 본문과 안내를 대화에 넣고 같은 턴을 한 번 다시 호출한다', async () => {
+        const conversation = conv(1, 10);
+        const before = conversation.length;
+        call.mockResolvedValueOnce({ result: { role: 'assistant', content: '잘린 답' }, callSignal: new AbortController().signal, repetitionCut: true });
+        const out = await callAgentTurnWithContext(base(conversation));
+        expect(call).toHaveBeenCalledTimes(2);
+        expect(out.result.content).toBe('ok');
+        expect(conversation).toHaveLength(before + 2);
+        expect(conversation[before]).toEqual({ role: 'assistant', content: '잘린 답' });
+        expect(conversation[before + 1].role).toBe('user');
+    });
+});
+
+describe('컨텍스트 절단 횟수 집계(마무리 전환 판정용)', () => {
+    const { contextTrimCount } = jest.requireActual('./context-pressure') as typeof import('./context-pressure');
+
+    it('인계 요약으로 줄인 호출을 센다', async () => {
+        const c = conv(8, 6000);
+        await callAgentTurnWithContext(base(c));
+        expect(contextTrimCount(c)).toBe(1);
+    });
+
+    it('안전망이 요청 사본에서 메시지를 잘라낸 호출을 센다', async () => {
+        const c = conv(2, 10);
+        call.mockResolvedValueOnce({ result: { role: 'assistant', content: 'ok', metrics: { context_dropped_messages: 3 } }, callSignal: new AbortController().signal });
+        await callAgentTurnWithContext(base(c));
+        expect(contextTrimCount(c)).toBe(1);
+    });
+
+    it('창 초과 오류 뒤 줄여 다시 부른 호출을 센다 — 한 턴에 한 번만', async () => {
+        const c = conv(8, 3000);
+        call.mockRejectedValueOnce(Object.assign(new Error("400 This model's maximum context length is 32768 tokens. However, you requested 40000 tokens"), { status: 400 }))
+            .mockResolvedValueOnce({ result: { role: 'assistant', content: 'ok', metrics: { context_dropped_messages: 1 } }, callSignal: new AbortController().signal });
+        await callAgentTurnWithContext(base(c, 'external-model'));
+        expect(contextTrimCount(c)).toBe(1);
+    });
+
+    it('줄이지 않은 호출은 세지 않는다', async () => {
+        const c = conv(2, 10);
+        await callAgentTurnWithContext(base(c));
+        expect(contextTrimCount(c)).toBe(0);
     });
 });

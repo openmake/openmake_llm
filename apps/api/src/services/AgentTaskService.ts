@@ -48,6 +48,7 @@ import { beginTaskLease } from './agent-task/task-lease';
 import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint, usedToolNamesFrom } from './agent-task/turn-reentry';
 import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
 import { nextTurnProgress } from './agent-task/turn-progress';
+import { replyNudge } from './agent-task/one-shot-notice';
 import { pickNoToolNudge } from './agent-task/turn-stall';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
@@ -137,7 +138,7 @@ export class AgentTaskService {
         let taskRuntime: TaskRuntime | null = null;
         let parked = false; // 질문 응답 대기 주차(F16.7) — finally 가 승인·workspace 를 남긴다
         const recentSignatures: string[] = [];
-        let stuckNotified = false;
+        let stuckNotified = false, stuckPending = false;
         let emptyRetries = 0;
         let stallNudges = 0; // 행동 예고 재촉 횟수(turn-stall)
         let verifyRetries = 0;
@@ -332,7 +333,7 @@ export class AgentTaskService {
                         stepNumber = fin.stepNumber;
                         if (fin.kind !== 'verify_retry') return;
                         verifyRetries++;
-                        conversation.push({ role: 'user', content: fin.nudge });
+                        conversation.push(replyNudge(fin.nudge));
                     }
                     await writeTurnCheckpoint(taskId, conversation, turn, taskRuntime);
                     continue;
@@ -431,7 +432,7 @@ export class AgentTaskService {
                 // 빈 응답(본문·도구 호출 없음)은 최종 답변으로 받지 않고 되묻는다 — 일시적 빈 응답 한 번으로 작업이 끝나지 않게(turn-guards).
                 if (isEmptyTurn(result) && emptyRetries < AGENT_TASK_LIMITS.EMPTY_RESPONSE_MAX_RETRIES) {
                     emptyRetries++;
-                    conversation.push({ role: 'assistant', content: AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER }, { role: 'user', content: getAgentTaskEmptyResponseNudge() });
+                    conversation.push({ role: 'assistant', content: AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER }, replyNudge(getAgentTaskEmptyResponseNudge()));
                     await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: `빈 응답 — 되묻기 ${emptyRetries}/${AGENT_TASK_LIMITS.EMPTY_RESPONSE_MAX_RETRIES}`, planStepIndex: planIdx() });
                     continue;
                 }
@@ -445,7 +446,8 @@ export class AgentTaskService {
                 // stuck 감지 — 동일 응답(내용+도구호출)이 STUCK_THRESHOLD 회 연속되면 전략변경 유도(turn-guards).
                 const stuck = pushStuckSignature(recentSignatures, result, AGENT_TASK_LIMITS.STUCK_THRESHOLD);
                 if (stuck && !stuckNotified) {
-                    conversation.push({ role: 'user', content: getAgentTaskStuckNudge() });
+                    // 도구 호출이 있으면 결과 뒤에 넣는다 — 호출과 결과 사이에 끼우면 짝이 깨져 턴 중간 재개·fork 가 매달린 호출을 못 찾는다.
+                    if (result.tool_calls?.length) stuckPending = true; else conversation.push(replyNudge(getAgentTaskStuckNudge()));
                     stuckNotified = true;
                     logger.info(`[AgentTask] stuck 감지 → 전략변경 주입: ${taskId} (turn ${turn + 1})`);
                 } else if (!stuck) stuckNotified = false;
@@ -491,7 +493,7 @@ export class AgentTaskService {
                         canAct: !finalTurnReason && turn < turnCeiling - 1, stallNudges });
                     if (stall) {
                         if (stall.note) { stallNudges++; await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: stall.note, planStepIndex: planIdx() }); }
-                        conversation.push({ role: 'user', content: stall.nudge });
+                        conversation.push(replyNudge(stall.nudge));
                         continue;
                     }
                     // 완료 판정은 finalizeTask 단일 관문 — 마커·verify·judge·산출물 영속(091).
@@ -504,7 +506,7 @@ export class AgentTaskService {
                     stepNumber = fin.stepNumber;
                     if (fin.kind === 'verify_retry') {
                         verifyRetries++;
-                        conversation.push({ role: 'user', content: fin.nudge });
+                        conversation.push(replyNudge(fin.nudge));
                         continue;
                     }
                     return;
@@ -528,6 +530,7 @@ export class AgentTaskService {
                 pausedMs = turnExec.pausedMs;
                 approvalTimeouts = turnExec.approvalTimeouts;
                 const { terminated, terminateSummary } = turnExec;
+                if (stuckPending) { conversation.push(replyNudge(getAgentTaskStuckNudge())); stuckPending = false; }
 
                 // terminate 도구 호출 — 깔끔한 완료 시그널(max_turns 소진 아님).
                 // 종전엔 이 경로가 판정 없이 바로 completed 였다(빈 terminate 로 산출물 0 완료가
@@ -542,7 +545,7 @@ export class AgentTaskService {
                     stepNumber = fin.stepNumber;
                     if (fin.kind === 'verify_retry') {
                         verifyRetries++;
-                        conversation.push({ role: 'user', content: fin.nudge });
+                        conversation.push(replyNudge(fin.nudge));
                         continue;
                     }
                     return;

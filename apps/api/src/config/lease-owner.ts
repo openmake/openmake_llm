@@ -15,8 +15,12 @@ export function sanitizeLeaseOwner(host: string, instance: string): string {
 }
 
 let owner: string | null = null;
-/** 이 프로세스의 owner — PM2 는 NODE_APP_INSTANCE 로 인스턴스 번호를 준다(단일 프로세스는 0). */
+/**
+ * 이 프로세스의 owner — PM2 는 NODE_APP_INSTANCE 로 인스턴스 번호를 준다(단일 프로세스는 0).
+ * OMK_LEASE_INSTANCE 가 있으면 그것을 쓴다 — 서버와 같은 호스트에서 따로 뜨는 프로세스(평가 실행기)가 서버와 같은 이름을 쓰면,
+ * 부팅 정리가 서로의 실행 중 작업을 "내 것"으로 보고 failed 로 바꾼다.
+ */
 export function leaseOwner(): string {
-    owner ??= sanitizeLeaseOwner(hostname(), process.env.NODE_APP_INSTANCE ?? '0');
+    owner ??= sanitizeLeaseOwner(hostname(), process.env.OMK_LEASE_INSTANCE ?? process.env.NODE_APP_INSTANCE ?? '0');
     return owner;
 }

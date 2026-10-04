@@ -48,7 +48,7 @@ async function buildSkillPromptBlock(userId: string): Promise<string> {
  */
 export async function buildAgentTaskSystemContent(userId: string, goal: string, taskId: string): Promise<string> {
     // 설정 "장기 기억" OFF 는 에이전트 작업에도 적용(memory-policy — 그전엔 채팅 경로만 게이팅).
-    // 순위 매김(기본 꺼짐)이 켜지면 최신순 대신 목표 관련도 × 신뢰도 × 시간 감쇠 순으로 싣는다(memory-rank).
+    // 순위 매김(기본 켜짐)은 최신순 대신 목표 관련도 × 신뢰도 × 시간 감쇠 순으로 싣는다(memory-rank).
     const memory = (await resolveMemoryLearning(userId))
         ? await buildUserMemoryBlock(userId, MEMORY_RANKING.ENABLED ? { poolSize: MEMORY_RANKING.POOL_SIZE, rank: (ms) => rankMemoriesForGoal(goal, ms) } : {})
         : '';

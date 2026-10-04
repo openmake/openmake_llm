@@ -29,6 +29,19 @@ export function getContextTrimNote(dropped: number, total: number): string {
     return `컨텍스트 창 초과 — 이번 모델 호출에서 대화 ${total}건 중 오래된 메시지 ${dropped}건을 빼고 보냈습니다. 모델이 앞선 내용을 보지 못했을 수 있습니다.`;
 }
 
+/** 컨텍스트 절단 반복 — 마무리 턴 전환 단계 기록의 사유 이름. */
+export const CONTEXT_FINAL_TURN_LABEL = '컨텍스트 절단 반복';
+
+/** 컨텍스트 절단이 되풀이되어 마무리 턴으로 돌릴 때 주입 — 도구를 더 쓰지 말고 지금까지의 결과로 답을 마무리하게 한다. */
+export function getContextFinalTurnNudge(): string {
+    return [
+        '대화가 모델의 컨텍스트 창을 여러 번 넘어 오래된 내용이 요약으로 바뀌었고, 더 줄일 여지가 거의 없습니다. 도구는 더 이상 사용할 수 없습니다.',
+        '추가 조사·실행·검증을 시도하지 말고, 지금 보이는 요약과 최근 결과를 근거로 최종 답변을 지금 작성하세요.',
+        '이미 만든 산출물(파일·아티팩트·게시물)이 있다면 무엇을 어디에 만들었는지 명시하세요.',
+        '목표를 달성하지 못했다면 첫 줄에 [GOAL_INCOMPLETE] 를 쓰고, 무엇까지 했고 무엇이 남았는지 적으세요.',
+    ].join('\n');
+}
+
 /** 인자 JSON 이 깨진 도구 호출에 돌려주는 결과 — 실행하지 않았음을 알리고 다시 호출하게 한다. */
 export function getMalformedToolArgsResult(toolName: string): string {
     return `Error: ${toolName} 호출의 인자가 올바른 JSON 이 아니어서 실행하지 않았습니다(출력이 중간에 잘렸을 수 있습니다). 인자를 완전한 JSON 으로 다시 작성해 호출하세요. 내용이 길면 여러 번에 나눠 호출하세요.`;
@@ -42,9 +55,40 @@ export function getDuplicateToolCallResult(toolName: string, originalCallId: str
     return `${DUPLICATE_TOOL_CALL_PREFIX} 같은 응답 안의 앞선 ${toolName} 호출${originalCallId ? `(${originalCallId})` : ''}과 이름·인자가 같아 다시 실행하지 않았습니다. 그 호출의 결과를 쓰세요.`;
 }
 
-/** 출력 반복 — 단계 기록에 남기는 문구(차단하지 않고 기록만 한다). */
-export function getOutputRepetitionNote(repeats: number, windowChars: number, sample: string): string {
-    return `출력 반복 감지(기록만) — 응답 본문에서 ${windowChars}자 구간이 ${repeats}회 반복됐습니다: "${sample}"`;
+/** 도구 결과 뒤에 붙이는 반복 안내의 머리말 — 반복 가드(tool-loop-guard)가 앞선 결과를 비교할 때 이 줄을 뺀다. 안내는 한 줄이어야 한다. */
+export const TOOL_LOOP_NOTE_MARKER = '\n\n[반복 안내]';
+
+/** 주기 반복 가드 — 서로 다른 호출이 같은 결과로 번갈아 되풀이될 때 결과 뒤에 붙이는 안내. */
+export function getToolLoopCycleNote(period: number, laps: number): string {
+    return `${TOOL_LOOP_NOTE_MARKER} 서로 다른 호출 ${period}개가 같은 결과로 번갈아 ${laps}바퀴 되풀이됐습니다. 같은 순서를 반복해도 결과는 바뀌지 않습니다 — 접근을 바꾸거나, 더 진행할 수 없으면 지금까지의 결과로 마무리하세요.`;
+}
+
+/** 주기 반복 가드 — 임계를 넘어 실행하지 않았을 때의 결과. */
+export function getToolLoopCycleBlockedResult(toolName: string, period: number, laps: number): string {
+    return `Error: 이 호출(${toolName})은 서로 다른 호출 ${period}개가 같은 결과로 ${laps}바퀴 되풀이된 주기를 이어가는 것이어서 실행하지 않았습니다. 다른 인자나 다른 방법을 쓰고, 더 진행할 수 없으면 지금까지의 결과로 마무리하세요.`;
+}
+
+/** 같은 구간 다시 읽기 — 바뀌지 않은 같은 파일·같은 구간을 다시 읽었을 때 결과 뒤에 붙이는 안내(내용은 그대로 돌려준다). */
+export function getRereadNote(): string {
+    return `${TOOL_LOOP_NOTE_MARKER} 이미 읽은 구간이고 그 뒤로 파일이 바뀌지 않았습니다. 다시 읽지 말고 이 내용으로 다음 단계를 진행하세요. 다른 부분이 필요하면 start_line 을 바꿔 읽으세요.`;
+}
+
+/** 출력 반복 — 단계 기록에 남기는 문구. cut 이면 반복이 시작된 뒤를 잘라 냈다. */
+export function getOutputRepetitionNote(repeats: number, windowChars: number, sample: string, cut = false): string {
+    return `출력 반복 감지(${cut ? '반복이 시작된 뒤를 잘라 냄' : '기록만'}) — 응답 본문에서 ${windowChars}자 구간이 ${repeats}회 반복됐습니다: "${sample}"`;
+}
+
+/** 출력 반복 — 잘라 낸 자리에 붙이는 생략 표시(대화와, 그대로 최종 답이 되면 결과에 남는다). */
+export const OUTPUT_REPETITION_CUT_MARKER = '\n\n[같은 내용이 되풀이되어 이후 출력을 생략했습니다]';
+
+/** 출력 반복 — 최종 답이 될 응답이 반복으로 잘렸을 때 주입해 한 번 다시 받는다. 횟수는 대화에 남은 이 문구로 센다. */
+export function getOutputRepetitionRetryNudge(): string {
+    return '방금 응답은 같은 내용이 되풀이되어 뒤를 잘라 냈습니다. 같은 문장을 반복하지 말고, 최종 답변을 처음부터 한 번만 간결하게 다시 작성하세요.';
+}
+
+/** 출력 반복 다시 요청 — 단계 기록에 남기는 문구. */
+export function getOutputRepetitionRetryNote(count: number, max: number): string {
+    return `출력 반복으로 잘린 답변 — 다시 요청 ${count}/${max}`;
 }
 
 /** 검증이 보류한 답변을 턴 상한에서 결과로 쓸 때 남기는 표시 — 단계 기록과 진행 알림이 같은 문장을 쓴다. */

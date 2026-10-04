@@ -2,7 +2,7 @@
  * 에이전트 작업 과제 묶음(golden-agent-tasks.json) 스키마 — 과제 정의가 깨지지 않았는지 CI 에서 본다.
  *
  * `cases` 는 네트워크 없는 샌드박스에서 끝나는 과제로, 야간 회귀 감시(eval:agent-tasks)가 실제로 실행한다.
- * `browserCases` 는 브라우저를 쓰는 과제다 — 외부 페이지에 의존해 야간 실행 묶음에는 넣지 않고 정의만 둔다.
+ * `browserCases` 는 브라우저를 쓰는 과제다 — 외부 페이지에 의존해 야간 실행 묶음에는 넣지 않고, 실행기에 --browser 를 줄 때만 돈다(eval:agent-tasks:browser).
  * 성공은 최종 답변에 정답 문자열이 들어 있는지로 판정한다(judgeExpectedAnswer).
  *
  * @module evaluation/agent-task-dataset

@@ -19,6 +19,19 @@ interface MemoryRow {
     created_at: string;
 }
 
+/** PURE: 앞에서부터 토큰 상한 안에 드는 메모리만 남긴다(첫 건은 상한을 넘어도 싣는다). 평가(eval:memory-rank)도 이 함수를 쓴다. */
+export function capMemoriesByTokens<T extends { content: string }>(memories: readonly T[], maxTokens: number): T[] {
+    const kept: T[] = [];
+    let usedTokens = 0;
+    for (const m of memories) {
+        const t = estimateTokens(m.content) + 4;
+        if (usedTokens + t > maxTokens && kept.length > 0) break;
+        kept.push(m);
+        usedTokens += t;
+    }
+    return kept;
+}
+
 /**
  * Semantic tier — 사용자 cross-conversation 메모리 블록('' 이면 미주입). 토큰 cap 적용.
  * 채팅(buildUserContextBlocks)과 Agent Task(system 조립) 양쪽에서 재사용(#3 3-tier 배선).
@@ -43,14 +56,7 @@ export async function buildUserMemoryBlock(
             }
         }
         const maxMem = USER_CONTEXT_LIMITS.MAX_MEMORY_TOKENS;
-        const kept: typeof memories = [];
-        let usedTokens = 0;
-        for (const m of memories) {
-            const t = estimateTokens(m.content) + 4;
-            if (usedTokens + t > maxMem && kept.length > 0) break;
-            kept.push(m);
-            usedTokens += t;
-        }
+        const kept = capMemoriesByTokens(memories, maxMem);
         if (kept.length < memories.length) {
             logger.info(`user_memories 토큰 cap 적용 (${kept.length}/${memories.length}, >${maxMem} tok)`);
         }

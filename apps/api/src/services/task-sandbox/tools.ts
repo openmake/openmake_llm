@@ -19,6 +19,7 @@ import { getBrowserUrlBlockedMessage } from '../../prompts/agent-task-prompt';
 import { viewWindow } from './file-view';
 import { resolveMissedStrReplace } from './str-replace-match';
 import { interpretExitCode } from './exit-code';
+import { maskedPipeFailureNote } from './pipe-status';
 import { ASK_HUMAN_STRUCTURED_SCHEMA, normalizeAskHuman } from './ask-human';
 import { ASK_HUMAN } from '../../config/agent-task-tools';
 import { ASK_HUMAN_STRUCTURED_DESCRIPTION } from '../../prompts/agent-task-tools';
@@ -74,6 +75,8 @@ function formatExec(r: ExecResult, command?: string): MCPToolResult {
     parts.push(`[exit=${r.exitCode}${r.timedOut ? ' TIMEOUT' : ''}${r.truncated ? ' TRUNCATED' : ''} ${r.durationMs}ms]`);
     const note = command !== undefined && !r.timedOut ? interpretExitCode(command, r.exitCode) : null;
     if (note) parts.push(note);
+    const masked = maskedPipeFailureNote(r);
+    if (masked) parts.push(masked);
     return textResult(parts.join('\n'), (r.exitCode !== 0 && !note) || r.timedOut);
 }
 
@@ -138,7 +141,7 @@ export function createTaskTools(
         handler: async (args): Promise<MCPToolResult> => {
             const command = str(args.command).trim();
             if (!command) return textResult('command 가 필요합니다.', true);
-            return formatExec(await sandbox.exec(command), command);
+            return formatExec(await sandbox.exec(command, { pipeStatus: true }), command);
         },
     };
 

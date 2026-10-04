@@ -107,6 +107,22 @@ describe('POST /:taskId/fork', () => {
             { role: 'user', content: 'goal' }, { role: 'user', content: FORK_WORKSPACE_NOTICE },
         ]);
     });
+    it('되묻기는 그 응답과 짝으로 빠지고, 호출과 결과 사이에 낀 안내가 매달린 호출을 가리지 않는다', async () => {
+        const call = (id: string) => ({ role: 'assistant', content: '', tool_calls: [{ id, type: 'function', function: { name: 'x', arguments: '{}' } }] });
+        const conversation = [
+            { role: 'user', content: 'goal' },
+            { role: 'assistant', content: '(empty)' }, { role: 'user', content: '빈 응답', replyNudge: true },
+            call('a'), { role: 'tool', tool_call_id: 'a', content: 'ok' },
+            call('b'), { role: 'user', content: 'stuck', replyNudge: true },
+        ];
+        getCheckpoint.mockResolvedValue({ conversation, plan: null });
+        const res = mockRes();
+        await handler('post', '/:taskId/fork')(req({ fromTurn: 1 }), res, jest.fn());
+        expect(res.statusCode).toBe(201);
+        expect((updateAgentTask.mock.calls[0] as any)[1].checkpoint.conversation).toEqual([
+            { role: 'user', content: 'goal' }, call('a'), { role: 'tool', tool_call_id: 'a', content: 'ok' }, { role: 'user', content: FORK_WORKSPACE_NOTICE },
+        ]);
+    });
     it('목표를 바꿔 분기하면 대화 끝 안내에 새 목표가 실린다 — 재개는 옛 대화를 그대로 쓰기 때문이다', async () => {
         getCheckpoint.mockResolvedValue({ conversation: [{ role: 'user', content: '원래 목표' }], plan: null });
         const res = mockRes();
