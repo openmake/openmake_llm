@@ -8,7 +8,8 @@
  * 무시한다. 알림은 검증을 통과한 것만 호스트(onNotice)에 넘길 뿐 아무 동작도 일으키지 않는다.
  */
 import WebSocket from 'ws';
-import { NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
+import { BRIDGE_KINDS, NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
+import { RequestGuard } from './request-guard';
 import type { BridgeCore } from './core';
 import type { BridgeMsg, BridgeNotice, BridgeResult, BridgeStatusCode } from './types';
 
@@ -17,6 +18,11 @@ export interface BridgeConnectionOptions {
     serverUrl: string;
     core: BridgeCore;
     deviceId: string;
+    /**
+     * 이 연결이 속한 PC 의 식별자 — 폴더(루트)마다 연결을 따로 만드는 호스트는 같은 값을 준다.
+     * 서버가 기기 상한을 PC 단위로 센다. 생략하면 서버가 deviceId 를 PC 로 본다.
+     */
+    hostId?: string;
     label: string;
     /** 접속 헤더 — 호출 시점마다 재평가(데스크톱은 최신 세션 쿠키를 읽는다). */
     headers: () => Promise<Record<string, string>> | Record<string, string>;
@@ -78,6 +84,8 @@ export class BridgeConnection {
     private closed = false;
     /** 연속 재연결 실패 횟수 — bridge_ready 를 받으면 0 */
     private reconnectAttempt = 0;
+    /** 만료·중복 판정 — 재연결해도 유지한다(끊기기 전에 처리한 요청이 다시 오는 경우를 막는다) */
+    private readonly guard = new RequestGuard();
 
     constructor(private readonly opts: BridgeConnectionOptions) {}
 
@@ -111,6 +119,8 @@ export class BridgeConnection {
                 deviceId: this.opts.deviceId,
                 label: this.opts.label,
                 folderName,
+                ...(this.opts.hostId ? { hostId: this.opts.hostId } : {}),
+                capabilities: BRIDGE_KINDS,
             }));
             this.openCleanup = this.opts.onOpen?.(this.ws) ?? null;
         }, 300));
@@ -135,6 +145,8 @@ export class BridgeConnection {
                     }));
                 } catch { /* noop */ }
             };
+            const rejected = this.guard.check(m);
+            if (rejected) { done(rejected); return; }
             // handleExec 는 async(exec 승인 대기) — sync/async 예외를 모두 done 으로 흡수.
             Promise.resolve().then(() => this.opts.core.handleExec(m, done))
                 .catch((e) => done({ ok: false, error: String((e as Error).message || e) }));

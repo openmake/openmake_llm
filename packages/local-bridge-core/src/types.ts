@@ -25,6 +25,8 @@ export interface BridgeMsg {
     ignoreCase?: boolean;
     /** code_nav grep — 매치 상한(디바이스 캡으로 다시 잘린다). */
     maxResults?: number;
+    /** bridge_exec — 이 시각(epoch ms)이 지나면 실행하지 않는다. 없으면(구버전 서버) 검사하지 않는다. */
+    expiresAt?: number;
     /** bridge_notice — 알림 종류(NOTICE_KINDS 화이트리스트). */
     notice?: string;
     /** bridge_notice approval_pending — 승인을 기다리는 도구 이름(표시 전용, 서버 발 텍스트). */
@@ -78,6 +80,8 @@ export interface BridgeResult {
     codeNav?: BridgeCodeNav;
     /** test_runner 결과 — 'npm' | 'pytest' | 'go' | 'none'. */
     testRunner?: string;
+    /** 실행 전에 거절했다(request-guard.ts) — 아무것도 실행하지 않았다. */
+    rejected?: 'expired' | 'duplicate';
 }
 
 /**

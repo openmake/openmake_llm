@@ -36,6 +36,7 @@ import { detectFileTaskIntent, detectPresentationChatIntent } from "@/lib/file-t
 import { detectReportTaskIntent } from "@/lib/report-task-intent";
 import { SLASH_COMMAND_DEBOUNCE_MS } from "@/lib/constants/ui-limits";
 import { uuid } from "@/lib/local-id";
+import { groupBridgeDevicesByHost } from "@/lib/bridge-devices";
 
 // 슬래시 스킬 호출: "/" + 공백없는 단일 토큰일 때만 드롭다운 표시.
 const SLASH_PATTERN = /^\/(\S*)$/;
@@ -262,13 +263,15 @@ export function Composer() {
   // Cowork D2: 로컬 브리지(데스크톱 앱) 연결 상태 — 토글 활성 판단. 15s 갱신.
   const { data: bridgeData } = useQuery({
     queryKey: ["local-bridge-status"],
-    queryFn: () => ApiClient.get<{ data: { enabled: boolean; connected: boolean; folderName: string | null; devices?: { deviceId: string; label: string; folderName: string; connectedAt: number }[] } }>("/api/local-bridge/status"),
+    queryFn: () => ApiClient.get<{ data: { enabled: boolean; connected: boolean; folderName: string | null; devices?: { deviceId: string; hostId?: string; label: string; folderName: string; connectedAt: number }[] } }>("/api/local-bridge/status"),
     enabled: agentTaskMode,
     refetchInterval: 15_000,
     staleTime: 10_000,
   });
   const bridgeConnected = !!bridgeData?.data?.connected;
   const bridgeDevices = bridgeData?.data?.devices ?? [];
+  // PC(hostId) 단위 묶음 — 라벨은 "PC이름 · 폴더" 형식이라 앞부분을 PC 이름으로 쓴다. hostId 가 없는 구버전 서버는 연결마다 한 묶음.
+  const bridgeHostGroups = groupBridgeDevicesByHost(bridgeDevices);
   // 폴더 선택(102): 연결 루트 하위 폴더 온디맨드 탐색 — 열 때마다 루트부터(서버 세션 캐시가
   // 탐색 경로를 따라 쌓여야 folderRel 검증을 통과한다. 재접속 후 이전 선택 경로 직행 금지).
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
@@ -712,11 +715,20 @@ export function Composer() {
                 onChange={(e) => setAgentLocalDeviceId(e.target.value || null)}
                 className="max-w-[220px] truncate rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs text-fg-1"
               >
-                {bridgeDevices.map((d) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.label}
-                  </option>
-                ))}
+                {/* 같은 PC 의 폴더별 연결은 묶어 보여 준다 — PC 가 한 대뿐이면 묶음 없이 그대로 */}
+                {bridgeHostGroups.length > 1
+                  ? bridgeHostGroups.map((g) => (
+                      <optgroup key={g.hostId} label={g.name}>
+                        {g.devices.map((d) => (
+                          <option key={d.deviceId} value={d.deviceId}>{d.folderName || d.label}</option>
+                        ))}
+                      </optgroup>
+                    ))
+                  : bridgeDevices.map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label}
+                      </option>
+                    ))}
               </select>
             )}
           </div>

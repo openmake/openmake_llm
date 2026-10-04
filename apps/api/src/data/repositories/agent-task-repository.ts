@@ -14,14 +14,19 @@ import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentTask, AgentTaskStatus, AgentTaskStep } from '../models/unified-database.types';
 import { allowedSources, AgentTaskTransitionError } from '../../services/agent-task/task-state';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
+import { AGENT_TASK_PARKED_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
+import type { ParkedTaskRow } from './agent-task-park-repository';
 
 /**
- * 주차(F16.7) 판정 SQL — paused 이고 마지막 전이 이벤트 사유가 hitl_parked. 부팅 마킹·복구·재개 claim·스윕이 같은 조건을 쓴다.
+ * 주차(F16.7) 판정 SQL — paused 이고 마지막 전이 이벤트 사유가 주차 사유(hitl_parked·device_wait). 부팅 마킹·복구·재개 claim·스윕이 같은 조건을 쓴다.
  * 주차는 이미 paused 인 작업에 걸리므로 paused→paused 이벤트로 표식한다(markParked).
  */
+/** 주차 사유 목록의 SQL 리터럴 — 값은 코드 상수뿐이고(사용자 입력 아님) 소문자·밑줄만 남긴다. */
+const PARK_REASONS_SQL = AGENT_TASK_PARK_REASONS.map((r) => `'${r.replace(/[^a-z_]/g, '')}'`).join(', ');
+
 export function parkedTaskCondition(alias: string): string {
     // COALESCE 필수 — 사유가 NULL 인(일반 승인 대기) paused 에서 비교가 NULL 이 되면 `NOT (…)` 도 NULL 이라 부팅 마킹·복구에서 빠진다
-    return `(${alias}.status = 'paused' AND COALESCE((SELECT e.reason FROM agent_task_events e WHERE e.task_id = ${alias}.id ORDER BY e.id DESC LIMIT 1), '') = 'hitl_parked')`;
+    return `(${alias}.status = 'paused' AND COALESCE((SELECT e.reason FROM agent_task_events e WHERE e.task_id = ${alias}.id ORDER BY e.id DESC LIMIT 1), '') IN (${PARK_REASONS_SQL}))`;
 }
 
 export class AgentTaskRepository extends BaseRepository {
@@ -305,10 +310,11 @@ export class AgentTaskRepository extends BaseRepository {
     }
 
     /** 주차 표식(F16.7) — recordEvent 와 달리 실패를 삼키지 않는다: 표식 없는 paused 는 아무도 재개하지 않는다. */
-    async markParked(taskId: string): Promise<void> {
+    async markParked(taskId: string, reason: string = AGENT_TASK_PARKED_REASON): Promise<void> {
+        if (!AGENT_TASK_PARK_REASONS.includes(reason)) throw new Error(`모르는 주차 사유: ${reason}`);
         await this.query(
-            `INSERT INTO agent_task_events (task_id, from_status, to_status, reason) VALUES ($1, 'paused', 'paused', 'hitl_parked')`,
-            [taskId],
+            `INSERT INTO agent_task_events (task_id, from_status, to_status, reason) VALUES ($1, 'paused', 'paused', $2)`,
+            [taskId, reason],
         );
     }
 
@@ -324,9 +330,11 @@ export class AgentTaskRepository extends BaseRepository {
     }
 
     /** 주차 중인 작업 목록 — 스윕이 결정 도착(재개)·만료(실패)·대기(워크스페이스 유지)로 나눈다. */
-    async listParkedTasks(limit = 200): Promise<Array<{ id: string; workspace_path: string | null; has_decision: boolean; has_live_pending: boolean }>> {
-        const r = await this.query<{ id: string; workspace_path: string | null; has_decision: boolean; has_live_pending: boolean }>(
+    async listParkedTasks(limit = 200): Promise<ParkedTaskRow[]> {
+        const r = await this.query<ParkedTaskRow>(
             `SELECT t.id, t.workspace_path,
+                    (SELECT e.reason FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1) AS reason,
+                    (EXTRACT(EPOCH FROM (NOW() - (SELECT e.created_at FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1))) * 1000)::bigint AS waited_ms,
                     EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status IN ('approved', 'rejected') AND a.consumed_at IS NULL) AS has_decision,
                     EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status = 'pending' AND a.expires_at > NOW()) AS has_live_pending
                FROM agent_tasks t WHERE ${parkedTaskCondition('t')} ORDER BY t.updated_at ASC LIMIT $1`,

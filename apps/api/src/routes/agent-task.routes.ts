@@ -52,7 +52,7 @@ import {
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 import { resolveDuplicateCreate, normalizedCreateKey, rememberCreatedTask } from '../services/agent-task/create-idempotency';
-import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, sendWorkspaceFile, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
+import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, sendWorkspaceFile, toPublicTask, validateLocalExecutorInput, waitReasonOf } from './agent-task.helpers';
 import { approvalsRouter } from './agent-task-approvals.routes';
 import { forkRouter } from './agent-task-fork.routes';
 import { browserSessionRouter } from './agent-task-browser-session.routes';
@@ -302,7 +302,7 @@ router.get('/:taskId', asyncHandler(async (req: Request, res: Response) => {
     if (!task) return;
     const db = getUnifiedDatabase();
     const steps = await db.getAgentTaskSteps(req.params.taskId);
-    res.json(success({ task: toPublicTask(task as unknown as Record<string, unknown>), steps }));
+    res.json(success({ task: { ...toPublicTask(task as unknown as Record<string, unknown>), ...(await waitReasonOf(task)) }, steps }));
 }));
 
 /**

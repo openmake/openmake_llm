@@ -60,6 +60,8 @@ export interface TaskSandboxConfig {
     /** 로컬 브리지 실행 시 true — 코드 실행(bash/python_execute)을 디바이스가 자체 확인하므로
      *  서버측 승인을 skip 해 이중 프롬프트를 없앤다(executor-select 에서 주입). */
     deviceGatesShell?: boolean;
+    /** 내부 전용 실행(config/internal-only-policy) — 이 실행에만 붙는 값. 외부 모델·외부 도구를 쓰지 않는다. */
+    internalOnly?: boolean;
     /** 승인 대기 timeout(ms) — 초과 시 자동 거절(작업 일시정지 해제). */
     approvalTimeoutMs: number;
     /** 완료 task workspace 보존 TTL(ms) — 초과한 workspace 디렉토리는 정리 스윕이 삭제. */

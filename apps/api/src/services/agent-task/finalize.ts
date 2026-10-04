@@ -213,7 +213,7 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         const execCtx = withSandboxUnavailableJudgeNote(
             buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence), taskId);
         // 셰도우 경로에선 ANSWER 에서 떨어져 나간 산출물을 함께 싣는다(적용 경로는 아티팩트 0 이라 빈 값).
-        const judgeClient = await judgeClientFor(userId);
+        const judgeClient = await judgeClientFor(userId, { internalOnly: sandboxCfg.internalOnly });
         // 원장 귀속 — 판정 호출의 비용도 이 작업 id 로 묶는다.
         const outcome = await runWithCostSession(taskId, () => judgeGoal(
             judgeClient, goal, body ?? '', signal, execCtx,

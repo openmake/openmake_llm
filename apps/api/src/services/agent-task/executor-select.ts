@@ -13,6 +13,7 @@
  */
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
+import { isInternalOnlyRun } from '../../config/internal-only-policy';
 import { RemoteExecutor } from '../local-bridge/remote-executor';
 import type { AgentTaskRunInput } from './types';
 
@@ -33,7 +34,7 @@ export function resolveExecutorPlan(
     // 로컬: 파일/기타 도구는 서버 승인 유지(디바이스는 파일에 다이얼로그 없음)하되, 코드 실행
     // (bash/python_execute)은 디바이스 confirmExec 가 게이트하므로 deviceGatesShell 로 서버 승인 skip.
     const sandboxCfg = isLocal
-        ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy ?? ('all' as const), deviceGatesShell: true }
+        ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy ?? ('all' as const), deviceGatesShell: true, internalOnly: isInternalOnlyRun(input) }
         : input.approvalPolicy
             ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy }
             : getTaskSandboxConfig();

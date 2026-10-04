@@ -28,6 +28,28 @@ const logger = createLogger('LocalBridge');
 export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'worktree' | 'folders' | 'lsp_diagnostics' | 'code_nav' | 'test_runner';
 
 /**
+ * 능력 목록(bridge_hello.capabilities)을 보내지 않는 구버전 기기가 지원하는 것으로 보는 종류 — 2026-10-04 시점의 전체.
+ * 이후 추가되는 종류는 여기에 넣지 않는다(구버전은 모른다 — 능력 목록에 있는 기기에만 보낸다).
+ */
+export const LEGACY_BRIDGE_KINDS: readonly BridgeKind[] = [
+    'exec', 'read', 'write', 'list', 'listAll', 'delete', 'task_end', 'worktree', 'folders', 'lsp_diagnostics', 'code_nav', 'test_runner',
+];
+
+/** 서버가 아는 요청 종류 전체 — 기기가 보낸 능력 목록에서 이 밖의 값은 버린다. */
+const KNOWN_BRIDGE_KINDS: ReadonlySet<string> = new Set<string>(LEGACY_BRIDGE_KINDS);
+
+/**
+ * PURE: bridge_hello.capabilities → 지원 종류 집합. 배열이 아니면 undefined(구버전 — LEGACY_BRIDGE_KINDS 로 본다),
+ * 배열이면 아는 종류만 남긴다(빈 배열 = 아무것도 지원하지 않음).
+ */
+export function normalizeCapabilities(raw: unknown): Set<BridgeKind> | undefined {
+    if (!Array.isArray(raw)) return undefined;
+    const out = new Set<BridgeKind>();
+    for (const v of raw) if (typeof v === 'string' && KNOWN_BRIDGE_KINDS.has(v)) out.add(v as BridgeKind);
+    return out;
+}
+
+/**
  * 서버→디바이스 단방향 알림 종류 — 디바이스 코어 NOTICE_KINDS 와 1:1.
  * approval_pending: 로컬 실행 작업이 도구 승인·ask_human 응답을 기다리며 멈췄다(컴패니언이 네이티브 알림).
  */
@@ -99,6 +121,8 @@ export interface BridgeDiagnostic {
     source: string;
 }
 
+export type BridgeTransportFailure = 'no_device' | 'send_failed' | 'timeout' | 'disconnected';
+
 /** 디바이스가 돌려주는 결과 (bridge_result). */
 export interface BridgeResult {
     ok: boolean;
@@ -127,6 +151,15 @@ export interface BridgeResult {
     codeNav?: BridgeCodeNavData;
     /** test_runner 결과 — 'npm' | 'pytest' | 'go' | 'none'. 없으면 구 디바이스로 보고 셸 프로브로 폴백한다. */
     testRunner?: string;
+    /** 서버가 채운다 — 기기의 능력 목록에 없는 종류라 보내지 않았다(기기는 아무것도 실행하지 않았다). */
+    unsupported?: boolean;
+    /**
+     * 서버가 채운다 — 기기의 응답 없이 끝난 사유. no_device·send_failed 는 요청이 기기에 닿지 않았고(실행되지 않음),
+     * timeout·disconnected 는 보낸 뒤 응답을 못 받았다(실행됐을 수 있다 — 쓰기·실행 계열은 결과 불명).
+     */
+    transport?: BridgeTransportFailure;
+    /** 기기가 실행 전에 거절했다(코어 request-guard) — 만료·중복. 아무것도 실행하지 않았다. */
+    rejected?: 'expired' | 'duplicate';
 }
 
 export interface DeviceSession {
@@ -135,6 +168,13 @@ export interface DeviceSession {
     /** 관측/영속용 라벨 (예: "MacBook-Pro · my-project") */
     label: string;
     folderName: string;
+    /**
+     * 이 연결이 속한 PC — 같은 PC 의 폴더(루트)별 연결이 같은 값을 갖는다. 상한은 이 단위로 센다.
+     * 구버전 기기는 보내지 않으므로 register 가 deviceId 로 채운다(현행 계산과 동일).
+     */
+    hostId?: string;
+    /** 기기가 지원한다고 알린 요청 종류. undefined = 구버전(LEGACY_BRIDGE_KINDS). */
+    capabilities?: Set<BridgeKind>;
     ws: WebSocket;
     connectedAt: number;
     /**
@@ -168,9 +208,20 @@ class LocalBridgeRegistry {
             this.devices.set(session.userId, byDevice);
         }
         const prev = byDevice.get(session.deviceId);
-        if (!prev && byDevice.size >= LOCAL_BRIDGE.MAX_DEVICES) {
-            logger.warn(`[Bridge] 디바이스 상한 초과 거부: user=${session.userId} device=${session.deviceId} (max=${LOCAL_BRIDGE.MAX_DEVICES})`);
-            return false;
+        session.hostId = session.hostId || session.deviceId;
+        if (!prev) {
+            // 상한은 PC(hostId) 단위 — 같은 PC 의 폴더별 연결은 1대로 세고, 한 PC 의 폴더 수는 따로 제한한다.
+            const rootsByHost = new Map<string, number>();
+            for (const s of byDevice.values()) rootsByHost.set(s.hostId ?? s.deviceId, (rootsByHost.get(s.hostId ?? s.deviceId) ?? 0) + 1);
+            const hostRoots = rootsByHost.get(session.hostId) ?? 0;
+            if (hostRoots === 0 && rootsByHost.size >= LOCAL_BRIDGE.MAX_DEVICES) {
+                logger.warn(`[Bridge] 디바이스 상한 초과 거부: user=${session.userId} device=${session.deviceId} host=${session.hostId} (max=${LOCAL_BRIDGE.MAX_DEVICES})`);
+                return false;
+            }
+            if (hostRoots >= LOCAL_BRIDGE.MAX_ROOTS_PER_HOST) {
+                logger.warn(`[Bridge] PC 당 폴더 상한 초과 거부: user=${session.userId} host=${session.hostId} (max=${LOCAL_BRIDGE.MAX_ROOTS_PER_HOST})`);
+                return false;
+            }
         }
         if (prev && prev.ws !== session.ws) {
             logger.info(`[Bridge] 동일 디바이스 재등록 대체: user=${session.userId} ${prev.label} → ${session.label}`);
@@ -236,25 +287,36 @@ class LocalBridgeRegistry {
         return this.devices.get(userId)?.get(deviceId)?.enumeratedFolders?.has(rel) ?? false;
     }
 
+    /** 이 기기가 요청 종류를 지원하는가 — 연결돼 있지 않으면 false. 능력 목록이 없는 구버전은 현행 종류만. */
+    supports(userId: string, deviceId: string | undefined, kind: BridgeKind): boolean {
+        const dev = this.getDevice(userId, deviceId);
+        if (!dev) return false;
+        return dev.capabilities ? dev.capabilities.has(kind) : LEGACY_BRIDGE_KINDS.includes(kind);
+    }
+
     /** 도구 1회 왕복. 타임아웃/연결단절 시 ok=false 결과로 해소(throw 하지 않음 — 도구 오류로 전달). */
     request(userId: string, payload: BridgeRequestPayload, timeoutMs = LOCAL_BRIDGE.REQUEST_TIMEOUT_MS, deviceId?: string): Promise<BridgeResult> {
         const dev = this.getDevice(userId, deviceId);
         if (!dev || dev.ws.readyState !== dev.ws.OPEN) {
-            return Promise.resolve({ ok: false, error: '연결된 로컬 디바이스가 없습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 연결하세요.' });
+            return Promise.resolve({ ok: false, transport: 'no_device', error: '연결된 로컬 디바이스가 없습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 연결하세요.' });
+        }
+        if (!this.supports(userId, dev.deviceId, payload.kind)) {
+            return Promise.resolve({ ok: false, unsupported: true, error: `이 디바이스는 '${payload.kind}' 요청을 지원하지 않습니다 — Companion 또는 CLI 를 업데이트하세요.` });
         }
         const reqId = randomUUID();
         return new Promise<BridgeResult>((resolve) => {
             const timer = setTimeout(() => {
                 this.pending.delete(reqId);
-                resolve({ ok: false, error: `로컬 실행 응답 시간 초과 (${Math.round(timeoutMs / 1000)}s)` });
+                resolve({ ok: false, transport: 'timeout', error: `로컬 실행 응답 시간 초과 (${Math.round(timeoutMs / 1000)}s)` });
             }, timeoutMs);
             this.pending.set(reqId, { resolve, timer, userId, deviceId: dev.deviceId });
             try {
-                dev.ws.send(JSON.stringify({ type: 'bridge_exec', reqId, ...payload }));
+                // expiresAt: 서버가 응답을 포기하는 시점 — 그 뒤에 도착한 요청을 기기가 실행하지 않게 한다(구버전 기기는 무시).
+                dev.ws.send(JSON.stringify({ type: 'bridge_exec', reqId, ...payload, expiresAt: Date.now() + timeoutMs }));
             } catch (e) {
                 clearTimeout(timer);
                 this.pending.delete(reqId);
-                resolve({ ok: false, error: `브리지 전송 실패: ${e instanceof Error ? e.message : String(e)}` });
+                resolve({ ok: false, transport: 'send_failed', error: `브리지 전송 실패: ${e instanceof Error ? e.message : String(e)}` });
             }
         });
     }
@@ -310,7 +372,7 @@ class LocalBridgeRegistry {
             if (p.userId === userId && p.deviceId === deviceId) {
                 clearTimeout(p.timer);
                 this.pending.delete(reqId);
-                p.resolve({ ok: false, error: reason });
+                p.resolve({ ok: false, transport: 'disconnected', error: reason });
             }
         }
     }

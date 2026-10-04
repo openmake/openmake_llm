@@ -94,6 +94,7 @@ function connectFolder(folder) {
     serverUrl,
     core,
     deviceId: rootDeviceId(real),
+    hostId: baseDeviceId(), // 폴더별 연결이 같은 PC 임을 서버에 알린다 — 기기 상한을 PC 단위로 센다
     label: `${os.hostname()} · ${path.basename(real)}`,
     headers: () => ({ Authorization: `Bearer ${apiKey}` }),
     onStatus: (s, code, arg) => send({ ev: 'status', folder: real, text: s, ...(code ? { code } : {}), ...(arg !== undefined ? { arg } : {}) }),

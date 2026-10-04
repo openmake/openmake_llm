@@ -15,6 +15,7 @@ const CODE_CLASS: Readonly<Record<string, FailureClass | null>> = {
   token_limit: "token_limit",
   timeout: "timeout",
   hitl_park_expired: "timeout",
+  device_wait_expired: "timeout",
   interrupted: "interrupted",
   interrupted_local_device: "interrupted",
   sandbox_unavailable: "interrupted",

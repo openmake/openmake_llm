@@ -198,6 +198,11 @@ const { WebSocketServer } = require('ws');
     assert.notEqual(dev2, dev1, '루트별 파생 deviceId 상이');
     assert.ok(dev1.length <= 64 && dev2.length <= 64, 'deviceId 64자 상한');
     assert.ok(dev1.split('-r-')[0] === dev2.split('-r-')[0], '기기 base id 공유');
+    // 능력 목록·PC 식별자(Companion P1) — 폴더별 연결이 같은 hostId 를 보내 서버가 PC 1대로 센다
+    assert.equal(hello.hostId, dev1.split('-r-')[0], 'hello hostId = 기기 base id');
+    assert.equal(hello2.hostId, hello.hostId, '루트가 달라도 hostId 는 같다');
+    assert.ok(Array.isArray(hello.capabilities) && hello.capabilities.includes('exec') && hello.capabilities.includes('read'), 'hello 에 지원 요청 종류');
+    assert.ok(!hello.capabilities.includes('browser'), '폐기된 browser 는 능력 목록에 없다');
     await waitEv((e) => e.ev === 'connected' && e.folder === realFolder2);
     assert.equal((await execVia(dev2, { kind: 'read', path: 'other.txt' })).content, 'other-root', '루트2 read');
     // 루트 간 상호 격리 — 루트2 연결이 루트1 파일에 닿지 못한다

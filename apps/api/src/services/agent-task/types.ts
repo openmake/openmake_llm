@@ -2,6 +2,7 @@
  * Agent Task 공용 타입/에러 — AgentTaskService 에서 분리 (파일 크기 가드).
  * @module services/agent-task/types
  */
+import { AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
 import type { ChatMessage } from '../../llm/types';
 import type { AttachedFileInput } from '../chat-service/attach-context';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
@@ -19,14 +20,15 @@ export class AgentTaskAbort extends Error {
 /** 질문형 승인(ask_human·mcp_elicit)이 만료돼 작업을 주차(paused)로 내려놓는다(F16.7).
  *  던지는 쪽(turn-executor)이 체크포인트와 주차 표식을 남기고, AgentTaskService 는 실행만 끝낸다(슬롯 반납). */
 export class AgentTaskParked extends Error {
-    constructor() {
-        super(AGENT_TASK_PARKED_REASON);
+    /** reason: 주차 표식과 같은 값 — 생략하면 질문 응답 대기(hitl_parked) */
+    constructor(reason: string = AGENT_TASK_PARKED_REASON) {
+        super(reason);
         this.name = 'AgentTaskParked';
     }
 }
 
 /** 주차 표식 — agent_task_events.reason. 마지막 이벤트가 이 사유인 paused 작업이 주차 중이다. */
-export const AGENT_TASK_PARKED_REASON = 'hitl_parked';
+export { AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_PARK_REASONS };
 
 /** runaway 가드 — 한도 초과 시 종류별 AgentTaskAbort throw (AgentTaskService 에서 분리 — 파일 크기 가드).
  *  pausedMs(승인 대기 누적)는 활성 시간이 아니므로 타임아웃 예산에서 제외(4-1). */
