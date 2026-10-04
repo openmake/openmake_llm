@@ -132,6 +132,8 @@ export const envSchema = z
         LLM_WEEKLY_TOKEN_LIMIT: nonNegativeIntWithDefault(5000000),
         /** 외부 모델 정책 JSON(Control Plane 기초) — 파싱은 config/external-model-policy, 형식 검증은 registry */
         EXTERNAL_MODEL_POLICY: z.string().optional(),
+        /** 로컬 브라우저 사이트 허용 목록 JSON(Companion P2) — 승인 없이 입력을 허용할 사이트. 형식 검증은 registry */
+        BROWSER_SITE_POLICY: z.string().optional(),
         /**
          * vLLM `extra_body.reasoning_effort` 전송 활성화 (opt-in 기본).
          *

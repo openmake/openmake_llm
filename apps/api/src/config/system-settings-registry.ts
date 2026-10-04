@@ -111,6 +111,8 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: 'MCP_TOOL_LIST_STALE_MS', group: 'agent', secret: false, requiresRestart: false, validate: nonNegativeIntString },
     { key: 'AGENT_TASK_HITL_PARK_ON_TIMEOUT', group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: 'AGENT_TASK_QUEUE_PRIORITY_MAX', group: 'agent', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+    // 로컬 브라우저 사이트 허용 목록(Companion P2) — {"allow":["groupware.example.co.kr"],"deny":[]}. 작업이 도구를 부를 때마다 읽는다(실시간)
+    { key: 'BROWSER_SITE_POLICY', group: 'agent', secret: false, requiresRestart: false, validate: jsonObject },
 
     // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
     { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },

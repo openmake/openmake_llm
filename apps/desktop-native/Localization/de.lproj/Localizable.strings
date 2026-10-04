@@ -84,3 +84,9 @@
 "update.script.replace" = "Die vorhandene App konnte nicht ersetzt werden.";
 "update.script.rollback" = "Die Installation der neuen Version ist fehlgeschlagen; die vorherige Version wurde wiederhergestellt.";
 "update.script.reopen" = "Das Update war erfolgreich, aber die App konnte nicht erneut geöffnet werden.";
+"menu.browser.takeover" = "Browser übernehmen (Agent pausieren)";
+"menu.browser.release" = "Browser zurückgeben (Agent fortsetzen)";
+"menu.browser.stop" = "Browser-Aufgabe stoppen";
+"settings.browser" = "Browser";
+"settings.browser.enable" = "Dem Agenten die Browsernutzung erlauben";
+"settings.browser.help" = "Wenn aktiviert, kann der Agent Webseiten in einem eigenen Chrome-Fenster mit separatem Profil öffnen und bedienen. Die Anmeldungen Ihres normalen Chrome werden nicht verwendet. Eingaben auf nicht freigegebenen Websites erfordern Ihre Genehmigung im Web.";

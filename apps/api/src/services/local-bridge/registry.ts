@@ -25,7 +25,7 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('LocalBridge');
 
 /** 서버→디바이스 도구 요청 종류 — 이 외의 kind 는 존재하지 않는다(임의 RPC 금지). */
-export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'worktree' | 'folders' | 'lsp_diagnostics' | 'code_nav' | 'test_runner';
+export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'worktree' | 'folders' | 'lsp_diagnostics' | 'code_nav' | 'test_runner' | 'browser';
 
 /**
  * 능력 목록(bridge_hello.capabilities)을 보내지 않는 구버전 기기가 지원하는 것으로 보는 종류 — 2026-10-04 시점의 전체.
@@ -36,7 +36,7 @@ export const LEGACY_BRIDGE_KINDS: readonly BridgeKind[] = [
 ];
 
 /** 서버가 아는 요청 종류 전체 — 기기가 보낸 능력 목록에서 이 밖의 값은 버린다. */
-const KNOWN_BRIDGE_KINDS: ReadonlySet<string> = new Set<string>(LEGACY_BRIDGE_KINDS);
+const KNOWN_BRIDGE_KINDS: ReadonlySet<string> = new Set<string>([...LEGACY_BRIDGE_KINDS, 'browser']);
 
 /**
  * PURE: bridge_hello.capabilities → 지원 종류 집합. 배열이 아니면 undefined(구버전 — LEGACY_BRIDGE_KINDS 로 본다),
@@ -96,6 +96,12 @@ export interface BridgeRequestPayload {
     glob?: string;
     ignoreCase?: boolean;
     maxResults?: number;
+    /** browser 전용(Companion P2) — 실행할 액션 배열(browser 도구의 액션 형식 그대로). */
+    actions?: unknown[];
+    /** browser 전용 — 사이트 허용 목록. 기기가 실제 탭 주소로 다시 판정한다. */
+    sitePolicy?: { allow: string[]; deny: string[] };
+    /** browser 전용 — 이번 호출에서 사용자가 승인한 호스트. */
+    approvedHosts?: string[];
 }
 
 /** code_nav 결과 — 디바이스 코어 BridgeCodeNav 와 1:1. */

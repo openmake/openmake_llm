@@ -7,6 +7,8 @@
  *   - TOOL_APPROVAL_POLICY_MIN 에이전트 작업 승인 정책 하한 — 요청값과 하한 중 더 엄격한 쪽
  *   - MCP_ALLOWED_SERVERS     카탈로그 템플릿 id 허용 목록(빈 목록 = 제한 없음) — from-catalog 설치 시 검사
  *   - ADDON_ALLOWLIST         이 조직이 쓸 수 있는 add-on id 목록(빈 목록 = 제한 없음) — 조직 관리자의 통제 수단(add-on 은 전부 무료, 과금 아님)
+ *   - BROWSER_SITE_POLICY     로컬 브라우저에서 승인 없이 입력을 허용할 사이트 — 병합은 EXTERNAL_MODEL_POLICY 와 같다
+ *                             (deny 합집합, allow 는 둘 다 있으면 교집합 · 한쪽만 있으면 그쪽). 빈 allow = 모든 입력이 승인 대상
  *
  * @module config/org-policy-registry
  */
@@ -18,6 +20,7 @@ export const ORG_POLICY_KEYS = {
     TOOL_APPROVAL_POLICY_MIN: 'TOOL_APPROVAL_POLICY_MIN',
     MCP_ALLOWED_SERVERS: 'MCP_ALLOWED_SERVERS',
     ADDON_ALLOWLIST: 'ADDON_ALLOWLIST',
+    BROWSER_SITE_POLICY: 'BROWSER_SITE_POLICY',
 } as const;
 export type OrgPolicyKey = typeof ORG_POLICY_KEYS[keyof typeof ORG_POLICY_KEYS];
 
@@ -28,6 +31,7 @@ export const ORG_POLICY_SCHEMAS: Record<OrgPolicyKey, z.ZodTypeAny> = {
     TOOL_APPROVAL_POLICY_MIN: z.enum(['none', 'high-risk', 'all']),
     MCP_ALLOWED_SERVERS: z.array(z.string().trim().min(1).max(64)).max(200),
     ADDON_ALLOWLIST: z.array(z.string().trim().min(1).max(120)).max(200),
+    BROWSER_SITE_POLICY: z.object({ allow: patternList.optional(), deny: patternList.optional() }).strict(),
 };
 
 export function isOrgPolicyKey(key: string): key is OrgPolicyKey {

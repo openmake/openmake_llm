@@ -34,6 +34,7 @@ import { APPROVAL_PREVIEW } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskParked } from '../agent-task/types';
 import type { DeviceLoss } from '../local-bridge/device-errors';
+import { markSiteWritesApproved, withSitePlan } from './browser-site-approval';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 
 const logger = createLogger('TaskRuntime');
@@ -287,13 +288,19 @@ export class TaskRuntime {
 
         // skill_run — 승인 전에 절차를 불러 인자에 체크섬을 묶는다. 승인 카드에는 절차 본문을 싣고, 실행 단계가 같은 절차인지 확인한다.
         const skillPreview = name === 'skill_run' && this.loadProcedure ? await bindSkillRunApproval(args, this.loadProcedure) : null;
-        if (requiresApproval(this.cfg.approvalPolicy, name, args, { deviceGatesShell: this.cfg.deviceGatesShell })) {
+        // 로컬 브라우저(P2) — 승인 전에 사이트 정책으로 액션을 훑는다. 허용 목록 밖 쓰기가 있으면 승인 판정용 인자에 실어
+        // 승인 바닥(site_write)이 정책·자동승인과 무관하게 묻게 하고, 승인 카드에 어느 사이트에 무엇을 보내는지 보인다.
+        const sitePlan = name === 'browser' && this.executor.planBrowserSitePolicy
+            ? await this.executor.planBrowserSitePolicy(Array.isArray(args.actions) ? args.actions : [args.actions])
+            : null;
+        const gateArgs = sitePlan ? withSitePlan(args, sitePlan) : args;
+        if (requiresApproval(this.cfg.approvalPolicy, name, gateArgs, { deviceGatesShell: this.cfg.deviceGatesShell })) {
             // 실행 전 미리보기(138) — 파일 쓰기 도구는 현재 파일과 인자로 diff 를 만들어 승인 카드에 싣는다(fail-open)
             const preview = skillPreview ?? (APPROVAL_PREVIEW.ENABLED
                 ? await buildApprovalPreview(name, args, (p) => this.executor.readFile(p)).catch(() => null)
                 : null);
             const { decision, reason, text: rejectText, waitedMs } = await getApprovalRegistry().request(
-                { taskId: this.taskId, userId: this.userId, toolName: name, args, preview: preview ?? undefined },
+                { taskId: this.taskId, userId: this.userId, toolName: name, args: gateArgs, preview: preview ?? undefined },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending, parkable: true, policy: this.cfg.approvalPolicy },
             );
             opts.onApprovalWaited?.(waitedMs);
@@ -302,6 +309,8 @@ export class TaskRuntime {
                 opts.onApprovalRejected?.({ toolName: name, reason: reason ?? 'user' });
                 return getApprovalRejectedNotice(name, reason, rejectText);
             }
+            // 사이트 쓰기를 사용자가 승인했다 — 핸들러가 이 표식이 있을 때만 승인된 호스트를 기기로 보낸다.
+            if (sitePlan && sitePlan.offListWrites.length > 0) markSiteWritesApproved(args);
         }
 
         // 작업 취소 → 실행 중인 샌드박스 명령 중단(도구 핸들러는 signal 을 받지 않는다).

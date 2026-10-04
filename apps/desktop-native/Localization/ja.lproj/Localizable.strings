@@ -84,3 +84,9 @@
 "update.script.replace" = "既存のアプリを置き換えられません。";
 "update.script.rollback" = "新しいバージョンのインストールに失敗したため、以前のバージョンに戻しました。";
 "update.script.reopen" = "アップデートは完了しましたが、アプリを再度開けませんでした。";
+"menu.browser.takeover" = "ブラウザを引き継ぐ（エージェントを一時停止）";
+"menu.browser.release" = "ブラウザを戻す（エージェントを再開）";
+"menu.browser.stop" = "ブラウザ作業を停止";
+"settings.browser" = "ブラウザ";
+"settings.browser.enable" = "エージェントのブラウザ使用を許可";
+"settings.browser.help" = "オンにすると、エージェントは専用の Chrome ウィンドウ（別プロファイル）で Web ページを開いて操作できます。普段お使いの Chrome のログイン情報は使いません。許可されていないサイトへの入力は Web で承認を求めます。";

@@ -41,6 +41,9 @@ const apiKey = process.env.OMK_COMPANION_API_KEY || '';
 
 const SUPPORT_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'OpenMakeCompanion');
 fs.mkdirSync(SUPPORT_DIR, { recursive: true });
+/** 로컬 브라우저 — 앱이 OMK_COMPANION_BROWSER=1 로 켠다(설정의 "브라우저 사용 허용"). 전용 프로필은 앱 데이터 폴더 아래. */
+const BROWSER_ENABLED = process.env.OMK_COMPANION_BROWSER === '1';
+const BROWSER_PROFILE_DIR = path.join(SUPPORT_DIR, 'browser-profile');
 
 function send(obj) { process.stdout.write(JSON.stringify(obj) + '\n'); }
 
@@ -87,6 +90,8 @@ function connectFolder(folder) {
       send({ ev: 'confirm', id, command, taskId: taskId ?? null, base, folder: real, sandbox: SANDBOX_ENABLED });
     }),
     sandboxProfileDir: SUPPORT_DIR,
+    // 로컬 브라우저(P2) — 앱 설정에서 켰을 때만 전용 프로필을 넘긴다. 사용자의 평소 Chrome 프로필이 아니다.
+    ...(BROWSER_ENABLED ? { browserProfileDir: BROWSER_PROFILE_DIR } : {}),
     onTaskEnd: (taskId) => send({ ev: 'taskEnd', taskId: taskId ?? null, folder: real }),
     onAutoApproveChange: () => send({ ev: 'autoApprove', count: totalAutoApprove() }),
   });
@@ -139,6 +144,14 @@ rl.on('line', (line) => {
       break;
     }
     case 'clearAutoApprove': for (const r of roots.values()) r.core.clearAutoApprove(); break;
+    // 브라우저 제어권(P2) — 사용자가 넘겨받으면 에이전트의 브라우저 요청을 실행하지 않는다. 브라우저는 루트들이 공유한다.
+    case 'browserControl': {
+      const user = m.user === true;
+      for (const r of roots.values()) r.core.setBrowserUserControl(user);
+      send({ ev: 'browserControl', user });
+      break;
+    }
+    case 'browserStop': for (const r of roots.values()) r.core.stopBrowser(); send({ ev: 'browserStopped' }); break;
     case 'quit': shutdown(); break;
     default: break;
   }

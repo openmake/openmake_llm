@@ -33,6 +33,15 @@ export const LOCAL_BRIDGE = {
     FOLDERS_MAX_ENTRIES: parseInt(process.env.BRIDGE_FOLDERS_MAX_ENTRIES || '200', 10),
 
     /**
+     * 로컬 브라우저(Companion P2) — 로컬 실행 작업이 사용자 PC 의 전용 프로필 Chrome 을 쓰게 한다. 기본 OFF.
+     * 켜도 기기가 능력 목록에 browser 를 알렸을 때만 도구가 노출된다. 사이트 정책(BROWSER_SITE_POLICY)이 함께 적용된다.
+     */
+    BROWSER_ENABLED: process.env.LOCAL_BRIDGE_BROWSER_ENABLED === 'true',
+
+    /** 브라우저 요청 1회 응답 대기 상한(ms) — 액션 여러 개를 한 번에 실행한다. LOCAL_BRIDGE_BROWSER_TIMEOUT_MS(기본 5분) */
+    BROWSER_TIMEOUT_MS: parseInt(process.env.LOCAL_BRIDGE_BROWSER_TIMEOUT_MS || '', 10) || 5 * 60 * 1000,
+
+    /**
      * 기기 대기 — 로컬 실행 작업이 쓸 기기가 연결돼 있지 않으면 실패시키지 않고 멈춰 두었다가(paused + device_wait),
      * 기기가 다시 연결되면 이어서 실행한다. 기본 ON — LOCAL_EXECUTOR_ENABLED 자체가 기본 OFF 라 이 값만으로 동작이 바뀌지 않는다.
      */

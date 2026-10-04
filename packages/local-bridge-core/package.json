@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "node ../../scripts/tsc7.cjs -p tsconfig.json",
-    "test": "jest"
+    "test": "jest --testPathIgnorePatterns=local-browser && jest local-browser --runInBand"
   },
   "dependencies": {
     "@openmake/config": "*",

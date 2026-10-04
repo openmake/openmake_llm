@@ -48,7 +48,7 @@ export function requiresApproval(
 ): boolean {
     if (opts.deviceGatesShell && DEVICE_GATED_SHELL.has(toolName)) return false;
     const floor = approvalFloorReason(toolName, args);
-    if (floor === 'memory_write') return true;
+    if (floor === 'memory_write' || floor === 'site_write') return true;
     return policyRequiresApproval(policy, classifyToolRisk(toolName, args),
         isSensitiveWrite(toolName, args) || floor !== null, isThirdPartyTool(toolName));
 }
