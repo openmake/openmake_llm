@@ -75,6 +75,20 @@ describe('retryRepeatedAnswer — 반복으로 잘린 최종 답변은 한 번 �
         expect(onNote).toHaveBeenCalledWith('retry', expect.stringContaining('1/1'));
     });
 
+    it('캐시 적중 토큰도 합친다 — 두 호출 모두 값이 없으면 없는 채로 둔다', async () => {
+        type Metrics = { prompt_tokens: number; completion_tokens: number; cached_prompt_tokens?: number };
+        const first = cut('잘린 답');
+        (first.result.metrics as Metrics).cached_prompt_tokens = 60;
+        const again: Metrics = { prompt_tokens: 150, completion_tokens: 10, cached_prompt_tokens: 140 };
+        const recall = jest.fn(async () => ({ result: { role: 'assistant' as const, content: '정리된 답', metrics: again } }));
+        const out = await retryRepeatedAnswer({ conversation: conv() }, first, recall);
+        expect(out.result.metrics).toEqual(expect.objectContaining({ prompt_tokens: 250, cached_prompt_tokens: 200 }));
+
+        const plainRecall = jest.fn(async () => ({ result: { role: 'assistant' as const, content: '정리된 답', metrics: { prompt_tokens: 150, completion_tokens: 10 } } }));
+        const none = await retryRepeatedAnswer({ conversation: conv() }, cut('잘린 답'), plainRecall);
+        expect(none.result.metrics).not.toHaveProperty('cached_prompt_tokens');
+    });
+
     it('이미 한 번 다시 요청했으면 더 요청하지 않는다(최대 1회)', async () => {
         const conversation = [...conv(), { role: 'assistant' as const, content: 'x' }, { role: 'user' as const, content: getOutputRepetitionRetryNudge() }];
         const recall = jest.fn();

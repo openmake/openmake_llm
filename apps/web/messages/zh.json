@@ -945,6 +945,8 @@
     "autoApproveHint": "此任务后续的工具调用将无需批准直接执行（提问、写入凭据或指令文件、外部 MCP 工具仍需确认）",
     "tokensUsed": "{count} 令牌",
     "tokensUsedHint": "此任务累计使用的LLM令牌",
+    "cacheHitLabel": "缓存命中",
+    "cacheHitHint": "输入令牌 {prompt} 中有 {cached} 个由模型服务器从缓存读取",
     "templates": {
       "title": "任务模板",
       "create": "新建模板",

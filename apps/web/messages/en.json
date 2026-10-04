@@ -945,6 +945,8 @@
     "autoApproveHint": "Run remaining tool calls of this task without approval (questions, writes to credential or agent-instruction files, and external MCP tools still ask)",
     "tokensUsed": "{count} tokens",
     "tokensUsedHint": "Total LLM tokens used by this task",
+    "cacheHitLabel": "Cache hit",
+    "cacheHitHint": "{cached} of {prompt} input tokens were read from the model server's cache",
     "templates": {
       "title": "Task templates",
       "create": "New template",
