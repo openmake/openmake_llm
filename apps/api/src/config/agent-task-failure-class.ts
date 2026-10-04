@@ -5,6 +5,8 @@
  * 분류는 운영 실측(2026-09-17 failed 59건: goal_incomplete 39 · max_turns_exhausted 5 · LLM 호출 오류 9 · timeout 4 ·
  * server restarted 2 · token_limit 1)에서 뽑았다. 계획 초안의 approval_rejected·sandbox 는 실패를 만들지 않아 뺐다
  * (승인 거절은 루프가 대안을 찾고, 샌드박스 실패는 degrade 로 이어진다).
+ * 2026-10-04: 샌드박스 생성 실패를 실패로 끝내는 정책(TASK_SANDBOX_UNAVAILABLE_POLICY=fail)이 생겼다 — 새 분류는 두지 않고
+ * interrupted 로 묶는다(실행 기반 사정으로 끊긴 것이고, 예약 연속 실패 집계에서도 빠져야 한다).
  * 마이그레이션 131 의 백필 CASE 와 규칙을 맞출 것.
  *
  * @module config/agent-task-failure-class
@@ -23,6 +25,7 @@ const EXACT: Readonly<Record<string, AgentTaskFailureClass>> = {
     interrupted: 'interrupted',
     interrupted_local_device: 'interrupted',
     'server restarted': 'interrupted',
+    sandbox_unavailable: 'interrupted', // 실행 환경(샌드박스)을 받지 못해 끝냄(정책 fail) — 작업 탓이 아니고 다시 실행하면 될 수 있다
 };
 
 /** 예외 메시지(SDK·게이트웨이 문구) — 위에서부터 첫 일치. */

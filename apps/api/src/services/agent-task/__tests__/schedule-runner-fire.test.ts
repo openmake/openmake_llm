@@ -126,17 +126,19 @@ describe('runScheduleTick — "보고할 것 없음" 안내', () => {
         return execute.mock.calls[0][0].goal;
     };
 
-    it('기본(꺼짐)은 목표를 그대로 넘긴다', async () => {
-        expect(await run()).toBe('일일 보고');
+    const cfg = jest.requireActual('../../../config/agent-task-schedule').AGENT_TASK_SCHEDULE;
+
+    it('기본(켜짐)은 목표 뒤에 표식 안내를 붙인다', async () => {
+        expect(cfg.SILENT_ENABLED).toBe(true);
+        const goal = await run();
+        expect(goal.startsWith('일일 보고')).toBe(true);
+        expect(goal).toContain('[NOTHING_TO_REPORT]');
     });
 
-    it('켜면 목표 뒤에 표식 안내를 붙인다', async () => {
-        const cfg = jest.requireActual('../../../config/agent-task-schedule').AGENT_TASK_SCHEDULE;
-        const restore = jest.replaceProperty(cfg, 'SILENT_ENABLED', true);
+    it('끄면 목표를 그대로 넘긴다', async () => {
+        const restore = jest.replaceProperty(cfg, 'SILENT_ENABLED', false);
         try {
-            const goal = await run();
-            expect(goal.startsWith('일일 보고')).toBe(true);
-            expect(goal).toContain('[NOTHING_TO_REPORT]');
+            expect(await run()).toBe('일일 보고');
         } finally { restore.restore(); }
     });
 });

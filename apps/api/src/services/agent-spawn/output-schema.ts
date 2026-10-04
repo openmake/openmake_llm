@@ -3,7 +3,7 @@
  *
  * 검증은 모델을 부르지 않는다(JSON 추출 + 스키마 대조). 어긋나면 서브에이전트에게 교정을 한 번만 요청하고,
  * 그래도 어긋나면 결과를 버리지 않고 "형식 검증 실패" 판정과 함께 부모에게 돌려준다.
- * 로컬 모델의 스키마 준수율은 실측 전이라 기본 꺼짐(AGENT_DELEGATION.OUTPUT_SCHEMA_ENABLED).
+ * 기본 켜짐 — 실측 근거는 AGENT_DELEGATION.OUTPUT_SCHEMA_ENABLED 의 주석에 있다.
  *
  * @module services/agent-spawn/output-schema
  */

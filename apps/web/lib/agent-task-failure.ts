@@ -3,7 +3,7 @@
  *
  * 서버는 failed 작업마다 분류(`failure_class`, config/agent-task-failure-class 의 7종)를 남긴다.
  * 오류 코드로 남는 사유는 코드별 라벨을 쓰고, SDK·게이트웨이 문구처럼 자유 문구로 남는 사유는 분류 라벨을 쓴다.
- * 다음 행동 문구는 분류마다 하나다. 문구는 messages/*.json 의 `agentTasks.errorReason` 에 있다.
+ * 다음 행동 문구는 분류마다 하나다(코드에 따로 둔 것은 그것을 쓴다). 문구는 messages/*.json 의 `agentTasks.errorReason` 에 있다.
  */
 export const FAILURE_CLASSES = ["goal_incomplete", "max_turns", "timeout", "token_limit", "llm_error", "interrupted", "unknown"] as const;
 export type FailureClass = (typeof FAILURE_CLASSES)[number];
@@ -17,6 +17,7 @@ const CODE_CLASS: Readonly<Record<string, FailureClass | null>> = {
   hitl_park_expired: "timeout",
   interrupted: "interrupted",
   interrupted_local_device: "interrupted",
+  sandbox_unavailable: "interrupted",
   aborted: null,
 };
 /** 같은 뜻의 다른 표기 — 서버가 재시작 정리 때 쓰는 문구를 번역 키로 맞춘다. */
@@ -50,7 +51,11 @@ export function failureLabelKey(error: string, serverClass?: string | null): str
   return label ? `errorReason.${label}` : null;
 }
 
+/** 분류의 문구가 맞지 않는 코드는 다음 행동 문구를 따로 둔다 — 실행 환경을 받지 못한 작업은 이어 할 지점이 없다. */
+const CODE_NEXT: Readonly<Record<string, string>> = { sandbox_unavailable: "sandbox_unavailable" };
+
 /** 다음 행동 문구의 번역 키(agentTasks 기준). */
 export function failureNextKey(error: string, serverClass?: string | null): string {
+  if (error in CODE_NEXT) return `errorReason.next.${CODE_NEXT[error]}`;
   return `errorReason.next.${failureClassOf(error, serverClass)}`;
 }

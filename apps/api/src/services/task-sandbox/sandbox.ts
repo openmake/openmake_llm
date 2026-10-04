@@ -24,6 +24,7 @@ import { BROWSER_RUN } from '../../config/agent-task-browser-web';
 import { BROWSER_TAKEOVER_DISCARDED_MESSAGE } from '../../prompts/agent-task-browser-web';
 import { guardBrowserResult } from './browser-result-guard';
 import type { TaskExecutor, ExecResult } from './executor';
+import { wrapPipeline, readPipeStatus, PIPE_STATUS_TAG_PREFIX } from './pipe-status';
 import { SANDBOX_WORKSPACE_DIR, stripWorkspacePrefix } from './workspace-path';
 import { createLogger } from '../../utils/logger';
 
@@ -252,6 +253,14 @@ export function runProcess(
  * 파일 I/O 는 bind-mount 된 호스트 workdir 에 직접 수행(빠르고 docker cp 불요).
  * TaskExecutor 의 Docker 구현체 (D0 — 원격 실행기는 D1 에서 같은 계약으로 추가).
  */
+/** 동시 샌드박스 상한에 걸려 만들지 못했다 — 일시적이라 호출부가 기다렸다 다시 시도한다. */
+export class TaskSandboxCapacityError extends Error {
+    constructor(readonly active: number, readonly max: number) {
+        super(`동시 task 샌드박스 상한 도달 (${active}/${max})`);
+        this.name = 'TaskSandboxCapacityError';
+    }
+}
+
 export class TaskSandbox implements TaskExecutor {
     readonly taskId: string;
     readonly containerName: string;
@@ -276,12 +285,12 @@ export class TaskSandbox implements TaskExecutor {
             logger.warn(`[${this.taskId}] network=restricted 는 메인 샌드박스 enforcement 미구현 → fail-safe none 으로 실행`);
         }
         // 동시 실행 상한 — 실행 중인 omk-task-* 컨테이너 수가 ground truth (재시작에도 정확).
-        // 초과 시 throw → AgentTaskService 가 샌드박스 없이 graceful degrade 로 진행.
+        // 초과 시 throw → AgentTaskService 가 자리를 기다리고, 끝내 없으면 정책대로 처리(agent-task/sandbox-unavailable).
         const ps = await runProcess(this.cfg.dockerPath,
             ['ps', '-q', '--filter', `name=${CONTAINER_PREFIX}`], { timeoutMs: 10_000, outputCap: 65536 });
         const active = ps.stdout.split('\n').filter(Boolean).length;
         if (active >= this.cfg.maxConcurrent) {
-            throw new Error(`동시 task 샌드박스 상한 도달 (${active}/${this.cfg.maxConcurrent})`);
+            throw new TaskSandboxCapacityError(active, this.cfg.maxConcurrent);
         }
         await mkdir(this.hostWorkdir, { recursive: true, mode: 0o777 });
         // 동명 잔존 컨테이너 제거(이전 비정상 종료 대비).
@@ -297,7 +306,7 @@ export class TaskSandbox implements TaskExecutor {
     }
 
     /** 컨테이너 내부에서 셸 명령 실행 (bash 도구의 실행 백엔드). */
-    async exec(command: string): Promise<ExecResult> {
+    async exec(command: string, opts?: { pipeStatus?: boolean }): Promise<ExecResult> {
         this.assertCreated();
         // 디스크 쿼터 — 컨테이너 내부 쓰기(bash 등)는 가로챌 수 없으므로 각 실행 직전 검사하는
         // best-effort: 초과 상태면 새 명령을 거부해 LLM 이 파일 정리 후 계속하도록 유도한다.
@@ -309,17 +318,20 @@ export class TaskSandbox implements TaskExecutor {
             };
         }
         const execId = randomUUID();
+        // 파이프에 가려진 실패 — 감쌀 수 있는 파이프라인이면 앞 단계가 종료 코드를 적게 감싼다(아니면 null, 종전대로).
+        const wrapped = opts?.pipeStatus ? wrapPipeline(command, `${PIPE_STATUS_TAG_PREFIX}${execId.slice(0, 8)}`) : null;
         const ac = new AbortController();
         this.running.add(ac);
         try {
-            return await runProcess(
+            const r = await runProcess(
                 this.cfg.dockerPath,
-                ['exec', '-e', `${EXEC_ID_ENV}=${execId}`, this.containerName, 'sh', '-c', command],
+                ['exec', '-e', `${EXEC_ID_ENV}=${execId}`, this.containerName, 'sh', '-c', wrapped?.command ?? command],
                 {
                     timeoutMs: this.cfg.execTimeoutMs, outputCap: this.cfg.outputCap, signal: ac.signal,
                     onStop: () => runProcess(this.cfg.dockerPath, buildKillExecArgs(this.containerName, execId), { timeoutMs: 10_000, outputCap: 4096 }),
                 },
             );
+            return wrapped ? readPipeStatus(r, wrapped) : r;
         } finally { this.running.delete(ac); }
     }
 

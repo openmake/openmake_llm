@@ -31,3 +31,8 @@ export function getScheduleSilentNote(): string {
         + `nothing new worth reporting to the user, reply with exactly ${AGENT_TASK_SCHEDULE_SILENT_MARKER} as your final answer `
         + 'and nothing else. Do not use it to skip the work or to hide a failure.';
 }
+
+/** fork 대화 정리 — 되묻기를 짝으로 뺄 수 없을 때 그 자리에 남기는 중립적인 한 줄(one-shot-notice.cleanConversationForFork). */
+export function getForkNeutralContinueLine(): string {
+    return 'Continue with the task.';
+}

@@ -38,7 +38,7 @@ export const QUOTE_EQUIVALENTS: Readonly<Record<string, string>> = {
  * 종료 코드 해석 — 셸 결과에서 0 이 아닌 코드가 오류가 아닌 잘 알려진 경우.
  * 키는 명령 이름(경로는 떼고 본다) 또는 "명령 하위명령", 값은 코드 → 뜻(문구는 prompts/agent-task-tools 의 EXIT_CODE_NOTES).
  * 여러 명령을 &&·;·|| 로 이은 경우는 어느 명령의 코드인지 알 수 없어 해석하지 않는다. 파이프는 마지막 명령으로 본다.
- * 파이프로 가려진 실패 경고는 넣지 않았다 — 오탐이 더 많다.
+ * 파이프로 가려진 실패는 명령 글자로 추정하지 않고 단계별 종료 코드를 받아 알린다(아래 PIPE_STATUS_HINT).
  * AGENT_TASK_EXIT_CODE_HINT=false 로 끄면 종전처럼 0 이 아닌 코드는 모두 오류로 표시한다.
  */
 export const EXIT_CODE_HINT_ENABLED = process.env.AGENT_TASK_EXIT_CODE_HINT !== 'false';
@@ -54,6 +54,21 @@ export const EXIT_CODE_MEANINGS: Readonly<Record<string, Readonly<Record<number,
     diff: DIFFER, cmp: DIFFER, 'git diff': DIFFER,
     test: FALSE, '[': FALSE, '[[': FALSE,
 };
+
+/**
+ * 파이프에 가려진 실패 경고 — Docker 샌드박스의 bash 도구가 마지막 파이프라인의 앞 단계마다 종료 코드를 받아 와,
+ * 전체 종료 코드는 0 인데 앞 단계가 0 이 아닐 때 결과에 한 줄을 붙인다(`npm test | tail -5`).
+ * 위 표에 있는 실패가 아닌 코드(grep 1)와 IGNORED_EXIT_CODES 는 알리지 않는다. 여러 줄·here-doc·백그라운드·명령 치환처럼
+ * 안전하게 가를 수 없는 명령은 감싸지 않고 종전대로 실행한다(task-sandbox/pipe-status). 로컬 실행기는 대상이 아니다.
+ * AGENT_TASK_PIPE_STATUS_HINT=false 로 끄면 명령을 감싸지 않는다.
+ */
+export const PIPE_STATUS_HINT = {
+    ENABLED: process.env.AGENT_TASK_PIPE_STATUS_HINT !== 'false',
+    /** 실패로 보지 않는 앞 단계 종료 코드 — 141 = SIGPIPE(뒤 명령이 먼저 읽기를 끝냈다, `yes | head -1`). */
+    IGNORED_EXIT_CODES: [141] as readonly number[],
+    /** 경고에 싣는 단계 명령의 최대 글자 수. */
+    COMMAND_MAX_CHARS: 80,
+} as const;
 
 /**
  * 검색 무일치 원인 안내 — grep_code 가 0건일 때 대소문자, 이스케이프 안 된 정규식 문자, 숨김·무시 대상 파일을
@@ -103,32 +118,51 @@ export const CODE_EXEC_TOOLS: readonly string[] = ['bash', 'python_execute'];
 /**
  * 검증 증거 원장 — 완료 관문의 workspace 테스트 게이트가 대화 기록을 보고 재실행 여부를 정한다.
  *   - 파일을 바꾼 흔적이 없으면(읽기만 한 작업, `ls` 만 한 bash) 게이트를 돌리지 않는다.
- *   - 마지막 변경 이후에 테스트·빌드 명령이 성공한 기록이 있으면 다시 돌리지 않는다. 변경보다 오래된 기록은 낡은 것이다.
- * 판정을 느슨하게 만드는 변경이라 **기본 꺼짐**이다 — 꺼져 있으면 종전대로 쓰기 도구를 쓴 작업은 무조건 다시 돌린다.
- * 모델이 일부 테스트만 돌린 것(`npx jest a.test.ts`)도 증거로 치므로, 켜기 전에 운영 기록으로 생략 건을 확인할 것.
+ *   - 마지막 변경 이후에 **게이트가 돌릴 것과 같은 테스트 실행**이 성공한 기록이 있으면 다시 돌리지 않는다.
+ *     변경보다 오래된 기록은 낡은 것이다.
+ * 증거로 치는 것은 좁다(FULL_TEST_RUN_RES): 작업 공간 루트에서, 게이트의 러너(npm·pytest·go)를, 대상을 고르는 인자 없이
+ * 전체로 돌려 종료 코드 0 으로 끝난 명령뿐이다. 일부 테스트 실행·빌드·린트·다른 러너는 증거가 아니고, 감지된 러너가
+ * 증거의 러너와 다르면 게이트를 그대로 돌린다(workspace-test-verify).
  * AGENT_TASK_VERIFY_EVIDENCE=true 로 켠다.
+ *
+ * 기본 꺼짐의 근거(2026-10-04 실측, retired-chat-model, 실제 Docker 샌드박스): 아낄 것이 거의 없다.
+ *   - 과제 묶음의 읽기 과제 3종(켬·끔 각 6회)과 fix-python-bug(각 3회)에서는 게이트가 한 번도 테스트를 돌리지 않았다 —
+ *     첨부가 uploads/ 에 있어 루트에 러너가 감지되지 않는다. 켬·끔의 턴·토큰이 같다(fix-python-bug 4턴·5.5만 토큰).
+ *   - 테스트를 루트로 옮겨 게이트가 도는 과제(각 6회)에서 게이트 통과 1회는 272~486ms 였다(10회). 건너뛰어 아끼는 시간이 그만큼이다.
+ *     켠 조건에서 "모델이 직접 테스트를 돌린" 3회 중 건너뛴 것은 0회 — 모델이 `rm … && pytest`·`pytest --import-mode=…` 처럼
+ *     변경이나 다른 인자를 붙여 돌려 증거로 치지 않았고, 그중 1회는 게이트가 실제 실패(수집 오류)를 잡았다.
+ *   - 놓침: 고치고 테스트를 안 돌린 실행(켬 3회)은 모두 게이트가 돌았다. 각본 대화(일부 실행·재수정·종료 코드 가리기)는 테스트로 고정.
+ * 판정을 느슨하게 하는 변경인데 얻는 것이 작업당 0.5초 이하라 켜지 않는다. 테스트가 오래 걸리는 저장소 작업이 많아지면 다시 잴 것.
  */
 export const VERIFY_EVIDENCE = {
     ENABLED: process.env.AGENT_TASK_VERIFY_EVIDENCE === 'true',
     /** 실행만으로 파일을 바꿨을 수 있다고 보는 도구(성공·실패 무관). bash 는 명령을 보고 가른다. */
-    MUTATING_TOOLS: ['python_execute', 'skill_run', 'spawn_agents'] as readonly string[],
+    MUTATING_TOOLS: ['python_execute', 'skill_run', 'spawn_agents', 'delegate'] as readonly string[],
+    /** 증거가 되는 명령 앞에 붙어도 되는 환경변수 — 실행 범위를 바꾸지 않는 것만(PYTEST_ADDOPTS 같은 것은 대상을 고른다). */
+    EVIDENCE_ENV_RE: /^CI=\S+$/,
+    /** 작업 공간 루트로 가는 cd. 다른 곳으로 간 뒤의 테스트는 게이트(루트에서 실행)와 범위가 달라 증거가 아니다. */
+    ROOT_CD_RE: /^cd\s+(?:\/workspace\/?|\.\/?)$/,
 } as const;
 
-/** 검증(테스트·빌드·타입 검사) 명령 — 한 명령(&& 로 이은 한 토막)의 앞머리에 맞춘다. */
-export const VERIFY_COMMAND_RES: readonly RegExp[] = [
-    /^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:test|build|lint|typecheck|check)\b/,
-    /^(?:npx\s+)?(?:jest|vitest|mocha|tsc|eslint)\b/,
-    /^(?:python3?\s+-m\s+)?pytest\b/,
-    /^python3?\s+-m\s+unittest\b/,
-    /^go\s+(?:test|build|vet)\b/,
-    /^cargo\s+(?:test|build|check)\b/,
-    /^make\s+(?:test|build|check)\b/,
-    /^(?:mvn|gradle|\.\/gradlew)\s+(?:test|build)\b/,
-];
+/** 테스트 게이트의 러너(workspace-test-verify 의 RUNNER_COMMANDS 와 같은 키). */
+export type GateTestRunner = 'npm' | 'pytest' | 'go';
+
+/**
+ * 전체 실행 형태의 테스트 명령 — 한 토막 전체에 맞춘다(끝까지). 대상을 고르거나(-k, 경로, -run, `-- 인자`) 아무것도 돌리지 않을 수
+ * 있는 인자(--collect-only, --if-present, --passWithNoTests)가 붙으면 맞지 않는다. 허용하는 것은 출력 모양만 바꾸는 인자다.
+ */
+export const FULL_TEST_RUN_RES: Readonly<Record<GateTestRunner, RegExp>> = {
+    npm: /^(?:npm|pnpm|yarn)\s+(?:run\s+)?test(?:\s+(?:--silent|-s))*$/,
+    pytest: /^(?:python3?\s+-m\s+)?pytest(?:\s+(?:-q+|-v+|-x|-s|-ra|--no-header|--tb=\w+|--color=\w+|-p\s+no:cacheprovider))*$/,
+    go: /^go\s+test(?:\s+(?:-v|-count=1))*\s+\.\/\.\.\.$/,
+};
 
 /** 파일을 바꾸지 않는 셸 명령 — 한 토막의 앞머리에 맞춘다. 여기에 없으면 바꿨을 수 있다고 본다. */
 export const READ_ONLY_COMMAND_RES: readonly RegExp[] = [
-    /^(?:ls|cat|head|tail|grep|egrep|fgrep|rg|pwd|wc|echo|printf|which|file|stat|tree|du|df|date|env|whoami|sort|uniq|cut|diff|cmp|test|\[|true|cd|nl|basename|dirname|realpath)\b/,
+    /^(?:ls|cat|head|tail|grep|egrep|fgrep|rg|pwd|wc|echo|printf|which|file|stat|tree|du|df|date|whoami|cut|diff|cmp|test|\[|true|cd|nl|basename|dirname|realpath)\b/,
+    /^env$/, // 인자가 붙은 env 는 다른 명령을 실행한다
+    /^sort\b(?!.*\s(?:-o|--output)\b)/,
+    /^uniq(?:\s+-\S+)*(?:\s+[^-\s]\S*)?$/, // 파일 인자가 둘이면 둘째는 출력 파일이다
     /^find\b(?!.*\s-(?:delete|exec|execdir|ok|fprint)\b)/,
     /^sed\s+-n\b(?!.*\s-i)/,
     /^git\s+(?:status|log|diff|show|branch|rev-parse|ls-files|blame|remote)\b/,
@@ -150,3 +184,12 @@ export const ASK_HUMAN = {
     /** 선택지 한 개의 최대 글자 수. */
     OPTION_MAX_CHARS: 200,
 } as const;
+
+/**
+ * 작업 변경분(diff)에서 빼는 내부 파일 — 제품이 작업 공간에 스스로 쓰는 파일이라 사용자 산출물이 아니다.
+ * 브라우저 로그인 상태 파일(config/task-sandbox BROWSER_SESSION.STATE_FILE·SCRIPT_FILE)과 python_execute 가 파일명 없이
+ * 실행할 때 쓰는 임시 스크립트. 2026-10-04 라이브 시험에서 이 파일들이 산출물 diff 에 섞여 나왔다.
+ * AGENT_TASK_DIFF_INTERNAL_FILES 로 바꾼다(쉼표 구분, .gitignore 패턴).
+ */
+export const CODE_DIFF_INTERNAL_FILES: readonly string[] = (process.env.AGENT_TASK_DIFF_INTERNAL_FILES
+    ?? '/.browser-state.json,/.omk-browser-session.mjs,/_exec.py').split(',').map((s) => s.trim()).filter(Boolean);

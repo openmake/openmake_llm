@@ -57,6 +57,8 @@ interface WorkspaceTestResult {
     runner?: TestRunner;
     /** 실패 시 모델에 주입할 출력(끝부분). */
     report: string;
+    /** 감지된 러너가 대화 기록의 증거(provenRunner)와 같아 실행을 건너뛰었다(검증 증거 원장). */
+    provenSkip?: boolean;
 }
 
 function hasWriteTool(usedTools: ReadonlySet<string>): boolean {
@@ -84,12 +86,15 @@ export async function verifyWorkspaceTests(
     usedTools: ReadonlySet<string>,
     stepNumber: number,
     signal?: AbortSignal,
+    /** 마지막 변경 이후 이 러너의 전체 실행이 통과한 기록이 있다(verification-evidence) — 감지된 러너와 같으면 다시 돌리지 않는다. */
+    provenRunner?: TestRunner,
 ): Promise<WorkspaceTestResult & { stepNumber: number }> {
     const skip = { ran: false, ok: true, report: '', stepNumber };
     try {
         if (signal?.aborted || !hasWriteTool(usedTools)) return skip;
         const runner = await detectWorkspaceTestRunner(runtime);
         if (!runner) return skip;
+        if (runner === provenRunner) return { ...skip, runner, provenSkip: true };
         const r = await runtime.execRaw(RUNNER_COMMANDS[runner]);
         const failed = r.exitCode !== 0 || r.timedOut;
         const output = `${r.stdout}${r.stderr ? `\n${r.stderr}` : ''}`;

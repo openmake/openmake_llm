@@ -182,6 +182,10 @@ public struct AgentTaskApproval: Decodable, Identifiable, Sendable, Equatable {
     /// 서버(approval-gate PendingApproval.args)는 예전부터 내려주고 있었는데 앱이 버려서,
     /// bash 가 무엇을 실행하는지·ask_human 이 무엇을 묻는지 모른 채 승인해야 했다.
     public let args: [String: String]
+    /// ask_human 구조화 질문(질문 여러 개·선택지·권장안) — 없으면 빈 배열이고 `args["question"]` 줄글을 보여 준다.
+    public let questions: [AgentTaskQuestion]
+    /// 구조화 질문 앞의 설명 — 서버가 줄 때만.
+    public let intro: String?
     /// 이관·에스컬레이션(HITL2, 2026-09-17) — 담당자가 바뀐 승인은 assigneeUserId 가 요청자와 다르다. 서버가 안 주면 nil.
     public let assigneeUserId: String?
     public let escalatedAt: String?
@@ -189,7 +193,8 @@ public struct AgentTaskApproval: Decodable, Identifiable, Sendable, Equatable {
     public let riskClass: String?
 
     public init(id: String, taskId: String, toolName: String, args: [String: String] = [:],
-                assigneeUserId: String? = nil, escalatedAt: String? = nil, riskClass: String? = nil) {
+                assigneeUserId: String? = nil, escalatedAt: String? = nil, riskClass: String? = nil,
+                questions: [AgentTaskQuestion] = [], intro: String? = nil) {
         self.id = id
         self.taskId = taskId
         self.toolName = toolName
@@ -197,6 +202,8 @@ public struct AgentTaskApproval: Decodable, Identifiable, Sendable, Equatable {
         self.assigneeUserId = assigneeUserId
         self.escalatedAt = escalatedAt
         self.riskClass = riskClass
+        self.questions = questions
+        self.intro = intro
     }
 
     enum CodingKeys: String, CodingKey {
@@ -218,6 +225,9 @@ public struct AgentTaskApproval: Decodable, Identifiable, Sendable, Equatable {
         assigneeUserId = try? container.decodeIfPresent(String.self, forKey: .assigneeUserId)
         escalatedAt = try? container.decodeIfPresent(String.self, forKey: .escalatedAt)
         riskClass = try? container.decodeIfPresent(String.self, forKey: .riskClass)
+        let structured = toolName == "ask_human" ? try? container.decode(StructuredQuestionArgs.self, forKey: .args) : nil
+        questions = structured?.questions ?? []
+        intro = questions.isEmpty ? nil : structured?.intro
     }
 
     /// 도구 승인이 아니라 사람의 답을 기다리는 질문 — 서버 config/tool-policy 의 HITL_ALWAYS_WAIT_TOOLS 와 짝.
