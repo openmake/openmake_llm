@@ -174,3 +174,48 @@ describe('ApprovalRegistry — 자동승인보다 바닥이 먼저', () => {
         expect(rows.get('old_mcp')?.status).toBe('pending');
     });
 });
+
+describe('메모리 쓰기 — 어느 모드에서도 묻는 바닥', () => {
+    const args = { content: '사용자는 보고서를 표로 받는 것을 선호한다' };
+
+    it('바닥 종류에 들어 있다 — 미지정이면 기본으로 켜진다', () => {
+        expect(parseApprovalFloorKinds(undefined)).toContain('memory_write');
+        expect(approvalFloorReason('memory_save', args)).toBe('memory_write');
+        expect(approvalFloorReason('memory_save', {})).toBe('memory_write');
+    });
+
+    it('승인 정책이 무엇이든 승인 대상이다 — 정책 none 에서도 묻는다', () => {
+        expect(requiresApproval('all', 'memory_save', args)).toBe(true);
+        expect(requiresApproval('high-risk', 'memory_save', args)).toBe(true);
+        expect(requiresApproval('none', 'memory_save', args)).toBe(true);
+        expect(requiresApproval('all', 'memory_save', args, { deviceGatesShell: true })).toBe(true);
+    });
+
+    it('자동승인 작업에서도 대기하고, 승인 카드에 저장할 문장 전문이 실린다', async () => {
+        const reg = new ApprovalRegistry();
+        reg.setAutoApprove('t-mem', true);
+        expect(reg.autoApproves('t-mem', 'memory_save', args)).toBe(false);
+        let settled = false;
+        let shown: Record<string, unknown> | undefined;
+        void reg.request({ taskId: 't-mem', userId: 'u1', toolName: 'memory_save', args }, { timeoutMs: 60_000, onPending: (p) => { shown = p.args; } })
+            .then(() => { settled = true; });
+        await tick();
+        expect(settled).toBe(false);
+        expect(shown).toEqual(args);
+        const [pending] = await reg.list('u1');
+        await reg.reject(pending.approvalId, 'u1');
+    });
+
+    it('무인 실행(예약)에서는 기다리지 않고 거절한다', async () => {
+        const reg = new ApprovalRegistry();
+        reg.setUnattended('t-mem-sched', true);
+        const r = await reg.request({ taskId: 't-mem-sched', userId: 'u1', toolName: 'memory_save', args }, { timeoutMs: 60_000 });
+        expect(r).toMatchObject({ decision: 'rejected', reason: 'unattended' });
+    });
+
+    it('병렬 서브에이전트의 도구 선별(바닥 호출 제외·승인 대상 제외)에 걸린다', () => {
+        // spawn-agents 는 자동승인이면 approvalFloorReason(name, {}) === null, 아니면 !requiresApproval(policy, name, {}) 인 도구만 준다
+        expect(approvalFloorReason('memory_save', {})).not.toBeNull();
+        for (const policy of ['all', 'high-risk', 'none'] as const) expect(requiresApproval(policy, 'memory_save', {})).toBe(true);
+    });
+});

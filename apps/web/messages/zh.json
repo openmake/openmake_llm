@@ -896,6 +896,15 @@
       "completed": "已完成",
       "pending": "待处理"
     },
+    "statusRaw": {
+      "pending": "待处理",
+      "queued": "排队中",
+      "running": "进行中",
+      "paused": "已暂停",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    },
     "failedTag": "失败",
     "cancelledTag": "已取消",
     "turnShort": "回合 {current}/{max}",
@@ -936,6 +945,8 @@
     "autoApproveHint": "此任务后续的工具调用将无需批准直接执行（提问、写入凭据或指令文件、外部 MCP 工具仍需确认）",
     "tokensUsed": "{count} 令牌",
     "tokensUsedHint": "此任务累计使用的LLM令牌",
+    "cacheHitLabel": "缓存命中",
+    "cacheHitHint": "输入令牌 {prompt} 中有 {cached} 个由模型服务器从缓存读取",
     "templates": {
       "title": "任务模板",
       "create": "新建模板",
@@ -2363,6 +2374,7 @@
       "link": "打开智能体列表"
     },
     "tasks": {
+      "reject": "拒绝",
       "title": "代理任务审批",
       "hint": "高风险工具执行和代理提问需经批准后任务才会继续。也可以直接在聊天中回复。",
       "empty": "没有待审批的代理任务。",
@@ -2384,7 +2396,8 @@
         "network": "网络访问",
         "external": "外部工具",
         "control": "控制",
-        "sensitive": "凭据文件"
+        "sensitive": "凭据文件",
+        "memory": "保存到记忆"
       },
       "recentTitle": "最近决定（30 分钟）",
       "revoked": "已撤销",

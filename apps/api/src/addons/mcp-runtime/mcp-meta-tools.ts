@@ -24,6 +24,18 @@ function norm(s: string): string {
     return s.toLowerCase().replace(/^mcp[-_]/, '');
 }
 
+/** 모델이 적은 서버 이름과 displayName 이 같은 서버를 가리키는가. */
+function sameServer(displayName: string, server: string): boolean {
+    return norm(displayName) === norm(server) || displayName.toLowerCase() === server.toLowerCase();
+}
+
+function toolListing(displayName: string, detail: unknown): MCPToolResult {
+    return text(
+        `'${displayName}' 서버 도구 — mcp_call 로 호출 시 server="${displayName}", tool=아래 이름, args=그 도구 입력:\n` +
+        JSON.stringify(detail, null, 2),
+    );
+}
+
 const mcpListToolsTool: MCPToolDefinition = {
     tool: {
         name: 'mcp_list_tools',
@@ -42,13 +54,15 @@ const mcpListToolsTool: MCPToolDefinition = {
         const { getUnifiedMCPClient } = await import('./unified-client');
         const router = getUnifiedMCPClient().getToolRouter();
         const groups = router.getUserPoolToolGroups(userId);
+        // 전역 서버(관리자가 모두에게 붙인 것)도 함께 본다 — 같은 이름은 사용자가 설치한 쪽이 이긴다(실행 경로와 같은 순서).
+        const globals = router.getGlobalToolGroups().filter(x => !groups.some(u => sameServer(u.displayName, x.displayName)));
         // "없습니다"만 반환하면 모델이 "검색/도구 불가 환경"으로 오일반화해 내장 도구까지
         // 안 쓰는 환각을 확증시킨다(2026-07-17 Discord 사례) — 내장 도구 가용을 함께 명시.
         //
         // 빈 그룹은 "미설치"와 "이번 실행에서 풀이 아직 안 채워짐"을 구분하지 못한다. 후자를
         // 미설치로 단정하자 모델이 설치돼 있는 서버를 두고 작업을 포기했다. DB 기준 설치 여부를
         // 확인해 두 경우를 다르게 안내한다. 조회 실패는 기존 문구로 폴백(graceful).
-        if (groups.length === 0) {
+        if (groups.length === 0 && globals.length === 0) {
             let installed: string[] = [];
             try {
                 const { McpCatalogRepository } = await import('../../data/repositories/mcp-catalog-repository');
@@ -71,20 +85,20 @@ const mcpListToolsTool: MCPToolDefinition = {
         }
 
         const server = typeof args.server === 'string' ? args.server.trim() : '';
-        if (!server) return text('설치된 MCP 서버: ' + groups.map(g => g.displayName).join(', '));
+        const names = [...groups, ...globals].map(x => x.displayName).join(', ');
+        if (!server) return text('설치된 MCP 서버: ' + names);
 
-        const g = groups.find(x => norm(x.displayName) === norm(server) || x.displayName.toLowerCase() === server.toLowerCase());
-        if (!g) return text(`서버 '${server}' 를 찾을 수 없습니다. 설치된 서버: ${groups.map(x => x.displayName).join(', ')}`);
+        const g = groups.find(x => sameServer(x.displayName, server));
+        const global = g ? undefined : globals.find(x => sameServer(x.displayName, server));
+        if (global) return toolListing(global.displayName, global.tools);
+        if (!g) return text(`서버 '${server}' 를 찾을 수 없습니다. 설치된 서버: ${names}`);
 
         const { collectUserPoolTools } = await import('./user-pool-tools');
         const { getUserMCPPool } = await import('./user-pool');
         const detail = collectUserPoolTools(getUserMCPPool(), userId)
             .filter(e => e.displayName === g.displayName)
             .map(e => ({ tool: e.originalToolName, description: e.tool.description, inputSchema: e.tool.inputSchema }));
-        return text(
-            `'${g.displayName}' 서버 도구 — mcp_call 로 호출 시 server="${g.displayName}", tool=아래 이름, args=그 도구 입력:\n` +
-            JSON.stringify(detail, null, 2),
-        );
+        return toolListing(g.displayName, detail);
     },
 };
 
@@ -112,11 +126,11 @@ const mcpCallTool: MCPToolDefinition = {
 
         const { getUnifiedMCPClient } = await import('./unified-client');
         const router = getUnifiedMCPClient().getToolRouter();
-        const g = router.getUserPoolToolGroups(userId)
-            .find(x => norm(x.displayName) === norm(server) || x.displayName.toLowerCase() === server.toLowerCase());
+        const g = router.getUserPoolToolGroups(userId).find(x => sameServer(x.displayName, server))
+            ?? router.getGlobalToolGroups().find(x => sameServer(x.displayName, server));
         if (!g) return text(`서버 '${server}' 를 찾을 수 없습니다.`);
 
-        // 네임스페이스 이름으로 재구성 → executeTool 의 user-pool 해석 경로 재사용.
+        // 네임스페이스 이름으로 재구성 → executeTool 의 해석 경로 재사용(사용자 풀 우선, 없으면 전역).
         const namespaced = `${g.displayName}${MCP_NAMESPACE_SEPARATOR}${tool}`;
         return router.executeTool(namespaced, toolArgs, context);
     },

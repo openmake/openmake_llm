@@ -6,6 +6,7 @@
  */
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
 import { OUTPUT_REPETITION_CUT_MARKER, getOutputRepetitionRetryNudge, getOutputRepetitionRetryNote } from '../../prompts/agent-task-turn-loop';
+import { AGENT_TASK_STEERING_MARKER } from '../../prompts/agent-task-prompt';
 import type { ChatMessage } from '../../llm/types';
 
 /**
@@ -39,13 +40,30 @@ export function detectOutputRepetition(text: string | null | undefined): { repea
     return null;
 }
 
+/**
+ * PURE: 사용자가 일부러 반복 출력을 시킨 작업인가 — 그런 작업의 반복은 모델의 반복 루프가 아니라 요청한 결과다.
+ * 사용자가 직접 쓴 글만 본다 — 목표(대화의 첫 사용자 메시지)와 작업 도중 보낸 지시(steering).
+ * 시스템이 주입하는 안내·재촉에도 "N번 반복" 같은 말이 들어 있어 섞어 보면 오탐한다.
+ */
+export function goalRequestsRepetition(conversation: readonly ChatMessage[]): boolean {
+    if (!AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_RESPECT_REQUEST) return false;
+    const goalAt = conversation.findIndex((m) => m.role === 'user');
+    const fromUser = conversation
+        .filter((m, i) => m.role === 'user' && typeof m.content === 'string' && (i === goalAt || m.content.startsWith(AGENT_TASK_STEERING_MARKER)))
+        .map((m) => m.content as string);
+    return fromUser.some((text) => AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_REQUEST_PATTERNS.some((re) => [...text.matchAll(re)].some((m) => {
+        const n = m.groups?.n ?? '';
+        return /^\d+$/.test(n) ? Number(n) >= AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_MIN_REPEATS : n !== '';
+    })));
+}
+
 /** PURE: 반복이 시작된 뒤를 잘라 내고 생략 표시를 붙인다 — 모델이 자기 반복을 다시 읽고 이어가지 않게 한다. */
 export function cutRepeatedOutput(text: string, cutAt: number): string {
     return `${text.slice(0, cutAt).trimEnd()}${OUTPUT_REPETITION_CUT_MARKER}`;
 }
 
 interface TurnOut {
-    result: { content?: string | null; tool_calls?: unknown[]; metrics?: { prompt_tokens?: number; completion_tokens?: number } };
+    result: { content?: string | null; tool_calls?: unknown[]; metrics?: { prompt_tokens?: number; completion_tokens?: number; cached_prompt_tokens?: number } };
     /** 이 응답의 본문을 반복 때문에 잘랐는가(turn-call 이 채운다). */
     repetitionCut?: boolean;
 }
@@ -68,5 +86,8 @@ export async function retryRepeatedAnswer<T extends TurnOut>(
     const again = await recall();
     const sum = (k: 'prompt_tokens' | 'completion_tokens'): number => (out.result.metrics?.[k] ?? 0) + (again.result.metrics?.[k] ?? 0);
     again.result.metrics = { ...again.result.metrics, prompt_tokens: sum('prompt_tokens'), completion_tokens: sum('completion_tokens') };
+    // 캐시 적중 토큰도 합친다 — 두 호출 모두 서버가 값을 주지 않았으면 없는 채로 둔다(0 으로 꾸미지 않는다).
+    const cached = [out, again].map((o) => o.result.metrics?.cached_prompt_tokens).filter((n): n is number => n !== undefined);
+    if (cached.length > 0) again.result.metrics.cached_prompt_tokens = cached.reduce((a, b) => a + b, 0);
     return again;
 }

@@ -25,7 +25,7 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('LocalBridge');
 
 /** 서버→디바이스 도구 요청 종류 — 이 외의 kind 는 존재하지 않는다(임의 RPC 금지). */
-export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'worktree' | 'folders' | 'lsp_diagnostics' | 'code_nav';
+export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'worktree' | 'folders' | 'lsp_diagnostics' | 'code_nav' | 'test_runner';
 
 /**
  * 서버→디바이스 단방향 알림 종류 — 디바이스 코어 NOTICE_KINDS 와 1:1.
@@ -125,6 +125,8 @@ export interface BridgeResult {
     serverKind?: string;
     /** code_nav 결과 — 없으면 구 디바이스(kind 미지원)로 보고 셸 경로로 폴백한다. */
     codeNav?: BridgeCodeNavData;
+    /** test_runner 결과 — 'npm' | 'pytest' | 'go' | 'none'. 없으면 구 디바이스로 보고 셸 프로브로 폴백한다. */
+    testRunner?: string;
 }
 
 export interface DeviceSession {

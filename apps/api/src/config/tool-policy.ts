@@ -60,6 +60,8 @@ const TOOL_RISK: Readonly<Record<string, RiskRule>> = {
     // 과거 작업 검색(agent-task/task-history-tool) — 본인 작업 읽기 전용
     task_history: 'read',
     skill_save: 'write',
+    // 사용자 메모리 쓰기(agent-task/memory-save-tool) — 어느 정책·자동승인에서도 묻는다(승인 바닥 memory_write)
+    memory_save: 'write',
     // 제어·플래닝·위임 — 부작용 없음
     terminate: 'control',
     ask_human: 'control',

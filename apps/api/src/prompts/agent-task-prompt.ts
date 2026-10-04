@@ -270,13 +270,16 @@ export function getAgentTaskGoalJudgeMessages(
     };
 }
 
+/** 중간 지시 주입문의 머리 표식 — 대화에서 "사용자가 직접 보낸 지시"를 시스템 안내와 구분할 때 쓴다(output-repetition). */
+export const AGENT_TASK_STEERING_MARKER = '[사용자 추가 지시]';
+
 /**
  * 실행 중 사용자 중간 지시(steering) 주입 프레이밍 — 다음 턴 conversation 에 user 메시지로 들어간다.
  * 진행 중 작업의 방향을 바꾸는 추가 지시임을 명시해, 모델이 기존 목표에 반영·조정하도록 유도한다.
  */
 export function getAgentTaskSteeringInjection(text: string): string {
     return [
-        '[사용자 추가 지시] 작업 진행 중 사용자가 다음 지시를 보냈습니다. 현재 작업에 이 지시를',
+        `${AGENT_TASK_STEERING_MARKER} 작업 진행 중 사용자가 다음 지시를 보냈습니다. 현재 작업에 이 지시를`,
         '즉시 반영해 방향을 조정하세요(기존 목표와 충돌하면 이 지시를 우선):',
         text,
     ].join('\n');

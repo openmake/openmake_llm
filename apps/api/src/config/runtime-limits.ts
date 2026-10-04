@@ -1743,6 +1743,13 @@ export const MCP_SANDBOX_BOOTSTRAP = {
      * 프로브보다 길게. MCP_SANDBOX_DOCKER_STOP_TIMEOUT_MS
      */
     DOCKER_STOP_TIMEOUT_MS: parseInt(process.env.MCP_SANDBOX_DOCKER_STOP_TIMEOUT_MS || '', 10) || 20000,
+    /**
+     * 서버 삭제 뒤 캐시 볼륨 정리 — 컨테이너(--rm)가 내려가는 동안은 "사용 중"으로 실패하므로 간격을 두고 다시 시도한다.
+     * MCP_SANDBOX_CACHE_VOLUME_CLEANUP=false 로 끈다(볼륨을 남긴다).
+     */
+    CACHE_VOLUME_CLEANUP_ENABLED: process.env.MCP_SANDBOX_CACHE_VOLUME_CLEANUP !== 'false',
+    CACHE_VOLUME_RM_ATTEMPTS: 3,
+    CACHE_VOLUME_RM_RETRY_MS: 2000,
     /** 부팅 고아 스윕 게이트 — MCP_SANDBOX_ORPHAN_REAP=false 로 해제 (기본 on) */
     ORPHAN_REAP_ENABLED: process.env.MCP_SANDBOX_ORPHAN_REAP !== 'false',
     /** 1회 스윕에서 처리할 최대 컨테이너 수 (폭주 안전판) */

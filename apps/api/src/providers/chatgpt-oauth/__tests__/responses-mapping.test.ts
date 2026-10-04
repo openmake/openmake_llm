@@ -151,6 +151,16 @@ describe('ResponsesStreamCollector', () => {
         expect(usages).toHaveLength(1);
     });
 
+    it('usage 의 input_tokens_details.cached_tokens 를 캐시 적중 토큰으로 싣는다', () => {
+        const { callbacks } = makeCallbacks();
+        const collector = new ResponsesStreamCollector();
+        collector.handleEvent({
+            type: 'response.completed',
+            response: { status: 'completed', usage: { input_tokens: 100, output_tokens: 5, input_tokens_details: { cached_tokens: 80 } } },
+        }, callbacks);
+        expect(collector.finalize(callbacks, false).usage).toEqual({ prompt_tokens: 100, completion_tokens: 5, cached_prompt_tokens: 80 });
+    });
+
     it('function call 스트림(added→delta→done)을 tool_calls 로 조립한다', () => {
         const { callbacks, toolCalls } = makeCallbacks();
         const collector = new ResponsesStreamCollector();

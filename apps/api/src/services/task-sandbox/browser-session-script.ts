@@ -5,6 +5,10 @@
  * 명령(POST /cmd, JSON): ping · shot · click{x,y} · type{text} · key{key} · scroll{dy} · goto{url} · back · close
  * 종료(close·유휴 상한·SIGTERM) 때 로그인 상태(storageState)를 파일에 저장한다 — 에이전트의 다음 browser 호출이 이어받는다.
  *
+ * 목적지 검사: egress 프록시(BROWSER_PROXY)가 없으면 이미지의 guard-proxy 를 컨테이너 안 루프백에 띄워 모든 연결
+ * (리다이렉트·하위 요청 포함)을 지나게 한다 — 에이전트 브라우저 러너(infra/task-runtime/browser-runner.mjs)와 같은 방식.
+ * guard-proxy 가 없는 옛 이미지에서는 띄우지 못한다(이동 주소는 서버 라우트가 먼저 검사한다).
+ *
  * @module services/task-sandbox/browser-session-script
  */
 export const BROWSER_SESSION_SCRIPT = String.raw`
@@ -23,9 +27,19 @@ const viewport = { width: Number(env.OMK_VIEW_W) || 1280, height: Number(env.OMK
 const QUALITY = Number(env.OMK_JPEG_QUALITY) || 60;
 const NAV_TIMEOUT = 20000;
 
+const GUARD_PROXY = '/opt/browser/guard-proxy.mjs';
+let proxy = env.BROWSER_PROXY ? { server: env.BROWSER_PROXY } : null;
+if (!proxy && env.BROWSER_DEST_GUARD !== 'off' && existsSync(GUARD_PROXY)) {
+    const { createGuardProxy, parseAllowedHosts } = await import(GUARD_PROXY);
+    const guard = createGuardProxy({ exempt: parseAllowedHosts(env.BROWSER_GUARD_ALLOWED_HOSTS) });
+    await new Promise((ok, fail) => { guard.once('error', fail); guard.listen(0, '127.0.0.1', ok); });
+    // chromium 은 루프백을 프록시 없이 직접 연결한다 — <-loopback> 으로 루프백도 프록시를 지나게 한다
+    proxy = { server: 'http://127.0.0.1:' + guard.address().port, bypass: '<-loopback>' };
+}
+
 const browser = await chromium.launch({
     headless: true,
-    ...(env.BROWSER_PROXY ? { proxy: { server: env.BROWSER_PROXY } } : {}),
+    ...(proxy ? { proxy } : {}),
 });
 let context;
 try {

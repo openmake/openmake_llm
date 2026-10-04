@@ -22,12 +22,14 @@ import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { bindSkillRunApproval } from './skill-run-binding';
 import { normalizeAskHuman } from './ask-human';
 import { createTaskHistoryTools } from '../agent-task/task-history-tool';
+import { createMemorySaveTools } from '../agent-task/memory-save-tool';
 import { saveProceduralSkill, revertProceduralSkill, resolveProceduralSpec, recordProceduralRun } from '../agent-task/procedural-skill';
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
 import { withToolNameSuggestions, detectShellToolMisuse, formatShellToolMisuseHint } from '../../tool-contract/tool-name-suggest';
 import { buildApprovalPreview } from './approval-preview';
 import type { PlanStepInput } from './planning';
+import type { ContributedAgentTaskTool } from '../chat-service/turn-integrations';
 import { APPROVAL_PREVIEW } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskParked } from '../agent-task/types';
@@ -77,6 +79,8 @@ export class TaskRuntime {
     private readonly plan = new TaskPlan({ autoAdvance: AGENT_TASK_LIMITS.PLAN_AUTO_ADVANCE });
     private readonly handlers = new Map<string, MCPToolDefinition['handler']>();
     private readonly defs: MCPToolDefinition[];
+    /** 기여 도구의 승인 전 검사 — 실행해도 거절될 호출은 승인 카드를 띄우지 않고 돌려준다(memory_save 의 문장 검사). */
+    private readonly prechecks = new Map<string, NonNullable<ContributedAgentTaskTool['precheck']>>();
     /** 절차 스킬 조회 — skill_run 승인 결속(skill-run-binding)이 승인 전에 절차를 불러올 때 쓴다. 플래그 OFF 면 없음. */
     private readonly loadProcedure?: ProceduralHooks['load'];
     /** 이 작업에 실제로 노출된 도구 이름(task + MCP + 내장). 이름 교정·셸 오용 감지에만 쓴다. */
@@ -119,7 +123,11 @@ export class TaskRuntime {
         // 작업 도구는 고정 관리되며 기여분만큼 늘어난다. 통합 모듈은 AgentTaskService 를 끌어올 수 있어
         // 정적 import 하면 순환이 된다 — 생성 시점 require 로 끊는다.
         const { getChatTurnIntegrations } = require('../chat-service/turn-integrations') as typeof import('../chat-service/turn-integrations');
-        const contributed = [...getChatTurnIntegrations().flatMap((i) => i.agentTaskTools?.() ?? []), ...createTaskHistoryTools(taskId, goal ? { goal } : {})];
+        const contributed = [
+            ...getChatTurnIntegrations().flatMap((i) => i.agentTaskTools?.() ?? []),
+            ...createTaskHistoryTools(taskId, goal ? { goal } : {}), ...createMemorySaveTools(taskId, goal ? { goal } : {}),
+        ];
+        for (const c of contributed) if (c.precheck) this.prechecks.set(c.tool.name, c.precheck);
         this.defs = createTaskTools(this.executor, this.plan, delegate, spawn, procedural, browserMetrics, contributed, { userId: this.userId });
         for (const d of this.defs) this.handlers.set(d.tool.name, d.handler);
     }
@@ -151,6 +159,11 @@ export class TaskRuntime {
     /** 실행기 자체 diff(로컬 worktree). 미지원이면 null → 호출부가 workspace git 캡처로 폴백. */
     async captureExecutorDiff(): Promise<string | null> {
         return this.executor.captureDiff ? this.executor.captureDiff() : null;
+    }
+
+    /** 실행기 전용 테스트 러너 탐지(로컬 브리지 — 디바이스 확인 창 없이). 'none' 은 러너 없음, null 은 미지원·실패 → 호출부가 셸 프로브로 폴백. */
+    async detectTestRunnerNative(): Promise<string | null> {
+        return this.executor.detectTestRunner ? this.executor.detectTestRunner() : null;
     }
 
     /** 승인 대기 알림을 실행기 채널로(로컬 브리지 → 디바이스 네이티브 알림). 미지원 실행기(docker)는 no-op. */
@@ -264,6 +277,9 @@ export class TaskRuntime {
                 ? `사용자 답변(질문: ${question}): ${text.trim()}`
                 : `사용자가 승인했습니다(계속 진행). 질문: ${question}`;
         }
+
+        const refusal = await this.prechecks.get(name)?.(args, { userId: this.userId });
+        if (refusal) return `Error: ${refusal}`;
 
         // skill_run — 승인 전에 절차를 불러 인자에 체크섬을 묶는다. 승인 카드에는 절차 본문을 싣고, 실행 단계가 같은 절차인지 확인한다.
         const skillPreview = name === 'skill_run' && this.loadProcedure ? await bindSkillRunApproval(args, this.loadProcedure) : null;

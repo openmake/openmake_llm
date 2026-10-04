@@ -26,6 +26,7 @@ import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "@/comp
 import { QuestionChoices } from "@/components/approvals/question-choices";
 import { isNearBottom } from "@/lib/chat-scroll";
 import { COPY_FEEDBACK_RESET_MS, REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
+import { shouldSubmitOnEnter, keepStillPending } from "@/lib/approval-input";
 
 const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
 /** 채팅 인라인 승인의 인자 요약 길이 — 넘으면 전문 펼쳐 보기가 붙는다. */
@@ -72,8 +73,22 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
   const answer = (a: PendingApproval) =>
     run(a, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/answer`, { text: answers[a.approvalId] ?? "" }));
   // task 자동승인(4-2) — 이후 이 작업의 도구 호출은 승인 없이 진행(ask_human 제외). 대기 중 승인도 즉시 해소.
-  const autoApprove = (a: PendingApproval) =>
-    run(a, () => ApiClient.post(`/api/agent-tasks/${a.taskId}/approvals/auto-approve`, {}));
+  // 계속 물어야 하는 호출(외부 MCP·지시 파일·메모리 쓰기 등)은 자동 승인 뒤에도 대기로 남는다 — 누른 카드를 낙관적으로 지우지 않고
+  // 서버에 남은 승인만 다시 그린다(지워 버리면 승인할 곳이 화면에서 사라져 작업이 멈춘 것처럼 보인다).
+  const autoApprove = async (a: PendingApproval) => {
+    setBusy(a.approvalId);
+    try {
+      await ApiClient.post(`/api/agent-tasks/${a.taskId}/approvals/auto-approve`, {});
+      const res = await ApiClient.get<{ data: { pending: { approvalId: string }[] } }>("/api/agent-tasks/approvals/pending").catch(() => null);
+      setChatHistory((prev) =>
+        prev.map((m) => (m.taskId === a.taskId ? { ...m, approvals: keepStillPending(m.approvals ?? [], res?.data?.pending) } : m)),
+      );
+    } catch (e) {
+      alert(t("approvals.processFailed", { error: e instanceof Error ? e.message : t("approvals.errorFallback") }));
+    } finally {
+      setBusy(null);
+    }
+  };
   const hasToolApproval = approvals.some((a) => !isQuestionApproval(a.toolName));
 
   return (
@@ -116,6 +131,11 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
               <textarea
                 value={text}
                 onChange={(e) => setAnswers((prev) => ({ ...prev, [a.approvalId]: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (!shouldSubmitOnEnter({ key: e.key, shiftKey: e.shiftKey, isComposing: e.nativeEvent.isComposing, keyCode: e.keyCode }, { multiline: true })) return;
+                  e.preventDefault();
+                  if (busy !== a.approvalId && text.trim()) void answer(a);
+                }}
                 placeholder={t("approvals.answerPlaceholder")}
                 rows={2}
                 disabled={busy === a.approvalId}
@@ -136,7 +156,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
             </div>
           );
         }
-        const summary = summarizeApprovalArgs(a.args, INLINE_ARGS_SUMMARY_MAX_CHARS);
+        const summary = summarizeApprovalArgs(a.args, INLINE_ARGS_SUMMARY_MAX_CHARS, a.toolName);
         return (
           <div key={a.approvalId} className="space-y-1.5 rounded-md border border-border bg-surface-1 p-2">
             <div className="flex items-center justify-between gap-2">

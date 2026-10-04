@@ -13,7 +13,7 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { chatTurnWithRoleFallback, TurnCallCapExceeded, type AgentRoleState } from './role-client';
 import { AgentTaskAbort } from './types';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
-import { detectOutputRepetition, cutRepeatedOutput } from './output-repetition';
+import { detectOutputRepetition, cutRepeatedOutput, goalRequestsRepetition } from './output-repetition';
 import { recoverTextToolCalls } from './text-tool-calls';
 import { getContextTrimNote, getTransientRetryNote, getOutputRepetitionNote } from '../../prompts/agent-task-turn-loop';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
@@ -85,7 +85,8 @@ export async function callAgentTurnWithBudget(p: TurnCallInput): Promise<TurnCal
         // 도구 호출은 건드리지 않는다. 본문 자체가 텍스트 도구 호출이면 자르지 않는다(호출문이 깨진다).
         const { OUTPUT_REPETITION_STEP_ENABLED: noteOn, OUTPUT_REPETITION_CUT_ENABLED: cutOn } = AGENT_TASK_TURN_LOOP;
         const repetition = noteOn || cutOn ? detectOutputRepetition(result.content) : null;
-        const repetitionCut = !!repetition && cutOn && recoverTextToolCalls(result.content ?? '').length === 0;
+        // 사용자가 일부러 반복 출력을 시킨 작업이면 자르지 않는다(기록은 남긴다).
+        const repetitionCut = !!repetition && cutOn && recoverTextToolCalls(result.content ?? '').length === 0 && !goalRequestsRepetition(p.conversation);
         if (repetition && noteOn) {
             try { p.onNote?.('output_repetition', getOutputRepetitionNote(repetition.repeats, AGENT_TASK_TURN_LOOP.OUTPUT_REPETITION_WINDOW_CHARS, repetition.sample, repetitionCut)); } catch { /* 관측 실패 무시 */ }
         }

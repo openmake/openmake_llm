@@ -157,3 +157,58 @@ export const TASK_HISTORY_INTENT_PATTERNS: readonly RegExp[] = [
     /\b(last time|(previous|earlier|past|prior) (tasks?|runs?|jobs?|work))\b/i,
     /\b(same|like)\b[^\n]{0,40}\b(as before|as last time|as previously|we did before)\b/i,
 ];
+
+/** 메모리 저장 도구 이름 — 승인 바닥(task-sandbox/approval-floor)과 도구 정의가 함께 쓴다. */
+export const MEMORY_SAVE_TOOL_NAME = 'memory_save';
+
+/**
+ * 메모리 저장 도구(memory_save) — 에이전트 작업이 사용자 메모리(user_memories)에 짧은 사실 한 줄을 쓴다.
+ * 쓰기는 다음 대화·작업의 프롬프트에 계속 실리므로, 승인 정책·자동승인과 무관하게 매번 승인 카드로 묻는다
+ * (config/agent-task-approval 의 바닥 종류 memory_write). 그 바닥이 꺼져 있으면 도구를 싣지 않는다.
+ * 서브에이전트(delegate·spawn_agents)에는 주지 않는다 — 작업 런타임의 도구라 호스트 도구 화이트리스트에 없다.
+ */
+export const MEMORY_SAVE_TOOL = {
+    /** AGENT_TASK_MEMORY_SAVE_TOOL=false 로 끈다. 기본 켜짐 — 저장마다 사람이 문장을 보고 승인한다. */
+    ENABLED: process.env.AGENT_TASK_MEMORY_SAVE_TOOL !== 'false',
+    /**
+     * 노출 조건 — 'intent'(기본): 목표가 저장을 청할 때만(MEMORY_SAVE_INTENT_PATTERNS) 싣는다. 'always': 모든 작업에 싣는다.
+     * AGENT_TASK_MEMORY_SAVE_EXPOSURE. 판단 경계 B형 — 결정적 프리필터로 좁히고 호출 여부는 모델이 본 턴에서 정한다.
+     */
+    EXPOSURE: (process.env.AGENT_TASK_MEMORY_SAVE_EXPOSURE === 'always' ? 'always' : 'intent') as 'intent' | 'always',
+    /** 한 작업(런타임 하나)이 저장할 수 있는 건수. 재개된 작업은 다시 센다. AGENT_TASK_MEMORY_SAVE_MAX_PER_TASK */
+    MAX_PER_TASK: num(process.env.AGENT_TASK_MEMORY_SAVE_MAX_PER_TASK, 3),
+    /** 저장 문장 길이 상한(자) — 자동 추출(config/memory-extraction 의 maxLen)과 같은 값. AGENT_TASK_MEMORY_SAVE_MAX_CHARS */
+    MAX_CHARS: num(process.env.AGENT_TASK_MEMORY_SAVE_MAX_CHARS, 300),
+} as const;
+
+/**
+ * 메모리 저장 도구를 실을 목표 — 기억·저장을 청하는 표현. "내가 기억하는 바로는"·"메모리 사용량"·"memory leak" 처럼
+ * 기억·메모리를 말하기만 하는 목표에는 걸리지 않게 명령형과 "~에 저장" 꼴만 본다.
+ */
+export const MEMORY_SAVE_INTENT_PATTERNS: readonly RegExp[] = [
+    /기억\s*해\s*(줘|주세요|주십시오|주길|둬|두세요|두어|놔|놓아|달라)/,
+    /기억\s*해(?![가-힣])/,
+    /기억\s*(하도록|하세요|하십시오)/,
+    /잊지\s*(마|말)/,
+    /(?<![가-힣])(메모리|장기\s*기억)\s*에\s*(저장|추가|기록|남겨|넣어)/,
+    /memory[_ ]save/i,
+    /\bremember\s+(that|this|my|me|i|to\s+always|to\s+never)\b/i,
+    /\b(save|store|add|write|commit)\b[^\n]{0,40}\b(to|in|into)\s+(your\s+|my\s+|the\s+|long[- ]term\s+)?memory\b/i,
+    /\b(don'?t|do not|never)\s+forget\b/i,
+];
+
+/**
+ * 저장 문장의 지시문 형태 — 메모리는 다음 대화의 시스템 프롬프트에 실리므로, 사실이 아니라 모델에게 내리는 지시처럼 읽히는
+ * 문장은 저장하지 않는다. 영어의 흔한 덮어쓰기 문구는 utils/input-sanitizer 의 검사가 먼저 보고, 여기는 그 밖(한국어·역할 흉내)이다.
+ */
+export const MEMORY_SAVE_INJECTION_PATTERNS: readonly RegExp[] = [
+    /(이전|앞선|위의|기존|모든)\s*(지시|지침|명령|규칙|프롬프트)\S*\s*(을|를|은|는)?\s*(무시|잊어|따르지)/,
+    /(시스템|system)\s*(프롬프트|prompt|메시지|message)/i,
+    /(?:^|\s)[[<(]\s*\/?\s*(system|assistant|user|developer|시스템)\s*[\]>)]/i,
+    /(?:^|\s)(system|assistant|developer)\s*:/i,
+    /\b(ignore|disregard|forget|override|bypass)\b[^\n]{0,30}\b(instructions?|rules?|guidelines?|prompts?|restrictions?|safety)\b/i,
+    /\bfrom now on\b[^\n]{0,20}\byou\b/i,
+    /\byou (are now|must|should|will)\b/i,
+    /(승인|확인)\s*(없이|을\s*건너|을\s*생략)/,
+    /\b(auto[- ]?approve|without (asking|approval|confirmation))\b/i,
+];

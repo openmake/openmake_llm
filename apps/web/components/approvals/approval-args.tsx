@@ -7,9 +7,21 @@
  */
 import { DiffView } from "@/components/chat/diff-view";
 
-/** PURE: 인자 요약 — 질문·명령은 그 문자열을, 그 외는 JSON 을 보인다. maxChars 를 넘으면 잘라내고 full 에 전문을 싣는다. */
-export function summarizeApprovalArgs(args: Record<string, unknown> | undefined, maxChars: number): { text: string; full?: string } {
+/** 사용자 메모리에 쓰는 도구 — 저장할 문장을 자르지 않고 그대로 보인다(사용자가 문장을 읽고 승인한다). */
+const MEMORY_SAVE_TOOL = "memory_save";
+
+/** PURE: 이 승인이 사용자 메모리 쓰기인가. */
+export function isMemorySaveApproval(toolName: string | undefined): boolean {
+  return toolName === MEMORY_SAVE_TOOL;
+}
+
+/**
+ * PURE: 인자 요약 — 질문·명령은 그 문자열을, 그 외는 JSON 을 보인다. maxChars 를 넘으면 잘라내고 full 에 전문을 싣는다.
+ * 메모리 저장(toolName 이 memory_save)은 저장할 문장 전문을 자르지 않고 보인다.
+ */
+export function summarizeApprovalArgs(args: Record<string, unknown> | undefined, maxChars: number, toolName?: string): { text: string; full?: string } {
   if (!args) return { text: "" };
+  if (isMemorySaveApproval(toolName) && typeof args.content === "string") return { text: args.content };
   const raw =
     typeof args.question === "string"
       ? args.question
