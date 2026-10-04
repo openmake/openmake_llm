@@ -82,6 +82,11 @@ export const RL_RESEARCH = {
  * 생성(POST /api/agent-tasks)만 createLimit 으로 보수적으로 별도 제한한다.
  * GET/HEAD(목록·상세 폴링)는 리미터 제외 — 프론트 진행 폴링이 빈번해 묶으면 429 로
  * 진행 표시가 죽는다(research 리미터와 동일 정책).
+ *
+ * createLimit(15분 10건)은 **사용자(액터)별** 예산이다 — 같은 사무실 IP 를 쓰는 사용자끼리 나눠 쓰지 않으므로
+ * 사용자 수(100명)와 무관하다(2026-10-05 검토). 사용자당 동시 실행이 1건(AGENT_TASK_QUEUE_USER_MAX)이고 작업 하나가
+ * 보통 1분 이상이라 한 사람이 15분에 실제로 끝낼 수 있는 양과 비슷하다. 올리면 전역 동시 2건인 대기열만 길어진다
+ * (100명 × 10건 = 15분에 최대 1000건 유입). 연속 시험처럼 더 필요하면 RL_AGENT_TASK_CREATE 로 조정한다.
  */
 export const RL_AGENT_TASK = {
     windowMs: WINDOW_15M,

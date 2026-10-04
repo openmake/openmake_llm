@@ -22,7 +22,7 @@ import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskStuckNudge, getAgentTaskEmptyResponseNudge, AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote } from '../prompts/agent-task-prompt';
+import { getAgentTaskStuckNudge, getAgentTaskEmptyResponseNudge, AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { isTerminalStatus, notifyTaskTerminal } from './agent-task/terminal-notify';
@@ -36,13 +36,12 @@ import { TaskRuntime } from './task-sandbox/runtime';
 import { getApprovalRegistry } from './task-sandbox/approval-gate';
 import { currentPlanStepIndex } from './task-sandbox/planning';
 import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
-import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { parkForMissingDevice } from './agent-task/device-wait';
 import { isInternalOnlyRun } from '../config/internal-only-policy';
 import { auditInternalOnly } from './agent-task/internal-only-audit';
-import { AgentTaskTurnTimeout } from './agent-task/turn-call';
-import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
+import { partialResultOf } from './agent-task/turn-call';
+import { injectTaskInputs } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { initWorkspaceBaseline } from './agent-task/code-diff';
@@ -288,22 +287,8 @@ export class AgentTaskService {
                     taskRuntime = null; stepNumber = await handleSandboxUnavailable(e, { taskId, signal, stepNumber, emitStep, conversation, remote: !!remoteExecutor });
                 }
             }
-            // 입력 첨부 주입 — 파일은 샌드박스 있으면 workspace(uploads/)에 기록(셸/파이썬으로 읽음), 없으면
-            // goal 에 fileContext 주입. 이미지는 goal vision 채널(+샌드박스면 원본 바이트도). workspace 는
-            // 실패/취소 시 삭제되므로 resume 에서 재기록(멱등 overwrite). goal 주입은 신규 시작 한정.
-            const inputFiles = (input.files ?? []).filter((f) => !!f && typeof f.name === 'string');
-            const inputImages = (input.images ?? []).filter((s) => typeof s === 'string' && s.length > 0);
-            if (inputFiles.length > 0 || inputImages.length > 0) {
-                const goalMsg = input.resume ? undefined : conversation.find((m) => m.role === 'user');
-                if (goalMsg && inputImages.length > 0) goalMsg.images = inputImages;
-                if (taskRuntime) {
-                    const lines = await writeInputFilesToWorkspace(taskRuntime, inputFiles, inputImages);
-                    if (goalMsg && lines.length > 0) goalMsg.content += getAgentTaskUploadedFilesNote(lines);
-                } else if (goalMsg && inputFiles.length > 0) {
-                    // 샌드박스 OFF/degrade — 채팅과 동일한 fileContext 주입(캡 포함).
-                    goalMsg.content += buildFileContext(inputFiles);
-                }
-            }
+            // 입력 첨부 주입(파일·이미지) — 상세는 agent-task/task-inputs.
+            await injectTaskInputs(input, conversation, taskRuntime);
             // 코드 작업 diff 캡처(openmake_code v1) — 첨부까지 기록된 시점을 git baseline 스냅샷(멱등·fail-open).
             if (taskRuntime && sandboxCfg.codeDiffEnabled) await initWorkspaceBaseline(taskRuntime, preTask);
 
@@ -581,14 +566,9 @@ export class AgentTaskService {
             const aborted = signal.aborted || (err instanceof AgentTaskAbort && err.kind === 'aborted');
             const kind = aborted ? 'aborted' : (err instanceof AgentTaskAbort ? err.kind : 'failed');
             const msg = err instanceof Error ? err.message : String(err);
-            await update({
-                status: aborted ? 'cancelled' : 'failed',
-                error: aborted ? kind : msg,
-                // 시간 예산으로 끊긴 마무리 턴의 부분 본문은 결과로 남긴다(종전엔 result NULL).
-                ...(err instanceof AgentTaskTurnTimeout && err.partialContent
-                    ? { result: `[시간 예산 초과로 중단된 부분 답변]\n\n${err.partialContent}` }
-                    : {}),
-            }).catch((e) => logger.warn(`[AgentTask] 상태 갱신 실패: ${e}`));
+            // 시간 예산으로 끊긴 마무리 턴의 부분 본문은 결과로 남긴다(turn-call 의 partialResultOf).
+            await update({ status: aborted ? 'cancelled' : 'failed', error: aborted ? kind : msg, ...partialResultOf(err) })
+                .catch((e) => logger.warn(`[AgentTask] 상태 갱신 실패: ${e}`));
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             AgentTaskService.running.delete(taskId);

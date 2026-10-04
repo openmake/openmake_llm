@@ -8,6 +8,9 @@ import type { AgentTaskInputFile } from './types';
 import { resolveStoredPath } from './upload-store';
 import { createLogger } from '../../utils/logger';
 import { AGENT_TASK_LIMITS, DOC_EXTRACT_LIMITS } from '../../config/runtime-limits';
+import { getAgentTaskUploadedFilesNote } from '../../prompts/agent-task-prompt';
+import { buildFileContext } from '../chat-service/attach-context';
+import type { ChatMessage } from '../../llm/types';
 
 /**
  * 작업 생성 시 기본 턴 수 결정 — 명시 maxTurns 우선. 대형 첨부(생성 시점 추출 상한 초과
@@ -110,4 +113,28 @@ export async function writeInputFilesToWorkspace(
         await write(rel, Buffer.from(m[2], 'base64'), ' (첨부 이미지 — 대화에도 vision 으로 전달됨)');
     }
     return lines;
+}
+
+/**
+ * 입력 첨부 주입 — 파일은 샌드박스가 있으면 workspace(uploads/)에 기록(셸/파이썬으로 읽음), 없으면 goal 에 fileContext 주입.
+ * 이미지는 goal vision 채널(+샌드박스면 원본 바이트도). workspace 는 실패/취소 시 삭제되므로 resume 에서 재기록(멱등 overwrite).
+ * goal 주입은 신규 시작 한정.
+ */
+export async function injectTaskInputs(
+    input: { files?: AgentTaskInputFile[]; images?: string[]; resume?: unknown },
+    conversation: ChatMessage[],
+    taskRuntime: TaskRuntime | null,
+): Promise<void> {
+    const inputFiles = (input.files ?? []).filter((f) => !!f && typeof f.name === 'string');
+    const inputImages = (input.images ?? []).filter((s) => typeof s === 'string' && s.length > 0);
+    if (inputFiles.length === 0 && inputImages.length === 0) return;
+    const goalMsg = input.resume ? undefined : conversation.find((m) => m.role === 'user');
+    if (goalMsg && inputImages.length > 0) goalMsg.images = inputImages;
+    if (taskRuntime) {
+        const lines = await writeInputFilesToWorkspace(taskRuntime, inputFiles, inputImages);
+        if (goalMsg && lines.length > 0) goalMsg.content += getAgentTaskUploadedFilesNote(lines);
+    } else if (goalMsg && inputFiles.length > 0) {
+        // 샌드박스 OFF/degrade — 채팅과 동일한 fileContext 주입(캡 포함).
+        goalMsg.content += buildFileContext(inputFiles);
+    }
 }
