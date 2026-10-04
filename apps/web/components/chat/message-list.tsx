@@ -22,7 +22,7 @@ import { ServedModelBadge } from "./served-model-badge";
 import { ToolCallCards } from "./tool-call-cards";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
-import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "@/components/approvals/approval-args";
+import { ApprovalArgsFull, ApprovalPreview, ApprovalSiteWrites, summarizeApprovalArgs } from "@/components/approvals/approval-args";
 import { QuestionChoices } from "@/components/approvals/question-choices";
 import { isNearBottom } from "@/lib/chat-scroll";
 import { COPY_FEEDBACK_RESET_MS, REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
@@ -161,6 +161,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
           <div key={a.approvalId} className="space-y-1.5 rounded-md border border-border bg-surface-1 p-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
+                <ApprovalSiteWrites args={a.args} label={t("approvals.siteWrites")} />
                 <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
                 <span className="ml-2 break-all text-xs text-muted">{summary.text}</span>
                 <ApprovalArgsFull full={summary.full} label={t("approvals.fullArgs", { chars: summary.full?.length ?? 0 })} />
@@ -363,6 +364,9 @@ const TONE_BADGE: Record<TaskTone, string> = {
   fail: "bg-danger-soft text-danger",
 };
 
+/** 서버 주차 사유 — 로컬 기기 연결 대기(config/agent-task-park-reasons 와 같은 값) */
+const DEVICE_WAIT_REASON = "device_wait";
+
 function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; approvals?: PendingApproval[]; taskId?: string }) {
   const t = useTranslations("chat");
   const cfg = TASK_STATUS[task.status] ?? TASK_STATUS.running;
@@ -377,7 +381,7 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
         </span>
         <span className="text-[13px] font-semibold tracking-tight text-fg">{t("agentTask.title")}</span>
         <span className={cn("ml-auto rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums", TONE_BADGE[cfg.tone])}>
-          {t(cfg.badgeKey)}{cfg.tone !== "ok" && task.currentTurn > 0 ? ` · ${t("agentTask.turn", { turn: task.currentTurn })}` : ""}
+          {t(task.status === "paused" && task.waitReason === DEVICE_WAIT_REASON ? "status.waitingDevice" : cfg.badgeKey)}{cfg.tone !== "ok" && task.currentTurn > 0 ? ` · ${t("agentTask.turn", { turn: task.currentTurn })}` : ""}
         </span>
       </div>
       <div className="flex flex-col gap-2.5 px-3.5 py-3">

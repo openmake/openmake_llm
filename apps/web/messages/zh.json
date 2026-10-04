@@ -381,6 +381,7 @@
       "preview": "变更预览",
       "procedurePreview": "查看将执行的步骤",
       "fullArgs": "查看全部内容（{chars} 个字符）",
+      "siteWrites": "将发送到允许列表之外的网站",
       "elicitHint": "{server} 服务器请求输入 · 字段: {fields}",
       "elicitJsonHint": "字段多于一个时请用 JSON 回答: {example}"
     },
@@ -417,6 +418,7 @@
       "pending": "等待中",
       "running": "运行中",
       "paused": "等待批准",
+      "waitingDevice": "等待设备连接",
       "completed": "已完成",
       "failed": "失败",
       "cancelled": "已取消"
@@ -2413,6 +2415,7 @@
       "preview": "执行前变更预览",
       "procedurePreview": "查看将执行的步骤",
       "fullArgs": "查看全部内容（{chars} 个字符）",
+      "siteWrites": "将发送到允许列表之外的网站",
       "assignedToMe": "已转交给我",
       "assignedAway": "已转交",
       "reassign": "转交",

@@ -356,6 +356,8 @@ export type WsServerEvent =
       approvalId?: string;
       /** 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다 */
       reason?: "assigned" | "escalated" | "revoked" | "plan_edited";
+      /** 멈춘 작업이 기다리는 것 — "device_wait" 는 로컬 기기 연결 대기, "hitl_parked" 는 사용자 답 대기 */
+      waitReason?: string;
       /** 사용자별 순번(증가) — 재연결 때 `agent_task_resume{afterSeq}` 로 보내면 그 뒤 이벤트만 다시 받는다 */
       seq?: number;
       /** 서버가 이벤트를 낸 시각(epoch ms) */

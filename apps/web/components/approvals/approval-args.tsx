@@ -31,6 +31,31 @@ export function summarizeApprovalArgs(args: Record<string, unknown> | undefined,
   return raw.length > maxChars ? { text: `${raw.slice(0, maxChars)}…`, full: raw } : { text: raw };
 }
 
+/**
+ * PURE: 허용 목록 밖 사이트에 보내는 쓰기 — 서버가 승인 인자에 실어 준 `offListWrites` 를 "사이트: 내용" 줄로 바꾼다.
+ * 자동 승인·건너뜀에서도 묻는 이유가 이것이라, JSON 앞부분에 가려지지 않게 카드 맨 위에 따로 보인다.
+ */
+export function siteWriteLines(args: Record<string, unknown> | undefined): string[] {
+  const list = args?.offListWrites;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((w) => {
+    const { host, detail } = (w ?? {}) as { host?: unknown; detail?: unknown };
+    return typeof host === "string" && host ? [typeof detail === "string" && detail ? `${host}: ${detail}` : host] : [];
+  });
+}
+
+/** 사이트 쓰기 안내 — 줄이 없으면 아무것도 그리지 않는다. */
+export function ApprovalSiteWrites({ args, label }: { args?: Record<string, unknown>; label: string }) {
+  const lines = siteWriteLines(args);
+  if (lines.length === 0) return null;
+  return (
+    <div className="mb-1 rounded-md border border-warning/40 bg-warning-soft px-2 py-1 text-xs text-fg">
+      <p className="font-medium">{label}</p>
+      {lines.map((l, i) => <p key={i} className="break-all font-mono text-[11px]">{l}</p>)}
+    </div>
+  );
+}
+
 /** 잘린 인자의 전문 — full 이 없으면(잘리지 않음) 아무것도 그리지 않는다. */
 export function ApprovalArgsFull({ full, label }: { full?: string; label: string }) {
   if (!full) return null;

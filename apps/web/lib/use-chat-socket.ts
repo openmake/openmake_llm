@@ -536,12 +536,12 @@ export function useChatSocket() {
             (m) => m.taskId && !["completed", "failed", "cancelled"].includes(m.agentTask?.status ?? ""),
           );
           for (const m of open) {
-            void ApiClient.get<{ data: { task: { status: string; progress: number; current_turn: number } } }>(`/api/agent-tasks/${m.taskId}`)
+            void ApiClient.get<{ data: { task: { status: string; progress: number; current_turn: number; waitReason?: string } } }>(`/api/agent-tasks/${m.taskId}`)
               .then((r) => {
                 const task = r?.data?.task;
                 if (!task) return;
                 setChatHistory((prev) => prev.map((x) => (x.taskId === m.taskId
-                  ? { ...x, agentTask: { goal: x.agentTask?.goal ?? "", ...(x.agentTask ?? {}), status: task.status, progress: task.progress, currentTurn: task.current_turn } as AgentTaskState }
+                  ? { ...x, agentTask: { goal: x.agentTask?.goal ?? "", ...(x.agentTask ?? {}), status: task.status, progress: task.progress, currentTurn: task.current_turn, waitReason: task.waitReason } as AgentTaskState }
                   : x)));
               })
               .catch(() => { /* 조회 실패 — 다음 이벤트가 맞춘다 */ });
@@ -575,6 +575,8 @@ export function useChatSocket() {
                         goal: m.agentTask?.goal ?? "",
                         ...(m.agentTask ?? {}),
                         status, currentTurn, progress,
+                        // 대기 사유는 그 이벤트의 것만 — 다시 돌기 시작하면 지운다
+                        waitReason: status === "paused" ? (data.waitReason ?? m.agentTask?.waitReason) : undefined,
                         ...extra,
                       } as AgentTaskState,
                     }

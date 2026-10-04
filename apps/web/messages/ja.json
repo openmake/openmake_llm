@@ -381,6 +381,7 @@
       "preview": "変更プレビュー",
       "procedurePreview": "実行される手順を表示",
       "fullArgs": "全文を表示（{chars}文字）",
+      "siteWrites": "許可リストにないサイトへ送信します",
       "elicitHint": "{server} サーバーからの入力リクエスト · 項目: {fields}",
       "elicitJsonHint": "項目が複数ある場合は JSON で回答してください: {example}"
     },
@@ -417,6 +418,7 @@
       "pending": "待機中",
       "running": "実行中",
       "paused": "承認待ち",
+      "waitingDevice": "デバイス接続待ち",
       "completed": "完了",
       "failed": "失敗",
       "cancelled": "キャンセル済み"
@@ -2413,6 +2415,7 @@
       "preview": "実行前の変更プレビュー",
       "procedurePreview": "実行される手順を表示",
       "fullArgs": "全文を表示（{chars}文字）",
+      "siteWrites": "許可リストにないサイトへ送信します",
       "assignedToMe": "自分に移管",
       "assignedAway": "移管済み",
       "reassign": "移管",

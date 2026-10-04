@@ -19,6 +19,11 @@ export interface ParkedTaskRow {
 }
 
 export class AgentTaskParkRepository extends BaseRepository {
+    /** 시작 요청의 승인 정책을 남긴다(183) — 주차에서 재개될 때 같은 정책으로 이어가게. */
+    async setApprovalPolicy(taskId: string, policy: string): Promise<void> {
+        await this.query('UPDATE agent_tasks SET approval_policy = $2 WHERE id = $1', [taskId, policy]);
+    }
+
     /** 주차 중인 작업의 사유(hitl_parked·device_wait) — 주차가 아니면 null. 화면이 "무엇을 기다리는지" 보여 주는 데 쓴다. */
     async getParkReason(taskId: string): Promise<string | null> {
         const r = await this.query<{ reason: string | null }>(

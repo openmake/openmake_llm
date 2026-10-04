@@ -55,6 +55,7 @@ import { replyNudge } from './agent-task/one-shot-notice';
 import { pickNoToolNudge } from './agent-task/turn-stall';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
+import { effectiveApprovalPolicy, persistApprovalPolicy } from './agent-task/approval-policy-restore';
 import { createSandboxWaiting, handleSandboxUnavailable } from './agent-task/sandbox-unavailable';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
@@ -189,6 +190,9 @@ export class AgentTaskService {
             // "나머지 모두 승인" 도 함께 복원(124) — 종전엔 메모리뿐이라 재시작 후 다시 물었다.
             if (input.resume) { totalTokens = Number(preTask?.total_tokens ?? 0); cacheUsage.restore(preTask); }
             if (input.resume && preTask?.auto_approve) getApprovalRegistry().setAutoApprove(taskId, true);
+            // 승인 정책(183) — 처음 시작이면 남기고, 재개면 남긴 값으로 되살린다(주차 재개는 요청 본문이 없다).
+            const approvalPolicy = effectiveApprovalPolicy(input, preTask?.approval_policy);
+            await persistApprovalPolicy(taskId, input);
 
             // resume 은 checkpoint(end-of-turn conversation)에서 복원, 새 시작은 system 에 활성 스킬
             // 지식(prompt_md)+크로스-task 학습(5-2, 플래그 OFF/실패 시 '') 주입. resume 은 old system 유지.
@@ -237,7 +241,7 @@ export class AgentTaskService {
             // 설정은 한 번만 읽어 스냅샷 공유. 승인 3모드는 input.approvalPolicy 로 이 실행에만 override
             // (비영속, resume은 전역 폴백; requiresApproval 호출부 2곳이 이 cfg 를 읽어 단일 지점 주입).
             // Cowork D1a: 실행 백엔드(docker/local)·승인 정책 결정 — 상세는 agent-task/executor-select.
-            const { sandboxCfg, runtimeEnabled, remoteExecutor } = resolveExecutorPlan(input, taskId, userId);
+            const { sandboxCfg, runtimeEnabled, remoteExecutor } = resolveExecutorPlan({ ...input, approvalPolicy }, taskId, userId);
             if (runtimeEnabled) {
                 try {
                     // G4 위임 — 상세는 agent-task/delegate (SUBAGENT_ENABLED 시 depth=1 tool-loop 승격,
@@ -567,7 +571,9 @@ export class AgentTaskService {
             await finalizeMaxTurnsExhausted({ taskId, userId, turnCeiling, conversation, taskRuntime, sandboxCfg, stepNumber, update, emitStep, held: verifyHold.answer });
         } catch (err) {
             // 질문 응답 대기 주차(F16.7) — 체크포인트·표식은 turn-executor 가 남겼다. 실행만 끝내 슬롯을 반납한다(재개는 hitl-park)
-            if (err instanceof AgentTaskParked && !signal.aborted) { parked = true; logger.info(`[AgentTask] 질문 응답 대기로 주차: ${taskId}`); return; }
+            if (err instanceof AgentTaskParked && !signal.aborted) { // 주차 — 사유를 실어 화면이 무엇을 기다리는지 보이게 한다
+                parked = true; emitAgentTaskProgress({ userId, taskId, status: 'paused', progress: curProgress, currentTurn: curTurn, waitReason: err.message }); logger.info(`[AgentTask] 주차(${err.message}): ${taskId}`); return;
+            }
             // signal.aborted 가 true 면 client.chat() 호출 도중 던져진 AbortError
             // ("Request was aborted") 도 사용자 취소로 분류 — 턴 사이 abort 뿐 아니라
             // LLM 호출 중간 취소도 cancelled 로 일관 처리.
