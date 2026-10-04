@@ -16,7 +16,8 @@
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import { z } from 'zod';
-import { getTaskSandboxConfig, BROWSER_SESSION, type TaskSandboxConfig } from '../../config/task-sandbox';
+import { getTaskSandboxConfig, BROWSER_SESSION, BROWSER_URL_GUARD_ENABLED, browserDestGuardEnv, type TaskSandboxConfig } from '../../config/task-sandbox';
+import { validateOutboundUrl } from '../../security/ssrf-guard';
 import { runProcess, sanitizeId } from './sandbox';
 import { SANDBOX_WORKSPACE_DIR } from './workspace-path';
 import { BROWSER_SESSION_SCRIPT } from './browser-session-script';
@@ -55,6 +56,18 @@ export const browserSessionInputSchema = z.discriminatedUnion('op', [
 export type BrowserSessionInput = z.infer<typeof browserSessionInputSchema>;
 
 export const browserSessionStartSchema = z.object({ url: httpUrl.optional() });
+
+/**
+ * 넘겨받은 브라우저가 가면 안 되는 주소인가(내부망·루프백·메타데이터) — 에이전트의 browser 도구와 같은 기준·같은 스위치
+ * (browser-url-guard). 사용자가 직접 조작한다고 서버 쪽 망에 더 넓게 닿아서는 안 된다.
+ * 여기서는 이동하려는 주소만 본다 — 리다이렉트·하위 요청은 컨테이너 안 검사 프록시가 막는다(세션 스크립트).
+ */
+export async function isBlockedSessionUrl(
+    url: string, validate: (url: string) => Promise<unknown> = (u) => validateOutboundUrl(u),
+): Promise<boolean> {
+    if (!BROWSER_URL_GUARD_ENABLED) return false;
+    try { await validate(url); return false; } catch { return true; }
+}
 
 /**
  * PURE: 에이전트가 browser 도구로 마지막에 연 주소(goto) — 넘겨받을 때 그 화면에서 시작하게 한다.
@@ -110,6 +123,8 @@ export function buildBrowserSessionRunArgs(
     a.push('-e', `OMK_VIEW_W=${BROWSER_SESSION.VIEWPORT.width}`, '-e', `OMK_VIEW_H=${BROWSER_SESSION.VIEWPORT.height}`);
     a.push('-e', `OMK_JPEG_QUALITY=${BROWSER_SESSION.JPEG_QUALITY}`);
     if (opts.proxyUrl) a.push('-e', `BROWSER_PROXY=${opts.proxyUrl}`);
+    // 프록시가 없는 배포 — 세션 스크립트가 컨테이너 안 검사 프록시를 띄울 때 쓰는 설정(에이전트 브라우저와 같은 값).
+    else for (const e of browserDestGuardEnv()) a.push('-e', e);
     if (opts.startUrl) a.push('-e', `OMK_START_URL=${opts.startUrl}`);
     a.push(cfg.image, 'node', `${SANDBOX_WORKSPACE_DIR}/${BROWSER_SESSION.SCRIPT_FILE}`);
     return a;

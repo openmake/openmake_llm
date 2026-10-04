@@ -1,6 +1,6 @@
 import {
     browserSessionContainerName, buildBrowserSessionRunArgs, buildBrowserSessionExecArgs,
-    browserSessionInputSchema, browserSessionStartSchema, BROWSER_SESSION_SCRIPT, lastBrowserUrl,
+    browserSessionInputSchema, browserSessionStartSchema, BROWSER_SESSION_SCRIPT, lastBrowserUrl, isBlockedSessionUrl,
 } from './browser-session';
 import { getTaskSandboxConfig, BROWSER_SESSION } from '../../config/task-sandbox';
 
@@ -45,6 +45,40 @@ describe('browser-session (사용자가 넘겨받는 브라우저)', () => {
         it('시작 주소는 환경변수로만 넘긴다(명령 인자로 해석되지 않는다)', () => {
             const a = buildBrowserSessionRunArgs('n', '/ws/t1', cfg, { startUrl: 'https://example.com/a?b=1' });
             expect(a).toContain('OMK_START_URL=https://example.com/a?b=1');
+        });
+    });
+
+    describe('목적지 검사(에이전트 브라우저와 같은 기준)', () => {
+        const saved = { ...process.env };
+        afterEach(() => { process.env = { ...saved }; });
+
+        it('프록시가 없으면 컨테이너 안 검사 설정(허용 예외)을 넘긴다', () => {
+            process.env.SSRF_ALLOWED_HOSTS = 'intra.example:8080';
+            delete process.env.TASK_SANDBOX_BROWSER_URL_GUARD;
+            expect(buildBrowserSessionRunArgs('n', '/ws/t1', cfg, {})).toContain('BROWSER_GUARD_ALLOWED_HOSTS=intra.example:8080');
+        });
+        it('검사를 끈 배포에서는 끄라고 넘긴다', () => {
+            process.env.TASK_SANDBOX_BROWSER_URL_GUARD = 'false';
+            expect(buildBrowserSessionRunArgs('n', '/ws/t1', cfg, {})).toContain('BROWSER_DEST_GUARD=off');
+        });
+        it('egress 프록시를 쓰면 넘기지 않는다(프록시가 검사한다)', () => {
+            process.env.SSRF_ALLOWED_HOSTS = 'intra.example:8080';
+            const a = buildBrowserSessionRunArgs('n', '/ws/t1', cfg, { proxyUrl: 'http://omk-egress-proxy:8888' });
+            expect(a.join(' ')).not.toContain('BROWSER_GUARD_ALLOWED_HOSTS');
+        });
+        it('세션 스크립트는 이미지에 검사 프록시가 있으면 띄워 루프백까지 지나게 한다', () => {
+            expect(BROWSER_SESSION_SCRIPT).toContain("'/opt/browser/guard-proxy.mjs'");
+            expect(BROWSER_SESSION_SCRIPT).toContain("bypass: '<-loopback>'");
+            expect(BROWSER_SESSION_SCRIPT).toContain("BROWSER_DEST_GUARD !== 'off'");
+        });
+        it('isBlockedSessionUrl — 검사가 막는 주소만 true', async () => {
+            const validate = async (u: string) => { if (u.includes('169.254.')) throw new Error('blocked'); };
+            expect(await isBlockedSessionUrl('http://169.254.169.254/', validate)).toBe(true);
+            expect(await isBlockedSessionUrl('https://example.com/', validate)).toBe(false);
+        });
+        it('isBlockedSessionUrl — 실제 가드로 루프백·메타데이터 주소를 막는다(이름 풀이 없는 IP)', async () => {
+            expect(await isBlockedSessionUrl('http://127.0.0.1:52418/')).toBe(true);
+            expect(await isBlockedSessionUrl('http://169.254.169.254/latest/meta-data/')).toBe(true);
         });
     });
 
