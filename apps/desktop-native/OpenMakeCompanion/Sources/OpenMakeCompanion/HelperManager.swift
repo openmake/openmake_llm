@@ -22,6 +22,14 @@ final class HelperManager: NSObject, ObservableObject {
     /** 루트별 최근 상태 텍스트 (연결됨/재연결 중/서버 오류 등). */
     @Published var rootStatus: [String: String] = [:]
     @Published var autoApproveCount = 0
+    /** 브라우저 제어권 — true 면 사용자가 넘겨받은 상태(에이전트의 브라우저 요청을 실행하지 않는다). */
+    @Published var browserUserControl = false
+
+    /** 로컬 브라우저 사용 허용(설정) — 켜면 헬퍼가 전용 프로필 Chrome 을 쓸 수 있다고 서버에 알린다. 기본 꺼짐. */
+    var browserEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: "browserEnabled") }
+        set { UserDefaults.standard.set(newValue, forKey: "browserEnabled") }
+    }
 
     private var process: Process?
     private var stdinPipe: Pipe?
@@ -95,6 +103,7 @@ final class HelperManager: NSObject, ObservableObject {
         p.arguments = [helperURL.path, "--server", backend.url]
         var env = ProcessInfo.processInfo.environment
         env["OMK_COMPANION_API_KEY"] = apiKey
+        if browserEnabled { env["OMK_COMPANION_BROWSER"] = "1" } else { env.removeValue(forKey: "OMK_COMPANION_BROWSER") }
         p.environment = env
         let inPipe = Pipe(), outPipe = Pipe()
         p.standardInput = inPipe
@@ -189,6 +198,23 @@ final class HelperManager: NSObject, ObservableObject {
 
     func clearAutoApprove() { send(["cmd": "clearAutoApprove"]) }
 
+    /** 브라우저 제어권 전환 — 넘겨받으면 에이전트 입력이 멈추고, 돌려주면 에이전트가 현재 화면을 다시 읽는다. */
+    func setBrowserUserControl(_ user: Bool) { send(["cmd": "browserControl", "user": user]) }
+    /** 실행 중인 브라우저 작업 즉시 중지. */
+    func stopBrowser() { send(["cmd": "browserStop"]) }
+
+    /** 브라우저 사용 허용 변경 — 헬퍼 재기동(spawn env)으로 반영하고 연결을 되살린다. */
+    func setBrowserEnabled(_ on: Bool) {
+        guard on != browserEnabled else { return }
+        browserEnabled = on
+        browserUserControl = false
+        let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
+        stopHelper()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            for f in folders { self.connect(folder: f) }
+        }
+    }
+
     /** 백엔드 전환 — 헬퍼 재기동(서버 URL 은 spawn 인자) 후 재연결. */
     func switchBackend(_ id: String) {
         backendId = id
@@ -242,6 +268,8 @@ final class HelperManager: NSObject, ObservableObject {
             }
         case "autoApprove":
             autoApproveCount = ev["count"] as? Int ?? 0
+        case "browserControl":
+            browserUserControl = ev["user"] as? Bool ?? false
         case "confirm":
             presentConfirm(ev)
         case "taskEnd":

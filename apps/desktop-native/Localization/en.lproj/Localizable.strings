@@ -84,3 +84,9 @@
 "update.script.replace" = "Could not replace the existing app.";
 "update.script.rollback" = "Installing the new version failed, so the previous version was restored.";
 "update.script.reopen" = "The update succeeded, but the app could not be reopened.";
+"menu.browser.takeover" = "Take Over Browser (Pause Agent)";
+"menu.browser.release" = "Hand Back Browser (Resume Agent)";
+"menu.browser.stop" = "Stop Browser Task";
+"settings.browser" = "Browser";
+"settings.browser.enable" = "Allow the agent to use a browser";
+"settings.browser.help" = "When on, the agent can open and operate web pages in a dedicated Chrome window with its own profile. It does not use the logins of your everyday Chrome. Typing into sites that are not on the allowed list asks for your approval on the web.";

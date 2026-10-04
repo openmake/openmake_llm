@@ -84,3 +84,9 @@
 "update.script.replace" = "无法替换现有应用。";
 "update.script.rollback" = "新版本安装失败，已恢复为之前的版本。";
 "update.script.reopen" = "更新已完成，但无法重新打开应用。";
+"menu.browser.takeover" = "接管浏览器（暂停代理）";
+"menu.browser.release" = "交还浏览器（恢复代理）";
+"menu.browser.stop" = "停止浏览器任务";
+"settings.browser" = "浏览器";
+"settings.browser.enable" = "允许代理使用浏览器";
+"settings.browser.help" = "开启后，代理可以在专用的 Chrome 窗口（独立配置文件）中打开并操作网页。不会使用您日常 Chrome 的登录信息。向未列入允许列表的网站输入内容时，会在网页端请求您的批准。";

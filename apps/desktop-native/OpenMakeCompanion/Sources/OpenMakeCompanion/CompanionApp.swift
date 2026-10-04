@@ -77,6 +77,13 @@ struct MenuContent: View {
         if helper.autoApproveCount > 0 {
             Button(L("menu.clearAutoApprove", helper.autoApproveCount)) { helper.clearAutoApprove() }
         }
+        // 로컬 브라우저(설정에서 켰고 폴더가 연결돼 있을 때) — 넘겨받기/돌려주기·즉시 중지
+        if helper.browserEnabled && !helper.connectedFolders.isEmpty {
+            Button(helper.browserUserControl ? L("menu.browser.release") : L("menu.browser.takeover")) {
+                helper.setBrowserUserControl(!helper.browserUserControl)
+            }
+            Button(L("menu.browser.stop")) { helper.stopBrowser() }
+        }
         Divider()
         Button(L("menu.openWeb")) { helper.openWeb() }
         Button(L("menu.checkUpdates")) {
@@ -98,6 +105,7 @@ struct SettingsView: View {
     @EnvironmentObject var helper: HelperManager
     @State private var apiKey: String = Keychain.load() ?? ""
     @State private var backendId: String = HelperManager.shared.backendId
+    @State private var browserEnabled: Bool = HelperManager.shared.browserEnabled
     @State private var saved = false
 
     var body: some View {
@@ -116,10 +124,16 @@ struct SettingsView: View {
                     }
                 }
             }
+            Section(L("settings.browser")) {
+                Toggle(L("settings.browser.enable"), isOn: $browserEnabled)
+                Text(L("settings.browser.help"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             HStack {
                 Button(L("settings.save")) {
                     Keychain.save(apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
                     if backendId != helper.backendId { helper.switchBackend(backendId) }
+                    helper.setBrowserEnabled(browserEnabled)
                     saved = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saved = false }
                 }

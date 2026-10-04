@@ -34,6 +34,8 @@ export class CliBridge {
             folder: opts.folder,
             confirm: opts.confirm,
             sandboxProfileDir: os.tmpdir(),
+            // 로컬 브라우저(P2) — OMK_BRIDGE_BROWSER=1 로 켠다. 전용 프로필은 ~/.openmake 아래(평소 Chrome 프로필이 아니다).
+            ...(process.env.OMK_BRIDGE_BROWSER === '1' ? { browserProfileDir: path.join(os.homedir(), '.openmake', 'browser-profile') } : {}),
             ...(opts.autoApproveAll !== undefined ? { autoApproveAll: opts.autoApproveAll } : {}),
         });
         this.connection = new BridgeConnection({

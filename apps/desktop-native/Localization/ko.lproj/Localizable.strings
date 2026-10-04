@@ -84,3 +84,9 @@
 "update.script.replace" = "기존 앱을 교체할 수 없습니다.";
 "update.script.rollback" = "새 버전 설치에 실패해 이전 버전으로 되돌렸습니다.";
 "update.script.reopen" = "업데이트는 됐지만 앱을 다시 열지 못했습니다.";
+"menu.browser.takeover" = "브라우저 넘겨받기 (에이전트 일시 정지)";
+"menu.browser.release" = "브라우저 돌려주기 (에이전트 재개)";
+"menu.browser.stop" = "브라우저 작업 중지";
+"settings.browser" = "브라우저";
+"settings.browser.enable" = "에이전트의 브라우저 사용 허용";
+"settings.browser.help" = "켜면 에이전트가 전용 Chrome 창(별도 프로필)에서 웹 페이지를 열고 조작할 수 있습니다. 평소 쓰는 Chrome 의 로그인 정보는 쓰지 않습니다. 허용되지 않은 사이트에 입력할 때는 웹에서 승인을 요청합니다.";
