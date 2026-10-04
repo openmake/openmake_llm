@@ -24,6 +24,7 @@ import { BROWSER_RUN } from '../../config/agent-task-browser-web';
 import { BROWSER_TAKEOVER_DISCARDED_MESSAGE } from '../../prompts/agent-task-browser-web';
 import { guardBrowserResult } from './browser-result-guard';
 import type { TaskExecutor, ExecResult } from './executor';
+import { wrapPipeline, readPipeStatus, PIPE_STATUS_TAG_PREFIX } from './pipe-status';
 import { SANDBOX_WORKSPACE_DIR, stripWorkspacePrefix } from './workspace-path';
 import { createLogger } from '../../utils/logger';
 
@@ -297,7 +298,7 @@ export class TaskSandbox implements TaskExecutor {
     }
 
     /** 컨테이너 내부에서 셸 명령 실행 (bash 도구의 실행 백엔드). */
-    async exec(command: string): Promise<ExecResult> {
+    async exec(command: string, opts?: { pipeStatus?: boolean }): Promise<ExecResult> {
         this.assertCreated();
         // 디스크 쿼터 — 컨테이너 내부 쓰기(bash 등)는 가로챌 수 없으므로 각 실행 직전 검사하는
         // best-effort: 초과 상태면 새 명령을 거부해 LLM 이 파일 정리 후 계속하도록 유도한다.
@@ -309,17 +310,20 @@ export class TaskSandbox implements TaskExecutor {
             };
         }
         const execId = randomUUID();
+        // 파이프에 가려진 실패 — 감쌀 수 있는 파이프라인이면 앞 단계가 종료 코드를 적게 감싼다(아니면 null, 종전대로).
+        const wrapped = opts?.pipeStatus ? wrapPipeline(command, `${PIPE_STATUS_TAG_PREFIX}${execId.slice(0, 8)}`) : null;
         const ac = new AbortController();
         this.running.add(ac);
         try {
-            return await runProcess(
+            const r = await runProcess(
                 this.cfg.dockerPath,
-                ['exec', '-e', `${EXEC_ID_ENV}=${execId}`, this.containerName, 'sh', '-c', command],
+                ['exec', '-e', `${EXEC_ID_ENV}=${execId}`, this.containerName, 'sh', '-c', wrapped?.command ?? command],
                 {
                     timeoutMs: this.cfg.execTimeoutMs, outputCap: this.cfg.outputCap, signal: ac.signal,
                     onStop: () => runProcess(this.cfg.dockerPath, buildKillExecArgs(this.containerName, execId), { timeoutMs: 10_000, outputCap: 4096 }),
                 },
             );
+            return wrapped ? readPipeStatus(r, wrapped) : r;
         } finally { this.running.delete(ac); }
     }
 
