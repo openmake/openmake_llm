@@ -72,3 +72,76 @@ describe('executeTurnToolCalls — 반복 가드', () => {
         expect(steps[0].content).toContain('실행하지 않았습니다');
     });
 });
+
+type Round = { name: string; args: Record<string, unknown>; result: string };
+/** 앞선 호출 기록 + 이번 턴의 호출 하나를 실행하고, 그 호출에 대해 대화에 실린 결과를 돌려준다. */
+function runAfter(history: Round[], call: { name: string; args: Record<string, unknown> }) {
+    const conversation: ChatMessage[] = [{ role: 'user', content: 'g' }];
+    history.forEach((h, i) => {
+        conversation.push({ role: 'assistant', content: '', tool_calls: [{ id: `h${i}`, type: 'function', function: { name: h.name, arguments: h.args } }] });
+        conversation.push({ role: 'tool', content: h.result, tool_name: h.name, tool_call_id: `h${i}` });
+    });
+    const toolCalls = [{ id: 'now', type: 'function' as const, function: { name: call.name, arguments: call.args } }];
+    conversation.push({ role: 'assistant', content: '', tool_calls: toolCalls });
+    return executeTurnToolCalls({
+        toolCalls, taskRuntime: null, sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 1000 },
+        extraToolNames: new Set<string>(), mcp: {}, userCtx: { userId: 'u1' }, userId: 'u1', taskId: 't1', turn: 2,
+        conversation, usedTools: new Set<string>(), signal: new AbortController().signal,
+        stepNumber: 5, searchCalls: 0, browserCalls: 0, pausedMs: 0, approvalTimeouts: 0,
+        getCurStatus: () => 'running', update: jest.fn(async () => undefined), emitStep: jest.fn(),
+    } as unknown as Parameters<typeof executeTurnToolCalls>[0]).then(() => String(conversation[conversation.length - 1].content));
+}
+
+describe('executeTurnToolCalls — 주기 반복(A-B-A-B)', () => {
+    const A = { name: 'web_fetch', args: { url: 'https://a.example' } };
+    const B = { name: 'web_fetch', args: { url: 'https://b.example' } };
+    const lap = (): Round[] => [{ ...A, result: 'page A' }, { ...B, result: 'page B' }];
+
+    it('두 번째 바퀴가 같은 결과로 끝나면 결과 뒤에 안내가 붙는다', async () => {
+        runTool.mockResolvedValueOnce('page B');
+        const out = await runAfter([...lap(), { ...A, result: 'page A' }], B);
+        expect(out).toContain('page B');
+        expect(out).toContain('[반복 안내]');
+        expect(out).toContain('번갈아');
+        expect(steps[0].content).toContain('[반복 안내]');
+    });
+
+    it('결과가 달라졌으면 안내하지 않는다', async () => {
+        runTool.mockResolvedValueOnce('page B (updated)');
+        expect(await runAfter([...lap(), { ...A, result: 'page A' }], B)).toBe('page B (updated)');
+    });
+
+    it('세 바퀴를 돈 뒤 주기를 이어가는 호출은 실행하지 않는다', async () => {
+        const out = await runAfter([...lap(), ...lap(), ...lap(), { ...A, result: 'page A' }], B);
+        expect(runTool).not.toHaveBeenCalled();
+        expect(out).toContain('실행하지 않았습니다');
+        expect(out).toContain('주기');
+    });
+});
+
+describe('executeTurnToolCalls — 같은 구간 다시 읽기', () => {
+    const view = { name: 'str_replace_editor', args: { command: 'view', path: 'a.log', start_line: 1, line_count: 50 } };
+
+    it('바뀌지 않은 같은 구간을 두 번째로 읽으면 내용은 그대로 돌려주고 안내를 붙인다', async () => {
+        runTool.mockResolvedValueOnce('line1\nline2');
+        const out = await runAfter([{ ...view, result: 'line1\nline2' }], view);
+        expect(out.startsWith('line1\nline2')).toBe(true);
+        expect(out).toContain('이미 읽은 구간');
+        expect(runTool).toHaveBeenCalledTimes(1);
+    });
+
+    it('그 사이에 편집이 있었으면 안내하지 않는다', async () => {
+        runTool.mockResolvedValueOnce('line1\nline2');
+        const edit = { name: 'str_replace_editor', args: { command: 'str_replace', path: 'a.log', old_str: 'x', new_str: 'y' }, result: 'ok' };
+        expect(await runAfter([{ ...view, result: 'line1\nline2' }, edit], view)).toBe('line1\nline2');
+    });
+
+    it('세 번째부터는 종전의 같은 결과 안내가 붙는다(다시 읽기 안내가 연속 집계를 끊지 않는다)', async () => {
+        runTool.mockResolvedValueOnce('line1\nline2');
+        const second = await runAfter([{ ...view, result: 'line1\nline2' }], view);
+        runTool.mockResolvedValueOnce('line1\nline2');
+        const out = await runAfter([{ ...view, result: 'line1\nline2' }, { ...view, result: second }], view);
+        expect(out).toContain('3번 연속 같은 결과');
+        expect(out).not.toContain('이미 읽은 구간');
+    });
+});

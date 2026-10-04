@@ -37,6 +37,12 @@ export const EXIT_CODE_NOTES = {
     false: '(종료 코드 1 = 조건이 거짓 — 오류가 아닙니다)',
 } as const;
 
+/** 파이프에 가려진 실패 — 셸 결과의 [exit=0] 줄 바로 뒤에 한 줄로 붙는다. failed 는 0 이 아닌 코드로 끝난 앞 단계들. */
+export function getMaskedPipeFailureNote(failed: ReadonlyArray<{ index: number; command: string; exitCode: number }>): string {
+    const list = failed.map((f) => `${f.index}번째(\`${f.command}\`)가 종료 코드 ${f.exitCode}`).join(', ');
+    return `(주의: 파이프라인의 앞 명령 ${list} 로 끝났습니다 — 전체 종료 코드 0 은 마지막 명령의 것입니다. 앞 명령의 출력을 확인하세요)`;
+}
+
 /** 검색 무일치 원인 — "(일치 없음: …)" 바로 뒤에 같은 줄로 붙는다. */
 export const GREP_MISS_HINTS = {
     ignoreCase: () => ' — 대소문자를 무시하면 일치하는 줄이 있습니다. ignore_case:true 로 다시 찾으세요.',
@@ -57,7 +63,7 @@ export function getWriteFailureFootnote(paths: readonly string[], rest: number):
 /** 검증 증거 원장 — 테스트 게이트를 돌리지 않은 이유(진행 표시·로그). */
 export const VERIFY_EVIDENCE_SKIP_NOTES = {
     no_change: () => '테스트 게이트: 파일을 바꾼 기록이 없어 돌리지 않음',
-    fresh_pass: (command: string) => `테스트 게이트: 마지막 변경 이후 성공한 검증 기록이 있어 다시 돌리지 않음 (${command})`,
+    fresh_pass: (command: string) => `테스트 게이트: 마지막 변경 이후 통과한 전체 테스트 실행 기록이 있어 다시 돌리지 않음 (${command})`,
 } as const;
 
 /** ask_human 도구 설명·인자 설명(구조화 질문). 기본 설명 뒤에 붙는다. */

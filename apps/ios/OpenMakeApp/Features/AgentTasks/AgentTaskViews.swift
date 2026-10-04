@@ -445,7 +445,10 @@ private struct AgentTaskApprovalCard: View {
                 .font(Instrument.mono(size: 12))
                 .foregroundStyle(Instrument.muted)
             // 무엇을 승인하는지 — bash 는 실행할 명령, 질문(ask_human·mcp_elicit)은 질문 본문.
-            if let summary = approval.argumentSummary {
+            // 구조화 질문(선택지·권장안)은 버튼으로 — 누르면 아래 답변 입력란이 채워진다. 구조가 없으면 줄글 그대로.
+            if !approval.questions.isEmpty {
+                AgentTaskQuestionChoices(intro: approval.intro, questions: approval.questions) { answer = $0 }
+            } else if let summary = approval.argumentSummary {
                 Text(summary)
                     .font(.system(
                         size: approval.isQuestion ? 15 : 13,

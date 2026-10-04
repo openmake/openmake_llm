@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
-  "description": "에이전트 작업 과제 묶음 — 제품이 안내하는 대표 사용(계산, 파일 편집, 표 집계, 오피스·PDF 산출물, 업로드 파일 분석, 코드 수정)을 네트워크 없이 샌드박스 안에서 끝나는 작은 과제로 옮긴 것과, 운영에서 턴을 낭비하게 만든 상황을 재현한 함정 과제(trap 필드: 긴 출력 뒤 오류, 큰 파일의 뒤쪽 줄, 같은 실패 호출 반복, 공백이 다른 문자열 치환). 기대 과정은 사용자 의도 기준: 검색·브라우저를 쓰지 않고, 실행 도구를 과하게 반복하지 않는다. 야간 회귀 감시(eval:agent-tasks)와 프롬프트 규칙 제거 실험(eval:ablation)이 함께 쓴다.",
+  "version": "1.3.0",
+  "description": "에이전트 작업 과제 묶음 — 제품이 안내하는 대표 사용(계산, 파일 편집, 표 집계, 오피스·PDF 산출물, 업로드 파일 분석, 코드 수정)을 네트워크 없이 샌드박스 안에서 끝나는 작은 과제로 옮긴 것과, 운영에서 턴을 낭비하게 만든 상황을 재현한 함정 과제(trap 필드: 긴 출력 뒤 오류, 큰 파일의 뒤쪽 줄, 같은 실패 호출 반복, 공백이 다른 문자열 치환, 긴 출력의 가운데에 있는 답 2종). 기대 과정은 사용자 의도 기준: 검색·브라우저를 쓰지 않고, 실행 도구를 과하게 반복하지 않는다. 야간 회귀 감시(eval:agent-tasks)와 프롬프트 규칙 제거 실험(eval:ablation)이 함께 쓴다.",
   "variants": [
     {
       "id": "baseline",
@@ -425,6 +425,96 @@
           "name": "settings.py",
           "type": "text/x-python",
           "content": "SETTINGS = {\n\t\"HOST\": \"0.0.0.0\",  \n\t\"PORT\": 8080,\n\t\"TIMEOUT\": 30,  \n\t\"RETRIES\": 3,\n}\n"
+        }
+      ]
+    },
+    {
+      "id": "trap-answer-mid-long-output",
+      "trap": "answer-mid-long-output",
+      "note": "함정 — 긴 출력의 가운데에 답. 출력이 도구 결과 상한의 16배쯤이고 답 줄(6,000줄 중 3,100번째)은 앞·뒤 미리보기 어디에도 없다. 값은 실행해야 나오고(해시 계산), 줄 양식은 base64 로 넣어 소스를 읽고 처음부터 걸러 받는 지름길을 막았다",
+      "goal": "uploads/audit.py 를 실행하면 레코드 점검 결과가 출력됩니다. 점검에 실패한 레코드가 하나 있습니다. 그 레코드의 번호와 오류 코드를 알려 주세요.",
+      "maxTurns": 8,
+      "spec": {
+        "id": "trap-answer-mid-long-output",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 4,
+          "python_execute": 3,
+          "str_replace_editor": 5,
+          "file_ops": 3,
+          "grep_code": 4
+        }
+      },
+      "expectedAnswer": {
+        "includes": [
+          "3100",
+          "E1421"
+        ]
+      },
+      "files": [
+        {
+          "name": "audit.py",
+          "content": "import base64\nimport hashlib\n\nTOTAL = 6000\nTARGET = 3100\nSALT = \"audit\"\nOK_LINE = \"cmVjb3JkIHtpfSBjaGVjaz1vaw==\"\nHIT_LINE = \"cmVjb3JkIHtpfSBjaGVjaz1GQUlMRUQgY29kZT1Fe3Z9\"\n\nvalue = int(hashlib.sha1(f\"{SALT}-{TARGET}\".encode()).hexdigest()[:6], 16) % 9000 + 1000\nfor i in range(1, TOTAL + 1):\n    line = base64.b64decode(HIT_LINE if i == TARGET else OK_LINE).decode()\n    print(line.replace(\"{i}\", f\"{i:05d}\").replace(\"{v}\", str(value)))\n"
+        }
+      ]
+    },
+    {
+      "id": "trap-answer-mid-slow-output",
+      "trap": "answer-mid-slow-output",
+      "note": "함정 — 긴 출력의 가운데에 답(느린 실행). 실행에 20초가 걸려, 가운데를 보려고 같은 명령을 다시 돌리면 그만큼 기다린다. 값은 실행해야 나오고(해시 계산), 줄 양식은 base64 로 넣었다",
+      "goal": "uploads/sync.py 는 샤드를 동기화하며 결과를 출력합니다. 실행해서, 한 번에 성공하지 못한 샤드의 번호와 그때의 대기 시간(ms) 값을 알려 주세요.",
+      "maxTurns": 8,
+      "spec": {
+        "id": "trap-answer-mid-slow-output",
+        "allowedTools": [
+          "bash",
+          "python_execute",
+          "str_replace_editor",
+          "file_ops",
+          "grep_code",
+          "repo_map",
+          "plan_create",
+          "plan_update",
+          "plan_view",
+          "terminate"
+        ],
+        "forbiddenTools": [
+          "browser",
+          "web_search"
+        ],
+        "maxCalls": {
+          "bash": 4,
+          "python_execute": 3,
+          "str_replace_editor": 5,
+          "file_ops": 3,
+          "grep_code": 4
+        }
+      },
+      "expectedAnswer": {
+        "includes": [
+          "2600",
+          "7885"
+        ]
+      },
+      "files": [
+        {
+          "name": "sync.py",
+          "content": "import base64\nimport hashlib\nimport sys\nimport time\n\nTOTAL = 5000\nTARGET = 2600\nSALT = \"shard\"\nOK_LINE = \"c2hhcmQge2l9IHN5bmM9b2s=\"\nHIT_LINE = \"c2hhcmQge2l9IHN5bmM9cmV0cmllZCBiYWNrb2ZmX21zPXt2fQ==\"\nPAUSE_EVERY = 250\nPAUSE_SECONDS = 1\n\nvalue = int(hashlib.sha1(f\"{SALT}-{TARGET}\".encode()).hexdigest()[:6], 16) % 9000 + 1000\nfor i in range(1, TOTAL + 1):\n    line = base64.b64decode(HIT_LINE if i == TARGET else OK_LINE).decode()\n    print(line.replace(\"{i}\", f\"{i:05d}\").replace(\"{v}\", str(value)))\n    if i % PAUSE_EVERY == 0:\n        sys.stdout.flush()\n        time.sleep(PAUSE_SECONDS)\n"
         }
       ]
     }

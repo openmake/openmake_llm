@@ -27,6 +27,7 @@
         "eval:memory-rank": "ts-node src/evaluation/run-memory-rank-evaluation.ts",
         "eval:ablation": "ts-node src/evaluation/run-prompt-ablation.ts",
         "eval:agent-tasks": "ts-node src/evaluation/run-prompt-ablation.ts --variants baseline --gate",
+        "eval:agent-tasks:browser": "ts-node src/evaluation/run-prompt-ablation.ts --variants baseline --browser only",
         "eval:matrix": "ts-node src/evaluation/run-matrix-evaluation.ts",
         "eval:probe": "ts-node src/evaluation/run-model-probe.ts",
         "eval:redteam": "ts-node src/evaluation/redteam/run-redteam-evaluation.ts",

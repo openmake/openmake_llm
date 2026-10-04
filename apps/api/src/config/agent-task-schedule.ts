@@ -33,6 +33,9 @@ export const AGENT_TASK_SCHEDULE = {
      * 남용 0/11 은 표본이 작다(실제 남용률이 0 이라는 뜻이 아니다) — 알림이 사라졌다는 신고가 오면 먼저 이 값을 끈다.
      */
     SILENT_ENABLED: process.env.AGENT_TASK_SCHEDULE_SILENT_ENABLED !== 'false',
+    /** fork 때 모델 응답에 대한 되묻기(빈 응답·검증 실패·stuck·행동 예고 재촉)도 대화에서 뺀다(one-shot-notice).
+     *  AGENT_TASK_FORK_STRIP_REPLY_NUDGES_ENABLED=false 로 끈다(종전: 일회성 자원 안내만 뺀다). */
+    FORK_STRIP_REPLY_NUDGES_ENABLED: process.env.AGENT_TASK_FORK_STRIP_REPLY_NUDGES_ENABLED !== 'false',
 } as const;
 
 /** 모델에 닿지 못한 오류 문구 — 연결 실패와 5xx 만. 4xx·시간 초과·목표 미달성은 다시 돌려도 같다. */

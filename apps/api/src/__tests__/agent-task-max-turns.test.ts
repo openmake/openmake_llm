@@ -268,3 +268,27 @@ describe('Agent Task — 빈 응답 되묻기', () => {
         expect(chatCalls.length).toBeLessThan(10);
     });
 });
+
+describe('Agent Task — stuck 안내의 자리', () => {
+    beforeEach(() => {
+        updateAgentTask.mockClear(); mockChat.mockClear();
+        chatCalls.length = 0; tokensPerTurn = 5;
+    });
+
+    it('같은 도구 호출이 되풀이될 때 안내를 도구 호출과 그 결과 사이에 넣지 않는다 — 결과 뒤에 넣는다', async () => {
+        mockChat.mockImplementation(async (c: { role: string; content?: unknown }[], _m?: unknown, _o?: unknown, a?: ChatAdvanced) => {
+            chatCalls.push({ conversation: [...c], advanced: a ?? {} });
+            return { role: 'assistant', content: '', tool_calls: [{ type: 'function', id: 'same', function: { name: 'web_search', arguments: { query: 'x' } } }], metrics: { prompt_tokens: 5, completion_tokens: 0 } } as never;
+        });
+        await new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '조사해서 알려 줘', maxTurns: 6 } as never);
+
+        const last = chatCalls[chatCalls.length - 1].conversation as { role: string; content?: unknown; tool_calls?: unknown[] }[];
+        const nudgeAt = last.findIndex((m) => m.role === 'user' && String(m.content).includes('같은 시도를 반복하고 있습니다'));
+        expect(nudgeAt).toBeGreaterThan(0);
+        // 도구 호출을 담은 assistant 바로 뒤에는 언제나 tool 결과가 온다.
+        last.forEach((m, i) => {
+            if (m.role === 'assistant' && m.tool_calls?.length) expect(last[i + 1]?.role).toBe('tool');
+        });
+        expect(last[nudgeAt - 1].role).toBe('tool');
+    });
+});

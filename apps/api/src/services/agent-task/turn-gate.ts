@@ -13,13 +13,15 @@ import { getAgentTaskBrowserLimitNudge, getAgentTaskFinalTurnNudge, getAgentTask
 import { stripApprovalGatedTools } from '../task-sandbox/approval-gate';
 import { isSearchTool } from './task-steps';
 import { oneShotNotice } from './one-shot-notice';
+import { shouldFinalizeForContext } from './context-pressure';
+import { CONTEXT_FINAL_TURN_LABEL, getContextFinalTurnNudge } from '../../prompts/agent-task-turn-loop';
 import { createLogger } from '../../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 
 const logger = createLogger('AgentTaskService');
 
-type FinalTurnReason = 'turns' | 'tokens' | null;
+type FinalTurnReason = 'turns' | 'tokens' | 'context' | null;
 
 /** 가드별 "1회 nudge 주입" 플래그 — 턴 루프가 소유하고 이 모듈이 제자리 갱신한다. */
 export interface TurnGateFlags {
@@ -65,6 +67,7 @@ interface TurnGateResult {
  *   최소 하나 있었을 때만 건다 — maxTurns=1 이면 유일한 턴이 곧 마지막이라 조건 없이 걸면
  *   도구를 한 번도 못 쓴다. 토큰 사유엔 이 가드가 없다: 누적이 임계를 넘었다는 건 resume 으로
  *   이미 예산을 소진하고 들어왔다는 뜻이라 첫 턴부터 마무리로 보내는 것이 맞다.
+ *   컨텍스트 사유: 창 초과로 대화를 줄이는 일이 작업 안에서 되풀이되면(context-pressure) 같은 경로로 마무리한다.
  * - 검색/브라우저 cap: browser 는 SEARCH_TOOL_KEYWORDS 에 안 잡혀 검색 throttle 로 제어
  *   불가하므로 별도 cap.
  * - HITL 무응답 강등: 승인 timeout 이 임계에 달하면 승인 필요 도구를 제거해 대기-소진 반복
@@ -88,7 +91,7 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
             ? 'tokens'
             : (turn > p.startTurn && turn === turnCeiling - 1)
                 ? 'turns'
-                : null;
+                : shouldFinalizeForContext(conversation) ? 'context' : null;
 
     const cappedTools = finalTurnReason
         ? []
@@ -106,9 +109,9 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
         : cappedTools;
 
     if (finalTurnReason && !flags.finalTurnNotified) {
-        conversation.push(oneShotNotice(getAgentTaskFinalTurnNudge(finalTurnReason)));
+        conversation.push(oneShotNotice(finalTurnReason === 'context' ? getContextFinalTurnNudge() : getAgentTaskFinalTurnNudge(finalTurnReason)));
         flags.finalTurnNotified = true;
-        const note = `자원 상한 임박(${finalTurnReason === 'tokens' ? '토큰 예산' : '남은 턴'})`
+        const note = `자원 상한 임박(${finalTurnReason === 'context' ? CONTEXT_FINAL_TURN_LABEL : finalTurnReason === 'tokens' ? '토큰 예산' : '남은 턴'})`
             + ` — 도구를 중단하고 최종 정리로 전환 (턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`;
         await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'final_turn', content: note })
             .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
