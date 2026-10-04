@@ -129,6 +129,8 @@ export class LLMClient {
              * fast-fail 타이머 취소용. tool-call-only 응답에서도 발화한다.
              */
             onActivity?: () => void;
+            /** SSE 청크를 받을 때마다 호출 (streaming 한정) — 호출자의 무응답(청크 간격) 감시용. */
+            onChunk?: () => void;
             /** 요청 클래스(F06.2·F04.6) — 셰도우 계측·우선순위 부여 분류. 미지정은 unspecified */
             requestClass?: LlmRequestClass;
         },
@@ -232,7 +234,7 @@ export class LLMClient {
             async (span) => {
                 const result = onToken
                     ? await streamChat(this.openai, request, (token, thinking) => { markFirstChunk(); onToken(token, thinking); }, extraBody, advancedOptions?.signal,
-                        undefined, () => { markFirstChunk(); advancedOptions?.onActivity?.(); })
+                        undefined, () => { markFirstChunk(); advancedOptions?.onActivity?.(); }, advancedOptions?.onChunk)
                     : await nonStreamChat(this.openai, request, extraBody, advancedOptions?.signal);
                 recordLlmRequestMetric({
                     ...metricBase(),

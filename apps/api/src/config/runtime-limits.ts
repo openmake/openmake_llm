@@ -1261,6 +1261,15 @@ export const AGENT_TASK_LIMITS = {
      *  마무리 턴에는 적용하지 않는다(장문 생성 — FINAL_TURN_MIN_MS 가 따로 보장). AGENT_TASK_TURN_CALL_TIMEOUT_MS */
     TURN_CALL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_MS || '', 10) >= 0
         ? parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_MS as string, 10) : 5 * 60 * 1000,
+    /** 도구 턴 모델 호출의 무응답 감시(ms) — 청크 사이 간격이 이 값을 넘으면 호출을 끊고 일시적 오류처럼 다시 시도한다. 0 이면 끔(종전처럼 비스트림).
+     *  켜면 도구 턴도 스트리밍으로 부른다(내부 모델만). 근거(2026-10-05 05:00 실측): 모델 서버는 정상 완료했는데 응답이 네트워크에서 유실돼
+     *  호출 상한 5분을 다 채운 뒤에야 재시도했다. 상한을 줄이면 정상적인 긴 생성(최대 221초)이 끊기므로 "진행 여부"로 판별한다.
+     *  AGENT_TASK_TURN_STREAM_IDLE_MS (기본 60초) */
+    TURN_STREAM_IDLE_MS: parseInt(process.env.AGENT_TASK_TURN_STREAM_IDLE_MS || '', 10) >= 0
+        ? parseInt(process.env.AGENT_TASK_TURN_STREAM_IDLE_MS as string, 10) : 60_000,
+    /** 무응답 감시의 첫 청크 기한(ms) — 첫 청크 전에는 모델 서버 대기열·프롬프트 처리 시간이 들어 청크 간격보다 길게 둔다.
+     *  AGENT_TASK_TURN_STREAM_FIRST_CHUNK_MS (기본 120초) */
+    TURN_STREAM_FIRST_CHUNK_MS: parseInt(process.env.AGENT_TASK_TURN_STREAM_FIRST_CHUNK_MS || '', 10) || 120_000,
     /** 호출 상한에 걸린 호출을 다시 시도하는 횟수(정상적으로 긴 생성이 되풀이되지 않게 작게 둔다). AGENT_TASK_TURN_CALL_TIMEOUT_RETRY_MAX */
     TURN_CALL_TIMEOUT_RETRY_MAX: parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_RETRY_MAX || '1', 10),
     /** 빈 응답(본문·도구 호출 없음)을 되묻는 횟수. 넘으면 종전대로 완료 관문으로 보낸다. AGENT_TASK_EMPTY_RESPONSE_MAX_RETRIES */

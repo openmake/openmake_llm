@@ -215,6 +215,8 @@ export async function streamChat(
      * 정상 스트림을 끊던 결함의 수정 지점, 2026-07-04.)
      */
     onActivity?: () => void,
+    /** SSE 청크를 받을 때마다 호출 — 호출자의 무응답(청크 간격) 감시용. 본문 없이 도구 호출 인자만 오는 동안에도 발화한다. */
+    onChunk?: () => void,
 ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
     const tools = request.tools ? toOpenAITools(request.tools) : undefined;
     const responseFormat = toResponseFormat(request.format);
@@ -309,6 +311,7 @@ export async function streamChat(
             }
             onActivity?.();
         }
+        onChunk?.();
         const choice = raw.choices?.[0];
         // vLLM 0.21+ 는 reasoning 모델 출력을 `delta.reasoning_content` 로 보냄 (Qwen3).
         // 일부 빌드는 `delta.reasoning` 도 사용 — 두 필드 모두 수신하여 호환.
