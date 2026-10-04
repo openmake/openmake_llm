@@ -9,7 +9,7 @@
  * @module services/agent-task/delegate
  */
 import type { LLMClient } from '../../llm';
-import type { ToolDefinition } from '../../llm/types';
+import type { ToolDefinition, UsageMetrics } from '../../llm/types';
 import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import type { DelegateFn } from '../task-sandbox/tools';
@@ -44,7 +44,7 @@ export interface DelegateFactoryParams {
     mcpTools: ToolDefinition[];
     signal: AbortSignal;
     /** 서브 LLM 토큰을 부모 누적에 합산(부모 runaway 가드 공유). */
-    onTokens: (n: number) => void;
+    onTokens: (n: number, metrics?: UsageMetrics) => void;
     /** 부모 작업의 남은 토큰 예산 — 서브가 이를 넘겨 쓰지 않게 한다. */
     remainingTokens?: () => number;
     /** 승인 대기 시간을 부모 pausedMs 에 합산(4-1 pause-aware 일관). */

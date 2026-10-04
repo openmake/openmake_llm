@@ -1,7 +1,10 @@
 /**
  * 메모리 저장 도구(memory_save) — 목표가 저장을 청할 때만 실리고, 문장 검사를 통과한 한 건만 기존 저장 경로로 쓴다.
  */
-import { createMemorySaveTools, checkMemoryContent, type MemorySaveStore } from './memory-save-tool';
+import { createMemorySaveTools, checkMemoryContent, memorySaveExposed, countPriorMemorySaves, type MemorySaveStore } from './memory-save-tool';
+import { getAgentTaskSteeringInjection } from '../../prompts/agent-task-prompt';
+import { MEMORY_SAVE_TOOL_TEXT as T } from '../../prompts/agent-task-skill-memory';
+import type { ChatMessage } from '../../llm/types';
 import { classifyToolRisk, hasSideEffects } from '../../config/tool-policy';
 import { MEMORY_SAVE_TOOL, MEMORY_SAVE_TOOL_NAME } from '../../config/agent-task-skill-memory';
 import { MEMORY_EXTRACTION } from '../../config/memory-extraction';
@@ -24,29 +27,43 @@ function fakeStore(over: Partial<MemorySaveStore> = {}) {
     };
     return store as jest.Mocked<MemorySaveStore>;
 }
-const tool = (store: MemorySaveStore, over: { maxPerTask?: number } = {}) =>
-    createMemorySaveTools('t-now', { enabled: true, floorActive: true, exposure: 'always', store, ...over })[0];
+const tool = (store: MemorySaveStore, over: { maxPerTask?: number; priorSaves?: () => Promise<number> } = {}) =>
+    createMemorySaveTools('t-now', { enabled: true, floorActive: true, store, priorSaves: async () => 0, ...over })[0];
 
 beforeEach(() => auditMemoryWrite.mockClear());
 
 describe('memory_save — 노출', () => {
-    const exposed = (goal?: string) => createMemorySaveTools('t-now', { enabled: true, floorActive: true, store: fakeStore(), ...(goal ? { goal } : {}) }).length === 1;
+    // 도구는 늘 등록해 두고(작업 도중 지시로도 쓸 수 있게), 모델에 보여 줄지는 턴마다 대화를 보고 정한다.
+    const exposed = (goal?: string) => memorySaveExposed(goal ? [{ role: 'system', content: 's' }, { role: 'user', content: goal }] : []);
 
-    it('기본으로 켜져 있고, 목표가 저장을 청할 때만 싣는다', () => {
+    it('기본으로 켜져 있고, 목표가 저장을 청할 때만 모델에 보여 준다', () => {
         expect(MEMORY_SAVE_TOOL.ENABLED).toBe(true);
         expect(MEMORY_SAVE_TOOL.EXPOSURE).toBe('intent');
-        expect(createMemorySaveTools('t-now', { goal: REMEMBER_GOAL, store: fakeStore() })).toHaveLength(1);
-        expect(createMemorySaveTools('t-now', { goal: '1부터 100까지 제곱의 합을 계산해 주세요', store: fakeStore() })).toEqual([]);
-        expect(createMemorySaveTools('t-now', { store: fakeStore() })).toEqual([]);
+        expect(createMemorySaveTools('t-now', { store: fakeStore() })).toHaveLength(1);
+        expect(exposed(REMEMBER_GOAL)).toBe(true);
+        expect(exposed('1부터 100까지 제곱의 합을 계산해 주세요')).toBe(false);
+        expect(exposed()).toBe(false);
+    });
+
+    it('작업 도중 사용자가 "기억해"라고 지시하면 그때부터 보여 준다 — 시스템이 넣은 안내 문구는 보지 않는다', () => {
+        const conv = [{ role: 'system', content: 's' }, { role: 'user', content: '보고서를 써 줘' }] as ChatMessage[];
+        expect(memorySaveExposed(conv)).toBe(false);
+        conv.push({ role: 'user', content: '결과를 기억해 두면 다음에 재사용할 수 있습니다(시스템 안내).' });
+        expect(memorySaveExposed(conv)).toBe(false);
+        conv.push({ role: 'user', content: getAgentTaskSteeringInjection('그리고 내가 보고서를 표로 받는 걸 좋아한다는 걸 기억해 줘') });
+        expect(memorySaveExposed(conv)).toBe(true);
+    });
+
+    it("노출 설정이 'always' 면 대화와 무관하게 보여 준다", () => {
+        expect(memorySaveExposed([], 'always')).toBe(true);
     });
 
     it('꺼져 있으면 싣지 않는다', () => {
-        expect(createMemorySaveTools('t-now', { enabled: false, floorActive: true, goal: REMEMBER_GOAL, store: fakeStore() })).toEqual([]);
+        expect(createMemorySaveTools('t-now', { enabled: false, floorActive: true, store: fakeStore() })).toEqual([]);
     });
 
     it('승인 바닥에서 메모리 쓰기가 빠져 있으면 싣지 않는다 — 항상 묻는 장치 없이는 쓰기를 주지 않는다', () => {
-        expect(createMemorySaveTools('t-now', { enabled: true, floorActive: false, goal: REMEMBER_GOAL, store: fakeStore() })).toEqual([]);
-        expect(createMemorySaveTools('t-now', { enabled: true, floorActive: false, exposure: 'always', store: fakeStore() })).toEqual([]);
+        expect(createMemorySaveTools('t-now', { enabled: true, floorActive: false, store: fakeStore() })).toEqual([]);
     });
 
     it.each([
@@ -175,6 +192,25 @@ describe('memory_save — 저장', () => {
         const third = await t.run({ content: '사용자는 한국어로 답을 받는다' }, { userId: 'u1' });
         expect(third.isError).toBe(true);
         expect(store.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('재개한 작업은 앞서 저장한 건수에서 이어 센다 — 재개로 상한이 다시 0 이 되지 않는다', async () => {
+        const store = fakeStore();
+        const t = tool(store, { maxPerTask: 2, priorSaves: async () => 2 });
+        const r = await t.run({ content: '사용자는 표를 선호한다' }, { userId: 'u1' });
+        expect(r.isError).toBe(true);
+        expect(r.text).toContain('2건');
+        expect(store.create).not.toHaveBeenCalled();
+    });
+
+    it('앞서 저장한 건수는 단계 기록에서 센다 — 저장에 성공한 memory_save 결과만', () => {
+        expect(countPriorMemorySaves([
+            { step_type: 'tool_result', tool_name: 'memory_save', tool_output: JSON.stringify([{ type: 'text', text: T.saved('사용자는 표를 선호한다') }]) },
+            { step_type: 'tool_result', tool_name: 'memory_save', tool_output: 'Error: 사용자가 도구 실행을 승인하지 않았습니다' },
+            { step_type: 'tool_result', tool_name: 'bash', tool_output: T.saved('x') },
+            { step_type: 'assistant_tool_call', tool_name: 'memory_save', tool_output: null },
+            { step_type: 'tool_result', tool_name: 'memory_save', content: T.saved('사용자는 목요일에 배포한다') },
+        ])).toBe(2);
     });
 
     it('저장소 오류는 예외 대신 오류 결과로 돌려준다', async () => {

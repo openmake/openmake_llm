@@ -7,7 +7,9 @@ jest.mock('../../config/runtime-limits', () => {
     };
 });
 
-import { shouldAdoptFinalTurnAnswer } from './turn-gate';
+import { shouldAdoptFinalTurnAnswer, withMemorySaveExposure } from './turn-gate';
+import { getAgentTaskSteeringInjection } from '../../prompts/agent-task-prompt';
+import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
 const base = { finalTurn: true, hasNativeTools: true, hasTextTools: false, answerLength: 500 };
 
@@ -40,5 +42,24 @@ describe('shouldAdoptFinalTurnAnswer — 마무리 턴 본문 채택', () => {
     it('임계 경계값은 채택한다', () => {
         expect(shouldAdoptFinalTurnAnswer({ ...base, answerLength: 200 })).toBe(true);
         expect(shouldAdoptFinalTurnAnswer({ ...base, answerLength: 199 })).toBe(false);
+    });
+});
+
+describe('withMemorySaveExposure — 메모리 저장 도구는 사용자가 청했을 때만 모델에 보여 준다', () => {
+    const t = (name: string): ToolDefinition => ({ type: 'function', function: { name, description: '', parameters: { type: 'object', properties: {} } } });
+    const tools = [t('bash'), t('memory_save'), t('view')];
+    const names = (conv: ChatMessage[]) => withMemorySaveExposure(tools, conv).map((x) => x.function.name);
+
+    it('목표에 저장 의도가 없으면 뺀다 — 다른 도구는 그대로', () => {
+        expect(names([{ role: 'user', content: '보고서를 써 줘' }])).toEqual(['bash', 'view']);
+    });
+    it('목표가 저장을 청하면 그대로 둔다', () => {
+        expect(names([{ role: 'user', content: '내가 표를 좋아한다는 걸 기억해 줘' }])).toEqual(['bash', 'memory_save', 'view']);
+    });
+    it('작업 도중 지시가 저장을 청하면 그 턴부터 보여 준다', () => {
+        const conv: ChatMessage[] = [{ role: 'user', content: '보고서를 써 줘' }];
+        expect(names(conv)).toEqual(['bash', 'view']);
+        conv.push({ role: 'user', content: getAgentTaskSteeringInjection('그리고 이 형식을 기억해 줘') });
+        expect(names(conv)).toEqual(['bash', 'memory_save', 'view']);
     });
 });

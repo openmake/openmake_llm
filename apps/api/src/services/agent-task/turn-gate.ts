@@ -18,6 +18,8 @@ import { CONTEXT_FINAL_TURN_LABEL, getContextFinalTurnNudge } from '../../prompt
 import { createLogger } from '../../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
+import { memorySaveExposed } from './memory-save-tool';
+import { MEMORY_SAVE_TOOL_NAME } from '../../config/agent-task-skill-memory';
 
 const logger = createLogger('AgentTaskService');
 
@@ -162,4 +164,12 @@ export function shouldAdoptFinalTurnAnswer(p: {
 }): boolean {
     if (!p.finalTurn || !p.hasNativeTools || p.hasTextTools) return false;
     return p.answerLength >= AGENT_TASK_LIMITS.FINAL_TURN_MIN_ANSWER_CHARS;
+}
+
+/**
+ * PURE: 사용자가 저장을 청하지 않은 대화면 도구 목록에서 memory_save 를 뺀다(memory-save-tool 의 memorySaveExposed).
+ * 호출부는 이 턴의 중간 지시(steering)를 대화에 넣은 **뒤에** 부른다 — 관문 안에서 거르면 지시가 온 바로 그 턴에는 도구가 안 보인다.
+ */
+export function withMemorySaveExposure(tools: ToolDefinition[], conversation: readonly ChatMessage[]): ToolDefinition[] {
+    return memorySaveExposed(conversation) ? tools : tools.filter((t) => t.function.name !== MEMORY_SAVE_TOOL_NAME);
 }

@@ -125,7 +125,7 @@ export class TaskRuntime {
         const { getChatTurnIntegrations } = require('../chat-service/turn-integrations') as typeof import('../chat-service/turn-integrations');
         const contributed = [
             ...getChatTurnIntegrations().flatMap((i) => i.agentTaskTools?.() ?? []),
-            ...createTaskHistoryTools(taskId, goal ? { goal } : {}), ...createMemorySaveTools(taskId, goal ? { goal } : {}),
+            ...createTaskHistoryTools(taskId, goal ? { goal } : {}), ...createMemorySaveTools(taskId),
         ];
         for (const c of contributed) if (c.precheck) this.prechecks.set(c.tool.name, c.precheck);
         this.defs = createTaskTools(this.executor, this.plan, delegate, spawn, procedural, browserMetrics, contributed, { userId: this.userId });
