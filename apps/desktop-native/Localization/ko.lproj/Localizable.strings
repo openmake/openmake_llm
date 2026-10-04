@@ -23,8 +23,9 @@
 "settings.server" = "서버";
 "settings.save" = "저장";
 "settings.saved" = "저장됨";
-"backend.external" = "외부 (chat.openmake.cc)";
-"backend.local" = "로컬 (localhost:52416)";
+"settings.server.help" = "브라우저에서 OpenMake 를 여는 주소를 그대로 넣으세요(예: https://chat.회사.co.kr, http://서버:3010). 비워 두면 기본 주소를 씁니다.";
+"settings.server.invalid" = "서버 주소가 올바르지 않습니다. http:// 또는 https:// 로 시작하는 주소를 넣으세요.";
+"settings.server.insecure" = "암호화되지 않은 연결(http)입니다. API key 와 작업 내용이 그대로 전송되므로 사내망처럼 믿을 수 있는 네트워크에서만 쓰세요.";
 
 /* 연결 상태 */
 "status.idle" = "미연결";

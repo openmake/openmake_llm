@@ -14,13 +14,15 @@
  * GET /api/desktop/latest          → { version, file, sha256, url, native: { 같은 값 }, windows?: { version, file, sha256, url } }
  *   windows 는 Windows 설치 파일(`OpenMake-Companion-Setup-*.exe`)이 게시돼 있을 때만 싣는다(Companion P4).
  * GET /api/desktop/download/:file  → dmg 스트림 (컴패니언 dmg 만)
+ * GET /api/desktop/config          → { apiPort, webPort } — 앱이 사용자가 넣은 주소 하나에서 연결 주소·웹 주소를 정하는 근거
  *
  * @module routes/desktop-update
  */
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DESKTOP_UPDATE } from '../config/desktop-update';
+import { DESKTOP_UPDATE, resolveDesktopPorts } from '../config/desktop-update';
+import { getConfig } from '../config/env';
 import { success, notFound, badRequest } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 
@@ -53,6 +55,11 @@ router.get('/latest', (_req: Request, res: Response) => {
     } catch {
         res.status(404).json(notFound('배포된 데스크톱 업데이트가 없습니다'));
     }
+});
+
+// 공개 라우트 — 포트 두 개뿐이고(비밀이 아니다), 앱은 API key 를 넣기 전에도 키 발급 페이지를 열어야 한다.
+router.get('/config', (_req: Request, res: Response) => {
+    res.json(success(resolveDesktopPorts(getConfig().port)));
 });
 
 router.get('/download/:file', (req: Request, res: Response) => {

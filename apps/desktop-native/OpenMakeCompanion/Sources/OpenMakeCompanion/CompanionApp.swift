@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         center.requestAuthorization(options: [.alert, .sound]) { _, _ in /* 거부는 fail-open */ }
         Task { @MainActor in
             HelperManager.shared.reconnectIfPossible()
-            Updater.shared.scheduleStartupCheck(backendUrl: HelperManager.shared.backend.url)
+            Updater.shared.scheduleStartupCheck(backendUrl: HelperManager.shared.serverAddress)
         }
     }
 
@@ -87,7 +87,7 @@ struct MenuContent: View {
         Divider()
         Button(L("menu.openWeb")) { helper.openWeb() }
         Button(L("menu.checkUpdates")) {
-            Task { await Updater.shared.check(backendUrl: helper.backend.url, interactive: true) }
+            Task { await Updater.shared.check(backendUrl: helper.serverAddress, interactive: true) }
         }
         Button(L("menu.settings")) {
             openSettings()
@@ -104,7 +104,8 @@ struct MenuContent: View {
 struct SettingsView: View {
     @EnvironmentObject var helper: HelperManager
     @State private var apiKey: String = Keychain.load() ?? ""
-    @State private var backendId: String = HelperManager.shared.backendId
+    @State private var server: String = HelperManager.shared.serverAddress
+    @State private var serverInvalid = false
     @State private var browserEnabled: Bool = HelperManager.shared.browserEnabled
     @State private var saved = false
 
@@ -115,13 +116,19 @@ struct SettingsView: View {
                 Text(L("settings.apiKey.help"))
                     .font(.caption).foregroundStyle(.secondary)
                 // 키 발급 위치는 웹의 API 액세스 페이지(/api-access) — 설정 탭이 아니다.
-                Button(L("settings.apiKey.open")) { helper.openApiAccess(backendId: backendId) }
+                Button(L("settings.apiKey.open")) { helper.openApiAccess(server: HelperManager.normalizeServer(server) ?? helper.serverAddress) }
             }
             Section(L("settings.backend")) {
-                Picker(L("settings.server"), selection: $backendId) {
-                    ForEach(HelperManager.backends, id: \.id) { b in
-                        Text(L(b.label)).tag(b.id)
-                    }
+                // 주소는 자유 입력 — 브라우저에서 쓰는 주소를 그대로 넣는다(연결·웹 주소는 서버에 물어 정한다).
+                TextField(L("settings.server"), text: $server, prompt: Text(HelperManager.defaultServer))
+                    .textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled()
+                Text(L("settings.server.help"))
+                    .font(.caption).foregroundStyle(.secondary)
+                if serverInvalid {
+                    Text(L("settings.server.invalid")).font(.caption).foregroundStyle(.red)
+                } else if HelperManager.isPlainRemoteHttp(server) {
+                    Text(L("settings.server.insecure")).font(.caption).foregroundStyle(.orange)
                 }
             }
             Section(L("settings.browser")) {
@@ -131,8 +138,16 @@ struct SettingsView: View {
             }
             HStack {
                 Button(L("settings.save")) {
+                    // 빈 칸은 기본 주소. 주소가 잘못됐으면 아무것도 저장하지 않는다.
+                    let entered = server.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard let address = entered.isEmpty ? HelperManager.defaultServer : HelperManager.normalizeServer(entered) else {
+                        serverInvalid = true
+                        return
+                    }
+                    serverInvalid = false
+                    server = address
                     Keychain.save(apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
-                    if backendId != helper.backendId { helper.switchBackend(backendId) }
+                    if address != helper.serverAddress { helper.switchServer(address) }
                     helper.setBrowserEnabled(browserEnabled)
                     saved = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saved = false }

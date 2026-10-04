@@ -35,18 +35,39 @@ final class HelperManager: NSObject, ObservableObject {
     private var stdinPipe: Pipe?
     private var stdoutBuf = Data()
 
-    // 백엔드 선택 — Electron 셸과 동일 2종. 로컬은 Next(3000)가 WS 를 프록시하지 못하므로
-    // 백엔드(52416) 직결 (기존 bridgeBackendUrl 관행). label 은 다국어 키.
-    static let backends: [(id: String, label: String, url: String, webUrl: String)] = [
-        ("external", "backend.external", "https://chat.openmake.cc", "https://chat.openmake.cc"),
-        ("local", "backend.local", "http://localhost:52416", "http://localhost:3000"),
-    ]
-    var backendId: String {
-        get { UserDefaults.standard.string(forKey: "backend") ?? "external" }
-        set { UserDefaults.standard.set(newValue, forKey: "backend") }
+    // 서버 주소 — 사용자가 설정에 넣는 주소 하나. 브라우저에서 쓰는 주소(또는 API 주소)를 그대로 넣으면
+    // 헬퍼(코어 endpoints)가 서버에 포트를 물어 연결 주소와 웹 주소를 정한다. 종전엔 선택지 2개
+    // (chat.openmake.cc / localhost:52416)를 코드에 박아 두어, 주소·포트가 다른 설치에는 연결할 수 없었다.
+    static let defaultServer = "https://chat.openmake.cc"
+    /** 종전 설정의 "로컬" 선택지가 가리키던 주소 — 최초 1회 옮길 때만 쓴다. */
+    private static let legacyLocalServer = "http://localhost:52416"
+    var serverAddress: String {
+        get {
+            if let s = UserDefaults.standard.string(forKey: "server"), !s.isEmpty { return s }
+            return UserDefaults.standard.string(forKey: "backend") == "local" ? Self.legacyLocalServer : Self.defaultServer
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "server")
+            UserDefaults.standard.removeObject(forKey: "backend")
+        }
     }
-    var backend: (id: String, label: String, url: String, webUrl: String) {
-        Self.backends.first { $0.id == backendId } ?? Self.backends[0]
+    /** 헬퍼가 알려 준 웹 주소(웹에서 열기·알림 링크). 아직 모르면 넣은 주소를 쓴다. */
+    @Published var resolvedWebUrl: String?
+    var webUrl: String { resolvedWebUrl ?? serverAddress }
+
+    /** 넣은 주소 → `방식://호스트[:포트]`. http(s) 주소가 아니면 nil. */
+    static func normalizeServer(_ raw: String) -> String? {
+        guard let u = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let scheme = u.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host = u.host, !host.isEmpty else { return nil }
+        let h = host.contains(":") ? "[\(host)]" : host // IPv6
+        return u.port.map { "\(scheme)://\(h):\($0)" } ?? "\(scheme)://\(h)"
+    }
+    /** 암호화 없이(http) 이 Mac 밖의 서버로 가는 주소인가 — API key 가 평문으로 나간다. */
+    static func isPlainRemoteHttp(_ raw: String) -> Bool {
+        guard let u = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)), u.scheme?.lowercased() == "http",
+              let host = u.host else { return false }
+        return !["localhost", "127.0.0.1", "::1"].contains(host)
     }
     /** 마지막 연결 폴더들 — 재기동 시 자동 재연결용(로컬 UserDefaults, 서버 미전송).
         구 단일 키(lastFolder)는 최초 1회 마이그레이션한다. */
@@ -100,7 +121,7 @@ final class HelperManager: NSObject, ObservableObject {
         }
         let p = Process()
         p.executableURL = nodeURL
-        p.arguments = [helperURL.path, "--server", backend.url]
+        p.arguments = [helperURL.path, "--server", serverAddress]
         var env = ProcessInfo.processInfo.environment
         env["OMK_COMPANION_API_KEY"] = apiKey
         if browserEnabled { env["OMK_COMPANION_BROWSER"] = "1" } else { env.removeValue(forKey: "OMK_COMPANION_BROWSER") }
@@ -215,9 +236,10 @@ final class HelperManager: NSObject, ObservableObject {
         }
     }
 
-    /** 백엔드 전환 — 헬퍼 재기동(서버 URL 은 spawn 인자) 후 재연결. */
-    func switchBackend(_ id: String) {
-        backendId = id
+    /** 서버 주소 변경 — 헬퍼 재기동(주소는 spawn 인자) 후 재연결. 웹 주소는 새 헬퍼가 다시 알려 준다. */
+    func switchServer(_ address: String) {
+        serverAddress = address
+        resolvedWebUrl = nil
         let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
         stopHelper()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
@@ -226,13 +248,39 @@ final class HelperManager: NSObject, ObservableObject {
     }
 
     func openWeb() {
-        if let url = URL(string: backend.webUrl) { NSWorkspace.shared.open(url) }
+        Task { if let url = URL(string: await webUrl(for: serverAddress)) { NSWorkspace.shared.open(url) } }
     }
 
-    /** bridge 스코프 키 발급 페이지 — 설정 화면에서 아직 저장하지 않은 백엔드 선택도 따른다. */
-    func openApiAccess(backendId id: String) {
-        let web = Self.backends.first { $0.id == id }?.webUrl ?? backend.webUrl
-        if let url = URL(string: "\(web)/api-access") { NSWorkspace.shared.open(url) }
+    /** bridge 스코프 키 발급 페이지 — 설정 화면에서 아직 저장하지 않은 주소도 따른다(키를 넣기 전이라 헬퍼가 떠 있지 않다). */
+    func openApiAccess(server: String) {
+        Task { if let url = URL(string: "\(await webUrl(for: server))/api-access") { NSWorkspace.shared.open(url) } }
+    }
+
+    /** 이 서버 주소의 웹 주소 — 떠 있는 헬퍼가 이미 알려 줬으면 그것을, 아니면 헬퍼를 조회 전용(`--resolve`)으로 잠깐 돌려 묻는다.
+        실패하면 넣은 주소를 그대로 쓴다. */
+    func webUrl(for server: String) async -> String {
+        if server == serverAddress, let known = resolvedWebUrl { return known }
+        guard let nodeURL = resourceURL("node"), let helperURL = resourceURL("helper.cjs") else { return server }
+        let resolved: String = await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let p = Process()
+                p.executableURL = nodeURL
+                p.arguments = [helperURL.path, "--server", server, "--resolve"]
+                let out = Pipe()
+                p.standardOutput = out
+                p.standardError = FileHandle.nullDevice
+                p.standardInput = FileHandle.nullDevice
+                var result = server
+                if (try? p.run()) != nil {
+                    let data = out.fileHandleForReading.readDataToEndOfFile()
+                    p.waitUntilExit()
+                    if let o = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let w = o["webUrl"] as? String { result = w }
+                }
+                cont.resume(returning: result)
+            }
+        }
+        if server == serverAddress { resolvedWebUrl = resolved }
+        return resolved
     }
 
     // ── 헬퍼 이벤트 소비 ──
@@ -268,6 +316,8 @@ final class HelperManager: NSObject, ObservableObject {
             }
         case "autoApprove":
             autoApproveCount = ev["count"] as? Int ?? 0
+        case "endpoints":
+            if let w = ev["webUrl"] as? String { resolvedWebUrl = w }
         case "browserControl":
             browserUserControl = ev["user"] as? Bool ?? false
         case "confirm":
@@ -320,7 +370,7 @@ final class HelperManager: NSObject, ObservableObject {
 
     /** 웹 작업 상세 딥링크 계약: /agent-tasks?task=<id> (admin/conversations 와 동일 패턴). */
     private func taskUrl(_ taskId: String?) -> String {
-        taskId.map { "\(backend.webUrl)/agent-tasks?task=\($0)" } ?? backend.webUrl
+        taskId.map { "\(webUrl)/agent-tasks?task=\($0)" } ?? webUrl
     }
 
     /** 작업 종료 알림 — 클릭 시 웹 작업 상세로 핸드오프(상세 UI 는 웹 단일 구현 원칙).

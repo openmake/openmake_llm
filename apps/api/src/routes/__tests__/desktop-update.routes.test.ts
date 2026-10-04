@@ -111,3 +111,21 @@ describe('Windows 설치 파일 (Companion P4)', () => {
         expect((await request(app).get('/api/desktop/download/OpenMake-Companion-Setup-1.0.0.exe')).status).toBe(404);
     });
 });
+
+describe('GET /api/desktop/config', () => {
+    it('API 포트와 웹 포트를 알려 준다 — 인증 없이', async () => {
+        const res = await request(app).get('/api/desktop/config');
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual({ apiPort: expect.any(Number), webPort: expect.any(Number) });
+    });
+});
+
+describe('resolveDesktopPorts — 웹 포트 규칙은 resolve-ports.cjs 와 같다', () => {
+    it('OMK_WEB_PORT → OMK_APP_URL 끝의 포트 → 3000', async () => {
+        const { resolveDesktopPorts } = await import('../../config/desktop-update');
+        expect(resolveDesktopPorts(52418, { OMK_WEB_PORT: '3010', OMK_APP_URL: 'https://chat.example.com:8443' })).toEqual({ apiPort: 52418, webPort: 3010 });
+        expect(resolveDesktopPorts(52416, { OMK_APP_URL: 'http://host:33000/' })).toEqual({ apiPort: 52416, webPort: 33000 });
+        expect(resolveDesktopPorts(52416, { OMK_APP_URL: 'https://chat.example.com' })).toEqual({ apiPort: 52416, webPort: 3000 });
+        expect(resolveDesktopPorts(52416, {})).toEqual({ apiPort: 52416, webPort: 3000 });
+    });
+});

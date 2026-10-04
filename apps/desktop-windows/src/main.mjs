@@ -13,9 +13,9 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, s
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { BridgeConnection, BridgeCore, bulkApprovalAllowed } from '@openmake/local-bridge-core';
+import { BridgeConnection, BridgeCore, bulkApprovalAllowed, discoverEndpoints, normalizeServerAddress } from '@openmake/local-bridge-core';
 import { pickLocale, translate } from './i18n.mjs';
-import { Store } from './store.mjs';
+import { Store, DEFAULT_SERVER } from './store.mjs';
 import { pickWindowsUpdate, sha256Of } from './update.mjs';
 
 const SMOKE = process.env.OMK_DESKTOP_SMOKE === '1';
@@ -39,6 +39,21 @@ function settings() {
 }
 const apiKey = () => process.env.OMK_DESKTOP_API_KEY || store.loadApiKey();
 
+/**
+ * 서버 주소에서 정한 연결 주소·웹 주소(코어 endpoints) — 설정의 주소 하나로 서버에 포트를 물어 정한다.
+ * 종전엔 포트 규칙 하나로 웹 주소를 추측해, API 와 웹의 포트가 다른 설치에서 링크가 엉뚱한 곳으로 갔다.
+ * 주소마다 한 번만 묻는다. 조회가 안 되면 넣은 주소를 그대로 쓴다.
+ */
+const endpointsByServer = new Map();
+function endpoints() {
+  const server = settings().server;
+  if (!endpointsByServer.has(server)) {
+    endpointsByServer.set(server, discoverEndpoints(server).catch(() => ({ bridgeUrl: server, webUrl: server, discovered: false })));
+  }
+  return endpointsByServer.get(server);
+}
+const openWeb = async (suffix = '') => shell.openExternal(`${(await endpoints()).webUrl}${suffix}`);
+
 function statusText() {
   if (!apiKey()) return t('status.needKey');
   if (roots.size === 0) return t('status.idle');
@@ -57,9 +72,10 @@ async function confirmExec(command, _taskId, base) {
   return bulkApprovalAllowed() && response === 1 ? 'all' : 'no';
 }
 
-function connectFolder(folder) {
+async function connectFolder(folder) {
   let real;
   try { real = fs.realpathSync(folder); } catch { return; }
+  const { bridgeUrl } = await endpoints();
   roots.get(real)?.connection.disconnect();
   const cfg = settings();
   const core = new BridgeCore({
@@ -72,7 +88,7 @@ function connectFolder(folder) {
   });
   const entry = { core, connection: null, status: t('status.connecting') };
   entry.connection = new BridgeConnection({
-    serverUrl: cfg.server,
+    serverUrl: bridgeUrl,
     core,
     deviceId: store.deviceIdFor(real),
     hostId: store.hostId(),
@@ -87,7 +103,7 @@ function connectFolder(folder) {
     },
     onNotice: (n) => {
       const note = new Notification({ title: t('notice.approval.title'), body: t('notice.approval.body', n.toolName) });
-      note.on('click', () => { void shell.openExternal(`${webUrl()}/agent-tasks?task=${encodeURIComponent(n.taskId)}`); });
+      note.on('click', () => { void openWeb(`/agent-tasks?task=${encodeURIComponent(n.taskId)}`); });
       note.show();
     },
     shouldReconnect: () => roots.has(real),
@@ -107,15 +123,9 @@ function disconnectFolder(real) {
   rebuildMenu();
 }
 
-/** 웹 주소 — 로컬 개발 서버(API 52416)는 웹이 3000 번이다. 그 밖은 서버 주소 그대로. */
-function webUrl() {
-  const server = settings().server;
-  return /^https?:\/\/(localhost|127\.0\.0\.1):52416$/.test(server) ? server.replace(':52416', ':3000') : server;
-}
-
 async function chooseFolder() {
   const r = await dialog.showOpenDialog({ properties: ['openDirectory'] });
-  if (!r.canceled && r.filePaths[0]) connectFolder(r.filePaths[0]);
+  if (!r.canceled && r.filePaths[0]) await connectFolder(r.filePaths[0]);
 }
 
 function setBrowserUserControl(on) {
@@ -141,7 +151,7 @@ function rebuildMenu() {
       { label: t('menu.browser.stop'), click: () => { for (const r of roots.values()) r.core.stopBrowser(); } });
   }
   items.push({ type: 'separator' },
-    { label: t('menu.openWeb'), click: () => { void shell.openExternal(webUrl()); } },
+    { label: t('menu.openWeb'), click: () => { void openWeb(); } },
     { label: t('menu.checkUpdates'), click: () => { void checkForUpdates(true); } },
     { label: t('menu.settings'), click: openSettings },
     { label: t('menu.quit'), click: () => app.quit() });
@@ -197,24 +207,28 @@ function openSettings() {
 function registerIpc() {
   ipcMain.handle('settings:get', () => {
     const s = settings();
-    const keys = ['settings.title', 'settings.server', 'settings.apiKey', 'settings.browser', 'settings.save', 'settings.saved', 'settings.noEncryption'];
+    const keys = ['settings.title', 'settings.server', 'settings.serverHelp', 'settings.serverInsecure', 'settings.serverInvalid', 'settings.apiKey', 'settings.browser', 'settings.save', 'settings.saved', 'settings.noEncryption'];
     // API key 원문은 화면으로 돌려보내지 않는다 — 저장돼 있는지만 알린다.
     return { server: s.server, browserEnabled: s.browserEnabled, hasApiKey: !!apiKey(), text: Object.fromEntries(keys.map((k) => [k, t(k)])) };
   });
   ipcMain.handle('settings:save', (_e, input) => {
     const prev = settings();
+    // 서버 주소 — 빈 칸은 기본 주소. http(s) 주소가 아니면 아무것도 저장하지 않는다.
+    const entered = typeof input?.server === 'string' ? input.server.trim() : null;
+    const server = entered === null ? prev.server : entered === '' ? DEFAULT_SERVER : normalizeServerAddress(entered);
+    if (!server) return { ok: false, reason: 'server' };
     const next = store.saveSettings({
-      ...(typeof input?.server === 'string' ? { server: input.server } : {}),
+      server,
       browserEnabled: input?.browserEnabled === true,
     });
     // 빈 입력은 "바꾸지 않음" — 저장된 key 를 지우지 않는다.
     const keySaved = typeof input?.apiKey === 'string' && input.apiKey.trim() ? store.saveApiKey(input.apiKey) : true;
     // 서버 주소·브라우저 사용이 바뀌었거나 key 가 새로 들어왔으면 연결을 다시 만든다.
     if (prev.server !== next.server || prev.browserEnabled !== next.browserEnabled || (typeof input?.apiKey === 'string' && input.apiKey.trim())) {
-      for (const real of [...roots.keys()]) connectFolder(real);
+      for (const real of [...roots.keys()]) void connectFolder(real);
     }
     rebuildMenu();
-    return { ok: keySaved };
+    return { ok: keySaved, server: next.server, ...(keySaved ? {} : { reason: 'encryption' }) };
   });
 }
 
@@ -238,7 +252,7 @@ if (!app.requestSingleInstanceLock()) {
     rebuildMenu();
     emit({ ev: 'ready', locale, trayIcon: !trayIcon.isEmpty() });
     const startFolders = process.env.OMK_DESKTOP_FOLDER ? [process.env.OMK_DESKTOP_FOLDER] : settings().folders;
-    if (apiKey()) for (const f of startFolders) connectFolder(f);
+    if (apiKey()) for (const f of startFolders) void connectFolder(f);
     // Windows 에서만 자동으로 확인한다 — 다른 OS 에서 이 앱은 개발용이다. 검증 실행 중에는 확인 창을 띄우지 않는다.
     if (process.platform === 'win32' && !SMOKE) void checkForUpdates(false);
   });

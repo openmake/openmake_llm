@@ -8,9 +8,11 @@
   .row{display:flex;align-items:center;gap:8px;margin-top:16px}.row label{margin:0;font-weight:400}
   button{margin-top:20px;padding:8px 18px;border:0;border-radius:4px;background:#087b70;color:#fff;font:inherit;cursor:pointer}
   #msg{margin-left:12px;font-size:13px}
+  .hint{margin-top:4px;font-size:12px;color:#5b6b66}.warn{color:#bd5d25}
 </style></head>
 <body>
   <label id="l-server" for="server"></label><input id="server" type="text" spellcheck="false">
+  <div id="server-help" class="hint"></div><div id="server-warn" class="hint warn" hidden></div>
   <label id="l-key" for="key"></label><input id="key" type="password" autocomplete="off" spellcheck="false">
   <div class="row"><input id="browser" type="checkbox"><label id="l-browser" for="browser"></label></div>
   <button id="save"></button><span id="msg"></span>
@@ -24,11 +26,17 @@
   $('l-browser').textContent = s.text['settings.browser'];
   $('save').textContent = s.text['settings.save'];
   $('server').value = s.server;
+  $('server-help').textContent = s.text['settings.serverHelp'];
+  $('server-warn').textContent = s.text['settings.serverInsecure'];
+  // 암호화 없이(http) 이 PC 밖으로 나가는 주소면 알린다 — API key 가 그대로 전송된다.
+  const warn = () => { $('server-warn').hidden = !/^http:\/\/(?!(localhost|127\.0\.0\.1|\[::1\])([:/]|$))/i.test($('server').value.trim()); };
+  $('server').addEventListener('input', warn); warn();
   $('browser').checked = s.browserEnabled;
   if (s.hasApiKey) $('key').placeholder = '••••••••';
   $('save').addEventListener('click', async () => {
     const r = await window.companion.saveSettings({ server: $('server').value.trim(), apiKey: $('key').value, browserEnabled: $('browser').checked });
-    $('msg').textContent = r.ok ? s.text['settings.saved'] : s.text['settings.noEncryption'];
+    $('msg').textContent = r.ok ? s.text['settings.saved'] : r.reason === 'server' ? s.text['settings.serverInvalid'] : s.text['settings.noEncryption'];
+    if (r.server) { $('server').value = r.server; warn(); }
     $('msg').style.color = r.ok ? '#087b70' : '#bd5d25';
     if (r.ok) $('key').value = '';
   });

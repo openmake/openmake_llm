@@ -23,8 +23,9 @@
 "settings.server" = "服务器";
 "settings.save" = "保存";
 "settings.saved" = "已保存";
-"backend.external" = "外部 (chat.openmake.cc)";
-"backend.local" = "本地 (localhost:52416)";
+"settings.server.help" = "请输入在浏览器中打开 OpenMake 时使用的地址（例如 https://chat.company.com、http://server:3010）。留空则使用默认地址。";
+"settings.server.invalid" = "服务器地址不正确。请输入以 http:// 或 https:// 开头的地址。";
+"settings.server.insecure" = "这是未加密的连接（http）。API key 和任务内容将以明文发送，请仅在公司内网等可信网络中使用。";
 
 /* 连接状态 */
 "status.idle" = "未连接";

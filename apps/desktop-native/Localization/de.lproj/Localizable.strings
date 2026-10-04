@@ -23,8 +23,9 @@
 "settings.server" = "Server";
 "settings.save" = "Speichern";
 "settings.saved" = "Gespeichert";
-"backend.external" = "Extern (chat.openmake.cc)";
-"backend.local" = "Lokal (localhost:52416)";
+"settings.server.help" = "Geben Sie die Adresse ein, mit der Sie OpenMake im Browser öffnen (z. B. https://chat.firma.de oder http://server:3010). Leer lassen, um die Standardadresse zu verwenden.";
+"settings.server.invalid" = "Die Serveradresse ist ungültig. Geben Sie eine Adresse ein, die mit http:// oder https:// beginnt.";
+"settings.server.insecure" = "Diese Verbindung ist nicht verschlüsselt (http). API-Key und Aufgabeninhalte werden unverschlüsselt übertragen – nur in einem vertrauenswürdigen Netzwerk wie dem Firmennetz verwenden.";
 
 /* Connection status */
 "status.idle" = "Nicht verbunden";
