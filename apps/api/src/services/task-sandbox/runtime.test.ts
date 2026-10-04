@@ -37,7 +37,8 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
     it('getLLMTools 13종 + isTaskTool', () => {
         const rt = new TaskRuntime('t1', 'u1', cfgNone);
         // 절차 스킬 도구(skill_save/skill_run)는 AGENT_TASK_PROCEDURAL_SKILLS 플래그 게이트라 제외하고 base 11 검증.
-        const names = rt.getLLMTools().map((t) => t.function.name).filter((n) => n !== 'skill_save' && n !== 'skill_run');
+        // memory_save 는 늘 등록되지만 모델에 보여 줄지는 턴 관문이 정한다(turn-gate 의 withMemorySaveExposure) — 여기서도 제외.
+        const names = rt.getLLMTools().map((t) => t.function.name).filter((n) => n !== 'skill_save' && n !== 'skill_run' && n !== 'memory_save');
         expect(names).toEqual(['bash', 'python_execute', 'str_replace_editor', 'file_ops', 'grep_code', 'repo_map', 'browser', 'plan_create', 'plan_update', 'plan_view', 'delegate', 'terminate', 'ask_human']);
         expect(rt.isTaskTool('bash')).toBe(true);
         expect(rt.isTaskTool('web_search')).toBe(false);

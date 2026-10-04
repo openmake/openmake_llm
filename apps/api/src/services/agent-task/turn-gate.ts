@@ -18,6 +18,8 @@ import { CONTEXT_FINAL_TURN_LABEL, getContextFinalTurnNudge } from '../../prompt
 import { createLogger } from '../../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
+import { memorySaveExposed } from './memory-save-tool';
+import { MEMORY_SAVE_TOOL_NAME } from '../../config/agent-task-skill-memory';
 
 const logger = createLogger('AgentTaskService');
 
@@ -103,10 +105,12 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
                 return true;
             })
             : p.tools;
+    // 메모리 저장 도구는 사용자가 저장을 청한 작업에서만 보여 준다(목표 또는 작업 도중 지시) — 등록은 늘 돼 있다.
+    const exposedTools = withMemorySaveExposure(cappedTools, conversation);
     const effectiveTools = hitlDegraded
-        ? stripApprovalGatedTools(cappedTools, p.sandboxCfg.approvalPolicy,
+        ? stripApprovalGatedTools(exposedTools, p.sandboxCfg.approvalPolicy,
             { deviceGatesShell: p.sandboxCfg.deviceGatesShell })
-        : cappedTools;
+        : exposedTools;
 
     if (finalTurnReason && !flags.finalTurnNotified) {
         conversation.push(oneShotNotice(finalTurnReason === 'context' ? getContextFinalTurnNudge() : getAgentTaskFinalTurnNudge(finalTurnReason)));
@@ -162,4 +166,9 @@ export function shouldAdoptFinalTurnAnswer(p: {
 }): boolean {
     if (!p.finalTurn || !p.hasNativeTools || p.hasTextTools) return false;
     return p.answerLength >= AGENT_TASK_LIMITS.FINAL_TURN_MIN_ANSWER_CHARS;
+}
+
+/** PURE: 사용자가 저장을 청하지 않은 대화면 도구 목록에서 memory_save 를 뺀다(memory-save-tool 의 memorySaveExposed). */
+export function withMemorySaveExposure(tools: ToolDefinition[], conversation: readonly ChatMessage[]): ToolDefinition[] {
+    return memorySaveExposed(conversation) ? tools : tools.filter((t) => t.function.name !== MEMORY_SAVE_TOOL_NAME);
 }

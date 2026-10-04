@@ -241,7 +241,7 @@ export class AgentTaskService {
                     // 토큰·승인대기는 부모 누적에 합산되어 runaway 가드·pause-aware 타임아웃 공유).
                     const delegateFn = buildDelegateFn({
                         client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
-                        onTokens: (n) => { totalTokens += n; }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
+                        onTokens: (n, m) => { totalTokens += n; cacheUsage.add(m); }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
                         onPausedMs: (ms) => { pausedMs += ms; },
                         ...buildSubagentApprovalHooks({ userId, taskId, update, getCurStatus: () => curStatus, getTaskRuntime: () => taskRuntime }),
                     });
@@ -249,7 +249,7 @@ export class AgentTaskService {
                     const spawnFn = AGENT_SPAWN.ENABLED
                         ? buildTaskSpawnFn({
                             client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
-                            onTokens: (n) => { totalTokens += n; }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
+                            onTokens: (n, m) => { totalTokens += n; cacheUsage.add(m); }, remainingTokens: () => AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS - totalTokens,
                             onPausedMs: (ms) => { pausedMs += ms; },
                         })
                         : undefined;

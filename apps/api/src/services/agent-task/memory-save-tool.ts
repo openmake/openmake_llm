@@ -10,7 +10,9 @@
  * @module services/agent-task/memory-save-tool
  */
 import { randomUUID } from 'node:crypto';
-import { getPool } from '../../data/models/unified-database';
+import { getPool, getUnifiedDatabase } from '../../data/models/unified-database';
+import { AGENT_TASK_STEERING_MARKER } from '../../prompts/agent-task-prompt';
+import type { ChatMessage } from '../../llm/types';
 import { UserMemoryRepository } from '../../data/repositories/user-memory-repository';
 import type { ContributedAgentTaskTool } from '../chat-service/turn-integrations';
 import { isDuplicateMemory, auditMemoryWrite } from '../chat-service/memory-extraction';
@@ -49,28 +51,56 @@ export function checkMemoryContent(raw: unknown): string | null {
 }
 
 /**
- * [memory_save] 또는 빈 배열(꺼짐 · 승인 바닥에 memory_write 없음 · 목표가 저장을 청하지 않음).
- * 저장 건수는 이 호출이 만든 도구(작업 런타임 하나) 안에서 센다.
+ * PURE: 이 턴에 memory_save 를 모델에 보여 줄까 — 사용자가 저장을 청했을 때만(B형: 결정적 프리필터).
+ * 사용자가 직접 쓴 글만 본다 — 목표(대화의 첫 사용자 메시지)와 작업 도중 보낸 지시(steering). 턴 관문(turn-gate)이 부른다.
+ */
+export function memorySaveExposed(conversation: readonly ChatMessage[], exposure: 'intent' | 'always' = MEMORY_SAVE_TOOL.EXPOSURE): boolean {
+    if (exposure === 'always') return true;
+    const goalAt = conversation.findIndex((m) => m.role === 'user');
+    return conversation.some((m, i) => m.role === 'user' && typeof m.content === 'string'
+        && (i === goalAt || m.content.startsWith(AGENT_TASK_STEERING_MARKER))
+        && MEMORY_SAVE_INTENT_PATTERNS.some((re) => re.test(m.content as string)));
+}
+
+interface StepLike { step_type?: string | null; tool_name?: string | null; tool_output?: string | null; content?: string | null }
+
+/** PURE: 단계 기록에서 저장에 성공한 memory_save 결과 수. */
+export function countPriorMemorySaves(steps: readonly StepLike[]): number {
+    return steps.filter((s) => s.step_type === 'tool_result' && s.tool_name === MEMORY_SAVE_TOOL_NAME
+        && `${s.tool_output ?? ''}${s.content ?? ''}`.includes(T.savedPrefix)).length;
+}
+
+async function loadPriorMemorySaves(taskId: string): Promise<number> {
+    return countPriorMemorySaves(await getUnifiedDatabase().getAgentTaskSteps(taskId) as StepLike[]);
+}
+
+/**
+ * [memory_save] 또는 빈 배열(꺼짐 · 승인 바닥에 memory_write 없음). 도구는 늘 등록해 두고, 모델에 보여 줄지는
+ * 턴마다 memorySaveExposed 가 정한다 — 작업 도중 "기억해"라고 지시해도 쓸 수 있게.
+ * 저장 건수는 작업 단위로 센다(재개하면 단계 기록에서 이어 센다).
  */
 export function createMemorySaveTools(
     taskId: string,
-    deps: { enabled?: boolean; floorActive?: boolean; store?: MemorySaveStore; goal?: string; exposure?: 'intent' | 'always'; maxPerTask?: number } = {},
+    deps: { enabled?: boolean; floorActive?: boolean; store?: MemorySaveStore; maxPerTask?: number; priorSaves?: () => Promise<number> } = {},
 ): ContributedAgentTaskTool[] {
     if (!(deps.enabled ?? MEMORY_SAVE_TOOL.ENABLED)) return [];
     // 항상 묻는 장치가 없으면 쓰기 도구를 주지 않는다 — 자동승인으로 사람 없이 메모리에 남는 길을 막는다.
     if (!(deps.floorActive ?? APPROVAL_FLOOR.has('memory_write'))) return [];
-    const goal = deps.goal ?? '';
-    if ((deps.exposure ?? MEMORY_SAVE_TOOL.EXPOSURE) === 'intent' && !MEMORY_SAVE_INTENT_PATTERNS.some((re) => re.test(goal))) return [];
     const store = (): MemorySaveStore => deps.store ?? new UserMemoryRepository(getPool());
     const maxPerTask = deps.maxPerTask ?? MEMORY_SAVE_TOOL.MAX_PER_TASK;
-    let saved = 0;
+    // 이 작업이 앞서 저장한 건수 — 재개하면 런타임이 새로 만들어지므로 단계 기록에서 한 번 읽어 이어 센다(조회 실패는 0 으로).
+    let saved: number | null = null;
+    const savedSoFar = async (): Promise<number> => {
+        saved ??= await (deps.priorSaves ?? (() => loadPriorMemorySaves(taskId)))().catch(() => 0);
+        return saved;
+    };
 
     /** 저장할 수 없는 사유(없으면 null) — 승인 전과 저장 직전에 같은 검사를 돈다(승인을 기다리는 사이 상태가 바뀔 수 있다). */
     const refusal = async (args: Record<string, unknown>, userId: string): Promise<string | null> => {
         if (!userId || userId === GUEST_USER_ID) return T.guest;
         const problem = checkMemoryContent(args.content);
         if (problem) return problem;
-        if (saved >= maxPerTask) return T.taskCap(maxPerTask);
+        if (await savedSoFar() >= maxPerTask) return T.taskCap(maxPerTask);
         try {
             const s = store();
             if (await s.countActiveByUser(userId) >= MEMORY_EXTRACTION.maxCount) return T.userCap(MEMORY_EXTRACTION.maxCount);
@@ -98,7 +128,7 @@ export function createMemorySaveTools(
             const content = String(args.content).trim();
             try {
                 const row = await store().create(randomUUID(), ctx.userId, content, 'explicit');
-                saved += 1;
+                saved = (await savedSoFar()) + 1;
                 // 설정 탭·자동 추출과 같은 감사 경로(memory.*) — 본문은 싣지 않는다.
                 void auditMemoryWrite('memory.agent_task_created', ctx.userId, { id: row.id, source: 'explicit', length: content.length, taskId });
                 return { text: T.saved(content) };

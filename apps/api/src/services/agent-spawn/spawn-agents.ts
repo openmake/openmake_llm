@@ -22,7 +22,7 @@
  */
 import { z } from 'zod';
 import { type LLMClient } from '../../llm';
-import type { ToolDefinition } from '../../llm/types';
+import type { ToolDefinition, UsageMetrics } from '../../llm/types';
 import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_SPAWN, TOOL_RESULT_TRUNCATION } from '../../config/runtime-limits';
@@ -205,7 +205,7 @@ interface SpawnAgentsParams {
     taskId: string;
     sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs'>;
     signal?: AbortSignal;
-    onTokens?: (n: number) => void;
+    onTokens?: (n: number, metrics?: UsageMetrics) => void;
     /** 부모 작업의 남은 토큰 예산(에이전트 작업 경로만) — 병렬 서브의 합이 이를 넘지 않게 한다. */
     remainingTokens?: () => number;
     onPausedMs?: (ms: number) => void;

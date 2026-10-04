@@ -36,9 +36,9 @@ const runtime = (taskId: string, policy: 'all' | 'high-risk' | 'none', goal = GO
     new TaskRuntime(taskId, 'u1', cfg(policy), undefined, undefined, undefined, goal);
 
 describe('TaskRuntime — memory_save', () => {
-    it('목표가 저장을 청할 때만 도구가 실린다', () => {
+    it('도구는 목표와 무관하게 등록된다 — 모델에 보여 줄지는 턴 관문이 정한다(작업 도중 지시로도 쓸 수 있게)', () => {
         expect(runtime('t-mem-exp', 'all').isTaskTool('memory_save')).toBe(true);
-        expect(runtime('t-mem-noexp', 'all', '1부터 100까지 제곱의 합을 계산해 주세요').isTaskTool('memory_save')).toBe(false);
+        expect(runtime('t-mem-noexp', 'all', '1부터 100까지 제곱의 합을 계산해 주세요').isTaskTool('memory_save')).toBe(true);
     });
 
     it.each(['all', 'high-risk', 'none'] as const)('정책 %s — 승인 카드가 뜨고 문장 전문이 실린다. 승인하면 저장한다', async (policy) => {

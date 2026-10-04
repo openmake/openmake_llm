@@ -84,6 +84,8 @@ export const MEMORY_SAVE_TOOL_TEXT = {
     duplicate: '이미 같은 내용의 메모리가 있습니다. 다시 저장하지 않았습니다.',
     userCap: (max: number) => `사용자 메모리가 상한(${max}건)에 닿아 저장하지 않았습니다. 사용자가 설정에서 기존 항목을 지워야 합니다.`,
     taskCap: (max: number) => `이 작업에서 저장할 수 있는 건수(${max}건)를 다 썼습니다. 더 저장하지 마세요.`,
+    /** 저장 성공 결과의 머리말 — 재개 때 단계 기록에서 저장 건수를 셀 때도 이 문구를 찾는다(바꾸면 옛 기록을 못 센다). */
+    savedPrefix: '메모리에 저장했습니다',
     saved: (content: string) => `메모리에 저장했습니다: "${content}"`,
     failed: (reason: string) => `메모리 저장 실패: ${reason}`,
 } as const;

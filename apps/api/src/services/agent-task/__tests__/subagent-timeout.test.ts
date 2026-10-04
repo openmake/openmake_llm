@@ -124,6 +124,17 @@ describe('서브에이전트 — 부모 잔여 토큰 예산', () => {
         expect(out).toContain('진행 중');
     });
 
+    it('호출별 사용량(metrics)도 부모에 넘긴다 — 부모가 캐시 적중 토큰을 누적할 수 있게', async () => {
+        const chat = jest.fn().mockResolvedValue({ content: '끝', metrics: { prompt_tokens: 10, completion_tokens: 2, cached_prompt_tokens: 7 } });
+        const client = { requestTimeout: 120_000, derive: jest.fn(() => ({ chat })), chat: jest.fn() };
+        const seen: Array<{ n: number; cached?: number }> = [];
+        await runSubagent({
+            ...(params(client) as object),
+            onTokens: (n: number, m?: { cached_prompt_tokens?: number }) => { seen.push({ n, cached: m?.cached_prompt_tokens }); },
+        } as never);
+        expect(seen).toEqual([{ n: 12, cached: 7 }]);
+    });
+
     it('부모 잔여가 넉넉하면 종전대로 턴 상한까지 간다', async () => {
         const { client, chat } = busyClient();
         const { prefetchReadOnlyCalls } = jest.requireMock('../../tool-parallel') as { prefetchReadOnlyCalls: jest.Mock };
