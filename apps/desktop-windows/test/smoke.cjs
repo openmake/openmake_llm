@@ -69,6 +69,7 @@ const { WebSocketServer } = require(path.join(__dirname, '..', '..', '..', 'node
     assert.ok(!fs.existsSync(path.join(folder, 'late.txt')), '만료 요청은 실행되지 않는다');
     await new Promise((r) => setTimeout(r, 300));
     assert.ok(events.some((e) => e.ev === 'ready'), 'ready 이벤트');
+    assert.ok(events.some((e) => e.ev === 'ready' && e.trayIcon === true), '트레이 아이콘이 비어 있지 않다(빈 이미지면 작업 표시줄에 보이지 않는다)');
     assert.ok(events.some((e) => e.ev === 'status' && e.code === 'connected'), '연결됨 상태');
     assert.ok(fs.existsSync(path.join(dataDir, 'device-id')), 'PC 식별자를 데이터 폴더에 저장');
   } catch (e) { failed = e; }

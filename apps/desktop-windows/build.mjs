@@ -11,3 +11,4 @@ mkdirSync(join(here, 'dist'), { recursive: true });
 execFileSync('npx', ['esbuild', join(here, 'src/main.mjs'), '--bundle', '--platform=node', '--target=node20', '--format=cjs',
     '--external:electron', `--outfile=${join(here, 'dist/main.cjs')}`], { cwd: root, stdio: 'inherit', shell: process.platform === 'win32' });
 for (const f of ['settings.html', 'preload.cjs']) cpSync(join(here, 'src', f), join(here, 'dist', f));
+cpSync(join(here, 'assets', 'icon.png'), join(here, 'dist', 'icon.png'));
