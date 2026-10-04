@@ -22,9 +22,9 @@
  * @module mcp/sandbox-bootstrap
  */
 import * as fs from 'fs';
-import { execFileSync } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import {
-    defaultSandboxConfig, resolveDocker, type SandboxConfig,
+    defaultSandboxConfig, resolveDocker, sandboxCacheVolumeName, type SandboxConfig,
     MCP_SANDBOX_ROLE_LABEL, MCP_SANDBOX_PID_LABEL_KEY,
 } from './sandbox-docker';
 import { MCP_SANDBOX_BOOTSTRAP } from '../../config/runtime-limits';
@@ -206,4 +206,41 @@ export function reapOrphanSandboxContainers(deps: OrphanReapDeps = {}): OrphanRe
         }
     }
     return result;
+}
+
+/** 테스트 주입용 — 미지정 시 실제 docker 를 비동기로 부른다(삭제 요청의 이벤트 루프를 막지 않는다). */
+interface CacheVolumeRemoveDeps {
+    resolveDockerPath?: () => string | null;
+    dockerExec?: (dockerPath: string, args: string[], timeoutMs: number) => Promise<string>;
+    sleep?: (ms: number) => Promise<void>;
+}
+
+function defaultDockerExecAsync(dockerPath: string, args: string[], timeoutMs: number): Promise<string> {
+    return new Promise((resolve, reject) => {
+        execFile(dockerPath, args, { encoding: 'utf-8', timeout: timeoutMs }, (err, stdout, stderr) =>
+            (err ? reject(new Error(String(stderr || err.message).trim())) : resolve(stdout)));
+    });
+}
+
+/**
+ * 삭제한 MCP 서버의 캐시 볼륨(npm·uv 캐시)을 치운다 — 종전에는 서버를 지워도 볼륨이 남아 쌓였다.
+ * 지웠으면 true. 볼륨이 없거나(샌드박스로 띄운 적 없음) docker 부재·실패는 false — throw 하지 않는다.
+ */
+export async function removeSandboxCacheVolume(serverId: string, deps: CacheVolumeRemoveDeps = {}): Promise<boolean> {
+    if (!MCP_SANDBOX_BOOTSTRAP.CACHE_VOLUME_CLEANUP_ENABLED) return false;
+    const dockerPath = (deps.resolveDockerPath ?? resolveConfiguredDocker)();
+    if (!dockerPath) return false;
+    const exec = deps.dockerExec ?? defaultDockerExecAsync;
+    const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+    const volume = sandboxCacheVolumeName(serverId, defaultSandboxConfig().cacheVolume);
+    for (let attempt = 1; attempt <= MCP_SANDBOX_BOOTSTRAP.CACHE_VOLUME_RM_ATTEMPTS; attempt++) {
+        try {
+            await exec(dockerPath, ['volume', 'rm', volume], MCP_SANDBOX_BOOTSTRAP.DOCKER_PROBE_TIMEOUT_MS);
+            return true;
+        } catch (err) {
+            if (/no such volume/i.test(err instanceof Error ? err.message : String(err))) return false;
+            if (attempt < MCP_SANDBOX_BOOTSTRAP.CACHE_VOLUME_RM_ATTEMPTS) await sleep(MCP_SANDBOX_BOOTSTRAP.CACHE_VOLUME_RM_RETRY_MS);
+        }
+    }
+    return false;
 }
