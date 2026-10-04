@@ -8,7 +8,7 @@ import * as path from 'path';
 import { WebSocketServer, type WebSocket as ServerWs } from 'ws';
 import { BridgeConnection, parseNotice } from '../connection';
 import { BridgeCore } from '../core';
-import { NOTICE_TOOL_NAME_MAX } from '../constants';
+import { BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, NOTICE_TOOL_NAME_MAX } from '../constants';
 import type { BridgeNotice } from '../types';
 
 interface Frame { type?: string; reqId?: string; result?: Record<string, unknown>; deviceId?: string; label?: string; folderName?: string }
@@ -89,6 +89,44 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
         expect(hello).toMatchObject({ deviceId: 'test-device-1', label: 'unit · test', folderName: path.basename(base) });
         await new Promise((r) => setTimeout(r, 50));
         expect(statuses.some((s) => s.startsWith('연결됨'))).toBe(true);
+    });
+
+    it('hello 프레임에 지원 요청 종류와 PC 식별자를 싣는다', async () => {
+        const core = new BridgeCore({ folder: base, confirm: async () => 'all', sandboxProfileDir: os.tmpdir() });
+        conn = new BridgeConnection({
+            serverUrl: `http://127.0.0.1:${server.port}`, core, deviceId: 'pc-1-r-abc', hostId: 'pc-1', label: 'unit · test',
+            headers: () => ({ Authorization: 'Bearer omk_test' }),
+        });
+        await conn.connect();
+        const hello = await server.waitFor((f) => f.type === 'bridge_hello') as Frame & { capabilities?: string[]; hostId?: string };
+        expect(hello.hostId).toBe('pc-1');
+        expect(hello.capabilities).toEqual([...BRIDGE_KINDS]);
+    });
+
+    it('hostId 를 주지 않으면 hello 에 싣지 않는다 (서버가 deviceId 로 본다)', async () => {
+        await makeConn().connect();
+        const hello = await server.waitFor((f) => f.type === 'bridge_hello') as Frame & { hostId?: string };
+        expect('hostId' in hello).toBe(false);
+    });
+
+    it('만료된 요청은 실행하지 않고 거절한다', async () => {
+        await makeConn().connect();
+        await server.waitFor((f) => f.type === 'bridge_hello');
+        server.send({ type: 'bridge_exec', kind: 'write', path: 'late.txt', contentB64: Buffer.from('x').toString('base64'), reqId: 'r-late', expiresAt: Date.now() - EXPIRY_SKEW_TOLERANCE_MS - 1000 });
+        const res = await server.waitFor((f) => f.type === 'bridge_result' && f.reqId === 'r-late');
+        expect(res.result).toMatchObject({ ok: false, rejected: 'expired' });
+        expect(fs.existsSync(path.join(base, 'late.txt'))).toBe(false);
+    });
+
+    it('같은 reqId 가 다시 오면 두 번 실행하지 않는다', async () => {
+        await makeConn().connect();
+        await server.waitFor((f) => f.type === 'bridge_hello');
+        server.send({ type: 'bridge_exec', kind: 'write', path: 'once.txt', contentB64: Buffer.from('first').toString('base64'), reqId: 'r-dup' });
+        await server.waitFor((f) => f.type === 'bridge_result' && f.reqId === 'r-dup');
+        server.send({ type: 'bridge_exec', kind: 'write', path: 'once.txt', contentB64: Buffer.from('second').toString('base64'), reqId: 'r-dup' });
+        const res = await server.waitFor((f) => f.type === 'bridge_result' && f.reqId === 'r-dup' && f.result?.ok === false);
+        expect(res.result).toMatchObject({ ok: false, rejected: 'duplicate' });
+        expect(fs.readFileSync(path.join(base, 'once.txt'), 'utf8')).toBe('first');
     });
 
     it('bridge_exec → 코어 실행 → 같은 reqId 의 bridge_result(durationMs 포함)', async () => {

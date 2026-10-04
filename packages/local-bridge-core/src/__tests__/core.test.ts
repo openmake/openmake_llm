@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { SANDBOX_ENABLED } from '../constants';
+import { BRIDGE_KINDS, SANDBOX_ENABLED } from '../constants';
 import { BridgeCore } from '../core';
 import type { BridgeMsg, BridgeResult, ConfirmFn } from '../types';
 
@@ -145,5 +145,12 @@ describe('BridgeCore', () => {
         const r = await run(makeCore(base), { kind: 'evil_rpc' });
         expect(r.ok).toBe(false);
         expect(r.error).toContain('지원하지 않는 kind');
+    });
+
+    it('BRIDGE_KINDS(서버에 알리는 능력 목록)는 handleExec 가 처리하는 종류와 정확히 같다', () => {
+        const src = fs.readFileSync(path.join(__dirname, '..', 'core.ts'), 'utf8');
+        const body = src.slice(src.indexOf('switch (m.kind)'));
+        const cases = [...body.matchAll(/case '([a-z_A-Z]+)'/g)].map((m) => m[1]);
+        expect([...cases].sort()).toEqual([...BRIDGE_KINDS].sort());
     });
 });

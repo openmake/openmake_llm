@@ -9,6 +9,7 @@ const mockRegister = jest.fn(() => true);
 const mockHandleResult = jest.fn();
 
 jest.mock('../../services/local-bridge/registry', () => ({
+    normalizeCapabilities: jest.requireActual('../../services/local-bridge/registry').normalizeCapabilities,
     getLocalBridgeRegistry: () => ({
         register: (...a: unknown[]) => mockRegister(...(a as [])),
         handleResult: (...a: unknown[]) => mockHandleResult(...(a as [])),
@@ -69,5 +70,29 @@ describe('handleBridgeMessage — 연결 방식 게이트', () => {
         await handleBridgeMessage(ws, hello);
         expect(mockRegister).not.toHaveBeenCalled();
         expect(raw.close).toHaveBeenCalledWith(1008, 'bridge_scope_required');
+    });
+});
+
+describe('handleBridgeMessage — 능력 목록·PC 식별자', () => {
+    const registered = (): Record<string, unknown> => (mockRegister.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+
+    it('hello 의 hostId·capabilities 를 정리해 등록에 넘긴다', async () => {
+        const { ws } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, { ...hello, hostId: '  mac-1  ', capabilities: ['read', 'exec', 'made_up'] } as unknown as WSMessage);
+        expect(registered().hostId).toBe('mac-1');
+        expect([...(registered().capabilities as Set<string>)].sort()).toEqual(['exec', 'read']);
+    });
+
+    it('보내지 않은 구버전은 둘 다 undefined 로 넘긴다 (레지스트리가 현행대로 처리)', async () => {
+        const { ws } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, hello);
+        expect(registered().hostId).toBeUndefined();
+        expect(registered().capabilities).toBeUndefined();
+    });
+
+    it('문자열이 아닌 hostId 는 버린다', async () => {
+        const { ws } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, { ...hello, hostId: { evil: true } } as unknown as WSMessage);
+        expect(registered().hostId).toBeUndefined();
     });
 });

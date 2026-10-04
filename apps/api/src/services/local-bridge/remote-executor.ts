@@ -14,12 +14,16 @@
  */
 import type { TaskExecutor, ExecResult, CodeNavSpec, CodeNavData } from '../task-sandbox/executor';
 import { stripWorkspacePrefix } from '../task-sandbox/workspace-path';
-import { getLocalBridgeRegistry, type BridgeResult, type BridgeRequestPayload } from './registry';
+import { getLocalBridgeRegistry, type BridgeKind, type BridgeResult, type BridgeRequestPayload } from './registry';
+import { getLocalBridgeUnknownOutcomeNotice } from '../../prompts/agent-task-prompt';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { readFile as fsReadFile, stat } from 'fs/promises';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('RemoteExecutor');
+
+/** 응답 없이 끝나면 "결과 불명"으로 다루는 요청 종류 — 기기의 상태를 바꾸는 것(쓰기·실행). 나머지는 읽기라 재시도 가능. */
+const UNKNOWN_OUTCOME_KINDS: ReadonlySet<BridgeKind> = new Set<BridgeKind>(['exec', 'write', 'delete']);
 
 /** 디바이스가 돌려줄 수 있는 test_runner 값 — 그 밖의 문자열은 믿지 않는다. */
 const TEST_RUNNER_TOKENS: readonly string[] = ['npm', 'pytest', 'go', 'none'];
@@ -100,9 +104,16 @@ export class RemoteExecutor implements TaskExecutor {
         }
     }
 
-    private req(payload: BridgeRequestPayload, timeoutMs?: number): Promise<BridgeResult> {
+    private async req(payload: BridgeRequestPayload, timeoutMs?: number): Promise<BridgeResult> {
         const withFolder = this.folderRel ? { ...payload, folder: this.folderRel } : payload;
-        return getLocalBridgeRegistry().request(this.userId, withFolder, timeoutMs, this.deviceId);
+        const r = await getLocalBridgeRegistry().request(this.userId, withFolder, timeoutMs, this.deviceId);
+        // 쓰기·실행 요청을 보낸 뒤 응답을 못 받았다 — 기기에서 실행됐을 수 있다. 일반 오류로 돌려주면 모델이 같은 호출을
+        // 다시 보내 두 번 실행될 수 있으므로, 상태부터 확인하라는 안내로 바꾼다. 읽기 계열은 다시 시도해도 되므로 그대로 둔다.
+        if (!r.ok && UNKNOWN_OUTCOME_KINDS.has(payload.kind) && (r.transport === 'timeout' || r.transport === 'disconnected')) {
+            logger.warn(`[${this.taskId}] 로컬 ${payload.kind} 결과 불명 (${r.transport})`);
+            return { ...r, error: getLocalBridgeUnknownOutcomeNotice(payload.kind, r.transport) };
+        }
+        return r;
     }
 
     /**

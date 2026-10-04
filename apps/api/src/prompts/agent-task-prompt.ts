@@ -337,6 +337,15 @@ export function getAgentTaskUnknownOutcomeNotice(toolName: string): string {
     return `이 도구 호출(${toolName})은 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없습니다. 이미 일부 또는 전부 반영됐을 수 있으니 같은 호출을 바로 반복하지 마세요. 먼저 현재 상태(파일·작업 디렉터리·대상 시스템)를 확인하고, 반영되지 않은 부분만 이어서 수행하세요. 확인할 방법이 없으면 사용자에게 물어보세요(ask_human).`;
 }
 
+/**
+ * 로컬 기기로 보낸 쓰기·실행 요청이 응답 없이 끝났을 때(연결 끊김·시간 초과)의 도구 결과 — 기기에서 실행됐을 수 있으므로
+ * 모델이 같은 호출을 바로 반복하지 않고 상태부터 확인하게 한다 (Companion P1).
+ */
+export function getLocalBridgeUnknownOutcomeNotice(action: string, cause: 'timeout' | 'disconnected'): string {
+    const why = cause === 'timeout' ? '기기의 응답이 제시간에 오지 않아' : '기기와의 연결이 끊겨';
+    return `이 요청(${action})은 ${why} 결과를 알 수 없습니다. 기기에서 이미 일부 또는 전부 실행됐을 수 있으니 같은 호출을 바로 반복하지 마세요. 먼저 현재 상태(파일·작업 디렉터리·대상 시스템)를 읽어서 확인하고, 반영되지 않은 부분만 이어서 수행하세요. 확인할 방법이 없으면 사용자에게 물어보세요(ask_human).`;
+}
+
 /** 결과 불명 호출을 사용자에게 묻는 질문 — 승인은 "다시 실행", 거절은 "다시 실행하지 않음" 이다. */
 export function getAgentTaskUnknownOutcomeQuestion(toolName: string): string {
     return `도구 호출(${toolName})이 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없습니다. 이미 일부 또는 전부 반영됐을 수 있습니다. 다시 실행할까요? 승인하면 같은 호출을 다시 실행하고, 거절하면 다시 실행하지 않고 현재 상태를 확인한 뒤 이어갑니다. 이미 끝났다면 그 내용을 답변으로 적어 주세요.`;

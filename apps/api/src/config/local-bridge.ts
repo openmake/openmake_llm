@@ -20,8 +20,14 @@ export const LOCAL_BRIDGE = {
     /** read/exec 결과 수신 캡(chars) — 모델 컨텍스트/스텝 저장 보호(샌드박스 outputCap 관행과 동일 축). */
     OUTPUT_CAP: parseInt(process.env.LOCAL_BRIDGE_OUTPUT_CAP || '65536', 10),
 
-    /** 유저당 동시 등록 브리지 디바이스 상한 (데스크톱+CLI 병존, 2026-08-21 다중화). */
+    /**
+     * 유저당 동시 등록 PC 상한. PC 는 bridge_hello.hostId 로 구분한다 — 같은 PC 의 폴더별 연결은 1대로 센다.
+     * hostId 를 보내지 않는 구버전 기기는 연결(deviceId)마다 1대로 센다.
+     */
     MAX_DEVICES: parseInt(process.env.LOCAL_BRIDGE_MAX_DEVICES || '3', 10),
+
+    /** PC 1대가 동시에 연결할 수 있는 폴더(루트) 상한 — PC 단위로 세면서 폴더 수가 무한정 늘지 않게 한다. */
+    MAX_ROOTS_PER_HOST: parseInt(process.env.LOCAL_BRIDGE_MAX_ROOTS_PER_HOST || '8', 10),
 
     /** 폴더 선택(folders kind) 1회 열거 상한 — 초과분은 절단 + truncated 플래그(디바이스측 강제). */
     FOLDERS_MAX_ENTRIES: parseInt(process.env.BRIDGE_FOLDERS_MAX_ENTRIES || '200', 10),

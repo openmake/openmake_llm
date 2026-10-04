@@ -113,3 +113,44 @@ describe('RemoteExecutor 브라우저 폐기', () => {
         expect(spy).not.toHaveBeenCalled();
     });
 });
+
+describe('RemoteExecutor 결과 불명 — 보낸 뒤 응답을 못 받은 쓰기·실행', () => {
+    afterEach(() => jest.restoreAllMocks());
+    const lost = (transport: 'timeout' | 'disconnected') => ({ ok: false, error: '원래 오류 문구', transport });
+
+    it.each(['timeout', 'disconnected'] as const)('exec 가 %s 로 끝나면 결과 불명 안내를 돌려준다', async (transport) => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue(lost(transport));
+        const r = await new RemoteExecutor('task-1', 'user-1').exec('npm run deploy');
+        expect(r.exitCode).not.toBe(0);
+        expect(r.stderr).toContain('결과를 알 수 없습니다');
+        expect(r.stderr).toContain('반복하지 마세요');
+    });
+
+    it('writeFile·deleteFile 도 결과 불명 안내로 실패한다', async () => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue(lost('disconnected'));
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await expect(ex.writeFile('a.txt', 'x')).rejects.toThrow('결과를 알 수 없습니다');
+        await expect(ex.deleteFile('a.txt')).rejects.toThrow('결과를 알 수 없습니다');
+    });
+
+    it('읽기 계열은 원래 오류 그대로 — 다시 시도해도 된다', async () => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue(lost('timeout'));
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await expect(ex.readFile('a.txt')).rejects.toThrow('원래 오류 문구');
+        await expect(ex.listDir('.')).rejects.toThrow('원래 오류 문구');
+    });
+
+    it('기기에 닿지 않은 실패(no_device·send_failed)는 결과 불명이 아니다', async () => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: false, error: '연결된 로컬 디바이스가 없습니다', transport: 'no_device' });
+        const r = await new RemoteExecutor('task-1', 'user-1').exec('ls');
+        expect(r.stderr).toContain('연결된 로컬 디바이스가 없습니다');
+        expect(r.stderr).not.toContain('결과를 알 수 없습니다');
+    });
+
+    it('기기가 직접 돌려준 실패는 그대로 전달한다', async () => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: false, error: '사용자가 명령 실행을 거부했습니다', exitCode: 126 });
+        const r = await new RemoteExecutor('task-1', 'user-1').exec('rm -rf x');
+        expect(r.stderr).toContain('거부');
+    });
+});
+

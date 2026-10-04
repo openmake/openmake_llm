@@ -25,6 +25,7 @@ router.get('/status', requireAuthOrApiKeyScope(API_KEY_SCOPES.BRIDGE), (req: Req
         folderName: latest?.folderName ?? null,
         devices: devices.map((d) => ({
             deviceId: d.deviceId,
+            hostId: d.hostId ?? d.deviceId,
             label: d.label,
             folderName: d.folderName,
             connectedAt: d.connectedAt,

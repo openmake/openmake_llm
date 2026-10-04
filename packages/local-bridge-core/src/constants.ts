@@ -35,6 +35,19 @@ export const TASK_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;
 export const NOTICE_KINDS: readonly string[] = ['approval_pending'];
 export const NOTICE_TOOL_NAME_MAX = 100;
 
+/**
+ * 이 코어가 처리하는 요청 종류 — bridge_hello.capabilities 로 서버에 알린다. core.ts handleExec 의 case 와 1:1
+ * (`__tests__/core.test.ts` 가 확인). 서버는 여기 없는 종류를 이 기기로 보내지 않는다.
+ */
+export const BRIDGE_KINDS: readonly string[] = [
+    'exec', 'read', 'write', 'list', 'listAll', 'delete', 'task_end', 'worktree', 'folders', 'lsp_diagnostics', 'code_nav', 'test_runner',
+];
+
+/** 요청 만료 판정의 시계 오차 허용(ms) — 서버와 PC 의 시계가 이만큼 어긋나도 정상 요청을 버리지 않는다. */
+export const EXPIRY_SKEW_TOLERANCE_MS = 120000;
+/** 중복 판정을 위해 기억하는 reqId 수 */
+export const SEEN_REQ_MAX = 2000;
+
 /** folders(하위 폴더 열거) 1회 상한 — 서버 BRIDGE_FOLDERS_MAX_ENTRIES 와 같은 축(디바이스측 강제). */
 export const FOLDERS_MAX_ENTRIES = 200;
 
