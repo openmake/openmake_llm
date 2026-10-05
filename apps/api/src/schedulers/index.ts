@@ -156,10 +156,12 @@ export async function startAllSchedulers(): Promise<void> {
 
     // 7-b. 질문 응답 대기 주차 스윕(F16.7) — 결정 도착분 재개·상한 초과분 실패·대기분 workspace 유지(주차가 없으면 조회 1회)
     try {
-        const { sweepParkedTasks } = await import('../services/agent-task/hitl-park');
+        const { sweepParkedTasks, expireParkedTasks } = await import('../services/agent-task/hitl-park');
         const { AGENT_TASK_LIMITS } = await import('../config/runtime-limits');
         void sweepParkedTasks();
         setInterval(() => { void sweepParkedTasks(); }, AGENT_TASK_LIMITS.HITL_PARK_SWEEP_MS).unref();
+        // 상한 초과 판정만 더 자주 — 본 스윕 주기를 기다리지 않고 실패로 바꾼다(재개 시도 빈도는 그대로)
+        setInterval(() => { void expireParkedTasks(); }, AGENT_TASK_LIMITS.HITL_PARK_EXPIRE_SWEEP_MS).unref();
     } catch (err) {
         logger.warn('주차 스윕 등록 실패(무시):', err);
     }
