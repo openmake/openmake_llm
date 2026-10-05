@@ -10,6 +10,7 @@ import { useTranslations } from "next-intl";
 import { Building2, Plus, Trash2, Users, ShieldCheck, History, Download, Upload, Loader2 } from "lucide-react";
 import { PageHeader, PageBody, Card, CardHeader, CardTitle, CardContent, Badge, Button, Table, Th, Td } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
+import { BrowserSitePolicyEditor, BROWSER_SITE_POLICY_SETTING_KEY } from "@/components/admin/browser-site-policy-editor";
 import type { ApiSuccess, OrgRole } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 
@@ -64,6 +65,18 @@ function PolicyEditor({ orgId, policies, onChanged }: { orgId: string; policies:
       setBusy(null);
     }
   }
+  /** 사이트 정책은 전용 편집기가 검증한 JSON 을 넘긴다 — 서버(조직 정책 저장)도 같은 검증을 한다. */
+  async function saveSitePolicy(json: string) {
+    setBusy(BROWSER_SITE_POLICY_SETTING_KEY);
+    try {
+      await ApiClient.put(`/api/admin/organizations/${orgId}/policies/${BROWSER_SITE_POLICY_SETTING_KEY}`, { value: JSON.parse(json) });
+      onChanged();
+    } catch (e) {
+      alert(t("policySaveFailed", { error: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setBusy(null);
+    }
+  }
   async function reset(key: string) {
     setBusy(key);
     try { await ApiClient.del(`/api/admin/organizations/${orgId}/policies/${key}`); onChanged(); }
@@ -99,6 +112,15 @@ function PolicyEditor({ orgId, policies, onChanged }: { orgId: string; policies:
           </div>
         </div>
       ))}
+      <div className="space-y-2">
+        <p className="text-[11px] text-muted">{t(`policyHelp.${BROWSER_SITE_POLICY_SETTING_KEY}`)}</p>
+        <BrowserSitePolicyEditor
+          value={current(BROWSER_SITE_POLICY_SETTING_KEY) === undefined ? "" : JSON.stringify(current(BROWSER_SITE_POLICY_SETTING_KEY))}
+          source={current(BROWSER_SITE_POLICY_SETTING_KEY) === undefined ? "default" : "db"}
+          busy={busy === BROWSER_SITE_POLICY_SETTING_KEY}
+          onSave={(json) => void saveSitePolicy(json)}
+          onReset={() => void reset(BROWSER_SITE_POLICY_SETTING_KEY)} />
+      </div>
     </div>
   );
 }

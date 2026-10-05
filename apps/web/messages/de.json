@@ -2545,7 +2545,8 @@
     "policyHelp": {
       "EXTERNAL_MODEL_POLICY": "Allow/Deny-Globs für externe Modelle als JSON. deny wird mit global vereinigt, allow geschnitten — eine Organisation kann eine globale Sperre nicht aufheben.",
       "TOOL_APPROVAL_POLICY_MIN": "Untergrenze der Genehmigungsrichtlinie für Agentenaufgaben. Ist sie strenger als die Anfrage, gilt die Untergrenze.",
-      "MCP_ALLOWED_SERVERS": "Kommagetrennte MCP-Katalogvorlagen-IDs, deren Installation erlaubt ist. Leer = keine Einschränkung."
+      "MCP_ALLOWED_SERVERS": "Kommagetrennte MCP-Katalogvorlagen-IDs, deren Installation erlaubt ist. Leer = keine Einschränkung.",
+      "BROWSER_SITE_POLICY": "Browser-Website-Richtlinie dieser Organisation. Die Deny-Liste wird mit global vereinigt. Hat global eine Allow-Liste, bleiben nur Einträge, die in beiden stehen; ist global leer, gilt die Liste der Organisation. Zurücksetzen folgt global."
     },
     "history": "Änderungsverlauf",
     "noHistory": "Noch keine Änderungen.",
