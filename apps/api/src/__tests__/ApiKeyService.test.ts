@@ -67,8 +67,12 @@ jest.mock('../utils/logger', () => ({
 }));
 
 const mockDisconnectByApiKey = jest.fn().mockReturnValue(0);
+const mockUpdateApiKeyExpiry = jest.fn().mockReturnValue(0);
 jest.mock('../services/local-bridge/registry', () => ({
-    getLocalBridgeRegistry: () => ({ disconnectByApiKey: (...a: unknown[]) => mockDisconnectByApiKey(...(a as [])) }),
+    getLocalBridgeRegistry: () => ({
+        disconnectByApiKey: (...a: unknown[]) => mockDisconnectByApiKey(...(a as [])),
+        updateApiKeyExpiry: (...a: unknown[]) => mockUpdateApiKeyExpiry(...(a as [])),
+    }),
 }));
 
 // ─────────────────────────────────────────────
@@ -588,5 +592,44 @@ describe('키 폐기 → 브리지 연결 끊기', () => {
         mockRotateApiKey.mockResolvedValue(makeDbKey());
         await service.rotateKey('key-uuid-001', 'user-001');
         expect(mockDisconnectByApiKey).toHaveBeenCalledWith('key-uuid-001');
+    });
+});
+
+// ─────────────────────────────────────────────
+// 키 만료일 변경 → 브리지 연결 (2026-10-05)
+// ─────────────────────────────────────────────
+describe('키 만료일 변경 → 브리지 연결', () => {
+    const service = new ApiKeyService();
+
+    test('만료일을 지난 시각으로 바꾸면 그 키의 연결을 바로 닫는다', async () => {
+        const past = new Date(Date.now() - 60_000).toISOString();
+        mockGetApiKeyById.mockResolvedValue(makeDbKey({ scopes: ['bridge'] }));
+        mockUpdateApiKey.mockResolvedValue(makeDbKey({ scopes: ['bridge'], expires_at: past }));
+        await service.updateKey('key-uuid-001', 'user-001', { expiresAt: past });
+        expect(mockDisconnectByApiKey).toHaveBeenCalledWith('key-uuid-001');
+    });
+
+    test('만료일을 앞으로의 시각으로 바꾸면 닫지 않고 연결의 만료 시각만 고친다', async () => {
+        const future = new Date(Date.now() + 3_600_000).toISOString();
+        mockGetApiKeyById.mockResolvedValue(makeDbKey({ scopes: ['bridge'] }));
+        mockUpdateApiKey.mockResolvedValue(makeDbKey({ scopes: ['bridge'], expires_at: future }));
+        await service.updateKey('key-uuid-001', 'user-001', { expiresAt: future });
+        expect(mockDisconnectByApiKey).not.toHaveBeenCalled();
+        expect(mockUpdateApiKeyExpiry).toHaveBeenCalledWith('key-uuid-001', new Date(future).getTime());
+    });
+
+    test('만료일을 없애면(null) 연결의 만료도 없앤다', async () => {
+        mockGetApiKeyById.mockResolvedValue(makeDbKey({ scopes: ['bridge'], expires_at: '2030-01-01T00:00:00.000Z' }));
+        mockUpdateApiKey.mockResolvedValue(makeDbKey({ scopes: ['bridge'], expires_at: undefined }));
+        await service.updateKey('key-uuid-001', 'user-001', { expiresAt: null });
+        expect(mockDisconnectByApiKey).not.toHaveBeenCalled();
+        expect(mockUpdateApiKeyExpiry).toHaveBeenCalledWith('key-uuid-001', null);
+    });
+
+    test('만료일을 건드리지 않으면 연결의 만료 시각도 그대로', async () => {
+        mockGetApiKeyById.mockResolvedValue(makeDbKey({ scopes: ['bridge'] }));
+        mockUpdateApiKey.mockResolvedValue(makeDbKey({ scopes: ['bridge'], name: 'x' }));
+        await service.updateKey('key-uuid-001', 'user-001', { name: 'x' });
+        expect(mockUpdateApiKeyExpiry).not.toHaveBeenCalled();
     });
 });

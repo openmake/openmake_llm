@@ -191,8 +191,13 @@ export class ApiKeyService {
 
         logger.info(`API Key 수정: id=${keyId}, user=${userId}`);
         // 비활성화·bridge 스코프 제거 — 이 키로 이미 연결된 브리지는 연결 시점 검증만 받았으므로 여기서 닫는다.
-        if (!updated.is_active || !apiKeyHasScope(updated.scopes, API_KEY_SCOPES.BRIDGE)) {
+        // 만료일 변경 — 지난 시각이면 바로 닫고, 아니면 연결의 만료 시각을 바꿔 하트비트가 새 값으로 닫게 한다.
+        const expiresAtMs = updated.expires_at ? new Date(updated.expires_at).getTime() : null;
+        const expired = expiresAtMs !== null && expiresAtMs <= Date.now();
+        if (!updated.is_active || !apiKeyHasScope(updated.scopes, API_KEY_SCOPES.BRIDGE) || (updates.expiresAt !== undefined && expired)) {
             getLocalBridgeRegistry().disconnectByApiKey(keyId);
+        } else if (updates.expiresAt !== undefined) {
+            getLocalBridgeRegistry().updateApiKeyExpiry(keyId, expiresAtMs);
         }
         await this.audit('update', userId, keyId, updates as Record<string, unknown>);
         return toPublic(updated);

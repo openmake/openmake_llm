@@ -41,6 +41,14 @@ const result = { type: 'bridge_result', reqId: 'r-1', result: { ok: true } } as 
 beforeEach(() => { mockRegister.mockClear(); mockHandleResult.mockClear(); });
 
 describe('handleBridgeMessage — 연결 방식 게이트', () => {
+    it('게스트 연결(비활성·삭제 계정의 키로 재연결)의 bridge_hello 는 등록하지 않는다', async () => {
+        const { ws, raw, sent } = fakeWs(undefined);
+        raw._authenticatedUserId = null as unknown as string;
+        await handleBridgeMessage(ws, hello);
+        expect(mockRegister).not.toHaveBeenCalled();
+        expect(sent[0]).toMatchObject({ type: 'error' });
+    });
+
     it('JWT/쿠키 연결(스코프 없음)의 bridge_hello 는 등록하지 않고 1008 로 닫는다', async () => {
         const { ws, raw, sent } = fakeWs(undefined);
         await handleBridgeMessage(ws, hello);
