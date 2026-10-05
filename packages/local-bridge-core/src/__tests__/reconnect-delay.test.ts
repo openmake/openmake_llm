@@ -59,7 +59,9 @@ describe('BridgeConnection 재연결 백오프', () => {
         const delays: number[] = [];
         const conn = makeConn(port, delays, []);
         await conn.connect();
-        await new Promise((r) => setTimeout(r, 400));
+        // 고정 시간만 기다리면 느린 CI 러너에서 접속 실패 처리가 늦어 4번째 예약 전에 끝난다 — 4번 예약될 때까지 기다린다
+        const deadline = Date.now() + 5000;
+        while (delays.length < 4 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20));
         conn.disconnect();
         expect(delays.slice(0, 4)).toEqual([20, 40, 80, 160]);
     });

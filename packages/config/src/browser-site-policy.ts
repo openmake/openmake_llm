@@ -199,3 +199,88 @@ export function parseBrowserSitePolicy(raw: unknown): BrowserSitePolicy {
   const o = v as { allow?: unknown; deny?: unknown };
   return { allow: list(o.allow), deny: list(o.deny) };
 }
+
+/** 저장 값(JSON 문자열) 길이 상한 — 시스템 설정 값 상한(apps/api admin-system-settings.routes·system-settings-registry 의 2000자)과 같다 */
+export const BROWSER_SITE_POLICY_MAX_JSON_CHARS = 2000;
+/** 패턴 하나의 길이 상한 — 조직 정책 스키마와 같은 값 */
+export const BROWSER_SITE_PATTERN_MAX_CHARS = 200;
+
+/** 패턴 검증 실패 사유 — 화면은 이 값으로 문구를 고른다 */
+export type BrowserSitePatternError = "empty" | "scheme" | "userinfo" | "wildcard" | "invalid" | "too_long";
+
+export type BrowserSitePatternResult = { ok: true; pattern: string } | { ok: false; error: BrowserSitePatternError };
+
+const URL_SCHEME_RE = /^([a-z][a-z0-9+.-]*):\/\//;
+/** `javascript:`·`mailto:` 처럼 `//` 없는 스킴 — 점이 든 앞부분(`example.com:443`)은 호스트로 본다 */
+const BARE_SCHEME_RE = /^[a-z][a-z0-9+-]*:(.*)$/;
+const PORT_ONLY_RE = /^\d+(?:[/?#].*)?$/;
+const PORT_SUFFIX_RE = /:\d+$/;
+const HOST_LABEL_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+/** `*.` 뒤에 있어야 하는 최소 라벨 수 — `*.com` 같은 최상위 도메인 전체 허용을 막는다 */
+const WILDCARD_MIN_LABELS = 2;
+
+/**
+ * 관리자가 넣은 패턴을 판정(browserHostMatches)이 쓰는 꼴로 정규화한다.
+ * 받는 것: 호스트 이름(`groupware.example.co.kr`, `localhost`, IPv4), 맨 앞 라벨만 `*` 인 패턴(`*.example.co.kr`).
+ * http(s) 주소를 붙여 넣으면 호스트만 남기고 포트·경로·질의는 뗀다(판정은 호스트만 본다).
+ * 거절: 다른 스킴, 계정(`user@`), 그 밖의 위치의 `*`·`*.com`, 호스트 이름에 쓸 수 없는 글자(한글 도메인은 xn-- 로), 너무 긴 값.
+ */
+export function normalizeBrowserSitePattern(input: string): BrowserSitePatternResult {
+  let s = input.trim().toLowerCase();
+  if (!s) return { ok: false, error: "empty" };
+  const scheme = URL_SCHEME_RE.exec(s);
+  if (scheme) {
+    if (scheme[1] !== "http" && scheme[1] !== "https") return { ok: false, error: "scheme" };
+    s = s.slice(scheme[0].length);
+  } else {
+    const bare = BARE_SCHEME_RE.exec(s);
+    if (bare && !PORT_ONLY_RE.test(bare[1])) return { ok: false, error: "scheme" };
+  }
+  s = s.split(/[/?#]/, 1)[0];
+  if (s.includes("@")) return { ok: false, error: "userinfo" };
+  s = s.replace(PORT_SUFFIX_RE, "");
+  if (s.endsWith(".")) s = s.slice(0, -1);
+  if (!s) return { ok: false, error: "empty" };
+  if (s.length > BROWSER_SITE_PATTERN_MAX_CHARS) return { ok: false, error: "too_long" };
+  const labels = s.split(".");
+  if (s.includes("*")) {
+    const rest = labels.slice(1);
+    if (labels[0] !== "*" || rest.some((l) => l.includes("*")) || rest.length < WILDCARD_MIN_LABELS) {
+      return { ok: false, error: "wildcard" };
+    }
+    labels.shift();
+  }
+  if (!labels.every((l) => HOST_LABEL_RE.test(l))) return { ok: false, error: "invalid" };
+  return { ok: true, pattern: s };
+}
+
+const POLICY_LIST_KEYS = ["allow", "deny"] as const;
+
+/**
+ * 저장할 정책 값(JSON 문자열)의 문제 목록 — 비어 있으면 저장해도 된다. 서버(시스템 설정 저장)와 관리자 화면이 같이 쓴다.
+ * 저장 값은 정규화된 패턴만 받는다(`not_normalized`) — 화면은 정규화해 저장하므로 원문을 손으로 고친 값만 걸린다.
+ * 항목: `too_long` · `json` · `shape` · `<목록>[i] "<패턴>": <사유|not_normalized|duplicate>`
+ */
+export function browserSitePolicyProblems(raw: string): string[] {
+  if (raw.length > BROWSER_SITE_POLICY_MAX_JSON_CHARS) return ["too_long"];
+  let v: unknown;
+  try { v = JSON.parse(raw); } catch { return ["json"]; }
+  if (!v || typeof v !== "object" || Array.isArray(v)) return ["shape"];
+  const o = v as Record<string, unknown>;
+  const isStringList = (x: unknown) => Array.isArray(x) && x.every((p) => typeof p === "string");
+  const shapeOk = Object.keys(o).every((k) => (POLICY_LIST_KEYS as readonly string[]).includes(k))
+    && POLICY_LIST_KEYS.every((k) => o[k] === undefined || isStringList(o[k]));
+  if (!shapeOk) return ["shape"];
+  const problems: string[] = [];
+  for (const name of POLICY_LIST_KEYS) {
+    const list = (o[name] as string[] | undefined) ?? [];
+    const seen = new Set<string>();
+    list.forEach((p, i) => {
+      const r = normalizeBrowserSitePattern(p);
+      const why = !r.ok ? r.error : r.pattern !== p ? "not_normalized" : seen.has(p) ? "duplicate" : null;
+      if (why) problems.push(`${name}[${i}] "${clip(p)}": ${why}`);
+      seen.add(p);
+    });
+  }
+  return problems;
+}
