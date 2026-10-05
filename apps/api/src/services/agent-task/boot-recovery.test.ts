@@ -58,6 +58,18 @@ describe('recoverInterruptedAgentTasks — queued 고아', () => {
         expect(updateAgentTask).not.toHaveBeenCalled(); // failed 로 정리하지 않는다
     });
 
+    it('queued 재디스패치는 DB 에 남은 대기 등록 시각(updated_at)을 넘겨 대기 시간을 이어 잰다', async () => {
+        interrupted.push({ ...base, status: 'queued', checkpoint: null, updated_at: '2026-10-05T00:00:00.000Z' });
+        await recoverInterruptedAgentTasks();
+        expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ enqueuedAt: Date.parse('2026-10-05T00:00:00.000Z') }));
+    });
+
+    it('checkpoint 재개는 새로 줄 서므로 등록 시각을 넘기지 않는다', async () => {
+        interrupted.push({ ...base, status: 'failed', updated_at: '2026-10-05T00:00:00.000Z', checkpoint: { conversation: [{ role: 'user', content: 'x' }], completedTurn: 1 } });
+        await recoverInterruptedAgentTasks();
+        expect((dispatch.mock.calls[0] as unknown[])[0]).not.toHaveProperty('enqueuedAt');
+    });
+
     it('running 인데 checkpoint 가 없으면 종전대로 failed(interrupted)', async () => {
         interrupted.push({ ...base, status: 'running', checkpoint: null });
         const r = await recoverInterruptedAgentTasks();

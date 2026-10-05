@@ -1469,6 +1469,8 @@ export const AGENT_TASK_LIMITS = {
      *  관리자만 DEFAULT 초과(상한은 system_settings AGENT_TASK_QUEUE_PRIORITY_MAX). */
     QUEUE_PRIORITY_SCHEDULED: -1,
     QUEUE_PRIORITY_DEFAULT: 0,
+    /** 대기 시간 요약(GET /queue/stats 의 memory.wait.recent)에 쓰는 최근 시작 건수 — 대기열에서 꺼내(또는 즉시) 시작한 최근 N건. */
+    QUEUE_WAIT_SAMPLE_SIZE: 200,
     /** 실패 큐 뷰(GET /queue/dead) 기본 조회 기간(일)·최대 행 수. AGENT_TASK_DEAD_QUEUE_DAYS / AGENT_TASK_DEAD_QUEUE_LIMIT */
     DEAD_QUEUE_DAYS: parseInt(process.env.AGENT_TASK_DEAD_QUEUE_DAYS || '7', 10),
     DEAD_QUEUE_LIMIT: parseInt(process.env.AGENT_TASK_DEAD_QUEUE_LIMIT || '100', 10),
