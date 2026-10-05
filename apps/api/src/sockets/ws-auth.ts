@@ -21,6 +21,8 @@ interface WebSocketAuthResult {
     authMethod?: 'cookie' | 'bearer' | 'none';
     /** API key 인증 시 그 키의 스코프(브리지 등록 게이트용). JWT/쿠키 인증은 undefined. */
     apiKeyScopes?: string[] | null;
+    /** API key 인증 시 그 키의 id(키 폐기 시 브리지 연결 끊기용). */
+    apiKeyId?: string;
 }
 
 function tokenFingerprint(token: string): string {
@@ -71,6 +73,7 @@ async function resolveAuthFromApiKey(
             tokenFingerprint: tokenFingerprint(plainKey),
             authMethod: 'bearer',
             apiKeyScopes: (key.scopes as string[] | undefined) ?? ['*'],
+            apiKeyId: key.id,
         };
     } catch (e) {
         logger.warn('[WS] API key 인증 실패:', e);

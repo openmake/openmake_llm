@@ -44,7 +44,7 @@ export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promis
         // hostId·capabilities 는 2026-10-04 추가 필드 — 보내지 않는 구버전은 레지스트리가 현행대로 처리한다.
         const hostId = typeof msg.hostId === 'string' && msg.hostId.trim() ? msg.hostId.trim().slice(0, 64) : undefined;
         const capabilities = normalizeCapabilities(msg.capabilities);
-        const ok = registry.register({ userId, deviceId, label, folderName, hostId, capabilities, ws, connectedAt: Date.now() });
+        const ok = registry.register({ userId, deviceId, label, folderName, hostId, capabilities, ws, connectedAt: Date.now(), apiKeyId: extWs._apiKeyId });
         if (!ok) {
             ws.send(JSON.stringify({ type: 'error', message: `브리지 디바이스 상한(${LOCAL_BRIDGE.MAX_DEVICES}대)을 초과했습니다 — 다른 디바이스 연결을 해제하세요` }));
             // 미등록 소켓을 열어두면 좀비로 남아 MAX_CONNECTIONS_PER_USER 만 갉아먹는다 — 명시 종료.

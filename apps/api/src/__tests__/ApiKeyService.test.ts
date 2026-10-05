@@ -66,6 +66,11 @@ jest.mock('../utils/logger', () => ({
     }),
 }));
 
+const mockDisconnectByApiKey = jest.fn().mockReturnValue(0);
+jest.mock('../services/local-bridge/registry', () => ({
+    getLocalBridgeRegistry: () => ({ disconnectByApiKey: (...a: unknown[]) => mockDisconnectByApiKey(...(a as [])) }),
+}));
+
 // ─────────────────────────────────────────────
 // Import after mocks
 // ─────────────────────────────────────────────
@@ -535,5 +540,53 @@ describe('getApiKeyService', () => {
         const svc1 = getApiKeyService();
         const svc2 = getApiKeyService();
         expect(svc1).toBe(svc2);
+    });
+});
+
+// ─────────────────────────────────────────────
+// 키 폐기 시 그 키로 인증한 브리지 연결 끊기 (2026-10-05)
+// ─────────────────────────────────────────────
+describe('키 폐기 → 브리지 연결 끊기', () => {
+    const service = new ApiKeyService();
+
+    test('deleteKey 성공이면 그 키의 브리지 연결을 닫는다', async () => {
+        mockGetApiKeyById.mockResolvedValue(makeDbKey());
+        mockDeleteApiKey.mockResolvedValue(true);
+        await service.deleteKey('key-uuid-001', 'user-001');
+        expect(mockDisconnectByApiKey).toHaveBeenCalledWith('key-uuid-001');
+    });
+
+    test('deleteKey 실패(타인 키)면 닫지 않는다', async () => {
+        mockGetApiKeyById.mockResolvedValue(makeDbKey({ user_id: 'other' }));
+        await service.deleteKey('key-uuid-001', 'user-001');
+        expect(mockDisconnectByApiKey).not.toHaveBeenCalled();
+    });
+
+    test('updateKey 로 비활성화하면 닫는다', async () => {
+        mockGetApiKeyById.mockResolvedValue(makeDbKey());
+        mockUpdateApiKey.mockResolvedValue(makeDbKey({ is_active: false }));
+        await service.updateKey('key-uuid-001', 'user-001', { isActive: false });
+        expect(mockDisconnectByApiKey).toHaveBeenCalledWith('key-uuid-001');
+    });
+
+    test('updateKey 로 bridge 스코프를 빼면 닫는다', async () => {
+        mockGetApiKeyById.mockResolvedValue(makeDbKey({ scopes: ['bridge'] }));
+        mockUpdateApiKey.mockResolvedValue(makeDbKey({ scopes: ['chat'] }));
+        await service.updateKey('key-uuid-001', 'user-001', { scopes: ['chat'] });
+        expect(mockDisconnectByApiKey).toHaveBeenCalledWith('key-uuid-001');
+    });
+
+    test('이름만 바꾸면 닫지 않는다', async () => {
+        mockGetApiKeyById.mockResolvedValue(makeDbKey({ scopes: ['bridge'] }));
+        mockUpdateApiKey.mockResolvedValue(makeDbKey({ scopes: ['bridge'], name: 'x' }));
+        await service.updateKey('key-uuid-001', 'user-001', { name: 'x' });
+        expect(mockDisconnectByApiKey).not.toHaveBeenCalled();
+    });
+
+    test('rotateKey 성공이면 옛 키의 연결을 닫는다', async () => {
+        mockGetApiKeyById.mockResolvedValue(makeDbKey());
+        mockRotateApiKey.mockResolvedValue(makeDbKey());
+        await service.rotateKey('key-uuid-001', 'user-001');
+        expect(mockDisconnectByApiKey).toHaveBeenCalledWith('key-uuid-001');
     });
 });

@@ -78,6 +78,8 @@ async function recoverTask(
         taskId: task.id,
         userId: String(task.user_id),
         priority: task.priority, // 증발한 대기열의 순위를 그대로(131)
+        // 증발한 대기열의 등록 시각 — 'queued' 로 바뀐 뒤엔 행이 갱신되지 않아 updated_at 이 곧 대기 등록 시각이다(pg 는 Date 로 줄 수 있다)
+        ...(wasQueued && Number.isFinite(new Date(task.updated_at).getTime()) ? { enqueuedAt: new Date(task.updated_at).getTime() } : {}),
         run: () => service.execute({
             taskId: task.id,
             goal: task.goal,
