@@ -25,6 +25,7 @@ bash ../../scripts/publish-desktop-windows.sh     # 서버 배포 폴더에 복�
 ```
 
 - 서버 주소는 설정에 하나만 넣는다. 앱이 그 주소의 `GET /api/desktop/config` 로 서버의 API·웹 포트를 물어 연결 주소와 웹 주소를 정한다(macOS 앱과 같은 규칙 — `packages/local-bridge-core` 의 `endpoints`).
+- 브라우저 넘겨받기·돌려주기를 서버에 알린다(0.1.3, `bridge_event` 의 `browser_control`). 서버가 `LOCAL_BRIDGE_TAKEOVER_PARK` 를 켰으면 넘겨받은 동안 작업을 주차해 실행 자리를 비운다(macOS 앱과 같은 동작).
 - 앱은 `GET /api/desktop/latest` 의 `windows` 블록으로 새 버전을 확인하고, 받은 설치 파일의 sha256 을 대조한 뒤에만 실행한다(`src/update.mjs`).
 - CI(`.github/workflows/desktop-windows.yml`)가 Windows 실행기에서 테스트·기동 검증을 돌리고 설치 파일을 만들어 실행 결과에 `OpenMake-Companion-Setup` 으로 남긴다(30일 보관). 서버 게시는 그 파일을 받아 위 스크립트로 한다.
 - **설치 파일(NSIS)은 Windows 나 x64 장비에서 만든다.** Apple Silicon Mac 에서는 앱 폴더(`release/win-unpacked`)까지만 만들어지고, 번들된 `makensis` 가 x64 실행 파일이라 마지막 단계가 실패한다(Rosetta 없음, 2026-10-04 확인).
