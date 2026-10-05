@@ -14,7 +14,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { BridgeConnection, BridgeCore, bulkApprovalAllowed, discoverEndpoints, normalizeServerAddress } from '@openmake/local-bridge-core';
-import { pickLocale, translate } from './i18n.mjs';
+import { AUTH_STATUS_KEYS, pickLocale, translate } from './i18n.mjs';
 import { Store, DEFAULT_SERVER } from './store.mjs';
 import { pickWindowsUpdate, sha256Of } from './update.mjs';
 
@@ -97,7 +97,8 @@ async function connectFolder(folder) {
     onStatus: (_s, code, arg) => {
       entry.status = code === 'connected' ? `${t('status.connected')}: ${path.basename(real)}`
         : code === 'reconnecting' ? t('status.reconnecting')
-          : code === 'server_error' ? t('status.serverError', arg ?? '') : t('status.connecting');
+          : code === 'server_error' ? t('status.serverError', arg ?? '')
+            : AUTH_STATUS_KEYS[code] ? t(AUTH_STATUS_KEYS[code]) : t('status.connecting');
       emit({ ev: 'status', folder: real, code });
       rebuildMenu();
     },

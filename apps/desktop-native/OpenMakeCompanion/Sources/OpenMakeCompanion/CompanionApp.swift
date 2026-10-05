@@ -146,8 +146,11 @@ struct SettingsView: View {
                     }
                     serverInvalid = false
                     server = address
-                    Keychain.save(apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
-                    if address != helper.serverAddress { helper.switchServer(address) }
+                    let newKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let keyChanged = newKey != (Keychain.load() ?? "")
+                    Keychain.save(newKey)
+                    // 헬퍼는 key 를 띄울 때 받으므로 바뀐 key 는 재기동해야 쓰인다(주소 변경도 재기동한다).
+                    if address != helper.serverAddress { helper.switchServer(address) } else if keyChanged { helper.reloadApiKey() }
                     helper.setBrowserEnabled(browserEnabled)
                     saved = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saved = false }

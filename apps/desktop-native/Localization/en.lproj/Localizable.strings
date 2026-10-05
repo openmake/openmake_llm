@@ -39,6 +39,14 @@
 "status.helperMissing" = "Helper resources missing (reinstall required)";
 "status.helperExited" = "Helper stopped — connect again";
 "status.helperLaunchFailed" = "Could not start helper: %@";
+/* Connection status — closed for an authentication reason */
+"status.auth.apiKeyRevoked" = "The API key was revoked — create a new key and enter it in Settings";
+"status.auth.apiKeyInvalid" = "The API key is missing or invalid — create a new key and enter it in Settings";
+"status.auth.apiKeyExpired" = "The API key has expired — create a new key and enter it in Settings";
+"status.auth.apiKeyInactive" = "The API key is deactivated — reactivate it or enter a new key in Settings";
+"status.auth.accountDisabled" = "Your account has been deactivated — contact your administrator";
+"status.auth.accountDeleted" = "Your account has been deleted — contact your administrator";
+"status.auth.scopeRequired" = "This API key lacks the bridge scope — create a key with the bridge scope and enter it in Settings";
 
 /* Folder picker */
 "panel.title" = "Choose a folder for agent tasks (you can add several folders one at a time)";

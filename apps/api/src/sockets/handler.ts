@@ -49,7 +49,7 @@ import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registr
 import { bufferEarlyMessages } from './ws-early-messages';
 import { handleRequestAgents } from './ws-agents-handler';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
-import { handleBridgeMessage } from './ws-bridge-handler';
+import { handleBridgeMessage, closeExpiredBridge } from './ws-bridge-handler';
 import { withSpan } from '../observability/otel';
 import { getAnalyticsSystem } from '../monitoring/analytics';
 import { getEventBus, AGENT_TASK_PROGRESS, type AgentTaskProgressEvent } from '../utils/event-bus';
@@ -188,6 +188,7 @@ export class WebSocketHandler {
             extWs._authenticatedUserRole = auth.userRole;
             extWs._apiKeyScopes = auth.apiKeyScopes ?? undefined; // API key 연결이면 스코프(브리지 게이트)
             extWs._apiKeyId = auth.apiKeyId; // 키 폐기 시 이 키로 등록한 브리지 연결을 닫는다
+            extWs._authFailure = auth.authFailure; // 인증 실패 사유 — 게스트 브리지 연결을 이 사유로 닫는다
             extWs._abortController = null;
             // 🔒 Phase 2: heartbeat alive 플래그 초기화
             extWs._isAlive = true;
@@ -482,7 +483,8 @@ export class WebSocketHandler {
                     extWs._abortController = null;
                 }
                 this.unregisterConnection(ws);
-                ws.terminate();
+                // 키가 만료된 브리지 연결은 사유를 실어 닫는다(앱이 만료를 알린다) — 그 밖은 종전대로 terminate
+                if (!(reason === 'token_expired' && closeExpiredBridge(ws))) ws.terminate();
             }
         }, WEBSOCKET_TIMEOUTS.HEARTBEAT_INTERVAL_MS); // 30초 주기
         // Allow process to exit during tests — don't hold event loop

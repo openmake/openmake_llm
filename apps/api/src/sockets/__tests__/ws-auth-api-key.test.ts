@@ -56,4 +56,34 @@ describe('authenticateWebSocket — API key 재연결', () => {
         const r = await authenticateWebSocket(req, logger);
         expect(r.userId).toBeNull();
     });
+
+    describe('인증 실패 사유(authFailure) — 브리지가 닫을 때 앱에 알린다', () => {
+        it('유효한 키는 사유가 없다', async () => {
+            expect((await authenticateWebSocket(req, logger)).authFailure).toBeUndefined();
+        });
+        it('없는 키 → api_key_invalid', async () => {
+            mockGetApiKeyByHash.mockResolvedValue(undefined);
+            expect((await authenticateWebSocket(req, logger)).authFailure).toBe('api_key_invalid');
+        });
+        it('비활성 키 → api_key_inactive', async () => {
+            mockGetApiKeyByHash.mockResolvedValue({ ...KEY, is_active: false });
+            expect((await authenticateWebSocket(req, logger)).authFailure).toBe('api_key_inactive');
+        });
+        it('만료된 키 → api_key_expired', async () => {
+            mockGetApiKeyByHash.mockResolvedValue({ ...KEY, expires_at: new Date(Date.now() - 1000).toISOString() });
+            expect((await authenticateWebSocket(req, logger)).authFailure).toBe('api_key_expired');
+        });
+        it('비활성 계정 → account_disabled', async () => {
+            mockGetUserById.mockResolvedValue({ id: 'u-1', role: 'user', is_active: false });
+            expect((await authenticateWebSocket(req, logger)).authFailure).toBe('account_disabled');
+        });
+        it('키는 있는데 계정이 없음 → account_deleted', async () => {
+            mockGetUserById.mockResolvedValue(undefined);
+            expect((await authenticateWebSocket(req, logger)).authFailure).toBe('account_deleted');
+        });
+        it('조회 오류 → auth_unavailable (다시 시도할 수 있는 실패)', async () => {
+            mockGetApiKeyByHash.mockRejectedValue(new Error('db down'));
+            expect((await authenticateWebSocket(req, logger)).authFailure).toBe('auth_unavailable');
+        });
+    });
 });

@@ -93,6 +93,14 @@ final class HelperManager: NSObject, ObservableObject {
         "idle": "status.idle",
         "api_key_required": "status.apiKeyRequired",
         "folder_open_failed": "status.folderOpenFailed",
+        // 서버가 인증 사유로 닫음(코어 AUTH_CLOSE_REASONS) — 코어는 긴 간격으로만 다시 시도한다
+        "api_key_revoked": "status.auth.apiKeyRevoked",
+        "api_key_invalid": "status.auth.apiKeyInvalid",
+        "api_key_expired": "status.auth.apiKeyExpired",
+        "api_key_inactive": "status.auth.apiKeyInactive",
+        "account_disabled": "status.auth.accountDisabled",
+        "account_deleted": "status.auth.accountDeleted",
+        "bridge_scope_required": "status.auth.scopeRequired",
     ]
 
     // ── 헬퍼 프로세스 lifecycle ──
@@ -229,6 +237,15 @@ final class HelperManager: NSObject, ObservableObject {
         guard on != browserEnabled else { return }
         browserEnabled = on
         browserUserControl = false
+        let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
+        stopHelper()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            for f in folders { self.connect(folder: f) }
+        }
+    }
+
+    /** API key 변경 — 헬퍼 재기동(key 는 spawn env)으로 반영하고 연결을 되살린다. 키 폐기·만료로 멈춘 연결도 새 키로 다시 붙는다. */
+    func reloadApiKey() {
         let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
         stopHelper()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {

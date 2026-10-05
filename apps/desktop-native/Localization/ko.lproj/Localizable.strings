@@ -39,6 +39,14 @@
 "status.helperMissing" = "헬퍼 리소스 없음 (재설치 필요)";
 "status.helperExited" = "헬퍼 종료됨 — 다시 연결하세요";
 "status.helperLaunchFailed" = "헬퍼 실행 실패: %@";
+/* 연결 상태 — 서버가 인증 사유로 닫음 (인증 사유로 닫힘) */
+"status.auth.apiKeyRevoked" = "API key 가 폐기되었습니다 — 새 키를 발급해 설정에 넣으세요";
+"status.auth.apiKeyInvalid" = "API key 가 없거나 올바르지 않습니다 — 새 키를 발급해 설정에 넣으세요";
+"status.auth.apiKeyExpired" = "API key 가 만료되었습니다 — 새 키를 발급해 설정에 넣으세요";
+"status.auth.apiKeyInactive" = "API key 가 비활성화되었습니다 — 키를 다시 켜거나 새 키를 설정에 넣으세요";
+"status.auth.accountDisabled" = "계정이 비활성화되었습니다 — 관리자에게 문의하세요";
+"status.auth.accountDeleted" = "계정이 삭제되었습니다 — 관리자에게 문의하세요";
+"status.auth.scopeRequired" = "이 API key 에는 bridge 스코프가 없습니다 — bridge 스코프 키를 발급해 설정에 넣으세요";
 
 /* 폴더 선택 */
 "panel.title" = "에이전트 작업에 연결할 폴더 선택 (여러 폴더를 각각 추가할 수 있습니다)";

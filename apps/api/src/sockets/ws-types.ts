@@ -3,6 +3,7 @@
  * @module sockets/ws-types
  */
 import { WebSocket } from 'ws';
+import type { BridgeAuthFailure } from '../config/local-bridge';
 
 /**
  * WebSocket 수신 메시지 인터페이스
@@ -53,6 +54,8 @@ export interface WSMessage {
     /** bridge_hello — 연결이 속한 PC 식별자(폴더별 연결이 공유) · 지원 요청 종류 목록 */
     hostId?: string;
     capabilities?: unknown;
+    /** bridge_hello — 인증 실패 시 사유를 실어 닫아도 되는 새 코어(2026-10-06). 없으면 종전대로 오류만 보낸다 */
+    authClose?: boolean;
     /** Local Bridge — bridge_event(기기→서버 단방향 알림) 종류·값. browser_control 의 user=true 는 사용자가 브라우저를 넘겨받음 */
     kind?: string;
     user?: boolean;
@@ -120,6 +123,8 @@ export interface ExtendedWebSocket extends WebSocket {
     _apiKeyScopes?: string[] | null;
     /** API key 인증 시 그 키의 id — 키를 폐기하면 이 키로 등록한 브리지 연결을 닫는다. */
     _apiKeyId?: string;
+    /** API key 인증 실패 사유(ws-auth) — 게스트로 떨어진 브리지 연결을 닫을 때 쓴다. */
+    _authFailure?: BridgeAuthFailure;
     _clientIp?: string;
     _connectedAtMs?: number;
     _lastActivityAtMs?: number;
