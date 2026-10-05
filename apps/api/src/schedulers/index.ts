@@ -225,6 +225,22 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('Agent Task 업로드 보존 스윕 등록 실패(무시):', err);
     }
 
+    // 8-E. Agent Task 보존 스윕(AGENT_TASK_RETENTION_ENABLED, 기본 꺼짐) — 끝난 지 N일 지난 작업 기록·작업 감사 로그와
+    //      작업 공간의 오래된 화면 캡처 삭제(부팅 + 6h 주기). 부팅 복구 뒤에 둔다 — 복구가 다시 살린 작업은 진행형이라 빠진다.
+    try {
+        const { AGENT_TASK_RETENTION } = await import('../config/runtime-limits');
+        if (AGENT_TASK_RETENTION.ENABLED) {
+            const { sweepAgentTaskRetention } = await import('../services/agent-task/task-retention');
+            const { getPool } = await import('../data/models/unified-database');
+            const sweep = () => sweepAgentTaskRetention(getPool()).catch(() => { /* 항목별로 이미 로그 — 다음 주기에 재시도 */ });
+            await sweep();
+            setInterval(() => { void sweep(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+            logger.debug('Agent Task 보존 스윕 등록 완료');
+        }
+    } catch (err) {
+        logger.warn('Agent Task 보존 스윕 등록 실패(무시):', err);
+    }
+
     // 8. 아티팩트 실행 히스토리 TTL 스윕 — persistTtlMs 초과 실행 결과 삭제(부팅 + 6h 주기).
     try {
         const { ARTIFACT_EXEC } = await import('../config/artifact-exec');

@@ -1925,6 +1925,29 @@ export const LLM_REQUEST_METRICS = {
     ERROR_CODE_MAX_CHARS: 64,
 } as const;
 
+/** 0 이상 정수 env(일·건수) — 비었거나 잘못되면 기본값. 0 은 "끔"으로 그대로 둔다. */
+const nonNegIntEnv = (v: string | undefined, def: number): number => {
+    const n = parseInt(v || '', 10);
+    return Number.isFinite(n) && n >= 0 ? n : def;
+};
+
+/**
+ * 에이전트 작업 보존(Companion 설계 01장 — 작업 기록·감사 로그 90일, 화면 캡처 30일). 주기 작업은 schedulers/index.ts,
+ * 본체는 services/agent-task/task-retention.ts. 전체 스위치 AGENT_TASK_RETENTION_ENABLED 기본 꺼짐 —
+ * 기존 설치의 자료를 배포만으로 지우지 않는다. 각 기간은 0 이면 그 항목만 끈다.
+ */
+export const AGENT_TASK_RETENTION = {
+    ENABLED: process.env.AGENT_TASK_RETENTION_ENABLED === 'true',
+    /** 끝난(completed·failed·cancelled) 지 N일 지난 작업의 작업·단계·승인 기록, 같은 기간 지난 작업 감사 로그 삭제 */
+    RECORD_RETENTION_DAYS: nonNegIntEnv(process.env.AGENT_TASK_RECORD_RETENTION_DAYS, 90),
+    /** 서버 샌드박스 작업 공간의 화면 캡처(이미지 파일) — 수정된 지 N일 지난 것 삭제(작업 기록은 남김) */
+    SCREENSHOT_RETENTION_DAYS: nonNegIntEnv(process.env.AGENT_TASK_SCREENSHOT_RETENTION_DAYS, 30),
+    /** 한 회차에 항목별로 지우는 건수 상한(작업·감사 로그·이미지 파일 각각) — 남은 것은 다음 주기에 */
+    BATCH_LIMIT: nonNegIntEnv(process.env.AGENT_TASK_RETENTION_BATCH_LIMIT, 500) || 500,
+    /** 화면 캡처로 보는 확장자(소문자) — 브라우저 도구 screenshot 은 jpeg/png */
+    SCREENSHOT_EXTENSIONS: ['.png', '.jpg', '.jpeg', '.webp'] as readonly string[],
+};
+
 /** 메시지 웹검색 출처(F19.4, 156) — 스트리밍 중 모아 assistant 행 저장 때 영속. 인메모리 대기는 TTL·개수 상한 */
 export const MESSAGE_SOURCES_LIMITS = {
     TTL_MS: 30 * 60_000,
