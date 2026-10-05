@@ -2545,7 +2545,8 @@
     "policyHelp": {
       "EXTERNAL_MODEL_POLICY": "Allow/deny globs for external models as JSON. deny is unioned with global, allow is intersected — an org cannot lift a global block.",
       "TOOL_APPROVAL_POLICY_MIN": "Minimum approval policy for agent tasks. If stricter than the request, the minimum wins.",
-      "MCP_ALLOWED_SERVERS": "Comma-separated MCP catalog template ids allowed for installation. Empty = no restriction."
+      "MCP_ALLOWED_SERVERS": "Comma-separated MCP catalog template ids allowed for installation. Empty = no restriction.",
+      "BROWSER_SITE_POLICY": "Browser site policy for this organization. The deny list is unioned with global. If global has an allow list, only entries present in both remain; if global is empty, the org list applies. Reset to follow global."
     },
     "history": "Change history",
     "noHistory": "No changes yet.",

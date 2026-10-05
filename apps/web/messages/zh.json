@@ -2545,7 +2545,8 @@
     "policyHelp": {
       "EXTERNAL_MODEL_POLICY": "外部模型允许/拒绝通配 JSON。deny 与全局取并集，allow 取交集 — 组织无法解除全局拒绝。",
       "TOOL_APPROVAL_POLICY_MIN": "智能体任务审批策略下限。若比请求值更严格，则以下限为准。",
-      "MCP_ALLOWED_SERVERS": "允许安装的 MCP 目录模板 id（逗号分隔）。留空 = 不限制。"
+      "MCP_ALLOWED_SERVERS": "允许安装的 MCP 目录模板 id（逗号分隔）。留空 = 不限制。",
+      "BROWSER_SITE_POLICY": "此组织的浏览器站点策略。拒绝列表与全局取并集。全局有允许列表时只保留两边都有的条目；全局为空时使用组织列表。重置后跟随全局。"
     },
     "history": "变更历史",
     "noHistory": "暂无变更。",
