@@ -48,7 +48,7 @@
     ],
     "devDependencies": {
         "@playwright/test": "^1.63.0",
-        "@types/node": "^26.6.3",
+        "@types/node": "^26.6.4",
         "@types/nodemailer": "^8.0.2",
         "@types/supertest": "^7.2.1",
         "concurrently": "^10.0.5",
