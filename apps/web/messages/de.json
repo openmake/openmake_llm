@@ -27,6 +27,7 @@
       "approvals": "Freigaben",
       "organizationsAdmin": "Organisationen",
       "costRatesAdmin": "Kostensätze",
+      "bridgeDevicesAdmin": "Verbundene Geräte",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "Evaluierungen",
       "quotaRequestsAdmin": "Kontingent-Freigaben",
@@ -2535,6 +2536,25 @@
     "note": "Notiz",
     "delete": "Löschen",
     "deleteConfirm": "Diesen Satz löschen? Der Fallback-Satz gilt dann."
+  },
+  "adminBridgeDevices": {
+    "title": "Verbundene Geräte",
+    "description": "Alle Geräte, die über Companion oder CLI für die lokale Ausführung verbunden sind. Es werden nur Ordnernamen angezeigt.",
+    "loadError": "Laden fehlgeschlagen.",
+    "disabled": "Die lokale Ausführung ist ausgeschaltet (LOCAL_EXECUTOR_ENABLED).",
+    "listTitle": "Verbundene Geräte",
+    "refresh": "Aktualisieren",
+    "empty": "Keine Geräte verbunden.",
+    "user": "Benutzer",
+    "host": "PC",
+    "label": "Name",
+    "folder": "Ordner",
+    "connectedAt": "Verbunden seit",
+    "capabilities": "Funktionen",
+    "disconnect": "Trennen",
+    "disconnectConfirm": "Verbindung „{label}“ von {email} trennen? Anfragen laufender lokaler Aufgaben schlagen fehl.",
+    "disconnectFailed": "Trennen fehlgeschlagen.",
+    "reconnectNote": "Trennen schließt nur die aktuelle Verbindung. Um eine erneute Verbindung zu verhindern, löschen oder deaktivieren Sie den Bridge-API-Schlüssel des Benutzers — beim Widerruf eines Schlüssels werden dessen Verbindungen sofort getrennt."
   },
   "adminQuotaRequests": {
     "title": "Kontingent-Überschreitungen",

@@ -27,6 +27,7 @@
       "approvals": "待审批",
       "organizationsAdmin": "组织管理",
       "costRatesAdmin": "成本单价",
+      "bridgeDevicesAdmin": "已连接设备",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "评估记录",
       "quotaRequestsAdmin": "配额审批",
@@ -2535,6 +2536,25 @@
     "note": "备注",
     "delete": "删除",
     "deleteConfirm": "删除此单价？将回退到默认单价。"
+  },
+  "adminBridgeDevices": {
+    "title": "已连接设备",
+    "description": "通过 Companion 或 CLI 连接到本地执行的所有设备。仅显示文件夹名称。",
+    "loadError": "加载失败。",
+    "disabled": "本地执行功能已关闭(LOCAL_EXECUTOR_ENABLED)。",
+    "listTitle": "已连接设备",
+    "refresh": "刷新",
+    "empty": "没有已连接的设备。",
+    "user": "用户",
+    "host": "电脑",
+    "label": "名称",
+    "folder": "文件夹",
+    "connectedAt": "连接时间",
+    "capabilities": "支持的功能",
+    "disconnect": "断开连接",
+    "disconnectConfirm": "要断开 {email} 的“{label}”连接吗?正在进行的本地任务的请求将失败。",
+    "disconnectFailed": "断开连接失败。",
+    "reconnectNote": "断开连接只会关闭当前连接。若要阻止设备重新连接,请删除或停用该用户的 bridge API 密钥 — 吊销密钥也会立即断开该密钥的连接。"
   },
   "adminQuotaRequests": {
     "title": "配额超额审批",

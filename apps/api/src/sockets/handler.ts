@@ -187,6 +187,7 @@ export class WebSocketHandler {
             extWs._authenticatedUserId = auth.userId;
             extWs._authenticatedUserRole = auth.userRole;
             extWs._apiKeyScopes = auth.apiKeyScopes ?? undefined; // API key 연결이면 스코프(브리지 게이트)
+            extWs._apiKeyId = auth.apiKeyId; // 키 폐기 시 이 키로 등록한 브리지 연결을 닫는다
             extWs._abortController = null;
             // 🔒 Phase 2: heartbeat alive 플래그 초기화
             extWs._isAlive = true;

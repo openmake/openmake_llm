@@ -183,6 +183,8 @@ export interface DeviceSession {
     capabilities?: Set<BridgeKind>;
     ws: WebSocket;
     connectedAt: number;
+    /** 이 연결이 인증에 쓴 API key 의 id — 키를 삭제·비활성화·순환하면 disconnectByApiKey 로 닫는다. */
+    apiKeyId?: string;
     /**
      * 폴더 선택 세션 캐시 — 이 디바이스가 folders 응답으로 스스로 열거·보고한 루트 기준
      * 상대경로 집합('' = 루트). 작업 생성·bridge_exec 의 folder 값은 이 집합에 있어야만
@@ -277,6 +279,33 @@ class LocalBridgeRegistry {
         const byDevice = this.devices.get(userId);
         if (!byDevice) return [];
         return [...byDevice.values()].sort((a, b) => a.connectedAt - b.connectedAt);
+    }
+
+    /** 모든 사용자의 접속 디바이스 (관리자 조회용, 사용자·접속 순). */
+    listAllDevices(): DeviceSession[] {
+        const out: DeviceSession[] = [];
+        for (const userId of this.devices.keys()) out.push(...this.getDevices(userId));
+        return out;
+    }
+
+    /**
+     * 디바이스 강제 해제 — 소켓을 닫고 레지스트리에서 바로 뺀다(close 이벤트를 기다리지 않는다:
+     * 응답 직후의 조회에 남지 않게). 없는 디바이스면 false.
+     */
+    disconnectDevice(userId: string, deviceId: string, reason: string): boolean {
+        const dev = this.devices.get(userId)?.get(deviceId);
+        if (!dev) return false;
+        this.unregister(dev.ws);
+        try { dev.ws.close(1008, reason); } catch { /* already closing */ }
+        return true;
+    }
+
+    /** 이 API key 로 인증한 브리지 연결을 모두 닫는다(키 삭제·비활성화·순환). 닫은 수를 돌려준다. */
+    disconnectByApiKey(apiKeyId: string): number {
+        const targets = this.listAllDevices().filter((s) => s.apiKeyId === apiKeyId);
+        for (const s of targets) this.disconnectDevice(s.userId, s.deviceId, 'api_key_revoked');
+        if (targets.length > 0) logger.info(`[Bridge] API key 폐기로 연결 ${targets.length}개 종료: key=${apiKeyId}`);
+        return targets.length;
     }
 
     /** folders 응답 수신 시 열거 캐시 병합 — 이후 folder 지정 요청·작업 생성의 검증 근거. */

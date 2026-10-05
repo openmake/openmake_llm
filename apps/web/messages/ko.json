@@ -27,6 +27,7 @@
       "approvals": "승인 대기",
       "organizationsAdmin": "조직 관리",
       "costRatesAdmin": "비용 단가",
+      "bridgeDevicesAdmin": "연결 기기",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "평가 이력",
       "quotaRequestsAdmin": "쿼터 승인",
@@ -2535,6 +2536,25 @@
     "note": "메모",
     "delete": "삭제",
     "deleteConfirm": "이 단가를 삭제할까요? 폴백 단가로 돌아갑니다."
+  },
+  "adminBridgeDevices": {
+    "title": "연결 기기",
+    "description": "Companion·CLI 로 로컬 실행에 연결된 전체 기기입니다. 폴더는 이름만 보입니다.",
+    "loadError": "불러오기에 실패했습니다.",
+    "disabled": "로컬 실행 기능이 꺼져 있습니다(LOCAL_EXECUTOR_ENABLED).",
+    "listTitle": "연결된 기기",
+    "refresh": "새로고침",
+    "empty": "연결된 기기가 없습니다.",
+    "user": "사용자",
+    "host": "PC",
+    "label": "이름",
+    "folder": "폴더",
+    "connectedAt": "연결 시각",
+    "capabilities": "지원 기능",
+    "disconnect": "연결 해제",
+    "disconnectConfirm": "{email} 의 “{label}” 연결을 끊을까요? 진행 중인 로컬 작업의 요청은 실패합니다.",
+    "disconnectFailed": "연결 해제에 실패했습니다.",
+    "reconnectNote": "연결 해제는 지금 연결만 끊습니다. 기기가 다시 연결하지 못하게 하려면 그 사용자의 bridge API 키를 삭제하거나 비활성화하세요 — 키를 폐기하면 그 키의 연결도 바로 끊깁니다."
   },
   "adminQuotaRequests": {
     "title": "쿼터 초과 승인함",
