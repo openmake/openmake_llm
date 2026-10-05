@@ -35,6 +35,22 @@ export const TASK_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;
 export const NOTICE_KINDS: readonly string[] = ['approval_pending'];
 export const NOTICE_TOOL_NAME_MAX = 100;
 
+/**
+ * 이 코어가 처리하는 요청 종류 — bridge_hello.capabilities 로 서버에 알린다. core.ts handleExec 의 case 와 1:1
+ * (`__tests__/core.test.ts` 가 확인). 서버는 여기 없는 종류를 이 기기로 보내지 않는다.
+ */
+export const BRIDGE_KINDS: readonly string[] = [
+    'exec', 'read', 'write', 'list', 'listAll', 'delete', 'task_end', 'worktree', 'folders', 'lsp_diagnostics', 'code_nav', 'test_runner',
+];
+
+/** 로컬 브라우저 요청 종류 — 호스트가 전용 프로필을 주고 Chrome 이 있을 때만 능력 목록에 넣는다(BridgeCore.capabilities). */
+export const BROWSER_KIND = 'browser';
+
+/** 요청 만료 판정의 시계 오차 허용(ms) — 서버와 PC 의 시계가 이만큼 어긋나도 정상 요청을 버리지 않는다. */
+export const EXPIRY_SKEW_TOLERANCE_MS = 120000;
+/** 중복 판정을 위해 기억하는 reqId 수 */
+export const SEEN_REQ_MAX = 2000;
+
 /** folders(하위 폴더 열거) 1회 상한 — 서버 BRIDGE_FOLDERS_MAX_ENTRIES 와 같은 축(디바이스측 강제). */
 export const FOLDERS_MAX_ENTRIES = 200;
 
@@ -101,3 +117,44 @@ export function sbq(p: string): string {
 export function sbSub(base: string, list: string[]): string {
     return list.map((d) => `(subpath ${sbq(path.join(base, d))})`).join(' ');
 }
+
+/**
+ * 로컬 브라우저(Companion P2) — 전용 프로필 Chrome 을 CDP 로 제어한다.
+ * 액션 형식·상한은 서버 샌드박스 러너(infra/task-runtime/browser-runner.mjs)와 같게 둔다.
+ */
+/** 한 번의 요청에서 실행하는 액션 수 상한 */
+export const BROWSER_MAX_ACTIONS = 40;
+/** 액션 1개의 대기 상한(ms) — 요소 대기·이동 완료 */
+export const BROWSER_ACTION_TIMEOUT_MS = Number(process.env.OMK_BRIDGE_BROWSER_TIMEOUT_MS || 20000);
+/** wait 액션의 상한(ms) */
+export const BROWSER_WAIT_MAX_MS = 10000;
+/** 추출 결과(text·html) 길이 상한(chars) */
+export const BROWSER_EXTRACT_MAX_CHARS = 8000;
+/** snapshot 이 돌려주는 상호작용 요소 수 상한 */
+export const BROWSER_SNAPSHOT_MAX_ELEMENTS = 100;
+/** snapshot 요소 이름 길이 상한 */
+export const BROWSER_SNAPSHOT_NAME_MAX = 120;
+/** 입력 뒤 결과에 되돌려 주는 값의 길이 상한 — 모델이 "들어갔는지" 확인하는 용도라 앞부분이면 충분하다 */
+export const BROWSER_FILL_ECHO_MAX_CHARS = 200;
+/** CDP 명령 1회 응답 상한(ms) */
+export const BROWSER_CDP_TIMEOUT_MS = 30000;
+/** Chrome 기동 후 디버깅 포트가 열릴 때까지의 대기 상한(ms) */
+export const BROWSER_LAUNCH_TIMEOUT_MS = 20000;
+/** 정리할 때 Chrome 종료를 기다리는 상한(ms) */
+export const BROWSER_EXIT_WAIT_MS = 5000;
+/** 요소·주소 폴링 간격(ms) */
+export const BROWSER_POLL_MS = 100;
+/** 누르기 뒤 이동이 시작되는지 지켜보는 시간(ms) */
+export const BROWSER_CLICK_SETTLE_MS = 250;
+/** 작업별 탭 수 상한 — 넘으면 가장 오래된 작업의 탭을 닫는다 */
+export const BROWSER_MAX_TABS = 4;
+/** 확인창 기록 문구 길이·개수 상한(한 액션) */
+export const BROWSER_DIALOG_MESSAGE_MAX = 300;
+export const BROWSER_DIALOG_RECORD_MAX = 20;
+/** 화면 없이 띄울지 — 테스트·서버 환경용. 기본은 사용자에게 보이는 창 */
+export const BROWSER_HEADLESS = process.env.OMK_BRIDGE_BROWSER_HEADLESS === '1';
+/** snapshot·smartClick 이 다루는 상호작용 역할 */
+export const BROWSER_INTERACTIVE_ROLES: readonly string[] = [
+    'button', 'link', 'textbox', 'checkbox', 'radio', 'combobox', 'menuitem',
+    'tab', 'switch', 'searchbox', 'slider', 'spinbutton', 'option',
+];

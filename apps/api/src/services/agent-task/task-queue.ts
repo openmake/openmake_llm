@@ -14,8 +14,23 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 import { getConfig } from '../../config/env';
+import { getMetrics } from '../../monitoring/metrics';
 
 const logger = createLogger('AgentTaskQueue');
+
+/** 대기 시간 히스토그램(ms) — 등록부터 시작까지. 즉시 시작은 0. */
+export const AGENT_TASK_QUEUE_WAIT_METRIC = 'agent_task_queue_wait_ms';
+
+/** 최근 시작 건의 대기 시간 요약(ms). 건수 0 이면 나머지 null. */
+export interface QueueWaitSummary { count: number; p50Ms: number | null; p95Ms: number | null; maxMs: number | null }
+
+/** PURE: 대기 시간 목록 → 건수·중앙값·p95·최대(nearest-rank 백분위). */
+export function summarizeQueueWaits(waits: readonly number[]): QueueWaitSummary {
+    if (waits.length === 0) return { count: 0, p50Ms: null, p95Ms: null, maxMs: null };
+    const sorted = [...waits].sort((a, b) => a - b);
+    const rank = (p: number) => sorted[Math.max(0, Math.ceil((p / 100) * sorted.length) - 1)];
+    return { count: sorted.length, p50Ms: rank(50), p95Ms: rank(95), maxMs: sorted[sorted.length - 1] };
+}
 
 interface QueueEntry {
     taskId: string;
@@ -24,25 +39,32 @@ interface QueueEntry {
     run: () => Promise<void>;
     /** 대기열 우선순위(131) — 높을수록 먼저. 미지정 0. 값 검증은 resolveQueuePriority(호출부). */
     priority?: number;
+    /** 대기 등록 시각(epoch ms) — 재시작 복구가 DB 에 남은 대기 시각을 넘긴다. 없으면 submit 시각. */
+    enqueuedAt?: number;
 }
 
 export class AgentTaskQueue {
     private globalActive = 0;
     private readonly userActive = new Map<string, number>();
     private readonly pending: QueueEntry[] = [];
+    /** 최근 시작 건의 대기 시간(ms) — 오래된 것부터 버린다. */
+    private readonly recentWaits: number[] = [];
 
     constructor(
         private readonly globalMax: number = AGENT_TASK_LIMITS.QUEUE_GLOBAL_MAX,
         private readonly userMax: number = AGENT_TASK_LIMITS.QUEUE_USER_MAX,
+        private readonly waitSampleSize: number = AGENT_TASK_LIMITS.QUEUE_WAIT_SAMPLE_SIZE,
+        private readonly now: () => number = Date.now,
     ) {}
 
     /** 즉시 실행 가능하면 start('started'), 아니면 대기열 등록('queued'). */
     submit(entry: QueueEntry): 'started' | 'queued' {
+        const queued = { ...entry, enqueuedAt: entry.enqueuedAt ?? this.now() };
         if (this.canRun(entry.userId)) {
-            this.start(entry);
+            this.start(queued);
             return 'started';
         }
-        this.pending.push(entry);
+        this.pending.push(queued);
         logger.info(`[Queue] 대기 등록: ${entry.taskId} (대기 ${this.pending.length}, 실행 ${this.globalActive})`);
         return 'queued';
     }
@@ -55,11 +77,39 @@ export class AgentTaskQueue {
         return true;
     }
 
-    /** 관측용 스냅샷 — byPriority 는 대기 중 항목의 우선순위별 개수. */
-    stats(): { globalActive: number; pending: number; byPriority: Record<string, number> } {
+    /**
+     * 대기 순번(1 부터) — 꺼낼 때와 같은 순서(우선순위 높은 순, 같으면 등록 순)에서 몇 번째인가. 대기 중이 아니면 null.
+     * 사용자별 상한 때문에 실제 시작 순서는 달라질 수 있어 "앞에 최대 몇 건"의 안내값이다.
+     */
+    position(taskId: string): number | null {
+        const i = this.pending.findIndex((e) => e.taskId === taskId);
+        if (i < 0) return null;
+        const mine = this.pending[i].priority ?? 0;
+        let ahead = 0;
+        for (let j = 0; j < this.pending.length; j++) {
+            if (j === i) continue;
+            const p = this.pending[j].priority ?? 0;
+            if (p > mine || (p === mine && j < i)) ahead++;
+        }
+        return ahead + 1;
+    }
+
+    /**
+     * 관측용 스냅샷 — byPriority 는 대기 중 항목의 우선순위별 개수.
+     * wait.recent 는 최근 시작 N건의 대기 시간 요약, wait.oldestPendingMs 는 지금 대기 중인 항목 중 가장 오래 기다린 시간(없으면 null).
+     */
+    stats(): {
+        globalActive: number; pending: number; byPriority: Record<string, number>;
+        wait: { recent: QueueWaitSummary; oldestPendingMs: number | null };
+    } {
         const byPriority: Record<string, number> = {};
-        for (const e of this.pending) byPriority[String(e.priority ?? 0)] = (byPriority[String(e.priority ?? 0)] ?? 0) + 1;
-        return { globalActive: this.globalActive, pending: this.pending.length, byPriority };
+        let oldest: number | null = null;
+        for (const e of this.pending) {
+            byPriority[String(e.priority ?? 0)] = (byPriority[String(e.priority ?? 0)] ?? 0) + 1;
+            if (e.enqueuedAt !== undefined && (oldest === null || e.enqueuedAt < oldest)) oldest = e.enqueuedAt;
+        }
+        const oldestPendingMs = oldest === null ? null : Math.max(0, this.now() - oldest);
+        return { globalActive: this.globalActive, pending: this.pending.length, byPriority, wait: { recent: summarizeQueueWaits(this.recentWaits), oldestPendingMs } };
     }
 
     private canRun(userId: string): boolean {
@@ -67,6 +117,7 @@ export class AgentTaskQueue {
     }
 
     private start(entry: QueueEntry): void {
+        this.recordWait(Math.max(0, this.now() - (entry.enqueuedAt ?? this.now())));
         this.globalActive++;
         this.userActive.set(entry.userId, (this.userActive.get(entry.userId) ?? 0) + 1);
         void entry.run()
@@ -78,6 +129,12 @@ export class AgentTaskQueue {
                 else this.userActive.set(entry.userId, next);
                 this.drain();
             });
+    }
+
+    private recordWait(ms: number): void {
+        this.recentWaits.push(ms);
+        if (this.recentWaits.length > this.waitSampleSize) this.recentWaits.splice(0, this.recentWaits.length - this.waitSampleSize);
+        getMetrics().recordHistogram(AGENT_TASK_QUEUE_WAIT_METRIC, ms);
     }
 
     /** 슬롯이 빈 만큼 대기열에서 꺼내 실행 — 유저 상한을 넘지 않는 후보 중 우선순위가 가장 높은 것, 같으면 먼저 등록된 것. */

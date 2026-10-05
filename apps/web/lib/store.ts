@@ -72,6 +72,11 @@ export interface AgentTaskState {
   files?: string[];
   /** 완료 시 코드 작업(openmake_code) git diff — 있으면 카드에 DiffView 로 렌더. */
   diff?: string;
+  /** 실패 사유(오류 코드 또는 원문)와 서버 분류 — 실패한 작업의 카드가 원인과 다음 행동을 보인다. */
+  error?: string;
+  failureClass?: string | null;
+  /** 멈춘 작업이 기다리는 것 — device_wait 면 로컬 기기 연결을 기다린다(승인 대기와 구분해 보인다). */
+  waitReason?: string;
   /** 방금 실행된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라인 표시. */
   lastStep?: { stepType: string; toolName?: string; preview?: string };
 }

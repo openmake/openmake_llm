@@ -4,7 +4,7 @@
  * CLI 브리지와 같은 코어를 쓰되 네이티브 앱 호스트 차이를 검증한다:
  *  - 인증: Authorization Bearer(API key) 헤더, Origin 없음 (CLI 계약과 동일)
  *  - confirmExec: 자동승인 훅이 아니라 **실제 stdio 왕복** — 승인(yes)/거부(no) 양쪽
- *  - browser: 폐기된 kind(2026-08-23) → 코어 미지원 거부
+ *  - browser: 앱 설정으로 켜지 않으면 능력 목록에 없고 요청을 거절한다. 제어권·중지 명령 왕복
  *  - 다중 루트(0.2.0): 루트당 독립 연결·파생 deviceId·스코프 상호 격리·개별 해제
  *  - stdin 종료 = 즉시 정리 종료 (좀비 방지)
  *
@@ -162,7 +162,18 @@ const { WebSocketServer } = require('ws');
 
     // ④ folders 열거 / browser 미지원 / worktree
     assert.deepEqual((await execVia(dev1, { kind: 'folders', path: '.' })).entries, ['subdir'], 'folders 열거');
-    assert.equal((await execVia(dev1, { kind: 'browser', spec: {} })).ok, false, 'browser 미지원 거부');
+    // 브라우저를 켜지 않은 헬퍼(OMK_COMPANION_BROWSER 없음)는 browser 요청을 실행하지 않는다
+    assert.equal((await execVia(dev1, { kind: 'browser', actions: [{ type: 'goto', url: 'https://example.com' }] })).ok, false, 'browser 미설정 거부');
+    // 제어권·중지 명령은 이벤트로 되돌아온다(앱이 메뉴 상태를 맞춘다)
+    send({ cmd: 'browserControl', user: true });
+    await waitEv((e) => e.ev === 'browserControl' && e.user === true);
+    // 넘겨받기·돌려주기는 서버에도 단방향 프레임으로 알린다(서버가 넘겨받기로 멈춘 작업을 재개한다)
+    await waitFor((f) => f.type === 'bridge_event' && f.kind === 'browser_control' && f.user === true);
+    send({ cmd: 'browserControl', user: false });
+    await waitEv((e) => e.ev === 'browserControl' && e.user === false);
+    await waitFor((f) => f.type === 'bridge_event' && f.kind === 'browser_control' && f.user === false);
+    send({ cmd: 'browserStop' });
+    await waitEv((e) => e.ev === 'browserStopped');
     const taskId = 'harness-task-000000000003';
     const wt = await execVia(dev1, { kind: 'worktree', op: 'add', taskId });
     assert.ok(wt.ok && wt.worktreeRel.endsWith(taskId), 'worktree add');
@@ -198,6 +209,11 @@ const { WebSocketServer } = require('ws');
     assert.notEqual(dev2, dev1, '루트별 파생 deviceId 상이');
     assert.ok(dev1.length <= 64 && dev2.length <= 64, 'deviceId 64자 상한');
     assert.ok(dev1.split('-r-')[0] === dev2.split('-r-')[0], '기기 base id 공유');
+    // 능력 목록·PC 식별자(Companion P1) — 폴더별 연결이 같은 hostId 를 보내 서버가 PC 1대로 센다
+    assert.equal(hello.hostId, dev1.split('-r-')[0], 'hello hostId = 기기 base id');
+    assert.equal(hello2.hostId, hello.hostId, '루트가 달라도 hostId 는 같다');
+    assert.ok(Array.isArray(hello.capabilities) && hello.capabilities.includes('exec') && hello.capabilities.includes('read'), 'hello 에 지원 요청 종류');
+    assert.ok(!hello.capabilities.includes('browser'), '브라우저를 켜지 않으면 능력 목록에 browser 가 없다');
     await waitEv((e) => e.ev === 'connected' && e.folder === realFolder2);
     assert.equal((await execVia(dev2, { kind: 'read', path: 'other.txt' })).content, 'other-root', '루트2 read');
     // 루트 간 상호 격리 — 루트2 연결이 루트1 파일에 닿지 못한다

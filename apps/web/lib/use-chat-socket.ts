@@ -536,12 +536,12 @@ export function useChatSocket() {
             (m) => m.taskId && !["completed", "failed", "cancelled"].includes(m.agentTask?.status ?? ""),
           );
           for (const m of open) {
-            void ApiClient.get<{ data: { task: { status: string; progress: number; current_turn: number } } }>(`/api/agent-tasks/${m.taskId}`)
+            void ApiClient.get<{ data: { task: { status: string; progress: number; current_turn: number; waitReason?: string } } }>(`/api/agent-tasks/${m.taskId}`)
               .then((r) => {
                 const task = r?.data?.task;
                 if (!task) return;
                 setChatHistory((prev) => prev.map((x) => (x.taskId === m.taskId
-                  ? { ...x, agentTask: { goal: x.agentTask?.goal ?? "", ...(x.agentTask ?? {}), status: task.status, progress: task.progress, currentTurn: task.current_turn } as AgentTaskState }
+                  ? { ...x, agentTask: { goal: x.agentTask?.goal ?? "", ...(x.agentTask ?? {}), status: task.status, progress: task.progress, currentTurn: task.current_turn, waitReason: task.waitReason } as AgentTaskState }
                   : x)));
               })
               .catch(() => { /* 조회 실패 — 다음 이벤트가 맞춘다 */ });
@@ -575,6 +575,8 @@ export function useChatSocket() {
                         goal: m.agentTask?.goal ?? "",
                         ...(m.agentTask ?? {}),
                         status, currentTurn, progress,
+                        // 대기 사유는 그 이벤트의 것만 — 다시 돌기 시작하면 지운다
+                        waitReason: status === "paused" ? (data.waitReason ?? m.agentTask?.waitReason) : undefined,
                         ...extra,
                       } as AgentTaskState,
                     }
@@ -588,11 +590,13 @@ export function useChatSocket() {
               const artifactIds: string[] = [];
               let files: string[] = [];
               let diff: string | undefined;
+              let failure: Pick<AgentTaskState, "error" | "failureClass"> = {};
               try {
                 const r = await ApiClient.get<{
-                  data: { task: { result?: string }; steps?: Array<{ step_type: string; content?: string }> };
+                  data: { task: { result?: string; error?: string; failure_class?: string | null }; steps?: Array<{ step_type: string; content?: string }> };
                 }>(`/api/agent-tasks/${taskId}`);
                 result = r?.data?.task?.result ?? "";
+                if (status === "failed" && r?.data?.task?.error) failure = { error: r.data.task.error, failureClass: r.data.task.failure_class ?? null };
                 // 코드 작업 diff 스텝 — 채팅 카드에 DiffView 로 인라인 렌더(마지막 diff 사용).
                 diff = (r?.data?.steps ?? []).filter((s) => s.step_type === "diff").pop()?.content || undefined;
                 // deliverable 아티팩트 — store 등록 후 카드가 칩으로 렌더.
@@ -613,7 +617,7 @@ export function useChatSocket() {
                 const f = await ApiClient.get<{ data: { files: string[] } }>(`/api/agent-tasks/${taskId}/files`);
                 files = f?.data?.files ?? [];
               } catch { /* 파일 없음 */ }
-              merge({ result, artifactIds, files, diff, lastStep: undefined }, undefined);
+              merge({ result, artifactIds, files, diff, lastStep: undefined, ...failure }, undefined);
             })();
           } else if (status === "paused") {
             // 승인 대기 — 해당 task 의 pending approval 조회 → 카드에 인라인 승인 버튼.
@@ -894,7 +898,16 @@ export function useChatSocket() {
         if (!alreadyStarted) await ApiClient.post(
           `/api/agent-tasks/${taskId}/execute`,
           approvalPolicy && approvalPolicy !== "all" ? { approvalPolicy } : {},
-        );
+        ).catch((e: unknown) => {
+          // 실행 요청이 거절됐다(기기 연결이 막 끊김 등) — 카드를 "대기"로 남기지 않고 실패로 바꾸고, 만들어 둔 작업은 취소한다.
+          // 그대로 두면 카드가 끝없이 대기로 보이고 서버에는 시작되지 않을 작업이 남는다.
+          const error = e instanceof Error ? e.message : String(e);
+          useAppStore.getState().setChatHistory((prev) => prev.map((m) => (m.taskId === taskId && m.agentTask
+            ? { ...m, agentTask: { ...m.agentTask, status: "failed", error } }
+            : m)));
+          void ApiClient.post(`/api/agent-tasks/${taskId}/cancel`, {}).catch(() => { /* 취소 실패 — 작업 목록에서 정리할 수 있다 */ });
+          throw e;
+        });
       } catch (e) {
         appendMessage({
           role: "assistant",

@@ -15,6 +15,8 @@ const CODE_CLASS: Readonly<Record<string, FailureClass | null>> = {
   token_limit: "token_limit",
   timeout: "timeout",
   hitl_park_expired: "timeout",
+  device_wait_expired: "timeout",
+  browser_takeover_expired: "timeout",
   interrupted: "interrupted",
   interrupted_local_device: "interrupted",
   sandbox_unavailable: "interrupted",
@@ -51,8 +53,9 @@ export function failureLabelKey(error: string, serverClass?: string | null): str
   return label ? `errorReason.${label}` : null;
 }
 
-/** 분류의 문구가 맞지 않는 코드는 다음 행동 문구를 따로 둔다 — 실행 환경을 받지 못한 작업은 이어 할 지점이 없다. */
-const CODE_NEXT: Readonly<Record<string, string>> = { sandbox_unavailable: "sandbox_unavailable" };
+/** 분류의 문구가 맞지 않는 코드는 다음 행동 문구를 따로 둔다 — 실행 환경을 받지 못한 작업은 이어 할 지점이 없고,
+ * 기기가 돌아오지 않아 끝난 작업은 시간 상한이 아니라 기기 연결이 문제다. */
+const CODE_NEXT: Readonly<Record<string, string>> = { sandbox_unavailable: "sandbox_unavailable", device_wait_expired: "device_wait_expired", browser_takeover_expired: "browser_takeover_expired" };
 
 /** 다음 행동 문구의 번역 키(agentTasks 기준). */
 export function failureNextKey(error: string, serverClass?: string | null): string {

@@ -99,6 +99,17 @@ export interface TaskExecutor {
     /** 브라우저 액션 배치 실행 (actions JSON 은 workspace 상대경로에 사전 기록). */
     runBrowser(actionsRelPath: string): Promise<ExecResult>;
 
+    /**
+     * 로컬 브라우저(원격 실행기만 구현, Companion P2) — 사이트 정책으로 액션을 훑어 막을 이동·허용 목록 밖 쓰기를 찾는다.
+     * 구현돼 있으면 browser 도구가 runBrowser(컨테이너) 대신 runBrowserSpec 으로 실행하고, 런타임이 승인 전에 이 계획을 본다.
+     */
+    planBrowserSitePolicy?(actions: readonly unknown[]): Promise<import('@openmake/config').BrowserSitePlan>;
+    /** 로컬 브라우저 실행 — approvedHosts 는 사용자가 이번 호출에서 승인한 호스트. */
+    runBrowserSpec?(spec: { actions: unknown[]; approvedHosts: string[] }): Promise<ExecResult>;
+
+    /** 로컬 기기 유실 신호(원격 실행기만 구현) — 읽으면 지워진다. 기기 대기 주차 판단용(agent-task/device-wait). */
+    consumeDeviceLoss?(): import('../local-bridge/device-errors').DeviceLoss | null;
+
     /** workspace 상대경로에 파일 쓰기 — 경로 가드 + 디스크 쿼터 적용. */
     writeFile(relPath: string, content: string | Buffer): Promise<void>;
 

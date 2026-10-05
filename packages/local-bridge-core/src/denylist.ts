@@ -12,6 +12,16 @@ export const EXEC_DENYLIST: { re: RegExp; why: string }[] = [
     { re: /id_rsa|id_ed25519|\.aws\/credentials|\.config\/gcloud/, why: '자격증명 파일 접근' },
     { re: /:\s*\(\s*\)\s*\{/, why: 'fork bomb' },
     { re: /\bdd\s+if=|\bmkfs\b|>\s*\/dev\/(disk|sd|rdisk)/, why: '디스크 파괴 연산' },
+    // ── Windows(cmd·PowerShell) — 같은 부류의 명백한 파괴·권한 상승·유출 ──
+    { re: /\b(rd|rmdir)\s+(\/s\b[^&|]*\s)?(\/q\s+)?(\/s\s+)?["']?([a-z]:\\?|%(systemdrive|userprofile|homepath)%\\?)["']?(\s|$)/i, why: '드라이브·홈 대량 삭제(rd)' },
+    { re: /\bdel\s+[^&|]*\/s\b[^&|]*["']?([a-z]:\\\*?|%(systemdrive|userprofile)%\\?\*?)["']?(\s|$)/i, why: '드라이브·홈 대량 삭제(del)' },
+    { re: /\bremove-item\b[^;|]*-recurse\b[^;|]*\s["']?([a-z]:\\?|\$env:(userprofile|systemdrive)\\?|~\\?)["']?(\s|$)/i, why: '드라이브·홈 대량 삭제(Remove-Item)' },
+    { re: /\bformat(\.com)?\s+[a-z]:/i, why: '디스크 포맷' },
+    { re: /\b(diskpart|bcdedit|cipher\s+\/w)\b/i, why: '디스크·부팅 설정 변경' },
+    { re: /\breg(\.exe)?\s+(delete|add)\s+["']?hk(lm|ey_local_machine)\b/i, why: '시스템 레지스트리 변경' },
+    { re: /\b(runas|start-process\b[^;|]*-verb\s+runas)\b/i, why: '권한 상승(runas)' },
+    { re: /\b(iwr|irm|invoke-webrequest|invoke-restmethod|curl|wget)\b[^|;]*\|\s*(iex|invoke-expression)\b/i, why: '원격 스크립트 직접 실행(iex)' },
+    { re: /\\\.ssh\\|\\\.aws\\credentials|\bntds\.dit\b|\\config\\sam\b/i, why: '자격증명 파일 접근' },
 ];
 
 /** ANSI 이스케이프 시퀀스(CSI) — 제어 문자만 지우면 `[0m` 같은 꼬리가 남아 토큰 경계를 가린다. */

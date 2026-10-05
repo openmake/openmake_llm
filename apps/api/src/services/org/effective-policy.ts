@@ -7,6 +7,7 @@
  * @module services/org/effective-policy
  */
 import { createLogger } from '../../utils/logger';
+import { parseBrowserSitePolicy, type BrowserSitePolicy } from '@openmake/config';
 import { getConfig } from '../../config/env';
 import { resolveExternalModelPolicy, type ExternalModelPolicy } from '../../config/external-model-policy';
 import { APPROVAL_POLICY_STRICTNESS, ORG_POLICY_KEYS, ORG_POLICY_SCHEMAS, type OrgPolicyKey } from '../../config/org-policy-registry';
@@ -21,6 +22,7 @@ export interface OrgPolicySet {
     approvalPolicyMin?: TaskSandboxApprovalPolicy;
     mcpAllowedServers?: string[];
     addonAllowlist?: string[];
+    browserSite?: BrowserSitePolicy;
 }
 
 export interface EffectivePolicy {
@@ -31,6 +33,8 @@ export interface EffectivePolicy {
     mcpAllowedServers?: string[];
     /** undefined = 제한 없음(전 add-on 사용 가능). 값이 있으면 그 목록만 사용권이 있다. */
     addonAllowlist?: string[];
+    /** 로컬 브라우저 사이트 허용 목록(Companion P2) — 비어 있으면 모든 입력이 승인 대상 */
+    browserSite: BrowserSitePolicy;
     orgId: string | null;
 }
 
@@ -53,6 +57,8 @@ export function parseOrgPolicyRows(rows: Array<{ key: string; value: unknown }>)
         } else if (row.key === ORG_POLICY_KEYS.ADDON_ALLOWLIST) {
             const list = parsed.data as string[];
             if (list.length > 0) out.addonAllowlist = list;
+        } else if (row.key === ORG_POLICY_KEYS.BROWSER_SITE_POLICY) {
+            out.browserSite = parseBrowserSitePolicy(parsed.data);
         }
     }
     return out;
@@ -103,6 +109,16 @@ async function orgPolicySetFor(orgId: string, now: number): Promise<OrgPolicySet
     }
 }
 
+/** PURE: 사이트 허용 목록 병합 — deny 합집합, allow 는 둘 다 있으면 교집합 · 한쪽만 있으면 그쪽(외부 모델 정책과 같은 규칙). */
+export function mergeBrowserSitePolicy(global: BrowserSitePolicy, org?: BrowserSitePolicy): BrowserSitePolicy {
+    if (!org) return global;
+    const deny = Array.from(new Set([...global.deny, ...org.deny]));
+    const allow = global.allow.length > 0 && org.allow.length > 0
+        ? org.allow.filter((x) => global.allow.includes(x)) // 교집합이 비면 빈 목록 = 모든 입력이 승인 대상(가장 엄격)
+        : (global.allow.length > 0 ? global.allow : org.allow);
+    return { allow, deny };
+}
+
 /** 정책 변경 직후 무효화. orgId 생략 시 전체. */
 export function clearOrgPolicyCache(orgId?: string): void {
     if (orgId === undefined) orgPolicyCache.clear(); else orgPolicyCache.delete(orgId);
@@ -112,13 +128,15 @@ export function clearOrgPolicyCache(orgId?: string): void {
 export async function resolveEffectivePolicy(userId: string | undefined, now: number = Date.now()): Promise<EffectivePolicy> {
     const global = resolveExternalModelPolicy(getConfig().externalModelPolicy);
     const org = await activeOrgFor(userId, now);
-    if (!org) return { externalModel: global, orgId: null };
+    const globalSite = parseBrowserSitePolicy(getConfig().browserSitePolicy);
+    if (!org) return { externalModel: global, browserSite: globalSite, orgId: null };
     const set = await orgPolicySetFor(org.orgId, now);
     return {
         externalModel: mergeExternalModelPolicy(global, set.externalModel),
         approvalPolicyMin: set.approvalPolicyMin,
         mcpAllowedServers: set.mcpAllowedServers,
         addonAllowlist: set.addonAllowlist,
+        browserSite: mergeBrowserSitePolicy(globalSite, set.browserSite),
         orgId: org.orgId,
     };
 }

@@ -15,6 +15,7 @@ import {
   Button,
 } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
+import { BROWSER_SITE_POLICY_SETTING_KEY, BrowserSitePolicyEditor } from "@/components/admin/browser-site-policy-editor";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { useEnabledWebAddons } from "@/addons/registry";
@@ -278,7 +279,10 @@ export default function AdminSystemSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-muted">{t(`groups.${group}.description`)}</p>
-              {items.map((s) => (
+              {items.map((s) => s.key === BROWSER_SITE_POLICY_SETTING_KEY ? (
+                <BrowserSitePolicyEditor key={s.key} value={s.value} source={s.source} busy={busyKey === s.key}
+                  onSave={(v) => save(s.key, v)} onReset={() => reset(s.key)} />
+              ) : (
                 <SettingRow key={s.key} setting={s} busy={busyKey === s.key} onSave={save} onReset={reset} />
               ))}
             </CardContent>

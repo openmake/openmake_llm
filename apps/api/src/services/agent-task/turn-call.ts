@@ -26,6 +26,12 @@ export class AgentTaskTurnTimeout extends AgentTaskAbort {
     }
 }
 
+/** 시간 예산으로 끊긴 마무리 턴의 부분 본문을 작업 결과로 남기는 갱신 조각 — 해당 없으면 빈 객체(종전엔 result NULL). */
+export function partialResultOf(err: unknown): { result?: string } {
+    return err instanceof AgentTaskTurnTimeout && err.partialContent
+        ? { result: `[시간 예산 초과로 중단된 부분 답변]\n\n${err.partialContent}` } : {};
+}
+
 interface TurnCallInput {
     roleState: AgentRoleState;
     conversation: ChatMessage[];
@@ -71,6 +77,9 @@ export async function callAgentTurnWithBudget(p: TurnCallInput): Promise<TurnCal
             taskId: p.taskId, userId: p.userId, onToken,
             // 도구 턴만 호출당 상한을 건다 — 마무리 턴은 장문 생성이라 위의 최소 보장을 따른다.
             callTimeoutMs: p.finalTurn ? undefined : AGENT_TASK_LIMITS.TURN_CALL_TIMEOUT_MS,
+            // 도구 턴은 청크가 끊긴 호출을 상한 전에 끊는다(무응답 감시) — 0 이면 끔.
+            idle: p.finalTurn || AGENT_TASK_LIMITS.TURN_STREAM_IDLE_MS <= 0 ? undefined
+                : { firstChunkMs: AGENT_TASK_LIMITS.TURN_STREAM_FIRST_CHUNK_MS, gapMs: AGENT_TASK_LIMITS.TURN_STREAM_IDLE_MS },
             // 짧은 재시도가 소진된 일시적 오류는 이 호출의 남은 예산 안에서 더 기다린다(turn-recovery).
             recoveryBudgetMs: remainingMs,
             // 재시도는 처음부터 다시 받는다 — 끊긴 시도의 부분 본문을 버려 겹치지 않게 한다.

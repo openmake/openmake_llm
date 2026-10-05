@@ -123,5 +123,7 @@ export function sequenceAgentTaskProgress(ev: AgentTaskProgressEvent, log: Agent
         // 승인 이관·에스컬레이션·철회·계획 편집 알림(HITL 2단계) — 받은 쪽은 승인함을 재조회한다.
         ...(ev.approvalId ? { approvalId: ev.approvalId } : {}),
         ...(ev.reason ? { reason: ev.reason } : {}),
+        // 멈춘 작업이 기다리는 것(기기 연결 등) — 채팅 카드가 "승인 대기"와 구분해 보인다.
+        ...(ev.waitReason ? { waitReason: ev.waitReason } : {}),
     });
 }

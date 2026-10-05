@@ -23,8 +23,9 @@
 "settings.server" = "Server";
 "settings.save" = "Speichern";
 "settings.saved" = "Gespeichert";
-"backend.external" = "Extern (chat.openmake.cc)";
-"backend.local" = "Lokal (localhost:52416)";
+"settings.server.help" = "Geben Sie die Adresse ein, mit der Sie OpenMake im Browser öffnen (z. B. https://chat.firma.de oder http://server:3010). Leer lassen, um die Standardadresse zu verwenden.";
+"settings.server.invalid" = "Die Serveradresse ist ungültig. Geben Sie eine Adresse ein, die mit http:// oder https:// beginnt.";
+"settings.server.insecure" = "Diese Verbindung ist nicht verschlüsselt (http). API-Key und Aufgabeninhalte werden unverschlüsselt übertragen – nur in einem vertrauenswürdigen Netzwerk wie dem Firmennetz verwenden.";
 
 /* Connection status */
 "status.idle" = "Nicht verbunden";
@@ -72,6 +73,8 @@
 "update.available.body" = "Jetzt herunterladen und installieren? Die App wird während der Installation kurz beendet und danach wieder geöffnet.";
 "update.install" = "Aktualisieren";
 "update.later" = "Später";
+"update.readOnly.title" = "Version v%1$@ ist verfügbar (aktuell v%2$@)";
+"update.readOnly.body" = "Die App kann an diesem Ort nicht ersetzt werden (z. B. wenn sie direkt aus einem Disk-Image gestartet wurde). Verschieben Sie die App in den Ordner „Programme“, öffnen Sie sie erneut und aktualisieren Sie dann.";
 "update.badDownload" = "Ungültige Download-Adresse";
 "update.checksum" = "Integritätsprüfung des Downloads fehlgeschlagen (sha256 stimmt nicht überein)";
 "update.noBundle" = "App-Bundle-Pfad nicht gefunden (Updates sind in Entwicklungsläufen nicht verfügbar)";
@@ -84,3 +87,9 @@
 "update.script.replace" = "Die vorhandene App konnte nicht ersetzt werden.";
 "update.script.rollback" = "Die Installation der neuen Version ist fehlgeschlagen; die vorherige Version wurde wiederhergestellt.";
 "update.script.reopen" = "Das Update war erfolgreich, aber die App konnte nicht erneut geöffnet werden.";
+"menu.browser.takeover" = "Browser übernehmen (Agent pausieren)";
+"menu.browser.release" = "Browser zurückgeben (Agent fortsetzen)";
+"menu.browser.stop" = "Browser-Aufgabe stoppen";
+"settings.browser" = "Browser";
+"settings.browser.enable" = "Dem Agenten die Browsernutzung erlauben";
+"settings.browser.help" = "Wenn aktiviert, kann der Agent Webseiten in einem eigenen Chrome-Fenster mit separatem Profil öffnen und bedienen. Die Anmeldungen Ihres normalen Chrome werden nicht verwendet. Eingaben auf nicht freigegebenen Websites erfordern Ihre Genehmigung im Web.";

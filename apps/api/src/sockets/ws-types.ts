@@ -50,6 +50,12 @@ export interface WSMessage {
     deviceId?: string;
     label?: string;
     folderName?: string;
+    /** bridge_hello — 연결이 속한 PC 식별자(폴더별 연결이 공유) · 지원 요청 종류 목록 */
+    hostId?: string;
+    capabilities?: unknown;
+    /** Local Bridge — bridge_event(기기→서버 단방향 알림) 종류·값. browser_control 의 user=true 는 사용자가 브라우저를 넘겨받음 */
+    kind?: string;
+    user?: boolean;
     /** Local Bridge — bridge_result 상관관계·결과 */
     reqId?: string;
     result?: Record<string, unknown>;
@@ -112,6 +118,8 @@ export interface ExtendedWebSocket extends WebSocket {
     _authMethod?: 'cookie' | 'bearer' | 'none';
     /** API key 인증 시 그 키의 스코프(브리지 등록 게이트). JWT/쿠키 인증은 undefined. */
     _apiKeyScopes?: string[] | null;
+    /** API key 인증 시 그 키의 id — 키를 폐기하면 이 키로 등록한 브리지 연결을 닫는다. */
+    _apiKeyId?: string;
     _clientIp?: string;
     _connectedAtMs?: number;
     _lastActivityAtMs?: number;

@@ -7,12 +7,17 @@ import type { WSMessage } from '../ws-types';
 
 const mockRegister = jest.fn(() => true);
 const mockHandleResult = jest.fn();
+const mockSetControl = jest.fn();
+const mockResumeTakeover = jest.fn(async (..._a: unknown[]) => 0);
+jest.mock('../../services/agent-task/browser-takeover', () => ({ resumeBrowserTakeoverTasks: (...a: unknown[]) => mockResumeTakeover(...a) }));
 
 jest.mock('../../services/local-bridge/registry', () => ({
+    normalizeCapabilities: jest.requireActual('../../services/local-bridge/registry').normalizeCapabilities,
     getLocalBridgeRegistry: () => ({
         register: (...a: unknown[]) => mockRegister(...(a as [])),
         handleResult: (...a: unknown[]) => mockHandleResult(...(a as [])),
         getDeviceIdByWs: () => 'dev-1',
+        setBrowserUserControl: (...a: unknown[]) => mockSetControl(...a),
     }),
 }));
 jest.mock('../../config/local-bridge', () => ({ LOCAL_BRIDGE: { ENABLED: true, MAX_DEVICES: 3 } }));
@@ -36,6 +41,14 @@ const result = { type: 'bridge_result', reqId: 'r-1', result: { ok: true } } as 
 beforeEach(() => { mockRegister.mockClear(); mockHandleResult.mockClear(); });
 
 describe('handleBridgeMessage — 연결 방식 게이트', () => {
+    it('게스트 연결(비활성·삭제 계정의 키로 재연결)의 bridge_hello 는 등록하지 않는다', async () => {
+        const { ws, raw, sent } = fakeWs(undefined);
+        raw._authenticatedUserId = null as unknown as string;
+        await handleBridgeMessage(ws, hello);
+        expect(mockRegister).not.toHaveBeenCalled();
+        expect(sent[0]).toMatchObject({ type: 'error' });
+    });
+
     it('JWT/쿠키 연결(스코프 없음)의 bridge_hello 는 등록하지 않고 1008 로 닫는다', async () => {
         const { ws, raw, sent } = fakeWs(undefined);
         await handleBridgeMessage(ws, hello);
@@ -69,5 +82,68 @@ describe('handleBridgeMessage — 연결 방식 게이트', () => {
         await handleBridgeMessage(ws, hello);
         expect(mockRegister).not.toHaveBeenCalled();
         expect(raw.close).toHaveBeenCalledWith(1008, 'bridge_scope_required');
+    });
+});
+
+describe('handleBridgeMessage — 능력 목록·PC 식별자', () => {
+    const registered = (): Record<string, unknown> => (mockRegister.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+
+    it('hello 의 hostId·capabilities 를 정리해 등록에 넘긴다', async () => {
+        const { ws } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, { ...hello, hostId: '  mac-1  ', capabilities: ['read', 'exec', 'made_up'] } as unknown as WSMessage);
+        expect(registered().hostId).toBe('mac-1');
+        expect([...(registered().capabilities as Set<string>)].sort()).toEqual(['exec', 'read']);
+    });
+
+    it('보내지 않은 구버전은 둘 다 undefined 로 넘긴다 (레지스트리가 현행대로 처리)', async () => {
+        const { ws } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, hello);
+        expect(registered().hostId).toBeUndefined();
+        expect(registered().capabilities).toBeUndefined();
+    });
+
+    it('문자열이 아닌 hostId 는 버린다', async () => {
+        const { ws } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, { ...hello, hostId: { evil: true } } as unknown as WSMessage);
+        expect(registered().hostId).toBeUndefined();
+    });
+});
+
+describe('handleBridgeMessage — 키 id 기록 (키 폐기 시 연결 끊기용)', () => {
+    it('API key 연결의 키 id 를 등록 세션에 싣는다', async () => {
+        const { ws, raw } = fakeWs(['bridge']);
+        (raw as Record<string, unknown>)._apiKeyId = 'key-123';
+        await handleBridgeMessage(ws, hello);
+        expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ apiKeyId: 'key-123' }));
+    });
+});
+
+describe('handleBridgeMessage — bridge_event(browser_control)', () => {
+    beforeEach(() => { mockSetControl.mockClear(); mockResumeTakeover.mockClear(); });
+    const ev = (user: unknown) => ({ type: 'bridge_event', kind: 'browser_control', user } as unknown as WSMessage);
+
+    it('돌려주면(user=false) 상태를 기록하고 그 사용자의 넘겨받기 대기 작업 재개를 시도한다', async () => {
+        const { ws, sent } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, ev(false));
+        await new Promise((r) => setImmediate(r));
+        expect(mockSetControl).toHaveBeenCalledWith('u3', ws, false);
+        expect(mockResumeTakeover).toHaveBeenCalledWith('u3');
+        expect(sent).toEqual([]); // 단방향 — 응답하지 않는다
+    });
+
+    it('넘겨받으면(user=true) 상태만 기록한다', async () => {
+        const { ws } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, ev(true));
+        await new Promise((r) => setImmediate(r));
+        expect(mockSetControl).toHaveBeenCalledWith('u3', ws, true);
+        expect(mockResumeTakeover).not.toHaveBeenCalled();
+    });
+
+    it('모르는 종류·불리언이 아닌 값은 무시한다', async () => {
+        const { ws } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, ev('no'));
+        await handleBridgeMessage(ws, { type: 'bridge_event', kind: 'other', user: false } as unknown as WSMessage);
+        expect(mockSetControl).not.toHaveBeenCalled();
+        expect(mockResumeTakeover).not.toHaveBeenCalled();
     });
 });

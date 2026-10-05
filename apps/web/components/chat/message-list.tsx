@@ -14,6 +14,8 @@ import { loadSessionIntoStore } from "@/lib/session-loader";
 import { appendAnonSessionId } from "@/lib/anon-session";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
+import { failureLabelKey, failureNextKey } from "@/lib/agent-task-failure";
+import { QUEUE_POSITION_POLL_MS, FAILURE_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
 import { isQuestionApproval, elicitationHint, structuredQuestions } from "@/lib/hitl-question";
 import { LiveSubagentPanel } from "@/components/agent-tasks/subagent-panel";
 import { Markdown } from "./markdown";
@@ -22,7 +24,7 @@ import { ServedModelBadge } from "./served-model-badge";
 import { ToolCallCards } from "./tool-call-cards";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
-import { ApprovalArgsFull, ApprovalPreview, summarizeApprovalArgs } from "@/components/approvals/approval-args";
+import { ApprovalArgsFull, ApprovalPreview, ApprovalSiteWrites, summarizeApprovalArgs } from "@/components/approvals/approval-args";
 import { QuestionChoices } from "@/components/approvals/question-choices";
 import { isNearBottom } from "@/lib/chat-scroll";
 import { COPY_FEEDBACK_RESET_MS, REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
@@ -161,6 +163,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
           <div key={a.approvalId} className="space-y-1.5 rounded-md border border-border bg-surface-1 p-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
+                <ApprovalSiteWrites args={a.args} label={t("approvals.siteWrites")} />
                 <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
                 <span className="ml-2 break-all text-xs text-muted">{summary.text}</span>
                 <ApprovalArgsFull full={summary.full} label={t("approvals.fullArgs", { chars: summary.full?.length ?? 0 })} />
@@ -363,8 +366,33 @@ const TONE_BADGE: Record<TaskTone, string> = {
   fail: "bg-danger-soft text-danger",
 };
 
+/** 서버 주차 사유 — 로컬 기기 연결 대기(config/agent-task-park-reasons 와 같은 값) */
+const DEVICE_WAIT_REASON = "device_wait";
+/** 사용자가 Companion 에서 브라우저를 넘겨받아 멈춘 작업 */
+const BROWSER_TAKEOVER_REASON = "browser_takeover";
+/** 멈춘 사유별 배지 문구(없으면 상태 기본 문구) */
+const WAIT_REASON_BADGE: Readonly<Record<string, string>> = { [DEVICE_WAIT_REASON]: "status.waitingDevice", [BROWSER_TAKEOVER_REASON]: "status.waitingBrowserTakeover" };
+
+/** 대기 순번 — 줄을 선 동안만 작업 상세를 주기적으로 읽어 "몇 번째"인지 보인다. 순번이 없으면(곧 시작) 아무것도 그리지 않는다. */
+function QueuePosition({ taskId }: { taskId: string }) {
+  const t = useTranslations("chat");
+  const [position, setPosition] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const read = () => ApiClient.get<{ data: { task: { queuePosition?: number } } }>(`/api/agent-tasks/${taskId}`)
+      .then((r) => { if (alive) setPosition(r?.data?.task?.queuePosition ?? null); })
+      .catch(() => { /* 조회 실패 — 다음 주기에 다시 */ });
+    void read();
+    const timer = setInterval(read, QUEUE_POSITION_POLL_MS);
+    return () => { alive = false; clearInterval(timer); };
+  }, [taskId]);
+  return position === null ? null : <p className="text-xs text-muted">{t("agentTask.queuePosition", { position })}</p>;
+}
+
 function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; approvals?: PendingApproval[]; taskId?: string }) {
   const t = useTranslations("chat");
+  const ta = useTranslations("agentTasks");
+  const failureKey = task.error ? failureLabelKey(task.error, task.failureClass) : null;
   const cfg = TASK_STATUS[task.status] ?? TASK_STATUS.running;
   const pct = Math.max(0, Math.min(100, Math.round(task.progress || 0)));
   const Icon = cfg.Icon;
@@ -377,7 +405,7 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
         </span>
         <span className="text-[13px] font-semibold tracking-tight text-fg">{t("agentTask.title")}</span>
         <span className={cn("ml-auto rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums", TONE_BADGE[cfg.tone])}>
-          {t(cfg.badgeKey)}{cfg.tone !== "ok" && task.currentTurn > 0 ? ` · ${t("agentTask.turn", { turn: task.currentTurn })}` : ""}
+          {t((task.status === "paused" && task.waitReason ? WAIT_REASON_BADGE[task.waitReason] : undefined) ?? cfg.badgeKey)}{cfg.tone !== "ok" && task.currentTurn > 0 ? ` · ${t("agentTask.turn", { turn: task.currentTurn })}` : ""}
         </span>
       </div>
       <div className="flex flex-col gap-2.5 px-3.5 py-3">
@@ -399,6 +427,15 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
               ? <><Wrench className="mr-1 inline h-3 w-3 align-[-1px]" />{task.lastStep.toolName}</>
               : <><Pencil className="mr-1 inline h-3 w-3 align-[-1px]" />{task.lastStep.stepType}</>}
             {task.lastStep.preview ? ` · ${task.lastStep.preview.slice(0, 80)}` : ""}
+          </p>
+        )}
+        {task.status === "pending" && taskId && <QueuePosition taskId={taskId} />}
+        {/* 실패 사유 — 무엇 때문에 끝났는지와 다음에 할 일(작업 목록 화면과 같은 문구). */}
+        {task.status === "failed" && task.error && (
+          <p className="break-words text-xs text-danger">
+            <span className="font-semibold">{ta("errorReason.label")}</span>{" "}
+            {failureKey ? ta(failureKey) : task.error.slice(0, FAILURE_REASON_MAX_CHARS)}
+            <span className="text-muted"> — {ta(failureNextKey(task.error, task.failureClass))}</span>
           </p>
         )}
         {/* 병렬 에이전트(fan-out) — 작업 화면에 들어가지 않아도 갈래별 진행이 채팅에서 보인다. */}

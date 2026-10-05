@@ -11,42 +11,60 @@
  * 낮아 "최신" 으로만 판단한다. 설령 넘어서더라도 그 교체 스크립트는 dmg 안의 `OpenMake.app` 을
  * 찾지 못해 원래 앱을 다시 연다 — 덮어쓰지 않는다.
  *
- * GET /api/desktop/latest          → { version, file, sha256, url, native: { 같은 값 } }
+ * GET /api/desktop/latest          → { version, file, sha256, url, native: { 같은 값 }, windows?: { version, file, sha256, url } }
+ *   windows 는 Windows 설치 파일(`OpenMake-Companion-Setup-*.exe`)이 게시돼 있을 때만 싣는다(Companion P4).
  * GET /api/desktop/download/:file  → dmg 스트림 (컴패니언 dmg 만)
+ * GET /api/desktop/config          → { apiPort, webPort } — 앱이 사용자가 넣은 주소 하나에서 연결 주소·웹 주소를 정하는 근거
  *
  * @module routes/desktop-update
  */
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DESKTOP_UPDATE } from '../config/desktop-update';
+import { DESKTOP_UPDATE, resolveDesktopPorts } from '../config/desktop-update';
+import { getConfig } from '../config/env';
 import { success, notFound, badRequest } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('DesktopUpdate');
 const router = Router();
 
+interface ManifestBlock { version?: string; file?: string; sha256?: string }
+
+/** PURE: 매니페스트 블록 → 응답 블록. 버전·파일명이 없거나 파일명이 그 OS 의 패턴에 맞지 않으면 null. */
+function toBlock(b: ManifestBlock | undefined, pattern: RegExp): { version: string; file: string; sha256: string | null; url: string } | null {
+    if (!b?.version || !b.file || !pattern.test(b.file)) return null;
+    return { version: b.version, file: b.file, sha256: b.sha256 ?? null, url: `/api/desktop/download/${b.file}` };
+}
+
 router.get('/latest', (_req: Request, res: Response) => {
     const manifestPath = path.join(DESKTOP_UPDATE.DIR, 'latest.json');
     try {
         const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
-            native?: { version?: string; file?: string; sha256?: string };
+            native?: ManifestBlock;
+            windows?: ManifestBlock;
         };
-        const n = m.native;
-        if (!n?.version || !n.file || !DESKTOP_UPDATE.FILE_PATTERN.test(n.file)) {
+        const native = toBlock(m.native, DESKTOP_UPDATE.FILE_PATTERN);
+        // Windows 블록(Companion P4) — 있으면 함께 싣는다. 최상위(기본) 값은 종전대로 macOS 컴패니언만 따른다.
+        const windows = toBlock(m.windows, DESKTOP_UPDATE.WINDOWS_FILE_PATTERN);
+        if (!native && !windows) {
             res.status(404).json(notFound('업데이트 매니페스트가 올바르지 않습니다'));
             return;
         }
-        const native = { version: n.version, file: n.file, sha256: n.sha256 ?? null, url: `/api/desktop/download/${n.file}` };
-        res.json(success({ ...native, native }));
+        res.json(success({ ...(native ? { ...native, native } : {}), ...(windows ? { windows } : {}) }));
     } catch {
         res.status(404).json(notFound('배포된 데스크톱 업데이트가 없습니다'));
     }
 });
 
+// 공개 라우트 — 포트 두 개뿐이고(비밀이 아니다), 앱은 API key 를 넣기 전에도 키 발급 페이지를 열어야 한다.
+router.get('/config', (_req: Request, res: Response) => {
+    res.json(success(resolveDesktopPorts(getConfig().port)));
+});
+
 router.get('/download/:file', (req: Request, res: Response) => {
     const file = req.params.file;
-    if (!DESKTOP_UPDATE.FILE_PATTERN.test(file)) {
+    if (!DESKTOP_UPDATE.FILE_PATTERN.test(file) && !DESKTOP_UPDATE.WINDOWS_FILE_PATTERN.test(file)) {
         res.status(400).json(badRequest('허용되지 않는 파일명'));
         return;
     }
@@ -55,7 +73,7 @@ router.get('/download/:file', (req: Request, res: Response) => {
         res.status(404).json(notFound('파일 없음'));
         return;
     }
-    logger.info(`데스크톱 dmg 다운로드: ${file}`);
+    logger.info(`데스크톱 설치 파일 다운로드: ${file}`);
     res.download(abs, file);
 });
 

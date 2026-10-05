@@ -24,6 +24,9 @@ import { resolveUserRole } from './boot-recovery';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { getLocalBridgeRegistry } from '../local-bridge/registry';
 import { createLogger } from '../../utils/logger';
+import { AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON } from '../../config/agent-task-park-reasons';
+import { AGENT_TASK_BROWSER_TAKEOVER_EXPIRED_ERROR, browserTakeoverAction } from './browser-takeover';
+import { AGENT_TASK_DEVICE_WAIT_EXPIRED_ERROR, deviceWaitAction } from './device-wait';
 import type { ChatMessage } from '../../llm/types';
 
 const logger = createLogger('AgentTaskHitlPark');
@@ -40,7 +43,9 @@ export async function resumeParkedTask(taskId: string): Promise<boolean> {
     const task = await db.getAgentTask(taskId);
     if (!task || task.status !== 'paused') return false;
     const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;
-    if (!cp || !Array.isArray(cp.conversation) || cp.conversation.length === 0) return false;
+    const hasCheckpoint = !!cp && Array.isArray(cp.conversation) && cp.conversation.length > 0;
+    // 체크포인트 없는 재개는 기기 대기만 허용 — 시작 시점에 기기가 없어 아무 턴도 돌지 않은 작업이라 처음부터 다시 시작한다.
+    if (!hasCheckpoint && (task.executor !== 'local' || !LOCAL_BRIDGE.DEVICE_WAIT_ENABLED)) return false;
     if (task.executor === 'local' && (!LOCAL_BRIDGE.ENABLED || !getLocalBridgeRegistry().getDevice(String(task.user_id), task.device_id ?? undefined))) {
         logger.info(`[${taskId}] 주차 재개 보류 — 로컬 디바이스 미연결(스윕이 다시 시도)`);
         return false;
@@ -65,15 +70,17 @@ export async function resumeParkedTask(taskId: string): Promise<boolean> {
             executor: task.executor === 'local' ? 'local' : undefined,
             deviceId: task.device_id ?? undefined,
             folderRel: task.folder_rel ?? undefined,
-            resume: {
-                conversation: cp.conversation as ChatMessage[],
-                fromTurn: (cp.completedTurn ?? 0) + 1,
-                fromStep: steps.length,
-                plan: task.plan,
-            },
+            ...(hasCheckpoint ? {
+                resume: {
+                    conversation: cp!.conversation as ChatMessage[],
+                    fromTurn: (cp!.completedTurn ?? 0) + 1,
+                    fromStep: steps.length,
+                    plan: task.plan,
+                },
+            } : {}),
         }),
     });
-    logger.info(`[${taskId}] 주차 작업 재개 ${outcome === 'queued' ? '대기열 등록' : '시작'} (turn ${(cp.completedTurn ?? 0) + 1})`);
+    logger.info(`[${taskId}] 주차 작업 재개 ${outcome === 'queued' ? '대기열 등록' : '시작'} (${hasCheckpoint ? `turn ${(cp!.completedTurn ?? 0) + 1}` : '처음부터'})`);
     return true;
 }
 
@@ -90,6 +97,28 @@ export async function sweepParkedTasks(): Promise<{ resumed: number; expired: nu
     const now = new Date();
     for (const t of rows) {
         try {
+            if (t.reason === AGENT_TASK_DEVICE_WAIT_REASON) {
+                // 기기 대기 — 승인과 무관하다. 재개는 resumeParkedTask 가 기기 연결을 보고 판단하고, 상한을 넘기면 실패로 끝낸다.
+                if (await resumeParkedTask(t.id)) { out.resumed++; continue; }
+                if (deviceWaitAction({ connected: false, waitedMs: Number(t.waited_ms ?? 0), maxMs: LOCAL_BRIDGE.DEVICE_WAIT_MAX_MS }) === 'expire') {
+                    await getUnifiedDatabase().updateAgentTask(t.id, { status: 'failed', error: AGENT_TASK_DEVICE_WAIT_EXPIRED_ERROR, terminalNotifyPending: true });
+                    out.expired++;
+                }
+                continue;
+            }
+            if (t.reason === AGENT_TASK_BROWSER_TAKEOVER_REASON) {
+                // 브라우저 넘겨받기 — 기기가 아직 넘겨받은 상태면 재개하지 않는다(다시 거절돼 주차되면 대기 시간이 처음부터 다시 잰다).
+                // 돌려줬거나 상태를 모르면(알림을 놓쳤다) 재개를 시도하고, 여전히 넘겨받은 상태면 실행기가 다시 주차한다.
+                const dev = LOCAL_BRIDGE.ENABLED ? getLocalBridgeRegistry().getDevice(String(t.user_id), t.device_id ?? undefined) : null;
+                const waitedMs = Number(t.waited_ms ?? 0);
+                const action = browserTakeoverAction({ connected: !!dev, userControl: dev?.browserUserControl === true, waitedMs, maxMs: LOCAL_BRIDGE.TAKEOVER_WAIT_MAX_MS });
+                if (action === 'resume' && await resumeParkedTask(t.id)) { out.resumed++; continue; }
+                if (waitedMs > LOCAL_BRIDGE.TAKEOVER_WAIT_MAX_MS) {
+                    await getUnifiedDatabase().updateAgentTask(t.id, { status: 'failed', error: AGENT_TASK_BROWSER_TAKEOVER_EXPIRED_ERROR, terminalNotifyPending: true });
+                    out.expired++;
+                }
+                continue;
+            }
             if (t.has_decision) {
                 if (await resumeParkedTask(t.id)) out.resumed++;
             } else if (!t.has_live_pending) {

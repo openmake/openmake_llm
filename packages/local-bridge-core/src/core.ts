@@ -16,7 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import {
-    DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
+    BRIDGE_KINDS, BROWSER_KIND, DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
     SANDBOX_BIN, SANDBOX_ENABLED,
 } from './constants';
 import { collectDiagnostics } from './diagnostics';
@@ -27,6 +27,9 @@ import { resolveExecPath } from './exec-path';
 import { detectGitDir, writeSandboxProfile } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
+import { findChrome } from './browser/chrome';
+import { bulkApprovalAllowed, shellInvocation } from './platform';
+import { LocalBrowser } from './browser/local-browser';
 import type { BridgeCoreOptions, BridgeMsg, BridgeResult } from './types';
 
 const fsp = fs.promises;
@@ -37,9 +40,24 @@ export class BridgeCore {
     private execPathCache: string | null = null;
     private readonly autoApproveTasks = new Set<string>();
 
+    /** 로컬 브라우저 — 호스트가 전용 프로필을 줬을 때만. 여러 연결 폴더가 같은 프로필이면 같은 브라우저를 공유한다. */
+    private readonly browser: LocalBrowser | null;
+
     constructor(private readonly opts: BridgeCoreOptions) {
         this.folderRoot = fs.realpathSync(opts.folder);
+        this.browser = opts.browserProfileDir && findChrome() ? LocalBrowser.forProfile(opts.browserProfileDir) : null;
     }
+
+    /** 서버에 알리는 능력 목록 — 브라우저는 전용 프로필과 Chrome 이 있을 때만 넣는다. */
+    capabilities(): string[] {
+        return this.browser ? [...BRIDGE_KINDS, BROWSER_KIND] : [...BRIDGE_KINDS];
+    }
+
+    /** 브라우저 제어권 — 사용자가 넘겨받은 동안 에이전트의 브라우저 요청은 실행하지 않는다. */
+    setBrowserUserControl(on: boolean): void { this.browser?.setUserControl(on); }
+    get browserUserControl(): boolean { return this.browser?.isUserControl ?? false; }
+    /** 실행 중인 브라우저 요청을 멈춘다(즉시 중지). */
+    stopBrowser(): void { this.browser?.requestStop(); }
 
     /**
      * 연결(폴더 확정) 시 1회 준비 — 샌드박스 프로파일 생성 + PATH 캐시 리셋.
@@ -69,6 +87,8 @@ export class BridgeCore {
         if (taskId && this.autoApproveTasks.has(taskId)) return true;
         // 확인 창엔 유효 실행 폴더(base)를 보여준다 — 어느 폴더에서 도는지 투명하게.
         const ans = await this.opts.confirm(command, taskId, base);
+        // 일괄 승인은 명령을 샌드박스로 가둘 수 있는 OS 에서만 받는다 — Windows 는 이번 명령만 허용으로 낮춘다.
+        if (ans === 'all' && !bulkApprovalAllowed()) return true;
         if (ans === 'all' && taskId) {
             this.autoApproveTasks.add(taskId);
             this.opts.onAutoApproveChange?.();
@@ -149,7 +169,9 @@ export class BridgeCore {
                 if (SANDBOX_ENABLED && this.sandboxProfilePath) {
                     execFile(SANDBOX_BIN, ['-f', this.sandboxProfilePath, '/bin/bash', '-c', String(m.command)], opts, cb);
                 } else {
-                    execFile('/bin/bash', ['-c', String(m.command)], opts, cb);
+                    // 샌드박스가 없는 OS — Windows 는 cmd.exe, 그 밖은 bash (platform.ts)
+                    const sh = shellInvocation(String(m.command));
+                    execFile(sh.file, sh.args, { ...opts, windowsVerbatimArguments: process.platform === 'win32' }, cb);
                 }
                 return;
             }
@@ -223,12 +245,28 @@ export class BridgeCore {
                 const codeNav = await this.timedFs('code_nav', () => runCodeNav(base, startAbs, m));
                 done({ ok: true, codeNav }); return;
             }
+            case 'browser': {
+                // 로컬 브라우저(P2) — 사이트 정책 판정·제어권·중지는 LocalBrowser 가 맡는다. 스크린샷·다운로드는 실행 폴더 안에만 쓴다.
+                if (!this.browser) { done({ ok: false, error: '이 디바이스는 브라우저를 쓸 수 없습니다(전용 프로필 미설정 또는 Chrome 없음)' }); return; }
+                const r = await this.browser.run(
+                    { actions: m.actions, sitePolicy: m.sitePolicy, approvedHosts: m.approvedHosts },
+                    {
+                        ...(m.taskId ? { taskId: m.taskId } : {}),
+                        downloadDir: base,
+                        saveFile: async (name, data) => { await fsp.writeFile(await safeFromAsync(base, name), data); },
+                    },
+                );
+                // 결과는 서버 샌드박스 러너와 같은 JSON 을 stdout 에 싣는다 — 서버의 browser 도구가 그대로 읽는다.
+                // 넘겨받은 상태라 실행하지 않았으면 결과에 표식을 싣는다 — 서버는 이 호출을 오류로 돌려주지 않고 작업을 주차한다.
+                done({ ok: true, stdout: JSON.stringify(r), exitCode: r.ok ? 0 : 1, ...(r.userControl ? { userControl: true } : {}) }); return;
+            }
             case 'worktree':
                 await handleWorktree(m, done, base); return;
             case 'task_end':
                 this.opts.onTaskEnd?.(m.taskId); // 호스트 정리(데스크톱=브라우저 패널 닫기)
                 // 일괄 승인은 그 작업에만 유효 — 종료 즉시 회수한다.
                 if (m.taskId && this.autoApproveTasks.delete(m.taskId)) this.opts.onAutoApproveChange?.();
+                void this.browser?.closeTask(m.taskId); // 이 작업의 브라우저 탭을 닫는다(로그인 정보는 프로필에 남는다)
                 done({ ok: true }); return;
             default: done({ ok: false, error: `지원하지 않는 kind: ${m.kind}` });
         }

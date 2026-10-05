@@ -34,6 +34,8 @@ export interface AgentTaskProgressEvent {
     /** 승인·계획 변경 알림일 때 대상 승인 id(계획 편집은 없음) — 클라이언트가 승인함을 재조회하는 신호 */
     approvalId?: string;
     reason?: AgentTaskProgressReason;
+    /** 멈춘 작업이 기다리는 것 — 'device_wait' 면 채팅 카드가 "승인 대기" 대신 기기 연결 대기로 보인다 */
+    waitReason?: string;
 }
 
 const bus = new EventEmitter();

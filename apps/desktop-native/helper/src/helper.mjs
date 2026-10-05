@@ -22,6 +22,7 @@
 //               {ev:'autoApprove',count}(전 루트 합계) {ev:'taskEnd',taskId,folder}
 //               {ev:'approvalPending',taskId,toolName,folder}
 //               {ev:'connected',folder} {ev:'disconnected',folder}
+//               {ev:'endpoints',webUrl,bridgeUrl,discovered} — 기동 직후 한 번(서버 주소에서 정한 연결·웹 주소)
 //   app→helper: {cmd:'connect',folder} {cmd:'disconnect',folder?}(folder 없으면 전체)
 //               {cmd:'confirm',id,result:'yes'|'all'|'no'} {cmd:'clearAutoApprove'} {cmd:'quit'}
 //   status code: connecting·connected(arg=폴더명)·server_error(arg=메시지)·reconnecting·closed·idle·
@@ -31,7 +32,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import * as readline from 'readline';
-import { BridgeConnection, BridgeCore, SANDBOX_ENABLED } from '../../../../packages/local-bridge-core/dist/index.js';
+import { BridgeConnection, BridgeCore, SANDBOX_ENABLED, discoverEndpoints } from '../../../../packages/local-bridge-core/dist/index.js';
 
 const serverUrl = (() => {
   const i = process.argv.indexOf('--server');
@@ -39,8 +40,21 @@ const serverUrl = (() => {
 })();
 const apiKey = process.env.OMK_COMPANION_API_KEY || '';
 
+// 서버 주소 찾기 — 사용자가 넣은 주소 하나(--server)에서 연결 주소와 웹 주소를 정한다(코어 endpoints).
+// 주소가 잘못됐으면 넣은 값을 그대로 쓴다(연결 단계에서 오류로 드러난다).
+const endpointsReady = discoverEndpoints(serverUrl).catch(() => ({ bridgeUrl: serverUrl, webUrl: serverUrl, discovered: false }));
+
+// `--resolve`: 주소만 찾아 한 줄로 내고 끝낸다 — 앱이 API key 를 넣기 전(키 발급 페이지를 열 때)에도 웹 주소를 알 수 있게.
+const RESOLVE_ONLY = process.argv.includes('--resolve');
+if (RESOLVE_ONLY) {
+  endpointsReady.then((e) => { process.stdout.write(JSON.stringify(e) + '\n'); process.exit(0); });
+}
+
 const SUPPORT_DIR = path.join(os.homedir(), 'Library', 'Application Support', 'OpenMakeCompanion');
 fs.mkdirSync(SUPPORT_DIR, { recursive: true });
+/** 로컬 브라우저 — 앱이 OMK_COMPANION_BROWSER=1 로 켠다(설정의 "브라우저 사용 허용"). 전용 프로필은 앱 데이터 폴더 아래. */
+const BROWSER_ENABLED = process.env.OMK_COMPANION_BROWSER === '1';
+const BROWSER_PROFILE_DIR = path.join(SUPPORT_DIR, 'browser-profile');
 
 function send(obj) { process.stdout.write(JSON.stringify(obj) + '\n'); }
 
@@ -70,7 +84,8 @@ function totalAutoApprove() {
   return n;
 }
 
-function connectFolder(folder) {
+async function connectFolder(folder) {
+  const { bridgeUrl } = await endpointsReady;
   if (!apiKey) { send({ ev: 'status', text: 'API key 필요 — 앱 설정에서 입력', code: 'api_key_required' }); return; }
   let real;
   try { real = fs.realpathSync(folder); } catch (e) {
@@ -87,13 +102,16 @@ function connectFolder(folder) {
       send({ ev: 'confirm', id, command, taskId: taskId ?? null, base, folder: real, sandbox: SANDBOX_ENABLED });
     }),
     sandboxProfileDir: SUPPORT_DIR,
+    // 로컬 브라우저(P2) — 앱 설정에서 켰을 때만 전용 프로필을 넘긴다. 사용자의 평소 Chrome 프로필이 아니다.
+    ...(BROWSER_ENABLED ? { browserProfileDir: BROWSER_PROFILE_DIR } : {}),
     onTaskEnd: (taskId) => send({ ev: 'taskEnd', taskId: taskId ?? null, folder: real }),
     onAutoApproveChange: () => send({ ev: 'autoApprove', count: totalAutoApprove() }),
   });
   const connection = new BridgeConnection({
-    serverUrl,
+    serverUrl: bridgeUrl,
     core,
     deviceId: rootDeviceId(real),
+    hostId: baseDeviceId(), // 폴더별 연결이 같은 PC 임을 서버에 알린다 — 기기 상한을 PC 단위로 센다
     label: `${os.hostname()} · ${path.basename(real)}`,
     headers: () => ({ Authorization: `Bearer ${apiKey}` }),
     onStatus: (s, code, arg) => send({ ev: 'status', folder: real, text: s, ...(code ? { code } : {}), ...(arg !== undefined ? { arg } : {}) }),
@@ -127,7 +145,7 @@ rl.on('line', (line) => {
   let m;
   try { m = JSON.parse(line); } catch { return; }
   switch (m.cmd) {
-    case 'connect': if (typeof m.folder === 'string') connectFolder(m.folder); break;
+    case 'connect': if (typeof m.folder === 'string') void connectFolder(m.folder); break;
     case 'disconnect': disconnectFolder(typeof m.folder === 'string' ? m.folder : undefined); break;
     case 'confirm': {
       const resolve = pendingConfirms.get(m.id);
@@ -138,6 +156,17 @@ rl.on('line', (line) => {
       break;
     }
     case 'clearAutoApprove': for (const r of roots.values()) r.core.clearAutoApprove(); break;
+    // 브라우저 제어권(P2) — 사용자가 넘겨받으면 에이전트의 브라우저 요청을 실행하지 않는다. 브라우저는 루트들이 공유한다.
+    case 'browserControl': {
+      const user = m.user === true;
+      for (const r of roots.values()) {
+        r.core.setBrowserUserControl(user);
+        r.connection.notifyBrowserControl(user); // 서버에 알린다 — 돌려주면 넘겨받기로 멈춘 작업이 이어서 실행된다
+      }
+      send({ ev: 'browserControl', user });
+      break;
+    }
+    case 'browserStop': for (const r of roots.values()) r.core.stopBrowser(); send({ ev: 'browserStopped' }); break;
     case 'quit': shutdown(); break;
     default: break;
   }
@@ -148,7 +177,7 @@ rl.on('line', (line) => {
 // 즉시 exit 하면 서버는 거부 대신 요청 타임아웃을 겪는다.
 let shuttingDown = false;
 function shutdown() {
-  if (shuttingDown) return;
+  if (shuttingDown || RESOLVE_ONLY) return; // 조회 전용 실행은 결과를 낸 뒤 스스로 끝난다
   shuttingDown = true;
   for (const resolve of pendingConfirms.values()) resolve('no');
   pendingConfirms.clear();
@@ -158,4 +187,7 @@ rl.on('close', shutdown);
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-send({ ev: 'status', text: '미연결', code: 'idle' });
+if (!RESOLVE_ONLY) {
+  send({ ev: 'status', text: '미연결', code: 'idle' });
+  endpointsReady.then((e) => send({ ev: 'endpoints', ...e }));
+}

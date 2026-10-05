@@ -179,7 +179,8 @@ export function createProceduralTools(
             const replay = async (): Promise<MCPToolResult> => {
             try {
                 if (spec.kind === 'browser') {
-                    if (!sandbox.isBrowserEnabled) return h.textResult(h.browserUnavailable, true);
+                    // 로컬 브라우저(runBrowserSpec)는 저장된 절차의 재생을 지원하지 않는다 — 재생은 승인 결속(사이트 정책)을 거치지 않는다.
+                    if (!sandbox.isBrowserEnabled || sandbox.runBrowserSpec) return h.textResult(h.browserUnavailable, true);
                     const renderedActions = deepSub(spec.actions ?? []);
                     const urlBlock = await h.browserUrlBlock(Array.isArray(renderedActions) ? renderedActions : []);
                     if (urlBlock) return h.textResult(urlBlock, true);

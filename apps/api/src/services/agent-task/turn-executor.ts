@@ -19,16 +19,16 @@ import { prepareToolArgs } from './tool-args';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import { notifyApprovalPending } from './approval-pending';
 
-import { AgentTaskAbort, AgentTaskParked } from './types';
+import { AgentTaskAbort, AgentTaskParked, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON } from './types';
 import { writeTurnCheckpoint, markToolCallInFlight } from './turn-reentry';
 import { hasSideEffects } from '../../config/tool-policy';
-import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote } from './tool-loop-guard';
+import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote, retryAfterUnknownOutcome } from './tool-loop-guard';
 import { needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from './tool-receipt';
 import { runWithToolCallContext } from '../../utils/tool-call-context';
 import { runWithToolMediaSink, toolMediaSinkFor } from '../../utils/tool-media-sink';
 import { isRejectedCall, findDuplicateCalls } from './turn-call-guards';
 import { getMalformedToolArgsResult, getDuplicateToolCallResult } from '../../prompts/agent-task-turn-loop';
-import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice } from '../../prompts/agent-task-prompt';
+import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice, type UnknownOutcomeCause } from '../../prompts/agent-task-prompt';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { TaskRuntime } from '../task-sandbox/runtime';
@@ -110,12 +110,14 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     let parkRequested = false;
     // 실행 중 표식(172)을 남긴 호출인가 — 결과 스텝 뒤(또는 주차 전)에 지운다.
     let inFlightMarked = false;
-    const park = async (): Promise<never> => {
+    // reason 을 주면 그 사유로 표식한다(기기 대기) — 생략은 질문 응답 대기.
+    const park = async (reason?: string): Promise<never> => {
         if (inFlightMarked) await markToolCallInFlight(taskId, null); // 주차된 호출은 재개 때 다시 실행된다
         await writeTurnCheckpoint(taskId, conversation, turn - 1, taskRuntime);
         await update({ status: 'paused' });
-        await new AgentTaskRepository(getPool()).markParked(taskId);
-        throw new AgentTaskParked();
+        if (reason) await new AgentTaskRepository(getPool()).markParked(taskId, reason);
+        else await new AgentTaskRepository(getPool()).markParked(taskId);
+        throw new AgentTaskParked(reason);
     };
     // 외부 MCP 서버의 사용자 입력 요청(F13.10) — ask_human 과 같은 채널로 묻는다(자동승인·정책 무관, 대기는 pause-aware).
     const elicitCtx: ToolUserInputContext = {
@@ -134,17 +136,17 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     };
     // 결과 불명 호출(172) — 사용자에게 묻는다: 승인 = 다시 실행(undefined), 그 밖은 다시 실행하지 않고 돌려줄 도구 결과.
     // 유예가 지나면 다른 승인처럼 주차하되 표식은 남긴다 — 재개 때 같은 질문으로 결정을 이어받는다.
-    const resolveUnknownOutcome = async (name: string, toolCallId: string): Promise<string | undefined> => {
+    const resolveUnknownOutcome = async (name: string, toolCallId: string, cause: UnknownOutcomeCause = 'restart'): Promise<string | undefined> => {
         if (!AGENT_TASK_LIMITS.REENTRY_UNKNOWN_OUTCOME_ASK) return getAgentTaskUnknownOutcomeNotice(name);
         const r = await getApprovalRegistry().request(
-            { taskId, userId, toolName: 'ask_human', args: { question: getAgentTaskUnknownOutcomeQuestion(name), toolName: name, toolCallId } },
+            { taskId, userId, toolName: 'ask_human', args: { question: getAgentTaskUnknownOutcomeQuestion(name, cause), toolName: name, toolCallId } },
             { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true },
         );
         pausedMs += r.waitedMs;
         if (r.reason === 'parked') await park();
         if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
-        if (r.decision === 'approved') return r.text?.trim() ? getAgentTaskUnknownOutcomeAnswerNotice(name, r.text.trim()) : undefined;
-        return r.reason === 'user' ? getAgentTaskUnknownOutcomeDeclinedNotice(name) : getAgentTaskUnknownOutcomeNotice(name);
+        if (r.decision === 'approved') return r.text?.trim() ? getAgentTaskUnknownOutcomeAnswerNotice(name, r.text.trim(), cause) : undefined;
+        return r.reason === 'user' ? getAgentTaskUnknownOutcomeDeclinedNotice(name, cause) : getAgentTaskUnknownOutcomeNotice(name);
     };
     // 모델에 보이는 도구 결과 — 샌드박스 밖에서 온 결과(호스트·외부 도구)와 browser 는 데이터로 감싼다(플래그 ON·목표가 있을 때만).
     const forModel = (name: string, result: string): string =>
@@ -201,6 +203,8 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         }
         const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
         let toolResult: string;
+        // 기기 대기(P1-4) — 이 호출의 결과를 기록한 뒤 주차한다(쓰기·실행을 보낸 뒤 끊겨 결과 불명).
+        let parkForDeviceAfterRecord = false;
         inFlightMarked = false;
         receiptOpen = false;
         // 부작용 도구는 승인 뒤·실행 직전에 표식을 남긴다 — 재개 때 저널에 없으면 결과 불명(다시 실행하지 않음).
@@ -209,9 +213,14 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             : undefined;
         const journaled = tc.id !== undefined ? journal.get(tc.id) : undefined;
         const pre = tc.id !== undefined ? prefetched.get(tc.id) : undefined;
+        // 기기와 끊겨 결과 불명으로 끝난 쓰기를 다시 하려 하는가 — 두 번 나가지 않게 사용자에게 묻고(승인하면 다시 실행),
+        // 이미 다시 실행하지 않기로 한 쓰기는 묻지 않고 막는다.
+        const deviceRetry = journaled === undefined && tc.id !== undefined && !malformed && hasSideEffects(name, args)
+            ? retryAfterUnknownOutcome(conversation, name, args) : null;
         const unknownResult = journaled === undefined && tc.id !== undefined && tc.id === input.unknownOutcomeId
             ? await resolveUnknownOutcome(name, tc.id)
-            : undefined;
+            : deviceRetry === 'ask' ? await resolveUnknownOutcome(name, tc.id!, 'device')
+                : deviceRetry === 'declined' ? getAgentTaskUnknownOutcomeDeclinedNotice(name, 'device') : undefined;
         // 반복 가드 — 같은 호출의 연속 실패·같은 결과 반복을 대화에서 세어 안내하거나 실행하지 않는다(tool-loop-guard).
         const loop = AGENT_TASK_LIMITS.TOOL_LOOP_GUARD_ENABLED && journaled === undefined && unknownResult === undefined && !original
             ? repetitionVerdict(priorRepetition(conversation, name, args), { readOnly: !hasSideEffects(name, args), toolName: name }, {
@@ -248,6 +257,12 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 onApprovalRejected,
                 onBeforeExecute: beforeExecute,
             }).catch((e: unknown) => (e instanceof AgentTaskParked ? park() : Promise.reject(e)));
+            // 로컬 기기가 사라졌다 — 닿지 않은 호출은 결과 없이 주차(재개 때 다시 실행), 결과 불명은 안내를 남기고 주차.
+            const deviceLoss = taskRuntime.consumeDeviceLoss?.() ?? null;
+            if (deviceLoss === 'rerunnable') await park(AGENT_TASK_DEVICE_WAIT_REASON);
+            // 사용자가 브라우저를 넘겨받아 실행하지 않았다 — 결과 없이 주차해 실행 자리를 반납하고, 돌려받으면 같은 호출을 다시 실행한다.
+            if (deviceLoss === 'browser_takeover') await park(AGENT_TASK_BROWSER_TAKEOVER_REASON);
+            parkForDeviceAfterRecord = deviceLoss === 'unknown';
             if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             if (toolResult.includes(TASK_TERMINATE_SENTINEL)) {
                 terminated = true;
@@ -315,6 +330,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 checkpoint: { conversation, completedTurn: turn - 1 },
             }).catch(() => { /* checkpoint 실패는 실행을 막지 않음 */ });
         }
+        if (parkForDeviceAfterRecord) await park(AGENT_TASK_DEVICE_WAIT_REASON);
     }
 
     return { terminated, terminateSummary, stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts };

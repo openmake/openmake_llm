@@ -14,6 +14,7 @@
  * @see docs/superpowers/plans/2026-08-12-system-settings-admin-ui.md
  */
 import { z } from 'zod';
+import { browserSitePolicyProblems } from '@openmake/config';
 import { contributedSettings, type AddonSettingValidator } from '../addon-host/contributions';
 
 /** Base 그룹 또는 add-on 이 기여한 그룹 이름 */
@@ -46,6 +47,13 @@ const nonNegativeIntString = z
 const jsonObject = nonEmpty.refine((v) => {
     try { const o = JSON.parse(v); return !!o && typeof o === 'object' && !Array.isArray(o); } catch { return false; }
 }, 'JSON 객체여야 합니다 (예: {"deny":["openrouter:*"]})');
+/** 브라우저 사이트 정책 — 관리자 화면 편집기와 같은 패턴 검증(@openmake/config browserSitePolicyProblems) */
+const browserSitePolicy = nonEmpty.superRefine((v, ctx) => {
+    const problems = browserSitePolicyProblems(v);
+    if (problems.length > 0) {
+        ctx.addIssue({ code: 'custom', message: `사이트 정책이 올바르지 않습니다 (예: {"allow":["groupware.example.co.kr","*.intra.example.co.kr"],"deny":[]}): ${problems.join(', ')}` });
+    }
+});
 /** 백분율 목표 — 0 초과 100 미만 소수(예: 99.5) */
 const percentTarget = nonEmpty.refine((v) => /^\d{1,2}(\.\d{1,3})?$/.test(v) && Number(v) > 0 && Number(v) < 100, '0 초과 100 미만 백분율이어야 합니다 (예: 99.5)');
 const mailtoOrHttps = nonEmpty.refine(
@@ -111,6 +119,8 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: 'MCP_TOOL_LIST_STALE_MS', group: 'agent', secret: false, requiresRestart: false, validate: nonNegativeIntString },
     { key: 'AGENT_TASK_HITL_PARK_ON_TIMEOUT', group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: 'AGENT_TASK_QUEUE_PRIORITY_MAX', group: 'agent', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+    // 로컬 브라우저 사이트 허용 목록(Companion P2) — {"allow":["groupware.example.co.kr"],"deny":[]}. 작업이 도구를 부를 때마다 읽는다(실시간)
+    { key: 'BROWSER_SITE_POLICY', group: 'agent', secret: false, requiresRestart: false, validate: browserSitePolicy },
 
     // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
     { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },

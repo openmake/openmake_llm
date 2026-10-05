@@ -27,7 +27,11 @@ export function buildSchedulingFields(p: SchedulingFieldsInput): Record<string, 
         out.cache_salt = crypto.createHmac('sha256', p.saltKey).update(String(p.userId)).digest('hex').slice(0, LLM_CACHE_SALT_HEX_CHARS);
     }
     if (p.priorityEnabled) {
-        out.priority = LLM_REQUEST_PRIORITY[p.requestClass ?? 'unspecified'];
+        const priority = LLM_REQUEST_PRIORITY[p.requestClass ?? 'unspecified'];
+        out.priority = priority;
+        // LiteLLM 은 최상위 priority 를 자체 대기열에만 쓰고 upstream 으로 넘기지 않는다(2026-10-05 실측: 대기 92초 그대로).
+        // extra_body 안의 값은 그대로 전달한다. vLLM 에 직접 붙는 구성은 최상위 값을 읽고 extra_body 는 무시한다.
+        out.extra_body = { priority };
     }
     return out;
 }

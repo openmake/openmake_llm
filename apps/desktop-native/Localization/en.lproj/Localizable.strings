@@ -23,8 +23,9 @@
 "settings.server" = "Server";
 "settings.save" = "Save";
 "settings.saved" = "Saved";
-"backend.external" = "External (chat.openmake.cc)";
-"backend.local" = "Local (localhost:52416)";
+"settings.server.help" = "Enter the address you use to open OpenMake in your browser (for example https://chat.company.com or http://server:3010). Leave empty to use the default.";
+"settings.server.invalid" = "The server address is not valid. Enter an address that starts with http:// or https://.";
+"settings.server.insecure" = "This connection is not encrypted (http). Your API key and task content are sent as-is, so use it only on a network you trust, such as your company network.";
 
 /* Connection status */
 "status.idle" = "Not connected";
@@ -72,6 +73,8 @@
 "update.available.body" = "Download and install it now? The app will quit briefly during installation and then reopen.";
 "update.install" = "Update";
 "update.later" = "Later";
+"update.readOnly.title" = "Version v%1$@ is available (current v%2$@)";
+"update.readOnly.body" = "The app cannot be replaced at this location (for example, when it is run directly from a disk image). Move the app to the Applications folder, reopen it, and then update.";
 "update.badDownload" = "Invalid download address";
 "update.checksum" = "Download integrity check failed (sha256 mismatch)";
 "update.noBundle" = "Could not find the app bundle path (updates are unavailable in development runs)";
@@ -84,3 +87,9 @@
 "update.script.replace" = "Could not replace the existing app.";
 "update.script.rollback" = "Installing the new version failed, so the previous version was restored.";
 "update.script.reopen" = "The update succeeded, but the app could not be reopened.";
+"menu.browser.takeover" = "Take Over Browser (Pause Agent)";
+"menu.browser.release" = "Hand Back Browser (Resume Agent)";
+"menu.browser.stop" = "Stop Browser Task";
+"settings.browser" = "Browser";
+"settings.browser.enable" = "Allow the agent to use a browser";
+"settings.browser.help" = "When on, the agent can open and operate web pages in a dedicated Chrome window with its own profile. It does not use the logins of your everyday Chrome. Typing into sites that are not on the allowed list asks for your approval on the web.";

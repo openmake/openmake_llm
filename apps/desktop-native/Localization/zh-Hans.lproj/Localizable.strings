@@ -23,8 +23,9 @@
 "settings.server" = "服务器";
 "settings.save" = "保存";
 "settings.saved" = "已保存";
-"backend.external" = "外部 (chat.openmake.cc)";
-"backend.local" = "本地 (localhost:52416)";
+"settings.server.help" = "请输入在浏览器中打开 OpenMake 时使用的地址（例如 https://chat.company.com、http://server:3010）。留空则使用默认地址。";
+"settings.server.invalid" = "服务器地址不正确。请输入以 http:// 或 https:// 开头的地址。";
+"settings.server.insecure" = "这是未加密的连接（http）。API key 和任务内容将以明文发送，请仅在公司内网等可信网络中使用。";
 
 /* 连接状态 */
 "status.idle" = "未连接";
@@ -72,6 +73,8 @@
 "update.available.body" = "现在下载并安装吗？安装期间应用会短暂退出，然后重新打开。";
 "update.install" = "更新";
 "update.later" = "稍后";
+"update.readOnly.title" = "有新版本 v%1$@（当前 v%2$@）";
+"update.readOnly.body" = "无法在此位置替换应用（例如直接从磁盘映像运行时）。请将应用移到“应用程序”文件夹并重新打开，然后再更新。";
 "update.badDownload" = "下载地址无效";
 "update.checksum" = "下载完整性校验失败（sha256 不匹配）";
 "update.noBundle" = "找不到应用包路径（开发运行时无法更新）";
@@ -84,3 +87,9 @@
 "update.script.replace" = "无法替换现有应用。";
 "update.script.rollback" = "新版本安装失败，已恢复为之前的版本。";
 "update.script.reopen" = "更新已完成，但无法重新打开应用。";
+"menu.browser.takeover" = "接管浏览器（暂停代理）";
+"menu.browser.release" = "交还浏览器（恢复代理）";
+"menu.browser.stop" = "停止浏览器任务";
+"settings.browser" = "浏览器";
+"settings.browser.enable" = "允许代理使用浏览器";
+"settings.browser.help" = "开启后，代理可以在专用的 Chrome 窗口（独立配置文件）中打开并操作网页。不会使用您日常 Chrome 的登录信息。向未列入允许列表的网站输入内容时，会在网页端请求您的批准。";

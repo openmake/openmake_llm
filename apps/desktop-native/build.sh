@@ -1,11 +1,14 @@
 #!/bin/bash
 # OpenMake Companion 빌드 — 헬퍼 번들 + Swift 빌드 + .app 조립 + ad-hoc 서명 + dmg.
 # 사전: npm run build:packages (local-bridge-core dist 필요)
-# 사용: bash apps/desktop-native/build.sh [버전]   (기본 버전: 0.1.0)
+# 사용: bash apps/desktop-native/build.sh [버전]   (기본 버전: VERSION 파일)
+# 버전을 주지 않으면 VERSION 파일의 값을 쓴다 — 종전 기본값 0.1.0 은 서버에 게시된 버전(0.2.8)보다 낮아,
+# CI 가 만든 새 빌드가 게시본을 "새 버전"으로 보고 구버전으로 되돌아갔다(2026-10-05).
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(cd ../.. && pwd)"
-VERSION="${1:-0.1.0}"
+VERSION="${1:-$(tr -d '[:space:]' < VERSION)}"
+[[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "버전 형식이 잘못됐습니다: $VERSION"; exit 1; }
 APP_NAME="OpenMake Companion"
 BUNDLE_ID="cc.openmake.companion"
 OUT="dist"
@@ -66,6 +69,12 @@ codesign --force --deep --sign - "$APP"
 # 6) dmg (파일명은 서버 FILE_PATTERN ^OpenMake-[A-Za-z0-9.-]+\.dmg$ 준수)
 DMG="$OUT/OpenMake-Companion-$VERSION-arm64.dmg"
 rm -f "$DMG"
-hdiutil create -volname "$APP_NAME" -srcfolder "$APP" -ov -format UDZO "$DMG" >/dev/null
+# hdiutil 은 GitHub macOS 실행기에서 "No space left on device" 로 간헐 실패한다(2026-10-05 하루 두 번, 디스크 여유와 무관 — 다시 돌리면 통과).
+# 몇 번 다시 시도하고, 끝내 실패하면 빌드를 실패시킨다.
+for attempt in 1 2 3; do
+  hdiutil create -volname "$APP_NAME" -srcfolder "$APP" -ov -format UDZO "$DMG" >/dev/null && break
+  [ "$attempt" = 3 ] && { echo "dmg 생성 실패(3회 시도)"; exit 1; }
+  echo "dmg 생성 실패 — 다시 시도 ($attempt/3)"; rm -f "$DMG"; sleep 5
+done
 shasum -a 256 "$DMG"
 echo "빌드 완료: $DMG"

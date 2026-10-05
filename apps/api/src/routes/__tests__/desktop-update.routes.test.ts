@@ -80,3 +80,52 @@ describe('GET /api/desktop/download/:file', () => {
         expect((await request(app).get('/api/desktop/download/latest.json')).status).toBe(400);
     });
 });
+
+describe('Windows 설치 파일 (Companion P4)', () => {
+    const WIN = { version: '0.1.0', file: 'OpenMake-Companion-Setup-0.1.0.exe', sha256: 'c'.repeat(64) };
+    beforeAll(() => fs.writeFileSync(path.join(DIR, WIN.file), 'windows-installer'));
+
+    it('windows 블록을 함께 싣고, 최상위 값은 종전대로 macOS 컴패니언이다', async () => {
+        writeManifest({ native: NATIVE, windows: WIN });
+        const res = await request(app).get('/api/desktop/latest');
+        expect(res.body.data.version).toBe(NATIVE.version);
+        expect(res.body.data.windows).toEqual({ ...WIN, url: `/api/desktop/download/${WIN.file}` });
+    });
+
+    it('windows 블록만 있어도 응답한다 — 최상위(macOS) 값은 없다', async () => {
+        writeManifest({ windows: WIN });
+        const res = await request(app).get('/api/desktop/latest');
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual({ windows: { ...WIN, url: `/api/desktop/download/${WIN.file}` } });
+    });
+
+    it('파일명이 패턴에 맞지 않는 windows 블록은 싣지 않는다', async () => {
+        writeManifest({ native: NATIVE, windows: { ...WIN, file: '..\\evil.exe' } });
+        const res = await request(app).get('/api/desktop/latest');
+        expect(res.body.data.windows).toBeUndefined();
+    });
+
+    it('설치 파일은 내려받을 수 있고, 다른 exe 는 거부한다', async () => {
+        expect((await request(app).get(`/api/desktop/download/${WIN.file}`)).status).toBe(200);
+        expect((await request(app).get('/api/desktop/download/evil.exe')).status).toBe(400);
+        expect((await request(app).get('/api/desktop/download/OpenMake-Companion-Setup-1.0.0.exe')).status).toBe(404);
+    });
+});
+
+describe('GET /api/desktop/config', () => {
+    it('API 포트와 웹 포트를 알려 준다 — 인증 없이', async () => {
+        const res = await request(app).get('/api/desktop/config');
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual({ apiPort: expect.any(Number), webPort: expect.any(Number) });
+    });
+});
+
+describe('resolveDesktopPorts — 웹 포트 규칙은 resolve-ports.cjs 와 같다', () => {
+    it('OMK_WEB_PORT → OMK_APP_URL 끝의 포트 → 3000', async () => {
+        const { resolveDesktopPorts } = await import('../../config/desktop-update');
+        expect(resolveDesktopPorts(52418, { OMK_WEB_PORT: '3010', OMK_APP_URL: 'https://chat.example.com:8443' })).toEqual({ apiPort: 52418, webPort: 3010 });
+        expect(resolveDesktopPorts(52416, { OMK_APP_URL: 'http://host:33000/' })).toEqual({ apiPort: 52416, webPort: 33000 });
+        expect(resolveDesktopPorts(52416, { OMK_APP_URL: 'https://chat.example.com' })).toEqual({ apiPort: 52416, webPort: 3000 });
+        expect(resolveDesktopPorts(52416, {})).toEqual({ apiPort: 52416, webPort: 3000 });
+    });
+});

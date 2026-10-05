@@ -9,7 +9,9 @@ import { basename, relative } from 'path';
 import { badRequest, notFound } from '../utils/api-response';
 import { safeRealWorkspacePath } from '../services/task-sandbox/sandbox';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
-import { getUnifiedDatabase } from '../data/models/unified-database';
+import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
+import { AgentTaskParkRepository } from '../data/repositories/agent-task-park-repository';
+import { getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import type { AgentTaskInputFile } from '../services/AgentTaskService';
@@ -94,6 +96,25 @@ export function filterTaskList<T extends { executor?: string | null; device_id?:
     );
 }
 
+/**
+ * 대기 정보(Companion P1-7) — 목록·상세 응답에 덧붙인다.
+ *   queuePosition : 대기열에서 몇 번째로 시작되는지(1 부터). 대기 중이 아니면 없다. 메모리 조회라 목록에도 쓴다.
+ *   waitReason    : 멈춘 작업이 무엇을 기다리는지(device_wait = 로컬 기기 연결, hitl_parked = 사용자 답). DB 조회라 상세에만 쓴다.
+ */
+export function queuePositionOf(t: { id?: unknown; status?: unknown }): { queuePosition?: number } {
+    if (t.status !== 'queued' || typeof t.id !== 'string') return {};
+    const pos = getAgentTaskQueue().position(t.id);
+    return pos === null ? {} : { queuePosition: pos };
+}
+
+export async function waitReasonOf(t: { id?: unknown; status?: unknown }): Promise<{ waitReason?: string }> {
+    if (t.status !== 'paused' || typeof t.id !== 'string') return {};
+    try {
+        const reason = await new AgentTaskParkRepository(getPool()).getParkReason(t.id);
+        return reason ? { waitReason: reason } : {};
+    } catch { return {}; } // 표시용 — 조회 실패가 상세 응답을 막지 않는다
+}
+
 export function toPublicTask(t: Record<string, unknown>) {
     const { checkpoint, input_files, input_images, create_idempotency_key, terminal_notify_pending, lease_owner, lease_until, in_flight_tool_call_id, ...rest } = t;
     void input_images; // dataURL 배열 — 응답에서 제외(팽창 방지)
@@ -108,6 +129,7 @@ export function toPublicTask(t: Record<string, unknown>) {
         ...rest,
         ...(fileMetas ? { input_files: fileMetas } : {}),
         resumable: !!checkpoint && (t.status === 'failed' || t.status === 'cancelled'),
+        ...queuePositionOf(t),
     };
 }
 

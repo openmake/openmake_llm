@@ -194,7 +194,7 @@ export function getTaskSandboxGuidance(): string {
  * 네트워크 차단)는 없다. 컨테이너 안내를 그대로 넣으면 모델이 `cd /workspace` 같은 없는 경로로
  * 턴을 버린다(2026-09-15 CLI 라이브 실측). 공용 문단은 샌드박스 안내와 같은 문구를 쓴다.
  */
-export function getLocalExecutorGuidance(): string {
+export function getLocalExecutorGuidance(opts: { browser?: boolean } = {}): string {
     return [
         '',
         '## 작업 환경 (사용자 로컬 폴더)',
@@ -203,7 +203,9 @@ export function getLocalExecutorGuidance(): string {
         '- 파일 도구는 이 폴더 밖 경로를 거부합니다. 셸 명령은 사용자 머신에서 실행되며 실행 전 사용자 확인을',
         '  받을 수 있고, 폴더 밖 쓰기(전역 설치 등)는 차단됩니다.',
         '- 설치된 언어·도구는 사용자 환경마다 다릅니다 — 필요한 명령이 있는지 먼저 확인하세요(예: `command -v node`).',
-        '- 이 환경에는 browser 도구가 없습니다.',
+        opts.browser
+            ? '- browser 도구는 사용자 PC 의 전용 Chrome 창을 조작합니다(탭·로그인 유지). 허용된 사이트 밖에서의 입력은 사용자 승인이 필요하고, 업무 자료를 외부 사이트에 입력하지 않습니다.'
+            : '- 이 환경에는 browser 도구가 없습니다.',
         '- bash/python_execute/str_replace_editor/file_ops 로 파일을 만들고 실행하고 편집하세요.',
         ...TASK_TOOL_USAGE_GUIDANCE,
         ...TASK_APPROVAL_AND_PLAN_GUIDANCE,
@@ -290,6 +292,29 @@ export function getBrowserUrlBlockedMessage(urls: readonly string[]): string {
     return `브라우저를 실행하지 않았습니다 — 내부망·로컬·메타데이터 주소이거나 http(s) 가 아닌 주소로는 이동할 수 없습니다: ${urls.join(', ')}. 공개 웹 주소만 사용하세요.`;
 }
 
+/** 로컬 브라우저 — http(s) 가 아닌 주소로의 이동이 있어 실행하지 않았을 때의 결과. */
+export function getBrowserLocalBlockedMessage(urls: readonly string[]): string {
+    return `브라우저를 실행하지 않았습니다 — http·https 가 아닌 주소(file:·javascript:·data: 등)로는 이동할 수 없습니다: ${urls.join(', ')}. 로컬 파일은 파일 도구로 읽으세요.`;
+}
+
+/** 로컬 브라우저 — 허용 목록 밖 사이트에 대한 쓰기가 승인 경로를 거치지 않았을 때의 결과(정상 경로에서는 나오지 않는다). */
+export function getBrowserSiteApprovalRequiredMessage(): string {
+    return '브라우저를 실행하지 않았습니다 — 허용 목록에 없는 사이트에 대한 입력·누르기는 사용자 승인이 필요합니다. 이 호출 경로에서는 승인을 받을 수 없으니, 읽기(extractText·snapshot)만 하거나 사용자에게 직접 요청하세요.';
+}
+
+/** 로컬 브라우저(사용자 PC 의 전용 Chrome) 도구 설명 — 서버 샌드박스 브라우저와 달리 탭이 유지되고 사이트 정책이 적용된다. */
+export function getLocalBrowserToolDescription(): string {
+    return '사용자 PC 의 전용 Chrome 창에서 웹 브라우저를 조작합니다. 탭과 로그인 상태가 호출 사이에 유지되므로 이전 호출의 페이지에서 이어서 작업할 수 있습니다(처음에는 goto 로 페이지를 여세요). '
+        + 'actions 배열을 순서대로 실행: goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · '
+        + 'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. '
+        + '페이지가 띄운 확인창은 그 액션 결과의 dialogs 에 실립니다 — confirm·prompt 는 기본으로 취소되고, 수락하려면 확인창을 띄우는 액션 앞에 dialog{accept:true,promptText?} 를 넣으세요. '
+        + 'CSS 셀렉터(click/fill)가 실패하면 snapshot 으로 상호작용 요소를 {role,name,index} 목록으로 얻은 뒤 smartClick{role,name,nth?}·smartFill{role,name,text,nth?} 로 재시도하세요. '
+        + 'fill·smartFill 결과의 value 가 칸에 실제로 들어간 값입니다 — 그것으로 확인하고 같은 입력을 되풀이하지 마세요(입력 칸에 extractText 를 쓰면 현재 값이 나옵니다. 비밀번호 칸의 값은 돌려주지 않습니다). '
+        + '읽기(extractText·snapshot·screenshot)는 어느 사이트에서든 됩니다. 관리자가 허용한 사이트 밖에서의 입력·누르기와 검색어를 실은 주소로의 이동은 사용자 승인을 받은 뒤 실행됩니다 — '
+        + '업무 자료를 외부 사이트(검색·번역·웹메일 등)에 입력하지 마세요. 사용자가 브라우저를 직접 조작하는 중이면 실행되지 않으니, 그때는 기다렸다가 현재 페이지를 다시 관찰하세요. '
+        + 'http·https 주소만 열 수 있습니다.';
+}
+
 /** 빈 응답 자리에 남기는 assistant 본문 — 빈 문자열 assistant 메시지는 역할 순서만 차지하고 모델에 단서를 주지 않는다. */
 export const AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER = '(빈 응답)';
 
@@ -337,19 +362,44 @@ export function getAgentTaskUnknownOutcomeNotice(toolName: string): string {
     return `이 도구 호출(${toolName})은 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없습니다. 이미 일부 또는 전부 반영됐을 수 있으니 같은 호출을 바로 반복하지 마세요. 먼저 현재 상태(파일·작업 디렉터리·대상 시스템)를 확인하고, 반영되지 않은 부분만 이어서 수행하세요. 확인할 방법이 없으면 사용자에게 물어보세요(ask_human).`;
 }
 
+/**
+ * 로컬 기기 결과 불명 안내에 들어가는 고정 문장 — 대화에서 "결과 불명으로 끝난 호출"을 찾는 표식으로도 쓴다
+ * (tool-loop-guard 의 isRetryAfterUnknownOutcome). 문장을 바꾸면 이전 대화의 표식과 맞지 않게 되니 유의.
+ */
+export const LOCAL_BRIDGE_UNKNOWN_OUTCOME_MARKER = '기기에서 이미 일부 또는 전부 실행됐을 수 있으니';
+
+/**
+ * 로컬 기기로 보낸 쓰기·실행 요청이 응답 없이 끝났을 때(연결 끊김·시간 초과)의 도구 결과 — 기기에서 실행됐을 수 있으므로
+ * 모델이 같은 호출을 바로 반복하지 않고 상태부터 확인하게 한다 (Companion P1).
+ */
+export function getLocalBridgeUnknownOutcomeNotice(action: string, cause: 'timeout' | 'disconnected'): string {
+    const why = cause === 'timeout' ? '기기의 응답이 제시간에 오지 않아' : '기기와의 연결이 끊겨';
+    return `이 요청(${action})은 ${why} 결과를 알 수 없습니다. ${LOCAL_BRIDGE_UNKNOWN_OUTCOME_MARKER} 같은 호출을 바로 반복하지 마세요. 먼저 현재 상태(파일·작업 디렉터리·대상 시스템)를 읽어서 확인하고, 반영되지 않은 부분만 이어서 수행하세요. 확인할 방법이 없으면 사용자에게 물어보세요(ask_human).`;
+}
+
+/** 결과 불명 질문·거절·답변 안내에 공통으로 들어가는 구절 — 대화에서 "결과 불명으로 처리된 호출"을 찾는 표식. */
+export const UNKNOWN_OUTCOME_PHRASE = '실행 도중 끊겨 결과를 알 수 없';
+
+/** 사용자가 다시 실행하지 않기로 한 안내에 들어가는 구절 — 같은 쓰기를 또 하려 하면 묻지 않고 바로 막는 표식. */
+export const UNKNOWN_OUTCOME_DECLINED_PHRASE = '사용자가 다시 실행하지 않기로 했습니다';
+
+/** 결과 불명의 원인 — 질문·안내 문구에 들어간다. device 는 로컬 기기와의 연결이 끊긴 경우(Companion). */
+export type UnknownOutcomeCause = 'restart' | 'device';
+const UNKNOWN_OUTCOME_WHY: Record<UnknownOutcomeCause, string> = { restart: '서버 재시작으로', device: '기기와의 연결 문제로' };
+
 /** 결과 불명 호출을 사용자에게 묻는 질문 — 승인은 "다시 실행", 거절은 "다시 실행하지 않음" 이다. */
-export function getAgentTaskUnknownOutcomeQuestion(toolName: string): string {
-    return `도구 호출(${toolName})이 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없습니다. 이미 일부 또는 전부 반영됐을 수 있습니다. 다시 실행할까요? 승인하면 같은 호출을 다시 실행하고, 거절하면 다시 실행하지 않고 현재 상태를 확인한 뒤 이어갑니다. 이미 끝났다면 그 내용을 답변으로 적어 주세요.`;
+export function getAgentTaskUnknownOutcomeQuestion(toolName: string, cause: UnknownOutcomeCause = 'restart'): string {
+    return `도구 호출(${toolName})이 ${UNKNOWN_OUTCOME_WHY[cause]} ${UNKNOWN_OUTCOME_PHRASE}습니다. 이미 일부 또는 전부 반영됐을 수 있습니다. 다시 실행할까요? 승인하면 같은 호출을 다시 실행하고, 거절하면 다시 실행하지 않고 현재 상태를 확인한 뒤 이어갑니다. 이미 끝났다면 그 내용을 답변으로 적어 주세요.`;
 }
 
 /** 사용자가 결과 불명 호출의 재실행을 거절했을 때의 도구 결과. */
-export function getAgentTaskUnknownOutcomeDeclinedNotice(toolName: string): string {
-    return `이 도구 호출(${toolName})은 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없고, 사용자가 다시 실행하지 않기로 했습니다. 같은 호출을 반복하지 마세요. 현재 상태(파일·작업 디렉터리·대상 시스템)를 확인하고, 반영되지 않은 부분이 있으면 사용자에게 알리거나 다른 방법으로 이어가세요.`;
+export function getAgentTaskUnknownOutcomeDeclinedNotice(toolName: string, cause: UnknownOutcomeCause = 'restart'): string {
+    return `이 도구 호출(${toolName})은 ${UNKNOWN_OUTCOME_WHY[cause]} ${UNKNOWN_OUTCOME_PHRASE}고, ${UNKNOWN_OUTCOME_DECLINED_PHRASE}. 같은 호출을 반복하지 마세요. 현재 상태(파일·작업 디렉터리·대상 시스템)를 확인하고, 반영되지 않은 부분이 있으면 사용자에게 알리거나 다른 방법으로 이어가세요.`;
 }
 
 /** 사용자가 결과 불명 호출에 텍스트로 답했을 때의 도구 결과 — 다시 실행하지 않고 답변을 근거로 이어간다. */
-export function getAgentTaskUnknownOutcomeAnswerNotice(toolName: string, answer: string): string {
-    return `이 도구 호출(${toolName})은 서버 재시작으로 실행 도중 끊겨 결과를 알 수 없어 사용자에게 물었습니다. 사용자 답변: ${answer}\n같은 호출을 바로 반복하지 말고, 이 답변을 근거로 이어서 수행하세요.`;
+export function getAgentTaskUnknownOutcomeAnswerNotice(toolName: string, answer: string, cause: UnknownOutcomeCause = 'restart'): string {
+    return `이 도구 호출(${toolName})은 ${UNKNOWN_OUTCOME_WHY[cause]} ${UNKNOWN_OUTCOME_PHRASE}어 사용자에게 물었습니다. 사용자 답변: ${answer}\n같은 호출을 바로 반복하지 말고, 이 답변을 근거로 이어서 수행하세요.`;
 }
 
 /** browser 도구 호출 한도 도달 시 주입 — 더 이상 탐색하지 말고 수집한 정보로 종합·작성 유도. */

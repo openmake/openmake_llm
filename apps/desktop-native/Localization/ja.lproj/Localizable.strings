@@ -23,8 +23,9 @@
 "settings.server" = "サーバー";
 "settings.save" = "保存";
 "settings.saved" = "保存しました";
-"backend.external" = "外部 (chat.openmake.cc)";
-"backend.local" = "ローカル (localhost:52416)";
+"settings.server.help" = "ブラウザで OpenMake を開くアドレスをそのまま入力してください（例: https://chat.company.co.jp、http://server:3010）。空欄の場合は既定のアドレスを使います。";
+"settings.server.invalid" = "サーバーアドレスが正しくありません。http:// または https:// で始まるアドレスを入力してください。";
+"settings.server.insecure" = "暗号化されていない接続（http）です。API キーと作業内容がそのまま送信されるため、社内ネットワークなど信頼できるネットワークでのみ使用してください。";
 
 /* 接続状態 */
 "status.idle" = "未接続";
@@ -72,6 +73,8 @@
 "update.available.body" = "今すぐダウンロードしてインストールしますか？インストール中、アプリは一時的に終了してから再度開きます。";
 "update.install" = "アップデート";
 "update.later" = "後で";
+"update.readOnly.title" = "新しいバージョン v%1$@ があります（現在 v%2$@）";
+"update.readOnly.body" = "この場所ではアプリを置き換えられません（ディスクイメージから直接実行した場合など）。アプリをアプリケーションフォルダに移動して開き直してから、アップデートしてください。";
 "update.badDownload" = "無効なダウンロードアドレス";
 "update.checksum" = "ダウンロードの整合性検証に失敗しました（sha256 不一致）";
 "update.noBundle" = "アプリバンドルのパスが見つかりません（開発実行ではアップデートできません）";
@@ -84,3 +87,9 @@
 "update.script.replace" = "既存のアプリを置き換えられません。";
 "update.script.rollback" = "新しいバージョンのインストールに失敗したため、以前のバージョンに戻しました。";
 "update.script.reopen" = "アップデートは完了しましたが、アプリを再度開けませんでした。";
+"menu.browser.takeover" = "ブラウザを引き継ぐ（エージェントを一時停止）";
+"menu.browser.release" = "ブラウザを戻す（エージェントを再開）";
+"menu.browser.stop" = "ブラウザ作業を停止";
+"settings.browser" = "ブラウザ";
+"settings.browser.enable" = "エージェントのブラウザ使用を許可";
+"settings.browser.help" = "オンにすると、エージェントは専用の Chrome ウィンドウ（別プロファイル）で Web ページを開いて操作できます。普段お使いの Chrome のログイン情報は使いません。許可されていないサイトへの入力は Web で承認を求めます。";

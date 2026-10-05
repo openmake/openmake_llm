@@ -1,0 +1,75 @@
+# ==============================================================
+# Desktop Windows Companion CI
+# ==============================================================
+# path-filter: apps/desktop-windows 또는 브리지 코어(packages/local-bridge-core) 변경 시에만 실행.
+# 설치 파일(NSIS)은 Windows·x64 에서만 만들어진다 — 여기서 만들어 실행 결과(artifact)로 남긴다.
+# 서버 게시는 수동(scripts/publish-desktop-windows.sh) — CI 는 빌드·검증과 산출물 보관만.
+# ==============================================================
+
+name: Desktop Windows
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'apps/desktop-windows/**'
+      - 'packages/local-bridge-core/**'
+      - '.github/workflows/desktop-windows.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'apps/desktop-windows/**'
+      - 'packages/local-bridge-core/**'
+      - '.github/workflows/desktop-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  companion:
+    name: Companion (Test → Smoke → Installer)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      # ─── Gate 1: 코어 dist + 앱 의존성 + 단위 테스트 ───
+      - name: "Gate 1: Core build + unit tests"
+        shell: bash
+        run: |
+          npm ci --ignore-scripts
+          npm run build:packages
+          cd apps/desktop-windows
+          npm ci
+          npm test
+
+      # ─── Gate 2: 실제 Windows 의 Electron 으로 기동 검증 ───
+      - name: "Gate 2: Smoke (real Electron on Windows)"
+        shell: bash
+        working-directory: apps/desktop-windows
+        run: npm run smoke
+
+      # ─── Gate 3: 설치 파일(NSIS, 무서명) ───
+      - name: "Gate 3: Installer"
+        shell: bash
+        working-directory: apps/desktop-windows
+        run: |
+          npm run dist:win
+          sha256sum release/OpenMake-Companion-Setup-*.exe
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: OpenMake-Companion-Setup
+          path: apps/desktop-windows/release/OpenMake-Companion-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 30

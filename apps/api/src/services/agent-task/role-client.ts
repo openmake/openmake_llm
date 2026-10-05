@@ -12,7 +12,7 @@ import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
 import { recoveryWaitMs } from './turn-recovery';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
-import { getRecoveryWaitNote } from '../../prompts/agent-task-turn-loop';
+import { getRecoveryWaitNote, getTurnCallIdleNote } from '../../prompts/agent-task-turn-loop';
 
 const logger = createLogger('AgentTaskService');
 
@@ -23,6 +23,8 @@ export interface AgentRoleState {
     external: boolean;
     /** 폴백은 작업당 1회 — true 면 더 이상 강등하지 않음 */
     fallbackDone: boolean;
+    /** 내부 전용 정책으로 쓰지 않은 외부 모델 id — 감사 기록용(없으면 차단한 것이 없다) */
+    blockedExternal?: string;
 }
 
 /**
@@ -33,12 +35,19 @@ export async function initAgentRoleState(
     taskId: string,
     userId: string,
     explicitClient?: LLMClient,
+    /** internalOnly: 내부 전용 실행(config/internal-only-policy) — 외부 제공자로 해석돼도 내부 모델을 쓴다 */
+    opts: { internalOnly?: boolean } = {},
 ): Promise<AgentRoleState> {
     if (explicitClient) {
         return { client: explicitClient, external: false, fallbackDone: true };
     }
     const resolved = await resolveRoleClientForUser('agent', userId);
     const external = resolved.providerId !== 'local-llm';
+    if (external && opts.internalOnly) {
+        // 내부 모델이 응답하지 못하면 작업은 실패한다 — 외부로 넘기는 경로는 없다(fallbackDone 으로 강등 로직도 닫는다).
+        logger.info(`[AgentTask] ${taskId} 내부 전용 — 외부 모델 ${resolved.fullId} 대신 내부 모델 사용`);
+        return { client: createClient({ model: getModelForRole('agent'), userId }), external: false, fallbackDone: true, blockedExternal: resolved.fullId };
+    }
     if (resolved.degraded) {
         logger.warn(`[AgentTask] ${taskId} agent role 폴백: ${resolved.degraded}`);
     } else if (external) {
@@ -71,6 +80,40 @@ export class TurnCallCapExceeded extends Error {
         super(`LLM call exceeded per-call cap (${capMs}ms)`);
         this.name = 'TurnCallCapExceeded';
     }
+}
+
+/** 모델 서버가 정해진 시간 동안 아무 청크도 보내지 않았다 — 일시적 오류처럼 다시 시도한다(isTransientLLMError 가 문구로 판별하지 않게 표식을 둔다). */
+export class TurnCallIdle extends Error {
+    constructor(public readonly idleMs: number) {
+        super(`${getTurnCallIdleNote(idleMs)}`);
+        this.name = 'TurnCallIdle';
+    }
+}
+
+/**
+ * 무응답 감시 — 첫 청크는 firstChunkMs, 그 뒤로는 청크 사이 gapMs 안에 다음 청크가 와야 한다. 넘기면 signal 을 끊는다.
+ * 호출당 상한(callTimeoutMs)은 정상적인 긴 생성을 끊지 않도록 길게 둘 수밖에 없어, 응답이 유실된 호출이 그 상한을 다 채웠다
+ * (2026-10-05 실측: 모델 서버는 정상 완료, 응답만 유실 → 5분 뒤에야 재시도).
+ */
+function idleWatch(idle: { firstChunkMs: number; gapMs: number }): { signal: AbortSignal; onChunk: () => void; stop: () => void; firedMs: () => number | null; maxGapMs: () => number } {
+    const ac = new AbortController();
+    let fired: number | null = null;
+    let last: number | null = null;
+    let maxGap = 0;
+    const arm = (ms: number): NodeJS.Timeout => setTimeout(() => { fired = ms; ac.abort(); }, ms);
+    let timer = arm(idle.firstChunkMs);
+    return {
+        signal: ac.signal,
+        onChunk: () => {
+            const now = Date.now();
+            if (last !== null) maxGap = Math.max(maxGap, now - last);
+            last = now;
+            clearTimeout(timer); if (fired === null) timer = arm(idle.gapMs);
+        },
+        stop: () => clearTimeout(timer),
+        firedMs: () => fired,
+        maxGapMs: () => maxGap,
+    };
 }
 
 /** abort 가능 대기 — 재시도 백오프 중 사용자 취소/예산 소진이 오면 즉시 중단. */
@@ -112,6 +155,8 @@ export async function chatTurnWithRoleFallback(
         onToken?: (token: string) => void;
         /** 호출 한 번의 상한(ms) — 넘으면 그 시도만 끊고 TURN_CALL_TIMEOUT_RETRY_MAX 회 다시 시도한다. 미지정·0 이면 p.signal 만 쓴다. */
         callTimeoutMs?: number;
+        /** 무응답 감시(ms) — 주면 내부 모델 호출을 스트리밍으로 바꿔 청크가 끊긴 호출을 일찍 끊고 다시 시도한다. 외부 모델에는 걸지 않는다. */
+        idle?: { firstChunkMs: number; gapMs: number };
         /** 이 호출을 시작할 때 남은 작업 시간 예산(ms) — 주면 짧은 재시도 소진 뒤 이 예산 안에서 더 기다린다. */
         recoveryBudgetMs?: number;
     },
@@ -122,10 +167,11 @@ export async function chatTurnWithRoleFallback(
     // SDK 요청 타임아웃 상한은 최대 예산(예약)에 맞춘다 — 실제 한계는 p.signal(잔여 예산)이 governor.
     // 원장 귀속(F25): 비용 행에 작업 id 를 실어 작업 단위로 모을 수 있게 한다. 로컬 토큰은 costContext 로,
     // 외부 role 모델(resolver 의 onUsage 가 `role:agent` 로 기록)은 비용 귀속 문맥으로 같은 id 가 붙는다.
-    const call = (signal: AbortSignal) => runWithCostSession(p.taskId, () => state.client
+    // 무응답 감시는 스트리밍이어야 청크를 볼 수 있다 — 호출자가 토큰 훅을 주지 않았으면 빈 훅으로 스트리밍만 켠다.
+    const call = (signal: AbortSignal, onChunk?: () => void) => runWithCostSession(p.taskId, () => state.client
         .derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS, costContext: { feature: 'agent_task', sessionId: p.taskId } })
-        .chat(p.conversation, undefined, p.onToken, {
-            tools: p.tools, signal, think: false, requestClass: 'agent_turn',
+        .chat(p.conversation, undefined, p.onToken ?? (onChunk ? () => { /* 스트리밍 강제 */ } : undefined), {
+            tools: p.tools, signal, think: false, requestClass: 'agent_turn', ...(onChunk && { onChunk }),
         }));
     const maxRetries = Math.max(0, AGENT_TASK_LIMITS.TURN_RETRY_MAX);
     let attempt = 0;
@@ -134,10 +180,26 @@ export async function chatTurnWithRoleFallback(
     const startedAt = Date.now();
     for (;;) {
         // 시도마다 상한을 새로 건다 — 멈춘 호출 하나가 남은 예산 전부를 태우지 못하게 한다.
-        const cap = p.callTimeoutMs && p.callTimeoutMs > 0 ? AbortSignal.timeout(p.callTimeoutMs) : null;
+        // 외부 모델 클라이언트 중에는 청크 신호를 주지 않는 구현이 있다 — 내부 모델 호출에만 건다.
+        const watch = p.idle && p.idle.gapMs > 0 && p.idle.firstChunkMs > 0 && !state.external ? idleWatch(p.idle) : null;
+        // 무응답 감시가 멈춘 호출을 잡으므로 그때는 호출 상한을 걸지 않는다 — 청크가 오는 긴 생성을 상한이 끊지 않게
+        // (2026-10-05 실측: 5,145토큰 파일 쓰기 호출이 290초로 상한 300초에 닿았다). 길이는 출력 토큰 상한과 작업 시간 예산(p.signal)이 막는다.
+        const cap = !watch && p.callTimeoutMs && p.callTimeoutMs > 0 ? AbortSignal.timeout(p.callTimeoutMs) : null;
+        const signals = [p.signal, ...(cap ? [cap] : []), ...(watch ? [watch.signal] : [])];
+        let chatErr: unknown;
         try {
-            return await call(cap ? AbortSignal.any([p.signal, cap]) : p.signal);
-        } catch (chatErr) {
+            const out = await call(signals.length > 1 ? AbortSignal.any(signals) : p.signal, watch?.onChunk);
+            // 끊기지는 않았지만 기한의 절반을 넘긴 간격 — 기한(AGENT_TASK_TURN_STREAM_IDLE_MS)을 조정할 근거로 남긴다.
+            if (watch && watch.maxGapMs() > p.idle!.gapMs / 2) logger.warn(`[AgentTask] ${p.taskId} 청크 간격 ${watch.maxGapMs()}ms — 무응답 기한 ${p.idle!.gapMs}ms 의 절반 초과`);
+            return out;
+        } catch (err) {
+            chatErr = err;
+        } finally {
+            watch?.stop();
+        }
+        {
+            const idleMs = watch?.firedMs() ?? null;
+            if (idleMs !== null && !p.signal.aborted && !cap?.aborted) chatErr = new TurnCallIdle(idleMs);
             if (cap?.aborted && !p.signal.aborted) {
                 if (capRetries >= Math.max(0, AGENT_TASK_LIMITS.TURN_CALL_TIMEOUT_RETRY_MAX)) throw new TurnCallCapExceeded(p.callTimeoutMs!);
                 capRetries++;
@@ -158,7 +220,7 @@ export async function chatTurnWithRoleFallback(
                 state.client = createClient({ model: getModelForRole('agent'), userId: p.userId });
                 continue;
             }
-            if (p.signal.aborted || !isTransientLLMError(chatErr)) throw chatErr;
+            if (p.signal.aborted || !(chatErr instanceof TurnCallIdle || isTransientLLMError(chatErr))) throw chatErr;
             if (attempt >= maxRetries) {
                 const waitMs = recoveryWaitMs(recoveryCycles + 1,
                     p.recoveryBudgetMs === undefined ? undefined : p.recoveryBudgetMs - (Date.now() - startedAt));
@@ -179,8 +241,11 @@ export async function chatTurnWithRoleFallback(
 }
 
 /** 'judge' role 별도 해석 — agent 실행 모델과 판정 모델을 분리 배정 가능. */
-export async function judgeClientFor(userId: string): Promise<LLMClient> {
-    return (await resolveRoleClientForUser('judge', userId)).client;
+export async function judgeClientFor(userId: string, opts: { internalOnly?: boolean } = {}): Promise<LLMClient> {
+    const resolved = await resolveRoleClientForUser('judge', userId);
+    // 내부 전용 실행은 판정에도 외부 모델을 쓰지 않는다 — 판정 입력에 작업 결과(사용자 PC 의 자료)가 들어간다.
+    if (opts.internalOnly && resolved.providerId !== 'local-llm') return createClient({ model: getModelForRole('judge'), userId });
+    return resolved.client;
 }
 
 /** 생성자 기본 클라이언트 — model 미지정 시 'agent' role 전역 티어. */

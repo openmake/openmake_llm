@@ -8,7 +8,9 @@
  * 무시한다. 알림은 검증을 통과한 것만 호스트(onNotice)에 넘길 뿐 아무 동작도 일으키지 않는다.
  */
 import WebSocket from 'ws';
-import { NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
+import { BROWSER_KIND, NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
+import { RequestGuard } from './request-guard';
+import { folderNameOf } from './platform';
 import type { BridgeCore } from './core';
 import type { BridgeMsg, BridgeNotice, BridgeResult, BridgeStatusCode } from './types';
 
@@ -17,6 +19,11 @@ export interface BridgeConnectionOptions {
     serverUrl: string;
     core: BridgeCore;
     deviceId: string;
+    /**
+     * 이 연결이 속한 PC 의 식별자 — 폴더(루트)마다 연결을 따로 만드는 호스트는 같은 값을 준다.
+     * 서버가 기기 상한을 PC 단위로 센다. 생략하면 서버가 deviceId 를 PC 로 본다.
+     */
+    hostId?: string;
     label: string;
     /** 접속 헤더 — 호출 시점마다 재평가(데스크톱은 최신 세션 쿠키를 읽는다). */
     headers: () => Promise<Record<string, string>> | Record<string, string>;
@@ -78,6 +85,8 @@ export class BridgeConnection {
     private closed = false;
     /** 연속 재연결 실패 횟수 — bridge_ready 를 받으면 0 */
     private reconnectAttempt = 0;
+    /** 만료·중복 판정 — 재연결해도 유지한다(끊기기 전에 처리한 요청이 다시 오는 경우를 막는다) */
+    private readonly guard = new RequestGuard();
 
     constructor(private readonly opts: BridgeConnectionOptions) {}
 
@@ -100,7 +109,7 @@ export class BridgeConnection {
         }
         this.ws = new WebSocket(wsUrl, { headers });
         this.status('연결 중…', 'connecting');
-        const folderName = this.opts.core.folderRoot.split('/').filter(Boolean).pop() || '/';
+        const folderName = folderNameOf(this.opts.core.folderRoot);
 
         this.ws.on('open', () => setTimeout(() => {
             // 서버가 연결을 등록하고 메시지 리스너를 부착할 때까지 대기(라이브 확인 300ms).
@@ -111,6 +120,8 @@ export class BridgeConnection {
                 deviceId: this.opts.deviceId,
                 label: this.opts.label,
                 folderName,
+                ...(this.opts.hostId ? { hostId: this.opts.hostId } : {}),
+                capabilities: this.opts.core.capabilities(),
             }));
             this.openCleanup = this.opts.onOpen?.(this.ws) ?? null;
         }, 300));
@@ -118,7 +129,13 @@ export class BridgeConnection {
         this.ws.on('message', (d: WebSocket.RawData) => {
             let m: BridgeMsg;
             try { m = JSON.parse(d.toString()) as BridgeMsg; } catch { return; }
-            if (m.type === 'bridge_ready') { this.reconnectAttempt = 0; this.status(`연결됨: ${folderName}`, 'connected', folderName); return; }
+            if (m.type === 'bridge_ready') {
+                this.reconnectAttempt = 0;
+                this.status(`연결됨: ${folderName}`, 'connected', folderName);
+                // 끊긴 동안 제어권이 바뀌었을 수 있다 — 브라우저를 쓰는 기기는 지금 상태를 다시 알린다.
+                if (this.opts.core.capabilities().includes(BROWSER_KIND)) this.notifyBrowserControl(this.opts.core.browserUserControl);
+                return;
+            }
             if (m.type === 'error') { this.status(`서버 오류: ${m.message ?? ''}`, 'server_error', m.message ?? ''); return; }
             if (m.type === 'bridge_notice') {
                 const n = parseNotice(m);
@@ -135,6 +152,8 @@ export class BridgeConnection {
                     }));
                 } catch { /* noop */ }
             };
+            const rejected = this.guard.check(m);
+            if (rejected) { done(rejected); return; }
             // handleExec 는 async(exec 승인 대기) — sync/async 예외를 모두 done 으로 흡수.
             Promise.resolve().then(() => this.opts.core.handleExec(m, done))
                 .catch((e) => done({ ok: false, error: String((e as Error).message || e) }));
@@ -164,6 +183,15 @@ export class BridgeConnection {
         this.opts.core.clearAutoApprove(); // 연결이 끊기면 일괄 승인도 회수한다(다음 연결로 새지 않게).
         try { if (this.ws) this.ws.close(); } catch { /* noop */ }
         this.ws = null;
+    }
+
+    /**
+     * 브라우저 제어권 알림(기기→서버 단방향, 2026-10-05 추가 프레임) — 사용자가 넘겨받거나(user=true) 돌려줄 때(false) 보낸다.
+     * 서버는 돌려받으면 넘겨받기로 멈춘 작업을 재개한다. 연결돼 있지 않으면 보내지 않는다(다시 연결되면 bridge_ready 때 알린다).
+     */
+    notifyBrowserControl(user: boolean): void {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        try { this.ws.send(JSON.stringify({ type: 'bridge_event', kind: 'browser_control', user })); } catch { /* noop */ }
     }
 
     /** 현재 소켓 — 호스트 전용 프레임(refresh 등) 전송용. */

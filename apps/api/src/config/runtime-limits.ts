@@ -1261,6 +1261,17 @@ export const AGENT_TASK_LIMITS = {
      *  마무리 턴에는 적용하지 않는다(장문 생성 — FINAL_TURN_MIN_MS 가 따로 보장). AGENT_TASK_TURN_CALL_TIMEOUT_MS */
     TURN_CALL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_MS || '', 10) >= 0
         ? parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_MS as string, 10) : 5 * 60 * 1000,
+    /** 도구 턴 모델 호출의 무응답 감시(ms) — 청크 사이 간격이 이 값을 넘으면 호출을 끊고 일시적 오류처럼 다시 시도한다. 0 이면 끔(종전처럼 비스트림).
+     *  켜면 도구 턴도 스트리밍으로 부른다(내부 모델만). 근거(2026-10-05 05:00 실측): 모델 서버는 정상 완료했는데 응답이 네트워크에서 유실돼
+     *  호출 상한 5분을 다 채운 뒤에야 재시도했다. 상한을 줄이면 정상적인 긴 생성(최대 221초)이 끊기므로 "진행 여부"로 판별한다.
+     *  감시가 걸린 호출에는 호출 상한(TURN_CALL_TIMEOUT_MS)을 적용하지 않는다 — 청크가 오는 긴 생성을 끊지 않게.
+     *  실측(2026-10-05, retired-chat-model): 5,145토큰 도구 인자 생성 290초 동안 청크 간격은 4초 미만이었다.
+     *  AGENT_TASK_TURN_STREAM_IDLE_MS (기본 60초) */
+    TURN_STREAM_IDLE_MS: parseInt(process.env.AGENT_TASK_TURN_STREAM_IDLE_MS || '', 10) >= 0
+        ? parseInt(process.env.AGENT_TASK_TURN_STREAM_IDLE_MS as string, 10) : 60_000,
+    /** 무응답 감시의 첫 청크 기한(ms) — 첫 청크 전에는 모델 서버 대기열·프롬프트 처리 시간이 들어 청크 간격보다 길게 둔다.
+     *  AGENT_TASK_TURN_STREAM_FIRST_CHUNK_MS (기본 120초) */
+    TURN_STREAM_FIRST_CHUNK_MS: parseInt(process.env.AGENT_TASK_TURN_STREAM_FIRST_CHUNK_MS || '', 10) || 120_000,
     /** 호출 상한에 걸린 호출을 다시 시도하는 횟수(정상적으로 긴 생성이 되풀이되지 않게 작게 둔다). AGENT_TASK_TURN_CALL_TIMEOUT_RETRY_MAX */
     TURN_CALL_TIMEOUT_RETRY_MAX: parseInt(process.env.AGENT_TASK_TURN_CALL_TIMEOUT_RETRY_MAX || '1', 10),
     /** 빈 응답(본문·도구 호출 없음)을 되묻는 횟수. 넘으면 종전대로 완료 관문으로 보낸다. AGENT_TASK_EMPTY_RESPONSE_MAX_RETRIES */
@@ -1458,6 +1469,8 @@ export const AGENT_TASK_LIMITS = {
      *  관리자만 DEFAULT 초과(상한은 system_settings AGENT_TASK_QUEUE_PRIORITY_MAX). */
     QUEUE_PRIORITY_SCHEDULED: -1,
     QUEUE_PRIORITY_DEFAULT: 0,
+    /** 대기 시간 요약(GET /queue/stats 의 memory.wait.recent)에 쓰는 최근 시작 건수 — 대기열에서 꺼내(또는 즉시) 시작한 최근 N건. */
+    QUEUE_WAIT_SAMPLE_SIZE: 200,
     /** 실패 큐 뷰(GET /queue/dead) 기본 조회 기간(일)·최대 행 수. AGENT_TASK_DEAD_QUEUE_DAYS / AGENT_TASK_DEAD_QUEUE_LIMIT */
     DEAD_QUEUE_DAYS: parseInt(process.env.AGENT_TASK_DEAD_QUEUE_DAYS || '7', 10),
     DEAD_QUEUE_LIMIT: parseInt(process.env.AGENT_TASK_DEAD_QUEUE_LIMIT || '100', 10),
@@ -1913,6 +1926,29 @@ export const LLM_REQUEST_METRICS = {
     RETENTION_DAYS: parseInt(process.env.LLM_REQUEST_METRICS_RETENTION_DAYS || '', 10) || 90,
     ERROR_CODE_MAX_CHARS: 64,
 } as const;
+
+/** 0 이상 정수 env(일·건수) — 비었거나 잘못되면 기본값. 0 은 "끔"으로 그대로 둔다. */
+const nonNegIntEnv = (v: string | undefined, def: number): number => {
+    const n = parseInt(v || '', 10);
+    return Number.isFinite(n) && n >= 0 ? n : def;
+};
+
+/**
+ * 에이전트 작업 보존(Companion 설계 01장 — 작업 기록·감사 로그 90일, 화면 캡처 30일). 주기 작업은 schedulers/index.ts,
+ * 본체는 services/agent-task/task-retention.ts. 전체 스위치 AGENT_TASK_RETENTION_ENABLED 기본 꺼짐 —
+ * 기존 설치의 자료를 배포만으로 지우지 않는다. 각 기간은 0 이면 그 항목만 끈다.
+ */
+export const AGENT_TASK_RETENTION = {
+    ENABLED: process.env.AGENT_TASK_RETENTION_ENABLED === 'true',
+    /** 끝난(completed·failed·cancelled) 지 N일 지난 작업의 작업·단계·승인 기록, 같은 기간 지난 작업 감사 로그 삭제 */
+    RECORD_RETENTION_DAYS: nonNegIntEnv(process.env.AGENT_TASK_RECORD_RETENTION_DAYS, 90),
+    /** 서버 샌드박스 작업 공간의 화면 캡처(이미지 파일) — 수정된 지 N일 지난 것 삭제(작업 기록은 남김) */
+    SCREENSHOT_RETENTION_DAYS: nonNegIntEnv(process.env.AGENT_TASK_SCREENSHOT_RETENTION_DAYS, 30),
+    /** 한 회차에 항목별로 지우는 건수 상한(작업·감사 로그·이미지 파일 각각) — 남은 것은 다음 주기에 */
+    BATCH_LIMIT: nonNegIntEnv(process.env.AGENT_TASK_RETENTION_BATCH_LIMIT, 500) || 500,
+    /** 화면 캡처로 보는 확장자(소문자) — 브라우저 도구 screenshot 은 jpeg/png */
+    SCREENSHOT_EXTENSIONS: ['.png', '.jpg', '.jpeg', '.webp'] as readonly string[],
+};
 
 /** 메시지 웹검색 출처(F19.4, 156) — 스트리밍 중 모아 assistant 행 저장 때 영속. 인메모리 대기는 TTL·개수 상한 */
 export const MESSAGE_SOURCES_LIMITS = {

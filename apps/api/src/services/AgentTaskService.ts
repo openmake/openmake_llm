@@ -22,7 +22,7 @@ import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskStuckNudge, getAgentTaskEmptyResponseNudge, AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote } from '../prompts/agent-task-prompt';
+import { getAgentTaskStuckNudge, getAgentTaskEmptyResponseNudge, AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { isTerminalStatus, notifyTaskTerminal } from './agent-task/terminal-notify';
@@ -36,10 +36,12 @@ import { TaskRuntime } from './task-sandbox/runtime';
 import { getApprovalRegistry } from './task-sandbox/approval-gate';
 import { currentPlanStepIndex } from './task-sandbox/planning';
 import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
-import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
-import { AgentTaskTurnTimeout } from './agent-task/turn-call';
-import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
+import { parkForMissingDevice } from './agent-task/device-wait';
+import { isInternalOnlyRun } from '../config/internal-only-policy';
+import { auditInternalOnly } from './agent-task/internal-only-audit';
+import { partialResultOf } from './agent-task/turn-call';
+import { injectTaskInputs } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { initWorkspaceBaseline } from './agent-task/code-diff';
@@ -52,6 +54,7 @@ import { replyNudge } from './agent-task/one-shot-notice';
 import { pickNoToolNudge } from './agent-task/turn-stall';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
+import { effectiveApprovalPolicy, persistApprovalPolicy } from './agent-task/approval-policy-restore';
 import { createSandboxWaiting, handleSandboxUnavailable } from './agent-task/sandbox-unavailable';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
@@ -116,7 +119,7 @@ export class AgentTaskService {
         const userCtx: UserContext = { userId, role: userRole };
 
         // 'agent' role 해석 — 상세는 agent-task/role-client (생성자 model 명시 시 그대로 사용)
-        const roleState = await initAgentRoleState(taskId, String(userId), this.explicitModel ? this.client : undefined);
+        const roleState = await initAgentRoleState(taskId, String(userId), this.explicitModel ? this.client : undefined, { internalOnly: isInternalOnlyRun(input) });
         this.client = roleState.client;
 
         let stepNumber = input.resume?.fromStep ?? 0;
@@ -186,6 +189,9 @@ export class AgentTaskService {
             // "나머지 모두 승인" 도 함께 복원(124) — 종전엔 메모리뿐이라 재시작 후 다시 물었다.
             if (input.resume) { totalTokens = Number(preTask?.total_tokens ?? 0); cacheUsage.restore(preTask); }
             if (input.resume && preTask?.auto_approve) getApprovalRegistry().setAutoApprove(taskId, true);
+            // 승인 정책(183) — 처음 시작이면 남기고, 재개면 남긴 값으로 되살린다(주차 재개는 요청 본문이 없다).
+            const approvalPolicy = effectiveApprovalPolicy(input, preTask?.approval_policy);
+            await persistApprovalPolicy(taskId, input);
 
             // resume 은 checkpoint(end-of-turn conversation)에서 복원, 새 시작은 system 에 활성 스킬
             // 지식(prompt_md)+크로스-task 학습(5-2, 플래그 OFF/실패 시 '') 주입. resume 은 old system 유지.
@@ -234,7 +240,7 @@ export class AgentTaskService {
             // 설정은 한 번만 읽어 스냅샷 공유. 승인 3모드는 input.approvalPolicy 로 이 실행에만 override
             // (비영속, resume은 전역 폴백; requiresApproval 호출부 2곳이 이 cfg 를 읽어 단일 지점 주입).
             // Cowork D1a: 실행 백엔드(docker/local)·승인 정책 결정 — 상세는 agent-task/executor-select.
-            const { sandboxCfg, runtimeEnabled, remoteExecutor } = resolveExecutorPlan(input, taskId, userId);
+            const { sandboxCfg, runtimeEnabled, remoteExecutor } = resolveExecutorPlan({ ...input, approvalPolicy }, taskId, userId);
             if (runtimeEnabled) {
                 try {
                     // G4 위임 — 상세는 agent-task/delegate (SUBAGENT_ENABLED 시 depth=1 tool-loop 승격,
@@ -270,32 +276,19 @@ export class AgentTaskService {
                     });
                     // 새 대화(resume 아님)면 system 에 작업환경 안내 주입 — 로컬 실행기는 연결 폴더 기준(컨테이너 안내는 /workspace·브라우저 전제).
                     if (!input.resume && conversation[0]?.role === 'system') {
-                        conversation[0].content += remoteExecutor ? getLocalExecutorGuidance() : getTaskSandboxGuidance();
+                        conversation[0].content += remoteExecutor ? getLocalExecutorGuidance({ browser: remoteExecutor.isBrowserEnabled }) : getTaskSandboxGuidance();
                         // 로컬 실행기 worktree 격리가 걸렸으면 작업 브랜치를 알린다(사용자 검토 지점).
                         const isolated = remoteExecutor?.isolatedBranch;
                         if (isolated) conversation[0].content += getWorktreeIsolationNote(isolated);
                     }
                     logger.info(`[AgentTask] 샌드박스 활성 (${taskId}, ${taskRuntime.containerName})`);
                 } catch (e) {
+                    await parkForMissingDevice(e, { taskId, update }); // 로컬 기기 미연결이면 주차(던진다, agent-task/device-wait)
                     taskRuntime = null; stepNumber = await handleSandboxUnavailable(e, { taskId, signal, stepNumber, emitStep, conversation, remote: !!remoteExecutor });
                 }
             }
-            // 입력 첨부 주입 — 파일은 샌드박스 있으면 workspace(uploads/)에 기록(셸/파이썬으로 읽음), 없으면
-            // goal 에 fileContext 주입. 이미지는 goal vision 채널(+샌드박스면 원본 바이트도). workspace 는
-            // 실패/취소 시 삭제되므로 resume 에서 재기록(멱등 overwrite). goal 주입은 신규 시작 한정.
-            const inputFiles = (input.files ?? []).filter((f) => !!f && typeof f.name === 'string');
-            const inputImages = (input.images ?? []).filter((s) => typeof s === 'string' && s.length > 0);
-            if (inputFiles.length > 0 || inputImages.length > 0) {
-                const goalMsg = input.resume ? undefined : conversation.find((m) => m.role === 'user');
-                if (goalMsg && inputImages.length > 0) goalMsg.images = inputImages;
-                if (taskRuntime) {
-                    const lines = await writeInputFilesToWorkspace(taskRuntime, inputFiles, inputImages);
-                    if (goalMsg && lines.length > 0) goalMsg.content += getAgentTaskUploadedFilesNote(lines);
-                } else if (goalMsg && inputFiles.length > 0) {
-                    // 샌드박스 OFF/degrade — 채팅과 동일한 fileContext 주입(캡 포함).
-                    goalMsg.content += buildFileContext(inputFiles);
-                }
-            }
+            // 입력 첨부 주입(파일·이미지) — 상세는 agent-task/task-inputs.
+            await injectTaskInputs(input, conversation, taskRuntime);
             // 코드 작업 diff 캡처(openmake_code v1) — 첨부까지 기록된 시점을 git baseline 스냅샷(멱등·fail-open).
             if (taskRuntime && sandboxCfg.codeDiffEnabled) await initWorkspaceBaseline(taskRuntime, preTask);
 
@@ -303,11 +296,12 @@ export class AgentTaskService {
             // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
             // injectedSkillIds: 시스템 프롬프트로 전문 주입된 스킬은 load_skill 카탈로그에서 제외
             // (채팅 경로가 활성 바인딩을 제외하는 것과 동일 규칙 — 중복 노출 방지).
-            const { tools, extraToolNames } = await assembleAgentTools({
+            const { tools, extraToolNames, removedForInternalOnly } = await assembleAgentTools({
                 mcpTools, taskRuntime, sandboxCfg, goal,
                 injectedSkillIds: new Set(skillBindings.map((b) => b.skill_id)),
                 userId,
             });
+            void auditInternalOnly({ taskId, userId: String(userId), blockedModel: roleState.blockedExternal, removedTools: removedForInternalOnly });
 
             // 턴 중간 재개(124): 결과 없는 tool_call 로 끝난 체크포인트는 LLM 재호출 없이 남은 호출만 실행(turn-reentry).
             let reentry = input.resume ? findDanglingToolCalls(conversation) : null;
@@ -562,7 +556,9 @@ export class AgentTaskService {
             await finalizeMaxTurnsExhausted({ taskId, userId, turnCeiling, conversation, taskRuntime, sandboxCfg, stepNumber, update, emitStep, held: verifyHold.answer });
         } catch (err) {
             // 질문 응답 대기 주차(F16.7) — 체크포인트·표식은 turn-executor 가 남겼다. 실행만 끝내 슬롯을 반납한다(재개는 hitl-park)
-            if (err instanceof AgentTaskParked && !signal.aborted) { parked = true; logger.info(`[AgentTask] 질문 응답 대기로 주차: ${taskId}`); return; }
+            if (err instanceof AgentTaskParked && !signal.aborted) { // 주차 — 사유를 실어 화면이 무엇을 기다리는지 보이게 한다
+                parked = true; emitAgentTaskProgress({ userId, taskId, status: 'paused', progress: curProgress, currentTurn: curTurn, waitReason: err.message }); logger.info(`[AgentTask] 주차(${err.message}): ${taskId}`); return;
+            }
             // signal.aborted 가 true 면 client.chat() 호출 도중 던져진 AbortError
             // ("Request was aborted") 도 사용자 취소로 분류 — 턴 사이 abort 뿐 아니라
             // LLM 호출 중간 취소도 cancelled 로 일관 처리.
@@ -570,14 +566,9 @@ export class AgentTaskService {
             const aborted = signal.aborted || (err instanceof AgentTaskAbort && err.kind === 'aborted');
             const kind = aborted ? 'aborted' : (err instanceof AgentTaskAbort ? err.kind : 'failed');
             const msg = err instanceof Error ? err.message : String(err);
-            await update({
-                status: aborted ? 'cancelled' : 'failed',
-                error: aborted ? kind : msg,
-                // 시간 예산으로 끊긴 마무리 턴의 부분 본문은 결과로 남긴다(종전엔 result NULL).
-                ...(err instanceof AgentTaskTurnTimeout && err.partialContent
-                    ? { result: `[시간 예산 초과로 중단된 부분 답변]\n\n${err.partialContent}` }
-                    : {}),
-            }).catch((e) => logger.warn(`[AgentTask] 상태 갱신 실패: ${e}`));
+            // 시간 예산으로 끊긴 마무리 턴의 부분 본문은 결과로 남긴다(turn-call 의 partialResultOf).
+            await update({ status: aborted ? 'cancelled' : 'failed', error: aborted ? kind : msg, ...partialResultOf(err) })
+                .catch((e) => logger.warn(`[AgentTask] 상태 갱신 실패: ${e}`));
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             AgentTaskService.running.delete(taskId);

@@ -39,16 +39,20 @@ const DEVICE_GATED_SHELL = new Set(['bash', 'python_execute']);
  *  자격증명 파일 쓰기(isSensitiveWrite)는 high-risk 에서도 승인 — 종전엔 `.env`·키 파일 덮어쓰기가
  *  서버 승인도 디바이스 확인도 없이 통과했다(로컬 브리지의 write kind 는 confirmExec 대상이 아니다).
  *  바닥 호출(approval-floor — 지시 파일 쓰기 포함)도 high-risk 에서 승인한다: 자동승인에서도 묻는 호출이 정책에서 빠지면 안 된다.
- *  사용자 메모리 쓰기(memory_write)는 정책 none 에서도 승인한다 — 사람이 문장을 보지 않은 채 메모리에 남는 길을 두지 않는다. */
+ *  사용자 메모리 쓰기(memory_write)는 정책 none 에서도 승인한다 — 사람이 문장을 보지 않은 채 메모리에 남는 길을 두지 않는다.
+ *  opts.siteGoverned=true(로컬 브라우저 — 서버가 사이트 정책으로 액션을 훑은 호출)면 high-risk 에서 browser 를 등급(network)으로
+ *  묻지 않는다: 허용 목록 밖 쓰기·누르기는 위의 site_write 바닥이 이미 잡았고, 남은 것은 읽기와 허용 목록 안 쓰기다
+ *  (설계 "읽기는 자유"). 종전엔 읽기까지 매번 물어 작업당 7~10회 승인이 났다. 정책 all 은 종전대로 전부 묻는다. */
 export function requiresApproval(
     policy: TaskSandboxApprovalPolicy,
     toolName: string,
     args: Record<string, unknown>,
-    opts: { deviceGatesShell?: boolean } = {},
+    opts: { deviceGatesShell?: boolean; siteGoverned?: boolean } = {},
 ): boolean {
     if (opts.deviceGatesShell && DEVICE_GATED_SHELL.has(toolName)) return false;
     const floor = approvalFloorReason(toolName, args);
-    if (floor === 'memory_write') return true;
+    if (floor === 'memory_write' || floor === 'site_write') return true;
+    if (opts.siteGoverned && toolName === 'browser' && policy === 'high-risk') return false;
     return policyRequiresApproval(policy, classifyToolRisk(toolName, args),
         isSensitiveWrite(toolName, args) || floor !== null, isThirdPartyTool(toolName));
 }

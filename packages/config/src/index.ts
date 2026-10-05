@@ -42,3 +42,6 @@ export const SENSITIVE_FILE_PATTERNS: readonly string[] = [
   "id_rsa", "id_rsa.*", "id_ed25519", "id_ed25519.*", ".npmrc", ".netrc", ".pgpass", ".htpasswd",
   "credentials", "credentials.*", "service-account*.json", "*.kdbx",
 ];
+
+/** 브라우저 사이트 정책 (서버·기기 공용 판정). */
+export * from "./browser-site-policy";

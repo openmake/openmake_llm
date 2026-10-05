@@ -20,6 +20,7 @@ import * as bcrypt from 'bcryptjs';
 import { getPool } from './models/unified-database';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
+import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 
 const logger = createLogger('UserManager');
 
@@ -436,6 +437,8 @@ class UserManagerImpl {
         params.push(userId);
         const result = await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
         if ((result.rowCount || 0) === 0) return null;
+        // 브리지 연결은 연결할 때만 계정을 검증한다 — 비활성화하면 이미 붙어 있는 연결을 여기서 닫는다.
+        if (updates.is_active === false) getLocalBridgeRegistry().disconnectByUser(userId, 'account_disabled');
 
         const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         const row = userResult.rows[0] as UserRow | undefined;
@@ -485,6 +488,7 @@ class UserManagerImpl {
             const deleted = (result.rowCount || 0) > 0;
 
             await client.query('COMMIT');
+            if (deleted) getLocalBridgeRegistry().disconnectByUser(userId, 'account_deleted');
             return deleted;
         } catch (err) {
             await client.query('ROLLBACK');

@@ -25,6 +25,14 @@ export interface BridgeMsg {
     ignoreCase?: boolean;
     /** code_nav grep — 매치 상한(디바이스 캡으로 다시 잘린다). */
     maxResults?: number;
+    /** browser — 실행할 액션 배열(서버 browser 도구의 액션 형식 그대로). */
+    actions?: unknown;
+    /** browser — 사이트 허용 목록(@openmake/config BrowserSitePolicy). 기기가 실제 탭 주소로 다시 판정한다. */
+    sitePolicy?: unknown;
+    /** browser — 이번 호출에서 사용자가 승인한 호스트. */
+    approvedHosts?: unknown;
+    /** bridge_exec — 이 시각(epoch ms)이 지나면 실행하지 않는다. 없으면(구버전 서버) 검사하지 않는다. */
+    expiresAt?: number;
     /** bridge_notice — 알림 종류(NOTICE_KINDS 화이트리스트). */
     notice?: string;
     /** bridge_notice approval_pending — 승인을 기다리는 도구 이름(표시 전용, 서버 발 텍스트). */
@@ -78,6 +86,10 @@ export interface BridgeResult {
     codeNav?: BridgeCodeNav;
     /** test_runner 결과 — 'npm' | 'pytest' | 'go' | 'none'. */
     testRunner?: string;
+    /** 실행 전에 거절했다(request-guard.ts) — 아무것도 실행하지 않았다. */
+    rejected?: 'expired' | 'duplicate';
+    /** browser — 사용자가 브라우저를 넘겨받은 상태라 아무것도 실행하지 않았다(서버가 작업을 주차한다). 구버전 서버는 무시한다. */
+    userControl?: boolean;
 }
 
 /**
@@ -115,6 +127,11 @@ export interface BridgeCoreOptions {
     onTaskEnd?: (taskId: string | undefined) => void;
     /** 일괄 승인 집합 변경 알림 (데스크톱=메뉴 라벨 갱신). */
     onAutoApproveChange?: () => void;
+    /**
+     * 로컬 브라우저 전용 프로필 디렉토리 — 주면 browser 요청을 처리한다(Chrome 이 있을 때). 없으면 브라우저 미지원.
+     * 사용자의 평소 Chrome 프로필이 아닌 **별도 디렉토리**여야 한다(호스트가 앱 데이터 폴더 아래에 만든다).
+     */
+    browserProfileDir?: string;
     /** 테스트/비대화형 훅 — confirm 없이 전부 승인 (OMK_BRIDGE_AUTO_APPROVE=1 과 동일 계열). */
     autoApproveAll?: boolean;
 }

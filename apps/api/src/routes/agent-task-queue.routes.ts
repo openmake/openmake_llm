@@ -8,6 +8,8 @@
  * 큐(3-B)는 인메모리라 지금까지 상태를 볼 곳이 없었다 — 대기가 쌓이는지, 상한이 맞는지,
  * 재시작 후 'queued' 고아가 남았는지를 여기서 본다. 인메모리 스냅샷과 DB 상태 집계를 나란히
  * 돌려주므로 둘이 어긋나면(DB queued > 메모리 pending) 고아가 있다는 뜻이다(부팅 복구가 회수).
+ * memory.wait 는 대기 시간 — recent(최근 시작 N건의 건수·p50Ms·p95Ms·maxMs, 즉시 시작은 0)와
+ * oldestPendingMs(지금 대기 중 가장 오래 기다린 시간, 없으면 null).
  *
  * @module routes/agent-task-queue.routes
  */
