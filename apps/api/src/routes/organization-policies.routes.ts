@@ -19,7 +19,7 @@ import { success, badRequest, notFound } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
 import { OrganizationRepository } from '../data/repositories/organization-repository';
 import { OrganizationPolicyRepository } from '../data/repositories/organization-policy-repository';
-import { isOrgPolicyKey, ORG_POLICY_SCHEMAS } from '../config/org-policy-registry';
+import { isOrgPolicyKey, ORG_POLICY_SCHEMAS, orgPolicySaveProblems } from '../config/org-policy-registry';
 import { membershipsFor } from '../services/org/membership-cache';
 import { clearOrgPolicyCache } from '../services/org/effective-policy';
 import { getAuditService } from '../services/AuditService';
@@ -73,6 +73,8 @@ function attach(router: Router, prefix: string, gate: 'admin' | 'org'): void {
         const body = putSchema.safeParse(req.body);
         const parsed = body.success ? ORG_POLICY_SCHEMAS[key].safeParse(body.data.value) : null;
         if (!parsed || !parsed.success) return res.status(400).json(badRequest('정책 값이 형식에 맞지 않습니다.'));
+        const problems = orgPolicySaveProblems(key, parsed.data);
+        if (problems.length > 0) return res.status(400).json(badRequest(`정책 값이 올바르지 않습니다: ${problems.join(', ')}`, { problems }));
         const previous = (await policyRepo().list(id)).find((r) => r.key === key)?.value ?? null;
         const row = await policyRepo().upsert(id, key, parsed.data, String(req.user!.id));
         clearOrgPolicyCache(id);

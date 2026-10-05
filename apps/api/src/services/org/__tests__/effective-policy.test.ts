@@ -55,4 +55,10 @@ describe('parseOrgPolicyRows', () => {
         expect(set.approvalPolicyMin).toBeUndefined();
         expect(set.mcpAllowedServers).toBeUndefined();
     });
+    test('이미 저장된 BROWSER_SITE_POLICY 는 패턴 검증에 걸려도 버리지 않는다 — 저장 시에만 거절(deny 가 조용히 사라지지 않게)', () => {
+        const set = parseOrgPolicyRows([
+            { key: 'BROWSER_SITE_POLICY', value: { allow: ['ok.example.com', '*.com'], deny: ['User@Bad.example.com'] } },
+        ]);
+        expect(set.browserSite).toEqual({ allow: ['ok.example.com', '*.com'], deny: ['user@bad.example.com'] });
+    });
 });
