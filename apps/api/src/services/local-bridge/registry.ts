@@ -19,6 +19,7 @@
  */
 import { randomUUID } from 'crypto';
 import type { WebSocket } from 'ws';
+import type { ExtendedWebSocket } from '../../sockets/ws-types';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { createLogger } from '../../utils/logger';
 
@@ -312,6 +313,24 @@ class LocalBridgeRegistry {
         const targets = this.listAllDevices().filter((s) => s.apiKeyId === apiKeyId);
         for (const s of targets) this.disconnectDevice(s.userId, s.deviceId, 'api_key_revoked');
         if (targets.length > 0) logger.info(`[Bridge] API key 폐기로 연결 ${targets.length}개 종료: key=${apiKeyId}`);
+        return targets.length;
+    }
+
+    /** 이 사용자의 브리지 연결을 모두 닫는다(계정 비활성화·삭제 — 관리자 강제 해제와 사유를 나눈다). 닫은 수를 돌려준다. */
+    disconnectByUser(userId: string, reason: 'account_disabled' | 'account_deleted'): number {
+        const targets = this.getDevices(userId);
+        for (const s of targets) this.disconnectDevice(s.userId, s.deviceId, reason);
+        if (targets.length > 0) logger.info(`[Bridge] 계정 상태 변경(${reason})으로 연결 ${targets.length}개 종료: user=${userId}`);
+        return targets.length;
+    }
+
+    /**
+     * 키 만료일 변경을 이 키로 인증한 연결에 반영한다(null = 무기한). 연결의 만료 시각은 WS 인증 때 한 번 정해지고
+     * 하트비트(sockets/handler.ts)가 그 값이 지난 연결을 닫으므로, 바뀐 값을 넣어 두면 새 만료 시각에 닫힌다. 바꾼 수를 돌려준다.
+     */
+    updateApiKeyExpiry(apiKeyId: string, expiresAtMs: number | null): number {
+        const targets = this.listAllDevices().filter((s) => s.apiKeyId === apiKeyId);
+        for (const s of targets) (s.ws as ExtendedWebSocket)._authTokenExpiresAtMs = expiresAtMs;
         return targets.length;
     }
 
