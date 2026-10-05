@@ -51,6 +51,16 @@ export const LOCAL_BRIDGE = {
     DEVICE_WAIT_MAX_MS: parseInt(process.env.LOCAL_BRIDGE_DEVICE_WAIT_MAX_MS || '', 10) || 24 * 60 * 60 * 1000,
 
     /**
+     * 브라우저 넘겨받기 주차(2026-10-05) — 사용자가 Companion 에서 브라우저를 넘겨받아 기기가 요청을 거절하면, 도구 오류로
+     * 모델에 돌려주지 않고 작업을 멈춰 실행 자리를 반납한다(paused + browser_takeover). 돌려주면 이어서 실행한다.
+     * 기본 OFF — LOCAL_BRIDGE_TAKEOVER_PARK=true 로 켠다. 끄면 종전대로 거절 문구가 도구 결과로 모델에 간다.
+     */
+    TAKEOVER_PARK_ENABLED: process.env.LOCAL_BRIDGE_TAKEOVER_PARK === 'true',
+
+    /** 넘겨받기 대기 상한(ms) — 넘기면 작업을 실패(browser_takeover_expired)로 끝낸다. LOCAL_BRIDGE_TAKEOVER_WAIT_MAX_MS(기본 1시간) */
+    TAKEOVER_WAIT_MAX_MS: parseInt(process.env.LOCAL_BRIDGE_TAKEOVER_WAIT_MAX_MS || '', 10) || 60 * 60 * 1000,
+
+    /**
      * worktree 격리 — 연결 폴더가 git 레포면 별도 worktree(디렉토리+브랜치)를 만들어 그 안에서만
      * 작업한다. 사용자의 현재 작업트리·브랜치가 오염되지 않고, 작업 결과를 `git diff HEAD` 로
      * 정확히 캡처할 수 있다(샌드박스와 달리 인위적 baseline 커밋이 필요 없다 — 레포의 실제

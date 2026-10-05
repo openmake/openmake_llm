@@ -53,6 +53,9 @@ export interface WSMessage {
     /** bridge_hello — 연결이 속한 PC 식별자(폴더별 연결이 공유) · 지원 요청 종류 목록 */
     hostId?: string;
     capabilities?: unknown;
+    /** Local Bridge — bridge_event(기기→서버 단방향 알림) 종류·값. browser_control 의 user=true 는 사용자가 브라우저를 넘겨받음 */
+    kind?: string;
+    user?: boolean;
     /** Local Bridge — bridge_result 상관관계·결과 */
     reqId?: string;
     result?: Record<string, unknown>;

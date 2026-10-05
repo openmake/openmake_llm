@@ -207,7 +207,7 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
         it('사용자가 넘겨받은 동안에는 실행하지 않고, 돌려주면 다시 실행한다', async () => {
             browser.setUserControl(true);
             const blocked = await browser.run({ actions: [{ type: 'goto', url: `${origin}/` }], sitePolicy: allowAll() }, opts());
-            expect(blocked).toMatchObject({ ok: false, error: BROWSER_USER_CONTROL_ERROR, results: [] });
+            expect(blocked).toMatchObject({ ok: false, error: BROWSER_USER_CONTROL_ERROR, results: [], userControl: true });
             browser.setUserControl(false);
             expect((await browser.run({ actions: [{ type: 'goto', url: `${origin}/` }], sitePolicy: allowAll() }, opts())).ok).toBe(true);
         }, 60000);

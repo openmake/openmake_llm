@@ -19,7 +19,7 @@ import { prepareToolArgs } from './tool-args';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import { notifyApprovalPending } from './approval-pending';
 
-import { AgentTaskAbort, AgentTaskParked, AGENT_TASK_DEVICE_WAIT_REASON } from './types';
+import { AgentTaskAbort, AgentTaskParked, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON } from './types';
 import { writeTurnCheckpoint, markToolCallInFlight } from './turn-reentry';
 import { hasSideEffects } from '../../config/tool-policy';
 import { priorRepetition, repetitionVerdict, cycleVerdict, rereadNote, retryAfterUnknownOutcome } from './tool-loop-guard';
@@ -260,6 +260,8 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             // 로컬 기기가 사라졌다 — 닿지 않은 호출은 결과 없이 주차(재개 때 다시 실행), 결과 불명은 안내를 남기고 주차.
             const deviceLoss = taskRuntime.consumeDeviceLoss?.() ?? null;
             if (deviceLoss === 'rerunnable') await park(AGENT_TASK_DEVICE_WAIT_REASON);
+            // 사용자가 브라우저를 넘겨받아 실행하지 않았다 — 결과 없이 주차해 실행 자리를 반납하고, 돌려받으면 같은 호출을 다시 실행한다.
+            if (deviceLoss === 'browser_takeover') await park(AGENT_TASK_BROWSER_TAKEOVER_REASON);
             parkForDeviceAfterRecord = deviceLoss === 'unknown';
             if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             if (toolResult.includes(TASK_TERMINATE_SENTINEL)) {

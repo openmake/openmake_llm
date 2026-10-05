@@ -52,6 +52,8 @@ export interface BrowserRunResult {
     finalUrl?: string;
     results: BrowserActionResult[];
     error?: string;
+    /** 사용자가 브라우저를 넘겨받은 상태라 아무것도 실행하지 않고 거절했다 — 서버가 작업을 주차하는 근거(2026-10-05). */
+    userControl?: true;
 }
 
 interface Action { type?: unknown; [k: string]: unknown }
@@ -372,7 +374,7 @@ export class LocalBrowser {
     // ── 실행 ──────────────────────────────────────────────────
 
     private async runNow(spec: BrowserSpec, opts: BrowserRunOptions): Promise<BrowserRunResult> {
-        if (this.userControl) return { ok: false, results: [], error: BROWSER_USER_CONTROL_ERROR };
+        if (this.userControl) return { ok: false, results: [], error: BROWSER_USER_CONTROL_ERROR, userControl: true };
         const actions = (Array.isArray(spec.actions) ? spec.actions : []).slice(0, BROWSER_MAX_ACTIONS) as Action[];
         const policy: BrowserSitePolicy = parseBrowserSitePolicy(spec.sitePolicy);
         const approvedHosts = Array.isArray(spec.approvedHosts) ? spec.approvedHosts.filter((h): h is string => typeof h === 'string') : [];

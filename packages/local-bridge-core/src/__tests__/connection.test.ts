@@ -208,6 +208,19 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
         expect(server.received.length).toBe(before); // 단방향 — 응답·실행 없음
     });
 
+    it('notifyBrowserControl 은 bridge_event(browser_control) 단방향 프레임을 보낸다', async () => {
+        await noticeConn([]).connect();
+        await server.waitFor((f) => f.type === 'bridge_hello');
+        await new Promise((r) => setTimeout(r, 50));
+        conn!.notifyBrowserControl(false);
+        const f = await server.waitFor((x) => x.type === 'bridge_event');
+        expect(f).toEqual({ type: 'bridge_event', kind: 'browser_control', user: false });
+    });
+
+    it('연결 전 notifyBrowserControl 은 아무것도 하지 않는다(던지지 않는다)', () => {
+        expect(() => noticeConn([]).notifyBrowserControl(true)).not.toThrow();
+    });
+
     it('종류·taskId·toolName 이 부적합한 알림은 버린다', async () => {
         const notices: BridgeNotice[] = [];
         await noticeConn(notices).connect();

@@ -166,6 +166,8 @@ export interface BridgeResult {
     transport?: BridgeTransportFailure;
     /** 기기가 실행 전에 거절했다(코어 request-guard) — 만료·중복. 아무것도 실행하지 않았다. */
     rejected?: 'expired' | 'duplicate';
+    /** browser — 사용자가 브라우저를 넘겨받은 상태라 기기가 아무것도 실행하지 않았다(2026-10-05, 구버전 기기는 싣지 않는다). */
+    userControl?: boolean;
 }
 
 export interface DeviceSession {
@@ -183,6 +185,11 @@ export interface DeviceSession {
     capabilities?: Set<BridgeKind>;
     ws: WebSocket;
     connectedAt: number;
+    /**
+     * 기기가 마지막으로 알린 브라우저 제어권(bridge_event browser_control) — true 면 사용자가 넘겨받은 상태.
+     * undefined = 알림을 받은 적 없음(구버전 기기 또는 연결 직후). 넘겨받기 주차의 재개 판단에만 쓴다.
+     */
+    browserUserControl?: boolean;
     /**
      * 폴더 선택 세션 캐시 — 이 디바이스가 folders 응답으로 스스로 열거·보고한 루트 기준
      * 상대경로 집합('' = 루트). 작업 생성·bridge_exec 의 folder 값은 이 집합에 있어야만
@@ -342,6 +349,11 @@ class LocalBridgeRegistry {
             logger.warn(`[Bridge] 알림 전송 실패: user=${userId} device=${dev.deviceId} ${e instanceof Error ? e.message : String(e)}`);
             return false;
         }
+    }
+
+    /** 브라우저 제어권 알림 기록 — 그 소켓으로 등록된 연결에만 남긴다(등록 전이면 무시). */
+    setBrowserUserControl(userId: string, ws: WebSocket, user: boolean): void {
+        for (const s of this.devices.get(userId)?.values() ?? []) if (s.ws === ws) s.browserUserControl = user;
     }
 
     /** ws 소켓에 해당하는 디바이스 id (없으면 null) — bridge_result 발신자 검증용. */

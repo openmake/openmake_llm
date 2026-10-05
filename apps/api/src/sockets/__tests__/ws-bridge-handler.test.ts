@@ -7,6 +7,9 @@ import type { WSMessage } from '../ws-types';
 
 const mockRegister = jest.fn(() => true);
 const mockHandleResult = jest.fn();
+const mockSetControl = jest.fn();
+const mockResumeTakeover = jest.fn(async (..._a: unknown[]) => 0);
+jest.mock('../../services/agent-task/browser-takeover', () => ({ resumeBrowserTakeoverTasks: (...a: unknown[]) => mockResumeTakeover(...a) }));
 
 jest.mock('../../services/local-bridge/registry', () => ({
     normalizeCapabilities: jest.requireActual('../../services/local-bridge/registry').normalizeCapabilities,
@@ -14,6 +17,7 @@ jest.mock('../../services/local-bridge/registry', () => ({
         register: (...a: unknown[]) => mockRegister(...(a as [])),
         handleResult: (...a: unknown[]) => mockHandleResult(...(a as [])),
         getDeviceIdByWs: () => 'dev-1',
+        setBrowserUserControl: (...a: unknown[]) => mockSetControl(...a),
     }),
 }));
 jest.mock('../../config/local-bridge', () => ({ LOCAL_BRIDGE: { ENABLED: true, MAX_DEVICES: 3 } }));
@@ -94,5 +98,35 @@ describe('handleBridgeMessage — 능력 목록·PC 식별자', () => {
         const { ws } = fakeWs(['bridge']);
         await handleBridgeMessage(ws, { ...hello, hostId: { evil: true } } as unknown as WSMessage);
         expect(registered().hostId).toBeUndefined();
+    });
+});
+
+describe('handleBridgeMessage — bridge_event(browser_control)', () => {
+    beforeEach(() => { mockSetControl.mockClear(); mockResumeTakeover.mockClear(); });
+    const ev = (user: unknown) => ({ type: 'bridge_event', kind: 'browser_control', user } as unknown as WSMessage);
+
+    it('돌려주면(user=false) 상태를 기록하고 그 사용자의 넘겨받기 대기 작업 재개를 시도한다', async () => {
+        const { ws, sent } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, ev(false));
+        await new Promise((r) => setImmediate(r));
+        expect(mockSetControl).toHaveBeenCalledWith('u3', ws, false);
+        expect(mockResumeTakeover).toHaveBeenCalledWith('u3');
+        expect(sent).toEqual([]); // 단방향 — 응답하지 않는다
+    });
+
+    it('넘겨받으면(user=true) 상태만 기록한다', async () => {
+        const { ws } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, ev(true));
+        await new Promise((r) => setImmediate(r));
+        expect(mockSetControl).toHaveBeenCalledWith('u3', ws, true);
+        expect(mockResumeTakeover).not.toHaveBeenCalled();
+    });
+
+    it('모르는 종류·불리언이 아닌 값은 무시한다', async () => {
+        const { ws } = fakeWs(['bridge']);
+        await handleBridgeMessage(ws, ev('no'));
+        await handleBridgeMessage(ws, { type: 'bridge_event', kind: 'other', user: false } as unknown as WSMessage);
+        expect(mockSetControl).not.toHaveBeenCalled();
+        expect(mockResumeTakeover).not.toHaveBeenCalled();
     });
 });

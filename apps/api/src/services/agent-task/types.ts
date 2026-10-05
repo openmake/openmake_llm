@@ -2,7 +2,7 @@
  * Agent Task 공용 타입/에러 — AgentTaskService 에서 분리 (파일 크기 가드).
  * @module services/agent-task/types
  */
-import { AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
+import { AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
 import type { ChatMessage } from '../../llm/types';
 import type { AttachedFileInput } from '../chat-service/attach-context';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
@@ -28,7 +28,7 @@ export class AgentTaskParked extends Error {
 }
 
 /** 주차 표식 — agent_task_events.reason. 마지막 이벤트가 이 사유인 paused 작업이 주차 중이다. */
-export { AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_PARK_REASONS };
+export { AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON, AGENT_TASK_PARK_REASONS };
 
 /** runaway 가드 — 한도 초과 시 종류별 AgentTaskAbort throw (AgentTaskService 에서 분리 — 파일 크기 가드).
  *  pausedMs(승인 대기 누적)는 활성 시간이 아니므로 타임아웃 예산에서 제외(4-1). */

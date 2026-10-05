@@ -8,7 +8,7 @@
  * 무시한다. 알림은 검증을 통과한 것만 호스트(onNotice)에 넘길 뿐 아무 동작도 일으키지 않는다.
  */
 import WebSocket from 'ws';
-import { NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
+import { BROWSER_KIND, NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
 import { RequestGuard } from './request-guard';
 import { folderNameOf } from './platform';
 import type { BridgeCore } from './core';
@@ -129,7 +129,13 @@ export class BridgeConnection {
         this.ws.on('message', (d: WebSocket.RawData) => {
             let m: BridgeMsg;
             try { m = JSON.parse(d.toString()) as BridgeMsg; } catch { return; }
-            if (m.type === 'bridge_ready') { this.reconnectAttempt = 0; this.status(`연결됨: ${folderName}`, 'connected', folderName); return; }
+            if (m.type === 'bridge_ready') {
+                this.reconnectAttempt = 0;
+                this.status(`연결됨: ${folderName}`, 'connected', folderName);
+                // 끊긴 동안 제어권이 바뀌었을 수 있다 — 브라우저를 쓰는 기기는 지금 상태를 다시 알린다.
+                if (this.opts.core.capabilities().includes(BROWSER_KIND)) this.notifyBrowserControl(this.opts.core.browserUserControl);
+                return;
+            }
             if (m.type === 'error') { this.status(`서버 오류: ${m.message ?? ''}`, 'server_error', m.message ?? ''); return; }
             if (m.type === 'bridge_notice') {
                 const n = parseNotice(m);
@@ -177,6 +183,15 @@ export class BridgeConnection {
         this.opts.core.clearAutoApprove(); // 연결이 끊기면 일괄 승인도 회수한다(다음 연결로 새지 않게).
         try { if (this.ws) this.ws.close(); } catch { /* noop */ }
         this.ws = null;
+    }
+
+    /**
+     * 브라우저 제어권 알림(기기→서버 단방향, 2026-10-05 추가 프레임) — 사용자가 넘겨받거나(user=true) 돌려줄 때(false) 보낸다.
+     * 서버는 돌려받으면 넘겨받기로 멈춘 작업을 재개한다. 연결돼 있지 않으면 보내지 않는다(다시 연결되면 bridge_ready 때 알린다).
+     */
+    notifyBrowserControl(user: boolean): void {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        try { this.ws.send(JSON.stringify({ type: 'bridge_event', kind: 'browser_control', user })); } catch { /* noop */ }
     }
 
     /** 현재 소켓 — 호스트 전용 프레임(refresh 등) 전송용. */

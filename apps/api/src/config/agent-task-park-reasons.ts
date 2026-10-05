@@ -11,5 +11,8 @@ export const AGENT_TASK_PARKED_REASON = 'hitl_parked';
 /** 기기 대기(Companion P1-4) — 로컬 실행 작업이 쓸 기기가 연결돼 있지 않다(agent-task/device-wait). */
 export const AGENT_TASK_DEVICE_WAIT_REASON = 'device_wait';
 
+/** 브라우저 넘겨받기(2026-10-05) — 사용자가 Companion 에서 브라우저를 넘겨받아 기기가 브라우저 요청을 거절했다(agent-task/browser-takeover). */
+export const AGENT_TASK_BROWSER_TAKEOVER_REASON = 'browser_takeover';
+
 /** 주차로 취급하는 사유 전부 */
-export const AGENT_TASK_PARK_REASONS: readonly string[] = [AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON];
+export const AGENT_TASK_PARK_REASONS: readonly string[] = [AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON];

@@ -332,7 +332,7 @@ export class AgentTaskRepository extends BaseRepository {
     /** 주차 중인 작업 목록 — 스윕이 결정 도착(재개)·만료(실패)·대기(워크스페이스 유지)로 나눈다. */
     async listParkedTasks(limit = 200): Promise<ParkedTaskRow[]> {
         const r = await this.query<ParkedTaskRow>(
-            `SELECT t.id, t.workspace_path,
+            `SELECT t.id, t.workspace_path, t.user_id, t.device_id,
                     (SELECT e.reason FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1) AS reason,
                     (EXTRACT(EPOCH FROM (NOW() - (SELECT e.created_at FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1))) * 1000)::bigint AS waited_ms,
                     EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status IN ('approved', 'rejected') AND a.consumed_at IS NULL) AS has_decision,

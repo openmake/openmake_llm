@@ -56,6 +56,14 @@ export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promis
         void import('../services/agent-task/device-wait').then((m) => m.resumeDeviceWaitingTasks(userId)).catch(() => undefined);
         return;
     }
+    // bridge_event — 기기→서버 단방향 알림(2026-10-05 추가 프레임). 지금은 브라우저 제어권(browser_control)뿐이고 응답하지 않는다.
+    // 돌려받으면(user=false) 넘겨받기로 멈춘 그 사용자의 작업을 재개한다(실패는 주차 스윕이 다시 시도).
+    if (msg.type === 'bridge_event') {
+        if (msg.kind !== 'browser_control' || typeof msg.user !== 'boolean') return;
+        registry.setBrowserUserControl(userId, ws, msg.user);
+        if (!msg.user) void import('../services/agent-task/browser-takeover').then((m) => m.resumeBrowserTakeoverTasks(userId)).catch(() => undefined);
+        return;
+    }
     // bridge_result — reqId 상관관계 해소 (소유 검증은 레지스트리가 수행). 발신 소켓의
     // deviceId 를 함께 넘겨 요청을 라우팅한 디바이스와 일치하는지 검증(교차 디바이스 주입 차단).
     if (typeof msg.reqId === 'string' && msg.result && typeof msg.result === 'object') {

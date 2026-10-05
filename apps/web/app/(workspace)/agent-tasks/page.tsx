@@ -711,6 +711,9 @@ function TaskDetailModal({
             {detail.task.status === "paused" && detail.task.waitReason === "device_wait" && (
               <p className="mt-2 text-xs text-muted">{t("waitingDevice")}</p>
             )}
+            {detail.task.status === "paused" && detail.task.waitReason === "browser_takeover" && (
+              <p className="mt-2 text-xs text-muted">{t("waitingBrowserTakeover")}</p>
+            )}
             {/* 실패 사유 — 상세에도 노출(카드와 동일 규칙) */}
             {detail.task.status === "failed" && detail.task.error && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">

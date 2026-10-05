@@ -327,7 +327,7 @@ export class WebSocketHandler {
 
         // Local Bridge (Cowork D1a): 데스크톱 실행기 등록/결과 — 인증된 연결 전용.
         // 채팅 파이프라인과 무관한 얇은 위임이라 validTypes/span 밖에서 조기 처리(ws-bridge-handler).
-        if (typedMsg.type === 'bridge_hello' || typedMsg.type === 'bridge_result') {
+        if (typedMsg.type === 'bridge_hello' || typedMsg.type === 'bridge_result' || typedMsg.type === 'bridge_event') {
             await handleBridgeMessage(ws, typedMsg);
             return;
         }

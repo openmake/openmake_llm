@@ -15,5 +15,7 @@ export class LocalDeviceUnavailableError extends Error {
  * 도구 실행 중 기기가 사라졌다는 신호 — 기기 대기 주차의 방식이 갈린다.
  *   rerunnable : 요청이 기기에 닿지 않았거나 읽기였다. 결과를 남기지 않고 주차하고 재개 때 다시 실행한다.
  *   unknown    : 쓰기·실행 요청을 보낸 뒤 끊겼다. 결과 불명 안내를 남기고 주차한다(다시 실행하지 않는다).
+ *   browser_takeover : 기기는 그대로지만 사용자가 브라우저를 넘겨받아 요청을 실행하지 않고 거절했다(2026-10-05).
+ *                      결과를 남기지 않고 넘겨받기 사유로 주차하고, 돌려받으면 같은 호출을 다시 실행한다.
  */
-export type DeviceLoss = 'rerunnable' | 'unknown';
+export type DeviceLoss = 'rerunnable' | 'unknown' | 'browser_takeover';

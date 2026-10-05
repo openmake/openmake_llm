@@ -130,7 +130,10 @@ async function chooseFolder() {
 
 function setBrowserUserControl(on) {
   browserUserControl = on;
-  for (const r of roots.values()) r.core.setBrowserUserControl(on);
+  for (const r of roots.values()) {
+    r.core.setBrowserUserControl(on);
+    r.connection?.notifyBrowserControl(on); // 서버에 알린다 — 돌려주면 넘겨받기로 멈춘 작업이 이어서 실행된다
+  }
   rebuildMenu();
 }
 

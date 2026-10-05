@@ -282,6 +282,8 @@ export class RemoteExecutor implements TaskExecutor {
             { kind: 'browser', actions: spec.actions, sitePolicy: browserSite, approvedHosts: spec.approvedHosts, taskId: this.taskId },
             LOCAL_BRIDGE.BROWSER_TIMEOUT_MS,
         );
+        // 사용자가 브라우저를 넘겨받아 거절됐다 — 턴 실행기가 이 신호를 보고 작업을 주차한다(결과 불명 신호가 우선).
+        if (LOCAL_BRIDGE.TAKEOVER_PARK_ENABLED && r.userControl === true && this.deviceLoss !== 'unknown') this.deviceLoss = 'browser_takeover';
         // 기기가 돌려준 현재 주소를 기억한다 — 실패·차단으로 끝나도 주소는 온다.
         try {
             const out = JSON.parse(r.stdout ?? '') as { finalUrl?: unknown };

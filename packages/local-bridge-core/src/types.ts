@@ -88,6 +88,8 @@ export interface BridgeResult {
     testRunner?: string;
     /** 실행 전에 거절했다(request-guard.ts) — 아무것도 실행하지 않았다. */
     rejected?: 'expired' | 'duplicate';
+    /** browser — 사용자가 브라우저를 넘겨받은 상태라 아무것도 실행하지 않았다(서버가 작업을 주차한다). 구버전 서버는 무시한다. */
+    userControl?: boolean;
 }
 
 /**
