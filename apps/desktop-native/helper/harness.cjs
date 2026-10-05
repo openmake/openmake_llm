@@ -167,8 +167,11 @@ const { WebSocketServer } = require('ws');
     // 제어권·중지 명령은 이벤트로 되돌아온다(앱이 메뉴 상태를 맞춘다)
     send({ cmd: 'browserControl', user: true });
     await waitEv((e) => e.ev === 'browserControl' && e.user === true);
+    // 넘겨받기·돌려주기는 서버에도 단방향 프레임으로 알린다(서버가 넘겨받기로 멈춘 작업을 재개한다)
+    await waitFor((f) => f.type === 'bridge_event' && f.kind === 'browser_control' && f.user === true);
     send({ cmd: 'browserControl', user: false });
     await waitEv((e) => e.ev === 'browserControl' && e.user === false);
+    await waitFor((f) => f.type === 'bridge_event' && f.kind === 'browser_control' && f.user === false);
     send({ cmd: 'browserStop' });
     await waitEv((e) => e.ev === 'browserStopped');
     const taskId = 'harness-task-000000000003';

@@ -421,6 +421,7 @@
       "running": "Running",
       "paused": "Awaiting approval",
       "waitingDevice": "Waiting for device",
+      "waitingBrowserTakeover": "You are using the browser",
       "completed": "Completed",
       "failed": "Failed",
       "cancelled": "Cancelled"
@@ -925,6 +926,7 @@
     "turnLabel": "Turn:",
     "queuePosition": "Queue position {position} — starts automatically when earlier tasks finish",
     "waitingDevice": "Waiting for your local device — connect Companion to continue",
+    "waitingBrowserTakeover": "You are controlling the browser — hand it back in Companion to continue",
     "planLabel": "Plan ({completed}/{total})",
     "outputsLabel": "{count} output(s)",
     "noSteps": "No step records.",
@@ -985,6 +987,7 @@
       "timeout": "Time limit exceeded",
       "hitl_park_expired": "Timed out waiting for your answer",
       "device_wait_expired": "Timed out waiting for your device to reconnect",
+      "browser_takeover_expired": "Timed out waiting for the browser to be handed back",
       "interrupted_local_device": "Interrupted: local device disconnected",
       "llm_error": "Model call failed",
       "sandbox_unavailable": "Execution environment unavailable",
@@ -997,6 +1000,7 @@
         "interrupted": "Resume to pick up from where it stopped.",
         "unknown": "Check the full failure reason. If it fails the same way again, tell your administrator.",
         "device_wait_expired": "Connect Companion (or the CLI), then run the task again.",
+        "browser_takeover_expired": "Hand the browser back from the Companion menu, then run the task again.",
         "sandbox_unavailable": "Run it again in a little while. An execution environment frees up once fewer tasks are running. If it keeps happening, tell your administrator."
       }
     },

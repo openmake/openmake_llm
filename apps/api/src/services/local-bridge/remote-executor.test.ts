@@ -250,3 +250,34 @@ describe('RemoteExecutor 로컬 브라우저 (Companion P2)', () => {
         expect(spy).not.toHaveBeenCalled();
     });
 });
+
+describe('RemoteExecutor 브라우저 넘겨받기 신호 — 넘겨받기 주차 판단용', () => {
+    afterEach(() => jest.restoreAllMocks());
+    const reply = (r: Record<string, unknown>) => jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue(r as never);
+    const userControlResult = { ok: true, stdout: JSON.stringify({ ok: false, results: [], error: 'x', userControl: true }), exitCode: 1, userControl: true };
+
+    it('기기가 넘겨받기 표식을 실어 돌려주면 browser_takeover — 한 번 읽으면 지워진다', async () => {
+        jest.replaceProperty(LOCAL_BRIDGE, 'TAKEOVER_PARK_ENABLED', true);
+        reply(userControlResult);
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+        expect(ex.consumeDeviceLoss()).toBe('browser_takeover');
+        expect(ex.consumeDeviceLoss()).toBeNull();
+    });
+
+    it('게이트가 꺼져 있으면 종전대로 오류 결과만 돌려준다', async () => {
+        jest.replaceProperty(LOCAL_BRIDGE, 'TAKEOVER_PARK_ENABLED', false);
+        reply(userControlResult);
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+        expect(ex.consumeDeviceLoss()).toBeNull();
+    });
+
+    it('표식이 없는 구버전 기기의 거절은 주차 신호가 아니다', async () => {
+        jest.replaceProperty(LOCAL_BRIDGE, 'TAKEOVER_PARK_ENABLED', true);
+        reply({ ok: true, stdout: JSON.stringify({ ok: false, results: [], error: '사용자가 브라우저를 직접 조작하는 중' }), exitCode: 1 });
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+        expect(ex.consumeDeviceLoss()).toBeNull();
+    });
+});

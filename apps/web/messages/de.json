@@ -421,6 +421,7 @@
       "running": "Wird ausgeführt",
       "paused": "Wartet auf Freigabe",
       "waitingDevice": "Warten auf Gerät",
+      "waitingBrowserTakeover": "Sie bedienen den Browser",
       "completed": "Abgeschlossen",
       "failed": "Fehlgeschlagen",
       "cancelled": "Abgebrochen"
@@ -925,6 +926,7 @@
     "turnLabel": "Runde:",
     "queuePosition": "Warteposition {position} — startet automatisch, sobald frühere Aufgaben fertig sind",
     "waitingDevice": "Warten auf Ihr lokales Gerät — verbinden Sie Companion, um fortzufahren",
+    "waitingBrowserTakeover": "Sie bedienen gerade den Browser — geben Sie ihn in Companion zurück, um fortzufahren",
     "planLabel": "Plan ({completed}/{total})",
     "outputsLabel": "{count} Ausgabe(n)",
     "noSteps": "Keine Schrittaufzeichnungen.",
@@ -985,6 +987,7 @@
       "timeout": "Zeitlimit überschritten",
       "hitl_park_expired": "Zeitüberschreitung beim Warten auf Ihre Antwort",
       "device_wait_expired": "Zeitüberschreitung beim Warten auf die Geräteverbindung",
+      "browser_takeover_expired": "Zeitüberschreitung beim Warten auf die Rückgabe des Browsers",
       "interrupted_local_device": "Unterbrochen: lokales Gerät getrennt",
       "llm_error": "Fehler beim Modellaufruf",
       "sandbox_unavailable": "Ausführungsumgebung nicht verfügbar",
@@ -997,6 +1000,7 @@
         "interrupted": "Setzen Sie die Aufgabe fort, um an der unterbrochenen Stelle weiterzumachen.",
         "unknown": "Prüfen Sie den vollständigen Fehlergrund. Tritt er erneut auf, informieren Sie Ihren Administrator.",
         "device_wait_expired": "Verbinden Sie Companion (oder die CLI) und führen Sie die Aufgabe erneut aus.",
+        "browser_takeover_expired": "Geben Sie den Browser im Companion-Menü zurück und führen Sie die Aufgabe erneut aus.",
         "sandbox_unavailable": "Starten Sie in Kürze erneut. Sobald weniger Aufgaben gleichzeitig laufen, wird eine Ausführungsumgebung frei. Wenn es weiter auftritt, informieren Sie die Administration."
       }
     },

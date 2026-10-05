@@ -24,7 +24,8 @@ import { resolveUserRole } from './boot-recovery';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { getLocalBridgeRegistry } from '../local-bridge/registry';
 import { createLogger } from '../../utils/logger';
-import { AGENT_TASK_DEVICE_WAIT_REASON } from '../../config/agent-task-park-reasons';
+import { AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON } from '../../config/agent-task-park-reasons';
+import { AGENT_TASK_BROWSER_TAKEOVER_EXPIRED_ERROR, browserTakeoverAction } from './browser-takeover';
 import { AGENT_TASK_DEVICE_WAIT_EXPIRED_ERROR, deviceWaitAction } from './device-wait';
 import type { ChatMessage } from '../../llm/types';
 
@@ -101,6 +102,19 @@ export async function sweepParkedTasks(): Promise<{ resumed: number; expired: nu
                 if (await resumeParkedTask(t.id)) { out.resumed++; continue; }
                 if (deviceWaitAction({ connected: false, waitedMs: Number(t.waited_ms ?? 0), maxMs: LOCAL_BRIDGE.DEVICE_WAIT_MAX_MS }) === 'expire') {
                     await getUnifiedDatabase().updateAgentTask(t.id, { status: 'failed', error: AGENT_TASK_DEVICE_WAIT_EXPIRED_ERROR, terminalNotifyPending: true });
+                    out.expired++;
+                }
+                continue;
+            }
+            if (t.reason === AGENT_TASK_BROWSER_TAKEOVER_REASON) {
+                // 브라우저 넘겨받기 — 기기가 아직 넘겨받은 상태면 재개하지 않는다(다시 거절돼 주차되면 대기 시간이 처음부터 다시 잰다).
+                // 돌려줬거나 상태를 모르면(알림을 놓쳤다) 재개를 시도하고, 여전히 넘겨받은 상태면 실행기가 다시 주차한다.
+                const dev = LOCAL_BRIDGE.ENABLED ? getLocalBridgeRegistry().getDevice(String(t.user_id), t.device_id ?? undefined) : null;
+                const waitedMs = Number(t.waited_ms ?? 0);
+                const action = browserTakeoverAction({ connected: !!dev, userControl: dev?.browserUserControl === true, waitedMs, maxMs: LOCAL_BRIDGE.TAKEOVER_WAIT_MAX_MS });
+                if (action === 'resume' && await resumeParkedTask(t.id)) { out.resumed++; continue; }
+                if (waitedMs > LOCAL_BRIDGE.TAKEOVER_WAIT_MAX_MS) {
+                    await getUnifiedDatabase().updateAgentTask(t.id, { status: 'failed', error: AGENT_TASK_BROWSER_TAKEOVER_EXPIRED_ERROR, terminalNotifyPending: true });
                     out.expired++;
                 }
                 continue;

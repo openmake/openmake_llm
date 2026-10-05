@@ -159,7 +159,10 @@ rl.on('line', (line) => {
     // 브라우저 제어권(P2) — 사용자가 넘겨받으면 에이전트의 브라우저 요청을 실행하지 않는다. 브라우저는 루트들이 공유한다.
     case 'browserControl': {
       const user = m.user === true;
-      for (const r of roots.values()) r.core.setBrowserUserControl(user);
+      for (const r of roots.values()) {
+        r.core.setBrowserUserControl(user);
+        r.connection.notifyBrowserControl(user); // 서버에 알린다 — 돌려주면 넘겨받기로 멈춘 작업이 이어서 실행된다
+      }
       send({ ev: 'browserControl', user });
       break;
     }

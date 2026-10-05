@@ -124,7 +124,8 @@ public struct WsServerEvent: Codable {
     public let taskID: String?
     /// 서버가 이벤트를 낸 시각(epoch ms)
     public let ts: Double?
-    /// 멈춘 작업이 기다리는 것 — "device_wait" 는 로컬 기기 연결 대기, "hitl_parked" 는 사용자 답 대기
+    /// 멈춘 작업이 기다리는 것 — "device_wait" 는 로컬 기기 연결 대기, "hitl_parked" 는 사용자 답 대기, "browser_takeover"
+    /// 는 사용자가 브라우저를 넘겨받음
     public let waitReason: String?
 
     public enum CodingKeys: String, CodingKey {

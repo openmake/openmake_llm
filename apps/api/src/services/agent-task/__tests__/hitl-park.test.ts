@@ -16,7 +16,7 @@ const dispatchAgentTask = jest.fn(async (e: { run: () => Promise<void> }) => { a
 jest.mock('../task-queue', () => ({ dispatchAgentTask: (e: { run: () => Promise<void> }) => dispatchAgentTask(e) }));
 jest.mock('../boot-recovery', () => ({ resolveUserRole: async () => 'user' }));
 let bridgeEnabled = true;
-jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { get ENABLED() { return bridgeEnabled; }, DEVICE_WAIT_ENABLED: true, DEVICE_WAIT_MAX_MS: 60_000 } }));
+jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { get ENABLED() { return bridgeEnabled; }, DEVICE_WAIT_ENABLED: true, DEVICE_WAIT_MAX_MS: 60_000, TAKEOVER_WAIT_MAX_MS: 30_000 } }));
 const getDevice = jest.fn();
 jest.mock('../../local-bridge/registry', () => ({ getLocalBridgeRegistry: () => ({ getDevice }) }));
 const utimes = jest.fn(async () => undefined);
@@ -131,5 +131,35 @@ describe('기기 대기(device_wait) 재개·스윕', () => {
         getDevice.mockReturnValue(undefined);
         await expect(sweepParkedTasks()).resolves.toMatchObject({ resumed: 0, expired: 1 });
         expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'failed', error: 'device_wait_expired' }));
+    });
+});
+
+describe('브라우저 넘겨받기(browser_takeover) 스윕', () => {
+    const waiting = { ...parkedTask, executor: 'local', device_id: 'd1' };
+    const row = (waited: string) => ({ id: 't1', user_id: 'u1', device_id: 'd1', workspace_path: null, reason: 'browser_takeover', waited_ms: waited, has_decision: false, has_live_pending: false });
+
+    it('기기가 아직 넘겨받은 상태면 재개하지 않는다(다시 주차되며 대기 시간이 초기화되지 않게)', async () => {
+        listParkedTasks.mockResolvedValue([row('5000')]);
+        getAgentTask.mockResolvedValue(waiting);
+        getDevice.mockReturnValue({ deviceId: 'd1', browserUserControl: true });
+        await expect(sweepParkedTasks()).resolves.toMatchObject({ resumed: 0, expired: 0 });
+        expect(claimParkedTask).not.toHaveBeenCalled();
+        expect(updateAgentTask).not.toHaveBeenCalled();
+    });
+
+    it('돌려줬거나 상태를 모르는 기기(알림을 놓침)면 재개를 시도한다', async () => {
+        listParkedTasks.mockResolvedValue([row('5000')]);
+        getAgentTask.mockResolvedValue(waiting);
+        getDevice.mockReturnValue({ deviceId: 'd1' });
+        await expect(sweepParkedTasks()).resolves.toMatchObject({ resumed: 1, expired: 0 });
+        expect(getDevice).toHaveBeenCalledWith('u1', 'd1');
+    });
+
+    it('넘겨받은 채 상한을 넘기면 browser_takeover_expired 로 실패시킨다', async () => {
+        listParkedTasks.mockResolvedValue([row('30001')]);
+        getAgentTask.mockResolvedValue(waiting);
+        getDevice.mockReturnValue({ deviceId: 'd1', browserUserControl: true });
+        await expect(sweepParkedTasks()).resolves.toMatchObject({ resumed: 0, expired: 1 });
+        expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'failed', error: 'browser_takeover_expired' }));
     });
 });

@@ -421,6 +421,7 @@
       "running": "运行中",
       "paused": "等待批准",
       "waitingDevice": "等待设备连接",
+      "waitingBrowserTakeover": "用户正在操作浏览器",
       "completed": "已完成",
       "failed": "失败",
       "cancelled": "已取消"
@@ -925,6 +926,7 @@
     "turnLabel": "回合:",
     "queuePosition": "排队第 {position} 位 — 前面的任务完成后自动开始",
     "waitingDevice": "正在等待本地设备连接 — 连接 Companion 后继续执行",
+    "waitingBrowserTakeover": "用户正在操作浏览器 — 在 Companion 中交还浏览器后继续执行",
     "planLabel": "计划 ({completed}/{total})",
     "outputsLabel": "{count} 个产出",
     "noSteps": "暂无步骤记录。",
@@ -985,6 +987,7 @@
       "timeout": "超出时间上限",
       "hitl_park_expired": "等待回答超时",
       "device_wait_expired": "等待设备重新连接超时",
+      "browser_takeover_expired": "等待交还浏览器超时",
       "interrupted_local_device": "本地设备断开连接而中断",
       "llm_error": "模型调用出错",
       "sandbox_unavailable": "未能准备执行环境",
@@ -997,6 +1000,7 @@
         "interrupted": "请继续运行，从中断的位置接着做。",
         "unknown": "请查看完整的失败原因；重新运行后仍然相同时请联系管理员。",
         "device_wait_expired": "请连接 Companion(或 CLI)后重新运行。",
+        "browser_takeover_expired": "请在 Companion 菜单中交还浏览器后重新运行。",
         "sandbox_unavailable": "请稍后重新运行。同时运行的任务减少后即可获得执行环境。如果持续出现，请通知管理员。"
       }
     },

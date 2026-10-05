@@ -49,7 +49,7 @@ function input(overrides: Record<string, unknown>) {
 beforeEach(() => { jest.clearAllMocks(); });
 
 
-function runtime(results: Record<string, string>, losses: Record<string, 'rerunnable' | 'unknown' | null>) {
+function runtime(results: Record<string, string>, losses: Record<string, 'rerunnable' | 'unknown' | 'browser_takeover' | null>) {
     let last: string | null = null;
     return {
         isTaskTool: () => true,
@@ -78,6 +78,19 @@ describe('executeTurnToolCalls — 기기 대기', () => {
         expect(writeTurnCheckpoint).toHaveBeenCalledWith('t1', conversation, 3, taskRuntime);
         expect(update).toHaveBeenCalledWith({ status: 'paused' });
         expect(markParked).toHaveBeenCalledWith('t1', 'device_wait');
+    });
+
+    it('사용자가 브라우저를 넘겨받아 거절됐으면 결과를 남기지 않고 browser_takeover 로 주차한다', async () => {
+        const taskRuntime = runtime({ browser: '{"ok":false}' }, { browser: 'browser_takeover' });
+        const { args, conversation, update } = input({
+            taskRuntime, getCurStatus: () => 'running',
+            toolCalls: [{ id: 'c1', function: { name: 'browser', arguments: { actions: [{ type: 'snapshot' }] } } }],
+        });
+        await expect(executeTurnToolCalls(args)).rejects.toBeInstanceOf(AgentTaskParked);
+        expect(conversation.filter((m) => m.role === 'tool')).toHaveLength(0); // 재개 때 같은 호출을 다시 실행한다
+        expect(addAgentTaskStep).not.toHaveBeenCalled();
+        expect(update).toHaveBeenCalledWith({ status: 'paused' });
+        expect(markParked).toHaveBeenCalledWith('t1', 'browser_takeover');
     });
 
     it('보낸 뒤 끊겨 결과를 알 수 없으면 안내를 기록한 뒤 주차한다 — 재개 때 다시 실행하지 않는다', async () => {

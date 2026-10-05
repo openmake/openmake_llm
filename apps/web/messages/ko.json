@@ -421,6 +421,7 @@
       "running": "실행 중",
       "paused": "승인 대기",
       "waitingDevice": "기기 연결 대기",
+      "waitingBrowserTakeover": "브라우저 사용자 조작 중",
       "completed": "완료",
       "failed": "실패",
       "cancelled": "취소됨"
@@ -925,6 +926,7 @@
     "turnLabel": "턴:",
     "queuePosition": "대기 순번 {position}번 — 앞선 작업이 끝나면 자동으로 시작합니다",
     "waitingDevice": "로컬 기기 연결을 기다리는 중 — Companion 을 연결하면 이어서 실행합니다",
+    "waitingBrowserTakeover": "사용자가 브라우저를 조작하는 중 — Companion 에서 브라우저를 돌려주면 이어서 실행합니다",
     "planLabel": "계획 ({completed}/{total})",
     "outputsLabel": "산출물 {count}개",
     "noSteps": "스텝 기록이 없습니다.",
@@ -985,6 +987,7 @@
       "timeout": "시간 상한 초과",
       "hitl_park_expired": "질문 응답 대기 시간 초과",
       "device_wait_expired": "기기 연결 대기 시간 초과",
+      "browser_takeover_expired": "브라우저 넘겨받기 대기 시간 초과",
       "interrupted_local_device": "로컬 기기 연결이 끊겨 중단",
       "llm_error": "모델 호출 오류",
       "sandbox_unavailable": "실행 환경을 준비하지 못함",
@@ -997,6 +1000,7 @@
         "interrupted": "이어하기로 중단된 지점부터 다시 시작하세요.",
         "unknown": "실패 사유 전문을 확인하고, 다시 실행해도 같으면 관리자에게 알리세요.",
         "device_wait_expired": "Companion(또는 CLI)을 연결한 뒤 다시 실행하세요.",
+        "browser_takeover_expired": "Companion 메뉴에서 브라우저를 돌려준 뒤 다시 실행하세요.",
         "sandbox_unavailable": "잠시 뒤 다시 실행하세요. 동시에 도는 작업이 줄면 실행 환경을 받을 수 있습니다. 계속되면 관리자에게 알리세요."
       }
     },

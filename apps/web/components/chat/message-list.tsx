@@ -368,6 +368,10 @@ const TONE_BADGE: Record<TaskTone, string> = {
 
 /** 서버 주차 사유 — 로컬 기기 연결 대기(config/agent-task-park-reasons 와 같은 값) */
 const DEVICE_WAIT_REASON = "device_wait";
+/** 사용자가 Companion 에서 브라우저를 넘겨받아 멈춘 작업 */
+const BROWSER_TAKEOVER_REASON = "browser_takeover";
+/** 멈춘 사유별 배지 문구(없으면 상태 기본 문구) */
+const WAIT_REASON_BADGE: Readonly<Record<string, string>> = { [DEVICE_WAIT_REASON]: "status.waitingDevice", [BROWSER_TAKEOVER_REASON]: "status.waitingBrowserTakeover" };
 
 /** 대기 순번 — 줄을 선 동안만 작업 상세를 주기적으로 읽어 "몇 번째"인지 보인다. 순번이 없으면(곧 시작) 아무것도 그리지 않는다. */
 function QueuePosition({ taskId }: { taskId: string }) {
@@ -401,7 +405,7 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
         </span>
         <span className="text-[13px] font-semibold tracking-tight text-fg">{t("agentTask.title")}</span>
         <span className={cn("ml-auto rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums", TONE_BADGE[cfg.tone])}>
-          {t(task.status === "paused" && task.waitReason === DEVICE_WAIT_REASON ? "status.waitingDevice" : cfg.badgeKey)}{cfg.tone !== "ok" && task.currentTurn > 0 ? ` · ${t("agentTask.turn", { turn: task.currentTurn })}` : ""}
+          {t((task.status === "paused" && task.waitReason ? WAIT_REASON_BADGE[task.waitReason] : undefined) ?? cfg.badgeKey)}{cfg.tone !== "ok" && task.currentTurn > 0 ? ` · ${t("agentTask.turn", { turn: task.currentTurn })}` : ""}
         </span>
       </div>
       <div className="flex flex-col gap-2.5 px-3.5 py-3">

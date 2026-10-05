@@ -11,6 +11,9 @@ import { AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_PARK_REASONS } from '../../co
 export interface ParkedTaskRow {
     id: string;
     workspace_path: string | null;
+    /** 넘겨받기 주차의 재개 판단용 — 작업의 사용자·지정 기기 */
+    user_id?: string | number | null;
+    device_id?: string | null;
     reason: string | null;
     /** bigint 라 pg 가 문자열로 준다 */
     waited_ms: string | number | null;
@@ -33,6 +36,18 @@ export class AgentTaskParkRepository extends BaseRepository {
         );
         const reason = r.rows[0]?.reason ?? null;
         return reason && AGENT_TASK_PARK_REASONS.includes(reason) ? reason : null;
+    }
+
+    /** 그 사용자의 작업 중 주어진 사유로 주차된 것 — 지정 기기와 함께(넘겨받기를 돌려받으면 재개를 시도한다). */
+    async listParkedTaskIdsByReason(userId: string, reason: string, limit = 50): Promise<Array<{ id: string; device_id: string | null }>> {
+        const r = await this.query<{ id: string; device_id: string | null }>(
+            `SELECT t.id, t.device_id FROM agent_tasks t
+              WHERE t.user_id = $1 AND t.status = 'paused'
+                AND COALESCE((SELECT e.reason FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1), '') = $2
+              ORDER BY t.updated_at ASC LIMIT $3`,
+            [userId, reason, limit],
+        );
+        return r.rows;
     }
 
     /** 기기 대기(device_wait)로 주차된 그 사용자의 작업 id — 기기가 등록되면 재개를 시도한다. */
