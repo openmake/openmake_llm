@@ -1307,6 +1307,9 @@ export const AGENT_TASK_LIMITS = {
     HITL_PARK_MAX_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_MAX_MS || '', 10) || 7 * 24 * 60 * 60 * 1000,
     /** 주차 스윕 주기(ms) — 결정이 왔는데 재개되지 못한 작업(로컬 디바이스 미연결 등) 재시도·상한 초과 정리·workspace 유지. AGENT_TASK_HITL_PARK_SWEEP_MS(기본 10분) */
     HITL_PARK_SWEEP_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_SWEEP_MS || '', 10) || 10 * 60 * 1000,
+    /** 주차 만료 점검 주기(ms) — 상한(기기 대기·넘겨받기·질문 응답 대기)을 넘긴 주차 작업만 실패로 바꾸는 가벼운 점검(조회 1회).
+     *  재개 시도·workspace 유지는 위 스윕 주기 그대로. 상한 초과 → 실패 표시의 최대 지연이 이 값이다. AGENT_TASK_HITL_PARK_EXPIRE_SWEEP_MS(기본 1분) */
+    HITL_PARK_EXPIRE_SWEEP_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_EXPIRE_SWEEP_MS || '', 10) || 60 * 1000,
     /** 승인 대기 유예(ms) — 이 시간을 넘긴 승인 대기는 도구 종류와 무관하게 주차해 실행 슬롯을 반납한다(한 사용자의
      *  늦은 승인이 다른 사용자의 작업을 막지 않게). 서브에이전트 승인은 재개 지점이 없어 제외. 0 이면 비활성(종전 동작).
      *  AGENT_TASK_HITL_PARK_GRACE_MS(기본 0, 권장 60000) */
