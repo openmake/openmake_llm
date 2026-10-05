@@ -26,4 +26,12 @@ describe('validateImportedConfig', () => {
             expect.stringContaining('UNKNOWN'),
         ]));
     });
+    test('조직 BROWSER_SITE_POLICY 는 전역 설정과 같은 패턴 검증을 받는다', () => {
+        const p = validateImportedConfig({ ...base, organizations: [
+            { slug: 'acme', name: 'A', monthlyTokenBudget: null, policies: { BROWSER_SITE_POLICY: { allow: ['*.com'], deny: [] } } },
+            { slug: 'beta', name: 'B', monthlyTokenBudget: null, policies: { BROWSER_SITE_POLICY: { allow: ['groupware.example.co.kr'] } } },
+        ] });
+        expect(p).toEqual([expect.stringContaining('organizations[acme].policies: BROWSER_SITE_POLICY')]);
+        expect(p[0]).toContain('allow[0] "*.com": wildcard');
+    });
 });

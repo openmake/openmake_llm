@@ -27,7 +27,7 @@ import { getModelSlot, CAPABILITY_SLOT } from '../config/model-slots';
 import { invalidateGlobalAssignmentCaches } from '../services/model-assignment-cache';
 import { OrganizationRepository } from '../data/repositories/organization-repository';
 import { OrganizationPolicyRepository } from '../data/repositories/organization-policy-repository';
-import { isOrgPolicyKey, ORG_POLICY_SCHEMAS } from '../config/org-policy-registry';
+import { isOrgPolicyKey, ORG_POLICY_SCHEMAS, orgPolicySaveProblems } from '../config/org-policy-registry';
 import { clearOrgPolicyCache } from '../services/org/effective-policy';
 import { clearOrgMembershipCache } from '../services/org/membership-cache';
 import { getAuditService } from '../services/AuditService';
@@ -76,7 +76,10 @@ export function validateImportedConfig(cfg: ExportedConfig): string[] {
         slugs.add(o.slug);
         for (const [k, v] of Object.entries(o.policies)) {
             if (!isOrgPolicyKey(k)) { problems.push(`organizations[${o.slug}].policies: 허용되지 않은 키 ${k}`); continue; }
-            if (!ORG_POLICY_SCHEMAS[k].safeParse(v).success) problems.push(`organizations[${o.slug}].policies: ${k} 값 형식 오류`);
+            const parsed = ORG_POLICY_SCHEMAS[k].safeParse(v);
+            if (!parsed.success) { problems.push(`organizations[${o.slug}].policies: ${k} 값 형식 오류`); continue; }
+            const bad = orgPolicySaveProblems(k, parsed.data);
+            if (bad.length > 0) problems.push(`organizations[${o.slug}].policies: ${k} 값 오류: ${bad.join(', ')}`);
         }
     }
     return problems;

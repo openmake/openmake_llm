@@ -13,6 +13,7 @@
  * @module config/org-policy-registry
  */
 import { z } from 'zod';
+import { browserSitePolicyProblems } from '@openmake/config';
 import type { TaskSandboxApprovalPolicy } from './task-sandbox';
 
 export const ORG_POLICY_KEYS = {
@@ -33,6 +34,16 @@ export const ORG_POLICY_SCHEMAS: Record<OrgPolicyKey, z.ZodTypeAny> = {
     ADDON_ALLOWLIST: z.array(z.string().trim().min(1).max(120)).max(200),
     BROWSER_SITE_POLICY: z.object({ allow: patternList.optional(), deny: patternList.optional() }).strict(),
 };
+
+/**
+ * 저장할 때만 보는 추가 검증 — ORG_POLICY_SCHEMAS 를 통과한 값(parsed.data)의 문제 목록(비면 저장해도 된다).
+ * BROWSER_SITE_POLICY 는 전역 시스템 설정과 같은 패턴 검증(browserSitePolicyProblems)을 받는다.
+ * 읽기(effective-policy parseOrgPolicyRows)는 스키마만 본다 — 이 검증 전에 저장된 행의 deny 가 조용히 사라지지 않게.
+ */
+export function orgPolicySaveProblems(key: OrgPolicyKey, value: unknown): string[] {
+    if (key === ORG_POLICY_KEYS.BROWSER_SITE_POLICY) return browserSitePolicyProblems(JSON.stringify(value));
+    return [];
+}
 
 export function isOrgPolicyKey(key: string): key is OrgPolicyKey {
     return Object.prototype.hasOwnProperty.call(ORG_POLICY_SCHEMAS, key);
