@@ -21,6 +21,11 @@ final class HelperManager: NSObject, ObservableObject {
     @Published var connectedFolders: [String] = []
     /** 루트별 최근 상태 텍스트 (연결됨/재연결 중/서버 오류 등). */
     @Published var rootStatus: [String: String] = [:]
+    /**
+     * 서버가 인증 사유(키 폐기·만료, 계정 비활성 등)로 닫아 긴 간격으로만 재시도 중인 루트. 설정 저장 때 키가 같아도
+     * 바로 다시 연결하는 근거다 — 관리자가 키·계정을 되살린 뒤 사용자가 10분을 기다리지 않게.
+     */
+    private(set) var authClosedFolders: Set<String> = []
     @Published var autoApproveCount = 0
     /** 브라우저 제어권 — true 면 사용자가 넘겨받은 상태(에이전트의 브라우저 요청을 실행하지 않는다). */
     @Published var browserUserControl = false
@@ -150,6 +155,7 @@ final class HelperManager: NSObject, ObservableObject {
                 if !(self?.connectedFolders.isEmpty ?? true) { self?.statusText = L("status.helperExited") }
                 self?.connectedFolders = []
                 self?.rootStatus = [:]
+                self?.authClosedFolders = []
             }
         }
         do { try p.run() } catch {
@@ -168,6 +174,7 @@ final class HelperManager: NSObject, ObservableObject {
         stdinPipe = nil
         connectedFolders = []
         rootStatus = [:]
+        authClosedFolders = []
         // quit 처리(결과 flush 100ms) 뒤에도 살아 있으면 강제 종료 — 좀비 방지 2중선.
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) { if let p, p.isRunning { p.terminate() } }
     }
@@ -320,9 +327,10 @@ final class HelperManager: NSObject, ObservableObject {
             let text = Self.statusText(code: code, arg: ev["arg"] as? String, fallback: ev["text"] as? String ?? "")
             if let f = ev["folder"] as? String {
                 rootStatus[f] = text // 루트별 상태 (연결됨/재연결 중/서버 오류)
+                if Self.isAuthClosed(code) { authClosedFolders.insert(f) } else { authClosedFolders.remove(f) }
             } else {
                 statusText = text
-                if code == "idle" { connectedFolders = []; rootStatus = [:] }
+                if code == "idle" { connectedFolders = []; rootStatus = [:]; authClosedFolders = [] }
             }
         case "connected":
             if let f = ev["folder"] as? String, !connectedFolders.contains(f) { connectedFolders.append(f) }
@@ -330,6 +338,7 @@ final class HelperManager: NSObject, ObservableObject {
             if let f = ev["folder"] as? String {
                 connectedFolders.removeAll { $0 == f }
                 rootStatus[f] = nil
+                authClosedFolders.remove(f)
             }
         case "autoApprove":
             autoApproveCount = ev["count"] as? Int ?? 0
@@ -348,6 +357,12 @@ final class HelperManager: NSObject, ObservableObject {
         default:
             break
         }
+    }
+
+    /** 인증 사유로 닫힘을 뜻하는 상태 코드인가 — 문구 키가 status.auth.* 인 코드(코어 AUTH_CLOSE_REASONS). */
+    static func isAuthClosed(_ code: String?) -> Bool {
+        guard let code, let key = statusKeys[code] else { return false }
+        return key.hasPrefix("status.auth.")
     }
 
     private static func statusText(code: String?, arg: String?, fallback: String) -> String {

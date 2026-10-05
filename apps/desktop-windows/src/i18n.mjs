@@ -65,6 +65,11 @@ export const AUTH_STATUS_KEYS = {
   bridge_scope_required: 'status.auth.scopeRequired',
 };
 
+/** 인증 사유로 닫힘을 뜻하는 상태 코드인가 — 설정 저장 때 key 가 그대로여도 다시 연결하는 근거. */
+export function isAuthClosed(code) {
+  return Object.prototype.hasOwnProperty.call(AUTH_STATUS_KEYS, code);
+}
+
 /** OS 언어(예: 'ko-KR', 'zh-CN') → 지원 언어. 모르면 기본 언어. */
 export function pickLocale(osLocale) {
   const base = String(osLocale || '').toLowerCase().split(/[-_]/)[0];

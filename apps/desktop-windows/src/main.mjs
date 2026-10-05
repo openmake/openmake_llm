@@ -14,7 +14,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { BridgeConnection, BridgeCore, bulkApprovalAllowed, discoverEndpoints, normalizeServerAddress } from '@openmake/local-bridge-core';
-import { AUTH_STATUS_KEYS, pickLocale, translate } from './i18n.mjs';
+import { AUTH_STATUS_KEYS, isAuthClosed, pickLocale, translate } from './i18n.mjs';
 import { Store, DEFAULT_SERVER } from './store.mjs';
 import { pickWindowsUpdate, sha256Of } from './update.mjs';
 
@@ -95,6 +95,7 @@ async function connectFolder(folder) {
     label: `${os.hostname()} · ${path.basename(real)}`,
     headers: () => ({ Authorization: `Bearer ${apiKey()}` }),
     onStatus: (_s, code, arg) => {
+      entry.authClosed = isAuthClosed(code);
       entry.status = code === 'connected' ? `${t('status.connected')}: ${path.basename(real)}`
         : code === 'reconnecting' ? t('status.reconnecting')
           : code === 'server_error' ? t('status.serverError', arg ?? '')
@@ -227,8 +228,10 @@ function registerIpc() {
     });
     // 빈 입력은 "바꾸지 않음" — 저장된 key 를 지우지 않는다.
     const keySaved = typeof input?.apiKey === 'string' && input.apiKey.trim() ? store.saveApiKey(input.apiKey) : true;
-    // 서버 주소·브라우저 사용이 바뀌었거나 key 가 새로 들어왔으면 연결을 다시 만든다.
-    if (prev.server !== next.server || prev.browserEnabled !== next.browserEnabled || (typeof input?.apiKey === 'string' && input.apiKey.trim())) {
+    // 서버 주소·브라우저 사용이 바뀌었거나 key 가 새로 들어왔으면 연결을 다시 만든다. 인증 사유로 끊겨 긴 간격 재시도 중인
+    // 연결이 있으면 그대로여도 다시 만든다 — 관리자가 키·계정을 되살린 뒤 10분을 기다리지 않게.
+    if (prev.server !== next.server || prev.browserEnabled !== next.browserEnabled || (typeof input?.apiKey === 'string' && input.apiKey.trim())
+      || [...roots.values()].some((r) => r.authClosed)) {
       for (const real of [...roots.keys()]) void connectFolder(real);
     }
     rebuildMenu();
