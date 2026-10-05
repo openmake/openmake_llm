@@ -112,15 +112,18 @@ function PolicyEditor({ orgId, policies, onChanged }: { orgId: string; policies:
           </div>
         </div>
       ))}
-      <div className="space-y-2">
-        <p className="text-[11px] text-muted">{t(`policyHelp.${BROWSER_SITE_POLICY_SETTING_KEY}`)}</p>
-        <BrowserSitePolicyEditor
-          value={current(BROWSER_SITE_POLICY_SETTING_KEY) === undefined ? "" : JSON.stringify(current(BROWSER_SITE_POLICY_SETTING_KEY))}
-          source={current(BROWSER_SITE_POLICY_SETTING_KEY) === undefined ? "default" : "db"}
-          busy={busy === BROWSER_SITE_POLICY_SETTING_KEY}
-          onSave={(json) => void saveSitePolicy(json)}
-          onReset={() => void reset(BROWSER_SITE_POLICY_SETTING_KEY)} />
-      </div>
+      <BrowserSitePolicyEditor
+        value={current(BROWSER_SITE_POLICY_SETTING_KEY) === undefined ? "" : JSON.stringify(current(BROWSER_SITE_POLICY_SETTING_KEY))}
+        source={current(BROWSER_SITE_POLICY_SETTING_KEY) === undefined ? "default" : "db"}
+        busy={busy === BROWSER_SITE_POLICY_SETTING_KEY}
+        onSave={(json) => void saveSitePolicy(json)}
+        onReset={() => void reset(BROWSER_SITE_POLICY_SETTING_KEY)}
+        copy={{
+          sourceSet: t("policySet"),
+          sourceUnset: t("policyUnset"),
+          help: t(`policyHelp.${BROWSER_SITE_POLICY_SETTING_KEY}`),
+          reset: t("policyReset"),
+        }} />
     </div>
   );
 }
