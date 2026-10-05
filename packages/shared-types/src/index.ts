@@ -406,3 +406,4 @@ export interface MePayload {
 }
 export * from "./knowledge";
 export * from "./model-assignments";
+export * from "./admin-local-bridge";

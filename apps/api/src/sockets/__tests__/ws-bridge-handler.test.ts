@@ -96,3 +96,12 @@ describe('handleBridgeMessage — 능력 목록·PC 식별자', () => {
         expect(registered().hostId).toBeUndefined();
     });
 });
+
+describe('handleBridgeMessage — 키 id 기록 (키 폐기 시 연결 끊기용)', () => {
+    it('API key 연결의 키 id 를 등록 세션에 싣는다', async () => {
+        const { ws, raw } = fakeWs(['bridge']);
+        (raw as Record<string, unknown>)._apiKeyId = 'key-123';
+        await handleBridgeMessage(ws, hello);
+        expect(mockRegister).toHaveBeenCalledWith(expect.objectContaining({ apiKeyId: 'key-123' }));
+    });
+});

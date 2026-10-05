@@ -115,6 +115,8 @@ export interface ExtendedWebSocket extends WebSocket {
     _authMethod?: 'cookie' | 'bearer' | 'none';
     /** API key 인증 시 그 키의 스코프(브리지 등록 게이트). JWT/쿠키 인증은 undefined. */
     _apiKeyScopes?: string[] | null;
+    /** API key 인증 시 그 키의 id — 키를 폐기하면 이 키로 등록한 브리지 연결을 닫는다. */
+    _apiKeyId?: string;
     _clientIp?: string;
     _connectedAtMs?: number;
     _lastActivityAtMs?: number;

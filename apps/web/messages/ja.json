@@ -27,6 +27,7 @@
       "approvals": "承認待ち",
       "organizationsAdmin": "組織管理",
       "costRatesAdmin": "コスト単価",
+      "bridgeDevicesAdmin": "接続デバイス",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "評価履歴",
       "quotaRequestsAdmin": "クォータ承認",
@@ -2572,6 +2573,25 @@
     "note": "メモ",
     "delete": "削除",
     "deleteConfirm": "この単価を削除しますか？フォールバック単価に戻ります。"
+  },
+  "adminBridgeDevices": {
+    "title": "接続デバイス",
+    "description": "Companion・CLI でローカル実行に接続している全デバイスです。フォルダは名前のみ表示されます。",
+    "loadError": "読み込みに失敗しました。",
+    "disabled": "ローカル実行機能はオフです(LOCAL_EXECUTOR_ENABLED)。",
+    "listTitle": "接続中のデバイス",
+    "refresh": "再読み込み",
+    "empty": "接続中のデバイスはありません。",
+    "user": "ユーザー",
+    "host": "PC",
+    "label": "名前",
+    "folder": "フォルダ",
+    "connectedAt": "接続日時",
+    "capabilities": "対応機能",
+    "disconnect": "接続解除",
+    "disconnectConfirm": "{email} の「{label}」の接続を切断しますか?実行中のローカル作業のリクエストは失敗します。",
+    "disconnectFailed": "接続解除に失敗しました。",
+    "reconnectNote": "接続解除は現在の接続のみを切断します。再接続させないには、そのユーザーの bridge API キーを削除または無効化してください — キーを破棄するとそのキーの接続もすぐに切断されます。"
   },
   "adminQuotaRequests": {
     "title": "クォータ超過承認",

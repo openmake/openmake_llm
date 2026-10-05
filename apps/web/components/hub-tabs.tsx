@@ -79,6 +79,7 @@ export function AdminTabs() {
         { href: "/admin/addons", label: tNav("items.addonsAdmin") },
         { href: "/admin/organizations", label: tNav("items.organizationsAdmin") },
         { href: "/admin/cost-rates", label: tNav("items.costRatesAdmin") },
+        { href: "/admin/bridge-devices", label: tNav("items.bridgeDevicesAdmin") },
         { href: "/admin/quota-requests", label: tNav("items.quotaRequestsAdmin") },
         { href: "/admin/schedules", label: tNav("items.schedulesAdmin") },
       ]}

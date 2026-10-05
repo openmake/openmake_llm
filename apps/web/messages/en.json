@@ -27,6 +27,7 @@
       "approvals": "Approvals",
       "organizationsAdmin": "Organizations",
       "costRatesAdmin": "Cost Rates",
+      "bridgeDevicesAdmin": "Connected devices",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "Evaluations",
       "quotaRequestsAdmin": "Quota Approvals",
@@ -2572,6 +2573,25 @@
     "note": "Note",
     "delete": "Delete",
     "deleteConfirm": "Delete this rate? The fallback rate will apply."
+  },
+  "adminBridgeDevices": {
+    "title": "Connected devices",
+    "description": "All devices connected for local execution via Companion or CLI. Only folder names are shown.",
+    "loadError": "Failed to load.",
+    "disabled": "Local execution is turned off (LOCAL_EXECUTOR_ENABLED).",
+    "listTitle": "Connected devices",
+    "refresh": "Refresh",
+    "empty": "No devices are connected.",
+    "user": "User",
+    "host": "PC",
+    "label": "Name",
+    "folder": "Folder",
+    "connectedAt": "Connected at",
+    "capabilities": "Capabilities",
+    "disconnect": "Disconnect",
+    "disconnectConfirm": "Disconnect “{label}” of {email}? Requests from running local tasks will fail.",
+    "disconnectFailed": "Failed to disconnect.",
+    "reconnectNote": "Disconnect only closes the current connection. To keep a device from reconnecting, delete or deactivate the user's bridge API key — revoking a key also closes its connections immediately."
   },
   "adminQuotaRequests": {
     "title": "Quota overage approvals",

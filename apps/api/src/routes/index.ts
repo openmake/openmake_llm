@@ -22,6 +22,7 @@ export { adminOrganizationsRouter } from './admin-organizations.routes';
 export { organizationPoliciesRouter, adminOrganizationPoliciesRouter } from './organization-policies.routes';
 export { adminConfigExportRouter } from './admin-config-export.routes';
 export { adminCostRatesRouter } from './admin-cost-rates.routes';
+export { adminLocalBridgeRouter } from './admin-local-bridge.routes';
 export { adminGatewayRouter } from './admin-gateway.routes';
 export { usageQuotaRouter, adminQuotaOverageRouter } from './quota-overage.routes';
 export { usageStatementsRouter, adminBillingRouter } from './billing-statements.routes';

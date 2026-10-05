@@ -49,6 +49,7 @@ import {
     adminOrganizationPoliciesRouter,
     adminConfigExportRouter,
     adminCostRatesRouter,
+    adminLocalBridgeRouter,
     adminGatewayRouter,
     usageQuotaRouter,
     adminQuotaOverageRouter,
@@ -205,6 +206,7 @@ export function setupApiRoutes(
     app.use('/api/organizations', organizationPoliciesRouter);
     app.use('/api/admin', adminConfigExportRouter);
     app.use('/api/admin', adminCostRatesRouter);
+    app.use('/api/admin', adminLocalBridgeRouter);   // 연결 기기 조회·강제 해제 (2026-10-05)
     app.use('/api/admin', adminGatewayRouter);
     app.use('/api/admin', adminQuotaOverageRouter);
     app.use('/api/usage', usageQuotaRouter);
