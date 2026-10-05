@@ -8,11 +8,11 @@
  * 무시한다. 알림은 검증을 통과한 것만 호스트(onNotice)에 넘길 뿐 아무 동작도 일으키지 않는다.
  */
 import WebSocket from 'ws';
-import { BROWSER_KIND, NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
+import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, AUTH_RETRY_MS, BROWSER_KIND, NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
 import { RequestGuard } from './request-guard';
 import { folderNameOf } from './platform';
 import type { BridgeCore } from './core';
-import type { BridgeMsg, BridgeNotice, BridgeResult, BridgeStatusCode } from './types';
+import type { BridgeAuthCloseReason, BridgeMsg, BridgeNotice, BridgeResult, BridgeStatusCode } from './types';
 
 export interface BridgeConnectionOptions {
     /** 서버 http(s) URL — ws(s) 로 변환해 접속한다 (서버 WSS 는 { server } 라 경로 무관). */
@@ -39,6 +39,8 @@ export interface BridgeConnectionOptions {
     reconnectMs?: number;
     /** 재연결 간격 상한(ms) — 기본 RECONNECT_MAX_MS */
     reconnectMaxMs?: number;
+    /** 인증 사유(AUTH_CLOSE_REASONS)로 닫혔을 때의 재시도 간격(ms) — 기본 AUTH_RETRY_MS */
+    authRetryMs?: number;
     /** 간격 분산용 난수(0 이상 1 미만) — 테스트 주입용, 기본 Math.random */
     random?: () => number;
     /** 재연결 대기를 건 직후 알림(ms) — 진단·테스트용 */
@@ -77,6 +79,9 @@ export function parseNotice(m: BridgeMsg): BridgeNotice | null {
     if (!toolName) return null;
     return { notice: 'approval_pending', taskId: m.taskId, toolName };
 }
+
+/** 서버가 인증 사유로 닫는 코드 — 정책 위반(1008). 서버의 #1164·#1168 종료와 같다. */
+const AUTH_CLOSE_CODE = 1008;
 
 export class BridgeConnection {
     private ws: WebSocket | null = null;
@@ -122,6 +127,8 @@ export class BridgeConnection {
                 folderName,
                 ...(this.opts.hostId ? { hostId: this.opts.hostId } : {}),
                 capabilities: this.opts.core.capabilities(),
+                // 인증 실패를 사유와 함께 닫아도 된다는 표시(2026-10-06) — 서버는 이 표시가 없는 구버전에는 종전대로 오류만 보낸다.
+                authClose: true,
             }));
             this.openCleanup = this.opts.onOpen?.(this.ws) ?? null;
         }, 300));
@@ -159,17 +166,23 @@ export class BridgeConnection {
                 .catch((e) => done({ ok: false, error: String((e as Error).message || e) }));
         });
 
-        this.ws.on('close', () => {
+        this.ws.on('close', (code: number, reasonBuf: Buffer) => {
             this.openCleanup?.(); this.openCleanup = null;
             const reconnect = !this.closed && (this.opts.shouldReconnect?.() ?? true);
             if (!reconnect) {
                 if (this.closed) this.status('종료', 'closed'); else this.status('미연결', 'idle');
                 return;
             }
-            this.status('끊김 — 재연결 대기', 'reconnecting');
+            // 인증 사유로 닫혔으면(키 폐기·만료, 계정 비활성 등) 사유를 보여 주고 긴 간격으로만 다시 시도한다 —
+            // 사용자가 키를 바꾸면 앱이 연결을 새로 만들고, 관리자가 되살리면 다음 재시도에 붙는다.
+            const reason = String(reasonBuf ?? '');
+            const authReason = code === AUTH_CLOSE_CODE && (AUTH_CLOSE_REASONS as readonly string[]).includes(reason) ? reason as BridgeAuthCloseReason : null;
+            if (authReason) this.status(AUTH_CLOSE_TEXT[authReason], authReason);
+            else this.status('끊김 — 재연결 대기', 'reconnecting');
             if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-            const delay = reconnectDelayMs(this.reconnectAttempt, this.opts.reconnectMs ?? RECONNECT_MS, this.opts.reconnectMaxMs ?? RECONNECT_MAX_MS, this.opts.random);
-            this.reconnectAttempt += 1;
+            const delay = authReason ? (this.opts.authRetryMs ?? AUTH_RETRY_MS)
+                : reconnectDelayMs(this.reconnectAttempt, this.opts.reconnectMs ?? RECONNECT_MS, this.opts.reconnectMaxMs ?? RECONNECT_MAX_MS, this.opts.random);
+            if (!authReason) this.reconnectAttempt += 1;
             this.reconnectTimer = setTimeout(() => { void this.connect(); }, delay);
             this.opts.onReconnectScheduled?.(delay);
         });

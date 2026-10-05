@@ -80,3 +80,27 @@ export const LOCAL_BRIDGE = {
     /** 진단 1회 대기 상한(ms) — 초과 시 생략. 디바이스측 DIAG_TIMEOUT_MS 보다 짧게 잡는다. */
     LSP_TIMEOUT_MS: parseInt(process.env.LOCAL_BRIDGE_LSP_TIMEOUT_MS || '10000', 10),
 } as const;
+
+/**
+ * 브리지 인증 실패로 연결을 닫을 때의 사유(close reason)와 안내 문구(2026-10-06).
+ * ws-auth 가 API key 인증 단계에서 사유를 정하고, ws-bridge-handler 가 게스트로 떨어진 연결의 bridge_hello 를
+ * 이 사유로 닫는다(사유를 알아듣는 새 코어가 hello 에 authClose 를 실을 때만 — 구버전 앱은 종전대로 오류만 받는다).
+ * 사유 문자열은 코어 AUTH_CLOSE_REASONS 와 1:1(앱이 이 값으로 다국어 상태를 고른다). auth_unavailable 은 인증을
+ * 확인하지 못한 일시적 실패(DB 오류)라 다시 시도할 수 있는 코드로 닫는다.
+ */
+export const BRIDGE_AUTH_FAILURE_MESSAGES = {
+    api_key_invalid: 'API key 가 없거나 올바르지 않습니다 — 새 키를 발급해 설정에 넣으세요',
+    api_key_expired: 'API key 가 만료되었습니다 — 새 키를 발급하거나 만료일을 늘리세요',
+    api_key_inactive: 'API key 가 비활성화되었습니다 — 키를 다시 켜거나 새 키를 발급하세요',
+    account_disabled: '계정이 비활성화되었습니다 — 관리자에게 문의하세요',
+    account_deleted: '계정이 삭제되었습니다',
+    auth_unavailable: '인증을 확인하지 못했습니다 — 잠시 후 다시 연결합니다',
+} as const;
+
+export type BridgeAuthFailure = keyof typeof BRIDGE_AUTH_FAILURE_MESSAGES;
+
+/** 브리지 연결을 닫는 코드 — 정책 위반(1008, 다시 연결해도 같은 결과)과 잠시 후 재시도(1013). */
+export const BRIDGE_CLOSE_CODES = { POLICY: 1008, TRY_AGAIN_LATER: 1013 } as const;
+
+/** 다시 시도하면 풀릴 수 있는 인증 실패 — TRY_AGAIN_LATER 로 닫는다. */
+export const BRIDGE_AUTH_RETRYABLE: ReadonlySet<BridgeAuthFailure> = new Set<BridgeAuthFailure>(['auth_unavailable']);

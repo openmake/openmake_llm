@@ -107,7 +107,14 @@ export interface BridgeNotice {
  * 연결 상태 코드 — onStatus 의 두 번째 인자. 상태 텍스트는 한국어 고정이라 호스트가 다국어로
  * 보여 줄 때 이 코드를 쓴다(세 번째 인자 arg = 폴더명·서버 메시지 등 치환값).
  */
-export type BridgeStatusCode = 'connecting' | 'connected' | 'server_error' | 'reconnecting' | 'closed' | 'idle' | 'auth_error';
+export type BridgeStatusCode = 'connecting' | 'connected' | 'server_error' | 'reconnecting' | 'closed' | 'idle' | 'auth_error' | BridgeAuthCloseReason;
+
+/**
+ * 서버가 인증 문제로 연결을 닫은 사유(닫는 코드 1008 의 reason) — 상태 코드로도 그대로 쓴다(2026-10-06).
+ * 키 폐기(삭제·비활성화·순환)·만료·비활성·없음, 계정 비활성·삭제, bridge 스코프 없음. 다시 연결해도 같은 결과다.
+ */
+export type BridgeAuthCloseReason = 'api_key_revoked' | 'api_key_invalid' | 'api_key_expired' | 'api_key_inactive'
+    | 'account_disabled' | 'account_deleted' | 'bridge_scope_required';
 
 /**
  * confirmExec 어댑터 — 실행 전 사용자 확인(비우회 게이트)의 호스트 구현.

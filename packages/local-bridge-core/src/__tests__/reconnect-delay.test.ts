@@ -79,7 +79,9 @@ describe('BridgeConnection 재연결 백오프', () => {
         const statuses: string[] = [];
         const conn = makeConn(port, delays, statuses);
         await conn.connect();
-        await new Promise((r) => setTimeout(r, 150)); // 20 → 40 → 80 까지 실패
+        // 20 → 40 까지 실패 — 고정 시간만 기다리면 부하가 걸린 러너에서 두 번째 예약 전에 끝난다(위 테스트와 같은 이유)
+        const until0 = Date.now() + 5000;
+        while (delays.length < 2 && Date.now() < until0) await new Promise((r) => setTimeout(r, 10));
         expect(delays.length).toBeGreaterThanOrEqual(2);
         expect(delays[1]).toBe(40);
         accept = true;

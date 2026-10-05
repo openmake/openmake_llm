@@ -27,6 +27,8 @@
 //               {cmd:'confirm',id,result:'yes'|'all'|'no'} {cmd:'clearAutoApprove'} {cmd:'quit'}
 //   status code: connecting·connected(arg=폴더명)·server_error(arg=메시지)·reconnecting·closed·idle·
 //                auth_error(arg=메시지)·api_key_required·folder_open_failed(arg=메시지)
+//                · 서버가 인증 사유로 닫음(0.3.2, 코어 AUTH_CLOSE_REASONS): api_key_revoked·api_key_invalid·api_key_expired·
+//                  api_key_inactive·account_disabled·account_deleted·bridge_scope_required
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';

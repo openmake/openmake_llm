@@ -8,13 +8,22 @@
 import type { WebSocket } from 'ws';
 import type { WSMessage, ExtendedWebSocket } from './ws-types';
 import { getLocalBridgeRegistry, normalizeCapabilities, type BridgeResult } from '../services/local-bridge/registry';
-import { LOCAL_BRIDGE } from '../config/local-bridge';
+import { LOCAL_BRIDGE, BRIDGE_AUTH_FAILURE_MESSAGES, BRIDGE_AUTH_RETRYABLE, BRIDGE_CLOSE_CODES } from '../config/local-bridge';
 import { apiKeyHasScope, API_KEY_SCOPES } from '../config/api-key-scopes';
 
 export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promise<void> {
     const extWs = ws as ExtendedWebSocket;
     const userId = extWs._authenticatedUserId;
     if (!userId) {
+        // 인증 실패(키 폐기·만료·비활성, 계정 비활성)로 게스트가 된 연결 — 사유를 알아듣는 새 코어(hello.authClose)는
+        // 사유를 실어 닫는다. 구버전 앱은 닫으면 짧은 간격으로 계속 다시 연결하므로 종전대로 오류만 보내고 열어 둔다.
+        if (msg.type === 'bridge_hello' && msg.authClose === true) {
+            const reason = extWs._authFailure ?? 'api_key_invalid';
+            ws.send(JSON.stringify({ type: 'error', message: BRIDGE_AUTH_FAILURE_MESSAGES[reason] }));
+            const code = BRIDGE_AUTH_RETRYABLE.has(reason) ? BRIDGE_CLOSE_CODES.TRY_AGAIN_LATER : BRIDGE_CLOSE_CODES.POLICY;
+            try { ws.close(code, reason); } catch { /* already closing */ }
+            return;
+        }
         ws.send(JSON.stringify({ type: 'error', message: '로컬 브리지는 로그인이 필요합니다' }));
         return;
     }
@@ -70,4 +79,15 @@ export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promis
         const senderDeviceId = registry.getDeviceIdByWs(userId, ws) ?? undefined;
         registry.handleResult(userId, msg.reqId, msg.result as unknown as BridgeResult, senderDeviceId);
     }
+}
+
+/**
+ * 하트비트가 키 만료로 끊는 연결이 등록된 브리지면 사유(api_key_expired)를 실어 닫고 true — 앱이 만료를 알 수 있다.
+ * 브리지가 아니면 아무것도 하지 않고 false(호출부가 종전대로 terminate 한다).
+ */
+export function closeExpiredBridge(ws: WebSocket): boolean {
+    const userId = (ws as ExtendedWebSocket)._authenticatedUserId;
+    if (!userId || getLocalBridgeRegistry().getDeviceIdByWs(userId, ws) === null) return false;
+    try { ws.close(BRIDGE_CLOSE_CODES.POLICY, 'api_key_expired'); } catch { /* already closing */ }
+    return true;
 }
