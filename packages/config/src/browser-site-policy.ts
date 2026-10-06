@@ -6,6 +6,8 @@
  *   - 쓰기(입력·키 입력·확인창 수락)와 누르기는 관리자가 지정한 허용 목록 사이트에서만 하고, 목록 밖에서는 건별 승인을 받는다.
  *   - 주소에 질의 문자열을 실어 목록 밖 사이트로 가는 이동(검색 등)은 쓰기로 본다 — 검색어가 주소에 실려 나간다.
  *   - http(s) 가 아닌 주소(file:·javascript:·data: 등)로는 이동하지 않는다 — 허용 폴더 밖의 로컬 파일을 브라우저로 읽는 길을 막는다.
+ *   - 업로드(uploadFile — PC 파일을 사이트의 파일 선택 칸에 넣기, 2026-10-06)는 허용 목록과 무관하게 매번 승인을 받는다.
+ *     승인은 그 호스트·파일 목록에 묶인다 — 기기는 실제 탭의 호스트와 파일 목록이 승인과 같을 때만 실행한다.
  *
  * 서버는 호출 전에 액션 배열을 훑어 승인이 필요한 것을 찾고(planBrowserActions), 기기는 실행 직전에 **실제 탭의 주소**로
  * 다시 판정한다(checkBrowserAction) — 리다이렉트·페이지가 연 새 창·사용자의 직접 조작으로 주소가 달라질 수 있다.
@@ -23,8 +25,8 @@ export interface BrowserSitePolicy {
 
 export const EMPTY_BROWSER_SITE_POLICY: BrowserSitePolicy = { allow: [], deny: [] };
 
-/** 액션 분류 — observe: 읽기, navigate: 주소 이동, write: 입력·키·확인창 수락, click: 누르기 */
-export type BrowserActionClass = "observe" | "navigate" | "write" | "click";
+/** 액션 분류 — observe: 읽기, navigate: 주소 이동, write: 입력·키·확인창 수락, click: 누르기, upload: PC 파일 올리기 */
+export type BrowserActionClass = "observe" | "navigate" | "write" | "click" | "upload";
 
 const ACTION_CLASS: Readonly<Record<string, BrowserActionClass>> = {
   goto: "navigate",
@@ -39,12 +41,13 @@ const ACTION_CLASS: Readonly<Record<string, BrowserActionClass>> = {
   screenshot: "observe",
   extractText: "observe",
   extractHtml: "observe",
+  uploadFile: "upload",
 };
 
 /** 승인 카드·오류 문구에 싣는 값의 길이 상한 */
 const DETAIL_MAX_CHARS = 200;
 
-type ActionLike = { type?: unknown; url?: unknown; text?: unknown; selector?: unknown; role?: unknown; name?: unknown; key?: unknown; accept?: unknown };
+type ActionLike = { type?: unknown; url?: unknown; text?: unknown; selector?: unknown; role?: unknown; name?: unknown; key?: unknown; accept?: unknown; files?: unknown };
 
 function asAction(a: unknown): ActionLike {
   return a && typeof a === "object" ? (a as ActionLike) : {};
@@ -120,6 +123,22 @@ export interface BrowserSiteWrite {
   detail: string;
 }
 
+/** 업로드 한 건 — 승인 카드에 호스트와 파일 이름 목록을 보이고, 승인되면 기기로 그대로 보낸다(BrowserUploadApproval). */
+export interface BrowserSiteUpload {
+  /** actions 배열에서의 위치 */
+  index: number;
+  /** 업로드가 향하는 호스트 — 알 수 없으면 빈 문자열(기기가 어떤 사이트로도 통과시키지 않는다) */
+  host: string;
+  /** 허용 폴더 기준 상대 경로 — 모델이 넣은 그대로(문자열만). 범위 검사는 기기가 한다 */
+  files: string[];
+}
+
+/** 사용자가 승인한 업로드 — 기기는 실제 탭의 호스트·액션의 파일 목록이 이것과 같을 때만 실행한다. */
+export interface BrowserUploadApproval {
+  host: string;
+  files: string[];
+}
+
 export interface BrowserBlockedNavigation {
   index: number;
   url: string;
@@ -130,6 +149,14 @@ export interface BrowserSitePlan {
   blocked: BrowserBlockedNavigation[];
   /** 허용 목록 밖 쓰기 — 사용자 승인이 필요하다 */
   offListWrites: BrowserSiteWrite[];
+  /** 업로드 — 허용 목록과 무관하게 항상 사용자 승인이 필요하다 */
+  uploads: BrowserSiteUpload[];
+}
+
+/** 액션의 파일 목록 — 문자열만 남긴다. 배열이 아니면 빈 목록. */
+export function uploadFilesOf(action: unknown): string[] {
+  const files = asAction(action).files;
+  return Array.isArray(files) ? files.filter((f): f is string => typeof f === "string") : [];
 }
 
 /**
@@ -139,6 +166,7 @@ export interface BrowserSitePlan {
 export function browserActionNeedsApproval(action: unknown, currentHost: string | null, policy: BrowserSitePolicy): string | null {
   const cls = classifyBrowserAction(action);
   if (cls === "observe") return null;
+  if (cls === "upload") return currentHost ?? ""; // 허용 목록과 무관하게 항상 승인
   if (cls === "navigate") {
     const url = asAction(action).url;
     const target = browserHostOf(url);
@@ -154,7 +182,7 @@ export function browserActionNeedsApproval(action: unknown, currentHost: string 
  * 누르기로 일어나는 이동은 서버가 알 수 없다 — 그 뒤의 쓰기는 기기가 실제 주소로 다시 판정한다.
  */
 export function planBrowserActions(actions: readonly unknown[], startUrl: string | null, policy: BrowserSitePolicy): BrowserSitePlan {
-  const plan: BrowserSitePlan = { blocked: [], offListWrites: [] };
+  const plan: BrowserSitePlan = { blocked: [], offListWrites: [], uploads: [] };
   let host = browserHostOf(startUrl);
   actions.forEach((action, index) => {
     const a = asAction(action);
@@ -163,7 +191,8 @@ export function planBrowserActions(actions: readonly unknown[], startUrl: string
       return;
     }
     const needs = browserActionNeedsApproval(action, host, policy);
-    if (needs !== null) plan.offListWrites.push({ index, type: String(a.type ?? ""), host: needs, detail: describeAction(action) });
+    if (needs !== null && classifyBrowserAction(action) === "upload") plan.uploads.push({ index, host: needs, files: uploadFilesOf(action) });
+    else if (needs !== null) plan.offListWrites.push({ index, type: String(a.type ?? ""), host: needs, detail: describeAction(action) });
     if (a.type === "goto") host = browserHostOf(a.url);
   });
   return plan;
@@ -173,14 +202,23 @@ export function planBrowserActions(actions: readonly unknown[], startUrl: string
  * 기기용 — 실행 직전, 실제 탭의 호스트로 판정한다. 통과면 null, 막으면 사유.
  * approvedHosts 는 이번 호출에서 사용자가 승인한 호스트(서버가 실어 보낸다). '' 는 "호스트를 알 수 없던 쓰기"의 승인이라
  * 실제 호스트가 무엇이든 통과시키지 않는다 — 승인 화면에 보이지 않은 사이트로 쓰지 않는다.
+ * 업로드는 approvedHosts 로 풀리지 않는다 — approvedUploads 에 같은 호스트·같은 파일 목록(순서 포함)이 있어야 한다.
  */
 export function checkBrowserAction(
   action: unknown, currentHost: string | null, policy: BrowserSitePolicy, approvedHosts: readonly string[],
+  approvedUploads: readonly BrowserUploadApproval[] = [],
 ): string | null {
   const a = asAction(action);
   if (a.type === "goto" && !isNavigableBrowserUrl(a.url)) return `이동할 수 없는 주소입니다(http·https 만 허용): ${clip(a.url)}`;
   const needs = browserActionNeedsApproval(action, currentHost, policy);
   if (needs === null) return null;
+  if (classifyBrowserAction(action) === "upload") {
+    const files = uploadFilesOf(action);
+    const match = needs !== "" && approvedUploads.some((u) => u.host.toLowerCase() === needs
+      && u.files.length === files.length && u.files.every((f, i) => f === files[i]));
+    return match ? null : `파일 업로드는 매번 사용자 승인이 필요합니다 — 승인된 사이트·파일 목록과 다릅니다(현재 ${needs || "주소 확인 불가"}). `
+      + "현재 페이지를 다시 확인한 뒤 같은 동작을 다시 요청하면 승인을 받습니다.";
+  }
   if (needs !== "" && approvedHosts.some((h) => h.toLowerCase() === needs)) return null;
   return `사이트 정책: 허용 목록에 없는 사이트(${needs || "주소 확인 불가"})에 대한 ${classifyBrowserAction(action) === "click" ? "누르기" : "입력"}는 사용자 승인이 필요합니다. `
     + "현재 페이지를 다시 확인한 뒤 같은 동작을 다시 요청하면 승인을 받습니다.";

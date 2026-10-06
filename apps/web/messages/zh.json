@@ -385,6 +385,7 @@
       "procedurePreview": "查看将执行的步骤",
       "fullArgs": "查看全部内容（{chars} 个字符）",
       "siteWrites": "将发送到允许列表之外的网站",
+      "siteUploads": "将把电脑中的文件上传到此网站",
       "elicitHint": "{server} 服务器请求输入 · 字段: {fields}",
       "elicitJsonHint": "字段多于一个时请用 JSON 回答: {example}"
     },
@@ -2462,6 +2463,7 @@
       "procedurePreview": "查看将执行的步骤",
       "fullArgs": "查看全部内容（{chars} 个字符）",
       "siteWrites": "将发送到允许列表之外的网站",
+      "siteUploads": "将把电脑中的文件上传到此网站",
       "assignedToMe": "已转交给我",
       "assignedAway": "已转交",
       "reassign": "转交",

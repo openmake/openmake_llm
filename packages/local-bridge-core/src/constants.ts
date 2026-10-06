@@ -67,6 +67,11 @@ export const BRIDGE_KINDS: readonly string[] = [
 
 /** 로컬 브라우저 요청 종류 — 호스트가 전용 프로필을 주고 Chrome 이 있을 때만 능력 목록에 넣는다(BridgeCore.capabilities). */
 export const BROWSER_KIND = 'browser';
+/**
+ * 브라우저 업로드(uploadFile) 능력 — 요청 종류가 아니라 browser 요청 안의 액션이다(2026-10-06 추가).
+ * 이 값을 알리지 않는 구버전 기기에는 서버가 업로드를 보내지 않고 모델에 "이 기기는 업로드를 지원하지 않는다"고 돌려준다.
+ */
+export const BROWSER_UPLOAD_CAPABILITY = 'browser_upload';
 
 /** 요청 만료 판정의 시계 오차 허용(ms) — 서버와 PC 의 시계가 이만큼 어긋나도 정상 요청을 버리지 않는다. */
 export const EXPIRY_SKEW_TOLERANCE_MS = 120000;
@@ -158,6 +163,10 @@ export const BROWSER_SNAPSHOT_MAX_ELEMENTS = 100;
 export const BROWSER_SNAPSHOT_NAME_MAX = 120;
 /** 입력 뒤 결과에 되돌려 주는 값의 길이 상한 — 모델이 "들어갔는지" 확인하는 용도라 앞부분이면 충분하다 */
 export const BROWSER_FILL_ECHO_MAX_CHARS = 200;
+/** uploadFile 한 번에 올리는 파일 수 상한 */
+export const BROWSER_UPLOAD_MAX_FILES = 10;
+/** uploadFile 파일 하나의 크기 상한(bytes) — 서버의 파일 쓰기 상한(LOCAL_BRIDGE_MAX_WRITE_BYTES 기본 8MiB)과 같은 값 */
+export const BROWSER_UPLOAD_MAX_FILE_BYTES = Number(process.env.OMK_BRIDGE_UPLOAD_MAX_FILE_BYTES || 8 * 1024 * 1024);
 /** CDP 명령 1회 응답 상한(ms) */
 export const BROWSER_CDP_TIMEOUT_MS = 30000;
 /** Chrome 기동 후 디버깅 포트가 열릴 때까지의 대기 상한(ms) */

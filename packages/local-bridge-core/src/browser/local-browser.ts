@@ -10,10 +10,10 @@
  *   - 쿠키·저장된 비밀번호·프로필 파일을 돌려주는 동작은 없다.
  *
  * 보안 불변식(변경 금지): http(s)·about:blank 밖으로 이동하지 않는다 · 사이트 정책 판정을 건너뛰는 경로가 없다 ·
- * 스크린샷·다운로드는 호출부가 준 폴더 안에만 쓴다.
+ * 스크린샷·다운로드는 호출부가 준 폴더 안에만 쓴다 · 업로드는 승인된 호스트·파일 목록과 같고 호출부의 파일 검사를 통과한 것만 넣는다.
  */
 import type { ChildProcess } from 'child_process';
-import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, type BrowserSitePolicy } from '@openmake/config';
+import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, type BrowserSitePolicy, type BrowserUploadApproval } from '@openmake/config';
 import {
     BROWSER_ACTION_TIMEOUT_MS, BROWSER_CLICK_SETTLE_MS, BROWSER_EXIT_WAIT_MS, BROWSER_DIALOG_MESSAGE_MAX, BROWSER_DIALOG_RECORD_MAX,
     BROWSER_EXTRACT_MAX_CHARS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_TABS, BROWSER_POLL_MS,
@@ -21,7 +21,7 @@ import {
 } from '../constants';
 import { CdpClient } from './cdp';
 import { launchChrome, readDevToolsEndpoint } from './chrome';
-import { browserPolicyBlockOf, userControlPolicyBlock } from './policy-block';
+import { browserPolicyBlockOf, uploadRejectedPolicyBlock, userControlPolicyBlock } from './policy-block';
 import type { BrowserPolicyBlock } from '../types';
 
 /** 서버가 보내는 브라우저 요청 본문 */
@@ -31,6 +31,8 @@ export interface BrowserSpec {
     sitePolicy?: unknown;
     /** 이번 호출에서 사용자가 승인한 호스트 */
     approvedHosts?: unknown;
+    /** 이번 호출에서 사용자가 승인한 업로드({host, files}[]) — 그 호스트·그 파일 목록에만 쓴다 */
+    approvedUploads?: unknown;
 }
 
 export interface BrowserRunOptions {
@@ -40,6 +42,8 @@ export interface BrowserRunOptions {
     saveFile: (name: string, data: Buffer) => Promise<void>;
     /** 다운로드가 떨어질 폴더(절대 경로) — 허용 폴더 안 */
     downloadDir: string;
+    /** 업로드할 파일 검사 — 폴더 기준 상대 경로 → 실제 경로, 걸리면 던진다(upload-files.ts). 없으면 업로드를 실행하지 않는다 */
+    resolveUploadFiles?: (files: unknown) => Promise<string[]>;
 }
 
 export interface BrowserActionResult {
@@ -74,7 +78,9 @@ interface Tab {
     lastUsed: number;
 }
 
-const PAGE_ACTIONS = new Set(['click', 'fill', 'snapshot', 'smartClick', 'smartFill', 'press', 'waitFor', 'screenshot', 'extractText', 'extractHtml']);
+const PAGE_ACTIONS = new Set(['click', 'fill', 'snapshot', 'smartClick', 'smartFill', 'press', 'waitFor', 'screenshot', 'extractText', 'extractHtml', 'uploadFile']);
+const UPLOAD_UNSUPPORTED_ERROR = '이 실행 위치에서는 파일 업로드를 할 수 없습니다';
+const UPLOAD_HOST_CHANGED_ERROR = '파일 칸을 기다리는 동안 다른 사이트로 이동해 업로드하지 않았습니다 — 현재 페이지를 다시 확인한 뒤 요청하세요';
 const BLANK_PAGE_ERROR = '빈 페이지(about:blank)에서 실행됨 — 먼저 goto 로 페이지를 여세요';
 /** 페이지 안에서 도는 조각 — 요소의 현재 값. 입력 칸은 value, 편집 가능한 영역은 보이는 글. 비밀번호 칸과 없는 요소는 null. */
 const FIELD_VALUE_JS = `(el) => { if (!el) return null; if (el instanceof HTMLInputElement && el.type === 'password') return null; return 'value' in el && typeof el.value === 'string' ? el.value : (el.isContentEditable ? el.innerText : null); }`;
@@ -104,6 +110,16 @@ const KEYS: Readonly<Record<string, { key: string; code: string; keyCode: number
 const MODIFIERS: Readonly<Record<string, number>> = { Alt: 1, Control: 2, Ctrl: 2, Meta: 4, Command: 4, Shift: 8 };
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** 서버가 보낸 승인된 업로드 목록 — 형태가 어긋난 항목은 버린다. */
+function parseApprovedUploads(raw: unknown): BrowserUploadApproval[] {
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap((u) => {
+        const o = (u && typeof u === 'object' ? u : {}) as { host?: unknown; files?: unknown };
+        return typeof o.host === 'string' && Array.isArray(o.files) && o.files.every((f) => typeof f === 'string')
+            ? [{ host: o.host, files: o.files as string[] }] : [];
+    });
+}
 const str = (v: unknown): string => (typeof v === 'string' ? v : v === undefined || v === null ? '' : String(v));
 
 /** 스크린샷 파일 이름 — 서버 러너와 같은 규칙(컨테이너 표기·./ 접두를 벗기고 안전한 문자만). */
@@ -384,6 +400,7 @@ export class LocalBrowser {
         const actions = (Array.isArray(spec.actions) ? spec.actions : []).slice(0, BROWSER_MAX_ACTIONS) as Action[];
         const policy: BrowserSitePolicy = parseBrowserSitePolicy(spec.sitePolicy);
         const approvedHosts = Array.isArray(spec.approvedHosts) ? spec.approvedHosts.filter((h): h is string => typeof h === 'string') : [];
+        const approvedUploads = parseApprovedUploads(spec.approvedUploads);
         const generation = this.stopGeneration;
         const results: BrowserActionResult[] = [];
         let policyBlock: BrowserPolicyBlock | undefined;
@@ -409,13 +426,19 @@ export class LocalBrowser {
                     const url = await this.currentUrl(cdp, tab);
                     // 사이트 정책 — 실제 탭의 주소로 판정한다. 통과하지 못하면 실행하지 않는다.
                     const host = browserHostOf(url);
-                    const denied = checkBrowserAction(a, host, policy, approvedHosts);
+                    const denied = checkBrowserAction(a, host, policy, approvedHosts, approvedUploads);
                     if (denied) {
                         policyBlock = browserPolicyBlockOf(a, host, policy);
                         throw new Error(denied);
                     }
                     if (PAGE_ACTIONS.has(str(a.type)) && url === 'about:blank') throw new Error(BLANK_PAGE_ERROR);
-                    results.push(await this.runAction(cdp, tab, a, i, opts));
+                    // 업로드 — 승인을 통과한 뒤 파일을 검사한다(폴더 밖·숨김·크기·개수). 걸리면 감사 기록용 표식을 남긴다.
+                    const upload = { paths: [] as string[], host };
+                    if (a.type === 'uploadFile') {
+                        if (!opts.resolveUploadFiles) throw new Error(UPLOAD_UNSUPPORTED_ERROR);
+                        try { upload.paths = await opts.resolveUploadFiles(a.files); } catch (e) { policyBlock = uploadRejectedPolicyBlock(host); throw e; }
+                    }
+                    results.push(await this.runAction(cdp, tab, a, i, opts, upload));
                 } catch (e) {
                     results.push({ i, type: a.type, ok: false, error: e instanceof Error ? e.message : String(e) });
                     failed = true;
@@ -429,7 +452,26 @@ export class LocalBrowser {
         }
     }
 
-    private async runAction(cdp: CdpClient, tab: Tab, a: Action, i: number, opts: BrowserRunOptions): Promise<BrowserActionResult> {
+    /**
+     * 파일 선택 칸(input[type=file])에 파일을 넣는다 — 페이지에는 사용자가 고른 것처럼 input·change 가 일어난다.
+     * 요소를 기다리는 동안 다른 사이트로 넘어갔으면 넣지 않는다(승인은 판정 때의 호스트에 묶였다). 요소를 잡은 뒤의 이동은 그 요소를 무효로 만든다.
+     */
+    private async uploadFiles(cdp: CdpClient, tab: Tab, selector: string, paths: string[], approvedHost: string | null): Promise<void> {
+        const sel = JSON.stringify(selector);
+        await this.poll(() => this.evaluate<boolean | null>(cdp, tab, `!!document.querySelector(${sel}) || null`), `요소를 찾지 못했습니다: ${selector}`);
+        const { result } = await cdp.send('Runtime.evaluate', { expression: `document.querySelector(${sel})` }, tab.sessionId) as { result?: { objectId?: string } };
+        if (!result?.objectId) throw new Error(`요소를 찾지 못했습니다: ${selector}`);
+        if (browserHostOf(await this.currentUrl(cdp, tab)) !== approvedHost) throw new Error(UPLOAD_HOST_CHANGED_ERROR);
+        const { result: kind } = await cdp.send('Runtime.callFunctionOn', {
+            objectId: result.objectId, returnByValue: true,
+            functionDeclaration: 'function () { return this instanceof HTMLInputElement && this.type === "file" ? (this.multiple ? "multiple" : "single") : "other"; }',
+        }, tab.sessionId) as { result?: { value?: unknown } };
+        if (kind?.value === 'other') throw new Error(`파일 선택 칸(input[type=file])이 아닙니다: ${selector}`);
+        if (kind?.value === 'single' && paths.length > 1) throw new Error(`여러 파일을 받지 않는 칸입니다(multiple 아님): ${selector}`);
+        await cdp.send('DOM.setFileInputFiles', { files: paths, objectId: result.objectId }, tab.sessionId);
+    }
+
+    private async runAction(cdp: CdpClient, tab: Tab, a: Action, i: number, opts: BrowserRunOptions, upload: { paths: string[]; host: string | null }): Promise<BrowserActionResult> {
         const sel = JSON.stringify(str(a.selector));
         switch (a.type) {
             case 'goto':
@@ -523,6 +565,9 @@ export class LocalBrowser {
                     : this.evaluate<string>(cdp, tab, 'document.documentElement.outerHTML'));
                 return { i, type: a.type, ok: true, html: str(html).slice(0, BROWSER_EXTRACT_MAX_CHARS) };
             }
+            case 'uploadFile':
+                await this.uploadFiles(cdp, tab, str(a.selector), upload.paths, upload.host);
+                return { i, type: a.type, ok: true, files: (a.files as string[]) };
             default:
                 // 모르는 액션은 사이트 정책에서 쓰기로 분류돼 이미 판정을 거쳤다 — 실행할 수 없으니 실패로 돌린다.
                 throw new Error('알 수 없는 action');

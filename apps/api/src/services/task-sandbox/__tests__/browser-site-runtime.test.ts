@@ -159,9 +159,9 @@ describe('승인 바닥·결속 (PURE)', () => {
         expect(hasOffListSiteWrites('bash', { offListWrites: [{}] })).toBe(false);
     });
     it('withSitePlan — 쓰기가 없으면 필드를 지우고, 있으면 서버 값만 싣는다', () => {
-        expect(withSitePlan({ actions: [], offListWrites: ['가짜'] }, { blocked: [], offListWrites: [] })).toEqual({ actions: [] });
+        expect(withSitePlan({ actions: [], offListWrites: ['가짜'] }, { blocked: [], offListWrites: [], uploads: [] })).toEqual({ actions: [] });
         const w = [{ index: 0, type: 'fill', host: 'a.com', detail: 'd' }];
-        expect(withSitePlan({ actions: [], offListWrites: [] }, { blocked: [], offListWrites: w })).toEqual({ actions: [], offListWrites: w });
+        expect(withSitePlan({ actions: [], offListWrites: [] }, { blocked: [], offListWrites: w, uploads: [] })).toEqual({ actions: [], offListWrites: w });
     });
     it('approvedHostsOf — 중복을 없애고, 호스트를 모르는 쓰기는 뺀다', () => {
         expect(approvedHostsOf([{ index: 0, type: 'fill', host: 'a.com', detail: '' }, { index: 1, type: 'click', host: 'a.com', detail: '' }, { index: 2, type: 'press', host: '', detail: '' }])).toEqual(['a.com']);

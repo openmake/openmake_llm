@@ -24,6 +24,11 @@ const PAGES: Record<string, string> = {
         <button id="send" type="submit">보내기</button></form>
         <button id="ask" onclick="document.getElementById('out').textContent = confirm('정말 삭제할까요?') ? '삭제함' : '취소함'">삭제</button>
         <p id="out"></p></body></html>`,
+    '/upload': `<html><body><input id="one" type="file"><input id="many" type="file" multiple><p id="up"></p><div id="notfile"></div>
+        <script>for (const id of ['one', 'many']) document.getElementById(id).addEventListener('change', async (e) => {
+            const parts = []; for (const f of e.target.files) parts.push(f.name + '=' + (await f.text()));
+            document.getElementById('up').textContent = id + ':' + parts.join(','); });</script></body></html>`,
+    '/hop': `<html><body><script>setTimeout(() => { location.href = location.href.replace('127.0.0.1', 'localhost').replace('/hop', '/upload'); }, 300);</script></body></html>`,
     '/late': '<html><body><script>setTimeout(() => { const b = document.createElement("button"); b.id = "late"; b.textContent = "늦게 뜬 버튼"; b.onclick = () => document.title = "눌림"; document.body.appendChild(b); }, 400);</script></body></html>',
 };
 
@@ -207,6 +212,70 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
         }, 60000);
     });
 
+    describe('업로드(uploadFile)', () => {
+        const approved = (files: string[]) => [{ host: '127.0.0.1', files }];
+        const uploadOpts = (resolved: string[]): BrowserRunOptions => ({ ...opts('t-up'), resolveUploadFiles: async () => resolved });
+
+        it('승인된 호스트·파일 목록이면 파일 선택 칸에 넣고, 페이지가 change 로 받는다', async () => {
+            const file = path.join(outDir, 'hello.txt');
+            fs.writeFileSync(file, '안녕');
+            const r = await browser.run({ actions: [
+                { type: 'goto', url: `${origin}/upload` }, { type: 'uploadFile', selector: '#one', files: ['hello.txt'] }, { type: 'extractText', selector: '#up' },
+            ], sitePolicy: allowAll(), approvedUploads: approved(['hello.txt']) }, uploadOpts([file]));
+            expect(r.ok).toBe(true);
+            expect(r.results[1]).toMatchObject({ ok: true, type: 'uploadFile', files: ['hello.txt'] });
+            expect(r.results[2].text).toBe('one:hello.txt=안녕');
+        }, 60000);
+
+        it('여러 파일은 multiple 칸에만 넣는다', async () => {
+            const a = path.join(outDir, 'a.txt'); const b = path.join(outDir, 'b.txt');
+            fs.writeFileSync(a, 'A'); fs.writeFileSync(b, 'B');
+            const ok = await browser.run({ actions: [{ type: 'uploadFile', selector: '#many', files: ['a.txt', 'b.txt'] }, { type: 'extractText', selector: '#up' }],
+                sitePolicy: allowAll(), approvedUploads: approved(['a.txt', 'b.txt']) }, uploadOpts([a, b]));
+            expect(ok.results[1].text).toBe('many:a.txt=A,b.txt=B');
+            const single = await browser.run({ actions: [{ type: 'uploadFile', selector: '#one', files: ['a.txt', 'b.txt'] }],
+                sitePolicy: allowAll(), approvedUploads: approved(['a.txt', 'b.txt']) }, uploadOpts([a, b]));
+            expect(single.results[0]).toMatchObject({ ok: false });
+            expect(String(single.results[0].error)).toMatch(/여러 파일/);
+        }, 60000);
+
+        it('파일 선택 칸이 아닌 요소는 거절한다', async () => {
+            const a = path.join(outDir, 'a.txt');
+            const r = await browser.run({ actions: [{ type: 'uploadFile', selector: '#notfile', files: ['a.txt'] }],
+                sitePolicy: allowAll(), approvedUploads: approved(['a.txt']) }, uploadOpts([a]));
+            expect(r.results[0]).toMatchObject({ ok: false });
+            expect(String(r.results[0].error)).toMatch(/파일 선택 칸/);
+        }, 60000);
+
+        it('파일 칸을 기다리는 동안 다른 사이트로 넘어가면 넣지 않는다', async () => {
+            const a = path.join(outDir, 'a.txt');
+            fs.writeFileSync(a, 'A');
+            const r = await browser.run({ actions: [{ type: 'goto', url: `${origin}/hop` }, { type: 'uploadFile', selector: '#one', files: ['a.txt'] }],
+                sitePolicy: allowAll(), approvedUploads: approved(['a.txt']) }, { ...uploadOpts([a]), taskId: 't-hop' }); // 다른 탭 — 뒤 테스트의 페이지를 바꾸지 않게
+            expect(r.results[1]).toMatchObject({ ok: false });
+            expect(String(r.results[1].error)).toMatch(/다른 사이트로 이동/);
+        }, 60000);
+
+        it('허용 목록 사이트여도 승인이 없거나 파일 목록이 다르면 실행하지 않는다(upload_unapproved)', async () => {
+            for (const approvedUploads of [undefined, approved(['other.txt'])]) {
+                const resolve = jest.fn(async () => ['/never']);
+                const r = await browser.run({ actions: [{ type: 'uploadFile', selector: '#one', files: ['a.txt'] }], sitePolicy: allowAll(), approvedUploads },
+                    { ...opts('t-up'), resolveUploadFiles: resolve });
+                expect(r.ok).toBe(false);
+                expect(r.policyBlock).toEqual({ kind: 'upload_unapproved', host: '127.0.0.1', action: 'uploadFile' });
+                expect(resolve).not.toHaveBeenCalled();
+            }
+        }, 60000);
+
+        it('파일 검사에서 거절되면 실행하지 않고 upload_rejected 를 남긴다', async () => {
+            const r = await browser.run({ actions: [{ type: 'uploadFile', selector: '#one', files: ['.env'] }], sitePolicy: allowAll(), approvedUploads: approved(['.env']) },
+                { ...opts('t-up'), resolveUploadFiles: async () => { throw new Error('숨김 파일은 올릴 수 없습니다: .env'); } });
+            expect(r.ok).toBe(false);
+            expect(String(r.results[0].error)).toMatch(/숨김/);
+            expect(r.policyBlock).toEqual({ kind: 'upload_rejected', host: '127.0.0.1', action: 'uploadFile' });
+        }, 60000);
+    });
+
     describe('제어권·중지·탭', () => {
         it('사용자가 넘겨받은 동안에는 실행하지 않고, 돌려주면 다시 실행한다', async () => {
             browser.setUserControl(true);
@@ -248,7 +317,7 @@ describeIfChrome('BridgeCore — browser 요청 (실제 Chrome)', () => {
     const run = (m: BridgeMsg): Promise<BridgeResult> => new Promise((resolve, reject) => { core.handleExec(m, resolve).catch(reject); });
 
     beforeAll(async () => {
-        server = http.createServer((_req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(PAGES['/']); });
+        server = http.createServer((req, res) => { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(PAGES[new URL(req.url ?? '/', 'http://x').pathname] ?? PAGES['/']); });
         await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
         origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
         folder = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-core-browser-'));
@@ -283,6 +352,23 @@ describeIfChrome('BridgeCore — browser 요청 (실제 Chrome)', () => {
         expect(r).toMatchObject({ ok: true, exitCode: 1 });
         expect(r.stdout).toContain('사용자 승인이 필요');
         expect(r.policyBlock).toEqual({ kind: 'site_off_list', host: '127.0.0.1', action: 'click' }); // 결과 맨 위 — 서버 감사 기록용
+    }, 60000);
+
+    it('전용 프로필이 있으면 업로드 능력(browser_upload)도 알린다', () => {
+        expect(core.capabilities()).toContain('browser_upload');
+    });
+
+    it('업로드는 연결 폴더 안의 파일만 넣고, 숨김 파일은 거절한다', async () => {
+        fs.writeFileSync(path.join(folder, 'report.txt'), '보고서');
+        fs.writeFileSync(path.join(folder, '.env'), 'SECRET=1');
+        const set = await run({ kind: 'browser', taskId: 'core-up', sitePolicy: { allow: ['127.0.0.1'] }, approvedUploads: [{ host: '127.0.0.1', files: ['report.txt'] }],
+            actions: [{ type: 'goto', url: `${origin}/upload` }, { type: 'uploadFile', selector: '#one', files: ['report.txt'] }, { type: 'extractText', selector: '#up' }] });
+        expect(set).toMatchObject({ ok: true, exitCode: 0 });
+        expect((JSON.parse(set.stdout ?? '{}') as { results: Array<{ text?: string }> }).results[2].text).toBe('one:report.txt=보고서');
+        const hidden = await run({ kind: 'browser', taskId: 'core-up', sitePolicy: { allow: ['127.0.0.1'] }, approvedUploads: [{ host: '127.0.0.1', files: ['.env'] }],
+            actions: [{ type: 'uploadFile', selector: '#pick', files: ['.env'] }] });
+        expect(hidden).toMatchObject({ exitCode: 1, policyBlock: { kind: 'upload_rejected', host: '127.0.0.1', action: 'uploadFile' } });
+        expect(hidden.stdout).not.toContain('SECRET');
     }, 60000);
 
     it('사용자가 넘겨받으면 실행하지 않는다', async () => {

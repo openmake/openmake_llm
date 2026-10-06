@@ -19,7 +19,7 @@ export const BROWSER_POLICY_BLOCK_AUDIT_ACTION = 'local_bridge.browser_policy_bl
 /** 사건의 resource_type — 작업 단위로 모아 본다(resourceId = 작업 id) */
 const AUDIT_RESOURCE_TYPE = 'agent_task';
 /** 기기가 보낼 수 있는 거절 종류(코어 BrowserPolicyBlockKind) — 그 밖의 값은 믿지 않는다 */
-const POLICY_BLOCK_KINDS: ReadonlySet<string> = new Set(['site_off_list', 'site_denied', 'blocked_url', 'user_control']);
+const POLICY_BLOCK_KINDS: ReadonlySet<string> = new Set(['site_off_list', 'site_denied', 'blocked_url', 'user_control', 'upload_unapproved', 'upload_rejected']);
 const USER_CONTROL_KIND = 'user_control';
 /** 호스트 이름 길이 상한 — DNS 이름 최대 길이 */
 const HOST_MAX_CHARS = 253;

@@ -24,7 +24,7 @@ import { ServedModelBadge } from "./served-model-badge";
 import { ToolCallCards } from "./tool-call-cards";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
-import { ApprovalArgsFull, ApprovalPreview, ApprovalSiteWrites, summarizeApprovalArgs } from "@/components/approvals/approval-args";
+import { ApprovalArgsFull, ApprovalPreview, ApprovalSiteUploads, ApprovalSiteWrites, summarizeApprovalArgs } from "@/components/approvals/approval-args";
 import { QuestionChoices } from "@/components/approvals/question-choices";
 import { isNearBottom } from "@/lib/chat-scroll";
 import { COPY_FEEDBACK_RESET_MS, REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
@@ -163,6 +163,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
           <div key={a.approvalId} className="space-y-1.5 rounded-md border border-border bg-surface-1 p-2">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
+                <ApprovalSiteUploads args={a.args} label={t("approvals.siteUploads")} />
                 <ApprovalSiteWrites args={a.args} label={t("approvals.siteWrites")} />
                 <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
                 <span className="ml-2 break-all text-xs text-muted">{summary.text}</span>

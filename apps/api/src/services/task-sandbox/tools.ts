@@ -26,7 +26,7 @@ import { ASK_HUMAN_STRUCTURED_DESCRIPTION } from '../../prompts/agent-task-tools
 import { FILE_VIEW_MAX_CHARS } from '../../config/runtime-limits';
 import { randomUUID } from 'crypto';
 import { AgentTaskParked } from '../agent-task/types';
-import { approvedHostsOf, areSiteWritesApproved } from './browser-site-approval';
+import { approvedHostsOf, approvedUploadsOf, areSiteWritesApproved, browserUploadRefusal, sitePlanNeedsApproval } from './browser-site-approval';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import type { ContributedAgentTaskTool } from '../chat-service/turn-integrations';
 import type { TaskExecutor, ExecResult } from './executor';
@@ -301,7 +301,7 @@ export function createTaskTools(
     const browser: MCPToolDefinition = {
         tool: {
             name: 'browser',
-            description: sandbox.runBrowserSpec ? getLocalBrowserToolDescription() : '일회성 컨테이너의 chromium 으로 웹 브라우저를 자동화합니다(G2). 호출마다 빈 페이지(about:blank)에서 새로 시작하므로(쿠키·로그인만 유지) goto 와 이어지는 액션을 한 actions 배열에 함께 넣으세요. actions 배열을 순서대로 실행: ' +
+            description: sandbox.runBrowserSpec ? getLocalBrowserToolDescription(sandbox.supportsBrowserUpload === true) : '일회성 컨테이너의 chromium 으로 웹 브라우저를 자동화합니다(G2). 호출마다 빈 페이지(about:blank)에서 새로 시작하므로(쿠키·로그인만 유지) goto 와 이어지는 액션을 한 actions 배열에 함께 넣으세요. actions 배열을 순서대로 실행: ' +
                 'goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · ' +
                 'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. ' +
                 '페이지가 띄운 확인창은 그 액션 결과의 dialogs 에 실립니다 — confirm·prompt 는 기본으로 취소되고, 수락하려면 ' +
@@ -343,14 +343,16 @@ export function createTaskTools(
                     true,
                 );
             }
+            const uploadRefusal = browserUploadRefusal(actions, sandbox); // 업로드는 업로드를 아는 로컬 기기에서만(런타임도 묻기 전에 거른다)
+            if (uploadRefusal) return textResult(uploadRefusal, true);
             // 로컬 브라우저(P2) — 사용자 PC 의 전용 프로필 Chrome 에서 실행한다. 서버용 주소 검사(사설망 차단)는 쓰지 않는다:
             // 사내 사이트가 주된 대상이다. 대신 사이트 정책을 적용하고, 기기가 실제 탭 주소로 다시 판정한다.
             if (sandbox.planBrowserSitePolicy && sandbox.runBrowserSpec) {
                 const plan = await sandbox.planBrowserSitePolicy(actions);
                 if (plan.blocked.length > 0) return textResult(getBrowserLocalBlockedMessage(plan.blocked.map((b) => b.url)), true);
-                // 허용 목록 밖 쓰기는 승인 경로(런타임의 site_write 바닥)를 거친 호출만 실행한다.
-                if (plan.offListWrites.length > 0 && !areSiteWritesApproved(args)) return textResult(getBrowserSiteApprovalRequiredMessage(), true);
-                const lr = await sandbox.runBrowserSpec({ actions, approvedHosts: approvedHostsOf(plan.offListWrites) });
+                // 허용 목록 밖 쓰기·업로드는 승인 경로(런타임의 site_write·site_upload 바닥)를 거친 호출만 실행한다.
+                if (sitePlanNeedsApproval(plan) && !areSiteWritesApproved(args)) return textResult(getBrowserSiteApprovalRequiredMessage(), true);
+                const lr = await sandbox.runBrowserSpec({ actions, approvedHosts: approvedHostsOf(plan.offListWrites), ...(plan.uploads.length > 0 ? { approvedUploads: approvedUploadsOf(plan.uploads) } : {}) });
                 browserMetrics?.(lr.stdout);
                 return formatExec(lr);
             }
