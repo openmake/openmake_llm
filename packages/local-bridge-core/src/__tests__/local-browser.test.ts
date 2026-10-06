@@ -28,6 +28,7 @@ const PAGES: Record<string, string> = {
         <script>for (const id of ['one', 'many']) document.getElementById(id).addEventListener('change', async (e) => {
             const parts = []; for (const f of e.target.files) parts.push(f.name + '=' + (await f.text()));
             document.getElementById('up').textContent = id + ':' + parts.join(','); });</script></body></html>`,
+    '/hop': `<html><body><script>setTimeout(() => { location.href = location.href.replace('127.0.0.1', 'localhost').replace('/hop', '/upload'); }, 300);</script></body></html>`,
     '/late': '<html><body><script>setTimeout(() => { const b = document.createElement("button"); b.id = "late"; b.textContent = "늦게 뜬 버튼"; b.onclick = () => document.title = "눌림"; document.body.appendChild(b); }, 400);</script></body></html>',
 };
 
@@ -244,6 +245,15 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
                 sitePolicy: allowAll(), approvedUploads: approved(['a.txt']) }, uploadOpts([a]));
             expect(r.results[0]).toMatchObject({ ok: false });
             expect(String(r.results[0].error)).toMatch(/파일 선택 칸/);
+        }, 60000);
+
+        it('파일 칸을 기다리는 동안 다른 사이트로 넘어가면 넣지 않는다', async () => {
+            const a = path.join(outDir, 'a.txt');
+            fs.writeFileSync(a, 'A');
+            const r = await browser.run({ actions: [{ type: 'goto', url: `${origin}/hop` }, { type: 'uploadFile', selector: '#one', files: ['a.txt'] }],
+                sitePolicy: allowAll(), approvedUploads: approved(['a.txt']) }, { ...uploadOpts([a]), taskId: 't-hop' }); // 다른 탭 — 뒤 테스트의 페이지를 바꾸지 않게
+            expect(r.results[1]).toMatchObject({ ok: false });
+            expect(String(r.results[1].error)).toMatch(/다른 사이트로 이동/);
         }, 60000);
 
         it('허용 목록 사이트여도 승인이 없거나 파일 목록이 다르면 실행하지 않는다(upload_unapproved)', async () => {

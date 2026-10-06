@@ -80,6 +80,7 @@ interface Tab {
 
 const PAGE_ACTIONS = new Set(['click', 'fill', 'snapshot', 'smartClick', 'smartFill', 'press', 'waitFor', 'screenshot', 'extractText', 'extractHtml', 'uploadFile']);
 const UPLOAD_UNSUPPORTED_ERROR = '이 실행 위치에서는 파일 업로드를 할 수 없습니다';
+const UPLOAD_HOST_CHANGED_ERROR = '파일 칸을 기다리는 동안 다른 사이트로 이동해 업로드하지 않았습니다 — 현재 페이지를 다시 확인한 뒤 요청하세요';
 const BLANK_PAGE_ERROR = '빈 페이지(about:blank)에서 실행됨 — 먼저 goto 로 페이지를 여세요';
 /** 페이지 안에서 도는 조각 — 요소의 현재 값. 입력 칸은 value, 편집 가능한 영역은 보이는 글. 비밀번호 칸과 없는 요소는 null. */
 const FIELD_VALUE_JS = `(el) => { if (!el) return null; if (el instanceof HTMLInputElement && el.type === 'password') return null; return 'value' in el && typeof el.value === 'string' ? el.value : (el.isContentEditable ? el.innerText : null); }`;
@@ -432,12 +433,12 @@ export class LocalBrowser {
                     }
                     if (PAGE_ACTIONS.has(str(a.type)) && url === 'about:blank') throw new Error(BLANK_PAGE_ERROR);
                     // 업로드 — 승인을 통과한 뒤 파일을 검사한다(폴더 밖·숨김·크기·개수). 걸리면 감사 기록용 표식을 남긴다.
-                    let uploadPaths: string[] = [];
+                    const upload = { paths: [] as string[], host };
                     if (a.type === 'uploadFile') {
                         if (!opts.resolveUploadFiles) throw new Error(UPLOAD_UNSUPPORTED_ERROR);
-                        try { uploadPaths = await opts.resolveUploadFiles(a.files); } catch (e) { policyBlock = uploadRejectedPolicyBlock(host); throw e; }
+                        try { upload.paths = await opts.resolveUploadFiles(a.files); } catch (e) { policyBlock = uploadRejectedPolicyBlock(host); throw e; }
                     }
-                    results.push(await this.runAction(cdp, tab, a, i, opts, uploadPaths));
+                    results.push(await this.runAction(cdp, tab, a, i, opts, upload));
                 } catch (e) {
                     results.push({ i, type: a.type, ok: false, error: e instanceof Error ? e.message : String(e) });
                     failed = true;
@@ -451,12 +452,16 @@ export class LocalBrowser {
         }
     }
 
-    /** 파일 선택 칸(input[type=file])에 파일을 넣는다 — 페이지에는 사용자가 고른 것처럼 input·change 가 일어난다. */
-    private async uploadFiles(cdp: CdpClient, tab: Tab, selector: string, paths: string[]): Promise<void> {
+    /**
+     * 파일 선택 칸(input[type=file])에 파일을 넣는다 — 페이지에는 사용자가 고른 것처럼 input·change 가 일어난다.
+     * 요소를 기다리는 동안 다른 사이트로 넘어갔으면 넣지 않는다(승인은 판정 때의 호스트에 묶였다). 요소를 잡은 뒤의 이동은 그 요소를 무효로 만든다.
+     */
+    private async uploadFiles(cdp: CdpClient, tab: Tab, selector: string, paths: string[], approvedHost: string | null): Promise<void> {
         const sel = JSON.stringify(selector);
         await this.poll(() => this.evaluate<boolean | null>(cdp, tab, `!!document.querySelector(${sel}) || null`), `요소를 찾지 못했습니다: ${selector}`);
         const { result } = await cdp.send('Runtime.evaluate', { expression: `document.querySelector(${sel})` }, tab.sessionId) as { result?: { objectId?: string } };
         if (!result?.objectId) throw new Error(`요소를 찾지 못했습니다: ${selector}`);
+        if (browserHostOf(await this.currentUrl(cdp, tab)) !== approvedHost) throw new Error(UPLOAD_HOST_CHANGED_ERROR);
         const { result: kind } = await cdp.send('Runtime.callFunctionOn', {
             objectId: result.objectId, returnByValue: true,
             functionDeclaration: 'function () { return this instanceof HTMLInputElement && this.type === "file" ? (this.multiple ? "multiple" : "single") : "other"; }',
@@ -466,7 +471,7 @@ export class LocalBrowser {
         await cdp.send('DOM.setFileInputFiles', { files: paths, objectId: result.objectId }, tab.sessionId);
     }
 
-    private async runAction(cdp: CdpClient, tab: Tab, a: Action, i: number, opts: BrowserRunOptions, uploadPaths: string[]): Promise<BrowserActionResult> {
+    private async runAction(cdp: CdpClient, tab: Tab, a: Action, i: number, opts: BrowserRunOptions, upload: { paths: string[]; host: string | null }): Promise<BrowserActionResult> {
         const sel = JSON.stringify(str(a.selector));
         switch (a.type) {
             case 'goto':
@@ -561,7 +566,7 @@ export class LocalBrowser {
                 return { i, type: a.type, ok: true, html: str(html).slice(0, BROWSER_EXTRACT_MAX_CHARS) };
             }
             case 'uploadFile':
-                await this.uploadFiles(cdp, tab, str(a.selector), uploadPaths);
+                await this.uploadFiles(cdp, tab, str(a.selector), upload.paths, upload.host);
                 return { i, type: a.type, ok: true, files: (a.files as string[]) };
             default:
                 // 모르는 액션은 사이트 정책에서 쓰기로 분류돼 이미 판정을 거쳤다 — 실행할 수 없으니 실패로 돌린다.
