@@ -104,8 +104,10 @@ export interface TaskExecutor {
      * 구현돼 있으면 browser 도구가 runBrowser(컨테이너) 대신 runBrowserSpec 으로 실행하고, 런타임이 승인 전에 이 계획을 본다.
      */
     planBrowserSitePolicy?(actions: readonly unknown[]): Promise<import('@openmake/config').BrowserSitePlan>;
-    /** 로컬 브라우저 실행 — approvedHosts 는 사용자가 이번 호출에서 승인한 호스트. */
-    runBrowserSpec?(spec: { actions: unknown[]; approvedHosts: string[] }): Promise<ExecResult>;
+    /** 로컬 브라우저 실행 — approvedHosts·approvedUploads 는 사용자가 이번 호출에서 승인한 호스트·업로드. */
+    runBrowserSpec?(spec: { actions: unknown[]; approvedHosts: string[]; approvedUploads?: import('@openmake/config').BrowserUploadApproval[] }): Promise<ExecResult>;
+    /** 연결된 기기가 브라우저 업로드(uploadFile)를 지원하는가(원격 실행기만, 2026-10-06) — 능력 목록 browser_upload. */
+    readonly supportsBrowserUpload?: boolean;
 
     /** 로컬 기기 유실 신호(원격 실행기만 구현) — 읽으면 지워진다. 기기 대기 주차 판단용(agent-task/device-wait). */
     consumeDeviceLoss?(): import('../local-bridge/device-errors').DeviceLoss | null;

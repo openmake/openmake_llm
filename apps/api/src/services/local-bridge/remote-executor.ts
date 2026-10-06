@@ -17,7 +17,7 @@ import { stripWorkspacePrefix } from '../task-sandbox/workspace-path';
 import { getLocalBridgeRegistry, type BridgeKind, type BridgeResult, type BridgeRequestPayload } from './registry';
 import { getLocalBridgeUnknownOutcomeNotice } from '../../prompts/agent-task-prompt';
 import { LocalDeviceUnavailableError, type DeviceLoss } from './device-errors';
-import { classifyBrowserAction, planBrowserActions, type BrowserSitePlan } from '@openmake/config';
+import { classifyBrowserAction, planBrowserActions, type BrowserSitePlan, type BrowserUploadApproval } from '@openmake/config';
 import { resolveEffectivePolicy } from '../org/effective-policy';
 import { auditBrowserPolicyBlock } from './browser-policy-audit';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
@@ -59,6 +59,10 @@ export class RemoteExecutor implements TaskExecutor {
      */
     get isBrowserEnabled(): boolean {
         return LOCAL_BRIDGE.BROWSER_ENABLED && getLocalBridgeRegistry().supports(this.userId, this.deviceId, 'browser');
+    }
+    /** 연결된 기기가 브라우저 업로드를 아는가 — 능력 목록에 browser_upload 를 알린 기기만(구버전은 모른다, 2026-10-06). */
+    get supportsBrowserUpload(): boolean {
+        return getLocalBridgeRegistry().supports(this.userId, this.deviceId, 'browser_upload');
     }
     /** 로그인 상태는 기기의 전용 프로필에 남는다 — 서버가 상태 파일을 다루지 않는다. */
     readonly browserStatePath = null;
@@ -277,10 +281,13 @@ export class RemoteExecutor implements TaskExecutor {
         return planBrowserActions(actions, this.lastBrowserUrl, browserSite);
     }
 
-    async runBrowserSpec(spec: { actions: unknown[]; approvedHosts: string[] }): Promise<ExecResult> {
+    async runBrowserSpec(spec: { actions: unknown[]; approvedHosts: string[]; approvedUploads?: BrowserUploadApproval[] }): Promise<ExecResult> {
         const { browserSite } = await resolveEffectivePolicy(this.userId);
         const r = await this.req(
-            { kind: 'browser', actions: spec.actions, sitePolicy: browserSite, approvedHosts: spec.approvedHosts, taskId: this.taskId },
+            {
+                kind: 'browser', actions: spec.actions, sitePolicy: browserSite, approvedHosts: spec.approvedHosts, taskId: this.taskId,
+                ...(spec.approvedUploads?.length ? { approvedUploads: spec.approvedUploads } : {}),
+            },
             LOCAL_BRIDGE.BROWSER_TIMEOUT_MS,
         );
         // 사용자가 브라우저를 넘겨받아 거절됐다 — 턴 실행기가 이 신호를 보고 작업을 주차한다(결과 불명 신호가 우선).

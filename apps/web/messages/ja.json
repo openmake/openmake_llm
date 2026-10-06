@@ -385,6 +385,7 @@
       "procedurePreview": "実行される手順を表示",
       "fullArgs": "全文を表示（{chars}文字）",
       "siteWrites": "許可リストにないサイトへ送信します",
+      "siteUploads": "PC のファイルをこのサイトにアップロードします",
       "elicitHint": "{server} サーバーからの入力リクエスト · 項目: {fields}",
       "elicitJsonHint": "項目が複数ある場合は JSON で回答してください: {example}"
     },
@@ -2462,6 +2463,7 @@
       "procedurePreview": "実行される手順を表示",
       "fullArgs": "全文を表示（{chars}文字）",
       "siteWrites": "許可リストにないサイトへ送信します",
+      "siteUploads": "PC のファイルをこのサイトにアップロードします",
       "assignedToMe": "自分に移管",
       "assignedAway": "移管済み",
       "reassign": "移管",

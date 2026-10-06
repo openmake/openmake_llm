@@ -51,7 +51,11 @@ export const APPROVAL_SECRET_KEY_WORDS = {
  * AGENT_TASK_APPROVAL_FLOOR(쉼표 구분)로 고른다. 빈 값이나 none 이면 바닥 없음(종전 동작).
  */
 export const APPROVAL_FLOOR_KINDS = ['credential_write', 'third_party_tool', 'instruction_write', 'memory_write', 'site_write'] as const;
-export type ApprovalFloorKind = typeof APPROVAL_FLOOR_KINDS[number];
+/**
+ * site_upload — 로컬 브라우저로 PC 파일을 사이트에 올리는 호출(uploadFile, 2026-10-06). 위 목록과 달리 고를 수 없다:
+ * AGENT_TASK_APPROVAL_FLOOR·승인 정책(none 포함)·자동승인과 무관하게 항상 묻는다(사용자 결정 — PC 파일이 밖으로 나간다).
+ */
+export type ApprovalFloorKind = typeof APPROVAL_FLOOR_KINDS[number] | 'site_upload';
 
 /** PURE: 환경변수 값 → 바닥 종류. 미지정이면 전부, 모르는 이름은 버린다. */
 export function parseApprovalFloorKinds(raw: string | undefined): ApprovalFloorKind[] {

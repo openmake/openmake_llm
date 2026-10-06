@@ -44,6 +44,32 @@ export function siteWriteLines(args: Record<string, unknown> | undefined): strin
   });
 }
 
+/**
+ * PURE: PC 파일 업로드 — 서버가 승인 인자에 실어 준 `siteUploads` 를 "사이트: 파일, 파일" 줄로 바꾼다(2026-10-06).
+ * 업로드는 허용 목록과 무관하게 매번 묻는다 — 어느 사이트에 어떤 파일이 나가는지를 카드 맨 위에 보인다.
+ */
+export function siteUploadLines(args: Record<string, unknown> | undefined): string[] {
+  const list = args?.siteUploads;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((u) => {
+    const { host, files } = (u ?? {}) as { host?: unknown; files?: unknown };
+    const names = Array.isArray(files) ? files.filter((f): f is string => typeof f === "string") : [];
+    return [`${typeof host === "string" && host ? host : "?"}: ${names.join(", ")}`];
+  });
+}
+
+/** 업로드 안내 — 줄이 없으면 아무것도 그리지 않는다. */
+export function ApprovalSiteUploads({ args, label }: { args?: Record<string, unknown>; label: string }) {
+  const lines = siteUploadLines(args);
+  if (lines.length === 0) return null;
+  return (
+    <div className="mb-1 rounded-md border border-warning/40 bg-warning-soft px-2 py-1 text-xs text-fg">
+      <p className="font-medium">{label}</p>
+      {lines.map((l, i) => <p key={i} className="break-all font-mono text-[11px]">{l}</p>)}
+    </div>
+  );
+}
+
 /** 사이트 쓰기 안내 — 줄이 없으면 아무것도 그리지 않는다. */
 export function ApprovalSiteWrites({ args, label }: { args?: Record<string, unknown>; label: string }) {
   const lines = siteWriteLines(args);

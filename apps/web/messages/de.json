@@ -385,6 +385,7 @@
       "procedurePreview": "Auszuführende Prozedur ansehen",
       "fullArgs": "Vollständigen Inhalt anzeigen ({chars} Zeichen)",
       "siteWrites": "Sendet an eine Website außerhalb der Zulassungsliste",
+      "siteUploads": "Lädt Dateien von Ihrem PC auf diese Website hoch",
       "elicitHint": "Eingabeanfrage von {server} · Felder: {fields}",
       "elicitJsonHint": "Bei mehreren Feldern bitte als JSON antworten: {example}"
     },
@@ -2462,6 +2463,7 @@
       "procedurePreview": "Auszuführende Prozedur ansehen",
       "fullArgs": "Vollständigen Inhalt anzeigen ({chars} Zeichen)",
       "siteWrites": "Sendet an eine Website außerhalb der Zulassungsliste",
+      "siteUploads": "Lädt Dateien von Ihrem PC auf diese Website hoch",
       "assignedToMe": "Mir zugewiesen",
       "assignedAway": "Weitergegeben",
       "reassign": "Weitergeben",

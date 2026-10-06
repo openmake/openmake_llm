@@ -385,6 +385,7 @@
       "procedurePreview": "실행될 절차 보기",
       "fullArgs": "전체 내용 보기 ({chars}자)",
       "siteWrites": "허용 목록에 없는 사이트로 보냅니다",
+      "siteUploads": "내 PC 파일을 이 사이트에 올립니다",
       "elicitHint": "{server} 서버의 입력 요청 · 항목: {fields}",
       "elicitJsonHint": "항목이 둘 이상이면 JSON 으로 답하세요: {example}"
     },
@@ -2462,6 +2463,7 @@
       "procedurePreview": "실행될 절차 보기",
       "fullArgs": "전체 내용 보기 ({chars}자)",
       "siteWrites": "허용 목록에 없는 사이트로 보냅니다",
+      "siteUploads": "내 PC 파일을 이 사이트에 올립니다",
       "assignedToMe": "나에게 이관됨",
       "assignedAway": "이관됨",
       "reassign": "이관",
