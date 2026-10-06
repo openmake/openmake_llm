@@ -21,6 +21,8 @@ import {
 } from '../constants';
 import { CdpClient } from './cdp';
 import { launchChrome, readDevToolsEndpoint } from './chrome';
+import { browserPolicyBlockOf, userControlPolicyBlock } from './policy-block';
+import type { BrowserPolicyBlock } from '../types';
 
 /** 서버가 보내는 브라우저 요청 본문 */
 export interface BrowserSpec {
@@ -54,6 +56,8 @@ export interface BrowserRunResult {
     error?: string;
     /** 사용자가 브라우저를 넘겨받은 상태라 아무것도 실행하지 않고 거절했다 — 서버가 작업을 주차하는 근거(2026-10-05). */
     userControl?: true;
+    /** 사이트 정책·사용자 제어로 막은 액션(서버 감사 기록용, 2026-10-06) — 막히면 거기서 멈추므로 한 호출에 하나다. */
+    policyBlock?: BrowserPolicyBlock;
 }
 
 interface Action { type?: unknown; [k: string]: unknown }
@@ -374,12 +378,15 @@ export class LocalBrowser {
     // ── 실행 ──────────────────────────────────────────────────
 
     private async runNow(spec: BrowserSpec, opts: BrowserRunOptions): Promise<BrowserRunResult> {
-        if (this.userControl) return { ok: false, results: [], error: BROWSER_USER_CONTROL_ERROR, userControl: true };
+        if (this.userControl) {
+            return { ok: false, results: [], error: BROWSER_USER_CONTROL_ERROR, userControl: true, policyBlock: userControlPolicyBlock(Array.isArray(spec.actions) ? spec.actions[0] : undefined) };
+        }
         const actions = (Array.isArray(spec.actions) ? spec.actions : []).slice(0, BROWSER_MAX_ACTIONS) as Action[];
         const policy: BrowserSitePolicy = parseBrowserSitePolicy(spec.sitePolicy);
         const approvedHosts = Array.isArray(spec.approvedHosts) ? spec.approvedHosts.filter((h): h is string => typeof h === 'string') : [];
         const generation = this.stopGeneration;
         const results: BrowserActionResult[] = [];
+        let policyBlock: BrowserPolicyBlock | undefined;
         let cdp: CdpClient;
         let tab: Tab;
         try {
@@ -395,11 +402,18 @@ export class LocalBrowser {
                 tab.dialogs = [];
                 let failed = false;
                 try {
-                    if (this.stopGeneration !== generation) throw new Error(this.userControl ? BROWSER_USER_CONTROL_ERROR : STOPPED_ERROR);
+                    if (this.stopGeneration !== generation) {
+                        if (this.userControl) policyBlock = userControlPolicyBlock(a);
+                        throw new Error(this.userControl ? BROWSER_USER_CONTROL_ERROR : STOPPED_ERROR);
+                    }
                     const url = await this.currentUrl(cdp, tab);
                     // 사이트 정책 — 실제 탭의 주소로 판정한다. 통과하지 못하면 실행하지 않는다.
-                    const denied = checkBrowserAction(a, browserHostOf(url), policy, approvedHosts);
-                    if (denied) throw new Error(denied);
+                    const host = browserHostOf(url);
+                    const denied = checkBrowserAction(a, host, policy, approvedHosts);
+                    if (denied) {
+                        policyBlock = browserPolicyBlockOf(a, host, policy);
+                        throw new Error(denied);
+                    }
                     if (PAGE_ACTIONS.has(str(a.type)) && url === 'about:blank') throw new Error(BLANK_PAGE_ERROR);
                     results.push(await this.runAction(cdp, tab, a, i, opts));
                 } catch (e) {
@@ -409,9 +423,9 @@ export class LocalBrowser {
                 if (tab.dialogs.length) results[results.length - 1].dialogs = tab.dialogs;
                 if (failed) break;
             }
-            return { ok: results.every((r) => r.ok), finalUrl: await this.currentUrl(cdp, tab), results };
+            return { ok: results.every((r) => r.ok), finalUrl: await this.currentUrl(cdp, tab), results, ...(policyBlock ? { policyBlock } : {}) };
         } catch (e) {
-            return { ok: false, results, error: e instanceof Error ? e.message : String(e) };
+            return { ok: false, results, error: e instanceof Error ? e.message : String(e), ...(policyBlock ? { policyBlock } : {}) };
         }
     }
 

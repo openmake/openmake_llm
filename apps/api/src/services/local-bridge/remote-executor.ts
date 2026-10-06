@@ -19,6 +19,7 @@ import { getLocalBridgeUnknownOutcomeNotice } from '../../prompts/agent-task-pro
 import { LocalDeviceUnavailableError, type DeviceLoss } from './device-errors';
 import { classifyBrowserAction, planBrowserActions, type BrowserSitePlan } from '@openmake/config';
 import { resolveEffectivePolicy } from '../org/effective-policy';
+import { auditBrowserPolicyBlock } from './browser-policy-audit';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { readFile as fsReadFile, stat } from 'fs/promises';
 import { createLogger } from '../../utils/logger';
@@ -284,6 +285,11 @@ export class RemoteExecutor implements TaskExecutor {
         );
         // 사용자가 브라우저를 넘겨받아 거절됐다 — 턴 실행기가 이 신호를 보고 작업을 주차한다(결과 불명 신호가 우선).
         if (LOCAL_BRIDGE.TAKEOVER_PARK_ENABLED && r.userControl === true && this.deviceLoss !== 'unknown') this.deviceLoss = 'browser_takeover';
+        // 기기가 사이트 정책·사용자 제어로 막았으면 감사 기록 한 건(호스트만, fail-open).
+        await auditBrowserPolicyBlock(r, {
+            taskId: this.taskId, userId: this.userId,
+            deviceId: getLocalBridgeRegistry().getDevice(this.userId, this.deviceId)?.deviceId ?? this.deviceId ?? null,
+        });
         // 기기가 돌려준 현재 주소를 기억한다 — 실패·차단으로 끝나도 주소는 온다.
         try {
             const out = JSON.parse(r.stdout ?? '') as { finalUrl?: unknown };

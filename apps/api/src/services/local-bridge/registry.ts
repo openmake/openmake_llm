@@ -169,6 +169,11 @@ export interface BridgeResult {
     rejected?: 'expired' | 'duplicate';
     /** browser — 사용자가 브라우저를 넘겨받은 상태라 기기가 아무것도 실행하지 않았다(2026-10-05, 구버전 기기는 싣지 않는다). */
     userControl?: boolean;
+    /**
+     * browser — 기기가 사이트 정책·사용자 제어로 막은 호출의 종류(코어 BrowserPolicyBlock, 2026-10-06). 감사 기록용.
+     * 기기가 보낸 값이라 형태를 믿지 않는다(browser-policy-audit 가 검증). 구버전 기기는 싣지 않는다.
+     */
+    policyBlock?: { kind?: unknown; host?: unknown; action?: unknown };
 }
 
 export interface DeviceSession {
