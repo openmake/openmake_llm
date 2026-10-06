@@ -30,7 +30,7 @@ interface AuditLog {
 }
 
 const ALL_ACTIONS = "__all__";
-const ACTIONS = [ALL_ACTIONS, "user.delete", "user.role_change", "apikey.create", "auth.login", "auth.failed_attempt", "mcp.server_register", "llm.context_overflow", "alert.dispatched"];
+const ACTIONS = [ALL_ACTIONS, "user.delete", "user.role_change", "apikey.create", "auth.login", "auth.failed_attempt", "mcp.server_register", "llm.context_overflow", "alert.dispatched", "local_bridge.browser_policy_block"];
 const PERIODS: { key: string; labelKey: string }[] = [
   { key: "today", labelKey: "period.today" },
   { key: "days7", labelKey: "period.days7" },
@@ -74,10 +74,12 @@ export default function AdminAuditPage() {
     (async () => {
       try {
         // GET /api/audit (admin 전용) → { success, data: { logs, total } }
-        const res = await ApiClient.get<{ data?: { logs?: ApiAuditLog[] }; logs?: ApiAuditLog[] }>("/api/audit?limit=50");
+        // 사건을 고르면 서버가 action 으로 거른 최근 50건을 받는다(최근 50건 안에서만 거르던 한계 해소).
+        const query = action === ALL_ACTIONS ? "" : `&action=${encodeURIComponent(action)}`;
+        const res = await ApiClient.get<{ data?: { logs?: ApiAuditLog[] }; logs?: ApiAuditLog[] }>(`/api/audit?limit=50${query}`);
         const payload = res.data ?? res;
         const raw = (payload.logs as ApiAuditLog[]) ?? [];
-        if (!alive || !raw.length) return;
+        if (!alive) return;
         setLogs(
           raw.map((l, i) => ({
             id: String(l.id ?? i),
@@ -95,7 +97,7 @@ export default function AdminAuditPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [action]);
 
   const filtered = useMemo(
     () =>
