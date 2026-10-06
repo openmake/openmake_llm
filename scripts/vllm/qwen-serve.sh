@@ -2,6 +2,22 @@
 # ============================================================
 # retired-chat-model — 기본 채팅 (262K context) @ :8002
 # ============================================================
+# ⚠️ 2026-10-07 동기화 (DGX ~/vllm/env/chat.env 실측 기준 — 이 파일은 참조본, SoT 는 chat.env):
+#   - 2026-09-14 가중치 retired-chat-model-fp8 → nvidia/retired-chat-model-NVFP4(modelopt MIXED_PRECISION: MLP·lm_head NVFP4
+#     + attention FP8, MTP 는 bf16). 29G→22G. 서빙 이름은 API 계약이라 retired-chat-model 그대로.
+#   - 2026-09-02 구 이름 별칭(qwen3.6-35b-a3b) 제거 — 별칭을 두면 /v1/models 에 옛 이름이 함께 떠서
+#     클라이언트가 구 모델이 뜬 것처럼 표시된다. 이제 노출 이름은 retired-chat-model 하나.
+#   - 2026-09-23 vLLM 0.27.1 → 0.30.0 (venv vllm_env.0300, 롤백 vllm_env.0271). VLLM_USE_DEEP_GEMM=0.
+#   - 2026-10-03 JEV-27B-VL 의사결정 어댑터를 같은 엔진·같은 포트에 LoRA 로 노출(model="jev-decision").
+#     앱 쪽: config/decision.ts, services/decision/jev-decision.ts, services/orchestrator/media-gate.ts.
+#     --max-num-seqs 8: 멀티모달 LoRA 경로가 배치 8 초과 시 System 1 확률이 틀어짐(모델 카드 명시).
+#     결정 요청은 top_k 0 · top_p 1.0 · repetition_penalty 1.0 필수(기본값이 logprob 을 왜곡).
+#   - 2026-10-04 --enable-prompt-tokens-details: usage 에 prompt_tokens_details.cached_tokens 를 낸다
+#     (에이전트 작업의 캐시 적중 집계용).
+#   - 2026-10-05 --scheduling-policy priority: 요청 priority(작을수록 먼저) 순 처리 — 화면 채팅이 에이전트 작업·
+#     배경 요청보다 앞선다(앱 쪽 config/llm-priority.ts, LLM_PRIORITY_ENABLED). priority 없는 요청은 0(가장 앞).
+#   아래 플래그 중 하나라도 빠지면 앱의 캐시 집계·우선순위·jev 게이트가 조용히 꺼진다.
+#
 # ⚠️ 2026-09-02 동기화: DGX :8002 실체가 retired-chat-model-fp8(dense, MTP) 로 교체됐고(DGX 측 2026-08-31)
 #   `--served-model-name retired-chat-model qwen3.6-35b-a3b` 로 구 이름을 호환 alias 로 함께 서빙한다.
 #   실행 주체도 바뀜 — PM2 가 아니라 DGX `/home/smith/vllm`(git: openmake/openmake_vllm) 의
@@ -21,7 +37,7 @@
 #   앱 실측(표본 4건)은 3건 개선·1건 악화로 유의성 미확보 — [ChatTiming] 로그 축적 후 재판단.
 #   문제 시 이 플래그만 제거하면 종전 동작으로 복귀한다.
 # 실행 주체: (구) DGX PM2 vllm-chat → (현) docker compose `vllm-chat` — 위 2026-09-02 주석 참고.
-# venv: /home/smith/vllm_data/rebuild/vllm_env.0271 (vLLM 0.27.1 — Qwen3.8 dense+MTP 레지스트리 포함)
+# venv: /home/smith/vllm_data/rebuild/vllm_env.0300 (vLLM 0.30.0, 2026-09-23 — 이전 0.27.1 은 vllm_env.0271)
 #
 # 보안:
 # - API key 는 CLI 인자 금지(ps 노출) — 0600 env 파일의 VLLM_API_KEY 를 vLLM 이 직접 인식
@@ -29,7 +45,9 @@
 #   tailscaled 기동 전 부팅 경쟁은 아래 대기 루프로 방어.
 set -euo pipefail
 
-MODEL_DIR="${QWEN_MODEL_DIR:-/home/smith/models/retired-chat-model-fp8}"
+# 2026-09-14 NVFP4 로 교체. 롤백: QWEN_MODEL_DIR=/home/smith/models/retired-chat-model-fp8
+MODEL_DIR="${QWEN_MODEL_DIR:-/home/smith/models/retired-chat-model-nvfp4}"
+export VLLM_USE_DEEP_GEMM=0
 
 # vLLM API key — env 파일(0600) 주입 (VLLM_API_KEY)
 set -a; [ -f /home/smith/vllm/vllm.env ] && . /home/smith/vllm/vllm.env; set +a
@@ -47,7 +65,7 @@ exec vllm serve "$MODEL_DIR" \
   --host "$VLLM_BIND_HOST" \
   --tensor-parallel-size 1 \
   --dtype auto \
-  --served-model-name retired-chat-model qwen3.6-35b-a3b \
+  --served-model-name retired-chat-model \
   --max-model-len 262144 \
   --gpu-memory-utilization 0.47 \
   --max-num-batched-tokens 8192 \
@@ -58,4 +76,12 @@ exec vllm serve "$MODEL_DIR" \
   --speculative-config '{"method": "mtp", "num_speculative_tokens": 1}' \
   --kv-cache-dtype fp8 \
   --enable-prefix-caching \
-  --override-generation-config '{"repetition_penalty": 1.05}'
+  --enable-prompt-tokens-details \
+  --scheduling-policy priority \
+  --override-generation-config '{"repetition_penalty": 1.05}' \
+  --enable-lora \
+  --max-lora-rank 32 \
+  --lora-modules jev-decision=/home/smith/models/jev-27b-vl/adapter_vllm \
+  --logprobs-mode processed_logprobs \
+  --max-num-seqs 8 \
+  --trust-request-chat-template
