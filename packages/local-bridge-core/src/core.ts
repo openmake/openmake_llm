@@ -258,7 +258,11 @@ export class BridgeCore {
                 );
                 // 결과는 서버 샌드박스 러너와 같은 JSON 을 stdout 에 싣는다 — 서버의 browser 도구가 그대로 읽는다.
                 // 넘겨받은 상태라 실행하지 않았으면 결과에 표식을 싣는다 — 서버는 이 호출을 오류로 돌려주지 않고 작업을 주차한다.
-                done({ ok: true, stdout: JSON.stringify(r), exitCode: r.ok ? 0 : 1, ...(r.userControl ? { userControl: true } : {}) }); return;
+                // 정책으로 막았으면 그 표식을 결과 맨 위에도 싣는다 — 서버가 stdout 을 풀지 않고 감사 기록을 남긴다(추가 전용).
+                done({
+                    ok: true, stdout: JSON.stringify(r), exitCode: r.ok ? 0 : 1,
+                    ...(r.userControl ? { userControl: true } : {}), ...(r.policyBlock ? { policyBlock: r.policyBlock } : {}),
+                }); return;
             }
             case 'worktree':
                 await handleWorktree(m, done, base); return;

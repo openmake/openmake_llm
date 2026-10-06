@@ -90,6 +90,21 @@ export interface BridgeResult {
     rejected?: 'expired' | 'duplicate';
     /** browser — 사용자가 브라우저를 넘겨받은 상태라 아무것도 실행하지 않았다(서버가 작업을 주차한다). 구버전 서버는 무시한다. */
     userControl?: boolean;
+    /** browser — 기기가 사이트 정책·사용자 제어로 막은 호출의 종류(서버 감사 기록용, 2026-10-06). 한 호출에 하나. 구버전 서버는 무시한다. */
+    policyBlock?: BrowserPolicyBlock;
+}
+
+/**
+ * 기기가 막은 브라우저 호출 — site_off_list: 허용 목록 밖 사이트의 쓰기·누르기(질의 문자열을 실은 이동 포함),
+ * site_denied: 거부 목록 사이트, blocked_url: http(s) 가 아닌 주소로의 이동, user_control: 사용자가 넘겨받은 상태.
+ * host 는 호스트 이름만(주소 전체·입력 내용은 싣지 않는다), 알 수 없으면 null. action 은 막힌 액션의 종류(goto·fill …).
+ */
+export type BrowserPolicyBlockKind = 'site_off_list' | 'site_denied' | 'blocked_url' | 'user_control';
+
+export interface BrowserPolicyBlock {
+    kind: BrowserPolicyBlockKind;
+    host: string | null;
+    action: string;
 }
 
 /**

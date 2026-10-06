@@ -8,6 +8,7 @@ import type { WebSocket } from 'ws';
 import { RemoteExecutor } from './remote-executor';
 import { getLocalBridgeRegistry } from './registry';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
+import { getAuditService } from '../AuditService';
 
 describe('RemoteExecutor 경로 — 컨테이너 표기(/workspace) 정규화', () => {
     afterEach(() => jest.restoreAllMocks());
@@ -252,6 +253,7 @@ describe('RemoteExecutor 로컬 브라우저 (Companion P2)', () => {
 });
 
 describe('RemoteExecutor 브라우저 넘겨받기 신호 — 넘겨받기 주차 판단용', () => {
+    beforeEach(() => jest.spyOn(getAuditService(), 'logAudit').mockResolvedValue(undefined)); // 넘겨받기 거절은 감사 기록도 남긴다 — DB 에 닿지 않게
     afterEach(() => jest.restoreAllMocks());
     const reply = (r: Record<string, unknown>) => jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue(r as never);
     const userControlResult = { ok: true, stdout: JSON.stringify({ ok: false, results: [], error: 'x', userControl: true }), exitCode: 1, userControl: true };
@@ -279,5 +281,92 @@ describe('RemoteExecutor 브라우저 넘겨받기 신호 — 넘겨받기 주�
         const ex = new RemoteExecutor('task-1', 'user-1');
         await ex.runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
         expect(ex.consumeDeviceLoss()).toBeNull();
+    });
+});
+
+describe('RemoteExecutor 브라우저 정책 차단 감사 기록 (local_bridge.browser_policy_block)', () => {
+    afterEach(() => jest.restoreAllMocks());
+    const reply = (r: Record<string, unknown>) => jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue(r as never);
+    const device = () => jest.spyOn(getLocalBridgeRegistry(), 'getDevice').mockReturnValue({
+        userId: 'user-1', deviceId: 'dev-1', label: 'mac · repo', folderName: 'repo', ws: {} as WebSocket, connectedAt: 0,
+    });
+    const audit = () => jest.spyOn(getAuditService(), 'logAudit').mockResolvedValue(undefined);
+    const blockedStdout = JSON.stringify({ ok: false, finalUrl: 'https://news.example.com/path?secret=1', results: [{ i: 0, type: 'fill', ok: false, error: '사이트 정책' }] });
+
+    it('기기가 막은 호출을 작업·사용자·기기·호스트·동작·거절 종류로 한 번 남긴다 — 주소 전체·입력 내용은 싣지 않는다', async () => {
+        device();
+        const spy = audit();
+        reply({ ok: true, exitCode: 1, stdout: blockedStdout, policyBlock: { kind: 'site_off_list', host: 'news.example.com', action: 'fill' } });
+        const r = await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'fill', selector: '#q', text: '비밀 자료' }], approvedHosts: [] });
+        expect(r.exitCode).toBe(1);
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy).toHaveBeenCalledWith({
+            action: 'local_bridge.browser_policy_block',
+            userId: 'user-1',
+            resourceType: 'agent_task',
+            resourceId: 'task-1',
+            details: { taskId: 'task-1', deviceId: 'dev-1', host: 'news.example.com', actionType: 'fill', kind: 'site_off_list' },
+        });
+        const written = JSON.stringify(spy.mock.calls[0][0]);
+        expect(written).not.toContain('secret');
+        expect(written).not.toContain('비밀 자료');
+    });
+
+    it('거부 목록·이동 불가 주소도 같은 사건으로 남는다', async () => {
+        device();
+        const spy = audit();
+        reply({ ok: true, exitCode: 1, stdout: blockedStdout, policyBlock: { kind: 'site_denied', host: 'pay.example.com', action: 'click' } });
+        await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'click', selector: '#pay' }], approvedHosts: [] });
+        reply({ ok: true, exitCode: 1, stdout: blockedStdout, policyBlock: { kind: 'blocked_url', host: null, action: 'goto' } });
+        await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'goto', url: 'file:///etc/hosts' }], approvedHosts: [] });
+        expect(spy.mock.calls.map(([c]) => (c.details as { kind: string }).kind)).toEqual(['site_denied', 'blocked_url']);
+        expect((spy.mock.calls[1][0].details as { host: unknown }).host).toBeNull();
+    });
+
+    it('사용자 제어 거절 — 표식이 있으면 한 번만, 표식 없이 userControl 만 실은 기기(#1165)도 user_control 로 한 번', async () => {
+        device();
+        const spy = audit();
+        reply({ ok: true, exitCode: 1, stdout: '{}', userControl: true, policyBlock: { kind: 'user_control', host: null, action: 'snapshot' } });
+        await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+        reply({ ok: true, exitCode: 1, stdout: '{}', userControl: true });
+        await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+        expect(spy).toHaveBeenCalledTimes(2);
+        expect(spy.mock.calls.map(([c]) => c.details)).toEqual([
+            { taskId: 'task-1', deviceId: 'dev-1', host: null, actionType: 'snapshot', kind: 'user_control' },
+            { taskId: 'task-1', deviceId: 'dev-1', host: null, actionType: null, kind: 'user_control' },
+        ]);
+    });
+
+    it('표식 없는 구버전 기기의 정책 거절·성공·전송 실패는 남기지 않는다', async () => {
+        device();
+        const spy = audit();
+        reply({ ok: true, exitCode: 1, stdout: blockedStdout });
+        await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'fill', selector: '#q', text: 'x' }], approvedHosts: [] });
+        reply({ ok: true, exitCode: 0, stdout: JSON.stringify({ ok: true, results: [] }) });
+        await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+        reply({ ok: false, error: 'x', transport: 'timeout' });
+        await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'snapshot' }], approvedHosts: [] });
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('형태가 어긋난 표식은 믿지 않는다 — 모르는 종류는 남기지 않고, 호스트·동작은 문자열·길이를 확인한다', async () => {
+        device();
+        const spy = audit();
+        reply({ ok: true, exitCode: 1, stdout: '{}', policyBlock: { kind: 'drop_table', host: 'a.com', action: 'fill' } });
+        await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'fill' }], approvedHosts: [] });
+        expect(spy).not.toHaveBeenCalled();
+        reply({ ok: true, exitCode: 1, stdout: '{}', policyBlock: { kind: 'site_off_list', host: 'h'.repeat(1000), action: { x: 1 } } });
+        await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'fill' }], approvedHosts: [] });
+        const details = spy.mock.calls[0][0].details as { host: string; actionType: unknown };
+        expect(details.host.length).toBeLessThanOrEqual(253);
+        expect(details.actionType).toBeNull();
+    });
+
+    it('감사 기록이 실패해도 도구 결과는 그대로 돌려준다(fail-open)', async () => {
+        device();
+        jest.spyOn(getAuditService(), 'logAudit').mockRejectedValue(new Error('db down'));
+        reply({ ok: true, exitCode: 1, stdout: blockedStdout, policyBlock: { kind: 'site_off_list', host: 'news.example.com', action: 'fill' } });
+        const r = await new RemoteExecutor('task-1', 'user-1').runBrowserSpec({ actions: [{ type: 'fill' }], approvedHosts: [] });
+        expect(r.exitCode).toBe(1);
     });
 });

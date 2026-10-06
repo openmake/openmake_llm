@@ -166,12 +166,14 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
             expect(String(r.results[2].error)).toContain('사용자 승인이 필요');
             expect(hits.some((h) => h.startsWith('/done'))).toBe(false);
             expect(r.finalUrl).toBe(`${origin}/form`); // 막혀도 현재 주소는 돌려준다 — 서버가 다음 판정에 쓴다
+            expect(r.policyBlock).toEqual({ kind: 'site_off_list', host: '127.0.0.1', action: 'fill' }); // 서버 감사 기록용 — 입력 내용 없음
         }, 60000);
 
         it('승인된 호스트의 입력은 실행한다', async () => {
             const r = await browser.run({ actions: [{ type: 'goto', url: `${origin}/form` }, { type: 'fill', selector: '#name', text: 'ok' }],
                 sitePolicy: { allow: [], deny: [] }, approvedHosts: ['127.0.0.1'] }, opts());
             expect(r.ok).toBe(true);
+            expect(r.policyBlock).toBeUndefined();
         }, 60000);
 
         it('리다이렉트로 다른 사이트에 도착하면 그 사이트의 입력은 막는다 — 서버가 본 주소가 아니라 실제 주소로 판정', async () => {
@@ -180,6 +182,7 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
             expect(r.results[0]).toMatchObject({ ok: true, url: `${other}/form` });
             expect(r.results[1].ok).toBe(false);
             expect(String(r.results[1].error)).toContain('localhost');
+            expect(r.policyBlock).toEqual({ kind: 'site_off_list', host: 'localhost', action: 'fill' });
         }, 60000);
 
         it('페이지가 연 새 창으로 옮겨 가서 그 주소로 판정한다', async () => {
@@ -200,6 +203,7 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
             expect(r.ok).toBe(false);
             expect(String(r.results[0].error)).toContain('이동할 수 없는 주소');
             expect(r.results).toHaveLength(1);
+            expect(r.policyBlock).toEqual({ kind: 'blocked_url', host: null, action: 'goto' });
         }, 60000);
     });
 
@@ -207,7 +211,8 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
         it('사용자가 넘겨받은 동안에는 실행하지 않고, 돌려주면 다시 실행한다', async () => {
             browser.setUserControl(true);
             const blocked = await browser.run({ actions: [{ type: 'goto', url: `${origin}/` }], sitePolicy: allowAll() }, opts());
-            expect(blocked).toMatchObject({ ok: false, error: BROWSER_USER_CONTROL_ERROR, results: [], userControl: true });
+            expect(blocked).toMatchObject({ ok: false, error: BROWSER_USER_CONTROL_ERROR, results: [], userControl: true,
+                policyBlock: { kind: 'user_control', host: null, action: 'goto' } });
             browser.setUserControl(false);
             expect((await browser.run({ actions: [{ type: 'goto', url: `${origin}/` }], sitePolicy: allowAll() }, opts())).ok).toBe(true);
         }, 60000);
@@ -277,6 +282,7 @@ describeIfChrome('BridgeCore — browser 요청 (실제 Chrome)', () => {
         const r = await run({ kind: 'browser', taskId: 'core-task-1', actions: [{ type: 'click', selector: '#next' }] });
         expect(r).toMatchObject({ ok: true, exitCode: 1 });
         expect(r.stdout).toContain('사용자 승인이 필요');
+        expect(r.policyBlock).toEqual({ kind: 'site_off_list', host: '127.0.0.1', action: 'click' }); // 결과 맨 위 — 서버 감사 기록용
     }, 60000);
 
     it('사용자가 넘겨받으면 실행하지 않는다', async () => {
@@ -284,6 +290,7 @@ describeIfChrome('BridgeCore — browser 요청 (실제 Chrome)', () => {
         expect(core.browserUserControl).toBe(true);
         const r = await run({ kind: 'browser', taskId: 'core-task-1', actions: [{ type: 'extractText' }] });
         expect(r.stdout).toContain('직접 조작하는 중');
+        expect(r).toMatchObject({ userControl: true, policyBlock: { kind: 'user_control', host: null, action: 'extractText' } });
         core.setBrowserUserControl(false);
     }, 60000);
 
