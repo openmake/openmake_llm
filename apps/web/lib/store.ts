@@ -163,6 +163,7 @@ type ChatStyle = "concise" | "default" | "verbose";
 
 /** 추론 강도 — thinkingEnabled 가 켜졌을 때만 의미. 백엔드 ws `thinkingLevel` 계약과 1:1. */
 type ThinkingLevel = "low" | "medium" | "high";
+export type AgentThinkingLevel = "off" | ThinkingLevel;
 
 /** store 인증 사용자 — shared-types User 의 표시용 부분집합 (name 은 username 매핑). */
 interface AuthUser {
@@ -225,6 +226,8 @@ interface AppState {
   agentTaskMode: boolean;
   /** 에이전트 작업 승인 3모드 — all=Manual(전부 승인·기본)·high-risk=Auto(고위험만)·none=Skip(전부 자동). */
   agentApprovalMode: "all" | "high-risk" | "none";
+  /** 에이전트 작업 추론 수준(184) — off 가 기본(종전 동작). 채팅의 thinkingLevel 과 별개(작업 단위). */
+  agentThinkingLevel: AgentThinkingLevel;
   /** 에이전트 작업 Git repo URL(Phase 2) — 있으면 태스크가 해당 repo 를 clone 해 작업 후 PR 생성. */
   /** Cowork D2: 로컬 실행 토글 — ON 이면 작업이 데스크톱 앱이 연결한 폴더에서 실행(executor='local'). */
   agentLocalExecutor: boolean;
@@ -309,6 +312,7 @@ interface AppState {
   ) => void;
   setSelectedModel: (m: string) => void;
   setAgentApprovalMode: (m: "all" | "high-risk" | "none") => void;
+  setAgentThinkingLevel: (v: AgentThinkingLevel) => void;
   setAgentLocalExecutor: (v: boolean) => void;
   setAgentLocalDeviceId: (v: string | null) => void;
   setAgentLocalFolderRel: (v: string | null) => void;
@@ -375,6 +379,7 @@ export const useAppStore = create<AppState>()(
   activeChatMode: null,
   agentTaskMode: false,
   agentApprovalMode: "all",
+  agentThinkingLevel: "off",
   agentLocalExecutor: false,
   agentLocalDeviceId: null,
   agentLocalFolderRel: null,
@@ -636,6 +641,7 @@ export const useAppStore = create<AppState>()(
     }),
   setSelectedModel: (m) => set({ selectedModel: m }),
   setAgentApprovalMode: (m) => set({ agentApprovalMode: m }),
+  setAgentThinkingLevel: (v) => set({ agentThinkingLevel: v }),
   setAgentLocalExecutor: (v) => set({ agentLocalExecutor: v }),
   // 디바이스 변경 시 폴더 선택은 리셋 — 다른 디바이스의 경로가 남지 않게.
   setAgentLocalDeviceId: (v) => set({ agentLocalDeviceId: v, agentLocalFolderRel: null }),

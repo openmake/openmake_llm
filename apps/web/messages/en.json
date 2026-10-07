@@ -341,6 +341,16 @@
       "autoHint": "Approve only high-risk tools (shell/python/browser/delete)",
       "skipHint": "Run all tools automatically"
     },
+    "thinkingMode": {
+      "label": "Reasoning:",
+      "off": "Off",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "offHint": "Same as today — fastest",
+      "levelHint": "The model thinks before each step. Slower and uses more tokens",
+      "highHint": "Deepest reasoning. Long-form tasks may take much longer"
+    },
     "localExec": {
       "label": "Local run:",
       "off": "Run in server sandbox",

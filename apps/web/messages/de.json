@@ -341,6 +341,16 @@
       "autoHint": "Nur risikoreiche Tools freigeben (Shell/Python/Browser/Löschen)",
       "skipHint": "Alle Tools automatisch ausführen"
     },
+    "thinkingMode": {
+      "label": "Denken:",
+      "off": "Aus",
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "high": "Hoch",
+      "offHint": "Wie bisher — am schnellsten",
+      "levelHint": "Das Modell denkt vor jedem Schritt nach. Langsamer, mehr Tokens",
+      "highHint": "Tiefstes Nachdenken. Lange Aufgaben können deutlich länger dauern"
+    },
     "localExec": {
       "label": "Lokale Ausführung:",
       "off": "In Server-Sandbox ausführen",

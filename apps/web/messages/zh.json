@@ -341,6 +341,16 @@
       "autoHint": "仅批准高风险工具 (shell/python/浏览器/删除)",
       "skipHint": "自动运行所有工具"
     },
+    "thinkingMode": {
+      "label": "推理:",
+      "off": "关闭",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "offHint": "与现在相同 — 最快",
+      "levelHint": "模型在每一步前先思考。更慢且消耗更多令牌",
+      "highHint": "最深入的推理。长篇任务可能耗时大幅增加"
+    },
     "localExec": {
       "label": "本地执行:",
       "off": "在服务器沙箱中运行",
