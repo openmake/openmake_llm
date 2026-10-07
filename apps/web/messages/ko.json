@@ -1147,6 +1147,13 @@
       "startFailed": "브라우저를 넘겨받지 못했습니다: {error}",
       "inputFailed": "조작이 전달되지 않았습니다: {error}",
       "releaseFailed": "돌려주지 못했습니다: {error}"
+    },
+    "thinkingBadge": "추론 {level}",
+    "thinkingLabel": "추론",
+    "thinkingLevel": {
+      "low": "낮음",
+      "medium": "보통",
+      "high": "높음"
     }
   },
   "customAgents": {
@@ -2645,7 +2652,13 @@
     "interventionsPerTask": "작업당 개입",
     "failureClass": "분류",
     "count": "건수",
-    "notes": "성공률 = 완료 ÷ (완료+실패+취소). 소요 시간은 끝난 작업의 첫 실행 시작부터 종료까지(실행 기록이 없으면 생성 시각부터). 작업당 개입 = (승인 요청+질문+기기 대기+넘겨받기) ÷ 작업 수. 자동 승인으로 실행된 도구는 승인 요청에 잡히지 않습니다."
+    "notes": "성공률 = 완료 ÷ (완료+실패+취소). 소요 시간은 끝난 작업의 첫 실행 시작부터 종료까지(실행 기록이 없으면 생성 시각부터). 작업당 개입 = (승인 요청+질문+기기 대기+넘겨받기) ÷ 작업 수. 자동 승인으로 실행된 도구는 승인 요청에 잡히지 않습니다.",
+    "thinkingTitle": "추론 수준별 요약",
+    "thinkingOff": "끄기",
+    "thinkingLow": "낮음",
+    "thinkingMedium": "보통",
+    "thinkingHigh": "높음",
+    "thinkingNote": "기존 작업(값 없음)은 '끄기'로 셉니다. 서버의 LLM_ENABLE_REASONING_EFFORT 가 꺼져 있으면 낮음·보통·높음은 모두 '켬'으로 동작합니다."
   },
   "adminQuotaRequests": {
     "title": "쿼터 초과 승인함",

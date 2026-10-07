@@ -1147,6 +1147,13 @@
       "startFailed": "ブラウザーを引き継げませんでした: {error}",
       "inputFailed": "操作が届きませんでした: {error}",
       "releaseFailed": "返せませんでした: {error}"
+    },
+    "thinkingBadge": "推論 {level}",
+    "thinkingLabel": "推論",
+    "thinkingLevel": {
+      "low": "低",
+      "medium": "中",
+      "high": "高"
     }
   },
   "customAgents": {
@@ -2645,7 +2652,13 @@
     "interventionsPerTask": "タスクあたりの介入",
     "failureClass": "分類",
     "count": "件数",
-    "notes": "成功率 = 完了 ÷ (完了+失敗+キャンセル)。所要時間は終了したタスクの最初の実行開始から終了まで(実行記録がなければ作成時刻から)。タスクあたりの介入 = (承認リクエスト+質問+デバイス待ち+引き継ぎ) ÷ タスク数。自動承認で実行されたツールは承認リクエストに含まれません。"
+    "notes": "成功率 = 完了 ÷ (完了+失敗+キャンセル)。所要時間は終了したタスクの最初の実行開始から終了まで(実行記録がなければ作成時刻から)。タスクあたりの介入 = (承認リクエスト+質問+デバイス待ち+引き継ぎ) ÷ タスク数。自動承認で実行されたツールは承認リクエストに含まれません。",
+    "thinkingTitle": "推論レベル別の要約",
+    "thinkingOff": "オフ",
+    "thinkingLow": "低",
+    "thinkingMedium": "中",
+    "thinkingHigh": "高",
+    "thinkingNote": "値のない既存の作業は「オフ」に数えます。サーバーの LLM_ENABLE_REASONING_EFFORT が無効なら低・中・高はすべて「オン」として動作します。"
   },
   "adminQuotaRequests": {
     "title": "クォータ超過承認",

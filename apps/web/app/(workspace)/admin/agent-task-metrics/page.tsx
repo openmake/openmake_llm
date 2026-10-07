@@ -38,6 +38,7 @@ const ROWS: Array<{ key: keyof AgentTaskMetricsGroup; fmt: Fmt }> = [
 const LABEL_KEY: Partial<Record<keyof AgentTaskMetricsGroup, string>> = { durationP50Ms: "durationP50", durationP95Ms: "durationP95" };
 /** 실행 방식 값 → 문구 키. 모르는 값은 그대로 보인다. */
 const EXECUTOR_LABEL_KEY: Record<string, string> = { local: "executorLocal", sandbox: "executorSandbox" };
+const THINKING_LABEL_KEY: Record<string, string> = { off: "thinkingOff", low: "thinkingLow", medium: "thinkingMedium", high: "thinkingHigh" };
 const DEFAULT_DAYS = 7;
 const MS_PER_SECOND = 1000;
 const SECONDS_PER_MINUTE = 60;
@@ -75,6 +76,7 @@ export default function AdminAgentTaskMetricsPage() {
   const columns = data ? [data.overall, ...data.byExecutor] : [];
   const colLabel = (g: AgentTaskMetricsGroup) =>
     g.executor === null ? t("overall") : EXECUTOR_LABEL_KEY[g.executor] ? t(EXECUTOR_LABEL_KEY[g.executor]) : g.executor;
+  const thinkingLabel = (g: AgentTaskMetricsGroup) => (g.thinkingLevel && THINKING_LABEL_KEY[g.thinkingLevel]) ? t(THINKING_LABEL_KEY[g.thinkingLevel]) : (g.thinkingLevel ?? "—");
 
   return (
     <>
@@ -120,6 +122,34 @@ export default function AdminAgentTaskMetricsPage() {
                 </Table>
               )}
               <p className="mt-3 text-[11px] text-muted">{t("notes")}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> {t("thinkingTitle")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!data || data.overall.total === 0 ? <p className="text-xs text-muted">{t("empty")}</p> : (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>{t("metric")}</Th>
+                      {data.byThinkingLevel.map((g) => <Th key={g.thinkingLevel ?? "_"} className="text-right">{thinkingLabel(g)}</Th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ROWS.map((row) => (
+                      <tr key={row.key}>
+                        <Td className="text-xs">{t(LABEL_KEY[row.key] ?? row.key)}</Td>
+                        {data.byThinkingLevel.map((g) => (
+                          <Td key={g.thinkingLevel ?? "_"} className="text-right font-mono text-xs">{format(g[row.key], row.fmt)}</Td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
+              <p className="mt-3 text-[11px] text-muted">{t("thinkingNote")}</p>
             </CardContent>
           </Card>
           <Card>
