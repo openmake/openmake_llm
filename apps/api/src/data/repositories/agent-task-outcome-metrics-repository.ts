@@ -78,7 +78,8 @@ const THINKING_SQL = GROUP_SQL
     .replace('SELECT t.executor,\n       GROUPING(t.executor) = 1 AS is_total,', "SELECT COALESCE(t.thinking_level, 'off') AS thinking_level,\n       false AS is_total,")
     .replace('SELECT t.id, t.executor, t.status,', 'SELECT t.id, t.executor, t.thinking_level, t.status,')
     .replace(' GROUP BY GROUPING SETS ((t.executor), ())\n ORDER BY is_total, t.executor', " GROUP BY COALESCE(t.thinking_level, 'off')");
-if (!THINKING_SQL.includes("COALESCE(t.thinking_level, 'off') AS thinking_level") || THINKING_SQL.includes('GROUPING SETS')) {
+if (!THINKING_SQL.includes("COALESCE(t.thinking_level, 'off') AS thinking_level") || !THINKING_SQL.includes('t.executor, t.thinking_level, t.status')
+    || THINKING_SQL.includes('GROUPING SETS')) {
     throw new Error('THINKING_SQL 치환 실패 — GROUP_SQL 의 SELECT/GROUP BY 문구가 바뀌었다');
 }
 
@@ -119,7 +120,7 @@ const THINKING_LEVEL_ORDER = ['off', 'low', 'medium', 'high'] as const;
 function byThinkingLevelOf(rows: GroupRow[]): AgentTaskMetricsGroup[] {
     return THINKING_LEVEL_ORDER.map((level) => {
         const r = rows.find((x) => x.thinking_level === level);
-        return r ? toGroup(r) : { ...toGroup({ executor: null, is_total: false, total: '0', completed: '0', failed: '0', cancelled: '0', in_progress: '0',
+        return r ? { ...toGroup(r), executor: null } : { ...toGroup({ executor: null, is_total: false, total: '0', completed: '0', failed: '0', cancelled: '0', in_progress: '0',
             duration_p50_ms: null, duration_p95_ms: null, token_tasks: '0', tokens_avg: null, tokens_sum: null, cached_prompt_tokens_sum: null,
             approval_requests: null, questions: null, device_waits: null, browser_takeovers: null }), thinkingLevel: level };
     });

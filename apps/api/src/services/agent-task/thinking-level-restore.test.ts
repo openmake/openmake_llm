@@ -1,3 +1,7 @@
+jest.mock('../../utils/logger', () => {
+    const shared = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
+    return { createLogger: () => shared, __shared: shared };
+});
 const setThinkingLevel = jest.fn(async () => undefined);
 jest.mock('../../data/models/unified-database', () => ({ getPool: () => ({}) }));
 jest.mock('../../data/repositories/agent-task-park-repository', () => ({
@@ -5,6 +9,8 @@ jest.mock('../../data/repositories/agent-task-park-repository', () => ({
 }));
 
 import { effectiveThinkingLevel, thinkingLevelToPersist, persistThinkingLevel } from './thinking-level-restore';
+
+const logger = (jest.requireMock('../../utils/logger') as { __shared: { warn: jest.Mock } }).__shared;
 
 describe('effectiveThinkingLevel', () => {
     it('요청값이 먼저다', () => {
@@ -35,8 +41,9 @@ describe('thinkingLevelToPersist / persistThinkingLevel', () => {
         await persistThinkingLevel('t1', { resume: {} , thinkingLevel: 'medium' });
         expect(setThinkingLevel).toHaveBeenCalledTimes(1);
     });
-    it('저장 실패는 삼킨다', async () => {
+    it('저장 실패는 warn 로그를 남기고 삼킨다', async () => {
         setThinkingLevel.mockRejectedValueOnce(new Error('db down'));
         await expect(persistThinkingLevel('t1', { thinkingLevel: 'high' })).resolves.toBeUndefined();
+        expect(logger.warn).toHaveBeenCalledWith('[AgentTask] t1 추론 수준 저장 실패 (무시): db down');
     });
 });

@@ -12,9 +12,8 @@ import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
 import { recoveryWaitMs } from './turn-recovery';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
-import { getRecoveryWaitNote, getTurnCallIdleNote } from '../../prompts/agent-task-turn-loop';
+import { getRecoveryWaitNote, getTurnCallIdleNote, getThinkingDowngradeNote } from '../../prompts/agent-task-turn-loop';
 import { thinkOptionFor, noteThinkingFailure, type ThinkingRunState } from './thinking-downgrade';
-import { getThinkingDowngradeNote } from '../../prompts/agent-task-turn-loop';
 import type { AgentTaskThinkingLevel } from './types';
 
 const logger = createLogger('AgentTaskService');
