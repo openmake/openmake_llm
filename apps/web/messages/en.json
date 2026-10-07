@@ -1080,7 +1080,7 @@
       "pick": "Pick a turn",
       "turnOption": "Turn {turn} ({messages} messages)",
       "go": "Fork & run",
-      "hint": "Re-runs everything after the chosen turn as a new task (fresh workspace).",
+      "hint": "Re-runs everything after the chosen turn as a new task. Depending on server settings the workspace is restored to that turn’s files or starts empty.",
       "failed": "Fork failed: {error}"
     },
     "priorityBadge": "Priority {priority}",
