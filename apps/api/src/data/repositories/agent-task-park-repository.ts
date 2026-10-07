@@ -27,6 +27,11 @@ export class AgentTaskParkRepository extends BaseRepository {
         await this.query('UPDATE agent_tasks SET approval_policy = $2 WHERE id = $1', [taskId, policy]);
     }
 
+    /** 실행 요청의 추론 수준을 남긴다(184) — 재개·분기될 때 같은 수준으로 이어가게. */
+    async setThinkingLevel(taskId: string, level: string): Promise<void> {
+        await this.query('UPDATE agent_tasks SET thinking_level = $2 WHERE id = $1', [taskId, level]);
+    }
+
     /** 주차 중인 작업의 사유(hitl_parked·device_wait) — 주차가 아니면 null. 화면이 "무엇을 기다리는지" 보여 주는 데 쓴다. */
     async getParkReason(taskId: string): Promise<string | null> {
         const r = await this.query<{ reason: string | null }>(

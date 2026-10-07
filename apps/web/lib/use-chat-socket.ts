@@ -808,6 +808,8 @@ export function useChatSocket() {
       localDeviceId?: string | null,
       /** 폴더 선택(102): 연결 루트 기준 상대경로 — deviceId 와 함께일 때만 유효. null/미지정=루트 */
       localFolderRel?: string | null,
+      /** 추론 수준(184) — off/미지정은 보내지 않는다(종전 동작·구버전 서버 호환). */
+      thinkingLevel?: "off" | "low" | "medium" | "high",
     ) => {
       const goal = message.trim();
       const s = useAppStore.getState();
@@ -895,9 +897,13 @@ export function useChatSocket() {
         // 서버가 중복 요청으로 판정해 기존 작업을 돌려줬고 이미 시작된 상태면 다시 실행하지 않는다.
         const alreadyStarted = created?.data?.deduplicated === true && created.data.task?.status !== "pending";
         // 승인 3모드 — all(기본)이면 전역 정책이므로 미전송, 그 외만 이 실행에 override 전달.
+        // 추론 수준도 같은 규칙 — off(기본)면 미전송, 그 외만 전달.
         if (!alreadyStarted) await ApiClient.post(
           `/api/agent-tasks/${taskId}/execute`,
-          approvalPolicy && approvalPolicy !== "all" ? { approvalPolicy } : {},
+          {
+            ...(approvalPolicy && approvalPolicy !== "all" ? { approvalPolicy } : {}),
+            ...(thinkingLevel && thinkingLevel !== "off" ? { thinkingLevel } : {}),
+          },
         ).catch((e: unknown) => {
           // 실행 요청이 거절됐다(기기 연결이 막 끊김 등) — 카드를 "대기"로 남기지 않고 실패로 바꾸고, 만들어 둔 작업은 취소한다.
           // 그대로 두면 카드가 끝없이 대기로 보이고 서버에는 시작되지 않을 작업이 남는다.

@@ -341,6 +341,16 @@
       "autoHint": "仅批准高风险工具 (shell/python/浏览器/删除)",
       "skipHint": "自动运行所有工具"
     },
+    "thinkingMode": {
+      "label": "推理:",
+      "off": "关闭",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "offHint": "与现在相同 — 最快",
+      "levelHint": "模型在每一步前先思考。更慢且消耗更多令牌",
+      "highHint": "最深入的推理。长篇任务可能耗时大幅增加"
+    },
     "localExec": {
       "label": "本地执行:",
       "off": "在服务器沙箱中运行",
@@ -1137,6 +1147,13 @@
       "startFailed": "无法接管浏览器:{error}",
       "inputFailed": "操作未送达:{error}",
       "releaseFailed": "无法交还:{error}"
+    },
+    "thinkingBadge": "推理 {level}",
+    "thinkingLabel": "推理",
+    "thinkingLevel": {
+      "low": "低",
+      "medium": "中",
+      "high": "高"
     }
   },
   "customAgents": {
@@ -2635,7 +2652,13 @@
     "interventionsPerTask": "每任务介入",
     "failureClass": "分类",
     "count": "数量",
-    "notes": "成功率 = 已完成 ÷ (已完成+失败+已取消)。耗时为已结束任务从首次开始执行到结束(无执行记录时从创建时间起)。每任务介入 = (审批请求+提问+设备等待+接管) ÷ 任务数。自动批准执行的工具不计入审批请求。"
+    "notes": "成功率 = 已完成 ÷ (已完成+失败+已取消)。耗时为已结束任务从首次开始执行到结束(无执行记录时从创建时间起)。每任务介入 = (审批请求+提问+设备等待+接管) ÷ 任务数。自动批准执行的工具不计入审批请求。",
+    "thinkingTitle": "按推理级别汇总",
+    "thinkingOff": "关闭",
+    "thinkingLow": "低",
+    "thinkingMedium": "中",
+    "thinkingHigh": "高",
+    "thinkingNote": "无值的旧任务计为\"关闭\"。若服务器的 LLM_ENABLE_REASONING_EFFORT 关闭，低/中/高均按\"开启\"运行。"
   },
   "adminQuotaRequests": {
     "title": "配额超额审批",

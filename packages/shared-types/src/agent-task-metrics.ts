@@ -8,6 +8,8 @@
 export interface AgentTaskMetricsGroup {
   /** 'sandbox'(서버 샌드박스) | 'local'(사용자 기기) 등 agent_tasks.executor 값. 전체 합계는 null. */
   executor: string | null;
+  /** 추론 수준별 묶음(184)에서만 채운다: 'off' | 'low' | 'medium' | 'high'. 실행 방식별·전체 묶음은 undefined. */
+  thinkingLevel?: string | null;
   total: number;
   completed: number;
   failed: number;
@@ -48,6 +50,8 @@ export interface AgentTaskMetricsResponse {
   maxDays: number;
   overall: AgentTaskMetricsGroup;
   byExecutor: AgentTaskMetricsGroup[];
+  /** 추론 수준별(184) — 항상 off·low·medium·high 네 묶음, 그 순서. 기존 행(NULL)은 off 로 센다. */
+  byThinkingLevel: AgentTaskMetricsGroup[];
   /** 실패 사유 상위 N(전체 기준). */
   topFailures: AgentTaskFailureCount[];
 }

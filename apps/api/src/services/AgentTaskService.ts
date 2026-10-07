@@ -16,7 +16,7 @@
  */
 import { type LLMClient } from '../llm';
 import type { ChatMessage, ToolDefinition } from '../llm/types';
-import { initAgentRoleState, defaultAgentClient } from './agent-task/role-client';
+import { initAgentRoleState, defaultAgentClient, runStateOf } from './agent-task/role-client';
 import { getToolRuntime } from '../runtime-ports/tool-runtime';
 
 import { getUnifiedDatabase } from '../data/models/unified-database';
@@ -55,6 +55,9 @@ import { pickNoToolNudge } from './agent-task/turn-stall';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { effectiveApprovalPolicy, persistApprovalPolicy } from './agent-task/approval-policy-restore';
+import { effectiveThinkingLevel, persistThinkingLevel } from './agent-task/thinking-level-restore';
+import { noteThinkingFailure, noteThinkingSuccess } from './agent-task/thinking-downgrade';
+import { getThinkingDowngradeNote } from '../prompts/agent-task-turn-loop';
 import { createSandboxWaiting, handleSandboxUnavailable } from './agent-task/sandbox-unavailable';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
@@ -192,6 +195,9 @@ export class AgentTaskService {
             // 승인 정책(183) — 처음 시작이면 남기고, 재개면 남긴 값으로 되살린다(주차 재개는 요청 본문이 없다).
             const approvalPolicy = effectiveApprovalPolicy(input, preTask?.approval_policy);
             await persistApprovalPolicy(taskId, input);
+            // 추론 수준(184) — 승인 정책과 같은 규칙(처음 시작이면 남기고, 재개면 남긴 값). 역할 상태는 위에서 'off' 로 만들어졌으므로 여기서 덮는다.
+            roleState.thinkingLevel = effectiveThinkingLevel(input, preTask?.thinking_level);
+            await persistThinkingLevel(taskId, input);
 
             // resume 은 checkpoint(end-of-turn conversation)에서 복원, 새 시작은 system 에 활성 스킬
             // 지식(prompt_md)+크로스-task 학습(5-2, 플래그 OFF/실패 시 '') 주입. resume 은 old system 유지.
@@ -429,11 +435,17 @@ export class AgentTaskService {
                 // 빈 응답(본문·도구 호출 없음)은 최종 답변으로 받지 않고 되묻는다 — 일시적 빈 응답 한 번으로 작업이 끝나지 않게(turn-guards).
                 if (isEmptyTurn(result) && emptyRetries < AGENT_TASK_LIMITS.EMPTY_RESPONSE_MAX_RETRIES) {
                     emptyRetries++;
+                    // 추론을 켠 작업의 빈 응답도 연속 실패로 센다(184) — 임계면 이번 실행만 추론을 끈다.
+                    if (noteThinkingFailure(runStateOf(roleState))) {
+                        await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'thinking_downgrade',
+                            content: getThinkingDowngradeNote(roleState.thinkingLevel ?? 'off', roleState.thinkingFailures ?? 0), planStepIndex: planIdx() });
+                    }
                     conversation.push({ role: 'assistant', content: AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER }, replyNudge(getAgentTaskEmptyResponseNudge()));
                     await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: `빈 응답 — 되묻기 ${emptyRetries}/${AGENT_TASK_LIMITS.EMPTY_RESPONSE_MAX_RETRIES}`, planStepIndex: planIdx() });
                     continue;
                 }
 
+                noteThinkingSuccess(runStateOf(roleState));
                 conversation.push({
                     role: 'assistant',
                     content: result.content,

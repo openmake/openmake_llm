@@ -100,3 +100,8 @@ export function getOutputRepetitionRetryNote(count: number, max: number): string
 export function getVerifyHeldAnswerNote(gates: readonly string[]): string {
     return `검증 미통과: 검증 실패를 고치던 중 턴 상한에 도달해, 검증을 통과하지 못한 직전 답변을 결과로 남겼습니다${gates.length > 0 ? ` (통과하지 못했거나 다시 돌리지 않은 검증: ${gates.join(', ')})` : ''}. 결과를 직접 확인하세요.`;
 }
+
+/** 추론 강등(184) — 단계 기록에 남기는 문구. 사용자 선택은 그대로이고 이번 실행만 끈다는 것을 분명히 한다. */
+export function getThinkingDowngradeNote(level: string, failures: number): string {
+    return `추론(${level})을 켠 턴이 ${failures}회 연속 실패(호출 상한 초과·빈 응답) — 이번 실행의 남은 턴은 추론을 끄고 계속합니다(작업의 선택값은 유지)`;
+}

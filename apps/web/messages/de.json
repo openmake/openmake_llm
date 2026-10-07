@@ -341,6 +341,16 @@
       "autoHint": "Nur risikoreiche Tools freigeben (Shell/Python/Browser/Löschen)",
       "skipHint": "Alle Tools automatisch ausführen"
     },
+    "thinkingMode": {
+      "label": "Denken:",
+      "off": "Aus",
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "high": "Hoch",
+      "offHint": "Wie bisher — am schnellsten",
+      "levelHint": "Das Modell denkt vor jedem Schritt nach. Langsamer, mehr Tokens",
+      "highHint": "Tiefstes Nachdenken. Lange Aufgaben können deutlich länger dauern"
+    },
     "localExec": {
       "label": "Lokale Ausführung:",
       "off": "In Server-Sandbox ausführen",
@@ -1137,6 +1147,13 @@
       "startFailed": "Browser konnte nicht übernommen werden: {error}",
       "inputFailed": "Eingabe wurde nicht zugestellt: {error}",
       "releaseFailed": "Zurückgeben fehlgeschlagen: {error}"
+    },
+    "thinkingBadge": "Denken {level}",
+    "thinkingLabel": "Denken",
+    "thinkingLevel": {
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "high": "Hoch"
     }
   },
   "customAgents": {
@@ -2635,7 +2652,13 @@
     "interventionsPerTask": "Eingriffe pro Aufgabe",
     "failureClass": "Klasse",
     "count": "Anzahl",
-    "notes": "Erfolgsquote = abgeschlossen ÷ (abgeschlossen + fehlgeschlagen + abgebrochen). Die Dauer reicht vom ersten Ausführungsstart bis zum Ende beendeter Aufgaben (ohne Ausführungseintrag ab Erstellung). Eingriffe pro Aufgabe = (Freigabeanfragen + Rückfragen + Gerätewartezeiten + Übernahmen) ÷ Aufgaben. Automatisch freigegebene Werkzeuge zählen nicht als Freigabeanfrage."
+    "notes": "Erfolgsquote = abgeschlossen ÷ (abgeschlossen + fehlgeschlagen + abgebrochen). Die Dauer reicht vom ersten Ausführungsstart bis zum Ende beendeter Aufgaben (ohne Ausführungseintrag ab Erstellung). Eingriffe pro Aufgabe = (Freigabeanfragen + Rückfragen + Gerätewartezeiten + Übernahmen) ÷ Aufgaben. Automatisch freigegebene Werkzeuge zählen nicht als Freigabeanfrage.",
+    "thinkingTitle": "Übersicht nach Denkstufe",
+    "thinkingOff": "Aus",
+    "thinkingLow": "Niedrig",
+    "thinkingMedium": "Mittel",
+    "thinkingHigh": "Hoch",
+    "thinkingNote": "Ältere Aufgaben (ohne Wert) zählen als Aus. Ist LLM_ENABLE_REASONING_EFFORT auf dem Server aus, verhalten sich Niedrig/Mittel/Hoch alle wie „an\"."
   },
   "adminQuotaRequests": {
     "title": "Kontingent-Überschreitungen",
