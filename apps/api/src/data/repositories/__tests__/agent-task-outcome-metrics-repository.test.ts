@@ -11,6 +11,7 @@ const row = (over: Record<string, unknown>) => ({
     executor: 'sandbox', is_total: false, total: '0', completed: '0', failed: '0', cancelled: '0', in_progress: '0',
     duration_p50_ms: null, duration_p95_ms: null, token_tasks: '0', tokens_avg: null, tokens_sum: null,
     cached_prompt_tokens_sum: null, approval_requests: null, questions: null, device_waits: null, browser_takeovers: null,
+    thinking_level: null,
     ...over,
 });
 
@@ -33,11 +34,15 @@ describe('AgentTaskOutcomeMetricsRepository.getMetrics', () => {
                     duration_p50_ms: '1500.5', duration_p95_ms: '9000', token_tasks: '3', tokens_avg: '1200.4', tokens_sum: '3601',
                     cached_prompt_tokens_sum: '800', approval_requests: '3', questions: '1', device_waits: '2', browser_takeovers: '1' }),
             ] })
-            .mockResolvedValueOnce({ rows: [{ failure_class: 'timeout', count: '3' }, { failure_class: 'unknown', count: '1' }] });
+            .mockResolvedValueOnce({ rows: [{ failure_class: 'timeout', count: '3' }, { failure_class: 'unknown', count: '1' }] })
+            .mockResolvedValueOnce({ rows: [
+                row({ executor: null, is_total: false, thinking_level: 'off', total: '5', completed: '2' }),
+                row({ executor: null, is_total: false, thinking_level: 'high', total: '1', completed: '0', in_progress: '1' }),
+            ] });
 
         const r = await repo.getMetrics({ days: 30, failureTopN: 5 });
 
-        expect(pool.query).toHaveBeenCalledTimes(2);
+        expect(pool.query).toHaveBeenCalledTimes(3);
         const [sql1, p1] = (pool.query as jest.Mock).mock.calls[0];
         expect(sql1).toMatch(/GROUPING SETS \(\(t\.executor\), \(\)\)/);
         expect(sql1).toMatch(/percentile_cont\(0\.5\)/);
@@ -52,6 +57,13 @@ describe('AgentTaskOutcomeMetricsRepository.getMetrics', () => {
         expect(sql2).toMatch(/status = 'failed'/);
         expect(sql2).toMatch(/LIMIT \$2/);
         expect(p2).toEqual([30, 5]);
+        const [sql3, p3] = (pool.query as jest.Mock).mock.calls[2];
+        expect(sql3).toMatch(/COALESCE\(t\.thinking_level, 'off'\)/);
+        expect(p3[0]).toBe(30);
+        expect(r.byThinkingLevel.map((g) => g.thinkingLevel)).toEqual(['off', 'low', 'medium', 'high']);
+        expect(r.byThinkingLevel[0]).toMatchObject({ thinkingLevel: 'off', total: 5, completed: 2 });
+        expect(r.byThinkingLevel[1]).toMatchObject({ thinkingLevel: 'low', total: 0, successRate: null });
+        expect(r.byThinkingLevel[3]).toMatchObject({ thinkingLevel: 'high', total: 1, inProgress: 1 });
 
         expect(r.byExecutor.map((g) => g.executor)).toEqual(['local', 'sandbox']);
         const local = r.byExecutor[0];
@@ -67,10 +79,11 @@ describe('AgentTaskOutcomeMetricsRepository.getMetrics', () => {
     });
 
     it('기간 안에 작업이 없으면 전체는 0건 묶음, 실행 방식별은 빈 배열', async () => {
-        (pool.query as jest.Mock).mockResolvedValueOnce({ rows: [row({ executor: null, is_total: true })] }).mockResolvedValueOnce({ rows: [] });
+        (pool.query as jest.Mock).mockResolvedValueOnce({ rows: [row({ executor: null, is_total: true })] }).mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [] });
         const r = await repo.getMetrics({ days: 7, failureTopN: 5 });
         expect(r.byExecutor).toEqual([]);
         expect(r.overall).toMatchObject({ executor: null, total: 0, successRate: null, interventionsPerTask: null });
         expect(r.topFailures).toEqual([]);
+        expect(r.byThinkingLevel).toHaveLength(4);
     });
 });
