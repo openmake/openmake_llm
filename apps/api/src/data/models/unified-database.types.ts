@@ -158,6 +158,8 @@ export interface AgentTask {
     cache_reported_prompt_tokens?: number | null;
     /** 시작 요청의 승인 정책(183) — 주차 재개 때 복원. NULL 은 지정 없음 */
     approval_policy?: string | null;
+    /** 시작 요청의 추론 수준(184) — 재개·분기 때 복원. NULL 은 지정 없음(off) */
+    thinking_level?: string | null;
     /** "나머지 모두 승인" 플래그 영속(124) — 재개 시 승인 레지스트리에 복원 */
     auto_approve?: boolean;
     /** 완료 출구 구분(091) — 'final_answer' | 'terminate'. 미완료/기존 행은 NULL */

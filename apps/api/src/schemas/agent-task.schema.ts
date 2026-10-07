@@ -83,6 +83,10 @@ export const createAgentTaskSchema = z.strictObject({
     approvalPolicy: z.never({
         error: '승인 정책은 생성이 아니라 POST /api/agent-tasks/:taskId/execute 에 전달하세요',
     }).optional(),
+    // 추론 수준도 실행 단위 옵션이다 — 승인 정책과 같은 이유로 생성에서는 거절한다.
+    thinkingLevel: z.never({
+        error: '추론 수준은 생성이 아니라 POST /api/agent-tasks/:taskId/execute 에 전달하세요',
+    }).optional(),
 });
 
 /** 에이전트 작업 생성 요청 TypeScript 타입 */
@@ -101,6 +105,8 @@ export const executeAgentTaskSchema = z.strictObject({
     allowedSkills: z.array(z.string().min(1).max(AT.ALLOWED_SKILL_MAX)).max(AGENT_TASK_LIMITS.EXECUTE_MAX_ALLOWED_SKILLS).optional(),
     /** 큐 우선순위(131) — 정수만 받고 범위는 라우트가 역할로 조정(관리자만 0 초과). 큐 OFF 면 기록만 된다. */
     priority: z.number().int().optional(),
+    /** 추론 수준(184) — 주 에이전트 턴의 thinking. 미지정·off 는 지금 동작(끔). */
+    thinkingLevel: z.enum(['off', 'low', 'medium', 'high']).optional(),
 });
 export type ExecuteAgentTaskInput = z.infer<typeof executeAgentTaskSchema>;
 
