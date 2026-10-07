@@ -45,7 +45,7 @@ interface TurnCallInput {
     elapsedActiveMs: number;
     /** 마무리 턴 여부 — 최소 시간 보장 + 스트리밍 부분 본문 보존이 켜진다. */
     finalTurn: boolean;
-    /** 이 호출에서 생긴 일을 단계 기록으로 남기는 훅(stepType, 본문) — 일시적 오류 재시도·컨텍스트 절단·출력 반복. 동기 호출, 실패해도 호출을 막지 않을 것. */
+    /** 이 호출에서 생긴 일을 단계 기록으로 남기는 훅(stepType, 본문) — 일시적 오류 재시도·컨텍스트 절단·출력 반복·추론 강등. 동기 호출, 실패해도 호출을 막지 않을 것. */
     onNote?: (stepType: string, note: string) => void;
 }
 
@@ -84,6 +84,8 @@ export async function callAgentTurnWithBudget(p: TurnCallInput): Promise<TurnCal
             recoveryBudgetMs: remainingMs,
             // 재시도는 처음부터 다시 받는다 — 끊긴 시도의 부분 본문을 버려 겹치지 않게 한다.
             onRetry: (info) => { partialContent = ''; p.onNote?.('retry', getTransientRetryNote(info.attempt, info.maxAttempts, info.error)); },
+            // 추론 강등(184) — 단계 기록으로 남긴다.
+            onThinkingDowngrade: (note) => { p.onNote?.('thinking_downgrade', note); },
         });
         // 창 초과로 요청 사본에서 오래된 메시지가 잘렸으면 단계 기록으로 남긴다 — 종전엔 로그 한 줄뿐이었다.
         const dropped = result.metrics?.context_dropped_messages ?? 0;
