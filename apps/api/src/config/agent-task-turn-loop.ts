@@ -80,6 +80,9 @@ export const AGENT_TASK_TURN_LOOP = {
      *  "검증 미통과" 표시(verify_skipped 스텝)와 함께 결과로 남긴다. 판정(마커·goal judge)은 그대로 거친다.
      *  AGENT_TASK_KEEP_HELD_ANSWER=false 면 종전처럼 max_turns_exhausted 실패로 끝난다. */
     KEEP_HELD_ANSWER: process.env.AGENT_TASK_KEEP_HELD_ANSWER !== 'false',
+    /** 추론 강등(184) — 추론을 켠 작업에서 턴 호출이 호출 상한 초과·빈 응답으로 이 횟수 연속 실패하면 남은 턴을 추론 없이 돈다.
+     *  작업 행의 선택값은 바꾸지 않는다(재개하면 다시 선택값). 횟수 2는 실측이 아니다. AGENT_TASK_THINKING_DOWNGRADE_AFTER */
+    THINKING_DOWNGRADE_AFTER_FAILURES: num(process.env.AGENT_TASK_THINKING_DOWNGRADE_AFTER, 2),
 };
 
 /**
