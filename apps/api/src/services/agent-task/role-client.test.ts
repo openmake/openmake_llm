@@ -259,6 +259,32 @@ describe('추론 수준(184)', () => {
         expect(chat.mock.calls[2][3]).toMatchObject({ think: false });
         expect(state.thinkingDowngraded).toBe(true);
     });
+    it('빈 본문 응답({ content: \'\' })이 돌아와도 thinkingFailures 를 0 으로 되돌리지 않는다', async () => {
+        // 성공 처리는 서비스의 비어 있지 않은 정상 턴에서만 한다 — 여기서 되돌리면 빈 응답 연속 강등이 영영 임계에 닿지 않는다.
+        const { state } = stateWithThinking([async () => ({ content: '' })], 'high');
+        state.thinkingFailures = 1;
+        await chatTurnWithRoleFallback(state, params());
+        expect(state.thinkingFailures).toBe(1);
+    });
+    it('무응답 감시 발동이 임계에 닿으면 강등해 think:false 로 다시 부른다', async () => {
+        // 감시가 켜진 내부 모델 도구 턴에는 호출 상한이 걸리지 않는다 — 감시 발동도 추론 실패로 세야 강등에 닿는다.
+        type Opts = { signal: AbortSignal; onChunk?: () => void };
+        const silent = (_c: unknown, _o: unknown, _t: unknown, opts: Opts) => new Promise((_res, rej) => {
+            opts.signal.addEventListener('abort', () => rej(new Error('Request was aborted.')), { once: true });
+        });
+        let n = 0;
+        const chat = jest.fn((...a: unknown[]) => (n++ < 2 ? (silent as (...x: unknown[]) => Promise<unknown>)(...a) : Promise.resolve({ content: 'ok' })));
+        const state: AgentRoleState = { client: { derive: () => ({ chat }) } as unknown as LLMClient, external: false, fallbackDone: true,
+            thinkingLevel: 'high', thinkingFailures: 0, thinkingDowngraded: false };
+        const onThinkingDowngrade = jest.fn();
+        const r = await chatTurnWithRoleFallback(state, { ...params(), idle: { firstChunkMs: 40, gapMs: 30 }, onThinkingDowngrade });
+        expect(r).toEqual({ content: 'ok' });
+        expect(chat).toHaveBeenCalledTimes(3);
+        expect(onThinkingDowngrade).toHaveBeenCalledTimes(1);
+        const calls = chat.mock.calls as unknown as Array<[unknown, unknown, unknown, { think?: unknown }]>;
+        expect(calls[0][3]).toMatchObject({ think: 'high' });
+        expect(calls[2][3]).toMatchObject({ think: false });
+    });
     it('off 작업의 호출 상한 초과는 종전처럼 TurnCallCapExceeded 로 끝난다', async () => {
         // fakeState 의 impl 은 signal 을 받지 않는다 — 상한(20ms)이 끊은 뒤 스스로 거절해 끝나지 않는 호출을 흉내 낸다.
         const hang = () => new Promise<never>((_res, rej) => { setTimeout(() => rej(new Error('aborted')), 50); });

@@ -13,7 +13,7 @@ import { createLogger } from '../../utils/logger';
 import { recoveryWaitMs } from './turn-recovery';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
 import { getRecoveryWaitNote, getTurnCallIdleNote } from '../../prompts/agent-task-turn-loop';
-import { thinkOptionFor, noteThinkingFailure, noteThinkingSuccess, type ThinkingRunState } from './thinking-downgrade';
+import { thinkOptionFor, noteThinkingFailure, type ThinkingRunState } from './thinking-downgrade';
 import { getThinkingDowngradeNote } from '../../prompts/agent-task-turn-loop';
 import type { AgentTaskThinkingLevel } from './types';
 
@@ -143,6 +143,16 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
     });
 }
 
+/** 추론 실패 1회를 세고, 임계에 닿아 이번에 강등됐으면 안내를 남기고 true — 호출자는 같은 턴을 think:false 로 다시 부른다. */
+function downgradeIfNeeded(state: AgentRoleState, p: { taskId: string; onThinkingDowngrade?: (note: string) => void }): boolean {
+    const rs = runStateOf(state);
+    if (!noteThinkingFailure(rs)) return false;
+    const note = getThinkingDowngradeNote(rs.thinkingLevel, rs.thinkingFailures);
+    logger.warn(`[AgentTask] ${p.taskId} ${note}`);
+    try { p.onThinkingDowngrade?.(note); } catch { /* 관측 실패 무시 */ }
+    return true;
+}
+
 /**
  * 턴 1회 chat 호출. reasoning OFF — qwen3.6 가 디자인/장문 작업에서 수만 토큰의
  * thinking 을 생성해 토큰 한도를 소진하고 deliverable 을 못 쓰는 폭주 차단.
@@ -211,7 +221,7 @@ export async function chatTurnWithRoleFallback(
             const out = await call(signals.length > 1 ? AbortSignal.any(signals) : p.signal, watch?.onChunk);
             // 끊기지는 않았지만 기한의 절반을 넘긴 간격 — 기한(AGENT_TASK_TURN_STREAM_IDLE_MS)을 조정할 근거로 남긴다.
             if (watch && watch.maxGapMs() > p.idle!.gapMs / 2) logger.warn(`[AgentTask] ${p.taskId} 청크 간격 ${watch.maxGapMs()}ms — 무응답 기한 ${p.idle!.gapMs}ms 의 절반 초과`);
-            noteThinkingSuccess(runStateOf(state));
+            // 성공 처리(연속 실패 수 되돌리기)는 서비스가 본문·도구 호출이 있는 턴에서만 한다 — 빈 본문 응답도 여기로 온다.
             return out;
         } catch (err) {
             chatErr = err;
@@ -220,16 +230,14 @@ export async function chatTurnWithRoleFallback(
         }
         {
             const idleMs = watch?.firedMs() ?? null;
-            if (idleMs !== null && !p.signal.aborted && !cap?.aborted) chatErr = new TurnCallIdle(idleMs);
+            if (idleMs !== null && !p.signal.aborted && !cap?.aborted) {
+                chatErr = new TurnCallIdle(idleMs);
+                // 감시가 켜진 턴에는 호출 상한이 없다 — 무응답 감시 발동도 추론 실패로 센다. 임계 전이면 아래 재시도 경로로 간다.
+                if (downgradeIfNeeded(state, p)) continue;
+            }
             if (cap?.aborted && !p.signal.aborted) {
                 // 추론을 켠 호출의 상한 초과 — 연속 실패로 세고, 임계에 닿으면 이번 실행만 추론을 끄고 같은 턴을 다시 부른다(강등은 cap 재시도 횟수를 쓰지 않는다).
-                const rs = runStateOf(state);
-                if (noteThinkingFailure(rs)) {
-                    const note = getThinkingDowngradeNote(rs.thinkingLevel, rs.thinkingFailures);
-                    logger.warn(`[AgentTask] ${p.taskId} ${note}`);
-                    try { p.onThinkingDowngrade?.(note); } catch { /* 관측 실패 무시 */ }
-                    continue;
-                }
+                if (downgradeIfNeeded(state, p)) continue;
                 if (capRetries >= Math.max(0, AGENT_TASK_LIMITS.TURN_CALL_TIMEOUT_RETRY_MAX)) throw new TurnCallCapExceeded(p.callTimeoutMs!);
                 capRetries++;
                 const note = `호출 상한(${Math.round(p.callTimeoutMs! / 1000)}초) 초과 — 다시 시도`;
