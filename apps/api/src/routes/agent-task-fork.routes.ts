@@ -68,6 +68,11 @@ forkRouter.post('/:taskId/fork', asyncHandler(async (req: Request, res: Response
         await new AgentTaskParkRepository(getPool()).setApprovalPolicy(id, src.approval_policy)
             .catch((e) => logger.warn(`[AgentTaskForkRoutes] 승인 정책 물려주기 실패 (무시): ${e instanceof Error ? e.message : String(e)}`));
     }
+    // 추론 수준(184)도 같은 이유로 물려준다 — 분기 재개는 저장값을 읽는다(thinking-level-restore).
+    if (src.thinking_level) {
+        await new AgentTaskParkRepository(getPool()).setThinkingLevel(id, src.thinking_level)
+            .catch((e) => logger.warn(`[AgentTaskForkRoutes] 추론 수준 물려주기 실패 (무시): ${e instanceof Error ? e.message : String(e)}`));
+    }
     logger.info(`[AgentTaskForkRoutes] fork: ${src.id}@${fromTurn} → ${id} (user ${req.user!.id})`);
     res.status(201).json(success({ taskId: id, fromTaskId: src.id, fromTurn, next: `/api/agent-tasks/${id}/resume` }));
 }));
