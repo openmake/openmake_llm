@@ -37,8 +37,9 @@ export function BrowserTakeover({ taskId }: { taskId: string }) {
 
   useEffect(() => {
     let alive = true;
-    ApiClient.get<{ data: { active: boolean } }>(base(taskId), { redirectOnUnauthorized: false })
-      .then((r) => { if (alive) { setEligible(true); setActive(!!r?.data?.active); } })
+    // 넘겨받을 수 없는 작업(브라우저 꺼짐·로컬 실행·작업 공간 정리·다른 사용자 작업)은 200 + eligible:false 로 온다 — 콘솔 오류 없이 숨긴다.
+    ApiClient.get<{ data: { active: boolean; eligible?: boolean } }>(base(taskId), { redirectOnUnauthorized: false })
+      .then((r) => { if (alive) { setEligible(r?.data?.eligible !== false); setActive(!!r?.data?.active); } })
       .catch(() => { if (alive) setEligible(false); });
     return () => { alive = false; };
   }, [taskId]);
