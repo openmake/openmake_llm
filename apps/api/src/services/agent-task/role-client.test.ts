@@ -11,6 +11,10 @@ jest.mock('../../config/runtime-limits', () => {
         },
     };
 });
+jest.mock('../../config/agent-task-turn-loop', () => {
+    const actual = jest.requireActual('../../config/agent-task-turn-loop');
+    return { ...actual, AGENT_TASK_TURN_LOOP: { ...actual.AGENT_TASK_TURN_LOOP, THINKING_DOWNGRADE_AFTER_FAILURES: 2 } };
+});
 // 로컬 폴백 경로가 실제 클라이언트를 만들지 않게 차단(이 스위트는 재시도 정책만 검증).
 jest.mock('../../llm', () => ({ createClient: jest.fn() }));
 jest.mock('../model-role-resolver', () => ({ resolveRoleClientForUser: jest.fn() }));
@@ -221,5 +225,44 @@ describe('chatTurnWithRoleFallback 무응답 감지', () => {
         const chat = jest.fn(stalls(5, 0) as (...x: unknown[]) => Promise<unknown>);
         await expect(chatTurnWithRoleFallback(stateWith(chat), { ...params(), idle })).rejects.toThrow('응답 없음');
         expect(chat).toHaveBeenCalledTimes(3);
+    });
+});
+
+describe('추론 수준(184)', () => {
+    function stateWithThinking(impls: Array<() => Promise<unknown>>, level: 'off' | 'low' | 'medium' | 'high') {
+        const { state, calls } = fakeState(impls);
+        state.thinkingLevel = level; state.thinkingFailures = 0; state.thinkingDowngraded = false;
+        const chat = (state.client.derive({}) as unknown as { chat: jest.Mock }).chat;
+        return { state, calls, chat };
+    }
+    it('off 는 think:false 그대로 보낸다 — 종전 요청과 같다', async () => {
+        const { state, chat } = stateWithThinking([async () => ({ content: 'ok' })], 'off');
+        await chatTurnWithRoleFallback(state, params());
+        expect(chat.mock.calls[0][3]).toMatchObject({ think: false });
+    });
+    it('수준을 켜면 think 에 그 값이 실린다', async () => {
+        const { state, chat } = stateWithThinking([async () => ({ content: 'ok' })], 'medium');
+        await chatTurnWithRoleFallback(state, params());
+        expect(chat.mock.calls[0][3]).toMatchObject({ think: 'medium' });
+    });
+    it('호출 상한 초과가 임계(2)에 닿으면 강등해 think:false 로 다시 부르고 안내를 한 번 남긴다', async () => {
+        // TURN_CALL_TIMEOUT_RETRY_MAX 는 1 로 고정돼 있다(위 mock). 상한 초과 2회 → 강등 → 3번째 호출은 think:false.
+        // fakeState 의 impl 은 signal 을 받지 않는다 — 상한(20ms)이 끊은 뒤 스스로 거절해 끝나지 않는 호출을 흉내 낸다.
+        const hang = () => new Promise<never>((_res, rej) => { setTimeout(() => rej(new Error('aborted')), 50); });
+        const { state, chat } = stateWithThinking([hang, hang, async () => ({ content: 'ok' })], 'high');
+        const onThinkingDowngrade = jest.fn();
+        const r = await chatTurnWithRoleFallback(state, { ...params(), callTimeoutMs: 20, onThinkingDowngrade });
+        expect(r).toEqual({ content: 'ok' });
+        expect(onThinkingDowngrade).toHaveBeenCalledTimes(1);
+        expect(onThinkingDowngrade.mock.calls[0][0]).toContain('추론(high)');
+        expect(chat.mock.calls[0][3]).toMatchObject({ think: 'high' });
+        expect(chat.mock.calls[2][3]).toMatchObject({ think: false });
+        expect(state.thinkingDowngraded).toBe(true);
+    });
+    it('off 작업의 호출 상한 초과는 종전처럼 TurnCallCapExceeded 로 끝난다', async () => {
+        // fakeState 의 impl 은 signal 을 받지 않는다 — 상한(20ms)이 끊은 뒤 스스로 거절해 끝나지 않는 호출을 흉내 낸다.
+        const hang = () => new Promise<never>((_res, rej) => { setTimeout(() => rej(new Error('aborted')), 50); });
+        const { state } = stateWithThinking([hang, hang], 'off');
+        await expect(chatTurnWithRoleFallback(state, { ...params(), callTimeoutMs: 20 })).rejects.toBeInstanceOf(TurnCallCapExceeded);
     });
 });
