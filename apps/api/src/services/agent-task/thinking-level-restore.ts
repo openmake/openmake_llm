@@ -8,7 +8,10 @@
  */
 import { getPool } from '../../data/models/unified-database';
 import { AgentTaskParkRepository } from '../../data/repositories/agent-task-park-repository';
+import { createLogger } from '../../utils/logger';
 import { AGENT_TASK_THINKING_LEVELS, type AgentTaskThinkingLevel } from './types';
+
+const logger = createLogger('AgentTaskService');
 
 type LevelInput = { thinkingLevel?: AgentTaskThinkingLevel; resume?: unknown };
 
@@ -29,5 +32,7 @@ export function thinkingLevelToPersist(input: LevelInput): AgentTaskThinkingLeve
 export async function persistThinkingLevel(taskId: string, input: LevelInput): Promise<void> {
     const level = thinkingLevelToPersist(input);
     if (!level) return;
-    await new AgentTaskParkRepository(getPool()).setThinkingLevel(taskId, level).catch(() => undefined);
+    await new AgentTaskParkRepository(getPool()).setThinkingLevel(taskId, level).catch((e: unknown) => {
+        logger.warn(`[AgentTask] ${taskId} 추론 수준 저장 실패 (무시): ${e instanceof Error ? e.message : String(e)}`);
+    });
 }

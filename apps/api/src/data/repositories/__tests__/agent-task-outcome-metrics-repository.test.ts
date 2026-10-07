@@ -36,8 +36,8 @@ describe('AgentTaskOutcomeMetricsRepository.getMetrics', () => {
             ] })
             .mockResolvedValueOnce({ rows: [{ failure_class: 'timeout', count: '3' }, { failure_class: 'unknown', count: '1' }] })
             .mockResolvedValueOnce({ rows: [
-                row({ executor: null, is_total: false, thinking_level: 'off', total: '5', completed: '2' }),
-                row({ executor: null, is_total: false, thinking_level: 'high', total: '1', completed: '0', in_progress: '1' }),
+                row({ executor: undefined, is_total: false, thinking_level: 'off', total: '5', completed: '2' }),
+                row({ executor: undefined, is_total: false, thinking_level: 'high', total: '1', completed: '0', in_progress: '1' }),
             ] });
 
         const r = await repo.getMetrics({ days: 30, failureTopN: 5 });
@@ -61,9 +61,9 @@ describe('AgentTaskOutcomeMetricsRepository.getMetrics', () => {
         expect(sql3).toMatch(/COALESCE\(t\.thinking_level, 'off'\)/);
         expect(p3[0]).toBe(30);
         expect(r.byThinkingLevel.map((g) => g.thinkingLevel)).toEqual(['off', 'low', 'medium', 'high']);
-        expect(r.byThinkingLevel[0]).toMatchObject({ thinkingLevel: 'off', total: 5, completed: 2 });
-        expect(r.byThinkingLevel[1]).toMatchObject({ thinkingLevel: 'low', total: 0, successRate: null });
-        expect(r.byThinkingLevel[3]).toMatchObject({ thinkingLevel: 'high', total: 1, inProgress: 1 });
+        expect(r.byThinkingLevel[0]).toMatchObject({ executor: null, thinkingLevel: 'off', total: 5, completed: 2 });
+        expect(r.byThinkingLevel[1]).toMatchObject({ executor: null, thinkingLevel: 'low', total: 0, successRate: null });
+        expect(r.byThinkingLevel[3]).toMatchObject({ executor: null, thinkingLevel: 'high', total: 1, inProgress: 1 });
 
         expect(r.byExecutor.map((g) => g.executor)).toEqual(['local', 'sandbox']);
         const local = r.byExecutor[0];
@@ -76,6 +76,13 @@ describe('AgentTaskOutcomeMetricsRepository.getMetrics', () => {
         expect(r.byExecutor[1]).toMatchObject({ successRate: null, durationP50Ms: null, tokensAvg: null, tokensSum: 0, interventionsPerTask: 0 });
         expect(r.overall).toMatchObject({ executor: null, total: 6, inProgress: 2, successRate: 0.5 });
         expect(r.topFailures).toEqual([{ failureClass: 'timeout', count: 3 }, { failureClass: 'unknown', count: 1 }]);
+    });
+
+    it('THINKING_SQL 은 CTE 에서 t.thinking_level 을 고른다', async () => {
+        (pool.query as jest.Mock).mockResolvedValue({ rows: [] });
+        await repo.getMetrics({ days: 7, failureTopN: 5 });
+        const [sql3] = (pool.query as jest.Mock).mock.calls[2];
+        expect(sql3).toContain('t.executor, t.thinking_level, t.status');
     });
 
     it('기간 안에 작업이 없으면 전체는 0건 묶음, 실행 방식별은 빈 배열', async () => {
