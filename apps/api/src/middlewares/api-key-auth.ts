@@ -116,6 +116,12 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
             }
         }
 
+        // 사용 기록(마지막 사용·요청 수) — 응답을 기다리게 하지 않고, 기록 실패가 인증 결과를 바꾸지 않게 한다.
+        // 토큰 수는 이 층에서 모르므로 0.
+        void Promise.resolve()
+            .then(() => db.recordApiKeyUsage(keyRecord.id, 0))
+            .catch((e: unknown) => logger.warn('API Key 사용 기록 실패:', e));
+
         next();
     } catch (err) {
         logger.error('API Key 인증 오류:', err);
