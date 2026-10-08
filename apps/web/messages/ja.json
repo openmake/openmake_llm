@@ -265,6 +265,7 @@
       "activate": "有効化",
       "deactivate": "無効化",
       "rotate": "ローテーション",
+      "rotateInactive": "無効なキーはローテーションできません — 先に有効化してください",
       "delete": "削除"
     },
     "scope": {
