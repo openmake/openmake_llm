@@ -7,8 +7,9 @@ import type { IncomingMessage } from 'http';
 
 const mockGetApiKeyByHash = jest.fn();
 const mockGetUserById = jest.fn();
+const mockRecordApiKeyUsage = jest.fn();
 jest.mock('../../data/models/unified-database', () => ({
-    getUnifiedDatabase: () => ({ getApiKeyByHash: mockGetApiKeyByHash, getUserById: mockGetUserById }),
+    getUnifiedDatabase: () => ({ getApiKeyByHash: mockGetApiKeyByHash, getUserById: mockGetUserById, recordApiKeyUsage: mockRecordApiKeyUsage }),
 }));
 jest.mock('../../auth/api-key-utils', () => ({
     API_KEY_PREFIX: 'omk_live_',
@@ -26,6 +27,7 @@ const KEY = { id: 'key-1', user_id: 'u-1', is_active: true, scopes: ['bridge'] }
 beforeEach(() => {
     mockGetApiKeyByHash.mockReset().mockResolvedValue(KEY);
     mockGetUserById.mockReset().mockResolvedValue({ id: 'u-1', role: 'user', is_active: true });
+    mockRecordApiKeyUsage.mockReset().mockResolvedValue(undefined);
 });
 
 describe('authenticateWebSocket — API key 재연결', () => {
@@ -85,5 +87,54 @@ describe('authenticateWebSocket — API key 재연결', () => {
             mockGetApiKeyByHash.mockRejectedValue(new Error('db down'));
             expect((await authenticateWebSocket(req, logger)).authFailure).toBe('auth_unavailable');
         });
+    });
+});
+
+describe('authenticateWebSocket — API key 사용 기록(2026-10-09)', () => {
+    const flush = () => new Promise((r) => setImmediate(r));
+
+    it('인증 성공 시 연결당 1회 키 id 와 토큰 0 으로 기록한다', async () => {
+        const r = await authenticateWebSocket(req, logger);
+        await flush();
+        expect(r.userId).toBe('u-1');
+        expect(mockRecordApiKeyUsage).toHaveBeenCalledTimes(1);
+        expect(mockRecordApiKeyUsage).toHaveBeenCalledWith('key-1', 0);
+    });
+
+    it.each([
+        ['없는 키', () => mockGetApiKeyByHash.mockResolvedValue(undefined)],
+        ['비활성 키', () => mockGetApiKeyByHash.mockResolvedValue({ ...KEY, is_active: false })],
+        ['만료된 키', () => mockGetApiKeyByHash.mockResolvedValue({ ...KEY, expires_at: new Date(Date.now() - 1000).toISOString() })],
+        ['비활성 계정', () => mockGetUserById.mockResolvedValue({ id: 'u-1', role: 'user', is_active: false })],
+        ['삭제된 계정', () => mockGetUserById.mockResolvedValue(undefined)],
+        ['키 조회 오류', () => mockGetApiKeyByHash.mockRejectedValue(new Error('db down'))],
+    ])('인증 실패(%s)는 기록하지 않는다', async (_label, arrange) => {
+        arrange();
+        const r = await authenticateWebSocket(req, logger);
+        await flush();
+        expect(r.userId).toBeNull();
+        expect(mockRecordApiKeyUsage).not.toHaveBeenCalled();
+    });
+
+    it('기록이 거부돼도 인증 결과는 그대로다', async () => {
+        mockRecordApiKeyUsage.mockRejectedValue(new Error('write failed'));
+        const r = await authenticateWebSocket(req, logger);
+        await flush();
+        expect(r.userId).toBe('u-1');
+        expect(r.authFailure).toBeUndefined();
+    });
+
+    it('기록이 동기적으로 던져도 인증 결과는 그대로다', async () => {
+        mockRecordApiKeyUsage.mockImplementation(() => { throw new Error('sync throw'); });
+        const r = await authenticateWebSocket(req, logger);
+        await flush();
+        expect(r.userId).toBe('u-1');
+        expect(r.authFailure).toBeUndefined();
+    });
+
+    it('기록 완료를 기다리지 않는다', async () => {
+        mockRecordApiKeyUsage.mockReturnValue(new Promise(() => { /* 끝나지 않음 */ }));
+        const r = await authenticateWebSocket(req, logger);
+        expect(r.userId).toBe('u-1');
     });
 });

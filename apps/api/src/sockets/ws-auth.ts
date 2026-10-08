@@ -69,6 +69,10 @@ async function resolveAuthFromApiKey(
         if (!user) return { ...GUEST_RESULT, authFailure: 'account_deleted' };
         if (!user.is_active) return { ...GUEST_RESULT, authFailure: 'account_disabled' };
         logger.info(`[WS] API key 인증 연결: userId=${user.id}`);
+        // 연결당 1회 사용 기록 — 연결을 기다리게 하지 않고, 기록 실패가 인증 결과를 바꾸지 않게 한다.
+        void Promise.resolve()
+            .then(() => db.recordApiKeyUsage(key.id, 0))
+            .catch((e: unknown) => logger.warn('[WS] API key 사용 기록 실패:', e));
         return {
             userId: String(user.id),
             userRole: (user.role as 'admin' | 'user' | 'guest') || 'user',
