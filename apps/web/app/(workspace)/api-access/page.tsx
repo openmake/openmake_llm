@@ -98,7 +98,7 @@ export default function ApiAccessPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await ApiClient.get<ApiSuccess<{ api_keys: ApiKeyRow[] }>>("/api/api-keys");
+      const res = await ApiClient.get<ApiSuccess<{ api_keys: ApiKeyRow[] }>>("/api/api-keys?include_inactive=true");
       setKeys(res?.data?.api_keys ?? []);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t("loadFailed"));
