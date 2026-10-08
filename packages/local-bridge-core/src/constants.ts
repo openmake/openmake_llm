@@ -153,6 +153,8 @@ export function sbSub(base: string, list: string[]): string {
 export const BROWSER_MAX_ACTIONS = 40;
 /** 액션 1개의 대기 상한(ms) — 요소 대기·이동 완료 */
 export const BROWSER_ACTION_TIMEOUT_MS = Number(process.env.OMK_BRIDGE_BROWSER_TIMEOUT_MS || 20000);
+/** selector 없는 extractText·extractHtml 이 문서 읽기(readyState !== 'loading')를 기다리는 상한(ms) — 넘으면 던지지 않고 결과에 loading: true 를 싣는다 */
+export const BROWSER_EXTRACT_READY_MS = Number(process.env.OMK_BRIDGE_BROWSER_EXTRACT_READY_MS || BROWSER_ACTION_TIMEOUT_MS);
 /** wait 액션의 상한(ms) */
 export const BROWSER_WAIT_MAX_MS = 10000;
 /** 추출 결과(text·html) 길이 상한(chars) */

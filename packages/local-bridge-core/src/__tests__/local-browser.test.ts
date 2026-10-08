@@ -3,6 +3,8 @@
  * Chrome 이 없는 환경과 CI 에서는 건너뛴다. 실행 전 OMK_BRIDGE_BROWSER_HEADLESS=1 이 필요하다(아래에서 설정).
  */
 process.env.OMK_BRIDGE_BROWSER_HEADLESS = '1';
+// 로딩 중 페이지의 추출 대기 상한 — 테스트에서는 짧게(기본은 액션 대기 상한과 같다)
+process.env.OMK_BRIDGE_BROWSER_EXTRACT_READY_MS = '1500';
 
 import * as fs from 'fs';
 import * as http from 'http';
@@ -29,6 +31,8 @@ const PAGES: Record<string, string> = {
             const parts = []; for (const f of e.target.files) parts.push(f.name + '=' + (await f.text()));
             document.getElementById('up').textContent = id + ':' + parts.join(','); });</script></body></html>`,
     '/hop': `<html><body><script>setTimeout(() => { location.href = location.href.replace('127.0.0.1', 'localhost').replace('/hop', '/upload'); }, 300);</script></body></html>`,
+    // 열리자마자 /slow 로 넘어간다 — /slow 는 응답을 끝내지 않아 문서가 계속 'loading' 이다
+    '/slow-hop': '<html><body><script>setTimeout(() => { location.href = "/slow"; }, 50);</script></body></html>',
     '/late': '<html><body><script>setTimeout(() => { const b = document.createElement("button"); b.id = "late"; b.textContent = "늦게 뜬 버튼"; b.onclick = () => document.title = "눌림"; document.body.appendChild(b); }, 400);</script></body></html>',
 };
 
@@ -44,6 +48,7 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
     let outDir: string;
     let browser: LocalBrowser;
     const hits: string[] = [];
+    const slowResponses: http.ServerResponse[] = [];
 
     const opts = (taskId = 't1'): BrowserRunOptions => ({
         taskId, downloadDir: outDir,
@@ -56,6 +61,12 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
             hits.push(req.url ?? '');
             const u = new URL(req.url ?? '/', 'http://x');
             if (u.pathname === '/redirect') { res.writeHead(302, { Location: `${other}/form` }); res.end(); return; }
+            if (u.pathname === '/slow') { // 앞부분만 보내고 응답을 끝내지 않는다
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                res.write(`<html><head><title>느린 페이지</title></head><body><input id="early" value="먼저 온 부분"><!--${' '.repeat(2048)}-->`);
+                slowResponses.push(res);
+                return;
+            }
             const body = u.pathname === '/done' ? `<html><body><p id="got">받음: ${u.search}</p></body></html>` : PAGES[u.pathname];
             res.writeHead(body ? 200 : 404, { 'Content-Type': 'text/html; charset=utf-8' });
             res.end(body ?? 'not found');
@@ -70,6 +81,7 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
     }, 30000);
 
     afterAll(async () => {
+        for (const res of slowResponses) res.end('</body></html>');
         await browser.dispose();
         await new Promise<void>((r) => server.close(() => r()));
         fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
@@ -86,6 +98,38 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
         expect(r.results[2].html).toBe('첫 페이지');
         expect(r.results[3].elements).toEqual(expect.arrayContaining([expect.objectContaining({ role: 'link', name: '양식으로' })]));
     }, 60000);
+
+    describe('selector 없는 extractText·extractHtml — 문서가 읽히는 중이면 loading 을 싣는다', () => {
+        it('다 읽힌 페이지는 종전과 같다 — loading 이 없다', async () => {
+            const r = await browser.run({ actions: [{ type: 'goto', url: `${origin}/` }, { type: 'extractText' }, { type: 'extractHtml' }], sitePolicy: allowAll() }, opts('ready-task'));
+            expect(r.ok).toBe(true);
+            expect(r.results[1].text).toContain('첫 페이지');
+            expect(r.results[1]).not.toHaveProperty('loading');
+            expect(r.results[2].html).toContain('<h1 id="t">첫 페이지</h1>');
+            expect(r.results[2]).not.toHaveProperty('loading');
+            await browser.closeTask('ready-task');
+        }, 60000);
+
+        it('기다려도 계속 loading 이면 던지지 않고 loading: true 와 그때까지의 결과를 돌려준다', async () => {
+            const r = await browser.run({ actions: [
+                { type: 'goto', url: `${origin}/slow-hop` }, { type: 'wait', ms: 1000 }, { type: 'extractText' }, { type: 'extractHtml' },
+            ], sitePolicy: allowAll() }, opts('slow-task'));
+            expect(r.ok).toBe(true);
+            expect(r.finalUrl).toBe(`${origin}/slow`);
+            expect(r.results[2]).toEqual(expect.objectContaining({ ok: true, loading: true }));
+            expect(r.results[2].text).toBe(''); // 보이는 글자가 아직 없다(입력 칸 값은 innerText 에 들지 않는다)
+            expect(r.results[3]).toEqual(expect.objectContaining({ ok: true, loading: true }));
+            expect(r.results[3].html).toContain('id="early"');
+        }, 60000);
+
+        it('selector 가 있으면 종전처럼 요소만 기다린다 — 로딩 중이어도 loading 이 없다', async () => {
+            const r = await browser.run({ actions: [{ type: 'extractText', selector: '#early' }], sitePolicy: allowAll() }, opts('slow-task'));
+            expect(r.ok).toBe(true);
+            expect(r.results[0].text).toBe('먼저 온 부분');
+            expect(r.results[0]).not.toHaveProperty('loading');
+            await browser.closeTask('slow-task');
+        }, 60000);
+    });
 
     it('호출이 끝나도 탭이 남는다 — 다음 호출이 같은 페이지에서 이어진다', async () => {
         const r = await browser.run({ actions: [{ type: 'click', selector: '#next' }, { type: 'extractText', selector: 'button#send' }], sitePolicy: allowAll() }, opts());
