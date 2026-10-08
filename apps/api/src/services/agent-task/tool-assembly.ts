@@ -19,6 +19,15 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
 
+/**
+ * 카탈로그에 없는 extraTools 이름 중 이미 warn 한 것 — 작업마다 같은 경고가 되풀이되지 않게 이름당 한 번만 warn,
+ * 그 뒤로는 debug. 사용자별 카탈로그 차이는 구분하지 않는다(설정 오류를 한 번 알리는 것이 목적).
+ */
+const warnedMissingExtraTools = new Set<string>();
+
+/** 테스트 전용 — 경고 기록을 비운다. */
+export function __resetMissingExtraToolWarningsForTest(): void { warnedMissingExtraTools.clear(); }
+
 interface AssembledTools {
     tools: ToolDefinition[];
     /** 내부 전용 실행에서 목록에서 뺀 추가 도구 이름 — 감사 기록용(내부 전용이 아니면 빈 배열) */
@@ -90,7 +99,12 @@ export async function assembleAgentTools(params: {
             const tool = mcpTools.find((t) => t.function.name === name);
             if (!tool) {
                 if (removedForInternalOnly.includes(name)) continue; // 내부 전용으로 뺀 것 — 설정 오류가 아니다
-                logger.warn(`[AgentTask] extraTools '${name}' 를 도구 카탈로그에서 찾지 못함 — 노출 생략`);
+                if (warnedMissingExtraTools.has(name)) {
+                    logger.debug(`[AgentTask] extraTools '${name}' 를 도구 카탈로그에서 찾지 못함 — 노출 생략`);
+                } else {
+                    warnedMissingExtraTools.add(name);
+                    logger.warn(`[AgentTask] extraTools '${name}' 를 도구 카탈로그에서 찾지 못함 — 노출 생략 (TASK_SANDBOX_EXTRA_TOOLS 확인, 이 경고는 이름마다 한 번만)`);
+                }
                 continue;
             }
             extra.push(tool);
