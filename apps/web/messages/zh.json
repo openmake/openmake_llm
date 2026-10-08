@@ -265,6 +265,7 @@
       "activate": "启用",
       "deactivate": "停用",
       "rotate": "轮换",
+      "rotateInactive": "已停用的密钥无法轮换 — 请先启用",
       "delete": "删除"
     },
     "scope": {

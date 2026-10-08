@@ -349,8 +349,8 @@ export default function ApiAccessPage() {
                           </button>
                           <button
                             onClick={() => rotate(k)}
-                            disabled={busyId === k.id}
-                            title={t("action.rotate")}
+                            disabled={busyId === k.id || !k.is_active}
+                            title={k.is_active ? t("action.rotate") : t("action.rotateInactive")}
                             className="grid h-7 w-7 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg disabled:opacity-40"
                           >
                             <RotateCw className="h-3.5 w-3.5" />

@@ -265,6 +265,7 @@
       "activate": "Aktivieren",
       "deactivate": "Deaktivieren",
       "rotate": "Rotieren",
+      "rotateInactive": "Inaktive Schlüssel können nicht rotiert werden — bitte zuerst aktivieren",
       "delete": "Löschen"
     },
     "scope": {
