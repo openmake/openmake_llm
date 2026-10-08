@@ -29,6 +29,11 @@ jest.mock('./task-steps', () => ({
     verifySkippedMessage: jest.fn((gates: readonly string[]) => `skipped: ${gates.join(',')}`),
 }));
 jest.mock('./code-diff', () => ({ maybePersistCodeDiff: jest.fn(async (_r: unknown, _c: unknown, _t: string, n: number) => n) }));
+// 판정 전 거절 승인 조회 — DB 없이 0건.
+jest.mock('../../data/repositories/agent-task-approval-repository', () => ({
+    AgentTaskApprovalRepository: jest.fn().mockImplementation(() => ({ listRejectedForTask: jest.fn(async () => []) })),
+}));
+jest.mock('../../data/models/unified-database', () => ({ getPool: jest.fn(() => ({})) }));
 
 import { finalizeTask, finalizeMaxTurnsExhausted, type FinalizeInput, type VerifyHold } from './finalize';
 import { persistVerifySkippedStep } from './task-steps';

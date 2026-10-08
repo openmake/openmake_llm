@@ -1386,6 +1386,12 @@ export const AGENT_TASK_LIMITS = {
     GOAL_JUDGE_ARTIFACT_MAX_ITEMS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_ARTIFACT_MAX_ITEMS || '5', 10),
     /** 산출물 항목당 본문 글자 캡 (프롬프트 팽창 방지 — 목표 수행 여부 판단엔 앞부분으로 충분) */
     GOAL_JUDGE_ARTIFACT_ITEM_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_ARTIFACT_ITEM_CHARS || '400', 10),
+    /** judge 에 싣는 "사용자가 거절한 동작" 최대 건수 — 거절 기록으로 판정 입력이 불어나지 않게(2026-10-09). */
+    GOAL_JUDGE_REJECTION_MAX_ITEMS: 10,
+    /** 거절 항목당 인자 요약(JSON) 글자 캡 */
+    GOAL_JUDGE_REJECTION_ARGS_CHARS: 200,
+    /** 거절 항목당 거절 사유 글자 캡 */
+    GOAL_JUDGE_REJECTION_REASON_CHARS: 300,
     /** 부팅 자동 복구 — 프로세스 재시작으로 중단된 task 를 부팅 시 자동 resume 한다.
      *  주의: schema-initializer 가 부팅 시 running/paused 를 failed('server restarted') 로 먼저
      *  마킹하므로, 복구 대상은 ①잔존 running/paused(마킹 실패 대비) + ②restart 마킹 + checkpoint

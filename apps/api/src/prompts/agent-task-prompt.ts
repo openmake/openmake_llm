@@ -272,6 +272,22 @@ export function getAgentTaskGoalJudgeMessages(
     };
 }
 
+/**
+ * 완료 판정 EXECUTION 에 붙는 "사용자가 거절한 동작" 절 — 거절이 있을 때만 붙는다(0건이면 판정 입력은 종전과 같다).
+ * 사용자가 승인 카드로 거절한 동작은 사용자가 스스로 목표에서 뺀 것이다. 그 동작을 하지 않은 것을 미달성으로 보면
+ * 사용자의 결정대로 끝낸 작업이 실패로 집계된다(2026-10-09 라이브 실측).
+ */
+export function getUserRejectionsJudgeNote(
+    items: ReadonlyArray<{ toolName: string; args: string; reason: string }>,
+): string {
+    return [
+        '사용자가 거절한 동작(승인 카드에서 거절 — 사용자가 스스로 목표에서 뺀 것):',
+        ...items.map((r) => `- ${r.toolName} ${r.args} — 거절 사유: ${r.reason || '(사유 없음)'}`),
+        '판정 지시: 위 동작과 거절 사유가 요구한 변경은 목표에서 제외하세요. 에이전트가 그 동작을 하지 않았거나 사유대로',
+        '범위를 줄여 수행한 것은 미달성 근거가 아닙니다. 제외하고 남은 목표를 수행했으면 달성(achieved=true)으로 판정하세요.',
+    ].join('\n');
+}
+
 /** 중간 지시 주입문의 머리 표식 — 대화에서 "사용자가 직접 보낸 지시"를 시스템 안내와 구분할 때 쓴다(output-repetition). */
 export const AGENT_TASK_STEERING_MARKER = '[사용자 추가 지시]';
 

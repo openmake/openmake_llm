@@ -29,7 +29,9 @@ import { applyReportRender } from '../chat-service/report-block';
 import { AGENT_TASK_INCOMPLETE_MARKER, getAgentTaskVerifyFailedNudge, getAgentTaskTestsFailedNudge } from '../../prompts/agent-task-prompt';
 import { getVerifyHeldAnswerNote } from '../../prompts/agent-task-turn-loop';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
-import { judgeGoal, buildJudgeExecutionContext, buildJudgeArtifactSummary } from './goal-judge';
+import { judgeGoal, buildJudgeExecutionContext, buildJudgeArtifactSummary, withUserRejectionsJudgeNote, type JudgeUserRejection } from './goal-judge';
+import { AgentTaskApprovalRepository } from '../../data/repositories/agent-task-approval-repository';
+import { getPool } from '../../data/models/unified-database';
 import { verifyCodeArtifacts } from './deliverable-verify';
 import { verifyWorkspaceTests } from './workspace-test-verify';
 import { persistArtifactSteps, persistJudgeStep, persistVerifySkippedStep, verifySkippedMessage } from './task-steps';
@@ -210,8 +212,10 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     if (AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED
         && (judgeApplies || AGENT_TASK_LIMITS.GOAL_JUDGE_SHADOW_ENABLED)) {
         // 실행 환경 없이 진행한 작업이면 그 사실을 판정에 알린다(sandbox-unavailable).
-        const execCtx = withSandboxUnavailableJudgeNote(
-            buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence), taskId);
+        // 사용자가 승인 카드로 거절한 동작도 알린다 — 사용자가 스스로 뺀 동작 때문에 미달성으로 잡히지 않게.
+        const execCtx = withUserRejectionsJudgeNote(withSandboxUnavailableJudgeNote(
+            buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence), taskId),
+        await loadUserRejections(taskId));
         // 셰도우 경로에선 ANSWER 에서 떨어져 나간 산출물을 함께 싣는다(적용 경로는 아티팩트 0 이라 빈 값).
         const judgeClient = await judgeClientFor(userId, { internalOnly: sandboxCfg.internalOnly });
         // 원장 귀속 — 판정 호출의 비용도 이 작업 id 로 묶는다.
@@ -268,6 +272,16 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     });
     logger.info(`[AgentTask] 완료: ${taskId} (${turn + 1} 턴, ${path}, judge=${verdict}, 아티팩트 ${artifacts.length}개)`);
     return { kind: 'completed', stepNumber };
+}
+
+/** 이 작업에서 사용자가 거절한 승인 — 조회 실패는 fail-open(거절 없음으로 보고 판정은 종전대로 진행). */
+async function loadUserRejections(taskId: string): Promise<JudgeUserRejection[]> {
+    try {
+        return await new AgentTaskApprovalRepository(getPool()).listRejectedForTask(taskId, AGENT_TASK_LIMITS.GOAL_JUDGE_REJECTION_MAX_ITEMS);
+    } catch (e) {
+        logger.warn(`[AgentTask] 거절 승인 조회 실패 — 판정은 거절 없이 진행: ${taskId}: ${e instanceof Error ? e.message : String(e)}`);
+        return [];
+    }
 }
 
 /**
