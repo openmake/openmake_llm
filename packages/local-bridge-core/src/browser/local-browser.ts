@@ -16,7 +16,7 @@ import type { ChildProcess } from 'child_process';
 import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, type BrowserSitePolicy, type BrowserUploadApproval } from '@openmake/config';
 import {
     BROWSER_ACTION_TIMEOUT_MS, BROWSER_CLICK_SETTLE_MS, BROWSER_EXIT_WAIT_MS, BROWSER_DIALOG_MESSAGE_MAX, BROWSER_DIALOG_RECORD_MAX,
-    BROWSER_EXTRACT_MAX_CHARS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_TABS, BROWSER_POLL_MS,
+    BROWSER_EXTRACT_MAX_CHARS, BROWSER_EXTRACT_READY_MS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_TABS, BROWSER_POLL_MS,
     BROWSER_SNAPSHOT_MAX_ELEMENTS, BROWSER_SNAPSHOT_NAME_MAX, BROWSER_WAIT_MAX_MS, BROWSER_FILL_ECHO_MAX_CHARS,
 } from '../constants';
 import { CdpClient } from './cdp';
@@ -50,6 +50,8 @@ export interface BrowserActionResult {
     i: number;
     type: unknown;
     ok: boolean;
+    /** selector 없는 extractText·extractHtml 에서, 기다려도 문서가 아직 읽히는 중(readyState 'loading')이었다 — text·html 이 비었거나 일부일 수 있다 */
+    loading?: boolean;
     [k: string]: unknown;
 }
 
@@ -280,8 +282,8 @@ export class LocalBrowser {
     }
 
     /** 조건이 참이 될 때까지 폴링 — 이동 중이라 평가가 실패하면 다시 시도한다. 시간 초과면 마지막 오류나 timeoutMessage 로 던진다. */
-    private async poll<T>(fn: () => Promise<T | null>, timeoutMessage: string): Promise<T> {
-        const deadline = Date.now() + BROWSER_ACTION_TIMEOUT_MS;
+    private async poll<T>(fn: () => Promise<T | null>, timeoutMessage: string, timeoutMs = BROWSER_ACTION_TIMEOUT_MS): Promise<T> {
+        const deadline = Date.now() + timeoutMs;
         let lastError: Error | null = null;
         for (;;) {
             try {
@@ -296,6 +298,12 @@ export class LocalBrowser {
             if (Date.now() >= deadline) throw lastError ?? new Error(timeoutMessage);
             await sleep(BROWSER_POLL_MS);
         }
+    }
+
+    /** 문서가 읽힐 때까지(readyState !== 'loading') 기다린다 — 시간 안에 읽혔으면 true. 시간 초과는 던지지 않고 false. */
+    private async waitDocumentReady(cdp: CdpClient, tab: Tab): Promise<boolean> {
+        return this.poll(async () => ((await this.evaluate<string>(cdp, tab, 'document.readyState')) !== 'loading' ? true : null),
+            '페이지 읽기 시간 초과', BROWSER_EXTRACT_READY_MS).then(() => true, () => false);
     }
 
     private async clickAt(cdp: CdpClient, tab: Tab, x: number, y: number): Promise<void> {
@@ -552,18 +560,21 @@ export class LocalBrowser {
                 return { i, type: a.type, ok: true, path: name };
             }
             case 'extractText': {
+                // selector 없이 페이지 전체를 읽을 때는 문서가 읽힐 때까지 기다린다 — 로딩 중의 빈 본문을 "성공·빈 문자열"로 보고하지 않게
+                const ready = a.selector ? true : await this.waitDocumentReady(cdp, tab);
                 const text = await (a.selector
                     ? this.poll(() => this.evaluate<string | null>(cdp, tab, `(() => { const el = document.querySelector(${sel}); if (!el) return null; const v = (${FIELD_VALUE_JS})(el); return ${FIELD_IS_FORM_JS} ? (v ?? '') : el.innerText; })()`),
                         `요소를 찾지 못했습니다: ${str(a.selector)}`)
                     : this.evaluate<string>(cdp, tab, 'document.body ? document.body.innerText : ""'));
-                return { i, type: a.type, ok: true, text: str(text).slice(0, BROWSER_EXTRACT_MAX_CHARS) };
+                return { i, type: a.type, ok: true, text: str(text).slice(0, BROWSER_EXTRACT_MAX_CHARS), ...(ready ? {} : { loading: true }) };
             }
             case 'extractHtml': {
+                const ready = a.selector ? true : await this.waitDocumentReady(cdp, tab);
                 const html = await (a.selector
                     ? this.poll(() => this.evaluate<string | null>(cdp, tab, `(() => { const el = document.querySelector(${sel}); return el ? el.innerHTML : null; })()`),
                         `요소를 찾지 못했습니다: ${str(a.selector)}`)
                     : this.evaluate<string>(cdp, tab, 'document.documentElement.outerHTML'));
-                return { i, type: a.type, ok: true, html: str(html).slice(0, BROWSER_EXTRACT_MAX_CHARS) };
+                return { i, type: a.type, ok: true, html: str(html).slice(0, BROWSER_EXTRACT_MAX_CHARS), ...(ready ? {} : { loading: true }) };
             }
             case 'uploadFile':
                 await this.uploadFiles(cdp, tab, str(a.selector), upload.paths, upload.host);
