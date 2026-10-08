@@ -179,6 +179,17 @@ export class AgentTaskApprovalRepository extends BaseRepository {
         return (r.rowCount ?? 0) > 0;
     }
 
+    /** 작업에서 사용자가 거절한 승인 — 완료 판정(goal judge)이 "사용자가 뺀 동작"을 목표에서 제외하는 데 쓴다. 오래된 순. */
+    async listRejectedForTask(taskId: string, limit = 20): Promise<Array<Pick<ApprovalRow, 'tool_name' | 'args' | 'answer_text'>>> {
+        const r = await this.query<Pick<ApprovalRow, 'tool_name' | 'args' | 'answer_text'>>(
+            `SELECT tool_name, args, answer_text FROM agent_task_approvals
+             WHERE task_id = $1 AND status = 'rejected'
+             ORDER BY decided_at ASC NULLS LAST, created_at ASC LIMIT $2`,
+            [taskId, limit],
+        );
+        return r.rows;
+    }
+
     /** 작업 종료 시 남은 pending 을 정리 — 승인함에 죽은 요청이 남지 않게. */
     async expirePendingForTask(taskId: string, status: 'expired' | 'aborted' = 'aborted'): Promise<void> {
         await this.query(

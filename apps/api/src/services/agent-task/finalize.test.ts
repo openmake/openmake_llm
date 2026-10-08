@@ -35,6 +35,12 @@ jest.mock('./task-steps', () => ({
     verifySkippedMessage: jest.fn((gates: readonly string[]) => `skipped: ${gates.join(',')}`),
 }));
 jest.mock('./code-diff', () => ({ maybePersistCodeDiff: jest.fn(async (_r: unknown, _c: unknown, _t: string, n: number) => n) }));
+// 사용자가 거절한 승인 조회 — DB 대신 테스트가 행을 정한다(기본 0건).
+const mockListRejected = jest.fn(async (_taskId: string): Promise<unknown[]> => []);
+jest.mock('../../data/repositories/agent-task-approval-repository', () => ({
+    AgentTaskApprovalRepository: jest.fn().mockImplementation(() => ({ listRejectedForTask: (id: string) => mockListRejected(id) })),
+}));
+jest.mock('../../data/models/unified-database', () => ({ getPool: jest.fn(() => ({})) }));
 
 import { finalizeTask, type FinalizeInput } from './finalize';
 import { judgeGoal } from './goal-judge';
@@ -87,6 +93,7 @@ const lastUpdate = (i: FinalizeInput): Record<string, unknown> => {
 beforeEach(() => {
     jest.clearAllMocks();
     verifyMock.mockResolvedValue({ ok: true, report: '' });
+    mockListRejected.mockResolvedValue([]);
 });
 
 describe('finalizeTask — 완료 관문 단일화(091)', () => {
@@ -417,5 +424,52 @@ describe('finalizeTask — 검증 증거 원장', () => {
             await run(undefined);
             expect(testsMock).toHaveBeenCalledTimes(1);
         });
+    });
+});
+
+describe('finalizeTask — 사용자가 거절한 동작은 판정에서 제외', () => {
+    const execCtxOf = (): string => judgeMock.mock.calls[0][4] as string;
+
+    it('거절 1건이 있으면 judge 입력(EXECUTION)에 그 도구·인자·사유와 제외 지시가 실린다', async () => {
+        mockListRejected.mockResolvedValue([
+            { tool_name: 'browser_type', args: { selector: '#name', text: '홍길동' }, answer_text: '입력하지 말고 제목만 읽어서 알려 줘' },
+        ]);
+        judgeMock.mockResolvedValue({ achieved: true, reason: '거절된 입력 제외 후 수행', raw: '' });
+
+        const out = await finalizeTask(input({ path: 'terminate', terminateSummary: '제목은 "로그인"입니다.' }));
+
+        expect(mockListRejected).toHaveBeenCalledWith('task-1');
+        const ctx = execCtxOf();
+        expect(ctx.startsWith('ctx\n')).toBe(true);
+        expect(ctx).toContain('사용자가 거절한 동작');
+        expect(ctx).toContain('browser_type');
+        expect(ctx).toContain('홍길동');
+        expect(ctx).toContain('거절 사유: 입력하지 말고 제목만 읽어서 알려 줘');
+        expect(ctx).toContain('목표에서 제외');
+        // 판정 기록(persistJudgeStep)에도 같은 입력이 남는다 — 사후 규명용.
+        expect(judgeStepMock.mock.calls[0][5]).toBe(ctx);
+        expect(out.kind).toBe('completed');
+    });
+
+    it('거절 0건이면 judge 입력은 종전과 같다', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+
+        await finalizeTask(input());
+
+        expect(mockListRejected).toHaveBeenCalledWith('task-1');
+        expect(execCtxOf()).toBe('ctx');
+    });
+
+    it('거절 조회가 던져도 판정은 종전 입력으로 진행된다(fail-open)', async () => {
+        mockListRejected.mockRejectedValue(new Error('db down'));
+        judgeMock.mockResolvedValue({ achieved: false, reason: '미달성', raw: '' });
+        const i = input();
+
+        const out = await finalizeTask(i);
+
+        expect(judgeMock).toHaveBeenCalledTimes(1);
+        expect(execCtxOf()).toBe('ctx');
+        expect(out.kind).toBe('goal_incomplete');
+        expect(lastUpdate(i)).toMatchObject({ status: 'failed', error: 'goal_incomplete', judgeVerdict: 'not_achieved' });
     });
 });
