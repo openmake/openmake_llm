@@ -52,17 +52,17 @@ describe('레이트리밋 격리', () => {
 
         // 같은 경로·같은 IP 라도 API key 는 자기 키 해시로 센다
         const cli = await request(app).post('/api/agent-tasks/x/share')
-            .set('X-Forwarded-For', proxyIp).set('X-API-Key', 'omk_live_testkey_a').send({});
+            .set('X-Forwarded-For', proxyIp).set('X-API-Key', 'omk_live_a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1').send({});
         expect(cli.status).toBe(200);
     });
 
     test('서로 다른 API key 는 서로의 예산을 먹지 않는다', async () => {
         const app = makeApp();
         for (let i = 0; i < RL_AGENT_TASK.ipLimit + 2; i++) {
-            await request(app).post('/api/agent-tasks/x/share').set('X-API-Key', 'omk_live_key_one').send({});
+            await request(app).post('/api/agent-tasks/x/share').set('X-API-Key', 'omk_live_b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2').send({});
         }
-        expect((await request(app).post('/api/agent-tasks/x/share').set('X-API-Key', 'omk_live_key_one').send({})).status).toBe(429);
-        expect((await request(app).post('/api/agent-tasks/x/share').set('X-API-Key', 'omk_live_key_two').send({})).status).toBe(200);
+        expect((await request(app).post('/api/agent-tasks/x/share').set('X-API-Key', 'omk_live_b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2').send({})).status).toBe(429);
+        expect((await request(app).post('/api/agent-tasks/x/share').set('X-API-Key', 'omk_live_c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3').send({})).status).toBe(200);
     });
 
     test('루프백 peer 에서는 CF-Connecting-IP 로 클라이언트를 구분한다', async () => {
