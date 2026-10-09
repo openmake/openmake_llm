@@ -47,6 +47,8 @@ export class AgentTaskQueue {
     private globalActive = 0;
     private readonly userActive = new Map<string, number>();
     private readonly pending: QueueEntry[] = [];
+    /** 실행 중(시작~종료) taskId — 같은 작업의 중복 제출 거부(2026-10-09 점검 ①). 대기 중은 pending 에서 찾는다. */
+    private readonly active = new Set<string>();
     /** 최근 시작 건의 대기 시간(ms) — 오래된 것부터 버린다. */
     private readonly recentWaits: number[] = [];
 
@@ -58,7 +60,11 @@ export class AgentTaskQueue {
     ) {}
 
     /** 즉시 실행 가능하면 start('started'), 아니면 대기열 등록('queued'). */
-    submit(entry: QueueEntry): 'started' | 'queued' {
+    submit(entry: QueueEntry): 'started' | 'queued' | 'duplicate' {
+        if (this.active.has(entry.taskId) || this.pending.some((e) => e.taskId === entry.taskId)) {
+            logger.warn(`[Queue] 같은 작업이 이미 실행·대기 중 — 제출 거부: ${entry.taskId}`);
+            return 'duplicate';
+        }
         const queued = { ...entry, enqueuedAt: entry.enqueuedAt ?? this.now() };
         if (this.canRun(entry.userId)) {
             this.start(queued);
@@ -119,10 +125,12 @@ export class AgentTaskQueue {
     private start(entry: QueueEntry): void {
         this.recordWait(Math.max(0, this.now() - (entry.enqueuedAt ?? this.now())));
         this.globalActive++;
+        this.active.add(entry.taskId);
         this.userActive.set(entry.userId, (this.userActive.get(entry.userId) ?? 0) + 1);
         void entry.run()
             .catch((e) => logger.warn(`[Queue] 실행 thunk 예외(무시): ${entry.taskId} — ${e instanceof Error ? e.message : e}`))
             .finally(() => {
+                this.active.delete(entry.taskId);
                 this.globalActive = Math.max(0, this.globalActive - 1);
                 const next = (this.userActive.get(entry.userId) ?? 1) - 1;
                 if (next <= 0) this.userActive.delete(entry.userId);
@@ -172,7 +180,7 @@ export function resolveQueuePriority(requested: unknown, isAdmin: boolean, max: 
  * 실행 디스패치 통합 진입점 — /execute·/resume·부팅복구가 공통 사용.
  * 큐 비활성(기본)이면 기존대로 즉시 detached 발사. 활성이면 큐 제출 후 대기 시 'queued' 로 표기.
  */
-export async function dispatchAgentTask(entry: QueueEntry): Promise<'started' | 'queued'> {
+export async function dispatchAgentTask(entry: QueueEntry): Promise<'started' | 'queued' | 'duplicate'> {
     if (!AGENT_TASK_LIMITS.QUEUE_ENABLED) {
         void entry.run().catch((e) => logger.warn(`[Queue] 실행 예외(무시): ${entry.taskId} — ${e instanceof Error ? e.message : e}`));
         return 'started';

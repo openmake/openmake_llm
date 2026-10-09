@@ -178,16 +178,19 @@ export class AgentTaskService {
 
         // cancel 레이스 봉쇄: 어떤 await 보다 먼저 레지스트리에 등록해 /cancel 이 항상
         // AbortController 에 도달하게 한다 (기존엔 스킬 조회 await 사이의 취소가 유실됐다).
+        // 레지스트리 소유권(2026-10-09 점검 ①) — 같은 taskId 가 이미 이 프로세스에서 돌면 두 번째 인스턴스는 시작하지 않는다
+        // (DB claim·큐 중복 거부가 막지만 큐 비활성 직발사 경로의 마지막 방어). 등록을 덮어쓰면 /cancel 이 첫 루프에 못 닿는다.
+        if (AgentTaskService.running.has(taskId)) { logger.warn(`[AgentTask] 이미 실행 중인 작업 — 두 번째 인스턴스 시작 안 함: ${taskId}`); return; }
         AgentTaskService.running.set(taskId, this);
         const lease = await beginTaskLease(taskId, () => { leaseLost = true; this.abortController.abort(); }); // 실행 소유권(176): 잃으면 루프를 멈춘다
         if (!lease.acquired) { AgentTaskService.running.delete(taskId); return; }
         try {
-            // 레지스트리 등록 전(detached 스케줄링 창)에 접수된 취소는 DB 에만 기록됨 — 시작 전 존중.
-            // 단 resume 은 "취소됐던 작업을 이어가는 것" 자체라 영속 상태 cancelled 를 취소 요청으로
-            // 읽으면 안 된다 — 그전엔 취소 작업 재개가 202 직후 곧바로 다시 aborted 로 끝났다
-            // (2026-08-26 CLI resume E2E 실측). AbortController 는 인스턴스별로 새것이라 signal 만 본다.
+            // 레지스트리 등록 전(detached 스케줄링 창)에 접수된 취소는 DB 에만 기록됨 — 시작 전 존중. 재개도 같다(2026-10-09 점검 ①):
+            // 모든 재개 진입점이 먼저 claim 으로 cancelled 를 벗어나므로(라우트 claimForExecute→queued, 주차 claimParkedTask→pending,
+            // 부팅 claimAgentTaskForRecovery→pending) 여기서 보이는 cancelled 는 항상 claim 뒤에 들어온 새 취소다.
+            // (종전엔 resume 이 영속 cancelled 를 무시했다 — 취소된 작업 재개가 202 직후 다시 aborted 로 끝나던 2026-08-26 문제는 claim 이 해결한다.)
             const preTask = await db.getAgentTask(taskId);
-            if (signal.aborted || (!input.resume && preTask?.status === 'cancelled')) throw new AgentTaskAbort('aborted');
+            if (signal.aborted || preTask?.status === 'cancelled') throw new AgentTaskAbort('aborted');
             // resume: 이전 실행분 토큰을 이어서 누적(4-4) — runaway 토큰 가드도 통산 기준으로 동작.
             // "나머지 모두 승인" 도 함께 복원(124) — 종전엔 메모리뿐이라 재시작 후 다시 물었다.
             if (input.resume) { totalTokens = Number(preTask?.total_tokens ?? 0); cacheUsage.restore(preTask); }
@@ -583,7 +586,7 @@ export class AgentTaskService {
                 .catch((e) => logger.warn(`[AgentTask] 상태 갱신 실패: ${e}`));
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
-            AgentTaskService.running.delete(taskId);
+            if (AgentTaskService.running.get(taskId) === this) AgentTaskService.running.delete(taskId); // 내 등록일 때만 — 다른 인스턴스 것을 지우지 않는다
             await lease.end();
             // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup. 소유권을 잃었으면 새 소유자가 쓰고 있어 건너뛴다.
             if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber });
