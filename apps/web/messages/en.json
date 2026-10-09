@@ -1688,6 +1688,9 @@
       "action": "Action",
       "target": "Target"
     },
+    "actionsError": "Could not load action options. All logs remain available.",
+    "loading": "Loading audit logs.",
+    "loadError": "Could not load audit logs.",
     "empty": "No logs match the filters."
   },
   "adminMetrics": {

@@ -30,7 +30,6 @@ interface AuditLog {
 }
 
 const ALL_ACTIONS = "__all__";
-const ACTIONS = [ALL_ACTIONS, "user.delete", "user.role_change", "apikey.create", "auth.login", "auth.failed_attempt", "mcp.server_register", "llm.context_overflow", "alert.dispatched", "local_bridge.browser_policy_block"];
 const PERIODS: { key: string; labelKey: string }[] = [
   { key: "today", labelKey: "period.today" },
   { key: "days7", labelKey: "period.days7" },
@@ -68,15 +67,41 @@ export default function AdminAuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [action, setAction] = useState(ALL_ACTIONS);
   const [period, setPeriod] = useState("days7");
+  const [actions, setActions] = useState<string[]>([]);
+  const [actionsError, setActionsError] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const query = useMemo(() => {
+    const params = new URLSearchParams();
+    if (action !== ALL_ACTIONS) params.set("action", action);
+    if (period !== "all") {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      if (period === "days7") start.setDate(start.getDate() - 6);
+      if (period === "days30") start.setDate(start.getDate() - 29);
+      params.set("startDate", start.toISOString());
+      params.set("endDate", new Date().toISOString());
+    }
+    return params.toString();
+  }, [action, period]);
 
   useEffect(() => {
     let alive = true;
+    ApiClient.get<{ data?: { actions?: string[] }; actions?: string[] }>("/api/audit/actions")
+      .then((res) => { if (alive) setActions((res.data ?? res).actions ?? []); })
+      .catch(() => { if (alive) setActionsError(true); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError(false);
     (async () => {
       try {
         // GET /api/audit (admin 전용) → { success, data: { logs, total } }
         // 사건을 고르면 서버가 action 으로 거른 최근 50건을 받는다(최근 50건 안에서만 거르던 한계 해소).
-        const query = action === ALL_ACTIONS ? "" : `&action=${encodeURIComponent(action)}`;
-        const res = await ApiClient.get<{ data?: { logs?: ApiAuditLog[] }; logs?: ApiAuditLog[] }>(`/api/audit?limit=50${query}`);
+        const res = await ApiClient.get<{ data?: { logs?: ApiAuditLog[] }; logs?: ApiAuditLog[] }>(`/api/audit?limit=50&${query}`);
         const payload = res.data ?? res;
         const raw = (payload.logs as ApiAuditLog[]) ?? [];
         if (!alive) return;
@@ -91,13 +116,17 @@ export default function AdminAuditPage() {
           })),
         );
       } catch {
-        /* 401/실패 시 목업 유지 */
+        if (!alive) return;
+        setLogs([]);
+        setError(true);
+      } finally {
+        if (alive) setLoading(false);
       }
     })();
     return () => {
       alive = false;
     };
-  }, [action]);
+  }, [query]);
 
   const filtered = useMemo(
     () =>
@@ -122,7 +151,8 @@ export default function AdminAuditPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => { window.location.href = "/api/audit/export"; }}
+              disabled={loading || error}
+              onClick={() => { window.location.href = `/api/audit/export?${query}`; }}
             >
               <Download className="h-4 w-4" />
               {t("exportCsv")}
@@ -133,9 +163,10 @@ export default function AdminAuditPage() {
       <AdminTabs />
 
       <PageBody>
+        {actionsError && <p role="alert" className="mb-4 text-sm text-muted">{t("actionsError")}</p>}
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <select className={selectCls} value={action} onChange={(e) => setAction(e.target.value)}>
-            {ACTIONS.map((a) => (
+            {[ALL_ACTIONS, ...actions].map((a) => (
               <option key={a} value={a}>
                 {a === ALL_ACTIONS ? t("filter.allActions") : a}
               </option>
@@ -170,10 +201,10 @@ export default function AdminAuditPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {loading || error || filtered.length === 0 ? (
                   <tr>
                     <Td className="py-8 text-center text-muted" colSpan={5}>
-                      {t("empty")}
+                      {t(loading ? "loading" : error ? "loadError" : "empty")}
                     </Td>
                   </tr>
                 ) : (

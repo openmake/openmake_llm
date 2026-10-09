@@ -19,6 +19,7 @@
         "test:infra": "node --test \"infra/**/*.test.mjs\"",
         "test:backend": "npm run build:packages && npm test --workspace=apps/api",
         "test:e2e": "npx playwright test",
+        "test:web": "node tests/web/run-tests.mjs",
         "test:e2e:ui": "npx playwright test --ui",
         "lint": "eslint .",
         "audit:gate": "node scripts/audit-gate.cjs",
