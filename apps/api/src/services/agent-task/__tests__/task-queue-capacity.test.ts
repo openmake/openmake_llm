@@ -13,7 +13,7 @@ function harness(globalMax = 2, userMax = 1) {
     const jobs = new Map<string, Job>();
     const running = (): string[] => [...jobs.values()].filter((j) => j.started).map((j) => j.taskId);
     let peak = 0;
-    const submit = (taskId: string, userId: string, priority?: number): 'started' | 'queued' => {
+    const submit = (taskId: string, userId: string, priority?: number): 'started' | 'queued' | 'duplicate' => {
         const job: Job = { taskId, userId, finish: () => undefined, started: false };
         jobs.set(taskId, job);
         return q.submit({
