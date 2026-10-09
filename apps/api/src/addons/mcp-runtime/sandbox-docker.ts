@@ -86,6 +86,7 @@ export const MCP_SANDBOX_PID_LABEL_KEY = 'openmake.pid';
 
 // docker 경로 해석은 Base 유틸(utils/docker-path)로 옮겼다 — 아티팩트 실행·보고서 내보내기도 같은 것을 쓴다 (2026-09-19).
 import { resolveDocker } from '../../utils/docker-path';
+import { isControlEnvKey } from '../../security/spawn-env-policy';
 export { resolveDocker };
 
 /** 환경에서 SandboxConfig 조립 (No-Hardcoding — env override). */
@@ -137,11 +138,12 @@ export function buildSandboxedEnv(input: SandboxInput): Record<string, string> {
  * 서버 설정의 env 중 docker CLI 가 읽는 키(DOCKER_HOST·DOCKER_CONTEXT·DOCKER_TLS_VERIFY …)를 뺀 것.
  * 이 env 는 컨테이너에 가기 전에 호스트의 docker 프로세스를 거친다 — 서버 설정이 그 키를 주면
  * docker 가 다른 데몬·컨텍스트로 접속한다. 컨테이너 안의 서버가 쓸 일도 없으므로 버린다.
+ * 그 밖의 제어 키(NODE_OPTIONS·LD_*·PATH 등, spawn-env-policy — DOCKER_* 포함)도 함께 버린다.
  */
 function serverEnv(input: SandboxInput): Record<string, unknown> {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(input.env ?? {})) {
-        if (!/^DOCKER_/i.test(k)) out[k] = v;
+        if (!isControlEnvKey(k)) out[k] = v;
     }
     return out;
 }

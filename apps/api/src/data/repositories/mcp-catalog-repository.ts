@@ -16,6 +16,8 @@ import { disabledCatalogTemplateIds } from '../../addon-host/pack-catalog';
 import { encryptToken, decryptToken } from '../../utils/token-crypto';
 import { createLogger } from '../../utils/logger';
 import { SQL_RESULT_LIMITS } from '../../config/http-data-limits';
+import { isControlEnvKey, McpCatalogInputError } from '../../security/spawn-env-policy';
+import { validateCatalogInput } from './mcp-catalog-input';
 import type {
     McpCatalogTemplate,
     McpFromCatalogPayload,
@@ -120,6 +122,7 @@ export class McpCatalogRepository {
         template: McpCatalogTemplate,
         userId: string,
     ): Promise<UserMcpServerRow> {
+        validateCatalogInput(template, payload);
         const id = `mcp_${userId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const args = this.renderArgs(template, payload.args);
         const env = this.encryptEnv(template, this.applyEnvDefaults(template, payload.env));
@@ -204,10 +207,12 @@ export class McpCatalogRepository {
         const existing = current.rows[0]?.env ?? {};
 
         const envSchema = (template?.env_schema ?? {}) as { properties?: Record<string, { secret?: boolean }> };
+        const control = Object.keys(patch).filter(isControlEnvKey);
+        if (control.length > 0) throw new McpCatalogInputError(`허용되지 않은 환경변수 키: ${control.join(', ')}`);
         const allowed = new Set([...Object.keys(envSchema.properties ?? {}), ...Object.keys(existing)]);
         const rejected = Object.keys(patch).filter((k) => !allowed.has(k));
         if (rejected.length > 0) {
-            throw new Error(`허용되지 않은 환경변수 키: ${rejected.join(', ')}`);
+            throw new McpCatalogInputError(`허용되지 않은 환경변수 키: ${rejected.join(', ')}`);
         }
 
         const merged: Record<string, string> = { ...existing };

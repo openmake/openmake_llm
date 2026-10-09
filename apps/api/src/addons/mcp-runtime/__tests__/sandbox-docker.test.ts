@@ -161,4 +161,10 @@ describe('buildSandboxedCommand (gate)', () => {
         expect(r.env).toEqual({});
         expect(r.args.join(' ')).not.toMatch(/DOCKER_/i);
     });
+
+    it('서버 설정의 제어 env(NODE_OPTIONS·LD_PRELOAD)는 컨테이너에 넣지 않는다', () => {
+        const r = buildSandboxedCommand({ ...input, env: { NODE_OPTIONS: '--require /x', LD_PRELOAD: '/x.so', HOME: '/cache', API_KEY: 'k1' } }, cfg());
+        expect(r.env).toEqual({ HOME: '/cache', API_KEY: 'k1' });
+        expect(r.args.join(' ')).not.toContain('NODE_OPTIONS');
+    });
 });
