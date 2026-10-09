@@ -181,3 +181,81 @@ describe('McpCatalogRepository.createFromCatalog — 원격 시드(148·149)', (
         expect(params[7]).toBe(url);
     });
 });
+
+describe('McpCatalogRepository.createFromCatalog — 입력 검증(2026-10-09 점검 ④)', () => {
+    const template = {
+        id: 'mcp-firecrawl',
+        transport_type: 'stdio',
+        command_template: 'npx -y firecrawl-mcp',
+        args_schema: { required: ['region'], properties: { region: { type: 'string' }, verbose: { type: 'boolean' } } },
+        env_schema: { required: ['FIRECRAWL_API_KEY'], properties: { FIRECRAWL_API_KEY: { secret: true }, HOME: { default: '/cache' }, NODE_OPTIONS: {} } },
+        is_enabled: true,
+    } as never;
+    const payload = (args: Record<string, unknown>, env: Record<string, string>) =>
+        ({ template_id: 'mcp-firecrawl', name: 'fc', visibility: 'user_private', args, env, auto_spawn: true }) as never;
+    const makePool = () => {
+        const queryMock = jest.fn().mockImplementation((_sql: string, params: unknown[]) =>
+            Promise.resolve({ rows: [{ id: String(params[0]), args: JSON.parse(String(params[5])), env: JSON.parse(String(params[6])) }] }));
+        return { queryMock, pool: { query: queryMock } as unknown as Pool };
+    };
+
+    it('스키마에 있는 args·env 만 통과하고 --k=v 로 렌더한다', async () => {
+        const { queryMock, pool } = makePool();
+        const row = await new McpCatalogRepository(pool).createFromCatalog(payload({ region: 'kr', verbose: true }, { FIRECRAWL_API_KEY: 'k' }), template, 'u1');
+        expect(JSON.parse(String(queryMock.mock.calls[0]![1]![5]))).toEqual(['-y', 'firecrawl-mcp', '--region=kr', '--verbose=true']);
+        expect(row.id).toMatch(/^mcp_u1_/);
+    });
+
+    it('args_schema.properties 밖의 키는 거부한다', async () => {
+        const { pool } = makePool();
+        await expect(new McpCatalogRepository(pool).createFromCatalog(payload({ region: 'kr', 'eval': 'x' }, { FIRECRAWL_API_KEY: 'k' }), template, 'u1'))
+            .rejects.toMatchObject({ name: 'McpCatalogInputError' });
+        expect((pool as unknown as { query: jest.Mock }).query).not.toHaveBeenCalled();
+    });
+
+    it('args_schema.required 가 빠지면 거부한다', async () => {
+        const { pool } = makePool();
+        await expect(new McpCatalogRepository(pool).createFromCatalog(payload({}, { FIRECRAWL_API_KEY: 'k' }), template, 'u1'))
+            .rejects.toThrow(/region/);
+    });
+
+    it('args 값은 string·number·boolean 만 받는다', async () => {
+        const { pool } = makePool();
+        await expect(new McpCatalogRepository(pool).createFromCatalog(payload({ region: { a: 1 } }, { FIRECRAWL_API_KEY: 'k' }), template, 'u1'))
+            .rejects.toMatchObject({ name: 'McpCatalogInputError' });
+    });
+
+    it('env_schema.properties 밖의 키는 거부한다', async () => {
+        const { pool } = makePool();
+        await expect(new McpCatalogRepository(pool).createFromCatalog(payload({ region: 'kr' }, { FIRECRAWL_API_KEY: 'k', LD_PRELOAD: '/x.so' }), template, 'u1'))
+            .rejects.toThrow(/LD_PRELOAD/);
+    });
+
+    it('스키마가 선언했어도 제어 키(NODE_OPTIONS)는 거부한다', async () => {
+        const { pool } = makePool();
+        await expect(new McpCatalogRepository(pool).createFromCatalog(payload({ region: 'kr' }, { FIRECRAWL_API_KEY: 'k', NODE_OPTIONS: '--require /x' }), template, 'u1'))
+            .rejects.toThrow(/NODE_OPTIONS/);
+    });
+
+    it('스키마 default 의 HOME 은 사용자 입력 없이도 채워진다(거부 목록 아님)', async () => {
+        const { queryMock, pool } = makePool();
+        await new McpCatalogRepository(pool).createFromCatalog(payload({ region: 'kr' }, { FIRECRAWL_API_KEY: 'k' }), template, 'u1');
+        expect(JSON.parse(String(queryMock.mock.calls[0]![1]![6])).HOME).toBe('/cache');
+    });
+
+    it('args_schema 가 없는 템플릿은 args 를 받지 않는다', async () => {
+        const { pool } = makePool();
+        const noArgs = { ...(template as object), args_schema: {} } as never;
+        await expect(new McpCatalogRepository(pool).createFromCatalog(payload({ region: 'kr' }, { FIRECRAWL_API_KEY: 'k' }), noArgs, 'u1'))
+            .rejects.toMatchObject({ name: 'McpCatalogInputError' });
+    });
+});
+
+describe('McpCatalogRepository.updateEnv — 제어 키 거부', () => {
+    it('기존 env 에 있던 키라도 제어 키면 거부한다', async () => {
+        const queryMock = jest.fn().mockResolvedValueOnce({ rowCount: 1, rows: [{ env: { NODE_OPTIONS: 'old', API_KEY: 'v1:x' } }] });
+        const repo = new McpCatalogRepository({ query: queryMock } as unknown as Pool);
+        await expect(repo.updateEnv('s1', { NODE_OPTIONS: '--require /x' }, null)).rejects.toThrow(/NODE_OPTIONS/);
+        expect(queryMock).toHaveBeenCalledTimes(1);
+    });
+});

@@ -26,6 +26,7 @@ import { Client, StreamableHTTPClientTransport, SSEClientTransport } from '@mode
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from '../../tool-contract/types';
 import { buildSandboxedCommand } from './sandbox-docker';
+import { stripControlEnv } from '../../security/spawn-env-policy';
 import { isConnectionDeathError } from '../../tool-contract/tool-error-classifier';
 import { createLogger } from '../../utils/logger';
 import { createPinnedFetch } from '../../security/ssrf-guard';
@@ -470,9 +471,10 @@ export class ExternalMCPClient extends EventEmitter {
                     //   부분집합)를 base 로 병합한다. sandboxed(docker) 시엔 sb.env 를 넘겨 docker
                     //   프로세스가 `-e KEY` 로 컨테이너에 전달하게 한다 — 값을 인자에 baked 하면
                     //   같은 호스트의 아무 프로세스나 `ps` 로 비밀을 읽을 수 있다.
+                    //   제어 키(spawn-env-policy)는 저장 시 거부되지만, 과거 행 보호로 여기서도 걷어낸다.
                     env: sb.sandboxed
                         ? sb.env
-                        : (this.config.env ? { ...this.config.env } as Record<string, string> : undefined),
+                        : stripControlEnv(this.config.env) as Record<string, string> | undefined,
                     stderr: 'pipe',
                 });
             }

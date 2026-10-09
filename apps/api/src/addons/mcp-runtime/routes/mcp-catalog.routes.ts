@@ -11,7 +11,7 @@ import { Router, Request, Response } from 'express';
 import { requireAuth } from '../../../auth';
 import { validateWithSecurity } from '../../../middlewares/validation';
 import { asyncHandler } from '../../../utils/error-handler';
-import { success, forbidden, notFound } from '../../../utils/api-response';
+import { success, badRequest, forbidden, notFound } from '../../../utils/api-response';
 import { McpCatalogRepository } from '../../../data/repositories/mcp-catalog-repository';
 import { canRegisterServer, canStartStopServer } from './mcp-visibility';
 import { McpFromCatalogPayloadSchema } from '../../../schemas/mcp-catalog.schema';
@@ -21,6 +21,7 @@ import { getLifecycleSupervisor } from '../lifecycle-supervisor';
 import { getUnifiedMCPClient } from '../index';
 import { connectGlobalServer } from './mcp-global-connect';
 import { createLogger } from '../../../utils/logger';
+import { McpCatalogInputError } from '../../../security/spawn-env-policy';
 
 const logger = createLogger('McpCatalogRoutes');
 
@@ -66,7 +67,13 @@ mcpCatalogRouter.post(
             return;
         }
 
-        const created = await repo.createFromCatalog(payload, template, actor.id);
+        let created;
+        try {
+            created = await repo.createFromCatalog(payload, template, actor.id);
+        } catch (e) {
+            if (e instanceof McpCatalogInputError) { res.status(400).json(badRequest(e.message)); return; }
+            throw e;
+        }
         logger.info(`from-catalog 등록: ${created.id} (template=${template.id}, user=${actor.id})`);
 
         // 설치 즉시 spawn — auto_spawn 서버를 바로 풀에 연결해 재로그인/다음 채팅을 기다리지 않고
