@@ -44,6 +44,19 @@ export const CACHE_SUBPATHS = ['.npm', '.cache', 'Library/Caches', '.cargo', '.g
 /** 읽기를 차단할 비밀 경로. */
 export const SECRET_SUBPATHS = ['.ssh', '.aws', '.gnupg', '.kube', '.docker', '.config/gcloud', 'Library/Keychains'];
 
+/**
+ * exec 자식 프로세스에 넘기는 env allowlist(2026-10-09 점검 ⑤) — 호스트 env 를 통째로 상속하면
+ * 헬퍼의 OMK_COMPANION_API_KEY·사용자 셸의 비밀이 `env` 한 번에 도구 결과로 새어 서버 DB 까지 남는다.
+ * PATH 는 exec-path 가 계산한 값으로 따로 넣는다.
+ */
+export const EXEC_ENV_ALLOWLIST_POSIX = ['HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'COLORTERM', 'LANG', 'LANGUAGE', 'TMPDIR', 'TZ'] as const;
+export const EXEC_ENV_ALLOWLIST_PREFIX_POSIX = ['LC_'] as const;
+export const EXEC_ENV_ALLOWLIST_WIN32 = [
+    'SystemRoot', 'windir', 'SystemDrive', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'USERNAME',
+    'HOMEDRIVE', 'HOMEPATH', 'APPDATA', 'LOCALAPPDATA', 'ProgramData', 'ProgramFiles', 'ProgramFiles(x86)',
+    'NUMBER_OF_PROCESSORS', 'OS',
+] as const;
+
 export const WORKTREE_DIR = '.openmake/worktrees';
 export const WORKTREE_BRANCH_PREFIX = 'omk-task/';
 /** taskId 재검증 — 경로·브랜치명에 들어가므로 UUID 문자만 허용(디렉토리 탈출·옵션 주입 차단). */

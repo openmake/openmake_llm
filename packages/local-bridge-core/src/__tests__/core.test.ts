@@ -100,6 +100,24 @@ describe('BridgeCore', () => {
         expect(r.stdout).toBe('done-2');
     });
 
+    it('exec: 자식 환경에 호스트 비밀이 상속되지 않는다(allowlist)', async () => {
+        process.env.OMK_COMPANION_API_KEY = 'omk_live_leak_probe';
+        process.env.OMK_TEST_SECRET_PROBE = 'leak';
+        try {
+            const core = makeCore(base);
+            core.prepare();
+            const r = await run(core, { kind: 'exec', command: 'env' });
+            expect(r.ok).toBe(true);
+            expect(r.stdout).not.toContain('omk_live_leak_probe');
+            expect(r.stdout).not.toContain('OMK_TEST_SECRET_PROBE');
+            expect(r.stdout).toMatch(/^HOME=/m);
+            expect(r.stdout).toMatch(/^PATH=/m);
+        } finally {
+            delete process.env.OMK_COMPANION_API_KEY;
+            delete process.env.OMK_TEST_SECRET_PROBE;
+        }
+    });
+
     it("일괄 승인('all')은 그 작업에만 유효하고 task_end 에서 회수된다", async () => {
         const answers: Array<'all' | 'no'> = ['all', 'no'];
         const confirm = jest.fn(async () => answers.shift() ?? 'no');

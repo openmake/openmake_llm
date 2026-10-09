@@ -41,6 +41,8 @@ const serverUrl = (() => {
   return i >= 0 ? process.argv[i + 1] : 'https://chat.openmake.cc';
 })();
 const apiKey = process.env.OMK_COMPANION_API_KEY || '';
+// 읽은 즉시 지운다 — exec 자식(코어는 allowlist env 로 띄우지만)과 진단 출력 어디에도 키가 남지 않게.
+delete process.env.OMK_COMPANION_API_KEY;
 
 // 서버 주소 찾기 — 사용자가 넣은 주소 하나(--server)에서 연결 주소와 웹 주소를 정한다(코어 endpoints).
 // 주소가 잘못됐으면 넣은 값을 그대로 쓴다(연결 단계에서 오류로 드러난다).

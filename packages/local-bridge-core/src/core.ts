@@ -24,6 +24,7 @@ import { runCodeNav } from './code-nav';
 import { detectTestRunner } from './test-runner';
 import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
+import { buildExecEnv } from './exec-env';
 import { detectGitDir, writeSandboxProfile } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
@@ -162,7 +163,8 @@ export class BridgeCore {
                 if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
                 const opts = {
                     cwd: base, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, encoding: 'utf8' as const,
-                    env: { ...process.env, PATH: this.execPathCache },
+                    // allowlist(exec-env) — 비밀 상속 차단
+                    env: buildExecEnv(process.env, this.execPathCache),
                 };
                 const cb = (err: import('child_process').ExecFileException | null, stdout: string, stderr: string): void => {
                     done({ ok: true, stdout: String(stdout), stderr: String(stderr), exitCode: err ? (typeof err.code === 'number' ? err.code : 1) : 0 });
