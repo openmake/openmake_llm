@@ -123,9 +123,12 @@ export class UnifiedDatabase {
         });
 
         // 스키마 초기화 — Promise를 보관하여 초기 쿼리가 스키마 완료를 대기할 수 있도록 함
-        this.schemaReady = initSchemaFn(this.pool).catch((err: unknown) => {
+        // 실패는 삼키지 않는다 — ensureReady() 가 그대로 reject 해 부팅 Fail-Fast 가 동작한다.
+        // 아래 catch 는 로그 + "아무도 await 하기 전" 의 unhandledRejection 방지용(원본 Promise 는 그대로 둔다).
+        this.schemaReady = initSchemaFn(this.pool);
+        this.schemaReady.catch((err: unknown) => {
             logger.error('[UnifiedDB] Schema init failed:', err);
-        }) as Promise<void>;
+        });
 
         this.userRepository = new UserRepository(this.pool);
         this.conversationRepository = new ConversationRepository(this.pool);
