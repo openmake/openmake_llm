@@ -27,6 +27,7 @@ const EXACT: Readonly<Record<string, AgentTaskFailureClass>> = {
     interrupted: 'interrupted',
     interrupted_local_device: 'interrupted',
     'server restarted': 'interrupted',
+    lease_held_elsewhere: 'interrupted', // 다른 서버의 살아 있는 실행 소유권 때문에 시작하지 못함(task-lease) — 다시 실행하면 된다
     sandbox_unavailable: 'interrupted', // 실행 환경(샌드박스)을 받지 못해 끝냄(정책 fail) — 작업 탓이 아니고 다시 실행하면 될 수 있다
 };
 

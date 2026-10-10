@@ -8,6 +8,7 @@
  */
 import type { QueryResult } from 'pg';
 import { BaseRepository } from './base-repository';
+import type { AuditAction } from '../../config/audit-actions';
 
 export class AuditRepository extends BaseRepository {
     async logAgentUsage(params: {
@@ -68,7 +69,7 @@ export class AuditRepository extends BaseRepository {
     }
 
     async logAudit(params: {
-        action: string;
+        action: AuditAction;
         userId?: string;
         resourceType?: string;
         resourceId?: string;

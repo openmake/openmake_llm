@@ -72,7 +72,7 @@ export class ApiKeyService {
     /**
      * 감사 로그 기록 (API Key CRUD 작업)
      */
-    private async audit(action: string, userId: string, keyId: string, details?: Record<string, unknown>): Promise<void> {
+    private async audit(action: 'create' | 'update' | 'delete' | 'rotate', userId: string, keyId: string, details?: Record<string, unknown>): Promise<void> {
         try {
             const db = getUnifiedDatabase();
             await db.logAudit({

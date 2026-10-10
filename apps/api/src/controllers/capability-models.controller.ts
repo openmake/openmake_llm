@@ -27,6 +27,7 @@ import {
     resolveCapabilityTarget, validateCapabilityAssignment, CapabilityUnavailableError,
 } from '../services/orchestrator/capability-resolver';
 import { getAuditService } from '../services/AuditService';
+import type { AuditAction } from '../config/audit-actions';
 import { buildCapabilityCatalog } from '../services/capability-catalog';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, badRequest, notFound } from '../utils/api-response';
@@ -53,7 +54,7 @@ function parseAssignable(value: string): Capability | null {
     return cap && ASSIGNABLE_CAPABILITIES.includes(cap) ? cap : null;
 }
 
-async function auditChange(userId: string, action: string, details: Record<string, unknown>): Promise<void> {
+async function auditChange(userId: string, action: AuditAction, details: Record<string, unknown>): Promise<void> {
     try {
         await getAuditService().logAudit({ action, userId, resourceType: 'capability_model', details });
     } catch (err) {

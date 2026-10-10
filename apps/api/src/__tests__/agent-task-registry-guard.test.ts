@@ -85,6 +85,8 @@ jest.mock('../services/task-sandbox/approval-gate', () => ({
 }));
 
 import { AgentTaskService } from '../services/AgentTaskService';
+import { beginTaskLease } from '../services/agent-task/task-lease';
+import { dispatchAgentTask } from '../services/agent-task/task-queue';
 
 const input = { taskId: 't1', userId: 'u1', goal: 'g', maxTurns: 3 } as never;
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r)); };
@@ -113,5 +115,29 @@ describe('AgentTaskService 레지스트리 소유권(2026-10-09 점검 ①)', ()
         expect(chat).not.toHaveBeenCalled();
         expect(statuses()).toContain('cancelled');
         expect(AgentTaskService.isRunning('t1')).toBe(false);
+    });
+    // 큐 비활성(기본) — 종료 정리는 레지스트리를 비운 뒤에 돈다. 그 사이의 재시도가 새 실행을 시작하면 이전 실행의 정리
+    // (같은 이름의 샌드박스 컨테이너·workspace 삭제, 승인 만료)가 새 실행의 자원을 지운다.
+    it('큐가 꺼져 있어도 이전 실행의 종료 정리가 끝나기 전 재디스패치는 duplicate 로 거절되고, 정리가 끝나면 다시 시작한다', async () => {
+        let endCleanup!: () => void;
+        const cleanup = new Promise<void>((r) => { endCleanup = r; });
+        (beginTaskLease as jest.Mock).mockImplementationOnce(async () => ({ acquired: true, end: () => cleanup }));
+        const entry = () => ({ taskId: 't1', userId: 'u1', run: () => new AgentTaskService().execute(input) });
+        await expect(dispatchAgentTask(entry())).resolves.toBe('started');
+        await flush();
+        expect(AgentTaskService.cancel('t1')).toBe(true);
+        await flush();
+        expect(statuses()).toContain('cancelled');
+        expect(AgentTaskService.isRunning('t1')).toBe(false); // 레지스트리는 비었지만 정리는 아직 안 끝났다
+        await expect(dispatchAgentTask(entry())).resolves.toBe('duplicate');
+        await flush();
+        expect(statuses().filter((s) => s === 'running')).toHaveLength(1); // 두 번째 실행은 시작하지 않았다
+        endCleanup();
+        await flush();
+        await expect(dispatchAgentTask(entry())).resolves.toBe('started');
+        await flush();
+        expect(statuses().filter((s) => s === 'running')).toHaveLength(2);
+        AgentTaskService.cancel('t1');
+        await flush();
     });
 });

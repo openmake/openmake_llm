@@ -19,6 +19,7 @@ import { success } from '../utils/api-response';
 import { GLOBAL_CAPABILITY_SCOPE, CAPABILITY_LIMITS } from '../config/capabilities';
 import { buildAssignmentsResponse, putAssignment, deleteAssignment } from '../services/model-assignments-service';
 import { getAuditService } from '../services/AuditService';
+import type { AuditAction } from '../config/audit-actions';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('AdminModelAssignmentsRoutes');
@@ -32,7 +33,7 @@ function adminUserId(req: Request): string | undefined {
     return req.user?.id !== undefined ? String(req.user.id) : undefined;
 }
 
-async function auditChange(req: Request, action: string, details: Record<string, unknown>): Promise<void> {
+async function auditChange(req: Request, action: AuditAction, details: Record<string, unknown>): Promise<void> {
     try {
         await getAuditService().logAudit({ action, userId: adminUserId(req), resourceType: 'model_assignment', details });
     } catch (err) {

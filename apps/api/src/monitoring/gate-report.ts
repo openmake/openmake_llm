@@ -262,10 +262,10 @@ async function runGateReportSweep(now: Date = new Date()): Promise<boolean> {
 
 /**
  * 스케줄러 등록 — 부팅 1회 + 주기 due 체크. 파일 존재가 멱등 마커라 중복 실행에 안전하다.
- * @returns 활성화 여부 (플래그 OFF 면 false)
+ * @returns 주기 타이머 (플래그 OFF 면 null) — schedulers 가 종료 때 멈춘다
  */
-export function startGateReportScheduler(): boolean {
-    if (!GATE_REPORT.ENABLED) return false;
+export function startGateReportScheduler(): NodeJS.Timeout | null {
+    if (!GATE_REPORT.ENABLED) return null;
     void runGateReportSweep().catch((e) => {
         logger.warn(`[GateReport] 부팅 스윕 실패(무시): ${e instanceof Error ? e.message : e}`);
     });
@@ -275,5 +275,5 @@ export function startGateReportScheduler(): boolean {
         });
     }, GATE_REPORT.CHECK_INTERVAL_MS);
     timer.unref();
-    return true;
+    return timer;
 }

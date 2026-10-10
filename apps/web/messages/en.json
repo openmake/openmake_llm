@@ -1002,6 +1002,7 @@
       "device_wait_expired": "Timed out waiting for your device to reconnect",
       "browser_takeover_expired": "Timed out waiting for the browser to be handed back",
       "interrupted_local_device": "Interrupted: local device disconnected",
+      "lease_held_elsewhere": "Could not start: running on another server",
       "llm_error": "Model call failed",
       "sandbox_unavailable": "Execution environment unavailable",
       "next": {
@@ -1010,11 +1011,13 @@
         "timeout": "Split the task into smaller parts or raise the time limit, then run it again.",
         "token_limit": "Narrow the goal or reduce the input material, then run it again.",
         "llm_error": "Try again in a moment. If it keeps failing, pick another model or tell your administrator.",
-        "interrupted": "Resume to pick up from where it stopped.",
+        "interrupted": "Resume to pick up from where it stopped if the option is available; otherwise run the task again.",
         "unknown": "Check the full failure reason. If it fails the same way again, tell your administrator.",
         "device_wait_expired": "Connect Companion (or the CLI), then run the task again.",
         "browser_takeover_expired": "Hand the browser back from the Companion menu, then run the task again.",
-        "sandbox_unavailable": "Run it again in a little while. An execution environment frees up once fewer tasks are running. If it keeps happening, tell your administrator."
+        "sandbox_unavailable": "Run it again in a little while. An execution environment frees up once fewer tasks are running. If it keeps happening, tell your administrator.",
+        "interrupted_local_device": "Reconnect Companion (or the CLI), then resume if the option is available, or run the task again.",
+        "lease_held_elsewhere": "Run it again in a moment."
       }
     },
     "planNode": "Step {n}",
@@ -1688,6 +1691,9 @@
       "action": "Action",
       "target": "Target"
     },
+    "actionsError": "Could not load action options. All logs remain available.",
+    "loading": "Loading audit logs.",
+    "loadError": "Could not load audit logs.",
     "empty": "No logs match the filters."
   },
   "adminMetrics": {

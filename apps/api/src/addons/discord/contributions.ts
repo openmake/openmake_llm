@@ -1,5 +1,5 @@
 /**
- * discord add-on 이 Base 레지스트리에 기여하는 선언 (2026-09-19) — 운영 설정 키와 API key 스코프.
+ * discord add-on 이 Base 레지스트리에 기여하는 선언 (2026-09-19) — 운영 설정 키, API key 스코프, 감사 action.
  * 순수 데이터다(다른 앱 모듈을 import 하지 않는다 — 설정 레지스트리가 부팅 초기에 읽는다).
  *
  * 봇은 별도 프로세스(PM2 openmake-discord)라 DB overlay 가 자동으로 닿지 않는다 — 기동 시
@@ -13,8 +13,18 @@ import type { AddonContribution } from '../../addon-host/contributions';
 /** Discord 봇 프로세스가 기동 시 자기 운영 설정을 받아오는 축 — 추론·브리지는 불가. */
 export const DISCORD_API_KEY_SCOPE = 'discord';
 
+/** 봇이 운영 설정을 받아간 사실의 감사 action — audit_logs 에 쌓인 값이라 이름을 바꾸지 않는다. */
+export const DISCORD_RUNTIME_CONFIG_FETCH_AUDIT_ACTION = 'discord_runtime_config_fetch';
+
+declare module '../../config/audit-actions' {
+    interface AddonAuditActions {
+        [DISCORD_RUNTIME_CONFIG_FETCH_AUDIT_ACTION]: null;
+    }
+}
+
 export const discordContribution: AddonContribution = {
     apiKeyScopes: [DISCORD_API_KEY_SCOPE],
+    auditActions: { [DISCORD_RUNTIME_CONFIG_FETCH_AUDIT_ACTION]: null },
     settings: [
         { key: 'DISCORD_BOT_TOKEN', group: 'discord', secret: true, requiresRestart: true, validate: 'apiKey', issueUrl: 'https://discord.com/developers/applications' },
         { key: 'DISCORD_BOT_MODEL', group: 'discord', secret: false, requiresRestart: true, validate: 'nonEmpty' },

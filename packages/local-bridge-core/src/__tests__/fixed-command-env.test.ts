@@ -96,6 +96,17 @@ posix('고정 명령의 자식 환경', () => {
         process.env.MISE_DATA_DIR = '/custom/mise';
         process.env.XDG_CONFIG_HOME = '/custom/xdg';
         process.env.ZDOTDIR = '/custom/zdot';
+        // mise 문서(directories·configuration)의 위치 변수 — bin-paths 결과를 바꾸므로 mise 자식에 넘어가야 한다.
+        const miseLocations: Record<string, string> = {
+            MISE_INSTALLS_DIR: '/custom/installs', MISE_INSTALL_STORE_DIR: '/custom/store', MISE_PLUGINS_DIR: '/custom/plugins',
+            MISE_SHIMS_DIR: '/custom/shims', MISE_SHARED_INSTALL_DIRS: '/shared/a:/shared/b',
+            MISE_GLOBAL_CONFIG_FILE: '/custom/global.toml', MISE_GLOBAL_CONFIG_ROOT: '/custom/root',
+            MISE_SYSTEM_CONFIG_DIR: '/custom/etc', MISE_SYSTEM_DIR: '/custom/etc-old', MISE_SYSTEM_CONFIG_FILE: '/custom/system.toml',
+            MISE_SYSTEM_DATA_DIR: '/custom/sysdata', MISE_SYSTEM_INSTALLS_DIR: '/custom/sysinstalls', MISE_SYSTEM_SHIMS_DIR: '/custom/sysshims',
+        };
+        Object.assign(process.env, miseLocations);
+        // 같은 접두의 비밀 — 접두 매칭이 아니라 키를 하나씩 적으므로 넘어가면 안 된다.
+        process.env.MISE_GITHUB_TOKEN = 'ghp_mise_fake';
 
         const parts = resolveExecPath(base).split(':');
         expect(parts[0]).toBe('/from/mise');
@@ -114,6 +125,9 @@ posix('고정 명령의 자식 환경', () => {
         expect(miseEnv.PATH.split(':')).toEqual(expect.arrayContaining(['/from/login/shell', bin]));
         expect(miseEnv.MISE_DATA_DIR).toBe('/custom/mise');
         expect(miseEnv.XDG_CONFIG_HOME).toBe('/custom/xdg');
+        expect(miseEnv).toMatchObject(miseLocations);
+        expect(miseEnv).not.toHaveProperty('MISE_GITHUB_TOKEN');
+        expect(shellEnv).not.toHaveProperty('MISE_GITHUB_TOKEN');
     });
 
     it('worktree git: git 자식에 비밀이 없고 PATH·HOME 은 있다', async () => {

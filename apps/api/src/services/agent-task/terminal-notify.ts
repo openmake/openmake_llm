@@ -11,7 +11,7 @@ import { emitAgentTaskProgress } from '../../utils/event-bus';
 import { getPushService } from '../PushService';
 import { getPool } from '../../data/models/unified-database';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
-import { AGENT_TASK_TERMINAL_NOTIFY } from '../../config/runtime-limits';
+import { AGENT_TASK_LIMITS, AGENT_TASK_TERMINAL_NOTIFY } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskTerminalNotify');
@@ -72,6 +72,8 @@ export async function resendMissedTerminalNotifications(repo: TerminalNotifyRepo
     try {
         rows = await repo.claimPendingTerminalNotifications({
             graceMs: AGENT_TASK_TERMINAL_NOTIFY.GRACE_MS, windowMs: AGENT_TASK_TERMINAL_NOTIFY.WINDOW_MS, limit: AGENT_TASK_TERMINAL_NOTIFY.BATCH,
+            // 부팅 복구가 되살릴 작업은 복구 인정 시간 동안 보류한다 — 복구가 꺼져 있으면 되살릴 주체가 없으므로 바로 알린다
+            recoveryHoldMs: AGENT_TASK_LIMITS.BOOT_RECOVERY_ENABLED ? AGENT_TASK_LIMITS.BOOT_RECOVERY_WINDOW_MS : 0,
         });
     } catch (err) {
         logger.warn(`종료 알림 재전송 조회 실패(다음 주기에 재시도): ${err instanceof Error ? err.message : String(err)}`);
@@ -87,8 +89,8 @@ export async function resendMissedTerminalNotifications(repo: TerminalNotifyRepo
     return sent;
 }
 
-/** 부팅 직후 1회 + 주기 점검 등록. 타이머는 프로세스 종료를 막지 않는다. */
-export function startTerminalNotifySweep(): void {
+/** 부팅 직후 1회 + 주기 점검 등록. 돌려준 타이머는 호출부(schedulers)가 종료 때 멈춘다. */
+export function startTerminalNotifySweep(): NodeJS.Timeout {
     void resendMissedTerminalNotifications();
-    setInterval(() => { void resendMissedTerminalNotifications(); }, AGENT_TASK_TERMINAL_NOTIFY.SWEEP_MS).unref();
+    return setInterval(() => { void resendMissedTerminalNotifications(); }, AGENT_TASK_TERMINAL_NOTIFY.SWEEP_MS);
 }

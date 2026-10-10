@@ -1002,6 +1002,7 @@
       "device_wait_expired": "等待设备重新连接超时",
       "browser_takeover_expired": "等待交还浏览器超时",
       "interrupted_local_device": "本地设备断开连接而中断",
+      "lease_held_elsewhere": "其他服务器正在运行，未能启动",
       "llm_error": "模型调用出错",
       "sandbox_unavailable": "未能准备执行环境",
       "next": {
@@ -1010,11 +1011,13 @@
         "timeout": "请把任务拆小或调高时间上限后重新运行。",
         "token_limit": "请缩小目标范围或减少输入资料后重新运行。",
         "llm_error": "请稍后重新运行。如果仍然失败，请换一个模型或联系管理员。",
-        "interrupted": "请继续运行，从中断的位置接着做。",
+        "interrupted": "可继续时请从中断的位置接着做，否则请重新运行。",
         "unknown": "请查看完整的失败原因；重新运行后仍然相同时请联系管理员。",
         "device_wait_expired": "请连接 Companion(或 CLI)后重新运行。",
         "browser_takeover_expired": "请在 Companion 菜单中交还浏览器后重新运行。",
-        "sandbox_unavailable": "请稍后重新运行。同时运行的任务减少后即可获得执行环境。如果持续出现，请通知管理员。"
+        "sandbox_unavailable": "请稍后重新运行。同时运行的任务减少后即可获得执行环境。如果持续出现，请通知管理员。",
+        "interrupted_local_device": "请重新连接 Companion(或 CLI)，可继续时请继续运行，否则请重新运行。",
+        "lease_held_elsewhere": "请稍后重新运行。"
       }
     },
     "planNode": "步骤{n}",
@@ -1688,6 +1691,9 @@
       "action": "操作",
       "target": "目标"
     },
+    "actionsError": "无法加载操作列表。仍可查看所有日志。",
+    "loading": "正在加载审计日志。",
+    "loadError": "无法加载审计日志。",
     "empty": "没有符合条件的日志。"
   },
   "adminMetrics": {

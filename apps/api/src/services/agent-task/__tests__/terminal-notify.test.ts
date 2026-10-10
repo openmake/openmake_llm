@@ -11,6 +11,7 @@ jest.mock('../../PushService', () => ({ getPushService: () => ({ sendPush }) }))
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => { throw new Error('pool unavailable'); } }));
 
 import { notifyTaskTerminal, resendMissedTerminalNotifications, type TerminalNotifyRepo } from '../terminal-notify';
+import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 
 const flush = async (): Promise<void> => { for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r)); };
 function repo(rows: Array<Record<string, unknown>> = []): TerminalNotifyRepo & { cleared: string[]; claims: number } {
@@ -104,6 +105,17 @@ describe('resendMissedTerminalNotifications', () => {
         // 가져올 때 저장소가 표식을 이미 지웠다(원자적 claim) — 여기서 다시 지우지 않는다
         await flush();
         expect(r.cleared).toEqual([]);
+    });
+
+    // 부팅 복구가 되살릴 작업의 "실패" 알림을 복구 창 동안 보류한다 — 복구가 꺼져 있으면 되살릴 주체가 없으므로 보류하지 않는다
+    it('부팅 복구 인정 시간만큼 보류를 요청한다', async () => {
+        const r = repo([]);
+        await resendMissedTerminalNotifications(r);
+        expect(r.claimPendingTerminalNotifications).toHaveBeenCalledWith(expect.objectContaining({
+            recoveryHoldMs: AGENT_TASK_LIMITS.BOOT_RECOVERY_ENABLED ? AGENT_TASK_LIMITS.BOOT_RECOVERY_WINDOW_MS : 0,
+        }));
+        expect(AGENT_TASK_LIMITS.BOOT_RECOVERY_ENABLED).toBe(true); // 기본 설정
+        expect(AGENT_TASK_LIMITS.BOOT_RECOVERY_WINDOW_MS).toBeGreaterThan(0);
     });
 
     it('남은 것이 없으면 아무것도 보내지 않는다', async () => {

@@ -1,5 +1,6 @@
 import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
+import { AUDIT_ACTIONS, CRITICAL_ACTIONS, type AuditAction, type AuditSeverity } from '../config/audit-actions';
 
 const logger = createLogger('AuditService');
 
@@ -20,7 +21,8 @@ interface GetAuditLogsFilters {
 }
 
 interface CreateAuditLogInput {
-    action: string;
+    /** config/audit-actions 레지스트리에 등록된 action 만 받는다 (미등록·오타는 컴파일 오류). */
+    action: AuditAction;
     userId?: string;
     resourceType?: string;
     resourceId?: string;
@@ -89,7 +91,9 @@ export class AuditService {
         const pool = getPool();
         const result = await pool.query('SELECT DISTINCT action FROM audit_logs ORDER BY action ASC');
         const rows = result.rows as Array<{ action: string }>;
-        return rows.map((row) => row.action);
+        // 레지스트리(서버가 기록할 수 있는 action 전부) + DB 에만 남은 과거 action.
+        // 아직 한 번도 기록되지 않은 action 도 필터 목록에 나오고, 과거 기록도 계속 걸러 볼 수 있다.
+        return [...new Set<string>([...AUDIT_ACTIONS, ...rows.map((row) => row.action)])].sort();
     }
 
     async getAuditStats(startDate?: string, endDate?: string): Promise<AuditStat[]> {
@@ -151,57 +155,12 @@ export class AuditService {
 }
 
 /**
- * Critical event whitelist — audit_logs INSERT 시 자동 AlertSystem 호출 대상.
- * severity 별로 channel 영향: info 는 console 만 (spam 방어), warning+ 는 webhook 도 발송.
- */
-const CRITICAL_ACTIONS: Record<string, 'info' | 'warning' | 'critical'> = {
-    // GDPR Article 17 (right to erasure) — admin 의 사용자 삭제
-    'user.deleted': 'critical',
-    // 권한 변화 — admin 승격/박탈
-    'user.role_changed': 'critical',
-    // 조직 정책 변경(129) — 외부 모델 차단·승인 하한·MCP 허용 목록
-    'org.policy_changed': 'warning',
-    // 운영 구성 내보내기/가져오기 (F22 Phase E)
-    'config.exported': 'warning',
-    'config.imported': 'critical',
-    // 쿼터 초과 승인·수동 부여 (F25 PR-3b)
-    'quota.overage_decided': 'warning',
-    'quota.grant_manual': 'warning',
-    // 보안 변화
-    'password.changed': 'warning',
-    // GDPR Article 7(3) — 동의 철회
-    'consent.withdrawn': 'warning',
-    // GDPR Phase D — 14세 미만 가입 대기 (operator 의 guardian verify 필요)
-    'minor_pending_registered': 'warning',
-    // GDPR Article 20 — 데이터 export 요청 (operator 인지용)
-    'export.requested': 'warning',
-    // ApiKeyService.audit() 가 실제 emit 하는 문자열과 정합 (api_key.<create|update|delete|rotate>).
-    // 키 삭제·회전은 보안 이벤트라 warning 채널(webhook 알림), 생성·수정은 audit 만.
-    'api_key.delete': 'warning',
-    'api_key.rotate': 'warning',
-    // admin 시스템 설정 변경 (routes/admin-system-settings) — 운영 설정 변조 감지용
-    'system_settings.updated': 'warning',
-    'system_settings.reset': 'warning',
-    // 첫 실행 셋업 마법사 완료 (routes/first-run-setup) — 첫 관리자 생성은 보안 이벤트
-    'setup.completed': 'warning',
-    // info 는 audit 만 (alert webhook 안 보냄)
-    // context_overflow 는 사용자 입력 검증 에러(>262K) — 2026-06-15 1M 제거로 흔해져
-    // webhook noise 방지 위해 warning→info 강등 (audit 추적 + console 만 유지)
-    'chat.context_overflow': 'info',
-    'api_key.create': 'info',
-    'api_key.update': 'info',
-    'user.register': 'info',
-    'consent.granted': 'info',
-    'login.failed': 'info',
-};
-
-/**
  * AlertSystem 으로 critical event 알림. info 는 webhook 안 보내고 console 만.
  * warning+ 는 channel 전체 (console + webhook + email if configured).
  */
 async function sendAlertForAction(
     input: CreateAuditLogInput,
-    severity: 'info' | 'warning' | 'critical',
+    severity: AuditSeverity,
 ): Promise<void> {
     try {
         const { getAlertSystem } = await import('../monitoring/alerts');

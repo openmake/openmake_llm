@@ -14,6 +14,7 @@ import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentTask, AgentTaskStatus, AgentTaskStep } from '../models/unified-database.types';
 import { allowedSources, AgentTaskTransitionError } from '../../services/agent-task/task-state';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
+import { recoverableRestartCondition } from './agent-task-run-repository';
 import { AGENT_TASK_PARKED_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
 import type { ParkedTaskRow } from './agent-task-park-repository';
 
@@ -105,15 +106,15 @@ export class AgentTaskRepository extends BaseRepository {
 
     /**
      * 알림을 못 보낸 종료 작업을 가져오면서 표식을 지운다(174) — 한 문장이라 여러 프로세스가 같은 행을 두 번 가져가지 않는다.
-     * graceMs: 정상 경로가 방금 쓴 행을 가로채지 않게 두는 여유. windowMs: 이보다 오래된 것은 다시 보내지 않는다.
+     * graceMs: 정상 경로가 방금 쓴 행을 가로채지 않게 두는 여유. windowMs: 이보다 오래된 것은 다시 보내지 않는다. recoveryHoldMs: 부팅 복구가 되살릴 행을 보류하는 시간(recoverableRestartCondition).
      */
-    async claimPendingTerminalNotifications(opts: { graceMs: number; windowMs: number; limit: number }): Promise<Array<Pick<AgentTask, 'id' | 'user_id' | 'goal' | 'status' | 'progress' | 'current_turn'>>> {
+    async claimPendingTerminalNotifications(opts: { graceMs: number; windowMs: number; limit: number; recoveryHoldMs: number }): Promise<Array<Pick<AgentTask, 'id' | 'user_id' | 'goal' | 'status' | 'progress' | 'current_turn'>>> {
         const result = await this.query<Pick<AgentTask, 'id' | 'user_id' | 'goal' | 'status' | 'progress' | 'current_turn'>>(
             `UPDATE agent_tasks SET terminal_notify_pending = FALSE
              WHERE id IN (
                  SELECT id FROM agent_tasks
                  WHERE terminal_notify_pending
-                   AND status IN ('completed', 'failed', 'cancelled')
+                   AND status IN ('completed', 'failed', 'cancelled') AND NOT ${recoverableRestartCondition('$4')}
                    AND updated_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')
                    AND updated_at > NOW() - ($2::bigint * INTERVAL '1 millisecond')
                  ORDER BY updated_at
@@ -121,7 +122,7 @@ export class AgentTaskRepository extends BaseRepository {
                  FOR UPDATE SKIP LOCKED
              )
              RETURNING id, user_id, goal, status, progress, current_turn`,
-            [opts.graceMs, opts.windowMs, opts.limit]);
+            [opts.graceMs, opts.windowMs, opts.limit, opts.recoveryHoldMs]);
         return result.rows;
     }
 
@@ -524,17 +525,17 @@ export class AgentTaskRepository extends BaseRepository {
      * 복구 소유권 원자적 획득 — 복구 대상 상태인 task 만 pending 으로 전이하고 rowCount 로
      * 성공 여부 반환. 다중 프로세스가 동시에 복구를 시도해도 조건부 UPDATE 가 한 번만
      * 성공(나머지는 rowCount=0)해 이중 실행을 막는다. restart 마킹의 error/completed_at 도
-     * 함께 정리(재개 task 가 목록에서 '실패·완료시각'으로 보이지 않게).
+     * 함께 정리(재개 task 가 목록에서 '실패·완료시각'으로 보이지 않게). expectedPrev: 목록을 읽을 때의 상태 — 그 뒤 바뀐 행은 0행.
      */
-    async claimAgentTaskForRecovery(taskId: string): Promise<boolean> {
+    async claimAgentTaskForRecovery(taskId: string, expectedPrev?: string): Promise<boolean> {
         const result = await this.query<{ prev: string }>(
             `UPDATE agent_tasks t
              SET status = 'pending', error = NULL, failure_class = NULL, completed_at = NULL, updated_at = NOW()
              FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $1 FOR UPDATE) o
              WHERE t.id = o.id AND ((o.prev IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('t')})
-                OR (o.prev = 'failed' AND t.error = 'server restarted'))
+                OR (o.prev = 'failed' AND t.error = 'server restarted')) AND ($2::text IS NULL OR o.prev = $2)
              RETURNING o.prev`,
-            [taskId]
+            [taskId, expectedPrev ?? null]
         );
         if ((result.rowCount ?? 0) === 0) return false;
         await this.recordEvent(taskId, result.rows[0]?.prev, 'pending', 'boot recovery claim');

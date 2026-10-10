@@ -13,6 +13,7 @@ const SAMPLES: Array<[string | null, string]> = [
     ['Connection error.', 'llm_error'],
     ['server restarted', 'interrupted'],
     ['interrupted_local_device', 'interrupted'],
+    ['lease_held_elsewhere', 'interrupted'],
     ['500 litellm.InternalServerError: InternalServerError: OpenAIException - boom', 'llm_error'],
     ['timeout', 'timeout'],
     ['token_limit', 'token_limit'],

@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('MigrationRunner');
@@ -29,6 +29,35 @@ interface MigrationStatus {
     checksum: string | null;
 }
 
+/** 풀과 전용 연결 어느 쪽으로도 문장을 보낼 수 있게 하는 최소 형태 */
+type Queryable = Pick<Pool, 'query'>;
+
+/**
+ * 마이그레이션 전용 연결 — 풀에서 연결 하나를 받아 그 세션의 statement_timeout 을 풀고 `fn` 을 돌린다.
+ *
+ * 공용 풀은 statement_timeout(기본 30초)이 걸려 있어 긴 백필 마이그레이션이 부팅 중 타임아웃 →
+ * Fail-Fast exit → 재시작 루프가 된다. advisory lock 대기도 같은 제한에 걸리므로 lock 보다 먼저 푼다.
+ * 끝나면(성공·실패 모두) 세션 기본값으로 원복하고 반납한다. 원복에 실패하면 제한이 풀린 연결이
+ * 풀로 돌아가지 않도록 폐기한다.
+ */
+async function withMigrationClient<T>(pool: Pool, fn: (client: PoolClient) => Promise<T>): Promise<T> {
+    const client = await pool.connect();
+    let restored = false;
+    try {
+        await client.query('SET statement_timeout = 0');
+        return await fn(client);
+    } finally {
+        try {
+            // 풀 설정의 statement_timeout 은 접속 시 세션 기본값으로 들어가므로 RESET 이 그 값으로 되돌린다
+            await client.query('RESET statement_timeout');
+            restored = true;
+        } catch (error: unknown) {
+            logger.warn('statement_timeout 원복 실패 — 연결을 폐기합니다:', error);
+        }
+        client.release(!restored);
+    }
+}
+
 /**
  * 마이그레이션 실행기.
  *
@@ -50,8 +79,8 @@ export class MigrationRunner {
         return this.namespace ? `${this.namespace}:${fileVersion}` : fileVersion;
     }
 
-    async ensureMigrationTable(): Promise<void> {
-        await this.pool.query(`
+    async ensureMigrationTable(db: Queryable = this.pool): Promise<void> {
+        await db.query(`
             CREATE TABLE IF NOT EXISTS migration_versions (
                 id SERIAL PRIMARY KEY,
                 version VARCHAR(255) NOT NULL UNIQUE,
@@ -62,18 +91,29 @@ export class MigrationRunner {
         `);
     }
 
-    async getAppliedMigrations(): Promise<string[]> {
-        await this.ensureMigrationTable();
-        const result = await this.pool.query<{ version: string }>(
+    async getAppliedMigrations(db: Queryable = this.pool): Promise<string[]> {
+        await this.ensureMigrationTable(db);
+        const result = await db.query<{ version: string }>(
             'SELECT version FROM migration_versions ORDER BY version ASC'
         );
         return result.rows.map((row) => row.version);
     }
 
-    async applyPending(): Promise<{ applied: string[]; skipped: string[] }> {
-        await this.ensureMigrationTable();
+    /**
+     * pending 마이그레이션 적용. `client` 를 주면 그 연결(호출자가 lock·timeout 을 관리)에서,
+     * 안 주면 전용 연결을 직접 받아 statement_timeout 없이 실행한다.
+     */
+    async applyPending(client?: PoolClient): Promise<{ applied: string[]; skipped: string[] }> {
+        if (client) {
+            return this.applyPendingOn(client);
+        }
+        return withMigrationClient(this.pool, (own) => this.applyPendingOn(own));
+    }
+
+    private async applyPendingOn(client: PoolClient): Promise<{ applied: string[]; skipped: string[] }> {
+        await this.ensureMigrationTable(client);
         const migrationFiles = this.loadMigrationFiles();
-        const appliedVersions = new Set(await this.getAppliedMigrations());
+        const appliedVersions = new Set(await this.getAppliedMigrations(client));
         const applied: string[] = [];
         const skipped: string[] = [];
 
@@ -89,7 +129,6 @@ export class MigrationRunner {
                 continue;
             }
 
-            const client = await this.pool.connect();
             try {
                 logger.info(`Applying migration ${migration.filename}`);
                 await client.query('BEGIN');
@@ -109,8 +148,6 @@ export class MigrationRunner {
                 await client.query('ROLLBACK');
                 logger.error(`Failed migration ${migration.filename}:`, error);
                 throw error;
-            } finally {
-                client.release();
             }
         }
 
@@ -220,25 +257,22 @@ export async function applyAddonMigrationsWithLock(
 ): Promise<Array<{ id: string; applied: string[]; error?: string }>> {
     if (addons.length === 0) return [];
     const out: Array<{ id: string; applied: string[]; error?: string }> = [];
-    const lockClient = await pool.connect();
-    try {
-        await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
+    await withMigrationClient(pool, async (client) => {
+        await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
         try {
             for (const addon of addons) {
                 try {
                     const runner = new MigrationRunner(pool, { namespace: `addon:${addon.id}`, dir: addon.dir });
-                    const { applied } = await runner.applyPending();
+                    const { applied } = await runner.applyPending(client);
                     out.push({ id: addon.id, applied });
                 } catch (err) {
                     out.push({ id: addon.id, applied: [], error: err instanceof Error ? err.message : String(err) });
                 }
             }
         } finally {
-            await lockClient.query('SELECT pg_advisory_unlock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
+            await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
         }
-    } finally {
-        lockClient.release();
-    }
+    });
     return out;
 }
 
@@ -257,15 +291,12 @@ const MIGRATION_ADVISORY_LOCK_KEY = 0x6f6d6c6d;
 export async function applyPendingWithLock(
     pool: Pool
 ): Promise<{ applied: string[]; skipped: string[] }> {
-    const lockClient = await pool.connect();
-    try {
-        await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
+    return withMigrationClient(pool, async (client) => {
+        await client.query('SELECT pg_advisory_lock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
         try {
-            return await new MigrationRunner(pool).applyPending();
+            return await new MigrationRunner(pool).applyPending(client);
         } finally {
-            await lockClient.query('SELECT pg_advisory_unlock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
+            await client.query('SELECT pg_advisory_unlock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
         }
-    } finally {
-        lockClient.release();
-    }
+    });
 }

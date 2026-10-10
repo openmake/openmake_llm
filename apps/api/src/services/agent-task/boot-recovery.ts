@@ -21,10 +21,11 @@ import { AgentTaskRepository } from '../../data/repositories/agent-task-reposito
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskService, type AgentTaskInputFile } from '../AgentTaskService';
-import { dispatchAgentTask } from './task-queue';
+import { dispatchAgentTask, getAgentTaskQueue } from './task-queue';
 import type { ChatMessage } from '../../llm/types';
 import type { AgentTaskUserRole } from './types';
 import { leaseOwner } from './task-lease';
+import { isAgentTaskShutdown } from './shutdown-drain';
 import type { AgentTask } from '../../data/models/unified-database.types';
 
 const logger = createLogger('AgentTaskBootRecovery');
@@ -65,8 +66,13 @@ async function recoverTask(
         return task.status === 'running' || task.status === 'paused' || wasQueued ? 'failed' : 'skipped';
     }
 
-    // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀.
-    const claimed = await taskRepo.claimAgentTaskForRecovery(task.id);
+    // 이 프로세스의 큐에 이미 있으면(조회 뒤 /execute·/resume 가 먼저 제출) 건드리지 않는다 — claim 하면 디스패치는
+    // 'duplicate' 로 버려지고 실행 중인 작업의 행만 pending 으로 덮인다(pending→completed 는 표 밖이라 종료 기록이 거부된다).
+    if (getAgentTaskQueue().has(task.id)) return 'skipped';
+
+    // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀. 읽을 때의 상태를 넘긴다: 위 확인은 이미
+    // 디스패치된 것만 잡으므로, 목록을 읽은 뒤 /execute·/resume 가 claim 만 하고 아직 디스패치 전인 행(queued)도 여기서 걸러야 한다.
+    const claimed = await taskRepo.claimAgentTaskForRecovery(task.id, task.status);
     if (!claimed) return 'skipped';
 
     const role = await resolveUserRole(db, task.user_id);
@@ -149,7 +155,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
  */
 export async function sweepExpiredTaskLeases(): Promise<{ resumed: number; failed: number }> {
     const out = { resumed: 0, failed: 0 };
-    if (!AGENT_TASK_LIMITS.LEASE_ENABLED) return out;
+    if (!AGENT_TASK_LIMITS.LEASE_ENABLED || isAgentTaskShutdown()) return out; // 종료 중엔 가져오지 않는다 — 가져와도 실행을 시작하지 못한다
     const db = getUnifiedDatabase();
     let taskRepo: AgentTaskRepository;
     let expired: AgentTask[];

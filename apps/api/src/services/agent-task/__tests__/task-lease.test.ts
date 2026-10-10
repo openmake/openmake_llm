@@ -9,7 +9,12 @@ jest.mock('../../../data/repositories/agent-task-repository', () => ({
     AgentTaskRepository: jest.fn(() => ({ acquireLease, renewLease, releaseLease })),
 }));
 
-import { beginTaskLease, leaseOwner, sanitizeLeaseOwner } from '../task-lease';
+const failUnstartedClaim = jest.fn(async (_taskId: string, _error: string) => true);
+jest.mock('../../../data/repositories/agent-task-run-repository', () => ({
+    AgentTaskRunRepository: jest.fn(() => ({ failUnstartedClaim })),
+}));
+
+import { beginTaskLease, leaseOwner, sanitizeLeaseOwner, AGENT_TASK_LEASE_HELD_ERROR } from '../task-lease';
 import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 
 const limits = AGENT_TASK_LIMITS as { LEASE_ENABLED: boolean; LEASE_MS: number };
@@ -53,6 +58,17 @@ describe('beginTaskLease', () => {
         await lease.end();
         expect(renewLease).not.toHaveBeenCalled();
         expect(releaseLease).not.toHaveBeenCalled();
+    });
+
+    // 호출부(라우트·복구)는 이미 claim(queued·pending)하고 'started' 로 알았다 — 조용히 돌아가면 실행·대기 항목 없는 claim 행이 남는다
+    it('잡지 못하면 아직 claim 상태인 행을 failed 로 닫는다(실패해도 결과는 같다) — 잡았으면 건드리지 않는다', async () => {
+        await (await beginTaskLease('t1', jest.fn())).end();
+        expect(failUnstartedClaim).not.toHaveBeenCalled();
+        acquireLease.mockResolvedValue(false);
+        expect((await beginTaskLease('t1', jest.fn())).acquired).toBe(false);
+        expect(failUnstartedClaim).toHaveBeenCalledWith('t1', AGENT_TASK_LEASE_HELD_ERROR);
+        failUnstartedClaim.mockRejectedValueOnce(new Error('db down'));
+        expect((await beginTaskLease('t1', jest.fn())).acquired).toBe(false);
     });
 
     it('연장이 0행이면(다른 서버가 가져감) 한 번 알리고 연장을 멈춘다. 끝낼 때 반납하지 않는다', async () => {

@@ -28,6 +28,7 @@ import { invalidateGlobalAssignmentCaches } from '../services/model-assignment-c
 import { describeEffectiveCapabilities } from '../controllers/capability-models.controller';
 import { getConfig } from '../config';
 import { getAuditService } from '../services/AuditService';
+import type { AuditAction } from '../config/audit-actions';
 import { createLogger } from '../utils/logger';
 import { slotKindReason } from '../services/model-assignments-service';
 
@@ -42,7 +43,7 @@ function adminUserId(req: Request): string | undefined {
     return req.user?.id !== undefined ? String(req.user.id) : undefined;
 }
 
-async function auditChange(req: Request, action: string, details: Record<string, unknown>): Promise<void> {
+async function auditChange(req: Request, action: AuditAction, details: Record<string, unknown>): Promise<void> {
     try {
         await getAuditService().logAudit({ action, userId: adminUserId(req), resourceType: 'capability_model', details });
     } catch (err) {

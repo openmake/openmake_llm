@@ -1002,6 +1002,7 @@
       "device_wait_expired": "デバイスの再接続待ちがタイムアウト",
       "browser_takeover_expired": "ブラウザの返却待ちがタイムアウト",
       "interrupted_local_device": "ローカル端末の切断により中断",
+      "lease_held_elsewhere": "別のサーバーで実行中のため開始できませんでした",
       "llm_error": "モデル呼び出しエラー",
       "sandbox_unavailable": "実行環境を準備できませんでした",
       "next": {
@@ -1010,11 +1011,13 @@
         "timeout": "作業を小さく分けるか、時間上限を延ばして再実行してください。",
         "token_limit": "目標の範囲や入力資料を減らして再実行してください。",
         "llm_error": "しばらくしてから再実行してください。続く場合は別のモデルを選ぶか、管理者に連絡してください。",
-        "interrupted": "再開して、中断した地点から続けてください。",
+        "interrupted": "再開できる場合は中断した地点から続け、できない場合はもう一度実行してください。",
         "unknown": "失敗理由の全文を確認し、再実行しても同じ場合は管理者に連絡してください。",
         "device_wait_expired": "Companion(または CLI)を接続してから、もう一度実行してください。",
         "browser_takeover_expired": "Companion のメニューでブラウザを戻してから、もう一度実行してください。",
-        "sandbox_unavailable": "しばらくしてから再実行してください。同時に動いているタスクが減ると実行環境を確保できます。続く場合は管理者に連絡してください。"
+        "sandbox_unavailable": "しばらくしてから再実行してください。同時に動いているタスクが減ると実行環境を確保できます。続く場合は管理者に連絡してください。",
+        "interrupted_local_device": "Companion(または CLI)を再接続してから、再開できる場合は再開し、できない場合はもう一度実行してください。",
+        "lease_held_elsewhere": "しばらくしてから再実行してください。"
       }
     },
     "planNode": "ステップ{n}",
@@ -1688,6 +1691,9 @@
       "action": "アクション",
       "target": "対象"
     },
+    "actionsError": "アクション一覧を取得できませんでした。全ログは閲覧できます。",
+    "loading": "監査ログを読み込み中です。",
+    "loadError": "監査ログを取得できませんでした。",
     "empty": "条件に一致するログはありません。"
   },
   "adminMetrics": {

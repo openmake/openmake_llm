@@ -31,6 +31,7 @@ import {
     issueSsoExchangeRedirect,
     consumeMobileExchangeCode,
 } from './auth-oauth-helpers';
+import { auditLoginSucceeded } from './auth-login-audit';
 
 // server.ts 종료 훅이 참조하는 정리 함수 (auth.controller.ts 경유 re-export 체인 유지)
 export { stopOAuthCleanup } from './auth-oauth-helpers';
@@ -149,6 +150,7 @@ class AuthOAuthController {
             const token = generateToken(user);
             const refreshToken = generateRefreshToken(user);
             this.auditMobileExchange(req, true, user.id, entry.provider);
+            auditLoginSucceeded(req, user, { method: 'exchange', provider: entry.provider });
             log.info(`[OAuth] 모바일 exchange 성공: ${user.email} (${entry.provider})`);
             res.json(success({ token, refreshToken, user }));
         } catch (error) {
@@ -317,6 +319,7 @@ class AuthOAuthController {
             }
             setTokenCookie(res, result.token);
             setRefreshTokenCookie(res, generateRefreshToken(result.user));
+            auditLoginSucceeded(req, result.user, { method: 'oauth', provider: 'google' });
             sendOAuthSuccessRedirect(res, '/?auth=callback');
         } catch (error) {
             log.error('[OAuth Google Callback] 오류:', error);
@@ -425,6 +428,7 @@ class AuthOAuthController {
             }
             setTokenCookie(res, result.token);
             setRefreshTokenCookie(res, generateRefreshToken(result.user));
+            auditLoginSucceeded(req, result.user, { method: 'oauth', provider: 'github' });
             sendOAuthSuccessRedirect(res, '/?auth=callback');
         } catch (error) {
             log.error('[OAuth GitHub Callback] 오류:', error);
@@ -549,6 +553,7 @@ class AuthOAuthController {
             }
             setTokenCookie(res, result.token);
             setRefreshTokenCookie(res, generateRefreshToken(result.user));
+            auditLoginSucceeded(req, result.user, { method: 'oauth', provider: 'kakao' });
             sendOAuthSuccessRedirect(res, '/?auth=callback');
         } catch (error) {
             log.error('[OAuth Kakao Callback] 오류:', error);

@@ -8,6 +8,18 @@ export const MAX_BUFFER = 1024 * 1024;
 export const RECONNECT_MS = 10000;
 /** 재연결 간격 상한(ms) — 서버가 오래 내려가 있어도 이보다 드물게 두드리지 않는다. */
 export const RECONNECT_MAX_MS = 60000;
+/**
+ * 접속(핸드셰이크) 시간 제한(ms) — 응답 없는 접속 시도를 끊어 재연결 루프로 돌려보낸다.
+ * 없으면 TCP 만 맺히고 업그레이드 응답이 오지 않는 시도가 close 없이 영원히 남는다.
+ */
+export const HANDSHAKE_TIMEOUT_MS = 30000;
+/** 생존 확인 ping 간격(ms) — 디바이스가 서버로 보낸다(서버·프록시의 응답 pong 이 수신 신호). */
+export const LIVENESS_PING_MS = 30000;
+/**
+ * 이 시간(ms) 동안 서버에서 아무 프레임(메시지·ping·pong)도 오지 않으면 죽은 연결로 보고 끊는다 — ping 간격의 2.5배.
+ * 네트워크가 잠깐 끊겨 반쯤 죽은 연결은 close 가 오지 않아, 앱은 떠 있는데 서버에는 미연결로 남았다(2026-10-10 실측 34분).
+ */
+export const LIVENESS_TIMEOUT_MS = 75000;
 
 /**
  * 서버가 인증 문제로 닫은 사유 — 서버 config/local-bridge.ts 의 인증 실패 사유와 #1164·#1168 의 사유(1:1).
@@ -55,10 +67,15 @@ export const EXEC_ENV_ALLOWLIST_PREFIX_POSIX = ['LC_'] as const;
  * 셸 경로 탐색(exec-path)의 로그인 셸·mise 자식에만 더 넘기는 키 — 설정·데이터 "위치"만 가리킨다(비밀 아님).
  * 빼면 위치를 기본값에서 옮긴 사용자(ZDOTDIR 의 zprofile, XDG·MISE_*_DIR 의 mise 설치본)의 PATH 가 덜 잡혀 exec 가 런타임을 못 찾는다.
  * 테스트 러너 탐지·진단은 exec 와 같은 환경이어야 결과가 exec 와 어긋나지 않으므로 이 키를 더하지 않는다.
+ * MISE_* 는 mise 문서(mise.jdx.dev/directories.html, configuration.html)의 위치 변수 중 `mise bin-paths` 결과를 바꾸는 것 —
+ * MISE_GITHUB_TOKEN 같은 비밀이 같은 접두를 쓰므로 접두 매칭 없이 키를 하나씩 적는다.
  */
 export const PATH_PROBE_ENV_EXTRA_POSIX = [
     'ZDOTDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME',
     'MISE_DATA_DIR', 'MISE_CONFIG_DIR', 'MISE_CACHE_DIR', 'MISE_STATE_DIR',
+    'MISE_INSTALLS_DIR', 'MISE_INSTALL_STORE_DIR', 'MISE_PLUGINS_DIR', 'MISE_SHIMS_DIR', 'MISE_SHARED_INSTALL_DIRS',
+    'MISE_GLOBAL_CONFIG_FILE', 'MISE_GLOBAL_CONFIG_ROOT', 'MISE_SYSTEM_CONFIG_DIR', 'MISE_SYSTEM_DIR', 'MISE_SYSTEM_CONFIG_FILE',
+    'MISE_SYSTEM_DATA_DIR', 'MISE_SYSTEM_INSTALLS_DIR', 'MISE_SYSTEM_SHIMS_DIR',
 ] as const;
 export const EXEC_ENV_ALLOWLIST_WIN32 = [
     'SystemRoot', 'windir', 'SystemDrive', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'USERNAME',

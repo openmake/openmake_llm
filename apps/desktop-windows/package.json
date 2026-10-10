@@ -1,6 +1,6 @@
 {
   "name": "openmake-companion-desktop",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "private": true,
   "description": "OpenMake Companion — Windows 트레이 앱(Electron). 브리지 보안 로직은 @openmake/local-bridge-core 를 그대로 쓴다",
   "main": "dist/main.cjs",
