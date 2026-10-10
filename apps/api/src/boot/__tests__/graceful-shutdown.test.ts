@@ -17,9 +17,16 @@ jest.mock('../../schedulers', () => ({ stopAllSchedulers: () => { calls.push('sc
 jest.mock('../../data/models/token-blacklist', () => ({ resetTokenBlacklist: () => { calls.push('token-blacklist'); } }));
 jest.mock('../../observability/otel', () => ({ shutdownTelemetry: async () => { calls.push('otel'); } }));
 jest.mock('../../data/models/unified-database', () => ({ closeDatabase: async () => { calls.push('db'); } }));
+const drainAgentTasksForShutdown = jest.fn(async (_timeoutMs: number) => { calls.push('agent-tasks'); return { aborted: 0, remaining: 0 }; });
+jest.mock('../../services/agent-task/shutdown-drain', () => ({
+    beginAgentTaskShutdown: () => { calls.push('agent-tasks:block'); },
+    drainAgentTasksForShutdown: (timeoutMs: number) => drainAgentTasksForShutdown(timeoutMs),
+}));
 
 import {
+    AGENT_TASK_DRAIN_TIMEOUT_MS,
     GRACEFUL_SHUTDOWN_TIMEOUT_MS,
+    SHUTDOWN_CONNECTION_GRACE_MS,
     createGracefulShutdown,
     installGracefulShutdown,
     type ShutdownProcess,
@@ -144,21 +151,38 @@ describe('installGracefulShutdown', () => {
 
         proc.emit('SIGTERM');
         await flush();
-        // 서버가 연결을 다 정리하기 전에는 아무것도 닫지 않는다
-        expect(calls).toEqual(['server:start']);
+        // 서버가 연결을 다 정리하기 전에는 아무것도 닫지 않는다 — 새 에이전트 작업 시작만 먼저 막는다
+        expect(calls).toEqual(['agent-tasks:block', 'server:start']);
 
         stopped.resolve();
         await new Promise((r) => setImmediate(r));
         await flush();
         await new Promise((r) => setImmediate(r));
         expect(calls).toEqual([
+            'agent-tasks:block',
             'server:start', 'server:end',
+            'agent-tasks',
             'tool-runtime',
             'oauth', 'analytics', 'schedulers', 'token-blacklist',
             'otel',
             'db',
         ]);
         expect(proc.exit).toHaveBeenCalledWith(0);
+    });
+
+    it('실행 중 에이전트 작업 정리는 연결 정리 뒤, 도구 런타임·DB 풀 종료 앞이고 상한을 넘겨준다', async () => {
+        const proc = new FakeProcess();
+        installGracefulShutdown({ stop: async () => { calls.push('server'); } }, proc);
+        proc.emit('SIGTERM');
+        await new Promise((r) => setTimeout(r, 50));
+        const at = (name: string): number => calls.indexOf(name);
+        expect(at('agent-tasks:block')).toBe(0);
+        expect(at('agent-tasks')).toBeGreaterThan(at('server'));
+        expect(at('agent-tasks')).toBeLessThan(at('tool-runtime'));
+        expect(at('agent-tasks')).toBeLessThan(at('db'));
+        expect(drainAgentTasksForShutdown).toHaveBeenCalledWith(AGENT_TASK_DRAIN_TIMEOUT_MS);
+        // 연결 유예와 작업 정리 상한을 다 써도 뒤 단계(도구 런타임·OTel·DB)의 몫이 남는다
+        expect(SHUTDOWN_CONNECTION_GRACE_MS + AGENT_TASK_DRAIN_TIMEOUT_MS).toBeLessThan(GRACEFUL_SHUTDOWN_TIMEOUT_MS);
     });
 
     it('SIGINT 도 같은 경로로 종료 코드 0', async () => {

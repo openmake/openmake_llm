@@ -7,14 +7,19 @@
  * 등록되지 않았다(cli 는 SIGINT 에 stop()+exit(0) 만 했다).
  *
  * 종료 순서:
+ *   ⓪ 새 에이전트 작업 시작 차단(표시만 — 기다리지 않는다)
  *   ① 새 연결 수신 중단 + 진행 중 요청·WebSocket 정리(server.stop() — 끝날 때까지 기다린다)
- *   ② 도구 런타임(외부 MCP 연결·사용자 풀)
- *   ③ 타이머류(OAuth 정리, Analytics, 스케줄러, TokenBlacklist)
- *   ④ OpenTelemetry flush
- *   ⑤ DB 커넥션 풀 — 맨 마지막(앞 단계가 DB 를 쓸 수 있다)
+ *   ② 실행 중 에이전트 작업 중단·정리 대기(상한 AGENT_TASK_DRAIN_TIMEOUT_MS) — 작업이 도구 런타임·DB 를 쓰므로 그 앞
+ *   ③ 도구 런타임(외부 MCP 연결·사용자 풀)
+ *   ④ 타이머류(OAuth 정리, Analytics, 스케줄러, TokenBlacklist)
+ *   ⑤ OpenTelemetry flush
+ *   ⑥ DB 커넥션 풀 — 맨 마지막(앞 단계가 DB 를 쓸 수 있다)
  *
- * 실행 중인 에이전트 작업을 종료 시점에 멈추거나 소유권을 반납하는 경로는 없다 — 프로세스가 끝난 뒤
- * 부팅 복구(services/agent-task/boot-recovery)와 지난 소유권 점검이 체크포인트에서 이어 실행한다.
+ * 실행 중인 에이전트 작업은 ②에서 멈춘다(services/agent-task/shutdown-drain): 사용자 취소가 아니라 부팅 복구가 집는
+ * 표식(failed + 'server restarted')으로 남기고, 실행 소유권을 반납하고 샌드박스 컨테이너를 내린다(workspace 는 남긴다).
+ * 다음 부팅의 복구(services/agent-task/boot-recovery)가 체크포인트에서 이어 실행한다. 상한 안에 정리가 끝나지 않은 작업과
+ * 비정상 종료(SIGKILL·크래시)는 종전처럼 부팅 때의 좀비 정리·복구와 지난 소유권 점검이 맡는다.
+ * 질문 응답 대기로 주차된 작업은 이 프로세스에 실행이 없어 건드리지 않는다.
  *
  * @module boot/graceful-shutdown
  */
@@ -26,6 +31,14 @@ export const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 30000;
 
 /** 진행 중 요청·WebSocket 이 스스로 끝나기를 기다리는 유예. 지나면 강제로 닫는다. */
 export const SHUTDOWN_CONNECTION_GRACE_MS = 10000;
+
+/**
+ * 실행 중 에이전트 작업의 종료 정리(상태 기록·소유권 반납·컨테이너 정리)를 기다리는 상한. 지나면 다음 단계로 간다.
+ * 전체 30초에서 연결 유예(최악 10초)를 빼면 20초 — 컨테이너 하나를 내리는 데 `docker stop -t 5` + rm 으로 보통 5~6초
+ * (작업끼리는 병렬)이고 중단 신호가 LLM 호출·도구에 닿는 시간을 더해 12초를 준다. 남는 8초는 뒤 단계
+ * (도구 런타임 정리·OTel flush·DB 풀 종료) 몫이다.
+ */
+export const AGENT_TASK_DRAIN_TIMEOUT_MS = 12000;
 
 /** 종료 모듈이 쓰는 process 의 부분 — 테스트가 가짜를 주입한다 */
 export interface ShutdownProcess {
@@ -128,7 +141,23 @@ export function createGracefulShutdown(
 /** 서버 프로세스의 종료 단계 — 순서가 곧 종료 순서다(모듈 주석 참고). */
 function serverShutdownSteps(server: { stop(): Promise<void> }): ShutdownStep[] {
     return [
+        {
+            // 연결 정리를 기다리는 동안(최악 10초) 들어오는 요청·예약 발화·대기열의 다음 항목이 새 실행을 시작하지 않게
+            name: '새 에이전트 작업 시작 차단',
+            run: async () => {
+                const { beginAgentTaskShutdown } = await import('../services/agent-task/shutdown-drain');
+                beginAgentTaskShutdown();
+            },
+        },
         { name: '연결 수신 중단·진행 중 연결 정리', run: () => server.stop() },
+        {
+            // 도구 런타임·DB 풀을 닫기 전에 — 작업 루프와 그 종료 정리가 둘 다 쓴다
+            name: '실행 중 에이전트 작업 정리',
+            run: async () => {
+                const { drainAgentTasksForShutdown } = await import('../services/agent-task/shutdown-drain');
+                await drainAgentTasksForShutdown(AGENT_TASK_DRAIN_TIMEOUT_MS);
+            },
+        },
         {
             // 외부 MCP 서버 연결 해제와 사용자 풀 graceful kill
             name: '도구 런타임 정리',
