@@ -37,6 +37,9 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     // 보안 변화
     'password.changed': 'warning',
     'login.failed': 'info',
+    // 성공 로그인 — 세션이 새로 만들어질 때마다 한 행(계정 탈취 조사용). 빈도가 높아 알림은 없다.
+    // 이 action 행만 db-retention 이 AUDIT_LOGIN_SUCCESS_RETENTION_DAYS 뒤 지운다.
+    'login.succeeded': null,
     'auth.mobile_exchange': null,
     'auth.mobile_exchange_failed': null,
     // 첫 실행 셋업 마법사 완료 (routes/first-run-setup) — 첫 관리자 생성은 보안 이벤트

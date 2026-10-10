@@ -11,6 +11,7 @@
  * - external_provider_models_cache  : 7일 이상 stale 항목 정리 (TTL 만료 후 누적 방지)
  * - consent_logs                    : CONSENT_PII_RETENTION_DAYS(기본 90일) 초과 ip/ua NULL (GDPR Article 5(1)(c))
  * - audit_logs                      : AUDIT_PII_RETENTION_DAYS(기본 90일) 초과 ip/ua NULL + details.actor 제거
+ * - audit_logs (login.succeeded)    : AUDIT_LOGIN_SUCCESS_RETENTION_DAYS(기본 90일) 초과 행 삭제 — 이 action 만, 다른 감사 기록은 삭제하지 않음
  * - alert_history                   : ALERT_PII_RETENTION_DAYS(기본 90일) 초과 data.actor/ipAddress/userAgent 제거
  * - mcp_server_instances            : MCP_INSTANCE_RETENTION_DAYS(기본 30일) 초과 transition 이력 삭제 (각 server·user 의 최신 transition 은 보존)
  * - orchestration_dispatch_decisions: ORCH_PREVIEW_RETENTION_DAYS(기본 30일) 초과 query_preview NULL (집계 지표는 METRICS_RETENTION_DAYS 까지 보존)
@@ -154,6 +155,26 @@ async function runRetention(): Promise<void> {
             );
             if ((auditResult.rowCount ?? 0) > 0) {
                 logger.info(`[DbRetention] audit_logs PII 익명화 ${auditResult.rowCount}건 완료 (${auditRetentionDays}일 초과)`);
+            }
+        }
+
+        // 7-a. 성공 로그인 기록(login.succeeded) 보존 (env: AUDIT_LOGIN_SUCCESS_RETENTION_DAYS, 기본 90일)
+        // 로그인마다 한 행이 쌓여 무한 증가하므로 이 action 행만 지운다 — 다른 action 의 감사 기록은
+        // 위 정책 그대로(행 보존, PII 만 제거). 기본값은 PII 익명화 기간과 같다: 그 뒤로는 IP 가 지워져
+        // "어느 IP 로 들어왔는지"를 더 볼 수 없다.
+        const loginAuditRetentionDays = parseInt(
+            process.env.AUDIT_LOGIN_SUCCESS_RETENTION_DAYS ?? '90',
+            10,
+        );
+        if (Number.isFinite(loginAuditRetentionDays) && loginAuditRetentionDays > 0) {
+            const loginAuditResult = await pool.query(
+                `DELETE FROM audit_logs
+                 WHERE action = 'login.succeeded'
+                   AND timestamp < NOW() - ($1 || ' days')::interval`,
+                [loginAuditRetentionDays.toString()]
+            );
+            if ((loginAuditResult.rowCount ?? 0) > 0) {
+                logger.info(`[DbRetention] 성공 로그인 감사 기록 ${loginAuditResult.rowCount}건 정리 완료 (${loginAuditRetentionDays}일 초과)`);
             }
         }
 

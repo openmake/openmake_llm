@@ -62,6 +62,10 @@ describe('audit action registry', () => {
         const withSeverity = Object.entries(AUDIT_ACTION_SEVERITY).filter(([, s]) => s !== null);
         expect(Object.keys(CRITICAL_ACTIONS).sort()).toEqual(withSeverity.map(([a]) => a).sort());
         expect(CRITICAL_ACTIONS['mcp_tool_call']).toBeUndefined();
+        // 성공 로그인은 로그인마다 쌓인다 — 감사 기록만 남기고 알림은 보내지 않는다(login.failed 는 'info').
+        expect(AUDIT_ACTION_SEVERITY['login.succeeded']).toBeNull();
+        expect(isAuditAction('login.succeeded')).toBe(true);
+        expect(CRITICAL_ACTIONS['login.succeeded']).toBeUndefined();
     });
 
     it('AUDIT_ACTIONS 는 레지스트리 전체를 정렬해 중복 없이 담는다', () => {
