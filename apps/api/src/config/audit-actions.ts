@@ -11,17 +11,26 @@
  * - 심각도 null = 감사 기록만 남기고 알림은 보내지 않는다.
  *   'info' 는 console 만, 'warning' 이상은 webhook 등 전체 채널(AuditService.sendAlertForAction).
  *
+ * 켜진 add-on 은 자기 action 을 기여로 얹는다(addon-host/contributions 의 `auditActions`) — Base 는
+ * 특정 add-on 의 action 이름을 적어 두지 않는다. 타입은 add-on 이 `AddonAuditActions` 를 보강해 더한다.
+ *
  * @module config/audit-actions
  */
 
+import { contributedAuditActions } from '../addon-host/contributions';
+
 export type AuditSeverity = 'info' | 'warning' | 'critical';
 
-export const AUDIT_ACTION_SEVERITY = {
+const BASE_AUDIT_ACTION_SEVERITY = {
     // ── 사용자·계정 ──
     // GDPR Article 17 (right to erasure) — admin 의 사용자 삭제
     'user.deleted': 'critical',
     // 권한 변화 — admin 승격/박탈
     'user.role_changed': 'critical',
+    // admin 의 계정 활성/비활성 변경 — 비활성화는 접근 차단
+    'user.active_changed': 'warning',
+    // admin 의 로그인 이메일 변경
+    'user.email_changed': 'warning',
     'user.register': 'info',
     // GDPR Phase D — 14세 미만 가입 대기 (operator 의 guardian verify 필요)
     'minor_pending_registered': 'warning',
@@ -118,15 +127,27 @@ export const AUDIT_ACTION_SEVERITY = {
     'local_bridge.device_disconnect': null,
     'local_bridge.browser_policy_block': null,
 
-    // ── 애드온(MCP·Discord) — 문자열만 등록, Base 가 addons 를 import 하지는 않는다 ──
+    // ── MCP 런타임 ──
     'mcp_catalog.oauth_client_changed': null,
     'mcp_server_env_update': null,
     'mcp_server_rename': null,
-    'discord_runtime_config_fetch': null,
 } as const satisfies Record<string, AuditSeverity | null>;
 
-/** 서버가 기록할 수 있는 감사 action. */
-export type AuditAction = keyof typeof AUDIT_ACTION_SEVERITY;
+/**
+ * add-on 이 기여하는 action 의 타입 확장점 — add-on 의 contributions 모듈이 `declare module` 로 보강한다.
+ * 런타임 값은 그 add-on 의 `auditActions` 기여로 들어온다(둘은 같은 파일에 나란히 둔다).
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface AddonAuditActions {}
+
+/** 서버가 기록할 수 있는 감사 action — Base 등록분 + add-on 기여분. */
+export type AuditAction = keyof typeof BASE_AUDIT_ACTION_SEVERITY | keyof AddonAuditActions;
+
+/** action → 알림 심각도. Base 등록분에 켜진 add-on 의 기여를 합친 것. */
+export const AUDIT_ACTION_SEVERITY: Readonly<Record<string, AuditSeverity | null>> = {
+    ...contributedAuditActions(),
+    ...BASE_AUDIT_ACTION_SEVERITY,
+};
 
 /** 등록된 action 전체 (정렬). 감사 화면 action 필터 목록의 바탕. */
 export const AUDIT_ACTIONS: readonly AuditAction[] = (Object.keys(AUDIT_ACTION_SEVERITY) as AuditAction[]).sort();

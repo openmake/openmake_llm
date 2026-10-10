@@ -33,6 +33,8 @@ describe('audit action registry', () => {
         expect(CRITICAL_ACTIONS).toEqual(expect.objectContaining({
             'user.deleted': 'critical',
             'user.role_changed': 'critical',
+            'user.active_changed': 'warning',
+            'user.email_changed': 'warning',
             'org.policy_changed': 'warning',
             'config.exported': 'warning',
             'config.imported': 'critical',
