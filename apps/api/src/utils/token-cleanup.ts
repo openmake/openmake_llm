@@ -50,14 +50,16 @@ let cleanupInterval: ReturnType<typeof setInterval> | null = null;
 /**
  * Start periodic cleanup (call once on server startup).
  * Runs immediately, then every hour.
+ * Returns the one-shot startup timer so the caller can cancel it on shutdown
+ * (the hourly interval is stopped by stopPeriodicCleanup). null if already started.
  */
-export function startPeriodicCleanup(): void {
+export function startPeriodicCleanup(): NodeJS.Timeout | null {
     if (cleanupInterval) {
-        return;
+        return null;
     }
 
     // Run immediately on startup (delayed 10s to let DB connect)
-    setTimeout(async () => {
+    const startupTimer = setTimeout(async () => {
         await pruneExpiredTokens();
         await pruneExpiredRateLimits();
     }, 10_000);
@@ -74,6 +76,7 @@ export function startPeriodicCleanup(): void {
     }
 
     logger.info('[TokenCleanup] Periodic cleanup started (every 1 hour)');
+    return startupTimer;
 }
 
 /**

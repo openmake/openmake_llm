@@ -48,7 +48,8 @@ export async function startAllSchedulers(): Promise<void> {
 
     // 3. 토큰 블랙리스트/레이트리밋 만료 데이터 주기 정리
     try {
-        startPeriodicCleanup();
+        const startupTimer = startPeriodicCleanup();
+        if (startupTimer) track(startupTimer);
         logger.debug('PeriodicCleanupScheduler 시작 완료');
     } catch (err) {
         logger.error('PeriodicCleanupScheduler 시작 실패:', err);
@@ -200,7 +201,7 @@ export async function startAllSchedulers(): Promise<void> {
     //       부팅 복구 뒤에 둔다 — 복구가 다시 살린 작업은 종료 상태가 아니라 대상에서 빠진다.
     try {
         const { startTerminalNotifySweep } = await import('../services/agent-task/terminal-notify');
-        startTerminalNotifySweep();
+        track(startTerminalNotifySweep());
     } catch (err) {
         logger.warn('종료 알림 재전송 등록 실패(무시):', err);
     }
