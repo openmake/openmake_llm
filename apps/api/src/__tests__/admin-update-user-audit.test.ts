@@ -123,9 +123,31 @@ describe('PUT /api/admin/users/:id 감사 기록', () => {
         expect(logAudit).not.toHaveBeenCalled();
     });
 
-    it('이메일만 바꾸면 역할·활성·비밀번호 기록은 남지 않는다', async () => {
+    it('이메일이 바뀌면 user.email_changed 만 남긴다', async () => {
         await put({ email: 'renamed@example.com' }, { email: 'renamed@example.com' });
 
+        expect(logAudit).toHaveBeenCalledTimes(1);
+        expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({
+            action: 'user.email_changed',
+            userId: 'admin-1',
+            resourceType: 'user',
+            resourceId: 'u-1',
+            details: { previousEmail: 'target@example.com', newEmail: 'renamed@example.com' },
+        }));
+    });
+
+    it('보낸 이메일이 기존과 같으면 기록하지 않는다', async () => {
+        await put({ email: 'target@example.com' });
+
+        expect(logAudit).not.toHaveBeenCalled();
+    });
+
+    it('유효하지 않은 역할은 changeUserRole 과 같은 400 으로 거절하고 DB 에 넘기지 않는다', async () => {
+        const res = await put({ role: 'superuser' }, { role: 'superuser' });
+
+        expect(res.status).toBe(400);
+        expect(JSON.stringify(res.body)).toContain('유효하지 않은 역할입니다');
+        expect(updateUser).not.toHaveBeenCalled();
         expect(logAudit).not.toHaveBeenCalled();
     });
 

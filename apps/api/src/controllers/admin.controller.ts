@@ -332,6 +332,12 @@ class AdminController {
                 }
             }
 
+            // changeUserRole 과 같은 검증 — 이 경로만 임의 문자열을 DB 에 넘기던 것을 막는다.
+            if (role !== undefined && !isUserRole(role)) {
+                res.status(400).json(badRequest('유효하지 않은 역할입니다'));
+                return;
+            }
+
             // 감사 기록은 "실제로 바뀐" 필드만 남긴다 — 수정 전 값을 먼저 읽어 둔다.
             const before = await userManager.getUserById(userId);
             const user = await userManager.updateUser(userId, { email, role, is_active, password });
@@ -348,6 +354,9 @@ class AdminController {
             }
             if (before && before.is_active !== user.is_active) {
                 this.auditUserChange(req, 'user.active_changed', userId, { isActive: user.is_active, targetEmail: user.email });
+            }
+            if (before && before.email !== user.email) {
+                this.auditUserChange(req, 'user.email_changed', userId, { previousEmail: before.email, newEmail: user.email });
             }
             // 비밀번호는 값·해시를 남기지 않는다 — 바꿨다는 사실만.
             if (password !== undefined) {
