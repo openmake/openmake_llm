@@ -37,7 +37,7 @@ export const AGENT_TASK_PARK_EXPIRED_ERROR = 'hitl_park_expired';
 
 /**
  * 주차 중인 작업을 재개한다. 주차가 아니거나(살아 있는 대기·이미 재개됨) 체크포인트가 없거나
- * 로컬 디바이스가 연결되지 않았거나 직전 실행이 아직 큐 자리를 쥐고 있으면 false(주차 유지 — 스윕이 다시 시도). 예외는 호출부로.
+ * 로컬 디바이스가 연결되지 않았거나 직전 실행이 아직 큐 자리를 쥐고 있으면 false(주차 유지 — 스윕이 다시 시도, 자리 보류분은 반납 직후 한 번 더). 예외는 호출부로.
  */
 export async function resumeParkedTask(taskId: string): Promise<boolean> {
     const db = getUnifiedDatabase();
@@ -53,8 +53,10 @@ export async function resumeParkedTask(taskId: string): Promise<boolean> {
     }
     // 주차 표식은 실행이 큐 자리를 반납하기 전(종료 정리 중)에 남는다 — 그 창에 claim 하면 디스패치가 'duplicate' 로 버려지고
     // 실행·대기 항목 없는 pending 행이 남는다(스윕·부팅 복구 대상도 아니다). claim 전에 막아 주차를 유지한다.
+    // 자리가 반납되면 큐가 이 재개를 한 번 다시 시도한다(위 검사를 처음부터 다시 거친다) — 다음 스윕까지 기다리지 않게.
     if (getAgentTaskQueue().has(taskId)) {
-        logger.info(`[${taskId}] 주차 재개 보류 — 직전 실행의 종료 정리가 아직 안 끝남(스윕이 다시 시도)`);
+        getAgentTaskQueue().retryAfterRelease(taskId, () => resumeParkedTask(taskId));
+        logger.info(`[${taskId}] 주차 재개 보류 — 직전 실행의 종료 정리가 아직 안 끝남(자리 반납 뒤 다시 시도)`);
         return false;
     }
     if (!(await new AgentTaskRepository(getPool()).claimParkedTask(taskId))) return false;

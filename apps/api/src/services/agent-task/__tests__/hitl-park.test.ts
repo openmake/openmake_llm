@@ -14,7 +14,7 @@ const execute = jest.fn(async () => undefined);
 jest.mock('../../AgentTaskService', () => ({ AgentTaskService: jest.fn().mockImplementation(() => ({ execute })) }));
 const dispatchAgentTask = jest.fn(async (e: { run: () => Promise<void> }) => { await e.run(); return 'started'; });
 const queueHas = jest.fn((_id: string) => false);
-jest.mock('../task-queue', () => ({ dispatchAgentTask: (e: { run: () => Promise<void> }) => dispatchAgentTask(e), getAgentTaskQueue: () => ({ has: queueHas }) }));
+jest.mock('../task-queue', () => ({ dispatchAgentTask: (e: { run: () => Promise<void> }) => dispatchAgentTask(e), getAgentTaskQueue: () => ({ has: queueHas, retryAfterRelease: jest.fn() }) }));
 jest.mock('../boot-recovery', () => ({ resolveUserRole: async () => 'user' }));
 let bridgeEnabled = true;
 jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { get ENABLED() { return bridgeEnabled; }, DEVICE_WAIT_ENABLED: true, DEVICE_WAIT_MAX_MS: 60_000, TAKEOVER_WAIT_MAX_MS: 30_000 } }));
