@@ -41,6 +41,7 @@ jest.mock('./task-queue', () => ({ dispatchAgentTask: (e: never) => dispatch(e),
 
 import { recoverInterruptedAgentTasks, sweepExpiredTaskLeases } from './boot-recovery';
 import { leaseOwner } from './task-lease';
+import { beginAgentTaskShutdown, resetAgentTaskShutdownForTest } from './shutdown-drain';
 
 beforeEach(() => { interrupted.length = 0; expired.length = 0; runningHere.clear(); jest.clearAllMocks(); takeOver.mockResolvedValue(true); claim.mockResolvedValue(true); });
 
@@ -151,6 +152,16 @@ describe('sweepExpiredTaskLeases — 소유권이 지난 작업을 가져와 이
         const r = await sweepExpiredTaskLeases();
         expect(r).toEqual({ resumed: 0, failed: 0 });
         expect(takeOver).not.toHaveBeenCalled();
+    });
+
+    it('서버 종료 중에는 가져오지 않는다 — 가져와도 실행을 시작하지 못한다', async () => {
+        expired.push({ ...base, status: 'running', checkpoint: cp });
+        beginAgentTaskShutdown();
+        try {
+            await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 0 });
+        } finally { resetAgentTaskShutdownForTest(); }
+        expect(takeOver).not.toHaveBeenCalled();
+        expect(claim).not.toHaveBeenCalled();
     });
 
     it('조회가 실패해도 던지지 않는다', async () => {

@@ -47,6 +47,7 @@ import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { initWorkspaceBaseline } from './agent-task/code-diff';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
+import { trackAgentTaskRun, isShutdownAbort, recordShutdownInterrupt } from './agent-task/shutdown-drain';
 import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint, usedToolNamesFrom } from './agent-task/turn-reentry';
 import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
 import { nextTurnProgress } from './agent-task/turn-progress';
@@ -98,16 +99,15 @@ export class AgentTaskService {
 
     static isRunning(taskId: string): boolean { return AgentTaskService.running.has(taskId); } // 소유권 점검이 자기 작업을 가져가지 않게
 
-    /** 외부에서 작업 취소 */
-    abort(): void {
-        this.abortController.abort();
-    }
+    /** 외부에서 작업 중단 — reason 없이 부르면 사용자 취소, 서버 종료는 사유를 싣는다(agent-task/shutdown-drain) */
+    abort(reason?: unknown): void { this.abortController.abort(reason); }
 
     /**
      * 자율 도구 루프 실행. 백그라운드 detached 호출 전제 — 예외를 던지지 않고
      * 모든 종료 경로에서 agent_tasks 상태를 갱신한다.
      */
-    async execute(input: AgentTaskRunInput): Promise<void> {
+    async execute(input: AgentTaskRunInput): Promise<void> { return trackAgentTaskRun(this, input.taskId, () => this.runLoop(input)); } // 종료 중이면 시작하지 않는다
+    private async runLoop(input: AgentTaskRunInput): Promise<void> {
         const { taskId, goal, userId, userRole, maxTurns, allowedSkills } = input;
         const db = getUnifiedDatabase();
         const mcp = getToolRuntime();
@@ -145,7 +145,7 @@ export class AgentTaskService {
         let curProgress = 0;
         let curTurn = 0;
         let taskRuntime: TaskRuntime | null = null;
-        let parked = false; // 질문 응답 대기 주차(F16.7) — finally 가 승인·workspace 를 남긴다
+        let parked = false, interrupted = false; // 질문 응답 대기 주차(F16.7)·서버 종료로 끊김 — finally 가 승인·workspace 를 남긴다
         const recentSignatures: string[] = [];
         let stuckNotified = false, stuckPending = false;
         let emptyRetries = 0;
@@ -571,13 +571,14 @@ export class AgentTaskService {
             await finalizeMaxTurnsExhausted({ taskId, userId, turnCeiling, conversation, taskRuntime, sandboxCfg, stepNumber, update, emitStep, held: verifyHold.answer });
         } catch (err) {
             // 질문 응답 대기 주차(F16.7) — 체크포인트·표식은 turn-executor 가 남겼다. 실행만 끝내 슬롯을 반납한다(재개는 hitl-park)
-            if (err instanceof AgentTaskParked && !signal.aborted) { // 주차 — 사유를 실어 화면이 무엇을 기다리는지 보이게 한다
+            if (err instanceof AgentTaskParked && (!signal.aborted || isShutdownAbort(signal))) { // 주차 — 사유를 실어 화면이 무엇을 기다리는지 보이게 한다
                 parked = true; emitAgentTaskProgress({ userId, taskId, status: 'paused', progress: curProgress, currentTurn: curTurn, waitReason: err.message }); logger.info(`[AgentTask] 주차(${err.message}): ${taskId}`); return;
             }
             // signal.aborted 가 true 면 client.chat() 호출 도중 던져진 AbortError
             // ("Request was aborted") 도 사용자 취소로 분류 — 턴 사이 abort 뿐 아니라
             // LLM 호출 중간 취소도 cancelled 로 일관 처리.
             if (leaseLost) { logger.warn(`[AgentTask] 소유권을 잃어 실행 중단: ${taskId}`); return; } // 취소·실패가 아니다 — 상태는 새 소유자가 쓴다
+            if (isShutdownAbort(signal)) { interrupted = true; await recordShutdownInterrupt(taskId, { totalTokens, ...cacheUsage.snapshot() }); return; } // 서버 종료 — 취소가 아니다. 부팅 복구가 집는 표식으로 남긴다
             const aborted = signal.aborted || (err instanceof AgentTaskAbort && err.kind === 'aborted');
             const kind = aborted ? 'aborted' : (err instanceof AgentTaskAbort ? err.kind : 'failed');
             const msg = err instanceof Error ? err.message : String(err);
@@ -589,7 +590,7 @@ export class AgentTaskService {
             if (AgentTaskService.running.get(taskId) === this) AgentTaskService.running.delete(taskId); // 내 등록일 때만 — 다른 인스턴스 것을 지우지 않는다
             await lease.end();
             // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup. 소유권을 잃었으면 새 소유자가 쓰고 있어 건너뛴다.
-            if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber });
+            if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber, interrupted });
         }
     }
 }

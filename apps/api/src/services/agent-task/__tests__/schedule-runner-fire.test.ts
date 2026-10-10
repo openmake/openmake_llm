@@ -28,6 +28,7 @@ jest.mock('../../../data/user-manager', () => ({ isAdminRole: () => false, getUs
 
 import { runScheduleTick } from '../schedule-runner';
 import { scheduleFireKey } from '../schedule-fire';
+import { beginAgentTaskShutdown, resetAgentTaskShutdownForTest } from '../shutdown-drain';
 
 const NOW = Date.parse('2026-10-04T01:00:00Z');
 const schedule = (over: Record<string, unknown> = {}) => ({
@@ -140,5 +141,19 @@ describe('runScheduleTick — "보고할 것 없음" 안내', () => {
         try {
             expect(await run()).toBe('일일 보고');
         } finally { restore.restore(); }
+    });
+});
+
+describe('runScheduleTick — 서버 종료 중', () => {
+    afterEach(() => resetAgentTaskShutdownForTest());
+
+    it('발화하지 않고 발화 시각도 넘기지 않는다 — 다음 부팅의 첫 tick 이 실행한다', async () => {
+        repo.getDue.mockResolvedValue([schedule()]);
+        beginAgentTaskShutdown();
+        await expect(runScheduleTick(NOW)).resolves.toBe(0);
+        expect(repo.getDue).not.toHaveBeenCalled();
+        expect(createAgentTask).not.toHaveBeenCalled();
+        expect(repo.markRun).not.toHaveBeenCalled();
+        expect(repo.markSkipped).not.toHaveBeenCalled();
     });
 });

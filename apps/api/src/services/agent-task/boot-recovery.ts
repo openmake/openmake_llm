@@ -25,6 +25,7 @@ import { dispatchAgentTask, getAgentTaskQueue } from './task-queue';
 import type { ChatMessage } from '../../llm/types';
 import type { AgentTaskUserRole } from './types';
 import { leaseOwner } from './task-lease';
+import { isAgentTaskShutdown } from './shutdown-drain';
 import type { AgentTask } from '../../data/models/unified-database.types';
 
 const logger = createLogger('AgentTaskBootRecovery');
@@ -153,7 +154,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
  */
 export async function sweepExpiredTaskLeases(): Promise<{ resumed: number; failed: number }> {
     const out = { resumed: 0, failed: 0 };
-    if (!AGENT_TASK_LIMITS.LEASE_ENABLED) return out;
+    if (!AGENT_TASK_LIMITS.LEASE_ENABLED || isAgentTaskShutdown()) return out; // 종료 중엔 가져오지 않는다 — 가져와도 실행을 시작하지 못한다
     const db = getUnifiedDatabase();
     let taskRepo: AgentTaskRepository;
     let expired: AgentTask[];
