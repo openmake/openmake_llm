@@ -3,7 +3,8 @@
  */
 import { SYSTEM_SETTINGS_REGISTRY } from '../../config/system-settings-registry';
 import { ALLOWED_API_KEY_SCOPES, apiKeyHasScope } from '../../config/api-key-scopes';
-import { DISCORD_API_KEY_SCOPE } from './contributions';
+import { DISCORD_API_KEY_SCOPE, DISCORD_RUNTIME_CONFIG_FETCH_AUDIT_ACTION } from './contributions';
+import { AUDIT_ACTIONS, CRITICAL_ACTIONS, isAuditAction } from '../../config/audit-actions';
 import { DISCORD_RUNTIME_SETTING_KEYS } from './runtime-keys';
 
 it('discord 그룹 키는 봇 중계 목록과 정확히 일치한다', () => {
@@ -25,4 +26,11 @@ it('discord 스코프는 봇 설정 배포 전용 — 추론·브리지 키로�
     expect(apiKeyHasScope(['bridge'], DISCORD_API_KEY_SCOPE)).toBe(false);
     expect(apiKeyHasScope([DISCORD_API_KEY_SCOPE], 'chat')).toBe(false);
     expect(apiKeyHasScope([DISCORD_API_KEY_SCOPE], DISCORD_API_KEY_SCOPE)).toBe(true);
+});
+
+it('감사 action 은 Base 레지스트리에 얹히고 알림 대상은 아니다', () => {
+    expect(DISCORD_RUNTIME_CONFIG_FETCH_AUDIT_ACTION).toBe('discord_runtime_config_fetch');
+    expect(isAuditAction(DISCORD_RUNTIME_CONFIG_FETCH_AUDIT_ACTION)).toBe(true);
+    expect(AUDIT_ACTIONS).toContain(DISCORD_RUNTIME_CONFIG_FETCH_AUDIT_ACTION);
+    expect(CRITICAL_ACTIONS[DISCORD_RUNTIME_CONFIG_FETCH_AUDIT_ACTION]).toBeUndefined();
 });

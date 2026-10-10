@@ -23,6 +23,7 @@ import { ADMIN_SYNCED_PROVIDER_KEYS, getProviderCatalogEntry } from '../config/e
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
 import { getAuditService } from '../services/AuditService';
+import type { AuditAction } from '../config/audit-actions';
 import { createLogger } from '../utils/logger';
 import { PAGINATION } from '../config/http-data-limits';
 
@@ -91,7 +92,7 @@ function adminUserId(req: Request): string | null {
     return req.user?.id !== undefined ? String(req.user.id) : null;
 }
 
-async function auditChange(req: Request, action: string, details: Record<string, unknown>): Promise<void> {
+async function auditChange(req: Request, action: AuditAction, details: Record<string, unknown>): Promise<void> {
     try {
         await getAuditService().logAudit({
             action,

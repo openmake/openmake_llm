@@ -26,6 +26,7 @@ import { UserModelRolesRepository } from '../data/repositories/user-model-roles-
 import { ModelRole, USER_ASSIGNABLE_MODEL_ROLES } from '../config/model-roles';
 import { validateModelAssignment } from '../services/model-assignment-validation';
 import { getAuditService } from '../services/AuditService';
+import type { AuditAction } from '../config/audit-actions';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, badRequest, notFound } from '../utils/api-response';
 import { slotKindReason } from '../services/model-assignments-service';
@@ -58,7 +59,7 @@ function parseAssignableRole(value: string): ModelRole | null {
  * 원인 추적이 불가했던 갭 해소. previous 를 함께 남겨 소실 시 복원 근거로 쓴다.
  * (admin-model-roles.routes 의 auditChange 와 동일 관용구 — 실패는 응답에 영향 없음)
  */
-async function auditChange(userId: string, action: string, details: Record<string, unknown>): Promise<void> {
+async function auditChange(userId: string, action: AuditAction, details: Record<string, unknown>): Promise<void> {
     try {
         await getAuditService().logAudit({
             action,

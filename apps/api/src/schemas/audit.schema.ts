@@ -10,18 +10,20 @@
  */
 import { z } from 'zod';
 import { SCHEMA_LIMITS } from '../config/http-data-limits';
+import { isAuditAction } from '../config/audit-actions';
 
 const { audit: A } = SCHEMA_LIMITS;
 
 /**
  * 감사 로그 생성 스키마
- * @property {string} action - 감사 액션 (필수, 1~100자)
+ * @property {string} action - 감사 액션 (필수, 1~100자, config/audit-actions 레지스트리에 등록된 값)
  * @property {string} [resourceType] - 리소스 유형 (200자 이하)
  * @property {string} [resourceId] - 리소스 ID (500자 이하)
  * @property {object} [details] - 추가 세부정보
  */
 export const createAuditSchema = z.object({
-    action: z.string().min(1, 'action은 필수입니다').max(A.ACTION_MAX),
+    action: z.string().min(1, 'action은 필수입니다').max(A.ACTION_MAX)
+        .refine(isAuditAction, '등록되지 않은 action 입니다'),
     resourceType: z.string().max(A.RESOURCE_TYPE_MAX).optional(),
     resourceId: z.string().max(A.RESOURCE_ID_MAX).optional(),
     details: z.record(z.string(), z.unknown()).optional(),

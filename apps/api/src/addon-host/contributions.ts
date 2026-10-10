@@ -44,6 +44,11 @@ export interface AddonContribution {
     toolRisk?: Readonly<Record<string, string>>;
     settings?: readonly AddonSettingDef[];
     apiKeyScopes?: readonly string[];
+    /**
+     * add-on 이 기록하는 감사 action → 알림 심각도(null = 기록만). config/audit-actions 레지스트리에 합쳐진다.
+     * 타입 쪽은 같은 모듈에서 `AddonAuditActions` 를 보강해 logAudit 에 넘길 수 있게 한다.
+     */
+    auditActions?: Readonly<Record<string, 'info' | 'warning' | 'critical' | null>>;
 }
 
 function enabledContributions(): AddonContribution[] {
@@ -58,6 +63,10 @@ export function contributedSettings(): AddonSettingDef[] {
 
 export function contributedApiKeyScopes(): string[] {
     return enabledContributions().flatMap(c => [...(c.apiKeyScopes ?? [])]);
+}
+
+export function contributedAuditActions(): Record<string, 'info' | 'warning' | 'critical' | null> {
+    return Object.assign({}, ...enabledContributions().map(c => c.auditActions ?? {}));
 }
 
 /** 켜진 add-on 이 더한 CLI 서브커맨드 — 핸들러는 호출 시점에 로드한다. */
