@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.93.1](https://github.com/openmake/openmake_llm/compare/v1.93.0...v1.93.1) (2026-10-10)
+
+
+### 🐛 버그 수정
+
+* **api:** /execute·/resume 가 큐 duplicate 거절 시 실행 시작 claim 을 되돌린다 ([264b262](https://github.com/openmake/openmake_llm/commit/264b262ae1ea56ebc940b41c15091e8bfded3fa6))
+* **api:** DB 초기화 실패를 ensureReady 가 그대로 reject 하게 한다 ([a2630e3](https://github.com/openmake/openmake_llm/commit/a2630e392f4708d0bc8e67d91f0b5b284bc9e6b9))
+* **api:** DB 초기화 실패를 삼키지 않아 부팅 Fail-Fast 가 동작 (안정화 PR D 1/3) ([d451016](https://github.com/openmake/openmake_llm/commit/d451016c5559629782c57ee2b2d133e12ed62b3a))
+* **api:** REST 채팅이 클라이언트 끊김 시 upstream LLM 호출을 중단 ([df759f7](https://github.com/openmake/openmake_llm/commit/df759f717894d60b2be76450ea23abf826563272))
+* **api:** REST 채팅이 클라이언트 끊김 시 upstream LLM 호출을 중단 (안정화 PR C) ([153a500](https://github.com/openmake/openmake_llm/commit/153a50046c651b67d75ddf311fc09999575ed7f4))
+* **api:** 부팅 시 스키마 초기화를 먼저 기다린다 ([0896490](https://github.com/openmake/openmake_llm/commit/089649078da5f14c89398fe926ffd7069bf1d2dc))
+* **api:** 실행 시작 claim 이 처음부터 재실행 때 이전 체크포인트를 같은 문장에서 지우고 되돌리기를 지원 ([513108c](https://github.com/openmake/openmake_llm/commit/513108cd69e225f15df1be4b9540ca212dff1a43))
+* **api:** 실행 시작 claim 후속 — 고아 queued 되돌리기·재실행 시 이전 체크포인트 제거 ([#1195](https://github.com/openmake/openmake_llm/issues/1195) 후속) ([b75351e](https://github.com/openmake/openmake_llm/commit/b75351ef643cf1dc82d65a93d4adb32b0430a3cf))
+* **api:** 작업 디스패치가 duplicate 면 행을 갱신하지 않는다 ([e41138e](https://github.com/openmake/openmake_llm/commit/e41138ef3d2191b3ef0757001ede2a427acf6173))
+* **api:** 클라이언트 연결 끊김을 res 기준으로 감지하는 abort 헬퍼 추가 ([9fa3de8](https://github.com/openmake/openmake_llm/commit/9fa3de8cb70a2cd028795184cafac5a26963722f))
+* **bridge:** worktree·샌드박스 탐지의 git 자식 환경도 exec allowlist 로 제한 ([6adf64f](https://github.com/openmake/openmake_llm/commit/6adf64fdbf4151a4aee429f73d9df8e95b900339))
+* **bridge:** 고정 명령·git 자식 환경을 exec allowlist 로 제한 ([#1194](https://github.com/openmake/openmake_llm/issues/1194) 후속) ([ef979e3](https://github.com/openmake/openmake_llm/commit/ef979e328f11b419c7349c763a346c57497cf08f))
+* **bridge:** 고정 명령의 자식 환경을 exec allowlist 로 제한 ([123d11b](https://github.com/openmake/openmake_llm/commit/123d11b1ba9575b75e6fb56f14a8a7d1b075a81d))
+* **companion:** 헬퍼에 API key 를 환경변수가 아니라 stdin 으로 전달 ([d896326](https://github.com/openmake/openmake_llm/commit/d89632642781e79a76b613a2991290caca876a87))
+* **companion:** 헬퍼에 API key 를 환경변수가 아니라 stdin 으로 전달 ([58c9233](https://github.com/openmake/openmake_llm/commit/58c9233c906b2a2a6e1fc1fc6a905bf6a58d2ca9))
+
 ## [1.93.0](https://github.com/openmake/openmake_llm/compare/v1.92.0...v1.93.0) (2026-10-10)
 
 
