@@ -36,7 +36,8 @@ jest.mock('../AgentTaskService', () => ({
     AgentTaskService: Object.assign(jest.fn().mockImplementation(() => ({ execute })), { isRunning: (id: string) => runningHere.has(id) }),
 }));
 const dispatch = jest.fn(async (entry: { run: () => Promise<void> }) => { await entry.run(); return 'started'; });
-jest.mock('./task-queue', () => ({ dispatchAgentTask: (e: never) => dispatch(e) }));
+const queueHas = jest.fn((_id: string) => false);
+jest.mock('./task-queue', () => ({ dispatchAgentTask: (e: never) => dispatch(e), getAgentTaskQueue: () => ({ has: queueHas }) }));
 
 import { recoverInterruptedAgentTasks, sweepExpiredTaskLeases } from './boot-recovery';
 import { leaseOwner } from './task-lease';
@@ -92,6 +93,16 @@ describe('recoverInterruptedAgentTasks — queued 고아', () => {
         const r = await recoverInterruptedAgentTasks();
         expect(r).toEqual({ resumed: 0, failed: 1 });
         expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ error: 'interrupted_local_device' }));
+    });
+
+    it('이 프로세스의 큐에 이미 실행·대기 중인 작업은 claim 하지 않고 건너뛴다(부팅 직후 /execute·/resume 가 먼저 제출)', async () => {
+        interrupted.push({ ...base, status: 'queued', checkpoint: null });
+        queueHas.mockReturnValueOnce(true);
+        const r = await recoverInterruptedAgentTasks();
+        expect(r).toEqual({ resumed: 0, failed: 0 });
+        expect(queueHas).toHaveBeenCalledWith('t1');
+        expect(claim).not.toHaveBeenCalled();
+        expect(dispatch).not.toHaveBeenCalled();
     });
 
     it('claim 에 실패하면(다른 프로세스가 선점) 건너뛴다', async () => {

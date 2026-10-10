@@ -17,6 +17,19 @@ describe('AgentTaskQueue', () => {
         expect(q.stats()).toMatchObject({ globalActive: 2, pending: 0 });
     });
 
+    it('has — 실행 중·대기 중이면 true, 끝나면 false(submit 이 duplicate 로 거절할 조건)', async () => {
+        const q = new AgentTaskQueue(1, 5);
+        const a = deferred();
+        expect(q.has('t1')).toBe(false);
+        q.submit({ taskId: 't1', userId: 'u1', run: () => a.promise });
+        q.submit({ taskId: 't2', userId: 'u1', run: () => deferred().promise });
+        expect(q.has('t1')).toBe(true); // 실행 중
+        expect(q.has('t2')).toBe(true); // 대기 중
+        a.resolve();
+        await new Promise((r) => setImmediate(r));
+        expect(q.has('t1')).toBe(false);
+    });
+
     it('전역 상한 초과 시 queued', () => {
         const q = new AgentTaskQueue(1, 5);
         const a = deferred();

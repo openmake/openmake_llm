@@ -21,7 +21,7 @@ import { AgentTaskRepository } from '../../data/repositories/agent-task-reposito
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskService, type AgentTaskInputFile } from '../AgentTaskService';
-import { dispatchAgentTask } from './task-queue';
+import { dispatchAgentTask, getAgentTaskQueue } from './task-queue';
 import type { ChatMessage } from '../../llm/types';
 import type { AgentTaskUserRole } from './types';
 import { leaseOwner } from './task-lease';
@@ -64,6 +64,10 @@ async function recoverTask(
         }
         return task.status === 'running' || task.status === 'paused' || wasQueued ? 'failed' : 'skipped';
     }
+
+    // 이 프로세스의 큐에 이미 있으면(조회 뒤 /execute·/resume 가 먼저 제출) 건드리지 않는다 — claim 하면 디스패치는
+    // 'duplicate' 로 버려지고 실행 중인 작업의 행만 pending 으로 덮인다(pending→completed 는 표 밖이라 종료 기록이 거부된다).
+    if (getAgentTaskQueue().has(task.id)) return 'skipped';
 
     // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀.
     const claimed = await taskRepo.claimAgentTaskForRecovery(task.id);
