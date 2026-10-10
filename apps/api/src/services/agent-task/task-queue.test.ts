@@ -1,4 +1,4 @@
-import { AgentTaskQueue, resolveQueuePriority } from './task-queue';
+import { AgentTaskQueue, resolveQueuePriority, dispatchAgentTask, getAgentTaskQueue } from './task-queue';
 
 /** 수동 해소 가능한 지연 thunk — start 로 실행 추적, resolve 로 완료 시뮬레이션. */
 function deferred() {
@@ -117,5 +117,35 @@ describe('resolveQueuePriority', () => {
         expect(resolveQueuePriority(-1, false, 10)).toBe(-1);
         expect(resolveQueuePriority(undefined, true, 10)).toBe(0);
         expect(resolveQueuePriority(1.5, true, 10)).toBe(0);
+    });
+});
+
+// 큐는 기본 설정에서 꺼져 있다 — 꺼진 경로도 같은 작업의 실행(종료 정리 포함)이 끝나기 전엔 다시 시작하지 않아야 한다
+describe('dispatchAgentTask — 큐 비활성(기본)', () => {
+    it('같은 작업의 실행이 끝나기 전(종료 정리 포함) 재디스패치는 duplicate 로 거절하고 실행하지 않는다', async () => {
+        const a = deferred();
+        const second = jest.fn(async () => undefined);
+        await expect(dispatchAgentTask({ taskId: 'off-1', userId: 'u1', run: () => a.promise })).resolves.toBe('started');
+        expect(getAgentTaskQueue().has('off-1')).toBe(true); // claim 전 확인(주차 재개·부팅 복구)이 보는 값
+        await expect(dispatchAgentTask({ taskId: 'off-1', userId: 'u1', run: second })).resolves.toBe('duplicate');
+        expect(second).not.toHaveBeenCalled();
+        a.resolve();
+        await new Promise((r) => setImmediate(r));
+        expect(getAgentTaskQueue().has('off-1')).toBe(false);
+        await expect(dispatchAgentTask({ taskId: 'off-1', userId: 'u1', run: second })).resolves.toBe('started');
+        expect(second).toHaveBeenCalledTimes(1);
+    });
+
+    it('상한 없이 바로 실행한다(대기·실행 수 집계에 들지 않는다) — 실행이 예외로 끝나도 자리를 비운다', async () => {
+        const before = getAgentTaskQueue().stats();
+        const runs = Array.from({ length: 12 }, () => deferred());
+        for (let i = 0; i < runs.length; i++) {
+            await expect(dispatchAgentTask({ taskId: `off-many-${i}`, userId: 'u1', run: () => runs[i].promise })).resolves.toBe('started');
+        }
+        expect(getAgentTaskQueue().stats()).toMatchObject({ globalActive: before.globalActive, pending: before.pending });
+        runs.forEach((r) => r.resolve());
+        await expect(dispatchAgentTask({ taskId: 'off-throw', userId: 'u1', run: async () => { throw new Error('boom'); } })).resolves.toBe('started');
+        await new Promise((r) => setImmediate(r));
+        expect(getAgentTaskQueue().has('off-throw')).toBe(false);
     });
 });
