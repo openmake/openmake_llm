@@ -15,6 +15,7 @@ import { createLogger } from '../../utils/logger';
 import { AgentTaskService } from '../AgentTaskService';
 import { getPushService } from '../PushService';
 import { dispatchAgentTask } from './task-queue';
+import { isAgentTaskShutdown } from './shutdown-drain';
 import { getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { publishScheduleOutput } from './schedule-publish';
 import { computeNextRun } from './schedule-cron';
@@ -143,7 +144,7 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
 
 /** 한 번의 tick — due 스케줄 전부 처리. 재진입 방지(느린 tick 이 겹치지 않게). */
 export async function runScheduleTick(nowMs = Date.now()): Promise<number> {
-    if (ticking) return 0;
+    if (ticking || isAgentTaskShutdown()) return 0; // 서버 종료 중엔 발화하지 않는다 — 발화 시각을 넘기지 않으므로 다음 부팅의 첫 tick 이 실행한다
     ticking = true;
     try {
         const repo = new AgentTaskScheduleRepository(getPool());
