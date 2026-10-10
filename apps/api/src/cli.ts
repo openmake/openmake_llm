@@ -64,6 +64,10 @@ program
         const { createDashboardServer } = await import('./dashboard');
         const dashboard = createDashboardServer({ port: parseInt(options.port) });
 
+        // 종료 처리·전역 예외 핸들러 — server.ts 직접 실행과 같은 모듈 (운영 진입점은 이 명령)
+        const { installGracefulShutdown } = await import('./boot/graceful-shutdown');
+        installGracefulShutdown(dashboard);
+
         const spinner = createSpinner('노드 연결 중...');
         spinner.start();
 
@@ -73,13 +77,6 @@ program
 
             console.log(chalk.green(`\n✅ 대시보드: ${chalk.underline(dashboard.url)}`));
             console.log(chalk.gray('\n종료하려면 Ctrl+C를 누르세요\n'));
-
-            // 종료 처리
-            process.on('SIGINT', () => {
-                console.log(chalk.yellow('\n\n👋 클러스터 종료 중...'));
-                dashboard.stop();
-                process.exit(0);
-            });
         } catch (error) {
             spinner.fail('클러스터 시작 실패');
             if (error instanceof Error) {
