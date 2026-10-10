@@ -27,6 +27,7 @@ import { API_KEY_SCOPES } from '../config/api-key-scopes';
 import { validate, validateWithSecurity } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AgentTaskRepository } from '../data/repositories/agent-task-repository';
+import { AgentTaskRunRepository } from '../data/repositories/agent-task-run-repository';
 import { resolveSessionListScope } from '../controllers/session.controller';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
@@ -345,21 +346,19 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
         }
     }
 
-    // 실패/취소 작업 재실행(재시도): dispatch 전에 DB 상태를 pending 으로 되돌린다 —
-    // 실행 시작 가드(AgentTaskService: preTask.status==='cancelled' 즉시 abort)가 이전
-    // 실행의 취소 기록을 새 실행에 대한 취소로 오인해 즉시 중단되는 것을 막고(라이브 실측),
-    // 재시도 직후 목록 조회도 pending 으로 보여 이중 클릭 창을 줄인다.
-    if (task.status === 'failed' || task.status === 'cancelled') {
-        await getUnifiedDatabase().updateAgentTask(task.id, { status: 'pending', progress: 0 });
-    }
-
     const role: UserRole = (req.user!.role as UserRole) || 'user';
 
     // 스킬 범위(allowedSkills, 미지정이면 전체 활성 스킬)와 승인 3모드(Manual/Auto/Skip)는
     // executeAgentTaskSchema 가 검증한다 — 잘못된 값은 여기 오기 전에 400 이다.
-    const { allowedSkills, approvalPolicy: requestedPolicy, priority } = req.body as ExecuteAgentTaskInput;
+    const { allowedSkills, approvalPolicy: requestedPolicy, priority, thinkingLevel } = req.body as ExecuteAgentTaskInput;
     // 조직 승인 하한(129) — 활성 조직이 TOOL_APPROVAL_POLICY_MIN 을 두면 요청값과 비교해 더 엄격한 쪽을 쓴다.
     const approvalPolicy = strictestApprovalPolicy(requestedPolicy, (await resolveEffectivePolicy(String(req.user!.id))).approvalPolicyMin);
+
+    // 실행 시작 claim(2026-10-09 점검 ①) — 위 상태 검사는 SELECT 기반이라 동시 요청을 못 막는다. 모든 조기 400 뒤·디스패치
+    // 직전에 조건부 UPDATE 로 잡고, 0행이면 다른 요청이 먼저 잡은 것. failed/cancelled 재실행의 progress 리셋도 여기서 한다.
+    if (!(await new AgentTaskRunRepository(getPool()).claimForExecute(task.id, { resetProgress: true, reason: 'execute claim' }))) {
+        return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.'));
+    }
 
     // 백그라운드 detached 실행 (응답은 즉시 반환). AgentTaskService 가 자체
     // AbortController 를 소유하므로 ws.close 와 무관하게 끝까지 진행한다.
@@ -377,6 +376,7 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
             maxTurns: task.max_turns,
             allowedSkills,
             approvalPolicy,
+            thinkingLevel,
             files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
             executor: (task.executor === 'local' ? 'local' : undefined),
@@ -384,6 +384,7 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
             folderRel: task.folder_rel ?? undefined,
         }),
     });
+    if (outcome === 'duplicate') return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.'));
 
     logger.info(`[AgentTaskRoutes] 작업 ${outcome === 'queued' ? '대기열 등록' : '실행 시작'}: ${task.id}`);
     res.status(202).json(success({
@@ -454,6 +455,10 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
     const db = getUnifiedDatabase();
     const steps = await db.getAgentTaskSteps(task.id);
 
+    // 실행 시작 claim(2026-10-09 점검 ①) — execute 와 같은 이유. 재개는 progress 를 잇는다.
+    if (!(await new AgentTaskRunRepository(getPool()).claimForExecute(task.id, { resetProgress: false, reason: 'resume claim' }))) {
+        return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.'));
+    }
     const service = new AgentTaskService();
     const outcome = await dispatchAgentTask({
         taskId: task.id,
@@ -478,6 +483,7 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
             },
         }),
     });
+    if (outcome === 'duplicate') return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.'));
 
     logger.info(`[AgentTaskRoutes] 작업 이어하기 ${outcome === 'queued' ? '대기열 등록' : '시작'}: ${task.id} (turn ${(cp.completedTurn ?? 0) + 1})`);
     res.status(202).json(success({

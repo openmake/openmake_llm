@@ -10,6 +10,7 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
 import { isOriginAllowed } from '../security/cors-policy';
 import { AUTH_COOKIES } from '../config/security';
+import type { BridgeAuthFailure } from '../config/local-bridge';
 
 interface WebSocketAuthResult {
     userId: string | null;
@@ -23,6 +24,8 @@ interface WebSocketAuthResult {
     apiKeyScopes?: string[] | null;
     /** API key 인증 시 그 키의 id(키 폐기 시 브리지 연결 끊기용). */
     apiKeyId?: string;
+    /** API key 인증 실패 사유 — 게스트로 떨어진 브리지 연결을 이 사유로 닫는다(인증 성공·JWT 경로는 undefined). */
+    authFailure?: BridgeAuthFailure;
 }
 
 function tokenFingerprint(token: string): string {
@@ -52,18 +55,24 @@ async function resolveAuthFromApiKey(
     plainKey: string,
     logger: ReturnType<typeof createLogger>,
 ): Promise<WebSocketAuthResult> {
-    if (!isValidApiKeyFormat(plainKey)) return { ...GUEST_RESULT };
+    if (!isValidApiKeyFormat(plainKey)) return { ...GUEST_RESULT, authFailure: 'api_key_invalid' };
     try {
         const db = getUnifiedDatabase();
         const key = await db.getApiKeyByHash(hashApiKey(plainKey));
-        if (!key || !key.is_active) return { ...GUEST_RESULT };
+        if (!key) return { ...GUEST_RESULT, authFailure: 'api_key_invalid' };
+        if (!key.is_active) return { ...GUEST_RESULT, authFailure: 'api_key_inactive' };
         if (key.expires_at && new Date(key.expires_at) < new Date()) {
             logger.warn('[WS] 만료된 API key 연결 시도 차단');
-            return { ...GUEST_RESULT };
+            return { ...GUEST_RESULT, authFailure: 'api_key_expired' };
         }
         const user = await db.getUserById(key.user_id);
-        if (!user || !user.is_active) return { ...GUEST_RESULT };
+        if (!user) return { ...GUEST_RESULT, authFailure: 'account_deleted' };
+        if (!user.is_active) return { ...GUEST_RESULT, authFailure: 'account_disabled' };
         logger.info(`[WS] API key 인증 연결: userId=${user.id}`);
+        // 연결당 1회 사용 기록 — 연결을 기다리게 하지 않고, 기록 실패가 인증 결과를 바꾸지 않게 한다.
+        void Promise.resolve()
+            .then(() => db.recordApiKeyUsage(key.id, 0))
+            .catch((e: unknown) => logger.warn('[WS] API key 사용 기록 실패:', e));
         return {
             userId: String(user.id),
             userRole: (user.role as 'admin' | 'user' | 'guest') || 'user',
@@ -77,7 +86,7 @@ async function resolveAuthFromApiKey(
         };
     } catch (e) {
         logger.warn('[WS] API key 인증 실패:', e);
-        return { ...GUEST_RESULT };
+        return { ...GUEST_RESULT, authFailure: 'auth_unavailable' };
     }
 }
 

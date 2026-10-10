@@ -2,8 +2,8 @@
  * 체크포인트 이력·분기(fork) 라우트 (F08 PR-7, 141) — agent-task.routes.ts 에서 router.use 로 마운트.
  *   GET  /api/agent-tasks/:taskId/checkpoints          — 이력 목록(턴·메시지 수·시각)
  *   POST /api/agent-tasks/:taskId/fork { fromTurn, goal? } — 그 턴의 체크포인트로 새 pending 작업 생성(클라이언트가 이어서 /resume)
- * 상태 전이표 변경 없음(pending → running 은 표에 있음). 워크스페이스는 복원하지 않는다(스냅샷 없음) — 대화 끝에 안내를 붙이고
- * 입력 첨부는 복사한다. 로컬 실행 작업은 같은 디바이스·폴더로만 fork.
+ * 상태 전이표 변경 없음(pending → running 은 표에 있음). 워크스페이스 복원은 services/agent-task/fork-workspace(기본 꺼짐)가
+ * 재개 때 시도한다 — 여기서는 대화 끝에 안내를 붙이고 입력 첨부·승인 정책(183)을 복사한다. 로컬 실행 작업은 같은 디바이스·폴더로만 fork.
  * @module routes/agent-task-fork
  */
 import { Router, Request, Response } from 'express';
@@ -13,6 +13,7 @@ import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
 import { AgentTaskRepository } from '../data/repositories/agent-task-repository';
+import { AgentTaskParkRepository } from '../data/repositories/agent-task-park-repository';
 import { loadOwnedTask } from './agent-task.helpers';
 import { buildForkNotice } from '../prompts/agent-task-prompt';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
@@ -61,6 +62,17 @@ forkRouter.post('/:taskId/fork', asyncHandler(async (req: Request, res: Response
     });
     await db.updateAgentTask(id, { checkpoint: { conversation, completedTurn: fromTurn }, ...(cp.plan ? { plan: cp.plan } : {}) });
     await repo.markForked(id, src.id, fromTurn).catch(() => { /* 표시용 — 실패해도 fork 는 유효 */ });
+    // 원 작업의 승인 정책을 물려준다 — 분기 재개(/resume, 본문 없음)는 저장된 정책을 읽으므로(approval-policy-restore) 이게 없으면
+    // 'high-risk' 로 돌던 작업이 분기 뒤 'all'(매 도구 승인)로 바뀐다(2026-10-08 라이브 확인). 실패해도 더 보수적인 쪽으로만 틀어진다.
+    if (src.approval_policy) {
+        await new AgentTaskParkRepository(getPool()).setApprovalPolicy(id, src.approval_policy)
+            .catch((e) => logger.warn(`[AgentTaskForkRoutes] 승인 정책 물려주기 실패 (무시): ${e instanceof Error ? e.message : String(e)}`));
+    }
+    // 추론 수준(184)도 같은 이유로 물려준다 — 분기 재개는 저장값을 읽는다(thinking-level-restore).
+    if (src.thinking_level) {
+        await new AgentTaskParkRepository(getPool()).setThinkingLevel(id, src.thinking_level)
+            .catch((e) => logger.warn(`[AgentTaskForkRoutes] 추론 수준 물려주기 실패 (무시): ${e instanceof Error ? e.message : String(e)}`));
+    }
     logger.info(`[AgentTaskForkRoutes] fork: ${src.id}@${fromTurn} → ${id} (user ${req.user!.id})`);
     res.status(201).json(success({ taskId: id, fromTaskId: src.id, fromTurn, next: `/api/agent-tasks/${id}/resume` }));
 }));

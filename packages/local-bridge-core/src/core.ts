@@ -16,7 +16,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import {
-    BRIDGE_KINDS, BROWSER_KIND, DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
+    BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY, DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
     SANDBOX_BIN, SANDBOX_ENABLED,
 } from './constants';
 import { collectDiagnostics } from './diagnostics';
@@ -24,12 +24,14 @@ import { runCodeNav } from './code-nav';
 import { detectTestRunner } from './test-runner';
 import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
+import { buildExecEnv } from './exec-env';
 import { detectGitDir, writeSandboxProfile } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
 import { findChrome } from './browser/chrome';
 import { bulkApprovalAllowed, shellInvocation } from './platform';
 import { LocalBrowser } from './browser/local-browser';
+import { resolveUploadFiles } from './browser/upload-files';
 import type { BridgeCoreOptions, BridgeMsg, BridgeResult } from './types';
 
 const fsp = fs.promises;
@@ -50,7 +52,7 @@ export class BridgeCore {
 
     /** 서버에 알리는 능력 목록 — 브라우저는 전용 프로필과 Chrome 이 있을 때만 넣는다. */
     capabilities(): string[] {
-        return this.browser ? [...BRIDGE_KINDS, BROWSER_KIND] : [...BRIDGE_KINDS];
+        return this.browser ? [...BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY] : [...BRIDGE_KINDS];
     }
 
     /** 브라우저 제어권 — 사용자가 넘겨받은 동안 에이전트의 브라우저 요청은 실행하지 않는다. */
@@ -161,7 +163,8 @@ export class BridgeCore {
                 if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
                 const opts = {
                     cwd: base, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, encoding: 'utf8' as const,
-                    env: { ...process.env, PATH: this.execPathCache },
+                    // allowlist(exec-env) — 비밀 상속 차단
+                    env: buildExecEnv(process.env, this.execPathCache),
                 };
                 const cb = (err: import('child_process').ExecFileException | null, stdout: string, stderr: string): void => {
                     done({ ok: true, stdout: String(stdout), stderr: String(stderr), exitCode: err ? (typeof err.code === 'number' ? err.code : 1) : 0 });
@@ -249,16 +252,22 @@ export class BridgeCore {
                 // 로컬 브라우저(P2) — 사이트 정책 판정·제어권·중지는 LocalBrowser 가 맡는다. 스크린샷·다운로드는 실행 폴더 안에만 쓴다.
                 if (!this.browser) { done({ ok: false, error: '이 디바이스는 브라우저를 쓸 수 없습니다(전용 프로필 미설정 또는 Chrome 없음)' }); return; }
                 const r = await this.browser.run(
-                    { actions: m.actions, sitePolicy: m.sitePolicy, approvedHosts: m.approvedHosts },
+                    { actions: m.actions, sitePolicy: m.sitePolicy, approvedHosts: m.approvedHosts, approvedUploads: m.approvedUploads },
                     {
                         ...(m.taskId ? { taskId: m.taskId } : {}),
                         downloadDir: base,
                         saveFile: async (name, data) => { await fsp.writeFile(await safeFromAsync(base, name), data); },
+                        // 업로드는 실행 폴더 안의 파일만(폴더 밖·숨김·크기·개수 거절)
+                        resolveUploadFiles: (files) => resolveUploadFiles(base, files),
                     },
                 );
                 // 결과는 서버 샌드박스 러너와 같은 JSON 을 stdout 에 싣는다 — 서버의 browser 도구가 그대로 읽는다.
                 // 넘겨받은 상태라 실행하지 않았으면 결과에 표식을 싣는다 — 서버는 이 호출을 오류로 돌려주지 않고 작업을 주차한다.
-                done({ ok: true, stdout: JSON.stringify(r), exitCode: r.ok ? 0 : 1, ...(r.userControl ? { userControl: true } : {}) }); return;
+                // 정책으로 막았으면 그 표식을 결과 맨 위에도 싣는다 — 서버가 stdout 을 풀지 않고 감사 기록을 남긴다(추가 전용).
+                done({
+                    ok: true, stdout: JSON.stringify(r), exitCode: r.ok ? 0 : 1,
+                    ...(r.userControl ? { userControl: true } : {}), ...(r.policyBlock ? { policyBlock: r.policyBlock } : {}),
+                }); return;
             }
             case 'worktree':
                 await handleWorktree(m, done, base); return;

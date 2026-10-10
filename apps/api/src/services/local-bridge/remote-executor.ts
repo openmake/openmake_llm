@@ -17,8 +17,9 @@ import { stripWorkspacePrefix } from '../task-sandbox/workspace-path';
 import { getLocalBridgeRegistry, type BridgeKind, type BridgeResult, type BridgeRequestPayload } from './registry';
 import { getLocalBridgeUnknownOutcomeNotice } from '../../prompts/agent-task-prompt';
 import { LocalDeviceUnavailableError, type DeviceLoss } from './device-errors';
-import { classifyBrowserAction, planBrowserActions, type BrowserSitePlan } from '@openmake/config';
+import { classifyBrowserAction, planBrowserActions, type BrowserSitePlan, type BrowserUploadApproval } from '@openmake/config';
 import { resolveEffectivePolicy } from '../org/effective-policy';
+import { auditBrowserPolicyBlock } from './browser-policy-audit';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { readFile as fsReadFile, stat } from 'fs/promises';
 import { createLogger } from '../../utils/logger';
@@ -58,6 +59,10 @@ export class RemoteExecutor implements TaskExecutor {
      */
     get isBrowserEnabled(): boolean {
         return LOCAL_BRIDGE.BROWSER_ENABLED && getLocalBridgeRegistry().supports(this.userId, this.deviceId, 'browser');
+    }
+    /** 연결된 기기가 브라우저 업로드를 아는가 — 능력 목록에 browser_upload 를 알린 기기만(구버전은 모른다, 2026-10-06). */
+    get supportsBrowserUpload(): boolean {
+        return getLocalBridgeRegistry().supports(this.userId, this.deviceId, 'browser_upload');
     }
     /** 로그인 상태는 기기의 전용 프로필에 남는다 — 서버가 상태 파일을 다루지 않는다. */
     readonly browserStatePath = null;
@@ -276,14 +281,22 @@ export class RemoteExecutor implements TaskExecutor {
         return planBrowserActions(actions, this.lastBrowserUrl, browserSite);
     }
 
-    async runBrowserSpec(spec: { actions: unknown[]; approvedHosts: string[] }): Promise<ExecResult> {
+    async runBrowserSpec(spec: { actions: unknown[]; approvedHosts: string[]; approvedUploads?: BrowserUploadApproval[] }): Promise<ExecResult> {
         const { browserSite } = await resolveEffectivePolicy(this.userId);
         const r = await this.req(
-            { kind: 'browser', actions: spec.actions, sitePolicy: browserSite, approvedHosts: spec.approvedHosts, taskId: this.taskId },
+            {
+                kind: 'browser', actions: spec.actions, sitePolicy: browserSite, approvedHosts: spec.approvedHosts, taskId: this.taskId,
+                ...(spec.approvedUploads?.length ? { approvedUploads: spec.approvedUploads } : {}),
+            },
             LOCAL_BRIDGE.BROWSER_TIMEOUT_MS,
         );
         // 사용자가 브라우저를 넘겨받아 거절됐다 — 턴 실행기가 이 신호를 보고 작업을 주차한다(결과 불명 신호가 우선).
         if (LOCAL_BRIDGE.TAKEOVER_PARK_ENABLED && r.userControl === true && this.deviceLoss !== 'unknown') this.deviceLoss = 'browser_takeover';
+        // 기기가 사이트 정책·사용자 제어로 막았으면 감사 기록 한 건(호스트만, fail-open).
+        await auditBrowserPolicyBlock(r, {
+            taskId: this.taskId, userId: this.userId,
+            deviceId: getLocalBridgeRegistry().getDevice(this.userId, this.deviceId)?.deviceId ?? this.deviceId ?? null,
+        });
         // 기기가 돌려준 현재 주소를 기억한다 — 실패·차단으로 끝나도 주소는 온다.
         try {
             const out = JSON.parse(r.stdout ?? '') as { finalUrl?: unknown };

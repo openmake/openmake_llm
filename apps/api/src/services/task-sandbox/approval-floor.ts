@@ -14,7 +14,7 @@ import { APPROVAL_FLOOR, INSTRUCTION_FILE_PATTERNS, type ApprovalFloorKind } fro
 import { isThirdPartyTool } from '../../config/tool-policy';
 import { MEMORY_SAVE_TOOL_NAME } from '../../config/agent-task-skill-memory';
 import { isSensitivePath } from './sensitive-paths';
-import { hasOffListSiteWrites } from './browser-site-approval';
+import { hasOffListSiteWrites, hasSiteUploads } from './browser-site-approval';
 
 /** 파일을 바꾸는 작업 — 도구별 인자 이름과 값. */
 const FILE_WRITE_OPS = new Set(['write', 'delete']);
@@ -76,6 +76,7 @@ export function isInstructionPath(normalizedPath: string): boolean {
 
 /** PURE: 이 호출이 자동승인에서도 물어야 하는 바닥 호출이면 그 종류, 아니면 null. */
 export function approvalFloorReason(toolName: string, args: Record<string, unknown>): ApprovalFloorKind | null {
+    if (hasSiteUploads(toolName, args)) return 'site_upload'; // 고를 수 없는 바닥 — APPROVAL_FLOOR 와 무관
     if (APPROVAL_FLOOR.has('third_party_tool') && isThirdPartyTool(toolName)) return 'third_party_tool';
     if (APPROVAL_FLOOR.has('memory_write') && toolName === MEMORY_SAVE_TOOL_NAME) return 'memory_write';
     if (APPROVAL_FLOOR.has('site_write') && hasOffListSiteWrites(toolName, args)) return 'site_write';

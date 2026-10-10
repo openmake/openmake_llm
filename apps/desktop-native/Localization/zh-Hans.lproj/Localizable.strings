@@ -39,6 +39,14 @@
 "status.helperMissing" = "缺少辅助程序资源（需要重新安装）";
 "status.helperExited" = "辅助程序已停止 — 请重新连接";
 "status.helperLaunchFailed" = "无法启动辅助程序：%@";
+/* Connection status — 因认证原因断开 */
+"status.auth.apiKeyRevoked" = "API key 已被吊销 — 请生成新密钥并在设置中输入";
+"status.auth.apiKeyInvalid" = "API key 缺失或无效 — 请生成新密钥并在设置中输入";
+"status.auth.apiKeyExpired" = "API key 已过期 — 请生成新密钥并在设置中输入";
+"status.auth.apiKeyInactive" = "API key 已停用 — 请重新启用或在设置中输入新密钥";
+"status.auth.accountDisabled" = "账户已被停用 — 请联系管理员";
+"status.auth.accountDeleted" = "账户已被删除 — 请联系管理员";
+"status.auth.scopeRequired" = "此 API key 没有 bridge 范围 — 请生成具有 bridge 范围的密钥并在设置中输入";
 
 /* 选择文件夹 */
 "panel.title" = "选择要连接到智能体任务的文件夹（可以逐个添加多个文件夹）";

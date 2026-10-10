@@ -28,6 +28,11 @@ jest.mock('../data/models/unified-database', () => ({
         deleteAgentTaskSteps: jest.fn().mockResolvedValue(undefined),
     }),
 }));
+// 추론 수준 저장(persistThinkingLevel)은 DB 풀을 쓴다 — 이 스위트는 루프 연결만 보므로 저장을 건너뛴다.
+jest.mock('../services/agent-task/thinking-level-restore', () => ({
+    ...jest.requireActual('../services/agent-task/thinking-level-restore'),
+    persistThinkingLevel: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../runtime-ports/tool-runtime', () => ({
     ...jest.requireActual('../runtime-ports/tool-runtime'),
     getToolRuntime: () => ({
@@ -99,5 +104,24 @@ describe('Agent Task — 말만 하고 멈춘 턴 재촉', () => {
 
         const agentTurns = chatCalls.filter((c) => String(c.conversation[1]?.content) === '조사해서 보고서를 써 줘');
         expect(agentTurns.length).toBe(2);
+    });
+});
+
+describe('Agent Task — 추론 강등(184) 서비스 연결', () => {
+    beforeEach(() => { updateAgentTask.mockClear(); addAgentTaskStep.mockClear(); mockChat.mockReset(); chatCalls.length = 0; });
+
+    it('빈 응답 2연속 → thinking_downgrade 단계 1회 기록 → 다음 호출의 think 가 false', async () => {
+        const thinks: unknown[] = [];
+        const rec = (c: Msg[], a?: ChatAdvanced & { think?: unknown }): void => { record(c, a); thinks.push(a?.think); };
+        mockChat
+            .mockImplementationOnce(async (c: Msg[], _m?: unknown, _o?: unknown, a?: ChatAdvanced) => { rec(c, a); return say('') as never; })
+            .mockImplementationOnce(async (c: Msg[], _m?: unknown, _o?: unknown, a?: ChatAdvanced) => { rec(c, a); return say('') as never; })
+            .mockImplementation(async (c: Msg[], _m?: unknown, _o?: unknown, a?: ChatAdvanced) => { rec(c, a); return say('조사를 마쳤습니다. 결과는 위와 같습니다.') as never; });
+
+        await new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '조사해서 보고서를 써 줘', maxTurns: 10, thinkingLevel: 'high' } as never);
+
+        const downgrades = addAgentTaskStep.mock.calls.map(([st]) => st as { stepType: string }).filter((st) => st.stepType === 'thinking_downgrade');
+        expect(downgrades).toHaveLength(1);
+        expect(thinks.slice(0, 3)).toEqual(['high', 'high', false]);
     });
 });

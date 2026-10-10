@@ -12,6 +12,7 @@ export { EXEC_DENYLIST, matchDenylist } from './denylist';
 export { safeFrom } from './scope';
 export { detectGitDir, writeSandboxProfile } from './sandbox';
 export { resolveExecPath } from './exec-path';
+export { buildExecEnv } from './exec-env';
 export { gitRun, handleWorktree } from './worktree';
 export { runCodeNav, walkFiles, globToRegExp } from './code-nav';
 export { BridgeCore } from './core';

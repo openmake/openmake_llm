@@ -3,7 +3,7 @@
  * @module services/agent-task/goal-judge
  */
 import type { LLMClient } from '../../llm';
-import { getAgentTaskGoalJudgeMessages } from '../../prompts/agent-task-prompt';
+import { getAgentTaskGoalJudgeMessages, getUserRejectionsJudgeNote } from '../../prompts/agent-task-prompt';
 import { AGENT_TASK_LIMITS, JUDGE_EVIDENCE_EXCLUDED_TOOLS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 
@@ -81,6 +81,27 @@ export function buildJudgeExecutionContext(
         ...(criteria.length > 0 ? [`계획 노드 완료 기준(DONE_WHEN):\n${criteria.join('\n')}`] : []),
         ...(toolEvidence ? [`최근 도구 실행 결과:\n${toolEvidence}`] : []),
     ].join('\n');
+}
+
+/** 작업에서 사용자가 거절한 승인 한 건 — agent_task_approvals(status='rejected') 행. */
+export interface JudgeUserRejection {
+    tool_name: string;
+    args: Record<string, unknown> | null;
+    answer_text: string | null;
+}
+
+/**
+ * 완료 판정의 수행 맥락(EXECUTION)에 사용자가 거절한 동작 절을 붙인다 — 거절이 있을 때만(withSandboxUnavailableJudgeNote 와 같은 방식).
+ * 거절 0건이면 execCtx 를 그대로 돌려준다.
+ */
+export function withUserRejectionsJudgeNote(execCtx: string, rejections: ReadonlyArray<JudgeUserRejection>): string {
+    if (rejections.length === 0) return execCtx;
+    const items = rejections.slice(0, AGENT_TASK_LIMITS.GOAL_JUDGE_REJECTION_MAX_ITEMS).map((r) => ({
+        toolName: r.tool_name,
+        args: JSON.stringify(r.args ?? {}).replace(/\s+/g, ' ').slice(0, AGENT_TASK_LIMITS.GOAL_JUDGE_REJECTION_ARGS_CHARS),
+        reason: (r.answer_text ?? '').replace(/\s+/g, ' ').trim().slice(0, AGENT_TASK_LIMITS.GOAL_JUDGE_REJECTION_REASON_CHARS),
+    }));
+    return `${execCtx}\n${getUserRejectionsJudgeNote(items)}`;
 }
 
 /**

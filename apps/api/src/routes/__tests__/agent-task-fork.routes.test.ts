@@ -1,5 +1,5 @@
 /**
- * 체크포인트 분기 라우트(141) — fork 는 pending 작업을 만들고 체크포인트·계획·첨부·실행기를 물려받는다.
+ * 체크포인트 분기 라우트(141) — fork 는 pending 작업을 만들고 체크포인트·계획·첨부·실행기·승인 정책을 물려받는다.
  * asyncHandler 는 promise 를 기다리지 않으므로 라우터 스택의 핸들러를 직접 await 한다.
  */
 const createAgentTask = jest.fn(async () => undefined);
@@ -14,6 +14,11 @@ jest.mock('../../data/models/unified-database', () => ({
 }));
 jest.mock('../../data/repositories/agent-task-repository', () => ({
     AgentTaskRepository: jest.fn().mockImplementation(() => ({ getCheckpoint, listCheckpoints, markForked })),
+}));
+const setApprovalPolicy = jest.fn(async () => undefined);
+const setThinkingLevel = jest.fn(async () => undefined);
+jest.mock('../../data/repositories/agent-task-park-repository', () => ({
+    AgentTaskParkRepository: jest.fn().mockImplementation(() => ({ setApprovalPolicy, setThinkingLevel })),
 }));
 jest.mock('../../auth/ownership', () => ({ assertResourceOwnerOrAdmin: jest.fn() }));
 // 작업 공간 복원 플래그는 .env 에 좌우되므로 꺼진 상태로 고정한다.
@@ -39,7 +44,8 @@ function mockRes() {
 }
 const src = {
     id: 'src', user_id: 'u1', goal: '원래 목표', max_turns: 12, status: 'failed',
-    input_files: [{ name: 'a.txt' }], input_images: null, executor: 'local', device_id: 'dev1', folder_rel: 'proj',
+    input_files: [{ name: 'a.txt' }], input_images: null, executor: 'local', device_id: 'dev1', folder_rel: 'proj', approval_policy: 'high-risk',
+    thinking_level: 'medium',
 };
 const req = (body: Record<string, unknown>) => ({ params: { taskId: 'src' }, body, user: { id: 'u1', role: 'user' } });
 
@@ -84,6 +90,33 @@ describe('POST /:taskId/fork', () => {
         expect(upd[1].plan).toEqual([{ step: 1 }]);
         expect(markForked).toHaveBeenCalledWith(newId, 'src', 2);
         expect(res.body.data.next).toBe(`/api/agent-tasks/${newId}/resume`);
+    });
+    it('원 작업의 승인 정책을 새 작업 행에 남긴다 — 분기 재개가 저장된 정책을 읽는다', async () => {
+        getCheckpoint.mockResolvedValue({ conversation: [{ role: 'user', content: 'hi' }], plan: null });
+        const res = mockRes();
+        await handler('post', '/:taskId/fork')(req({ fromTurn: 1 }), res, jest.fn());
+        expect(res.statusCode).toBe(201);
+        expect(setApprovalPolicy).toHaveBeenCalledWith(res.body.data.taskId, 'high-risk');
+    });
+    it('원 작업에 저장된 정책이 없으면 남기지 않는다(재개 기본값 그대로)', async () => {
+        getAgentTask.mockResolvedValue({ ...src, approval_policy: null });
+        getCheckpoint.mockResolvedValue({ conversation: [{ role: 'user', content: 'hi' }], plan: null });
+        const res = mockRes();
+        await handler('post', '/:taskId/fork')(req({ fromTurn: 1 }), res, jest.fn());
+        expect(res.statusCode).toBe(201);
+        expect(setApprovalPolicy).not.toHaveBeenCalled();
+    });
+    it('원 작업의 추론 수준을 새 작업 행에 남긴다', async () => {
+        getCheckpoint.mockResolvedValue({ conversation: [{ role: 'user', content: 'hi' }], plan: null });
+        const res = mockRes();
+        await handler('post', '/:taskId/fork')(req({ fromTurn: 1 }), res, jest.fn());
+        expect(setThinkingLevel).toHaveBeenCalledWith(res.body.data.taskId, 'medium');
+    });
+    it('원 작업에 추론 수준이 없으면 남기지 않는다', async () => {
+        getAgentTask.mockResolvedValue({ ...src, thinking_level: null });
+        getCheckpoint.mockResolvedValue({ conversation: [{ role: 'user', content: 'hi' }], plan: null });
+        await handler('post', '/:taskId/fork')(req({ fromTurn: 1 }), mockRes(), jest.fn());
+        expect(setThinkingLevel).not.toHaveBeenCalled();
     });
     it.each([-1, 0])('0 기준 체크포인트 턴 %i 도 분기한다', async (turn) => {
         getCheckpoint.mockResolvedValue({ conversation: [{ role: 'user', content: 'hi' }], plan: null });

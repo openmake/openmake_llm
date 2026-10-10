@@ -231,6 +231,19 @@ const { WebSocketServer } = require('ws');
     assert.ok(!socks.has(dev1), '루트1 소켓 종료');
     assert.equal((await execVia(dev2, { kind: 'read', path: 'other.txt' })).content, 'other-root', '루트1 해제 후 루트2 생존');
 
+    // ⑤-B 인증 사유로 닫힘(0.3.2) — hello 에 authClose 를 싣고, 서버가 1008 api_key_revoked 로 닫으면
+    //      그 루트의 상태 코드가 사유 그대로 올라온다(앱이 "API key 가 폐기되었습니다" 로 번역). 곧바로 다시 붙지 않는다.
+    assert.equal(hello.authClose, true, 'hello authClose');
+    send({ cmd: 'connect', folder });
+    await waitFor((f) => f.type === 'bridge_hello' && f.folderName === path.basename(folder) && socks.has(f.deviceId));
+    const hellosBefore = hellos.length;
+    socks.get(dev1).close(1008, 'api_key_revoked');
+    await waitEv((e) => e.ev === 'status' && e.folder === realFolder && e.code === 'api_key_revoked');
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(hellos.length, hellosBefore, '인증 사유로 닫히면 곧바로 다시 연결하지 않는다');
+    send({ cmd: 'disconnect', folder });
+    await waitEv((e) => e.ev === 'disconnected' && e.folder === realFolder && events.filter((x) => x.ev === 'disconnected' && x.folder === realFolder).length >= 2);
+
     // ⑥ stdin 종료 = 정리 종료 (좀비 방지) — pending confirm 은 'no' 로 해소
     const zombieP = execVia(dev2, { kind: 'exec', command: 'echo never-runs' });
     await waitEv((e) => e.ev === 'confirm' && e.command.includes('never-runs'));

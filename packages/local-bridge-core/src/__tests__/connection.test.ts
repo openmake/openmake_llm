@@ -8,7 +8,7 @@ import * as path from 'path';
 import { WebSocketServer, type WebSocket as ServerWs } from 'ws';
 import { BridgeConnection, parseNotice } from '../connection';
 import { BridgeCore } from '../core';
-import { BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, NOTICE_TOOL_NAME_MAX } from '../constants';
+import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, NOTICE_TOOL_NAME_MAX } from '../constants';
 import type { BridgeNotice } from '../types';
 
 interface Frame { type?: string; reqId?: string; result?: Record<string, unknown>; deviceId?: string; label?: string; folderName?: string }
@@ -39,6 +39,8 @@ class FakeServer {
     }
     send(frame: Record<string, unknown>): void { this.sockets[this.sockets.length - 1]?.send(JSON.stringify(frame)); }
     dropAll(): void { for (const s of this.sockets) s.terminate(); this.sockets = []; }
+    /** 서버가 사유를 실어 닫는다(키 폐기·계정 비활성 등). */
+    closeAll(code: number, reason: string): void { for (const s of this.sockets) s.close(code, reason); this.sockets = []; }
     waitFor(pred: (f: Frame) => boolean, ms = 5000): Promise<Frame> {
         const hit = this.received.find(pred);
         if (hit) return Promise.resolve(hit);
@@ -252,5 +254,62 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
         conn!.disconnect();
         await new Promise((r) => setTimeout(r, 100));
         expect(codes[codes.length - 1]).toEqual(['closed', undefined]);
+    });
+
+    it('hello 에 authClose 를 싣는다 — 서버가 인증 실패를 사유와 함께 닫아도 된다는 표시', async () => {
+        await makeConn().connect();
+        const hello = await server.waitFor((f) => f.type === 'bridge_hello') as Frame & { authClose?: boolean };
+        expect(hello.authClose).toBe(true);
+    });
+
+    /** 닫는 사유 검증용 연결 — 상태 코드와 재연결 대기를 기록한다. */
+    function authConn(codes: Array<[string, string | undefined]>, delays: number[]): BridgeConnection {
+        const core = new BridgeCore({ folder: base, confirm: async () => 'no', sandboxProfileDir: os.tmpdir() });
+        conn = new BridgeConnection({
+            serverUrl: `http://127.0.0.1:${server.port}`, core, deviceId: 'test-device-a', label: 'unit · auth',
+            headers: () => ({ Authorization: 'Bearer omk_test' }),
+            onStatus: (s, code, arg) => { statuses.push(s); if (code) codes.push([code, arg]); },
+            reconnectMs: 100, authRetryMs: 7777, random: () => 1,
+            onReconnectScheduled: (ms) => delays.push(ms),
+        });
+        return conn;
+    }
+    async function closedWith(code: number, reason: string): Promise<{ codes: Array<[string, string | undefined]>; delays: number[] }> {
+        const codes: Array<[string, string | undefined]> = [];
+        const delays: number[] = [];
+        await authConn(codes, delays).connect();
+        await server.waitFor((f) => f.type === 'bridge_hello');
+        await new Promise((r) => setTimeout(r, 50));
+        server.closeAll(code, reason);
+        const until = Date.now() + 3000;
+        while (delays.length === 0 && Date.now() < until) await new Promise((r) => setTimeout(r, 10));
+        return { codes, delays };
+    }
+
+    it.each([...AUTH_CLOSE_REASONS])('인증 사유(%s)로 닫히면 그 사유를 상태 코드로 알리고 긴 간격으로만 다시 시도한다', async (reason) => {
+        const { codes, delays } = await closedWith(1008, reason);
+        expect(codes[codes.length - 1]).toEqual([reason, undefined]);
+        expect(statuses[statuses.length - 1]).toBe(AUTH_CLOSE_TEXT[reason]);
+        expect(delays).toEqual([7777]);
+    });
+
+    it('인증이 아닌 1008 사유(기기 상한)는 종전대로 재연결 대기', async () => {
+        const { codes, delays } = await closedWith(1008, 'bridge_device_limit');
+        expect(codes[codes.length - 1]).toEqual(['reconnecting', undefined]);
+        expect(delays).toEqual([100]);
+    });
+
+    it('인증을 확인하지 못함(1013 auth_unavailable)은 일시적 실패라 종전대로 재연결 대기', async () => {
+        const { codes, delays } = await closedWith(1013, 'auth_unavailable');
+        expect(codes[codes.length - 1]).toEqual(['reconnecting', undefined]);
+        expect(delays).toEqual([100]);
+    });
+
+    it('인증 사유로 닫힌 뒤 disconnect() 하면 기다리던 재시도도 취소된다', async () => {
+        await closedWith(1008, 'api_key_revoked');
+        const before = server.connections;
+        conn!.disconnect();
+        await new Promise((r) => setTimeout(r, 200));
+        expect(server.connections).toBe(before);
     });
 });

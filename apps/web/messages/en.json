@@ -28,6 +28,7 @@
       "organizationsAdmin": "Organizations",
       "costRatesAdmin": "Cost Rates",
       "bridgeDevicesAdmin": "Connected devices",
+      "agentTaskMetricsAdmin": "Task metrics",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "Evaluations",
       "quotaRequestsAdmin": "Quota Approvals",
@@ -264,6 +265,7 @@
       "activate": "Activate",
       "deactivate": "Deactivate",
       "rotate": "Rotate",
+      "rotateInactive": "Inactive keys can't be rotated — activate the key first",
       "delete": "Delete"
     },
     "scope": {
@@ -340,6 +342,16 @@
       "autoHint": "Approve only high-risk tools (shell/python/browser/delete)",
       "skipHint": "Run all tools automatically"
     },
+    "thinkingMode": {
+      "label": "Reasoning:",
+      "off": "Off",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "offHint": "Same as today — fastest",
+      "levelHint": "The model thinks before each step. Slower and uses more tokens",
+      "highHint": "Deepest reasoning. Long-form tasks may take much longer"
+    },
     "localExec": {
       "label": "Local run:",
       "off": "Run in server sandbox",
@@ -384,6 +396,7 @@
       "procedurePreview": "View the procedure to run",
       "fullArgs": "Show full content ({chars} chars)",
       "siteWrites": "Sends to a site outside the allowlist",
+      "siteUploads": "Uploads files from your PC to this site",
       "elicitHint": "Input requested by {server} · fields: {fields}",
       "elicitJsonHint": "For more than one field, answer in JSON: {example}"
     },
@@ -1078,7 +1091,7 @@
       "pick": "Pick a turn",
       "turnOption": "Turn {turn} ({messages} messages)",
       "go": "Fork & run",
-      "hint": "Re-runs everything after the chosen turn as a new task (fresh workspace).",
+      "hint": "Re-runs everything after the chosen turn as a new task. Depending on server settings the workspace is restored to that turn’s files or starts empty.",
       "failed": "Fork failed: {error}"
     },
     "priorityBadge": "Priority {priority}",
@@ -1135,6 +1148,13 @@
       "startFailed": "Could not take control of the browser: {error}",
       "inputFailed": "Input was not delivered: {error}",
       "releaseFailed": "Could not hand back: {error}"
+    },
+    "thinkingBadge": "Reasoning {level}",
+    "thinkingLabel": "Reasoning",
+    "thinkingLevel": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
     }
   },
   "customAgents": {
@@ -2461,6 +2481,7 @@
       "procedurePreview": "View the procedure to run",
       "fullArgs": "Show full content ({chars} chars)",
       "siteWrites": "Sends to a site outside the allowlist",
+      "siteUploads": "Uploads files from your PC to this site",
       "assignedToMe": "Assigned to me",
       "assignedAway": "Reassigned",
       "reassign": "Reassign",
@@ -2546,7 +2567,7 @@
       "EXTERNAL_MODEL_POLICY": "Allow/deny globs for external models as JSON. deny is unioned with global, allow is intersected — an org cannot lift a global block.",
       "TOOL_APPROVAL_POLICY_MIN": "Minimum approval policy for agent tasks. If stricter than the request, the minimum wins.",
       "MCP_ALLOWED_SERVERS": "Comma-separated MCP catalog template ids allowed for installation. Empty = no restriction.",
-      "BROWSER_SITE_POLICY": "Browser site policy for this organization. The deny list is unioned with global. If global has an allow list, only entries present in both remain; if global is empty, the org list applies. Reset to follow global."
+      "BROWSER_SITE_POLICY": "Browser site policy for this organization. The deny list is unioned with global. If global has an allow list, only entries present in both remain; if global is empty, the org list applies. Clear it to follow global."
     },
     "history": "Change history",
     "noHistory": "No changes yet.",
@@ -2597,6 +2618,48 @@
     "disconnectConfirm": "Disconnect “{label}” of {email}? Requests from running local tasks will fail.",
     "disconnectFailed": "Failed to disconnect.",
     "reconnectNote": "Disconnect only closes the current connection. To keep a device from reconnecting, delete or deactivate the user's bridge API key — revoking a key also closes its connections immediately."
+  },
+  "adminAgentTaskMetrics": {
+    "title": "Task metrics",
+    "description": "Success rate, duration, tokens and user interventions of agent tasks by executor. Covers tasks created in the period.",
+    "period": "Period",
+    "days": "{days} days",
+    "refresh": "Refresh",
+    "loadError": "Failed to load metrics.",
+    "empty": "No tasks were created in this period.",
+    "summaryTitle": "Summary by executor",
+    "failuresTitle": "Top failure reasons",
+    "noFailures": "No failed tasks.",
+    "metric": "Metric",
+    "overall": "All",
+    "executorLocal": "Local device",
+    "executorSandbox": "Server sandbox",
+    "total": "Tasks",
+    "completed": "Completed",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "inProgress": "In progress",
+    "successRate": "Success rate",
+    "durationP50": "Median duration",
+    "durationP95": "p95 duration",
+    "tokenTasks": "Tasks with token data",
+    "tokensAvg": "Avg tokens",
+    "tokensSum": "Total tokens",
+    "cachedPromptTokensSum": "Cached prompt tokens",
+    "approvalRequests": "Approval requests",
+    "questions": "Questions",
+    "deviceWaits": "Device waits",
+    "browserTakeovers": "Browser takeovers",
+    "interventionsPerTask": "Interventions per task",
+    "failureClass": "Class",
+    "count": "Count",
+    "notes": "Success rate = completed ÷ (completed + failed + cancelled). Duration runs from the first execution start to the end of finished tasks (from creation if no execution record). Interventions per task = (approval requests + questions + device waits + takeovers) ÷ tasks. Tools run under auto-approval are not counted as approval requests.",
+    "thinkingTitle": "Summary by reasoning level",
+    "thinkingOff": "Off",
+    "thinkingLow": "Low",
+    "thinkingMedium": "Medium",
+    "thinkingHigh": "High",
+    "thinkingNote": "Older tasks (no value) count as Off. If the server's LLM_ENABLE_REASONING_EFFORT is off, Low/Medium/High all behave as \"on\"."
   },
   "adminQuotaRequests": {
     "title": "Quota overage approvals",

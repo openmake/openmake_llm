@@ -28,6 +28,7 @@
       "organizationsAdmin": "Organisationen",
       "costRatesAdmin": "Kostensätze",
       "bridgeDevicesAdmin": "Verbundene Geräte",
+      "agentTaskMetricsAdmin": "Aufgabenmetriken",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "Evaluierungen",
       "quotaRequestsAdmin": "Kontingent-Freigaben",
@@ -264,6 +265,7 @@
       "activate": "Aktivieren",
       "deactivate": "Deaktivieren",
       "rotate": "Rotieren",
+      "rotateInactive": "Inaktive Schlüssel können nicht rotiert werden — bitte zuerst aktivieren",
       "delete": "Löschen"
     },
     "scope": {
@@ -340,6 +342,16 @@
       "autoHint": "Nur risikoreiche Tools freigeben (Shell/Python/Browser/Löschen)",
       "skipHint": "Alle Tools automatisch ausführen"
     },
+    "thinkingMode": {
+      "label": "Denken:",
+      "off": "Aus",
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "high": "Hoch",
+      "offHint": "Wie bisher — am schnellsten",
+      "levelHint": "Das Modell denkt vor jedem Schritt nach. Langsamer, mehr Tokens",
+      "highHint": "Tiefstes Nachdenken. Lange Aufgaben können deutlich länger dauern"
+    },
     "localExec": {
       "label": "Lokale Ausführung:",
       "off": "In Server-Sandbox ausführen",
@@ -384,6 +396,7 @@
       "procedurePreview": "Auszuführende Prozedur ansehen",
       "fullArgs": "Vollständigen Inhalt anzeigen ({chars} Zeichen)",
       "siteWrites": "Sendet an eine Website außerhalb der Zulassungsliste",
+      "siteUploads": "Lädt Dateien von Ihrem PC auf diese Website hoch",
       "elicitHint": "Eingabeanfrage von {server} · Felder: {fields}",
       "elicitJsonHint": "Bei mehreren Feldern bitte als JSON antworten: {example}"
     },
@@ -1078,7 +1091,7 @@
       "pick": "Runde wählen",
       "turnOption": "Runde {turn} ({messages} Nachrichten)",
       "go": "Verzweigen & starten",
-      "hint": "Führt alles nach der gewählten Runde als neue Aufgabe erneut aus (neuer Arbeitsordner).",
+      "hint": "Führt alles nach der gewählten Runde als neue Aufgabe erneut aus. Je nach Servereinstellung wird der Arbeitsordner auf den Stand dieser Runde zurückgesetzt oder startet leer.",
       "failed": "Verzweigen fehlgeschlagen: {error}"
     },
     "priorityBadge": "Priorität {priority}",
@@ -1135,6 +1148,13 @@
       "startFailed": "Browser konnte nicht übernommen werden: {error}",
       "inputFailed": "Eingabe wurde nicht zugestellt: {error}",
       "releaseFailed": "Zurückgeben fehlgeschlagen: {error}"
+    },
+    "thinkingBadge": "Denken {level}",
+    "thinkingLabel": "Denken",
+    "thinkingLevel": {
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "high": "Hoch"
     }
   },
   "customAgents": {
@@ -2461,6 +2481,7 @@
       "procedurePreview": "Auszuführende Prozedur ansehen",
       "fullArgs": "Vollständigen Inhalt anzeigen ({chars} Zeichen)",
       "siteWrites": "Sendet an eine Website außerhalb der Zulassungsliste",
+      "siteUploads": "Lädt Dateien von Ihrem PC auf diese Website hoch",
       "assignedToMe": "Mir zugewiesen",
       "assignedAway": "Weitergegeben",
       "reassign": "Weitergeben",
@@ -2597,6 +2618,48 @@
     "disconnectConfirm": "Verbindung „{label}“ von {email} trennen? Anfragen laufender lokaler Aufgaben schlagen fehl.",
     "disconnectFailed": "Trennen fehlgeschlagen.",
     "reconnectNote": "Trennen schließt nur die aktuelle Verbindung. Um eine erneute Verbindung zu verhindern, löschen oder deaktivieren Sie den Bridge-API-Schlüssel des Benutzers — beim Widerruf eines Schlüssels werden dessen Verbindungen sofort getrennt."
+  },
+  "adminAgentTaskMetrics": {
+    "title": "Aufgabenmetriken",
+    "description": "Erfolgsquote, Dauer, Tokens und Benutzereingriffe von Agent-Aufgaben nach Ausführungsart. Erfasst werden im Zeitraum erstellte Aufgaben.",
+    "period": "Zeitraum",
+    "days": "{days} Tage",
+    "refresh": "Aktualisieren",
+    "loadError": "Metriken konnten nicht geladen werden.",
+    "empty": "In diesem Zeitraum wurden keine Aufgaben erstellt.",
+    "summaryTitle": "Übersicht nach Ausführungsart",
+    "failuresTitle": "Häufigste Fehlerursachen",
+    "noFailures": "Keine fehlgeschlagenen Aufgaben.",
+    "metric": "Kennzahl",
+    "overall": "Gesamt",
+    "executorLocal": "Lokales Gerät",
+    "executorSandbox": "Server-Sandbox",
+    "total": "Aufgaben",
+    "completed": "Abgeschlossen",
+    "failed": "Fehlgeschlagen",
+    "cancelled": "Abgebrochen",
+    "inProgress": "Laufend",
+    "successRate": "Erfolgsquote",
+    "durationP50": "Median der Dauer",
+    "durationP95": "Dauer p95",
+    "tokenTasks": "Aufgaben mit Token-Daten",
+    "tokensAvg": "Tokens Ø",
+    "tokensSum": "Tokens gesamt",
+    "cachedPromptTokensSum": "Gecachte Prompt-Tokens",
+    "approvalRequests": "Freigabeanfragen",
+    "questions": "Rückfragen",
+    "deviceWaits": "Gerätewartezeiten",
+    "browserTakeovers": "Browser-Übernahmen",
+    "interventionsPerTask": "Eingriffe pro Aufgabe",
+    "failureClass": "Klasse",
+    "count": "Anzahl",
+    "notes": "Erfolgsquote = abgeschlossen ÷ (abgeschlossen + fehlgeschlagen + abgebrochen). Die Dauer reicht vom ersten Ausführungsstart bis zum Ende beendeter Aufgaben (ohne Ausführungseintrag ab Erstellung). Eingriffe pro Aufgabe = (Freigabeanfragen + Rückfragen + Gerätewartezeiten + Übernahmen) ÷ Aufgaben. Automatisch freigegebene Werkzeuge zählen nicht als Freigabeanfrage.",
+    "thinkingTitle": "Übersicht nach Denkstufe",
+    "thinkingOff": "Aus",
+    "thinkingLow": "Niedrig",
+    "thinkingMedium": "Mittel",
+    "thinkingHigh": "Hoch",
+    "thinkingNote": "Ältere Aufgaben (ohne Wert) zählen als Aus. Ist LLM_ENABLE_REASONING_EFFORT auf dem Server aus, verhalten sich Niedrig/Mittel/Hoch alle wie „an\"."
   },
   "adminQuotaRequests": {
     "title": "Kontingent-Überschreitungen",

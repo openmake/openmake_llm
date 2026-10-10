@@ -28,6 +28,7 @@
       "organizationsAdmin": "조직 관리",
       "costRatesAdmin": "비용 단가",
       "bridgeDevicesAdmin": "연결 기기",
+      "agentTaskMetricsAdmin": "작업 지표",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "평가 이력",
       "quotaRequestsAdmin": "쿼터 승인",
@@ -264,6 +265,7 @@
       "activate": "활성화",
       "deactivate": "비활성화",
       "rotate": "순환",
+      "rotateInactive": "비활성 키는 순환할 수 없습니다 — 먼저 활성화하세요",
       "delete": "삭제"
     },
     "scope": {
@@ -340,6 +342,16 @@
       "autoHint": "고위험 도구만 승인 (셸/파이썬/브라우저/삭제)",
       "skipHint": "모든 도구를 자동 실행"
     },
+    "thinkingMode": {
+      "label": "추론:",
+      "off": "끄기",
+      "low": "낮음",
+      "medium": "보통",
+      "high": "높음",
+      "offHint": "지금과 같음 — 가장 빠름",
+      "levelHint": "모델이 단계마다 생각한 뒤 행동합니다. 느려지고 토큰이 늘어납니다",
+      "highHint": "가장 깊게 생각합니다. 장문 작업에서 시간이 크게 늘 수 있습니다"
+    },
     "localExec": {
       "label": "로컬 실행:",
       "off": "서버 샌드박스에서 실행",
@@ -384,6 +396,7 @@
       "procedurePreview": "실행될 절차 보기",
       "fullArgs": "전체 내용 보기 ({chars}자)",
       "siteWrites": "허용 목록에 없는 사이트로 보냅니다",
+      "siteUploads": "내 PC 파일을 이 사이트에 올립니다",
       "elicitHint": "{server} 서버의 입력 요청 · 항목: {fields}",
       "elicitJsonHint": "항목이 둘 이상이면 JSON 으로 답하세요: {example}"
     },
@@ -1078,7 +1091,7 @@
       "pick": "턴 선택",
       "turnOption": "턴 {turn} ({messages}개 메시지)",
       "go": "분기 실행",
-      "hint": "선택한 턴 이후를 새 작업으로 다시 진행합니다(작업 폴더는 새로 시작).",
+      "hint": "선택한 턴 이후를 새 작업으로 다시 진행합니다. 작업 폴더는 서버 설정에 따라 그 시점의 파일로 복원되거나 비어 있는 상태로 시작합니다.",
       "failed": "분기 실패: {error}"
     },
     "priorityBadge": "우선순위 {priority}",
@@ -1135,6 +1148,13 @@
       "startFailed": "브라우저를 넘겨받지 못했습니다: {error}",
       "inputFailed": "조작이 전달되지 않았습니다: {error}",
       "releaseFailed": "돌려주지 못했습니다: {error}"
+    },
+    "thinkingBadge": "추론 {level}",
+    "thinkingLabel": "추론",
+    "thinkingLevel": {
+      "low": "낮음",
+      "medium": "보통",
+      "high": "높음"
     }
   },
   "customAgents": {
@@ -2461,6 +2481,7 @@
       "procedurePreview": "실행될 절차 보기",
       "fullArgs": "전체 내용 보기 ({chars}자)",
       "siteWrites": "허용 목록에 없는 사이트로 보냅니다",
+      "siteUploads": "내 PC 파일을 이 사이트에 올립니다",
       "assignedToMe": "나에게 이관됨",
       "assignedAway": "이관됨",
       "reassign": "이관",
@@ -2546,7 +2567,7 @@
       "EXTERNAL_MODEL_POLICY": "외부 모델 허용·차단 글롭 JSON. deny 는 글로벌과 합집합, allow 는 교집합 — 글로벌 차단을 풀 수 없습니다.",
       "TOOL_APPROVAL_POLICY_MIN": "에이전트 작업 승인 정책 하한. 요청값보다 엄격하면 하한이 적용됩니다.",
       "MCP_ALLOWED_SERVERS": "설치를 허용할 MCP 카탈로그 템플릿 id 목록(쉼표 구분). 비우면 제한 없음.",
-      "BROWSER_SITE_POLICY": "이 조직의 브라우저 사이트 정책. 거부 목록은 글로벌과 합쳐집니다. 허용 목록은 글로벌에 허용 목록이 있으면 양쪽에 똑같이 있는 항목만 남고, 글로벌이 비어 있으면 조직 목록을 씁니다. 초기화하면 글로벌을 따릅니다."
+      "BROWSER_SITE_POLICY": "이 조직의 브라우저 사이트 정책. 거부 목록은 글로벌과 합쳐집니다. 허용 목록은 글로벌에 허용 목록이 있으면 양쪽에 똑같이 있는 항목만 남고, 글로벌이 비어 있으면 조직 목록을 씁니다. 해제하면 글로벌을 따릅니다."
     },
     "history": "변경 이력",
     "noHistory": "변경 이력이 없습니다.",
@@ -2597,6 +2618,48 @@
     "disconnectConfirm": "{email} 의 “{label}” 연결을 끊을까요? 진행 중인 로컬 작업의 요청은 실패합니다.",
     "disconnectFailed": "연결 해제에 실패했습니다.",
     "reconnectNote": "연결 해제는 지금 연결만 끊습니다. 기기가 다시 연결하지 못하게 하려면 그 사용자의 bridge API 키를 삭제하거나 비활성화하세요 — 키를 폐기하면 그 키의 연결도 바로 끊깁니다."
+  },
+  "adminAgentTaskMetrics": {
+    "title": "작업 지표",
+    "description": "에이전트 작업의 성공률·소요 시간·토큰·사용자 개입 횟수를 실행 방식별로 봅니다. 기간 안에 만들어진 작업이 대상입니다.",
+    "period": "기간",
+    "days": "{days}일",
+    "refresh": "새로고침",
+    "loadError": "지표를 불러오지 못했습니다.",
+    "empty": "이 기간에 만들어진 작업이 없습니다.",
+    "summaryTitle": "실행 방식별 요약",
+    "failuresTitle": "실패 사유 상위",
+    "noFailures": "실패한 작업이 없습니다.",
+    "metric": "항목",
+    "overall": "전체",
+    "executorLocal": "로컬 기기",
+    "executorSandbox": "서버 샌드박스",
+    "total": "작업 수",
+    "completed": "완료",
+    "failed": "실패",
+    "cancelled": "취소",
+    "inProgress": "진행 중",
+    "successRate": "성공률",
+    "durationP50": "소요 시간 중앙값",
+    "durationP95": "소요 시간 p95",
+    "tokenTasks": "토큰 기록 작업 수",
+    "tokensAvg": "토큰 평균",
+    "tokensSum": "토큰 합계",
+    "cachedPromptTokensSum": "캐시 적중 토큰 합계",
+    "approvalRequests": "승인 요청",
+    "questions": "질문",
+    "deviceWaits": "기기 대기",
+    "browserTakeovers": "브라우저 넘겨받기",
+    "interventionsPerTask": "작업당 개입",
+    "failureClass": "분류",
+    "count": "건수",
+    "notes": "성공률 = 완료 ÷ (완료+실패+취소). 소요 시간은 끝난 작업의 첫 실행 시작부터 종료까지(실행 기록이 없으면 생성 시각부터). 작업당 개입 = (승인 요청+질문+기기 대기+넘겨받기) ÷ 작업 수. 자동 승인으로 실행된 도구는 승인 요청에 잡히지 않습니다.",
+    "thinkingTitle": "추론 수준별 요약",
+    "thinkingOff": "끄기",
+    "thinkingLow": "낮음",
+    "thinkingMedium": "보통",
+    "thinkingHigh": "높음",
+    "thinkingNote": "기존 작업(값 없음)은 '끄기'로 셉니다. 서버의 LLM_ENABLE_REASONING_EFFORT 가 꺼져 있으면 낮음·보통·높음은 모두 '켬'으로 동작합니다."
   },
   "adminQuotaRequests": {
     "title": "쿼터 초과 승인함",

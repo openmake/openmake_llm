@@ -17,6 +17,7 @@ import { ARTIFACT_EXEC } from '../config/artifact-exec';
 import { ARTIFACT_COMMENT_LIMITS } from '../config/runtime-limits';
 import { ARTIFACT_EXPORT } from '../config/artifact-export';
 import { verifyToken } from '../auth/auth-core';
+import { isValidApiKeyFormat } from '../auth/api-key-utils';
 import { isAdminRole } from '../data/user-manager';
 
 // ================================================
@@ -49,6 +50,12 @@ interface AdvancedRateLimiterOptions {
     message: string;
     /** true 를 반환하면 이 요청은 카운트/차단하지 않고 통과 (예: 비용 리미터에서 read-only GET 제외) */
     skip?: (req: Request) => boolean;
+    /**
+     * false 면 X-API-Key 헤더로 액터를 나누지 않는다(항상 JWT > IP). 로그인·회원가입처럼 API 키와
+     * 무관한 경로용 — 검증되지 않은 헤더가 액터 키가 되면 헤더만 바꿔 리밋을 우회한다(2026-10-09 점검).
+     * 기본 true.
+     */
+    apiKeyActor?: boolean;
 }
 
 interface RateLimitDecision {
@@ -103,12 +110,17 @@ function getRequestIP(req: Request): string {
  * JWT 사용자 > API key > IP 순. **API key 를 IP 로 세면 안 된다**: 프록시 뒤에서는 CLI·
  * 데스크톱 클라이언트가 사이트 전체 트래픽과 한 버킷을 쓰게 되어, 남의 요청 때문에 429 를
  * 맞는다(실측). 키 원문은 넣지 않고 해시 앞부분만 쓴다.
+ * 검증되지 않은 헤더이므로 형식 검사만 한다. 형식이 맞는 임의 키로 버킷을 늘리는 것까지는 막지
+ * 못하므로 API 키와 무관한 리미터는 `apiKeyActor:false` 로 둔다.
  */
-function resolveActorKey(req: Request, userId: string | null, ip: string): string {
+function resolveActorKey(req: Request, userId: string | null, ip: string, apiKeyActor: boolean): string {
     if (userId) return `user:${userId}`;
-    const raw = req.headers['x-api-key'];
-    const apiKey = (Array.isArray(raw) ? raw[0] : raw)?.trim();
-    if (apiKey) return `key:${createHash('sha256').update(apiKey).digest('hex').slice(0, 16)}`;
+    if (apiKeyActor) {
+        const raw = req.headers['x-api-key'];
+        const apiKey = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+        // 형식이 맞는 키만 자기 버킷 — 임의 문자열이 버킷을 만들면 헤더만 바꿔 리밋을 우회한다
+        if (apiKey && isValidApiKeyFormat(apiKey)) return `key:${createHash('sha256').update(apiKey).digest('hex').slice(0, 16)}`;
+    }
     return `ip:${ip}`;
 }
 
@@ -301,7 +313,7 @@ function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
         const ip = getRequestIP(req);
         const identity = await resolveLimiterIdentity(req);
         const userKey = identity?.userId ?? null;
-        const actorKey = resolveActorKey(req, userKey, ip);
+        const actorKey = resolveActorKey(req, userKey, ip, options.apiKeyActor !== false);
 
         // Admin은 높은 배수의 제한 적용 (완전 우회 방지)
         const effectiveIpLimit = isAdminRole(identity?.role) ? options.ipLimit * RATE_LIMIT_POLICY.ADMIN_MULTIPLIER : options.ipLimit;
@@ -385,6 +397,7 @@ export const authLimiter = createAdvancedRateLimiter({
         { path: /^POST:\/api\/auth\/login(?:\/|$)/, limit: RL_AUTH.loginLimit },
         { path: /^POST:\/api\/auth\/register(?:\/|$)/, limit: RL_AUTH.registerLimit },
     ],
+    apiKeyActor: false,
     message: '로그인 시도가 너무 많습니다.',
 });
 

@@ -9,6 +9,7 @@
  * - `sweepParkedTasks`(주기): 결정이 있는데 재개되지 않은 작업(로컬 디바이스 미연결·재개 직전 재시작)은 다시 재개,
  *   대기 상한(`AGENT_TASK_HITL_PARK_MAX_MS`)이 지난 작업은 failed(hitl_park_expired), 아직 기다리는 작업은
  *   샌드박스 workspace 의 mtime 을 갱신해 stale workspace 스윕(TTL 72h)에 지워지지 않게 한다.
+ * - `expireParkedTasks`(더 짧은 주기): 상한 초과분만 실패로 바꾼다 — 본 스윕 주기(기본 10분)만큼 늦게 실패로 바뀌지 않게.
  *
  * 부팅 시 좀비 마킹(schema-initializer)·부팅 복구는 주차 작업을 건드리지 않는다(parkedTaskCondition).
  *
@@ -135,5 +136,43 @@ export async function sweepParkedTasks(): Promise<{ resumed: number; expired: nu
         }
     }
     if (out.resumed || out.expired) logger.info(`주차 스윕 — 재개 ${out.resumed} · 만료 ${out.expired} · 대기 ${out.touched}`);
+    return out;
+}
+
+/**
+ * 만료 전용 스윕(`AGENT_TASK_HITL_PARK_EXPIRE_SWEEP_MS`, 본 스윕보다 짧은 주기) — 상한을 넘긴 주차 작업만 실패로 바꾼다.
+ * 재개 시도·workspace 갱신은 하지 않는다(그건 본 스윕 몫이라 주기를 줄이지 않는다). 지금 재개될 수 있는 작업
+ * (기기 연결됨·넘겨받기 반환됨·결정 도착)은 건드리지 않고 본 스윕·연결 즉시 경로에 맡긴다. 절대 throw 하지 않는다.
+ */
+export async function expireParkedTasks(): Promise<{ expired: number }> {
+    const out = { expired: 0 };
+    let rows;
+    try {
+        rows = await new AgentTaskRepository(getPool()).listParkedTasks();
+    } catch (e) {
+        logger.warn(`주차 만료 점검 조회 실패(건너뜀): ${e instanceof Error ? e.message : e}`);
+        return out;
+    }
+    for (const t of rows) {
+        try {
+            const waitedMs = Number(t.waited_ms ?? 0);
+            const dev = LOCAL_BRIDGE.ENABLED ? getLocalBridgeRegistry().getDevice(String(t.user_id), t.device_id ?? undefined) : null;
+            let error: string | null = null;
+            if (t.reason === AGENT_TASK_DEVICE_WAIT_REASON) {
+                if (deviceWaitAction({ connected: !!dev, waitedMs, maxMs: LOCAL_BRIDGE.DEVICE_WAIT_MAX_MS }) === 'expire') error = AGENT_TASK_DEVICE_WAIT_EXPIRED_ERROR;
+            } else if (t.reason === AGENT_TASK_BROWSER_TAKEOVER_REASON) {
+                if (browserTakeoverAction({ connected: !!dev, userControl: dev?.browserUserControl === true, waitedMs, maxMs: LOCAL_BRIDGE.TAKEOVER_WAIT_MAX_MS }) === 'expire') error = AGENT_TASK_BROWSER_TAKEOVER_EXPIRED_ERROR;
+            } else if (!t.has_decision && !t.has_live_pending) {
+                await new AgentTaskApprovalRepository(getPool()).expirePendingForTask(t.id, 'expired');
+                error = AGENT_TASK_PARK_EXPIRED_ERROR;
+            }
+            if (!error) continue;
+            await getUnifiedDatabase().updateAgentTask(t.id, { status: 'failed', error, terminalNotifyPending: true });
+            out.expired++;
+        } catch (e) {
+            logger.warn(`[${t.id}] 주차 만료 처리 실패(다음 주기에 재시도): ${e instanceof Error ? e.message : e}`);
+        }
+    }
+    if (out.expired) logger.info(`주차 만료 점검 — 만료 ${out.expired}`);
     return out;
 }

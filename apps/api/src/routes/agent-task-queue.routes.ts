@@ -4,6 +4,7 @@
  *
  *   GET /api/agent-tasks/queue/stats  (admin)
  *   GET /api/agent-tasks/queue/dead?class=&days=&limit=  (admin) — 실패 큐 뷰(131), 재처리는 /resume
+ *   GET /api/agent-tasks/metrics?days=  (admin) — 작업 지표(Companion P5)
  *
  * 큐(3-B)는 인메모리라 지금까지 상태를 볼 곳이 없었다 — 대기가 쌓이는지, 상한이 맞는지,
  * 재시작 후 'queued' 고아가 남았는지를 여기서 본다. 인메모리 스냅샷과 DB 상태 집계를 나란히
@@ -22,6 +23,9 @@ import { AgentTaskRepository } from '../data/repositories/agent-task-repository'
 import { getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { AGENT_TASK_FAILURE_CLASSES } from '../config/agent-task-failure-class';
+import { AgentTaskOutcomeMetricsRepository } from '../data/repositories/agent-task-outcome-metrics-repository';
+import { AGENT_TASK_METRICS } from '../config/agent-task-metrics';
+import type { AgentTaskMetricsResponse } from '@openmake/shared-types';
 
 export const agentTaskQueueRouter = Router();
 
@@ -54,4 +58,14 @@ agentTaskQueueRouter.get('/queue/dead', requireAuth, requireAdmin, asyncHandler(
     const limit = intQuery(req.query.limit, AGENT_TASK_LIMITS.DEAD_QUEUE_LIMIT, 1, 500, 'limit');
     const r = await new AgentTaskRepository(getPool()).listFailedAgentTasks({ failureClass: cls, sinceDays, limit });
     res.json(success({ sinceDays, class: cls ?? null, classes: AGENT_TASK_FAILURE_CLASSES, ...r }));
+}));
+
+/** 작업 지표(Companion P5) — 실행 방식별 성공률·소요 시간·토큰·사용자 개입·실패 사유. 집계 정의는 저장소 주석. */
+agentTaskQueueRouter.get('/metrics', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
+    const days = intQuery(req.query.days, AGENT_TASK_METRICS.DEFAULT_DAYS, 1, AGENT_TASK_METRICS.MAX_DAYS, 'days');
+    const r = await new AgentTaskOutcomeMetricsRepository(getPool()).getMetrics({ days, failureTopN: AGENT_TASK_METRICS.FAILURE_TOP_N });
+    const body: AgentTaskMetricsResponse = {
+        days, dayOptions: [...AGENT_TASK_METRICS.DAY_OPTIONS], maxDays: AGENT_TASK_METRICS.MAX_DAYS, ...r,
+    };
+    res.json(success(body));
 }));

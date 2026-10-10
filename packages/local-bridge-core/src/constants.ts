@@ -1,5 +1,6 @@
 /** 브리지 코어 공통 상수 — 데스크톱·CLI 에서 자구 동일하던 값을 단일화 (2026-08-22). */
 import * as path from 'path';
+import type { BridgeAuthCloseReason } from './types';
 
 export const EXEC_TIMEOUT_MS = 120000;
 export const MAX_BUFFER = 1024 * 1024;
@@ -7,6 +8,27 @@ export const MAX_BUFFER = 1024 * 1024;
 export const RECONNECT_MS = 10000;
 /** 재연결 간격 상한(ms) — 서버가 오래 내려가 있어도 이보다 드물게 두드리지 않는다. */
 export const RECONNECT_MAX_MS = 60000;
+
+/**
+ * 서버가 인증 문제로 닫은 사유 — 서버 config/local-bridge.ts 의 인증 실패 사유와 #1164·#1168 의 사유(1:1).
+ * 이 사유로 닫히면 사용자가 키·계정을 고치기 전에는 다시 연결해도 같은 결과라, 사유를 상태로 보여 주고
+ * AUTH_RETRY_MS 간격으로만 다시 시도한다(관리자가 키·계정을 되살리면 저절로 붙는다).
+ */
+export const AUTH_CLOSE_REASONS: readonly BridgeAuthCloseReason[] = [
+    'api_key_revoked', 'api_key_invalid', 'api_key_expired', 'api_key_inactive', 'account_disabled', 'account_deleted', 'bridge_scope_required',
+];
+/** 인증 사유로 닫혔을 때의 재시도 간격(ms) — 10분. */
+export const AUTH_RETRY_MS = 10 * 60 * 1000;
+/** 인증 사유별 상태 문구(한국어 원문 — CLI 가 그대로 쓰고, 앱은 사유 코드로 다국어 문구를 고른다). */
+export const AUTH_CLOSE_TEXT: Record<BridgeAuthCloseReason, string> = {
+    api_key_revoked: 'API key 가 폐기되었습니다 — 새 키를 발급해 설정에 넣으세요',
+    api_key_invalid: 'API key 가 없거나 올바르지 않습니다 — 새 키를 발급해 설정에 넣으세요',
+    api_key_expired: 'API key 가 만료되었습니다 — 새 키를 발급해 설정에 넣으세요',
+    api_key_inactive: 'API key 가 비활성화되었습니다 — 키를 다시 켜거나 새 키를 설정에 넣으세요',
+    account_disabled: '계정이 비활성화되었습니다 — 관리자에게 문의하세요',
+    account_deleted: '계정이 삭제되었습니다 — 관리자에게 문의하세요',
+    bridge_scope_required: "이 API key 에는 'bridge' 스코프가 없습니다 — bridge 스코프 키를 발급해 설정에 넣으세요",
+};
 export const PATH_PROBE_TIMEOUT_MS = 5000;
 /** git 디렉터리 탐지(rev-parse) 프로브 타임아웃(ms). */
 export const GIT_PROBE_TIMEOUT_MS = 5000;
@@ -21,6 +43,19 @@ export const SANDBOX_ENABLED = process.platform === 'darwin' && process.env.OMK_
 export const CACHE_SUBPATHS = ['.npm', '.cache', 'Library/Caches', '.cargo', '.gradle', '.m2', '.yarn', '.pnpm-store', 'go/pkg'];
 /** 읽기를 차단할 비밀 경로. */
 export const SECRET_SUBPATHS = ['.ssh', '.aws', '.gnupg', '.kube', '.docker', '.config/gcloud', 'Library/Keychains'];
+
+/**
+ * exec 자식 프로세스에 넘기는 env allowlist(2026-10-09 점검 ⑤) — 호스트 env 를 통째로 상속하면
+ * 헬퍼의 OMK_COMPANION_API_KEY·사용자 셸의 비밀이 `env` 한 번에 도구 결과로 새어 서버 DB 까지 남는다.
+ * PATH 는 exec-path 가 계산한 값으로 따로 넣는다.
+ */
+export const EXEC_ENV_ALLOWLIST_POSIX = ['HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'COLORTERM', 'LANG', 'LANGUAGE', 'TMPDIR', 'TZ'] as const;
+export const EXEC_ENV_ALLOWLIST_PREFIX_POSIX = ['LC_'] as const;
+export const EXEC_ENV_ALLOWLIST_WIN32 = [
+    'SystemRoot', 'windir', 'SystemDrive', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'USERNAME',
+    'HOMEDRIVE', 'HOMEPATH', 'APPDATA', 'LOCALAPPDATA', 'ProgramData', 'ProgramFiles', 'ProgramFiles(x86)',
+    'NUMBER_OF_PROCESSORS', 'OS',
+] as const;
 
 export const WORKTREE_DIR = '.openmake/worktrees';
 export const WORKTREE_BRANCH_PREFIX = 'omk-task/';
@@ -45,6 +80,11 @@ export const BRIDGE_KINDS: readonly string[] = [
 
 /** 로컬 브라우저 요청 종류 — 호스트가 전용 프로필을 주고 Chrome 이 있을 때만 능력 목록에 넣는다(BridgeCore.capabilities). */
 export const BROWSER_KIND = 'browser';
+/**
+ * 브라우저 업로드(uploadFile) 능력 — 요청 종류가 아니라 browser 요청 안의 액션이다(2026-10-06 추가).
+ * 이 값을 알리지 않는 구버전 기기에는 서버가 업로드를 보내지 않고 모델에 "이 기기는 업로드를 지원하지 않는다"고 돌려준다.
+ */
+export const BROWSER_UPLOAD_CAPABILITY = 'browser_upload';
 
 /** 요청 만료 판정의 시계 오차 허용(ms) — 서버와 PC 의 시계가 이만큼 어긋나도 정상 요청을 버리지 않는다. */
 export const EXPIRY_SKEW_TOLERANCE_MS = 120000;
@@ -126,6 +166,8 @@ export function sbSub(base: string, list: string[]): string {
 export const BROWSER_MAX_ACTIONS = 40;
 /** 액션 1개의 대기 상한(ms) — 요소 대기·이동 완료 */
 export const BROWSER_ACTION_TIMEOUT_MS = Number(process.env.OMK_BRIDGE_BROWSER_TIMEOUT_MS || 20000);
+/** selector 없는 extractText·extractHtml 이 문서 읽기(readyState !== 'loading')를 기다리는 상한(ms) — 넘으면 던지지 않고 결과에 loading: true 를 싣는다 */
+export const BROWSER_EXTRACT_READY_MS = Number(process.env.OMK_BRIDGE_BROWSER_EXTRACT_READY_MS || BROWSER_ACTION_TIMEOUT_MS);
 /** wait 액션의 상한(ms) */
 export const BROWSER_WAIT_MAX_MS = 10000;
 /** 추출 결과(text·html) 길이 상한(chars) */
@@ -136,6 +178,10 @@ export const BROWSER_SNAPSHOT_MAX_ELEMENTS = 100;
 export const BROWSER_SNAPSHOT_NAME_MAX = 120;
 /** 입력 뒤 결과에 되돌려 주는 값의 길이 상한 — 모델이 "들어갔는지" 확인하는 용도라 앞부분이면 충분하다 */
 export const BROWSER_FILL_ECHO_MAX_CHARS = 200;
+/** uploadFile 한 번에 올리는 파일 수 상한 */
+export const BROWSER_UPLOAD_MAX_FILES = 10;
+/** uploadFile 파일 하나의 크기 상한(bytes) — 서버의 파일 쓰기 상한(LOCAL_BRIDGE_MAX_WRITE_BYTES 기본 8MiB)과 같은 값 */
+export const BROWSER_UPLOAD_MAX_FILE_BYTES = Number(process.env.OMK_BRIDGE_UPLOAD_MAX_FILE_BYTES || 8 * 1024 * 1024);
 /** CDP 명령 1회 응답 상한(ms) */
 export const BROWSER_CDP_TIMEOUT_MS = 30000;
 /** Chrome 기동 후 디버깅 포트가 열릴 때까지의 대기 상한(ms) */

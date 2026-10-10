@@ -60,4 +60,19 @@ describe('executeAgentTaskSchema — 실행 옵션 계약', () => {
     it('미선언 키도 거절한다', () => {
         expect(executeAgentTaskSchema.safeParse({ approvalPolicyy: 'none' }).success).toBe(false);
     });
+
+    it('thinkingLevel 은 execute 에서 4개 값만 받는다', () => {
+        for (const v of ['off', 'low', 'medium', 'high']) {
+            expect(executeAgentTaskSchema.safeParse({ thinkingLevel: v }).success).toBe(true);
+        }
+        expect(executeAgentTaskSchema.safeParse({ thinkingLevel: 'xhigh' }).success).toBe(false);
+        expect(executeAgentTaskSchema.safeParse({ thinkingLevel: true }).success).toBe(false);
+        // 미지정은 통과 — 구버전 웹·재개 경로는 보내지 않는다
+        expect(executeAgentTaskSchema.safeParse({}).success).toBe(true);
+    });
+    it('thinkingLevel 을 생성에 실으면 execute 로 안내하며 거절한다', () => {
+        const r = createAgentTaskSchema.safeParse({ goal: 'g', thinkingLevel: 'high' });
+        expect(r.success).toBe(false);
+        expect(JSON.stringify(r.success ? null : r.error.issues)).toContain('/execute');
+    });
 });

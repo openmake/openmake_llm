@@ -8,6 +8,7 @@ import type { WSMessage } from '../ws-types';
 const mockRegister = jest.fn(() => true);
 const mockHandleResult = jest.fn();
 const mockSetControl = jest.fn();
+const mockGetDeviceIdByWs = jest.fn((..._a: unknown[]): string | null => 'dev-1');
 const mockResumeTakeover = jest.fn(async (..._a: unknown[]) => 0);
 jest.mock('../../services/agent-task/browser-takeover', () => ({ resumeBrowserTakeoverTasks: (...a: unknown[]) => mockResumeTakeover(...a) }));
 
@@ -16,13 +17,16 @@ jest.mock('../../services/local-bridge/registry', () => ({
     getLocalBridgeRegistry: () => ({
         register: (...a: unknown[]) => mockRegister(...(a as [])),
         handleResult: (...a: unknown[]) => mockHandleResult(...(a as [])),
-        getDeviceIdByWs: () => 'dev-1',
+        getDeviceIdByWs: (...a: unknown[]) => mockGetDeviceIdByWs(...a),
         setBrowserUserControl: (...a: unknown[]) => mockSetControl(...a),
     }),
 }));
-jest.mock('../../config/local-bridge', () => ({ LOCAL_BRIDGE: { ENABLED: true, MAX_DEVICES: 3 } }));
+jest.mock('../../config/local-bridge', () => ({
+    ...jest.requireActual('../../config/local-bridge'),
+    LOCAL_BRIDGE: { ENABLED: true, MAX_DEVICES: 3 },
+}));
 
-import { handleBridgeMessage } from '../ws-bridge-handler';
+import { handleBridgeMessage, closeExpiredBridge } from '../ws-bridge-handler';
 
 function fakeWs(scopes: string[] | undefined) {
     const sent: Array<Record<string, unknown>> = [];
@@ -145,5 +149,70 @@ describe('handleBridgeMessage — bridge_event(browser_control)', () => {
         await handleBridgeMessage(ws, { type: 'bridge_event', kind: 'other', user: false } as unknown as WSMessage);
         expect(mockSetControl).not.toHaveBeenCalled();
         expect(mockResumeTakeover).not.toHaveBeenCalled();
+    });
+});
+
+describe('handleBridgeMessage — 인증 실패 사유로 닫기 (2026-10-06)', () => {
+    /** 사유를 알아듣는 새 코어의 hello — authClose 를 싣는다. */
+    const newHello = { ...hello, authClose: true } as unknown as WSMessage;
+    function guestWs(authFailure?: string) {
+        const f = fakeWs(undefined);
+        f.raw._authenticatedUserId = null as unknown as string;
+        if (authFailure) (f.raw as Record<string, unknown>)._authFailure = authFailure;
+        return f;
+    }
+
+    it.each([
+        ['api_key_expired'], ['api_key_inactive'], ['api_key_invalid'], ['account_disabled'], ['account_deleted'],
+    ])('게스트의 새 hello 는 인증 단계 사유(%s)로 1008 닫는다 — 등록하지 않는다', async (reason) => {
+        const { ws, raw, sent } = guestWs(reason);
+        await handleBridgeMessage(ws, newHello);
+        expect(mockRegister).not.toHaveBeenCalled();
+        expect(sent[0]).toMatchObject({ type: 'error' });
+        expect(raw.close).toHaveBeenCalledWith(1008, reason);
+    });
+
+    it('사유가 없는 게스트(키 없이 접속)는 api_key_invalid 로 닫는다', async () => {
+        const { ws, raw } = guestWs();
+        await handleBridgeMessage(ws, newHello);
+        expect(raw.close).toHaveBeenCalledWith(1008, 'api_key_invalid');
+    });
+
+    it('인증을 확인하지 못한 경우(DB 오류)는 다시 시도할 수 있는 1013 으로 닫는다', async () => {
+        const { ws, raw } = guestWs('auth_unavailable');
+        await handleBridgeMessage(ws, newHello);
+        expect(raw.close).toHaveBeenCalledWith(1013, 'auth_unavailable');
+    });
+
+    it('authClose 를 싣지 않은 구버전 hello 는 종전대로 오류만 보내고 닫지 않는다 (구버전 앱의 재연결 반복 방지)', async () => {
+        const { ws, raw, sent } = guestWs('api_key_expired');
+        await handleBridgeMessage(ws, hello);
+        expect(sent[0]).toMatchObject({ type: 'error' });
+        expect(raw.close).not.toHaveBeenCalled();
+    });
+});
+
+describe('closeExpiredBridge — 하트비트가 키 만료로 끊을 때', () => {
+    beforeEach(() => { mockGetDeviceIdByWs.mockReset(); });
+
+    it('등록된 브리지 연결이면 1008 api_key_expired 로 닫고 true', () => {
+        mockGetDeviceIdByWs.mockReturnValue('dev-1');
+        const { ws, raw } = fakeWs(['bridge']);
+        expect(closeExpiredBridge(ws)).toBe(true);
+        expect(raw.close).toHaveBeenCalledWith(1008, 'api_key_expired');
+    });
+
+    it('브리지가 아닌 연결은 건드리지 않고 false (호출부가 종전대로 terminate)', () => {
+        mockGetDeviceIdByWs.mockReturnValue(null);
+        const { ws, raw } = fakeWs(undefined);
+        expect(closeExpiredBridge(ws)).toBe(false);
+        expect(raw.close).not.toHaveBeenCalled();
+    });
+
+    it('게스트 연결도 false', () => {
+        const { ws, raw } = fakeWs(undefined);
+        raw._authenticatedUserId = null as unknown as string;
+        expect(closeExpiredBridge(ws)).toBe(false);
+        expect(mockGetDeviceIdByWs).not.toHaveBeenCalled();
     });
 });

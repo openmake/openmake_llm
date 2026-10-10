@@ -272,6 +272,22 @@ export function getAgentTaskGoalJudgeMessages(
     };
 }
 
+/**
+ * 완료 판정 EXECUTION 에 붙는 "사용자가 거절한 동작" 절 — 거절이 있을 때만 붙는다(0건이면 판정 입력은 종전과 같다).
+ * 사용자가 승인 카드로 거절한 동작은 사용자가 스스로 목표에서 뺀 것이다. 그 동작을 하지 않은 것을 미달성으로 보면
+ * 사용자의 결정대로 끝낸 작업이 실패로 집계된다(2026-10-09 라이브 실측).
+ */
+export function getUserRejectionsJudgeNote(
+    items: ReadonlyArray<{ toolName: string; args: string; reason: string }>,
+): string {
+    return [
+        '사용자가 거절한 동작(승인 카드에서 거절 — 사용자가 스스로 목표에서 뺀 것):',
+        ...items.map((r) => `- ${r.toolName} ${r.args} — 거절 사유: ${r.reason || '(사유 없음)'}`),
+        '판정 지시: 위 동작과 거절 사유가 요구한 변경은 목표에서 제외하세요. 에이전트가 그 동작을 하지 않았거나 사유대로',
+        '범위를 줄여 수행한 것은 미달성 근거가 아닙니다. 제외하고 남은 목표를 수행했으면 달성(achieved=true)으로 판정하세요.',
+    ].join('\n');
+}
+
 /** 중간 지시 주입문의 머리 표식 — 대화에서 "사용자가 직접 보낸 지시"를 시스템 안내와 구분할 때 쓴다(output-repetition). */
 export const AGENT_TASK_STEERING_MARKER = '[사용자 추가 지시]';
 
@@ -302,8 +318,26 @@ export function getBrowserSiteApprovalRequiredMessage(): string {
     return '브라우저를 실행하지 않았습니다 — 허용 목록에 없는 사이트에 대한 입력·누르기는 사용자 승인이 필요합니다. 이 호출 경로에서는 승인을 받을 수 없으니, 읽기(extractText·snapshot)만 하거나 사용자에게 직접 요청하세요.';
 }
 
+/** 서버 샌드박스 브라우저에서 업로드를 요청했을 때의 결과 — 업로드는 로컬 브라우저에서만 지원한다. */
+export function getBrowserUploadSandboxMessage(): string {
+    return '브라우저를 실행하지 않았습니다 — 파일 업로드는 사용자 PC 의 로컬 브라우저(Companion 연결 실행)에서만 지원하며, 서버 샌드박스 브라우저에서는 할 수 없습니다. 사용자에게 직접 올려 달라고 요청하세요.';
+}
+
+/** 연결된 기기의 앱이 업로드를 모를 때(구버전)의 결과. */
+export function getBrowserUploadUnsupportedMessage(): string {
+    return '브라우저를 실행하지 않았습니다 — 연결된 기기의 앱이 파일 업로드를 지원하지 않습니다(앱 업데이트 필요). 사용자에게 직접 올려 달라고 요청하거나 앱을 업데이트해 달라고 안내하세요.';
+}
+
+/** 로컬 브라우저 도구 설명의 업로드 안내 — 기기가 업로드를 아는지에 따라 다르다. */
+function localBrowserUploadNote(uploadSupported: boolean): string {
+    return uploadSupported
+        ? 'uploadFile{selector,files} 는 연결 폴더 기준 상대 경로의 파일(files)을 파일 선택 칸(selector 는 input[type=file] 요소 — 숨겨져 있으면 extractHtml 로 찾으세요)에 넣습니다. '
+            + '업로드는 사이트와 무관하게 매번 사용자 승인을 받으며, 폴더 밖·숨김 파일·너무 큰 파일은 기기가 거절합니다. '
+        : '이 기기의 앱은 파일 업로드(uploadFile)를 지원하지 않습니다. ';
+}
+
 /** 로컬 브라우저(사용자 PC 의 전용 Chrome) 도구 설명 — 서버 샌드박스 브라우저와 달리 탭이 유지되고 사이트 정책이 적용된다. */
-export function getLocalBrowserToolDescription(): string {
+export function getLocalBrowserToolDescription(uploadSupported = false): string {
     return '사용자 PC 의 전용 Chrome 창에서 웹 브라우저를 조작합니다. 탭과 로그인 상태가 호출 사이에 유지되므로 이전 호출의 페이지에서 이어서 작업할 수 있습니다(처음에는 goto 로 페이지를 여세요). '
         + 'actions 배열을 순서대로 실행: goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · '
         + 'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. '
@@ -312,6 +346,7 @@ export function getLocalBrowserToolDescription(): string {
         + 'fill·smartFill 결과의 value 가 칸에 실제로 들어간 값입니다 — 그것으로 확인하고 같은 입력을 되풀이하지 마세요(입력 칸에 extractText 를 쓰면 현재 값이 나옵니다. 비밀번호 칸의 값은 돌려주지 않습니다). '
         + '읽기(extractText·snapshot·screenshot)는 어느 사이트에서든 됩니다. 관리자가 허용한 사이트 밖에서의 입력·누르기와 검색어를 실은 주소로의 이동은 사용자 승인을 받은 뒤 실행됩니다 — '
         + '업무 자료를 외부 사이트(검색·번역·웹메일 등)에 입력하지 마세요. 사용자가 브라우저를 직접 조작하는 중이면 실행되지 않으니, 그때는 기다렸다가 현재 페이지를 다시 관찰하세요. '
+        + localBrowserUploadNote(uploadSupported)
         + 'http·https 주소만 열 수 있습니다.';
 }
 

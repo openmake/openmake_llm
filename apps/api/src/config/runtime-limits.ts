@@ -1307,6 +1307,9 @@ export const AGENT_TASK_LIMITS = {
     HITL_PARK_MAX_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_MAX_MS || '', 10) || 7 * 24 * 60 * 60 * 1000,
     /** 주차 스윕 주기(ms) — 결정이 왔는데 재개되지 못한 작업(로컬 디바이스 미연결 등) 재시도·상한 초과 정리·workspace 유지. AGENT_TASK_HITL_PARK_SWEEP_MS(기본 10분) */
     HITL_PARK_SWEEP_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_SWEEP_MS || '', 10) || 10 * 60 * 1000,
+    /** 주차 만료 점검 주기(ms) — 상한(기기 대기·넘겨받기·질문 응답 대기)을 넘긴 주차 작업만 실패로 바꾸는 가벼운 점검(조회 1회).
+     *  재개 시도·workspace 유지는 위 스윕 주기 그대로. 상한 초과 → 실패 표시의 최대 지연이 이 값이다. AGENT_TASK_HITL_PARK_EXPIRE_SWEEP_MS(기본 1분) */
+    HITL_PARK_EXPIRE_SWEEP_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_EXPIRE_SWEEP_MS || '', 10) || 60 * 1000,
     /** 승인 대기 유예(ms) — 이 시간을 넘긴 승인 대기는 도구 종류와 무관하게 주차해 실행 슬롯을 반납한다(한 사용자의
      *  늦은 승인이 다른 사용자의 작업을 막지 않게). 서브에이전트 승인은 재개 지점이 없어 제외. 0 이면 비활성(종전 동작).
      *  AGENT_TASK_HITL_PARK_GRACE_MS(기본 0, 권장 60000) */
@@ -1383,6 +1386,12 @@ export const AGENT_TASK_LIMITS = {
     GOAL_JUDGE_ARTIFACT_MAX_ITEMS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_ARTIFACT_MAX_ITEMS || '5', 10),
     /** 산출물 항목당 본문 글자 캡 (프롬프트 팽창 방지 — 목표 수행 여부 판단엔 앞부분으로 충분) */
     GOAL_JUDGE_ARTIFACT_ITEM_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_ARTIFACT_ITEM_CHARS || '400', 10),
+    /** judge 에 싣는 "사용자가 거절한 동작" 최대 건수 — 거절 기록으로 판정 입력이 불어나지 않게(2026-10-09). */
+    GOAL_JUDGE_REJECTION_MAX_ITEMS: 10,
+    /** 거절 항목당 인자 요약(JSON) 글자 캡 */
+    GOAL_JUDGE_REJECTION_ARGS_CHARS: 200,
+    /** 거절 항목당 거절 사유 글자 캡 */
+    GOAL_JUDGE_REJECTION_REASON_CHARS: 300,
     /** 부팅 자동 복구 — 프로세스 재시작으로 중단된 task 를 부팅 시 자동 resume 한다.
      *  주의: schema-initializer 가 부팅 시 running/paused 를 failed('server restarted') 로 먼저
      *  마킹하므로, 복구 대상은 ①잔존 running/paused(마킹 실패 대비) + ②restart 마킹 + checkpoint

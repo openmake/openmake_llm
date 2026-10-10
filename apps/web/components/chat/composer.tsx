@@ -217,6 +217,7 @@ export function Composer() {
     toggleChatMode,
     agentTaskMode,
     agentApprovalMode,
+    agentThinkingLevel,
     agentLocalExecutor,
     agentLocalDeviceId,
     agentLocalFolderRel,
@@ -228,6 +229,7 @@ export function Composer() {
     toggle,
     setSelectedModel,
     setAgentApprovalMode,
+    setAgentThinkingLevel,
     setAgentLocalExecutor,
     setAgentLocalDeviceId,
     setAgentLocalFolderRel,
@@ -397,6 +399,7 @@ export function Composer() {
         agentLocalExecutor || undefined,
         agentLocalExecutor ? (selectedBridgeDevice?.deviceId ?? null) : null,
         agentLocalExecutor ? agentLocalFolderRel : null,
+        agentThinkingLevel,
       );
     } else if (
       !activeChatMode &&
@@ -491,6 +494,12 @@ export function Composer() {
     { v: "all" as const, label: t("approvalMode.manual"), hint: t("approvalMode.manualHint") },
     { v: "high-risk" as const, label: t("approvalMode.auto"), hint: t("approvalMode.autoHint") },
     { v: "none" as const, label: t("approvalMode.skip"), hint: t("approvalMode.skipHint") },
+  ];
+  const THINKING_MODES = [
+    { v: "off" as const, label: t("thinkingMode.off"), hint: t("thinkingMode.offHint") },
+    { v: "low" as const, label: t("thinkingMode.low"), hint: t("thinkingMode.levelHint") },
+    { v: "medium" as const, label: t("thinkingMode.medium"), hint: t("thinkingMode.levelHint") },
+    { v: "high" as const, label: t("thinkingMode.high"), hint: t("thinkingMode.highHint") },
   ];
 
   // 가로채기(bypass) 모드: 켜지면 백엔드가 전용 파이프라인을 타며 일반 도구·아티팩트를 무시.
@@ -794,6 +803,28 @@ export function Composer() {
                     agentApprovalMode === m.v
                       ? "bg-accent text-accent-fg"
                       : "text-muted hover:bg-surface-2",
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {/* 추론 수준(184) — 이 실행의 주 에이전트 턴 thinking. off 가 기본(종전 동작). */}
+        {agentTaskMode && (
+          <div className="flex items-center gap-2 px-3 pt-2 text-xs">
+            <span className="text-muted">{t("thinkingMode.label")}</span>
+            <div className="inline-flex overflow-hidden rounded-md border border-border">
+              {THINKING_MODES.map((m) => (
+                <button
+                  key={m.v}
+                  type="button"
+                  onClick={() => setAgentThinkingLevel(m.v)}
+                  title={m.hint}
+                  className={cn(
+                    "px-2 py-0.5 font-medium transition",
+                    agentThinkingLevel === m.v ? "bg-accent text-accent-fg" : "text-muted hover:bg-surface-2",
                   )}
                 >
                   {m.label}

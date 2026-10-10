@@ -1,6 +1,6 @@
 /**
  * 브라우저 넘겨받기(Take control) 라우트 — agent-task.routes.ts 에서 router.use 로 마운트.
- *   GET    /api/agent-tasks/:taskId/browser-session             — 넘겨받은 상태인지
+ *   GET    /api/agent-tasks/:taskId/browser-session             — 넘겨받은 상태인지(넘겨받을 수 없는 작업도 200 + eligible:false)
  *   POST   /api/agent-tasks/:taskId/browser-session { url? }    — 넘겨받기(세션 컨테이너 시작, 멱등)
  *   GET    /api/agent-tasks/:taskId/browser-session/screenshot  — 현재 화면(JPEG base64)·주소·제목
  *   POST   /api/agent-tasks/:taskId/browser-session/input       — 클릭·입력·키·스크롤·주소 이동·뒤로
@@ -28,25 +28,41 @@ export const browserSessionRouter = Router();
 const BLOCKED_URL = '내부망·로컬 주소로는 이동할 수 없습니다. 공개 웹 주소만 열 수 있습니다.';
 const NO_SESSION = '넘겨받은 브라우저 세션이 없습니다(유휴 상한이 지나 종료됐을 수 있습니다).';
 
-/** 소유자·실행 방식·작업 공간 검증 후 작업 공간 경로 반환 — 실패하면 응답을 끝내고 undefined. */
-async function loadSessionTarget(req: Request, res: Response): Promise<{ taskId: string; workdir: string } | undefined> {
+type SessionTarget = { taskId: string; workdir: string };
+/** 넘겨받을 수 없는 이유 — 상태 조회는 이것을 200 으로 돌려주고, 조작 라우트는 status 로 응답한다. */
+type SessionIneligible = { status: 400 | 403; message: string; reason: 'not_owner' | 'not_sandbox' | 'workspace_gone' };
+
+/** 소유자·실행 방식·작업 공간 검증 — 작업이 없거나 권한이 없으면(loadOwnedTask) 응답을 끝내고 undefined. */
+async function resolveSessionTarget(req: Request, res: Response): Promise<SessionTarget | SessionIneligible | undefined> {
     const task = await loadOwnedTask(req, res, req.params.taskId);
     if (!task) return undefined;
     if (String(task.user_id) !== String(req.user!.id)) {
-        res.status(403).json(forbidden('브라우저는 작업 소유자만 넘겨받을 수 있습니다.'));
-        return undefined;
+        return { status: 403, message: '브라우저는 작업 소유자만 넘겨받을 수 있습니다.', reason: 'not_owner' };
     }
     const cfg = getTaskSandboxConfig();
     const workdir = (task as { workspace_path?: string | null }).workspace_path;
     if (!cfg.enabled || !cfg.browserEnabled || task.executor === 'local' || !workdir) {
-        res.status(400).json(badRequest('이 작업의 브라우저는 넘겨받을 수 없습니다(샌드박스에서 실행된 작업만 가능합니다).'));
-        return undefined;
+        return { status: 400, message: '이 작업의 브라우저는 넘겨받을 수 없습니다(샌드박스에서 실행된 작업만 가능합니다).', reason: 'not_sandbox' };
     }
     if (!(await stat(workdir).then((s) => s.isDirectory(), () => false))) {
-        res.status(400).json(badRequest('작업 공간이 정리되어 브라우저를 넘겨받을 수 없습니다.'));
-        return undefined;
+        return { status: 400, message: '작업 공간이 정리되어 브라우저를 넘겨받을 수 없습니다.', reason: 'workspace_gone' };
     }
     return { taskId: task.id, workdir };
+}
+
+function isIneligible(r: SessionTarget | SessionIneligible): r is SessionIneligible {
+    return 'reason' in r;
+}
+
+/** 조작 라우트용 — 넘겨받을 수 없으면 400/403 으로 응답을 끝내고 undefined. */
+async function loadSessionTarget(req: Request, res: Response): Promise<SessionTarget | undefined> {
+    const r = await resolveSessionTarget(req, res);
+    if (!r) return undefined;
+    if (isIneligible(r)) {
+        res.status(r.status).json(r.status === 403 ? forbidden(r.message) : badRequest(r.message));
+        return undefined;
+    }
+    return r;
 }
 
 async function audit(req: Request, taskId: string, action: 'agent_task_browser_takeover' | 'agent_task_browser_release'): Promise<void> {
@@ -57,9 +73,12 @@ async function audit(req: Request, taskId: string, action: 'agent_task_browser_t
 }
 
 browserSessionRouter.get('/:taskId/browser-session', asyncHandler(async (req: Request, res: Response) => {
-    const target = await loadSessionTarget(req, res);
+    // 상태 조회는 작업 상세 화면이 모든 작업에 대해 부른다 — 넘겨받을 수 없는 작업(브라우저 꺼짐·로컬 실행·작업 공간 정리·
+    // 다른 사용자 작업을 보는 관리자)은 오류가 아니라 "해당 없음"이므로 200 으로 알린다(400/403 은 브라우저 콘솔에 오류로 남았다).
+    const target = await resolveSessionTarget(req, res);
     if (!target) return;
-    res.json(success({ active: await isBrowserSessionActive(target.taskId) }));
+    if (isIneligible(target)) return res.json(success({ active: false, eligible: false, reason: target.reason }));
+    res.json(success({ active: await isBrowserSessionActive(target.taskId), eligible: true }));
 }));
 
 browserSessionRouter.post('/:taskId/browser-session', asyncHandler(async (req: Request, res: Response) => {

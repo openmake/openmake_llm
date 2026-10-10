@@ -27,6 +27,8 @@
 //               {cmd:'confirm',id,result:'yes'|'all'|'no'} {cmd:'clearAutoApprove'} {cmd:'quit'}
 //   status code: connecting·connected(arg=폴더명)·server_error(arg=메시지)·reconnecting·closed·idle·
 //                auth_error(arg=메시지)·api_key_required·folder_open_failed(arg=메시지)
+//                · 서버가 인증 사유로 닫음(0.3.2, 코어 AUTH_CLOSE_REASONS): api_key_revoked·api_key_invalid·api_key_expired·
+//                  api_key_inactive·account_disabled·account_deleted·bridge_scope_required
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -39,6 +41,8 @@ const serverUrl = (() => {
   return i >= 0 ? process.argv[i + 1] : 'https://chat.openmake.cc';
 })();
 const apiKey = process.env.OMK_COMPANION_API_KEY || '';
+// 읽은 즉시 지운다 — exec 자식(코어는 allowlist env 로 띄우지만)과 진단 출력 어디에도 키가 남지 않게.
+delete process.env.OMK_COMPANION_API_KEY;
 
 // 서버 주소 찾기 — 사용자가 넣은 주소 하나(--server)에서 연결 주소와 웹 주소를 정한다(코어 endpoints).
 // 주소가 잘못됐으면 넣은 값을 그대로 쓴다(연결 단계에서 오류로 드러난다).

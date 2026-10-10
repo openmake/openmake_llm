@@ -152,16 +152,28 @@ function PolicyTester({ policy }: { policy: BrowserSitePolicy }) {
   );
 }
 
+/** 시스템 설정 밖(조직 정책 화면)에서 쓸 때 바꿔 끼우는 문구 — 출처 배지·설명·초기화 단추 */
+export interface BrowserSitePolicyEditorCopy {
+  /** source 가 "db" 일 때 배지 */
+  sourceSet: string;
+  /** source 가 "db" 가 아닐 때 배지 */
+  sourceUnset: string;
+  help: string;
+  reset: string;
+}
+
 /**
  * 브라우저 사이트 허용 목록(BROWSER_SITE_POLICY) 전용 편집기 — 시스템 설정 화면의 agent 그룹에서 JSON 입력란 대신 쓴다.
  * 저장은 기존 시스템 설정 API(onSave → PUT /api/admin/system-settings), 서버도 같은 검증(browserSitePolicyProblems)을 한다.
+ * 조직 정책 화면은 copy 로 문구만 바꿔 쓴다. copy 가 없으면 시스템 설정 문구.
  */
-export function BrowserSitePolicyEditor({ value, source, busy, onSave, onReset }: {
+export function BrowserSitePolicyEditor({ value, source, busy, onSave, onReset, copy }: {
   value: string | undefined;
   source: "db" | "env" | "default";
   busy: boolean;
   onSave: (value: string) => void;
   onReset: () => void;
+  copy?: BrowserSitePolicyEditorCopy;
 }) {
   const t = useTranslations("adminSystemSettings");
   const tp = useTranslations("adminSystemSettings.browserSitePolicy");
@@ -174,7 +186,9 @@ export function BrowserSitePolicyEditor({ value, source, busy, onSave, onReset }
   const changed = draftJson !== serialize(saved);
   const problems = browserSitePolicyProblems(draftJson);
   const tooLong = problems.includes("too_long");
-  const sourceLabel = source === "db" ? t("sourceDb") : source === "env" ? t("sourceEnv") : t("sourceDefault");
+  const sourceLabel = copy
+    ? (source === "db" ? copy.sourceSet : copy.sourceUnset)
+    : source === "db" ? t("sourceDb") : source === "env" ? t("sourceEnv") : t("sourceDefault");
 
   return (
     <div className="space-y-3 rounded-lg border p-3">
@@ -183,7 +197,7 @@ export function BrowserSitePolicyEditor({ value, source, busy, onSave, onReset }
         <Badge tone={source === "db" ? "accent" : "neutral"} className="shrink-0 whitespace-nowrap">{sourceLabel}</Badge>
         {changed && <Badge tone="warn" className="shrink-0 whitespace-nowrap">{tp("unsaved")}</Badge>}
       </div>
-      <p className="text-sm text-muted">{tp("help")}</p>
+      <p className="text-sm text-muted">{copy ? copy.help : tp("help")}</p>
       <div className="grid gap-3 lg:grid-cols-2">
         {LISTS.map((name) => (
           <PatternList key={name} name={name} patterns={draft[name]} disabled={busy}
@@ -211,9 +225,9 @@ export function BrowserSitePolicyEditor({ value, source, busy, onSave, onReset }
         )}
         {source === "db" && (
           <Button variant="ghost" size="sm" className="whitespace-nowrap" disabled={busy}
-            aria-label={t("reset")} title={t("resetHelp")} onClick={onReset}>
+            aria-label={copy ? copy.reset : t("reset")} title={copy ? copy.reset : t("resetHelp")} onClick={onReset}>
             <RotateCcw className="h-4 w-4" aria-hidden />
-            {t("reset")}
+            {copy ? copy.reset : t("reset")}
           </Button>
         )}
       </div>

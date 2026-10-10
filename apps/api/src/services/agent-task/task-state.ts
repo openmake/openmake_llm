@@ -6,12 +6,12 @@
  * 표 밖 전이는 거부(throw)되고, 허용 전이는 agent_task_events 에 남는다.
  *
  * 전이 출처(실경로에서 도출 — 새 경로가 생기면 여기에 먼저 적을 것):
- *   pending  → queued(큐 대기) · running(실행 시작) · cancelled(실행 전 취소) · failed(시작 실패)
+ *   pending  → queued(큐 대기·실행 claim) · running(실행 시작) · cancelled(실행 전 취소) · failed(시작 실패)
  *   queued   → running · pending(부팅 복구 claim) · cancelled · failed
  *   running  → paused(승인 대기) · completed · failed · cancelled · pending(복구 claim)
  *   paused   → running(승인 해소) · completed · failed · cancelled · pending(복구 claim)
- *   failed   → pending(재실행 전 리셋·복구 claim) · queued · running(resume) · cancelled
- *   cancelled→ pending · queued · running(resume)
+ *   failed   → pending(재실행 전 리셋·복구 claim) · queued(실행 claim) · running(resume) · cancelled
+ *   cancelled→ pending · queued(실행 claim) · running(resume)
  *   completed→ (없음 — 라우트가 재실행·재개를 400 으로 막는다)
  * 같은 상태로의 갱신은 no-op(허용, 이벤트 없음).
  *

@@ -62,6 +62,8 @@ interface ChecklistItem {
 
 interface AgentTask {
   id: string;
+  /** 추론 수준(184) — off/없음은 undefined(배지 숨김) */
+  thinkingLevel?: "low" | "medium" | "high";
   goal: string;
   status: TaskStatus;
   rawStatus: ApiTaskStatus;
@@ -107,6 +109,8 @@ interface PlanStep {
 
 interface ApiAgentTask {
   id: string;
+  /** 추론 수준(184) */
+  thinking_level?: string | null;
   goal: string;
   status: ApiTaskStatus;
   progress?: number;
@@ -228,6 +232,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     cachedPromptTokens: typeof t.cached_prompt_tokens === "number" ? t.cached_prompt_tokens : undefined,
     cacheReportedPromptTokens: typeof t.cache_reported_prompt_tokens === "number" ? t.cache_reported_prompt_tokens : undefined,
     executor: t.executor,
+    thinkingLevel: t.thinking_level === "low" || t.thinking_level === "medium" || t.thinking_level === "high" ? t.thinking_level : undefined,
     folderRel: t.folder_rel || undefined,
     error: t.error || undefined,
     failureClass: t.failure_class,
@@ -1408,6 +1413,9 @@ export default function AgentTasksPage() {
                       {task.executor === "local" && (
                         <Badge tone="neutral">{t("localBadge")}</Badge>
                       )}
+                      {task.thinkingLevel && (
+                        <Badge tone="neutral">{t("thinkingBadge", { level: t(`thinkingLevel.${task.thinkingLevel}`) })}</Badge>
+                      )}
                       {task.priority !== undefined && (
                         <Badge tone={task.priority > 0 ? "accent" : "neutral"}>{t("priorityBadge", { priority: task.priority })}</Badge>
                       )}
@@ -1497,6 +1505,12 @@ export default function AgentTasksPage() {
                       <dt className="text-faint">{t("modelLabel")}</dt>
                       <dd className="truncate text-fg-2">{task.model}</dd>
                     </div>
+                    {task.thinkingLevel && (
+                      <div className="flex items-baseline justify-between gap-2">
+                        <dt className="text-faint">{t("thinkingLabel")}</dt>
+                        <dd className="truncate text-fg-2">{t(`thinkingLevel.${task.thinkingLevel}`)}</dd>
+                      </div>
+                    )}
                     <div className="flex items-baseline justify-between gap-2">
                       <dt className="text-faint">{t("elapsedLabel")}</dt>
                       <dd className="truncate font-mono text-fg-2">{task.elapsed}</dd>

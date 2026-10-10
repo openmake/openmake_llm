@@ -36,17 +36,23 @@ export const LEGACY_BRIDGE_KINDS: readonly BridgeKind[] = [
     'exec', 'read', 'write', 'list', 'listAll', 'delete', 'task_end', 'worktree', 'folders', 'lsp_diagnostics', 'code_nav', 'test_runner',
 ];
 
-/** 서버가 아는 요청 종류 전체 — 기기가 보낸 능력 목록에서 이 밖의 값은 버린다. */
-const KNOWN_BRIDGE_KINDS: ReadonlySet<string> = new Set<string>([...LEGACY_BRIDGE_KINDS, 'browser']);
+/**
+ * 기기 능력 — 요청 종류에 더해, 요청 안의 추가 기능을 알리는 값.
+ * browser_upload: browser 요청의 uploadFile 액션(2026-10-06) — 알리지 않는 기기에는 업로드를 보내지 않는다.
+ */
+export type BridgeCapability = BridgeKind | 'browser_upload';
+
+/** 서버가 아는 능력 전체 — 기기가 보낸 능력 목록에서 이 밖의 값은 버린다. */
+const KNOWN_BRIDGE_KINDS: ReadonlySet<string> = new Set<string>([...LEGACY_BRIDGE_KINDS, 'browser', 'browser_upload']);
 
 /**
  * PURE: bridge_hello.capabilities → 지원 종류 집합. 배열이 아니면 undefined(구버전 — LEGACY_BRIDGE_KINDS 로 본다),
  * 배열이면 아는 종류만 남긴다(빈 배열 = 아무것도 지원하지 않음).
  */
-export function normalizeCapabilities(raw: unknown): Set<BridgeKind> | undefined {
+export function normalizeCapabilities(raw: unknown): Set<BridgeCapability> | undefined {
     if (!Array.isArray(raw)) return undefined;
-    const out = new Set<BridgeKind>();
-    for (const v of raw) if (typeof v === 'string' && KNOWN_BRIDGE_KINDS.has(v)) out.add(v as BridgeKind);
+    const out = new Set<BridgeCapability>();
+    for (const v of raw) if (typeof v === 'string' && KNOWN_BRIDGE_KINDS.has(v)) out.add(v as BridgeCapability);
     return out;
 }
 
@@ -103,6 +109,8 @@ export interface BridgeRequestPayload {
     sitePolicy?: { allow: string[]; deny: string[] };
     /** browser 전용 — 이번 호출에서 사용자가 승인한 호스트. */
     approvedHosts?: string[];
+    /** browser 전용 — 이번 호출에서 사용자가 승인한 업로드(호스트·파일 목록). 기기가 같을 때만 실행한다(2026-10-06). */
+    approvedUploads?: Array<{ host: string; files: string[] }>;
 }
 
 /** code_nav 결과 — 디바이스 코어 BridgeCodeNav 와 1:1. */
@@ -169,6 +177,11 @@ export interface BridgeResult {
     rejected?: 'expired' | 'duplicate';
     /** browser — 사용자가 브라우저를 넘겨받은 상태라 기기가 아무것도 실행하지 않았다(2026-10-05, 구버전 기기는 싣지 않는다). */
     userControl?: boolean;
+    /**
+     * browser — 기기가 사이트 정책·사용자 제어로 막은 호출의 종류(코어 BrowserPolicyBlock, 2026-10-06). 감사 기록용.
+     * 기기가 보낸 값이라 형태를 믿지 않는다(browser-policy-audit 가 검증). 구버전 기기는 싣지 않는다.
+     */
+    policyBlock?: { kind?: unknown; host?: unknown; action?: unknown };
 }
 
 export interface DeviceSession {
@@ -183,7 +196,7 @@ export interface DeviceSession {
      */
     hostId?: string;
     /** 기기가 지원한다고 알린 요청 종류. undefined = 구버전(LEGACY_BRIDGE_KINDS). */
-    capabilities?: Set<BridgeKind>;
+    capabilities?: Set<BridgeCapability>;
     ws: WebSocket;
     connectedAt: number;
     /** 이 연결이 인증에 쓴 API key 의 id — 키를 삭제·비활성화·순환하면 disconnectByApiKey 로 닫는다. */
@@ -349,10 +362,10 @@ class LocalBridgeRegistry {
     }
 
     /** 이 기기가 요청 종류를 지원하는가 — 연결돼 있지 않으면 false. 능력 목록이 없는 구버전은 현행 종류만. */
-    supports(userId: string, deviceId: string | undefined, kind: BridgeKind): boolean {
+    supports(userId: string, deviceId: string | undefined, kind: BridgeCapability): boolean {
         const dev = this.getDevice(userId, deviceId);
         if (!dev) return false;
-        return dev.capabilities ? dev.capabilities.has(kind) : LEGACY_BRIDGE_KINDS.includes(kind);
+        return dev.capabilities ? dev.capabilities.has(kind) : (LEGACY_BRIDGE_KINDS as readonly string[]).includes(kind);
     }
 
     /** 도구 1회 왕복. 타임아웃/연결단절 시 ok=false 결과로 해소(throw 하지 않음 — 도구 오류로 전달). */

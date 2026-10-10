@@ -9,6 +9,10 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 
 export type AgentTaskUserRole = 'admin' | 'user' | 'guest';
 
+/** 작업 실행의 추론 수준 — 'off' 는 종전 동작(턴 호출 think:false). */
+export type AgentTaskThinkingLevel = 'off' | 'low' | 'medium' | 'high';
+export const AGENT_TASK_THINKING_LEVELS: readonly AgentTaskThinkingLevel[] = ['off', 'low', 'medium', 'high'];
+
 /** 루프 종료 사유를 명확히 구분하기 위한 내부 에러 */
 export class AgentTaskAbort extends Error {
     constructor(public readonly kind: 'aborted' | 'timeout' | 'token_limit') {
@@ -81,6 +85,8 @@ export interface AgentTaskRunInput {
     /** 승인 3모드(Manual/Auto/Skip) — 이 실행에 한해 전역 승인 정책을 override(비영속).
      *  all=전부 승인, high-risk=고위험만, none=전부 자동. 미지정 시 전역 TASK_SANDBOX_APPROVAL_POLICY. */
     approvalPolicy?: 'all' | 'high-risk' | 'none';
+    /** 추론 수준(184) — 주 에이전트 턴 호출의 thinking. 미지정은 'off'(종전 동작). 서브에이전트·judge 는 대상이 아니다. */
+    thinkingLevel?: AgentTaskThinkingLevel;
     /** 이 실행의 총 타임아웃(ms) override — 미지정 시 전역 TOTAL_TIMEOUT_MS. 예약(무인) task 는
      *  무거운 생성 워크플로우를 위해 더 긴 SCHEDULE_TOTAL_TIMEOUT_MS 를 넘긴다. */
     totalTimeoutMs?: number;

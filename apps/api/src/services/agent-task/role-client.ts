@@ -12,7 +12,9 @@ import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
 import { recoveryWaitMs } from './turn-recovery';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
-import { getRecoveryWaitNote, getTurnCallIdleNote } from '../../prompts/agent-task-turn-loop';
+import { getRecoveryWaitNote, getTurnCallIdleNote, getThinkingDowngradeNote } from '../../prompts/agent-task-turn-loop';
+import { thinkOptionFor, noteThinkingFailure, type ThinkingRunState } from './thinking-downgrade';
+import type { AgentTaskThinkingLevel } from './types';
 
 const logger = createLogger('AgentTaskService');
 
@@ -25,6 +27,20 @@ export interface AgentRoleState {
     fallbackDone: boolean;
     /** 내부 전용 정책으로 쓰지 않은 외부 모델 id — 감사 기록용(없으면 차단한 것이 없다) */
     blockedExternal?: string;
+    /** 추론 수준(184) — 미지정은 'off'. 강등 상태는 이 실행 안에만 있다(thinking-downgrade). */
+    thinkingLevel?: AgentTaskThinkingLevel;
+    thinkingFailures?: number;
+    thinkingDowngraded?: boolean;
+}
+
+const thinkingInit = (level: AgentTaskThinkingLevel | undefined) => ({ thinkingLevel: level ?? 'off', thinkingFailures: 0, thinkingDowngraded: false }) as const;
+
+/** 선택 필드를 채워 강등 모듈이 다루는 상태로 — 같은 객체를 변경하므로 호출자는 state 로 결과를 본다. */
+export function runStateOf(state: AgentRoleState): ThinkingRunState {
+    state.thinkingLevel ??= 'off';
+    state.thinkingFailures ??= 0;
+    state.thinkingDowngraded ??= false;
+    return state as ThinkingRunState;
 }
 
 /**
@@ -36,24 +52,24 @@ export async function initAgentRoleState(
     userId: string,
     explicitClient?: LLMClient,
     /** internalOnly: 내부 전용 실행(config/internal-only-policy) — 외부 제공자로 해석돼도 내부 모델을 쓴다 */
-    opts: { internalOnly?: boolean } = {},
+    opts: { internalOnly?: boolean; thinkingLevel?: AgentTaskThinkingLevel } = {},
 ): Promise<AgentRoleState> {
     if (explicitClient) {
-        return { client: explicitClient, external: false, fallbackDone: true };
+        return { client: explicitClient, external: false, fallbackDone: true, ...thinkingInit(opts.thinkingLevel) };
     }
     const resolved = await resolveRoleClientForUser('agent', userId);
     const external = resolved.providerId !== 'local-llm';
     if (external && opts.internalOnly) {
         // 내부 모델이 응답하지 못하면 작업은 실패한다 — 외부로 넘기는 경로는 없다(fallbackDone 으로 강등 로직도 닫는다).
         logger.info(`[AgentTask] ${taskId} 내부 전용 — 외부 모델 ${resolved.fullId} 대신 내부 모델 사용`);
-        return { client: createClient({ model: getModelForRole('agent'), userId }), external: false, fallbackDone: true, blockedExternal: resolved.fullId };
+        return { client: createClient({ model: getModelForRole('agent'), userId }), external: false, fallbackDone: true, blockedExternal: resolved.fullId, ...thinkingInit(opts.thinkingLevel) };
     }
     if (resolved.degraded) {
         logger.warn(`[AgentTask] ${taskId} agent role 폴백: ${resolved.degraded}`);
     } else if (external) {
         logger.info(`[AgentTask] ${taskId} agent role 외부 모델 사용: ${resolved.fullId}`);
     }
-    return { client: resolved.client, external, fallbackDone: false };
+    return { client: resolved.client, external, fallbackDone: false, ...thinkingInit(opts.thinkingLevel) };
 }
 
 /**
@@ -126,10 +142,21 @@ function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
     });
 }
 
+/** 추론 실패 1회를 세고, 임계에 닿아 이번에 강등됐으면 안내를 남기고 true — 호출자는 같은 턴을 think:false 로 다시 부른다. */
+function downgradeIfNeeded(state: AgentRoleState, p: { taskId: string; onThinkingDowngrade?: (note: string) => void }): boolean {
+    const rs = runStateOf(state);
+    if (!noteThinkingFailure(rs)) return false;
+    const note = getThinkingDowngradeNote(rs.thinkingLevel, rs.thinkingFailures);
+    logger.warn(`[AgentTask] ${p.taskId} ${note}`);
+    try { p.onThinkingDowngrade?.(note); } catch { /* 관측 실패 무시 */ }
+    return true;
+}
+
 /**
  * 턴 1회 chat 호출. reasoning OFF — qwen3.6 가 디자인/장문 작업에서 수만 토큰의
  * thinking 을 생성해 토큰 한도를 소진하고 deliverable 을 못 쓰는 폭주 차단.
  * 도구 루프의 단계별 reasoning 은 대화 구조 자체가 대신한다.
+ * 184 부터는 작업의 추론 수준(thinkOptionFor)을 따르고, off 가 종전 동작이다.
  *
  * 외부 role 모델의 4xx(tools 미지원 등 — 예: NVIDIA 소형 모델 tools 400) 는
  * 로컬 default 로 1회 강등 후 같은 턴을 재시도한다 (state.client 교체).
@@ -159,6 +186,8 @@ export async function chatTurnWithRoleFallback(
         idle?: { firstChunkMs: number; gapMs: number };
         /** 이 호출을 시작할 때 남은 작업 시간 예산(ms) — 주면 짧은 재시도 소진 뒤 이 예산 안에서 더 기다린다. */
         recoveryBudgetMs?: number;
+        /** 추론 강등(184) 때 단계 기록으로 남길 훅 — 한 실행에 한 번만 불린다. */
+        onThinkingDowngrade?: (note: string) => void;
     },
 ): Promise<Awaited<ReturnType<LLMClient['chat']>>> {
     // openai SDK 요청 타임아웃을 task 총 예산에 맞춰 늘린다(파생 클라이언트, baseUrl/model 유지).
@@ -171,7 +200,7 @@ export async function chatTurnWithRoleFallback(
     const call = (signal: AbortSignal, onChunk?: () => void) => runWithCostSession(p.taskId, () => state.client
         .derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS, costContext: { feature: 'agent_task', sessionId: p.taskId } })
         .chat(p.conversation, undefined, p.onToken ?? (onChunk ? () => { /* 스트리밍 강제 */ } : undefined), {
-            tools: p.tools, signal, think: false, requestClass: 'agent_turn', ...(onChunk && { onChunk }),
+            tools: p.tools, signal, think: thinkOptionFor(runStateOf(state)), requestClass: 'agent_turn', ...(onChunk && { onChunk }),
         }));
     const maxRetries = Math.max(0, AGENT_TASK_LIMITS.TURN_RETRY_MAX);
     let attempt = 0;
@@ -191,6 +220,7 @@ export async function chatTurnWithRoleFallback(
             const out = await call(signals.length > 1 ? AbortSignal.any(signals) : p.signal, watch?.onChunk);
             // 끊기지는 않았지만 기한의 절반을 넘긴 간격 — 기한(AGENT_TASK_TURN_STREAM_IDLE_MS)을 조정할 근거로 남긴다.
             if (watch && watch.maxGapMs() > p.idle!.gapMs / 2) logger.warn(`[AgentTask] ${p.taskId} 청크 간격 ${watch.maxGapMs()}ms — 무응답 기한 ${p.idle!.gapMs}ms 의 절반 초과`);
+            // 성공 처리(연속 실패 수 되돌리기)는 서비스가 본문·도구 호출이 있는 턴에서만 한다 — 빈 본문 응답도 여기로 온다.
             return out;
         } catch (err) {
             chatErr = err;
@@ -199,8 +229,14 @@ export async function chatTurnWithRoleFallback(
         }
         {
             const idleMs = watch?.firedMs() ?? null;
-            if (idleMs !== null && !p.signal.aborted && !cap?.aborted) chatErr = new TurnCallIdle(idleMs);
+            if (idleMs !== null && !p.signal.aborted && !cap?.aborted) {
+                chatErr = new TurnCallIdle(idleMs);
+                // 감시가 켜진 턴에는 호출 상한이 없다 — 무응답 감시 발동도 추론 실패로 센다. 임계 전이면 아래 재시도 경로로 간다.
+                if (downgradeIfNeeded(state, p)) continue;
+            }
             if (cap?.aborted && !p.signal.aborted) {
+                // 추론을 켠 호출의 상한 초과 — 연속 실패로 세고, 임계에 닿으면 이번 실행만 추론을 끄고 같은 턴을 다시 부른다(강등은 cap 재시도 횟수를 쓰지 않는다).
+                if (downgradeIfNeeded(state, p)) continue;
                 if (capRetries >= Math.max(0, AGENT_TASK_LIMITS.TURN_CALL_TIMEOUT_RETRY_MAX)) throw new TurnCallCapExceeded(p.callTimeoutMs!);
                 capRetries++;
                 const note = `호출 상한(${Math.round(p.callTimeoutMs! / 1000)}초) 초과 — 다시 시도`;

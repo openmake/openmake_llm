@@ -28,6 +28,7 @@
       "organizationsAdmin": "組織管理",
       "costRatesAdmin": "コスト単価",
       "bridgeDevicesAdmin": "接続デバイス",
+      "agentTaskMetricsAdmin": "タスク指標",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "評価履歴",
       "quotaRequestsAdmin": "クォータ承認",
@@ -264,6 +265,7 @@
       "activate": "有効化",
       "deactivate": "無効化",
       "rotate": "ローテーション",
+      "rotateInactive": "無効なキーはローテーションできません — 先に有効化してください",
       "delete": "削除"
     },
     "scope": {
@@ -340,6 +342,16 @@
       "autoHint": "高リスクツールのみ承認 (シェル/python/ブラウザ/削除)",
       "skipHint": "すべてのツールを自動実行"
     },
+    "thinkingMode": {
+      "label": "推論:",
+      "off": "オフ",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "offHint": "従来どおり — 最速",
+      "levelHint": "モデルが各ステップで考えてから行動します。遅くなりトークンが増えます",
+      "highHint": "最も深く考えます。長文の作業では時間が大きく増えることがあります"
+    },
     "localExec": {
       "label": "ローカル実行:",
       "off": "サーバーサンドボックスで実行",
@@ -384,6 +396,7 @@
       "procedurePreview": "実行される手順を表示",
       "fullArgs": "全文を表示（{chars}文字）",
       "siteWrites": "許可リストにないサイトへ送信します",
+      "siteUploads": "PC のファイルをこのサイトにアップロードします",
       "elicitHint": "{server} サーバーからの入力リクエスト · 項目: {fields}",
       "elicitJsonHint": "項目が複数ある場合は JSON で回答してください: {example}"
     },
@@ -1078,7 +1091,7 @@
       "pick": "ターンを選択",
       "turnOption": "ターン {turn}（{messages} メッセージ）",
       "go": "分岐して実行",
-      "hint": "選んだターン以降を新しい作業として再実行します（作業フォルダは新規）。",
+      "hint": "選んだターン以降を新しい作業として再実行します。作業フォルダはサーバー設定により、その時点のファイルに復元されるか空の状態で始まります。",
       "failed": "分岐に失敗: {error}"
     },
     "priorityBadge": "優先度 {priority}",
@@ -1135,6 +1148,13 @@
       "startFailed": "ブラウザーを引き継げませんでした: {error}",
       "inputFailed": "操作が届きませんでした: {error}",
       "releaseFailed": "返せませんでした: {error}"
+    },
+    "thinkingBadge": "推論 {level}",
+    "thinkingLabel": "推論",
+    "thinkingLevel": {
+      "low": "低",
+      "medium": "中",
+      "high": "高"
     }
   },
   "customAgents": {
@@ -2461,6 +2481,7 @@
       "procedurePreview": "実行される手順を表示",
       "fullArgs": "全文を表示（{chars}文字）",
       "siteWrites": "許可リストにないサイトへ送信します",
+      "siteUploads": "PC のファイルをこのサイトにアップロードします",
       "assignedToMe": "自分に移管",
       "assignedAway": "移管済み",
       "reassign": "移管",
@@ -2546,7 +2567,7 @@
       "EXTERNAL_MODEL_POLICY": "外部モデルの許可/拒否グロブ JSON。deny はグローバルと和集合、allow は積集合 — グローバルの拒否は解除できません。",
       "TOOL_APPROVAL_POLICY_MIN": "エージェント作業の承認ポリシー下限。要求より厳しければ下限が適用されます。",
       "MCP_ALLOWED_SERVERS": "インストールを許可する MCP カタログテンプレート id（カンマ区切り）。空 = 制限なし。",
-      "BROWSER_SITE_POLICY": "この組織のブラウザサイトポリシー。拒否リストはグローバルと和集合になります。グローバルに許可リストがある場合は両方に同じ項目だけが残り、グローバルが空なら組織のリストを使います。リセットするとグローバルに従います。"
+      "BROWSER_SITE_POLICY": "この組織のブラウザサイトポリシー。拒否リストはグローバルと和集合になります。グローバルに許可リストがある場合は両方に同じ項目だけが残り、グローバルが空なら組織のリストを使います。解除するとグローバルに従います。"
     },
     "history": "変更履歴",
     "noHistory": "変更履歴はありません。",
@@ -2597,6 +2618,48 @@
     "disconnectConfirm": "{email} の「{label}」の接続を切断しますか?実行中のローカル作業のリクエストは失敗します。",
     "disconnectFailed": "接続解除に失敗しました。",
     "reconnectNote": "接続解除は現在の接続のみを切断します。再接続させないには、そのユーザーの bridge API キーを削除または無効化してください — キーを破棄するとそのキーの接続もすぐに切断されます。"
+  },
+  "adminAgentTaskMetrics": {
+    "title": "タスク指標",
+    "description": "エージェントタスクの成功率・所要時間・トークン・ユーザー介入回数を実行方式別に表示します。期間内に作成されたタスクが対象です。",
+    "period": "期間",
+    "days": "{days}日",
+    "refresh": "再読み込み",
+    "loadError": "指標を読み込めませんでした。",
+    "empty": "この期間に作成されたタスクはありません。",
+    "summaryTitle": "実行方式別の概要",
+    "failuresTitle": "失敗理由の上位",
+    "noFailures": "失敗したタスクはありません。",
+    "metric": "項目",
+    "overall": "全体",
+    "executorLocal": "ローカルデバイス",
+    "executorSandbox": "サーバーサンドボックス",
+    "total": "タスク数",
+    "completed": "完了",
+    "failed": "失敗",
+    "cancelled": "キャンセル",
+    "inProgress": "進行中",
+    "successRate": "成功率",
+    "durationP50": "所要時間の中央値",
+    "durationP95": "所要時間 p95",
+    "tokenTasks": "トークン記録のあるタスク数",
+    "tokensAvg": "トークン平均",
+    "tokensSum": "トークン合計",
+    "cachedPromptTokensSum": "キャッシュヒットトークン合計",
+    "approvalRequests": "承認リクエスト",
+    "questions": "質問",
+    "deviceWaits": "デバイス待ち",
+    "browserTakeovers": "ブラウザ引き継ぎ",
+    "interventionsPerTask": "タスクあたりの介入",
+    "failureClass": "分類",
+    "count": "件数",
+    "notes": "成功率 = 完了 ÷ (完了+失敗+キャンセル)。所要時間は終了したタスクの最初の実行開始から終了まで(実行記録がなければ作成時刻から)。タスクあたりの介入 = (承認リクエスト+質問+デバイス待ち+引き継ぎ) ÷ タスク数。自動承認で実行されたツールは承認リクエストに含まれません。",
+    "thinkingTitle": "推論レベル別の要約",
+    "thinkingOff": "オフ",
+    "thinkingLow": "低",
+    "thinkingMedium": "中",
+    "thinkingHigh": "高",
+    "thinkingNote": "値のない既存の作業は「オフ」に数えます。サーバーの LLM_ENABLE_REASONING_EFFORT が無効なら低・中・高はすべて「オン」として動作します。"
   },
   "adminQuotaRequests": {
     "title": "クォータ超過承認",

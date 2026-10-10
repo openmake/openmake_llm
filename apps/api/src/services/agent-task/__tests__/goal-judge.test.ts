@@ -6,7 +6,7 @@
  * 종료는 호출자(AgentTaskService)가 담당하며 agent-task-input-files.test.ts 가 통합 커버한다.
  * 여기서는 judge 가 false 를 돌려주는 경로(계약의 goal-judge 쪽 절반)와 fail-open 을 고정한다.
  */
-import { judgeGoalAchieved, buildJudgeExecutionContext, buildJudgeToolEvidence,  judgeGoal, buildJudgeArtifactSummary } from '../goal-judge';
+import { judgeGoalAchieved, buildJudgeExecutionContext, buildJudgeToolEvidence,  judgeGoal, buildJudgeArtifactSummary, withUserRejectionsJudgeNote } from '../goal-judge';
 import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 import type { LLMClient } from '../../../llm';
 
@@ -244,5 +244,22 @@ describe('buildJudgeArtifactSummary — ANSWER 에서 떨어져 나간 산출물
 
     it('산출물이 없으면 빈 문자열 (프롬프트에 ARTIFACTS 섹션이 붙지 않는다)', () => {
         expect(buildJudgeArtifactSummary([])).toBe('');
+    });
+});
+
+describe('withUserRejectionsJudgeNote', () => {
+    it('거절 0건이면 수행 맥락을 그대로 돌려준다', () => {
+        expect(withUserRejectionsJudgeNote('ctx', [])).toBe('ctx');
+    });
+
+    it('인자가 없거나 사유가 비면 표시를 채우고, 긴 사유는 자른다', () => {
+        const out = withUserRejectionsJudgeNote('ctx', [
+            { tool_name: 'bash', args: null, answer_text: null },
+            { tool_name: 'write_file', args: { path: 'a.txt' }, answer_text: '가'.repeat(1000) },
+        ]);
+        expect(out.startsWith('ctx\n')).toBe(true);
+        expect(out).toContain('- bash {} — 거절 사유: (사유 없음)');
+        expect(out).toContain('- write_file {"path":"a.txt"} — 거절 사유: ');
+        expect(out).not.toContain('가'.repeat(AGENT_TASK_LIMITS.GOAL_JUDGE_REJECTION_REASON_CHARS + 1));
     });
 });

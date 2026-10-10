@@ -22,7 +22,7 @@ describe('분류', () => {
         expect(classifyBrowserAction({ type: 'dialog' })).toBe('observe');
     });
     it('모르는 액션·형태가 깨진 액션은 쓰기로 본다', () => {
-        expect(classifyBrowserAction({ type: 'uploadFile' })).toBe('write');
+        expect(classifyBrowserAction({ type: 'dragAndDrop' })).toBe('write');
         expect(classifyBrowserAction(null)).toBe('write');
         expect(classifyBrowserAction('click')).toBe('write');
     });

@@ -72,11 +72,38 @@ describe('대상 검증', () => {
         expect(res.statusCode).toBe(400);
         expect(startBrowserSession).not.toHaveBeenCalled();
     });
-    it('작업 공간이 없으면 400', async () => {
+    it('작업 공간이 없으면 조작은 400', async () => {
         getAgentTask.mockResolvedValue(task({ workspace_path: join(workdir, 'gone') }));
         const res = mockRes();
-        await handler('get', BASE)(req(), res);
+        await handler('post', BASE)(req(), res);
         expect(res.statusCode).toBe(400);
+        expect(startBrowserSession).not.toHaveBeenCalled();
+    });
+});
+
+describe('상태 조회(GET) — 넘겨받을 수 없는 작업도 오류가 아니다', () => {
+    it('넘겨받을 수 있으면 active·eligible', async () => {
+        const res = mockRes();
+        await handler('get', BASE)(req(), res);
+        expect(res.statusCode).toBe(200);
+        expect(res.body.data).toEqual({ active: true, eligible: true });
+    });
+    it.each([
+        ['로컬 실행 작업', { executor: 'local' }, 'not_sandbox'],
+        ['작업 공간이 정리된 작업', { workspace_path: 'gone-dir' }, 'workspace_gone'],
+    ])('%s 은 200 + eligible:false (%s)', async (_label, extra, reason) => {
+        getAgentTask.mockResolvedValue(task(extra as Record<string, unknown>));
+        const res = mockRes();
+        await handler('get', BASE)(req(), res);
+        expect(res.statusCode).toBe(200);
+        expect(res.body.data).toEqual({ active: false, eligible: false, reason });
+        expect(isBrowserSessionActive).not.toHaveBeenCalled();
+    });
+    it('다른 사용자의 작업을 보는 관리자도 200 + eligible:false (not_owner)', async () => {
+        const res = mockRes();
+        await handler('get', BASE)(req({}, { id: 'admin1', role: 'admin' }), res);
+        expect(res.statusCode).toBe(200);
+        expect(res.body.data).toEqual({ active: false, eligible: false, reason: 'not_owner' });
     });
 });
 

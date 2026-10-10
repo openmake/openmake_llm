@@ -22,7 +22,7 @@ jest.mock('../../local-bridge/registry', () => ({ getLocalBridgeRegistry: () => 
 const utimes = jest.fn(async () => undefined);
 jest.mock('fs/promises', () => ({ utimes: (...a: unknown[]) => utimes(...(a as [])) }));
 
-import { resumeParkedTask, sweepParkedTasks, AGENT_TASK_PARK_EXPIRED_ERROR } from '../hitl-park';
+import { resumeParkedTask, sweepParkedTasks, expireParkedTasks, AGENT_TASK_PARK_EXPIRED_ERROR } from '../hitl-park';
 
 const parkedTask = {
     id: 't1', user_id: 'u1', goal: 'g', status: 'paused', max_turns: 10, priority: 2, executor: 'sandbox',
@@ -161,5 +161,51 @@ describe('브라우저 넘겨받기(browser_takeover) 스윕', () => {
         getDevice.mockReturnValue({ deviceId: 'd1', browserUserControl: true });
         await expect(sweepParkedTasks()).resolves.toMatchObject({ resumed: 0, expired: 1 });
         expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'failed', error: 'browser_takeover_expired' }));
+    });
+});
+
+describe('expireParkedTasks — 상한 초과 판정만 따로 자주(재개·workspace 갱신은 하지 않는다)', () => {
+    const row = (p: Record<string, unknown>) => ({ workspace_path: '/ws/x', user_id: 'u1', device_id: 'd1', has_decision: false, has_live_pending: false, ...p });
+    // 'd1' = 연결돼 있고 넘겨받은 상태, 'back' = 연결돼 있고 돌려받은 상태, 그 밖 = 미연결
+    const devices = (_u: string, id?: string) => (id === 'd1' ? { deviceId: 'd1', browserUserControl: true } : id === 'back' ? { deviceId: 'back' } : undefined);
+
+    it('세 주차 사유 모두 상한을 넘긴 것을 실패로 바꾼다', async () => {
+        listParkedTasks.mockResolvedValue([
+            row({ id: 'd', reason: 'device_wait', waited_ms: '60001', device_id: 'gone' }),
+            row({ id: 'b', reason: 'browser_takeover', waited_ms: '30001' }),
+            row({ id: 'h', reason: 'hitl_parked', waited_ms: '1' }),
+        ]);
+        getDevice.mockImplementation(devices);
+        await expect(expireParkedTasks()).resolves.toEqual({ expired: 3 });
+        expect(updateAgentTask).toHaveBeenCalledWith('d', { status: 'failed', error: 'device_wait_expired', terminalNotifyPending: true });
+        expect(updateAgentTask).toHaveBeenCalledWith('b', { status: 'failed', error: 'browser_takeover_expired', terminalNotifyPending: true });
+        expect(expirePendingForTask).toHaveBeenCalledWith('h', 'expired');
+        expect(updateAgentTask).toHaveBeenCalledWith('h', { status: 'failed', error: AGENT_TASK_PARK_EXPIRED_ERROR, terminalNotifyPending: true });
+    });
+
+    it('상한 안·재개 가능한 작업은 건드리지 않고, 재개 시도·workspace 갱신도 하지 않는다', async () => {
+        listParkedTasks.mockResolvedValue([
+            row({ id: 'd-in', reason: 'device_wait', waited_ms: '5000', device_id: 'gone' }),
+            row({ id: 'd-conn', reason: 'device_wait', waited_ms: '60001' }), // 기기 연결됨 — 재개는 연결 즉시 경로·본 스윕 몫
+            row({ id: 'b-in', reason: 'browser_takeover', waited_ms: '5000' }),
+            row({ id: 'b-back', reason: 'browser_takeover', waited_ms: '30001', device_id: 'back' }), // 돌려받음 — 재개 대상
+            row({ id: 'h-dec', reason: 'hitl_parked', has_decision: true }),
+            row({ id: 'h-live', reason: 'hitl_parked', has_live_pending: true }),
+        ]);
+        getDevice.mockImplementation(devices);
+        await expect(expireParkedTasks()).resolves.toEqual({ expired: 0 });
+        expect(updateAgentTask).not.toHaveBeenCalled();
+        expect(expirePendingForTask).not.toHaveBeenCalled();
+        expect(claimParkedTask).not.toHaveBeenCalled();
+        expect(getAgentTask).not.toHaveBeenCalled();
+        expect(utimes).not.toHaveBeenCalled();
+    });
+
+    it('조회·개별 처리 실패는 삼킨다', async () => {
+        listParkedTasks.mockRejectedValueOnce(new Error('db'));
+        await expect(expireParkedTasks()).resolves.toEqual({ expired: 0 });
+        listParkedTasks.mockResolvedValueOnce([row({ id: 'h', reason: 'hitl_parked' })]);
+        expirePendingForTask.mockRejectedValueOnce(new Error('boom'));
+        await expect(expireParkedTasks()).resolves.toEqual({ expired: 0 });
     });
 });

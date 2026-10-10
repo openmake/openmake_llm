@@ -39,6 +39,14 @@
 "status.helperMissing" = "Hilfsressourcen fehlen (Neuinstallation erforderlich)";
 "status.helperExited" = "Hilfsprozess beendet – bitte erneut verbinden";
 "status.helperLaunchFailed" = "Hilfsprozess konnte nicht gestartet werden: %@";
+/* Connection status — aus Authentifizierungsgründen getrennt */
+"status.auth.apiKeyRevoked" = "Der API key wurde widerrufen – neuen Schlüssel erstellen und in den Einstellungen eingeben";
+"status.auth.apiKeyInvalid" = "Der API key fehlt oder ist ungültig – neuen Schlüssel erstellen und in den Einstellungen eingeben";
+"status.auth.apiKeyExpired" = "Der API key ist abgelaufen – neuen Schlüssel erstellen und in den Einstellungen eingeben";
+"status.auth.apiKeyInactive" = "Der API key ist deaktiviert – wieder aktivieren oder neuen Schlüssel in den Einstellungen eingeben";
+"status.auth.accountDisabled" = "Ihr Konto wurde deaktiviert – wenden Sie sich an Ihren Administrator";
+"status.auth.accountDeleted" = "Ihr Konto wurde gelöscht – wenden Sie sich an Ihren Administrator";
+"status.auth.scopeRequired" = "Dieser API key hat keinen bridge-Bereich – Schlüssel mit bridge-Bereich erstellen und in den Einstellungen eingeben";
 
 /* Folder picker */
 "panel.title" = "Ordner für Agentenaufgaben auswählen (Sie können nacheinander mehrere Ordner hinzufügen)";

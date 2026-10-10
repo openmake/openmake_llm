@@ -12,7 +12,7 @@
  *
  * @see app/(workspace)/approvals/page.tsx
  */
-import { ApprovalArgsFull, ApprovalPreview, ApprovalSiteWrites, isMemorySaveApproval, summarizeApprovalArgs } from "./approval-args";
+import { ApprovalArgsFull, ApprovalPreview, ApprovalSiteUploads, ApprovalSiteWrites, isMemorySaveApproval, summarizeApprovalArgs } from "./approval-args";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -208,6 +208,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 onAnswerAction={(text) => setAnswers((p) => ({ ...p, [a.approvalId]: text }))} />
             ) : (
               <>
+                <ApprovalSiteUploads args={a.args} label={t("tasks.siteUploads")} />
                 <ApprovalSiteWrites args={a.args} label={t("tasks.siteWrites")} />
                 <p className="whitespace-pre-wrap break-words text-sm text-fg">{summary.text}</p>
                 <ApprovalArgsFull full={summary.full} label={t("tasks.fullArgs", { chars: summary.full?.length ?? 0 })} />

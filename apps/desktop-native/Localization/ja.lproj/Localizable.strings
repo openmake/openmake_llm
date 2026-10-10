@@ -39,6 +39,14 @@
 "status.helperMissing" = "ヘルパーのリソースがありません（再インストールが必要です）";
 "status.helperExited" = "ヘルパーが終了しました — もう一度接続してください";
 "status.helperLaunchFailed" = "ヘルパーを起動できませんでした: %@";
+/* Connection status — 認証上の理由で切断 */
+"status.auth.apiKeyRevoked" = "API key が取り消されました — 新しいキーを発行して設定に入力してください";
+"status.auth.apiKeyInvalid" = "API key がないか正しくありません — 新しいキーを発行して設定に入力してください";
+"status.auth.apiKeyExpired" = "API key の有効期限が切れました — 新しいキーを発行して設定に入力してください";
+"status.auth.apiKeyInactive" = "API key が無効になっています — キーを再度有効にするか、新しいキーを設定に入力してください";
+"status.auth.accountDisabled" = "アカウントが無効化されました — 管理者にお問い合わせください";
+"status.auth.accountDeleted" = "アカウントが削除されました — 管理者にお問い合わせください";
+"status.auth.scopeRequired" = "この API key には bridge スコープがありません — bridge スコープのキーを発行して設定に入力してください";
 
 /* フォルダ選択 */
 "panel.title" = "エージェントのタスクに接続するフォルダを選択（複数のフォルダを 1 つずつ追加できます）";

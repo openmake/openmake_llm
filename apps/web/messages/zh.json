@@ -28,6 +28,7 @@
       "organizationsAdmin": "组织管理",
       "costRatesAdmin": "成本单价",
       "bridgeDevicesAdmin": "已连接设备",
+      "agentTaskMetricsAdmin": "任务指标",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "评估记录",
       "quotaRequestsAdmin": "配额审批",
@@ -264,6 +265,7 @@
       "activate": "启用",
       "deactivate": "停用",
       "rotate": "轮换",
+      "rotateInactive": "已停用的密钥无法轮换 — 请先启用",
       "delete": "删除"
     },
     "scope": {
@@ -340,6 +342,16 @@
       "autoHint": "仅批准高风险工具 (shell/python/浏览器/删除)",
       "skipHint": "自动运行所有工具"
     },
+    "thinkingMode": {
+      "label": "推理:",
+      "off": "关闭",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "offHint": "与现在相同 — 最快",
+      "levelHint": "模型在每一步前先思考。更慢且消耗更多令牌",
+      "highHint": "最深入的推理。长篇任务可能耗时大幅增加"
+    },
     "localExec": {
       "label": "本地执行:",
       "off": "在服务器沙箱中运行",
@@ -384,6 +396,7 @@
       "procedurePreview": "查看将执行的步骤",
       "fullArgs": "查看全部内容（{chars} 个字符）",
       "siteWrites": "将发送到允许列表之外的网站",
+      "siteUploads": "将把电脑中的文件上传到此网站",
       "elicitHint": "{server} 服务器请求输入 · 字段: {fields}",
       "elicitJsonHint": "字段多于一个时请用 JSON 回答: {example}"
     },
@@ -1078,7 +1091,7 @@
       "pick": "选择回合",
       "turnOption": "回合 {turn}（{messages} 条消息）",
       "go": "分支并运行",
-      "hint": "以新任务重新执行所选回合之后的内容（工作目录重新开始）。",
+      "hint": "以新任务重新执行所选回合之后的内容。工作目录会根据服务器设置恢复到该回合的文件，或从空目录开始。",
       "failed": "分支失败：{error}"
     },
     "priorityBadge": "优先级 {priority}",
@@ -1135,6 +1148,13 @@
       "startFailed": "无法接管浏览器:{error}",
       "inputFailed": "操作未送达:{error}",
       "releaseFailed": "无法交还:{error}"
+    },
+    "thinkingBadge": "推理 {level}",
+    "thinkingLabel": "推理",
+    "thinkingLevel": {
+      "low": "低",
+      "medium": "中",
+      "high": "高"
     }
   },
   "customAgents": {
@@ -2461,6 +2481,7 @@
       "procedurePreview": "查看将执行的步骤",
       "fullArgs": "查看全部内容（{chars} 个字符）",
       "siteWrites": "将发送到允许列表之外的网站",
+      "siteUploads": "将把电脑中的文件上传到此网站",
       "assignedToMe": "已转交给我",
       "assignedAway": "已转交",
       "reassign": "转交",
@@ -2546,7 +2567,7 @@
       "EXTERNAL_MODEL_POLICY": "外部模型允许/拒绝通配 JSON。deny 与全局取并集，allow 取交集 — 组织无法解除全局拒绝。",
       "TOOL_APPROVAL_POLICY_MIN": "智能体任务审批策略下限。若比请求值更严格，则以下限为准。",
       "MCP_ALLOWED_SERVERS": "允许安装的 MCP 目录模板 id（逗号分隔）。留空 = 不限制。",
-      "BROWSER_SITE_POLICY": "此组织的浏览器站点策略。拒绝列表与全局取并集。全局有允许列表时只保留两边都有的条目；全局为空时使用组织列表。重置后跟随全局。"
+      "BROWSER_SITE_POLICY": "此组织的浏览器站点策略。拒绝列表与全局取并集。全局有允许列表时只保留两边都有的条目；全局为空时使用组织列表。清除后跟随全局。"
     },
     "history": "变更历史",
     "noHistory": "暂无变更。",
@@ -2597,6 +2618,48 @@
     "disconnectConfirm": "要断开 {email} 的“{label}”连接吗?正在进行的本地任务的请求将失败。",
     "disconnectFailed": "断开连接失败。",
     "reconnectNote": "断开连接只会关闭当前连接。若要阻止设备重新连接,请删除或停用该用户的 bridge API 密钥 — 吊销密钥也会立即断开该密钥的连接。"
+  },
+  "adminAgentTaskMetrics": {
+    "title": "任务指标",
+    "description": "按执行方式查看智能体任务的成功率、耗时、令牌和用户介入次数。统计对象为该期间内创建的任务。",
+    "period": "期间",
+    "days": "{days}天",
+    "refresh": "刷新",
+    "loadError": "无法加载指标。",
+    "empty": "该期间内没有创建任务。",
+    "summaryTitle": "按执行方式汇总",
+    "failuresTitle": "主要失败原因",
+    "noFailures": "没有失败的任务。",
+    "metric": "项目",
+    "overall": "全部",
+    "executorLocal": "本地设备",
+    "executorSandbox": "服务器沙箱",
+    "total": "任务数",
+    "completed": "已完成",
+    "failed": "失败",
+    "cancelled": "已取消",
+    "inProgress": "进行中",
+    "successRate": "成功率",
+    "durationP50": "耗时中位数",
+    "durationP95": "耗时 p95",
+    "tokenTasks": "有令牌记录的任务数",
+    "tokensAvg": "令牌平均",
+    "tokensSum": "令牌合计",
+    "cachedPromptTokensSum": "缓存命中令牌合计",
+    "approvalRequests": "审批请求",
+    "questions": "提问",
+    "deviceWaits": "设备等待",
+    "browserTakeovers": "浏览器接管",
+    "interventionsPerTask": "每任务介入",
+    "failureClass": "分类",
+    "count": "数量",
+    "notes": "成功率 = 已完成 ÷ (已完成+失败+已取消)。耗时为已结束任务从首次开始执行到结束(无执行记录时从创建时间起)。每任务介入 = (审批请求+提问+设备等待+接管) ÷ 任务数。自动批准执行的工具不计入审批请求。",
+    "thinkingTitle": "按推理级别汇总",
+    "thinkingOff": "关闭",
+    "thinkingLow": "低",
+    "thinkingMedium": "中",
+    "thinkingHigh": "高",
+    "thinkingNote": "无值的旧任务计为\"关闭\"。若服务器的 LLM_ENABLE_REASONING_EFFORT 关闭，低/中/高均按\"开启\"运行。"
   },
   "adminQuotaRequests": {
     "title": "配额超额审批",
