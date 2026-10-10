@@ -67,10 +67,15 @@ export const EXEC_ENV_ALLOWLIST_PREFIX_POSIX = ['LC_'] as const;
  * 셸 경로 탐색(exec-path)의 로그인 셸·mise 자식에만 더 넘기는 키 — 설정·데이터 "위치"만 가리킨다(비밀 아님).
  * 빼면 위치를 기본값에서 옮긴 사용자(ZDOTDIR 의 zprofile, XDG·MISE_*_DIR 의 mise 설치본)의 PATH 가 덜 잡혀 exec 가 런타임을 못 찾는다.
  * 테스트 러너 탐지·진단은 exec 와 같은 환경이어야 결과가 exec 와 어긋나지 않으므로 이 키를 더하지 않는다.
+ * MISE_* 는 mise 문서(mise.jdx.dev/directories.html, configuration.html)의 위치 변수 중 `mise bin-paths` 결과를 바꾸는 것 —
+ * MISE_GITHUB_TOKEN 같은 비밀이 같은 접두를 쓰므로 접두 매칭 없이 키를 하나씩 적는다.
  */
 export const PATH_PROBE_ENV_EXTRA_POSIX = [
     'ZDOTDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME',
     'MISE_DATA_DIR', 'MISE_CONFIG_DIR', 'MISE_CACHE_DIR', 'MISE_STATE_DIR',
+    'MISE_INSTALLS_DIR', 'MISE_INSTALL_STORE_DIR', 'MISE_PLUGINS_DIR', 'MISE_SHIMS_DIR', 'MISE_SHARED_INSTALL_DIRS',
+    'MISE_GLOBAL_CONFIG_FILE', 'MISE_GLOBAL_CONFIG_ROOT', 'MISE_SYSTEM_CONFIG_DIR', 'MISE_SYSTEM_DIR', 'MISE_SYSTEM_CONFIG_FILE',
+    'MISE_SYSTEM_DATA_DIR', 'MISE_SYSTEM_INSTALLS_DIR', 'MISE_SYSTEM_SHIMS_DIR',
 ] as const;
 export const EXEC_ENV_ALLOWLIST_WIN32 = [
     'SystemRoot', 'windir', 'SystemDrive', 'ComSpec', 'PATHEXT', 'TEMP', 'TMP', 'USERPROFILE', 'USERNAME',
