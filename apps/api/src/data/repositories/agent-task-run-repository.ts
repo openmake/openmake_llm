@@ -19,6 +19,19 @@ export interface ExecuteClaim {
     reset?: { progress: number; checkpoint: unknown | null };
 }
 
+/**
+ * 종료로 끊겨 부팅 복구가 되살릴 작업의 판정 SQL — failed('server restarted') 이고, 끊긴 지 holdParam(ms) 이 안 됐고,
+ * boot-recovery recoverTask 가 재개하는 조건(체크포인트에 대화가 있음·로컬 실행 아님)을 채운 행. 종료 알림 점검이 이 행을 건너뛴다:
+ * 정상 종료(shutdown-drain)와 비정상 종료(schema-initializer 의 좀비 정리)가 남긴 알림 표식은 복구보다 먼저 읽힐 수 있다
+ * (종료 직전의 주기 점검, 다른 서버의 점검). 복구가 claim 하면 종료 상태가 아니게 되어 대상에서 빠지고, 복구가 오지 않으면
+ * 시간이 지난 뒤 알린다. 되살리지 못하는 행(체크포인트 없음·로컬 실행)은 해당하지 않아 종전대로 바로 알린다.
+ */
+export function recoverableRestartCondition(holdParam: string): string {
+    return `(status = 'failed' AND error = 'server restarted' AND completed_at > NOW() - (${holdParam}::bigint * INTERVAL '1 millisecond')
+             AND executor IS DISTINCT FROM 'local'
+             AND CASE WHEN jsonb_typeof(checkpoint->'conversation') = 'array' THEN jsonb_array_length(checkpoint->'conversation') > 0 ELSE FALSE END)`;
+}
+
 export class AgentTaskRunRepository extends BaseRepository {
     /**
      * 실행 시작 claim(2026-10-09 점검 ①) — /execute·/resume 가 디스패치 직전에 부른다. pending/failed/cancelled 에서만

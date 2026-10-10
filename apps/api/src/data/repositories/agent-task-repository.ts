@@ -14,6 +14,7 @@ import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentTask, AgentTaskStatus, AgentTaskStep } from '../models/unified-database.types';
 import { allowedSources, AgentTaskTransitionError } from '../../services/agent-task/task-state';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
+import { recoverableRestartCondition } from './agent-task-run-repository';
 import { AGENT_TASK_PARKED_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
 import type { ParkedTaskRow } from './agent-task-park-repository';
 
@@ -105,15 +106,15 @@ export class AgentTaskRepository extends BaseRepository {
 
     /**
      * 알림을 못 보낸 종료 작업을 가져오면서 표식을 지운다(174) — 한 문장이라 여러 프로세스가 같은 행을 두 번 가져가지 않는다.
-     * graceMs: 정상 경로가 방금 쓴 행을 가로채지 않게 두는 여유. windowMs: 이보다 오래된 것은 다시 보내지 않는다.
+     * graceMs: 정상 경로가 방금 쓴 행을 가로채지 않게 두는 여유. windowMs: 이보다 오래된 것은 다시 보내지 않는다. recoveryHoldMs: 부팅 복구가 되살릴 행을 보류하는 시간(recoverableRestartCondition).
      */
-    async claimPendingTerminalNotifications(opts: { graceMs: number; windowMs: number; limit: number }): Promise<Array<Pick<AgentTask, 'id' | 'user_id' | 'goal' | 'status' | 'progress' | 'current_turn'>>> {
+    async claimPendingTerminalNotifications(opts: { graceMs: number; windowMs: number; limit: number; recoveryHoldMs: number }): Promise<Array<Pick<AgentTask, 'id' | 'user_id' | 'goal' | 'status' | 'progress' | 'current_turn'>>> {
         const result = await this.query<Pick<AgentTask, 'id' | 'user_id' | 'goal' | 'status' | 'progress' | 'current_turn'>>(
             `UPDATE agent_tasks SET terminal_notify_pending = FALSE
              WHERE id IN (
                  SELECT id FROM agent_tasks
                  WHERE terminal_notify_pending
-                   AND status IN ('completed', 'failed', 'cancelled')
+                   AND status IN ('completed', 'failed', 'cancelled') AND NOT ${recoverableRestartCondition('$4')}
                    AND updated_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')
                    AND updated_at > NOW() - ($2::bigint * INTERVAL '1 millisecond')
                  ORDER BY updated_at
@@ -121,7 +122,7 @@ export class AgentTaskRepository extends BaseRepository {
                  FOR UPDATE SKIP LOCKED
              )
              RETURNING id, user_id, goal, status, progress, current_turn`,
-            [opts.graceMs, opts.windowMs, opts.limit]);
+            [opts.graceMs, opts.windowMs, opts.limit, opts.recoveryHoldMs]);
         return result.rows;
     }
 
