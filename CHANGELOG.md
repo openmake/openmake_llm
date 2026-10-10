@@ -1,5 +1,58 @@
 # Changelog
 
+## [1.94.0](https://github.com/openmake/openmake_llm/compare/v1.93.1...v1.94.0) (2026-10-10)
+
+
+### ✨ 기능
+
+* **api:** 성공 로그인 감사 기록에 보존 기간을 둔다 ([75dcdd1](https://github.com/openmake/openmake_llm/commit/75dcdd18b0eb018c9eba4be3ceb14fa6d2578803))
+* **api:** 성공 로그인을 감사 기록에 남기고 보존 기간을 둔다 ([d3d8aff](https://github.com/openmake/openmake_llm/commit/d3d8aff182990a4edb8f9214a93ed972a22c927b))
+* **api:** 성공 로그인을 감사 기록에 남긴다 (login.succeeded) ([621657a](https://github.com/openmake/openmake_llm/commit/621657a160562b558acadb32e81435ed42cdcbb3))
+
+
+### 🐛 버그 수정
+
+* **api:** add-on 감사 action 은 기여로 등록 — Base 경계 위반 해소, 사용자 변경 action 2종 추가 ([47866b8](https://github.com/openmake/openmake_llm/commit/47866b8c032502a46a140d202c86610a40530134))
+* **api:** updateUser 감사 헬퍼의 action 을 레지스트리 타입으로 ([54bd2e1](https://github.com/openmake/openmake_llm/commit/54bd2e1da90420174b4f05818171dfc3eeba083e))
+* **api:** 감사 action 레지스트리 — logAudit action 을 union 타입으로 (안정화 PR E 1/3) ([5a99a9b](https://github.com/openmake/openmake_llm/commit/5a99a9b577d09e62d1b0e1242ca902fa544abf0b))
+* **api:** 감사 로그 조회·내보내기의 잘못된 날짜 파라미터를 400 으로 거절 ([4750bf3](https://github.com/openmake/openmake_llm/commit/4750bf3d7cb5cea1fc241476e94a2687f882d51d))
+* **api:** 감사 로그 조회의 limit/offset 을 검증 (안정화 PR E 3/3) ([dbabddd](https://github.com/openmake/openmake_llm/commit/dbabdddc5cd2e3c04a6455fb60cd106e0b39a434))
+* **api:** 감사 조회·내보내기의 잘못된 날짜 파라미터를 400 으로 거절 ([dfaa394](https://github.com/openmake/openmake_llm/commit/dfaa39432607dcf38dad55483f377b4c362ac1d4))
+* **api:** 관리자 사용자 수정(PUT /users/:id)에 감사 기록 추가 ([5eaa941](https://github.com/openmake/openmake_llm/commit/5eaa941ae4738c6c6dd07461ff7be8dfdcfe0dcb))
+* **api:** 관리자 사용자 수정에 감사 기록·역할 검증 추가 (안정화 PR E 2/3) ([241a1f6](https://github.com/openmake/openmake_llm/commit/241a1f63b4a926d99adb0a26aebb11234483215e))
+* **api:** 관리자 사용자 수정의 역할 검증·이메일 변경 감사 기록 ([82bb177](https://github.com/openmake/openmake_llm/commit/82bb1772336a273fe4e4187f884a7e97a85c1d32))
+* **api:** 마이그레이션을 statement_timeout 없는 전용 연결에서 실행 (안정화 PR D 3/3) ([2008b93](https://github.com/openmake/openmake_llm/commit/2008b935e6eb457a284db798d97e0053d91cb02d))
+* **api:** 부팅 복구 claim 은 목록을 읽을 때의 상태 그대로인 행만 잡는다 ([b6ca905](https://github.com/openmake/openmake_llm/commit/b6ca905228dee7139d771f612e95022a7ee285ec))
+* **api:** 부팅 복구가 되살릴 작업에는 "실패" 종료 알림을 보내지 않는다 ([ec0bc16](https://github.com/openmake/openmake_llm/commit/ec0bc165e91227a188ffeb41789fd0079108d099))
+* **api:** 서버 종료 때 실행 중 에이전트 작업을 중단·정리하고 복구 가능한 표식으로 남긴다 (안정화 PR D 후속) ([7b49819](https://github.com/openmake/openmake_llm/commit/7b498197e41ec9fb12fad6629eeaef46f603f654))
+* **api:** 서버 종료로 끊기는 에이전트 작업을 복구 가능한 표식으로 남기고 정리한다 ([e7c143a](https://github.com/openmake/openmake_llm/commit/e7c143a4dd677154a85ddaf0666dc2930724700b))
+* **api:** 스케줄러 중지가 등록만 하고 버리던 주기 타이머도 멈춘다 ([c094a29](https://github.com/openmake/openmake_llm/commit/c094a2946cd4fff82761d9ffec45ba01bca150e6))
+* **api:** 실행 소유권을 잡지 못해 시작하지 못한 claim 을 failed 로 닫는다 ([db77767](https://github.com/openmake/openmake_llm/commit/db7776787a18c0152e924759226c37d29d76bacc))
+* **api:** 실행 시작 claim 이 이전 종료의 error·분류·종료 시각을 지우고, 되돌릴 때 복원한다 ([627d960](https://github.com/openmake/openmake_llm/commit/627d96028567245859d4924cb19f6e6095763193))
+* **api:** 에이전트 작업 잔여 — 재실행 시 이전 오류 잔존·복구될 작업의 실패 알림·부팅 복구 claim 창 ([8900274](https://github.com/openmake/openmake_llm/commit/89002747976aeab535606d01282b8f4218dc0602))
+* **api:** 운영 진입점(cli cluster)에 종료 경로 연결·종료 순서 교정 (안정화 PR D 2/3) ([086b096](https://github.com/openmake/openmake_llm/commit/086b0964578ac0ad0099453d4603bdb49ad5b316))
+* **api:** 운영 진입점(cli cluster)이 종료 모듈을 등록한다 ([e88d201](https://github.com/openmake/openmake_llm/commit/e88d201e5373912139e0bb77bdf576bbbb4e7650))
+* **api:** 종료 경로를 모듈로 분리하고 종료 순서를 바로잡는다 ([48496cb](https://github.com/openmake/openmake_llm/commit/48496cbc085aa93b0227e309cdd9c841921bfcdd))
+* **api:** 종료 단계에 실행 중 에이전트 작업 정리를 넣는다 ([b6bee74](https://github.com/openmake/openmake_llm/commit/b6bee74ed6f22eb4713343566e4f53524f23b065))
+* **api:** 종료 단계에서 Redis 연결을 닫는다 ([d61787c](https://github.com/openmake/openmake_llm/commit/d61787cf3e837abbff29c3b233cad95dae79d8ec))
+* **api:** 종료 때 Redis 연결을 닫고 남아 있던 스케줄러 타이머도 멈춘다 ([dd57aff](https://github.com/openmake/openmake_llm/commit/dd57affe2f1a8b734a75ab23d2f4694335b15327))
+* **api:** 종료 알림 재전송·토큰 정리 부팅 타이머도 stopAllSchedulers 가 멈춘다 ([6a36b2a](https://github.com/openmake/openmake_llm/commit/6a36b2a38f4306da489b3c37017dcb32b2b0b2db))
+* **api:** 종료 알림 재전송·토큰 정리 지연 타이머도 스케줄러 중지가 멈춘다 ([#1221](https://github.com/openmake/openmake_llm/issues/1221) 후속) ([709cbf6](https://github.com/openmake/openmake_llm/commit/709cbf63f433db9374948864a0c5e668fdd76398))
+* **api:** 종료 정리 중 보류된 주차 재개를 자리 반납 직후 다시 시도한다 ([1e61ffc](https://github.com/openmake/openmake_llm/commit/1e61ffc6d213bfb71f3d1c5d79ae15c26e7d2372))
+* **api:** 주차 재개·부팅 복구가 큐에 이미 있는 작업을 claim 하지 않는다 ([eb4ec7e](https://github.com/openmake/openmake_llm/commit/eb4ec7e63ab28248da1217a0faef988b15be1d1d))
+* **api:** 주차 재개·부팅 복구가 큐에 이미 있는 작업을 claim 하지 않는다 ([#1201](https://github.com/openmake/openmake_llm/issues/1201) 후속) ([ff80098](https://github.com/openmake/openmake_llm/commit/ff800982bf0a414ca316eae39a54cbf59376ec75))
+* **api:** 주차 재개가 보류되면 자리 반납 직후 다시 시도 ([#1215](https://github.com/openmake/openmake_llm/issues/1215) 후속) ([78fdbcb](https://github.com/openmake/openmake_llm/commit/78fdbcb92992080d09c7f43e041c5759d70b7354))
+* **api:** 큐 비활성(기본) 경로에서도 같은 작업의 중복 실행·고아 claim 을 막는다 ([9dc7588](https://github.com/openmake/openmake_llm/commit/9dc75886e87858ae6763748e0668a50ea40950e9))
+* **api:** 큐가 꺼진 경로도 같은 작업의 실행·종료 정리 중 재디스패치를 duplicate 로 거절한다 ([5fb19cf](https://github.com/openmake/openmake_llm/commit/5fb19cfe4f8958907bf553118ef2ee553a9aca63))
+* **bridge:** 반쯤 죽은 연결을 감지해 재연결한다 — 생존 확인 ping·접속 시간 제한 ([094b77c](https://github.com/openmake/openmake_llm/commit/094b77c3c0c9c0317132064710209e3863563ac7))
+* **bridge:** 반쯤 죽은 연결을 감지해 재연결한다 — 생존 확인 ping·접속 시간 제한 ([9a7b6b9](https://github.com/openmake/openmake_llm/commit/9a7b6b9c87ee75513a227083579c8778ddd40fa9))
+* **bridge:** 셸 경로 탐색에 mise 위치 변수(설치본·전역/시스템 설정) 전달 ([2ac4647](https://github.com/openmake/openmake_llm/commit/2ac4647d5a572e6f939ae074d680d4d25ac7d7f4))
+* **bridge:** 셸 경로 탐색에 mise 위치 변수를 더 넘긴다 ([#1200](https://github.com/openmake/openmake_llm/issues/1200) 후속) ([7181219](https://github.com/openmake/openmake_llm/commit/7181219e9ac0db87c56cc5e5728fbf19e6e70b70))
+* **deploy:** API 앱 PM2 kill_timeout 을 종료 제한보다 길게 한다 ([2a6b3d1](https://github.com/openmake/openmake_llm/commit/2a6b3d18a34b6ed49c1ecccbf61ab64235769167))
+* **web:** 감사 화면의 필터·기간·내보내기를 서버 기록과 맞춘다 (안정화 PR E 화면) ([2f36965](https://github.com/openmake/openmake_llm/commit/2f3696528be480b67e10c0f22917d4ad646bdb0b))
+* **web:** 에이전트 작업 실패 사유에 빠진 코드 문구 추가 ([3eba086](https://github.com/openmake/openmake_llm/commit/3eba086335758c5c6d040c800acc3d4d14fd4790))
+* **web:** 에이전트 작업 실패 사유의 다음 행동 안내를 실제 상황에 맞춘다 ([1aa5b90](https://github.com/openmake/openmake_llm/commit/1aa5b90f629415967bfb310e1b44cfbcc4bc64a4))
+
 ## [1.93.1](https://github.com/openmake/openmake_llm/compare/v1.93.0...v1.93.1) (2026-10-10)
 
 
