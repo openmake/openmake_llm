@@ -1688,6 +1688,9 @@
       "action": "操作",
       "target": "目标"
     },
+    "actionsError": "无法加载操作列表。仍可查看所有日志。",
+    "loading": "正在加载审计日志。",
+    "loadError": "无法加载审计日志。",
     "empty": "没有符合条件的日志。"
   },
   "adminMetrics": {

@@ -1688,6 +1688,9 @@
       "action": "Aktion",
       "target": "Ziel"
     },
+    "actionsError": "Aktionen konnten nicht geladen werden. Alle Protokolle bleiben verfügbar.",
+    "loading": "Audit-Protokolle werden geladen.",
+    "loadError": "Audit-Protokolle konnten nicht geladen werden.",
     "empty": "Keine Protokolle entsprechen den Filtern."
   },
   "adminMetrics": {
