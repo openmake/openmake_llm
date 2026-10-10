@@ -19,6 +19,7 @@ import { success, unauthorized } from '../utils/api-response';
 import { CAPABILITY_LIMITS } from '../config/capabilities';
 import { buildAssignmentsResponse, putAssignment, deleteAssignment } from '../services/model-assignments-service';
 import { getAuditService } from '../services/AuditService';
+import type { AuditAction } from '../config/audit-actions';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('ModelAssignmentsController');
@@ -37,7 +38,7 @@ function getUserId(req: Request): string | null {
     return null;
 }
 
-async function auditChange(userId: string, action: string, details: Record<string, unknown>): Promise<void> {
+async function auditChange(userId: string, action: AuditAction, details: Record<string, unknown>): Promise<void> {
     try {
         await getAuditService().logAudit({ action, userId, resourceType: 'model_assignment', details });
     } catch (err) {

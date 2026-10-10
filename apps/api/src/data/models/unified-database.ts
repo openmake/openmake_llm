@@ -19,6 +19,7 @@ import { Pool, type PoolConfig } from 'pg';
 import { getConfig } from '../../config/env';
 import { DB_POOL_TIMEOUTS } from '../../config/timeouts';
 import { createLogger } from '../../utils/logger';
+import type { AuditAction } from '../../config/audit-actions';
 import {
     ApiKeyRepository,
     AuditRepository,
@@ -245,7 +246,7 @@ export class UnifiedDatabase {
     // ===== 감사 로그 =====
 
     async logAudit(params: {
-        action: string;
+        action: AuditAction;
         userId?: string;
         resourceType?: string;
         resourceId?: string;

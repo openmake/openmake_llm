@@ -1,4 +1,6 @@
 import { AuditService } from '../services/AuditService';
+import { AUDIT_ACTIONS } from '../config/audit-actions';
+import { createAuditSchema } from '../schemas/audit.schema';
 import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
 
 // Mock dependencies
@@ -89,14 +91,25 @@ describe('AuditService', () => {
     });
 
     describe('getDistinctActions', () => {
-        it('should return a list of unique actions', async () => {
-            const mockRows = [{ action: 'login' }, { action: 'logout' }];
+        it('레지스트리의 action 전부를 담고, DB 에만 있는 과거 action 도 함께 정렬해 돌려준다', async () => {
+            // 'login' = 레지스트리 밖 과거 기록, 'user.deleted' = 레지스트리와 중복
+            const mockRows = [{ action: 'login' }, { action: 'user.deleted' }];
             mockPool.query.mockResolvedValueOnce({ rows: mockRows });
 
             const actions = await auditService.getDistinctActions();
 
-            expect(actions).toEqual(['login', 'logout']);
+            expect(actions).toEqual([...new Set([...AUDIT_ACTIONS, 'login'])].sort());
+            expect(actions.filter((a) => a === 'user.deleted')).toHaveLength(1);
             expect(mockPool.query).toHaveBeenCalledWith(expect.stringContaining('SELECT DISTINCT action'));
+        });
+
+        it('한 번도 기록되지 않은 action 도 목록에 나온다', async () => {
+            mockPool.query.mockResolvedValueOnce({ rows: [] });
+
+            const actions = await auditService.getDistinctActions();
+
+            expect(actions).toEqual([...AUDIT_ACTIONS]);
+            expect(actions).toContain('user.role_changed');
         });
     });
 
@@ -135,7 +148,7 @@ describe('AuditService', () => {
     describe('logAudit', () => {
         it('should call db.logAudit with correct parameters', async () => {
             const input = {
-                action: 'test_action',
+                action: 'artifact_export' as const,
                 userId: 'user-1',
                 resourceType: 'file',
                 resourceId: 'file-123',
@@ -152,7 +165,18 @@ describe('AuditService', () => {
         it('should throw error if db.logAudit fails', async () => {
             mockDb.logAudit.mockRejectedValueOnce(new Error('DB Error'));
 
-            await expect(auditService.logAudit({ action: 'fail' })).rejects.toThrow('DB Error');
+            await expect(auditService.logAudit({ action: 'artifact_export' })).rejects.toThrow('DB Error');
         });
+    });
+});
+
+describe('createAuditSchema (POST /api/audit)', () => {
+    it('레지스트리에 등록된 action 은 받는다', () => {
+        expect(createAuditSchema.safeParse({ action: 'user.deleted' }).success).toBe(true);
+    });
+
+    it('미등록 action 은 거절한다', () => {
+        expect(createAuditSchema.safeParse({ action: 'user.delete' }).success).toBe(false);
+        expect(createAuditSchema.safeParse({ action: '' }).success).toBe(false);
     });
 });

@@ -34,6 +34,7 @@ import {
 } from '../config/model-roles';
 import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
 import { getAuditService } from '../services/AuditService';
+import type { AuditAction } from '../config/audit-actions';
 import { createLogger } from '../utils/logger';
 import { slotKindReason } from '../services/model-assignments-service';
 
@@ -60,7 +61,7 @@ function adminUserId(req: Request): string | undefined {
     return req.user?.id !== undefined ? String(req.user.id) : undefined;
 }
 
-async function auditChange(req: Request, action: string, details: Record<string, unknown>): Promise<void> {
+async function auditChange(req: Request, action: AuditAction, details: Record<string, unknown>): Promise<void> {
     try {
         await getAuditService().logAudit({
             action,
