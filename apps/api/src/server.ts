@@ -41,7 +41,8 @@ import { getConfig } from './config';
 import { HTTP_SERVER_TIMEOUTS, WS_LIMITS } from './config/timeouts';
 import { validateModels } from './config/model-roles';
 import { probeLocalModelAvailability } from './config/local-models';
-import { startAllSchedulers, stopAllSchedulers } from './schedulers';
+import { startAllSchedulers } from './schedulers';
+import { closeServerConnections, installGracefulShutdown } from './boot/graceful-shutdown';
 
 /**
  * 대시보드 서버 초기화 옵션
@@ -296,7 +297,7 @@ export class DashboardServer {
                     console.error(`   1. 다른 포트 사용: node dist/cli.js cluster --port ${this.port + 1}`);
                     console.error(`   2. 기존 프로세스 종료: lsof -ti:${this.port} | xargs kill -9`);
                     console.error('');
-                    this.stop();
+                    void this.stop();
                     reject(error);
                 } else {
                     console.error('서버 오류:', error);
@@ -325,13 +326,15 @@ export class DashboardServer {
 
     /**
      * 서버를 정상 종료합니다.
-     * 클러스터, WebSocket, HTTP 서버 순으로 종료합니다.
+     * 새 연결 수신을 멈추고 열린 HTTP·WebSocket 연결을 정리한 뒤(유예 후 강제 종료) 클러스터를 중지합니다.
+     * 진행 중 요청이 노드를 쓸 수 있어 클러스터는 연결이 다 닫힌 뒤에 중지합니다.
+     *
+     * @returns HTTP 서버가 완전히 닫히면 resolve (reject 하지 않음)
      */
-    stop(): void {
-        this.cluster.stop();
+    async stop(): Promise<void> {
         this.wsHandler.stopHeartbeat();
-        this.wss.close();
-        this.server.close();
+        await closeServerConnections(this.server, this.wss);
+        this.cluster.stop();
     }
 
     /**
@@ -351,108 +354,9 @@ if (require.main === module) {
     const port = getConfig().port;
     const server = new DashboardServer({ port });
 
-    // Graceful shutdown: SIGINT (Ctrl+C) + SIGTERM
-    const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 30000;
-
-    let isShuttingDown = false;
-    const gracefulShutdown = async (signal: string, exitCode: number = 0) => {
-        // 재진입 가드 — shutdown 중 발생하는 2차 unhandledRejection/추가 시그널로
-        // 동일 정리 로직이 중복 실행(DB/MCP 이중 종료)되는 것을 방지.
-        if (isShuttingDown) {
-            console.log(`\n(이미 종료 진행 중 — '${signal}' 무시)`);
-            return;
-        }
-        isShuttingDown = true;
-        console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
-
-        const shutdownWork = async () => {
-            // 도구 런타임 정리 — 외부 MCP 서버 연결 해제와 사용자 풀 graceful kill
-            try {
-                const { getToolRuntime } = await import('./runtime-ports/tool-runtime');
-                await getToolRuntime().shutdown();
-                console.log('[Shutdown] 도구 런타임 정리 완료');
-            } catch (error) {
-                console.error('[Shutdown] 도구 런타임 정리 중 오류:', error);
-            }
-
-            // DB 커넥션 풀 정상 종료
-            try {
-                const { closeDatabase } = await import('./data/models/unified-database');
-                await closeDatabase();
-                console.log('[Shutdown] DB 커넥션 풀 종료 완료');
-            } catch (error) {
-                console.error('[Shutdown] DB 커넥션 풀 종료 중 오류:', error);
-            }
-
-            // OAuth state 정리 타이머 중지
-            try {
-                const { stopOAuthCleanup } = await import('./controllers/auth.controller');
-                stopOAuthCleanup();
-                console.log('[Shutdown] OAuth 정리 타이머 중지 완료');
-            } catch (error) {
-                console.error('[Shutdown] OAuth 정리 타이머 중지 중 오류:', error);
-            }
-
-            // Analytics 타이머 중지
-            try {
-                const { getAnalyticsSystem } = await import('./monitoring/analytics');
-                getAnalyticsSystem().dispose();
-                console.log('[Shutdown] Analytics 타이머 중지 완료');
-            } catch (error) {
-                console.error('[Shutdown] Analytics 타이머 중지 중 오류:', error);
-            }
-
-            // ⚙️ P2-3: 모든 백그라운드 스케줄러 통합 중지
-            stopAllSchedulers();
-
-            // TokenBlacklist 타이머 정리
-            try {
-                const { resetTokenBlacklist } = await import('./data/models/token-blacklist');
-                resetTokenBlacklist();
-                console.log('[Shutdown] TokenBlacklist 타이머 중지 완료');
-            } catch (error) {
-                console.error('[Shutdown] TokenBlacklist 타이머 중지 중 오류:', error);
-            }
-
-            // OpenTelemetry SDK 종료 (OTel flush 보장)
-            try {
-                const { shutdownTelemetry } = await import('./observability/otel');
-                await shutdownTelemetry();
-                console.log('[Shutdown] OpenTelemetry 종료 완료');
-            } catch (error) {
-                console.error('[Shutdown] OpenTelemetry 종료 중 오류:', error);
-            }
-
-
-            server.stop();
-        };
-
-        // 30초 전체 타임아웃: 종료 작업이 지연될 경우 강제 종료
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Graceful shutdown timed out')), GRACEFUL_SHUTDOWN_TIMEOUT_MS);
-        });
-
-        try {
-            await Promise.race([shutdownWork(), timeoutPromise]);
-        } catch (error) {
-            console.error('[Shutdown] 종료 타임아웃 또는 오류 — 강제 종료:', error);
-        }
-
-        process.exit(exitCode);
-    };
-
-    // 전역 예외 핸들러 등록 (프로세스 안정성)
-    process.on('uncaughtException', (err) => {
-        console.error('[FATAL] uncaughtException:', err);
-        // 비정상 상태이므로 graceful shutdown 후 종료
-        gracefulShutdown('uncaughtException', 1);
-    });
-
-    process.on('unhandledRejection', (reason, _promise) => {
-        console.error('[FATAL] unhandledRejection — graceful shutdown 시작:', reason);
-        // 오염된 상태로 계속 실행하지 않고 graceful shutdown 후 PM2가 재시작
-        gracefulShutdown('unhandledRejection', 1);
-    });
+    // 종료 처리·전역 예외 핸들러 (SIGINT/SIGTERM/uncaughtException/unhandledRejection) —
+    // 운영 진입점(cli.ts cluster)과 같은 모듈을 쓴다.
+    installGracefulShutdown(server);
 
     server.start()
         .then(async () => {
@@ -463,7 +367,4 @@ if (require.main === module) {
             console.error('❌ 서버 시작 실패:', err);
             process.exit(1);
         });
-
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 }
