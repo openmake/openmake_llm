@@ -21,7 +21,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { success } from '../utils/api-response';
+import { success, badRequest } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { validate } from '../middlewares/validation';
 import { createAuditSchema } from '../schemas/audit.schema';
@@ -35,6 +35,27 @@ const auditService = getAuditService();
 // All audit endpoints require admin access
 router.use(requireAuth, requireAdmin);
 
+// ISO 8601 날짜(YYYY-MM-DD) 또는 날짜+시각(화면이 보내는 Date.toISOString() 형식 포함)
+const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:\d{2})?)?$/;
+
+/**
+ * startDate/endDate 쿼리 값 검증 — 그대로 SQL 파라미터가 되므로 날짜가 아니면 DB 캐스트 오류(500)
+ * @returns 미지정·빈 값은 undefined, 잘못된 값은 null
+ */
+function parseDateParam(raw: unknown): string | undefined | null {
+    if (raw === undefined || raw === '') return undefined;
+    if (typeof raw !== 'string') return null;
+    const m = ISO_DATE_PATTERN.exec(raw);
+    if (!m || Number.isNaN(Date.parse(raw))) return null;
+    // Date.parse 는 2026-02-30 같은 없는 날짜를 다음 달로 넘겨 받아들인다 — 달력에 있는 날인지 따로 확인
+    const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    const calendar = new Date(Date.UTC(year, month - 1, day));
+    if (calendar.getUTCMonth() !== month - 1 || calendar.getUTCDate() !== day) return null;
+    return raw;
+}
+
+const INVALID_DATE_MESSAGE = 'startDate/endDate 는 ISO 8601 날짜 형식이어야 합니다';
+
 // ================================================
 // 감사 로그 조회
 // ================================================
@@ -47,8 +68,12 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
      // limit 은 [1, ADMIN_MAX_LIMIT], offset 은 0 이상 — 검증이 없으면 큰 limit 은 전체 전송, 음수는 DB 오류(500)
      const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || PAGINATION.ADMIN_DEFAULT_LIMIT, 1), PAGINATION.ADMIN_MAX_LIMIT);
      const offset = Math.max(parseInt(req.query.offset as string, 10) || PAGINATION.DEFAULT_OFFSET, 0);
-     const startDate = req.query.startDate as string | undefined;
-     const endDate = req.query.endDate as string | undefined;
+     const startDate = parseDateParam(req.query.startDate);
+     const endDate = parseDateParam(req.query.endDate);
+     if (startDate === null || endDate === null) {
+         res.status(400).json(badRequest(INVALID_DATE_MESSAGE));
+         return;
+     }
      const action = req.query.action as string | undefined;
      const userId = req.query.userId as string | undefined;
 
@@ -75,8 +100,12 @@ router.get('/export', asyncHandler(async (req: Request, res: Response) => {
     // 잘못된 설정값(숫자 아님·0 이하)은 기본 상한으로 — 그대로 LIMIT 에 넘기면 DB 오류(500)
     const configuredMaxRows = parseInt(process.env.AUDIT_CSV_MAX_ROWS ?? '10000', 10);
     const maxRows = configuredMaxRows > 0 ? configuredMaxRows : 10000;
-    const startDate = req.query.startDate as string | undefined;
-    const endDate = req.query.endDate as string | undefined;
+    const startDate = parseDateParam(req.query.startDate);
+    const endDate = parseDateParam(req.query.endDate);
+    if (startDate === null || endDate === null) {
+        res.status(400).json(badRequest(INVALID_DATE_MESSAGE));
+        return;
+    }
     const action = req.query.action as string | undefined;
     const userId = req.query.userId as string | undefined;
 
