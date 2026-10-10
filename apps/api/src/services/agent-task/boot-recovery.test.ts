@@ -52,7 +52,7 @@ describe('recoverInterruptedAgentTasks — queued 고아', () => {
         interrupted.push({ ...base, status: 'queued', checkpoint: null });
         const r = await recoverInterruptedAgentTasks();
         expect(r).toEqual({ resumed: 1, failed: 0 });
-        expect(claim).toHaveBeenCalledWith('t1');
+        expect(claim).toHaveBeenCalledWith('t1', 'queued'); // 읽을 때의 상태 — 그 뒤 /execute 가 잡아 바뀐 행은 claim 이 0행이다
         expect(execute).toHaveBeenCalledTimes(1);
         const input = (execute.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
         expect(input.resume).toBeUndefined();          // 처음부터
@@ -123,7 +123,7 @@ describe('sweepExpiredTaskLeases — 소유권이 지난 작업을 가져와 이
         const r = await sweepExpiredTaskLeases();
         expect(r).toEqual({ resumed: 1, failed: 0 });
         expect(takeOver).toHaveBeenCalledWith('t1', leaseOwner(), 60_000);
-        expect(claim).toHaveBeenCalledWith('t1');
+        expect(claim).toHaveBeenCalledWith('t1', 'running');
         const input = (execute.mock.calls[0] as unknown[])[0] as { resume?: { fromTurn: number } };
         expect(input.resume?.fromTurn).toBe(3);
     });

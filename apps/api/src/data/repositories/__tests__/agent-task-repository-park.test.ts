@@ -62,3 +62,27 @@ describe('AgentTaskRepository — 주차(F16.7)', () => {
         expect(calls[1].sql).toContain(`NOT ${parkedTaskCondition('t')}`);
     });
 });
+
+// 복구 대상 목록을 읽은 뒤 /execute·/resume 가 같은 행을 잡으면(failed→queued) 복구 claim 이 그 행을 pending 으로 덮는다
+describe('AgentTaskRepository.claimAgentTaskForRecovery — 목록을 읽은 뒤 바뀐 행은 잡지 않는다', () => {
+    it('읽을 때의 상태를 넘기면 그 상태 그대로일 때만 잡는다', async () => {
+        const { pool, calls } = fakePool([{ rows: [], rowCount: 0 }]);
+        await expect(new AgentTaskRepository(pool).claimAgentTaskForRecovery('t1', 'failed')).resolves.toBe(false);
+        expect(calls[0].sql).toContain('o.prev = $2');
+        expect(calls[0].params).toEqual(['t1', 'failed']);
+    });
+});
+
+// 종료로 끊긴 작업('server restarted')은 부팅 복구가 되살릴 수 있다 — 복구보다 먼저 "실패" 알림이 나가면 안 된다
+describe('AgentTaskRepository.claimPendingTerminalNotifications — 부팅 복구가 되살릴 작업은 보류', () => {
+    it('복구 창 안의 server restarted 행 중 복구 조건(체크포인트 있음·로컬 실행 아님)을 채운 것은 가져오지 않는다', async () => {
+        const { pool, calls } = fakePool([{ rows: [], rowCount: 0 }]);
+        await new AgentTaskRepository(pool).claimPendingTerminalNotifications({ graceMs: 30_000, windowMs: 86_400_000, limit: 50, recoveryHoldMs: 900_000 });
+        const sql = calls[0].sql.replace(/\s+/g, ' ');
+        expect(sql).toContain("AND NOT (status = 'failed' AND error = 'server restarted'");
+        expect(sql).toContain("completed_at > NOW() - ($4::bigint * INTERVAL '1 millisecond')");
+        expect(sql).toContain("executor IS DISTINCT FROM 'local'");
+        expect(sql).toContain("jsonb_typeof(checkpoint->'conversation') = 'array'");
+        expect(calls[0].params).toEqual([30_000, 86_400_000, 50, 900_000]);
+    });
+});

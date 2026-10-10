@@ -70,3 +70,30 @@ describe('initSchema — 실행 소유권(176)이 있으면 다른 서버의 실
         expect(sql).not.toContain('lease_owner');
     });
 });
+
+// 종료 알림 표식(174) — 정상 종료가 남긴 'server restarted' 행은 표식을 이미 갖고 있고, 그 알림이 나간 뒤 1분 안에 다시 뜨면
+// 시간 조건만으로는 표식이 또 서서 같은 알림이 두 번 나간다. 이번 부팅이 방금 마킹한 행에만 세운다.
+describe('initSchema — 종료 알림 표식은 이번 부팅이 마킹한 작업에만 세운다', () => {
+    it('좀비 마킹이 돌려준 id 로만 표식을 세운다', async () => {
+        const calls: Array<{ sql: string; params?: unknown[] }> = [];
+        const pool = {
+            query: jest.fn(async (sql: unknown, params?: unknown[]) => {
+                calls.push({ sql: String(sql), params });
+                const marking = String(sql).includes('UPDATE agent_tasks') && String(sql).includes("error = 'server restarted', completed_at = NOW()");
+                return marking ? { rowCount: 2, rows: [{ id: 'a' }, { id: 'b' }] } : { rowCount: 0, rows: [] };
+            }),
+        } as unknown as Pool;
+        await initSchema(pool);
+        const flag = calls.find(c => c.sql.includes('terminal_notify_pending = TRUE'))!;
+        expect(flag.sql).toContain('id = ANY($1)');
+        expect(flag.sql).not.toContain("INTERVAL '1 minute'");
+        expect(flag.params).toEqual([['a', 'b']]);
+    });
+
+    it('마킹한 작업이 없으면 표식을 세우지 않는다', async () => {
+        const { pool, queries } = fakePool();
+        await initSchema(pool);
+        expect(queries.some(q => q.includes('terminal_notify_pending = TRUE'))).toBe(false);
+    });
+});
+

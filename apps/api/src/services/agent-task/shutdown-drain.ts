@@ -74,7 +74,7 @@ export async function trackAgentTaskRun(svc: AbortableRun, taskId: string, run: 
 
 /**
  * 종료로 끊긴 실행의 상태 기록 — 부팅 복구가 집는 표식으로 남긴다. 종료 알림 표식은 세우되 여기서 알리지는 않는다:
- * 복구가 다시 살리면 종료 상태가 아니게 되어 알림 대상에서 빠지고, 살리지 못하면(체크포인트 없음) 주기 점검이 알린다.
+ * 복구가 되살릴 행은 알림 점검이 복구 인정 시간 동안 건너뛰고(recoverableRestartCondition), 살리지 못하는 행(체크포인트 없음·로컬 실행)은 주기 점검이 알린다.
  * usage: 그때까지의 누적 토큰 — 재개가 이어서 센다. 절대 throw 하지 않는다.
  */
 export async function recordShutdownInterrupt(taskId: string, usage: { totalTokens: number; cachedPromptTokens?: number; cacheReportedPromptTokens?: number }): Promise<void> {

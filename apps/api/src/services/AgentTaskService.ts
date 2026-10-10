@@ -179,7 +179,7 @@ export class AgentTaskService {
         // cancel 레이스 봉쇄: 어떤 await 보다 먼저 레지스트리에 등록해 /cancel 이 항상
         // AbortController 에 도달하게 한다 (기존엔 스킬 조회 await 사이의 취소가 유실됐다).
         // 레지스트리 소유권(2026-10-09 점검 ①) — 같은 taskId 가 이미 이 프로세스에서 돌면 두 번째 인스턴스는 시작하지 않는다
-        // (DB claim·큐 중복 거부가 막지만 큐 비활성 직발사 경로의 마지막 방어). 등록을 덮어쓰면 /cancel 이 첫 루프에 못 닿는다.
+        // (DB claim·디스패치 중복 거부(큐 submit·runDirect)가 먼저 막는다 — 디스패치를 거치지 않는 호출의 방어). 등록을 덮어쓰면 /cancel 이 첫 루프에 못 닿는다.
         if (AgentTaskService.running.has(taskId)) { logger.warn(`[AgentTask] 이미 실행 중인 작업 — 두 번째 인스턴스 시작 안 함: ${taskId}`); return; }
         AgentTaskService.running.set(taskId, this);
         const lease = await beginTaskLease(taskId, () => { leaseLost = true; this.abortController.abort(); }); // 실행 소유권(176): 잃으면 루프를 멈춘다
