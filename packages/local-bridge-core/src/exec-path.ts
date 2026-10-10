@@ -4,19 +4,22 @@
  * ① 로그인 셸 PATH 캡처 ② mise 도구 경로(activate 가 zshrc 전용이라 ①에도 안 잡힘 —
  * bin-paths 직접 조회, cwd=연결 폴더라 프로젝트 버전 반영) ③ 표준 설치 경로 폴백을 병합한다.
  * 폴더 연결 시 1회 계산하고, 각 단계 실패는 다음 폴백으로 넘어간다(exec 자체를 막지 않음).
+ * 두 자식(로그인 셸·mise)에는 호스트 env 를 통째로 주지 않는다 — exec 와 같은 allowlist + 위치 변수만(사용자 rc·프로젝트 mise 설정이 비밀을 읽지 못하게).
  */
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { PATH_PROBE_TIMEOUT_MS } from './constants';
+import { PATH_PROBE_ENV_EXTRA_POSIX, PATH_PROBE_TIMEOUT_MS } from './constants';
+import { buildExecEnv } from './exec-env';
 
 export function resolveExecPath(folderRoot: string | null): string {
     // Windows — 로그인 셸·Homebrew·mise 관행이 없다. 프로세스의 PATH 를 그대로 쓴다.
     if (process.platform === 'win32') return process.env.PATH || process.env.Path || '';
     const parts: string[] = [];
+    const probeEnv = (p: string): Record<string, string> => buildExecEnv(process.env, p, process.platform, PATH_PROBE_ENV_EXTRA_POSIX);
     try {
         parts.push(...execFileSync(process.env.SHELL || '/bin/zsh', ['-lc', 'echo -n "$PATH"'],
-            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS }).trim().split(':'));
+            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, env: probeEnv(process.env.PATH || '') }).trim().split(':'));
     } catch { /* 로그인 셸 실패 → 아래 폴백만 사용 */ }
     parts.push(...(process.env.PATH || '').split(':'));
     parts.push('/opt/homebrew/bin', '/usr/local/bin',
@@ -25,7 +28,7 @@ export function resolveExecPath(folderRoot: string | null): string {
     let merged = base;
     try {
         const misePaths = execFileSync('mise', ['bin-paths'],
-            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, cwd: folderRoot || os.homedir(), env: { ...process.env, PATH: base } })
+            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, cwd: folderRoot || os.homedir(), env: probeEnv(base) })
             .trim().split('\n').filter(Boolean);
         // 프로젝트 버전이 이기도록 mise 경로를 앞에 둔다.
         merged = [...new Set([...misePaths, ...base.split(':')])].join(':');
