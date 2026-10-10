@@ -262,7 +262,7 @@ async function runRetention(): Promise<void> {
  * 서버 시작 시 한 번만 호출되어야 합니다.
  * 즉시 1회 실행 후 RETENTION_INTERVAL_MS 마다 반복 실행됩니다.
  */
-export function startDbRetention(): void {
+export function startDbRetention(): NodeJS.Timeout {
     // 서버 시작 직후 1회 즉시 실행
     void runRetention();
 
@@ -277,4 +277,5 @@ export function startDbRetention(): void {
     }
 
     logger.info(`[DbRetention] 스케줄러 시작 (주기: ${RETENTION_INTERVAL_MS / 1000 / 60}분)`);
+    return timer;
 }
