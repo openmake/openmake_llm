@@ -5,6 +5,7 @@
  * @module data/repositories/agent-task-run-repository
  */
 import { BaseRepository } from './base-repository';
+import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
 
 /** claimForExecute 가 잡은 실행 시작 claim — 디스패치가 거절되면 revertClaim 이 이것으로 되돌린다. */
 export interface ExecuteClaim {
@@ -58,6 +59,26 @@ export class AgentTaskRunRepository extends BaseRepository {
         );
         if ((r.rowCount ?? 0) === 0) return false;
         await this.recordEvent(taskId, 'queued', claim.prev, 'claim reverted');
+        return true;
+    }
+
+    /**
+     * 시작하지 못한 claim 닫기 — claim(라우트 queued·복구/주차 재개 pending) 뒤 이 프로세스가 실행을 시작하지 못했을 때
+     * (다른 서버의 살아 있는 실행 소유권 — task-lease). 호출부는 이미 'started' 로 응답했으므로 그대로 두면 실행·대기 항목
+     * 없는 claim 행이 남는다(지난 소유권 점검은 running·paused 만 본다). 아직 claim 상태일 때만 failed 로 닫아 사용자가
+     * 보고 다시 실행할 수 있게 한다 — 그 사이 다른 서버가 running 으로 올렸거나 취소됐으면 0행(false)이고 건드리지 않는다.
+     */
+    async failUnstartedClaim(taskId: string, error: string): Promise<boolean> {
+        const r = await this.query<{ prev: string }>(
+            `UPDATE agent_tasks t SET status = 'failed', error = $2, failure_class = $3, completed_at = NOW(), updated_at = NOW(), terminal_notify_pending = TRUE
+             FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $1 FOR UPDATE) o
+             WHERE t.id = o.id AND o.prev IN ('queued', 'pending')
+             RETURNING o.prev`,
+            [taskId, error, classifyAgentTaskFailure(error)],
+        );
+        const row = r.rows[0];
+        if ((r.rowCount ?? 0) === 0 || !row) return false;
+        await this.recordEvent(taskId, row.prev, 'failed', error);
         return true;
     }
 

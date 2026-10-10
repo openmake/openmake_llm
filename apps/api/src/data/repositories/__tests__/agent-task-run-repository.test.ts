@@ -91,3 +91,23 @@ describe('AgentTaskRunRepository.revertClaim', () => {
         expect(calls).toHaveLength(1);
     });
 });
+
+describe('AgentTaskRunRepository.failUnstartedClaim', () => {
+    it('아직 claim 상태(queued·pending)일 때만 failed 로 닫고 종료 알림 표식·분류·이벤트를 남긴다', async () => {
+        const { pool, calls } = fakePool([{ rows: [{ prev: 'queued' }], rowCount: 1 }, { rows: [], rowCount: 1 }]);
+        await expect(new AgentTaskRunRepository(pool).failUnstartedClaim('t1', 'lease_held_elsewhere')).resolves.toBe(true);
+        expect(calls[0].sql).toContain("SET status = 'failed'");
+        expect(calls[0].sql).toContain("o.prev IN ('queued', 'pending')");
+        expect(calls[0].sql).toContain('FOR UPDATE');
+        expect(calls[0].sql).toContain('terminal_notify_pending = TRUE');
+        expect(calls[0].sql).toContain('completed_at = NOW()');
+        expect(calls[0].params).toEqual(['t1', 'lease_held_elsewhere', 'interrupted']);
+        expect(calls[1].params).toEqual(['t1', 'queued', 'failed', 'lease_held_elsewhere']);
+    });
+
+    it('0행(다른 서버가 이미 running 으로 올림·취소됨)이면 false 이고 이벤트를 남기지 않는다', async () => {
+        const { pool, calls } = fakePool([{ rows: [], rowCount: 0 }]);
+        await expect(new AgentTaskRunRepository(pool).failUnstartedClaim('t1', 'lease_held_elsewhere')).resolves.toBe(false);
+        expect(calls).toHaveLength(1);
+    });
+});
