@@ -201,6 +201,10 @@ export class DashboardServer {
         // 스키마 마이그레이션이 완료되기 전에 API 요청을 처리하지 않도록 대기
         try {
             const { getUserManager } = await import('./data/user-manager');
+            // 스키마가 먼저다 — 관리자 계정 보장 등은 테이블이 있어야 성공한다. 스키마 초기화가
+            // 실패하면 여기서 reject 되어 아래 Fail-Fast 로 간다.
+            const { getUnifiedDatabase } = await import('./data/models/unified-database');
+            await getUnifiedDatabase().ensureReady();
             await Promise.all([
                 getConversationDB().ensureReady(),
                 getUserManager().ensureReady()
