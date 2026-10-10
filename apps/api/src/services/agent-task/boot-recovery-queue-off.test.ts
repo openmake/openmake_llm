@@ -37,6 +37,6 @@ it('큐가 꺼져 있어도, 조회 뒤 먼저 시작해 실행 중인 작업은
     finish();
     await new Promise((r) => setImmediate(r));
     await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
-    expect(claim).toHaveBeenCalledWith(task.id);
+    expect(claim).toHaveBeenCalledWith(task.id, 'running');
     expect(execute).toHaveBeenCalledTimes(1);
 });

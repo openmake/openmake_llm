@@ -70,8 +70,9 @@ async function recoverTask(
     // 'duplicate' 로 버려지고 실행 중인 작업의 행만 pending 으로 덮인다(pending→completed 는 표 밖이라 종료 기록이 거부된다).
     if (getAgentTaskQueue().has(task.id)) return 'skipped';
 
-    // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀.
-    const claimed = await taskRepo.claimAgentTaskForRecovery(task.id);
+    // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀. 읽을 때의 상태를 넘긴다: 위 확인은 이미
+    // 디스패치된 것만 잡으므로, 목록을 읽은 뒤 /execute·/resume 가 claim 만 하고 아직 디스패치 전인 행(queued)도 여기서 걸러야 한다.
+    const claimed = await taskRepo.claimAgentTaskForRecovery(task.id, task.status);
     if (!claimed) return 'skipped';
 
     const role = await resolveUserRole(db, task.user_id);

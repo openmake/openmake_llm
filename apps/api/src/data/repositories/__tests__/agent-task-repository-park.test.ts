@@ -62,3 +62,13 @@ describe('AgentTaskRepository — 주차(F16.7)', () => {
         expect(calls[1].sql).toContain(`NOT ${parkedTaskCondition('t')}`);
     });
 });
+
+// 복구 대상 목록을 읽은 뒤 /execute·/resume 가 같은 행을 잡으면(failed→queued) 복구 claim 이 그 행을 pending 으로 덮는다
+describe('AgentTaskRepository.claimAgentTaskForRecovery — 목록을 읽은 뒤 바뀐 행은 잡지 않는다', () => {
+    it('읽을 때의 상태를 넘기면 그 상태 그대로일 때만 잡는다', async () => {
+        const { pool, calls } = fakePool([{ rows: [], rowCount: 0 }]);
+        await expect(new AgentTaskRepository(pool).claimAgentTaskForRecovery('t1', 'failed')).resolves.toBe(false);
+        expect(calls[0].sql).toContain('o.prev = $2');
+        expect(calls[0].params).toEqual(['t1', 'failed']);
+    });
+});

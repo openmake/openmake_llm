@@ -524,17 +524,17 @@ export class AgentTaskRepository extends BaseRepository {
      * 복구 소유권 원자적 획득 — 복구 대상 상태인 task 만 pending 으로 전이하고 rowCount 로
      * 성공 여부 반환. 다중 프로세스가 동시에 복구를 시도해도 조건부 UPDATE 가 한 번만
      * 성공(나머지는 rowCount=0)해 이중 실행을 막는다. restart 마킹의 error/completed_at 도
-     * 함께 정리(재개 task 가 목록에서 '실패·완료시각'으로 보이지 않게).
+     * 함께 정리(재개 task 가 목록에서 '실패·완료시각'으로 보이지 않게). expectedPrev: 목록을 읽을 때의 상태 — 그 뒤 바뀐 행은 0행.
      */
-    async claimAgentTaskForRecovery(taskId: string): Promise<boolean> {
+    async claimAgentTaskForRecovery(taskId: string, expectedPrev?: string): Promise<boolean> {
         const result = await this.query<{ prev: string }>(
             `UPDATE agent_tasks t
              SET status = 'pending', error = NULL, failure_class = NULL, completed_at = NULL, updated_at = NOW()
              FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $1 FOR UPDATE) o
              WHERE t.id = o.id AND ((o.prev IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('t')})
-                OR (o.prev = 'failed' AND t.error = 'server restarted'))
+                OR (o.prev = 'failed' AND t.error = 'server restarted')) AND ($2::text IS NULL OR o.prev = $2)
              RETURNING o.prev`,
-            [taskId]
+            [taskId, expectedPrev ?? null]
         );
         if ((result.rowCount ?? 0) === 0) return false;
         await this.recordEvent(taskId, result.rows[0]?.prev, 'pending', 'boot recovery claim');
