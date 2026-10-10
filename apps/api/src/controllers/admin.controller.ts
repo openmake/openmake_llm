@@ -16,6 +16,7 @@ import { CAPACITY } from '../config/runtime-limits';
 import { validatePasswordComplexity } from '../services/AuthService';
 import { listAlertHistory, exportAlertHistoryCsv, getAlertStats, getLlmPoolStats, acknowledgeAlert } from './admin-alerts.controller';
 import { PAGINATION } from '../config/http-data-limits';
+import type { AuditAction } from '../config/audit-actions';
 
 const log = createLogger('AdminController');
 
@@ -332,6 +333,14 @@ class AdminController {
                 }
             }
 
+            // changeUserRole 과 같은 검증 — 이 경로만 임의 문자열을 DB 에 넘기던 것을 막는다.
+            if (role !== undefined && !isUserRole(role)) {
+                res.status(400).json(badRequest('유효하지 않은 역할입니다'));
+                return;
+            }
+
+            // 감사 기록은 "실제로 바뀐" 필드만 남긴다 — 수정 전 값을 먼저 읽어 둔다.
+            const before = await userManager.getUserById(userId);
             const user = await userManager.updateUser(userId, { email, role, is_active, password });
 
             if (!user) {
@@ -340,11 +349,51 @@ class AdminController {
             }
 
             log.info(`사용자 정보 수정: ${user.email}`);
+            // changeUserRole 과 같은 정책 — 이 경로로 바꿔도 같은 기록이 남아야 한다.
+            if (before && before.role !== user.role) {
+                this.auditUserChange(req, 'user.role_changed', userId, { newRole: user.role, targetEmail: user.email });
+            }
+            if (before && before.is_active !== user.is_active) {
+                this.auditUserChange(req, 'user.active_changed', userId, { isActive: user.is_active, targetEmail: user.email });
+            }
+            if (before && before.email !== user.email) {
+                this.auditUserChange(req, 'user.email_changed', userId, { previousEmail: before.email, newEmail: user.email });
+            }
+            // 비밀번호는 값·해시를 남기지 않는다 — 바꿨다는 사실만.
+            if (password !== undefined) {
+                this.auditUserChange(req, 'password.changed', userId, { targetEmail: user.email });
+            }
             res.json(success({ user }));
         } catch (error) {
             log.error('[Admin Update User] 오류:', error);
             res.status(500).json(internalError('사용자 정보 수정 실패'));
         }
+    }
+
+    /**
+     * 관리자가 다른 사용자를 수정한 사실을 감사 기록으로 남긴다.
+     * 응답을 막지 않고, 기록 실패는 경고 로그만 남긴다(changeUserRole 과 같은 정책).
+     */
+    private auditUserChange(req: Request, action: AuditAction, targetUserId: string, details: Record<string, unknown>): void {
+        void (async () => {
+            try {
+                const adminId = String('userId' in req.user! ? req.user!.userId : req.user!.id);
+                const { getAuditService } = await import('../services/AuditService');
+                await getAuditService().logAudit({
+                    action,
+                    userId: adminId,
+                    resourceType: 'user',
+                    resourceId: targetUserId,
+                    details,
+                    ipAddress: req.ip,
+                    userAgent: req.headers['user-agent'],
+                    actor: {
+                        email: 'email' in req.user! ? (req.user as { email?: string }).email : undefined,
+                        role: 'role' in req.user! ? (req.user as { role?: string }).role : undefined,
+                    },
+                });
+            } catch (e) { log.warn(`[audit] ${action} 기록 실패:`, e); }
+        })();
     }
 
     /**
