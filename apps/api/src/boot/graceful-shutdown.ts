@@ -1,0 +1,214 @@
+/**
+ * ============================================================
+ * Graceful Shutdown - 서버 종료 경로
+ * ============================================================
+ * 운영 진입점(`cli.js cluster`, PM2)과 직접 실행(`server.ts`)이 같은 종료 경로를 쓴다.
+ * 종전에는 이 로직이 server.ts 의 직접 실행 블록 안에만 있어 운영에서는 SIGTERM·예외 핸들러가
+ * 등록되지 않았다(cli 는 SIGINT 에 stop()+exit(0) 만 했다).
+ *
+ * 종료 순서:
+ *   ① 새 연결 수신 중단 + 진행 중 요청·WebSocket 정리(server.stop() — 끝날 때까지 기다린다)
+ *   ② 도구 런타임(외부 MCP 연결·사용자 풀)
+ *   ③ 타이머류(OAuth 정리, Analytics, 스케줄러, TokenBlacklist)
+ *   ④ OpenTelemetry flush
+ *   ⑤ DB 커넥션 풀 — 맨 마지막(앞 단계가 DB 를 쓸 수 있다)
+ *
+ * 실행 중인 에이전트 작업을 종료 시점에 멈추거나 소유권을 반납하는 경로는 없다 — 프로세스가 끝난 뒤
+ * 부팅 복구(services/agent-task/boot-recovery)와 지난 소유권 점검이 체크포인트에서 이어 실행한다.
+ *
+ * @module boot/graceful-shutdown
+ */
+import type { Server as HttpServer } from 'http';
+import type { WebSocketServer } from 'ws';
+
+/** 종료 전체 제한 시간. PM2 kill_timeout(ecosystem.config.js)은 이보다 길어야 한다. */
+export const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 30000;
+
+/** 진행 중 요청·WebSocket 이 스스로 끝나기를 기다리는 유예. 지나면 강제로 닫는다. */
+export const SHUTDOWN_CONNECTION_GRACE_MS = 10000;
+
+/** 종료 모듈이 쓰는 process 의 부분 — 테스트가 가짜를 주입한다 */
+export interface ShutdownProcess {
+    on(event: string, listener: (...args: unknown[]) => void): unknown;
+    exit(code?: number): unknown;
+}
+
+export interface ShutdownStep {
+    /** 로그에 쓰는 이름 */
+    name: string;
+    run: () => unknown;
+}
+
+export type GracefulShutdown = (signal: string, exitCode?: number) => Promise<void>;
+
+/**
+ * 새 연결 수신을 멈추고 열린 연결을 정리한다. http 서버가 완전히 닫히면 resolve 한다(reject 하지 않는다).
+ *
+ * - 유휴 keep-alive 연결은 바로 닫는다.
+ * - 열린 WebSocket 은 1001(going away)로 닫는다 — 클라이언트 close 로 기존 정리 경로(sockets/handler)가 돈다.
+ * - 진행 중 요청은 graceMs 동안 기다리고, 남으면 강제로 닫아 server.close 가 끝나게 한다.
+ * - listen 하지 않은 서버(EADDRINUSE 경로)는 바로 끝난다.
+ */
+export function closeServerConnections(
+    server: HttpServer,
+    wss: WebSocketServer,
+    graceMs: number = SHUTDOWN_CONNECTION_GRACE_MS,
+): Promise<void> {
+    return new Promise((resolve) => {
+        const forceTimer = setTimeout(() => {
+            for (const client of wss.clients) client.terminate();
+            server.closeAllConnections();
+        }, graceMs);
+        server.close(() => {
+            clearTimeout(forceTimer);
+            resolve();
+        });
+        wss.close();
+        for (const client of wss.clients) client.close(1001, 'server_shutdown');
+        server.closeIdleConnections();
+    });
+}
+
+/**
+ * 단계를 순서대로 실행한 뒤 프로세스를 끝내는 종료 함수를 만든다.
+ * 한 단계의 실패는 로그만 남기고 다음 단계로 간다.
+ */
+export function createGracefulShutdown(
+    steps: readonly ShutdownStep[],
+    options: { proc?: ShutdownProcess; timeoutMs?: number } = {},
+): GracefulShutdown {
+    const proc = options.proc ?? process;
+    const timeoutMs = options.timeoutMs ?? GRACEFUL_SHUTDOWN_TIMEOUT_MS;
+
+    let isShuttingDown = false;
+    return async (signal: string, exitCode: number = 0): Promise<void> => {
+        // 재진입 가드 — shutdown 중 발생하는 2차 unhandledRejection/추가 시그널로
+        // 동일 정리 로직이 중복 실행(DB/MCP 이중 종료)되는 것을 방지.
+        if (isShuttingDown) {
+            console.log(`\n(이미 종료 진행 중 — '${signal}' 무시)`);
+            return;
+        }
+        isShuttingDown = true;
+        console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
+
+        let timedOut = false;
+        const shutdownWork = async (): Promise<void> => {
+            for (const step of steps) {
+                if (timedOut) return;
+                try {
+                    await step.run();
+                    console.log(`[Shutdown] ${step.name} 완료`);
+                } catch (error) {
+                    console.error(`[Shutdown] ${step.name} 중 오류:`, error);
+                }
+            }
+        };
+
+        // 전체 타임아웃: 종료 작업이 지연될 경우 강제 종료
+        let timer: NodeJS.Timeout | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            timer = setTimeout(() => {
+                timedOut = true;
+                reject(new Error('Graceful shutdown timed out'));
+            }, timeoutMs);
+        });
+
+        try {
+            await Promise.race([shutdownWork(), timeoutPromise]);
+        } catch (error) {
+            console.error('[Shutdown] 종료 타임아웃 또는 오류 — 강제 종료:', error);
+        } finally {
+            clearTimeout(timer);
+        }
+
+        proc.exit(exitCode);
+    };
+}
+
+/** 서버 프로세스의 종료 단계 — 순서가 곧 종료 순서다(모듈 주석 참고). */
+function serverShutdownSteps(server: { stop(): Promise<void> }): ShutdownStep[] {
+    return [
+        { name: '연결 수신 중단·진행 중 연결 정리', run: () => server.stop() },
+        {
+            // 외부 MCP 서버 연결 해제와 사용자 풀 graceful kill
+            name: '도구 런타임 정리',
+            run: async () => {
+                const { getToolRuntime } = await import('../runtime-ports/tool-runtime');
+                await getToolRuntime().shutdown();
+            },
+        },
+        {
+            name: 'OAuth 정리 타이머 중지',
+            run: async () => {
+                const { stopOAuthCleanup } = await import('../controllers/auth.controller');
+                stopOAuthCleanup();
+            },
+        },
+        {
+            name: 'Analytics 타이머 중지',
+            run: async () => {
+                const { getAnalyticsSystem } = await import('../monitoring/analytics');
+                getAnalyticsSystem().dispose();
+            },
+        },
+        {
+            // ⚙️ P2-3: 모든 백그라운드 스케줄러 통합 중지
+            name: '스케줄러 중지',
+            run: async () => {
+                const { stopAllSchedulers } = await import('../schedulers');
+                stopAllSchedulers();
+            },
+        },
+        {
+            name: 'TokenBlacklist 타이머 중지',
+            run: async () => {
+                const { resetTokenBlacklist } = await import('../data/models/token-blacklist');
+                resetTokenBlacklist();
+            },
+        },
+        {
+            // OTel flush 보장
+            name: 'OpenTelemetry 종료',
+            run: async () => {
+                const { shutdownTelemetry } = await import('../observability/otel');
+                await shutdownTelemetry();
+            },
+        },
+        {
+            name: 'DB 커넥션 풀 종료',
+            run: async () => {
+                const { closeDatabase } = await import('../data/models/unified-database');
+                await closeDatabase();
+            },
+        },
+    ];
+}
+
+/**
+ * 서버의 종료 처리와 전역 예외 핸들러를 등록한다. 서버 시작 전에 부른다.
+ * SIGINT·SIGTERM 은 종료 코드 0, uncaughtException·unhandledRejection 은 1.
+ */
+export function installGracefulShutdown(
+    server: { stop(): Promise<void> },
+    proc: ShutdownProcess = process,
+): GracefulShutdown {
+    const gracefulShutdown = createGracefulShutdown(serverShutdownSteps(server), { proc });
+
+    // 전역 예외 핸들러 등록 (프로세스 안정성)
+    proc.on('uncaughtException', (err) => {
+        console.error('[FATAL] uncaughtException:', err);
+        // 비정상 상태이므로 graceful shutdown 후 종료
+        void gracefulShutdown('uncaughtException', 1);
+    });
+
+    proc.on('unhandledRejection', (reason) => {
+        console.error('[FATAL] unhandledRejection — graceful shutdown 시작:', reason);
+        // 오염된 상태로 계속 실행하지 않고 graceful shutdown 후 PM2가 재시작
+        void gracefulShutdown('unhandledRejection', 1);
+    });
+
+    proc.on('SIGINT', () => { void gracefulShutdown('SIGINT'); });
+    proc.on('SIGTERM', () => { void gracefulShutdown('SIGTERM'); });
+
+    return gracefulShutdown;
+}

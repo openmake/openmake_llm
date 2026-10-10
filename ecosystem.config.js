@@ -173,7 +173,9 @@ const apps = [{
         watch: false,
         
         // Graceful shutdown
-        kill_timeout: 10000,            // SIGKILL 전 10초 대기
+        // 앱의 종료 제한(apps/api/src/boot/graceful-shutdown.ts GRACEFUL_SHUTDOWN_TIMEOUT_MS = 30초)보다
+        // 길어야 한다 — 짧으면 정리 도중 SIGKILL 된다.
+        kill_timeout: 35000,            // SIGKILL 전 35초 대기
         listen_timeout: 15000,          // 시작 후 15초 내 ready 신호
         
         // 환경 오버라이드
