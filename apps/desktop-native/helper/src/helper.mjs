@@ -4,7 +4,10 @@
 // (CLI 와 동일 코어 — 보안 코드 재구현 금지 원칙, plan §3).
 // 이 파일은 호스트 차이만 남는다:
 //   - 인증: API key(omk_live_*) Authorization 헤더 (CLI 와 동일 계약).
-//     key 는 argv 가 아니라 env(OMK_COMPANION_API_KEY)로 받는다 — ps 인자 노출 방지.
+//     key 는 argv·env 가 아니라 stdin 첫 줄({cmd:'auth',apiKey})로 받는다 — 프로세스 시작 인자·환경은
+//     같은 사용자의 다른 프로세스가 읽을 수 있다(sysctl KERN_PROCARGS2). 읽은 뒤 process.env 에서 지워도
+//     시작 환경은 그대로 남아, 샌드박스 안의 승인된 명령이 헬퍼의 키를 읽어 낼 수 있었다(0.3.4 에서 수정).
+//     env(OMK_COMPANION_API_KEY)는 개발·하네스 전용 폴백으로만 남긴다.
 //   - confirmExec: stdio JSON-lines 로 부모(네이티브 앱)에 위임 — 비우회 사용자 확인의
 //     선택 주체는 항상 앱의 네이티브 다이얼로그(사용자)다. stdin 소실 시 'no'(fail-safe).
 //   - deviceId·샌드박스 프로파일: ~/Library/Application Support/OpenMakeCompanion
@@ -23,7 +26,8 @@
 //               {ev:'approvalPending',taskId,toolName,folder}
 //               {ev:'connected',folder} {ev:'disconnected',folder}
 //               {ev:'endpoints',webUrl,bridgeUrl,discovered} — 기동 직후 한 번(서버 주소에서 정한 연결·웹 주소)
-//   app→helper: {cmd:'connect',folder} {cmd:'disconnect',folder?}(folder 없으면 전체)
+//   app→helper: {cmd:'auth',apiKey}(기동 직후 한 번 — connect 보다 먼저)
+//               {cmd:'connect',folder} {cmd:'disconnect',folder?}(folder 없으면 전체)
 //               {cmd:'confirm',id,result:'yes'|'all'|'no'} {cmd:'clearAutoApprove'} {cmd:'quit'}
 //   status code: connecting·connected(arg=폴더명)·server_error(arg=메시지)·reconnecting·closed·idle·
 //                auth_error(arg=메시지)·api_key_required·folder_open_failed(arg=메시지)
@@ -40,7 +44,8 @@ const serverUrl = (() => {
   const i = process.argv.indexOf('--server');
   return i >= 0 ? process.argv[i + 1] : 'https://chat.openmake.cc';
 })();
-const apiKey = process.env.OMK_COMPANION_API_KEY || '';
+// 앱은 stdin 의 auth 명령으로 키를 준다. env 는 개발·하네스 전용 폴백 — 시작 환경은 다른 프로세스가 읽을 수 있다.
+let apiKey = process.env.OMK_COMPANION_API_KEY || '';
 // 읽은 즉시 지운다 — exec 자식(코어는 allowlist env 로 띄우지만)과 진단 출력 어디에도 키가 남지 않게.
 delete process.env.OMK_COMPANION_API_KEY;
 
@@ -149,6 +154,7 @@ rl.on('line', (line) => {
   let m;
   try { m = JSON.parse(line); } catch { return; }
   switch (m.cmd) {
+    case 'auth': if (typeof m.apiKey === 'string' && m.apiKey) apiKey = m.apiKey; break;
     case 'connect': if (typeof m.folder === 'string') void connectFolder(m.folder); break;
     case 'disconnect': disconnectFolder(typeof m.folder === 'string' ? m.folder : undefined); break;
     case 'confirm': {

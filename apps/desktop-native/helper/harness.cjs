@@ -69,10 +69,12 @@ const { WebSocketServer } = require('ws');
         return waitFor((f) => f.type === 'bridge_result' && f.reqId === reqId).then((f) => f.result);
     };
 
-    // 헬퍼 spawn — API key 는 env(ps 인자 비노출 계약)
+    // 헬퍼 spawn — API key 는 argv·env 가 아니라 stdin 의 auth 명령으로 준다(시작 인자·환경은 다른 프로세스가 읽을 수 있다)
+    const helperEnv = { ...process.env };
+    delete helperEnv.OMK_COMPANION_API_KEY;
     const helper = spawn(process.execPath, [
         path.join(__dirname, 'dist/helper.cjs'), '--server', `http://127.0.0.1:${port}`,
-    ], { env: { ...process.env, OMK_COMPANION_API_KEY: 'omk_live_harness' }, stdio: ['pipe', 'pipe', 'inherit'] });
+    ], { env: helperEnv, stdio: ['pipe', 'pipe', 'inherit'] });
     const events = [];
     const evWaiters = [];
     let buf = '';
@@ -101,7 +103,8 @@ const { WebSocketServer } = require('ws');
     const realFolder = fs.realpathSync(folder);
     const realFolder2 = fs.realpathSync(folder2);
 
-    // ① connect → hello: Bearer 인증, Origin 없음, 디바이스 메타
+    // ① auth(stdin) → connect → hello: Bearer 인증, Origin 없음, 디바이스 메타
+    send({ cmd: 'auth', apiKey: 'omk_live_harness' });
     send({ cmd: 'connect', folder });
     const hello = await waitFor((f) => f.type === 'bridge_hello');
     assert.equal(hello.folderName, path.basename(folder), 'hello folderName');
