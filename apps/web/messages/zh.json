@@ -1002,7 +1002,7 @@
       "device_wait_expired": "等待设备重新连接超时",
       "browser_takeover_expired": "等待交还浏览器超时",
       "interrupted_local_device": "本地设备断开连接而中断",
-      "lease_held_elsewhere": "其他服务器正在运行，未能启动",
+      "lease_held_elsewhere": "其他服务器正在运行该任务，未能启动",
       "llm_error": "模型调用出错",
       "sandbox_unavailable": "未能准备执行环境",
       "next": {
