@@ -44,8 +44,9 @@ router.use(requireAuth, requireAdmin);
  * 감사 로그 목록 조회 (관리자 전용)
  */
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
-     const limit = parseInt(req.query.limit as string, 10) || PAGINATION.ADMIN_DEFAULT_LIMIT;
-     const offset = parseInt(req.query.offset as string, 10) || PAGINATION.DEFAULT_OFFSET;
+     // limit 은 [1, ADMIN_MAX_LIMIT], offset 은 0 이상 — 검증이 없으면 큰 limit 은 전체 전송, 음수는 DB 오류(500)
+     const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || PAGINATION.ADMIN_DEFAULT_LIMIT, 1), PAGINATION.ADMIN_MAX_LIMIT);
+     const offset = Math.max(parseInt(req.query.offset as string, 10) || PAGINATION.DEFAULT_OFFSET, 0);
      const startDate = req.query.startDate as string | undefined;
      const endDate = req.query.endDate as string | undefined;
      const action = req.query.action as string | undefined;
@@ -71,7 +72,9 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
  * 출력 형식: UTF-8 BOM + CSV (Excel 한글 호환, RFC 4180 escape).
  */
 router.get('/export', asyncHandler(async (req: Request, res: Response) => {
-    const maxRows = parseInt(process.env.AUDIT_CSV_MAX_ROWS ?? '10000', 10);
+    // 잘못된 설정값(숫자 아님·0 이하)은 기본 상한으로 — 그대로 LIMIT 에 넘기면 DB 오류(500)
+    const configuredMaxRows = parseInt(process.env.AUDIT_CSV_MAX_ROWS ?? '10000', 10);
+    const maxRows = configuredMaxRows > 0 ? configuredMaxRows : 10000;
     const startDate = req.query.startDate as string | undefined;
     const endDate = req.query.endDate as string | undefined;
     const action = req.query.action as string | undefined;
@@ -129,7 +132,7 @@ router.get('/actions', asyncHandler(async (req: Request, res: Response) => {
  */
 router.get('/user/:userId', asyncHandler(async (req: Request, res: Response) => {
      const { userId } = req.params;
-     const limit = parseInt(req.query.limit as string, 10) || PAGINATION.ADMIN_DEFAULT_LIMIT;
+     const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || PAGINATION.ADMIN_DEFAULT_LIMIT, 1), PAGINATION.ADMIN_MAX_LIMIT);
      const { logs, total } = await auditService.getAuditLogs({ userId, limit });
      res.json(success({ logs, total, userId }));
 }));
