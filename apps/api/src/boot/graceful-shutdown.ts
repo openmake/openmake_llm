@@ -11,9 +11,12 @@
  *   ① 새 연결 수신 중단 + 진행 중 요청·WebSocket 정리(server.stop() — 끝날 때까지 기다린다)
  *   ② 실행 중 에이전트 작업 중단·정리 대기(상한 AGENT_TASK_DRAIN_TIMEOUT_MS) — 작업이 도구 런타임·DB 를 쓰므로 그 앞
  *   ③ 도구 런타임(외부 MCP 연결·사용자 풀)
- *   ④ 타이머류(OAuth 정리, Analytics, 스케줄러, TokenBlacklist)
- *   ⑤ OpenTelemetry flush
- *   ⑥ DB 커넥션 풀 — 맨 마지막(앞 단계가 DB 를 쓸 수 있다)
+ *   ④ 타이머류(OAuth 정리, Analytics, 스케줄러, TokenBlacklist) — 스케줄러 중지는 schedulers 가 건 주기 타이머를
+ *      전부 멈춘다(뒤 단계가 Redis·DB 를 닫는 동안 발화해 닫힌 연결을 쓰지 않게)
+ *   ⑤ Redis 연결(공용 Key-Value 저장소) — Redis 를 쓰는 요청 처리·에이전트 작업·스케줄러가 다 멈춘 뒤.
+ *      메모리 백엔드(STORAGE_BACKEND=memory)에서는 아무 일도 하지 않는다
+ *   ⑥ OpenTelemetry flush
+ *   ⑦ DB 커넥션 풀 — 맨 마지막(앞 단계가 DB 를 쓸 수 있다)
  *
  * 실행 중인 에이전트 작업은 ②에서 멈춘다(services/agent-task/shutdown-drain): 사용자 취소가 아니라 부팅 복구가 집는
  * 표식(failed + 'server restarted')으로 남기고, 실행 소유권을 반납하고 샌드박스 컨테이너를 내린다(workspace 는 남긴다).
@@ -193,6 +196,14 @@ function serverShutdownSteps(server: { stop(): Promise<void> }): ShutdownStep[] 
             run: async () => {
                 const { resetTokenBlacklist } = await import('../data/models/token-blacklist');
                 resetTokenBlacklist();
+            },
+        },
+        {
+            // 공용 Key-Value 저장소(레이트 리미터·쿼터·OAuth state·캐시)의 Redis 연결 — 메모리 백엔드면 아무 일도 없다
+            name: 'Redis 연결 종료',
+            run: async () => {
+                const { closeKeyValueStore } = await import('../storage');
+                await closeKeyValueStore();
             },
         },
         {

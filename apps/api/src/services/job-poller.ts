@@ -161,20 +161,22 @@ function defaultDeps(): PollerDeps {
 }
 
 /** 부팅: 중단된 제출 복구(항상) + poller(플래그 ON 일 때만) */
-export async function startJobRuntime(): Promise<void> {
+export async function startJobRuntime(): Promise<NodeJS.Timeout | null> {
     try {
         const n = await new JobRuntimeRepository(getPool()).recoverInterruptedSubmissions(JOB_RUNTIME.SUBMIT_RECOVERY_GRACE_MS);
         if (n > 0) logger.warn(`중단된 제출 ${n}건을 submission_unknown 으로 표시 — 자동 재제출하지 않습니다`);
     } catch (err) {
         logger.warn(`제출 복구 실패(계속): ${err instanceof Error ? err.message : String(err)}`);
     }
-    if (!JOB_RUNTIME.POLLER_ENABLED) return;
+    if (!JOB_RUNTIME.POLLER_ENABLED) return null;
     const deps = defaultDeps();
     let running = false;
-    setInterval(() => {
+    const timer = setInterval(() => {
         if (running) return;
         running = true;
         void runPollerTick(deps).catch((err: unknown) => logger.warn(`poller tick 실패: ${err instanceof Error ? err.message : String(err)}`)).finally(() => { running = false; });
-    }, JOB_RUNTIME.POLL_INTERVAL_MS).unref();
+    }, JOB_RUNTIME.POLL_INTERVAL_MS);
+    timer.unref();
     logger.info(`Job poller 시작 (owner ${deps.owner}, ${JOB_RUNTIME.POLL_INTERVAL_MS}ms)`);
+    return timer;
 }

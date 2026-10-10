@@ -15,7 +15,7 @@ jest.mock('../../services/cost/quota-reconcile-job', () => ({
     stopQuotaReconcileJob: jest.fn(),
 }));
 jest.mock('../../data/db-retention', () => ({ startDbRetention: jest.fn() }));
-jest.mock('../../utils/token-cleanup', () => ({ startPeriodicCleanup: jest.fn() }));
+jest.mock('../../utils/token-cleanup', () => ({ startPeriodicCleanup: jest.fn(), stopPeriodicCleanup: jest.fn() }));
 
 import { stopAllSchedulers } from '../index';
 import { stopQuotaReconcileJob } from '../../services/cost/quota-reconcile-job';

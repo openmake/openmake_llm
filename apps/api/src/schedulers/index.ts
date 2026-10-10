@@ -8,7 +8,7 @@
 import { startSessionCleanupScheduler, stopSessionCleanupScheduler } from '../data/conversation-db';
 import { startQuotaReconcileJob, stopQuotaReconcileJob } from '../services/cost/quota-reconcile-job';
 import { startDbRetention } from '../data/db-retention';
-import { startPeriodicCleanup } from '../utils/token-cleanup';
+import { startPeriodicCleanup, stopPeriodicCleanup } from '../utils/token-cleanup';
 import { createLogger } from '../utils/logger';
 import { CLEANUP_INTERVALS } from '../config/timeouts';
 
@@ -16,6 +16,12 @@ const logger = createLogger('Schedulers');
 
 /** 전역 타이머 관리 */
 const activeTimers: NodeJS.Timeout[] = [];
+
+/** 등록한 타이머를 stopAllSchedulers 가 멈출 수 있게 모은다. 프로세스 종료는 막지 않는다(unref). */
+function track(timer: NodeJS.Timeout): void {
+    timer.unref();
+    activeTimers.push(timer);
+}
 
 /**
  * 모든 백그라운드 스케줄러를 시작합니다.
@@ -33,7 +39,7 @@ export async function startAllSchedulers(): Promise<void> {
 
     // 2. DB 데이터 보존 정리 스케줄러 (만료 문서, 토큰, OAuth state 정리)
     try {
-        startDbRetention();
+        track(startDbRetention());
         startQuotaReconcileJob();
         logger.debug('DbRetentionScheduler 시작 완료');
     } catch (err) {
@@ -61,7 +67,7 @@ export async function startAllSchedulers(): Promise<void> {
     try {
         const { reapStaleGeneratedMedia } = await import('../services/generated-media-retention');
         reapStaleGeneratedMedia();
-        setInterval(() => { try { reapStaleGeneratedMedia(); } catch { /* noop */ } }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+        track(setInterval(() => { try { reapStaleGeneratedMedia(); } catch { /* noop */ } }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
     } catch (err) {
         logger.warn('생성 미디어 스윕 등록 실패 (계속):', err);
     }
@@ -69,7 +75,8 @@ export async function startAllSchedulers(): Promise<void> {
     // 6-c. 공통 Job Runtime — 중단된 제출 복구(항상) + 백그라운드 poller(CAPABILITY_JOB_POLLER_ENABLED 일 때만)
     try {
         const { startJobRuntime } = await import('../services/job-poller');
-        await startJobRuntime();
+        const pollerTimer = await startJobRuntime();
+        if (pollerTimer) track(pollerTimer);
     } catch (err) {
         logger.warn('Job Runtime 시작 실패 (계속):', err);
     }
@@ -81,7 +88,7 @@ export async function startAllSchedulers(): Promise<void> {
             const { reapOrphanTaskSandboxes, reapStaleWorkspaces } = await import('../services/task-sandbox/sandbox');
             await reapOrphanTaskSandboxes();
             await reapStaleWorkspaces(Date.now());
-            setInterval(() => { void reapStaleWorkspaces(Date.now()).catch(() => { /* noop */ }); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+            track(setInterval(() => { void reapStaleWorkspaces(Date.now()).catch(() => { /* noop */ }); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
             logger.debug('TaskSandbox 정리 스케줄 등록 완료');
         }
     } catch (err) {
@@ -98,7 +105,7 @@ export async function startAllSchedulers(): Promise<void> {
                 .then((r) => { if (r.requests || r.fingerprints) logger.info(`chat_requests 보존 정리: 요청 ${r.requests} · 지문 ${r.fingerprints}`); })
                 .catch(() => { /* 142 적용 전 등 — 다음 주기에 재시도 */ });
             void purge();
-            setInterval(() => { void purge(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+            track(setInterval(() => { void purge(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
         }
     } catch (err) {
         logger.warn('chat_requests 보존 정리 등록 실패(무시):', err);
@@ -119,10 +126,10 @@ export async function startAllSchedulers(): Promise<void> {
                 .then(({ rows }) => repo().insertSamples(rows)).catch(() => { /* noop */ });
             const purge = () => repo().purge(NODE_METRICS.RETENTION_DAYS).catch(() => 0);
             void scrape();
-            setInterval(() => { void scrape(); }, NODE_METRICS.POLL_MS).unref();
-            setInterval(() => { void sample(); }, NODE_METRICS.QUEUE_SAMPLE_MS).unref();
+            track(setInterval(() => { void scrape(); }, NODE_METRICS.POLL_MS));
+            track(setInterval(() => { void sample(); }, NODE_METRICS.QUEUE_SAMPLE_MS));
             void purge();
-            setInterval(() => { void purge(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+            track(setInterval(() => { void purge(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
         }
     } catch (err) {
         logger.warn('노드 지표 수집 등록 실패(무시):', err);
@@ -136,9 +143,9 @@ export async function startAllSchedulers(): Promise<void> {
         const { getAlertSystem } = await import('../monitoring/alerts');
         const { getPool } = await import('../data/models/unified-database');
         const tick = () => runSloTick(getPool(), (...a) => getAlertSystem().sendAlert(...a)).catch(() => { /* noop */ });
-        setTimeout(() => { void tick(); }, SLO_LIMITS.FIRST_TICK_DELAY_MS).unref();
-        setInterval(() => { void tick(); }, SLO_LIMITS.TICK_MS).unref();
-        setInterval(() => { void new SloRepository(getPool()).purge(SLO_LIMITS.SNAPSHOT_RETENTION_DAYS).catch(() => 0); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+        track(setTimeout(() => { void tick(); }, SLO_LIMITS.FIRST_TICK_DELAY_MS));
+        track(setInterval(() => { void tick(); }, SLO_LIMITS.TICK_MS));
+        track(setInterval(() => { void new SloRepository(getPool()).purge(SLO_LIMITS.SNAPSHOT_RETENTION_DAYS).catch(() => 0); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
     } catch (err) {
         logger.warn('SLO 평가 등록 실패(무시):', err);
     }
@@ -149,7 +156,7 @@ export async function startAllSchedulers(): Promise<void> {
         const { getPool } = await import('../data/models/unified-database');
         const purgeLlmMetrics = () => getPool().query('DELETE FROM llm_request_metrics WHERE created_at < NOW() - make_interval(days => $1)', [LLM_REQUEST_METRICS.RETENTION_DAYS])
             .catch(() => undefined);
-        setInterval(() => { void purgeLlmMetrics(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+        track(setInterval(() => { void purgeLlmMetrics(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
     } catch (err) {
         logger.warn('LLM 요청 계측 보존 정리 등록 실패(무시):', err);
     }
@@ -159,9 +166,9 @@ export async function startAllSchedulers(): Promise<void> {
         const { sweepParkedTasks, expireParkedTasks } = await import('../services/agent-task/hitl-park');
         const { AGENT_TASK_LIMITS } = await import('../config/runtime-limits');
         void sweepParkedTasks();
-        setInterval(() => { void sweepParkedTasks(); }, AGENT_TASK_LIMITS.HITL_PARK_SWEEP_MS).unref();
+        track(setInterval(() => { void sweepParkedTasks(); }, AGENT_TASK_LIMITS.HITL_PARK_SWEEP_MS));
         // 상한 초과 판정만 더 자주 — 본 스윕 주기를 기다리지 않고 실패로 바꾼다(재개 시도 빈도는 그대로)
-        setInterval(() => { void expireParkedTasks(); }, AGENT_TASK_LIMITS.HITL_PARK_EXPIRE_SWEEP_MS).unref();
+        track(setInterval(() => { void expireParkedTasks(); }, AGENT_TASK_LIMITS.HITL_PARK_EXPIRE_SWEEP_MS));
     } catch (err) {
         logger.warn('주차 스윕 등록 실패(무시):', err);
     }
@@ -172,7 +179,7 @@ export async function startAllSchedulers(): Promise<void> {
         const { AGENT_TASK_LIMITS } = await import('../config/runtime-limits');
         if (AGENT_TASK_LIMITS.LEASE_ENABLED) {
             const { sweepExpiredTaskLeases } = await import('../services/agent-task/boot-recovery');
-            setInterval(() => { void sweepExpiredTaskLeases(); }, AGENT_TASK_LIMITS.LEASE_SWEEP_MS).unref();
+            track(setInterval(() => { void sweepExpiredTaskLeases(); }, AGENT_TASK_LIMITS.LEASE_SWEEP_MS));
         }
     } catch (err) {
         logger.warn('실행 소유권 점검 등록 실패(무시):', err);
@@ -201,7 +208,8 @@ export async function startAllSchedulers(): Promise<void> {
     // 8-C. Agent Task 스케줄/반복 트리거 — 플래그 ON 시 cron/interval due 스캔(tick 주기).
     try {
         const { startAgentTaskScheduleScheduler } = await import('../services/agent-task/schedule-runner');
-        if (startAgentTaskScheduleScheduler()) logger.debug('Agent Task 스케줄러 등록 완료');
+        const scheduleTimer = startAgentTaskScheduleScheduler();
+        if (scheduleTimer) { track(scheduleTimer); logger.debug('Agent Task 스케줄러 등록 완료'); }
     } catch (err) {
         logger.warn('Agent Task 스케줄러 등록 실패(무시):', err);
     }
@@ -221,7 +229,7 @@ export async function startAllSchedulers(): Promise<void> {
             }
         };
         await sweep().catch(() => { /* noop */ });
-        setInterval(() => { void sweep().catch(() => { /* noop */ }); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+        track(setInterval(() => { void sweep().catch(() => { /* noop */ }); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
         logger.debug('Agent Task 업로드 보존 스윕 등록 완료');
     } catch (err) {
         logger.warn('Agent Task 업로드 보존 스윕 등록 실패(무시):', err);
@@ -236,7 +244,7 @@ export async function startAllSchedulers(): Promise<void> {
             const { getPool } = await import('../data/models/unified-database');
             const sweep = () => sweepAgentTaskRetention(getPool()).catch(() => { /* 항목별로 이미 로그 — 다음 주기에 재시도 */ });
             await sweep();
-            setInterval(() => { void sweep(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+            track(setInterval(() => { void sweep(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
             logger.debug('Agent Task 보존 스윕 등록 완료');
         }
     } catch (err) {
@@ -254,7 +262,7 @@ export async function startAllSchedulers(): Promise<void> {
                 if (n) logger.info(`아티팩트 실행 히스토리 ${n}건 TTL 정리`);
             };
             await sweep().catch(() => { /* noop */ });
-            setInterval(() => { void sweep().catch(() => { /* noop */ }); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+            track(setInterval(() => { void sweep().catch(() => { /* noop */ }); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS));
             logger.debug('아티팩트 실행 히스토리 TTL 스윕 등록 완료');
         }
     } catch (err) {
@@ -264,7 +272,8 @@ export async function startAllSchedulers(): Promise<void> {
     // 9. 주간 게이트 판정 리포트 — measure-first 게이트 관측 스냅샷(무-LLM, 멱등).
     try {
         const { startGateReportScheduler } = await import('../monitoring/gate-report');
-        if (startGateReportScheduler()) logger.debug('GateReportScheduler 등록 완료');
+        const gateReportTimer = startGateReportScheduler();
+        if (gateReportTimer) { track(gateReportTimer); logger.debug('GateReportScheduler 등록 완료'); }
     } catch (err) {
         logger.warn('GateReportScheduler 등록 실패(무시):', err);
     }
@@ -413,7 +422,14 @@ export function stopAllSchedulers(): void {
         logger.error('QuotaReconcileJob 중지 실패:', err);
     }
 
-    // 3. 타이머 기반 스케줄러 정리
+    // 3. 토큰 정리 주기 중지 — 역시 자체 모듈 타이머
+    try {
+        stopPeriodicCleanup();
+    } catch (err) {
+        logger.error('PeriodicCleanupScheduler 중지 실패:', err);
+    }
+
+    // 4. 타이머 기반 스케줄러 정리
     for (const timer of activeTimers) {
         clearInterval(timer);
     }
