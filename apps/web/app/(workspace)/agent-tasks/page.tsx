@@ -241,8 +241,8 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
   };
 }
 
-/** 재개 가능한 사유 — resume 버튼과 시각적으로 연결. */
-const RESUMABLE_ERROR_CODES = new Set(["max_turns_exhausted", "interrupted"]);
+/** 재개 가능한 사유 — resume 버튼과 시각적으로 연결. 실제 재개 가능 여부는 서버의 resumable(체크포인트 유무)로 함께 본다. */
+const RESUMABLE_ERROR_CODES = new Set(["max_turns_exhausted", "interrupted", "server restarted", "interrupted_local_device"]);
 
 /** 실패 사유 라벨: 알려진 코드·분류는 번역(lib/agent-task-failure), 그 외는 원문 축약(전문은 tooltip). */
 function errorReasonLabel(tr: TFn, error: string, failureClass?: string | null): string {
@@ -729,7 +729,7 @@ function TaskDetailModal({
                 >
                   {errorReasonLabel(t, detail.task.error, detail.task.failure_class)}
                 </span>
-                {RESUMABLE_ERROR_CODES.has(detail.task.error) && (
+                {RESUMABLE_ERROR_CODES.has(detail.task.error) && detail.task.resumable && (
                   <span className="text-faint">{t("errorReason.resumableHint")}</span>
                 )}
                 {/* 다음 행동 — 분류마다 한 문장(사용자 취소는 분류가 없어 생략) */}
