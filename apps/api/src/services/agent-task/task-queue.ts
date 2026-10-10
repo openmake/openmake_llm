@@ -188,7 +188,8 @@ export async function dispatchAgentTask(entry: QueueEntry): Promise<'started' | 
     const outcome = getAgentTaskQueue().submit(entry);
     // 우선순위도 남긴다 — 재시작으로 대기열이 증발해도 부팅 복구가 같은 순위로 다시 제출한다(131). 기본값은 컬럼 DEFAULT 와 같아 생략
     const priority = entry.priority && entry.priority !== AGENT_TASK_LIMITS.QUEUE_PRIORITY_DEFAULT ? { priority: entry.priority } : {};
-    if (outcome === 'queued' || 'priority' in priority) {
+    // duplicate 는 행을 건드리지 않는다 — 이 제출은 버려지므로 실행 중인 작업의 우선순위를 덮으면 안 되고, 호출부의 claim 되돌리기(updated_at 조건)도 깨진다
+    if (outcome !== 'duplicate' && (outcome === 'queued' || 'priority' in priority)) {
         await getUnifiedDatabase().updateAgentTask(entry.taskId, { ...(outcome === 'queued' ? { status: 'queued' as const } : {}), ...priority }).catch(() => { /* noop */ });
     }
     return outcome;

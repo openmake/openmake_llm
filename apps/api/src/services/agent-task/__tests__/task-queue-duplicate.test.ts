@@ -1,9 +1,11 @@
 /**
  * 같은 taskId 중복 제출 거부(2026-10-09 점검 ①) — 실행 중이든 대기 중이든 두 번째 submit 은 'duplicate' 이고 대기열에 들어가지 않는다.
  */
-jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ updateAgentTask: async () => undefined }) }));
+process.env.AGENT_TASK_QUEUE_ENABLED = 'true'; // dispatchAgentTask 가 큐를 거치게(import 전에)
+const updateAgentTask = jest.fn(async (..._a: unknown[]) => undefined);
+jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ updateAgentTask: (...a: unknown[]) => updateAgentTask(...a) }) }));
 
-import { AgentTaskQueue } from '../task-queue';
+import { AgentTaskQueue, dispatchAgentTask } from '../task-queue';
 
 function job() {
     let finish = (): void => undefined;
@@ -35,5 +37,13 @@ describe('AgentTaskQueue — taskId 중복', () => {
         q.submit({ taskId: 't1', userId: 'u1', run: a.run });
         await a.finish();
         expect(q.submit({ taskId: 't1', userId: 'u1', run: job().run })).toBe('started');
+    });
+    it('dispatchAgentTask 는 duplicate 면 행을 건드리지 않는다(우선순위를 덮지 않고, claim 되돌리기의 시각 조건도 깨지 않는다)', async () => {
+        const a = job();
+        expect(await dispatchAgentTask({ taskId: 'dup-1', userId: 'u1', priority: 5, run: a.run })).toBe('started');
+        updateAgentTask.mockClear();
+        expect(await dispatchAgentTask({ taskId: 'dup-1', userId: 'u1', priority: 7, run: job().run })).toBe('duplicate');
+        expect(updateAgentTask).not.toHaveBeenCalled();
+        await a.finish();
     });
 });

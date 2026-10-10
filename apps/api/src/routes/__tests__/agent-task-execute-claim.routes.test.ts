@@ -10,8 +10,9 @@ jest.mock('../../data/models/unified-database', () => ({
     getPool: () => ({}),
 }));
 const claimForExecute = jest.fn();
+const revertClaim = jest.fn(async () => true);
 jest.mock('../../data/repositories/agent-task-run-repository', () => ({
-    AgentTaskRunRepository: jest.fn().mockImplementation(() => ({ claimForExecute })),
+    AgentTaskRunRepository: jest.fn().mockImplementation(() => ({ claimForExecute, revertClaim })),
 }));
 const dispatchAgentTask = jest.fn();
 jest.mock('../../services/agent-task/task-queue', () => ({
@@ -38,9 +39,10 @@ function mockRes() {
 }
 const base = { id: 't1', user_id: 'u1', goal: 'g', max_turns: 5, status: 'failed', executor: null, input_files: null, input_images: null, plan: null,
     checkpoint: { conversation: [{ role: 'user', content: 'g' }], completedTurn: 1 } };
+const claim = { prev: 'failed', claimedAt: 'ts' };
 const req = (body: Record<string, unknown> = {}) => ({ params: { taskId: 't1' }, body, user: { id: 'u1', role: 'user' } });
 
-beforeEach(() => { jest.clearAllMocks(); getAgentTask.mockResolvedValue(base); claimForExecute.mockResolvedValue(true); dispatchAgentTask.mockResolvedValue('started'); });
+beforeEach(() => { jest.clearAllMocks(); getAgentTask.mockResolvedValue(base); claimForExecute.mockResolvedValue(claim); dispatchAgentTask.mockResolvedValue('started'); });
 
 describe('POST /:taskId/execute', () => {
     const execute = handler('post', '/:taskId/execute', 1);
@@ -53,7 +55,7 @@ describe('POST /:taskId/execute', () => {
         expect(dispatchAgentTask).toHaveBeenCalledTimes(1);
     });
     it('claim 0행이면 400 이고 디스패치하지 않는다(동시 /execute 의 두 번째)', async () => {
-        claimForExecute.mockResolvedValue(false);
+        claimForExecute.mockResolvedValue(null);
         const res = mockRes();
         await execute(req(), res, jest.fn());
         expect(res.statusCode).toBe(400);
@@ -74,11 +76,17 @@ describe('POST /:taskId/execute', () => {
         expect(res.body.error.message).toContain('완료');
         expect(claimForExecute).not.toHaveBeenCalled();
     });
-    it('큐가 duplicate 를 돌려주면 400', async () => {
+    it('큐가 duplicate 를 돌려주면 400 이고 claim 을 되돌린다(종료 정리 중 재시도 — queued 고아 방지)', async () => {
         dispatchAgentTask.mockResolvedValue('duplicate');
         const res = mockRes();
         await execute(req(), res, jest.fn());
         expect(res.statusCode).toBe(400);
+        expect(revertClaim).toHaveBeenCalledWith('t1', claim);
+    });
+    it('디스패치가 받아들여지면 claim 을 되돌리지 않는다', async () => {
+        const res = mockRes();
+        await execute(req(), res, jest.fn());
+        expect(revertClaim).not.toHaveBeenCalled();
     });
 });
 
@@ -92,7 +100,7 @@ describe('POST /:taskId/resume', () => {
         expect(dispatchAgentTask).toHaveBeenCalledTimes(1);
     });
     it('claim 0행이면 400·디스패치 없음', async () => {
-        claimForExecute.mockResolvedValue(false);
+        claimForExecute.mockResolvedValue(null);
         const res = mockRes();
         await resume(req(), res, jest.fn());
         expect(res.statusCode).toBe(400);
@@ -105,10 +113,11 @@ describe('POST /:taskId/resume', () => {
         expect(res.statusCode).toBe(400);
         expect(claimForExecute).not.toHaveBeenCalled();
     });
-    it('큐가 duplicate 를 돌려주면 400', async () => {
+    it('큐가 duplicate 를 돌려주면 400 이고 claim 을 되돌린다', async () => {
         dispatchAgentTask.mockResolvedValue('duplicate');
         const res = mockRes();
         await resume(req(), res, jest.fn());
         expect(res.statusCode).toBe(400);
+        expect(revertClaim).toHaveBeenCalledWith('t1', claim);
     });
 });
