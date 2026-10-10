@@ -16,6 +16,7 @@ import { CAPACITY } from '../config/runtime-limits';
 import { validatePasswordComplexity } from '../services/AuthService';
 import { listAlertHistory, exportAlertHistoryCsv, getAlertStats, getLlmPoolStats, acknowledgeAlert } from './admin-alerts.controller';
 import { PAGINATION } from '../config/http-data-limits';
+import type { AuditAction } from '../config/audit-actions';
 
 const log = createLogger('AdminController');
 
@@ -373,7 +374,7 @@ class AdminController {
      * 관리자가 다른 사용자를 수정한 사실을 감사 기록으로 남긴다.
      * 응답을 막지 않고, 기록 실패는 경고 로그만 남긴다(changeUserRole 과 같은 정책).
      */
-    private auditUserChange(req: Request, action: string, targetUserId: string, details: Record<string, unknown>): void {
+    private auditUserChange(req: Request, action: AuditAction, targetUserId: string, details: Record<string, unknown>): void {
         void (async () => {
             try {
                 const adminId = String('userId' in req.user! ? req.user!.userId : req.user!.id);
