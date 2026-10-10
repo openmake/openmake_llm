@@ -49,6 +49,7 @@ import { detectLanguage } from '../chat/language-policy';
 import { getCurrentDate } from '../utils/datetime';
 import { getConversationDB } from '../data/conversation-db';
 import { createLogger } from '../utils/logger';
+import { abortOnClientDisconnect } from '../utils/abort-on-client-disconnect';
 
 const logger = createLogger('ChatRoutes');
 const router = Router();
@@ -86,6 +87,9 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validateWithSecu
         }
     }
 
+    // 클라이언트가 응답을 기다리다 끊으면 upstream LLM 호출도 끊는다.
+    const abortSignal = abortOnClientDisconnect(res);
+
     try {
         let thinkingTrace = '';
         const result = await ChatRequestHandler.processChat({
@@ -107,6 +111,7 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validateWithSecu
             userContext,
             apiKeyId: req.apiKeyId,
             clusterManager,
+            abortSignal,
             onToken: () => { /* 일반 채팅은 스트리밍 안 함 */ },
             onThinking: (thinking: string) => { thinkingTrace += thinking; },
         });
@@ -133,6 +138,11 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validateWithSecu
             ...(pipelineInfo && { pipeline_info: pipelineInfo }),
         }));
     } catch (error) {
+        if (abortSignal.aborted) {
+            // 클라이언트 중단 — 끊긴 연결에 에러 응답·error 로그를 남기지 않는다.
+            logger.debug(`[chat] 클라이언트 연결 끊김으로 중단: ${error instanceof Error ? error.message : error}`);
+            return;
+        }
         if (error instanceof ChatRequestError) {
             res.status(error.statusCode).json(
                 error.statusCode === 403 ? forbidden(error.message) : serviceUnavailable(error.message)
@@ -175,13 +185,7 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validateWi
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no'); // BUG-R3-001: Nginx 프록시 버퍼링 방지 (실시간 스트리밍 보장)
 
-    let aborted = false;
-    const abortController = new AbortController();
-
-    req.on('close', () => {
-        aborted = true;
-        abortController.abort();
-    });
+    const abortSignal = abortOnClientDisconnect(res);
 
     try {
         const result = await ChatRequestHandler.processChat({
@@ -204,18 +208,18 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validateWi
             userContext,
             apiKeyId: req.apiKeyId,
             clusterManager,
-            abortSignal: abortController.signal,
+            abortSignal,
             onToken: (token: string) => {
-                if (aborted) return;
+                if (abortSignal.aborted) return;
                 res.write(`data: ${JSON.stringify({ token })}\n\n`);
             },
             onThinking: (thinking: string) => {
-                if (aborted) return;
+                if (abortSignal.aborted) return;
                 res.write(`data: ${JSON.stringify({ thinking })}\n\n`);
             },
         });
 
-        if (!aborted) {
+        if (!abortSignal.aborted) {
             // §10 tool_calls가 있으면 스트리밍 이벤트로 전송
             if (result.tool_calls) {
                 res.write(`data: ${JSON.stringify({ tool_calls: result.tool_calls, finish_reason: result.finish_reason })}\n\n`);
@@ -226,14 +230,16 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validateWi
         }
         res.end();
     } catch (error) {
-        if (error instanceof ChatRequestError) {
+        if (abortSignal.aborted) {
+            logger.debug(`[stream] 클라이언트 연결 끊김으로 중단: ${error instanceof Error ? error.message : error}`);
+        } else if (error instanceof ChatRequestError) {
             logger.warn(`[stream] ChatRequestError: ${error.message}`);
         } else if (error instanceof ProviderError) {
             logger.warn(`[stream] ProviderError (${error.code}): ${error.message}`);
         } else {
             logger.error('[stream] 스트리밍 처리 실패:', error);
         }
-        if (!aborted) {
+        if (!abortSignal.aborted) {
             if (error instanceof ChatRequestError) {
                 res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
             } else if (error instanceof ProviderError) {
@@ -283,10 +289,8 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
     //  한국어 사용자가 영어 답변을 받던 비대칭을 제거.)
     const userLanguage: string = req.body.userLanguage || detectLanguage(message).language;
 
-    // 사용자 중단(abort) — 클라이언트가 fetch 를 취소하면 req 가 close 되어 upstream LLM 호출도 끊는다.
-    const abortController = new AbortController();
-    let settled = false;
-    req.on('close', () => { if (!settled) abortController.abort(); });
+    // 사용자 중단(abort) — 클라이언트가 fetch 를 취소해 응답 전에 연결이 닫히면 upstream LLM 호출도 끊는다.
+    const abortSignal = abortOnClientDisconnect(res);
 
     // 모델 full id 정규화 — 프론트는 'local-llm:qwen3.6-35b-a3b' / 'anthropic:claude-...' 형식을 보낸다.
     // 'default'·미지정·prefix 없는 경우는 로컬 기본 모델로 폴백.
@@ -317,7 +321,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
                 { num_predict: STRUCTURED_MAX_OUTPUT_TOKENS },
                 undefined,
                 // 구조화 출력은 thinking 을 명시적으로 끈다 — 추론 토큰이 strict 스키마 출력 예산을 잠식하지 않게.
-                { format, signal: abortController.signal, think: false },
+                { format, signal: abortSignal, think: false },
             );
             return { text: result.content ?? '', truncated: result.metrics?.finish_reason === 'length' };
         };
@@ -341,7 +345,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
                     messages,
                     modelId: resolved.modelId,
                     maxTokens: STRUCTURED_MAX_OUTPUT_TOKENS,
-                    abortSignal: abortController.signal,
+                    abortSignal,
                     ...(responseFormat ? { responseFormat } : {}),
                 },
                 {}, // 토큰 콜백 불필요 — 누적 결과(content)만 사용
@@ -357,7 +361,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
             userLang: userLanguage,
             webSearchEnabled: req.body.webSearch === true,
             explicitlyDisabled: req.body.enabledTools?.web_search === false,
-            signal: abortController.signal,
+            signal: abortSignal,
             userId: userContext.userId,
         });
 
@@ -369,7 +373,6 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
             webContext: webSearchContext || undefined,
             currentDate: getCurrentDate(),
         });
-        settled = true;
 
         // 대화 기록 저장 (fail-open) — 원 질문 + 구조화 답변을 conversation DB 에 영속.
         // 스트리밍 경로(request-handler)와 동일한 request-persistence 헬퍼를 재사용해
@@ -413,11 +416,10 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
             ...(savedSessionId ? { sessionId: savedSessionId } : {}),
         }));
     } catch (err) {
-        settled = true;
         // 이 엔드포인트는 항상 JSON 으로 응답한다 — 글로벌 핸들러/Express 기본(비-JSON "Internal Server Error")
         // 으로 위임하지 않아, 프론트(ApiClient.JSON.parse)가 어떤 실패에도 파싱 가능한 본문을 받게 한다.
         if (res.headersSent) return; // abort 등으로 이미 응답 시작 — 중복 전송 방지
-        if (abortController.signal.aborted) return; // 클라이언트 중단 — 끊긴 연결에 에러 응답 불필요(spurious 500 방지)
+        if (abortSignal.aborted) return; // 클라이언트 중단 — 끊긴 연결에 에러 응답 불필요(spurious 500 방지)
         if (err instanceof ProviderError) {
             res.status(PROVIDER_ERROR_HTTP_STATUS[err.code] ?? 502).json({ error: err.message, code: err.code });
             return;

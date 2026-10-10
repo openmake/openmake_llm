@@ -4,8 +4,8 @@
  * 2026-09-16: REST(글로벌 errorHandler)·WS 는 code 별로 응답했지만 SSE catch 는
  * ProviderError 를 구분하지 않아 정책 차단(403)이 "스트리밍 중 오류가 발생했습니다" 로만 나갔다.
  *
- * supertest 는 요청 본문 소비 직후 req 'close' 를 발생시켜 라우트의 aborted 가드에 걸리므로
- * (실제 HTTP 클라이언트와 다름), 라우터 스택에서 핸들러를 꺼내 가짜 req/res 로 직접 호출한다.
+ * 인증·rate limit 미들웨어를 거치지 않도록 라우터 스택에서 핸들러를 꺼내 가짜 req/res 로 직접 호출한다.
+ * (라우트는 res 'close' 로 클라이언트 끊김을 본다 — 가짜 res 는 끊기지 않는 연결이다.)
  */
 import { EventEmitter } from 'events';
 import type { Request, Response } from 'express';
@@ -31,6 +31,7 @@ const invoke = async () => {
     }) as unknown as Request;
     const chunks: string[] = [];
     const res = {
+        once: jest.fn(),
         setHeader: jest.fn(),
         status: jest.fn().mockReturnThis(),
         json: jest.fn(),

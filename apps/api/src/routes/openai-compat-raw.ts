@@ -24,6 +24,7 @@ import { createClient } from '../llm/client';
 import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm/types';
 import { OpenAICompatService, type OpenAIChatCompletionRequest, type OpenAIMessage } from '../services/OpenAICompatService';
 import { createLogger } from '../utils/logger';
+import { abortOnClientDisconnect } from '../utils/abort-on-client-disconnect';
 
 const log = createLogger('OpenAICompatRaw');
 
@@ -104,9 +105,8 @@ export async function handleRawCompletion(
     const target = resolveRawTarget(body.model);
     const completionId = OpenAICompatService.generateCompletionId();
     const messages = toChatMessages(body.messages);
-    const abort = new AbortController();
     // 클라이언트가 응답을 다 받기 전에 끊으면 upstream 도 중단. (req 'close' 는 본문 소비 직후에도 나므로 res 기준)
-    res.on('close', () => { if (!res.writableEnded) abort.abort(); });
+    const abortSignal = abortOnClientDisconnect(res);
     const startedAt = Date.now();
 
     const writeChunk = (delta: { role?: string; content?: string; tool_calls?: unknown[] }, finishReason: string | null, extra?: Record<string, unknown>) => {
@@ -125,14 +125,14 @@ export async function handleRawCompletion(
 
     let result: RawResult;
     try {
-        result = await callTarget(target, messages, body, opts, abort.signal, (token) => {
-            if (body.stream === true && !abort.signal.aborted) writeChunk({ content: token }, null);
+        result = await callTarget(target, messages, body, opts, abortSignal, (token) => {
+            if (body.stream === true && !abortSignal.aborted) writeChunk({ content: token }, null);
         });
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log.warn(`raw 호출 실패 (${body.model}): ${message}`);
         if (body.stream === true) {
-            if (!abort.signal.aborted) {
+            if (!abortSignal.aborted) {
                 res.write(`data: ${JSON.stringify({ error: { message, type: 'upstream_error' } })}\n\n`);
                 res.write(OpenAICompatService.buildDoneEvent());
             }
@@ -150,7 +150,7 @@ export async function handleRawCompletion(
     log.info(`raw ${target.kind} ${body.model} ${Date.now() - startedAt}ms in=${promptTokens} out=${completionTokens} finish=${finish}`);
 
     if (body.stream === true) {
-        if (abort.signal.aborted) { res.end(); return; }
+        if (abortSignal.aborted) { res.end(); return; }
         if (result.toolCalls.length > 0) writeChunk({ tool_calls: result.toolCalls }, null);
         // 마지막 청크에 usage 동봉 (stream_options.include_usage 와 같은 위치) — 벤치가 정확 토큰 수를 읽는다
         writeChunk({}, finish, { usage });
