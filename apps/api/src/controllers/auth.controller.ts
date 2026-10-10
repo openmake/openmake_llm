@@ -20,6 +20,7 @@ import { AUTH_COOKIES } from '../config/security';
 import { validate } from '../middlewares/validation';
 import { loginSchema, registerSchema, changePasswordSchema } from '../schemas';
 import { createAuthOAuthController } from './auth-oauth.controller';
+import { auditLoginSucceeded } from './auth-login-audit';
 
 // OAuth cleanup 재수출 (server.ts에서 import하는 경로 유지)
 export { stopOAuthCleanup } from './auth-oauth.controller';
@@ -147,6 +148,8 @@ class AuthController {
                 res.status(401).json(unauthorized(result.error || '로그인에 실패했습니다'));
                 return;
             }
+
+            if (result.token && result.user) auditLoginSucceeded(req, result.user, { method: 'password' });
 
             // 모바일(iOS) 신호: returnRefreshToken=true 면 쿠키 미설정, refresh token 을 body 로 반환 (축 2)
             const mobileMode = req.body?.returnRefreshToken === true;
