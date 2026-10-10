@@ -27,6 +27,7 @@ bash ../../scripts/publish-desktop-windows.sh     # 서버 배포 폴더에 복�
 - 서버 주소는 설정에 하나만 넣는다. 앱이 그 주소의 `GET /api/desktop/config` 로 서버의 API·웹 포트를 물어 연결 주소와 웹 주소를 정한다(macOS 앱과 같은 규칙 — `packages/local-bridge-core` 의 `endpoints`).
 - 브라우저 넘겨받기·돌려주기를 서버에 알린다(0.1.3, `bridge_event` 의 `browser_control`). 서버가 `LOCAL_BRIDGE_TAKEOVER_PARK` 를 켰으면 넘겨받은 동안 작업을 주차해 실행 자리를 비운다(macOS 앱과 같은 동작).
 - 로컬 브라우저 파일 업로드(0.1.5, 허용 폴더 안의 파일만·매번 승인)와 정책 차단 표식(`policyBlock`)을 지원한다 — macOS 앱과 같은 코어(#1177 · #1178).
+- 끊긴 연결을 스스로 감지해 다시 연결한다(0.1.7 — 30초마다 ping, 75초 무응답이면 끊고 재연결, 접속 시도 30초 제한. macOS 앱과 같은 코어).
 - 에이전트가 실행하는 명령은 허용 목록의 환경변수만 물려받는다(0.1.6 — 셸 명령과 git 같은 고정 명령·worktree 탐지 모두, 코어 #1200). 앱을 띄운 환경의 다른 변수는 자식 프로세스에 넘어가지 않는다.
 - 서버가 인증 문제(키 폐기·만료·비활성, 계정 비활성·삭제, bridge 스코프 없음)로 연결을 닫으면 그 사유를 상태에 보여 주고 10분 간격으로만 다시 시도한다(0.1.4, macOS 앱과 같은 동작). 설정에서 API key 를 새로 넣으면 바로 다시 연결한다.
 - 앱은 `GET /api/desktop/latest` 의 `windows` 블록으로 새 버전을 확인하고, 받은 설치 파일의 sha256 을 대조한 뒤에만 실행한다(`src/update.mjs`).

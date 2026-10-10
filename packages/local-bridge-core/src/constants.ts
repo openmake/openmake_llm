@@ -8,6 +8,18 @@ export const MAX_BUFFER = 1024 * 1024;
 export const RECONNECT_MS = 10000;
 /** 재연결 간격 상한(ms) — 서버가 오래 내려가 있어도 이보다 드물게 두드리지 않는다. */
 export const RECONNECT_MAX_MS = 60000;
+/**
+ * 접속(핸드셰이크) 시간 제한(ms) — 응답 없는 접속 시도를 끊어 재연결 루프로 돌려보낸다.
+ * 없으면 TCP 만 맺히고 업그레이드 응답이 오지 않는 시도가 close 없이 영원히 남는다.
+ */
+export const HANDSHAKE_TIMEOUT_MS = 30000;
+/** 생존 확인 ping 간격(ms) — 디바이스가 서버로 보낸다(서버·프록시의 응답 pong 이 수신 신호). */
+export const LIVENESS_PING_MS = 30000;
+/**
+ * 이 시간(ms) 동안 서버에서 아무 프레임(메시지·ping·pong)도 오지 않으면 죽은 연결로 보고 끊는다 — ping 간격의 2.5배.
+ * 네트워크가 잠깐 끊겨 반쯤 죽은 연결은 close 가 오지 않아, 앱은 떠 있는데 서버에는 미연결로 남았다(2026-10-10 실측 34분).
+ */
+export const LIVENESS_TIMEOUT_MS = 75000;
 
 /**
  * 서버가 인증 문제로 닫은 사유 — 서버 config/local-bridge.ts 의 인증 실패 사유와 #1164·#1168 의 사유(1:1).
