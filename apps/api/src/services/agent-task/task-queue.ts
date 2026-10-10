@@ -61,7 +61,7 @@ export class AgentTaskQueue {
 
     /** 즉시 실행 가능하면 start('started'), 아니면 대기열 등록('queued'). */
     submit(entry: QueueEntry): 'started' | 'queued' | 'duplicate' {
-        if (this.active.has(entry.taskId) || this.pending.some((e) => e.taskId === entry.taskId)) {
+        if (this.has(entry.taskId)) {
             logger.warn(`[Queue] 같은 작업이 이미 실행·대기 중 — 제출 거부: ${entry.taskId}`);
             return 'duplicate';
         }
@@ -73,6 +73,14 @@ export class AgentTaskQueue {
         this.pending.push(queued);
         logger.info(`[Queue] 대기 등록: ${entry.taskId} (대기 ${this.pending.length}, 실행 ${this.globalActive})`);
         return 'queued';
+    }
+
+    /**
+     * 같은 작업이 실행 중(종료 정리 포함)이거나 대기 중인가 — submit 이 'duplicate' 로 거절하는 조건.
+     * 되돌릴 수 없는 claim(주차 재개·부팅 복구)은 claim 전에 이것으로 확인한다.
+     */
+    has(taskId: string): boolean {
+        return this.active.has(taskId) || this.pending.some((e) => e.taskId === taskId);
     }
 
     /** 대기 중인(아직 실행 전) task 를 취소로 제거. 실행 중이면 false(호출부가 AbortController 로 취소). */

@@ -20,7 +20,7 @@ import { getUnifiedDatabase, getPool } from '../../data/models/unified-database'
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import { AgentTaskApprovalRepository } from '../../data/repositories/agent-task-approval-repository';
 import { AgentTaskService, type AgentTaskInputFile } from '../AgentTaskService';
-import { dispatchAgentTask } from './task-queue';
+import { dispatchAgentTask, getAgentTaskQueue } from './task-queue';
 import { resolveUserRole } from './boot-recovery';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { getLocalBridgeRegistry } from '../local-bridge/registry';
@@ -37,7 +37,7 @@ export const AGENT_TASK_PARK_EXPIRED_ERROR = 'hitl_park_expired';
 
 /**
  * 주차 중인 작업을 재개한다. 주차가 아니거나(살아 있는 대기·이미 재개됨) 체크포인트가 없거나
- * 로컬 디바이스가 연결되지 않았으면 false(주차 유지 — 스윕이 다시 시도). 예외는 호출부로.
+ * 로컬 디바이스가 연결되지 않았거나 직전 실행이 아직 큐 자리를 쥐고 있으면 false(주차 유지 — 스윕이 다시 시도). 예외는 호출부로.
  */
 export async function resumeParkedTask(taskId: string): Promise<boolean> {
     const db = getUnifiedDatabase();
@@ -49,6 +49,12 @@ export async function resumeParkedTask(taskId: string): Promise<boolean> {
     if (!hasCheckpoint && (task.executor !== 'local' || !LOCAL_BRIDGE.DEVICE_WAIT_ENABLED)) return false;
     if (task.executor === 'local' && (!LOCAL_BRIDGE.ENABLED || !getLocalBridgeRegistry().getDevice(String(task.user_id), task.device_id ?? undefined))) {
         logger.info(`[${taskId}] 주차 재개 보류 — 로컬 디바이스 미연결(스윕이 다시 시도)`);
+        return false;
+    }
+    // 주차 표식은 실행이 큐 자리를 반납하기 전(종료 정리 중)에 남는다 — 그 창에 claim 하면 디스패치가 'duplicate' 로 버려지고
+    // 실행·대기 항목 없는 pending 행이 남는다(스윕·부팅 복구 대상도 아니다). claim 전에 막아 주차를 유지한다.
+    if (getAgentTaskQueue().has(taskId)) {
+        logger.info(`[${taskId}] 주차 재개 보류 — 직전 실행의 종료 정리가 아직 안 끝남(스윕이 다시 시도)`);
         return false;
     }
     if (!(await new AgentTaskRepository(getPool()).claimParkedTask(taskId))) return false;
@@ -81,7 +87,7 @@ export async function resumeParkedTask(taskId: string): Promise<boolean> {
             } : {}),
         }),
     });
-    logger.info(`[${taskId}] 주차 작업 재개 ${outcome === 'queued' ? '대기열 등록' : '시작'} (${hasCheckpoint ? `turn ${(cp!.completedTurn ?? 0) + 1}` : '처음부터'})`);
+    logger.info(`[${taskId}] 주차 작업 재개 ${outcome === 'queued' ? '대기열 등록' : outcome === 'duplicate' ? '생략 — 다른 경로가 먼저 제출' : '시작'} (${hasCheckpoint ? `turn ${(cp!.completedTurn ?? 0) + 1}` : '처음부터'})`);
     return true;
 }
 

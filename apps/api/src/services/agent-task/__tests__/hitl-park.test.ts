@@ -13,7 +13,8 @@ jest.mock('../../../data/repositories/agent-task-approval-repository', () => ({ 
 const execute = jest.fn(async () => undefined);
 jest.mock('../../AgentTaskService', () => ({ AgentTaskService: jest.fn().mockImplementation(() => ({ execute })) }));
 const dispatchAgentTask = jest.fn(async (e: { run: () => Promise<void> }) => { await e.run(); return 'started'; });
-jest.mock('../task-queue', () => ({ dispatchAgentTask: (e: { run: () => Promise<void> }) => dispatchAgentTask(e) }));
+const queueHas = jest.fn((_id: string) => false);
+jest.mock('../task-queue', () => ({ dispatchAgentTask: (e: { run: () => Promise<void> }) => dispatchAgentTask(e), getAgentTaskQueue: () => ({ has: queueHas }) }));
 jest.mock('../boot-recovery', () => ({ resolveUserRole: async () => 'user' }));
 let bridgeEnabled = true;
 jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { get ENABLED() { return bridgeEnabled; }, DEVICE_WAIT_ENABLED: true, DEVICE_WAIT_MAX_MS: 60_000, TAKEOVER_WAIT_MAX_MS: 30_000 } }));
@@ -30,7 +31,7 @@ const parkedTask = {
     input_files: null, input_images: null,
 };
 
-beforeEach(() => { jest.clearAllMocks(); bridgeEnabled = true; claimParkedTask.mockResolvedValue(true); });
+beforeEach(() => { jest.clearAllMocks(); bridgeEnabled = true; claimParkedTask.mockResolvedValue(true); queueHas.mockReturnValue(false); });
 
 describe('resumeParkedTask', () => {
     it('주차 작업을 claim 하고 체크포인트 다음 턴부터 같은 우선순위로 재개한다', async () => {
@@ -51,6 +52,15 @@ describe('resumeParkedTask', () => {
         getAgentTask.mockResolvedValueOnce(parkedTask);
         claimParkedTask.mockResolvedValueOnce(false);
         await expect(resumeParkedTask('t1')).resolves.toBe(false);
+        expect(dispatchAgentTask).not.toHaveBeenCalled();
+    });
+
+    it('주차 직전 실행이 아직 큐 자리를 쥐고 있으면(종료 정리 중) claim 하지 않고 주차를 유지한다 — 스윕이 다시 시도', async () => {
+        getAgentTask.mockResolvedValue(parkedTask);
+        queueHas.mockReturnValue(true);
+        await expect(resumeParkedTask('t1')).resolves.toBe(false);
+        expect(queueHas).toHaveBeenCalledWith('t1');
+        expect(claimParkedTask).not.toHaveBeenCalled();
         expect(dispatchAgentTask).not.toHaveBeenCalled();
     });
 
