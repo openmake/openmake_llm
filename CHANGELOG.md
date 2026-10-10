@@ -1,5 +1,54 @@
 # Changelog
 
+## [1.93.0](https://github.com/openmake/openmake_llm/compare/v1.92.0...v1.93.0) (2026-10-10)
+
+
+### ✨ 기능
+
+* **admin:** 감사 로그 화면 사건 드롭다운에 브라우저 정책 차단 사건 추가 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** /execute 의 thinkingLevel 을 실행에 연결하고 빈 응답도 강등으로 센다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** agent_tasks.thinking_level 칸과 저장 메서드  — 184 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 관리자 작업 지표 API·화면 — 실행 방식별 성공률·소요 시간·토큰·사용자 개입 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 실행 옵션 thinkingLevel 스키마·입력 타입 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 작업 지표에 추론 수준별 집계 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 체크포인트 분기가 추론 수준도 물려받는다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 추론 강등 규칙 — 연속 실패 임계·문구·순수 함수 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 추론 수준 저장·복원 모듈 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 턴 호출이 작업의 추론 수준을 따르고 상한 초과 연속이면 강등 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **local-bridge:** 기기가 정책으로 막은 브라우저 호출을 감사 로그에 남긴다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **local-browser:** 로컬 브라우저에서 PC 파일을 사이트에 올리는 uploadFile 액션 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **local-browser:** 파일 칸을 기다리는 동안 다른 사이트로 넘어가면 업로드하지 않는다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **web:** 에이전트 모드 입력창에 추론 수준 선택 — /execute 에 thinkingLevel ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **web:** 작업 카드·상세에 추론 수준 표시, 작업 지표에 수준별 표 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+
+
+### 🐛 버그 수정
+
+* **admin:** 조직 정책 화면의 브라우저 사이트 정책 편집기를 조직용 문구로 표시 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 브라우저 넘겨받기 상태 조회는 넘겨받을 수 없는 작업도 200 으로 답한다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 사용자가 거절한 동작은 goal judge 판정에서 제외 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 없는 extraTools 경고는 이름마다 한 번만 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 주차 대기 상한 초과를 1분 주기로 실패 처리 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 체크포인트 분기가 원 작업의 승인 정책을 물려받는다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 추론 강등이 빈 응답·무응답 감시 발동에서도 동작한다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **agent-task:** 추론 수준 리뷰 후속 — 지표 SQL 검증·executor null·저장 실패 로그·import 정리 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **api:** /execute·/resume 가 claimForExecute 로 동시 요청을 하나만 받게 게이트 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **api:** API key 인증 성공 시 마지막 사용·요청 수를 기록 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **api:** MCP 카탈로그 등록의 args·env 를 템플릿 스키마로 검증하고 제어 env 키 거부 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **api:** 로그인 리미터가 미검증 X-API-Key 헤더로 우회되지 않게 액터 키 제한 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **api:** 에이전트 작업 레지스트리가 두 번째 인스턴스를 거부하고 재개도 시작 시 취소를 존중 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **api:** 에이전트 작업 실행 시작 claim 을 조건부 UPDATE 로 추가 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **api:** 작업 큐가 같은 taskId 의 중복 제출을 duplicate 로 거부 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **api:** 카탈로그 입력 검증을 별도 모듈로 분리해 파일 길이 가드 통과 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **bridge:** exec 자식 환경을 allowlist 로 제한하고 헬퍼 API 키를 env 에서 제거 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **deps:** @modelcontextprotocol/sdk 1.32.1 로 올려 오늘 나온 high 권고 — GHSA-6qxp-vccf-f47h를 해소한다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **deps:** proxy-addr 2.0.8·source-map-js 1.2.2 로 올려 오늘 나온 audit 권고를 해소한다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **local-bridge-core:** 로딩 중 페이지의 extractText/extractHtml 결과에 loading 표시 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **local-bridge:** 인증 문제로 끊긴 브리지 연결의 사유를 앱에 보여 준다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **local-bridge:** 인증 사유로 끊긴 뒤 설정을 저장하면 같은 키라도 바로 다시 연결한다 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **web:** API 액세스 목록에 비활성 키도 불러와 다시 활성화할 수 있게 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+* **web:** 비활성 API 키 행의 순환 단추를 비활성화 ([3e89672](https://github.com/openmake/openmake_llm/commit/3e896724ce75fc0d4ffdcfbc2b3f81e3e8be2bb5))
+
 ## [1.92.0](https://github.com/openmake/openmake_llm/compare/v1.91.0...v1.92.0) (2026-10-05)
 
 
