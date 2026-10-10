@@ -14,11 +14,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { EXEC_TIMEOUT_MS, MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR } from './constants';
+import { buildExecEnv } from './exec-env';
 import type { BridgeMsg, BridgeResult } from './types';
 
 export function gitRun(args: string[], cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
     return new Promise((resolve) => {
-        execFile('git', args, { cwd, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER }, (err, stdout, stderr) => {
+        // 자식 환경은 exec 와 같은 allowlist 로 제한한다 — `git worktree add` 는 사용자 레포의 훅(post-checkout 등)을 실행한다.
+        // 여기서 쓰는 연산은 모두 로컬(rev-parse·worktree·add -N·diff·status·branch -D)이라 SSH·GPG·GIT_* 가 필요 없다.
+        execFile('git', args, { cwd, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, env: buildExecEnv(process.env, process.env.PATH ?? '') }, (err, stdout, stderr) => {
             resolve({
                 code: err ? ((err as NodeJS.ErrnoException & { code?: number }).code ?? 1) : 0,
                 stdout: String(stdout), stderr: String(stderr),

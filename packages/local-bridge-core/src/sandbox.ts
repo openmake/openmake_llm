@@ -10,6 +10,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { CACHE_SUBPATHS, GIT_PROBE_TIMEOUT_MS, SECRET_SUBPATHS, sbq, sbSub } from './constants';
+import { buildExecEnv } from './exec-env';
 
 /**
  * 연결 폴더가 git 레포(하위 폴더 포함)면 레포의 .git 절대경로, 아니면 null.
@@ -22,7 +23,8 @@ export function detectGitDir(root: string): string | null {
     try {
         return execFileSync('git', ['rev-parse', '--absolute-git-dir'],
             // stderr 를 버린다 — 기본값은 부모 터미널로 물려줘 레포가 아닌 폴더에서 git 의 "fatal: not a git repository" 가 찍혔다.
-            { cwd: root, encoding: 'utf8', timeout: GIT_PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
+            // 자식 환경은 exec 와 같은 allowlist 로 제한한다(호스트 env 의 비밀을 넘기지 않는다).
+            { cwd: root, encoding: 'utf8', timeout: GIT_PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'], env: buildExecEnv(process.env, process.env.PATH ?? '') }).trim() || null;
     } catch { return null; }
 }
 

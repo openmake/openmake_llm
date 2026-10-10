@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { TEST_RUNNER_PROBE_TIMEOUT_MS } from './constants';
+import { buildExecEnv } from './exec-env';
 
 export type TestRunnerToken = 'npm' | 'pytest' | 'go' | 'none';
 
@@ -40,10 +41,11 @@ function hasPytestMarker(dir: string): boolean {
     try { return fs.readdirSync(dir).some((n) => /^test_.*\.py$/.test(n)); } catch { return false; }
 }
 
+/** cwd 가 사용자 폴더라 그 안의 pytest.py·conftest 가 import 될 수 있다 — 자식 환경은 exec 와 같은 allowlist 로 제한한다. */
 function canImportPytest(dir: string, execPath: string): Promise<boolean> {
     return new Promise((resolve) => {
         execFile('python3', ['-c', 'import pytest'],
-            { cwd: dir, timeout: TEST_RUNNER_PROBE_TIMEOUT_MS, env: { ...process.env, PATH: execPath } },
+            { cwd: dir, timeout: TEST_RUNNER_PROBE_TIMEOUT_MS, env: buildExecEnv(process.env, execPath) },
             (err) => resolve(!err));
     });
 }
