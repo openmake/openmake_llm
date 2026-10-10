@@ -47,7 +47,7 @@ export class AgentTaskQueue {
     private globalActive = 0;
     private readonly userActive = new Map<string, number>();
     private readonly pending: QueueEntry[] = [];
-    /** 실행 중(시작~종료) taskId — 같은 작업의 중복 제출 거부(2026-10-09 점검 ①). 대기 중은 pending 에서 찾는다. */
+    /** 실행 중(시작~종료) taskId — 같은 작업의 중복 제출 거부(2026-10-09 점검 ①). 대기 중은 pending 에서 찾는다. 큐 비활성 경로(runDirect)도 여기에 든다. */
     private readonly active = new Set<string>();
     /** 최근 시작 건의 대기 시간(ms) — 오래된 것부터 버린다. */
     private readonly recentWaits: number[] = [];
@@ -73,6 +73,24 @@ export class AgentTaskQueue {
         this.pending.push(queued);
         logger.info(`[Queue] 대기 등록: ${entry.taskId} (대기 ${this.pending.length}, 실행 ${this.globalActive})`);
         return 'queued';
+    }
+
+    /**
+     * 큐 비활성(기본) 경로의 즉시 실행 — 상한·대기·집계 없이 바로 시작하되 "실행 중" 표시(active)는 큐 경로와 같이 쓴다.
+     * 그래서 has·duplicate 거절이 큐 on/off 와 무관하게 성립한다: thunk 는 AgentTaskService.execute 의 종료 정리(finally —
+     * 서비스 레지스트리를 비운 뒤 샌드박스·승인 정리)까지 끝나야 resolve 하므로, 그 전의 재시도는 여기서 걸린다.
+     * 막지 않으면 새 실행이 같은 이름의 샌드박스 컨테이너·workspace 를 만들고 이전 실행의 정리가 그것을 지운다.
+     */
+    runDirect(entry: QueueEntry): 'started' | 'duplicate' {
+        if (this.has(entry.taskId)) {
+            logger.warn(`[Queue] 같은 작업이 이미 실행(종료 정리) 중 — 실행 거부: ${entry.taskId}`);
+            return 'duplicate';
+        }
+        this.active.add(entry.taskId);
+        void entry.run()
+            .catch((e) => logger.warn(`[Queue] 실행 예외(무시): ${entry.taskId} — ${e instanceof Error ? e.message : e}`))
+            .finally(() => { this.active.delete(entry.taskId); });
+        return 'started';
     }
 
     /**
@@ -186,13 +204,10 @@ export function resolveQueuePriority(requested: unknown, isAdmin: boolean, max: 
 
 /**
  * 실행 디스패치 통합 진입점 — /execute·/resume·부팅복구가 공통 사용.
- * 큐 비활성(기본)이면 기존대로 즉시 detached 발사. 활성이면 큐 제출 후 대기 시 'queued' 로 표기.
+ * 큐 비활성(기본)이면 즉시 detached 발사(같은 작업이 아직 실행·종료 정리 중이면 'duplicate'). 활성이면 큐 제출 후 대기 시 'queued' 로 표기.
  */
 export async function dispatchAgentTask(entry: QueueEntry): Promise<'started' | 'queued' | 'duplicate'> {
-    if (!AGENT_TASK_LIMITS.QUEUE_ENABLED) {
-        void entry.run().catch((e) => logger.warn(`[Queue] 실행 예외(무시): ${entry.taskId} — ${e instanceof Error ? e.message : e}`));
-        return 'started';
-    }
+    if (!AGENT_TASK_LIMITS.QUEUE_ENABLED) return getAgentTaskQueue().runDirect(entry);
     const outcome = getAgentTaskQueue().submit(entry);
     // 우선순위도 남긴다 — 재시작으로 대기열이 증발해도 부팅 복구가 같은 순위로 다시 제출한다(131). 기본값은 컬럼 DEFAULT 와 같아 생략
     const priority = entry.priority && entry.priority !== AGENT_TASK_LIMITS.QUEUE_PRIORITY_DEFAULT ? { priority: entry.priority } : {};
