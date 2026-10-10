@@ -49,6 +49,8 @@ export class AgentTaskQueue {
     private readonly pending: QueueEntry[] = [];
     /** 실행 중(시작~종료) taskId — 같은 작업의 중복 제출 거부(2026-10-09 점검 ①). 대기 중은 pending 에서 찾는다. 큐 비활성 경로(runDirect)도 여기에 든다. */
     private readonly active = new Set<string>();
+    /** 자리 반납 뒤 한 번 실행할 재시도(taskId 당 1건) — 실행 중인 작업에만 등록되고 반납 때 지워진다. */
+    private readonly releaseRetries = new Map<string, () => unknown>();
     /** 최근 시작 건의 대기 시간(ms) — 오래된 것부터 버린다. */
     private readonly recentWaits: number[] = [];
 
@@ -89,8 +91,25 @@ export class AgentTaskQueue {
         this.active.add(entry.taskId);
         void entry.run()
             .catch((e) => logger.warn(`[Queue] 실행 예외(무시): ${entry.taskId} — ${e instanceof Error ? e.message : e}`))
-            .finally(() => { this.active.delete(entry.taskId); });
+            .finally(() => { this.active.delete(entry.taskId); this.runReleaseRetry(entry.taskId); });
         return 'started';
+    }
+
+    /**
+     * 이 작업의 실행이 자리를 반납한 직후 retry 를 한 번 실행한다 — has 때문에 보류된 주차 재개가 다음 스윕(기본 10분)까지
+     * 밀리지 않게. 실행 중(종료 정리 포함)일 때만 등록되고(아니면 무시), taskId 당 1건이라 거듭 등록해도 한 번만 돈다.
+     * retry 의 실패·예외는 로그만 남긴다(주차 스윕이 다시 본다).
+     */
+    retryAfterRelease(taskId: string, retry: () => unknown): void {
+        if (this.active.has(taskId)) this.releaseRetries.set(taskId, retry);
+    }
+
+    private runReleaseRetry(taskId: string): void {
+        const retry = this.releaseRetries.get(taskId);
+        if (!retry) return;
+        this.releaseRetries.delete(taskId);
+        void Promise.resolve().then(retry)
+            .catch((e) => logger.warn(`[Queue] 자리 반납 뒤 재시도 실패(스윕에 맡김): ${taskId} — ${e instanceof Error ? e.message : e}`));
     }
 
     /**
@@ -162,6 +181,7 @@ export class AgentTaskQueue {
                 if (next <= 0) this.userActive.delete(entry.userId);
                 else this.userActive.set(entry.userId, next);
                 this.drain();
+                this.runReleaseRetry(entry.taskId);
             });
     }
 
