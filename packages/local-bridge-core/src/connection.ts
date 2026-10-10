@@ -8,7 +8,10 @@
  * 무시한다. 알림은 검증을 통과한 것만 호스트(onNotice)에 넘길 뿐 아무 동작도 일으키지 않는다.
  */
 import WebSocket from 'ws';
-import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, AUTH_RETRY_MS, BROWSER_KIND, NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE } from './constants';
+import {
+    AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, AUTH_RETRY_MS, BROWSER_KIND, HANDSHAKE_TIMEOUT_MS, LIVENESS_PING_MS, LIVENESS_TIMEOUT_MS,
+    NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE,
+} from './constants';
 import { RequestGuard } from './request-guard';
 import { folderNameOf } from './platform';
 import type { BridgeCore } from './core';
@@ -41,6 +44,12 @@ export interface BridgeConnectionOptions {
     reconnectMaxMs?: number;
     /** 인증 사유(AUTH_CLOSE_REASONS)로 닫혔을 때의 재시도 간격(ms) — 기본 AUTH_RETRY_MS */
     authRetryMs?: number;
+    /** 접속(핸드셰이크) 시간 제한(ms) — 기본 HANDSHAKE_TIMEOUT_MS */
+    handshakeTimeoutMs?: number;
+    /** 생존 확인 ping 간격(ms) — 기본 LIVENESS_PING_MS */
+    livenessPingMs?: number;
+    /** 서버 무응답을 죽은 연결로 보는 시간(ms) — 기본 LIVENESS_TIMEOUT_MS */
+    livenessTimeoutMs?: number;
     /** 간격 분산용 난수(0 이상 1 미만) — 테스트 주입용, 기본 Math.random */
     random?: () => number;
     /** 재연결 대기를 건 직후 알림(ms) — 진단·테스트용 */
@@ -87,6 +96,7 @@ export class BridgeConnection {
     private ws: WebSocket | null = null;
     private reconnectTimer: NodeJS.Timeout | null = null;
     private openCleanup: (() => void) | null = null;
+    private livenessTimer: NodeJS.Timeout | null = null;
     private closed = false;
     /** 연속 재연결 실패 횟수 — bridge_ready 를 받으면 0 */
     private reconnectAttempt = 0;
@@ -101,6 +111,7 @@ export class BridgeConnection {
         this.closed = false;
         this.opts.core.prepare();
         const wsUrl = this.opts.serverUrl.replace(/^http/, 'ws');
+        this.stopLiveness();
         try { if (this.ws) { this.ws.removeAllListeners(); this.ws.close(); } } catch { /* noop */ }
         // headers() 실패(예: 데스크톱 세션 토큰 부재)는 소켓 생성 전이므로 재연결 루프를
         // 걸지 않고 멈춘다 — 종전 데스크톱 의미(로그인 후 사용자가 다시 연결) 보존.
@@ -112,10 +123,12 @@ export class BridgeConnection {
             this.status(msg, 'auth_error', msg);
             return;
         }
-        this.ws = new WebSocket(wsUrl, { headers });
+        const ws = new WebSocket(wsUrl, { headers, handshakeTimeout: this.opts.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS });
+        this.ws = ws;
         this.status('연결 중…', 'connecting');
         const folderName = folderNameOf(this.opts.core.folderRoot);
 
+        this.ws.on('open', () => this.startLiveness(ws));
         this.ws.on('open', () => setTimeout(() => {
             // 서버가 연결을 등록하고 메시지 리스너를 부착할 때까지 대기(라이브 확인 300ms).
             // 즉시 전송하면 리스너 부착 전 프레임이 유실돼 등록이 안 된다.
@@ -167,6 +180,7 @@ export class BridgeConnection {
         });
 
         this.ws.on('close', (code: number, reasonBuf: Buffer) => {
+            this.stopLiveness();
             this.openCleanup?.(); this.openCleanup = null;
             const reconnect = !this.closed && (this.opts.shouldReconnect?.() ?? true);
             if (!reconnect) {
@@ -189,8 +203,32 @@ export class BridgeConnection {
         this.ws.on('error', () => { /* close 가 후속 처리 */ });
     }
 
+    /**
+     * 생존 확인 — 주기적으로 ping 을 보내고, 서버에서 아무 프레임도 오지 않은 지 오래면 연결을 끊는다(close → 재연결).
+     * 반쯤 죽은 연결은 OS 가 알려 주지 않아 close 이벤트가 오지 않는다 — 여기서 끊지 않으면 재연결이 시작되지 않는다.
+     */
+    private startLiveness(ws: WebSocket): void {
+        this.stopLiveness();
+        let lastSeen = Date.now();
+        const seen = (): void => { lastSeen = Date.now(); };
+        ws.on('message', seen);
+        ws.on('ping', seen);
+        ws.on('pong', seen);
+        const timeoutMs = this.opts.livenessTimeoutMs ?? LIVENESS_TIMEOUT_MS;
+        this.livenessTimer = setInterval(() => {
+            if (Date.now() - lastSeen > timeoutMs) { try { ws.terminate(); } catch { /* noop */ } return; }
+            try { if (ws.readyState === WebSocket.OPEN) ws.ping(); } catch { /* noop */ }
+        }, this.opts.livenessPingMs ?? LIVENESS_PING_MS);
+        this.livenessTimer.unref?.();
+    }
+
+    private stopLiveness(): void {
+        if (this.livenessTimer) { clearInterval(this.livenessTimer); this.livenessTimer = null; }
+    }
+
     disconnect(): void {
         this.closed = true;
+        this.stopLiveness();
         this.reconnectAttempt = 0;
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
         this.opts.core.clearAutoApprove(); // 연결이 끊기면 일괄 승인도 회수한다(다음 연결로 새지 않게).

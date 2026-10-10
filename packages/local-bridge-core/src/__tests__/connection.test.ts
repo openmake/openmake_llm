@@ -3,6 +3,7 @@
  * hello 프레임·reqId 상관·durationMs·재연결·해제 시 일괄 승인 회수까지 실제 소켓으로 본다.
  */
 import * as fs from 'fs';
+import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
 import { WebSocketServer, type WebSocket as ServerWs } from 'ws';
@@ -22,8 +23,11 @@ class FakeServer {
     port = 0;
     connections = 0;
 
+    /** autoPong=false 면 디바이스의 ping 에 응답하지 않는다 — 반쯤 죽은 연결 흉내. */
+    constructor(private readonly autoPong = true) {}
+
     async start(): Promise<void> {
-        this.wss = new WebSocketServer({ port: 0 });
+        this.wss = new WebSocketServer({ port: 0, autoPong: this.autoPong });
         await new Promise<void>((r) => this.wss.once('listening', r));
         this.port = (this.wss.address() as { port: number }).port;
         this.wss.on('connection', (ws) => {
@@ -169,6 +173,62 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
         await new Promise((r) => setTimeout(r, 400)); // reconnectMs(100) 의 4배 대기
         expect(server.connections).toBe(before);
         expect(statuses[statuses.length - 1]).toBe('종료');
+    });
+
+    it('서버가 아무 프레임도 보내지 않으면(반쯤 죽은 연결) 스스로 끊고 재연결한다', async () => {
+        await server.stop();
+        server = new FakeServer(false);
+        await server.start();
+        const core = new BridgeCore({ folder: base, confirm: async () => 'all', sandboxProfileDir: os.tmpdir() });
+        conn = new BridgeConnection({
+            serverUrl: `http://127.0.0.1:${server.port}`, core, deviceId: 'test-device-1', label: 'unit · test',
+            headers: () => ({ Authorization: 'Bearer omk_test' }), onStatus: (s) => statuses.push(s),
+            reconnectMs: 50, livenessPingMs: 40, livenessTimeoutMs: 120,
+        });
+        await conn.connect();
+        await server.waitFor((f) => f.type === 'bridge_hello');
+        // 서버는 소켓을 닫지 않는다 — 디바이스가 무응답을 감지해 끊어야 두 번째 연결이 생긴다.
+        await server.waitFor((f) => f.type === 'bridge_hello' && server.connections >= 2, 4000);
+        expect(statuses).toContain('끊김 — 재연결 대기');
+    });
+
+    it('서버가 ping 에 응답하는 동안에는 연결을 유지한다', async () => {
+        const core = new BridgeCore({ folder: base, confirm: async () => 'all', sandboxProfileDir: os.tmpdir() });
+        conn = new BridgeConnection({
+            serverUrl: `http://127.0.0.1:${server.port}`, core, deviceId: 'test-device-1', label: 'unit · test',
+            headers: () => ({ Authorization: 'Bearer omk_test' }), onStatus: (s) => statuses.push(s),
+            reconnectMs: 50, livenessPingMs: 40, livenessTimeoutMs: 120,
+        });
+        await conn.connect();
+        await server.waitFor((f) => f.type === 'bridge_hello');
+        await new Promise((r) => setTimeout(r, 500)); // 무응답 한도(120)의 4배
+        expect(server.connections).toBe(1);
+        expect(statuses).not.toContain('끊김 — 재연결 대기');
+    });
+
+    it('접속 응답이 오지 않으면 시간 제한으로 끊고 다시 시도한다', async () => {
+        // TCP 만 받고 업그레이드 응답을 하지 않는 서버
+        const held: net.Socket[] = [];
+        const silent = net.createServer((s) => { held.push(s); s.on('error', () => undefined); });
+        await new Promise<void>((r) => silent.listen(0, '127.0.0.1', () => r()));
+        const port = (silent.address() as net.AddressInfo).port;
+        const core = new BridgeCore({ folder: base, confirm: async () => 'all', sandboxProfileDir: os.tmpdir() });
+        conn = new BridgeConnection({
+            serverUrl: `http://127.0.0.1:${port}`, core, deviceId: 'test-device-1', label: 'unit · test',
+            headers: () => ({ Authorization: 'Bearer omk_test' }), onStatus: (s) => statuses.push(s),
+            reconnectMs: 50, handshakeTimeoutMs: 100,
+        });
+        try {
+            await conn.connect();
+            const deadline = Date.now() + 4000;
+            while (held.length < 2 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
+            expect(held.length).toBeGreaterThanOrEqual(2);
+            expect(statuses).toContain('끊김 — 재연결 대기');
+        } finally {
+            conn.disconnect(); conn = null;
+            for (const s of held) s.destroy();
+            await new Promise<void>((r) => silent.close(() => r()));
+        }
     });
 
     it('headers() 실패는 상태만 알리고 재연결하지 않는다 (데스크톱 토큰 부재 의미 보존)', async () => {
