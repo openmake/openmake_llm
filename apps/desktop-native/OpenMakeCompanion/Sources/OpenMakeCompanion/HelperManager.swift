@@ -136,7 +136,9 @@ final class HelperManager: NSObject, ObservableObject {
         p.executableURL = nodeURL
         p.arguments = [helperURL.path, "--server", serverAddress]
         var env = ProcessInfo.processInfo.environment
-        env["OMK_COMPANION_API_KEY"] = apiKey
+        // 키는 환경으로 넘기지 않는다 — 프로세스 시작 환경은 같은 사용자의 다른 프로세스가 읽을 수 있어,
+        // 샌드박스 안의 승인된 명령이 헬퍼의 키를 읽어 낼 수 있었다. 기동 직후 stdin 으로 준다(아래 auth).
+        env.removeValue(forKey: "OMK_COMPANION_API_KEY")
         if browserEnabled { env["OMK_COMPANION_BROWSER"] = "1" } else { env.removeValue(forKey: "OMK_COMPANION_BROWSER") }
         p.environment = env
         let inPipe = Pipe(), outPipe = Pipe()
@@ -164,6 +166,7 @@ final class HelperManager: NSObject, ObservableObject {
         }
         process = p
         stdinPipe = inPipe
+        send(["cmd": "auth", "apiKey": apiKey])
         return true
     }
 

@@ -288,14 +288,14 @@ describe('ConversationDB', () => {
     });
 
     describe('Error Handling', () => {
-        test('should log error if initialization fails', async () => {
+        test('should log error and reject ensureReady if initialization fails', async () => {
             const error = new Error('DB Connection Failed');
             (getPool as jest.Mock).mockImplementationOnce(() => {
                 throw error;
             });
 
             const failDb = new (db.constructor as any)();
-            await expect(failDb.ensureReady()).resolves.toBeUndefined(); 
+            await expect(failDb.ensureReady()).rejects.toThrow('DB Connection Failed');
         });
 
         test('createSession should throw if DB query fails and it is not a duplicate key', async () => {

@@ -20,6 +20,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX, DIAG_TIMEOUT_MS, MAX_BUFFER } from './constants';
+import { buildExecEnv } from './exec-env';
 import type { BridgeDiagnostic } from './types';
 
 const TS_EXT = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
@@ -34,7 +35,8 @@ function run(file: string, args: string[], cwd: string, extraPath?: string): Pro
                 timeout: DIAG_TIMEOUT_MS,
                 maxBuffer: MAX_BUFFER,
                 encoding: 'utf8',
-                env: extraPath ? { ...process.env, PATH: extraPath } : process.env,
+                // 레포의 tsc·python3 가 도는 자리 — 호스트 env 전체가 아니라 exec 와 같은 allowlist 만 넘긴다.
+                env: buildExecEnv(process.env, extraPath || process.env.PATH || process.env.Path || ''),
             },
             (_err, stdout, stderr) => resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }),
         );

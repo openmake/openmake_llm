@@ -113,7 +113,10 @@ class UserManagerImpl {
      * 비동기로 스키마 확인 및 관리자 계정 보장을 수행합니다.
      */
     constructor() {
-        this.initReady = this.init().catch(err => { logger.error('[UserManager] Init failed:', err); });
+        // 실패는 삼키지 않는다 — ensureReady() 가 그대로 reject 한다(부팅 Fail-Fast).
+        // 아래 catch 는 로그 + await 전 unhandledRejection 방지용.
+        this.initReady = this.init();
+        this.initReady.catch(err => { logger.error('[UserManager] Init failed:', err); });
     }
 
     /** 스키마 초기화 완료 Promise (race condition 방지) */

@@ -18,6 +18,7 @@ import { getPool } from '../data/models/unified-database';
 import { handleRawCompletion, isRawRequest } from './openai-compat-raw';
 import { OPENAI_COMPAT_SESSION } from '../config/openai-compat';
 import { createLogger } from '../utils/logger';
+import { abortOnClientDisconnect } from '../utils/abort-on-client-disconnect';
 
 const openaiCompatRouter = Router();
 const log = createLogger('OpenAICompatRoute');
@@ -296,19 +297,14 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
     // metadata lookup 방식 채택 — 기존 세션이 있으면 그 실제 id 를 재사용, 없으면 생성 후 태깅).
     const { reuseSessionId, sessionKey } = await resolveSessionContinuity(body, userContext, req.apiKeyId);
 
+    // 클라이언트가 응답을 다 받기 전에 끊으면 upstream LLM 호출도 끊는다 (스트리밍·비스트리밍 공통).
+    const abortSignal = abortOnClientDisconnect(res);
+
     if (body.stream === true) {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Accel-Buffering', 'no');
-
-        let aborted = false;
-        const abortController = new AbortController();
-
-        req.on('close', () => {
-            aborted = true;
-            abortController.abort();
-        });
 
         res.write(`data: ${JSON.stringify(OpenAICompatService.buildStreamChunk({
             id: completionId,
@@ -329,9 +325,9 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 userContext,
                 apiKeyId: req.apiKeyId,
                 clusterManager,
-                abortSignal: abortController.signal,
+                abortSignal,
                 onToken: (token: string) => {
-                    if (aborted) {
+                    if (abortSignal.aborted) {
                         return;
                     }
                     res.write(`data: ${JSON.stringify(OpenAICompatService.buildStreamChunk({
@@ -350,7 +346,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 await tagSessionKey(result.sessionId, sessionKey);
             }
 
-            if (!aborted && result.tool_calls && result.tool_calls.length > 0) {
+            if (!abortSignal.aborted && result.tool_calls && result.tool_calls.length > 0) {
                 res.write(`data: ${JSON.stringify(OpenAICompatService.buildStreamChunk({
                     id: completionId,
                     model: resultModel,
@@ -360,7 +356,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             }
 
             // OpenMake 확장: 스트리밍에서도 artifacts 를 마지막 delta 로 동봉 — 비스트리밍과 대칭.
-            if (!aborted) {
+            if (!abortSignal.aborted) {
                 const artifactsOut = await buildArtifactsOut(result, body, userContext);
                 if (artifactsOut) {
                     res.write(`data: ${JSON.stringify(OpenAICompatService.buildStreamChunk({
@@ -372,7 +368,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 }
             }
 
-            if (!aborted) {
+            if (!abortSignal.aborted) {
                 res.write(`data: ${JSON.stringify(OpenAICompatService.buildStreamChunk({
                     id: completionId,
                     model: resultModel,
@@ -384,7 +380,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             res.end();
             return;
         } catch (error) {
-            if (!aborted) {
+            if (!abortSignal.aborted) {
                 const message = error instanceof Error ? error.message : 'streaming error';
                 res.write(`data: ${JSON.stringify({ error: { message } })}\n\n`);
                 res.write(OpenAICompatService.buildDoneEvent());
@@ -406,6 +402,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             userContext,
             apiKeyId: req.apiKeyId,
             clusterManager,
+            abortSignal,
             onToken: () => {
                 // non-streaming endpoint intentionally ignores token events
             },
@@ -442,6 +439,11 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
 
         res.json(response);
     } catch (error) {
+        if (abortSignal.aborted) {
+            // 클라이언트 중단 — 끊긴 연결에 에러 응답을 쓰지 않는다.
+            log.debug(`클라이언트 연결 끊김으로 중단: ${error instanceof Error ? error.message : error}`);
+            return;
+        }
         if (error instanceof ChatRequestError) {
             openaiError(res, error.statusCode, error.message);
             return;

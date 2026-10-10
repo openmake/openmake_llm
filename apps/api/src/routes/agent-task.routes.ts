@@ -356,7 +356,10 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
 
     // 실행 시작 claim(2026-10-09 점검 ①) — 위 상태 검사는 SELECT 기반이라 동시 요청을 못 막는다. 모든 조기 400 뒤·디스패치
     // 직전에 조건부 UPDATE 로 잡고, 0행이면 다른 요청이 먼저 잡은 것. failed/cancelled 재실행의 progress 리셋도 여기서 한다.
-    if (!(await new AgentTaskRunRepository(getPool()).claimForExecute(task.id, { resetProgress: true, reason: 'execute claim' }))) {
+    // 이전 체크포인트도 같은 문장에서 지운다 — 시작 전 재시작 때 부팅 복구가 이전 실행의 이어하기로 처리하지 않게.
+    const runRepo = new AgentTaskRunRepository(getPool());
+    const claim = await runRepo.claimForExecute(task.id, { resetProgress: true, reason: 'execute claim' });
+    if (!claim) {
         return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.'));
     }
 
@@ -384,7 +387,8 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
             folderRel: task.folder_rel ?? undefined,
         }),
     });
-    if (outcome === 'duplicate') return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.'));
+    // 이전 실행의 종료 정리가 아직 안 끝났다 — claim 을 되돌려 실행·대기 항목 없는 queued 행을 남기지 않는다.
+    if (outcome === 'duplicate') { await runRepo.revertClaim(task.id, claim); return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.')); }
 
     logger.info(`[AgentTaskRoutes] 작업 ${outcome === 'queued' ? '대기열 등록' : '실행 시작'}: ${task.id}`);
     res.status(202).json(success({
@@ -456,7 +460,9 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
     const steps = await db.getAgentTaskSteps(task.id);
 
     // 실행 시작 claim(2026-10-09 점검 ①) — execute 와 같은 이유. 재개는 progress 를 잇는다.
-    if (!(await new AgentTaskRunRepository(getPool()).claimForExecute(task.id, { resetProgress: false, reason: 'resume claim' }))) {
+    const runRepo = new AgentTaskRunRepository(getPool());
+    const claim = await runRepo.claimForExecute(task.id, { resetProgress: false, reason: 'resume claim' });
+    if (!claim) {
         return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.'));
     }
     const service = new AgentTaskService();
@@ -483,7 +489,7 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
             },
         }),
     });
-    if (outcome === 'duplicate') return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.'));
+    if (outcome === 'duplicate') { await runRepo.revertClaim(task.id, claim); return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.')); }
 
     logger.info(`[AgentTaskRoutes] 작업 이어하기 ${outcome === 'queued' ? '대기열 등록' : '시작'}: ${task.id} (turn ${(cp.completedTurn ?? 0) + 1})`);
     res.status(202).json(success({
