@@ -89,8 +89,8 @@ export async function resendMissedTerminalNotifications(repo: TerminalNotifyRepo
     return sent;
 }
 
-/** 부팅 직후 1회 + 주기 점검 등록. 타이머는 프로세스 종료를 막지 않는다. */
-export function startTerminalNotifySweep(): void {
+/** 부팅 직후 1회 + 주기 점검 등록. 돌려준 타이머는 호출부(schedulers)가 종료 때 멈춘다. */
+export function startTerminalNotifySweep(): NodeJS.Timeout {
     void resendMissedTerminalNotifications();
-    setInterval(() => { void resendMissedTerminalNotifications(); }, AGENT_TASK_TERMINAL_NOTIFY.SWEEP_MS).unref();
+    return setInterval(() => { void resendMissedTerminalNotifications(); }, AGENT_TASK_TERMINAL_NOTIFY.SWEEP_MS);
 }

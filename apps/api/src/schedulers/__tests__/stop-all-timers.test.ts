@@ -5,15 +5,19 @@
  * 소유권 점검·보존 스윕 등)와, 시작 함수가 핸들을 돌려주지 않는 타이머(Job poller·DB 보존 정리·게이트 리포트)가
  * 종료 절차의 "스케줄러 중지" 뒤에도 계속 발화했다.
  *
- * 스케줄러가 부르는 모듈은 전부 가짜다 — 타이머 등록 여부만 본다. 핸들을 돌려주는 시작 함수는 진짜 타이머를 건다.
- * (종료 알림 재전송 startTerminalNotifySweep 은 핸들을 내주지 않아 여기서 다루지 않는다.)
+ * 스케줄러가 부르는 모듈은 대부분 가짜다 — 타이머 등록 여부만 본다. 핸들을 돌려주는 시작 함수는 진짜 타이머를 건다.
+ * 종료 알림 재전송(startTerminalNotifySweep)과 토큰 정리(startPeriodicCleanup)는 실제 시작 함수를 쓴다 —
+ * 가짜로 바꾸면 시작 함수가 핸들을 내주지 않는 빈틈을 못 잡는다.
  */
 const HOUR = 60 * 60 * 1000;
 
 jest.mock('../../data/conversation-db', () => ({ startSessionCleanupScheduler: jest.fn(), stopSessionCleanupScheduler: jest.fn() }));
 jest.mock('../../services/cost/quota-reconcile-job', () => ({ startQuotaReconcileJob: jest.fn(), stopQuotaReconcileJob: jest.fn() }));
 jest.mock('../../data/db-retention', () => ({ startDbRetention: () => setInterval(() => undefined, HOUR) }));
-jest.mock('../../utils/token-cleanup', () => ({ startPeriodicCleanup: jest.fn(), stopPeriodicCleanup: jest.fn() }));
+jest.mock('../../utils/token-cleanup', () => {
+    const actual = jest.requireActual('../../utils/token-cleanup');
+    return { ...actual, stopPeriodicCleanup: jest.fn(actual.stopPeriodicCleanup) };
+});
 jest.mock('../../config/runtime-limits', () => ({
     ...jest.requireActual('../../config/runtime-limits'),
     CHAT_REQUESTS: { ENABLED: true, RETENTION_DAYS: 90, FINGERPRINT_RETENTION_DAYS: 180 },
@@ -47,7 +51,6 @@ jest.mock('../../services/agent-task/boot-recovery', () => ({
     sweepExpiredTaskLeases: async () => undefined,
     recoverInterruptedAgentTasks: async () => ({ resumed: 0, failed: 0 }),
 }));
-jest.mock('../../services/agent-task/terminal-notify', () => ({ startTerminalNotifySweep: jest.fn() }));
 jest.mock('../../services/agent-task/schedule-runner', () => ({ startAgentTaskScheduleScheduler: () => setInterval(() => undefined, 60_000) }));
 jest.mock('../../services/agent-task/upload-retention', () => ({ sweepExpiredTaskUploads: async () => ({ sweptTasks: 0, orphanDirs: 0, tmpFiles: 0 }) }));
 jest.mock('../../services/agent-task/chunk-store', () => ({ cleanupStaleChunkUploads: async () => undefined }));
