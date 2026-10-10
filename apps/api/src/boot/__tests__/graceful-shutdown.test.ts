@@ -15,6 +15,8 @@ jest.mock('../../monitoring/analytics', () => ({
 }));
 jest.mock('../../schedulers', () => ({ stopAllSchedulers: () => { calls.push('schedulers'); } }));
 jest.mock('../../data/models/token-blacklist', () => ({ resetTokenBlacklist: () => { calls.push('token-blacklist'); } }));
+const closeKeyValueStore = jest.fn(async () => { calls.push('redis'); });
+jest.mock('../../storage', () => ({ closeKeyValueStore: () => closeKeyValueStore() }));
 jest.mock('../../observability/otel', () => ({ shutdownTelemetry: async () => { calls.push('otel'); } }));
 jest.mock('../../data/models/unified-database', () => ({ closeDatabase: async () => { calls.push('db'); } }));
 const drainAgentTasksForShutdown = jest.fn(async (_timeoutMs: number) => { calls.push('agent-tasks'); return { aborted: 0, remaining: 0 }; });
@@ -164,6 +166,7 @@ describe('installGracefulShutdown', () => {
             'agent-tasks',
             'tool-runtime',
             'oauth', 'analytics', 'schedulers', 'token-blacklist',
+            'redis',
             'otel',
             'db',
         ]);
@@ -183,6 +186,30 @@ describe('installGracefulShutdown', () => {
         expect(drainAgentTasksForShutdown).toHaveBeenCalledWith(AGENT_TASK_DRAIN_TIMEOUT_MS);
         // 연결 유예와 작업 정리 상한을 다 써도 뒤 단계(도구 런타임·OTel·DB)의 몫이 남는다
         expect(SHUTDOWN_CONNECTION_GRACE_MS + AGENT_TASK_DRAIN_TIMEOUT_MS).toBeLessThan(GRACEFUL_SHUTDOWN_TIMEOUT_MS);
+    });
+
+    it('Redis 연결은 Redis 를 쓰는 단계(요청 처리·에이전트 작업·스케줄러) 뒤, DB 풀 종료 앞에서 닫는다', async () => {
+        const proc = new FakeProcess();
+        installGracefulShutdown({ stop: async () => { calls.push('server'); } }, proc);
+        proc.emit('SIGTERM');
+        await new Promise((r) => setTimeout(r, 50));
+        const at = (name: string): number => calls.indexOf(name);
+        for (const before of ['server', 'agent-tasks', 'tool-runtime', 'schedulers']) {
+            expect(at('redis')).toBeGreaterThan(at(before));
+        }
+        expect(at('redis')).toBeLessThan(at('db'));
+    });
+
+    it('Redis 닫기가 실패해도 로그만 남기고 나머지 단계(DB 풀 종료)를 마친다', async () => {
+        const proc = new FakeProcess();
+        closeKeyValueStore.mockRejectedValueOnce(new Error('Connection is closed.'));
+        installGracefulShutdown({ stop: async () => undefined }, proc);
+        proc.emit('SIGTERM');
+        await new Promise((r) => setTimeout(r, 50));
+        expect(calls).not.toContain('redis');
+        expect(calls[calls.length - 1]).toBe('db');
+        expect(console.error).toHaveBeenCalledWith('[Shutdown] Redis 연결 종료 중 오류:', expect.any(Error));
+        expect(proc.exit).toHaveBeenCalledWith(0);
     });
 
     it('SIGINT 도 같은 경로로 종료 코드 0', async () => {

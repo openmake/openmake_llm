@@ -42,6 +42,15 @@ export function getKeyValueStore(): KeyValueStore {
 }
 
 /**
+ * 서버 종료 때 공용 저장소의 연결을 닫는다(boot/graceful-shutdown 의 한 단계).
+ * Redis 백엔드만 연결을 갖는다 — 메모리 백엔드이거나 저장소가 만들어진 적이 없으면 아무 일도 하지 않는다
+ * (닫으려고 새로 연결하지 않는다). 닫은 인스턴스는 그대로 둔다: 비우면 종료 중 늦게 온 호출이 연결을 새로 연다.
+ */
+export async function closeKeyValueStore(): Promise<void> {
+    if (cachedInstance instanceof RedisStore) await cachedInstance.close();
+}
+
+/**
  * 테스트 전용: 싱글톤 리셋. Production 코드에서 호출 금지.
  * mock된 getConfig가 다른 값을 반환하도록 바꾼 직후 사용.
  */
