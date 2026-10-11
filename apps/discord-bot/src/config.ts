@@ -27,6 +27,12 @@ function parseIntEnv(value: string | undefined, defaultValue: number): number {
     return Number.isFinite(n) && n > 0 ? n : defaultValue;
 }
 
+/** parseIntEnv 와 같되 0 을 유효한 값으로 받는다 ("끔"을 0 으로 표현하는 항목용). */
+function parseNonNegativeIntEnv(value: string | undefined, defaultValue: number): number {
+    const n = parseInt(value || '', 10);
+    return Number.isFinite(n) && n >= 0 ? n : defaultValue;
+}
+
 /**
  * 서버에서 받아온 설정을 덮어쓸 수 있도록 mutable 로 둔다 — 값 해석 우선순위는
  * **서버(system_settings DB > 서버 .env) > 봇 프로세스 .env > 기본값**.
@@ -83,30 +89,62 @@ export function applyRemoteSettings(settings: Record<string, string>): string[] 
 /**
  * 서버(openmake_llm)에서 이 봇의 운영 설정을 받아온다 — 관리자 화면(system_settings)에서
  * 입력한 값이 여기로 온다. 인증은 `DISCORD_BOT_API_KEY`(discord 스코프).
- * 실패는 조용히 무시하고 .env 값으로 계속 간다(서버가 내려가도 봇은 뜬다).
+ * 서버 부팅·전체 재시작 때는 봇이 백엔드보다 먼저 뜨므로, 네트워크 오류와 5xx 는 한도 안에서 다시 시도한다.
+ * 4xx(키 오류 등)는 기다려도 바뀌지 않아 바로 포기한다.
+ * 끝내 실패하면 경고만 남기고 .env 값으로 계속 간다(서버가 내려가도 봇은 뜬다).
+ * @param options 재시도 한도·간격 덮어쓰기 (테스트용 — 기본은 env 상수)
  */
-export async function loadRemoteSettings(): Promise<string[]> {
+export async function loadRemoteSettings(
+    options: { retryMaxMs?: number; retryIntervalMs?: number } = {},
+): Promise<string[]> {
     if (!config.apiKey) return [];
+    const retryMaxMs = options.retryMaxMs ?? REMOTE_SETTINGS_RETRY_MAX_MS;
+    const retryIntervalMs = options.retryIntervalMs ?? REMOTE_SETTINGS_RETRY_INTERVAL_MS;
     const url = `${config.apiBaseUrl.replace(/\/$/, '')}/api/integrations/discord/runtime-config`;
-    try {
-        const res = await fetch(url, {
-            headers: { 'X-API-Key': config.apiKey },
-            signal: AbortSignal.timeout(REMOTE_SETTINGS_TIMEOUT_MS),
-        });
-        if (!res.ok) {
-            console.warn(`[discord-bot] 서버 설정 조회 실패 (${res.status}) — .env 값으로 기동합니다.`);
+    const startedAt = Date.now();
+    for (let attempt = 1; ; attempt += 1) {
+        let failure: string;
+        try {
+            const res = await fetch(url, {
+                headers: { 'X-API-Key': config.apiKey },
+                signal: AbortSignal.timeout(REMOTE_SETTINGS_TIMEOUT_MS),
+            });
+            if (res.ok) {
+                const body = (await res.json()) as { data?: { settings?: Record<string, string> } };
+                if (attempt > 1) {
+                    const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+                    console.log(`[discord-bot] 서버 설정 조회 성공 — ${attempt}번째 시도, ${elapsedSec}초 만에 받았습니다.`);
+                }
+                return applyRemoteSettings(body?.data?.settings ?? {});
+            }
+            if (res.status < 500) {
+                console.warn(`[discord-bot] 서버 설정 조회 실패 (${res.status}) — .env 값으로 기동합니다.`);
+                return [];
+            }
+            failure = `HTTP ${res.status}`;
+        } catch (e) {
+            failure = e instanceof Error ? e.message : String(e);
+        }
+        // 다음 시도가 한도를 넘기면 여기서 그만둔다 (retryMaxMs 0 = 재시도 없음)
+        if (Date.now() - startedAt + retryIntervalMs > retryMaxMs) {
+            console.warn(`[discord-bot] 서버 설정 조회 실패(${failure}) — .env 값으로 기동합니다.`);
             return [];
         }
-        const body = (await res.json()) as { data?: { settings?: Record<string, string> } };
-        return applyRemoteSettings(body?.data?.settings ?? {});
-    } catch (e) {
-        console.warn(`[discord-bot] 서버 설정 조회 실패(${e instanceof Error ? e.message : e}) — .env 값으로 기동합니다.`);
-        return [];
+        if (attempt === 1) {
+            console.log(`[discord-bot] 서버 설정 조회 실패(${failure}) — 백엔드가 뜰 때까지 최대 ${Math.round(retryMaxMs / 1000)}초 동안 다시 시도합니다.`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, retryIntervalMs));
     }
 }
 
 /** 서버 설정 조회 타임아웃 — 봇 기동을 오래 막지 않는다. */
 const REMOTE_SETTINGS_TIMEOUT_MS = parseIntEnv(process.env.DISCORD_REMOTE_SETTINGS_TIMEOUT_MS, 5_000);
+
+/** 서버 설정 조회 재시도 총 대기 한도 — 백엔드가 뜨는 시간(보통 수 초~수십 초)을 기다린다. 0 이면 재시도 없음. */
+const REMOTE_SETTINGS_RETRY_MAX_MS = parseNonNegativeIntEnv(process.env.DISCORD_REMOTE_SETTINGS_RETRY_MAX_MS, 60_000);
+
+/** 서버 설정 조회 재시도 간격 */
+const REMOTE_SETTINGS_RETRY_INTERVAL_MS = parseIntEnv(process.env.DISCORD_REMOTE_SETTINGS_RETRY_INTERVAL_MS, 2_000);
 
 /** Discord 메시지 하드 리밋(2000자) 아래 분할 여유치 */
 export const DISCORD_CHUNK_LIMIT = 1900;
