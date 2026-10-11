@@ -247,18 +247,24 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         // 같은 턴에 모델이 부른 web_search 의 출처도 번호표에 넣는다 — 번호가 사전 주입 뒤(11~)라 여기 없으면
         // 모델의 [출처 11] 인용이 아래에서 죽은 마커로 지워지고 무관한 사전 검색 전체가 붙는다(2026-10-12 라이브).
         const toolSources = (input.toolSources ?? []).filter((list) => list.length > 0);
+        const injectedNums = [...numToSource.keys()];
         for (const s of toolSources.flat()) {
             if (!numToSource.has(String(s.n))) numToSource.set(String(s.n), { title: s.title, url: s.url });
         }
         // 인용이 없을 때 붙일 기본 목록 — 도구 검색이 돈 턴은 가장 최근 검색의 상위 N건(모델이 마지막에 보고 쓴 근거),
         // 도구 검색이 없던 턴은 번호표 전체(= 사전 주입 전체, 기존 동작). 사전 주입 없이 도구 검색만 돈 턴은
         // 기본 목록이 없다 — 모델이 읽은 페이지를 `출처: A, B` 평문으로 직접 쓴 답에 검색 결과가 덧붙는 소음 방지.
-        const lastToolSearch = toolSources[toolSources.length - 1];
+        // 1건짜리 목록은 읽은 페이지(extract_webpage·web_scrape)다 — 검색을 대신하지 않고, 최근 검색 뒤에 읽은 것을 덧붙인다.
+        const lastSearchIdx = toolSources.map((list) => list.length > 1).lastIndexOf(true);
+        const lastToolSearch = lastSearchIdx >= 0 ? toolSources[lastSearchIdx] : undefined;
         const defaultNums = !hasInjectedSources
             ? []
-            : lastToolSearch
-                ? (WEB_SEARCH_INJECTION.MAX_RESULTS > 0 ? lastToolSearch.slice(0, WEB_SEARCH_INJECTION.MAX_RESULTS) : lastToolSearch).map((s) => String(s.n))
-                : [...numToSource.keys()];
+            : [
+                ...(lastToolSearch
+                    ? (WEB_SEARCH_INJECTION.MAX_RESULTS > 0 ? lastToolSearch.slice(0, WEB_SEARCH_INJECTION.MAX_RESULTS) : lastToolSearch).map((s) => String(s.n))
+                    : injectedNums),
+                ...toolSources.slice(lastSearchIdx + 1).flat().map((s) => String(s.n)),
+            ];
         // 수집 목록에 없는 번호의 죽은 인용 마커 결정적 제거 — 저장 히스토리(반환값)가 대상.
         // 이미 스트리밍된 화면은 ws-chat-handler 의 done.cleanedContent 교체가 완료 시점에 정리.
         const stripRes = stripDeadCitationMarkers(finalContent, new Set(numToSource.keys()));

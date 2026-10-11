@@ -87,6 +87,20 @@ describe('appendDeterministicBlocks — 사전 주입 + 도구 검색 출처', (
         expect(out).not.toContain('https://first.example/');
     });
 
+    it('인용이 없을 때 검색 뒤에 읽은 페이지가 있으면 최근 검색 상위 N건에 읽은 페이지를 더해 붙인다', () => {
+        const search = toolSearch(11, 4, 'search');
+        const page = toolSearch(15, 1, 'page');
+        const { out } = run('인용 없이 쓴 답변.', { webSearchContext: injectedContext(10), toolSources: [search, page] });
+        expect(listedNums(out)).toEqual([11, 12, 13, 14, 15]);
+        expect(out).not.toContain('https://pre.example/');
+    });
+
+    it('인용이 없고 도구는 페이지 읽기만 했으면 사전 주입 전체에 읽은 페이지를 더해 붙인다', () => {
+        const page = toolSearch(11, 1, 'page');
+        const { out } = run('인용 없이 쓴 답변.', { webSearchContext: injectedContext(10), toolSources: [page] });
+        expect(listedNums(out)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    });
+
     it('도구 검색이 없던 턴은 종전대로 — 인용이 없으면 사전 주입 전체, 있으면 인용된 것만', () => {
         const none = run('인용 없이 쓴 답변.', { webSearchContext: injectedContext(10) });
         expect(listedNums(none.out)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
