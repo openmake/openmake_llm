@@ -163,6 +163,31 @@ describe('appendDeterministicBlocks — 도구 검색만 돈 턴', () => {
         expect(streamed).toBe('');
     });
 
+    // extract_webpage·web_scrape 가 읽은 페이지도 출처 1건으로 등록된다 — 링크를 주고 "요약해줘" 한 턴처럼 읽기 도구만 돈 턴.
+    // 라벨 인용이 있을 때만 목록이 붙고, 인용이 없거나 라벨 없는 [1] 만 있으면 본문 그대로다.
+    it('읽은 페이지 1건만 있는 턴 — [출처 1] 로 인용하면 그 페이지가 목록에 붙는다', () => {
+        const readPage: SearchSourceRef[] = [{ n: 1, title: 'Bun 1.3', url: 'https://bun.sh/blog/bun-v1.3', snippet: 's' }];
+        const { out, streamed } = run('Bun 1.3 이 나왔다 [출처 1].', { toolSources: [readPage] });
+        expect(listedNums(out)).toEqual([1]);
+        expect(streamed).toContain('**출처**\n- **1.** [Bun 1.3](https://bun.sh/blog/bun-v1.3)');
+    });
+
+    it('읽은 페이지 1건만 있는 턴 — 인용이 없거나 라벨 없는 [1] 만 있으면 아무것도 붙이지 않는다', () => {
+        const readPage: SearchSourceRef[] = [{ n: 1, title: 'Bun 1.3', url: 'https://bun.sh/blog/bun-v1.3', snippet: 's' }];
+        for (const body of ['링크의 글을 요약하면 이렇다.', '요약하면 이렇다 [1].']) {
+            const { out, streamed } = run(body, { toolSources: [readPage] });
+            expect(out).toBe(body);
+            expect(streamed).toBe('');
+        }
+    });
+
+    it('검색 뒤에 읽은 페이지(검색 결과 뒤 번호)를 인용하면 읽은 페이지가 목록에 붙는다', () => {
+        const readPage: SearchSourceRef[] = [{ n: 11, title: 'Bun 1.3', url: 'https://bun.sh/blog/bun-v1.3', snippet: 's' }];
+        const { out } = run('공식 발표 [출처 11]. 반응 [출처 2].', { toolSources: [toolSearch(1, 10), readPage] });
+        expect(listedNums(out)).toEqual([11, 2]);
+        expect(out).toContain('- **11.** [Bun 1.3](https://bun.sh/blog/bun-v1.3)');
+    });
+
     it('도구 검색이 결과 없이 끝난 턴은 건드리지 않는다', () => {
         const { out, streamed } = run('검색 결과가 없었다 [출처 1].', { toolSources: [[]] });
         expect(out).toBe('검색 결과가 없었다 [출처 1].');

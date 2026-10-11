@@ -93,7 +93,7 @@ interface DeterministicAppendInput {
     integrationBlocks: IntegrationBlocks;
     /** 오픈디자인 도구로 저장한 HTML 산출물 (마지막 저장본 — captureOdArtifactHtml 참고). */
     odArtifact?: OdArtifactCapture | null;
-    /** 이 턴의 web_search 도구 출처 — 호출 1회당 목록 1개, 결과가 나온 순서. 번호는 사전 주입 뒤로 이어진다. */
+    /** 이 턴의 도구 출처(web_search 결과·읽은 페이지) — 호출 1회당 목록 1개, 결과가 나온 순서. 번호는 사전 주입 뒤로 이어진다. */
     toolSources?: SearchSourceRef[][];
     req: ChatMessageRequest;
     ctx: StreamFromExternalContext;

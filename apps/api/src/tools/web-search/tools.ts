@@ -14,6 +14,7 @@ import { safeFetch } from '../../security/ssrf-guard';
 import { performWebSearch } from './search-orchestrator';
 import { memoizedWebSearch } from './search-memo';
 import { formatSearchSources, toSourceRefs } from './format-sources';
+import { registerPageSource } from './page-source';
 
 /**
  * 웹 검색 MCP 도구 (web_search)
@@ -107,12 +108,16 @@ export const extractWebpageTool: MCPToolDefinition = {
             required: ['url']
         }
     },
-    handler: async (args): Promise<MCPToolResult> => {
+    handler: async (args, context): Promise<MCPToolResult> => {
         const url = args.url as string;
         try {
             const response = await safeFetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
             const html = await response.text();
             const content = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, TRUNCATION.WEB_CONTENT_MAX);
+            // 채팅 턴이면 읽은 페이지를 출처 1건으로 등록 — 번호가 없으면 모델이 이 내용을 검색 결과 번호로 인용한다
+            const title = /<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1].replace(/\s+/g, ' ');
+            const pageSource = registerPageSource(context, { title, url, text: content });
+            if (pageSource) return { content: [{ type: 'text', text: `${pageSource.header}\n\n${content}` }], sources: pageSource.sources };
             return { content: [{ type: 'text', text: content }] };
         } catch (e) {
             return { content: [{ type: 'text', text: `오류: ${e}` }], isError: true };
