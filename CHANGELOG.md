@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.94.2](https://github.com/openmake/openmake_llm/compare/v1.94.1...v1.94.2) (2026-10-11)
+
+
+### 🐛 버그 수정
+
+* **discord-bot:** 기동 때 백엔드가 뜰 때까지 서버 설정 조회를 다시 시도한다 ([dac7ccf](https://github.com/openmake/openmake_llm/commit/dac7ccf485d3341b33ca1df48286503645e873eb))
+* **discord-bot:** 기동 때 백엔드가 뜰 때까지 서버 설정 조회를 다시 시도한다 ([42764b4](https://github.com/openmake/openmake_llm/commit/42764b4eae0afe1327b5096f2c81fdb79b80d206))
+
 ## [1.94.1](https://github.com/openmake/openmake_llm/compare/v1.94.0...v1.94.1) (2026-10-11)
 
 
