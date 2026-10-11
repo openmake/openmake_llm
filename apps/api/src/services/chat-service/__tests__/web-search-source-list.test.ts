@@ -96,12 +96,6 @@ describe('appendDeterministicBlocks — 사전 주입 + 도구 검색 출처', (
         expect(cited.out).not.toContain('[출처 11]');
     });
 
-    it('사전 주입이 없는 턴은 도구 출처가 있어도 목록을 붙이지 않는다 (현 동작 유지)', () => {
-        const { out, streamed } = run('최신 수치 [출처 1].', { toolSources: [toolSearch(1, 10)] });
-        expect(out).toBe('최신 수치 [출처 1].');
-        expect(streamed).toBe('');
-    });
-
     it('모델이 출처 섹션을 직접 썼고 인용·URL 이 없으면 최근 도구 검색 상위 N건의 URL 을 보강한다', () => {
         const { out } = run('답변.\n\n**출처**\n- 도구 11\n- 도구 12', {
             webSearchContext: injectedContext(10),
@@ -110,5 +104,65 @@ describe('appendDeterministicBlocks — 사전 주입 + 도구 검색 출처', (
         expect(out).toContain('[11] https://tool.example/11');
         expect(out).toContain('[13] https://tool.example/13');
         expect(out).not.toContain('https://pre.example/');
+    });
+});
+
+/**
+ * 사전 주입 없이 모델이 web_search 도구만 부른 턴 — 번호표는 도구 출처(1~)뿐이다.
+ * 인용이 있으면 사전 검색 턴과 같은 규칙으로 붙이고, 인용이 없으면 아무것도 붙이지 않는다
+ * (모델이 extract_webpage 로 읽은 페이지를 `출처: A, B` 평문으로 직접 쓴 답에 검색 결과 10건이 덧붙는 소음 방지).
+ */
+describe('appendDeterministicBlocks — 도구 검색만 돈 턴', () => {
+    it('인용이 있으면 인용된 도구 출처만 목록으로 붙는다', () => {
+        const { out, streamed } = run('최신 수치 [출처 1]. 배경 [출처 4, 6].', { toolSources: [toolSearch(1, 10)] });
+        expect(listedNums(out)).toEqual([1, 4, 6]);
+        expect(out).toContain('4. [도구 4](https://tool.example/4)');
+        expect(streamed).toContain('**출처**\n1. [도구 1](https://tool.example/1)');
+    });
+
+    it('인용이 없으면 아무것도 붙이지 않는다', () => {
+        const body = '공식 문서를 읽고 정리한 답변.\n\n출처: [Node.js 릴리스](https://nodejs.org/en/about/previous-releases), [블로그](https://blog.example/a)';
+        const { out, streamed } = run(body, { toolSources: [toolSearch(1, 10), toolSearch(11, 10, 'second')] });
+        expect(out).toBe(body);
+        expect(streamed).toBe('');
+    });
+
+    it('목록 밖 번호의 인용 마커는 지운다', () => {
+        const { out } = run('근거 [출처 2]. 지어낸 번호 [출처 40].', { toolSources: [toolSearch(1, 10)] });
+        expect(out).toContain('[출처 2]');
+        expect(out).not.toContain('[출처 40]');
+        expect(listedNums(out)).toEqual([2]);
+    });
+
+    it('목록 밖 번호만 인용했으면 마커만 지우고 목록은 붙이지 않는다', () => {
+        const { out, streamed } = run('지어낸 번호 [출처 40].', { toolSources: [toolSearch(1, 10)] });
+        expect(out).toBe('지어낸 번호.');
+        expect(streamed).toBe('');
+    });
+
+    it('라벨 없는 대괄호 숫자(모델 자체 각주·코드)는 인용으로 보지 않는다', () => {
+        const body = 'Bun 1.3 이 나왔다[1]. 예: `arr[3]`.\n\n[1] Bun 공식 블로그 https://bun.sh/blog\n[2] 릴리스 노트 https://github.com/oven-sh/bun/releases';
+        const { out, streamed } = run(body, { toolSources: [toolSearch(1, 10)] });
+        expect(out).toBe(body);
+        expect(streamed).toBe('');
+    });
+
+    it('모델이 출처 섹션을 직접 썼으면 인용된 번호 중 섹션에 URL 이 없는 것만 보강한다', () => {
+        const { out } = run('수치 [출처 1]. 배경 [출처 3].\n\n**출처**\n- [도구 1](https://tool.example/1)\n- 도구 3', { toolSources: [toolSearch(1, 5)] });
+        expect(out).toContain('🔗 **URL**\n[3] https://tool.example/3');
+        expect(out).not.toContain('[1] https://tool.example/1');
+    });
+
+    it('모델이 출처 섹션을 직접 썼고 인용이 없으면 보강하지 않는다', () => {
+        const body = '답변.\n\n**출처**\n- 도구 1\n- 도구 2';
+        const { out, streamed } = run(body, { toolSources: [toolSearch(1, 5)] });
+        expect(out).toBe(body);
+        expect(streamed).toBe('');
+    });
+
+    it('도구 검색이 결과 없이 끝난 턴은 건드리지 않는다', () => {
+        const { out, streamed } = run('검색 결과가 없었다 [출처 1].', { toolSources: [[]] });
+        expect(out).toBe('검색 결과가 없었다 [출처 1].');
+        expect(streamed).toBe('');
     });
 });

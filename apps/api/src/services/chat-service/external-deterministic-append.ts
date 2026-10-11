@@ -197,7 +197,10 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     // 소스 문자열은 message-pipeline 경로에선 req.webSearchContext 가 아니라 ctx.enhancedMessage
     // (finalEnhancedMessage, context-builder 가 웹검색 컨텍스트를 합친 값)에 실려 온다. 둘 다 fallback.
     const webSearchCtxText = req.webSearchContext || ctx.enhancedMessage || '';
-    if (/\[[^\]]*?\d+\]\s*.+?\n\s*URL:\s*\S+/.test(webSearchCtxText)) {
+    // 사전 주입이 없어도 모델이 web_search 도구를 불러 출처가 있으면 같은 처리를 한다 — 게이트가 사전 주입만 보던
+    // 때는 도구 검색만 돈 턴의 [출처 N] 인용에 목록이 붙지 않고 목록 밖 번호 마커도 남았다.
+    const hasInjectedSources = /\[[^\]]*?\d+\]\s*.+?\n\s*URL:\s*\S+/.test(webSearchCtxText);
+    if (hasInjectedSources || (input.toolSources ?? []).some((list) => list.length > 0)) {
         const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
         const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
         const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
@@ -219,11 +222,14 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
             if (!numToSource.has(String(s.n))) numToSource.set(String(s.n), { title: s.title, url: s.url });
         }
         // 인용이 없을 때 붙일 기본 목록 — 도구 검색이 돈 턴은 가장 최근 검색의 상위 N건(모델이 마지막에 보고 쓴 근거),
-        // 도구 검색이 없던 턴은 번호표 전체(= 사전 주입 전체, 기존 동작).
+        // 도구 검색이 없던 턴은 번호표 전체(= 사전 주입 전체, 기존 동작). 사전 주입 없이 도구 검색만 돈 턴은
+        // 기본 목록이 없다 — 모델이 읽은 페이지를 `출처: A, B` 평문으로 직접 쓴 답에 검색 결과가 덧붙는 소음 방지.
         const lastToolSearch = toolSources[toolSources.length - 1];
-        const defaultNums = lastToolSearch
-            ? (WEB_SEARCH_INJECTION.MAX_RESULTS > 0 ? lastToolSearch.slice(0, WEB_SEARCH_INJECTION.MAX_RESULTS) : lastToolSearch).map((s) => String(s.n))
-            : [...numToSource.keys()];
+        const defaultNums = !hasInjectedSources
+            ? []
+            : lastToolSearch
+                ? (WEB_SEARCH_INJECTION.MAX_RESULTS > 0 ? lastToolSearch.slice(0, WEB_SEARCH_INJECTION.MAX_RESULTS) : lastToolSearch).map((s) => String(s.n))
+                : [...numToSource.keys()];
         // 수집 목록에 없는 번호의 죽은 인용 마커 결정적 제거 — 저장 히스토리(반환값)가 대상.
         // 이미 스트리밍된 화면은 ws-chat-handler 의 done.cleanedContent 교체가 완료 시점에 정리.
         const stripRes = stripDeadCitationMarkers(finalContent, new Set(numToSource.keys()));
@@ -234,8 +240,10 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         // 본문에 인용된 소스 번호 ([출처 N]/[Source N]/[N] — 수집 목록에 있는 번호만 인정).
         // 대괄호 안 숫자를 전부 인정 — `[출처 3, 8]` 복합 인용에서 마지막 숫자만 잡혀 앞 번호
         // 출처가 목록에서 빠지던 결함 방지.
+        // 도구 검색만 돈 턴은 라벨 있는 인용만 인정한다 — 번호표가 1부터라 모델이 직접 쓴 각주 `[1]`·코드의
+        // `arr[3]` 이 도구 출처 번호와 우연히 맞아 무관한 목록이 붙는다. 사전 검색 턴의 인정 범위는 그대로.
         const citedNums: string[] = [];
-        const citeRe = /\[[^\]\n]*\d[^\]\n]*\]/g;
+        const citeRe = hasInjectedSources ? /\[[^\]\n]*\d[^\]\n]*\]/g : new RegExp(CITATION_MARKER_SRC, 'gi');
         let cm: RegExpExecArray | null;
         while ((cm = citeRe.exec(finalContent)) !== null) {
             for (const num of cm[0].match(/\d+/g) ?? []) {
