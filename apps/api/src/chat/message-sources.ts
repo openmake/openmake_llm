@@ -2,7 +2,8 @@
  * 턴별 웹검색 출처 수집기 (F19.4) — 스트리밍 중 search_sources 로 내보낸 출처를 messageId(클라이언트 발급 id) 로 모았다가
  * assistant 행 저장 시 꺼내 `conversation_messages.sources`(156) 에 넣는다. 저장 경로가 콜백 사슬 밖에 있어 인메모리로 잇는다.
  *
- * 같은 턴에 검색이 여러 번이면 **마지막 출처 목록** 을 쓴다 — 본문 [N] 은 가장 최근 번호 체계를 따르기 때문이다.
+ * 같은 턴에 여러 번 기록되면 **마지막으로 받은 목록** 을 쓴다 — 보내는 쪽(ws-chat-sources createTurnSourceEmitter)이
+ * 턴 시작 출처에 도구 출처를 이어 붙인 누적 목록을 매번 보내므로, 마지막 것이 그 턴의 전체다.
  *
  * @module chat/message-sources
  */

@@ -88,6 +88,16 @@ describe('executeExternalTool — 웹검색 출처 전달(F19.4)', () => {
         expect(mcpToolResultCallback).toHaveBeenCalledWith(expect.objectContaining({ toolName: 'web_search', resources: [], sources }));
     });
 
+    // 답변 끝 출처 목록(appendDeterministicBlocks)의 번호표에 도구 출처를 넣기 위한 턴 단위 수집 — 콜백이 없는 경로(REST)에서도 모인다
+    it('수집 배열을 넘기면 호출 한 번의 출처 목록을 그대로 쌓는다 (콜백 없어도)', async () => {
+        const collected: Array<typeof sources> = [];
+        executeTool.mockResolvedValueOnce({ content: [{ type: 'text', text: '[1] T' }], sources });
+        executeTool.mockResolvedValueOnce({ content: [{ type: 'text', text: 'plain' }] });
+        await executeExternalTool(deps, 'web_search', { query: 'q' }, collected);
+        await executeExternalTool(deps, 'extract_webpage', { url: 'u' }, collected);
+        expect(collected).toEqual([sources]);
+    });
+
     it('sources·resource 둘 다 없으면 출처 없이 요약만 알린다', async () => {
         const mcpToolResultCallback = jest.fn();
         executeTool.mockResolvedValue({ content: [{ type: 'text', text: 'plain' }], sources: [] });

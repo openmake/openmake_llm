@@ -418,6 +418,7 @@ export async function runExternalStream(
         generatedMediaMarkdowns: state.generatedMediaMarkdowns,
         integrationBlocks: state.integrationBlocks,
         odArtifact: state.odArtifact,
+        toolSources: state.toolSources,
         req,
         ctx,
     });

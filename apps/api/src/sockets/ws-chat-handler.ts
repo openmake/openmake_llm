@@ -32,7 +32,7 @@ import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCached
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../tools/web-search/build-search-context';
-import { emitSearchSources, parseUserLocation } from './ws-chat-sources';
+import { createTurnSourceEmitter, parseUserLocation } from './ws-chat-sources';
 import { createServedModelEmitter, getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
 
 /**
@@ -234,7 +234,7 @@ export async function handleChatMessage(
         const { clientRequestId, priorMessageId } = await claimClientRequestShared(extWs._authenticatedUserId ? `u:${extWs._authenticatedUserId}` : `a:${anonSessionId ?? ''}`, msg.clientRequestId, messageId);
         if (priorMessageId) { out({ type: 'done', messageId: priorMessageId, deduplicated: true, metrics: { tokensPerSec: '0.00', tokenCount: 0 } }); return; }
         const turnStartSources = [...(injectedSources ?? []), ...turnContexts.sources]; // 도구 출처는 이 뒤 번호로 이어 붙는다
-        emitSearchSources(out, messageId, turnStartSources); // 사전 주입 검색·통합 출처(F19.4)
+        const emitToolSources = createTurnSourceEmitter(out, messageId, turnStartSources); // 사전 주입 검색·통합 출처 발행(F19.4) + 도구 출처 누적
 
         // 토큰 생성 메트릭 추적 (tokenCount, partialAssistantResponse 는 catch 접근을 위해 try 외부 선언)
         tokenCount = 0;
@@ -368,7 +368,7 @@ export async function handleChatMessage(
             // MCP tool 호출 결과의 resource content 를 frontend 로 emit
             // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
             onMcpToolResult: (event) => {
-                emitSearchSources(out, messageId, [...turnStartSources, ...(event.sources ?? [])]); // web_search 도구 출처(F19.4)
+                emitToolSources(event.sources); // web_search 도구 출처(F19.4) — 같은 턴의 앞 검색 것에 이어 붙여 보낸다
                 if (!event.resources.length && !event.summary) return;
                 out({
                     type: 'mcp_tool_result',

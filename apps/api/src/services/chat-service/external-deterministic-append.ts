@@ -10,7 +10,7 @@
  */
 import { createLogger } from '../../utils/logger';
 import { getChatTurnIntegrations, type IntegrationBlocks } from './turn-integrations';
-import { REPORT_PIPELINE } from '../../config/runtime-limits';
+import { REPORT_PIPELINE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { tryRenderReportBlock } from './report-block';
 import { stripMissingGeneratedLinks } from './generated-link-guard';
 import { basename } from 'path';
@@ -18,6 +18,7 @@ import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-chat-locales';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { StreamFromExternalContext } from './external-provider-types';
+import type { SearchSourceRef } from '../../tools/web-search/types';
 
 const logger = createLogger('ChatExternalProvider');
 
@@ -92,6 +93,8 @@ interface DeterministicAppendInput {
     integrationBlocks: IntegrationBlocks;
     /** 오픈디자인 도구로 저장한 HTML 산출물 (마지막 저장본 — captureOdArtifactHtml 참고). */
     odArtifact?: OdArtifactCapture | null;
+    /** 이 턴의 web_search 도구 출처 — 호출 1회당 목록 1개, 결과가 나온 순서. 번호는 사전 주입 뒤로 이어진다. */
+    toolSources?: SearchSourceRef[][];
     req: ChatMessageRequest;
     ctx: StreamFromExternalContext;
 }
@@ -194,12 +197,17 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     // 소스 문자열은 message-pipeline 경로에선 req.webSearchContext 가 아니라 ctx.enhancedMessage
     // (finalEnhancedMessage, context-builder 가 웹검색 컨텍스트를 합친 값)에 실려 온다. 둘 다 fallback.
     const webSearchCtxText = req.webSearchContext || ctx.enhancedMessage || '';
-    if (/\[[^\]]*?\d+\]\s*.+?\n\s*URL:\s*\S+/.test(webSearchCtxText)) {
-        const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
-        const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
-        const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
-        const headerIdx = finalContent.search(headerRe);
-        const alreadyHasSources = headerIdx >= 0;
+    // 사전 주입이 없어도 모델이 web_search 도구를 불러 출처가 있으면 같은 처리를 한다 — 게이트가 사전 주입만 보던
+    // 때는 도구 검색만 돈 턴의 [출처 N] 인용에 목록이 붙지 않고 목록 밖 번호 마커도 남았다.
+    const hasInjectedSources = /\[[^\]]*?\d+\]\s*.+?\n\s*URL:\s*\S+/.test(webSearchCtxText);
+    const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
+    const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
+    const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
+    const headerIdx = finalContent.search(headerRe);
+    const alreadyHasSources = headerIdx >= 0;
+    // 도구 검색만 돈 턴에서 모델이 출처 섹션을 직접 썼으면 건드리지 않는다 — 목록 작성 금지 지시가 없는 턴이라
+    // 모델이 읽은 페이지까지 섞어 자기 번호로 목록을 쓰고, 도구 번호표 기준의 마커 제거·URL 보강은 그 번호와 어긋난다.
+    if (hasInjectedSources || (!alreadyHasSources && (input.toolSources ?? []).some((list) => list.length > 0))) {
         // 컨텍스트에서 번호→(제목, URL) 파싱 — canonical 목록 생성·누락 검증에 공용.
         const numToSource = new Map<string, { title: string; url: string }>();
         const re = /\[[^\]]*?(\d+)\]\s*(.+?)\n\s*URL:\s*(\S+)/g;
@@ -209,6 +217,21 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
                 numToSource.set(mm[1], { title: mm[2].trim(), url: mm[3].trim() });
             }
         }
+        // 같은 턴에 모델이 부른 web_search 의 출처도 번호표에 넣는다 — 번호가 사전 주입 뒤(11~)라 여기 없으면
+        // 모델의 [출처 11] 인용이 아래에서 죽은 마커로 지워지고 무관한 사전 검색 전체가 붙는다(2026-10-12 라이브).
+        const toolSources = (input.toolSources ?? []).filter((list) => list.length > 0);
+        for (const s of toolSources.flat()) {
+            if (!numToSource.has(String(s.n))) numToSource.set(String(s.n), { title: s.title, url: s.url });
+        }
+        // 인용이 없을 때 붙일 기본 목록 — 도구 검색이 돈 턴은 가장 최근 검색의 상위 N건(모델이 마지막에 보고 쓴 근거),
+        // 도구 검색이 없던 턴은 번호표 전체(= 사전 주입 전체, 기존 동작). 사전 주입 없이 도구 검색만 돈 턴은
+        // 기본 목록이 없다 — 모델이 읽은 페이지를 `출처: A, B` 평문으로 직접 쓴 답에 검색 결과가 덧붙는 소음 방지.
+        const lastToolSearch = toolSources[toolSources.length - 1];
+        const defaultNums = !hasInjectedSources
+            ? []
+            : lastToolSearch
+                ? (WEB_SEARCH_INJECTION.MAX_RESULTS > 0 ? lastToolSearch.slice(0, WEB_SEARCH_INJECTION.MAX_RESULTS) : lastToolSearch).map((s) => String(s.n))
+                : [...numToSource.keys()];
         // 수집 목록에 없는 번호의 죽은 인용 마커 결정적 제거 — 저장 히스토리(반환값)가 대상.
         // 이미 스트리밍된 화면은 ws-chat-handler 의 done.cleanedContent 교체가 완료 시점에 정리.
         const stripRes = stripDeadCitationMarkers(finalContent, new Set(numToSource.keys()));
@@ -219,8 +242,10 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         // 본문에 인용된 소스 번호 ([출처 N]/[Source N]/[N] — 수집 목록에 있는 번호만 인정).
         // 대괄호 안 숫자를 전부 인정 — `[출처 3, 8]` 복합 인용에서 마지막 숫자만 잡혀 앞 번호
         // 출처가 목록에서 빠지던 결함 방지.
+        // 도구 검색만 돈 턴은 라벨 있는 인용만 인정한다 — 번호표가 1부터라 모델이 직접 쓴 각주 `[1]`·코드의
+        // `arr[3]` 이 도구 출처 번호와 우연히 맞아 무관한 목록이 붙는다. 사전 검색 턴의 인정 범위는 그대로.
         const citedNums: string[] = [];
-        const citeRe = /\[[^\]\n]*\d[^\]\n]*\]/g;
+        const citeRe = hasInjectedSources ? /\[[^\]\n]*\d[^\]\n]*\]/g : new RegExp(CITATION_MARKER_SRC, 'gi');
         let cm: RegExpExecArray | null;
         while ((cm = citeRe.exec(finalContent)) !== null) {
             for (const num of cm[0].match(/\d+/g) ?? []) {
@@ -228,16 +253,18 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
             }
         }
         if (!alreadyHasSources) {
-            // canonical 목록 첨부 — 인용된 번호가 있으면 그 소스만(정밀), 없으면 전체(기존 동작).
+            // canonical 목록 첨부 — 인용된 번호가 있으면 그 소스만(정밀), 없으면 기본 목록(defaultNums).
             // 번호는 인라인 인용과 일치하도록 원본 소스 번호를 유지한다 (재번호 시 [출처 3]↔목록 불일치).
-            const targetNums = citedNums.length > 0 ? citedNums : [...numToSource.keys()];
+            const targetNums = citedNums.length > 0 ? citedNums : defaultNums;
             const entries: string[] = [];
             const seen = new Set<string>();
             for (const n of targetNums) {
                 const { title, url } = numToSource.get(n)!;
                 if (url && !seen.has(url)) {
                     seen.add(url);
-                    entries.push(`${n}. [${title || url}](${url})`);
+                    // 글머리 목록 + 굵은 번호 — `N. ` 순서 목록으로 쓰면 마크다운이 첫 번호만 따라 1,2,3 으로 다시 매기고
+                    // (인용 [출처 8] ↔ 목록 "3."), 1 로 시작하지 않으면 목록이 안 되어 한 문단으로 뭉친다(2026-10-12 라이브).
+                    entries.push(`- **${n}.** [${title || url}](${url})`);
                 }
             }
             if (entries.length > 0) {
@@ -249,7 +276,7 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         } else {
             // 모델이 목록 작성 금지 지시를 무시하고 섹션을 만든 경우 — 인용 번호별로 해당
             // 소스 URL 이 **출처 섹션 안에** 존재하는지 검증, 누락분만 보강. 인용이 전혀 없는데
-            // 섹션에 URL 도 없으면(제목만 나열) 전체 번호 보강 (기존 동작 유지).
+            // 섹션에 URL 도 없으면(제목만 나열) 기본 목록(defaultNums) 보강.
             // 검사는 섹션 스코프(본문 산문의 URL 언급이 섹션 누락을 가리지 않게) + URL 정규화
             // (프로토콜·트레일링 슬래시·대소문자 변형이 중복 첨부로 이어지지 않게) 비교.
             const normalizeUrl = (u: string) =>
@@ -261,7 +288,7 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
             const nums = missingNums.length > 0
                 ? missingNums
                 : citedNums.length === 0 && !/https?:\/\//.test(finalContent.slice(headerIdx))
-                    ? [...numToSource.keys()]
+                    ? defaultNums
                     : [];
             const lines = nums.map((n) => `[${n}] ${numToSource.get(n)!.url}`);
             if (lines.length > 0) {
