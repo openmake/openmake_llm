@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.94.3](https://github.com/openmake/openmake_llm/compare/v1.94.2...v1.94.3) (2026-10-11)
+
+
+### 🐛 버그 수정
+
+* **web-search:** 검색어 정리기 보강 + 도구 검색만 돈 턴의 출처 목록 ([364b326](https://github.com/openmake/openmake_llm/commit/364b326bd5ba0df6aaaabfaf8c91bd0c19e360cc))
+* **web-search:** 검색어 정리기 지시 낱말 패턴에 낱말 경계를 둔다 ([4bbf0bc](https://github.com/openmake/openmake_llm/commit/4bbf0bc5ce0a2bdd10f1db336af2967836f464d2))
+* **web-search:** 검색어 정리기가 검색 지시 표현과 "오늘 기준"을 통째로 걷어낸다 ([8304ff3](https://github.com/openmake/openmake_llm/commit/8304ff3e364b8e873d7341d780ea5aefe5d96ef3))
+* **web-search:** 도구 검색 출처를 답변 끝 출처 목록 번호표에 포함 ([042cead](https://github.com/openmake/openmake_llm/commit/042ceadc61d8bfce631c7455733cdf0362190626))
+* **web-search:** 도구 검색 출처를 답변 끝 출처 목록에 반영 ([84ce1a5](https://github.com/openmake/openmake_llm/commit/84ce1a5a48a5526f7860aaa2e44e7338d3a3b4e2))
+* **web-search:** 도구 검색만 돈 턴에도 인용된 출처 목록을 붙인다 ([06e895f](https://github.com/openmake/openmake_llm/commit/06e895f6870acaa00b5ceed7f0a11d10ef522c9c))
+* **web-search:** 도구 검색만 돈 턴에서 모델이 쓴 출처 섹션은 건드리지 않는다 ([9fc7ed9](https://github.com/openmake/openmake_llm/commit/9fc7ed9c1afb1911657518bd6859ded2cd7970a6))
+* **web-search:** 출처 목록을 글머리 목록 + 굵은 번호로 쓴다 ([f0f4c82](https://github.com/openmake/openmake_llm/commit/f0f4c823ffa57562f0b021d6102cb6a18201f9ed))
+* **web-search:** 턴 누적 출처 저장 상한을 20 → 60 으로 ([4e12568](https://github.com/openmake/openmake_llm/commit/4e12568ad15f32312d41c9e6d6480b3108c545a4))
+
 ## [1.94.2](https://github.com/openmake/openmake_llm/compare/v1.94.1...v1.94.2) (2026-10-11)
 
 
