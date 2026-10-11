@@ -262,7 +262,9 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
                 const { title, url } = numToSource.get(n)!;
                 if (url && !seen.has(url)) {
                     seen.add(url);
-                    entries.push(`${n}. [${title || url}](${url})`);
+                    // 글머리 목록 + 굵은 번호 — `N. ` 순서 목록으로 쓰면 마크다운이 첫 번호만 따라 1,2,3 으로 다시 매기고
+                    // (인용 [출처 8] ↔ 목록 "3."), 1 로 시작하지 않으면 목록이 안 되어 한 문단으로 뭉친다(2026-10-12 라이브).
+                    entries.push(`- **${n}.** [${title || url}](${url})`);
                 }
             }
             if (entries.length > 0) {

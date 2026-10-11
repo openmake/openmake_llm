@@ -37,7 +37,7 @@ function run(finalContent: string, opts: { webSearchContext?: string; toolSource
 /** 첨부된 출처 목록의 번호들 */
 function listedNums(out: string): number[] {
     const block = out.split('**출처**')[1] ?? '';
-    return [...block.matchAll(/^(\d+)\. \[/gm)].map((m) => Number(m[1]));
+    return [...block.matchAll(/^- \*\*(\d+)\.\*\* \[/gm)].map((m) => Number(m[1]));
 }
 
 describe('appendDeterministicBlocks — 사전 주입 + 도구 검색 출처', () => {
@@ -49,9 +49,9 @@ describe('appendDeterministicBlocks — 사전 주입 + 도구 검색 출처', (
         expect(out).toContain('[출처 11]');
         expect(out).toContain('[출처 13]');
         expect(listedNums(out)).toEqual([11, 13]);
-        expect(out).toContain('11. [도구 11](https://tool.example/11)');
+        expect(out).toContain('- **11.** [도구 11](https://tool.example/11)');
         expect(out).not.toContain('https://pre.example/');
-        expect(streamed).toContain('13. [도구 13](https://tool.example/13)');
+        expect(streamed).toContain('- **13.** [도구 13](https://tool.example/13)');
     });
 
     it('사전 주입과 도구 출처를 섞어 인용하면 둘 다 목록에 붙는다', () => {
@@ -60,8 +60,8 @@ describe('appendDeterministicBlocks — 사전 주입 + 도구 검색 출처', (
             toolSources: [toolSearch(11, 10)],
         });
         expect(listedNums(out)).toEqual([2, 12, 15]);
-        expect(out).toContain('2. [사전 2](https://pre.example/2)');
-        expect(out).toContain('15. [도구 15](https://tool.example/15)');
+        expect(out).toContain('- **2.** [사전 2](https://pre.example/2)');
+        expect(out).toContain('- **15.** [도구 15](https://tool.example/15)');
     });
 
     it('어느 쪽에도 없는 번호의 인용은 여전히 지운다', () => {
@@ -116,8 +116,8 @@ describe('appendDeterministicBlocks — 도구 검색만 돈 턴', () => {
     it('인용이 있으면 인용된 도구 출처만 목록으로 붙는다', () => {
         const { out, streamed } = run('최신 수치 [출처 1]. 배경 [출처 4, 6].', { toolSources: [toolSearch(1, 10)] });
         expect(listedNums(out)).toEqual([1, 4, 6]);
-        expect(out).toContain('4. [도구 4](https://tool.example/4)');
-        expect(streamed).toContain('**출처**\n1. [도구 1](https://tool.example/1)');
+        expect(out).toContain('- **4.** [도구 4](https://tool.example/4)');
+        expect(streamed).toContain('**출처**\n- **1.** [도구 1](https://tool.example/1)');
     });
 
     it('인용이 없으면 아무것도 붙이지 않는다', () => {
