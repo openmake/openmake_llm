@@ -236,13 +236,11 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
     const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
     const headerIdx = finalContent.search(headerRe);
-    // 도구 검색만 돈 턴에서 모델이 출처 섹션을 링크와 함께 직접 썼으면 건드리지 않는다 — 목록 작성 금지 지시가 없는 턴이라
-    // 모델이 읽은 페이지까지 섞어 자기 번호로 목록을 쓰고, 도구 번호표 기준의 마커 제거·URL 보강은 그 번호와 어긋난다.
-    // 이 턴은 평문 머리줄(`검색 결과 출처:`)도 섹션으로 보고, 섹션에 URL 이 하나도 없으면 섹션이 없는 것과 같게 처리한다
-    // (링크 없는 목록만 남아 원문으로 못 가는 것 방지). 사전 주입 턴의 판정(헤딩·굵은 글씨면 섹션)은 그대로.
-    const alreadyHasSources = hasInjectedSources
-        ? headerIdx >= 0
-        : [headerIdx >= 0 ? finalContent.slice(headerIdx) : '', findPlainSourceSection(finalContent) ?? ''].some((section) => /https?:\/\//.test(section));
+    // 도구 검색만 돈 턴에서 모델이 출처 섹션을 직접 썼으면 건드리지 않는다 — 목록 작성 금지 지시가 없는 턴이라
+    // 모델이 읽은 페이지까지 섞어 자기 번호로 목록을 쓰고, 도구 번호표 기준의 마커 제거·목록 첨부는 그 번호와 어긋난다
+    // (2026-10-12 라이브: 모델 1번 = 공식 블로그, 도구 1번 = 무관한 페이지 — URL 없는 섹션에 붙였더니 엉뚱한 출처가 달렸다).
+    // 이 턴은 평문 머리줄(`검색 결과 출처:`)도 섹션으로 본다. 사전 주입 턴의 판정(헤딩·굵은 글씨면 섹션)은 그대로.
+    const alreadyHasSources = headerIdx >= 0 || (!hasInjectedSources && findPlainSourceSection(finalContent) !== null);
     if (hasInjectedSources || (!alreadyHasSources && (input.toolSources ?? []).some((list) => list.length > 0))) {
         // 같은 턴에 모델이 부른 web_search 의 출처도 번호표에 넣는다 — 번호가 사전 주입 뒤(11~)라 여기 없으면
         // 모델의 [출처 11] 인용이 아래에서 죽은 마커로 지워지고 무관한 사전 검색 전체가 붙는다(2026-10-12 라이브).

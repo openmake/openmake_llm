@@ -116,7 +116,8 @@ export const extractWebpageTool: MCPToolDefinition = {
             const content = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, TRUNCATION.WEB_CONTENT_MAX);
             // 채팅 턴이면 읽은 페이지를 출처 1건으로 등록 — 번호가 없으면 모델이 이 내용을 검색 결과 번호로 인용한다
             const title = /<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1].replace(/\s+/g, ' ');
-            const pageSource = registerPageSource(context, { title, url, text: content });
+            // 오류 응답(403 등)의 본문은 출처가 아니다 — 번호를 주면 모델이 오류 페이지를 근거처럼 인용한다
+            const pageSource = response.ok === false ? undefined : registerPageSource(context, { title, url, text: content });
             if (pageSource) return { content: [{ type: 'text', text: `${pageSource.header}\n\n${content}` }], sources: pageSource.sources };
             return { content: [{ type: 'text', text: content }] };
         } catch (e) {

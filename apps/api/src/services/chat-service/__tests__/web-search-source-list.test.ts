@@ -211,8 +211,8 @@ describe('appendDeterministicBlocks — 도구 검색만 돈 턴', () => {
 
 /**
  * 도구 검색만 돈 턴 — 모델이 쓴 출처 섹션의 판정(2026-10-12).
- * 섹션에 URL 이 하나라도 있으면 서버는 아무것도 하지 않고(모델 번호 + 링크 목록과 어긋나지 않게),
- * URL 이 하나도 없으면 섹션이 없는 것과 같게 처리한다(링크 없는 목록만 남아 원문으로 못 가는 것 방지).
+ * 모델이 섹션을 직접 썼으면 URL 유무와 상관없이 서버는 아무것도 하지 않는다 — 모델이 자기 번호로 목록을 쓰면
+ * 도구 번호표 기준의 목록은 번호만 같은 엉뚱한 출처가 된다(로컬 라이브: 모델 1번 = Bun 공식 블로그, 도구 1번 = 무관한 페이지).
  * 섹션 인식은 헤딩·굵은 글씨에 더해 평문 `(수식어) 출처:` 줄까지 — 스테이징에서 `검색 결과 출처:` 평문 줄이 안 걸렸다.
  */
 describe('appendDeterministicBlocks — 도구 검색만 돈 턴의 모델 출처 섹션', () => {
@@ -239,20 +239,13 @@ describe('appendDeterministicBlocks — 도구 검색만 돈 턴의 모델 출�
         untouched('発表 [出典 1]。\n\n出典：\n- https://bun.com/blog/bun-v1.3');
     });
 
-    it('평문 섹션에 URL 이 없으면 섹션이 없는 것처럼 — 목록 밖 마커를 지우고 인용된 출처 목록을 붙인다', () => {
-        const { out } = run('수치 [출처 2]. 배경 [출처 5]. 지어낸 번호 [출처 40].\n\n검색 결과 출처:\n2 nxplace.com — 요약\n5 example.org — 요약', { toolSources: [toolSearch(1, 8)] });
-        expect(out).not.toContain('[출처 40]');
-        expect(listedNums(out)).toEqual([2, 5]);
-        expect(out).toContain('- **5.** [도구 5](https://tool.example/5)');
+    it('평문 섹션에 URL 이 없어도 건드리지 않는다 — 목록이 두 번 보이지 않는다', () => {
+        untouched('수치 [출처 2]. 배경 [출처 5]. 지어낸 번호 [출처 40].\n\n검색 결과 출처:\n2 nxplace.com — 요약\n5 example.org — 요약');
     });
 
-    it('헤딩·굵은 글씨 섹션이라도 URL 이 없으면 인용된 출처 목록을 붙인다', () => {
-        const heading = run('수치 [출처 2]. 지어낸 번호 [출처 40].\n\n## 출처 목록\n- 도구 2', { toolSources: [toolSearch(1, 8)] });
-        expect(heading.out).not.toContain('[출처 40]');
-        expect(heading.out).toContain('\n\n---\n\n**출처**\n- **2.** [도구 2](https://tool.example/2)');
-
-        const bold = run('수치 [출처 3].\n\n**출처**\n- 도구 3', { toolSources: [toolSearch(1, 8)] });
-        expect(bold.streamed).toBe('\n\n---\n\n**출처**\n- **3.** [도구 3](https://tool.example/3)');
+    it('헤딩·굵은 글씨 섹션에 URL 이 없어도 건드리지 않는다 — 모델 자체 번호일 수 있다', () => {
+        untouched('공식 발표 [출처 1]. 보도 [출처 2].\n\n## 출처 목록\n\n1 Bun 공식 블로그 "Bun 1.3" — bun.com/blog/bun-v1.3\n2 InfoQ — infoq.com');
+        untouched('수치 [출처 3].\n\n**출처**\n- 도구 3');
     });
 
     it('본문 중간의 한 줄 "출처: …" 표기는 섹션으로 보지 않는다 — URL 이 있어도 서버 목록이 붙는다', () => {

@@ -81,6 +81,15 @@ describe('extract_webpage 출처 번호', () => {
         expect(context.sourceNumberBase).toBe(10);
     });
 
+    it('HTTP 오류 응답(403 등)은 본문은 종전대로 돌려주되 출처로 등록하지 않는다', async () => {
+        mockSafeFetch.mockResolvedValueOnce({ ok: false, status: 403, text: async () => 'Forbidden' });
+        const context = { userId: '3', role: 'user' as const, sourceNumberBase: 18 };
+        const r = await extract.handler({ url: PAGE_URL }, context);
+        expect(r.sources).toBeUndefined();
+        expect(textOf(r)).toBe('Forbidden');
+        expect(context.sourceNumberBase).toBe(18);
+    });
+
     it('web_search → extract_webpage → web_search 가 겹치지 않는 번호를 받는다', async () => {
         const context = { userId: '3', role: 'user' as const, sourceNumberBase: 10 };
         const first = await search.handler({ query: 'q1' }, context);
