@@ -1963,7 +1963,8 @@ export const AGENT_TASK_RETENTION = {
 export const MESSAGE_SOURCES_LIMITS = {
     TTL_MS: 30 * 60_000,
     MAX_PENDING: 500,
-    MAX_SOURCES: 20,
+    /** 턴 누적 상한 — 사전 주입(10) 뒤로 web_search 호출마다 10건씩 번호가 이어진다. 넘는 번호는 본문 [N] 칩이 빈다 */
+    MAX_SOURCES: 60,
     MAX_TITLE_CHARS: 300,
     MAX_URL_CHARS: 2_000,
     MAX_SNIPPET_CHARS: 400,
