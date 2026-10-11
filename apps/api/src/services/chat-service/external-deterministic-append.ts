@@ -200,12 +200,14 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     // 사전 주입이 없어도 모델이 web_search 도구를 불러 출처가 있으면 같은 처리를 한다 — 게이트가 사전 주입만 보던
     // 때는 도구 검색만 돈 턴의 [출처 N] 인용에 목록이 붙지 않고 목록 밖 번호 마커도 남았다.
     const hasInjectedSources = /\[[^\]]*?\d+\]\s*.+?\n\s*URL:\s*\S+/.test(webSearchCtxText);
-    if (hasInjectedSources || (input.toolSources ?? []).some((list) => list.length > 0)) {
-        const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
-        const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
-        const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
-        const headerIdx = finalContent.search(headerRe);
-        const alreadyHasSources = headerIdx >= 0;
+    const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
+    const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
+    const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
+    const headerIdx = finalContent.search(headerRe);
+    const alreadyHasSources = headerIdx >= 0;
+    // 도구 검색만 돈 턴에서 모델이 출처 섹션을 직접 썼으면 건드리지 않는다 — 목록 작성 금지 지시가 없는 턴이라
+    // 모델이 읽은 페이지까지 섞어 자기 번호로 목록을 쓰고, 도구 번호표 기준의 마커 제거·URL 보강은 그 번호와 어긋난다.
+    if (hasInjectedSources || (!alreadyHasSources && (input.toolSources ?? []).some((list) => list.length > 0))) {
         // 컨텍스트에서 번호→(제목, URL) 파싱 — canonical 목록 생성·누락 검증에 공용.
         const numToSource = new Map<string, { title: string; url: string }>();
         const re = /\[[^\]]*?(\d+)\]\s*(.+?)\n\s*URL:\s*(\S+)/g;

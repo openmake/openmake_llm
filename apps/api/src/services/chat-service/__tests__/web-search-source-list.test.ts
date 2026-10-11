@@ -147,10 +147,13 @@ describe('appendDeterministicBlocks — 도구 검색만 돈 턴', () => {
         expect(streamed).toBe('');
     });
 
-    it('모델이 출처 섹션을 직접 썼으면 인용된 번호 중 섹션에 URL 이 없는 것만 보강한다', () => {
-        const { out } = run('수치 [출처 1]. 배경 [출처 3].\n\n**출처**\n- [도구 1](https://tool.example/1)\n- 도구 3', { toolSources: [toolSearch(1, 5)] });
-        expect(out).toContain('🔗 **URL**\n[3] https://tool.example/3');
-        expect(out).not.toContain('[1] https://tool.example/1');
+    // 2026-10-12 로컬 라이브: 모델이 읽은 페이지까지 섞어 자기 번호로 `## 출처 목록` 을 쓰자, 도구 출처 번호표
+    // 기준의 `🔗 URL` 보강이 같은 번호에 다른 URL 을 덧붙였다. 사전 주입이 없는 턴은 목록 작성 금지 지시도 없다.
+    it('모델이 출처 섹션을 직접 썼으면 건드리지 않는다 — 번호가 모델 자체 목록 기준일 수 있다', () => {
+        const body = '공식 발표 [출처 1]. 벤치마크 [출처 5]. 후속 [출처 12].\n\n## 출처 목록\n1 Bun Blog — https://bun.com/blog/bun-v1.3\n5 Mashblog — https://mashblog.com/posts/bun\n12 InfoQ — https://www.infoq.com/news/bun';
+        const { out, streamed } = run(body, { toolSources: [toolSearch(1, 8)] });
+        expect(out).toBe(body);
+        expect(streamed).toBe('');
     });
 
     it('모델이 출처 섹션을 직접 썼고 인용이 없으면 보강하지 않는다', () => {
