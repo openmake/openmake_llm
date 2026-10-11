@@ -22,6 +22,7 @@ import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { ChatStreamResult } from '../../providers/i-provider';
 import type { ExternalProviderDeps, StreamFromExternalContext } from './external-provider-types';
+import type { SearchSourceRef } from '../../tools/web-search/types';
 import { withLanguageNote } from './tool-result-language';
 
 type ExternalToolCall = NonNullable<ChatStreamResult['toolCalls']>[number];
@@ -52,6 +53,11 @@ interface ToolBatchState {
      * 모델이 최종 응답에 <artifact> 를 생략하면 결정적 첨부한다(위 블록들과 동일 패턴).
      */
     odArtifact: OdArtifactCapture | null;
+    /**
+     * 도구(web_search)가 낸 구조화 출처 — 호출 1회당 목록 1개, 결과가 나온 순서.
+     * 답변 끝 출처 목록의 번호표에 사전 주입 출처와 함께 들어간다(external-deterministic-append).
+     */
+    toolSources: SearchSourceRef[][];
 }
 
 /** 빈 배치 상태 — 요청 1건마다 새로 만든다. */
@@ -63,6 +69,7 @@ export function createToolBatchState(): ToolBatchState {
         generatedMediaMarkdowns: [],
         integrationBlocks: {},
         odArtifact: null,
+        toolSources: [],
     };
 }
 
@@ -95,7 +102,7 @@ export async function runToolCallBatch(params: {
     const parallelReadOnlyResults = await prefetchReadOnlyCalls(
         toolCalls,
         () => true,
-        (tc) => executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>),
+        (tc) => executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>, state.toolSources),
         { path: 'chat', ...(req.abortSignal ? { signal: req.abortSignal } : {}) },
     );
     for (const tc of toolCalls) {
@@ -150,7 +157,7 @@ export async function runToolCallBatch(params: {
         } else {
             // 병렬 선실행된 읽기 전용 결과가 있으면 재실행 없이 소비.
             toolResult = parallelReadOnlyResults.get(tc.id)
-                ?? await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
+                ?? await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>, state.toolSources);
         }
         // 오픈디자인 HTML 산출물 캡처 — 저장 성공한 자체완결 HTML 만, 마지막 것 유지.
         // mcp_call 메타 도구 경유 간접 호출도 server::tool 로 정규화해 동일 캡처한다.

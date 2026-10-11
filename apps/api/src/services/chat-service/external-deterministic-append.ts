@@ -10,7 +10,7 @@
  */
 import { createLogger } from '../../utils/logger';
 import { getChatTurnIntegrations, type IntegrationBlocks } from './turn-integrations';
-import { REPORT_PIPELINE } from '../../config/runtime-limits';
+import { REPORT_PIPELINE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { tryRenderReportBlock } from './report-block';
 import { stripMissingGeneratedLinks } from './generated-link-guard';
 import { basename } from 'path';
@@ -18,6 +18,7 @@ import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-chat-locales';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { StreamFromExternalContext } from './external-provider-types';
+import type { SearchSourceRef } from '../../tools/web-search/types';
 
 const logger = createLogger('ChatExternalProvider');
 
@@ -92,6 +93,8 @@ interface DeterministicAppendInput {
     integrationBlocks: IntegrationBlocks;
     /** 오픈디자인 도구로 저장한 HTML 산출물 (마지막 저장본 — captureOdArtifactHtml 참고). */
     odArtifact?: OdArtifactCapture | null;
+    /** 이 턴의 web_search 도구 출처 — 호출 1회당 목록 1개, 결과가 나온 순서. 번호는 사전 주입 뒤로 이어진다. */
+    toolSources?: SearchSourceRef[][];
     req: ChatMessageRequest;
     ctx: StreamFromExternalContext;
 }
@@ -209,6 +212,18 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
                 numToSource.set(mm[1], { title: mm[2].trim(), url: mm[3].trim() });
             }
         }
+        // 같은 턴에 모델이 부른 web_search 의 출처도 번호표에 넣는다 — 번호가 사전 주입 뒤(11~)라 여기 없으면
+        // 모델의 [출처 11] 인용이 아래에서 죽은 마커로 지워지고 무관한 사전 검색 전체가 붙는다(2026-10-12 라이브).
+        const toolSources = (input.toolSources ?? []).filter((list) => list.length > 0);
+        for (const s of toolSources.flat()) {
+            if (!numToSource.has(String(s.n))) numToSource.set(String(s.n), { title: s.title, url: s.url });
+        }
+        // 인용이 없을 때 붙일 기본 목록 — 도구 검색이 돈 턴은 가장 최근 검색의 상위 N건(모델이 마지막에 보고 쓴 근거),
+        // 도구 검색이 없던 턴은 번호표 전체(= 사전 주입 전체, 기존 동작).
+        const lastToolSearch = toolSources[toolSources.length - 1];
+        const defaultNums = lastToolSearch
+            ? (WEB_SEARCH_INJECTION.MAX_RESULTS > 0 ? lastToolSearch.slice(0, WEB_SEARCH_INJECTION.MAX_RESULTS) : lastToolSearch).map((s) => String(s.n))
+            : [...numToSource.keys()];
         // 수집 목록에 없는 번호의 죽은 인용 마커 결정적 제거 — 저장 히스토리(반환값)가 대상.
         // 이미 스트리밍된 화면은 ws-chat-handler 의 done.cleanedContent 교체가 완료 시점에 정리.
         const stripRes = stripDeadCitationMarkers(finalContent, new Set(numToSource.keys()));
@@ -228,9 +243,9 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
             }
         }
         if (!alreadyHasSources) {
-            // canonical 목록 첨부 — 인용된 번호가 있으면 그 소스만(정밀), 없으면 전체(기존 동작).
+            // canonical 목록 첨부 — 인용된 번호가 있으면 그 소스만(정밀), 없으면 기본 목록(defaultNums).
             // 번호는 인라인 인용과 일치하도록 원본 소스 번호를 유지한다 (재번호 시 [출처 3]↔목록 불일치).
-            const targetNums = citedNums.length > 0 ? citedNums : [...numToSource.keys()];
+            const targetNums = citedNums.length > 0 ? citedNums : defaultNums;
             const entries: string[] = [];
             const seen = new Set<string>();
             for (const n of targetNums) {
@@ -249,7 +264,7 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         } else {
             // 모델이 목록 작성 금지 지시를 무시하고 섹션을 만든 경우 — 인용 번호별로 해당
             // 소스 URL 이 **출처 섹션 안에** 존재하는지 검증, 누락분만 보강. 인용이 전혀 없는데
-            // 섹션에 URL 도 없으면(제목만 나열) 전체 번호 보강 (기존 동작 유지).
+            // 섹션에 URL 도 없으면(제목만 나열) 기본 목록(defaultNums) 보강.
             // 검사는 섹션 스코프(본문 산문의 URL 언급이 섹션 누락을 가리지 않게) + URL 정규화
             // (프로토콜·트레일링 슬래시·대소문자 변형이 중복 첨부로 이어지지 않게) 비교.
             const normalizeUrl = (u: string) =>
@@ -261,7 +276,7 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
             const nums = missingNums.length > 0
                 ? missingNums
                 : citedNums.length === 0 && !/https?:\/\//.test(finalContent.slice(headerIdx))
-                    ? [...numToSource.keys()]
+                    ? defaultNums
                     : [];
             const lines = nums.map((n) => `[${n}] ${numToSource.get(n)!.url}`);
             if (lines.length > 0) {

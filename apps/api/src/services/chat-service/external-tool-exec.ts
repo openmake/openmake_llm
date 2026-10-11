@@ -44,15 +44,18 @@ export function summarizeToolCall(toolArgs: Record<string, unknown>, resultText:
 
 /**
  * 외부 LLM Tool Calling — MCP 도구 실행 + user sandbox. 끝나면 결과 요약(+리소스·출처)을 콜백으로 한 번 알린다.
+ * toolSources 를 넘기면 이 호출의 출처 목록을 거기에 쌓는다 — 답변 끝 출처 목록의 번호표용(콜백 유무와 무관).
  */
 export async function executeExternalTool(
     deps: ExternalProviderDeps,
     toolName: string,
     toolArgs: Record<string, unknown>,
+    toolSources?: NonNullable<ToolSideOutput['sources']>[],
 ): Promise<string> {
     const startedAt = Date.now();
     const side: ToolSideOutput = { resources: [] };
     const text = await runExternalTool(deps, toolName, toolArgs, side);
+    if (side.sources) toolSources?.push(side.sources);
     if (deps.mcpToolResultCallback) {
         try {
             deps.mcpToolResultCallback({

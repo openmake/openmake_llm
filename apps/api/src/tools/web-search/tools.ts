@@ -47,6 +47,9 @@ const webSearchTool: MCPToolDefinition = {
         // showSource: 결과가 어느 검색엔진(naver.com·google.com 등)에서 왔는지 제목 옆에 표시.
         // 같은 턴에 먼저 붙은 출처(사전 주입 웹검색·문서 근거)가 있으면 번호를 그 뒤부터 — 본문 [N] 이 겹치지 않게
         const numberOffset = context?.sourceNumberBase ?? 0;
+        // 같은 턴의 다음 web_search 가 이 뒤 번호를 받게 기준을 민다 — 문맥은 턴 내 공유 객체(런타임이 복제하지 않는다)이고,
+        // 결과가 나온 뒤 await 없는 구간이라 병렬 호출끼리도 범위가 겹치지 않는다. 기준이 없는 문맥(채팅 턴 밖)은 그대로 둔다.
+        if (context?.sourceNumberBase !== undefined) context.sourceNumberBase = numberOffset + results.length;
         const output = `검색 결과 (${results.length}개)\n\n` +
             formatSearchSources(results, { maxSnippetChars: WEB_SEARCH_TOOL_LIMITS.SNIPPET_CHARS, snippetSuffix: '...', showSource: true, numberOffset });
 
