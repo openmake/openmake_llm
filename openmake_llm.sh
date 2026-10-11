@@ -332,6 +332,34 @@ start_redis() {
     wait_for_port "$REDIS_PORT" "Redis"
 }
 
+# 이미 등록된 PM2 앱 하나를 ecosystem.config.js 의 지금 정의로 다시 띄운다 (호출 전에 export_dotenv_for_pm2).
+#
+# `pm2 restart <이름>` 은 ecosystem 을 다시 읽지 않는다 — PM2 는 등록 시점의 설정을 계속 쓰므로
+# kill_timeout·max_memory_restart·args 같은 ecosystem 변경이 기존 설치본에 영영 닿지 않았다
+# (2026-10-11 staging 실측: kill_timeout 을 35000 으로 올린 뒤 배포해도 10000 그대로 →
+# 종료 절차가 10초에 SIGKILL).
+# `pm2 restart|startOrRestart ecosystem.config.js --only <이름>` 은 쓰지 않는다 — 옵션은 다시 적용하지만
+# 프로세스 env 를 ecosystem 의 env 블록으로 갈아 끼워 셸에 올린 .env 값이 버려지고(PM2 7 God.restartProcessId →
+# Utility.extendExtraConfig, 2026-09-04 의 stale env 가 되살아난다), script·로그 경로는 반영하지 않는다.
+# 그래서 지우고 새로 등록한다. --only 로 이 앱 하나만 — 같은 호스트의 다른 인스턴스나 이 설치본이
+# 쓰지 않는 앱(discord 등)은 건드리지 않는다.
+# 지운 뒤 등록이 실패하면 앱이 PM2 에서 사라지므로, ecosystem 이 이 이름을 정의하고 script 가 있는지
+# 먼저 본다. 아니면 지우지 않고 예전처럼 이름으로 재시작한다(설정은 다시 적용되지 않는다).
+pm2_restart_app() {
+    local name="$1"
+    if ! ( cd "$SCRIPT_DIR" && node -e '
+        const path = require("path"), fs = require("fs");
+        const app = require("./ecosystem.config.js").apps.find((a) => a.name === process.argv[1]);
+        process.exit(app && fs.existsSync(path.resolve(app.cwd || ".", app.script)) ? 0 : 1);
+    ' "$name" ) >/dev/null 2>&1; then
+        log_warn "ecosystem.config.js 로 $name 을 다시 등록할 수 없음(이름 또는 script 없음) — ecosystem 설정 재적용 없이 재시작"
+        pm2 restart "$name" --update-env >/dev/null 2>&1
+        return
+    fi
+    pm2 delete "$name" >/dev/null 2>&1 || return 1
+    ( cd "$SCRIPT_DIR" && pm2 start ecosystem.config.js --only "$name" >/dev/null 2>&1 )
+}
+
 start_app() {
     log_step "Layer 3/3: OpenMake LLM (PM2)"
 
@@ -351,7 +379,7 @@ start_app() {
     if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
         log_info "$APP_NAME 이미 등록됨 — restart 시도"
         export_dotenv_for_pm2
-        pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 || {
+        pm2_restart_app "$APP_NAME" || {
             log_err "$APP_NAME restart 실패"
             return 2
         }
@@ -517,7 +545,7 @@ restart_built_apps() {
     export_dotenv_for_pm2
     for app in "$APP_NAME" "$FRONT_APP_NAME"; do
         if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$app\""; then
-            if pm2 restart "$app" --update-env >/dev/null 2>&1; then
+            if pm2_restart_app "$app"; then
                 log_ok "$app 재시작"
                 restarted=1
             else
@@ -697,14 +725,14 @@ cmd_deploy() {
     log_step "PM2 앱 재시작 (의존성은 그대로 유지)"
     if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
         export_dotenv_for_pm2
-        pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 || {
+        pm2_restart_app "$APP_NAME" || {
             log_err "$APP_NAME restart 실패"
             return 2
         }
         # 프론트(next start)는 .next 빌드본을 기동 시점에 읽으므로 함께 재시작해야
         # 새 빌드가 반영된다 (누락 시 옛 프론트가 계속 서빙되는 함정).
         if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$FRONT_APP_NAME\""; then
-            pm2 restart "$FRONT_APP_NAME" --update-env >/dev/null 2>&1 \
+            pm2_restart_app "$FRONT_APP_NAME" \
                 && log_ok "$FRONT_APP_NAME 재시작" \
                 || log_warn "$FRONT_APP_NAME restart 실패 — 'pm2 restart $FRONT_APP_NAME' 수동 확인 필요"
         else
@@ -963,7 +991,7 @@ cmd_canary_deploy() {
   2) 빌드: npm run build (--no-restart)
   3) 마이그레이션: $([[ "$DEPLOY_NO_MIGRATE" -eq 1 ]] && echo "생략(--no-migrate)" || echo "cli.ts migrate")
   4) 카나리 헬스체크: http://127.0.0.1:$CANARY_HEALTH_PORT/health (최대 $((CANARY_HEALTH_RETRIES * CANARY_HEALTH_INTERVAL))s)
-  5) 통과 시 전환: pm2 restart $APP_NAME $FRONT_APP_NAME --update-env
+  5) 통과 시 전환: $APP_NAME · $FRONT_APP_NAME 을 ecosystem.config.js 정의로 재시작
   6) 전환 후 헬스체크(포트 $APP_PORT) 실패 시: 1)의 백업으로 롤백 후 재기동
 EOF
         return 0
@@ -994,13 +1022,13 @@ EOF
     log_step "전환: PM2 앱 재시작"
     if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
         export_dotenv_for_pm2
-        pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 || {
+        pm2_restart_app "$APP_NAME" || {
             log_err "$APP_NAME restart 실패 — 롤백 시도"
             canary_restore_dist && restart_built_apps
             return 2
         }
         if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$FRONT_APP_NAME\""; then
-            pm2 restart "$FRONT_APP_NAME" --update-env >/dev/null 2>&1 \
+            pm2_restart_app "$FRONT_APP_NAME" \
                 && log_ok "$FRONT_APP_NAME 재시작" \
                 || log_warn "$FRONT_APP_NAME restart 실패 — 'pm2 restart $FRONT_APP_NAME' 수동 확인 필요"
         fi
@@ -1014,9 +1042,9 @@ EOF
         canary_restore_dist || { log_err "롤백 실패 — 즉시 수동 개입 필요"; return 2; }
         if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
             export_dotenv_for_pm2
-            pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 || log_err "롤백 후 재시작 실패 — 수동 개입 필요"
+            pm2_restart_app "$APP_NAME" || log_err "롤백 후 재시작 실패 — 수동 개입 필요"
             pm2 jlist 2>/dev/null | grep -q "\"name\":\"$FRONT_APP_NAME\"" \
-                && { pm2 restart "$FRONT_APP_NAME" --update-env >/dev/null 2>&1 || true; }
+                && { pm2_restart_app "$FRONT_APP_NAME" || true; }
         fi
         wait_for_app_with_logs "$APP_PORT" "OpenMake LLM" \
             && log_warn "롤백 완료 — 직전 커밋 빌드로 복구됨, 원인 조사 필요" \
@@ -1107,7 +1135,7 @@ cmd_db_restore() {
 
     if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
         export_dotenv_for_pm2
-        pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 && log_ok "$APP_NAME 재시작" \
+        pm2_restart_app "$APP_NAME" && log_ok "$APP_NAME 재시작" \
             || log_warn "$APP_NAME 재시작 실패 — 'pm2 restart $APP_NAME' 수동 확인"
         wait_for_app_with_logs "$APP_PORT" "OpenMake LLM" || true
     fi
