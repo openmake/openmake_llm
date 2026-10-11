@@ -18,6 +18,7 @@ import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-chat-locales';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { StreamFromExternalContext } from './external-provider-types';
+import { parseInjectedSources } from '../../tools/web-search/format-sources';
 import type { SearchSourceRef } from '../../tools/web-search/types';
 
 const logger = createLogger('ChatExternalProvider');
@@ -228,7 +229,9 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     const webSearchCtxText = req.webSearchContext || ctx.enhancedMessage || '';
     // 사전 주입이 없어도 모델이 web_search 도구를 불러 출처가 있으면 같은 처리를 한다 — 게이트가 사전 주입만 보던
     // 때는 도구 검색만 돈 턴의 [출처 N] 인용에 목록이 붙지 않고 목록 밖 번호 마커도 남았다.
-    const hasInjectedSources = /\[[^\]]*?\d+\]\s*.+?\n\s*URL:\s*\S+/.test(webSearchCtxText);
+    // 컨텍스트에서 번호→(제목, URL) 파싱 — canonical 목록 생성·누락 검증에 공용.
+    const numToSource = parseInjectedSources(webSearchCtxText);
+    const hasInjectedSources = numToSource.size > 0;
     const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
     const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
     const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
@@ -241,15 +244,6 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         ? headerIdx >= 0
         : [headerIdx >= 0 ? finalContent.slice(headerIdx) : '', findPlainSourceSection(finalContent) ?? ''].some((section) => /https?:\/\//.test(section));
     if (hasInjectedSources || (!alreadyHasSources && (input.toolSources ?? []).some((list) => list.length > 0))) {
-        // 컨텍스트에서 번호→(제목, URL) 파싱 — canonical 목록 생성·누락 검증에 공용.
-        const numToSource = new Map<string, { title: string; url: string }>();
-        const re = /\[[^\]]*?(\d+)\]\s*(.+?)\n\s*URL:\s*(\S+)/g;
-        let mm: RegExpExecArray | null;
-        while ((mm = re.exec(webSearchCtxText)) !== null) {
-            if (!numToSource.has(mm[1])) {
-                numToSource.set(mm[1], { title: mm[2].trim(), url: mm[3].trim() });
-            }
-        }
         // 같은 턴에 모델이 부른 web_search 의 출처도 번호표에 넣는다 — 번호가 사전 주입 뒤(11~)라 여기 없으면
         // 모델의 [출처 11] 인용이 아래에서 죽은 마커로 지워지고 무관한 사전 검색 전체가 붙는다(2026-10-12 라이브).
         const toolSources = (input.toolSources ?? []).filter((list) => list.length > 0);

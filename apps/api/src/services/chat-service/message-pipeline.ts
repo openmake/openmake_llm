@@ -40,6 +40,7 @@ import { buildUserContextBlocks } from './user-context-blocks';
 import { autoFormMemories } from './memory-extraction';
 import { resolveMemoryLearning } from './memory-policy';
 import type { RequestContext } from './request-context';
+import { resolveSourceNumberBase } from '../../tools/web-search/format-sources';
 import { recordOrchestrationDispatch } from './orchestration-shadow-recorder';
 import { detectOrchestrationIntents } from './external-tool-plan';
 import { ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
@@ -83,8 +84,9 @@ export async function runMessagePipeline(svc: ChatService,
     const reqCtx: RequestContext = {
         userContext: {
             ...svc.buildUserContext(userId || 'guest', userRole),
-            // 턴 시작 출처가 없어도 0 으로 싣는다 — 같은 턴의 web_search 호출들이 번호를 이어 매기는 기준(턴 공유 객체)
-            sourceNumberBase: req.sourceNumberBase ?? 0,
+            // 턴 시작 출처가 없어도 0 으로 싣는다 — 같은 턴의 web_search 호출들이 번호를 이어 매기는 기준(턴 공유 객체).
+            // 호출부가 기준을 주지 않았으면(REST 는 webSearchContext 문자열만 온다) 사전 주입 컨텍스트의 출처 번호 최댓값
+            sourceNumberBase: resolveSourceNumberBase(req.sourceNumberBase, webSearchContext),
         },
         message: req.message,
         // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화(외부 서비스는 자체 도구 체계 사용)

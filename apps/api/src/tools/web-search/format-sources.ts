@@ -102,3 +102,28 @@ export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOp
     });
     return lines.join(separator);
 }
+
+/**
+ * formatSearchSources 라벨형(`[출처 N] 제목\n   URL: …`)의 역 — 사전 주입 컨텍스트 문자열에서 번호 → 제목·URL 을 뽑는다.
+ * 답변 끝 출처 목록의 번호표와 도구 출처 번호의 기준이 같은 규칙으로 읽도록 한 곳에 둔다. 같은 번호는 먼저 나온 것이 이긴다.
+ */
+export function parseInjectedSources(text: string): Map<string, { title: string; url: string }> {
+    const numToSource = new Map<string, { title: string; url: string }>();
+    const re = /\[[^\]]*?(\d+)\]\s*(.+?)\n\s*URL:\s*(\S+)/g;
+    let mm: RegExpExecArray | null;
+    while ((mm = re.exec(text)) !== null) {
+        if (!numToSource.has(mm[1])) {
+            numToSource.set(mm[1], { title: mm[2].trim(), url: mm[3].trim() });
+        }
+    }
+    return numToSource;
+}
+
+/**
+ * 이 턴의 도구 출처 번호 기준 — 호출부가 준 값(웹소켓 경로: 사전 주입 + 통합 출처 수)이 있으면 그 값,
+ * 없으면 사전 주입 컨텍스트의 출처 번호 최댓값(REST 경로는 webSearchContext 문자열만 온다), 그것도 없으면 0.
+ */
+export function resolveSourceNumberBase(explicitBase: number | undefined, webSearchContext: string | undefined): number {
+    if (explicitBase !== undefined) return explicitBase;
+    return Math.max(0, ...[...parseInjectedSources(webSearchContext ?? '').keys()].map(Number));
+}
