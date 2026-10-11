@@ -64,7 +64,7 @@ describe('External Provider — 출처 링크 보강', () => {
     it('섹션 미작성 + 인용 있음 → 인용된 소스만, 원본 번호 유지 (재번호 금지)', async () => {
         const result = await streamFromExternalProvider(deps, makeResolved('답 [출처 2] 기반.'), req, () => {}, ctx);
         expect(result).toContain('**출처**');
-        expect(result).toContain('2. [제목B](https://b.example.com/2)'); // 원본 번호 2 유지
+        expect(result).toContain('- **2.** [제목B](https://b.example.com/2)'); // 원본 번호 2 유지
         expect(result).not.toContain('https://a.example.com/1'); // 미인용 소스 제외
     });
 });
