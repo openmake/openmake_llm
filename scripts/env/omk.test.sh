@@ -486,6 +486,49 @@ for f in install_linux.sh scripts/setup/mac/60-app.sh; do
     ok "build: $f 도 빌드에 넘긴다" "grep -q 'API_PROXY_TARGET=\"http://localhost:\$APP_PORT\" npm run build' '$HERE/../../$f'"
 done
 
+# ── 재시작: 이미 등록된 앱도 ecosystem.config.js 의 지금 정의로 다시 띄운다 ──
+# `pm2 restart <이름>` 은 ecosystem 을 다시 읽지 않는다 — kill_timeout 을 10000→35000 으로 올린 변경이 기존
+# 설치본에 닿지 않아 종료 절차가 10초에 SIGKILL 로 끊겼다(2026-10-11 staging 실측). 가짜 pm2 로 호출만 기록한다.
+RS="$TMP/restarttarget"; mkdir -p "$RS/bin" "$RS/apps/api/dist"
+cp "$HERE/../../openmake_llm.sh" "$RS/"; : > "$RS/apps/api/dist/cli.js"; : > "$RS/next.js"
+printf 'OMK_INSTANCE=rs\nPORT=52499\nRS_FROM_DOTENV=fresh\n' > "$RS/.env"
+cat > "$RS/ecosystem.config.js" <<'EOF'
+const s = process.env.OMK_INSTANCE ? `-${process.env.OMK_INSTANCE}` : '';
+module.exports = { apps: [
+    { name: `openmake-llm${s}`, script: 'apps/api/dist/cli.js', cwd: __dirname, kill_timeout: 35000 },
+    { name: `openmake-next${s}`, script: `${__dirname}/next.js`, cwd: __dirname },
+    { name: `openmake-discord${s}`, script: 'apps/discord-bot/dist/index.js', cwd: __dirname },
+] };
+EOF
+printf '#!/usr/bin/env bash\nexit 0\n' > "$RS/bin/npm"
+cat > "$RS/bin/pm2" <<EOF
+#!/usr/bin/env bash
+if [[ "\$1" == jlist ]]; then cat "$RS/jlist"; exit 0; fi
+printf '%s | cwd=%s | env=%s\n' "\$*" "\$PWD" "\${RS_FROM_DOTENV:-}" >> "$RS/pm2.log"
+EOF
+chmod +x "$RS/bin/npm" "$RS/bin/pm2"
+rs_build() { : > "$RS/pm2.log"; ( unset OMK_INSTANCE RS_FROM_DOTENV; PATH="$RS/bin:$PATH" bash "$RS/openmake_llm.sh" build >/dev/null 2>&1 ); }
+if has node; then
+    printf '[{"name":"openmake-llm-rs"},{"name":"openmake-next-rs"}]' > "$RS/jlist"; rs_build
+    eq "restart: 등록된 앱은 지우고 ecosystem 으로 다시 등록한다(이 앱만, .env 값은 셸로)" "$(cut -d'|' -f1,3 "$RS/pm2.log" | tr '\n' ';')" \
+        "delete openmake-llm-rs | env=fresh;start ecosystem.config.js --only openmake-llm-rs | env=fresh;delete openmake-next-rs | env=fresh;start ecosystem.config.js --only openmake-next-rs | env=fresh;"
+    ok "restart: ecosystem 은 설치본 디렉터리에서 평가한다" '[[ "$(grep -c "^start .*cwd=$RS " "$RS/pm2.log")" == 2 ]]'
+    printf '[{"name":"openmake-llm-rs"}]' > "$RS/jlist"; rs_build
+    ok "restart: 등록되지 않은 앱(next·discord)은 새로 띄우지 않는다" '! grep -qE "next|discord" "$RS/pm2.log"'
+    # ecosystem 이 그 이름을 정의하지 않으면(이름이 어긋난 설치본) 지우지 않는다 — 지우면 다시 띄울 정의가 없다.
+    printf '[{"name":"openmake-llm-rs"}]' > "$RS/jlist"; printf 'PORT=52499\nOMK_INSTANCE=rs\n' > "$RS/.env"
+    ( cd "$RS" && sed -i.bak 's/openmake-llm\$/openmake-api$/' ecosystem.config.js ); rs_build
+    eq "restart: ecosystem 에 없는 이름은 지우지 않고 예전처럼 재시작" "$(cut -d'|' -f1 "$RS/pm2.log" | tr '\n' ';')" "restart openmake-llm-rs --update-env ;"
+    mv "$RS/ecosystem.config.js.bak" "$RS/ecosystem.config.js"; rm -f "$RS/apps/api/dist/cli.js"; rs_build
+    eq "restart: 띄울 script 가 없으면 지우지 않는다" "$(cut -d'|' -f1 "$RS/pm2.log" | tr '\n' ';')" "restart openmake-llm-rs --update-env ;"
+else echo "SKIP restart: ecosystem 재적용 (node 없음)"; fi
+eq "restart: 이름만으로 재시작하는 곳은 폴백 한 곳뿐" "$(grep -cE '^[^#]*pm2 restart "\$' "$HERE/../../openmake_llm.sh")" "1"
+# 스크립트가 만드는 이름과 실제 ecosystem 이 만드는 이름이 같아야 --only 가 맞는 앱을 집는다.
+if ( cd "$HERE/../.." && node -e 'require("./ecosystem.config.js")' ) >/dev/null 2>&1; then
+    eq "restart: ecosystem 의 앱 이름 = 스크립트의 앱 이름" \
+        "$( cd "$HERE/../.." && OMK_INSTANCE=rs node -e 'console.log(require("./ecosystem.config.js").apps.slice(0,2).map(a=>a.name).join(" "))' )" "openmake-llm-rs openmake-next-rs"
+else echo "SKIP restart: 실제 ecosystem 이름 대조 (의존성 없음)"; fi
+
 # ── 스모크: 갱신 직후 설치본이 실제로 도는지 사람 없이 본다 (네트워크는 건드리지 않는다 — smoke_code 를 갈아 끼운다) ──
 SM="$OMK_ROOT/smk/llm"; mkdir -p "$SM/apps/web/.next"
 printf 'PORT=52417\nOMK_WEB_PORT=3010\n' > "$SM/.env"

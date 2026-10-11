@@ -9,6 +9,10 @@
  *   pm2 monit                              # 모니터링 대시보드
  *   pm2 save && pm2 startup                # 시스템 부팅 시 자동 시작
  *
+ * 이 파일의 변경(kill_timeout·메모리 한도·args 등)은 `pm2 restart <이름>` 으로는 반영되지 않는다 — PM2 는
+ * 등록 시점의 설정을 계속 쓴다. `./openmake_llm.sh restart|deploy|update` 는 등록된 앱을 지우고 이 파일로
+ * 다시 등록하므로(pm2_restart_app) 다음 배포에 자동 반영된다.
+ *
  * 로그 로테이션 (필수, 1회만 실행):
  *   pm2 install pm2-logrotate
  *   pm2 set pm2-logrotate:max_size 10M
