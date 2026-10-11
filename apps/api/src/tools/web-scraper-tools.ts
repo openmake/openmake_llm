@@ -20,6 +20,7 @@ import { LLM_TIMEOUTS } from '../config/timeouts';
 import { scrapePage, mapSiteUrls, crawlSite } from '../utils/web-scraper';
 import { validateOutboundUrl } from '../security/ssrf-guard';
 import { semanticCompact } from '../services/semantic-compactor';
+import { registerPageSource } from './web-search/page-source';
 
 // ============================================
 // web_scrape — 웹 페이지 스크래핑
@@ -48,7 +49,7 @@ export const webScrapeTool: MCPToolDefinition = {
             required: ['url']
         }
     },
-    async handler(args: Record<string, unknown>): Promise<MCPToolResult> {
+    async handler(args: Record<string, unknown>, context): Promise<MCPToolResult> {
         try {
             const url = args.url as string;
             await validateOutboundUrl(url);
@@ -65,9 +66,12 @@ export const webScrapeTool: MCPToolDefinition = {
                 content = await semanticCompact('web_scrape', content);
             }
 
+            // 채팅 턴이면 읽은 페이지를 출처 1건으로 등록(extract_webpage 와 같은 처리) — 요약(await) 뒤에 번호를 받는다
+            const pageSource = registerPageSource(context, { title: result.title, url, text: result.markdown });
             return {
-                content: [{ type: 'text', text: `**${result.title || url}** 스크래핑 완료\n\n${content}` }],
-                isError: false
+                content: [{ type: 'text', text: `${pageSource ? `${pageSource.header}\n\n` : ''}**${result.title || url}** 스크래핑 완료\n\n${content}` }],
+                isError: false,
+                ...(pageSource ? { sources: pageSource.sources } : {})
             };
         } catch (error: unknown) {
             return {

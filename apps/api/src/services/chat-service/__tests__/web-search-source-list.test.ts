@@ -87,6 +87,20 @@ describe('appendDeterministicBlocks — 사전 주입 + 도구 검색 출처', (
         expect(out).not.toContain('https://first.example/');
     });
 
+    it('인용이 없을 때 검색 뒤에 읽은 페이지가 있으면 최근 검색 상위 N건에 읽은 페이지를 더해 붙인다', () => {
+        const search = toolSearch(11, 4, 'search');
+        const page = toolSearch(15, 1, 'page');
+        const { out } = run('인용 없이 쓴 답변.', { webSearchContext: injectedContext(10), toolSources: [search, page] });
+        expect(listedNums(out)).toEqual([11, 12, 13, 14, 15]);
+        expect(out).not.toContain('https://pre.example/');
+    });
+
+    it('인용이 없고 도구는 페이지 읽기만 했으면 사전 주입 전체에 읽은 페이지를 더해 붙인다', () => {
+        const page = toolSearch(11, 1, 'page');
+        const { out } = run('인용 없이 쓴 답변.', { webSearchContext: injectedContext(10), toolSources: [page] });
+        expect(listedNums(out)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    });
+
     it('도구 검색이 없던 턴은 종전대로 — 인용이 없으면 사전 주입 전체, 있으면 인용된 것만', () => {
         const none = run('인용 없이 쓴 답변.', { webSearchContext: injectedContext(10) });
         expect(listedNums(none.out)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
@@ -163,9 +177,89 @@ describe('appendDeterministicBlocks — 도구 검색만 돈 턴', () => {
         expect(streamed).toBe('');
     });
 
+    // extract_webpage·web_scrape 가 읽은 페이지도 출처 1건으로 등록된다 — 링크를 주고 "요약해줘" 한 턴처럼 읽기 도구만 돈 턴.
+    // 라벨 인용이 있을 때만 목록이 붙고, 인용이 없거나 라벨 없는 [1] 만 있으면 본문 그대로다.
+    it('읽은 페이지 1건만 있는 턴 — [출처 1] 로 인용하면 그 페이지가 목록에 붙는다', () => {
+        const readPage: SearchSourceRef[] = [{ n: 1, title: 'Bun 1.3', url: 'https://bun.sh/blog/bun-v1.3', snippet: 's' }];
+        const { out, streamed } = run('Bun 1.3 이 나왔다 [출처 1].', { toolSources: [readPage] });
+        expect(listedNums(out)).toEqual([1]);
+        expect(streamed).toContain('**출처**\n- **1.** [Bun 1.3](https://bun.sh/blog/bun-v1.3)');
+    });
+
+    it('읽은 페이지 1건만 있는 턴 — 인용이 없거나 라벨 없는 [1] 만 있으면 아무것도 붙이지 않는다', () => {
+        const readPage: SearchSourceRef[] = [{ n: 1, title: 'Bun 1.3', url: 'https://bun.sh/blog/bun-v1.3', snippet: 's' }];
+        for (const body of ['링크의 글을 요약하면 이렇다.', '요약하면 이렇다 [1].']) {
+            const { out, streamed } = run(body, { toolSources: [readPage] });
+            expect(out).toBe(body);
+            expect(streamed).toBe('');
+        }
+    });
+
+    it('검색 뒤에 읽은 페이지(검색 결과 뒤 번호)를 인용하면 읽은 페이지가 목록에 붙는다', () => {
+        const readPage: SearchSourceRef[] = [{ n: 11, title: 'Bun 1.3', url: 'https://bun.sh/blog/bun-v1.3', snippet: 's' }];
+        const { out } = run('공식 발표 [출처 11]. 반응 [출처 2].', { toolSources: [toolSearch(1, 10), readPage] });
+        expect(listedNums(out)).toEqual([11, 2]);
+        expect(out).toContain('- **11.** [Bun 1.3](https://bun.sh/blog/bun-v1.3)');
+    });
+
     it('도구 검색이 결과 없이 끝난 턴은 건드리지 않는다', () => {
         const { out, streamed } = run('검색 결과가 없었다 [출처 1].', { toolSources: [[]] });
         expect(out).toBe('검색 결과가 없었다 [출처 1].');
         expect(streamed).toBe('');
+    });
+});
+
+/**
+ * 도구 검색만 돈 턴 — 모델이 쓴 출처 섹션의 판정(2026-10-12).
+ * 모델이 섹션을 직접 썼으면 URL 유무와 상관없이 서버는 아무것도 하지 않는다 — 모델이 자기 번호로 목록을 쓰면
+ * 도구 번호표 기준의 목록은 번호만 같은 엉뚱한 출처가 된다(로컬 라이브: 모델 1번 = Bun 공식 블로그, 도구 1번 = 무관한 페이지).
+ * 섹션 인식은 헤딩·굵은 글씨에 더해 평문 `(수식어) 출처:` 줄까지 — 스테이징에서 `검색 결과 출처:` 평문 줄이 안 걸렸다.
+ */
+describe('appendDeterministicBlocks — 도구 검색만 돈 턴의 모델 출처 섹션', () => {
+    const untouched = (body: string) => {
+        const { out, streamed } = run(body, { toolSources: [toolSearch(1, 8)] });
+        expect(out).toBe(body);
+        expect(streamed).toBe('');
+    };
+
+    it('평문 섹션에 URL 이 있으면 건드리지 않는다', () => {
+        untouched('공식 발표 [출처 1]. 벤치마크 [출처 5]. 후속 [출처 12].\n\n검색 결과 출처:\n1 Bun Blog — https://bun.com/blog/bun-v1.3\n5 Mashblog — https://mashblog.com/posts/bun\n12 InfoQ — https://www.infoq.com/news/bun');
+    });
+
+    it('평문 섹션(URL 있음) 뒤에 맺음말이 와도 건드리지 않는다', () => {
+        untouched('공식 발표 [출처 1].\n\n출처:\n- [Bun Blog](https://bun.com/blog/bun-v1.3)\n- [InfoQ](https://www.infoq.com/news/bun)\n\n더 궁금한 점이 있으면 말씀해 주세요.');
+    });
+
+    it('답변 마지막 줄의 한 줄 평문 섹션(URL 있음)도 건드리지 않는다', () => {
+        untouched('공식 발표 [출처 1].\n\n참고 출처: [Bun Blog](https://bun.com/blog/bun-v1.3), [InfoQ](https://www.infoq.com/news/bun)');
+    });
+
+    it('다른 언어 라벨·복수형·전각 콜론의 평문 섹션도 같은 규칙이다', () => {
+        untouched('Released [Source 1].\n\nSources:\n1. Bun Blog https://bun.com/blog/bun-v1.3');
+        untouched('発表 [出典 1]。\n\n出典：\n- https://bun.com/blog/bun-v1.3');
+    });
+
+    it('평문 섹션에 URL 이 없어도 건드리지 않는다 — 목록이 두 번 보이지 않는다', () => {
+        untouched('수치 [출처 2]. 배경 [출처 5]. 지어낸 번호 [출처 40].\n\n검색 결과 출처:\n2 nxplace.com — 요약\n5 example.org — 요약');
+    });
+
+    it('헤딩·굵은 글씨 섹션에 URL 이 없어도 건드리지 않는다 — 모델 자체 번호일 수 있다', () => {
+        untouched('공식 발표 [출처 1]. 보도 [출처 2].\n\n## 출처 목록\n\n1 Bun 공식 블로그 "Bun 1.3" — bun.com/blog/bun-v1.3\n2 InfoQ — infoq.com');
+        untouched('수치 [출처 3].\n\n**출처**\n- 도구 3');
+    });
+
+    it('본문 중간의 한 줄 "출처: …" 표기는 섹션으로 보지 않는다 — URL 이 있어도 서버 목록이 붙는다', () => {
+        const { out } = run('인구는 줄었다 [출처 2].\n출처: 통계청 (https://kostat.go.kr)\n\n다음으로 물가는 올랐다 [출처 4]. 자세한 내용은 https://example.org/cpi 를 보라.', { toolSources: [toolSearch(1, 8)] });
+        expect(listedNums(out)).toEqual([2, 4]);
+    });
+
+    it('콜론 뒤가 빈 평문 줄이라도 바로 뒤가 목록이 아니면 섹션으로 보지 않는다', () => {
+        const { out } = run('인구는 줄었다 [출처 2].\n\n출처:\n통계청이 낸 자료를 보면 https://kostat.go.kr 에 표가 있다.', { toolSources: [toolSearch(1, 8)] });
+        expect(listedNums(out)).toEqual([2]);
+    });
+
+    it('사전 주입 턴은 평문 섹션을 섹션으로 보지 않는다(종전 그대로) — URL 이 있어도 인용된 출처 목록이 붙는다', () => {
+        const { out } = run('근거 [출처 3].\n\n검색 결과 출처:\n3 사전 3 — https://pre.example/3', { webSearchContext: injectedContext(10) });
+        expect(listedNums(out)).toEqual([3]);
     });
 });

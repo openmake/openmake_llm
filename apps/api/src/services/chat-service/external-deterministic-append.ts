@@ -10,7 +10,7 @@
  */
 import { createLogger } from '../../utils/logger';
 import { getChatTurnIntegrations, type IntegrationBlocks } from './turn-integrations';
-import { REPORT_PIPELINE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
+import { MODEL_SOURCE_SECTION, REPORT_PIPELINE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { tryRenderReportBlock } from './report-block';
 import { stripMissingGeneratedLinks } from './generated-link-guard';
 import { basename } from 'path';
@@ -18,6 +18,7 @@ import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-chat-locales';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { StreamFromExternalContext } from './external-provider-types';
+import { parseInjectedSources } from '../../tools/web-search/format-sources';
 import type { SearchSourceRef } from '../../tools/web-search/types';
 
 const logger = createLogger('ChatExternalProvider');
@@ -28,6 +29,35 @@ const SOURCE_LABEL_ALT = [...new Set(Object.values(WEB_SEARCH_TEMPLATES).map((t)
     .join('|');
 /** 라벨 인용 마커 소스 — `[출처 3]`·`[Source 1, 2]` 형태. 라벨 없는 `[3]` 은 각주/코드 오탐 위험으로 제외. */
 const CITATION_MARKER_SRC = `\\[\\s*(?:${SOURCE_LABEL_ALT})\\s*\\d+(?:\\s*[,·、]\\s*\\d+)*\\s*\\]`;
+
+/** 평문 출처 섹션의 머리줄 — (짧은 수식어) + 출처 라벨(복수형 s·n 허용) + 콜론. 1번 그룹 = 콜론 뒤 같은 줄의 내용. */
+const PLAIN_SOURCE_LINE_SRC = `^[ \\t]*[^\\n:：]{0,${MODEL_SOURCE_SECTION.LABEL_PREFIX_MAX_CHARS}}?(?:${SOURCE_LABEL_ALT})[sn]?[ \\t]*[:：][ \\t]*(.*)$`;
+/** 목록 항목으로 보는 줄 — 글머리표·번호·대괄호로 시작 (`- A`, `2 nxplace.com — …`, `[1] …`) */
+const SOURCE_LIST_LINE_RE = /^\s*(?:[-*+•·]|\d|\[)/;
+
+/**
+ * 모델이 평문으로 쓴 출처 섹션(`검색 결과 출처:` 줄 + 목록)의 본문 — 없으면 null.
+ * 본문 중간의 한 줄 표기("출처: 통계청")를 섹션으로 오인하지 않게 두 꼴만 인정한다:
+ * ① 콜론 뒤가 빈 줄이고 바로 다음(빈 줄 제외)이 목록 항목 — 이어지는 목록 항목까지가 섹션(뒤의 맺음말은 섹션 밖),
+ * ② 콜론 뒤에 내용이 있는 한 줄이 답변의 마지막 줄.
+ */
+function findPlainSourceSection(content: string): string | null {
+    for (const m of content.matchAll(new RegExp(PLAIN_SOURCE_LINE_SRC, 'gim'))) {
+        const rest = content.slice(m.index + m[0].length);
+        if (m[1].trim()) {
+            if (!rest.trim()) return m[0];
+            continue;
+        }
+        const items: string[] = [];
+        for (const line of rest.split('\n')) {
+            if (!line.trim()) continue;
+            if (!SOURCE_LIST_LINE_RE.test(line)) break;
+            items.push(line);
+        }
+        if (items.length > 0) return items.join('\n');
+    }
+    return null;
+}
 
 /**
  * 수집 목록(validNums)에 없는 번호의 죽은 인용 마커를 제거한다 — 모델(qwen)이 주입 상한을
@@ -93,7 +123,7 @@ interface DeterministicAppendInput {
     integrationBlocks: IntegrationBlocks;
     /** 오픈디자인 도구로 저장한 HTML 산출물 (마지막 저장본 — captureOdArtifactHtml 참고). */
     odArtifact?: OdArtifactCapture | null;
-    /** 이 턴의 web_search 도구 출처 — 호출 1회당 목록 1개, 결과가 나온 순서. 번호는 사전 주입 뒤로 이어진다. */
+    /** 이 턴의 도구 출처(web_search 결과·읽은 페이지) — 호출 1회당 목록 1개, 결과가 나온 순서. 번호는 사전 주입 뒤로 이어진다. */
     toolSources?: SearchSourceRef[][];
     req: ChatMessageRequest;
     ctx: StreamFromExternalContext;
@@ -199,39 +229,40 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     const webSearchCtxText = req.webSearchContext || ctx.enhancedMessage || '';
     // 사전 주입이 없어도 모델이 web_search 도구를 불러 출처가 있으면 같은 처리를 한다 — 게이트가 사전 주입만 보던
     // 때는 도구 검색만 돈 턴의 [출처 N] 인용에 목록이 붙지 않고 목록 밖 번호 마커도 남았다.
-    const hasInjectedSources = /\[[^\]]*?\d+\]\s*.+?\n\s*URL:\s*\S+/.test(webSearchCtxText);
+    // 컨텍스트에서 번호→(제목, URL) 파싱 — canonical 목록 생성·누락 검증에 공용.
+    const numToSource = parseInjectedSources(webSearchCtxText);
+    const hasInjectedSources = numToSource.size > 0;
     const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
     const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
     const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
     const headerIdx = finalContent.search(headerRe);
-    const alreadyHasSources = headerIdx >= 0;
     // 도구 검색만 돈 턴에서 모델이 출처 섹션을 직접 썼으면 건드리지 않는다 — 목록 작성 금지 지시가 없는 턴이라
-    // 모델이 읽은 페이지까지 섞어 자기 번호로 목록을 쓰고, 도구 번호표 기준의 마커 제거·URL 보강은 그 번호와 어긋난다.
+    // 모델이 읽은 페이지까지 섞어 자기 번호로 목록을 쓰고, 도구 번호표 기준의 마커 제거·목록 첨부는 그 번호와 어긋난다
+    // (2026-10-12 라이브: 모델 1번 = 공식 블로그, 도구 1번 = 무관한 페이지 — URL 없는 섹션에 붙였더니 엉뚱한 출처가 달렸다).
+    // 이 턴은 평문 머리줄(`검색 결과 출처:`)도 섹션으로 본다. 사전 주입 턴의 판정(헤딩·굵은 글씨면 섹션)은 그대로.
+    const alreadyHasSources = headerIdx >= 0 || (!hasInjectedSources && findPlainSourceSection(finalContent) !== null);
     if (hasInjectedSources || (!alreadyHasSources && (input.toolSources ?? []).some((list) => list.length > 0))) {
-        // 컨텍스트에서 번호→(제목, URL) 파싱 — canonical 목록 생성·누락 검증에 공용.
-        const numToSource = new Map<string, { title: string; url: string }>();
-        const re = /\[[^\]]*?(\d+)\]\s*(.+?)\n\s*URL:\s*(\S+)/g;
-        let mm: RegExpExecArray | null;
-        while ((mm = re.exec(webSearchCtxText)) !== null) {
-            if (!numToSource.has(mm[1])) {
-                numToSource.set(mm[1], { title: mm[2].trim(), url: mm[3].trim() });
-            }
-        }
         // 같은 턴에 모델이 부른 web_search 의 출처도 번호표에 넣는다 — 번호가 사전 주입 뒤(11~)라 여기 없으면
         // 모델의 [출처 11] 인용이 아래에서 죽은 마커로 지워지고 무관한 사전 검색 전체가 붙는다(2026-10-12 라이브).
         const toolSources = (input.toolSources ?? []).filter((list) => list.length > 0);
+        const injectedNums = [...numToSource.keys()];
         for (const s of toolSources.flat()) {
             if (!numToSource.has(String(s.n))) numToSource.set(String(s.n), { title: s.title, url: s.url });
         }
         // 인용이 없을 때 붙일 기본 목록 — 도구 검색이 돈 턴은 가장 최근 검색의 상위 N건(모델이 마지막에 보고 쓴 근거),
         // 도구 검색이 없던 턴은 번호표 전체(= 사전 주입 전체, 기존 동작). 사전 주입 없이 도구 검색만 돈 턴은
         // 기본 목록이 없다 — 모델이 읽은 페이지를 `출처: A, B` 평문으로 직접 쓴 답에 검색 결과가 덧붙는 소음 방지.
-        const lastToolSearch = toolSources[toolSources.length - 1];
+        // 1건짜리 목록은 읽은 페이지(extract_webpage·web_scrape)다 — 검색을 대신하지 않고, 최근 검색 뒤에 읽은 것을 덧붙인다.
+        const lastSearchIdx = toolSources.map((list) => list.length > 1).lastIndexOf(true);
+        const lastToolSearch = lastSearchIdx >= 0 ? toolSources[lastSearchIdx] : undefined;
         const defaultNums = !hasInjectedSources
             ? []
-            : lastToolSearch
-                ? (WEB_SEARCH_INJECTION.MAX_RESULTS > 0 ? lastToolSearch.slice(0, WEB_SEARCH_INJECTION.MAX_RESULTS) : lastToolSearch).map((s) => String(s.n))
-                : [...numToSource.keys()];
+            : [
+                ...(lastToolSearch
+                    ? (WEB_SEARCH_INJECTION.MAX_RESULTS > 0 ? lastToolSearch.slice(0, WEB_SEARCH_INJECTION.MAX_RESULTS) : lastToolSearch).map((s) => String(s.n))
+                    : injectedNums),
+                ...toolSources.slice(lastSearchIdx + 1).flat().map((s) => String(s.n)),
+            ];
         // 수집 목록에 없는 번호의 죽은 인용 마커 결정적 제거 — 저장 히스토리(반환값)가 대상.
         // 이미 스트리밍된 화면은 ws-chat-handler 의 done.cleanedContent 교체가 완료 시점에 정리.
         const stripRes = stripDeadCitationMarkers(finalContent, new Set(numToSource.keys()));

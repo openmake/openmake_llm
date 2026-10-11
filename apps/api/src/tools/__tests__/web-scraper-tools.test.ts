@@ -73,6 +73,32 @@ describe('web-scraper MCP tools', () => {
         expect(result.content[0].text).toContain('# Sample Markdown');
     });
 
+    // 읽은 페이지에 번호가 없으면 모델이 검색 결과 번호를 빌려 인용한다(2026-10-12) — extract_webpage 와 같은 처리
+    it('webScrapeTool — 채팅 턴(기준 있음)이면 읽은 페이지를 출처 1건으로 등록하고 번호를 결과 앞에 붙인다', async () => {
+        mockScrapePage.mockResolvedValueOnce({ markdown: '# Sample Markdown', title: 'Sample Page', links: [] });
+        const context = { userId: '3', role: 'user' as const, sourceNumberBase: 10 };
+
+        const result = await webScrapeTool.handler({ url: 'https://example.com/a' }, context);
+
+        expect(result.sources).toEqual([{ n: 11, title: 'Sample Page', url: 'https://example.com/a', snippet: '# Sample Markdown...' }]);
+        expect(result.content[0].text).toBe('[11] Sample Page\n   https://example.com/a\n\n**Sample Page** 스크래핑 완료\n\n# Sample Markdown');
+        expect(context.sourceNumberBase).toBe(11);
+    });
+
+    it('webScrapeTool — 기준이 없는 문맥은 종전 결과 그대로, 실패하면 번호를 주지 않는다', async () => {
+        mockScrapePage.mockResolvedValueOnce({ markdown: '# Sample Markdown', title: 'Sample Page', links: [] });
+        expect(await webScrapeTool.handler({ url: 'https://example.com/a' }, { userId: '3', role: 'user' })).toEqual({
+            content: [{ type: 'text', text: '**Sample Page** 스크래핑 완료\n\n# Sample Markdown' }],
+            isError: false,
+        });
+
+        mockScrapePage.mockRejectedValueOnce(new Error('network error'));
+        const context = { userId: '3', role: 'user' as const, sourceNumberBase: 10 };
+        const failed = await webScrapeTool.handler({ url: 'https://example.com/a' }, context);
+        expect(failed.sources).toBeUndefined();
+        expect(context.sourceNumberBase).toBe(10);
+    });
+
     it('webScrapeTool returns error on failure', async () => {
         mockScrapePage.mockRejectedValueOnce(new Error('network error'));
 
