@@ -194,3 +194,65 @@ describe('appendDeterministicBlocks — 도구 검색만 돈 턴', () => {
         expect(streamed).toBe('');
     });
 });
+
+/**
+ * 도구 검색만 돈 턴 — 모델이 쓴 출처 섹션의 판정(2026-10-12).
+ * 섹션에 URL 이 하나라도 있으면 서버는 아무것도 하지 않고(모델 번호 + 링크 목록과 어긋나지 않게),
+ * URL 이 하나도 없으면 섹션이 없는 것과 같게 처리한다(링크 없는 목록만 남아 원문으로 못 가는 것 방지).
+ * 섹션 인식은 헤딩·굵은 글씨에 더해 평문 `(수식어) 출처:` 줄까지 — 스테이징에서 `검색 결과 출처:` 평문 줄이 안 걸렸다.
+ */
+describe('appendDeterministicBlocks — 도구 검색만 돈 턴의 모델 출처 섹션', () => {
+    const untouched = (body: string) => {
+        const { out, streamed } = run(body, { toolSources: [toolSearch(1, 8)] });
+        expect(out).toBe(body);
+        expect(streamed).toBe('');
+    };
+
+    it('평문 섹션에 URL 이 있으면 건드리지 않는다', () => {
+        untouched('공식 발표 [출처 1]. 벤치마크 [출처 5]. 후속 [출처 12].\n\n검색 결과 출처:\n1 Bun Blog — https://bun.com/blog/bun-v1.3\n5 Mashblog — https://mashblog.com/posts/bun\n12 InfoQ — https://www.infoq.com/news/bun');
+    });
+
+    it('평문 섹션(URL 있음) 뒤에 맺음말이 와도 건드리지 않는다', () => {
+        untouched('공식 발표 [출처 1].\n\n출처:\n- [Bun Blog](https://bun.com/blog/bun-v1.3)\n- [InfoQ](https://www.infoq.com/news/bun)\n\n더 궁금한 점이 있으면 말씀해 주세요.');
+    });
+
+    it('답변 마지막 줄의 한 줄 평문 섹션(URL 있음)도 건드리지 않는다', () => {
+        untouched('공식 발표 [출처 1].\n\n참고 출처: [Bun Blog](https://bun.com/blog/bun-v1.3), [InfoQ](https://www.infoq.com/news/bun)');
+    });
+
+    it('다른 언어 라벨·복수형·전각 콜론의 평문 섹션도 같은 규칙이다', () => {
+        untouched('Released [Source 1].\n\nSources:\n1. Bun Blog https://bun.com/blog/bun-v1.3');
+        untouched('発表 [出典 1]。\n\n出典：\n- https://bun.com/blog/bun-v1.3');
+    });
+
+    it('평문 섹션에 URL 이 없으면 섹션이 없는 것처럼 — 목록 밖 마커를 지우고 인용된 출처 목록을 붙인다', () => {
+        const { out } = run('수치 [출처 2]. 배경 [출처 5]. 지어낸 번호 [출처 40].\n\n검색 결과 출처:\n2 nxplace.com — 요약\n5 example.org — 요약', { toolSources: [toolSearch(1, 8)] });
+        expect(out).not.toContain('[출처 40]');
+        expect(listedNums(out)).toEqual([2, 5]);
+        expect(out).toContain('- **5.** [도구 5](https://tool.example/5)');
+    });
+
+    it('헤딩·굵은 글씨 섹션이라도 URL 이 없으면 인용된 출처 목록을 붙인다', () => {
+        const heading = run('수치 [출처 2]. 지어낸 번호 [출처 40].\n\n## 출처 목록\n- 도구 2', { toolSources: [toolSearch(1, 8)] });
+        expect(heading.out).not.toContain('[출처 40]');
+        expect(heading.out).toContain('\n\n---\n\n**출처**\n- **2.** [도구 2](https://tool.example/2)');
+
+        const bold = run('수치 [출처 3].\n\n**출처**\n- 도구 3', { toolSources: [toolSearch(1, 8)] });
+        expect(bold.streamed).toBe('\n\n---\n\n**출처**\n- **3.** [도구 3](https://tool.example/3)');
+    });
+
+    it('본문 중간의 한 줄 "출처: …" 표기는 섹션으로 보지 않는다 — URL 이 있어도 서버 목록이 붙는다', () => {
+        const { out } = run('인구는 줄었다 [출처 2].\n출처: 통계청 (https://kostat.go.kr)\n\n다음으로 물가는 올랐다 [출처 4]. 자세한 내용은 https://example.org/cpi 를 보라.', { toolSources: [toolSearch(1, 8)] });
+        expect(listedNums(out)).toEqual([2, 4]);
+    });
+
+    it('콜론 뒤가 빈 평문 줄이라도 바로 뒤가 목록이 아니면 섹션으로 보지 않는다', () => {
+        const { out } = run('인구는 줄었다 [출처 2].\n\n출처:\n통계청이 낸 자료를 보면 https://kostat.go.kr 에 표가 있다.', { toolSources: [toolSearch(1, 8)] });
+        expect(listedNums(out)).toEqual([2]);
+    });
+
+    it('사전 주입 턴은 평문 섹션을 섹션으로 보지 않는다(종전 그대로) — URL 이 있어도 인용된 출처 목록이 붙는다', () => {
+        const { out } = run('근거 [출처 3].\n\n검색 결과 출처:\n3 사전 3 — https://pre.example/3', { webSearchContext: injectedContext(10) });
+        expect(listedNums(out)).toEqual([3]);
+    });
+});

@@ -10,7 +10,7 @@
  */
 import { createLogger } from '../../utils/logger';
 import { getChatTurnIntegrations, type IntegrationBlocks } from './turn-integrations';
-import { REPORT_PIPELINE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
+import { MODEL_SOURCE_SECTION, REPORT_PIPELINE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { tryRenderReportBlock } from './report-block';
 import { stripMissingGeneratedLinks } from './generated-link-guard';
 import { basename } from 'path';
@@ -28,6 +28,35 @@ const SOURCE_LABEL_ALT = [...new Set(Object.values(WEB_SEARCH_TEMPLATES).map((t)
     .join('|');
 /** 라벨 인용 마커 소스 — `[출처 3]`·`[Source 1, 2]` 형태. 라벨 없는 `[3]` 은 각주/코드 오탐 위험으로 제외. */
 const CITATION_MARKER_SRC = `\\[\\s*(?:${SOURCE_LABEL_ALT})\\s*\\d+(?:\\s*[,·、]\\s*\\d+)*\\s*\\]`;
+
+/** 평문 출처 섹션의 머리줄 — (짧은 수식어) + 출처 라벨(복수형 s·n 허용) + 콜론. 1번 그룹 = 콜론 뒤 같은 줄의 내용. */
+const PLAIN_SOURCE_LINE_SRC = `^[ \\t]*[^\\n:：]{0,${MODEL_SOURCE_SECTION.LABEL_PREFIX_MAX_CHARS}}?(?:${SOURCE_LABEL_ALT})[sn]?[ \\t]*[:：][ \\t]*(.*)$`;
+/** 목록 항목으로 보는 줄 — 글머리표·번호·대괄호로 시작 (`- A`, `2 nxplace.com — …`, `[1] …`) */
+const SOURCE_LIST_LINE_RE = /^\s*(?:[-*+•·]|\d|\[)/;
+
+/**
+ * 모델이 평문으로 쓴 출처 섹션(`검색 결과 출처:` 줄 + 목록)의 본문 — 없으면 null.
+ * 본문 중간의 한 줄 표기("출처: 통계청")를 섹션으로 오인하지 않게 두 꼴만 인정한다:
+ * ① 콜론 뒤가 빈 줄이고 바로 다음(빈 줄 제외)이 목록 항목 — 이어지는 목록 항목까지가 섹션(뒤의 맺음말은 섹션 밖),
+ * ② 콜론 뒤에 내용이 있는 한 줄이 답변의 마지막 줄.
+ */
+function findPlainSourceSection(content: string): string | null {
+    for (const m of content.matchAll(new RegExp(PLAIN_SOURCE_LINE_SRC, 'gim'))) {
+        const rest = content.slice(m.index + m[0].length);
+        if (m[1].trim()) {
+            if (!rest.trim()) return m[0];
+            continue;
+        }
+        const items: string[] = [];
+        for (const line of rest.split('\n')) {
+            if (!line.trim()) continue;
+            if (!SOURCE_LIST_LINE_RE.test(line)) break;
+            items.push(line);
+        }
+        if (items.length > 0) return items.join('\n');
+    }
+    return null;
+}
 
 /**
  * 수집 목록(validNums)에 없는 번호의 죽은 인용 마커를 제거한다 — 모델(qwen)이 주입 상한을
@@ -204,9 +233,13 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
     const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
     const headerIdx = finalContent.search(headerRe);
-    const alreadyHasSources = headerIdx >= 0;
-    // 도구 검색만 돈 턴에서 모델이 출처 섹션을 직접 썼으면 건드리지 않는다 — 목록 작성 금지 지시가 없는 턴이라
+    // 도구 검색만 돈 턴에서 모델이 출처 섹션을 링크와 함께 직접 썼으면 건드리지 않는다 — 목록 작성 금지 지시가 없는 턴이라
     // 모델이 읽은 페이지까지 섞어 자기 번호로 목록을 쓰고, 도구 번호표 기준의 마커 제거·URL 보강은 그 번호와 어긋난다.
+    // 이 턴은 평문 머리줄(`검색 결과 출처:`)도 섹션으로 보고, 섹션에 URL 이 하나도 없으면 섹션이 없는 것과 같게 처리한다
+    // (링크 없는 목록만 남아 원문으로 못 가는 것 방지). 사전 주입 턴의 판정(헤딩·굵은 글씨면 섹션)은 그대로.
+    const alreadyHasSources = hasInjectedSources
+        ? headerIdx >= 0
+        : [headerIdx >= 0 ? finalContent.slice(headerIdx) : '', findPlainSourceSection(finalContent) ?? ''].some((section) => /https?:\/\//.test(section));
     if (hasInjectedSources || (!alreadyHasSources && (input.toolSources ?? []).some((list) => list.length > 0))) {
         // 컨텍스트에서 번호→(제목, URL) 파싱 — canonical 목록 생성·누락 검증에 공용.
         const numToSource = new Map<string, { title: string; url: string }>();
