@@ -83,7 +83,8 @@ export async function runMessagePipeline(svc: ChatService,
     const reqCtx: RequestContext = {
         userContext: {
             ...svc.buildUserContext(userId || 'guest', userRole),
-            ...(req.sourceNumberBase ? { sourceNumberBase: req.sourceNumberBase } : {}),
+            // 턴 시작 출처가 없어도 0 으로 싣는다 — 같은 턴의 web_search 호출들이 번호를 이어 매기는 기준(턴 공유 객체)
+            sourceNumberBase: req.sourceNumberBase ?? 0,
         },
         message: req.message,
         // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화(외부 서비스는 자체 도구 체계 사용)
