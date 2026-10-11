@@ -6,7 +6,8 @@
     "scripts": {
         "build": "node ../../scripts/tsc7.cjs",
         "dev": "ts-node src/index.ts",
-        "start": "node dist/index.js"
+        "start": "node dist/index.js",
+        "test": "node --require ts-node/register --test src/config.test.ts"
     },
     "engines": {
         "node": ">=24 <25"
