@@ -1003,6 +1003,7 @@
       "browser_takeover_expired": "等待交还浏览器超时",
       "interrupted_local_device": "本地设备断开连接而中断",
       "lease_held_elsewhere": "其他服务器正在运行该任务，未能启动",
+      "recovery_limit": "多次自动恢复仍无进展，已停止",
       "llm_error": "模型调用出错",
       "sandbox_unavailable": "未能准备执行环境",
       "next": {
@@ -1017,7 +1018,8 @@
         "browser_takeover_expired": "请在 Companion 菜单中交还浏览器后重新运行。",
         "sandbox_unavailable": "请稍后重新运行。同时运行的任务减少后即可获得执行环境。如果持续出现，请通知管理员。",
         "interrupted_local_device": "请重新连接 Companion(或 CLI)，可继续时请继续运行，否则请重新运行。",
-        "lease_held_elsewhere": "请稍后重新运行。"
+        "lease_held_elsewhere": "请稍后重新运行。",
+        "recovery_limit": "可以从中断处继续运行。如果再次停在同一位置，请将目标拆小后重新运行，或通知管理员。"
       }
     },
     "planNode": "步骤{n}",

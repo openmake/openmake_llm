@@ -18,6 +18,7 @@
  */
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
+import { AgentTaskRunRepository } from '../../data/repositories/agent-task-run-repository';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskService, type AgentTaskInputFile } from '../AgentTaskService';
@@ -70,6 +71,15 @@ async function recoverTask(
     // 'duplicate' 로 버려지고 실행 중인 작업의 행만 pending 으로 덮인다(pending→completed 는 표 밖이라 종료 기록이 거부된다).
     if (getAgentTaskQueue().has(task.id)) return 'skipped';
 
+    // 진행 없이 되풀이되는 복구 끊기 — 작업 하나가 프로세스를 죽이면(메모리 한도 재시작 등) 재시작 → 자동 재개 → 다시 죽음이 끝없이 돈다.
+    // 새 턴 체크포인트 없이 상한만큼 복구된 작업은 더 재개하지 않고 닫는다(체크포인트는 남아 사용자가 이어 할 수 있다).
+    // 실행한 적 없는 대기(queued) 재제출은 해당 없다. 횟수 조회 실패는 복구를 막지 않는다.
+    if (!wasQueued && await recoveryLimitReached(task.id)) {
+        if (!(await new AgentTaskRunRepository(getPool()).failRecoveryLimit(task.id, task.status))) return 'skipped';
+        logger.warn(`[BootRecovery] 진행 없는 복구가 ${AGENT_TASK_LIMITS.RECOVERY_MAX_ATTEMPTS}회 되풀이됨 → 자동 재개 중단(recovery_limit): ${task.id}`);
+        return 'failed';
+    }
+
     // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀. 읽을 때의 상태를 넘긴다: 위 확인은 이미
     // 디스패치된 것만 잡으므로, 목록을 읽은 뒤 /execute·/resume 가 claim 만 하고 아직 디스패치 전인 행(queued)도 여기서 걸러야 한다.
     const claimed = await taskRepo.claimAgentTaskForRecovery(task.id, task.status);
@@ -108,6 +118,18 @@ async function recoverTask(
         ? `[BootRecovery] 자동 재개: ${task.id} (turn ${(cp!.completedTurn ?? 0) + 1})`
         : `[BootRecovery] 대기열 증발분 재디스패치: ${task.id}`);
     return 'resumed';
+}
+
+/** 이 작업이 진행 없이 상한만큼 복구됐는가 — 꺼져 있거나(0 이하) 조회가 실패하면 false. */
+async function recoveryLimitReached(taskId: string): Promise<boolean> {
+    const max = AGENT_TASK_LIMITS.RECOVERY_MAX_ATTEMPTS;
+    if (!(max > 0)) return false;
+    try {
+        return (await new AgentTaskRunRepository(getPool()).countRecoveriesWithoutProgress(taskId)) >= max;
+    } catch (e) {
+        logger.warn(`[BootRecovery] 복구 횟수 조회 실패 — 상한 없이 복구한다: ${taskId} — ${e instanceof Error ? e.message : e}`);
+        return false;
+    }
 }
 
 /**

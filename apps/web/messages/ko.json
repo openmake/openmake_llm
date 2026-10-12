@@ -1003,6 +1003,7 @@
       "browser_takeover_expired": "브라우저 넘겨받기 대기 시간 초과",
       "interrupted_local_device": "로컬 기기 연결이 끊겨 중단",
       "lease_held_elsewhere": "다른 서버가 실행 중이라 시작하지 못함",
+      "recovery_limit": "자동 복구를 되풀이했지만 진행하지 못해 멈춤",
       "llm_error": "모델 호출 오류",
       "sandbox_unavailable": "실행 환경을 준비하지 못함",
       "next": {
@@ -1017,7 +1018,8 @@
         "browser_takeover_expired": "Companion 메뉴에서 브라우저를 돌려준 뒤 다시 실행하세요.",
         "sandbox_unavailable": "잠시 뒤 다시 실행하세요. 동시에 도는 작업이 줄면 실행 환경을 받을 수 있습니다. 계속되면 관리자에게 알리세요.",
         "interrupted_local_device": "Companion(또는 CLI)을 다시 연결한 뒤, 이어하기가 있으면 이어서 하고 없으면 다시 실행하세요.",
-        "lease_held_elsewhere": "잠시 뒤 다시 실행하세요."
+        "lease_held_elsewhere": "잠시 뒤 다시 실행하세요.",
+        "recovery_limit": "이어하기로 중단된 지점부터 다시 시도할 수 있습니다. 같은 지점에서 또 멈추면 목표를 더 작게 나눠 다시 실행하거나 관리자에게 알리세요."
       }
     },
     "planNode": "{n}단계",
