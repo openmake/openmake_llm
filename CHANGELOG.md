@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.95.0](https://github.com/openmake/openmake_llm/compare/v1.94.4...v1.95.0) (2026-10-12)
+
+
+### ✨ 기능
+
+* **agent-task:** 모델 서버 장기 장애 때 실패 대신 주차하고, 돌아오면 이어서 실행한다 ([fa30474](https://github.com/openmake/openmake_llm/commit/fa3047402cc1d4460e830aaccd33ffa8ef1a3ff6))
+* **agent-task:** 모델 서버가 한동안 응답하지 못하면 실패 대신 주차하고, 돌아오면 이어서 실행한다 ([5696f6c](https://github.com/openmake/openmake_llm/commit/5696f6c5236a4688c05bb47f51d358a6d1d926e5))
+* **agent-task:** 작업 지표에 안정화 신호를 더한다 ([5632c44](https://github.com/openmake/openmake_llm/commit/5632c44e5429c2c18f83b610de211a2fe8f5f066))
+* **agent-task:** 작업 지표에 안정화 신호를 더한다 ([ef73164](https://github.com/openmake/openmake_llm/commit/ef73164eac94c0ccfe6c48cd4cbc252f7bba8330))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 재개한 실행의 첫 응답을 "계획만 쓴 첫 턴"으로 재촉하지 않는다 ([bd1d6c0](https://github.com/openmake/openmake_llm/commit/bd1d6c0e45a20063503e8312e7c24a74d5b1bd96))
+* **agent-task:** 재시작으로 끊긴 로컬 기기 작업을 기기 대기로 주차해 자동으로 이어 실행한다 ([bb5c10f](https://github.com/openmake/openmake_llm/commit/bb5c10fc85c217cd5accc22e8bfcc2e67ccb2891))
+* **agent-task:** 재시작으로 끊긴 로컬 기기 작업을 기기 대기로 주차해 자동으로 이어 실행한다 ([49f3903](https://github.com/openmake/openmake_llm/commit/49f390352b47cc934ac8b2dbbf42dbada775496c))
+* **agent-task:** 진행 없이 되풀이되는 자동 복구를 상한에서 멈춘다 ([1db9ff1](https://github.com/openmake/openmake_llm/commit/1db9ff1186c2bc2664353e6ddd4bf1d12ac3c623))
+* **agent-task:** 진행 없이 되풀이되는 자동 복구를 상한에서 멈춘다 ([716e18d](https://github.com/openmake/openmake_llm/commit/716e18d7e3efd3a1b8b312140d07c3b54ba529a8))
+* **agent-task:** 호스트·외부 도구 호출에 공통 시간 상한을 걸고 중단 신호에 바로 반응한다 ([9e55a38](https://github.com/openmake/openmake_llm/commit/9e55a3888684669f3a820afd7378099dc042c06a))
+* **agent-task:** 호스트·외부 도구 호출에 공통 시간 상한을 걸고 중단 신호에 바로 반응한다 ([1f638ba](https://github.com/openmake/openmake_llm/commit/1f638ba8b707214e13c5dd53793b0c84ebb92f6b))
+
 ## [1.94.4](https://github.com/openmake/openmake_llm/compare/v1.94.3...v1.94.4) (2026-10-12)
 
 
