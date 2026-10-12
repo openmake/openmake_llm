@@ -52,7 +52,7 @@ import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, write
 import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
 import { nextTurnProgress } from './agent-task/turn-progress';
 import { replyNudge } from './agent-task/one-shot-notice';
-import { pickNoToolNudge } from './agent-task/turn-stall';
+import { pickNoToolNudge, isFirstModelTurn } from './agent-task/turn-stall';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { effectiveApprovalPolicy, persistApprovalPolicy } from './agent-task/approval-policy-restore';
@@ -501,7 +501,7 @@ export class AgentTaskService {
                 if (!hasToolCalls) {
                     // 계획만 쓰고 멈춘 첫 턴(산출물 없음)은 1회, 이후 턴의 "이제 ~하겠습니다"식 행동 예고는 상한까지 재촉하고 계속한다.
                     // 수행 불가 선언(마커)은 재촉하지 않고 관문으로 보낸다 — 판정은 agent-task/turn-stall.
-                    const stall = pickNoToolNudge({ firstTurn: turn === startTurn, content: stepContent, artifactCount: extracted!.artifacts.length,
+                    const stall = pickNoToolNudge({ firstTurn: turn === startTurn && isFirstModelTurn(conversation), content: stepContent, artifactCount: extracted!.artifacts.length,
                         canAct: !finalTurnReason && turn < turnCeiling - 1, stallNudges });
                     if (stall) {
                         if (stall.note) { stallNudges++; await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: stall.note, planStepIndex: planIdx() }); }
