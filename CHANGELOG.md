@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.94.4](https://github.com/openmake/openmake_llm/compare/v1.94.3...v1.94.4) (2026-10-12)
+
+
+### 🐛 버그 수정
+
+* **web-search:** REST 경로도 사전 주입 출처 뒤부터 도구 출처 번호를 매긴다 ([c64d192](https://github.com/openmake/openmake_llm/commit/c64d192ae768e270b102950f371a767f747a2934))
+* **web-search:** 도구 검색만 돈 턴의 모델 출처 섹션을 URL 유무로 가른다 ([34c67dd](https://github.com/openmake/openmake_llm/commit/34c67dd9ae282cfc86fa76e43ff50351a1c638c2))
+* **web-search:** 모델이 쓴 출처 섹션은 URL 이 없어도 건드리지 않고, 오류 응답 페이지는 출처로 등록하지 않는다 ([972a564](https://github.com/openmake/openmake_llm/commit/972a5644a74b8e48df00d8d321648f3fee8d2753))
+* **web-search:** 모델이 읽은 페이지(extract_webpage·web_scrape)에 출처 번호를 준다 ([6ae98df](https://github.com/openmake/openmake_llm/commit/6ae98df716970a09c2db85970821ba8dcc31195b))
+* **web-search:** 읽은 페이지가 인용 없는 턴의 기본 출처 목록을 밀어내지 않게 한다 ([5ed92b3](https://github.com/openmake/openmake_llm/commit/5ed92b35bf34e68e79e98bf69b64060b810d94e7))
+* **web-search:** 읽은 페이지에 출처 번호 + 모델이 쓴 출처 섹션 판정 + REST 번호 기준 ([f5e4f7c](https://github.com/openmake/openmake_llm/commit/f5e4f7ca933dd2742fa77f28f53815fc37633afe))
+
 ## [1.94.3](https://github.com/openmake/openmake_llm/compare/v1.94.2...v1.94.3) (2026-10-11)
 
 
