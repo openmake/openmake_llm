@@ -14,7 +14,9 @@ export type FixtureReply =
     /** 비스트리밍 JSON 응답. */
     | { kind: 'json'; body: Record<string, unknown> }
     /** HTTP 오류. */
-    | { kind: 'error'; status: number; headers?: Record<string, string> };
+    | { kind: 'error'; status: number; headers?: Record<string, string> }
+    /** 응답하지 않는다 — 클라이언트가 끊거나 서버를 닫을 때까지 요청을 붙잡는다(호출 도중의 중단·종료 시험). */
+    | { kind: 'hang' };
 
 export interface LlmFixture {
     /** `new OpenAI({ baseURL })` 에 그대로 넣는다. */
@@ -47,6 +49,7 @@ export async function startLlmFixture(reply: (index: number, body: Record<string
             requests.push(body);
             headers.push({ ...req.headers });
             const r = reply(index, body);
+            if (r.kind === 'hang') return;
             if (r.kind === 'error') {
                 res.writeHead(r.status, { 'Content-Type': 'application/json', ...(r.headers ?? {}) });
                 res.end(JSON.stringify({ error: { message: 'fixture failure', type: 'server_error' } }));

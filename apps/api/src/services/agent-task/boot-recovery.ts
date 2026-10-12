@@ -18,6 +18,9 @@
  */
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
+import { AgentTaskRunRepository } from '../../data/repositories/agent-task-run-repository';
+import { AgentTaskParkRepository } from '../../data/repositories/agent-task-park-repository';
+import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskService, type AgentTaskInputFile } from '../AgentTaskService';
@@ -38,7 +41,7 @@ async function recoverTask(
     task: AgentTask,
     db: ReturnType<typeof getUnifiedDatabase>,
     taskRepo: AgentTaskRepository,
-): Promise<'resumed' | 'failed' | 'skipped'> {
+): Promise<'resumed' | 'failed' | 'skipped' | 'parked'> {
     const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;
     const hasCheckpoint = !!cp && Array.isArray(cp.conversation) && cp.conversation.length > 0;
     // 'queued' 는 인메모리 대기열에 있다가 재시작으로 증발한 것 — 시작한 적이 없으니
@@ -54,11 +57,11 @@ async function recoverTask(
         return task.status === 'running' || task.status === 'paused' || wasQueued ? 'failed' : 'skipped';
     }
 
-    // 로컬 실행 작업은 자동 재개하지 않는다 — 부팅 시점엔 브리지 디바이스가 아직
-    // 연결되지 않아(CLI/데스크톱은 서버 기동 후 재접속) RemoteExecutor.create 가
-    // 미연결로 실패한다. 상태만 failed(interrupted)로 정리해 완료 오표시·영구 polling 을
-    // 막고, 사용자가 디바이스 재연결 후 /resume 으로 수동 재개하게 한다.
-    if (task.executor === 'local') {
+    // 로컬 실행 작업 — 부팅 시점엔 브리지 디바이스가 아직 연결되지 않아(CLI/데스크톱은 서버 기동 후 재접속) 바로 재개하면
+    // RemoteExecutor.create 가 미연결로 실패한다. 기기 대기를 쓰면 아래에서 주차하고(기기가 붙으면 이어진다), 쓰지 않으면
+    // 종전대로 failed(interrupted)로 정리해 사용자가 디바이스 재연결 후 /resume 으로 수동 재개하게 한다.
+    const parkLocal = task.executor === 'local' && LOCAL_BRIDGE.ENABLED && LOCAL_BRIDGE.DEVICE_WAIT_ENABLED;
+    if (task.executor === 'local' && !parkLocal) {
         if (task.status === 'running' || task.status === 'paused' || wasQueued) {
             await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted_local_device', terminalNotifyPending: true });
             logger.info(`[BootRecovery] 로컬 실행 작업 자동재개 보류 → failed(디바이스 재연결 후 수동 resume): ${task.id}`);
@@ -69,6 +72,30 @@ async function recoverTask(
     // 이 프로세스의 큐에 이미 있으면(조회 뒤 /execute·/resume 가 먼저 제출) 건드리지 않는다 — claim 하면 디스패치는
     // 'duplicate' 로 버려지고 실행 중인 작업의 행만 pending 으로 덮인다(pending→completed 는 표 밖이라 종료 기록이 거부된다).
     if (getAgentTaskQueue().has(task.id)) return 'skipped';
+
+    // 진행 없이 되풀이되는 복구 끊기 — 작업 하나가 프로세스를 죽이면(메모리 한도 재시작 등) 재시작 → 자동 재개 → 다시 죽음이 끝없이 돈다.
+    // 새 턴 체크포인트 없이 상한만큼 복구된 작업은 더 재개하지 않고 닫는다(체크포인트는 남아 사용자가 이어 할 수 있다).
+    // 실행한 적 없는 대기(queued) 재제출은 해당 없다. 횟수 조회 실패는 복구를 막지 않는다.
+    if (!wasQueued && await recoveryLimitReached(task.id)) {
+        if (!(await new AgentTaskRunRepository(getPool()).failRecoveryLimit(task.id, task.status))) return 'skipped';
+        logger.warn(`[BootRecovery] 진행 없는 복구가 ${AGENT_TASK_LIMITS.RECOVERY_MAX_ATTEMPTS}회 되풀이됨 → 자동 재개 중단(recovery_limit): ${task.id}`);
+        return 'failed';
+    }
+
+    // 로컬 실행 작업은 기기 대기로 주차한다 — 종전엔 재시작(배포)마다 실패로 남아 사용자가 직접 이어 해야 했다.
+    // 기기가 등록되면 device-wait 가, 놓친 것은 주차 스윕이 재개하고, 대기 상한을 넘기면 실패로 끝난다. 이미 붙어 있으면 바로 재개를 시도한다.
+    if (parkLocal) {
+        if (!(await new AgentTaskParkRepository(getPool()).parkForDeviceRecovery(task.id, task.status))) return 'skipped';
+        logger.info(`[BootRecovery] 로컬 실행 작업 → 기기 대기로 주차(기기가 연결되면 이어서 실행): ${task.id}`);
+        try {
+            // hitl-park 는 이 모듈을 끌어온다(resolveUserRole) — 정적으로 묶지 않는다
+            const { resumeParkedTask } = await import('./hitl-park');
+            if (await resumeParkedTask(task.id)) return 'resumed';
+        } catch (e) {
+            logger.warn(`[BootRecovery] 주차 직후 재개 시도 실패(스윕이 다시 시도): ${task.id} — ${e instanceof Error ? e.message : e}`);
+        }
+        return 'parked';
+    }
 
     // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀. 읽을 때의 상태를 넘긴다: 위 확인은 이미
     // 디스패치된 것만 잡으므로, 목록을 읽은 뒤 /execute·/resume 가 claim 만 하고 아직 디스패치 전인 행(queued)도 여기서 걸러야 한다.
@@ -108,6 +135,18 @@ async function recoverTask(
         ? `[BootRecovery] 자동 재개: ${task.id} (turn ${(cp!.completedTurn ?? 0) + 1})`
         : `[BootRecovery] 대기열 증발분 재디스패치: ${task.id}`);
     return 'resumed';
+}
+
+/** 이 작업이 진행 없이 상한만큼 복구됐는가 — 꺼져 있거나(0 이하) 조회가 실패하면 false. */
+async function recoveryLimitReached(taskId: string): Promise<boolean> {
+    const max = AGENT_TASK_LIMITS.RECOVERY_MAX_ATTEMPTS;
+    if (!(max > 0)) return false;
+    try {
+        return (await new AgentTaskRunRepository(getPool()).countRecoveriesWithoutProgress(taskId)) >= max;
+    } catch (e) {
+        logger.warn(`[BootRecovery] 복구 횟수 조회 실패 — 상한 없이 복구한다: ${taskId} — ${e instanceof Error ? e.message : e}`);
+        return false;
+    }
 }
 
 /**

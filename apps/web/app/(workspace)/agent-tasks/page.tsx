@@ -135,7 +135,7 @@ interface ApiAgentTask {
   folder_rel?: string | null;
   /** 대기열 순번(1 부터) — 대기 중일 때만 */
   queuePosition?: number;
-  /** 멈춘 작업이 기다리는 것 — device_wait(로컬 기기 연결) · hitl_parked(사용자 답). 상세 응답에만 온다 */
+  /** 멈춘 작업이 기다리는 것 — device_wait(로컬 기기 연결) · hitl_parked(사용자 답) · model_wait(모델 서버 응답). 상세 응답에만 온다 */
   waitReason?: string;
   /** 실패 사유 (toPublicTask 가 노출하는 error 컬럼) */
   error?: string;
@@ -242,7 +242,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
 }
 
 /** 재개 가능한 사유 — resume 버튼과 시각적으로 연결. 실제 재개 가능 여부는 서버의 resumable(체크포인트 유무)로 함께 본다. */
-const RESUMABLE_ERROR_CODES = new Set(["max_turns_exhausted", "interrupted", "server restarted", "interrupted_local_device"]);
+const RESUMABLE_ERROR_CODES = new Set(["max_turns_exhausted", "interrupted", "server restarted", "interrupted_local_device", "recovery_limit"]);
 
 /** 실패 사유 라벨: 알려진 코드·분류는 번역(lib/agent-task-failure), 그 외는 원문 축약(전문은 tooltip). */
 function errorReasonLabel(tr: TFn, error: string, failureClass?: string | null): string {
@@ -718,6 +718,9 @@ function TaskDetailModal({
             )}
             {detail.task.status === "paused" && detail.task.waitReason === "browser_takeover" && (
               <p className="mt-2 text-xs text-muted">{t("waitingBrowserTakeover")}</p>
+            )}
+            {detail.task.status === "paused" && detail.task.waitReason === "model_wait" && (
+              <p className="mt-2 text-xs text-muted">{t("waitingModel")}</p>
             )}
             {/* 실패 사유 — 상세에도 노출(카드와 동일 규칙) */}
             {detail.task.status === "failed" && detail.task.error && (

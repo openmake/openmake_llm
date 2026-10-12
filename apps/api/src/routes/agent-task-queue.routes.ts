@@ -24,6 +24,7 @@ import { getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { AGENT_TASK_FAILURE_CLASSES } from '../config/agent-task-failure-class';
 import { AgentTaskOutcomeMetricsRepository } from '../data/repositories/agent-task-outcome-metrics-repository';
+import { AgentTaskStabilityMetricsRepository } from '../data/repositories/agent-task-stability-metrics-repository';
 import { AGENT_TASK_METRICS } from '../config/agent-task-metrics';
 import type { AgentTaskMetricsResponse } from '@openmake/shared-types';
 
@@ -60,12 +61,15 @@ agentTaskQueueRouter.get('/queue/dead', requireAuth, requireAdmin, asyncHandler(
     res.json(success({ sinceDays, class: cls ?? null, classes: AGENT_TASK_FAILURE_CLASSES, ...r }));
 }));
 
-/** 작업 지표(Companion P5) — 실행 방식별 성공률·소요 시간·토큰·사용자 개입·실패 사유. 집계 정의는 저장소 주석. */
+/** 작업 지표(Companion P5) — 실행 방식별 성공률·소요 시간·토큰·사용자 개입·실패 사유, 그리고 안정화 신호. 집계 정의는 저장소 주석. */
 agentTaskQueueRouter.get('/metrics', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const days = intQuery(req.query.days, AGENT_TASK_METRICS.DEFAULT_DAYS, 1, AGENT_TASK_METRICS.MAX_DAYS, 'days');
-    const r = await new AgentTaskOutcomeMetricsRepository(getPool()).getMetrics({ days, failureTopN: AGENT_TASK_METRICS.FAILURE_TOP_N });
+    const [r, stability] = await Promise.all([
+        new AgentTaskOutcomeMetricsRepository(getPool()).getMetrics({ days, failureTopN: AGENT_TASK_METRICS.FAILURE_TOP_N }),
+        new AgentTaskStabilityMetricsRepository(getPool()).getStability(days),
+    ]);
     const body: AgentTaskMetricsResponse = {
-        days, dayOptions: [...AGENT_TASK_METRICS.DAY_OPTIONS], maxDays: AGENT_TASK_METRICS.MAX_DAYS, ...r,
+        days, dayOptions: [...AGENT_TASK_METRICS.DAY_OPTIONS], maxDays: AGENT_TASK_METRICS.MAX_DAYS, ...r, stability,
     };
     res.json(success(body));
 }));

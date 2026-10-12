@@ -1415,6 +1415,10 @@ export const AGENT_TASK_LIMITS = {
      *  재시작이 남긴 오래된 failed('server restarted') 는 건드리지 않는다(수동 resume 대상).
      *  AGENT_TASK_BOOT_RECOVERY_WINDOW_MS 로 오버라이드(기본 15분). */
     BOOT_RECOVERY_WINDOW_MS: parseInt(process.env.AGENT_TASK_BOOT_RECOVERY_WINDOW_MS || '', 10) || 15 * 60_000,
+    /** 진행 없이 되풀이되는 자동 복구 상한 — 한 작업이 새 턴 체크포인트 없이 이만큼 복구(부팅 복구·지난 소유권 점검)됐으면
+     *  더 재개하지 않고 failed(recovery_limit)로 둔다(체크포인트는 남아 수동 이어하기 가능). 작업 하나가 프로세스를 죽일 때
+     *  재시작 → 자동 재개 → 다시 죽음이 끝없이 도는 것을 끊는다. 0 이면 끔. AGENT_TASK_RECOVERY_MAX_ATTEMPTS(기본 3) */
+    RECOVERY_MAX_ATTEMPTS: parseInt(process.env.AGENT_TASK_RECOVERY_MAX_ATTEMPTS || '3', 10),
     /** 동적 도구 서브셋팅(Phase 2-A) — 샌드박스 활성 시 목표 관련성 top-K MCP 도구를 예산 내에서
      *  샌드박스 도구에 합류(호스트 실행 + HITL 승인 게이트). 전체 카탈로그(~150)를 넘기면 vLLM
      *  문법 컴파일이 폭주하므로 예산으로 캡한다. ⚠️ 기본 OFF — 활성화 전 문법 컴파일 지연 실측 필수.

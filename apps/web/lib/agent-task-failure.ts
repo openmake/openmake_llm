@@ -20,6 +20,8 @@ const CODE_CLASS: Readonly<Record<string, FailureClass | null>> = {
   interrupted: "interrupted",
   interrupted_local_device: "interrupted",
   lease_held_elsewhere: "interrupted",
+  recovery_limit: "interrupted",
+  model_wait_expired: "llm_error",
   sandbox_unavailable: "interrupted",
   aborted: null,
 };
@@ -56,13 +58,15 @@ export function failureLabelKey(error: string, serverClass?: string | null): str
 
 /** 분류의 문구가 맞지 않는 코드는 다음 행동 문구를 따로 둔다 — 실행 환경을 받지 못한 작업은 이어 할 지점이 없고,
  * 기기가 돌아오지 않아 끝난 작업은 시간 상한이 아니라 기기 연결이 문제다. 로컬 기기가 끊겨 중단된 작업은 기기부터 다시 연결해야 하고,
- * 다른 서버가 실행 소유권을 쥐고 있어 시작하지 못한 작업은 이어 할 지점 없이 다시 실행하면 된다. */
+ * 다른 서버가 실행 소유권을 쥐고 있어 시작하지 못한 작업은 이어 할 지점 없이 다시 실행하면 된다.
+ * 자동 복구를 되풀이하다 멈춘 작업은 이어 해도 같은 지점에서 다시 멈출 수 있다. */
 const CODE_NEXT: Readonly<Record<string, string>> = {
   sandbox_unavailable: "sandbox_unavailable",
   device_wait_expired: "device_wait_expired",
   browser_takeover_expired: "browser_takeover_expired",
   interrupted_local_device: "interrupted_local_device",
   lease_held_elsewhere: "lease_held_elsewhere",
+  recovery_limit: "recovery_limit",
 };
 
 /** 다음 행동 문구의 번역 키(agentTasks 기준). */

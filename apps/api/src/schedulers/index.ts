@@ -174,6 +174,15 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('주차 스윕 등록 실패(무시):', err);
     }
 
+    // 7-c. 모델 대기 스윕 — 모델 서버 장애로 멈춘 작업을 모델이 돌아오면 재개(대기 중인 작업이 없으면 조회 1회, 모델 확인 없음)
+    try {
+        const { sweepModelWaitTasks } = await import('../services/agent-task/model-wait');
+        const { AGENT_TASK_TURN_LOOP } = await import('../config/agent-task-turn-loop');
+        track(setInterval(() => { void sweepModelWaitTasks(); }, AGENT_TASK_TURN_LOOP.MODEL_WAIT_SWEEP_MS));
+    } catch (err) {
+        logger.warn('모델 대기 스윕 등록 실패(무시):', err);
+    }
+
     // 7-c. 지난 실행 소유권 점검(176) — 소유권 연장이 끊긴 실행 중 작업(그 서버가 죽음)을 가져와 체크포인트에서 이어 실행한다.
     //       부팅 복구(아래) 뒤부터 주기로만 돈다 — 부팅 직후의 내 작업은 부팅 복구가 처리한다.
     try {

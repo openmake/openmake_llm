@@ -25,7 +25,8 @@ import { resolveUserRole } from './boot-recovery';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { getLocalBridgeRegistry } from '../local-bridge/registry';
 import { createLogger } from '../../utils/logger';
-import { AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON } from '../../config/agent-task-park-reasons';
+import { AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON, AGENT_TASK_MODEL_WAIT_REASON } from '../../config/agent-task-park-reasons';
+import { AgentTaskParkRepository } from '../../data/repositories/agent-task-park-repository';
 import { AGENT_TASK_BROWSER_TAKEOVER_EXPIRED_ERROR, browserTakeoverAction } from './browser-takeover';
 import { AGENT_TASK_DEVICE_WAIT_EXPIRED_ERROR, deviceWaitAction } from './device-wait';
 import type { ChatMessage } from '../../llm/types';
@@ -45,8 +46,9 @@ export async function resumeParkedTask(taskId: string): Promise<boolean> {
     if (!task || task.status !== 'paused') return false;
     const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;
     const hasCheckpoint = !!cp && Array.isArray(cp.conversation) && cp.conversation.length > 0;
-    // 체크포인트 없는 재개는 기기 대기만 허용 — 시작 시점에 기기가 없어 아무 턴도 돌지 않은 작업이라 처음부터 다시 시작한다.
-    if (!hasCheckpoint && (task.executor !== 'local' || !LOCAL_BRIDGE.DEVICE_WAIT_ENABLED)) return false;
+    // 체크포인트 없는 재개는 기기 대기·모델 대기만 허용 — 시작 시점에 기기가 없었거나 첫 턴에 모델이 응답하지 않아 아무 턴도 돌지 않은 작업이라 처음부터 다시 시작한다.
+    if (!hasCheckpoint && (task.executor !== 'local' || !LOCAL_BRIDGE.DEVICE_WAIT_ENABLED)
+        && (await new AgentTaskParkRepository(getPool()).getParkReason(taskId)) !== AGENT_TASK_MODEL_WAIT_REASON) return false;
     if (task.executor === 'local' && (!LOCAL_BRIDGE.ENABLED || !getLocalBridgeRegistry().getDevice(String(task.user_id), task.device_id ?? undefined))) {
         logger.info(`[${taskId}] 주차 재개 보류 — 로컬 디바이스 미연결(스윕이 다시 시도)`);
         return false;
@@ -128,6 +130,11 @@ export async function sweepParkedTasks(): Promise<{ resumed: number; expired: nu
                 }
                 continue;
             }
+            if (t.reason === AGENT_TASK_MODEL_WAIT_REASON) {
+                // 모델 대기 — 재개·만료는 전용 스윕(model-wait)이 맡는다. 여기서는 작업 공간만 유지한다.
+                if (t.workspace_path) { await utimes(t.workspace_path, now, now); out.touched++; }
+                continue;
+            }
             if (t.has_decision) {
                 if (await resumeParkedTask(t.id)) out.resumed++;
             } else if (!t.has_live_pending) {
@@ -170,6 +177,8 @@ export async function expireParkedTasks(): Promise<{ expired: number }> {
                 if (deviceWaitAction({ connected: !!dev, waitedMs, maxMs: LOCAL_BRIDGE.DEVICE_WAIT_MAX_MS }) === 'expire') error = AGENT_TASK_DEVICE_WAIT_EXPIRED_ERROR;
             } else if (t.reason === AGENT_TASK_BROWSER_TAKEOVER_REASON) {
                 if (browserTakeoverAction({ connected: !!dev, userControl: dev?.browserUserControl === true, waitedMs, maxMs: LOCAL_BRIDGE.TAKEOVER_WAIT_MAX_MS }) === 'expire') error = AGENT_TASK_BROWSER_TAKEOVER_EXPIRED_ERROR;
+            } else if (t.reason === AGENT_TASK_MODEL_WAIT_REASON) {
+                continue; // 모델 대기의 만료는 전용 스윕(model-wait)이 맡는다
             } else if (!t.has_decision && !t.has_live_pending) {
                 await new AgentTaskApprovalRepository(getPool()).expirePendingForTask(t.id, 'expired');
                 error = AGENT_TASK_PARK_EXPIRED_ERROR;

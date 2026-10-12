@@ -20,6 +20,8 @@ let bridgeEnabled = true;
 jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { get ENABLED() { return bridgeEnabled; }, DEVICE_WAIT_ENABLED: true, DEVICE_WAIT_MAX_MS: 60_000, TAKEOVER_WAIT_MAX_MS: 30_000 } }));
 const getDevice = jest.fn();
 jest.mock('../../local-bridge/registry', () => ({ getLocalBridgeRegistry: () => ({ getDevice }) }));
+const getParkReason = jest.fn(async (_id: string): Promise<string | null> => null);
+jest.mock('../../../data/repositories/agent-task-park-repository', () => ({ AgentTaskParkRepository: jest.fn().mockImplementation(() => ({ getParkReason })) }));
 const utimes = jest.fn(async () => undefined);
 jest.mock('fs/promises', () => ({ utimes: (...a: unknown[]) => utimes(...(a as [])) }));
 
@@ -217,5 +219,34 @@ describe('expireParkedTasks — 상한 초과 판정만 따로 자주(재개·wo
         listParkedTasks.mockResolvedValueOnce([row({ id: 'h', reason: 'hitl_parked' })]);
         expirePendingForTask.mockRejectedValueOnce(new Error('boom'));
         await expect(expireParkedTasks()).resolves.toEqual({ expired: 0 });
+    });
+});
+
+// 모델 서버가 한동안 응답하지 못해 멈춘 작업 — 재개·만료는 전용 스윕(model-wait)이 맡는다
+describe('모델 대기(model_wait) — 주차 스윕은 건드리지 않는다', () => {
+    const row = (over: Record<string, unknown>) => ({ id: 't1', user_id: 'u1', device_id: null, workspace_path: '/w/t1', reason: 'model_wait', waited_ms: '999999999', has_decision: false, has_live_pending: false, ...over });
+    beforeEach(() => { getAgentTask.mockResolvedValue(parkedTask); getParkReason.mockResolvedValue(null); });
+
+    it('본 스윕 — 승인 만료로 실패시키지도, 재개하지도 않는다(작업 공간만 유지한다)', async () => {
+        listParkedTasks.mockResolvedValue([row({})]);
+        await expect(sweepParkedTasks()).resolves.toMatchObject({ resumed: 0, expired: 0, touched: 1 });
+        expect(updateAgentTask).not.toHaveBeenCalled();
+        expect(expirePendingForTask).not.toHaveBeenCalled();
+        expect(claimParkedTask).not.toHaveBeenCalled();
+        expect(utimes).toHaveBeenCalledWith('/w/t1', expect.any(Date), expect.any(Date));
+    });
+
+    it('만료 전용 스윕 — 건드리지 않는다', async () => {
+        listParkedTasks.mockResolvedValue([row({})]);
+        await expect(expireParkedTasks()).resolves.toEqual({ expired: 0 });
+        expect(updateAgentTask).not.toHaveBeenCalled();
+        expect(expirePendingForTask).not.toHaveBeenCalled();
+    });
+
+    it('첫 턴에서 멈춰 체크포인트가 없는 모델 대기 작업은 처음부터 다시 시작한다', async () => {
+        getAgentTask.mockResolvedValue({ ...parkedTask, checkpoint: null });
+        getParkReason.mockResolvedValue('model_wait');
+        await expect(resumeParkedTask('t1')).resolves.toBe(true);
+        expect((execute.mock.calls[0] as unknown[])[0]).not.toHaveProperty('resume');
     });
 });

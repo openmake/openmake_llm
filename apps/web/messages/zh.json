@@ -435,6 +435,7 @@
       "paused": "等待批准",
       "waitingDevice": "等待设备连接",
       "waitingBrowserTakeover": "用户正在操作浏览器",
+      "waitingModel": "等待模型响应",
       "completed": "已完成",
       "failed": "失败",
       "cancelled": "已取消"
@@ -940,6 +941,7 @@
     "queuePosition": "排队第 {position} 位 — 前面的任务完成后自动开始",
     "waitingDevice": "正在等待本地设备连接 — 连接 Companion 后继续执行",
     "waitingBrowserTakeover": "用户正在操作浏览器 — 在 Companion 中交还浏览器后继续执行",
+    "waitingModel": "正在等待模型服务器响应 — 恢复后将自动继续运行",
     "planLabel": "计划 ({completed}/{total})",
     "outputsLabel": "{count} 个产出",
     "noSteps": "暂无步骤记录。",
@@ -1003,6 +1005,8 @@
       "browser_takeover_expired": "等待交还浏览器超时",
       "interrupted_local_device": "本地设备断开连接而中断",
       "lease_held_elsewhere": "其他服务器正在运行该任务，未能启动",
+      "recovery_limit": "多次自动恢复仍无进展，已停止",
+      "model_wait_expired": "模型服务器未恢复，已停止",
       "llm_error": "模型调用出错",
       "sandbox_unavailable": "未能准备执行环境",
       "next": {
@@ -1017,7 +1021,8 @@
         "browser_takeover_expired": "请在 Companion 菜单中交还浏览器后重新运行。",
         "sandbox_unavailable": "请稍后重新运行。同时运行的任务减少后即可获得执行环境。如果持续出现，请通知管理员。",
         "interrupted_local_device": "请重新连接 Companion(或 CLI)，可继续时请继续运行，否则请重新运行。",
-        "lease_held_elsewhere": "请稍后重新运行。"
+        "lease_held_elsewhere": "请稍后重新运行。",
+        "recovery_limit": "可以从中断处继续运行。如果再次停在同一位置，请将目标拆小后重新运行，或通知管理员。"
       }
     },
     "planNode": "步骤{n}",
@@ -2665,7 +2670,27 @@
     "thinkingLow": "低",
     "thinkingMedium": "中",
     "thinkingHigh": "高",
-    "thinkingNote": "无值的旧任务计为\"关闭\"。若服务器的 LLM_ENABLE_REASONING_EFFORT 关闭，低/中/高均按\"开启\"运行。"
+    "thinkingNote": "无值的旧任务计为\"关闭\"。若服务器的 LLM_ENABLE_REASONING_EFFORT 关闭，低/中/高均按\"开启\"运行。",
+    "stabilityTitle": "稳定性信号",
+    "stabilitySignal": "信号",
+    "stabilityOccurrences": "发生次数",
+    "stabilityTasks": "任务数",
+    "stabilityEmpty": "此期间没有记录到信号。",
+    "stabilityQueueWait": "队列等待(受理 → 运行): 启动 {starts} 次，中位数 {p50}，p95 {p95}",
+    "stabilityNote": "以期间内创建的全部任务为准。根据状态转换记录和步骤记录的文字统计，文字变更之前的记录可能统计不到。",
+    "stabilitySignals": {
+      "restart_interrupt": "因服务器重启而中断运行",
+      "recovery": "自动恢复(继续运行·等待设备)",
+      "recovery_limit": "达到重复恢复上限而停止",
+      "model_wait": "因模型服务器故障而等待",
+      "llm_retry": "模型调用重试",
+      "llm_recovery_wait": "重试用尽后的等待",
+      "empty_response_retry": "空响应重新询问",
+      "loop_guard_block": "重复防护拦截",
+      "tool_call_timeout": "工具调用超出时间上限",
+      "context_trim": "上下文截断",
+      "output_repetition": "输出重复"
+    }
   },
   "adminQuotaRequests": {
     "title": "配额超额审批",

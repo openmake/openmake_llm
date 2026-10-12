@@ -28,6 +28,8 @@ const EXACT: Readonly<Record<string, AgentTaskFailureClass>> = {
     interrupted_local_device: 'interrupted',
     'server restarted': 'interrupted',
     lease_held_elsewhere: 'interrupted', // 다른 서버의 살아 있는 실행 소유권 때문에 시작하지 못함(task-lease) — 다시 실행하면 된다
+    model_wait_expired: 'llm_error', // 모델 대기 상한 초과(agent-task/model-wait) — 모델 서버가 끝내 돌아오지 않았다
+    recovery_limit: 'interrupted', // 진행 없이 되풀이된 자동 복구를 멈춤(boot-recovery) — 체크포인트가 남아 사용자가 이어 할 수 있다
     sandbox_unavailable: 'interrupted', // 실행 환경(샌드박스)을 받지 못해 끝냄(정책 fail) — 작업 탓이 아니고 다시 실행하면 될 수 있다
 };
 

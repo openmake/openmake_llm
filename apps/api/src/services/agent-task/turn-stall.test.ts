@@ -1,4 +1,4 @@
-import { endsWithActionAnnouncement, pickNoToolNudge } from './turn-stall';
+import { endsWithActionAnnouncement, pickNoToolNudge, isFirstModelTurn } from './turn-stall';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
 import { AGENT_TASK_INCOMPLETE_MARKER } from '../../prompts/agent-task-prompt';
 
@@ -55,3 +55,19 @@ describe('pickNoToolNudge — 도구 호출 없이 끝난 턴을 재촉할지', 
         expect(pickNoToolNudge({ ...base, canAct: false })).toBeNull();
     });
 });
+
+// 재개한 실행의 첫 응답은 "계획만 쓴 첫 턴"이 아니다 — 이미 도구까지 쓴 대화의 답변에 "계획은 확인했습니다" 재촉이 붙었다
+describe('isFirstModelTurn', () => {
+    type Msg = { role: string; content: string };
+    const sys: Msg = { role: 'system', content: 's' };
+    const user: Msg = { role: 'user', content: '목표' };
+    it('모델의 응답이 방금 것 하나뿐이면 첫 턴이다', () => {
+        const conversation: Msg[] = [sys, user, { role: 'assistant', content: '계획입니다' }];
+        expect(isFirstModelTurn(conversation)).toBe(true);
+    });
+    it('앞선 응답·도구 결과가 있으면(재개·이후 턴) 첫 턴이 아니다', () => {
+        const conversation: Msg[] = [sys, user, { role: 'assistant', content: '' }, { role: 'tool', content: '결과' }, { role: 'assistant', content: '답' }];
+        expect(isFirstModelTurn(conversation)).toBe(false);
+    });
+});
+

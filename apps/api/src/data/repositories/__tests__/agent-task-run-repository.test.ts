@@ -2,7 +2,7 @@
  * 실행 시작 claim(2026-10-09 점검 ①) — pending/failed/cancelled 에서만 queued 로 원자 전이. 0행이면 다른 요청이 먼저 잡은 것.
  */
 import type { Pool } from 'pg';
-import { AgentTaskRunRepository } from '../agent-task-run-repository';
+import { AgentTaskRunRepository, recoverableRestartCondition } from '../agent-task-run-repository';
 
 function fakePool(results: Array<{ rows: unknown[]; rowCount?: number }>) {
     const calls: Array<{ sql: string; params: unknown[] }> = [];
@@ -141,5 +141,53 @@ describe('AgentTaskRunRepository.failUnstartedClaim', () => {
         const { pool, calls } = fakePool([{ rows: [], rowCount: 0 }]);
         await expect(new AgentTaskRunRepository(pool).failUnstartedClaim('t1', 'lease_held_elsewhere')).resolves.toBe(false);
         expect(calls).toHaveLength(1);
+    });
+});
+
+// 진행 없이 되풀이되는 복구 끊기 — 작업 하나가 프로세스를 죽이면 재시작 → 자동 재개 → 다시 죽음이 끝없이 돈다
+describe('AgentTaskRunRepository.countRecoveriesWithoutProgress', () => {
+    it('마지막 진행(체크포인트 기록)·사용자 재실행·이전 중단 뒤의 복구 claim 만 세고, 실행한 적 없는 대기(queued) 재제출은 뺀다', async () => {
+        const { pool, calls } = fakePool([{ rows: [{ n: 2 }], rowCount: 1 }]);
+        await expect(new AgentTaskRunRepository(pool).countRecoveriesWithoutProgress('t1')).resolves.toBe(2);
+        expect(calls[0].sql).toContain('FROM agent_task_events');
+        expect(calls[0].sql).toContain("IS DISTINCT FROM 'queued'");
+        expect(calls[0].sql).toContain('agent_task_checkpoints');
+        expect(calls[0].params).toEqual(['t1', 'boot recovery claim', ['recovery_limit', 'execute claim', 'resume claim']]);
+    });
+
+    it('행이 없으면 0', async () => {
+        const { pool } = fakePool([{ rows: [], rowCount: 0 }]);
+        await expect(new AgentTaskRunRepository(pool).countRecoveriesWithoutProgress('t1')).resolves.toBe(0);
+    });
+});
+
+describe('AgentTaskRunRepository.failRecoveryLimit', () => {
+    it('읽을 때의 상태 그대로인 중단 작업만 failed(recovery_limit)로 닫고 알림 표식·이벤트를 남긴다 — 체크포인트는 건드리지 않는다', async () => {
+        const { pool, calls } = fakePool([{ rows: [{ prev: 'failed' }], rowCount: 1 }, { rows: [], rowCount: 1 }]);
+        await expect(new AgentTaskRunRepository(pool).failRecoveryLimit('t1', 'failed')).resolves.toBe(true);
+        expect(calls[0].sql).toContain("SET status = 'failed'");
+        expect(calls[0].sql).toContain('terminal_notify_pending = TRUE');
+        expect(calls[0].sql).toContain('FOR UPDATE');
+        expect(calls[0].sql).not.toContain('checkpoint');
+        expect(calls[0].params).toEqual(['t1', 'recovery_limit', 'interrupted', 'failed', 'server restarted']);
+        expect(calls[1].params).toEqual(['t1', 'failed', 'failed', 'recovery_limit']);
+    });
+
+    it('그 사이 다른 요청이 잡았으면(0행) false 이고 이벤트를 남기지 않는다', async () => {
+        const { pool, calls } = fakePool([{ rows: [], rowCount: 0 }]);
+        await expect(new AgentTaskRunRepository(pool).failRecoveryLimit('t1', 'running')).resolves.toBe(false);
+        expect(calls).toHaveLength(1);
+    });
+});
+
+// 종료 알림 보류 — 부팅 복구가 되살릴 행은 알리지 않는다. 로컬 기기 작업도 기기 대기로 주차하게 되면 되살릴 행이다
+describe('recoverableRestartCondition', () => {
+    it('로컬 작업을 되살리지 못하는 설정이면 로컬 실행을 뺀다', () => {
+        expect(recoverableRestartCondition('$4', false)).toContain("executor IS DISTINCT FROM 'local'");
+    });
+    it('로컬 작업을 기기 대기로 되살리는 설정이면 로컬 실행도 보류한다', () => {
+        const sql = recoverableRestartCondition('$4', true);
+        expect(sql).not.toContain("'local'");
+        expect(sql).toContain("error = 'server restarted'");
     });
 });

@@ -372,7 +372,9 @@ const DEVICE_WAIT_REASON = "device_wait";
 /** 사용자가 Companion 에서 브라우저를 넘겨받아 멈춘 작업 */
 const BROWSER_TAKEOVER_REASON = "browser_takeover";
 /** 멈춘 사유별 배지 문구(없으면 상태 기본 문구) */
-const WAIT_REASON_BADGE: Readonly<Record<string, string>> = { [DEVICE_WAIT_REASON]: "status.waitingDevice", [BROWSER_TAKEOVER_REASON]: "status.waitingBrowserTakeover" };
+/** 모델 서버가 응답하지 않아 멈춘 작업 — 모델이 돌아오면 서버가 이어서 실행한다 */
+const MODEL_WAIT_REASON = "model_wait";
+const WAIT_REASON_BADGE: Readonly<Record<string, string>> = { [DEVICE_WAIT_REASON]: "status.waitingDevice", [BROWSER_TAKEOVER_REASON]: "status.waitingBrowserTakeover", [MODEL_WAIT_REASON]: "status.waitingModel" };
 
 /** 대기 순번 — 줄을 선 동안만 작업 상세를 주기적으로 읽어 "몇 번째"인지 보인다. 순번이 없으면(곧 시작) 아무것도 그리지 않는다. */
 function QueuePosition({ taskId }: { taskId: string }) {

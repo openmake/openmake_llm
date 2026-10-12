@@ -38,6 +38,7 @@ import { currentPlanStepIndex } from './task-sandbox/planning';
 import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { parkForMissingDevice } from './agent-task/device-wait';
+import { parkForModelOutage } from './agent-task/model-wait';
 import { isInternalOnlyRun } from '../config/internal-only-policy';
 import { auditInternalOnly } from './agent-task/internal-only-audit';
 import { partialResultOf } from './agent-task/turn-call';
@@ -52,7 +53,7 @@ import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, write
 import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
 import { nextTurnProgress } from './agent-task/turn-progress';
 import { replyNudge } from './agent-task/one-shot-notice';
-import { pickNoToolNudge } from './agent-task/turn-stall';
+import { pickNoToolNudge, isFirstModelTurn } from './agent-task/turn-stall';
 import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { effectiveApprovalPolicy, persistApprovalPolicy } from './agent-task/approval-policy-restore';
@@ -378,7 +379,7 @@ export class AgentTaskService {
                             .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
                         emitStep(stepType, undefined, note);
                     },
-                });
+                }).catch((e) => parkForModelOutage(e, { taskId, signal, update })); // 모델 서버가 끝내 응답하지 않으면 실패 대신 주차(model-wait)
                 this.client = roleState.client;
                 totalTokens +=
                     (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);
@@ -501,7 +502,7 @@ export class AgentTaskService {
                 if (!hasToolCalls) {
                     // 계획만 쓰고 멈춘 첫 턴(산출물 없음)은 1회, 이후 턴의 "이제 ~하겠습니다"식 행동 예고는 상한까지 재촉하고 계속한다.
                     // 수행 불가 선언(마커)은 재촉하지 않고 관문으로 보낸다 — 판정은 agent-task/turn-stall.
-                    const stall = pickNoToolNudge({ firstTurn: turn === startTurn, content: stepContent, artifactCount: extracted!.artifacts.length,
+                    const stall = pickNoToolNudge({ firstTurn: turn === startTurn && isFirstModelTurn(conversation), content: stepContent, artifactCount: extracted!.artifacts.length,
                         canAct: !finalTurnReason && turn < turnCeiling - 1, stallNudges });
                     if (stall) {
                         if (stall.note) { stallNudges++; await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: stall.note, planStepIndex: planIdx() }); }

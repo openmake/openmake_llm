@@ -1,6 +1,8 @@
 /**
  * 주차(F16.7) SQL — 표식은 paused→paused(hitl_parked) 이벤트, 재개 claim·목록·부팅 복구가 같은 조건을 쓴다.
  */
+// 로컬 기기 작업을 되살리지 않는 기본 설정으로 고정한다(개발 장비의 .env 가 로컬 실행을 켜 두면 보류 조건이 달라진다)
+jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { ...jest.requireActual('../../../config/local-bridge').LOCAL_BRIDGE, ENABLED: false } }));
 import type { Pool } from 'pg';
 import { AgentTaskRepository, parkedTaskCondition } from '../agent-task-repository';
 import { AgentTaskParkRepository } from '../agent-task-park-repository';
@@ -12,12 +14,12 @@ function fakePool(results: Array<{ rows: unknown[]; rowCount?: number }>) {
 }
 
 describe('AgentTaskRepository — 주차(F16.7)', () => {
-    it('parkedTaskCondition 은 paused + 마지막 이벤트 사유가 주차 사유(질문 응답 대기·기기 대기·브라우저 넘겨받기)', () => {
+    it('parkedTaskCondition 은 paused + 마지막 이벤트 사유가 주차 사유(질문 응답 대기·기기 대기·브라우저 넘겨받기·모델 대기)', () => {
         const c = parkedTaskCondition('t');
         expect(c).toContain("t.status = 'paused'");
         expect(c).toContain('ORDER BY e.id DESC LIMIT 1');
         expect(c).toContain('COALESCE('); // NULL 사유에서 NOT(조건) 이 NULL 이 되지 않게(부팅 마킹 누락 방지)
-        expect(c).toContain("IN ('hitl_parked', 'device_wait', 'browser_takeover')");
+        expect(c).toContain("IN ('hitl_parked', 'device_wait', 'browser_takeover', 'model_wait')");
     });
 
     it('markParked 는 사유를 받아 표식한다 — 기본은 질문 응답 대기, 모르는 사유는 거절', async () => {

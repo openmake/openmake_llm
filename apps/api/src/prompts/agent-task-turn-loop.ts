@@ -52,6 +52,11 @@ export function getMalformedToolArgsResult(toolName: string): string {
     return `Error: ${toolName} 호출의 인자가 올바른 JSON 이 아니어서 실행하지 않았습니다(출력이 중간에 잘렸을 수 있습니다). 인자를 완전한 JSON 으로 다시 작성해 호출하세요. 내용이 길면 여러 번에 나눠 호출하세요.`;
 }
 
+/** 시간 상한을 넘겨 기다리기를 멈춘 도구 호출에 돌려주는 결과 — 실행이 뒤늦게 끝났을 수 있음을 알려 같은 호출을 곧바로 되풀이하지 않게 한다. */
+export function getToolCallTimeoutResult(toolName: string, capMs: number): string {
+    return `Error: ${toolName} 호출이 ${Math.round(capMs / 1000)}초 안에 끝나지 않아 시간 상한으로 기다리기를 멈췄습니다. 실행이 뒤늦게 끝났을 수도 있습니다 — 같은 호출을 바로 되풀이하지 말고, 결과가 남았는지 먼저 확인하거나 다른 방법을 쓰세요.`;
+}
+
 /** 한 응답 안의 중복 호출에 주는 결과의 머리말 — 반복 가드(tool-loop-guard)가 이 결과를 집계에서 빼는 데 쓴다. */
 export const DUPLICATE_TOOL_CALL_PREFIX = '[중복 호출]';
 

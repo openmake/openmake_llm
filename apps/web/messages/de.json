@@ -435,6 +435,7 @@
       "paused": "Wartet auf Freigabe",
       "waitingDevice": "Warten auf Gerät",
       "waitingBrowserTakeover": "Sie bedienen den Browser",
+      "waitingModel": "Warten auf Modell",
       "completed": "Abgeschlossen",
       "failed": "Fehlgeschlagen",
       "cancelled": "Abgebrochen"
@@ -940,6 +941,7 @@
     "queuePosition": "Warteposition {position} — startet automatisch, sobald frühere Aufgaben fertig sind",
     "waitingDevice": "Warten auf Ihr lokales Gerät — verbinden Sie Companion, um fortzufahren",
     "waitingBrowserTakeover": "Sie bedienen gerade den Browser — geben Sie ihn in Companion zurück, um fortzufahren",
+    "waitingModel": "Warten auf Antwort des Modellservers — die Aufgabe wird automatisch fortgesetzt, sobald er wieder erreichbar ist",
     "planLabel": "Plan ({completed}/{total})",
     "outputsLabel": "{count} Ausgabe(n)",
     "noSteps": "Keine Schrittaufzeichnungen.",
@@ -1003,6 +1005,8 @@
       "browser_takeover_expired": "Zeitüberschreitung beim Warten auf die Rückgabe des Browsers",
       "interrupted_local_device": "Unterbrochen: lokales Gerät getrennt",
       "lease_held_elsewhere": "Start nicht möglich: läuft auf einem anderen Server",
+      "recovery_limit": "Angehalten: Wiederholte automatische Wiederherstellung ohne Fortschritt",
+      "model_wait_expired": "Angehalten: Der Modellserver ist nicht zurückgekehrt",
       "llm_error": "Fehler beim Modellaufruf",
       "sandbox_unavailable": "Ausführungsumgebung nicht verfügbar",
       "next": {
@@ -1017,7 +1021,8 @@
         "browser_takeover_expired": "Geben Sie den Browser im Companion-Menü zurück und führen Sie die Aufgabe erneut aus.",
         "sandbox_unavailable": "Starten Sie in Kürze erneut. Sobald weniger Aufgaben gleichzeitig laufen, wird eine Ausführungsumgebung frei. Wenn es weiter auftritt, informieren Sie die Administration.",
         "interrupted_local_device": "Verbinden Sie Companion (oder die CLI) erneut und setzen Sie die Aufgabe fort, falls möglich; andernfalls starten Sie sie erneut.",
-        "lease_held_elsewhere": "Starten Sie die Aufgabe in Kürze erneut."
+        "lease_held_elsewhere": "Starten Sie die Aufgabe in Kürze erneut.",
+        "recovery_limit": "Sie können die Aufgabe an der unterbrochenen Stelle fortsetzen. Wenn sie erneut an derselben Stelle stoppt, teilen Sie das Ziel in kleinere Aufgaben auf und starten Sie erneut, oder informieren Sie die Administration."
       }
     },
     "planNode": "Schritt {n}",
@@ -2665,7 +2670,27 @@
     "thinkingLow": "Niedrig",
     "thinkingMedium": "Mittel",
     "thinkingHigh": "Hoch",
-    "thinkingNote": "Ältere Aufgaben (ohne Wert) zählen als Aus. Ist LLM_ENABLE_REASONING_EFFORT auf dem Server aus, verhalten sich Niedrig/Mittel/Hoch alle wie „an\"."
+    "thinkingNote": "Ältere Aufgaben (ohne Wert) zählen als Aus. Ist LLM_ENABLE_REASONING_EFFORT auf dem Server aus, verhalten sich Niedrig/Mittel/Hoch alle wie „an\".",
+    "stabilityTitle": "Stabilitätssignale",
+    "stabilitySignal": "Signal",
+    "stabilityOccurrences": "Vorkommen",
+    "stabilityTasks": "Aufgaben",
+    "stabilityEmpty": "In diesem Zeitraum wurden keine Signale aufgezeichnet.",
+    "stabilityQueueWait": "Wartezeit in der Warteschlange (angenommen → läuft): {starts} Starts, Median {p50}, p95 {p95}",
+    "stabilityNote": "Bezieht sich auf alle im Zeitraum erstellten Aufgaben. Gezählt wird anhand von Übergangseinträgen und Schritttexten; Einträge vor einer Textänderung werden möglicherweise nicht erfasst.",
+    "stabilitySignals": {
+      "restart_interrupt": "Ausführung durch Serverneustart unterbrochen",
+      "recovery": "Automatische Wiederherstellung (Fortsetzen oder Warten auf Gerät)",
+      "recovery_limit": "Am Limit wiederholter Wiederherstellungen gestoppt",
+      "model_wait": "Geparkt, während der Modellserver nicht erreichbar war",
+      "llm_retry": "Wiederholung des Modellaufrufs",
+      "llm_recovery_wait": "Warten nach ausgeschöpften Wiederholungen",
+      "empty_response_retry": "Nachfrage bei leerer Antwort",
+      "loop_guard_block": "Blockierung durch Schleifenschutz",
+      "tool_call_timeout": "Zeitlimit für Tool-Aufruf überschritten",
+      "context_trim": "Kontextkürzung",
+      "output_repetition": "Ausgabewiederholung"
+    }
   },
   "adminQuotaRequests": {
     "title": "Kontingent-Überschreitungen",

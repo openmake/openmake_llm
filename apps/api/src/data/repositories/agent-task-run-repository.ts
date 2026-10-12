@@ -6,6 +6,7 @@
  */
 import { BaseRepository } from './base-repository';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
+import { LOCAL_BRIDGE } from '../../config/local-bridge';
 
 /** claimForExecute 가 잡은 실행 시작 claim — 디스패치가 거절되면 revertClaim 이 이것으로 되돌린다. */
 export interface ExecuteClaim {
@@ -21,16 +22,24 @@ export interface ExecuteClaim {
 
 /**
  * 종료로 끊겨 부팅 복구가 되살릴 작업의 판정 SQL — failed('server restarted') 이고, 끊긴 지 holdParam(ms) 이 안 됐고,
- * boot-recovery recoverTask 가 재개하는 조건(체크포인트에 대화가 있음·로컬 실행 아님)을 채운 행. 종료 알림 점검이 이 행을 건너뛴다:
+ * boot-recovery recoverTask 가 되살리는 조건(체크포인트에 대화가 있음)을 채운 행. 종료 알림 점검이 이 행을 건너뛴다:
  * 정상 종료(shutdown-drain)와 비정상 종료(schema-initializer 의 좀비 정리)가 남긴 알림 표식은 복구보다 먼저 읽힐 수 있다
- * (종료 직전의 주기 점검, 다른 서버의 점검). 복구가 claim 하면 종료 상태가 아니게 되어 대상에서 빠지고, 복구가 오지 않으면
- * 시간이 지난 뒤 알린다. 되살리지 못하는 행(체크포인트 없음·로컬 실행)은 해당하지 않아 종전대로 바로 알린다.
+ * (종료 직전의 주기 점검, 다른 서버의 점검). 복구가 claim·주차하면 종료 상태가 아니게 되어 대상에서 빠지고, 복구가 오지 않으면
+ * 시간이 지난 뒤 알린다. 되살리지 못하는 행(체크포인트 없음)은 해당하지 않아 종전대로 바로 알린다.
+ * 로컬 기기 작업은 기기 대기를 쓸 때만 되살린다(기기 대기로 주차) — localRecoverable 이 false 면 종전대로 뺀다.
  */
-export function recoverableRestartCondition(holdParam: string): string {
-    return `(status = 'failed' AND error = 'server restarted' AND completed_at > NOW() - (${holdParam}::bigint * INTERVAL '1 millisecond')
-             AND executor IS DISTINCT FROM 'local'
+export function recoverableRestartCondition(holdParam: string, localRecoverable: boolean = LOCAL_BRIDGE.ENABLED && LOCAL_BRIDGE.DEVICE_WAIT_ENABLED): string {
+    return `(status = 'failed' AND error = 'server restarted' AND completed_at > NOW() - (${holdParam}::bigint * INTERVAL '1 millisecond')${localRecoverable ? '' : `
+             AND executor IS DISTINCT FROM 'local'`}
              AND CASE WHEN jsonb_typeof(checkpoint->'conversation') = 'array' THEN jsonb_array_length(checkpoint->'conversation') > 0 ELSE FALSE END)`;
 }
+
+/** 진행 없이 되풀이된 자동 복구를 멈춘 작업의 error 코드 — config/agent-task-failure-class 에서 interrupted 로 분류 */
+export const AGENT_TASK_RECOVERY_LIMIT_ERROR = 'recovery_limit';
+/** 복구 claim 이 남기는 이벤트 사유 — agent-task-repository.claimAgentTaskForRecovery 가 쓰는 문구와 같아야 한다 */
+export const RECOVERY_CLAIM_REASON = 'boot recovery claim';
+/** 복구 횟수를 처음부터 다시 세게 하는 이벤트 — 이전 중단, 사용자의 재실행·이어하기 */
+const RECOVERY_COUNT_RESET_REASONS: readonly string[] = [AGENT_TASK_RECOVERY_LIMIT_ERROR, 'execute claim', 'resume claim'];
 
 export class AgentTaskRunRepository extends BaseRepository {
     /**
@@ -99,6 +108,42 @@ export class AgentTaskRunRepository extends BaseRepository {
         const row = r.rows[0];
         if ((r.rowCount ?? 0) === 0 || !row) return false;
         await this.recordEvent(taskId, row.prev, 'failed', error);
+        return true;
+    }
+
+    /**
+     * 진행 없이 되풀이된 복구 횟수 — 마지막 턴 체크포인트 기록(agent_task_checkpoints)과 마지막 초기화 이벤트(이전 중단·사용자의
+     * 재실행/이어하기) 뒤에 남은 복구 claim 수. 실행한 적 없는 대기(queued) 행의 재제출은 세지 않는다. 이벤트 기록은 fail-open 이라
+     * 실제보다 적게 셀 수 있다(그만큼 더 복구한다).
+     */
+    async countRecoveriesWithoutProgress(taskId: string): Promise<number> {
+        const r = await this.query<{ n: number }>(
+            `SELECT COUNT(*)::int AS n FROM agent_task_events e
+             WHERE e.task_id = $1 AND e.reason = $2 AND e.from_status IS DISTINCT FROM 'queued'
+               AND e.created_at > GREATEST(
+                   COALESCE((SELECT MAX(c.created_at) FROM agent_task_checkpoints c WHERE c.task_id = $1), '-infinity'::timestamptz),
+                   COALESCE((SELECT MAX(x.created_at) FROM agent_task_events x WHERE x.task_id = $1 AND x.reason = ANY($3::text[])), '-infinity'::timestamptz))`,
+            [taskId, RECOVERY_CLAIM_REASON, [...RECOVERY_COUNT_RESET_REASONS]],
+        );
+        return Number(r.rows[0]?.n ?? 0);
+    }
+
+    /**
+     * 복구 상한에 닿은 작업 닫기 — 복구가 읽은 상태(expectedPrev) 그대로인 중단 작업(running·paused 잔존, failed('server restarted'))만
+     * failed(recovery_limit)로 바꾼다. 체크포인트는 그대로 둔다(사용자가 이어 할 수 있다). 그 사이 /execute·/resume·다른 서버의
+     * 복구가 잡았으면 0행(false)이고 건드리지 않는다.
+     */
+    async failRecoveryLimit(taskId: string, expectedPrev: string): Promise<boolean> {
+        const r = await this.query<{ prev: string }>(
+            `UPDATE agent_tasks t SET status = 'failed', error = $2, failure_class = $3, completed_at = NOW(), updated_at = NOW(), terminal_notify_pending = TRUE
+             FROM (SELECT id, status AS prev, error AS prev_error FROM agent_tasks WHERE id = $1 FOR UPDATE) o
+             WHERE t.id = o.id AND o.prev = $4 AND (o.prev IN ('running', 'paused') OR (o.prev = 'failed' AND o.prev_error = $5))
+             RETURNING o.prev`,
+            [taskId, AGENT_TASK_RECOVERY_LIMIT_ERROR, classifyAgentTaskFailure(AGENT_TASK_RECOVERY_LIMIT_ERROR), expectedPrev, 'server restarted'],
+        );
+        const row = r.rows[0];
+        if ((r.rowCount ?? 0) === 0 || !row) return false;
+        await this.recordEvent(taskId, row.prev, 'failed', AGENT_TASK_RECOVERY_LIMIT_ERROR);
         return true;
     }
 

@@ -435,6 +435,7 @@
       "paused": "승인 대기",
       "waitingDevice": "기기 연결 대기",
       "waitingBrowserTakeover": "브라우저 사용자 조작 중",
+      "waitingModel": "모델 응답 대기",
       "completed": "완료",
       "failed": "실패",
       "cancelled": "취소됨"
@@ -940,6 +941,7 @@
     "queuePosition": "대기 순번 {position}번 — 앞선 작업이 끝나면 자동으로 시작합니다",
     "waitingDevice": "로컬 기기 연결을 기다리는 중 — Companion 을 연결하면 이어서 실행합니다",
     "waitingBrowserTakeover": "사용자가 브라우저를 조작하는 중 — Companion 에서 브라우저를 돌려주면 이어서 실행합니다",
+    "waitingModel": "모델 서버의 응답을 기다리는 중 — 모델이 돌아오면 자동으로 이어서 실행합니다",
     "planLabel": "계획 ({completed}/{total})",
     "outputsLabel": "산출물 {count}개",
     "noSteps": "스텝 기록이 없습니다.",
@@ -1003,6 +1005,8 @@
       "browser_takeover_expired": "브라우저 넘겨받기 대기 시간 초과",
       "interrupted_local_device": "로컬 기기 연결이 끊겨 중단",
       "lease_held_elsewhere": "다른 서버가 실행 중이라 시작하지 못함",
+      "recovery_limit": "자동 복구를 되풀이했지만 진행하지 못해 멈춤",
+      "model_wait_expired": "모델 서버가 돌아오지 않아 중단",
       "llm_error": "모델 호출 오류",
       "sandbox_unavailable": "실행 환경을 준비하지 못함",
       "next": {
@@ -1017,7 +1021,8 @@
         "browser_takeover_expired": "Companion 메뉴에서 브라우저를 돌려준 뒤 다시 실행하세요.",
         "sandbox_unavailable": "잠시 뒤 다시 실행하세요. 동시에 도는 작업이 줄면 실행 환경을 받을 수 있습니다. 계속되면 관리자에게 알리세요.",
         "interrupted_local_device": "Companion(또는 CLI)을 다시 연결한 뒤, 이어하기가 있으면 이어서 하고 없으면 다시 실행하세요.",
-        "lease_held_elsewhere": "잠시 뒤 다시 실행하세요."
+        "lease_held_elsewhere": "잠시 뒤 다시 실행하세요.",
+        "recovery_limit": "이어하기로 중단된 지점부터 다시 시도할 수 있습니다. 같은 지점에서 또 멈추면 목표를 더 작게 나눠 다시 실행하거나 관리자에게 알리세요."
       }
     },
     "planNode": "{n}단계",
@@ -2665,7 +2670,27 @@
     "thinkingLow": "낮음",
     "thinkingMedium": "보통",
     "thinkingHigh": "높음",
-    "thinkingNote": "기존 작업(값 없음)은 '끄기'로 셉니다. 서버의 LLM_ENABLE_REASONING_EFFORT 가 꺼져 있으면 낮음·보통·높음은 모두 '켬'으로 동작합니다."
+    "thinkingNote": "기존 작업(값 없음)은 '끄기'로 셉니다. 서버의 LLM_ENABLE_REASONING_EFFORT 가 꺼져 있으면 낮음·보통·높음은 모두 '켬'으로 동작합니다.",
+    "stabilityTitle": "안정화 신호",
+    "stabilitySignal": "신호",
+    "stabilityOccurrences": "발생",
+    "stabilityTasks": "작업 수",
+    "stabilityEmpty": "이 기간에 기록된 신호가 없습니다.",
+    "stabilityQueueWait": "대기열 대기(접수 → 실행): {starts}회 시작, 중앙값 {p50}, p95 {p95}",
+    "stabilityNote": "기간 안에 만들어진 작업 전체 기준입니다. 전이 기록과 단계 기록의 문구로 세므로, 문구가 바뀌기 전의 기록은 잡히지 않을 수 있습니다.",
+    "stabilitySignals": {
+      "restart_interrupt": "서버 재시작으로 실행 중단",
+      "recovery": "자동 복구(재개·기기 대기 주차)",
+      "recovery_limit": "복구 반복 상한으로 중단",
+      "model_wait": "모델 서버 장애로 대기(주차)",
+      "llm_retry": "모델 호출 재시도",
+      "llm_recovery_wait": "재시도 소진 뒤 대기",
+      "empty_response_retry": "빈 응답 되묻기",
+      "loop_guard_block": "반복 가드 차단",
+      "tool_call_timeout": "도구 호출 시간 상한 초과",
+      "context_trim": "컨텍스트 절단",
+      "output_repetition": "출력 반복"
+    }
   },
   "adminQuotaRequests": {
     "title": "쿼터 초과 승인함",

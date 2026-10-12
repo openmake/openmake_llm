@@ -435,6 +435,7 @@
       "paused": "承認待ち",
       "waitingDevice": "デバイス接続待ち",
       "waitingBrowserTakeover": "ユーザーがブラウザを操作中",
+      "waitingModel": "モデル応答待ち",
       "completed": "完了",
       "failed": "失敗",
       "cancelled": "キャンセル済み"
@@ -940,6 +941,7 @@
     "queuePosition": "待機順 {position} 番 — 先のタスクが終わると自動で開始します",
     "waitingDevice": "ローカルデバイスの接続待ち — Companion を接続すると続行します",
     "waitingBrowserTakeover": "ユーザーがブラウザを操作中 — Companion でブラウザを戻すと続行します",
+    "waitingModel": "モデルサーバーの応答を待っています — 復旧すると自動的に続きから実行します",
     "planLabel": "計画 ({completed}/{total})",
     "outputsLabel": "成果物 {count}件",
     "noSteps": "ステップ記録がありません。",
@@ -1003,6 +1005,8 @@
       "browser_takeover_expired": "ブラウザの返却待ちがタイムアウト",
       "interrupted_local_device": "ローカル端末の切断により中断",
       "lease_held_elsewhere": "別のサーバーで実行中のため開始できませんでした",
+      "recovery_limit": "自動復旧を繰り返しても進まなかったため停止しました",
+      "model_wait_expired": "モデルサーバーが復旧しなかったため停止しました",
       "llm_error": "モデル呼び出しエラー",
       "sandbox_unavailable": "実行環境を準備できませんでした",
       "next": {
@@ -1017,7 +1021,8 @@
         "browser_takeover_expired": "Companion のメニューでブラウザを戻してから、もう一度実行してください。",
         "sandbox_unavailable": "しばらくしてから再実行してください。同時に動いているタスクが減ると実行環境を確保できます。続く場合は管理者に連絡してください。",
         "interrupted_local_device": "Companion(または CLI)を再接続してから、再開できる場合は再開し、できない場合はもう一度実行してください。",
-        "lease_held_elsewhere": "しばらくしてから再実行してください。"
+        "lease_held_elsewhere": "しばらくしてから再実行してください。",
+        "recovery_limit": "中断した地点から再開できます。同じ地点でまた止まる場合は、目標を小さく分けて再実行するか、管理者に連絡してください。"
       }
     },
     "planNode": "ステップ{n}",
@@ -2665,7 +2670,27 @@
     "thinkingLow": "低",
     "thinkingMedium": "中",
     "thinkingHigh": "高",
-    "thinkingNote": "値のない既存の作業は「オフ」に数えます。サーバーの LLM_ENABLE_REASONING_EFFORT が無効なら低・中・高はすべて「オン」として動作します。"
+    "thinkingNote": "値のない既存の作業は「オフ」に数えます。サーバーの LLM_ENABLE_REASONING_EFFORT が無効なら低・中・高はすべて「オン」として動作します。",
+    "stabilityTitle": "安定化シグナル",
+    "stabilitySignal": "シグナル",
+    "stabilityOccurrences": "発生",
+    "stabilityTasks": "タスク数",
+    "stabilityEmpty": "この期間に記録されたシグナルはありません。",
+    "stabilityQueueWait": "キュー待ち(受付 → 実行): 開始 {starts} 回、中央値 {p50}、p95 {p95}",
+    "stabilityNote": "期間内に作成された全タスクが対象です。遷移記録とステップ記録の文言で数えるため、文言を変更する前の記録は拾えない場合があります。",
+    "stabilitySignals": {
+      "restart_interrupt": "サーバー再起動による実行中断",
+      "recovery": "自動復旧(再開・デバイス待ち)",
+      "recovery_limit": "復旧の繰り返し上限で停止",
+      "model_wait": "モデルサーバー障害による待機",
+      "llm_retry": "モデル呼び出しの再試行",
+      "llm_recovery_wait": "再試行を使い切った後の待機",
+      "empty_response_retry": "空の応答の聞き直し",
+      "loop_guard_block": "繰り返しガードによるブロック",
+      "tool_call_timeout": "ツール呼び出しの時間上限超過",
+      "context_trim": "コンテキストの切り詰め",
+      "output_repetition": "出力の繰り返し"
+    }
   },
   "adminQuotaRequests": {
     "title": "クォータ超過承認",
