@@ -2667,7 +2667,26 @@
     "thinkingLow": "Low",
     "thinkingMedium": "Medium",
     "thinkingHigh": "High",
-    "thinkingNote": "Older tasks (no value) count as Off. If the server's LLM_ENABLE_REASONING_EFFORT is off, Low/Medium/High all behave as \"on\"."
+    "thinkingNote": "Older tasks (no value) count as Off. If the server's LLM_ENABLE_REASONING_EFFORT is off, Low/Medium/High all behave as \"on\".",
+    "stabilityTitle": "Stability signals",
+    "stabilitySignal": "Signal",
+    "stabilityOccurrences": "Occurrences",
+    "stabilityTasks": "Tasks",
+    "stabilityEmpty": "No signals recorded in this period.",
+    "stabilityQueueWait": "Queue wait (accepted → running): {starts} starts, median {p50}, p95 {p95}",
+    "stabilityNote": "Covers all tasks created in the period. Counted from transition records and step text, so records written before a wording change may not be picked up.",
+    "stabilitySignals": {
+      "restart_interrupt": "Run interrupted by server restart",
+      "recovery": "Automatic recovery (resume or device-wait park)",
+      "recovery_limit": "Stopped at the repeated-recovery limit",
+      "llm_retry": "Model call retry",
+      "llm_recovery_wait": "Wait after retries were exhausted",
+      "empty_response_retry": "Empty response re-ask",
+      "loop_guard_block": "Loop guard block",
+      "tool_call_timeout": "Tool call time limit exceeded",
+      "context_trim": "Context trim",
+      "output_repetition": "Output repetition"
+    }
   },
   "adminQuotaRequests": {
     "title": "Quota overage approvals",

@@ -2667,7 +2667,26 @@
     "thinkingLow": "低",
     "thinkingMedium": "中",
     "thinkingHigh": "高",
-    "thinkingNote": "値のない既存の作業は「オフ」に数えます。サーバーの LLM_ENABLE_REASONING_EFFORT が無効なら低・中・高はすべて「オン」として動作します。"
+    "thinkingNote": "値のない既存の作業は「オフ」に数えます。サーバーの LLM_ENABLE_REASONING_EFFORT が無効なら低・中・高はすべて「オン」として動作します。",
+    "stabilityTitle": "安定化シグナル",
+    "stabilitySignal": "シグナル",
+    "stabilityOccurrences": "発生",
+    "stabilityTasks": "タスク数",
+    "stabilityEmpty": "この期間に記録されたシグナルはありません。",
+    "stabilityQueueWait": "キュー待ち(受付 → 実行): 開始 {starts} 回、中央値 {p50}、p95 {p95}",
+    "stabilityNote": "期間内に作成された全タスクが対象です。遷移記録とステップ記録の文言で数えるため、文言を変更する前の記録は拾えない場合があります。",
+    "stabilitySignals": {
+      "restart_interrupt": "サーバー再起動による実行中断",
+      "recovery": "自動復旧(再開・デバイス待ち)",
+      "recovery_limit": "復旧の繰り返し上限で停止",
+      "llm_retry": "モデル呼び出しの再試行",
+      "llm_recovery_wait": "再試行を使い切った後の待機",
+      "empty_response_retry": "空の応答の聞き直し",
+      "loop_guard_block": "繰り返しガードによるブロック",
+      "tool_call_timeout": "ツール呼び出しの時間上限超過",
+      "context_trim": "コンテキストの切り詰め",
+      "output_repetition": "出力の繰り返し"
+    }
   },
   "adminQuotaRequests": {
     "title": "クォータ超過承認",

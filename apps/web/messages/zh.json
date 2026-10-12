@@ -2667,7 +2667,26 @@
     "thinkingLow": "低",
     "thinkingMedium": "中",
     "thinkingHigh": "高",
-    "thinkingNote": "无值的旧任务计为\"关闭\"。若服务器的 LLM_ENABLE_REASONING_EFFORT 关闭，低/中/高均按\"开启\"运行。"
+    "thinkingNote": "无值的旧任务计为\"关闭\"。若服务器的 LLM_ENABLE_REASONING_EFFORT 关闭，低/中/高均按\"开启\"运行。",
+    "stabilityTitle": "稳定性信号",
+    "stabilitySignal": "信号",
+    "stabilityOccurrences": "发生次数",
+    "stabilityTasks": "任务数",
+    "stabilityEmpty": "此期间没有记录到信号。",
+    "stabilityQueueWait": "队列等待(受理 → 运行): 启动 {starts} 次，中位数 {p50}，p95 {p95}",
+    "stabilityNote": "以期间内创建的全部任务为准。根据状态转换记录和步骤记录的文字统计，文字变更之前的记录可能统计不到。",
+    "stabilitySignals": {
+      "restart_interrupt": "因服务器重启而中断运行",
+      "recovery": "自动恢复(继续运行·等待设备)",
+      "recovery_limit": "达到重复恢复上限而停止",
+      "llm_retry": "模型调用重试",
+      "llm_recovery_wait": "重试用尽后的等待",
+      "empty_response_retry": "空响应重新询问",
+      "loop_guard_block": "重复防护拦截",
+      "tool_call_timeout": "工具调用超出时间上限",
+      "context_trim": "上下文截断",
+      "output_repetition": "输出重复"
+    }
   },
   "adminQuotaRequests": {
     "title": "配额超额审批",
