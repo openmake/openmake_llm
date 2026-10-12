@@ -18,8 +18,16 @@ export function endsWithActionAnnouncement(text: string): boolean {
     return AGENT_TASK_STALL_INTENT_RE.test(t.slice(-AGENT_TASK_TURN_LOOP.STALL_TAIL_CHARS));
 }
 
+/**
+ * PURE: 방금 받은 응답이 이 작업에서 모델의 첫 응답인가 — 대화에 assistant 메시지가 그것 하나뿐일 때.
+ * 재개한 실행의 첫 응답은 해당하지 않는다: 이미 도구까지 쓴 대화의 답변을 "계획만 쓴 첫 턴"으로 보면 엉뚱한 재촉이 붙고 모델을 한 번 더 부른다.
+ */
+export function isFirstModelTurn(conversation: ReadonlyArray<{ role: string }>): boolean {
+    return conversation.filter((m) => m.role === 'assistant').length === 1;
+}
+
 interface NoToolTurn {
-    /** 이 실행의 첫 턴인가(재개면 재개한 턴). */
+    /** 이 작업에서 모델의 첫 응답인가(isFirstModelTurn) — 재개한 실행의 첫 응답은 아니다. */
     firstTurn: boolean;
     /** 산출물을 떼어낸 응답 본문. */
     content: string | null | undefined;
