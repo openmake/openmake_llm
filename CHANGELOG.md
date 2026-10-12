@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.96.0](https://github.com/openmake/openmake_llm/compare/v1.95.0...v1.96.0) (2026-10-12)
+
+
+### ✨ 기능
+
+* **discord-bot:** 허용한 봇과의 대화 지원 (기본 꺼짐) ([ac7e217](https://github.com/openmake/openmake_llm/commit/ac7e21721d270e750fce41fe73cb2af1036ba998))
+* **discord-bot:** 허용한 봇과의 대화 지원 (기본 꺼짐) ([71903cd](https://github.com/openmake/openmake_llm/commit/71903cdb6906b906689be8698e73834a243c1aca))
+
 ## [1.95.0](https://github.com/openmake/openmake_llm/compare/v1.94.4...v1.95.0) (2026-10-12)
 
 
