@@ -14,5 +14,8 @@ export const AGENT_TASK_DEVICE_WAIT_REASON = 'device_wait';
 /** 브라우저 넘겨받기(2026-10-05) — 사용자가 Companion 에서 브라우저를 넘겨받아 기기가 브라우저 요청을 거절했다(agent-task/browser-takeover). */
 export const AGENT_TASK_BROWSER_TAKEOVER_REASON = 'browser_takeover';
 
+/** 모델 대기(2026-10-13) — 모델 서버가 재시도·대기를 다 쓰도록 응답하지 못했다. 모델이 돌아오면 이어서 실행한다(agent-task/model-wait). */
+export const AGENT_TASK_MODEL_WAIT_REASON = 'model_wait';
+
 /** 주차로 취급하는 사유 전부 */
-export const AGENT_TASK_PARK_REASONS: readonly string[] = [AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON];
+export const AGENT_TASK_PARK_REASONS: readonly string[] = [AGENT_TASK_PARKED_REASON, AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON, AGENT_TASK_MODEL_WAIT_REASON];

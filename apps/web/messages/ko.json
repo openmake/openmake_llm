@@ -435,6 +435,7 @@
       "paused": "승인 대기",
       "waitingDevice": "기기 연결 대기",
       "waitingBrowserTakeover": "브라우저 사용자 조작 중",
+      "waitingModel": "모델 응답 대기",
       "completed": "완료",
       "failed": "실패",
       "cancelled": "취소됨"
@@ -940,6 +941,7 @@
     "queuePosition": "대기 순번 {position}번 — 앞선 작업이 끝나면 자동으로 시작합니다",
     "waitingDevice": "로컬 기기 연결을 기다리는 중 — Companion 을 연결하면 이어서 실행합니다",
     "waitingBrowserTakeover": "사용자가 브라우저를 조작하는 중 — Companion 에서 브라우저를 돌려주면 이어서 실행합니다",
+    "waitingModel": "모델 서버의 응답을 기다리는 중 — 모델이 돌아오면 자동으로 이어서 실행합니다",
     "planLabel": "계획 ({completed}/{total})",
     "outputsLabel": "산출물 {count}개",
     "noSteps": "스텝 기록이 없습니다.",
@@ -1004,6 +1006,7 @@
       "interrupted_local_device": "로컬 기기 연결이 끊겨 중단",
       "lease_held_elsewhere": "다른 서버가 실행 중이라 시작하지 못함",
       "recovery_limit": "자동 복구를 되풀이했지만 진행하지 못해 멈춤",
+      "model_wait_expired": "모델 서버가 돌아오지 않아 중단",
       "llm_error": "모델 호출 오류",
       "sandbox_unavailable": "실행 환경을 준비하지 못함",
       "next": {
@@ -2679,6 +2682,7 @@
       "restart_interrupt": "서버 재시작으로 실행 중단",
       "recovery": "자동 복구(재개·기기 대기 주차)",
       "recovery_limit": "복구 반복 상한으로 중단",
+      "model_wait": "모델 서버 장애로 대기(주차)",
       "llm_retry": "모델 호출 재시도",
       "llm_recovery_wait": "재시도 소진 뒤 대기",
       "empty_response_retry": "빈 응답 되묻기",

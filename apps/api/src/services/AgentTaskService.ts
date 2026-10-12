@@ -38,6 +38,7 @@ import { currentPlanStepIndex } from './task-sandbox/planning';
 import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { parkForMissingDevice } from './agent-task/device-wait';
+import { parkForModelOutage } from './agent-task/model-wait';
 import { isInternalOnlyRun } from '../config/internal-only-policy';
 import { auditInternalOnly } from './agent-task/internal-only-audit';
 import { partialResultOf } from './agent-task/turn-call';
@@ -378,7 +379,7 @@ export class AgentTaskService {
                             .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
                         emitStep(stepType, undefined, note);
                     },
-                });
+                }).catch((e) => parkForModelOutage(e, { taskId, signal, update })); // 모델 서버가 끝내 응답하지 않으면 실패 대신 주차(model-wait)
                 this.client = roleState.client;
                 totalTokens +=
                     (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);

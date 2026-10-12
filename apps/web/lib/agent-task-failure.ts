@@ -21,6 +21,7 @@ const CODE_CLASS: Readonly<Record<string, FailureClass | null>> = {
   interrupted_local_device: "interrupted",
   lease_held_elsewhere: "interrupted",
   recovery_limit: "interrupted",
+  model_wait_expired: "llm_error",
   sandbox_unavailable: "interrupted",
   aborted: null,
 };

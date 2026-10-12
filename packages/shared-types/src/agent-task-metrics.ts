@@ -46,7 +46,7 @@ export interface AgentTaskFailureCount {
 /** 안정화 신호 하나 — 기간 안에 만들어진 작업에서 일어난 횟수와 겪은 작업 수. */
 export interface AgentTaskStabilitySignal {
   /**
-   * 전이 이벤트: restart_interrupt(서버 재시작으로 실행 중단) · recovery(자동 복구) · recovery_limit(진행 없는 복구 상한으로 중단).
+   * 전이 이벤트: restart_interrupt(서버 재시작으로 실행 중단) · recovery(자동 복구) · recovery_limit(진행 없는 복구 상한으로 중단) · model_wait(모델 서버 장애로 주차).
    * 단계 기록: llm_retry · llm_recovery_wait · empty_response_retry · loop_guard_block · tool_call_timeout · context_trim · output_repetition
    * (config/agent-task-metrics 의 AGENT_TASK_STABILITY_STEP_SIGNALS).
    */

@@ -435,6 +435,7 @@
       "paused": "Wartet auf Freigabe",
       "waitingDevice": "Warten auf Gerät",
       "waitingBrowserTakeover": "Sie bedienen den Browser",
+      "waitingModel": "Warten auf Modell",
       "completed": "Abgeschlossen",
       "failed": "Fehlgeschlagen",
       "cancelled": "Abgebrochen"
@@ -940,6 +941,7 @@
     "queuePosition": "Warteposition {position} — startet automatisch, sobald frühere Aufgaben fertig sind",
     "waitingDevice": "Warten auf Ihr lokales Gerät — verbinden Sie Companion, um fortzufahren",
     "waitingBrowserTakeover": "Sie bedienen gerade den Browser — geben Sie ihn in Companion zurück, um fortzufahren",
+    "waitingModel": "Warten auf Antwort des Modellservers — die Aufgabe wird automatisch fortgesetzt, sobald er wieder erreichbar ist",
     "planLabel": "Plan ({completed}/{total})",
     "outputsLabel": "{count} Ausgabe(n)",
     "noSteps": "Keine Schrittaufzeichnungen.",
@@ -1004,6 +1006,7 @@
       "interrupted_local_device": "Unterbrochen: lokales Gerät getrennt",
       "lease_held_elsewhere": "Start nicht möglich: läuft auf einem anderen Server",
       "recovery_limit": "Angehalten: Wiederholte automatische Wiederherstellung ohne Fortschritt",
+      "model_wait_expired": "Angehalten: Der Modellserver ist nicht zurückgekehrt",
       "llm_error": "Fehler beim Modellaufruf",
       "sandbox_unavailable": "Ausführungsumgebung nicht verfügbar",
       "next": {
@@ -2679,6 +2682,7 @@
       "restart_interrupt": "Ausführung durch Serverneustart unterbrochen",
       "recovery": "Automatische Wiederherstellung (Fortsetzen oder Warten auf Gerät)",
       "recovery_limit": "Am Limit wiederholter Wiederherstellungen gestoppt",
+      "model_wait": "Geparkt, während der Modellserver nicht erreichbar war",
       "llm_retry": "Wiederholung des Modellaufrufs",
       "llm_recovery_wait": "Warten nach ausgeschöpften Wiederholungen",
       "empty_response_retry": "Nachfrage bei leerer Antwort",

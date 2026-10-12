@@ -435,6 +435,7 @@
       "paused": "Awaiting approval",
       "waitingDevice": "Waiting for device",
       "waitingBrowserTakeover": "You are using the browser",
+      "waitingModel": "Waiting for model",
       "completed": "Completed",
       "failed": "Failed",
       "cancelled": "Cancelled"
@@ -940,6 +941,7 @@
     "queuePosition": "Queue position {position} — starts automatically when earlier tasks finish",
     "waitingDevice": "Waiting for your local device — connect Companion to continue",
     "waitingBrowserTakeover": "You are controlling the browser — hand it back in Companion to continue",
+    "waitingModel": "Waiting for the model server to respond — the task continues automatically once it is back",
     "planLabel": "Plan ({completed}/{total})",
     "outputsLabel": "{count} output(s)",
     "noSteps": "No step records.",
@@ -1004,6 +1006,7 @@
       "interrupted_local_device": "Interrupted: local device disconnected",
       "lease_held_elsewhere": "Could not start: running on another server",
       "recovery_limit": "Stopped: repeated automatic recovery made no progress",
+      "model_wait_expired": "Stopped: the model server did not come back",
       "llm_error": "Model call failed",
       "sandbox_unavailable": "Execution environment unavailable",
       "next": {
@@ -2679,6 +2682,7 @@
       "restart_interrupt": "Run interrupted by server restart",
       "recovery": "Automatic recovery (resume or device-wait park)",
       "recovery_limit": "Stopped at the repeated-recovery limit",
+      "model_wait": "Parked while the model server was unavailable",
       "llm_retry": "Model call retry",
       "llm_recovery_wait": "Wait after retries were exhausted",
       "empty_response_retry": "Empty response re-ask",

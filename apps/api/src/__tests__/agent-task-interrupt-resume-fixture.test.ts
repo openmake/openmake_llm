@@ -12,8 +12,8 @@ import { startLlmFixture, sseChunk, type FixtureReply, type LlmFixture } from '.
 
 // ── 메모리 저장소: 작업 행 하나와 단계 기록 — 실행 루프·복구·재개가 같은 것을 읽고 쓴다 ──
 type Row = Record<string, unknown> & { id: string; status: string };
-const store: { task: Row; steps: Array<Record<string, unknown>>; inFlight: string | null; events: string[] } = {
-    task: { id: 't1', status: 'pending' }, steps: [], inFlight: null, events: [],
+const store: { task: Row; steps: Array<Record<string, unknown>>; inFlight: string | null; events: string[]; parked: string | null } = {
+    task: { id: 't1', status: 'pending' }, steps: [], inFlight: null, events: [], parked: null,
 };
 const CAMEL_TO_COLUMN: Record<string, string> = { currentTurn: 'current_turn', totalTokens: 'total_tokens', terminalNotifyPending: 'terminal_notify_pending' };
 const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
@@ -45,6 +45,14 @@ jest.mock('../data/repositories/agent-task-repository', () => ({
             store.events.push('pending');
             return true;
         },
+        // 주차 표식·목록·재개 claim — 실제로는 마지막 전이 이벤트의 사유로 읽는다
+        markParked: async (_id: never, reason: never) => { store.parked = reason; },
+        listParkedTasks: async () => (store.task.status === 'paused' && store.parked ? [{ id: 't1', user_id: 'u1', device_id: null, workspace_path: null, reason: store.parked, waited_ms: '0', has_decision: false, has_live_pending: false }] : []),
+        claimParkedTask: async () => {
+            if (!(store.task.status === 'paused' && store.parked)) return false;
+            store.parked = null; store.task.status = 'pending'; store.events.push('pending');
+            return true;
+        },
         setInFlightToolCall: async (_id: never, callId: never) => { store.inFlight = callId; },
         getInFlightToolCall: async () => store.inFlight,
         getToolCallJournal: async (_id: never, ids: never) => new Map(store.steps
@@ -57,7 +65,7 @@ jest.mock('../data/repositories/agent-task-run-repository', () => ({
     AgentTaskRunRepository: jest.fn().mockImplementation(() => repoOf({ countRecoveriesWithoutProgress: async () => 0 })),
 }));
 jest.mock('../data/repositories/agent-task-park-repository', () => ({
-    AgentTaskParkRepository: jest.fn().mockImplementation(() => repoOf({})),
+    AgentTaskParkRepository: jest.fn().mockImplementation(() => repoOf({ getParkReason: async () => (store.task.status === 'paused' ? store.parked : null) })),
 }));
 
 // ── 모델: 실제 LLMClient 를 가짜 서버에 붙인다(쿼터 예약·SDK 자체 재시도만 끈다) ──
@@ -106,12 +114,19 @@ jest.mock('../runtime-ports/skill-runtime', () => ({
 
 process.env.TASK_SANDBOX_ENABLED = 'false';
 process.env.AGENT_TASK_QUEUE_ENABLED = 'false'; // 개발 장비의 .env 와 무관하게 기본 경로(즉시 실행)로
+// 모델 오류의 재시도·소진 뒤 대기를 기다리지 않게 간격만 줄인다(횟수는 기본값 그대로)
+process.env.AGENT_TASK_TURN_RETRY_BACKOFF_MS = '1';
+process.env.AGENT_TASK_RECOVERY_WAIT_BASE_MS = '1';
+process.env.AGENT_TASK_RECOVERY_WAIT_CAP_MS = '1';
 
 import { AgentTaskService } from '../services/AgentTaskService';
 import { dispatchAgentTask, getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { drainAgentTasksForShutdown, resetAgentTaskShutdownForTest } from '../services/agent-task/shutdown-drain';
 import { recoverInterruptedAgentTasks } from '../services/agent-task/boot-recovery';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
+import { sweepModelWaitTasks } from '../services/agent-task/model-wait';
+import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
+import { AGENT_TASK_TURN_LOOP } from '../config/agent-task-turn-loop';
 
 const GOAL = '오늘의 날씨를 검색해서 한 문장으로 알려 줘';
 const FINAL = '검색 결과에 따르면 오늘은 맑습니다. 요청하신 내용을 한 문장으로 정리했습니다.';
@@ -148,6 +163,8 @@ const isAgentTurn = (body: Record<string, unknown>): boolean => Array.isArray(bo
 const agentTurns = (): Array<{ messages: Msg[] }> => fixture.requests.filter(isAgentTurn) as never;
 
 let agentReply: (turnIndex: number) => FixtureReply;
+/** 모델 서버 장애 — 켜져 있으면 모든 요청(에이전트 턴·상태 확인)에 503 을 준다. */
+let modelDown = false;
 
 async function waitFor(what: string, pred: () => boolean | Promise<boolean>, timeoutMs = 8000): Promise<void> {
     const until = Date.now() + timeoutMs;
@@ -169,14 +186,14 @@ async function restartServer(): Promise<{ aborted: number; remaining: number }> 
 }
 
 beforeAll(async () => {
-    fixture = await startLlmFixture((_i, body) => (isAgentTurn(body)
+    fixture = await startLlmFixture((_i, body) => (modelDown ? { kind: 'error', status: 503 } : isAgentTurn(body)
         ? asRequested(body, agentReply(agentTurns().length - 1))
         : asRequested(body, textReply('{"verdict":"achieved","reason":"목표를 달성했습니다."}'))));
 });
 afterAll(async () => { await fixture.close(); });
 beforeEach(() => {
     store.task = { id: 't1', status: 'pending', user_id: 'u1', goal: GOAL, max_turns: 6, executor: 'sandbox', priority: 0, checkpoint: null, plan: null, error: null, updated_at: new Date() };
-    store.steps.length = 0; store.events.length = 0; store.inFlight = null;
+    store.steps.length = 0; store.events.length = 0; store.inFlight = null; store.parked = null; modelDown = false;
     fixture.requests.length = 0;
     executeTool.mockReset();
     resetAgentTaskShutdownForTest();
@@ -291,3 +308,31 @@ describe('실행 중 끊김 → 부팅 복구 → 재개 (실제 루프·종료 
         expect(fixture.requests).toHaveLength(0);
     });
 });
+
+describe('모델 서버 장애 → 모델 대기 주차 → 모델이 돌아오면 재개 (실제 루프·스윕, 가짜 LLM 서버)', () => {
+    it('재시도와 소진 뒤 대기를 다 쓰도록 응답이 없으면 실패가 아니라 주차하고, 모델이 돌아온 뒤의 스윕이 이어서 완료시킨다', async () => {
+        modelDown = true;
+        agentReply = () => textReply(FINAL);
+
+        startTask();
+        await waitFor('모델 대기 주차', () => store.parked === 'model_wait' && !getAgentTaskQueue().has('t1'));
+        expect(store.task.status).toBe('paused');
+        expect(store.task.error ?? null).toBeNull();
+        expect(store.events).not.toContain('failed');
+        // 첫 호출 + 짧은 재시도 + 소진 뒤 대기 주기를 모두 쓴 뒤에야 주차한다
+        expect(agentTurns()).toHaveLength(1 + AGENT_TASK_LIMITS.TURN_RETRY_MAX + AGENT_TASK_TURN_LOOP.RECOVERY_WAIT_MAX_CYCLES);
+
+        // 모델이 아직 내려가 있으면 스윕은 확인만 하고 그대로 둔다
+        const before = fixture.requests.length;
+        await expect(sweepModelWaitTasks()).resolves.toEqual({ resumed: 0, expired: 0 });
+        expect(fixture.requests.length).toBe(before + 1); // 상태 확인 한 번
+        expect(store.task.status).toBe('paused');
+
+        modelDown = false;
+        await expect(sweepModelWaitTasks()).resolves.toEqual({ resumed: 1, expired: 0 });
+        await waitFor('모델 복귀 뒤 완료', () => store.task.status === 'completed');
+        expect(String(store.task.result)).toContain('맑습니다');
+        expect(store.parked).toBeNull();
+    });
+});
+

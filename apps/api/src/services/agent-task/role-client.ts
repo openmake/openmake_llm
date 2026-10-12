@@ -276,6 +276,11 @@ export async function chatTurnWithRoleFallback(
     }
 }
 
+/** 모델 서버 쪽 사정으로 호출이 끝내 실패했는가 — 재시도 대상 오류(isTransientLLMError)이거나 청크가 끊긴 호출. 예산·취소 중단은 아니다. */
+export function isModelOutageError(err: unknown): boolean {
+    return err instanceof TurnCallIdle || isTransientLLMError(err);
+}
+
 /** 'judge' role 별도 해석 — agent 실행 모델과 판정 모델을 분리 배정 가능. */
 export async function judgeClientFor(userId: string, opts: { internalOnly?: boolean } = {}): Promise<LLMClient> {
     const resolved = await resolveRoleClientForUser('judge', userId);
