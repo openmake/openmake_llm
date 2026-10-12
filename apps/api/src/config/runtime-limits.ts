@@ -365,6 +365,12 @@ export const WEB_SEARCH_INJECTION = {
     QUERY_MAX_CHARS: parseInjectLimit(process.env.WEB_SEARCH_QUERY_MAX_CHARS, 200),
 } as const;
 
+/** 모델이 답변에 직접 쓴 출처 섹션의 인식 규칙 (services/chat-service/external-deterministic-append) */
+export const MODEL_SOURCE_SECTION = {
+    /** 평문 머리줄(`검색 결과 출처:`)에서 출처 라벨 앞에 올 수 있는 수식어의 최대 글자 수 — 넘으면 문장으로 본다 */
+    LABEL_PREFIX_MAX_CHARS: 20,
+} as const;
+
 /**
  * SearXNG 카테고리 스코프 — 질의 성격에 맞는 카테고리를 추가 요청해 권위 소스를 보강한다.
  * (기본 general 은 google cse+ddg 뿐이라 블로그 위주 — `it` 은 github/mdn/docker hub,
