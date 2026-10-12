@@ -13,6 +13,8 @@ const interrupted: unknown[] = [];
 const expired: unknown[] = [];
 const takeOver = jest.fn(async () => true);
 const runningHere = new Set<string>();
+const countRecoveries = jest.fn(async (_id: string) => 0);
+const failRecoveryLimit = jest.fn(async (_id: string, _prev: string) => true);
 
 jest.mock('../../data/models/unified-database', () => ({
     getUnifiedDatabase: () => ({ updateAgentTask, getAgentTaskSteps, getUserById }),
@@ -26,10 +28,14 @@ jest.mock('../../data/repositories/agent-task-repository', () => ({
         takeOverExpiredLease: takeOver,
     })),
 }));
+jest.mock('../../data/repositories/agent-task-run-repository', () => ({
+    ...jest.requireActual('../../data/repositories/agent-task-run-repository'),
+    AgentTaskRunRepository: jest.fn().mockImplementation(() => ({ countRecoveriesWithoutProgress: countRecoveries, failRecoveryLimit })),
+}));
 // 나머지 export(LOG_REDACT 등 — logger 가 읽는다)는 실제 값을 유지한다
 jest.mock('../../config/runtime-limits', () => ({
     ...jest.requireActual('../../config/runtime-limits'),
-    AGENT_TASK_LIMITS: { BOOT_RECOVERY_ENABLED: true, BOOT_RECOVERY_WINDOW_MS: 60_000, LEASE_ENABLED: true, LEASE_MS: 60_000 },
+    AGENT_TASK_LIMITS: { BOOT_RECOVERY_ENABLED: true, BOOT_RECOVERY_WINDOW_MS: 60_000, LEASE_ENABLED: true, LEASE_MS: 60_000, RECOVERY_MAX_ATTEMPTS: 3 },
 }));
 const execute = jest.fn(async () => undefined);
 jest.mock('../AgentTaskService', () => ({
@@ -43,7 +49,7 @@ import { recoverInterruptedAgentTasks, sweepExpiredTaskLeases } from './boot-rec
 import { leaseOwner } from './task-lease';
 import { beginAgentTaskShutdown, resetAgentTaskShutdownForTest } from './shutdown-drain';
 
-beforeEach(() => { interrupted.length = 0; expired.length = 0; runningHere.clear(); jest.clearAllMocks(); takeOver.mockResolvedValue(true); claim.mockResolvedValue(true); });
+beforeEach(() => { interrupted.length = 0; expired.length = 0; runningHere.clear(); jest.clearAllMocks(); takeOver.mockResolvedValue(true); claim.mockResolvedValue(true); countRecoveries.mockResolvedValue(0); failRecoveryLimit.mockResolvedValue(true); });
 
 const base = { id: 't1', user_id: 'u1', goal: '목표', max_turns: 10, executor: 'server', input_files: null, input_images: null };
 
@@ -182,5 +188,56 @@ describe('recoverInterruptedAgentTasks — 소유권 컬럼이 아직 없는 DB(
         const r = await recoverInterruptedAgentTasks();
         expect(getInterruptedAgentTasks).toHaveBeenCalledTimes(2);
         expect(r).toEqual({ resumed: 1, failed: 0 });
+    });
+});
+
+// 작업 하나가 프로세스를 죽이면(메모리 한도 재시작 등) 재시작 → 자동 재개 → 다시 죽음이 끝없이 돈다
+describe('진행 없이 되풀이되는 복구 끊기', () => {
+    const resumable = { ...base, status: 'failed', checkpoint: { conversation: [{ role: 'user', content: 'x' }], completedTurn: 2 } };
+
+    it('진행 없는 복구가 상한에 닿은 작업은 다시 재개하지 않고 failed(recovery_limit)로 닫는다', async () => {
+        interrupted.push(resumable);
+        countRecoveries.mockResolvedValueOnce(3);
+        const r = await recoverInterruptedAgentTasks();
+        expect(r).toEqual({ resumed: 0, failed: 1 });
+        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'failed');
+        expect(claim).not.toHaveBeenCalled();
+        expect(dispatch).not.toHaveBeenCalled();
+    });
+
+    it('상한 미만이면 종전대로 재개한다', async () => {
+        interrupted.push(resumable);
+        countRecoveries.mockResolvedValueOnce(2);
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
+        expect(failRecoveryLimit).not.toHaveBeenCalled();
+    });
+
+    it('닫는 사이 다른 요청이 잡았으면(0행) 건너뛴다', async () => {
+        interrupted.push(resumable);
+        countRecoveries.mockResolvedValueOnce(3);
+        failRecoveryLimit.mockResolvedValueOnce(false);
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 0 });
+        expect(claim).not.toHaveBeenCalled();
+    });
+
+    it('횟수 조회가 실패하면 복구를 막지 않는다', async () => {
+        interrupted.push(resumable);
+        countRecoveries.mockRejectedValueOnce(new Error('db down'));
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
+    });
+
+    it('실행한 적 없는 대기(queued) 작업은 세지 않고 다시 제출한다', async () => {
+        interrupted.push({ ...base, status: 'queued', checkpoint: null });
+        countRecoveries.mockResolvedValue(9);
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
+        expect(countRecoveries).not.toHaveBeenCalled();
+    });
+
+    it('소유권이 지난 작업을 가져올 때도 같은 상한을 쓴다', async () => {
+        expired.push({ ...resumable, status: 'running', lease_owner: 'other:0' });
+        countRecoveries.mockResolvedValueOnce(3);
+        await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 1 });
+        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'running');
+        expect(dispatch).not.toHaveBeenCalled();
     });
 });

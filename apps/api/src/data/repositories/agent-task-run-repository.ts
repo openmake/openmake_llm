@@ -32,6 +32,13 @@ export function recoverableRestartCondition(holdParam: string): string {
              AND CASE WHEN jsonb_typeof(checkpoint->'conversation') = 'array' THEN jsonb_array_length(checkpoint->'conversation') > 0 ELSE FALSE END)`;
 }
 
+/** 진행 없이 되풀이된 자동 복구를 멈춘 작업의 error 코드 — config/agent-task-failure-class 에서 interrupted 로 분류 */
+export const AGENT_TASK_RECOVERY_LIMIT_ERROR = 'recovery_limit';
+/** 복구 claim 이 남기는 이벤트 사유 — agent-task-repository.claimAgentTaskForRecovery 가 쓰는 문구와 같아야 한다 */
+const RECOVERY_CLAIM_REASON = 'boot recovery claim';
+/** 복구 횟수를 처음부터 다시 세게 하는 이벤트 — 이전 중단, 사용자의 재실행·이어하기 */
+const RECOVERY_COUNT_RESET_REASONS: readonly string[] = [AGENT_TASK_RECOVERY_LIMIT_ERROR, 'execute claim', 'resume claim'];
+
 export class AgentTaskRunRepository extends BaseRepository {
     /**
      * 실행 시작 claim(2026-10-09 점검 ①) — /execute·/resume 가 디스패치 직전에 부른다. pending/failed/cancelled 에서만
@@ -99,6 +106,42 @@ export class AgentTaskRunRepository extends BaseRepository {
         const row = r.rows[0];
         if ((r.rowCount ?? 0) === 0 || !row) return false;
         await this.recordEvent(taskId, row.prev, 'failed', error);
+        return true;
+    }
+
+    /**
+     * 진행 없이 되풀이된 복구 횟수 — 마지막 턴 체크포인트 기록(agent_task_checkpoints)과 마지막 초기화 이벤트(이전 중단·사용자의
+     * 재실행/이어하기) 뒤에 남은 복구 claim 수. 실행한 적 없는 대기(queued) 행의 재제출은 세지 않는다. 이벤트 기록은 fail-open 이라
+     * 실제보다 적게 셀 수 있다(그만큼 더 복구한다).
+     */
+    async countRecoveriesWithoutProgress(taskId: string): Promise<number> {
+        const r = await this.query<{ n: number }>(
+            `SELECT COUNT(*)::int AS n FROM agent_task_events e
+             WHERE e.task_id = $1 AND e.reason = $2 AND e.from_status IS DISTINCT FROM 'queued'
+               AND e.created_at > GREATEST(
+                   COALESCE((SELECT MAX(c.created_at) FROM agent_task_checkpoints c WHERE c.task_id = $1), '-infinity'::timestamptz),
+                   COALESCE((SELECT MAX(x.created_at) FROM agent_task_events x WHERE x.task_id = $1 AND x.reason = ANY($3::text[])), '-infinity'::timestamptz))`,
+            [taskId, RECOVERY_CLAIM_REASON, [...RECOVERY_COUNT_RESET_REASONS]],
+        );
+        return Number(r.rows[0]?.n ?? 0);
+    }
+
+    /**
+     * 복구 상한에 닿은 작업 닫기 — 복구가 읽은 상태(expectedPrev) 그대로인 중단 작업(running·paused 잔존, failed('server restarted'))만
+     * failed(recovery_limit)로 바꾼다. 체크포인트는 그대로 둔다(사용자가 이어 할 수 있다). 그 사이 /execute·/resume·다른 서버의
+     * 복구가 잡았으면 0행(false)이고 건드리지 않는다.
+     */
+    async failRecoveryLimit(taskId: string, expectedPrev: string): Promise<boolean> {
+        const r = await this.query<{ prev: string }>(
+            `UPDATE agent_tasks t SET status = 'failed', error = $2, failure_class = $3, completed_at = NOW(), updated_at = NOW(), terminal_notify_pending = TRUE
+             FROM (SELECT id, status AS prev, error AS prev_error FROM agent_tasks WHERE id = $1 FOR UPDATE) o
+             WHERE t.id = o.id AND o.prev = $4 AND (o.prev IN ('running', 'paused') OR (o.prev = 'failed' AND o.prev_error = $5))
+             RETURNING o.prev`,
+            [taskId, AGENT_TASK_RECOVERY_LIMIT_ERROR, classifyAgentTaskFailure(AGENT_TASK_RECOVERY_LIMIT_ERROR), expectedPrev, 'server restarted'],
+        );
+        const row = r.rows[0];
+        if ((r.rowCount ?? 0) === 0 || !row) return false;
+        await this.recordEvent(taskId, row.prev, 'failed', AGENT_TASK_RECOVERY_LIMIT_ERROR);
         return true;
     }
 

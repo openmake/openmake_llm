@@ -1003,6 +1003,7 @@
       "browser_takeover_expired": "ブラウザの返却待ちがタイムアウト",
       "interrupted_local_device": "ローカル端末の切断により中断",
       "lease_held_elsewhere": "別のサーバーで実行中のため開始できませんでした",
+      "recovery_limit": "自動復旧を繰り返しても進まなかったため停止しました",
       "llm_error": "モデル呼び出しエラー",
       "sandbox_unavailable": "実行環境を準備できませんでした",
       "next": {
@@ -1017,7 +1018,8 @@
         "browser_takeover_expired": "Companion のメニューでブラウザを戻してから、もう一度実行してください。",
         "sandbox_unavailable": "しばらくしてから再実行してください。同時に動いているタスクが減ると実行環境を確保できます。続く場合は管理者に連絡してください。",
         "interrupted_local_device": "Companion(または CLI)を再接続してから、再開できる場合は再開し、できない場合はもう一度実行してください。",
-        "lease_held_elsewhere": "しばらくしてから再実行してください。"
+        "lease_held_elsewhere": "しばらくしてから再実行してください。",
+        "recovery_limit": "中断した地点から再開できます。同じ地点でまた止まる場合は、目標を小さく分けて再実行するか、管理者に連絡してください。"
       }
     },
     "planNode": "ステップ{n}",
