@@ -16,6 +16,7 @@ import { config, EXIT_CODE_CONFIG, loadRemoteSettings, validateConfig } from './
 import { isUserAllowed, shouldRespond, stripBotMention } from './access-control';
 import { appendTurns, getHistory, resetSession, sessionKey } from './session-store';
 import { requestChatCompletion, resolveModel } from './openmake-client';
+import { noteHumanMessage, shouldHandleBotMessage, tryConsumeBotTurn } from './bot-conversation';
 import { splitForDiscord } from './message-utils';
 import { prepareReply } from './attachments';
 
@@ -140,9 +141,19 @@ client.once('clientReady', async () => {
 });
 
 client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
     const botUserId = client.user?.id;
     if (!botUserId) return;
+    if (message.author.bot) {
+        // 허용된 봇이 나를 불렀을 때만, 연속 상한 안에서 답한다 (사용자 접근 제어 대신 봇 허용 목록이 기준)
+        if (!shouldHandleBotMessage(message, botUserId)) return;
+        if (!tryConsumeBotTurn(message.channelId)) {
+            console.log(`[discord-bot] 봇끼리 연속 응답 상한(${config.botExchangeMax}) — 채널 ${message.channelId} 에서 사람 메시지가 올 때까지 봇에게 답하지 않습니다.`);
+            return;
+        }
+        await handleChat(message, botUserId);
+        return;
+    }
+    noteHumanMessage(message.channelId);
     if (!isUserAllowed(message)) return;
     if (!shouldRespond(message, botUserId)) return;
     await handleChat(message, botUserId);

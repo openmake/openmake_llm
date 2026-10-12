@@ -57,6 +57,12 @@ export const config = {
     requireMention: parseBool(process.env.DISCORD_REQUIRE_MENTION, true),
     freeResponseChannels: parseList(process.env.DISCORD_FREE_RESPONSE_CHANNELS),
 
+    // ── 봇끼리 대화 (기본 꺼짐) ───────────────────────────────
+    /** 메시지를 받아 줄 다른 봇의 사용자 id 목록. 비어 있으면 봇 메시지를 모두 무시한다 */
+    allowedBotIds: parseList(process.env.DISCORD_ALLOWED_BOT_IDS),
+    /** 사람 메시지 없이 봇에게 연속으로 답하는 횟수 상한 (채널별) */
+    botExchangeMax: parseIntEnv(process.env.DISCORD_BOT_EXCHANGE_MAX, 4),
+
     // ── 세션 (사용자별 격리, /reset 까지 유지) ─────────────────
     /** 세션당 보관할 최대 대화 턴 수 (user+assistant 쌍) */
     sessionMaxTurns: parseIntEnv(process.env.DISCORD_SESSION_MAX_TURNS, 20),
