@@ -43,6 +43,26 @@ export interface AgentTaskFailureCount {
   count: number;
 }
 
+/** 안정화 신호 하나 — 기간 안에 만들어진 작업에서 일어난 횟수와 겪은 작업 수. */
+export interface AgentTaskStabilitySignal {
+  /**
+   * 전이 이벤트: restart_interrupt(서버 재시작으로 실행 중단) · recovery(자동 복구) · recovery_limit(진행 없는 복구 상한으로 중단).
+   * 단계 기록: llm_retry · llm_recovery_wait · empty_response_retry · loop_guard_block · tool_call_timeout · context_trim · output_repetition
+   * (config/agent-task-metrics 의 AGENT_TASK_STABILITY_STEP_SIGNALS).
+   */
+  id: string;
+  occurrences: number;
+  tasks: number;
+}
+
+/** 안정화 신호 묶음 — 실행 방식으로 나누지 않은 전체 기준. */
+export interface AgentTaskStabilityMetrics {
+  /** 고정 순서(전이 이벤트 → 단계 기록). 일어나지 않은 신호도 0 으로 싣는다. */
+  signals: AgentTaskStabilitySignal[];
+  /** 대기열 대기 — 접수(queued) 전이에서 실행(running) 전이까지. starts 는 그렇게 시작한 횟수, 0 이면 백분위는 null. */
+  queueWait: { starts: number; p50Ms: number | null; p95Ms: number | null };
+}
+
 export interface AgentTaskMetricsResponse {
   days: number;
   /** 화면의 기간 선택지와 상한(config). */
@@ -54,4 +74,6 @@ export interface AgentTaskMetricsResponse {
   byThinkingLevel: AgentTaskMetricsGroup[];
   /** 실패 사유 상위 N(전체 기준). */
   topFailures: AgentTaskFailureCount[];
+  /** 안정화 신호(재시작 중단·자동 복구·재시도·가드 발동·대기열 대기). */
+  stability: AgentTaskStabilityMetrics;
 }

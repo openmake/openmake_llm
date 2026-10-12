@@ -7,6 +7,10 @@ jest.mock('../../data/models/unified-database', () => ({ getPool: () => ({}) }))
 jest.mock('../../data/repositories/agent-task-outcome-metrics-repository', () => ({
     AgentTaskOutcomeMetricsRepository: jest.fn().mockImplementation(() => ({ getMetrics })),
 }));
+const getStability = jest.fn(async (_days: number) => ({ signals: [{ id: 'recovery', occurrences: 2, tasks: 1 }], queueWait: { starts: 0, p50Ms: null, p95Ms: null } }));
+jest.mock('../../data/repositories/agent-task-stability-metrics-repository', () => ({
+    AgentTaskStabilityMetricsRepository: jest.fn().mockImplementation(() => ({ getStability })),
+}));
 jest.mock('../../auth', () => ({ requireAuth: jest.fn(), requireAdmin: jest.fn() }));
 
 import { agentTaskQueueRouter } from '../agent-task-queue.routes';
@@ -58,5 +62,12 @@ describe('GET /metrics', () => {
         await handler('/metrics')({ query: { days } }, mockRes(), next);
         expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 400 }));
         expect(getMetrics).not.toHaveBeenCalled();
+    });
+
+    it('같은 기간의 안정화 신호를 함께 돌려준다', async () => {
+        const res = mockRes();
+        await handler('/metrics')({ query: { days: '30' } }, res, jest.fn());
+        expect(getStability).toHaveBeenCalledWith(30);
+        expect(res.body.data.stability).toEqual({ signals: [{ id: 'recovery', occurrences: 2, tasks: 1 }], queueWait: { starts: 0, p50Ms: null, p95Ms: null } });
     });
 });

@@ -2667,7 +2667,26 @@
     "thinkingLow": "낮음",
     "thinkingMedium": "보통",
     "thinkingHigh": "높음",
-    "thinkingNote": "기존 작업(값 없음)은 '끄기'로 셉니다. 서버의 LLM_ENABLE_REASONING_EFFORT 가 꺼져 있으면 낮음·보통·높음은 모두 '켬'으로 동작합니다."
+    "thinkingNote": "기존 작업(값 없음)은 '끄기'로 셉니다. 서버의 LLM_ENABLE_REASONING_EFFORT 가 꺼져 있으면 낮음·보통·높음은 모두 '켬'으로 동작합니다.",
+    "stabilityTitle": "안정화 신호",
+    "stabilitySignal": "신호",
+    "stabilityOccurrences": "발생",
+    "stabilityTasks": "작업 수",
+    "stabilityEmpty": "이 기간에 기록된 신호가 없습니다.",
+    "stabilityQueueWait": "대기열 대기(접수 → 실행): {starts}회 시작, 중앙값 {p50}, p95 {p95}",
+    "stabilityNote": "기간 안에 만들어진 작업 전체 기준입니다. 전이 기록과 단계 기록의 문구로 세므로, 문구가 바뀌기 전의 기록은 잡히지 않을 수 있습니다.",
+    "stabilitySignals": {
+      "restart_interrupt": "서버 재시작으로 실행 중단",
+      "recovery": "자동 복구(재개·기기 대기 주차)",
+      "recovery_limit": "복구 반복 상한으로 중단",
+      "llm_retry": "모델 호출 재시도",
+      "llm_recovery_wait": "재시도 소진 뒤 대기",
+      "empty_response_retry": "빈 응답 되묻기",
+      "loop_guard_block": "반복 가드 차단",
+      "tool_call_timeout": "도구 호출 시간 상한 초과",
+      "context_trim": "컨텍스트 절단",
+      "output_repetition": "출력 반복"
+    }
   },
   "adminQuotaRequests": {
     "title": "쿼터 초과 승인함",

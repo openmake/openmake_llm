@@ -4,10 +4,11 @@
  * /admin/agent-task-metrics — 에이전트 작업 지표(Companion P5 측정 장치, 2026-10-06).
  * 실행 방식별 성공률·소요 시간·토큰·사용자 개입·실패 사유를 표로 본다. 집계 정의는 API 저장소
  * (agent-task-outcome-metrics-repository) 주석과 같다. 차트 없이 표만.
+ * 안정화 신호(재시작 중단·자동 복구·재시도·가드 발동·대기열 대기)는 전체 기준 한 표로 본다(agent-task-stability-metrics-repository).
  */
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { BarChart3, RefreshCw, TriangleAlert } from "lucide-react";
+import { Activity, BarChart3, RefreshCw, TriangleAlert } from "lucide-react";
 import { PageHeader, PageBody, Card, CardHeader, CardTitle, CardContent, Button, Table, Th, Td, NativeSelect } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
 import type { AgentTaskMetricsGroup, AgentTaskMetricsResponse, ApiSuccess } from "@openmake/shared-types";
@@ -150,6 +151,35 @@ export default function AdminAgentTaskMetricsPage() {
                 </Table>
               )}
               <p className="mt-3 text-[11px] text-muted">{t("thinkingNote")}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Activity className="h-4 w-4" /> {t("stabilityTitle")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!data?.stability || data.overall.total === 0 ? <p className="text-xs text-muted">{t("stabilityEmpty")}</p> : (
+                <>
+                  <Table>
+                    <thead>
+                      <tr><Th>{t("stabilitySignal")}</Th><Th className="text-right">{t("stabilityOccurrences")}</Th><Th className="text-right">{t("stabilityTasks")}</Th></tr>
+                    </thead>
+                    <tbody>
+                      {data.stability.signals.map((sig) => (
+                        <tr key={sig.id}>
+                          <Td className="text-xs">{t.has(`stabilitySignals.${sig.id}`) ? t(`stabilitySignals.${sig.id}`) : sig.id}</Td>
+                          <Td className="text-right font-mono text-xs">{num(sig.occurrences)}</Td>
+                          <Td className="text-right font-mono text-xs">{num(sig.tasks)}</Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                  <p className="mt-3 text-xs">
+                    {t("stabilityQueueWait", { starts: num(data.stability.queueWait.starts), p50: format(data.stability.queueWait.p50Ms, "ms"), p95: format(data.stability.queueWait.p95Ms, "ms") })}
+                  </p>
+                </>
+              )}
+              <p className="mt-3 text-[11px] text-muted">{t("stabilityNote")}</p>
             </CardContent>
           </Card>
           <Card>
