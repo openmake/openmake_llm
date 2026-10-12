@@ -37,6 +37,14 @@ jest.mock('../../config/runtime-limits', () => ({
     ...jest.requireActual('../../config/runtime-limits'),
     AGENT_TASK_LIMITS: { BOOT_RECOVERY_ENABLED: true, BOOT_RECOVERY_WINDOW_MS: 60_000, LEASE_ENABLED: true, LEASE_MS: 60_000, RECOVERY_MAX_ATTEMPTS: 3 },
 }));
+const localBridge = { ENABLED: false, DEVICE_WAIT_ENABLED: true };
+jest.mock('../../config/local-bridge', () => ({ LOCAL_BRIDGE: localBridge }));
+const parkForDeviceRecovery = jest.fn(async (_id: string, _prev: string) => true);
+jest.mock('../../data/repositories/agent-task-park-repository', () => ({
+    AgentTaskParkRepository: jest.fn().mockImplementation(() => ({ parkForDeviceRecovery })),
+}));
+const resumeParkedTask = jest.fn(async (_id: string) => false);
+jest.mock('./hitl-park', () => ({ resumeParkedTask: (id: string) => resumeParkedTask(id) }));
 const execute = jest.fn(async () => undefined);
 jest.mock('../AgentTaskService', () => ({
     AgentTaskService: Object.assign(jest.fn().mockImplementation(() => ({ execute })), { isRunning: (id: string) => runningHere.has(id) }),
@@ -49,7 +57,7 @@ import { recoverInterruptedAgentTasks, sweepExpiredTaskLeases } from './boot-rec
 import { leaseOwner } from './task-lease';
 import { beginAgentTaskShutdown, resetAgentTaskShutdownForTest } from './shutdown-drain';
 
-beforeEach(() => { interrupted.length = 0; expired.length = 0; runningHere.clear(); jest.clearAllMocks(); takeOver.mockResolvedValue(true); claim.mockResolvedValue(true); countRecoveries.mockResolvedValue(0); failRecoveryLimit.mockResolvedValue(true); });
+beforeEach(() => { interrupted.length = 0; expired.length = 0; runningHere.clear(); jest.clearAllMocks(); takeOver.mockResolvedValue(true); claim.mockResolvedValue(true); countRecoveries.mockResolvedValue(0); failRecoveryLimit.mockResolvedValue(true); localBridge.ENABLED = false; localBridge.DEVICE_WAIT_ENABLED = true; parkForDeviceRecovery.mockResolvedValue(true); resumeParkedTask.mockResolvedValue(false); });
 
 const base = { id: 't1', user_id: 'u1', goal: '목표', max_turns: 10, executor: 'server', input_files: null, input_images: null };
 
@@ -95,7 +103,7 @@ describe('recoverInterruptedAgentTasks — queued 고아', () => {
         expect(input.resume.fromTurn).toBe(3);
     });
 
-    it('queued 라도 로컬 실행 작업은 디바이스 미연결이라 failed 로 보류한다', async () => {
+    it('기기 대기를 쓰지 않는 설정이면 queued 라도 로컬 실행 작업은 종전대로 failed 로 보류한다', async () => {
         interrupted.push({ ...base, status: 'queued', executor: 'local', checkpoint: null });
         const r = await recoverInterruptedAgentTasks();
         expect(r).toEqual({ resumed: 0, failed: 1 });
@@ -239,5 +247,63 @@ describe('진행 없이 되풀이되는 복구 끊기', () => {
         await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 1 });
         expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'running');
         expect(dispatch).not.toHaveBeenCalled();
+    });
+});
+
+// 종전엔 재시작(배포)마다 실행 중이던 로컬 기기 작업이 실패로 남아 사용자가 직접 이어 해야 했다
+describe('로컬 기기 작업 — 재시작 뒤 기기 대기로 주차', () => {
+    const local = { ...base, executor: 'local', status: 'failed', checkpoint: { conversation: [{ role: 'user', content: 'x' }], completedTurn: 2 } };
+    beforeEach(() => { localBridge.ENABLED = true; });
+
+    it('체크포인트가 있는 로컬 작업은 실패로 두지 않고 기기 대기로 주차한다(기기가 붙으면 이어진다)', async () => {
+        interrupted.push(local);
+        const r = await recoverInterruptedAgentTasks();
+        expect(r).toEqual({ resumed: 0, failed: 0 });
+        expect(parkForDeviceRecovery).toHaveBeenCalledWith('t1', 'failed');
+        expect(updateAgentTask).not.toHaveBeenCalled();
+        expect(claim).not.toHaveBeenCalled();
+        expect(dispatch).not.toHaveBeenCalled();
+        expect(resumeParkedTask).toHaveBeenCalledWith('t1'); // 기기가 이미 붙어 있으면 스윕을 기다리지 않는다
+    });
+
+    it('기기가 이미 연결돼 있어 바로 재개됐으면 재개로 센다', async () => {
+        interrupted.push(local);
+        resumeParkedTask.mockResolvedValueOnce(true);
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
+    });
+
+    it('실행한 적 없는 대기(queued) 로컬 작업도 주차한다', async () => {
+        interrupted.push({ ...base, executor: 'local', status: 'queued', checkpoint: null });
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 0 });
+        expect(parkForDeviceRecovery).toHaveBeenCalledWith('t1', 'queued');
+        expect(updateAgentTask).not.toHaveBeenCalled();
+    });
+
+    it('주차하는 사이 다른 요청이 잡았으면(0행) 재개를 시도하지 않는다', async () => {
+        interrupted.push(local);
+        parkForDeviceRecovery.mockResolvedValueOnce(false);
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 0 });
+        expect(resumeParkedTask).not.toHaveBeenCalled();
+    });
+
+    it('즉시 재개 시도가 실패해도 주차는 유지되고 던지지 않는다(스윕이 다시 본다)', async () => {
+        interrupted.push(local);
+        resumeParkedTask.mockRejectedValueOnce(new Error('boom'));
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 0 });
+    });
+
+    it('진행 없는 복구가 상한에 닿은 로컬 작업은 주차하지 않고 닫는다', async () => {
+        interrupted.push(local);
+        countRecoveries.mockResolvedValueOnce(3);
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 1 });
+        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'failed');
+        expect(parkForDeviceRecovery).not.toHaveBeenCalled();
+    });
+
+    it('체크포인트 없이 실행 중이던 로컬 작업은 종전대로 failed(interrupted)', async () => {
+        interrupted.push({ ...base, executor: 'local', status: 'running', checkpoint: null });
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 1 });
+        expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ error: 'interrupted' }));
+        expect(parkForDeviceRecovery).not.toHaveBeenCalled();
     });
 });

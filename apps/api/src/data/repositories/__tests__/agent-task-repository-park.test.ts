@@ -1,6 +1,8 @@
 /**
  * 주차(F16.7) SQL — 표식은 paused→paused(hitl_parked) 이벤트, 재개 claim·목록·부팅 복구가 같은 조건을 쓴다.
  */
+// 로컬 기기 작업을 되살리지 않는 기본 설정으로 고정한다(개발 장비의 .env 가 로컬 실행을 켜 두면 보류 조건이 달라진다)
+jest.mock('../../../config/local-bridge', () => ({ LOCAL_BRIDGE: { ...jest.requireActual('../../../config/local-bridge').LOCAL_BRIDGE, ENABLED: false } }));
 import type { Pool } from 'pg';
 import { AgentTaskRepository, parkedTaskCondition } from '../agent-task-repository';
 import { AgentTaskParkRepository } from '../agent-task-park-repository';
