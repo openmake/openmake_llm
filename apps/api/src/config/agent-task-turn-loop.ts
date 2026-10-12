@@ -10,6 +10,11 @@ const num = (v: string | undefined, d: number): number => {
 };
 
 export const AGENT_TASK_TURN_LOOP = {
+    /** 도구 호출 한 번을 기다리는 상한(ms) — 호스트(내장)·외부 도구 공통 안전판(tool-call-cap). 넘으면 기다리기를 멈추고 시간 초과를
+     *  도구 결과로 돌려준다. 사용자 입력 대기는 세지 않는다. 샌드박스 도구는 대상이 아니다(TASK_SANDBOX_EXEC_TIMEOUT_MS).
+     *  실측 근거는 없다 — 도구 자체 상한 중 가장 긴 영상 내려받기(CAPABILITY_VIDEO_DOWNLOAD_TIMEOUT_MS, 10분)보다 길게 잡았다.
+     *  0 이면 끔. AGENT_TASK_TOOL_CALL_TIMEOUT_MS(기본 15분) */
+    TOOL_CALL_TIMEOUT_MS: num(process.env.AGENT_TASK_TOOL_CALL_TIMEOUT_MS, 15 * 60_000),
     /** 재시도 소진 뒤 대기 — 짧은 재시도(AGENT_TASK_TURN_RETRY_MAX, 2초·4초)가 다 실패한 일시적 오류(5xx·408·429·연결 끊김)를
      *  더 긴 간격으로 기다렸다가 다시 부른다. 모델 서버가 재기동 중일 때 예약 작업이 실패로 끝나던 것을 줄인다.
      *  남은 작업 시간 예산보다 길게는 기다리지 않는다. AGENT_TASK_RECOVERY_WAIT=false 로 끈다. */

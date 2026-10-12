@@ -28,7 +28,8 @@ const markParked = jest.fn(async (..._a: unknown[]) => undefined);
 jest.mock('../../../data/repositories/agent-task-repository', () => ({ AgentTaskRepository: jest.fn().mockImplementation(() => ({ markParked: (...a: unknown[]) => markParked(...a) })) }));
 
 import { executeTurnToolCalls } from '../turn-executor';
-import { AgentTaskParked } from '../types';
+import { AgentTaskParked, AgentTaskAbort } from '../types';
+import { AGENT_TASK_TURN_LOOP } from '../../../config/agent-task-turn-loop';
 import type { ChatMessage } from '../../../llm/types';
 
 function input(overrides: Record<string, unknown>) {
@@ -127,5 +128,39 @@ describe('executeTurnToolCalls — 기기 대기', () => {
         const { args } = input({ taskRuntime, getCurStatus: () => 'running', toolCalls: [{ id: 'c1', function: { name: 'bash', arguments: {} } }] });
         await expect(executeTurnToolCalls(args)).resolves.toMatchObject({ terminated: false });
         expect(markParked).not.toHaveBeenCalled();
+    });
+});
+
+// 도구 호출 공통 시간 상한 — 끝나지 않는 호스트·외부 도구가 작업을 running 으로 무기한 붙잡지 않게 한다
+describe('executeTurnToolCalls — 도구 호출 시간 상한', () => {
+    afterEach(() => { jest.useRealTimers(); });
+
+    it('끝나지 않는 도구는 상한에서 시간 초과 결과로 기록하고 다음 호출로 넘어간다', async () => {
+        jest.useFakeTimers();
+        runTool.mockImplementationOnce(() => new Promise<string>(() => { /* 끝나지 않음 */ })).mockResolvedValueOnce('second ok');
+        const { args, conversation } = input({
+            getCurStatus: () => 'running',
+            toolCalls: [
+                { id: 'c1', function: { name: 'web_search', arguments: { query: 'x' } } },
+                { id: 'c2', function: { name: 'web_search', arguments: { query: 'y' } } },
+            ],
+        });
+        const done = executeTurnToolCalls(args);
+        await jest.advanceTimersByTimeAsync(AGENT_TASK_TURN_LOOP.TOOL_CALL_TIMEOUT_MS);
+        await done;
+        const results = conversation.filter((m) => m.role === 'tool');
+        expect(results.map((m) => m.tool_call_id)).toEqual(['c1', 'c2']);
+        expect(results[0].content).toMatch(/^Error: .*web_search.*시간/);
+        expect(results[1].content).toBe('second ok');
+    });
+
+    it('도구가 끝나지 않아도 취소 신호가 오면 바로 중단한다', async () => {
+        runTool.mockImplementationOnce(() => new Promise<string>(() => { /* 끝나지 않음 */ }));
+        const ac = new AbortController();
+        const { args } = input({ getCurStatus: () => 'running', signal: ac.signal, toolCalls: [{ id: 'c1', function: { name: 'web_search', arguments: { query: 'x' } } }] });
+        const done = executeTurnToolCalls(args).catch((e: unknown) => e);
+        await new Promise((r) => setImmediate(r));
+        ac.abort();
+        await expect(done).resolves.toBeInstanceOf(AgentTaskAbort);
     });
 });
