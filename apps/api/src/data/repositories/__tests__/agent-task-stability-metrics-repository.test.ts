@@ -23,7 +23,7 @@ describe('AgentTaskStabilityMetricsRepository.getStability', () => {
             .mockResolvedValueOnce({ rows: [{ llm_retry_n: '7', llm_retry_t: '2', tool_call_timeout_n: '1', tool_call_timeout_t: '1' }] });
         const r = await repo.getStability(7);
 
-        expect(r.signals.map((s) => s.id)).toEqual(['restart_interrupt', 'recovery', 'recovery_limit', ...AGENT_TASK_STABILITY_STEP_SIGNALS.map((s) => s.id)]);
+        expect(r.signals.map((s) => s.id)).toEqual(['restart_interrupt', 'recovery', 'recovery_limit', 'model_wait', ...AGENT_TASK_STABILITY_STEP_SIGNALS.map((s) => s.id)]);
         expect(r.signals.find((s) => s.id === 'restart_interrupt')).toEqual({ id: 'restart_interrupt', occurrences: 4, tasks: 3 });
         expect(r.signals.find((s) => s.id === 'recovery_limit')).toEqual({ id: 'recovery_limit', occurrences: 1, tasks: 1 });
         expect(r.signals.find((s) => s.id === 'llm_retry')).toEqual({ id: 'llm_retry', occurrences: 7, tasks: 2 });
@@ -38,7 +38,7 @@ describe('AgentTaskStabilityMetricsRepository.getStability', () => {
         const [stepSql, stepParams] = (pool.query as jest.Mock).mock.calls[1];
         expect(eventSql).toContain('agent_task_events');
         expect(eventSql).toContain('make_interval(days => $1)');
-        expect(eventParams).toEqual([30, 'server restarted', 'boot recovery claim', 'recovery_limit']);
+        expect(eventParams).toEqual([30, 'server restarted', 'boot recovery claim', 'recovery_limit', 'model_wait']);
         expect(stepSql).toContain('agent_task_steps');
         expect(stepSql).toContain('LIKE');
         expect(stepParams[0]).toBe(30);

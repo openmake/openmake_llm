@@ -211,6 +211,9 @@ export class ApprovalRegistry {
         if (enabled) this.unattendedTasks.add(taskId); else this.unattendedTasks.delete(taskId);
     }
 
+    /** 무인 작업(예약 실행)인가 */
+    isUnattended(taskId: string): boolean { return this.unattendedTasks.has(taskId); }
+
     /** 이 호출이 자동승인으로 대기 없이 통과하는가 — 바닥 검사가 전체 허용보다 먼저다. 선실행·서브 도구 선별도 이 판정을 쓴다. */
     autoApproves(taskId: string, toolName: string, args: Record<string, unknown>): boolean {
         return this.autoApproveTasks.has(taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(toolName) && approvalFloorReason(toolName, args) === null;

@@ -435,6 +435,7 @@
       "paused": "承認待ち",
       "waitingDevice": "デバイス接続待ち",
       "waitingBrowserTakeover": "ユーザーがブラウザを操作中",
+      "waitingModel": "モデル応答待ち",
       "completed": "完了",
       "failed": "失敗",
       "cancelled": "キャンセル済み"
@@ -940,6 +941,7 @@
     "queuePosition": "待機順 {position} 番 — 先のタスクが終わると自動で開始します",
     "waitingDevice": "ローカルデバイスの接続待ち — Companion を接続すると続行します",
     "waitingBrowserTakeover": "ユーザーがブラウザを操作中 — Companion でブラウザを戻すと続行します",
+    "waitingModel": "モデルサーバーの応答を待っています — 復旧すると自動的に続きから実行します",
     "planLabel": "計画 ({completed}/{total})",
     "outputsLabel": "成果物 {count}件",
     "noSteps": "ステップ記録がありません。",
@@ -1004,6 +1006,7 @@
       "interrupted_local_device": "ローカル端末の切断により中断",
       "lease_held_elsewhere": "別のサーバーで実行中のため開始できませんでした",
       "recovery_limit": "自動復旧を繰り返しても進まなかったため停止しました",
+      "model_wait_expired": "モデルサーバーが復旧しなかったため停止しました",
       "llm_error": "モデル呼び出しエラー",
       "sandbox_unavailable": "実行環境を準備できませんでした",
       "next": {
@@ -2679,6 +2682,7 @@
       "restart_interrupt": "サーバー再起動による実行中断",
       "recovery": "自動復旧(再開・デバイス待ち)",
       "recovery_limit": "復旧の繰り返し上限で停止",
+      "model_wait": "モデルサーバー障害による待機",
       "llm_retry": "モデル呼び出しの再試行",
       "llm_recovery_wait": "再試行を使い切った後の待機",
       "empty_response_retry": "空の応答の聞き直し",

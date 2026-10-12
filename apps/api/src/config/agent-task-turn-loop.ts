@@ -10,6 +10,16 @@ const num = (v: string | undefined, d: number): number => {
 };
 
 export const AGENT_TASK_TURN_LOOP = {
+    /** 모델 대기 — 일시적 모델 오류(5xx·408·429·연결 끊김·무응답)가 짧은 재시도와 소진 뒤 대기를 다 쓰고도 계속되면 작업을 실패시키지 않고
+     *  멈춰 둔다(paused + model_wait). 전용 스윕이 모델에 짧게 물어 보고 응답하면 이어서 실행한다. 예약(무인) 실행은 대상이 아니다(자체 재실행 규칙).
+     *  AGENT_TASK_MODEL_WAIT=false 로 끄면 종전대로 실패(llm_error)한다. */
+    MODEL_WAIT_ENABLED: process.env.AGENT_TASK_MODEL_WAIT !== 'false',
+    /** 모델 대기 상한(ms) — 넘기면 실패(model_wait_expired)로 끝낸다. 실측 근거 없음. AGENT_TASK_MODEL_WAIT_MAX_MS(기본 1시간) */
+    MODEL_WAIT_MAX_MS: num(process.env.AGENT_TASK_MODEL_WAIT_MAX_MS, 60 * 60_000),
+    /** 모델 대기 스윕 주기(ms) — 대기 중인 작업이 있을 때만 모델을 확인한다. AGENT_TASK_MODEL_WAIT_SWEEP_MS(기본 1분) */
+    MODEL_WAIT_SWEEP_MS: num(process.env.AGENT_TASK_MODEL_WAIT_SWEEP_MS, 60_000),
+    /** 모델 확인 호출의 상한(ms). AGENT_TASK_MODEL_WAIT_PROBE_TIMEOUT_MS(기본 20초) */
+    MODEL_WAIT_PROBE_TIMEOUT_MS: num(process.env.AGENT_TASK_MODEL_WAIT_PROBE_TIMEOUT_MS, 20_000),
     /** 도구 호출 한 번을 기다리는 상한(ms) — 호스트(내장)·외부 도구 공통 안전판(tool-call-cap). 넘으면 기다리기를 멈추고 시간 초과를
      *  도구 결과로 돌려준다. 사용자 입력 대기는 세지 않는다. 샌드박스 도구는 대상이 아니다(TASK_SANDBOX_EXEC_TIMEOUT_MS).
      *  실측 근거는 없다 — 도구 자체 상한 중 가장 긴 영상 내려받기(CAPABILITY_VIDEO_DOWNLOAD_TIMEOUT_MS, 10분)보다 길게 잡았다.
