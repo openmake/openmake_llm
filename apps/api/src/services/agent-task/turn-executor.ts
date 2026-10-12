@@ -28,7 +28,10 @@ import { needsReceipt, startReceipt, finishReceipt, receiptStatusOf } from './to
 import { runWithToolCallContext } from '../../utils/tool-call-context';
 import { runWithToolMediaSink, toolMediaSinkFor } from '../../utils/tool-media-sink';
 import { isRejectedCall, findDuplicateCalls } from './turn-call-guards';
-import { getMalformedToolArgsResult, getDuplicateToolCallResult } from '../../prompts/agent-task-turn-loop';
+import { getMalformedToolArgsResult, getDuplicateToolCallResult, getToolCallTimeoutResult } from '../../prompts/agent-task-turn-loop';
+import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
+import { runWithToolCallCap } from './tool-call-cap';
+import { createLogger } from '../../utils/logger';
 import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice, type UnknownOutcomeCause } from '../../prompts/agent-task-prompt';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
@@ -36,6 +39,8 @@ import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import type { UserContext } from '../../tool-contract/types';
 import type { ChatMessage, ToolCall } from '../../llm/types';
+
+const logger = createLogger('AgentTaskService');
 
 type UnifiedDb = ReturnType<typeof getUnifiedDatabase>;
 type AgentTaskUpdatePayload = Parameters<UnifiedDb['updateAgentTask']>[1];
@@ -120,14 +125,17 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         else await new AgentTaskRepository(getPool()).markParked(taskId);
         throw new AgentTaskParked(reason);
     };
+    // 도구가 사용자 입력을 기다리는 중인 요청 수 — 그동안은 도구 호출 시간 상한을 세지 않는다(tool-call-cap).
+    let waitingForUser = 0;
     // 외부 MCP 서버의 사용자 입력 요청(F13.10) — ask_human 과 같은 채널로 묻는다(자동승인·정책 무관, 대기는 pause-aware).
     const elicitCtx: ToolUserInputContext = {
         taskId,
         ask: async (args) => {
+            waitingForUser++;
             const r = await getApprovalRegistry().request(
                 { taskId, userId, toolName: TOOL_USER_INPUT_APPROVAL_NAME, args },
                 { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName), parkable: true },
-            );
+            ).finally(() => { waitingForUser--; });
             pausedMs += r.waitedMs;
             if (r.reason === 'parked') { parkRequested = true; return r; } // 서버엔 cancel, 도구가 끝나면 주차
             if (r.decision === 'rejected') onApprovalRejected({ toolName: TOOL_USER_INPUT_APPROVAL_NAME, reason: r.reason ?? 'user' });
@@ -154,8 +162,14 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         AGENT_TASK_LIMITS.TOOL_RESULT_WRAP_ENABLED && input.goal && (name === 'browser' || !taskRuntime?.isTaskTool(name))
             ? wrapUntrustedToolResult(result, input.goal)
             : result;
-    const execTool = (name: string, args: Record<string, unknown>): Promise<string> =>
-        runWithToolMediaSink(toolMediaSinkFor(taskRuntime), () => getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx, taskRuntime?.spillLargeResult)));
+    // 호스트·외부 도구 호출 — 공통 시간 상한을 걸고, 중단 신호가 오면 호출이 끝나기를 기다리지 않는다(tool-call-cap).
+    const execTool = (name: string, args: Record<string, unknown>): Promise<string> => runWithToolCallCap(
+        () => runWithToolMediaSink(toolMediaSinkFor(taskRuntime), () => getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx, taskRuntime?.spillLargeResult))),
+        {
+            capMs: AGENT_TASK_TURN_LOOP.TOOL_CALL_TIMEOUT_MS, signal, isWaitingForUser: () => waitingForUser > 0,
+            onTimeout: () => { logger.warn(`[AgentTask] 도구 호출 시간 상한 초과: ${taskId} — ${name}`); return getToolCallTimeoutResult(name, AGENT_TASK_TURN_LOOP.TOOL_CALL_TIMEOUT_MS); },
+        },
+    );
     // 외부 도구(175) — 영수증을 남기고 멱등 키를 호출 문맥에 실어 실행한다(외부 MCP 클라이언트가 읽어 서버에 보낸다).
     let receiptOpen = false;
     const execWithReceipt = async (name: string, args: Record<string, unknown>, toolCallId: string | undefined): Promise<string> => {
