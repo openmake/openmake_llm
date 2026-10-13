@@ -5,12 +5,15 @@
  */
 import { ORCHESTRATOR } from '../../../config/capabilities';
 import { performWebSearch } from '../../../tools/web-search/search-orchestrator';
+import { cleanSearchQuery, searchQueryFromInstruction } from '../../../tools/web-search/query-cleaner';
 import type { CapabilityExecutor } from '../types';
 
 const MAX_RESULTS = 8;
 
 export const webSearchExecutor: CapabilityExecutor = async (task, ctx) => {
-    const query = (task.instruction || ctx.userMessage).trim();
+    // 계획기 지시문("Search for …")은 문장이고 사용자 메시지("…조사해서 보고해")는 대화체 — 둘 다 검색어로 다듬는다
+    const instruction = (task.instruction || '').trim();
+    const query = instruction ? searchQueryFromInstruction(instruction) : cleanSearchQuery(ctx.userMessage);
     if (!query) throw new Error('web.search: 검색어가 없습니다');
     const results = await performWebSearch(query, { maxResults: MAX_RESULTS, language: ctx.lang, signal: ctx.signal, preferRecent: true });
     if (results.length === 0) {

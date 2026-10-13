@@ -5,7 +5,7 @@
  * "오늘 기준 최신 Node.js LTS 버전을 웹에서 해서" 로 나가 무관한 결과(MDN 용어집·Docker Hub)가 주입됐다.
  * "검색" 낱말만 지워지고 앞의 "웹에서"와 뒤의 활용 어미 "해서"가 남은 것.
  */
-import { cleanSearchQuery } from '../query-cleaner';
+import { cleanSearchQuery, searchQueryFromInstruction } from '../query-cleaner';
 
 describe('cleanSearchQuery — 검색 지시 표현', () => {
     it('실측 문장: 지시 표현과 시점 한정 표현이 모두 빠진다', () => {
@@ -132,5 +132,49 @@ describe('cleanSearchQuery — 낱말 경계', () => {
         ['구글 검색 알고리즘 변경 알려줘', '구글 검색 알고리즘 변경'],
     ])('검색 지시가 없는 매체 표현은 보존한다: %s', (input, expected) => {
         expect(cleanSearchQuery(input)).toBe(expected);
+    });
+});
+
+describe('cleanSearchQuery — 보고 지시', () => {
+    // 2026-10-13 로컬 기록: "벤처기업확인기관에 대해서 조사해서 보고해" 가 "…에 대해서 보고해" 로 나갔다.
+    it.each([
+        ['벤처기업확인기관에 대해서 조사해서 보고해', '벤처기업확인기관에 대해서'],
+        ['벤처기업확인기관 조사해서 보고해줘', '벤처기업확인기관'],
+        ['벤처기업확인기관 현황 보고해 주세요', '벤처기업확인기관 현황'],
+    ])('"보고해" 가 검색어에 남지 않는다: %s', (input, expected) => {
+        expect(cleanSearchQuery(input)).toBe(expected);
+    });
+
+    it.each([
+        ['분기 보고서 양식', '분기 보고서 양식'],
+        ['사업 보고 절차', '사업 보고 절차'],
+    ])('명사 "보고"는 보존한다: %s', (input, expected) => {
+        expect(cleanSearchQuery(input)).toBe(expected);
+    });
+});
+
+describe('searchQueryFromInstruction — 계획기 지시문에서 검색어만', () => {
+    // 2026-10-13 로컬 orchestrator_runs 의 web.search 지시문 31건 중 다수가 "Search for …"·"…를 검색" 꼴이었고
+    // 실행기가 그 문장을 그대로 검색어로 썼다.
+    it.each([
+        ['Search for the latest Node.js LTS version as of today.', 'the latest Node.js LTS version as of today'],
+        ['Search the web for Bun runtime version 1.3 release notes and major changes.', 'Bun runtime version 1.3 release notes and major changes'],
+        ['Search in English for Bun 1.3 release notes and major changes.', 'Bun 1.3 release notes and major changes'],
+        ['Find the latest Node.js LTS version as of today, including the official source URL and release date.', 'the latest Node.js LTS version as of today, including the official source URL and release date'],
+        ['Search for the 2026 minimum wage in South Korea and summarize the result in one sentence.', 'the 2026 minimum wage in South Korea'],
+        ['벤처기업확인기관 목록 및 관련 정보를 검색', '벤처기업확인기관 목록 및 관련 정보'],
+        ['MySQL 9의 주요 신규 기능과 변경사항을 조사', 'MySQL 9의 주요 신규 기능과 변경사항'],
+        ['벤처기업확인기관의 정의, 법적 근거 및 현황에 대한 최신 정보를 검색하고 요약하세요.', '벤처기업확인기관의 정의, 법적 근거 및 현황에 대한 최신 정보'],
+    ])('지시 표현을 걷어낸다: %s', (input, expected) => {
+        expect(searchQueryFromInstruction(input)).toBe(expected);
+    });
+
+    it.each([
+        ['Bun runtime 1.3 release notes and major changes, new features, breaking changes'],
+        ['벤처기업확인기관 지정 현황'],
+        ['청년 고용 실태 조사'],
+        ['Find My iPhone 사용법'],
+    ])('이미 검색어인 것은 그대로 둔다: %s', (input) => {
+        expect(searchQueryFromInstruction(input)).toBe(input);
     });
 });

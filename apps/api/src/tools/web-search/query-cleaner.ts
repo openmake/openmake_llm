@@ -37,6 +37,8 @@ const INSTRUCTION_NOISE: readonly RegExp[] = [
     // `조사`/`리서치` 단독은 넣지 않는다(2026-09-13: 딥리서치 폴백 쿼리에 "…조사해줘" 가
     // 그대로 남아 무관한 검색 결과가 보고서 참고문헌에 실렸다).
     /(알려|말해|설명해|답해|정리해|가르쳐|조사해|리서치해|찾아)\s*(주세요|주실래요|줄래요|줄래|줘요|줘|봐요|봐|서)?(?![가-힣])/g,
+    // "보고해" 는 활용형만 — "보고서"·"사업 보고" 같은 명사는 보존(2026-10-13: "…조사해서 보고해" 의 "보고해" 가 남았다).
+    /보고\s*(해\s*(줘|주세요|줄래|요)?|하라|하세요)(?![가-힣])/g,
     /(이|가|은|는)?\s*누구(야|인지|니|예요|입니까|인가요|신가요)?\s*\??(?![가-힣])/g,
     /(이|가|은|는)?\s*뭐(야|예요|니)?\s*\??(?![가-힣])/g,
     /무엇(인지|입니까|인가요)?\s*\??(?![가-힣])/g,
@@ -55,6 +57,30 @@ export function cleanSearchQuery(raw: string): string {
     q = q
         .replace(/\s+/g, ' ')
         .replace(/^[\s.?!,]+/g, '')
+        .replace(/[\s.?!,]+$/g, '')
+        .trim();
+    return q.length >= 2 ? q : original;
+}
+
+/** 계획기 지시문 앞머리의 영어 검색 동사구 — "Search (the web|in English) for"·"Find the"·"Look up" */
+const INSTRUCTION_LEAD_EN = /^(?:search|look\s+up|look\s+for|investigate|research)\b(?:\s+(?:the\s+web|the\s+internet|online|in\s+\w+))?(?:\s+for)?\s+|^find\s+(?=(?:the|a|an|out)\b)/i;
+/** 지시문 꼬리의 후처리 요구 — ", and summarize …"·"…를 검색하고 요약하세요" */
+const INSTRUCTION_TAIL_EN = /,?\s+and\s+(?:summarize|summarise|report|explain|describe|list|provide)\b.*$/i;
+const INSTRUCTION_TAIL_KO = /(을|를)\s*(검색|조사|찾아|확인)\S*(\s+\S+)*$/;
+
+/**
+ * 오케스트레이터 계획기가 web.search 작업에 적은 instruction 에서 검색어만 남긴다.
+ * 계획기는 "Search for the latest …"·"…를 검색하고 요약하세요" 같은 **문장**을 쓰는데(2026-10-13 로컬 기록 31건 중
+ * 다수), 실행기가 그 문장을 그대로 검색 엔진에 넘기면 지시 낱말이 검색어에 섞인다. 사용자 발화용
+ * `cleanSearchQuery` 와 달리 지시문의 머리·꼬리만 자른다. 과잉 제거면 원문을 돌려준다.
+ */
+export function searchQueryFromInstruction(instruction: string): string {
+    const original = (instruction || '').trim();
+    const q = original
+        .replace(INSTRUCTION_LEAD_EN, '')
+        .replace(INSTRUCTION_TAIL_EN, '')
+        .replace(INSTRUCTION_TAIL_KO, '')
+        .replace(/\s+/g, ' ')
         .replace(/[\s.?!,]+$/g, '')
         .trim();
     return q.length >= 2 ? q : original;
