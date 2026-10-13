@@ -19,6 +19,9 @@ import { requestChatCompletion, resolveModel } from './openmake-client';
 import { noteHumanMessage, shouldHandleBotMessage, tryConsumeBotTurn } from './bot-conversation';
 import { splitForDiscord } from './message-utils';
 import { prepareReply } from './attachments';
+import { createTaskClient } from './task-client';
+import { createTaskController, type TaskController } from './task-commands';
+import { handleTaskInteraction, registerTaskCommands } from './task-discord';
 
 /**
  * 기동 절차: 서버(관리자 화면) 설정 수신 → 검증 → Discord 로그인.
@@ -55,6 +58,10 @@ const client = new Client({
     // DM 채널은 partial 로 도착하므로 필수
     partials: [Partials.Channel, Partials.Message],
 });
+
+/** /task 조정자 — 허용 사용자 목록이 있을 때만 만들어진다(clientReady). 없으면 기능이 꺼진 것이다. */
+let taskController: TaskController | null = null;
+
 
 const TYPING_REFRESH_MS = 8_000; // Discord typing 표시는 ~10초 후 소멸 → 주기 갱신
 
@@ -137,6 +144,21 @@ client.once('clientReady', async () => {
                 new SlashCommandBuilder().setName('reset').setDescription('이 채널의 내 대화 세션을 초기화합니다').toJSON(),
             );
         }
+        // /task 는 허용 사용자 목록이 있을 때만 켠다 — 비어 있으면 명령도 등록하지 않는다.
+        if (config.taskAllowedUsers.length > 0) {
+            taskController = createTaskController({
+                client: createTaskClient({ baseUrl: config.apiBaseUrl, apiKey: config.apiKey }),
+                config: {
+                    allowedUsers: config.taskAllowedUsers,
+                    executor: config.taskExecutor,
+                    approvalPolicy: config.taskApprovalPolicy,
+                    pollMs: config.taskPollMs,
+                    watchMaxMs: config.taskWatchMaxMs,
+                },
+            });
+            await registerTaskCommands(app);
+            console.log(`[discord-bot] /task 켜짐 — 허용 사용자 ${config.taskAllowedUsers.length}명, 실행 위치 ${config.taskExecutor}, 승인 ${config.taskApprovalPolicy}`);
+        }
     }
 });
 
@@ -160,6 +182,14 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('interactionCreate', async (interaction) => {
+    if (taskController) {
+        try {
+            if (await handleTaskInteraction(interaction, taskController)) return;
+        } catch (err) {
+            console.error('[discord-bot] /task 상호작용 실패:', err instanceof Error ? err.message : err);
+            return;
+        }
+    }
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'reset') {
         await handleReset(interaction).catch((err) => console.error('[discord-bot] /reset 실패:', err));
