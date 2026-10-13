@@ -43,7 +43,7 @@ describe('runTaskGate', () => {
     });
 
     it('짧은 지시도 길이로 거르지 않고 어댑터에 묻는다', async () => {
-        const decide = jest.fn(async () => ({ pTrue: 0.91, ms: 240 }));
+        const decide = jest.fn(async (_input: { state: string; question: string }) => ({ pTrue: 0.91, ms: 240 }));
         const r = await runTaskGate({ ...base, message: '배포해줘' }, { mode: 'shadow', modelAvailable: () => true, decide });
         expect(decide).toHaveBeenCalledTimes(1);
         expect(decide.mock.calls[0][0]).toEqual({ state: 'User message: "배포해줘"\nAttachments: none', question: TASK_GATE.QUESTION });

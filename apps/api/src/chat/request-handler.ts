@@ -28,6 +28,7 @@ import { buildExecutionPlan } from './profile-resolver';
 import { applySlashCommand, languageDetectionInput } from './slash-command';
 import { resolveLanguagePolicy } from '../services/chat-service/language-resolver';
 import { detectFastPath } from './fast-path-detector';
+import { startTaskGateSession } from './task-gate-session';
 import { historySummaryCache } from '../services/chat-service/history-summary-cache';
 import { summarizeHistory } from './history-summarizer';
 import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
@@ -334,6 +335,17 @@ export class ChatRequestHandler {
             log.info(`[RequestHandler] Fast-path 감지(${fastPath.reason}) — 사용자 thinking 토글 무시하고 OFF`);
         }
 
+        // 작업 게이트(A형 예외 — chat/task-gate-session.ts): 답과 나란히 판정한다. 답은 기다리지 않는다.
+        const taskGate = startTaskGateSession({
+            message: userFacingMessage,
+            attachmentKinds: [...(images?.length ? ['image'] : []), ...(mediaFiles?.length ? ['file'] : [])],
+            fastPathMatched: fastPath.matched,
+            userId: userContext.authenticatedUserId ?? undefined,
+            channel: params.apiKeyId ? 'api' : 'web',
+            modeActive: imageMode === true || Object.values(modes ?? {}).some(Boolean),
+            signal: abortSignal,
+        });
+
         // 사전 요약 캐시 조회: 이전 턴 종료 후 백그라운드로 미리 요약된 결과가 있으면 사용.
         // hit 조건은 (sessionId, history.length) 정확 일치. mismatch 시 ChatService 가
         // inline summarize 로 자동 fallback 하므로 안전.
@@ -513,6 +525,7 @@ export class ChatRequestHandler {
                 return getConversationDB().updateMessageReasoningSummary(savedMessageId, summary);
             }).catch((e) => log.warn(`reasoning_summary 영속화 실패 (무시): ${e instanceof Error ? e.message : e}`));
         }
+        const taskSuggestion = taskGate.finish({ sessionId: currentSessionId, messageId: savedMessageId });
 
         // 8. 다음 턴을 위한 사전 요약 (백그라운드, fire-and-forget)
         // 새 history = 기존 + user message + cleanedResponse (placeholder 포함).
@@ -552,6 +565,7 @@ export class ChatRequestHandler {
                 agentBypass: !!(params.apiKeyId || fastPath.matched || userAgentBypass),
                 summaryCacheHit: cachedSummary !== null,
             },
+            ...(taskSuggestion ? { taskSuggestion } : {}),
         };
     }
 
