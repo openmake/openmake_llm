@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.97.0](https://github.com/openmake/openmake_llm/compare/v1.96.0...v1.97.0) (2026-10-13)
+
+
+### ✨ 기능
+
+* **chat:** 작업 게이트 제안을 웹소켓 완료 이벤트와 v1 응답에 싣는다 (on 일 때만) ([9c1c3a1](https://github.com/openmake/openmake_llm/commit/9c1c3a16a5abf3bfc588a9cc85b29a9a212800b7))
+* **chat:** 작업 게이트를 채팅 처리에 연결 — 답과 나란히 판정하고 기록 ([463f8bb](https://github.com/openmake/openmake_llm/commit/463f8bbb0e2b03816f034b160dc78e696a756562))
+* **chat:** 채팅 요청의 작업 적합성 판정 — 기록 전용으로 시작 (기본 꺼짐) ([19c45ea](https://github.com/openmake/openmake_llm/commit/19c45eac7fd57083f56cd39ec7d6cce1ace3269a))
+* **db:** 작업 게이트 기록 테이블과 저장소 (migration 185) ([de04ac2](https://github.com/openmake/openmake_llm/commit/de04ac246cd2f2d611f080fa6a099e1c4cdee89c))
+* **decision:** 채팅 요청의 작업 적합성 판정 모듈 (기본 꺼짐) ([bd87353](https://github.com/openmake/openmake_llm/commit/bd87353dbb0e85637169cf0300cc2048fa281615))
+* **scripts:** 작업 게이트 셰도우 기록 검토 보고 ([731def4](https://github.com/openmake/openmake_llm/commit/731def44bdf94c7fd56c76a9dccadce11f4264d9))
+
+
+### 🐛 버그 수정
+
+* **chat:** 작업 게이트 검토 반영 — 전달되지 않는 경로의 suggested, 건너뛰는 조건 테스트, iOS 생성 코드 ([f918006](https://github.com/openmake/openmake_llm/commit/f918006653f0bf85150b5dab973b45bba46cc3c5))
+
 ## [1.96.0](https://github.com/openmake/openmake_llm/compare/v1.95.0...v1.96.0) (2026-10-12)
 
 
