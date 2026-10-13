@@ -57,6 +57,14 @@ const MUTATING = new Set<string>(MUTATING_METHODS);
 const SKIP_REFRESH_ENDPOINTS = ["/api/auth/refresh", "/api/auth/login"];
 
 /**
+ * 네트워크 계층 실패(fetch 가 TypeError 로 거절 — 응답 자체가 없음) 뒤 멱등 GET 을 한 번 다시 보내기 전 대기.
+ * 2026-10-13 운영(chat.openmake.cc, Cloudflare HTTP/3): 브라우저↔edge 세션이 닫히는 순간 30초 폴링 5건이
+ * 함께 `ERR_CONNECTION_CLOSED` 로 실패했고 같은 순간 새 세션에 실린 요청은 성공했다 — 서버 홉은 모두
+ * 유휴 125초 뒤에도 재사용이 됐다. 죽은 세션을 브라우저가 버릴 틈만 주고 다시 보낸다.
+ */
+const NETWORK_RETRY_DELAY_MS = 250;
+
+/**
  * Single-flight refresh: 동시에 401 이 난 여러 요청이 각자 /api/auth/refresh 를 호출하면
  * 서버 토큰 로테이션이 경합(첫 호출이 회전·기존 토큰 블랙리스트 → 나머지는 블랙리스트된
  * 토큰으로 401 → clearTokenCookie 로 세션 쿠키 wipe)해 세션이 죽는다.
@@ -155,7 +163,7 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
-async function request<T>(endpoint: string, options: ApiRequestOptions = {}, _isRetry = false): Promise<T> {
+async function request<T>(endpoint: string, options: ApiRequestOptions = {}, _isRetry = false, _networkRetried = false): Promise<T> {
   const { redirectOnUnauthorized = true, ...fetchOptions } = options;
   const method = (fetchOptions.method || "GET").toUpperCase();
   const headers: Record<string, string> = {
@@ -167,7 +175,17 @@ async function request<T>(endpoint: string, options: ApiRequestOptions = {}, _is
     const token = await ensureCsrf();
     if (token) headers[CSRF.HEADER_NAME] = token;
   }
-  const res = await fetch(endpoint, { ...fetchOptions, credentials: "include", headers });
+  let res: Response;
+  try {
+    res = await fetch(endpoint, { ...fetchOptions, credentials: "include", headers });
+  } catch (err) {
+    // 응답 없이 끊긴 멱등 GET 만 한 번 더 — 호출자 취소(AbortError)·mutating 요청은 그대로 올린다
+    if (method === "GET" && !_networkRetried && err instanceof TypeError) {
+      await new Promise((r) => setTimeout(r, NETWORK_RETRY_DELAY_MS));
+      return request<T>(endpoint, options, _isRetry, true);
+    }
+    throw err;
+  }
   const text = await res.text();
   // 비-JSON 본문(예: 프록시/서버 기본 "Internal Server Error" 평문)에도 깨지지 않도록 방어.
   // 파싱 실패 시 json=null 로 두고, 아래 에러 분기에서 status 기반 메시지로 폴백한다.
@@ -188,7 +206,7 @@ async function request<T>(endpoint: string, options: ApiRequestOptions = {}, _is
     ) {
       const refreshed = await refreshOnce();
       if (refreshed) {
-        return request<T>(endpoint, options, true);
+        return request<T>(endpoint, options, true, _networkRetried);
       }
       if (redirectOnUnauthorized && typeof window !== "undefined"
         && window.location.pathname !== "/login" && !isPublicPath(window.location.pathname)) {
