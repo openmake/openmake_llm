@@ -1,11 +1,11 @@
 /** 작업 게이트 세션 — 채팅 답과 나란히 도는 판정의 수거·기록·실패 격리를 고정한다 (실제 모델·DB 없음) */
-import { startTaskGateSession, type TaskGateSessionInput } from '../task-gate-session';
+import { buildTaskGateSessionInput, startTaskGateSession, type TaskGateSessionInput } from '../task-gate-session';
 import type { TaskGateRecord } from '../../services/decision/task-gate';
 import type { ChatTaskGateLogEntry } from '../../data/repositories/chat-task-gate-log-repository';
 
 const input: TaskGateSessionInput = {
     message: '보고서 파일 만들어서 저장해줘', attachmentKinds: [], fastPathMatched: false,
-    userId: 'u1', channel: 'web', modeActive: false,
+    userId: 'u1', channel: 'web', skip: false, suggestable: true,
 };
 const jev = (pTrue: number): TaskGateRecord => ({ source: 'jev', model: 'jev-decision', pTrue, ms: 240 });
 /** 대기 중인 마이크로태스크·타이머를 비운다 */
@@ -18,10 +18,10 @@ function harness() {
 }
 
 describe('startTaskGateSession — 판정하지 않는 경우', () => {
-    it('모드 off, 비로그인, 채팅 모드가 켜진 요청은 판정도 기록도 없다', async () => {
+    it('모드 off, 비로그인, 건너뛸 요청(skip)은 판정도 기록도 없다', async () => {
         const { save } = harness();
         const run = jest.fn(async () => jev(0.99));
-        for (const [mode, over] of [['off', {}], ['on', { userId: undefined }], ['on', { modeActive: true }]] as const) {
+        for (const [mode, over] of [['off', {}], ['on', { userId: undefined }], ['on', { skip: true }]] as const) {
             const s = startTaskGateSession({ ...input, ...over }, { mode, threshold: 0.9, run, save });
             expect(s.finish({ sessionId: 's1', messageId: 1 })).toBeUndefined();
         }
@@ -51,6 +51,16 @@ describe('startTaskGateSession — 수거와 기록', () => {
             userId: 'u1', sessionId: 's1', messageId: 42, channel: 'web', mode: 'on', source: 'jev',
             pTrue: 0.95, gateError: null, gateMs: 240, gateModel: 'jev-decision', suggested: true, queryChars: input.message.length,
         }]);
+    });
+
+    it('제안을 전달할 수 없는 경로(suggestable=false)에서는 on·기준 이상이어도 제안하지 않고 suggested=false 로 기록한다', async () => {
+        const { saved, save } = harness();
+        const s = startTaskGateSession({ ...input, suggestable: false }, { mode: 'on', threshold: 0.9, run: async () => jev(0.95), save });
+        await flush();
+        expect(s.finish({ sessionId: 's1', messageId: 42 })).toBeUndefined();
+        await flush();
+        expect(saved).toHaveLength(1);
+        expect(saved[0]).toMatchObject({ mode: 'on', pTrue: 0.95, suggested: false });
     });
 
     it('shadow 에서는 확률이 높아도 제안하지 않고 기록만 한다', async () => {
@@ -133,5 +143,40 @@ describe('startTaskGateSession — 실패 격리', () => {
         expect(s.finish({ sessionId: 's1', messageId: 1 })).toEqual({ pTrue: 0.95 });
         await flush();
         expect(save).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('buildTaskGateSessionInput — 요청에서 판정 입력을 만든다', () => {
+    const req = { message: '배포해줘', fastPathMatched: false, authenticatedUserId: 'u1' as string | null, hasTools: false, suggestable: true };
+
+    it('일반 웹 요청은 건너뛰지 않는다', () => {
+        expect(buildTaskGateSessionInput(req)).toEqual({
+            message: '배포해줘', attachmentKinds: [], fastPathMatched: false, userId: 'u1', channel: 'web', skip: false, suggestable: true, signal: undefined,
+        });
+    });
+
+    it('외부 도구 호출 경로(tools)는 건너뛴다', () => {
+        expect(buildTaskGateSessionInput({ ...req, hasTools: true }).skip).toBe(true);
+    });
+
+    it('이미지 모드나 켜진 모드 토글이 하나라도 있으면 건너뛴다 — 꺼진 토글만 있으면 건너뛰지 않는다', () => {
+        expect(buildTaskGateSessionInput({ ...req, imageMode: true }).skip).toBe(true);
+        expect(buildTaskGateSessionInput({ ...req, modes: { discussion: false, research: true } }).skip).toBe(true);
+        expect(buildTaskGateSessionInput({ ...req, modes: { discussion: false } }).skip).toBe(false);
+        expect(buildTaskGateSessionInput({ ...req, imageMode: false, modes: {} }).skip).toBe(false);
+    });
+
+    it('비로그인은 userId 없이, API 키 요청은 api 채널로 만든다', () => {
+        expect(buildTaskGateSessionInput({ ...req, authenticatedUserId: null }).userId).toBeUndefined();
+        expect(buildTaskGateSessionInput({ ...req, apiKeyId: 'k1' }).channel).toBe('api');
+    });
+
+    it('이미지·파일 첨부를 종류로 싣는다', () => {
+        expect(buildTaskGateSessionInput({ ...req, images: ['data:…'], mediaFiles: [{}] }).attachmentKinds).toEqual(['image', 'file']);
+        expect(buildTaskGateSessionInput({ ...req, images: [], mediaFiles: [] }).attachmentKinds).toEqual([]);
+    });
+
+    it('전달 가능 여부를 그대로 넘긴다', () => {
+        expect(buildTaskGateSessionInput({ ...req, suggestable: false }).suggestable).toBe(false);
     });
 });

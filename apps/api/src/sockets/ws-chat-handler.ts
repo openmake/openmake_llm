@@ -307,7 +307,7 @@ export async function handleChatMessage(
 
         // ChatRequestHandler.processChat으로 통합 처리
         const result = await ChatRequestHandler.processChat({
-            message, originalMessage: rawMessage,
+            message, originalMessage: rawMessage, taskSuggestionDeliverable: true,
             model: selectedModel, nodeId,
             history,
             images: pdfVision.images.length > 0 ? [...(images ?? []), ...pdfVision.images] : images,

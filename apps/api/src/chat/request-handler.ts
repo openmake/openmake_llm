@@ -28,7 +28,7 @@ import { buildExecutionPlan } from './profile-resolver';
 import { applySlashCommand, languageDetectionInput } from './slash-command';
 import { resolveLanguagePolicy } from '../services/chat-service/language-resolver';
 import { detectFastPath } from './fast-path-detector';
-import { startTaskGateSession } from './task-gate-session';
+import { buildTaskGateSessionInput, startTaskGateSession } from './task-gate-session';
 import { historySummaryCache } from '../services/chat-service/history-summary-cache';
 import { summarizeHistory } from './history-summarizer';
 import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
@@ -336,15 +336,11 @@ export class ChatRequestHandler {
         }
 
         // 작업 게이트(A형 예외 — chat/task-gate-session.ts): 답과 나란히 판정한다. 답은 기다리지 않는다.
-        const taskGate = startTaskGateSession({
-            message: userFacingMessage,
-            attachmentKinds: [...(images?.length ? ['image'] : []), ...(mediaFiles?.length ? ['file'] : [])],
-            fastPathMatched: fastPath.matched,
-            userId: userContext.authenticatedUserId ?? undefined,
-            channel: params.apiKeyId ? 'api' : 'web',
-            modeActive: imageMode === true || Object.values(modes ?? {}).some(Boolean),
-            signal: abortSignal,
-        });
+        const taskGate = startTaskGateSession(buildTaskGateSessionInput({
+            message: userFacingMessage, images, mediaFiles, fastPathMatched: fastPath.matched,
+            authenticatedUserId: userContext.authenticatedUserId, apiKeyId: params.apiKeyId, imageMode, modes,
+            hasTools: !!tools?.length, suggestable: params.taskSuggestionDeliverable === true, signal: abortSignal,
+        }));
 
         // 사전 요약 캐시 조회: 이전 턴 종료 후 백그라운드로 미리 요약된 결과가 있으면 사용.
         // hit 조건은 (sessionId, history.length) 정확 일치. mismatch 시 ChatService 가

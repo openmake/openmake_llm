@@ -115,6 +115,8 @@ export interface ChatRequestParams {
     userContext: ChatUserContext;
     /** API Key 인증 요청 시 키 ID */
     apiKeyId?: string;
+    /** 이 호출 경로가 작업 게이트 제안(ChatResult.taskSuggestion)을 클라이언트에 실어 보낸다 — 웹소켓·v1 비스트리밍만 true. 미지정은 제안 없음 */
+    taskSuggestionDeliverable?: boolean;
     /** 슬래시 확장 **전** 원문 — 언어 감지용(확장문은 스킬 본문 언어가 질문 언어를 덮는다). 미전달 시 message 사용 */
     originalMessage?: string;
     /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
