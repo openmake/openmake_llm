@@ -32,7 +32,9 @@ export const MEDIA_GATE = {
     /** 셰도우 판정 on/off. 결정 모델이 로컬 카탈로그에 없으면 켜져 있어도 호출하지 않는다. ORCHESTRATOR_GATE_SHADOW_ENABLED */
     SHADOW_ENABLED: process.env.ORCHESTRATOR_GATE_SHADOW_ENABLED !== 'false',
     /**
-     * Planner 생략 — 판정이 "미디어 작업 아님"으로 확실하면(확률 < SKIP_THRESHOLD) Planner 를 부르지 않고 종전 단일 경로로 간다.
+     * Planner 생략 — 미디어 판정(확률 < SKIP_THRESHOLD)과 검색 판정(SEARCH_GATE.SKIP_THRESHOLD)이 **둘 다** "아님"으로 확실하면
+     * Planner 를 부르지 않고 종전 단일 경로로 간다. 미디어 판정만으로는 생략하지 않는다 — Planner 가 계획하는 것의 대부분은
+     * 웹 검색인데 미디어 질문은 그것을 가리지 못한다(검색만 하는 계획 19건에 최대 0.010, 2026-10-13).
      * **기본 꺼짐.** 근거(2026-10-03): 의도 기준 라벨 60건에서 미디어 요청 최저 0.755 · 비미디어 최고 0.407 로 겹치지 않았고
      * 임계 0.05 에서 놓친 미디어 요청 0/28, 생략 가능한 단순 턴 23/32. 다만 표본이 손으로 만든 것이고 실사용 셰도우 기록이
      * 10건뿐이라, 운영 기록으로 놓침 0 을 확인한 뒤 켠다. 첨부·진행 중 작업이 있는 턴은 항상 Planner 로 보낸다.
@@ -54,25 +56,42 @@ export const MEDIA_GATE = {
 export const SEARCH_GATE = {
     /** 기록 on/off. 결정 모델이 로컬 카탈로그에 없으면 켜져 있어도 호출하지 않는다. ORCHESTRATOR_SEARCH_GATE_SHADOW_ENABLED */
     SHADOW_ENABLED: process.env.ORCHESTRATOR_SEARCH_GATE_SHADOW_ENABLED !== 'false',
+    /**
+     * Planner 생략에 쓰는 기준 — 미디어 판정과 **함께** 이 값 미만이어야 생략한다(MEDIA_GATE.SKIP_ENABLED 가 켜졌을 때만).
+     * 근거(2026-10-13 세 환경 뒤늦은 판정, 원문이 있는 실행 192건): "검색 < 0.1 · 미디어 < 0.05" 에서 22% 생략·놓침 0,
+     * 0.2 로 올리면 32%·놓침 1(앞 대화에 기대는 후속 문장). ORCHESTRATOR_SEARCH_GATE_SKIP_THRESHOLD
+     */
+    SKIP_THRESHOLD: Number(process.env.ORCHESTRATOR_SEARCH_GATE_SKIP_THRESHOLD) || 0.1,
     /** 어댑터에 묻는 질문(영문 고정 — 어댑터 학습 형식) */
     QUESTION: 'Does answering this request require looking up current or factual information on the web?',
 } as const;
 
 /**
- * 근거 게이트 — "이 답이 그 턴의 검색 출처에 근거했는가" 판정. **기록 전용**이다: 답을 저장한 뒤에 돌고
+ * 근거 게이트 — "답의 인용 문장이 그 문장이 인용한 출처에 근거했는가" 판정. **기록 전용**이다: 답을 저장한 뒤에 돌고
  * `chat_grounding_gate_log` 에 남을 뿐 답을 바꾸거나 막지 않는다(C형 후단 판정, fail-open).
- * 근거(2026-10-13): 검색은 맞았는데 답은 기억으로 지어낸 사례에서 맞는 답 0.919 · 지어낸 답 0.011·0.006 (손으로 만든 3문장).
- * 기준값과 걸렸을 때의 처리(경고·재종합)는 기록을 본 뒤 정한다.
+ *
+ * 문장 단위로 묻는다. 처음에는 답 전체와 출처 전체를 한 번에 물었는데(186) 운영 기록 16건이 0.26~0.66 에 몰려 구분이
+ * 없었다. 인용 문장 × 인용한 출처로 바꾸자 세 환경 108짝에서 맞는 짝 중앙 0.47 · 틀린 짝 중앙 0.13(AUROC 0.82)이 나왔고,
+ * 0.1 미만으로 걸린 맞는 짝 2건은 실제로 잘못된 인용이었다(2026-10-13 뒤늦은 판정). 표본이 작아 기준값은 잠정이다.
+ * 한계: 출처 번호를 인용하지 않은 답은 확인하지 못한다. 같은 문서의 다른 대목을 인용한 "조금 틀린 인용"은 높게 나온다.
  */
 export const GROUNDING_GATE = {
     /** 기록 on/off. 출처가 있는 답에만 돈다. CHAT_GROUNDING_GATE_SHADOW_ENABLED */
     SHADOW_ENABLED: process.env.CHAT_GROUNDING_GATE_SHADOW_ENABLED !== 'false',
-    /** 상태에 싣는 출처(번호·제목·요약) 상한(자). CHAT_GROUNDING_GATE_SOURCES_MAX_CHARS */
-    SOURCES_MAX_CHARS: parseInt(process.env.CHAT_GROUNDING_GATE_SOURCES_MAX_CHARS || '4000', 10),
-    /** 상태에 싣는 답 앞부분 상한(자) — 결론이 앞에 온다. CHAT_GROUNDING_GATE_ANSWER_MAX_CHARS */
-    ANSWER_MAX_CHARS: parseInt(process.env.CHAT_GROUNDING_GATE_ANSWER_MAX_CHARS || '1500', 10),
+    /** 답 하나에서 확인하는 인용 문장 수 상한 — 판정 호출 수의 상한이기도 하다. CHAT_GROUNDING_GATE_MAX_CLAIMS */
+    MAX_CLAIMS: parseInt(process.env.CHAT_GROUNDING_GATE_MAX_CLAIMS || '8', 10),
+    /** 한 문장이 여러 출처를 인용했을 때 확인하는 출처 수 */
+    MAX_SOURCES_PER_CLAIM: 2,
+    /** 확인 대상 문장의 최소 길이(자) — 그보다 짧으면 주장으로 보지 않는다. 한국어는 "유효기간은 3년입니다"(11자)도 주장이다 */
+    CLAIM_MIN_CHARS: 8,
+    /** 상태에 싣는 문장 상한(자) */
+    CLAIM_MAX_CHARS: 400,
+    /** 상태에 싣는 출처 요약 상한(자) */
+    SNIPPET_MAX_CHARS: 1200,
+    /** 이 확률 미만이면 "근거 없는 인용"으로 센다(low_count). **잠정값** — 기록을 본 뒤 고친다. CHAT_GROUNDING_GATE_LOW_THRESHOLD */
+    LOW_THRESHOLD: Number(process.env.CHAT_GROUNDING_GATE_LOW_THRESHOLD) || 0.1,
     /** 어댑터에 묻는 질문(영문 고정 — 어댑터 학습 형식) */
-    QUESTION: 'Is the answer supported by the search results?',
+    QUESTION: 'Is the claim supported by the source?',
 } as const;
 
 export type TaskGateMode = 'off' | 'shadow' | 'on';

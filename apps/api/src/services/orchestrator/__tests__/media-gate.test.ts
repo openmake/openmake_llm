@@ -39,9 +39,12 @@ describe('runMediaGateShadow', () => {
 });
 
 describe('shouldSkipPlanner', () => {
+    const media = (p: number) => ({ gateModel: 'm', gatePTrue: p });
+    const search = (p: number) => ({ searchGatePTrue: p });
+
     it('기본값(꺼짐)에서는 판정이 아무리 낮아도 생략하지 않는다', async () => {
         const { shouldSkipPlanner } = await import('../media-gate');
-        expect(shouldSkipPlanner({ gateModel: 'm', gatePTrue: 0.0001 }, 0)).toBe(false);
+        expect(shouldSkipPlanner(media(0.0001), search(0.0001), 0)).toBe(false);
     });
 
     describe('켰을 때', () => {
@@ -53,18 +56,22 @@ describe('shouldSkipPlanner', () => {
         });
         afterAll(() => { delete process.env.ORCHESTRATOR_GATE_SKIP_ENABLED; jest.resetModules(); });
 
-        it('임계 미만이고 첨부가 없으면 생략한다', () => {
-            expect(skip({ gateModel: 'm', gatePTrue: 0.01 }, 0)).toBe(true);
+        it('미디어·검색 판정이 둘 다 임계 미만이고 첨부가 없으면 생략한다', () => {
+            expect(skip(media(0.01), search(0.05), 0)).toBe(true);
         });
-        it('임계 이상이면 Planner 로 보낸다', () => {
-            expect(skip({ gateModel: 'm', gatePTrue: 0.2 }, 0)).toBe(false);
+        it('미디어가 임계 이상이면 Planner 로 보낸다', () => {
+            expect(skip(media(0.2), search(0.01), 0)).toBe(false);
+        });
+        it('검색이 임계 이상이면 Planner 로 보낸다 — Planner 가 실제로 정하는 것은 대부분 검색 여부다', () => {
+            expect(skip(media(0.001), search(0.15), 0)).toBe(false);
+        });
+        it('둘 중 하나라도 판정이 없으면(꺼짐·실패) Planner 로 보낸다', () => {
+            expect(skip(media(0.001), undefined, 0)).toBe(false);
+            expect(skip(media(0.001), { searchGateMs: 3000, searchGateError: 'timeout' }, 0)).toBe(false);
+            expect(skip(undefined, search(0.01), 0)).toBe(false);
         });
         it('첨부·진행 중 작업이 있으면 항상 Planner 로 보낸다', () => {
-            expect(skip({ gateModel: 'm', gatePTrue: 0.001 }, 1)).toBe(false);
-        });
-        it('판정이 없거나 실패했으면 Planner 로 보낸다', () => {
-            expect(skip(undefined, 0)).toBe(false);
-            expect(skip({ gateModel: 'm', gateError: 'timeout' }, 0)).toBe(false);
+            expect(skip(media(0.001), search(0.001), 1)).toBe(false);
         });
     });
 });
