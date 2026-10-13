@@ -307,7 +307,7 @@ export async function handleChatMessage(
 
         // ChatRequestHandler.processChat으로 통합 처리
         const result = await ChatRequestHandler.processChat({
-            message, originalMessage: rawMessage,
+            message, originalMessage: rawMessage, taskSuggestionDeliverable: true,
             model: selectedModel, nodeId,
             history,
             images: pdfVision.images.length > 0 ? [...(images ?? []), ...pdfVision.images] : images,
@@ -457,6 +457,7 @@ export async function handleChatMessage(
             messageId,
             metrics: { tokensPerSec, tokenCount },
             ...(cleanedContent !== undefined ? { cleanedContent } : {}),
+            ...(result.taskSuggestion ? { taskSuggestion: result.taskSuggestion } : {}),
         });
 
         // 답변 검증 (선택) — done 이후 judge 모델이 1회 점검하고 **지적만** 보낸다(자동 수정 없음).

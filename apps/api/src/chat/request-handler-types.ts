@@ -115,6 +115,8 @@ export interface ChatRequestParams {
     userContext: ChatUserContext;
     /** API Key 인증 요청 시 키 ID */
     apiKeyId?: string;
+    /** 이 호출 경로가 작업 게이트 제안(ChatResult.taskSuggestion)을 클라이언트에 실어 보낸다 — 웹소켓·v1 비스트리밍만 true. 미지정은 제안 없음 */
+    taskSuggestionDeliverable?: boolean;
     /** 슬래시 확장 **전** 원문 — 언어 감지용(확장문은 스킬 본문 언어가 질문 언어를 덮는다). 미전달 시 message 사용 */
     originalMessage?: string;
     /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
@@ -222,6 +224,11 @@ export interface ChatResult {
     finish_reason?: 'stop' | 'tool_calls';
     /** 경로 분기 측정 메타 (TTFB 분석용, 일반 채팅 응답에만 포함) */
     routingMeta?: RoutingMeta;
+    /**
+     * 작업 게이트 제안 — 이 요청은 여러 단계의 작업(agent-task)으로 처리하는 편이 낫다는 판정.
+     * CHAT_TASK_GATE_MODE=on 이고 확률이 기준 이상일 때만 실린다 (chat/task-gate-session.ts).
+     */
+    taskSuggestion?: { pTrue: number };
     /**
      * Artifacts (2026-05-26): 응답에서 추출된 artifact 목록.
      * - 명시적 `<artifact>` 태그 → 그대로 변환

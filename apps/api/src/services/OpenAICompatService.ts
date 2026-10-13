@@ -76,7 +76,7 @@ interface OpenAIChatCompletionResponse {
     model: string;
     choices: Array<{
         index: number;
-        message: { role: 'assistant'; content: string | null; tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>; artifacts?: OpenAICompatArtifact[] };
+        message: { role: 'assistant'; content: string | null; tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>; artifacts?: OpenAICompatArtifact[]; /** OpenMake 확장 — 작업 게이트 제안(이 요청은 agent-task 로 처리하는 편이 낫다는 판정 확률) */ task_suggestion?: { p_true: number } };
         finish_reason: 'stop' | 'tool_calls' | 'length' | null;
     }>;
     usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
@@ -192,6 +192,7 @@ export class OpenAICompatService {
         completionTokens: number;
         toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
         artifacts?: OpenAICompatArtifact[];
+        taskSuggestion?: { pTrue: number };
     }): OpenAIChatCompletionResponse {
         return {
             id: params.id,
@@ -206,6 +207,7 @@ export class OpenAICompatService {
                         content: params.content,
                         ...(params.toolCalls && params.toolCalls.length > 0 ? { tool_calls: params.toolCalls } : {}),
                         ...(params.artifacts && params.artifacts.length > 0 ? { artifacts: params.artifacts } : {}),
+                        ...(params.taskSuggestion ? { task_suggestion: { p_true: params.taskSuggestion.pTrue } } : {}),
                     },
                     finish_reason: params.finishReason,
                 },

@@ -43,3 +43,30 @@ export const MEDIA_GATE = {
     /** 어댑터에 묻는 질문(영문 고정 — 어댑터 학습 형식) */
     QUESTION: 'Does the user want an image, music/audio, or video to be generated or edited in this turn?',
 } as const;
+
+export type TaskGateMode = 'off' | 'shadow' | 'on';
+
+/** PURE: 환경 변수 값 → 모드. 없거나 모르는 값은 off (조용히 켜지지 않게) */
+export function parseTaskGateMode(value: string | undefined): TaskGateMode {
+    return value === 'shadow' || value === 'on' ? value : 'off';
+}
+
+/** PURE: 0~1 사이 숫자만 받는다 — 그 밖은 기본값 */
+export function parseTaskGateThreshold(value: string | undefined, fallback = 0.9): number {
+    if (value === undefined || value.trim() === '') return fallback;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? n : fallback;
+}
+
+/**
+ * 작업 게이트 — "이 채팅 요청은 여러 단계의 작업(agent-task)으로 처리하는 편이 나은가" 판정.
+ * 채팅 답과 나란히 돌고 결과는 `chat_task_gate_log` 에 남는다. 채팅의 경로·모델·도구 노출은 바꾸지 않는다.
+ */
+export const TASK_GATE = {
+    /** off 판정 안 함(기본) · shadow 판정하고 기록만 · on 기록하고 기준 이상이면 응답에도 싣는다. CHAT_TASK_GATE_MODE */
+    MODE: parseTaskGateMode(process.env.CHAT_TASK_GATE_MODE),
+    /** on 에서 응답에 싣는 기준 확률. **실측 없이 정한 값** — 셰도우 기록을 본 뒤 고친다. CHAT_TASK_GATE_THRESHOLD */
+    THRESHOLD: parseTaskGateThreshold(process.env.CHAT_TASK_GATE_THRESHOLD),
+    /** 어댑터에 묻는 질문(영문 고정 — 어댑터 학습 형식) */
+    QUESTION: 'Does this request require multi-step work — such as creating or editing files, running commands or code, or operating a browser — rather than a single direct reply?',
+} as const;
