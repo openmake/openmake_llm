@@ -46,6 +46,21 @@ describe('textExecutor — 머리글 언어', () => {
     });
 });
 
+describe('textExecutor — 검색 결과에 근거하라는 규칙', () => {
+    it('앞선 결과에 웹 검색이 있으면 그 사실만 쓰고 없는 것은 확인되지 않음으로 적으라고 싣는다 — 실측(2026-10-13): 요약만 받고 나머지를 지어냈다', async () => {
+        await run('ko');
+        expect(userContent()).toMatch(/검색 결과에 있는 사실만/);
+        expect(userContent()).toMatch(/확인되지 않음/);
+    });
+
+    it('검색이 아닌 앞선 결과(이미지 설명 등)에는 싣지 않는다 — 창작 작업을 막지 않는다', async () => {
+        const task = { id: 't2', capability: 'text.reason', instruction: 'Write a caption', refs: ['t1'], attachments: [] };
+        const results = new Map([['t1', { taskId: 't1', capability: 'vision.describe', ok: true, text: '고양이 사진', media: [] }]]);
+        await textExecutor(task as never, { lang: 'ko', userMessage: 'x', results, attachments: new Map(), targets: new Map([['t2', target]]) } as never);
+        expect(userContent()).not.toMatch(/검색 결과에 있는 사실만/);
+    });
+});
+
 describe('textExecutor — 추론 끄기', () => {
     function body(t: object) {
         const task = { id: 't2', capability: 'text.reason', instruction: 'x', refs: [], attachments: [] };

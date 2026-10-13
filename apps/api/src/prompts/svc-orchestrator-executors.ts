@@ -21,6 +21,19 @@ export function getTextWorkerSystemPrompt(lang: string): string {
     return lang === 'ko' ? TEXT_WORKER_KO : TEXT_WORKER_EN;
 }
 
+/**
+ * 앞선 결과에 웹 검색이 있을 때 text 작업자에게 붙이는 규칙 — 검색 요약은 짧아서(제목+요약) 빈 곳을 기억으로 채우면
+ * 그럴듯한 틀린 보고서가 된다(실측 2026-10-13: 근거 법·지정 기관을 지어냄).
+ */
+const SEARCH_GROUNDING_KO =
+    '검색 결과에 있는 사실만 근거로 쓰세요. 검색 결과에 없는 기관명·법령명·수치·날짜는 지어내지 말고 "확인되지 않음"으로 적으세요.';
+const SEARCH_GROUNDING_EN =
+    'Use only facts found in the search results. Do not invent names, laws, figures or dates that are not there — write "not confirmed" instead.';
+
+export function getSearchGroundingRule(lang: string): string {
+    return lang === 'ko' ? SEARCH_GROUNDING_KO : SEARCH_GROUNDING_EN;
+}
+
 /** vision.ocr 전사 system prompt */
 const OCR_KO =
     '당신은 OCR 기록자입니다. 이미지 속 글자·표·코드를 보이는 그대로, 순서대로, 빠짐없이 전사하세요. 해석·요약 금지. 표는 마크다운 표로.';

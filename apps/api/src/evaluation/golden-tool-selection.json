@@ -114,6 +114,16 @@
       ]
     },
     {
+      "id": "tool-ws-011",
+      "query": "벤처기업확인기관에 대해서 조사해서 보고해",
+      "expectedTool": "web_search",
+      "language": "ko",
+      "tags": [
+        "web_search",
+        "research-request"
+      ]
+    },
+    {
       "id": "tool-url-001",
       "query": "https://example.com/blog/post 이 글 요약해줘",
       "expectedTool": "extract_webpage",
