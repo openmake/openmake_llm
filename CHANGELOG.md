@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.98.0](https://github.com/openmake/openmake_llm/compare/v1.97.0...v1.98.0) (2026-10-13)
+
+
+### ✨ 기능
+
+* **discord-bot:** /task — 디스코드에서 에이전트 작업 시작·승인·취소 (기본 꺼짐) ([61b41ec](https://github.com/openmake/openmake_llm/commit/61b41ec4fcfdc337fb04dd007ee0e57a82b8bd30))
+* **discord-bot:** /task 설정 (기본 꺼짐) ([8981a30](https://github.com/openmake/openmake_llm/commit/8981a305d34579e03f543d2b9f726d0b9706dd1d))
+* **discord-bot:** /task 조정자 — 권한·채널당 한 작업·승인 주인 확인 ([c9567d7](https://github.com/openmake/openmake_llm/commit/c9567d770c469a76c1c56e39947f800c286ea872))
+* **discord-bot:** /task·/task-cancel 명령과 승인 버튼 연결 ([e035960](https://github.com/openmake/openmake_llm/commit/e0359607af1dc1e5db1f411e0e8e03670b75996e))
+* **discord-bot:** 에이전트 작업 API 클라이언트 ([bfe6ba8](https://github.com/openmake/openmake_llm/commit/bfe6ba8912d899110b646f7aa07e36a87854063a))
+* **discord-bot:** 작업 지켜보기 — 진행 표시·승인 요청·끝 처리 ([abc3513](https://github.com/openmake/openmake_llm/commit/abc3513f04fb06ec825a098b795ddbb8684aa4c4))
+
+
+### 🐛 버그 수정
+
+* **discord-bot:** /task 검토 반영 — 전송 실패 시 승인 재게시·결과 안내, 글 못 쓰는 채널 사전 확인, 연결 테스트 ([981df24](https://github.com/openmake/openmake_llm/commit/981df24dd1d5bab0685c02222e0c6d2dce511446))
+
 ## [1.97.0](https://github.com/openmake/openmake_llm/compare/v1.96.0...v1.97.0) (2026-10-13)
 
 
