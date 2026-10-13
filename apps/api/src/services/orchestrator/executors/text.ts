@@ -6,7 +6,7 @@
 import { CAPABILITY_LIMITS, ORCHESTRATOR } from '../../../config/capabilities';
 import { resolveCapabilityTarget } from '../capability-resolver';
 import { callJson, extractChatText, extractUsage } from '../http-call';
-import { getTextWorkerSystemPrompt } from '../../../prompts/svc-orchestrator-executors';
+import { getSearchGroundingRule, getTextWorkerSystemPrompt } from '../../../prompts/svc-orchestrator-executors';
 import { refsText, type CapabilityExecutor } from '../types';
 import { buildExtraBody } from '../../../llm/reasoning-adapter';
 
@@ -21,6 +21,7 @@ export const textExecutor: CapabilityExecutor = async (task, ctx) => {
         task.instruction ? `${ko ? '## 지시' : '## Instruction'}\n${task.instruction}` : '',
         `${ko ? '## 사용자 원문' : '## User message'}\n${ctx.userMessage}`,
         refs ? `${ko ? '## 앞선 작업 결과' : '## Earlier task results'}\n${refs}` : '',
+        refs && task.refs.some((r) => ctx.results.get(r)?.capability === 'web.search') ? getSearchGroundingRule(ctx.lang) : '',
     ].filter(Boolean).join('\n\n');
     const body: Record<string, unknown> = {
         model: target.model,
