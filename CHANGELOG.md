@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.100.1](https://github.com/openmake/openmake_llm/compare/v1.100.0...v1.100.1) (2026-10-13)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** 검색 결과만 받아 초안을 쓰는 텍스트 작업을 계획에서 뺀다 ([4b91125](https://github.com/openmake/openmake_llm/commit/4b911250c932e1ffdec773100574a42aba0ca168))
+* **orchestrator:** 검색 뒤 초안 작업 제거, 내부 이름 노출 방지, Planner 생략 때 판정 대기 상한 ([acf909e](https://github.com/openmake/openmake_llm/commit/acf909ec2c64d25d859b584fdcc32de8a7859fa8))
+* **orchestrator:** 작업 결과의 내부 이름이 답에 새지 않게, Planner 생략 때 판정 대기 상한 ([82dee7c](https://github.com/openmake/openmake_llm/commit/82dee7c70dfb6a9edda7d9967c145660832be6ca))
+
 ## [1.100.0](https://github.com/openmake/openmake_llm/compare/v1.99.0...v1.100.0) (2026-10-13)
 
 
