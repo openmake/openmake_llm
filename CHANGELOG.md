@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.100.2](https://github.com/openmake/openmake_llm/compare/v1.100.1...v1.100.2) (2026-10-13)
+
+
+### 🐛 버그 수정
+
+* **web-search:** 계획기 지시문을 그대로 검색어로 쓰지 않는다 ([6cfe468](https://github.com/openmake/openmake_llm/commit/6cfe46878a99710521094fc617b9ff3029da5f81))
+* **web-search:** 계획기 지시문을 그대로 검색어로 쓰지 않는다 ([7075212](https://github.com/openmake/openmake_llm/commit/70752126b4fac887a8b6052d9778dfa3a14bcd0b))
+
 ## [1.100.1](https://github.com/openmake/openmake_llm/compare/v1.100.0...v1.100.1) (2026-10-13)
 
 
