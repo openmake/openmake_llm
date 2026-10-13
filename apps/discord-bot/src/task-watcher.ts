@@ -3,7 +3,7 @@
  * 디스코드 호출은 주입받은 화면(WatchUi)으로만 한다(테스트와 진입점이 각자 구현을 준다).
  * 불변식: 화면 쪽 오류나 일시적인 조회 실패가 지켜보기를 죽이지 않는다.
  */
-import type { PendingApproval, TaskClient, TaskSnapshot } from './task-client';
+import { TaskApiError, type PendingApproval, type TaskClient, type TaskSnapshot } from './task-client';
 
 export interface WatchUi {
     /** 진행 표시 메시지 — 처음엔 올리고 그 뒤로는 고친다 */
@@ -30,7 +30,8 @@ export interface WatchOptions extends WatchInfo {
     now?: () => number;
 }
 
-export type WatchOutcome = 'completed' | 'failed' | 'cancelled' | 'timeout' | 'unreachable';
+/** gone = 작업이 서버에서 사라짐(삭제) */
+export type WatchOutcome = 'completed' | 'failed' | 'cancelled' | 'timeout' | 'unreachable' | 'gone';
 
 const TERMINAL_STATUSES: readonly string[] = ['completed', 'failed', 'cancelled'];
 const DEFAULT_MAX_CONSECUTIVE_FAILURES = 10;
@@ -50,9 +51,11 @@ const STATUS_HEAD: Record<string, string> = {
     cancelled: '🛑 작업 취소됨',
 };
 
-const MSG_UNREACHABLE = '⚠️ 서버에 연결하지 못해 이 작업을 더 지켜보지 않습니다. 작업 상태는 웹의 작업 화면에서 확인하세요.';
+const MSG_UNREACHABLE = '⚠️ 서버에 연결하지 못해 이 작업을 더 지켜보지 않습니다. 작업 상태는 웹의 작업 화면에서 확인하세요. 멈추려면 /task-cancel 을 쓰세요.';
+const MSG_GONE = 'ℹ️ 이 작업을 서버에서 찾을 수 없습니다(삭제됐을 수 있습니다). 지켜보기를 끝냅니다.';
+const MSG_AUTH_REJECTED = '⚠️ 서버가 봇의 인증을 거절해 이 작업을 더 지켜보지 않습니다. 봇 관리자에게 알려 주세요. 작업 상태는 웹의 작업 화면에서 확인하세요.';
 const MSG_FINAL_INCOMPLETE = '⚠️ 결과를 모두 올리지 못했습니다. 전체 결과는 웹의 작업 화면에서 확인하세요.';
-const MSG_WATCH_TIMEOUT = '⏱️ 지켜보는 시간이 끝났습니다. 작업은 계속 진행 중입니다 — 웹의 작업 화면에서 확인하세요.';
+const MSG_WATCH_TIMEOUT = '⏱️ 지켜보는 시간이 끝났습니다. 작업은 계속 진행 중입니다 — 웹의 작업 화면에서 확인하세요. 멈추려면 /task-cancel 을 쓰세요.';
 
 const truncate = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max)}…` : text);
 
@@ -70,9 +73,9 @@ export function formatFinal(snapshot: TaskSnapshot): string {
     if (snapshot.status === 'failed') return `❌ 작업이 실패했습니다: ${snapshot.error ?? '사유 없음'}`;
     if (snapshot.status === 'cancelled') return '🛑 작업이 취소되었습니다.';
     const raw = snapshot.result ?? '';
-    const hadArtifact = ARTIFACT_PLACEHOLDER.test(raw);
-    ARTIFACT_PLACEHOLDER.lastIndex = 0;
-    const body = raw.replace(ARTIFACT_PLACEHOLDER, '').trim() || '(결과 본문 없음)';
+    const stripped = raw.replace(ARTIFACT_PLACEHOLDER, '');
+    const hadArtifact = stripped !== raw;
+    const body = stripped.trim() || '(결과 본문 없음)';
     return `✅ 작업이 끝났습니다.\n\n${body}${hadArtifact ? '\n\n📎 산출물은 웹의 작업 화면에서 확인하세요.' : ''}`;
 }
 
@@ -118,6 +121,17 @@ export async function watchTask(
             snapshot = await client.getTask(taskId);
             failures = 0;
         } catch (e) {
+            // 404·401·403 은 기다려도 풀리지 않는다 — 일시 실패로 세지 않고 바로 알린다
+            const status = e instanceof TaskApiError ? e.status : 0;
+            if (status === 404) {
+                await safely('안내 전송', () => ui.postFinal(MSG_GONE));
+                return 'gone';
+            }
+            if (status === 401 || status === 403) {
+                console.warn(`[discord-bot] 작업 ${taskId} 조회가 인증에서 거절됨(${status}) — 지켜보기 종료`);
+                await safely('안내 전송', () => ui.postFinal(MSG_AUTH_REJECTED));
+                return 'unreachable';
+            }
             failures += 1;
             if (failures >= maxFailures) {
                 console.warn(`[discord-bot] 작업 ${taskId} 조회 연속 ${failures}회 실패 — 지켜보기 종료:`, e instanceof Error ? e.message : e);
@@ -130,8 +144,8 @@ export async function watchTask(
 
         const statusText = formatStatus(snapshot, opts);
         if (statusText !== lastStatusText) {
-            await safely('진행 표시', () => ui.updateStatus(statusText));
-            lastStatusText = statusText;
+            // 올리는 데 성공했을 때만 기억한다 — 실패하면 내용이 같아도 다음 조회에서 다시 시도한다
+            if (await safely('진행 표시', () => ui.updateStatus(statusText))) lastStatusText = statusText;
         }
 
         if (isTerminalStatus(snapshot.status)) {
