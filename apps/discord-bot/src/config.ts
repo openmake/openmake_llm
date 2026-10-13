@@ -33,6 +33,19 @@ function parseNonNegativeIntEnv(value: string | undefined, defaultValue: number)
     return Number.isFinite(n) && n >= 0 ? n : defaultValue;
 }
 
+export type TaskExecutor = 'sandbox' | 'local';
+export type TaskApprovalPolicy = 'all' | 'high-risk' | 'none';
+
+/** PURE: 작업 실행 위치 — local 만 그대로, 그 밖(오타 포함)은 서버 격리 환경 */
+export function parseTaskExecutor(value: string | undefined): TaskExecutor {
+    return value === 'local' ? 'local' : 'sandbox';
+}
+
+/** PURE: 승인 방식 — 모르는 값은 가장 엄격한 all(전부 승인)로 */
+export function parseTaskApprovalPolicy(value: string | undefined): TaskApprovalPolicy {
+    return value === 'high-risk' || value === 'none' ? value : 'all';
+}
+
 /**
  * 서버에서 받아온 설정을 덮어쓸 수 있도록 mutable 로 둔다 — 값 해석 우선순위는
  * **서버(system_settings DB > 서버 .env) > 봇 프로세스 .env > 기본값**.
@@ -62,6 +75,18 @@ export const config = {
     allowedBotIds: parseList(process.env.DISCORD_ALLOWED_BOT_IDS),
     /** 사람 메시지 없이 봇에게 연속으로 답하는 횟수 상한 (채널별) */
     botExchangeMax: parseIntEnv(process.env.DISCORD_BOT_EXCHANGE_MAX, 4),
+
+    // ── 에이전트 작업 (/task, 기본 꺼짐) ───────────────────────
+    /** /task 를 쓸 수 있는 디스코드 사용자 id 목록. 비어 있으면 기능 꺼짐(명령도 등록하지 않는다) */
+    taskAllowedUsers: parseList(process.env.DISCORD_TASK_ALLOWED_USERS),
+    /** 작업 실행 위치 — sandbox(서버 격리 환경) | local(Companion 이 연결된 기기) */
+    taskExecutor: parseTaskExecutor(process.env.DISCORD_TASK_EXECUTOR),
+    /** 이 봇이 시작한 작업의 승인 방식 — all(전부 승인) | high-risk | none */
+    taskApprovalPolicy: parseTaskApprovalPolicy(process.env.DISCORD_TASK_APPROVAL_POLICY),
+    /** 작업 상태 조회 간격(ms) */
+    taskPollMs: parseIntEnv(process.env.DISCORD_TASK_POLL_MS, 5_000),
+    /** 한 작업을 지켜보는 최대 시간(ms) — 넘으면 지켜보기만 끝낸다(작업은 계속 돈다) */
+    taskWatchMaxMs: parseIntEnv(process.env.DISCORD_TASK_WATCH_MAX_MS, 2 * 60 * 60 * 1000),
 
     // ── 세션 (사용자별 격리, /reset 까지 유지) ─────────────────
     /** 세션당 보관할 최대 대화 턴 수 (user+assistant 쌍) */
