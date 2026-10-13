@@ -31,7 +31,7 @@ it('같은 레벨은 병렬, 다음 레벨은 앞 결과를 본다', async () =>
     behaviors.a = async () => { order.push('a-start'); await new Promise((r) => setTimeout(r, 30)); order.push('a-end'); return { ok: true, text: 'A', media: [] }; };
     behaviors.b = async () => { order.push('b-start'); return { ok: true, text: 'B', media: [] }; };
     const p = plan({ complexity: 'multi', tasks: [
-        { id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }, { id: 'c', capability: 'text.reason', input: { refs: ['a', 'b'] } },
+        { id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }, { id: 'c', capability: 'text.code', input: { refs: ['a', 'b'] } },
     ] });
     const s = await executePlan(p, ctx());
     expect(order.slice(0, 2).sort()).toEqual(['a-start', 'b-start']); // b 가 a 종료 전에 시작
@@ -42,7 +42,7 @@ it('같은 레벨은 병렬, 다음 레벨은 앞 결과를 본다', async () =>
 it('실패한 부모의 자식은 skipped(호출 없음), 독립 작업은 계속', async () => {
     behaviors.p = async () => { throw new Error('boom'); };
     const p = plan({ complexity: 'multi', tasks: [
-        { id: 'p', capability: 'web.search' }, { id: 'x', capability: 'web.search' }, { id: 'child', capability: 'text.reason', depends_on: ['p'] },
+        { id: 'p', capability: 'web.search' }, { id: 'x', capability: 'web.search' }, { id: 'child', capability: 'text.code', depends_on: ['p'] },
     ] });
     const s = await executePlan(p, ctx());
     expect(calls).toEqual(expect.arrayContaining(['p', 'x'])); expect(calls).not.toContain('child');
@@ -70,7 +70,7 @@ it('pending(영상 미완료)은 ok=false·status=pending — 자식은 실행�
 it('실행 중 취소되면 나머지는 skipped·cancelled=true, 취소 후 새 레벨은 시작하지 않는다', async () => {
     const ac = new AbortController();
     behaviors.slow = async () => { await new Promise((r) => setTimeout(r, 20)); ac.abort(); return { ok: true, text: 's', media: [] }; };
-    const p = plan({ complexity: 'multi', tasks: [{ id: 'slow', capability: 'web.search' }, { id: 'next', capability: 'text.reason', depends_on: ['slow'] }] });
+    const p = plan({ complexity: 'multi', tasks: [{ id: 'slow', capability: 'web.search' }, { id: 'next', capability: 'text.code', depends_on: ['slow'] }] });
     const s = await executePlan(p, ctx({ signal: ac.signal }));
     expect(s.cancelled).toBe(true);
     expect(calls).toEqual(['slow']);

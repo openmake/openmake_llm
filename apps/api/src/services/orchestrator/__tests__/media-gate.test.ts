@@ -1,5 +1,5 @@
 /** 미디어 게이트(셰도우) — 판정 입력 구성과 실행 조건 고정 (실제 모델 호출 없음) */
-import { buildMediaGateState, runMediaGateShadow, runSearchGateShadow } from '../media-gate';
+import { buildMediaGateState, gatesWithin, runMediaGateShadow, runSearchGateShadow } from '../media-gate';
 import { DECISION, SEARCH_GATE } from '../../../config/decision';
 
 describe('buildMediaGateState', () => {
@@ -94,5 +94,21 @@ describe('runSearchGateShadow — "웹 검색이 필요한가" 기록 전용 판
     it('판정 실패는 사유만 싣는다 — 예외를 올리지 않는다', async () => {
         const r = await runSearchGateShadow({ message: 'x', attachmentKinds: [] }, { modelAvailable: () => true, decide: async () => ({ pTrue: null, ms: 3000, error: 'timeout' }) });
         expect(r).toEqual({ searchGateMs: 3000, searchGateError: 'timeout' });
+    });
+});
+
+describe('gatesWithin — Planner 생략을 위해 판정을 기다리는 시간의 상한', () => {
+    const later = <T>(value: T, ms: number) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
+
+    it('두 판정이 시간 안에 끝나면 그대로 돌려준다', async () => {
+        const r = await gatesWithin(later({ gateModel: 'm', gatePTrue: 0.01 }, 5), later({ searchGatePTrue: 0.02 }, 5), 200);
+        expect(r).toEqual([{ gateModel: 'm', gatePTrue: 0.01 }, { searchGatePTrue: 0.02 }]);
+    });
+
+    it('하나라도 늦으면 기다리지 않고 둘 다 없음으로 돌려준다 — 엔진이 긴 입력을 읽는 동안 판정이 수 초 밀린다(실측 2026-10-13)', async () => {
+        const started = Date.now();
+        const r = await gatesWithin(later({ gateModel: 'm', gatePTrue: 0.01 }, 5), later({ searchGatePTrue: 0.02 }, 2000), 50);
+        expect(r).toEqual([undefined, undefined]);
+        expect(Date.now() - started).toBeLessThan(500);
     });
 });
