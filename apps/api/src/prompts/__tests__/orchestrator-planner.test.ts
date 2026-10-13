@@ -12,3 +12,11 @@ it.each([
     expect(prompt).toMatch(limit);
     expect(prompt).toMatch(noCopy);
 });
+
+// 2026-10-13: web.search 의 instruction 이 "Search for …" 같은 지시문으로 나와 그대로 검색어가 됐다.
+it.each([
+    ['ko', /web\.search 의 instruction 은 검색창에 넣을 검색어/],
+    ['en', /web\.search instruction is the search query itself/],
+])('%s 프롬프트는 web.search 지시문을 검색어로 쓰라고 한다', (lang, rule) => {
+    expect(getPlannerSystemPrompt(lang)).toMatch(rule);
+});
