@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.100.3](https://github.com/openmake/openmake_llm/compare/v1.100.2...v1.100.3) (2026-10-13)
+
+
+### 🐛 버그 수정
+
+* **api-client:** 네트워크 오류로 끊긴 멱등 GET 을 한 번 다시 보낸다 ([61e1fe5](https://github.com/openmake/openmake_llm/commit/61e1fe5a4f3745f1acccde593dbf424e233c6ac3))
+* **api-client:** 네트워크 오류로 끊긴 멱등 GET 을 한 번 다시 보낸다 ([9113222](https://github.com/openmake/openmake_llm/commit/9113222692eecf0586e3272273dd8c671dbc03bf))
+
 ## [1.100.2](https://github.com/openmake/openmake_llm/compare/v1.100.1...v1.100.2) (2026-10-13)
 
 
