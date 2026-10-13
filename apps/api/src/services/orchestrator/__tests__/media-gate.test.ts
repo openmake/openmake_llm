@@ -1,6 +1,6 @@
 /** 미디어 게이트(셰도우) — 판정 입력 구성과 실행 조건 고정 (실제 모델 호출 없음) */
-import { buildMediaGateState, runMediaGateShadow } from '../media-gate';
-import { DECISION } from '../../../config/decision';
+import { buildMediaGateState, runMediaGateShadow, runSearchGateShadow } from '../media-gate';
+import { DECISION, SEARCH_GATE } from '../../../config/decision';
 
 describe('buildMediaGateState', () => {
     it('사용자 메시지와 첨부 종류를 싣는다', () => {
@@ -66,5 +66,26 @@ describe('shouldSkipPlanner', () => {
             expect(skip(undefined, 0)).toBe(false);
             expect(skip({ gateModel: 'm', gateError: 'timeout' }, 0)).toBe(false);
         });
+    });
+});
+
+describe('runSearchGateShadow — "웹 검색이 필요한가" 기록 전용 판정', () => {
+    it('결정 모델이 카탈로그에 없으면 호출하지 않는다(undefined)', async () => {
+        let called = 0;
+        const r = await runSearchGateShadow({ message: 'x', attachmentKinds: [] }, { modelAvailable: () => false, decide: async () => { called++; return { pTrue: 1, ms: 1 }; } });
+        expect(r).toBeUndefined();
+        expect(called).toBe(0);
+    });
+
+    it('미디어 게이트와 같은 상태 문자열에 검색 질문을 묻고, 결과를 검색 게이트 필드로 돌려준다', async () => {
+        const asked: Array<{ state: string; question: string }> = [];
+        const r = await runSearchGateShadow({ message: '오늘 환율 알려줘', attachmentKinds: [] }, { modelAvailable: () => true, decide: async (i) => { asked.push(i); return { pTrue: 0.91, ms: 180 }; } });
+        expect(asked).toEqual([{ state: buildMediaGateState('오늘 환율 알려줘', []), question: SEARCH_GATE.QUESTION }]);
+        expect(r).toEqual({ searchGatePTrue: 0.91, searchGateMs: 180 });
+    });
+
+    it('판정 실패는 사유만 싣는다 — 예외를 올리지 않는다', async () => {
+        const r = await runSearchGateShadow({ message: 'x', attachmentKinds: [] }, { modelAvailable: () => true, decide: async () => ({ pTrue: null, ms: 3000, error: 'timeout' }) });
+        expect(r).toEqual({ searchGateMs: 3000, searchGateError: 'timeout' });
     });
 });
