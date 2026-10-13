@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.99.0](https://github.com/openmake/openmake_llm/compare/v1.98.0...v1.99.0) (2026-10-13)
+
+
+### ✨ 기능
+
+* **decision:** 의사결정 어댑터 기록 전용 판정 2종 — 검색 필요 게이트, 답변 근거 게이트 ([eecf826](https://github.com/openmake/openmake_llm/commit/eecf8263dabd4bf9a02c0adb8e21de684fca4a45))
+* **decision:** 의사결정 어댑터 기록 전용 판정 2종 — 검색 필요 게이트, 답변 근거 게이트 ([50e363f](https://github.com/openmake/openmake_llm/commit/50e363f0e72f8a1b3a541c2d7200dafd1cc0330a))
+
+
+### 🐛 버그 수정
+
+* **discord-bot:** /task 후속 — 명령 등록 실패에 봇이 죽지 않게, 지켜보기 끝난 작업 취소, 404·401 즉시 안내 ([ad57986](https://github.com/openmake/openmake_llm/commit/ad57986acbad2eb5f0385fbb14b400b85a8c61f0))
+* **discord-bot:** /task 후속 — 명령 등록 실패에 봇이 죽지 않게, 지켜보기 끝난 작업 취소, 404·401 즉시 안내 ([ee17bf2](https://github.com/openmake/openmake_llm/commit/ee17bf212b77356072a8c685c626b1bae2a39c38))
+* **orchestrator:** 검색 뒤 보고서가 검색 결과 없이 지어지던 문제 ([7384c3b](https://github.com/openmake/openmake_llm/commit/7384c3b6bd2a75eccb913a9c883a429a2effbeda))
+* **orchestrator:** 검색 뒤 보고서가 검색 결과 없이 지어지던 문제 — 의존 텍스트 작업에 앞 결과 전달, 조사 요청에 웹 검색 노출 ([0aaf732](https://github.com/openmake/openmake_llm/commit/0aaf7327d44f451a1a842843802c2f4b97cab8b5))
+
 ## [1.98.0](https://github.com/openmake/openmake_llm/compare/v1.97.0...v1.98.0) (2026-10-13)
 
 
