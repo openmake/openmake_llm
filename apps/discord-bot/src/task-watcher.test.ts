@@ -142,3 +142,32 @@ test('결과 문구: 산출물 표기는 지우고 안내를 붙인다, 본문�
     assert.equal(formatFinal(snap({ status: 'completed', result: null })), '✅ 작업이 끝났습니다.\n\n(결과 본문 없음)');
     assert.equal(formatFinal(snap({ status: 'failed', error: null })), '❌ 작업이 실패했습니다: 사유 없음');
 });
+
+test('승인 요청 전송이 실패하면 다음 조회에서 다시 올린다 — 실패한 요청을 올린 것으로 치지 않는다', async () => {
+    const a1 = { approvalId: 'a1', taskId: 't1', toolName: 'bash', args: { command: 'ls' } };
+    const { client } = scripted([snap({ status: 'paused' }), snap({ status: 'paused' }), snap({ status: 'paused' }), snap({ status: 'cancelled' })], [[a1]]);
+    let attempts = 0;
+    const posted: string[] = [];
+    const ui: WatchUi = {
+        updateStatus: async () => undefined,
+        postApproval: async (a) => { attempts += 1; if (attempts === 1) throw new Error('rate limited'); posted.push(a.approvalId); },
+        postFinal: async () => undefined,
+    };
+    await watchTask(client, 't1', ui, opts());
+    assert.equal(attempts, 2);
+    assert.deepEqual(posted, ['a1']);
+});
+
+test('결과 전송이 실패하면 짧은 안내를 한 번 더 올린다 — 잘린 결과를 완결된 것처럼 두지 않는다', async () => {
+    const { client } = scripted([snap({ status: 'completed', result: '긴 결과' })]);
+    const finals: string[] = [];
+    let first = true;
+    const ui: WatchUi = {
+        updateStatus: async () => undefined,
+        postApproval: async () => undefined,
+        postFinal: async (t) => { if (first) { first = false; throw new Error('send failed'); } finals.push(t); },
+    };
+    assert.equal(await watchTask(client, 't1', ui, opts()), 'completed');
+    assert.equal(finals.length, 1);
+    assert.match(finals[0], /결과를 모두 올리지 못했습니다/);
+});

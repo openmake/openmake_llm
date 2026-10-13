@@ -51,6 +51,7 @@ const STATUS_HEAD: Record<string, string> = {
 };
 
 const MSG_UNREACHABLE = '⚠️ 서버에 연결하지 못해 이 작업을 더 지켜보지 않습니다. 작업 상태는 웹의 작업 화면에서 확인하세요.';
+const MSG_FINAL_INCOMPLETE = '⚠️ 결과를 모두 올리지 못했습니다. 전체 결과는 웹의 작업 화면에서 확인하세요.';
 const MSG_WATCH_TIMEOUT = '⏱️ 지켜보는 시간이 끝났습니다. 작업은 계속 진행 중입니다 — 웹의 작업 화면에서 확인하세요.';
 
 const truncate = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max)}…` : text);
@@ -96,11 +97,13 @@ export async function watchTask(
     const now = opts.now ?? Date.now;
     const maxFailures = opts.maxConsecutiveFailures ?? DEFAULT_MAX_CONSECUTIVE_FAILURES;
     /** 화면 쪽 오류는 삼킨다 — 디스코드 전송 실패가 지켜보기를 끝내면 승인·결과를 놓친다 */
-    const safely = async (what: string, action: () => Promise<void>): Promise<void> => {
+    const safely = async (what: string, action: () => Promise<void>): Promise<boolean> => {
         try {
             await action();
+            return true;
         } catch (e) {
             console.warn(`[discord-bot] 작업 ${taskId} ${what} 실패 (무시):`, e instanceof Error ? e.message : e);
+            return false;
         }
     };
 
@@ -132,7 +135,10 @@ export async function watchTask(
         }
 
         if (isTerminalStatus(snapshot.status)) {
-            await safely('결과 전송', () => ui.postFinal(formatFinal(snapshot)));
+            // 결과가 중간에 끊기면 잘린 글이 완결된 것처럼 남는다 — 짧은 안내를 한 번 더 올린다
+            if (!(await safely('결과 전송', () => ui.postFinal(formatFinal(snapshot))))) {
+                await safely('결과 안내 전송', () => ui.postFinal(MSG_FINAL_INCOMPLETE));
+            }
             return snapshot.status as WatchOutcome;
         }
 
@@ -140,8 +146,8 @@ export async function watchTask(
             try {
                 for (const approval of await client.listPendingApprovals(taskId)) {
                     if (postedApprovals.has(approval.approvalId)) continue;
-                    postedApprovals.add(approval.approvalId);
-                    await safely('승인 요청 전송', () => ui.postApproval(approval));
+                    // 올리는 데 성공한 요청만 기억한다 — 실패한 요청은 다음 조회에서 다시 올린다(버튼이 없으면 작업이 조용히 멈춘다)
+                    if (await safely('승인 요청 전송', () => ui.postApproval(approval))) postedApprovals.add(approval.approvalId);
                 }
             } catch (e) {
                 console.warn(`[discord-bot] 작업 ${taskId} 승인 대기 조회 실패 (다음 주기에 재시도):`, e instanceof Error ? e.message : e);

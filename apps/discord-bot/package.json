@@ -7,7 +7,7 @@
         "build": "node ../../scripts/tsc7.cjs",
         "dev": "ts-node src/index.ts",
         "start": "node dist/index.js",
-        "test": "node --require ts-node/register --test src/config.test.ts src/bot-conversation.test.ts src/task-config.test.ts src/task-client.test.ts src/task-watcher.test.ts src/task-commands.test.ts"
+        "test": "node --require ts-node/register --test src/config.test.ts src/bot-conversation.test.ts src/task-config.test.ts src/task-client.test.ts src/task-watcher.test.ts src/task-commands.test.ts src/task-discord.test.ts"
     },
     "engines": {
         "node": ">=24 <25"

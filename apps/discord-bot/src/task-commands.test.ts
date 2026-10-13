@@ -52,7 +52,8 @@ function screen() {
 }
 
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-const make = (client: TaskClient, config: Partial<TaskControllerConfig> = {}) => createTaskController({ client, config: { ...baseConfig, ...config }, sleep: async () => { await tick(); } });
+/** 끝나지 않는 가짜 작업의 지켜보기가 테스트 뒤에 남아 돌지 않게, 지켜보는 시간을 짧게 준다 */
+const make = (client: TaskClient, config: Partial<TaskControllerConfig> = {}) => createTaskController({ client, config: { ...baseConfig, watchMaxMs: 400, ...config }, sleep: async () => { await tick(); } });
 
 test('허용 목록이 비어 있으면 꺼져 있고 누구도 시작하지 못한다', async () => {
     const client = fakeClient();
@@ -177,4 +178,16 @@ test('승인 결정 호출이 실패하면 버튼을 남겨 두고(끝나지 않
     while (s.approvals.length === 0) await tick();
     const r = await c.decide({ userId: OWNER, approvalId: 'a1', decision: 'approve' });
     assert.deepEqual([r.settled, /ECONNREFUSED/.test(r.text)], [false, true]);
+});
+
+test('채널에 글을 올릴 수 없으면 작업을 만들지 않는다 — 보이지 않는 작업을 남기지 않는다', async () => {
+    const client = fakeClient();
+    const c = make(client);
+    const ui: WatchUi = { updateStatus: async () => { throw new Error('Missing Access'); }, postApproval: async () => undefined, postFinal: async () => undefined };
+    const r = await c.start({ userId: OWNER, channelId: 'c1', goal: 'x', ui });
+    assert.equal(r.ok, false);
+    assert.match((r as { reason: string }).reason, /이 채널에 메시지를 올릴 수 없어/);
+    assert.deepEqual(client.log, []);
+    // 자리도 풀려 있다
+    assert.equal((await c.start({ userId: OWNER, channelId: 'c1', goal: 'x', ui: screen().ui })).ok, true);
 });

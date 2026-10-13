@@ -42,6 +42,8 @@ const MSG = {
     notAllowed: '이 명령을 쓸 권한이 없습니다.',
     emptyGoal: '작업 목표를 적어 주세요.',
     busy: '이 채널에서 이미 작업이 진행 중입니다. 끝난 뒤 다시 시도하거나 /task-cancel 로 멈추세요.',
+    cannotPost: '이 채널에 메시지를 올릴 수 없어 작업을 시작하지 않았습니다. 봇의 채널 권한을 확인하세요.',
+    preparing: '⏳ 작업을 준비하는 중…',
     noDevice: 'Companion 이 연결돼 있지 않아 작업을 시작하지 않았습니다. 데스크톱 앱을 연결한 뒤 다시 시도하세요.',
     startFailed: '작업을 시작하지 못했습니다',
     noActive: '이 채널에 진행 중인 작업이 없습니다.',
@@ -80,6 +82,14 @@ export function createTaskController(deps: {
             // 아래의 첫 await 전에 자리를 잡는다 — 거의 동시에 온 두 번째 요청이 여기서 걸린다
             const slot: { taskId: string | null; starterId: string } = { taskId: null, starterId: req.userId };
             active.set(req.channelId, slot);
+
+            // 작업을 만들기 전에 채널에 글을 올릴 수 있는지 먼저 본다 — 못 올리면 진행·승인·결과가 모두 안 보인다
+            try {
+                await req.ui.updateStatus(MSG.preparing);
+            } catch {
+                active.delete(req.channelId);
+                return { ok: false, reason: MSG.cannotPost };
+            }
 
             let taskId: string | null = null;
             try {
