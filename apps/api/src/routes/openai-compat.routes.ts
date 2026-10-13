@@ -393,6 +393,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
     try {
         const result = await ChatRequestHandler.processChat({
             message: converted.message,
+            taskSuggestionDeliverable: true, // 비스트리밍 응답은 message.task_suggestion 으로 싣는다 (스트리밍 경로는 싣지 않는다)
             model: body.model,
             history: converted.history,
             sessionId: reuseSessionId,
@@ -435,6 +436,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             completionTokens,
             toolCalls: result.tool_calls,
             artifacts: artifactsOut,
+            taskSuggestion: result.taskSuggestion,
         });
 
         res.json(response);

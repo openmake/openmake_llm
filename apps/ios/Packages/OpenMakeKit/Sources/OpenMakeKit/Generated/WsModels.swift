@@ -80,6 +80,8 @@ public struct WsServerEvent: Codable {
     public let deduplicated: Bool?
     /// 백엔드 실제 페이로드(ws-chat-handler): 스트리밍 완료 시 토큰 메트릭. tokensPerSec 는 toFixed(2) 문자열.
     public let metrics: Metrics?
+    /// 작업 게이트 제안 — 이 요청은 여러 단계의 작업(agent-task)으로 처리하는 편이 낫다는 판정 확률. 서버 설정이 on 이고 기준 이상일 때만 온다
+    public let taskSuggestion: TaskSuggestion?
     public let content: String?
     public let finished: Bool?
     /// 재생해야 할 이벤트 일부가 링버퍼에서 밀려났음 — 아티팩트는 done.cleanedContent 로 재구성할 것
@@ -145,6 +147,7 @@ public struct WsServerEvent: Codable {
         case cleanedContent = "cleanedContent"
         case deduplicated = "deduplicated"
         case metrics = "metrics"
+        case taskSuggestion = "taskSuggestion"
         case content = "content"
         case finished = "finished"
         case gap = "gap"
@@ -179,7 +182,7 @@ public struct WsServerEvent: Codable {
         case waitReason = "waitReason"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, approvalID: String?, currentTurn: Double?, reason: Reason?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, approvalID: String?, currentTurn: Double?, reason: Reason?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -196,6 +199,7 @@ public struct WsServerEvent: Codable {
         self.cleanedContent = cleanedContent
         self.deduplicated = deduplicated
         self.metrics = metrics
+        self.taskSuggestion = taskSuggestion
         self.content = content
         self.finished = finished
         self.gap = gap
@@ -266,6 +270,7 @@ public extension WsServerEvent {
         cleanedContent: String?? = nil,
         deduplicated: Bool?? = nil,
         metrics: Metrics?? = nil,
+        taskSuggestion: TaskSuggestion?? = nil,
         content: String?? = nil,
         finished: Bool?? = nil,
         gap: Bool?? = nil,
@@ -316,6 +321,7 @@ public extension WsServerEvent {
             cleanedContent: cleanedContent ?? self.cleanedContent,
             deduplicated: deduplicated ?? self.deduplicated,
             metrics: metrics ?? self.metrics,
+            taskSuggestion: taskSuggestion ?? self.taskSuggestion,
             content: content ?? self.content,
             finished: finished ?? self.finished,
             gap: gap ?? self.gap,
@@ -1030,6 +1036,55 @@ public extension SummaryClass {
             durationMS: durationMS ?? self.durationMS,
             ok: ok ?? self.ok,
             preview: preview ?? self.preview
+        )
+    }
+
+    func jsonData() throws -> Data {
+        return try newJSONEncoder().encode(self)
+    }
+
+    func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
+        return String(data: try self.jsonData(), encoding: encoding)
+    }
+}
+
+/// 작업 게이트 제안 — 이 요청은 여러 단계의 작업(agent-task)으로 처리하는 편이 낫다는 판정 확률. 서버 설정이 on 이고 기준 이상일 때만 온다
+// MARK: - TaskSuggestion
+public struct TaskSuggestion: Codable {
+    public let pTrue: Double
+
+    public enum CodingKeys: String, CodingKey {
+        case pTrue = "pTrue"
+    }
+
+    public init(pTrue: Double) {
+        self.pTrue = pTrue
+    }
+}
+
+// MARK: TaskSuggestion convenience initializers and mutators
+
+public extension TaskSuggestion {
+    init(data: Data) throws {
+        self = try newJSONDecoder().decode(TaskSuggestion.self, from: data)
+    }
+
+    init(_ json: String, using encoding: String.Encoding = .utf8) throws {
+        guard let data = json.data(using: encoding) else {
+            throw NSError(domain: "JSONDecoding", code: 0, userInfo: nil)
+        }
+        try self.init(data: data)
+    }
+
+    init(fromURL url: URL) throws {
+        try self.init(data: try Data(contentsOf: url))
+    }
+
+    func with(
+        pTrue: Double? = nil
+    ) -> TaskSuggestion {
+        return TaskSuggestion(
+            pTrue: pTrue ?? self.pTrue
         )
     }
 
