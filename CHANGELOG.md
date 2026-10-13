@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.100.0](https://github.com/openmake/openmake_llm/compare/v1.99.0...v1.100.0) (2026-10-13)
+
+
+### ✨ 기능
+
+* **decision:** 근거 게이트를 문장 단위로, Planner 생략에 검색 판정을 함께 본다 ([e723e99](https://github.com/openmake/openmake_llm/commit/e723e99efbf6b27d271884f4d1db98ae578b235e))
+* **decision:** 근거 게이트를 문장 단위로, Planner 생략에 검색 판정을 함께 본다 ([fdb4f0d](https://github.com/openmake/openmake_llm/commit/fdb4f0d3b8dc464a1f985aabae163300201df7bf))
+
 ## [1.99.0](https://github.com/openmake/openmake_llm/compare/v1.98.0...v1.99.0) (2026-10-13)
 
 
