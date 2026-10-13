@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Interaction } from 'discord.js';
 import type { DecideResult, StartResult, TaskController } from './task-commands';
-import { handleTaskInteraction } from './task-discord';
+import { handleDisabledTaskInteraction, handleTaskInteraction } from './task-discord';
 
 function controller(over: Partial<TaskController> = {}) {
     const calls: string[] = [];
@@ -32,7 +32,8 @@ function command(name: string, opts: { goal?: string; channel?: unknown } = {}) 
         channelId: 'c1',
         channel: 'channel' in opts ? opts.channel : { send: async () => ({ edit: async () => undefined }) },
         options: { getString: () => opts.goal ?? '' },
-        deferReply: async (o: { ephemeral?: boolean }) => { out.push(`defer:${o.ephemeral === true}`); },
+        deferReply: async (o: { flags?: number }) => { out.push(`defer:${o.flags === 64}`); },
+        reply: async (o: unknown) => { out.push(`reply:${JSON.stringify(o)}`); },
         editReply: async (text: string) => { out.push(`edit:${text}`); },
     };
     return { i: i as unknown as Interaction, out };
@@ -50,6 +51,7 @@ function button(customId: string) {
         deferUpdate: async () => { out.push('deferUpdate'); },
         editReply: async (o: unknown) => { out.push(['edit', o]); },
         followUp: async (o: unknown) => { out.push(['followUp', o]); },
+        reply: async (o: unknown) => { out.push(['reply', o]); },
     };
     return { i: i as unknown as Interaction, out };
 }
@@ -100,7 +102,7 @@ test('버튼: 끝나지 않은 요청(권한 없음 등)은 버튼을 남기고 
     const { c } = controller({ decide: async () => ({ settled: false, text: '작업을 시작한 사람만 할 수 있습니다.' }) });
     const { i, out } = button('task:reject:a1');
     await handleTaskInteraction(i, c);
-    assert.deepEqual(out, ['deferUpdate', ['followUp', { content: '작업을 시작한 사람만 할 수 있습니다.', ephemeral: true }]]);
+    assert.deepEqual(out, ['deferUpdate', ['followUp', { content: '작업을 시작한 사람만 할 수 있습니다.', flags: 64 }]]);
 });
 
 test('이 모듈의 것이 아닌 상호작용은 건드리지 않는다', async () => {
@@ -109,4 +111,25 @@ test('이 모듈의 것이 아닌 상호작용은 건드리지 않는다', async
     assert.equal(await handleTaskInteraction(button('other:approve:a1').i, c), false);
     assert.equal(await handleTaskInteraction(button('task:delete:a1').i, c), false);
     assert.deepEqual(calls, []);
+});
+
+test('진행 표시: 고치기가 실패하면(메시지가 지워짐 등) 새 메시지로 다시 올린다', async () => {
+    const sends: string[] = [];
+    const channel = { send: async (o: { content: string }) => { sends.push(o.content); return { edit: async () => { throw new Error('Unknown Message'); } }; } };
+    const { c } = controller({ start: async (req) => { await req.ui.updateStatus('첫 표시'); await req.ui.updateStatus('둘째 표시'); return { ok: true, taskId: 't1' }; } });
+    await handleTaskInteraction(command('task', { goal: 'x', channel }).i, c);
+    assert.deepEqual(sends, ['첫 표시', '둘째 표시']);
+});
+
+test('기능이 꺼진 봇: 남아 있는 /task 명령과 승인 버튼에 꺼져 있다고 답한다(무응답으로 두지 않는다)', async () => {
+    for (const name of ['task', 'task-cancel']) {
+        const { i, out } = command(name);
+        assert.equal(await handleDisabledTaskInteraction(i), true);
+        assert.match(String(out[0]), /^reply:.*꺼져 있습니다.*"flags":64/);
+    }
+    const b = button('task:approve:a1');
+    assert.equal(await handleDisabledTaskInteraction(b.i), true);
+    assert.match(JSON.stringify(b.out[0]), /꺼져 있습니다/);
+    assert.equal(await handleDisabledTaskInteraction(command('reset').i), false);
+    assert.equal(await handleDisabledTaskInteraction(button('other:approve:a1').i), false);
 });

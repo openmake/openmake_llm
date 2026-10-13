@@ -33,6 +33,13 @@ function parseNonNegativeIntEnv(value: string | undefined, defaultValue: number)
     return Number.isFinite(n) && n >= 0 ? n : defaultValue;
 }
 
+/** 작업 상태 조회 간격의 하한(ms) — 더 작은 값은 서버를 초당 수십 번 두드린다 */
+const TASK_POLL_MIN_MS = 1_000;
+
+export function parseTaskPollMs(value: string | undefined): number {
+    return Math.max(TASK_POLL_MIN_MS, parseIntEnv(value, 5_000));
+}
+
 export type TaskExecutor = 'sandbox' | 'local';
 export type TaskApprovalPolicy = 'all' | 'high-risk' | 'none';
 
@@ -83,8 +90,8 @@ export const config = {
     taskExecutor: parseTaskExecutor(process.env.DISCORD_TASK_EXECUTOR),
     /** 이 봇이 시작한 작업의 승인 방식 — all(전부 승인) | high-risk | none */
     taskApprovalPolicy: parseTaskApprovalPolicy(process.env.DISCORD_TASK_APPROVAL_POLICY),
-    /** 작업 상태 조회 간격(ms) */
-    taskPollMs: parseIntEnv(process.env.DISCORD_TASK_POLL_MS, 5_000),
+    /** 작업 상태 조회 간격(ms) — 1초 아래로는 내려가지 않는다 */
+    taskPollMs: parseTaskPollMs(process.env.DISCORD_TASK_POLL_MS),
     /** 한 작업을 지켜보는 최대 시간(ms) — 넘으면 지켜보기만 끝낸다(작업은 계속 돈다) */
     taskWatchMaxMs: parseIntEnv(process.env.DISCORD_TASK_WATCH_MAX_MS, 2 * 60 * 60 * 1000),
 

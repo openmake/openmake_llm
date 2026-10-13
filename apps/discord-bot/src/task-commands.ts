@@ -6,6 +6,7 @@
  *  - 허용 목록(DISCORD_TASK_ALLOWED_USERS)에 든 사용자만 작업을 시작한다. 목록이 비면 기능이 꺼진 것이다.
  *  - 한 채널에서 동시에 한 작업만 받는다.
  *  - 취소와 승인은 그 작업을 시작한 사람만 한다.
+ *  - 지켜보기만 끝난 작업(시간 초과·서버 연결 실패)은 채널을 비워 주되, 시작한 사람이 /task-cancel 로 멈출 수 있게 기억한다.
  * 상태는 메모리에만 둔다 — 봇을 재시작하면 지켜보던 작업과 승인 버튼의 주인을 잊는다(작업은 서버에서 계속 돈다).
  */
 import type { TaskApprovalPolicy, TaskExecutor } from './config';
@@ -49,6 +50,7 @@ const MSG = {
     noActive: '이 채널에 진행 중인 작업이 없습니다.',
     notStarter: '작업을 시작한 사람만 할 수 있습니다.',
     cancelRequested: '취소를 요청했습니다.',
+    cancelUnwatchedRequested: '지켜보기가 끝난 작업의 취소를 요청했습니다. 결과는 웹의 작업 화면에서 확인하세요.',
     cancelFailed: '취소하지 못했습니다',
     unknownApproval: '이 승인 요청을 찾을 수 없습니다. 이미 처리됐거나 봇이 재시작됐을 수 있습니다 — 웹의 작업 화면에서 확인하세요.',
     approved: '✅ 승인됨',
@@ -68,6 +70,8 @@ export function createTaskController(deps: {
     const { client, config } = deps;
     /** 채널 → 진행 중 작업. taskId 가 null 이면 만드는 중(자리만 잡은 상태) */
     const active = new Map<string, { taskId: string | null; starterId: string }>();
+    /** 채널 → 지켜보기만 끝나고 서버에서는 아직 돌 수 있는 마지막 작업 */
+    const unwatched = new Map<string, { taskId: string; starterId: string }>();
     /** 승인 id → 그 작업을 시작한 사람. 지켜보기가 승인 요청을 올릴 때 적는다 */
     const approvalOwners = new Map<string, string>();
 
@@ -125,6 +129,9 @@ export function createTaskController(deps: {
                 ...(deps.sleep ? { sleep: deps.sleep } : {}),
                 ...(deps.now ? { now: deps.now } : {}),
             })
+                .then((outcome) => {
+                    if (outcome === 'timeout' || outcome === 'unreachable') unwatched.set(req.channelId, { taskId: startedTaskId, starterId: req.userId });
+                })
                 .catch((e) => console.error(`[discord-bot] 작업 ${startedTaskId} 지켜보기 오류:`, reasonOf(e)))
                 .finally(() => {
                     if (active.get(req.channelId)?.taskId === startedTaskId) active.delete(req.channelId);
@@ -134,11 +141,15 @@ export function createTaskController(deps: {
 
         async cancel(req) {
             const slot = active.get(req.channelId);
-            if (!slot || !slot.taskId) return MSG.noActive;
-            if (slot.starterId !== req.userId) return MSG.notStarter;
+            const left = slot ? undefined : unwatched.get(req.channelId);
+            const target = slot ?? left;
+            if (!target || !target.taskId) return MSG.noActive;
+            if (target.starterId !== req.userId) return MSG.notStarter;
             try {
-                await client.cancelTask(slot.taskId);
-                return MSG.cancelRequested;
+                await client.cancelTask(target.taskId);
+                if (!left) return MSG.cancelRequested;
+                unwatched.delete(req.channelId);
+                return MSG.cancelUnwatchedRequested;
             } catch (e) {
                 return `${MSG.cancelFailed}: ${reasonOf(e)}`;
             }

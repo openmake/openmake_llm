@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { config, parseTaskApprovalPolicy, parseTaskExecutor } from './config';
+import { config, parseTaskApprovalPolicy, parseTaskExecutor, parseTaskPollMs } from './config';
 
 test('실행 위치는 local 만 그대로 받고 그 밖은 sandbox', () => {
     assert.equal(parseTaskExecutor('local'), 'local');
@@ -29,4 +29,12 @@ test('환경 변수가 없으면 기능이 꺼져 있고 안전한 기본값이�
     assert.equal(config.taskApprovalPolicy, 'all');
     assert.equal(config.taskPollMs, 5_000);
     assert.equal(config.taskWatchMaxMs, 7_200_000);
+});
+
+test('조회 간격은 1초 아래로 내려가지 않는다 — 잘못 넣은 값이 서버를 두드리지 않게', () => {
+    assert.equal(parseTaskPollMs('1'), 1_000);
+    assert.equal(parseTaskPollMs('250'), 1_000);
+    assert.equal(parseTaskPollMs('3000'), 3_000);
+    assert.equal(parseTaskPollMs(undefined), 5_000);
+    assert.equal(parseTaskPollMs('abc'), 5_000);
 });

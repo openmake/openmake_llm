@@ -121,3 +121,18 @@ test('오류 본문이 JSON 이 아니어도 상태 코드로 오류를 만든�
         (e: unknown) => e instanceof TaskApiError && e.status === 404,
     );
 });
+
+test('응답이 시간 안에 오지 않거나 연결이 안 되면 한국어 사유로 알린다', async () => {
+    const slow = http.createServer(() => undefined); // 받기만 하고 답하지 않는다
+    await new Promise<void>((resolve) => slow.listen(0, '127.0.0.1', () => resolve()));
+    server = slow;
+    const port = (slow.address() as AddressInfo).port;
+    const timedOut = createTaskClient({ baseUrl: `http://127.0.0.1:${port}`, apiKey: 'k', timeoutMs: 50 });
+    await assert.rejects(timedOut.getTask('t1'), (e: unknown) => e instanceof TaskApiError && /시간 안에/.test(e.message) && e.status === 0);
+
+    slow.closeAllConnections();
+    await new Promise<void>((resolve) => slow.close(() => resolve()));
+    server = undefined;
+    const refused = createTaskClient({ baseUrl: `http://127.0.0.1:${port}`, apiKey: 'k' });
+    await assert.rejects(refused.getTask('t1'), (e: unknown) => e instanceof TaskApiError && /연결하지 못/.test(e.message) && e.status === 0);
+});
