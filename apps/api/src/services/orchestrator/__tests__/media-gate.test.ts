@@ -43,6 +43,9 @@ describe('shouldSkipPlanner', () => {
     const search = (p: number) => ({ searchGatePTrue: p });
 
     it('기본값(꺼짐)에서는 판정이 아무리 낮아도 생략하지 않는다', async () => {
+        // 로컬 .env 가 켜 둔 값(2026-10-13 이후 세 환경 모두 true)이 jest.setup 으로 들어오므로 기본값은 명시적으로 비운다
+        delete process.env.ORCHESTRATOR_GATE_SKIP_ENABLED;
+        jest.resetModules();
         const { shouldSkipPlanner } = await import('../media-gate');
         expect(shouldSkipPlanner(media(0.0001), search(0.0001), 0)).toBe(false);
     });
