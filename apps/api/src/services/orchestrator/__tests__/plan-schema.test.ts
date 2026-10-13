@@ -67,6 +67,33 @@ describe('validatePlan — 구조·의미 검증', () => {
         expect(refs('img')).toEqual([]);
     });
 
+    it('검색 결과만 받아 초안을 쓰는 텍스트 작업은 계획에서 뺀다 — 종합은 본 모델이 하고, 초안은 값을 지어냈다(실측 2026-10-13: 44~64초, "v20.13.0")', () => {
+        const r = validatePlan({ complexity: 'multi', tasks: [
+            { id: 't1', capability: 'web.search', input: { instruction: 'q' } },
+            { id: 't2', capability: 'text.reason', input: { instruction: '검색 결과로 보고서 작성' }, depends_on: ['t1'] },
+        ] }, known);
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.plan.tasks.map((t) => t.id)).toEqual(['t1']);
+        expect(r.plan.levels.map((l) => l.map((t) => t.id))).toEqual([['t1']]);
+        expect(r.plan.complexity).toBe('multi');
+    });
+
+    it('다른 작업이 그 초안을 쓰거나, 검색이 아닌 결과도 함께 받는 텍스트 작업은 남긴다', () => {
+        const used = validatePlan({ complexity: 'multi', tasks: [
+            { id: 't1', capability: 'web.search', input: { instruction: 'q' } },
+            { id: 't2', capability: 'text.reason', input: { instruction: '가사 쓰기' }, depends_on: ['t1'] },
+            { id: 't3', capability: 'audio.speech', input: { refs: ['t2'] } },
+        ] }, known);
+        expect(used.ok && used.plan.tasks.map((t) => t.id)).toEqual(['t1', 't2', 't3']);
+        const mixed = validatePlan({ complexity: 'multi', tasks: [
+            { id: 't1', capability: 'web.search', input: { instruction: 'q' } },
+            { id: 'v', capability: 'vision.describe', input: { attachments: ['a1'] } },
+            { id: 't2', capability: 'text.reason', input: { instruction: '비교', refs: ['t1', 'v'] } },
+        ] }, known);
+        expect(mixed.ok && mixed.plan.tasks.map((t) => t.id)).toEqual(['t1', 'v', 't2']);
+    });
+
     it('강제 디코딩 스키마가 영상 인자 키를 선언한다 — 선언 안 된 키는 구조화 출력 planner 가 만들지 못한다', () => {
         const input = PLAN_JSON_SCHEMA.properties.tasks.items.properties.input.properties;
         expect(Object.keys(input)).toEqual(expect.arrayContaining(['seconds', 'size', 'negative_prompt']));

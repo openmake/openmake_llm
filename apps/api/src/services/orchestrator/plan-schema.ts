@@ -180,6 +180,18 @@ export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<strin
         for (const r of t.refs) if (!t.dependsOn.includes(r)) t.dependsOn.push(r);
     }
 
+    // 검색 결과만 받아 초안을 쓰는 text.reason 은 뺀다 — 종합은 본 채팅 모델이 검색 결과를 직접 보고 한다.
+    // 이 초안은 검색 요약에 없는 값을 지어냈고(근거 규칙을 붙여도 "v20.13.0"), 로컬 모델에서 44~64초를 썼다(실측 2026-10-13).
+    // 다른 작업이 그 결과를 쓰거나 검색이 아닌 결과도 함께 받는 경우는 남긴다.
+    const capabilityOf = new Map(tasks.map((t) => [t.id, t.capability]));
+    for (let i = tasks.length - 1; i >= 0; i--) {
+        const t = tasks[i];
+        if (t.capability !== 'text.reason' || t.refs.length === 0) continue;
+        if (!t.refs.every((r) => capabilityOf.get(r) === 'web.search')) continue;
+        if (tasks.some((o) => o !== t && (o.dependsOn.includes(t.id) || o.refs.includes(t.id)))) continue;
+        tasks.splice(i, 1);
+    }
+
     // 위상 정렬 (Kahn) — 순환이면 실패
     const byId = new Map(tasks.map((t) => [t.id, t]));
     const indeg = new Map(tasks.map((t) => [t.id, t.dependsOn.length]));
