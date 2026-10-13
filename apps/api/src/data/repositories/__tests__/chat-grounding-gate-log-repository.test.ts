@@ -10,15 +10,21 @@ function fakePool() {
 }
 
 describe('ChatGroundingGateLogRepository.insert', () => {
-    it('본문 없이 판정 값만 한 행으로 남긴다, 긴 실패 사유는 200자에서 자른다', async () => {
+    const entry = { userId: 'u1', sessionId: 's1', messageId: 42, pTrue: 0.02, gateError: null, gateMs: 250, gateModel: 'jev-decision', sourceCount: 8, answerChars: 1200, method: 'claim' as const, claimCount: 2, lowCount: 1, claims: [{ n: 1, p: 0.8 }, { n: 2, p: 0.02 }] };
+
+    it('본문 없이 판정 값만 한 행으로 남긴다 — 문장별 결과는 출처 번호와 확률만', async () => {
         const { pool, calls } = fakePool();
-        const repo = new ChatGroundingGateLogRepository(pool);
-        await repo.insert({ userId: 'u1', sessionId: 's1', messageId: 42, pTrue: 0.02, gateError: null, gateMs: 190, gateModel: 'jev-decision', sourceCount: 8, answerChars: 1200 });
-        await repo.insert({ userId: 'u1', sessionId: 's1', messageId: null, pTrue: null, gateError: 'x'.repeat(500), gateMs: 3000, gateModel: 'jev-decision', sourceCount: 1, answerChars: 3 });
+        await new ChatGroundingGateLogRepository(pool).insert(entry);
         expect(calls[0].sql).toContain('INSERT INTO chat_grounding_gate_log');
-        expect(calls[0].params).toEqual(['u1', 's1', 42, 0.02, null, 190, 'jev-decision', 8, 1200]);
-        expect(calls[1].params[2]).toBeNull();
-        expect(String(calls[1].params[4])).toHaveLength(200);
+        expect(calls[0].params).toEqual(['u1', 's1', 42, 0.02, null, 250, 'jev-decision', 8, 1200, 'claim', 2, 1, JSON.stringify(entry.claims)]);
+    });
+
+    it('답 메시지 id 가 없거나 확률이 없으면 NULL, 긴 실패 사유는 200자에서 자른다', async () => {
+        const { pool, calls } = fakePool();
+        await new ChatGroundingGateLogRepository(pool).insert({ ...entry, messageId: null, pTrue: null, gateError: 'x'.repeat(500), claimCount: 0, lowCount: 0, claims: [] });
+        expect(calls[0].params[2]).toBeNull();
+        expect(calls[0].params[3]).toBeNull();
+        expect(String(calls[0].params[4])).toHaveLength(200);
     });
 });
 
