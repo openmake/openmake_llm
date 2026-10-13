@@ -16,7 +16,7 @@ import { ArtifactRepository } from '../../data/repositories/artifact-repository'
 import { expandArtifactPlaceholders, findArtifactPlaceholderIds } from '../../llm/artifact-parser';
 import type { ChatMessageRequest } from '../chat-service-types';
 import { planRequest } from './planner';
-import { runMediaGateShadow, runSearchGateShadow, shouldSkipPlanner } from './media-gate';
+import { gatesWithin, runMediaGateShadow, runSearchGateShadow, shouldSkipPlanner } from './media-gate';
 import { MEDIA_GATE } from '../../config/decision';
 import { validatePlan, type ValidatedPlan } from './plan-schema';
 import { executePlan } from './executor';
@@ -197,7 +197,7 @@ export async function recentAssistantMessages(req: ChatMessageRequest): Promise<
     return msgs.map((m) => expandArtifactPlaceholders(m, (id) => contents.get(id)).slice(0, ORCHESTRATOR.EXEC_RECENT_MESSAGE_MAX_CHARS));
 }
 
-function buildResultBlock(results: TaskResult[], lang: string): string {
+export function buildResultBlock(results: TaskResult[], lang: string): string {
     const ko = lang === 'ko';
     const lines = results.map((r) => {
         const statusLabel = r.status === 'completed' ? (ko ? '완료' : 'done') : r.status === 'pending' ? (ko ? '진행 중(미완료)' : 'pending') : r.status === 'skipped' ? (ko ? '건너뜀' : 'skipped') : (ko ? '실패' : 'failed');
@@ -210,8 +210,8 @@ function buildResultBlock(results: TaskResult[], lang: string): string {
         return `${head}\n${body}${media}`;
     });
     const intro = ko
-        ? '[오케스트레이터 작업 결과 — 아래 결과를 근거로 사용자에게 답하세요. 완료된 미디어는 마크다운 링크를 그대로 답변에 포함하고, 실패·미지원·미배정·진행 중(미완료) 작업은 완료된 것처럼 말하지 말고 그 상태와 사유를 솔직히 알리세요. 링크나 파일명을 지어내지 마세요.]'
-        : '[Orchestrator task results — answer the user based on these. Include completed media markdown links verbatim; for failed/unsupported/unassigned tasks tell the user the reason honestly. Never invent links or file names.]';
+        ? '[오케스트레이터 작업 결과 — 아래 결과를 근거로 사용자에게 답하세요. 완료된 미디어는 마크다운 링크를 그대로 답변에 포함하고, 실패·미지원·미배정·진행 중(미완료) 작업은 완료된 것처럼 말하지 말고 그 상태와 사유를 솔직히 알리세요. 링크나 파일명을 지어내지 마세요. 텍스트 추론 작업의 결과는 초안입니다 — 웹 검색 결과나 직접 읽은 페이지와 다르면 검색 결과를 따르세요. 이 블록의 작업 번호(t1·t2 등)와 "오케스트레이터"·"하위 작업" 같은 내부 이름은 사용자에게 말하지 마세요 — 초안을 바로잡았다는 설명도 붙이지 말고 확인된 내용만 답하세요.]'
+        : '[Orchestrator task results — answer the user based on these. Include completed media markdown links verbatim; for failed/unsupported/unassigned tasks tell the user the reason honestly. Never invent links or file names. A text-reasoning task result is only a draft — if it disagrees with web search results or pages you read, follow the search results. Never mention the task ids (t1, t2, …) or internal names such as "orchestrator" or "sub-task" to the user, and do not explain that you corrected a draft — just give the verified answer.]';
     return `${intro}\n\n${lines.join('\n\n')}`;
 }
 
@@ -300,7 +300,8 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
             .catch((e) => logger.debug(`셰도우 기록 실패: ${e instanceof Error ? e.message : String(e)}`));
     };
     // Planner 생략(기본 꺼짐, config/decision.ts) — 켜면 판정을 먼저 기다린다. 판정이 없거나 애매하면 종전대로 Planner 로 간다.
-    if (MEDIA_GATE.SKIP_ENABLED && shouldSkipPlanner(await gate, await searchGate, attachments.size)) {
+    // 판정은 정한 시간까지만 기다린다 — 늦으면 Planner 로 간다(엔진이 긴 입력을 읽는 동안 판정이 수 초 밀린다)
+    if (MEDIA_GATE.SKIP_ENABLED && shouldSkipPlanner(...(await gatesWithin(gate, searchGate, MEDIA_GATE.SKIP_WAIT_MS)), attachments.size)) {
         logger.info('[Orchestrator] 미디어·검색 게이트: 둘 다 아님 — Planner 생략');
         record({ requestId: input.requestId, userId, plannerModel: 'gate-skip', plannerMs: 0, plannerOk: true, complexity: 'simple', taskCount: 0, outcome: 'simple' });
         return { mode: 'simple', mediaMarkdowns: [], plannerMs: 0 };

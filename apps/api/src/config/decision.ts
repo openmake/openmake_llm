@@ -42,6 +42,12 @@ export const MEDIA_GATE = {
      */
     SKIP_ENABLED: process.env.ORCHESTRATOR_GATE_SKIP_ENABLED === 'true',
     SKIP_THRESHOLD: Number(process.env.ORCHESTRATOR_GATE_SKIP_THRESHOLD) || 0.05,
+    /**
+     * 생략 여부를 정하려고 판정을 기다리는 상한 ms — 넘으면 판정 없이 Planner 로 간다. 판정은 보통 0.2~0.5초지만, 엔진이 긴 입력
+     * 한 건(3만 토큰, 17초)을 읽는 동안에는 6~9초 밀렸고 요청 우선순위를 실어도 같았다(2026-10-13 실측). 기다림이 답을 늦추지 않게 한다.
+     * ORCHESTRATOR_GATE_SKIP_WAIT_MS
+     */
+    SKIP_WAIT_MS: parseInt(process.env.ORCHESTRATOR_GATE_SKIP_WAIT_MS || '800', 10),
     /** 어댑터에 묻는 질문(영문 고정 — 어댑터 학습 형식) */
     QUESTION: 'Does the user want an image, music/audio, or video to be generated or edited in this turn?',
 } as const;

@@ -81,3 +81,21 @@ export async function runSearchGateShadow(
         ...(r.error ? { searchGateError: r.error } : {}),
     };
 }
+
+/**
+ * Planner 생략을 정하려고 두 판정을 기다리되 `ms` 까지만 — 하나라도 늦으면 둘 다 없음으로 돌려준다(→ Planner 로 간다).
+ * 판정 자체는 계속 돌아 기록에는 남는다.
+ */
+export async function gatesWithin(
+    gate: Promise<MediaGateRecord | undefined>,
+    searchGate: Promise<SearchGateRecord | undefined>,
+    ms: number,
+): Promise<[MediaGateRecord | undefined, SearchGateRecord | undefined]> {
+    let timer: NodeJS.Timeout | undefined;
+    const late = new Promise<[undefined, undefined]>((resolve) => { timer = setTimeout(() => resolve([undefined, undefined]), ms); });
+    try {
+        return await Promise.race([Promise.all([gate, searchGate]), late]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
