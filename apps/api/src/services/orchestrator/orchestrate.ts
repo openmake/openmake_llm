@@ -16,7 +16,7 @@ import { ArtifactRepository } from '../../data/repositories/artifact-repository'
 import { expandArtifactPlaceholders, findArtifactPlaceholderIds } from '../../llm/artifact-parser';
 import type { ChatMessageRequest } from '../chat-service-types';
 import { planRequest } from './planner';
-import { runMediaGateShadow, shouldSkipPlanner } from './media-gate';
+import { runMediaGateShadow, runSearchGateShadow, shouldSkipPlanner } from './media-gate';
 import { MEDIA_GATE } from '../../config/decision';
 import { validatePlan, type ValidatedPlan } from './plan-schema';
 import { executePlan } from './executor';
@@ -290,11 +290,13 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
     onProgress?.({ type: 'orchestrator_status', phase: 'planning' });
 
     // 미디어 게이트(셰도우) — Planner 와 나란히 돌린다. 결과는 기록에만 쓰고 기다리지 않는다(답변 시작을 늦추지 않음).
-    const gate = runMediaGateShadow({ message: req.message ?? '', attachmentKinds: [...attachments.values()].map((a) => a.kind), signal: input.signal })
-        .catch(() => undefined);
+    const gateInput = { message: req.message ?? '', attachmentKinds: [...attachments.values()].map((a) => a.kind), signal: input.signal };
+    const gate = runMediaGateShadow(gateInput).catch(() => undefined);
+    // 검색 게이트(기록 전용, config/decision.ts SEARCH_GATE) — 같은 자리에서 나란히 묻고 같은 행에 남긴다
+    const searchGate = runSearchGateShadow(gateInput).catch(() => undefined);
     const record = (partial: Parameters<OrchestratorRunsRepository['insert']>[0]) => {
         if (!ORCHESTRATOR.SHADOW_ENABLED) return;
-        void gate.then((g) => new OrchestratorRunsRepository(getPool()).insert({ ...partial, ...g }))
+        void Promise.all([gate, searchGate]).then(([g, s]) => new OrchestratorRunsRepository(getPool()).insert({ ...partial, ...g, ...s }))
             .catch((e) => logger.debug(`셰도우 기록 실패: ${e instanceof Error ? e.message : String(e)}`));
     };
     // Planner 생략(기본 꺼짐, config/decision.ts) — 켜면 판정을 먼저 기다린다. 판정이 없거나 애매하면 종전대로 Planner 로 간다.
