@@ -457,6 +457,7 @@ export async function handleChatMessage(
             messageId,
             metrics: { tokensPerSec, tokenCount },
             ...(cleanedContent !== undefined ? { cleanedContent } : {}),
+            ...(result.taskSuggestion ? { taskSuggestion: result.taskSuggestion } : {}),
         });
 
         // 답변 검증 (선택) — done 이후 judge 모델이 1회 점검하고 **지적만** 보낸다(자동 수정 없음).

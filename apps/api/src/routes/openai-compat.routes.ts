@@ -435,6 +435,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             completionTokens,
             toolCalls: result.tool_calls,
             artifacts: artifactsOut,
+            taskSuggestion: result.taskSuggestion,
         });
 
         res.json(response);

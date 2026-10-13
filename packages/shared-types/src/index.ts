@@ -248,6 +248,8 @@ export type WsServerEvent =
       cleanedContent?: string;
       /** 같은 clientRequestId 의 재전송이라 새 생성 없이 끝냈음(140) */
       deduplicated?: boolean;
+      /** 작업 게이트 제안 — 이 요청은 여러 단계의 작업(agent-task)으로 처리하는 편이 낫다는 판정 확률. 서버 설정이 on 이고 기준 이상일 때만 온다 */
+      taskSuggestion?: { pTrue: number };
     }
   | { type: "aborted"; message?: string }
   /**
