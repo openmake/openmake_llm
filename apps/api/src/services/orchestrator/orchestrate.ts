@@ -300,8 +300,8 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
             .catch((e) => logger.debug(`셰도우 기록 실패: ${e instanceof Error ? e.message : String(e)}`));
     };
     // Planner 생략(기본 꺼짐, config/decision.ts) — 켜면 판정을 먼저 기다린다. 판정이 없거나 애매하면 종전대로 Planner 로 간다.
-    if (MEDIA_GATE.SKIP_ENABLED && shouldSkipPlanner(await gate, attachments.size)) {
-        logger.info('[Orchestrator] 미디어 게이트: 미디어 작업 아님 — Planner 생략');
+    if (MEDIA_GATE.SKIP_ENABLED && shouldSkipPlanner(await gate, await searchGate, attachments.size)) {
+        logger.info('[Orchestrator] 미디어·검색 게이트: 둘 다 아님 — Planner 생략');
         record({ requestId: input.requestId, userId, plannerModel: 'gate-skip', plannerMs: 0, plannerOk: true, complexity: 'simple', taskCount: 0, outcome: 'simple' });
         return { mode: 'simple', mediaMarkdowns: [], plannerMs: 0 };
     }
