@@ -13,6 +13,7 @@
  */
 
 import { takeMessageSources } from './message-sources';
+import { logGroundingShadow } from '../services/decision/grounding-gate';
 import { getConversationDB } from '../data/conversation-db';
 import { adoptFirstMessageTitle, DEFAULT_SESSION_TITLE } from '../data/conversation-sessions';
 import { SESSION_TITLE_FROM_MESSAGE_CHARS } from '../config/service-limits';
@@ -171,6 +172,8 @@ export async function saveAssistantMessage(
     // 2. 본문 저장 — saveHistory=true 일 때만. 저장된 메시지 id 반환 (요약 헤드라인 후속 UPDATE 용)
     if (saveHistory) {
         const conversationDb = getConversationDB();
+        // 스트리밍 중 search_sources 로 보낸 출처(F19.4) — 같은 messageId 로 모아 둔 것을 1회 꺼낸다
+        const sources = takeMessageSources(attribution?.clientMessageId);
         const saved = await conversationDb.addMessage(sessionId, 'assistant', response, {
             model,
             responseTime,
@@ -178,9 +181,10 @@ export async function saveAssistantMessage(
             ...(thinking ? { thinking } : {}),
             ...(attribution?.agentId ? { agentId: attribution.agentId } : {}),
             ...(attribution?.clientMessageId ? { clientMessageId: attribution.clientMessageId } : {}),
-            // 스트리밍 중 search_sources 로 보낸 출처(F19.4) — 같은 messageId 로 모아 둔 것을 1회 꺼낸다
-            ...(() => { const sources = takeMessageSources(attribution?.clientMessageId); return sources ? { sources } : {}; })(),
+            ...(sources ? { sources } : {}),
         });
+        // 근거 게이트(기록 전용, C형 — services/decision/grounding-gate.ts): 출처가 있는 답만, 저장 뒤에, 기다리지 않고 판정한다
+        if (sources?.length && saved?.id) void logGroundingShadow({ userId, sessionId, messageId: saved.id, sources, answer: response });
         return saved?.id ?? null;
     }
     return null;

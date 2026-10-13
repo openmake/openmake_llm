@@ -191,3 +191,27 @@ test('채널에 글을 올릴 수 없으면 작업을 만들지 않는다 — �
     // 자리도 풀려 있다
     assert.equal((await c.start({ userId: OWNER, channelId: 'c1', goal: 'x', ui: screen().ui })).ok, true);
 });
+
+test('지켜보는 시간이 끝난 작업도 시작한 사람이 /task-cancel 로 멈출 수 있다 — 한 번 취소하면 잊는다', async () => {
+    const client = fakeClient({ snapshots: [snap({ status: 'running' })] });
+    const c = make(client, { watchMaxMs: 0 });
+    const s = screen();
+    await c.start({ userId: OWNER, channelId: 'c1', goal: 'x', ui: s.ui });
+    await s.finished; // 시간 초과 안내
+    await tick();
+    assert.equal(await c.cancel({ userId: OTHER_ALLOWED, channelId: 'c1' }), '작업을 시작한 사람만 할 수 있습니다.');
+    assert.match(await c.cancel({ userId: OWNER, channelId: 'c1' }), /취소를 요청했습니다/);
+    assert.deepEqual(client.log.filter((l) => l.startsWith('cancel')), ['cancel:t1']);
+    assert.equal(await c.cancel({ userId: OWNER, channelId: 'c1' }), '이 채널에 진행 중인 작업이 없습니다.');
+});
+
+test('정상으로 끝난 작업은 /task-cancel 대상으로 남지 않는다', async () => {
+    const client = fakeClient();
+    const c = make(client);
+    const s = screen();
+    await c.start({ userId: OWNER, channelId: 'c1', goal: 'x', ui: s.ui });
+    await s.finished;
+    await tick();
+    assert.equal(await c.cancel({ userId: OWNER, channelId: 'c1' }), '이 채널에 진행 중인 작업이 없습니다.');
+    assert.deepEqual(client.log.filter((l) => l.startsWith('cancel')), []);
+});

@@ -170,6 +170,12 @@ export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<strin
             if (!ids.has(d)) return { ok: false, reason: `task '${t.id}' references unknown task '${d}'` };
             if (d === t.id) return { ok: false, reason: `task '${t.id}' depends on itself` };
         }
+        // 텍스트 작업이 앞 작업에 의존하면 그 결과를 읽으려는 것이다 — Planner 가 depends_on 만 적고 refs 를 비우면
+        // 실행기가 앞 결과를 넘기지 않아 검색 뒤 보고서를 기억으로 지어낸다(실측 2026-10-13, 입력 106토큰).
+        // 다른 기능(이미지·낭독 등)은 refs 본문을 그대로 입력으로 쓰므로 건드리지 않는다.
+        if (t.capability.startsWith('text.')) {
+            for (const d of t.dependsOn) if (!t.refs.includes(d)) t.refs.push(d);
+        }
         // refs 는 암묵적 의존 — depends_on 에 합친다
         for (const r of t.refs) if (!t.dependsOn.includes(r)) t.dependsOn.push(r);
     }

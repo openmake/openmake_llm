@@ -22,6 +22,11 @@ describe('WEB_SEARCH_INTENT_PATTERNS', () => {
         'Can you look up the latest Nvidia earnings on the internet?',
         'search for Tokyo weather online',
         'Just google it for me',
+        // 조사 요청 — "검색"이라는 말 없이 온다(2026-10-13: 도구가 빠져 모델이 지어내거나 툴콜 문자열을 본문에 냈다)
+        '벤처기업확인기관에 대해서 조사해서 보고해',
+        '이 회사 최근 투자 유치 현황 조사해줘',
+        '경쟁사 가격 정책 좀 조사해 주세요',
+        '위 내용이 사실인지 다시 조사해서 알려줘',
     ])('시의성·검색 질의를 매칭한다: %s', (msg) => {
         expect(matches(msg)).toBe(true);
     });
@@ -34,6 +39,10 @@ describe('WEB_SEARCH_INTENT_PATTERNS', () => {
         'How do I look up a key in a Python dict?',
         'Explain how online learning works',
         'Write a Google Docs add-on',
+        // 사용자가 이미 한 조사를 말하는 문장 — 요청이 아니다
+        '설문 조사해서 결과 정리했는데 표로 만들어줘',
+        '어제 조사해 본 내용인데 요약해줘',
+        '여론조사 결과를 설명해줘',
     ])('일반 질의는 매칭하지 않는다: %s', (msg) => {
         expect(matches(msg)).toBe(false);
     });

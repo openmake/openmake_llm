@@ -44,6 +44,37 @@ export const MEDIA_GATE = {
     QUESTION: 'Does the user want an image, music/audio, or video to be generated or edited in this turn?',
 } as const;
 
+/**
+ * 검색 게이트 — "이 요청에 웹 검색이 필요한가" 판정. **기록 전용**이다: 미디어 게이트와 같은 자리에서 나란히 돌고
+ * `orchestrator_runs.search_gate_*` 에 남을 뿐 Planner·검색 동작을 바꾸지 않는다.
+ * 근거(2026-10-13 로컬 기록): Planner 가 계획한 기능은 text 50·web.search 20·image 2 — Planner 가 실제로 정하는 것은
+ * 대부분 "검색할까"인데, 미디어 게이트는 검색만 하는 계획 19건에 최대 0.010 을 줘서 미디어 질문만으로는 Planner 를
+ * 생략할 수 없다. 손으로 만든 12문장에서는 검색 필요 0.72~0.97 · 불필요 0.004~0.064 였다(평가셋 아님).
+ */
+export const SEARCH_GATE = {
+    /** 기록 on/off. 결정 모델이 로컬 카탈로그에 없으면 켜져 있어도 호출하지 않는다. ORCHESTRATOR_SEARCH_GATE_SHADOW_ENABLED */
+    SHADOW_ENABLED: process.env.ORCHESTRATOR_SEARCH_GATE_SHADOW_ENABLED !== 'false',
+    /** 어댑터에 묻는 질문(영문 고정 — 어댑터 학습 형식) */
+    QUESTION: 'Does answering this request require looking up current or factual information on the web?',
+} as const;
+
+/**
+ * 근거 게이트 — "이 답이 그 턴의 검색 출처에 근거했는가" 판정. **기록 전용**이다: 답을 저장한 뒤에 돌고
+ * `chat_grounding_gate_log` 에 남을 뿐 답을 바꾸거나 막지 않는다(C형 후단 판정, fail-open).
+ * 근거(2026-10-13): 검색은 맞았는데 답은 기억으로 지어낸 사례에서 맞는 답 0.919 · 지어낸 답 0.011·0.006 (손으로 만든 3문장).
+ * 기준값과 걸렸을 때의 처리(경고·재종합)는 기록을 본 뒤 정한다.
+ */
+export const GROUNDING_GATE = {
+    /** 기록 on/off. 출처가 있는 답에만 돈다. CHAT_GROUNDING_GATE_SHADOW_ENABLED */
+    SHADOW_ENABLED: process.env.CHAT_GROUNDING_GATE_SHADOW_ENABLED !== 'false',
+    /** 상태에 싣는 출처(번호·제목·요약) 상한(자). CHAT_GROUNDING_GATE_SOURCES_MAX_CHARS */
+    SOURCES_MAX_CHARS: parseInt(process.env.CHAT_GROUNDING_GATE_SOURCES_MAX_CHARS || '4000', 10),
+    /** 상태에 싣는 답 앞부분 상한(자) — 결론이 앞에 온다. CHAT_GROUNDING_GATE_ANSWER_MAX_CHARS */
+    ANSWER_MAX_CHARS: parseInt(process.env.CHAT_GROUNDING_GATE_ANSWER_MAX_CHARS || '1500', 10),
+    /** 어댑터에 묻는 질문(영문 고정 — 어댑터 학습 형식) */
+    QUESTION: 'Is the answer supported by the search results?',
+} as const;
+
 export type TaskGateMode = 'off' | 'shadow' | 'on';
 
 /** PURE: 환경 변수 값 → 모드. 없거나 모르는 값은 off (조용히 켜지지 않게) */

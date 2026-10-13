@@ -9,6 +9,7 @@ import {
     Client,
     GatewayIntentBits,
     Message,
+    MessageFlags,
     Partials,
     SlashCommandBuilder,
 } from 'discord.js';
@@ -21,7 +22,7 @@ import { splitForDiscord } from './message-utils';
 import { prepareReply } from './attachments';
 import { createTaskClient } from './task-client';
 import { createTaskController, type TaskController } from './task-commands';
-import { handleTaskInteraction, registerTaskCommands } from './task-discord';
+import { handleDisabledTaskInteraction, handleTaskInteraction, registerTaskCommands } from './task-discord';
 
 /**
  * 기동 절차: 서버(관리자 화면) 설정 수신 → 검증 → Discord 로그인.
@@ -61,7 +62,6 @@ const client = new Client({
 
 /** /task 조정자 — 허용 사용자 목록이 있을 때만 만들어진다(clientReady). 없으면 기능이 꺼진 것이다. */
 let taskController: TaskController | null = null;
-
 
 const TYPING_REFRESH_MS = 8_000; // Discord typing 표시는 ~10초 후 소멸 → 주기 갱신
 
@@ -121,7 +121,7 @@ async function handleReset(interaction: ChatInputCommandInteraction): Promise<vo
     const existed = resetSession(key);
     await interaction.reply({
         content: existed ? '🔄 이 채널의 대화 세션을 초기화했습니다.' : 'ℹ️ 초기화할 세션이 없습니다.',
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
     });
 }
 
@@ -137,28 +137,37 @@ client.once('clientReady', async () => {
     // commands.set 은 전역 명령 전체를 교체해 같은 봇 앱을 공유하는 다른 gateway(hermes 등)의
     // 명령을 지워버림 — 기존 명령을 보존하고 /reset 만 없을 때 추가한다.
     const app = client.application;
-    if (app) {
+    if (!app) return;
+    // 명령 등록 실패(디스코드 API 장애 등)가 봇을 죽이면 안 된다 — 이 리스너에서 새어 나간 거부는 프로세스를 끝낸다.
+    // 채팅은 명령 없이도 동작하고, 명령은 한 번 등록되면 디스코드에 남는다.
+    try {
         const existing = await app.commands.fetch();
         if (!existing.some((cmd) => cmd.name === 'reset')) {
             await app.commands.create(
                 new SlashCommandBuilder().setName('reset').setDescription('이 채널의 내 대화 세션을 초기화합니다').toJSON(),
             );
         }
-        // /task 는 허용 사용자 목록이 있을 때만 켠다 — 비어 있으면 명령도 등록하지 않는다.
-        if (config.taskAllowedUsers.length > 0) {
-            taskController = createTaskController({
-                client: createTaskClient({ baseUrl: config.apiBaseUrl, apiKey: config.apiKey }),
-                config: {
-                    allowedUsers: config.taskAllowedUsers,
-                    executor: config.taskExecutor,
-                    approvalPolicy: config.taskApprovalPolicy,
-                    pollMs: config.taskPollMs,
-                    watchMaxMs: config.taskWatchMaxMs,
-                },
-            });
+    } catch (err) {
+        console.error('[discord-bot] /reset 명령 등록 실패 (기동은 계속):', err instanceof Error ? err.message : err);
+    }
+    // /task 는 허용 사용자 목록이 있을 때만 켠다 — 비어 있으면 명령도 등록하지 않는다.
+    if (config.taskAllowedUsers.length > 0) {
+        taskController = createTaskController({
+            client: createTaskClient({ baseUrl: config.apiBaseUrl, apiKey: config.apiKey }),
+            config: {
+                allowedUsers: config.taskAllowedUsers,
+                executor: config.taskExecutor,
+                approvalPolicy: config.taskApprovalPolicy,
+                pollMs: config.taskPollMs,
+                watchMaxMs: config.taskWatchMaxMs,
+            },
+        });
+        try {
             await registerTaskCommands(app);
-            console.log(`[discord-bot] /task 켜짐 — 허용 사용자 ${config.taskAllowedUsers.length}명, 실행 위치 ${config.taskExecutor}, 승인 ${config.taskApprovalPolicy}`);
+        } catch (err) {
+            console.error('[discord-bot] /task 명령 등록 실패 (이미 등록돼 있으면 그대로 동작):', err instanceof Error ? err.message : err);
         }
+        console.log(`[discord-bot] /task 켜짐 — 허용 사용자 ${config.taskAllowedUsers.length}명, 실행 위치 ${config.taskExecutor}, 승인 ${config.taskApprovalPolicy}`);
     }
 });
 
@@ -189,6 +198,8 @@ client.on('interactionCreate', async (interaction) => {
             console.error('[discord-bot] /task 상호작용 실패:', err instanceof Error ? err.message : err);
             return;
         }
+    } else if (config.taskAllowedUsers.length === 0 && (await handleDisabledTaskInteraction(interaction).catch(() => true))) {
+        return;
     }
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'reset') {

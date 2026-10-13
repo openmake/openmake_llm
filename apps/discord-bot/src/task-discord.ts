@@ -10,6 +10,7 @@ import {
     Interaction,
     Message,
     MessageCreateOptions,
+    MessageFlags,
     SlashCommandBuilder,
 } from 'discord.js';
 import { splitForDiscord } from './message-utils';
@@ -61,8 +62,16 @@ function channelUi(channel: SendableChannel): WatchUi {
     let statusMessage: Message | null = null;
     return {
         async updateStatus(text) {
-            if (statusMessage) await statusMessage.edit({ content: text });
-            else statusMessage = await channel.send({ content: text, allowedMentions: { parse: [] } });
+            if (statusMessage) {
+                try {
+                    await statusMessage.edit({ content: text });
+                    return;
+                } catch {
+                    // 메시지가 지워졌거나 고칠 수 없다 — 아래에서 새 메시지로 다시 올린다
+                    statusMessage = null;
+                }
+            }
+            statusMessage = await channel.send({ content: text, allowedMentions: { parse: [] } });
         },
         async postApproval(approval) {
             await channel.send({ content: formatApproval(approval), components: [approvalButtons(approval)], allowedMentions: { parse: [] } });
@@ -79,7 +88,7 @@ function channelUi(channel: SendableChannel): WatchUi {
 export async function handleTaskInteraction(interaction: Interaction, controller: TaskController): Promise<boolean> {
     if (interaction.isChatInputCommand() && interaction.commandName === TASK_COMMAND) {
         // 작업 생성·실행 호출이 3초(디스코드 응답 기한)를 넘을 수 있어 먼저 접수한다. 답은 본인에게만 보인다.
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const channel = interaction.channel;
         if (!channel || !('send' in channel)) {
             await interaction.editReply('이 채널에는 메시지를 올릴 수 없어 작업을 시작하지 않았습니다.');
@@ -96,7 +105,7 @@ export async function handleTaskInteraction(interaction: Interaction, controller
     }
 
     if (interaction.isChatInputCommand() && interaction.commandName === TASK_CANCEL_COMMAND) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await interaction.editReply(await controller.cancel({ userId: interaction.user.id, channelId: interaction.channelId }));
         return true;
     }
@@ -110,10 +119,25 @@ export async function handleTaskInteraction(interaction: Interaction, controller
             // 끝난 요청은 버튼을 지우고 결과를 원래 메시지에 덧붙인다
             await interaction.editReply({ content: `${interaction.message.content}\n${result.text}`, components: [] });
         } else {
-            await interaction.followUp({ content: result.text, ephemeral: true });
+            await interaction.followUp({ content: result.text, flags: MessageFlags.Ephemeral });
         }
         return true;
     }
 
     return false;
+}
+
+const MSG_DISABLED = '이 봇에서는 /task 기능이 꺼져 있습니다.';
+
+/**
+ * 기능이 꺼진 봇에 남아 있는 /task 명령·승인 버튼 — 답하지 않으면 디스코드가 "응답하지 않았습니다"를 띄운다.
+ * (명령은 지우지 않는다: 같은 봇 앱을 다른 gateway 와 함께 쓰는 경우가 있어 이름만으로 내 것인지 알 수 없다.)
+ * @returns 이 모듈의 상호작용이어서 답했으면 true
+ */
+export async function handleDisabledTaskInteraction(interaction: Interaction): Promise<boolean> {
+    const isTaskCommand = interaction.isChatInputCommand() && (interaction.commandName === TASK_COMMAND || interaction.commandName === TASK_CANCEL_COMMAND);
+    const isTaskButton = interaction.isButton() && interaction.customId.startsWith(`${BUTTON_PREFIX}:`);
+    if (!isTaskCommand && !isTaskButton) return false;
+    await interaction.reply({ content: MSG_DISABLED, flags: MessageFlags.Ephemeral });
+    return true;
 }

@@ -7,10 +7,10 @@ import {
 } from '../tool-selection-evaluator';
 
 describe('tool-selection-evaluator', () => {
-    it('기본 골든셋이 로드되고 40건 · id 유일', () => {
+    it('기본 골든셋이 로드되고 41건 · id 유일', () => {
         const ds = loadToolSelectionDataset();
-        expect(ds.cases).toHaveLength(40);
-        expect(new Set(ds.cases.map((c) => c.id)).size).toBe(40);
+        expect(ds.cases).toHaveLength(41);
+        expect(new Set(ds.cases.map((c) => c.id)).size).toBe(41);
     });
 
     it('의미 검증 — 기대/금지 없는 케이스·expectedTool 없는 expectedArgs 거부', () => {

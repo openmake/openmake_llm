@@ -2,6 +2,7 @@
  * 에이전트 작업 API 클라이언트 — 생성·실행·조회·취소·승인. 디스코드를 모른다.
  * 인증은 채팅과 같은 봇 API 키(`Authorization: Bearer`)다. 작업은 그 키의 계정으로 만들어진다.
  * 서버 응답은 `{ success, data }` 이고, 실패는 2xx 가 아닌 상태 코드로 온다.
+ * 응답 자체를 받지 못한 실패(시간 초과·연결 실패)는 상태 코드 0 으로 던진다.
  */
 import type { TaskApprovalPolicy, TaskExecutor } from './config';
 
@@ -79,15 +80,22 @@ export function createTaskClient(opts: { baseUrl: string; apiKey: string; timeou
     const base = opts.baseUrl.replace(/\/$/, '');
 
     async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
-        const res = await fetch(`${base}${path}`, {
-            method,
-            headers: {
-                Authorization: `Bearer ${opts.apiKey}`,
-                ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-            },
-            ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-            signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-        });
+        let res: Response;
+        try {
+            res = await fetch(`${base}${path}`, {
+                method,
+                headers: {
+                    Authorization: `Bearer ${opts.apiKey}`,
+                    ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+                },
+                ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+                signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+            });
+        } catch (e) {
+            // fetch 의 원문("The operation was aborted due to timeout", "fetch failed")은 그대로 채널에 나간다 — 읽을 수 있는 말로 바꾼다
+            const timedOut = e instanceof Error && e.name === 'TimeoutError';
+            throw new TaskApiError(timedOut ? '서버 응답이 시간 안에 오지 않았습니다' : '서버에 연결하지 못했습니다', 0);
+        }
         const json: unknown = await res.json().catch(() => undefined);
         if (!res.ok) throw new TaskApiError(errorMessageOf(json) ?? `HTTP ${res.status}`, res.status);
         return (json as { data?: T } | undefined)?.data as T;

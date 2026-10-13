@@ -7,7 +7,7 @@
  * 쓸 수 있는지는 Planner 결과와의 일치율(특히 미디어 요청을 놓친 건수)을 실측한 뒤 정한다.
  * 실패는 fail-open 이다(판정 없음으로 기록).
  */
-import { DECISION, MEDIA_GATE } from '../../config/decision';
+import { DECISION, MEDIA_GATE, SEARCH_GATE } from '../../config/decision';
 import { findLocalModel } from '../../config/local-models';
 import { decideNoul, type NoulDecision } from '../decision/jev-decision';
 
@@ -49,5 +49,31 @@ export async function runMediaGateShadow(
         ...(r.pTrue !== null ? { gatePTrue: r.pTrue } : {}),
         gateMs: r.ms,
         ...(r.error ? { gateError: r.error } : {}),
+    };
+}
+
+export interface SearchGateRecord {
+    searchGatePTrue?: number;
+    searchGateMs?: number;
+    searchGateError?: string;
+}
+
+/**
+ * 검색 게이트(기록 전용) — 같은 상태 문자열에 "웹 검색이 필요한가"를 묻는다. 판단 경계·근거는 config/decision.ts 의 SEARCH_GATE.
+ * @returns 기록할 판정. 꺼져 있거나 결정 모델이 없으면 undefined(호출 없음)
+ */
+export async function runSearchGateShadow(
+    input: { message: string; attachmentKinds: string[]; signal?: AbortSignal },
+    deps: MediaGateDeps = {},
+): Promise<SearchGateRecord | undefined> {
+    if (!SEARCH_GATE.SHADOW_ENABLED) return undefined;
+    const available = deps.modelAvailable ?? (() => !!findLocalModel(DECISION.MODEL));
+    if (!available()) return undefined;
+    const decide = deps.decide ?? ((i, signal) => decideNoul(i, { signal }));
+    const r = await decide({ state: buildMediaGateState(input.message, input.attachmentKinds), question: SEARCH_GATE.QUESTION }, input.signal);
+    return {
+        ...(r.pTrue !== null ? { searchGatePTrue: r.pTrue } : {}),
+        searchGateMs: r.ms,
+        ...(r.error ? { searchGateError: r.error } : {}),
     };
 }

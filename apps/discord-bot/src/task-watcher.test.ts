@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { PendingApproval, TaskSnapshot } from './task-client';
+import { TaskApiError, type PendingApproval, type TaskSnapshot } from './task-client';
 import { formatApproval, formatFinal, formatStatus, isTerminalStatus, watchTask, type WatchOptions, type WatchUi } from './task-watcher';
 
 const snap = (over: Partial<TaskSnapshot>): TaskSnapshot => ({ id: 't1', status: 'running', progress: 0, currentTurn: 0, maxTurns: 32, result: null, error: null, ...over });
@@ -170,4 +170,45 @@ test('결과 전송이 실패하면 짧은 안내를 한 번 더 올린다 — �
     assert.equal(await watchTask(client, 't1', ui, opts()), 'completed');
     assert.equal(finals.length, 1);
     assert.match(finals[0], /결과를 모두 올리지 못했습니다/);
+});
+
+test('작업이 서버에서 사라지면(404) 기다리지 않고 바로 알리고 끝낸다', async () => {
+    const { client, calls } = scripted([() => { throw new TaskApiError('작업을 찾을 수 없습니다.', 404); }]);
+    const s = screen();
+    assert.equal(await watchTask(client, 't1', s.ui, opts()), 'gone');
+    assert.equal(calls(), 1);
+    assert.equal(s.finals.length, 1);
+    assert.match(s.finals[0], /찾을 수 없/);
+    assert.doesNotMatch(s.finals[0], /연결하지 못/);
+});
+
+test('서버가 봇의 인증을 거절하면(401·403) 바로 알리고 끝낸다', async () => {
+    for (const status of [401, 403]) {
+        const { client, calls } = scripted([() => { throw new TaskApiError('Invalid API key', status); }]);
+        const s = screen();
+        assert.equal(await watchTask(client, 't1', s.ui, opts()), 'unreachable');
+        assert.equal(calls(), 1);
+        assert.match(s.finals[0], /인증/);
+    }
+});
+
+test('진행 표시 전송이 실패하면 내용이 같아도 다음 조회에서 다시 시도한다', async () => {
+    const { client } = scripted([
+        snap({ status: 'running', currentTurn: 1 }),
+        snap({ status: 'running', currentTurn: 1 }),
+        snap({ status: 'running', currentTurn: 1 }),
+        snap({ status: 'completed', result: '끝' }),
+    ]);
+    const s = screen();
+    let attempts = 0;
+    const ui: WatchUi = { ...s.ui, updateStatus: async (t) => { attempts += 1; if (attempts === 1) throw new Error('전송 실패'); s.statuses.push(t); } };
+    await watchTask(client, 't1', ui, opts());
+    assert.equal(attempts, 3); // 실패 1 + 재시도 성공 1 + 완료 1 — 세 번째 조회(같은 내용, 이미 성공)는 고치지 않는다
+});
+
+test('지켜보는 시간이 끝나면 멈추는 방법(/task-cancel)을 함께 알린다', async () => {
+    const { client } = scripted([snap({ status: 'running' })]);
+    const s = screen();
+    assert.equal(await watchTask(client, 't1', s.ui, opts({ watchMaxMs: 0 })), 'timeout');
+    assert.match(s.finals[0], /\/task-cancel/);
 });

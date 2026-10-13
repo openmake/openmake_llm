@@ -51,6 +51,22 @@ describe('validatePlan — 구조·의미 검증', () => {
         expect(r.plan.synthesis).toBe(true);
     });
 
+    it('앞 작업에 의존하는 텍스트 작업은 refs 를 안 적어도 그 결과를 받는다 — 실측(2026-10-13): 검색 뒤 보고서 작업이 검색 결과 없이 지어냈다', () => {
+        const r = validatePlan({ complexity: 'multi', tasks: [
+            { id: 't1', capability: 'web.search', input: { instruction: 'q' } },
+            { id: 't2', capability: 'text.reason', input: { instruction: '검색 결과로 보고서 작성' }, depends_on: ['t1'] },
+            { id: 't3', capability: 'text.code', input: { instruction: 'c', refs: ['t2'] }, depends_on: ['t1'] },
+            { id: 'img', capability: 'image.generate', input: { instruction: 'p' }, depends_on: ['t1'] },
+        ] }, known);
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const refs = (id: string) => r.plan.tasks.find((t) => t.id === id)!.refs;
+        expect(refs('t2')).toEqual(['t1']);
+        expect(refs('t3').sort()).toEqual(['t1', 't2']);
+        // 텍스트가 아닌 작업의 refs 는 건드리지 않는다 — 이미지·낭독은 refs 본문을 그대로 입력으로 쓴다
+        expect(refs('img')).toEqual([]);
+    });
+
     it('강제 디코딩 스키마가 영상 인자 키를 선언한다 — 선언 안 된 키는 구조화 출력 planner 가 만들지 못한다', () => {
         const input = PLAN_JSON_SCHEMA.properties.tasks.items.properties.input.properties;
         expect(Object.keys(input)).toEqual(expect.arrayContaining(['seconds', 'size', 'negative_prompt']));
