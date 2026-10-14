@@ -57,6 +57,14 @@ const FOLD_OPTIONS = (): { keepTurns: number; minChars: number; headChars: numbe
  */
 const lastUsage = new WeakMap<ChatMessage[], UsageSample>();
 
+/** PURE-ish: 컨텍스트 사용률(188) — (추정 대화 토큰 + 도구 스키마 토큰)×보정 / 입력 예산. 예산을 모르면 null. */
+export function contextUsageRatio(conversation: ChatMessage[], tools: ToolDefinition[], model: string): number | null {
+    const budget = inputBudgetFor(model);
+    if (budget === null || budget <= 0) return null;
+    const scale = calibrationScale(lastUsage.get(conversation));
+    return ((estimateConversationTokens(conversation) + estimateToolSchemaTokens(tools)) * scale) / budget;
+}
+
 /** 창 초과 사전 판정 — 넘으면 오래된 메시지를 인계 요약으로 바꾼다. 줄인 메시지 수를 돌려준다. */
 function fitToWindow(conversation: ChatMessage[], tools: ToolDefinition[], model: string): number {
     if (!CONTEXT_HANDOFF.ENABLED) return 0;
