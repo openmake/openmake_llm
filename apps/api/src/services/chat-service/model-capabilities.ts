@@ -142,3 +142,13 @@ export async function resolveModelCapabilities(
 
     return { caps: heuristic, source: 'heuristic' };
 }
+
+/**
+ * 외부 모델의 vision 만 프로필 → 운영자 카탈로그 순으로 본다(resolveModelCapabilities 의 ③·③' 와 같은 우선순위).
+ * provider 객체가 없는 호출부(작업 role 해석 결과)용 — 적힌 값이 없으면 undefined(모름)이고, 휴리스틱은 쓰지 않는다.
+ */
+export function knownExternalVision(providerId: string, modelId: string): boolean | undefined {
+    const profiled = resolveModelProfile(modelId, providerId).capabilities;
+    if (profiled) return profiled.vision;
+    return getProviderCatalogEntry(providerId)?.fallbackModels?.find((m) => m.id === modelId)?.capabilities?.vision;
+}
