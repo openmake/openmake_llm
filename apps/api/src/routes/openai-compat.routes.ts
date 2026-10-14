@@ -22,6 +22,7 @@ import { abortOnClientDisconnect } from '../utils/abort-on-client-disconnect';
 import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
 import { buildFileContext, type AttachedFileInput } from '../services/chat-service/attach-context';
+import { buildTurnAttachments } from '../services/chat-service/turn-attachments';
 
 const openaiCompatRouter = Router();
 const log = createLogger('OpenAICompatRoute');
@@ -306,12 +307,18 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
     const tools = convertTools(body);
 
     // OpenMake 확장 files[]: 문서 텍스트만 추출해 fileContext 로 주입 (이미지는 image_url → converted.images 경로)
+    // 위임 작업(delegate_agent_task)에는 추출 전 base64 원본을 보관해 넘긴다 — 작업 공간 uploads/ 에 원본이 쓰인다
     let fileContext = '';
+    let attachedFiles: AttachedFileInput[] | undefined;
+    let originalFileData: Array<string | undefined> = [];
     if (Array.isArray(body.files) && body.files.length > 0) {
         const files: AttachedFileInput[] = body.files.map((f) => ({ name: f.name, type: f.type, size: f.size, data: f.data }));
+        originalFileData = files.map((f) => f.data);
         await extractAttachedDocuments(files); // in-place: data → content
         fileContext = buildFileContext(files);
+        attachedFiles = files;
     }
+    const attachments = buildTurnAttachments(attachedFiles, converted.images, originalFileData);
 
     // 세션 연속성: OpenAI 호환 클라이언트의 연속 호출을 결정적 세션 키로 하나의 세션에 누적.
     // 매 호출마다 새 세션이 파편 생성되던 문제 해소 (createSession 이 클라이언트 id 를 받지 않아
@@ -342,6 +349,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 sessionId: reuseSessionId,
                 ...(converted.images && converted.images.length > 0 ? { images: converted.images } : {}),
                 ...(fileContext ? { fileContext } : {}),
+                ...(attachments ? { attachments } : {}),
                 tools,
                 tool_choice: body.tool_choice,
                 userContext,
@@ -422,6 +430,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             sessionId: reuseSessionId,
             ...(converted.images && converted.images.length > 0 ? { images: converted.images } : {}),
             ...(fileContext ? { fileContext } : {}),
+            ...(attachments ? { attachments } : {}),
             tools,
             tool_choice: body.tool_choice,
             userContext,
