@@ -32,4 +32,6 @@ export const AGENT_TASK_LONG_RUNNING = {
     HANDOFF_TURN_MAX_CHARS: num('AGENT_TASK_LONG_RUNNING_HANDOFF_TURN_MAX_CHARS', 2000),
     /** 인계 턴 호출 제한 시간(ms). 넘기면 계획의 미완 항목으로 대신한다. */
     HANDOFF_TURN_TIMEOUT_MS: num('AGENT_TASK_LONG_RUNNING_HANDOFF_TURN_TIMEOUT_MS', 60_000),
+    /** 세그먼트 활성 시간이 세그먼트 시간 상한(totalTimeoutMs)의 이 비율 이상이면 시간 초과로 끝나기 전에 이어간다. 0.5~0.95. */
+    SEGMENT_TIME_RATIO: Math.min(0.95, Math.max(0.5, num('AGENT_TASK_LONG_RUNNING_SEGMENT_TIME_RATIO', 0.8))),
 } as const;

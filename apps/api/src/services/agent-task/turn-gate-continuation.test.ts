@@ -44,4 +44,13 @@ describe('applyTurnResourceGates — 이어가기(188)', () => {
         expect(r.finalTurnReason).toBe('turns');
         expect(r.continuationReason).toBeNull();
     });
+    it('세그먼트 시간 임박(timeUp)이면 time 사유로 이어간다 — 다른 상한 사유가 먼저', async () => {
+        expect((await applyTurnResourceGates({ ...baseInput(), chain: { canContinue: true, contextRatio: 0.1, timeUp: true } })).continuationReason).toBe('time');
+        expect((await applyTurnResourceGates({ ...baseInput(), totalTokens: 800, chain: { canContinue: true, contextRatio: 0.1, timeUp: true } })).continuationReason).toBe('tokens');
+    });
+    it('체인 예산이 없으면 timeUp 이어도 이어가지 않고 마무리 턴도 걸지 않는다(종전과 같다)', async () => {
+        const r = await applyTurnResourceGates({ ...baseInput(), chain: { canContinue: false, contextRatio: null, timeUp: true } });
+        expect(r.continuationReason).toBeNull();
+        expect(r.finalTurnReason).toBeNull();
+    });
 });

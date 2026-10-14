@@ -101,11 +101,54 @@ export interface ContinueInput {
     totalTokens: number;
 }
 
-/** 후속 세그먼트를 만들고 디스패치한다. 실패하면 { skipped: 사유 } — 호출부는 종전대로 마무리한다. */
-export async function continueAsNewSegment(p: ContinueInput): Promise<{ successorId: string } | { skipped: string }> {
+type ContinueOutcome = { successorId: string } | { skipped: string };
+const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+/**
+ * 선점을 놓쳤을 때 — 이미 만들어진 후속을 따른다(설계: "선점 실패면 이미 만들어진 쪽을 따른다").
+ * 선점·디스패치 뒤 completed/continued 갱신 전에 프로세스가 죽고 부팅 복구로 이 작업이 다시 돌면 여기로 온다.
+ * 후속이 살아 있으면(failed/cancelled 아님) 그 id 를 돌려 호출부가 이 작업을 '이어짐'으로 끝내게 하고(종료 알림 없음),
+ * 후속 행이 없거나 실패·취소면 skipped — 호출부는 종전대로 마무리한다.
+ */
+async function followExistingSuccessor(taskId: string): Promise<ContinueOutcome> {
+    const db = getUnifiedDatabase();
+    const cur = await db.getAgentTask(taskId).catch(() => undefined);
+    const existingId = cur?.continued_by_task_id;
+    const existing = existingId ? await db.getAgentTask(existingId).catch(() => undefined) : undefined;
+    if (existing && existing.status !== 'failed' && existing.status !== 'cancelled') {
+        logger.info(`[Continuation] 선점 실패 — 이미 만들어진 후속을 따른다: ${taskId} → ${existing.id} (${existing.status})`);
+        return { successorId: existing.id };
+    }
+    return { skipped: `이미 다른 실행이 이어갔습니다${existingId ? ` (후속 ${existingId} 없음·실패·취소)` : ''}` };
+}
+
+/** 정리 대상 추적 — 예상 밖 예외에서도 abandon 이 무엇을 되돌릴지 안다. */
+interface ContinueTrack { successorId: string; claimed: boolean; rowCreated: boolean }
+
+/**
+ * 후속 세그먼트를 만들고 디스패치한다. 실패하면 { skipped: 사유 } — 호출부는 종전대로 마무리한다.
+ * 어떤 예외도 밖으로 던지지 않는다 — 던지면 호출부의 마무리 폴백을 건너뛰고 작업이 failed 로 끝난다.
+ */
+export async function continueAsNewSegment(p: ContinueInput): Promise<ContinueOutcome> {
+    const db = getUnifiedDatabase();
+    const chainRepo = new AgentTaskChainRepository(getPool()); // claimContinuation·resetContinuation (Task 2 분리, Ruling 2)
+    const track: ContinueTrack = { successorId: '', claimed: false, rowCreated: false };
+    // 행을 만든 뒤 실패하면 고아 후속(체크포인트·디스패치 없는 pending)이 남지 않게 failed 로 닫고, 쥔 선점을 되돌린다
+    const abandon = async (why: string): Promise<{ skipped: string }> => {
+        if (track.rowCreated) await db.updateAgentTask(track.successorId, { status: 'failed', error: `이어가기 준비 실패: ${why}` }).catch((e) => logger.warn(`[Continuation] 고아 후속 닫기 실패: ${track.successorId} — ${errMsg(e)}`));
+        if (track.claimed) await chainRepo.resetContinuation(p.task.id, track.successorId).catch((e) => logger.warn(`[Continuation] 선점 되돌리기 실패(다음 판정은 선점 실패로 본다): ${p.task.id} — ${errMsg(e)}`));
+        return { skipped: why };
+    };
+    try {
+        return await runContinuation(p, chainRepo, track, abandon);
+    } catch (e) {
+        return abandon(`이어가기 예외: ${errMsg(e)}`);
+    }
+}
+
+async function runContinuation(p: ContinueInput, chainRepo: AgentTaskChainRepository, track: ContinueTrack, abandon: (why: string) => Promise<{ skipped: string }>): Promise<ContinueOutcome> {
     const db = getUnifiedDatabase();
     const repo = new AgentTaskRepository(getPool()); // markForked
-    const chainRepo = new AgentTaskChainRepository(getPool()); // claimContinuation·resetContinuation (Task 2 분리, Ruling 2)
     const state = chainBudgetState(p.task, p.root, p.activeMs, p.totalTokens);
     if (!state) return { skipped: '체인 작업이 아닙니다' };
     if (p.root.long_running?.cancelled || p.task.status === 'cancelled') return { skipped: '체인이 취소되었습니다' };
@@ -113,7 +156,7 @@ export async function continueAsNewSegment(p: ContinueInput): Promise<{ successo
 
     const nextSteps = await askNextSteps({ roleState: p.roleState, conversation: p.conversation, signal: p.signal, taskId: p.task.id, userId: String(p.task.user_id), plan: p.task.plan });
     // 장기 실행은 전역 플래그(FORK_WORKSPACE_RESTORE_ENABLED)와 무관하게 스냅숏을 강제한다 — 후속 세그먼트가 파일을 이어받는 유일한 길.
-    if (p.taskRuntime) await snapshotWorkspaceTurn(p.taskRuntime, p.turn, { force: true }).catch((e) => logger.warn(`[Continuation] 작업 공간 스냅숏 실패(후속이 복원 실패로 멈출 수 있음): ${e instanceof Error ? e.message : String(e)}`));
+    if (p.taskRuntime) await snapshotWorkspaceTurn(p.taskRuntime, p.turn, { force: true }).catch((e) => logger.warn(`[Continuation] 작업 공간 스냅숏 실패(후속이 복원 실패로 멈출 수 있음): ${errMsg(e)}`));
 
     // 인계 턴(최대 HANDOFF_TURN_TIMEOUT_MS) 동안 취소됐을 수 있다 — 중단 신호와 루트의 취소 표식을 선점 직전에 다시 본다
     if (p.signal.aborted) return { skipped: '체인이 취소되었습니다' };
@@ -121,14 +164,10 @@ export async function continueAsNewSegment(p: ContinueInput): Promise<{ successo
     if (freshRoot?.long_running?.cancelled) return { skipped: '체인이 취소되었습니다' };
 
     const successorId = randomUUID();
-    // 행을 만든 뒤 실패하면 고아 후속(체크포인트·디스패치 없는 pending)이 남지 않게 failed 로 닫고 선점을 되돌린다
-    let rowCreated = false;
-    const abandon = async (why: string): Promise<{ skipped: string }> => {
-        if (rowCreated) await db.updateAgentTask(successorId, { status: 'failed', error: `이어가기 준비 실패: ${why}` }).catch(() => { /* 닫기 실패는 경고 없이 — 선점 되돌리기는 계속 */ });
-        await chainRepo.resetContinuation(p.task.id, successorId).catch(() => { /* 되돌리기 실패는 다음 판정이 skipped 로 본다 */ });
-        return { skipped: why };
-    };
-    if (!(await chainRepo.claimContinuation(p.task.id, successorId))) return { skipped: '이미 다른 실행이 이어갔습니다' };
+    track.successorId = successorId;
+    // 순서: 선점(UPDATE) → 후속 INSERT. 선점이 먼저라 continued_by_task_id 에는 FK 가 없다(마이그레이션 188).
+    if (!(await chainRepo.claimContinuation(p.task.id, successorId))) return followExistingSuccessor(p.task.id);
+    track.claimed = true;
 
     const segmentIndex = state.segmentIndex + 1;
     const summary = buildContinuationSummary(p.conversation, p.task.goal, nextSteps);
@@ -144,14 +183,15 @@ export async function continueAsNewSegment(p: ContinueInput): Promise<{ successo
             chainRootTaskId: p.root.id, continuedFromTaskId: p.task.id, continuation,
         });
         if (!created) throw new Error('작업을 저장하지 못했습니다');
-        rowCreated = true;
+        track.rowCreated = true;
         await db.updateAgentTask(successorId, { checkpoint: { conversation: seeded, completedTurn: -1 }, ...(p.task.plan ? { plan: p.task.plan } : {}) });
-        await repo.markForked(successorId, p.task.id, p.turn).catch(() => { /* 표시용 */ });
+        // forked_from·턴 표시는 후속의 작업 공간 복원(initWorkspaceBaseline)이 읽는다 — 실패하면 후속이 파일을 못 받으므로 abandon
+        await repo.markForked(successorId, p.task.id, p.turn);
         const park = new AgentTaskParkRepository(getPool());
         if (p.task.approval_policy) await park.setApprovalPolicy(successorId, p.task.approval_policy).catch(() => { /* 물려주기 실패 무시 */ });
         if (p.task.thinking_level) await park.setThinkingLevel(successorId, p.task.thinking_level).catch(() => { /* 물려주기 실패 무시 */ });
     } catch (e) {
-        return abandon(`후속 작업 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+        return abandon(`후속 작업 저장 실패: ${errMsg(e)}`);
     }
 
     try {
@@ -169,7 +209,7 @@ export async function continueAsNewSegment(p: ContinueInput): Promise<{ successo
             }),
         });
     } catch (e) {
-        return abandon(`디스패치 실패: ${e instanceof Error ? e.message : String(e)}`);
+        return abandon(`디스패치 실패: ${errMsg(e)}`);
     }
     logger.info(`[Continuation] 이어가기: ${p.task.id} → ${successorId} (세그먼트 ${segmentIndex}, 사유 ${p.reason}, 누적 ${state.usedMs}ms/${state.usedTokens}tok)`);
     return { successorId };

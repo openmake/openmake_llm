@@ -4,11 +4,13 @@
 -- 앞뒤 연결은 continued_from/continued_by 로 둔다. long_running 은 루트에만(체인 예산·취소 표식),
 -- continuation 은 후속 작업에만(인계 요약·세그먼트 번호·누적 사용량) 들어간다.
 -- 타입은 141 의 forked_from_task_id 와 같은 TEXT. 멱등(IF NOT EXISTS). 되돌리기: rollbacks/188_agent_task_chain_rollback.sql
+-- continued_by_task_id 에는 외래 키를 걸지 않는다 — 이어가기는 후속 행을 INSERT 하기 **전에** 이 열을 조건부 UPDATE 로
+-- 선점한다(경합 방지). 즉시 검사 FK 면 선점이 23503 으로 실패한다. 가리키는 행이 없으면 "후속 없음"으로 읽는다.
 
 ALTER TABLE agent_tasks
     ADD COLUMN IF NOT EXISTS chain_root_task_id TEXT REFERENCES agent_tasks(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS continued_from_task_id TEXT REFERENCES agent_tasks(id) ON DELETE SET NULL,
-    ADD COLUMN IF NOT EXISTS continued_by_task_id TEXT REFERENCES agent_tasks(id) ON DELETE SET NULL,
+    ADD COLUMN IF NOT EXISTS continued_by_task_id TEXT,
     ADD COLUMN IF NOT EXISTS long_running JSONB,
     ADD COLUMN IF NOT EXISTS continuation JSONB;
 

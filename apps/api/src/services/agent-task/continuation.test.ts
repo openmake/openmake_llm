@@ -1,6 +1,8 @@
 jest.mock('../../config/agent-task-long-running', () => ({
     AGENT_TASK_LONG_RUNNING: { ENABLED: true, DEFAULT_MS: 1, MAX_MS: 1, DEFAULT_TOKENS: 1, MAX_TOKENS: 1, DEFAULT_SEGMENTS: 1, MAX_SEGMENTS: 1, CONTINUE_AT_RATIO: 0.9, HANDOFF_TURN_MAX_CHARS: 50, HANDOFF_TURN_TIMEOUT_MS: 100 },
 }));
+const mockLogger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
+jest.mock('../../utils/logger', () => ({ createLogger: () => mockLogger }));
 const chatMock = jest.fn();
 jest.mock('./role-client', () => ({ chatTurnWithRoleFallback: (...a: unknown[]) => chatMock(...a) }));
 const snapshotMock = jest.fn().mockResolvedValue(undefined);
@@ -21,6 +23,7 @@ import { buildContinuationSummary, chainBudgetState, askNextSteps, continueAsNew
 import { HANDOFF_SUMMARY_MARKER } from '../../prompts/agent-task-context';
 import { CONTINUATION_NEXT_STEPS_HEADING, CONTINUATION_NO_NEXT_STEPS } from '../../prompts/agent-task-continuation';
 import type { ChatMessage } from '../../llm/types';
+import * as continuationPrompts from '../../prompts/agent-task-continuation';
 
 const conv = (): ChatMessage[] => [
     { role: 'system', content: 'sys' }, { role: 'user', content: '목표' },
@@ -165,5 +168,81 @@ describe('continueAsNewSegment', () => {
         expect(r).toEqual({ skipped: expect.stringMatching(/저장/) });
         const sid = chainRepo.claimContinuation.mock.calls[0][1];
         expect(chainRepo.resetContinuation).toHaveBeenCalledWith('root', sid);
+    });
+});
+
+describe('continueAsNewSegment — 최종 검토 수정', () => {
+    const input = () => ({
+        task: { id: 'root', user_id: 'u', goal: '목표', max_turns: 32, chain_root_task_id: 'root', long_running: budget, executor: 'sandbox', input_files: null, input_images: null } as never,
+        root, reason: 'context' as const, conversation: conv(), turn: 7,
+        roleState: {} as never, signal: new AbortController().signal, taskRuntime: null,
+        userRole: 'user' as const, activeMs: 1_000, totalTokens: 100,
+    });
+    beforeEach(() => {
+        jest.clearAllMocks();
+        chainRepo.claimContinuation.mockResolvedValue(true); chainRepo.resetContinuation.mockResolvedValue(undefined);
+        chatMock.mockResolvedValue({ content: '1. 다음' }); db.getAgentTask.mockResolvedValue(root);
+        db.createAgentTask.mockResolvedValue(true); db.updateAgentTask.mockResolvedValue(undefined);
+        repo.markForked.mockResolvedValue(undefined); dispatchMock.mockResolvedValue('started');
+    });
+
+    it('순서: 선점(UPDATE) 다음에 후속 INSERT — 그래서 continued_by_task_id 에 FK 가 없어야 한다', async () => {
+        await continueAsNewSegment(input());
+        expect(chainRepo.claimContinuation.mock.invocationCallOrder[0]).toBeLessThan(db.createAgentTask.mock.invocationCallOrder[0]);
+    });
+    it('선점 자체가 예외(예: FK 23503)여도 던지지 않고 skipped — 쥔 선점이 없으니 되돌리지 않는다', async () => {
+        chainRepo.claimContinuation.mockRejectedValueOnce(Object.assign(new Error('violates foreign key constraint'), { code: '23503' }));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ skipped: expect.stringMatching(/^이어가기 예외: .*foreign key/) });
+        expect(chainRepo.resetContinuation).not.toHaveBeenCalled();
+        expect(db.createAgentTask).not.toHaveBeenCalled();
+    });
+    it('선점 뒤 try 밖의 예상 밖 예외도 던지지 않고 skipped — 쥔 선점은 되돌린다(행은 아직 없음)', async () => {
+        const spy = jest.spyOn(continuationPrompts, 'getContinuationNotice').mockImplementationOnce(() => { throw new Error('boom'); });
+        const r = await continueAsNewSegment(input());
+        spy.mockRestore();
+        expect(r).toEqual({ skipped: '이어가기 예외: boom' });
+        const sid = chainRepo.claimContinuation.mock.calls[0][1];
+        expect(chainRepo.resetContinuation).toHaveBeenCalledWith('root', sid);
+        expect(db.createAgentTask).not.toHaveBeenCalled();
+    });
+    it('markForked 가 실패하면(복원이 이 열을 읽는다) abandon — 후속 failed·선점 되돌림·디스패치 없음', async () => {
+        repo.markForked.mockRejectedValueOnce(new Error('db down'));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ skipped: expect.stringMatching(/저장 실패: db down/) });
+        const sid = db.createAgentTask.mock.calls[0][0].id;
+        expect(db.updateAgentTask).toHaveBeenCalledWith(sid, expect.objectContaining({ status: 'failed' }));
+        expect(chainRepo.resetContinuation).toHaveBeenCalledWith('root', sid);
+        expect(dispatchMock).not.toHaveBeenCalled();
+    });
+    it('abandon 의 정리 갱신이 실패하면 logger.warn 으로 남긴다', async () => {
+        dispatchMock.mockRejectedValueOnce(new Error('queue full'));
+        db.updateAgentTask.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('close fail')); // 체크포인트 저장은 성공, 닫기는 실패
+        chainRepo.resetContinuation.mockRejectedValueOnce(new Error('reset fail'));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ skipped: expect.stringMatching(/디스패치 실패/) });
+        const warned = mockLogger.warn.mock.calls.map((c) => String(c[0])).join('\n');
+        expect(warned).toMatch(/close fail/);
+        expect(warned).toMatch(/reset fail/);
+    });
+    it('선점 실패 — 이미 만들어진 후속이 살아 있으면 그 id 를 돌려준다(호출부는 이어짐으로 마감, 알림 없음)', async () => {
+        chainRepo.claimContinuation.mockResolvedValueOnce(false);
+        db.getAgentTask.mockImplementation(async (id: string) => (id === 'root' ? { ...(root as object), continued_by_task_id: 's-old' } : id === 's-old' ? { id: 's-old', status: 'running' } : undefined));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ successorId: 's-old' });
+        expect(db.createAgentTask).not.toHaveBeenCalled();
+        expect(dispatchMock).not.toHaveBeenCalled();
+        expect(chainRepo.resetContinuation).not.toHaveBeenCalled();
+    });
+    it.each([
+        ['후속이 failed', { id: 's-old', status: 'failed' }],
+        ['후속이 cancelled', { id: 's-old', status: 'cancelled' }],
+        ['후속 행이 없음', undefined],
+    ])('선점 실패 — %s 이면 skipped(종전 마무리)', async (_label, succ) => {
+        chainRepo.claimContinuation.mockResolvedValueOnce(false);
+        db.getAgentTask.mockImplementation(async (id: string) => (id === 'root' ? { ...(root as object), continued_by_task_id: 's-old' } : id === 's-old' ? succ : undefined));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ skipped: expect.stringMatching(/이미 다른 실행이 이어갔습니다/) });
+        expect(db.createAgentTask).not.toHaveBeenCalled();
     });
 });
