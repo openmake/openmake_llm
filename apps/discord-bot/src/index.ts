@@ -20,6 +20,7 @@ import { requestChatCompletion, resolveModel } from './openmake-client';
 import { noteHumanMessage, shouldHandleBotMessage, tryConsumeBotTurn } from './bot-conversation';
 import { splitForDiscord } from './message-utils';
 import { prepareReply } from './attachments';
+import { collectInboundAttachments, DEFAULT_ATTACHMENT_PROMPT, formatSkippedNotice } from './inbound-attachments';
 import { createTaskClient } from './task-client';
 import { createTaskController, type TaskController } from './task-commands';
 import { handleDisabledTaskInteraction, handleTaskInteraction, registerTaskCommands } from './task-discord';
@@ -66,8 +67,11 @@ let taskController: TaskController | null = null;
 const TYPING_REFRESH_MS = 8_000; // Discord typing 표시는 ~10초 후 소멸 → 주기 갱신
 
 async function handleChat(message: Message, botUserId: string): Promise<void> {
-    const content = stripBotMention(message.content, botUserId);
-    if (!content) return;
+    const text = stripBotMention(message.content, botUserId);
+    const hasAttachments = message.attachments.size > 0;
+    if (!text && !hasAttachments) return;
+    // 첨부만 올린 경우 기본 문구로 요청 — 세션 이력에도 이 텍스트만 남는다(첨부는 이번 턴에만 적용)
+    const content = text || DEFAULT_ATTACHMENT_PROMPT;
 
     const key = sessionKey(message.channelId, message.author.id);
     const channel = message.channel;
@@ -78,13 +82,18 @@ async function handleChat(message: Message, botUserId: string): Promise<void> {
         : null;
 
     try {
-        const answer = await requestChatCompletion(getHistory(key), content);
+        // 들어오는 첨부: 봇이 내려받아 이미지는 image_url, 문서는 files[] 로 전달 (서명·만료 URL 은 넘기지 않음)
+        const inbound = hasAttachments
+            ? await collectInboundAttachments(message.attachments.values())
+            : { imageParts: [], files: [], skipped: [] };
+        const answer = await requestChatCompletion(getHistory(key), content, inbound);
         // 생성 이미지·아티팩트 → 파일 첨부 + 뷰어 링크 (Discord 는 md 이미지/artifact 렌더 불가)
         const prepared = await prepareReply(answer.content, answer.artifacts);
         // 히스토리에는 항상 치환본(prepared.content) 저장 — 원문의 [[artifact:id]] placeholder 를
         // 그대로 남기면 모델이 그 표기를 모방해 실체 없는 placeholder 만 출력한다 (2026-07-21 실측)
         appendTurns(key, content, prepared.content);
-        const chunks = splitForDiscord(prepared.content);
+        const skippedNotice = formatSkippedNotice(inbound.skipped);
+        const chunks = splitForDiscord(skippedNotice ? `${prepared.content}\n${skippedNotice}` : prepared.content);
         try {
             await message.reply({
                 content: chunks[0],
