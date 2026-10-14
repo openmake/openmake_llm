@@ -125,13 +125,29 @@ describe('finalizeUploadedFile', () => {
         await expect(store.finalizeUploadedFile('t', path.join(root, 'tmp', 'missing'), 'a.txt', 0)).rejects.toThrow(/ENOENT/);
     });
 
-    // 결함: safeBaseName 이 길이를 자르지 않아, 이름이 파일 시스템 한도(대개 255바이트)를 넘으면 rename 이 ENAMETOOLONG 으로
+    // (고침) 결함: safeBaseName 이 길이를 자르지 않아, 이름이 파일 시스템 한도(대개 255바이트)를 넘으면 rename 이 ENAMETOOLONG 으로
     // 실패해 task 생성(routes/agent-task.routes.ts multipart 경로)·청크 claim 이 깨진다. 한글은 1자 3바이트라 86자면 넘는다.
     // 재현: finalizeUploadedFile('t', <tmp>, '가'.repeat(90) + '.pdf', 0) → ENAMETOOLONG
-    it.skip('[결함] 파일 시스템 한도를 넘는 긴 이름도 잘라서 저장한다', async () => {
+    it('[결함] 파일 시스템 한도를 넘는 긴 이름도 잘라서 저장한다', async () => {
         const tmp = await tmpFile('m-long');
         const stored = await store.finalizeUploadedFile('t', tmp, '가'.repeat(90) + '.pdf', 0);
         expect(Buffer.byteLength(path.basename(stored))).toBeLessThanOrEqual(255);
+        // 접두(0_) 를 뺀 이름은 200바이트 이하, 확장자 유지, UTF-8 경계에서 잘려 깨진 문자(U+FFFD)가 없다.
+        const name = path.basename(stored).slice('0_'.length);
+        expect(Buffer.byteLength(name)).toBeLessThanOrEqual(200);
+        expect(name).toBe('가'.repeat(65) + '.pdf');
+        expect(name).not.toContain('\uFFFD');
+        expect(await fs.readFile(path.join(root, stored), 'utf8')).toBe('data');
+    });
+
+    it('확장자 자체가 상한을 넘으면 이름 전체를 200바이트로 자른다', async () => {
+        const stored = await store.finalizeUploadedFile('t', await tmpFile('m-ext'), 'a.' + 'b'.repeat(300), 0);
+        expect(path.basename(stored)).toBe('0_a.' + 'b'.repeat(198));
+    });
+
+    it('200바이트 이하 이름은 그대로 둔다', async () => {
+        const name = 'a'.repeat(196) + '.txt';
+        await expect(store.finalizeUploadedFile('t', await tmpFile('m-200'), name, 0)).resolves.toBe(path.join('t', `0_${name}`));
     });
 });
 
