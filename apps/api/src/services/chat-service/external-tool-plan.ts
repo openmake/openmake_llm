@@ -112,9 +112,16 @@ export function buildExternalToolPlan(params: {
             logger.info(`[Orchestration] ${t.exposureLog} — ${t.name} 노출`);
         }
     }
+    // 아티팩트 의도가 위임 의도보다 우선 — "html 파일 하나로 만들어줘" 가 `파일…만들` 위임 패턴에도
+    // 걸려 백그라운드 위임으로 새면, 결과 통로(WS 이벤트·웹 푸시)가 없는 REST 클라이언트(Discord 봇)는
+    // 산출물을 영영 못 받는다(2026-10-14 운영). 응답 아티팩트만이 모든 클라이언트에 도달한다.
     if (orchestration.taskDelegate && toolCalling) {
-        tools.push(buildDelegateAgentTaskTool());
-        logger.info('[Orchestration] 작업 위임 의도 감지 — delegate_agent_task 노출');
+        if (wantsArtifact) {
+            logger.info('[Orchestration] 작업 위임 의도 감지 — 아티팩트 의도 턴이라 delegate_agent_task 억제');
+        } else {
+            tools.push(buildDelegateAgentTaskTool());
+            logger.info('[Orchestration] 작업 위임 의도 감지 — delegate_agent_task 노출');
+        }
     }
     // 사용자 확인 질문(ask_user): 큰 산출물을 만들기 전에 모호한 요청을 되묻는 출구 — 아티팩트·보고서
     // 의도 턴에만 노출한다(상시 노출 금지). 호출 처리는 external-provider 루프(도구 미실행·턴 종료).
@@ -122,7 +129,7 @@ export function buildExternalToolPlan(params: {
         tools.push(buildAskUserTool());
     }
     if (wantsArtifact && toolCalling) {
-        logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구 억제 (잔여 도구 ${tools.length}종)`);
+        logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구${orchestration.taskDelegate ? '·delegate_agent_task' : ''} 억제 (잔여 도구 ${tools.length}종)`);
     }
     // 통합(add-on) 의도 시 첫 턴에 그 통합의 도구를 강제 호출(tool_choice)한다 — 넛지만으론 qwen 이
     // web_search/자체아티팩트로 이탈한다. 등록 순서대로 첫 건이 이긴다.
