@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Interaction } from 'discord.js';
 import type { DecideResult, StartResult, TaskController } from './task-commands';
-import { handleDisabledTaskInteraction, handleTaskInteraction } from './task-discord';
+import { delegatedTaskUi, handleDisabledTaskInteraction, handleTaskInteraction } from './task-discord';
 
 function controller(over: Partial<TaskController> = {}) {
     const calls: string[] = [];
@@ -16,6 +16,7 @@ function controller(over: Partial<TaskController> = {}) {
         start: async (req): Promise<StartResult> => { calls.push(`start:${req.userId}:${req.channelId}:${req.goal}`); return { ok: true, taskId: '8da742a6-661e' }; },
         cancel: async (req) => { calls.push(`cancel:${req.userId}:${req.channelId}`); return '취소를 요청했습니다.'; },
         decide: async (req): Promise<DecideResult> => { calls.push(`decide:${req.userId}:${req.approvalId}:${req.decision}`); return { settled: true, text: '✅ 승인됨' }; },
+        trackApproval: (approvalId, ownerId) => { calls.push(`track:${approvalId}:${ownerId}`); },
         ...over,
     };
     return { c, calls };
@@ -132,4 +133,20 @@ test('기능이 꺼진 봇: 남아 있는 /task 명령과 승인 버튼에 꺼�
     assert.match(JSON.stringify(b.out[0]), /꺼져 있습니다/);
     assert.equal(await handleDisabledTaskInteraction(command('reset').i), false);
     assert.equal(await handleDisabledTaskInteraction(button('other:approve:a1').i), false);
+});
+
+test('delegatedTaskUi: 승인 주인을 적을 수 있으면 버튼과 함께 올리고, 아니면 버튼 없이 웹 승인 안내', async () => {
+    const approval = { approvalId: 'ap-1', toolName: 'run_command', args: { command: 'ls' } };
+    const sent: Array<{ content: string; components?: unknown[] }> = [];
+    const channel = { send: async (o: { content: string; components?: unknown[] }) => { sent.push(o); return {} as never; } };
+
+    const tracked: string[] = [];
+    await delegatedTaskUi(channel as never, (a) => tracked.push(a.approvalId)).postApproval(approval as never);
+    assert.deepEqual(tracked, ['ap-1']);
+    assert.equal(sent[0].components?.length, 1);
+
+    await delegatedTaskUi(channel as never, null).postApproval(approval as never);
+    assert.equal(sent[1].components, undefined);
+    assert.match(sent[1].content, /run_command/);
+    assert.match(sent[1].content, /웹의 작업 화면에서 승인하세요/);
 });

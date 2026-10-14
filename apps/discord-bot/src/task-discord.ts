@@ -24,7 +24,7 @@ export const TASK_CANCEL_COMMAND = 'task-cancel';
 const BUTTON_PREFIX = 'task';
 
 /** 메시지를 보낼 수 있는 채널의 최소 모양 — DM·스레드·서버 채널 공통 */
-interface SendableChannel {
+export interface SendableChannel {
     send(options: MessageCreateOptions): Promise<Message>;
 }
 
@@ -80,6 +80,28 @@ function channelUi(channel: SendableChannel): WatchUi {
             for (const chunk of splitForDiscord(text)) {
                 await channel.send({ content: chunk, allowedMentions: { parse: [] } });
             }
+        },
+    };
+}
+
+const MSG_APPROVE_ON_WEB = '웹의 작업 화면에서 승인하세요.';
+
+/**
+ * 채팅에서 위임한 작업을 지켜보는 화면 — /task 와 같은 채널 화면을 쓰되 승인 요청만 다르다.
+ * onApproval 이 있으면(/task 가 켜져 있고 요청한 사람이 허용 목록에 있을 때) 승인 버튼을 올리고 주인을 적게 하고,
+ * 없으면 버튼 없이 웹에서 승인하라는 안내만 붙인다(아무나 위험 도구를 승인하지 못하게).
+ */
+export function delegatedTaskUi(channel: SendableChannel, onApproval: ((approval: PendingApproval) => void) | null): WatchUi {
+    const ui = channelUi(channel);
+    return {
+        ...ui,
+        async postApproval(approval) {
+            if (onApproval) {
+                onApproval(approval);
+                await ui.postApproval(approval);
+                return;
+            }
+            await channel.send({ content: `${formatApproval(approval)}\n${MSG_APPROVE_ON_WEB}`, allowedMentions: { parse: [] } });
         },
     };
 }

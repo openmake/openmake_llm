@@ -215,3 +215,14 @@ test('정상으로 끝난 작업은 /task-cancel 대상으로 남지 않는다',
     assert.equal(await c.cancel({ userId: OWNER, channelId: 'c1' }), '이 채널에 진행 중인 작업이 없습니다.');
     assert.deepEqual(client.log.filter((l) => l.startsWith('cancel')), []);
 });
+
+test('trackApproval — 채팅에서 위임한 작업의 승인 요청도 주인이 버튼으로 결정한다', async () => {
+    const client = fakeClient();
+    const c = make(client);
+    c.trackApproval('ap-9', OWNER);
+    const byOther = await c.decide({ userId: OTHER_ALLOWED, approvalId: 'ap-9', decision: 'approve' });
+    assert.equal(byOther.settled, false);
+    const byOwner = await c.decide({ userId: OWNER, approvalId: 'ap-9', decision: 'approve' });
+    assert.equal(byOwner.settled, true);
+    assert.deepEqual(client.log, ['decide:ap-9:approve']);
+});
