@@ -107,11 +107,15 @@ describe('gateTurnWithContinuation', () => {
         expect(r.gate).toBeNull();
         expect(continueMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'context' }));
     });
-    it('segmentHasProgress — turn > startTurn 이고 마지막 인계 요약 뒤에 assistant/tool 이 있어야 한다', () => {
+    it('segmentHasProgress — turn > startTurn 이고 마지막 인계 요약 뒤에 도구 일(tool, tool_calls 있는 assistant)이 있어야 한다', () => {
         expect(segmentHasProgress(worked(), 0, 0)).toBe(false);
         expect(segmentHasProgress(worked(), 1, 0)).toBe(true);
         expect(segmentHasProgress(seed(), 3, 0)).toBe(false);
         expect(segmentHasProgress([...worked(), ...seed()], 3, 0)).toBe(false); // 인계 요약 앞의 일은 세지 않는다
+        // 도구 없는 텍스트 답은 진행이 아니다 — 채택됐으면 작업이 끝났고, 채택되지 않았으면(산출물 재촉 등) 일이 아니다
+        expect(segmentHasProgress([...seed(), { role: 'assistant', content: '답' }], 3, 0)).toBe(false);
+        expect(segmentHasProgress([...seed(), worked()[1]], 3, 0)).toBe(true); // tool_calls 있는 assistant
+        expect(segmentHasProgress([...seed(), worked()[2]], 3, 0)).toBe(true); // tool 메시지
     });
     it('이어가기를 건너뛰면 사유를 info 로그로 남긴다', async () => {
         continueMock.mockResolvedValueOnce({ skipped: '체인 예산 소진' });
