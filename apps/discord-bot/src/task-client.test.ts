@@ -88,6 +88,29 @@ test('작업 조회: 서버 필드를 봇이 쓰는 모양으로 옮긴다 — �
     assert.equal(t3.completionPath, 'continued');
 });
 
+test('산출물 조회: steps 의 artifact 스텝 content(JSON)를 파싱한다 — content·kind 가 문자열이 아니거나 JSON 이 아니면 무시', async () => {
+    const md = { id: 'r1', kind: 'markdown', title: '보고서', content: '# 제목' };
+    const code = { id: 'c1', kind: 'code', title: 'main', lang: 'py', content: 'print(1)' };
+    const { baseUrl, seen } = await serve({
+        'GET /api/agent-tasks/t1/steps': ok({ steps: [
+            { id: 1, step_type: 'thinking', content: JSON.stringify(md) },
+            { id: 2, step_type: 'artifact', content: JSON.stringify(md) },
+            { id: 3, step_type: 'artifact', content: 'not json' },
+            { id: 4, step_type: 'artifact', content: JSON.stringify({ kind: 'html', content: 1 }) },
+            { id: 5, step_type: 'artifact', content: JSON.stringify({ kind: null, content: 'x' }) },
+            { id: 6, step_type: 'artifact' },
+            { id: 7, step_type: 'artifact', content: JSON.stringify(code) },
+            { id: 8, step_type: 'artifact', content: JSON.stringify({ kind: 'svg', content: '<svg/>' }) },
+        ], total: 8 }),
+    });
+    assert.deepEqual(await createTaskClient({ baseUrl, apiKey: 'k' }).listArtifacts('t1'), [
+        { id: 'r1', kind: 'markdown', title: '보고서', lang: null, content: '# 제목' },
+        { id: 'c1', kind: 'code', title: 'main', lang: 'py', content: 'print(1)' },
+        { id: 'artifact', kind: 'svg', title: 'artifact', lang: null, content: '<svg/>' },
+    ]);
+    assert.equal(seen[0].url, '/api/agent-tasks/t1/steps');
+});
+
 test('승인 대기 조회: 그 작업의 요청만 돌려준다', async () => {
     const { baseUrl } = await serve({
         'GET /api/agent-tasks/approvals/pending': ok({ pending: [
