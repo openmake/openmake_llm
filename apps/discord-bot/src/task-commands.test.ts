@@ -31,6 +31,8 @@ function fakeClient(over: Partial<Fake> = {}): Fake {
         async cancelTask(id) { f.log.push(`cancel:${id}`); },
         async listPendingApprovals() { return f.pending; },
         async listArtifacts() { return []; },
+        async listWorkspaceFiles() { return []; },
+        async downloadWorkspaceFile() { return null; },
         async decideApproval(id, decision) { f.log.push(`decide:${id}:${decision}`); return f.decision; },
         async isDeviceConnected() { f.log.push('device?'); return f.connected; },
         ...over,

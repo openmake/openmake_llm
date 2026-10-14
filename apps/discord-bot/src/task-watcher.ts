@@ -3,8 +3,8 @@
  * 디스코드 호출은 주입받은 화면(WatchUi)으로만 한다(테스트와 진입점이 각자 구현을 준다).
  * 불변식: 화면 쪽 오류나 일시적인 조회 실패가 지켜보기를 죽이지 않는다.
  */
-import { toArtifactFiles, type ArtifactFile, type ArtifactPlan } from './task-artifacts';
-import { TaskApiError, type PendingApproval, type TaskClient, type TaskSnapshot } from './task-client';
+import { MAX_ARTIFACT_BYTES, MAX_ARTIFACT_FILES, toArtifactFiles, workspaceOutputs, type ArtifactFile, type ArtifactPlan, type WorkspaceFile } from './task-artifacts';
+import { TaskApiError, type PendingApproval, type TaskArtifact, type TaskClient, type TaskSnapshot } from './task-client';
 
 export interface WatchUi {
     /** 진행 표시 메시지 — 처음엔 올리고 그 뒤로는 고친다 */
@@ -98,8 +98,31 @@ export function formatApproval(approval: PendingApproval): string {
     return `⚠️ 승인이 필요합니다 — ${approval.toolName}\n\`\`\`\n${safe}\n\`\`\``;
 }
 
+/** 작업 공간 산출물 — 개수 상한 안의 것만 내려받는다. 상한 밖·실패한 것은 data null(못 올린 수로 센다) */
+async function fetchWorkspaceFiles(
+    client: Pick<TaskClient, 'listWorkspaceFiles' | 'downloadWorkspaceFile'>,
+    taskId: string,
+): Promise<WorkspaceFile[]> {
+    let outputs: string[];
+    try {
+        outputs = workspaceOutputs(await client.listWorkspaceFiles(taskId));
+    } catch (e) {
+        console.warn(`[discord-bot] 작업 ${taskId} 작업 공간 파일 조회 실패 (나머지로 게시):`, e instanceof Error ? e.message : e);
+        return [];
+    }
+    return Promise.all(outputs.map(async (path, i): Promise<WorkspaceFile> => {
+        if (i >= MAX_ARTIFACT_FILES) return { path, data: null };
+        try {
+            return { path, data: await client.downloadWorkspaceFile(taskId, path, MAX_ARTIFACT_BYTES) };
+        } catch (e) {
+            console.warn(`[discord-bot] 작업 ${taskId} 작업 공간 파일 ${path} 내려받기 실패 (건너뜀):`, e instanceof Error ? e.message : e);
+            return { path, data: null };
+        }
+    }));
+}
+
 export async function watchTask(
-    client: Pick<TaskClient, 'getTask' | 'listPendingApprovals' | 'listArtifacts'>,
+    client: Pick<TaskClient, 'getTask' | 'listPendingApprovals' | 'listArtifacts' | 'listWorkspaceFiles' | 'downloadWorkspaceFile'>,
     taskId: string,
     ui: WatchUi,
     opts: WatchOptions,
@@ -171,14 +194,17 @@ export async function watchTask(
         }
 
         if (isTerminalStatus(snapshot.status)) {
-            // 산출물은 완료일 때 한 번만 조회한다 — 실패하면 삼키고 첨부 없이 종전 문구로 올린다
+            // 산출물(응답 산출물·작업 공간 파일)은 완료일 때 한 번만 조회한다 — 어느 쪽이 실패해도 삼키고 나머지로 올린다
             let plan: ArtifactPlan = { files: [], leftOver: 0 };
             if (snapshot.status === 'completed') {
-                try {
-                    plan = toArtifactFiles(await client.listArtifacts(current));
-                } catch (e) {
-                    console.warn(`[discord-bot] 작업 ${current} 산출물 조회 실패 (첨부 없이 게시):`, e instanceof Error ? e.message : e);
-                }
+                const [artifacts, workspace] = await Promise.all([
+                    client.listArtifacts(current).catch((e: unknown): TaskArtifact[] => {
+                        console.warn(`[discord-bot] 작업 ${current} 산출물 조회 실패 (나머지로 게시):`, e instanceof Error ? e.message : e);
+                        return [];
+                    }),
+                    fetchWorkspaceFiles(client, current),
+                ]);
+                plan = toArtifactFiles(artifacts, workspace);
             }
             const files = plan.files.length > 0 ? plan.files : undefined;
             // 결과가 중간에 끊기면 잘린 글이 완결된 것처럼 남는다 — 짧은 안내를 한 번 더 올린다
