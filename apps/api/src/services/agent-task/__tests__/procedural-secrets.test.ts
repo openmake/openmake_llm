@@ -109,16 +109,16 @@ describe('findPlaintextSecrets — 브라우저 입력값', () => {
         expect(findPlaintextSecrets({ kind: 'browser', actions: [], code: 'TOKEN=sk-abcdefghijklmnop1234' })).toEqual([]);
     });
 
-    // 결함: goto 의 url 은 검사하지 않는다 — 주소에 박힌 자격 증명·토큰이 그대로 저장된다.
+    // (고침) 결함: goto 의 url 은 검사하지 않는다 — 주소에 박힌 자격 증명·토큰이 그대로 저장된다.
     // 재현: findPlaintextSecrets({ kind:'browser', actions:[{ type:'goto', url:'https://admin:hunter2@example.com/?access_token=abcdef123456' }] }) → []
-    it.skip('[결함] goto url 에 박힌 자격 증명·토큰을 찾는다', () => {
+    it('[결함] goto url 에 박힌 자격 증명·토큰을 찾는다', () => {
         expect(browser({ type: 'goto', url: 'https://admin:hunter2@example.com/' })).toHaveLength(1);
         expect(browser({ type: 'goto', url: 'https://example.com/cb?access_token=abcdef123456' })).toHaveLength(1);
     });
 
-    // 결함: dialog{promptText} 는 text|value 가 아니라 검사 밖이다 — 비밀번호를 묻는 prompt 창에 넣은 평문이 저장된다.
+    // (고침) 결함: dialog{promptText} 는 text|value 가 아니라 검사 밖이다 — 비밀번호를 묻는 prompt 창에 넣은 평문이 저장된다.
     // 재현: findPlaintextSecrets({ kind:'browser', actions:[{ type:'dialog', accept:true, promptText:'hunter2!', label:'비밀번호' }] }) → []
-    it.skip('[결함] 확인창 promptText 의 평문을 찾는다', () => {
+    it('[결함] 확인창 promptText 의 평문을 찾는다', () => {
         expect(browser({ type: 'dialog', accept: true, promptText: 'hunter2!', label: '비밀번호' })).toHaveLength(1);
     });
 });
@@ -174,25 +174,25 @@ describe('findPlaintextSecrets — 스크립트 본문', () => {
         expect(findPlaintextSecrets({ kind: 'script', code: 'echo hi', actions: [{ type: 'fill', selector: '#password', text: 'x' }] })).toEqual([]);
     });
 
-    // 결함(빈틈): 이름 있는 형식 토큰 중 sk-·omk_live_·bearer 만 본다 — GitHub PAT·AWS 액세스 키·Slack 토큰은
+    // (고침) 결함(빈틈): 이름 있는 형식 토큰 중 sk-·omk_live_·bearer 만 본다 — GitHub PAT·AWS 액세스 키·Slack 토큰은
     // 키 이름 없이 박히면 통과한다. 재현: findPlaintextSecrets({ kind:'script', code:'git clone https://ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/o/r' }) → []
-    it.skip('[결함] ghp_·AKIA·xoxb- 형식 토큰을 찾는다', () => {
+    it('[결함] ghp_·AKIA·xoxb- 형식 토큰을 찾는다', () => {
         expect(script('git clone https://ghp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/o/r')).toHaveLength(1);
         expect(script('aws configure set aws_access_key_id AKIAIOSFODNN7EXAMPLE')).toHaveLength(1);
         expect(script('SLACK=xoxb-123456789012-abcdefghij')).toHaveLength(1);
     });
 
-    // 결함(빈틈): 스크립트 키 이름 규칙에 pass·pwd 가 없다(브라우저 입력란 규칙에는 pwd 가 있다) — 흔한 환경 변수 이름이 통과한다.
+    // (고침) 결함(빈틈): 스크립트 키 이름 규칙에 pass·pwd 가 없다(브라우저 입력란 규칙에는 pwd 가 있다) — 흔한 환경 변수 이름이 통과한다.
     // 재현: findPlaintextSecrets({ kind:'script', code:'DB_PASS=hunter22' }) → [] , code:'MYSQL_PWD=hunter22' → []
-    it.skip('[결함] DB_PASS=·MYSQL_PWD= 리터럴을 찾는다', () => {
+    it('[결함] DB_PASS=·MYSQL_PWD= 리터럴을 찾는다', () => {
         expect(script('DB_PASS=hunter22')).toHaveLength(1);
         expect(script('MYSQL_PWD=hunter22 mysql')).toHaveLength(1);
     });
 
-    // 결함(거짓 양성): 파이썬에서 비밀을 환경 변수·입력으로 읽는 "권장" 형태가 리터럴로 걸려 저장이 거절된다.
+    // (고침) 결함(거짓 양성): 파이썬에서 비밀을 환경 변수·입력으로 읽는 "권장" 형태가 리터럴로 걸려 저장이 거절된다.
     // 값 클래스 [^\s"'${}] 가 식(os.environ.get(...)·getpass.getpass())도 6자 이상 리터럴로 본다.
     // 재현: findPlaintextSecrets({ kind:'script', lang:'python', code:"token = os.environ.get('TOKEN')" }) → ['code (…)']
-    it.skip('[결함] 파이썬 환경 변수·입력 읽기는 걸리지 않는다', () => {
+    it('[결함] 파이썬 환경 변수·입력 읽기는 걸리지 않는다', () => {
         expect(findPlaintextSecrets({ kind: 'script', lang: 'python', code: "token = os.environ.get('TOKEN')" })).toEqual([]);
         expect(findPlaintextSecrets({ kind: 'script', lang: 'python', code: 'password = getpass.getpass()' })).toEqual([]);
         expect(findPlaintextSecrets({ kind: 'script', lang: 'python', code: 'api_key = settings.API_KEY' })).toEqual([]);
