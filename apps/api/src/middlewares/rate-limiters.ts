@@ -16,7 +16,7 @@ import { STORAGE_POLICY, RATE_LIMIT_POLICY, AUTH_COOKIES } from '../config/secur
 import { ARTIFACT_EXEC } from '../config/artifact-exec';
 import { ARTIFACT_COMMENT_LIMITS } from '../config/runtime-limits';
 import { ARTIFACT_EXPORT } from '../config/artifact-export';
-import { verifyToken } from '../auth/auth-core';
+import { verifyToken, looksLikeJWT } from '../auth/auth-core';
 import { isValidApiKeyFormat } from '../auth/api-key-utils';
 import { isAdminRole } from '../data/user-manager';
 
@@ -145,7 +145,8 @@ async function resolveLimiterIdentity(req: Request): Promise<{ userId: string; r
     const authHeader = req.headers.authorization;
     const bearer = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
     const token = (req.cookies?.[AUTH_COOKIES.ACCESS] as string | undefined) || bearer;
-    if (!token || typeof token !== 'string') return null;
+    // API 키(omk_live_)는 JWT 가 아니므로 검증·경고 생략 — IP 기준 폴백(기존 동작과 같음)
+    if (!token || typeof token !== 'string' || !looksLikeJWT(token)) return null;
     try {
         const payload = await verifyToken(token);
         if (payload?.userId) {

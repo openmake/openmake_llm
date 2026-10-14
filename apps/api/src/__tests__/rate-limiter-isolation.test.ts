@@ -8,6 +8,12 @@
 jest.mock('../config', () => ({
     getConfig: () => ({ storageBackend: 'memory', redisUrl: '', trustedProxies: [] }),
 }));
+// 리미터의 신원 해석이 어떤 토큰에 JWT 검증을 시도하는지 관찰한다
+const mockVerifyToken = jest.fn(async (_token: string): Promise<unknown> => null);
+jest.mock('../auth/auth-core', () => ({
+    ...jest.requireActual('../auth/auth-core'),
+    verifyToken: (token: string) => mockVerifyToken(token),
+}));
 
 import express from 'express';
 import request from 'supertest';
@@ -80,5 +86,32 @@ describe('레이트리밋 격리', () => {
         const app = makeApp();
         const res = await request(app).post('/api/chat').set('CF-Connecting-IP', 'not-an-ip; drop table').send({});
         expect(res.status).toBe(200);
+    });
+});
+
+describe('레이트리밋 신원 해석 — Bearer 토큰 종류', () => {
+    beforeEach(() => {
+        resetKeyValueStoreForTests();
+        mockVerifyToken.mockClear();
+    });
+
+    test('Bearer API 키(omk_live_)는 JWT 검증을 타지 않고 IP 기준으로 센다', async () => {
+        const app = makeApp();
+        const res = await request(app).post('/api/chat')
+            .set('X-Forwarded-For', '203.0.113.210')
+            .set('Authorization', 'Bearer omk_live_d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4').send({});
+        expect(res.status).toBe(200);
+        expect(mockVerifyToken).not.toHaveBeenCalled();
+    });
+
+    test('JWT 모양 Bearer 토큰은 여전히 verifyToken 으로 검증한다', async () => {
+        const app = makeApp();
+        const jwtLike = 'aaa.bbb.ccc';
+        mockVerifyToken.mockResolvedValueOnce({ userId: 'u-1', role: 'user' });
+        const res = await request(app).post('/api/chat')
+            .set('X-Forwarded-For', '203.0.113.211')
+            .set('Authorization', `Bearer ${jwtLike}`).send({});
+        expect(res.status).toBe(200);
+        expect(mockVerifyToken).toHaveBeenCalledWith(jwtLike);
     });
 });
