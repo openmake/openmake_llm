@@ -35,7 +35,7 @@ import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { getApprovalRegistry } from './task-sandbox/approval-gate';
 import { currentPlanStepIndex } from './task-sandbox/planning';
-import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
+import { shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { parkForMissingDevice } from './agent-task/device-wait';
 import { parkForModelOutage } from './agent-task/model-wait';
@@ -45,7 +45,7 @@ import { partialResultOf } from './agent-task/turn-call';
 import { injectTaskInputs } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
-import { loadChainContext, chainGateInput, tryContinue, prepareSegmentWorkspace } from './agent-task/continuation-hook';
+import { loadChainContext, gateTurnWithContinuation, prepareSegmentWorkspace } from './agent-task/continuation-hook';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
 import { trackAgentTaskRun, isShutdownAbort, recordShutdownInterrupt } from './agent-task/shutdown-drain';
@@ -192,7 +192,7 @@ export class AgentTaskService {
             // (종전엔 resume 이 영속 cancelled 를 무시했다 — 취소된 작업 재개가 202 직후 다시 aborted 로 끝나던 2026-08-26 문제는 claim 이 해결한다.)
             const preTask = await db.getAgentTask(taskId);
             if (signal.aborted || preTask?.status === 'cancelled') throw new AgentTaskAbort('aborted');
-            const chainCtx = await loadChainContext(taskId, preTask); // 장기 실행 체인(188)이면 현재·루트 행 — 아니면 null(종전과 같다)
+            let chainCtx = await loadChainContext(taskId, preTask); // 장기 실행 체인(188)이면 현재·루트 행 — 아니면 null(종전과 같다)
             // resume: 이전 실행분 토큰을 이어서 누적(4-4) — runaway 토큰 가드도 통산 기준으로 동작.
             // "나머지 모두 승인" 도 함께 복원(124) — 종전엔 메모리뿐이라 재시작 후 다시 물었다.
             if (input.resume) { totalTokens = Number(preTask?.total_tokens ?? 0); cacheUsage.restore(preTask); }
@@ -351,14 +351,14 @@ export class AgentTaskService {
 
                 // 턴 자원 가드(검색/브라우저 cap·마무리 턴·HITL 무응답 강등) — 도구 세트 축소 +
                 // 최초 발동 시 nudge 주입·스텝 기록. 판정 근거는 agent-task/turn-gate 참고.
-                const gate = await applyTurnResourceGates({
+                const gr = await gateTurnWithContinuation({ chain: chainCtx, model: roleState.client.model, cont: { roleState, signal, taskRuntime, userRole, activeMs: Date.now() - startedAt - pausedMs, update }, gate: {
                     taskId, turn, startTurn, turnCeiling, totalTokens,
                     searchCalls, browserCalls, approvalTimeouts,
-                    tools, sandboxCfg, conversation, flags: gateFlags, stepNumber, emitStep, chain: chainGateInput(chainCtx, conversation, tools, roleState.client.model, Date.now() - startedAt - pausedMs, totalTokens),
-                });
-                stepNumber = gate.stepNumber;
+                    tools, sandboxCfg, conversation, flags: gateFlags, stepNumber, emitStep,
+                } });
+                if (!gr.gate) { continuedToSuccessor = true; return; } // 이어가기(188): 후속 세그먼트로 넘김. 실패면 체인을 끄고 이 턴이 종전 마무리 턴(continuation-hook). 활성 시간은 주차 제외
+                chainCtx = gr.chain; const gate = gr.gate; stepNumber = gate.stepNumber;
                 const { effectiveTools, finalTurnReason } = gate;
-                if (gate.continuationReason && chainCtx && await tryContinue({ ctx: chainCtx, reason: gate.continuationReason, conversation, turn, roleState, signal, taskRuntime, userRole, activeMs: Date.now() - startedAt - pausedMs, totalTokens, update, gateFlags })) { continuedToSuccessor = true; return; } // 이어가기(188): 상한 사유면 이 턴을 돌지 않고 후속으로 넘긴다 — 실패하면 종전대로 마무리(continuation-hook)
 
                 // 실행 중 사용자 중간 지시(steering) — 이 턴 경계에 도착한 지시를 conversation 에
                 // user 메시지로 주입해 방향을 조정한다. 턴 경계 소비라 tool_call_id 매칭이 유지되고

@@ -4,13 +4,18 @@ jest.mock('./continuation', () => ({
     continueAsNewSegment: (...a: unknown[]) => continueMock(...a),
 }));
 jest.mock('./turn-context', () => ({ contextUsageRatio: () => 0.5 }));
-const db = { getAgentTask: jest.fn() };
+const db = { getAgentTask: jest.fn(), addAgentTaskStep: jest.fn().mockResolvedValue(undefined) };
 jest.mock('../../data/models/unified-database', () => ({ getUnifiedDatabase: () => db, getPool: () => ({}) }));
 const initWorkspaceBaseline = jest.fn();
 jest.mock('./code-diff', () => ({ initWorkspaceBaseline: (...a: unknown[]) => initWorkspaceBaseline(...a) }));
 const markChainCancelled = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../data/repositories/agent-task-chain-repository', () => ({ AgentTaskChainRepository: jest.fn(() => ({ markChainCancelled })) }));
-import { loadChainContext, chainGateInput, finishAsContinued, tryContinue, prepareSegmentWorkspace } from './continuation-hook';
+jest.mock('../../config/runtime-limits', () => {
+    const actual = jest.requireActual('../../config/runtime-limits');
+    return { ...actual, AGENT_TASK_LIMITS: { ...actual.AGENT_TASK_LIMITS, FINAL_TURN_NUDGE_ENABLED: true } };
+});
+import { loadChainContext, chainGateInput, finishAsContinued, gateTurnWithContinuation, prepareSegmentWorkspace } from './continuation-hook';
+import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
 const budget = { maxDurationMs: 10_000, maxTotalTokens: 1000, maxSegments: 3, startedAt: 0 };
 const rt = {} as never;
@@ -46,18 +51,53 @@ describe('continuation-hook', () => {
         expect(ok).toBe(false);
         expect(update).not.toHaveBeenCalled();
     });
-    it('tryContinue — 실패하면 다음 턴에 종전 마무리 nudge 가 들어가도록 finalTurnNotified 를 되돌린다', async () => {
-        continueMock.mockResolvedValueOnce({ skipped: 'x' });
-        const gateFlags = { finalTurnNotified: true } as never as { finalTurnNotified: boolean };
-        const ok = await tryContinue({ ctx: { task: { id: 's1' } as never, root: { id: 'root' } as never }, reason: 'turns', conversation: [], turn: 3, roleState: {} as never, signal: new AbortController().signal, taskRuntime: null, userRole: 'user', activeMs: 1, totalTokens: 1, update: jest.fn(), gateFlags: gateFlags as never });
-        expect(ok).toBe(false);
-        expect(gateFlags.finalTurnNotified).toBe(false);
-    });
     it('주차 시간은 체인 사용량에 들어가지 않는다 — activeMs 는 호출부가 (지금-시작-주차) 로 넘긴다', () => {
         const ctx = { task: { id: 'r', chain_root_task_id: 'r' } as never, root: { id: 'r', long_running: budget } as never };
-        const startedAt = 0, now = 9_000, pausedMs = 5_000;
-        expect(chainGateInput(ctx, [], [], 'm', now - startedAt - pausedMs, 0)?.canContinue).toBe(true); // 4,000 < 10,000
-        expect(chainGateInput(ctx, [], [], 'm', now - startedAt, 0)?.canContinue).toBe(true);
+        const startedAt = 0, now = 12_000, pausedMs = 5_000;
+        expect(chainGateInput(ctx, [], [], 'm', now - startedAt - pausedMs, 0)?.canContinue).toBe(true); // 7,000 < 10,000
+        expect(chainGateInput(ctx, [], [], 'm', now - startedAt, 0)?.canContinue).toBe(false); // 12,000 ≥ 10,000 — 주차를 넣으면 멈춘다
+    });
+});
+
+describe('gateTurnWithContinuation', () => {
+    beforeEach(() => jest.clearAllMocks());
+    const tool = { type: 'function', function: { name: 'shell', description: '', parameters: {} } } as unknown as ToolDefinition;
+    const chain = () => ({ task: { id: 'r', chain_root_task_id: 'r' } as never, root: { id: 'r', long_running: budget } as never });
+    const gateInput = (turn: number, conversation: ChatMessage[], flags: { searchLimitNotified: boolean; browserLimitNotified: boolean; finalTurnNotified: boolean; approvalDegradeNotified: boolean }) => ({
+        taskId: 'r', turn, startTurn: 0, turnCeiling: 32, totalTokens: 0, searchCalls: 0, browserCalls: 0, approvalTimeouts: 0,
+        tools: [tool], sandboxCfg: { approvalPolicy: 'none', deviceGatesShell: false } as never, conversation, flags, stepNumber: 0, emitStep: jest.fn(),
+    });
+    const cont = { roleState: {} as never, signal: new AbortController().signal, taskRuntime: null, userRole: 'user' as const, activeMs: 1, update: jest.fn().mockResolvedValue(undefined) };
+
+    it('이어가기에 성공하면 gate 없이(null) 돌려준다 — 호출부는 루프를 끝낸다', async () => {
+        continueMock.mockResolvedValueOnce({ successorId: 's2' });
+        const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
+        const r = await gateTurnWithContinuation({ chain: chain(), model: 'm', cont, gate: gateInput(31, [], flags) });
+        expect(r.gate).toBeNull();
+        expect(continueMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'turns', turn: 31 }));
+    });
+    it('이어가기에 실패하면 같은 턴이 종전 마무리 턴이 되고(사유·도구 차단·nudge) 체인을 끈다 — 다음 턴엔 다시 시도하지 않는다', async () => {
+        continueMock.mockResolvedValueOnce({ skipped: '디스패치 실패' });
+        const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
+        const conversation: ChatMessage[] = [{ role: 'user', content: 'g' }];
+        const big = { task: { id: 'r', chain_root_task_id: 'r' } as never, root: { id: 'r', long_running: { ...budget, maxTotalTokens: 1e12 } } as never }; // 체인 예산은 남고 세그먼트 토큰 상한만 넘음
+        const r = await gateTurnWithContinuation({ chain: big, model: 'm', cont, gate: { ...gateInput(30, conversation, flags), totalTokens: 10_000_000 } });
+        expect(continueMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'tokens' }));
+        expect(r.gate?.finalTurnReason).toBe('tokens');
+        expect(r.gate?.effectiveTools).toEqual([]);
+        expect(r.gate?.continuationReason).toBeNull();
+        expect(flags.finalTurnNotified).toBe(true);
+        expect(conversation.length).toBe(2); // 마무리 nudge 주입
+        expect(r.chain).toBeNull();
+        const next = await gateTurnWithContinuation({ chain: r.chain, model: 'm', cont, gate: { ...gateInput(31, conversation, flags), totalTokens: 10_000_000 } });
+        expect(next.gate?.finalTurnReason).toBe('tokens');
+        expect(continueMock).toHaveBeenCalledTimes(1);
+    });
+    it('체인이 아니면 게이트만 한 번 — 종전과 같다', async () => {
+        const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
+        const r = await gateTurnWithContinuation({ chain: null, model: 'm', cont, gate: gateInput(31, [], flags) });
+        expect(r.gate?.finalTurnReason).toBe('turns');
+        expect(continueMock).not.toHaveBeenCalled();
     });
 });
 
