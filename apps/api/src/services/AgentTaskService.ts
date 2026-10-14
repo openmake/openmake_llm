@@ -43,7 +43,7 @@ import { partialResultOf } from './agent-task/turn-call';
 import { injectTaskInputs } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
-import { loadChainContext, gateTurnWithContinuation, prepareSegmentWorkspace } from './agent-task/continuation-hook';
+import { loadChainContext, gateTurnWithContinuation, prepareSegmentWorkspace, effectiveSegmentTimeoutMs } from './agent-task/continuation-hook';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
 import { trackAgentTaskRun, isShutdownAbort, recordShutdownInterrupt } from './agent-task/shutdown-drain';
@@ -113,7 +113,7 @@ export class AgentTaskService {
         // 총 타임아웃 예산 — 예약(무인) task 는 input.totalTimeoutMs 로 더 긴 예산을 받는다(기본 전역값).
         const turnCeiling = Math.min(maxTurns, AGENT_TASK_LIMITS.MAX_TURNS_CEILING);
         // 턴 상한과 정합(근거는 runtime-limits TURN_TIME_BUDGET_MS) — 명시/예약 예산이 더 크면 그대로.
-        const totalTimeoutMs = Math.max(input.totalTimeoutMs ?? AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS,
+        let totalTimeoutMs = Math.max(input.totalTimeoutMs ?? AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS,
             turnCeiling * AGENT_TASK_LIMITS.TURN_TIME_BUDGET_MS);
 
         const userCtx: UserContext = { userId, role: userRole };
@@ -312,6 +312,7 @@ export class AgentTaskService {
 
             // 턴 중간 재개(124): 결과 없는 tool_call 로 끝난 체크포인트는 LLM 재호출 없이 남은 호출만 실행(turn-reentry).
             let reentry = input.resume ? findDanglingToolCalls(conversation) : null;
+            totalTimeoutMs = effectiveSegmentTimeoutMs(chainCtx, totalTimeoutMs, Date.now() - startedAt - pausedMs); // 체인이면 체인 남은 시간으로 묶는다(최소 한 턴) — continuation-hook
 
             for (let turn = startTurn; turn < turnCeiling; turn++) {
                 assertWithinLimits(signal, startedAt, pausedMs, totalTokens, totalTimeoutMs);
