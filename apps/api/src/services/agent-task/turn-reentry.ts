@@ -17,7 +17,7 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { snapshotWorkspaceTurn } from './fork-workspace';
 import { handoffUsedToolNames } from './context-handoff';
 import { createLogger } from '../../utils/logger';
-import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
+import { AgentTaskCheckpointRepository } from '../../data/repositories/agent-task-checkpoint-repository';
 import type { ChatMessage, ToolCall } from '../../llm/types';
 
 const logger = createLogger('TurnReentry');
@@ -98,7 +98,7 @@ export function resolveUnknownOutcome(inFlightId: string | null, calls: ToolCall
 /** 실행 중 표식 기록·해제(null) — 실패해도 실행을 막지 않는다(그 호출만 종전의 최소 1회 재실행으로 돌아간다). */
 export async function markToolCallInFlight(taskId: string, toolCallId: string | null): Promise<void> {
     try {
-        await new AgentTaskRepository(getPool()).setInFlightToolCall(taskId, toolCallId);
+        await new AgentTaskCheckpointRepository(getPool()).setInFlightToolCall(taskId, toolCallId);
     } catch (e) {
         logger.warn(`[${taskId}] 실행 중 표식 ${toolCallId ? '기록' : '해제'} 실패 (무시):`, e);
     }
@@ -108,7 +108,7 @@ export async function markToolCallInFlight(taskId: string, toolCallId: string | 
 export async function loadReentryState(taskId: string, calls: ToolCall[]): Promise<{ journal: Map<string, string>; unknownOutcomeId?: string }> {
     const journal = await loadToolCallJournal(taskId, calls);
     if (!AGENT_TASK_LIMITS.REENTRY_UNKNOWN_OUTCOME_ENABLED) return { journal };
-    const inFlight = await new AgentTaskRepository(getPool()).getInFlightToolCall(taskId).catch(() => null);
+    const inFlight = await new AgentTaskCheckpointRepository(getPool()).getInFlightToolCall(taskId).catch(() => null);
     return { journal, unknownOutcomeId: resolveUnknownOutcome(inFlight, calls, journal) };
 }
 
@@ -116,7 +116,7 @@ export async function loadReentryState(taskId: string, calls: ToolCall[]): Promi
 export async function loadToolCallJournal(taskId: string, calls: ToolCall[]): Promise<Map<string, string>> {
     const ids = calls.map((tc) => tc.id).filter((id): id is string => typeof id === 'string');
     if (ids.length === 0) return new Map();
-    return new AgentTaskRepository(getPool()).getToolCallJournal(taskId, ids);
+    return new AgentTaskCheckpointRepository(getPool()).getToolCallJournal(taskId, ids);
 }
 
 /** end-of-turn 체크포인트 — 완전한 conversation + 완료 턴 + 계획 스냅샷(재개 시 복원). */
@@ -128,7 +128,7 @@ export async function writeTurnCheckpoint(taskId: string, conversation: ChatMess
     });
     // 이력(141) — fork 원천. 실패해도 최신 체크포인트(위)는 남는다(fail-open).
     try {
-        await new AgentTaskRepository(getPool()).insertCheckpointHistory(taskId, completedTurn, conversation, plan && plan.length > 0 ? plan : null, AGENT_TASK_LIMITS.CHECKPOINT_KEEP);
+        await new AgentTaskCheckpointRepository(getPool()).insertCheckpointHistory(taskId, completedTurn, conversation, plan && plan.length > 0 ? plan : null, AGENT_TASK_LIMITS.CHECKPOINT_KEEP);
     } catch (e) {
         logger.warn(`[${taskId}] 체크포인트 이력 기록 실패 (무시):`, e);
     }

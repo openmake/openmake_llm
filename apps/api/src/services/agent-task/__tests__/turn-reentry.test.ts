@@ -2,7 +2,7 @@
  * 턴 중간 재개(124) — 체크포인트 대화에서 결과 없는 tool_call 만 골라낸다.
  */
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({}), getPool: () => ({}) }));
-jest.mock('../../../data/repositories/agent-task-repository', () => ({ AgentTaskRepository: jest.fn() }));
+jest.mock('../../../data/repositories/agent-task-checkpoint-repository', () => ({ AgentTaskCheckpointRepository: jest.fn() }));
 
 import { ensureUniqueToolCallIds, findDanglingToolCalls, resolveUnknownOutcome , usedToolNamesFrom } from '../turn-reentry';
 import type { ChatMessage } from '../../../llm/types';

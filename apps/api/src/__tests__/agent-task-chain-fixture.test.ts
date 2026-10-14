@@ -79,12 +79,17 @@ jest.mock('../data/repositories/agent-task-repository', () => ({
             store.parked.delete(id); r.status = 'pending';
             return true;
         },
+        markForked: async (id: never, from: never, turn: never) => { Object.assign(rowOf(id), { forked_from_task_id: from, forked_from_turn: turn }); },
+    })),
+}));
+// 턴 재진입 기록(실행 중 호출·도구 결과 저널)은 체크포인트 저장소로 분리됐다 — 같은 Map 위에서 구현
+jest.mock('../data/repositories/agent-task-checkpoint-repository', () => ({
+    AgentTaskCheckpointRepository: jest.fn().mockImplementation(() => repoOf({
         setInFlightToolCall: async (id: never, callId: never) => { store.inFlight.set(id, callId); },
         getInFlightToolCall: async (id: never) => store.inFlight.get(id) ?? null,
         getToolCallJournal: async (id: never, ids: never) => new Map(stepsOf(id)
             .filter((s) => s.stepType === 'tool_result' && (ids as string[]).includes(String(s.toolCallId)))
             .map((s) => [String(s.toolCallId), String(s.content)])),
-        markForked: async (id: never, from: never, turn: never) => { Object.assign(rowOf(id), { forked_from_task_id: from, forked_from_turn: turn }); },
     })),
 }));
 // 체인 저장소 — 실제 SQL 의 조건(선점은 continued_by 가 비어 있을 때만, 취소 표식은 long_running 병합)을 그대로 옮긴다
@@ -178,7 +183,8 @@ import { CONTINUATION_NEXT_STEPS_HEADING, getContinuationNextStepsPrompt, getCon
 const GOAL = '오늘의 날씨를 여러 번 검색해서 한 문장으로 알려 줘';
 const FINAL = '검색 결과에 따르면 오늘은 맑습니다. 요청하신 내용을 한 문장으로 정리했습니다.';
 const NEXT_STEPS = '1. 남은 지역의 날씨를 검색한다\n2. 결과를 한 문장으로 정리한다';
-const HANDOFF_PROMPT = getContinuationNextStepsPrompt(AGENT_TASK_LONG_RUNNING.HANDOFF_TURN_MAX_CHARS);
+/** 인계 턴 질문 — 사유별 문구라 이 테스트가 쓰는 사유(turns·tokens)의 둘 다 인계로 본다 */
+const HANDOFF_PROMPTS = new Set(['turns', 'tokens'].map((r) => getContinuationNextStepsPrompt(AGENT_TASK_LONG_RUNNING.HANDOFF_TURN_MAX_CHARS, r)));
 const ROOT = 'root';
 type Msg = { role: string; content?: unknown; tool_calls?: Array<Record<string, unknown>>; tool_call_id?: string };
 type Body = Record<string, unknown> & { messages?: Msg[]; tools?: unknown[] };
@@ -213,7 +219,7 @@ const text = (m: Msg | undefined): string => (typeof m?.content === 'string' ? m
 const msgs = (b: Body): Msg[] => b.messages ?? [];
 const isTaskConv = (b: Body): boolean => text(msgs(b)[1]) === GOAL;
 const hasTools = (b: Body): boolean => Array.isArray(b.tools) && b.tools.length > 0;
-const isHandoff = (b: Body): boolean => isTaskConv(b) && text(msgs(b).at(-1)) === HANDOFF_PROMPT;
+const isHandoff = (b: Body): boolean => isTaskConv(b) && HANDOFF_PROMPTS.has(text(msgs(b).at(-1)));
 /** 후속 세그먼트의 대화 — 시드의 세 번째 메시지가 인계 요약이고 끝에 "세션 N" 안내가 붙는다. 루트는 0. */
 const segmentOf = (b: Body): number => {
     const seed = text(msgs(b)[2]);

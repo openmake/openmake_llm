@@ -11,6 +11,9 @@ import { AgentTaskChainRepository } from '../data/repositories/agent-task-chain-
 import { AppError, AuthorizationError } from '../utils/error-handler';
 import { isAdminRole } from '../data/user-manager';
 import { toPublicTask, waitReasonOf } from './agent-task.helpers';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('AgentTaskChain');
 
 export type ChainRow = Pick<AgentTask, 'id' | 'status' | 'total_tokens' | 'completion_path' | 'continuation' | 'continued_by_task_id' | 'created_at'>;
 
@@ -87,6 +90,20 @@ export async function cancelTargetOf(task: AgentTask): Promise<AgentTask> {
 /** GET /:taskId 응답 본문 — 공개 task(+대기 사유·chain 블록)와 스텝. */
 export async function detailPayload(task: AgentTask, steps: AgentTaskStep[]) {
     return { task: { ...toPublicTask(task as unknown as Record<string, unknown>), ...(await waitReasonOf(task)), ...(await chainInfoOf(task)) }, steps };
+}
+
+/**
+ * GET / 목록 보조 — 체인 루트 행에 chain_segment_count(서버 집계 세그먼트 수)를 붙인다. 웹 카드가 받은 목록 행으로 세면
+ * 상태 필터·개수 제한에 따라 틀렸다. 루트가 없으면 DB 호출 없음. 집계 실패는 목록을 막지 않는다(웹은 종전 계산으로 폴백).
+ */
+export async function withChainSegmentCounts<T extends Pick<AgentTask, 'id' | 'chain_root_task_id'>>(tasks: T[]): Promise<Array<T & { chain_segment_count?: number }>> {
+    const rootIds = tasks.filter((t) => t.chain_root_task_id === t.id).map((t) => t.id);
+    if (rootIds.length === 0) return tasks;
+    const counts = await new AgentTaskChainRepository(getPool()).countChainSegments(rootIds).catch((e) => {
+        logger.warn(`[AgentTaskChain] 세그먼트 수 집계 실패(목록은 그대로): ${e instanceof Error ? e.message : String(e)}`);
+        return new Map<string, number>();
+    });
+    return tasks.map((t) => (counts.has(t.id) ? { ...t, chain_segment_count: counts.get(t.id) } : t));
 }
 
 /** GET /?chain=<rootId> — 체인 세그먼트 목록. 권한은 기존 목록과 같다: 루트가 내 것이거나 admin. */
