@@ -2,6 +2,7 @@
  * MCP docker 샌드박스 단위 테스트 — 게이트 + docker run 인자 조립 + loopback 치환.
  */
 import { buildDockerArgs, buildSandboxedCommand, buildSandboxedEnv, rewriteLoopback, SandboxConfig } from '../sandbox-docker';
+import { needsPlaywrightBrowser, shellQuote, wrapWithPlaywrightInstall } from '../sandbox-playwright';
 
 const cfg = (over: Partial<SandboxConfig> = {}): SandboxConfig => ({
     enabled: true,
@@ -166,5 +167,60 @@ describe('buildSandboxedCommand (gate)', () => {
         const r = buildSandboxedCommand({ ...input, env: { NODE_OPTIONS: '--require /x', LD_PRELOAD: '/x.so', HOME: '/cache', API_KEY: 'k1' } }, cfg());
         expect(r.env).toEqual({ HOME: '/cache', API_KEY: 'k1' });
         expect(r.args.join(' ')).not.toContain('NODE_OPTIONS');
+    });
+});
+
+describe('playwright 브라우저 사전 설치 래핑 (sandbox-playwright)', () => {
+    const noapi = { command: 'uvx', args: ['--with', 'mcp<2', 'noapi-google-search-mcp==0.3.2'], serverId: 'g1' };
+
+    it('noapi uvx 서버 → 마지막 인자가 sh -c <script>, 같은 venv 로 install 후 exec', () => {
+        const a = buildDockerArgs(noapi, cfg());
+        const img = a.indexOf('openmake-mcp-runtime:latest');
+        expect(a.slice(img + 1, img + 3)).toEqual(['sh', '-c']);
+        expect(a.length).toBe(img + 4);
+        const script = a[a.length - 1];
+        expect(script).toContain("'uvx' '--with' 'mcp<2' '--from' 'noapi-google-search-mcp==0.3.2' python -m playwright install 'chromium'");
+        expect(script).toContain("exec 'uvx' '--with' 'mcp<2' 'noapi-google-search-mcp==0.3.2'");
+        // 설치 출력은 stderr 로 — MCP JSON-RPC stdout 오염 금지, stdin 도 넘기지 않는다
+        expect(script).toMatch(/playwright install 'chromium' <\/dev\/null >&2 \|\| true; exec 'uvx' /);
+    });
+
+    it('다른 uvx/npx 서버 → 래핑 없이 종전 그대로', () => {
+        for (const input of [
+            { command: 'uvx', args: ['mcp-server-fetch'], serverId: 'f1' },
+            { command: 'npx', args: ['-y', 'pkg'], serverId: 'n1' },
+        ]) {
+            const a = buildDockerArgs(input, cfg());
+            expect(a.slice(-(input.args.length + 1))).toEqual([input.command, ...input.args]);
+            expect(a).not.toContain('sh');
+        }
+    });
+
+    it('env OMK_PLAYWRIGHT_BROWSERS opt-in uvx 서버 → 래핑(값의 브라우저 목록 설치)', () => {
+        const input = { command: 'uvx', args: ['some-browser-mcp'], serverId: 'b1', env: { OMK_PLAYWRIGHT_BROWSERS: 'chromium,firefox' } };
+        expect(needsPlaywrightBrowser(input)).toBe(true);
+        const script = buildDockerArgs(input, cfg()).slice(-1)[0];
+        expect(script).toContain("'--from' 'some-browser-mcp' python -m playwright install 'chromium' 'firefox'");
+        expect(script).toContain("exec 'uvx' 'some-browser-mcp'");
+    });
+
+    it('판정: uvx 가 아니면 플래그가 있어도 false, 빈 플래그는 무시', () => {
+        expect(needsPlaywrightBrowser({ command: 'npx', args: ['x'], env: { OMK_PLAYWRIGHT_BROWSERS: 'chromium' } })).toBe(false);
+        expect(needsPlaywrightBrowser({ command: 'uvx', args: ['x'], env: { OMK_PLAYWRIGHT_BROWSERS: '' } })).toBe(false);
+        expect(needsPlaywrightBrowser({ command: 'uvx', args: ['noapi-google-search-mcp'] })).toBe(true);
+    });
+
+    it('--from 이 이미 있으면 그 스펙을 그대로 쓰고 실행 이름은 설치에서 뺀다', () => {
+        const s = wrapWithPlaywrightInstall('uvx', ['--from', 'noapi-google-search-mcp==0.3.2', 'noapi-google-search-mcp']);
+        expect(s).toEqual(['sh', '-c', expect.stringContaining("'uvx' '--from' 'noapi-google-search-mcp==0.3.2' python -m playwright install 'chromium'")]);
+        expect(s[2]).toContain("exec 'uvx' '--from' 'noapi-google-search-mcp==0.3.2' 'noapi-google-search-mcp'");
+    });
+
+    it('인용 헬퍼: 공백·작은따옴표·셸 메타문자를 안전하게 감싼다', () => {
+        expect(shellQuote("a b")).toBe("'a b'");
+        expect(shellQuote("it's")).toBe("'it'\\''s'");
+        expect(shellQuote('$(rm -rf /);`x`')).toBe("'$(rm -rf /);`x`'");
+        const s = wrapWithPlaywrightInstall('uvx', ['--with', "x'; touch /tmp/p; '", 'noapi-google-search-mcp'])[2];
+        expect(s).toContain("'--with' 'x'\\''; touch /tmp/p; '\\'''");
     });
 });

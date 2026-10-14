@@ -87,6 +87,7 @@ export const MCP_SANDBOX_PID_LABEL_KEY = 'openmake.pid';
 // docker 경로 해석은 Base 유틸(utils/docker-path)로 옮겼다 — 아티팩트 실행·보고서 내보내기도 같은 것을 쓴다 (2026-09-19).
 import { resolveDocker } from '../../utils/docker-path';
 import { isControlEnvKey } from '../../security/spawn-env-policy';
+import { needsPlaywrightBrowser, playwrightBrowsersFromEnv, wrapWithPlaywrightInstall } from './sandbox-playwright';
 export { resolveDocker };
 
 /** 환경에서 SandboxConfig 조립 (No-Hardcoding — env override). */
@@ -194,7 +195,15 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
         a.push('-e', k);
     }
     a.push(cfg.image);
-    a.push(rewriteLoopback(input.command), ...input.args.map((x) => rewriteLoopback(String(x))));
+    const command = rewriteLoopback(input.command);
+    const args = input.args.map((x) => rewriteLoopback(String(x)));
+    if (needsPlaywrightBrowser(input)) {
+        // 브라우저 uvx 서버 — 스폰 전 같은 venv 로 playwright 브라우저 설치(리비전 드리프트 대응, sandbox-playwright).
+        const browsers = playwrightBrowsersFromEnv(input.env);
+        a.push(...wrapWithPlaywrightInstall(command, args, browsers.length > 0 ? browsers : undefined));
+    } else {
+        a.push(command, ...args);
+    }
     return a;
 }
 
