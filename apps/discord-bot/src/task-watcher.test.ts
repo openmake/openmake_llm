@@ -295,6 +295,28 @@ test('결과 문구: 산출물을 첨부하면 본문이 없을 때 "산출물 N
     assert.equal(formatFinal(snap({ status: 'completed', result: '[[artifact:a]]' }), { files: [], leftOver: 0 }), '✅ 작업이 끝났습니다.\n\n(결과 본문 없음)\n\n📎 산출물은 웹의 작업 화면에서 확인하세요.');
 });
 
+test('결과 문구: 자리표시자는 첨부 파일 이름으로, 못 올린 산출물은 웹 안내로 바꾸고 빈 줄은 둘까지 접는다', () => {
+    // 운영 재현 — 종전에는 자리표시자를 지워 "정리해 드릴게요." 다음이 빈 줄뿐이었다
+    const result = '사진을 확인했습니다. 아래에 분석 결과를 정리해 드릴게요.\n\n[[artifact:dog-photo-analysis]]\n\n필요하시면 더 알려 주세요.';
+    const dog = { name: 'dog-photo-analysis.md', data: Buffer.from('x'), artifactId: 'dog-photo-analysis' };
+    assert.equal(
+        formatFinal(snap({ status: 'completed', result }), { files: [dog], leftOver: 0 }),
+        '✅ 작업이 끝났습니다.\n\n사진을 확인했습니다. 아래에 분석 결과를 정리해 드릴게요.\n\n📎 dog-photo-analysis.md\n\n필요하시면 더 알려 주세요.',
+    );
+    // 버전 표기 꼴도 같은 id 로 본다
+    assert.equal(
+        formatFinal(snap({ status: 'completed', result: '요약\n[[artifact:dog-photo-analysis:v2]]' }), { files: [dog], leftOver: 0 }),
+        '✅ 작업이 끝났습니다.\n\n요약\n📎 dog-photo-analysis.md',
+    );
+    // 못 올린 산출물(개수·크기 상한)은 제목과 웹 안내
+    assert.equal(
+        formatFinal(snap({ status: 'completed', result: '정리했습니다.\n\n\n[[artifact:big]]\n\n\n\n끝.' }), { files: [], leftOver: 1, leftOverArtifacts: [{ id: 'big', title: '큰 보고서' }] }),
+        '✅ 작업이 끝났습니다.\n\n정리했습니다.\n\n📎 큰 보고서 — 웹의 작업 화면에서 확인\n\n끝.\n\n📎 산출물은 웹의 작업 화면에서 확인하세요.',
+    );
+    // 자리표시자 없는 본문은 빈 줄도 그대로
+    assert.equal(formatFinal(snap({ status: 'completed', result: '가\n\n\n\n나' }), { files: [dog], leftOver: 0 }), '✅ 작업이 끝났습니다.\n\n가\n\n\n\n나');
+});
+
 test('completed 면 산출물을 한 번 조회해 결과와 함께 파일로 넘긴다', async () => {
     let asked = 0;
     const { client } = scripted([snap({ status: 'completed', result: '[[artifact:보고서]]' })], [], async () => { asked += 1; return [md('보고서'), md('부록')]; });
@@ -302,7 +324,8 @@ test('completed 면 산출물을 한 번 조회해 결과와 함께 파일로 �
     assert.equal(await watchTask(client, 't1', s.ui, opts()), 'completed');
     assert.equal(asked, 1);
     assert.deepEqual(s.finals, ['✅ 작업이 끝났습니다.\n\n산출물 2개를 첨부합니다.']);
-    assert.deepEqual(s.finalFiles[0]?.map((f) => f.name), ['보고서.md', '부록.md']);
+    // 제목·id 가 모두 비ASCII 면 디스코드가 지울 이름 대신 artifact
+    assert.deepEqual(s.finalFiles[0]?.map((f) => f.name), ['artifact.md', 'artifact-2.md']);
 });
 
 test('산출물 조회가 실패하면 삼키고 종전 문구로 올린다 — 실패·취소는 조회하지 않는다', async () => {
@@ -328,7 +351,7 @@ test('completed 면 작업 공간 파일도 조회해 산출물만 내려받고,
     assert.equal(await watchTask(client, 't1', s.ui, opts()), 'completed');
     assert.deepEqual(downloaded, [['monthly.csv', 8 * 1024 * 1024]]);
     assert.deepEqual(s.finals, ['✅ 작업이 끝났습니다.\n\n산출물 2개를 첨부합니다.']);
-    assert.deepEqual(s.finalFiles[0]?.map((f) => f.name), ['monthly.csv', '보고서.md']);
+    assert.deepEqual(s.finalFiles[0]?.map((f) => f.name), ['monthly.csv', 'artifact.md']);
     assert.equal(s.finalFiles[0]?.[0].data.toString('utf8'), '월,합계');
 });
 
@@ -353,7 +376,7 @@ test('작업 공간 조회·다운로드가 실패해도 삼키고 나머지로 
     });
     const s = screen();
     assert.equal(await watchTask(client, 't1', s.ui, opts()), 'completed');
-    assert.deepEqual(s.finalFiles[0]?.map((f) => f.name), ['b.csv', '보고서.md']);
+    assert.deepEqual(s.finalFiles[0]?.map((f) => f.name), ['b.csv', 'artifact.md']);
     assert.deepEqual(s.finals, ['✅ 작업이 끝났습니다.\n\n산출물 2개를 첨부합니다.\n\n📎 나머지 1개는 웹의 작업 화면에서 확인하세요.']);
 
     const listFails = scripted([snap({ status: 'completed', result: '' })], [], async () => [md('보고서')], {
@@ -361,7 +384,7 @@ test('작업 공간 조회·다운로드가 실패해도 삼키고 나머지로 
     });
     const s2 = screen();
     await watchTask(listFails.client, 't1', s2.ui, opts());
-    assert.deepEqual(s2.finalFiles[0]?.map((f) => f.name), ['보고서.md']);
+    assert.deepEqual(s2.finalFiles[0]?.map((f) => f.name), ['artifact.md']);
 
     const artifactsFail = scripted([snap({ status: 'completed', result: '' })], [], async () => { throw new TaskApiError('없음', 500); }, {
         list: async () => ['a.csv'],
