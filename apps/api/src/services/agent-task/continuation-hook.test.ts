@@ -35,7 +35,7 @@ describe('continuation-hook', () => {
         db.getAgentTask.mockResolvedValueOnce({ id: 's1', chain_root_task_id: 'root' }).mockResolvedValueOnce({ id: 'root', long_running: budget });
         const ctx = await loadChainContext('s1');
         expect(ctx?.root.id).toBe('root');
-        expect(chainGateInput(ctx, [], [], 'm', 100, 10)).toEqual({ canContinue: true, contextRatio: 0.5, remainingMs: 9_900, timeUp: false });
+        expect(chainGateInput(ctx, [], [], 'm', 100, 10)).toEqual({ canContinue: true, contextRatio: 0.5, timeUp: false });
     });
     it('finishAsContinued — 성공하면 completed/continued 로 마감하고 true, 알림은 보내지 않는다', async () => {
         continueMock.mockResolvedValueOnce({ successorId: 's2' });
@@ -57,9 +57,9 @@ describe('continuation-hook', () => {
         expect(chainGateInput(ctx, [], [], 'm', now - startedAt - pausedMs, 0)?.canContinue).toBe(true); // 7,000 < 10,000
         expect(chainGateInput(ctx, [], [], 'm', now - startedAt, 0)?.canContinue).toBe(false); // 12,000 ≥ 10,000 — 주차를 넣으면 멈춘다
     });
-    it('chainGateInput — remainingMs 는 체인 시간 예산의 남은 양, timeUp 은 세그먼트 시간 상한 × SEGMENT_TIME_RATIO(기본 0.8) 기준', () => {
+    it('chainGateInput — timeUp 은 세그먼트 시간 상한 × SEGMENT_TIME_RATIO(기본 0.8) 기준', () => {
         const ctx = { task: { id: 'r', chain_root_task_id: 'r' } as never, root: { id: 'r', long_running: budget } as never };
-        expect(chainGateInput(ctx, [], [], 'm', 4_000, 0, 5_000)).toMatchObject({ remainingMs: 6_000, timeUp: true });
+        expect(chainGateInput(ctx, [], [], 'm', 4_000, 0, 5_000)).toMatchObject({ timeUp: true });
         expect(chainGateInput(ctx, [], [], 'm', 3_999, 0, 5_000)).toMatchObject({ timeUp: false });
         expect(chainGateInput(ctx, [], [], 'm', 4_000, 0)).toMatchObject({ timeUp: false }); // 상한을 모르면 판정하지 않는다
     });

@@ -26,15 +26,15 @@ export async function loadChainContext(taskId: string, preloaded?: AgentTask): P
 
 /**
  * turn-gate 의 chain 입력 — 체인이 아니면 undefined(게이트는 종전과 같다).
- * remainingMs: 체인 시간 예산의 남은 양(maxDurationMs − 누적). timeUp: 이번 세그먼트 활성 시간이 세그먼트 시간 상한
+ * timeUp: 이번 세그먼트 활성 시간이 세그먼트 시간 상한
  * (서비스의 totalTimeoutMs)의 SEGMENT_TIME_RATIO 이상 — assertWithinLimits 가 'timeout' 으로 체인을 failed 로 끝내기 전에 잇는다(설계 §2.1).
  */
-export function chainGateInput(ctx: ChainContext | null, conversation: ChatMessage[], tools: ToolDefinition[], model: string, activeMs: number, totalTokens: number, segmentTimeoutMs?: number): { canContinue: boolean; contextRatio: number | null; remainingMs: number; timeUp: boolean } | undefined {
+export function chainGateInput(ctx: ChainContext | null, conversation: ChatMessage[], tools: ToolDefinition[], model: string, activeMs: number, totalTokens: number, segmentTimeoutMs?: number): { canContinue: boolean; contextRatio: number | null; timeUp: boolean } | undefined {
     if (!ctx) return undefined;
     const state = chainBudgetState(ctx.task, ctx.root, activeMs, totalTokens);
     if (!state) return undefined;
     const timeUp = segmentTimeoutMs != null && activeMs >= segmentTimeoutMs * AGENT_TASK_LONG_RUNNING.SEGMENT_TIME_RATIO;
-    return { canContinue: state.canContinue, contextRatio: contextUsageRatio(conversation, tools, model), remainingMs: Math.max(0, state.limits.maxDurationMs - state.usedMs), timeUp };
+    return { canContinue: state.canContinue, contextRatio: contextUsageRatio(conversation, tools, model), timeUp };
 }
 
 /** segmentTimeoutMs: 서비스의 세그먼트 시간 상한(totalTimeoutMs) — 'time' 이어가기 판정용 */

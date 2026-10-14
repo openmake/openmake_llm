@@ -4,7 +4,7 @@
  * 선점 SQL 의 모양과 마이그레이션 파일의 열 정의를 확인한다.
  */
 import type { Pool } from 'pg';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { AgentTaskChainRepository } from '../agent-task-chain-repository';
 
@@ -14,7 +14,8 @@ function fakePool(rowCount = 1) {
     return { pool: pool as unknown as Pool, calls };
 }
 
-const MIGRATION = join(__dirname, '../../../../../../db/migrations/188_agent_task_chain.sql');
+const MIGRATIONS = join(__dirname, '../../../../../../db/migrations');
+const MIGRATION = join(MIGRATIONS, '188_agent_task_chain.sql');
 
 describe('AgentTaskChainRepository.claimContinuation — 선점 후 INSERT 순서', () => {
     it('선점은 아직 없는 후속 id 를 적는 조건부 UPDATE 하나다(후속 행을 만들지 않는다)', async () => {
@@ -41,5 +42,17 @@ describe('마이그레이션 188 — continued_by_task_id 에 FK 가 없다', ()
     it('나머지 두 체인 열의 FK 는 그대로', () => {
         expect(columnDef('chain_root_task_id')).toMatch(/REFERENCES agent_tasks\(id\) ON DELETE SET NULL/);
         expect(columnDef('continued_from_task_id')).toMatch(/REFERENCES agent_tasks\(id\) ON DELETE SET NULL/);
+    });
+});
+
+describe('마이그레이션 189 — 옛 188(FK 포함)이 먼저 적용된 DB 보정', () => {
+    it('189 가 있고 continued_by FK 를 멱등으로 지운다', () => {
+        const p = join(MIGRATIONS, '189_agent_task_chain_drop_continued_by_fk.sql');
+        expect(existsSync(p)).toBe(true);
+        expect(readFileSync(p, 'utf8')).toContain('DROP CONSTRAINT IF EXISTS agent_tasks_continued_by_task_id_fkey');
+    });
+    it('189 되돌리기는 FK 를 되살리지 않는다(주석만)', () => {
+        const sql = readFileSync(join(MIGRATIONS, 'rollbacks/189_agent_task_chain_drop_continued_by_fk_rollback.sql'), 'utf8');
+        expect(sql.split('\n').filter((l) => l.trim() && !l.trim().startsWith('--'))).toEqual([]);
     });
 });
