@@ -57,14 +57,16 @@ export function chainGateInput(ctx: ChainContext | null, conversation: ChatMessa
 
 /**
  * PURE: 이 세그먼트가 일을 했는가(폭주 방지) — turns 사유와 같은 turn > startTurn 에 더해, 마지막 인계 요약
- * (후속 시드·컨텍스트 접기) 뒤에 assistant/tool 메시지가 하나라도 있어야 한다. 시드+도구 스키마만으로 컨텍스트 기준을
- * 넘는 작은 예산에서 첫 턴마다 이어가 일 없이 세그먼트를 태우던 것(라이브 2차: 45초에 4세그먼트, 누적 0tok)을 막는다.
+ * (후속 시드·컨텍스트 접기) 뒤에 도구 일 — tool 메시지 또는 tool_calls 가 있는 assistant 메시지 — 이 하나라도 있어야 한다.
+ * 도구 없는 텍스트 답은 진행이 아니다: 채택됐으면 작업이 끝났을 것이고, 채택되지 않았으면(산출물 재촉 등) 일이 아니다.
+ * 시드+도구 스키마만으로 컨텍스트 기준을 넘는 작은 예산에서 첫 턴마다 이어가 일 없이 세그먼트를 태우던 것
+ * (라이브 2차: 45초에 4세그먼트, 누적 0tok)과, 첫 턴 마무리 턴의 채택 안 된 텍스트 답을 진행으로 보고 잇던 것을 막는다.
  */
 export function segmentHasProgress(conversation: ChatMessage[], turn: number, startTurn: number): boolean {
     if (turn <= startTurn) return false;
     let from = 0;
     conversation.forEach((m, i) => { if (m.role === 'user' && typeof m.content === 'string' && m.content.includes(HANDOFF_SUMMARY_MARKER)) from = i + 1; });
-    return conversation.slice(from).some((m) => m.role === 'assistant' || m.role === 'tool');
+    return conversation.slice(from).some((m) => m.role === 'tool' || (m.role === 'assistant' && !!m.tool_calls?.length));
 }
 
 /** segmentTimeoutMs: 서비스의 세그먼트 시간 상한(totalTimeoutMs) — 'time' 이어가기 판정용 */
