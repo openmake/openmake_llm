@@ -215,7 +215,10 @@ test('지켜보는 시간이 끝나면 멈추는 방법(/task-cancel)을 함께 
 
 test('completed + continuedByTaskId 면 결과를 올리지 않고 후속 작업을 같은 진행 메시지로 계속 지켜본다', async () => {
     const snapshots: Record<string, TaskSnapshot[]> = {
-        a: [snap({ id: 'a', status: 'completed', progress: 100, currentTurn: 5, result: '이어가기', continuedByTaskId: 'b', completionPath: 'continued' })],
+        a: [
+            snap({ id: 'a', status: 'running', progress: 50, currentTurn: 4 }),
+            snap({ id: 'a', status: 'completed', progress: 100, currentTurn: 5, result: '이어가기', continuedByTaskId: 'b', completionPath: 'continued' }),
+        ],
         b: [
             snap({ id: 'b', status: 'running', progress: 10, currentTurn: 1 }),
             snap({ id: 'b', status: 'completed', progress: 100, currentTurn: 3, result: '끝', completionPath: 'final_answer' }),
@@ -228,12 +231,14 @@ test('completed + continuedByTaskId 면 결과를 올리지 않고 후속 작업
     };
     const s = screen();
     assert.equal(await watchTask(client, 'a', s.ui, opts({ pollMs: 0 })), 'completed');
-    assert.deepEqual(asked, ['a', 'b', 'b']);
+    assert.deepEqual(asked, ['a', 'a', 'b', 'b']);
     assert.equal(s.finals.length, 1);
     assert.match(s.finals[0], /끝/);
     assert.doesNotMatch(s.finals[0], /이어가기/);
     assert.ok(s.statuses.some((t) => t.includes('세그먼트 2')));
     assert.ok(!s.statuses[0].includes('세그먼트')); // 첫 세그먼트는 머리를 붙이지 않는다
+    // 넘겨준 세그먼트의 완료는 진행 메시지에 '완료'로 보이지 않는다 — 진행 중 → (세그먼트 2) 로 바로 간다
+    assert.ok(!s.statuses.some((t) => t.includes('완료') && !t.includes('세그먼트')));
 });
 
 test('이어진 작업도 watchMaxMs 는 체인 전체에 적용된다', async () => {
@@ -246,4 +251,19 @@ test('이어진 작업도 watchMaxMs 는 체인 전체에 적용된다', async (
     assert.equal(await watchTask(client, 'a', s.ui, opts({ pollMs: 0, watchMaxMs: 10, sleep: async () => { t += 6; }, now: () => t })), 'timeout');
     assert.equal(s.finals.length, 1);
     assert.match(s.finals[0], /지켜보는 시간이 끝났습니다/);
+});
+
+test('a → b → c 로 두 번 이어지면 진행 표시 머리가 (세그먼트 3) 까지 간다', async () => {
+    const snapshots: Record<string, TaskSnapshot> = {
+        a: snap({ id: 'a', status: 'completed', continuedByTaskId: 'b', completionPath: 'continued' }),
+        b: snap({ id: 'b', status: 'completed', continuedByTaskId: 'c', completionPath: 'continued' }),
+        c: snap({ id: 'c', status: 'completed', result: '최종', completionPath: 'final_answer' }),
+    };
+    const client = { getTask: async (id: string) => snapshots[id], listPendingApprovals: async () => [] };
+    const s = screen();
+    assert.equal(await watchTask(client, 'a', s.ui, opts({ pollMs: 0 })), 'completed');
+    assert.equal(s.statuses.length, 1);
+    assert.match(s.statuses[0], /^\(세그먼트 3\) ✅ 작업 완료/);
+    assert.equal(s.finals.length, 1);
+    assert.match(s.finals[0], /최종/);
 });

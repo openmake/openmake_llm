@@ -147,6 +147,17 @@ export async function watchTask(
             continue;
         }
 
+        // 이어가기(188): 끝난 게 아니라 후속 세그먼트로 넘어간 것 — 같은 진행 메시지로 계속 지켜본다.
+        // 진행 표시보다 먼저 본다 — 넘겨준 세그먼트의 '✅ 작업 완료' 가 진행 메시지에 잠깐이라도 보이지 않게
+        if (snapshot.status === 'completed' && snapshot.continuedByTaskId) {
+            current = snapshot.continuedByTaskId;
+            segment += 1;
+            postedApprovals.clear();
+            lastStatusText = '';
+            await sleep(opts.pollMs);
+            continue;
+        }
+
         const statusText = formatStatus(snapshot, opts, segment);
         if (statusText !== lastStatusText) {
             // 올리는 데 성공했을 때만 기억한다 — 실패하면 내용이 같아도 다음 조회에서 다시 시도한다
@@ -154,15 +165,6 @@ export async function watchTask(
         }
 
         if (isTerminalStatus(snapshot.status)) {
-            // 이어가기(188): 끝난 게 아니라 후속 세그먼트로 넘어간 것 — 같은 진행 메시지로 계속 지켜본다
-            if (snapshot.status === 'completed' && snapshot.continuedByTaskId) {
-                current = snapshot.continuedByTaskId;
-                segment += 1;
-                postedApprovals.clear();
-                lastStatusText = '';
-                await sleep(opts.pollMs);
-                continue;
-            }
             // 결과가 중간에 끊기면 잘린 글이 완결된 것처럼 남는다 — 짧은 안내를 한 번 더 올린다
             if (!(await safely('결과 전송', () => ui.postFinal(formatFinal(snapshot))))) {
                 await safely('결과 안내 전송', () => ui.postFinal(MSG_FINAL_INCOMPLETE));
