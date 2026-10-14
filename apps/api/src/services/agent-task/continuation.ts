@@ -115,7 +115,19 @@ export async function continueAsNewSegment(p: ContinueInput): Promise<{ successo
     // 장기 실행은 전역 플래그(FORK_WORKSPACE_RESTORE_ENABLED)와 무관하게 스냅숏을 강제한다 — 후속 세그먼트가 파일을 이어받는 유일한 길.
     if (p.taskRuntime) await snapshotWorkspaceTurn(p.taskRuntime, p.turn, { force: true }).catch((e) => logger.warn(`[Continuation] 작업 공간 스냅숏 실패(후속이 복원 실패로 멈출 수 있음): ${e instanceof Error ? e.message : String(e)}`));
 
+    // 인계 턴(최대 HANDOFF_TURN_TIMEOUT_MS) 동안 취소됐을 수 있다 — 중단 신호와 루트의 취소 표식을 선점 직전에 다시 본다
+    if (p.signal.aborted) return { skipped: '체인이 취소되었습니다' };
+    const freshRoot = await db.getAgentTask(p.root.id).catch(() => undefined);
+    if (freshRoot?.long_running?.cancelled) return { skipped: '체인이 취소되었습니다' };
+
     const successorId = randomUUID();
+    // 행을 만든 뒤 실패하면 고아 후속(체크포인트·디스패치 없는 pending)이 남지 않게 failed 로 닫고 선점을 되돌린다
+    let rowCreated = false;
+    const abandon = async (why: string): Promise<{ skipped: string }> => {
+        if (rowCreated) await db.updateAgentTask(successorId, { status: 'failed', error: `이어가기 준비 실패: ${why}` }).catch(() => { /* 닫기 실패는 경고 없이 — 선점 되돌리기는 계속 */ });
+        await chainRepo.resetContinuation(p.task.id, successorId).catch(() => { /* 되돌리기 실패는 다음 판정이 skipped 로 본다 */ });
+        return { skipped: why };
+    };
     if (!(await chainRepo.claimContinuation(p.task.id, successorId))) return { skipped: '이미 다른 실행이 이어갔습니다' };
 
     const segmentIndex = state.segmentIndex + 1;
@@ -132,29 +144,33 @@ export async function continueAsNewSegment(p: ContinueInput): Promise<{ successo
             chainRootTaskId: p.root.id, continuedFromTaskId: p.task.id, continuation,
         });
         if (!created) throw new Error('작업을 저장하지 못했습니다');
+        rowCreated = true;
         await db.updateAgentTask(successorId, { checkpoint: { conversation: seeded, completedTurn: -1 }, ...(p.task.plan ? { plan: p.task.plan } : {}) });
         await repo.markForked(successorId, p.task.id, p.turn).catch(() => { /* 표시용 */ });
         const park = new AgentTaskParkRepository(getPool());
         if (p.task.approval_policy) await park.setApprovalPolicy(successorId, p.task.approval_policy).catch(() => { /* 물려주기 실패 무시 */ });
         if (p.task.thinking_level) await park.setThinkingLevel(successorId, p.task.thinking_level).catch(() => { /* 물려주기 실패 무시 */ });
     } catch (e) {
-        await chainRepo.resetContinuation(p.task.id, successorId).catch(() => { /* 되돌리기 실패는 다음 판정이 skipped 로 본다 */ });
-        return { skipped: `후속 작업 저장 실패: ${e instanceof Error ? e.message : String(e)}` };
+        return abandon(`후속 작업 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    const { AgentTaskService } = await import('../AgentTaskService'); // 순환 import 회피
-    const service = new AgentTaskService();
-    const seededConversation = seeded; // 체크포인트에 쓴 것과 같은 배열 — DB 를 다시 읽지 않는다
-    await dispatchAgentTask({
-        taskId: successorId, userId: String(p.task.user_id),
-        run: () => service.execute({
-            taskId: successorId, goal: p.task.goal, userId: String(p.task.user_id), userRole: p.userRole, maxTurns: p.task.max_turns,
-            files: Array.isArray(p.task.input_files) ? p.task.input_files as AgentTaskInputFile[] : undefined,
-            images: Array.isArray(p.task.input_images) ? p.task.input_images as string[] : undefined,
-            executor: p.task.executor === 'local' ? 'local' : undefined, deviceId: p.task.device_id ?? undefined, folderRel: p.task.folder_rel ?? undefined,
-            resume: { conversation: seededConversation, fromTurn: 0, fromStep: 0, ...(p.task.plan ? { plan: p.task.plan } : {}) },
-        }),
-    });
+    try {
+        const { AgentTaskService } = await import('../AgentTaskService'); // 순환 import 회피
+        const service = new AgentTaskService();
+        await dispatchAgentTask({
+            taskId: successorId, userId: String(p.task.user_id),
+            run: () => service.execute({
+                taskId: successorId, goal: p.task.goal, userId: String(p.task.user_id), userRole: p.userRole, maxTurns: p.task.max_turns,
+                files: Array.isArray(p.task.input_files) ? p.task.input_files as AgentTaskInputFile[] : undefined,
+                images: Array.isArray(p.task.input_images) ? p.task.input_images as string[] : undefined,
+                executor: p.task.executor === 'local' ? 'local' : undefined, deviceId: p.task.device_id ?? undefined, folderRel: p.task.folder_rel ?? undefined,
+                // 체크포인트에 쓴 것과 같은 seeded 배열 — DB 를 다시 읽지 않는다
+                resume: { conversation: seeded, fromTurn: 0, fromStep: 0, ...(p.task.plan ? { plan: p.task.plan } : {}) },
+            }),
+        });
+    } catch (e) {
+        return abandon(`디스패치 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
     logger.info(`[Continuation] 이어가기: ${p.task.id} → ${successorId} (세그먼트 ${segmentIndex}, 사유 ${p.reason}, 누적 ${state.usedMs}ms/${state.usedTokens}tok)`);
     return { successorId };
 }

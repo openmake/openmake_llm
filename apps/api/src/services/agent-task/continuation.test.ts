@@ -14,7 +14,8 @@ jest.mock('../../data/repositories/agent-task-repository', () => ({ AgentTaskRep
 jest.mock('../../data/repositories/agent-task-chain-repository', () => ({ AgentTaskChainRepository: jest.fn(() => chainRepo) }));
 jest.mock('../../data/repositories/agent-task-park-repository', () => ({ AgentTaskParkRepository: jest.fn(() => ({ setApprovalPolicy: jest.fn().mockResolvedValue(undefined), setThinkingLevel: jest.fn().mockResolvedValue(undefined) })) }));
 jest.mock('../../data/models/unified-database', () => ({ getUnifiedDatabase: () => db, getPool: () => ({}) }));
-jest.mock('../AgentTaskService', () => ({ AgentTaskService: jest.fn(() => ({ execute: jest.fn().mockResolvedValue(undefined) })) }));
+const executeMock = jest.fn().mockResolvedValue(undefined);
+jest.mock('../AgentTaskService', () => ({ AgentTaskService: jest.fn(() => ({ execute: (...a: unknown[]) => executeMock(...a) })) }));
 
 import { buildContinuationSummary, chainBudgetState, askNextSteps, continueAsNewSegment } from './continuation';
 import { HANDOFF_SUMMARY_MARKER } from '../../prompts/agent-task-context';
@@ -88,7 +89,7 @@ describe('continueAsNewSegment', () => {
         roleState: {} as never, signal: new AbortController().signal, taskRuntime: {} as never,
         userRole: 'user' as const, activeMs: 1_000, totalTokens: 100,
     });
-    beforeEach(() => { jest.clearAllMocks(); chainRepo.claimContinuation.mockResolvedValue(true); chatMock.mockResolvedValue({ content: '1. 다음' }); });
+    beforeEach(() => { jest.clearAllMocks(); chainRepo.claimContinuation.mockResolvedValue(true); chatMock.mockResolvedValue({ content: '1. 다음' }); db.getAgentTask.mockResolvedValue(root); db.updateAgentTask.mockResolvedValue(undefined); dispatchMock.mockResolvedValue('started'); });
 
     it('스냅숏 → 선점 → 후속 생성(체크포인트 시드·fork 표시·정책 물려주기) → 디스패치 순으로 하고 successorId 를 돌려준다', async () => {
         const r = await continueAsNewSegment(input());
@@ -103,7 +104,10 @@ describe('continueAsNewSegment', () => {
         expect(cp.conversation.map((m: ChatMessage) => m.role)).toEqual(['system', 'user', 'user']);
         expect(cp.completedTurn).toBe(-1);
         expect(repo.markForked).toHaveBeenCalledWith(created.id, 'root', 7);
-        expect(dispatchMock).toHaveBeenCalled();
+        const entry = dispatchMock.mock.calls[0][0];
+        expect(entry.taskId).toBe(created.id);
+        await entry.run();
+        expect(executeMock.mock.calls[0][0].resume).toEqual({ conversation: cp.conversation, fromTurn: 0, fromStep: 0 });
     });
     it('선점에 실패하면(이미 이어짐) 후속을 만들지 않고 skipped', async () => {
         chainRepo.claimContinuation.mockResolvedValueOnce(false);
@@ -114,6 +118,42 @@ describe('continueAsNewSegment', () => {
     it('현재 작업이 취소됐거나 루트에 취소 표식이면 skipped', async () => {
         const r = await continueAsNewSegment({ ...input(), root: { id: 'root', long_running: { ...budget, cancelled: true } } as never });
         expect(r).toEqual({ skipped: expect.stringMatching(/취소/) });
+    });
+    it('현재 작업 상태가 cancelled 면 skipped', async () => {
+        const r = await continueAsNewSegment({ ...input(), task: { ...(input().task as object), status: 'cancelled' } as never });
+        expect(r).toEqual({ skipped: expect.stringMatching(/취소/) });
+        expect(db.createAgentTask).not.toHaveBeenCalled();
+    });
+    it('인계 턴 중 중단 신호가 오면(AbortError) 선점·생성 없이 skipped', async () => {
+        const ac = new AbortController();
+        chatMock.mockImplementationOnce(async () => { ac.abort(); const e = new Error('aborted'); e.name = 'AbortError'; throw e; });
+        const r = await continueAsNewSegment({ ...input(), signal: ac.signal });
+        expect(r).toEqual({ skipped: expect.stringMatching(/취소/) });
+        expect(chainRepo.claimContinuation).not.toHaveBeenCalled();
+        expect(db.createAgentTask).not.toHaveBeenCalled();
+    });
+    it('인계 턴 동안 루트에 취소 표식이 생기면 skipped', async () => {
+        db.getAgentTask.mockResolvedValueOnce({ id: 'root', long_running: { ...budget, cancelled: true } });
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ skipped: expect.stringMatching(/취소/) });
+        expect(db.createAgentTask).not.toHaveBeenCalled();
+    });
+    it('행 생성 뒤 체크포인트 저장이 실패하면 후속을 failed 로 닫고 선점을 되돌린다', async () => {
+        db.updateAgentTask.mockRejectedValueOnce(new Error('db down'));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ skipped: expect.stringMatching(/저장/) });
+        const sid = db.createAgentTask.mock.calls[0][0].id;
+        expect(db.updateAgentTask).toHaveBeenCalledWith(sid, expect.objectContaining({ status: 'failed', error: expect.stringMatching(/이어가기 준비 실패/) }));
+        expect(chainRepo.resetContinuation).toHaveBeenCalledWith('root', sid);
+        expect(dispatchMock).not.toHaveBeenCalled();
+    });
+    it('디스패치가 실패하면 후속을 failed 로 닫고 선점을 되돌린다', async () => {
+        dispatchMock.mockRejectedValueOnce(new Error('queue full'));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ skipped: expect.stringMatching(/디스패치 실패/) });
+        const sid = db.createAgentTask.mock.calls[0][0].id;
+        expect(db.updateAgentTask).toHaveBeenCalledWith(sid, expect.objectContaining({ status: 'failed' }));
+        expect(chainRepo.resetContinuation).toHaveBeenCalledWith('root', sid);
     });
     it('인계 턴이 실패해도 후속은 만든다', async () => {
         chatMock.mockRejectedValueOnce(new Error('timeout'));
