@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.102.0](https://github.com/openmake/openmake_llm/compare/v1.101.0...v1.102.0) (2026-10-14)
+
+
+### ✨ 기능
+
+* **discord-bot:** 작업 완료 게시에 산출물을 파일로 첨부 ([8c6d652](https://github.com/openmake/openmake_llm/commit/8c6d65264b67817aca72ee7819353feaac664473))
+* **discord-bot:** 작업 완료 게시에 산출물을 파일로 첨부 — 자리표시자뿐인 결과가 "(결과 본문 없음)" 으로 보이던 것 ([377ced6](https://github.com/openmake/openmake_llm/commit/377ced6a7dab0deaf2438d57e9597d420f5989d5))
+* **discord-bot:** 작업 완료 게시에 작업 공간 산출물 파일도 첨부 ([ce3d666](https://github.com/openmake/openmake_llm/commit/ce3d6663ab96e4e2d1c392ba48a5ecae092ab98d))
+* **discord-bot:** 작업 완료 게시에 작업 공간 산출물 파일도 첨부 — file_ops 로 쓴 파일이 빠지던 것 ([1f8affc](https://github.com/openmake/openmake_llm/commit/1f8affc6e22da265143dcc9db25bdaee2b1ee24a))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** [#1301](https://github.com/openmake/openmake_llm/issues/1301) 잔여 정리 — 600줄 여유, 인계 사유 문구, 세그먼트 시간 상한, 목록 세그먼트 수 ([61c388b](https://github.com/openmake/openmake_llm/commit/61c388b821de992af9fe05f0832c7cbfb4e67efd))
+* **agent-task:** 목록 카드의 체인 세그먼트 수를 서버 집계로 ([e504fd8](https://github.com/openmake/openmake_llm/commit/e504fd87b95ce6493d922418f1f133a5797e8b7b))
+* **agent-task:** 세그먼트 시간 상한을 체인 남은 시간으로 묶어 마지막 세그먼트가 체인 상한을 넘지 않게 ([9c826c0](https://github.com/openmake/openmake_llm/commit/9c826c09a8f393c2e12722b2044850bfa92e74e7))
+* **agent-task:** 승인·거절·답변의 결정자를 agent_task_approvals.decided_by 에 기록 ([4ac4642](https://github.com/openmake/openmake_llm/commit/4ac46423b72e370bdffdb3b46138c6dacddfca27))
+* **agent-task:** 승인·거절·답변의 결정자를 agent_task_approvals.decided_by 에 기록 ([f600596](https://github.com/openmake/openmake_llm/commit/f600596a79ff3c0d67fab102c2400aa3722000a2))
+* **agent-task:** 업로드 파일 이름을 200바이트로 잘라 ENAMETOOLONG 방지(확장자 보존) ([2ac39b0](https://github.com/openmake/openmake_llm/commit/2ac39b09fcf4a28cbd83ae86e713ebeb18c60e3e))
+* **agent-task:** 인계 턴 프롬프트의 사유 문구를 실제 이어가기 사유로 ([4191589](https://github.com/openmake/openmake_llm/commit/41915890650a871a150afa4eb55f1894315728ef))
+* **agent-task:** 절차 스킬 비밀 값 검사 — URL·dialog 검사, 토큰 형식·pass/pwd 키 추가, 환경 참조 식 오탐 제거 ([1b91b2f](https://github.com/openmake/openmake_llm/commit/1b91b2fb35a795f9f10a2224eb576516ee11cdb6))
+* **agent-task:** 절차 스킬 비밀 값 검사 결함 5건과 업로드 파일 이름 길이(ENAMETOOLONG) 수정 ([22c038c](https://github.com/openmake/openmake_llm/commit/22c038c97875881adea3cb141debbc22697d78a8))
+* **agent-task:** 체인 폭주 가드 — 도구 없는 텍스트 답은 세그먼트 진행으로 보지 않는다 ([513fb88](https://github.com/openmake/openmake_llm/commit/513fb88fe685dd95109187920378fe243fbea820))
+* **agent-task:** 체인 폭주 가드 — 도구 없는 텍스트 답은 세그먼트 진행으로 보지 않는다 ([59b769e](https://github.com/openmake/openmake_llm/commit/59b769e3fd3388bc2c3196f743885de63bb8fe26))
+
+
+### ♻️ 리팩터링
+
+* **agent-task:** AgentTaskService·agent-task-repository 600줄 상한 여유 확보 — 실행 소유권·체크포인트 저장소, 턴 응답 처리 분리 ([9d36b42](https://github.com/openmake/openmake_llm/commit/9d36b42fc54912ca5b654e247b2ed67086af1718))
+
 ## [1.101.0](https://github.com/openmake/openmake_llm/compare/v1.100.3...v1.101.0) (2026-10-14)
 
 
