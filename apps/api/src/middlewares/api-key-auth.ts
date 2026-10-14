@@ -20,8 +20,9 @@ const logger = createLogger('ApiKeyAuth');
 /**
  * API Key에서 평문 키를 추출
  * 우선순위: X-API-Key > Authorization: Bearer
+ * 레이트 리미터(rate-limiters.ts)도 이 함수로 키를 꺼내 키별 버킷을 정한다 — 두 형식을 같게 다루기 위함
  */
-function extractApiKey(req: Request): string | undefined {
+export function extractApiKey(req: Request): string | undefined {
     // 1. X-API-Key 헤더
     const xApiKey = req.headers['x-api-key'];
     if (typeof xApiKey === 'string' && xApiKey.startsWith(API_KEY_PREFIX)) {

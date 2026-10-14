@@ -174,6 +174,8 @@ export function setupParsersAndLimiting(app: Application): void {
         '/api/web-search', '/api/users/me/memories', '/api/mcp',
         '/api/api-keys', '/api/push', '/api/admin', '/api/monitoring', '/api/metrics',
         '/api/agent-tasks',
+        // OpenAI 호환 API — routes/v1 이 키별 RPM(apiKeyRateLimiter)·TPM(apiKeyTPMLimiter)을 건다
+        '/api/v1/',
     ];
     app.use('/api/', (req, res, next) => {
         const url = req.originalUrl;

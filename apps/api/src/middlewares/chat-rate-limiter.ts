@@ -12,6 +12,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { getPool } from '../data/models/unified-database';
 import { isAdminRole } from '../data/user-manager';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ChatRateLimiter');
 
 interface RateLimitEntry {
     count: number;
@@ -123,12 +126,46 @@ const DAILY_LIMITS: Record<string, number> = {
     guest: Number(process.env.CHAT_DAILY_LIMIT_GUEST) || 20
 };
 
-function getNextMidnightUTC(): number {
-    const now = new Date();
-    const tomorrow = new Date(Date.UTC(
-        now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1
-    ));
-    return tomorrow.getTime();
+/** 일일 한도 초기화 기준 TZ 기본값 — 서비스 대상이 한국 사용자라 UTC 자정(한국 09:00)이 아닌 한국 자정 */
+const DEFAULT_RESET_TZ = 'Asia/Seoul';
+
+/** timeZone 기준 t 시점의 벽시계 시각을 UTC 로 읽은 값과 t 의 차이(ms) = 그 시점의 UTC 오프셋 */
+function getTimeZoneOffsetMs(t: number, fmt: Intl.DateTimeFormat): number {
+    const p: Record<string, number> = {};
+    for (const part of fmt.formatToParts(t)) {
+        if (part.type !== 'literal') p[part.type] = Number(part.value);
+    }
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - Math.floor(t / 1000) * 1000;
+}
+
+/**
+ * 일일 채팅 한도가 초기화될 다음 자정(epoch ms).
+ * 기준 TZ 는 CHAT_DAILY_RESET_TZ(IANA, 기본 Asia/Seoul). 잘못된 TZ 면 경고 후 UTC 자정으로 폴백.
+ * 외부 라이브러리 없이 Intl 로 그 TZ 의 오늘 날짜를 얻고, 내일 00:00 벽시계 시각을 오프셋으로 epoch 로 바꾼다
+ * (DST 가 있는 TZ 도 맞도록 오프셋을 내일 자정 근처에서 다시 잰다).
+ */
+export function getNextResetMidnight(
+    nowMs: number = Date.now(),
+    timeZone: string = process.env.CHAT_DAILY_RESET_TZ || DEFAULT_RESET_TZ,
+): number {
+    let fmt: Intl.DateTimeFormat;
+    try {
+        fmt = new Intl.DateTimeFormat('en-US', {
+            timeZone, hourCycle: 'h23',
+            year: 'numeric', month: 'numeric', day: 'numeric',
+            hour: 'numeric', minute: 'numeric', second: 'numeric',
+        });
+    } catch {
+        logger.warn(`CHAT_DAILY_RESET_TZ 값이 올바른 IANA 시간대가 아님(${timeZone}) — UTC 자정으로 폴백`);
+        const now = new Date(nowMs);
+        return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+    }
+    // 그 TZ 의 오늘 날짜 → 내일 00:00 벽시계 시각(UTC 로 표기한 값)
+    const wall = new Date(nowMs + getTimeZoneOffsetMs(nowMs, fmt));
+    const tomorrowWall = Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate() + 1);
+    // 벽시계 → epoch: 오프셋을 한 번 어림한 뒤 그 시점의 오프셋으로 다시 맞춘다(DST 경계 대비)
+    const guess = tomorrowWall - getTimeZoneOffsetMs(tomorrowWall, fmt);
+    return tomorrowWall - getTimeZoneOffsetMs(guess, fmt);
 }
 
 function getDailyLimit(role: string): number {
@@ -158,7 +195,7 @@ export function chatRateLimiter(req: Request, res: Response, next: NextFunction)
     let entry = rateLimitCache.get(key);
 
     if (!entry || now >= entry.resetAt) {
-        entry = { count: 0, resetAt: getNextMidnightUTC() };
+        entry = { count: 0, resetAt: getNextResetMidnight() };
         rateLimitCache.set(key, entry);
 
         if (rateLimitCache.size > MAX_ENTRIES) {
@@ -244,7 +281,7 @@ export async function checkChatRateLimit(
             entry = dbEntry;
             rateLimitCache.set(key, entry);
         } else {
-            entry = { count: 0, resetAt: getNextMidnightUTC() };
+            entry = { count: 0, resetAt: getNextResetMidnight() };
             rateLimitCache.set(key, entry);
         }
 

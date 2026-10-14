@@ -95,13 +95,50 @@ describe('레이트리밋 신원 해석 — Bearer 토큰 종류', () => {
         mockVerifyToken.mockClear();
     });
 
-    test('Bearer API 키(omk_live_)는 JWT 검증을 타지 않고 IP 기준으로 센다', async () => {
+    test('Bearer API 키(omk_live_)는 JWT 검증을 타지 않는다', async () => {
         const app = makeApp();
         const res = await request(app).post('/api/chat')
             .set('X-Forwarded-For', '203.0.113.210')
             .set('Authorization', 'Bearer omk_live_d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4').send({});
         expect(res.status).toBe(200);
         expect(mockVerifyToken).not.toHaveBeenCalled();
+    });
+
+    test('Bearer 로 보낸 API 키도 IP 버킷이 아니라 자기 키 버킷으로 센다(X-API-Key 와 같다)', async () => {
+        const app = makeApp();
+        const proxyIp = '::1'; // 프록시 뒤 — 익명 트래픽이 모두 이 IP 버킷을 쓴다
+        for (let i = 0; i < RL_AGENT_TASK.ipLimit + 2; i++) {
+            await request(app).post('/api/agent-tasks/x/share').set('X-Forwarded-For', proxyIp).send({});
+        }
+        expect((await request(app).post('/api/agent-tasks/x/share').set('X-Forwarded-For', proxyIp).send({})).status).toBe(429);
+
+        // Discord 봇·OpenAI SDK 는 Authorization: Bearer 가 표준 — 소진된 IP 버킷에 섞이면 안 된다
+        const bot = await request(app).post('/api/agent-tasks/x/share')
+            .set('X-Forwarded-For', proxyIp)
+            .set('Authorization', 'Bearer omk_live_e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5').send({});
+        expect(bot.status).toBe(200);
+    });
+
+    test('Bearer 키와 X-API-Key 로 보낸 같은 키는 한 버킷을 쓴다', async () => {
+        const app = makeApp();
+        const key = 'omk_live_f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6';
+        for (let i = 0; i < RL_AGENT_TASK.ipLimit + 2; i++) {
+            await request(app).post('/api/agent-tasks/x/share').set('Authorization', `Bearer ${key}`).send({});
+        }
+        expect((await request(app).post('/api/agent-tasks/x/share').set('X-API-Key', key).send({})).status).toBe(429);
+        // 소진된 건 키 버킷이지 IP 버킷이 아니다
+        expect((await request(app).post('/api/agent-tasks/x/share').send({})).status).toBe(200);
+    });
+
+    test('형식이 틀린 Bearer omk_live_ 값은 키 버킷을 만들지 않고 IP 로 센다', async () => {
+        const app = makeApp();
+        const ip = '203.0.113.212';
+        for (let i = 0; i < RL_AGENT_TASK.ipLimit + 2; i++) {
+            await request(app).post('/api/agent-tasks/x/share').set('X-Forwarded-For', ip).send({});
+        }
+        const res = await request(app).post('/api/agent-tasks/x/share')
+            .set('X-Forwarded-For', ip).set('Authorization', 'Bearer omk_live_zz').send({});
+        expect(res.status).toBe(429);
     });
 
     test('JWT 모양 Bearer 토큰은 여전히 verifyToken 으로 검증한다', async () => {
