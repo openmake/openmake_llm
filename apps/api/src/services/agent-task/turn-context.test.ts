@@ -11,7 +11,7 @@ jest.mock('../../config/model-pool', () => {
 });
 jest.mock('./turn-call', () => ({ callAgentTurnWithBudget: jest.fn() }));
 
-import { callAgentTurnWithContext, isContextOverflowError } from './turn-context';
+import { callAgentTurnWithContext, contextUsageRatio, isContextOverflowError } from './turn-context';
 import { callAgentTurnWithBudget } from './turn-call';
 import { isHandoffSummary } from './context-handoff';
 import { isFoldedToolResult } from './context-fold';
@@ -227,5 +227,14 @@ describe('컨텍스트 절단 횟수 집계(마무리 전환 판정용)', () => 
         const c = conv(2, 10);
         await callAgentTurnWithContext(base(c));
         expect(contextTrimCount(c)).toBe(0);
+    });
+});
+
+describe('컨텍스트 사용률(188)', () => {
+    it('contextUsageRatio — 예산을 모르는 모델이면 null, 아니면 추정/예산', () => {
+        expect(contextUsageRatio([{ role: 'user', content: 'x' }], [], 'unknown-model')).toBeNull();
+        const ratio = contextUsageRatio(conv(2, 1000), [], 'pool-model');
+        expect(ratio).toBeGreaterThan(0);
+        expect(ratio).toBeLessThan(1);
     });
 });
