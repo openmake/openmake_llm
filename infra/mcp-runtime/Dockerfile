@@ -26,6 +26,7 @@ RUN apt-get update \
 # 베이킹한다. 브라우저 본체는 서버별 캐시 볼륨(~/.cache/ms-playwright)에 설치·유지되며,
 # 서버 패키지의 playwright 버전이 바뀌면 볼륨에 `python -m playwright install chromium`
 # 재실행이 필요하다(버전-리비전 정합). 폰트는 스크린샷 한글 렌더용.
+# (2026-10-15 부터 sandbox-playwright 가 스폰 전 자동 설치)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libglib2.0-0 libnss3 libnspr4 libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 \
