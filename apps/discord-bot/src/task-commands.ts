@@ -117,7 +117,7 @@ export function createTaskController(deps: {
             const startedTaskId = taskId;
             const ui: WatchUi = {
                 updateStatus: (text) => req.ui.updateStatus(text),
-                postFinal: (text) => req.ui.postFinal(text),
+                postFinal: (text, files) => req.ui.postFinal(text, files),
                 postApproval: async (approval) => {
                     approvalOwners.set(approval.approvalId, req.userId);
                     await req.ui.postApproval(approval);

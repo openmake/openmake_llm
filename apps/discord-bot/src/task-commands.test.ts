@@ -30,6 +30,7 @@ function fakeClient(over: Partial<Fake> = {}): Fake {
         async getTask() { return f.snapshots.length > 1 ? (f.snapshots.shift() as TaskSnapshot) : f.snapshots[0]; },
         async cancelTask(id) { f.log.push(`cancel:${id}`); },
         async listPendingApprovals() { return f.pending; },
+        async listArtifacts() { return []; },
         async decideApproval(id, decision) { f.log.push(`decide:${id}:${decision}`); return f.decision; },
         async isDeviceConnected() { f.log.push('device?'); return f.connected; },
         ...over,

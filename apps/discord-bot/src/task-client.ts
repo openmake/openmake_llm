@@ -28,6 +28,15 @@ export interface PendingApproval {
     args: unknown;
 }
 
+/** 작업 산출물 — 서버 artifact 스텝의 content(ExtractedArtifact JSON 문자열)를 옮긴다 */
+export interface TaskArtifact {
+    id: string;
+    kind: string;
+    title: string;
+    lang: string | null;
+    content: string;
+}
+
 export class TaskApiError extends Error {
     constructor(message: string, readonly status: number) {
         super(message);
@@ -47,6 +56,8 @@ export interface TaskClient {
     getTask(taskId: string): Promise<TaskSnapshot>;
     cancelTask(taskId: string): Promise<void>;
     listPendingApprovals(taskId: string): Promise<PendingApproval[]>;
+    /** 작업의 산출물 — 형식이 다른 스텝은 건너뛴다 */
+    listArtifacts(taskId: string): Promise<TaskArtifact[]>;
     /** 'gone' = 이미 처리됐거나 만료된 요청(404) */
     decideApproval(approvalId: string, decision: 'approve' | 'reject'): Promise<'ok' | 'gone'>;
     isDeviceConnected(): Promise<boolean>;
@@ -77,6 +88,23 @@ function toSnapshot(raw: RawTask): TaskSnapshot {
         continuedByTaskId: stringOrNull(raw.continued_by_task_id),
         completionPath: stringOrNull(raw.completion_path),
     };
+}
+
+/** 스텝 content 를 산출물로 — 웹 작업 화면의 parseStepArtifact 와 같은 규칙(content·kind 가 문자열이 아니면 null) */
+function parseArtifact(raw: unknown): TaskArtifact | null {
+    try {
+        const o = JSON.parse(String(raw ?? '')) as { id?: unknown; kind?: unknown; title?: unknown; lang?: unknown; content?: unknown } | null;
+        if (typeof o?.content !== 'string' || typeof o.kind !== 'string') return null;
+        return {
+            id: typeof o.id === 'string' ? o.id : 'artifact',
+            kind: o.kind,
+            title: typeof o.title === 'string' ? o.title : 'artifact',
+            lang: typeof o.lang === 'string' ? o.lang : null,
+            content: o.content,
+        };
+    } catch {
+        return null;
+    }
 }
 
 /** 서버 오류 본문에서 사람이 읽을 문장을 꺼낸다 — 형식이 달라도 죽지 않는다 */
@@ -140,6 +168,14 @@ export function createTaskClient(opts: { baseUrl: string; apiKey: string; timeou
             return (data?.pending ?? [])
                 .filter((p) => p.taskId === taskId && typeof p.approvalId === 'string')
                 .map((p) => ({ approvalId: String(p.approvalId), taskId, toolName: String(p.toolName ?? 'unknown'), args: p.args }));
+        },
+        async listArtifacts(taskId) {
+            // 서버는 agent_task_steps 행을 그대로 준다(snake_case: step_type·content)
+            const data = await call<{ steps?: Array<{ step_type?: unknown; content?: unknown }> }>('GET', `/api/agent-tasks/${encodeURIComponent(taskId)}/steps`);
+            return (data?.steps ?? [])
+                .filter((st) => st.step_type === 'artifact')
+                .map((st) => parseArtifact(st.content))
+                .filter((a): a is TaskArtifact => a !== null);
         },
         async decideApproval(approvalId, decision) {
             try {

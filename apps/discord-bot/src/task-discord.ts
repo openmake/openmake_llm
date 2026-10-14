@@ -80,9 +80,12 @@ function channelUi(channel: SendableChannel): WatchUi {
         async postApproval(approval) {
             await channel.send({ content: formatApproval(approval), components: [approvalButtons(approval)], allowedMentions: { parse: [] } });
         },
-        async postFinal(text) {
-            for (const chunk of splitForDiscord(text)) {
-                await channel.send({ content: chunk, allowedMentions: { parse: [] } });
+        async postFinal(text, files) {
+            const chunks = splitForDiscord(text);
+            for (const [i, chunk] of chunks.entries()) {
+                // 산출물 첨부는 마지막 조각에 싣는다 — 결과 글 끝에 파일이 붙는다
+                const attach = files?.length && i === chunks.length - 1 ? { files: files.map((f) => ({ attachment: f.data, name: f.name })) } : {};
+                await channel.send({ content: chunk, allowedMentions: { parse: [] }, ...attach });
             }
         },
     };
