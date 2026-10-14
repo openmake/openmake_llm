@@ -445,13 +445,12 @@ describe('장기 실행 체인 — 이어가기·복구·취소·폭주 가드 (
     });
 
     /**
-     * 결함 후보(별도 PR) — 재현: 체인 세그먼트의 첫 턴부터 상한 사유(tokens·context)에 걸리고, 마무리 턴의 답이 작업의 첫 모델 응답이라
-     * 산출물 재촉(turn-stall 의 deliverable nudge, 단계 'plan')으로 채택되지 않으면, 다음 턴에 segmentHasProgress 가 그 도구 없는
-     * 텍스트 답(assistant 메시지)을 "진행"으로 보고 후속을 만든다(로그: "진행 없음 — 이어가기 보류" 뒤 "이어가기: root → … 사유 tokens").
-     * 도구 일 없이 세그먼트가 이어진다 — 시드만으로 컨텍스트 기준을 넘는 후속(라이브 2차의 경우)도 같은 길로 가드를 지날 수 있다.
-     * 아래 기대는 가드의 의도대로 후속 없음. 지금 코드에서는 후속이 생겨 실패한다.
+     * 회귀 방지 — 체인 세그먼트의 첫 턴부터 상한 사유(tokens·context)에 걸리고, 마무리 턴의 답이 작업의 첫 모델 응답이라
+     * 산출물 재촉(turn-stall 의 deliverable nudge, 단계 'plan')으로 채택되지 않아도, 다음 턴에 segmentHasProgress 가 그 도구 없는
+     * 텍스트 답(assistant 메시지)을 "진행"으로 보지 않는다 — 진행은 인계 요약 뒤의 tool 메시지나 tool_calls 있는 assistant 뿐이다.
+     * 종전에는 그 텍스트 답을 진행으로 보아 후속이 생겼다(로그: "진행 없음 — 이어가기 보류" 뒤 "이어가기: root → … 사유 tokens").
      */
-    it.skip('[결함] 진행 없는 세그먼트의 첫 모델 응답이 재촉으로 채택되지 않아도 그 텍스트 답을 진행으로 보지 않는다', async () => {
+    it('진행 없는 세그먼트의 첫 모델 응답이 재촉으로 채택되지 않아도 그 텍스트 답을 진행으로 보지 않는다', async () => {
         expectStoppedWithoutSuccessor(await runStalledTokenRoot([]));
     });
 
