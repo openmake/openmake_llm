@@ -55,6 +55,7 @@ interface OpsProviderUsageRow {
     cost_usd_micros: string | null;
     avg_duration_ms: string | null;
     errors: string;
+    client_aborted: string;
 }
 
 interface OpsTaskTokensByUserRow {
@@ -155,7 +156,8 @@ export class OpsMetricsRepository extends BaseRepository {
         return r.rows;
     }
 
-    /** 외부 provider 사용량(토큰·비용·오류) — provider×model. */
+    /** 외부 provider 사용량(토큰·비용·오류) — provider×model.
+     *  errors 는 클라이언트 중단(CLIENT_ABORTED)을 뺀 값, 중단은 client_aborted 로 따로 센다. */
     async getProviderUsage(hours: number, limit: number): Promise<OpsProviderUsageRow[]> {
         const r = await this.query<OpsProviderUsageRow>(
             `SELECT provider_id, model_id, COUNT(*) AS requests,
@@ -163,7 +165,8 @@ export class OpsMetricsRepository extends BaseRepository {
                     SUM(output_tokens)::text AS output_tokens,
                     SUM(cost_usd_micros)::text AS cost_usd_micros,
                     ROUND(AVG(duration_ms))::text AS avg_duration_ms,
-                    COUNT(*) FILTER (WHERE error_code IS NOT NULL) AS errors
+                    COUNT(*) FILTER (WHERE error_code IS NOT NULL AND error_code <> 'CLIENT_ABORTED') AS errors,
+                    COUNT(*) FILTER (WHERE error_code = 'CLIENT_ABORTED') AS client_aborted
              FROM external_provider_usage
              WHERE occurred_at >= ${WINDOW}
              GROUP BY provider_id, model_id
