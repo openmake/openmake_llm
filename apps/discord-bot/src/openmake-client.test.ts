@@ -4,10 +4,15 @@
  */
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
-import { requestChatCompletion } from './openmake-client';
+import { config } from './config';
+import { RequestTimeoutError, requestChatCompletion } from './openmake-client';
 
 const realFetch = globalThis.fetch;
-afterEach(() => { globalThis.fetch = realFetch; });
+const realTimeoutMs = config.requestTimeoutMs;
+afterEach(() => {
+    globalThis.fetch = realFetch;
+    config.requestTimeoutMs = realTimeoutMs;
+});
 
 /** 모델 목록·채팅 응답을 흉내 내고, 채팅 요청 body 를 기록한다 */
 function stubFetch(): { bodies: Array<Record<string, unknown>> } {
@@ -54,4 +59,42 @@ test('문서가 있으면 body.files 로 보내고 content 는 문자열 유지'
     const messages = bodies[0].messages as Array<{ role: string; content: unknown }>;
     assert.deepEqual(messages[2], { role: 'user', content: '요약해' });
     assert.deepEqual(bodies[0].files, [file]);
+});
+
+/** 채팅 요청은 끝나지 않다가 signal 이 abort 되면 Node fetch 처럼 reject 하는 가짜 */
+function stubHangingFetch(): void {
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input).endsWith('/api/v1/models')) {
+            return Response.json({ data: [{ id: 'test-model' }] });
+        }
+        return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')));
+        });
+    }) as typeof fetch;
+}
+
+test('응답 제한 시간을 넘기면 RequestTimeoutError — 사용자 안내 문구와 초 단위 제한 시간', async () => {
+    stubHangingFetch();
+    config.requestTimeoutMs = 30;
+    await assert.rejects(requestChatCompletion(history, '긴 HTML 만들어 줘'), (err: unknown) => {
+        assert.ok(err instanceof RequestTimeoutError, '전용 오류로 구분');
+        assert.equal(err.timeoutMs, 30);
+        assert.match(err.message, /^응답 제한 시간\(0\.03초\)을 넘겨 요청을 중단했습니다\./);
+        assert.match(err.message, /DISCORD_BOT_REQUEST_TIMEOUT_MS/);
+        return true;
+    });
+});
+
+test('일반 네트워크 오류는 RequestTimeoutError 로 바꾸지 않고 그대로 던진다', async () => {
+    const networkErr = new TypeError('fetch failed');
+    globalThis.fetch = (async (input: string | URL | Request) => {
+        if (String(input).endsWith('/api/v1/models')) {
+            return Response.json({ data: [{ id: 'test-model' }] });
+        }
+        throw networkErr;
+    }) as typeof fetch;
+    await assert.rejects(requestChatCompletion(history, '안녕'), (err: unknown) => {
+        assert.equal(err, networkErr);
+        return true;
+    });
 });

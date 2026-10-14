@@ -16,7 +16,7 @@ import {
 import { config, EXIT_CODE_CONFIG, loadRemoteSettings, validateConfig } from './config';
 import { isUserAllowed, shouldRespond, stripBotMention } from './access-control';
 import { appendTurns, getHistory, resetSession, sessionKey } from './session-store';
-import { requestChatCompletion, resolveModel } from './openmake-client';
+import { RequestTimeoutError, requestChatCompletion, resolveModel } from './openmake-client';
 import { noteHumanMessage, shouldHandleBotMessage, tryConsumeBotTurn } from './bot-conversation';
 import { splitForDiscord } from './message-utils';
 import { prepareReply } from './attachments';
@@ -116,9 +116,14 @@ async function handleChat(message: Message, botUserId: string): Promise<void> {
         }
     } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
-        console.error(`[discord-bot] 응답 실패 (${key}):`, reason);
+        if (err instanceof RequestTimeoutError) {
+            console.error(`[discord-bot] 응답 실패 (${key}): 응답 제한 시간 초과 (${err.timeoutMs / 1000}s)`);
+        } else {
+            console.error(`[discord-bot] 응답 실패 (${key}):`, reason);
+        }
+        const notice = err instanceof RequestTimeoutError ? `⚠️ ${reason}` : `⚠️ 답변 생성에 실패했습니다: ${reason}`;
         await message
-            .reply({ content: `⚠️ 답변 생성에 실패했습니다: ${reason}`, allowedMentions: { parse: [] } })
+            .reply({ content: notice, allowedMentions: { parse: [] } })
             .catch(() => {});
     } finally {
         if (typingTimer) clearInterval(typingTimer);

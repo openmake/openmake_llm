@@ -21,6 +21,20 @@ interface ChatAnswer {
     artifacts: ResponseArtifact[];
 }
 
+/**
+ * 요청 제한 시간(DISCORD_BOT_REQUEST_TIMEOUT_MS) 초과 — fetch 의 영어 abort 문구 대신
+ * 사용자에게 그대로 보여 줄 안내를 담는다 (2026-10-14 운영: 로컬 모델의 긴 HTML 생성이 5분을 넘김).
+ */
+export class RequestTimeoutError extends Error {
+    constructor(readonly timeoutMs: number) {
+        super(
+            `응답 제한 시간(${timeoutMs / 1000}초)을 넘겨 요청을 중단했습니다. 긴 문서·HTML 생성은 시간이 더 걸릴 수 있습니다 — `
+            + '요청을 나누거나 관리자에게 제한 시간(DISCORD_BOT_REQUEST_TIMEOUT_MS) 상향을 요청하세요.',
+        );
+        this.name = 'RequestTimeoutError';
+    }
+}
+
 let resolvedModel = config.model;
 
 /** DISCORD_BOT_MODEL 미설정 시 백엔드 모델 목록의 첫 항목으로 결정 */
@@ -86,6 +100,10 @@ export async function requestChatCompletion(
             throw new Error('백엔드 응답에 content 가 없습니다.');
         }
         return { content: content ?? '', artifacts };
+    } catch (err) {
+        // 우리 타이머가 abort 했을 때만 전용 오류로 바꾼다 — 일반 네트워크 오류는 그대로
+        if (controller.signal.aborted) throw new RequestTimeoutError(config.requestTimeoutMs);
+        throw err;
     } finally {
         clearTimeout(timer);
     }
