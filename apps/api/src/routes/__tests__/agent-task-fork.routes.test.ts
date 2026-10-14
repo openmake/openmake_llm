@@ -13,7 +13,10 @@ jest.mock('../../data/models/unified-database', () => ({
     getPool: () => ({}),
 }));
 jest.mock('../../data/repositories/agent-task-repository', () => ({
-    AgentTaskRepository: jest.fn().mockImplementation(() => ({ getCheckpoint, listCheckpoints, markForked })),
+    AgentTaskRepository: jest.fn().mockImplementation(() => ({ markForked })),
+}));
+jest.mock('../../data/repositories/agent-task-checkpoint-repository', () => ({
+    AgentTaskCheckpointRepository: jest.fn().mockImplementation(() => ({ getCheckpoint, listCheckpoints })),
 }));
 const setApprovalPolicy = jest.fn(async () => undefined);
 const setThinkingLevel = jest.fn(async () => undefined);

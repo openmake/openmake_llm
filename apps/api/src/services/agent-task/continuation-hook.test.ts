@@ -17,7 +17,9 @@ jest.mock('../../config/runtime-limits', () => {
     const actual = jest.requireActual('../../config/runtime-limits');
     return { ...actual, AGENT_TASK_LIMITS: { ...actual.AGENT_TASK_LIMITS, FINAL_TURN_NUDGE_ENABLED: true } };
 });
-import { loadChainContext, chainGateInput, finishAsContinued, gateTurnWithContinuation, prepareSegmentWorkspace, segmentHasProgress } from './continuation-hook';
+import { loadChainContext, chainGateInput, finishAsContinued, gateTurnWithContinuation, prepareSegmentWorkspace, segmentHasProgress, effectiveSegmentTimeoutMs } from './continuation-hook';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { AGENT_TASK_LONG_RUNNING } from '../../config/agent-task-long-running';
 import { HANDOFF_SUMMARY_MARKER } from '../../prompts/agent-task-context';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
@@ -105,11 +107,15 @@ describe('gateTurnWithContinuation', () => {
         expect(r.gate).toBeNull();
         expect(continueMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'context' }));
     });
-    it('segmentHasProgress — turn > startTurn 이고 마지막 인계 요약 뒤에 assistant/tool 이 있어야 한다', () => {
+    it('segmentHasProgress — turn > startTurn 이고 마지막 인계 요약 뒤에 도구 일(tool, tool_calls 있는 assistant)이 있어야 한다', () => {
         expect(segmentHasProgress(worked(), 0, 0)).toBe(false);
         expect(segmentHasProgress(worked(), 1, 0)).toBe(true);
         expect(segmentHasProgress(seed(), 3, 0)).toBe(false);
         expect(segmentHasProgress([...worked(), ...seed()], 3, 0)).toBe(false); // 인계 요약 앞의 일은 세지 않는다
+        // 도구 없는 텍스트 답은 진행이 아니다 — 채택됐으면 작업이 끝났고, 채택되지 않았으면(산출물 재촉 등) 일이 아니다
+        expect(segmentHasProgress([...seed(), { role: 'assistant', content: '답' }], 3, 0)).toBe(false);
+        expect(segmentHasProgress([...seed(), worked()[1]], 3, 0)).toBe(true); // tool_calls 있는 assistant
+        expect(segmentHasProgress([...seed(), worked()[2]], 3, 0)).toBe(true); // tool 메시지
     });
     it('이어가기를 건너뛰면 사유를 info 로그로 남긴다', async () => {
         continueMock.mockResolvedValueOnce({ skipped: '체인 예산 소진' });
@@ -167,6 +173,55 @@ describe('gateTurnWithContinuation', () => {
         const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
         const r = await gateTurnWithContinuation({ chain: null, model: 'm', cont, gate: gateInput(31, [], flags) });
         expect(r.gate?.finalTurnReason).toBe('turns');
+        expect(continueMock).not.toHaveBeenCalled();
+    });
+});
+
+describe('effectiveSegmentTimeoutMs — 세그먼트 시간 상한을 체인 남은 시간으로 묶는다', () => {
+    const HOUR = 3_600_000;
+    const TURN = AGENT_TASK_LIMITS.TURN_TIME_BUDGET_MS;
+    const seg = (maxDurationMs: number, chainUsedMs?: number) => ({
+        task: { id: 's', chain_root_task_id: 'r', ...(chainUsedMs != null ? { continuation: { chainUsedMs } } : {}) } as never,
+        root: { id: 'r', long_running: { ...budget, maxDurationMs } } as never,
+    });
+    it('체인이 아니면(또는 루트에 예산이 없으면) 세그먼트 상한 그대로', () => {
+        expect(effectiveSegmentTimeoutMs(null, 900_000)).toBe(900_000);
+        expect(effectiveSegmentTimeoutMs({ task: { id: 't' } as never, root: { id: 'r' } as never }, 900_000)).toBe(900_000);
+    });
+    it('체인 남은 시간이 세그먼트 상한보다 길면 세그먼트 상한', () => {
+        expect(effectiveSegmentTimeoutMs(seg(8 * HOUR), 900_000)).toBe(900_000); // 루트: 앞 누적 0
+        expect(effectiveSegmentTimeoutMs(seg(8 * HOUR, 2 * HOUR), 900_000)).toBe(900_000);
+    });
+    it('체인 남은 시간(maxDurationMs − 앞 세그먼트 누적)이 더 짧으면 남은 시간', () => {
+        expect(effectiveSegmentTimeoutMs(seg(HOUR, HOUR - 300_000), 900_000)).toBe(300_000);
+    });
+    it('남은 시간이 0 이하이거나 한 턴도 안 되면 하한(지금까지의 활성 시간 + 한 턴 예산) — 최소 한 턴은 돈다, 세그먼트 상한은 넘지 않는다', () => {
+        expect(effectiveSegmentTimeoutMs(seg(HOUR, HOUR + 5_000), 900_000)).toBe(TURN); // 음수
+        expect(effectiveSegmentTimeoutMs(seg(HOUR, HOUR), 900_000, 12_000)).toBe(12_000 + TURN); // 0, 준비에 12초 썼다
+        expect(effectiveSegmentTimeoutMs(seg(HOUR, HOUR - 1_000), 900_000)).toBe(TURN); // 1초 남음
+        expect(effectiveSegmentTimeoutMs(seg(HOUR, HOUR + 5_000), TURN / 2)).toBe(TURN / 2);
+    });
+    it('SEGMENT_TIME_RATIO 는 실효 상한에 곱한다 — 체인에 시간이 남아 있으면 남은 시간 × 비율에서 time 사유로 잇는다', () => {
+        const ctx = seg(HOUR, HOUR - 300_000); // 남은 5분 < 세그먼트 상한 15분
+        const eff = effectiveSegmentTimeoutMs(ctx, 900_000);
+        const at = eff * AGENT_TASK_LONG_RUNNING.SEGMENT_TIME_RATIO;
+        expect(chainGateInput(ctx, [], [], 'm', at, 0, eff)).toMatchObject({ canContinue: true, timeUp: true });
+        expect(chainGateInput(ctx, [], [], 'm', at - 1, 0, eff)).toMatchObject({ timeUp: false });
+        expect(chainGateInput(ctx, [], [], 'm', at, 0, 900_000)).toMatchObject({ timeUp: false }); // 종전(세그먼트 상한 기준)이면 판정하지 못했다
+    });
+    it('남은 시간이 0 이하면 timeUp 이어도 canContinue=false — time 으로 잇지 않고 예산 소진으로 끝난다(하한 시간 뒤 assertWithinLimits 의 timeout)', async () => {
+        const ctx = seg(HOUR, HOUR + 5_000);
+        const eff = effectiveSegmentTimeoutMs(ctx, 900_000);
+        expect(chainGateInput(ctx, [], [], 'm', eff, 0, eff)).toMatchObject({ canContinue: false, timeUp: true });
+        continueMock.mockClear();
+        const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
+        const cont = { roleState: {} as never, signal: new AbortController().signal, taskRuntime: null, userRole: 'user' as const, activeMs: eff, segmentTimeoutMs: eff, update: jest.fn() };
+        const worked: ChatMessage[] = [{ role: 'user', content: 'g' }, { role: 'assistant', content: '', tool_calls: [{ id: 'c', type: 'function', function: { name: 'shell', arguments: {} } }] }, { role: 'tool', content: 'ok', tool_call_id: 'c' } as ChatMessage];
+        const r = await gateTurnWithContinuation({ chain: ctx, model: 'm', cont, gate: {
+            taskId: 's', turn: 3, startTurn: 0, turnCeiling: 32, totalTokens: 0, searchCalls: 0, browserCalls: 0, approvalTimeouts: 0,
+            tools: [], sandboxCfg: { approvalPolicy: 'none', deviceGatesShell: false } as never, conversation: worked, flags, stepNumber: 0, emitStep: jest.fn(),
+        } });
+        expect(r.gate?.continuationReason).toBeNull();
         expect(continueMock).not.toHaveBeenCalled();
     });
 });

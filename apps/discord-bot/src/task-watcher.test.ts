@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { TaskApiError, type PendingApproval, type TaskSnapshot } from './task-client';
+import { TaskApiError, type PendingApproval, type TaskArtifact, type TaskSnapshot } from './task-client';
 import { formatApproval, formatFinal, formatStatus, isTerminalStatus, watchTask, type WatchOptions, type WatchUi } from './task-watcher';
 
 const snap = (over: Partial<TaskSnapshot>): TaskSnapshot => ({ id: 't1', status: 'running', progress: 0, currentTurn: 0, maxTurns: 32, result: null, error: null, continuedByTaskId: null, completionPath: null, ...over });
@@ -14,16 +14,22 @@ function screen() {
     const statuses: string[] = [];
     const approvals: PendingApproval[] = [];
     const finals: string[] = [];
+    const finalFiles: Array<Array<{ name: string; data: Buffer }> | undefined> = [];
     const ui: WatchUi = {
         updateStatus: async (t) => { statuses.push(t); },
         postApproval: async (a) => { approvals.push(a); },
-        postFinal: async (t) => { finals.push(t); },
+        postFinal: async (t, files) => { finals.push(t); finalFiles.push(files); },
     };
-    return { ui, statuses, approvals, finals };
+    return { ui, statuses, approvals, finals, finalFiles };
 }
 
 /** 정해 둔 순서대로 응답하는 가짜 클라이언트 — 함수면 불러서(던지게도) 쓴다 */
-function scripted(steps: Array<TaskSnapshot | (() => TaskSnapshot)>, pending: PendingApproval[][] = []) {
+function scripted(
+    steps: Array<TaskSnapshot | (() => TaskSnapshot)>,
+    pending: PendingApproval[][] = [],
+    artifacts: () => Promise<TaskArtifact[]> = async () => [],
+    workspace: { list?: () => Promise<string[]>; download?: (rel: string, maxBytes: number) => Promise<Buffer | null> } = {},
+) {
     let i = 0;
     let p = 0;
     return {
@@ -35,6 +41,9 @@ function scripted(steps: Array<TaskSnapshot | (() => TaskSnapshot)>, pending: Pe
                 return typeof step === 'function' ? step() : step;
             },
             listPendingApprovals: async () => pending[Math.min(p++, pending.length - 1)] ?? [],
+            listArtifacts: artifacts,
+            listWorkspaceFiles: workspace.list ?? (async () => []),
+            downloadWorkspaceFile: async (_taskId: string, rel: string, maxBytes: number) => (workspace.download ? workspace.download(rel, maxBytes) : null),
         },
     };
 }
@@ -228,6 +237,9 @@ test('completed + continuedByTaskId 면 결과를 올리지 않고 후속 작업
     const client = {
         getTask: async (id: string) => { asked.push(id); return snapshots[id].length > 1 ? snapshots[id].shift()! : snapshots[id][0]; },
         listPendingApprovals: async () => [],
+        listArtifacts: async () => [],
+        listWorkspaceFiles: async () => [],
+        downloadWorkspaceFile: async () => null,
     };
     const s = screen();
     assert.equal(await watchTask(client, 'a', s.ui, opts({ pollMs: 0 })), 'completed');
@@ -246,6 +258,9 @@ test('이어진 작업도 watchMaxMs 는 체인 전체에 적용된다', async (
     const client = {
         getTask: async (id: string) => snap({ id, status: id === 'a' ? 'completed' : 'running', maxTurns: 1, continuedByTaskId: id === 'a' ? 'b' : null, completionPath: id === 'a' ? 'continued' : null }),
         listPendingApprovals: async () => [],
+        listArtifacts: async () => [],
+        listWorkspaceFiles: async () => [],
+        downloadWorkspaceFile: async () => null,
     };
     const s = screen();
     assert.equal(await watchTask(client, 'a', s.ui, opts({ pollMs: 0, watchMaxMs: 10, sleep: async () => { t += 6; }, now: () => t })), 'timeout');
@@ -259,11 +274,100 @@ test('a → b → c 로 두 번 이어지면 진행 표시 머리가 (세그먼�
         b: snap({ id: 'b', status: 'completed', continuedByTaskId: 'c', completionPath: 'continued' }),
         c: snap({ id: 'c', status: 'completed', result: '최종', completionPath: 'final_answer' }),
     };
-    const client = { getTask: async (id: string) => snapshots[id], listPendingApprovals: async () => [] };
+    const client = { getTask: async (id: string) => snapshots[id], listPendingApprovals: async () => [], listArtifacts: async () => [], listWorkspaceFiles: async () => [], downloadWorkspaceFile: async () => null };
     const s = screen();
     assert.equal(await watchTask(client, 'a', s.ui, opts({ pollMs: 0 })), 'completed');
     assert.equal(s.statuses.length, 1);
     assert.match(s.statuses[0], /^\(세그먼트 3\) ✅ 작업 완료/);
     assert.equal(s.finals.length, 1);
     assert.match(s.finals[0], /최종/);
+});
+
+const md = (title: string): TaskArtifact => ({ id: title, kind: 'markdown', title, lang: null, content: `# ${title}` });
+
+test('결과 문구: 산출물을 첨부하면 본문이 없을 때 "산출물 N개를 첨부합니다." 로, 못 올린 것은 한 줄로 안내한다', () => {
+    const file = { name: 'a.md', data: Buffer.from('x') };
+    assert.equal(formatFinal(snap({ status: 'completed', result: '[[artifact:a]]' }), { files: [file], leftOver: 0 }), '✅ 작업이 끝났습니다.\n\n산출물 1개를 첨부합니다.');
+    assert.equal(formatFinal(snap({ status: 'completed', result: '[[artifact:a]]\n\n요약입니다.' }), { files: [file, file], leftOver: 3 }), '✅ 작업이 끝났습니다.\n\n요약입니다.\n\n📎 나머지 3개는 웹의 작업 화면에서 확인하세요.');
+    // 산출물이 있지만 하나도 못 올렸으면 종전 안내
+    assert.equal(formatFinal(snap({ status: 'completed', result: '[[artifact:a]]' }), { files: [], leftOver: 1 }), '✅ 작업이 끝났습니다.\n\n(결과 본문 없음)\n\n📎 산출물은 웹의 작업 화면에서 확인하세요.');
+    // 산출물이 없으면 종전 문구
+    assert.equal(formatFinal(snap({ status: 'completed', result: '[[artifact:a]]' }), { files: [], leftOver: 0 }), '✅ 작업이 끝났습니다.\n\n(결과 본문 없음)\n\n📎 산출물은 웹의 작업 화면에서 확인하세요.');
+});
+
+test('completed 면 산출물을 한 번 조회해 결과와 함께 파일로 넘긴다', async () => {
+    let asked = 0;
+    const { client } = scripted([snap({ status: 'completed', result: '[[artifact:보고서]]' })], [], async () => { asked += 1; return [md('보고서'), md('부록')]; });
+    const s = screen();
+    assert.equal(await watchTask(client, 't1', s.ui, opts()), 'completed');
+    assert.equal(asked, 1);
+    assert.deepEqual(s.finals, ['✅ 작업이 끝났습니다.\n\n산출물 2개를 첨부합니다.']);
+    assert.deepEqual(s.finalFiles[0]?.map((f) => f.name), ['보고서.md', '부록.md']);
+});
+
+test('산출물 조회가 실패하면 삼키고 종전 문구로 올린다 — 실패·취소는 조회하지 않는다', async () => {
+    const { client } = scripted([snap({ status: 'completed', result: '[[artifact:a]]' })], [], async () => { throw new TaskApiError('없음', 404); });
+    const s = screen();
+    assert.equal(await watchTask(client, 't1', s.ui, opts()), 'completed');
+    assert.deepEqual(s.finals, ['✅ 작업이 끝났습니다.\n\n(결과 본문 없음)\n\n📎 산출물은 웹의 작업 화면에서 확인하세요.']);
+    assert.equal(s.finalFiles[0], undefined);
+
+    let asked = 0;
+    const failed = scripted([snap({ status: 'failed', error: 'x' })], [], async () => { asked += 1; return []; });
+    await watchTask(failed.client, 't1', screen().ui, opts());
+    assert.equal(asked, 0);
+});
+
+test('completed 면 작업 공간 파일도 조회해 산출물만 내려받고, 응답 산출물보다 먼저 첨부한다', async () => {
+    const downloaded: Array<[string, number]> = [];
+    const { client } = scripted([snap({ status: 'completed', result: '[[artifact:보고서]]' })], [], async () => [md('보고서')], {
+        list: async () => ['monthly.csv', 'uploads/input.xlsx', '.verify_a.py'],
+        download: async (rel, maxBytes) => { downloaded.push([rel, maxBytes]); return Buffer.from('월,합계'); },
+    });
+    const s = screen();
+    assert.equal(await watchTask(client, 't1', s.ui, opts()), 'completed');
+    assert.deepEqual(downloaded, [['monthly.csv', 8 * 1024 * 1024]]);
+    assert.deepEqual(s.finals, ['✅ 작업이 끝났습니다.\n\n산출물 2개를 첨부합니다.']);
+    assert.deepEqual(s.finalFiles[0]?.map((f) => f.name), ['monthly.csv', '보고서.md']);
+    assert.equal(s.finalFiles[0]?.[0].data.toString('utf8'), '월,합계');
+});
+
+test('작업 공간 파일은 상한 안의 것만 내려받고 넘친 수는 웹으로 안내한다', async () => {
+    const downloaded: string[] = [];
+    const paths = Array.from({ length: 7 }, (_, i) => `f${i}.csv`);
+    const { client } = scripted([snap({ status: 'completed', result: '끝' })], [], async () => [], {
+        list: async () => paths,
+        download: async (rel) => { downloaded.push(rel); return Buffer.from(rel); },
+    });
+    const s = screen();
+    await watchTask(client, 't1', s.ui, opts());
+    assert.deepEqual(downloaded, paths.slice(0, 5));
+    assert.deepEqual(s.finalFiles[0]?.map((f) => f.name), paths.slice(0, 5));
+    assert.deepEqual(s.finals, ['✅ 작업이 끝났습니다.\n\n끝\n\n📎 나머지 2개는 웹의 작업 화면에서 확인하세요.']);
+});
+
+test('작업 공간 조회·다운로드가 실패해도 삼키고 나머지로 게시한다', async () => {
+    const { client } = scripted([snap({ status: 'completed', result: '' })], [], async () => [md('보고서')], {
+        list: async () => ['a.csv', 'b.csv'],
+        download: async (rel) => { if (rel === 'a.csv') throw new TaskApiError('끊김', 0); return Buffer.from('b'); },
+    });
+    const s = screen();
+    assert.equal(await watchTask(client, 't1', s.ui, opts()), 'completed');
+    assert.deepEqual(s.finalFiles[0]?.map((f) => f.name), ['b.csv', '보고서.md']);
+    assert.deepEqual(s.finals, ['✅ 작업이 끝났습니다.\n\n산출물 2개를 첨부합니다.\n\n📎 나머지 1개는 웹의 작업 화면에서 확인하세요.']);
+
+    const listFails = scripted([snap({ status: 'completed', result: '' })], [], async () => [md('보고서')], {
+        list: async () => { throw new TaskApiError('없음', 500); },
+    });
+    const s2 = screen();
+    await watchTask(listFails.client, 't1', s2.ui, opts());
+    assert.deepEqual(s2.finalFiles[0]?.map((f) => f.name), ['보고서.md']);
+
+    const artifactsFail = scripted([snap({ status: 'completed', result: '' })], [], async () => { throw new TaskApiError('없음', 500); }, {
+        list: async () => ['a.csv'],
+        download: async () => Buffer.from('a'),
+    });
+    const s3 = screen();
+    await watchTask(artifactsFail.client, 't1', s3.ui, opts());
+    assert.deepEqual(s3.finalFiles[0]?.map((f) => f.name), ['a.csv']);
 });

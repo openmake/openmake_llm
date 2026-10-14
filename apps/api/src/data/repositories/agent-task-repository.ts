@@ -261,32 +261,6 @@ export class AgentTaskRepository extends BaseRepository {
         if (prev !== updates.status) await this.recordEvent(taskId, prev, updates.status, updates.transitionReason ?? updates.error ?? undefined);
     }
 
-    /** 턴 체크포인트 이력(141) 1행 + 초과분 정리 — fail-open 은 호출부. */
-    async insertCheckpointHistory(taskId: string, turn: number, conversation: unknown[], plan: unknown | null, keep: number): Promise<void> {
-        await this.query(
-            `INSERT INTO agent_task_checkpoints (task_id, turn, conversation, plan) VALUES ($1, $2, $3::jsonb, $4::jsonb)
-             ON CONFLICT (task_id, turn) DO UPDATE SET conversation = EXCLUDED.conversation, plan = EXCLUDED.plan, created_at = NOW()`,
-            [taskId, turn, JSON.stringify(conversation), plan == null ? null : JSON.stringify(plan)],
-        );
-        await this.query(
-            `DELETE FROM agent_task_checkpoints WHERE task_id = $1 AND id NOT IN (
-                 SELECT id FROM agent_task_checkpoints WHERE task_id = $1 ORDER BY turn DESC LIMIT $2)`,
-            [taskId, keep],
-        );
-    }
-
-    async listCheckpoints(taskId: string): Promise<Array<{ turn: number; messages: number; created_at: string }>> {
-        const r = await this.query<{ turn: number; messages: string; created_at: string }>(
-            `SELECT turn, jsonb_array_length(conversation)::text AS messages, created_at FROM agent_task_checkpoints WHERE task_id = $1 ORDER BY turn ASC`, [taskId]);
-        return r.rows.map((x) => ({ turn: x.turn, messages: Number(x.messages), created_at: x.created_at }));
-    }
-
-    async getCheckpoint(taskId: string, turn: number): Promise<{ conversation: unknown[]; plan: unknown | null } | null> {
-        const r = await this.query<{ conversation: unknown[]; plan: unknown | null }>(
-            'SELECT conversation, plan FROM agent_task_checkpoints WHERE task_id = $1 AND turn = $2', [taskId, turn]);
-        return r.rows[0] ?? null;
-    }
-
     /** fork 표시(141) — 새 작업에 원 작업·턴을 기록. */
     async markForked(taskId: string, fromTaskId: string, fromTurn: number): Promise<void> {
         await this.query('UPDATE agent_tasks SET forked_from_task_id = $2, forked_from_turn = $3 WHERE id = $1', [taskId, fromTaskId, fromTurn]);
@@ -357,26 +331,6 @@ export class AgentTaskRepository extends BaseRepository {
     /** "나머지 모두 승인" 플래그 영속(124) — 재시작 후 재개된 작업이 승인을 다시 묻지 않게. */
     async setAutoApprove(taskId: string, enabled: boolean): Promise<void> {
         await this.query('UPDATE agent_tasks SET auto_approve = $2, updated_at = NOW() WHERE id = $1', [taskId, enabled]);
-    }
-
-    /** 도구 호출 저널(124) — tool_call_id → tool_result 본문. 턴 중간 재개가 실행된 호출을 건너뛰는 근거. */
-    async getToolCallJournal(taskId: string, toolCallIds: string[]): Promise<Map<string, string>> {
-        const r = await this.query<{ tool_call_id: string; content: string | null }>(
-            `SELECT tool_call_id, content FROM agent_task_steps
-             WHERE task_id = $1 AND step_type = 'tool_result' AND tool_call_id = ANY($2::text[])`,
-            [taskId, toolCallIds],
-        );
-        return new Map(r.rows.map((row) => [row.tool_call_id, row.content ?? '']));
-    }
-
-    /** 실행 중 표식(172) — 부작용 도구 실행 직전에 id 를, 결과 스텝 기록 뒤 null 을 쓴다. */
-    async setInFlightToolCall(taskId: string, toolCallId: string | null): Promise<void> {
-        await this.query(`UPDATE agent_tasks SET in_flight_tool_call_id = $2 WHERE id = $1`, [taskId, toolCallId]);
-    }
-
-    async getInFlightToolCall(taskId: string): Promise<string | null> {
-        const r = await this.query<{ in_flight_tool_call_id: string | null }>(`SELECT in_flight_tool_call_id FROM agent_tasks WHERE id = $1`, [taskId]);
-        return r.rows[0]?.in_flight_tool_call_id ?? null;
     }
 
     async addAgentTaskStep(params: {
@@ -480,47 +434,6 @@ export class AgentTaskRepository extends BaseRepository {
             leaseOwner ? [windowMs / 1000, leaseOwner] : [windowMs / 1000]
         );
         return result.rows;
-    }
-
-    /** 실행 소유권(176) 잡기 — 소유권이 없거나, 내 것이거나, 지났을 때만. 다른 서버의 살아 있는 소유권이면 false. */
-    async acquireLease(taskId: string, owner: string, leaseMs: number): Promise<boolean> {
-        const r = await this.query(
-            `UPDATE agent_tasks SET lease_owner = $2, lease_until = NOW() + make_interval(secs => $3)
-             WHERE id = $1 AND (lease_owner IS NULL OR lease_owner = $2 OR lease_until < NOW())`,
-            [taskId, owner, leaseMs / 1000]);
-        return (r.rowCount ?? 0) > 0;
-    }
-
-    /** 실행 소유권 연장 — 여전히 내 것일 때만. 0행이면 다른 서버가 가져갔다. */
-    async renewLease(taskId: string, owner: string, leaseMs: number): Promise<boolean> {
-        const r = await this.query(
-            `UPDATE agent_tasks SET lease_until = NOW() + make_interval(secs => $3) WHERE id = $1 AND lease_owner = $2`,
-            [taskId, owner, leaseMs / 1000]);
-        return (r.rowCount ?? 0) > 0;
-    }
-
-    /** 실행 소유권 반납 — 내 것일 때만. */
-    async releaseLease(taskId: string, owner: string): Promise<void> {
-        await this.query(`UPDATE agent_tasks SET lease_owner = NULL, lease_until = NULL WHERE id = $1 AND lease_owner = $2`, [taskId, owner]);
-    }
-
-    /** 소유권이 지난 실행 중 작업(주차 제외) — 소유권을 잡아 본 적 없는 작업(lease_until NULL)은 대상이 아니다. */
-    async listExpiredLeaseTasks(): Promise<AgentTask[]> {
-        const r = await this.query<AgentTask>(
-            `SELECT * FROM agent_tasks
-             WHERE status IN ('running', 'paused') AND lease_until IS NOT NULL AND lease_until < NOW()
-               AND NOT ${parkedTaskCondition('agent_tasks')}
-             ORDER BY lease_until ASC LIMIT 50`);
-        return r.rows;
-    }
-
-    /** 지난 소유권을 원자적으로 가져온다 — 여러 서버가 동시에 시도해도 한 곳만 성공한다. */
-    async takeOverExpiredLease(taskId: string, owner: string, leaseMs: number): Promise<boolean> {
-        const r = await this.query(
-            `UPDATE agent_tasks SET lease_owner = $2, lease_until = NOW() + make_interval(secs => $3)
-             WHERE id = $1 AND status IN ('running', 'paused') AND lease_until IS NOT NULL AND lease_until < NOW()`,
-            [taskId, owner, leaseMs / 1000]);
-        return (r.rowCount ?? 0) > 0;
     }
 
     /**

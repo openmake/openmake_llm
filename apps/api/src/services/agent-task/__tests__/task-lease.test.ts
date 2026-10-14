@@ -5,8 +5,8 @@ const acquireLease = jest.fn(async () => true);
 const renewLease = jest.fn(async () => true);
 const releaseLease = jest.fn(async () => undefined);
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) }));
-jest.mock('../../../data/repositories/agent-task-repository', () => ({
-    AgentTaskRepository: jest.fn(() => ({ acquireLease, renewLease, releaseLease })),
+jest.mock('../../../data/repositories/agent-task-lease-repository', () => ({
+    AgentTaskLeaseRepository: jest.fn(() => ({ acquireLease, renewLease, releaseLease })),
 }));
 
 const failUnstartedClaim = jest.fn(async (_taskId: string, _error: string) => true);
