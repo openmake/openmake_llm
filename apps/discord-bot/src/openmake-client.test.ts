@@ -98,3 +98,36 @@ test('일반 네트워크 오류는 RequestTimeoutError 로 바꾸지 않고 그
         return true;
     });
 });
+
+/** 채팅 응답 message 를 그대로 돌려주는 가짜 */
+function stubAnswer(message: Record<string, unknown>): void {
+    globalThis.fetch = (async (input: string | URL | Request) => {
+        if (String(input).endsWith('/api/v1/models')) {
+            return Response.json({ data: [{ id: 'test-model' }] });
+        }
+        return Response.json({ choices: [{ message }] });
+    }) as typeof fetch;
+}
+
+test('message.agent_tasks(위임한 백그라운드 작업)를 agentTasks 로 읽는다', async () => {
+    stubAnswer({
+        content: '백그라운드 작업으로 위임했습니다',
+        agent_tasks: [
+            { id: 't1', goal: '엑셀 만들기', status: 'created' },
+            { id: 't0', goal: '예전 작업', status: 'duplicate' },
+            { goal: 'id 없음', status: 'created' },
+            { id: 't9', goal: '모르는 상태', status: 'weird' },
+        ],
+    });
+    const answer = await requestChatCompletion(history, '엑셀 파일 만들어줘');
+    assert.deepEqual(answer.agentTasks, [
+        { id: 't1', goal: '엑셀 만들기', status: 'created' },
+        { id: 't0', goal: '예전 작업', status: 'duplicate' },
+    ]);
+});
+
+test('agent_tasks 가 없으면 agentTasks 는 빈 배열', async () => {
+    stubAnswer({ content: '답변' });
+    const answer = await requestChatCompletion(history, '안녕');
+    assert.deepEqual(answer.agentTasks, []);
+});
