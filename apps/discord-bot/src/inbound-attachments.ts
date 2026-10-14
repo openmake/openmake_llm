@@ -41,7 +41,7 @@ export type InboundPayloadItem = { kind: 'image'; part: ImageUrlPart } | { kind:
 export const INBOUND_LIMITS = {
     /** 첨부 1개 최대 바이트 */
     MAX_FILE_BYTES: 8 * 1024 * 1024,
-    /** 메시지 전체 합계 최대 바이트 — 주의: base64 는 4/3 배라 합계 약 7.5MB 를 넘으면 백엔드 JSON 상한(10mb)에서 413 이 날 수 있다 */
+    /** 메시지 전체 합계 최대 바이트 — base64(4/3 배) 본문 상한인 백엔드 30mb 와 짝 */
     MAX_TOTAL_BYTES: 20 * 1024 * 1024,
     /** 메시지당 최대 개수 */
     MAX_COUNT: 10,
