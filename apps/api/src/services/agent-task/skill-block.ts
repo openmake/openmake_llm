@@ -63,7 +63,9 @@ export async function buildAgentTaskSystemContent(userId: string, goal: string, 
     // 이전에는 agent-task-prompt 의 짧은 요약 규칙만 받아, html 디자인 규칙(디자인 토큰·
     // 시멘틱 마크업·반응형)이 에이전트 작업 산출물에는 적용되지 않았다.
     // 사용자의 artifacts_enabled=false 는 buildArtifactGuideBlock 이 ''를 반환해 그대로 존중된다.
-    const artifactGuide = await buildArtifactGuideBlock(userId, goalLang);
+    // 단 채팅 전용 "산출물 전달" 절(응답 아티팩트로 직접, MCP create_artifact·위임 금지)은 뺀다 —
+    // 에이전트 작업은 파일 산출·open-design 저장이 본업이라 위 작업 프롬프트의 저장 지시와 충돌한다.
+    const artifactGuide = await buildArtifactGuideBlock(userId, goalLang, { deliverableClause: false });
     // 병렬 분담 안내는 도구가 실제로 실릴 때만 — 없는 도구를 권하면 모델이 헛호출한다.
     const parallelGuide = AGENT_SPAWN.ENABLED ? getAgentTaskParallelGuide() : '';
     return getAgentTaskSystemPrompt()

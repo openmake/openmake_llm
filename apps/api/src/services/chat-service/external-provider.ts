@@ -387,8 +387,10 @@ export async function runExternalStream(
         // 컨텍스트 초과는 **재시도해도 같다** — UPSTREAM_ERROR("잠시 후 다시 시도") 로 안내하면
         // 사용자가 같은 실패를 반복한다. upstream 이 code 를 주지 않으므로 메시지로 판정한다
         // (LiteLLM: `ContextWindowExceededError` / OpenAI 호환: `maximum context length`).
+        // 클라이언트 중단은 provider 오류가 아니다 — 'ABORTED'(코드 없음)·provider 의 중단 ProviderError
+        // (UPSTREAM_ERROR) 모두 신호 기준으로 CLIENT_ABORTED 로 남겨 업스트림 장애와 구분한다.
         const rawMsg = err instanceof Error ? err.message : String(err ?? '');
-        errorCode = err && typeof err === 'object' && 'code' in err
+        errorCode = req.abortSignal?.aborted ? 'CLIENT_ABORTED' : err && typeof err === 'object' && 'code' in err
             ? String((err as { code: unknown }).code)
             : /ContextWindowExceeded|maximum context length|context_length_exceeded|too many tokens/i.test(rawMsg)
                 ? 'CONTEXT_TOO_LARGE'

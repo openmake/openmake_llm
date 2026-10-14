@@ -46,9 +46,15 @@ const DELEGATE_GUIDE_CLAUSE = 'delegate_agent_task 는 파일 산출·코드 실
 /**
  * 시스템 프롬프트에 주입하는 배정 가이드 — 해당 의도 프리필터 매칭 턴에만 주입된다.
  * 도구별 설명 절은 기여 도구(등록 순서) → 위임 도구 순으로 잇는다.
+ * includeDelegate=false(위임 도구가 이 턴에 노출되지 않음 — 예: 아티팩트 의도 턴)면 위임 절을 빼고,
+ * 남는 절이 없으면 '' 를 돌려준다(없는 도구를 권하지 않는다).
  */
-export function buildOrchestrationPromptGuide(): string {
-    const clauses = [...contributedOrchestrationTools().map((t) => t.promptGuideClause), DELEGATE_GUIDE_CLAUSE];
+export function buildOrchestrationPromptGuide(opts: { includeDelegate?: boolean } = {}): string {
+    const clauses = [
+        ...contributedOrchestrationTools().map((t) => t.promptGuideClause),
+        ...(opts.includeDelegate !== false ? [DELEGATE_GUIDE_CLAUSE] : []),
+    ];
+    if (clauses.length === 0) return '';
     return '\n\n[오케스트레이션 배정]\n'
         + '- 이 턴에 제공된 오케스트레이션 도구는 사용자 요청 유형과 이미 일치한다고 판단되어 노출된 것입니다. '
         + '해당 도구가 다루는 작업이면 그 도구로 처리하고, 결과를 사용자에게 정리해 전달하세요.\n'
