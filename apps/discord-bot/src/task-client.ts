@@ -58,6 +58,10 @@ export interface TaskClient {
     listPendingApprovals(taskId: string): Promise<PendingApproval[]>;
     /** 작업의 산출물 — 형식이 다른 스텝은 건너뛴다 */
     listArtifacts(taskId: string): Promise<TaskArtifact[]>;
+    /** 작업 공간의 파일(상대 경로) — 서버가 숨김 파일은 빼고, workspace 가 없으면 빈 목록을 준다 */
+    listWorkspaceFiles(taskId: string): Promise<string[]>;
+    /** 작업 공간 파일 하나의 바이트 — maxBytes 를 넘거나(Content-Length·본문) 파일이 없으면(404) null */
+    downloadWorkspaceFile(taskId: string, rel: string, maxBytes: number): Promise<Buffer | null>;
     /** 'gone' = 이미 처리됐거나 만료된 요청(404) */
     decideApproval(approvalId: string, decision: 'approve' | 'reject'): Promise<'ok' | 'gone'>;
     isDeviceConnected(): Promise<boolean>;
@@ -121,6 +125,12 @@ function errorMessageOf(body: unknown): string | undefined {
 export function createTaskClient(opts: { baseUrl: string; apiKey: string; timeoutMs?: number }): TaskClient {
     const base = opts.baseUrl.replace(/\/$/, '');
 
+    /** fetch 의 원문("The operation was aborted due to timeout", "fetch failed")은 그대로 채널에 나간다 — 읽을 수 있는 말로 바꾼다 */
+    const networkError = (e: unknown): TaskApiError => {
+        const timedOut = e instanceof Error && e.name === 'TimeoutError';
+        return new TaskApiError(timedOut ? '서버 응답이 시간 안에 오지 않았습니다' : '서버에 연결하지 못했습니다', 0);
+    };
+
     async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, timeoutMs?: number): Promise<T> {
         let res: Response;
         try {
@@ -134,13 +144,52 @@ export function createTaskClient(opts: { baseUrl: string; apiKey: string; timeou
                 signal: AbortSignal.timeout(timeoutMs ?? opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
             });
         } catch (e) {
-            // fetch 의 원문("The operation was aborted due to timeout", "fetch failed")은 그대로 채널에 나간다 — 읽을 수 있는 말로 바꾼다
-            const timedOut = e instanceof Error && e.name === 'TimeoutError';
-            throw new TaskApiError(timedOut ? '서버 응답이 시간 안에 오지 않았습니다' : '서버에 연결하지 못했습니다', 0);
+            throw networkError(e);
         }
         const json: unknown = await res.json().catch(() => undefined);
         if (!res.ok) throw new TaskApiError(errorMessageOf(json) ?? `HTTP ${res.status}`, res.status);
         return (json as { data?: T } | undefined)?.data as T;
+    }
+
+    /** 바이너리 GET — 인증·시간 상한·오류 규칙은 call 과 같다. 404 와 상한 초과는 null */
+    async function download(path: string, maxBytes: number): Promise<Buffer | null> {
+        try {
+            const res = await fetch(`${base}${path}`, {
+                headers: { Authorization: `Bearer ${opts.apiKey}` },
+                signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+            });
+            if (res.status === 404) {
+                await res.body?.cancel();
+                return null;
+            }
+            if (!res.ok) {
+                const json: unknown = await res.json().catch(() => undefined);
+                throw new TaskApiError(errorMessageOf(json) ?? `HTTP ${res.status}`, res.status);
+            }
+            const declared = Number(res.headers.get('content-length'));
+            if (Number.isFinite(declared) && declared > maxBytes) {
+                await res.body?.cancel();
+                return null;
+            }
+            // Content-Length 가 없을 수 있다(chunked) — 읽으면서 세다가 넘으면 끊는다
+            const chunks: Uint8Array[] = [];
+            let total = 0;
+            const reader = res.body?.getReader();
+            for (;;) {
+                const part = reader ? await reader.read() : { done: true as const, value: undefined };
+                if (part.done) break;
+                total += part.value.byteLength;
+                if (total > maxBytes) {
+                    await reader?.cancel();
+                    return null;
+                }
+                chunks.push(part.value);
+            }
+            return Buffer.concat(chunks);
+        } catch (e) {
+            if (e instanceof TaskApiError) throw e;
+            throw networkError(e);
+        }
     }
 
     return {
@@ -176,6 +225,13 @@ export function createTaskClient(opts: { baseUrl: string; apiKey: string; timeou
                 .filter((st) => st.step_type === 'artifact')
                 .map((st) => parseArtifact(st.content))
                 .filter((a): a is TaskArtifact => a !== null);
+        },
+        async listWorkspaceFiles(taskId) {
+            const data = await call<{ files?: unknown[] }>('GET', `/api/agent-tasks/${encodeURIComponent(taskId)}/files`);
+            return (data?.files ?? []).filter((f): f is string => typeof f === 'string');
+        },
+        async downloadWorkspaceFile(taskId, rel, maxBytes) {
+            return download(`/api/agent-tasks/${encodeURIComponent(taskId)}/files/download?path=${encodeURIComponent(rel)}`, maxBytes);
         },
         async decideApproval(approvalId, decision) {
             try {
