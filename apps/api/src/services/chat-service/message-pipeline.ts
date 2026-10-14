@@ -478,6 +478,8 @@ export async function runMessagePipeline(svc: ChatService,
         ...(extReportGuide ? { reportGuideBlock: extReportGuide } : {}),
     };
     const externalResponse = await svc.streamFromExternalProvider(externalResolved, req, streamToken, extStreamCtx, reqCtx);
+    // 위임한 백그라운드 작업 — REST 응답 agent_tasks 로 나가 클라이언트(Discord 봇)가 지켜본다
+    if (extStreamCtx.delegatedTasks?.length) svc.setDelegatedTasks(extStreamCtx.delegatedTasks);
 
     // ── Step 5: 라우팅 로그 + 메트릭 기록 ──
     // regex 분류(LLM 호출 0회)로 queryType/모델을 채워 라우팅 분석 관측 확보 (2026-07-18).

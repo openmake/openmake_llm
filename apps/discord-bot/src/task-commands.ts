@@ -34,9 +34,11 @@ export interface TaskController {
     start(req: { userId: string; channelId: string; goal: string; ui: WatchUi }): Promise<StartResult>;
     cancel(req: { userId: string; channelId: string }): Promise<string>;
     decide(req: { userId: string; approvalId: string; decision: 'approve' | 'reject' }): Promise<DecideResult>;
+    /** /task 밖에서 올린 승인 요청(채팅에서 위임한 작업)의 주인을 적는다 — 그 사람만 버튼으로 결정한다 */
+    trackApproval(approvalId: string, ownerId: string): void;
 }
 
-const EXECUTOR_LABEL: Record<TaskExecutor, string> = { sandbox: '서버 격리 환경', local: '이 기기(Companion)' };
+export const EXECUTOR_LABEL: Record<TaskExecutor, string> = { sandbox: '서버 격리 환경', local: '이 기기(Companion)' };
 const POLICY_LABEL: Record<TaskApprovalPolicy, string> = { all: '전부', 'high-risk': '고위험만', none: '없음' };
 
 const MSG = {
@@ -153,6 +155,10 @@ export function createTaskController(deps: {
             } catch (e) {
                 return `${MSG.cancelFailed}: ${reasonOf(e)}`;
             }
+        },
+
+        trackApproval(approvalId, ownerId) {
+            approvalOwners.set(approvalId, ownerId);
         },
 
         async decide(req) {

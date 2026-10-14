@@ -378,6 +378,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             }
 
             // OpenMake 확장: 스트리밍에서도 artifacts 를 마지막 delta 로 동봉 — 비스트리밍과 대칭.
+            // (위임 작업 agent_tasks 는 비스트리밍 전용 — 스트리밍 클라이언트는 아직 쓰지 않아 범위 밖)
             if (!abortSignal.aborted) {
                 const artifactsOut = await buildArtifactsOut(result, body, userContext);
                 if (artifactsOut) {
@@ -460,6 +461,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             toolCalls: result.tool_calls,
             artifacts: artifactsOut,
             taskSuggestion: result.taskSuggestion,
+            agentTasks: result.agentTasks,
         });
 
         res.json(response);

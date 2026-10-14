@@ -14,3 +14,16 @@ describe('OpenAICompatService.buildResponse — task_suggestion', () => {
         expect('task_suggestion' in r.choices[0].message).toBe(false);
     });
 });
+
+describe('OpenAICompatService.buildResponse — agent_tasks', () => {
+    it('위임 작업이 있으면 message.agent_tasks 로 싣는다', () => {
+        const tasks = [{ id: 't1', goal: 'g', status: 'created' as const }];
+        const r = OpenAICompatService.buildResponse({ ...base, agentTasks: tasks });
+        expect(r.choices[0].message.agent_tasks).toEqual(tasks);
+    });
+
+    it('비어 있거나 없으면 키 자체가 없다', () => {
+        expect('agent_tasks' in OpenAICompatService.buildResponse({ ...base, agentTasks: [] }).choices[0].message).toBe(false);
+        expect('agent_tasks' in OpenAICompatService.buildResponse(base).choices[0].message).toBe(false);
+    });
+});

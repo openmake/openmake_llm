@@ -6,19 +6,35 @@ import { config } from './config';
 import { ChatTurn } from './session-store';
 import { ResponseArtifact } from './attachments';
 import type { InboundAttachments } from './inbound-attachments';
+import type { AgentTaskRef } from './delegated-watch';
 
 interface ModelListResponse {
     data?: Array<{ id: string }>;
 }
 
 interface ChatCompletionResponse {
-    choices?: Array<{ message?: { content?: string; artifacts?: ResponseArtifact[] } }>;
+    /** agent_tasks — OpenMake 확장: 이번 턴에 모델이 위임한 백그라운드 작업 */
+    choices?: Array<{ message?: { content?: string; artifacts?: ResponseArtifact[]; agent_tasks?: unknown[] } }>;
     error?: { message?: string };
 }
 
 interface ChatAnswer {
     content: string;
     artifacts: ResponseArtifact[];
+    /** 이번 턴에 위임한 백그라운드 작업 — 봇이 지켜보다 결과를 채널에 올린다(없으면 빈 배열) */
+    agentTasks: AgentTaskRef[];
+}
+
+/** 형식이 맞는 항목만 남긴다 — 서버가 다른 모양을 보내도 봇이 죽지 않게 */
+function parseAgentTasks(raw: unknown[] | undefined): AgentTaskRef[] {
+    const out: AgentTaskRef[] = [];
+    for (const t of raw ?? []) {
+        if (!t || typeof t !== 'object') continue;
+        const { id, goal, status } = t as Record<string, unknown>;
+        if (typeof id !== 'string' || !id || (status !== 'created' && status !== 'duplicate')) continue;
+        out.push({ id, goal: typeof goal === 'string' ? goal : '', status });
+    }
+    return out;
 }
 
 /**
@@ -99,7 +115,7 @@ export async function requestChatCompletion(
         if (!content && artifacts.length === 0) {
             throw new Error('백엔드 응답에 content 가 없습니다.');
         }
-        return { content: content ?? '', artifacts };
+        return { content: content ?? '', artifacts, agentTasks: parseAgentTasks(message?.agent_tasks) };
     } catch (err) {
         // 우리 타이머가 abort 했을 때만 전용 오류로 바꾼다 — 일반 네트워크 오류는 그대로
         if (controller.signal.aborted) throw new RequestTimeoutError(config.requestTimeoutMs);
