@@ -58,7 +58,7 @@ import { forkRouter } from './agent-task-fork.routes';
 import { browserSessionRouter } from './agent-task-browser-session.routes';
 import { cancelRouter } from './agent-task-cancel.routes';
 import { longRunningCreateFields } from './agent-task-long-running';
-import { chainTaskList, detailPayload } from './agent-task-chain';
+import { chainTaskList, detailPayload, withChainSegmentCounts } from './agent-task-chain';
 import { getPlanEditRegistry } from '../services/agent-task/plan-edits';
 import { TaskPlan, type PlanStepInput } from '../services/task-sandbox/planning';
 import { getPool } from '../data/models/unified-database';
@@ -294,7 +294,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
         ? await db.getAllAgentTasks(AGENT_TASK_LIMITS.LIST_ALL_DEFAULT)
         : await db.getUserAgentTasks(userId);
     // ?executor=local&deviceId=…&status=failed,cancelled — CLI 목록용 부가 필터(권한 범위 무변경)
-    const tasks = typeof req.query.chain === 'string' ? await chainTaskList(req) : filterTaskList(fetched, req.query);
+    const tasks = typeof req.query.chain === 'string' ? await chainTaskList(req) : await withChainSegmentCounts(filterTaskList(fetched, req.query)); // 루트 행에 세그먼트 수(agent-task-chain)
     res.json(success({ tasks: tasks.map(t => toPublicTask(t as unknown as Record<string, unknown>)), total: tasks.length }));
 }));
 

@@ -59,4 +59,14 @@ export class AgentTaskChainRepository extends BaseRepository {
         );
         return r.rows;
     }
+
+    /** 체인별 세그먼트 수(루트 포함) — 목록 카드용 서버 집계. 루트 id 들로 한 번에 센다(목록의 상태 필터·개수 제한과 무관). */
+    async countChainSegments(rootIds: string[]): Promise<Map<string, number>> {
+        if (rootIds.length === 0) return new Map();
+        const r = await this.query<{ chain_root_task_id: string; n: string }>(
+            'SELECT chain_root_task_id, COUNT(*)::text AS n FROM agent_tasks WHERE chain_root_task_id = ANY($1::text[]) GROUP BY 1',
+            [rootIds],
+        );
+        return new Map(r.rows.map((row) => [row.chain_root_task_id, parseInt(row.n, 10)]));
+    }
 }
