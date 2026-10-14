@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { artifactFileName, MAX_ARTIFACT_BYTES, MAX_ARTIFACT_FILES, toArtifactFiles } from './task-artifacts';
+import { artifactFileName, MAX_ARTIFACT_BYTES, MAX_ARTIFACT_FILES, toArtifactFiles, workspaceOutputs } from './task-artifacts';
 import type { TaskArtifact } from './task-client';
 
 const art = (over: Partial<TaskArtifact>): TaskArtifact => ({ id: 'a', kind: 'markdown', title: '보고서', lang: null, content: '# 제목', ...over });
@@ -40,4 +40,31 @@ test('첨부는 최대 5개, 8MB 를 넘는 것은 건너뛴다 — 못 올린 �
     assert.deepEqual(big.files.map((f) => f.name), ['ok.md']);
     assert.equal(big.leftOver, 1);
     assert.deepEqual(toArtifactFiles([]), { files: [], leftOver: 0 });
+});
+
+test('작업 공간 산출물: 숨김 경로·.git·node_modules·입력 첨부(uploads/)는 빼고 순서는 그대로', () => {
+    assert.deepEqual(workspaceOutputs([
+        'monthly.csv', '.env', '.git/HEAD', 'out/.cache/x', 'node_modules/a/index.js', 'src/node_modules/b.js',
+        'uploads/sales.xlsx', 'uploads/sub/a.txt', 'out/uploads/kept.txt', 'out/report.md',
+    ]), ['monthly.csv', 'out/uploads/kept.txt', 'out/report.md']);
+    assert.deepEqual(workspaceOutputs([]), []);
+});
+
+const ws = (path: string, text: string | null = 'a,b') => ({ path, data: text === null ? null : Buffer.from(text, 'utf8') });
+
+test('작업 공간 파일은 basename 을 이름으로, 응답 산출물보다 먼저 — 이름이 겹치면 -2', () => {
+    const { files, leftOver } = toArtifactFiles([art({ title: 'monthly', kind: 'csv' })], [ws('monthly.csv'), ws('out/monthly.csv'), ws('a/b:c.txt')]);
+    assert.deepEqual(files.map((f) => f.name), ['monthly.csv', 'monthly-2.csv', 'b_c.txt', 'monthly-3.csv']);
+    assert.equal(files[0].data.toString('utf8'), 'a,b');
+    assert.equal(leftOver, 0);
+});
+
+test('작업 공간 파일과 응답 산출물을 합쳐 최대 5개 — 내려받지 못한 것(null)·8MB 초과·넘친 것은 못 올린 수로 센다', () => {
+    const r = toArtifactFiles([art({ title: 'r1' }), art({ title: 'r2' })], [ws('a.csv'), ws('b.csv', null), ws('c.csv'), ws('d.csv'), ws('e.csv')]);
+    assert.deepEqual(r.files.map((f) => f.name), ['a.csv', 'c.csv', 'd.csv', 'e.csv', 'r1.md']);
+    assert.equal(r.leftOver, 2);
+
+    const big = toArtifactFiles([], [{ path: 'big.bin', data: Buffer.alloc(MAX_ARTIFACT_BYTES + 1) }, ws('ok.csv')]);
+    assert.deepEqual(big.files.map((f) => f.name), ['ok.csv']);
+    assert.equal(big.leftOver, 1);
 });
