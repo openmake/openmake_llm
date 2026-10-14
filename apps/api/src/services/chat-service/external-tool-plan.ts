@@ -53,6 +53,16 @@ export function detectOrchestrationIntents(message: string | undefined): Orchest
     };
 }
 
+/**
+ * PURE: 명시적 아티팩트(또는 보고서) 의도 턴인가 — 사용자 아티팩트 토글 또는 메시지 패턴.
+ * 도구 억제(아래 플랜)와 배정 안내의 위임 절 제외(external-system-prompt)가 공유한다.
+ */
+export function isArtifactIntentTurn(req: Pick<ChatMessageRequest, 'message' | 'artifactMode'>): boolean {
+    const msg = req.message ?? '';
+    const wantsReport = REPORT_PIPELINE.ENABLED && REPORT_INTENT_PATTERNS.some((re) => re.test(msg));
+    return req.artifactMode === true || wantsReport || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(msg));
+}
+
 interface ExternalToolPlan {
     tools: ToolDefinition[];
     /** 첫 턴 tool_choice 강제 대상 (통합 의도 > web_search 우선순위). */
@@ -80,11 +90,7 @@ export function buildExternalToolPlan(params: {
     // 쓰도록 유도 (2026-06-23 통제실험 근거).
     // 보고서 의도(P1 파이프라인)는 산출물이 reportdata→아티팩트이므로 아티팩트 의도와
     // 동일하게 distractor 를 억제한다 (web_search 는 억제 목록에 없어 조사 가능).
-    const wantsReport = REPORT_PIPELINE.ENABLED
-        && REPORT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
-    const wantsArtifact = req.artifactMode === true
-        || wantsReport
-        || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
+    const wantsArtifact = isArtifactIntentTurn(req);
     // 단, 활성 스킬이 required 로 바인딩한 도구는 억제 면제 — 스킬의 명시 의도가
     // 일반화된 distractor 휴리스틱보다 우선.
     const tools = toolCalling
