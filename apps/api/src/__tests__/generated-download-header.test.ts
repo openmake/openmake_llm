@@ -23,7 +23,8 @@ describe('generatedDownloadHeader — /generated/*?download=1 첨부 응답', ()
     it('download=1 이면 파일명과 함께 attachment 로 내려준다', async () => {
         const res = await request(app).get('/generated/music-1.mp3?download=1');
         expect(res.status).toBe(200);
-        expect(res.headers['content-disposition']).toBe('attachment; filename="music-1.mp3"');
+        // express 5.3 부터 단순 파일명은 따옴표 없이 냄 — RFC 6266 상 둘 다 유효하므로 인용 유무는 따지지 않는다
+        expect(res.headers['content-disposition']).toMatch(/^attachment; filename="?music-1\.mp3"?$/);
     });
 
     it('쿼리가 없으면 인라인 재생을 위해 Content-Disposition 을 붙이지 않는다', async () => {
