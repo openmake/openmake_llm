@@ -32,6 +32,23 @@ describe('AgentTaskChainRepository.claimContinuation — 선점 후 INSERT 순�
     });
 });
 
+describe('AgentTaskChainRepository.countChainSegments — 목록 카드의 세그먼트 수', () => {
+    it('루트 id 들로 한 번에 센다(루트 포함, 목록 필터와 무관)', async () => {
+        const calls: Array<{ sql: string; params: unknown[] }> = [];
+        const pool = { query: jest.fn(async (sql: string, params: unknown[] = []) => { calls.push({ sql, params }); return { rows: [{ chain_root_task_id: 'r1', n: '4' }, { chain_root_task_id: 'r2', n: '1' }], rowCount: 2 }; }) } as unknown as Pool;
+        const counts = await new AgentTaskChainRepository(pool).countChainSegments(['r1', 'r2']);
+        expect(counts).toEqual(new Map([['r1', 4], ['r2', 1]]));
+        expect(calls).toHaveLength(1);
+        expect(calls[0].sql).toMatch(/WHERE chain_root_task_id = ANY\(\$1::text\[\]\) GROUP BY 1/);
+        expect(calls[0].params).toEqual([['r1', 'r2']]);
+    });
+    it('루트가 없으면 DB 를 부르지 않는다', async () => {
+        const { pool, calls } = fakePool();
+        expect(await new AgentTaskChainRepository(pool).countChainSegments([])).toEqual(new Map());
+        expect(calls).toHaveLength(0);
+    });
+});
+
 describe('마이그레이션 188 — continued_by_task_id 에 FK 가 없다', () => {
     const sql = readFileSync(MIGRATION, 'utf8').split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
     const columnDef = (name: string) => sql.split('\n').find((l) => l.includes(`ADD COLUMN IF NOT EXISTS ${name} `)) ?? '';
