@@ -351,7 +351,7 @@ export class AgentTaskService {
 
                 // 턴 자원 가드(검색/브라우저 cap·마무리 턴·HITL 무응답 강등) — 도구 세트 축소 +
                 // 최초 발동 시 nudge 주입·스텝 기록. 판정 근거는 agent-task/turn-gate 참고.
-                const gr = await gateTurnWithContinuation({ chain: chainCtx, model: roleState.client.model, cont: { roleState, signal, taskRuntime, userRole, activeMs: Date.now() - startedAt - pausedMs, update }, gate: {
+                const gr = await gateTurnWithContinuation({ chain: chainCtx, model: roleState.client.model, cont: { roleState, signal, taskRuntime, userRole, activeMs: Date.now() - startedAt - pausedMs, segmentTimeoutMs: totalTimeoutMs, update }, gate: {
                     taskId, turn, startTurn, turnCeiling, totalTokens,
                     searchCalls, browserCalls, approvalTimeouts,
                     tools, sandboxCfg, conversation, flags: gateFlags, stepNumber, emitStep,

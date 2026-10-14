@@ -119,8 +119,8 @@ export interface LongRunningBudget {
     cancelled?: boolean;
 }
 
-/** 이어가기 사유 — turn-gate 의 FinalTurnReason 과 같은 집합. */
-export type ContinuationReason = 'turns' | 'tokens' | 'context';
+/** 이어가기 사유 — turn-gate 의 FinalTurnReason 에 'time'(세그먼트 시간 상한 임박, 체인 전용)을 더한 집합. */
+export type ContinuationReason = 'turns' | 'tokens' | 'context' | 'time';
 
 /** 후속 작업의 continuation 열(188) — 앞 세그먼트가 넘긴 것. 누적 사용량은 이 행까지의 합이다. */
 export interface ContinuationInfo {

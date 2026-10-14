@@ -3,6 +3,7 @@
  * @module services/agent-task/continuation-hook
  */
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
+import { AGENT_TASK_LONG_RUNNING } from '../../config/agent-task-long-running';
 import type { AgentTask } from '../../data/models/unified-database.types';
 import { AgentTaskChainRepository } from '../../data/repositories/agent-task-chain-repository';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
@@ -23,15 +24,21 @@ export async function loadChainContext(taskId: string, preloaded?: AgentTask): P
     return root?.long_running ? { task, root } : null;
 }
 
-/** turn-gate 의 chain 입력 — 체인이 아니면 undefined(게이트는 종전과 같다). */
-export function chainGateInput(ctx: ChainContext | null, conversation: ChatMessage[], tools: ToolDefinition[], model: string, activeMs: number, totalTokens: number): { canContinue: boolean; contextRatio: number | null } | undefined {
+/**
+ * turn-gate 의 chain 입력 — 체인이 아니면 undefined(게이트는 종전과 같다).
+ * remainingMs: 체인 시간 예산의 남은 양(maxDurationMs − 누적). timeUp: 이번 세그먼트 활성 시간이 세그먼트 시간 상한
+ * (서비스의 totalTimeoutMs)의 SEGMENT_TIME_RATIO 이상 — assertWithinLimits 가 'timeout' 으로 체인을 failed 로 끝내기 전에 잇는다(설계 §2.1).
+ */
+export function chainGateInput(ctx: ChainContext | null, conversation: ChatMessage[], tools: ToolDefinition[], model: string, activeMs: number, totalTokens: number, segmentTimeoutMs?: number): { canContinue: boolean; contextRatio: number | null; remainingMs: number; timeUp: boolean } | undefined {
     if (!ctx) return undefined;
     const state = chainBudgetState(ctx.task, ctx.root, activeMs, totalTokens);
     if (!state) return undefined;
-    return { canContinue: state.canContinue, contextRatio: contextUsageRatio(conversation, tools, model) };
+    const timeUp = segmentTimeoutMs != null && activeMs >= segmentTimeoutMs * AGENT_TASK_LONG_RUNNING.SEGMENT_TIME_RATIO;
+    return { canContinue: state.canContinue, contextRatio: contextUsageRatio(conversation, tools, model), remainingMs: Math.max(0, state.limits.maxDurationMs - state.usedMs), timeUp };
 }
 
-type FinishInput = Omit<ContinueInput, 'task' | 'root'> & { ctx: ChainContext; update: (u: { status: 'completed'; completionPath: string; result: string; progress: number }) => Promise<void> };
+/** segmentTimeoutMs: 서비스의 세그먼트 시간 상한(totalTimeoutMs) — 'time' 이어가기 판정용 */
+type FinishInput = Omit<ContinueInput, 'task' | 'root'> & { ctx: ChainContext; segmentTimeoutMs?: number; update: (u: { status: 'completed'; completionPath: string; result: string; progress: number }) => Promise<void> };
 
 /** 후속을 만들고 현재 작업을 '이어짐' 으로 마감. 실패면 false — 호출부가 종전 마무리 턴으로 간다. */
 export async function finishAsContinued(p: FinishInput): Promise<boolean> {
@@ -51,7 +58,7 @@ type GateResult = Awaited<ReturnType<typeof applyTurnResourceGates>>;
  */
 export async function gateTurnWithContinuation(p: { gate: GateInput; chain: ChainContext | null; model: string; cont: Omit<FinishInput, 'ctx' | 'reason' | 'conversation' | 'turn' | 'totalTokens'> }): Promise<{ gate: GateResult | null; chain: ChainContext | null }> {
     const g = p.gate;
-    const first = await applyTurnResourceGates({ ...g, chain: chainGateInput(p.chain, g.conversation, g.tools, p.model, p.cont.activeMs, g.totalTokens) });
+    const first = await applyTurnResourceGates({ ...g, chain: chainGateInput(p.chain, g.conversation, g.tools, p.model, p.cont.activeMs, g.totalTokens, p.cont.segmentTimeoutMs) });
     if (!first.continuationReason || !p.chain) return { gate: first, chain: p.chain };
     if (await finishAsContinued({ ...p.cont, ctx: p.chain, reason: first.continuationReason, conversation: g.conversation, turn: g.turn, totalTokens: g.totalTokens })) return { gate: null, chain: p.chain };
     return { gate: await applyTurnResourceGates({ ...g, stepNumber: first.stepNumber }), chain: null };

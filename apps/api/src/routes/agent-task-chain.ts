@@ -62,6 +62,28 @@ export async function cancelChainIfAny(task: AgentTask): Promise<void> {
     await new AgentTaskChainRepository(getPool()).markChainCancelled(task.chain_root_task_id).catch(() => { /* 위 설명 */ });
 }
 
+const isFinished = (status: string): boolean => status === 'completed' || status === 'failed' || status === 'cancelled';
+
+/**
+ * PURE: 취소 대상 — 체인 세그먼트(루트·앞 세그먼트)로 취소를 요청하면 그 행은 이미 '이어짐'(completed)이라
+ * 실제로 돌고 있는 끝나지 않은 세그먼트를 취소해야 한다(설계 §2.4). 요청 작업이 아직 끝나지 않았거나
+ * 체인이 아니거나 끝나지 않은 세그먼트가 없으면 요청 작업 그대로.
+ */
+export function resolveCancelTarget(task: Pick<AgentTask, 'id' | 'status' | 'chain_root_task_id'>, segments: Array<Pick<ChainRow, 'id' | 'status'>>): string {
+    if (!task.chain_root_task_id || !isFinished(task.status)) return task.id;
+    return segments.find((s) => !isFinished(s.status))?.id ?? task.id;
+}
+
+/** 취소 라우트 보조 — 실제로 취소할 작업 행(체인이면 끝나지 않은 세그먼트, 같은 소유자일 때만). 아니면 요청 작업. */
+export async function cancelTargetOf(task: AgentTask): Promise<AgentTask> {
+    if (!task.chain_root_task_id || !isFinished(task.status)) return task;
+    const segments = await new AgentTaskChainRepository(getPool()).listChain(task.chain_root_task_id);
+    const id = resolveCancelTarget(task, segments);
+    if (id === task.id) return task;
+    const target = await getUnifiedDatabase().getAgentTask(id);
+    return target && String(target.user_id) === String(task.user_id) ? target : task;
+}
+
 /** GET /:taskId 응답 본문 — 공개 task(+대기 사유·chain 블록)와 스텝. */
 export async function detailPayload(task: AgentTask, steps: AgentTaskStep[]) {
     return { task: { ...toPublicTask(task as unknown as Record<string, unknown>), ...(await waitReasonOf(task)), ...(await chainInfoOf(task)) }, steps };

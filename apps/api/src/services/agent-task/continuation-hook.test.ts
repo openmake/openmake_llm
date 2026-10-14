@@ -35,7 +35,7 @@ describe('continuation-hook', () => {
         db.getAgentTask.mockResolvedValueOnce({ id: 's1', chain_root_task_id: 'root' }).mockResolvedValueOnce({ id: 'root', long_running: budget });
         const ctx = await loadChainContext('s1');
         expect(ctx?.root.id).toBe('root');
-        expect(chainGateInput(ctx, [], [], 'm', 100, 10)).toEqual({ canContinue: true, contextRatio: 0.5 });
+        expect(chainGateInput(ctx, [], [], 'm', 100, 10)).toEqual({ canContinue: true, contextRatio: 0.5, remainingMs: 9_900, timeUp: false });
     });
     it('finishAsContinued — 성공하면 completed/continued 로 마감하고 true, 알림은 보내지 않는다', async () => {
         continueMock.mockResolvedValueOnce({ successorId: 's2' });
@@ -56,6 +56,12 @@ describe('continuation-hook', () => {
         const startedAt = 0, now = 12_000, pausedMs = 5_000;
         expect(chainGateInput(ctx, [], [], 'm', now - startedAt - pausedMs, 0)?.canContinue).toBe(true); // 7,000 < 10,000
         expect(chainGateInput(ctx, [], [], 'm', now - startedAt, 0)?.canContinue).toBe(false); // 12,000 ≥ 10,000 — 주차를 넣으면 멈춘다
+    });
+    it('chainGateInput — remainingMs 는 체인 시간 예산의 남은 양, timeUp 은 세그먼트 시간 상한 × SEGMENT_TIME_RATIO(기본 0.8) 기준', () => {
+        const ctx = { task: { id: 'r', chain_root_task_id: 'r' } as never, root: { id: 'r', long_running: budget } as never };
+        expect(chainGateInput(ctx, [], [], 'm', 4_000, 0, 5_000)).toMatchObject({ remainingMs: 6_000, timeUp: true });
+        expect(chainGateInput(ctx, [], [], 'm', 3_999, 0, 5_000)).toMatchObject({ timeUp: false });
+        expect(chainGateInput(ctx, [], [], 'm', 4_000, 0)).toMatchObject({ timeUp: false }); // 상한을 모르면 판정하지 않는다
     });
 });
 
@@ -92,6 +98,26 @@ describe('gateTurnWithContinuation', () => {
         const next = await gateTurnWithContinuation({ chain: r.chain, model: 'm', cont, gate: { ...gateInput(31, conversation, flags), totalTokens: 10_000_000 } });
         expect(next.gate?.finalTurnReason).toBe('tokens');
         expect(continueMock).toHaveBeenCalledTimes(1);
+    });
+    it('세그먼트 활성 시간이 시간 상한의 SEGMENT_TIME_RATIO 이상이면 time 사유로 이어간다(timeout 으로 failed 가 되기 전에)', async () => {
+        continueMock.mockResolvedValueOnce({ successorId: 's2' });
+        const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
+        const r = await gateTurnWithContinuation({ chain: chain(), model: 'm', cont: { ...cont, activeMs: 800, segmentTimeoutMs: 1_000 }, gate: gateInput(3, [], flags) });
+        expect(r.gate).toBeNull();
+        expect(continueMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'time' }));
+    });
+    it('시간 상한 비율 미만이면 time 사유 없음', async () => {
+        const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
+        const r = await gateTurnWithContinuation({ chain: chain(), model: 'm', cont: { ...cont, activeMs: 799, segmentTimeoutMs: 1_000 }, gate: gateInput(3, [], flags) });
+        expect(r.gate?.continuationReason).toBeNull();
+        expect(continueMock).not.toHaveBeenCalled();
+    });
+    it('체인이 아니면 시간 비율을 넘어도 time 사유가 없다 — 종전과 같다(시간 초과는 assertWithinLimits 가 처리)', async () => {
+        const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
+        const r = await gateTurnWithContinuation({ chain: null, model: 'm', cont: { ...cont, activeMs: 999, segmentTimeoutMs: 1_000 }, gate: gateInput(3, [], flags) });
+        expect(r.gate?.continuationReason).toBeNull();
+        expect(r.gate?.finalTurnReason).toBeNull();
+        expect(continueMock).not.toHaveBeenCalled();
     });
     it('체인이 아니면 게이트만 한 번 — 종전과 같다', async () => {
         const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };

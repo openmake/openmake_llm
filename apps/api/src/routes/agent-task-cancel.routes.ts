@@ -2,6 +2,7 @@
  * 작업 취소 라우트 — agent-task.routes.ts 가 600줄 상한이라 핸들러를 그대로 옮겼다(188). router.use 로 마운트.
  *   POST /api/agent-tasks/:taskId/cancel
  * 체인(188) 세그먼트면 취소 신호 전에 루트에 체인 취소 표식을 남겨, 중단 직전의 이어가기도 막는다.
+ * 루트·앞 세그먼트(이미 '이어짐'으로 끝난 행)로 요청해도 실제로 돌고 있는 세그먼트를 찾아 그것을 취소한다(설계 §2.4).
  * @module routes/agent-task-cancel
  */
 import { Router, Request, Response } from 'express';
@@ -12,7 +13,7 @@ import { AgentTaskService } from '../services/AgentTaskService';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { loadOwnedTask } from './agent-task.helpers';
-import { cancelChainIfAny } from './agent-task-chain';
+import { cancelChainIfAny, cancelTargetOf } from './agent-task-chain';
 
 export const cancelRouter = Router();
 
@@ -21,9 +22,10 @@ export const cancelRouter = Router();
  * 실행 중 작업 취소
  */
 cancelRouter.post('/:taskId/cancel', asyncHandler(async (req: Request, res: Response) => {
-    const task = await loadOwnedTask(req, res, req.params.taskId);
-    if (!task) return;
-    await cancelChainIfAny(task);
+    const requested = await loadOwnedTask(req, res, req.params.taskId);
+    if (!requested) return;
+    await cancelChainIfAny(requested);
+    const task = await cancelTargetOf(requested); // 체인이면 끝나지 않은 세그먼트 — 아래 취소 경로는 이 행에 적용
 
     const signaled = AgentTaskService.cancel(task.id);
     if (signaled) {

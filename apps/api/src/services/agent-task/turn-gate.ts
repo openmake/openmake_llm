@@ -21,6 +21,7 @@ import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { memorySaveExposed } from './memory-save-tool';
 import { MEMORY_SAVE_TOOL_NAME } from '../../config/agent-task-skill-memory';
 import { AGENT_TASK_LONG_RUNNING } from '../../config/agent-task-long-running';
+import type { ContinuationReason } from './types';
 
 const logger = createLogger('AgentTaskService');
 
@@ -52,8 +53,9 @@ interface TurnGateInput {
     flags: TurnGateFlags;
     stepNumber: number;
     emitStep: (stepType: string, toolName?: string, content?: string | null) => void;
-    /** 장기 실행 체인(188) — 있으면 상한 사유를 마무리 턴 대신 이어가기로 돌린다. contextRatio 는 turn-context.contextUsageRatio. */
-    chain?: { canContinue: boolean; contextRatio: number | null };
+    /** 장기 실행 체인(188) — 있으면 상한 사유를 마무리 턴 대신 이어가기로 돌린다. contextRatio 는 turn-context.contextUsageRatio.
+     *  timeUp: 세그먼트 활성 시간이 시간 상한의 SEGMENT_TIME_RATIO 이상(continuation-hook.chainGateInput) — 시간 초과(failed) 전에 잇는다. */
+    chain?: { canContinue: boolean; contextRatio: number | null; timeUp?: boolean };
 }
 
 interface TurnGateResult {
@@ -61,7 +63,7 @@ interface TurnGateResult {
     /** 마무리 턴 전환 사유 — 호출부의 "마무리 턴 도구 차단" 가드가 이어서 사용. */
     finalTurnReason: FinalTurnReason;
     /** 이어가기 사유(188) — 값이 있으면 finalTurnReason 은 null 이고 마무리 nudge·스텝은 남기지 않는다. */
-    continuationReason: FinalTurnReason;
+    continuationReason: ContinuationReason | null;
     stepNumber: number;
 }
 
@@ -102,7 +104,7 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
 
     // 이어가기(188): 장기 실행 작업은 상한 사유를 마무리 대신 후속 작업으로 돌린다. 컨텍스트는 사용률 기준이 하나 더 있다.
     const nearFull = p.chain?.contextRatio != null && p.chain.contextRatio >= AGENT_TASK_LONG_RUNNING.CONTINUE_AT_RATIO;
-    const continuationReason: FinalTurnReason = p.chain?.canContinue ? (finalTurnReason ?? (nearFull ? 'context' : null)) : null;
+    const continuationReason: ContinuationReason | null = p.chain?.canContinue ? (finalTurnReason ?? (nearFull ? 'context' : p.chain.timeUp ? 'time' : null)) : null;
     const effectiveFinalReason: FinalTurnReason = continuationReason ? null : finalTurnReason;
 
     const cappedTools = effectiveFinalReason
