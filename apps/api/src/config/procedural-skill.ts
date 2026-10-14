@@ -30,12 +30,21 @@ export const PROCEDURAL_SECRET_FIELD_RE = new RegExp(
     'i',
 );
 
-/** 스크립트 본문에 박힌 비밀 값 — 환경 변수 참조($VAR)와 {{param}} 은 걸리지 않게 리터럴 값만 본다. */
+/**
+ * 스크립트 본문에 박힌 비밀 값 — 환경 변수 참조($VAR)와 {{param}} 은 걸리지 않게 리터럴 값만 본다.
+ * 형식이 정해진 토큰은 키 이름 없이도 찾는다. 키 이름 뒤 값은 따옴표 리터럴이거나 따옴표 없는 단순 토큰일 때만 —
+ * os.environ.get('TOKEN')·getpass.getpass()·settings.API_KEY 처럼 괄호·점이 든 식은 리터럴이 아니다.
+ */
 export const PROCEDURAL_SECRET_VALUE_RES: readonly RegExp[] = (process.env.AGENT_TASK_PROCEDURAL_SECRET_VALUE_PATTERNS
     ? process.env.AGENT_TASK_PROCEDURAL_SECRET_VALUE_PATTERNS.split('|||')
     : [
         'bearer\\s+[a-z0-9._-]{16,}',
         '\\bsk-[a-z0-9_-]{16,}',
         'omk_live_[a-z0-9]{8,}',
-        '(?:passw(?:or)?d|passwd|secret|token|api[_-]?key)["\']?\\s*[=:]\\s*["\']?[^\\s"\'${}]{6,}',
+        '\\bghp_[a-z0-9]{36}',
+        '\\bgithub_pat_[a-z0-9_]{22,}',
+        '\\bAKIA[0-9A-Z]{16}\\b',
+        '\\bxox[abp]-[a-z0-9-]{10,}',
+        '(?:passw(?:or)?d|passwd|(?<![a-z0-9])(?:pass|pwd)|secret|token|api[_-]?key)["\']?\\s*[=:]\\s*'
+            + '(?:"[^"\\s${}]{6,}"|\'[^\'\\s${}]{6,}\'|[^\\s"\'${}().]{6,}(?![^\\s;,&|]))',
     ]).map((p) => new RegExp(p, 'i'));
