@@ -10,7 +10,7 @@ import type { TaskRuntime } from '../task-sandbox/runtime';
 import { initWorkspaceBaseline } from './code-diff';
 import { chainBudgetState, continueAsNewSegment, type ContinueInput } from './continuation';
 import { contextUsageRatio } from './turn-context';
-import type { TurnGateFlags } from './turn-gate';
+import { applyTurnResourceGates } from './turn-gate';
 
 export interface ChainContext { task: AgentTask; root: AgentTask }
 
@@ -41,11 +41,20 @@ export async function finishAsContinued(p: FinishInput): Promise<boolean> {
     return true;
 }
 
-/** 서비스 루프의 호출 한 줄 — 이어졌으면 true(루프 종료). 실패면 다음 턴에 종전 마무리 nudge 가 들어가게 플래그를 되돌린다. */
-export async function tryContinue(p: FinishInput & { gateFlags: TurnGateFlags }): Promise<boolean> {
-    if (await finishAsContinued(p)) return true;
-    p.gateFlags.finalTurnNotified = false;
-    return false;
+type GateInput = Omit<Parameters<typeof applyTurnResourceGates>[0], 'chain'>;
+type GateResult = Awaited<ReturnType<typeof applyTurnResourceGates>>;
+
+/**
+ * 턴 자원 게이트 + 이어가기 — 서비스 루프의 호출 한 번. 이어졌으면 gate=null(루프 종료).
+ * 이어가기에 실패하면 체인을 끄고(chain=null) 같은 턴을 종전 게이트로 다시 판정한다 — 이 턴이 종전 마무리 턴(사유·도구 차단·nudge)이 되고,
+ * 이후 턴도 종전과 같다(매 턴 인계 턴을 다시 부르지 않는다). 첫 판정의 다른 nudge 는 flags 가 막아 두 번 들어가지 않는다.
+ */
+export async function gateTurnWithContinuation(p: { gate: GateInput; chain: ChainContext | null; model: string; cont: Omit<FinishInput, 'ctx' | 'reason' | 'conversation' | 'turn' | 'totalTokens'> }): Promise<{ gate: GateResult | null; chain: ChainContext | null }> {
+    const g = p.gate;
+    const first = await applyTurnResourceGates({ ...g, chain: chainGateInput(p.chain, g.conversation, g.tools, p.model, p.cont.activeMs, g.totalTokens) });
+    if (!first.continuationReason || !p.chain) return { gate: first, chain: p.chain };
+    if (await finishAsContinued({ ...p.cont, ctx: p.chain, reason: first.continuationReason, conversation: g.conversation, turn: g.turn, totalTokens: g.totalTokens })) return { gate: null, chain: p.chain };
+    return { gate: await applyTurnResourceGates({ ...g, stepNumber: first.stepNumber }), chain: null };
 }
 
 /**
