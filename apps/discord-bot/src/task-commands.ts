@@ -10,7 +10,7 @@
  * 상태는 메모리에만 둔다 — 봇을 재시작하면 지켜보던 작업과 승인 버튼의 주인을 잊는다(작업은 서버에서 계속 돈다).
  */
 import type { TaskApprovalPolicy, TaskExecutor } from './config';
-import type { TaskClient } from './task-client';
+import type { TaskClient, TaskInputAttachments } from './task-client';
 import { watchTask, type WatchUi } from './task-watcher';
 
 export interface TaskControllerConfig {
@@ -31,7 +31,8 @@ export interface DecideResult {
 
 export interface TaskController {
     isEnabled(): boolean;
-    start(req: { userId: string; channelId: string; goal: string; ui: WatchUi }): Promise<StartResult>;
+    /** attachments — /task 의 첨부 옵션을 내려받은 것. 작업 생성에 그대로 넘긴다 */
+    start(req: { userId: string; channelId: string; goal: string; ui: WatchUi; attachments?: TaskInputAttachments }): Promise<StartResult>;
     cancel(req: { userId: string; channelId: string }): Promise<string>;
     decide(req: { userId: string; approvalId: string; decision: 'approve' | 'reject' }): Promise<DecideResult>;
     /** /task 밖에서 올린 승인 요청(채팅에서 위임한 작업)의 주인을 적는다 — 그 사람만 버튼으로 결정한다 */
@@ -103,7 +104,7 @@ export function createTaskController(deps: {
                     active.delete(req.channelId);
                     return { ok: false, reason: MSG.noDevice };
                 }
-                taskId = await client.createTask(goal, config.executor);
+                taskId = await client.createTask(goal, config.executor, req.attachments);
                 slot.taskId = taskId;
                 await client.executeTask(taskId, config.approvalPolicy);
             } catch (e) {
