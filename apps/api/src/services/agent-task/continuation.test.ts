@@ -67,7 +67,7 @@ describe('buildContinuationSummary', () => {
 });
 
 describe('askNextSteps', () => {
-    const p = () => ({ roleState: {} as never, conversation: conv(), signal: new AbortController().signal, taskId: 't', userId: 'u', plan: null });
+    const p = () => ({ roleState: {} as never, conversation: conv(), signal: new AbortController().signal, taskId: 't', userId: 'u', plan: null, reason: 'context' as const });
     it('모델 답을 상한 글자로 자른다', async () => {
         chatMock.mockResolvedValueOnce({ content: 'x'.repeat(80) });
         expect((await askNextSteps(p())).length).toBe(50);
@@ -82,6 +82,24 @@ describe('askNextSteps', () => {
     it('모델도 계획도 없으면 고정 문구', async () => {
         chatMock.mockResolvedValueOnce({ content: '   ' });
         expect(await askNextSteps(p())).toBe(CONTINUATION_NO_NEXT_STEPS);
+    });
+    it.each([
+        ['context', '컨텍스트 한도'], ['tokens', '토큰 예산'], ['time', '세그먼트 시간 상한'], ['turns', '턴 상한'],
+    ] as const)('인계 턴 질문은 실제 이어가기 사유(%s)를 말한다', async (reason, label) => {
+        chatMock.mockResolvedValueOnce({ content: '1. 다음' });
+        await askNextSteps({ ...p(), reason });
+        const asked = chatMock.mock.calls.at(-1)[1].conversation.at(-1).content as string;
+        expect(asked).toContain(`이 작업은 ${label} 때문에 새 세션으로 이어집니다.`);
+        if (reason !== 'context') expect(asked).not.toContain('컨텍스트 한도');
+    });
+});
+
+describe('이어가기 프롬프트 사유 문구', () => {
+    it('인계 턴 질문과 후속 첫 메시지가 같은 사유 문구를 쓴다', () => {
+        for (const [reason, label] of [['context', '컨텍스트 한도'], ['tokens', '토큰 예산'], ['time', '세그먼트 시간 상한'], ['turns', '턴 상한']]) {
+            expect(continuationPrompts.getContinuationNextStepsPrompt(50, reason)).toContain(label);
+            expect(continuationPrompts.getContinuationNotice(2, reason)).toContain(label);
+        }
     });
 });
 
