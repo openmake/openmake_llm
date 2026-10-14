@@ -16,22 +16,13 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { extractToken, verifyToken, isAdmin, clearTokenCookie } from './auth-core';
+import { extractToken, verifyToken, isAdmin, clearTokenCookie, looksLikeJWT } from './auth-core';
 import { getUserManager, PublicUser, UserRole } from '../data/user-manager';
 import { unauthorized, forbidden } from '../utils/api-response';
 import { AUTH_COOKIES } from '../config/security';
 
 import { createLogger } from '../utils/logger';
 const log = createLogger('AuthMiddleware');
-/**
- * JWT 토큰 형식 사전 검증 (header.payload.signature 3-part dot 구조)
- * jwt.verify() 호출 전에 빠르게 걸러내어 불필요한 에러 로그 방지
- */
-function looksLikeJWT(token: string): boolean {
-    const parts = token.split('.');
-    return parts.length === 3 && parts.every(p => p.length > 0);
-}
-
 /**
  * JWT 토큰에서 추출된 인증 정보 (미들웨어용)
  * PublicUser보다 간소화된 버전 - JWT 페이로드에서 직접 추출
