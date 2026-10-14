@@ -1,5 +1,5 @@
 /**
- * 브라우저·웹·MCP 영역 설정 (hermes 도입 2단계) — No-Hardcoding L1/L2.
+ * 브라우저·웹·MCP 영역 설정 — No-Hardcoding L1/L2.
  *
  * 영역 전용 파일이다 — 공용 설정 파일(runtime-limits·task-sandbox)에 줄을 더하지 않으려고 따로 둔다.
  *

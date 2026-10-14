@@ -1,5 +1,5 @@
 /**
- * Agent Task 도구·실행 환경·완료 판정 보강 문구 (hermes-agent 검토 2단계, 2026-10-04).
+ * Agent Task 도구·실행 환경·완료 판정 보강 문구 (2026-10-04 보강).
  * 모델·사용자에게 보이는 문장만 둔다. 임계값·스위치는 config/agent-task-tools.ts.
  *
  * @module prompts/agent-task-tools
