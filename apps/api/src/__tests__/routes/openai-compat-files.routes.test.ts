@@ -28,6 +28,8 @@ jest.mock('../../data/repositories/oaicompat-session-repo', () => ({
 
 // 추출기 mock: data(base64) → content 로 in-place 치환 (실제 계약과 같은 모양)
 jest.mock('../../services/chat-service/doc-extractor', () => ({
+    // extracted 판정(isBinaryDocumentName)은 실제 규칙 그대로 쓴다
+    isBinaryDocumentName: jest.requireActual('../../services/chat-service/doc-extractor').isBinaryDocumentName,
     extractAttachedDocuments: jest.fn(async (files: AttachedFileInput[] | undefined) => {
         for (const f of files ?? []) {
             if (typeof f.data === 'string') {
