@@ -1,5 +1,59 @@
 # Changelog
 
+## [1.101.0](https://github.com/openmake/openmake_llm/compare/v1.100.3...v1.101.0) (2026-10-14)
+
+
+### ✨ 기능
+
+* **agent-task:** 생성 API 가 longRunning 체인 예산을 받는다 — 기능 게이트·역할·절대 상한 ([2d2132f](https://github.com/openmake/openmake_llm/commit/2d2132fca6d88f70c410efec35a1b201e3aedf8f))
+* **agent-task:** 실행 루프가 장기 실행 작업을 후속 세그먼트로 잇는다 — 작업 공간 보존·종료 알림 억제 ([5f56a51](https://github.com/openmake/openmake_llm/commit/5f56a51056cc2fd580fa03cd30f99b710ed35d2e))
+* **agent-task:** 이어가기 모듈 — 인계 턴·작업 공간 스냅숏·후속 작업 생성(멱등 선점)·디스패치 ([ba2d063](https://github.com/openmake/openmake_llm/commit/ba2d063eae21ba98c713c1a14a3a54b5b0219351))
+* **agent-task:** 장기 실행 작업과 후속 작업 체인 — 상한에 닿으면 끝내는 대신 인계 요약·작업 공간을 넘겨 이어간다 ([a27523a](https://github.com/openmake/openmake_llm/commit/a27523ac7fe624a56bb5998260ef8fcd328cce9e))
+* **agent-task:** 장기 실행 체인 설정·마이그레이션 188·타입 ([7af0907](https://github.com/openmake/openmake_llm/commit/7af090734280475a006b6681a7ec4abebe152c89))
+* **agent-task:** 저장소 — 체인 열 쓰기, 이어가기 선점, 체인 취소 표식, 체인 목록 ([20fe169](https://github.com/openmake/openmake_llm/commit/20fe1696cde3b9c0ff10687a3665974325520b5b))
+* **agent-task:** 조회 응답의 chain 블록, ?chain= 세그먼트 목록, 취소 시 체인 취소 표식 ([4934830](https://github.com/openmake/openmake_llm/commit/4934830d5c3c97fbcffbbefacd175ff601a15c1c))
+* **agent-task:** 턴 게이트가 장기 실행 작업의 상한 사유를 이어가기로 돌린다 — 컨텍스트 사용률 포함 ([6e2b3c8](https://github.com/openmake/openmake_llm/commit/6e2b3c8f2068c7586bea80ddf92509342f28ab9d))
+* **api:** /api/v1/chat/completions 에 files 첨부 확장 — 문서 텍스트 추출을 REST 로 개방 ([c9cfb7e](https://github.com/openmake/openmake_llm/commit/c9cfb7e50337e1897a4a02d820905c2ed65151fb))
+* **chat,discord-bot:** 채팅 첨부를 위임 작업에 전달, /task 첨부 옵션, REST 텍스트 첨부 디코딩 ([01ae98f](https://github.com/openmake/openmake_llm/commit/01ae98f8500a3b8c6f699c3768d5047e5cf9096a))
+* **chat:** 채팅 턴 첨부를 delegate_agent_task 작업의 input_files·images 로 전달 ([7120047](https://github.com/openmake/openmake_llm/commit/7120047ae3a39fd804a7dafa54618c537d59e115))
+* **discord-bot:** /task 에 첨부 옵션 — 내려받아 작업 생성 files·images 로 전달 ([2ba5fc7](https://github.com/openmake/openmake_llm/commit/2ba5fc7073177e980646a5204e70d76803b223cb))
+* **discord-bot:** 작업 감시기가 이어진 후속 세그먼트를 같은 진행 메시지로 따라간다 ([35f0677](https://github.com/openmake/openmake_llm/commit/35f0677655f6a82300743e09fa42b6f31949b29f))
+* **discord-bot:** 채널 첨부(이미지·문서)를 백엔드로 전달해 분석 ([b489722](https://github.com/openmake/openmake_llm/commit/b4897226c53dbc68c26134e2ddc89f544c79b697))
+* **discord-bot:** 채널 첨부(이미지·문서)를 백엔드로 전달해 분석 ([b676f91](https://github.com/openmake/openmake_llm/commit/b676f914ac2e04dec93615cbba52a9af591dccd5))
+* **discord-bot:** 채팅에서 위임한 백그라운드 작업을 봇이 지켜보다 결과를 채널에 올린다 — REST 응답에 agent_tasks 확장 ([866ded0](https://github.com/openmake/openmake_llm/commit/866ded065058488c4480d8a3e26275f85715473e))
+* **discord-bot:** 채팅에서 위임한 백그라운드 작업을 봇이 지켜보다 결과를 채널에 올린다 — REST 응답에 agent_tasks 확장 ([5674609](https://github.com/openmake/openmake_llm/commit/567460936acb23f6572f599687e9fc386087f4ea))
+* **web:** 에이전트 작업 화면에 장기 실행 체인 — 루트로 접기, 이어짐 배지, 체인 사용량 ([334bb1a](https://github.com/openmake/openmake_llm/commit/334bb1aeee3c6bd76530d853577d82117524621c))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 마이그레이션 189 — 옛 188 로 생긴 continued_by FK 제거, 미사용 remainingMs 정리 ([961f914](https://github.com/openmake/openmake_llm/commit/961f914fbf6151f35d71bd9ad10166e71d4f51a0))
+* **agent-task:** 이어가기 — 준비·디스패치 실패 시 후속을 failed 로 닫고 선점 되돌리기, 인계 턴 중 취소 재확인 ([c1715ae](https://github.com/openmake/openmake_llm/commit/c1715ae253accdc29d59d0fa9ecd4cb2929178f7))
+* **agent-task:** 이어가기 실패 시 같은 턴을 종전 마무리 턴으로 — 체인을 끄고 게이트 재판정 ([d841959](https://github.com/openmake/openmake_llm/commit/d841959be81a836744cc7be63832ef79885ed21c))
+* **agent-task:** 진행 없는 세그먼트는 이어가지 않음(폭주 방지), 후속에 승인 정책·추론 수준 전달, 건너뜀 사유 로그 ([26a26ec](https://github.com/openmake/openmake_llm/commit/26a26eccafe418ca04cc2672da859329b330047b))
+* **agent-task:** 최종 검토 — 선점 FK 순서, 세그먼트 시간 예산, 체인 취소가 실행 중 세그먼트를 멈춤, 선점 실패 시 기존 후속 따라가기 ([261889d](https://github.com/openmake/openmake_llm/commit/261889d99219bf3c4d755b77f0fd10ffd2d990ca))
+* **api:** /api/v1/chat/completions 본문 상한 30mb — 봇 첨부 합계 20MB 의 base64 팽창 수용 ([26936e9](https://github.com/openmake/openmake_llm/commit/26936e99c25279d2f1a58e5b806b9479b818f1cc))
+* **api:** 레이트 리미터가 API 키 Bearer 를 JWT 로 검증해 매 요청 경고 찍던 소음 제거 ([d8856d4](https://github.com/openmake/openmake_llm/commit/d8856d4ca3327eec46560eed61940e653e27cd30))
+* **api:** 레이트 리미터가 API 키 Bearer 를 JWT 로 검증해 매 요청 경고 찍던 소음 제거 ([4db5469](https://github.com/openmake/openmake_llm/commit/4db54693ed50473da6e35861021bcc9e39f5ce34))
+* **api:** 레이트 리미터가 Bearer API 키를 IP 로 세고 /api/v1 을 이중 적용하던 결함, 일일 한도 초기화를 한국 자정으로 ([4087c58](https://github.com/openmake/openmake_llm/commit/4087c589fd618e7d9436c8fdda3ab02c0ac30580))
+* **api:** 레이트 리미터가 Bearer API 키를 IP 로 세고 /api/v1 을 이중 적용하던 결함, 일일 한도 초기화를 한국 자정으로 ([d852c6e](https://github.com/openmake/openmake_llm/commit/d852c6efb02f3632f54df4724831a7b9c573406b))
+* **api:** 명시적 아티팩트 요청이 백그라운드 위임·MCP 생성 도구로 이탈해 산출물이 채팅에 안 오던 문제 ([73597df](https://github.com/openmake/openmake_llm/commit/73597df63221ca361eed1a08928b487be41d81a2))
+* **api:** 명시적 아티팩트 요청이 백그라운드 위임·MCP 생성 도구로 이탈해 산출물이 채팅에 안 오던 문제 ([6196837](https://github.com/openmake/openmake_llm/commit/6196837ea9b54ecf475e9d68e26938062995bc58))
+* **api:** 모델이 MCP 서버 이름을 도구로 부르면 서버::도구 후보를 안내 — 운영 하루 13건 턴 낭비 ([38ab15d](https://github.com/openmake/openmake_llm/commit/38ab15dce1746aa0ca51e02dcfbccf9137bf34e6))
+* **api:** 모델이 MCP 서버 이름을 도구로 부르면 서버::도구 후보를 안내 — 운영 하루 13건 턴 낭비 ([4ac2b38](https://github.com/openmake/openmake_llm/commit/4ac2b3877f42f0a892aa38fb4f686f4e097334e4))
+* **api:** 아티팩트·중단 후속 — 에이전트 작업 프롬프트 충돌 분리, 배정 안내 정리, 중단 사용량 코드, 자체 tools 경로 중단 가드 ([09b7cb9](https://github.com/openmake/openmake_llm/commit/09b7cb91f390a55c10fd1d67a99ed2743c7e1b94))
+* **api:** 아티팩트·중단 후속 — 에이전트 작업 프롬프트 충돌 분리, 배정 안내 정리, 중단 사용량 코드, 자체 tools 경로 중단 가드 ([1913fc8](https://github.com/openmake/openmake_llm/commit/1913fc87db5362fb2f44e38149f39b32a11ac953))
+* **api:** 클라이언트가 끊은 요청을 계속 처리하던 결함 — 중단 뒤 도구 실행·추가 턴·잘린 본문 저장 차단 ([940ac4c](https://github.com/openmake/openmake_llm/commit/940ac4cefb27200f55b699159fcec79cb90b34ce))
+* **api:** 클라이언트가 끊은 요청을 계속 처리하던 결함 — 중단 뒤 도구 실행·추가 턴·잘린 본문 저장 차단 ([8182b2c](https://github.com/openmake/openmake_llm/commit/8182b2cf3e9fc7919e0302b4edcd892af9544585))
+* **chat:** REST files[] 의 텍스트 파일(csv·txt·md·json 등)을 content 로 디코딩 — 바이너리 메타로만 들어가던 공백 ([f7e2b26](https://github.com/openmake/openmake_llm/commit/f7e2b26ac4052d91aaaa66677fbbe5c728fdd5db))
+* **discord-bot:** 세그먼트를 넘길 때 진행 메시지에 '작업 완료'가 잠깐 보이던 것 — 이어가기 판정을 진행 표시 앞으로 ([a131e5e](https://github.com/openmake/openmake_llm/commit/a131e5e925556f00820ef0ecf843085719c6902e))
+* **discord-bot:** 응답 제한 시간 초과를 사용자가 알 수 있는 안내로 바꾸고 기본 제한 시간을 10분으로 ([e37dfc6](https://github.com/openmake/openmake_llm/commit/e37dfc6bb63c1237a2c760b36531965caa741e12))
+* **discord-bot:** 응답 제한 시간 초과를 사용자가 알 수 있는 안내로 바꾸고 기본 제한 시간을 10분으로 ([ba3ab4d](https://github.com/openmake/openmake_llm/commit/ba3ab4db974cbb8f828fb78d4c2f633c58a685b3))
+* **mcp-runtime:** 브라우저 uvx MCP 서버는 스폰 전 같은 venv 로 playwright install chromium ([942e1b1](https://github.com/openmake/openmake_llm/commit/942e1b148ee2ece4bf927ef443c2759207958584))
+* **mcp-runtime:** 브라우저 uvx 서버는 스폰 전 같은 venv 로 playwright install chromium — 리비전 드리프트로 google_search 가 죽던 문제 ([f7d6ab4](https://github.com/openmake/openmake_llm/commit/f7d6ab4efcf1dc50d5b2da6dc84257da53033a66))
+* **ops-metrics:** provider 사용량 집계에서 클라이언트 중단(CLIENT_ABORTED)을 오류와 분리 ([27df7f6](https://github.com/openmake/openmake_llm/commit/27df7f6335a6ac87d691c3a586f8b95283c6d0ff))
+* **ops-metrics:** provider 사용량 집계에서 클라이언트 중단(CLIENT_ABORTED)을 오류와 분리 ([f1b6444](https://github.com/openmake/openmake_llm/commit/f1b6444f3bd2e7b1403c76978217fa2c1cb542cd))
+
 ## [1.100.3](https://github.com/openmake/openmake_llm/compare/v1.100.2...v1.100.3) (2026-10-13)
 
 
