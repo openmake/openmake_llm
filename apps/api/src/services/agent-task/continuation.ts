@@ -68,11 +68,11 @@ function pendingPlanItems(plan: unknown): string[] {
 }
 
 /** 인계 턴 — 도구 없이 "다음에 할 일" 만 받는다. 실패·빈 답이면 계획의 미완 항목, 그것도 없으면 고정 문구. */
-export async function askNextSteps(p: { roleState: AgentRoleState; conversation: ChatMessage[]; signal: AbortSignal; taskId: string; userId: string; plan: unknown }): Promise<string> {
+export async function askNextSteps(p: { roleState: AgentRoleState; conversation: ChatMessage[]; signal: AbortSignal; taskId: string; userId: string; plan: unknown; reason: ContinuationReason }): Promise<string> {
     const max = C.HANDOFF_TURN_MAX_CHARS;
     try {
         const result = await chatTurnWithRoleFallback(p.roleState, {
-            conversation: [...p.conversation, { role: 'user', content: getContinuationNextStepsPrompt(max) }],
+            conversation: [...p.conversation, { role: 'user', content: getContinuationNextStepsPrompt(max, p.reason) }],
             tools: [], signal: AbortSignal.any([p.signal, AbortSignal.timeout(C.HANDOFF_TURN_TIMEOUT_MS)]),
             taskId: p.taskId, userId: p.userId,
         });
@@ -157,7 +157,7 @@ async function runContinuation(p: ContinueInput, chainRepo: AgentTaskChainReposi
     if (p.root.long_running?.cancelled || p.task.status === 'cancelled') return { skipped: '체인이 취소되었습니다' };
     if (!state.canContinue) return { skipped: '체인 예산 소진' };
 
-    const nextSteps = await askNextSteps({ roleState: p.roleState, conversation: p.conversation, signal: p.signal, taskId: p.task.id, userId: String(p.task.user_id), plan: p.task.plan });
+    const nextSteps = await askNextSteps({ roleState: p.roleState, conversation: p.conversation, signal: p.signal, taskId: p.task.id, userId: String(p.task.user_id), plan: p.task.plan, reason: p.reason });
     // 장기 실행은 전역 플래그(FORK_WORKSPACE_RESTORE_ENABLED)와 무관하게 스냅숏을 강제한다 — 후속 세그먼트가 파일을 이어받는 유일한 길.
     if (p.taskRuntime) await snapshotWorkspaceTurn(p.taskRuntime, p.turn, { force: true }).catch((e) => logger.warn(`[Continuation] 작업 공간 스냅숏 실패(후속이 복원 실패로 멈출 수 있음): ${errMsg(e)}`));
 
