@@ -551,6 +551,7 @@ export class ChatRequestHandler {
         return {
             response: cleanedResponse,
             artifacts: extractedArtifacts.length > 0 ? extractedArtifacts : undefined,
+            ...(chatService.getDelegatedTasks().length > 0 ? { agentTasks: chatService.getDelegatedTasks() } : {}),
             sessionId: currentSessionId,
             model: servedModel,
             executionPlan: plan,

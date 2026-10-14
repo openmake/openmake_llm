@@ -21,9 +21,11 @@ import { noteHumanMessage, shouldHandleBotMessage, tryConsumeBotTurn } from './b
 import { splitForDiscord } from './message-utils';
 import { prepareReply } from './attachments';
 import { collectInboundAttachments, DEFAULT_ATTACHMENT_PROMPT, formatSkippedNotice } from './inbound-attachments';
-import { createTaskClient } from './task-client';
-import { createTaskController, type TaskController } from './task-commands';
-import { handleDisabledTaskInteraction, handleTaskInteraction, registerTaskCommands } from './task-discord';
+import { createTaskClient, type TaskClient } from './task-client';
+import { createTaskController, EXECUTOR_LABEL, type TaskController } from './task-commands';
+import { delegatedTaskUi, handleDisabledTaskInteraction, handleTaskInteraction, registerTaskCommands, type SendableChannel } from './task-discord';
+import { watchTask } from './task-watcher';
+import { createDelegatedWatchRegistry, formatNotWatched, startDelegatedWatches, type AgentTaskRef } from './delegated-watch';
 
 /**
  * 기동 절차: 서버(관리자 화면) 설정 수신 → 검증 → Discord 로그인.
@@ -63,6 +65,45 @@ const client = new Client({
 
 /** /task 조정자 — 허용 사용자 목록이 있을 때만 만들어진다(clientReady). 없으면 기능이 꺼진 것이다. */
 let taskController: TaskController | null = null;
+
+/** 채팅에서 위임한 작업 조회용 — 봇 키의 사용자가 작업 소유자다. 설정을 받은 뒤(clientReady) 만든다 */
+let delegatedTaskClient: TaskClient | null = null;
+/** 위임 작업 지켜보기 현황 — 메모리에만 둔다(봇 재시작 시 지켜보기가 끊기는 것은 받아들인다) */
+const delegatedWatches = createDelegatedWatchRegistry();
+/** 위임 작업은 승인 정책을 지정하지 않는다 — 서버 기본값을 따른다 */
+const DELEGATED_POLICY_LABEL = '서버 기본 설정';
+
+/**
+ * 채팅에서 모델이 위임한 백그라운드 작업을 지켜보다 진행·승인·결과를 채널에 올린다(/task 와 독립).
+ * 승인 버튼은 /task 가 켜져 있고 요청한 사람이 허용 목록에 있을 때만 — 아니면 웹에서 승인하라는 안내.
+ */
+function watchDelegatedTasks(message: Message, tasks: AgentTaskRef[]): void {
+    const taskClient = delegatedTaskClient;
+    const channel = message.channel;
+    if (!taskClient || tasks.length === 0 || !('send' in channel)) return;
+    const sendable = channel as unknown as SendableChannel;
+    const controller = taskController;
+    const canApprove = controller !== null && config.taskAllowedUsers.includes(message.author.id);
+    startDelegatedWatches(tasks, {
+        channelId: message.channelId,
+        registry: delegatedWatches,
+        watch: (task) => watchTask(
+            taskClient,
+            task.id,
+            delegatedTaskUi(sendable, canApprove ? (approval) => controller.trackApproval(approval.approvalId, message.author.id) : null),
+            {
+                goal: task.goal,
+                executorLabel: EXECUTOR_LABEL.sandbox,
+                policyLabel: DELEGATED_POLICY_LABEL,
+                pollMs: config.taskPollMs,
+                watchMaxMs: config.taskWatchMaxMs,
+            },
+        ),
+        notifyNotWatched: async (task) => {
+            await sendable.send({ content: formatNotWatched(task), allowedMentions: { parse: [] } });
+        },
+    });
+}
 
 const TYPING_REFRESH_MS = 8_000; // Discord typing 표시는 ~10초 후 소멸 → 주기 갱신
 
@@ -114,6 +155,8 @@ async function handleChat(message: Message, botUserId: string): Promise<void> {
                 await channel.send({ content: chunk, allowedMentions: { parse: [] } });
             }
         }
+        // 답변을 보낸 뒤 위임한 작업을 지켜본다 — 세션 이력에는 위 텍스트만 남는다
+        watchDelegatedTasks(message, answer.agentTasks);
     } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
         if (err instanceof RequestTimeoutError) {
@@ -142,6 +185,8 @@ async function handleReset(interaction: ChatInputCommandInteraction): Promise<vo
 client.once('clientReady', async () => {
     const user = client.user;
     if (!user) return;
+    // 채팅 위임 작업 지켜보기는 /task 설정과 무관하게 켠다
+    delegatedTaskClient = createTaskClient({ baseUrl: config.apiBaseUrl, apiKey: config.apiKey });
     try {
         const model = await resolveModel();
         console.log(`[discord-bot] 로그인: ${user.tag}, 모델: ${model}, 백엔드: ${config.apiBaseUrl}`);

@@ -16,6 +16,7 @@ import { CHAT_DELEGATE_TOOL_NAME, runChatDelegate } from './chat-delegate';
 import { SPAWN_AGENTS_TOOL_NAME, runChatSpawnAgents } from '../agent-spawn/spawn-agents';
 import { isOrchestrationTool, runOrchestrationTool } from './orchestration-dispatch';
 import { executeExternalTool } from './external-tool-exec';
+import { recordDelegatedTask } from './delegated-task-record';
 import { captureOdArtifactHtml, normalizeOdToolCall, type OdArtifactCapture } from './external-deterministic-append';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import type { ChatMessage, ToolDefinition } from '../../llm';
@@ -149,6 +150,8 @@ export async function runToolCallBatch(params: {
                     ...(req.userLanguagePreference ? { userLanguage: req.userLanguagePreference } : {}),
                     ...(req.abortSignal ? { signal: req.abortSignal } : {}),
                 });
+            // 위임한 백그라운드 작업을 ctx 에 남긴다 — REST 응답의 agent_tasks 로 나가 클라이언트가 지켜본다.
+            recordDelegatedTask(ctx, tc.name, tc.args as Record<string, unknown>, toolResult);
             // Stage 2 셰도우 계측 — 첫 호출의 도구명·성공 여부 기록.
             if (ctx.orchestrationTelemetry && !ctx.orchestrationTelemetry.called) {
                 ctx.orchestrationTelemetry.called = tc.name;

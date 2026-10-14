@@ -236,4 +236,6 @@ export interface ChatResult {
      * ws-handler 가 done 직전 WS 이벤트로 발행 → 클라이언트 패널 자동 오픈.
      */
     artifacts?: Array<{ id: string; kind: string; title: string; lang: string | null; version: number; content: string }>;
+    /** 이번 턴에 delegate_agent_task 로 위임한 백그라운드 작업 — REST 응답 message.agent_tasks (없으면 생략) */
+    agentTasks?: Array<{ id: string; goal: string; status: 'created' | 'duplicate' }>;
 }

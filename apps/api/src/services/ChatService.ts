@@ -76,6 +76,8 @@ export class ChatService {
     readonly providerRouter?: ProviderRouter;
     /** 직전 외부 provider 호출의 사용량 메트릭 (billing/usage 이벤트용) */
     private lastProviderUsage: import('../llm').UsageMetrics | null = null;
+    /** 이번 요청에서 delegate_agent_task 로 위임한 백그라운드 작업 (REST 응답 agent_tasks 용) */
+    private delegatedTasks: import('./chat-service/delegated-task-record').DelegatedTaskRecord[] = [];
 
     /**
      * 현재 채팅의 MCP tool resource content 콜백.
@@ -375,6 +377,16 @@ export class ChatService {
      */
     getLastProviderUsage(): import('../llm').UsageMetrics | null {
         return this.lastProviderUsage;
+    }
+
+    /** message-pipeline 이 외부 provider 스트림 뒤 ctx.delegatedTasks 를 넘긴다 */
+    setDelegatedTasks(tasks: import('./chat-service/delegated-task-record').DelegatedTaskRecord[]): void {
+        this.delegatedTasks = tasks;
+    }
+
+    /** 이번 요청에서 위임한 백그라운드 작업 — request-handler 가 ChatResult.agentTasks 로 노출 */
+    getDelegatedTasks(): import('./chat-service/delegated-task-record').DelegatedTaskRecord[] {
+        return this.delegatedTasks;
     }
 
     // ────────────────────────────────────────────────────────────

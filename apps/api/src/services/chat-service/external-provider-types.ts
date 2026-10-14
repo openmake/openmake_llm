@@ -75,4 +75,6 @@ export interface StreamFromExternalContext {
     timings?: ChatTimings;
     /** 멀티모달 오케스트레이터가 이번 턴에 만든 미디어 마크다운(성공분만) — 모델이 누락해도 결정적 첨부 */
     orchestratorMedia?: string[];
+    /** 이번 턴에 delegate_agent_task 로 위임한 백그라운드 작업 — 도구 배치가 채워 되돌려준다(REST 응답 agent_tasks). */
+    delegatedTasks?: import('./delegated-task-record').DelegatedTaskRecord[];
 }
