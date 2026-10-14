@@ -67,6 +67,17 @@ function resolveThinking(
     return req.thinkingLevel ?? true;
 }
 
+/**
+ * 클라이언트 중단 가드 — LLM 스트림은 중단되면 끝난 것처럼 돌아오므로(잘린 본문·깨진 도구 호출),
+ * 호출 직후와 턴 경계에서 확인한다. 중단이면 도구 실행·추가 턴·정상 완료(이력 저장) 없이
+ * 기존 관례대로 'ABORTED' 를 던진다 — 상위(request-handler)는 저장 전에 빠져나간다.
+ */
+function throwIfAborted(req: ChatMessageRequest, pendingToolCalls: number): void {
+    if (!req.abortSignal?.aborted) return;
+    logger.warn(`요청 중단 — 도구 ${pendingToolCalls}건 미실행, 루프 종료`);
+    throw new Error('ABORTED');
+}
+
 export async function runExternalStream(
     deps: ExternalProviderDeps,
     resolved: ResolvedProvider,
@@ -182,6 +193,8 @@ export async function runExternalStream(
 
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
+            // 도구 실행 중 중단됐으면 다음 턴(최종 턴 전환 포함)을 돌지 않는다.
+            throwIfAborted(req, 0);
             // Wall-clock 예산 가드 — 상세는 external-loop-guards.
             if (!suppressTools && applyWallClockGuard({ startedAt, messages })) {
                 suppressTools = true;
@@ -229,6 +242,7 @@ export async function runExternalStream(
                     },
                 },
             );
+            throwIfAborted(req, result.toolCalls?.length ?? 0);
 
             if (suppressTools || !result.toolCalls || result.toolCalls.length === 0) {
                 // B. 빈 응답 방어: 도구를 아직 끄지 않았는데 모델이 도구 호출도 텍스트도 없이
@@ -327,6 +341,7 @@ export async function runExternalStream(
         // C. 턴 소진 방어: 마지막 턴까지 도구 호출로 끝나면(리서치형 요청이 전 턴을 도구에
         // 소진) 최종 답변 본문이 없어 빈/스텁 content 가 반환된다 — wall-clock·doom-loop
         // 가드와 동일하게 도구를 끈 마무리 턴을 1회 실행해 답변을 강제한다.
+        throwIfAborted(req, 0);
         if (result.toolCalls && result.toolCalls.length > 0) {
             logger.warn(`⏳ 외부 LLM 턴 예산 소진(${MAX_TOOL_TURNS}턴) — 도구 비활성 최종 턴으로 답변 강제`);
             messages.push({
@@ -357,6 +372,7 @@ export async function runExternalStream(
                     },
                 },
             );
+            throwIfAborted(req, result.toolCalls?.length ?? 0);
         }
 
         // D. 추론만 온 턴의 최후 수단: 로컬 thinking 턴이 본문 없이 추론만 내면 스트림 파서는 승격하지
@@ -371,8 +387,10 @@ export async function runExternalStream(
         // 컨텍스트 초과는 **재시도해도 같다** — UPSTREAM_ERROR("잠시 후 다시 시도") 로 안내하면
         // 사용자가 같은 실패를 반복한다. upstream 이 code 를 주지 않으므로 메시지로 판정한다
         // (LiteLLM: `ContextWindowExceededError` / OpenAI 호환: `maximum context length`).
+        // 클라이언트 중단은 provider 오류가 아니다 — 'ABORTED'(코드 없음)·provider 의 중단 ProviderError
+        // (UPSTREAM_ERROR) 모두 신호 기준으로 CLIENT_ABORTED 로 남겨 업스트림 장애와 구분한다.
         const rawMsg = err instanceof Error ? err.message : String(err ?? '');
-        errorCode = err && typeof err === 'object' && 'code' in err
+        errorCode = req.abortSignal?.aborted ? 'CLIENT_ABORTED' : err && typeof err === 'object' && 'code' in err
             ? String((err as { code: unknown }).code)
             : /ContextWindowExceeded|maximum context length|context_length_exceeded|too many tokens/i.test(rawMsg)
                 ? 'CONTEXT_TOO_LARGE'

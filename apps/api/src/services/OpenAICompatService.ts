@@ -55,6 +55,11 @@ export interface OpenAIChatCompletionRequest {
      * 공유 뷰어에 발행하고 message.artifacts[].shareUrl 로 반환 (Discord gateway 용).
      */
     publish_artifacts?: boolean;
+    /**
+     * OpenMake 확장 (비표준): 문서 첨부(base64 원본) — Discord gateway 용.
+     * 서버가 텍스트로 추출해 fileContext 로 주입한다. 이미지는 표준 image_url 경로를 쓴다.
+     */
+    files?: Array<{ name: string; type?: string; size?: number; data: string }>;
 }
 
 /** OpenMake 확장 — 응답에서 추출된 artifact (non-stream 전용, message.artifacts). */
@@ -69,6 +74,17 @@ export interface OpenAICompatArtifact {
     shareUrl?: string;
 }
 
+/**
+ * OpenMake 확장 — 이번 턴에 모델이 delegate_agent_task 로 위임한 백그라운드 작업 (non-stream 전용, message.agent_tasks).
+ * 완료 알림은 WS 이벤트·웹 푸시뿐이라 REST 클라이언트(Discord 봇)는 이 id 로 작업을 조회해 결과를 지켜본다.
+ * created = 새로 만듦, duplicate = 같은 목표의 기존 작업을 재사용. 스트리밍 응답에는 싣지 않는다(범위 밖).
+ */
+export interface OpenAICompatAgentTask {
+    id: string;
+    goal: string;
+    status: 'created' | 'duplicate';
+}
+
 interface OpenAIChatCompletionResponse {
     id: string;
     object: 'chat.completion';
@@ -76,7 +92,7 @@ interface OpenAIChatCompletionResponse {
     model: string;
     choices: Array<{
         index: number;
-        message: { role: 'assistant'; content: string | null; tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>; artifacts?: OpenAICompatArtifact[]; /** OpenMake 확장 — 작업 게이트 제안(이 요청은 agent-task 로 처리하는 편이 낫다는 판정 확률) */ task_suggestion?: { p_true: number } };
+        message: { role: 'assistant'; content: string | null; tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>; artifacts?: OpenAICompatArtifact[]; /** OpenMake 확장 — 작업 게이트 제안(이 요청은 agent-task 로 처리하는 편이 낫다는 판정 확률) */ task_suggestion?: { p_true: number }; agent_tasks?: OpenAICompatAgentTask[] };
         finish_reason: 'stop' | 'tool_calls' | 'length' | null;
     }>;
     usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
@@ -193,6 +209,7 @@ export class OpenAICompatService {
         toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
         artifacts?: OpenAICompatArtifact[];
         taskSuggestion?: { pTrue: number };
+        agentTasks?: OpenAICompatAgentTask[];
     }): OpenAIChatCompletionResponse {
         return {
             id: params.id,
@@ -208,6 +225,7 @@ export class OpenAICompatService {
                         ...(params.toolCalls && params.toolCalls.length > 0 ? { tool_calls: params.toolCalls } : {}),
                         ...(params.artifacts && params.artifacts.length > 0 ? { artifacts: params.artifacts } : {}),
                         ...(params.taskSuggestion ? { task_suggestion: { p_true: params.taskSuggestion.pTrue } } : {}),
+                        ...(params.agentTasks && params.agentTasks.length > 0 ? { agent_tasks: params.agentTasks } : {}),
                     },
                     finish_reason: params.finishReason,
                 },

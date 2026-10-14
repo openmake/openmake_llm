@@ -1163,7 +1163,11 @@
       "low": "低",
       "medium": "中",
       "high": "高"
-    }
+    },
+    "chainSegment": "后续分段 {index}/{count}",
+    "chainRoot": "长时间运行（{count} 个分段）",
+    "chainContinuedTag": "已转入下一分段",
+    "chainBudget": "链路用量 {usedMinutes} 分钟 · {usedTokens} 令牌 · {segments}/{maxSegments} 分段"
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

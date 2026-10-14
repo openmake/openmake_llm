@@ -174,6 +174,18 @@ describe('AgentTaskService 입력 첨부 파일', () => {
         expect(goal).toContain('uploads/stats.xlsx.txt');
     });
 
+    it('샌드박스 ON: 텍스트 파일(원본 data + 디코딩 content, extracted 없음)은 원본만 한 번 기록된다', async () => {
+        process.env.TASK_SANDBOX_ENABLED = 'true';
+        await new AgentTaskService().execute({
+            ...baseInput,
+            files: [{ name: 'sales.csv', type: 'text/csv', data: Buffer.from('a,b\n1,2').toString('base64'), content: 'a,b\n1,2' }],
+        });
+
+        expect(writeWorkspaceFile).toHaveBeenCalledTimes(1);
+        expect(writeWorkspaceFile).toHaveBeenCalledWith('uploads/sales.csv', expect.any(Buffer));
+        expect((writeWorkspaceFile.mock.calls[0][1] as Buffer).toString('utf8')).toBe('a,b\n1,2');
+    });
+
     it('최종 답변에 [GOAL_INCOMPLETE] 마커가 있으면 failed(goal_incomplete) 로 종료', async () => {
         chatContent = '[GOAL_INCOMPLETE]\n업로드된 자료가 없어 보고서를 작성할 수 없습니다.';
         await new AgentTaskService().execute(baseInput);

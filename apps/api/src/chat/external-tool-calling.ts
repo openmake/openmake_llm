@@ -190,6 +190,8 @@ export async function processExternalToolCalling(params: {
         {
             ...(effectiveTools && { tools: effectiveTools }),
             ...(tool_choice !== undefined && { tool_choice }),
+            // 클라이언트 중단 시 upstream 요청도 끊는다 — 외부 provider 분기(위)와 같은 처리.
+            ...(_abortSignal && { signal: _abortSignal }),
         }
     );
 

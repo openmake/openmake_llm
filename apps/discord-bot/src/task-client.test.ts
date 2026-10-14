@@ -56,6 +56,17 @@ test('작업 생성: sandbox 는 goal 만, local 은 executor 를 함께 보내�
     assert.equal(seen[0].auth, 'Bearer k1');
 });
 
+test('작업 생성: 첨부가 있으면 files·images 를 본문에 싣고, 비어 있으면 키를 넣지 않는다', async () => {
+    const { baseUrl, seen } = await serve({ 'POST /api/agent-tasks': { status: 201, body: { success: true, data: { task: { id: 't1' } } } } });
+    const client = createTaskClient({ baseUrl, apiKey: 'k' });
+    const files = [{ name: 'sales.xlsx', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: 3, data: 'QUJD' }];
+    const images = ['data:image/png;base64,iVBORw0KGgo='];
+    await client.createTask('sales.xlsx 분석', 'sandbox', { files, images });
+    await client.createTask('분석', 'sandbox', { files: [], images: [] });
+    assert.deepEqual(seen[0].body, { goal: 'sales.xlsx 분석', files, images });
+    assert.deepEqual(seen[1].body, { goal: '분석' });
+});
+
 test('작업 실행: 승인 방식을 본문에 싣는다', async () => {
     const { baseUrl, seen } = await serve({ 'POST /api/agent-tasks/t1/execute': { status: 202, body: { success: true, data: { taskId: 't1' } } } });
     await createTaskClient({ baseUrl, apiKey: 'k' }).executeTask('t1', 'all');
@@ -66,10 +77,15 @@ test('작업 조회: 서버 필드를 봇이 쓰는 모양으로 옮긴다 — �
     const { baseUrl } = await serve({
         'GET /api/agent-tasks/t1': ok({ task: { id: 't1', status: 'running', progress: 22, current_turn: 7, max_turns: 32, result: null, error: null }, steps: [] }),
         'GET /api/agent-tasks/t2': ok({ task: { id: 't2', status: 'completed', result: '끝' }, steps: [] }),
+        'GET /api/agent-tasks/t3': ok({ task: { id: 't3', status: 'completed', result: '이어가기', continued_by_task_id: 't4', completion_path: 'continued' }, steps: [] }),
     });
     const client = createTaskClient({ baseUrl, apiKey: 'k' });
-    assert.deepEqual(await client.getTask('t1'), { id: 't1', status: 'running', progress: 22, currentTurn: 7, maxTurns: 32, result: null, error: null });
-    assert.deepEqual(await client.getTask('t2'), { id: 't2', status: 'completed', progress: 0, currentTurn: 0, maxTurns: 0, result: '끝', error: null });
+    assert.deepEqual(await client.getTask('t1'), { id: 't1', status: 'running', progress: 22, currentTurn: 7, maxTurns: 32, result: null, error: null, continuedByTaskId: null, completionPath: null });
+    assert.deepEqual(await client.getTask('t2'), { id: 't2', status: 'completed', progress: 0, currentTurn: 0, maxTurns: 0, result: '끝', error: null, continuedByTaskId: null, completionPath: null });
+    // 이어가기(188) — 후속 작업 id 와 끝난 경로를 옮긴다
+    const t3 = await client.getTask('t3');
+    assert.equal(t3.continuedByTaskId, 't4');
+    assert.equal(t3.completionPath, 'continued');
 });
 
 test('승인 대기 조회: 그 작업의 요청만 돌려준다', async () => {

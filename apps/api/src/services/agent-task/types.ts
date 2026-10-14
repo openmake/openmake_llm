@@ -108,3 +108,28 @@ export interface AgentTaskRunInput {
         plan?: unknown;
     };
 }
+
+/** 체인 예산 — 루트 작업의 long_running 열(188). cancelled 는 체인 취소 표식. */
+export interface LongRunningBudget {
+    maxDurationMs: number;
+    maxTotalTokens: number;
+    maxSegments: number;
+    /** 루트 생성 시각(epoch ms) — 표시용. 예산 판정은 chainUsedMs(주차 제외 누적)로 한다. */
+    startedAt: number;
+    cancelled?: boolean;
+}
+
+/** 이어가기 사유 — turn-gate 의 FinalTurnReason 에 'time'(세그먼트 시간 상한 임박, 체인 전용)을 더한 집합. */
+export type ContinuationReason = 'turns' | 'tokens' | 'context' | 'time';
+
+/** 후속 작업의 continuation 열(188) — 앞 세그먼트가 넘긴 것. 누적 사용량은 이 행까지의 합이다. */
+export interface ContinuationInfo {
+    fromTaskId: string;
+    /** 루트가 0, 첫 후속이 1 … */
+    segmentIndex: number;
+    reason: ContinuationReason;
+    /** 인계 요약 전문(HANDOFF_SUMMARY_MARKER 로 시작) — 후속 작업의 첫 사용자 메시지. */
+    summary: string;
+    chainUsedMs: number;
+    chainUsedTokens: number;
+}

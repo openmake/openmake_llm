@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Interaction } from 'discord.js';
 import type { DecideResult, StartResult, TaskController } from './task-commands';
-import { handleDisabledTaskInteraction, handleTaskInteraction } from './task-discord';
+import type { InboundAttachmentMeta, InboundAttachments } from './inbound-attachments';
+import { delegatedTaskUi, handleDisabledTaskInteraction, handleTaskInteraction, registerTaskCommands } from './task-discord';
 
 function controller(over: Partial<TaskController> = {}) {
     const calls: string[] = [];
@@ -16,13 +17,14 @@ function controller(over: Partial<TaskController> = {}) {
         start: async (req): Promise<StartResult> => { calls.push(`start:${req.userId}:${req.channelId}:${req.goal}`); return { ok: true, taskId: '8da742a6-661e' }; },
         cancel: async (req) => { calls.push(`cancel:${req.userId}:${req.channelId}`); return '취소를 요청했습니다.'; },
         decide: async (req): Promise<DecideResult> => { calls.push(`decide:${req.userId}:${req.approvalId}:${req.decision}`); return { settled: true, text: '✅ 승인됨' }; },
+        trackApproval: (approvalId, ownerId) => { calls.push(`track:${approvalId}:${ownerId}`); },
         ...over,
     };
     return { c, calls };
 }
 
 /** 슬래시 명령 상호작용의 최소 모양 */
-function command(name: string, opts: { goal?: string; channel?: unknown } = {}) {
+function command(name: string, opts: { goal?: string; channel?: unknown; file?: InboundAttachmentMeta } = {}) {
     const out: string[] = [];
     const i = {
         isChatInputCommand: () => true,
@@ -31,7 +33,7 @@ function command(name: string, opts: { goal?: string; channel?: unknown } = {}) 
         user: { id: 'u1' },
         channelId: 'c1',
         channel: 'channel' in opts ? opts.channel : { send: async () => ({ edit: async () => undefined }) },
-        options: { getString: () => opts.goal ?? '' },
+        options: { getString: () => opts.goal ?? '', getAttachment: () => opts.file ?? null },
         deferReply: async (o: { flags?: number }) => { out.push(`defer:${o.flags === 64}`); },
         reply: async (o: unknown) => { out.push(`reply:${JSON.stringify(o)}`); },
         editReply: async (text: string) => { out.push(`edit:${text}`); },
@@ -63,6 +65,64 @@ test('/task: 먼저 본인에게만 보이게 접수하고, 목표와 사용자�
     assert.deepEqual(calls, ['start:u1:c1:로그 집계']);
     assert.equal(out[0], 'defer:true');
     assert.match(out[1], /^edit:작업을 시작했습니다/);
+});
+
+test('/task: 첨부 옵션이 있으면 내려받아 files·images 로 start 에 넘기고, 생략된 파일을 알린다', async () => {
+    let started: Parameters<TaskController['start']>[0] | undefined;
+    const { c } = controller({ start: async (req) => { started = req; return { ok: true, taskId: '8da742a6-661e' }; } });
+    const file: InboundAttachmentMeta = { name: 'sales.pdf', url: 'https://cdn.example/sales.pdf', contentType: 'application/pdf', size: 3 };
+    const seen: InboundAttachmentMeta[][] = [];
+    const collect = async (metas: Iterable<InboundAttachmentMeta>): Promise<InboundAttachments> => {
+        seen.push([...metas]);
+        return {
+            files: [{ name: 'sales.pdf', type: 'application/pdf', size: 3, data: 'QUJD' }],
+            imageParts: [{ type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } }],
+            skipped: ['big.zip'],
+        };
+    };
+    const { i, out } = command('task', { goal: 'sales.pdf 분석', file });
+    assert.equal(await handleTaskInteraction(i, c, collect), true);
+    assert.deepEqual(seen, [[{ name: 'sales.pdf', url: 'https://cdn.example/sales.pdf', contentType: 'application/pdf', size: 3 }]]);
+    assert.deepEqual(started?.attachments, {
+        files: [{ name: 'sales.pdf', type: 'application/pdf', size: 3, data: 'QUJD' }],
+        images: ['data:image/png;base64,iVBORw0KGgo='],
+    });
+    assert.match(out[1], /^edit:작업을 시작했습니다/);
+    assert.match(out[1], /big\.zip/);
+});
+
+test('/task: 첨부 옵션이 없으면 내려받지 않고 attachments 없이 시작한다', async () => {
+    let started: Parameters<TaskController['start']>[0] | undefined;
+    const { c } = controller({ start: async (req) => { started = req; return { ok: true, taskId: '8da742a6-661e' }; } });
+    let collected = false;
+    const { i } = command('task', { goal: '로그 집계' });
+    await handleTaskInteraction(i, c, async () => { collected = true; return { files: [], imageParts: [], skipped: [] }; });
+    assert.equal(collected, false);
+    assert.equal(started?.attachments, undefined);
+});
+
+test('명령 등록: 이미 있는 /task 에 file 옵션이 없으면 고치고, 있으면 그대로 둔다', async () => {
+    const made: string[] = [];
+    const edited: unknown[] = [];
+    const app = (taskOptions: Array<{ name: string }>) => ({
+        commands: {
+            fetch: async () => [
+                { name: 'task', options: taskOptions },
+                { name: 'task-cancel', options: [] },
+            ],
+            create: async (data: { name: string }) => { made.push(data.name); },
+            edit: async (cmd: { name: string }, data: unknown) => { if (cmd.name === 'task') edited.push(data); },
+        },
+    });
+    await registerTaskCommands(app([{ name: 'goal' }]) as never);
+    assert.equal(edited.length, 1);
+    const options = (edited[0] as { options: Array<{ name: string; type: number; required?: boolean }> }).options;
+    assert.deepEqual(options.map((o) => o.name), ['goal', 'file']);
+    assert.equal(options[1].type, 11); // ApplicationCommandOptionType.Attachment
+    assert.notEqual(options[1].required, true);
+    await registerTaskCommands(app([{ name: 'goal' }, { name: 'file' }]) as never);
+    assert.equal(edited.length, 1);
+    assert.deepEqual(made, []);
 });
 
 test('/task: 시작이 거절되면 그 사유를 답한다', async () => {
@@ -132,4 +192,20 @@ test('기능이 꺼진 봇: 남아 있는 /task 명령과 승인 버튼에 꺼�
     assert.match(JSON.stringify(b.out[0]), /꺼져 있습니다/);
     assert.equal(await handleDisabledTaskInteraction(command('reset').i), false);
     assert.equal(await handleDisabledTaskInteraction(button('other:approve:a1').i), false);
+});
+
+test('delegatedTaskUi: 승인 주인을 적을 수 있으면 버튼과 함께 올리고, 아니면 버튼 없이 웹 승인 안내', async () => {
+    const approval = { approvalId: 'ap-1', toolName: 'run_command', args: { command: 'ls' } };
+    const sent: Array<{ content: string; components?: unknown[] }> = [];
+    const channel = { send: async (o: { content: string; components?: unknown[] }) => { sent.push(o); return {} as never; } };
+
+    const tracked: string[] = [];
+    await delegatedTaskUi(channel as never, (a) => tracked.push(a.approvalId)).postApproval(approval as never);
+    assert.deepEqual(tracked, ['ap-1']);
+    assert.equal(sent[0].components?.length, 1);
+
+    await delegatedTaskUi(channel as never, null).postApproval(approval as never);
+    assert.equal(sent[1].components, undefined);
+    assert.match(sent[1].content, /run_command/);
+    assert.match(sent[1].content, /웹의 작업 화면에서 승인하세요/);
 });

@@ -67,6 +67,8 @@ export interface ChatRequestParams {
     turnSystemPromptPart?: string;
     /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 executor 입력 */
     mediaFiles?: import('../services/chat-service-types').MediaFileInput[];
+    /** 이번 턴 첨부 원본 — delegate_agent_task 가 작업 공간 uploads/ 로 넘긴다(services/chat-service/turn-attachments) */
+    attachments?: import('../services/chat-service-types').ChatTurnAttachments;
     /** 켜진 채팅 모드 — add-on id → true. 일반 채팅 대신 그 모드가 턴을 가져간다(chat-modes.ts) */
     modes?: Record<string, boolean>;
     /** 이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성 */
@@ -236,4 +238,6 @@ export interface ChatResult {
      * ws-handler 가 done 직전 WS 이벤트로 발행 → 클라이언트 패널 자동 오픈.
      */
     artifacts?: Array<{ id: string; kind: string; title: string; lang: string | null; version: number; content: string }>;
+    /** 이번 턴에 delegate_agent_task 로 위임한 백그라운드 작업 — REST 응답 message.agent_tasks (없으면 생략) */
+    agentTasks?: Array<{ id: string; goal: string; status: 'created' | 'duplicate' }>;
 }

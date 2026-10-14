@@ -13,6 +13,7 @@ import {
     MessageFlags,
     SlashCommandBuilder,
 } from 'discord.js';
+import { collectInboundAttachments, formatSkippedNotice } from './inbound-attachments';
 import { splitForDiscord } from './message-utils';
 import type { PendingApproval } from './task-client';
 import type { TaskController } from './task-commands';
@@ -24,24 +25,27 @@ export const TASK_CANCEL_COMMAND = 'task-cancel';
 const BUTTON_PREFIX = 'task';
 
 /** 메시지를 보낼 수 있는 채널의 최소 모양 — DM·스레드·서버 채널 공통 */
-interface SendableChannel {
+export interface SendableChannel {
     send(options: MessageCreateOptions): Promise<Message>;
 }
 
 /**
  * 명령 등록 — 기존 /reset 과 같은 방식(전역 명령을 통째로 바꾸지 않고 없을 때만 추가).
- * 기능이 켜져 있을 때만 부른다.
+ * 기능이 켜져 있을 때만 부른다. 이미 등록된 /task 에 첨부 옵션(file)이 없으면 그 명령만 고친다.
  */
 export async function registerTaskCommands(app: ClientApplication): Promise<void> {
     const existing = await app.commands.fetch();
-    if (!existing.some((cmd) => cmd.name === TASK_COMMAND)) {
-        await app.commands.create(
-            new SlashCommandBuilder()
-                .setName(TASK_COMMAND)
-                .setDescription('에이전트 작업을 시작합니다 — 진행·승인·결과가 이 채널에 올라옵니다')
-                .addStringOption((option) => option.setName('goal').setDescription('작업 목표').setRequired(true))
-                .toJSON(),
-        );
+    const taskCommand = new SlashCommandBuilder()
+        .setName(TASK_COMMAND)
+        .setDescription('에이전트 작업을 시작합니다 — 진행·승인·결과가 이 채널에 올라옵니다')
+        .addStringOption((option) => option.setName('goal').setDescription('작업 목표').setRequired(true))
+        .addAttachmentOption((option) => option.setName('file').setDescription('작업에 넘길 파일(선택, 8MB 이하)'))
+        .toJSON();
+    const registered = existing.find((cmd) => cmd.name === TASK_COMMAND);
+    if (!registered) {
+        await app.commands.create(taskCommand);
+    } else if (!registered.options.some((o) => o.name === 'file')) {
+        await app.commands.edit(registered, taskCommand);
     }
     if (!existing.some((cmd) => cmd.name === TASK_CANCEL_COMMAND)) {
         await app.commands.create(
@@ -84,8 +88,37 @@ function channelUi(channel: SendableChannel): WatchUi {
     };
 }
 
-/** @returns 이 모듈이 처리한 상호작용이면 true */
-export async function handleTaskInteraction(interaction: Interaction, controller: TaskController): Promise<boolean> {
+const MSG_APPROVE_ON_WEB = '웹의 작업 화면에서 승인하세요.';
+
+/**
+ * 채팅에서 위임한 작업을 지켜보는 화면 — /task 와 같은 채널 화면을 쓰되 승인 요청만 다르다.
+ * onApproval 이 있으면(/task 가 켜져 있고 요청한 사람이 허용 목록에 있을 때) 승인 버튼을 올리고 주인을 적게 하고,
+ * 없으면 버튼 없이 웹에서 승인하라는 안내만 붙인다(아무나 위험 도구를 승인하지 못하게).
+ */
+export function delegatedTaskUi(channel: SendableChannel, onApproval: ((approval: PendingApproval) => void) | null): WatchUi {
+    const ui = channelUi(channel);
+    return {
+        ...ui,
+        async postApproval(approval) {
+            if (onApproval) {
+                onApproval(approval);
+                await ui.postApproval(approval);
+                return;
+            }
+            await channel.send({ content: `${formatApproval(approval)}\n${MSG_APPROVE_ON_WEB}`, allowedMentions: { parse: [] } });
+        },
+    };
+}
+
+/**
+ * @param collect - 첨부 내려받기(테스트에서 바꿔 끼운다)
+ * @returns 이 모듈이 처리한 상호작용이면 true
+ */
+export async function handleTaskInteraction(
+    interaction: Interaction,
+    controller: TaskController,
+    collect: typeof collectInboundAttachments = collectInboundAttachments,
+): Promise<boolean> {
     if (interaction.isChatInputCommand() && interaction.commandName === TASK_COMMAND) {
         // 작업 생성·실행 호출이 3초(디스코드 응답 기한)를 넘을 수 있어 먼저 접수한다. 답은 본인에게만 보인다.
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -94,13 +127,19 @@ export async function handleTaskInteraction(interaction: Interaction, controller
             await interaction.editReply('이 채널에는 메시지를 올릴 수 없어 작업을 시작하지 않았습니다.');
             return true;
         }
+        // 첨부 옵션 — 디스코드 CDN 주소는 만료되므로 여기서 내려받아 작업 생성에 base64 로 넘긴다
+        const file = interaction.options.getAttachment('file');
+        const inbound = file ? await collect([{ name: file.name, url: file.url, contentType: file.contentType, size: file.size }]) : undefined;
         const result = await controller.start({
             userId: interaction.user.id,
             channelId: interaction.channelId,
             goal: interaction.options.getString('goal', true),
             ui: channelUi(channel as unknown as SendableChannel),
+            ...(inbound ? { attachments: { files: inbound.files, images: inbound.imageParts.map((p) => p.image_url.url) } } : {}),
         });
-        await interaction.editReply(result.ok ? `작업을 시작했습니다. 진행 상황이 이 채널에 올라옵니다. (작업 ${result.taskId.slice(0, 8)})` : `⚠️ ${result.reason}`);
+        const skippedNotice = inbound ? formatSkippedNotice(inbound.skipped) : '';
+        const reply = result.ok ? `작업을 시작했습니다. 진행 상황이 이 채널에 올라옵니다. (작업 ${result.taskId.slice(0, 8)})` : `⚠️ ${result.reason}`;
+        await interaction.editReply(skippedNotice ? `${reply}\n${skippedNotice}` : reply);
         return true;
     }
 
