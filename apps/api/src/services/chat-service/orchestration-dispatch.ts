@@ -23,6 +23,8 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AgentTaskService } from '../AgentTaskService';
 import { dispatchAgentTask } from '../agent-task/task-queue';
 import { claimDelegatedTaskDurable, releaseDelegatedTask } from '../agent-task/create-idempotency';
+import { resolveDefaultMaxTurns } from '../agent-task/task-inputs';
+import type { ChatTurnAttachments } from '../chat-service-types';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import { isAdminRole } from '../../data/user-manager';
@@ -70,6 +72,7 @@ export function buildDelegateAgentTaskTool(): ToolDefinition {
             description: '파일을 만들거나 코드를 실행해야 하는 요청에 사용합니다 — 백그라운드 에이전트가 '
                 + '샌드박스에서 작업을 수행하고 산출물을 남깁니다(위험 도구는 사용자 승인을 거칩니다). '
                 + '엑셀·CSV·스크립트·텍스트 파일 생성 요청이면 이 도구로 위임하세요. '
+                + '이번 턴에 첨부된 파일·이미지는 작업 공간 uploads/ 로 함께 전달되므로 goal 에 파일명을 언급하면 됩니다. '
                 + '즉시 말로 답할 수 있는 질문에는 사용하지 마세요.',
             parameters: {
                 type: 'object',
@@ -87,16 +90,21 @@ export function buildDelegateAgentTaskTool(): ToolDefinition {
 async function runDelegateAgentTask(params: {
     args: Record<string, unknown>;
     userCtx: UserContext;
+    /** 이번 턴 첨부 — 작업 입력(input_files·input_images)으로 넘겨 실행 때 uploads/ 에 쓰인다 */
+    attachments?: ChatTurnAttachments;
 }): Promise<string> {
     const goal = String(params.args.goal ?? '').trim();
     if (!goal) return 'Error: goal 이 필요합니다.';
     const userId = String(params.userCtx.userId ?? '');
     if (!userId || userId === 'guest') return 'Error: 로그인된 사용자만 에이전트 작업을 위임할 수 있습니다.';
 
+    const inputFiles = params.attachments?.files?.length ? params.attachments.files : undefined;
+    const inputImages = params.attachments?.images?.length ? params.attachments.images : undefined;
     const rawTurns = Number(params.args.max_turns);
+    // 인자가 없으면 첨부 기준 기본값 — 샌드박스에서 직접 파싱해야 하는 대형·미추출 문서는 턴 예산을 올린다
     const maxTurns = Number.isFinite(rawTurns) && rawTurns > 0
         ? Math.min(Math.floor(rawTurns), AGENT_TASK_LIMITS.MAX_TURNS_CEILING)
-        : AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS;
+        : resolveDefaultMaxTurns(undefined, inputFiles);
 
     let claimed = false;
     try {
@@ -110,7 +118,7 @@ async function runDelegateAgentTask(params: {
         });
         if (priorTaskId) return duplicate(priorTaskId);
         claimed = true;
-        const created = await db.createAgentTask({ id: taskId, userId, goal, maxTurns, ...(createKey ? { idempotencyKey: createKey } : {}) });
+        const created = await db.createAgentTask({ id: taskId, userId, goal, maxTurns, inputFiles, inputImages, ...(createKey ? { idempotencyKey: createKey } : {}) });
         if (!created && createKey) {
             // 유니크 충돌 — 다른 서버가 같은 위임을 방금 만들었다. 그 작업을 돌려준다.
             const existing = await db.findAgentTaskByCreateKey(userId, createKey);
@@ -127,9 +135,11 @@ async function runDelegateAgentTask(params: {
                 userId,
                 userRole: (isAdminRole(params.userCtx.role) ? 'admin' : 'user'),
                 maxTurns,
+                files: inputFiles,
+                images: inputImages,
             }),
         });
-        logger.info(`[delegate_agent_task] 작업 위임: ${taskId} (${outcome})`);
+        logger.info(`[delegate_agent_task] 작업 위임: ${taskId} (${outcome}) 첨부 파일 ${inputFiles?.length ?? 0}·이미지 ${inputImages?.length ?? 0}`);
         return JSON.stringify({
             task_id: taskId,
             status: outcome,
@@ -151,6 +161,8 @@ export async function runOrchestrationTool(params: {
     userCtx: UserContext;
     userLanguage?: string;
     signal?: AbortSignal;
+    /** 이번 턴 첨부 — delegate_agent_task 만 쓴다 */
+    attachments?: ChatTurnAttachments;
 }): Promise<string> {
     const contributed = contributedOrchestrationTools().find((t) => t.name === params.name);
     if (contributed) {
@@ -161,7 +173,7 @@ export async function runOrchestrationTool(params: {
         });
     }
     if (params.name === DELEGATE_AGENT_TASK_TOOL_NAME) {
-        return runDelegateAgentTask({ args: params.args, userCtx: params.userCtx });
+        return runDelegateAgentTask({ args: params.args, userCtx: params.userCtx, attachments: params.attachments });
     }
     return `Error: 알 수 없는 오케스트레이션 도구 — ${params.name}`;
 }

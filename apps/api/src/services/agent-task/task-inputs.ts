@@ -95,7 +95,8 @@ export async function writeInputFilesToWorkspace(
             // 바이너리 원본 — base64 디코드해 그대로 기록 (직접 파싱용)
             await write(`${TASK_UPLOAD_DIR}/${claim(base, i)}`, Buffer.from(f.data!, 'base64'), ' (원본 파일)');
         }
-        if (hasContent) {
+        // 원본이 있는데 extracted 가 아니면 텍스트 파일 — 원본이 곧 본문이라 content 를 따로 쓰지 않는다
+        if (hasContent && (f.extracted || (!hasStored && !hasData))) {
             const label =
                 (f.extracted ? ` (원본 ${f.name} 에서 추출한 텍스트)` : '') +
                 (f.truncated ? ' — 길이 제한으로 일부 절단됨' : '');

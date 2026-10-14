@@ -56,6 +56,17 @@ test('작업 생성: sandbox 는 goal 만, local 은 executor 를 함께 보내�
     assert.equal(seen[0].auth, 'Bearer k1');
 });
 
+test('작업 생성: 첨부가 있으면 files·images 를 본문에 싣고, 비어 있으면 키를 넣지 않는다', async () => {
+    const { baseUrl, seen } = await serve({ 'POST /api/agent-tasks': { status: 201, body: { success: true, data: { task: { id: 't1' } } } } });
+    const client = createTaskClient({ baseUrl, apiKey: 'k' });
+    const files = [{ name: 'sales.xlsx', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: 3, data: 'QUJD' }];
+    const images = ['data:image/png;base64,iVBORw0KGgo='];
+    await client.createTask('sales.xlsx 분석', 'sandbox', { files, images });
+    await client.createTask('분석', 'sandbox', { files: [], images: [] });
+    assert.deepEqual(seen[0].body, { goal: 'sales.xlsx 분석', files, images });
+    assert.deepEqual(seen[1].body, { goal: '분석' });
+});
+
 test('작업 실행: 승인 방식을 본문에 싣는다', async () => {
     const { baseUrl, seen } = await serve({ 'POST /api/agent-tasks/t1/execute': { status: 202, body: { success: true, data: { taskId: 't1' } } } });
     await createTaskClient({ baseUrl, apiKey: 'k' }).executeTask('t1', 'all');
