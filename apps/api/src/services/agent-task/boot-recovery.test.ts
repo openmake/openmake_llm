@@ -24,6 +24,10 @@ jest.mock('../../data/repositories/agent-task-repository', () => ({
     AgentTaskRepository: jest.fn().mockImplementation(() => ({
         getInterruptedAgentTasks: async () => interrupted,
         claimAgentTaskForRecovery: claim,
+    })),
+}));
+jest.mock('../../data/repositories/agent-task-lease-repository', () => ({
+    AgentTaskLeaseRepository: jest.fn().mockImplementation(() => ({
         listExpiredLeaseTasks: async () => expired,
         takeOverExpiredLease: takeOver,
     })),
@@ -179,8 +183,8 @@ describe('sweepExpiredTaskLeases — 소유권이 지난 작업을 가져와 이
     });
 
     it('조회가 실패해도 던지지 않는다', async () => {
-        const { AgentTaskRepository } = jest.requireMock('../../data/repositories/agent-task-repository') as { AgentTaskRepository: jest.Mock };
-        AgentTaskRepository.mockImplementationOnce(() => ({ listExpiredLeaseTasks: async () => { throw new Error('db down'); } }));
+        const { AgentTaskLeaseRepository } = jest.requireMock('../../data/repositories/agent-task-lease-repository') as { AgentTaskLeaseRepository: jest.Mock };
+        AgentTaskLeaseRepository.mockImplementationOnce(() => ({ listExpiredLeaseTasks: async () => { throw new Error('db down'); } }));
         await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 0 });
     });
 });

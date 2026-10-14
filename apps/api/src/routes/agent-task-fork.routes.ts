@@ -13,6 +13,7 @@ import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
 import { AgentTaskRepository } from '../data/repositories/agent-task-repository';
+import { AgentTaskCheckpointRepository } from '../data/repositories/agent-task-checkpoint-repository';
 import { AgentTaskParkRepository } from '../data/repositories/agent-task-park-repository';
 import { loadOwnedTask } from './agent-task.helpers';
 import { buildForkNotice } from '../prompts/agent-task-prompt';
@@ -28,7 +29,7 @@ export const forkRouter = Router();
 forkRouter.get('/:taskId/checkpoints', asyncHandler(async (req: Request, res: Response) => {
     const task = await loadOwnedTask(req, res, req.params.taskId);
     if (!task) return;
-    res.json(success({ checkpoints: await new AgentTaskRepository(getPool()).listCheckpoints(task.id) }));
+    res.json(success({ checkpoints: await new AgentTaskCheckpointRepository(getPool()).listCheckpoints(task.id) }));
 }));
 
 forkRouter.post('/:taskId/fork', asyncHandler(async (req: Request, res: Response) => {
@@ -39,7 +40,7 @@ forkRouter.post('/:taskId/fork', asyncHandler(async (req: Request, res: Response
     // 체크포인트 턴은 0 기준 완료 턴 번호다(첫 턴 도중의 턴 중간 체크포인트는 -1) — turn-reentry.writeTurnCheckpoint 와 짝.
     if (!Number.isInteger(fromTurn) || fromTurn < -1) return res.status(400).json(badRequest('fromTurn 은 -1 이상의 정수여야 합니다.'));
     const repo = new AgentTaskRepository(getPool());
-    const cp = await repo.getCheckpoint(src.id, fromTurn);
+    const cp = await new AgentTaskCheckpointRepository(getPool()).getCheckpoint(src.id, fromTurn);
     if (!cp) return res.status(404).json(notFound(`턴 ${fromTurn} 의 체크포인트가 없습니다(이력은 최근 것만 보존).`));
     const goal = typeof body.goal === 'string' && body.goal.trim() ? body.goal.trim() : src.goal;
     // 턴 중간 체크포인트는 결과 없는 tool_call 이 매달려 있다 — 그 assistant 부터 잘라 새 워크스페이스에서 그 턴을 다시 수행한다.
