@@ -82,6 +82,9 @@ interface ApprovalResult {
     waitedMs: number;
 }
 
+/** 내부 결정 — 결정자(REST actorId)는 agent_task_approvals.decided_by 로만 가고 호출자 결과에는 싣지 않는다. */
+type ApprovalDecisionInput = Omit<ApprovalResult, 'waitedMs'> & { decidedBy?: string };
+
 /**
  * PURE: HITL 무응답 강등 — 승인을 요구할 도구(+승인 정책과 무관하게 항상 사람을 기다리는
  * ask_human)를 도구 세트에서 제거한다. 사용자 부재 시 남은 턴을 승인 불요 경로로 강제해
@@ -118,7 +121,7 @@ export interface PendingApproval {
 
 interface Waiter {
     pending: PendingApproval;
-    resolve: (r: ApprovalResult) => void;
+    resolve: (r: ApprovalResult & { decidedBy?: string }) => void;
     timer: NodeJS.Timeout;
     /** 자동승인에서도 묻는 바닥 호출(approval-floor) — 요청 시점의 원래 인자로 판정해 둔다. */
     floor: boolean;
@@ -287,7 +290,7 @@ export class ApprovalRegistry {
             void this.event(approvalId, 'requested', null, { toolName: input.toolName, riskClass, ...(opts.policy ? { policy: opts.policy } : {}) });
         }
         return new Promise<ApprovalResult>((resolvePromise) => {
-            const settle = (r: Omit<ApprovalResult, 'waitedMs'>) => {
+            const settle = ({ decidedBy, ...r }: ApprovalDecisionInput) => {
                 const w = this.waiters.get(approvalId);
                 if (!w) return;
                 clearTimeout(w.timer);
@@ -298,7 +301,7 @@ export class ApprovalRegistry {
                 // 살아 있는 waiter 의 결정은 즉시 실행(소비)된다 — consumed 표시로 재시작 이어받기·철회(138) 대상에서 뺀다
                 else void this.persist((s) => s.markDecided(approvalId,
                     r.decision === 'approved' ? 'approved' : r.reason === 'timeout' ? 'expired' : r.reason === 'abort' ? 'aborted' : 'rejected',
-                    r.text, undefined, true));
+                    r.text, decidedBy, true));
                 resolvePromise({ ...r, waitedMs: Date.now() - pending.createdAt });
             };
             const graceMs = this.parkGraceMs(opts.parkable, opts.timeoutMs);
@@ -316,17 +319,17 @@ export class ApprovalRegistry {
 
     /** 메모리 waiter 가 없으면(프로세스 재시작으로 작업이 내려간 상태) 저장소 pending 행에 결정만 남긴다 —
      *  재개된 작업이 같은 호출을 다시 요청할 때 takeoverForCall 로 소비한다. */
-    private settleOrPersist(approvalId: string, r: Omit<ApprovalResult, 'waitedMs'>): Promise<boolean> {
+    private settleOrPersist(approvalId: string, r: ApprovalDecisionInput): Promise<boolean> {
         const w = this.waiters.get(approvalId);
         if (w) { w.resolve({ ...r, waitedMs: Date.now() - w.pending.createdAt }); return Promise.resolve(true); }
-        return this.persist((s) => s.markDecided(approvalId, r.decision === 'approved' ? 'approved' : 'rejected', r.text))
+        return this.persist((s) => s.markDecided(approvalId, r.decision === 'approved' ? 'approved' : 'rejected', r.text, r.decidedBy))
             .then((ok) => ok === true);
     }
 
     /** REST 승인 — owner 검증은 호출부 책임. 성공 시 true. */
     approve(approvalId: string, actorId?: string): Promise<boolean> {
         void this.event(approvalId, 'approved', actorId);
-        return this.settleOrPersist(approvalId, { decision: 'approved' });
+        return this.settleOrPersist(approvalId, { decision: 'approved', decidedBy: actorId });
     }
 
     /**
@@ -368,7 +371,7 @@ export class ApprovalRegistry {
     /** REST 거절 — reasonText 는 사용자가 적은 사유(선택). 답변과 같은 칸(answer_text)에 남아 재시작 뒤에도 모델에 전달된다. */
     reject(approvalId: string, actorId?: string, reasonText?: string): Promise<boolean> {
         void this.event(approvalId, 'rejected', actorId);
-        return this.settleOrPersist(approvalId, { decision: 'rejected', reason: 'user', ...(reasonText ? { text: reasonText } : {}) });
+        return this.settleOrPersist(approvalId, { decision: 'rejected', reason: 'user', decidedBy: actorId, ...(reasonText ? { text: reasonText } : {}) });
     }
 
     /**
@@ -378,7 +381,7 @@ export class ApprovalRegistry {
      */
     answer(approvalId: string, text: string, actorId?: string): Promise<boolean> {
         void this.event(approvalId, 'answered', actorId, { chars: text.length });
-        return this.settleOrPersist(approvalId, { decision: 'approved', text });
+        return this.settleOrPersist(approvalId, { decision: 'approved', text, decidedBy: actorId });
     }
 
     /** 작업 종료 시 저장소에 남은 pending 정리(124) — 메모리 waiter 는 signal abort 가 이미 해소했다. */
