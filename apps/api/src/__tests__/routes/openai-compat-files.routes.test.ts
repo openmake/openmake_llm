@@ -28,6 +28,8 @@ jest.mock('../../data/repositories/oaicompat-session-repo', () => ({
 
 // 추출기 mock: data(base64) → content 로 in-place 치환 (실제 계약과 같은 모양)
 jest.mock('../../services/chat-service/doc-extractor', () => ({
+    // extracted 판정(isBinaryDocumentName)은 실제 규칙 그대로 쓴다
+    isBinaryDocumentName: jest.requireActual('../../services/chat-service/doc-extractor').isBinaryDocumentName,
     extractAttachedDocuments: jest.fn(async (files: AttachedFileInput[] | undefined) => {
         for (const f of files ?? []) {
             if (typeof f.data === 'string') {
@@ -96,6 +98,30 @@ describe('openai-compat files[] 확장', () => {
         expect(res.status).toBe(200);
         expect(extractAttachedDocuments).not.toHaveBeenCalled();
         expect(processChatSpy.mock.calls[0][0].fileContext).toBeUndefined();
+    });
+
+    it.each([false, true])('stream=%s: 위임 작업용 attachments 에 추출 전 원본과 이미지를 싣는다', async (stream) => {
+        const res = await request(mkApp())
+            .post('/api/v1/chat/completions')
+            .send({
+                ...baseBody(stream, [{ name: 'report.pdf', type: 'application/pdf', size: 3, data: 'QUJD' }]),
+                messages: [{ role: 'user', content: [
+                    { type: 'text', text: '첨부를 분석해, 백그라운드로' },
+                    { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+                ] }],
+            });
+        expect(res.status).toBe(200);
+        expect(processChatSpy.mock.calls[0][0].attachments).toEqual({
+            files: [{ name: 'report.pdf', type: 'application/pdf', size: 3, content: '추출본:report.pdf', data: 'QUJD', extracted: true }],
+            images: ['data:image/png;base64,iVBORw0KGgo='],
+        });
+    });
+
+    it('첨부가 없으면 attachments 를 넘기지 않는다', async () => {
+        await request(mkApp())
+            .post('/api/v1/chat/completions')
+            .send({ model: 'test-model', messages: [{ role: 'user', content: '안녕' }] });
+        expect(processChatSpy.mock.calls[0][0]).not.toHaveProperty('attachments');
     });
 
     it.each([

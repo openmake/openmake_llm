@@ -224,6 +224,13 @@ export const DOC_EXTRACT_LIMITS = {
      * kordoc(순수 JS, 한컴오피스·JVM 불요)이 HWP 3.x/5.x·HWPX·HWPML 을 마크다운으로 낸다.
      */
     HWP_EXTS: ['hwp', 'hwpx', 'hml'] as readonly string[],
+    /**
+     * 텍스트로 풀어 쓸 확장자(base64 data → UTF-8 → content).
+     * REST 클라이언트(봇 등)는 텍스트 파일도 base64 로 보내는데, 위 목록에 없어 data 가 버려지고
+     * "바이너리 메타"로만 들어갔다. 실제 판정은 NUL 바이트·UTF-8 디코딩 검사를 함께 통과해야 한다.
+     */
+    TEXT_EXTS: ['txt', 'csv', 'tsv', 'md', 'markdown', 'json', 'jsonl', 'xml', 'yaml', 'yml', 'log', 'ini', 'cfg',
+        'conf', 'toml', 'html', 'htm', 'css', 'js', 'ts', 'py', 'sh', 'sql'] as readonly string[],
     /** kordoc 추출 타임아웃 (ms) — 순수 JS 파서라 JVM 경로보다 짧게 잡는다 */
     HWP_TIMEOUT_MS: parseInt(process.env.DOC_EXTRACT_HWP_TIMEOUT_MS || '30000', 10),
     /** 스캔본 PDF OCR 폴백 on/off (기본 on — opendataloader 가 텍스트를 못 뽑으면 officeparser+tesseract 로 재시도) */

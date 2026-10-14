@@ -38,7 +38,7 @@ import {
     createAgentTaskSchema, executeAgentTaskSchema,
     type CreateAgentTaskInput, type ExecuteAgentTaskInput,
 } from '../schemas/agent-task.schema';
-import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
+import { extractAttachedDocuments, isBinaryDocumentName } from '../services/chat-service/doc-extractor';
 import { getSteeringRegistry } from '../services/agent-task/steering';
 import { dispatchAgentTask, resolveQueuePriority } from '../services/agent-task/task-queue';
 import { listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
@@ -181,7 +181,7 @@ router.post('/', (req: Request, res: Response, next) => {
             size: f.size,
             truncated: f.truncated,
             ...(originalData[i] ? { data: originalData[i] } : {}),
-            ...(originalData[i] && typeof f.content === 'string' ? { extracted: true } : {}),
+            ...(originalData[i] && typeof f.content === 'string' && isBinaryDocumentName(f.name) ? { extracted: true } : {}),
         }));
     }
 
@@ -225,7 +225,7 @@ router.post('/', (req: Request, res: Response, next) => {
                 if (typeof probe.content === 'string') {
                     entry.content = probe.content;
                     entry.truncated = probe.truncated;
-                    entry.extracted = true;
+                    if (isBinaryDocumentName(name)) entry.extracted = true;
                 }
             }
             stored.push(entry);

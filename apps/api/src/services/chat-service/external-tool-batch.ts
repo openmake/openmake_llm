@@ -149,6 +149,7 @@ export async function runToolCallBatch(params: {
                     userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },
                     ...(req.userLanguagePreference ? { userLanguage: req.userLanguagePreference } : {}),
                     ...(req.abortSignal ? { signal: req.abortSignal } : {}),
+                    attachments: req.attachments,
                 });
             // 위임한 백그라운드 작업을 ctx 에 남긴다 — REST 응답의 agent_tasks 로 나가 클라이언트가 지켜본다.
             recordDelegatedTask(ctx, tc.name, tc.args as Record<string, unknown>, toolResult);
