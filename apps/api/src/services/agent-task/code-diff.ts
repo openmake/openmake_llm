@@ -33,11 +33,12 @@ const GIT = 'git -c safe.directory=/workspace -c user.email=agent@openmake.local
  * (resume 재진입 시 이전 실행의 에이전트 변경분이 baseline 에 흡수되어 diff 에서 사라지는
  * 것을 막는다.) 입력 첨부(uploads/) 기록 후에 호출해 첨부가 baseline 에 포함되게 한다.
  */
-export async function initWorkspaceBaseline(runtime: TaskRuntime, forkOrigin?: ForkOrigin): Promise<void> {
+export async function initWorkspaceBaseline(runtime: TaskRuntime, forkOrigin?: ForkOrigin, opts: { forceRestore?: boolean } = {}): Promise<boolean> {
     // 로컬 실행기(D1a): 사용자 폴더에 git init/commit 을 만들면 안 된다 — diff 캡처 자체를 생략.
-    if (runtime.localWorkdir === null) return;
+    if (runtime.localWorkdir === null) return false;
     // fork 한 작업이면 기준점을 만들기 전에 원 작업의 그 시점 파일을 복원한다 — 복원분이 기준점에 들어가 diff 가 자기 변경분만 담는다.
-    await restoreForkedWorkspace(runtime, forkOrigin);
+    // 반환값: 복원 성공 여부 — 장기 실행 후속(forceRestore)은 전역 플래그와 무관하게 복원한다(188).
+    const restored = await restoreForkedWorkspace(runtime, forkOrigin, { force: !!opts.forceRestore });
     try {
         const r = await runtime.execRaw(
             `[ -d .git ] || { ${GIT} init -q && ${GIT} add -A && ${GIT} commit -q --allow-empty -m baseline; }`,
@@ -48,6 +49,7 @@ export async function initWorkspaceBaseline(runtime: TaskRuntime, forkOrigin?: F
     } catch (e) {
         logger.warn(`[AgentTask] git baseline 실패: ${e instanceof Error ? e.message : e}`);
     }
+    return restored;
 }
 
 /**

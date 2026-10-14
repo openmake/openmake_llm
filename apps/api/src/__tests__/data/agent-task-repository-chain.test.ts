@@ -52,6 +52,15 @@ describe('AgentTaskRepository — 체인 열(188)', () => {
         expect(query.mock.calls[0][1]).toEqual(['a', 'b']);
     });
 
+    it('resetContinuation 은 그 후속 id 일 때만 continued_by_task_id 를 비운다', async () => {
+        const query = jest.fn().mockResolvedValue({ rowCount: 1, rows: [] });
+        await chainRepoWith(query).resetContinuation('a', 'b');
+        const sql = String(query.mock.calls[0][0]);
+        expect(sql).toMatch(/continued_by_task_id = NULL/);
+        expect(sql).toMatch(/continued_by_task_id = \$2/);
+        expect(query.mock.calls[0][1]).toEqual(['a', 'b']);
+    });
+
     it('markChainCancelled 는 long_running 에 cancelled 를 병합한다', async () => {
         const query = jest.fn().mockResolvedValue({ rowCount: 1, rows: [] });
         await chainRepoWith(query).markChainCancelled('root');
