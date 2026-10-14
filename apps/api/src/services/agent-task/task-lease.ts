@@ -16,7 +16,7 @@
  * @module services/agent-task/task-lease
  */
 import { getPool } from '../../data/models/unified-database';
-import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
+import { AgentTaskLeaseRepository } from '../../data/repositories/agent-task-lease-repository';
 import { AgentTaskRunRepository } from '../../data/repositories/agent-task-run-repository';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
@@ -59,7 +59,7 @@ export async function beginTaskLease(taskId: string, onLost: () => void): Promis
     if (!AGENT_TASK_LIMITS.LEASE_ENABLED) return NO_LEASE;
     const me = leaseOwner();
     const leaseMs = AGENT_TASK_LIMITS.LEASE_MS;
-    const repo = (): AgentTaskRepository => new AgentTaskRepository(getPool());
+    const repo = (): AgentTaskLeaseRepository => new AgentTaskLeaseRepository(getPool());
     try {
         if (!(await repo().acquireLease(taskId, me, leaseMs))) {
             logger.warn(`[${taskId}] 다른 서버가 실행 중인 작업 — 이 프로세스는 실행하지 않는다`);

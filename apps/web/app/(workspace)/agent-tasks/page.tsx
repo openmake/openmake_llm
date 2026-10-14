@@ -98,6 +98,8 @@ interface AgentTask {
   chainRootId?: string;
   continuedFromId?: string;
   completionPath?: string;
+  /** 체인 세그먼트 수(루트 포함) — 목록 응답의 루트 행에만 서버 집계로 온다 */
+  chainSegmentCount?: number;
 }
 
 type PlanStepStatus = "not_started" | "in_progress" | "completed" | "blocked";
@@ -156,6 +158,8 @@ interface ApiAgentTask {
   continued_from_task_id?: string | null;
   continued_by_task_id?: string | null;
   completion_path?: string | null;
+  /** 체인 세그먼트 수 — 목록 응답의 체인 루트 행에만 온다(서버 집계) */
+  chain_segment_count?: number;
   /** 체인 요약 — 상세 응답에만, 체인 작업일 때만 온다 */
   chain?: {
     rootId: string;
@@ -261,6 +265,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     chainRootId: t.chain_root_task_id || undefined,
     continuedFromId: t.continued_from_task_id || undefined,
     completionPath: t.completion_path || undefined,
+    chainSegmentCount: typeof t.chain_segment_count === "number" ? t.chain_segment_count : undefined,
   };
 }
 
@@ -1425,11 +1430,11 @@ export default function AgentTasksPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {/* 장기 실행 체인: 후속 세그먼트는 접고 루트 카드만 — 세그먼트 수는 목록에 있는 같은 체인 행 수 */}
+            {/* 장기 실행 체인: 후속 세그먼트는 접고 루트 카드만 — 세그먼트 수는 서버 집계(chain_segment_count), 없으면 목록에 있는 같은 체인 행 수 */}
             {tasks.filter((x) => !x.continuedFromId).map((task) => {
               const meta = STATUS_META[task.status];
               const chainSegments = task.chainRootId === task.id
-                ? Math.max(1, tasks.filter((x) => x.chainRootId === task.id).length)
+                ? task.chainSegmentCount ?? Math.max(1, tasks.filter((x) => x.chainRootId === task.id).length)
                 : 0;
               const handedOff = task.rawStatus === "completed" && task.completionPath === "continued";
               const total = task.checklist.length;

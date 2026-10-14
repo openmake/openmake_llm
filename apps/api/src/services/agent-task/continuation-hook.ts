@@ -4,6 +4,7 @@
  */
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { AGENT_TASK_LONG_RUNNING } from '../../config/agent-task-long-running';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import type { AgentTask } from '../../data/models/unified-database.types';
 import { AgentTaskChainRepository } from '../../data/repositories/agent-task-chain-repository';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
@@ -26,6 +27,19 @@ export async function loadChainContext(taskId: string, preloaded?: AgentTask): P
     if (!task?.chain_root_task_id) return null;
     const root = task.chain_root_task_id === task.id ? task : await db.getAgentTask(task.chain_root_task_id);
     return root?.long_running ? { task, root } : null;
+}
+
+/**
+ * PURE: 실효 세그먼트 시간 상한 — 체인 작업이면 min(세그먼트 상한 totalTimeoutMs, 체인 남은 시간 = maxDurationMs − 앞 세그먼트 누적 chainUsedMs).
+ * 체인 예산은 턴 시작의 판정(chainBudgetState)만 보던 탓에, 체인 남은 시간이 세그먼트 상한보다 짧아도 마지막 세그먼트가 끝까지 돌았다.
+ * 하한: 지금까지의 활성 시간 + 한 턴 예산(TURN_TIME_BUDGET_MS) — 남은 시간이 그보다 짧으면(0 이하 포함) 최소 한 턴은 돈다.
+ * 체인이 아니면 totalTimeoutMs 그대로. 서비스는 이 값을 assertWithinLimits·턴 호출 예산·'time' 판정(segmentTimeoutMs)에 함께 쓴다.
+ */
+export function effectiveSegmentTimeoutMs(ctx: ChainContext | null, totalTimeoutMs: number, elapsedActiveMs = 0): number {
+    const limits = ctx?.root.long_running;
+    if (!ctx || !limits) return totalTimeoutMs;
+    const remaining = limits.maxDurationMs - (ctx.task.continuation?.chainUsedMs ?? 0);
+    return Math.min(totalTimeoutMs, Math.max(remaining, elapsedActiveMs + AGENT_TASK_LIMITS.TURN_TIME_BUDGET_MS));
 }
 
 /**

@@ -53,6 +53,10 @@ jest.mock('../data/repositories/agent-task-repository', () => ({
             store.parked = null; store.task.status = 'pending'; store.events.push('pending');
             return true;
         },
+    })),
+}));
+jest.mock('../data/repositories/agent-task-checkpoint-repository', () => ({
+    AgentTaskCheckpointRepository: jest.fn().mockImplementation(() => repoOf({
         setInFlightToolCall: async (_id: never, callId: never) => { store.inFlight = callId; },
         getInFlightToolCall: async () => store.inFlight,
         getToolCallJournal: async (_id: never, ids: never) => new Map(store.steps
