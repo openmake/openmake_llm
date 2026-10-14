@@ -39,9 +39,8 @@ import {
     type CreateAgentTaskInput, type ExecuteAgentTaskInput,
 } from '../schemas/agent-task.schema';
 import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
-import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getSteeringRegistry } from '../services/agent-task/steering';
-import { dispatchAgentTask, resolveQueuePriority, getAgentTaskQueue } from '../services/agent-task/task-queue';
+import { dispatchAgentTask, resolveQueuePriority } from '../services/agent-task/task-queue';
 import { listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import multer from 'multer';
 import * as fs from 'fs/promises';
@@ -53,10 +52,13 @@ import {
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 import { resolveDuplicateCreate, normalizedCreateKey, rememberCreatedTask } from '../services/agent-task/create-idempotency';
-import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, sendWorkspaceFile, toPublicTask, validateLocalExecutorInput, waitReasonOf } from './agent-task.helpers';
+import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, sendWorkspaceFile, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 import { approvalsRouter } from './agent-task-approvals.routes';
 import { forkRouter } from './agent-task-fork.routes';
 import { browserSessionRouter } from './agent-task-browser-session.routes';
+import { cancelRouter } from './agent-task-cancel.routes';
+import { longRunningCreateFields } from './agent-task-long-running';
+import { chainTaskList, detailPayload } from './agent-task-chain';
 import { getPlanEditRegistry } from '../services/agent-task/plan-edits';
 import { TaskPlan, type PlanStepInput } from '../services/task-sandbox/planning';
 import { getPool } from '../data/models/unified-database';
@@ -152,6 +154,7 @@ router.post('/', (req: Request, res: Response, next) => {
         }
     }
 
+    const chainFields = longRunningCreateFields(input.longRunning, req.user!.role, taskId); // 장기 실행 체인(188) — 게이트·역할·상한, 거절은 400(첨부 클레임 전)
     // 중복 생성 방지 — 같은 Idempotency-Key 의 재요청(더블 클릭·재전송)은 처음 만든 작업을 돌려준다. 첫 await 전에 판정한다.
     const createKey = normalizedCreateKey(req.get('Idempotency-Key'));
     const dup = await resolveDuplicateCreate({ userId, rawKey: createKey, taskId, res, loadTask: (id) => db.getAgentTask(id), findByKey: (u, k) => db.findAgentTaskByCreateKey(u, k) });
@@ -250,6 +253,7 @@ router.post('/', (req: Request, res: Response, next) => {
         executor,
         deviceId: executor === 'local' ? deviceId : undefined,
         folderRel: executor === 'local' ? folderRel : undefined,
+        ...chainFields,
     });
     if (!created && createKey) {
         // 같은 키의 작업을 다른 서버(또는 재시작 전 프로세스)가 먼저 만들었다 — 방금 받은 첨부를 치우고 그 작업을 돌려준다.
@@ -290,7 +294,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
         ? await db.getAllAgentTasks(AGENT_TASK_LIMITS.LIST_ALL_DEFAULT)
         : await db.getUserAgentTasks(userId);
     // ?executor=local&deviceId=…&status=failed,cancelled — CLI 목록용 부가 필터(권한 범위 무변경)
-    const tasks = filterTaskList(fetched, req.query);
+    const tasks = typeof req.query.chain === 'string' ? await chainTaskList(req) : filterTaskList(fetched, req.query);
     res.json(success({ tasks: tasks.map(t => toPublicTask(t as unknown as Record<string, unknown>)), total: tasks.length }));
 }));
 
@@ -303,7 +307,7 @@ router.get('/:taskId', asyncHandler(async (req: Request, res: Response) => {
     if (!task) return;
     const db = getUnifiedDatabase();
     const steps = await db.getAgentTaskSteps(req.params.taskId);
-    res.json(success({ task: { ...toPublicTask(task as unknown as Record<string, unknown>), ...(await waitReasonOf(task)) }, steps }));
+    res.json(success(await detailPayload(task, steps)));
 }));
 
 /**
@@ -396,33 +400,6 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
         taskId: task.id,
         queued: outcome === 'queued',
     }));
-}));
-
-/**
- * POST /api/agent-tasks/:taskId/cancel
- * 실행 중 작업 취소
- */
-router.post('/:taskId/cancel', asyncHandler(async (req: Request, res: Response) => {
-    const task = await loadOwnedTask(req, res, req.params.taskId);
-    if (!task) return;
-
-    const signaled = AgentTaskService.cancel(task.id);
-    if (signaled) {
-        // AbortController 신호됨 — execute 루프가 cancelled 로 상태 갱신
-        return res.json(success({ message: '작업 취소를 요청했습니다.', taskId: task.id }));
-    }
-
-    // 실행 전 대기열(queued)에 있으면 큐에서 제거 후 상태 정리(아직 execute 미시작이라 AbortController 없음).
-    const dequeued = getAgentTaskQueue().cancelPending(task.id);
-
-    // 레지스트리에 없음: DB 상 running/queued/pending·paused(질문 응답 대기 주차 F16.7 — 남은 질문 승인도 만료) 이면 상태 정리
-    if (dequeued || ['running', 'pending', 'queued', 'paused'].includes(task.status)) {
-        const db = getUnifiedDatabase();
-        await db.updateAgentTask(task.id, { status: 'cancelled' });
-        if (task.status === 'paused') getApprovalRegistry().closeTask(task.id);
-        return res.json(success({ message: '작업이 취소되었습니다.', taskId: task.id }));
-    }
-    return res.status(400).json(badRequest('실행 중이거나 대기 중인 작업이 아닙니다.'));
 }));
 
 /**
@@ -591,7 +568,7 @@ router.put('/:taskId/plan', validate(updatePlanSchema), asyncHandler(async (req:
 
 // 승인(HITL) 라우트는 agent-task-approvals.routes.ts (600줄 게이트로 분리, 2026-09-17) — 라우트 순서(answer → :decision)는 그 파일이 지킨다.
 router.use(approvalsRouter);
-// 체크포인트 이력·분기(141)는 agent-task-fork.routes.ts, 브라우저 넘겨받기는 agent-task-browser-session.routes.ts
-router.use(forkRouter, browserSessionRouter);
+// 체크포인트 이력·분기(141)는 agent-task-fork.routes.ts, 브라우저 넘겨받기는 agent-task-browser-session.routes.ts, 취소는 agent-task-cancel.routes.ts
+router.use(forkRouter, browserSessionRouter, cancelRouter);
 
 export default router;

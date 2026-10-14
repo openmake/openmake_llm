@@ -16,6 +16,9 @@ export interface TaskSnapshot {
     maxTurns: number;
     result: string | null;
     error: string | null;
+    /** 이어가기(188) — 이 작업을 이어받은 후속 작업 id. 있으면 감시기가 그쪽으로 옮겨 간다 */
+    continuedByTaskId: string | null;
+    completionPath: string | null;
 }
 
 export interface PendingApproval {
@@ -48,6 +51,7 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 
 interface RawTask {
     id?: unknown; status?: unknown; progress?: unknown; current_turn?: unknown; max_turns?: unknown; result?: unknown; error?: unknown;
+    continued_by_task_id?: unknown; completion_path?: unknown;
 }
 
 const numberOr = (value: unknown, fallback: number): number => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
@@ -62,6 +66,8 @@ function toSnapshot(raw: RawTask): TaskSnapshot {
         maxTurns: numberOr(raw.max_turns, 0),
         result: stringOrNull(raw.result),
         error: stringOrNull(raw.error),
+        continuedByTaskId: stringOrNull(raw.continued_by_task_id),
+        completionPath: stringOrNull(raw.completion_path),
     };
 }
 

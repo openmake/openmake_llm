@@ -1163,7 +1163,11 @@
       "low": "Low",
       "medium": "Medium",
       "high": "High"
-    }
+    },
+    "chainSegment": "Continued segment {index}/{count}",
+    "chainRoot": "Long-running ({count} segments)",
+    "chainContinuedTag": "Continued in next segment",
+    "chainBudget": "Chain usage {usedMinutes} min · {usedTokens} tokens · {segments}/{maxSegments} segments"
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

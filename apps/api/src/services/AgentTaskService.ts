@@ -35,7 +35,7 @@ import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { getApprovalRegistry } from './task-sandbox/approval-gate';
 import { currentPlanStepIndex } from './task-sandbox/planning';
-import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
+import { shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { parkForMissingDevice } from './agent-task/device-wait';
 import { parkForModelOutage } from './agent-task/model-wait';
@@ -45,7 +45,7 @@ import { partialResultOf } from './agent-task/turn-call';
 import { injectTaskInputs } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted, type VerifyHold } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
-import { initWorkspaceBaseline } from './agent-task/code-diff';
+import { loadChainContext, gateTurnWithContinuation, prepareSegmentWorkspace } from './agent-task/continuation-hook';
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
 import { trackAgentTaskRun, isShutdownAbort, recordShutdownInterrupt } from './agent-task/shutdown-drain';
@@ -146,7 +146,7 @@ export class AgentTaskService {
         let curProgress = 0;
         let curTurn = 0;
         let taskRuntime: TaskRuntime | null = null;
-        let parked = false, interrupted = false; // 질문 응답 대기 주차(F16.7)·서버 종료로 끊김 — finally 가 승인·workspace 를 남긴다
+        let parked = false, interrupted = false, continuedToSuccessor = false; // 질문 응답 대기 주차(F16.7)·서버 종료로 끊김·이어가기(188) — finally 가 승인·workspace 를 남긴다
         const recentSignatures: string[] = [];
         let stuckNotified = false, stuckPending = false;
         let emptyRetries = 0;
@@ -169,7 +169,7 @@ export class AgentTaskService {
             curTurn = u.currentTurn ?? curTurn;
             // 누적 토큰 영속(4-4) — 매 갱신에 싣는다: 종료 때만 쓰면 주차·중단된 작업은 값이 안 남아 재개가 0 부터 다시 셌다.
             // terminal 전이엔 알림 표식(174)도 같은 쓰기로 남긴다 — 저장 직후 죽어도 주기 점검이 종료 알림을 다시 보낸다.
-            const terminal = isTerminalStatus(u.status);
+            const terminal = isTerminalStatus(u.status) && u.completionPath !== 'continued'; // 이어짐 마감(188)은 종료 알림을 보내지 않는다
             u = { ...u, totalTokens, ...cacheUsage.snapshot(), ...(terminal ? { terminalNotifyPending: true } : {}) };
             await db.updateAgentTask(taskId, u);
             emitAgentTaskProgress({ userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn });
@@ -192,6 +192,7 @@ export class AgentTaskService {
             // (종전엔 resume 이 영속 cancelled 를 무시했다 — 취소된 작업 재개가 202 직후 다시 aborted 로 끝나던 2026-08-26 문제는 claim 이 해결한다.)
             const preTask = await db.getAgentTask(taskId);
             if (signal.aborted || preTask?.status === 'cancelled') throw new AgentTaskAbort('aborted');
+            let chainCtx = await loadChainContext(taskId, preTask); // 장기 실행 체인(188)이면 현재·루트 행 — 아니면 null(종전과 같다)
             // resume: 이전 실행분 토큰을 이어서 누적(4-4) — runaway 토큰 가드도 통산 기준으로 동작.
             // "나머지 모두 승인" 도 함께 복원(124) — 종전엔 메모리뿐이라 재시작 후 다시 물었다.
             if (input.resume) { totalTokens = Number(preTask?.total_tokens ?? 0); cacheUsage.restore(preTask); }
@@ -300,7 +301,7 @@ export class AgentTaskService {
             // 입력 첨부 주입(파일·이미지) — 상세는 agent-task/task-inputs.
             await injectTaskInputs(input, conversation, taskRuntime);
             // 코드 작업 diff 캡처(openmake_code v1) — 첨부까지 기록된 시점을 git baseline 스냅샷(멱등·fail-open).
-            if (taskRuntime && sandboxCfg.codeDiffEnabled) await initWorkspaceBaseline(taskRuntime, preTask);
+            if (taskRuntime) await prepareSegmentWorkspace(taskRuntime, preTask, sandboxCfg.codeDiffEnabled, input.executor); // 이어받은 세그먼트는 강제 복원(188, continuation-hook)
 
             // LLM 에 전달할 도구 세트 조립(샌드박스 도구 + extraTools + 2-A 동적 도구). 상세는
             // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
@@ -350,12 +351,13 @@ export class AgentTaskService {
 
                 // 턴 자원 가드(검색/브라우저 cap·마무리 턴·HITL 무응답 강등) — 도구 세트 축소 +
                 // 최초 발동 시 nudge 주입·스텝 기록. 판정 근거는 agent-task/turn-gate 참고.
-                const gate = await applyTurnResourceGates({
+                const gr = await gateTurnWithContinuation({ chain: chainCtx, model: roleState.client.model, cont: { roleState, signal, taskRuntime, userRole, activeMs: Date.now() - startedAt - pausedMs, segmentTimeoutMs: totalTimeoutMs, approvalPolicy, thinkingLevel: roleState.thinkingLevel, update }, gate: {
                     taskId, turn, startTurn, turnCeiling, totalTokens,
                     searchCalls, browserCalls, approvalTimeouts,
                     tools, sandboxCfg, conversation, flags: gateFlags, stepNumber, emitStep,
-                });
-                stepNumber = gate.stepNumber;
+                } });
+                if (!gr.gate) { continuedToSuccessor = true; return; } // 이어가기(188): 후속 세그먼트로 넘김. 실패면 체인을 끄고 이 턴이 종전 마무리 턴(continuation-hook). 활성 시간은 주차 제외
+                chainCtx = gr.chain; const gate = gr.gate; stepNumber = gate.stepNumber;
                 const { effectiveTools, finalTurnReason } = gate;
 
                 // 실행 중 사용자 중간 지시(steering) — 이 턴 경계에 도착한 지시를 conversation 에
@@ -591,7 +593,7 @@ export class AgentTaskService {
             if (AgentTaskService.running.get(taskId) === this) AgentTaskService.running.delete(taskId); // 내 등록일 때만 — 다른 인스턴스 것을 지우지 않는다
             await lease.end();
             // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup. 소유권을 잃었으면 새 소유자가 쓰고 있어 건너뛴다.
-            if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber, interrupted });
+            if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber, interrupted, keepWorkspace: continuedToSuccessor });
         }
     }
 }

@@ -13,7 +13,7 @@ const OTHER_ALLOWED = 'u-other';
 const STRANGER = 'u-stranger';
 
 const baseConfig: TaskControllerConfig = { allowedUsers: [OWNER, OTHER_ALLOWED], executor: 'sandbox', approvalPolicy: 'all', pollMs: 1, watchMaxMs: 60_000 };
-const snap = (over: Partial<TaskSnapshot>): TaskSnapshot => ({ id: 't1', status: 'running', progress: 0, currentTurn: 0, maxTurns: 32, result: null, error: null, ...over });
+const snap = (over: Partial<TaskSnapshot>): TaskSnapshot => ({ id: 't1', status: 'running', progress: 0, currentTurn: 0, maxTurns: 32, result: null, error: null, continuedByTaskId: null, completionPath: null, ...over });
 
 interface Fake extends TaskClient { log: string[]; snapshots: TaskSnapshot[]; pending: PendingApproval[]; connected: boolean; failExecute: boolean; decision: 'ok' | 'gone' }
 

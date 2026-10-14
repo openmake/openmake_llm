@@ -46,12 +46,19 @@ describe('code-diff', () => {
             const origin = { forked_from_task_id: 'src', forked_from_turn: 1 };
             await initWorkspaceBaseline(fakeRuntime(execRaw), origin);
             expect(order).toEqual(['restore', 'baseline']);
-            expect(restoreForkedWorkspace).toHaveBeenCalledWith(expect.anything(), origin);
+            expect(restoreForkedWorkspace).toHaveBeenCalledWith(expect.anything(), origin, { force: false });
+        });
+
+        it('forceRestore 면 복원을 강제하고 복원 결과를 돌려준다(장기 실행 후속)', async () => {
+            restoreForkedWorkspace.mockResolvedValueOnce(true);
+            const origin = { forked_from_task_id: 'src', forked_from_turn: 1 };
+            await expect(initWorkspaceBaseline(fakeRuntime(jest.fn().mockResolvedValue(ok(''))), origin, { forceRestore: true })).resolves.toBe(true);
+            expect(restoreForkedWorkspace).toHaveBeenCalledWith(expect.anything(), origin, { force: true });
         });
 
         it('exec 실패는 throw 하지 않음 (fail-open)', async () => {
             const execRaw = jest.fn().mockRejectedValue(new Error('docker down'));
-            await expect(initWorkspaceBaseline(fakeRuntime(execRaw))).resolves.toBeUndefined();
+            await expect(initWorkspaceBaseline(fakeRuntime(execRaw))).resolves.toBe(false);
         });
     });
 

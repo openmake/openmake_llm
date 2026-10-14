@@ -17,6 +17,7 @@ import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class'
 import { recoverableRestartCondition } from './agent-task-run-repository';
 import { AGENT_TASK_PARKED_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
 import type { ParkedTaskRow } from './agent-task-park-repository';
+import { chainCreateColumns, type AgentTaskChainCreateParams } from './agent-task-chain-repository';
 
 /**
  * 주차(F16.7) 판정 SQL — paused 이고 마지막 전이 이벤트 사유가 주차 사유(hitl_parked·device_wait). 부팅 마킹·복구·재개 claim·스윕이 같은 조건을 쓴다.
@@ -49,7 +50,7 @@ export class AgentTaskRepository extends BaseRepository {
         folderRel?: string;
         /** 생성 요청의 Idempotency-Key (174) — 같은 사용자·같은 키의 행이 이미 있으면 만들지 않는다 */
         idempotencyKey?: string;
-    }): Promise<boolean> {
+    } & AgentTaskChainCreateParams): Promise<boolean> {
         // input_files/input_images 는 값이 있을 때만 컬럼에 포함 — 056/057 마이그레이션
         // 미적용 배포에서도 해당 값 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
         const cols = ['id', 'user_id', 'goal', 'max_turns', 'model'];
@@ -79,6 +80,7 @@ export class AgentTaskRepository extends BaseRepository {
             cols.push('create_idempotency_key');
             values.push(params.idempotencyKey);
         }
+        for (const [col, v] of chainCreateColumns(params)) { cols.push(col); values.push(v); } // 장기 실행 체인(188) — 값이 있을 때만
         const insert = `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`;
         if (params.idempotencyKey === undefined) {
             await this.query(insert, values);
