@@ -63,8 +63,10 @@ export function isTerminalStatus(status: string): boolean {
     return TERMINAL_STATUSES.includes(status);
 }
 
-export function formatStatus(snapshot: TaskSnapshot, info: WatchInfo): string {
-    const head = STATUS_HEAD[snapshot.status] ?? `작업 상태: ${snapshot.status}`;
+/** segment — 이어가기(188)로 이어진 몇 번째 세그먼트인지. 2 이상일 때만 머리에 붙인다 */
+export function formatStatus(snapshot: TaskSnapshot, info: WatchInfo, segment = 1): string {
+    const prefix = segment > 1 ? `(세그먼트 ${segment}) ` : '';
+    const head = prefix + (STATUS_HEAD[snapshot.status] ?? `작업 상태: ${snapshot.status}`);
     const turns = snapshot.maxTurns > 0 ? ` — ${snapshot.currentTurn}/${snapshot.maxTurns} 턴 (${snapshot.progress}%)` : '';
     return `${head}${turns}\n목표: ${truncate(info.goal.replace(/\s+/g, ' ').trim(), GOAL_MAX_CHARS)}\n실행 위치: ${info.executorLabel} · 승인: ${info.policyLabel}`;
 }
@@ -96,6 +98,9 @@ export async function watchTask(
     ui: WatchUi,
     opts: WatchOptions,
 ): Promise<WatchOutcome> {
+    // 이어가기(188): 지켜보는 작업 id 는 체인을 따라 바뀐다. 시작 시각은 그대로 — watchMaxMs 는 체인 전체에 적용된다
+    let current = taskId;
+    let segment = 1;
     const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
     const now = opts.now ?? Date.now;
     const maxFailures = opts.maxConsecutiveFailures ?? DEFAULT_MAX_CONSECUTIVE_FAILURES;
@@ -105,7 +110,7 @@ export async function watchTask(
             await action();
             return true;
         } catch (e) {
-            console.warn(`[discord-bot] 작업 ${taskId} ${what} 실패 (무시):`, e instanceof Error ? e.message : e);
+            console.warn(`[discord-bot] 작업 ${current} ${what} 실패 (무시):`, e instanceof Error ? e.message : e);
             return false;
         }
     };
@@ -118,7 +123,7 @@ export async function watchTask(
     for (;;) {
         let snapshot: TaskSnapshot;
         try {
-            snapshot = await client.getTask(taskId);
+            snapshot = await client.getTask(current);
             failures = 0;
         } catch (e) {
             // 404·401·403 은 기다려도 풀리지 않는다 — 일시 실패로 세지 않고 바로 알린다
@@ -128,13 +133,13 @@ export async function watchTask(
                 return 'gone';
             }
             if (status === 401 || status === 403) {
-                console.warn(`[discord-bot] 작업 ${taskId} 조회가 인증에서 거절됨(${status}) — 지켜보기 종료`);
+                console.warn(`[discord-bot] 작업 ${current} 조회가 인증에서 거절됨(${status}) — 지켜보기 종료`);
                 await safely('안내 전송', () => ui.postFinal(MSG_AUTH_REJECTED));
                 return 'unreachable';
             }
             failures += 1;
             if (failures >= maxFailures) {
-                console.warn(`[discord-bot] 작업 ${taskId} 조회 연속 ${failures}회 실패 — 지켜보기 종료:`, e instanceof Error ? e.message : e);
+                console.warn(`[discord-bot] 작업 ${current} 조회 연속 ${failures}회 실패 — 지켜보기 종료:`, e instanceof Error ? e.message : e);
                 await safely('안내 전송', () => ui.postFinal(MSG_UNREACHABLE));
                 return 'unreachable';
             }
@@ -142,13 +147,22 @@ export async function watchTask(
             continue;
         }
 
-        const statusText = formatStatus(snapshot, opts);
+        const statusText = formatStatus(snapshot, opts, segment);
         if (statusText !== lastStatusText) {
             // 올리는 데 성공했을 때만 기억한다 — 실패하면 내용이 같아도 다음 조회에서 다시 시도한다
             if (await safely('진행 표시', () => ui.updateStatus(statusText))) lastStatusText = statusText;
         }
 
         if (isTerminalStatus(snapshot.status)) {
+            // 이어가기(188): 끝난 게 아니라 후속 세그먼트로 넘어간 것 — 같은 진행 메시지로 계속 지켜본다
+            if (snapshot.status === 'completed' && snapshot.continuedByTaskId) {
+                current = snapshot.continuedByTaskId;
+                segment += 1;
+                postedApprovals.clear();
+                lastStatusText = '';
+                await sleep(opts.pollMs);
+                continue;
+            }
             // 결과가 중간에 끊기면 잘린 글이 완결된 것처럼 남는다 — 짧은 안내를 한 번 더 올린다
             if (!(await safely('결과 전송', () => ui.postFinal(formatFinal(snapshot))))) {
                 await safely('결과 안내 전송', () => ui.postFinal(MSG_FINAL_INCOMPLETE));
@@ -158,13 +172,13 @@ export async function watchTask(
 
         if (snapshot.status === 'paused') {
             try {
-                for (const approval of await client.listPendingApprovals(taskId)) {
+                for (const approval of await client.listPendingApprovals(current)) {
                     if (postedApprovals.has(approval.approvalId)) continue;
                     // 올리는 데 성공한 요청만 기억한다 — 실패한 요청은 다음 조회에서 다시 올린다(버튼이 없으면 작업이 조용히 멈춘다)
                     if (await safely('승인 요청 전송', () => ui.postApproval(approval))) postedApprovals.add(approval.approvalId);
                 }
             } catch (e) {
-                console.warn(`[discord-bot] 작업 ${taskId} 승인 대기 조회 실패 (다음 주기에 재시도):`, e instanceof Error ? e.message : e);
+                console.warn(`[discord-bot] 작업 ${current} 승인 대기 조회 실패 (다음 주기에 재시도):`, e instanceof Error ? e.message : e);
             }
         }
 

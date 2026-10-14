@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { TaskApiError, type PendingApproval, type TaskSnapshot } from './task-client';
 import { formatApproval, formatFinal, formatStatus, isTerminalStatus, watchTask, type WatchOptions, type WatchUi } from './task-watcher';
 
-const snap = (over: Partial<TaskSnapshot>): TaskSnapshot => ({ id: 't1', status: 'running', progress: 0, currentTurn: 0, maxTurns: 32, result: null, error: null, ...over });
+const snap = (over: Partial<TaskSnapshot>): TaskSnapshot => ({ id: 't1', status: 'running', progress: 0, currentTurn: 0, maxTurns: 32, result: null, error: null, continuedByTaskId: null, completionPath: null, ...over });
 const info = { goal: '로그에서 오류 건수 집계', executorLabel: '서버 격리 환경', policyLabel: '전부' };
 
 function screen() {
@@ -211,4 +211,39 @@ test('지켜보는 시간이 끝나면 멈추는 방법(/task-cancel)을 함께 
     const s = screen();
     assert.equal(await watchTask(client, 't1', s.ui, opts({ watchMaxMs: 0 })), 'timeout');
     assert.match(s.finals[0], /\/task-cancel/);
+});
+
+test('completed + continuedByTaskId 면 결과를 올리지 않고 후속 작업을 같은 진행 메시지로 계속 지켜본다', async () => {
+    const snapshots: Record<string, TaskSnapshot[]> = {
+        a: [snap({ id: 'a', status: 'completed', progress: 100, currentTurn: 5, result: '이어가기', continuedByTaskId: 'b', completionPath: 'continued' })],
+        b: [
+            snap({ id: 'b', status: 'running', progress: 10, currentTurn: 1 }),
+            snap({ id: 'b', status: 'completed', progress: 100, currentTurn: 3, result: '끝', completionPath: 'final_answer' }),
+        ],
+    };
+    const asked: string[] = [];
+    const client = {
+        getTask: async (id: string) => { asked.push(id); return snapshots[id].length > 1 ? snapshots[id].shift()! : snapshots[id][0]; },
+        listPendingApprovals: async () => [],
+    };
+    const s = screen();
+    assert.equal(await watchTask(client, 'a', s.ui, opts({ pollMs: 0 })), 'completed');
+    assert.deepEqual(asked, ['a', 'b', 'b']);
+    assert.equal(s.finals.length, 1);
+    assert.match(s.finals[0], /끝/);
+    assert.doesNotMatch(s.finals[0], /이어가기/);
+    assert.ok(s.statuses.some((t) => t.includes('세그먼트 2')));
+    assert.ok(!s.statuses[0].includes('세그먼트')); // 첫 세그먼트는 머리를 붙이지 않는다
+});
+
+test('이어진 작업도 watchMaxMs 는 체인 전체에 적용된다', async () => {
+    let t = 0;
+    const client = {
+        getTask: async (id: string) => snap({ id, status: id === 'a' ? 'completed' : 'running', maxTurns: 1, continuedByTaskId: id === 'a' ? 'b' : null, completionPath: id === 'a' ? 'continued' : null }),
+        listPendingApprovals: async () => [],
+    };
+    const s = screen();
+    assert.equal(await watchTask(client, 'a', s.ui, opts({ pollMs: 0, watchMaxMs: 10, sleep: async () => { t += 6; }, now: () => t })), 'timeout');
+    assert.equal(s.finals.length, 1);
+    assert.match(s.finals[0], /지켜보는 시간이 끝났습니다/);
 });
