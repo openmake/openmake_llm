@@ -18,9 +18,14 @@ jest.mock('../../config/agent-task-turn-loop', () => {
 // 로컬 폴백 경로가 실제 클라이언트를 만들지 않게 차단(이 스위트는 재시도 정책만 검증).
 jest.mock('../../llm', () => ({ createClient: jest.fn() }));
 jest.mock('../model-role-resolver', () => ({ resolveRoleClientForUser: jest.fn() }));
+jest.mock('../../config/model-roles', () => ({ getModelForRole: (role: string) => `local-${role}-model` }));
+const mockLogger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
+jest.mock('../../utils/logger', () => ({ createLogger: () => mockLogger }));
 
-import { chatTurnWithRoleFallback, isTransientLLMError, TurnCallCapExceeded, type AgentRoleState } from './role-client';
+import { chatTurnWithRoleFallback, initAgentRoleState, isTransientLLMError, TurnCallCapExceeded, type AgentRoleState } from './role-client';
 import type { LLMClient } from '../../llm';
+import { createClient } from '../../llm';
+import { resolveRoleClientForUser } from '../model-role-resolver';
 
 /** status 를 가진 오류 생성(openai SDK APIError 형태 흉내). */
 function statusError(status: number, message = `http ${status}`): Error {
@@ -290,5 +295,59 @@ describe('추론 수준(184)', () => {
         const hang = () => new Promise<never>((_res, rej) => { setTimeout(() => rej(new Error('aborted')), 50); });
         const { state } = stateWithThinking([hang, hang], 'off');
         await expect(chatTurnWithRoleFallback(state, { ...params(), callTimeoutMs: 20 })).rejects.toBeInstanceOf(TurnCallCapExceeded);
+    });
+});
+
+describe('initAgentRoleState — 이미지 입력과 외부 모델 vision', () => {
+    const createClientMock = createClient as jest.Mock;
+    const resolveMock = resolveRoleClientForUser as jest.Mock;
+    const localClient = { model: 'local-agent-model', local: true };
+    // hasa qwen3-coder 는 카탈로그(external-providers fallbackModels)에 vision:false 로 적혀 있다.
+    const nonVision = { client: { model: 'qwen3-coder' }, providerId: 'hasa', modelId: 'qwen3-coder', fullId: 'hasa:qwen3-coder' };
+    const unknown = { client: { model: 'mystery' }, providerId: 'hasa', modelId: 'mystery-model-x', fullId: 'hasa:mystery-model-x' };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        createClientMock.mockReturnValue(localClient);
+    });
+
+    it('vision:false 외부 모델 + 이미지 입력이면 외부 호출 없이 내부 모델로 시작한다', async () => {
+        resolveMock.mockResolvedValue(nonVision);
+        const s = await initAgentRoleState('t1', 'u1', undefined, { hasImages: true });
+        expect(s.client).toBe(localClient);
+        expect(createClientMock).toHaveBeenCalledWith({ model: 'local-agent-model', userId: 'u1' });
+        expect(s.external).toBe(false);
+        expect(s.fallbackDone).toBe(true);
+        expect(s.skippedExternal).toBe('hasa:qwen3-coder');
+        expect(s.blockedExternal).toBeUndefined();
+        expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('hasa:qwen3-coder 는 이미지 입력 미지원'));
+    });
+
+    it('vision:false 외부 모델이라도 이미지가 없으면 종전처럼 외부를 쓴다', async () => {
+        resolveMock.mockResolvedValue(nonVision);
+        const s = await initAgentRoleState('t1', 'u1', undefined, { hasImages: false });
+        expect(s.client).toBe(nonVision.client);
+        expect(s.external).toBe(true);
+        expect(s.fallbackDone).toBe(false);
+        expect(s.skippedExternal).toBeUndefined();
+        expect(createClientMock).not.toHaveBeenCalled();
+    });
+
+    it('vision 을 모르는 외부 모델은 이미지가 있어도 막지 않는다(4xx 폴백은 그대로)', async () => {
+        resolveMock.mockResolvedValue(unknown);
+        const s = await initAgentRoleState('t1', 'u1', undefined, { hasImages: true });
+        expect(s.client).toBe(unknown.client);
+        expect(s.external).toBe(true);
+        expect(s.fallbackDone).toBe(false);
+        expect(createClientMock).not.toHaveBeenCalled();
+    });
+
+    it('내부 전용이 먼저 적용된다', async () => {
+        resolveMock.mockResolvedValue(nonVision);
+        const s = await initAgentRoleState('t1', 'u1', undefined, { internalOnly: true, hasImages: true });
+        expect(s.client).toBe(localClient);
+        expect(s.blockedExternal).toBe('hasa:qwen3-coder');
+        expect(s.skippedExternal).toBeUndefined();
+        expect(mockLogger.info).toHaveBeenCalledWith(expect.stringContaining('내부 전용'));
     });
 });

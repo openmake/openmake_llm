@@ -7,6 +7,7 @@ import { createClient, type LLMClient } from '../../llm';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 import { getModelForRole } from '../../config/model-roles';
 import { resolveRoleClientForUser } from '../model-role-resolver';
+import { knownExternalVision } from '../chat-service/model-capabilities';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
@@ -27,6 +28,8 @@ export interface AgentRoleState {
     fallbackDone: boolean;
     /** 내부 전용 정책으로 쓰지 않은 외부 모델 id — 감사 기록용(없으면 차단한 것이 없다) */
     blockedExternal?: string;
+    /** 이미지 입력을 받지 못한다고 적힌 외부 모델이라 쓰지 않은 id — 감사 기록용(없으면 건너뛴 것이 없다) */
+    skippedExternal?: string;
     /** 추론 수준(184) — 미지정은 'off'. 강등 상태는 이 실행 안에만 있다(thinking-downgrade). */
     thinkingLevel?: AgentTaskThinkingLevel;
     thinkingFailures?: number;
@@ -52,7 +55,8 @@ export async function initAgentRoleState(
     userId: string,
     explicitClient?: LLMClient,
     /** internalOnly: 내부 전용 실행(config/internal-only-policy) — 외부 제공자로 해석돼도 내부 모델을 쓴다 */
-    opts: { internalOnly?: boolean; thinkingLevel?: AgentTaskThinkingLevel } = {},
+    /** hasImages: 입력에 이미지가 있다 — vision:false 로 적힌 외부 모델은 헛호출(400) 없이 내부 모델로 시작한다 */
+    opts: { internalOnly?: boolean; thinkingLevel?: AgentTaskThinkingLevel; hasImages?: boolean } = {},
 ): Promise<AgentRoleState> {
     if (explicitClient) {
         return { client: explicitClient, external: false, fallbackDone: true, ...thinkingInit(opts.thinkingLevel) };
@@ -63,6 +67,11 @@ export async function initAgentRoleState(
         // 내부 모델이 응답하지 못하면 작업은 실패한다 — 외부로 넘기는 경로는 없다(fallbackDone 으로 강등 로직도 닫는다).
         logger.info(`[AgentTask] ${taskId} 내부 전용 — 외부 모델 ${resolved.fullId} 대신 내부 모델 사용`);
         return { client: createClient({ model: getModelForRole('agent'), userId }), external: false, fallbackDone: true, blockedExternal: resolved.fullId, ...thinkingInit(opts.thinkingLevel) };
+    }
+    // 명시적으로 false 일 때만 — 모르는 모델(undefined)은 종전대로 외부를 쓰고 4xx 폴백에 맡긴다.
+    if (external && opts.hasImages && knownExternalVision(resolved.providerId, resolved.modelId) === false) {
+        logger.info(`[AgentTask] ${taskId} 외부 모델 ${resolved.fullId} 는 이미지 입력 미지원 — 내부 모델 사용`);
+        return { client: createClient({ model: getModelForRole('agent'), userId }), external: false, fallbackDone: true, skippedExternal: resolved.fullId, ...thinkingInit(opts.thinkingLevel) };
     }
     if (resolved.degraded) {
         logger.warn(`[AgentTask] ${taskId} agent role 폴백: ${resolved.degraded}`);
