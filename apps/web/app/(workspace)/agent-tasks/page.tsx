@@ -94,6 +94,10 @@ interface AgentTask {
   ownerId?: string;
   /** 큐 우선순위(131) — 0 이 아니면 목록에 뱃지 */
   priority?: number;
+  /** 장기 실행 체인 — 루트 id(루트 자신은 자기 id), 앞 세그먼트 id, 종료 경로('continued' = 다음 세그먼트로 넘김) */
+  chainRootId?: string;
+  continuedFromId?: string;
+  completionPath?: string;
 }
 
 type PlanStepStatus = "not_started" | "in_progress" | "completed" | "blocked";
@@ -147,6 +151,22 @@ interface ApiAgentTask {
   user_id?: string | number;
   /** 큐 우선순위(131) — 예약 -1, 기본 0, 관리자 지정 >0 */
   priority?: number;
+  /** 장기 실행 체인 — 체인이 아닌 작업은 모두 null */
+  chain_root_task_id?: string | null;
+  continued_from_task_id?: string | null;
+  continued_by_task_id?: string | null;
+  completion_path?: string | null;
+  /** 체인 요약 — 상세 응답에만, 체인 작업일 때만 온다 */
+  chain?: {
+    rootId: string;
+    segmentIndex: number;
+    segmentCount: number;
+    continuedFrom: string | null;
+    continuedBy: string | null;
+    activeSegmentId: string | null;
+    budget: { usedMs: number; usedTokens: number; segments: number; maxMs: number; maxTokens: number; maxSegments: number };
+    cancelled: boolean;
+  };
 }
 
 type TaskFilesResponse = ApiSuccess<{ files: string[] }>;
@@ -238,6 +258,9 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     failureClass: t.failure_class,
     ownerId: t.user_id != null ? String(t.user_id) : undefined,
     priority: typeof t.priority === "number" && t.priority !== 0 ? t.priority : undefined,
+    chainRootId: t.chain_root_task_id || undefined,
+    continuedFromId: t.continued_from_task_id || undefined,
+    completionPath: t.completion_path || undefined,
   };
 }
 
@@ -709,6 +732,26 @@ function TaskDetailModal({
               </span>
               <span>{t("turnLabel")} {detail.task.current_turn ?? 0}/{detail.task.max_turns ?? 0}</span>
             </div>
+            {/* 장기 실행 체인 — 세그먼트 위치·체인 사용량, 지금 도는 세그먼트가 따로 있으면 그쪽으로 가는 링크 */}
+            {detail.task.chain && (() => {
+              const chain = detail.task.chain;
+              return (
+                <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-faint">
+                  <span>{t("chainSegment", { index: chain.segmentIndex + 1, count: chain.segmentCount })}</span>
+                  <span>{t("chainBudget", {
+                    usedMinutes: Math.round(chain.budget.usedMs / 60000),
+                    usedTokens: chain.budget.usedTokens,
+                    segments: chain.budget.segments,
+                    maxSegments: chain.budget.maxSegments,
+                  })}</span>
+                  {chain.activeSegmentId && chain.activeSegmentId !== detail.task.id && (
+                    <a className="text-accent underline" href={`/agent-tasks?task=${encodeURIComponent(chain.activeSegmentId)}`}>
+                      {chain.activeSegmentId}
+                    </a>
+                  )}
+                </div>
+              );
+            })()}
             {/* 대기 안내(Companion P1) — 대기열 순번·로컬 기기 연결 대기 */}
             {detail.task.status === "queued" && typeof detail.task.queuePosition === "number" && (
               <p className="mt-2 text-xs text-muted">{t("queuePosition", { position: detail.task.queuePosition })}</p>
@@ -1382,8 +1425,13 @@ export default function AgentTasksPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {tasks.map((task) => {
+            {/* 장기 실행 체인: 후속 세그먼트는 접고 루트 카드만 — 세그먼트 수는 목록에 있는 같은 체인 행 수 */}
+            {tasks.filter((x) => !x.continuedFromId).map((task) => {
               const meta = STATUS_META[task.status];
+              const chainSegments = task.chainRootId === task.id
+                ? Math.max(1, tasks.filter((x) => x.chainRootId === task.id).length)
+                : 0;
+              const handedOff = task.rawStatus === "completed" && task.completionPath === "continued";
               const total = task.checklist.length;
               const completed = task.checklist.filter((c) => c.done).length;
               const pct = total ? Math.round((completed / total) * 100) : task.progress;
@@ -1400,15 +1448,19 @@ export default function AgentTasksPage() {
                       <Badge tone={
                         task.rawStatus === "cancelled" ? "warn"
                           : task.rawStatus === "failed" ? "danger"
-                            : meta.tone
+                            : handedOff ? "accent"
+                              : meta.tone
                       }>
                         {task.status === "running" && (
                           <LoaderCircle className="h-3 w-3 animate-spin" />
                         )}
-                        {t(meta.labelKey)}
+                        {handedOff ? t("chainContinuedTag") : t(meta.labelKey)}
                         {task.rawStatus === "failed" && ` (${t("failedTag")})`}
                         {task.rawStatus === "cancelled" && ` (${t("cancelledTag")})`}
                       </Badge>
+                      {chainSegments > 0 && (
+                        <Badge tone="neutral">{t("chainRoot", { count: chainSegments })}</Badge>
+                      )}
                       {/* 전체 보기에서 타 사용자 작업 구분 뱃지 */}
                       {viewAll && task.ownerId && task.ownerId !== String(myUserId ?? "") && (
                         <Badge tone="neutral">{t("ownerBadge", { id: task.ownerId })}</Badge>
