@@ -49,6 +49,34 @@ function levenshtein(a: string, b: string): number {
     return prev[b.length];
 }
 
+/**
+ * 불린 이름이 **MCP 서버 이름**이면 그 서버 이름을, 아니면 null.
+ *
+ * 실측(운영 2026-10-14 하루 13건): 모델이 `mcp_list_tools` 로 서버 목록을 본 뒤 서버 이름
+ * (`noapi-google-search`)을 도구처럼 부른다. `mcp_call` 에 tool=서버 이름을 넘기면
+ * `서버::서버` 로 풀리므로 그 형태도 같은 실수로 본다. 그 밖의 `::` 이름은 종전 규칙.
+ */
+function serverNameGuess(unknown: string): string | null {
+    const parts = unknown.split('::');
+    if (parts.length === 1) return unknown;
+    if (parts.length === 2 && normalizeToolName(parts[0]) && normalizeToolName(parts[0]) === normalizeToolName(parts[1])) {
+        return parts[0];
+    }
+    return null;
+}
+
+/** PURE: 불린 이름이 서버 이름일 때 그 서버의 `서버::도구` 후보(대소문자·구분자 무시). */
+function serverPrefixMatches(unknown: string, pool: readonly string[]): string[] {
+    const server = serverNameGuess(unknown);
+    if (server === null) return [];
+    const key = normalizeToolName(server);
+    if (!key) return [];
+    return pool.filter((n) => {
+        const i = n.indexOf('::');
+        return i > 0 && n !== unknown && normalizeToolName(n.slice(0, i)) === key;
+    });
+}
+
 interface SuggestToolNamesOpts {
     maxSuggestions?: number;
     maxDistance?: number;
@@ -57,7 +85,7 @@ interface SuggestToolNamesOpts {
 /**
  * PURE: 알 수 없는 도구 이름에 대한 후보를 우선순위대로 돌려준다.
  *
- * 우선순위 — ① 생태계 별칭(`Read`→`file_ops`) ② 정규화 완전 일치(구분자·대소문자만 다름)
+ * 우선순위 — ⓪ MCP 서버 이름 접두 일치(`서버` → `서버::도구`) ① 생태계 별칭(`Read`→`file_ops`) ② 정규화 완전 일치(구분자·대소문자만 다름)
  * ③ `server::tool` 의 도구 부분 일치 ④ 편집거리 근접.
  *
  * 짧은 이름은 거리 상한을 좁힌다(`floor(len/3)`) — `bash`(4자)에 거리 3 을 허용하면
@@ -80,6 +108,9 @@ export function suggestToolNames(
     const push = (name: string) => {
         if (name && name !== unknown && !out.includes(name)) out.push(name);
     };
+
+    // ⓪ 서버 이름을 도구로 부른 경우 — 그 서버의 `서버::도구` 가 가장 확실한 교정이다.
+    for (const n of serverPrefixMatches(unknown, pool)) push(n);
 
     // ① 생태계 별칭 — 이름이 그대로 있으면 가장 확실한 교정이다.
     const alias = ALIAS_BY_NORMALIZED.get(target);
@@ -128,7 +159,10 @@ export function withToolNameSuggestions(
     if (!TOOL_NAME_SUGGEST.enabled) return baseMessage;
     const names = suggestToolNames(unknown, available, opts);
     if (names.length === 0) return baseMessage;
-    return `${baseMessage} — 다음 이름을 의도한 것 같습니다: ${names.join(', ')}. 정확한 이름으로 다시 호출하세요.`;
+    const suggested = `${baseMessage} — 다음 이름을 의도한 것 같습니다: ${names.join(', ')}. 정확한 이름으로 다시 호출하세요.`;
+    const server = serverNameGuess(unknown);
+    if (server === null || !names.some((n) => serverPrefixMatches(unknown, available).includes(n))) return suggested;
+    return `${suggested}\n\`${server}\` 는 MCP 서버 이름입니다 — 도구는 \`서버::도구\` 형식으로 부르세요.`;
 }
 
 /** `sh: 1: web_search: not found` / `bash: line 2: foo: command not found` 양식. */
