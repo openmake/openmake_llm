@@ -38,6 +38,11 @@ export class AgentTaskChainRepository extends BaseRepository {
         return (r.rowCount ?? 0) === 1;
     }
 
+    /** 선점 되돌리기(188) — 후속 생성이 실패했을 때 continued_by_task_id 를 비운다. */
+    async resetContinuation(fromTaskId: string, successorId: string): Promise<void> {
+        await this.query('UPDATE agent_tasks SET continued_by_task_id = NULL WHERE id = $1 AND continued_by_task_id = $2', [fromTaskId, successorId]);
+    }
+
     /** 체인 취소 표식(188) — 루트의 long_running 에 cancelled 를 병합. 이어가기 직전 판정이 이 표식을 본다. */
     async markChainCancelled(rootId: string): Promise<void> {
         await this.query(

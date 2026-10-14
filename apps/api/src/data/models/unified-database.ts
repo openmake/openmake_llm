@@ -20,6 +20,7 @@ import { getConfig } from '../../config/env';
 import { DB_POOL_TIMEOUTS } from '../../config/timeouts';
 import { createLogger } from '../../utils/logger';
 import type { AuditAction } from '../../config/audit-actions';
+import type { AgentTaskChainCreateParams } from '../repositories/agent-task-chain-repository';
 import {
     ApiKeyRepository,
     AuditRepository,
@@ -341,7 +342,7 @@ export class UnifiedDatabase {
         deviceId?: string;
         folderRel?: string;
         idempotencyKey?: string;
-    }): Promise<boolean> {
+    } & AgentTaskChainCreateParams): Promise<boolean> {
         return this.agentTaskRepository.createAgentTask(params);
     }
 

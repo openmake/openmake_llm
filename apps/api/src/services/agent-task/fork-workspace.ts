@@ -33,8 +33,8 @@ export function turnSnapshotRef(turn: number): string {
 }
 
 /** 현재 작업 공간을 턴 ref 로 남긴다 — 기준점(.git)이 있을 때만, HEAD 는 그대로. */
-export async function snapshotWorkspaceTurn(runtime: TaskRuntime, turn: number): Promise<void> {
-    if (!AGENT_TASK_LIMITS.FORK_WORKSPACE_RESTORE_ENABLED || runtime.localWorkdir === null) return;
+export async function snapshotWorkspaceTurn(runtime: TaskRuntime, turn: number, opts: { force?: boolean } = {}): Promise<void> {
+    if ((!AGENT_TASK_LIMITS.FORK_WORKSPACE_RESTORE_ENABLED && !opts.force) || runtime.localWorkdir === null) return;
     try {
         const r = await runtime.execRaw(
             `[ -d .git ] && ${GIT} add -A && t=$(${GIT} write-tree) && c=$(${GIT} commit-tree "$t" -p HEAD -m turn-${turn}) && ${GIT} update-ref ${turnSnapshotRef(turn)} "$c"`,
@@ -52,8 +52,8 @@ export interface ForkOrigin { forked_from_task_id?: string | null; forked_from_t
  * 갈라져 나온 작업의 작업 공간 복원 — 기준점이 아직 없는 첫 실행에서만. 복원했으면 true.
  * 기준점 생성(initWorkspaceBaseline) **전에** 불러야 복원된 파일이 기준점에 들어가 이 작업의 diff 가 자기 변경분만 담는다.
  */
-export async function restoreForkedWorkspace(runtime: TaskRuntime, origin: ForkOrigin | undefined): Promise<boolean> {
-    if (!AGENT_TASK_LIMITS.FORK_WORKSPACE_RESTORE_ENABLED || runtime.localWorkdir === null) return false;
+export async function restoreForkedWorkspace(runtime: TaskRuntime, origin: ForkOrigin | undefined, opts: { force?: boolean } = {}): Promise<boolean> {
+    if ((!AGENT_TASK_LIMITS.FORK_WORKSPACE_RESTORE_ENABLED && !opts.force) || runtime.localWorkdir === null) return false;
     const srcTaskId = origin?.forked_from_task_id;
     const turn = origin?.forked_from_turn;
     if (!srcTaskId || turn === null || turn === undefined) return false;
