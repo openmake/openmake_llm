@@ -13,7 +13,8 @@ interface Seen { method: string; url: string; auth: string | undefined; body: un
 let server: http.Server | undefined;
 
 /** 요청을 기록하고, 경로별로 정해 둔 응답을 돌려주는 서버 */
-function serve(routes: Record<string, { status?: number; body: unknown }>): Promise<{ baseUrl: string; seen: Seen[] }> {
+/** raw 가 있으면 JSON 대신 그 바이트를 보낸다 — chunked 면 Content-Length 없이 나눠 보낸다 */
+function serve(routes: Record<string, { status?: number; body?: unknown; raw?: Buffer; chunked?: boolean }>): Promise<{ baseUrl: string; seen: Seen[] }> {
     const seen: Seen[] = [];
     return new Promise((resolve) => {
         const s = http.createServer((req, res) => {
@@ -23,6 +24,12 @@ function serve(routes: Record<string, { status?: number; body: unknown }>): Prom
                 seen.push({ method: req.method ?? '', url: req.url ?? '', auth: req.headers.authorization, body: raw ? JSON.parse(raw) : undefined });
                 const route = routes[`${req.method} ${req.url}`];
                 res.statusCode = route?.status ?? (route ? 200 : 404);
+                if (route?.raw) {
+                    res.setHeader('Content-Type', 'application/octet-stream');
+                    if (!route.chunked) return res.end(route.raw);
+                    res.write(route.raw.subarray(0, 1));
+                    return res.end(route.raw.subarray(1));
+                }
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify(route?.body ?? { success: false, error: { message: 'no route' } }));
             });
@@ -86,6 +93,63 @@ test('작업 조회: 서버 필드를 봇이 쓰는 모양으로 옮긴다 — �
     const t3 = await client.getTask('t3');
     assert.equal(t3.continuedByTaskId, 't4');
     assert.equal(t3.completionPath, 'continued');
+});
+
+test('산출물 조회: steps 의 artifact 스텝 content(JSON)를 파싱한다 — content·kind 가 문자열이 아니거나 JSON 이 아니면 무시', async () => {
+    const md = { id: 'r1', kind: 'markdown', title: '보고서', content: '# 제목' };
+    const code = { id: 'c1', kind: 'code', title: 'main', lang: 'py', content: 'print(1)' };
+    const { baseUrl, seen } = await serve({
+        'GET /api/agent-tasks/t1/steps': ok({ steps: [
+            { id: 1, step_type: 'thinking', content: JSON.stringify(md) },
+            { id: 2, step_type: 'artifact', content: JSON.stringify(md) },
+            { id: 3, step_type: 'artifact', content: 'not json' },
+            { id: 4, step_type: 'artifact', content: JSON.stringify({ kind: 'html', content: 1 }) },
+            { id: 5, step_type: 'artifact', content: JSON.stringify({ kind: null, content: 'x' }) },
+            { id: 6, step_type: 'artifact' },
+            { id: 7, step_type: 'artifact', content: JSON.stringify(code) },
+            { id: 8, step_type: 'artifact', content: JSON.stringify({ kind: 'svg', content: '<svg/>' }) },
+        ], total: 8 }),
+    });
+    assert.deepEqual(await createTaskClient({ baseUrl, apiKey: 'k' }).listArtifacts('t1'), [
+        { id: 'r1', kind: 'markdown', title: '보고서', lang: null, content: '# 제목' },
+        { id: 'c1', kind: 'code', title: 'main', lang: 'py', content: 'print(1)' },
+        { id: 'artifact', kind: 'svg', title: 'artifact', lang: null, content: '<svg/>' },
+    ]);
+    assert.equal(seen[0].url, '/api/agent-tasks/t1/steps');
+});
+
+test('작업 공간 파일 목록: files 중 문자열만 돌려주고, 없으면 빈 목록', async () => {
+    const { baseUrl, seen } = await serve({
+        'GET /api/agent-tasks/t1/files': ok({ files: ['monthly.csv', 'out/report.md', 3, null] }),
+        'GET /api/agent-tasks/t2/files': ok({}),
+    });
+    const client = createTaskClient({ baseUrl, apiKey: 'k' });
+    assert.deepEqual(await client.listWorkspaceFiles('t1'), ['monthly.csv', 'out/report.md']);
+    assert.deepEqual(await client.listWorkspaceFiles('t2'), []);
+    assert.equal(seen[0].url, '/api/agent-tasks/t1/files');
+    assert.equal(seen[0].auth, 'Bearer k');
+});
+
+test('작업 공간 파일 내려받기: 바이트를 돌려주고, 상한을 넘거나(Content-Length·본문) 404 면 null', async () => {
+    const bytes = Buffer.from([0x00, 0xff, 0x41, 0x42, 0x43, 0x0a]);
+    const { baseUrl, seen } = await serve({
+        'GET /api/agent-tasks/t1/files/download?path=out%2F%EC%9B%94%EA%B0%84.csv': { raw: bytes },
+        'GET /api/agent-tasks/t1/files/download?path=big.bin': { raw: bytes },
+        'GET /api/agent-tasks/t1/files/download?path=chunked.bin': { raw: bytes, chunked: true },
+        'GET /api/agent-tasks/t1/files/download?path=gone.csv': { status: 404, body: { success: false, error: { message: '파일을 찾을 수 없습니다.' } } },
+        'GET /api/agent-tasks/t1/files/download?path=bad': { status: 400, body: { success: false, error: { message: '잘못된 경로입니다.' } } },
+    });
+    const client = createTaskClient({ baseUrl, apiKey: 'k' });
+    assert.deepEqual(await client.downloadWorkspaceFile('t1', 'out/월간.csv', 100), bytes);
+    assert.equal(seen[0].auth, 'Bearer k');
+    assert.equal(await client.downloadWorkspaceFile('t1', 'big.bin', 5), null);
+    assert.deepEqual(await client.downloadWorkspaceFile('t1', 'chunked.bin', 6), bytes);
+    assert.equal(await client.downloadWorkspaceFile('t1', 'chunked.bin', 5), null);
+    assert.equal(await client.downloadWorkspaceFile('t1', 'gone.csv', 100), null);
+    await assert.rejects(
+        () => client.downloadWorkspaceFile('t1', 'bad', 100),
+        (e: unknown) => e instanceof TaskApiError && e.status === 400 && e.message === '잘못된 경로입니다.',
+    );
 });
 
 test('승인 대기 조회: 그 작업의 요청만 돌려준다', async () => {
