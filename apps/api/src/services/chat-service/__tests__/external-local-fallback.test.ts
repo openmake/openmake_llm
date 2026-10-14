@@ -101,8 +101,9 @@ describe('streamFromExternalProvider — 외부 실패 시 로컬 폴백', () =>
 
     it('사용자 중단(abort)은 폴백하지 않는다', async () => {
         const ac = new AbortController();
-        ac.abort();
+        // 호출 도중 중단 — 이미 중단된 요청은 LLM 을 부르기 전에 'ABORTED' 로 끝난다(external-provider).
         const failing = makeResolved('chatgpt', 'gpt-5.5', async () => {
+            ac.abort();
             throw new ProviderError('UPSTREAM_ERROR', '중단');
         });
         const local = makeResolved('local-llm', 'qwen3.6-35b-a3b', okStream);

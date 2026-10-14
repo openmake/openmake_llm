@@ -36,6 +36,7 @@ import { resolveModelProfile } from '../config/model-profiles';
 import { LOCAL_PRESERVE_THINKING_ENABLED } from '../config/llm-parameters';
 import { FALLBACK_REASONING_ONLY_NOTICE, shouldPromoteReasoningOnly } from './reasoning-only-recovery';
 import { readCachedPromptTokens } from './cached-prompt-tokens';
+import { isAbortedStream, markAborted } from './stream-abort';
 
 const log = createLogger('StreamParser');
 
@@ -217,7 +218,7 @@ export async function streamChat(
     onActivity?: () => void,
     /** SSE 청크를 받을 때마다 호출 — 호출자의 무응답(청크 간격) 감시용. 본문 없이 도구 호출 인자만 오는 동안에도 발화한다. */
     onChunk?: () => void,
-): Promise<ChatMessage & { metrics?: UsageMetrics }> {
+): Promise<ChatMessage & { metrics?: UsageMetrics; aborted?: true }> {
     const tools = request.tools ? toOpenAITools(request.tools) : undefined;
     const responseFormat = toResponseFormat(request.format);
     const requestStartedAt = Date.now();
@@ -395,8 +396,9 @@ export async function streamChat(
     // Artifact parser flush — 닫는 태그 없이 끝난 partial 도 emit
     artifactParser?.flush();
 
+    const aborted = isAbortedStream(signal, toolBuffers.size + pseudoFlush.toolCalls.length); // 중단 시 부분 tool call 폐기 — stream-abort
     const toolCalls: ChatMessage['tool_calls'] = [];
-    for (const buf of toolBuffers.values()) {
+    for (const buf of aborted ? [] : toolBuffers.values()) {
         // 인자 JSON 절단/불량은 {} 로 강등 + 관측 로그 + 표식(argumentsInvalid) — tool-call-args.
         const { args, invalid } = parseToolCallArguments(buf.jsonBuffer, buf.name);
         // vLLM 발급 id 보존 — agent-loop 다음 턴에서 tool 메시지 tool_call_id 와 일치 필요.
@@ -405,7 +407,7 @@ export async function streamChat(
 
     // 네이티브 tool_calls 가 하나도 없을 때만 텍스트 툴콜을 승격한다 — 정상 파싱된 호출과
     // 중복 실행되지 않도록. 승격된 호출은 상위 tool loop 에서 실제로 실행된다.
-    if (toolCalls.length === 0 && pseudoFlush.toolCalls.length > 0) {
+    if (!aborted && toolCalls.length === 0 && pseudoFlush.toolCalls.length > 0) {
         log.warn(`[PseudoToolCall] 텍스트로 새어나온 툴콜 ${pseudoFlush.toolCalls.length}건 복구 — `
             + `tools=${pseudoFlush.toolCalls.map((c) => c.name).join(',')} (요청 tools=${request.tools?.length ?? 0}종)`);
         for (const c of pseudoFlush.toolCalls) {
@@ -483,7 +485,7 @@ export async function streamChat(
         log.warn(`[ModelPool] response truncated at max_tokens — model=${request.model} completion_tokens=${completionTokens}`);
     }
 
-    return {
+    return markAborted(aborted, {
         role: 'assistant',
         content: finalContent,
         ...(finalThinking && { thinking: finalThinking }),
@@ -494,7 +496,7 @@ export async function streamChat(
             ...(cachedPromptTokens !== undefined && { cached_prompt_tokens: cachedPromptTokens }),
             ...(finishReason && { finish_reason: finishReason }),
         },
-    };
+    });
 }
 
 export async function nonStreamChat(
