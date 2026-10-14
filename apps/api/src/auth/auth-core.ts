@@ -194,6 +194,15 @@ export async function verifyRefreshToken(token: string): Promise<JWTPayload | nu
 }
 
 /**
+ * JWT 토큰 형식 사전 검증 (header.payload.signature 3-part dot 구조)
+ * jwt.verify() 호출 전에 빠르게 걸러내어 불필요한 에러 로그 방지
+ */
+export function looksLikeJWT(token: string): boolean {
+    const parts = token.split('.');
+    return parts.length === 3 && parts.every(p => p.length > 0);
+}
+
+/**
  * JWT 토큰 검증
  * #8 연동: 블랙리스트 확인 추가
  */
