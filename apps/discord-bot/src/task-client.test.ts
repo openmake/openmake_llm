@@ -66,10 +66,15 @@ test('작업 조회: 서버 필드를 봇이 쓰는 모양으로 옮긴다 — �
     const { baseUrl } = await serve({
         'GET /api/agent-tasks/t1': ok({ task: { id: 't1', status: 'running', progress: 22, current_turn: 7, max_turns: 32, result: null, error: null }, steps: [] }),
         'GET /api/agent-tasks/t2': ok({ task: { id: 't2', status: 'completed', result: '끝' }, steps: [] }),
+        'GET /api/agent-tasks/t3': ok({ task: { id: 't3', status: 'completed', result: '이어가기', continued_by_task_id: 't4', completion_path: 'continued' }, steps: [] }),
     });
     const client = createTaskClient({ baseUrl, apiKey: 'k' });
-    assert.deepEqual(await client.getTask('t1'), { id: 't1', status: 'running', progress: 22, currentTurn: 7, maxTurns: 32, result: null, error: null });
-    assert.deepEqual(await client.getTask('t2'), { id: 't2', status: 'completed', progress: 0, currentTurn: 0, maxTurns: 0, result: '끝', error: null });
+    assert.deepEqual(await client.getTask('t1'), { id: 't1', status: 'running', progress: 22, currentTurn: 7, maxTurns: 32, result: null, error: null, continuedByTaskId: null, completionPath: null });
+    assert.deepEqual(await client.getTask('t2'), { id: 't2', status: 'completed', progress: 0, currentTurn: 0, maxTurns: 0, result: '끝', error: null, continuedByTaskId: null, completionPath: null });
+    // 이어가기(188) — 후속 작업 id 와 끝난 경로를 옮긴다
+    const t3 = await client.getTask('t3');
+    assert.equal(t3.continuedByTaskId, 't4');
+    assert.equal(t3.completionPath, 'continued');
 });
 
 test('승인 대기 조회: 그 작업의 요청만 돌려준다', async () => {

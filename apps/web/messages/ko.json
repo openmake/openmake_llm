@@ -1163,7 +1163,11 @@
       "low": "낮음",
       "medium": "보통",
       "high": "높음"
-    }
+    },
+    "chainSegment": "이어진 작업 {index}/{count}",
+    "chainRoot": "장기 실행 (세그먼트 {count}개)",
+    "chainContinuedTag": "다음 세그먼트로 이어짐",
+    "chainBudget": "체인 사용량 {usedMinutes}분 · {usedTokens} 토큰 · {segments}/{maxSegments} 세그먼트"
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",

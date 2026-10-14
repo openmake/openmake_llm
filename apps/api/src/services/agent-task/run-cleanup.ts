@@ -29,9 +29,11 @@ export async function cleanupTaskRun(opts: {
     stepNumber: number;
     /** 서버 종료로 끊겼는가(agent-task/shutdown-drain) — 부팅 복구가 체크포인트에서 이어받는다 */
     interrupted?: boolean;
+    /** 이어가기(188)로 끝남 — 후속 작업이 작업 공간을 복원해 가므로 보존 */
+    keepWorkspace?: boolean;
 }): Promise<void> {
     const { taskId, taskRuntime, stepNumber } = opts;
-    const parked = opts.parked || !!opts.interrupted;
+    const parked = opts.parked || !!opts.interrupted || !!opts.keepWorkspace;
     if (parked) getApprovalRegistry().clearAutoApprove(taskId);
     else getApprovalRegistry().closeTask(taskId);
     getSteeringRegistry().clear(taskId);

@@ -20,6 +20,8 @@ import type { ChatMessage, ToolDefinition } from '../../llm/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { memorySaveExposed } from './memory-save-tool';
 import { MEMORY_SAVE_TOOL_NAME } from '../../config/agent-task-skill-memory';
+import { AGENT_TASK_LONG_RUNNING } from '../../config/agent-task-long-running';
+import type { ContinuationReason } from './types';
 
 const logger = createLogger('AgentTaskService');
 
@@ -51,12 +53,17 @@ interface TurnGateInput {
     flags: TurnGateFlags;
     stepNumber: number;
     emitStep: (stepType: string, toolName?: string, content?: string | null) => void;
+    /** 장기 실행 체인(188) — 있으면 상한 사유를 마무리 턴 대신 이어가기로 돌린다. contextRatio 는 turn-context.contextUsageRatio.
+     *  timeUp: 세그먼트 활성 시간이 시간 상한의 SEGMENT_TIME_RATIO 이상(continuation-hook.chainGateInput) — 시간 초과(failed) 전에 잇는다. */
+    chain?: { canContinue: boolean; contextRatio: number | null; timeUp?: boolean };
 }
 
 interface TurnGateResult {
     effectiveTools: ToolDefinition[];
     /** 마무리 턴 전환 사유 — 호출부의 "마무리 턴 도구 차단" 가드가 이어서 사용. */
     finalTurnReason: FinalTurnReason;
+    /** 이어가기 사유(188) — 값이 있으면 finalTurnReason 은 null 이고 마무리 nudge·스텝은 남기지 않는다. */
+    continuationReason: ContinuationReason | null;
     stepNumber: number;
 }
 
@@ -95,7 +102,12 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
                 ? 'turns'
                 : shouldFinalizeForContext(conversation) ? 'context' : null;
 
-    const cappedTools = finalTurnReason
+    // 이어가기(188): 장기 실행 작업은 상한 사유를 마무리 대신 후속 작업으로 돌린다. 컨텍스트는 사용률 기준이 하나 더 있다.
+    const nearFull = p.chain?.contextRatio != null && p.chain.contextRatio >= AGENT_TASK_LONG_RUNNING.CONTINUE_AT_RATIO;
+    const continuationReason: ContinuationReason | null = p.chain?.canContinue ? (finalTurnReason ?? (nearFull ? 'context' : p.chain.timeUp ? 'time' : null)) : null;
+    const effectiveFinalReason: FinalTurnReason = continuationReason ? null : finalTurnReason;
+
+    const cappedTools = effectiveFinalReason
         ? []
         : (overSearchLimit || overBrowserLimit)
             ? p.tools.filter((t) => {
@@ -110,15 +122,15 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
             { deviceGatesShell: p.sandboxCfg.deviceGatesShell })
         : cappedTools;
 
-    if (finalTurnReason && !flags.finalTurnNotified) {
-        conversation.push(oneShotNotice(finalTurnReason === 'context' ? getContextFinalTurnNudge() : getAgentTaskFinalTurnNudge(finalTurnReason)));
+    if (effectiveFinalReason && !flags.finalTurnNotified) {
+        conversation.push(oneShotNotice(effectiveFinalReason === 'context' ? getContextFinalTurnNudge() : getAgentTaskFinalTurnNudge(effectiveFinalReason)));
         flags.finalTurnNotified = true;
-        const note = `자원 상한 임박(${finalTurnReason === 'context' ? CONTEXT_FINAL_TURN_LABEL : finalTurnReason === 'tokens' ? '토큰 예산' : '남은 턴'})`
+        const note = `자원 상한 임박(${effectiveFinalReason === 'context' ? CONTEXT_FINAL_TURN_LABEL : effectiveFinalReason === 'tokens' ? '토큰 예산' : '남은 턴'})`
             + ` — 도구를 중단하고 최종 정리로 전환 (턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`;
         await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'final_turn', content: note })
             .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
         emitStep('final_turn', undefined, note);
-        logger.info(`[AgentTask] 마무리 턴 전환: ${taskId} (사유=${finalTurnReason}, `
+        logger.info(`[AgentTask] 마무리 턴 전환: ${taskId} (사유=${effectiveFinalReason}, `
             + `턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`);
     }
     if (hitlDegraded && !flags.approvalDegradeNotified) {
@@ -141,7 +153,7 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
         flags.browserLimitNotified = true;
     }
 
-    return { effectiveTools, finalTurnReason, stepNumber };
+    return { effectiveTools, finalTurnReason: effectiveFinalReason, continuationReason, stepNumber };
 }
 
 /**

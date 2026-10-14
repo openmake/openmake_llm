@@ -75,6 +75,12 @@ export const createAgentTaskSchema = z.strictObject({
     images: z.array(
         z.string().startsWith('data:image/').max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS)
     ).max(FILE_ATTACH_LIMITS.MAX_IMAGES).optional(),
+    /** 장기 실행 체인(188) — 값 검증(기본값 초과·역할)은 라우트의 resolveLongRunningBudget 이 한다. */
+    longRunning: z.strictObject({
+        maxDurationMs: z.number().int().positive().optional(),
+        maxTotalTokens: z.number().int().positive().optional(),
+        maxSegments: z.number().int().positive().optional(),
+    }).optional(),
     // Phase 2 Git: 작업 대상 repo(https://github.com/org/repo)·브랜치. 있으면 실행 시 호스트가 clone.
     // 엄격한 형식 검증은 서버 parseGithubRepo 가 수행 — 여기선 prefix·길이·안전문자만.
     // 승인 정책은 **실행 단위** 옵션이라 생성이 아니라 execute 에 넘긴다. 여기 실리면
