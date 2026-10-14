@@ -22,7 +22,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { AGENT_TASK_LIMITS, DOC_EXTRACT_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import { safeBaseName, finalizeUploadedFile, resolveStoredPath } from './upload-store';
-import { extractAttachedDocuments } from '../chat-service/doc-extractor';
+import { extractAttachedDocuments, isBinaryDocumentName } from '../chat-service/doc-extractor';
 import type { AgentTaskInputFile } from './types';
 
 const logger = createLogger('AgentTaskChunkStore');
@@ -214,7 +214,7 @@ export async function claimUploadsAsInputFiles(
             if (typeof probe.content === 'string') {
                 entry.content = probe.content;
                 entry.truncated = probe.truncated;
-                entry.extracted = true;
+                if (isBinaryDocumentName(c.name)) entry.extracted = true;
             }
         }
         out.push(entry);

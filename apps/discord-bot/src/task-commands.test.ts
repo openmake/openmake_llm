@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { PendingApproval, TaskClient, TaskSnapshot } from './task-client';
+import type { PendingApproval, TaskClient, TaskInputAttachments, TaskSnapshot } from './task-client';
 import { createTaskController, type TaskControllerConfig } from './task-commands';
 import type { WatchUi } from './task-watcher';
 
@@ -13,9 +13,9 @@ const OTHER_ALLOWED = 'u-other';
 const STRANGER = 'u-stranger';
 
 const baseConfig: TaskControllerConfig = { allowedUsers: [OWNER, OTHER_ALLOWED], executor: 'sandbox', approvalPolicy: 'all', pollMs: 1, watchMaxMs: 60_000 };
-const snap = (over: Partial<TaskSnapshot>): TaskSnapshot => ({ id: 't1', status: 'running', progress: 0, currentTurn: 0, maxTurns: 32, result: null, error: null, ...over });
+const snap = (over: Partial<TaskSnapshot>): TaskSnapshot => ({ id: 't1', status: 'running', progress: 0, currentTurn: 0, maxTurns: 32, result: null, error: null, continuedByTaskId: null, completionPath: null, ...over });
 
-interface Fake extends TaskClient { log: string[]; snapshots: TaskSnapshot[]; pending: PendingApproval[]; connected: boolean; failExecute: boolean; decision: 'ok' | 'gone' }
+interface Fake extends TaskClient { createdWith?: TaskInputAttachments; log: string[]; snapshots: TaskSnapshot[]; pending: PendingApproval[]; connected: boolean; failExecute: boolean; decision: 'ok' | 'gone' }
 
 function fakeClient(over: Partial<Fake> = {}): Fake {
     const f: Fake = {
@@ -25,7 +25,7 @@ function fakeClient(over: Partial<Fake> = {}): Fake {
         connected: true,
         failExecute: false,
         decision: 'ok',
-        async createTask(goal, executor) { f.log.push(`create:${executor}:${goal}`); return 't1'; },
+        async createTask(goal, executor, attachments) { f.log.push(`create:${executor}:${goal}`); f.createdWith = attachments; return 't1'; },
         async executeTask(id, policy) { f.log.push(`execute:${id}:${policy}`); if (f.failExecute) throw new Error('큐가 가득 찼습니다'); },
         async getTask() { return f.snapshots.length > 1 ? (f.snapshots.shift() as TaskSnapshot) : f.snapshots[0]; },
         async cancelTask(id) { f.log.push(`cancel:${id}`); },
@@ -54,6 +54,16 @@ function screen() {
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 /** 끝나지 않는 가짜 작업의 지켜보기가 테스트 뒤에 남아 돌지 않게, 지켜보는 시간을 짧게 준다 */
 const make = (client: TaskClient, config: Partial<TaskControllerConfig> = {}) => createTaskController({ client, config: { ...baseConfig, watchMaxMs: 400, ...config }, sleep: async () => { await tick(); } });
+
+test('시작: 첨부를 작업 생성에 넘긴다(없으면 넘기지 않는다)', async () => {
+    const attachments: TaskInputAttachments = { files: [{ name: 'a.pdf', type: 'application/pdf', size: 3, data: 'QUJD' }], images: ['data:image/png;base64,iVBORw0KGgo='] };
+    const withFiles = fakeClient();
+    await make(withFiles).start({ userId: OWNER, channelId: 'c1', goal: 'a.pdf 요약', ui: screen().ui, attachments });
+    assert.deepEqual(withFiles.createdWith, attachments);
+    const without = fakeClient();
+    await make(without).start({ userId: OWNER, channelId: 'c1', goal: '요약', ui: screen().ui });
+    assert.equal(without.createdWith, undefined);
+});
 
 test('허용 목록이 비어 있으면 꺼져 있고 누구도 시작하지 못한다', async () => {
     const client = fakeClient();
@@ -214,4 +224,15 @@ test('정상으로 끝난 작업은 /task-cancel 대상으로 남지 않는다',
     await tick();
     assert.equal(await c.cancel({ userId: OWNER, channelId: 'c1' }), '이 채널에 진행 중인 작업이 없습니다.');
     assert.deepEqual(client.log.filter((l) => l.startsWith('cancel')), []);
+});
+
+test('trackApproval — 채팅에서 위임한 작업의 승인 요청도 주인이 버튼으로 결정한다', async () => {
+    const client = fakeClient();
+    const c = make(client);
+    c.trackApproval('ap-9', OWNER);
+    const byOther = await c.decide({ userId: OTHER_ALLOWED, approvalId: 'ap-9', decision: 'approve' });
+    assert.equal(byOther.settled, false);
+    const byOwner = await c.decide({ userId: OWNER, approvalId: 'ap-9', decision: 'approve' });
+    assert.equal(byOwner.settled, true);
+    assert.deepEqual(client.log, ['decide:ap-9:approve']);
 });

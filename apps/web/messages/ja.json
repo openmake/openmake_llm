@@ -1163,7 +1163,11 @@
       "low": "低",
       "medium": "中",
       "high": "高"
-    }
+    },
+    "chainSegment": "継続セグメント {index}/{count}",
+    "chainRoot": "長時間実行（{count} セグメント）",
+    "chainContinuedTag": "次のセグメントへ継続",
+    "chainBudget": "チェーン使用量 {usedMinutes}分 · {usedTokens} トークン · {segments}/{maxSegments} セグメント"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

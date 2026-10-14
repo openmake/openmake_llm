@@ -18,7 +18,35 @@
  * @module prompts/artifact-guide
  */
 
-const KO_GUIDE = `
+/**
+ * 채팅 턴 전용 절 — 산출물은 이 응답의 아티팩트로 직접(MCP 생성 도구·백그라운드 위임 금지).
+ * 에이전트 작업 프롬프트(agent-task-prompt)는 파일 산출·open-design 저장이 본업이라 이 절과
+ * 충돌하므로 거기엔 싣지 않는다(getArtifactGuide 의 deliverableClause:false).
+ */
+const KO_DESIGN_SAVE_RULE = ` 완성본은 아래 "산출물 전달" 대로 응답
+아티팩트로 출력하고, 디자인 워크스페이스 저장(\`open-design::create_artifact\` /
+\`open-design::write_file\`)은 사용자가 명시적으로 요청할 때만 하세요.`;
+
+const KO_DELIVERABLE_CLAUSE = `
+**산출물 전달 — 이 응답의 아티팩트로 직접:**
+HTML·문서·코드 산출물은 이 응답의 \`<artifact>\` 로 직접 출력하세요. MCP 도구(예:
+\`create_artifact\` 류)나 백그라운드 작업 위임으로 대신 만들지 마세요 — 채팅 클라이언트에
+전달되지 않습니다.
+`;
+
+const EN_DESIGN_SAVE_RULE = ` Output the
+finished design as a response artifact (see "Deliverable delivery" below); save it to the
+design workspace (\`open-design::create_artifact\` / \`open-design::write_file\`) only
+when the user explicitly asks.`;
+
+const EN_DELIVERABLE_CLAUSE = `
+**Deliverable delivery — directly as this response's artifact:**
+Output HTML/document/code deliverables directly as an \`<artifact>\` in this response;
+do not build them through an MCP tool (e.g. \`create_artifact\`-style tools) or by
+delegating to a background task — those never reach the chat client.
+`;
+
+const koGuide = (d: boolean): string => `
 
 ---
 
@@ -103,10 +131,9 @@ markdown 산출물은 길이만으로 감싸지 마세요. 다음을 **종합 �
 **디자인 도구 연동 (open-design:: 도구가 제공되는 경우):**
 UI/UX·디자인 작업이라면 HTML 을 작성하기 **전에** \`open-design::get_artifact\` /
 \`open-design::list_projects\` 등으로 기존 프로젝트의 디자인 토큰·컴포넌트 스타일을
-조회해 동일한 디자인 언어를 유지하고, 완성본은 \`open-design::create_artifact\` 또는
-\`open-design::write_file\` 로 디자인 워크스페이스에 저장하세요. 도구가 없으면 위
+조회해 동일한 디자인 언어를 유지하세요.${d ? KO_DESIGN_SAVE_RULE : ''} 도구가 없으면 위
 디자인 규칙만 적용합니다.
-
+${d ? KO_DELIVERABLE_CLAUSE : ''}
 **예시 — Python 코드:**
 \`\`\`
 <artifact id="quicksort" kind="code" title="QuickSort 구현" lang="python">
@@ -197,7 +224,7 @@ function App() {
 이 5개를 지키지 않은 html 은 미완성으로 간주됩니다. 사용자가 명시적으로 다른 스타일을 요청한 경우에만 예외.
 ⚠️ 대화 히스토리에 이전에 생성한 html(다른 서체·그라데이션 배경 등)이 있어도 **그 스타일을 따라 하지 마세요** — 재작성·새 문서는 항상 위 5항 규칙이 우선입니다.`;
 
-const EN_GUIDE = `
+const enGuide = (d: boolean): string => `
 
 ---
 
@@ -277,10 +304,8 @@ the artifact code**.
 **Design tool integration (when open-design:: tools are available):**
 For UI/UX or design work, BEFORE writing HTML call \`open-design::get_artifact\` /
 \`open-design::list_projects\` to read the existing project's design tokens and
-component styles so your output matches the established design language, and save
-the finished design back via \`open-design::create_artifact\` or
-\`open-design::write_file\`. If the tools are absent, just apply the design rules above.
-
+component styles so your output matches the established design language.${d ? EN_DESIGN_SAVE_RULE : ''} If the tools are absent, just apply the design rules above.
+${d ? EN_DELIVERABLE_CLAUSE : ''}
 Outside the tag, write only a brief description/context. Do not duplicate
 the artifact body outside — the user will see it twice.
 
@@ -317,9 +342,11 @@ HTML that violates these five is considered unfinished. Deviate only when the us
  * 사용자 언어에 맞는 artifact guide 반환. artifacts_enabled=false 면 호출자가 skip.
  *
  * @param language - 사용자 resolvedLanguage ('ko' | 'en' | ...). 미지정 시 영어.
+ * @param opts.deliverableClause - 채팅 전용 "산출물 전달" 절 포함 여부(기본 true). 에이전트 작업은 false.
  */
-export function getArtifactGuide(language?: string): string {
-    return language === 'ko' ? KO_GUIDE : EN_GUIDE;
+export function getArtifactGuide(language?: string, opts: { deliverableClause?: boolean } = {}): string {
+    const d = opts.deliverableClause !== false;
+    return language === 'ko' ? koGuide(d) : enGuide(d);
 }
 
 /**

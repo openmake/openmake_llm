@@ -53,6 +53,16 @@ export function detectOrchestrationIntents(message: string | undefined): Orchest
     };
 }
 
+/**
+ * PURE: 명시적 아티팩트(또는 보고서) 의도 턴인가 — 사용자 아티팩트 토글 또는 메시지 패턴.
+ * 도구 억제(아래 플랜)와 배정 안내의 위임 절 제외(external-system-prompt)가 공유한다.
+ */
+export function isArtifactIntentTurn(req: Pick<ChatMessageRequest, 'message' | 'artifactMode'>): boolean {
+    const msg = req.message ?? '';
+    const wantsReport = REPORT_PIPELINE.ENABLED && REPORT_INTENT_PATTERNS.some((re) => re.test(msg));
+    return req.artifactMode === true || wantsReport || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(msg));
+}
+
 interface ExternalToolPlan {
     tools: ToolDefinition[];
     /** 첫 턴 tool_choice 강제 대상 (통합 의도 > web_search 우선순위). */
@@ -80,11 +90,7 @@ export function buildExternalToolPlan(params: {
     // 쓰도록 유도 (2026-06-23 통제실험 근거).
     // 보고서 의도(P1 파이프라인)는 산출물이 reportdata→아티팩트이므로 아티팩트 의도와
     // 동일하게 distractor 를 억제한다 (web_search 는 억제 목록에 없어 조사 가능).
-    const wantsReport = REPORT_PIPELINE.ENABLED
-        && REPORT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
-    const wantsArtifact = req.artifactMode === true
-        || wantsReport
-        || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
+    const wantsArtifact = isArtifactIntentTurn(req);
     // 단, 활성 스킬이 required 로 바인딩한 도구는 억제 면제 — 스킬의 명시 의도가
     // 일반화된 distractor 휴리스틱보다 우선.
     const tools = toolCalling
@@ -112,9 +118,16 @@ export function buildExternalToolPlan(params: {
             logger.info(`[Orchestration] ${t.exposureLog} — ${t.name} 노출`);
         }
     }
+    // 아티팩트 의도가 위임 의도보다 우선 — "html 파일 하나로 만들어줘" 가 `파일…만들` 위임 패턴에도
+    // 걸려 백그라운드 위임으로 새면, 결과 통로(WS 이벤트·웹 푸시)가 없는 REST 클라이언트(Discord 봇)는
+    // 산출물을 영영 못 받는다(2026-10-14 운영). 응답 아티팩트만이 모든 클라이언트에 도달한다.
     if (orchestration.taskDelegate && toolCalling) {
-        tools.push(buildDelegateAgentTaskTool());
-        logger.info('[Orchestration] 작업 위임 의도 감지 — delegate_agent_task 노출');
+        if (wantsArtifact) {
+            logger.info('[Orchestration] 작업 위임 의도 감지 — 아티팩트 의도 턴이라 delegate_agent_task 억제');
+        } else {
+            tools.push(buildDelegateAgentTaskTool());
+            logger.info('[Orchestration] 작업 위임 의도 감지 — delegate_agent_task 노출');
+        }
     }
     // 사용자 확인 질문(ask_user): 큰 산출물을 만들기 전에 모호한 요청을 되묻는 출구 — 아티팩트·보고서
     // 의도 턴에만 노출한다(상시 노출 금지). 호출 처리는 external-provider 루프(도구 미실행·턴 종료).
@@ -122,7 +135,7 @@ export function buildExternalToolPlan(params: {
         tools.push(buildAskUserTool());
     }
     if (wantsArtifact && toolCalling) {
-        logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구 억제 (잔여 도구 ${tools.length}종)`);
+        logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구${orchestration.taskDelegate ? '·delegate_agent_task' : ''} 억제 (잔여 도구 ${tools.length}종)`);
     }
     // 통합(add-on) 의도 시 첫 턴에 그 통합의 도구를 강제 호출(tool_choice)한다 — 넛지만으론 qwen 이
     // web_search/자체아티팩트로 이탈한다. 등록 순서대로 첫 건이 이긴다.

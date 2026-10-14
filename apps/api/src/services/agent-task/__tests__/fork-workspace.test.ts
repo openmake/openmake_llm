@@ -48,6 +48,12 @@ describe('snapshotWorkspaceTurn', () => {
         expect(execRaw).not.toHaveBeenCalled();
     });
 
+    it('꺼져 있어도 force 면 스냅숏을 만든다(장기 실행 이어가기)', async () => {
+        const execRaw = jest.fn().mockResolvedValue(ok());
+        await snapshotWorkspaceTurn(runtime(execRaw), 2, { force: true });
+        expect(execRaw).toHaveBeenCalledTimes(1);
+    });
+
     it('호스트 작업 공간이 없는 실행기(로컬 브리지)는 건너뛴다', async () => {
         enable();
         const execRaw = jest.fn();

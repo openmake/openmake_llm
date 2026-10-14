@@ -361,6 +361,7 @@ export class ChatRequestHandler {
             ...(sourceNumberBase ? { sourceNumberBase } : {}),
             ...(turnSystemPromptPart ? { turnSystemPromptPart } : {}),
             ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
+            ...(params.attachments ? { attachments: params.attachments } : {}),
             modes,
             imageMode,
             artifactMode,
@@ -551,6 +552,7 @@ export class ChatRequestHandler {
         return {
             response: cleanedResponse,
             artifacts: extractedArtifacts.length > 0 ? extractedArtifacts : undefined,
+            ...(chatService.getDelegatedTasks().length > 0 ? { agentTasks: chatService.getDelegatedTasks() } : {}),
             sessionId: currentSessionId,
             model: servedModel,
             executionPlan: plan,

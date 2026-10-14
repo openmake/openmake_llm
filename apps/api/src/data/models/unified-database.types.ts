@@ -124,6 +124,12 @@ export interface AgentTask {
     /** fork 출처(141) — 다른 작업의 체크포인트에서 갈라져 나온 작업만 채워진다 */
     forked_from_task_id?: string | null;
     forked_from_turn?: number | null;
+    /** 장기 실행 체인(188) — 체인이 아니면 모두 NULL */
+    chain_root_task_id?: string | null;
+    continued_from_task_id?: string | null;
+    continued_by_task_id?: string | null;
+    long_running?: import('../../services/agent-task/types').LongRunningBudget | null;
+    continuation?: import('../../services/agent-task/types').ContinuationInfo | null;
     /** 실행 소유권(176) — 지금 이 작업을 실행 중인 프로세스와 소유권 만료 시각 */
     lease_owner?: string | null;
     lease_until?: string | Date | null;

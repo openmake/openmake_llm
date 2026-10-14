@@ -30,6 +30,7 @@ import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext, collectMediaFiles } from '../services/chat-service/attach-context';
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
+import { buildTurnAttachments } from '../services/chat-service/turn-attachments';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../tools/web-search/build-search-context';
 import { createTurnSourceEmitter, parseUserLocation } from './ws-chat-sources';
@@ -164,11 +165,10 @@ export async function handleChatMessage(
             const { buildPdfVisionAttachment } = await import('../services/chat-service/pdf-vision');
             pdfVision = await buildPdfVisionAttachment(msg.files, images?.length ?? 0);
         }
+        const fileDataBeforeExtract = (msg.files ?? []).map((f) => f.data); // 위임 작업 첨부(uploads/)용 원본 — 아래 추출이 data 를 지운다
         if (hasFiles) {
-            // 오디오·영상·이미지 원본은 doc-extractor 가 소거하기 전에 명시 계약(mediaFiles)으로 보존
-            mediaFiles = collectMediaFiles(msg.files);
-            const { extractAttachedDocuments } = await import('../services/chat-service/doc-extractor');
-            await extractAttachedDocuments(msg.files);
+            mediaFiles = collectMediaFiles(msg.files); // 오디오·영상·이미지 원본은 doc-extractor 가 소거하기 전에 명시 계약(mediaFiles)으로 보존
+            await (await import('../services/chat-service/doc-extractor')).extractAttachedDocuments(msg.files);
         }
         const fileContext = buildFileContext(msg.files);
 
@@ -316,7 +316,7 @@ export async function handleChatMessage(
             fileContext: [effectiveAttachContext + pdfVision.note, turnContexts.contextBlock].filter(Boolean).join('\n\n') || undefined,
             sourceNumberBase: turnStartSources.length || undefined,
             turnSystemPromptPart: turnContexts.systemPromptPart || undefined,
-            ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
+            ...(mediaFiles.length > 0 ? { mediaFiles } : {}), attachments: buildTurnAttachments(msg.files, images, fileDataBeforeExtract), // attachments: 위임 작업 첨부
             modes: activeModes,
             imageMode: msg.imageMode === true,
             artifactMode: msg.artifactMode === true,

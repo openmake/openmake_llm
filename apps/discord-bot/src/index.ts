@@ -16,13 +16,16 @@ import {
 import { config, EXIT_CODE_CONFIG, loadRemoteSettings, validateConfig } from './config';
 import { isUserAllowed, shouldRespond, stripBotMention } from './access-control';
 import { appendTurns, getHistory, resetSession, sessionKey } from './session-store';
-import { requestChatCompletion, resolveModel } from './openmake-client';
+import { RequestTimeoutError, requestChatCompletion, resolveModel } from './openmake-client';
 import { noteHumanMessage, shouldHandleBotMessage, tryConsumeBotTurn } from './bot-conversation';
 import { splitForDiscord } from './message-utils';
 import { prepareReply } from './attachments';
-import { createTaskClient } from './task-client';
-import { createTaskController, type TaskController } from './task-commands';
-import { handleDisabledTaskInteraction, handleTaskInteraction, registerTaskCommands } from './task-discord';
+import { collectInboundAttachments, DEFAULT_ATTACHMENT_PROMPT, formatSkippedNotice } from './inbound-attachments';
+import { createTaskClient, type TaskClient } from './task-client';
+import { createTaskController, EXECUTOR_LABEL, type TaskController } from './task-commands';
+import { delegatedTaskUi, handleDisabledTaskInteraction, handleTaskInteraction, registerTaskCommands, type SendableChannel } from './task-discord';
+import { watchTask } from './task-watcher';
+import { createDelegatedWatchRegistry, formatNotWatched, startDelegatedWatches, type AgentTaskRef } from './delegated-watch';
 
 /**
  * 기동 절차: 서버(관리자 화면) 설정 수신 → 검증 → Discord 로그인.
@@ -63,11 +66,53 @@ const client = new Client({
 /** /task 조정자 — 허용 사용자 목록이 있을 때만 만들어진다(clientReady). 없으면 기능이 꺼진 것이다. */
 let taskController: TaskController | null = null;
 
+/** 채팅에서 위임한 작업 조회용 — 봇 키의 사용자가 작업 소유자다. 설정을 받은 뒤(clientReady) 만든다 */
+let delegatedTaskClient: TaskClient | null = null;
+/** 위임 작업 지켜보기 현황 — 메모리에만 둔다(봇 재시작 시 지켜보기가 끊기는 것은 받아들인다) */
+const delegatedWatches = createDelegatedWatchRegistry();
+/** 위임 작업은 승인 정책을 지정하지 않는다 — 서버 기본값을 따른다 */
+const DELEGATED_POLICY_LABEL = '서버 기본 설정';
+
+/**
+ * 채팅에서 모델이 위임한 백그라운드 작업을 지켜보다 진행·승인·결과를 채널에 올린다(/task 와 독립).
+ * 승인 버튼은 /task 가 켜져 있고 요청한 사람이 허용 목록에 있을 때만 — 아니면 웹에서 승인하라는 안내.
+ */
+function watchDelegatedTasks(message: Message, tasks: AgentTaskRef[]): void {
+    const taskClient = delegatedTaskClient;
+    const channel = message.channel;
+    if (!taskClient || tasks.length === 0 || !('send' in channel)) return;
+    const sendable = channel as unknown as SendableChannel;
+    const controller = taskController;
+    const canApprove = controller !== null && config.taskAllowedUsers.includes(message.author.id);
+    startDelegatedWatches(tasks, {
+        channelId: message.channelId,
+        registry: delegatedWatches,
+        watch: (task) => watchTask(
+            taskClient,
+            task.id,
+            delegatedTaskUi(sendable, canApprove ? (approval) => controller.trackApproval(approval.approvalId, message.author.id) : null),
+            {
+                goal: task.goal,
+                executorLabel: EXECUTOR_LABEL.sandbox,
+                policyLabel: DELEGATED_POLICY_LABEL,
+                pollMs: config.taskPollMs,
+                watchMaxMs: config.taskWatchMaxMs,
+            },
+        ),
+        notifyNotWatched: async (task) => {
+            await sendable.send({ content: formatNotWatched(task), allowedMentions: { parse: [] } });
+        },
+    });
+}
+
 const TYPING_REFRESH_MS = 8_000; // Discord typing 표시는 ~10초 후 소멸 → 주기 갱신
 
 async function handleChat(message: Message, botUserId: string): Promise<void> {
-    const content = stripBotMention(message.content, botUserId);
-    if (!content) return;
+    const text = stripBotMention(message.content, botUserId);
+    const hasAttachments = message.attachments.size > 0;
+    if (!text && !hasAttachments) return;
+    // 첨부만 올린 경우 기본 문구로 요청 — 세션 이력에도 이 텍스트만 남는다(첨부는 이번 턴에만 적용)
+    const content = text || DEFAULT_ATTACHMENT_PROMPT;
 
     const key = sessionKey(message.channelId, message.author.id);
     const channel = message.channel;
@@ -78,13 +123,18 @@ async function handleChat(message: Message, botUserId: string): Promise<void> {
         : null;
 
     try {
-        const answer = await requestChatCompletion(getHistory(key), content);
+        // 들어오는 첨부: 봇이 내려받아 이미지는 image_url, 문서는 files[] 로 전달 (서명·만료 URL 은 넘기지 않음)
+        const inbound = hasAttachments
+            ? await collectInboundAttachments(message.attachments.values())
+            : { imageParts: [], files: [], skipped: [] };
+        const answer = await requestChatCompletion(getHistory(key), content, inbound);
         // 생성 이미지·아티팩트 → 파일 첨부 + 뷰어 링크 (Discord 는 md 이미지/artifact 렌더 불가)
         const prepared = await prepareReply(answer.content, answer.artifacts);
         // 히스토리에는 항상 치환본(prepared.content) 저장 — 원문의 [[artifact:id]] placeholder 를
         // 그대로 남기면 모델이 그 표기를 모방해 실체 없는 placeholder 만 출력한다 (2026-07-21 실측)
         appendTurns(key, content, prepared.content);
-        const chunks = splitForDiscord(prepared.content);
+        const skippedNotice = formatSkippedNotice(inbound.skipped);
+        const chunks = splitForDiscord(skippedNotice ? `${prepared.content}\n${skippedNotice}` : prepared.content);
         try {
             await message.reply({
                 content: chunks[0],
@@ -105,11 +155,18 @@ async function handleChat(message: Message, botUserId: string): Promise<void> {
                 await channel.send({ content: chunk, allowedMentions: { parse: [] } });
             }
         }
+        // 답변을 보낸 뒤 위임한 작업을 지켜본다 — 세션 이력에는 위 텍스트만 남는다
+        watchDelegatedTasks(message, answer.agentTasks);
     } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
-        console.error(`[discord-bot] 응답 실패 (${key}):`, reason);
+        if (err instanceof RequestTimeoutError) {
+            console.error(`[discord-bot] 응답 실패 (${key}): 응답 제한 시간 초과 (${err.timeoutMs / 1000}s)`);
+        } else {
+            console.error(`[discord-bot] 응답 실패 (${key}):`, reason);
+        }
+        const notice = err instanceof RequestTimeoutError ? `⚠️ ${reason}` : `⚠️ 답변 생성에 실패했습니다: ${reason}`;
         await message
-            .reply({ content: `⚠️ 답변 생성에 실패했습니다: ${reason}`, allowedMentions: { parse: [] } })
+            .reply({ content: notice, allowedMentions: { parse: [] } })
             .catch(() => {});
     } finally {
         if (typingTimer) clearInterval(typingTimer);
@@ -128,6 +185,8 @@ async function handleReset(interaction: ChatInputCommandInteraction): Promise<vo
 client.once('clientReady', async () => {
     const user = client.user;
     if (!user) return;
+    // 채팅 위임 작업 지켜보기는 /task 설정과 무관하게 켠다
+    delegatedTaskClient = createTaskClient({ baseUrl: config.apiBaseUrl, apiKey: config.apiKey });
     try {
         const model = await resolveModel();
         console.log(`[discord-bot] 로그인: ${user.tag}, 모델: ${model}, 백엔드: ${config.apiBaseUrl}`);

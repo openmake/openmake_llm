@@ -98,6 +98,9 @@ export async function handleToolCallingPath(p: ToolCallingPathParams): Promise<C
         onToken: p.onToken,
         abortSignal: p.abortSignal,
     });
+    // 클라이언트가 끊었으면 잘린 본문·부분 tool_calls 를 저장·반환하지 않는다 — 기존 관례대로 'ABORTED'
+    // (채팅 파이프라인의 external-provider 중단 가드와 같은 처리).
+    if (p.abortSignal?.aborted) throw new Error('ABORTED');
 
     const responseTime = Date.now() - p.startTime;
 

@@ -16,6 +16,9 @@ export interface TaskSnapshot {
     maxTurns: number;
     result: string | null;
     error: string | null;
+    /** 이어가기(188) — 이 작업을 이어받은 후속 작업 id. 있으면 감시기가 그쪽으로 옮겨 간다 */
+    continuedByTaskId: string | null;
+    completionPath: string | null;
 }
 
 export interface PendingApproval {
@@ -32,8 +35,14 @@ export class TaskApiError extends Error {
     }
 }
 
+/** 작업 입력 첨부 — 서버 작업 생성의 files[](base64 원본)·images[](data:image/ URL). 실행 때 작업 공간 uploads/ 에 쓰인다 */
+export interface TaskInputAttachments {
+    files?: Array<{ name: string; type?: string; size: number; data: string }>;
+    images?: string[];
+}
+
 export interface TaskClient {
-    createTask(goal: string, executor: TaskExecutor): Promise<string>;
+    createTask(goal: string, executor: TaskExecutor, attachments?: TaskInputAttachments): Promise<string>;
     executeTask(taskId: string, approvalPolicy: TaskApprovalPolicy): Promise<void>;
     getTask(taskId: string): Promise<TaskSnapshot>;
     cancelTask(taskId: string): Promise<void>;
@@ -45,9 +54,12 @@ export interface TaskClient {
 
 /** 요청 1건의 기본 시간 상한 — 조회·결정은 짧은 호출이다 */
 const DEFAULT_TIMEOUT_MS = 15_000;
+/** 첨부가 있는 작업 생성의 시간 상한 — 서버가 생성 때 문서 텍스트를 추출한다(문서당 최대 수십 초) */
+const CREATE_WITH_FILES_TIMEOUT_MS = 120_000;
 
 interface RawTask {
     id?: unknown; status?: unknown; progress?: unknown; current_turn?: unknown; max_turns?: unknown; result?: unknown; error?: unknown;
+    continued_by_task_id?: unknown; completion_path?: unknown;
 }
 
 const numberOr = (value: unknown, fallback: number): number => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
@@ -62,6 +74,8 @@ function toSnapshot(raw: RawTask): TaskSnapshot {
         maxTurns: numberOr(raw.max_turns, 0),
         result: stringOrNull(raw.result),
         error: stringOrNull(raw.error),
+        continuedByTaskId: stringOrNull(raw.continued_by_task_id),
+        completionPath: stringOrNull(raw.completion_path),
     };
 }
 
@@ -79,7 +93,7 @@ function errorMessageOf(body: unknown): string | undefined {
 export function createTaskClient(opts: { baseUrl: string; apiKey: string; timeoutMs?: number }): TaskClient {
     const base = opts.baseUrl.replace(/\/$/, '');
 
-    async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+    async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown, timeoutMs?: number): Promise<T> {
         let res: Response;
         try {
             res = await fetch(`${base}${path}`, {
@@ -89,7 +103,7 @@ export function createTaskClient(opts: { baseUrl: string; apiKey: string; timeou
                     ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
                 },
                 ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-                signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+                signal: AbortSignal.timeout(timeoutMs ?? opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
             });
         } catch (e) {
             // fetch 의 원문("The operation was aborted due to timeout", "fetch failed")은 그대로 채널에 나간다 — 읽을 수 있는 말로 바꾼다
@@ -102,8 +116,11 @@ export function createTaskClient(opts: { baseUrl: string; apiKey: string; timeou
     }
 
     return {
-        async createTask(goal, executor) {
-            const data = await call<{ task?: RawTask }>('POST', '/api/agent-tasks', { goal, ...(executor === 'local' ? { executor } : {}) });
+        async createTask(goal, executor, attachments) {
+            const files = attachments?.files?.length ? attachments.files : undefined;
+            const images = attachments?.images?.length ? attachments.images : undefined;
+            const body = { goal, ...(executor === 'local' ? { executor } : {}), ...(files ? { files } : {}), ...(images ? { images } : {}) };
+            const data = await call<{ task?: RawTask }>('POST', '/api/agent-tasks', body, files || images ? CREATE_WITH_FILES_TIMEOUT_MS : undefined);
             const id = data?.task?.id;
             if (typeof id !== 'string' || !id) throw new TaskApiError('작업 id 를 받지 못했습니다', 502);
             return id;
