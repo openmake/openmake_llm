@@ -1,6 +1,6 @@
 /**
  * Discord gateway bot 설정 — 전부 환경변수에서 로드 (No-Hardcoding 정책 L1/L2).
- * 접근 제어 키 체계는 hermes-agent Discord gateway 와 동일한 의미론:
+ * 접근 제어 키 체계:
  *   DISCORD_ALLOWED_USERS / DISCORD_ALLOWED_ROLES / DISCORD_ALLOW_ALL_USERS
  *   DISCORD_REQUIRE_MENTION / DISCORD_FREE_RESPONSE_CHANNELS
  */
@@ -71,7 +71,7 @@ export const config = {
     /** 백엔드 한 턴 응답 제한 시간(ms, 기본 10분) — 로컬 모델은 긴 산출물에 5분 이상 걸릴 수 있음 */
     requestTimeoutMs: parseIntEnv(process.env.DISCORD_BOT_REQUEST_TIMEOUT_MS, 600_000),
 
-    // ── 접근 제어 (hermes-parity) ─────────────────────────────
+    // ── 접근 제어 ─────────────────────────────
     allowAllUsers: parseBool(process.env.DISCORD_ALLOW_ALL_USERS, false),
     allowedUsers: parseList(process.env.DISCORD_ALLOWED_USERS),
     allowedRoles: parseList(process.env.DISCORD_ALLOWED_ROLES),

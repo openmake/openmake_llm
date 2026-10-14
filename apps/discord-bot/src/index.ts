@@ -1,6 +1,6 @@
 /**
  * OpenMake LLM Discord gateway bot 엔트리포인트.
- * 구조 (hermes-agent gateway 동일 계열):
+ * 구조:
  *   Discord Gateway(WS, 아웃바운드) 상시 접속 → 메시지 수신 → 접근 제어/멘션 규칙
  *   → 사용자별 세션 이력 → POST /api/v1/chat/completions → Discord 회신.
  */
@@ -193,7 +193,7 @@ client.once('clientReady', async () => {
     } catch (err) {
         console.error('[discord-bot] 백엔드 모델 확인 실패 (기동은 계속):', err instanceof Error ? err.message : err);
     }
-    // commands.set 은 전역 명령 전체를 교체해 같은 봇 앱을 공유하는 다른 gateway(hermes 등)의
+    // commands.set 은 전역 명령 전체를 교체해 같은 봇 앱을 공유하는 다른 gateway 의
     // 명령을 지워버림 — 기존 명령을 보존하고 /reset 만 없을 때 추가한다.
     const app = client.application;
     if (!app) return;
