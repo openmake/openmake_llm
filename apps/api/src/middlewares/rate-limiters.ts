@@ -18,6 +18,7 @@ import { ARTIFACT_COMMENT_LIMITS } from '../config/runtime-limits';
 import { ARTIFACT_EXPORT } from '../config/artifact-export';
 import { verifyToken, looksLikeJWT } from '../auth/auth-core';
 import { isValidApiKeyFormat } from '../auth/api-key-utils';
+import { extractApiKey } from './api-key-auth';
 import { isAdminRole } from '../data/user-manager';
 
 // ================================================
@@ -105,19 +106,14 @@ function getRequestIP(req: Request): string {
 }
 
 /**
- * 액터 키 — "이 요청을 누구 몫으로 셀 것인가".
- *
- * JWT 사용자 > API key > IP 순. **API key 를 IP 로 세면 안 된다**: 프록시 뒤에서는 CLI·
- * 데스크톱 클라이언트가 사이트 전체 트래픽과 한 버킷을 쓰게 되어, 남의 요청 때문에 429 를
- * 맞는다(실측). 키 원문은 넣지 않고 해시 앞부분만 쓴다.
- * 검증되지 않은 헤더이므로 형식 검사만 한다. 형식이 맞는 임의 키로 버킷을 늘리는 것까지는 막지
- * 못하므로 API 키와 무관한 리미터는 `apiKeyActor:false` 로 둔다.
+ * 액터 키 — "이 요청을 누구 몫으로 셀 것인가". JWT 사용자 > API key(X-API-Key 또는 Bearer omk_live_ — Discord 봇·OpenAI SDK 는 Bearer 가 표준) > IP 순.
+ * **API key 를 IP 로 세면 안 된다**: 프록시 뒤에서는 CLI·데스크톱 클라이언트가 사이트 전체 트래픽과 한 버킷을 쓰게 되어, 남의 요청 때문에 429 를 맞는다(실측). 키 원문은 넣지 않고 해시 앞부분만 쓴다.
+ * 검증되지 않은 헤더이므로 형식 검사만 한다. 형식이 맞는 임의 키로 버킷을 늘리는 것까지는 막지 못하므로 API 키와 무관한 리미터는 `apiKeyActor:false` 로 둔다.
  */
 function resolveActorKey(req: Request, userId: string | null, ip: string, apiKeyActor: boolean): string {
     if (userId) return `user:${userId}`;
     if (apiKeyActor) {
-        const raw = req.headers['x-api-key'];
-        const apiKey = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+        const apiKey = extractApiKey(req);
         // 형식이 맞는 키만 자기 버킷 — 임의 문자열이 버킷을 만들면 헤더만 바꿔 리밋을 우회한다
         if (apiKey && isValidApiKeyFormat(apiKey)) return `key:${createHash('sha256').update(apiKey).digest('hex').slice(0, 16)}`;
     }
