@@ -14,7 +14,7 @@ import { getExternalProviderSystemGuards } from '../../chat/prompt';
 import { getCurrentDate } from '../../utils/datetime';
 import { getStyleGuard, normalizeStyle } from '../../chat/style';
 import { buildOrchestrationPromptGuide } from './orchestration-dispatch';
-import { hasOrchestrationIntent, type OrchestrationIntents } from './external-tool-plan';
+import { hasOrchestrationIntent, isArtifactIntentTurn, type OrchestrationIntents } from './external-tool-plan';
 import { SPAWN_PROMPT_GUIDE } from '../agent-spawn/spawn-agents';
 import { LANGUAGE_DISPLAY_NAMES, resolvePromptLocale, type SupportedLanguageCode } from '../../chat/language-policy';
 import type { StreamFromExternalContext } from './external-provider-types';
@@ -173,8 +173,13 @@ export function buildExternalSystemPromptParts(params: ExternalSystemPromptParam
 
     // 오케스트레이션 자동 배정(Stage 1) — 해당 의도 프리필터 매칭 턴에만 배정 가이드 주입
     // (도구 노출과 동일 조건 공유 — external-tool-plan.detectOrchestrationIntents).
+    // 위임 절은 delegate_agent_task 가 실제로 노출되는 턴에만 — 아티팩트 의도 턴은 플랜이 그 도구를
+    // 숨기므로(external-tool-plan) 안내만 남으면 모델이 없는 도구를 찾는다.
     if (hasOrchestrationIntent(orchestration)) {
-        systemPromptParts.push(buildOrchestrationPromptGuide().trim());
+        const guide = buildOrchestrationPromptGuide({
+            includeDelegate: orchestration?.taskDelegate === true && !isArtifactIntentTurn(req),
+        }).trim();
+        if (guide) systemPromptParts.push(guide);
     }
 
     // 병렬 위임 의도 — 매칭 턴에만 spawn_agents 사용 가이드 주입 (오케스트레이션 가이드와
