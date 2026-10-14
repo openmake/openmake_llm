@@ -68,7 +68,8 @@ export const config = {
     apiKey: process.env.DISCORD_BOT_API_KEY || '',
     /** 사용할 모델 id. 미설정 시 GET /api/v1/models 첫 항목 사용 */
     model: process.env.DISCORD_BOT_MODEL || '',
-    requestTimeoutMs: parseIntEnv(process.env.DISCORD_BOT_REQUEST_TIMEOUT_MS, 120_000),
+    /** 백엔드 한 턴 응답 제한 시간(ms, 기본 10분) — 로컬 모델은 긴 산출물에 5분 이상 걸릴 수 있음 */
+    requestTimeoutMs: parseIntEnv(process.env.DISCORD_BOT_REQUEST_TIMEOUT_MS, 600_000),
 
     // ── 접근 제어 (hermes-parity) ─────────────────────────────
     allowAllUsers: parseBool(process.env.DISCORD_ALLOW_ALL_USERS, false),
