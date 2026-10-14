@@ -1,5 +1,5 @@
 /**
- * 에이전트 작업 턴 루프 설정 — 오류 복구와 응답 가드의 임계값(hermes-agent 검토 "턴 루프·종료 조건·오류 복구").
+ * 에이전트 작업 턴 루프 설정 — 오류 복구와 응답 가드의 임계값.
  * 근거가 실측이 아닌 값은 주석에 그렇게 적는다 — 발동은 스텝으로 남으니 운영 집계 뒤 조정한다.
  *
  * @module config/agent-task-turn-loop
@@ -29,7 +29,7 @@ export const AGENT_TASK_TURN_LOOP = {
      *  더 긴 간격으로 기다렸다가 다시 부른다. 모델 서버가 재기동 중일 때 예약 작업이 실패로 끝나던 것을 줄인다.
      *  남은 작업 시간 예산보다 길게는 기다리지 않는다. AGENT_TASK_RECOVERY_WAIT=false 로 끈다. */
     RECOVERY_WAIT_ENABLED: process.env.AGENT_TASK_RECOVERY_WAIT !== 'false',
-    /** 대기 횟수와 간격(첫 대기·상한) — 15·30·60·60·60초. 실측이 아니라 hermes-agent 의 값이다.
+    /** 대기 횟수와 간격(첫 대기·상한) — 15·30·60·60·60초. 실측이 아닌 참고값이다.
      *  AGENT_TASK_RECOVERY_WAIT_MAX_CYCLES / _BASE_MS / _CAP_MS */
     RECOVERY_WAIT_MAX_CYCLES: num(process.env.AGENT_TASK_RECOVERY_WAIT_MAX_CYCLES, 5),
     RECOVERY_WAIT_BASE_MS: num(process.env.AGENT_TASK_RECOVERY_WAIT_BASE_MS, 15_000),
@@ -37,7 +37,7 @@ export const AGENT_TASK_TURN_LOOP = {
     /** 말만 하고 멈춘 턴 재촉 — 도구 호출 없이 다음 행동 예고로 끝난 짧은 응답을 최종 답변으로 받지 않고 되묻는 횟수(작업당).
      *  첫 턴의 계획-만 재촉과 별개다. 0 이면 끈다. AGENT_TASK_STALL_NUDGE_MAX */
     STALL_NUDGE_MAX: num(process.env.AGENT_TASK_STALL_NUDGE_MAX, 2),
-    /** 이보다 긴 응답은 실질 답변으로 보고 재촉하지 않는다 / 예고를 찾는 끝부분 길이. 실측이 아니라 hermes-agent 의 값이다. */
+    /** 이보다 긴 응답은 실질 답변으로 보고 재촉하지 않는다 / 예고를 찾는 끝부분 길이. 실측이 아닌 참고값이다. */
     STALL_MAX_CHARS: num(process.env.AGENT_TASK_STALL_MAX_CHARS, 400),
     STALL_TAIL_CHARS: 160,
     /** 컨텍스트 절단 기록 — 창 초과로 요청 사본에서 오래된 메시지를 잘라낸 호출을 단계 기록(context_trim)으로 남긴다.
@@ -62,7 +62,7 @@ export const AGENT_TASK_TURN_LOOP = {
      *  AGENT_TASK_OUTPUT_REPETITION_CUT=false 면 종전처럼 기록만 한다. AGENT_TASK_OUTPUT_REPETITION_RETRY_MAX */
     OUTPUT_REPETITION_CUT_ENABLED: process.env.AGENT_TASK_OUTPUT_REPETITION_CUT !== 'false',
     OUTPUT_REPETITION_RETRY_MAX: num(process.env.AGENT_TASK_OUTPUT_REPETITION_RETRY_MAX, 1),
-    /** 창 길이(자)·반복 횟수 임계 — 60자 창이 5회 이상. 실측이 아니라 hermes-agent 의 값이다.
+    /** 창 길이(자)·반복 횟수 임계 — 60자 창이 5회 이상. 실측이 아닌 참고값이다.
      *  AGENT_TASK_OUTPUT_REPETITION_WINDOW_CHARS / _MIN_REPEATS */
     OUTPUT_REPETITION_WINDOW_CHARS: num(process.env.AGENT_TASK_OUTPUT_REPETITION_WINDOW_CHARS, 60),
     OUTPUT_REPETITION_MIN_REPEATS: num(process.env.AGENT_TASK_OUTPUT_REPETITION_MIN_REPEATS, 5),
@@ -83,7 +83,7 @@ export const AGENT_TASK_TURN_LOOP = {
      *  임계를 넘으면 실행하지 않는다. 같은 호출의 연속 반복(AGENT_TASK_TOOL_LOOP_*)이 못 잡는 경우다. AGENT_TASK_TOOL_LOOP_CYCLE=false 로 끈다. */
     TOOL_LOOP_CYCLE_ENABLED: process.env.AGENT_TASK_TOOL_LOOP_CYCLE !== 'false',
     /** 같은 주기가 이 바퀴째 같은 결과로 끝나면 안내 / 이 바퀴를 다 돈 뒤 주기를 이어가는 호출은 실행하지 않음 / 보는 주기 길이 상한.
-     *  실측이 아니다 — hermes-agent 는 주기 4까지 본다. AGENT_TASK_TOOL_LOOP_CYCLE_WARN / _BLOCK / _MAX_PERIOD */
+     *  실측이 아닌 참고값이다. AGENT_TASK_TOOL_LOOP_CYCLE_WARN / _BLOCK / _MAX_PERIOD */
     TOOL_LOOP_CYCLE_WARN: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_WARN, 2),
     TOOL_LOOP_CYCLE_BLOCK: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_BLOCK, 3),
     TOOL_LOOP_CYCLE_MAX_PERIOD: num(process.env.AGENT_TASK_TOOL_LOOP_CYCLE_MAX_PERIOD, 3),
