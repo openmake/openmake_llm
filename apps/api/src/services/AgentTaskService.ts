@@ -22,9 +22,7 @@ import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskStuckNudge, getAgentTaskEmptyResponseNudge, AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote } from '../prompts/agent-task-prompt';
-import { extractAndStripArtifacts } from '../llm/artifact-parser';
-import { applyReportRender } from './chat-service/report-block';
+import { getAgentTaskStuckNudge, getTaskSandboxGuidance, getLocalExecutorGuidance, getWorktreeIsolationNote } from '../prompts/agent-task-prompt';
 import { isTerminalStatus, notifyTaskTerminal } from './agent-task/terminal-notify';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../tool-contract/types';
@@ -35,7 +33,7 @@ import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { getApprovalRegistry } from './task-sandbox/approval-gate';
 import { currentPlanStepIndex } from './task-sandbox/planning';
-import { shouldAdoptFinalTurnAnswer, withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
+import { withMemorySaveExposure, type TurnGateFlags } from './agent-task/turn-gate';
 import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { parkForMissingDevice } from './agent-task/device-wait';
 import { parkForModelOutage } from './agent-task/model-wait';
@@ -49,7 +47,7 @@ import { loadChainContext, gateTurnWithContinuation, prepareSegmentWorkspace } f
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
 import { trackAgentTaskRun, isShutdownAbort, recordShutdownInterrupt } from './agent-task/shutdown-drain';
-import { ensureUniqueToolCallIds, findDanglingToolCalls, loadReentryState, writeTurnCheckpoint, usedToolNamesFrom } from './agent-task/turn-reentry';
+import { findDanglingToolCalls, loadReentryState, writeTurnCheckpoint, usedToolNamesFrom } from './agent-task/turn-reentry';
 import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
 import { nextTurnProgress } from './agent-task/turn-progress';
 import { replyNudge } from './agent-task/one-shot-notice';
@@ -58,12 +56,10 @@ import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { effectiveApprovalPolicy, persistApprovalPolicy } from './agent-task/approval-policy-restore';
 import { effectiveThinkingLevel, persistThinkingLevel } from './agent-task/thinking-level-restore';
-import { noteThinkingFailure, noteThinkingSuccess } from './agent-task/thinking-downgrade';
-import { getThinkingDowngradeNote } from '../prompts/agent-task-turn-loop';
+import { noteThinkingSuccess } from './agent-task/thinking-downgrade';
 import { createSandboxWaiting, handleSandboxUnavailable } from './agent-task/sandbox-unavailable';
-import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
-import { prepareToolArgs } from './agent-task/tool-args';
+import { normalizeTurnToolCalls, nudgeEmptyResponse, recordResponseStep } from './agent-task/turn-response';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { callAgentTurnWithContext } from './agent-task/turn-context';
 import { CacheUsageTally } from './agent-task/cache-usage';
@@ -392,62 +388,15 @@ export class AgentTaskService {
                     throw new AgentTaskAbort('token_limit');
                 }
 
-                // 마무리 턴(도구 차단): effectiveTools=[] 로 호출했어도 모델이 native tool_calls 를
-                // 뱉거나 XML 텍스트로 도구를 호출(아래 recoverTextToolCalls 가 승격)하면 도구가 실행돼
-                // 최종 정리가 무산된다. finalTurnReason 이면 그 호출을 실행하지 않는다 — 남은 턴이
-                // 있으면(토큰 사유) 도구 없는 다음 턴에서 답변을 유도하고, 마지막 턴이면 도구 없이 끝나
-                // turn 상한 종료(재개 가능)로 떨어진다(도구만 부른 응답을 "완료"로 오표시하지 않음).
-                // tool_calls 는 남기지 않는다 — tool 결과 없이 dangling 되면 resume/렌더 정합이 깨진다.
-                const finalTurnHasNativeTools = !!(result.tool_calls && result.tool_calls.length > 0);
-                const finalTurnHasTextTools = !!finalTurnReason && !finalTurnHasNativeTools
-                    && !!result.content && recoverTextToolCalls(result.content).length > 0;
-                // 실질 답변 채택: 도구 호출이 섞였어도 본문이 충분하면 그 텍스트를 최종 답변으로 삼는다.
-                // 종전엔 응답 전체를 버려서, 산출물을 다 만들어 놓고 마지막 턴에 도구를 한 번 더 부르려 한
-                // 작업이 max_turns_exhausted 로 실패 기록됐다(2026-08-08 예약 리포트: 렌더 완료된 36KB
-                // report.html 이 게시되지 못하고 workspace 와 함께 폐기). 텍스트 도구 호출(XML) 케이스는
-                // 본문 자체가 도구 호출문이라 채택하지 않는다 — native tool_calls 만 버리고 본문을 살린다.
-                const finalTurnAnswerLen = (result.content ?? '').trim().length;
-                const finalTurnAnswerUsable = shouldAdoptFinalTurnAnswer({
-                    finalTurn: !!finalTurnReason,
-                    hasNativeTools: finalTurnHasNativeTools,
-                    hasTextTools: finalTurnHasTextTools,
-                    answerLength: finalTurnAnswerLen,
-                });
-                if (finalTurnReason && (finalTurnHasNativeTools || finalTurnHasTextTools) && !finalTurnAnswerUsable) {
-                    logger.info(`[AgentTask] 마무리 턴 도구 호출 무시: ${taskId} (turn ${turn + 1})`);
-                    conversation.push({ role: 'assistant', content: result.content });
-                    const stType = turn === 0 ? 'plan' : 'assistant';
-                    await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: stType, content: result.content });
-                    emitStep(stType, undefined, result.content);
-                    continue;
-                }
-                if (finalTurnAnswerUsable) {
-                    // 도구 호출만 떨궈 아래 최종 답변 경로(finalize 관문)로 자연 진입시킨다.
-                    logger.info(`[AgentTask] 마무리 턴 도구 호출 폐기·본문 채택: ${taskId} `
-                        + `(turn ${turn + 1}, ${finalTurnAnswerLen}자, 폐기 ${result.tool_calls!.length}건)`);
-                    result.tool_calls = undefined;
-                }
-
-                // qwen 결함 보정: 구조화 tool_calls 없이 도구 호출을 XML 텍스트로 뱉으면 실행이 안 돼
-                // 파일이 안 만들어진다(→ 다운로드할 산출물 없음) — 파싱해 실 tool_calls 로 승격 후 실행.
-                // 마무리 턴은 위 도구 차단 가드에서 이미 continue 로 처리되므로 여기 도달하지 않는다.
-                // 대화 기록 **전에** 승격해야 assistant.tool_calls 에 남아 tool 결과와 짝이 맞고 턴 중간 재개가 된다.
-                if ((!result.tool_calls || result.tool_calls.length === 0) && result.content) {
-                    const recovered = recoverTextToolCalls(result.content);
-                    if (recovered.length > 0) { result.tool_calls = recovered; result.content = ''; }
-                }
-                if (result.tool_calls?.length) result.tool_calls = ensureUniqueToolCallIds(result.tool_calls, conversation, turn);
+                // 도구 호출 정리(마무리 턴 차단·텍스트 도구 호출 승격·id 정리) — agent-task/turn-response.
+                const screened = await normalizeTurnToolCalls({ result, finalTurnReason, taskId, turn, conversation, stepNumber, emitStep });
+                stepNumber = screened.stepNumber;
+                if (screened.skip) continue;
 
                 // 빈 응답(본문·도구 호출 없음)은 최종 답변으로 받지 않고 되묻는다 — 일시적 빈 응답 한 번으로 작업이 끝나지 않게(turn-guards).
                 if (isEmptyTurn(result) && emptyRetries < AGENT_TASK_LIMITS.EMPTY_RESPONSE_MAX_RETRIES) {
                     emptyRetries++;
-                    // 추론을 켠 작업의 빈 응답도 연속 실패로 센다(184) — 임계면 이번 실행만 추론을 끈다.
-                    if (noteThinkingFailure(runStateOf(roleState))) {
-                        await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'thinking_downgrade',
-                            content: getThinkingDowngradeNote(roleState.thinkingLevel ?? 'off', roleState.thinkingFailures ?? 0), planStepIndex: planIdx() });
-                    }
-                    conversation.push({ role: 'assistant', content: AGENT_TASK_EMPTY_RESPONSE_PLACEHOLDER }, replyNudge(getAgentTaskEmptyResponseNudge()));
-                    await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: `빈 응답 — 되묻기 ${emptyRetries}/${AGENT_TASK_LIMITS.EMPTY_RESPONSE_MAX_RETRIES}`, planStepIndex: planIdx() });
+                    stepNumber = await nudgeEmptyResponse({ roleState, conversation, taskId, stepNumber, emptyRetries, planIdx });
                     continue;
                 }
 
@@ -467,39 +416,9 @@ export class AgentTaskService {
                     logger.info(`[AgentTask] stuck 감지 → 전략변경 주입: ${taskId} (turn ${turn + 1})`);
                 } else if (!stuck) stuckNotified = false;
 
-                const hasToolCalls = !!result.tool_calls && result.tool_calls.length > 0;
-
-                // 최종 답변 턴이면 deliverable(<artifact> 태그) 추출 — 스텝/result 는
-                // cleaned 본문으로 기록하고, 아티팩트는 step_type='artifact' 행으로 영속화.
-                // reportdata 블록은 추출 **전에** 고정 템플릿으로 렌더해 <artifact> 로 변환
-                // (P1 Phase 2 — 렌더 없인 fence-fallback 이 원본 JSON 을 code 아티팩트로 오영속).
-                const extracted = hasToolCalls ? null : extractAndStripArtifacts(applyReportRender(result.content ?? ''));
-                const stepContent = extracted ? extracted.cleanedContent : result.content;
-
-                // 스텝 기록(display용). 첫 턴은 목표 분해 계획(plan)으로 표시.
-                // resume 복원 상태(turn>0)는 plan 이 아님 — 중간 재개이므로 자동 제외됨.
-                const stepType = turn === 0
-                    ? 'plan'
-                    : (hasToolCalls ? 'assistant_tool_call' : 'assistant');
-                // 턴이 호출한 도구명 기록(콤마 결합) — 실행 결과는 tool_result 행에 남지만,
-                // 중단/거부로 실행되지 않은 호출 의도까지 남겨 턴 단위 집계를 가능하게 한다.
-                const turnToolNames = hasToolCalls
-                    ? result.tool_calls!.map((tc) => tc.function.name).join(',')
-                    : undefined;
-                await db.addAgentTaskStep({
-                    taskId,
-                    stepNumber: stepNumber++,
-                    stepType,
-                    toolName: turnToolNames,
-                    content: stepContent,
-                    planStepIndex: planIdx(),
-                    // 호출 의도의 인자까지 영속(091) — 중단·거부로 실행되지 않아 tool_result 행이
-                    // 남지 않는 호출도 사후에 복기할 수 있게 한다(tool_name 영속과 같은 취지).
-                    toolArgs: hasToolCalls
-                        ? prepareToolArgs(result.tool_calls!.map((tc) => ({ name: tc.function.name, args: tc.function.arguments })))
-                        : undefined,
-                });
-                emitStep(stepType, turnToolNames, stepContent);
+                // 응답 스텝 기록(최종 답변 턴이면 아티팩트 분리) — agent-task/turn-response.
+                const rec = await recordResponseStep({ result, turn, taskId, stepNumber, planIdx, emitStep });
+                const { hasToolCalls, extracted, stepContent } = rec; stepNumber = rec.stepNumber;
 
                 if (!hasToolCalls) {
                     // 계획만 쓰고 멈춘 첫 턴(산출물 없음)은 1회, 이후 턴의 "이제 ~하겠습니다"식 행동 예고는 상한까지 재촉하고 계속한다.

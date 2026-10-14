@@ -20,6 +20,7 @@ import { getUnifiedDatabase, getPool } from '../../data/models/unified-database'
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import { AgentTaskRunRepository } from '../../data/repositories/agent-task-run-repository';
 import { AgentTaskParkRepository } from '../../data/repositories/agent-task-park-repository';
+import { AgentTaskLeaseRepository } from '../../data/repositories/agent-task-lease-repository';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
@@ -197,10 +198,12 @@ export async function sweepExpiredTaskLeases(): Promise<{ resumed: number; faile
     if (!AGENT_TASK_LIMITS.LEASE_ENABLED || isAgentTaskShutdown()) return out; // 종료 중엔 가져오지 않는다 — 가져와도 실행을 시작하지 못한다
     const db = getUnifiedDatabase();
     let taskRepo: AgentTaskRepository;
+    let leaseRepo: AgentTaskLeaseRepository;
     let expired: AgentTask[];
     try {
         taskRepo = new AgentTaskRepository(getPool());
-        expired = await taskRepo.listExpiredLeaseTasks();
+        leaseRepo = new AgentTaskLeaseRepository(getPool());
+        expired = await leaseRepo.listExpiredLeaseTasks();
     } catch (e) {
         logger.warn(`[LeaseSweep] 지난 소유권 조회 실패 — 건너뜀: ${e instanceof Error ? e.message : e}`);
         return out;
@@ -208,7 +211,7 @@ export async function sweepExpiredTaskLeases(): Promise<{ resumed: number; faile
     for (const task of expired) {
         try {
             if (AgentTaskService.isRunning(task.id)) continue;
-            if (!(await taskRepo.takeOverExpiredLease(task.id, leaseOwner(), AGENT_TASK_LIMITS.LEASE_MS))) continue;
+            if (!(await leaseRepo.takeOverExpiredLease(task.id, leaseOwner(), AGENT_TASK_LIMITS.LEASE_MS))) continue;
             logger.info(`[LeaseSweep] 소유권이 지난 작업을 가져옴: ${task.id} (이전 소유자 ${task.lease_owner ?? '-'})`);
             const outcome = await recoverTask(task, db, taskRepo);
             if (outcome === 'resumed') out.resumed++;

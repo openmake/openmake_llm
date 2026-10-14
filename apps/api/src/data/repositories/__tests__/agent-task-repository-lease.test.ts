@@ -3,6 +3,7 @@
  */
 import type { Pool } from 'pg';
 import { AgentTaskRepository, parkedTaskCondition } from '../agent-task-repository';
+import { AgentTaskLeaseRepository } from '../agent-task-lease-repository';
 
 function fakePool(results: Array<{ rows: unknown[]; rowCount?: number }>) {
     const calls: Array<{ sql: string; params: unknown[] }> = [];
@@ -13,7 +14,7 @@ function fakePool(results: Array<{ rows: unknown[]; rowCount?: number }>) {
 describe('AgentTaskRepository — 실행 소유권', () => {
     it('acquireLease — 소유권이 없거나 내 것이거나 지났을 때만 잡는다', async () => {
         const { pool, calls } = fakePool([{ rows: [], rowCount: 1 }, { rows: [], rowCount: 0 }]);
-        const repo = new AgentTaskRepository(pool);
+        const repo = new AgentTaskLeaseRepository(pool);
         await expect(repo.acquireLease('t1', 'host:0', 60_000)).resolves.toBe(true);
         await expect(repo.acquireLease('t1', 'host:0', 60_000)).resolves.toBe(false);
         expect(calls[0].sql).toContain('lease_owner IS NULL OR lease_owner = $2 OR lease_until < NOW()');
@@ -22,7 +23,7 @@ describe('AgentTaskRepository — 실행 소유권', () => {
 
     it('renewLease — 여전히 내 것일 때만 연장한다(0행 = 잃음)', async () => {
         const { pool, calls } = fakePool([{ rows: [], rowCount: 1 }, { rows: [], rowCount: 0 }]);
-        const repo = new AgentTaskRepository(pool);
+        const repo = new AgentTaskLeaseRepository(pool);
         await expect(repo.renewLease('t1', 'host:0', 60_000)).resolves.toBe(true);
         await expect(repo.renewLease('t1', 'host:0', 60_000)).resolves.toBe(false);
         expect(calls[0].sql).toContain('WHERE id = $1 AND lease_owner = $2');
@@ -30,14 +31,14 @@ describe('AgentTaskRepository — 실행 소유권', () => {
 
     it('releaseLease — 내 것일 때만 비운다', async () => {
         const { pool, calls } = fakePool([{ rows: [], rowCount: 1 }]);
-        await new AgentTaskRepository(pool).releaseLease('t1', 'host:0');
+        await new AgentTaskLeaseRepository(pool).releaseLease('t1', 'host:0');
         expect(calls[0].sql).toContain('lease_owner = NULL, lease_until = NULL');
         expect(calls[0].sql).toContain('AND lease_owner = $2');
     });
 
     it('listExpiredLeaseTasks — 실행 중이고 소유권이 지난 작업만, 주차·소유권 없는 작업은 뺀다', async () => {
         const { pool, calls } = fakePool([{ rows: [{ id: 't1' }] }]);
-        await expect(new AgentTaskRepository(pool).listExpiredLeaseTasks()).resolves.toEqual([{ id: 't1' }]);
+        await expect(new AgentTaskLeaseRepository(pool).listExpiredLeaseTasks()).resolves.toEqual([{ id: 't1' }]);
         expect(calls[0].sql).toContain("status IN ('running', 'paused')");
         expect(calls[0].sql).toContain('lease_until IS NOT NULL AND lease_until < NOW()');
         expect(calls[0].sql).toContain(`NOT ${parkedTaskCondition('agent_tasks')}`);
@@ -45,7 +46,7 @@ describe('AgentTaskRepository — 실행 소유권', () => {
 
     it('takeOverExpiredLease — 지난 소유권만 원자적으로 가져온다', async () => {
         const { pool, calls } = fakePool([{ rows: [], rowCount: 1 }, { rows: [], rowCount: 0 }]);
-        const repo = new AgentTaskRepository(pool);
+        const repo = new AgentTaskLeaseRepository(pool);
         await expect(repo.takeOverExpiredLease('t1', 'host:1', 60_000)).resolves.toBe(true);
         await expect(repo.takeOverExpiredLease('t1', 'host:1', 60_000)).resolves.toBe(false);
         expect(calls[0].sql).toContain('lease_until IS NOT NULL AND lease_until < NOW()');
