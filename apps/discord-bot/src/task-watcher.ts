@@ -40,7 +40,8 @@ const DEFAULT_MAX_CONSECUTIVE_FAILURES = 10;
 const GOAL_MAX_CHARS = 200;
 /** 승인 문구에 싣는 도구 인자의 상한(자) */
 const APPROVAL_ARGS_MAX_CHARS = 500;
-const ARTIFACT_PLACEHOLDER = /\[\[artifact:[^\]]+\]\]/g;
+/** 서버 apps/api llm/artifact-parser.ts 의 PLACEHOLDER_SCAN_PATTERN 과 같다 — `[[artifact:id]]`, `[[artifact:id:vN]]` */
+const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+?)(?::v\d+)?\]\]/g;
 
 const STATUS_HEAD: Record<string, string> = {
     pending: '⏳ 작업 준비 중',
@@ -72,6 +73,20 @@ export function formatStatus(snapshot: TaskSnapshot, info: WatchInfo, segment = 
     return `${head}${turns}\n목표: ${truncate(info.goal.replace(/\s+/g, ' ').trim(), GOAL_MAX_CHARS)}\n실행 위치: ${info.executorLabel} · 승인: ${info.policyLabel}`;
 }
 
+/**
+ * 본문의 자리표시자를 첨부 파일 이름(`📎 이름`)으로, 못 올린 산출물은 `📎 제목 — 웹의 작업 화면에서 확인` 으로 바꾼다.
+ * 모르는 id 는 지운다. 자리표시자가 있었을 때만 연속 빈 줄을 둘까지 접는다
+ */
+function withArtifactRefs(raw: string, plan: ArtifactPlan): string {
+    const replaced = raw.replace(ARTIFACT_PLACEHOLDER, (_m, id: string) => {
+        const file = plan.files.find((f) => f.artifactId === id);
+        if (file) return `📎 ${file.name}`;
+        const missed = plan.leftOverArtifacts?.find((a) => a.id === id);
+        return missed ? `📎 ${missed.title} — 웹의 작업 화면에서 확인` : '';
+    });
+    return (replaced === raw ? raw : replaced.replace(/\n[ \t]*(?:\n[ \t]*){2,}/g, '\n\n')).trim();
+}
+
 /** plan — 함께 첨부할 산출물. 하나라도 첨부하면 본문이 없을 때 첨부 안내로 대신하고, 못 올린 것만 웹으로 안내한다 */
 export function formatFinal(snapshot: TaskSnapshot, plan: ArtifactPlan = { files: [], leftOver: 0 }): string {
     if (snapshot.status === 'failed') return `❌ 작업이 실패했습니다: ${snapshot.error ?? '사유 없음'}`;
@@ -79,11 +94,11 @@ export function formatFinal(snapshot: TaskSnapshot, plan: ArtifactPlan = { files
     const raw = snapshot.result ?? '';
     const stripped = raw.replace(ARTIFACT_PLACEHOLDER, '');
     if (plan.files.length > 0) {
-        const body = stripped.trim() || `산출물 ${plan.files.length}개를 첨부합니다.`;
+        const body = stripped.trim() ? withArtifactRefs(raw, plan) : `산출물 ${plan.files.length}개를 첨부합니다.`;
         return `✅ 작업이 끝났습니다.\n\n${body}${plan.leftOver > 0 ? `\n\n📎 나머지 ${plan.leftOver}개는 웹의 작업 화면에서 확인하세요.` : ''}`;
     }
     const hadArtifact = stripped !== raw || plan.leftOver > 0;
-    const body = stripped.trim() || '(결과 본문 없음)';
+    const body = stripped.trim() ? withArtifactRefs(raw, plan) : '(결과 본문 없음)';
     return `✅ 작업이 끝났습니다.\n\n${body}${hadArtifact ? '\n\n📎 산출물은 웹의 작업 화면에서 확인하세요.' : ''}`;
 }
 
