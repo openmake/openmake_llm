@@ -27,6 +27,15 @@ describe('cleanupTaskRun', () => {
         expect(clearSteering).toHaveBeenCalledWith('t1');
     });
 
+    it('이어가기(188)로 끝남(keepWorkspace)은 주차와 같이 workspace 를 보존한다 — 후속이 복원해 간다', async () => {
+        const rt = runtime();
+        await cleanupTaskRun({ taskId: 't1', taskRuntime: rt as unknown as TaskRuntime, status: 'completed', parked: false, stepNumber: 5, keepWorkspace: true });
+        expect(clearAutoApprove).toHaveBeenCalledWith('t1');
+        expect(closeTask).not.toHaveBeenCalled();
+        expect(captureDiffOnCleanup).not.toHaveBeenCalled();
+        expect(rt.cleanup).toHaveBeenCalledWith(false);
+    });
+
     it('실패는 승인 정리·diff 캡처 후 workspace 삭제, 완료는 보존', async () => {
         const failed = runtime();
         await cleanupTaskRun({ taskId: 't1', taskRuntime: failed as unknown as TaskRuntime, status: 'failed', parked: false, stepNumber: 5 });
