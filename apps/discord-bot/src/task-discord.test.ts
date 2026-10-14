@@ -209,3 +209,15 @@ test('delegatedTaskUi: 승인 주인을 적을 수 있으면 버튼과 함께 �
     assert.match(sent[1].content, /run_command/);
     assert.match(sent[1].content, /웹의 작업 화면에서 승인하세요/);
 });
+
+test('결과 게시: 첨부 파일은 나눈 글의 마지막 조각에만 싣는다', async () => {
+    const sent: Array<{ content: string; files?: Array<{ attachment: Buffer; name: string }> }> = [];
+    const channel = { send: async (o: (typeof sent)[number]) => { sent.push(o); return {} as never; } };
+    const files = [{ name: 'a.md', data: Buffer.from('# a') }];
+    await delegatedTaskUi(channel as never, null).postFinal(`${'가'.repeat(1_990)}\n${'나'.repeat(100)}`, files);
+    assert.equal(sent.length, 2);
+    assert.equal(sent[0].files, undefined);
+    assert.deepEqual(sent[1].files, [{ attachment: files[0].data, name: 'a.md' }]);
+    await delegatedTaskUi(channel as never, null).postFinal('짧은 결과');
+    assert.equal(sent[2].files, undefined);
+});
