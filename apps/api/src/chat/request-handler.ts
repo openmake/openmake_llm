@@ -361,6 +361,7 @@ export class ChatRequestHandler {
             ...(sourceNumberBase ? { sourceNumberBase } : {}),
             ...(turnSystemPromptPart ? { turnSystemPromptPart } : {}),
             ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
+            ...(params.attachments ? { attachments: params.attachments } : {}),
             modes,
             imageMode,
             artifactMode,

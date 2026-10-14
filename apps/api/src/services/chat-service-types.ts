@@ -42,6 +42,16 @@ export interface MediaFileInput {
 }
 
 /**
+ * 이번 턴 첨부를 위임 작업 입력으로 넘기는 형태 — delegate_agent_task 가 작업 생성(input_files·input_images)과
+ * 실행(files·images)에 그대로 쓴다. files 는 작업 생성 라우트와 같은 모양(원본 data 보존·extracted 표시),
+ * images 는 data:image/ URL.
+ */
+export interface ChatTurnAttachments {
+    files?: import('./agent-task/types').AgentTaskInputFile[];
+    images?: string[];
+}
+
+/**
  * 채팅 메시지 요청 인터페이스
  *
  * ChatService.processMessage()에 전달되는 요청 객체의 구조를 정의합니다.
@@ -70,6 +80,8 @@ export interface ChatMessageRequest {
     turnSystemPromptPart?: string;
     /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 executor 입력. doc-extractor 가 소거하기 전에 WS/REST 가 채운다 */
     mediaFiles?: MediaFileInput[];
+    /** 이번 턴 첨부 원본 — delegate_agent_task 가 작업 공간 uploads/ 로 넘긴다(services/chat-service/turn-attachments) */
+    attachments?: ChatTurnAttachments;
     /** 켜진 채팅 모드 — add-on id → true. 일반 채팅 대신 그 모드가 턴을 가져간다(chat-modes.ts) */
     modes?: Record<string, boolean>;
     /** 이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성 */
