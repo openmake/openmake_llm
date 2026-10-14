@@ -3,7 +3,10 @@ jest.mock('./continuation', () => ({
     chainBudgetState: jest.requireActual('./continuation').chainBudgetState,
     continueAsNewSegment: (...a: unknown[]) => continueMock(...a),
 }));
-jest.mock('./turn-context', () => ({ contextUsageRatio: () => 0.5 }));
+const ratioMock = jest.fn(() => 0.5);
+jest.mock('./turn-context', () => ({ contextUsageRatio: () => ratioMock() }));
+const mockLogger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
+jest.mock('../../utils/logger', () => ({ createLogger: () => mockLogger }));
 const db = { getAgentTask: jest.fn(), addAgentTaskStep: jest.fn().mockResolvedValue(undefined) };
 jest.mock('../../data/models/unified-database', () => ({ getUnifiedDatabase: () => db, getPool: () => ({}) }));
 const initWorkspaceBaseline = jest.fn();
@@ -14,7 +17,8 @@ jest.mock('../../config/runtime-limits', () => {
     const actual = jest.requireActual('../../config/runtime-limits');
     return { ...actual, AGENT_TASK_LIMITS: { ...actual.AGENT_TASK_LIMITS, FINAL_TURN_NUDGE_ENABLED: true } };
 });
-import { loadChainContext, chainGateInput, finishAsContinued, gateTurnWithContinuation, prepareSegmentWorkspace } from './continuation-hook';
+import { loadChainContext, chainGateInput, finishAsContinued, gateTurnWithContinuation, prepareSegmentWorkspace, segmentHasProgress } from './continuation-hook';
+import { HANDOFF_SUMMARY_MARKER } from '../../prompts/agent-task-context';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
 const budget = { maxDurationMs: 10_000, maxTotalTokens: 1000, maxSegments: 3, startedAt: 0 };
@@ -73,19 +77,59 @@ describe('gateTurnWithContinuation', () => {
         taskId: 'r', turn, startTurn: 0, turnCeiling: 32, totalTokens: 0, searchCalls: 0, browserCalls: 0, approvalTimeouts: 0,
         tools: [tool], sandboxCfg: { approvalPolicy: 'none', deviceGatesShell: false } as never, conversation, flags, stepNumber: 0, emitStep: jest.fn(),
     });
+    /** 이 세그먼트에서 한 턴 일한 대화(assistant 도구 호출 + 결과) */
+    const worked = (): ChatMessage[] => [{ role: 'user', content: 'g' }, { role: 'assistant', content: '', tool_calls: [{ id: 'c', type: 'function', function: { name: 'shell', arguments: {} } }] }, { role: 'tool', content: 'ok', tool_call_id: 'c' } as ChatMessage];
+    const freshFlags = () => ({ searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false });
+    const seed = (): ChatMessage[] => [{ role: 'system', content: 's' }, { role: 'user', content: 'g' }, { role: 'user', content: `${HANDOFF_SUMMARY_MARKER} 메시지 0개를 정리` }];
+
+    it('폭주 방지 — 세그먼트 첫 턴(시드뿐)에 컨텍스트 0.95 여도 이어가지 않고 경고만 남긴다', async () => {
+        ratioMock.mockReturnValue(0.95);
+        const r = await gateTurnWithContinuation({ chain: chain(), model: 'm', cont, gate: gateInput(0, seed(), freshFlags()) });
+        ratioMock.mockReturnValue(0.5);
+        expect(continueMock).not.toHaveBeenCalled();
+        expect(r.gate?.continuationReason).toBeNull();
+        expect(r.chain).not.toBeNull(); // 체인은 끄지 않는다 — 다음 턴에 일을 하면 이어갈 수 있다
+        expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringMatching(/진행 없음/));
+    });
+    it('폭주 방지 — 두 번째 턴이어도 시드 뒤 assistant/도구 메시지가 없으면 이어가지 않는다', async () => {
+        ratioMock.mockReturnValue(0.95);
+        await gateTurnWithContinuation({ chain: chain(), model: 'm', cont, gate: gateInput(1, seed(), freshFlags()) });
+        ratioMock.mockReturnValue(0.5);
+        expect(continueMock).not.toHaveBeenCalled();
+    });
+    it('폭주 방지 — 한 턴 일한 뒤(assistant+tool)에는 0.95 면 context 로 이어간다', async () => {
+        ratioMock.mockReturnValue(0.95);
+        continueMock.mockResolvedValueOnce({ successorId: 's2' });
+        const r = await gateTurnWithContinuation({ chain: chain(), model: 'm', cont, gate: gateInput(1, [...seed(), ...worked().slice(1)], freshFlags()) });
+        ratioMock.mockReturnValue(0.5);
+        expect(r.gate).toBeNull();
+        expect(continueMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'context' }));
+    });
+    it('segmentHasProgress — turn > startTurn 이고 마지막 인계 요약 뒤에 assistant/tool 이 있어야 한다', () => {
+        expect(segmentHasProgress(worked(), 0, 0)).toBe(false);
+        expect(segmentHasProgress(worked(), 1, 0)).toBe(true);
+        expect(segmentHasProgress(seed(), 3, 0)).toBe(false);
+        expect(segmentHasProgress([...worked(), ...seed()], 3, 0)).toBe(false); // 인계 요약 앞의 일은 세지 않는다
+    });
+    it('이어가기를 건너뛰면 사유를 info 로그로 남긴다', async () => {
+        continueMock.mockResolvedValueOnce({ skipped: '체인 예산 소진' });
+        await gateTurnWithContinuation({ chain: chain(), model: 'm', cont, gate: gateInput(31, worked(), freshFlags()) });
+        expect(mockLogger.info).toHaveBeenCalledWith('[Continuation] 이어가기 건너뜀: r — 체인 예산 소진');
+    });
+
     const cont = { roleState: {} as never, signal: new AbortController().signal, taskRuntime: null, userRole: 'user' as const, activeMs: 1, update: jest.fn().mockResolvedValue(undefined) };
 
     it('이어가기에 성공하면 gate 없이(null) 돌려준다 — 호출부는 루프를 끝낸다', async () => {
         continueMock.mockResolvedValueOnce({ successorId: 's2' });
         const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
-        const r = await gateTurnWithContinuation({ chain: chain(), model: 'm', cont, gate: gateInput(31, [], flags) });
+        const r = await gateTurnWithContinuation({ chain: chain(), model: 'm', cont, gate: gateInput(31, worked(), flags) });
         expect(r.gate).toBeNull();
         expect(continueMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'turns', turn: 31 }));
     });
     it('이어가기에 실패하면 같은 턴이 종전 마무리 턴이 되고(사유·도구 차단·nudge) 체인을 끈다 — 다음 턴엔 다시 시도하지 않는다', async () => {
         continueMock.mockResolvedValueOnce({ skipped: '디스패치 실패' });
         const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
-        const conversation: ChatMessage[] = [{ role: 'user', content: 'g' }];
+        const conversation: ChatMessage[] = worked();
         const big = { task: { id: 'r', chain_root_task_id: 'r' } as never, root: { id: 'r', long_running: { ...budget, maxTotalTokens: 1e12 } } as never }; // 체인 예산은 남고 세그먼트 토큰 상한만 넘음
         const r = await gateTurnWithContinuation({ chain: big, model: 'm', cont, gate: { ...gateInput(30, conversation, flags), totalTokens: 10_000_000 } });
         expect(continueMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'tokens' }));
@@ -93,7 +137,7 @@ describe('gateTurnWithContinuation', () => {
         expect(r.gate?.effectiveTools).toEqual([]);
         expect(r.gate?.continuationReason).toBeNull();
         expect(flags.finalTurnNotified).toBe(true);
-        expect(conversation.length).toBe(2); // 마무리 nudge 주입
+        expect(conversation.length).toBe(4); // 마무리 nudge 주입
         expect(r.chain).toBeNull();
         const next = await gateTurnWithContinuation({ chain: r.chain, model: 'm', cont, gate: { ...gateInput(31, conversation, flags), totalTokens: 10_000_000 } });
         expect(next.gate?.finalTurnReason).toBe('tokens');
@@ -102,7 +146,7 @@ describe('gateTurnWithContinuation', () => {
     it('세그먼트 활성 시간이 시간 상한의 SEGMENT_TIME_RATIO 이상이면 time 사유로 이어간다(timeout 으로 failed 가 되기 전에)', async () => {
         continueMock.mockResolvedValueOnce({ successorId: 's2' });
         const flags = { searchLimitNotified: false, browserLimitNotified: false, finalTurnNotified: false, approvalDegradeNotified: false };
-        const r = await gateTurnWithContinuation({ chain: chain(), model: 'm', cont: { ...cont, activeMs: 800, segmentTimeoutMs: 1_000 }, gate: gateInput(3, [], flags) });
+        const r = await gateTurnWithContinuation({ chain: chain(), model: 'm', cont: { ...cont, activeMs: 800, segmentTimeoutMs: 1_000 }, gate: gateInput(3, worked(), flags) });
         expect(r.gate).toBeNull();
         expect(continueMock).toHaveBeenCalledWith(expect.objectContaining({ reason: 'time' }));
     });

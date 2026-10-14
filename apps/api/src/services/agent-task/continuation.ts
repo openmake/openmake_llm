@@ -23,7 +23,7 @@ import { buildHandoffSummary } from './context-handoff';
 import { snapshotWorkspaceTurn } from './fork-workspace';
 import { dispatchAgentTask } from './task-queue';
 import type { TaskRuntime } from '../task-sandbox/runtime';
-import type { ContinuationInfo, ContinuationReason, LongRunningBudget, AgentTaskUserRole, AgentTaskInputFile } from './types';
+import type { ContinuationInfo, ContinuationReason, LongRunningBudget, AgentTaskUserRole, AgentTaskInputFile, AgentTaskRunInput, AgentTaskThinkingLevel } from './types';
 import { CONTINUATION_NEXT_STEPS_HEADING, CONTINUATION_NO_NEXT_STEPS, getContinuationNextStepsPrompt, getContinuationNotice } from '../../prompts/agent-task-continuation';
 
 const logger = createLogger('AgentTaskContinuation');
@@ -96,6 +96,9 @@ export interface ContinueInput {
     signal: AbortSignal;
     taskRuntime: TaskRuntime | null;
     userRole: AgentTaskUserRole;
+    /** 이번 실행의 실효 승인 정책·추론 수준 — 후속이 물려받는다(없으면 현재 행 값) */
+    approvalPolicy?: AgentTaskRunInput['approvalPolicy'];
+    thinkingLevel?: AgentTaskThinkingLevel;
     /** 이번 세그먼트의 활성 시간(주차 제외)·누적 토큰 */
     activeMs: number;
     totalTokens: number;
@@ -165,6 +168,9 @@ async function runContinuation(p: ContinueInput, chainRepo: AgentTaskChainReposi
 
     const successorId = randomUUID();
     track.successorId = successorId;
+    // 후속이 물려받을 승인 정책·추론 수준 — 실행의 실효 값(요청 본문 override 포함), 없으면 현재 행 값
+    const approvalPolicy = (p.approvalPolicy ?? p.task.approval_policy ?? undefined) as AgentTaskRunInput['approvalPolicy'];
+    const thinkingLevel = (p.thinkingLevel ?? p.task.thinking_level ?? undefined) as AgentTaskThinkingLevel | undefined;
     // 순서: 선점(UPDATE) → 후속 INSERT. 선점이 먼저라 continued_by_task_id 에는 FK 가 없다(마이그레이션 188).
     if (!(await chainRepo.claimContinuation(p.task.id, successorId))) return followExistingSuccessor(p.task.id);
     track.claimed = true;
@@ -188,8 +194,8 @@ async function runContinuation(p: ContinueInput, chainRepo: AgentTaskChainReposi
         // forked_from·턴 표시는 후속의 작업 공간 복원(initWorkspaceBaseline)이 읽는다 — 실패하면 후속이 파일을 못 받으므로 abandon
         await repo.markForked(successorId, p.task.id, p.turn);
         const park = new AgentTaskParkRepository(getPool());
-        if (p.task.approval_policy) await park.setApprovalPolicy(successorId, p.task.approval_policy).catch(() => { /* 물려주기 실패 무시 */ });
-        if (p.task.thinking_level) await park.setThinkingLevel(successorId, p.task.thinking_level).catch(() => { /* 물려주기 실패 무시 */ });
+        if (approvalPolicy) await park.setApprovalPolicy(successorId, approvalPolicy).catch(() => { /* execute 입력으로도 넘긴다 */ });
+        if (thinkingLevel) await park.setThinkingLevel(successorId, thinkingLevel).catch(() => { /* execute 입력으로도 넘긴다 */ });
     } catch (e) {
         return abandon(`후속 작업 저장 실패: ${errMsg(e)}`);
     }
@@ -204,6 +210,7 @@ async function runContinuation(p: ContinueInput, chainRepo: AgentTaskChainReposi
                 files: Array.isArray(p.task.input_files) ? p.task.input_files as AgentTaskInputFile[] : undefined,
                 images: Array.isArray(p.task.input_images) ? p.task.input_images as string[] : undefined,
                 executor: p.task.executor === 'local' ? 'local' : undefined, deviceId: p.task.device_id ?? undefined, folderRel: p.task.folder_rel ?? undefined,
+                approvalPolicy, thinkingLevel,
                 // 체크포인트에 쓴 것과 같은 seeded 배열 — DB 를 다시 읽지 않는다
                 resume: { conversation: seeded, fromTurn: 0, fromStep: 0, ...(p.task.plan ? { plan: p.task.plan } : {}) },
             }),

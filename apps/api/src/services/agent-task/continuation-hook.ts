@@ -12,6 +12,10 @@ import { initWorkspaceBaseline } from './code-diff';
 import { chainBudgetState, continueAsNewSegment, type ContinueInput } from './continuation';
 import { contextUsageRatio } from './turn-context';
 import { applyTurnResourceGates } from './turn-gate';
+import { HANDOFF_SUMMARY_MARKER } from '../../prompts/agent-task-context';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('AgentTaskContinuation');
 
 export interface ChainContext { task: AgentTask; root: AgentTask }
 
@@ -37,13 +41,25 @@ export function chainGateInput(ctx: ChainContext | null, conversation: ChatMessa
     return { canContinue: state.canContinue, contextRatio: contextUsageRatio(conversation, tools, model), timeUp };
 }
 
+/**
+ * PURE: 이 세그먼트가 일을 했는가(폭주 방지) — turns 사유와 같은 turn > startTurn 에 더해, 마지막 인계 요약
+ * (후속 시드·컨텍스트 접기) 뒤에 assistant/tool 메시지가 하나라도 있어야 한다. 시드+도구 스키마만으로 컨텍스트 기준을
+ * 넘는 작은 예산에서 첫 턴마다 이어가 일 없이 세그먼트를 태우던 것(라이브 2차: 45초에 4세그먼트, 누적 0tok)을 막는다.
+ */
+export function segmentHasProgress(conversation: ChatMessage[], turn: number, startTurn: number): boolean {
+    if (turn <= startTurn) return false;
+    let from = 0;
+    conversation.forEach((m, i) => { if (m.role === 'user' && typeof m.content === 'string' && m.content.includes(HANDOFF_SUMMARY_MARKER)) from = i + 1; });
+    return conversation.slice(from).some((m) => m.role === 'assistant' || m.role === 'tool');
+}
+
 /** segmentTimeoutMs: 서비스의 세그먼트 시간 상한(totalTimeoutMs) — 'time' 이어가기 판정용 */
 type FinishInput = Omit<ContinueInput, 'task' | 'root'> & { ctx: ChainContext; segmentTimeoutMs?: number; update: (u: { status: 'completed'; completionPath: string; result: string; progress: number }) => Promise<void> };
 
 /** 후속을 만들고 현재 작업을 '이어짐' 으로 마감. 실패면 false — 호출부가 종전 마무리 턴으로 간다. */
 export async function finishAsContinued(p: FinishInput): Promise<boolean> {
     const outcome = await continueAsNewSegment({ ...p, task: p.ctx.task, root: p.ctx.root });
-    if ('skipped' in outcome) return false;
+    if ('skipped' in outcome) { logger.info(`[Continuation] 이어가기 건너뜀: ${p.ctx.task.id} — ${outcome.skipped}`); return false; }
     await p.update({ status: 'completed', completionPath: 'continued', progress: 100, result: `이어가기: 후속 작업 ${outcome.successorId} 에서 계속합니다 (사유: ${p.reason}).` });
     return true;
 }
@@ -58,7 +74,13 @@ type GateResult = Awaited<ReturnType<typeof applyTurnResourceGates>>;
  */
 export async function gateTurnWithContinuation(p: { gate: GateInput; chain: ChainContext | null; model: string; cont: Omit<FinishInput, 'ctx' | 'reason' | 'conversation' | 'turn' | 'totalTokens'> }): Promise<{ gate: GateResult | null; chain: ChainContext | null }> {
     const g = p.gate;
-    const first = await applyTurnResourceGates({ ...g, chain: chainGateInput(p.chain, g.conversation, g.tools, p.model, p.cont.activeMs, g.totalTokens, p.cont.segmentTimeoutMs) });
+    const chainIn = chainGateInput(p.chain, g.conversation, g.tools, p.model, p.cont.activeMs, g.totalTokens, p.cont.segmentTimeoutMs);
+    // 폭주 방지: 진행 없는 세그먼트는 이어가지 않는다 — 게이트는 종전과 같다(컨텍스트 압박 → 접기·마무리 턴). 체인은 끄지 않는다
+    const stalled = !!chainIn?.canContinue && !segmentHasProgress(g.conversation, g.turn, g.startTurn);
+    const first = await applyTurnResourceGates({ ...g, chain: chainIn && { ...chainIn, canContinue: chainIn.canContinue && !stalled } });
+    if (stalled && (first.finalTurnReason || chainIn!.timeUp || (chainIn!.contextRatio ?? 0) >= AGENT_TASK_LONG_RUNNING.CONTINUE_AT_RATIO)) {
+        logger.warn(`[Continuation] 진행 없음 — 이어가기 보류: ${g.taskId} (턴 ${g.turn}, 시작 ${g.startTurn}, 컨텍스트 ${chainIn!.contextRatio ?? '-'})`);
+    }
     if (!first.continuationReason || !p.chain) return { gate: first, chain: p.chain };
     if (await finishAsContinued({ ...p.cont, ctx: p.chain, reason: first.continuationReason, conversation: g.conversation, turn: g.turn, totalTokens: g.totalTokens })) return { gate: null, chain: p.chain };
     return { gate: await applyTurnResourceGates({ ...g, stepNumber: first.stepNumber }), chain: null };

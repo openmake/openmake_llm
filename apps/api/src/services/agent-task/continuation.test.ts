@@ -14,7 +14,8 @@ const repo = { markForked: jest.fn().mockResolvedValue(undefined) };
 const chainRepo = { claimContinuation: jest.fn().mockResolvedValue(true), resetContinuation: jest.fn().mockResolvedValue(undefined) };
 jest.mock('../../data/repositories/agent-task-repository', () => ({ AgentTaskRepository: jest.fn(() => repo) }));
 jest.mock('../../data/repositories/agent-task-chain-repository', () => ({ AgentTaskChainRepository: jest.fn(() => chainRepo) }));
-jest.mock('../../data/repositories/agent-task-park-repository', () => ({ AgentTaskParkRepository: jest.fn(() => ({ setApprovalPolicy: jest.fn().mockResolvedValue(undefined), setThinkingLevel: jest.fn().mockResolvedValue(undefined) })) }));
+const park = { setApprovalPolicy: jest.fn().mockResolvedValue(undefined), setThinkingLevel: jest.fn().mockResolvedValue(undefined) };
+jest.mock('../../data/repositories/agent-task-park-repository', () => ({ AgentTaskParkRepository: jest.fn(() => park) }));
 jest.mock('../../data/models/unified-database', () => ({ getUnifiedDatabase: () => db, getPool: () => ({}) }));
 const executeMock = jest.fn().mockResolvedValue(undefined);
 jest.mock('../AgentTaskService', () => ({ AgentTaskService: jest.fn(() => ({ execute: (...a: unknown[]) => executeMock(...a) })) }));
@@ -186,6 +187,19 @@ describe('continueAsNewSegment — 최종 검토 수정', () => {
         repo.markForked.mockResolvedValue(undefined); dispatchMock.mockResolvedValue('started');
     });
 
+    it('후속은 실행의 승인 정책·추론 수준을 물려받는다 — 행에 저장하고 execute 입력에도 싣는다', async () => {
+        const r = await continueAsNewSegment({ ...input(), approvalPolicy: 'none', thinkingLevel: 'high' });
+        const sid = (r as { successorId: string }).successorId;
+        expect(park.setApprovalPolicy).toHaveBeenCalledWith(sid, 'none');
+        expect(park.setThinkingLevel).toHaveBeenCalledWith(sid, 'high');
+        await dispatchMock.mock.calls[0][0].run();
+        expect(executeMock.mock.calls[0][0]).toMatchObject({ taskId: sid, approvalPolicy: 'none', thinkingLevel: 'high' });
+    });
+    it('실행 값이 없으면 현재 행의 정책·수준을 쓴다', async () => {
+        await continueAsNewSegment({ ...input(), task: { ...(input().task as object), approval_policy: 'high-risk', thinking_level: 'low' } as never });
+        await dispatchMock.mock.calls[0][0].run();
+        expect(executeMock.mock.calls[0][0]).toMatchObject({ approvalPolicy: 'high-risk', thinkingLevel: 'low' });
+    });
     it('순서: 선점(UPDATE) 다음에 후속 INSERT — 그래서 continued_by_task_id 에 FK 가 없어야 한다', async () => {
         await continueAsNewSegment(input());
         expect(chainRepo.claimContinuation.mock.invocationCallOrder[0]).toBeLessThan(db.createAgentTask.mock.invocationCallOrder[0]);
