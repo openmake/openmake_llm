@@ -26,6 +26,7 @@ import { Client, StreamableHTTPClientTransport, SSEClientTransport } from '@mode
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from '../../tool-contract/types';
 import { buildSandboxedCommand } from './sandbox-docker';
+import { needsPlaywrightBrowser } from './sandbox-playwright';
 import { stripControlEnv } from '../../security/spawn-env-policy';
 import { isConnectionDeathError } from '../../tool-contract/tool-error-classifier';
 import { createLogger } from '../../utils/logger';
@@ -461,6 +462,9 @@ export class ExternalMCPClient extends EventEmitter {
                 });
                 if (sb.sandboxed) {
                     logger.info(`MCP 서버 "${this.config.name}" docker 격리 적용 (net=${this.config.sandbox_network ?? 'full'})`);
+                    if (needsPlaywrightBrowser({ command: this.config.command, args: this.config.args || [], env: this.config.env })) {
+                        logger.info(`[McpSandbox] ${this.config.id}: playwright 브라우저 사전 설치 래핑`);
+                    }
                 }
                 return new StdioClientTransport({
                     command: sb.command,
