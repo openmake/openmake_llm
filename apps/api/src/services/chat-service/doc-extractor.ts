@@ -40,6 +40,36 @@ export function isExtractableSize(name: string, size: number): boolean {
         && size <= DOC_EXTRACT_LIMITS.OCR_MAX_BYTES;
 }
 
+/** PDF·오피스·HWP — 바이너리 문서에서 텍스트를 "추출"하는 대상 확장자인지 (extracted 표시 기준) */
+export function isBinaryDocumentName(name: string): boolean {
+    const ext = extOf(name);
+    return DOC_EXTRACT_LIMITS.PDF_EXTS.includes(ext)
+        || DOC_EXTRACT_LIMITS.OFFICE_EXTS.includes(ext)
+        || DOC_EXTRACT_LIMITS.HWP_EXTS.includes(ext);
+}
+
+const TEXT_MIME_TYPES = [
+    'application/json', 'application/xml', 'application/x-yaml', 'application/yaml',
+    'application/javascript', 'application/x-ndjson',
+];
+
+/**
+ * 텍스트 첨부 판정 — ① MIME(text/* 또는 텍스트 계열 application) 이나 확장자(TEXT_EXTS) 가 텍스트이고
+ * ② 앞 8KB 에 NUL 이 없으며 전체가 UTF-8 로 디코딩될 때만 참.
+ */
+export function isTextAttachment(name: string, type: string | undefined, buf: Buffer): boolean {
+    const mime = (type ?? '').split(';')[0].trim().toLowerCase();
+    const textual = mime.startsWith('text/') || TEXT_MIME_TYPES.includes(mime)
+        || DOC_EXTRACT_LIMITS.TEXT_EXTS.includes(extOf(name));
+    if (!textual || buf.subarray(0, 8192).includes(0)) return false;
+    try {
+        new TextDecoder('utf-8', { fatal: true }).decode(buf);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 /**
  * Promise 에 타임아웃을 건다. 초과 시 reject (원 작업은 백그라운드에 남을 수 있으나 호출자가 graceful 처리).
  * PDF 는 JVM child process 라 강제 종료가 어려워, 과대 파일은 MAX_BYTES_PER_FILE 로 사전 차단한다.
@@ -216,6 +246,7 @@ async function extractOffice(buf: Buffer, ext: string): Promise<string> {
 /**
  * files[] 의 data(base64 문서)를 텍스트로 추출해 content 를 채운다 (in-place mutate).
  * - 이미 content 가 있으면 추출 생략
+ * - 텍스트로 판정되는 파일(isTextAttachment)은 UTF-8 로 풀어 content 로 쓴다
  * - 추출 대상 아닌 확장자/과대 파일/추출 실패 → content 미설정(메타 처리)
  * - 성공 시 FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE 로 절단
  */
@@ -231,7 +262,21 @@ export async function extractAttachedDocuments(files: AttachedFileInput[] | unde
         const isPdf = DOC_EXTRACT_LIMITS.PDF_EXTS.includes(ext);
         const isOffice = DOC_EXTRACT_LIMITS.OFFICE_EXTS.includes(ext);
         const isHwp = DOC_EXTRACT_LIMITS.HWP_EXTS.includes(ext);
-        if (!isPdf && !isOffice && !isHwp) { delete f.data; continue; }
+        if (!isPdf && !isOffice && !isHwp) {
+            // 텍스트 파일(csv·txt·md·json 등)은 base64 를 UTF-8 로 풀어 그대로 content 로 쓴다
+            const tbuf = Buffer.from(f.data, 'base64');
+            if (tbuf.length > 0 && tbuf.length <= DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE
+                && isTextAttachment(typeof f.name === 'string' ? f.name : '', typeof f.type === 'string' ? f.type : undefined, tbuf)) {
+                const text = new TextDecoder('utf-8').decode(tbuf);
+                f.content = text.slice(0, FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE);
+                if (text.length > FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE) f.truncated = true;
+                logger.info(`[DocExtract] ${f.name} (${ext}) → ${f.content.length}자 텍스트`);
+            } else if (tbuf.length > DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE) {
+                logger.warn(`[DocExtract] ${f.name}: 크기 초과/빈 파일 (${tbuf.length}B) — 추출 생략`);
+            }
+            delete f.data;
+            continue;
+        }
 
         const buf = Buffer.from(f.data, 'base64');
         // PDF 는 MAX_BYTES_PER_FILE(JVM 보호) 초과라도 OCR_MAX_BYTES 까지는 OCR 직행 허용 —

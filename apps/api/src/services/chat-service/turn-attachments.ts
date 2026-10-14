@@ -13,6 +13,7 @@ import type { AttachedFileInput } from './attach-context';
 import type { AgentTaskInputFile } from '../agent-task/types';
 import type { ChatTurnAttachments } from '../chat-service-types';
 import { buildImageDataUrl } from '../../utils/image-mime';
+import { isBinaryDocumentName } from './doc-extractor';
 
 /**
  * @param files - 추출을 마친 첨부(텍스트는 content, 추출된 문서는 content 가 채워지고 data 는 지워진 상태)
@@ -34,7 +35,8 @@ export function buildTurnAttachments(
             content: f.content,
             truncated: f.truncated,
             ...(data ? { data } : {}),
-            ...(data && typeof f.content === 'string' ? { extracted: true } : {}),
+            // extracted 는 바이너리 문서에서 뽑은 텍스트만 — 텍스트 파일은 원본이 곧 본문이라 .txt 를 따로 쓰지 않는다
+            ...(data && typeof f.content === 'string' && isBinaryDocumentName(f.name) ? { extracted: true } : {}),
         };
     });
     // 작업 입력 이미지는 data:image/ URL 만 받는다(uploads/ 에 원본 바이트로 쓴다) — 외부 URL 은 뺀다

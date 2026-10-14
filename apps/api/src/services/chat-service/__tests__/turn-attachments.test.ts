@@ -25,6 +25,14 @@ describe('buildTurnAttachments', () => {
         expect(result?.files?.[0].extracted).toBeUndefined();
     });
 
+    it('텍스트 파일을 디코딩한 content 에는 extracted 를 붙이지 않는다 — 원본이 곧 텍스트', () => {
+        const result = buildTurnAttachments(
+            [{ name: 'sales.csv', type: 'text/csv', size: 8, content: 'a,b\n1,2' }], undefined, ['YSxiCjEsMg=='],
+        );
+        expect(result?.files?.[0]).toEqual(expect.objectContaining({ name: 'sales.csv', data: 'YSxiCjEsMg==', content: 'a,b\n1,2' }));
+        expect(result?.files?.[0].extracted).toBeUndefined();
+    });
+
     it('웹소켓 첨부의 id 는 넘기지 않는다', () => {
         const result = buildTurnAttachments([{ id: 'f1', name: 'b.txt', type: 'text/plain', content: 'x' }], undefined);
         expect(result?.files?.[0]).not.toHaveProperty('id');
