@@ -10,6 +10,7 @@
  */
 
 const mockExecuteTool = jest.fn();
+const mockRecordUsage = jest.fn();
 
 jest.mock('../utils/logger', () => ({
     createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
@@ -33,6 +34,11 @@ jest.mock('../runtime-ports/tool-runtime', () => ({
         onUserLogin: jest.fn(), onUserLogout: jest.fn(), onChatStart: jest.fn(), onChatEnd: jest.fn(),
         onServerReady: jest.fn(), shutdown: jest.fn(),
     }),
+}));
+// 사용량 기록 — 중단이 어떤 errorCode 로 남는지 확인한다(실제 DB 기록은 하지 않는다).
+jest.mock('../services/chat-service/external-tool-exec', () => ({
+    ...jest.requireActual('../services/chat-service/external-tool-exec'),
+    recordExternalUsageFireAndForget: (...args: unknown[]) => mockRecordUsage(...args),
 }));
 // env 파생 상수 고정: 턴 5, wall-clock 가드 off, 서브에이전트·spawn off
 jest.mock('../config/runtime-limits', () => {
@@ -78,6 +84,7 @@ function makeResolved(onCall: (n: number) => void) {
 describe('External Provider — 클라이언트 중단', () => {
     beforeEach(() => {
         mockExecuteTool.mockReset();
+        mockRecordUsage.mockReset();
         mockExecuteTool.mockResolvedValue({ content: [{ type: 'text', text: '결과' }] });
     });
 
@@ -116,5 +123,43 @@ describe('External Provider — 클라이언트 중단', () => {
 
         expect(mockExecuteTool).toHaveBeenCalledTimes(1);
         expect(streamChat).toHaveBeenCalledTimes(1);
+    });
+
+    it('중단은 사용량 기록에 UPSTREAM_ERROR 가 아니라 CLIENT_ABORTED 로 남는다', async () => {
+        const controller = new AbortController();
+        const { resolved } = makeResolved(() => controller.abort());
+
+        await expect(streamFromExternalProvider(
+            { currentUserContext: null, allowedTools: [webSearchTool] } as any,
+            resolved,
+            { message: '웹 검색해줘', userId: 'guest', history: [], abortSignal: controller.signal } as any,
+            () => {},
+            {},
+        )).rejects.toThrow('ABORTED');
+
+        expect(mockRecordUsage).toHaveBeenCalledTimes(1);
+        expect(mockRecordUsage.mock.calls[0][1]).toMatchObject({ errorCode: 'CLIENT_ABORTED' });
+    });
+
+    it('provider 가 중단을 ProviderError(UPSTREAM_ERROR)로 던져도 신호가 중단이면 CLIENT_ABORTED 다', async () => {
+        const controller = new AbortController();
+        const streamChat = jest.fn().mockImplementation(async () => {
+            controller.abort();
+            throw Object.assign(new Error('OpenAI 호환 호출 중단'), { code: 'UPSTREAM_ERROR' });
+        });
+        const resolved = {
+            providerId: 'local-llm', modelId: 'test-model', fullId: 'local-llm:test-model',
+            provider: { getCapabilities: () => ({ vision: false, toolCalling: true }), streamChat },
+        } as any;
+
+        await expect(streamFromExternalProvider(
+            { currentUserContext: null, allowedTools: [webSearchTool] } as any,
+            resolved,
+            { message: '웹 검색해줘', userId: 'guest', history: [], abortSignal: controller.signal } as any,
+            () => {},
+            {},
+        )).rejects.toThrow();
+
+        expect(mockRecordUsage.mock.calls[0][1]).toMatchObject({ errorCode: 'CLIENT_ABORTED' });
     });
 });
