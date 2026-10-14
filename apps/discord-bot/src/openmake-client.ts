@@ -5,6 +5,7 @@
 import { config } from './config';
 import { ChatTurn } from './session-store';
 import { ResponseArtifact } from './attachments';
+import type { InboundAttachments } from './inbound-attachments';
 
 interface ModelListResponse {
     data?: Array<{ id: string }>;
@@ -40,8 +41,21 @@ export async function resolveModel(): Promise<string> {
     return resolvedModel;
 }
 
-export async function requestChatCompletion(history: ChatTurn[], userContent: string): Promise<ChatAnswer> {
+/**
+ * 첨부(attachments)는 이번 턴의 마지막 user 메시지에만 싣는다 — 히스토리(ChatTurn)는 텍스트만 (웹 화면과 같은 규칙).
+ * 이미지는 content-part 배열(text + image_url), 문서는 OpenMake 확장 files[].
+ */
+export async function requestChatCompletion(
+    history: ChatTurn[],
+    userContent: string,
+    attachments?: Pick<InboundAttachments, 'imageParts' | 'files'>,
+): Promise<ChatAnswer> {
     const model = await resolveModel();
+    const imageParts = attachments?.imageParts ?? [];
+    const files = attachments?.files ?? [];
+    const lastUserContent = imageParts.length > 0
+        ? [{ type: 'text', text: userContent }, ...imageParts]
+        : userContent;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.requestTimeoutMs);
     try {
@@ -53,9 +67,11 @@ export async function requestChatCompletion(history: ChatTurn[], userContent: st
             },
             body: JSON.stringify({
                 model,
-                messages: [...history, { role: 'user', content: userContent }],
+                messages: [...history, { role: 'user', content: lastUserContent }],
                 // OpenMake 확장: 아티팩트를 공유 뷰어에 link 발행해 shareUrl 포함
                 publish_artifacts: true,
+                // OpenMake 확장: 문서 첨부(base64) — 백엔드가 텍스트로 추출해 주입
+                ...(files.length > 0 ? { files } : {}),
             }),
             signal: controller.signal,
         });

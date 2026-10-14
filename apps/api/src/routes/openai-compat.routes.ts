@@ -19,6 +19,9 @@ import { handleRawCompletion, isRawRequest } from './openai-compat-raw';
 import { OPENAI_COMPAT_SESSION } from '../config/openai-compat';
 import { createLogger } from '../utils/logger';
 import { abortOnClientDisconnect } from '../utils/abort-on-client-disconnect';
+import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
+import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
+import { buildFileContext, type AttachedFileInput } from '../services/chat-service/attach-context';
 
 const openaiCompatRouter = Router();
 const log = createLogger('OpenAICompatRoute');
@@ -225,6 +228,16 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
         return;
     }
 
+    // OpenMake 확장 files[] 형식 검증 — 항목은 { name: string, data: string(base64) }, 개수는 채팅 첨부 상한과 동일
+    if (body.files !== undefined) {
+        if (!Array.isArray(body.files)
+            || body.files.length > FILE_ATTACH_LIMITS.MAX_FILES
+            || !body.files.every((f) => isRecord(f) && typeof f.name === 'string' && typeof f.data === 'string')) {
+            openaiError(res, 400, `files must be an array (max ${FILE_ATTACH_LIMITS.MAX_FILES}) of { name: string, data: base64 string }`);
+            return;
+        }
+    }
+
     // body.model 검증 (2026-05-19): 이전엔 임의 문자열도 buildExecutionPlan() 가 기본 모델로
     // silent override → 운영자/외부 클라이언트가 *잘못된 모델 이름* 을 보내도 알 길 없음.
     // vLLM/OpenAI spec 준수 위해 listAvailableModels() 에 없는 model id 는 404 로 거절.
@@ -292,6 +305,14 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
     const userContext = buildUserContext(req);
     const tools = convertTools(body);
 
+    // OpenMake 확장 files[]: 문서 텍스트만 추출해 fileContext 로 주입 (이미지는 image_url → converted.images 경로)
+    let fileContext = '';
+    if (Array.isArray(body.files) && body.files.length > 0) {
+        const files: AttachedFileInput[] = body.files.map((f) => ({ name: f.name, type: f.type, size: f.size, data: f.data }));
+        await extractAttachedDocuments(files); // in-place: data → content
+        fileContext = buildFileContext(files);
+    }
+
     // 세션 연속성: OpenAI 호환 클라이언트의 연속 호출을 결정적 세션 키로 하나의 세션에 누적.
     // 매 호출마다 새 세션이 파편 생성되던 문제 해소 (createSession 이 클라이언트 id 를 받지 않아
     // metadata lookup 방식 채택 — 기존 세션이 있으면 그 실제 id 를 재사용, 없으면 생성 후 태깅).
@@ -320,6 +341,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 history: converted.history,
                 sessionId: reuseSessionId,
                 ...(converted.images && converted.images.length > 0 ? { images: converted.images } : {}),
+                ...(fileContext ? { fileContext } : {}),
                 tools,
                 tool_choice: body.tool_choice,
                 userContext,
@@ -398,6 +420,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             history: converted.history,
             sessionId: reuseSessionId,
             ...(converted.images && converted.images.length > 0 ? { images: converted.images } : {}),
+            ...(fileContext ? { fileContext } : {}),
             tools,
             tool_choice: body.tool_choice,
             userContext,

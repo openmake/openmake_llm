@@ -55,6 +55,11 @@ export interface OpenAIChatCompletionRequest {
      * 공유 뷰어에 발행하고 message.artifacts[].shareUrl 로 반환 (Discord gateway 용).
      */
     publish_artifacts?: boolean;
+    /**
+     * OpenMake 확장 (비표준): 문서 첨부(base64 원본) — Discord gateway 용.
+     * 서버가 텍스트로 추출해 fileContext 로 주입한다. 이미지는 표준 image_url 경로를 쓴다.
+     */
+    files?: Array<{ name: string; type?: string; size?: number; data: string }>;
 }
 
 /** OpenMake 확장 — 응답에서 추출된 artifact (non-stream 전용, message.artifacts). */
