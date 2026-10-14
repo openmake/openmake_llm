@@ -29,6 +29,33 @@ export function safeBaseName(name: string, fallback: string): string {
     return ((name.split(/[\\/]/).pop() ?? '').replace(/\p{Cc}/gu, '_').trim()) || fallback;
 }
 
+/**
+ * 디스크 저장 이름(접두 `<index>_` 제외)의 바이트 상한 — 파일 시스템 이름 한도(대개 255바이트)를 접두와 합쳐도 넘지 않게.
+ * 넘으면 rename 이 ENAMETOOLONG 으로 실패한다(한글은 1자 3바이트). 표시용 이름(safeBaseName)은 자르지 않는다.
+ */
+const STORED_NAME_MAX_BYTES = 200;
+
+/** UTF-8 바이트 상한까지 코드 포인트 단위로 자른다(문자 중간에서 끊지 않는다). */
+function truncateUtf8(s: string, maxBytes: number): string {
+    let out = '';
+    let bytes = 0;
+    for (const ch of s) {
+        bytes += Buffer.byteLength(ch);
+        if (bytes > maxBytes) break;
+        out += ch;
+    }
+    return out;
+}
+
+/** 저장 이름을 STORED_NAME_MAX_BYTES 이하로 — 확장자는 남기고 앞부분을 자른다. */
+function limitStoredName(name: string): string {
+    if (Buffer.byteLength(name) <= STORED_NAME_MAX_BYTES) return name;
+    const ext = path.extname(name);
+    const extBytes = Buffer.byteLength(ext);
+    if (extBytes >= STORED_NAME_MAX_BYTES) return truncateUtf8(name, STORED_NAME_MAX_BYTES);
+    return truncateUtf8(name.slice(0, name.length - ext.length), STORED_NAME_MAX_BYTES - extBytes) + ext;
+}
+
 /** taskId 하위 저장 디렉토리의 절대 경로. taskId 는 서버 생성 uuid 만 온다(경로 주입 불가). */
 function taskDir(taskId: string): string {
     return path.join(ROOT, taskId);
@@ -46,7 +73,7 @@ export async function finalizeUploadedFile(
 ): Promise<string> {
     const dir = taskDir(taskId);
     await fs.mkdir(dir, { recursive: true });
-    const rel = `${index}_${safeBaseName(originalName, `file_${index}`)}`;
+    const rel = `${index}_${limitStoredName(safeBaseName(originalName, `file_${index}`))}`;
     await fs.rename(tmpPath, path.join(dir, rel));
     return path.join(taskId, rel);
 }
