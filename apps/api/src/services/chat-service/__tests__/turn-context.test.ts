@@ -63,13 +63,37 @@ describe('collectTurnContexts', () => {
         const r = await collectTurnContexts({ message: 'q', userLang: 'ko' });
         expect(offCalls).not.toHaveBeenCalled();
         expect(r.contextBlock).toBe('ON');
-        expect(integrationGate).toHaveBeenCalledWith('off');
+        expect(integrationGate).toHaveBeenCalledWith('off', undefined);
+    });
+
+    it('사용자 id 를 게이트에 넘긴다(조직 사용권 축)', async () => {
+        __setChatTurnIntegrationsForTest([{ id: 'k', prepareTurnContext: async () => ({ contextBlock: 'K' }) }]);
+        await collectTurnContexts({ message: 'q', userLang: 'ko', userId: 'u1' });
+        expect(integrationGate).toHaveBeenCalledWith('k', 'u1');
+    });
+
+    it('조직 허용 목록 밖 add-on 은 건너뛴다(채팅은 계속)', async () => {
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'not_entitled' });
+        const prepare = jest.fn(async () => ({ contextBlock: 'K' }));
+        __setChatTurnIntegrationsForTest([{ id: 'k', prepareTurnContext: prepare }]);
+        const r = await collectTurnContexts({ message: 'q', userLang: 'ko', userId: 'u1' });
+        expect(prepare).not.toHaveBeenCalled();
+        expect(r).toEqual({ contextBlock: '', sources: [], systemPromptPart: '' });
     });
 
     it('상태를 확인하지 못한 add-on 도 건너뛴다(채팅은 계속)', async () => {
         integrationGate.mockResolvedValue({ allowed: false, reason: 'state_unknown', detail: 'DB 장애' });
         __setChatTurnIntegrationsForTest([{ id: 'k', prepareTurnContext: async () => ({ contextBlock: 'K' }) }]);
         const r = await collectTurnContexts({ message: 'q', userLang: 'ko' });
+        expect(r).toEqual({ contextBlock: '', sources: [], systemPromptPart: '' });
+    });
+
+    it('부팅에 실패한 add-on 도 건너뛴다(채팅은 계속)', async () => {
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'failed' });
+        const prepare = jest.fn(async () => ({ contextBlock: 'K' }));
+        __setChatTurnIntegrationsForTest([{ id: 'k', prepareTurnContext: prepare }]);
+        const r = await collectTurnContexts({ message: 'q', userLang: 'ko' });
+        expect(prepare).not.toHaveBeenCalled();
         expect(r).toEqual({ contextBlock: '', sources: [], systemPromptPart: '' });
     });
 

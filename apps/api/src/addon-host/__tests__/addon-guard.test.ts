@@ -96,6 +96,15 @@ describe('addonGuard', () => {
         expect(r.nexted).toBe(false);
     });
 
+    it('부팅에 실패한 add-on 은 503 ADDON_FAILED — Retry-After 없음(관리자 조치 필요)', async () => {
+        checkAddonEntitlement.mockResolvedValue('failed');
+        const r = await run({});
+        expect(r.status).toBe(503);
+        expect(r.body?.error?.code).toBe('ADDON_FAILED');
+        expect(r.headers['Retry-After']).toBeUndefined();
+        expect(r.nexted).toBe(false);
+    });
+
     it('판정 함수가 던져도 통과시키지 않는다 — 503 ADDON_STATE_UNKNOWN', async () => {
         checkAddonEntitlement.mockRejectedValue(new Error('정책 조회 실패'));
         const r = await run({});

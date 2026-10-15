@@ -52,7 +52,13 @@ export async function ensureAddonStates(): Promise<void> {
     if (err) logger.debug(`add-on 상태 적재 실패(무시): ${err.message}`);
 }
 
-export type AddonEnabledVerdict = { known: true; enabled: boolean } | { known: false; reason: string };
+/**
+ * `state` — 켜짐/꺼짐의 이유. env 차단은 `env_disabled`, 행 없음(미등록)은 기본 의도 `enabled`.
+ * `failed`(부팅 실패)는 관리자 조치가 필요해 라우트가 꺼짐(404)과 구분해 503 `ADDON_FAILED` 로 알린다(설계 문서 8.3).
+ */
+export type AddonEnabledVerdict =
+    | { known: true; enabled: boolean; state: AddonState | 'env_disabled' }
+    | { known: false; reason: string };
 
 /**
  * strict 켜짐 판정 — '조회 실패'를 '켜짐'으로 읽지 않는다(설계 문서 8.3). env 차단은 항상 안다.
@@ -61,13 +67,13 @@ export type AddonEnabledVerdict = { known: true; enabled: boolean } | { known: f
  * `isAddonEnabled()` 는 스킬 주입 필터의 fail-open 경로로 그대로 둔다.
  */
 export async function readAddonEnabledStrict(addonId: string): Promise<AddonEnabledVerdict> {
-    if (!isBuiltinAddonEnabled(addonId)) return { known: true, enabled: false };
+    if (!isBuiltinAddonEnabled(addonId)) return { known: true, enabled: false, state: 'env_disabled' };
     if (!cacheFresh()) {
         const err = await refreshStates();
         if (err) return { known: false, reason: err.message };
     }
-    const state = cachedAddonState(addonId);
-    return { known: true, enabled: state === undefined ? true : state === 'enabled' };
+    const state = cachedAddonState(addonId) ?? 'enabled';
+    return { known: true, enabled: state === 'enabled', state };
 }
 
 /**

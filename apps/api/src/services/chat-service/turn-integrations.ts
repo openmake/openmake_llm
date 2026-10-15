@@ -203,8 +203,8 @@ export async function collectTurnContexts(
         if (!integration.prepareTurnContext) continue;
         try {
             const r = await withTurnContextTimeout((async () => {
-                // 기능 훅 게이트 — 관리자가 끈·상태 확인 불가 add-on 은 이 턴에 기여하지 않는다(통합 0개와 같은 결과, 채팅은 계속). 게이트의 DB 조회도 이 통합의 시간 상한 안에서 돈다
-                const gate = await integrationGate(integration.id);
+                // 기능 훅 게이트 — 관리자가 끈·조직 허용 목록 밖·상태 확인 불가 add-on 은 이 턴에 기여하지 않는다(통합 0개와 같은 결과, 채팅은 계속). 게이트의 DB 조회도 이 통합의 시간 상한 안에서 돈다
+                const gate = await integrationGate(integration.id, input.userId);
                 if (!gate.allowed) {
                     turnContextLog.info(`[TurnContext] '${integration.id}' 컨텍스트 준비 건너뜀(${gate.reason}${gate.detail ? `: ${gate.detail}` : ''})`);
                     return undefined;
