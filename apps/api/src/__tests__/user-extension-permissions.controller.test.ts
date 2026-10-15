@@ -177,6 +177,16 @@ describe('POST /:id/permissions/revoke', () => {
         });
     });
 
+    it('이미 network 가 철회된 상태에서 다시 철회(no-op)하면 MCP 제한을 한 번 더 건다 — 지난 제한 실패의 재시도', async () => {
+        currentRow = makeRow({ permission_state: 'review_required', permissions_granted: [], permissions_requested: [NET] });
+        const res = await request(app()).post(`${BASE}/revoke`).send({ permissions: [NET] });
+        expect(res.status).toBe(200);
+        expect(mockSaveReview).not.toHaveBeenCalled();
+        expect(mockLogAudit).not.toHaveBeenCalled();
+        expect(mockRestrict).toHaveBeenCalledWith('ext-1');
+        expect(res.body.data.restricted).toEqual({ sandboxed: 1, disabled: 1 });
+    });
+
     it('어휘 밖 권한·빈 목록은 400, 저장하지 않는다', async () => {
         expect((await request(app()).post(`${BASE}/revoke`).send({ permissions: ['files:read'] })).status).toBe(400);
         expect((await request(app()).post(`${BASE}/revoke`).send({ permissions: [] })).status).toBe(400);

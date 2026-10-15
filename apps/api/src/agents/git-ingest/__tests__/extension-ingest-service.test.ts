@@ -386,7 +386,9 @@ describe('ExtensionIngestService', () => {
             if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
 
             const upd = extUpdate(q);
-            expect((upd[1] as unknown[]).slice(8)).toEqual(['review_required', '[]', '["network:internet"]', null]);
+            // 뒤 둘은 읽어 둔 상태·승인(경합 검사 — 그 사이 철회되면 0행)
+            expect((upd[1] as unknown[]).slice(8)).toEqual(['review_required', '[]', '["network:internet"]', null, 'reviewed', '[]']);
+            expect(String(upd[0])).toContain('permission_state IS NOT DISTINCT FROM');
             expect(permissionWrites(q)).toBe(1);
             expect(r.validationWarnings.join(' ')).toContain('PERMISSION_REVIEW_REQUIRED: network:internet');
             expect(insertDraftParams(q)[9]).toBe('none');
@@ -419,9 +421,37 @@ describe('ExtensionIngestService', () => {
 
             await makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
 
-            expect((extUpdate(q)[1] as unknown[]).slice(8)).toEqual(['legacy_unreviewed', null, null, null]);
+            expect((extUpdate(q)[1] as unknown[]).slice(8)).toEqual(['legacy_unreviewed', null, null, null, 'legacy_unreviewed', null]);
             expect(permissionWrites(q)).toBe(1);
             expect(insertDraftParams(q)[9]).toBeNull();               // sandboxNetwork 미지정 → COALESCE 기본(full)
+        });
+
+        it('읽은 뒤 업데이트 도중 권한이 바뀌었으면(갱신 0행) EXTENSION_UPDATE_CONFLICT — 읽어 둔 승인으로 덮어쓰지 않는다', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('newsha4');
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json', 'openmake-addon.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(PLUGIN_MCP_ONLY);
+            mockFetcher.fetchFile.mockResolvedValueOnce(addonManifest(['network:internet']));
+            const q = mockPool.query as jest.Mock;
+            q.mockResolvedValueOnce({ rows: [] });                    // dedupe
+            q.mockResolvedValueOnce({ rows: [{                        // findActiveByName — network 승인된 상태로 읽음
+                id: 'user-ext-p4', name: 'tool-pack', version: '1.0.0', description: null,
+                source_url: 'foo/bar', source_ref: 'oldsha4', source_path: 'plugin.json',
+                manifest: { components: {} },
+                permission_state: 'reviewed', permissions_granted: ['network:internet'], permissions_requested: ['network:internet'],
+            }] });
+            q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills
+            q.mockResolvedValueOnce({ rows: [] });                    // delete assignments
+            q.mockResolvedValueOnce({ rows: [] });                    // archive skills
+            q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
+            q.mockResolvedValueOnce({ rows: [] });                    // archive custom agents
+            conventionOk();
+            q.mockResolvedValueOnce({ rows: [] });                    // resolveUniqueServerName
+            q.mockResolvedValueOnce({ rows: [{ id: 'mcp-p4' }] });    // insertDraft
+            q.mockResolvedValueOnce({ rows: [] });                    // updateAfterReinstall — 그 사이 철회돼 0행
+
+            await expect(makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' }))
+                .rejects.toThrow('EXTENSION_UPDATE_CONFLICT');
+            expect((extUpdate(q)[1] as unknown[]).slice(12)).toEqual(['reviewed', '["network:internet"]']);
         });
     });
 

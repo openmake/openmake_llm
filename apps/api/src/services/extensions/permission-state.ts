@@ -176,6 +176,7 @@ export function permissionExcludedServers(manifest: Record<string, unknown> | nu
     if (!Array.isArray(servers)) return [];
     return servers
         .filter(isRecord)
-        .filter((s) => typeof s.name === 'string' && typeof s.error === 'string' && PERMISSION_ERROR_PATTERN.test(s.error))
-        .map((s) => s.name as string);
+        .filter((s): s is Record<string, unknown> & { name: string; error: string } =>
+            typeof s.name === 'string' && typeof s.error === 'string' && PERMISSION_ERROR_PATTERN.test(s.error))
+        .map((s) => s.name);
 }

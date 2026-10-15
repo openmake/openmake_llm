@@ -10,6 +10,7 @@
  *  ⑤ 조건부 저장: 요청 권한이 읽은 값과 다르면 0행
  *  ⑥ MCP 네트워크 제한 → 복원 왕복(권한 표시가 있는 stdio 만 되돌린다)
  *  ⑦ 설치·업데이트 한 문장 저장(UserExtensionRepository.insert·updateAfterReinstall 의 permission)
+ *  ⑦-b 업데이트 경합: 읽어 둔 상태·승인(expected)과 저장 값이 다르면 0행 — 그 사이 철회를 덮어쓰지 않는다
  */
 import { Pool, type PoolClient } from 'pg';
 import * as fs from 'fs';
@@ -166,5 +167,39 @@ describeOrSkip('마이그레이션 190 + UserExtensionPermissionRepository (TEMP
 
         const plain = await extRepo.insert({ ...base, userId: 'u-2', name: 'no-permission', sourceUrl: 'https://example.invalid/z' });
         expect((await stateOf(plain.id)).permission_state).toBe('legacy_unreviewed');
+    });
+
+    it('⑦-b 업데이트가 읽은 뒤 다른 쪽이 승인을 바꿨으면(철회) 0행 — 철회가 남는다', async () => {
+        const extRepo = new UserExtensionRepository(client as unknown as Pool);
+        const base = { version: '1.0.0', sourceRef: 'sha1', sourcePath: 'plugin.json', sourceHash: 'h1', manifest: { components: {} } };
+        const net = ['network:internet'];
+        const row = await extRepo.insert({
+            ...base, userId: 'u-3', name: 'race', sourceUrl: 'https://example.invalid/r',
+            permission: { state: 'reviewed', granted: net, requested: net, reviewedBy: 'u-3' },
+        });
+        // ingest 가 읽은 값: reviewed · [network]. 그 사이 소유자가 network 를 철회한다
+        await repo.saveReviewIfRequestedUnchanged(row.id, { state: 'review_required', granted: [], reviewedBy: 'u-3', expectedRequested: net });
+        const lost = await extRepo.updateAfterReinstall(row.id, {
+            ...base, sourceRef: 'sha2',
+            permission: { state: 'reviewed', granted: net, requested: net, reviewedBy: null },
+            expected: { state: 'reviewed', granted: net },
+        });
+        expect(lost).toBeNull();
+        expect(await stateOf(row.id)).toMatchObject({ permission_state: 'review_required', permissions_granted: [] });
+
+        // 읽은 값이 저장 값과 같으면 쓴다(null 승인도 IS NOT DISTINCT FROM 으로 같다고 본다)
+        const ok = await extRepo.updateAfterReinstall(row.id, {
+            ...base, sourceRef: 'sha3',
+            permission: { state: 'review_required', granted: [], requested: net, reviewedBy: null },
+            expected: { state: 'review_required', granted: [] },
+        });
+        expect(ok?.source_ref).toBe('sha3');
+        const legacy = await extRepo.insert({ ...base, userId: 'u-3', name: 'race-legacy', sourceUrl: 'https://example.invalid/l' });
+        const legacyOk = await extRepo.updateAfterReinstall(legacy.id, {
+            ...base, sourceRef: 'sha2',
+            permission: { state: 'legacy_unreviewed', granted: null, requested: null, reviewedBy: null },
+            expected: { state: 'legacy_unreviewed', granted: null },
+        });
+        expect(legacyOk).not.toBeNull();
     });
 });
