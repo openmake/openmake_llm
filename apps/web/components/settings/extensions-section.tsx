@@ -7,6 +7,7 @@ import { Button, Card, CardHeader, CardTitle, CardContent, Input } from "@/compo
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { MarketplacePublishSection } from "@/components/settings/marketplace-publish-section";
+import { ExtensionPermissionBadge, ExtensionPermissionPanel } from "@/components/settings/extension-permission-panel";
 import { useAppStore } from "@/lib/store";
 
 interface UserExtension {
@@ -20,6 +21,10 @@ interface UserExtension {
   created_at?: string;
   /** 설치 리포트 — 미지원 구성요소·건너뛴 MCP 항목·스킬 호환 적응 (ingest 가 기록) */
   manifest?: { warnings?: string[] };
+  /** 권한 상태 (190) — lib/extension-permission-state 가 분류한다 */
+  permission_state?: string | null;
+  permissions_granted?: string[] | null;
+  permissions_requested?: string[] | null;
 }
 
 type ExtensionVisibility = "private" | "shared" | "organization";
@@ -389,6 +394,7 @@ export function ExtensionsSection() {
                     {ext.visibility === "organization" && (
                       <span className="shrink-0 whitespace-nowrap text-xs text-accent">{t("share.organization")}</span>
                     )}
+                    <ExtensionPermissionBadge ext={ext} />
                     {activeOrgId || ext.visibility === "organization" ? (
                       <select
                         aria-label={t("share.visibilityAria")}
@@ -516,6 +522,12 @@ export function ExtensionsSection() {
                               <p className="mt-1 text-xs text-muted">{t("report.hint")}</p>
                             </div>
                           )}
+                          <ExtensionPermissionPanel
+                            ext={ext}
+                            onUpdated={(patch) =>
+                              setExtensions((list) => list.map((e) => (e.id === ext.id ? { ...e, ...patch } : e)))
+                            }
+                          />
                           <p className="text-xs text-muted">{t("approvalHint")}</p>
                         </>
                       ) : (
