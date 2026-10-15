@@ -17,6 +17,7 @@ import type { KnowledgeSpaceSummary } from "@openmake/shared-types";
 import { knowledgeApi } from "../api";
 import { qk } from "../constants";
 import { parseDate } from "../helpers";
+import { addonAvailabilityMessageKey, addonErrorOf, classifyAddonError } from "@/lib/addon-availability";
 import { CreateSpaceDialog } from "../components/create-dialog";
 import { KnowledgeAdminPanel } from "../components/admin-panel";
 
@@ -76,11 +77,13 @@ export function SpaceListView() {
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { data: spaces = [], isLoading } = useQuery({
+  const { data: spaces = [], isLoading, error } = useQuery({
     queryKey: qk.spaces(),
     queryFn: knowledgeApi.listSpaces,
     retry: false,
   });
+  const { status, code } = addonErrorOf(error);
+  const errorMessageKey = error ? addonAvailabilityMessageKey(classifyAddonError(status, code)) : null;
 
   const normalized = query.trim().toLowerCase();
   const filtered = normalized
@@ -114,6 +117,11 @@ export function SpaceListView() {
 
         {isLoading ? (
           <p className="text-sm text-muted">{t("loading")}</p>
+        ) : errorMessageKey ? (
+          <div className="grid place-items-center gap-2 rounded-lg border border-dashed border-border py-16 text-center">
+            <AlertTriangle className="h-8 w-8 text-faint" />
+            <p className="text-sm text-muted">{t(errorMessageKey)}</p>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="grid place-items-center gap-2 rounded-lg border border-dashed border-border py-16 text-center">
             <Library className="h-8 w-8 text-faint" />
