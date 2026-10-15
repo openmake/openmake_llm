@@ -15,11 +15,12 @@ jest.mock('../../auth', () => ({ optionalAuth: (...a: unknown[]) => optionalAuth
 
 import { addonGuard } from '../routes';
 
-function run(req: Partial<Request>): Promise<{ status?: number; body?: { error?: { code?: string } }; nexted: boolean }> {
+function run(req: Partial<Request>): Promise<{ status?: number; body?: { error?: { code?: string } }; headers: Record<string, string>; nexted: boolean }> {
     return new Promise((resolve) => {
-        const out: { status?: number; body?: { error?: { code?: string } }; nexted: boolean } = { nexted: false };
+        const out: { status?: number; body?: { error?: { code?: string } }; headers: Record<string, string>; nexted: boolean } = { headers: {}, nexted: false };
         const res = {
             status(code: number) { out.status = code; return this; },
+            set(name: string, value: string) { out.headers[name] = value; return this; },
             json(body: { error?: { code?: string } }) { out.body = body; resolve(out); return this; },
         } as unknown as Response;
         const next: NextFunction = () => { out.nexted = true; resolve(out); };
@@ -76,9 +77,30 @@ describe('addonGuard', () => {
         expect(r.nexted).toBe(true);
     });
 
-    it('판정이 실패해도 막지 않는다(fail-open)', async () => {
+    it('optionalAuth 가 reject 해도 멈추지 않고 사용자 없이 판정한다', async () => {
+        optionalAuth.mockRejectedValue(new Error('토큰 검증 중 DB 장애'));
+        checkAddonEntitlement.mockResolvedValue('ok');
+
+        const r = await run({});
+
+        expect(checkAddonEntitlement).toHaveBeenCalledWith('deep-research', undefined);
+        expect(r.nexted).toBe(true);
+    });
+
+    it('상태를 확인하지 못하면 503 ADDON_STATE_UNKNOWN + Retry-After (꺼짐 404 와 구분)', async () => {
+        checkAddonEntitlement.mockResolvedValue('state-unknown');
+        const r = await run({});
+        expect(r.status).toBe(503);
+        expect(r.body?.error?.code).toBe('ADDON_STATE_UNKNOWN');
+        expect(r.headers['Retry-After']).toBe('5');
+        expect(r.nexted).toBe(false);
+    });
+
+    it('판정 함수가 던져도 통과시키지 않는다 — 503 ADDON_STATE_UNKNOWN', async () => {
         checkAddonEntitlement.mockRejectedValue(new Error('정책 조회 실패'));
         const r = await run({});
-        expect(r.nexted).toBe(true);
+        expect(r.status).toBe(503);
+        expect(r.body?.error?.code).toBe('ADDON_STATE_UNKNOWN');
+        expect(r.nexted).toBe(false);
     });
 });

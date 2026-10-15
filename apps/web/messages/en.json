@@ -2854,6 +2854,8 @@
   },
   "knowledge": {
     "serverError": "A server error occurred",
+    "disabledByAdmin": "An administrator has turned off Knowledge.",
+    "unavailable": "Knowledge is temporarily unavailable. Please try again shortly.",
     "cancel": "Cancel",
     "close": "Close",
     "save": "Save",
