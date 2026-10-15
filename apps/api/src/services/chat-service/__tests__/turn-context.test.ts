@@ -1,6 +1,9 @@
 /**
  * 턴 전 컨텍스트 확장점(collectTurnContexts) — 출처 번호 오프셋 이어 붙이기·실패/초과 통합 건너뛰기.
  */
+const integrationGate = jest.fn();
+jest.mock('../../addon/integration-gate', () => ({ integrationGate: (...a: unknown[]) => integrationGate(...a) }));
+
 import {
     __setChatTurnIntegrationsForTest, collectTurnContexts, collectHiddenSessionIds,
     isSessionMemoryIsolated, type ChatTurnIntegration,
@@ -9,6 +12,7 @@ import {
 const src = (n: number) => ({ n, title: `t${n}`, url: `/x/${n}`, snippet: 's' });
 
 afterEach(() => __setChatTurnIntegrationsForTest(null));
+beforeEach(() => { integrationGate.mockReset(); integrationGate.mockResolvedValue({ allowed: true }); });
 
 describe('collectTurnContexts', () => {
     it('통합마다 앞선 출처 뒤로 번호를 이어 받는다', async () => {
@@ -47,6 +51,26 @@ describe('collectTurnContexts', () => {
         expect(r.systemPromptPart).toBe('PART-A\n\nPART-C');
         expect(r.contextBlock).toBe('ctx');
     });
+
+    it('관리자가 끈 add-on 의 prepareTurnContext 는 부르지 않고 나머지는 싣는다', async () => {
+        const offCalls = jest.fn(async () => ({ contextBlock: 'OFF' }));
+        integrationGate.mockImplementation(async (id: string) => (id === 'off' ? { allowed: false, reason: 'disabled' } : { allowed: true }));
+        __setChatTurnIntegrationsForTest([
+            { id: 'off', prepareTurnContext: offCalls },
+            { id: 'on', prepareTurnContext: async () => ({ contextBlock: 'ON' }) },
+        ]);
+        const r = await collectTurnContexts({ message: 'q', userLang: 'ko' });
+        expect(offCalls).not.toHaveBeenCalled();
+        expect(r.contextBlock).toBe('ON');
+        expect(integrationGate).toHaveBeenCalledWith('off');
+    });
+
+    it('상태를 확인하지 못한 add-on 도 건너뛴다(채팅은 계속)', async () => {
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'state_unknown', detail: 'DB 장애' });
+        __setChatTurnIntegrationsForTest([{ id: 'k', prepareTurnContext: async () => ({ contextBlock: 'K' }) }]);
+        const r = await collectTurnContexts({ message: 'q', userLang: 'ko' });
+        expect(r).toEqual({ contextBlock: '', sources: [], systemPromptPart: '' });
+    });
 });
 
 describe('isSessionMemoryIsolated (전역 메모리 쓰기 게이트)', () => {
@@ -69,6 +93,15 @@ describe('isSessionMemoryIsolated (전역 메모리 쓰기 게이트)', () => {
         __setChatTurnIntegrationsForTest([{ id: 'x', isMemoryIsolatedSession: async () => true }]);
         expect(await isSessionMemoryIsolated('guest', 's1')).toBe(false);
         expect(await isSessionMemoryIsolated('u1', undefined)).toBe(false);
+    });
+
+    it('꺼진 add-on 도 격리 훅은 호출된다(보호 훅은 토글과 무관)', async () => {
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'disabled' });
+        const isolated = jest.fn(async () => true);
+        __setChatTurnIntegrationsForTest([{ id: 'x', isMemoryIsolatedSession: isolated }]);
+        expect(await isSessionMemoryIsolated('u1', 's1')).toBe(true);
+        expect(isolated).toHaveBeenCalledTimes(1);
+        expect(integrationGate).not.toHaveBeenCalled();
     });
 });
 
