@@ -2849,7 +2849,9 @@
       "not_loaded": "Laufzeit nicht geladen",
       "registering": "Registrierung",
       "ready": "bereit",
-      "failed": "Laufzeitfehler"
+      "failed": "Laufzeitfehler",
+      "stopping": "wird angehalten",
+      "stopped": "angehalten"
     }
   },
   "knowledge": {

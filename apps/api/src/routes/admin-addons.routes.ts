@@ -2,8 +2,9 @@
  * Add-on 관리 API (2026-09-19, S3·§10-5) — 설치 목록·상태 토글·사용권 확인.
  *
  * Base 는 개별 add-on 을 모른다. 이 라우트는 **호스트가 발견한 목록과 DB 상태**만 다룬다.
- * 토글은 `addon_installations.state` 를 바꾸고, 라우트 노출·사용권 판정에는 즉시 반영된다 —
- * 런타임 등록(도구·스킬·채팅 모드)은 부팅 시점이라 **재시작이 필요하다**(응답의 `restartRequired`).
+ * 토글은 `addon_installations.state` 를 바꾸고, 라우트 노출·사용권 판정에는 즉시 반영된다. 같은 프로세스의 런타임은
+ * `applyDesiredState` 로 바로 정지(drain)·재개되고(응답의 `runtime`), 재개 수단이 없는 런타임과 다른 프로세스는
+ * **재시작이 필요하다**(응답의 `restartRequired`).
  *
  * @module routes/admin-addons.routes
  */
@@ -24,6 +25,10 @@ import { availableChatModelFacts, checkModelRequirement } from '../services/addo
 import { clearAddonStateCache } from '../services/addon/addon-state';
 import { loadPackVerifications } from '../services/addon/pack-verification';
 import { getAuditService } from '../services/AuditService';
+import { applyDesiredState, type AddonRuntimeTransition } from '../addon-host/lifecycle';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('AdminAddons');
 
 export const adminAddonsRouter = Router();
 
@@ -90,7 +95,8 @@ adminAddonsRouter.get('/addons', requireAuth, requireAdmin, asyncHandler(async (
 
 /**
  * PATCH /api/admin/addons/:addonId/state
- * 상태 전환 — installed | enabled | disabled | failed.
+ * 상태 전환 — installed | enabled | disabled | failed. 저장 뒤 이 프로세스의 런타임에 의도를 반영한다:
+ * 끄면 새 작업 차단 + 진행 중 작업 drain(상한 ADDON_DRAIN_TIMEOUT_MS — 응답이 그만큼 늦을 수 있다), 켜면 resume 이 있는 런타임만 재개.
  */
 adminAddonsRouter.patch('/addons/:addonId/state', requireAuth, requireAdmin, validate(addonStateSchema), asyncHandler(async (req: Request, res: Response) => {
     const { addonId } = req.params;
@@ -101,14 +107,22 @@ adminAddonsRouter.patch('/addons/:addonId/state', requireAuth, requireAdmin, val
         return;
     }
     clearAddonStateCache();
+    // 런타임 반영이 실패해도 의도 저장은 끝났다 — 재시작으로 반영하라고 안내한다(라우트·훅 게이트는 이미 새 의도를 본다)
+    let runtime: AddonRuntimeTransition;
+    try {
+        runtime = await applyDesiredState(addonId, updated.desired_state);
+    } catch (err) {
+        logger.error(`add-on '${addonId}' 런타임 반영 실패 — 재시작으로 반영: ${err instanceof Error ? err.message : String(err)}`);
+        runtime = 'restart_required';
+    }
     await getAuditService().logAudit({
         action: 'addon.state_changed',
         userId: req.user?.id !== undefined ? String(req.user.id) : undefined,
         resourceType: 'addon',
         resourceId: addonId,
-        details: { state, reason: reason ?? null },
+        details: { state, reason: reason ?? null, runtime },
     });
-    res.json(success({ addon: updated, restartRequired: true, restartNote: RESTART_REQUIRED_NOTE }));
+    res.json(success({ addon: updated, runtime, restartRequired: runtime === 'restart_required', restartNote: RESTART_REQUIRED_NOTE }));
 }));
 
 /**

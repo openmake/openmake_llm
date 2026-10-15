@@ -2849,7 +2849,9 @@
       "not_loaded": "런타임 미적재",
       "registering": "등록 중",
       "ready": "준비됨",
-      "failed": "런타임 실패"
+      "failed": "런타임 실패",
+      "stopping": "정지 중",
+      "stopped": "정지됨"
     }
   },
   "knowledge": {
