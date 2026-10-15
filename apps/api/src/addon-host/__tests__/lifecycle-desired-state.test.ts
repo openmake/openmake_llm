@@ -1,6 +1,12 @@
 /**
  * 관리자 의도 반영(applyDesiredState) — 같은 프로세스에서 끄면 drain 정지, 켜면 resume 이 있는 런타임만 재개.
  */
+// 진입점 유무는 내장 레지스트리로 판단한다 — 테스트가 발견 목록을 정한다
+const mockDefs: unknown[] = [];
+jest.mock('../builtin-registry', () => ({
+    ...jest.requireActual('../builtin-registry'),
+    listBuiltinAddonDefs: () => mockDefs,
+}));
 import { bootAddons, type AddonBootDeps } from '../index';
 import { getAddonRuntimeStatus, resetAddonRuntimeStatusesForTest } from '../activation';
 import { applyDesiredState, resetAddonLifecyclesForTest } from '../lifecycle';
@@ -26,10 +32,13 @@ function bootWith(id: string, handle: AddonRuntimeHandle | undefined, withRuntim
         async markFailed() { /* 기록 생략 */ },
         async markSucceeded() { /* 기록 생략 */ },
     };
-    return bootAddons([addon(id, withRuntime)], deps);
+    const def = addon(id, withRuntime);
+    mockDefs.push(def);
+    return bootAddons([def], deps);
 }
 
 beforeEach(() => {
+    mockDefs.length = 0;
     resetAddonRuntimeStatusesForTest();
     resetCapabilityRuntimeForTest();
     resetLegacyCapabilityBridgeForTest();
@@ -76,11 +85,17 @@ describe('applyDesiredState', () => {
         expect(await applyDesiredState('never', 'disabled')).toBe('not_loaded');
     });
 
-    it('런타임 진입점이 없는 add-on(팩): 수명주기 기록이 없어 disabled → not_loaded, enabled → restart_required', async () => {
+    it('런타임 진입점이 없는 add-on(팩): 적용할 런타임이 없어 끄기·켜기 모두 unchanged', async () => {
         await bootWith('pack', undefined, false);
         expect(getAddonRuntimeStatus('pack').status).toBe('ready');
-        expect(await applyDesiredState('pack', 'disabled')).toBe('not_loaded');
-        expect(await applyDesiredState('pack', 'enabled')).toBe('restart_required');
+        expect(await applyDesiredState('pack', 'disabled')).toBe('unchanged');
+        expect(await applyDesiredState('pack', 'enabled')).toBe('unchanged');
+    });
+
+    it('진입점은 있는데 이 프로세스가 세우지 않은 add-on(부팅 때 꺼짐): enabled → restart_required, disabled → not_loaded', async () => {
+        mockDefs.push(addon('off-at-boot'));
+        expect(await applyDesiredState('off-at-boot', 'enabled')).toBe('restart_required');
+        expect(await applyDesiredState('off-at-boot', 'disabled')).toBe('not_loaded');
     });
 
     it('정지 중에 재개를 요청하면 정지가 끝난 뒤 재개한다(경합)', async () => {
