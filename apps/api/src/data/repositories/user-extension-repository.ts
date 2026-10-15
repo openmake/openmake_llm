@@ -11,7 +11,9 @@
  * @module data/repositories/user-extension-repository
  */
 import { v4 as uuidv4 } from 'uuid';
-import { BaseRepository } from './base-repository';
+import { BaseRepository, type QueryParam } from './base-repository';
+import type { ExtensionPermissionState } from '../../config/addon-permissions';
+import { jsonbParam, type SavePermissionStateInput } from './user-extension-permission-repository';
 
 export interface UserExtensionRow {
     id: string;
@@ -29,6 +31,16 @@ export interface UserExtensionRow {
     visibility: ExtensionVisibility;
     /** visibility='organization' 일 때 대상 조직 (166) */
     org_id: string | null;
+    /** 권한 상태 (190) — config/addon-permissions EXTENSION_PERMISSION_STATES */
+    permission_state: ExtensionPermissionState;
+    /** 승인한 권한 (190). legacy_unreviewed 는 NULL */
+    permissions_granted: string[] | null;
+    /** 마지막 설치·업데이트 번들이 요청한 권한 (190). 매니페스트 미동봉이면 NULL */
+    permissions_requested: string[] | null;
+    /** 마지막 승인·철회 시각 (190) */
+    permissions_reviewed_at: Date | null;
+    /** 마지막으로 승인·철회한 사용자 id (190, 백필 행은 'migration:190') */
+    permissions_reviewed_by: string | null;
     created_at: Date;
     updated_at: Date;
 }
@@ -47,15 +59,28 @@ interface InsertExtensionInput {
     sourceHash: string;
     trackingRef?: string | null;
     manifest: Record<string, unknown>;
+    /** 권한 상태(190) — 주면 행과 같은 문장으로 저장한다. 없으면 DB 기본값(legacy_unreviewed) */
+    permission?: SavePermissionStateInput;
+}
+
+/**
+ * 권한 상태(190) 파라미터 — 확장 행 쓰기와 **같은 문장**에 싣는다. 따로 UPDATE 하면 그 문장만 실패했을 때
+ * 행은 바뀌고 상태는 이전(신규면 legacy_unreviewed)으로 남아, 다음 업데이트가 재승인 없이 권한을 넓힐 수 있다.
+ */
+function permissionParams(p: SavePermissionStateInput): QueryParam[] {
+    return [p.state, jsonbParam(p.granted), jsonbParam(p.requested), p.reviewedBy];
 }
 
 export class UserExtensionRepository extends BaseRepository {
     async insert(input: InsertExtensionInput): Promise<UserExtensionRow> {
         const id = `user-ext-${uuidv4()}`;
+        const p = input.permission;
         const r = await this.query<UserExtensionRow>(
             `INSERT INTO user_extensions
-               (id, user_id, name, version, description, source_url, source_ref, source_path, source_hash, tracking_ref, manifest, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, 'active')
+               (id, user_id, name, version, description, source_url, source_ref, source_path, source_hash, tracking_ref, manifest, status${p ? `,
+                permission_state, permissions_granted, permissions_requested, permissions_reviewed_by, permissions_reviewed_at` : ''})
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, 'active'${p ? `,
+                $12, $13::jsonb, $14::jsonb, $15::text, CASE WHEN $15::text IS NULL THEN NULL ELSE NOW() END` : ''})
              RETURNING *`,
             [
                 id,
@@ -69,6 +94,7 @@ export class UserExtensionRepository extends BaseRepository {
                 input.sourceHash,
                 input.trackingRef ?? null,
                 JSON.stringify(input.manifest),
+                ...(p ? permissionParams(p) : []),
             ]
         );
         return r.rows[0];
@@ -83,12 +109,26 @@ export class UserExtensionRepository extends BaseRepository {
         sourceHash: string;
         trackingRef?: string | null;
         manifest: Record<string, unknown>;
+        /** 권한 상태(190) — 주면 같은 문장으로 저장한다(reviewedBy 가 null 이면 승인 기록 by·at 유지). 없으면 그대로 */
+        permission?: SavePermissionStateInput;
+        /**
+         * 판정에 쓴(읽어 둔) 상태·승인 — permission 과 함께 주면 저장 값이 이와 같을 때만 쓴다. 업데이트 도중
+         * 소유자·관리자가 철회했으면 0행(null) — 읽어 둔 승인으로 덮어써 철회를 되살리지 않는다.
+         */
+        expected?: { state: ExtensionPermissionState | null; granted: readonly string[] | null };
     }): Promise<UserExtensionRow | null> {
+        const p = input.permission;
+        const e = p ? input.expected : undefined;
         const r = await this.query<UserExtensionRow>(
             `UPDATE user_extensions
                 SET version=$1, description=$2, source_ref=$3, source_path=$4,
-                    source_hash=$5, tracking_ref=$6, manifest=$7::jsonb, updated_at=NOW()
-              WHERE id=$8 AND status='active'
+                    source_hash=$5, tracking_ref=$6, manifest=$7::jsonb, updated_at=NOW()${p ? `,
+                    permission_state=$9, permissions_granted=$10::jsonb, permissions_requested=$11::jsonb,
+                    permissions_reviewed_by=COALESCE($12::text, permissions_reviewed_by),
+                    permissions_reviewed_at=CASE WHEN $12::text IS NULL THEN permissions_reviewed_at ELSE NOW() END` : ''}
+              WHERE id=$8 AND status='active'${e ? `
+                AND permission_state IS NOT DISTINCT FROM $13
+                AND permissions_granted IS NOT DISTINCT FROM $14::jsonb` : ''}
               RETURNING *`,
             [
                 input.version,
@@ -99,6 +139,8 @@ export class UserExtensionRepository extends BaseRepository {
                 input.trackingRef ?? null,
                 JSON.stringify(input.manifest),
                 id,
+                ...(p ? permissionParams(p) : []),
+                ...(e ? [e.state, jsonbParam(e.granted)] : []),
             ]
         );
         return r.rows[0] ?? null;
