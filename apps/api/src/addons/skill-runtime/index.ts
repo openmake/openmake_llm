@@ -7,6 +7,7 @@
  *
  * @module addons/skill-runtime
  */
+import type { AddonRuntimeHost } from '../../addon-host';
 import { registerSkillRuntime } from '../../runtime-ports/skill-runtime';
 import { contributeBuiltInTools } from '../../runtime-ports/builtin-tool-contributions';
 import type { MCPToolDefinition } from '../../tool-contract/types';
@@ -18,13 +19,17 @@ import { seedBaseSkills } from './skill-seeder';
 
 const logger = createLogger('SkillRuntimeAddon');
 
-export async function startSkillRuntime(): Promise<void> {
+/**
+ * handle 을 돌려주지 않는다 — 진행 중 작업이 없는 선언형 런타임이라 정지할 것이 없고, 끈 뒤 다시 켜려면 재시작한다(restart_required).
+ * 끄는 즉시의 효과는 턴마다의 게이트(라우트·스킬 주입 필터)가 맡는다.
+ */
+export async function startSkillRuntime(host: AddonRuntimeHost): Promise<void> {
     registerSkillRuntime(skillRuntime);
     contributeBuiltInTools('skill-runtime', [
         loadSkillTool as MCPToolDefinition,
         createSkillTool as MCPToolDefinition,
     ]);
-    // 시드는 부팅을 막지 않는다 — 실패는 로그만(fail-open).
-    seedBaseSkills().catch((err: unknown) => logger.error('Base 스킬 시딩 실패:', err));
+    // 시드는 부팅을 막지 않는다 — 실패는 로그만(fail-open). 호스트 signal 이 끊기면(시작 시간 초과·종료) 중단한다.
+    seedBaseSkills(host.signal).catch((err: unknown) => logger.error('Base 스킬 시딩 실패:', err));
     logger.info('Skill Runtime 등록 완료');
 }

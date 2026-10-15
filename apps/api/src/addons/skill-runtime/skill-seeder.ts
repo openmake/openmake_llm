@@ -16,8 +16,13 @@ const logger = createLogger('SkillSeeder');
 
 /**
  * general 에이전트 스킬과 skill-author-guide 를 DB 에 upsert 하고 general 에 배정한다.
+ * `signal`(add-on 호스트의 host.signal)이 끊기면 다음 단계로 가지 않는다 — 시작 시간 초과·프로세스 종료 뒤 DB 를 쓰지 않게.
  */
-export async function seedBaseSkills(): Promise<void> {
+export async function seedBaseSkills(signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) {
+        logger.info('Base 스킬 시딩 건너뜀 — add-on 정지 신호');
+        return;
+    }
     logger.info('Base 스킬 시딩 시작...');
 
     try {
@@ -49,6 +54,10 @@ export async function seedBaseSkills(): Promise<void> {
             errorCount++;
         }
 
+        if (signal?.aborted) {
+            logger.info(`Base 스킬 시딩 중단 — add-on 정지 신호(${seededCount}개까지 완료)`);
+            return;
+        }
         // system-skill-author-guide 시드 (LLM 에게 create_skill 도구 사용 안내)
         try {
             await seedSystemSkillAuthorGuide(repo);
