@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { createLogger } from '../../../utils/logger';
 import { kdb, inTransaction } from '../db';
+import { assertLeaseHeld, type JobLease } from '../jobs/lease';
 import { enqueueJob } from '../jobs/queue';
 import { INDEX_PUBLISH_LOCK_KEY } from '../constants';
 import { describeEmbeddingProvider, makeIndexEmbedder, type EmbedFn } from './provider';
@@ -148,7 +149,7 @@ export async function startReindex(): Promise<{ indexId: string }> {
  * reindex 작업 본체(worker 가 호출) — ready 문서의 모든 청크를 새 index 로 임베딩하고,
  * 개수 검증 후 한 트랜잭션에서 활성 index 를 교체한다.
  */
-export async function runReindexJob(indexId: string, deps: { embed?: EmbedFn } = {}): Promise<void> {
+export async function runReindexJob(indexId: string, deps: { embed?: EmbedFn; lease?: JobLease } = {}): Promise<void> {
     const target = await getIndexById(indexId);
     if (!target) throw new Error(`reindex 대상 index 없음: ${indexId}`);
     // 새(building) index 는 startReindex 에서 라이브 배정으로 기록됐다 — 그 기록 모델로 임베딩한다(= reindex 는 라이브 배정을 반영).
@@ -158,8 +159,9 @@ export async function runReindexJob(indexId: string, deps: { embed?: EmbedFn } =
         return;
     }
 
-    // ready·게시된(현재 버전)·미삭제 문서의 청크 중 아직 이 index 에 없는 것
+    // ready·게시된(현재 버전)·미삭제 문서의 청크 중 아직 이 index 에 없는 것 — 배치마다 lease 를 본다(잃었으면 임베딩 호출 전에 멈춘다)
     for (;;) {
+        deps.lease?.throwIfLost();
         const batch = await kdb().query<{ id: string; content: string }>(
             `SELECT c.id, c.content
                FROM knowledge_chunks c
@@ -176,6 +178,7 @@ export async function runReindexJob(indexId: string, deps: { embed?: EmbedFn } =
         if (batch.rows.length === 0) break;
         const vectors = await embed(batch.rows.map((r) => r.content));
         await inTransaction(async (client) => {
+            await assertLeaseHeld(client, deps.lease);
             await insertEmbeddings(client, indexId, batch.rows.map((r, i) => ({ chunkId: r.id, vector: vectors[i] })));
         });
     }
@@ -199,6 +202,7 @@ export async function runReindexJob(indexId: string, deps: { embed?: EmbedFn } =
     // 원자 전환 — 게시와 같은 잠금 아래에서 빠진 청크가 없음을 다시 확인한 뒤(검증~전환 사이에 ready 가 된 문서 방지)
     // 이전 활성을 먼저 내리고(부분 유니크 충돌 방지) 새 index 를 올린다. 빠진 게 있으면 작업 재시도가 채운다.
     await inTransaction(async (client) => {
+        await assertLeaseHeld(client, deps.lease);
         await client.query('SELECT pg_advisory_xact_lock($1)', [INDEX_PUBLISH_LOCK_KEY]);
         const missing = await client.query<{ n: string }>(
             `SELECT COUNT(*)::text AS n
