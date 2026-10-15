@@ -1842,6 +1842,20 @@ export const TASK_CODE_NAV = {
  */
 export const ADDON_STATE_CACHE_TTL_MS = parseInt(process.env.ADDON_STATE_CACHE_TTL_MS || '30000', 10);
 
+/**
+ * Add-on 런타임 진입점(`entry.runtime`) 시작 상한(ms) — 넘으면 그 add-on 은 runtime_failed 로 회수하고 host.signal 을 끊는다.
+ * 외부 서버 초기 연결(서버마다 연결 시도)을 하는 런타임이 가장 길다 — 그 경우를 실패로 만들지 않도록 넉넉히 둔다.
+ * `ADDON_START_TIMEOUT_MS` 로 오버라이드.
+ */
+export const ADDON_START_TIMEOUT_MS = parseInt(process.env.ADDON_START_TIMEOUT_MS || '120000', 10);
+
+/**
+ * Add-on 정지(drain) 상한(ms) — 관리자 토글과 프로세스 종료가 진행 중 작업을 기다리는 시간. 넘으면 취소 신호를 보내고 더 기다리지 않는다.
+ * 종료 경로 예산: 연결 유예 10초 + 에이전트 작업 12초 + 이 값이 전체 30초 안에 들고 뒤 단계(도구 런타임·OTel·DB) 몫 3초를 남기도록 5초.
+ * `ADDON_DRAIN_TIMEOUT_MS` 로 오버라이드.
+ */
+export const ADDON_DRAIN_TIMEOUT_MS = parseInt(process.env.ADDON_DRAIN_TIMEOUT_MS || '5000', 10);
+
 export const ORG_CONTEXT = {
     /** 사용자별 멤버십·활성 조직 캐시 보존(ms). ORG_CONTEXT_CACHE_TTL_MS 로 오버라이드. */
     CACHE_TTL_MS: parseInt(process.env.ORG_CONTEXT_CACHE_TTL_MS || '60000', 10),
