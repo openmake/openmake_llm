@@ -8,6 +8,7 @@ import {
     __setChatTurnIntegrationsForTest, collectTurnContexts, collectHiddenSessionIds,
     isSessionMemoryIsolated, type ChatTurnIntegration,
 } from '../turn-integrations';
+import { TURN_CONTEXT_TIMEOUT_MS } from '../../../config/service-limits';
 
 const src = (n: number) => ({ n, title: `t${n}`, url: `/x/${n}`, snippet: 's' });
 
@@ -70,6 +71,25 @@ describe('collectTurnContexts', () => {
         __setChatTurnIntegrationsForTest([{ id: 'k', prepareTurnContext: async () => ({ contextBlock: 'K' }) }]);
         const r = await collectTurnContexts({ message: 'q', userLang: 'ko' });
         expect(r).toEqual({ contextBlock: '', sources: [], systemPromptPart: '' });
+    });
+
+    it('게이트 조회가 시간 상한을 넘기면 그 통합만 건너뛴다', async () => {
+        jest.useFakeTimers();
+        try {
+            const hungCalls = jest.fn(async () => ({ contextBlock: 'HUNG' }));
+            integrationGate.mockImplementation((id: string) => (id === 'hung' ? new Promise(() => {}) : Promise.resolve({ allowed: true })));
+            __setChatTurnIntegrationsForTest([
+                { id: 'hung', prepareTurnContext: hungCalls },
+                { id: 'ok', prepareTurnContext: async () => ({ contextBlock: 'OK' }) },
+            ]);
+            const p = collectTurnContexts({ message: 'q', userLang: 'ko' });
+            await jest.advanceTimersByTimeAsync(TURN_CONTEXT_TIMEOUT_MS + 1);
+            const r = await p;
+            expect(hungCalls).not.toHaveBeenCalled();
+            expect(r.contextBlock).toBe('OK');
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });
 
