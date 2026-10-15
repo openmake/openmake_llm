@@ -1,7 +1,9 @@
 /**
  * 수집 작업 worker — `knowledge_ingestion_jobs` 를 lease + fencing token(SKIP LOCKED)으로 집어 처리한다.
  * kind 별 핸들러는 `Record` 맵으로 분기한다(switch 금지). 실패는 백오프 재시도, 상한 초과는 failed.
- * 모든 확정 쓰기는 이 tick 이 받은 fencing token 조건부라 lease 가 만료된 옛 실행자의 완료는 거절된다.
+ * claim 이 받은 fencing token 은 `JobLease` 로 핸들러까지 간다(`deps.lease`) — job 행 갱신(finish·retry·heartbeat)과
+ * 핸들러의 확정 쓰기(청크·임베딩·ready·index 전환) 모두 그 token 조건부라 lease 를 잃은 옛 실행자의 결과는 거절된다.
+ * heartbeat 갱신이 0행이면 lease 상실로 표시하고, 상실로 끝난 작업의 행은 건드리지 않는다(새 실행자의 것).
  *
  * @module addons/knowledge-runtime/jobs/worker
  */
@@ -17,6 +19,7 @@ import { FAILURE_CODES, type FailureCode } from '../ingestion/errors';
 import { deleteStoredFile } from '../documents/storage';
 import { rechunkSpace } from './rechunk';
 import { runCleanup } from './cleanup';
+import { createJobLease, LeaseLostError, type JobLease } from './lease';
 
 const logger = createLogger('KnowledgeWorker');
 
@@ -118,28 +121,50 @@ export class KnowledgeWorker {
     }
 
     private async runOne(job: JobRow, leaseMs: number, maxAttempts: number): Promise<void> {
-        const token = Number(job.fencing_token);
-        const beat = setInterval(() => { void this.renew(job.id, token, leaseMs); }, Math.max(1_000, leaseMs * KNOWLEDGE_RUNTIME.JOB_HEARTBEAT_RATIO));
+        const token = job.fencing_token; // BIGINT 문자열 그대로 — Number 로 바꾸지 않는다
+        const lease = createJobLease({ jobId: job.id, token, owner: this.owner, now: this.now() });
+        const beat = setInterval(() => { void this.renew(lease, leaseMs); }, Math.max(1_000, leaseMs * KNOWLEDGE_RUNTIME.JOB_HEARTBEAT_RATIO));
         beat.unref();
         try {
-            await HANDLERS[job.kind](job, this.deps);
+            await HANDLERS[job.kind](job, { ...this.deps, lease });
             await this.finish(job.id, token);
         } catch (err) {
+            if (err instanceof LeaseLostError || lease.signal.aborted) {
+                // 행은 이미 다른 실행자의 것 — finish·retry 로 건드리면 그쪽 상태를 덮는다
+                logger.warn(`작업 중단(lease 상실 — 결과 쓰기 거절): ${job.kind} ${job.id} token=${token} — ${err instanceof Error ? err.message : String(err)}`);
+                return;
+            }
             await this.failOrRetry(job, token, maxAttempts, err instanceof Error ? err.message : String(err));
         } finally {
             clearInterval(beat);
         }
     }
 
-    private async renew(id: string, token: number, leaseMs: number): Promise<void> {
-        await kdb().query(
-            `UPDATE knowledge_ingestion_jobs SET lease_expires_at = NOW() + ($3::bigint * INTERVAL '1 millisecond'), updated_at = NOW()
-              WHERE id = $1 AND fencing_token = $2 AND state = 'running'`,
-            [id, token, leaseMs],
-        ).catch(() => undefined);
+    /**
+     * heartbeat — 내 token·owner 의 running 행만 늘린다. 0행이면 다른 실행자가 집은 것이라 lease 상실로 표시한다.
+     * 조회 오류는 삼키지 않고 지속 시간을 잰다: 마지막 성공(renewedAt) 뒤 lease 기간(leaseMs)을 넘기면 DB 에서 lease 가
+     * 이미 만료돼 누구든 집을 수 있는 상태라 상실로 표시한다(종전엔 오류를 조용히 무시해 옛 실행자가 계속 썼다).
+     */
+    private async renew(lease: JobLease, leaseMs: number): Promise<void> {
+        try {
+            const r = await kdb().query(
+                `UPDATE knowledge_ingestion_jobs SET lease_expires_at = NOW() + ($3::bigint * INTERVAL '1 millisecond'), updated_at = NOW()
+                  WHERE id = $1 AND fencing_token = $2 AND lease_owner = $4 AND state = 'running'`,
+                [lease.jobId, lease.token, leaseMs, lease.owner],
+            );
+            if ((r.rowCount ?? 0) === 0) { lease.markLost('heartbeat 갱신 0행 — 다른 실행자가 집었거나 작업이 끝났음'); return; }
+            lease.touch(this.now());
+        } catch (err) {
+            const silentMs = this.now() - lease.renewedAt;
+            if (silentMs > leaseMs) {
+                lease.markLost(`heartbeat 갱신 오류가 lease 기간을 넘겨 이어짐(${silentMs}ms > ${leaseMs}ms) — ${err instanceof Error ? err.message : String(err)}`);
+                return;
+            }
+            logger.debug(`heartbeat 갱신 실패(다음 주기 재시도, ${silentMs}ms 경과): ${lease.jobId} — ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
-    private async finish(id: string, token: number): Promise<void> {
+    private async finish(id: string, token: string): Promise<void> {
         await kdb().query(
             `UPDATE knowledge_ingestion_jobs SET state = 'done', lease_owner = NULL, lease_expires_at = NULL, last_error = NULL, updated_at = NOW()
               WHERE id = $1 AND fencing_token = $2`,
@@ -147,7 +172,7 @@ export class KnowledgeWorker {
         );
     }
 
-    private async failOrRetry(job: JobRow, token: number, maxAttempts: number, error: string): Promise<void> {
+    private async failOrRetry(job: JobRow, token: string, maxAttempts: number, error: string): Promise<void> {
         const plan = retryPlan(Number(job.attempts), maxAttempts);
         const attempts = plan.attempts;
         if (plan.final) {

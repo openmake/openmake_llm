@@ -7,8 +7,9 @@
  */
 import { randomUUID } from 'node:crypto';
 import { createLogger } from '../../../utils/logger';
-import { kdb } from '../db';
+import { kdb, inTransaction } from '../db';
 import { ingestVersion, type IngestDeps } from '../ingestion/pipeline';
+import { assertLeaseHeld } from './lease';
 
 const logger = createLogger('KnowledgeRechunk');
 
@@ -32,14 +33,19 @@ export async function rechunkSpace(spaceId: string, deps: IngestDeps = {}): Prom
     )).rows;
 
     for (const cur of rows) {
+        deps.lease?.throwIfLost();
         const newVersionId = randomUUID();
         // 원본은 그대로(storage_ref 재사용) — 새 버전 행만 만들어 파이프라인이 다시 청킹·임베딩·게시하게 한다
-        await kdb().query(
-            `INSERT INTO knowledge_document_versions
-               (id, document_id, content_hash, mime_type, original_filename, storage_ref, source_size, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'uploaded')`,
-            [newVersionId, cur.document_id, cur.content_hash, cur.mime_type, cur.original_filename, cur.storage_ref, Number(cur.source_size)],
-        );
+        // 새 버전 행도 lease 검사와 같은 트랜잭션에 — lease 를 잃은 실행자가 고아 uploaded 행을 남기지 않게(이어지는 ingestVersion 은 자체 fence)
+        await inTransaction(async (client) => {
+            await assertLeaseHeld(client, deps.lease);
+            await client.query(
+                `INSERT INTO knowledge_document_versions
+                   (id, document_id, content_hash, mime_type, original_filename, storage_ref, source_size, status)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, 'uploaded')`,
+                [newVersionId, cur.document_id, cur.content_hash, cur.mime_type, cur.original_filename, cur.storage_ref, Number(cur.source_size)],
+            );
+        });
         const res = await ingestVersion(newVersionId, deps);
         if (res.status === 'failed') {
             logger.warn(`rechunk 문서 실패: document=${cur.document_id} code=${res.failureCode}`);
