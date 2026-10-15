@@ -144,17 +144,34 @@ export function describePermissions(row: {
         granted: normalizePermissions(row.permissions_granted),
         requested: normalizePermissions(row.permissions_requested),
         blocked: current.blocked,
-        reviewedAt: row.permissions_reviewed_at === null ? null : new Date(row.permissions_reviewed_at).toISOString(),
+        reviewedAt: toIsoOrNull(row.permissions_reviewed_at),
     };
+}
+
+/** 저장 시각 → ISO 문자열. 날짜로 읽히지 않는 값은 null — 조회 전체가 RangeError 로 실패하지 않게 한다 */
+function toIsoOrNull(value: Date | string | null): string | null {
+    if (value === null) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 /** 권한 오류 코드 — extension-components 가 MCP 결과 error 앞에 붙인다 */
 const PERMISSION_ERROR_PATTERN = /^PERMISSION_(DENIED|REVIEW_REQUIRED)\b/;
 
-/** 설치 기록(manifest.components.mcpServers)에서 권한 때문에 설치에서 빠진 MCP 서버 이름 */
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null;
+}
+
+/**
+ * 설치 기록(manifest.components.mcpServers)에서 권한 때문에 설치에서 빠진 MCP 서버 이름.
+ * 저장 JSON 이 어긋나도(배열 아님·null 요소·이름 없음) 던지지 않고 건너뛴다.
+ */
 export function permissionExcludedServers(manifest: Record<string, unknown> | null | undefined): string[] {
-    const components = (manifest?.components ?? {}) as { mcpServers?: Array<{ name?: unknown; error?: unknown }> };
-    return (components.mcpServers ?? [])
-        .filter((s) => typeof s.error === 'string' && PERMISSION_ERROR_PATTERN.test(s.error))
-        .map((s) => String(s.name));
+    const components = manifest?.components;
+    const servers = isRecord(components) ? components.mcpServers : undefined;
+    if (!Array.isArray(servers)) return [];
+    return servers
+        .filter(isRecord)
+        .filter((s) => typeof s.name === 'string' && typeof s.error === 'string' && PERMISSION_ERROR_PATTERN.test(s.error))
+        .map((s) => s.name as string);
 }

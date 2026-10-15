@@ -138,6 +138,11 @@ describe('describePermissions', () => {
             permissions_reviewed_at: new Date('2026-10-16T01:02:03Z'),
         })).toEqual({ state: 'review_required', granted: [], requested: [NET], blocked: [NET], reviewedAt: '2026-10-16T01:02:03.000Z' });
     });
+    it('저장 시각이 날짜로 읽히지 않으면 reviewedAt null — 조회가 RangeError 로 실패하지 않는다', () => {
+        expect(describePermissions({
+            permission_state: 'reviewed', permissions_granted: [NET], permissions_requested: [NET], permissions_reviewed_at: 'not-a-date',
+        }).reviewedAt).toBeNull();
+    });
 });
 
 describe('permissionExcludedServers', () => {
@@ -156,5 +161,19 @@ describe('permissionExcludedServers', () => {
     it('구성요소 기록이 없으면 빈 배열', () => {
         expect(permissionExcludedServers(null)).toEqual([]);
         expect(permissionExcludedServers({ components: {} })).toEqual([]);
+    });
+    it('저장 JSON 이 어긋나도 던지지 않는다 — 배열 아님·null 요소·이름 없음은 건너뛴다', () => {
+        expect(permissionExcludedServers({ components: { mcpServers: 'x' } })).toEqual([]);
+        expect(permissionExcludedServers({ components: null })).toEqual([]);
+        expect(permissionExcludedServers({
+            components: {
+                mcpServers: [
+                    null,
+                    'cloud',
+                    { error: 'PERMISSION_DENIED: network:internet 권한 없음' },
+                    { name: 'cloud', error: 'PERMISSION_DENIED: network:internet 권한 없음' },
+                ],
+            },
+        })).toEqual(['cloud']);
     });
 });

@@ -25,6 +25,7 @@ import { createExportController } from '../controllers/export.controller';
 import { createUserPreferencesController } from '../controllers/user-preferences.controller';
 import { createUserAgentsController } from '../controllers/user-agents.controller';
 import { createUserExtensionsController } from '../controllers/user-extensions.controller';
+import { createUserExtensionPermissionsController } from '../controllers/user-extension-permissions.controller';
 import { createUserMemoriesController } from '../controllers/user-memories.controller';
 import { createUserModelRolesController } from '../controllers/user-model-roles.controller';
 import { createCapabilityModelsController } from '../controllers/capability-models.controller';
@@ -257,6 +258,8 @@ export function setupApiRoutes(
     app.use('/api/users/me/agents', createUserAgentsController());
     // 확장 번들 (Agent Plugins v1) — 설치는 채팅 도구 import_extension_from_git, 여기선 목록/상세/제거
     app.use('/api/users/me/extensions', createUserExtensionsController());
+    // 확장 권한 상태(190) — 조회·재승인·철회. 위 컨트롤러의 '/:id' 와 경로가 겹치지 않는다
+    app.use('/api/users/me/extensions', createUserExtensionPermissionsController());
     // Cross-conversation Memory — REST 로 explicit 저장 (claude.ai/ChatGPT Memory 동등, 2026-05-26)
     // ⚠️ 채팅 `/remember` 슬래시는 미구현 — 저장은 이 엔드포인트(POST)로만.
     app.use('/api/users/me/memories', createUserMemoriesController());

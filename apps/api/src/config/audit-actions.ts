@@ -73,6 +73,9 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     'quota.grant_manual': 'warning',
     'cost_rate.changed': null,
     'addon.state_changed': null,
+    // 설치형 확장 권한 재승인·철회(190) — 감사 기록만(알림 없음)
+    'extension.permissions_approved': null,
+    'extension.permissions_revoked': null,
     'alert.acknowledged': null,
     'tool_circuit_reset': null,
 
