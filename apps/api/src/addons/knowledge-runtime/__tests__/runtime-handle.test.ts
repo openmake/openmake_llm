@@ -1,18 +1,21 @@
 // apps/api/src/addons/knowledge-runtime/__tests__/runtime-handle.test.ts
 /**
  * Knowledge 런타임 handle — 정지 중 claim 없음(stop-admission), drain 이 진행 작업을 기다림, 시간 초과면 lease 상실·반납,
- * resume 뒤 claim 재개, 끝난 핸들러라도 lease 를 잃었으면 done 을 쓰지 않음. DB 는 SQL 문자열로 분기하는 가짜 kdb.
+ * resume 뒤 claim 재개, claim 진행 중 정지되면 집은 작업을 실행하지 않고 반납, 끝난 핸들러라도 lease 를 잃었으면 done 을 쓰지 않음. DB 는 SQL 문자열로 분기하는 가짜 kdb.
  */
 import type { JobLease } from '../jobs/lease';
 import type { AddonRuntimeHost } from '../../../addon-host';
 
 const queries: Array<{ sql: string; params: unknown[] }> = [];
 let claimRows: unknown[] = [];
+/** 있으면 claim 쿼리가 이 약속이 풀릴 때까지 멈춘다(claim 진행 중 정지 재현) */
+let claimGate: Promise<void> | null = null;
 jest.mock('../db', () => ({
     kdb: () => ({
         query: async (sql: string, params: unknown[]) => {
             queries.push({ sql, params });
             if (sql.includes("SET state = 'running'")) {
+                if (claimGate) await claimGate;
                 const rows = claimRows;
                 claimRows = [];
                 return { rows, rowCount: rows.length };
@@ -62,6 +65,7 @@ function fakeHost(intervals: Array<{ fn: () => void; ms: number }>): AddonRuntim
 beforeEach(() => {
     queries.length = 0;
     claimRows = [{ ...JOB }];
+    claimGate = null;
     ingestVersion.mockReset();
 });
 afterEach(async () => { await stopKnowledgeRuntime(); });
@@ -147,6 +151,30 @@ describe('KnowledgeWorker 정지·재개', () => {
         expect(w.health()).toEqual({ status: 'running', inflight: 0 });
         expect(await w.tick()).toBe(1);
         expect(claims()).toHaveLength(1);
+    });
+
+    it('claim 진행 중 정지되면 집은 작업을 실행하지 않고 lease 를 반납한다 — 그동안 health 는 draining', async () => {
+        const gate = deferred<void>();
+        claimGate = gate.promise;
+        claimRows = [{ ...JOB }, { ...JOB, id: 'job-2', fencing_token: '9' }];
+        const w = new KnowledgeWorker();
+        const ticking = w.tick();
+        await flush();
+        expect(claims()).toHaveLength(1); // claim 쿼리가 나가 멈춰 있다
+
+        await w.stop({ drain: false, signal: new AbortController().signal });
+        expect(w.health()).toEqual({ status: 'draining', inflight: 0 });
+
+        gate.resolve();
+        expect(await ticking).toBe(0);
+        expect(ingestVersion).not.toHaveBeenCalled();
+        const release = sqlWith(RELEASE_SQL);
+        expect(release).toHaveLength(2);
+        expect(release.map((q) => q.params.slice(0, 2))).toEqual([['job-1', '7'], ['job-2', '9']]);
+        expect(sqlWith("SET state = 'done'")).toHaveLength(0);
+        expect(sqlWith("SET state = 'queued'")).toHaveLength(0);
+        expect(sqlWith("SET state = 'failed'")).toHaveLength(0);
+        expect(w.health()).toEqual({ status: 'stopped', inflight: 0 });
     });
 
     it('성공한 핸들러라도 그 사이 lease 를 잃었으면 done 을 쓰지 않는다', async () => {
