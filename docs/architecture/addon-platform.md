@@ -35,15 +35,15 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 
 "상태를 확인하지 못한 것"과 "꺼진 것"을 섞지 않는다. 확인 불가는 **차단하되 재시도 가능한 장애**로 알린다.
 
-| 경로 | 판정 함수 | 켜짐 | 관리자가 끔 | 조직 allowlist 밖 | 확인 불가(DB 장애) |
-|---|---|---|---|---|---|
-| add-on 전용 라우트(`addonGuard`) | `checkAddonEntitlement` | 통과 | **404 `ADDON_DISABLED`**(부팅 실패 `failed` 포함) | **403 `ADDON_NOT_ENTITLED`** | **503 `ADDON_STATE_UNKNOWN`** + `Retry-After: 5` |
-| capability 실행(`admitCapability`) | `readAddonStateStrict` | ok | `ADDON_DISABLED` | (해당 없음) | `ADDON_STATE_UNKNOWN` |
-| 채팅 기능 훅 `prepareTurnContext` | `integrationGate` | 호출 | 건너뜀(info 로그) | (해당 없음 — 사용자 단위 정책은 라우트가 맡음) | 건너뜀 |
-| 채팅 오케스트레이션 도구 `run` | `integrationGate` | 실행 | `Error: … 중지되어 실행할 수 없습니다` | (해당 없음) | `Error: … 확인할 수 없어 실행하지 않았습니다` |
-| 팩 스킬 주입 필터 | `entitledAddonIds` | 주입 | 제외 | 제외 | **주입 유지(fail-open)** — 선언형 콘텐츠, 피해 없음 |
+| 경로 | 판정 함수 | 켜짐 | 관리자가 끔 | 부팅 실패(`failed`) | 조직 allowlist 밖 | 확인 불가(DB 장애) |
+|---|---|---|---|---|---|---|
+| add-on 전용 라우트(`addonGuard`) | `checkAddonEntitlement` | 통과 | **404 `ADDON_DISABLED`** | **503 `ADDON_FAILED`**(`Retry-After` 없음 — 관리자 조치 필요) | **403 `ADDON_NOT_ENTITLED`** | **503 `ADDON_STATE_UNKNOWN`** + `Retry-After: 5` |
+| capability 실행(`admitCapability`) | `readAddonStateStrict` | ok | `ADDON_DISABLED` | `ADDON_FAILED` | (해당 없음) | `ADDON_STATE_UNKNOWN` |
+| 채팅 기능 훅 `prepareTurnContext` | `integrationGate` | 호출 | 건너뜀(info 로그) | 건너뜀(info 로그, reason `failed`) | (해당 없음 — 사용자 단위 정책은 라우트가 맡음) | 건너뜀 |
+| 채팅 오케스트레이션 도구 `run` | `integrationGate` | 실행 | `Error: … 중지되어 실행할 수 없습니다` | `Error: … 부팅에 실패해 이 도구를 실행할 수 없습니다` | (해당 없음) | `Error: … 확인할 수 없어 실행하지 않았습니다` |
+| 팩 스킬 주입 필터 | `entitledAddonIds` | 주입 | 제외 | 제외 | 제외 | **주입 유지(fail-open)** — 선언형 콘텐츠, 피해 없음 |
 
-**판정 기준 열**: 라우트·채팅 훅 게이트의 strict 판정(`readAddonEnabledStrict`)은 `addon_installations.state`(installed·enabled·disabled·failed)를 읽어 `enabled` 가 아니면 모두 '꺼짐'으로 다룬다 — 부팅 실패(`failed`)도 404 `ADDON_DISABLED` 로 나가고 웹은 '관리자가 중지'로 표시한다(라우트 동작은 종전과 같고 문구만 새것). capability 경로만 `ADDON_FAILED` 를 구분한다. 라우트·웹에서 `failed` 를 따로 구분하는 것(예: `ADDON_FAILED` 404 + '준비되지 않음' 문구)은 2차.
+**판정 기준 열**: 라우트·채팅 훅 게이트의 strict 판정(`readAddonEnabledStrict`)은 `addon_installations.state`(installed·enabled·disabled·failed)를 읽어 `enabled` 가 아니면 차단한다. 그중 부팅 실패(`failed`)는 판정의 `state` 로 구분해 라우트가 503 `ADDON_FAILED`(`Retry-After` 없음 — 재시도로 풀리지 않고 관리자 조치가 필요하다)로 알리고, 웹은 '준비되지 않았습니다(부팅 실패)' 문구(`knowledge.notReady`)를 보인다. 채팅 훅은 건너뛰고 오케스트레이션 도구는 부팅 실패 문구를 돌려준다. `installed`·`disabled` 는 종전대로 404 `ADDON_DISABLED`.
 
 env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항상 알 수 있다).
 
@@ -64,4 +64,4 @@ claim 은 `UPDATE … fencing_token = fencing_token + 1 … FOR UPDATE SKIP LOCK
 
 ## 10. 범위 밖(다음 묶음)
 
-진행 작업 drain·타이머·연결 회수·부분 시작 실패 정리(2차), manifest 없는 확장의 권한 상태 명시화(2차), 라우트·웹에서 부팅 실패(`failed`)를 '꺼짐'과 구분(`ADDON_FAILED` 404 + '준비되지 않음' 문구, 2차 — §8.3 판정 기준 열), 순수 동기 채팅 훅의 턴 게이트(2차 — §8.4), 계약 패키지·데이터 포트·별도 worker 프로세스(3차 — Knowledge 처리량·API 지연 측정 뒤 조건부).
+진행 작업 drain·타이머·연결 회수·부분 시작 실패 정리(2차), manifest 없는 확장의 권한 상태 명시화(2차), 순수 동기 채팅 훅의 턴 게이트(2차 — §8.4), 계약 패키지·데이터 포트·별도 worker 프로세스(3차 — Knowledge 처리량·API 지연 측정 뒤 조건부).
