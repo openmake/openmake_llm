@@ -119,7 +119,7 @@ export class AgentTaskService {
         const userCtx: UserContext = { userId, role: userRole };
 
         // 'agent' role 해석 — 상세는 agent-task/role-client (생성자 model 명시 시 그대로 사용)
-        const roleState = await initAgentRoleState(taskId, String(userId), this.explicitModel ? this.client : undefined, { internalOnly: isInternalOnlyRun(input) });
+        const roleState = await initAgentRoleState(taskId, String(userId), this.explicitModel ? this.client : undefined, { internalOnly: isInternalOnlyRun(input), hasImages: (input.images?.length ?? 0) > 0 });
         this.client = roleState.client;
 
         let stepNumber = input.resume?.fromStep ?? 0;

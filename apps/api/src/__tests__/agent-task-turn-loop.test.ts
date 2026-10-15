@@ -1,5 +1,5 @@
 /**
- * 턴 루프 가드의 서비스 루프 연결 검사 — 행동 예고 재촉·검증 보류 답변 보존(hermes-agent 검토 "턴 루프·종료 조건·오류 복구").
+ * 턴 루프 가드의 서비스 루프 연결 검사 — 행동 예고 재촉·검증 보류 답변 보존.
  * 판정 규칙 자체는 agent-task/turn-stall.test.ts 등 단위 테스트가 본다.
  */
 type ChatAdvanced = { tools?: unknown[] };
