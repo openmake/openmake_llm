@@ -12,6 +12,7 @@
  * @module services/chat-service/turn-integrations
  */
 import { loadEnabledChatIntegrations } from '../../addon-host/chat-integrations';
+import { integrationGate } from '../addon/integration-gate';
 import { TURN_CONTEXT_TIMEOUT_MS } from '../../config/service-limits';
 import { createLogger } from '../../utils/logger';
 
@@ -188,7 +189,7 @@ export function collectContextRefs(msg: Record<string, unknown>): Record<string,
 }
 
 /**
- * 모든 통합의 턴 전 컨텍스트를 모은다 — 통합마다 시간 상한을 두고, 실패·초과한 통합은 건너뛴다(채팅은 계속).
+ * 모든 통합의 턴 전 컨텍스트를 모은다 — 기능 훅 게이트(관리자 토글·상태 확인)를 통과한 통합만, 통합마다 시간 상한을 두고, 실패·초과한 통합은 건너뛴다(채팅은 계속).
  * 출처 번호는 통합 순서대로 이어 붙도록 각 통합에 오프셋을 넘긴다.
  */
 export async function collectTurnContexts(
@@ -201,6 +202,12 @@ export async function collectTurnContexts(
     for (const integration of getChatTurnIntegrations()) {
         if (!integration.prepareTurnContext) continue;
         try {
+            // 기능 훅 게이트 — 관리자가 끈·상태 확인 불가 add-on 은 이 턴에 기여하지 않는다(통합 0개와 같은 결과, 채팅은 계속)
+            const gate = await integrationGate(integration.id);
+            if (!gate.allowed) {
+                turnContextLog.info(`[TurnContext] '${integration.id}' 컨텍스트 준비 건너뜀(${gate.reason}${gate.detail ? `: ${gate.detail}` : ''})`);
+                continue;
+            }
             const r = await withTurnContextTimeout(integration.prepareTurnContext({ ...input, sourceOffset: offset }), integration.id);
             if (r?.contextBlock) blocks.push(r.contextBlock);
             if (r?.systemPromptPart) systemPromptParts.push(r.systemPromptPart);
