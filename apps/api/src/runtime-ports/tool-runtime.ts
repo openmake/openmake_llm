@@ -12,6 +12,9 @@
  *
  * @module runtime-ports/tool-runtime
  */
+import type {
+    TOOL_USER_INPUT_APPROVAL_NAME as CONTRACT_TOOL_USER_INPUT_APPROVAL_NAME, ToolSummary, ToolUserInputContext,
+} from '@openmake/plugin-contracts';
 import type { MCPToolResult, UserContext } from '../tool-contract/types';
 import type { ToolDefinition } from '../llm/types';
 import { dispatchTool } from '../tool-contract/tool-dispatch';
@@ -24,28 +27,15 @@ const logger = createLogger('ToolRuntimePort');
 /**
  * 승인함에 올라가는 "도구가 사용자에게 묻는 질문" 의 도구 이름 — `config/tool-policy` 등급표·
  * `HITL_ALWAYS_WAIT_TOOLS` 와 짝이다. 이름은 MCP elicitation 시절 그대로 유지한다(DB 저장값 호환).
+ * 값은 Base 가 들고 타입은 계약(`@openmake/plugin-contracts`)에 고정한다(API 는 계약 패키지를 런타임에 require 하지 않는다).
  */
-export const TOOL_USER_INPUT_APPROVAL_NAME = 'mcp_elicit';
+export const TOOL_USER_INPUT_APPROVAL_NAME: typeof CONTRACT_TOOL_USER_INPUT_APPROVAL_NAME = 'mcp_elicit';
 
-export interface ToolUserInputResult {
-    decision: 'approved' | 'rejected';
-    /** rejected 사유 — 'user' 만 명시 거절(decline), 나머지(timeout·abort)는 cancel */
-    reason?: string;
-    text?: string;
-}
-
-/** 실행 중 도구가 사용자에게 물을 수 있는 문맥 — 승인 레지스트리 배선은 호출부(turn-executor)가 묶어 준다. */
-export interface ToolUserInputContext {
-    taskId: string;
-    ask(args: Record<string, unknown>): Promise<ToolUserInputResult>;
-}
-
-/** 도구 목록의 최소 표현 — 소켓 API 가 쓴다(`::` 는 외부 도구). */
-export interface ToolSummary {
-    name: string;
-    description: string;
-    external: boolean;
-}
+/**
+ * 사용자 질문 결과·문맥(승인 레지스트리 배선은 호출부 turn-executor 가 묶는다)·도구 목록 요약(소켓 API, `::` 는 외부 도구) —
+ * 정의는 계약 패키지(3차 C2), 여기서는 재수출만 한다.
+ */
+export type { ToolSummary, ToolUserInputContext, ToolUserInputResult } from '@openmake/plugin-contracts';
 
 export interface ToolRuntime {
     /** LLM function-calling 형식의 도구 목록. userContext 가 있으면 그 사용자의 외부 도구도 포함된다. */

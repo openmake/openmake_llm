@@ -30,7 +30,9 @@ import { CAPABILITY_CONTRACT_VERSION } from '../capability-contract/types';
 import { getCapabilityRegistry } from '../runtime-ports/capability-runtime';
 import { releaseAddonResources, startAddonRuntime } from './lifecycle';
 import type { AddonRuntimeEntry, AddonRuntimeHandle, AddonRuntimeHost } from './lifecycle-types';
-import type { AddonFailureCode, AddonInstallationRow } from '../data/repositories/addon-state-repository';
+import type { AddonInstallationIntent } from '@openmake/plugin-contracts';
+import type { AddonFailureCode } from '../data/repositories/addon-state-repository';
+import { toAddonInstallationIntent } from '../runtime-ports/contract-mappers';
 import {
     builtinAddonIds, enabledBuiltinAddons, invalidBuiltinAddons, listBuiltinAddonDefs, unknownDisabledIds,
     type BuiltinAddon,
@@ -115,7 +117,7 @@ export type {
  */
 export interface AddonBootDeps {
     /** DB 의도 조회 — 실패는 throw (호출부가 env 판정으로 계속하며 경고) */
-    readInstallations(): Promise<Map<string, Pick<AddonInstallationRow, 'desired_state' | 'state'>>>;
+    readInstallations(): Promise<Map<string, AddonInstallationIntent>>;
     applyMigrations(targets: Array<{ id: string; dir: string }>): Promise<Array<{ id: string; applied: string[]; error?: string }>>;
     /** 진입점 호출 — handle 을 돌려주면 수명주기(lifecycle.ts)가 기록해 토글·종료 때 정지한다 */
     startRuntime(addon: BuiltinAddon, ref: string, host: AddonRuntimeHost): Promise<void | AddonRuntimeHandle>;
@@ -137,7 +139,7 @@ function defaultBootDeps(): AddonBootDeps {
         appVersion: APP_VERSION,
         async readInstallations() {
             const rows = await (await repo()).list();
-            return new Map(rows.map(r => [r.addon_id, { desired_state: r.desired_state, state: r.state }]));
+            return new Map(rows.map(r => [r.addon_id, toAddonInstallationIntent(r)]));
         },
         async applyMigrations(targets) {
             const { applyAddonMigrationsWithLock } = await import('../data/migrations/runner');
@@ -169,16 +171,16 @@ export async function bootAddons(candidates: readonly BuiltinAddon[], deps: Addo
     };
 
     // ③ env(후보 목록) ∧ DB 의도 — 조회 실패는 경고 후 env 판정만으로 계속한다(기존 팩의 부팅을 DB 장애가 막지 않는다)
-    let desired: Map<string, Pick<AddonInstallationRow, 'desired_state' | 'state'>> | null = null;
+    let desired: Map<string, AddonInstallationIntent> | null = null;
     try { desired = await deps.readInstallations(); } catch (err) {
         logger.warn(`add-on 의도 조회 실패 — env 판정만으로 부팅: ${err instanceof Error ? err.message : String(err)}`);
     }
     let active: BuiltinAddon[] = [];
     for (const addon of candidates) {
         const row = desired?.get(addon.id);
-        if (row && row.desired_state !== 'enabled') {
-            results.set(addon.id, { id: addon.id, stage: 'excluded', reason: `관리자 의도 ${row.desired_state}` });
-            logger.info(`add-on '${addon.id}' 관리자 의도 ${row.desired_state} — 부팅 대상에서 제외`);
+        if (row && row.desiredState !== 'enabled') {
+            results.set(addon.id, { id: addon.id, stage: 'excluded', reason: `관리자 의도 ${row.desiredState}` });
+            logger.info(`add-on '${addon.id}' 관리자 의도 ${row.desiredState} — 부팅 대상에서 제외`);
             continue;
         }
         // ② 버전 불일치는 경고 후 계속 실행하지 않고 그 add-on 을 제외한다(계획서 7.4) — capability 계약 버전도 같다
