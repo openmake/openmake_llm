@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.103.0](https://github.com/openmake/openmake_llm/compare/v1.102.3...v1.103.0) (2026-10-15)
+
+
+### ✨ 기능
+
+* **addons:** add-on 실행 정책 통일 — 확인 불가 503, 채팅 기능 훅 게이트, 설계 문서 정리 ([b712bf3](https://github.com/openmake/openmake_llm/commit/b712bf33b1260549d4bad9cb3337f3076174bf77))
+* **addons:** strict 켜짐 판정 readAddonEnabledStrict — 조회 실패를 켜짐으로 읽지 않는다 ([33af461](https://github.com/openmake/openmake_llm/commit/33af4610ad1794d5cf20de081ddecbe5afdaee8d))
+* **addons:** 기여 오케스트레이션 도구도 실행 시점에 add-on 게이트를 거친다 ([f1501ca](https://github.com/openmake/openmake_llm/commit/f1501ca36f0890aa303c5b6eadd83c78c1816bee))
+* **addons:** 사용권 판정에 state-unknown 추가 — 조회 실패를 허용으로 읽지 않는다 ([4bca5f4](https://github.com/openmake/openmake_llm/commit/4bca5f4a4d78898abbe6230d441cf0243f15bc41))
+* **addons:** 채팅 기능 훅 게이트 — 관리자가 끈 add-on 의 prepareTurnContext 를 턴마다 건너뛴다 ([ec309ad](https://github.com/openmake/openmake_llm/commit/ec309ad638d96cf62029a65c6f3aacc8d7740c06))
+* **knowledge:** JobLease·assertLeaseHeld — 확정 쓰기까지 fencing token 을 끌고 가는 lease 문맥 ([9336e50](https://github.com/openmake/openmake_llm/commit/9336e503278e153c82eaa35679bdb46db6b544fc))
+* **web:** Knowledge 목록이 '관리자가 중지'(404)와 '일시 확인 불가'(503)를 구분해 보여 준다 ([218c8bf](https://github.com/openmake/openmake_llm/commit/218c8bf07807b2a363f962dd68589a1b2b55886d))
+
+
+### 🐛 버그 수정
+
+* **addons:** 게이트 보강 — optionalAuth 거절·이중 전송 가드, 게이트를 턴 시간 상한 안으로 ([c9c1b12](https://github.com/openmake/openmake_llm/commit/c9c1b12f4c362a9193146db3ce4ef71d01b20617))
+* **addons:** 라우트 게이트 확인 불가는 통과 대신 503 ADDON_STATE_UNKNOWN ([ecd4f71](https://github.com/openmake/openmake_llm/commit/ecd4f71015d5d52ddc95792ec543d9a28b3725f2))
+* **knowledge:** rechunk 의 새 버전 INSERT 도 lease 검사와 같은 트랜잭션으로 ([ceb0fdc](https://github.com/openmake/openmake_llm/commit/ceb0fdc885a33b99d16fb898f90a0a40176298a1))
+* **knowledge:** reindex 전환·배치 삽입과 rechunk·cleanup 도 lease 검사 뒤에만 쓴다 ([8065725](https://github.com/openmake/openmake_llm/commit/8065725c9a53faf2cd1da3dc702c8ca1159df709))
+* **knowledge:** worker heartbeat 0행을 lease 상실로 처리하고 핸들러에 lease 를 넘긴다 ([22674c9](https://github.com/openmake/openmake_llm/commit/22674c97b3fb3cdc05d3a39f596439128a56ce45))
+* **knowledge:** worker 결과 쓰기 fencing — lease 를 잃은 실행자의 청크·ready·failed·index 전환 거절 ([d830a75](https://github.com/openmake/openmake_llm/commit/d830a75faeb00478d4b2bc0dd2d941c86e80ed32))
+* **knowledge:** 수집 파이프라인의 청크 교체·임베딩·게시를 lease 검사 뒤에만 쓴다 ([10f36ac](https://github.com/openmake/openmake_llm/commit/10f36ac31673466ca5a452ce6a467a53449b0349))
+
 ## [1.102.3](https://github.com/openmake/openmake_llm/compare/v1.102.2...v1.102.3) (2026-10-15)
 
 
