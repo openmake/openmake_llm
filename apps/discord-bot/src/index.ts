@@ -130,9 +130,9 @@ async function handleChat(message: Message, botUserId: string): Promise<void> {
         const answer = await requestChatCompletion(getHistory(key), content, inbound);
         // 생성 이미지·아티팩트 → 파일 첨부 + 뷰어 링크 (Discord 는 md 이미지/artifact 렌더 불가)
         const prepared = await prepareReply(answer.content, answer.artifacts);
-        // 히스토리에는 항상 치환본(prepared.content) 저장 — 원문의 [[artifact:id]] placeholder 를
+        // 히스토리에는 placeholder 는 치환본, 표는 모델이 쓴 원문(prepared.historyContent) 저장 — 원문의 [[artifact:id]] placeholder 를
         // 그대로 남기면 모델이 그 표기를 모방해 실체 없는 placeholder 만 출력한다 (2026-07-21 실측)
-        appendTurns(key, content, prepared.content);
+        appendTurns(key, content, prepared.historyContent);
         const skippedNotice = formatSkippedNotice(inbound.skipped);
         const chunks = splitForDiscord(skippedNotice ? `${prepared.content}\n${skippedNotice}` : prepared.content);
         try {
