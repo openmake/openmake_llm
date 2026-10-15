@@ -78,6 +78,12 @@ export function retryPlan(attempts: number, maxAttempts: number): { attempts: nu
 export class KnowledgeWorker {
     private readonly owner = `${hostname()}#${process.pid}#${randomUUID().slice(0, 8)}`;
     private running = false;
+    /** stop-admission — false 면 tick 이 새 작업을 집지 않는다(진행 중 작업은 계속). add-on 정지·재개가 바꾼다 */
+    private admitting = true;
+    /** 진행 중 tick — drain 이 기다린다 */
+    private current: Promise<number> | null = null;
+    /** 진행 중 작업의 lease — drain 시간 초과·즉시 정지 때 상실 처리하고 반납한다 */
+    private readonly inflight = new Set<JobLease>();
 
     constructor(private readonly deps: WorkerDeps = {}) {}
 
@@ -85,21 +91,86 @@ export class KnowledgeWorker {
         return this.deps.now ? this.deps.now() : Date.now();
     }
 
-    /** 한 tick — 처리한 작업 수를 돌려준다(테스트·로그용). 겹쳐 돌지 않게 재진입 방지 */
+    /** 한 tick — 처리한 작업 수를 돌려준다(테스트·로그용). 겹쳐 돌지 않게 재진입 방지, 정지(stop-admission) 중이면 집지 않는다 */
     async tick(): Promise<number> {
-        if (this.running) return 0;
+        if (this.running || !this.admitting) return 0;
         this.running = true;
+        const work = this.runTick();
+        this.current = work;
         try {
-            const limits = await getDefaultLimits();
-            const jobs = await this.claim(limits.ingestConcurrency, limits.jobLeaseMs);
-            if (jobs.length === 0) return 0;
-            await Promise.all(jobs.map((j) => (Number(j.attempts) > limits.jobMaxAttempts
-                ? this.failOverClaimed(j, limits.jobMaxAttempts)
-                : this.runOne(j, limits.jobLeaseMs, limits.jobMaxAttempts))));
-            return jobs.length;
+            return await work;
         } finally {
             this.running = false;
+            this.current = null;
         }
+    }
+
+    private async runTick(): Promise<number> {
+        const limits = await getDefaultLimits();
+        if (!this.admitting) return 0; // 한도를 읽는 사이 정지됐으면 집지 않는다
+        const jobs = await this.claim(limits.ingestConcurrency, limits.jobLeaseMs);
+        if (jobs.length === 0) return 0;
+        await Promise.all(jobs.map((j) => (Number(j.attempts) > limits.jobMaxAttempts
+            ? this.failOverClaimed(j, limits.jobMaxAttempts)
+            : this.runOne(j, limits.jobLeaseMs, limits.jobMaxAttempts))));
+        return jobs.length;
+    }
+
+    /**
+     * 정지 — 새 claim 을 멈춘다(stop-admission). drain 이면 진행 중 tick(집은 작업 전부)이 끝나기를 signal 이 끊길 때까지 기다린다.
+     * 기다리지 않거나(drain=false) 시간이 넘으면 진행 중 작업의 lease 를 상실 처리해 핸들러를 단계 경계에서 멈추게 하고
+     * (job 행·문서 상태 쓰기 없음) lease 를 반납한다. 폴링 타이머는 그대로 두고 tick 이 claim 을 건너뛴다.
+     */
+    async stop(opts: { drain: boolean; signal: AbortSignal }): Promise<void> {
+        this.admitting = false;
+        const current = this.current;
+        if (current && opts.drain && !opts.signal.aborted) {
+            const finished = await new Promise<boolean>((resolve) => {
+                const onAbort = (): void => resolve(false);
+                opts.signal.addEventListener('abort', onAbort, { once: true });
+                void current.then(() => true, () => true).then((done) => {
+                    opts.signal.removeEventListener('abort', onAbort);
+                    resolve(done);
+                });
+            });
+            if (finished) return;
+        }
+        await this.releaseInflight(opts.drain ? 'drain 시간 초과' : '즉시 정지');
+    }
+
+    /** 재개 — 다음 tick 부터 다시 집는다 */
+    resume(): void {
+        this.admitting = true;
+    }
+
+    /** 관리 화면·종료 로그용 상태 */
+    health(): { status: 'running' | 'draining' | 'stopped'; inflight: number } {
+        const inflight = this.inflight.size;
+        if (this.admitting) return { status: 'running', inflight };
+        return { status: inflight > 0 ? 'draining' : 'stopped', inflight };
+    }
+
+    /**
+     * 진행 중 lease 를 끊고 반납한다 — `lease_expires_at` 을 지금으로 당겨 재개·재시작 뒤 바로 다시 집히게 한다.
+     * 같은 token·owner 의 running 행만 바꾸므로 이미 다른 실행자가 집은 행은 건드리지 않는다. 옛 실행자의 늦은 확정 쓰기는
+     * `assertLeaseHeld`(lease.throwIfLost) 가 막는다.
+     */
+    private async releaseInflight(reason: string): Promise<void> {
+        const leases = [...this.inflight];
+        if (leases.length === 0) return;
+        for (const lease of leases) lease.markLost(`add-on 정지 — ${reason}`);
+        await Promise.all(leases.map(async (lease) => {
+            try {
+                await kdb().query(
+                    `UPDATE knowledge_ingestion_jobs SET lease_expires_at = NOW(), updated_at = NOW()
+                      WHERE id = $1 AND fencing_token = $2 AND lease_owner = $3 AND state = 'running'`,
+                    [lease.jobId, lease.token, lease.owner],
+                );
+            } catch (err) {
+                logger.warn(`lease 반납 실패(만료 뒤 다시 집힌다): ${lease.jobId} — ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }));
+        logger.warn(`수집 worker 정지 — 진행 중 작업 ${leases.length}건 중단(${reason}), lease 반납`);
     }
 
     /** 만료 lease 포함해 due 작업을 원자적으로 집는다 */
@@ -142,10 +213,13 @@ export class KnowledgeWorker {
     private async runOne(job: JobRow, leaseMs: number, maxAttempts: number): Promise<void> {
         const token = job.fencing_token; // BIGINT 문자열 그대로 — Number 로 바꾸지 않는다
         const lease = createJobLease({ jobId: job.id, token, owner: this.owner, now: this.now() });
+        this.inflight.add(lease);
         const beat = setInterval(() => { void this.renew(lease, leaseMs); }, Math.max(1_000, leaseMs * KNOWLEDGE_RUNTIME.JOB_HEARTBEAT_RATIO));
         beat.unref();
         try {
             await HANDLERS[job.kind](job, { ...this.deps, lease });
+            // 핸들러가 끝난 뒤에도 그 사이 lease 를 잃었으면(정지 시간 초과·heartbeat 0행) done 을 쓰지 않는다 — 반납한 행은 다음 실행자의 것
+            lease.throwIfLost();
             await this.finish(job.id, token);
         } catch (err) {
             if (err instanceof LeaseLostError || lease.signal.aborted) {
@@ -156,6 +230,7 @@ export class KnowledgeWorker {
             await this.failOrRetry(job, token, maxAttempts, err instanceof Error ? err.message : String(err));
         } finally {
             clearInterval(beat);
+            this.inflight.delete(lease);
         }
     }
 
