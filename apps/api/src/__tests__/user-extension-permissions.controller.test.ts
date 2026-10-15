@@ -161,12 +161,20 @@ describe('POST /:id/permissions/revoke', () => {
         expect(mockRestrict).toHaveBeenCalledWith('ext-1');
     });
 
-    it('승인하지 않은 권한 철회는 상태 유지, MCP 변경 없음', async () => {
-        currentRow = makeRow({ permission_state: 'reviewed', permissions_granted: [NET], permissions_requested: [NET] });
+    it('승인하지 않은 권한 철회는 멱등 no-op — 저장·MCP 변경·감사 없음, 200 에 현재 상태', async () => {
+        currentRow = makeRow({
+            permission_state: 'reviewed', permissions_granted: [NET], permissions_requested: [NET],
+            permissions_reviewed_at: new Date('2026-10-01T00:00:00Z'), permissions_reviewed_by: 'admin-9',
+        });
         const res = await request(app()).post(`${BASE}/revoke`).send({ permissions: ['database:addon'] });
         expect(res.status).toBe(200);
-        expect(mockSaveReview).toHaveBeenCalledWith('ext-1', expect.objectContaining({ state: 'reviewed', granted: [NET] }));
+        expect(mockSaveReview).not.toHaveBeenCalled();
         expect(mockRestrict).not.toHaveBeenCalled();
+        expect(mockLogAudit).not.toHaveBeenCalled();
+        expect(res.body.data).toEqual({
+            permissions: { state: 'reviewed', granted: [NET], requested: [NET], blocked: [], reviewedAt: '2026-10-01T00:00:00.000Z' },
+            restricted: { sandboxed: 0, disabled: 0 },
+        });
     });
 
     it('어휘 밖 권한·빈 목록은 400, 저장하지 않는다', async () => {

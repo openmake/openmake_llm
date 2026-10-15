@@ -113,13 +113,17 @@ export function approvePermissions(input: { requested: readonly string[] | null 
     return { next: 'reviewed', blocked: [], granted, requested, effective: granted, reviewedNow: true };
 }
 
-/** 철회 — 승인 범위에서 `remove` 를 뺀 뒤 ③ 규칙으로 다시 판정한다(레거시는 묵시 권한에서 뺀다) */
+/**
+ * 철회 — 승인 범위에서 `remove` 를 뺀 뒤 ③ 규칙으로 다시 판정한다(레거시는 묵시 권한에서 뺀다).
+ * 승인 범위에 철회 대상이 하나도 없으면 바뀐 것이 없다 — reviewedNow false(호출자는 저장·감사를 하지 않는다).
+ */
 export function revokePermissions(input: PermissionStateInput, remove: readonly string[]): PermissionEvaluation {
     const base = input.state === 'legacy_unreviewed' || input.state === null
         ? effectiveRequested(null)
         : normalizePermissions(input.granted) ?? [];
     const granted = without(base, normalizePermissions(remove) ?? []);
-    return { ...evaluatePermissionState({ state: 'reviewed', granted, requested: input.requested }), reviewedNow: true };
+    const changed = granted.length !== base.length;
+    return { ...evaluatePermissionState({ state: 'reviewed', granted, requested: input.requested }), reviewedNow: changed };
 }
 
 /** 네트워크가 열려 있는가 — effective 가 undefined(레거시)면 종전대로 열려 있다 */

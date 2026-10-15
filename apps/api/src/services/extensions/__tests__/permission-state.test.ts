@@ -108,12 +108,20 @@ describe('revokePermissions', () => {
     });
     it('레거시에서 network 철회 → 묵시 권한에서 뺀다(review_required)', () => {
         expect(revokePermissions({ state: 'legacy_unreviewed', granted: null, requested: null }, [NET])).toMatchObject({
-            next: 'review_required', granted: [], blocked: [NET],
+            next: 'review_required', granted: [], blocked: [NET], reviewedNow: true,
         });
     });
-    it('승인하지 않은 권한을 철회하면 상태는 그대로', () => {
+    it('승인하지 않은 권한을 철회하면 상태는 그대로, 승인 기록도 남기지 않는다(reviewedNow false)', () => {
         expect(revokePermissions({ state: 'reviewed', granted: [NET], requested: [NET] }, [DB])).toMatchObject({
-            next: 'reviewed', granted: [NET], blocked: [],
+            next: 'reviewed', granted: [NET], blocked: [], reviewedNow: false,
+        });
+        expect(revokePermissions({ state: 'review_required', granted: [], requested: [NET] }, [NET])).toMatchObject({
+            reviewedNow: false,
+        });
+    });
+    it('레거시에서 묵시 권한 밖을 철회하면 바뀐 것 없음(reviewedNow false)', () => {
+        expect(revokePermissions({ state: 'legacy_unreviewed', granted: null, requested: null }, [DB])).toMatchObject({
+            reviewedNow: false,
         });
     });
 });
