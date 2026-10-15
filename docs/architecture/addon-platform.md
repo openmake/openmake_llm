@@ -66,4 +66,28 @@ claim 은 `UPDATE … fencing_token = fencing_token + 1 … FOR UPDATE SKIP LOCK
 
 ## 10. 범위 밖(다음 묶음)
 
-진행 작업 drain·타이머·연결 회수·부분 시작 실패 정리(2차), manifest 없는 확장의 권한 상태 명시화(2차), 기여 작업 도구(`agentTaskTools`) 실행 게이트·작업 도중 토글 반영(2차), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), 계약 패키지·데이터 포트·별도 worker 프로세스(3차 — Knowledge 처리량·API 지연 측정 뒤 조건부).
+진행 작업 drain·타이머·연결 회수·부분 시작 실패 정리(2차), manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트·작업 도중 토글 반영(2차), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), 계약 패키지·데이터 포트·별도 worker 프로세스(3차 — Knowledge 처리량·API 지연 측정 뒤 조건부).
+
+## 11. 설치형 확장의 권한 상태 (`user_extensions.permission_state`, 마이그레이션 190)
+
+설치형 확장(Git·ZIP·마켓 갤러리)의 권한은 번들의 `openmake-addon.json` `permissions` 가 **요청**하고, 설치 기록이 **승인**을 들고 있다. 판정은 `services/extensions/permission-state.ts`(순수 함수), 저장은 `data/repositories/user-extension-permission-repository.ts`, 집행은 설치 때 `agents/git-ingest/extension-components.ts` 의 MCP 서버 저장(네트워크가 없으면 stdio 는 `sandbox_network='none'`, 원격 서버는 설치에서 제외)이다.
+
+| 상태 | 뜻 | 집행 | 화면 |
+|---|---|---|---|
+| `legacy_unreviewed` | 매니페스트도 승인 기록도 없는 예전 설치(190 이전 행 전부의 기본값) | 없음 — 종전 동작(네트워크 허용) 보존 | "레거시 미검토" + 재승인 |
+| `reviewed` | 승인 기록(`permissions_granted`) 안에서 동작 | 요청 ∩ 승인만 허용 | "권한 검토됨" |
+| `review_required` | 업데이트가 승인 범위보다 넓게 요청 | 초과분만 막고 기존 승인 범위는 유지 | "재승인 필요" + 막힌 권한 + 재승인 |
+
+전이:
+- 첫 설치: 매니페스트 없음 → `legacy_unreviewed`. 있음 → `reviewed`(설치한 사람이 그 권한을 승인한 것으로 기록 — 종전 deny-by-default 집행과 결과가 같다).
+- `legacy_unreviewed` 업데이트: 매니페스트가 계속 없으면 그대로. 새로 생기면 레거시가 쓰던 권한(`network:internet`) 안이면 `reviewed`, 넘으면 `review_required`.
+- `reviewed`·`review_required` 업데이트: 요청 ⊆ 승인이면 `reviewed`(승인 기록 유지), 아니면 `review_required`(초과분 차단). **매니페스트가 사라진 업데이트는 레거시 묵시 권한(network)을 요청한 것으로 본다** — 매니페스트를 빼서 집행을 피할 수 없다.
+- 재승인 `POST /api/users/me/extensions/:id/permissions/approve`(소유자·관리자): 승인 = 요청(매니페스트가 없으면 network) → `reviewed`, 감사 `extension.permissions_approved`. 네트워크가 새로 열리면 권한 때문에 막았던 stdio 서버(`manifest_meta.networkRestrictedByPermission`)만 `full` 로 되돌린다. 설치 때 제외된 원격 서버는 확장을 제거·재설치해야 생긴다(응답 `excludedRemoteServers`).
+- 철회 `POST …/revoke` `{ permissions: [...] }`: 승인에서 뺀 뒤 다시 판정, 감사 `extension.permissions_revoked`. 네트워크가 닫히면 연결된 stdio 는 `none`(`networkRestrictedByPermission`), 원격 서버는 `enabled=false`(`disabledByPermission`).
+- 재승인·철회는 읽은 요청 권한이 저장 값과 다르면(그 사이 업데이트) 409 — 오래된 화면으로 넓어진 권한을 승인하지 않는다.
+- MCP 서버 반영은 **다음 기동부터**다. 이미 떠 있는 프로세스는 그대로 돈다.
+- 조회 `GET …/permissions` 와 목록 응답은 상태·승인·요청 권한을 주고, 승인자 id(`permissions_reviewed_by`)는 목록 응답에서 뺀다.
+
+롤백:
+- **코드만 이전 버전으로 되돌리면** 새 열은 기본값이 있어 무시되고 승인 기록은 DB 에 남는다. 다시 올리면 그대로 이어진다. 되돌린 기간에 업데이트된 확장은 요청 권한이 갱신되지 않은 채라, 다음 업데이트 때 다시 판정된다.
+- `db/migrations/rollbacks/190_user_extensions_permission_state_rollback.sql` 은 열을 지우므로 승인·철회 기록이 사라진다. 그 뒤 190 을 다시 적용하면 설치 기록에 `manifest.addonPermissions` 가 있는 행만 `reviewed`(승인자 `migration:190`)로 복원되고 나머지는 `legacy_unreviewed` 로 돌아간다.
