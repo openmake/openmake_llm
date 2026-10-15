@@ -14,13 +14,13 @@ jest.mock('../../../data/repositories/addon-state-repository', () => ({
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getPool: () => ({}) }) }));
 
 import { checkAddonEntitlement, entitledAddonIds } from '../entitlement';
-import { clearAddonStateCache } from '../addon-state';
+import { __resetAddonStateCacheForTest } from '../addon-state';
 
 const ENV_KEY = 'ADDON_BUILTIN_DISABLED';
 
 beforeEach(() => {
     jest.clearAllMocks();
-    clearAddonStateCache();
+    __resetAddonStateCacheForTest();
     delete process.env[ENV_KEY];
     listRows.mockResolvedValue([
         { addon_id: 'industry-pack', state: 'enabled' },

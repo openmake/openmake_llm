@@ -8,6 +8,7 @@
  * 모든 단계가 빈 순회다.
  *
  * 훅은 순수 함수여야 한다(같은 입력 → 같은 출력) — 평가 하네스와 프롬프트 지문이 이 결과에 의존한다.
+ * 기능 훅의 집합은 턴 시작에 적재한 add-on 상태 캐시로 거른다(`getActiveChatTurnIntegrations`) — 같은 상태면 같은 집합이다.
  *
  * @module services/chat-service/turn-integrations
  */
@@ -136,8 +137,9 @@ export function getChatTurnIntegrations(): readonly ChatTurnIntegration[] {
 }
 
 /** 기능 훅용 — 꺼진(DB 의도 disabled·부팅 실패 failed·env) add-on 의 순수 동기 훅(프롬프트 조각·도구 노출·의도 판정·블록 추출)을 건너뛴다.
- *  동기라 DB 를 기다릴 수 없어 상태 캐시(`isAddonEnabledSync`, TTL 30초, 캐시 없으면 켜짐)로 판정한다. 조직 사용권 축은 실행 시점의
- *  async 게이트(`integrationGate`)가 맡는다. 보호 훅(`isSessionMemoryIsolated`·`collectHiddenSessionIds`)과 구 클라이언트 필드 매핑
+ *  동기라 DB 를 기다릴 수 없어 상태 캐시(`isAddonEnabledSync`)로 판정한다 — 캐시는 턴 시작(`runMessagePipeline`)에 `ensureAddonStates` 로
+ *  적재(TTL 30초)하고, 비워도 마지막 값을 유지하며, 첫 적재 전에만 켜짐으로 본다. 조직 사용권 축은 실행 시점의 async 게이트
+ *  (`integrationGate`)가 맡는다. 보호 훅(`isSessionMemoryIsolated`·`collectHiddenSessionIds`)과 구 클라이언트 필드 매핑
  *  (`collectContextRefs`)은 전체 목록(`getChatTurnIntegrations`)을 그대로 쓴다. */
 export function getActiveChatTurnIntegrations(): readonly ChatTurnIntegration[] {
     return getChatTurnIntegrations().filter((i) => isAddonEnabledSync(i.id));
@@ -158,6 +160,11 @@ export function detectIntegrationIntents(message: string): Record<string, boolea
 }
 
 /** 통합별 결정적 첨부 블록 상태 (턴 상태에 둔다). */
+/** 활성 통합의 시스템 프롬프트 조각 — 꺼진 add-on 의 조각은 싣지 않는다. */
+export function collectIntegrationSystemPromptParts(req: TurnIntegrationRequest): string[] {
+    return getActiveChatTurnIntegrations().flatMap((i) => i.systemPromptParts?.(req) ?? []);
+}
+
 export type IntegrationBlocks = Record<string, string[]>;
 
 /** 도구 결과에서 모든 통합의 블록을 떼어 상태에 모으고(중복 제외) 모델용 텍스트를 돌려준다. */

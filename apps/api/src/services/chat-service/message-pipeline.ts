@@ -34,6 +34,7 @@ import { checkUserQuota } from '../../llm/user-quota';
 import { QuotaExceededError } from '../../errors/quota-exceeded.error';
 import { resolveDegradeMap, resolveDegradeTarget } from '../../config/quota-degrade-policy';
 import { getActiveChatTurnIntegrations, isSessionMemoryIsolated } from './turn-integrations';
+import { ensureAddonStates } from '../addon/addon-state';
 import { applyAgentModelOverride } from './agent-model-override';
 import { resolveModeExternalClient } from './mode-external-client';
 import { buildUserContextBlocks } from './user-context-blocks';
@@ -69,6 +70,9 @@ export async function runMessagePipeline(svc: ChatService,
     onThinking?: (thinking: string) => void,
     _onSystemEvent?: SystemEventCallback,
 ): Promise<string> {
+    // add-on 상태 캐시를 턴 시작에 적재한다(TTL 안이면 즉시) — 순수 동기 훅의 `isAddonEnabledSync` 가 이 턴 동안 최신 캐시를 본다.
+    // REST(/api/v1)·Discord 경로에는 이 밖에 적재하는 호출이 없다(WS 의 collectTurnContexts 는 Knowledge 가 있을 때만 적재).
+    await ensureAddonStates();
     const {
         message,
         images,

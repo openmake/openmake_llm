@@ -27,9 +27,9 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 | `runtimeStatus` | 이 프로세스가 코드를 어디까지 세웠나(not_loaded·registering·ready·failed) | 프로세스마다 다름 |
 | `effectiveAvailability` | 위 셋 + 조회 성공 여부의 합성(available·disabled·not_ready·failed·incompatible·state_unknown) | — |
 
-**실시간인 것과 아닌 것**: 라우트 노출·사용권·채팅의 `prepareTurnContext`·기여 도구 실행은 요청(턴)마다 DB 의도를 본다. 순수 동기 훅(프롬프트 조각·도구 노출·의도 판정)은 턴마다 상태 캐시(`isAddonEnabledSync`, TTL 30초, 캐시 없으면 켜짐으로 봄)로 판정한다 — 캐시는 라우트 요청과 턴 시작의 strict 판정이 채운다. 런타임 등록·내장 도구 기여·스킬 시드는 부팅 시점이라 재시작이 필요하다(관리 화면 `restartNote`).
+**실시간인 것과 아닌 것**: 라우트 노출·사용권·채팅의 `prepareTurnContext`·기여 도구 실행은 요청(턴)마다 DB 의도를 본다. 순수 동기 훅(프롬프트 조각·도구 노출·의도 판정)은 턴마다 상태 캐시(`isAddonEnabledSync`)로 판정한다 — 캐시는 턴 시작(`runMessagePipeline`)과 라우트 게이트가 `ensureAddonStates` 로 적재하고(TTL 30초), 비워도 마지막 값을 유지하며, 첫 적재 전(부팅 직후)에만 켜짐으로 본다. 런타임 등록·내장 도구 기여·스킬 시드는 부팅 시점이라 재시작이 필요하다(관리 화면 `restartNote`).
 
-**토글 전파 범위**: 관리자 토글(`PATCH /api/admin/addons/:id/state`)은 같은 프로세스의 캐시를 즉시 비운다. 운영은 PM2 cluster 라 **다른 워커 프로세스는 캐시 TTL(최대 30초) 뒤에** 새 의도를 본다. 즉시·원자적 철회(상태 변경과 실행 시작 기록의 직렬화)는 보장하지 않으며 2차 범위다. 캐시 TTL 을 "즉시 반영"이라고 쓰지 않는다.
+**토글 전파 범위**: 관리자 토글(`PATCH /api/admin/addons/:id/state`)은 같은 프로세스의 캐시를 만료시킨다 — 다음 턴·요청이 다시 읽고, 진행 중인 턴은 마지막 값을 그대로 쓴다. 운영은 PM2 cluster 라 **다른 워커 프로세스는 캐시 TTL(최대 30초) 뒤에** 새 의도를 본다. 즉시·원자적 철회(상태 변경과 실행 시작 기록의 직렬화)는 보장하지 않으며 2차 범위다. 캐시 TTL 을 "즉시 반영"이라고 쓰지 않는다.
 
 ## 8.3 실행 판정 — 한 규칙
 
@@ -52,13 +52,13 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 | 훅 | 종류 | 꺼진 add-on | 판정 실패 |
 |---|---|---|---|
 | `prepareTurnContext`, 오케스트레이션 도구 `run` | 기능 | **멈춘다(턴마다 `integrationGate`)** | 그 통합만 건너뜀 |
-| 순수 동기 훅 `detectIntent`·`forceIncludeTools`·`forcedFirstTurnTool`·`systemPromptParts`·`userLocationHint`·`enhancedMessagePrefix`·`mcpSelectionHint`·`extractBlocks`·`scrubFinalContent`·`preserveFromRawResult`·`agentTaskTools`·기여 도구 노출 | 기능(프롬프트·노출) | **턴마다 캐시 판정으로 건너뜀**(`getActiveChatTurnIntegrations` → `isAddonEnabledSync`, 캐시 TTL 30초, 캐시 없으면 켜짐으로 봄; 조직 사용권 축은 안 봄) | 해당 없음(동기, DB 안 봄 — 캐시가 비면 켜짐) |
+| 순수 동기 훅 `detectIntent`·`forceIncludeTools`·`forcedFirstTurnTool`·`systemPromptParts`·`userLocationHint`·`enhancedMessagePrefix`·`mcpSelectionHint`·`extractBlocks`·`scrubFinalContent`·`preserveFromRawResult`·`agentTaskTools`·기여 도구 노출 | 기능(프롬프트·노출) | **턴마다 캐시 판정으로 건너뜀**(`getActiveChatTurnIntegrations` → `isAddonEnabledSync`, 턴 시작에 적재·TTL 30초, 첫 적재 전에만 켜짐; 조직 사용권 축은 안 봄) | 해당 없음(동기 — 적재 실패 시 마지막 값, 첫 적재 전엔 켜짐) |
 | `isMemoryIsolatedSession` | 보호 | **계속 돈다** | 격리로 간주(fail-closed) |
 | `listHiddenSessionIds` | 표시 | 계속 돈다 | 숨김만 건너뜀(본인 목록 배치, 누출 아님) |
 
 채팅 기능 훅 게이트(`integrationGate`)는 라우트 게이트와 같은 판정(`checkAddonEntitlement` — 상태 + 조직 사용권)을 쓴다 — 조직 allowlist 밖 add-on 은 라우트 403 과 함께 채팅 기능 훅도 멈춘다(사용자가 없는 게스트 턴은 조직 축을 보지 않는다).
 
-순수 훅(`detectIntent` 등)은 동기라 턴마다 DB 를 묻지 않고 상태 캐시로 판정한다 — 관리자가 끄면(DB 의도 disabled·부팅 실패 failed·env) 캐시가 갱신된 뒤의 턴부터 프롬프트 조각·도구 노출·의도 판정이 빠진다(같은 프로세스는 토글 즉시, 다른 워커는 TTL 뒤). 캐시가 아직 없으면 켜짐으로 본다(fail-open — 선언형 노출이라 피해 없음, 실행은 어차피 `integrationGate` 가 막음). 조직 사용권 축은 동기 훅이 보지 않으며 실행 시점(`runOrchestrationTool`·`prepareTurnContext`)의 게이트가 맡는다. 보호 훅(`isMemoryIsolatedSession`)·표시 훅(`listHiddenSessionIds`)·구 클라이언트 필드 매핑(`collectContextRefs`)은 꺼진 add-on 도 전체 목록으로 계속 돈다. 꺼진 add-on 의 기여 도구가 호출되면(`isOrchestrationTool` 은 전체 목록으로 분류) 실행 시점에서 거절 문구를 돌려준다.
+순수 훅(`detectIntent` 등)은 동기라 턴마다 DB 를 묻지 않고 상태 캐시로 판정한다 — 관리자가 끄면(DB 의도 disabled·부팅 실패 failed·env) 캐시가 갱신된 뒤의 턴부터 프롬프트 조각·도구 노출·의도 판정이 빠진다(같은 프로세스는 다음 턴부터, 다른 워커는 TTL 뒤 첫 턴부터). 첫 적재 전(부팅 직후)에만 켜짐으로 본다(fail-open — 선언형 노출; `prepareTurnContext`·오케스트레이션 도구 실행은 `integrationGate` 가 막지만, 기여 작업 도구(`agentTaskTools`)의 `run` 에는 실행 게이트가 없다 — §10). 조직 사용권 축은 동기 훅이 보지 않으며 실행 시점(`runOrchestrationTool`·`prepareTurnContext`)의 게이트가 맡는다. 보호 훅(`isMemoryIsolatedSession`)·표시 훅(`listHiddenSessionIds`)·구 클라이언트 필드 매핑(`collectContextRefs`)은 꺼진 add-on 도 전체 목록으로 계속 돈다. 꺼진 add-on 의 기여 도구가 호출되면(`isOrchestrationTool` 은 전체 목록으로 분류) 실행 시점에서 거절 문구를 돌려준다.
 
 ## 9. Knowledge 작업 큐의 lease·fencing (`addons/knowledge-runtime/jobs/`)
 
@@ -66,4 +66,4 @@ claim 은 `UPDATE … fencing_token = fencing_token + 1 … FOR UPDATE SKIP LOCK
 
 ## 10. 범위 밖(다음 묶음)
 
-진행 작업 drain·타이머·연결 회수·부분 시작 실패 정리(2차), manifest 없는 확장의 권한 상태 명시화(2차), 계약 패키지·데이터 포트·별도 worker 프로세스(3차 — Knowledge 처리량·API 지연 측정 뒤 조건부).
+진행 작업 drain·타이머·연결 회수·부분 시작 실패 정리(2차), manifest 없는 확장의 권한 상태 명시화(2차), 기여 작업 도구(`agentTaskTools`) 실행 게이트·작업 도중 토글 반영(2차), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), 계약 패키지·데이터 포트·별도 worker 프로세스(3차 — Knowledge 처리량·API 지연 측정 뒤 조건부).
