@@ -2345,6 +2345,34 @@
     "agents": "Custom agents",
     "none": "None",
     "approvalHint": "Draft components must be approved in the Skill Library / MCP Servers pages before activation.",
+    "permissions": {
+      "title": "Permissions",
+      "badge": {
+        "reviewed": "Permissions reviewed",
+        "legacy": "Legacy, not reviewed",
+        "reviewRequired": "Re-approval needed"
+      },
+      "requested": "Requested permissions",
+      "noneRequested": "No permissions requested",
+      "blocked": "Blocked until re-approved",
+      "label": {
+        "network": "Network access (outbound traffic from MCP servers)",
+        "database": "Add-on database schema"
+      },
+      "impact": {
+        "reviewed": "Runs only within the approved permissions. If an update asks for more, only the added permissions are blocked until re-approved.",
+        "legacy": "Older-style extension without a permission declaration (openmake-addon.json). It keeps network access as before. Re-approving records the current permissions; if a later update asks for broader permissions, only those are blocked.",
+        "reviewRequired": "An update asks for broader permissions than previously approved. Until you re-approve, only the added permissions are blocked (remote MCP servers are not installed and local MCP servers run without network). Existing features keep working."
+      },
+      "recovery": "Click Re-approve to use the blocked features. If you do not want to grant them, leave it as is or remove the extension.",
+      "approve": "Re-approve",
+      "approveConfirm": "Grant these permissions to this extension: {perms}. Continue?",
+      "approved": "Permissions approved.",
+      "restored": "Lifted the network restriction on {count} local MCP server(s). Takes effect from the next run.",
+      "reinstallRemote": "Remote MCP servers skipped at install time ({names}) are installed only after you remove and reinstall the extension.",
+      "approveFailed": "Could not re-approve. Please try again shortly.",
+      "conflict": "The extension was updated in the meantime and its requested permissions changed. Refresh and check again."
+    },
     "report": {
       "title": "Install report",
       "hint": "Components unsupported here were not installed, and skills written for other ecosystems got an automatic tool-name mapping note."

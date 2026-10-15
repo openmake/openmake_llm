@@ -54,6 +54,7 @@ import {
 } from './extension-components';
 import { GitIngestService } from './git-ingest-service';
 import { UserExtensionRepository } from '../../data/repositories/user-extension-repository';
+import { evaluatePermissionState } from '../../services/extensions/permission-state';
 import { EXTENSION_INGEST, SKILL_CREATOR } from '../../config/constants';
 
 const logger = createLogger('ExtensionIngestService');
@@ -298,6 +299,11 @@ export class ExtensionIngestService {
             }
         }
 
+        // (5-b) 권한 상태(190) — 요청 권한을 이전 승인과 대조한다. 초과분만 재승인 전까지 막고 기존 승인 범위는 유지한다. 상태는 확장 행 쓰기와 같은 문장으로 저장한다(user-extension-repository).
+        const permission = evaluatePermissionState({ state: updateTarget ? (updateTarget.permission_state ?? 'legacy_unreviewed') : null, granted: updateTarget?.permissions_granted ?? null, requested: addonPermissions ?? null });
+        const permissionSave = { state: permission.next, granted: permission.granted, requested: permission.requested, reviewedBy: permission.reviewedNow ? input.userId : null };
+        if (permission.blocked.length > 0) warnings.push(`PERMISSION_REVIEW_REQUIRED: ${permission.blocked.join(', ')} — 이전에 승인한 범위보다 넓어 재승인 전까지 막았습니다(설정 → 확장에서 재승인)`);
+
         // (5-c) 이 환경이 설치하지 않는 구성요소 — 조용히 무시하지 않고 리포트한다
         const unsupported = detectUnsupportedComponents(tree.entries, root, manifest.raw);
         if (unsupported.length > 0) {
@@ -363,7 +369,7 @@ export class ExtensionIngestService {
             manifestPath: candidate.path,
             extensionName: manifest.name,
             warnings,
-            ...(addonPermissions !== undefined ? { addonPermissions } : {}),
+            ...(permission.effective !== undefined ? { addonPermissions: permission.effective, blockedPermissions: permission.blocked } : {}),
             commandPaths: manifest.commandPaths,
             mcpServersPath: manifest.mcpServersPath,
         };
@@ -400,6 +406,8 @@ export class ExtensionIngestService {
             components: { skills: skillResults, mcpServers: mcpResults, agents: agentResults },
             // 설치 리포트 — 미지원 구성요소·건너뛴 MCP 항목·스킬 적응 (상세 UI 노출)
             warnings,
+            // 번들이 요청한 권한 원문(마이그레이션 190 백필·재적용의 출처) — 매니페스트 미동봉이면 키 없음
+            ...(addonPermissions !== undefined ? { addonPermissions } : {}),
         };
         let row;
         let previousVersion: string | undefined;
@@ -414,8 +422,9 @@ export class ExtensionIngestService {
                 sourceHash,
                 trackingRef: effectiveTrackingRef,
                 manifest: componentManifest,
+                permission: permissionSave, expected: { state: updateTarget.permission_state, granted: updateTarget.permissions_granted }, // 읽은 뒤 철회됐으면 0행
             });
-            if (!row) throw new Error(`EXTENSION_UPDATE_FAILED: ${updateTarget.id} 갱신 실패`);
+            if (!row) throw new Error(`EXTENSION_UPDATE_CONFLICT: ${updateTarget.id} — 업데이트 도중 권한 상태가 바뀌었거나 확장이 제거됨, 다시 업데이트하세요`);
         } else {
             row = await extRepo.insert({
                 userId: input.userId,
@@ -428,6 +437,7 @@ export class ExtensionIngestService {
                 sourceHash,
                 trackingRef: effectiveTrackingRef,
                 manifest: componentManifest,
+                permission: permissionSave,
             });
         }
         // 매니페스트 scope=organization — **새 설치**만 설치자의 활성 조직 갤러리에 공개한다(업데이트는 소유자가 정한 공개범위를 건드리지 않는다).
