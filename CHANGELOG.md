@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.102.3](https://github.com/openmake/openmake_llm/compare/v1.102.2...v1.102.3) (2026-10-15)
+
+
+### 🐛 버그 수정
+
+* **web:** 넘겨받기 차단 주소 안내 문구와 돌려주기 직후 409 소음 제거 ([b4ded3a](https://github.com/openmake/openmake_llm/commit/b4ded3ad22f45f31a19a7a64ea173eaae891acb4))
+* **web:** 넘겨받기 차단 주소 안내 문구와 돌려주기 직후 409 소음 제거 ([895e7d5](https://github.com/openmake/openmake_llm/commit/895e7d54709624d4b5ec5de88a999e6f49c4b397))
+
 ## [1.102.2](https://github.com/openmake/openmake_llm/compare/v1.102.1...v1.102.2) (2026-10-15)
 
 
