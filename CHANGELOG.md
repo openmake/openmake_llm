@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.102.1](https://github.com/openmake/openmake_llm/compare/v1.102.0...v1.102.1) (2026-10-15)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 이미지 입력 작업에서 vision 미지원 외부 모델은 내부 모델로 시작 ([3d4fa28](https://github.com/openmake/openmake_llm/commit/3d4fa28e9e158e4f1794396f5f675eeb425bd301))
+* **agent-task:** 이미지 입력 작업에서 vision 미지원 외부 모델은 내부 모델로 시작 ([b36c791](https://github.com/openmake/openmake_llm/commit/b36c791e416ed5bbed3caef28baf201daf36f37c))
+* **discord-bot:** 산출물 첨부 이름을 ASCII 로, 완료 본문의 자리표시자를 첨부 안내로 바꾼다 ([49e9917](https://github.com/openmake/openmake_llm/commit/49e9917152e4634f9ba266ff0af512f0d4501cd8))
+* **discord-bot:** 산출물 첨부 이름을 ASCII 로, 완료 본문의 자리표시자를 첨부 안내로 바꾼다 ([3528f3f](https://github.com/openmake/openmake_llm/commit/3528f3f8bb931253691aee758de37aab56542602))
+
 ## [1.102.0](https://github.com/openmake/openmake_llm/compare/v1.101.0...v1.102.0) (2026-10-14)
 
 
