@@ -8,7 +8,7 @@
  * @module services/chat-service/external-system-prompt
  */
 import type { ChatMessageRequest } from '../chat-service-types';
-import { getChatTurnIntegrations } from './turn-integrations';
+import { getActiveChatTurnIntegrations } from './turn-integrations';
 import type { ResolvedProvider } from '../../providers/provider-router';
 import { getExternalProviderSystemGuards } from '../../chat/prompt';
 import { getCurrentDate } from '../../utils/datetime';
@@ -163,7 +163,7 @@ export function buildExternalSystemPromptParts(params: ExternalSystemPromptParam
         systemPromptParts.push(
             `[사용자 현재 위치 — 기기 GPS] 위도 ${lat.toFixed(6)}, 경도 ${lng.toFixed(6)}. ` +
             '"내 주변"·"근처"·"현재 위치" 류 질문은 이 좌표를 기준으로 답하세요. ' +
-            getChatTurnIntegrations().map((i) => i.userLocationHint?.() ?? '').join('') +
+            getActiveChatTurnIntegrations().map((i) => i.userLocationHint?.() ?? '').join('') +
             '좌표 값 자체를 답변 본문에 나열하지는 마세요.',
         );
     }

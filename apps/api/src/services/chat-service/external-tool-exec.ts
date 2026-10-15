@@ -11,7 +11,7 @@
  * @module services/chat-service/external-tool-exec
  */
 import { createLogger } from '../../utils/logger';
-import { getChatTurnIntegrations } from './turn-integrations';
+import { getActiveChatTurnIntegrations } from './turn-integrations';
 import { recordLlmCost } from '../cost/cost-ledger-service';
 import { MAX_TOOL_RESULT_CHARS, CHAT_TOOL_CARD } from '../../config/runtime-limits';
 import { prepareToolArgs } from '../agent-task/tool-args';
@@ -118,7 +118,7 @@ async function runExternalTool(
                     (c as { type?: unknown }).type === 'text' && typeof (c as { text?: unknown }).text === 'string')
                 .map((c) => c.text)
                 .join('\n');
-            for (const integration of getChatTurnIntegrations()) {
+            for (const integration of getActiveChatTurnIntegrations()) {
                 preservedPrefix += integration.preserveFromRawResult?.(rawText) ?? '';
             }
         }

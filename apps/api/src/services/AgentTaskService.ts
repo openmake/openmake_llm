@@ -64,6 +64,7 @@ import { assembleAgentTools } from './agent-task/tool-assembly';
 import { callAgentTurnWithContext } from './agent-task/turn-context';
 import { CacheUsageTally } from './agent-task/cache-usage';
 import { buildAgentTaskSystemContent, resolveSkillToolBindings } from './agent-task/skill-block';
+import { ensureAddonStates } from './addon/addon-state';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
 export { type AgentTaskInputFile } from './agent-task/types';
@@ -266,6 +267,8 @@ export class AgentTaskService {
                             onPausedMs: (ms) => { pausedMs += ms; },
                         })
                         : undefined;
+                    // add-on 이 기여한 작업 도구 노출은 상태 캐시(동기)로 거른다 — 이 프로세스에 채팅 턴이 없어도 최신 캐시를 보게 먼저 적재한다.
+                    await ensureAddonStates();
                     taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn, spawnFn, remoteExecutor, goal);
                     if (input.resume?.plan) taskRuntime.restorePlan(input.resume.plan); // 체크포인트의 계획 복원(124)
                     // 이름 교정(P0-b) — 모델에 실제 노출된 도구 이름을 런타임에 알려, 잘못된 이름 호출과

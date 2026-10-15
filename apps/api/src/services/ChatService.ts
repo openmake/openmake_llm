@@ -19,7 +19,7 @@
  * @requires ../llm/client - LLM HTTP 클라이언트
  */
 import { createLogger } from '../utils/logger';
-import { getChatTurnIntegrations } from './chat-service/turn-integrations';
+import { getActiveChatTurnIntegrations } from './chat-service/turn-integrations';
 import { AGENTS, type AgentSelection } from '../agents';
 import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
@@ -161,7 +161,7 @@ export class ChatService {
         // 통합(add-on)이 고정한 외부 컨텍스트가 있으면 그 MCP 서버를 참조된 것으로 취급 —
         // 접두는 LLM 전용 enhancedMessage 에만 실리므로(reqCtx.message 는 원문)
         // depth 매칭 힌트를 여기서 보강한다.
-        const mcpSelectHints = getChatTurnIntegrations().map((i) => i.mcpSelectionHint?.(reqCtx)).filter(Boolean);
+        const mcpSelectHints = getActiveChatTurnIntegrations().map((i) => i.mcpSelectionHint?.(reqCtx)).filter(Boolean);
         const mcpSelectMessage = mcpSelectHints.length > 0 ? `${reqCtx.message ?? ''} ${mcpSelectHints.join(' ')}` : reqCtx.message;
         const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, enabledToggles, CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, mcpSelectMessage, CHAT_USER_MCP_BREADTH_SLOTS);
 
