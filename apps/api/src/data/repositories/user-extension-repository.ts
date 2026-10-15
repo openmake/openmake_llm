@@ -12,6 +12,7 @@
  */
 import { v4 as uuidv4 } from 'uuid';
 import { BaseRepository } from './base-repository';
+import type { ExtensionPermissionState } from '../../config/addon-permissions';
 
 export interface UserExtensionRow {
     id: string;
@@ -29,6 +30,16 @@ export interface UserExtensionRow {
     visibility: ExtensionVisibility;
     /** visibility='organization' 일 때 대상 조직 (166) */
     org_id: string | null;
+    /** 권한 상태 (190) — config/addon-permissions EXTENSION_PERMISSION_STATES */
+    permission_state: ExtensionPermissionState;
+    /** 승인한 권한 (190). legacy_unreviewed 는 NULL */
+    permissions_granted: string[] | null;
+    /** 마지막 설치·업데이트 번들이 요청한 권한 (190). 매니페스트 미동봉이면 NULL */
+    permissions_requested: string[] | null;
+    /** 마지막 승인·철회 시각 (190) */
+    permissions_reviewed_at: Date | null;
+    /** 마지막으로 승인·철회한 사용자 id (190, 백필 행은 'migration:190') */
+    permissions_reviewed_by: string | null;
     created_at: Date;
     updated_at: Date;
 }
