@@ -5,6 +5,10 @@ import type { LLMClient } from '../../../llm/client';
 import { GitFetcher } from '../git-fetcher';
 
 jest.mock('../../../data/retry-wrapper', () => ({ withRetry: (fn: () => unknown) => fn() }));
+const savePermissionState = jest.fn();
+jest.mock('../../../data/repositories/user-extension-permission-repository', () => ({
+    UserExtensionPermissionRepository: jest.fn().mockImplementation(() => ({ savePermissionState })),
+}));
 
 describe('repo-scanner (extension)', () => {
     const entry = (path: string) => ({ path, sha: 's', size: 100, type: 'blob' as const });
@@ -308,6 +312,117 @@ describe('ExtensionIngestService', () => {
         // 구 구성요소 archive UPDATE 가 실행됐는지
         const archiveCalls = q.mock.calls.filter((c: unknown[]) => String(c[0]).includes("SET status='archived'"));
         expect(archiveCalls.length).toBe(2);
+    });
+
+    describe('권한 상태(190)', () => {
+        const addonManifest = (permissions: string[]) => JSON.stringify({
+            id: 'tool-pack', name: 'tool-pack', version: '1.0.0',
+            requires: { openmake: '>=0.0.0' }, scope: 'user', components: {}, permissions,
+        });
+        const conventionOk = () => (mockLLM.chat as jest.Mock).mockResolvedValueOnce({
+            content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 30 },
+        });
+        const insertDraftParams = (q: jest.Mock): unknown[] =>
+            q.mock.calls.find((c: unknown[]) => String(c[0]).includes('INSERT INTO mcp_servers'))![1] as unknown[];
+
+        it('첫 설치 + openmake-addon.json [] → reviewed(설치자 승인 기록), stdio 는 네트워크 차단 표시와 함께 저장', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json', 'openmake-addon.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(PLUGIN_MCP_ONLY);        // plugin.json
+            mockFetcher.fetchFile.mockResolvedValueOnce(addonManifest([]));      // openmake-addon.json
+            const q = mockPool.query as jest.Mock;
+            q.mockResolvedValueOnce({ rows: [] });                    // findRecentByHash
+            q.mockResolvedValueOnce({ rows: [] });                    // findActiveByName
+            q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // countActiveForUser
+            conventionOk();
+            q.mockResolvedValueOnce({ rows: [] });                    // resolveUniqueServerName
+            q.mockResolvedValueOnce({ rows: [{ id: 'mcp-p1' }] });    // insertDraft
+            q.mockResolvedValueOnce({ rows: [{                        // user_extensions INSERT RETURNING
+                id: 'user-ext-p1', user_id: 'user-1', name: 'tool-pack', version: '1.0.0', status: 'active',
+            }] });
+            q.mockResolvedValueOnce({ rows: [] });                    // linkComponents (mcp)
+
+            const r = await makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
+            if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+
+            expect(savePermissionState).toHaveBeenCalledWith('user-ext-p1', {
+                state: 'reviewed', granted: [], requested: [], reviewedBy: 'user-1',
+            });
+            const draft = insertDraftParams(q);
+            expect(draft[9]).toBe('none');                                                   // sandbox_network
+            expect(JSON.parse(draft[8] as string)).toMatchObject({ networkRestrictedByPermission: true });
+            const extInsert = q.mock.calls.find((c: unknown[]) => String(c[0]).includes('INSERT INTO user_extensions'))!;
+            expect(JSON.parse((extInsert[1] as unknown[])[10] as string)).toMatchObject({ addonPermissions: [] });
+        });
+
+        it('업데이트가 승인 범위보다 넓은 권한을 요구 → review_required, 초과분(network)만 막고 경고', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('newsha2');
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json', 'openmake-addon.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(PLUGIN_MCP_ONLY);
+            mockFetcher.fetchFile.mockResolvedValueOnce(addonManifest(['network:internet']));
+            const q = mockPool.query as jest.Mock;
+            q.mockResolvedValueOnce({ rows: [] });                    // dedupe
+            q.mockResolvedValueOnce({ rows: [{                        // findActiveByName — 같은 repo, 구 sha, 승인 []
+                id: 'user-ext-p2', name: 'tool-pack', version: '1.0.0', description: null,
+                source_url: 'foo/bar', source_ref: 'oldsha2', source_path: 'plugin.json',
+                manifest: { components: {} },
+                permission_state: 'reviewed', permissions_granted: [], permissions_requested: [],
+            }] });
+            q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills
+            q.mockResolvedValueOnce({ rows: [] });                    // delete assignments
+            q.mockResolvedValueOnce({ rows: [] });                    // archive skills
+            q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
+            q.mockResolvedValueOnce({ rows: [] });                    // archive custom agents
+            conventionOk();
+            q.mockResolvedValueOnce({ rows: [] });                    // resolveUniqueServerName
+            q.mockResolvedValueOnce({ rows: [{ id: 'mcp-p2' }] });    // insertDraft
+            q.mockResolvedValueOnce({ rows: [{                        // updateAfterReinstall RETURNING
+                id: 'user-ext-p2', name: 'tool-pack', version: '1.0.0', status: 'active',
+            }] });
+            q.mockResolvedValueOnce({ rows: [] });                    // linkComponents (mcp)
+
+            const r = await makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
+            if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+
+            expect(savePermissionState).toHaveBeenCalledWith('user-ext-p2', {
+                state: 'review_required', granted: [], requested: ['network:internet'], reviewedBy: null,
+            });
+            expect(r.validationWarnings.join(' ')).toContain('PERMISSION_REVIEW_REQUIRED: network:internet');
+            expect(insertDraftParams(q)[9]).toBe('none');
+        });
+
+        it('매니페스트 없는 레거시 업데이트는 집행 없이 legacy_unreviewed 로 저장(종전 동작)', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('newsha3');
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(PLUGIN_MCP_ONLY);
+            const q = mockPool.query as jest.Mock;
+            q.mockResolvedValueOnce({ rows: [] });                    // dedupe
+            q.mockResolvedValueOnce({ rows: [{                        // findActiveByName — 레거시
+                id: 'user-ext-p3', name: 'tool-pack', version: '1.0.0', description: null,
+                source_url: 'foo/bar', source_ref: 'oldsha3', source_path: 'plugin.json',
+                manifest: { components: {} },
+                permission_state: 'legacy_unreviewed', permissions_granted: null, permissions_requested: null,
+            }] });
+            q.mockResolvedValueOnce({ rows: [] });                    // snapshotApprovedSkills
+            q.mockResolvedValueOnce({ rows: [] });                    // delete assignments
+            q.mockResolvedValueOnce({ rows: [] });                    // archive skills
+            q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
+            q.mockResolvedValueOnce({ rows: [] });                    // archive custom agents
+            conventionOk();
+            q.mockResolvedValueOnce({ rows: [] });                    // resolveUniqueServerName
+            q.mockResolvedValueOnce({ rows: [{ id: 'mcp-p3' }] });    // insertDraft
+            q.mockResolvedValueOnce({ rows: [{                        // updateAfterReinstall RETURNING
+                id: 'user-ext-p3', name: 'tool-pack', version: '1.0.0', status: 'active',
+            }] });
+            q.mockResolvedValueOnce({ rows: [] });                    // linkComponents (mcp)
+
+            await makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
+
+            expect(savePermissionState).toHaveBeenCalledWith('user-ext-p3', {
+                state: 'legacy_unreviewed', granted: null, requested: null, reviewedBy: null,
+            });
+            expect(insertDraftParams(q)[9]).toBeNull();               // sandboxNetwork 미지정 → COALESCE 기본(full)
+        });
     });
 
     describe('marketplace 인덱스', () => {
