@@ -9,11 +9,13 @@
 import { createLogger } from '../../../utils/logger';
 import { kdb } from '../db';
 import { KNOWLEDGE_RUNTIME } from '../constants';
+import type { JobLease } from './lease';
 
 const logger = createLogger('KnowledgeCleanup');
 
 export interface CleanupDeps {
     deleteStoredFile: (storageRef: string) => Promise<void>;
+    lease?: JobLease;
 }
 
 /** 대상 문서들의 원본 파일을 지우고 문서 행을 삭제한다(cascade) */
