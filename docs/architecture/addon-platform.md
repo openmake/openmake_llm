@@ -27,7 +27,7 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 | `runtimeStatus` | 이 프로세스가 코드를 어디까지 세웠나(not_loaded·registering·ready·failed) | 프로세스마다 다름 |
 | `effectiveAvailability` | 위 셋 + 조회 성공 여부의 합성(available·disabled·not_ready·failed·incompatible·state_unknown) | — |
 
-**실시간인 것과 아닌 것**: 라우트 노출·사용권·채팅 기능 훅은 요청(턴)마다 DB 의도를 본다. 런타임 등록·내장 도구 기여·스킬 시드는 부팅 시점이라 재시작이 필요하다(관리 화면 `restartNote`).
+**실시간인 것과 아닌 것**: 라우트 노출·사용권·채팅의 `prepareTurnContext`·기여 도구 실행은 요청(턴)마다 DB 의도를 본다. 순수 동기 훅(프롬프트 조각·도구 노출)과 런타임 등록·내장 도구 기여·스킬 시드는 부팅 시점이라 재시작이 필요하다(관리 화면 `restartNote`).
 
 **토글 전파 범위**: 관리자 토글(`PATCH /api/admin/addons/:id/state`)은 같은 프로세스의 캐시를 즉시 비운다. 운영은 PM2 cluster 라 **다른 워커 프로세스는 캐시 TTL(최대 30초) 뒤에** 새 의도를 본다. 즉시·원자적 철회(상태 변경과 실행 시작 기록의 직렬화)는 보장하지 않으며 2차 범위다. 캐시 TTL 을 "즉시 반영"이라고 쓰지 않는다.
 
@@ -37,11 +37,13 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 
 | 경로 | 판정 함수 | 켜짐 | 관리자가 끔 | 조직 allowlist 밖 | 확인 불가(DB 장애) |
 |---|---|---|---|---|---|
-| add-on 전용 라우트(`addonGuard`) | `checkAddonEntitlement` | 통과 | **404 `ADDON_DISABLED`** | **403 `ADDON_NOT_ENTITLED`** | **503 `ADDON_STATE_UNKNOWN`** + `Retry-After: 5` |
+| add-on 전용 라우트(`addonGuard`) | `checkAddonEntitlement` | 통과 | **404 `ADDON_DISABLED`**(부팅 실패 `failed` 포함) | **403 `ADDON_NOT_ENTITLED`** | **503 `ADDON_STATE_UNKNOWN`** + `Retry-After: 5` |
 | capability 실행(`admitCapability`) | `readAddonStateStrict` | ok | `ADDON_DISABLED` | (해당 없음) | `ADDON_STATE_UNKNOWN` |
 | 채팅 기능 훅 `prepareTurnContext` | `integrationGate` | 호출 | 건너뜀(info 로그) | (해당 없음 — 사용자 단위 정책은 라우트가 맡음) | 건너뜀 |
 | 채팅 오케스트레이션 도구 `run` | `integrationGate` | 실행 | `Error: … 중지되어 실행할 수 없습니다` | (해당 없음) | `Error: … 확인할 수 없어 실행하지 않았습니다` |
 | 팩 스킬 주입 필터 | `entitledAddonIds` | 주입 | 제외 | 제외 | **주입 유지(fail-open)** — 선언형 콘텐츠, 피해 없음 |
+
+**판정 기준 열**: 라우트·채팅 훅 게이트의 strict 판정(`readAddonEnabledStrict`)은 `addon_installations.state`(installed·enabled·disabled·failed)를 읽어 `enabled` 가 아니면 모두 '꺼짐'으로 다룬다 — 부팅 실패(`failed`)도 404 `ADDON_DISABLED` 로 나가고 웹은 '관리자가 중지'로 표시한다(라우트 동작은 종전과 같고 문구만 새것). capability 경로만 `ADDON_FAILED` 를 구분한다. 라우트·웹에서 `failed` 를 따로 구분하는 것(예: `ADDON_FAILED` 404 + '준비되지 않음' 문구)은 2차.
 
 env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항상 알 수 있다).
 
@@ -49,11 +51,12 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 
 | 훅 | 종류 | 꺼진 add-on | 판정 실패 |
 |---|---|---|---|
-| `prepareTurnContext`, `orchestrationTool`, `detectIntent`·`forceIncludeTools`·`systemPromptParts` 등 순수 훅 | 기능 | 멈춘다 | 그 통합만 건너뛴다 |
+| `prepareTurnContext`, 오케스트레이션 도구 `run` | 기능 | **멈춘다(턴마다 `integrationGate`)** | 그 통합만 건너뜀 |
+| 순수 동기 훅 `detectIntent`·`forceIncludeTools`·`forcedFirstTurnTool`·`systemPromptParts`·`enhancedMessagePrefix`·`mcpSelectionHint`·`extractBlocks`·`scrubFinalContent` | 기능(프롬프트·노출) | **계속 돈다** — 부팅 시점(env) 판정, 재시작 필요; 턴 게이트는 2차 | 해당 없음(동기, DB 안 봄) |
 | `isMemoryIsolatedSession` | 보호 | **계속 돈다** | 격리로 간주(fail-closed) |
 | `listHiddenSessionIds` | 표시 | 계속 돈다 | 숨김만 건너뜀(본인 목록 배치, 누출 아님) |
 
-순수 훅(`detectIntent` 등)은 동기라 턴마다 DB 를 묻지 않는다 — 기여 도구가 노출돼도 실행 시점(`runOrchestrationTool`)에서 막힌다.
+순수 훅(`detectIntent` 등)은 동기라 턴마다 DB 를 묻지 않는다 — 관리자가 꺼도 재시작 전까지 프롬프트 조각·도구 노출은 남지만, 기여 도구가 노출돼도 실행 시점(`runOrchestrationTool`)에서 막힌다.
 
 ## 9. Knowledge 작업 큐의 lease·fencing (`addons/knowledge-runtime/jobs/`)
 
@@ -61,4 +64,4 @@ claim 은 `UPDATE … fencing_token = fencing_token + 1 … FOR UPDATE SKIP LOCK
 
 ## 10. 범위 밖(다음 묶음)
 
-진행 작업 drain·타이머·연결 회수·부분 시작 실패 정리(2차), manifest 없는 확장의 권한 상태 명시화(2차), 계약 패키지·데이터 포트·별도 worker 프로세스(3차 — Knowledge 처리량·API 지연 측정 뒤 조건부).
+진행 작업 drain·타이머·연결 회수·부분 시작 실패 정리(2차), manifest 없는 확장의 권한 상태 명시화(2차), 라우트·웹에서 부팅 실패(`failed`)를 '꺼짐'과 구분(`ADDON_FAILED` 404 + '준비되지 않음' 문구, 2차 — §8.3 판정 기준 열), 순수 동기 채팅 훅의 턴 게이트(2차 — §8.4), 계약 패키지·데이터 포트·별도 worker 프로세스(3차 — Knowledge 처리량·API 지연 측정 뒤 조건부).
