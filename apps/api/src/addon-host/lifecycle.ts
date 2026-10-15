@@ -130,15 +130,15 @@ export async function startAddonRuntime(
 }
 
 /**
- * 정리 함수를 등록 역순으로 한 번씩 부른다 — 하나마다 `timeoutMs` 상한 안에서만 기다리고, 던지거나 넘어도 나머지는 계속.
- * 상한 안에 끝난 이름을 돌려준다.
+ * 정리 함수를 등록 역순으로 한 번씩 부른다 — 하나마다 `limit()` 이 준 signal 이 끊길 때까지만 기다리고, 던지거나 넘어도 나머지는 계속.
+ * 이미 끊긴 signal(마감 지남)이면 부르기만 하고 기다리지 않는다(경고). 상한 안에 끝난 이름을 돌려준다.
  */
-async function runDisposables(record: AddonLifecycleRecord, timeoutMs: number): Promise<string[]> {
+async function runDisposables(record: AddonLifecycleRecord, limit: () => AbortSignal): Promise<string[]> {
     const list = record.disposables.splice(0).reverse();
     const done: string[] = [];
     for (const item of list) {
         const work = Promise.resolve().then(() => item.dispose());
-        const outcome = await settleWithin(work, waitLimit(timeoutMs, record.addonId), record.addonId, `정리 '${item.name}'`);
+        const outcome = await settleWithin(work, limit(), record.addonId, `정리 '${item.name}'`);
         if (outcome === 'done') done.push(item.name);
     }
     return done;
@@ -161,7 +161,7 @@ export async function releaseAddonResources(
         const work = Promise.resolve().then(() => handle.stop({ drain: false, signal: AbortSignal.abort() }));
         await settleWithin(work, waitLimit(timeoutMs, addonId), addonId, '시작 실패 보상 정지');
     }
-    const disposed = record ? await runDisposables(record, timeoutMs) : [];
+    const disposed = record ? await runDisposables(record, () => waitLimit(timeoutMs, addonId)) : [];
     if (record && !record.controller.signal.aborted) record.controller.abort(new Error('add-on 자원 회수'));
     const tools = unregisterToolContributions(addonId);
     const capabilities = getCapabilityRegistry().unregisterOwner(addonId);
@@ -194,8 +194,12 @@ export type AddonStopOutcome = 'stopped' | 'already_stopped' | 'not_running';
 /**
  * 정지 — `ready` 인 add-on 의 handle.stop 을 시간 제한(`ADDON_DRAIN_TIMEOUT_MS`) 안에서 부르고 `stopped` 로 둔다.
  * handle 이 없는 기존 진입점은 상태만 바꾼다. host.signal·정리 함수는 건드리지 않는다(재개할 수 있어야 한다).
+ * `deadline` 을 주면(전체 정지) `timeoutMs` 대신 그 마감 signal 로 기다리고 취소를 알린다.
  */
-export function stopAddon(addonId: string, opts: { drain: boolean; timeoutMs?: number }): Promise<AddonStopOutcome> {
+export function stopAddon(
+    addonId: string,
+    opts: { drain: boolean; timeoutMs?: number; deadline?: AbortSignal },
+): Promise<AddonStopOutcome> {
     const record = records.get(addonId);
     if (!record) return Promise.resolve('not_running');
     return serialize(record, async (): Promise<AddonStopOutcome> => {
@@ -206,7 +210,7 @@ export function stopAddon(addonId: string, opts: { drain: boolean; timeoutMs?: n
         const timeoutMs = opts.timeoutMs ?? ADDON_DRAIN_TIMEOUT_MS;
         const handle = record.handle;
         if (handle) {
-            const signal = waitLimit(timeoutMs, addonId);
+            const signal = opts.deadline ?? waitLimit(timeoutMs, addonId);
             await settleWithin(Promise.resolve().then(() => handle.stop({ drain: opts.drain, signal })), signal, addonId, 'drain 정지');
         }
         setAddonRuntimeStatus(addonId, 'stopped');
@@ -240,16 +244,21 @@ export function resumeAddon(addonId: string): Promise<AddonResumeOutcome> {
 }
 
 /**
- * 프로세스 종료 — 모든 add-on 을 예산 안에서 병렬로 정지한 뒤 host.signal 을 끊고 정리 함수를 회수한다.
- * 정리 함수 하나하나도 같은 예산(`budgetMs`) 안에서만 기다린다 — 끝나지 않는 정리가 종료를 붙잡지 않게.
+ * 프로세스 종료 — 모든 add-on 을 병렬로 정지한 뒤 host.signal 을 끊고 정리 함수를 회수한다.
+ * `budgetMs` 는 정지(같은 add-on 의 앞선 정지·재개 대기 포함)와 정리 함수 전체를 합친 **단일 마감**이다 — 종료 단계의 상한이
+ * 정확히 이 값이 되게. 마감이 지난 뒤의 정리 함수는 부르기만 하고 기다리지 않는다(경고). 기록은 그래도 비운다.
  * 기여 도구·capability 등록은 지우지 않는다(곧 프로세스가 끝난다 — 남은 요청 처리가 거절되지 않게).
  */
 export async function stopAllAddons(opts: { drain: boolean; budgetMs: number }): Promise<void> {
     const all = [...records.values()];
-    await Promise.all(all.map((record) => stopAddon(record.addonId, { drain: opts.drain, timeoutMs: opts.budgetMs })));
+    const deadline = waitLimit(opts.budgetMs, '전체 정지');
+    await Promise.all(all.map((record) => settleWithin(
+        stopAddon(record.addonId, { drain: opts.drain, timeoutMs: opts.budgetMs, deadline }).then(() => undefined),
+        deadline, record.addonId, '종료 정지(대기 포함)',
+    )));
     for (const record of all) {
         if (!record.controller.signal.aborted) record.controller.abort(new Error('프로세스 종료'));
-        await runDisposables(record, opts.budgetMs);
+        await runDisposables(record, () => deadline);
     }
 }
 

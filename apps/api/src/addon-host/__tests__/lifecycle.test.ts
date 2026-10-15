@@ -215,4 +215,21 @@ describe('add-on 수명주기', () => {
         expect(close).toHaveBeenCalledTimes(1);
         expect(getAddonRuntimeStatus('mu').status).toBe('stopped');
     });
+
+    it('전체 정지의 예산은 정지와 정리 함수 전체를 합친 단일 마감이다 — 느린 stop·끝나지 않는 정리 함수가 여럿이어도', async () => {
+        const never = (): Promise<void> => new Promise<void>(() => undefined);
+        const start: AddonBootDeps['startRuntime'] = async (_a, _ref, host) => {
+            for (const name of ['s1', 's2', 's3']) host.registerDisposable(name, never);
+            return { stop: never };
+        };
+        await bootAddons([addon('nu'), addon('xi')], deps(start));
+        const startedAt = Date.now();
+        await stopAllAddons({ drain: true, budgetMs: 60 });
+        // 함수당 상한이면 60 + 60×6 = 420ms 이상 — 단일 마감이면 약 60ms
+        expect(Date.now() - startedAt).toBeLessThan(300);
+        expect(getAddonRuntimeStatus('nu').status).toBe('stopped');
+        expect(getAddonRuntimeStatus('xi').status).toBe('stopped');
+        expect(getAddonLifecycleRecord('nu')?.disposables).toEqual([]);
+        expect(getAddonLifecycleRecord('xi')?.disposables).toEqual([]);
+    });
 });
