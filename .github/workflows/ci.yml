@@ -152,6 +152,11 @@ jobs:
       - name: "Gate 4: ESLint"
         run: npm run lint
 
+      # add-on → Base 내부 import ratchet(설계 D2) — 허용 목록(scripts/lint/addon-import-allowlist.json) 밖의 새 import 만 실패.
+      # 목록에서 사라진 항목은 권고만 출력한다(npm run gen:addon-boundary 로 목록을 줄인다). 계약 패키지 경계는 위 ESLint 가 본다.
+      - name: "Gate 4: Add-on Boundary (ratchet)"
+        run: npm run check:addon-boundary
+
       # 루트 eslint 설정은 apps/web/** 를 제외한다 — web 은 자체 설정(eslint-config-next)으로 따로 돈다.
       - name: "Gate 4: ESLint (apps/web)"
         run: npm run lint --workspace=apps/web
