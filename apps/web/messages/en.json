@@ -1155,6 +1155,9 @@
       "ended": "The browser session ended (no input, or the task finished).",
       "startFailed": "Could not take control of the browser: {error}",
       "inputFailed": "Input was not delivered: {error}",
+      "inputBlocked": "This address can't be opened. It isn't an allowed domain, so the proxy refused the connection — ask an administrator to add it to the allowlist, or open a different address.",
+      "inputUnresolved": "The address couldn't be found. Check the spelling of the domain.",
+      "inputTimeout": "The page didn't open in time. Please try again.",
       "releaseFailed": "Could not hand back: {error}"
     },
     "thinkingBadge": "Reasoning {level}",

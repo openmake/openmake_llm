@@ -2,7 +2,7 @@
  * 브라우저 넘겨받기(Take control) 라우트 — agent-task.routes.ts 에서 router.use 로 마운트.
  *   GET    /api/agent-tasks/:taskId/browser-session             — 넘겨받은 상태인지(넘겨받을 수 없는 작업도 200 + eligible:false)
  *   POST   /api/agent-tasks/:taskId/browser-session { url? }    — 넘겨받기(세션 컨테이너 시작, 멱등)
- *   GET    /api/agent-tasks/:taskId/browser-session/screenshot  — 현재 화면(JPEG base64)·주소·제목
+ *   GET    /api/agent-tasks/:taskId/browser-session/screenshot  — 현재 화면(JPEG base64)·주소·제목(세션이 끝났으면 200 + active:false)
  *   POST   /api/agent-tasks/:taskId/browser-session/input       — 클릭·입력·키·스크롤·주소 이동·뒤로
  *   DELETE /api/agent-tasks/:taskId/browser-session             — 돌려주기(로그인 상태 저장 후 종료)
  *
@@ -108,7 +108,8 @@ browserSessionRouter.get('/:taskId/browser-session/screenshot', asyncHandler(asy
     if (!r.ok || !r.image) {
         // 페이지 이동 중에는 캡처가 실패할 수 있다 — 세션이 살아 있으면 다음 폴링에서 다시 받는다
         if (await isBrowserSessionActive(target.taskId)) return res.json(success({ active: true, image: null, url: r.url ?? '', title: '' }));
-        return res.status(409).json(conflict(NO_SESSION));
+        // 세션이 없으면 오류가 아니라 "끝났음"을 알린다(상태 조회와 같은 원칙) — 돌려주기와 겹친 폴링이 409 로 콘솔·서버 경고에 남았다
+        return res.json(success({ active: false, image: null, url: '', title: '' }));
     }
     res.json(success({ active: true, image: r.image, url: r.url ?? '', title: r.title ?? '' }));
 }));

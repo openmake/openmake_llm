@@ -3,10 +3,12 @@
 export {}; // 모듈로 만들어 다른 테스트 파일의 전역 타입 이름과 겹치지 않게 한다
 type Input = { op: 'type'; text: string } | { op: 'key'; key: string } | null;
 interface KeyLike { key: string; ctrlKey?: boolean; metaKey?: boolean; altKey?: boolean; isComposing?: boolean }
-const { toViewportPoint, keyToInput } = require('../../../../web/lib/browser-takeover') as {
+type InputErrorKind = 'blocked' | 'unresolved' | 'timeout' | 'unknown';
+const { toViewportPoint, keyToInput, classifyInputError } = require('../../../../web/lib/browser-takeover') as {
     toViewportPoint: (cx: number, cy: number, rect: { left: number; top: number; width: number; height: number },
         natural: { width: number; height: number }) => { x: number; y: number } | null;
     keyToInput: (e: KeyLike) => Input;
+    classifyInputError: (raw: string) => InputErrorKind;
 };
 
 describe('toViewportPoint', () => {
@@ -45,5 +47,29 @@ describe('keyToInput', () => {
         expect(keyToInput({ key: 'Shift' })).toBeNull();
         expect(keyToInput({ key: 'F5' })).toBeNull();
         expect(keyToInput({ key: '+', ctrlKey: true })).toBeNull();
+    });
+});
+
+describe('classifyInputError', () => {
+    it('프록시가 연결을 거절하면 blocked(허용 목록 밖 도메인)', () => {
+        expect(classifyInputError('page.goto: net::ERR_TUNNEL_CONNECTION_FAILED at https://example.net/\nCall log:\n  - navigating to "https://example.net/", waiting until "domcontentloaded"')).toBe('blocked');
+        expect(classifyInputError('page.goto: net::ERR_PROXY_CONNECTION_FAILED at https://example.net/')).toBe('blocked');
+    });
+    it('이름 풀이 실패는 unresolved', () => {
+        expect(classifyInputError('page.goto: net::ERR_NAME_NOT_RESOLVED at https://exmaple.com/')).toBe('unresolved');
+    });
+    it('시간 초과는 timeout', () => {
+        expect(classifyInputError('Timeout 20000ms exceeded')).toBe('timeout');
+        expect(classifyInputError('page.goto: net::ERR_TIMED_OUT at https://example.com/')).toBe('timeout');
+        expect(classifyInputError('page.goto: net::ERR_CONNECTION_TIMED_OUT at https://example.com/')).toBe('timeout');
+    });
+    it('대소문자를 가리지 않는다', () => {
+        expect(classifyInputError('net::err_tunnel_connection_failed')).toBe('blocked');
+        expect(classifyInputError('NET::ERR_NAME_NOT_RESOLVED')).toBe('unresolved');
+        expect(classifyInputError('timeout 5000ms exceeded')).toBe('timeout');
+    });
+    it('그 외는 unknown', () => {
+        expect(classifyInputError('Element is not attached to the DOM')).toBe('unknown');
+        expect(classifyInputError('')).toBe('unknown');
     });
 });
