@@ -25,12 +25,20 @@ interface CacheEntry { states: Map<string, AddonState>; loadedAt: number }
 let cache: CacheEntry | null = null;
 /** 진행 중인 적재 — 거절하지 않고 실패를 값으로 돌려준다(fail-open·strict 두 경로가 같은 적재를 기다린다) */
 let inflight: Promise<Error | null> | null = null;
+/** 비우기 세대 — 적재 도중 비워지면(쓰기 직후 clear) 그 스냅숏은 쓰기 전 값일 수 있어 버리고 다시 읽는다 */
+let generation = 0;
 
 async function loadStates(): Promise<void> {
     const { getUnifiedDatabase } = await import('../../data/models/unified-database');
     const { AddonStateRepository } = await import('../../data/repositories/addon-state-repository');
-    const rows = await new AddonStateRepository(getUnifiedDatabase().getPool()).list();
-    cache = { states: new Map(rows.map(r => [r.addon_id, r.state])), loadedAt: Date.now() };
+    const repo = new AddonStateRepository(getUnifiedDatabase().getPool());
+    for (;;) {
+        const startedGen = generation;
+        const rows = await repo.list();
+        if (startedGen !== generation) continue; // 적재 중 비워짐 — 옛 스냅숏을 버리고 다시 읽는다(기다리는 쪽도 새 값을 받는다)
+        cache = { states: new Map(rows.map(r => [r.addon_id, r.state])), loadedAt: Date.now() };
+        return;
+    }
 }
 
 function cacheFresh(): boolean {
@@ -102,12 +110,15 @@ export async function readAddonStateStrict(addonId: string): Promise<StrictAddon
  * 다음 적재 전까지 '모름 = 켜짐'으로 떨어져 이미 꺼둔 add-on 의 훅이 되살아나지 않게 한다.
  */
 export function clearAddonStateCache(): void {
+    generation++;
     if (cache) cache = { states: cache.states, loadedAt: 0 };
 }
 
 /** 테스트 전용 — 캐시를 완전히 비운다(첫 적재 전 상태). */
 export function __resetAddonStateCacheForTest(): void {
     cache = null;
+    inflight = null;
+    generation = 0;
 }
 
 /** 캐시에 적재된 상태(없으면 undefined = DB 를 아직 못 읽었거나 미등록). */
