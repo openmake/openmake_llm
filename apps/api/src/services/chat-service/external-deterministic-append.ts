@@ -9,7 +9,7 @@
  * @module services/chat-service/external-deterministic-append
  */
 import { createLogger } from '../../utils/logger';
-import { getChatTurnIntegrations, type IntegrationBlocks } from './turn-integrations';
+import { getActiveChatTurnIntegrations, type IntegrationBlocks } from './turn-integrations';
 import { MODEL_SOURCE_SECTION, REPORT_PIPELINE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { tryRenderReportBlock } from './report-block';
 import { stripMissingGeneratedLinks } from './generated-link-guard';
@@ -100,7 +100,7 @@ export function citationMarkersWereCleaned(streamed: string, final: string): boo
 export function scrubByIntegrations(content: string): { content: string; removed: number } {
     let out = content;
     let removed = 0;
-    for (const integration of getChatTurnIntegrations()) {
+    for (const integration of getActiveChatTurnIntegrations()) {
         const r = integration.scrubFinalContent?.(out);
         if (r) { out = r.content; removed += r.removed; }
     }
@@ -209,7 +209,7 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
     }
 
     // 통합 블록도 동일하게 — LLM 이 옮기지 않았으면 결정적 첨부(라이브 stream + 저장 히스토리).
-    for (const integration of getChatTurnIntegrations()) {
+    for (const integration of getActiveChatTurnIntegrations()) {
         const missing = (integrationBlocks[integration.id] ?? []).filter((b) => !finalContent.includes(b));
         if (missing.length === 0) continue;
         const appended = (finalContent.trim() ? '\n\n' : '') + missing.join('\n\n');

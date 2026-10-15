@@ -13,6 +13,7 @@
  */
 import { loadEnabledChatIntegrations } from '../../addon-host/chat-integrations';
 import { integrationGate } from '../addon/integration-gate';
+import { isAddonEnabledSync } from '../addon/addon-state';
 import { TURN_CONTEXT_TIMEOUT_MS } from '../../config/service-limits';
 import { createLogger } from '../../utils/logger';
 
@@ -134,6 +135,14 @@ export function getChatTurnIntegrations(): readonly ChatTurnIntegration[] {
     return integrations;
 }
 
+/** 기능 훅용 — 꺼진(DB 의도 disabled·부팅 실패 failed·env) add-on 의 순수 동기 훅(프롬프트 조각·도구 노출·의도 판정·블록 추출)을 건너뛴다.
+ *  동기라 DB 를 기다릴 수 없어 상태 캐시(`isAddonEnabledSync`, TTL 30초, 캐시 없으면 켜짐)로 판정한다. 조직 사용권 축은 실행 시점의
+ *  async 게이트(`integrationGate`)가 맡는다. 보호 훅(`isSessionMemoryIsolated`·`collectHiddenSessionIds`)과 구 클라이언트 필드 매핑
+ *  (`collectContextRefs`)은 전체 목록(`getChatTurnIntegrations`)을 그대로 쓴다. */
+export function getActiveChatTurnIntegrations(): readonly ChatTurnIntegration[] {
+    return getChatTurnIntegrations().filter((i) => isAddonEnabledSync(i.id));
+}
+
 /** 테스트 전용 — 통합 구성을 바꿔 끼운다. */
 export function __setChatTurnIntegrationsForTest(list: ChatTurnIntegration[] | null): void {
     integrations = list;
@@ -142,7 +151,7 @@ export function __setChatTurnIntegrationsForTest(list: ChatTurnIntegration[] | n
 /** 통합별 의도 플래그 — 의도 훅이 있는 통합만. */
 export function detectIntegrationIntents(message: string): Record<string, boolean> {
     const out: Record<string, boolean> = {};
-    for (const i of getChatTurnIntegrations()) {
+    for (const i of getActiveChatTurnIntegrations()) {
         if (i.detectIntent) out[i.id] = i.detectIntent(message);
     }
     return out;
@@ -154,7 +163,7 @@ export type IntegrationBlocks = Record<string, string[]>;
 /** 도구 결과에서 모든 통합의 블록을 떼어 상태에 모으고(중복 제외) 모델용 텍스트를 돌려준다. */
 export function extractIntegrationBlocks(toolResult: string, state: IntegrationBlocks): string {
     let modelFacing = toolResult;
-    for (const i of getChatTurnIntegrations()) {
+    for (const i of getActiveChatTurnIntegrations()) {
         if (!i.extractBlocks) continue;
         const extracted = i.extractBlocks(modelFacing);
         const bucket = (state[i.id] ??= []);
