@@ -2854,6 +2854,8 @@
   },
   "knowledge": {
     "serverError": "发生服务器错误",
+    "disabledByAdmin": "管理员已停用 Knowledge 功能。",
+    "unavailable": "暂时无法确认 Knowledge 状态，请稍后重试。",
     "cancel": "取消",
     "close": "关闭",
     "save": "保存",

@@ -23,7 +23,8 @@ const logger = createLogger('AddonState');
 interface CacheEntry { states: Map<string, AddonState>; loadedAt: number }
 
 let cache: CacheEntry | null = null;
-let inflight: Promise<void> | null = null;
+/** 진행 중인 적재 — 거절하지 않고 실패를 값으로 돌려준다(fail-open·strict 두 경로가 같은 적재를 기다린다) */
+let inflight: Promise<Error | null> | null = null;
 
 async function loadStates(): Promise<void> {
     const { getUnifiedDatabase } = await import('../../data/models/unified-database');
@@ -32,13 +33,41 @@ async function loadStates(): Promise<void> {
     cache = { states: new Map(rows.map(r => [r.addon_id, r.state])), loadedAt: Date.now() };
 }
 
-/** 캐시를 채운다(만료·미적재 시). 실패는 로그만 — 호출부는 env 판정으로 계속한다. */
-export async function ensureAddonStates(): Promise<void> {
-    if (cache && Date.now() - cache.loadedAt < ADDON_STATE_CACHE_TTL_MS) return;
+function cacheFresh(): boolean {
+    return cache !== null && Date.now() - cache.loadedAt < ADDON_STATE_CACHE_TTL_MS;
+}
+
+/** 적재를 한 번만 돌리고 결과(null = 성공, Error = 실패)를 돌려준다. 동시 호출은 같은 적재를 기다린다. */
+function refreshStates(): Promise<Error | null> {
     inflight ??= loadStates()
-        .catch(err => { logger.debug(`add-on 상태 적재 실패(무시): ${err instanceof Error ? err.message : String(err)}`); })
+        .then(() => null, (err: unknown) => (err instanceof Error ? err : new Error(String(err))))
         .finally(() => { inflight = null; });
-    await inflight;
+    return inflight;
+}
+
+/** 캐시를 채운다(만료·미적재 시). 실패는 로그만 — 호출부는 env 판정으로 계속한다(fail-open). */
+export async function ensureAddonStates(): Promise<void> {
+    if (cacheFresh()) return;
+    const err = await refreshStates();
+    if (err) logger.debug(`add-on 상태 적재 실패(무시): ${err.message}`);
+}
+
+export type AddonEnabledVerdict = { known: true; enabled: boolean } | { known: false; reason: string };
+
+/**
+ * strict 켜짐 판정 — '조회 실패'를 '켜짐'으로 읽지 않는다(설계 문서 8.3). env 차단은 항상 안다.
+ * DB 의도는 TTL 안의 캐시를 쓰고, 만료·미적재면 다시 읽는다. 읽기에 실패하면 `known:false` — 만료된 캐시로
+ * 답하지 않는다(장애 동안 꺼진 기능이 열리는 것보다 503 이 낫다). 라우트 게이트·채팅 훅 게이트가 쓴다.
+ * `isAddonEnabled()` 는 스킬 주입 필터의 fail-open 경로로 그대로 둔다.
+ */
+export async function readAddonEnabledStrict(addonId: string): Promise<AddonEnabledVerdict> {
+    if (!isBuiltinAddonEnabled(addonId)) return { known: true, enabled: false };
+    if (!cacheFresh()) {
+        const err = await refreshStates();
+        if (err) return { known: false, reason: err.message };
+    }
+    const state = cachedAddonState(addonId);
+    return { known: true, enabled: state === undefined ? true : state === 'enabled' };
 }
 
 /**
