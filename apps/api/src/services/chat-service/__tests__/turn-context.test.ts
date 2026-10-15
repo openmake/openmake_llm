@@ -3,17 +3,23 @@
  */
 const integrationGate = jest.fn();
 jest.mock('../../addon/integration-gate', () => ({ integrationGate: (...a: unknown[]) => integrationGate(...a) }));
+const isAddonEnabledSync = jest.fn((_id: string) => true);
+jest.mock('../../addon/addon-state', () => ({ isAddonEnabledSync: (id: string) => isAddonEnabledSync(id) }));
 
 import {
-    __setChatTurnIntegrationsForTest, collectTurnContexts, collectHiddenSessionIds,
-    isSessionMemoryIsolated, type ChatTurnIntegration,
+    __setChatTurnIntegrationsForTest, collectTurnContexts, collectHiddenSessionIds, collectContextRefs,
+    collectIntegrationSystemPromptParts, detectIntegrationIntents, extractIntegrationBlocks, getActiveChatTurnIntegrations,
+    isSessionMemoryIsolated, type ChatTurnIntegration, type IntegrationBlocks,
 } from '../turn-integrations';
 import { TURN_CONTEXT_TIMEOUT_MS } from '../../../config/service-limits';
 
 const src = (n: number) => ({ n, title: `t${n}`, url: `/x/${n}`, snippet: 's' });
 
 afterEach(() => __setChatTurnIntegrationsForTest(null));
-beforeEach(() => { integrationGate.mockReset(); integrationGate.mockResolvedValue({ allowed: true }); });
+beforeEach(() => {
+    integrationGate.mockReset(); integrationGate.mockResolvedValue({ allowed: true });
+    isAddonEnabledSync.mockReset(); isAddonEnabledSync.mockImplementation(() => true);
+});
 
 describe('collectTurnContexts', () => {
     it('통합마다 앞선 출처 뒤로 번호를 이어 받는다', async () => {
@@ -176,5 +182,68 @@ describe('collectHiddenSessionIds (기본 목록 숨김)', () => {
         __setChatTurnIntegrationsForTest([{ id: 'x', prepareTurnContext: async () => ({ sources: [src(1), src(3)] }) }]);
         const r = await collectTurnContexts({ message: 'q', userLang: 'ko', sourceOffset: 2 });
         expect(r.sources.map((s) => s.n)).toEqual([3]);
+    });
+});
+
+describe('순수 동기 훅의 상태 캐시 게이트 (getActiveChatTurnIntegrations)', () => {
+    const offOnly = (id: string) => id !== 'off';
+
+    it('꺼진 add-on 은 활성 목록에서 빠진다', () => {
+        isAddonEnabledSync.mockImplementation(offOnly);
+        __setChatTurnIntegrationsForTest([{ id: 'off' }, { id: 'on' }]);
+        expect(getActiveChatTurnIntegrations().map((i) => i.id)).toEqual(['on']);
+    });
+
+    it('detectIntegrationIntents 에 꺼진 add-on 의 키가 없다', () => {
+        isAddonEnabledSync.mockImplementation(offOnly);
+        const offIntent = jest.fn(() => true);
+        __setChatTurnIntegrationsForTest([
+            { id: 'off', detectIntent: offIntent },
+            { id: 'on', detectIntent: () => true },
+        ]);
+        expect(detectIntegrationIntents('q')).toEqual({ on: true });
+        expect(offIntent).not.toHaveBeenCalled();
+    });
+
+    it('collectIntegrationSystemPromptParts 에 꺼진 add-on 의 프롬프트 조각이 없다', () => {
+        isAddonEnabledSync.mockImplementation(offOnly);
+        const offParts = jest.fn(() => ['OFF-PART']);
+        __setChatTurnIntegrationsForTest([
+            { id: 'off', systemPromptParts: offParts },
+            { id: 'on', systemPromptParts: () => ['ON-PART'] },
+            { id: 'none' },
+        ]);
+        expect(collectIntegrationSystemPromptParts({ message: 'q' })).toEqual(['ON-PART']);
+        expect(offParts).not.toHaveBeenCalled();
+    });
+
+    it('extractIntegrationBlocks 는 꺼진 add-on 의 블록 추출을 건너뛴다', () => {
+        isAddonEnabledSync.mockImplementation(offOnly);
+        const offExtract = jest.fn((t: string) => ({ blocks: ['B-OFF'], modelFacing: t }));
+        __setChatTurnIntegrationsForTest([
+            { id: 'off', extractBlocks: offExtract },
+            { id: 'on', extractBlocks: (t: string) => ({ blocks: ['B-ON'], modelFacing: `${t}!` }) },
+        ]);
+        const state: IntegrationBlocks = {};
+        expect(extractIntegrationBlocks('r', state)).toBe('r!');
+        expect(state).toEqual({ on: ['B-ON'] });
+        expect(offExtract).not.toHaveBeenCalled();
+    });
+
+    it('꺼진 add-on 도 보호 훅(격리 판정·숨김 세션)은 호출된다', async () => {
+        isAddonEnabledSync.mockImplementation(() => false);
+        const isolated = jest.fn(async () => true);
+        const hidden = jest.fn(async () => ['s9']);
+        __setChatTurnIntegrationsForTest([{ id: 'off', isMemoryIsolatedSession: isolated, listHiddenSessionIds: hidden }]);
+        expect(await isSessionMemoryIsolated('u1', 's1')).toBe(true);
+        expect([...(await collectHiddenSessionIds('u1'))]).toEqual(['s9']);
+        expect(isolated).toHaveBeenCalledTimes(1);
+        expect(hidden).toHaveBeenCalledTimes(1);
+    });
+
+    it('꺼진 add-on 의 컨텍스트 참조도 collectContextRefs 가 옮겨 받는다(구 필드 포함)', () => {
+        isAddonEnabledSync.mockImplementation(() => false);
+        __setChatTurnIntegrationsForTest([{ id: 'off', legacyWsContextField: 'notebook' }]);
+        expect(collectContextRefs({ notebook: { id: 'n1', title: 'T' } })).toEqual({ off: { id: 'n1', title: 'T' } });
     });
 });

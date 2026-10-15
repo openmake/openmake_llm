@@ -16,7 +16,7 @@
  * @module services/chat-service/orchestration-dispatch
  */
 import { randomUUID } from 'crypto';
-import { getChatTurnIntegrations, type ContributedOrchestrationTool } from './turn-integrations';
+import { getActiveChatTurnIntegrations, getChatTurnIntegrations, type ContributedOrchestrationTool } from './turn-integrations';
 import { integrationGate } from '../addon/integration-gate';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../tool-contract/types';
@@ -34,13 +34,15 @@ const logger = createLogger('OrchestrationDispatch');
 
 export const DELEGATE_AGENT_TASK_TOOL_NAME = 'delegate_agent_task';
 
-/** add-on 이 기여한 오케스트레이션 도구 (예: 인라인 토론) — turn-integrations 의 orchestrationTool */
+/** add-on 이 기여한 오케스트레이션 도구 (예: 인라인 토론) — turn-integrations 의 orchestrationTool. 노출·의도·가이드용이라 꺼진 add-on 은 뺀다(상태 캐시) */
 export function contributedOrchestrationTools(): ContributedOrchestrationTool[] {
-    return getChatTurnIntegrations().flatMap((i) => (i.orchestrationTool ? [i.orchestrationTool] : []));
+    return getActiveChatTurnIntegrations().flatMap((i) => (i.orchestrationTool ? [i.orchestrationTool] : []));
 }
 
+/** 실행 경로 분류 — 꺼진 add-on 의 도구 호출도 runOrchestrationTool 로 보내 명시적 거절 문구를 받게 전체 목록에서 찾는다 */
 export function isOrchestrationTool(name: string): boolean {
-    return name === DELEGATE_AGENT_TASK_TOOL_NAME || contributedOrchestrationTools().some((t) => t.name === name);
+    return name === DELEGATE_AGENT_TASK_TOOL_NAME
+        || getChatTurnIntegrations().some((i) => i.orchestrationTool?.name === name);
 }
 
 /** 배정 가이드에서 위임 도구를 설명하는 절 */

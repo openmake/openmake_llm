@@ -25,12 +25,20 @@ interface CacheEntry { states: Map<string, AddonState>; loadedAt: number }
 let cache: CacheEntry | null = null;
 /** 진행 중인 적재 — 거절하지 않고 실패를 값으로 돌려준다(fail-open·strict 두 경로가 같은 적재를 기다린다) */
 let inflight: Promise<Error | null> | null = null;
+/** 비우기 세대 — 적재 도중 비워지면(쓰기 직후 clear) 그 스냅숏은 쓰기 전 값일 수 있어 버리고 다시 읽는다 */
+let generation = 0;
 
 async function loadStates(): Promise<void> {
     const { getUnifiedDatabase } = await import('../../data/models/unified-database');
     const { AddonStateRepository } = await import('../../data/repositories/addon-state-repository');
-    const rows = await new AddonStateRepository(getUnifiedDatabase().getPool()).list();
-    cache = { states: new Map(rows.map(r => [r.addon_id, r.state])), loadedAt: Date.now() };
+    const repo = new AddonStateRepository(getUnifiedDatabase().getPool());
+    for (;;) {
+        const startedGen = generation;
+        const rows = await repo.list();
+        if (startedGen !== generation) continue; // 적재 중 비워짐 — 옛 스냅숏을 버리고 다시 읽는다(기다리는 쪽도 새 값을 받는다)
+        cache = { states: new Map(rows.map(r => [r.addon_id, r.state])), loadedAt: Date.now() };
+        return;
+    }
 }
 
 function cacheFresh(): boolean {
@@ -97,9 +105,20 @@ export async function readAddonStateStrict(addonId: string): Promise<StrictAddon
     }
 }
 
-/** 쓰기 직후 호출 — 다음 조회가 DB 를 다시 읽는다. */
+/**
+ * 쓰기 직후 호출 — 다음 조회가 DB 를 다시 읽는다. 마지막으로 알던 값은 남긴다: 동기 판정(`isAddonEnabledSync`)이
+ * 다음 적재 전까지 '모름 = 켜짐'으로 떨어져 이미 꺼둔 add-on 의 훅이 되살아나지 않게 한다.
+ */
 export function clearAddonStateCache(): void {
+    generation++;
+    if (cache) cache = { states: cache.states, loadedAt: 0 };
+}
+
+/** 테스트 전용 — 캐시를 완전히 비운다(첫 적재 전 상태). */
+export function __resetAddonStateCacheForTest(): void {
     cache = null;
+    inflight = null;
+    generation = 0;
 }
 
 /** 캐시에 적재된 상태(없으면 undefined = DB 를 아직 못 읽었거나 미등록). */
@@ -108,8 +127,8 @@ export function cachedAddonState(addonId: string): AddonState | undefined {
 }
 
 /**
- * 동기 판정 — 캐시에 있는 값만 본다. 요청 경로는 `ensureAddonStates()` 를 먼저 await 한다.
- * DB 상태를 모르면 env 판정만 쓴다(부팅 초기 fail-open).
+ * 동기 판정 — 캐시에 있는 값만 본다(만료돼도 마지막 값). 채팅은 턴 시작(`runMessagePipeline`)에서, 라우트는 게이트에서
+ * `ensureAddonStates()` 를 먼저 await 해 이 턴의 캐시를 TTL 안으로 맞춘다. 첫 적재 전에는 env 판정만 쓴다(부팅 직후 fail-open).
  */
 export function isAddonEnabledSync(addonId: string): boolean {
     if (!isBuiltinAddonEnabled(addonId)) return false;

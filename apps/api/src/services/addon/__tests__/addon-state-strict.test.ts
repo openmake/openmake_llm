@@ -8,14 +8,14 @@ jest.mock('../../../data/repositories/addon-state-repository', () => ({
 }));
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getPool: () => ({}) }) }));
 
-import { readAddonEnabledStrict, clearAddonStateCache, ensureAddonStates } from '../addon-state';
+import { readAddonEnabledStrict, clearAddonStateCache, ensureAddonStates, isAddonEnabledSync, __resetAddonStateCacheForTest } from '../addon-state';
 import { ADDON_STATE_CACHE_TTL_MS } from '../../../config/runtime-limits';
 
 const ENV_KEY = 'ADDON_BUILTIN_DISABLED';
 
 beforeEach(() => {
     jest.clearAllMocks();
-    clearAddonStateCache();
+    __resetAddonStateCacheForTest();
     delete process.env[ENV_KEY];
     listRows.mockResolvedValue([
         { addon_id: 'industry-pack', state: 'enabled' },
@@ -101,5 +101,44 @@ describe('readAddonEnabledStrict', () => {
         const v = await readAddonEnabledStrict('industry-pack');
         expect(v.known).toBe(false);
         expect(listRows).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('clearAddonStateCache 와 동기 판정', () => {
+    it('비운 뒤에도 동기 판정은 마지막으로 알던 값을 쓴다(꺼둔 add-on 이 켜짐으로 되살아나지 않는다)', async () => {
+        await ensureAddonStates();
+        expect(isAddonEnabledSync('sleeping-pack')).toBe(false);
+        clearAddonStateCache();
+        expect(isAddonEnabledSync('sleeping-pack')).toBe(false);
+        expect(isAddonEnabledSync('industry-pack')).toBe(true);
+    });
+
+    it('비운 뒤 다음 조회는 DB 를 다시 읽는다', async () => {
+        await ensureAddonStates();
+        expect(listRows).toHaveBeenCalledTimes(1);
+        clearAddonStateCache();
+        listRows.mockResolvedValueOnce([{ addon_id: 'sleeping-pack', state: 'enabled' }]);
+        expect(await readAddonEnabledStrict('sleeping-pack')).toEqual({ known: true, enabled: true, state: 'enabled' });
+        expect(listRows).toHaveBeenCalledTimes(2);
+        expect(isAddonEnabledSync('sleeping-pack')).toBe(true);
+    });
+
+    it('첫 적재 전(캐시 없음)에는 env 판정만으로 켜짐(fail-open)', () => {
+        expect(isAddonEnabledSync('sleeping-pack')).toBe(true);
+    });
+
+    it('적재 도중 비워지면 그 스냅숏(쓰기 전 값)을 버리고 다시 읽는다', async () => {
+        let resolveFirst!: (rows: unknown[]) => void;
+        listRows.mockReset();
+        listRows.mockImplementationOnce(() => new Promise((r) => { resolveFirst = r; }));
+        listRows.mockResolvedValueOnce([{ addon_id: 'industry-pack', state: 'disabled' }]);
+        const pending = ensureAddonStates();
+        while (listRows.mock.calls.length === 0) await new Promise((r) => setImmediate(r)); // 쿼리가 시작된 뒤
+        clearAddonStateCache(); // 관리자가 industry-pack 을 껐다 — 진행 중인 적재는 쓰기 전 스냅숏
+        resolveFirst([{ addon_id: 'industry-pack', state: 'enabled' }]);
+        await pending;
+        expect(listRows).toHaveBeenCalledTimes(2);
+        expect(isAddonEnabledSync('industry-pack')).toBe(false);
+        expect(await readAddonEnabledStrict('industry-pack')).toEqual({ known: true, enabled: false, state: 'disabled' });
     });
 });
