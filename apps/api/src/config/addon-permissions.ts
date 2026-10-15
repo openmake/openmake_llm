@@ -36,3 +36,23 @@ export const ADDON_PERMISSION_LABELS: Readonly<Record<AddonPermission, string>> 
 export function hasAddonPermission(permissions: readonly string[] | undefined, perm: AddonPermission): boolean {
     return !!permissions?.includes(perm);
 }
+
+/**
+ * 설치형 확장(user_extensions)의 권한 상태 (마이그레이션 190, 2026-10-16 — 설계 D4).
+ *   reviewed          — 승인 기록(permissions_granted) 안에서 집행한다
+ *   legacy_unreviewed — 매니페스트·승인 기록이 없는 예전 설치. 종전 동작(네트워크 허용)을 보존한다
+ *   review_required   — 업데이트가 승인 범위보다 넓은 권한을 요구했다. 초과분만 막는다
+ */
+export const EXTENSION_PERMISSION_STATES = ['reviewed', 'legacy_unreviewed', 'review_required'] as const;
+export type ExtensionPermissionState = typeof EXTENSION_PERMISSION_STATES[number];
+
+/**
+ * 매니페스트 없는 확장이 종전에 실제로 쓰던 권한 — 레거시 설치를 재승인하거나, 매니페스트가 사라진 업데이트를
+ * 판정할 때 "요청 권한"으로 본다. 레거시 확장은 MCP 서버의 외부 통신만 열려 있었다(DB 스키마는 내장 add-on 전용).
+ */
+export const LEGACY_IMPLICIT_PERMISSIONS: readonly AddonPermission[] = [ADDON_PERMISSIONS.NETWORK_INTERNET];
+
+/** 어휘에 있는 권한 문자열인가 — DB·매니페스트에서 읽은 값을 거를 때 쓴다 */
+export function isAddonPermission(value: string): value is AddonPermission {
+    return (ADDON_PERMISSION_VALUES as readonly string[]).includes(value);
+}
