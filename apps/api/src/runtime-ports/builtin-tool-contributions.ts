@@ -30,6 +30,15 @@ export function resetBuiltInToolContributions(): void {
     contributions.clear();
 }
 
+/**
+ * 한 add-on 의 기여를 지운다 — 시작 실패 보상(addon-host/lifecycle)이 부른다. 지운 도구 수를 돌려준다(없으면 0 — 여러 번 불러도 안전).
+ */
+export function unregisterToolContributions(addonId: string): number {
+    const removed = contributions.get(addonId)?.length ?? 0;
+    if (contributions.delete(addonId)) logger.debug(`add-on '${addonId}' 내장 도구 기여 ${removed}개 해제`);
+    return removed;
+}
+
 /** 등록된 기여 도구 — 등록 순서대로 평탄화 */
 export function contributedBuiltInTools(): MCPToolDefinition[] {
     return [...contributions.values()].flat();

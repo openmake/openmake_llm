@@ -24,6 +24,10 @@ jest.mock('../../services/agent-task/shutdown-drain', () => ({
     beginAgentTaskShutdown: () => { calls.push('agent-tasks:block'); },
     drainAgentTasksForShutdown: (timeoutMs: number) => drainAgentTasksForShutdown(timeoutMs),
 }));
+const stopAllAddons = jest.fn(async (_o: { drain: boolean; budgetMs: number }) => { calls.push('addons'); });
+jest.mock('../../addon-host/lifecycle', () => ({
+    stopAllAddons: (o: { drain: boolean; budgetMs: number }) => stopAllAddons(o),
+}));
 
 import {
     AGENT_TASK_DRAIN_TIMEOUT_MS,
@@ -33,6 +37,7 @@ import {
     installGracefulShutdown,
     type ShutdownProcess,
 } from '../graceful-shutdown';
+import { ADDON_DRAIN_TIMEOUT_MS } from '../../config/runtime-limits';
 
 class FakeProcess extends EventEmitter implements ShutdownProcess {
     exit = jest.fn();
@@ -164,6 +169,7 @@ describe('installGracefulShutdown', () => {
             'agent-tasks:block',
             'server:start', 'server:end',
             'agent-tasks',
+            'addons',
             'tool-runtime',
             'oauth', 'analytics', 'schedulers', 'token-blacklist',
             'redis',
@@ -186,6 +192,21 @@ describe('installGracefulShutdown', () => {
         expect(drainAgentTasksForShutdown).toHaveBeenCalledWith(AGENT_TASK_DRAIN_TIMEOUT_MS);
         // 연결 유예와 작업 정리 상한을 다 써도 뒤 단계(도구 런타임·OTel·DB)의 몫이 남는다
         expect(SHUTDOWN_CONNECTION_GRACE_MS + AGENT_TASK_DRAIN_TIMEOUT_MS).toBeLessThan(GRACEFUL_SHUTDOWN_TIMEOUT_MS);
+    });
+
+    it('add-on 런타임 정지(drain)는 에이전트 작업 정리 뒤, 도구 런타임·Redis·DB 풀 종료 앞이고 예산을 넘겨준다', async () => {
+        const proc = new FakeProcess();
+        installGracefulShutdown({ stop: async () => { calls.push('server'); } }, proc);
+        proc.emit('SIGTERM');
+        await new Promise((r) => setTimeout(r, 50));
+        const at = (name: string): number => calls.indexOf(name);
+        expect(at('addons')).toBeGreaterThan(at('agent-tasks'));
+        expect(at('addons')).toBeLessThan(at('tool-runtime'));
+        expect(at('addons')).toBeLessThan(at('redis'));
+        expect(at('addons')).toBeLessThan(at('db'));
+        expect(stopAllAddons).toHaveBeenCalledWith({ drain: true, budgetMs: ADDON_DRAIN_TIMEOUT_MS });
+        // 연결 유예 + 에이전트 작업 + add-on drain 을 다 써도 뒤 단계(도구 런타임·OTel·DB) 몫이 남는다
+        expect(SHUTDOWN_CONNECTION_GRACE_MS + AGENT_TASK_DRAIN_TIMEOUT_MS + ADDON_DRAIN_TIMEOUT_MS).toBeLessThan(GRACEFUL_SHUTDOWN_TIMEOUT_MS);
     });
 
     it('Redis 연결은 Redis 를 쓰는 단계(요청 처리·에이전트 작업·스케줄러) 뒤, DB 풀 종료 앞에서 닫는다', async () => {

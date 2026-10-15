@@ -27,7 +27,7 @@ interface AddonRow {
   entitlementSku: string | null;
   failureReason: string | null;
   desiredState?: "enabled" | "disabled" | null;
-  runtimeStatus?: "not_loaded" | "registering" | "ready" | "failed";
+  runtimeStatus?: "not_loaded" | "registering" | "ready" | "stopping" | "stopped" | "failed";
   restartRequired?: boolean;
   lastFailureCode?: string | null;
   permissions?: string[];

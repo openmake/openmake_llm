@@ -2877,7 +2877,9 @@
       "not_loaded": "运行时未加载",
       "registering": "注册中",
       "ready": "就绪",
-      "failed": "运行时失败"
+      "failed": "运行时失败",
+      "stopping": "正在停止",
+      "stopped": "已停止"
     }
   },
   "knowledge": {

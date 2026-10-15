@@ -5,6 +5,7 @@ import { musicGenerateHandler } from '../generate';
 import { normalizeMusicPlanInput } from '../plan-input';
 import { decodeAudioDataUrl, musicDuration } from '../providers/acestep';
 import { startMusicRuntime } from '../boot';
+import type { AddonRuntimeHost } from '../../../addon-host';
 import type { CapabilityContext } from '../../../capability-contract/types';
 import type { PlanTask } from '../../../services/orchestrator/plan-schema';
 import type { TaskResult } from '../../../services/orchestrator/types';
@@ -80,6 +81,6 @@ test('가사를 쓰는 앞 작업에 의존하면서 refs·가사가 비면 의�
 
 test('startMusicRuntime 은 music.generate 하나를 게시한다', async () => {
     const ids: string[] = [];
-    await startMusicRuntime({ owner: { addonId: 'music-runtime', addonVersion: '1.0.0', source: 'builtin' }, registerCapabilities: (e) => { ids.push(...e.map((x) => x.definition.id)); } });
+    await startMusicRuntime({ owner: { addonId: 'music-runtime', addonVersion: '1.0.0', source: 'builtin' }, registerCapabilities: (e) => { ids.push(...e.map((x) => x.definition.id)); } } as AddonRuntimeHost);
     expect(ids).toEqual(['music.generate']);
 });
