@@ -13,14 +13,17 @@
  *
  * @module addon-host/activation
  */
-import type { AddonDesiredState, AddonFailureCode, AddonState } from '../data/repositories/addon-state-repository';
+import type {
+    AddonAvailability, AddonDesiredState, AddonFailureCode, AddonRuntimeStatus, AddonState,
+} from '@openmake/plugin-contracts';
 import { isBuiltinAddonEnabled } from './builtin-registry';
 
-/** stopping·stopped 는 관리자 토글·프로세스 종료로 런타임 handle 을 정지한 상태(코드는 프로세스에 남는다 — lifecycle.ts) */
-export type AddonRuntimeStatus = 'not_loaded' | 'registering' | 'ready' | 'stopping' | 'stopped' | 'failed';
-
-/** 6.4 가용성 상태 중 add-on 축이 결정하는 것 — capability 축(unassigned·unsupported·forbidden)은 Registry 가 더한다 */
-export type AddonAvailability = 'available' | 'disabled' | 'not_ready' | 'failed' | 'incompatible' | 'state_unknown';
+/**
+ * 런타임 상태·가용성 어휘 — 정의는 계약 패키지(3차 C2), 여기서는 재수출만 한다.
+ * stopping·stopped 는 관리자 토글·프로세스 종료로 런타임 handle 을 정지한 상태(코드는 프로세스에 남는다 — lifecycle.ts).
+ * 가용성은 6.4 상태 중 add-on 축이 결정하는 것 — capability 축(unassigned·unsupported·forbidden)은 Registry 가 더한다.
+ */
+export type { AddonAvailability, AddonRuntimeStatus } from '@openmake/plugin-contracts';
 
 export interface AddonActivation {
     addonId: string;
