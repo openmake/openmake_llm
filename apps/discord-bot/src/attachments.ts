@@ -6,6 +6,8 @@
  *   본문의 `[[artifact:id]]` placeholder 를 제목+공유 뷰어 링크로 치환한다.
  */
 import { config } from './config';
+import { convertTablesForDiscord } from './message-utils';
+import { discordSafe } from './task-artifacts';
 
 export interface ResponseArtifact {
     id: string;
@@ -24,6 +26,8 @@ interface DiscordFile {
 
 interface PreparedReply {
     content: string;
+    /** 세션 이력용 — placeholder 치환·이미지 제거는 끝났고 표는 변환 전 원문 */
+    historyContent: string;
     files: DiscordFile[];
 }
 
@@ -60,14 +64,9 @@ function extFor(artifact: ResponseArtifact): string {
     return /^[a-z0-9]{1,10}$/.test(mapped) ? mapped : 'txt';
 }
 
-/** 파일명 안전화 — 경로/제어문자 제거, 길이 제한 */
+/** 파일명 안전화 — 디스코드가 보존하는 글자만(작업 경로와 같은 규칙), 제목 → id → artifact 순, 길이 제한 */
 function safeFilename(title: string, fallback: string): string {
-    const base = (title || fallback)
-        .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 60);
-    return base || fallback;
+    return (discordSafe(title) || discordSafe(fallback)).slice(0, 60) || 'artifact';
 }
 
 /** /generated/* 이미지를 백엔드에서 내려받아 Buffer 로 반환 (실패/초과 시 null) */
@@ -143,7 +142,8 @@ export async function prepareReply(answer: string, artifacts: ResponseArtifact[]
     content = content.trim();
     if (!content && files.length > 0) content = '📎 산출물을 첨부했습니다.';
     if (!content) content = '(빈 응답)';
-    return { content, files };
+    // Discord 는 마크다운 표를 렌더하지 않는다 — 이미지 제거·치환·안내가 끝난 본문에 마지막으로 적용
+    return { content: convertTablesForDiscord(content), historyContent: content, files };
 }
 
 function escapeRegExp(s: string): string {

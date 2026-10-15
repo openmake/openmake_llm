@@ -3,6 +3,7 @@
  * 디스코드 호출은 주입받은 화면(WatchUi)으로만 한다(테스트와 진입점이 각자 구현을 준다).
  * 불변식: 화면 쪽 오류나 일시적인 조회 실패가 지켜보기를 죽이지 않는다.
  */
+import { convertTablesForDiscord } from './message-utils';
 import { MAX_ARTIFACT_BYTES, MAX_ARTIFACT_FILES, toArtifactFiles, workspaceOutputs, type ArtifactFile, type ArtifactPlan, type WorkspaceFile } from './task-artifacts';
 import { TaskApiError, type PendingApproval, type TaskArtifact, type TaskClient, type TaskSnapshot } from './task-client';
 
@@ -94,11 +95,12 @@ export function formatFinal(snapshot: TaskSnapshot, plan: ArtifactPlan = { files
     const raw = snapshot.result ?? '';
     const stripped = raw.replace(ARTIFACT_PLACEHOLDER, '');
     if (plan.files.length > 0) {
-        const body = stripped.trim() ? withArtifactRefs(raw, plan) : `산출물 ${plan.files.length}개를 첨부합니다.`;
+        // Discord 는 마크다운 표를 렌더하지 않는다 — 자리표시자를 바꾼 본문에 마지막으로 적용
+        const body = stripped.trim() ? convertTablesForDiscord(withArtifactRefs(raw, plan)) : `산출물 ${plan.files.length}개를 첨부합니다.`;
         return `✅ 작업이 끝났습니다.\n\n${body}${plan.leftOver > 0 ? `\n\n📎 나머지 ${plan.leftOver}개는 웹의 작업 화면에서 확인하세요.` : ''}`;
     }
     const hadArtifact = stripped !== raw || plan.leftOver > 0;
-    const body = stripped.trim() ? withArtifactRefs(raw, plan) : '(결과 본문 없음)';
+    const body = stripped.trim() ? convertTablesForDiscord(withArtifactRefs(raw, plan)) : '(결과 본문 없음)';
     return `✅ 작업이 끝났습니다.\n\n${body}${hadArtifact ? '\n\n📎 산출물은 웹의 작업 화면에서 확인하세요.' : ''}`;
 }
 

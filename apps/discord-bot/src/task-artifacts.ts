@@ -40,7 +40,7 @@ const safe = (text: string): string => text.replace(UNSAFE_CHARS, '_').trim();
  * 디스코드가 보존하는 글자(ASCII 영숫자·-·_·.)만 남긴다 — 디스코드는 첨부 이름에서 비ASCII 를 지우고,
  * 남는 게 없으면 임의 hex 이름을 붙인다. 영숫자가 하나도 없으면 빈 문자열
  */
-function discordSafe(text: string): string {
+export function discordSafe(text: string): string {
     const name = safe(text).replace(/\s+/g, '_').replace(/[^A-Za-z0-9._-]/g, '').replace(/_+/g, '_').replace(/^[_-]+|[_-]+$/g, '');
     return /[A-Za-z0-9]/.test(name) ? name : '';
 }
