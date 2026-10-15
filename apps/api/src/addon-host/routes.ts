@@ -7,7 +7,7 @@
  * @module addon-host/routes
  */
 import { Router, type Application, type IRouter, type NextFunction, type Request, type Response } from 'express';
-import { success } from '../utils/api-response';
+import { error, success } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 import { enabledBuiltinAddons, isBuiltinAddonEnabled, listBuiltinAddonDefs } from './builtin-registry';
 import type { ADDON_KINDS } from './manifest';
@@ -41,12 +41,19 @@ function createAddonListRouter(): Router {
     return router;
 }
 
+/** 확인 불가 응답 — 503 + Retry-After. 꺼짐(404)·조직 밖(403)과 구분해 클라이언트가 재시도할 수 있게 한다(설계 문서 8.3). */
+const RETRY_AFTER_SECONDS = '5';
+function respondStateUnknown(res: Response, addonId: string): void {
+    res.status(503).set('Retry-After', RETRY_AFTER_SECONDS)
+        .json(error('ADDON_STATE_UNKNOWN', `add-on '${addonId}' 상태를 지금 확인할 수 없습니다. 잠시 후 다시 시도하세요.`));
+}
+
 /**
- * add-on 전용 라우트의 게이트 — 요청마다 상태와 사용권을 본다 (2026-09-19, S3).
+ * add-on 전용 라우트의 게이트 — 요청마다 상태와 사용권을 본다 (2026-09-19, S3; 2026-10-16 확인 불가 503).
  *
  * env 로 끈 add-on 은 아예 마운트되지 않지만(코드도 로드하지 않는다), **관리자가 DB 에서 끈** add-on 은
  * 재시작 없이 즉시 404 가 된다. 조직 정책 `ADDON_ALLOWLIST` 를 둔 조직에서 목록 밖이면 403(조직 관리자의 통제 — 과금 아님).
- * 판정 실패는 통과시킨다(fail-open) — 정책 조회 장애가 기능을 막지 않는다.
+ * 상태·정책을 확인하지 못하면(DB 장애) 503 `ADDON_STATE_UNKNOWN` — 종전의 fail-open(통과)은 꺼진 add-on 을 장애 중에 열었다.
  */
 export function addonGuard(addonId: string) {
     return (req: Request, res: Response, next: NextFunction): void => {
@@ -71,8 +78,14 @@ export function addonGuard(addonId: string) {
                     res.status(403).json({ success: false, error: { code: 'ADDON_NOT_ENTITLED', message: `add-on '${addonId}' 사용권이 없습니다. 관리자에게 문의하세요.` } });
                     return;
                 }
+                if (verdict === 'state-unknown') {
+                    respondStateUnknown(res, addonId);
+                    return;
+                }
             } catch (err) {
-                logger.debug(`add-on '${addonId}' 게이트 판정 실패(통과): ${err instanceof Error ? err.message : String(err)}`);
+                logger.warn(`add-on '${addonId}' 게이트 판정 실패(503): ${err instanceof Error ? err.message : String(err)}`);
+                respondStateUnknown(res, addonId);
+                return;
             }
             next();
         })();
