@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.102.2](https://github.com/openmake/openmake_llm/compare/v1.102.1...v1.102.2) (2026-10-15)
+
+
+### 🐛 버그 수정
+
+* **discord-bot:** 마크다운 표를 굵은 제목 + 목록으로 바꿔 게시 ([5dd312f](https://github.com/openmake/openmake_llm/commit/5dd312fecdf29c35b2bb664c176e21bc195f1689))
+* **discord-bot:** 마크다운 표를 굵은 제목 + 목록으로 바꿔 게시 — Discord 가 표를 렌더하지 않아 열이 공백으로 붙어 보이던 것 ([7ac8be9](https://github.com/openmake/openmake_llm/commit/7ac8be9eddc20fbc7cb02bfbbb67cd3f33584566))
+* **discord-bot:** 채팅 응답 아티팩트 첨부 이름을 디스코드가 보존하는 글자로 ([c1617da](https://github.com/openmake/openmake_llm/commit/c1617da69cf34c714e4c9abaa70563a82f04a785))
+* **discord-bot:** 채팅 응답 아티팩트 첨부 이름을 디스코드가 보존하는 글자로 ([d84c2a8](https://github.com/openmake/openmake_llm/commit/d84c2a85dfaeec31c602d21a47a4c1b858ad83e5))
+* **discord-bot:** 표 변환 리뷰 반영 — 닫는 펜스 판정, 머리 행 보존, 이어쓰기 행, 변환 순서와 세션 이력 원문 ([4a9833d](https://github.com/openmake/openmake_llm/commit/4a9833dfdce01c4bd16626909daea7f8ef10e240))
+
 ## [1.102.1](https://github.com/openmake/openmake_llm/compare/v1.102.0...v1.102.1) (2026-10-15)
 
 
