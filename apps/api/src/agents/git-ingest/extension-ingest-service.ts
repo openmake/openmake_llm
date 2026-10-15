@@ -422,9 +422,9 @@ export class ExtensionIngestService {
                 sourceHash,
                 trackingRef: effectiveTrackingRef,
                 manifest: componentManifest,
-                permission: permissionSave,
+                permission: permissionSave, expected: { state: updateTarget.permission_state, granted: updateTarget.permissions_granted }, // 읽은 뒤 철회됐으면 0행
             });
-            if (!row) throw new Error(`EXTENSION_UPDATE_FAILED: ${updateTarget.id} 갱신 실패`);
+            if (!row) throw new Error(`EXTENSION_UPDATE_CONFLICT: ${updateTarget.id} — 업데이트 도중 권한 상태가 바뀌었거나 확장이 제거됨, 다시 업데이트하세요`);
         } else {
             row = await extRepo.insert({
                 userId: input.userId,

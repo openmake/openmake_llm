@@ -8,7 +8,8 @@
  *   POST /api/users/me/extensions/:id/permissions/revoke   — 승인에서 빼고 다시 판정 (감사 extension.permissions_revoked)
  *
  * 재승인·철회는 읽은 요청 권한이 저장 값과 같을 때만 쓴다 — 그 사이 업데이트가 요청을 넓혔으면 409.
- * 승인 범위에 없는 권한만 철회하면 아무것도 쓰지 않고 현재 상태를 200 으로 돌려준다(멱등).
+ * 승인 범위에 없는 권한만 철회하면 아무것도 쓰지 않고 현재 상태를 200 으로 돌려준다(멱등). 단 네트워크가 이미 닫혀 있으면
+ * MCP 제한은 한 번 더 건다(상태 저장 뒤 제한이 실패한 경우의 재시도 — 제한 SQL 은 멱등).
  * 네트워크가 열리고 닫히면 연결된 MCP 서버를 바로 고친다(다음 기동부터 적용 — 떠 있는 프로세스는 그대로):
  *   닫힘 → stdio 는 sandbox_network='none', 원격(HTTP)은 enabled=false
  *   열림 → 권한 때문에 막았던 stdio 만 'full'. 설치 때 제외된 원격 서버는 확장을 제거·재설치해야 생긴다(응답 excludedRemoteServers)
@@ -130,9 +131,13 @@ export function createUserExtensionPermissionsController(): Router {
             { state: row.permission_state, granted: row.permissions_granted, requested: row.permissions_requested },
             permissions,
         );
-        // 승인 범위에 철회 대상이 없으면 멱등 no-op — 승인 기록(by·at)을 덮어쓰지 않고 감사도 남기지 않는다
+        // 승인 범위에 철회 대상이 없으면 멱등 no-op — 승인 기록(by·at)을 덮어쓰지 않고 감사도 남기지 않는다.
+        // 네트워크가 이미 닫힌 상태면 MCP 제한만 다시 건다 — 지난 철회의 제한이 실패했을 때 재시도 수단(SQL 이 이미 막힌 서버는 건너뛰어 멱등).
         if (!next.reviewedNow) {
-            res.json(success({ permissions: describePermissions(row), restricted: { sandboxed: 0, disabled: 0 } }));
+            const restricted = allowsNetwork(before)
+                ? { sandboxed: 0, disabled: 0 }
+                : await new UserExtensionPermissionRepository(getPool()).restrictLinkedMcpNetwork(row.id);
+            res.json(success({ permissions: describePermissions(row), restricted }));
             return;
         }
         const permRepo = new UserExtensionPermissionRepository(getPool());

@@ -111,8 +111,14 @@ export class UserExtensionRepository extends BaseRepository {
         manifest: Record<string, unknown>;
         /** 권한 상태(190) — 주면 같은 문장으로 저장한다(reviewedBy 가 null 이면 승인 기록 by·at 유지). 없으면 그대로 */
         permission?: SavePermissionStateInput;
+        /**
+         * 판정에 쓴(읽어 둔) 상태·승인 — permission 과 함께 주면 저장 값이 이와 같을 때만 쓴다. 업데이트 도중
+         * 소유자·관리자가 철회했으면 0행(null) — 읽어 둔 승인으로 덮어써 철회를 되살리지 않는다.
+         */
+        expected?: { state: ExtensionPermissionState | null; granted: readonly string[] | null };
     }): Promise<UserExtensionRow | null> {
         const p = input.permission;
+        const e = p ? input.expected : undefined;
         const r = await this.query<UserExtensionRow>(
             `UPDATE user_extensions
                 SET version=$1, description=$2, source_ref=$3, source_path=$4,
@@ -120,7 +126,9 @@ export class UserExtensionRepository extends BaseRepository {
                     permission_state=$9, permissions_granted=$10::jsonb, permissions_requested=$11::jsonb,
                     permissions_reviewed_by=COALESCE($12::text, permissions_reviewed_by),
                     permissions_reviewed_at=CASE WHEN $12::text IS NULL THEN permissions_reviewed_at ELSE NOW() END` : ''}
-              WHERE id=$8 AND status='active'
+              WHERE id=$8 AND status='active'${e ? `
+                AND permission_state IS NOT DISTINCT FROM $13
+                AND permissions_granted IS NOT DISTINCT FROM $14::jsonb` : ''}
               RETURNING *`,
             [
                 input.version,
@@ -132,6 +140,7 @@ export class UserExtensionRepository extends BaseRepository {
                 JSON.stringify(input.manifest),
                 id,
                 ...(p ? permissionParams(p) : []),
+                ...(e ? [e.state, jsonbParam(e.granted)] : []),
             ]
         );
         return r.rows[0] ?? null;
