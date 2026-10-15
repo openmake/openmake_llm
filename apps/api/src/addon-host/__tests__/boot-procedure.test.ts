@@ -6,6 +6,7 @@
  */
 import { bootAddons, type AddonBootDeps } from '../index';
 import { getAddonRuntimeStatus, resetAddonRuntimeStatusesForTest, resolveAddonActivation } from '../activation';
+import { resetAddonLifecyclesForTest } from '../lifecycle';
 import { getCapabilityRegistry, resetCapabilityRuntimeForTest } from '../../runtime-ports/capability-runtime';
 import { resetLegacyCapabilityBridgeForTest } from '../legacy-capability-bridge';
 import type { BuiltinAddon } from '../builtin-registry';
@@ -43,7 +44,7 @@ function deps(over: Partial<AddonBootDeps> = {}): AddonBootDeps & { started: str
     };
 }
 
-beforeEach(() => { resetAddonRuntimeStatusesForTest(); resetCapabilityRuntimeForTest(); resetLegacyCapabilityBridgeForTest(); });
+beforeEach(() => { resetAddonRuntimeStatusesForTest(); resetCapabilityRuntimeForTest(); resetLegacyCapabilityBridgeForTest(); resetAddonLifecyclesForTest(); });
 
 describe('bootAddons', () => {
     it('T04: migration 실패 add-on 은 런타임을 시작하지 않고, 다른 add-on 은 정상 시작한다', async () => {
