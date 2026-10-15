@@ -110,6 +110,12 @@ export class KnowledgeWorker {
         if (!this.admitting) return 0; // 한도를 읽는 사이 정지됐으면 집지 않는다
         const jobs = await this.claim(limits.ingestConcurrency, limits.jobLeaseMs);
         if (jobs.length === 0) return 0;
+        if (!this.admitting) {
+            // claim 이 도는 사이 정지됐다 — 정지 요청 뒤에는 새 작업을 실행하지 않는다. 집은 lease 를 바로 반납(상태 쓰기 없음)
+            await this.releaseLeases(jobs.map((j) => ({ jobId: j.id, token: j.fencing_token, owner: this.owner })));
+            logger.warn(`수집 worker 정지 — claim 진행 중 정지되어 집은 작업 ${jobs.length}건을 실행하지 않고 lease 반납`);
+            return 0;
+        }
         await Promise.all(jobs.map((j) => (Number(j.attempts) > limits.jobMaxAttempts
             ? this.failOverClaimed(j, limits.jobMaxAttempts)
             : this.runOne(j, limits.jobLeaseMs, limits.jobMaxAttempts))));
@@ -143,11 +149,11 @@ export class KnowledgeWorker {
         this.admitting = true;
     }
 
-    /** 관리 화면·종료 로그용 상태 */
+    /** 관리 화면·종료 로그용 상태 — 정지 뒤 진행 중 tick(claim 대기 포함)이나 작업이 남아 있으면 draining */
     health(): { status: 'running' | 'draining' | 'stopped'; inflight: number } {
         const inflight = this.inflight.size;
         if (this.admitting) return { status: 'running', inflight };
-        return { status: inflight > 0 ? 'draining' : 'stopped', inflight };
+        return { status: inflight > 0 || this.current ? 'draining' : 'stopped', inflight };
     }
 
     /**
@@ -159,6 +165,12 @@ export class KnowledgeWorker {
         const leases = [...this.inflight];
         if (leases.length === 0) return;
         for (const lease of leases) lease.markLost(`add-on 정지 — ${reason}`);
+        await this.releaseLeases(leases);
+        logger.warn(`수집 worker 정지 — 진행 중 작업 ${leases.length}건 중단(${reason}), lease 반납`);
+    }
+
+    /** lease 반납 SQL — `lease_expires_at` 을 지금으로 당긴다. job 행 상태·문서 상태는 쓰지 않는다 */
+    private async releaseLeases(leases: ReadonlyArray<Pick<JobLease, 'jobId' | 'token' | 'owner'>>): Promise<void> {
         await Promise.all(leases.map(async (lease) => {
             try {
                 await kdb().query(
@@ -170,7 +182,6 @@ export class KnowledgeWorker {
                 logger.warn(`lease 반납 실패(만료 뒤 다시 집힌다): ${lease.jobId} — ${err instanceof Error ? err.message : String(err)}`);
             }
         }));
-        logger.warn(`수집 worker 정지 — 진행 중 작업 ${leases.length}건 중단(${reason}), lease 반납`);
     }
 
     /** 만료 lease 포함해 due 작업을 원자적으로 집는다 */
