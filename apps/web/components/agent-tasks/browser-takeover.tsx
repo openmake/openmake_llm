@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ArrowLeft, Loader2, MousePointerClick, Undo2 } from "lucide-react";
 import { ApiClient, ApiError } from "@/lib/api-client";
-import { keyToInput, toViewportPoint } from "@/lib/browser-takeover";
+import { classifyInputError, keyToInput, toViewportPoint } from "@/lib/browser-takeover";
 import {
   BROWSER_TAKEOVER_INPUT_SETTLE_MS, BROWSER_TAKEOVER_POLL_MS, BROWSER_TAKEOVER_SCROLL_FLUSH_MS,
 } from "@/lib/constants/ui-limits";
@@ -101,12 +101,15 @@ function TakeoverDialog({ taskId, onEnded, onHide }: { taskId: string; onEnded: 
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!alive.current) return;
     if (loading.current) return;
     loading.current = true;
     try {
-      const r = await ApiClient.get<{ data: Frame }>(`${base(taskId)}/screenshot`, { redirectOnUnauthorized: false });
+      const r = await ApiClient.get<{ data: Frame & { active?: boolean } }>(`${base(taskId)}/screenshot`, { redirectOnUnauthorized: false });
       if (!alive.current) return;
       const next = r?.data;
+      // 세션이 끝났다(유휴 상한·작업 종료) — 서버는 200 + active:false 로 알린다
+      if (next?.active === false) { onEnded(false); return; }
       if (next) {
         // 이동 중이라 캡처가 없으면 직전 화면을 유지한다
         setFrame((prev) => (next.image ? next : prev ? { ...prev, url: next.url || prev.url } : next));
@@ -114,7 +117,7 @@ function TakeoverDialog({ taskId, onEnded, onHide }: { taskId: string; onEnded: 
       }
     } catch (e) {
       if (!alive.current) return;
-      // 409 — 세션이 끝났다(유휴 상한·작업 종료)
+      // 409 — 세션이 끝났다(active:false 이전 서버 — 배포 중 호환)
       if (e instanceof ApiError && e.status === 409) { onEnded(false); return; }
     } finally {
       loading.current = false;
@@ -133,18 +136,28 @@ function TakeoverDialog({ taskId, onEnded, onHide }: { taskId: string; onEnded: 
     };
   }, [refresh]);
 
+  // 실패 종류를 알면 Playwright 원문 대신 사용자가 할 일을 보여 준다
+  const inputErrorMessage = useCallback((raw: string) => {
+    switch (classifyInputError(raw)) {
+      case "blocked": return t("inputBlocked");
+      case "unresolved": return t("inputUnresolved");
+      case "timeout": return t("inputTimeout");
+      default: return t("inputFailed", { error: raw });
+    }
+  }, [t]);
+
   const send = useCallback(async (input: SessionInput) => {
     setError(null);
     try {
       const r = await ApiClient.post<{ data: { ok: boolean; error?: string } }>(`${base(taskId)}/input`, input);
-      if (r?.data && !r.data.ok) setError(t("inputFailed", { error: r.data.error ?? "" }));
+      if (r?.data && !r.data.ok) setError(inputErrorMessage(r.data.error ?? ""));
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) { onEnded(false); return; }
       setError(t("inputFailed", { error: e instanceof Error ? e.message : "" }));
     }
     // 화면이 바뀔 틈을 준 뒤 바로 다시 받는다
     setTimeout(() => { if (alive.current) void refresh(); }, BROWSER_TAKEOVER_INPUT_SETTLE_MS);
-  }, [taskId, t, onEnded, refresh]);
+  }, [taskId, t, onEnded, refresh, inputErrorMessage]);
 
   function onScreenClick(e: React.MouseEvent) {
     const img = imgRef.current;
@@ -188,10 +201,14 @@ function TakeoverDialog({ taskId, onEnded, onHide }: { taskId: string; onEnded: 
 
   async function release() {
     setReleasing(true);
+    // 돌려주기와 겹친 폴링이 끝난 세션을 조회하지 않게 먼저 멈춘다
+    alive.current = false;
     try {
       await ApiClient.del(base(taskId));
       onEnded(true);
     } catch (e) {
+      // 다이얼로그를 유지하므로 폴링을 되살린다
+      alive.current = true;
       setError(t("releaseFailed", { error: e instanceof Error ? e.message : "" }));
       setReleasing(false);
     }
