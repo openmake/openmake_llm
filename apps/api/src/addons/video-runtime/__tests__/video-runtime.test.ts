@@ -11,6 +11,7 @@ import { videoJobDriver } from '../driver';
 import { VIDEO_OPERATIONS } from '../providers/adapters';
 import { startVideoRuntime } from '../boot';
 import { validateOperationSpecs } from '../../../runtime-ports/model-invoker';
+import type { AddonRuntimeHost } from '../../../addon-host';
 import type { CapabilityContext } from '../../../capability-contract/types';
 import type { PlanTask } from '../../../services/orchestrator/plan-schema';
 import type { SubmitOutcome } from '../../../runtime-ports/job-runtime';
@@ -168,7 +169,7 @@ describe('driver·연산·plan hook', () => {
     it('부정 표현 분리 · 부팅은 video.generate 하나를 게시', async () => {
         expect(splitVideoNegations('sunset over sea, without subtitles or logos')).toEqual({ prompt: 'sunset over sea', excluded: ['subtitles', 'logos'] });
         const ids: string[] = [];
-        await startVideoRuntime({ owner: { addonId: 'video-runtime', addonVersion: '1.0.0', source: 'builtin' }, registerCapabilities: (e) => { ids.push(...e.map((x) => x.definition.id)); } });
+        await startVideoRuntime({ owner: { addonId: 'video-runtime', addonVersion: '1.0.0', source: 'builtin' }, registerCapabilities: (e) => { ids.push(...e.map((x) => x.definition.id)); } } as AddonRuntimeHost);
         expect(ids).toEqual(['video.generate']);
     });
 });

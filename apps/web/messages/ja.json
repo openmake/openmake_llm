@@ -2877,7 +2877,9 @@
       "not_loaded": "ランタイム未読込",
       "registering": "登録中",
       "ready": "準備完了",
-      "failed": "ランタイム失敗"
+      "failed": "ランタイム失敗",
+      "stopping": "停止中",
+      "stopped": "停止済み"
     }
   },
   "knowledge": {

@@ -2877,7 +2877,9 @@
       "not_loaded": "runtime not loaded",
       "registering": "registering",
       "ready": "ready",
-      "failed": "runtime failed"
+      "failed": "runtime failed",
+      "stopping": "stopping",
+      "stopped": "stopped"
     }
   },
   "knowledge": {

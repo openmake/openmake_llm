@@ -10,6 +10,8 @@
  *   ⓪ 새 에이전트 작업 시작 차단(표시만 — 기다리지 않는다)
  *   ① 새 연결 수신 중단 + 진행 중 요청·WebSocket 정리(server.stop() — 끝날 때까지 기다린다)
  *   ② 실행 중 에이전트 작업 중단·정리 대기(상한 AGENT_TASK_DRAIN_TIMEOUT_MS) — 작업이 도구 런타임·DB 를 쓰므로 그 앞
+ *   ②' add-on 런타임 정지(drain, 상한 ADDON_DRAIN_TIMEOUT_MS) — 신규 작업 차단·진행 중 작업 마무리·호스트 타이머 회수
+ *      (addon-host/lifecycle). 수집 worker 의 lease 반납이 DB 를 쓰므로 DB 풀 종료 앞, 도구 런타임 정리보다 먼저
  *   ③ 도구 런타임(외부 MCP 연결·사용자 풀)
  *   ④ 타이머류(OAuth 정리, Analytics, 스케줄러, TokenBlacklist) — 스케줄러 중지는 schedulers 가 건 주기 타이머를
  *      전부 멈춘다(뒤 단계가 Redis·DB 를 닫는 동안 발화해 닫힌 연결을 쓰지 않게)
@@ -28,6 +30,7 @@
  */
 import type { Server as HttpServer } from 'http';
 import type { WebSocketServer } from 'ws';
+import { ADDON_DRAIN_TIMEOUT_MS } from '../config/runtime-limits';
 
 /** 종료 전체 제한 시간. PM2 kill_timeout(ecosystem.config.js)은 이보다 길어야 한다. */
 export const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 30000;
@@ -159,6 +162,15 @@ function serverShutdownSteps(server: { stop(): Promise<void> }): ShutdownStep[] 
             run: async () => {
                 const { drainAgentTasksForShutdown } = await import('../services/agent-task/shutdown-drain');
                 await drainAgentTasksForShutdown(AGENT_TASK_DRAIN_TIMEOUT_MS);
+            },
+        },
+        {
+            // add-on 런타임(수집 worker 같은 백그라운드 작업)이 새 작업을 멈추고 진행 중 작업을 예산 안에서 마친다 — 넘으면 취소·lease 반납.
+            // 호스트 타이머·정리 함수도 여기서 회수된다. DB 풀·도구 런타임을 닫기 전에.
+            name: 'add-on 런타임 정지(drain)',
+            run: async () => {
+                const { stopAllAddons } = await import('../addon-host/lifecycle');
+                await stopAllAddons({ drain: true, budgetMs: ADDON_DRAIN_TIMEOUT_MS });
             },
         },
         {
