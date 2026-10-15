@@ -17,6 +17,7 @@
  */
 import { randomUUID } from 'crypto';
 import { getChatTurnIntegrations, type ContributedOrchestrationTool } from './turn-integrations';
+import { integrationGate } from '../addon/integration-gate';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../tool-contract/types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
@@ -164,9 +165,17 @@ export async function runOrchestrationTool(params: {
     /** 이번 턴 첨부 — delegate_agent_task 만 쓴다 */
     attachments?: ChatTurnAttachments;
 }): Promise<string> {
-    const contributed = contributedOrchestrationTools().find((t) => t.name === params.name);
-    if (contributed) {
-        return contributed.run({
+    const owner = getChatTurnIntegrations().find((i) => i.orchestrationTool?.name === params.name);
+    if (owner?.orchestrationTool) {
+        // 기능 훅 게이트 — 의도 프리필터(순수 훅)로 노출됐어도 실행 시점에 add-on 이 꺼져 있으면 돌리지 않는다(설계 문서 8.4)
+        const gate = await integrationGate(owner.id);
+        if (!gate.allowed) {
+            logger.info(`기여 도구 '${params.name}' 실행 거절 — add-on '${owner.id}' ${gate.reason}${gate.detail ? `: ${gate.detail}` : ''}`);
+            return gate.reason === 'disabled'
+                ? `Error: add-on '${owner.id}' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다`
+                : `Error: add-on '${owner.id}' 상태를 확인할 수 없어 이 도구를 실행하지 않았습니다. 잠시 후 다시 시도하세요`;
+        }
+        return owner.orchestrationTool.run({
             args: params.args,
             ...(params.userLanguage ? { userLanguage: params.userLanguage } : {}),
             ...(params.signal ? { signal: params.signal } : {}),
