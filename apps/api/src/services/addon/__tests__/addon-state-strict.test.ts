@@ -9,6 +9,7 @@ jest.mock('../../../data/repositories/addon-state-repository', () => ({
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getPool: () => ({}) }) }));
 
 import { readAddonEnabledStrict, clearAddonStateCache, ensureAddonStates } from '../addon-state';
+import { ADDON_STATE_CACHE_TTL_MS } from '../../../config/runtime-limits';
 
 const ENV_KEY = 'ADDON_BUILTIN_DISABLED';
 
@@ -21,6 +22,15 @@ beforeEach(() => {
         { addon_id: 'sleeping-pack', state: 'disabled' },
     ]);
 });
+
+afterEach(() => {
+    jest.restoreAllMocks();
+});
+
+/** 첫 적재 시각을 고정하고, 이후 시계를 TTL 너머로 옮긴다 */
+function moveClockPastTtl(base: number): void {
+    jest.spyOn(Date, 'now').mockReturnValue(base + ADDON_STATE_CACHE_TTL_MS + 1);
+}
 
 describe('readAddonEnabledStrict', () => {
     it('env 로 끈 add-on 은 DB 를 묻지 않고 enabled:false', async () => {
@@ -61,5 +71,28 @@ describe('readAddonEnabledStrict', () => {
         listRows.mockRejectedValue(new Error('DB 장애'));
         const [strict] = await Promise.all([readAddonEnabledStrict('industry-pack'), ensureAddonStates()]);
         expect(strict.known).toBe(false);
+        expect(listRows).toHaveBeenCalledTimes(1);
+    });
+
+    it('만료된 캐시는 다시 읽는다', async () => {
+        const base = 1_000_000;
+        jest.spyOn(Date, 'now').mockReturnValue(base);
+        expect(await readAddonEnabledStrict('industry-pack')).toEqual({ known: true, enabled: true });
+        expect(listRows).toHaveBeenCalledTimes(1);
+        moveClockPastTtl(base);
+        listRows.mockResolvedValue([{ addon_id: 'industry-pack', state: 'disabled' }]);
+        expect(await readAddonEnabledStrict('industry-pack')).toEqual({ known: true, enabled: false });
+        expect(listRows).toHaveBeenCalledTimes(2);
+    });
+
+    it('만료된 캐시 + 재적재 실패 → known:false (옛 값으로 답하지 않는다)', async () => {
+        const base = 1_000_000;
+        jest.spyOn(Date, 'now').mockReturnValue(base);
+        expect(await readAddonEnabledStrict('industry-pack')).toEqual({ known: true, enabled: true });
+        moveClockPastTtl(base);
+        listRows.mockRejectedValue(new Error('DB 장애'));
+        const v = await readAddonEnabledStrict('industry-pack');
+        expect(v.known).toBe(false);
+        expect(listRows).toHaveBeenCalledTimes(2);
     });
 });
