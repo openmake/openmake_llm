@@ -6,6 +6,7 @@
  *   본문의 `[[artifact:id]]` placeholder 를 제목+공유 뷰어 링크로 치환한다.
  */
 import { config } from './config';
+import { convertTablesForDiscord } from './message-utils';
 import { discordSafe } from './task-artifacts';
 
 export interface ResponseArtifact {
@@ -85,6 +86,7 @@ async function downloadGenerated(relPath: string): Promise<Buffer | null> {
 export async function prepareReply(answer: string, artifacts: ResponseArtifact[] = []): Promise<PreparedReply> {
     const files: DiscordFile[] = [];
     let content = answer;
+    content = convertTablesForDiscord(content); // Discord 는 마크다운 표를 렌더하지 않는다
 
     // ── 1) 생성 이미지 (/generated/*) → 파일 첨부 ──────────────
     const imagePaths: string[] = [];
