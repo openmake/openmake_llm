@@ -32,6 +32,7 @@ export async function rechunkSpace(spaceId: string, deps: IngestDeps = {}): Prom
     )).rows;
 
     for (const cur of rows) {
+        deps.lease?.throwIfLost();
         const newVersionId = randomUUID();
         // 원본은 그대로(storage_ref 재사용) — 새 버전 행만 만들어 파이프라인이 다시 청킹·임베딩·게시하게 한다
         await kdb().query(

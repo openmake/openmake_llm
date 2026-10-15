@@ -3,6 +3,7 @@
  *  - 삭제된 문서(deleted_at): 버전 원본 파일 삭제 후 문서 행 삭제(cascade 로 버전·청크·임베딩까지)
  *  - tombstoned Space: 소속 문서 원본·행 삭제 후 Space 를 purged 로(감사 흔적은 남긴다)
  * 삭제 커밋이 곧 검색 제외이므로 이 작업은 저장공간 회수만 한다(검색 정합성과 무관).
+ * 멱등(tombstone 대상의 물리 삭제)이라 트랜잭션 검사 대신 경계 검사만 둔다 — lease 를 잃으면 다음 경계에서 멈추고 나머지는 새 실행자가 이어서 지운다.
  *
  * @module addons/knowledge-runtime/jobs/cleanup
  */
@@ -34,6 +35,7 @@ async function purgeDocuments(documentIds: string[], deps: CleanupDeps): Promise
  */
 export async function runCleanup(spaceId: string | null, deps: CleanupDeps): Promise<void> {
     const batch = KNOWLEDGE_RUNTIME.CLEANUP_BATCH;
+    deps.lease?.throwIfLost();
 
     // ① 삭제된 문서 회수
     const delDocs = (await kdb().query<{ id: string }>(
@@ -43,6 +45,7 @@ export async function runCleanup(spaceId: string | null, deps: CleanupDeps): Pro
         spaceId ? [spaceId, batch] : [batch],
     )).rows.map((r) => r.id);
     await purgeDocuments(delDocs, deps);
+    deps.lease?.throwIfLost();
 
     // ② tombstoned Space 회수 → purged
     const spaces = (await kdb().query<{ id: string }>(
@@ -53,6 +56,7 @@ export async function runCleanup(spaceId: string | null, deps: CleanupDeps): Pro
     )).rows.map((r) => r.id);
 
     for (const sid of spaces) {
+        deps.lease?.throwIfLost();
         const docs = (await kdb().query<{ id: string }>(
             `SELECT id FROM knowledge_documents WHERE space_id = $1`,
             [sid],
