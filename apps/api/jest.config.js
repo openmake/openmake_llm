@@ -35,6 +35,8 @@ module.exports = {
         // rootDir 위반 TS6059 로 깨지므로 그 방법은 쓸 수 없다.)
         '^@openmake/config$': '<rootDir>/../../packages/config/src/index.ts',
         '^@openmake/api-client$': '<rootDir>/../../packages/api-client/src/index.ts',
+        // 계약 패키지 — apps/api 소스는 type-only 로만 쓰지만(런타임 require 없음) 테스트는 상수 값을 비교한다
+        '^@openmake/plugin-contracts$': '<rootDir>/../../packages/plugin-contracts/src/index.ts',
         // ESM-only 패키지를 jest CJS 런타임에서 로드 가능하게 하는 로컬 shim.
         // 개별 테스트의 jest.mock(..., factory)은 그대로 우선 적용된다.
         '^uuid$': '<rootDir>/__mocks__/uuid.js',

@@ -1860,8 +1860,8 @@ dev_locate() {
     [[ -n "$DEV_BENCH" ]] || { [[ -f "$DEV_LLM/../openmake_bench/package.json" ]] && DEV_BENCH="$( cd "$DEV_LLM/../openmake_bench" && pwd )"; }
     [[ -z "$DEV_BENCH" || -f "$DEV_BENCH/package.json" ]] || die "OMK_DEV_BENCH 가 openmake_bench 가 아닙니다: $DEV_BENCH"
 }
-# 백엔드는 CommonJS 라 워크스페이스 패키지(shared-types·config·api-client·local-bridge-core)를 dist 로
-# 소비한다 — dist 가 없으면 `npm run dev:api`(ts-node)가 모듈을 못 찾는다. 앱 빌드(--skip-build)와는 별개다.
+# 백엔드는 CommonJS 라 워크스페이스 패키지(plugin-contracts·shared-types·config·api-client·local-bridge-core)를 dist 로
+# 소비한다 — dist 가 없으면 `npm run dev:api`(ts-node)가 모듈·타입을 못 찾는다. 앱 빌드(--skip-build)와는 별개다.
 dev_build_packages() {
     log_info "워크스페이스 패키지 빌드 (packages/*/dist)"
     ( cd "$DEV_LLM" && npm run build:packages >/dev/null ) || die "build:packages 실패"
@@ -2008,7 +2008,7 @@ cmd_dev_up() {
     # ~/.openmake 를 지워도 .env·node_modules 는 클론에 남아 setup 을 건너뛴다 — 래퍼는 여기서 되살린다.
     [[ -x "$OMK_ROOT/bin/omk" ]] || install_wrapper
     load_toolchain "$DEV_LLM"
-    [[ -d "$DEV_LLM/packages/shared-types/dist" ]] || dev_build_packages
+    [[ -d "$DEV_LLM/packages/shared-types/dist" && -d "$DEV_LLM/packages/plugin-contracts/dist" ]] || dev_build_packages
     # 접속 호스트 — 이번에 준 것(--host·--tailscale)을 .env 에 기억된 것과 합친다. 한 번 주면 다음부터는 생략 가능.
     local hosts; hosts="$(dotenv_get "$DEV_LLM/.env" OMK_DEV_HOSTS)"
     [[ $use_ts -eq 1 ]] && { local ts; ts="$(tailscale_hosts)"; [[ -n "$ts" ]] || die "tailscale 주소를 읽을 수 없습니다 (tailscale CLI·로그인 확인)"; hosts="$(csv_union "$hosts" "$ts")"; }
