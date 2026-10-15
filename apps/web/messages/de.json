@@ -1155,6 +1155,9 @@
       "ended": "Die Browsersitzung wurde beendet (keine Eingabe oder Aufgabe beendet).",
       "startFailed": "Browser konnte nicht übernommen werden: {error}",
       "inputFailed": "Eingabe wurde nicht zugestellt: {error}",
+      "inputBlocked": "Diese Adresse kann nicht geöffnet werden. Sie ist keine erlaubte Domain, daher hat der Proxy die Verbindung abgelehnt — bitten Sie die Administration, sie zur Zulassungsliste hinzuzufügen, oder öffnen Sie eine andere Adresse.",
+      "inputUnresolved": "Die Adresse wurde nicht gefunden. Prüfen Sie die Schreibweise der Domain.",
+      "inputTimeout": "Die Seite wurde nicht rechtzeitig geöffnet. Versuchen Sie es erneut.",
       "releaseFailed": "Zurückgeben fehlgeschlagen: {error}"
     },
     "thinkingBadge": "Denken {level}",

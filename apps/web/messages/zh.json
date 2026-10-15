@@ -1155,6 +1155,9 @@
       "ended": "浏览器会话已结束(无操作或任务已结束)。",
       "startFailed": "无法接管浏览器:{error}",
       "inputFailed": "操作未送达:{error}",
+      "inputBlocked": "无法打开此地址。该域名不在允许范围内，代理拒绝了连接 — 请联系管理员将其加入允许列表，或打开其他地址。",
+      "inputUnresolved": "找不到该地址。请检查域名拼写。",
+      "inputTimeout": "页面未能在规定时间内打开。请重试。",
       "releaseFailed": "无法交还:{error}"
     },
     "thinkingBadge": "推理 {level}",

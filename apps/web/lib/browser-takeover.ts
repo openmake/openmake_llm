@@ -40,3 +40,22 @@ export function keyToInput(e: { key: string; ctrlKey?: boolean; metaKey?: boolea
   }
   return { op: "type", text: e.key };
 }
+
+export type TakeoverInputErrorKind = "blocked" | "unresolved" | "timeout" | "unknown";
+
+/**
+ * 조작 실패 사유(Playwright 오류 원문) → 화면에 보여 줄 실패 종류. 대소문자 무관, 부분 일치. 앞에 있는 종류가 먼저 맞는다.
+ * blocked — egress 프록시가 연결을 거절했다(허용 목록 밖 도메인).
+ */
+export function classifyInputError(raw: string): TakeoverInputErrorKind {
+  const INPUT_ERROR_PATTERNS: ReadonlyArray<readonly [Exclude<TakeoverInputErrorKind, "unknown">, readonly string[]]> = [
+    ["blocked", ["ERR_TUNNEL_CONNECTION_FAILED", "ERR_PROXY_CONNECTION_FAILED"]],
+    ["unresolved", ["ERR_NAME_NOT_RESOLVED"]],
+    ["timeout", ["Timeout", "ERR_TIMED_OUT", "ERR_CONNECTION_TIMED_OUT"]],
+  ];
+  const text = raw.toLowerCase();
+  for (const [kind, patterns] of INPUT_ERROR_PATTERNS) {
+    if (patterns.some((p) => text.includes(p.toLowerCase()))) return kind;
+  }
+  return "unknown";
+}
