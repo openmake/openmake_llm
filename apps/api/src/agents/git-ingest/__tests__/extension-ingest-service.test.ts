@@ -5,10 +5,6 @@ import type { LLMClient } from '../../../llm/client';
 import { GitFetcher } from '../git-fetcher';
 
 jest.mock('../../../data/retry-wrapper', () => ({ withRetry: (fn: () => unknown) => fn() }));
-const savePermissionState = jest.fn();
-jest.mock('../../../data/repositories/user-extension-permission-repository', () => ({
-    UserExtensionPermissionRepository: jest.fn().mockImplementation(() => ({ savePermissionState })),
-}));
 
 describe('repo-scanner (extension)', () => {
     const entry = (path: string) => ({ path, sha: 's', size: 100, type: 'blob' as const });
@@ -324,6 +320,11 @@ describe('ExtensionIngestService', () => {
         });
         const insertDraftParams = (q: jest.Mock): unknown[] =>
             q.mock.calls.find((c: unknown[]) => String(c[0]).includes('INSERT INTO mcp_servers'))![1] as unknown[];
+        const extUpdate = (q: jest.Mock): unknown[] =>
+            q.mock.calls.find((c: unknown[]) => String(c[0]).includes('UPDATE user_extensions') && String(c[0]).includes('source_ref'))!;
+        // 상태는 확장 행 쓰기와 같은 문장으로 저장된다 — 별도 UPDATE 가 없어 "행은 바뀌고 상태 저장만 실패"하는 창이 없다
+        const permissionWrites = (q: jest.Mock): number =>
+            q.mock.calls.filter((c: unknown[]) => String(c[0]).includes('permission_state')).length;
 
         it('첫 설치 + openmake-addon.json [] → reviewed(설치자 승인 기록), stdio 는 네트워크 차단 표시와 함께 저장', async () => {
             mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
@@ -345,14 +346,14 @@ describe('ExtensionIngestService', () => {
             const r = await makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
             if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
 
-            expect(savePermissionState).toHaveBeenCalledWith('user-ext-p1', {
-                state: 'reviewed', granted: [], requested: [], reviewedBy: 'user-1',
-            });
             const draft = insertDraftParams(q);
             expect(draft[9]).toBe('none');                                                   // sandbox_network
             expect(JSON.parse(draft[8] as string)).toMatchObject({ networkRestrictedByPermission: true });
             const extInsert = q.mock.calls.find((c: unknown[]) => String(c[0]).includes('INSERT INTO user_extensions'))!;
             expect(JSON.parse((extInsert[1] as unknown[])[10] as string)).toMatchObject({ addonPermissions: [] });
+            expect(String(extInsert[0])).toContain('permission_state');
+            expect((extInsert[1] as unknown[]).slice(11)).toEqual(['reviewed', '[]', '[]', 'user-1']);
+            expect(permissionWrites(q)).toBe(1);
         });
 
         it('업데이트가 승인 범위보다 넓은 권한을 요구 → review_required, 초과분(network)만 막고 경고', async () => {
@@ -384,9 +385,9 @@ describe('ExtensionIngestService', () => {
             const r = await makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
             if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
 
-            expect(savePermissionState).toHaveBeenCalledWith('user-ext-p2', {
-                state: 'review_required', granted: [], requested: ['network:internet'], reviewedBy: null,
-            });
+            const upd = extUpdate(q);
+            expect((upd[1] as unknown[]).slice(8)).toEqual(['review_required', '[]', '["network:internet"]', null]);
+            expect(permissionWrites(q)).toBe(1);
             expect(r.validationWarnings.join(' ')).toContain('PERMISSION_REVIEW_REQUIRED: network:internet');
             expect(insertDraftParams(q)[9]).toBe('none');
         });
@@ -418,9 +419,8 @@ describe('ExtensionIngestService', () => {
 
             await makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
 
-            expect(savePermissionState).toHaveBeenCalledWith('user-ext-p3', {
-                state: 'legacy_unreviewed', granted: null, requested: null, reviewedBy: null,
-            });
+            expect((extUpdate(q)[1] as unknown[]).slice(8)).toEqual(['legacy_unreviewed', null, null, null]);
+            expect(permissionWrites(q)).toBe(1);
             expect(insertDraftParams(q)[9]).toBeNull();               // sandboxNetwork 미지정 → COALESCE 기본(full)
         });
     });
