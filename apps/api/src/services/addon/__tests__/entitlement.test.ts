@@ -2,7 +2,7 @@
  * Add-on 사용권(entitlement) — 켜짐 상태 × 조직 allowlist 의 AND (2026-09-19, S3).
  *
  * 조직 허용 목록의 계약이 여기 있다: allowlist 에 없는 add-on 은 전용 라우트 403,
- * 팩 스킬 주입 제외. 판정 실패는 fail-open(막지 않는다).
+ * 팩 스킬 주입 제외. 판정 실패는 state-unknown(라우트는 503). 스킬 주입 필터(entitledAddonIds)만 fail-open 을 유지한다.
  */
 const resolveEffectivePolicy = jest.fn();
 jest.mock('../../org/effective-policy', () => ({ resolveEffectivePolicy: (...a: unknown[]) => resolveEffectivePolicy(...a) }));
@@ -59,14 +59,14 @@ describe('checkAddonEntitlement', () => {
         expect(resolveEffectivePolicy).not.toHaveBeenCalled();
     });
 
-    it('정책 조회가 실패해도 막지 않는다(fail-open)', async () => {
+    it('조직 정책 조회가 실패하면 state-unknown (허용으로 읽지 않는다)', async () => {
         resolveEffectivePolicy.mockRejectedValue(new Error('DB 장애'));
-        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('ok');
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('state-unknown');
     });
 
-    it('상태를 못 읽어도(DB 미초기화) 막지 않는다', async () => {
+    it('상태를 못 읽으면(DB 미초기화) state-unknown', async () => {
         listRows.mockRejectedValue(new Error('부팅 초기'));
-        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('ok');
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('state-unknown');
     });
 });
 
@@ -81,5 +81,11 @@ describe('entitledAddonIds', () => {
     it('빈 입력은 조회 없이 빈 집합', async () => {
         expect([...(await entitledAddonIds([], 'u1'))]).toEqual([]);
         expect(resolveEffectivePolicy).not.toHaveBeenCalled();
+    });
+
+    it('상태를 못 읽어도 스킬 주입 필터는 종전대로 막지 않는다(fail-open 유지)', async () => {
+        listRows.mockRejectedValue(new Error('DB 장애'));
+        const allowed = await entitledAddonIds(['industry-pack'], 'u1');
+        expect([...allowed]).toEqual(['industry-pack']);
     });
 });
