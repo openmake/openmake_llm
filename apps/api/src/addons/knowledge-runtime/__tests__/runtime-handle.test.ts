@@ -3,13 +3,15 @@
  * Knowledge 런타임 handle — 정지 중 claim 없음(stop-admission), drain 이 진행 작업을 기다림, 시간 초과면 lease 상실·반납,
  * resume 뒤 claim 재개, claim 진행 중 정지되면 집은 작업을 실행하지 않고 반납, 끝난 핸들러라도 lease 를 잃었으면 done 을 쓰지 않음. DB 는 SQL 문자열로 분기하는 가짜 kdb.
  */
-import type { JobLease } from '../jobs/lease';
+import { createJobLease, type JobLease } from '../jobs/lease';
 import type { AddonRuntimeHost } from '../../../addon-host';
 
 const queries: Array<{ sql: string; params: unknown[] }> = [];
 let claimRows: unknown[] = [];
 /** 있으면 claim 쿼리가 이 약속이 풀릴 때까지 멈춘다(claim 진행 중 정지 재현) */
 let claimGate: Promise<void> | null = null;
+/** 있으면 heartbeat 갱신 쿼리가 이 약속이 풀릴 때까지 멈춘다(반납과 겹친 갱신 재현) */
+let renewGate: Promise<void> | null = null;
 jest.mock('../db', () => ({
     kdb: () => ({
         query: async (sql: string, params: unknown[]) => {
@@ -20,6 +22,7 @@ jest.mock('../db', () => ({
                 claimRows = [];
                 return { rows, rowCount: rows.length };
             }
+            if (sql.includes(RENEW_SQL) && renewGate) await renewGate;
             return { rows: [], rowCount: 1 };
         },
     }),
@@ -41,6 +44,7 @@ import { KNOWLEDGE_RUNTIME } from '../constants';
 
 const JOB = { id: 'job-1', kind: 'ingest', document_version_id: 'v1', space_id: null, embedding_index_id: null, attempts: 1, fencing_token: '7' };
 const RELEASE_SQL = 'SET lease_expires_at = NOW(), updated_at = NOW()';
+const RENEW_SQL = "SET lease_expires_at = NOW() + ($3::bigint";
 const sqlWith = (s: string) => queries.filter((q) => q.sql.includes(s));
 const claims = () => sqlWith("SET state = 'running'");
 const flush = (): Promise<void> => new Promise((r) => setImmediate(r));
@@ -49,6 +53,12 @@ function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
     let resolve!: (v: T) => void;
     const promise = new Promise<T>((r) => { resolve = r; });
     return { promise, resolve };
+}
+
+/** private heartbeat 갱신을 직접 부른다 — 주기(≥1s)를 기다리지 않고 경계만 확인한다 */
+function renewOf(w: KnowledgeWorker): (lease: JobLease, leaseMs: number) => Promise<void> {
+    const r = (w as unknown as { renew: (lease: JobLease, leaseMs: number) => Promise<void> }).renew;
+    return (lease, leaseMs) => r.call(w, lease, leaseMs);
 }
 
 function fakeHost(intervals: Array<{ fn: () => void; ms: number }>): AddonRuntimeHost {
@@ -66,6 +76,7 @@ beforeEach(() => {
     queries.length = 0;
     claimRows = [{ ...JOB }];
     claimGate = null;
+    renewGate = null;
     ingestVersion.mockReset();
 });
 afterEach(async () => { await stopKnowledgeRuntime(); });
@@ -175,6 +186,29 @@ describe('KnowledgeWorker 정지·재개', () => {
         expect(sqlWith("SET state = 'queued'")).toHaveLength(0);
         expect(sqlWith("SET state = 'failed'")).toHaveLength(0);
         expect(w.health()).toEqual({ status: 'stopped', inflight: 0 });
+    });
+
+    it('lease 를 잃은 뒤의 heartbeat 는 반납한 lease 를 다시 늘리지 않는다', async () => {
+        const w = new KnowledgeWorker();
+        const lease = createJobLease({ jobId: 'job-1', token: '7', owner: 'o' });
+        lease.markLost('테스트 — 정지 반납');
+        await renewOf(w)(lease, 60_000);
+        expect(sqlWith(RENEW_SQL)).toHaveLength(0);
+    });
+
+    it('반납과 겹쳐 이미 나간 heartbeat 가 뒤에 커밋되면 다시 반납한다', async () => {
+        const gate = deferred<void>();
+        renewGate = gate.promise;
+        const w = new KnowledgeWorker();
+        const lease = createJobLease({ jobId: 'job-1', token: '7', owner: 'o' });
+        const renewing = renewOf(w)(lease, 60_000);
+        await flush();
+        lease.markLost('테스트 — 갱신 진행 중 정지');
+        gate.resolve();
+        await renewing;
+        const release = sqlWith(RELEASE_SQL);
+        expect(release).toHaveLength(1);
+        expect(release[0].params).toEqual(['job-1', '7', 'o']);
     });
 
     it('성공한 핸들러라도 그 사이 lease 를 잃었으면 done 을 쓰지 않는다', async () => {

@@ -227,6 +227,9 @@ export class KnowledgeWorker {
         this.inflight.add(lease);
         const beat = setInterval(() => { void this.renew(lease, leaseMs); }, Math.max(1_000, leaseMs * KNOWLEDGE_RUNTIME.JOB_HEARTBEAT_RATIO));
         beat.unref();
+        // lease 를 잃으면(정지 반납·heartbeat 0행) 갱신을 멈춘다 — 반납한 lease 를 다시 늘리면 아무도 바로 집지 못한다
+        const stopBeat = (): void => clearInterval(beat);
+        lease.signal.addEventListener('abort', stopBeat, { once: true });
         try {
             await HANDLERS[job.kind](job, { ...this.deps, lease });
             // 핸들러가 끝난 뒤에도 그 사이 lease 를 잃었으면(정지 시간 초과·heartbeat 0행) done 을 쓰지 않는다 — 반납한 행은 다음 실행자의 것
@@ -241,6 +244,7 @@ export class KnowledgeWorker {
             await this.failOrRetry(job, token, maxAttempts, err instanceof Error ? err.message : String(err));
         } finally {
             clearInterval(beat);
+            lease.signal.removeEventListener('abort', stopBeat);
             this.inflight.delete(lease);
         }
     }
@@ -251,6 +255,7 @@ export class KnowledgeWorker {
      * 이미 만료돼 누구든 집을 수 있는 상태라 상실로 표시한다(종전엔 오류를 조용히 무시해 옛 실행자가 계속 썼다).
      */
     private async renew(lease: JobLease, leaseMs: number): Promise<void> {
+        if (lease.signal.aborted) return; // 잃은(반납한) lease 는 늘리지 않는다
         try {
             const r = await kdb().query(
                 `UPDATE knowledge_ingestion_jobs SET lease_expires_at = NOW() + ($3::bigint * INTERVAL '1 millisecond'), updated_at = NOW()
@@ -258,6 +263,8 @@ export class KnowledgeWorker {
                 [lease.jobId, lease.token, leaseMs, lease.owner],
             );
             if ((r.rowCount ?? 0) === 0) { lease.markLost('heartbeat 갱신 0행 — 다른 실행자가 집었거나 작업이 끝났음'); return; }
+            // 갱신이 나가 있는 사이 정지 반납이 먼저 커밋됐을 수 있다 — 방금 늘린 lease 를 다시 반납한다
+            if (lease.signal.aborted) { await this.releaseLeases([lease]); return; }
             lease.touch(this.now());
         } catch (err) {
             const silentMs = this.now() - lease.renewedAt;
