@@ -3,6 +3,7 @@
  * 디스코드 호출은 주입받은 화면(WatchUi)으로만 한다(테스트와 진입점이 각자 구현을 준다).
  * 불변식: 화면 쪽 오류나 일시적인 조회 실패가 지켜보기를 죽이지 않는다.
  */
+import { convertTablesForDiscord } from './message-utils';
 import { MAX_ARTIFACT_BYTES, MAX_ARTIFACT_FILES, toArtifactFiles, workspaceOutputs, type ArtifactFile, type ArtifactPlan, type WorkspaceFile } from './task-artifacts';
 import { TaskApiError, type PendingApproval, type TaskArtifact, type TaskClient, type TaskSnapshot } from './task-client';
 
@@ -91,7 +92,8 @@ function withArtifactRefs(raw: string, plan: ArtifactPlan): string {
 export function formatFinal(snapshot: TaskSnapshot, plan: ArtifactPlan = { files: [], leftOver: 0 }): string {
     if (snapshot.status === 'failed') return `❌ 작업이 실패했습니다: ${snapshot.error ?? '사유 없음'}`;
     if (snapshot.status === 'cancelled') return '🛑 작업이 취소되었습니다.';
-    const raw = snapshot.result ?? '';
+    // Discord 는 마크다운 표를 렌더하지 않는다 — 굵은 제목 + 목록으로 바꾼 본문을 쓴다
+    const raw = convertTablesForDiscord(snapshot.result ?? '');
     const stripped = raw.replace(ARTIFACT_PLACEHOLDER, '');
     if (plan.files.length > 0) {
         const body = stripped.trim() ? withArtifactRefs(raw, plan) : `산출물 ${plan.files.length}개를 첨부합니다.`;
