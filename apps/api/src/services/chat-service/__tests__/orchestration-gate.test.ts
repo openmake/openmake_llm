@@ -52,6 +52,13 @@ describe('runOrchestrationTool 게이트', () => {
         expect(out).toBe("Error: add-on 'discussion' 상태를 확인할 수 없어 이 도구를 실행하지 않았습니다. 잠시 후 다시 시도하세요");
     });
 
+    it('부팅에 실패한 add-on 의 도구는 run 없이 부팅 실패 Error 문자열', async () => {
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'failed' });
+        const out = await runOrchestrationTool({ name: 'start_discussion', args: {}, userCtx });
+        expect(run).not.toHaveBeenCalled();
+        expect(out).toBe("Error: add-on 'discussion' 이 부팅에 실패해 이 도구를 실행할 수 없습니다");
+    });
+
     it('모르는 도구 이름은 종전 메시지', async () => {
         expect(await runOrchestrationTool({ name: 'nope', args: {}, userCtx })).toBe('Error: 알 수 없는 오케스트레이션 도구 — nope');
         expect(integrationGate).not.toHaveBeenCalled();

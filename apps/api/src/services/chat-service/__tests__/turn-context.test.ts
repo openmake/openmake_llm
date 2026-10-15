@@ -73,6 +73,15 @@ describe('collectTurnContexts', () => {
         expect(r).toEqual({ contextBlock: '', sources: [], systemPromptPart: '' });
     });
 
+    it('부팅에 실패한 add-on 도 건너뛴다(채팅은 계속)', async () => {
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'failed' });
+        const prepare = jest.fn(async () => ({ contextBlock: 'K' }));
+        __setChatTurnIntegrationsForTest([{ id: 'k', prepareTurnContext: prepare }]);
+        const r = await collectTurnContexts({ message: 'q', userLang: 'ko' });
+        expect(prepare).not.toHaveBeenCalled();
+        expect(r).toEqual({ contextBlock: '', sources: [], systemPromptPart: '' });
+    });
+
     it('게이트 조회가 시간 상한을 넘기면 그 통합만 건너뛴다', async () => {
         jest.useFakeTimers();
         try {

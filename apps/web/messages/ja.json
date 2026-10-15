@@ -2856,6 +2856,7 @@
     "serverError": "サーバーエラーが発生しました",
     "disabledByAdmin": "管理者が Knowledge 機能を停止しました。",
     "unavailable": "Knowledge の状態を現在確認できません。しばらくしてからもう一度お試しください。",
+    "notReady": "Knowledge 機能は利用できません（起動に失敗）。管理者にお問い合わせください。",
     "cancel": "キャンセル",
     "close": "閉じる",
     "save": "保存",

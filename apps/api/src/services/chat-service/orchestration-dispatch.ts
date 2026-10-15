@@ -171,6 +171,7 @@ export async function runOrchestrationTool(params: {
         const gate = await integrationGate(owner.id);
         if (!gate.allowed) {
             logger.info(`기여 도구 '${params.name}' 실행 거절 — add-on '${owner.id}' ${gate.reason}${gate.detail ? `: ${gate.detail}` : ''}`);
+            if (gate.reason === 'failed') return `Error: add-on '${owner.id}' 이 부팅에 실패해 이 도구를 실행할 수 없습니다`;
             return gate.reason === 'disabled'
                 ? `Error: add-on '${owner.id}' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다`
                 : `Error: add-on '${owner.id}' 상태를 확인할 수 없어 이 도구를 실행하지 않았습니다. 잠시 후 다시 시도하세요`;
