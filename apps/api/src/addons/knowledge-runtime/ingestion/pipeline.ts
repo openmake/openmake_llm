@@ -19,6 +19,7 @@ import { chunkerFor, type ProducedChunk } from './chunker-registry';
 import { parserFor, supportedMimeTypes } from './parser-registry';
 import { INDEX_PUBLISH_LOCK_KEY, KNOWLEDGE_RUNTIME } from '../constants';
 import { FAILURE_CODES, failureCodeOf, KnowledgeIngestError, type FailureCode } from './errors';
+import type { JobLease } from '../jobs/lease';
 
 const logger = createLogger('KnowledgeIngest');
 
@@ -38,6 +39,8 @@ export interface IngestDeps {
     embed?: EmbedFn;
     ensureIndex?: () => Promise<KnowledgeIndex>;
     readFile?: (storageRef: string) => Promise<Buffer>;
+    /** worker 가 넘기는 lease — 단계 경계·확정 쓰기에서 검사한다. 없으면(평가 하네스 직접 호출) 검사하지 않는다 */
+    lease?: JobLease;
 }
 
 export interface IngestResult {
