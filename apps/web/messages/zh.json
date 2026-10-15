@@ -2345,6 +2345,34 @@
     "agents": "自定义智能体",
     "none": "无",
     "approvalHint": "draft 状态的组件需在技能库/MCP 服务器页面批准后才会启用。",
+    "permissions": {
+      "title": "权限",
+      "badge": {
+        "reviewed": "权限已审核",
+        "legacy": "旧版（未审核）",
+        "reviewRequired": "需要重新批准"
+      },
+      "requested": "请求的权限",
+      "noneRequested": "未请求任何权限",
+      "blocked": "重新批准前被阻止的权限",
+      "label": {
+        "network": "网络访问（MCP 服务器的外部通信）",
+        "database": "add-on 专用数据库架构"
+      },
+      "impact": {
+        "reviewed": "仅在已批准的权限范围内运行。如果更新请求更多权限，只有新增的权限会在重新批准前被阻止。",
+        "legacy": "这是没有权限声明（openmake-addon.json）的旧式扩展，仍可像以前一样使用网络。重新批准会记录当前权限；之后的更新若请求更广的权限，只会阻止那些权限。",
+        "reviewRequired": "更新请求的权限超出了之前批准的范围。在重新批准之前，只有新增的权限被阻止（不会安装远程 MCP 服务器，本地 MCP 服务器在无网络的环境中运行）。现有功能照常工作。"
+      },
+      "recovery": "要使用被阻止的功能，请点击重新批准。如果不想授予这些权限，可以保持现状或移除该扩展。",
+      "approve": "重新批准",
+      "approveConfirm": "将向此扩展授予以下权限：{perms}。是否继续？",
+      "approved": "已批准权限。",
+      "restored": "已解除 {count} 个本地 MCP 服务器的网络限制，将在下次运行时生效。",
+      "reinstallRemote": "安装时被排除的远程 MCP 服务器（{names}）需要移除扩展后重新安装才会安装。",
+      "approveFailed": "无法重新批准，请稍后重试。",
+      "conflict": "在此期间扩展已更新，请求的权限发生了变化。请刷新后再确认。"
+    },
     "report": {
       "title": "安装报告",
       "hint": "本环境不支持的组件未被安装，外部格式的技能已自动添加工具名称对应说明。"
