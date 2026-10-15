@@ -6,6 +6,7 @@
  *   본문의 `[[artifact:id]]` placeholder 를 제목+공유 뷰어 링크로 치환한다.
  */
 import { config } from './config';
+import { discordSafe } from './task-artifacts';
 
 export interface ResponseArtifact {
     id: string;
@@ -60,14 +61,9 @@ function extFor(artifact: ResponseArtifact): string {
     return /^[a-z0-9]{1,10}$/.test(mapped) ? mapped : 'txt';
 }
 
-/** 파일명 안전화 — 경로/제어문자 제거, 길이 제한 */
+/** 파일명 안전화 — 디스코드가 보존하는 글자만(작업 경로와 같은 규칙), 제목 → id → artifact 순, 길이 제한 */
 function safeFilename(title: string, fallback: string): string {
-    const base = (title || fallback)
-        .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 60);
-    return base || fallback;
+    return (discordSafe(title) || discordSafe(fallback)).slice(0, 60) || 'artifact';
 }
 
 /** /generated/* 이미지를 백엔드에서 내려받아 Buffer 로 반환 (실패/초과 시 null) */
