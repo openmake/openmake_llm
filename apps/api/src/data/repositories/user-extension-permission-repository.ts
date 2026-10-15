@@ -34,7 +34,7 @@ export interface SaveReviewInput {
 }
 
 /** jsonb 파라미터 — null 은 SQL NULL, 배열은 JSON 문자열 */
-function jsonbParam(value: readonly string[] | null): string | null {
+export function jsonbParam(value: readonly string[] | null): string | null {
     return value === null ? null : JSON.stringify(value);
 }
 

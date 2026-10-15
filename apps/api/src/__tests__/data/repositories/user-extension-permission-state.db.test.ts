@@ -9,11 +9,13 @@
  *  ④ jsonb null: granted null 은 SQL NULL 로 저장, reviewedBy null 은 승인 기록을 건드리지 않는다
  *  ⑤ 조건부 저장: 요청 권한이 읽은 값과 다르면 0행
  *  ⑥ MCP 네트워크 제한 → 복원 왕복(권한 표시가 있는 stdio 만 되돌린다)
+ *  ⑦ 설치·업데이트 한 문장 저장(UserExtensionRepository.insert·updateAfterReinstall 의 permission)
  */
 import { Pool, type PoolClient } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UserExtensionPermissionRepository } from '../../../data/repositories/user-extension-permission-repository';
+import { UserExtensionRepository } from '../../../data/repositories/user-extension-repository';
 
 const CONN = process.env.TEST_DATABASE_URL;
 const describeOrSkip = CONN ? describe : describe.skip;
@@ -138,5 +140,31 @@ describeOrSkip('마이그레이션 190 + UserExtensionPermissionRepository (TEMP
             { id: 's-author-none', sandbox_network: 'none', manifest_meta: {} },
             { id: 's-stdio', sandbox_network: 'full', manifest_meta: {} },
         ]);
+    });
+
+    it('⑦ 설치·업데이트가 상태를 행과 같은 문장으로 쓴다 — reviewedBy null 업데이트는 승인 기록 유지', async () => {
+        const extRepo = new UserExtensionRepository(client as unknown as Pool);
+        const base = { version: '1.0.0', sourceRef: 'sha1', sourcePath: 'plugin.json', sourceHash: 'h1', manifest: { components: {} } };
+        const row = await extRepo.insert({
+            ...base, userId: 'u-2', name: 'one-statement', sourceUrl: 'https://example.invalid/y',
+            permission: { state: 'reviewed', granted: [], requested: [], reviewedBy: 'u-2' },
+        });
+        const inserted = await stateOf(row.id);
+        expect(inserted).toMatchObject({
+            permission_state: 'reviewed', permissions_granted: [], permissions_requested: [], permissions_reviewed_by: 'u-2',
+        });
+        expect(inserted.permissions_reviewed_at).not.toBeNull();
+
+        await extRepo.updateAfterReinstall(row.id, {
+            ...base, sourceRef: 'sha2',
+            permission: { state: 'review_required', granted: [], requested: ['network:internet'], reviewedBy: null },
+        });
+        expect(await stateOf(row.id)).toMatchObject({
+            permission_state: 'review_required', permissions_granted: [], permissions_requested: ['network:internet'],
+            permissions_reviewed_by: 'u-2', permissions_reviewed_at: inserted.permissions_reviewed_at,
+        });
+
+        const plain = await extRepo.insert({ ...base, userId: 'u-2', name: 'no-permission', sourceUrl: 'https://example.invalid/z' });
+        expect((await stateOf(plain.id)).permission_state).toBe('legacy_unreviewed');
     });
 });
