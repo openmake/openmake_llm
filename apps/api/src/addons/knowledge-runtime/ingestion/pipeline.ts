@@ -19,7 +19,8 @@ import { chunkerFor, type ProducedChunk } from './chunker-registry';
 import { parserFor, supportedMimeTypes } from './parser-registry';
 import { INDEX_PUBLISH_LOCK_KEY, KNOWLEDGE_RUNTIME } from '../constants';
 import { FAILURE_CODES, failureCodeOf, KnowledgeIngestError, type FailureCode } from './errors';
-import type { JobLease } from '../jobs/lease';
+import { assertLeaseHeld, LeaseLostError, type JobLease } from '../jobs/lease';
+import type { PoolClient } from 'pg';
 
 const logger = createLogger('KnowledgeIngest');
 
@@ -80,27 +81,42 @@ async function loadContext(versionId: string): Promise<VersionContext> {
     };
 }
 
-async function setStage(versionId: string, stage: Stage): Promise<void> {
-    await kdb().query(
+/**
+ * 확정 쓰기 — lease 가 있으면 검사(`assertLeaseHeld`, FOR SHARE)와 쓰기를 한 트랜잭션에 묶어 "선조회 뒤 무조건 쓰기"가 되지 않게 한다.
+ * lease 가 없으면(평가 하네스 직접 호출) 종전처럼 풀에 바로 쓴다.
+ */
+async function fenced<T>(lease: JobLease | undefined, fn: (q: Pick<PoolClient, 'query'>) => Promise<T>): Promise<T> {
+    if (!lease) return fn(kdb());
+    return inTransaction(async (client) => {
+        await assertLeaseHeld(client, lease);
+        return fn(client);
+    });
+}
+
+async function setStage(versionId: string, stage: Stage, lease: JobLease | undefined): Promise<void> {
+    await fenced(lease, (q) => q.query(
         `UPDATE knowledge_document_versions SET status = $2, progress = $3, updated_at = NOW() WHERE id = $1`,
         [versionId, stage, STAGE[stage].progress],
-    );
+    ));
 }
 
-async function markFailed(versionId: string, code: FailureCode): Promise<void> {
-    await kdb().query(
-        `UPDATE knowledge_document_versions SET status = 'failed', failure_code = $2, updated_at = NOW() WHERE id = $1`,
-        [versionId, code],
-    );
-    await kdb().query(
-        `UPDATE knowledge_documents SET status = 'failed', updated_at = NOW() WHERE id = (SELECT document_id FROM knowledge_document_versions WHERE id = $1)`,
-        [versionId],
-    );
+async function markFailed(versionId: string, code: FailureCode, lease: JobLease | undefined): Promise<void> {
+    await fenced(lease, async (q) => {
+        await q.query(
+            `UPDATE knowledge_document_versions SET status = 'failed', failure_code = $2, updated_at = NOW() WHERE id = $1`,
+            [versionId, code],
+        );
+        await q.query(
+            `UPDATE knowledge_documents SET status = 'failed', updated_at = NOW() WHERE id = (SELECT document_id FROM knowledge_document_versions WHERE id = $1)`,
+            [versionId],
+        );
+    });
 }
 
-/** 청크를 원자적으로 교체 — 기존 청크(및 cascade 임베딩)를 지우고 새로 넣는다 */
-async function replaceChunks(versionId: string, chunks: ProducedChunk[]): Promise<void> {
+/** 청크를 원자적으로 교체 — 기존 청크(및 cascade 임베딩)를 지우고 새로 넣는다. lease 가 있으면 첫 문장에서 검사한다 */
+async function replaceChunks(versionId: string, chunks: ProducedChunk[], lease: JobLease | undefined): Promise<void> {
     await inTransaction(async (client) => {
+        await assertLeaseHeld(client, lease);
         await client.query(`DELETE FROM knowledge_chunks WHERE document_version_id = $1`, [versionId]);
         for (const c of chunks) {
             await client.query(
@@ -116,6 +132,7 @@ async function replaceChunks(versionId: string, chunks: ProducedChunk[]): Promis
 
 /**
  * 한 버전을 수집한다. 실패는 상태 전이로 남기고 예외를 던지지 않는다(worker 가 결과로 재시도 판단).
+ * 예외: lease 상실(`LeaseLostError`)은 상태(ready·failed·단계)를 쓰지 않고 그대로 던진다.
  */
 export async function ingestVersion(versionId: string, deps: IngestDeps = {}): Promise<IngestResult> {
     const embedOverride = deps.embed;
@@ -123,12 +140,14 @@ export async function ingestVersion(versionId: string, deps: IngestDeps = {}): P
     const readFile = deps.readFile ?? readStoredFile;
     let stage: Stage = 'validating';
     try {
+        deps.lease?.throwIfLost();
         const ctx = await loadContext(versionId);
         const profiles = await resolveSpaceProfiles(ctx.configProfileId);
 
         // ── validating ──
+        deps.lease?.throwIfLost();
         stage = 'validating';
-        await setStage(versionId, stage);
+        await setStage(versionId, stage, deps.lease);
         const parser = parserFor(ctx.mimeType);
         if (!parser || !supportedMimeTypes().includes(ctx.mimeType) || !profiles.limits.allowedMimeTypes.includes(ctx.mimeType)) {
             throw new KnowledgeIngestError(FAILURE_CODES.VALIDATION, `지원하지 않는 형식: ${ctx.mimeType}`);
@@ -139,34 +158,37 @@ export async function ingestVersion(versionId: string, deps: IngestDeps = {}): P
         const buffer = await readFile(ctx.storageRef);
 
         // ── extracting ──
+        deps.lease?.throwIfLost();
         stage = 'extracting';
-        await setStage(versionId, stage);
+        await setStage(versionId, stage, deps.lease);
         const parsed = await parser.parse(buffer, {
             minCharsPerPdfPage: profiles.limits.minCharsPerPdfPage,
             timeoutMs: KNOWLEDGE_RUNTIME.EXTRACT_TIMEOUT_MS,
         });
-        await kdb().query(
+        await fenced(deps.lease, (q) => q.query(
             `UPDATE knowledge_document_versions
                 SET parser_id = $2, parser_version = $3, extracted_chars = $4, page_count = $5, updated_at = NOW()
               WHERE id = $1`,
             [versionId, parsed.parserId, parsed.parserVersion, parsed.text.length, parsed.pageCount ?? null],
-        );
+        ));
 
         // ── chunking ──
+        deps.lease?.throwIfLost();
         stage = 'chunking';
-        await setStage(versionId, stage);
+        await setStage(versionId, stage, deps.lease);
         const strategy = chunkerFor(profiles.chunker.strategy);
         if (!strategy) throw new KnowledgeIngestError(FAILURE_CODES.CHUNKING, `알 수 없는 청커 전략: ${profiles.chunker.strategy}`);
         const chunks = strategy.chunk({
             text: parsed.text, profile: profiles.chunker, pages: parsed.pages, markdown: ctx.mimeType === MARKDOWN_MIME,
         });
-        await replaceChunks(versionId, chunks);
+        await replaceChunks(versionId, chunks, deps.lease);
 
         // 임베딩→검증→게시 — 게시 직전 활성 index 가 바뀌었으면(동시 reindex 전환) 새 index 로 다시 한다
         for (let attempt = 0; ; attempt++) {
             // ── embedding ──
+            deps.lease?.throwIfLost();
             stage = 'embedding';
-            await setStage(versionId, stage);
+            await setStage(versionId, stage, deps.lease);
             const index = await ensureIndex();
             // 활성 index 에 넣을 벡터는 그 index 에 기록된 모델로 임베딩한다(라이브 배정 변경이 활성 index 를 오염시키지 않게).
             const embed = embedOverride ?? makeIndexEmbedder(index);
@@ -180,13 +202,15 @@ export async function ingestVersion(versionId: string, deps: IngestDeps = {}): P
             }
             if (chunkRows.length > 0) {
                 await inTransaction(async (client) => {
+                    await assertLeaseHeld(client, deps.lease);
                     await insertEmbeddings(client, index.id, chunkRows.map((r, i) => ({ chunkId: r.id, vector: vectors[i] })));
                 });
             }
 
             // ── verifying ──
+            deps.lease?.throwIfLost();
             stage = 'verifying';
-            await setStage(versionId, stage);
+            await setStage(versionId, stage, deps.lease);
             const embedded = await countEmbeddings(index.id, chunkRows.map((r) => r.id));
             if (embedded !== chunkRows.length) {
                 throw new KnowledgeIngestError(FAILURE_CODES.VERIFICATION, `임베딩 검증 실패 (${embedded}/${chunkRows.length})`);
@@ -194,6 +218,7 @@ export async function ingestVersion(versionId: string, deps: IngestDeps = {}): P
 
             // ── 원자 게시 ── index 전환과 같은 잠금 아래에서, 임베딩한 index 가 여전히 활성일 때만 ready 로 바꾼다
             const published = await inTransaction(async (client) => {
+                await assertLeaseHeld(client, deps.lease);
                 await client.query('SELECT pg_advisory_xact_lock($1)', [INDEX_PUBLISH_LOCK_KEY]);
                 const active = await client.query<{ id: string }>('SELECT id FROM knowledge_embedding_indexes WHERE is_active');
                 if (active.rows[0]?.id !== index.id) return false;
@@ -217,9 +242,19 @@ export async function ingestVersion(versionId: string, deps: IngestDeps = {}): P
             logger.info(`게시 직전 활성 index 변경 감지 — 새 index 로 다시 임베딩: version=${versionId}`);
         }
     } catch (err) {
+        // lease 를 잃은 실행자는 상태를 쓰지 않는다 — 행·버전은 새 실행자의 것(worker 가 받아 로그만 남긴다)
+        if (err instanceof LeaseLostError) throw err;
+        if (deps.lease?.signal.aborted) {
+            throw new LeaseLostError(deps.lease.jobId, `수집 오류 처리 중 lease 상실 확인 — 원래 오류: ${err instanceof Error ? err.message : String(err)}`);
+        }
         const code = failureCodeOf(err, STAGE[stage].fail);
         logger.warn(`수집 실패: version=${versionId} stage=${stage} code=${code} — ${err instanceof Error ? err.message : String(err)}`);
-        await markFailed(versionId, code).catch((e) => logger.warn('실패 상태 기록 실패(무시):', e));
+        try {
+            await markFailed(versionId, code, deps.lease);
+        } catch (e) {
+            if (e instanceof LeaseLostError) throw e; // failed 기록 직전 검사에서 재선점 확인 — 새 실행자의 상태를 failed 로 덮지 않는다
+            logger.warn('실패 상태 기록 실패(무시):', e);
+        }
         return { status: 'failed', failureCode: code };
     }
 }
