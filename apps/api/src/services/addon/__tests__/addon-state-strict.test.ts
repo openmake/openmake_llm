@@ -126,4 +126,19 @@ describe('clearAddonStateCache 와 동기 판정', () => {
     it('첫 적재 전(캐시 없음)에는 env 판정만으로 켜짐(fail-open)', () => {
         expect(isAddonEnabledSync('sleeping-pack')).toBe(true);
     });
+
+    it('적재 도중 비워지면 그 스냅숏(쓰기 전 값)을 버리고 다시 읽는다', async () => {
+        let resolveFirst!: (rows: unknown[]) => void;
+        listRows.mockReset();
+        listRows.mockImplementationOnce(() => new Promise((r) => { resolveFirst = r; }));
+        listRows.mockResolvedValueOnce([{ addon_id: 'industry-pack', state: 'disabled' }]);
+        const pending = ensureAddonStates();
+        while (listRows.mock.calls.length === 0) await new Promise((r) => setImmediate(r)); // 쿼리가 시작된 뒤
+        clearAddonStateCache(); // 관리자가 industry-pack 을 껐다 — 진행 중인 적재는 쓰기 전 스냅숏
+        resolveFirst([{ addon_id: 'industry-pack', state: 'enabled' }]);
+        await pending;
+        expect(listRows).toHaveBeenCalledTimes(2);
+        expect(isAddonEnabledSync('industry-pack')).toBe(false);
+        expect(await readAddonEnabledStrict('industry-pack')).toEqual({ known: true, enabled: false, state: 'disabled' });
+    });
 });

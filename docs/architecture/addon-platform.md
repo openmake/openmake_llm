@@ -27,9 +27,9 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 | `runtimeStatus` | 이 프로세스가 코드를 어디까지 세웠나(not_loaded·registering·ready·failed) | 프로세스마다 다름 |
 | `effectiveAvailability` | 위 셋 + 조회 성공 여부의 합성(available·disabled·not_ready·failed·incompatible·state_unknown) | — |
 
-**실시간인 것과 아닌 것**: 라우트 노출·사용권·채팅의 `prepareTurnContext`·기여 도구 실행은 요청(턴)마다 DB 의도를 본다. 순수 동기 훅(프롬프트 조각·도구 노출·의도 판정)은 턴마다 상태 캐시(`isAddonEnabledSync`)로 판정한다 — 캐시는 턴 시작(`runMessagePipeline`)과 라우트 게이트가 `ensureAddonStates` 로 적재하고(TTL 30초), 비워도 마지막 값을 유지하며, 첫 적재 전(부팅 직후)에만 켜짐으로 본다. 런타임 등록·내장 도구 기여·스킬 시드는 부팅 시점이라 재시작이 필요하다(관리 화면 `restartNote`).
+**실시간인 것과 아닌 것**: 라우트 노출·사용권·채팅의 `prepareTurnContext`·기여 도구 실행은 요청(턴)마다 DB 의도를 본다. 순수 동기 훅(프롬프트 조각·도구 노출·의도 판정)은 턴마다 상태 캐시(`isAddonEnabledSync`)로 판정한다 — 캐시는 턴 시작(`runMessagePipeline` 의 `ensureAddonStates`)과 라우트 게이트(strict 판정)가 적재하고(TTL 30초), 비워도 마지막 값을 유지하며, 첫 적재 전(부팅 직후)에만 켜짐으로 본다. 런타임 등록·내장 도구 기여·스킬 시드는 부팅 시점이라 재시작이 필요하다(관리 화면 `restartNote`).
 
-**토글 전파 범위**: 관리자 토글(`PATCH /api/admin/addons/:id/state`)은 같은 프로세스의 캐시를 만료시킨다 — 다음 턴·요청이 다시 읽고, 진행 중인 턴은 마지막 값을 그대로 쓴다. 운영은 PM2 cluster 라 **다른 워커 프로세스는 캐시 TTL(최대 30초) 뒤에** 새 의도를 본다. 즉시·원자적 철회(상태 변경과 실행 시작 기록의 직렬화)는 보장하지 않으며 2차 범위다. 캐시 TTL 을 "즉시 반영"이라고 쓰지 않는다.
+**토글 전파 범위**: 관리자 토글(`PATCH /api/admin/addons/:id/state`)은 같은 프로세스의 캐시를 만료시킨다 — 다음 턴·요청이 다시 읽고(적재 도중 비워지면 그 스냅숏은 버리고 다시 읽는다), 진행 중인 턴은 마지막 값을 쓰되 같은 턴의 strict 판정이나 다른 요청이 다시 적재하면 이후 동기 훅은 새 값을 본다(턴 단위 스냅숏은 §10). 운영은 PM2 cluster 라 **다른 워커 프로세스는 캐시 TTL(최대 30초) 뒤에** 새 의도를 본다. 즉시·원자적 철회(상태 변경과 실행 시작 기록의 직렬화)는 보장하지 않으며 2차 범위다. 캐시 TTL 을 "즉시 반영"이라고 쓰지 않는다.
 
 ## 8.3 실행 판정 — 한 규칙
 

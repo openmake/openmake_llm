@@ -159,12 +159,12 @@ export function detectIntegrationIntents(message: string): Record<string, boolea
     return out;
 }
 
-/** 통합별 결정적 첨부 블록 상태 (턴 상태에 둔다). */
 /** 활성 통합의 시스템 프롬프트 조각 — 꺼진 add-on 의 조각은 싣지 않는다. */
 export function collectIntegrationSystemPromptParts(req: TurnIntegrationRequest): string[] {
     return getActiveChatTurnIntegrations().flatMap((i) => i.systemPromptParts?.(req) ?? []);
 }
 
+/** 통합별 결정적 첨부 블록 상태 (턴 상태에 둔다). */
 export type IntegrationBlocks = Record<string, string[]>;
 
 /** 도구 결과에서 모든 통합의 블록을 떼어 상태에 모으고(중복 제외) 모델용 텍스트를 돌려준다. */
