@@ -92,15 +92,15 @@ function withArtifactRefs(raw: string, plan: ArtifactPlan): string {
 export function formatFinal(snapshot: TaskSnapshot, plan: ArtifactPlan = { files: [], leftOver: 0 }): string {
     if (snapshot.status === 'failed') return `❌ 작업이 실패했습니다: ${snapshot.error ?? '사유 없음'}`;
     if (snapshot.status === 'cancelled') return '🛑 작업이 취소되었습니다.';
-    // Discord 는 마크다운 표를 렌더하지 않는다 — 굵은 제목 + 목록으로 바꾼 본문을 쓴다
-    const raw = convertTablesForDiscord(snapshot.result ?? '');
+    const raw = snapshot.result ?? '';
     const stripped = raw.replace(ARTIFACT_PLACEHOLDER, '');
     if (plan.files.length > 0) {
-        const body = stripped.trim() ? withArtifactRefs(raw, plan) : `산출물 ${plan.files.length}개를 첨부합니다.`;
+        // Discord 는 마크다운 표를 렌더하지 않는다 — 자리표시자를 바꾼 본문에 마지막으로 적용
+        const body = stripped.trim() ? convertTablesForDiscord(withArtifactRefs(raw, plan)) : `산출물 ${plan.files.length}개를 첨부합니다.`;
         return `✅ 작업이 끝났습니다.\n\n${body}${plan.leftOver > 0 ? `\n\n📎 나머지 ${plan.leftOver}개는 웹의 작업 화면에서 확인하세요.` : ''}`;
     }
     const hadArtifact = stripped !== raw || plan.leftOver > 0;
-    const body = stripped.trim() ? withArtifactRefs(raw, plan) : '(결과 본문 없음)';
+    const body = stripped.trim() ? convertTablesForDiscord(withArtifactRefs(raw, plan)) : '(결과 본문 없음)';
     return `✅ 작업이 끝났습니다.\n\n${body}${hadArtifact ? '\n\n📎 산출물은 웹의 작업 화면에서 확인하세요.' : ''}`;
 }
 

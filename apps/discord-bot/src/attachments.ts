@@ -26,6 +26,8 @@ interface DiscordFile {
 
 interface PreparedReply {
     content: string;
+    /** 세션 이력용 — placeholder 치환·이미지 제거는 끝났고 표는 변환 전 원문 */
+    historyContent: string;
     files: DiscordFile[];
 }
 
@@ -86,7 +88,6 @@ async function downloadGenerated(relPath: string): Promise<Buffer | null> {
 export async function prepareReply(answer: string, artifacts: ResponseArtifact[] = []): Promise<PreparedReply> {
     const files: DiscordFile[] = [];
     let content = answer;
-    content = convertTablesForDiscord(content); // Discord 는 마크다운 표를 렌더하지 않는다
 
     // ── 1) 생성 이미지 (/generated/*) → 파일 첨부 ──────────────
     const imagePaths: string[] = [];
@@ -141,7 +142,8 @@ export async function prepareReply(answer: string, artifacts: ResponseArtifact[]
     content = content.trim();
     if (!content && files.length > 0) content = '📎 산출물을 첨부했습니다.';
     if (!content) content = '(빈 응답)';
-    return { content, files };
+    // Discord 는 마크다운 표를 렌더하지 않는다 — 이미지 제거·치환·안내가 끝난 본문에 마지막으로 적용
+    return { content: convertTablesForDiscord(content), historyContent: content, files };
 }
 
 function escapeRegExp(s: string): string {

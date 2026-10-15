@@ -154,7 +154,7 @@ test('결과 문구: 산출물 표기는 지우고 안내를 붙인다, 본문�
 
 test('결과 문구: 마크다운 표는 굵은 제목 + 목록으로 바꾼다', () => {
     const result = '정리입니다.\n\n| 구분 | 내용 |\n|---|---|\n| 외모 | - 털 색: 갈색<br>- 털 결: 곱슬 |';
-    assert.equal(formatFinal(snap({ status: 'completed', result })), '✅ 작업이 끝났습니다.\n\n정리입니다.\n\n**외모**\n- 털 색: 갈색\n- 털 결: 곱슬');
+    assert.equal(formatFinal(snap({ status: 'completed', result })), '✅ 작업이 끝났습니다.\n\n정리입니다.\n\n*구분 · 내용*\n\n**외모**\n- 털 색: 갈색\n- 털 결: 곱슬');
 });
 
 test('승인 요청 전송이 실패하면 다음 조회에서 다시 올린다 — 실패한 요청을 올린 것으로 치지 않는다', async () => {
