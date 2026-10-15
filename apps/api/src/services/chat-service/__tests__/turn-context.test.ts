@@ -8,7 +8,7 @@ jest.mock('../../addon/addon-state', () => ({ isAddonEnabledSync: (id: string) =
 
 import {
     __setChatTurnIntegrationsForTest, collectTurnContexts, collectHiddenSessionIds, collectContextRefs,
-    detectIntegrationIntents, extractIntegrationBlocks, getActiveChatTurnIntegrations,
+    collectIntegrationSystemPromptParts, detectIntegrationIntents, extractIntegrationBlocks, getActiveChatTurnIntegrations,
     isSessionMemoryIsolated, type ChatTurnIntegration, type IntegrationBlocks,
 } from '../turn-integrations';
 import { TURN_CONTEXT_TIMEOUT_MS } from '../../../config/service-limits';
@@ -203,6 +203,18 @@ describe('순수 동기 훅의 상태 캐시 게이트 (getActiveChatTurnIntegra
         ]);
         expect(detectIntegrationIntents('q')).toEqual({ on: true });
         expect(offIntent).not.toHaveBeenCalled();
+    });
+
+    it('collectIntegrationSystemPromptParts 에 꺼진 add-on 의 프롬프트 조각이 없다', () => {
+        isAddonEnabledSync.mockImplementation(offOnly);
+        const offParts = jest.fn(() => ['OFF-PART']);
+        __setChatTurnIntegrationsForTest([
+            { id: 'off', systemPromptParts: offParts },
+            { id: 'on', systemPromptParts: () => ['ON-PART'] },
+            { id: 'none' },
+        ]);
+        expect(collectIntegrationSystemPromptParts({ message: 'q' })).toEqual(['ON-PART']);
+        expect(offParts).not.toHaveBeenCalled();
     });
 
     it('extractIntegrationBlocks 는 꺼진 add-on 의 블록 추출을 건너뛴다', () => {
