@@ -20,6 +20,7 @@ import type { CapabilityOwner } from '../capability-contract/types';
 import { getAddonRuntimeStatus, setAddonRuntimeStatus } from './activation';
 import type { BuiltinAddon } from './builtin-registry';
 import { isAddonRuntimeHandle, type AddonRuntimeHandle, type AddonRuntimeHost } from './lifecycle-types';
+import type { AddonDesiredState } from '../data/repositories/addon-state-repository';
 
 const logger = createLogger('AddonLifecycle');
 
@@ -255,6 +256,26 @@ export async function stopAllAddons(opts: { drain: boolean; budgetMs: number }):
 /** 관리 API·테스트가 읽는다 */
 export function getAddonLifecycleRecord(addonId: string): Readonly<AddonLifecycleRecord> | undefined {
     return records.get(addonId);
+}
+
+export type AddonRuntimeTransition = 'stopped' | 'resumed' | 'restart_required' | 'unchanged' | 'not_loaded';
+
+/**
+ * 관리자 의도를 **이 프로세스의** 런타임에 반영한다(관리자 토글 라우트가 부른다).
+ * - disabled: drain 정지(상한 `ADDON_DRAIN_TIMEOUT_MS`) → `stopped`. 이 프로세스가 세우지 않았으면 `not_loaded`.
+ * - enabled : resume 이 있으면 `resumed`, 없거나 실패하면 `restart_required`, 이미 ready 면 `unchanged`,
+ *             이 프로세스가 세우지 않았으면(부팅 때 꺼져 있었다) `restart_required`.
+ * 다른 프로세스의 런타임은 바꾸지 못한다 — 재시작으로 반영한다(결정 D1, 운영은 단일 fork).
+ */
+export async function applyDesiredState(addonId: string, desired: AddonDesiredState): Promise<AddonRuntimeTransition> {
+    if (desired === 'disabled') {
+        const outcome = await stopAddon(addonId, { drain: true });
+        return outcome === 'not_running' ? 'not_loaded' : 'stopped';
+    }
+    const outcome = await resumeAddon(addonId);
+    if (outcome === 'resumed') return 'resumed';
+    if (outcome === 'already_ready') return 'unchanged';
+    return 'restart_required';
 }
 
 /** 테스트 정리용 */
