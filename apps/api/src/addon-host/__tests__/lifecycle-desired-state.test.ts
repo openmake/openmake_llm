@@ -8,7 +8,7 @@ jest.mock('../builtin-registry', () => ({
     listBuiltinAddonDefs: () => mockDefs,
 }));
 import { bootAddons, type AddonBootDeps } from '../index';
-import { getAddonRuntimeStatus, resetAddonRuntimeStatusesForTest } from '../activation';
+import { getAddonRuntimeStatus, resetAddonRuntimeStatusesForTest, resolveAddonActivation } from '../activation';
 import { applyDesiredState, resetAddonLifecyclesForTest } from '../lifecycle';
 import type { AddonRuntimeHandle, AddonRuntimeStopOptions } from '../lifecycle-types';
 import { resetCapabilityRuntimeForTest } from '../../runtime-ports/capability-runtime';
@@ -90,6 +90,26 @@ describe('applyDesiredState', () => {
         expect(getAddonRuntimeStatus('pack').status).toBe('ready');
         expect(await applyDesiredState('pack', 'disabled')).toBe('unchanged');
         expect(await applyDesiredState('pack', 'enabled')).toBe('unchanged');
+    });
+
+    it('handle 을 돌려주지 않은 런타임 add-on: 멈춘 것이 없어 끄기·켜기 모두 unchanged, 상태는 ready 유지', async () => {
+        await bootWith('void-rt', undefined);
+        expect(await applyDesiredState('void-rt', 'disabled')).toBe('unchanged');
+        expect(getAddonRuntimeStatus('void-rt').status).toBe('ready');
+        expect(await applyDesiredState('void-rt', 'enabled')).toBe('unchanged');
+        expect(getAddonRuntimeStatus('void-rt').status).toBe('ready');
+    });
+
+    it('handle 없는 런타임 add-on 을 끄고 켠 뒤에도 즉시 available 이고 재시작이 필요 없다', async () => {
+        await bootWith('void-on', undefined);
+        await applyDesiredState('void-on', 'disabled');
+        await applyDesiredState('void-on', 'enabled');
+        const activation = resolveAddonActivation({
+            addonId: 'void-on', hasRuntimeEntry: true, versionCompatible: true,
+            row: { known: true, desiredState: 'enabled', state: 'enabled', stateRevision: 2, lastFailureCode: null },
+        });
+        expect(activation.effectiveAvailability).toBe('available');
+        expect(activation.restartRequired).toBe(false);
     });
 
     it('진입점은 있는데 이 프로세스가 세우지 않은 add-on(부팅 때 꺼짐): enabled → restart_required, disabled → not_loaded', async () => {

@@ -42,16 +42,16 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 | not_loaded | 부팅 ⑤ 진입점 호출 | registering | 시간 제한 `ADDON_START_TIMEOUT_MS`(기본 120초) |
 | registering | 진입점 성공 + 게시 대조 통과 | ready | handle 이 있으면 기록 |
 | registering | 진입점 실패·시간 초과·게시 불일치 | failed | 아래 "실패 보상" |
-| ready | 관리자 disabled · 프로세스 종료 | stopping | handle.stop({drain:true, signal}) |
+| ready | 관리자 disabled · 프로세스 종료 | stopping | handle.stop({drain:true, signal}) — handle 이 없으면 관리자 disabled 는 상태를 바꾸지 않는다(`ready`, 응답 `unchanged`) |
 | stopping | stop 완료 또는 drain 시간 초과 | stopped | 상한 `ADDON_DRAIN_TIMEOUT_MS`(기본 5초) — 넘으면 signal 로 취소하고 더 기다리지 않는다 |
 | stopped | 관리자 enabled + handle.resume 있음 | ready | 응답 `runtime: 'resumed'` |
 | stopped | 관리자 enabled + resume 없음·실패 | stopped | 응답 `runtime: 'restart_required'`, `restartRequired: true` |
 
-**실패 보상(시작 실패)**: 등록 역순으로 ① 돌려준 handle 즉시 정지(drain=false) ② `host.registerDisposable`·`host.setInterval`·`host.setTimeout` 으로 건 정리 함수(역순, 한 번씩) ③ 기여 도구(`unregisterToolContributions`) ④ capability(`unregisterOwner`), 그리고 host.signal 을 끊는다. 두 번 불러도 안전하다. 포트 등록(`registerToolRuntime`·`registerSkillRuntime`)은 Base 의 단일 포트라 회수하지 않는다. 시작 시간 초과 뒤에도 진입점 자체는 멈추지 않으므로, signal 을 무시하고 늦게 끝난 진입점이 그 뒤에 건 등록은 회수되지 않는다 — 런타임은 긴 초기화 단계마다 `host.signal` 을 보고 끊겼으면 등록하지 말고 빠져나와야 한다.
+**실패 보상(시작 실패)**: 등록 역순으로 ① 돌려준 handle 즉시 정지(drain=false) ② `host.registerDisposable`·`host.setInterval`·`host.setTimeout` 으로 건 정리 함수(역순, 한 번씩) ③ 기여 도구(`unregisterToolContributions`) ④ capability(`unregisterOwner`), 그리고 host.signal 을 끊는다. 두 번 불러도 안전하다. 포트 등록(`registerToolRuntime`·`registerSkillRuntime`)은 Base 의 단일 포트라 회수하지 않는다. 시작 시간 초과 뒤에도 진입점 자체는 멈추지 않는다 — 그 뒤에 늦게 돌아온 handle 은 호스트가 즉시 정지(drain=false)하고, host.signal 이 끊긴 뒤의 `registerDisposable`·`setInterval`·`setTimeout` 은 등록하지 않고 바로 정리하며, `registerCapabilities` 는 게시하지 않는다(경고 로그). 그 밖의 부작용(기여 도구 등)은 회수되지 않으므로 런타임은 긴 초기화 단계마다 `host.signal` 을 보고 끊겼으면 빠져나와야 한다.
 
 **host.signal**: 시작 시간 초과·시작 실패·프로세스 종료 때 끊긴다. 관리자 토글 정지에는 끊지 않는다(재개할 수 있어야 한다). 호스트 타이머·정리 함수도 토글 정지에서는 남고 종료·실패 때 회수된다.
 
-**토글 전파**: `PATCH /api/admin/addons/:id/state` 가 저장 뒤 `applyDesiredState(addonId, desired)` 로 **같은 프로세스**의 런타임을 바로 정지·재개한다(응답 `runtime`: stopped·resumed·restart_required·unchanged·not_loaded). 런타임 진입점이 없는 add-on 은 양방향 `unchanged`, 이 프로세스의 레지스트리에 없는 id 는 켜면 `restart_required`·끄면 `not_loaded` 다. 끄는 응답은 drain 만큼(최대 5초) 늦을 수 있다. 다른 프로세스의 런타임은 재시작으로 반영한다.
+**토글 전파**: `PATCH /api/admin/addons/:id/state` 가 저장 뒤 `applyDesiredState(addonId, desired)` 로 **같은 프로세스**의 런타임을 바로 정지·재개한다(응답 `runtime`: stopped·resumed·restart_required·unchanged·not_loaded). 런타임 진입점이 없는 add-on 과 진입점이 handle 을 돌려주지 않은 add-on(실제로 멈춘 것이 없다)은 양방향 `unchanged`(상태 `ready` 유지 — 슬롯 가용성 즉시 유지), 이 프로세스의 레지스트리에 없는 id 는 켜면 `restart_required`·끄면 `not_loaded` 다. 끄는 응답은 drain 만큼(최대 5초) 늦을 수 있다. 다른 프로세스의 런타임은 재시작으로 반영한다.
 
 **종료**: graceful-shutdown 의 "add-on 런타임 정지(drain)" 단계가 에이전트 작업 정리 뒤, 도구 런타임·Redis·DB 풀 종료 앞에서 `stopAllAddons({drain:true, budgetMs: ADDON_DRAIN_TIMEOUT_MS})` 를 부른다(연결 유예 10초 + 작업 12초 + add-on 5초 < 전체 30초). `budgetMs` 는 정지·직렬화 큐 대기·정리 전체에 걸린 단일 마감이다. MCP 는 이 단계와 ③ 도구 런타임 정리 양쪽에서 정리된다(두 번째는 빈 반복).
 
@@ -61,8 +61,8 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 |---|---|---|---|
 | Knowledge | 있음 | 새 claim 중단(stop-admission), 진행 작업 drain, 넘으면 lease 상실 처리·반납(`lease_expires_at = NOW()`, 상태 쓰기 없음). claim 도중 정지되면 집은 작업은 실행하지 않고 반납하며, heartbeat 는 잃은 lease 를 다시 늘리지 않는다 | 있음 — 다음 폴링부터 claim |
 | MCP Runtime | 있음 | `mcpToolRuntime.shutdown()` 위임(외부 연결·사용자 풀) | 없음 — 재시작 |
-| Skill Runtime | 없음 | — (시드는 host.signal 로 중단) | 재시작 |
-| 그 밖의 runtime add-on | 없음 | 상태만 stopped | 재시작 |
+| Skill Runtime | 없음 | 런타임 상태 그대로(시드는 host.signal 로 중단) | 즉시(`unchanged`) |
+| 그 밖의 runtime add-on | 없음 | 런타임 상태 그대로(`ready`, 응답 `unchanged`) — 라우트·사용권 게이트로 즉시 반영 | 즉시(`unchanged`) — 등록(도구·스킬 주입·채팅 모드) 변경은 재시작 |
 
 관리자가 MCP 런타임을 끄면 외부 연결·child 프로세스는 정리되지만 도구 포트 등록(`registerToolRuntime`)과 supervisor 타이머는 남는다 — 완전한 반영은 재시작이 필요하다(포트·supervisor 회수는 다음 묶음 D1 범위).
 

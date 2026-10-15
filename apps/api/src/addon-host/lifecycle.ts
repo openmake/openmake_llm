@@ -70,11 +70,23 @@ function createRecord(addonId: string): AddonLifecycleRecord {
 
 function hostFor(addon: BuiltinAddon, record: AddonLifecycleRecord): AddonRuntimeHost {
     const owner: CapabilityOwner = { addonId: addon.id, addonVersion: addon.manifest.version, source: 'builtin' };
-    const track = (name: string, dispose: () => void | Promise<void>): void => { record.disposables.push({ name, dispose }); };
+    const aborted = (): boolean => record.controller.signal.aborted;
+    // host.signal 이 끊긴 뒤(시작 시간 초과·실패 회수·종료)의 등록은 이미 비운 목록에 쌓이지 않게 곧바로 정리한다
+    const track = (name: string, dispose: () => void | Promise<void>): void => {
+        if (!aborted()) { record.disposables.push({ name, dispose }); return; }
+        logger.warn(`add-on '${addon.id}' 회수 뒤 늦은 등록 '${name}' — 등록하지 않고 바로 정리`);
+        Promise.resolve().then(dispose).catch((err: unknown) => {
+            logger.warn(`add-on '${addon.id}' 늦은 정리 '${name}' 오류: ${errorMessage(err)}`);
+        });
+    };
     return {
         owner,
         signal: record.controller.signal,
-        registerCapabilities: (entries) => registerCapabilities(owner, entries, addon.manifest.provides?.capabilities ?? []),
+        registerCapabilities: (entries) => {
+            // 실패·회수된 add-on 의 capability 를 다시 게시하지 않는다
+            if (aborted()) { logger.warn(`add-on '${addon.id}' 회수 뒤 늦은 capability 게시 — 무시`); return; }
+            registerCapabilities(owner, entries, addon.manifest.provides?.capabilities ?? []);
+        },
         registerDisposable: track,
         setInterval: (fn, ms) => {
             const timer = setInterval(fn, ms);
@@ -119,7 +131,15 @@ export async function startAddonRuntime(
             const onAbort = (): void => { reject(signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason))); };
             signal.addEventListener('abort', onAbort, { once: true });
             start(hostFor(addon, record)).then(
-                (value) => { signal.removeEventListener('abort', onAbort); resolve(value); },
+                (value) => {
+                    signal.removeEventListener('abort', onAbort);
+                    // 시간 초과 뒤 늦게 돌아온 handle 은 아무도 정지하지 않는다 — 여기서 즉시 정지시킨다
+                    if (signal.aborted && isAddonRuntimeHandle(value)) {
+                        const work = Promise.resolve().then(() => value.stop({ drain: false, signal: AbortSignal.abort() }));
+                        void settleWithin(work, waitLimit(ADDON_DRAIN_TIMEOUT_MS, addon.id), addon.id, '늦은 시작 handle 정지');
+                    }
+                    resolve(value);
+                },
                 (err: unknown) => { signal.removeEventListener('abort', onAbort); reject(err); },
             );
         });
@@ -189,11 +209,12 @@ async function settleWithin(work: Promise<void>, signal: AbortSignal, addonId: s
     return outcome;
 }
 
-export type AddonStopOutcome = 'stopped' | 'already_stopped' | 'not_running';
+export type AddonStopOutcome = 'stopped' | 'already_stopped' | 'not_running' | 'nothing_to_stop';
 
 /**
  * 정지 — `ready` 인 add-on 의 handle.stop 을 시간 제한(`ADDON_DRAIN_TIMEOUT_MS`) 안에서 부르고 `stopped` 로 둔다.
- * handle 이 없는 기존 진입점은 상태만 바꾼다. host.signal·정리 함수는 건드리지 않는다(재개할 수 있어야 한다).
+ * handle 이 없는 기존 진입점은 실제로 멈출 것이 없어 상태를 바꾸지 않는다(`ready` 유지 → `nothing_to_stop`, 콘텐츠 팩과 같은 규칙).
+ * host.signal·정리 함수는 건드리지 않는다(재개할 수 있어야 한다).
  * `deadline` 을 주면(전체 정지) `timeoutMs` 대신 그 마감 signal 로 기다리고 취소를 알린다.
  */
 export function stopAddon(
@@ -206,13 +227,12 @@ export function stopAddon(
         const status = getAddonRuntimeStatus(addonId).status;
         if (status === 'stopped') return 'already_stopped';
         if (status !== 'ready') return 'not_running';
+        const handle = record.handle;
+        if (!handle) return 'nothing_to_stop';
         setAddonRuntimeStatus(addonId, 'stopping');
         const timeoutMs = opts.timeoutMs ?? ADDON_DRAIN_TIMEOUT_MS;
-        const handle = record.handle;
-        if (handle) {
-            const signal = opts.deadline ?? waitLimit(timeoutMs, addonId);
-            await settleWithin(Promise.resolve().then(() => handle.stop({ drain: opts.drain, signal })), signal, addonId, 'drain 정지');
-        }
+        const signal = opts.deadline ?? waitLimit(timeoutMs, addonId);
+        await settleWithin(Promise.resolve().then(() => handle.stop({ drain: opts.drain, signal })), signal, addonId, 'drain 정지');
         setAddonRuntimeStatus(addonId, 'stopped');
         logger.info(`add-on '${addonId}' 런타임 정지(${opts.drain ? `drain ≤${timeoutMs}ms` : '즉시'})`);
         return 'stopped';
@@ -259,6 +279,8 @@ export async function stopAllAddons(opts: { drain: boolean; budgetMs: number }):
     for (const record of all) {
         if (!record.controller.signal.aborted) record.controller.abort(new Error('프로세스 종료'));
         await runDisposables(record, () => deadline);
+        // handle 없는 기록은 stopAddon 이 상태를 두지만, 종료는 타이머·정리 함수까지 회수했으므로 멈춘 것으로 둔다
+        if (getAddonRuntimeStatus(record.addonId).status === 'ready') setAddonRuntimeStatus(record.addonId, 'stopped');
     }
 }
 
@@ -274,6 +296,7 @@ export type AddonRuntimeTransition = 'stopped' | 'resumed' | 'restart_required' 
  * - 런타임 진입점(`entry.runtime`)이 없다고 레지스트리가 확인한 add-on(콘텐츠 팩 등)은 적용할 런타임이 없다 → `unchanged`
  *   (라우트·훅 게이트는 새 의도를 바로 본다). 레지스트리에 없는 id 는 진입점이 있을 수 있다고 보고 아래 규칙을 따른다.
  * - disabled: drain 정지(상한 `ADDON_DRAIN_TIMEOUT_MS`) → `stopped`. 이 프로세스가 세우지 않았으면 `not_loaded`.
+ *             handle 이 없는 런타임(void 진입점)은 멈출 것이 없어 `unchanged`(ready 유지 — 켜기도 `unchanged`).
  * - enabled : resume 이 있으면 `resumed`, 없거나 실패하면 `restart_required`, 이미 ready 면 `unchanged`,
  *             이 프로세스가 세우지 않았으면(부팅 때 꺼져 있었다) `restart_required`.
  * 다른 프로세스의 런타임은 바꾸지 못한다 — 재시작으로 반영한다(결정 D1, 운영은 단일 fork).
@@ -283,6 +306,7 @@ export async function applyDesiredState(addonId: string, desired: AddonDesiredSt
     if (def && !def.manifest.entry?.runtime) return 'unchanged';
     if (desired === 'disabled') {
         const outcome = await stopAddon(addonId, { drain: true });
+        if (outcome === 'nothing_to_stop') return 'unchanged';
         return outcome === 'not_running' ? 'not_loaded' : 'stopped';
     }
     const outcome = await resumeAddon(addonId);

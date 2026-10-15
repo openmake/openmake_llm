@@ -33,7 +33,7 @@ const logger = createLogger('AdminAddons');
 export const adminAddonsRouter = Router();
 
 /** 상태를 바꿔도 재시작 전에는 반영되지 않는 축 — 관리자에게 그대로 알린다. */
-const RESTART_REQUIRED_NOTE = '런타임 등록(도구·스킬 주입·채팅 모드)은 재시작 후 반영됩니다. 라우트 노출과 사용권은 즉시 적용됩니다.';
+const RESTART_REQUIRED_NOTE = '정지·재개 계약(handle)이 있는 런타임은 토글 즉시 정지·재개되고, 그 밖의 런타임 등록(도구·스킬 주입·채팅 모드)은 재시작 후 반영됩니다. 라우트 노출과 사용권은 즉시 적용됩니다.';
 
 export const addonStateSchema = z.object({
     state: z.enum(ADDON_STATES),
