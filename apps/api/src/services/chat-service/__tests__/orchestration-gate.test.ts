@@ -10,8 +10,10 @@ jest.mock('../../agent-task/task-inputs', () => ({ resolveDefaultMaxTurns: jest.
 jest.mock('../../agent-task/create-idempotency', () => ({ claimDelegatedTaskDurable: jest.fn(), releaseDelegatedTask: jest.fn() }));
 const integrationGate = jest.fn();
 jest.mock('../../addon/integration-gate', () => ({ integrationGate: (...a: unknown[]) => integrationGate(...a) }));
+const isAddonEnabledSync = jest.fn((_id: string) => true);
+jest.mock('../../addon/addon-state', () => ({ isAddonEnabledSync: (id: string) => isAddonEnabledSync(id) }));
 
-import { runOrchestrationTool } from '../orchestration-dispatch';
+import { contributedOrchestrationTools, isOrchestrationTool, runOrchestrationTool } from '../orchestration-dispatch';
 import { __setChatTurnIntegrationsForTest } from '../turn-integrations';
 
 const userCtx = { userId: '3', role: 'user' } as never;
@@ -20,6 +22,7 @@ const run = jest.fn(async () => 'RESULT');
 beforeEach(() => {
     jest.clearAllMocks();
     integrationGate.mockResolvedValue({ allowed: true });
+    isAddonEnabledSync.mockImplementation(() => true);
     __setChatTurnIntegrationsForTest([{
         id: 'discussion',
         orchestrationTool: {
@@ -70,5 +73,17 @@ describe('runOrchestrationTool 게이트', () => {
     it('모르는 도구 이름은 종전 메시지', async () => {
         expect(await runOrchestrationTool({ name: 'nope', args: {}, userCtx })).toBe('Error: 알 수 없는 오케스트레이션 도구 — nope');
         expect(integrationGate).not.toHaveBeenCalled();
+    });
+});
+
+describe('기여 도구 노출 — 상태 캐시 게이트', () => {
+    it('꺼진 add-on 의 도구는 노출 목록에서 빠지지만 실행 경로 분류는 유지된다(거절 문구를 내기 위해)', async () => {
+        expect(contributedOrchestrationTools().map((t) => t.name)).toEqual(['start_discussion']);
+        isAddonEnabledSync.mockImplementation((id: string) => id !== 'discussion');
+        expect(contributedOrchestrationTools()).toEqual([]);
+        expect(isOrchestrationTool('start_discussion')).toBe(true);
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'disabled' });
+        const out = await runOrchestrationTool({ name: 'start_discussion', args: {}, userCtx });
+        expect(out).toBe("Error: add-on 'discussion' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다");
     });
 });
