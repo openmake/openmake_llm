@@ -167,10 +167,11 @@ export async function runOrchestrationTool(params: {
 }): Promise<string> {
     const owner = getChatTurnIntegrations().find((i) => i.orchestrationTool?.name === params.name);
     if (owner?.orchestrationTool) {
-        // 기능 훅 게이트 — 의도 프리필터(순수 훅)로 노출됐어도 실행 시점에 add-on 이 꺼져 있으면 돌리지 않는다(설계 문서 8.4)
-        const gate = await integrationGate(owner.id);
+        // 기능 훅 게이트 — 의도 프리필터(순수 훅)로 노출됐어도 실행 시점에 add-on 이 꺼져 있거나 조직 허용 목록 밖이면 돌리지 않는다(설계 문서 8.4)
+        const gate = await integrationGate(owner.id, params.userCtx.userId !== undefined ? String(params.userCtx.userId) : undefined);
         if (!gate.allowed) {
             logger.info(`기여 도구 '${params.name}' 실행 거절 — add-on '${owner.id}' ${gate.reason}${gate.detail ? `: ${gate.detail}` : ''}`);
+            if (gate.reason === 'not_entitled') return `Error: add-on '${owner.id}' 은 이 조직에서 사용할 수 없습니다(허용 목록 밖)`;
             if (gate.reason === 'failed') return `Error: add-on '${owner.id}' 이 부팅에 실패해 이 도구를 실행할 수 없습니다`;
             return gate.reason === 'disabled'
                 ? `Error: add-on '${owner.id}' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다`

@@ -34,7 +34,7 @@ describe('runOrchestrationTool 게이트', () => {
     it('켜진 add-on 의 도구는 실행한다', async () => {
         const out = await runOrchestrationTool({ name: 'start_discussion', args: { topic: 't' }, userCtx });
         expect(out).toBe('RESULT');
-        expect(integrationGate).toHaveBeenCalledWith('discussion');
+        expect(integrationGate).toHaveBeenCalledWith('discussion', '3');
         expect(run).toHaveBeenCalledWith(expect.objectContaining({ args: { topic: 't' } }));
     });
 
@@ -57,6 +57,14 @@ describe('runOrchestrationTool 게이트', () => {
         const out = await runOrchestrationTool({ name: 'start_discussion', args: {}, userCtx });
         expect(run).not.toHaveBeenCalled();
         expect(out).toBe("Error: add-on 'discussion' 이 부팅에 실패해 이 도구를 실행할 수 없습니다");
+    });
+
+    it('조직 허용 목록 밖 add-on 의 도구는 run 없이 허용 목록 Error 문자열', async () => {
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'not_entitled' });
+        const out = await runOrchestrationTool({ name: 'start_discussion', args: {}, userCtx });
+        expect(run).not.toHaveBeenCalled();
+        expect(integrationGate).toHaveBeenCalledWith('discussion', '3');
+        expect(out).toBe("Error: add-on 'discussion' 은 이 조직에서 사용할 수 없습니다(허용 목록 밖)");
     });
 
     it('모르는 도구 이름은 종전 메시지', async () => {
