@@ -196,12 +196,20 @@ describe('GET 화면', () => {
         await handler('get', `${BASE}/screenshot`)(req(), res);
         expect(res.body.data).toEqual({ active: true, image: 'QUJD', url: 'https://example.com/', title: 'Example' });
     });
-    it('세션이 끝났으면 409', async () => {
+    it('세션이 끝났으면 200 + active:false (돌려주기와 겹친 폴링이 콘솔 오류로 남지 않게)', async () => {
         sendBrowserSessionCommand.mockResolvedValue({ ok: false, error: 'session_unavailable' });
         isBrowserSessionActive.mockResolvedValue(false);
         const res = mockRes();
         await handler('get', `${BASE}/screenshot`)(req(), res);
-        expect(res.statusCode).toBe(409);
+        expect(res.statusCode).toBe(200);
+        expect(res.body.data).toEqual({ active: false, image: null, url: '', title: '' });
+    });
+    it('세션은 살아 있는데 캡처만 실패하면 active:true, image:null', async () => {
+        sendBrowserSessionCommand.mockResolvedValue({ ok: false, error: 'navigating', url: 'https://example.com/' });
+        const res = mockRes();
+        await handler('get', `${BASE}/screenshot`)(req(), res);
+        expect(res.statusCode).toBe(200);
+        expect(res.body.data).toEqual({ active: true, image: null, url: 'https://example.com/', title: '' });
     });
 });
 
