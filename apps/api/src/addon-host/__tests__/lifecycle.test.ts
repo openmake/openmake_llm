@@ -181,4 +181,38 @@ describe('add-on 수명주기', () => {
         expect(sawAbort).toBe(true);
         expect(getAddonRuntimeStatus('iota').status).toBe('stopped');
     });
+
+    it('Node 타이머 상한(2^31-1)을 넘는 값도 잘못된 값으로 본다 — 1ms 로 바뀌어 즉시 시간 초과되지 않는다', async () => {
+        const r = await bootAddons([addon('kappa')], deps(async () => { await sleep(20); }, { startTimeoutMs: 2 ** 31 }));
+        expect(r[0].stage).toBe('ready');
+    });
+
+    it('시작 실패 보상은 끝나지 않는 stop·정리 함수가 있어도 상한 안에 돌아오고 나머지 정리는 계속한다', async () => {
+        const close = jest.fn();
+        const stop = jest.fn((_o: AddonRuntimeStopOptions) => new Promise<void>(() => undefined));
+        await bootAddons([addon('lambda')], deps(async (_a, _ref, host) => {
+            host.registerDisposable('first', close);
+            host.registerDisposable('stuck', () => new Promise<void>(() => undefined));
+            return { stop };
+        }));
+        const startedAt = Date.now();
+        const released = await releaseAddonResources('lambda', 30);
+        expect(Date.now() - startedAt).toBeLessThan(1_000);
+        expect(stop).toHaveBeenCalledTimes(1);
+        expect(close).toHaveBeenCalledTimes(1);
+        expect(released.disposed).toEqual(['first']);
+    });
+
+    it('전체 정지는 끝나지 않는 정리 함수가 있어도 예산 안에 돌아온다', async () => {
+        const close = jest.fn();
+        await bootAddons([addon('mu')], deps(async (_a, _ref, host) => {
+            host.registerDisposable('first', close);
+            host.registerDisposable('stuck', () => new Promise<void>(() => undefined));
+        }));
+        const startedAt = Date.now();
+        await stopAllAddons({ drain: true, budgetMs: 30 });
+        expect(Date.now() - startedAt).toBeLessThan(1_000);
+        expect(close).toHaveBeenCalledTimes(1);
+        expect(getAddonRuntimeStatus('mu').status).toBe('stopped');
+    });
 });

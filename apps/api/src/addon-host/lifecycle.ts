@@ -41,12 +41,22 @@ function errorMessage(err: unknown): string {
     return err instanceof Error ? err.message : String(err);
 }
 
-/** Node 타이머(`AbortSignal.timeout`)가 받는 지연 상한(ms) — 넘거나 정수가 아니면 RangeError 를 던진다 */
-const MAX_TIMER_DELAY_MS = 2 ** 32 - 1;
+/**
+ * Node 타이머가 그대로 지키는 지연 상한(ms, 32비트 부호 있는 정수). NaN·음수·비정수는 `AbortSignal.timeout` 이 RangeError 를 던지고,
+ * 이 값을 넘으면 던지지 않고 TimeoutOverflowWarning 뒤 1ms 로 바뀐다(즉시 시간 초과).
+ */
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
-/** env 오입력(NaN·음수)이 `AbortSignal.timeout` 에서 던지지 않게 미리 거른다 */
+/** env 오입력(NaN·음수·상한 초과)을 `AbortSignal.timeout` 에 넘기기 전에 거른다 */
 function isTimerDelay(ms: number): boolean {
     return Number.isInteger(ms) && ms >= 0 && ms <= MAX_TIMER_DELAY_MS;
+}
+
+/** 정지·정리의 기다림 상한 signal — 값이 잘못되면 기다리지 않고 바로 취소한다(멈추거나 끝없이 기다리지 않게) */
+function waitLimit(ms: number, addonId: string): AbortSignal {
+    if (isTimerDelay(ms)) return AbortSignal.timeout(ms);
+    logger.warn(`add-on 기다림 상한 값이 잘못됨(${ms}) — '${addonId}' 즉시 취소`);
+    return AbortSignal.abort();
 }
 
 function createRecord(addonId: string): AddonLifecycleRecord {
@@ -118,58 +128,64 @@ export async function startAddonRuntime(
     }
 }
 
-/** 정리 함수를 등록 역순으로 한 번씩 부른다 — 하나가 던져도 나머지는 계속. 부른 이름을 돌려준다 */
-async function runDisposables(record: AddonLifecycleRecord): Promise<string[]> {
+/**
+ * 정리 함수를 등록 역순으로 한 번씩 부른다 — 하나마다 `timeoutMs` 상한 안에서만 기다리고, 던지거나 넘어도 나머지는 계속.
+ * 상한 안에 끝난 이름을 돌려준다.
+ */
+async function runDisposables(record: AddonLifecycleRecord, timeoutMs: number): Promise<string[]> {
     const list = record.disposables.splice(0).reverse();
     const done: string[] = [];
     for (const item of list) {
-        try {
-            await item.dispose();
-            done.push(item.name);
-        } catch (err) {
-            logger.warn(`add-on '${record.addonId}' 정리 '${item.name}' 실패(계속): ${errorMessage(err)}`);
-        }
+        const work = Promise.resolve().then(() => item.dispose());
+        const outcome = await settleWithin(work, waitLimit(timeoutMs, record.addonId), record.addonId, `정리 '${item.name}'`);
+        if (outcome === 'done') done.push(item.name);
     }
     return done;
 }
 
 /**
  * 시작 실패 보상 — handle 즉시 정지(drain=false) → 정리 함수(역순) → 기여 도구 → capability 를 회수하고 host.signal 을 끊는다.
- * 두 번 불러도 안전하다(비운 목록·지운 기여는 0건). 회수한 항목을 돌려준다(로그·테스트용).
+ * stop·정리 함수 하나하나는 `timeoutMs`(기본 `ADDON_DRAIN_TIMEOUT_MS`) 상한 안에서만 기다린다 — 끝나지 않는 런타임이
+ * 부팅 루프(뒤의 add-on 시작)를 붙잡지 않게. 두 번 불러도 안전하다(비운 목록·지운 기여는 0건). 회수한 항목을 돌려준다(로그·테스트용).
  */
-export async function releaseAddonResources(addonId: string): Promise<{ disposed: string[]; tools: number; capabilities: string[] }> {
+export async function releaseAddonResources(
+    addonId: string,
+    timeoutMs: number = ADDON_DRAIN_TIMEOUT_MS,
+): Promise<{ disposed: string[]; tools: number; capabilities: string[] }> {
     const record = records.get(addonId);
     if (record?.handle) {
         const handle = record.handle;
         record.handle = null;
-        try {
-            await handle.stop({ drain: false, signal: AbortSignal.abort() });
-        } catch (err) {
-            logger.warn(`add-on '${addonId}' 시작 실패 보상 중 정지 실패(계속): ${errorMessage(err)}`);
-        }
+        // 런타임에는 이미 끊긴 signal 로 즉시 취소를 알리고, 호스트는 상한 안에서만 기다린다
+        const work = Promise.resolve().then(() => handle.stop({ drain: false, signal: AbortSignal.abort() }));
+        await settleWithin(work, waitLimit(timeoutMs, addonId), addonId, '시작 실패 보상 정지');
     }
-    const disposed = record ? await runDisposables(record) : [];
+    const disposed = record ? await runDisposables(record, timeoutMs) : [];
     if (record && !record.controller.signal.aborted) record.controller.abort(new Error('add-on 자원 회수'));
     const tools = unregisterToolContributions(addonId);
     const capabilities = getCapabilityRegistry().unregisterOwner(addonId);
     return { disposed, tools, capabilities };
 }
 
-/** handle.stop 을 signal 이 끊길 때까지만 기다린다 — 넘으면 경고만 남기고 돌아온다(런타임은 같은 signal 로 취소를 받는다) */
-async function settleWithin(work: Promise<void>, signal: AbortSignal, addonId: string): Promise<void> {
+/**
+ * 작업(stop·정리 함수)을 signal 이 끊길 때까지만 기다린다 — 넘으면 경고만 남기고 돌아온다(stop 은 같은 signal 로 취소를 받는다).
+ * 결과: done(끝남) · failed(던짐 — 경고 후 계속) · timeout(상한 초과).
+ */
+async function settleWithin(work: Promise<void>, signal: AbortSignal, addonId: string, what: string): Promise<'done' | 'failed' | 'timeout'> {
     let onAbort: (() => void) | undefined;
-    const aborted = new Promise<'aborted'>((resolve) => {
-        if (signal.aborted) { resolve('aborted'); return; }
-        onAbort = () => resolve('aborted');
+    const aborted = new Promise<'timeout'>((resolve) => {
+        if (signal.aborted) { resolve('timeout'); return; }
+        onAbort = () => resolve('timeout');
         signal.addEventListener('abort', onAbort, { once: true });
     });
     const finished = work.then(
         () => 'done' as const,
-        (err: unknown) => { logger.warn(`add-on '${addonId}' 정지 중 오류(정지로 간주): ${errorMessage(err)}`); return 'done' as const; },
+        (err: unknown) => { logger.warn(`add-on '${addonId}' ${what} 오류(계속): ${errorMessage(err)}`); return 'failed' as const; },
     );
     const outcome = await Promise.race([finished, aborted]);
     if (onAbort) signal.removeEventListener('abort', onAbort);
-    if (outcome === 'aborted') logger.warn(`add-on '${addonId}' drain 시간 초과 — 취소 신호를 보냈고 더 기다리지 않는다`);
+    if (outcome === 'timeout') logger.warn(`add-on '${addonId}' ${what} 시간 초과 — 더 기다리지 않는다`);
+    return outcome;
 }
 
 export type AddonStopOutcome = 'stopped' | 'already_stopped' | 'not_running';
@@ -189,10 +205,8 @@ export function stopAddon(addonId: string, opts: { drain: boolean; timeoutMs?: n
         const timeoutMs = opts.timeoutMs ?? ADDON_DRAIN_TIMEOUT_MS;
         const handle = record.handle;
         if (handle) {
-            // 상한 값이 잘못되면 기다리지 않고 바로 취소한다 — 'stopping' 에 멈추거나 종료가 끝없이 기다리지 않게
-            if (!isTimerDelay(timeoutMs)) logger.warn(`add-on drain 상한 값이 잘못됨(${timeoutMs}) — '${addonId}' 즉시 취소`);
-            const signal = isTimerDelay(timeoutMs) ? AbortSignal.timeout(timeoutMs) : AbortSignal.abort();
-            await settleWithin(Promise.resolve().then(() => handle.stop({ drain: opts.drain, signal })), signal, addonId);
+            const signal = waitLimit(timeoutMs, addonId);
+            await settleWithin(Promise.resolve().then(() => handle.stop({ drain: opts.drain, signal })), signal, addonId, 'drain 정지');
         }
         setAddonRuntimeStatus(addonId, 'stopped');
         logger.info(`add-on '${addonId}' 런타임 정지(${opts.drain ? `drain ≤${timeoutMs}ms` : '즉시'})`);
@@ -226,6 +240,7 @@ export function resumeAddon(addonId: string): Promise<AddonResumeOutcome> {
 
 /**
  * 프로세스 종료 — 모든 add-on 을 예산 안에서 병렬로 정지한 뒤 host.signal 을 끊고 정리 함수를 회수한다.
+ * 정리 함수 하나하나도 같은 예산(`budgetMs`) 안에서만 기다린다 — 끝나지 않는 정리가 종료를 붙잡지 않게.
  * 기여 도구·capability 등록은 지우지 않는다(곧 프로세스가 끝난다 — 남은 요청 처리가 거절되지 않게).
  */
 export async function stopAllAddons(opts: { drain: boolean; budgetMs: number }): Promise<void> {
@@ -233,7 +248,7 @@ export async function stopAllAddons(opts: { drain: boolean; budgetMs: number }):
     await Promise.all(all.map((record) => stopAddon(record.addonId, { drain: opts.drain, timeoutMs: opts.budgetMs })));
     for (const record of all) {
         if (!record.controller.signal.aborted) record.controller.abort(new Error('프로세스 종료'));
-        await runDisposables(record);
+        await runDisposables(record, opts.budgetMs);
     }
 }
 
