@@ -81,6 +81,27 @@ describe('KnowledgeWorker lease', () => {
         expect(retry[0].params[1]).toBe('7');
     });
 
+    it('lease 상실로 재선점이 반복돼 attempts 가 상한을 넘으면 핸들러 없이 최종 실패로 기록한다', async () => {
+        claimRows = [{ ...JOB, attempts: 4 }];
+        await new KnowledgeWorker().tick();
+        expect(ingestVersion).not.toHaveBeenCalled();
+        const failed = sqlWith("SET state = 'failed'");
+        expect(failed).toHaveLength(1);
+        expect(failed[0].params[0]).toBe('job-1');
+        expect(failed[0].params[1]).toBe('7');
+        expect(String(failed[0].params[2])).toContain('재선점 상한 초과');
+        expect(String(failed[0].params[2])).toContain('attempts=4 > max=3');
+    });
+
+    it('attempts 가 상한과 같으면 종전처럼 핸들러를 부른다', async () => {
+        claimRows = [{ ...JOB, attempts: 3 }];
+        ingestVersion.mockResolvedValue({ status: 'ready', chunkCount: 1 });
+        await new KnowledgeWorker().tick();
+        expect(ingestVersion).toHaveBeenCalledTimes(1);
+        expect(sqlWith("SET state = 'failed'")).toHaveLength(0);
+        expect(sqlWith("SET state = 'done'")).toHaveLength(1);
+    });
+
     it('heartbeat 갱신이 0행이면 lease 를 잃은 것으로 표시한다', async () => {
         renewRowCount = 0;
         const w = new KnowledgeWorker();

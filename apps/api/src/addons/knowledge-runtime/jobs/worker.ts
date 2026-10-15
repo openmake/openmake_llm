@@ -93,7 +93,9 @@ export class KnowledgeWorker {
             const limits = await getDefaultLimits();
             const jobs = await this.claim(limits.ingestConcurrency, limits.jobLeaseMs);
             if (jobs.length === 0) return 0;
-            await Promise.all(jobs.map((j) => this.runOne(j, limits.jobLeaseMs, limits.jobMaxAttempts)));
+            await Promise.all(jobs.map((j) => (Number(j.attempts) > limits.jobMaxAttempts
+                ? this.failOverClaimed(j, limits.jobMaxAttempts)
+                : this.runOne(j, limits.jobLeaseMs, limits.jobMaxAttempts))));
             return jobs.length;
         } finally {
             this.running = false;
@@ -118,6 +120,23 @@ export class KnowledgeWorker {
             [this.owner, leaseMs, Math.max(1, limit)],
         );
         return r.rows;
+    }
+
+    /**
+     * lease 상실로 끝난 실행은 failOrRetry 를 거치지 않아 상한이 적용되지 않는다 — 재선점이 끝없이 이어지지 않게
+     * 다시 집었을 때 이미 상한을 넘긴 작업은 핸들러 없이 최종 실패로 기록한다.
+     * 비교가 `>` 인 이유: 정상 경로(retryPlan 의 `>=`)는 "이번 시도가 실패한 뒤" 판단하고, 이 경로는
+     * "다시 집었는데 이번 시도 번호가 이미 상한을 넘김"을 본다 — 상한과 같은 번호의 시도는 아직 돌려 볼 몫이다.
+     */
+    private async failOverClaimed(job: JobRow, maxAttempts: number): Promise<void> {
+        const token = job.fencing_token; // BIGINT 문자열 그대로
+        const error = `재선점 상한 초과(attempts=${job.attempts} > max=${maxAttempts}) — lease 상실이 반복됨`;
+        await kdb().query(
+            `UPDATE knowledge_ingestion_jobs SET state = 'failed', lease_owner = NULL, lease_expires_at = NULL, last_error = $3, updated_at = NOW()
+              WHERE id = $1 AND fencing_token = $2`,
+            [job.id, token, error],
+        );
+        logger.warn(`작업 최종 실패(재선점 상한): ${job.kind} ${job.id} token=${token} — ${error}`);
     }
 
     private async runOne(job: JobRow, leaseMs: number, maxAttempts: number): Promise<void> {
