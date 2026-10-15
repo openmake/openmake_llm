@@ -77,6 +77,16 @@ describe('addonGuard', () => {
         expect(r.nexted).toBe(true);
     });
 
+    it('optionalAuth 가 reject 해도 멈추지 않고 사용자 없이 판정한다', async () => {
+        optionalAuth.mockRejectedValue(new Error('토큰 검증 중 DB 장애'));
+        checkAddonEntitlement.mockResolvedValue('ok');
+
+        const r = await run({});
+
+        expect(checkAddonEntitlement).toHaveBeenCalledWith('deep-research', undefined);
+        expect(r.nexted).toBe(true);
+    });
+
     it('상태를 확인하지 못하면 503 ADDON_STATE_UNKNOWN + Retry-After (꺼짐 404 와 구분)', async () => {
         checkAddonEntitlement.mockResolvedValue('state-unknown');
         const r = await run({});

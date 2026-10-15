@@ -65,7 +65,10 @@ export function addonGuard(addonId: string) {
                 // optionalAuth 로 문맥만 채운다. v1 라우터 안에서는 앞선 인증이 이미 채워 두었으므로 건너뛴다.
                 if (!req.user) {
                     const { optionalAuth } = await import('../auth');
-                    await new Promise<void>((resolve) => { void optionalAuth(req, res, () => resolve()); });
+                    await new Promise<void>((resolve) => {
+                        // optionalAuth 가 reject 해도(토큰 검증 중 DB 장애 등) 요청이 멈추거나 unhandledRejection 이 되지 않게 — 사용자 없이 판정을 계속한다
+                        Promise.resolve(optionalAuth(req, res, () => resolve())).catch(() => resolve());
+                    });
                 }
                 const { checkAddonEntitlement } = await import('../services/addon/entitlement');
                 const userId = req.user?.id !== undefined ? String(req.user.id) : undefined;
@@ -84,7 +87,8 @@ export function addonGuard(addonId: string) {
                 }
             } catch (err) {
                 logger.warn(`add-on '${addonId}' 게이트 판정 실패(503): ${err instanceof Error ? err.message : String(err)}`);
-                respondStateUnknown(res, addonId);
+                // 이미 응답이 나간 뒤 던진 경우 이중 전송으로 unhandledRejection 이 되지 않게
+                if (!res.headersSent) respondStateUnknown(res, addonId);
                 return;
             }
             next();
