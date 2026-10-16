@@ -226,3 +226,37 @@ manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기�
 - **코드만 이전 버전으로 되돌리면** 새 열은 기본값이 있어 무시되고 승인 기록은 DB 에 남는다. 다시 올리면 그대로 이어진다. 되돌린 기간에 업데이트된 확장은 요청 권한이 갱신되지 않은 채라, 다음 업데이트 때 다시 판정된다.
 - `db/migrations/rollbacks/190_user_extensions_permission_state_rollback.sql` 은 열을 지우므로 승인·철회 기록이 사라진다. 그 뒤 190 을 다시 적용하면 설치 기록에 `manifest.addonPermissions` 가 있는 행만 `reviewed`(승인자 `migration:190`)로 복원되고 나머지는 `legacy_unreviewed` 로 돌아간다.
 - 재적용 백필은 `manifest.addonPermissions` **요청 원문**을 승인으로 복원한다. 롤백 전에 `review_required` 로 막혀 있던(미승인) 권한이나 철회한 권한까지 승인된 것으로 돌아가므로, 재적용 전에 해당 확장의 상태를 기록해 두고 재적용 뒤 확인·철회해야 한다.
+
+## 12. 경로별 실행 책임표 (actor → 정책 → 실행 → 종료)
+
+한 add-on 기능이 실행되는 모든 입구를 한 줄씩 적는다. "actor" 는 그 실행을 누구의 권한으로 하는가(사용자 user · 조직 org · 시스템 system), "판정 함수" 는 실행 직전에 상태·사용권을 보는 함수, "실행 주체" 는 코드가 실제로 도는 프로세스, "중지 방법" 은 관리자가 끄거나 프로세스가 끝날 때 그 경로가 멈추는 방식, "보호 훅" 은 기능을 꺼도 계속 도는 안전장치다. 오류 코드의 뜻은 §8.3, 수명주기는 §7.3, 큐는 §9 를 따른다.
+
+| 경로 | actor | 판정 함수 | 실행 주체 | 중지 방법 | 보호 훅 |
+|---|---|---|---|---|---|
+| add-on 전용 HTTP 라우트(매니페스트 `routes` 로 건 모든 경로 — 예 `/api/knowledge/*`) | user(쿠키·Bearer), 조직 사용권은 user 의 활성 조직 | `addonGuard` → `checkAddonEntitlement`(strict DB 판정) — 404 `ADDON_DISABLED`·503 `ADDON_FAILED`·403 `ADDON_NOT_ENTITLED`·503 `ADDON_STATE_UNKNOWN` | API 프로세스(요청 처리) | 토글 저장 직후 다음 요청부터 거절(같은 프로세스·다른 프로세스 모두 — 라우트 판정은 캐시를 쓰지 않는다) | 없음(라우트 자체가 소유권 검사 — `resolveUserId`) |
+| `/api/v1/*`(API 키) | user(API 키 소유자) | `requireApiKey`·`requireScope` → 채팅이면 아래 "채팅 턴" 행과 같은 파이프라인 | API 프로세스 | 키 폐기·scope 축소는 다음 요청부터. add-on 기능은 채팅 턴 행과 같다 | 채팅 턴 행과 같다 |
+| 채팅 턴 — WS(`sockets/ws-chat-handler.ts`)·REST(`/api/chat`) 공통 `runMessagePipeline` | user 또는 guest | 기능 훅 `prepareTurnContext`: 턴마다 `integrationGate`(→ `checkAddonEntitlement`). 순수 동기 훅: `isAddonEnabledSync`(턴 시작 `ensureAddonStates` 적재, TTL `ADDON_STATE_CACHE_TTL_MS`) | API 프로세스 | 기능 훅은 다음 턴부터 건너뜀. 동기 훅은 캐시 갱신 뒤 턴부터. 진행 중 턴은 끝까지 가거나 사용자의 `abort` 로 멈춘다 | `isSessionMemoryIsolated`(Space 연결 대화는 전역 메모리 미기록, 판정 실패 시 격리 — fail-closed), `listHiddenSessionIds` |
+| 채팅 오케스트레이션 도구 `run`(매니페스트 기여 도구) | user | `runOrchestrationTool` → `integrationGate` — 거절 문구 `Error: add-on '<id>' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다`(부팅 실패·조직 밖·확인 불가 문구는 §8.3) | API 프로세스 | 실행 시점 거절(노출은 동기 훅 캐시로 빠짐) | 없음 |
+| 기여 작업 도구(`agentTaskTools`) | user(작업 소유자) | 실행 게이트 없음 — 노출만 동기 훅 캐시로 막는다(§8.4) | 에이전트 작업 실행기(API 프로세스) | 작업 취소(`POST /api/agent-tasks/:taskId/cancel`) · graceful-shutdown 의 작업 drain(`AGENT_TASK_DRAIN_TIMEOUT_MS`) | 없음 |
+| 팩 스킬 주입(선언형 콘텐츠) | user | `entitledAddonIds` — 확인 불가 시 주입 유지(fail-open, 선언형이라 피해 없음) | API 프로세스(프롬프트 구성) | 다음 턴부터 제외 | 없음 |
+| 스킬 시드(부팅) | system | 부팅 ⑤ 진입점, `host.signal`(시작 시간 제한 `ADDON_START_TIMEOUT_MS`) | API 프로세스(부팅) | `host.signal` 끊김 → 시드 중단. 관리자 토글은 재시작 필요(Skill Runtime 은 handle 없음) | 없음 |
+| MCP 도구(외부 서버·stdio child) | user(서버 소유자) | MCP add-on 상태(라우트·capability 판정) + 설치형 확장 권한 상태(`allowsNetwork` — `legacy_unreviewed` 는 기존 허용 유지, `review_required` 는 초과분 거절, §11) | API 프로세스의 MCP supervisor(외부 연결·child) | 관리자 disabled → handle.stop = `mcpToolRuntime.shutdown()`. 재개 없음(재시작). 포트 등록·supervisor 타이머는 재시작까지 남는다(§7.3) | 권한 상태 초과분 차단 |
+| 산출물 코드 실행(`services/artifact-exec-service.ts` `executeArtifactCode`) | user | Base 소유 기능 — add-on 판정 대상 아님. 실행 가능 여부는 Base 설정(`ARTIFACT_EXEC`) | 샌드박스 컨테이너(읽기 전용, tmpfs) | 실행 시간 제한·컨테이너 종료 | 샌드박스 격리 |
+| 예약 capability 작업(`services/job-poller.ts`, `CAPABILITY_JOB_POLLER_ENABLED=true` 일 때) | system(poller) 이 제출 user 대신 | `admitCapability`(job scope 재발급) — 소유 add-on 이 꺼졌거나 상태 불명이면 네트워크 호출 없이 다음 주기로 미룸 | API 프로세스 poller | 다음 주기부터 미룸. 확정 쓰기는 fencing token 조건부 | lease·fencing token |
+| Knowledge 수집(ingest) | 개인 Space `user` / 조직 Space `org`(조직 id) — `actor_kind`·`actor_user_id`·`org_id`·`policy_revision` 기록, 평가 하네스 수집은 `system`(§9.2) | tick 마다 `readAddonRunVerdict`(add-on strict 판정 — run 이 아니면 그 tick 은 집지 않음) → 집은 user·org 작업은 `checkUserEntitlement`(사용권): `not-entitled` 최종 실패, `disabled`·`failed`·`state-unknown` 보류(`KNOWLEDGE_JOB_ADMISSION_DEFER_MS` 뒤). claim 은 소비자 모드가 자기 종류일 때만(`knowledge_worker_mode`, §9.4) | 모드에 따라 API 프로세스 poller(`inprocess`) 또는 별도 프로세스 `openmake-knowledge-worker`(`external`) | inprocess: 관리자 disabled → handle.stop = stop-admission + drain(`ADDON_DRAIN_TIMEOUT_MS`), 넘으면 lease 반납. external: handle 이 닿지 않음 — 상태 캐시 TTL(`ADDON_STATE_CACHE_TTL_MS`) 안에 claim 게이트가 새 claim 을 멈추고 진행 중 작업은 끝까지 감, 프로세스 종료는 SIGTERM drain(`KNOWLEDGE_WORKER_DRAIN_TIMEOUT_MS`, §9.5). 취소 `POST /api/knowledge/jobs/:id/cancel`(접수한 사용자 또는 관리자 — queued 즉시 `cancelled`, running 은 heartbeat 가 요청을 읽은 뒤 다음 단계 경계에서 `cancelled`, §9.3) | `assertLeaseHeld`(모든 확정 쓰기의 첫 문장) |
+| Knowledge 재색인·재청크(reindex·rechunk) | 요청한 관리자 `user`(§9.2) | 수집과 같다 | 수집과 같다 | 수집과 같다 | 수집과 같다 |
+| Knowledge 정리(cleanup — 삭제된 문서·Space 의 청크·파일) | `system`(요청자는 기록용) | add-on 단위 strict 판정만(사용권 재검사 없음) — §9.2 | 수집과 같은 소비자 | 수집과 같다(add-on 이 꺼지면 tick 이 집지 않음) | `assertLeaseHeld` |
+
+**이 표가 보장하지 않는 것**: 같은 DB 안의 코드 경계이며 물리 SQL 권한 격리가 아니다(§8.6). DB 밖 부작용(임베딩 호출·파일 삭제·외부 MCP 호출)은 멈출 뿐 되돌리지 않는다 — exactly-once 가 아니다. 토글과 실행 시작의 원자적 직렬화는 하지 않는다(§7.2 "토글 전파 범위").
+
+## 13. 검증 증거 규약
+
+검증 도구(`scripts/bench/*`, `scripts/release/*`)와 e2e 는 결과를 저장소 밖 증거 디렉터리에 남긴다 — `.omo/` 는 `.gitignore` 에 있어 커밋되지 않는다.
+
+- 위치: `.omo/evidence/base-plugin-separation/<run-id>/task-<N>/`. `<run-id>` 는 `<UTC YYYYMMDDTHHMMZ>-<git short sha 8자>`, `<N>` 은 로드맵 작업 번호(1 = 기준선·책임표, 3 = 전송 경로 e2e, 11 = 릴리스 후보 검증(작업 11 에서 추가), 12 = 배포 기록(작업 12 에서 추가)).
+- 남기는 것: 명령 원문, exit code, 소요 시간, git SHA, 설정 **이름**(값 아님), assertion 결과, 로그 꼬리. 남기지 않는 것: 비밀값(토큰·비밀번호·API 키·DB 비밀번호가 든 URL) — 도구는 URL 의 비밀번호 부분을 `***` 로 바꿔 쓴다.
+- 부하 receipt(`baseline.json`·`current.json`) 스키마 `schemaVersion: 1`: `runId`·`label`·`gitSha`·`createdAt`·`environment`(로컬/개발/스테이징/운영)·`target`·`runtime`(`ts-node` 또는 `node-dist`)·`settings{connections,durationSec,warmupSec,settleSec,v1RatePerSec,scenarios[]}`·`envNames[]`·`scenarios[{name,method,path,requests,ok,errorRate,throughputRps,p50Ms,p95Ms,p99Ms,statusCounts,transportErrors}]`·`rss{samples,failedSamples,beforeBytes,afterBytes,peakBytes,pid,restarted,source}`(`failedSamples` 는 실패한 표본 요청 수 — 기록용).
+- 성능 게이트(설계 D6): 같은 `settings` 에서 시나리오별 p95 ≤ 기준선 × 1.10(작은 값의 측정 잡음을 위해 기준선 + 2ms 까지는 허용), 처리율 ≥ 기준선 × 0.95, 오류율 ≤ max(기준선, 1%), RSS 최고값 ≤ 기준선 × 1.10. `settings`·`runtime`·`environment` 가 다르거나, `target` 이 다르거나, 측정 중 pid 가 바뀌면 비교하지 않는다(무효).
+- 로컬 수치는 ts-node 로 띄운 API 라 RSS 에 컴파일러 메모리가 섞인다 — 로컬 RSS 비교는 참고값이고, 운영 판단용 RSS 는 스테이징에서 빌드 산출물(`node-dist`)로 다시 잰다(`docs/architecture/addon-platform-runbook.md` §3.2).
+- 릴리스 후보 검증(작업 11 에서 추가): `node scripts/release/verify-matrix.mjs --run-id <id> --local`(개발자 맥에서는 `--local` 필수 — 로컬 정책상 돌리지 않는 명령을 "미측정" 으로 남긴다) → `node scripts/release/release-candidate.mjs --run-id <id>`. receipt 들의 git SHA 가 섞이면 보고서 머리말에 모두 적고 판정은 "판단 대기" 를 넘지 않는다.
+- 배포·관찰·롤백 절차와 완료 기록은 `docs/architecture/addon-platform-runbook.md`(작업 12 의 운영 기록 칸은 그 문서 §11).
