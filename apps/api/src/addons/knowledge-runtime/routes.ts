@@ -21,6 +21,7 @@ import { getChunkPreview } from './preview';
 import { getCapabilities } from './capabilities';
 import * as admin from './admin/service';
 import { startReindex } from './embedding/index-manager';
+import { userJobActor } from './jobs/actor';
 
 /** Zod 파싱 — 실패하면 ValidationError(400). 첫 이슈 메시지를 사람이 읽게 붙인다. */
 function parse<T>(schema: ZodTypeAny, data: unknown): T {
@@ -164,11 +165,11 @@ knowledgeRouter.put('/admin/profiles/:id', requireAuth, asyncHandler(async (req,
 
 knowledgeRouter.post('/admin/reindex', requireAuth, asyncHandler(async (req, res) => {
     assertAdmin(req);
-    res.status(202).json(success(await startReindex()));
+    res.status(202).json(success(await startReindex(userJobActor(resolveUserId(req)))));
 }));
 
 knowledgeRouter.post('/admin/spaces/:id/rechunk', requireAuth, asyncHandler(async (req, res) => {
     assertAdmin(req);
-    await admin.rechunkSpace(req.params.id);
+    await admin.rechunkSpace(req.params.id, resolveUserId(req));
     res.status(202).json(success({ queued: true }));
 }));

@@ -37,6 +37,12 @@ jest.mock('../config/profiles', () => ({
 // 외부 모델·파일 저장소는 부르지 않는다 — deps 로 주입한 readFile·embed 만 쓴다
 jest.mock('../embedding/provider', () => ({ makeIndexEmbedder: () => { throw new Error('모델 호출 금지'); } }));
 jest.mock('../documents/storage', () => ({ readStoredFile: () => { throw new Error('파일 읽기 금지'); }, deleteStoredFile: jest.fn() }));
+jest.mock('../../../runtime-ports/addon-admission', () => ({
+    readAddonRunVerdict: async () => ({ run: true }),
+    checkUserEntitlement: async () => 'ok',
+    readAddonStateRevision: async () => 1,
+    warmAddonStates: async () => undefined,
+}));
 
 import { KnowledgeWorker, type JobRow } from '../jobs/worker';
 import { createJobLease, assertLeaseHeld, LeaseLostError, type JobLease } from '../jobs/lease';
