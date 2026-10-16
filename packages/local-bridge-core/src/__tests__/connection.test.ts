@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
-import { WebSocketServer, type WebSocket as ServerWs } from 'ws';
+import { WebSocket, WebSocketServer, type WebSocket as ServerWs } from 'ws';
 import { BridgeConnection, parseNotice } from '../connection';
 import { BridgeCore } from '../core';
 import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, NOTICE_TOOL_NAME_MAX } from '../constants';
@@ -176,20 +176,55 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
     });
 
     it('서버가 아무 프레임도 보내지 않으면(반쯤 죽은 연결) 스스로 끊고 재연결한다', async () => {
+        // 가짜 타이머로 연결 쪽 시간(setTimeout·setInterval·Date)만 손으로 흘린다 — 실 소켓 I/O 는 진짜로 두고,
+        // 시간은 아래 단계에서만 앞으로 민다. 부하 걸린 CI 에서도 결과가 벽시계 속도에 좌우되지 않는다(10-16 flaky).
+        const HELLO_DELAY_MS = 300; // connection.ts 의 open → hello 지연
+        const PING_MS = 100;
+        const TIMEOUT_MS = 500; // hello 지연보다 길게 — 첫 연결이 hello·ready 를 마친 뒤 침묵해야 '반쯤 죽은' 상황
+        const RECONNECT_MS = 50;
+        const IO_DEADLINE_MS = 4000; // 실 소켓 왕복 대기 한도(실시간) — 루프백 왕복이라 보통 수 ms
+        /** 실 I/O 가 끝나 조건이 설 때까지 이벤트 루프를 돌린다(가짜 시간은 움직이지 않는다). */
+        const until = async (what: string, cond: () => boolean): Promise<void> => {
+            const deadline = performance.now() + IO_DEADLINE_MS;
+            while (!cond()) {
+                if (performance.now() > deadline) throw new Error(`기다림 초과: ${what}`);
+                await new Promise((r) => setImmediate(r));
+            }
+        };
+        const hellos = (): number => server.received.filter((f) => f.type === 'bridge_hello').length;
+        const socketOpen = (): boolean => conn?.socket()?.readyState === WebSocket.OPEN;
+
         await server.stop();
         server = new FakeServer(false);
         await server.start();
-        const core = new BridgeCore({ folder: base, confirm: async () => 'all', sandboxProfileDir: os.tmpdir() });
-        conn = new BridgeConnection({
-            serverUrl: `http://127.0.0.1:${server.port}`, core, deviceId: 'test-device-1', label: 'unit · test',
-            headers: () => ({ Authorization: 'Bearer omk_test' }), onStatus: (s) => statuses.push(s),
-            reconnectMs: 50, livenessPingMs: 40, livenessTimeoutMs: 120,
-        });
-        await conn.connect();
-        await server.waitFor((f) => f.type === 'bridge_hello');
-        // 서버는 소켓을 닫지 않는다 — 디바이스가 무응답을 감지해 끊어야 두 번째 연결이 생긴다.
-        await server.waitFor((f) => f.type === 'bridge_hello' && server.connections >= 2, 4000);
-        expect(statuses).toContain('끊김 — 재연결 대기');
+        jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask', 'performance'] });
+        try {
+            const core = new BridgeCore({ folder: base, confirm: async () => 'all', sandboxProfileDir: os.tmpdir() });
+            conn = new BridgeConnection({
+                serverUrl: `http://127.0.0.1:${server.port}`, core, deviceId: 'test-device-1', label: 'unit · test',
+                headers: () => ({ Authorization: 'Bearer omk_test' }), onStatus: (s) => statuses.push(s),
+                reconnectMs: RECONNECT_MS, livenessPingMs: PING_MS, livenessTimeoutMs: TIMEOUT_MS,
+                random: () => 1, // 재연결 대기 = reconnectMs 그대로(흩기 없음)
+            });
+            // 1) 첫 연결 → hello → bridge_ready
+            await conn.connect();
+            await until('첫 연결 open', () => server.connections === 1 && socketOpen());
+            await jest.advanceTimersByTimeAsync(HELLO_DELAY_MS);
+            await until('첫 bridge_ready', () => hellos() === 1 && statuses.some((s) => s.startsWith('연결됨')));
+            expect(statuses).not.toContain('끊김 — 재연결 대기');
+            // 2) 서버는 소켓을 닫지 않고 침묵(ping 에도 무응답) — 무응답 한도를 넘기면 디바이스가 스스로 끊어야 한다.
+            await jest.advanceTimersByTimeAsync(TIMEOUT_MS + 2 * PING_MS);
+            await until('디바이스 쪽 끊김', () => statuses.includes('끊김 — 재연결 대기'));
+            expect(server.connections).toBe(1);
+            // 3) 재연결 대기 → 두 번째 연결 → hello 재전송
+            await jest.advanceTimersByTimeAsync(RECONNECT_MS);
+            await until('두 번째 연결 open', () => server.connections === 2 && socketOpen());
+            await jest.advanceTimersByTimeAsync(HELLO_DELAY_MS);
+            await until('두 번째 hello', () => hellos() === 2);
+            expect(server.connections).toBe(2);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('서버가 ping 에 응답하는 동안에는 연결을 유지한다', async () => {
