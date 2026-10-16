@@ -413,18 +413,22 @@
     },
     "quickStarts": {
       "summarize": {
+        "description": "输入要总结的文字，整理核心要点。",
         "label": "总结",
         "prompt": "请总结以下内容：\n\n"
       },
       "research": {
+        "description": "输入感兴趣的主题，深入了解相关内容。",
         "label": "研究",
         "prompt": "请深入研究以下主题：\n\n"
       },
       "analyze": {
+        "description": "输入问题，分步骤进行分析。",
         "label": "逐步分析",
         "prompt": "请逐步分析以下问题：\n\n"
       },
       "brainstorm": {
+        "description": "输入主题，探索多种创意和思路。",
         "label": "头脑风暴",
         "prompt": "让我们围绕以下内容进行头脑风暴：\n\n"
       }
