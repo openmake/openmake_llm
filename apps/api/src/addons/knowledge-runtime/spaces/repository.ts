@@ -9,6 +9,7 @@ import type { PoolClient } from 'pg';
 import type { KnowledgeScopeType } from '@openmake/shared-types';
 import { kdb } from '../db';
 import { accessPredicate, type KnowledgeActor } from '../config/scope-policy';
+import { baseDataPort } from '../../../runtime-ports/base-data-port';
 
 export interface SpaceScopeRow {
     id: string;
@@ -139,15 +140,16 @@ export async function touchSpace(id: string): Promise<void> {
 
 export interface SpaceConversationRow { session_id: string; title: string; updated_at: string }
 
-/** Space 에 연결된 대화 목록(최근 갱신 순) — 인가는 호출부가 Space 로 이미 확인했다. */
+/**
+ * Space 에 연결된 대화 목록(최근 갱신 순) — 인가는 호출부가 Space 로 이미 확인했다.
+ * 바인딩은 Knowledge 표에서, 제목·갱신 시각은 Base 데이터 포트에서 받는다(삭제된 세션은 포트가 돌려주지 않아 빠진다).
+ * 제목이 없는 세션은 빈 문자열 — 응답 DTO(KnowledgeConversation.title)는 문자열이다.
+ */
 export async function listConversationsForSpace(spaceId: string): Promise<SpaceConversationRow[]> {
-    const r = await kdb().query<SpaceConversationRow>(
-        `SELECT b.session_id, cs.title, cs.updated_at
-         FROM knowledge_conversation_bindings b
-         JOIN conversation_sessions cs ON cs.id = b.session_id
-         WHERE b.space_id = $1
-         ORDER BY cs.updated_at DESC`,
+    const r = await kdb().query<{ session_id: string }>(
+        `SELECT session_id FROM knowledge_conversation_bindings WHERE space_id = $1`,
         [spaceId],
     );
-    return r.rows;
+    const summaries = await baseDataPort.conversationSessions.summaries(r.rows.map((row) => row.session_id));
+    return summaries.map((s) => ({ session_id: s.id, title: s.title ?? '', updated_at: s.updatedAt }));
 }
