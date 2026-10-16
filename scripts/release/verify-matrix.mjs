@@ -6,6 +6,8 @@
  *     [--commands scripts/release/commands.json] [--only id1,id2] [--local]
  *
  * --local: skipLocal 사유가 있는 명령은 실행하지 않고 "미측정(로컬 정책)" receipt 를 남긴다.
+ *   개발자 맥(로컬)에서는 --local 이 필수다 — 빠뜨리면 skipLocal 명령(예: build-full, 로컬 빌드 금지)을 그대로 실행한다.
+ *   고른 명령에 skipLocal 이 있는데 --local 이 없으면 실행 전에 그 id 들을 알리는 줄을 찍는다.
  * requiresEnv 가 비어 있지 않은데 env 가 없으면 실행하지 않고 "환경 부재" receipt 를 남긴다.
  * 명령은 commands.json 순서대로 돈다 — jest-api·db-tests 는 e2e 대상 API 를 띄우기 전에 돌려야 한다(같은 격리 테스트 DB 를
  * 쓴다). 그래서 commands.json 에서 모든 e2e·live 명령보다 앞에 있고, --only 로 나눠 돌릴 때도 이 순서를 지킨다.
@@ -58,6 +60,11 @@ const only = values.only ? values.only.split(',').map((s) => s.trim()).filter(Bo
 const unknown = only.filter((id) => !doc.commands.some((c) => c.id === id));
 if (unknown.length > 0) fail(`모르는 id: ${unknown.join(', ')}`);
 const selected = only.length > 0 ? doc.commands.filter((c) => only.includes(c.id)) : doc.commands;
+
+const localOnly = selected.filter((c) => c.skipLocal).map((c) => c.id);
+if (!values.local && localOnly.length > 0) {
+    console.log(`[verify-matrix] 주의: --local 없이 실행 — skipLocal 명령(${localOnly.join(', ')})도 돈다. 개발자 맥(로컬)에서는 --local 을 붙인다`);
+}
 
 const taskDir = resolve(repoRoot, values['evidence-root'], values['run-id'], 'task-11');
 const receiptsDir = join(taskDir, 'receipts');

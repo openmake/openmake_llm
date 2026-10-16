@@ -1,13 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
     validateCommands, missingEnv, parseCounts, buildReceipt, redactSecrets,
-    classify, validateAcceptances, decideVerdict, renderReleaseCandidate,
+    classify, validateAcceptances, decideVerdict, renderReleaseCandidate, candidateVerdict,
 } from './lib.mjs';
-import { runCommand } from './runner.mjs';
+import { createChunkMasker, runCommand } from './runner.mjs';
 
 const JEST = { anchor: '^Tests:.*$', keysOn: 'anchor', passed: '(\\d+) passed', failed: '(\\d+) failed', skipped: '(\\d+) skipped' };
 const NODE = { anchor: '^ℹ tests \\d+', keysOn: 'output', passed: '^ℹ pass (\\d+)', failed: '^ℹ fail (\\d+)', skipped: '^ℹ skipped (\\d+)' };
@@ -106,6 +108,67 @@ test('renderReleaseCandidate: 판정·분류 표·매트릭스 행별 증거·�
     assert.ok(md.includes('| jest-api | unit | passed | 통과 |'));
     assert.ok(md.includes('| 롤백 | drill(환경 부재) | 증거 없음 |'));
     assert.ok(md.includes('- drill — 환경 부재: env 없음: KNOWLEDGE_PSQL'));
+});
+
+test('renderReleaseCandidate: receipt 의 git SHA 가 섞이면 머리말에 모두 적고 판단 대기로 둔다', () => {
+    const d = doc([cmd(), cmd({ id: 'drill', group: 'drill', counts: null, covers: ['롤백'] })]);
+    const receipts = [
+        buildReceipt(cmd(), raw({ output: 'Tests: 3 passed, 3 total' }), { gitSha: 'a'.repeat(40) }),
+        buildReceipt(d.commands[1], raw(), { gitSha: 'b'.repeat(40) }),
+    ];
+    const md = renderReleaseCandidate({ meta: { runId: 'r', gitSha: 'a'.repeat(40), createdAt: 't' }, receipts, commandsDoc: d, acceptances: { schemaVersion: 1, items: {} } });
+    assert.ok(md.includes(`- git SHA: **섞임(2개)** — \`${'a'.repeat(40)}\`, \`${'b'.repeat(40)}\``));
+    assert.ok(md.includes('판정: **판단 대기**'));
+    assert.match(md, /## 판단이 필요한 항목\n\n- git SHA 혼합 — .*jest-api.*drill/);
+    assert.equal(candidateVerdict(receipts, { schemaVersion: 1, items: {} }), '판단 대기');
+    // 한 SHA 면 종전대로 후보
+    assert.equal(candidateVerdict([receipts[0]], { schemaVersion: 1, items: {} }), '후보');
+});
+
+const RC_SCRIPT = fileURLToPath(new URL('./release-candidate.mjs', import.meta.url));
+function runReleaseCandidate(setup, extraArgs = []) {
+    const root = mkdtempSync(join(tmpdir(), 'release-rc-'));
+    const taskDir = join(root, 'r1', 'task-11');
+    mkdirSync(join(taskDir, 'receipts'), { recursive: true });
+    setup(taskDir, root);
+    return spawnSync(process.execPath, [RC_SCRIPT, '--run-id', 'r1', '--evidence-root', root, ...extraArgs], { encoding: 'utf8' });
+}
+
+test('release-candidate: task-11/commands.json 이 없거나 acceptances JSON 이 깨지면 exit 2(입력 오류)', () => {
+    const missing = runReleaseCandidate(() => {});
+    assert.equal(missing.status, 2);
+    assert.match(missing.stderr, /commands\.json 없음/);
+    const one = doc([cmd()]);
+    const root2 = mkdtempSync(join(tmpdir(), 'release-rc-acc-'));
+    writeFileSync(join(root2, 'acc.json'), '{ 깨진 JSON');
+    const bad = runReleaseCandidate((taskDir) => {
+        writeFileSync(join(taskDir, 'commands.json'), JSON.stringify(one));
+        writeFileSync(join(taskDir, 'receipts', 'jest-api.json'), JSON.stringify(buildReceipt(cmd(), raw(), meta)));
+    }, ['--acceptances', join(root2, 'acc.json')]);
+    assert.equal(bad.status, 2);
+    assert.match(bad.stderr, /acceptances 읽기 실패/);
+});
+
+test('createChunkMasker: 두 청크로 갈린 URL 의 비밀번호도 가린다', () => {
+    const out = [];
+    // runner 와 같이 내보낸 조각마다 가린다 — 조각이 URL 을 가르지 않아야 가려진다
+    const m = createChunkMasker((t) => out.push(redactSecrets(t)));
+    m.push(Buffer.from('connect postgresql://openmake:sec'));
+    m.push(Buffer.from('ret@localhost:5433/db ok\n'));
+    m.flush();
+    const joined = out.join('');
+    assert.equal(joined.includes('secret'), false);
+    assert.ok(joined.includes('connect '));
+    assert.ok(joined.endsWith('ok\n'));
+});
+
+test('runCommand: 두 번의 write 로 갈린 URL 비밀번호가 출력·로그에 남지 않는다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    const logPath = join(dir, 'split.log');
+    const res = await runCommand({ cmd: "printf 'url=postgresql://u:sec'; sleep 0.3; printf 'ret@h:5433/db\\n'", cwd: dir, env: process.env, timeoutSec: 10, logPath });
+    assert.equal(res.exitCode, 0);
+    assert.equal(res.output, 'url=postgresql://u:***@h:5433/db\n');
+    assert.equal(readFileSync(logPath, 'utf8'), res.output);
 });
 
 test('runCommand: 출력·exit 를 남기고, 시간 초과는 죽이고 timedOut', async () => {
