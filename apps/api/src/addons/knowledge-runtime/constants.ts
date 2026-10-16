@@ -39,6 +39,8 @@ export const KNOWLEDGE_RUNTIME = {
     WORKER_SCHEMA_WAIT_MS: Number(process.env.KNOWLEDGE_WORKER_SCHEMA_WAIT_MS) || 60_000,
     /** 위 대기 중 다시 확인하는 주기(ms) */
     WORKER_SCHEMA_POLL_MS: Number(process.env.KNOWLEDGE_WORKER_SCHEMA_POLL_MS) || 2_000,
+    /** /api/health 의 inflight 합산에 넣는 heartbeat 나이 상한(ms) — heartbeat 주기의 세 배 */
+    WORKER_HEARTBEAT_STALE_MS: Number(process.env.KNOWLEDGE_WORKER_HEARTBEAT_STALE_MS) || 15_000,
 } as const;
 
 /**

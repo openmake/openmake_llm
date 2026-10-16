@@ -59,6 +59,7 @@ jest.mock('../auth/middleware', () => ({
 import express from 'express';
 import request from 'supertest';
 import { setupApiRoutes } from '../routes/setup';
+import { registerHealthSection } from '../runtime-ports/health-sections';
 
 // ── 테스트용 Express 앱 생성 ──
 function createTestApp() {
@@ -112,6 +113,29 @@ describe('라우트 설정 — 기본 엔드포인트', () => {
         expect(res.body.services.database).toBeDefined();
         expect(res.body.services.llm).toBeDefined();
         expect(res.body.services.memory).toBeDefined();
+    });
+
+    test('GET /api/health → add-on 이 등록한 절이 최상위 키로 붙는다', async () => {
+        const off = registerHealthSection('sample', async () => ({ mode: 'inprocess', generation: 3 }));
+        try {
+            const res = await request(app).get('/api/health');
+            expect(res.status).toBe(200);
+            expect(res.body.sample).toEqual({ mode: 'inprocess', generation: 3 });
+        } finally {
+            off();
+        }
+    });
+
+    test('GET /api/health → 절 하나가 실패해도 200 이고 그 절만 error', async () => {
+        const off = registerHealthSection('broken', async () => { throw new Error('db down'); });
+        try {
+            const res = await request(app).get('/api/health');
+            expect(res.status).toBe(200);
+            expect(res.body.status).toBe('ok');
+            expect(res.body.broken).toEqual({ error: 'db down' });
+        } finally {
+            off();
+        }
     });
 
     test('GET /ready → 200', async () => {
