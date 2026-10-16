@@ -79,4 +79,9 @@ describe('conversationSessions.summaries', () => {
         ]);
         expect(getSessionSummaries).toHaveBeenCalledWith(['s1', 's2']);
     });
+
+    it('updated_at 이 NULL 인 행(컬럼이 NOT NULL 이 아니다)은 예외 없이 updatedAt null', async () => {
+        getSessionSummaries.mockResolvedValueOnce([{ id: 's3', title: '옛 대화', updated_at: null }]);
+        await expect(sessions.summaries(['s3'])).resolves.toEqual([{ id: 's3', title: '옛 대화', updatedAt: null }]);
+    });
 });

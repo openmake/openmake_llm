@@ -63,19 +63,21 @@ describe('resolveBoundSpace', () => {
 
 describe('bindExistingConversation', () => {
     it('남의 세션은 404 이고 바인딩을 쓰지 않는다', async () => {
-        port.ownerOf.mockResolvedValueOnce('u2');
+        port.exists.mockResolvedValueOnce(false);
         await expect(bindExistingConversation('u1', 'sp1', 's1')).rejects.toMatchObject({ statusCode: 404 });
+        expect(port.exists).toHaveBeenCalledWith({ kind: 'user', userId: 'u1' }, 's1');
+        expect(port.ownerOf).not.toHaveBeenCalled();
         expect(query).not.toHaveBeenCalled();
     });
 
-    it('없는 세션·익명 세션(소유자 null)도 404', async () => {
-        port.ownerOf.mockResolvedValueOnce(null);
+    it('없는 세션·익명 세션도 404(포트 exists 가 false)', async () => {
+        port.exists.mockResolvedValueOnce(false);
         await expect(bindExistingConversation('u1', 'sp1', 's1')).rejects.toMatchObject({ statusCode: 404 });
         expect(query).not.toHaveBeenCalled();
     });
 
     it('자기 세션이면 upsert 한 번, SQL 은 Base 테이블을 쓰지 않는다', async () => {
-        port.ownerOf.mockResolvedValueOnce('u1');
+        port.exists.mockResolvedValueOnce(true);
         query.mockResolvedValueOnce({ rowCount: 1, rows: [] });
         await expect(bindExistingConversation('u1', 'sp1', 's1')).resolves.toBeUndefined();
         expect(query).toHaveBeenCalledTimes(1);

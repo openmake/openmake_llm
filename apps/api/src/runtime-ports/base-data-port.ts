@@ -14,8 +14,8 @@ import { getSessionOwnerId, getSessionSummaries, listSessionIdsByOwner } from '.
 export interface ConversationSessionSummary {
     id: string;
     title: string | null;
-    /** ISO 8601 */
-    updatedAt: string;
+    /** ISO 8601 — `conversation_sessions.updated_at` 은 NOT NULL 이 아니라 null 일 수 있다 */
+    updatedAt: string | null;
 }
 
 export interface ConversationSessionsPort {
@@ -48,7 +48,7 @@ export const baseDataPort: BaseDataPort = {
         async summaries(sessionIds) {
             if (sessionIds.length === 0) return [];
             const rows = await getSessionSummaries(sessionIds);
-            return rows.map((row) => ({ id: row.id, title: row.title, updatedAt: row.updated_at.toISOString() }));
+            return rows.map((row) => ({ id: row.id, title: row.title, updatedAt: row.updated_at?.toISOString() ?? null }));
         },
     },
 };

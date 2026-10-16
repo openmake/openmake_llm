@@ -76,8 +76,8 @@ export async function bindExistingConversation(userId: string, spaceId: string, 
     const space = await getSpaceScopeRow(actor, spaceId, 'read');
     if (!space) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
 
-    const owner = await baseDataPort.conversationSessions.ownerOf(sessionId);
-    if (owner !== userId) {
+    // actor 범위 조회 — 없는 세션·익명 세션·남의 세션은 모두 false → 404(존재를 누출하지 않는다)
+    if (!(await baseDataPort.conversationSessions.exists(userActor(userId), sessionId))) {
         throw new AppError('대화', 404, true, 'NOT_FOUND');
     }
     await kdb().query(

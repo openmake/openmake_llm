@@ -34,11 +34,15 @@ describe('listConversationsForSpace', () => {
         expect(query.mock.calls[0][1]).toEqual(['sp1']);
     });
 
-    it('제목이 없는 세션은 빈 문자열, 삭제돼 포트가 돌려주지 않은 세션은 빠진다', async () => {
-        query.mockResolvedValueOnce({ rows: [{ session_id: 's1' }, { session_id: 'gone' }] });
-        summaries.mockResolvedValueOnce([{ id: 's1', title: null, updatedAt: '2026-10-16T01:00:00.000Z' }]);
+    it('제목·갱신 시각이 없는 세션은 null 그대로(종전 JOIN 과 같다), 삭제돼 포트가 돌려주지 않은 세션은 빠진다', async () => {
+        query.mockResolvedValueOnce({ rows: [{ session_id: 's1' }, { session_id: 's3' }, { session_id: 'gone' }] });
+        summaries.mockResolvedValueOnce([
+            { id: 's1', title: null, updatedAt: '2026-10-16T01:00:00.000Z' },
+            { id: 's3', title: null, updatedAt: null },
+        ]);
         await expect(listConversationsForSpace('sp1')).resolves.toEqual([
-            { session_id: 's1', title: '', updated_at: '2026-10-16T01:00:00.000Z' },
+            { session_id: 's1', title: null, updated_at: '2026-10-16T01:00:00.000Z' },
+            { session_id: 's3', title: null, updated_at: null },
         ]);
     });
 
