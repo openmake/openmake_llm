@@ -33,7 +33,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^10",
-    "eslint-config-next": "16.4.0",
+    "eslint-config-next": "^16.4.0",
     "tailwindcss": "^4",
     "typescript": "^6.0.3"
   }
