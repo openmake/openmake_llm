@@ -64,6 +64,8 @@ grep -c '^KNOWLEDGE_WORKER_MODE=external' .env || echo worker-mode-env-not-exter
 pm2 jlist | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).map(a=>`${a.name}:${a.pm2_env.status}`).join(" ")))'
 psql "$DATABASE_URL" -tAc "SELECT mode, generation FROM knowledge_worker_mode"
 psql "$DATABASE_URL" -tAc "SELECT addon_id, state FROM addon_installations ORDER BY addon_id"
+mkdir -p .omo/evidence/base-plugin-separation/<run-id>/task-12
+psql "$DATABASE_URL" -tAc "SELECT addon_id, state FROM addon_installations ORDER BY addon_id" > .omo/evidence/base-plugin-separation/<run-id>/task-12/preflight-<환경>.txt
 ```
 Expected:
 - 배포할 SHA·태그가 릴리스 후보 보고서(`task-11/release-candidate.md`)의 SHA 와 같다.
@@ -71,7 +73,7 @@ Expected:
 - `worker-mode-env-not-external`(또는 `0`) — 릴리스 배포 시점에 `.env` 의 `KNOWLEDGE_WORKER_MODE` 는 없거나 `inprocess` 다.
 - PM2 목록에 `openmake-llm:online`, 웹 앱 online, `openmake-knowledge-worker` 는 **없다**(external 전환 전에는 등록되지 않는다).
 - `knowledge_worker_mode` 는 처음 배포면 표가 아직 없어 오류(`relation … does not exist`)이고, 재배포면 `inprocess|<n>`.
-- add-on 상태 목록을 증거(`task-12/preflight-<환경>.txt`)로 저장한다 — 배포 뒤 같은 목록이어야 한다.
+- add-on 상태 목록을 증거(`task-12/preflight-<환경>.txt`, 마지막 명령)로 저장한다 — 배포 뒤 같은 목록이어야 한다(§3.3 의 `diff` 가 이 파일을 읽는다). `<환경>` 은 스테이징·운영.
 
 중단 기준: SHA 불일치, `KNOWLEDGE_WORKER_MODE=external` 이 이미 설정돼 있음, `openmake-llm` 이 online 이 아님.
 
@@ -94,25 +96,33 @@ Expected: 백업 파일 경로 출력, dry-run 이 1)~6) 순서를 출력, canar
 
 1. 일회용 DB 준비 — 둘 중 하나:
    - 새 스키마: 스테이징 PostgreSQL 에 빈 DB `<e2e DB 이름>_test` 를 만들고 `TEST_DATABASE_URL=<e2e DB URL> ./scripts/setup-test-db.sh`(코어 + 내장 add-on 마이그레이션 적용).
-   - 스테이징 자료 복제: 방금 만든 백업을 **별도 DB** 에 푼다 — `pg_restore --no-owner -d <e2e DB URL> <백업 디렉터리>/<최신 백업>.dump`. `scripts/backups/db-restore.sh` 는 쓰지 않는다(대상 DB 를 통째로 바꾸는 애플리케이션 DB 복원용이다, §8).
-2. e2e 전용 API 기동·실행·정지:
+   - 스테이징 자료 복제: 빈 DB `<e2e DB 이름>_test` 를 **먼저 만들고**(`createdb <e2e DB 이름>_test`), 방금 만든 백업을 그 별도 DB 에 푼다. 풀기 전에 대상이 `_test` DB 인지 확인하고, 아니면 풀지 않는다:
+     `psql "<e2e DB URL>" -tAc "SELECT current_database()" | grep -q '_test$' && pg_restore --no-owner -d "<e2e DB URL>" <백업 디렉터리>/<최신 백업>.dump || echo "STOP: _test DB 가 아니거나 복원 실패"`.
+     `scripts/backups/db-restore.sh` 는 쓰지 않는다(대상 DB 를 통째로 바꾸는 애플리케이션 DB 복원용이다, §8).
+2. e2e 전용 API 기동·실행·정지 — 괄호(서브셸) 블록을 통째로 붙여 넣는다. 가드가 실패하면 `exit 1` 이 서브셸만 끝내 그 뒤 명령이 돌지 않는다(운영자 셸은 남는다):
 ```bash
 cd <스테이징 설치 경로>
 git rev-parse HEAD                      # 릴리스 SHA 인지 확인(canary-deploy 가 빌드한 산출물)
+(
 export TEST_DATABASE_URL=<e2e DB URL>
-psql "$TEST_DATABASE_URL" -tAc "SELECT current_database()" | grep -q '_test$' || echo "STOP: 일회용 DB 가 아니다"
-lsof -nP -iTCP:<e2e API 포트> -sTCP:LISTEN && echo "STOP: 포트 사용 중"
+psql "$TEST_DATABASE_URL" -tAc "SELECT current_database()" | grep -q '_test$' || { echo "STOP: 일회용 DB 가 아니다"; exit 1; }
+! lsof -nP -iTCP:<e2e API 포트> -sTCP:LISTEN || { echo "STOP: 포트 사용 중"; exit 1; }
 OMK_API_PORT=<e2e API 포트> PORT=<e2e API 포트> DATABASE_URL="$TEST_DATABASE_URL" USER_MEMORY_AUTO_EXTRACT=true ORG_CONTEXT_CACHE_TTL_MS=1000 \
-RL_GENERAL_IP=1000000 RL_GENERAL_USER=1000000 CAPABILITY_JOB_POLLER_ENABLED=false \
+RL_GENERAL_IP=1000000 RL_GENERAL_USER=1000000 CAPABILITY_JOB_POLLER_ENABLED=false KNOWLEDGE_STORAGE_DIR=<일회용 경로> \
+AGENT_TASK_QUEUE_ENABLED=false AGENT_TASK_SCHEDULES_ENABLED=false AGENT_TASK_LEASE_ENABLED=false AGENT_TASK_BOOT_RECOVERY=false \
+NODE_METRICS_ENABLED=false GATE_REPORT_ENABLED=false OTEL_ENABLED=false LLM_MODEL_PROBE_INTERVAL_MS=0 AGENT_SELF_IMPROVE_FIRST_RUN_DELAY_MS=86400000 \
+OPERATOR_WEBHOOK_URL= OPERATOR_WEBHOOK_URL_CRITICAL= OPERATOR_WEBHOOK_URL_WARNING= OPERATOR_WEBHOOK_URL_INFO= \
   nohup npm --workspace apps/api run start > <증거 디렉터리>/task-12/staging-e2e-api.log 2>&1 &
 echo $! > <증거 디렉터리>/task-12/staging-e2e-api.pid
 for i in $(seq 1 90); do curl -fsS http://127.0.0.1:<e2e API 포트>/health >/dev/null 2>&1 && { echo "up after ${i}x2s"; break; }; sleep 2; done
 E2E_BASE_URL=http://127.0.0.1:<e2e API 포트> \
   npx playwright test tests/e2e/plugin-boundary.spec.ts tests/e2e/extension-permissions.spec.ts --project=chromium
-kill "$(cat <증거 디렉터리>/task-12/staging-e2e-api.pid)" 2>/dev/null
+psql "$TEST_DATABASE_URL" -tAc "SELECT state, desired_state FROM addon_installations WHERE addon_id='knowledge-runtime'"
+kill "$(cat <증거 디렉터리>/task-12/staging-e2e-api.pid)" 2>/dev/null; rm -f <증거 디렉터리>/task-12/staging-e2e-api.pid
 lsof -ti tcp:<e2e API 포트> -sTCP:LISTEN | xargs -r kill
+)
 ```
-셸에 준 설정이 `.env` 보다 우선한다(dotenv 는 이미 있는 값을 덮지 않는다) — 그래서 이 API 는 `.env` 의 애플리케이션 DB 가 아니라 `TEST_DATABASE_URL` 에 붙는다. `STOP` 줄이 하나라도 나오면 그 뒤 명령을 실행하지 않는다. 정지는 pid 파일과 e2e 포트에서 듣는 프로세스로만 한다 — 이름으로 찾아 죽이지 않는다(애플리케이션 API 까지 걸린다). `--project=chromium` 으로만 돈다(`playwright.config.ts` 의 webkit 프로젝트는 쓰지 않는다). `E2E_BASE_URL` 은 셸 값이 `tests/e2e/.env.e2e` 보다 우선한다.
+셸에 준 설정이 `.env` 보다 우선한다(dotenv 는 이미 있는 값을 덮지 않는다) — 그래서 이 API 는 `.env` 의 애플리케이션 DB 가 아니라 `TEST_DATABASE_URL` 에 붙는다. 둘째~넷째 줄의 끄기 스위치는 이 묶음의 e2e 실행이 실제로 쓴 목록이다 — 복제 DB 의 예약 에이전트 작업이 돌거나(모델 호출·외부 전달) 운영자 webhook 이 실제 채널로 경보를 보내지 않게 한다(`OPERATOR_WEBHOOK_URL*` 는 빈 값으로 덮는다 — dotenv 는 빈 값도 "이미 있음" 으로 보고 덮지 않는다). Knowledge 업로드 파일은 `KNOWLEDGE_STORAGE_DIR` 로 애플리케이션 저장소와 나눈다. 셸로 덮은 이 이름들 말고는 애플리케이션 `.env` 를 그대로 쓴다 — Redis(`REDIS_URL`) 등 그 밖의 연동은 애플리케이션과 함께 쓴다. `STOP` 줄이 나오면 서브셸이 거기서 끝난다. 정지 앞의 `SELECT state, desired_state` 는 `enabled|enabled` 여야 한다(e2e 의 afterAll 이 의도·상태를 함께 되돌렸다는 확인 — 일회용 DB 라 다르면 기록하고 DB 를 지운다). 정지는 pid 파일과 e2e 포트에서 듣는 프로세스로만 한다 — 이름으로 찾아 죽이지 않는다(애플리케이션 API 까지 걸린다). `--project=chromium` 으로만 돈다(`playwright.config.ts` 의 webkit 프로젝트는 쓰지 않는다). `E2E_BASE_URL` 은 셸 값이 `tests/e2e/.env.e2e` 보다 우선한다.
 Expected: 모두 passed(plugin-boundary 의 메모리·조직 테스트 포함 — 위 설정으로 띄웠으므로 대조군이 성립한다). 끝나면 일회용 DB 를 지운다(`DROP DATABASE <e2e DB 이름>_test`).
 
 스테이징 성능 기준선(빌드 산출물, 같은 부하):
@@ -161,7 +171,7 @@ Expected: dry-run 이 시작 전 확인과 ①~④ 순서를 출력, 실제 실�
 종료 코드(드릴 머리말): `0` 성공 · `2` 사용법·도구 없음 · `3` DB 오류 · `4` lease 대기 초과 · `5` generation 불일치 · `6` 헬스 확인 실패 · `7` `.env` 의 `KNOWLEDGE_WORKER_MODE` 가 목표와 다름 · `8` 단계 명령(API 재시작·worker 기동) 실패.
 - 시작 전 확인에서 난 `7`(또는 `2`)은 아무것도 바꾸지 않은 상태다 — `.env` 를 고쳐 다시 실행한다.
 - ① 뒤 실패(`3`~`8`, ④ 직전의 `7` 포함)는 드릴이 복구 안내 한 줄을 남긴다. 원인을 바로 고칠 수 없으면 반대 방향으로 되돌린다: `.env` 를 `KNOWLEDGE_WORKER_MODE=inprocess` 로 되돌리고 `bash scripts/knowledge-worker-rollback-drill.sh to-inprocess`(§7.1). 같은 방향을 다시 실행하는 것도 안전하다(① 은 generation 만 하나 더 올린다).
-- worker 가 뜨지 않으면 종료 코드를 본다(설계 문서 §9.5): `78` 은 설정 오류(add-on 마이그레이션 004 행 없음·`ADDON_BUILTIN_DISABLED` 로 꺼짐·`KNOWLEDGE_WORKER_HEALTH_PORT` 를 묶지 못함)라 PM2 가 다시 띄우지 않는다. 스키마 확인 조회의 DB 오류는 78 이 아니라 대기 상한 뒤 `1` 로 끝나 PM2 가 다시 띄운다. worker 로그는 API 로그와 따로 `apps/api/logs/knowledge-worker-combined.log`·`knowledge-worker-error.log` 다.
+- worker 가 뜨지 않으면 종료 코드를 본다(설계 문서 §9.5): `78` 은 설정 오류(add-on 마이그레이션 004 행 없음·`ADDON_BUILTIN_DISABLED` 로 꺼짐·`KNOWLEDGE_WORKER_HEALTH_PORT` 를 묶지 못함)라 PM2 가 다시 띄우지 않는다. 스키마 확인 조회의 DB 오류는 78 이 아니라 대기 상한 뒤 `1` 로 끝나 PM2 가 다시 띄운다. worker 로그는 API 로그와 따로 `apps/api/logs/knowledge-worker-combined.log`·`knowledge-worker-error.log` 다. 로거가 올라오기 전에 죽은 경우(모듈 로드·설정 단계)는 이 파일에 남지 않는다 — PM2 가 직접 받는 `openmake-knowledge-worker-out.log`·`openmake-knowledge-worker-error.log`(인스턴스가 있으면 이름에 접미사가 붙는다, 위치 `OMK_LOG_DIR` — 기본 `/tmp`, `ecosystem.config.js`)를 본다.
 
 ## 4. 관측 항목
 
@@ -174,14 +184,14 @@ Expected: dry-run 이 시작 전 확인과 ①~④ 순서를 출력, 실제 실�
 | worker heartbeat | `/api/health` 의 `knowledge.workerHeartbeatAgeMs`, SQL `SELECT worker_id, mode, generation, EXTRACT(EPOCH FROM now()-last_seen)::int AS age_s, inflight FROM knowledge_worker_heartbeats ORDER BY last_seen DESC LIMIT 5` | `KNOWLEDGE_WORKER_HEARTBEAT_STALE_MS`(기본 15000) 미만 | null 또는 15000 이상이 15분 간격 연속 3회 |
 | lease 재할당 | SQL `SELECT count(*) FROM knowledge_ingestion_jobs WHERE fencing_token >= 2 AND state IN ('queued','running')` | 0 또는 배포·재시작 직후 잠깐 | 1시간 안에 줄지 않고 늘어난다(연속 3회 측정) |
 | 큐 나이 | `/api/health` 의 `knowledge.queueOldestAgeMs`, SQL `SELECT state, count(*) FROM knowledge_ingestion_jobs GROUP BY state` | 600000(10분) 미만 | 600000 이상이 연속 3회 |
-| 오류율·p95 | 스테이징: §3.2 의 `bench:api`·`bench:compare`. 운영: 한산한 시간에 `npm run bench:api -- --connections 2 --duration 30 --warmup 5 --scenarios health,knowledge-spaces --environment 운영 --runtime node-dist …` | `bench:compare` exit 0(p95 +10% 이내, 처리율 95% 이상, 오류율 1% 이하) | exit 1 이 연속 3회 측정(각 15분 간격) |
+| 오류율·p95 | 스테이징: §3.2 의 `bench:api`·`bench:compare`. 운영: 한산한 시간에 `npm run bench:api -- --connections 2 --duration 30 --warmup 5 --scenarios health --environment 운영 --runtime node-dist --target-sha <릴리스 SHA> --out …/task-12/current-운영.json` — 운영은 `health` 시나리오만 잰다(필요하면 `v1-models` 를 더한다 — API 키 RPM 300 안의 고정 속도). `knowledge-spaces` 처럼 관리자 쿠키로 `/api/*` 를 치는 시나리오는 몇 초 만에 사용자 예산(`RL_GENERAL_USER` 기본 1000/15분)을 다 써 429 가 오류율로 잡히고 관리자 계정이 잠긴다 — 측정 인스턴스의 `RL_GENERAL_*` 를 올려 둔 때만 넣는다. RSS 표본기도 같은 쿠키로 `/api/health` 를 1초마다 치므로 같은 15분 창에서 여러 번 재지 않는다. 운영 기준선은 현재 릴리스에서 같은 명령으로 처음 잰 값을 `task-1/baseline-운영.json`(일반형 `task-1/baseline-<환경>.json`)으로 저장해 쓴다 | `bench:compare` exit 0(p95 +10% 이내, 처리율 95% 이상, 오류율 1% 이하) | exit 1(regressed)이면 한산한 때 한 번 더 조용히 잰다 — 두 번째도 exit 1 일 때만 롤백을 판단한다(연속 3회 측정을 돌리지 않는다). exit 2(무효)는 판단에 쓰지 않는다 |
 | RSS | `curl -fsS -H "Cookie: <관리자 쿠키>" http://127.0.0.1:<API 포트>/api/health` 의 `process.rss`(관리자만), 공개 `services.memory.rssMB` | 배포 전 값 × 1.10 이하 | 초과가 15분 간격 연속 3회 |
 | 메모리 격리(정합성) | `user_memories` 는 원 대화 id 를 저장하지 않아 SQL 로 출처를 가를 수 없다. 로그 `pm2 logs openmake-llm --nostream --lines 5000 \| grep -c "메모리 격리 판정 실패"`(판정 오류 시 격리로 간주한 횟수)와 §3.2 의 plugin-boundary 메모리 테스트 결과로 본다 | 판정 실패 0, 메모리 테스트 통과 | 연결 대화의 메시지가 `user_memories` 에 들어간 사례가 하나라도 확인됨 — 즉시 중단 |
 | 확장 권한(보안) | SQL `SELECT permission_state, count(*) FROM user_extensions GROUP BY 1`, 로그 `grep -c "PERMISSION_REVIEW_REQUIRED"` | 배포 직후 분포와 같다. `review_required` 확장의 초과 권한 실행 0 | `review_required` 확장이 초과 권한으로 네트워크를 쓴 흔적 — 즉시 중단 |
 
 **즉시 중단(보안·정합성)**: 꺼진 add-on 라우트가 200 으로 응답, 다른 사용자의 Space·문서가 보임, 연결 대화의 메시지가 전역 메모리로 들어감, lease 를 잃은 실행자의 확정 쓰기(같은 문서 버전에 서로 다른 fencing token 의 청크가 섞임), `review_required` 확장의 초과 권한 실행. 하나라도 보이면 §7 롤백을 시작한다.
 
-**성능 이탈 중단**: 위 표의 "연속 3회(15분 간격)" 규칙. 한 번의 튐은 기록만 한다.
+**성능 이탈 중단**: 위 표의 "연속 3회(15분 간격)" 규칙(오류율·p95 행은 그 행의 "두 번째 조용한 측정" 규칙). 한 번의 튐은 기록만 한다.
 
 ## 5. 관찰 기간
 
@@ -358,15 +368,21 @@ docker --context colima-openmake run -d --name omk-e2e-test-pg -e POSTGRES_USER=
   -e POSTGRES_DB=openmake_llm_test -p 127.0.0.1:5433:5432 pgvector/pgvector:0.8.3-pg16-trixie
 export TEST_DATABASE_URL=postgresql://openmake:openmake_test@localhost:5433/openmake_llm_test
 bash scripts/setup-test-db.sh
+lsof -nP -iTCP:52438 -sTCP:LISTEN && echo "STOP: 52438 사용 중 — 아래를 실행하지 않는다(정리 단계가 남의 프로세스를 끄게 된다)"
 OMK_API_PORT=52438 PORT=52438 DATABASE_URL="$TEST_DATABASE_URL" USER_MEMORY_AUTO_EXTRACT=true ORG_CONTEXT_CACHE_TTL_MS=1000 \
-RL_GENERAL_IP=1000000 RL_GENERAL_USER=1000000 CAPABILITY_JOB_POLLER_ENABLED=false TS_NODE_TRANSPILE_ONLY=true \
+RL_GENERAL_IP=1000000 RL_GENERAL_USER=1000000 CAPABILITY_JOB_POLLER_ENABLED=false TS_NODE_TRANSPILE_ONLY=true KNOWLEDGE_STORAGE_DIR=/tmp/omk-e2e-knowledge \
+AGENT_TASK_QUEUE_ENABLED=false AGENT_TASK_SCHEDULES_ENABLED=false AGENT_TASK_LEASE_ENABLED=false AGENT_TASK_BOOT_RECOVERY=false \
+NODE_METRICS_ENABLED=false GATE_REPORT_ENABLED=false OTEL_ENABLED=false LLM_MODEL_PROBE_INTERVAL_MS=0 AGENT_SELF_IMPROVE_FIRST_RUN_DELAY_MS=86400000 \
+OPERATOR_WEBHOOK_URL= OPERATOR_WEBHOOK_URL_CRITICAL= OPERATOR_WEBHOOK_URL_WARNING= OPERATOR_WEBHOOK_URL_INFO= \
   nohup npm --workspace apps/api run dev > /tmp/omk-e2e-api.log 2>&1 &
 echo $! > /tmp/omk-e2e-api.pid
 for i in $(seq 1 90); do curl -fsS http://localhost:52438/health >/dev/null 2>&1 && { echo "up after ${i}x2s"; break; }; sleep 2; done
 cp tests/e2e/.env.e2e.example tests/e2e/.env.e2e
 E2E_BASE_URL=http://localhost:52438 npx playwright test tests/e2e/plugin-boundary.spec.ts --project=chromium
+psql "$TEST_DATABASE_URL" -tAc "SELECT state, desired_state FROM addon_installations WHERE addon_id='knowledge-runtime'"
 ```
-Expected: `10 passed`. 로컬은 `--project=chromium` 으로만 돈다 — webkit 브라우저는 로컬에 설치돼 있지 않다.
+끄기 스위치 목록은 §3.2 와 같다(이 묶음의 e2e 실행이 쓴 목록). 그 밖의 연동(Redis 등)은 개발 `.env` 를 함께 쓴다.
+Expected: `10 passed`, 마지막 줄 `enabled|enabled`(afterAll 이 의도·상태를 함께 되돌렸다). `STOP` 줄이 나오면 그 뒤 명령을 실행하지 않는다 — :52438 을 쓰는 프로세스가 무엇인지 먼저 확인한다. 로컬은 `--project=chromium` 으로만 돈다 — webkit 브라우저는 로컬에 설치돼 있지 않다.
 
 끝나면 이 절차로 띄운 API 만 끈다 — `pkill -f` 처럼 이름으로 찾아 죽이지 않는다(개발 스택 프로세스까지 걸린다). pid 파일의 프로세스와, 남은 경우 :52438 에서 듣고 있는 프로세스만 끈다:
 ```bash
