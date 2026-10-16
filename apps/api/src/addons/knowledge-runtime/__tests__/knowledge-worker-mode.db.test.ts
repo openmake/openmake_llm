@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import type { Pool } from 'pg';
-import { applyKnowledgeSchema, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
+import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 
 const CONN = process.env.TEST_DATABASE_URL;
 const describeOrSkip = CONN ? describe : describe.skip;
@@ -58,7 +58,7 @@ describeOrSkip('knowledge worker 모드 (실 DB)', () => {
     beforeAll(async () => {
         unlock = await lockKnowledgeQueueTests(pool);
         await applyKnowledgeSchema(pool);
-    });
+    }, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS);
     beforeEach(async () => { await resetWorkerMode(pool); });
     afterAll(async () => {
         if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
@@ -120,7 +120,21 @@ describeOrSkip('knowledge worker 모드 (실 DB)', () => {
         const leases = spawnSync('bash', [MODE_SH, 'running-leases'], { env, encoding: 'utf8' });
         expect(leases.status).toBe(0);
         expect(Number.isInteger(Number(leases.stdout.trim()))).toBe(true);
+        // 대기열 — 실행할 때가 된 것과 run_after 가 미래인 것(재시도 대기·지연 정리)을 나눠 센다
+        const delayed = randomUUID();
+        await pool.query(`INSERT INTO knowledge_ingestion_jobs (id, kind, actor_kind, run_after) VALUES ($1, 'cleanup', 'system', NOW() + INTERVAL '30 days')`, [delayed]);
+        jobIds.push(delayed);
+        await insertJob();
+        const counts = await pool.query<{ due: string; delayed: string }>(
+            `SELECT COUNT(*) FILTER (WHERE run_after <= NOW()) AS due, COUNT(*) FILTER (WHERE run_after > NOW()) AS delayed
+               FROM knowledge_ingestion_jobs WHERE state = 'queued'`,
+        );
         const show = spawnSync('bash', [MODE_SH, 'show'], { env, encoding: 'utf8' });
         expect(show.stdout).toMatch(/^mode\|external\|generation /m);
+        const queue = /^queue\|queued_due (\d+)\|queued_delayed (\d+)\|running \d+\|live_leases \d+$/m.exec(show.stdout);
+        expect(queue).not.toBeNull();
+        expect(Number(queue?.[2])).toBeGreaterThanOrEqual(1);
+        expect({ due: Number(queue?.[1]), delayed: Number(queue?.[2]) })
+            .toEqual({ due: Number(counts.rows[0].due), delayed: Number(counts.rows[0].delayed) });
     });
 });
