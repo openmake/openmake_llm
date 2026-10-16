@@ -245,8 +245,58 @@ test('commands.json: db-tests 요약 줄 전체를 읽어 통과·실패·skip �
     assert.deepEqual(parseCounts(out, spec), { passed: 5, failed: 1, skipped: 1 });
 });
 
-test('validateCommands: keysOn anchor 인데 anchor 가 줄 끝(.*$)까지 덮지 않으면 오류', () => {
-    const errs = validateCommands(doc([cmd({ counts: { ...JEST, anchor: '^Tests: \\d+' } })]));
-    assert.ok(errs.some((e) => e.includes('.*$')));
+test('parseCounts: keysOn anchor 면 anchor 가 잡은 줄 전체를 읽는다 — 접두만 잡는 anchor·$ 없는 동치 형태도 같은 결과', () => {
+    const out = 'Tests: 1 passed, 1 total\nmore\nTests:       2 failed, 4321 passed, 1 skipped, 4324 total\n';
+    const want = { passed: 4321, failed: 2, skipped: 1 };
+    for (const anchor of ['^Tests:.*$', '^Tests: ', '^Tests:[^\\n]*', '^Tests:.*']) {
+        assert.deepEqual(validateCommands(doc([cmd({ counts: { ...JEST, anchor } })])), [], anchor);
+        assert.deepEqual(parseCounts(out, { ...JEST, anchor }), want, anchor);
+    }
     assert.deepEqual(validateCommands(doc([cmd({ counts: { ...NODE, anchor: '^ℹ tests \\d+' } })])), []);
+});
+
+test('validateCommands: null·객체 아닌 항목은 예외가 아니라 검증 오류', () => {
+    for (const bad of [null, 42, 'x']) {
+        const errs = validateCommands(doc([cmd(), bad]));
+        assert.ok(errs.some((e) => e.includes('객체')), String(bad));
+    }
+});
+
+test('validateCommands: counts 의 passed·failed·skipped 정규식에 캡처 그룹이 없으면 오류', () => {
+    for (const k of ['passed', 'failed', 'skipped']) {
+        const errs = validateCommands(doc([cmd({ counts: { ...JEST, [k]: '\\d+ ' + k } })]));
+        assert.ok(errs.some((e) => e.includes(`counts.${k}`) && e.includes('캡처')), k);
+    }
+});
+
+test('parseCounts: 캡처가 숫자가 아니면 NaN 이 아니라 null(미확인)', () => {
+    const spec = { ...JEST, skipped: '(skipped)' };
+    const got = parseCounts('Tests: 3 passed, 1 skipped, 4 total\n', spec);
+    assert.deepEqual(got, { passed: 3, failed: 0, skipped: null });
+});
+
+test('createChunkMasker: 청크 경계에서 갈린 한글 멀티바이트 문자가 깨지지 않는다', () => {
+    const text = '한글 출력 검증 — 통과\n';
+    const bytes = Buffer.from(text, 'utf8');
+    const out = [];
+    const m = createChunkMasker((t) => out.push(t));
+    m.push(bytes.subarray(0, 1));
+    m.push(bytes.subarray(1, 8));
+    m.push(bytes.subarray(8));
+    m.flush();
+    const joined = out.join('');
+    assert.equal(joined.includes('\uFFFD'), false);
+    assert.equal(joined, text);
+});
+
+test('runCommand: spawn 실패(없는 cwd → ENOENT)는 예외 없이 실패 결과로 돌아온다', async () => {
+    // bash 는 늘 있으므로 없는 cwd 로 spawn 자체를 실패시킨다 — 어느 환경에서나 ENOENT 로 결정적이다
+    const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    const res = await runCommand({ cmd: 'echo never', cwd: join(dir, 'no-such-dir'), env: process.env, timeoutSec: 10, logPath: join(dir, 'err.log') });
+    assert.equal(res.exitCode, null);
+    assert.equal(res.signal, null);
+    assert.equal(res.timedOut, false);
+    assert.match(res.output, /ENOENT/);
+    assert.equal(readFileSync(join(dir, 'err.log'), 'utf8'), res.output);
+    assert.equal(buildReceipt(cmd(), res, meta).status, 'failed');
 });

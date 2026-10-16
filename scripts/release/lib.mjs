@@ -23,6 +23,11 @@ function compiles(src) {
     }
 }
 
+/** 캡처 그룹 수 — 빈 대안을 붙여 빈 문자열에 늘 맞게 한 뒤 결과 배열 길이로 센다 */
+function captureGroupCount(src) {
+    return new RegExp(`${src}|`).exec('').length - 1;
+}
+
 export function validateCommands(doc) {
     if (!doc || doc.schemaVersion !== SCHEMA_VERSION) return [`schemaVersion 이 ${SCHEMA_VERSION} 이 아니다`];
     const errors = [];
@@ -30,9 +35,13 @@ export function validateCommands(doc) {
     if (rows.length === 0) errors.push('matrixRows 가 비었다');
     if (!Array.isArray(doc.commands) || doc.commands.length === 0) return [...errors, 'commands 가 비었다'];
     const seen = new Set();
-    for (const c of doc.commands) {
-        const where = `command ${c?.id ?? '(id 없음)'}`;
-        if (!ID_RE.test(c?.id ?? '')) errors.push(`${where}: id 형식`);
+    for (const [i, c] of doc.commands.entries()) {
+        if (c === null || typeof c !== 'object' || Array.isArray(c)) {
+            errors.push(`commands[${i}]: 객체가 아니다`);
+            continue;
+        }
+        const where = `command ${c.id ?? '(id 없음)'}`;
+        if (!ID_RE.test(c.id ?? '')) errors.push(`${where}: id 형식`);
         if (seen.has(c.id)) errors.push(`${where}: id 중복`);
         seen.add(c.id);
         if (typeof c.title !== 'string' || !c.title) errors.push(`${where}: title 없음`);
@@ -46,11 +55,12 @@ export function validateCommands(doc) {
             const s = c.counts ?? {};
             if (!['anchor', 'output'].includes(s.keysOn)) errors.push(`${where}: counts.keysOn 은 anchor|output`);
             for (const k of ['anchor', 'passed', 'failed', 'skipped']) {
-                if (s[k] !== undefined && !compiles(s[k])) errors.push(`${where}: counts.${k} 정규식이 깨졌다`);
+                if (s[k] === undefined) continue;
+                if (!compiles(s[k])) errors.push(`${where}: counts.${k} 정규식이 깨졌다`);
+                // 수는 첫 캡처 그룹에서 읽는다 — 그룹이 없으면 m[1] 이 undefined 라 NaN 이 된다
+                else if (k !== 'anchor' && captureGroupCount(s[k]) === 0) errors.push(`${where}: counts.${k} 정규식에 캡처 그룹 (\\d+) 가 없다`);
             }
             if (typeof s.anchor !== 'string') errors.push(`${where}: counts.anchor 없음`);
-            // keysOn anchor 면 anchor 가 잡은 부분만 읽으므로 줄 끝까지 덮어야 한다(접두만 잡으면 모두 0 이 된다)
-            else if (s.keysOn === 'anchor' && !s.anchor.endsWith('.*$')) errors.push(`${where}: keysOn anchor 면 counts.anchor 는 .*$ 로 끝나야 한다`);
         }
     }
     return errors;
@@ -60,20 +70,38 @@ export function missingEnv(command, env) {
     return command.requiresEnv.filter((name) => !env[name]);
 }
 
+/** 마지막 일치의 첫 캡처를 수로. 일치 없음은 undefined, 일치했는데 수가 아니면 null(NaN 을 내보내지 않는다) */
 function lastMatchNumber(text, src) {
     const re = new RegExp(src, 'gm');
-    let value = null;
-    for (const m of text.matchAll(re)) value = Number(m[1]);
+    let value;
+    for (const m of text.matchAll(re)) {
+        const n = Number(m[1]);
+        value = m[1] !== undefined && Number.isFinite(n) ? n : null;
+    }
     return value;
 }
 
-/** spec 이 null 이면 null(해당 없음). anchor 를 못 찾으면 모두 null(미확인). 찾았는데 항목이 없으면 0 */
+/** 일치 위치가 든 줄 전체 */
+function lineAt(text, index) {
+    const start = text.lastIndexOf('\n', index - 1) + 1;
+    const end = text.indexOf('\n', index);
+    return text.slice(start, end === -1 ? text.length : end);
+}
+
+/**
+ * spec 이 null 이면 null(해당 없음). anchor 를 못 찾으면 모두 null(미확인). 찾았는데 항목이 없으면 0, 수가 아니면 null.
+ * keysOn anchor 면 마지막 anchor 가 시작한 줄 전체를 읽는다 — anchor 가 접두만 잡든 `.*$` 로 끝나든 결과가 같다.
+ */
 export function parseCounts(output, spec) {
     if (spec === null) return null;
     const anchors = [...output.matchAll(new RegExp(spec.anchor, 'gm'))];
     if (anchors.length === 0) return { passed: null, failed: null, skipped: null };
-    const scope = spec.keysOn === 'anchor' ? anchors[anchors.length - 1][0] : output;
-    const read = (k) => (spec[k] ? (lastMatchNumber(scope, spec[k]) ?? 0) : null);
+    const scope = spec.keysOn === 'anchor' ? lineAt(output, anchors[anchors.length - 1].index) : output;
+    const read = (k) => {
+        if (!spec[k]) return null;
+        const v = lastMatchNumber(scope, spec[k]);
+        return v === undefined ? 0 : v;
+    };
     return { passed: read('passed'), failed: read('failed'), skipped: read('skipped') };
 }
 
