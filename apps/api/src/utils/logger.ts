@@ -10,6 +10,7 @@
  * @description
  * - 콘솔: 컬러 포맷, 시:분:초 타임스탬프
  * - 파일: error.log (에러 전용), combined.log (전체), 각 5MB/5파일 로테이션
+ *   (env LOG_FILE_PREFIX 가 있으면 파일 이름 앞에 붙인다 — 같은 logs/ 를 쓰는 다른 프로세스가 한 파일을 함께 돌리지 않게)
  * - 카테고리 로거: createLogger('CategoryName')으로 [Category] 접두사 자동 추가
  * - 로그 레벨: 환경변수 LOG_LEVEL (기본: info)
  */
@@ -22,6 +23,14 @@ import { redactSecrets } from './redact';
 import { LOG_REDACT } from '../config/runtime-limits';
 
 const logDir = path.join(__dirname, '../../logs');
+
+/**
+ * 로그 파일 경로 — winston 파일 로테이션은 프로세스마다 크기를 따로 세므로 두 프로세스가 한 파일을 쓰면 회전이 엇갈린다.
+ * API 외 프로세스(예: 별도 worker 진입점)는 logger 를 import 하기 전에 LOG_FILE_PREFIX 를 정해 자기 파일을 쓴다. API 는 비워 둔다.
+ */
+export function logFilePath(name: string): string {
+    return path.join(logDir, `${process.env.LOG_FILE_PREFIX ?? ''}${name}`);
+}
 
 // trace_id 추출 헬퍼 (OTel 모듈 lazy 로딩)
 let _getTraceId: (() => string | undefined) | null = null;
@@ -82,14 +91,14 @@ const logger = winston.createLogger({
         }),
         // 에러 로그 파일
         new winston.transports.File({
-            filename: path.join(logDir, 'error.log'),
+            filename: logFilePath('error.log'),
             level: 'error',
             maxsize: 5242880, // 5MB
             maxFiles: 5
         }),
         // 전체 로그 파일
         new winston.transports.File({
-            filename: path.join(logDir, 'combined.log'),
+            filename: logFilePath('combined.log'),
             maxsize: 5242880,
             maxFiles: 5
         })
