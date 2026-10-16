@@ -8,74 +8,39 @@
  *  - handler 의 실행 시그니처는 P02 에서 기존 실행기(`CapabilityExecutor`)와 같다. P04 의 Restricted ModelInvoker 가
  *    들어오면 `ctx` 가 승인 handle 기반으로 좁혀진다(계약 버전은 그대로 1 — 필드 추가만).
  *
+ * 2026-10-16(3차 C2): 순수 metadata·소유자·실행 문맥 DTO 의 원천은 계약 패키지 `@openmake/plugin-contracts` 다 — 이 파일은
+ * 그것을 재수출하고, Base 포트(승인 handle·제한 호출·Artifact·Job)를 붙인 `CapabilityContext`·`CapabilityHandler` 만 정의한다.
+ * 오케스트레이터 모듈(`services/orchestrator/*`)에 기대지 않는다 — 두 쪽이 같은 모양인지는
+ * `__tests__/plugin-contracts-compat.test.ts` 가 tsc 로 고정한다.
+ *
  * @module capability-contract/types
  */
-import type { PlanTask } from '../services/orchestrator/plan-schema';
-import type { ExecContext, ExecutorOutput } from '../services/orchestrator/types';
+import type {
+    CAPABILITY_CONTRACT_VERSION as CONTRACT_CAPABILITY_VERSION,
+    CapabilityDefinition, CapabilityExecContextDTO, CapabilityExecutorOutputDTO, CapabilityOwner, CapabilityTaskDTO,
+    ModelDescriptor, SupportVerdict,
+} from '@openmake/plugin-contracts';
+import type { Capability } from '../config/capabilities';
 import type { ApprovedInvocationHandle } from './admission';
 import type { RestrictedModelInvoker } from '../runtime-ports/model-invoker';
 import type { ScopedArtifactStore } from '../runtime-ports/artifact-store';
 import type { JobDriver, ScopedJobRuntime } from '../runtime-ports/job-runtime';
 import type { OperationSpec } from '../runtime-ports/model-invoker';
 
-export type CapabilityId = string;
-export type AddonId = string;
-export type JsonSchema = Readonly<Record<string, unknown>>;
+export type {
+    AddonId, CapabilityDefinition, CapabilityId, CapabilityOwner, DirectTransport, JsonSchema, ModelDescriptor, SupportVerdict,
+} from '@openmake/plugin-contracts';
 
-export const CAPABILITY_CONTRACT_VERSION = 1 as const;
-
-export interface CapabilityDefinition {
-    id: CapabilityId;
-    contractVersion: typeof CAPABILITY_CONTRACT_VERSION;
-    /** 모델 배정 대상인가(설정 화면·model_assignments) */
-    assignable: boolean;
-    /** Planner 가 계획에 쓸 수 있는가 */
-    plannable: boolean;
-    display: {
-        /** 한국어 라벨(i18n 은 웹이 별도 보유 — 서버 metadata 는 ko 기준) */
-        label: string;
-        /** 설정 화면 그룹 키(text·vision·image·audio·music·video·web) */
-        group: string;
-        order: number;
-    };
-    /** Planner 프롬프트 한 줄 설명 */
-    plannerHint: string;
-    /** 계획 `input` 의 추가 인자 스키마 — Planner 용 JSON schema 투영과 서버 검증이 같은 원천을 쓴다 */
-    inputSchema: JsonSchema;
-    /** 배정 `params` 스키마(설정 화면 위젯) */
-    settingsSchema: JsonSchema;
-    execution: {
-        mode: 'sync' | 'job';
-        timeoutMs: number;
-        supportsCancellation: boolean;
-    };
-    output: { mimeTypes: readonly string[] };
-}
-
-export interface ModelDescriptor {
-    fullId: string;
-    providerId: string;
-    isExternal: boolean;
-}
+/** 값은 Base 가 들고(API 는 계약 패키지를 런타임에 require 하지 않는다 — type-only 규칙), 타입은 계약 상수에 고정한다 */
+export const CAPABILITY_CONTRACT_VERSION: typeof CONTRACT_CAPABILITY_VERSION = 1;
 
 /**
- * provider 지원 판정. `direct` 는 게이트웨이가 프록시하지 못하는 provider API 라 앱이 사용자/서버 키로 provider 에 직결해야 함을
- * 선언한다(P08 — 종전 resolver 의 영상 전용 분기를 driver descriptor 로). 주소는 서버 통제 값(카탈로그 기본 URL·등록 base URL)뿐이다.
- */
-export type SupportVerdict = { supported: true; direct?: DirectTransport } | { supported: false; reason: string };
-
-/**
- * 직결 선언. `api: 'native'` 는 provider 의 OpenAI 호환 주소가 아니라 **카탈로그에 고정된 네이티브 API**(`nativeApi` — 주소·인증 헤더)를
- * 쓴다는 뜻이다(Gemini `/interactions` 등). add-on 은 "네이티브를 쓴다"만 고르고 주소·헤더 이름은 정하지 못한다.
- */
-export interface DirectTransport { endpoint: string; api?: 'native' }
-
-/**
- * Add-on handler 가 받는 실행 문맥(P04) — 승인 handle · 제한 호출 포트 · scoped Artifact 포트. 종전 `ExecContext` 에서
- * **`targets`(헤더·키 포함)·`handles` 를 뺀** 것이다: raw 자격증명은 `model` 포트 안에만 있다(T08).
+ * Add-on handler 가 받는 실행 문맥(P04) — 계약 실행 문맥(`CapabilityExecContextDTO`, Base capability 합집합으로 좁힘)에
+ * 승인 handle · 제한 호출 포트 · scoped Artifact 포트를 더한 것이다. 종전 `ExecContext` 에서 **`targets`(헤더·키 포함)·`handles` 를
+ * 뺀** 모양과 같다: raw 자격증명은 `model` 포트 안에만 있다(T08).
  * Base 소유(legacy bridge) 실행기는 전환 기간 동안 `targets` 를 덧붙여 받는다(executor.ts).
  */
-export interface CapabilityContext extends Omit<ExecContext, 'targets' | 'handles'> {
+export interface CapabilityContext extends CapabilityExecContextDTO<Capability> {
     invocation: ApprovedInvocationHandle;
     model: RestrictedModelInvoker;
     artifacts: ScopedArtifactStore;
@@ -86,9 +51,9 @@ export interface CapabilityContext extends Omit<ExecContext, 'targets' | 'handle
 
 export interface CapabilityHandler {
     /** 실행 — ctx 는 승인 handle 기반 문맥. 임의 모델·Provider·URL 을 고를 수 없다(포트가 거절) */
-    execute(task: PlanTask, ctx: CapabilityContext): Promise<ExecutorOutput>;
+    execute(task: CapabilityTaskDTO<Capability>, ctx: CapabilityContext): Promise<CapabilityExecutorOutputDTO>;
     /** 계획 인자 정규화 hook(원문 우선 보정 등). 원문 의미를 조용히 바꾸지 않는다 — 진단은 로그로 */
-    normalizePlanInput?(task: PlanTask, userMessage: string): PlanTask;
+    normalizePlanInput?(task: CapabilityTaskDTO<Capability>, userMessage: string): CapabilityTaskDTO<Capability>;
     /** 이 driver 가 배정된 모델을 지원하는가 — 배정 저장·실행 전 검사 */
     describeProviderSupport?(model: ModelDescriptor): SupportVerdict;
     /**
@@ -100,13 +65,6 @@ export interface CapabilityHandler {
     jobDriver?: JobDriver;
     /** driver 가 쓰는 추가 provider 연산(경로 템플릿) — 등록 시 검증, 포트가 origin·자격증명을 붙인다 */
     operations?: Readonly<Record<string, OperationSpec>>;
-}
-
-/** 소유자는 Host 가 채운다 — 외부 입력을 신뢰하지 않는다 */
-export interface CapabilityOwner {
-    addonId: AddonId;
-    addonVersion: string;
-    source: 'builtin';
 }
 
 export interface CapabilityRegistration {

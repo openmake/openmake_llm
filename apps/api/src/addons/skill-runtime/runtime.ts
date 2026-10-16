@@ -7,9 +7,9 @@
  * @module addons/skill-runtime/runtime
  */
 import type {
-    ActiveSkillBinding, ManifestPromptResult, SkillCatalogOptions, SkillRuntime, SkillSummary, SkillUsageEvent,
+    ActiveSkillBinding, ManifestPromptResult, SkillCatalogOptions, SkillRecordDTO, SkillRuntime, SkillSummary, SkillUsageEvent,
 } from '../../runtime-ports/skill-runtime';
-import type { AgentSkill } from '../../data/repositories/skill-repository';
+import { toSkillRecordDTO } from '../../runtime-ports/contract-mappers';
 import type { ToolDefinition } from '../../llm/types';
 import { getSkillManager } from './skill-manager';
 import { isSkillOfferEnabled } from './skill-catalog';
@@ -24,8 +24,9 @@ export const skillRuntime: SkillRuntime = {
         return getSkillManager().buildManifestPrompt(agentId, userId, agentCategory, query, options);
     },
 
-    getSkillsForAgent(agentId: string, userId?: string, agentCategory?: string): Promise<AgentSkill[]> {
-        return getSkillManager().getSkillsForAgent(agentId, userId, agentCategory);
+    /** 저장소 행을 계약 DTO 로 바꿔 넘긴다 — Base 는 이름(name)만 쓴다(agents/system-prompt.ts) */
+    async getSkillsForAgent(agentId: string, userId?: string, agentCategory?: string): Promise<SkillRecordDTO[]> {
+        return (await getSkillManager().getSkillsForAgent(agentId, userId, agentCategory)).map(toSkillRecordDTO);
     },
 
     buildSkillPrompt(agentId: string, userId?: string, agentCategory?: string): Promise<string> {

@@ -2,8 +2,8 @@
  * Knowledge 도메인 실 DB 검증(K01 복제본 전용) — 운영(5432)에 절대 붙지 않는다.
  * TEST_DATABASE_URL 없으면 skip. cross-user 누출 0·조직 규칙·중복 해시 409·삭제 즉시 비노출·바인딩 소유권을 검증한다.
  *
- * `../db` 를 K01 풀로, conversation-sessions·membership-cache 를 mock 해 서비스가 K01 만 만지게 한다.
- * (repository 들은 module-level kdb() 를 쓰므로 주입 대신 모듈 mock 으로 라우팅한다.)
+ * `../db` 와 Base 풀(unified-database 의 getPool — 데이터 포트가 쓴다)을 K01 풀로, conversation-sessions·membership-cache 를
+ * mock 해 서비스가 K01 만 만지게 한다. (repository 들은 module-level kdb() 를 쓰므로 주입 대신 모듈 mock 으로 라우팅한다.)
  */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -34,6 +34,10 @@ jest.mock('../db', () => {
 jest.mock('../../../services/org/membership-cache', () => ({ activeOrgFor: jest.fn(async () => null) }));
 // 새 대화 생성은 K01 에 직접 세션 행을 넣는 mock 으로(운영 conversation-sessions 는 getPool→5432 라 부르면 안 된다)
 jest.mock('../../../data/conversation-sessions', () => ({ createSession: jest.fn() }));
+// Base 데이터 포트(runtime-ports/base-data-port → data/conversation-session-lookup)도 K01 풀로 — 그 모듈은 getPool 만 쓴다
+jest.mock('../../../data/models/unified-database', () => ({
+    getPool: () => (jest.requireMock('../db') as { __pool: unknown }).__pool,
+}));
 
 import { createSession } from '../../../data/conversation-sessions';
 import { AppError } from '../../../utils/error-handler';

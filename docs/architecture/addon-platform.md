@@ -31,7 +31,7 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 
 **토글 전파 범위**: 관리자 토글(`PATCH /api/admin/addons/:id/state`)은 같은 프로세스의 캐시를 만료시킨다 — 다음 턴·요청이 다시 읽고(적재 도중 비워지면 그 스냅숏은 버리고 다시 읽는다), 진행 중인 턴은 마지막 값을 쓰되 같은 턴의 strict 판정이나 다른 요청이 다시 적재하면 이후 동기 훅은 새 값을 본다(턴 단위 스냅숏은 §10). 운영은 PM2 단일 fork(`instances: 1`) 프로세스 하나라 토글은 그 프로세스에 즉시 반영된다 — 프로세스를 여럿 띄우는 배치(canary 포트·별도 worker)에서는 **다른 프로세스가 캐시 TTL(최대 30초) 뒤에** 새 의도를 보고, 런타임 정지·재개는 토글을 받은 프로세스에만 일어난다(다른 프로세스는 재시작). 즉시·원자적 철회(상태 변경과 실행 시작 기록의 직렬화)는 보장하지 않으며 2차 범위다. 캐시 TTL 을 "즉시 반영"이라고 쓰지 않는다.
 
-## 7.3 수명주기 (`addon-host/lifecycle.ts`, 계약 `addon-host/lifecycle-types.ts`)
+## 7.3 수명주기 (`addon-host/lifecycle.ts`, 계약 `@openmake/plugin-contracts` — 재수출 `addon-host/lifecycle-types.ts`)
 
 코드 언로드는 하지 않는다(재시작 필요 유지). 런타임 진입점은 `AddonRuntimeHost` 를 받고 `void` 또는 `AddonRuntimeHandle { stop({drain, signal}), resume?(), health?() }` 을 돌려준다 — `void` 인 기존 add-on 은 그대로 동작한다. 호스트는 add-on 별 기록(handle·정리 함수 목록·host.signal)을 두고, 상태는 `activation.ts` 표가 단일 원천이다.
 
@@ -68,6 +68,37 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 
 DB 밖 부작용(임베딩 호출·파일 삭제)은 멈출 뿐 되돌리지 않는다.
 
+## 7.4 계약 패키지 (`packages/plugin-contracts`, `@openmake/plugin-contracts`)
+
+Base ↔ Add-on 계약의 원천이다. **타입과 상수만** 담고 런타임 의존이 없다(eslint 가 apps·외부 패키지·자기 디렉터리 밖 import 를 막는다). 버전 `PLUGIN_CONTRACT_VERSION`(1.0.0) — 필드 삭제·의미 변경은 major, 선택 필드·새 DTO 는 minor.
+
+| 파일 | 내용 |
+|---|---|
+| `actor.ts` | `Actor` = user·org·system — 포트가 "누구의 것을" 돌려줄지 정한다 |
+| `availability.ts` | 설치 상태·관리자 의도·실패 코드 어휘, `AddonRuntimeStatus`·`AddonAvailability`, 부팅이 읽는 `AddonInstallationIntent` |
+| `lifecycle.ts` | `AddonRuntimeHandle`·`AddonRuntimeHost<THandler>`·`AddonRuntimeEntry<THandler>`(§7.3) |
+| `manifest.ts` | `AddonManifestDTO`(검증기 zod 스키마는 Base `addon-host/manifest.ts`) |
+| `contributions.ts` | capability metadata·소유자·실행 문맥 DTO, 스킬 포트 DTO(`SkillRecordDTO`·`ActiveSkillBinding`·`SkillUsageEvent`·`ManifestPromptResult`·`SkillSummary`·`SkillCatalogOptions`), 도구 포트 DTO(`ToolUserInputResult`·`ToolUserInputContext`·`ToolSummary`) |
+
+**Base 가 계약을 쓰는 규칙**
+- `apps/api` 소스는 계약 패키지를 `import type` / `export type` 으로만 쓴다(eslint `@typescript-eslint/no-restricted-imports`). 배포(`openmake_llm.sh deploy`)는 `npm install` 없이 build→restart 라 새 워크스페이스 링크가 없을 수 있기 때문이다. 타입은 `apps/api/tsconfig.json` 의 `paths` 가 `packages/plugin-contracts/dist/index.d.ts` 로 푼다(src 로 물리면 rootDir 위반) — 그래서 apps/api 의 tsc 앞에는 `npm run build:packages` 가 있어야 한다. Jest 는 `moduleNameMapper` 로 src 를 본다.
+- 상수 값은 Base 가 들고 타입을 계약 상수의 `typeof` 로 고정한다(`ADDON_STATES`·`CAPABILITY_CONTRACT_VERSION`·`LOAD_SKILL_TOOL_NAME`·`TOOL_USER_INPUT_APPROVAL_NAME`) — 한쪽만 바꾸면 tsc 가 막는다.
+- 기존 경로(`addon-host/lifecycle-types`·`addon-host/activation`·`runtime-ports/*`·`capability-contract/types`)는 재수출 facade 다. `CapabilityHandler`·`CapabilityContext`·`ToolRuntime`·`SkillRuntime` 인터페이스는 Base 포트(승인 handle·제한 호출·LLM 도구 정의) 타입에 묶여 Base 에 남는다 — 계약의 `AddonRuntimeHost` 는 handler 형을 제네릭으로 받고 Base facade 가 `CapabilityHandler` 로 채운다.
+- 오케스트레이터 타입(`services/orchestrator/*`)과 계약 DTO 의 동등성, zod 매니페스트와 `AddonManifestDTO` 의 동등성은 `apps/api/src/__tests__/plugin-contracts-compat.test.ts` 가 tsc 로 고정한다. 계약만 쓰는 샘플 add-on(`packages/plugin-contracts/__tests__/compile-sample.ts`)은 패키지 빌드 때 컴파일된다.
+- 저장소 행 → 계약 DTO 변환은 `runtime-ports/contract-mappers.ts`(`toSkillRecordDTO`·`toAddonInstallationIntent`) 한 곳이다.
+
+## 7.5 마이그레이션 소유권
+
+| 소유 | 위치 | `migration_versions.version` | 부팅 때 적용 | 수동·테스트 DB 명령(apps/api 에서) |
+|---|---|---|---|---|
+| Base(코어) | `db/init/002-schema.sql`(baseline) + `db/migrations/NNN_*.sql` | `NNN` | `applyPendingWithLock`(서버 부팅) | `npx ts-node src/data/migrations/cli.ts migrate` |
+| add-on | `apps/api/addons/builtin/<id>/migrations/NNN_*.sql` — 매니페스트 `components.migrations` 와 권한 `database:addon` 이 둘 다 있을 때만 | `addon:<id>:NNN` | 부팅 ④ `applyAddonMigrationsWithLock` — env ∧ DB 의도로 켜진 add-on 만 | `npx ts-node src/data/migrations/cli.ts migrate:addons` — env 로 켜진 add-on(DB 의도는 보지 않는다), 코어 `migrate` 뒤에 |
+
+- 두 실행기는 같은 advisory lock 으로 직렬화된다. add-on 마이그레이션은 코어 테이블을 만들거나 바꾸지 않는다 — 코어 테이블을 FK 로 **참조**하는 것은 되므로 코어 뒤에 돈다.
+- 기존 마이그레이션 파일은 고치지 않는다. 바꿀 것은 새 번호로 additive 하게(열 추가·새 표) 하고, 롤백은 코드만 되돌려도 동작하도록 기본값을 둔다(설계 D8).
+- `migrate:addons` 는 부팅 ④ 와 같은 대상 선택(`selectMigrationTargets`)·같은 잠금을 쓰되 하나라도 실패하면 종료 코드 1 이다(부팅은 실패한 add-on 만 막고 서버는 계속 뜬다).
+- 테스트 DB 는 `scripts/setup-test-db.sh` 가 코어와 add-on 마이그레이션을 모두 적용한다(`TEST_DATABASE_URL` 을 주면 그 DB 에 바로, 이름은 `_test` 로 끝나야 한다).
+
 ## 8.3 실행 판정 — 한 규칙
 
 "상태를 확인하지 못한 것"과 "꺼진 것"을 섞지 않는다. 확인 불가는 **차단하되 재시도 가능한 장애**로 알린다.
@@ -97,13 +128,44 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 
 순수 훅(`detectIntent` 등)은 동기라 턴마다 DB 를 묻지 않고 상태 캐시로 판정한다 — 관리자가 끄면(DB 의도 disabled·부팅 실패 failed·env) 캐시가 갱신된 뒤의 턴부터 프롬프트 조각·도구 노출·의도 판정이 빠진다(같은 프로세스는 다음 턴부터, 다른 워커는 TTL 뒤 첫 턴부터). 첫 적재 전(부팅 직후)에만 켜짐으로 본다(fail-open — 선언형 노출; `prepareTurnContext`·오케스트레이션 도구 실행은 `integrationGate` 가 막지만, 기여 작업 도구(`agentTaskTools`)의 `run` 에는 실행 게이트가 없다 — §10). 조직 사용권 축은 동기 훅이 보지 않으며 실행 시점(`runOrchestrationTool`·`prepareTurnContext`)의 게이트가 맡는다. 보호 훅(`isMemoryIsolatedSession`)·표시 훅(`listHiddenSessionIds`)·구 클라이언트 필드 매핑(`collectContextRefs`)은 꺼진 add-on 도 전체 목록으로 계속 돈다. 꺼진 add-on 의 기여 도구가 호출되면(`isOrchestrationTool` 은 전체 목록으로 분류) 실행 시점에서 거절 문구를 돌려준다.
 
+## 8.5 Add-on ↔ Base 경계 규칙
+
+| 규칙 | 집행 | 실패 조건 |
+|---|---|---|
+| Base 는 add-on 모듈을 import 하지 않는다 | eslint `no-restricted-imports`(`**/addons/**`, addon-host 제외) | 위반 즉시 |
+| 계약 패키지는 apps·외부 패키지·자기 디렉터리 밖을 import 하지 않는다 | eslint(`packages/plugin-contracts/src/**`) | 위반 즉시 |
+| apps/api 는 계약 패키지를 type-only 로만 쓴다(테스트 예외) | eslint `@typescript-eslint/no-restricted-imports` | 값 import·재수출 |
+| add-on → Base 내부 계층(data·services·routes·sockets·controllers·middlewares·auth·chat) import 는 **줄어들기만** 한다 | `npm run check:addon-boundary`(CI Gate 4), 허용 목록 `scripts/lint/addon-import-allowlist.json` | 목록 밖의 새 (파일, 대상) 쌍. 사라진 쌍은 권고만 — `npm run gen:addon-boundary` 로 목록을 줄인다 |
+| add-on 소스는 Base 테이블을 SQL 로 쓰지 않는다 | Jest `__tests__/addons-no-base-table-sql.test.ts`(테이블 목록은 코어 스키마의 CREATE TABLE) | SQL 키워드 뒤의 Base 테이블 이름. 예외(래칫): 스킬 런타임의 스킬 스키마 6개 표 |
+
+add-on 이 써도 되는 문은 `runtime-ports/*`(포트)·`addon-host`·`config`·`utils`·`@openmake/plugin-contracts` 다. 허용 목록·SQL 검사는 테스트(`__tests__`·`*.test.ts`)와 평가 시드 도구(`evaluation/`)를 보지 않는다. 초기 허용 목록은 141쌍/67파일(2026-10-16) — 새 import 를 목록에 더하는 diff 는 리뷰에서 거절한다.
+
+ratchet 은 `BASE_LAYERS`(`scripts/lint/addon-boundary-lib.mjs`) 8개 디렉터리 — `data`·`services`·`routes`·`sockets`·`controllers`·`middlewares`·`auth`·`chat` — 로 가는 import 만 센다. `tools/`·`agents/`·`llm/`·`security/`·`workflow/` 등 그 밖의 Base 디렉터리로 가는 import 는 세지 않으며, 범위 확장은 2차 후보다.
+
+## 8.6 Base 데이터 포트 (`runtime-ports/base-data-port.ts`)
+
+add-on 이 Base 소유 테이블을 읽어야 할 때의 문이다. 지금은 대화 세션만 있다.
+
+| 함수 | 인가 | 결과 |
+|---|---|---|
+| `conversationSessions.listIdsForUser(actor)` | actor 의 것만 — user actor 만 세션을 소유하므로 org·system 은 `[]` | 소유 세션 id |
+| `conversationSessions.exists(actor, sessionId)` | 같음 — user 가 아니면 false | 세션이 있고 그 user 소유면 true |
+| `conversationSessions.ownerOf(sessionId)` | **없음** — 호출부가 상위 자원(예: Knowledge Space)으로 인가한 뒤에만 | 소유자 id, 익명·없는 세션은 null |
+| `conversationSessions.summaries(sessionIds)` | **없음** — 같음 | 제목·갱신 시각(ISO), 최근 갱신 순, 없는 id 는 빠짐, 빈 입력은 조회 없이 `[]` |
+
+Knowledge 는 바인딩(연결·해제·해석·사이드바 숨김)과 Space 대화 목록의 소유·제목 조회를 이 포트로 한다 — 종전의 `conversation_sessions` JOIN 5곳을 바꿨고 결과·404 는 같다. 제목·갱신 시각이 없는 세션은 null 그대로 내려간다(`KnowledgeConversation.title`·`updatedAt` 은 `string | null`; `conversation_sessions.updated_at` 은 NOT NULL 이 아니다). 바인딩 연결의 소유 확인은 actor 범위의 `exists` 를 쓴다. 쿼리는 `data/conversation-session-lookup.ts` 에 있다. Base 테이블 SQL 스캔(§8.5)은 schema-qualified 이름·따옴표 식별자·문자열 보간으로 만든 이름·콤마 조인을 잡지 못하고 `evaluation/` 은 제외한다. **같은 DB·같은 풀의 코드 경계**이며 물리 SQL 권한 격리(별도 DB 역할)를 주장하지 않는다.
+
+포트의 actor 범위도 코드 경계다. `ownerOf`·`summaries` 는 actor 를 받지 않고, `exists`·`listIdsForUser` 의 actor 는 호출자(add-on)가 만든다 — Base 가 요청 문맥에서 발급한 actor 가 아니다. 물리 SQL 권한 격리와 Base 발급 actor 는 2차 후보다.
+
+**DB 테스트**: `*.db.test.ts` 는 `TEST_DATABASE_URL` 이 있을 때만 돈다. CI 는 Gate 1.5 에서 job 안의 일회용 PostgreSQL(`pgvector/pgvector:0.8.3-pg16-trixie`)에 `scripts/setup-test-db.sh` 로 코어+add-on 마이그레이션을 적용하고 `npm run test:db` 로 그 파일들만 `--runInBand` 로 돌린다 — 마지막 줄 `db tests ran: N` 이 0 이면(전부 skip) 실패다. 로컬도 같은 두 명령이다. CI 에서 실제로 도는 DB 테스트는 `*.db.test.ts` 뿐이다 — `TEST_DATABASE_URL||DATABASE_URL` 로 게이트된 다른 테스트 7개(027_mcp_server_draft·128_org_scoped_sharing·mcp-catalog-repository.metrics·mcp-server-draft-repository·mcp-catalog-admin.routes·mcp-server-ingest.routes·mcp-server-ingest-service)는 이름 변경(`*.db.test.ts`)이 후속이다.
+
 ## 9. Knowledge 작업 큐의 lease·fencing (`addons/knowledge-runtime/jobs/`)
 
 claim 은 `UPDATE … fencing_token = fencing_token + 1 … FOR UPDATE SKIP LOCKED` 로 만료 lease 를 포함해 집는다. 실행자는 받은 token(BIGINT — 문자열로 들고 다니며 `Number` 로 바꾸지 않는다)을 `JobLease` 로 끌고 가 **job 행 갱신(finish·retry·heartbeat)과 모든 확정 쓰기(청크 교체·임베딩 삽입·문서 ready 게시·실패 기록·index 전환)** 의 트랜잭션 첫 문장에서 `assertLeaseHeld`(`SELECT … WHERE id AND fencing_token AND lease_owner AND state='running' FOR SHARE`)로 검사한다 — 검사와 쓰기가 같은 트랜잭션·같은 행 잠금 아래 있어 "선조회 뒤 무조건 쓰기"(TOCTOU)가 아니다. heartbeat 갱신이 0행이거나, 갱신 오류가 lease 기간을 넘겨 이어지면 lease 상실로 표시하고 핸들러는 단계 경계에서 멈춘다. lease 를 잃은 실행자는 job 행·문서 상태(ready·failed) 어느 것도 쓰지 않는다. DB 밖 부작용(임베딩 호출·파일 삭제)은 멈출 뿐 되돌리지 않는다 — exactly-once 가 아니다.
 
 ## 10. 범위 밖(다음 묶음)
 
-manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트·작업 도중 토글 반영(2차), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), 계약 패키지·데이터 포트·별도 worker 프로세스(3차 — Knowledge 처리량·API 지연 측정 뒤 조건부).
+manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트·작업 도중 토글 반영(2차), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), 별도 worker 프로세스(3차 C4), add-on → Base 내부 import 의 전수 이전(ratchet 으로 줄여 간다 — §8.5), 대화 세션 밖의 Base 테이블 포트(필요해질 때), 물리 SQL 권한 격리.
 
 ## 11. 설치형 확장의 권한 상태 (`user_extensions.permission_state`, 마이그레이션 190)
 

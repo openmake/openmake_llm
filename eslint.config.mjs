@@ -151,4 +151,53 @@ export default [
       ],
     },
   },
+  {
+    // 계약 패키지(@openmake/plugin-contracts)는 타입·상수만 — apps·외부 패키지·자기 디렉터리 밖을 import 하지 않는다(런타임 의존 0).
+    // 바로 위 packages/*/src 블록과 같은 룰이라 이 블록이 옵션을 덮어쓴다(뒤 블록이 이긴다) — 그래서 apps 금지 패턴도 다시 둔다.
+    files: ["packages/plugin-contracts/src/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/apps/**"],
+              message:
+                "packages 는 apps 를 참조하지 않는다(의존성 역전 금지) — 공통 계약·상수만 담고, 방향은 apps → packages 단방향을 유지한다.",
+            },
+            {
+              regex: "^(?!\\.{1,2}/)",
+              message: "계약 패키지는 런타임 의존이 없다 — 외부 패키지를 import 하지 않는다(타입·상수만).",
+            },
+            {
+              regex: "^\\.\\./\\.\\./",
+              message: "계약 패키지는 자기 디렉터리 밖을 import 하지 않는다.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // apps/api 는 계약 패키지를 type-only(import type / export type)로만 쓴다 — 배포(deploy)는 npm install 없이
+    // build→restart 라 워크스페이스 링크가 없을 수 있다. 타입은 tsconfig paths(dist/index.d.ts)로 풀고 런타임 require 는
+    // 만들지 않는다. 테스트는 값 비교를 위해 예외.
+    files: ["apps/api/src/**/*.ts"],
+    ignores: ["apps/api/src/**/__tests__/**", "apps/api/src/**/*.test.ts"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@openmake/plugin-contracts",
+              allowTypeImports: true,
+              message:
+                "apps/api 는 @openmake/plugin-contracts 를 import type / export type 으로만 쓴다(런타임 require 금지 — 배포에 워크스페이스 링크가 없을 수 있다). 런타임 값은 Base 에 두고 타입을 계약 상수(typeof)에 고정한다.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];
