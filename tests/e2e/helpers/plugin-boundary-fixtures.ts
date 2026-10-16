@@ -1,6 +1,6 @@
 /**
  * plugin-boundary.spec.ts 의 helper — 관리자·일반 사용자 가입, 격리 DB 조작, WS 한 턴.
- * DB 는 TEST_DATABASE_URL(없으면 DATABASE_URL) — gdpr-fixtures.pgConfig 를 그대로 쓴다.
+ * DB 는 TEST_DATABASE_URL(이름이 _test 로 끝나는 격리 DB)만 — gdpr-fixtures.pgConfig 를 그대로 쓴다.
  * 가입·로그인은 e2e-account 의 signupE2eAccount 를 쓰고, 여기서는 관리자 승격만 더한다.
  * 시험 데이터는 만든 id 로만 지운다.
  */
@@ -79,14 +79,7 @@ export async function assertIsolatedE2eTarget(): Promise<void> {
     if (!process.env.E2E_BASE_URL) {
         throw new Error('E2E_BASE_URL 이 지정되지 않았다 — 이 suite 는 격리 테스트 DB 에 붙인 e2e 전용 API 에서만 돈다(runbook 부록 B). 개발 API(:52418)로 돌리지 않는다');
     }
-    const url = process.env.TEST_DATABASE_URL;
-    if (!url) {
-        throw new Error('TEST_DATABASE_URL 이 없다 — DATABASE_URL 로 대체하지 않는다. 이름이 _test 로 끝나는 격리 DB 를 지정한다');
-    }
-    const configured = new URL(url).pathname.replace(/^\//, '');
-    if (!configured.endsWith('_test')) {
-        throw new Error(`TEST_DATABASE_URL 의 DB 이름(${configured})이 _test 로 끝나지 않는다 — 격리 DB 가 아니면 돌리지 않는다`);
-    }
+    pgConfig(); // TEST_DATABASE_URL 이 있고 그 DB 이름이 _test 로 끝나는지(아니면 던진다)
     const actual = await withDb(async (pg) => (await pg.query<{ db: string }>('SELECT current_database() AS db')).rows[0]?.db ?? '');
     if (!actual.endsWith('_test')) {
         throw new Error(`접속한 DB(${actual})가 _test 로 끝나지 않는다 — 격리 DB 가 아니면 돌리지 않는다`);

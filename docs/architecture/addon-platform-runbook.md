@@ -383,7 +383,7 @@ E2E_BASE_URL=http://localhost:52438 npx playwright test tests/e2e/plugin-boundar
 psql "$TEST_DATABASE_URL" -tAc "SELECT state, desired_state FROM addon_installations WHERE addon_id='knowledge-runtime'"
 )
 ```
-끄기 스위치 목록은 §3.2 와 같다(이 묶음의 e2e 실행이 쓴 목록). 그 밖의 연동(Redis 등)은 개발 `.env` 를 함께 쓴다.
+끄기 스위치 목록은 §3.2 와 같다(이 묶음의 e2e 실행이 쓴 목록). 그 밖의 연동(Redis 등)은 개발 `.env` 를 함께 쓴다. e2e 픽스처(사용자 정리·관리자 승격)는 `tests/e2e/.env.e2e`(또는 셸)의 `TEST_DATABASE_URL` 만 쓴다 — 이름이 `_test` 로 끝나야 하고 `DATABASE_URL` 로 대체하지 않는다(없거나 이름이 다르면 픽스처가 던진다).
 Expected: `9 passed`, 마지막 줄 `enabled|enabled`(afterAll 이 의도·상태를 함께 되돌렸다). `STOP` 줄이 나오면 서브셸이 거기서 끝나 그 뒤 명령이 돌지 않는다(§3.2 와 같은 형식) — :52438 을 쓰는 프로세스가 무엇인지 먼저 확인한다. 로컬은 `--project=chromium` 으로만 돈다 — webkit 브라우저는 로컬에 설치돼 있지 않다.
 
 끝나면 이 절차로 띄운 API 만 끈다 — `pkill -f` 처럼 이름으로 찾아 죽이지 않는다(개발 스택 프로세스까지 걸린다). pid 파일의 프로세스와, 남은 경우 :52438 에서 듣고 있는 프로세스만 끈다:
