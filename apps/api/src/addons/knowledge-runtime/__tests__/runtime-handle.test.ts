@@ -238,7 +238,7 @@ describe('startKnowledgeRuntime handle', () => {
         ingestVersion.mockResolvedValue({ status: 'ready', chunkCount: 1 });
         const intervals: Array<{ fn: () => void; ms: number }> = [];
         const handle = await startKnowledgeRuntime(fakeHost(intervals));
-        expect(intervals).toHaveLength(1);
+        expect(intervals.map((i) => i.ms)).toEqual([KNOWLEDGE_RUNTIME.JOB_POLL_INTERVAL_MS, KNOWLEDGE_RUNTIME.WORKER_HEARTBEAT_MS]);
         expect(intervals[0].ms).toBe(KNOWLEDGE_RUNTIME.JOB_POLL_INTERVAL_MS);
         expect(handle.health?.()).toEqual({ status: 'running', inflight: 0 });
 

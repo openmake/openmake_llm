@@ -17,6 +17,9 @@
     "runtime": "index#startKnowledgeRuntime",
     "chatIntegration": "chat-integration#knowledgeChatIntegration",
     "contributions": "contributions#knowledgeContribution",
+    "workers": [
+      { "name": "knowledge-ingest", "module": "standalone/worker-process#runKnowledgeWorkerProcess" }
+    ],
     "routes": [
       {
         "mountPath": "/api/knowledge",
