@@ -257,4 +257,5 @@ manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기�
 - 남기는 것: 명령 원문, exit code, 소요 시간, git SHA, 설정 **이름**(값 아님), assertion 결과, 로그 꼬리. 남기지 않는 것: 비밀값(토큰·비밀번호·API 키·DB 비밀번호가 든 URL) — 도구는 URL 의 비밀번호 부분을 `***` 로 바꿔 쓴다.
 - 부하 receipt(`baseline.json`·`current.json`) 스키마 `schemaVersion: 1`: `runId`·`label`·`gitSha`·`createdAt`·`environment`(로컬/개발/스테이징/운영)·`target`·`runtime`(`ts-node` 또는 `node-dist`)·`settings{connections,durationSec,warmupSec,v1RatePerSec,scenarios[]}`·`envNames[]`·`scenarios[{name,method,path,requests,ok,errorRate,throughputRps,p50Ms,p95Ms,p99Ms,statusCounts,transportErrors}]`·`rss{samples,beforeBytes,afterBytes,peakBytes,pid,restarted,source}`.
 - 성능 게이트(설계 D6): 같은 `settings` 에서 시나리오별 p95 ≤ 기준선 × 1.10(작은 값의 측정 잡음을 위해 기준선 + 2ms 까지는 허용), 처리율 ≥ 기준선 × 0.95, 오류율 ≤ max(기준선, 1%), RSS 최고값 ≤ 기준선 × 1.10. `settings` 가 다르거나 측정 중 pid 가 바뀌면 비교하지 않는다(무효).
-- 로컬 수치는 ts-node 로 띄운 API 라 RSS 에 컴파일러 메모리가 섞인다 — 로컬 RSS 비교는 참고값이고, 운영 판단용 RSS 는 스테이징에서 빌드 산출물(`node-dist`)로 다시 잰다(runbook §4).
+- 로컬 수치는 ts-node 로 띄운 API 라 RSS 에 컴파일러 메모리가 섞인다 — 로컬 RSS 비교는 참고값이고, 운영 판단용 RSS 는 스테이징에서 빌드 산출물(`node-dist`)로 다시 잰다(runbook §3.2).
+- 배포·관찰·롤백 절차와 완료 기록은 `docs/architecture/addon-platform-runbook.md`.
