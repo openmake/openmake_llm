@@ -303,6 +303,15 @@ export function summarizeAddonMigrations(
     return { lines, ok: failed === 0 };
 }
 
+/**
+ * 한 마이그레이션 version 이 `migration_versions` 에 기록돼 있는가(읽기만 — 표를 만들지 않는다).
+ * 표가 없거나 DB 오류면 그대로 던진다 — 호출부가 "없음"과 "조회 실패"를 나눠 다룬다.
+ */
+export async function isMigrationApplied(pool: Pool, version: string): Promise<boolean> {
+    const result = await pool.query('SELECT 1 FROM migration_versions WHERE version = $1', [version]);
+    return (result.rowCount ?? 0) > 0;
+}
+
 /** 마이그레이션 직렬화용 전역 advisory lock 키 (앱 전역 유일 고정값 — "omlm" 의 hex). */
 const MIGRATION_ADVISORY_LOCK_KEY = 0x6f6d6c6d;
 

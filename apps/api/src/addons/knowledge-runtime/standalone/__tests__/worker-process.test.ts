@@ -1,7 +1,7 @@
 /**
  * 별도 worker 본체 — 스키마 대기(행 없음 78·조회 오류 1)·설정 오류, external 소비자 기동·즉시 heartbeat,
  * 127.0.0.1 /health(묶기 실패는 타이머 전 78), drain 정지(멱등, 진행 중 heartbeat 를 기다린 뒤 행 삭제).
- * DB·worker·heartbeat 는 mock. /health 는 실제 HTTP(빈 포트)로 확인한다.
+ * 마이그레이션 기록 포트·worker·heartbeat 는 mock. /health 는 실제 HTTP(빈 포트)로 확인한다.
  */
 import { createServer } from 'node:net';
 
@@ -9,18 +9,19 @@ let mockSchemaRows = 1;
 /** 스키마 조회를 실패시킬 연속 횟수(Infinity 면 언제나) */
 let mockSchemaErrors = 0;
 const schemaQueries = jest.fn();
-jest.mock('../../db', () => ({
-    kdb: () => ({
-        query: async (sql: string) => {
-            if (!sql.includes('FROM migration_versions')) return { rows: [], rowCount: 0 };
-            schemaQueries();
-            if (mockSchemaErrors > 0) {
-                mockSchemaErrors -= 1;
-                throw new Error('connect ECONNREFUSED');
-            }
-            return { rows: [], rowCount: mockSchemaRows };
+jest.mock('../../../../runtime-ports/base-data-port', () => ({
+    baseDataPort: {
+        migrations: {
+            isApplied: async (version: string) => {
+                schemaQueries(version);
+                if (mockSchemaErrors > 0) {
+                    mockSchemaErrors -= 1;
+                    throw new Error('connect ECONNREFUSED');
+                }
+                return mockSchemaRows > 0;
+            },
         },
-    }),
+    },
 }));
 const writeWorkerHeartbeat = jest.fn(async (..._a: unknown[]) => ({ dbMode: 'external', generation: 4 }));
 const removeWorkerHeartbeat = jest.fn(async (..._a: unknown[]) => undefined);
@@ -46,6 +47,7 @@ jest.mock('../../jobs/worker', () => ({
 import { AddonWorkerConfigError } from '../../../../addon-host/worker-entry';
 import { runKnowledgeWorkerProcess } from '../worker-process';
 import { KNOWLEDGE_RUNTIME } from '../../constants';
+import { REQUIRED_JOB_SCHEMA_VERSION } from '../../jobs/job-schema';
 
 function freePort(): Promise<number> {
     return new Promise((resolve, reject) => {
@@ -93,6 +95,7 @@ describe('runKnowledgeWorkerProcess', () => {
         const handle = await runKnowledgeWorkerProcess({ healthPort: 0, migrationWaitMs: 60_000 });
         try {
             expect(schemaQueries).toHaveBeenCalledTimes(2);
+            expect(schemaQueries).toHaveBeenCalledWith(REQUIRED_JOB_SCHEMA_VERSION);
             expect(ctorArgs).toEqual([{ consumerKind: 'external' }]);
         } finally {
             await handle.stop('test');
@@ -102,7 +105,9 @@ describe('runKnowledgeWorkerProcess', () => {
     it('조회 오류 뒤 상한에서 행이 없다고 확인되면 WorkerConfigError(78)', async () => {
         mockSchemaErrors = 1;
         mockSchemaRows = 0;
-        await expect(runKnowledgeWorkerProcess({ healthPort: 0, migrationWaitMs: 1 })).rejects.toBeInstanceOf(AddonWorkerConfigError);
+        // 상한을 폴링 간격의 절반으로 — 첫 조회(오류)는 반드시 상한 안, 두 번째 조회(행 없음)는 반드시 상한 뒤(1ms 상한은 시각 경계에 따라 흔들렸다)
+        const migrationWaitMs = KNOWLEDGE_RUNTIME.WORKER_SCHEMA_POLL_MS / 2;
+        await expect(runKnowledgeWorkerProcess({ healthPort: 0, migrationWaitMs })).rejects.toBeInstanceOf(AddonWorkerConfigError);
         expect(schemaQueries).toHaveBeenCalledTimes(2);
     }, 15_000);
 
