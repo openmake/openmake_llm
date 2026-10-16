@@ -297,4 +297,40 @@ describe('safeFetch', () => {
 
         await expect(safeFetch('https://93.184.216.34/start')).rejects.toThrow('SSRF blocked: too many redirects');
     });
+
+    // 호출자가 redirect:'manual' 을 주면 3xx 를 그대로 돌려준다 — MCP SDK 처럼 자체 리다이렉트 정책(same-origin)을 가진 클라이언트가 판단한다
+    test("redirect:'manual' 이면 3xx 를 따라가지 않고 그대로 돌려준다", async () => {
+        const { fetchFn, calls } = mockFetchSequence([
+            new Response(null, { status: 307, headers: { location: 'https://8.8.8.8/other' } }),
+            new Response('should-not-be-fetched', { status: 200 })
+        ]);
+        globalThis.fetch = fetchFn;
+
+        const response = await safeFetch('https://93.184.216.34/mcp', { method: 'POST', body: '{}', redirect: 'manual' });
+
+        expect(response.status).toBe(307);
+        expect(response.headers.get('location')).toBe('https://8.8.8.8/other');
+        expect(calls).toHaveLength(1);
+    });
+
+    test("redirect:'error' 이면 3xx 에서 거부한다", async () => {
+        const { fetchFn, calls } = mockFetchSequence([
+            new Response(null, { status: 302, headers: { location: 'https://8.8.8.8/other' } })
+        ]);
+        globalThis.fetch = fetchFn;
+
+        await expect(safeFetch('https://93.184.216.34/start', { redirect: 'error' }))
+            .rejects.toThrow('SSRF blocked: redirect not allowed (redirect: error)');
+        expect(calls).toHaveLength(1);
+    });
+
+    test("redirect:'manual' 이어도 첫 요청의 차단 IP 검증은 그대로", async () => {
+        const { fetchFn, calls } = mockFetchSequence([new Response('ok', { status: 200 })]);
+        globalThis.fetch = fetchFn;
+        const loopback = async (): Promise<{ address: string; family: number }> => ({ address: '127.0.0.1', family: 4 });
+
+        await expect(safeFetch('https://internal.example/x', { redirect: 'manual' }, loopback))
+            .rejects.toThrow('SSRF blocked: resolved to blocked IP range: 127.0.0.1');
+        expect(calls).toHaveLength(0);
+    });
 });
