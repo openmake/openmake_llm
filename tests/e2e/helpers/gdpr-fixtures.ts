@@ -17,13 +17,18 @@ export interface GdprUserFixture {
 }
 
 /**
- * 로컬 DB 접속 정보 — 자격증명은 **하드코딩하지 않는다**(공개 리포).
- * 루트 `.env` 의 DATABASE_URL 을 그대로 쓰고, 없으면 명확히 실패시킨다.
+ * e2e DB 접속 정보 — 자격증명은 **하드코딩하지 않는다**(공개 리포).
+ * `TEST_DATABASE_URL`(tests/e2e/.env.e2e 또는 셸)만 쓰고, DB 이름이 `_test` 로 끝나야 한다.
+ * 개발 DB(`DATABASE_URL`)로 대체하지 않는다 — 픽스처가 사용자를 만들고 지우므로 격리 DB 에서만 돈다.
  */
-export function pgConfig() {
-    const url = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
+export function pgConfig(): { connectionString: string } {
+    const url = process.env.TEST_DATABASE_URL;
     if (!url) {
-        throw new Error('DATABASE_URL(또는 TEST_DATABASE_URL)이 필요합니다 — 루트 .env 를 로드하세요.');
+        throw new Error('TEST_DATABASE_URL 이 없다 — tests/e2e/.env.e2e 에 이름이 _test 로 끝나는 격리 DB 를 지정한다(DATABASE_URL 로 대체하지 않는다)');
+    }
+    const dbName = new URL(url).pathname.replace(/^\//, '');
+    if (!dbName.endsWith('_test')) {
+        throw new Error(`TEST_DATABASE_URL 의 DB 이름(${dbName})이 _test 로 끝나지 않는다 — 격리 DB 가 아니면 돌리지 않는다`);
     }
     return { connectionString: url };
 }
