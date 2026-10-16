@@ -347,9 +347,11 @@
       "id": "drill-worker-dry-run",
       "title": "worker 전환·롤백 드릴 순서 확인(DRILL_DRY_RUN=1)",
       "group": "drill",
-      "cmd": "DRILL_DRY_RUN=1 bash scripts/knowledge-worker-rollback-drill.sh to-external && DRILL_DRY_RUN=1 bash scripts/knowledge-worker-rollback-drill.sh to-inprocess",
+      "cmd": "export KNOWLEDGE_DRILL_ENV_FILE=\"$EVIDENCE_ROOT/$RUN_ID/task-11/drill.env\" && mkdir -p \"$(dirname \"$KNOWLEDGE_DRILL_ENV_FILE\")\" && echo KNOWLEDGE_WORKER_MODE=external > \"$KNOWLEDGE_DRILL_ENV_FILE\" && DRILL_DRY_RUN=1 bash scripts/knowledge-worker-rollback-drill.sh to-external && echo KNOWLEDGE_WORKER_MODE=inprocess > \"$KNOWLEDGE_DRILL_ENV_FILE\" && DRILL_DRY_RUN=1 bash scripts/knowledge-worker-rollback-drill.sh to-inprocess",
       "timeoutSec": 120,
       "requiresEnv": [
+        "EVIDENCE_ROOT",
+        "RUN_ID",
         "KNOWLEDGE_PSQL",
         "KNOWLEDGE_API_HEALTH_URL"
       ],
