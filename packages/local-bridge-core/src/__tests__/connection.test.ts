@@ -9,7 +9,7 @@ import * as path from 'path';
 import { WebSocket, WebSocketServer, type WebSocket as ServerWs } from 'ws';
 import { BridgeConnection, parseNotice } from '../connection';
 import { BridgeCore } from '../core';
-import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, NOTICE_TOOL_NAME_MAX } from '../constants';
+import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, HELLO_DELAY_MS, NOTICE_TOOL_NAME_MAX } from '../constants';
 import type { BridgeNotice } from '../types';
 
 interface Frame { type?: string; reqId?: string; result?: Record<string, unknown>; deviceId?: string; label?: string; folderName?: string }
@@ -17,6 +17,8 @@ interface Frame { type?: string; reqId?: string; result?: Record<string, unknown
 /** 가짜 브리지 서버 — 받은 프레임을 쌓고, 테스트가 임의 프레임을 내려보낼 수 있다. */
 class FakeServer {
     readonly received: Frame[] = [];
+    /** 연결별 받은 프레임 — 한 연결에 hello 가 몇 번 왔는지 따로 센다. */
+    readonly receivedByConn: Frame[][] = [];
     private wss!: WebSocketServer;
     private sockets: ServerWs[] = [];
     private waiters: Array<{ pred: (f: Frame) => boolean; resolve: (f: Frame) => void }> = [];
@@ -33,9 +35,12 @@ class FakeServer {
         this.wss.on('connection', (ws) => {
             this.connections += 1;
             this.sockets.push(ws);
+            const mine: Frame[] = [];
+            this.receivedByConn.push(mine);
             ws.on('message', (d) => {
                 const f = JSON.parse(d.toString()) as Frame;
                 this.received.push(f);
+                mine.push(f);
                 this.waiters = this.waiters.filter((w) => (w.pred(f) ? (w.resolve(f), false) : true));
                 if (f.type === 'bridge_hello') ws.send(JSON.stringify({ type: 'bridge_ready' }));
             });
@@ -54,6 +59,27 @@ class FakeServer {
         });
     }
     async stop(): Promise<void> { this.dropAll(); await new Promise<void>((r) => this.wss.close(() => r())); }
+}
+
+/** 실 소켓 왕복 대기 한도(실시간) — 루프백 왕복이라 보통 수 ms. 가짜 시간과 무관하게 벽시계로 잰다. */
+const IO_DEADLINE_MS = 4000;
+
+/** 실 I/O 가 끝나 조건이 설 때까지 이벤트 루프를 돌린다(가짜 시간은 움직이지 않는다). */
+async function until(what: string, cond: () => boolean): Promise<void> {
+    const deadline = performance.now() + IO_DEADLINE_MS;
+    while (!cond()) {
+        if (performance.now() > deadline) throw new Error(`기다림 초과: ${what}`);
+        await new Promise((r) => setImmediate(r));
+    }
+}
+
+/**
+ * 연결 쪽 시간(setTimeout·setInterval·Date)만 가짜로 두고 run 을 돌린다 — 실 소켓 I/O 는 진짜로 두고 시간은
+ * 테스트가 advanceTimersByTimeAsync 로만 민다. 부하 걸린 CI 에서도 결과가 벽시계 속도에 좌우되지 않는다(10-16 flaky).
+ */
+async function withFakeClock(run: () => Promise<void>): Promise<void> {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask', 'performance'] });
+    try { await run(); } finally { jest.useRealTimers(); }
 }
 
 describe('BridgeConnection (가짜 WS 서버)', () => {
@@ -178,7 +204,6 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
     it('서버가 아무 프레임도 보내지 않으면(반쯤 죽은 연결) 스스로 끊고 재연결한다', async () => {
         // 가짜 타이머로 연결 쪽 시간(setTimeout·setInterval·Date)만 손으로 흘린다 — 실 소켓 I/O 는 진짜로 두고,
         // 시간은 아래 단계에서만 앞으로 민다. 부하 걸린 CI 에서도 결과가 벽시계 속도에 좌우되지 않는다(10-16 flaky).
-        const HELLO_DELAY_MS = 300; // connection.ts 의 open → hello 지연
         const PING_MS = 100;
         const TIMEOUT_MS = 500; // hello 지연보다 길게 — 첫 연결이 hello·ready 를 마친 뒤 침묵해야 '반쯤 죽은' 상황
         const RECONNECT_MS = 50;
@@ -225,6 +250,55 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
         } finally {
             jest.useRealTimers();
         }
+    });
+
+    it('hello 지연 전에 끊긴 소켓의 hello 타이머는 다음 소켓에 hello 를 보내지 않는다 (연결마다 hello 한 번)', async () => {
+        const RECONNECT_MS = 50;
+        const hellosOn = (i: number): number => (server.receivedByConn[i] ?? []).filter((f) => f.type === 'bridge_hello').length;
+        const socketOpen = (): boolean => conn?.socket()?.readyState === WebSocket.OPEN;
+        await withFakeClock(async () => {
+            const core = new BridgeCore({ folder: base, confirm: async () => 'all', sandboxProfileDir: os.tmpdir() });
+            conn = new BridgeConnection({
+                serverUrl: `http://127.0.0.1:${server.port}`, core, deviceId: 'test-device-1', label: 'unit · test',
+                headers: () => ({ Authorization: 'Bearer omk_test' }), onStatus: (s) => statuses.push(s),
+                reconnectMs: RECONNECT_MS, random: () => 1, // 재연결 대기 = reconnectMs 그대로
+            });
+            // 1) 첫 소켓이 열리자마자(hello 지연 전) 서버가 끊는다
+            await conn.connect();
+            await until('첫 연결 open', () => server.connections === 1 && socketOpen());
+            server.dropAll();
+            await until('첫 연결 끊김', () => statuses.includes('끊김 — 재연결 대기'));
+            // 2) 재연결 → 두 번째 소켓 open
+            await jest.advanceTimersByTimeAsync(RECONNECT_MS);
+            await until('두 번째 연결 open', () => server.connections === 2 && socketOpen());
+            // 3) 첫 소켓의 hello 시각과 두 번째 소켓의 hello 시각을 모두 지나도록 민다
+            await jest.advanceTimersByTimeAsync(HELLO_DELAY_MS);
+            await until('두 번째 연결 hello', () => hellosOn(1) >= 1);
+            await jest.advanceTimersByTimeAsync(HELLO_DELAY_MS);
+            await until('두 번째 연결 bridge_ready', () => statuses.some((s) => s.startsWith('연결됨')));
+            // 늦게 도착하는 중복 프레임이 있으면 잡히도록 실 I/O 를 한 번 더 돌린다
+            conn.socket()!.send(JSON.stringify({ type: 'probe' }));
+            await until('probe 도착', () => (server.receivedByConn[1] ?? []).some((f) => f.type === 'probe'));
+            expect(hellosOn(0)).toBe(0);
+            expect(hellosOn(1)).toBe(1);
+        });
+    });
+
+    it('정상 연결은 hello 지연이 지난 뒤 hello 를 한 번만 보낸다', async () => {
+        const socketOpen = (): boolean => conn?.socket()?.readyState === WebSocket.OPEN;
+        await withFakeClock(async () => {
+            await makeConn().connect();
+            await until('연결 open', () => server.connections === 1 && socketOpen());
+            await jest.advanceTimersByTimeAsync(HELLO_DELAY_MS - 1);
+            conn!.socket()!.send(JSON.stringify({ type: 'probe' }));
+            await until('probe 도착', () => server.received.some((f) => f.type === 'probe'));
+            expect(server.received.filter((f) => f.type === 'bridge_hello')).toHaveLength(0); // 지연 전에는 보내지 않는다
+            await jest.advanceTimersByTimeAsync(1);
+            await until('hello', () => server.received.some((f) => f.type === 'bridge_hello'));
+            await jest.advanceTimersByTimeAsync(HELLO_DELAY_MS * 3);
+            await until('bridge_ready', () => statuses.some((s) => s.startsWith('연결됨')));
+            expect(server.receivedByConn[0].filter((f) => f.type === 'bridge_hello')).toHaveLength(1);
+        });
     });
 
     it('서버가 ping 에 응답하는 동안에는 연결을 유지한다', async () => {
