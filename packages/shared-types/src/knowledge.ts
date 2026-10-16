@@ -44,8 +44,10 @@ export interface KnowledgeDocument {
 
 export interface KnowledgeConversation {
   sessionId: string;
-  title: string;
-  updatedAt: string;
+  /** 세션 제목이 없으면 null */
+  title: string | null;
+  /** 세션 갱신 시각(ISO 8601) — Base 컬럼이 NOT NULL 이 아니라 null 일 수 있다 */
+  updatedAt: string | null;
 }
 
 export interface KnowledgeSpaceDetail extends KnowledgeSpaceSummary {

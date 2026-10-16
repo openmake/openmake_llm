@@ -11,7 +11,8 @@ import { getPool } from './models/unified-database';
 export interface SessionSummaryRow {
     id: string;
     title: string | null;
-    updated_at: Date;
+    /** 컬럼이 NOT NULL 이 아니다(db/init/002-schema.sql) */
+    updated_at: Date | null;
 }
 
 /** 이 사용자가 소유한 세션 id 전부 */
