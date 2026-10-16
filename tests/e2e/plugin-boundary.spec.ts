@@ -10,13 +10,15 @@
  * 문구는 Jest(services/chat-service/__tests__/orchestration-gate.test.ts)가 고정하고, 여기서는
  * 턴이 시간 안에 끝났는지와, 턴 이벤트에 그 add-on 이름이 나오면 반드시 거절 문구여야 한다는 것을 본다.
  * 끝나면 afterAll 이 Knowledge 를 enabled 로 되돌리고, DB 가 enabled 가 아니면 실패로 던진다.
+ * beforeAll 이 대상 가드(assertIsolatedE2eTarget — E2E_BASE_URL 명시, `_test` DB)를 먼저 확인한다. 가드가 실패하면
+ * afterAll 도 DB 를 건드리지 않는다.
  */
 import { test, expect } from '@playwright/test';
 import { deleteUser } from './helpers/gdpr-fixtures';
 import {
     KNOWLEDGE_ID, e2eBaseUrl, e2eWsOrigin, signupBoundaryUser, patchKnowledgeState,
     setInstallationStateInDb, readInstallationState, readDesiredState, waitForDocumentReady, countMemoriesContaining,
-    createOrgWithAllowlist, deleteOrg, runWsTurn, knowledgeSources, forceEnabledInDb,
+    createOrgWithAllowlist, deleteOrg, deleteSpaceInDb, runWsTurn, assertIsolatedE2eTarget, knowledgeSources, forceEnabledInDb,
     type BoundaryUser, type WsTurnResult,
 } from './helpers/plugin-boundary-fixtures';
 
@@ -29,6 +31,10 @@ const WS_TURN_TIMEOUT_MS = 90_000;
 const MEMORY_WAIT_MS = 10_000;
 /** DB 를 직접 바꾼 상태가 라우트에 보일 때까지 — 대상 API 의 add-on 상태 캐시(기본 30초)보다 길게 */
 const STATE_CACHE_WAIT_MS = 40_000;
+/** 정리용 PATCH 의 요청 시간 상한 — 응답 없는 API 가 afterAll 예산을 다 써 DB 대체 복원에 닿지 못하는 일을 막는다 */
+const RESTORE_PATCH_TIMEOUT_MS = 10_000;
+/** afterAll 전체 예산 — PATCH 상한 + DB 대체 복원 + 정리 + 마지막 상태 확인이 들어가게 */
+const AFTER_ALL_TIMEOUT_MS = 120_000;
 
 /** 토글 응답 data — C1 계약 */
 interface ToggleData {
@@ -43,6 +49,8 @@ let boundSessionId = '';
 let plainSessionId = '';
 let orgId = '';
 let disabledTurn: WsTurnResult | null = null;
+/** 대상 가드 통과 여부 — 통과 전에는 afterAll 이 DB 를 바꾸지 않는다(개발 DB 보호) */
+let targetVerified = false;
 
 function adminUser(): BoundaryUser {
     if (!admin) throw new Error('beforeAll 에서 관리자 가입이 끝나지 않았다');
@@ -64,11 +72,15 @@ async function toggleData(res: { json(): Promise<unknown> }): Promise<ToggleData
 }
 
 test.beforeAll(async () => {
+    await assertIsolatedE2eTarget();
+    targetVerified = true;
     admin = await signupBoundaryUser(BASE, { admin: true });
     member = await signupBoundaryUser(BASE);
 });
 
 test.afterAll(async ({ request }) => {
+    test.setTimeout(AFTER_ALL_TIMEOUT_MS);
+    if (!targetVerified) return; // 격리 대상이 확인되지 않았다 — 아무 DB 도 바꾸지 않는다
     // 각 정리 단계는 따로 잡아 오류를 모으고 다음 단계를 계속한다. Knowledge 상태 확인은 언제나 마지막에 한다.
     const errors: string[] = [];
     const step = async (name: string, fn: () => Promise<void>): Promise<void> => {
@@ -83,7 +95,7 @@ test.afterAll(async ({ request }) => {
         let restored = false;
         if (admin) {
             try {
-                const res = await patchKnowledgeState(request, admin, 'enabled');
+                const res = await patchKnowledgeState(request, admin, 'enabled', { timeoutMs: RESTORE_PATCH_TIMEOUT_MS });
                 if (res.ok()) {
                     const data = await toggleData(res);
                     if (data.runtime === 'resumed' || data.runtime === 'unchanged') restored = true;
@@ -100,7 +112,16 @@ test.afterAll(async ({ request }) => {
     });
     if (admin) {
         const a = admin;
-        if (spaceId) await step('Space 삭제', async () => { await request.delete(`/api/knowledge/spaces/${spaceId}`, { headers: a.headers }); });
+        if (spaceId) {
+            await step('Space 삭제', async () => {
+                const res = await request.delete(`/api/knowledge/spaces/${spaceId}`, { headers: a.headers });
+                // API 삭제가 2xx 가 아니면(예: add-on 이 꺼진 채 남음) DB 에서 id 로 지운다 — 사용자 삭제는 Space 로 cascade 되지 않는다
+                if (!res.ok()) {
+                    console.warn(`[plugin-boundary] Space 삭제 API 응답 ${res.status()} — DB 에서 id 로 지운다`);
+                    await deleteSpaceInDb(spaceId);
+                }
+            });
+        }
         if (plainSessionId) await step('일반 대화 삭제', async () => { await request.delete(`/api/chat/sessions/${plainSessionId}`, { headers: a.headers }); });
     }
     if (orgId) await step('조직 삭제', () => deleteOrg(orgId));
@@ -121,6 +142,7 @@ test('준비: enabled 에서 Space·문서·연결 대화·일반 대화를 만�
     test.setTimeout(120_000);
     const a = adminUser();
     expect(await readInstallationState()).toBe('enabled');
+    expect(await readDesiredState()).toBe('enabled');
     const space = await request.post('/api/knowledge/spaces', { headers: a.headers, data: { name: `pb-${MARKER}` } });
     expect(space.status()).toBe(201);
     spaceId = ((await space.json()) as { data: { space: { id: string } } }).data.space.id;

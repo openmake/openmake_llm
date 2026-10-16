@@ -65,7 +65,8 @@ export async function signupUser(
         const pg = new Client(pgConfig());
         await pg.connect();
         try {
-            await pg.query(`UPDATE users SET role='admin', tier='enterprise' WHERE id=$1`, [userId]);
+            // users.tier 는 마이그레이션 039 가 지웠다 — 역할만 바꾼다
+            await pg.query(`UPDATE users SET role='admin' WHERE id=$1`, [userId]);
         } finally {
             await pg.end();
         }
