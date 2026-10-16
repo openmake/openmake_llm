@@ -60,6 +60,7 @@ export interface AddonManifestDTO {
         chatMode?: string;
         contributions?: string;
         routes?: AddonEntryRouteDTO[];
+        workers?: ReadonlyArray<{ name: string; module: string }>;
     };
     /** Registry 에 게시하는 capability ID 목록 — 런타임 등록 결과와 정확히 일치해야 게시된다 */
     provides?: {

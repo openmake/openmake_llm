@@ -27,6 +27,18 @@ export const KNOWLEDGE_RUNTIME = {
     PUBLISH_INDEX_SWITCH_RETRIES: Number(process.env.KNOWLEDGE_PUBLISH_INDEX_SWITCH_RETRIES) || 2,
     /** claim 뒤 실행 판정이 보류(add-on 꺼짐·상태 확인 불가)면 다시 집기까지 기다리는 시간(ms) — attempts 는 되돌린다 */
     JOB_ADMISSION_DEFER_MS: Number(process.env.KNOWLEDGE_JOB_ADMISSION_DEFER_MS) || 30_000,
+    /** 소비자 heartbeat 행 갱신 주기(ms) — API inprocess poller·별도 worker 둘 다 */
+    WORKER_HEARTBEAT_MS: Number(process.env.KNOWLEDGE_WORKER_HEARTBEAT_MS) || 5_000,
+    /** 이보다 오래 갱신되지 않은 heartbeat 행은 갱신 때 지운다(ms) — 프로세스가 재시작될 때마다 worker_id 가 바뀐다 */
+    WORKER_HEARTBEAT_RETENTION_MS: Number(process.env.KNOWLEDGE_WORKER_HEARTBEAT_RETENTION_MS) || 86_400_000,
+    /** 별도 worker 정지 때 진행 중 작업을 기다리는 상한(ms) — 넘으면 lease 를 반납하고 멈춘다 */
+    WORKER_DRAIN_TIMEOUT_MS: Number(process.env.KNOWLEDGE_WORKER_DRAIN_TIMEOUT_MS) || 20_000,
+    /** 별도 worker 종료 전체 상한(ms) — drain + DB 풀 종료. PM2 kill_timeout(30초)보다 짧아야 한다 */
+    WORKER_SHUTDOWN_TIMEOUT_MS: Number(process.env.KNOWLEDGE_WORKER_SHUTDOWN_TIMEOUT_MS) || 25_000,
+    /** 별도 worker 가 기동 때 add-on 마이그레이션(004)을 기다리는 상한(ms) — API 가 먼저 떠서 적용한다 */
+    WORKER_SCHEMA_WAIT_MS: Number(process.env.KNOWLEDGE_WORKER_SCHEMA_WAIT_MS) || 60_000,
+    /** 위 대기 중 다시 확인하는 주기(ms) */
+    WORKER_SCHEMA_POLL_MS: Number(process.env.KNOWLEDGE_WORKER_SCHEMA_POLL_MS) || 2_000,
 } as const;
 
 /**

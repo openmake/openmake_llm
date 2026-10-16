@@ -72,6 +72,7 @@ _instance="$(env_line OMK_INSTANCE)"
 readonly INSTANCE="$_instance"
 readonly APP_NAME="openmake-llm${INSTANCE:+-$INSTANCE}"
 readonly FRONT_APP_NAME="openmake-next${INSTANCE:+-$INSTANCE}"
+readonly WORKER_APP_NAME="openmake-knowledge-worker${INSTANCE:+-$INSTANCE}"
 readonly PG_CONTAINER="openmake${INSTANCE:+-$INSTANCE}-postgres"
 
 # Caddy 리버스 프록시 설정 — 이 레포가 SoT.
@@ -358,6 +359,18 @@ pm2_restart_app() {
     fi
     pm2 delete "$name" >/dev/null 2>&1 || return 1
     ( cd "$SCRIPT_DIR" && pm2 start ecosystem.config.js --only "$name" >/dev/null 2>&1 )
+}
+
+# Knowledge 별도 worker(external 모드에서만 PM2 에 등록됨) — 등록돼 있으면 새 빌드로 다시 띄운다.
+# API 가 먼저 떠서 add-on 마이그레이션을 적용한 뒤 부른다(worker 는 마이그레이션이 없으면 기다리다 78 로 멈춘다).
+# 실패해도 배포를 멈추지 않는다(API 는 이미 새 버전) — 경고만 남긴다.
+restart_knowledge_worker_if_registered() {
+    if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$WORKER_APP_NAME\""; then
+        pm2_restart_app "$WORKER_APP_NAME" \
+            && log_ok "$WORKER_APP_NAME 재시작" \
+            || log_warn "$WORKER_APP_NAME restart 실패 — 'pm2 logs $WORKER_APP_NAME' 확인 필요"
+    fi
+    return 0
 }
 
 start_app() {
@@ -739,6 +752,7 @@ cmd_deploy() {
             log_info "$FRONT_APP_NAME PM2 미등록 — 프론트 재시작 생략"
         fi
         wait_for_app_with_logs "$APP_PORT" "OpenMake LLM"
+        restart_knowledge_worker_if_registered
     else
         log_info "$APP_NAME PM2 미등록 — 신규 시작 (ecosystem: 백엔드+프론트 함께 기동)"
         ( cd "$SCRIPT_DIR" && pm2 start ecosystem.config.js ) || return 2
@@ -901,8 +915,9 @@ canary_smoke_test() {
     local log_file
     log_file="$(mktemp -t openmake-canary-XXXXXX.log)"
     export_dotenv_for_pm2
+    # 카나리 API 는 수집 poller 를 띄우지 않는다(external) — 새 코드가 헬스체크 동안 운영 큐의 작업을 집지 않게
     (
-        cd "$SCRIPT_DIR" && PORT="$CANARY_HEALTH_PORT" NODE_ENV=production \
+        cd "$SCRIPT_DIR" && PORT="$CANARY_HEALTH_PORT" NODE_ENV=production KNOWLEDGE_WORKER_MODE=external \
             node apps/api/dist/cli.js cluster --port "$CANARY_HEALTH_PORT" \
             >"$log_file" 2>&1 &
         echo $! > "${log_file}.pid"
@@ -1051,6 +1066,8 @@ EOF
             || log_err "롤백 후에도 헬스체크 실패 — 즉시 수동 개입 필요"
         return 3
     fi
+
+    restart_knowledge_worker_if_registered
 
     log_step "Caddy 설정 동기화"
     sync_caddyfile

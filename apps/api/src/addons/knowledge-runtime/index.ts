@@ -15,6 +15,7 @@ import { createLogger } from '../../utils/logger';
 import { KNOWLEDGE_RUNTIME } from './constants';
 import { configuredWorkerMode } from './config/worker-mode';
 import { KnowledgeWorker } from './jobs/worker';
+import { removeWorkerHeartbeat, writeWorkerHeartbeat } from './jobs/heartbeat-row';
 
 const logger = createLogger('KnowledgeRuntime');
 
@@ -60,6 +61,12 @@ export async function startKnowledgeRuntime(host: AddonRuntimeHost): Promise<Add
     host.setInterval(() => {
         void w.tick().catch((err) => logger.warn(`수집 worker tick 실패(무시): ${err instanceof Error ? err.message : String(err)}`));
     }, KNOWLEDGE_RUNTIME.JOB_POLL_INTERVAL_MS);
+    // 소비자 heartbeat 행 — /api/health 가 현재 모드 소비자의 생존을 본다. 실패는 다음 주기에 다시(fail-open)
+    host.setInterval(() => {
+        void writeWorkerHeartbeat({ workerId: w.id, kind: 'inprocess', inflight: w.health().inflight })
+            .catch((err) => logger.debug(`heartbeat 행 갱신 실패(무시): ${err instanceof Error ? err.message : String(err)}`));
+    }, KNOWLEDGE_RUNTIME.WORKER_HEARTBEAT_MS);
+    host.registerDisposable('knowledge-heartbeat-row', () => removeWorkerHeartbeat(w.id).catch(() => undefined));
     logger.info(`Knowledge 수집 worker 시작 (poll ${KNOWLEDGE_RUNTIME.JOB_POLL_INTERVAL_MS}ms, inprocess)`);
     return handleFor(w);
 }

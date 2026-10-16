@@ -38,6 +38,14 @@ const addonEntrySchema = z.object({
     chatMode: entryRefSchema.optional(),
     /** 설정·API key 스코프·도구 위험 등급 기여 (addon-host/contributions.ts `AddonContribution`) */
     contributions: entryRefSchema.optional(),
+    /**
+     * 별도 프로세스 worker — Base 진입점(`workers/<이름>.ts`)이 이름으로 찾아 부른다(`addon-host/worker-entry.ts`).
+     * 이름은 PM2 앱·진입점 파일과 짝인 계약이다(Base 코드에 add-on id 를 쓰지 않으려고 이름으로 찾는다).
+     */
+    workers: z.array(z.object({
+        name: z.string().min(2).max(40).regex(/^[a-z][a-z0-9-]*$/),
+        module: entryRefSchema,
+    }).strict()).max(5).optional(),
     /** 전용 라우트 — `within: 'v1'` 은 v1 라우터(API 키 인증·스코프·rate limit 뒤) 안에 건다 */
     routes: z.array(z.object({
         mountPath: z.string().min(1).max(200).regex(/^\/[A-Za-z0-9/_-]*$/),
