@@ -146,6 +146,34 @@ describe('KnowledgeWorker 실행 판정', () => {
         expect(sqlWith("SET state = 'done'")).toHaveLength(1);
     });
 
+    it('판정을 기다리는 사이 즉시 정지되면 판정이 끝나도 핸들러를 돌리지 않고 lease 만 반납한다', async () => {
+        claimRows = [JOB];
+        let release: (v: EntitlementVerdict) => void = () => undefined;
+        const pending = new Promise<EntitlementVerdict>((resolve) => { release = resolve; });
+        const port: AdmissionPort = { readRunVerdict: async () => ({ run: true }), checkUserEntitlement: () => pending };
+        const w = new KnowledgeWorker({ admission: port });
+        const tick = w.tick();
+        await new Promise((r) => setImmediate(r)); // claim 을 지나 판정 대기에 들어갈 때까지
+        await w.stop({ drain: false, signal: new AbortController().signal });
+        release('ok');
+        await tick;
+        expect(ingestVersion).not.toHaveBeenCalled();
+        expect(sqlWith('SET lease_expires_at = NOW()')).toHaveLength(1);
+        expect(sqlWith("SET state = 'done'")).toHaveLength(0);
+        expect(w.health().status).toBe('stopped');
+    });
+
+    it('판정이 예외면 tick 은 실패하지 않고 그 작업만 lease 반납한다(상태 쓰기 없음)', async () => {
+        claimRows = [JOB];
+        const port: AdmissionPort = { readRunVerdict: async () => ({ run: true }), checkUserEntitlement: async () => { throw new Error('db down'); } };
+        const w = new KnowledgeWorker({ admission: port });
+        await expect(w.tick()).resolves.toBe(1);
+        expect(ingestVersion).not.toHaveBeenCalled();
+        expect(sqlWith('SET lease_expires_at = NOW()')).toHaveLength(1);
+        expect(sqlWith('SET state = $4')).toHaveLength(0);
+        expect(sqlWith('attempts = GREATEST(attempts - 1, 0)')).toHaveLength(0);
+    });
+
     it('claim 은 actor·취소 열을 돌려받고, 집은 시각을 lastClaimAt 으로 남긴다', async () => {
         claimRows = [{ ...JOB, actor_kind: 'system' }];
         ingestVersion.mockResolvedValue({ status: 'ready', chunkCount: 1 });

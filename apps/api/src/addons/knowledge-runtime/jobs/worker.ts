@@ -167,13 +167,25 @@ export class KnowledgeWorker {
     /**
      * 집은 작업 하나의 갈래 — 재선점 상한 → 실행 판정(접수 주체의 사용권 재검사) → 실행.
      * 판정: run(실행) · defer(add-on 꺼짐·상태 확인 불가 — attempts 를 되돌려 나중에) · reject(사용권 철회 — 최종 실패).
+     * 판정·마감 쓰기의 예외는 그 작업만 lease 반납으로 끝낸다(tick 의 다른 작업까지 실패시키지 않는다).
      */
     private async dispatch(job: JobRow, limits: LimitsProfile): Promise<void> {
+        try {
+            await this.dispatchOne(job, limits);
+        } catch (err) {
+            logger.warn(`작업 판정·마감 실패 — lease 반납(다시 집힌다): ${job.kind} ${job.id} — ${err instanceof Error ? err.message : String(err)}`);
+            await this.releaseClaimed(job);
+        }
+    }
+
+    private async dispatchOne(job: JobRow, limits: LimitsProfile): Promise<void> {
         if (Number(job.attempts) > limits.jobMaxAttempts) {
             await this.failOverClaimed(job, limits.jobMaxAttempts);
             return;
         }
         const decision = await admitJob(job, this.admission);
+        // 판정을 기다리는 사이 정지됐다 — 이 작업은 아직 inflight 에 없어 stop 이 반납하지 못했다. 상태 쓰기 없이 반납한다
+        if (!this.admitting) { await this.releaseClaimed(job); return; }
         const actions: Readonly<Record<JobAdmission, () => Promise<void>>> = {
             run: () => this.runOne(job, limits.jobLeaseMs, limits.jobMaxAttempts),
             defer: async () => {
@@ -183,6 +195,11 @@ export class KnowledgeWorker {
             reject: () => this.rejectClaimed(job, decision.verdict),
         };
         await actions[decision.admission]();
+    }
+
+    /** 집은 작업 하나의 lease 를 상태 쓰기 없이 반납한다(정지·판정 실패) */
+    private async releaseClaimed(job: JobRow): Promise<void> {
+        await this.releaseLeases([{ jobId: job.id, token: job.fencing_token, owner: this.owner }]);
     }
 
     /** 사용권이 철회된 사용자 작업 — 재시도하지 않고 최종 실패로 마감한다(수집이면 문서 버전도 ADDON_NOT_ENTITLED) */
@@ -295,6 +312,7 @@ export class KnowledgeWorker {
     }
 
     private async runOne(job: JobRow, leaseMs: number, maxAttempts: number): Promise<void> {
+        if (!this.admitting) { await this.releaseClaimed(job); return; } // 정지 뒤에는 새 lease 로 핸들러를 시작하지 않는다
         const token = job.fencing_token; // BIGINT 문자열 그대로 — Number 로 바꾸지 않는다
         const lease = createJobLease({ jobId: job.id, token, owner: this.owner, now: this.now() });
         this.inflight.add(lease);
