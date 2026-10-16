@@ -1856,6 +1856,12 @@ export const ADDON_START_TIMEOUT_MS = parseInt(process.env.ADDON_START_TIMEOUT_M
  */
 export const ADDON_DRAIN_TIMEOUT_MS = parseInt(process.env.ADDON_DRAIN_TIMEOUT_MS || '5000', 10);
 
+/**
+ * `/api/health` 의 add-on 절 하나를 기다리는 상한(ms) — 넘으면 그 절만 `{ error: 'timeout …' }`. 헬스 응답이 DB 지연에 묶이지 않게.
+ * `HEALTH_SECTION_TIMEOUT_MS` 로 오버라이드.
+ */
+export const HEALTH_SECTION_TIMEOUT_MS = parseInt(process.env.HEALTH_SECTION_TIMEOUT_MS || '1000', 10);
+
 export const ORG_CONTEXT = {
     /** 사용자별 멤버십·활성 조직 캐시 보존(ms). ORG_CONTEXT_CACHE_TTL_MS 로 오버라이드. */
     CACHE_TTL_MS: parseInt(process.env.ORG_CONTEXT_CACHE_TTL_MS || '60000', 10),

@@ -93,6 +93,7 @@ import { bootstrapServices } from '../bootstrap';
 import { getConfig } from '../config';
 import { success } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
+import { collectHealthSections } from '../runtime-ports/health-sections';
 import { csrfProtectionMiddleware, csrfTokenIssuer } from '../middlewares/csrf-protection';
 import { authLimiter } from '../middlewares/rate-limiters';
 import { mountAddonRoutes } from '../addon-host/routes';
@@ -129,6 +130,8 @@ export function setupApiRoutes(
         const dbPool = getPool();
         const memory = process.memoryUsage();
         const clusterStats = cluster.getStats();
+        // add-on 이 등록한 상태 절(예: 수집 소비자 모드·대기열) — 절마다 시간 상한, 실패는 그 절만 { error }
+        const sections = await collectHealthSections();
 
         res.json({
             status: 'ok',
@@ -152,7 +155,8 @@ export function setupApiRoutes(
                     heapTotalMB: Math.round(memory.heapTotal / 1024 / 1024),
                     rssMB: Math.round(memory.rss / 1024 / 1024)
                 }
-            }
+            },
+            ...sections,
         });
     });
 

@@ -6,6 +6,7 @@
 import { AppError } from '../../../utils/error-handler';
 import { kdb } from '../db';
 import { enqueueJob } from '../jobs/queue';
+import { userJobActor } from '../jobs/actor';
 import { clearProfileCache } from '../config/profiles';
 import { PROFILE_CONFIG_SCHEMAS } from '../schemas';
 import type { KnowledgeAdminStatus, KnowledgeProfile } from '@openmake/shared-types';
@@ -73,12 +74,12 @@ export async function updateProfile(id: string, body: { name?: string; config: R
     return toProfile(r.rows[0]);
 }
 
-/** 관리자 재청킹 — 존재하는(미삭제) Space 만. 청크 정책 변경은 재수집이므로 rechunk 작업을 큐잉. */
-export async function rechunkSpace(spaceId: string): Promise<void> {
+/** 관리자 재청킹 — 존재하는(미삭제) Space 만. 청크 정책 변경은 재수집이므로 rechunk 작업을 큐잉(접수 주체는 그 관리자). */
+export async function rechunkSpace(spaceId: string, requestedBy: string): Promise<void> {
     const exists = await kdb().query(
         `SELECT 1 FROM knowledge_spaces WHERE id = $1 AND deleted_at IS NULL`,
         [spaceId],
     );
     if ((exists.rowCount ?? 0) === 0) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
-    await enqueueJob({ kind: 'rechunk', spaceId });
+    await enqueueJob({ kind: 'rechunk', spaceId, actor: userJobActor(requestedBy) });
 }

@@ -159,13 +159,47 @@ Knowledge 는 바인딩(연결·해제·해석·사이드바 숨김)과 Space �
 
 **DB 테스트**: `*.db.test.ts` 는 `TEST_DATABASE_URL` 이 있을 때만 돈다. CI 는 Gate 1.5 에서 job 안의 일회용 PostgreSQL(`pgvector/pgvector:0.8.3-pg16-trixie`)에 `scripts/setup-test-db.sh` 로 코어+add-on 마이그레이션을 적용하고 `npm run test:db` 로 그 파일들만 `--runInBand` 로 돌린다 — 마지막 줄 `db tests ran: N` 이 0 이면(전부 skip) 실패다. 로컬도 같은 두 명령이다. CI 에서 실제로 도는 DB 테스트는 `*.db.test.ts` 뿐이다 — `TEST_DATABASE_URL||DATABASE_URL` 로 게이트된 다른 테스트 7개(027_mcp_server_draft·128_org_scoped_sharing·mcp-catalog-repository.metrics·mcp-server-draft-repository·mcp-catalog-admin.routes·mcp-server-ingest.routes·mcp-server-ingest-service)는 이름 변경(`*.db.test.ts`)이 후속이다.
 
-## 9. Knowledge 작업 큐의 lease·fencing (`addons/knowledge-runtime/jobs/`)
+## 9. Knowledge 작업 큐 (`addons/knowledge-runtime/jobs/`)
 
-claim 은 `UPDATE … fencing_token = fencing_token + 1 … FOR UPDATE SKIP LOCKED` 로 만료 lease 를 포함해 집는다. 실행자는 받은 token(BIGINT — 문자열로 들고 다니며 `Number` 로 바꾸지 않는다)을 `JobLease` 로 끌고 가 **job 행 갱신(finish·retry·heartbeat)과 모든 확정 쓰기(청크 교체·임베딩 삽입·문서 ready 게시·실패 기록·index 전환)** 의 트랜잭션 첫 문장에서 `assertLeaseHeld`(`SELECT … WHERE id AND fencing_token AND lease_owner AND state='running' FOR SHARE`)로 검사한다 — 검사와 쓰기가 같은 트랜잭션·같은 행 잠금 아래 있어 "선조회 뒤 무조건 쓰기"(TOCTOU)가 아니다. heartbeat 갱신이 0행이거나, 갱신 오류가 lease 기간을 넘겨 이어지면 lease 상실로 표시하고 핸들러는 단계 경계에서 멈춘다. lease 를 잃은 실행자는 job 행·문서 상태(ready·failed) 어느 것도 쓰지 않는다. DB 밖 부작용(임베딩 호출·파일 삭제)은 멈출 뿐 되돌리지 않는다 — exactly-once 가 아니다.
+### 9.1 lease·fencing
+
+claim 은 `UPDATE … fencing_token = fencing_token + 1 … FOR UPDATE SKIP LOCKED` 로 만료 lease 를 포함해 집는다. 실행자는 받은 token(BIGINT — 문자열로 들고 다니며 `Number` 로 바꾸지 않는다)을 `JobLease` 로 끌고 가 **job 행 갱신(finish·retry·heartbeat·마감)과 모든 확정 쓰기(청크 교체·임베딩 삽입·문서 ready 게시·실패 기록·index 전환)** 의 트랜잭션 첫 문장에서 `assertLeaseHeld`(`SELECT … WHERE id AND fencing_token AND lease_owner AND state='running' FOR SHARE`)로 검사한다 — 검사와 쓰기가 같은 트랜잭션·같은 행 잠금 아래 있어 "선조회 뒤 무조건 쓰기"(TOCTOU)가 아니다. heartbeat 갱신이 0행이거나, 갱신 오류가 lease 기간을 넘겨 이어지면 lease 상실로 표시하고 핸들러는 단계 경계에서 멈춘다. lease 를 잃은 실행자는 job 행·문서 상태(ready·failed) 어느 것도 쓰지 않는다. 핸들러가 정상 반환해도 그 사이 lease 를 잃었으면 `done` 을 쓰지 않는다. DB 밖 부작용(임베딩 호출·파일 삭제)은 멈출 뿐 되돌리지 않는다 — exactly-once 가 아니다.
+
+### 9.2 접수 주체(actor)와 claim 재검사
+
+| 접수 지점 | actor | claim 때 재검사 |
+|---|---|---|
+| 문서 업로드·재시도 | 개인 Space `user` / 조직 Space `org`(조직 id) | 상태 + 조직 사용권(`checkUserEntitlement`) |
+| 관리자 재색인·재청킹 | 그 관리자 `user` | 같음 |
+| 문서·Space 삭제의 정리(cleanup) | `system`(요청자는 기록용) | add-on 단위 게이트만 |
+| 평가 하네스 | `system` | add-on 단위 게이트만 |
+| 004 이전 행(actor NULL) | `system` 으로 본다 | add-on 단위 게이트만 |
+
+접수 때 `policy_revision`(그 시점 `addon_installations.state_revision`, 조회 실패면 NULL)을 함께 남긴다 — 추적용이며 판정은 claim 때 늘 다시 한다. tick 은 먼저 add-on 단위 strict 판정(`readAddonRunVerdict` — 꺼짐·실패·env 차단은 stopped, 조회 실패는 unknown)을 보고 run 이 아니면 그 tick 은 집지 않는다. 집은 사용자·조직 작업의 판정: `ok` 실행, `not-entitled` 최종 실패(작업 `failed`, 문서 버전 `ADDON_NOT_ENTITLED`), `disabled`·`failed`·`state-unknown` 보류(queued 로 되돌리고 attempts −1, `KNOWLEDGE_JOB_ADMISSION_DEFER_MS` 뒤). add-on 은 이 판정을 `runtime-ports/addon-admission` 으로만 묻는다.
+
+### 9.3 취소
+
+`POST /api/knowledge/jobs/:id/cancel` — 접수한 사용자(user·org 작업) 또는 관리자만, 그 밖은 404. queued 는 바로 `cancelled`(수집이면 문서 버전 `CANCELLED`) 200, running 은 `cancel_requested_at` 만 찍고 202 `cancelling`, 끝난 작업은 409 `JOB_NOT_CANCELLABLE`. 감사 `knowledge.job_cancelled`. 실행자의 heartbeat 갱신(`RETURNING cancel_requested_at`, 주기 `max(1초, jobLeaseMs × 0.4)`)이 요청을 읽으면 `lease.markCancelled` 로 신호를 끊고, 핸들러는 다음 단계 경계에서 `JobCancelledError`(`LeaseLostError` 의 하위형 — 상실 경로의 "상태를 쓰지 않고 던진다"를 그대로 탄다)로 멈춘다. lease 는 여전히 그 실행자의 것이므로 실행자가 token·owner 조건으로 `cancelled` 를 쓴다. 핸들러가 이미 끝난 뒤 도착한 취소는 `done` 으로 둔다. 취소 요청된 채 다시 집힌 작업(앞 실행자가 죽음)은 핸들러 없이 `cancelled`. 진행 중이던 DB 밖 호출은 끝까지 가고 그 결과만 버린다. 취소 요청 뒤 실행자의 heartbeat 가 멈춰(프로세스 정지 등) lease 가 만료되면 다른 소비자가 다시 집을 수 있고 그때 attempts 가 1 늘어난다 — 다시 집힌 작업은 위 규칙대로 핸들러 없이 `cancelled` 로 마감하므로 상태 정합성은 유지된다.
+
+### 9.4 소비자 모드와 generation
+
+`knowledge_worker_mode`(id=1 단일 행: `mode` inprocess|external, `generation`)가 claim 권한의 authority 다. claim SQL 은 `WITH m AS (SELECT mode FROM knowledge_worker_mode WHERE id = 1 FOR SHARE)` 로 읽어 자기 종류와 같을 때만 집는다 — 모드 전환(UPDATE)은 진행 중 claim 이 끝날 때까지 기다리고, 전환 커밋 뒤 시작한 claim 은 새 값을 본다. 행이 없으면 아무도 집지 않는다. 설정 `KNOWLEDGE_WORKER_MODE`(기본 inprocess)는 "이 API 프로세스가 poller 를 띄우는가"만 정한다 — external 이면 API 는 poller 없이 정지·재개할 것이 없는 handle 을 돌려준다. 전환은 `scripts/knowledge-worker-mode.sh set <mode>`(generation+1)이고, 그 앞뒤 순서는 9.6 이다. 소비자는 `knowledge_worker_heartbeats` 에 worker_id·종류·generation·inflight 를 주기(`KNOWLEDGE_WORKER_HEARTBEAT_MS`)로 쓴다. API 안(inprocess) 소비자는 관리자 정지(handle.stop) 뒤 heartbeat 행 갱신을 멈춘다(resume 하면 다시 쓴다) — 그래서 `/api/health`·롤백 스크립트의 "살아 있음"(heartbeat 나이 15초 미만)이 정지를 반영하기까지 최대 15초 늦다.
+
+### 9.5 별도 worker 프로세스
+
+PM2 앱 `openmake-knowledge-worker`(`apps/api/dist/workers/knowledge-worker.js`) — `KNOWLEDGE_WORKER_MODE=external` 일 때만 ecosystem 에 등록된다. Base 진입점은 루트 .env·설정·시스템 설정 overlay·종료 신호만 맡고, add-on 본체는 매니페스트 `entry.workers[name=knowledge-ingest]` 로 찾는다(`addon-host/worker-entry` — Base 는 add-on 코드를 import 하지 않는다). 본체는 add-on 마이그레이션 004 를 기다렸다가(`KNOWLEDGE_WORKER_SCHEMA_WAIT_MS`) 행이 끝내 없으면 종료 코드 78(PM2 `stop_exit_codes` — 다시 띄우지 않는다), 있으면 상태 캐시를 채우고 `127.0.0.1:<KNOWLEDGE_WORKER_HEALTH_PORT>/health`(0 이면 끔 — 포트를 묶지 못하면 타이머를 걸기 전에 78)를 연 뒤 external 소비자로 폴링하며 heartbeat 행을 둔다. API listen·add-on 전체 부팅·마이그레이션 적용은 하지 않는다. 스키마 확인 조회가 DB 오류로 실패하면 "없음"과 나눠 대기 상한(기본 60초)까지 다시 시도하고, 상한에서 마지막 조회가 여전히 오류면 종료 코드 1 로 끝나 PM2 가 다시 띄운다(재부팅 때 DB 가 늦게 뜨는 경우 — 한 번의 시도가 `min_uptime` 10초보다 길어 재시작 상한에 걸리지 않는다). 로그 파일은 API 와 나눈다 — 진입점이 `LOG_FILE_PREFIX=knowledge-worker-` 를 정해 `apps/api/logs/knowledge-worker-combined.log`·`knowledge-worker-error.log` 를 쓴다(winston 회전은 프로세스마다 크기를 따로 세므로 한 파일을 두 프로세스가 쓰면 회전이 엇갈린다). SIGTERM → 새 claim 중단 → 진행 작업 drain(`KNOWLEDGE_WORKER_DRAIN_TIMEOUT_MS` 20초, 넘으면 lease 반납) → heartbeat 행 삭제 → DB 풀 종료(전체 25초 < PM2 kill_timeout 30초). 관리자 토글은 이 프로세스에 handle 로 닿지 않는다 — 상태 캐시 TTL(`ADDON_STATE_CACHE_TTL_MS`) 안에 claim 게이트가 보고 새 claim 을 멈추며, 진행 중 작업은 끝까지 간다. `./openmake_llm.sh deploy`·`canary-deploy` 는 등록된 worker 를 API 가 뜬 뒤 재시작하고, 카나리 API 는 poller 를 띄우지 않는다(external). 임베딩 capability 를 add-on driver 의 direct transport 로 배정한 경우는 이 프로세스에서 지원하지 않는다(driver 를 등록하지 않으므로 게이트웨이 경로로 해석된다).
+
+`/api/health` 의 `knowledge`: `{ mode, generation, workerHeartbeatAgeMs, queueOldestAgeMs, inflight }` — `workerHeartbeatAgeMs` 는 현재 모드와 같은 종류 소비자의 가장 최근 heartbeat 나이(없으면 null), `queueOldestAgeMs` 는 실행할 때가 된 queued 작업의 최장 대기. external 인데 worker 가 없으면 앞이 null 이고 뒤가 자란다. `/api/health` 는 인증 없이 열려 있으므로 이 절은 누구에게나 보인다 — 내보내는 것은 모드·generation·heartbeat 나이·최장 대기 시간·진행 중 건수뿐이고 작업 id·문서·사용자·오류 문구는 없다.
+
+### 9.6 전환·롤백 순서 (`scripts/knowledge-worker-rollback-drill.sh {to-inprocess|to-external}`)
+
+순서는 언제나 DB 모드 전환 → 설정(`KNOWLEDGE_WORKER_MODE`) 변경 → API 재시작이다 — 설정이 external 인 채 떠 있는 API 는 DB 모드만 inprocess 로 되돌려도 재시작 전까지 poller 를 띄우지 않는다(작업이 쌓인다).
+
+① DB 모드 변경 + generation+1(옛 소비자의 새 claim 즉시 차단) ② 옛 소비자 정지(SIGTERM → drain) ③ 살아 있는 lease 0 + generation 이 ① 의 값인지 확인 ④ 새 소비자 기동, `/api/health` 의 `knowledge` 가 새 모드·generation·살아 있는 heartbeat 인지 확인. API 재시작은 셸의 `KNOWLEDGE_WORKER_MODE` 를 넘기지만 다음 배포는 `.env` 값으로 API 를 다시 띄우므로, 스크립트는 시작 전(① 앞)과 ④ 직전에 `.env` 의 `KNOWLEDGE_WORKER_MODE`(없으면 inprocess)가 목표 모드인지 보고 다르면 종료 코드 7 로 멈춘다 — `.env` 를 먼저 바꾸고 실행한다. 앱 이름 기본값은 `OMK_INSTANCE` 로 `-<인스턴스>` 를 붙이고(ecosystem 과 같은 규칙), heartbeat 나이 상한은 API 와 같은 `KNOWLEDGE_WORKER_HEARTBEAT_STALE_MS` 를 읽는다. ① 뒤 단계가 실패하면 문서의 종료 코드(3 DB·4 lease·5 generation·6 헬스·8 단계 명령)로 끝나며 복구 안내 한 줄을 남긴다. 대상·명령은 환경변수로 받는다(서버 이름 없음, `DRILL_DRY_RUN=1` 로 순서만 출력). 코드 자체를 004 이전으로 되돌릴 때는 옛 코드가 모드 행을 보지 않으므로 별도 worker 를 먼저 내리고(to-inprocess) 되돌린다.
 
 ## 10. 범위 밖(다음 묶음)
 
-manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트·작업 도중 토글 반영(2차), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), 별도 worker 프로세스(3차 C4), add-on → Base 내부 import 의 전수 이전(ratchet 으로 줄여 간다 — §8.5), 대화 세션 밖의 Base 테이블 포트(필요해질 때), 물리 SQL 권한 격리.
+manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트·작업 도중 토글 반영(2차), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), add-on → Base 내부 import 의 전수 이전(ratchet 으로 줄여 간다 — §8.5), 대화 세션 밖의 Base 테이블 포트(필요해질 때), 물리 SQL 권한 격리.
 
 ## 11. 설치형 확장의 권한 상태 (`user_extensions.permission_state`, 마이그레이션 190)
 

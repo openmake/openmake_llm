@@ -11,8 +11,8 @@ import { hostname } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { createLogger } from '../../../utils/logger';
 import { kdb } from '../db';
-import { KNOWLEDGE_RUNTIME } from '../constants';
-import { getDefaultLimits } from '../config/profiles';
+import { KNOWLEDGE_ADDON_ID, KNOWLEDGE_RUNTIME } from '../constants';
+import { getDefaultLimits, type LimitsProfile } from '../config/profiles';
 import { ingestVersion, type IngestDeps } from '../ingestion/pipeline';
 import { runReindexJob } from '../embedding/index-manager';
 import { FAILURE_CODES, type FailureCode } from '../ingestion/errors';
@@ -20,6 +20,9 @@ import { deleteStoredFile } from '../documents/storage';
 import { rechunkSpace } from './rechunk';
 import { runCleanup } from './cleanup';
 import { createJobLease, LeaseLostError, type JobLease } from './lease';
+import { admitJob, defaultAdmissionPort, type AdmissionPort, type JobAdmission } from './admission';
+import { deferClaimedJob, finishJobTerminal } from './terminal';
+import type { JobActorKind, KnowledgeWorkerMode } from './job-schema';
 
 const logger = createLogger('KnowledgeWorker');
 
@@ -34,10 +37,22 @@ export interface JobRow {
     embedding_index_id: string | null;
     attempts: number;
     fencing_token: string;
+    /** 접수 주체 — NULL 은 004 이전 행(시스템 작업으로 본다) */
+    actor_kind: JobActorKind | null;
+    actor_user_id: string | null;
+    org_id: string | null;
+    /** 접수 시점 add-on 상태 revision(추적용) */
+    policy_revision: number | null;
+    /** 취소 요청 시각 — 있으면 실행하지 않고 cancelled 로 마감한다(Task 3) */
+    cancel_requested_at: Date | null;
 }
 
 export interface WorkerDeps extends IngestDeps {
     now?: () => number;
+    /** 실행 판정 포트 — 테스트가 주입한다. 기본은 runtime-ports/addon-admission */
+    admission?: AdmissionPort;
+    /** 이 소비자의 종류 — claim 이 DB 모드(knowledge_worker_mode.mode)와 대조한다. 기본 inprocess(API 안 poller) */
+    consumerKind?: KnowledgeWorkerMode;
 }
 
 type Handler = (job: JobRow, deps: WorkerDeps) => Promise<void>;
@@ -84,8 +99,29 @@ export class KnowledgeWorker {
     private current: Promise<number> | null = null;
     /** 진행 중 작업의 lease — drain 시간 초과·즉시 정지 때 상실 처리하고 반납한다 */
     private readonly inflight = new Set<JobLease>();
+    /** 실행 판정 포트 — 테스트가 주입한다(기본은 runtime-ports/addon-admission) */
+    private readonly admission: AdmissionPort;
+    /** 이 소비자의 종류 — DB 모드와 다르면 claim 이 0건이다 */
+    private readonly kind: KnowledgeWorkerMode;
+    /** 마지막 add-on 게이트 판정 — 바뀔 때만 로그를 남긴다 */
+    private lastGate: string | null = null;
+    /** 마지막으로 작업을 1건 이상 집은 시각(ms) — 별도 프로세스 /health 가 보여 준다 */
+    private lastClaim: number | null = null;
 
-    constructor(private readonly deps: WorkerDeps = {}) {}
+    constructor(private readonly deps: WorkerDeps = {}) {
+        this.admission = deps.admission ?? defaultAdmissionPort;
+        this.kind = deps.consumerKind ?? 'inprocess';
+    }
+
+    /** 이 실행자의 lease owner 값 — heartbeat 행의 worker_id 로도 쓴다 */
+    get id(): string {
+        return this.owner;
+    }
+
+    /** 마지막으로 작업을 집은 시각(ms), 아직 없으면 null */
+    lastClaimAt(): number | null {
+        return this.lastClaim;
+    }
 
     private now(): number {
         return this.deps.now ? this.deps.now() : Date.now();
@@ -108,6 +144,10 @@ export class KnowledgeWorker {
     private async runTick(): Promise<number> {
         const limits = await getDefaultLimits();
         if (!this.admitting) return 0; // 한도를 읽는 사이 정지됐으면 집지 않는다
+        // add-on 실행 판정(strict) — 꺼짐·실패·상태 확인 불가면 이번 tick 은 집지 않는다(다음 tick 에 다시 본다)
+        const gate = await this.admission.readRunVerdict(KNOWLEDGE_ADDON_ID);
+        this.noteGate(gate.run ? 'run' : `${gate.reason}: ${gate.detail}`);
+        if (!gate.run || !this.admitting) return 0; // 판정을 기다리는 사이 정지됐어도 집지 않는다
         const jobs = await this.claim(limits.ingestConcurrency, limits.jobLeaseMs);
         if (jobs.length === 0) return 0;
         if (!this.admitting) {
@@ -116,10 +156,78 @@ export class KnowledgeWorker {
             logger.warn(`수집 worker 정지 — claim 진행 중 정지되어 집은 작업 ${jobs.length}건을 실행하지 않고 lease 반납`);
             return 0;
         }
-        await Promise.all(jobs.map((j) => (Number(j.attempts) > limits.jobMaxAttempts
-            ? this.failOverClaimed(j, limits.jobMaxAttempts)
-            : this.runOne(j, limits.jobLeaseMs, limits.jobMaxAttempts))));
+        this.lastClaim = this.now();
+        await Promise.all(jobs.map((j) => this.dispatch(j, limits)));
         return jobs.length;
+    }
+
+    /** 게이트 판정이 바뀔 때만 로그를 남긴다(폴링마다 같은 줄이 쌓이지 않게) */
+    private noteGate(verdict: string): void {
+        if (verdict === this.lastGate) return;
+        this.lastGate = verdict;
+        if (verdict === 'run') logger.info('Knowledge add-on 실행 판정 통과 — 작업을 집는다');
+        else logger.warn(`Knowledge add-on 실행 판정 보류 — 작업을 집지 않는다(${verdict})`);
+    }
+
+    /**
+     * 집은 작업 하나의 갈래 — 재선점 상한 → 실행 판정(접수 주체의 사용권 재검사) → 실행.
+     * 판정: run(실행) · defer(add-on 꺼짐·상태 확인 불가 — attempts 를 되돌려 나중에) · reject(사용권 철회 — 최종 실패).
+     * 판정·마감 쓰기의 예외는 그 작업만 lease 반납으로 끝낸다(tick 의 다른 작업까지 실패시키지 않는다).
+     */
+    private async dispatch(job: JobRow, limits: LimitsProfile): Promise<void> {
+        try {
+            await this.dispatchOne(job, limits);
+        } catch (err) {
+            logger.warn(`작업 판정·마감 실패 — lease 반납(다시 집힌다): ${job.kind} ${job.id} — ${err instanceof Error ? err.message : String(err)}`);
+            await this.releaseClaimed(job);
+        }
+    }
+
+    private async dispatchOne(job: JobRow, limits: LimitsProfile): Promise<void> {
+        if (job.cancel_requested_at) {
+            // 취소 요청된 채 다시 집힌 작업(앞 실행자가 죽었거나 lease 를 놓음) — 핸들러를 돌리지 않고 마감한다
+            await this.finishCancelled(job, '취소 요청된 작업을 다시 집음 — 실행 없이 마감');
+            return;
+        }
+        if (Number(job.attempts) > limits.jobMaxAttempts) {
+            await this.failOverClaimed(job, limits.jobMaxAttempts);
+            return;
+        }
+        const decision = await admitJob(job, this.admission);
+        // 판정을 기다리는 사이 정지됐다 — 이 작업은 아직 inflight 에 없어 stop 이 반납하지 못했다. 상태 쓰기 없이 반납한다
+        if (!this.admitting) { await this.releaseClaimed(job); return; }
+        const actions: Readonly<Record<JobAdmission, () => Promise<void>>> = {
+            run: () => this.runOne(job, limits.jobLeaseMs, limits.jobMaxAttempts),
+            defer: async () => {
+                await deferClaimedJob({ id: job.id, fencingToken: job.fencing_token, owner: this.owner }, `실행 보류(${decision.verdict})`);
+                logger.info(`작업 실행 보류(${decision.verdict}): ${job.kind} ${job.id} — ${KNOWLEDGE_RUNTIME.JOB_ADMISSION_DEFER_MS}ms 뒤 다시`);
+            },
+            reject: () => this.rejectClaimed(job, decision.verdict),
+        };
+        await actions[decision.admission]();
+    }
+
+    /** 집은 작업 하나의 lease 를 상태 쓰기 없이 반납한다(정지·판정 실패) */
+    private async releaseClaimed(job: JobRow): Promise<void> {
+        await this.releaseLeases([{ jobId: job.id, token: job.fencing_token, owner: this.owner }]);
+    }
+
+    /** 사용권이 철회된 사용자 작업 — 재시도하지 않고 최종 실패로 마감한다(수집이면 문서 버전도 ADDON_NOT_ENTITLED) */
+    private async rejectClaimed(job: JobRow, verdict: string): Promise<void> {
+        const closed = await finishJobTerminal({
+            jobId: job.id, token: job.fencing_token, owner: this.owner, state: 'failed',
+            lastError: `실행 거절(${verdict}) — 접수 뒤 사용권이 바뀌었다`, versionFailureCode: FAILURE_CODES.NOT_ENTITLED,
+        });
+        logger.warn(`작업 실행 거절(${verdict}): ${job.kind} ${job.id} 사용자=${job.actor_user_id ?? '-'}${closed ? '' : ' — 이미 다른 실행자의 행(쓰기 없음)'}`);
+    }
+
+    /** 취소 마감 — 내 token·owner 의 running 행을 cancelled 로(수집이면 문서 버전 CANCELLED). DB 밖 호출(임베딩·파일 삭제)은 되돌리지 않는다 */
+    private async finishCancelled(job: Pick<JobRow, 'id' | 'kind' | 'fencing_token'>, detail: string): Promise<void> {
+        const closed = await finishJobTerminal({
+            jobId: job.id, token: job.fencing_token, owner: this.owner, state: 'cancelled',
+            lastError: `취소됨 — ${detail}`, versionFailureCode: FAILURE_CODES.CANCELLED,
+        });
+        logger.info(`작업 취소 마감: ${job.kind} ${job.id}${closed ? '' : ' — 이미 다른 실행자의 행(쓰기 없음)'}`);
     }
 
     /**
@@ -184,10 +292,15 @@ export class KnowledgeWorker {
         }));
     }
 
-    /** 만료 lease 포함해 due 작업을 원자적으로 집는다 */
+    /**
+     * 만료 lease 포함해 due 작업을 원자적으로 집는다 — DB 모드가 이 소비자의 종류와 같을 때만(설계 D5).
+     * 모드 행을 FOR SHARE 로 읽어, 모드 전환(UPDATE)이 진행 중 claim 이 끝날 때까지 기다리게 하고 전환 커밋 뒤 시작한
+     * claim 은 새 값을 보게 한다 — 전환 뒤 옛 소비자의 새 claim 은 없다. 모드 행이 없으면 아무도 집지 않는다.
+     */
     private async claim(limit: number, leaseMs: number): Promise<JobRow[]> {
         const r = await kdb().query<JobRow>(
-            `UPDATE knowledge_ingestion_jobs j
+            `WITH m AS (SELECT mode FROM knowledge_worker_mode WHERE id = 1 FOR SHARE)
+             UPDATE knowledge_ingestion_jobs j
                 SET state = 'running', lease_owner = $1,
                     lease_expires_at = NOW() + ($2::bigint * INTERVAL '1 millisecond'),
                     fencing_token = j.fencing_token + 1, attempts = j.attempts + 1, updated_at = NOW()
@@ -195,11 +308,13 @@ export class KnowledgeWorker {
                     SELECT id FROM knowledge_ingestion_jobs
                      WHERE state IN ('queued', 'running') AND run_after <= NOW()
                        AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+                       AND EXISTS (SELECT 1 FROM m WHERE m.mode = $4)
                      ORDER BY run_after
                      FOR UPDATE SKIP LOCKED
                      LIMIT $3)
-            RETURNING j.id, j.kind, j.document_version_id, j.space_id, j.embedding_index_id, j.attempts, j.fencing_token`,
-            [this.owner, leaseMs, Math.max(1, limit)],
+            RETURNING j.id, j.kind, j.document_version_id, j.space_id, j.embedding_index_id, j.attempts, j.fencing_token,
+                      j.actor_kind, j.actor_user_id, j.org_id, j.policy_revision, j.cancel_requested_at`,
+            [this.owner, leaseMs, Math.max(1, limit), this.kind],
         );
         return r.rows;
     }
@@ -222,6 +337,7 @@ export class KnowledgeWorker {
     }
 
     private async runOne(job: JobRow, leaseMs: number, maxAttempts: number): Promise<void> {
+        if (!this.admitting) { await this.releaseClaimed(job); return; } // 정지 뒤에는 새 lease 로 핸들러를 시작하지 않는다
         const token = job.fencing_token; // BIGINT 문자열 그대로 — Number 로 바꾸지 않는다
         const lease = createJobLease({ jobId: job.id, token, owner: this.owner, now: this.now() });
         this.inflight.add(lease);
@@ -232,10 +348,16 @@ export class KnowledgeWorker {
         lease.signal.addEventListener('abort', stopBeat, { once: true });
         try {
             await HANDLERS[job.kind](job, { ...this.deps, lease });
-            // 핸들러가 끝난 뒤에도 그 사이 lease 를 잃었으면(정지 시간 초과·heartbeat 0행) done 을 쓰지 않는다 — 반납한 행은 다음 실행자의 것
-            lease.throwIfLost();
+            // 핸들러가 끝난 뒤에도 그 사이 lease 를 잃었으면(정지 시간 초과·heartbeat 0행) done 을 쓰지 않는다 — 반납한 행은 다음 실행자의 것.
+            // 취소 표시만 받은 경우는 lease 가 아직 내 것이고 일이 끝났으므로 done 으로 마감한다(취소가 늦었다)
+            if (!lease.isCancelled()) lease.throwIfLost();
             await this.finish(job.id, token);
         } catch (err) {
+            if (lease.isCancelled()) {
+                // 취소 — 핸들러는 단계 경계에서 JobCancelledError 로 멈췄다. 마감(cancelled)은 lease 를 쥔 이 실행자가 fence 안에서 쓴다
+                await this.finishCancelled(job, err instanceof Error ? err.message : String(err));
+                return;
+            }
             if (err instanceof LeaseLostError || lease.signal.aborted) {
                 // 행은 이미 다른 실행자의 것 — finish·retry 로 건드리면 그쪽 상태를 덮는다
                 logger.warn(`작업 중단(lease 상실 — 결과 쓰기 거절): ${job.kind} ${job.id} token=${token} — ${err instanceof Error ? err.message : String(err)}`);
@@ -257,15 +379,18 @@ export class KnowledgeWorker {
     private async renew(lease: JobLease, leaseMs: number): Promise<void> {
         if (lease.signal.aborted) return; // 잃은(반납한) lease 는 늘리지 않는다
         try {
-            const r = await kdb().query(
+            const r = await kdb().query<{ cancel_requested_at: Date | null }>(
                 `UPDATE knowledge_ingestion_jobs SET lease_expires_at = NOW() + ($3::bigint * INTERVAL '1 millisecond'), updated_at = NOW()
-                  WHERE id = $1 AND fencing_token = $2 AND lease_owner = $4 AND state = 'running'`,
+                  WHERE id = $1 AND fencing_token = $2 AND lease_owner = $4 AND state = 'running'
+                  RETURNING cancel_requested_at`,
                 [lease.jobId, lease.token, leaseMs, lease.owner],
             );
             if ((r.rowCount ?? 0) === 0) { lease.markLost('heartbeat 갱신 0행 — 다른 실행자가 집었거나 작업이 끝났음'); return; }
             // 갱신이 나가 있는 사이 정지 반납이 먼저 커밋됐을 수 있다 — 방금 늘린 lease 를 다시 반납한다
             if (lease.signal.aborted) { await this.releaseLeases([lease]); return; }
             lease.touch(this.now());
+            // 취소 요청 — 신호를 끊어 핸들러가 다음 단계 경계에서 멈추게 한다(lease 는 계속 내 것: 마감은 이 실행자가 cancelled 로 쓴다)
+            if (r.rows[0]?.cancel_requested_at) lease.markCancelled('사용자·관리자 취소 요청');
         } catch (err) {
             const silentMs = this.now() - lease.renewedAt;
             if (silentMs > leaseMs) {

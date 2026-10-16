@@ -128,4 +128,8 @@ export const DEFAULT_CONFIG: EnvConfig = {
     // Storage — default memory preserves single-instance in-memory behavior
     storageBackend: 'memory' as const,
     redisUrl: '',
+
+    // Knowledge 수집 worker — 기본은 API 프로세스 안(inprocess), 별도 worker 의 /health 는 열지 않음(0)
+    knowledgeWorkerMode: 'inprocess' as const,
+    knowledgeWorkerHealthPort: 0,
 };
