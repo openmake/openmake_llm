@@ -13,6 +13,8 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 // API(server.ts)와 같은 루트 .env — src·dist 어느 쪽에서 실행해도 apps/api/<src|dist>/workers 기준 네 단계 위. 이미 있는 값은 덮지 않는다
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env'), quiet: true });
+// 로그 파일을 API 와 나눈다(logs/knowledge-worker-combined.log 등) — 한 파일을 두 프로세스가 회전시키지 않게. logger import 전에 정한다
+process.env.LOG_FILE_PREFIX = 'knowledge-worker-';
 
 import { createLogger } from '../utils/logger';
 import { getConfig } from '../config';
