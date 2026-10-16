@@ -88,14 +88,32 @@ curl -fsS http://127.0.0.1:<API 포트>/api/health | node -e 'let s="";process.s
 ```
 Expected: 백업 파일 경로 출력, dry-run 이 1)~6) 순서를 출력, canary-deploy exit 0(카나리 헬스 → 전환 → 전환 후 헬스 통과), `/health` 의 버전·SHA 가 릴리스 값, `/api/health` 의 `knowledge` 가 `{"mode":"inprocess","generation":<n>,"workerHeartbeatAgeMs":<15000 미만>,"queueOldestAgeMs":<null 또는 숫자>,"inflight":<0 이상>}`.
 
-스테이징 기능 확인(배포 직후 1회):
+스테이징 기능 확인(배포 직후 1회) — **스테이징 애플리케이션 API·DB 를 대상으로 e2e 를 돌리지 않는다.** plugin-boundary e2e 는 시험 사용자를 지우고 만들며, 조직·멤버·`ADDON_ALLOWLIST` 정책을 넣고, 전역 knowledge-runtime add-on 상태를 끄고 켠다 — 애플리케이션 DB 에 돌리면 실행 동안 모든 스테이징 사용자에게 add-on 이 꺼지고, 실행이 중간에 끊기면 꺼진 채 남는다(부록 B 와 같은 이유). 대신 스테이징 호스트에서 릴리스 SHA 의 빌드 산출물로 **e2e 전용 API 를 별도 포트에** 띄우고, 스테이징 PostgreSQL 안의 **일회용 DB** 에 붙인다.
+
+규칙: `TEST_DATABASE_URL` 은 스테이징 애플리케이션 DB 를 가리키지 않는다. 일회용 DB 이름은 `_test` 로 끝난다(`scripts/setup-test-db.sh` 가 그 밖의 이름을 거절한다).
+
+1. 일회용 DB 준비 — 둘 중 하나:
+   - 새 스키마: 스테이징 PostgreSQL 에 빈 DB `<e2e DB 이름>_test` 를 만들고 `TEST_DATABASE_URL=<e2e DB URL> ./scripts/setup-test-db.sh`(코어 + 내장 add-on 마이그레이션 적용).
+   - 스테이징 자료 복제: 방금 만든 백업을 **별도 DB** 에 푼다 — `pg_restore --no-owner -d <e2e DB URL> <백업 디렉터리>/<최신 백업>.dump`. `scripts/backups/db-restore.sh` 는 쓰지 않는다(대상 DB 를 통째로 바꾸는 애플리케이션 DB 복원용이다, §8).
+2. e2e 전용 API 기동·실행·정지:
 ```bash
-cd <스테이징 저장소 체크아웃>
-E2E_BASE_URL=http://127.0.0.1:<스테이징 API 포트> TEST_DATABASE_URL=<스테이징 DB URL> \
+cd <스테이징 설치 경로>
+git rev-parse HEAD                      # 릴리스 SHA 인지 확인(canary-deploy 가 빌드한 산출물)
+export TEST_DATABASE_URL=<e2e DB URL>
+psql "$TEST_DATABASE_URL" -tAc "SELECT current_database()" | grep -q '_test$' || echo "STOP: 일회용 DB 가 아니다"
+lsof -nP -iTCP:<e2e API 포트> -sTCP:LISTEN && echo "STOP: 포트 사용 중"
+OMK_API_PORT=<e2e API 포트> PORT=<e2e API 포트> DATABASE_URL="$TEST_DATABASE_URL" USER_MEMORY_AUTO_EXTRACT=true ORG_CONTEXT_CACHE_TTL_MS=1000 \
+RL_GENERAL_IP=1000000 RL_GENERAL_USER=1000000 CAPABILITY_JOB_POLLER_ENABLED=false \
+  nohup npm --workspace apps/api run start > <증거 디렉터리>/task-12/staging-e2e-api.log 2>&1 &
+echo $! > <증거 디렉터리>/task-12/staging-e2e-api.pid
+for i in $(seq 1 90); do curl -fsS http://127.0.0.1:<e2e API 포트>/health >/dev/null 2>&1 && { echo "up after ${i}x2s"; break; }; sleep 2; done
+E2E_BASE_URL=http://127.0.0.1:<e2e API 포트> \
   npx playwright test tests/e2e/plugin-boundary.spec.ts tests/e2e/extension-permissions.spec.ts --project=chromium
+kill "$(cat <증거 디렉터리>/task-12/staging-e2e-api.pid)" 2>/dev/null
+lsof -ti tcp:<e2e API 포트> -sTCP:LISTEN | xargs -r kill
 ```
-`--project=chromium` 으로만 돈다 — webkit 브라우저는 로컬에 설치돼 있지 않다(`playwright.config.ts` 의 webkit 프로젝트는 쓰지 않는다). `E2E_BASE_URL` 은 셸 값이 `tests/e2e/.env.e2e` 보다 우선한다.
-Expected: 모두 passed. 스테이징 API 가 `USER_MEMORY_AUTO_EXTRACT=true`·`ORG_CONTEXT_CACHE_TTL_MS=1000` 이 아니면 plugin-boundary 의 메모리·조직 테스트는 대조군 단계에서 실패한다 — 그 경우 이 두 테스트 결과는 "환경 불일치" 로 기록하고, 메모리 격리는 §5 의 SQL 감시로 확인한다.
+셸에 준 설정이 `.env` 보다 우선한다(dotenv 는 이미 있는 값을 덮지 않는다) — 그래서 이 API 는 `.env` 의 애플리케이션 DB 가 아니라 `TEST_DATABASE_URL` 에 붙는다. `STOP` 줄이 하나라도 나오면 그 뒤 명령을 실행하지 않는다. 정지는 pid 파일과 e2e 포트에서 듣는 프로세스로만 한다 — 이름으로 찾아 죽이지 않는다(애플리케이션 API 까지 걸린다). `--project=chromium` 으로만 돈다(`playwright.config.ts` 의 webkit 프로젝트는 쓰지 않는다). `E2E_BASE_URL` 은 셸 값이 `tests/e2e/.env.e2e` 보다 우선한다.
+Expected: 모두 passed(plugin-boundary 의 메모리·조직 테스트 포함 — 위 설정으로 띄웠으므로 대조군이 성립한다). 끝나면 일회용 DB 를 지운다(`DROP DATABASE <e2e DB 이름>_test`).
 
 스테이징 성능 기준선(빌드 산출물, 같은 부하):
 ```bash
