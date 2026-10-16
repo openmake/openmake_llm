@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.105.0](https://github.com/openmake/openmake_llm/compare/v1.104.1...v1.105.0) (2026-10-16)
+
+
+### ✨ 기능
+
+* **web:** explain chat quick-start cards ([1af20e1](https://github.com/openmake/openmake_llm/commit/1af20e13d469f3b28868669d500b7f57e6244567))
+* **web:** explain chat quick-start cards ([df1165a](https://github.com/openmake/openmake_llm/commit/df1165ae4bc2a21a015f4b3bb5e4ef01e3dd755e))
+* **web:** promote quick-start card descriptions to main ([7b7775b](https://github.com/openmake/openmake_llm/commit/7b7775b54d47dc03783479c25a4199228deda1ab))
+
 ## [1.104.1](https://github.com/openmake/openmake_llm/compare/v1.104.0...v1.104.1) (2026-10-16)
 
 
