@@ -42,7 +42,7 @@ test('empty chat shows an explanation under each quick-start label', async () =>
   const cleanup = await mount('ko');
   try {
     for (const [index, start] of Object.values(ko.chat.quickStarts).entries()) {
-      const button = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes(start.label));
+      const button = [...document.querySelector('[data-testid="quick-starts"]')!.querySelectorAll('button')].find((b) => b.textContent?.includes(start.label));
       assert.ok(button, start.label);
       assert.ok(button.textContent?.includes(koreanDescriptions[index]), `${start.label} must show its explanation`);
     }
@@ -55,7 +55,7 @@ for (const locale of Object.keys(locales) as (keyof typeof locales)[]) {
   test(`${locale}: descriptions remain visible and clicking them only prefills the original prompt`, async () => {
     const cleanup = await mount(locale);
     try {
-      const buttons = [...document.querySelectorAll('button')];
+      const buttons = [...document.querySelector('[data-testid="quick-starts"]')!.querySelectorAll('button')];
       assert.equal(buttons.length, 4);
       for (const start of Object.values(locales[locale].chat.quickStarts)) {
         assert.ok(start.description.trim());
