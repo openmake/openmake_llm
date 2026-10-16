@@ -140,6 +140,8 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 
 add-on 이 써도 되는 문은 `runtime-ports/*`(포트)·`addon-host`·`config`·`utils`·`@openmake/plugin-contracts` 다. 허용 목록·SQL 검사는 테스트(`__tests__`·`*.test.ts`)와 평가 시드 도구(`evaluation/`)를 보지 않는다. 초기 허용 목록은 141쌍/67파일(2026-10-16) — 새 import 를 목록에 더하는 diff 는 리뷰에서 거절한다.
 
+ratchet 은 `BASE_LAYERS`(`scripts/lint/addon-boundary-lib.mjs`) 8개 디렉터리 — `data`·`services`·`routes`·`sockets`·`controllers`·`middlewares`·`auth`·`chat` — 로 가는 import 만 센다. `tools/`·`agents/`·`llm/`·`security/`·`workflow/` 등 그 밖의 Base 디렉터리로 가는 import 는 세지 않으며, 범위 확장은 2차 후보다.
+
 ## 8.6 Base 데이터 포트 (`runtime-ports/base-data-port.ts`)
 
 add-on 이 Base 소유 테이블을 읽어야 할 때의 문이다. 지금은 대화 세션만 있다.
@@ -151,11 +153,11 @@ add-on 이 Base 소유 테이블을 읽어야 할 때의 문이다. 지금은 �
 | `conversationSessions.ownerOf(sessionId)` | **없음** — 호출부가 상위 자원(예: Knowledge Space)으로 인가한 뒤에만 | 소유자 id, 익명·없는 세션은 null |
 | `conversationSessions.summaries(sessionIds)` | **없음** — 같음 | 제목·갱신 시각(ISO), 최근 갱신 순, 없는 id 는 빠짐, 빈 입력은 조회 없이 `[]` |
 
-Knowledge 는 바인딩(연결·해제·해석·사이드바 숨김)과 Space 대화 목록의 소유·제목 조회를 이 포트로 한다 — 종전의 `conversation_sessions` JOIN 5곳을 바꿨고 결과·404 는 같다. 쿼리는 `data/conversation-session-lookup.ts` 에 있다. **같은 DB·같은 풀의 코드 경계**이며 물리 SQL 권한 격리(별도 DB 역할)를 주장하지 않는다.
+Knowledge 는 바인딩(연결·해제·해석·사이드바 숨김)과 Space 대화 목록의 소유·제목 조회를 이 포트로 한다 — 종전의 `conversation_sessions` JOIN 5곳을 바꿨고 결과·404 는 같다. 제목·갱신 시각이 없는 세션은 null 그대로 내려간다(`KnowledgeConversation.title`·`updatedAt` 은 `string | null`; `conversation_sessions.updated_at` 은 NOT NULL 이 아니다). 바인딩 연결의 소유 확인은 actor 범위의 `exists` 를 쓴다. 쿼리는 `data/conversation-session-lookup.ts` 에 있다. Base 테이블 SQL 스캔(§8.5)은 schema-qualified 이름·따옴표 식별자·문자열 보간으로 만든 이름·콤마 조인을 잡지 못하고 `evaluation/` 은 제외한다. **같은 DB·같은 풀의 코드 경계**이며 물리 SQL 권한 격리(별도 DB 역할)를 주장하지 않는다.
 
 포트의 actor 범위도 코드 경계다. `ownerOf`·`summaries` 는 actor 를 받지 않고, `exists`·`listIdsForUser` 의 actor 는 호출자(add-on)가 만든다 — Base 가 요청 문맥에서 발급한 actor 가 아니다. 물리 SQL 권한 격리와 Base 발급 actor 는 2차 후보다.
 
-**DB 테스트**: `*.db.test.ts` 는 `TEST_DATABASE_URL` 이 있을 때만 돈다. CI 는 Gate 1.5 에서 job 안의 일회용 PostgreSQL(`pgvector/pgvector:0.8.3-pg16-trixie`)에 `scripts/setup-test-db.sh` 로 코어+add-on 마이그레이션을 적용하고 `npm run test:db` 로 그 파일들만 `--runInBand` 로 돌린다 — 마지막 줄 `db tests ran: N` 이 0 이면(전부 skip) 실패다. 로컬도 같은 두 명령이다.
+**DB 테스트**: `*.db.test.ts` 는 `TEST_DATABASE_URL` 이 있을 때만 돈다. CI 는 Gate 1.5 에서 job 안의 일회용 PostgreSQL(`pgvector/pgvector:0.8.3-pg16-trixie`)에 `scripts/setup-test-db.sh` 로 코어+add-on 마이그레이션을 적용하고 `npm run test:db` 로 그 파일들만 `--runInBand` 로 돌린다 — 마지막 줄 `db tests ran: N` 이 0 이면(전부 skip) 실패다. 로컬도 같은 두 명령이다. CI 에서 실제로 도는 DB 테스트는 `*.db.test.ts` 뿐이다 — `TEST_DATABASE_URL||DATABASE_URL` 로 게이트된 다른 테스트 7개(027_mcp_server_draft·128_org_scoped_sharing·mcp-catalog-repository.metrics·mcp-server-draft-repository·mcp-catalog-admin.routes·mcp-server-ingest.routes·mcp-server-ingest-service)는 이름 변경(`*.db.test.ts`)이 후속이다.
 
 ## 9. Knowledge 작업 큐의 lease·fencing (`addons/knowledge-runtime/jobs/`)
 
