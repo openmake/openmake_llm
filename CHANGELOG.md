@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.104.1](https://github.com/openmake/openmake_llm/compare/v1.104.0...v1.104.1) (2026-10-16)
+
+
+### 🐛 버그 수정
+
+* **security:** safeFetch 가 redirect:'manual'·'error' 를 존중 — MCP SDK same-origin 리다이렉트 정책 우회 차단 ([617eb52](https://github.com/openmake/openmake_llm/commit/617eb5243783e4ec2cb7ed85843ec991f75edc99))
+* **security:** safeFetch 가 redirect:'manual'·'error' 를 존중 — MCP SDK same-origin 리다이렉트 정책이 우회되지 않게 ([8fdf032](https://github.com/openmake/openmake_llm/commit/8fdf032224ac389739d9deb4412fbd26f6d0167c))
+
 ## [1.104.0](https://github.com/openmake/openmake_llm/compare/v1.103.0...v1.104.0) (2026-10-16)
 
 
