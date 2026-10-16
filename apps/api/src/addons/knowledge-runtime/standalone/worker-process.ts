@@ -17,8 +17,8 @@
 import { createServer, type Server } from 'node:http';
 import { AddonWorkerConfigError, type AddonWorkerHandle, type AddonWorkerOptions } from '../../../addon-host/worker-entry';
 import { warmAddonStates } from '../../../runtime-ports/addon-admission';
+import { baseDataPort } from '../../../runtime-ports/base-data-port';
 import { createLogger } from '../../../utils/logger';
-import { kdb } from '../db';
 import { KNOWLEDGE_RUNTIME } from '../constants';
 import { KnowledgeWorker } from '../jobs/worker';
 import { REQUIRED_JOB_SCHEMA_VERSION, type KnowledgeWorkerMode } from '../jobs/job-schema';
@@ -56,8 +56,8 @@ type SchemaProbe = 'present' | 'absent' | 'error';
 
 async function probeSchema(): Promise<SchemaProbe> {
     try {
-        const r = await kdb().query('SELECT 1 FROM migration_versions WHERE version = $1', [REQUIRED_JOB_SCHEMA_VERSION]);
-        return (r.rowCount ?? 0) > 0 ? 'present' : 'absent';
+        // Base 표(migration_versions)는 포트로만 읽는다 — add-on 소스는 Base 테이블 이름을 SQL 로 쓰지 않는다
+        return (await baseDataPort.migrations.isApplied(REQUIRED_JOB_SCHEMA_VERSION)) ? 'present' : 'absent';
     } catch (err) {
         logger.warn(`마이그레이션 기록 조회 실패(대기 상한까지 다시): ${message(err)}`);
         return 'error';
