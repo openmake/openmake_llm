@@ -68,6 +68,18 @@ Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트
 
 DB 밖 부작용(임베딩 호출·파일 삭제)은 멈출 뿐 되돌리지 않는다.
 
+## 7.5 마이그레이션 소유권
+
+| 소유 | 위치 | `migration_versions.version` | 부팅 때 적용 | 수동·테스트 DB 명령(apps/api 에서) |
+|---|---|---|---|---|
+| Base(코어) | `db/init/002-schema.sql`(baseline) + `db/migrations/NNN_*.sql` | `NNN` | `applyPendingWithLock`(서버 부팅) | `npx ts-node src/data/migrations/cli.ts migrate` |
+| add-on | `apps/api/addons/builtin/<id>/migrations/NNN_*.sql` — 매니페스트 `components.migrations` 와 권한 `database:addon` 이 둘 다 있을 때만 | `addon:<id>:NNN` | 부팅 ④ `applyAddonMigrationsWithLock` — env ∧ DB 의도로 켜진 add-on 만 | `npx ts-node src/data/migrations/cli.ts migrate:addons` — env 로 켜진 add-on(DB 의도는 보지 않는다), 코어 `migrate` 뒤에 |
+
+- 두 실행기는 같은 advisory lock 으로 직렬화된다. add-on 마이그레이션은 코어 테이블을 만들거나 바꾸지 않는다 — 코어 테이블을 FK 로 **참조**하는 것은 되므로 코어 뒤에 돈다.
+- 기존 마이그레이션 파일은 고치지 않는다. 바꿀 것은 새 번호로 additive 하게(열 추가·새 표) 하고, 롤백은 코드만 되돌려도 동작하도록 기본값을 둔다(설계 D8).
+- `migrate:addons` 는 부팅 ④ 와 같은 대상 선택(`selectMigrationTargets`)·같은 잠금을 쓰되 하나라도 실패하면 종료 코드 1 이다(부팅은 실패한 add-on 만 막고 서버는 계속 뜬다).
+- 테스트 DB 는 `scripts/setup-test-db.sh` 가 코어와 add-on 마이그레이션을 모두 적용한다(`TEST_DATABASE_URL` 을 주면 그 DB 에 바로, 이름은 `_test` 로 끝나야 한다).
+
 ## 8.3 실행 판정 — 한 규칙
 
 "상태를 확인하지 못한 것"과 "꺼진 것"을 섞지 않는다. 확인 불가는 **차단하되 재시도 가능한 장애**로 알린다.
