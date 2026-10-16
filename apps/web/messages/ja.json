@@ -413,18 +413,22 @@
     },
     "quickStarts": {
       "summarize": {
+        "description": "文章を入力して、要点をまとめます。",
         "label": "要約",
         "prompt": "次の内容を要約してください:\n\n"
       },
       "research": {
+        "description": "気になるトピックを入力して、詳しく調べます。",
         "label": "リサーチ",
         "prompt": "次のトピックを深くリサーチしてください:\n\n"
       },
       "analyze": {
+        "description": "問題を入力して、段階ごとに分けて考えます。",
         "label": "段階的分析",
         "prompt": "次の問題を段階的に分析してください:\n\n"
       },
       "brainstorm": {
+        "description": "テーマを入力して、多様なアイデアや方法を考えます。",
         "label": "ブレインストーミング",
         "prompt": "次についてブレインストーミングしましょう:\n\n"
       }

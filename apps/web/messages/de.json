@@ -413,18 +413,22 @@
     },
     "quickStarts": {
       "summarize": {
+        "description": "Gib einen Text ein, um die Kernaussagen zusammenzufassen.",
         "label": "Zusammenfassen",
         "prompt": "Fasse Folgendes zusammen:\n\n"
       },
       "research": {
+        "description": "Gib ein Thema ein, um es genauer zu erkunden.",
         "label": "Recherchieren",
         "prompt": "Recherchiere das folgende Thema eingehend:\n\n"
       },
       "analyze": {
+        "description": "Gib ein Problem ein, um es Schritt für Schritt zu untersuchen.",
         "label": "Schritt-für-Schritt-Analyse",
         "prompt": "Analysiere das folgende Problem Schritt für Schritt:\n\n"
       },
       "brainstorm": {
+        "description": "Gib ein Thema ein, um Ideen und Ansätze zu sammeln.",
         "label": "Brainstorming",
         "prompt": "Lass uns über Folgendes Brainstorming machen:\n\n"
       }
