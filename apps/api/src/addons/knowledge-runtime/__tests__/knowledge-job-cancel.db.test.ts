@@ -8,7 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import { applyKnowledgeSchema, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
+import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 
 const CONN = process.env.TEST_DATABASE_URL;
 const describeOrSkip = CONN ? describe : describe.skip;
@@ -90,7 +90,7 @@ describeOrSkip('knowledge 작업 취소 (실 DB)', () => {
         unlock = await lockKnowledgeQueueTests(pool);
         await applyKnowledgeSchema(pool);
         await resetWorkerMode(pool);
-    });
+    }, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS);
     afterAll(async () => {
         if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
         if (spaceIds.length) await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [spaceIds]);
