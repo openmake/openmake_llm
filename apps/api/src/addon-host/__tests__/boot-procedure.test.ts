@@ -78,7 +78,7 @@ describe('bootAddons', () => {
     });
 
     it('관리자 의도 disabled 는 env 가 켜져 있어도 부팅 대상에서 제외한다(실패로 기록하지 않는다)', async () => {
-        const d = deps({ async readInstallations() { return new Map([['off', { desired_state: 'disabled', state: 'disabled' }]]); } });
+        const d = deps({ async readInstallations() { return new Map([['off', { addonId: 'off', desiredState: 'disabled', state: 'disabled' }]]); } });
         const r = await bootAddons([addon('off', { runtime: 'boot#start' }), addon('on', { runtime: 'boot#start' })], d);
         expect(d.started).toEqual(['on']);
         expect(r[0]).toMatchObject({ id: 'off', stage: 'excluded' });
