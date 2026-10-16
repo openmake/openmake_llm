@@ -96,6 +96,8 @@ import { getPool } from '../data/models/unified-database';
 import { collectHealthSections } from '../runtime-ports/health-sections';
 import { csrfProtectionMiddleware, csrfTokenIssuer } from '../middlewares/csrf-protection';
 import { authLimiter } from '../middlewares/rate-limiters';
+import { optionalAuth } from '../auth';
+import { readHealthProcessSection } from './health-process-section';
 import { mountAddonRoutes } from '../addon-host/routes';
 
 
@@ -126,7 +128,8 @@ export function setupApiRoutes(
     app.use('/api', csrfProtectionMiddleware);
 
     // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환)
-    app.get('/api/health', async (_req: Request, res: Response) => {
+    app.get('/api/health', optionalAuth, async (req: Request, res: Response) => {
+        const processSection = readHealthProcessSection(req);
         const dbPool = getPool();
         const memory = process.memoryUsage();
         const clusterStats = cluster.getStats();
@@ -157,6 +160,7 @@ export function setupApiRoutes(
                 }
             },
             ...sections,
+            ...(processSection ? { process: processSection } : {}),
         });
     });
 
