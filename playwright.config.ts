@@ -8,7 +8,7 @@
  * 환경변수(셸 또는 tests/e2e/.env.e2e — 셸이 우선한다):
  *   E2E_BASE_URL      — 대상 API URL. 없으면 PW_TEST_BASE_URL(하위호환), 그것도 없으면 http://localhost:52418(로컬 개발 API).
  *   E2E_WS_ORIGIN     — WS 연결의 Origin 헤더(plugin-boundary.spec.ts). 기본 http://localhost:3010.
- *   TEST_DATABASE_URL — DB 픽스처(사용자 정리·관리자 승격·상태 조작). 없으면 DATABASE_URL.
+ *   TEST_DATABASE_URL — DB 픽스처(사용자 정리·관리자 승격·상태 조작). 이름이 _test 로 끝나야 하고, DATABASE_URL 로 대체하지 않는다.
  * 루트 .env 는 읽지 않는다 — e2e 가 운영·개발 DB 자격증명을 우연히 집지 않게 한다.
  */
 import { defineConfig, devices } from '@playwright/test';

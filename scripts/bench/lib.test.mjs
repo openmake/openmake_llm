@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
     percentile, summarizeScenario, summarizeRss, validateReceipt,
-    compareReceipts, renderComparison, exitCodeForVerdict,
+    compareReceipts, renderComparison, exitCodeForVerdict, scenariosWithoutSuccess, THRESHOLDS,
 } from './lib.mjs';
 
 function receipt(overrides = {}) {
@@ -177,4 +177,32 @@ test('api-load.mjs CLI: --settle 빈 값·음수는 인자 오류 exit 2(대상 
         const r = spawnSync(process.execPath, [script, ...common, ...settle], { encoding: 'utf8', env, timeout: 20_000 });
         assert.equal(r.status, 2, `${settle.join(' ')} → ${r.status}: ${r.stderr}`);
     }
+});
+
+test('scenariosWithoutSuccess: 2xx 가 0건인 시나리오 이름 — api-load 는 이 receipt 를 남기지 않는다(exit 3)', () => {
+    const ok = { name: 'health', ok: 10 };
+    const broken = { name: 'knowledge-spaces', ok: 0 };
+    assert.deepEqual(scenariosWithoutSuccess([ok, broken]), ['knowledge-spaces']);
+    assert.deepEqual(scenariosWithoutSuccess([ok]), []);
+});
+
+test('compareReceipts: 어느 쪽이든 오류율이 상한 이상이거나 처리율 0 인 시나리오가 있으면 invalid(깨진 기준선으로 통과하지 않는다)', () => {
+    const ceiling = THRESHOLDS.errorRateInvalidCeiling;
+    assert.equal(ceiling, 0.5);
+    const brokenBase = withScenario('knowledge-spaces', { errorRate: 1, throughputRps: 0 });
+    const r1 = compareReceipts(brokenBase, brokenBase);
+    assert.equal(r1.verdict, 'invalid');
+    assert.ok(r1.problems.some((p) => p.includes('baseline') && p.includes('knowledge-spaces')));
+    assert.equal(compareReceipts(receipt(), withScenario('health', { errorRate: ceiling })).verdict, 'invalid');
+    assert.equal(compareReceipts(withScenario('health', { throughputRps: 0 }), receipt()).verdict, 'invalid');
+    // 상한 바로 아래는 기존 규칙(악화)으로 판정한다
+    assert.equal(compareReceipts(receipt(), withScenario('health', { errorRate: 0.49 })).verdict, 'regressed');
+});
+
+test('compare.mjs CLI: 깨진 기준선(2xx 0건)과 비교하면 exit 2', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bench-compare-broken-'));
+    const write = (name, obj) => { const p = join(dir, name); writeFileSync(p, JSON.stringify(obj)); return p; };
+    const broken = withScenario('knowledge-spaces', { errorRate: 1, throughputRps: 0 });
+    const r = spawnSync(process.execPath, [new URL('./compare.mjs', import.meta.url).pathname, '--baseline', write('b.json', broken), '--current', write('c.json', broken)], { encoding: 'utf8' });
+    assert.equal(r.status, 2);
 });

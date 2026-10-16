@@ -8,7 +8,7 @@
  *
  * 실행(웹이 /api 를 API 로 넘기므로 웹 주소를 준다):
  *   PW_TEST_BASE_URL=http://localhost:3010 npx playwright test tests/e2e/extension-permissions.spec.ts --project=chromium
- *   (DATABASE_URL 은 루트 .env 또는 환경 변수 — 픽스처·정리용)
+ *   (TEST_DATABASE_URL 은 tests/e2e/.env.e2e 또는 셸 — 이름이 _test 로 끝나는 격리 DB, 픽스처·정리용)
  *
  * 정리: spec 이 만든 확장·사용자만 id 로 지운다.
  */
