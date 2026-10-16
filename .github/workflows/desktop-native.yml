@@ -39,7 +39,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version-file: .node-version
 
       # ─── Gate 1: 헬퍼 번들 + 하네스 ───
       # local-bridge-core dist 빌드 → esbuild 번들 → stdio confirm 왕복 포함 회귀 하네스.
