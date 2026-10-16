@@ -331,12 +331,14 @@ async function processOneUnit(signal: AbortSignal): Promise<void> {
 
 | 묶음 | 코드 완료(PR·dev 머지·CI) | 배포 완료(스테이징) | 배포 완료(운영, SHA·시각) | 운영 완료(관찰·롤백 훈련·F1~F4) |
 |---|---|---|---|---|
-| 수명주기 | PR #1340 · 2026-10-16 dev 머지 · CI 통과 | | | |
-| 계약·데이터 포트·테스트 DB | PR #1341 · 2026-10-16 dev 머지 · CI 통과 | | | |
-| 레거시 권한 | PR #1339 · 2026-10-16 dev 머지 · CI 통과 | | | |
-| worker 잔여·별도 프로세스 | PR #1342 · 2026-10-16 dev 머지 · CI 통과 | | | |
-| 검증·배포 문서(이 runbook) | | | | |
+| 수명주기 | PR #1340 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | |
+| 계약·데이터 포트·테스트 DB | PR #1341 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | |
+| 레거시 권한 | PR #1339 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | |
+| worker 잔여·별도 프로세스 | PR #1342 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | |
+| 검증·배포 문서(이 runbook) | PR #1343 · 2026-10-16 dev 머지 · CI 통과 · `task-11/release-candidate.md` "조건부 후보" | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | |
 | Knowledge external 전환(별도 승인) | 해당 없음 | | | |
+
+후속 릴리스 v1.104.1(2026-10-16 23:52, 4e476c58 — #1352 의존성·#1353 safeFetch 리다이렉트 정책)도 같은 절차·같은 증거로 운영에 있다. 2026-10-16 배포는 사용자 결정으로 §3.2 의 스테이징 24시간 관찰·격리 DB e2e·성능 기준선 비교와 `canary-deploy` 경로를 건너뛰고 지난 릴리스와 같은 `omk env update`/`deploy --yes` 로 했다(`task-12/operations-handoff.md` 에 기록) — 운영 완료 칸은 §5 관찰 48시간·§7.4·§8·F1~F4 뒤에 채운다.
 
 칸에는 날짜·증거 경로(`task-11/release-candidate.md`·`task-12/deployment-receipt.md`·`task-12/rollback-drill.txt`·`task-12/operations-handoff.md` 중 해당 파일)·기록자를 적는다. 빈 칸은 "아직 아님" 이다. 이 runbook 이 들어간 묶음은 코드 완료까지다 — 스테이징·운영 배포, 관찰, 롤백 훈련은 사용자 승인 뒤에만 실행하므로 "배포 완료"·"운영 완료" 칸은 그 전까지 비워 둔다.
 
