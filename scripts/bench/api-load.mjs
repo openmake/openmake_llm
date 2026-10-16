@@ -10,7 +10,7 @@
  *
  * - 대상 API 는 일반 리미터를 풀어(RL_GENERAL_IP·RL_GENERAL_USER) 띄운다 — 그래도 생긴 429 는 오류로 센다.
  * - v1 은 키별 RPM 300 이 있어 --v1-rate(초당, 기본 4)의 고정 속도로 친다(처리율은 그 속도를 지켰는지 본다).
- * - RSS 는 1초마다 /api/health 를 관리자 쿠키로 읽는다: process.rss(바이트)가 있으면 그것,
+ * - RSS 는 이전 표본이 끝난 뒤 1초마다(동시에 하나만) /api/health 를 관리자 쿠키로 읽는다: process.rss(바이트)가 있으면 그것,
  *   없으면(이 필드가 없는 옛 코드) services.memory.rssMB × 1048576. uptime 감소·pid 변경은 재시작으로 기록한다
  *   (표본을 보낸 시각 순으로 비교 — 응답 순서 역전은 재시작이 아니다). 실패한 표본 수는 rss.failedSamples 로 남긴다.
  * - --settle(초, 기본 90): 로그인 뒤 이만큼 기다린 다음 첫 RSS 표본·워밍업·측정을 시작한다 — 부팅 직후
@@ -21,7 +21,7 @@ import { parseArgs } from 'node:util';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import autocannon from 'autocannon';
-import { SCENARIO_NAMES, SCHEMA_VERSION, scenariosWithoutSuccess, summarizeRss, summarizeScenario } from './lib.mjs';
+import { SCENARIO_NAMES, SCHEMA_VERSION, scenariosWithoutSuccess, startSerialPoller, summarizeRss, summarizeScenario } from './lib.mjs';
 
 const RSS_SAMPLE_INTERVAL_MS = 1000;
 const MIB = 1048576;
@@ -168,11 +168,12 @@ function startRssSampler(baseUrl, session) {
             (e) => { failed += 1; lastError = e; },
         );
     };
-    const timer = setInterval(tick, RSS_SAMPLE_INTERVAL_MS);
+    // 표본은 한 번에 하나 — 느린 /api/health 응답이 측정 대상에 동시 요청으로 쌓이지 않게
+    const poller = startSerialPoller(tick, RSS_SAMPLE_INTERVAL_MS);
     return {
-        first: tick(),
+        first: poller.first,
         stop() {
-            clearInterval(timer);
+            poller.stop();
             return { samples, failed, lastError };
         },
     };
