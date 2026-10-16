@@ -1,65 +1,58 @@
-import type { NextFunction, Request, Response } from 'express';
-import { guestOnAuthError, readHealthProcessSection } from '../health-process-section';
+// /api/health 는 DB 를 건드리지 않는다 — 블랙리스트·사용자 조회가 불리면 멈추거나 던지게 해 둔다
+jest.mock('../../data/models/token-blacklist', () => ({
+    getTokenBlacklist: jest.fn(() => ({ has: () => new Promise<boolean>(() => { /* 영원히 대기(멈춘 풀) */ }) })),
+}));
+jest.mock('../../data/user-manager', () => ({
+    ...jest.requireActual('../../data/user-manager'),
+    getUserManager: jest.fn(() => { throw new Error('health 경로에서 사용자 조회 금지'); }),
+}));
+
+import * as jwt from 'jsonwebtoken';
+import type { Request } from 'express';
+import { getConfig } from '../../config/env';
+import { getTokenBlacklist } from '../../data/models/token-blacklist';
+import { getUserManager } from '../../data/user-manager';
+import { readHealthProcessSection } from '../health-process-section';
 
 const mem: NodeJS.MemoryUsage = { rss: 123_456, heapUsed: 45_678, heapTotal: 0, external: 0, arrayBuffers: 0 };
 
-// JWT 에서 꺼낸 사용자 모양(AuthUser: userId·role)으로 요청을 흉내 낸다
-const adminReq: Pick<Request, 'user'> = { user: { userId: 'bench-admin', role: 'admin' } };
-const userReq: Pick<Request, 'user'> = { user: { userId: 'bench-user', role: 'user' } };
-const guestReq: Pick<Request, 'user'> = {};
+function sign(role: string, opts: jwt.SignOptions = {}): string {
+    return jwt.sign({ userId: `bench-${role}`, email: `${role}@example.test`, role, type: 'access' }, getConfig().jwtSecret, { expiresIn: '5m', jwtid: `jti-${role}`, ...opts });
+}
+// 쿠키(httpOnly) 또는 Authorization 헤더로 토큰을 싣는다
+const cookieReq = (token: string): Pick<Request, 'cookies' | 'headers'> => ({ cookies: { auth_token: token }, headers: {} });
+const bearerReq = (token: string): Pick<Request, 'cookies' | 'headers'> => ({ cookies: {}, headers: { authorization: `Bearer ${token}` } });
+const guestReq: Pick<Request, 'cookies' | 'headers'> = { cookies: {}, headers: {} };
 
-describe('readHealthProcessSection — /api/health 의 관리자 전용 process 필드', () => {
-    it('관리자에게는 pid·rss·heapUsed·uptimeSec 를 준다', () => {
-        const section = readHealthProcessSection(adminReq, mem);
-        expect(section).toEqual({ pid: process.pid, rss: 123_456, heapUsed: 45_678, uptimeSec: expect.any(Number) });
+describe('readHealthProcessSection — /api/health 의 관리자 전용 process 필드(서명된 JWT 만으로 판단, DB 없음)', () => {
+    afterEach(() => {
+        expect(getTokenBlacklist).not.toHaveBeenCalled();
+        expect(getUserManager).not.toHaveBeenCalled();
     });
 
-    it('일반 사용자에게는 주지 않는다', () => {
-        expect(readHealthProcessSection(userReq, mem)).toBeUndefined();
+    it('관리자 토큰(쿠키)에는 pid·rss·heapUsed·uptimeSec 를 준다', () => {
+        expect(readHealthProcessSection(cookieReq(sign('admin')), mem))
+            .toEqual({ pid: process.pid, rss: 123_456, heapUsed: 45_678, uptimeSec: expect.any(Number) });
     });
 
-    it('게스트(인증 없음)에게는 주지 않는다', () => {
+    it('관리자 토큰(Bearer 헤더)에도 준다', () => {
+        expect(readHealthProcessSection(bearerReq(sign('admin')), mem)).toEqual(expect.objectContaining({ rss: 123_456 }));
+    });
+
+    it('일반 사용자 토큰에는 주지 않는다', () => {
+        expect(readHealthProcessSection(cookieReq(sign('user')), mem)).toBeUndefined();
+    });
+
+    it('토큰이 없으면(게스트) 주지 않는다', () => {
         expect(readHealthProcessSection(guestReq, mem)).toBeUndefined();
     });
-});
 
-describe('guestOnAuthError — /api/health 의 선택 인증이 DB 오류로 실패해도 500 이 아니라 게스트로 계속한다', () => {
-    // 미들웨어가 next 를 부를 때까지 기다린다(오류 경로는 비동기 catch 에서 부른다)
-    function run(auth: (req: Request, res: Response, next: NextFunction) => Promise<void>, req: Request) {
-        const res = {} as Response;
-        const next = jest.fn();
-        guestOnAuthError(auth)(req, res, next);
-        return new Promise<jest.Mock>((resolve) => { setImmediate(() => resolve(next)); });
-    }
-
-    it('사용자 조회가 던지면 req.user·req.token 을 비우고 오류 없이 next() — 관리자 process 필드도 빠진다', async () => {
-        const req = { user: { userId: 'u', role: 'admin' }, token: 't' } as unknown as Request;
-        const failing = async (): Promise<void> => { throw new Error('connection terminated'); };
-        const next = await run(failing, req);
-        expect(next).toHaveBeenCalledTimes(1);
-        expect(next).toHaveBeenCalledWith(undefined);
-        expect(req.user).toBeUndefined();
-        expect(req.token).toBeUndefined();
-        expect(readHealthProcessSection(req, mem)).toBeUndefined();
-    });
-
-    it('정상 경로는 인증 미들웨어의 next 를 한 번만 넘긴다', async () => {
-        const req = {} as Request;
-        const ok = async (r: Request, _res: Response, n: NextFunction): Promise<void> => {
-            r.user = { userId: 'bench-admin', role: 'admin' };
-            n();
-        };
-        const next = await run(ok, req);
-        expect(next).toHaveBeenCalledTimes(1);
-        expect(readHealthProcessSection(req, mem)).toEqual(expect.objectContaining({ rss: 123_456 }));
-    });
-
-    it('next 를 부른 뒤에 던지면 next 를 다시 부르지 않는다', async () => {
-        const late = async (_r: Request, _res: Response, n: NextFunction): Promise<void> => {
-            n();
-            throw new Error('늦은 오류');
-        };
-        const next = await run(late, {} as Request);
-        expect(next).toHaveBeenCalledTimes(1);
+    it('서명이 틀리거나 만료됐거나 JWT 모양이 아니거나 refresh 토큰이면 게스트로 본다(던지지 않는다)', () => {
+        const forged = jwt.sign({ userId: 'x', email: 'x@example.test', role: 'admin', type: 'access' }, 'wrong-secret-wrong-secret-wrong-secret');
+        const expired = sign('admin', { expiresIn: -10 });
+        const refresh = jwt.sign({ userId: 'x', email: 'x@example.test', role: 'admin', type: 'refresh' }, getConfig().jwtSecret);
+        for (const token of [forged, expired, 'not-a-jwt', refresh]) {
+            expect(readHealthProcessSection(cookieReq(token), mem)).toBeUndefined();
+        }
     });
 });
