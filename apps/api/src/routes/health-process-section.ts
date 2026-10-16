@@ -30,14 +30,15 @@ export function readHealthProcessSection(
  * 헬스는 DB 장애 때 더 필요하다. 인증 미들웨어가 next 를 부르기 전에 실패하면 req.user·req.token 을 비우고
  * 게스트로 넘긴다(관리자 process 필드만 빠진다). next 를 이미 불렀다면 다시 부르지 않는다.
  */
-export function guestOnAuthError(auth: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
+export function guestOnAuthError(auth: (req: Request, res: Response, next: NextFunction) => Promise<void> | void): RequestHandler {
     return (req, res, next) => {
         let passed = false;
         const once: NextFunction = (err?: unknown) => {
             passed = true;
             next(err);
         };
-        auth(req, res, once).catch((e: unknown) => {
+        // 동기 미들웨어(반환값 없음)·동기 throw 도 같은 경로로 받는다
+        Promise.resolve().then(() => auth(req, res, once)).catch((e: unknown) => {
             if (passed) return;
             log.warn(`[/api/health] 선택 인증 실패 — 게스트로 응답한다: ${e instanceof Error ? e.message : String(e)}`);
             req.user = undefined;
