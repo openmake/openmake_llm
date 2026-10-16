@@ -10,8 +10,10 @@ jest.mock('../../agent-task/task-inputs', () => ({ resolveDefaultMaxTurns: jest.
 jest.mock('../../agent-task/create-idempotency', () => ({ claimDelegatedTaskDurable: jest.fn(), releaseDelegatedTask: jest.fn() }));
 const integrationGate = jest.fn();
 jest.mock('../../addon/integration-gate', () => ({ integrationGate: (...a: unknown[]) => integrationGate(...a) }));
+const isAddonEnabledSync = jest.fn((_id: string) => true);
+jest.mock('../../addon/addon-state', () => ({ isAddonEnabledSync: (id: string) => isAddonEnabledSync(id) }));
 
-import { runOrchestrationTool } from '../orchestration-dispatch';
+import { contributedOrchestrationTools, isOrchestrationTool, runOrchestrationTool } from '../orchestration-dispatch';
 import { __setChatTurnIntegrationsForTest } from '../turn-integrations';
 
 const userCtx = { userId: '3', role: 'user' } as never;
@@ -20,6 +22,7 @@ const run = jest.fn(async () => 'RESULT');
 beforeEach(() => {
     jest.clearAllMocks();
     integrationGate.mockResolvedValue({ allowed: true });
+    isAddonEnabledSync.mockImplementation(() => true);
     __setChatTurnIntegrationsForTest([{
         id: 'discussion',
         orchestrationTool: {
@@ -34,7 +37,7 @@ describe('runOrchestrationTool 게이트', () => {
     it('켜진 add-on 의 도구는 실행한다', async () => {
         const out = await runOrchestrationTool({ name: 'start_discussion', args: { topic: 't' }, userCtx });
         expect(out).toBe('RESULT');
-        expect(integrationGate).toHaveBeenCalledWith('discussion');
+        expect(integrationGate).toHaveBeenCalledWith('discussion', '3');
         expect(run).toHaveBeenCalledWith(expect.objectContaining({ args: { topic: 't' } }));
     });
 
@@ -52,8 +55,35 @@ describe('runOrchestrationTool 게이트', () => {
         expect(out).toBe("Error: add-on 'discussion' 상태를 확인할 수 없어 이 도구를 실행하지 않았습니다. 잠시 후 다시 시도하세요");
     });
 
+    it('부팅에 실패한 add-on 의 도구는 run 없이 부팅 실패 Error 문자열', async () => {
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'failed' });
+        const out = await runOrchestrationTool({ name: 'start_discussion', args: {}, userCtx });
+        expect(run).not.toHaveBeenCalled();
+        expect(out).toBe("Error: add-on 'discussion' 이 부팅에 실패해 이 도구를 실행할 수 없습니다");
+    });
+
+    it('조직 허용 목록 밖 add-on 의 도구는 run 없이 허용 목록 Error 문자열', async () => {
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'not_entitled' });
+        const out = await runOrchestrationTool({ name: 'start_discussion', args: {}, userCtx });
+        expect(run).not.toHaveBeenCalled();
+        expect(integrationGate).toHaveBeenCalledWith('discussion', '3');
+        expect(out).toBe("Error: add-on 'discussion' 은 이 조직에서 사용할 수 없습니다(허용 목록 밖)");
+    });
+
     it('모르는 도구 이름은 종전 메시지', async () => {
         expect(await runOrchestrationTool({ name: 'nope', args: {}, userCtx })).toBe('Error: 알 수 없는 오케스트레이션 도구 — nope');
         expect(integrationGate).not.toHaveBeenCalled();
+    });
+});
+
+describe('기여 도구 노출 — 상태 캐시 게이트', () => {
+    it('꺼진 add-on 의 도구는 노출 목록에서 빠지지만 실행 경로 분류는 유지된다(거절 문구를 내기 위해)', async () => {
+        expect(contributedOrchestrationTools().map((t) => t.name)).toEqual(['start_discussion']);
+        isAddonEnabledSync.mockImplementation((id: string) => id !== 'discussion');
+        expect(contributedOrchestrationTools()).toEqual([]);
+        expect(isOrchestrationTool('start_discussion')).toBe(true);
+        integrationGate.mockResolvedValue({ allowed: false, reason: 'disabled' });
+        const out = await runOrchestrationTool({ name: 'start_discussion', args: {}, userCtx });
+        expect(out).toBe("Error: add-on 'discussion' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다");
     });
 });

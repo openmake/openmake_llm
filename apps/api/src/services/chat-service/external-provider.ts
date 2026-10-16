@@ -15,7 +15,7 @@
 import { createLogger } from '../../utils/logger';
 import { SPAWN_AGENTS_TOOL_NAME } from '../agent-spawn/spawn-agents';
 import { LOOP_DETECTION, AGENT_LOOP_LIMITS, SPAWN_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
-import { detectIntegrationIntents, getChatTurnIntegrations } from './turn-integrations';
+import { collectIntegrationSystemPromptParts, detectIntegrationIntents } from './turn-integrations';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { AGENT_SPAWN } from '../../config/runtime-limits';
 import { buildExternalToolPlan, detectOrchestrationIntents, hasOrchestrationIntent } from './external-tool-plan';
@@ -89,7 +89,7 @@ export async function runExternalStream(
     const enteredAtMs = Date.now();
     // 통합(add-on) 의도·프롬프트 조각 — 원 메시지 기준으로 한 번 계산해 프롬프트·관측에 함께 쓴다.
     const integrationIntents = detectIntegrationIntents(req.message ?? '');
-    const integrationPromptParts = getChatTurnIntegrations().flatMap((i) => i.systemPromptParts?.(req) ?? []);
+    const integrationPromptParts = collectIntegrationSystemPromptParts(req);
     // 오케스트레이션 자동 배정 의도 — 프롬프트 가이드 주입(아래)과 도구 노출(플랜)이 공유.
     const orchestration = detectOrchestrationIntents(req.message);
     // 병렬 위임 의도 — 매칭 턴에만 spawn_agents 사용 가이드를 주입한다 (도구는 상시 노출이나

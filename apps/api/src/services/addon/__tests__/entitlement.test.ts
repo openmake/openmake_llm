@@ -14,17 +14,18 @@ jest.mock('../../../data/repositories/addon-state-repository', () => ({
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getPool: () => ({}) }) }));
 
 import { checkAddonEntitlement, entitledAddonIds } from '../entitlement';
-import { clearAddonStateCache } from '../addon-state';
+import { __resetAddonStateCacheForTest } from '../addon-state';
 
 const ENV_KEY = 'ADDON_BUILTIN_DISABLED';
 
 beforeEach(() => {
     jest.clearAllMocks();
-    clearAddonStateCache();
+    __resetAddonStateCacheForTest();
     delete process.env[ENV_KEY];
     listRows.mockResolvedValue([
         { addon_id: 'industry-pack', state: 'enabled' },
         { addon_id: 'sleeping-pack', state: 'disabled' },
+        { addon_id: 'broken-pack', state: 'failed' },
     ]);
     resolveEffectivePolicy.mockResolvedValue({ orgId: null });
 });
@@ -32,6 +33,11 @@ beforeEach(() => {
 describe('checkAddonEntitlement', () => {
     it('켜져 있고 조직 제한이 없으면 ok', async () => {
         expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('ok');
+    });
+
+    it('부팅에 실패한(state=failed) add-on 은 failed — 조직 축은 보지 않는다', async () => {
+        expect(await checkAddonEntitlement('broken-pack', 'u1')).toBe('failed');
+        expect(resolveEffectivePolicy).not.toHaveBeenCalled();
     });
 
     it('관리자가 DB 에서 끈 add-on 은 disabled', async () => {

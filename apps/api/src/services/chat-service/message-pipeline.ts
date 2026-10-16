@@ -33,7 +33,8 @@ import { runProviderGate, servedModelLabel } from './provider-gate';
 import { checkUserQuota } from '../../llm/user-quota';
 import { QuotaExceededError } from '../../errors/quota-exceeded.error';
 import { resolveDegradeMap, resolveDegradeTarget } from '../../config/quota-degrade-policy';
-import { getChatTurnIntegrations, isSessionMemoryIsolated } from './turn-integrations';
+import { getActiveChatTurnIntegrations, isSessionMemoryIsolated } from './turn-integrations';
+import { ensureAddonStates } from '../addon/addon-state';
 import { applyAgentModelOverride } from './agent-model-override';
 import { resolveModeExternalClient } from './mode-external-client';
 import { buildUserContextBlocks } from './user-context-blocks';
@@ -69,6 +70,9 @@ export async function runMessagePipeline(svc: ChatService,
     onThinking?: (thinking: string) => void,
     _onSystemEvent?: SystemEventCallback,
 ): Promise<string> {
+    // add-on 상태 캐시를 턴 시작에 적재한다(TTL 안이면 즉시) — 순수 동기 훅의 `isAddonEnabledSync` 가 이 턴 동안 최신 캐시를 본다.
+    // REST(/api/v1)·Discord 경로에는 이 밖에 적재하는 호출이 없다(WS 의 collectTurnContexts 는 Knowledge 가 있을 때만 적재).
+    await ensureAddonStates();
     const {
         message,
         images,
@@ -357,7 +361,7 @@ export async function runMessagePipeline(svc: ChatService,
     // 통합(add-on) 컨텍스트 접두 (예: 고정한 노트북) — LLM 전용 enhancedMessage 채널에만 주입.
     // (원문 message 는 대화 저장·말풍선·사이드바 제목에 쓰이므로 오염 금지 —
     //  webSearchContext 와 동일한 transient 주입 원칙. 도구 노출은 reqCtx.contextRefs 가 담당)
-    const integrationPrefixes = getChatTurnIntegrations()
+    const integrationPrefixes = getActiveChatTurnIntegrations()
         .map((i) => i.enhancedMessagePrefix?.(req, languagePolicy?.resolvedLanguage || 'ko'))
         .filter((p): p is string => !!p);
     const finalEnhancedMessage = integrationPrefixes.length > 0

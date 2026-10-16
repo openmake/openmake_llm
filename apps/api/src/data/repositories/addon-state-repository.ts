@@ -10,16 +10,18 @@
  * @module data/repositories/addon-state-repository
  */
 import type { Pool } from 'pg';
+import type {
+    ADDON_DESIRED_STATES as CONTRACT_ADDON_DESIRED_STATES, ADDON_FAILURE_CODES as CONTRACT_ADDON_FAILURE_CODES,
+    ADDON_STATES as CONTRACT_ADDON_STATES, AddonDesiredState, AddonFailureCode, AddonState,
+} from '@openmake/plugin-contracts';
 
-export const ADDON_STATES = ['installed', 'enabled', 'disabled', 'failed'] as const;
-export type AddonState = typeof ADDON_STATES[number];
-
-export const ADDON_DESIRED_STATES = ['enabled', 'disabled'] as const;
-export type AddonDesiredState = typeof ADDON_DESIRED_STATES[number];
-
+// 어휘의 원천은 계약 패키지다. 값은 Base 가 들고(API 는 계약 패키지를 런타임에 require 하지 않는다 — type-only 규칙),
+// 타입은 계약 상수의 타입으로 고정한다 — 한쪽만 바꾸면 tsc 가 막는다.
+export const ADDON_STATES: typeof CONTRACT_ADDON_STATES = ['installed', 'enabled', 'disabled', 'failed'];
+export const ADDON_DESIRED_STATES: typeof CONTRACT_ADDON_DESIRED_STATES = ['enabled', 'disabled'];
 /** 부팅 실패 분류 — 관리자 화면·복구 판단이 문자열이 아니라 코드로 읽는다 */
-export const ADDON_FAILURE_CODES = ['migration_failed', 'runtime_failed', 'version_mismatch', 'registration_failed', 'needs_retry'] as const;
-export type AddonFailureCode = typeof ADDON_FAILURE_CODES[number];
+export const ADDON_FAILURE_CODES: typeof CONTRACT_ADDON_FAILURE_CODES = ['migration_failed', 'runtime_failed', 'version_mismatch', 'registration_failed', 'needs_retry'];
+export type { AddonDesiredState, AddonFailureCode, AddonState } from '@openmake/plugin-contracts';
 
 export const ADDON_SOURCES = ['builtin', 'git', 'zip', 'local', 'marketplace'] as const;
 export type AddonSource = typeof ADDON_SOURCES[number];

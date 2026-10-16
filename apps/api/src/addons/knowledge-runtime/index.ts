@@ -1,38 +1,93 @@
 /**
- * knowledge-runtime 런타임 진입점 — 수집 작업 worker 를 백그라운드로 돌린다.
+ * knowledge-runtime 런타임 진입점 — 수집 작업 worker 를 백그라운드로 돌리고 수명주기 handle 을 돌려준다.
  * add-on 매니페스트 `entry.runtime = index#startKnowledgeRuntime` 가 부팅 절차에서 이 함수를 부른다.
- * capability 를 게시하지 않으므로 host 인자는 무시한다(다른 런타임 add-on 과 동일).
+ * 폴링·heartbeat 타이머는 호스트 타이머(`host.setInterval` — owner 태그·unref·종료 때 회수)로 건다. capability 는 게시하지 않는다.
+ * 관리자 토글(disabled)은 handle.stop 으로 새 claim 을 멈추고 진행 중 작업을 drain 하며, enabled 는 resume 으로 다시 연다.
+ *
+ * 모드(설계 D5): 설정 `KNOWLEDGE_WORKER_MODE` 가 external 이면 이 API 프로세스는 poller 를 띄우지 않는다 — 별도 프로세스
+ * (`workers/knowledge-worker.ts`, PM2 openmake-knowledge-worker)가 처리한다. inprocess 여도 실제 claim 은 DB
+ * `knowledge_worker_mode` 가 inprocess 일 때만 일어난다(claim SQL 이 대조한다).
+ * 두 모드 모두 `/api/health` 에 `knowledge` 절(모드·generation·heartbeat 나이·대기열 나이·진행 수)을 등록한다.
  *
  * @module addons/knowledge-runtime/index
  */
+import type { AddonRuntimeHandle, AddonRuntimeHost } from '../../addon-host';
+import { registerHealthSection } from '../../runtime-ports/health-sections';
 import { createLogger } from '../../utils/logger';
 import { KNOWLEDGE_RUNTIME } from './constants';
+import { configuredWorkerMode } from './config/worker-mode';
 import { KnowledgeWorker } from './jobs/worker';
+import { removeWorkerHeartbeat, writeWorkerHeartbeat } from './jobs/heartbeat-row';
+import { readKnowledgeQueueHealth } from './jobs/worker-status';
 
 const logger = createLogger('KnowledgeRuntime');
 
-let timer: NodeJS.Timeout | null = null;
+/** /api/health 응답의 최상위 키 */
+const HEALTH_SECTION = 'knowledge';
+
 let worker: KnowledgeWorker | null = null;
 
-/** worker 를 폴링 주기로 기동한다. 이미 돌고 있으면 아무것도 하지 않는다(중복 기동 방지). */
-export async function startKnowledgeRuntime(): Promise<void> {
-    if (timer) return;
-    worker = new KnowledgeWorker();
-    const w = worker;
-    // 매 tick 은 fail-open — 한 번의 오류가 폴링을 멈추지 않는다
-    timer = setInterval(() => {
-        void w.tick().catch((err) => logger.warn(`수집 worker tick 실패(무시): ${err instanceof Error ? err.message : String(err)}`));
-    }, KNOWLEDGE_RUNTIME.JOB_POLL_INTERVAL_MS);
-    // 프로세스 종료를 막지 않는다(job-poller 와 동일 패턴)
-    timer.unref();
-    logger.info(`Knowledge 수집 worker 시작 (poll ${KNOWLEDGE_RUNTIME.JOB_POLL_INTERVAL_MS}ms)`);
+function handleFor(w: KnowledgeWorker): AddonRuntimeHandle {
+    return {
+        async stop(opts) {
+            await w.stop(opts);
+            logger.info(`Knowledge 수집 worker 정지(${opts.drain ? 'drain' : '즉시'}) — 새 작업을 집지 않는다`);
+        },
+        async resume() {
+            w.resume();
+            logger.info('Knowledge 수집 worker 재개 — 새 작업을 다시 집는다');
+        },
+        health: () => w.health(),
+    };
 }
 
-/** 테스트·정리용 — 폴링 중단 */
-export function stopKnowledgeRuntime(): void {
-    if (timer) {
-        clearInterval(timer);
-        timer = null;
+/** external 모드 handle — 이 프로세스에는 정지·재개할 수집이 없다. 관리자 토글은 별도 worker 가 claim 때 add-on 상태로 본다 */
+function externalModeHandle(): AddonRuntimeHandle {
+    return {
+        async stop() {
+            // 이 프로세스에서 도는 수집이 없다
+        },
+        async resume() {
+            // 이 프로세스에서 도는 수집이 없다
+        },
+        health: () => ({ status: 'stopped', inflight: 0, detail: 'external 모드 — 별도 worker 프로세스가 수집한다' }),
+    };
+}
+
+/** /api/health 에 수집 소비자 상태 절을 건다(두 모드 모두) — 정리 때 해제 */
+function registerQueueHealth(host: AddonRuntimeHost): void {
+    host.registerDisposable('knowledge-health-section', registerHealthSection(HEALTH_SECTION, () => readKnowledgeQueueHealth()));
+}
+
+/** worker 를 폴링 주기로 기동한다(inprocess). 이미 돌고 있으면 새로 띄우지 않고 그 worker 의 handle 을 돌려준다(중복 기동 방지). */
+export async function startKnowledgeRuntime(host: AddonRuntimeHost): Promise<AddonRuntimeHandle> {
+    registerQueueHealth(host);
+    if (configuredWorkerMode() === 'external') {
+        logger.info('Knowledge 수집 worker — external 모드: 이 프로세스는 poller 를 띄우지 않는다(별도 worker 프로세스가 처리)');
+        return externalModeHandle();
     }
+    if (worker) return handleFor(worker);
+    const w = new KnowledgeWorker({ consumerKind: 'inprocess' });
+    worker = w;
+    // 매 tick 은 fail-open — 한 번의 오류가 폴링을 멈추지 않는다. 정지 중에는 tick 이 claim 을 건너뛴다
+    host.setInterval(() => {
+        void w.tick().catch((err) => logger.warn(`수집 worker tick 실패(무시): ${err instanceof Error ? err.message : String(err)}`));
+    }, KNOWLEDGE_RUNTIME.JOB_POLL_INTERVAL_MS);
+    // 소비자 heartbeat 행 — /api/health 가 현재 모드 소비자의 생존을 본다. 실패는 다음 주기에 다시(fail-open)
+    // 관리자 정지(handle.stop)로 claim 을 멈춘 뒤에는 갱신하지 않는다 — 행이 늙어 헬스가 "살아 있음"으로 오판하지 않게(resume 하면 다시 쓴다)
+    host.setInterval(() => {
+        if (w.health().status === 'stopped') return;
+        void writeWorkerHeartbeat({ workerId: w.id, kind: 'inprocess', inflight: w.health().inflight })
+            .catch((err) => logger.debug(`heartbeat 행 갱신 실패(무시): ${err instanceof Error ? err.message : String(err)}`));
+    }, KNOWLEDGE_RUNTIME.WORKER_HEARTBEAT_MS);
+    host.registerDisposable('knowledge-heartbeat-row', () => removeWorkerHeartbeat(w.id).catch(() => undefined));
+    logger.info(`Knowledge 수집 worker 시작 (poll ${KNOWLEDGE_RUNTIME.JOB_POLL_INTERVAL_MS}ms, inprocess)`);
+    return handleFor(w);
+}
+
+/** 테스트·정리용 — worker 를 즉시 정지하고 잊는다(폴링 타이머는 호스트가 회수한다) */
+export async function stopKnowledgeRuntime(): Promise<void> {
+    const w = worker;
     worker = null;
+    if (w) await w.stop({ drain: false, signal: AbortSignal.abort() });
 }

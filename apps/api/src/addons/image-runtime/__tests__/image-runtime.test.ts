@@ -3,6 +3,7 @@
  */
 import { imageEditHandler, imageGenerateHandler } from '../generate';
 import { startImageRuntime } from '../boot';
+import type { AddonRuntimeHost } from '../../../addon-host';
 import type { CapabilityContext } from '../../../capability-contract/types';
 import type { PlanTask } from '../../../services/orchestrator/plan-schema';
 
@@ -75,7 +76,7 @@ describe('imageEditHandler', () => {
 describe('startImageRuntime', () => {
     it('호스트 문맥으로 두 capability 를 한 번에 게시한다', async () => {
         const registered: string[] = [];
-        await startImageRuntime({ owner: { addonId: 'image-runtime', addonVersion: '1.0.0', source: 'builtin' }, registerCapabilities: (entries) => { registered.push(...entries.map((e) => e.definition.id)); } });
+        await startImageRuntime({ owner: { addonId: 'image-runtime', addonVersion: '1.0.0', source: 'builtin' }, registerCapabilities: (entries) => { registered.push(...entries.map((e) => e.definition.id)); } } as AddonRuntimeHost);
         expect(registered).toEqual(['image.generate', 'image.edit']);
     });
 });

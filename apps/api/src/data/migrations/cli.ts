@@ -6,24 +6,53 @@ import * as pathModule from 'path';
 dotenv.config({ path: pathModule.resolve(__dirname, '../../../../../.env') });
 
 import { closeDatabase, getPool, getUnifiedDatabase } from '../models/unified-database';
-import { MigrationRunner } from './runner';
+import { applyAddonMigrationsWithLock, MigrationRunner, summarizeAddonMigrations } from './runner';
+
+const COMMANDS = ['status', 'migrate', 'migrate:addons'] as const;
+type Command = typeof COMMANDS[number];
+
+function isCommand(value: string | undefined): value is Command {
+    return value !== undefined && (COMMANDS as readonly string[]).includes(value);
+}
 
 function printUsage(): void {
     console.log('Usage:');
     console.log('  npx ts-node apps/api/src/data/migrations/cli.ts status');
     console.log('  npx ts-node apps/api/src/data/migrations/cli.ts migrate');
+    console.log('  npx ts-node apps/api/src/data/migrations/cli.ts migrate:addons');
+}
+
+/**
+ * 내장 add-on 마이그레이션 — 부팅 ④ 와 같은 대상 선택(`selectMigrationTargets`: components.migrations + database:addon 권한)과
+ * 같은 잠금(`applyAddonMigrationsWithLock`)을 쓴다. 대상은 env(`ADDON_BUILTIN_DISABLED`)로 켜진 add-on 이고 DB 의도는 보지 않는다
+ * (테스트 DB·수동 복구용 — 부팅은 계속 의도까지 본다). 코어 `migrate` 뒤에 돌린다. 하나라도 실패하면 종료 코드 1.
+ */
+async function migrateAddons(): Promise<void> {
+    const { enabledBuiltinAddons } = await import('../../addon-host/builtin-registry');
+    const { selectMigrationTargets } = await import('../../addon-host');
+    const { targets, denied } = selectMigrationTargets(enabledBuiltinAddons());
+    const outcomes = await applyAddonMigrationsWithLock(getPool(), targets);
+    const { lines, ok } = summarizeAddonMigrations(denied, outcomes);
+    for (const line of lines) console.log(line);
+    if (!ok) process.exitCode = 1;
 }
 
 async function run(): Promise<void> {
     const command = process.argv[2];
 
-    if (!command || (command !== 'status' && command !== 'migrate')) {
+    if (!isCommand(command)) {
         printUsage();
         process.exitCode = 1;
         return;
     }
 
     await getUnifiedDatabase().ensureReady();
+
+    if (command === 'migrate:addons') {
+        await migrateAddons();
+        return;
+    }
+
     const runner = new MigrationRunner(getPool());
 
     if (command === 'status') {

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Pool, PoolClient } from 'pg';
 import { createLogger } from '../../utils/logger';
+import { ADDON_PERMISSIONS } from '../../config/addon-permissions';
 
 const logger = createLogger('MigrationRunner');
 
@@ -274,6 +275,41 @@ export async function applyAddonMigrationsWithLock(
         }
     });
     return out;
+}
+
+/** add-on 마이그레이션 한 번의 결과 — `applyAddonMigrationsWithLock` 반환 원소와 같은 모양 */
+export interface AddonMigrationOutcome {
+    id: string;
+    applied: string[];
+    error?: string;
+}
+
+/**
+ * PURE: `migrate:addons` CLI 출력 — 권한(`database:addon`)이 없어 건너뛴 add-on·add-on 별 적용 결과를 줄로 만든다.
+ * 하나라도 실패하면 ok=false(CLI 종료 코드 1). 부팅 ④ 는 실패해도 서버를 살리지만(fail-open) CLI 는 실패를 숨기지 않는다.
+ */
+export function summarizeAddonMigrations(
+    denied: readonly string[],
+    outcomes: readonly AddonMigrationOutcome[],
+): { lines: string[]; ok: boolean } {
+    const lines: string[] = [];
+    for (const id of denied) lines.push(`  ! ${id}: '${ADDON_PERMISSIONS.DATABASE_ADDON}' 권한이 없어 건너뜀`);
+    for (const o of outcomes) {
+        if (o.error) lines.push(`  x ${o.id}: ${o.error}`);
+        else lines.push(`  + ${o.id}: ${o.applied.length}건 적용${o.applied.length > 0 ? ` (${o.applied.join(', ')})` : ''}`);
+    }
+    const failed = outcomes.filter((o) => o.error).length;
+    lines.push(`Add-on migrations: ${outcomes.length} add-on, failed ${failed}`);
+    return { lines, ok: failed === 0 };
+}
+
+/**
+ * 한 마이그레이션 version 이 `migration_versions` 에 기록돼 있는가(읽기만 — 표를 만들지 않는다).
+ * 표가 없거나 DB 오류면 그대로 던진다 — 호출부가 "없음"과 "조회 실패"를 나눠 다룬다.
+ */
+export async function isMigrationApplied(pool: Pool, version: string): Promise<boolean> {
+    const result = await pool.query('SELECT 1 FROM migration_versions WHERE version = $1', [version]);
+    return (result.rowCount ?? 0) > 0;
 }
 
 /** 마이그레이션 직렬화용 전역 advisory lock 키 (앱 전역 유일 고정값 — "omlm" 의 hex). */

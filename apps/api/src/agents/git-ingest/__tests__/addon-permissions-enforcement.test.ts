@@ -18,6 +18,7 @@ jest.mock('../convention-checker', () => ({
 
 import { collectMcpDrafts, type ComponentContext } from '../extension-components';
 import type { LLMClient } from '../../../llm/client';
+import { evaluatePermissionState, type PermissionStateInput } from '../../../services/extensions/permission-state';
 
 const stdio = { name: 'local', transportType: 'stdio' as const, command: 'npx', args: ['-y', 'some-mcp@1.0.0'] };
 const remote = { name: 'cloud', transportType: 'streamable-http' as const, url: 'https://mcp.example.com/mcp' };
@@ -72,5 +73,64 @@ describe('collectMcpDrafts — add-on 권한 집행', () => {
     it('다른 권한만 선언한 경우에도 네트워크는 닫힌다(권한은 서로를 열지 않는다)', async () => {
         await collectMcpDrafts(ctx(['database:addon']), [stdio], llm);
         expect(insertDraft.mock.calls[0][0].sandboxNetwork).toBe('none');
+    });
+});
+
+/**
+ * 권한 상태(190) 매트릭스 — 매니페스트 유무 × stdio/HTTP × network 승인 유무.
+ * 판정(evaluatePermissionState)의 effective·blocked 를 그대로 ComponentContext 에 넣어 집행 결과를 본다
+ * (extension-ingest-service 가 하는 연결과 같다).
+ */
+const NET = 'network:internet';
+type StdioOutcome = 'full' | 'none';
+type RemoteOutcome = 'installed' | 'denied' | 'review';
+const MATRIX: Array<[string, PermissionStateInput, StdioOutcome, RemoteOutcome]> = [
+    ['매니페스트 없음 · 레거시 → 둘 다 종전대로', { state: 'legacy_unreviewed', granted: null, requested: null }, 'full', 'installed'],
+    ['매니페스트 없음 · 첫 설치 → 레거시(집행 없음)', { state: null, granted: null, requested: null }, 'full', 'installed'],
+    ['매니페스트 없음 · 승인 [network] (레거시 재승인 뒤 업데이트)', { state: 'reviewed', granted: [NET], requested: null }, 'full', 'installed'],
+    ['매니페스트 없음 · 승인 [] (매니페스트를 뺀 업데이트) → 재승인 필요', { state: 'reviewed', granted: [], requested: null }, 'none', 'review'],
+    ['매니페스트 [network] · 첫 설치', { state: null, granted: null, requested: [NET] }, 'full', 'installed'],
+    ['매니페스트 [network] · 승인 [network]', { state: 'reviewed', granted: [NET], requested: [NET] }, 'full', 'installed'],
+    ['매니페스트 [network] · 승인 [] → 재승인 필요(초과분만 막음)', { state: 'reviewed', granted: [], requested: [NET] }, 'none', 'review'],
+    ['매니페스트 [network] · 레거시 → 레거시가 쓰던 범위라 허용', { state: 'legacy_unreviewed', granted: null, requested: [NET] }, 'full', 'installed'],
+    ['매니페스트 [] · 첫 설치 → 네트워크 없음(deny by default)', { state: null, granted: null, requested: [] }, 'none', 'denied'],
+    ['매니페스트 [] · 승인 [network] → 요청이 좁으면 좁게', { state: 'reviewed', granted: [NET], requested: [] }, 'none', 'denied'],
+];
+
+function ctxFor(input: PermissionStateInput): ComponentContext {
+    const e = evaluatePermissionState(input);
+    return {
+        ...ctx(undefined),
+        ...(e.effective !== undefined ? { addonPermissions: e.effective, blockedPermissions: e.blocked } : {}),
+    };
+}
+
+describe('collectMcpDrafts — 권한 상태(190) 매트릭스', () => {
+    it.each(MATRIX)('%s', async (_title, input, stdioOutcome, remoteOutcome) => {
+        const c = ctxFor(input);
+        const res = await collectMcpDrafts(c, [stdio, remote], llm);
+
+        const stdioCall = insertDraft.mock.calls.find((call) => call[0].transportType === 'stdio');
+        expect(stdioCall).toBeDefined();
+        if (stdioOutcome === 'full') {
+            expect(stdioCall![0].sandboxNetwork).toBeUndefined();
+            expect(stdioCall![0].manifestMeta.networkRestrictedByPermission).toBeUndefined();
+        } else {
+            expect(stdioCall![0].sandboxNetwork).toBe('none');
+            expect(stdioCall![0].manifestMeta.networkRestrictedByPermission).toBe(true);
+        }
+
+        const cloud = res.find((r) => r.name === 'cloud');
+        if (remoteOutcome === 'installed') {
+            expect(cloud?.error).toBeUndefined();
+            expect(insertDraft).toHaveBeenCalledTimes(2);
+        } else if (remoteOutcome === 'denied') {
+            expect(cloud?.error).toMatch(/^PERMISSION_DENIED:/);
+            expect(c.warnings.join(' ')).toContain('MCP_NETWORK_PERMISSION_MISSING');
+        } else {
+            expect(cloud?.error).toMatch(/^PERMISSION_REVIEW_REQUIRED:/);
+            expect(c.warnings.join(' ')).toContain('MCP_PERMISSION_REVIEW_REQUIRED');
+            expect(c.warnings.join(' ')).not.toContain('MCP_NETWORK_PERMISSION_MISSING');
+        }
     });
 });

@@ -14,7 +14,10 @@
  *
  * @module runtime-ports/skill-runtime
  */
-import type { AgentSkill } from '../data/repositories/skill-repository';
+import type {
+    LOAD_SKILL_TOOL_NAME as CONTRACT_LOAD_SKILL_TOOL_NAME,
+    ActiveSkillBinding, ManifestPromptResult, SkillCatalogOptions, SkillRecordDTO, SkillSummary, SkillUsageEvent,
+} from '@openmake/plugin-contracts';
 import type { ToolDefinition } from '../llm/types';
 import { createLogger } from '../utils/logger';
 
@@ -23,51 +26,19 @@ const logger = createLogger('SkillRuntimePort');
 /**
  * `load_skill` 도구 이름 — 스킬 계약의 일부라 Base 도 안다(도구 노출 판단·승인 게이트가 이름으로 센다).
  * 도구의 **구현**은 add-on 에 있고 내장 도구 기여로 실린다.
+ * 값은 Base 가 들고 타입은 계약(`@openmake/plugin-contracts`)에 고정한다(API 는 계약 패키지를 런타임에 require 하지 않는다).
  */
-export const LOAD_SKILL_TOOL_NAME = 'load_skill';
+export const LOAD_SKILL_TOOL_NAME: typeof CONTRACT_LOAD_SKILL_TOOL_NAME = 'load_skill';
 
-/** 활성화된 skill 의 단일 도구 binding row. @see services/chat-service/tool-merger.ts 의 동일 타입 */
-export interface ActiveSkillBinding {
-    skill_id: string;
-    skill_version: string;
-    tool_name: string;
-    binding_mode: 'required' | 'allowed' | 'denied';
-}
-
-export type SkillUsageKind = 'slash' | 'load_skill' | 'inject' | 'skill_run';
-export type SkillUsageStatus = 'ok' | 'error' | 'denied';
-
-export interface SkillUsageEvent {
-    skillId: string;
-    kind: SkillUsageKind;
-    userId?: string | null;
-    /** skill_manifests.version — 모르면 'legacy' */
-    skillVersion?: string | null;
-    /** 해시만 저장 (원문 미보관) */
-    args?: unknown;
-    status?: SkillUsageStatus;
-    durationMs?: number | null;
-}
-
-/** 매니페스트 주입 결과 — prompt 와 실제로 주입된 스킬 이름(프론트 "스킬 활성화" 칩) */
-export interface ManifestPromptResult {
-    prompt: string;
-    skillNames: string[];
-}
-
-/** 슬래시 명령 해석에 필요한 최소 스킬 정보 */
-export interface SkillSummary {
-    id: string;
-    name: string;
-    content: string;
-}
-
-export interface SkillCatalogOptions {
-    /** 이미 시스템 프롬프트로 전문 주입된 스킬 id — 카탈로그에서 제외(중복 노출 방지) */
-    excludeIds?: ReadonlySet<string>;
-    /** 본인 소유 비공개 스킬(확장 설치분 등)을 카탈로그에 포함하기 위한 사용자 id */
-    userId?: string;
-}
+/**
+ * 스킬 포트의 값 DTO — 정의는 계약 패키지(3차 C2), 여기서는 재수출만 한다.
+ * 스킬 행은 저장소 모양 대신 `SkillRecordDTO`(직렬화 가능한 계약 모양)로 넘긴다 — 변환은 `runtime-ports/contract-mappers.ts`.
+ * `ActiveSkillBinding` 은 services/chat-service/tool-merger.ts 의 같은 이름 타입과 짝이다.
+ */
+export type {
+    ActiveSkillBinding, ManifestPromptResult, SkillCatalogOptions, SkillRecordDTO, SkillSummary, SkillUsageEvent,
+    SkillUsageKind, SkillUsageStatus,
+} from '@openmake/plugin-contracts';
 
 /**
  * Base 가 스킬에게 요구하는 전부. 구현은 add-on 이고, 여기 없는 기능(생성·초안·내보내기·배정 API)은
@@ -80,7 +51,7 @@ export interface SkillRuntime {
         options?: { offerOnOverflow?: boolean },
     ): Promise<ManifestPromptResult | null>;
     /** 레거시(매니페스트 미보유) 경로 — agent 에 배정된 스킬 목록과 그 프롬프트 */
-    getSkillsForAgent(agentId: string, userId?: string, agentCategory?: string): Promise<AgentSkill[]>;
+    getSkillsForAgent(agentId: string, userId?: string, agentCategory?: string): Promise<SkillRecordDTO[]>;
     buildSkillPrompt(agentId: string, userId?: string, agentCategory?: string): Promise<string>;
     /** 활성 스킬의 도구 binding — 도구 머지(tool-merger)에 쓰인다 */
     getActiveSkillBindings(agentId: string, userId?: string): Promise<ActiveSkillBinding[]>;

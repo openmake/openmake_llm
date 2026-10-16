@@ -9,6 +9,7 @@ import type { KnowledgeDocument } from '@openmake/shared-types';
 import { AppError } from '../../../utils/error-handler';
 import { inTransaction } from '../db';
 import { enqueueJob } from '../jobs/queue';
+import { spaceJobActor, systemJobActor } from '../jobs/actor';
 import { actorFor } from '../config/scope-policy';
 import { resolveSpaceProfiles, getDefaultLimits } from '../config/profiles';
 import { getSpaceScopeRow, touchSpace } from '../spaces/repository';
@@ -79,7 +80,7 @@ export async function uploadDocument(userId: string, spaceId: string, file: Uplo
             spaceId, createdBy: userId, logicalName, contentHash: hash, mimeType: mime,
             originalFilename: logicalName, storageRef, sourceSize: file.size, chunkerProfileId: chunker.id,
         });
-        await enqueueJob({ kind: 'ingest', documentVersionId: versionId }, client);
+        await enqueueJob({ kind: 'ingest', documentVersionId: versionId, actor: spaceJobActor(userId, space) }, client);
     });
     await touchSpace(spaceId).catch(() => undefined);
 
@@ -97,12 +98,12 @@ export async function deleteDocument(userId: string, spaceId: string, documentId
     await inTransaction(async (client) => {
         const ok = await repo.softDeleteDocument(client, spaceId, documentId);
         if (!ok) throw new AppError('문서', 404, true, 'NOT_FOUND');
-        await enqueueJob({ kind: 'cleanup', spaceId, runAfter }, client);
+        await enqueueJob({ kind: 'cleanup', spaceId, runAfter, actor: systemJobActor(userId) }, client);
     });
 }
 
 export async function retryDocument(userId: string, spaceId: string, documentId: string): Promise<void> {
-    await requireWritableSpace(userId, spaceId);
+    const space = await requireWritableSpace(userId, spaceId);
     const target = await repo.getRetryTarget(spaceId, documentId);
     if (!target) throw new AppError('문서', 404, true, 'NOT_FOUND');
     if (target.status !== 'failed') {
@@ -110,6 +111,6 @@ export async function retryDocument(userId: string, spaceId: string, documentId:
     }
     await inTransaction(async (client) => {
         await repo.resetVersionForRetry(client, target.documentId, target.versionId);
-        await enqueueJob({ kind: 'ingest', documentVersionId: target.versionId }, client);
+        await enqueueJob({ kind: 'ingest', documentVersionId: target.versionId, actor: spaceJobActor(userId, space) }, client);
     });
 }
