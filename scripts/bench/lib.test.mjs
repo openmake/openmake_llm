@@ -56,7 +56,7 @@ test('summarizeRss: 최고값·처음·끝, pid 변경이나 uptime 감소는 re
         { rss: 30, pid: 1, uptime: 6, source: 'process' },
         { rss: 20, pid: 1, uptime: 7, source: 'process' },
     ]);
-    assert.deepEqual(same, { samples: 3, beforeBytes: 10, afterBytes: 20, peakBytes: 30, pid: 1, restarted: false, source: 'process' });
+    assert.deepEqual(same, { samples: 3, failedSamples: 0, beforeBytes: 10, afterBytes: 20, peakBytes: 30, pid: 1, restarted: false, source: 'process' });
     assert.equal(summarizeRss([
         { rss: 10, pid: 1, uptime: 5, source: 'process' },
         { rss: 10, pid: 2, uptime: 6, source: 'process' },
@@ -136,4 +136,45 @@ test('compare.mjs CLI: exit 0·1·2', () => {
     assert.equal(run(write('slow.json', withScenario('health', { p95Ms: 30 }))), 1);
     assert.equal(run(write('bad.json', receipt({ settings: { connections: 1 } }))), 2);
     assert.equal(run(join(dir, 'none.json')), 2);
+});
+
+test('summarizeRss: 늦게 온 앞 표본(응답 순서 역전)은 재시작이 아니다, failedSamples 를 남긴다', () => {
+    const r = summarizeRss([
+        { rss: 10, pid: 1, uptime: 5, source: 'process', startedAt: 1000 },
+        { rss: 12, pid: 1, uptime: 7, source: 'process', startedAt: 3000 },
+        { rss: 11, pid: 1, uptime: 6, source: 'process', startedAt: 2000 },
+    ], 2);
+    assert.equal(r.restarted, false);
+    assert.equal(r.afterBytes, 12);
+    assert.equal(r.failedSamples, 2);
+    // 보낸 순서로도 uptime 이 줄면 재시작
+    assert.equal(summarizeRss([
+        { rss: 10, pid: null, uptime: 50, source: 'rssMB', startedAt: 1000 },
+        { rss: 10, pid: null, uptime: 3, source: 'rssMB', startedAt: 2000 },
+    ]).restarted, true);
+});
+
+test('compareReceipts: runtime·environment 가 다르면 settings mismatch, target 이 다르면 사유 한 줄(모두 invalid)', () => {
+    const base = receipt({ runtime: 'ts-node', environment: '스테이징', target: 'http://127.0.0.1:1' });
+    const rt = compareReceipts(base, receipt({ runtime: 'node-dist', environment: '스테이징', target: 'http://127.0.0.1:1' }));
+    assert.equal(rt.verdict, 'invalid');
+    assert.ok(rt.problems.some((p) => p.startsWith('settings mismatch') && p.includes('"runtime":"ts-node"')));
+    const env = compareReceipts(base, receipt({ runtime: 'ts-node', environment: '운영', target: 'http://127.0.0.1:1' }));
+    assert.equal(env.verdict, 'invalid');
+    assert.ok(env.problems.some((p) => p.startsWith('settings mismatch') && p.includes('"environment":"운영"')));
+    const tgt = compareReceipts(base, receipt({ runtime: 'ts-node', environment: '스테이징', target: 'http://127.0.0.1:2' }));
+    assert.equal(tgt.verdict, 'invalid');
+    assert.equal(tgt.problems.some((p) => p.startsWith('settings mismatch')), false);
+    assert.ok(tgt.problems.includes('target 이 다르다: baseline http://127.0.0.1:1 / current http://127.0.0.1:2'));
+    assert.equal(compareReceipts(base, receipt({ runtime: 'ts-node', environment: '스테이징', target: 'http://127.0.0.1:1' })).verdict, 'pass');
+});
+
+test('api-load.mjs CLI: --settle 빈 값·음수는 인자 오류 exit 2(대상 API 오류 3 이 아니다)', () => {
+    const script = new URL('./api-load.mjs', import.meta.url).pathname;
+    const common = ['--base-url', 'http://127.0.0.1:9', '--label', 'x', '--target-sha', 'x', '--out', join(tmpdir(), 'never.json')];
+    const env = { ...process.env, BENCH_ADMIN_EMAIL: 'a@b', BENCH_ADMIN_PASSWORD: 'x' };
+    for (const settle of [['--settle', ''], ['--settle', '-1'], ['--settle=-1']]) {
+        const r = spawnSync(process.execPath, [script, ...common, ...settle], { encoding: 'utf8', env, timeout: 20_000 });
+        assert.equal(r.status, 2, `${settle.join(' ')} → ${r.status}: ${r.stderr}`);
+    }
 });
