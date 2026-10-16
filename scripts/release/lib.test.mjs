@@ -166,3 +166,12 @@ test('commands.json: bench-compare 가 환경 부재면 "성능" 행은 증거 �
     const md = renderReleaseCandidate({ meta: { runId: 'r', gitSha: meta.gitSha, createdAt: 't' }, receipts, commandsDoc, acceptances: { schemaVersion: 1, items: {} } });
     assert.match(md, /^\| 성능 \| [^\n]*\| 증거 없음 \|$/m);
 });
+
+test('commands.json: 드릴 스크립트를 부르는 명령은 모두 KNOWLEDGE_DRILL_ENV_FILE 을 증거 디렉터리로 둔다(저장소 .env 를 읽지 않게)', () => {
+    const drills = commandsDoc.commands.filter((c) => c.cmd.includes('knowledge-worker-rollback-drill.sh'));
+    assert.ok(drills.length >= 2);
+    for (const c of drills) {
+        assert.ok(c.cmd.includes('KNOWLEDGE_DRILL_ENV_FILE="$EVIDENCE_ROOT/$RUN_ID/task-11/drill.env"'), c.id);
+        assert.ok(c.cmd.indexOf('KNOWLEDGE_DRILL_ENV_FILE=') < c.cmd.indexOf('knowledge-worker-rollback-drill.sh'), c.id);
+    }
+});
