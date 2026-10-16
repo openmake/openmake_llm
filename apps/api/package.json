@@ -11,6 +11,8 @@
         "dev": "ts-node --files src/server.ts",
         "addons:build": "ts-node --files src/addon-host/authoring/build-packs.ts",
         "start": "node dist/server.js",
+        "worker:knowledge": "node dist/workers/knowledge-worker.js",
+        "dev:worker:knowledge": "ts-node --files src/workers/knowledge-worker.ts",
         "watch": "node ../../scripts/tsc7.cjs --watch",
         "test": "jest",
         "test:watch": "jest --watch",

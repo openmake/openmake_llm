@@ -18,6 +18,7 @@ import { KnowledgeWorker } from '../jobs/worker';
 import { clearEmbeddingProviderCache } from '../embedding/provider';
 import { contentHash, storeOriginal } from '../documents/storage';
 import { enqueueJob } from '../jobs/queue';
+import { systemJobActor } from '../jobs/actor';
 import { CORPUS, SPACES, PERSONAS, ORGS } from './fixtures/corpus';
 import type { CorpusDoc } from './types';
 import { buildTextLayerPdf, scannedPdfBytes } from './fixtures/pdf';
@@ -127,7 +128,7 @@ async function directIngest(
          VALUES ($1, $2, $3, $4, $5, $6, $7, 'uploaded', 0)`,
         [versionId, documentId, contentHash(buffer), mime, doc.filename, storageRef, buffer.length],
     );
-    await enqueueJob({ kind: 'ingest', documentVersionId: versionId });
+    await enqueueJob({ kind: 'ingest', documentVersionId: versionId, actor: systemJobActor(null) });
     await drainJobs(worker, 20);
     const st = await readDocStatus(documentId);
     return { documentId, versionId, status: st.status, failureCode: st.failureCode };

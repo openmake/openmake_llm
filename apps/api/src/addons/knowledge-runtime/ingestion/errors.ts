@@ -20,6 +20,10 @@ export const FAILURE_CODES = {
     EMBEDDING: 'FAILED_EMBEDDING',
     /** 임베딩 수가 청크 수와 맞지 않는다(부분 성공은 검색 불가) */
     VERIFICATION: 'FAILED_VERIFICATION',
+    /** 접수 뒤 조직 사용권이 철회됨 — claim 때 재검사에서 거절(재시도하지 않는다) */
+    NOT_ENTITLED: 'ADDON_NOT_ENTITLED',
+    /** 사용자·관리자가 수집을 취소함 — 다시 올리려면 재시도한다 */
+    CANCELLED: 'CANCELLED',
 } as const;
 
 export type FailureCode = (typeof FAILURE_CODES)[keyof typeof FAILURE_CODES];

@@ -37,6 +37,16 @@ jest.mock('../embedding/index-manager', () => ({ runReindexJob: jest.fn() }));
 jest.mock('../jobs/rechunk', () => ({ rechunkSpace: jest.fn() }));
 jest.mock('../jobs/cleanup', () => ({ runCleanup: jest.fn() }));
 jest.mock('../documents/storage', () => ({ deleteStoredFile: jest.fn() }));
+jest.mock('../../../runtime-ports/addon-admission', () => ({
+    readAddonRunVerdict: async () => ({ run: true }),
+    checkUserEntitlement: async () => 'ok',
+    readAddonStateRevision: async () => 1,
+    warmAddonStates: async () => undefined,
+}));
+jest.mock('../config/worker-mode', () => ({
+    configuredWorkerMode: () => 'inprocess',
+    configuredWorkerHealthPort: () => 0,
+}));
 
 import { KnowledgeWorker } from '../jobs/worker';
 import { startKnowledgeRuntime, stopKnowledgeRuntime } from '../index';
@@ -228,7 +238,7 @@ describe('startKnowledgeRuntime handle', () => {
         ingestVersion.mockResolvedValue({ status: 'ready', chunkCount: 1 });
         const intervals: Array<{ fn: () => void; ms: number }> = [];
         const handle = await startKnowledgeRuntime(fakeHost(intervals));
-        expect(intervals).toHaveLength(1);
+        expect(intervals.map((i) => i.ms)).toEqual([KNOWLEDGE_RUNTIME.JOB_POLL_INTERVAL_MS, KNOWLEDGE_RUNTIME.WORKER_HEARTBEAT_MS]);
         expect(intervals[0].ms).toBe(KNOWLEDGE_RUNTIME.JOB_POLL_INTERVAL_MS);
         expect(handle.health?.()).toEqual({ status: 'running', inflight: 0 });
 

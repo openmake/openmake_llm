@@ -1,5 +1,5 @@
 /**
- * Base 데이터 포트 — add-on 이 Base 소유 테이블(대화 세션)을 읽는 문 (설계 3차 §3 C2, 로드맵 작업 7).
+ * Base 데이터 포트 — add-on 이 Base 소유 테이블(대화 세션·마이그레이션 기록)을 읽는 문 (설계 3차 §3 C2, 로드맵 작업 7).
  *
  * add-on 소스는 Base 테이블 이름을 SQL 로 쓰지 않는다(`__tests__/addons-no-base-table-sql.test.ts`). 대신 이 포트를 부른다.
  * actor 를 받는 함수는 **그 actor 의 것만** 돌려준다 — 세션은 user actor 만 소유하므로 org·system actor 는 빈 목록·false.
@@ -10,6 +10,8 @@
  */
 import type { Actor } from '@openmake/plugin-contracts';
 import { getSessionOwnerId, getSessionSummaries, listSessionIdsByOwner } from '../data/conversation-session-lookup';
+import { isMigrationApplied } from '../data/migrations/runner';
+import { getPool } from '../data/models/unified-database';
 
 export interface ConversationSessionSummary {
     id: string;
@@ -29,8 +31,14 @@ export interface ConversationSessionsPort {
     summaries(sessionIds: readonly string[]): Promise<ConversationSessionSummary[]>;
 }
 
+export interface MigrationRecordsPort {
+    /** 이 version(예: `addon:<id>:NNN`)이 적용 기록에 있는가 — 조회 실패(표 없음·DB 오류)는 던진다 */
+    isApplied(version: string): Promise<boolean>;
+}
+
 export interface BaseDataPort {
     conversationSessions: ConversationSessionsPort;
+    migrations: MigrationRecordsPort;
 }
 
 export const baseDataPort: BaseDataPort = {
@@ -49,6 +57,11 @@ export const baseDataPort: BaseDataPort = {
             if (sessionIds.length === 0) return [];
             const rows = await getSessionSummaries(sessionIds);
             return rows.map((row) => ({ id: row.id, title: row.title, updatedAt: row.updated_at?.toISOString() ?? null }));
+        },
+    },
+    migrations: {
+        async isApplied(version) {
+            return isMigrationApplied(getPool(), version);
         },
     },
 };

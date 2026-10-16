@@ -2943,6 +2943,8 @@
       "scannedPdf": "스캔된 PDF 는 지원하지 않습니다(텍스트층 없음)",
       "extraction": "본문을 추출하지 못했습니다",
       "embedding": "임베딩에 실패했습니다",
+      "cancelled": "처리가 취소되었습니다",
+      "notEntitled": "Knowledge 사용 권한이 없어 처리하지 못했습니다",
       "unknown": "처리에 실패했습니다"
     },
     "doc": {

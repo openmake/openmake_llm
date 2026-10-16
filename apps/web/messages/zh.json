@@ -2943,6 +2943,8 @@
       "scannedPdf": "不支持扫描版 PDF（无文本层）",
       "extraction": "无法提取正文",
       "embedding": "嵌入失败",
+      "cancelled": "处理已取消",
+      "notEntitled": "没有 Knowledge 使用权限，无法处理",
       "unknown": "处理失败"
     },
     "doc": {

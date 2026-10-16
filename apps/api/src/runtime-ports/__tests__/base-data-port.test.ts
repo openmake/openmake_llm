@@ -7,9 +7,12 @@ jest.mock('../../data/conversation-session-lookup', () => ({
     getSessionOwnerId: jest.fn(),
     getSessionSummaries: jest.fn(),
 }));
+jest.mock('../../data/migrations/runner', () => ({ isMigrationApplied: jest.fn() }));
+jest.mock('../../data/models/unified-database', () => ({ getPool: () => 'pool' }));
 
 import { baseDataPort } from '../base-data-port';
 import * as lookup from '../../data/conversation-session-lookup';
+import * as runner from '../../data/migrations/runner';
 
 const listSessionIdsByOwner = lookup.listSessionIdsByOwner as jest.Mock;
 const getSessionOwnerId = lookup.getSessionOwnerId as jest.Mock;
@@ -83,5 +86,25 @@ describe('conversationSessions.summaries', () => {
     it('updated_at 이 NULL 인 행(컬럼이 NOT NULL 이 아니다)은 예외 없이 updatedAt null', async () => {
         getSessionSummaries.mockResolvedValueOnce([{ id: 's3', title: '옛 대화', updated_at: null }]);
         await expect(sessions.summaries(['s3'])).resolves.toEqual([{ id: 's3', title: '옛 대화', updatedAt: null }]);
+    });
+});
+
+describe('migrations.isApplied', () => {
+    const isMigrationApplied = runner.isMigrationApplied as jest.Mock;
+
+    it('기록이 있으면 true — Base 풀과 version 을 그대로 넘긴다', async () => {
+        isMigrationApplied.mockResolvedValueOnce(true);
+        await expect(baseDataPort.migrations.isApplied('addon:knowledge-runtime:004')).resolves.toBe(true);
+        expect(isMigrationApplied).toHaveBeenCalledWith('pool', 'addon:knowledge-runtime:004');
+    });
+
+    it('기록이 없으면 false', async () => {
+        isMigrationApplied.mockResolvedValueOnce(false);
+        await expect(baseDataPort.migrations.isApplied('addon:x:001')).resolves.toBe(false);
+    });
+
+    it('조회 실패는 삼키지 않고 던진다 — 호출부가 "없음"과 나눈다', async () => {
+        isMigrationApplied.mockRejectedValueOnce(new Error('connect ECONNREFUSED'));
+        await expect(baseDataPort.migrations.isApplied('addon:x:001')).rejects.toThrow('ECONNREFUSED');
     });
 });

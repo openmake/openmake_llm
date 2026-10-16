@@ -32,6 +32,12 @@ jest.mock('../../embedding/index-manager', () => ({ runReindexJob: jest.fn() }))
 jest.mock('../rechunk', () => ({ rechunkSpace: jest.fn() }));
 jest.mock('../cleanup', () => ({ runCleanup: jest.fn() }));
 jest.mock('../../documents/storage', () => ({ deleteStoredFile: jest.fn() }));
+jest.mock('../../../../runtime-ports/addon-admission', () => ({
+    readAddonRunVerdict: async () => ({ run: true }),
+    checkUserEntitlement: async () => 'ok',
+    readAddonStateRevision: async () => 1,
+    warmAddonStates: async () => undefined,
+}));
 
 import { KnowledgeWorker } from '../worker';
 import { LeaseLostError } from '../lease';

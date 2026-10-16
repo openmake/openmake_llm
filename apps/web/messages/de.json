@@ -2943,6 +2943,8 @@
       "scannedPdf": "Gescannte PDFs werden nicht unterstützt (keine Textebene)",
       "extraction": "Text konnte nicht extrahiert werden",
       "embedding": "Embedding fehlgeschlagen",
+      "cancelled": "Verarbeitung wurde abgebrochen",
+      "notEntitled": "Nicht verarbeitet — keine Berechtigung für Knowledge",
       "unknown": "Verarbeitung fehlgeschlagen"
     },
     "doc": {
