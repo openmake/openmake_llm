@@ -5,6 +5,8 @@
  *   시나리오별 p95 ≤ 기준선 × 1.10 (작은 값의 잡음을 위해 기준선 + 2ms 까지 허용),
  *   처리율 ≥ 기준선 × 0.95, 오류율 ≤ max(기준선, 1%), RSS 최고값 ≤ 기준선 × 1.10.
  * 부하 설정이 다르거나 측정 중 API 가 재시작되면 비교하지 않는다(invalid).
+ * 어느 쪽이든 오류율 ≥ errorRateInvalidCeiling 이거나 처리율 0 인 시나리오가 있으면 깨진 측정이라 invalid —
+ * 깨진 기준선(오류율 100%)이면 "오류율 ≤ max(기준선, 1%)" 가 늘 통과하기 때문이다.
  */
 export const SCHEMA_VERSION = 1;
 
@@ -13,6 +15,7 @@ export const THRESHOLDS = Object.freeze({
     p95AbsSlackMs: 2,
     throughputMinRatio: 0.95,
     errorRateFloor: 0.01,
+    errorRateInvalidCeiling: 0.5,
     rssMaxRatio: 1.10,
 });
 
@@ -63,6 +66,11 @@ export function summarizeScenario({ name, method, path, latenciesMs, statusCount
         statusCounts: { ...statusCounts },
         transportErrors,
     };
+}
+
+/** 2xx 가 한 건도 없는 시나리오 이름 — 대상 API 가 깨진 측정이라 receipt 로 남기지 않는다(api-load.mjs exit 3) */
+export function scenariosWithoutSuccess(scenarios) {
+    return scenarios.filter((s) => s.ok === 0).map((s) => s.name);
 }
 
 /**
@@ -144,6 +152,13 @@ export function compareReceipts(baseline, current, t = THRESHOLDS) {
     }
     if (baseline.rss.restarted) problems.push('baseline 측정 중 API 가 재시작됐다(pid 변경 또는 uptime 감소)');
     if (current.rss.restarted) problems.push('current 측정 중 API 가 재시작됐다(pid 변경 또는 uptime 감소)');
+    for (const [side, r] of [['baseline', baseline], ['current', current]]) {
+        for (const s of r.scenarios) {
+            if (s.errorRate >= t.errorRateInvalidCeiling || s.throughputRps === 0) {
+                problems.push(`${side} 의 ${s.name} 가 깨진 측정이다(오류율 ${s.errorRate} ≥ ${t.errorRateInvalidCeiling} 또는 처리율 ${s.throughputRps})`);
+            }
+        }
+    }
 
     const rows = [];
     for (const b of baseline.scenarios) {

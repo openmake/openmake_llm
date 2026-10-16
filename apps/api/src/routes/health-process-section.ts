@@ -2,12 +2,15 @@
  * /api/health 의 관리자 전용 process 필드 — 부하 harness(scripts/bench/api-load.mjs)가
  * 같은 프로세스의 RSS 를 바이트 단위로 표본하고, pid 로 측정 중 재시작을 알아챈다.
  * 공개 응답의 services.memory.rssMB(MiB 정수)는 그대로 둔다 — 비관리자 응답은 바뀌지 않는다.
+ *
+ * 헬스는 DB 장애를 알리려고 있으므로 이 경로는 DB 에 닿지 않는다: 관리자 여부는 서명된 JWT 의
+ * role 로만 판단한다(블랙리스트·사용자 조회 없음). 잘못됐거나 만료된 토큰은 게스트로 본다(401·500 없음).
+ * 받아들인 대가: 폐기(로그아웃)됐거나 비활성화된 관리자의 만료 전 토큰으로도 process 필드
+ * (pid·rss·heapUsed·uptimeSec — 민감도 낮음)를 읽을 수 있다. access 토큰은 단명이라 노출 창이 짧다.
  */
-import type { NextFunction, Request, RequestHandler, Response } from 'express';
-import { isAdmin } from '../auth/auth-core';
-import { createLogger } from '../utils/logger';
-
-const log = createLogger('HealthRoute');
+import type { Request } from 'express';
+import { extractToken, isAdmin, looksLikeJWT, verifyTokenSignature } from '../auth/auth-core';
+import { AUTH_COOKIES } from '../config/security';
 
 export interface HealthProcessSection {
     pid: number;
@@ -17,33 +20,14 @@ export interface HealthProcessSection {
 }
 
 export function readHealthProcessSection(
-    req: Pick<Request, 'user'>,
+    req: Pick<Request, 'cookies' | 'headers'>,
     mem: NodeJS.MemoryUsage = process.memoryUsage(),
 ): HealthProcessSection | undefined {
-    const role = req.user?.role;
+    // 쿠키(httpOnly) 우선, 다음 Authorization 헤더 — optionalAuth 와 같은 순서
+    const cookieToken: unknown = req.cookies?.[AUTH_COOKIES.ACCESS];
+    const token = typeof cookieToken === 'string' && cookieToken ? cookieToken : extractToken(req.headers.authorization);
+    if (!token || !looksLikeJWT(token)) return undefined;
+    const role = verifyTokenSignature(token)?.role;
     if (!role || !isAdmin(role)) return undefined;
     return { pid: process.pid, rss: mem.rss, heapUsed: mem.heapUsed, uptimeSec: Math.round(process.uptime()) };
-}
-
-/**
- * /api/health 용 선택 인증 — 쿠키 사용자 조회(DB)가 실패해도 헬스가 500 이 되지 않게 게스트로 계속한다.
- * 헬스는 DB 장애 때 더 필요하다. 인증 미들웨어가 next 를 부르기 전에 실패하면 req.user·req.token 을 비우고
- * 게스트로 넘긴다(관리자 process 필드만 빠진다). next 를 이미 불렀다면 다시 부르지 않는다.
- */
-export function guestOnAuthError(auth: (req: Request, res: Response, next: NextFunction) => Promise<void> | void): RequestHandler {
-    return (req, res, next) => {
-        let passed = false;
-        const once: NextFunction = (err?: unknown) => {
-            passed = true;
-            next(err);
-        };
-        // 동기 미들웨어(반환값 없음)·동기 throw 도 같은 경로로 받는다
-        Promise.resolve().then(() => auth(req, res, once)).catch((e: unknown) => {
-            if (passed) return;
-            log.warn(`[/api/health] 선택 인증 실패 — 게스트로 응답한다: ${e instanceof Error ? e.message : String(e)}`);
-            req.user = undefined;
-            req.token = undefined;
-            once();
-        });
-    };
 }

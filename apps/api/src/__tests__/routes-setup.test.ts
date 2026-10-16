@@ -52,12 +52,21 @@ jest.mock('../bootstrap', () => ({
 // (add-on 라우트 게이트가 optionalAuth 를 직접 부르면서 /api/agents 요청이 멈춰 드러남, 2026-09-20).
 jest.mock('../auth/middleware', () => ({
     requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
-    optionalAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
+    optionalAuth: jest.fn((_req: unknown, _res: unknown, next: () => void) => next()),
     requireAdmin: (_req: unknown, _res: unknown, next: () => void) => next()
+}));
+
+// /api/health 는 DB 를 건드리지 않는다 — 블랙리스트 조회가 불리면 영원히 멈추게 해 둔다(멈춘 풀 흉내)
+jest.mock('../data/models/token-blacklist', () => ({
+    getTokenBlacklist: jest.fn(() => ({ has: () => new Promise<boolean>(() => { /* 대기 */ }) })),
 }));
 
 import express from 'express';
 import request from 'supertest';
+import * as jwt from 'jsonwebtoken';
+import { getConfig } from '../config/env';
+import { optionalAuth } from '../auth/middleware';
+import { getTokenBlacklist } from '../data/models/token-blacklist';
 import { setupApiRoutes } from '../routes/setup';
 import { registerHealthSection } from '../runtime-ports/health-sections';
 
@@ -136,6 +145,44 @@ describe('라우트 설정 — 기본 엔드포인트', () => {
         } finally {
             off();
         }
+    });
+
+    describe('GET /api/health → 관리자 process 필드는 서명된 JWT 만으로 판단한다(DB 조회 없음)', () => {
+        const bearer = (role: string): string => `Bearer ${jwt.sign(
+            { userId: `u-${role}`, email: `${role}@example.test`, role, type: 'access' },
+            getConfig().jwtSecret, { expiresIn: '5m', jwtid: `jti-${role}` })}`;
+        beforeEach(() => {
+            (optionalAuth as jest.Mock).mockClear();
+            (getTokenBlacklist as jest.Mock).mockClear();
+        });
+        afterEach(() => {
+            expect(optionalAuth).not.toHaveBeenCalled();
+            expect(getTokenBlacklist).not.toHaveBeenCalled();
+        });
+
+        test('토큰 없음 → 200, process 없음', async () => {
+            const res = await request(app).get('/api/health');
+            expect(res.status).toBe(200);
+            expect(res.body.process).toBeUndefined();
+        });
+
+        test('잘못된 토큰 → 200 게스트, process 없음', async () => {
+            const res = await request(app).get('/api/health').set('Authorization', 'Bearer a.b.c');
+            expect(res.status).toBe(200);
+            expect(res.body.process).toBeUndefined();
+        });
+
+        test('일반 사용자 토큰 → 200, process 없음', async () => {
+            const res = await request(app).get('/api/health').set('Authorization', bearer('user'));
+            expect(res.status).toBe(200);
+            expect(res.body.process).toBeUndefined();
+        });
+
+        test('관리자 토큰 → 200, process{pid,rss,heapUsed,uptimeSec}', async () => {
+            const res = await request(app).get('/api/health').set('Authorization', bearer('admin'));
+            expect(res.status).toBe(200);
+            expect(res.body.process).toEqual({ pid: process.pid, rss: expect.any(Number), heapUsed: expect.any(Number), uptimeSec: expect.any(Number) });
+        });
     });
 
     test('GET /ready → 200', async () => {

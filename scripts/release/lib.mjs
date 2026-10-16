@@ -49,6 +49,8 @@ export function validateCommands(doc) {
                 if (s[k] !== undefined && !compiles(s[k])) errors.push(`${where}: counts.${k} 정규식이 깨졌다`);
             }
             if (typeof s.anchor !== 'string') errors.push(`${where}: counts.anchor 없음`);
+            // keysOn anchor 면 anchor 가 잡은 부분만 읽으므로 줄 끝까지 덮어야 한다(접두만 잡으면 모두 0 이 된다)
+            else if (s.keysOn === 'anchor' && !s.anchor.endsWith('.*$')) errors.push(`${where}: keysOn anchor 면 counts.anchor 는 .*$ 로 끝나야 한다`);
         }
     }
     return errors;

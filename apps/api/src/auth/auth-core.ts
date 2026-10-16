@@ -254,6 +254,24 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
 }
 
 /**
+ * 서명·만료·토큰 타입만 검증한다 — 블랙리스트(DB) 조회 없음.
+ * DB 장애 중에도 응답해야 하는 경로(/api/health) 전용이다. 폐기(로그아웃)됐지만 만료 전인 토큰도
+ * 통과하므로, 민감도가 낮은 정보를 가르는 데만 쓴다. 인증·권한 부여에는 verifyToken 을 쓴다.
+ */
+export function verifyTokenSignature(token: string): JWTPayload | null {
+    try {
+        const preCheck = jwt.decode(token) as Record<string, unknown> | null;
+        // access 토큰만 허용(type 없음 = 레거시 access) — verifyToken 과 같은 규칙
+        if (preCheck?.type && preCheck.type !== 'access') return null;
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] as Algorithm[] });
+        return isValidJWTPayload(decoded) ? decoded : null;
+    } catch {
+        // 서명 불일치·만료·형식 오류는 게스트로 본다
+        return null;
+    }
+}
+
+/**
  * 토큰을 블랙리스트에 추가 (로그아웃 시 호출)
  * #8 연동: PostgreSQL 기반 영속 블랙리스트
  */

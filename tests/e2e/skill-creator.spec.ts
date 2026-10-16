@@ -18,6 +18,7 @@
 
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { Client } from 'pg';
+import { pgConfig } from './helpers/gdpr-fixtures';
 
 // ============================================================
 // Admin fixture helpers
@@ -29,15 +30,6 @@ interface AdminFixture {
     userId: string;
     email: string;
     cookies: string;  // 'auth_token=...' header value
-}
-
-function pgConfig() {
-    // 자격증명은 하드코딩하지 않는다(공개 리포) — 루트 .env 의 DATABASE_URL 사용.
-    const url = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
-    if (!url) {
-        throw new Error('DATABASE_URL(또는 TEST_DATABASE_URL)이 필요합니다 — 루트 .env 를 로드하세요.');
-    }
-    return { connectionString: url };
 }
 
 async function createAdminFixture(request: APIRequestContext): Promise<AdminFixture> {

@@ -203,7 +203,7 @@
       ],
       "skipLocal": null,
       "counts": {
-        "anchor": "^db tests ran: \\d+",
+        "anchor": "^db tests ran: \\d+.*$",
         "keysOn": "anchor",
         "passed": "passed (\\d+)",
         "failed": "failed (\\d+)",
