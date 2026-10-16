@@ -65,11 +65,18 @@ export function summarizeScenario({ name, method, path, latenciesMs, statusCount
     };
 }
 
-/** RSS 표본 요약. pid 가 바뀌거나 uptime 이 줄면 측정 중 재시작으로 본다 */
-export function summarizeRss(samples) {
-    if (samples.length === 0) {
-        return { samples: 0, beforeBytes: null, afterBytes: null, peakBytes: null, pid: null, restarted: false, source: null };
+/**
+ * RSS 표본 요약. pid 가 바뀌거나 uptime 이 줄면 측정 중 재시작으로 본다.
+ * 표본에 startedAt(요청을 보낸 시각, ms)이 있으면 그 순서로 비교한다 — 응답이 늦게 온 앞 표본이 뒤에 쌓여도
+ * uptime 감소로 잘못 보지 않게. failedSamples 는 실패한 표본 요청 수(기록용, 판정에 쓰지 않는다).
+ */
+export function summarizeRss(inputSamples, failedSamples = 0) {
+    if (inputSamples.length === 0) {
+        return { samples: 0, failedSamples, beforeBytes: null, afterBytes: null, peakBytes: null, pid: null, restarted: false, source: null };
     }
+    const samples = inputSamples.every((x) => isNum(x.startedAt))
+        ? [...inputSamples].sort((a, b) => a.startedAt - b.startedAt)
+        : inputSamples;
     let restarted = false;
     for (let i = 1; i < samples.length; i += 1) {
         const a = samples[i - 1];
@@ -79,6 +86,7 @@ export function summarizeRss(samples) {
     const sources = new Set(samples.map((s) => s.source));
     return {
         samples: samples.length,
+        failedSamples,
         beforeBytes: samples[0].rss,
         afterBytes: samples[samples.length - 1].rss,
         peakBytes: Math.max(...samples.map((s) => s.rss)),
@@ -106,8 +114,12 @@ export function validateReceipt(r) {
     return errors;
 }
 
-function settingsKey(s) {
+// 같은 부하인지 가르는 열쇠 — settings 와 실행 방식(runtime: ts-node 는 컴파일러 메모리가 RSS 에 섞인다)·환경
+function settingsKey(receipt) {
+    const s = receipt.settings;
     return JSON.stringify({
+        runtime: receipt.runtime,
+        environment: receipt.environment,
         connections: s.connections,
         durationSec: s.durationSec,
         warmupSec: s.warmupSec,
@@ -123,8 +135,12 @@ export function compareReceipts(baseline, current, t = THRESHOLDS) {
         ...validateReceipt(current).map((e) => `current: ${e}`),
     ];
     if (problems.length > 0) return { verdict: 'invalid', rows: [], problems };
-    if (settingsKey(baseline.settings) !== settingsKey(current.settings)) {
-        problems.push(`settings mismatch — 같은 부하가 아니다: baseline ${settingsKey(baseline.settings)} / current ${settingsKey(current.settings)}`);
+    if (settingsKey(baseline) !== settingsKey(current)) {
+        problems.push(`settings mismatch — 같은 부하가 아니다: baseline ${settingsKey(baseline)} / current ${settingsKey(current)}`);
+    }
+    // 대상(URL)이 다르면 같은 대상의 전후 비교가 아니다 — 포트만 다른 경우도 있어 부하 열쇠와 따로 사유를 적는다
+    if (baseline.target !== current.target) {
+        problems.push(`target 이 다르다: baseline ${baseline.target} / current ${current.target}`);
     }
     if (baseline.rss.restarted) problems.push('baseline 측정 중 API 가 재시작됐다(pid 변경 또는 uptime 감소)');
     if (current.rss.restarted) problems.push('current 측정 중 API 가 재시작됐다(pid 변경 또는 uptime 감소)');

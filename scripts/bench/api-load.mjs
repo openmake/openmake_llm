@@ -11,10 +11,11 @@
  * - 대상 API 는 일반 리미터를 풀어(RL_GENERAL_IP·RL_GENERAL_USER) 띄운다 — 그래도 생긴 429 는 오류로 센다.
  * - v1 은 키별 RPM 300 이 있어 --v1-rate(초당, 기본 4)의 고정 속도로 친다(처리율은 그 속도를 지켰는지 본다).
  * - RSS 는 1초마다 /api/health 를 관리자 쿠키로 읽는다: process.rss(바이트)가 있으면 그것,
- *   없으면(이 필드가 없는 옛 코드) services.memory.rssMB × 1048576. uptime 감소·pid 변경은 재시작으로 기록한다.
+ *   없으면(이 필드가 없는 옛 코드) services.memory.rssMB × 1048576. uptime 감소·pid 변경은 재시작으로 기록한다
+ *   (표본을 보낸 시각 순으로 비교 — 응답 순서 역전은 재시작이 아니다). 실패한 표본 수는 rss.failedSamples 로 남긴다.
  * - --settle(초, 기본 90): 로그인 뒤 이만큼 기다린 다음 첫 RSS 표본·워밍업·측정을 시작한다 — 부팅 직후
  *   일시 피크(내장 팩 설치 등)를 재지 않게. 값은 settings.settleSec 로 남고, 기준선과 다르면 비교가 무효다.
- * exit: 0 저장 · 2 인자·env 오류 · 3 대상 API 오류(연결·로그인·키 발급·RSS 표본 없음)
+ * exit: 0 저장 · 2 인자·env 오류(`--settle ""`·음수 포함) · 3 대상 API 오류(연결·로그인·키 발급·RSS 표본 없음)
  */
 import { parseArgs } from 'node:util';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -47,25 +48,31 @@ function usageError(message) {
 }
 
 function parseCli(argv) {
-    const { values } = parseArgs({
-        args: argv,
-        strict: true,
-        options: {
-            'base-url': { type: 'string' },
-            label: { type: 'string' },
-            'target-sha': { type: 'string' },
-            out: { type: 'string' },
-            'run-id': { type: 'string', default: '' },
-            connections: { type: 'string', default: '10' },
-            duration: { type: 'string', default: '30' },
-            warmup: { type: 'string', default: '5' },
-            settle: { type: 'string', default: '90' },
-            'v1-rate': { type: 'string', default: '4' },
-            scenarios: { type: 'string', default: SCENARIO_NAMES.join(',') },
-            environment: { type: 'string', default: '로컬' },
-            runtime: { type: 'string', default: 'ts-node' },
-        },
-    });
+    // 인자 오류는 exit 2 — '-1' 처럼 '-' 로 시작하는 값은 parseArgs 가 던지므로 여기서 잡는다(main 의 catch 는 exit 3)
+    let values;
+    try {
+        ({ values } = parseArgs({
+            args: argv,
+            strict: true,
+            options: {
+                'base-url': { type: 'string' },
+                label: { type: 'string' },
+                'target-sha': { type: 'string' },
+                out: { type: 'string' },
+                'run-id': { type: 'string', default: '' },
+                connections: { type: 'string', default: '10' },
+                duration: { type: 'string', default: '30' },
+                warmup: { type: 'string', default: '5' },
+                settle: { type: 'string', default: '90' },
+                'v1-rate': { type: 'string', default: '4' },
+                scenarios: { type: 'string', default: SCENARIO_NAMES.join(',') },
+                environment: { type: 'string', default: '로컬' },
+                runtime: { type: 'string', default: 'ts-node' },
+            },
+        }));
+    } catch (e) {
+        usageError(`인자 오류: ${e instanceof Error ? e.message : String(e)}`);
+    }
     const missing = ['base-url', 'label', 'target-sha', 'out'].filter((k) => !values[k]);
     if (missing.length > 0) usageError(`필수 인자 없음: ${missing.map((k) => `--${k}`).join(', ')}`);
     const scenarios = values.scenarios.split(',').map((s) => s.trim()).filter(Boolean);
@@ -79,7 +86,8 @@ function parseCli(argv) {
         return n;
     };
     const nonNegativeInt = (k) => {
-        const n = Number(values[k]);
+        // Number('') 는 0 이라 빈 값을 따로 거절한다
+        const n = values[k].trim() === '' ? Number.NaN : Number(values[k]);
         if (!Number.isInteger(n) || n < 0) usageError(`--${k} 는 0 이상의 정수: ${values[k]}`);
         return n;
     };
@@ -151,13 +159,21 @@ async function readProcessSample(baseUrl, session) {
 function startRssSampler(baseUrl, session) {
     const samples = [];
     let lastError = null;
-    const tick = () => readProcessSample(baseUrl, session).then((s) => { samples.push(s); }, (e) => { lastError = e; });
+    let failed = 0;
+    // startedAt: 요청을 보낸 시각 — 응답 순서가 뒤바뀌어도 summarizeRss 가 보낸 순서로 재시작을 판단한다
+    const tick = () => {
+        const startedAt = Date.now();
+        return readProcessSample(baseUrl, session).then(
+            (s) => { samples.push({ ...s, startedAt }); },
+            (e) => { failed += 1; lastError = e; },
+        );
+    };
     const timer = setInterval(tick, RSS_SAMPLE_INTERVAL_MS);
     return {
         first: tick(),
         stop() {
             clearInterval(timer);
-            return { samples, lastError };
+            return { samples, failed, lastError };
         },
     };
 }
@@ -246,11 +262,11 @@ async function main() {
         },
         envNames: presentEnvNames(),
         scenarios: results,
-        rss: summarizeRss(stopped.samples),
+        rss: summarizeRss(stopped.samples, stopped.failed),
     };
     mkdirSync(dirname(opts.out), { recursive: true });
     writeFileSync(opts.out, `${JSON.stringify(receipt, null, 2)}\n`);
-    console.log(`[bench] 저장: ${opts.out} (RSS 최고 ${Math.round(receipt.rss.peakBytes / MIB)}MiB, 출처 ${receipt.rss.source}, 재시작 ${receipt.rss.restarted})`);
+    console.log(`[bench] 저장: ${opts.out} (RSS 최고 ${Math.round(receipt.rss.peakBytes / MIB)}MiB, 출처 ${receipt.rss.source}, 재시작 ${receipt.rss.restarted}, 실패 표본 ${receipt.rss.failedSamples})`);
 }
 
 main().catch((e) => {
