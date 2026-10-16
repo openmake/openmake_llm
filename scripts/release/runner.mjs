@@ -9,6 +9,35 @@ import { dirname } from 'node:path';
 import { redactSecrets } from './lib.mjs';
 
 const KILL_GRACE_MS = 10_000;
+// 공백 없는 꼬리를 이만큼까지 붙잡아 둔다 — URL 이 청크 경계에서 잘려도 다음 청크와 합친 뒤 가린다
+const MAX_HELD_TAIL = 4096;
+
+/**
+ * 스트림 하나의 청크를 받아 마지막 공백 문자 뒤 꼬리를 다음 청크와 합칠 때까지 붙잡는다.
+ * 비밀번호가 든 URL 은 공백을 품지 않으므로, 공백까지 끊어 내보내면 URL 이 두 청크로 갈려 가리기를 피하지 못한다.
+ * 꼬리가 MAX_HELD_TAIL 을 넘으면(공백 없는 긴 출력) 그대로 내보낸다. 끝나면 flush 로 남은 꼬리를 내보낸다.
+ */
+export function createChunkMasker(emit) {
+    let held = '';
+    return {
+        push(buf) {
+            const text = held + buf.toString('utf8');
+            const cut = text.search(/\s(?=\S*$)/);
+            if (cut === -1) {
+                if (text.length > MAX_HELD_TAIL) { held = ''; emit(text); } else held = text;
+                return;
+            }
+            held = text.slice(cut + 1);
+            emit(text.slice(0, cut + 1));
+            if (held.length > MAX_HELD_TAIL) { emit(held); held = ''; }
+        },
+        flush() {
+            const rest = held;
+            held = '';
+            emit(rest);
+        },
+    };
+}
 
 export function runCommand({ cmd, cwd, env, timeoutSec, logPath }) {
     mkdirSync(dirname(logPath), { recursive: true });
@@ -17,13 +46,16 @@ export function runCommand({ cmd, cwd, env, timeoutSec, logPath }) {
     return new Promise((resolve) => {
         const child = spawn('bash', ['-c', cmd], { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
         const chunks = [];
-        const onData = (buf) => {
-            const text = redactSecrets(buf.toString('utf8'));
-            chunks.push(text);
-            log.write(text);
+        const emit = (text) => {
+            if (!text) return;
+            const masked = redactSecrets(text);
+            chunks.push(masked);
+            log.write(masked);
         };
-        child.stdout.on('data', onData);
-        child.stderr.on('data', onData);
+        const stdoutMask = createChunkMasker(emit);
+        const stderrMask = createChunkMasker(emit);
+        child.stdout.on('data', stdoutMask.push);
+        child.stderr.on('data', stderrMask.push);
         let timedOut = false;
         let killTimer = null;
         const timer = setTimeout(() => {
@@ -36,6 +68,8 @@ export function runCommand({ cmd, cwd, env, timeoutSec, logPath }) {
         child.on('close', (code, signal) => {
             clearTimeout(timer);
             if (killTimer) clearTimeout(killTimer);
+            stdoutMask.flush();
+            stderrMask.flush();
             const finishedAt = new Date();
             // 로그 파일이 디스크에 다 써진 뒤에 돌려준다 — 호출 측이 바로 읽어도 잘리지 않게
             log.end(() => resolve({

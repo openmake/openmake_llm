@@ -158,15 +158,32 @@ export function decideVerdict(classified) {
 
 const fmtCount = (v) => (v === null || v === undefined ? '-' : String(v));
 
+/** receipt 들의 서로 다른 gitSha(처음 나온 순서). 둘 이상이면 한 SHA 의 증거가 아니다 */
+export function receiptShas(receipts) {
+    return [...new Set(receipts.map((r) => r.gitSha ?? 'unknown'))];
+}
+
+/** 명령 분류 판정에 SHA 혼합을 더한다 — 섞였으면 '후보'·'조건부 후보' 가 아니라 '판단 대기' */
+export function candidateVerdict(receipts, acceptances) {
+    const items = acceptances?.items ?? {};
+    const verdict = decideVerdict(receipts.map((r) => classify(r, items[r.id])));
+    if (receiptShas(receipts).length > 1 && verdict !== '릴리스 후보 아님') return '판단 대기';
+    return verdict;
+}
+
 export function renderReleaseCandidate({ meta, receipts, commandsDoc, acceptances }) {
     const items = acceptances?.items ?? {};
     const classified = receipts.map((r) => classify(r, items[r.id]));
     const byId = new Map(classified.map((c) => [c.id, c]));
-    const verdict = decideVerdict(classified);
+    const verdict = candidateVerdict(receipts, acceptances);
+    const shas = receipts.length > 0 ? receiptShas(receipts) : [meta.gitSha];
+    const shaLine = shas.length === 1
+        ? `- git SHA: \`${shas[0]}\``
+        : `- git SHA: **섞임(${shas.length}개)** — ${shas.map((s) => `\`${s}\``).join(', ')}`;
     const lines = [
         `# 릴리스 후보 검증 — ${meta.runId}`,
         '',
-        `- git SHA: \`${meta.gitSha}\``,
+        shaLine,
         `- 작성: ${meta.createdAt}`,
         `- 판정: **${verdict}**`,
         '- 기준: 미측정·skip·기존 실패는 빼지 않고 분류한다. 수용은 acceptances.json 의 사유·증거가 있을 때만.',
@@ -190,7 +207,11 @@ export function renderReleaseCandidate({ meta, receipts, commandsDoc, acceptance
     }
     lines.push('', '## 판단이 필요한 항목', '');
     const pending = classified.filter((c) => c.category !== '통과');
-    if (pending.length === 0) lines.push('- 없음');
+    if (shas.length > 1) {
+        const bySha = shas.map((sha) => `\`${sha}\`: ${receipts.filter((r) => (r.gitSha ?? 'unknown') === sha).map((r) => r.id).join(', ')}`);
+        lines.push(`- git SHA 혼합 — receipt 들이 한 SHA 의 증거가 아니다. 한 SHA 로 다시 돌리거나 섞인 사유를 적는다(${bySha.join(' / ')})`);
+    }
+    if (pending.length === 0 && shas.length === 1) lines.push('- 없음');
     for (const c of pending) lines.push(`- ${c.id} — ${c.category}: ${c.note || '사유 없음'}${c.accepted ? '' : ' (미수용)'}`);
     return `${lines.join('\n')}\n`;
 }
