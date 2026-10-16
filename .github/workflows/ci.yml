@@ -1,7 +1,8 @@
 # ==============================================================
 # GitHub Actions CI Pipeline
 # ==============================================================
-# 8 게이트: Contract Drift → Installer Lint → Jest → TypeScript Build → File Size Guard → ESLint → Routing Eval → Response Eval
+# 게이트(실제 순서): Contract Drift → Installer Lint → Dependency Audit → Jest → DB Tests(1.5) → TypeScript Build → File Size Guard
+#   → ESLint → Add-on Boundary(ratchet) → ESLint·i18n(apps/web) → Routing Eval → Response Eval → 7~12 mock 평가
 # 로컬 `npm test`/`npm run build`/`npm run lint` 와 같은 스크립트로 돈다(별도 미러 스크립트 없음).
 # Docker 빌드·이미지 사용 없음(프로젝트 방침) — 예외: Gate 1.5 DB 테스트용 PostgreSQL 서비스 컨테이너(설계 D3, 이 job 안에서만 사는 빈 DB)
 # 대상 브랜치: main(staging·릴리스가 따른다)과 dev(feature/* 가 모인다). dev 에 합칠 때도 같은 게이트를 지난다 —
