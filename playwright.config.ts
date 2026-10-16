@@ -13,10 +13,12 @@
  */
 import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
+import { e2eBaseUrl } from './tests/e2e/helpers/e2e-target';
 
 dotenv.config({ path: `${__dirname}/tests/e2e/.env.e2e`, quiet: true });
 
-const baseURL = process.env.E2E_BASE_URL || process.env.PW_TEST_BASE_URL || 'http://localhost:52418';
+// dotenv 를 읽은 뒤에 부른다 — helper(plugin-boundary-fixtures)와 같은 규칙(tests/e2e/helpers/e2e-target.ts)
+const baseURL = e2eBaseUrl();
 
 export default defineConfig({
     testDir: 'tests/e2e',

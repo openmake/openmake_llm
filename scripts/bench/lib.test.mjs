@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
     percentile, summarizeScenario, summarizeRss, validateReceipt,
-    compareReceipts, renderComparison, exitCodeForVerdict, scenariosWithoutSuccess, THRESHOLDS,
+    compareReceipts, renderComparison, exitCodeForVerdict, scenariosWithoutSuccess, startSerialPoller, THRESHOLDS,
 } from './lib.mjs';
 
 function receipt(overrides = {}) {
@@ -205,4 +205,28 @@ test('compare.mjs CLI: 깨진 기준선(2xx 0건)과 비교하면 exit 2', () =>
     const broken = withScenario('knowledge-spaces', { errorRate: 1, throughputRps: 0 });
     const r = spawnSync(process.execPath, [new URL('./compare.mjs', import.meta.url).pathname, '--baseline', write('b.json', broken), '--current', write('c.json', broken)], { encoding: 'utf8' });
     assert.equal(r.status, 2);
+});
+
+test('startSerialPoller: 느린 표본이 끝나야 다음을 보낸다 — 동시에 둘 이상 날아가지 않고, stop 뒤엔 더 보내지 않는다', async () => {
+    const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let calls = 0;
+    // 표본 하나가 간격(20ms)의 다섯 배 넘게 걸리는 느린 대상
+    const tick = async () => {
+        calls += 1;
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        await sleep(120);
+        inFlight -= 1;
+    };
+    const poller = startSerialPoller(tick, 20);
+    await poller.first;
+    await sleep(400);
+    poller.stop();
+    const callsAtStop = calls;
+    await sleep(200);
+    assert.equal(maxInFlight, 1);
+    assert.ok(callsAtStop >= 3, `표본 ${callsAtStop}건`);
+    assert.ok(calls <= callsAtStop, 'stop 뒤에 새 표본을 보냈다');
 });

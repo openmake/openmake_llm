@@ -10,12 +10,11 @@ import WebSocket from 'ws';
 import { pgConfig } from './gdpr-fixtures';
 import { signupE2eAccount, type E2eAccount } from './e2e-account';
 
+// 대상 URL 규칙은 playwright.config.ts 와 같은 출처를 쓴다
+export { e2eBaseUrl } from './e2e-target';
+
 export const KNOWLEDGE_ID = 'knowledge-runtime';
 const TEST_PW = 'PluginBoundaryE2E!2026';
-
-export function e2eBaseUrl(): string {
-    return process.env.E2E_BASE_URL || process.env.PW_TEST_BASE_URL || 'http://localhost:52418';
-}
 
 export function e2eWsOrigin(): string {
     return process.env.E2E_WS_ORIGIN || 'http://localhost:3010';

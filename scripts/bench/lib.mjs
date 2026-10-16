@@ -7,6 +7,10 @@
  * 부하 설정이 다르거나 측정 중 API 가 재시작되면 비교하지 않는다(invalid).
  * 어느 쪽이든 오류율 ≥ errorRateInvalidCeiling 이거나 처리율 0 인 시나리오가 있으면 깨진 측정이라 invalid —
  * 깨진 기준선(오류율 100%)이면 "오류율 ≤ max(기준선, 1%)" 가 늘 통과하기 때문이다.
+ * 깨진 측정은 기준선만이 아니라 현재(current) 측정도 같은 규칙으로 invalid 다.
+ * 판정 우선순위: invalid(exit 2)가 regressed(exit 1)보다 앞선다 — 비교할 수 없는 측정이면 회귀 여부를 말하지 않는다.
+ *
+ * startSerialPoller 만 타이머를 쓴다(네트워크·파일 I/O 는 없다 — 호출 측 tick 이 한다).
  */
 export const SCHEMA_VERSION = 1;
 
@@ -205,4 +209,29 @@ export function exitCodeForVerdict(verdict) {
     if (verdict === 'pass') return 0;
     if (verdict === 'regressed') return 1;
     return 2;
+}
+
+/**
+ * tick 을 한 번에 하나씩 돌린다 — 이전 tick 이 끝난(성공·실패 모두) 뒤 intervalMs 를 기다려 다음을 부른다.
+ * setInterval 은 느린 응답이 쌓여 측정 대상에 동시 요청을 겹쳐 보내므로 쓰지 않는다.
+ * 실패 집계는 tick 이 한다(거부돼도 다음 tick 은 이어진다). stop 뒤에는 새 tick 을 부르지 않는다.
+ */
+export function startSerialPoller(tick, intervalMs) {
+    let stopped = false;
+    let timer = null;
+    const run = () => {
+        const p = tick();
+        const next = () => {
+            if (!stopped) timer = setTimeout(run, intervalMs);
+        };
+        p.then(next, next);
+        return p;
+    };
+    return {
+        first: run(),
+        stop() {
+            stopped = true;
+            if (timer) clearTimeout(timer);
+        },
+    };
 }
