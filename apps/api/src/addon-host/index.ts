@@ -26,9 +26,13 @@ import { installPackSkills } from './pack-skills';
 import { setAddonRuntimeStatus } from './activation';
 import { ensureLegacyCapabilityBridge, LEGACY_BRIDGE_CAPABILITIES } from './legacy-capability-bridge';
 import { checkCapabilityOwnership } from '../capability-contract/registry';
-import { CAPABILITY_CONTRACT_VERSION, type CapabilityDefinition, type CapabilityHandler, type CapabilityOwner } from '../capability-contract/types';
-import { getCapabilityRegistry, registerCapabilities } from '../runtime-ports/capability-runtime';
-import type { AddonFailureCode, AddonInstallationRow } from '../data/repositories/addon-state-repository';
+import { CAPABILITY_CONTRACT_VERSION } from '../capability-contract/types';
+import { getCapabilityRegistry } from '../runtime-ports/capability-runtime';
+import { releaseAddonResources, startAddonRuntime } from './lifecycle';
+import type { AddonRuntimeEntry, AddonRuntimeHandle, AddonRuntimeHost } from './lifecycle-types';
+import type { AddonInstallationIntent } from '@openmake/plugin-contracts';
+import type { AddonFailureCode } from '../data/repositories/addon-state-repository';
+import { toAddonInstallationIntent } from '../runtime-ports/contract-mappers';
 import {
     builtinAddonIds, enabledBuiltinAddons, invalidBuiltinAddons, listBuiltinAddonDefs, unknownDisabledIds,
     type BuiltinAddon,
@@ -100,23 +104,12 @@ export function selectMigrationTargets(addons: readonly BuiltinAddon[]): { targe
 }
 
 /**
- * 런타임 진입점(`entry.runtime`)이 받는 호스트 문맥 — add-on 은 이것으로만 capability 를 게시한다(P02).
- * 소유자(addonId·version·source)는 호스트가 채우고, 게시는 manifest `provides` 와 정확히 일치해야 한다.
- * 종전 런타임(mcp·skill·search-providers)은 인자를 무시해도 된다.
+ * 런타임 진입점(`entry.runtime`)이 받는 호스트 문맥과 수명주기 계약 — 정의는 `lifecycle-types.ts`, 조립은 `lifecycle.ts`.
+ * add-on 은 종전대로 이 모듈(`../../addon-host`)에서 타입을 import 한다. 인자를 쓰지 않는 런타임은 무시해도 된다.
  */
-export interface AddonRuntimeHost {
-    owner: CapabilityOwner;
-    /** 한 트랜잭션으로 등록·게시 — 실패하면 아무것도 게시되지 않는다 */
-    registerCapabilities(entries: ReadonlyArray<{ definition: CapabilityDefinition; handler: CapabilityHandler }>): void;
-}
-
-function runtimeHostFor(addon: BuiltinAddon): AddonRuntimeHost {
-    const owner: CapabilityOwner = { addonId: addon.id, addonVersion: addon.manifest.version, source: 'builtin' };
-    return {
-        owner,
-        registerCapabilities: (entries) => registerCapabilities(owner, entries, addon.manifest.provides?.capabilities ?? []),
-    };
-}
+export type {
+    AddonRuntimeEntry, AddonRuntimeHandle, AddonRuntimeHealth, AddonRuntimeHost, AddonRuntimeStopOptions,
+} from './lifecycle-types';
 
 /**
  * 부팅 절차가 의존하는 외부 효과 — 테스트가 통째로 주입한다(DB·require 없이 절차만 검증).
@@ -124,12 +117,15 @@ function runtimeHostFor(addon: BuiltinAddon): AddonRuntimeHost {
  */
 export interface AddonBootDeps {
     /** DB 의도 조회 — 실패는 throw (호출부가 env 판정으로 계속하며 경고) */
-    readInstallations(): Promise<Map<string, Pick<AddonInstallationRow, 'desired_state' | 'state'>>>;
+    readInstallations(): Promise<Map<string, AddonInstallationIntent>>;
     applyMigrations(targets: Array<{ id: string; dir: string }>): Promise<Array<{ id: string; applied: string[]; error?: string }>>;
-    startRuntime(addon: BuiltinAddon, ref: string, host: AddonRuntimeHost): Promise<void>;
+    /** 진입점 호출 — handle 을 돌려주면 수명주기(lifecycle.ts)가 기록해 토글·종료 때 정지한다 */
+    startRuntime(addon: BuiltinAddon, ref: string, host: AddonRuntimeHost): Promise<void | AddonRuntimeHandle>;
     markFailed(addonId: string, code: AddonFailureCode, reason: string): Promise<void>;
     markSucceeded(addonId: string): Promise<void>;
     appVersion: string;
+    /** 시작 상한(ms) — 없으면 `ADDON_START_TIMEOUT_MS`. 테스트가 짧게 준다 */
+    startTimeoutMs?: number;
 }
 
 function defaultBootDeps(): AddonBootDeps {
@@ -143,7 +139,7 @@ function defaultBootDeps(): AddonBootDeps {
         appVersion: APP_VERSION,
         async readInstallations() {
             const rows = await (await repo()).list();
-            return new Map(rows.map(r => [r.addon_id, { desired_state: r.desired_state, state: r.state }]));
+            return new Map(rows.map(r => [r.addon_id, toAddonInstallationIntent(r)]));
         },
         async applyMigrations(targets) {
             const { applyAddonMigrationsWithLock } = await import('../data/migrations/runner');
@@ -151,7 +147,7 @@ function defaultBootDeps(): AddonBootDeps {
             return applyAddonMigrationsWithLock(getUnifiedDatabase().getPool(), targets);
         },
         async startRuntime(addon, ref, host) {
-            await loadAddonEntry<(host: AddonRuntimeHost) => Promise<void>>(addon, ref)(host);
+            return loadAddonEntry<AddonRuntimeEntry>(addon, ref)(host);
         },
         async markFailed(addonId, code, reason) {
             try { await (await repo()).markBootFailure(addonId, code, reason); await invalidate(); } catch { /* 로그가 이미 남았다 */ }
@@ -175,16 +171,16 @@ export async function bootAddons(candidates: readonly BuiltinAddon[], deps: Addo
     };
 
     // ③ env(후보 목록) ∧ DB 의도 — 조회 실패는 경고 후 env 판정만으로 계속한다(기존 팩의 부팅을 DB 장애가 막지 않는다)
-    let desired: Map<string, Pick<AddonInstallationRow, 'desired_state' | 'state'>> | null = null;
+    let desired: Map<string, AddonInstallationIntent> | null = null;
     try { desired = await deps.readInstallations(); } catch (err) {
         logger.warn(`add-on 의도 조회 실패 — env 판정만으로 부팅: ${err instanceof Error ? err.message : String(err)}`);
     }
     let active: BuiltinAddon[] = [];
     for (const addon of candidates) {
         const row = desired?.get(addon.id);
-        if (row && row.desired_state !== 'enabled') {
-            results.set(addon.id, { id: addon.id, stage: 'excluded', reason: `관리자 의도 ${row.desired_state}` });
-            logger.info(`add-on '${addon.id}' 관리자 의도 ${row.desired_state} — 부팅 대상에서 제외`);
+        if (row && row.desiredState !== 'enabled') {
+            results.set(addon.id, { id: addon.id, stage: 'excluded', reason: `관리자 의도 ${row.desiredState}` });
+            logger.info(`add-on '${addon.id}' 관리자 의도 ${row.desiredState} — 부팅 대상에서 제외`);
             continue;
         }
         // ② 버전 불일치는 경고 후 계속 실행하지 않고 그 add-on 을 제외한다(계획서 7.4) — capability 계약 버전도 같다
@@ -237,12 +233,13 @@ export async function bootAddons(candidates: readonly BuiltinAddon[], deps: Addo
     }
 
     // ⑤ 런타임 진입점 — 등록 중(registering) 표시 후 ready/failed. 하나가 실패해도 나머지는 계속 세운다.
+    // 진입점은 시간 제한(ADDON_START_TIMEOUT_MS) 안에서 돌고, 돌려준 handle·호스트 타이머·정리 함수는 lifecycle.ts 가 기록한다.
     for (const addon of active) {
         const ref = addon.manifest.entry?.runtime;
         if (ref) {
             setAddonRuntimeStatus(addon.id, 'registering');
             try {
-                await deps.startRuntime(addon, ref, runtimeHostFor(addon));
+                await startAddonRuntime(addon, (host) => deps.startRuntime(addon, ref, host), deps.startTimeoutMs);
                 // 게시 결과 ↔ manifest 선언 대조 — 선언만 하고 등록하지 않은 add-on 은 실패(부분 등록은 회수)
                 const declared = [...(addon.manifest.provides?.capabilities ?? [])].sort();
                 const published = getCapabilityRegistry().list().filter(r => r.owner.addonId === addon.id).map(r => r.definition.id).sort();
@@ -251,8 +248,11 @@ export async function bootAddons(candidates: readonly BuiltinAddon[], deps: Addo
                 }
             } catch (err) {
                 const reason = err instanceof Error ? err.message : String(err);
-                const removed = getCapabilityRegistry().unregisterOwner(addon.id);
-                if (removed.length > 0) logger.warn(`add-on '${addon.id}' 부분 등록 회수: ${removed.join(', ')}`);
+                // 시작 실패 보상 — handle 정지 → 정리 함수(역순) → 기여 도구 → capability
+                const released = await releaseAddonResources(addon.id);
+                if (released.disposed.length + released.tools + released.capabilities.length > 0) {
+                    logger.warn(`add-on '${addon.id}' 부분 시작 회수: 정리 ${released.disposed.length}건, 기여 도구 ${released.tools}개, capability [${released.capabilities.join(', ')}]`);
+                }
                 logger.error(`add-on '${addon.id}' 런타임 등록 실패 — 해당 기능 비활성: ${reason}`);
                 await fail(addon, 'runtime_failed', 'runtime_failed', reason);
                 continue;

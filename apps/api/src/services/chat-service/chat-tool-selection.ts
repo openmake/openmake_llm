@@ -8,7 +8,7 @@
  * @module services/chat-service/chat-tool-selection
  */
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../../tools/agent-task-tools';
-import { getChatTurnIntegrations } from './turn-integrations';
+import { getActiveChatTurnIntegrations } from './turn-integrations';
 import { OPS_METRICS_TOOL_ENABLED, OPS_METRICS_INTENT_PATTERNS } from '../../config/ops-metrics';
 import {
     WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS,
@@ -52,7 +52,7 @@ export function selectTurnTools(params: {
     // 통합(add-on)이 의도 턴에 요구하는 도구를 강제 포함한다 — cap/relevance 선택에서 누락돼도
     // 그 통합의 렌더 체인(도구포함→tool_choice강제→블록주입)이 끊기지 않게 한다.
     let finalCombined = combined;
-    for (const integration of getChatTurnIntegrations()) {
+    for (const integration of getActiveChatTurnIntegrations()) {
         for (const { nameIncludes, reason } of integration.forceIncludeTools?.(msg) ?? []) {
             const t = allTools.find((x) => x.function.name.includes(nameIncludes));
             if (t && !finalCombined.some((x) => x.function.name === t.function.name)) {

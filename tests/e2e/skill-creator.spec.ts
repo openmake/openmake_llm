@@ -18,6 +18,7 @@
 
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { Client } from 'pg';
+import { pgConfig } from './helpers/gdpr-fixtures';
 
 // ============================================================
 // Admin fixture helpers
@@ -29,15 +30,6 @@ interface AdminFixture {
     userId: string;
     email: string;
     cookies: string;  // 'auth_token=...' header value
-}
-
-function pgConfig() {
-    // 자격증명은 하드코딩하지 않는다(공개 리포) — 루트 .env 의 DATABASE_URL 사용.
-    const url = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
-    if (!url) {
-        throw new Error('DATABASE_URL(또는 TEST_DATABASE_URL)이 필요합니다 — 루트 .env 를 로드하세요.');
-    }
-    return { connectionString: url };
 }
 
 async function createAdminFixture(request: APIRequestContext): Promise<AdminFixture> {
@@ -54,11 +46,11 @@ async function createAdminFixture(request: APIRequestContext): Promise<AdminFixt
     const userId = String(regBody.data?.user?.id || regBody.data?.id || '');
     if (!userId) throw new Error('register response missing user.id');
 
-    // 2. role/tier 승격 (DB 직접 — admin promotion endpoint 부재)
+    // 2. role 승격 (DB 직접 — admin promotion endpoint 부재). users.tier 는 마이그레이션 039 가 지웠다
     const pg = new Client(pgConfig());
     await pg.connect();
     try {
-        await pg.query(`UPDATE users SET role='admin', tier='enterprise' WHERE id=$1`, [userId]);
+        await pg.query(`UPDATE users SET role='admin' WHERE id=$1`, [userId]);
     } finally {
         await pg.end();
     }

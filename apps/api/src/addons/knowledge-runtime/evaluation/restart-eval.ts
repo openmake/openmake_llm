@@ -12,6 +12,7 @@
 import { kdb } from '../db';
 import { ingestVersion } from '../ingestion/pipeline';
 import { enqueueJob } from '../jobs/queue';
+import { systemJobActor } from '../jobs/actor';
 import { KnowledgeWorker } from '../jobs/worker';
 import { getActiveIndex } from '../embedding/index-manager';
 import type { EvalCase, EvalDataset } from './types';
@@ -50,7 +51,7 @@ async function measureVersion(versionId: string): Promise<{ dups: number; chunks
 
 /** lease 만료 시뮬레이션 — 죽은 실행자가 running 으로 쥔 job 을 만들고 worker 가 재선점하게 한다 */
 async function simulateLeaseExpiry(versionId: string): Promise<void> {
-    const jobId = await enqueueJob({ kind: 'ingest', documentVersionId: versionId });
+    const jobId = await enqueueJob({ kind: 'ingest', documentVersionId: versionId, actor: systemJobActor(null) });
     // 죽은 실행자가 lease 를 쥔 채 만료된 상태로 만든다(fencing_token 을 올려 옛 토큰을 무효화 대상으로).
     await kdb().query(
         `UPDATE knowledge_ingestion_jobs

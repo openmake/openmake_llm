@@ -11,6 +11,7 @@ import { createLogger } from '../../../utils/logger';
 import { kdb, inTransaction } from '../db';
 import { assertLeaseHeld, type JobLease } from '../jobs/lease';
 import { enqueueJob } from '../jobs/queue';
+import type { JobActor } from '../jobs/actor';
 import { INDEX_PUBLISH_LOCK_KEY } from '../constants';
 import { describeEmbeddingProvider, makeIndexEmbedder, type EmbedFn } from './provider';
 
@@ -129,8 +130,8 @@ export async function countEmbeddings(indexId: string, chunkIds: string[]): Prom
     return Number(r.rows[0].n);
 }
 
-/** reindex 시작 — building index 생성 + reindex 작업 큐잉. 반환은 새 index id */
-export async function startReindex(): Promise<{ indexId: string }> {
+/** reindex 시작 — building index 생성 + reindex 작업 큐잉(접수 주체는 요청한 관리자). 반환은 새 index id */
+export async function startReindex(actor: JobActor): Promise<{ indexId: string }> {
     const info = await describeEmbeddingProvider();
     const indexId = randomUUID();
     await inTransaction(async (client) => {
@@ -139,7 +140,7 @@ export async function startReindex(): Promise<{ indexId: string }> {
              VALUES ($1, $2, $3, $4, $5, 'building', FALSE)`,
             [indexId, info.providerRef, info.modelId, info.dimension, DEFAULT_METRIC],
         );
-        await enqueueJob({ kind: 'reindex', embeddingIndexId: indexId }, client);
+        await enqueueJob({ kind: 'reindex', embeddingIndexId: indexId, actor }, client);
     });
     logger.info(`reindex 시작: ${indexId} (${info.providerRef})`);
     return { indexId };

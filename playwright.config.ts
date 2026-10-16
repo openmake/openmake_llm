@@ -1,19 +1,24 @@
 /**
  * Playwright config — tests/e2e/ 의 *.spec.ts 를 chromium + webkit 으로 실행.
  *
- * 로컬 실행:
- *   PORT=52417 npm run dev:api   # (별 터미널) 백엔드 dev 서버
- *   PW_TEST_BASE_URL=http://localhost:52417 npm run test:e2e
+ * 대상은 로컬 API 만 기본으로 둔다(운영 포트 기본값 없음). 로컬 실행:
+ *   cp tests/e2e/.env.e2e.example tests/e2e/.env.e2e      # 한 번 — 로컬 주소만 넣는다
+ *   npm run test:e2e -- --project=chromium
  *
- * 환경변수:
- *   PW_TEST_BASE_URL — 서버 URL (기본: http://localhost:52416, prod 서버와 동일)
- *   DATABASE_URL     — DB 픽스처용. 아래 dotenv 로 루트 .env 에서 로드한다.
+ * 환경변수(셸 또는 tests/e2e/.env.e2e — 셸이 우선한다):
+ *   E2E_BASE_URL      — 대상 API URL. 없으면 PW_TEST_BASE_URL(하위호환), 그것도 없으면 http://localhost:52418(로컬 개발 API).
+ *   E2E_WS_ORIGIN     — WS 연결의 Origin 헤더(plugin-boundary.spec.ts). 기본 http://localhost:3010.
+ *   TEST_DATABASE_URL — DB 픽스처(사용자 정리·관리자 승격·상태 조작). 이름이 _test 로 끝나야 하고, DATABASE_URL 로 대체하지 않는다.
+ * 루트 .env 는 읽지 않는다 — e2e 가 운영·개발 DB 자격증명을 우연히 집지 않게 한다.
  */
 import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
+import { e2eBaseUrl } from './tests/e2e/helpers/e2e-target';
 
-// DB 자격증명을 spec 에 하드코딩하지 않기 위해 루트 .env 를 선로드한다(공개 리포).
-dotenv.config({ path: `${__dirname}/.env`, quiet: true });
+dotenv.config({ path: `${__dirname}/tests/e2e/.env.e2e`, quiet: true });
+
+// dotenv 를 읽은 뒤에 부른다 — helper(plugin-boundary-fixtures)와 같은 규칙(tests/e2e/helpers/e2e-target.ts)
+const baseURL = e2eBaseUrl();
 
 export default defineConfig({
     testDir: 'tests/e2e',
@@ -25,7 +30,7 @@ export default defineConfig({
     workers: 1,  // 인증 race condition 회피 — DB 동일 인스턴스 공유
     reporter: [['list']],
     use: {
-        baseURL: process.env.PW_TEST_BASE_URL || 'http://localhost:52416',
+        baseURL,
         trace: 'retain-on-failure',
         actionTimeout: 5_000,
         navigationTimeout: 10_000,

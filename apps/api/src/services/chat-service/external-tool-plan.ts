@@ -14,7 +14,7 @@
  *
  * @module services/chat-service/external-tool-plan
  */
-import { getChatTurnIntegrations } from './turn-integrations';
+import { getActiveChatTurnIntegrations } from './turn-integrations';
 import {
     EXTERNAL_LLM_TOOL_BLACKLIST, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS,
     WEB_SEARCH_INTENT_PATTERNS, REPORT_PIPELINE, REPORT_INTENT_PATTERNS,
@@ -142,7 +142,7 @@ export function buildExternalToolPlan(params: {
     const toolNames = tools.map((t) => t.function.name);
     let forcedIntegrationToolName: string | undefined;
     if (toolCalling) {
-        for (const integration of getChatTurnIntegrations()) {
+        for (const integration of getActiveChatTurnIntegrations()) {
             forcedIntegrationToolName = integration.forcedFirstTurnTool?.(req.message ?? '', toolNames);
             if (forcedIntegrationToolName) {
                 logger.info(`[Integration:${integration.id}] 첫 턴 tool_choice 강제: ${forcedIntegrationToolName}`);

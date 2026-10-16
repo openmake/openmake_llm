@@ -16,7 +16,7 @@
  * @module services/chat-service/orchestration-dispatch
  */
 import { randomUUID } from 'crypto';
-import { getChatTurnIntegrations, type ContributedOrchestrationTool } from './turn-integrations';
+import { getActiveChatTurnIntegrations, getChatTurnIntegrations, type ContributedOrchestrationTool } from './turn-integrations';
 import { integrationGate } from '../addon/integration-gate';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../tool-contract/types';
@@ -34,13 +34,15 @@ const logger = createLogger('OrchestrationDispatch');
 
 export const DELEGATE_AGENT_TASK_TOOL_NAME = 'delegate_agent_task';
 
-/** add-on 이 기여한 오케스트레이션 도구 (예: 인라인 토론) — turn-integrations 의 orchestrationTool */
+/** add-on 이 기여한 오케스트레이션 도구 (예: 인라인 토론) — turn-integrations 의 orchestrationTool. 노출·의도·가이드용이라 꺼진 add-on 은 뺀다(상태 캐시) */
 export function contributedOrchestrationTools(): ContributedOrchestrationTool[] {
-    return getChatTurnIntegrations().flatMap((i) => (i.orchestrationTool ? [i.orchestrationTool] : []));
+    return getActiveChatTurnIntegrations().flatMap((i) => (i.orchestrationTool ? [i.orchestrationTool] : []));
 }
 
+/** 실행 경로 분류 — 꺼진 add-on 의 도구 호출도 runOrchestrationTool 로 보내 명시적 거절 문구를 받게 전체 목록에서 찾는다 */
 export function isOrchestrationTool(name: string): boolean {
-    return name === DELEGATE_AGENT_TASK_TOOL_NAME || contributedOrchestrationTools().some((t) => t.name === name);
+    return name === DELEGATE_AGENT_TASK_TOOL_NAME
+        || getChatTurnIntegrations().some((i) => i.orchestrationTool?.name === name);
 }
 
 /** 배정 가이드에서 위임 도구를 설명하는 절 */
@@ -167,10 +169,12 @@ export async function runOrchestrationTool(params: {
 }): Promise<string> {
     const owner = getChatTurnIntegrations().find((i) => i.orchestrationTool?.name === params.name);
     if (owner?.orchestrationTool) {
-        // 기능 훅 게이트 — 의도 프리필터(순수 훅)로 노출됐어도 실행 시점에 add-on 이 꺼져 있으면 돌리지 않는다(설계 문서 8.4)
-        const gate = await integrationGate(owner.id);
+        // 기능 훅 게이트 — 의도 프리필터(순수 훅)로 노출됐어도 실행 시점에 add-on 이 꺼져 있거나 조직 허용 목록 밖이면 돌리지 않는다(설계 문서 8.4)
+        const gate = await integrationGate(owner.id, params.userCtx.userId !== undefined ? String(params.userCtx.userId) : undefined);
         if (!gate.allowed) {
             logger.info(`기여 도구 '${params.name}' 실행 거절 — add-on '${owner.id}' ${gate.reason}${gate.detail ? `: ${gate.detail}` : ''}`);
+            if (gate.reason === 'not_entitled') return `Error: add-on '${owner.id}' 은 이 조직에서 사용할 수 없습니다(허용 목록 밖)`;
+            if (gate.reason === 'failed') return `Error: add-on '${owner.id}' 이 부팅에 실패해 이 도구를 실행할 수 없습니다`;
             return gate.reason === 'disabled'
                 ? `Error: add-on '${owner.id}' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다`
                 : `Error: add-on '${owner.id}' 상태를 확인할 수 없어 이 도구를 실행하지 않았습니다. 잠시 후 다시 시도하세요`;

@@ -253,4 +253,41 @@ if (fs.existsSync(DISCORD_ENTRY)) {
     });
 }
 
+// ── Knowledge 수집 worker (별도 프로세스, 선택) ───────────────────────────────
+// 설계 D5: KNOWLEDGE_WORKER_MODE=external 일 때만 등록한다 — inprocess(기본)면 API 가 수집하므로 이 앱은 없다
+// (`pm2 start ecosystem.config.js` 가 기본 설치에서 worker 를 띄우지 않게).
+// 전환·롤백은 scripts/knowledge-worker-rollback-drill.sh 순서로(DB 모드 → 옛 소비자 drain → lease 확인 → 새 소비자).
+// 설정 미비(add-on 마이그레이션 없음·add-on env 차단·/health 포트 충돌)면 exit 78 로 스스로 내려가며 stop_exit_codes 가 재시작 루프를 막는다
+// (기동 때 DB 접속 실패는 1 — PM2 가 다시 띄운다).
+const KNOWLEDGE_WORKER_ENTRY = path.join(__dirname, 'apps/api/dist/workers/knowledge-worker.js');
+if (process.env.KNOWLEDGE_WORKER_MODE === 'external' && fs.existsSync(KNOWLEDGE_WORKER_ENTRY)) {
+    apps.push({
+        name: `openmake-knowledge-worker${INSTANCE_SUFFIX}`,
+        script: 'apps/api/dist/workers/knowledge-worker.js',
+        ...INTERPRETER,
+        cwd: __dirname,
+        env: {
+            NODE_ENV: 'production',
+            KNOWLEDGE_WORKER_MODE: 'external',
+            // PDF 텍스트 추출(opendataloader-pdf)은 Java 11+ — API 앱과 같은 탐지 결과를 넘긴다
+            ...(JAVA_HOME ? { JAVA_HOME } : {}),
+            PATH: JAVA_PATH_PREFIX + (process.env.PATH || ''),
+        },
+        instances: 1,
+        exec_mode: 'fork',
+        autorestart: true,
+        stop_exit_codes: [78],          // EX_CONFIG — 설정 미비 정상 정지
+        max_restarts: 10,
+        min_uptime: '10s',
+        restart_delay: 3000,
+        max_memory_restart: process.env.OMK_KNOWLEDGE_WORKER_MAX_MEMORY || '1G',
+        // worker 종료 상한(KNOWLEDGE_WORKER_SHUTDOWN_TIMEOUT_MS 기본 25초 = drain 20초 + DB 풀)보다 길어야 한다
+        kill_timeout: 30000,
+        error_file: logFile(`openmake-knowledge-worker${INSTANCE_SUFFIX}-error.log`),
+        out_file: logFile(`openmake-knowledge-worker${INSTANCE_SUFFIX}-out.log`),
+        merge_logs: true,
+        log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    });
+}
+
 module.exports = { apps };

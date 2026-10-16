@@ -172,6 +172,11 @@ export interface EnvConfig {
     // Storage — shared backend for rate-limiter and OAuth state
     storageBackend: 'memory' | 'redis';
     redisUrl: string;
+
+    // Knowledge 수집 worker — 이 API 프로세스가 수집 poller 를 띄우는가(inprocess) 아니면 별도 프로세스에 맡기는가(external)
+    knowledgeWorkerMode: 'inprocess' | 'external';
+    /** 별도 worker 프로세스의 /health 포트(127.0.0.1) — 0 이면 열지 않는다 */
+    knowledgeWorkerHealthPort: number;
 }
 
 /**
@@ -310,6 +315,10 @@ export function loadConfig(): EnvConfig {
         // Storage backend
         STORAGE_BACKEND: env('STORAGE_BACKEND'),
         REDIS_URL: env('REDIS_URL'),
+
+        // Knowledge 수집 worker 모드
+        KNOWLEDGE_WORKER_MODE: env('KNOWLEDGE_WORKER_MODE'),
+        KNOWLEDGE_WORKER_HEALTH_PORT: env('KNOWLEDGE_WORKER_HEALTH_PORT'),
     });
 
     if (!parsedResult.success) {
@@ -452,6 +461,10 @@ export function loadConfig(): EnvConfig {
         // Storage backend
         storageBackend: parsed.STORAGE_BACKEND ?? DEFAULT_CONFIG.storageBackend,
         redisUrl: parsed.REDIS_URL ?? DEFAULT_CONFIG.redisUrl,
+
+        // Knowledge 수집 worker 모드
+        knowledgeWorkerMode: parsed.KNOWLEDGE_WORKER_MODE ?? DEFAULT_CONFIG.knowledgeWorkerMode,
+        knowledgeWorkerHealthPort: parsed.KNOWLEDGE_WORKER_HEALTH_PORT ?? DEFAULT_CONFIG.knowledgeWorkerHealthPort,
     };
 }
 

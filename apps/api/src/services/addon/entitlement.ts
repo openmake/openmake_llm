@@ -20,8 +20,11 @@ import { isAddonEnabled, readAddonEnabledStrict } from './addon-state';
 
 const logger = createLogger('AddonEntitlement');
 
-/** 'state-unknown' = 상태·정책을 확인하지 못함(DB 장애) — 라우트는 503 으로 알린다(설계 문서 8.3). 꺼짐과 섞지 않는다. */
-export type EntitlementVerdict = 'ok' | 'disabled' | 'not-entitled' | 'state-unknown';
+/**
+ * 'state-unknown' = 상태·정책을 확인하지 못함(DB 장애) — 라우트는 503 으로 알린다(설계 문서 8.3). 꺼짐과 섞지 않는다.
+ * 'failed' = 부팅에 실패함(`state=failed`) — 관리자 조치가 필요하다. 라우트는 503 `ADDON_FAILED`(재시도 안내 없음).
+ */
+export type EntitlementVerdict = 'ok' | 'disabled' | 'failed' | 'not-entitled' | 'state-unknown';
 
 /**
  * @param userId 요청 사용자 — 없으면(게스트·내부 호출) 조직 축은 보지 않는다.
@@ -32,6 +35,7 @@ export async function checkAddonEntitlement(addonId: string, userId?: string): P
         logger.warn(`add-on '${addonId}' 상태 확인 불가: ${enabled.reason}`);
         return 'state-unknown';
     }
+    if (enabled.state === 'failed') return 'failed';
     if (!enabled.enabled) return 'disabled';
     if (!userId) return 'ok';
     try {

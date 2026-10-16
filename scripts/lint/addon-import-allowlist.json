@@ -1,0 +1,280 @@
+{
+  "description": "apps/api/src/addons/** → Base 내부 계층(data·services·routes·sockets·controllers·middlewares·auth·chat) import 허용 목록. 줄어들기만 한다(ratchet). 새 import 는 runtime-ports 의 포트나 @openmake/plugin-contracts 를 거친다. 재생성: npm run gen:addon-boundary",
+  "entries": {
+    "deep-research/chat-mode.ts": [
+      "services/chat-service/chat-modes"
+    ],
+    "deep-research/content-scraper.ts": [
+      "data/models/unified-database"
+    ],
+    "deep-research/findings-synthesizer.ts": [
+      "data/models/unified-database"
+    ],
+    "deep-research/report-generator.ts": [
+      "data/models/unified-database"
+    ],
+    "deep-research/research-context.ts": [
+      "services/agent-task/tool-selector-embedding",
+      "services/chat-service/tool-restrictions"
+    ],
+    "deep-research/routes.ts": [
+      "auth",
+      "auth/ownership",
+      "chat/language-policy",
+      "controllers/session.controller",
+      "data/models/unified-database",
+      "data/user-manager",
+      "middlewares/validation",
+      "services/model-role-resolver"
+    ],
+    "deep-research/service.ts": [
+      "data/models/unified-database"
+    ],
+    "deep-research/source-searcher.ts": [
+      "data/models/unified-database"
+    ],
+    "deep-research/strategy-types.ts": [
+      "services/chat-service-types",
+      "services/chat-strategies/types"
+    ],
+    "deep-research/strategy.ts": [
+      "chat/language-policy",
+      "data/models/unified-database",
+      "services/chat-strategies/types"
+    ],
+    "deep-research/topic-decomposer.ts": [
+      "data/models/unified-database"
+    ],
+    "discord/routes.ts": [
+      "middlewares/api-key-auth",
+      "services/AuditService",
+      "services/system-settings-service"
+    ],
+    "discussion/chat-integration.ts": [
+      "services/chat-service/turn-integrations"
+    ],
+    "discussion/chat-mode.ts": [
+      "services/chat-service/chat-modes"
+    ],
+    "discussion/context.ts": [
+      "chat/language-policy"
+    ],
+    "discussion/discussion-locales.ts": [
+      "chat/language-policy"
+    ],
+    "discussion/engine.ts": [
+      "chat/language-policy"
+    ],
+    "discussion/sources.ts": [
+      "sockets/ws-chat-locales"
+    ],
+    "discussion/strategy-types.ts": [
+      "services/chat-service-types",
+      "services/chat-strategies/types"
+    ],
+    "discussion/strategy.ts": [
+      "chat/language-policy",
+      "services/chat-strategies/types"
+    ],
+    "image-runtime/generate.ts": [
+      "services/orchestrator/media-io",
+      "services/orchestrator/plan-schema",
+      "services/orchestrator/types"
+    ],
+    "kakao-map/chat-integration.ts": [
+      "services/chat-service/turn-integrations"
+    ],
+    "knowledge-runtime/chat-integration.ts": [
+      "services/chat-service/turn-integrations"
+    ],
+    "knowledge-runtime/config/scope-policy.ts": [
+      "services/org/membership-cache"
+    ],
+    "knowledge-runtime/conversations/binding-service.ts": [
+      "data/conversation-sessions"
+    ],
+    "knowledge-runtime/db.ts": [
+      "data/models/unified-database"
+    ],
+    "knowledge-runtime/embedding/provider.ts": [
+      "services/cost/cost-ledger-service",
+      "services/orchestrator/capability-resolver",
+      "services/orchestrator/http-call"
+    ],
+    "knowledge-runtime/http.ts": [
+      "data/user-manager"
+    ],
+    "knowledge-runtime/routes.ts": [
+      "auth"
+    ],
+    "mcp-runtime/chat-integration.ts": [
+      "services/chat-service/turn-integrations"
+    ],
+    "mcp-runtime/lifecycle-supervisor.ts": [
+      "data/repositories/mcp-catalog-repository"
+    ],
+    "mcp-runtime/mcp-meta-tools.ts": [
+      "data/models/unified-database",
+      "data/repositories/mcp-catalog-repository"
+    ],
+    "mcp-runtime/mcp-server-ingest-tool.ts": [
+      "data/models/unified-database",
+      "data/user-manager"
+    ],
+    "mcp-runtime/oauth-provider.ts": [
+      "data/models/unified-database",
+      "data/repositories/mcp-catalog-oauth-client-repository",
+      "data/repositories/mcp-oauth-repository"
+    ],
+    "mcp-runtime/routes/mcp-admin-monitoring.routes.ts": [
+      "auth",
+      "data/models/unified-database",
+      "data/repositories/mcp-admin-monitoring-repository"
+    ],
+    "mcp-runtime/routes/mcp-catalog-admin.routes.ts": [
+      "auth",
+      "data/models/unified-database",
+      "data/repositories/mcp-catalog-admin-repository",
+      "data/repositories/mcp-catalog-oauth-client-repository",
+      "services/AuditService"
+    ],
+    "mcp-runtime/routes/mcp-catalog.routes.ts": [
+      "auth",
+      "data/models/unified-database",
+      "data/repositories/mcp-catalog-repository",
+      "middlewares/validation",
+      "services/org/effective-policy"
+    ],
+    "mcp-runtime/routes/mcp-global-connect.ts": [
+      "data/models/unified-database",
+      "data/repositories/mcp-catalog-repository"
+    ],
+    "mcp-runtime/routes/mcp-oauth.routes.ts": [
+      "auth",
+      "data/models/unified-database",
+      "data/repositories/mcp-catalog-repository",
+      "data/repositories/mcp-oauth-repository"
+    ],
+    "mcp-runtime/routes/mcp-server-ingest.mounted.ts": [
+      "data/models/unified-database"
+    ],
+    "mcp-runtime/routes/mcp-server-ingest.routes.ts": [
+      "auth",
+      "data/repositories/mcp-server-draft-repository",
+      "data/user-manager"
+    ],
+    "mcp-runtime/routes/mcp-server-rename.ts": [
+      "data/models/unified-database",
+      "data/repositories/mcp-catalog-repository",
+      "services/AuditService"
+    ],
+    "mcp-runtime/routes/mcp-visibility.ts": [
+      "data/repositories/mcp-catalog-repository",
+      "data/user-manager"
+    ],
+    "mcp-runtime/routes/mcp.routes.ts": [
+      "auth",
+      "data/models/unified-database",
+      "data/repositories/mcp-catalog-repository",
+      "data/repositories/mcp-oauth-repository",
+      "middlewares/validation",
+      "services/AuditService"
+    ],
+    "mcp-runtime/runtime-boot.ts": [
+      "data/models/unified-database",
+      "data/repositories/mcp-catalog-repository"
+    ],
+    "mcp-runtime/server-registry.ts": [
+      "data/models/unified-database"
+    ],
+    "mcp-runtime/unified-client.ts": [
+      "data/models/unified-database"
+    ],
+    "music-runtime/generate.ts": [
+      "chat/language-policy",
+      "services/orchestrator/media-io",
+      "services/orchestrator/plan-schema",
+      "services/orchestrator/types"
+    ],
+    "music-runtime/plan-input.ts": [
+      "services/orchestrator/orchestrate",
+      "services/orchestrator/plan-schema"
+    ],
+    "notebooklm/chat-integration.ts": [
+      "services/chat-service/turn-integrations"
+    ],
+    "notebooklm/routes.ts": [
+      "auth",
+      "data/models/unified-database",
+      "data/repositories/mcp-catalog-repository"
+    ],
+    "skill-runtime/load-skill-tool.ts": [
+      "data/models/unified-database",
+      "data/repositories/skill-asset-repository"
+    ],
+    "skill-runtime/routes/agent-skill-assign.routes.ts": [
+      "auth",
+      "middlewares/validation"
+    ],
+    "skill-runtime/routes/skills-drafts.routes.ts": [
+      "auth",
+      "data/user-manager",
+      "middlewares/validation"
+    ],
+    "skill-runtime/routes/skills-export.ts": [
+      "auth/ownership"
+    ],
+    "skill-runtime/routes/skills-usage.routes.ts": [
+      "auth",
+      "data/user-manager",
+      "middlewares/validation"
+    ],
+    "skill-runtime/routes/skills-user-assign.routes.ts": [
+      "auth",
+      "middlewares/validation"
+    ],
+    "skill-runtime/routes/skills.routes.ts": [
+      "auth",
+      "auth/ownership",
+      "data/models/unified-database",
+      "data/user-manager",
+      "middlewares/validation"
+    ],
+    "skill-runtime/skill-catalog.ts": [
+      "data/repositories/skill-repository"
+    ],
+    "skill-runtime/skill-creator-tool.ts": [
+      "data/models/unified-database",
+      "data/user-manager"
+    ],
+    "skill-runtime/skill-creator.ts": [
+      "data/repositories/skill-manifest-sync"
+    ],
+    "skill-runtime/skill-entitlement-filter.ts": [
+      "services/addon/entitlement"
+    ],
+    "skill-runtime/skill-manager.ts": [
+      "chat/slash-command",
+      "data/models/unified-database",
+      "data/repositories/skill-manifest-sync",
+      "data/repositories/skill-repository"
+    ],
+    "skill-runtime/skill-seeder.ts": [
+      "data/models/unified-database",
+      "data/repositories/skill-repository"
+    ],
+    "skill-runtime/skill-usage-log.ts": [
+      "data/models/unified-database"
+    ],
+    "video-runtime/generate.ts": [
+      "data/repositories/job-runtime-repo",
+      "services/orchestrator/media-io",
+      "services/orchestrator/plan-schema",
+      "services/orchestrator/types"
+    ],
+    "video-runtime/plan-input.ts": [
+      "services/orchestrator/orchestrate",
+      "services/orchestrator/plan-schema"
+    ]
+  }
+}

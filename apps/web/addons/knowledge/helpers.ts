@@ -23,20 +23,18 @@ export function statusLabelKey(status: KnowledgeVersionStatus): string {
   return `status.${status}`;
 }
 
-/** 실패코드 → i18n 키(`failure.<key>`). 미등록 코드는 `failure.unknown`. */
+/** 실패코드 → i18n 키(`failure.<key>`) 룩업. 미등록 코드는 `failure.unknown`. */
+const FAILURE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
+  FAILED_VALIDATION: "failure.validation",
+  SCANNED_PDF_UNSUPPORTED: "failure.scannedPdf",
+  FAILED_EXTRACTION: "failure.extraction",
+  FAILED_EMBEDDING: "failure.embedding",
+  CANCELLED: "failure.cancelled",
+  ADDON_NOT_ENTITLED: "failure.notEntitled",
+};
+
 export function failureMessageKey(code: string | null | undefined): string {
-  switch (code) {
-    case "FAILED_VALIDATION":
-      return "failure.validation";
-    case "SCANNED_PDF_UNSUPPORTED":
-      return "failure.scannedPdf";
-    case "FAILED_EXTRACTION":
-      return "failure.extraction";
-    case "FAILED_EMBEDDING":
-      return "failure.embedding";
-    default:
-      return "failure.unknown";
-  }
+  return code && Object.hasOwn(FAILURE_MESSAGE_KEYS, code) ? FAILURE_MESSAGE_KEYS[code] : "failure.unknown";
 }
 
 const KB = 1024;

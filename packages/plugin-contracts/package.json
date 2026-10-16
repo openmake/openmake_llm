@@ -1,0 +1,17 @@
+{
+  "name": "@openmake/plugin-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Base ↔ Add-on 계약 — 런타임 수명주기·활성 상태·매니페스트·기여 DTO (타입·상수만, 런타임 의존 0)",
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node ../../scripts/tsc7.cjs -p tsconfig.json && node ../../scripts/tsc7.cjs -p tsconfig.sample.json"
+  }
+}

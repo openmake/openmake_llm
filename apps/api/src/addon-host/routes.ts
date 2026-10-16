@@ -54,6 +54,8 @@ function respondStateUnknown(res: Response, addonId: string): void {
  * env 로 끈 add-on 은 아예 마운트되지 않지만(코드도 로드하지 않는다), **관리자가 DB 에서 끈** add-on 은
  * 재시작 없이 즉시 404 가 된다. 조직 정책 `ADDON_ALLOWLIST` 를 둔 조직에서 목록 밖이면 403(조직 관리자의 통제 — 과금 아님).
  * 상태·정책을 확인하지 못하면(DB 장애) 503 `ADDON_STATE_UNKNOWN` — 종전의 fail-open(통과)은 꺼진 add-on 을 장애 중에 열었다.
+ * 부팅에 실패한(`state=failed`) add-on 은 503 `ADDON_FAILED` — 관리자 조치가 필요하므로 `Retry-After` 를 붙이지 않는다
+ * (종전에는 꺼짐과 같은 404 라 "관리자가 껐다"로 잘못 읽혔다).
  */
 export function addonGuard(addonId: string) {
     return (req: Request, res: Response, next: NextFunction): void => {
@@ -75,6 +77,10 @@ export function addonGuard(addonId: string) {
                 const verdict = await checkAddonEntitlement(addonId, userId);
                 if (verdict === 'disabled') {
                     res.status(404).json({ success: false, error: { code: 'ADDON_DISABLED', message: `add-on '${addonId}' 이 비활성 상태입니다.` } });
+                    return;
+                }
+                if (verdict === 'failed') {
+                    res.status(503).json(error('ADDON_FAILED', `add-on '${addonId}' 이 부팅에 실패해 사용할 수 없습니다. 관리자에게 문의하세요.`));
                     return;
                 }
                 if (verdict === 'not-entitled') {

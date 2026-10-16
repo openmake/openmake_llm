@@ -25,6 +25,7 @@ import { createExportController } from '../controllers/export.controller';
 import { createUserPreferencesController } from '../controllers/user-preferences.controller';
 import { createUserAgentsController } from '../controllers/user-agents.controller';
 import { createUserExtensionsController } from '../controllers/user-extensions.controller';
+import { createUserExtensionPermissionsController } from '../controllers/user-extension-permissions.controller';
 import { createUserMemoriesController } from '../controllers/user-memories.controller';
 import { createUserModelRolesController } from '../controllers/user-model-roles.controller';
 import { createCapabilityModelsController } from '../controllers/capability-models.controller';
@@ -92,8 +93,10 @@ import { bootstrapServices } from '../bootstrap';
 import { getConfig } from '../config';
 import { success } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
+import { collectHealthSections } from '../runtime-ports/health-sections';
 import { csrfProtectionMiddleware, csrfTokenIssuer } from '../middlewares/csrf-protection';
 import { authLimiter } from '../middlewares/rate-limiters';
+import { readHealthProcessSection } from './health-process-section';
 import { mountAddonRoutes } from '../addon-host/routes';
 
 
@@ -123,11 +126,15 @@ export function setupApiRoutes(
     app.get('/api/csrf-token', csrfTokenIssuer);
     app.use('/api', csrfProtectionMiddleware);
 
-    // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환)
-    app.get('/api/health', async (_req: Request, res: Response) => {
+    // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환). 인증 미들웨어 없음 — DB 에 닿지 않게
+    // 관리자 process 필드는 서명된 JWT 만으로 가른다(health-process-section.ts 의 대가 설명 참고)
+    app.get('/api/health', async (req: Request, res: Response) => {
+        const processSection = readHealthProcessSection(req);
         const dbPool = getPool();
         const memory = process.memoryUsage();
         const clusterStats = cluster.getStats();
+        // add-on 이 등록한 상태 절(예: 수집 소비자 모드·대기열) — 절마다 시간 상한, 실패는 그 절만 { error }
+        const sections = await collectHealthSections();
 
         res.json({
             status: 'ok',
@@ -151,7 +158,9 @@ export function setupApiRoutes(
                     heapTotalMB: Math.round(memory.heapTotal / 1024 / 1024),
                     rssMB: Math.round(memory.rss / 1024 / 1024)
                 }
-            }
+            },
+            ...sections,
+            ...(processSection ? { process: processSection } : {}),
         });
     });
 
@@ -257,6 +266,8 @@ export function setupApiRoutes(
     app.use('/api/users/me/agents', createUserAgentsController());
     // 확장 번들 (Agent Plugins v1) — 설치는 채팅 도구 import_extension_from_git, 여기선 목록/상세/제거
     app.use('/api/users/me/extensions', createUserExtensionsController());
+    // 확장 권한 상태(190) — 조회·재승인·철회. 위 컨트롤러의 '/:id' 와 경로가 겹치지 않는다
+    app.use('/api/users/me/extensions', createUserExtensionPermissionsController());
     // Cross-conversation Memory — REST 로 explicit 저장 (claude.ai/ChatGPT Memory 동등, 2026-05-26)
     // ⚠️ 채팅 `/remember` 슬래시는 미구현 — 저장은 이 엔드포인트(POST)로만.
     app.use('/api/users/me/memories', createUserMemoriesController());

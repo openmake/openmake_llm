@@ -203,6 +203,30 @@ export function looksLikeJWT(token: string): boolean {
 }
 
 /**
+ * access 토큰 타입 확인 + HS256 서명·만료 검증 + 페이로드 형식 검사 — verifyToken·verifyTokenSignature 공용.
+ * 거절 사유는 onReject 로 알린다(없으면 조용히 null). jwt.verify 의 서명·만료 오류는 호출 측이 잡도록 던진다.
+ */
+function verifyAccessSignature(
+    token: string,
+    preCheck: Record<string, unknown> | null,
+    onReject?: (message: string) => void,
+): JWTPayload | null {
+    // refresh token으로 access 인증 시도 차단
+    // access token만 허용: type 필드가 없거나(레거시) 'access'인 경우만 통과
+    if (preCheck?.type && preCheck.type !== 'access') {
+        onReject?.(`access 이외 토큰 타입 차단: ${preCheck.type}`);
+        return null;
+    }
+    // algorithms 화이트리스트 고정(HS256) — alg 혼동 공격 방어(sign 은 대칭 HS256).
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] as Algorithm[] });
+    if (!isValidJWTPayload(decoded)) {
+        onReject?.('JWT 페이로드 형식 불일치');
+        return null;
+    }
+    return decoded;
+}
+
+/**
  * JWT 토큰 검증
  * #8 연동: 블랙리스트 확인 추가
  */
@@ -227,20 +251,7 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
              }
          }
 
-         // refresh token으로 access 인증 시도 차단
-         // access token만 허용: type 필드가 없거나(레거시) 'access'인 경우만 통과
-         if (preCheck?.type && preCheck.type !== 'access') {
-             logger.warn(`access 이외 토큰 타입 차단: ${preCheck.type}`);
-             return null;
-         }
-
-         // algorithms 화이트리스트 고정(HS256) — alg 혼동 공격 방어(sign 은 대칭 HS256).
-         const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] as Algorithm[] });
-         if (!isValidJWTPayload(decoded)) {
-             logger.warn('JWT 페이로드 형식 불일치');
-             return null;
-         }
-         return decoded;
+         return verifyAccessSignature(token, preCheck, (message) => logger.warn(message));
      } catch (error) {
          // jwt malformed / expired 등은 정상적 상황 (만료 쿠키) — 스택트레이스 없이 간단 로그
          const errName = error instanceof Error ? error.name : '';
@@ -251,6 +262,21 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
          }
          return null;
      }
+}
+
+/**
+ * 서명·만료·토큰 타입만 검증한다 — 블랙리스트(DB) 조회 없음.
+ * DB 장애 중에도 응답해야 하는 경로(/api/health) 전용이다. 폐기(로그아웃)됐지만 만료 전인 토큰도
+ * 통과하므로, 민감도가 낮은 정보를 가르는 데만 쓴다. 인증·권한 부여에는 verifyToken 을 쓴다.
+ */
+export function verifyTokenSignature(token: string): JWTPayload | null {
+    try {
+        // verifyToken 과 같은 규칙(access 만·HS256·페이로드 형식) — 거절 로그는 남기지 않는다
+        return verifyAccessSignature(token, jwt.decode(token) as Record<string, unknown> | null);
+    } catch {
+        // 서명 불일치·만료·형식 오류는 게스트로 본다
+        return null;
+    }
 }
 
 /**

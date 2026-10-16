@@ -2345,6 +2345,34 @@
     "agents": "Benutzerdefinierte Agents",
     "none": "Keine",
     "approvalHint": "Entwurfskomponenten müssen vor der Aktivierung auf den Seiten Skill-Bibliothek / MCP-Server freigegeben werden.",
+    "permissions": {
+      "title": "Berechtigungen",
+      "badge": {
+        "reviewed": "Berechtigungen geprüft",
+        "legacy": "Alt, nicht geprüft",
+        "reviewRequired": "Erneute Freigabe nötig"
+      },
+      "requested": "Angeforderte Berechtigungen",
+      "noneRequested": "Keine Berechtigungen angefordert",
+      "blocked": "Bis zur erneuten Freigabe gesperrt",
+      "label": {
+        "network": "Netzwerkzugriff (ausgehender Verkehr von MCP-Servern)",
+        "database": "Add-on-eigenes DB-Schema"
+      },
+      "impact": {
+        "reviewed": "Läuft nur innerhalb der freigegebenen Berechtigungen. Fordert ein Update mehr an, werden nur die zusätzlichen Berechtigungen bis zur erneuten Freigabe gesperrt.",
+        "legacy": "Erweiterung im alten Format ohne Berechtigungsangabe (openmake-addon.json). Sie behält wie bisher den Netzwerkzugriff. Eine erneute Freigabe hält die aktuellen Berechtigungen fest; fordert ein späteres Update mehr an, werden nur diese gesperrt.",
+        "reviewRequired": "Ein Update fordert mehr Berechtigungen an als zuvor freigegeben. Bis zur erneuten Freigabe sind nur die zusätzlichen Berechtigungen gesperrt (Remote-MCP-Server werden nicht installiert, lokale MCP-Server laufen ohne Netzwerk). Bestehende Funktionen arbeiten weiter."
+      },
+      "recovery": "Klicken Sie auf Erneut freigeben, um die gesperrten Funktionen zu nutzen. Wenn Sie die Berechtigungen nicht erteilen möchten, lassen Sie alles wie es ist oder entfernen Sie die Erweiterung.",
+      "approve": "Erneut freigeben",
+      "approveConfirm": "Dieser Erweiterung folgende Berechtigungen erteilen: {perms}. Fortfahren?",
+      "approved": "Berechtigungen freigegeben.",
+      "restored": "Netzwerksperre für {count} lokale MCP-Server aufgehoben. Gilt ab der nächsten Ausführung.",
+      "reinstallRemote": "Bei der Installation ausgelassene Remote-MCP-Server ({names}) werden erst installiert, wenn Sie die Erweiterung entfernen und neu installieren.",
+      "approveFailed": "Erneute Freigabe fehlgeschlagen. Bitte versuchen Sie es in Kürze erneut.",
+      "conflict": "Die Erweiterung wurde zwischenzeitlich aktualisiert und ihre angeforderten Berechtigungen haben sich geändert. Bitte neu laden und erneut prüfen."
+    },
     "report": {
       "title": "Installationsbericht",
       "hint": "Hier nicht unterstützte Komponenten wurden nicht installiert, und für andere Ökosysteme geschriebene Skills erhielten einen automatischen Hinweis zur Tool-Namen-Zuordnung."
@@ -2849,13 +2877,16 @@
       "not_loaded": "Laufzeit nicht geladen",
       "registering": "Registrierung",
       "ready": "bereit",
-      "failed": "Laufzeitfehler"
+      "failed": "Laufzeitfehler",
+      "stopping": "wird angehalten",
+      "stopped": "angehalten"
     }
   },
   "knowledge": {
     "serverError": "Ein Serverfehler ist aufgetreten",
     "disabledByAdmin": "Ein Administrator hat Knowledge deaktiviert.",
     "unavailable": "Knowledge ist vorübergehend nicht verfügbar. Bitte versuchen Sie es in Kürze erneut.",
+    "notReady": "Knowledge ist nicht verfügbar: der Start ist fehlgeschlagen. Bitte wenden Sie sich an einen Administrator.",
     "cancel": "Abbrechen",
     "close": "Schließen",
     "save": "Speichern",
@@ -2912,6 +2943,8 @@
       "scannedPdf": "Gescannte PDFs werden nicht unterstützt (keine Textebene)",
       "extraction": "Text konnte nicht extrahiert werden",
       "embedding": "Embedding fehlgeschlagen",
+      "cancelled": "Verarbeitung wurde abgebrochen",
+      "notEntitled": "Nicht verarbeitet — keine Berechtigung für Knowledge",
       "unknown": "Verarbeitung fehlgeschlagen"
     },
     "doc": {

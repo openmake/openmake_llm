@@ -97,10 +97,16 @@ export interface ComponentContext {
     /** 설치 리포트 — 각 갈래가 사유를 push 한다 */
     warnings: string[];
     /**
-     * 번들이 동봉한 `openmake-addon.json` 의 permissions. **undefined = 매니페스트 미동봉**(종전 확장 —
-     * 권한 집행 없이 기존 동작), 배열이면 deny-by-default 로 집행한다(`config/addon-permissions.ts`).
+     * 집행할 허용 권한 — 권한 상태 판정(`services/extensions/permission-state.ts`)의 effective.
+     * **undefined = 집행 없음**(legacy_unreviewed — 종전 확장의 기존 동작), 배열이면 deny-by-default 로 집행한다
+     * (`config/addon-permissions.ts`).
      */
     addonPermissions?: readonly string[];
+    /**
+     * 요청했지만 승인 범위 밖이라 막은 권한(190 — review_required). 집행 자체는 addonPermissions 가 하고,
+     * 이 목록은 거절 사유를 "권한 없음"과 "재승인 필요"로 나눠 알리는 데만 쓴다.
+     */
+    blockedPermissions?: readonly string[];
     /** plugin.json `commands` 경로 필드 (없으면 commands/ 디렉토리만) */
     commandPaths?: string[];
     /** plugin.json `mcpServers` 가 파일 경로 문자열일 때 */
@@ -379,14 +385,21 @@ export async function collectMcpDrafts(
     const results: McpServerInstallResult[] = [];
     const checker = new ConventionChecker(llmClientFactory(SKILL_CREATOR.authorModel));
     const draftRepo = new McpServerDraftRepository(ctx.pool);
-    // add-on 권한 집행 — 매니페스트를 동봉한 번들만(deny by default). 네트워크 권한이 없으면
-    // stdio 서버는 `--network none` 샌드박스로 저장하고, 원격(HTTP) 서버는 성립할 수 없어 제외한다.
+    // add-on 권한 집행 — 허용 권한이 정해진 설치만(deny by default, legacy_unreviewed 는 undefined 라 종전 동작).
+    // 네트워크 권한이 없으면 stdio 서버는 `--network none` 샌드박스로 저장하고, 원격(HTTP) 서버는 성립할 수 없어 제외한다.
     const enforcePermissions = ctx.addonPermissions !== undefined;
     const networkAllowed = !enforcePermissions || hasAddonPermission(ctx.addonPermissions, ADDON_PERMISSIONS.NETWORK_INTERNET);
+    // 요청은 했지만 승인 범위 밖(재승인 필요)인지, 처음부터 요청하지 않았는지 — 안내 문구만 다르다
+    const networkNeedsReview = !networkAllowed && !!ctx.blockedPermissions?.includes(ADDON_PERMISSIONS.NETWORK_INTERNET);
     for (const entry of mcpEntries) {
         if (!networkAllowed && entry.transportType !== 'stdio') {
-            ctx.warnings.push(`MCP_NETWORK_PERMISSION_MISSING: 원격 MCP 서버 '${entry.name}' 제외 — 매니페스트에 '${ADDON_PERMISSIONS.NETWORK_INTERNET}' 권한이 없습니다`);
-            results.push({ name: entry.name, error: `PERMISSION_DENIED: ${ADDON_PERMISSIONS.NETWORK_INTERNET} 권한 없음` });
+            if (networkNeedsReview) {
+                ctx.warnings.push(`MCP_PERMISSION_REVIEW_REQUIRED: 원격 MCP 서버 '${entry.name}' 제외 — '${ADDON_PERMISSIONS.NETWORK_INTERNET}' 권한이 이전 승인 범위 밖입니다(설정 → 확장에서 재승인)`);
+                results.push({ name: entry.name, error: `PERMISSION_REVIEW_REQUIRED: ${ADDON_PERMISSIONS.NETWORK_INTERNET} 재승인 필요` });
+            } else {
+                ctx.warnings.push(`MCP_NETWORK_PERMISSION_MISSING: 원격 MCP 서버 '${entry.name}' 제외 — 매니페스트에 '${ADDON_PERMISSIONS.NETWORK_INTERNET}' 권한이 없습니다`);
+                results.push({ name: entry.name, error: `PERMISSION_DENIED: ${ADDON_PERMISSIONS.NETWORK_INTERNET} 권한 없음` });
+            }
             continue;
         }
         try {
@@ -415,6 +428,8 @@ export async function collectMcpDrafts(
                     gitPath: ctx.manifestPath,
                     extensionName: ctx.extensionName,
                     serverKey: entry.name,
+                    // 권한 때문에 네트워크를 막았다는 표시 — 재승인이 이 서버만 골라 되돌린다(user-extension-permission-repository)
+                    ...(networkAllowed ? {} : { networkRestrictedByPermission: true }),
                     conventionFindings: conv.findings,
                     blockedByConvention,
                     tokensUsed: conv.tokensUsed,

@@ -75,9 +75,9 @@ function getUserId(req: Request): string | null {
     return null;
 }
 
-/** 응답에서 내부 필드(source_hash, user_id) 제외. */
+/** 응답에서 내부 필드(source_hash, user_id, 승인자 id) 제외. */
 function toPublic(row: UserExtensionRow) {
-    const { source_hash: _hash, user_id: _uid, ...rest } = row;
+    const { source_hash: _hash, user_id: _uid, permissions_reviewed_by: _reviewer, ...rest } = row;
     return rest;
 }
 

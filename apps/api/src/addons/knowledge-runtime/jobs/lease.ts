@@ -18,6 +18,18 @@ export class LeaseLostError extends Error {
     }
 }
 
+/**
+ * 취소로 멈춤 — LeaseLostError 의 하위형이라 기존 "상실이면 상태를 쓰지 않고 그대로 던진다" 경로(파이프라인·reindex·rechunk)를
+ * 그대로 탄다. worker 는 `lease.isCancelled()` 로 상실과 구분해, lease 를 아직 쥔 채 fence 안에서 cancelled 를 쓴다.
+ */
+export class JobCancelledError extends LeaseLostError {
+    constructor(jobId: string, detail: string) {
+        super(jobId, detail);
+        this.name = 'JobCancelledError';
+        this.message = `작업 ${jobId} 이 취소됐다 — ${detail}`;
+    }
+}
+
 export interface JobLease {
     readonly jobId: string;
     /** `knowledge_ingestion_jobs.fencing_token`(BIGINT) — pg 가 돌려준 문자열 그대로. `Number` 로 바꾸지 않는다(2^53 넘는 값 보존) */
@@ -33,11 +45,16 @@ export interface JobLease {
     throwIfLost(): void;
     /** worker(heartbeat)·assertLeaseHeld 가 부른다 — 첫 사유만 남긴다 */
     markLost(detail: string): void;
+    /** worker(heartbeat 가 cancel_requested_at 을 봄)가 부른다 — 신호를 끊되 lease 는 여전히 이 실행자의 것이다. 첫 사유만 남긴다 */
+    markCancelled(detail: string): void;
+    /** 취소로 끊겼는가(상실과 구분) */
+    isCancelled(): boolean;
 }
 
 export function createJobLease(input: { jobId: string; token: string; owner: string; now?: number }): JobLease {
     const controller = new AbortController();
     let detail = '';
+    let cancelled = false;
     const lease: JobLease = {
         jobId: input.jobId,
         token: input.token,
@@ -48,12 +65,22 @@ export function createJobLease(input: { jobId: string; token: string; owner: str
             lease.renewedAt = nowMs;
         },
         throwIfLost() {
-            if (controller.signal.aborted) throw new LeaseLostError(input.jobId, detail);
+            if (!controller.signal.aborted) return;
+            throw cancelled ? new JobCancelledError(input.jobId, detail) : new LeaseLostError(input.jobId, detail);
         },
         markLost(d: string) {
             if (controller.signal.aborted) return;
             detail = d;
             controller.abort();
+        },
+        markCancelled(d: string) {
+            if (controller.signal.aborted) return;
+            cancelled = true;
+            detail = d;
+            controller.abort();
+        },
+        isCancelled() {
+            return cancelled;
         },
     };
     return lease;

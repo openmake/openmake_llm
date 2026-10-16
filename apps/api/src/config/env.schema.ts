@@ -88,6 +88,12 @@ export const envSchema = z
         // Redis connection URL — required when STORAGE_BACKEND=redis
         REDIS_URL: z.string().default(''),
 
+        // Knowledge 수집 worker — inprocess: API 가 poller 를 띄운다(기본) / external: 별도 프로세스(PM2 openmake-knowledge-worker)가 처리.
+        // 실제 claim 권한은 DB knowledge_worker_mode 단일 행이 정한다(이 값과 다르면 그 소비자는 집지 않는다).
+        KNOWLEDGE_WORKER_MODE: z.enum(['inprocess', 'external']).default('inprocess'),
+        // 별도 worker 프로세스의 /health 포트(127.0.0.1) — 0 이면 열지 않는다
+        KNOWLEDGE_WORKER_HEALTH_PORT: z.coerce.number().int().min(0).max(65535).default(0),
+
         // OAuth
         GOOGLE_CLIENT_ID: z.string().default(''),
         GOOGLE_CLIENT_SECRET: z.string().default(''),

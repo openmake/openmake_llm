@@ -4,7 +4,7 @@
  * 축 넷을 따로 둔다(계획서 7.2):
  *   - `enabledByEnv`     : 배포 환경의 비상 차단(`ADDON_BUILTIN_DISABLED`) — 재시작 단위
  *   - `desiredState`     : DB 가 기록한 관리자의 사용 의도 — 실시간
- *   - `runtimeStatus`    : **이 프로세스**가 그 add-on 의 코드를 어디까지 세웠나(not_loaded·registering·ready·failed) —
+ *   - `runtimeStatus`    : **이 프로세스**가 그 add-on 의 코드를 어디까지 세웠나(not_loaded·registering·ready·stopping·stopped·failed) —
  *                          전역 DB 의 단일 값으로 대체하지 않는다(프로세스마다 다를 수 있다)
  *   - `effectiveAvailability` : 위 셋과 조회 성공 여부를 합성한 결과(6.4 상태표의 부분집합)
  *
@@ -13,13 +13,17 @@
  *
  * @module addon-host/activation
  */
-import type { AddonDesiredState, AddonFailureCode, AddonState } from '../data/repositories/addon-state-repository';
+import type {
+    AddonAvailability, AddonDesiredState, AddonFailureCode, AddonRuntimeStatus, AddonState,
+} from '@openmake/plugin-contracts';
 import { isBuiltinAddonEnabled } from './builtin-registry';
 
-export type AddonRuntimeStatus = 'not_loaded' | 'registering' | 'ready' | 'failed';
-
-/** 6.4 가용성 상태 중 add-on 축이 결정하는 것 — capability 축(unassigned·unsupported·forbidden)은 Registry 가 더한다 */
-export type AddonAvailability = 'available' | 'disabled' | 'not_ready' | 'failed' | 'incompatible' | 'state_unknown';
+/**
+ * 런타임 상태·가용성 어휘 — 정의는 계약 패키지(3차 C2), 여기서는 재수출만 한다.
+ * stopping·stopped 는 관리자 토글·프로세스 종료로 런타임 handle 을 정지한 상태(코드는 프로세스에 남는다 — lifecycle.ts).
+ * 가용성은 6.4 상태 중 add-on 축이 결정하는 것 — capability 축(unassigned·unsupported·forbidden)은 Registry 가 더한다.
+ */
+export type { AddonAvailability, AddonRuntimeStatus } from '@openmake/plugin-contracts';
 
 export interface AddonActivation {
     addonId: string;
@@ -36,7 +40,7 @@ export interface AddonActivation {
     effectiveAvailability: AddonAvailability;
 }
 
-/** 이 프로세스의 런타임 상태 표 — 부팅 절차(index.ts)만 쓴다 */
+/** 이 프로세스의 런타임 상태 표 — 부팅 절차(index.ts)와 수명주기(lifecycle.ts)만 쓴다 */
 const runtimeStatuses = new Map<string, { status: AddonRuntimeStatus; failureCode?: AddonFailureCode; reason?: string }>();
 
 export function setAddonRuntimeStatus(addonId: string, status: AddonRuntimeStatus, failure?: { code: AddonFailureCode; reason: string }): void {
@@ -74,7 +78,9 @@ export function resolveAddonActivation(input: ActivationInput): AddonActivation 
         lastFailureCode: runtime.failureCode ?? known?.lastFailureCode ?? null,
         runtimeStatus: runtime.status,
     };
-    const restartRequired = input.hasRuntimeEntry && enabledByEnv && desiredState === 'enabled' && runtime.status === 'not_loaded';
+    // 의도는 켜짐인데 이 프로세스의 런타임이 없거나(not_loaded) 정지된 채(stopped — resume 이 없거나 실패) 남아 있으면 재시작해야 반영된다
+    const restartRequired = input.hasRuntimeEntry && enabledByEnv && desiredState === 'enabled'
+        && (runtime.status === 'not_loaded' || runtime.status === 'stopped');
     let effectiveAvailability: AddonAvailability;
     if (!enabledByEnv) effectiveAvailability = 'disabled';
     else if (!input.versionCompatible) effectiveAvailability = 'incompatible';

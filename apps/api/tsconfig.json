@@ -18,7 +18,10 @@
         "sourceMap": true,
         "noImplicitAny": true,
         "strictNullChecks": true,
-        "types": ["node", "jest"]
+        "types": ["node", "jest"],
+        "paths": {
+            "@openmake/plugin-contracts": ["../../packages/plugin-contracts/dist/index.d.ts"]
+        }
     },
     "include": [
         "src/**/*"

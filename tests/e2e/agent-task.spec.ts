@@ -14,7 +14,7 @@
  *
  * 실행:
  *   PW_TEST_BASE_URL=http://localhost:52418 npx playwright test tests/e2e/agent-task.spec.ts
- *   (DATABASE_URL 은 루트 .env 또는 환경 변수 — 사용자 정리용)
+ *   (TEST_DATABASE_URL 은 tests/e2e/.env.e2e 또는 셸 — 이름이 _test 로 끝나는 격리 DB, 사용자 정리용)
  *
  * 정리: spec 이 만든 작업·사용자만 **id 로** 지운다(작업은 DELETE API, 남으면 DB id 지정 삭제).
  * CSRF: 서버 기본값(enforce)에서도 돌도록 쿠키 인증 요청에 Double-Submit 토큰을 붙인다(agent-task-fixtures).
