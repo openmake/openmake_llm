@@ -10,7 +10,8 @@ import type { ZodTypeAny } from 'zod';
 import { requireAuth } from '../../auth';
 import { success } from '../../utils/api-response';
 import { asyncHandler, ValidationError } from '../../utils/error-handler';
-import { resolveUserId, assertAdmin } from './http';
+import { resolveUserId, assertAdmin, isAdminRequest } from './http';
+import { requestJobCancel, type JobCancelOutcome } from './jobs/cancel';
 import { getDefaultLimits } from './config/profiles';
 import { createSpaceSchema, updateSpaceSchema, updateProfileSchema, memoryInputSchema } from './schemas';
 import * as spaces from './spaces/service';
@@ -97,6 +98,15 @@ knowledgeRouter.delete('/spaces/:id/documents/:docId', requireAuth, asyncHandler
 knowledgeRouter.post('/spaces/:id/documents/:docId/retry', requireAuth, asyncHandler(async (req, res) => {
     await documents.retryDocument(resolveUserId(req), req.params.id, req.params.docId);
     res.json(success({ retried: true }));
+}));
+
+// ── Jobs (취소 — 본인 또는 관리자) ──
+/** 취소 결과 → HTTP 상태: 대기 중이라 바로 끝냄 200, 실행 중이라 경계에서 멈출 예정 202 */
+const CANCEL_HTTP_STATUS: Readonly<Record<JobCancelOutcome['state'], number>> = { cancelled: 200, cancelling: 202 };
+
+knowledgeRouter.post('/jobs/:id/cancel', requireAuth, asyncHandler(async (req, res) => {
+    const out = await requestJobCancel({ jobId: req.params.id, userId: resolveUserId(req), isAdmin: isAdminRequest(req) });
+    res.status(CANCEL_HTTP_STATUS[out.state]).json(success(out));
 }));
 
 // ── Space memories (수동 — 자동 추출 없음) ──

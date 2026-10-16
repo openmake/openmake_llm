@@ -37,6 +37,8 @@ jest.mock('../config/profiles', () => ({
     getDefaultLimits: jest.fn(async () => ({ maxFileBytes: 1024 * 1024, allowedMimeTypes: ['text/markdown'] })),
     clearProfileCache: jest.fn(),
 }));
+const requestJobCancel = jest.fn();
+jest.mock('../jobs/cancel', () => ({ requestJobCancel: (...a: unknown[]) => requestJobCancel(...a) }));
 
 import { knowledgeRouter } from '../routes';
 
@@ -63,5 +65,18 @@ describe('knowledge 라우트 응답 계약', () => {
         expect(Object.keys(status).sort()).toEqual(['capabilities', 'embeddingIndex', 'jobCounts', 'pgvectorVersion']);
         expect((await request(app).get('/api/knowledge/admin/profiles')).body.data).toHaveProperty('profiles');
         expect((await request(app).put('/api/knowledge/admin/profiles/retrieval-default').send({ config: {} })).body.data).toHaveProperty('profile.isDefault', true);
+    });
+
+    it('작업 취소 — 실행 중이면 202 cancelling, 대기 중이면 200 cancelled(봉투 data), 요청자·관리자 여부를 넘긴다', async () => {
+        requestJobCancel.mockResolvedValueOnce({ jobId: 'j1', state: 'cancelling' });
+        const running = await request(app).post('/api/knowledge/jobs/j1/cancel');
+        expect(running.status).toBe(202);
+        expect(running.body.data).toEqual({ jobId: 'j1', state: 'cancelling' });
+        expect(requestJobCancel).toHaveBeenCalledWith({ jobId: 'j1', userId: '3', isAdmin: true });
+
+        requestJobCancel.mockResolvedValueOnce({ jobId: 'j2', state: 'cancelled' });
+        const queued = await request(app).post('/api/knowledge/jobs/j2/cancel');
+        expect(queued.status).toBe(200);
+        expect(queued.body.data).toEqual({ jobId: 'j2', state: 'cancelled' });
     });
 });

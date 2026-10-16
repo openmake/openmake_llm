@@ -16,6 +16,7 @@
   "entry": {
     "runtime": "index#startKnowledgeRuntime",
     "chatIntegration": "chat-integration#knowledgeChatIntegration",
+    "contributions": "contributions#knowledgeContribution",
     "routes": [
       {
         "mountPath": "/api/knowledge",

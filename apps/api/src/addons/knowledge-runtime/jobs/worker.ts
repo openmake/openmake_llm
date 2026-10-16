@@ -179,6 +179,11 @@ export class KnowledgeWorker {
     }
 
     private async dispatchOne(job: JobRow, limits: LimitsProfile): Promise<void> {
+        if (job.cancel_requested_at) {
+            // 취소 요청된 채 다시 집힌 작업(앞 실행자가 죽었거나 lease 를 놓음) — 핸들러를 돌리지 않고 마감한다
+            await this.finishCancelled(job, '취소 요청된 작업을 다시 집음 — 실행 없이 마감');
+            return;
+        }
         if (Number(job.attempts) > limits.jobMaxAttempts) {
             await this.failOverClaimed(job, limits.jobMaxAttempts);
             return;
@@ -209,6 +214,15 @@ export class KnowledgeWorker {
             lastError: `실행 거절(${verdict}) — 접수 뒤 사용권이 바뀌었다`, versionFailureCode: FAILURE_CODES.NOT_ENTITLED,
         });
         logger.warn(`작업 실행 거절(${verdict}): ${job.kind} ${job.id} 사용자=${job.actor_user_id ?? '-'}${closed ? '' : ' — 이미 다른 실행자의 행(쓰기 없음)'}`);
+    }
+
+    /** 취소 마감 — 내 token·owner 의 running 행을 cancelled 로(수집이면 문서 버전 CANCELLED). DB 밖 호출(임베딩·파일 삭제)은 되돌리지 않는다 */
+    private async finishCancelled(job: Pick<JobRow, 'id' | 'kind' | 'fencing_token'>, detail: string): Promise<void> {
+        const closed = await finishJobTerminal({
+            jobId: job.id, token: job.fencing_token, owner: this.owner, state: 'cancelled',
+            lastError: `취소됨 — ${detail}`, versionFailureCode: FAILURE_CODES.CANCELLED,
+        });
+        logger.info(`작업 취소 마감: ${job.kind} ${job.id}${closed ? '' : ' — 이미 다른 실행자의 행(쓰기 없음)'}`);
     }
 
     /**
@@ -323,10 +337,16 @@ export class KnowledgeWorker {
         lease.signal.addEventListener('abort', stopBeat, { once: true });
         try {
             await HANDLERS[job.kind](job, { ...this.deps, lease });
-            // 핸들러가 끝난 뒤에도 그 사이 lease 를 잃었으면(정지 시간 초과·heartbeat 0행) done 을 쓰지 않는다 — 반납한 행은 다음 실행자의 것
-            lease.throwIfLost();
+            // 핸들러가 끝난 뒤에도 그 사이 lease 를 잃었으면(정지 시간 초과·heartbeat 0행) done 을 쓰지 않는다 — 반납한 행은 다음 실행자의 것.
+            // 취소 표시만 받은 경우는 lease 가 아직 내 것이고 일이 끝났으므로 done 으로 마감한다(취소가 늦었다)
+            if (!lease.isCancelled()) lease.throwIfLost();
             await this.finish(job.id, token);
         } catch (err) {
+            if (lease.isCancelled()) {
+                // 취소 — 핸들러는 단계 경계에서 JobCancelledError 로 멈췄다. 마감(cancelled)은 lease 를 쥔 이 실행자가 fence 안에서 쓴다
+                await this.finishCancelled(job, err instanceof Error ? err.message : String(err));
+                return;
+            }
             if (err instanceof LeaseLostError || lease.signal.aborted) {
                 // 행은 이미 다른 실행자의 것 — finish·retry 로 건드리면 그쪽 상태를 덮는다
                 logger.warn(`작업 중단(lease 상실 — 결과 쓰기 거절): ${job.kind} ${job.id} token=${token} — ${err instanceof Error ? err.message : String(err)}`);
@@ -348,15 +368,18 @@ export class KnowledgeWorker {
     private async renew(lease: JobLease, leaseMs: number): Promise<void> {
         if (lease.signal.aborted) return; // 잃은(반납한) lease 는 늘리지 않는다
         try {
-            const r = await kdb().query(
+            const r = await kdb().query<{ cancel_requested_at: Date | null }>(
                 `UPDATE knowledge_ingestion_jobs SET lease_expires_at = NOW() + ($3::bigint * INTERVAL '1 millisecond'), updated_at = NOW()
-                  WHERE id = $1 AND fencing_token = $2 AND lease_owner = $4 AND state = 'running'`,
+                  WHERE id = $1 AND fencing_token = $2 AND lease_owner = $4 AND state = 'running'
+                  RETURNING cancel_requested_at`,
                 [lease.jobId, lease.token, leaseMs, lease.owner],
             );
             if ((r.rowCount ?? 0) === 0) { lease.markLost('heartbeat 갱신 0행 — 다른 실행자가 집었거나 작업이 끝났음'); return; }
             // 갱신이 나가 있는 사이 정지 반납이 먼저 커밋됐을 수 있다 — 방금 늘린 lease 를 다시 반납한다
             if (lease.signal.aborted) { await this.releaseLeases([lease]); return; }
             lease.touch(this.now());
+            // 취소 요청 — 신호를 끊어 핸들러가 다음 단계 경계에서 멈추게 한다(lease 는 계속 내 것: 마감은 이 실행자가 cancelled 로 쓴다)
+            if (r.rows[0]?.cancel_requested_at) lease.markCancelled('사용자·관리자 취소 요청');
         } catch (err) {
             const silentMs = this.now() - lease.renewedAt;
             if (silentMs > leaseMs) {
