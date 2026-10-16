@@ -22,7 +22,7 @@ import { runCleanup } from './cleanup';
 import { createJobLease, LeaseLostError, type JobLease } from './lease';
 import { admitJob, defaultAdmissionPort, type AdmissionPort, type JobAdmission } from './admission';
 import { deferClaimedJob, finishJobTerminal } from './terminal';
-import type { JobActorKind } from './job-schema';
+import type { JobActorKind, KnowledgeWorkerMode } from './job-schema';
 
 const logger = createLogger('KnowledgeWorker');
 
@@ -51,6 +51,8 @@ export interface WorkerDeps extends IngestDeps {
     now?: () => number;
     /** 실행 판정 포트 — 테스트가 주입한다. 기본은 runtime-ports/addon-admission */
     admission?: AdmissionPort;
+    /** 이 소비자의 종류 — claim 이 DB 모드(knowledge_worker_mode.mode)와 대조한다. 기본 inprocess(API 안 poller) */
+    consumerKind?: KnowledgeWorkerMode;
 }
 
 type Handler = (job: JobRow, deps: WorkerDeps) => Promise<void>;
@@ -99,6 +101,8 @@ export class KnowledgeWorker {
     private readonly inflight = new Set<JobLease>();
     /** 실행 판정 포트 — 테스트가 주입한다(기본은 runtime-ports/addon-admission) */
     private readonly admission: AdmissionPort;
+    /** 이 소비자의 종류 — DB 모드와 다르면 claim 이 0건이다 */
+    private readonly kind: KnowledgeWorkerMode;
     /** 마지막 add-on 게이트 판정 — 바뀔 때만 로그를 남긴다 */
     private lastGate: string | null = null;
     /** 마지막으로 작업을 1건 이상 집은 시각(ms) — 별도 프로세스 /health 가 보여 준다 */
@@ -106,6 +110,7 @@ export class KnowledgeWorker {
 
     constructor(private readonly deps: WorkerDeps = {}) {
         this.admission = deps.admission ?? defaultAdmissionPort;
+        this.kind = deps.consumerKind ?? 'inprocess';
     }
 
     /** 이 실행자의 lease owner 값 — heartbeat 행의 worker_id 로도 쓴다 */
@@ -287,10 +292,15 @@ export class KnowledgeWorker {
         }));
     }
 
-    /** 만료 lease 포함해 due 작업을 원자적으로 집는다 */
+    /**
+     * 만료 lease 포함해 due 작업을 원자적으로 집는다 — DB 모드가 이 소비자의 종류와 같을 때만(설계 D5).
+     * 모드 행을 FOR SHARE 로 읽어, 모드 전환(UPDATE)이 진행 중 claim 이 끝날 때까지 기다리게 하고 전환 커밋 뒤 시작한
+     * claim 은 새 값을 보게 한다 — 전환 뒤 옛 소비자의 새 claim 은 없다. 모드 행이 없으면 아무도 집지 않는다.
+     */
     private async claim(limit: number, leaseMs: number): Promise<JobRow[]> {
         const r = await kdb().query<JobRow>(
-            `UPDATE knowledge_ingestion_jobs j
+            `WITH m AS (SELECT mode FROM knowledge_worker_mode WHERE id = 1 FOR SHARE)
+             UPDATE knowledge_ingestion_jobs j
                 SET state = 'running', lease_owner = $1,
                     lease_expires_at = NOW() + ($2::bigint * INTERVAL '1 millisecond'),
                     fencing_token = j.fencing_token + 1, attempts = j.attempts + 1, updated_at = NOW()
@@ -298,12 +308,13 @@ export class KnowledgeWorker {
                     SELECT id FROM knowledge_ingestion_jobs
                      WHERE state IN ('queued', 'running') AND run_after <= NOW()
                        AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+                       AND EXISTS (SELECT 1 FROM m WHERE m.mode = $4)
                      ORDER BY run_after
                      FOR UPDATE SKIP LOCKED
                      LIMIT $3)
             RETURNING j.id, j.kind, j.document_version_id, j.space_id, j.embedding_index_id, j.attempts, j.fencing_token,
                       j.actor_kind, j.actor_user_id, j.org_id, j.policy_revision, j.cancel_requested_at`,
-            [this.owner, leaseMs, Math.max(1, limit)],
+            [this.owner, leaseMs, Math.max(1, limit), this.kind],
         );
         return r.rows;
     }

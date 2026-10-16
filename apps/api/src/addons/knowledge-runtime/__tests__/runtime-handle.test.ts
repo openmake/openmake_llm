@@ -43,6 +43,10 @@ jest.mock('../../../runtime-ports/addon-admission', () => ({
     readAddonStateRevision: async () => 1,
     warmAddonStates: async () => undefined,
 }));
+jest.mock('../config/worker-mode', () => ({
+    configuredWorkerMode: () => 'inprocess',
+    configuredWorkerHealthPort: () => 0,
+}));
 
 import { KnowledgeWorker } from '../jobs/worker';
 import { startKnowledgeRuntime, stopKnowledgeRuntime } from '../index';
