@@ -389,6 +389,11 @@ export function stripCredentialHeaders(headers: HeadersInit): Record<string, str
     return out;
 }
 
+/**
+ * hop 마다 SSRF 검증(스킴·DNS·차단 IP·허용목록)과 IP 고정을 한 뒤 요청한다. 기본은 3xx 를 직접 따라간다.
+ * `init.redirect` 가 'manual' 이면 3xx 를 그대로 돌려주고 'error' 면 거부한다 — 자체 리다이렉트 정책을 가진
+ * 클라이언트(MCP SDK 의 same-origin 정책)가 우회되지 않게 하기 위함이다.
+ */
 export async function safeFetch(
     rawUrl: string,
     init?: RequestInit,
@@ -428,10 +433,17 @@ export async function safeFetch(
         }) as unknown as Response;
 
         const location = response.headers.get('location');
-        if (REDIRECT_STATUS_CODES.has(response.status) && location) {
-            const nextUrl = new URL(location, currentUrl);
+        // 호출자가 redirect:'manual' 이면 3xx 를 그대로 돌려준다 — MCP SDK 처럼 자체 리다이렉트 정책(same-origin)을
+        // 가진 클라이언트가 판단하고, 다시 요청하면 그 hop 도 여기서 재검증된다
+        if (REDIRECT_STATUS_CODES.has(response.status) && location && init?.redirect !== 'manual') {
             // 리다이렉트 응답 본문은 쓰지 않는다 — 연결을 바로 놓는다
             await response.body?.cancel().catch(() => undefined);
+            if (init?.redirect === 'error') {
+                const message = 'SSRF blocked: redirect not allowed (redirect: error)';
+                logger.warn(message, { rawUrl: redactUrlForLog(currentUrl), location: redactUrlForLog(location) });
+                throw new Error(message);
+            }
+            const nextUrl = new URL(location, currentUrl);
             // https → http 다운그레이드 리다이렉트는 거부 (자격증명·본문 평문 노출)
             if (url.protocol === 'https:' && nextUrl.protocol === 'http:') {
                 const message = 'SSRF blocked: redirect downgrades https to http';
@@ -462,6 +474,7 @@ export async function safeFetch(
  * (TOCTOU). 이 fetch 는 매 요청마다 재검증 + resolved IP 고정으로 그 갭을 닫는다.
  *
  * 반환 시그니처는 MCP SDK 의 `FetchLike` 및 OpenAI SDK 의 `Fetch` 와 호환된다.
+ * MCP SDK 는 이 fetch 를 redirect:'manual' 로 불러 same-origin 리다이렉트만 따라간다 — `safeFetch` 가 그 값을 존중한다.
  */
 export function createPinnedFetch(
     resolver: DnsResolver = dns.lookup,
