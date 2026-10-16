@@ -331,10 +331,10 @@ async function processOneUnit(signal: AbortSignal): Promise<void> {
 
 | 묶음 | 코드 완료(PR·dev 머지·CI) | 배포 완료(스테이징) | 배포 완료(운영, SHA·시각) | 운영 완료(관찰·롤백 훈련·F1~F4) |
 |---|---|---|---|---|
-| 수명주기 | | | | |
-| 계약·데이터 포트·테스트 DB | | | | |
-| 레거시 권한 | | | | |
-| worker 잔여·별도 프로세스 | | | | |
+| 수명주기 | PR #1340 · 2026-10-16 dev 머지 · CI 통과 | | | |
+| 계약·데이터 포트·테스트 DB | PR #1341 · 2026-10-16 dev 머지 · CI 통과 | | | |
+| 레거시 권한 | PR #1339 · 2026-10-16 dev 머지 · CI 통과 | | | |
+| worker 잔여·별도 프로세스 | PR #1342 · 2026-10-16 dev 머지 · CI 통과 | | | |
 | 검증·배포 문서(이 runbook) | | | | |
 | Knowledge external 전환(별도 승인) | 해당 없음 | | | |
 
@@ -368,7 +368,8 @@ docker --context colima-openmake run -d --name omk-e2e-test-pg -e POSTGRES_USER=
   -e POSTGRES_DB=openmake_llm_test -p 127.0.0.1:5433:5432 pgvector/pgvector:0.8.3-pg16-trixie
 export TEST_DATABASE_URL=postgresql://openmake:openmake_test@localhost:5433/openmake_llm_test
 bash scripts/setup-test-db.sh
-lsof -nP -iTCP:52438 -sTCP:LISTEN && echo "STOP: 52438 사용 중 — 아래를 실행하지 않는다(정리 단계가 남의 프로세스를 끄게 된다)"
+(
+! lsof -nP -iTCP:52438 -sTCP:LISTEN || { echo "STOP: 52438 사용 중 — 아래를 실행하지 않는다(정리 단계가 남의 프로세스를 끄게 된다)"; exit 1; }
 OMK_API_PORT=52438 PORT=52438 DATABASE_URL="$TEST_DATABASE_URL" USER_MEMORY_AUTO_EXTRACT=true ORG_CONTEXT_CACHE_TTL_MS=1000 \
 RL_GENERAL_IP=1000000 RL_GENERAL_USER=1000000 CAPABILITY_JOB_POLLER_ENABLED=false TS_NODE_TRANSPILE_ONLY=true KNOWLEDGE_STORAGE_DIR=/tmp/omk-e2e-knowledge \
 AGENT_TASK_QUEUE_ENABLED=false AGENT_TASK_SCHEDULES_ENABLED=false AGENT_TASK_LEASE_ENABLED=false AGENT_TASK_BOOT_RECOVERY=false \
@@ -380,9 +381,10 @@ for i in $(seq 1 90); do curl -fsS http://localhost:52438/health >/dev/null 2>&1
 cp tests/e2e/.env.e2e.example tests/e2e/.env.e2e
 E2E_BASE_URL=http://localhost:52438 npx playwright test tests/e2e/plugin-boundary.spec.ts --project=chromium
 psql "$TEST_DATABASE_URL" -tAc "SELECT state, desired_state FROM addon_installations WHERE addon_id='knowledge-runtime'"
+)
 ```
 끄기 스위치 목록은 §3.2 와 같다(이 묶음의 e2e 실행이 쓴 목록). 그 밖의 연동(Redis 등)은 개발 `.env` 를 함께 쓴다.
-Expected: `10 passed`, 마지막 줄 `enabled|enabled`(afterAll 이 의도·상태를 함께 되돌렸다). `STOP` 줄이 나오면 그 뒤 명령을 실행하지 않는다 — :52438 을 쓰는 프로세스가 무엇인지 먼저 확인한다. 로컬은 `--project=chromium` 으로만 돈다 — webkit 브라우저는 로컬에 설치돼 있지 않다.
+Expected: `9 passed`, 마지막 줄 `enabled|enabled`(afterAll 이 의도·상태를 함께 되돌렸다). `STOP` 줄이 나오면 서브셸이 거기서 끝나 그 뒤 명령이 돌지 않는다(§3.2 와 같은 형식) — :52438 을 쓰는 프로세스가 무엇인지 먼저 확인한다. 로컬은 `--project=chromium` 으로만 돈다 — webkit 브라우저는 로컬에 설치돼 있지 않다.
 
 끝나면 이 절차로 띄운 API 만 끈다 — `pkill -f` 처럼 이름으로 찾아 죽이지 않는다(개발 스택 프로세스까지 걸린다). pid 파일의 프로세스와, 남은 경우 :52438 에서 듣고 있는 프로세스만 끈다:
 ```bash
