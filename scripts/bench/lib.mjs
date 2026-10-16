@@ -111,6 +111,7 @@ function settingsKey(s) {
         connections: s.connections,
         durationSec: s.durationSec,
         warmupSec: s.warmupSec,
+        settleSec: s.settleSec,
         v1RatePerSec: s.v1RatePerSec,
         scenarios: [...(s.scenarios ?? [])].sort(),
     });

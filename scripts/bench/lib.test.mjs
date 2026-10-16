@@ -12,7 +12,7 @@ import {
 function receipt(overrides = {}) {
     return {
         schemaVersion: 1,
-        settings: { connections: 10, durationSec: 30, warmupSec: 5, v1RatePerSec: 4, scenarios: ['health', 'knowledge-spaces'] },
+        settings: { connections: 10, durationSec: 30, warmupSec: 5, settleSec: 90, v1RatePerSec: 4, scenarios: ['health', 'knowledge-spaces'] },
         scenarios: [
             { name: 'health', p95Ms: 10, throughputRps: 400, errorRate: 0 },
             { name: 'knowledge-spaces', p95Ms: 50, throughputRps: 100, errorRate: 0 },
@@ -102,6 +102,10 @@ test('compareReceipts: settings mismatch·재시작·시나리오 누락은 inva
     assert.equal(mismatch.verdict, 'invalid');
     assert.ok(mismatch.problems[0].startsWith('settings mismatch'));
     assert.equal(exitCodeForVerdict(mismatch.verdict), 2);
+    // 부팅 직후 피크를 잰 쪽과 안정된 쪽을 비교하지 않는다 — settle 이 다르면 invalid
+    const settle = compareReceipts(receipt(), receipt({ settings: { ...receipt().settings, settleSec: 0 } }));
+    assert.equal(settle.verdict, 'invalid');
+    assert.ok(settle.problems[0].startsWith('settings mismatch'));
     assert.equal(compareReceipts(receipt(), receipt({ rss: { peakBytes: 1000, restarted: true, source: 'process' } })).verdict, 'invalid');
     const missing = receipt();
     missing.scenarios = missing.scenarios.slice(0, 1);

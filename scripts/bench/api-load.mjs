@@ -5,13 +5,15 @@
  *
  *   BENCH_ADMIN_EMAIL=… BENCH_ADMIN_PASSWORD=… node scripts/bench/api-load.mjs \
  *     --base-url http://localhost:52428 --label baseline --target-sha <sha> --out <파일> \
- *     [--run-id <id>] [--connections 10] [--duration 30] [--warmup 5] [--v1-rate 4] \
+ *     [--run-id <id>] [--connections 10] [--duration 30] [--warmup 5] [--settle 90] [--v1-rate 4] \
  *     [--scenarios health,v1-models,knowledge-spaces] [--environment 로컬] [--runtime ts-node]
  *
  * - 대상 API 는 일반 리미터를 풀어(RL_GENERAL_IP·RL_GENERAL_USER) 띄운다 — 그래도 생긴 429 는 오류로 센다.
  * - v1 은 키별 RPM 300 이 있어 --v1-rate(초당, 기본 4)의 고정 속도로 친다(처리율은 그 속도를 지켰는지 본다).
  * - RSS 는 1초마다 /api/health 를 관리자 쿠키로 읽는다: process.rss(바이트)가 있으면 그것,
  *   없으면(이 필드가 없는 옛 코드) services.memory.rssMB × 1048576. uptime 감소·pid 변경은 재시작으로 기록한다.
+ * - --settle(초, 기본 90): 로그인 뒤 이만큼 기다린 다음 첫 RSS 표본·워밍업·측정을 시작한다 — 부팅 직후
+ *   일시 피크(내장 팩 설치 등)를 재지 않게. 값은 settings.settleSec 로 남고, 기준선과 다르면 비교가 무효다.
  * exit: 0 저장 · 2 인자·env 오류 · 3 대상 API 오류(연결·로그인·키 발급·RSS 표본 없음)
  */
 import { parseArgs } from 'node:util';
@@ -57,6 +59,7 @@ function parseCli(argv) {
             connections: { type: 'string', default: '10' },
             duration: { type: 'string', default: '30' },
             warmup: { type: 'string', default: '5' },
+            settle: { type: 'string', default: '90' },
             'v1-rate': { type: 'string', default: '4' },
             scenarios: { type: 'string', default: SCENARIO_NAMES.join(',') },
             environment: { type: 'string', default: '로컬' },
@@ -75,6 +78,11 @@ function parseCli(argv) {
         if (!(n > 0)) usageError(`--${k} 는 양의 정수: ${values[k]}`);
         return n;
     };
+    const nonNegativeInt = (k) => {
+        const n = Number(values[k]);
+        if (!Number.isInteger(n) || n < 0) usageError(`--${k} 는 0 이상의 정수: ${values[k]}`);
+        return n;
+    };
     return {
         baseUrl: values['base-url'].replace(/\/$/, ''),
         label: values.label,
@@ -84,6 +92,7 @@ function parseCli(argv) {
         connections: positiveInt('connections'),
         durationSec: positiveInt('duration'),
         warmupSec: positiveInt('warmup'),
+        settleSec: nonNegativeInt('settle'),
         v1RatePerSec: positiveInt('v1-rate'),
         scenarios,
         environment: values.environment,
@@ -192,6 +201,10 @@ async function main() {
     const apiKey = opts.scenarios.includes('v1-models')
         ? await createApiKey(opts.baseUrl, session, `bench-${opts.runId || Date.now()}`)
         : null;
+    if (opts.settleSec > 0) {
+        console.log(`[bench] settle ${opts.settleSec}초 대기 — 부팅 직후 피크가 가라앉은 뒤 잰다`);
+        await new Promise((resolve) => { setTimeout(resolve, opts.settleSec * 1000); });
+    }
     const sampler = startRssSampler(opts.baseUrl, session);
     await sampler.first;
 
@@ -227,6 +240,7 @@ async function main() {
             connections: opts.connections,
             durationSec: opts.durationSec,
             warmupSec: opts.warmupSec,
+            settleSec: opts.settleSec,
             v1RatePerSec: opts.v1RatePerSec,
             scenarios: opts.scenarios,
         },
