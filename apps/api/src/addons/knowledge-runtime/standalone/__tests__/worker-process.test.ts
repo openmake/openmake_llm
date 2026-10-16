@@ -1,13 +1,25 @@
 /**
- * 별도 worker 본체 — 스키마 대기·설정 오류, external 소비자 기동·즉시 heartbeat, 127.0.0.1 /health, drain 정지(멱등).
+ * 별도 worker 본체 — 스키마 대기(행 없음 78·조회 오류 1)·설정 오류, external 소비자 기동·즉시 heartbeat,
+ * 127.0.0.1 /health(묶기 실패는 타이머 전 78), drain 정지(멱등, 진행 중 heartbeat 를 기다린 뒤 행 삭제).
  * DB·worker·heartbeat 는 mock. /health 는 실제 HTTP(빈 포트)로 확인한다.
  */
 import { createServer } from 'node:net';
 
 let mockSchemaRows = 1;
+/** 스키마 조회를 실패시킬 연속 횟수(Infinity 면 언제나) */
+let mockSchemaErrors = 0;
+const schemaQueries = jest.fn();
 jest.mock('../../db', () => ({
     kdb: () => ({
-        query: async (sql: string) => (sql.includes('FROM migration_versions') ? { rows: [], rowCount: mockSchemaRows } : { rows: [], rowCount: 0 }),
+        query: async (sql: string) => {
+            if (!sql.includes('FROM migration_versions')) return { rows: [], rowCount: 0 };
+            schemaQueries();
+            if (mockSchemaErrors > 0) {
+                mockSchemaErrors -= 1;
+                throw new Error('connect ECONNREFUSED');
+            }
+            return { rows: [], rowCount: mockSchemaRows };
+        },
     }),
 }));
 const writeWorkerHeartbeat = jest.fn(async (..._a: unknown[]) => ({ dbMode: 'external', generation: 4 }));
@@ -48,6 +60,9 @@ function freePort(): Promise<number> {
 
 beforeEach(() => {
     mockSchemaRows = 1;
+    mockSchemaErrors = 0;
+    schemaQueries.mockClear();
+    writeWorkerHeartbeat.mockImplementation(async () => ({ dbMode: 'external', generation: 4 }));
     ctorArgs.length = 0;
     writeWorkerHeartbeat.mockClear();
     removeWorkerHeartbeat.mockClear();
@@ -61,6 +76,49 @@ describe('runKnowledgeWorkerProcess', () => {
         await expect(runKnowledgeWorkerProcess({ healthPort: 0, migrationWaitMs: 0 })).rejects.toBeInstanceOf(AddonWorkerConfigError);
         expect(writeWorkerHeartbeat).not.toHaveBeenCalled();
         expect(ctorArgs).toHaveLength(0);
+    });
+
+    it('스키마 조회가 대기 상한까지 DB 오류면 WorkerConfigError 가 아닌 일반 오류(종료 코드 1 — PM2 재시작)', async () => {
+        mockSchemaErrors = Infinity;
+        const err = await runKnowledgeWorkerProcess({ healthPort: 0, migrationWaitMs: 0 }).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect(err).not.toBeInstanceOf(AddonWorkerConfigError);
+        expect((err as Error).message).toContain('DB 접속 확인');
+        expect(writeWorkerHeartbeat).not.toHaveBeenCalled();
+        expect(ctorArgs).toHaveLength(0);
+    });
+
+    it('조회 오류가 나도 대기 상한 안에서 다시 시도하고, 그 뒤 행이 보이면 정상 기동한다', async () => {
+        mockSchemaErrors = 1;
+        const handle = await runKnowledgeWorkerProcess({ healthPort: 0, migrationWaitMs: 60_000 });
+        try {
+            expect(schemaQueries).toHaveBeenCalledTimes(2);
+            expect(ctorArgs).toEqual([{ consumerKind: 'external' }]);
+        } finally {
+            await handle.stop('test');
+        }
+    }, 15_000);
+
+    it('조회 오류 뒤 상한에서 행이 없다고 확인되면 WorkerConfigError(78)', async () => {
+        mockSchemaErrors = 1;
+        mockSchemaRows = 0;
+        await expect(runKnowledgeWorkerProcess({ healthPort: 0, migrationWaitMs: 1 })).rejects.toBeInstanceOf(AddonWorkerConfigError);
+        expect(schemaQueries).toHaveBeenCalledTimes(2);
+    }, 15_000);
+
+    it('/health 포트를 묶지 못하면 타이머·heartbeat 전에 WorkerConfigError(78)', async () => {
+        const holder = createServer();
+        await new Promise<void>((resolve) => holder.listen(0, '127.0.0.1', () => resolve()));
+        const a = holder.address();
+        const port = typeof a === 'object' && a ? a.port : 0;
+        try {
+            const err = await runKnowledgeWorkerProcess({ healthPort: port }).catch((e: unknown) => e);
+            expect(err).toBeInstanceOf(AddonWorkerConfigError);
+            expect((err as Error).message).toContain('KNOWLEDGE_WORKER_HEALTH_PORT');
+            expect(writeWorkerHeartbeat).not.toHaveBeenCalled();
+        } finally {
+            await new Promise<void>((resolve) => holder.close(() => resolve()));
+        }
     });
 
     it('스키마가 있으면 상태 캐시를 채우고 external 소비자로 기동해 heartbeat 를 바로 한 번 쓴다', async () => {
@@ -106,5 +164,27 @@ describe('runKnowledgeWorkerProcess', () => {
         expect(removeWorkerHeartbeat).toHaveBeenCalledWith('w-test');
         expect(handle.healthPort()).toBeNull();
         await expect(fetch(`http://127.0.0.1:${port}/health`)).rejects.toThrow();
+    });
+    it('stop 은 진행 중 heartbeat 쓰기가 끝난 뒤에 행을 지운다 — 늦은 쓰기가 행을 되살리지 않는다', async () => {
+        jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+        try {
+            const order: string[] = [];
+            const handle = await runKnowledgeWorkerProcess({ healthPort: 0, drainTimeoutMs: 1_000 });
+            let release: () => void = () => undefined;
+            writeWorkerHeartbeat.mockImplementation(() => new Promise((resolve) => {
+                release = () => { order.push('write'); resolve({ dbMode: 'external', generation: 4 }); };
+            }));
+            removeWorkerHeartbeat.mockImplementation(async () => { order.push('remove'); });
+            jest.advanceTimersByTime(KNOWLEDGE_RUNTIME.WORKER_HEARTBEAT_MS);
+            expect(writeWorkerHeartbeat).toHaveBeenCalledTimes(2);
+            const stopped = handle.stop('SIGTERM');
+            await new Promise((resolve) => setImmediate(resolve));
+            expect(removeWorkerHeartbeat).not.toHaveBeenCalled();
+            release();
+            await stopped;
+            expect(order).toEqual(['write', 'remove']);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });
