@@ -5,8 +5,9 @@
  *
  * 헬스는 DB 장애를 알리려고 있으므로 이 경로는 DB 에 닿지 않는다: 관리자 여부는 서명된 JWT 의
  * role 로만 판단한다(블랙리스트·사용자 조회 없음). 잘못됐거나 만료된 토큰은 게스트로 본다(401·500 없음).
- * 받아들인 대가: 폐기(로그아웃)됐거나 비활성화된 관리자의 만료 전 토큰으로도 process 필드
- * (pid·rss·heapUsed·uptimeSec — 민감도 낮음)를 읽을 수 있다. access 토큰은 단명이라 노출 창이 짧다.
+ * 받아들인 대가: 폐기(로그아웃)됐거나 비활성화됐거나 일반 사용자로 강등된 관리자의 만료 전 토큰으로도
+ * process 필드(pid·rss·heapUsed·uptimeSec — 민감도 낮음)를 읽을 수 있다 — role 은 토큰이 만료될 때까지
+ * 발급 당시 값이다. access 토큰은 단명이라 노출 창이 짧다.
  */
 import type { Request } from 'express';
 import { extractToken, isAdmin, looksLikeJWT, verifyTokenSignature } from '../auth/auth-core';
