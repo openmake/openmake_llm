@@ -9,7 +9,7 @@
  */
 import WebSocket from 'ws';
 import {
-    AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, AUTH_RETRY_MS, BROWSER_KIND, HANDSHAKE_TIMEOUT_MS, LIVENESS_PING_MS, LIVENESS_TIMEOUT_MS,
+    AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, AUTH_RETRY_MS, BROWSER_KIND, HANDSHAKE_TIMEOUT_MS, HELLO_DELAY_MS, LIVENESS_PING_MS, LIVENESS_TIMEOUT_MS,
     NOTICE_KINDS, NOTICE_TOOL_NAME_MAX, RECONNECT_MAX_MS, RECONNECT_MS, TASK_ID_RE,
 } from './constants';
 import { RequestGuard } from './request-guard';
@@ -97,6 +97,8 @@ export class BridgeConnection {
     private reconnectTimer: NodeJS.Timeout | null = null;
     private openCleanup: (() => void) | null = null;
     private livenessTimer: NodeJS.Timeout | null = null;
+    /** open 뒤 hello 전송 대기 — 소켓이 닫히거나 연결을 새로 만들면 취소한다(다음 소켓에 새지 않게). */
+    private helloTimer: NodeJS.Timeout | null = null;
     private closed = false;
     /** 연속 재연결 실패 횟수 — bridge_ready 를 받으면 0 */
     private reconnectAttempt = 0;
@@ -112,6 +114,7 @@ export class BridgeConnection {
         this.opts.core.prepare();
         const wsUrl = this.opts.serverUrl.replace(/^http/, 'ws');
         this.stopLiveness();
+        this.cancelHello();
         try { if (this.ws) { this.ws.removeAllListeners(); this.ws.close(); } } catch { /* noop */ }
         // headers() 실패(예: 데스크톱 세션 토큰 부재)는 소켓 생성 전이므로 재연결 루프를
         // 걸지 않고 멈춘다 — 종전 데스크톱 의미(로그인 후 사용자가 다시 연결) 보존.
@@ -129,22 +132,26 @@ export class BridgeConnection {
         const folderName = folderNameOf(this.opts.core.folderRoot);
 
         this.ws.on('open', () => this.startLiveness(ws));
-        this.ws.on('open', () => setTimeout(() => {
-            // 서버가 연결을 등록하고 메시지 리스너를 부착할 때까지 대기(라이브 확인 300ms).
-            // 즉시 전송하면 리스너 부착 전 프레임이 유실돼 등록이 안 된다.
-            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-            this.ws.send(JSON.stringify({
-                type: 'bridge_hello',
-                deviceId: this.opts.deviceId,
-                label: this.opts.label,
-                folderName,
-                ...(this.opts.hostId ? { hostId: this.opts.hostId } : {}),
-                capabilities: this.opts.core.capabilities(),
-                // 인증 실패를 사유와 함께 닫아도 된다는 표시(2026-10-06) — 서버는 이 표시가 없는 구버전에는 종전대로 오류만 보낸다.
-                authClose: true,
-            }));
-            this.openCleanup = this.opts.onOpen?.(this.ws) ?? null;
-        }, 300));
+        this.ws.on('open', () => {
+            this.cancelHello();
+            // 서버가 연결을 등록하고 메시지 리스너를 부착할 때까지 대기(HELLO_DELAY_MS).
+            // 연 소켓(ws)을 붙잡아 둔다 — 그 소켓이 끊기고 재연결로 새 소켓이 열렸으면 보내지 않는다(중복 hello 방지).
+            this.helloTimer = setTimeout(() => {
+                this.helloTimer = null;
+                if (this.ws !== ws || ws.readyState !== WebSocket.OPEN) return;
+                ws.send(JSON.stringify({
+                    type: 'bridge_hello',
+                    deviceId: this.opts.deviceId,
+                    label: this.opts.label,
+                    folderName,
+                    ...(this.opts.hostId ? { hostId: this.opts.hostId } : {}),
+                    capabilities: this.opts.core.capabilities(),
+                    // 인증 실패를 사유와 함께 닫아도 된다는 표시(2026-10-06) — 서버는 이 표시가 없는 구버전에는 종전대로 오류만 보낸다.
+                    authClose: true,
+                }));
+                this.openCleanup = this.opts.onOpen?.(ws) ?? null;
+            }, HELLO_DELAY_MS);
+        });
 
         this.ws.on('message', (d: WebSocket.RawData) => {
             let m: BridgeMsg;
@@ -181,6 +188,7 @@ export class BridgeConnection {
 
         this.ws.on('close', (code: number, reasonBuf: Buffer) => {
             this.stopLiveness();
+            this.cancelHello();
             this.openCleanup?.(); this.openCleanup = null;
             const reconnect = !this.closed && (this.opts.shouldReconnect?.() ?? true);
             if (!reconnect) {
@@ -226,9 +234,14 @@ export class BridgeConnection {
         if (this.livenessTimer) { clearInterval(this.livenessTimer); this.livenessTimer = null; }
     }
 
+    private cancelHello(): void {
+        if (this.helloTimer) { clearTimeout(this.helloTimer); this.helloTimer = null; }
+    }
+
     disconnect(): void {
         this.closed = true;
         this.stopLiveness();
+        this.cancelHello();
         this.reconnectAttempt = 0;
         if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
         this.opts.core.clearAutoApprove(); // 연결이 끊기면 일괄 승인도 회수한다(다음 연결로 새지 않게).
