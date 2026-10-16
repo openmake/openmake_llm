@@ -22,3 +22,8 @@ export function assertAdmin(req: Request): void {
         throw new AppError('관리자 권한이 필요합니다', 403, true, 'FORBIDDEN');
     }
 }
+
+/** 관리자 요청인가 — 소유자 또는 관리자에게 허용하는 동작(작업 취소)이 쓴다 */
+export function isAdminRequest(req: Request): boolean {
+    return isAdminRole(req.user?.role);
+}
