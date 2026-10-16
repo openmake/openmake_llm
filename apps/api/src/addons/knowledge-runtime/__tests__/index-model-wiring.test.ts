@@ -29,6 +29,8 @@ jest.mock('../jobs/queue', () => ({ enqueueJob: jest.fn() }));
 import { retrieve } from '../retrieval/service';
 import { ingestVersion } from '../ingestion/pipeline';
 import { startReindex, runReindexJob, type KnowledgeIndex } from '../embedding/index-manager';
+import { enqueueJob } from '../jobs/queue';
+import { userJobActor } from '../jobs/actor';
 import { makeIndexEmbedder, embedTexts, describeEmbeddingProvider } from '../embedding/provider';
 import type { KnowledgeActor } from '../config/scope-policy';
 
@@ -98,7 +100,11 @@ describe('reindex — 라이브 배정으로', () => {
     it('startReindex 는 라이브 배정(describeEmbeddingProvider)을 building index 에 기록한다', async () => {
         mockDescribe.mockResolvedValue({ providerRef: 'local-llm:new-model', modelId: 'new-model', dimension: 3 });
 
-        await startReindex();
+        await startReindex(userJobActor('admin-1'));
+        expect(enqueueJob).toHaveBeenCalledWith(
+            expect.objectContaining({ kind: 'reindex', actor: { kind: 'user', userId: 'admin-1', orgId: null } }),
+            expect.anything(),
+        );
 
         const insert = mockQuery.mock.calls.find((c) => /INSERT INTO knowledge_embedding_indexes/.test(String(c[0])));
         expect(insert).toBeDefined();

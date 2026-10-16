@@ -9,6 +9,7 @@ import type {
 import { AppError } from '../../../utils/error-handler';
 import { inTransaction } from '../db';
 import { enqueueJob } from '../jobs/queue';
+import { systemJobActor } from '../jobs/actor';
 import { actorFor, creatableScopeId, SCOPE_POLICY, type KnowledgeActor } from '../config/scope-policy';
 import { getDefaultLimits } from '../config/profiles';
 import { listDocumentRowsForSpace } from '../documents/repository';
@@ -116,6 +117,6 @@ export async function deleteSpace(userId: string, id: string): Promise<void> {
     await inTransaction(async (client) => {
         const ok = await repo.tombstoneSpace(client, actor, id);
         if (!ok) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
-        await enqueueJob({ kind: 'cleanup', spaceId: id, runAfter }, client);
+        await enqueueJob({ kind: 'cleanup', spaceId: id, runAfter, actor: systemJobActor(userId) }, client);
     });
 }

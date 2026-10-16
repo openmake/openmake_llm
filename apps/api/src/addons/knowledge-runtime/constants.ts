@@ -25,6 +25,8 @@ export const KNOWLEDGE_RUNTIME = {
     CLEANUP_BATCH: Number(process.env.KNOWLEDGE_CLEANUP_BATCH) || 50,
     /** 게시 도중 활성 index 가 바뀌었을 때 새 index 로 다시 임베딩하는 최대 횟수 */
     PUBLISH_INDEX_SWITCH_RETRIES: Number(process.env.KNOWLEDGE_PUBLISH_INDEX_SWITCH_RETRIES) || 2,
+    /** claim 뒤 실행 판정이 보류(add-on 꺼짐·상태 확인 불가)면 다시 집기까지 기다리는 시간(ms) — attempts 는 되돌린다 */
+    JOB_ADMISSION_DEFER_MS: Number(process.env.KNOWLEDGE_JOB_ADMISSION_DEFER_MS) || 30_000,
 } as const;
 
 /**
@@ -33,3 +35,6 @@ export const KNOWLEDGE_RUNTIME = {
  * 값은 이 용도의 고유 식별자일 뿐이다(pg_advisory_xact_lock 의 bigint 키).
  */
 export const INDEX_PUBLISH_LOCK_KEY = 7_041_902_411;
+
+/** 이 add-on 의 id — 실행 판정·상태 revision 조회 키(매니페스트 `id` 와 같아야 한다) */
+export const KNOWLEDGE_ADDON_ID = 'knowledge-runtime';
