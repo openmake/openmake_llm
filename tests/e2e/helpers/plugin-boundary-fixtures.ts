@@ -34,24 +34,63 @@ export async function withDb<T>(fn: (pg: Client) => Promise<T>): Promise<T> {
     }
 }
 
+/** 관리자 승격(role 만 — users.tier 는 마이그레이션 039 가 지웠다). 실패하면 방금 만든 사용자를 id 로 지우고 원래 오류를 던진다 */
+async function promoteAdminOrDelete(userId: string): Promise<void> {
+    try {
+        await withDb((pg) => pg.query(`UPDATE users SET role='admin' WHERE id=$1`, [userId]));
+    } catch (err) {
+        // 승격 실패 사용자가 afterAll 정리 대상(admin 변수)에 오르지 못해 남지 않게 여기서 지운다
+        await withDb((pg) => pg.query(`DELETE FROM users WHERE id=$1`, [userId])).catch((cleanupErr: unknown) => {
+            console.error(`[plugin-boundary] 승격 실패 사용자 ${userId} 삭제도 실패 — 이 id 로 직접 지운다: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`);
+        });
+        throw err;
+    }
+}
+
 /** 가입 + 로그인. admin 이면 로그인 전에 DB 로 관리자 승격해 로그인 토큰에 역할이 실리게 한다 */
 export async function signupBoundaryUser(baseURL: string, opts: { admin?: boolean } = {}): Promise<BoundaryUser> {
     return signupE2eAccount(baseURL, {
         prefix: 'e2e-plugin-boundary',
         password: TEST_PW,
-        afterRegister: opts.admin
-            ? async (userId) => {
-                await withDb((pg) => pg.query(`UPDATE users SET role='admin' WHERE id=$1`, [userId]));
-            }
-            : undefined,
+        afterRegister: opts.admin ? promoteAdminOrDelete : undefined,
     });
 }
 
-export function patchKnowledgeState(api: APIRequestContext, admin: BoundaryUser, state: 'enabled' | 'disabled'): Promise<APIResponse> {
+export function patchKnowledgeState(
+    api: APIRequestContext,
+    admin: BoundaryUser,
+    state: 'enabled' | 'disabled',
+    opts: { timeoutMs?: number } = {},
+): Promise<APIResponse> {
     return api.patch(`/api/admin/addons/${KNOWLEDGE_ID}/state`, {
         headers: admin.headers,
         data: { state, reason: 'e2e plugin-boundary' },
+        ...(opts.timeoutMs ? { timeout: opts.timeoutMs } : {}),
     });
+}
+
+/**
+ * 파괴적 suite 의 대상 가드 — 사용자 승격·전역 add-on 토글·상태 강제를 하므로 격리 대상에서만 돈다.
+ * (a) E2E_BASE_URL 이 셸 또는 tests/e2e/.env.e2e 에 명시돼 있어야 한다(기본값 :52418 은 로컬 개발 API).
+ * (b) TEST_DATABASE_URL 이 있어야 하고(DATABASE_URL 로 대체하지 않는다), 그 DB 이름과 실제 접속 DB 가 `_test` 로 끝나야 한다.
+ * 어긋나면 이유를 담아 던진다 — 호출 측은 이 확인이 통과한 뒤에만 DB 를 바꾼다.
+ */
+export async function assertIsolatedE2eTarget(): Promise<void> {
+    if (!process.env.E2E_BASE_URL) {
+        throw new Error('E2E_BASE_URL 이 지정되지 않았다 — 이 suite 는 격리 테스트 DB 에 붙인 e2e 전용 API 에서만 돈다(runbook 부록 B). 개발 API(:52418)로 돌리지 않는다');
+    }
+    const url = process.env.TEST_DATABASE_URL;
+    if (!url) {
+        throw new Error('TEST_DATABASE_URL 이 없다 — DATABASE_URL 로 대체하지 않는다. 이름이 _test 로 끝나는 격리 DB 를 지정한다');
+    }
+    const configured = new URL(url).pathname.replace(/^\//, '');
+    if (!configured.endsWith('_test')) {
+        throw new Error(`TEST_DATABASE_URL 의 DB 이름(${configured})이 _test 로 끝나지 않는다 — 격리 DB 가 아니면 돌리지 않는다`);
+    }
+    const actual = await withDb(async (pg) => (await pg.query<{ db: string }>('SELECT current_database() AS db')).rows[0]?.db ?? '');
+    if (!actual.endsWith('_test')) {
+        throw new Error(`접속한 DB(${actual})가 _test 로 끝나지 않는다 — 격리 DB 가 아니면 돌리지 않는다`);
+    }
 }
 
 /**
@@ -111,6 +150,11 @@ export async function createOrgWithAllowlist(ownerUserId: string, memberUserId: 
             [orgId, JSON.stringify(allowlist), ownerUserId]);
     });
     return orgId;
+}
+
+/** API 삭제가 2xx 가 아닐 때의 대체 — Space 행을 id 로 지운다(문서·작업·연결은 ON DELETE CASCADE). 사용자 삭제로는 지워지지 않는다 */
+export async function deleteSpaceInDb(spaceId: string): Promise<void> {
+    await withDb((pg) => pg.query(`DELETE FROM knowledge_spaces WHERE id=$1`, [spaceId]));
 }
 
 export async function deleteOrg(orgId: string): Promise<void> {
