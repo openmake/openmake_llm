@@ -15,13 +15,13 @@
  *   (표본을 보낸 시각 순으로 비교 — 응답 순서 역전은 재시작이 아니다). 실패한 표본 수는 rss.failedSamples 로 남긴다.
  * - --settle(초, 기본 90): 로그인 뒤 이만큼 기다린 다음 첫 RSS 표본·워밍업·측정을 시작한다 — 부팅 직후
  *   일시 피크(내장 팩 설치 등)를 재지 않게. 값은 settings.settleSec 로 남고, 기준선과 다르면 비교가 무효다.
- * exit: 0 저장 · 2 인자·env 오류(`--settle ""`·음수 포함) · 3 대상 API 오류(연결·로그인·키 발급·RSS 표본 없음)
+ * exit: 0 저장 · 2 인자·env 오류(`--settle ""`·음수 포함) · 3 대상 API 오류(연결·로그인·키 발급·RSS 표본 없음·2xx 0건 시나리오 — receipt 를 남기지 않는다)
  */
 import { parseArgs } from 'node:util';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import autocannon from 'autocannon';
-import { SCENARIO_NAMES, SCHEMA_VERSION, summarizeRss, summarizeScenario } from './lib.mjs';
+import { SCENARIO_NAMES, SCHEMA_VERSION, scenariosWithoutSuccess, summarizeRss, summarizeScenario } from './lib.mjs';
 
 const RSS_SAMPLE_INTERVAL_MS = 1000;
 const MIB = 1048576;
@@ -242,6 +242,9 @@ async function main() {
         if (apiKey) await deleteApiKey(opts.baseUrl, session, apiKey.id);
     }
     if (stopped.samples.length === 0) throw new Error(`RSS 표본 0건: ${stopped.lastError?.message ?? '원인 미상'}`);
+    // 2xx 0건인 시나리오가 있으면 receipt 를 남기지 않는다 — 깨진 기준선으로 뒤 비교가 늘 통과하지 않게(exit 3)
+    const broken = scenariosWithoutSuccess(results);
+    if (broken.length > 0) throw new Error(`2xx 응답 0건 시나리오: ${broken.join(', ')} — receipt 를 남기지 않는다`);
 
     const receipt = {
         schemaVersion: SCHEMA_VERSION,
