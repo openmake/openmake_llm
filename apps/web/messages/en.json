@@ -2943,6 +2943,8 @@
       "scannedPdf": "Scanned PDFs are not supported (no text layer)",
       "extraction": "Could not extract text",
       "embedding": "Embedding failed",
+      "cancelled": "Processing was cancelled",
+      "notEntitled": "Not processed — Knowledge access is not available for this account",
       "unknown": "Processing failed"
     },
     "doc": {

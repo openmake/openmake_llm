@@ -2943,6 +2943,8 @@
       "scannedPdf": "スキャンした PDF は非対応です（テキスト層なし）",
       "extraction": "本文を抽出できませんでした",
       "embedding": "埋め込みに失敗しました",
+      "cancelled": "処理がキャンセルされました",
+      "notEntitled": "Knowledge の利用権限がないため処理できませんでした",
       "unknown": "処理に失敗しました"
     },
     "doc": {
