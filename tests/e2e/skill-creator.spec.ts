@@ -54,11 +54,11 @@ async function createAdminFixture(request: APIRequestContext): Promise<AdminFixt
     const userId = String(regBody.data?.user?.id || regBody.data?.id || '');
     if (!userId) throw new Error('register response missing user.id');
 
-    // 2. role/tier 승격 (DB 직접 — admin promotion endpoint 부재)
+    // 2. role 승격 (DB 직접 — admin promotion endpoint 부재). users.tier 는 마이그레이션 039 가 지웠다
     const pg = new Client(pgConfig());
     await pg.connect();
     try {
-        await pg.query(`UPDATE users SET role='admin', tier='enterprise' WHERE id=$1`, [userId]);
+        await pg.query(`UPDATE users SET role='admin' WHERE id=$1`, [userId]);
     } finally {
         await pg.end();
     }

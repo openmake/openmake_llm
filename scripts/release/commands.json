@@ -1,0 +1,417 @@
+{
+  "schemaVersion": 1,
+  "matrixRows": [
+    "정상 채팅",
+    "스킬",
+    "MCP",
+    "문서",
+    "예약",
+    "산출물",
+    "disabled",
+    "unknown",
+    "조직 거절",
+    "승인 대기",
+    "프로세스 장애",
+    "롤백",
+    "성능"
+  ],
+  "commands": [
+    {
+      "id": "build-packages",
+      "title": "공유 패키지 빌드(계약 패키지 포함)",
+      "group": "static",
+      "cmd": "npm run build:packages",
+      "timeoutSec": 600,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": []
+    },
+    {
+      "id": "tsc-api",
+      "title": "API 타입 검사",
+      "group": "static",
+      "cmd": "npx tsc --noEmit -p apps/api/tsconfig.json",
+      "timeoutSec": 900,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": []
+    },
+    {
+      "id": "tsc-web",
+      "title": "웹 타입 검사",
+      "group": "static",
+      "cmd": "npx tsc --noEmit -p apps/web/tsconfig.json",
+      "timeoutSec": 900,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": []
+    },
+    {
+      "id": "lint",
+      "title": "ESLint(루트)",
+      "group": "static",
+      "cmd": "npm run lint",
+      "timeoutSec": 900,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": []
+    },
+    {
+      "id": "lint-web",
+      "title": "ESLint(apps/web)",
+      "group": "static",
+      "cmd": "npm --workspace apps/web run lint",
+      "timeoutSec": 900,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": []
+    },
+    {
+      "id": "i18n-web",
+      "title": "웹 5개 locale 키 검사",
+      "group": "static",
+      "cmd": "npm --workspace apps/web run check:i18n",
+      "timeoutSec": 300,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": []
+    },
+    {
+      "id": "addon-boundary",
+      "title": "add-on → Base import 래칫",
+      "group": "static",
+      "cmd": "npm run check:addon-boundary",
+      "timeoutSec": 300,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": []
+    },
+    {
+      "id": "contracts-drift",
+      "title": "API 계약 산출물 drift",
+      "group": "static",
+      "cmd": "npm run contracts:export && test -z \"$(git status --porcelain -- packages/api-contracts)\"",
+      "timeoutSec": 600,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": []
+    },
+    {
+      "id": "file-size-guard",
+      "title": "apps/api/src 600줄 상한(CI Gate 3 과 같은 대상)",
+      "group": "static",
+      "cmd": "find apps/api/src -name '*.ts' -not -path '*/dist/*' -not -path '*__tests__*' -not -name '*.test.*' -not -name '*.d.ts' -not -name '*-locales.ts' -not -name '*-data-*.ts' -not -name '*-guidelines.ts' -not -name 'types.ts' -not -name 'runtime-limits.ts' -not -name 'prompt-templates.ts' -not -name 'language-policy.ts' -exec grep -c '' {} + | awk -F: '$2 > 600 {print; bad=1} END {exit bad}'",
+      "timeoutSec": 300,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": []
+    },
+    {
+      "id": "build-full",
+      "title": "전체 빌드(npm run build)",
+      "group": "build",
+      "cmd": "npm run build",
+      "timeoutSec": 1800,
+      "requiresEnv": [],
+      "skipLocal": "이 맥북은 빌드하지 않는다(로컬 정책) — CI Gate 2 가 같은 SHA 로 잰다",
+      "counts": null,
+      "covers": []
+    },
+    {
+      "id": "test-infra",
+      "title": "node --test(infra·lint·ci·bench·release 도구)",
+      "group": "unit",
+      "cmd": "npm run test:infra",
+      "timeoutSec": 600,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": {
+        "anchor": "^ℹ tests \\d+",
+        "keysOn": "output",
+        "passed": "^ℹ pass (\\d+)",
+        "failed": "^ℹ fail (\\d+)",
+        "skipped": "^ℹ skipped (\\d+)"
+      },
+      "covers": []
+    },
+    {
+      "id": "jest-addon",
+      "title": "add-on 경계·수명주기·오케스트레이션 게이트 Jest",
+      "group": "unit",
+      "cmd": "npx jest -c apps/api/jest.config.js apps/api/src/services/addon apps/api/src/addon-host apps/api/src/services/chat-service/__tests__/orchestration-gate.test.ts apps/api/src/routes/__tests__/admin-addons-state.routes.test.ts",
+      "timeoutSec": 900,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": {
+        "anchor": "^Tests:.*$",
+        "keysOn": "anchor",
+        "passed": "(\\d+) passed",
+        "failed": "(\\d+) failed",
+        "skipped": "(\\d+) skipped"
+      },
+      "covers": [
+        "disabled",
+        "unknown",
+        "조직 거절"
+      ]
+    },
+    {
+      "id": "jest-api",
+      "title": "API Jest 전체(runInBand)",
+      "group": "unit",
+      "cmd": "npm --workspace apps/api test -- --runInBand",
+      "timeoutSec": 3600,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": {
+        "anchor": "^Tests:.*$",
+        "keysOn": "anchor",
+        "passed": "(\\d+) passed",
+        "failed": "(\\d+) failed",
+        "skipped": "(\\d+) skipped"
+      },
+      "covers": [
+        "정상 채팅",
+        "스킬",
+        "MCP",
+        "문서",
+        "예약",
+        "산출물",
+        "disabled",
+        "unknown",
+        "조직 거절",
+        "승인 대기"
+      ]
+    },
+    {
+      "id": "db-tests",
+      "title": "격리 PostgreSQL DB 테스트(*.db.test.ts)",
+      "group": "db",
+      "cmd": "npm run test:db",
+      "timeoutSec": 1800,
+      "requiresEnv": [
+        "TEST_DATABASE_URL"
+      ],
+      "skipLocal": null,
+      "counts": {
+        "anchor": "^db tests ran: \\d+",
+        "keysOn": "anchor",
+        "passed": "passed (\\d+)",
+        "failed": "failed (\\d+)",
+        "skipped": "skipped (\\d+)"
+      },
+      "covers": [
+        "문서",
+        "프로세스 장애",
+        "승인 대기"
+      ]
+    },
+    {
+      "id": "eval-routing",
+      "title": "라우팅 평가(골든셋, CI 와 같은 임계 0.5)",
+      "group": "eval",
+      "cmd": "OMK_EVAL_PASS_THRESHOLD=0.5 npm --workspace apps/api run eval:routing",
+      "timeoutSec": 900,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": [
+        "정상 채팅"
+      ]
+    },
+    {
+      "id": "eval-response",
+      "title": "응답 패턴 평가(mock, 임계 0.5)",
+      "group": "eval",
+      "cmd": "OMK_EVAL_RESPONSE_THRESHOLD=0.5 npm --workspace apps/api run eval:response",
+      "timeoutSec": 900,
+      "requiresEnv": [],
+      "skipLocal": null,
+      "counts": null,
+      "covers": [
+        "정상 채팅"
+      ]
+    },
+    {
+      "id": "e2e-plugin-boundary",
+      "title": "add-on 경계 e2e(Knowledge 토글·WS·메모리 격리)",
+      "group": "e2e",
+      "cmd": "npx playwright test tests/e2e/plugin-boundary.spec.ts --project=chromium",
+      "timeoutSec": 900,
+      "requiresEnv": [
+        "E2E_BASE_URL",
+        "TEST_DATABASE_URL"
+      ],
+      "skipLocal": null,
+      "counts": {
+        "anchor": "^\\s+\\d+ (passed|failed|skipped|flaky)",
+        "keysOn": "output",
+        "passed": "^\\s+(\\d+) passed",
+        "failed": "^\\s+(\\d+) failed",
+        "skipped": "^\\s+(\\d+) skipped"
+      },
+      "covers": [
+        "정상 채팅",
+        "문서",
+        "disabled",
+        "조직 거절"
+      ]
+    },
+    {
+      "id": "e2e-extension-permissions",
+      "title": "설치형 확장 권한 재승인 e2e(C3)",
+      "group": "e2e",
+      "cmd": "npx playwright test tests/e2e/extension-permissions.spec.ts --project=chromium",
+      "timeoutSec": 600,
+      "requiresEnv": [
+        "E2E_BASE_URL",
+        "TEST_DATABASE_URL"
+      ],
+      "skipLocal": null,
+      "counts": {
+        "anchor": "^\\s+\\d+ (passed|failed|skipped|flaky)",
+        "keysOn": "output",
+        "passed": "^\\s+(\\d+) passed",
+        "failed": "^\\s+(\\d+) failed",
+        "skipped": "^\\s+(\\d+) skipped"
+      },
+      "covers": [
+        "승인 대기",
+        "MCP"
+      ]
+    },
+    {
+      "id": "e2e-all",
+      "title": "Playwright 전체(npm run test:e2e)",
+      "group": "e2e",
+      "cmd": "npm run test:e2e -- --project=chromium",
+      "timeoutSec": 2700,
+      "requiresEnv": [
+        "E2E_BASE_URL",
+        "TEST_DATABASE_URL"
+      ],
+      "skipLocal": null,
+      "counts": {
+        "anchor": "^\\s+\\d+ (passed|failed|skipped|flaky)",
+        "keysOn": "output",
+        "passed": "^\\s+(\\d+) passed",
+        "failed": "^\\s+(\\d+) failed",
+        "skipped": "^\\s+(\\d+) skipped"
+      },
+      "covers": [
+        "정상 채팅",
+        "스킬",
+        "MCP"
+      ]
+    },
+    {
+      "id": "health-knowledge",
+      "title": "/api/health 의 knowledge 섹션(C4)",
+      "group": "live",
+      "cmd": "node -e \"fetch(process.env.E2E_BASE_URL + '/api/health').then((r) => r.json()).then((b) => { if (!b.knowledge || !b.knowledge.mode) { console.error('knowledge 섹션 없음'); process.exit(1); } console.log(JSON.stringify(b.knowledge)); })\"",
+      "timeoutSec": 60,
+      "requiresEnv": [
+        "E2E_BASE_URL"
+      ],
+      "skipLocal": null,
+      "counts": null,
+      "covers": [
+        "프로세스 장애"
+      ]
+    },
+    {
+      "id": "worker-mode-show",
+      "title": "Knowledge 소비자 모드·generation 조회(C4)",
+      "group": "live",
+      "cmd": "bash scripts/knowledge-worker-mode.sh show",
+      "timeoutSec": 60,
+      "requiresEnv": [
+        "KNOWLEDGE_PSQL"
+      ],
+      "skipLocal": null,
+      "counts": null,
+      "covers": [
+        "롤백"
+      ]
+    },
+    {
+      "id": "drill-worker-dry-run",
+      "title": "worker 전환·롤백 드릴 순서 확인(DRILL_DRY_RUN=1)",
+      "group": "drill",
+      "cmd": "export KNOWLEDGE_DRILL_ENV_FILE=\"$EVIDENCE_ROOT/$RUN_ID/task-11/drill.env\" && mkdir -p \"$(dirname \"$KNOWLEDGE_DRILL_ENV_FILE\")\" && echo KNOWLEDGE_WORKER_MODE=external > \"$KNOWLEDGE_DRILL_ENV_FILE\" && DRILL_DRY_RUN=1 bash scripts/knowledge-worker-rollback-drill.sh to-external && echo KNOWLEDGE_WORKER_MODE=inprocess > \"$KNOWLEDGE_DRILL_ENV_FILE\" && DRILL_DRY_RUN=1 bash scripts/knowledge-worker-rollback-drill.sh to-inprocess",
+      "timeoutSec": 120,
+      "requiresEnv": [
+        "EVIDENCE_ROOT",
+        "RUN_ID",
+        "KNOWLEDGE_PSQL",
+        "KNOWLEDGE_API_HEALTH_URL"
+      ],
+      "skipLocal": null,
+      "counts": null,
+      "covers": [
+        "롤백"
+      ]
+    },
+    {
+      "id": "drill-worker-roundtrip",
+      "title": "worker 전환 → 롤백 왕복 실행(C4 드릴, exit 0·2~8)",
+      "group": "drill",
+      "cmd": "export KNOWLEDGE_DRILL_ENV_FILE=\"$EVIDENCE_ROOT/$RUN_ID/task-11/drill.env\" && mkdir -p \"$(dirname \"$KNOWLEDGE_DRILL_ENV_FILE\")\" && echo KNOWLEDGE_WORKER_MODE=external > \"$KNOWLEDGE_DRILL_ENV_FILE\" && bash scripts/knowledge-worker-rollback-drill.sh to-external && echo KNOWLEDGE_WORKER_MODE=inprocess > \"$KNOWLEDGE_DRILL_ENV_FILE\" && bash scripts/knowledge-worker-rollback-drill.sh to-inprocess && bash scripts/knowledge-worker-mode.sh show",
+      "timeoutSec": 900,
+      "requiresEnv": [
+        "EVIDENCE_ROOT",
+        "RUN_ID",
+        "KNOWLEDGE_PSQL",
+        "KNOWLEDGE_API_HEALTH_URL",
+        "KNOWLEDGE_DRILL_RESTART_API_CMD",
+        "KNOWLEDGE_DRILL_STOP_WORKER_CMD",
+        "KNOWLEDGE_DRILL_START_WORKER_CMD",
+        "KNOWLEDGE_DRILL_DELETE_WORKER_CMD"
+      ],
+      "skipLocal": null,
+      "counts": null,
+      "covers": [
+        "롤백",
+        "프로세스 장애"
+      ]
+    },
+    {
+      "id": "canary-dry-run",
+      "title": "단계 배포 순서 확인(canary-deploy --dry-run)",
+      "group": "drill",
+      "cmd": "./openmake_llm.sh canary-deploy --dry-run",
+      "timeoutSec": 120,
+      "requiresEnv": [],
+      "skipLocal": "운영 스크립트가 설치본 .env 를 읽는다 — 이 맥북에서는 돌리지 않고 스테이징에서 runbook §3 으로 확인",
+      "counts": null,
+      "covers": [
+        "롤백"
+      ]
+    },
+    {
+      "id": "bench-compare",
+      "title": "부하 기준선 비교(D6)",
+      "group": "bench",
+      "cmd": "npm run --silent bench:compare -- --baseline \"$BENCH_BASELINE\" --current \"$BENCH_CURRENT\"",
+      "timeoutSec": 120,
+      "requiresEnv": [
+        "BENCH_BASELINE",
+        "BENCH_CURRENT"
+      ],
+      "skipLocal": null,
+      "counts": null,
+      "covers": [
+        "성능"
+      ]
+    }
+  ]
+}

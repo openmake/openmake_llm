@@ -96,6 +96,8 @@ import { getPool } from '../data/models/unified-database';
 import { collectHealthSections } from '../runtime-ports/health-sections';
 import { csrfProtectionMiddleware, csrfTokenIssuer } from '../middlewares/csrf-protection';
 import { authLimiter } from '../middlewares/rate-limiters';
+import { optionalAuth } from '../auth';
+import { guestOnAuthError, readHealthProcessSection } from './health-process-section';
 import { mountAddonRoutes } from '../addon-host/routes';
 
 
@@ -125,8 +127,9 @@ export function setupApiRoutes(
     app.get('/api/csrf-token', csrfTokenIssuer);
     app.use('/api', csrfProtectionMiddleware);
 
-    // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환)
-    app.get('/api/health', async (_req: Request, res: Response) => {
+    // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환). 선택 인증의 DB 오류는 게스트로 계속한다(헬스가 500 이 되지 않게)
+    app.get('/api/health', guestOnAuthError(optionalAuth), async (req: Request, res: Response) => {
+        const processSection = readHealthProcessSection(req);
         const dbPool = getPool();
         const memory = process.memoryUsage();
         const clusterStats = cluster.getStats();
@@ -157,6 +160,7 @@ export function setupApiRoutes(
                 }
             },
             ...sections,
+            ...(processSection ? { process: processSection } : {}),
         });
     });
 
