@@ -238,3 +238,15 @@ test('commands.json: 드릴 스크립트를 부르는 명령은 모두 KNOWLEDGE
         assert.ok(c.cmd.indexOf('KNOWLEDGE_DRILL_ENV_FILE=') < c.cmd.indexOf('knowledge-worker-rollback-drill.sh'), c.id);
     }
 });
+
+test('commands.json: db-tests 요약 줄 전체를 읽어 통과·실패·skip 수를 센다(run-db-tests.mjs 형식)', () => {
+    const spec = commandsDoc.commands.find((c) => c.id === 'db-tests').counts;
+    const out = 'some log\ndb tests ran: 7 (passed 5, failed 1, skipped 1, files 3)\n';
+    assert.deepEqual(parseCounts(out, spec), { passed: 5, failed: 1, skipped: 1 });
+});
+
+test('validateCommands: keysOn anchor 인데 anchor 가 줄 끝(.*$)까지 덮지 않으면 오류', () => {
+    const errs = validateCommands(doc([cmd({ counts: { ...JEST, anchor: '^Tests: \\d+' } })]));
+    assert.ok(errs.some((e) => e.includes('.*$')));
+    assert.deepEqual(validateCommands(doc([cmd({ counts: { ...NODE, anchor: '^ℹ tests \\d+' } })])), []);
+});
