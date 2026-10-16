@@ -19,6 +19,12 @@ export interface AddonEntryRouteDTO {
     within?: 'v1';
 }
 
+/** 워커 프로세스 진입점 — `name` 은 워커 식별자, `module` 은 add-on 루트 기준 모듈 경로 */
+export interface AddonEntryWorkerDTO {
+    name: string;
+    module: string;
+}
+
 export interface AddonManifestDTO {
     id: string;
     name: string;
@@ -60,7 +66,7 @@ export interface AddonManifestDTO {
         chatMode?: string;
         contributions?: string;
         routes?: AddonEntryRouteDTO[];
-        workers?: ReadonlyArray<{ name: string; module: string }>;
+        workers?: AddonEntryWorkerDTO[];
     };
     /** Registry 에 게시하는 capability ID 목록 — 런타임 등록 결과와 정확히 일치해야 게시된다 */
     provides?: {
