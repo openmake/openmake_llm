@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Pool } from 'pg';
-import { applyKnowledgeSchema, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
+import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 
 const CONN = process.env.TEST_DATABASE_URL;
 const describeOrSkip = CONN ? describe : describe.skip;
@@ -25,7 +25,7 @@ describeOrSkip('knowledge 마이그레이션 004 (실 DB)', () => {
     beforeAll(async () => {
         unlock = await lockKnowledgeQueueTests(pool);
         await applyKnowledgeSchema(pool);
-    });
+    }, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS);
     afterAll(async () => {
         if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
         if (workerIds.length) await pool.query('DELETE FROM knowledge_worker_heartbeats WHERE worker_id = ANY($1::text[])', [workerIds]);

@@ -13,10 +13,24 @@ export const KNOWLEDGE_DB_TEST_LOCK_KEY = 7_041_902_500;
 // __tests__/helpers → apps/api/addons/builtin/knowledge-runtime/migrations
 const MIGRATIONS = resolve(__dirname, '../../../../../addons/builtin/knowledge-runtime/migrations');
 
-/** 세션 advisory lock 을 잡고, 놓는 함수를 돌려준다 — beforeAll 에서 잡고 afterAll 에서 놓는다 */
+/** lock 대기 상한(ms) — 다른 jest 워커의 실 DB 파일이 쥐고 있으면 여기까지 기다린다(가장 긴 파일보다 넉넉히) */
+export const KNOWLEDGE_DB_TEST_LOCK_WAIT_MS = 150_000;
+/** lock 을 잡는 beforeAll 의 jest 시간 상한 — lock 대기 상한보다 길어야 기본 hook 시간 초과 대신 분명한 lock 오류로 끝난다 */
+export const KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS = KNOWLEDGE_DB_TEST_LOCK_WAIT_MS + 30_000;
+
+/** 세션 advisory lock 을 잡고, 놓는 함수를 돌려준다 — beforeAll(시간 상한 KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS)에서 잡고 afterAll 에서 놓는다 */
 export async function lockKnowledgeQueueTests(pool: Pool): Promise<() => Promise<void>> {
     const client = await pool.connect();
-    await client.query('SELECT pg_advisory_lock($1)', [KNOWLEDGE_DB_TEST_LOCK_KEY]);
+    try {
+        await client.query("SELECT set_config('lock_timeout', $1, false)", [String(KNOWLEDGE_DB_TEST_LOCK_WAIT_MS)]);
+        await client.query('SELECT pg_advisory_lock($1)', [KNOWLEDGE_DB_TEST_LOCK_KEY]);
+        await client.query('RESET lock_timeout');
+    } catch (err) {
+        client.release();
+        throw new Error(
+            `Knowledge 실 DB 테스트 lock 을 ${KNOWLEDGE_DB_TEST_LOCK_WAIT_MS}ms 안에 잡지 못했다 — 다른 jest 워커가 쥐고 있다(--runInBand 로 돌린다): ${err instanceof Error ? err.message : String(err)}`,
+        );
+    }
     return async () => {
         try {
             await client.query('SELECT pg_advisory_unlock($1)', [KNOWLEDGE_DB_TEST_LOCK_KEY]);

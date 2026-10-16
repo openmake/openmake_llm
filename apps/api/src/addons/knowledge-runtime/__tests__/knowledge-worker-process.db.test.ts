@@ -12,7 +12,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Pool } from 'pg';
-import { applyKnowledgeSchema, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
+import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 import {
     activateFakeIndex, assertFullTestSchema, fakeVector, freePort, insertIngestFixture, jobSnapshot, setJobLeaseMs, spawnWorker,
     startFakeGateway, stopWorker, waitFor, workerEnv, type FakeGateway, type WorkerChild,
@@ -71,7 +71,7 @@ describeOrSkip('knowledge worker 별도 프로세스 (실 DB)', () => {
         await activateFakeIndex(pool);
         gateway = await startFakeGateway(fakeVector);
         storageDir = await mkdtemp(join(tmpdir(), 'knowledge-worker-proc-'));
-    });
+    }, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS);
     beforeEach(() => {
         gateway.hold(false);
         gateway.releaseAll();

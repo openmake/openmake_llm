@@ -7,7 +7,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Pool } from 'pg';
-import { applyKnowledgeSchema, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
+import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 import {
     activateFakeIndex, assertFullTestSchema, fakeVector, insertIngestFixture, jobSnapshot, spawnWorker, startFakeGateway,
     stopWorker, waitFor, workerEnv, type FakeGateway, type WorkerChild,
@@ -71,7 +71,7 @@ describeOrSkip('knowledge 두 모드 결과 비교 (실 DB)', () => {
         storageDir = await mkdtemp(join(tmpdir(), 'knowledge-parity-'));
         // inprocess 쪽(이 프로세스 안 worker)도 fixture 원본을 같은 곳에서 읽는다 — STORAGE_DIR 은 env 를 매번 읽는 getter
         process.env.KNOWLEDGE_STORAGE_DIR = storageDir;
-    });
+    }, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS);
     afterAll(async () => {
         if (child) await stopWorker(child, 'SIGKILL', 5_000);
         await gateway.close();
