@@ -413,18 +413,22 @@
     },
     "quickStarts": {
       "summarize": {
+        "description": "요약할 글을 입력해 핵심 내용을 정리해요.",
         "label": "요약하기",
         "prompt": "다음 내용을 요약해 줘:\n\n"
       },
       "research": {
+        "description": "궁금한 주제를 입력해 관련 내용을 자세히 알아봐요.",
         "label": "리서치",
         "prompt": "다음 주제를 깊이 리서치해 줘:\n\n"
       },
       "analyze": {
+        "description": "문제를 입력해 단계별로 나누어 살펴봐요.",
         "label": "단계별 분석",
         "prompt": "다음 문제를 단계별로 분석해 줘:\n\n"
       },
       "brainstorm": {
+        "description": "주제를 입력해 다양한 아이디어와 접근법을 떠올려요.",
         "label": "브레인스토밍",
         "prompt": "다음에 대해 브레인스토밍하자:\n\n"
       }

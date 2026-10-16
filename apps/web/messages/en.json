@@ -413,18 +413,22 @@
     },
     "quickStarts": {
       "summarize": {
+        "description": "Add text to summarize its key points.",
         "label": "Summarize",
         "prompt": "Summarize the following:\n\n"
       },
       "research": {
+        "description": "Enter a topic to explore it in detail.",
         "label": "Research",
         "prompt": "Research the following topic in depth:\n\n"
       },
       "analyze": {
+        "description": "Enter a problem to examine it step by step.",
         "label": "Step-by-step analysis",
         "prompt": "Analyze the following problem step by step:\n\n"
       },
       "brainstorm": {
+        "description": "Enter a topic to explore ideas and approaches.",
         "label": "Brainstorm",
         "prompt": "Let's brainstorm about the following:\n\n"
       }
