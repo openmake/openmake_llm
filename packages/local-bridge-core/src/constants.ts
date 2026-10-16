@@ -13,6 +13,11 @@ export const RECONNECT_MAX_MS = 60000;
  * 없으면 TCP 만 맺히고 업그레이드 응답이 오지 않는 시도가 close 없이 영원히 남는다.
  */
 export const HANDSHAKE_TIMEOUT_MS = 30000;
+/**
+ * open 뒤 bridge_hello 를 보내기까지 기다리는 시간(ms) — 서버가 연결을 등록하고 메시지 리스너를 부착할 때까지(라이브 확인 300ms).
+ * 즉시 전송하면 리스너 부착 전 프레임이 유실돼 등록이 안 된다.
+ */
+export const HELLO_DELAY_MS = 300;
 /** 생존 확인 ping 간격(ms) — 디바이스가 서버로 보낸다(서버·프록시의 응답 pong 이 수신 신호). */
 export const LIVENESS_PING_MS = 30000;
 /**
