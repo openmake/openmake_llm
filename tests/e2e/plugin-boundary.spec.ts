@@ -16,7 +16,7 @@ import { deleteUser } from './helpers/gdpr-fixtures';
 import {
     KNOWLEDGE_ID, e2eBaseUrl, e2eWsOrigin, signupBoundaryUser, patchKnowledgeState,
     setInstallationStateInDb, readInstallationState, readDesiredState, waitForDocumentReady, countMemoriesContaining,
-    createOrgWithAllowlist, deleteOrg, runWsTurn, knowledgeSourceEvents,
+    createOrgWithAllowlist, deleteOrg, runWsTurn, knowledgeSources, forceEnabledInDb,
     type BoundaryUser, type WsTurnResult,
 } from './helpers/plugin-boundary-fixtures';
 
@@ -69,22 +69,52 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async ({ request }) => {
-    // 정리 실패가 있어도 다음 정리를 계속하고, 마지막에 Knowledge 상태를 확인한다
-    await setInstallationStateInDb('enabled');
-    if (admin) {
-        await patchKnowledgeState(request, admin, 'enabled');
-        if (spaceId) await request.delete(`/api/knowledge/spaces/${spaceId}`, { headers: admin.headers });
-        if (plainSessionId) await request.delete(`/api/chat/sessions/${plainSessionId}`, { headers: admin.headers });
-    }
-    if (orgId) await deleteOrg(orgId);
-    if (admin) await deleteUser(admin.userId);
-    if (member) await deleteUser(member.userId);
+    // 각 정리 단계는 따로 잡아 오류를 모으고 다음 단계를 계속한다. Knowledge 상태 확인은 언제나 마지막에 한다.
+    const errors: string[] = [];
+    const step = async (name: string, fn: () => Promise<void>): Promise<void> => {
+        try {
+            await fn();
+        } catch (err) {
+            errors.push(`${name}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    };
 
-    const state = await readInstallationState();
-    const desired = await readDesiredState();
-    if (state !== 'enabled' || desired !== 'enabled') {
-        throw new Error(`정리 뒤 Knowledge 가 enabled 가 아니다: state=${state} desired_state=${desired}`);
+    await step('Knowledge 복원', async () => {
+        let restored = false;
+        if (admin) {
+            try {
+                const res = await patchKnowledgeState(request, admin, 'enabled');
+                if (res.ok()) {
+                    const data = await toggleData(res);
+                    if (data.runtime === 'resumed' || data.runtime === 'unchanged') restored = true;
+                    else errors.push(`Knowledge 복원: 토글 응답 runtime=${data.runtime}(resumed·unchanged 아님) — 런타임이 멈춰 있을 수 있다`);
+                } else {
+                    errors.push(`Knowledge 복원: 토글 응답 ${res.status()}`);
+                }
+            } catch (err) {
+                errors.push(`Knowledge 복원: 토글 요청 실패 ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        // 토글이 2xx 가 아니거나 요청 자체가 실패하면 DB 로 의도·상태를 되돌린다(관리자 가입 전 실패 포함)
+        if (!restored) await forceEnabledInDb();
+    });
+    if (admin) {
+        const a = admin;
+        if (spaceId) await step('Space 삭제', async () => { await request.delete(`/api/knowledge/spaces/${spaceId}`, { headers: a.headers }); });
+        if (plainSessionId) await step('일반 대화 삭제', async () => { await request.delete(`/api/chat/sessions/${plainSessionId}`, { headers: a.headers }); });
     }
+    if (orgId) await step('조직 삭제', () => deleteOrg(orgId));
+    if (admin) { const id = admin.userId; await step('관리자 삭제', () => deleteUser(id)); }
+    if (member) { const id = member.userId; await step('일반 사용자 삭제', () => deleteUser(id)); }
+
+    await step('Knowledge 상태 확인', async () => {
+        const state = await readInstallationState();
+        const desired = await readDesiredState();
+        if (state !== 'enabled' || desired !== 'enabled') {
+            errors.push(`정리 뒤 Knowledge 가 enabled 가 아니다: state=${state} desired_state=${desired}`);
+        }
+    });
+    if (errors.length) throw new Error(`afterAll 정리 오류 ${errors.length}건:\n${errors.join('\n')}`);
 });
 
 test('준비: enabled 에서 Space·문서·연결 대화·일반 대화를 만든다', async ({ request }) => {
@@ -117,7 +147,7 @@ test('enabled(대조군): Space 연결 대화의 WS 턴은 Knowledge 출처를 �
     test.setTimeout(WS_TURN_TIMEOUT_MS + 30_000);
     const turn = await runWsTurn(BASE, ORIGIN, adminUser().authToken, { message: `${MARKER} 코드명이 무엇인지 문서에서 찾아줘`, sessionId: boundSessionId }, WS_TURN_TIMEOUT_MS);
     expect(turn.ended).not.toBe('timeout');
-    expect(knowledgeSourceEvents(turn.events).length, '켜진 상태에서 출처가 없으면 이 환경으로는 끈 뒤의 "출처 없음" 을 판정할 수 없다').toBeGreaterThan(0);
+    expect(knowledgeSources(turn.events, spaceId).length, '켜진 상태에서 출처가 없으면 이 환경으로는 끈 뒤의 "출처 없음" 을 판정할 수 없다').toBeGreaterThan(0);
 });
 
 test('토글: disabled 응답은 runtime=stopped·restartRequired=false, 바로 다음 라우트는 404 ADDON_DISABLED', async ({ request }) => {
@@ -137,7 +167,7 @@ test('disabled: Space 연결 대화의 WS 턴에 Knowledge 출처가 없다', as
     test.setTimeout(WS_TURN_TIMEOUT_MS + 30_000);
     disabledTurn = await runWsTurn(BASE, ORIGIN, adminUser().authToken, { message: `${MARKER} 코드명이 무엇인지 문서에서 찾아줘`, sessionId: boundSessionId }, WS_TURN_TIMEOUT_MS);
     expect(disabledTurn.ended).not.toBe('timeout');
-    expect(knowledgeSourceEvents(disabledTurn.events)).toEqual([]);
+    expect(knowledgeSources(disabledTurn.events, spaceId)).toEqual([]);
 });
 
 test('disabled: 그 턴은 시간 안에 끝났고, Knowledge 기여 도구가 나오면 반드시 거절 문구다', async () => {

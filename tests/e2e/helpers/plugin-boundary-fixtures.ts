@@ -159,6 +159,27 @@ export function runWsTurn(
     });
 }
 
-export function knowledgeSourceEvents(events: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-    return events.filter((e) => e.type === 'search_sources' && Array.isArray(e.sources) && (e.sources as unknown[]).length > 0);
+/**
+ * 그 Space 의 Knowledge 출처만 센다 — 출처 url 이 /knowledge/<spaceId>?doc=… 인 것
+ * (addons/knowledge-runtime/retrieval/citation.ts chunkUrl). 웹검색 출처는 빼서 끈 상태 판정이 흔들리지 않게 한다.
+ */
+export function knowledgeSources(events: Array<Record<string, unknown>>, spaceId: string): Array<Record<string, unknown>> {
+    if (!spaceId) throw new Error('knowledgeSources: spaceId 가 비었다 — 준비 테스트가 Space 를 만들지 못했다');
+    const prefix = `/knowledge/${encodeURIComponent(spaceId)}`;
+    const found: Array<Record<string, unknown>> = [];
+    for (const e of events) {
+        if (e.type !== 'search_sources' || !Array.isArray(e.sources)) continue;
+        for (const src of e.sources as unknown[]) {
+            if (typeof src !== 'object' || src === null) continue;
+            const url = (src as { url?: unknown }).url;
+            if (typeof url === 'string' && url.startsWith(prefix)) found.push(src as Record<string, unknown>);
+        }
+    }
+    return found;
+}
+
+/** 실패 경로 복원 — 토글 API 를 못 쓸 때 의도·상태를 add-on id 로 직접 enabled 로 되돌린다 */
+export async function forceEnabledInDb(): Promise<void> {
+    await withDb((pg) => pg.query(
+        `UPDATE addon_installations SET desired_state='enabled', state='enabled', updated_at=NOW() WHERE addon_id=$1`, [KNOWLEDGE_ID]));
 }
