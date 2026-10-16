@@ -61,6 +61,8 @@ apps/api/data/
 # Legacy backup files
 bak/
 backup/
+# DB 덤프 — scripts/backups/db-backup.sh 의 기본 BACKUP_DIR(<repo>/backups). 루트만 무시한다(scripts/backups/ 는 추적)
+/backups/
 
 # User uploaded files (sensitive user data)
 uploads/
