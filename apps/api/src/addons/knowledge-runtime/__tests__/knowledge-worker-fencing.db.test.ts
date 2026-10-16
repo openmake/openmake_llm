@@ -9,9 +9,8 @@
  * 끝나면 만든 job·space 를 id 로 지운다.
  */
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { Pool } from 'pg';
+import type { Pool } from 'pg';
+import { applyKnowledgeSchema, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 
 const CONN = process.env.TEST_DATABASE_URL;
 const describeOrSkip = CONN ? describe : describe.skip;
@@ -49,8 +48,7 @@ type WorkerInternals = { owner: string; claim(limit: number, leaseMs: number): P
 const internals = (w: KnowledgeWorker) => w as unknown as WorkerInternals;
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>((r) => { resolve = r; }); return { promise, resolve }; };
 
-// 테스트 파일 위치(apps/api/src/addons/knowledge-runtime/__tests__) 기준 → apps/api/addons/builtin/knowledge-runtime/migrations
-const MIGRATION = resolve(__dirname, '../../../../addons/builtin/knowledge-runtime/migrations/001_knowledge_spaces.sql');
+let unlock: () => Promise<void>;
 
 let index: KnowledgeIndex;
 const jobIds: string[] = [];
@@ -98,8 +96,9 @@ async function state(f: IngestFixture) {
 
 describeOrSkip('knowledge worker fencing (실 DB)', () => {
     beforeAll(async () => {
-        await pool.query('CREATE TABLE IF NOT EXISTS conversation_sessions (id TEXT PRIMARY KEY)');
-        await pool.query(readFileSync(MIGRATION, 'utf8')); // IF NOT EXISTS — 재실행 안전
+        unlock = await lockKnowledgeQueueTests(pool);
+        await applyKnowledgeSchema(pool); // 001 + 004, IF NOT EXISTS — 재실행 안전
+        await resetWorkerMode(pool); // claim 은 inprocess 소비자로 집는다(Task 4)
         const id = randomUUID();
         await pool.query(`UPDATE knowledge_embedding_indexes SET is_active = FALSE WHERE is_active`);
         await pool.query(
@@ -112,6 +111,7 @@ describeOrSkip('knowledge worker fencing (실 DB)', () => {
     afterAll(async () => {
         if (jobIds.length) await pool.query(`DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])`, [jobIds]);
         if (spaceIds.length) await pool.query(`DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])`, [spaceIds]); // cascade: 문서·버전·청크·임베딩
+        await unlock();
         await pool.end();
     });
 
