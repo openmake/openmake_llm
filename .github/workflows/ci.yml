@@ -3,7 +3,7 @@
 # ==============================================================
 # 8 게이트: Contract Drift → Installer Lint → Jest → TypeScript Build → File Size Guard → ESLint → Routing Eval → Response Eval
 # 로컬 `npm test`/`npm run build`/`npm run lint` 와 같은 스크립트로 돈다(별도 미러 스크립트 없음).
-# Docker 사용 없음 (프로젝트 방침 영구 제외)
+# Docker 빌드·이미지 사용 없음(프로젝트 방침) — 예외: Gate 1.5 DB 테스트용 PostgreSQL 서비스 컨테이너(설계 D3, 이 job 안에서만 사는 빈 DB)
 # 대상 브랜치: main(staging·릴리스가 따른다)과 dev(feature/* 가 모인다). dev 에 합칠 때도 같은 게이트를 지난다 —
 # 검사가 dev → main PR 에 몰리면 실패한 커밋을 찾기 어렵다.
 # ==============================================================
@@ -47,6 +47,23 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+
+    # DB 통합 테스트(*.db.test.ts)용 일회용 PostgreSQL(pgvector — knowledge add-on 마이그레이션이 vector 확장을 만든다).
+    # Gate 1.5 만 TEST_DATABASE_URL 로 쓴다. 포트 5433 — model-assignments DB 테스트는 :5432 URL 이면 스스로 skip 한다.
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.3-pg16-trixie
+        env:
+          POSTGRES_USER: openmake
+          POSTGRES_PASSWORD: openmake_test
+          POSTGRES_DB: openmake_llm_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U openmake -d openmake_llm_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout
@@ -118,12 +135,25 @@ jobs:
       # 12개가 러너 차이만으로 실패했다. 게다가 대상이 src/__tests__ **직속**(비재귀)이라
       # 서브디렉토리·인라인 테스트 86개는 애초에 게이트 밖이었다. jest 로 통일해 전량을 본다.
       #
-      # DB 가 필요한 테스트는 DATABASE_URL 부재 시 스스로 describe.skip 한다(러너에서 제외 불필요).
+      # DB 가 필요한 테스트(*.db.test.ts)는 여기서는 TEST_DATABASE_URL 이 없어 스스로 describe.skip 하고, Gate 1.5 가 따로 돌린다.
       - name: "Gate 1: Jest"
         run: npm test
         env:
           # supertest 반복 호출이 rate limit 에 걸리지 않도록 — jest.setup.ts 와 같은 축
           CI: 'true'
+
+      # ─── Gate 1.5: DB Tests ───
+      # 위 PostgreSQL 서비스에 코어+add-on 마이그레이션을 적용하고(scripts/setup-test-db.sh, psql·.env 불필요)
+      # *.db.test.ts 만 --runInBand 로 돌린다(scripts/ci/run-db-tests.mjs). "db tests ran: N" 이 0 이면(전부 skip —
+      # 변수가 jest 에 닿지 않음) 실패로 본다. Gate 1 에는 변수를 주지 않는다 — 주면 jest.setup-after-env 의 pg 차단이 풀려
+      # 단위 테스트까지 실 DB 에 붙는다.
+      - name: "Gate 1.5: DB Tests (PostgreSQL)"
+        env:
+          TEST_DATABASE_URL: postgresql://openmake:openmake_test@localhost:5433/openmake_llm_test
+          CI: 'true'
+        run: |
+          bash scripts/setup-test-db.sh
+          npm run test:db
 
       # ─── Gate 2: TypeScript Build ───
       # 웹 빌드는 next/font/google 로 Google 에서 폰트를 받는다 — 그 다운로드가 한 번 실패하면 코드와 무관하게
