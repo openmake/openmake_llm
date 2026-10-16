@@ -338,11 +338,11 @@ function ThinkingIndicator({
 }
 
 const QUICK_STARTS = [
-  { icon: MessagesSquare, labelKey: "quickStarts.summarize.label", descriptionKey: "quickStarts.summarize.description", promptKey: "quickStarts.summarize.prompt" },
-  { icon: Telescope, labelKey: "quickStarts.research.label", descriptionKey: "quickStarts.research.description", promptKey: "quickStarts.research.prompt" },
-  { icon: Brain, labelKey: "quickStarts.analyze.label", descriptionKey: "quickStarts.analyze.description", promptKey: "quickStarts.analyze.prompt" },
-  { icon: Sparkles, labelKey: "quickStarts.brainstorm.label", descriptionKey: "quickStarts.brainstorm.description", promptKey: "quickStarts.brainstorm.prompt" },
-];
+  { icon: MessagesSquare, id: "summarize" },
+  { icon: Telescope, id: "research" },
+  { icon: Brain, id: "analyze" },
+  { icon: Sparkles, id: "brainstorm" },
+] as const;
 
 /** 에이전트 작업 인라인 카드 — 상태별 벡터 아이콘 + 진행바 + 결과/아티팩트/산출물 + 승인 (이모지 없음). */
 type TaskTone = "run" | "pause" | "ok" | "fail";
@@ -872,17 +872,17 @@ export function MessageList() {
           </p>
         )}
 
-        <div className="mt-7 grid w-full max-w-md grid-cols-2 gap-2.5">
+        <div data-testid="quick-starts" className="mt-7 grid w-full max-w-md grid-cols-2 gap-2.5">
           {QUICK_STARTS.map((q) => (
             <button
-              key={q.labelKey}
-              onClick={() => setInputDraft(t(q.promptKey))}
+              key={q.id}
+              onClick={() => setInputDraft(t(`quickStarts.${q.id}.prompt`))}
               className="flex items-start gap-2.5 rounded-xl border border-border bg-surface px-3.5 py-3 text-left text-sm font-medium text-fg transition hover:border-border-strong hover:bg-surface-2"
             >
               <q.icon className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
               <span className="min-w-0 break-words">
-                <span className="block">{t(q.labelKey)}</span>
-                <span className="mt-1 block text-xs font-normal leading-relaxed text-muted">{t(q.descriptionKey)}</span>
+                <span className="block">{t(`quickStarts.${q.id}.label`)}</span>
+                <span className="mt-1 block text-xs font-normal leading-relaxed text-muted">{t(`quickStarts.${q.id}.description`)}</span>
               </span>
             </button>
           ))}
