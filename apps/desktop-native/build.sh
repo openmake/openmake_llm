@@ -34,6 +34,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp OpenMakeCompanion/.build/release/OpenMakeCompanion "$APP/Contents/MacOS/"
 cp helper/dist/helper.cjs "$APP/Contents/Resources/helper.cjs"
 # Node 런타임 동봉 — 시스템 node 미의존 (plan Step 0 결정)
+# 동봉할 node 는 저장소 .node-version 과 정확히 같아야 한다 — 다르면 빌드 실패.
+# shellcheck source=/dev/null
+. "$ROOT/scripts/lib/node-version.sh"
+require_node_version "$ROOT" || exit 1
 NODE_BIN="$(command -v node)"
 NODE_BIN="$(node -e 'console.log(process.execPath)')"
 cp "$NODE_BIN" "$APP/Contents/Resources/node"

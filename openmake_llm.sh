@@ -53,6 +53,11 @@ readonly SCRIPT_DIR
 # shellcheck source=/dev/null
 [[ -f "$SCRIPT_DIR/.openmake/toolchain.env" ]] && . "$SCRIPT_DIR/.openmake/toolchain.env"
 
+# Node 버전 검사(.node-version 정확 일치) — deploy·canary-deploy 가 빌드 전에 쓴다.
+# (스크립트만 복사해 쓰는 시험을 위해 파일이 있을 때만 읽는다 — 없으면 deploy 가 검사 함수 없음으로 멈춘다.)
+# shellcheck source=/dev/null
+[[ -f "$SCRIPT_DIR/scripts/lib/node-version.sh" ]] && . "$SCRIPT_DIR/scripts/lib/node-version.sh"
+
 # macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다
 # (scripts/env/omk.sh 의 omk_docker_host 와 같은 규칙). 이미 정해 둔 DOCKER_HOST 는 존중한다.
 if [[ "$(uname -s)" == "Darwin" && -z "${DOCKER_HOST:-}" && -S "$HOME/.colima/openmake/docker.sock" ]]; then
@@ -717,6 +722,10 @@ cmd_deploy() {
     parse_deploy_opts "$@"
     preflight
 
+    # Node 버전 — 빌드·재시작은 .node-version 과 정확히 같은 node(셸·PM2 데몬 모두)로만 한다.
+    require_node_version "$SCRIPT_DIR" || exit 1
+    require_pm2_daemon_node_version "$SCRIPT_DIR" || exit 1
+
     log_step "Deploy: build → migrate → restart"
 
     # 0) 태그 동기화(fail-open) — build-info.json 의 gitTag 는 로컬 태그(`git describe`)라
@@ -995,6 +1004,10 @@ cmd_canary_deploy() {
     done
     parse_deploy_opts "${pass[@]+"${pass[@]}"}"
     preflight
+
+    # Node 버전 — 빌드·재시작은 .node-version 과 정확히 같은 node(셸·PM2 데몬 모두)로만 한다.
+    require_node_version "$SCRIPT_DIR" || exit 1
+    require_pm2_daemon_node_version "$SCRIPT_DIR" || exit 1
 
     log_step "Canary Deploy: 백업 → 빌드 → 마이그레이션 → 카나리 헬스체크 → 전환 → (실패 시 롤백)"
     log_warn "단일 호스트 한계: 헬스체크는 새 코드의 기동 가능성만 검증하며, 전환(pm2 restart) 자체는 짧은 다운타임을 수반합니다."
