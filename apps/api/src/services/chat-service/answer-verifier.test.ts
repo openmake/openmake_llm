@@ -17,7 +17,6 @@ const LONG = 'x'.repeat(300);
 
 function load(): typeof import('./answer-verifier') {
     jest.resetModules();
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     return require('./answer-verifier');
 }
 

@@ -95,7 +95,6 @@ export function loadGoldenDataset(filePath: string = DEFAULT_DATASET_PATH): Gold
 /** 팩 케이스 로드 — add-on 이 없거나 읽기에 실패하면 빈 배열(평가를 막지 않는다). */
 function loadPackCases(): GoldenCase[] {
     try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { loadEnabledPackEvalCases } = require('../addon-host/pack-evals') as typeof import('../addon-host/pack-evals');
         return loadEnabledPackEvalCases() as unknown as GoldenCase[];
     } catch {
