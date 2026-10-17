@@ -97,7 +97,6 @@ function resolveNominalContext(modelId?: string): number {
     if (ctxExplicit) return defaultCtx;
     if (modelId) {
         // 순환 import 방지를 위해 지연 로드 (local-models 는 config 계층 내부 모듈).
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { findLocalModel } = require('./local-models') as typeof import('./local-models');
         const entry = findLocalModel(modelId);
         if (entry?.contextLength && entry.contextLength > 0) return entry.contextLength;

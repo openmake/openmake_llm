@@ -39,7 +39,7 @@ export function MarketplacePublishSection({ onPublishedAction }: { onPublishedAc
   useEffect(() => { void load(); }, [load]);
 
   const toggle = (kind: "skills" | "agents" | "mcp", id: string) =>
-    setSel((p) => { const n = new Set(p[kind]); n.has(id) ? n.delete(id) : n.add(id); return { ...p, [kind]: n }; });
+    setSel((p) => { const n = new Set(p[kind]); if (n.has(id)) n.delete(id); else n.add(id); return { ...p, [kind]: n }; });
   const total = sel.skills.size + sel.agents.size + sel.mcp.size;
 
   async function publish() {

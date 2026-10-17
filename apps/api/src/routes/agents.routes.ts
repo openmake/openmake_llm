@@ -15,7 +15,7 @@ import { getAgentLearningSystem } from '../agents/learning';
 import { getCustomAgentBuilder } from '../agents/custom-builder';
 import { success, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
-import { requireAuth, requireAdmin } from '../auth';
+import { requireAuth } from '../auth';
 import { unauthorized } from '../utils/api-response';
 import { validate } from '../middlewares/validation';
 import {

@@ -63,7 +63,6 @@ function MarkdownLink({ ...props }: LinkProps) {
   if (kind === "audio" && props.href) {
     return (
       <span className="my-2 block">
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <audio controls preload="metadata" src={props.href} className="w-full max-w-md">
           <a href={props.href}>{props.children}</a>
         </audio>
@@ -74,7 +73,6 @@ function MarkdownLink({ ...props }: LinkProps) {
   if (kind === "video" && props.href) {
     return (
       <span className="my-2 block">
-        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video controls preload="metadata" src={props.href} className="max-h-[420px] w-full max-w-xl rounded-lg border border-border">
           <a href={props.href}>{props.children}</a>
         </video>

@@ -16,7 +16,6 @@ export function loadAddonEntry<T>(addon: BuiltinAddon, ref: string): T {
     const codeDir = builtinAddonCodeDir(addon.id);
     const resolved = path.resolve(codeDir, modulePath);
     if (!resolved.startsWith(codeDir + path.sep)) throw new Error(`add-on '${addon.id}' 진입점이 코드 디렉토리 밖: ${ref}`);
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require(resolved) as Record<string, unknown>;
     const value = mod[exportName];
     if (value === undefined || value === null) throw new Error(`add-on '${addon.id}' 진입점에 export '${exportName}' 없음: ${ref}`);

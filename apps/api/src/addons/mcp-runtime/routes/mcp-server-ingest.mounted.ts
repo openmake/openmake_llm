@@ -15,7 +15,6 @@ const e2eMcpMock = process.env.MCP_INGEST_E2E_MOCK === 'true';
 // require() 로 lazy load 하여 production 번들에 mock 코드가 포함되지 않게 함.
 const fetcherFactory = e2eMcpMock
     ? (() => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { MockGitFetcher } = require('../../../agents/git-ingest/__mocks__/mock-git-fetcher');
         return () => new MockGitFetcher();
     })()

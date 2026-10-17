@@ -24,7 +24,7 @@ import { success, badRequest, conflict } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuthOrApiKeyScope } from '../middlewares/api-key-auth';
 import { API_KEY_SCOPES } from '../config/api-key-scopes';
-import { validate, validateWithSecurity } from '../middlewares/validation';
+import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AgentTaskRepository } from '../data/repositories/agent-task-repository';
 import { AgentTaskRunRepository } from '../data/repositories/agent-task-run-repository';
@@ -42,13 +42,9 @@ import { extractAttachedDocuments, isBinaryDocumentName } from '../services/chat
 import { getSteeringRegistry } from '../services/agent-task/steering';
 import { dispatchAgentTask, resolveQueuePriority } from '../services/agent-task/task-queue';
 import { listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
-import multer from 'multer';
-import * as fs from 'fs/promises';
-import { AGENT_TASK_LIMITS, FILE_ATTACH_LIMITS, DOC_EXTRACT_LIMITS } from '../config/runtime-limits';
-import {
-    ensureUploadTmpDir, finalizeUploadedFile, resolveStoredPath,
-    discardTmpFiles, removeTaskFiles, safeBaseName,
-} from '../services/agent-task/upload-store';
+import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
+import { discardTmpFiles, removeTaskFiles } from '../services/agent-task/upload-store';
+import { createBodyMw, storeMultipartInputFiles } from './agent-task-create-inputs';
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 import { resolveDuplicateCreate, normalizedCreateKey, rememberCreatedTask } from '../services/agent-task/create-idempotency';
@@ -88,35 +84,8 @@ type UserRole = 'admin' | 'user' | 'guest';
  *    텍스트 첨부)와 `files` 파트(바이너리 원본)를 받아 multer 가 디스크로 스트리밍한다.
  *    base64-in-JSON 과 달리 body 전체를 메모리에 올리지 않고, DB 에는 storedPath 만 남는다.
  */
-const uploadMw = multer({
-    storage: multer.diskStorage({
-        destination: (_req, _file, cb) => {
-            ensureUploadTmpDir().then((d) => cb(null, d), (e) => cb(e as Error, ''));
-        },
-        filename: (_req, _file, cb) => cb(null, uuidv4()),
-    }),
-    limits: { fileSize: AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES, files: FILE_ATTACH_LIMITS.MAX_FILES },
-}).array('files', FILE_ATTACH_LIMITS.MAX_FILES);
-
-// body 상한은 express.json 파서와 동일 상수 공유 — validate 기본값(1MB)이 파서 상한을
-// 무력화해 대용량 첨부가 "요청 본문이 너무 큽니다" 로 거부되던 정합 버그 방지.
-const jsonValidateMw = validateWithSecurity(createAgentTaskSchema, {
-    maxBodySizeBytes: AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES,
-    preserveFormattingFields: ['goal', 'files'], // 첨부 텍스트(코드·CSV) 들여쓰기 보존 — 기본 정제는 연속 공백을 접는다
-});
-
-router.post('/', (req: Request, res: Response, next) => {
-    if (!req.is('multipart/form-data')) return jsonValidateMw(req, res, next);
-    uploadMw(req, res, (err?: unknown) => {
-        if (!err) return next();
-        const msg = err instanceof multer.MulterError
-            ? (err.code === 'LIMIT_FILE_SIZE'
-                ? `첨부 파일이 너무 큽니다 (최대 ${AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES} bytes)`
-                : `업로드 형식 오류: ${err.code}`)
-            : (err instanceof Error ? err.message : String(err));
-        res.status(400).json(badRequest(msg));
-    });
-}, asyncHandler(async (req: Request, res: Response) => {
+// 본문 분기 미들웨어(createBodyMw: multer·body 상한)와 multipart 첨부 저장은 agent-task-create-inputs.ts (max-lines 가드로 분리)
+router.post('/', createBodyMw, asyncHandler(async (req: Request, res: Response) => {
     const parts = (req.files as Express.Multer.File[] | undefined) ?? [];
 
     // multipart 는 payload 필드(JSON)를 동일 스키마로 검증 — 실패 시 tmp 파일 롤백.
@@ -204,33 +173,7 @@ router.post('/', (req: Request, res: Response, next) => {
     // 참조한다(DB 에 base64 미저장). 추출 상한 이하 문서만 텍스트 추출을 병행 —
     // 초과 파일은 추출 없이 원본만 샌드박스로 전달돼 에이전트가 직접 파싱한다.
     if (parts.length > 0) {
-        const stored: AgentTaskInputFile[] = [];
-        for (const [i, p] of parts.entries()) {
-            // busboy 가 latin1 로 넘긴 한글 파일명 복원 (이미 UTF-8 이면 고문자 부재로 무변환)
-            const rawName = /[\u0080-\u00ff]/.test(p.originalname)
-                ? Buffer.from(p.originalname, 'latin1').toString('utf8')
-                : p.originalname;
-            const name = safeBaseName(rawName, `file_${i}`);
-            const storedPath = await finalizeUploadedFile(taskId, p.path, rawName, i);
-            const entry: AgentTaskInputFile = { name, type: p.mimetype, size: p.size, storedPath };
-            // 생성 시점 추출은 30MB 이내만 — 대형 스캔 PDF OCR(파일당 ~2분)을 여기서 돌리면
-            // 생성 응답이 Cloudflare 응답 한도(100s, 524)를 초과한다. 대형 파일 텍스트화는
-            // 샌드박스 내 tesseract(에이전트 직접 OCR)가 담당.
-            if (p.size <= DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE) {
-                const probe: AgentTaskInputFile = {
-                    name, type: p.mimetype,
-                    data: (await fs.readFile(resolveStoredPath(storedPath))).toString('base64'),
-                };
-                await extractAttachedDocuments([probe]);
-                if (typeof probe.content === 'string') {
-                    entry.content = probe.content;
-                    entry.truncated = probe.truncated;
-                    if (isBinaryDocumentName(name)) entry.extracted = true;
-                }
-            }
-            stored.push(entry);
-        }
-        inputFiles = [...(inputFiles ?? []), ...stored];
+        inputFiles = [...(inputFiles ?? []), ...(await storeMultipartInputFiles(taskId, parts))];
     }
 
     // 비동기 에이전트 중복 인지(P-6): 이미 진행 중인 작업이 있으면 경고를 함께 반환 —
