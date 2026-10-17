@@ -66,8 +66,14 @@ set -euo pipefail
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]:-$0}" )" && pwd )"
 readonly SCRIPT_DIR
 readonly DEFAULT_REPO_URL="https://github.com/openmake/openmake_llm.git"
-readonly NODE_MAJOR_MIN=24
-readonly NODE_PINNED_VERSION="24.21.0"   # mise.toml / .node-version 과 동일
+# Node 버전의 유일한 기준은 저장소 루트 .node-version 이다 (scripts/ci/node-version.test.mjs 가 리터럴이 없는지 검사).
+# curl | bash 로 레포 밖에서 실행되면 파일이 없어 비어 있다 — bootstrap_source 가 레포 안의 이 스크립트로
+# 다시 실행하므로 ensure_node 시점에는 채워진다.
+NODE_PINNED_VERSION=""
+[[ -f "$SCRIPT_DIR/.node-version" ]] \
+    && NODE_PINNED_VERSION="$(sed -e 's/[[:space:]]//g' -e 's/^v//' "$SCRIPT_DIR/.node-version" | tr -d '\n')"
+readonly NODE_PINNED_VERSION
+readonly NODE_PINNED_MAJOR="${NODE_PINNED_VERSION%%.*}"
 readonly TOOLCHAIN_DIR="$SCRIPT_DIR/.openmake"
 readonly TOOLCHAIN_ENV="$TOOLCHAIN_DIR/toolchain.env"
 readonly HEALTH_RETRIES=45
@@ -494,7 +500,8 @@ persist_path() {
 }
 
 # ── 1. Node.js ───────────────────────────────────────────────────────────────
-node_major() { node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0; }
+# 지금 PATH 의 node 가 .node-version 과 정확히 같은가 (메이저만 맞으면 장비마다 다른 판이 섞인다).
+node_is_pinned() { [[ -n "$NODE_PINNED_VERSION" && "$(node -p 'process.versions.node' 2>/dev/null)" == "$NODE_PINNED_VERSION" ]]; }
 
 # 버전 관리자(mise/fnm/nvm/asdf)가 있으면 그것으로 Node 24 를 활성화한다.
 try_node_version_manager() {
@@ -513,7 +520,7 @@ try_node_version_manager() {
         if fnm install "$NODE_PINNED_VERSION" >/dev/null 2>&1; then
             eval "$(fnm env --shell bash 2>/dev/null)" || true
             fnm use "$NODE_PINNED_VERSION" >/dev/null 2>&1 || true
-            [[ "$(node_major)" -ge $NODE_MAJOR_MIN ]] && return 0
+            node_is_pinned && return 0
         fi
     fi
     # nvm 은 함수라 command -v 로 안 잡힌다 — 스크립트를 직접 source.
@@ -527,7 +534,7 @@ try_node_version_manager() {
         . "$nvm_sh"
         nvm install "$NODE_PINNED_VERSION" >/dev/null 2>&1 || true
         nvm use "$NODE_PINNED_VERSION" >/dev/null 2>&1 || true; set -u
-        if [[ "$(node_major)" -ge $NODE_MAJOR_MIN ]]; then
+        if node_is_pinned; then
             persist_path "$(dirname "$(command -v node)")"; return 0
         fi
     fi
@@ -542,7 +549,7 @@ install_node_tarball() {
 
     if [[ -x "$dest/bin/node" ]]; then
         export PATH="$dest/bin:$PATH"; persist_path "$dest/bin"
-        [[ "$(node_major)" -ge $NODE_MAJOR_MIN ]] && return 0
+        node_is_pinned && return 0
     fi
 
     has curl || die "curl 이 필요합니다 (Node 자동 설치용). 패키지 관리자로 curl 을 먼저 설치하세요."
@@ -550,10 +557,10 @@ install_node_tarball() {
     rm -rf "$dest"; mkdir -p "$dest"
     # --strip-components=1 로 node-v24.x-plat/ 껍데기를 벗긴다.
     if ! curl -fsSL "$url" | tar -xz -C "$dest" --strip-components=1; then
-        die "Node 다운로드/압축해제 실패 — 네트워크를 확인하거나 Node 24 를 직접 설치한 뒤 재실행하세요."
+        die "Node 다운로드/압축해제 실패 — 네트워크를 확인하거나 Node $NODE_PINNED_VERSION 을 직접 설치한 뒤 재실행하세요."
     fi
     export PATH="$dest/bin:$PATH"; persist_path "$dest/bin"
-    [[ "$(node_major)" -ge $NODE_MAJOR_MIN ]] || die "Node 설치 후에도 버전 확인 실패"
+    node_is_pinned || die "Node 설치 후에도 버전이 .node-version($NODE_PINNED_VERSION)과 다릅니다 (지금 $(node -v 2>/dev/null || echo 없음))"
 }
 
 ensure_node() {
@@ -563,33 +570,36 @@ ensure_node() {
     # shellcheck source=/dev/null
     [[ -f "$TOOLCHAIN_ENV" ]] && . "$TOOLCHAIN_ENV"
 
-    if has node && [[ "$(node_major)" -ge $NODE_MAJOR_MIN ]]; then
+    [[ -n "$NODE_PINNED_VERSION" ]] || die "$SCRIPT_DIR/.node-version 을 읽을 수 없습니다 — 레포 안에서 실행하세요."
+
+    if has node && node_is_pinned; then
         log_ok "node $(node -v) / npm $(npm -v 2>/dev/null || echo '?')"
-        if [[ "$(node_major)" -gt $NODE_MAJOR_MIN ]]; then
-            log_warn "package.json engines 는 node >=24 <25 를 명시합니다 (현재 $(node -v))."
-            log_warn "설치는 계속되지만 .npmrc 에 engine-strict=true 가 있으면 실패합니다."
-        fi
         return 0
     fi
 
     if has node; then
-        log_warn "node $(node -v) 는 최소 요구 버전(v$NODE_MAJOR_MIN)보다 낮습니다 — Node 24 를 준비합니다."
+        log_warn "node $(node -v) 는 기준 버전(.node-version v$NODE_PINNED_VERSION)과 다릅니다 — Node $NODE_PINNED_VERSION 을 준비합니다."
     else
         log_warn "node 미설치 — Node $NODE_PINNED_VERSION 을 준비합니다."
     fi
 
-    if try_node_version_manager && [[ "$(node_major)" -ge $NODE_MAJOR_MIN ]]; then
+    if try_node_version_manager && node_is_pinned; then
         log_ok "node $(node -v) 활성화"
         return 0
     fi
 
-    if [[ "$PKG" == "brew" ]] && confirm "brew 로 node@24 를 설치할까요?"; then
-        brew install node@24 || true
+    if [[ "$PKG" == "brew" ]] && confirm "brew 로 node@$NODE_PINNED_MAJOR 를 설치할까요?"; then
+        brew install "node@$NODE_PINNED_MAJOR" || true
         local brew_bin
-        brew_bin="$(brew --prefix)/opt/node@24/bin"
+        brew_bin="$(brew --prefix)/opt/node@$NODE_PINNED_MAJOR/bin"
         if [[ -x "$brew_bin/node" ]]; then
-            export PATH="$brew_bin:$PATH"; persist_path "$brew_bin"
-            log_ok "node $(node -v) 활성화"; return 0
+            export PATH="$brew_bin:$PATH"
+            # brew 의 node@<메이저> 는 그 메이저의 최신판이라 기준과 다를 수 있다 — 같을 때만 쓰고, 다르면 tarball 로.
+            if node_is_pinned; then
+                persist_path "$brew_bin"
+                log_ok "node $(node -v) 활성화"; return 0
+            fi
+            log_warn "brew 의 node $(node -v) 는 기준 v$NODE_PINNED_VERSION 과 달라 쓰지 않습니다 — 공식 tarball 로 준비합니다."
         fi
     fi
 
