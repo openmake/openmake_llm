@@ -47,7 +47,7 @@ import { DiffView } from "@/components/chat/diff-view";
 import { PlanEditor } from "@/components/agent-tasks/plan-editor";
 import { BrowserTakeover } from "@/components/agent-tasks/browser-takeover";
 import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
-import { onAgentTaskChange, onOpenAgentTask } from "@/lib/agent-task-change";
+import { onAgentTaskChange, onOpenAgentTask, requestOpenAgentTask } from "@/lib/agent-task-change";
 import { failureLabelKey, failureNextKey } from "@/lib/agent-task-failure";
 import { taskStatusLabelKey } from "@/lib/approval-input";
 
@@ -634,6 +634,7 @@ function TaskDetailModal({
   taskId: string;
 }) {
   const t = useTranslations("agentTasks");
+  const router = useRouter();
   const [detail, setDetail] = useState<{ task: ApiAgentTask; steps: ApiTaskStep[] } | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [subagents, setSubagents] = useState<SubagentTraceView[]>([]);
@@ -703,7 +704,9 @@ function TaskDetailModal({
       const newId = r?.data?.taskId;
       if (!newId) throw new Error("fork");
       await ApiClient.post(`/api/agent-tasks/${newId}/resume`, {});
-      window.location.assign(`/agent-tasks?task=${encodeURIComponent(newId)}`);
+      // 같은 화면이라 주소만 바뀐다 — 상세 열기·목록 갱신은 열기 알림으로 화면에 맡긴다.
+      router.push(`/agent-tasks?task=${encodeURIComponent(newId)}`);
+      requestOpenAgentTask(newId);
     } catch (e) {
       alert(t("fork.failed", { error: e instanceof Error ? e.message : "" }));
     } finally { setForking(false); }
@@ -1305,7 +1308,8 @@ export default function AgentTasksPage() {
     if (id) setDetailTaskId(id);
   }, []);
   // 이미 이 화면에 있을 때 통합 상태 패널에서 작업을 누른 경우 — 주소만 바뀌므로 알림으로 연다.
-  useEffect(() => onOpenAgentTask(setDetailTaskId), []);
+  // 방금 만든 작업(체크포인트 복제)일 수 있어 목록도 다시 읽는다.
+  useEffect(() => onOpenAgentTask((id) => { setDetailTaskId(id); void loadTasks(); }), [loadTasks]);
 
   async function handleCancel(task: AgentTask) {
     if (!window.confirm(t("cancelConfirm", { goal: task.goal.slice(0, 40) }))) return;

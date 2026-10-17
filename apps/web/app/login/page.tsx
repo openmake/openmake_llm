@@ -28,6 +28,8 @@ export default function LoginPage() {
   }, []);
   const ssoQuery = ssoClient ? `?client=${encodeURIComponent(ssoClient)}` : "";
   const afterLogin = () => {
+    // API 리다이렉트(SSO exchange code 발급) 주소라 Next 페이지 이동이 아니다 — 전체 이동이 필요하다.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     if (ssoClient) window.location.assign(`/api/auth/sso/authorize${ssoQuery}`);
     else router.push("/");
   };

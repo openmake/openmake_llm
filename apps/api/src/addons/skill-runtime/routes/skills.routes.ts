@@ -21,7 +21,6 @@
  */
 
 import { Router, Request, Response } from 'express';
-import multer from 'multer';
 import { createLogger } from '../../../utils/logger';
 import { success, notFound, unauthorized } from '../../../utils/api-response';
 import { asyncHandler } from '../../../utils/error-handler';
@@ -49,7 +48,8 @@ import { importFromGitSchema } from '../../../schemas/git-ingest.schema';
 import { GitIngestService } from '../../../agents/git-ingest/git-ingest-service';
 import { GitFetcher } from '../../../agents/git-ingest/git-fetcher';
 import { RL_SKILL_CREATE, RL_SKILL_CREATE_SHORT } from '../../../config/rate-limits';
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import rateLimit from 'express-rate-limit';
+import { skillCreateKeyGen, skillUpload, mapGitIngestErrorToStatus } from './skills-route-helpers';
 
 // ────────────────────────────────────────────────────────────────────
 // Skill Creator Rate Limiters (월간 quota + 시간당 burst, 역할별 차등 — 남용 방지)
@@ -58,15 +58,6 @@ type SkillRole = 'user' | 'admin';
 
 function resolveSkillRole(req: Request): SkillRole {
     return isAdminRole(req.user?.role) ? 'admin' : 'user';
-}
-
-function skillCreateKeyGen(prefix: string) {
-    return (req: Request): string => {
-        const uid = req.user
-            ? ('userId' in req.user ? (req.user as { userId: string }).userId : req.user.id?.toString())
-            : undefined;
-        return uid ? `${prefix}:user:${uid}` : `${prefix}:ip:${ipKeyGenerator(req.ip || 'unknown')}`;
-    };
 }
 
 const skillCreateMonthlyLimiter = rateLimit({
@@ -104,20 +95,6 @@ router.use('/', skillsDraftsRouter);
 import skillsUserAssignRouter from './skills-user-assign.routes';
 import { isAdminRole } from '../../../data/user-manager';
 router.use('/', skillsUserAssignRouter);
-
-// .SKILL 업로드 multer (memoryStorage, 256KB 제한, P5-D7)
-const skillUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 256 * 1024 },
-    fileFilter: (_req, file, cb) => {
-        const lower = file.originalname.toLowerCase();
-        if (lower.endsWith('.skill') || lower.endsWith('.md')) {
-            cb(null, true);
-        } else {
-            cb(new Error('.SKILL 또는 .md 파일만 허용됩니다'));
-        }
-    },
-});
 
 // ================================================
 // 스킬 카테고리
@@ -437,16 +414,6 @@ router.post('/import-from-git', requireAuth, skillCreateMonthlyLimiter, skillCre
     }
 }));
 
-function mapGitIngestErrorToStatus(code: string): number {
-    switch (code) {
-        case 'INVALID_GIT_URL': case 'INVALID_REF': case 'MANIFEST_INVALID': return 400;
-        case 'REPO_NOT_FOUND': return 404;
-        case 'NO_SKILL_FOUND': return 422;
-        case 'GITHUB_RATE_LIMITED': case 'DRAFT_LIMIT_EXCEEDED': return 429;
-        case 'FILE_TOO_LARGE': case 'UPSTREAM_FETCH_FAIL': return 502;
-        default: return 500;
-    }
-}
 /**
  * POST /api/agents/skills/:skillId/rewrite-proposal
  *
