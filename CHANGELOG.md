@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.105.2](https://github.com/openmake/openmake_llm/compare/v1.105.1...v1.105.2) (2026-10-17)
+
+
+### 🐛 버그 수정
+
+* **agent-tasks:** 체크포인트 분기 뒤 부모 작업 상태가 남지 않게 ([51f99d5](https://github.com/openmake/openmake_llm/commit/51f99d52805377f374292110603b041a18cd400d))
+
 ## [1.105.1](https://github.com/openmake/openmake_llm/compare/v1.105.0...v1.105.1) (2026-10-16)
 
 
