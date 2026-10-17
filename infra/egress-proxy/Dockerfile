@@ -7,7 +7,8 @@
 #   docker build -t openmake-egress-proxy:latest infra/egress-proxy
 #
 # 실행은 services/task-sandbox/egress-proxy.ts 가 런타임에 관리(ensureEgressProxy).
-FROM node:22-slim
+# 버전은 저장소 .node-version 과 같아야 한다(scripts/ci/node-version.test.mjs 가 검사).
+FROM node:24.21.0-bookworm-slim
 USER node
 WORKDIR /app
 COPY proxy.mjs guard-proxy.mjs /app/
