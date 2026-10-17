@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.105.3](https://github.com/openmake/openmake_llm/compare/v1.105.2...v1.105.3) (2026-10-17)
+
+
+### 🐛 버그 수정
+
+* **infra:** node 버전을 .node-version 하나로 고정하고 설치·배포·빌드에서 검사 ([cf6f829](https://github.com/openmake/openmake_llm/commit/cf6f82983862ce2d3d6aba4be88cb8b183890d27))
+* **infra:** node 버전을 .node-version 하나로 고정하고 설치·배포·빌드에서 검사 ([26ef579](https://github.com/openmake/openmake_llm/commit/26ef5798b58404c17218eb481b5950af7f65c391))
+
 ## [1.105.2](https://github.com/openmake/openmake_llm/compare/v1.105.1...v1.105.2) (2026-10-17)
 
 
