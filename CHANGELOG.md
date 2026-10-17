@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.105.1](https://github.com/openmake/openmake_llm/compare/v1.105.0...v1.105.1) (2026-10-16)
+
+
+### 🐛 버그 수정
+
+* promote backup ignore and quick-start review fixes ([9b7b601](https://github.com/openmake/openmake_llm/commit/9b7b60104fa1c126dd66115751e06d662bd53772))
+
+
+### ♻️ 리팩터링
+
+* **web:** 빠른 시작 카드 키를 id 로 줄이고 테스트 범위를 그리드로 좁힘 ([abe5c48](https://github.com/openmake/openmake_llm/commit/abe5c4886ce10f895ac36b2446f89d40dfb021f9))
+
 ## [1.105.0](https://github.com/openmake/openmake_llm/compare/v1.104.1...v1.105.0) (2026-10-16)
 
 
