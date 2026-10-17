@@ -1667,7 +1667,8 @@ export default function AgentTasksPage() {
       {/* 작업 상세 모달 */}
       {detailTaskId && (
         <Modal open={!!detailTaskId} onClose={() => setDetailTaskId(null)} title={t("modalTitle")}>
-          <TaskDetailModal taskId={detailTaskId} />
+          {/* 작업이 바뀌면(체크포인트 분기 등) 새로 그린다 — 이전 작업의 파일·편집 상태가 남지 않게. */}
+          <TaskDetailModal key={detailTaskId} taskId={detailTaskId} />
         </Modal>
       )}
       {previewTaskId && (
