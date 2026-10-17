@@ -1,7 +1,6 @@
 /**
  * npm audit 게이트(F28.8) — 새 high 권고·만료된 허용·해소돼 남은 허용 항목 판정.
  */
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { evaluateAudit } = require('../../../../../scripts/audit-gate.cjs') as {
     evaluateAudit: (audit: unknown, allowlist: unknown[], opts?: { level?: string; now?: Date }) => {
         ok: boolean; failures: Array<{ id: string }>; expired: Array<{ id: string }>; allowed: Array<{ id: string }>; unused: string[];

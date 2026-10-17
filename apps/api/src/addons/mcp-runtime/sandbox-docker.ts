@@ -25,8 +25,6 @@
  *
  * @module mcp/sandbox-docker
  */
-import * as fs from 'fs';
-import * as path from 'path';
 
 /** 'full'=bridge, 'none'=--network none, 'host'=컨테이너 없이 호스트 직접 실행(opt-out) */
 type SandboxNetwork = 'full' | 'none' | 'host';
