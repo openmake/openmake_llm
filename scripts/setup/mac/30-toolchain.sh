@@ -5,7 +5,9 @@
 # install_mac.sh 단계 — Node 24 · PM2 · Docker(전용 Colima) · 포트 충돌 회피
 # ==============================================================================
 
-node_major() { node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0; }
+# Node 버전 검사(.node-version 정확 일치) — 저장소 루트는 install_mac.sh 의 SCRIPT_DIR.
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/scripts/lib/node-version.sh"
 
 ensure_node() {
     log_step "Node.js $NODE_MAJOR"
@@ -15,7 +17,11 @@ ensure_node() {
     # keg-only formula 라 PATH 에 직접 올린다 — PM2 가 기동 시점 PATH 의 node 를 쓴다.
     export PATH="$bin:$PATH"
     persist_path "$bin"
-    [[ "$(node_major)" -eq $NODE_MAJOR ]] || die "node $(node -v) — package.json engines 는 >=$NODE_MAJOR <$((NODE_MAJOR + 1))"
+    # 메이저만이 아니라 .node-version 과 정확히 같아야 한다 (안내는 require_node_version 이 stderr 에 낸다).
+    require_node_version "$SCRIPT_DIR" \
+        || die "node $(node -v) 가 .node-version($(node_version_pinned "$SCRIPT_DIR")) 과 다릅니다 — 위 안내대로 맞춘 뒤 다시 실행하세요."
+    # brew upgrade 가 다른 판으로 올리지 않게 고정한다 (실패해도 설치는 계속).
+    brew pin "node@$NODE_MAJOR" >/dev/null 2>&1 || log_warn "brew pin node@$NODE_MAJOR 실패 — 'brew pin node@$NODE_MAJOR' 를 직접 실행하세요."
     log_ok "node $(node -v) / npm $(npm -v)"
 }
 

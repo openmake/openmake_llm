@@ -10,7 +10,7 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 
 # install_mac.sh 가 주는 전역·도우미의 최소 대역
 HOME="$TMP/home"; mkdir -p "$HOME"
-NODE_MAJOR=24; OMK_ROOT="$TMP/root"; PG_CONTAINER="openmake-postgres"; SKIP_DOCKER=0
+SCRIPT_DIR="$(cd "$HERE/../.." && pwd)"; NODE_MAJOR=24; OMK_ROOT="$TMP/root"; PG_CONTAINER="openmake-postgres"; SKIP_DOCKER=0
 log_info() { :; }; log_ok() { :; }; log_warn() { printf 'WARN %s\n' "$*"; }; log_step() { :; }
 die() { printf 'DIE %s\n' "$*"; exit 2; }
 add_todo() { :; }
