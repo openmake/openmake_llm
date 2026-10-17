@@ -12,7 +12,6 @@ jest.mock('../../config/local-bridge', () => ({
     LOCAL_BRIDGE: { ...jest.requireActual('../../config/local-bridge').LOCAL_BRIDGE, MAX_DEVICES: 3 },
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { getLocalBridgeRegistry } = require('./registry') as typeof import('./registry');
 type DeviceSession = import('./registry').DeviceSession;
 

@@ -152,6 +152,8 @@ export default function AdminAuditPage() {
               variant="outline"
               size="sm"
               disabled={loading || error}
+              // API(CSV 다운로드) 주소라 Next 페이지 이동이 아니다 — 브라우저가 직접 받게 한다.
+              // eslint-disable-next-line @next/next/no-location-assign-relative-destination
               onClick={() => { window.location.href = `/api/audit/export?${query}`; }}
             >
               <Download className="h-4 w-4" />

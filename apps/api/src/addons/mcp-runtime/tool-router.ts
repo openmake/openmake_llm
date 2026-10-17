@@ -38,7 +38,6 @@ import { MCP_EXTERNAL_TOOL_LIMITS } from '../../config/timeouts';
 import { inputAwareTimer } from './elicitation-bridge';
 import { isConnectionDeathError } from '../../tool-contract/tool-error-classifier';
 import { isToolCircuitOpen } from '../../tool-contract/tool-health';
-import { withToolNameSuggestions } from '../../tool-contract/tool-name-suggest';
 import type { UserMCPPool } from './user-pool';
 import type { ExternalMCPClient } from './external-client';
 import { collectUserPoolTools } from './user-pool-tools';

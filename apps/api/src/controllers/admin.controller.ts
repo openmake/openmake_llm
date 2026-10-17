@@ -6,16 +6,13 @@
  */
 
 import { Request, Response, Router } from 'express';
-import { csvCell } from '../utils/csv';
 import { getUserManager, UserRole, USER_ROLES, isUserRole } from '../data/user-manager';
-import { getPool } from '../data/models/unified-database';
 import { requireAuth, requireAdmin } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, internalError } from '../utils/api-response';
-import { CAPACITY } from '../config/runtime-limits';
 import { validatePasswordComplexity } from '../services/AuthService';
 import { listAlertHistory, exportAlertHistoryCsv, getAlertStats, getLlmPoolStats, acknowledgeAlert } from './admin-alerts.controller';
-import { PAGINATION } from '../config/http-data-limits';
+import { getConversations, getStats, exportConversations } from './admin-conversations.controller';
 import type { AuditAction } from '../config/audit-actions';
 
 const log = createLogger('AdminController');
@@ -71,170 +68,10 @@ class AdminController {
         this.router.post('/alerts/:id/acknowledge', acknowledgeAlert);
 
         // 관리자용 대화 목록 (모든 사용자 대화 조회)
-        this.router.get('/stats', this.getStats.bind(this));
-        this.router.get('/conversations/export', this.exportConversations.bind(this));
-        this.router.get('/conversations', this.getConversations.bind(this));
+        this.router.get('/stats', getStats);
+        this.router.get('/conversations/export', exportConversations);
+        this.router.get('/conversations', getConversations);
     }
-
-    /**
-     * GET /api/admin/conversations - 전체 대화 목록 (관리자용)
-     */
-    private async getConversations(req: Request, res: Response): Promise<void> {
-        try {
-            const pool = getPool();
-            const page = Math.max(1, parseInt(req.query.page as string) || 1);
-            const limit = Math.min(parseInt(req.query.limit as string) || PAGINATION.USERS_DEFAULT_LIMIT, PAGINATION.USERS_MAX_LIMIT);
-            const offset = (page - 1) * limit;
-            const startDate = req.query.startDate as string | undefined;
-            const endDate = req.query.endDate as string | undefined;
-            const date = req.query.date as string | undefined; // Legacy single date support
-            const role = req.query.role as string | undefined;
-            const search = req.query.search as string | undefined;
-
-            const conditions: string[] = [];
-            const params: unknown[] = [];
-            let paramIdx = 1;
-            // Date range filter (startDate/endDate takes precedence)
-            if (startDate) {
-                conditions.push(`cm.created_at::date >= $${paramIdx++}`);
-                params.push(startDate);
-            }
-            if (endDate) {
-                conditions.push(`cm.created_at::date <= $${paramIdx++}`);
-                params.push(endDate);
-            }
-            // Legacy single date filter (fallback if no range provided)
-            if (!startDate && !endDate && date) {
-                conditions.push(`cm.created_at::date = $${paramIdx++}`);
-                params.push(date);
-            }
-            if (role && ['user', 'assistant', 'system'].includes(role)) {
-                conditions.push(`cm.role = $${paramIdx++}`);
-                params.push(role);
-            }
-            if (search) {
-                conditions.push(`cm.content ILIKE $${paramIdx++}`);
-                params.push(`%${search}%`);
-            }
-
-            const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-
-            const countResult = await pool.query(
-                `SELECT COUNT(*) as total FROM conversation_messages cm ${where}`,
-                params
-            );
-            const total = parseInt(countResult.rows[0].total, 10);
-
-            const dataResult = await pool.query(
-                `SELECT
-                    cm.id,
-                    cm.session_id,
-                    cm.role,
-                    cm.content,
-                    cm.model,
-                    cm.created_at,
-                    cs.title AS session_title,
-                    u.email AS user_email
-                 FROM conversation_messages cm
-                 LEFT JOIN conversation_sessions cs ON cs.id = cm.session_id
-                 LEFT JOIN users u ON u.id = cs.user_id
-                 ${where}
-                 ORDER BY cm.created_at DESC
-                 LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
-                [...params, limit, offset]
-            );
-
-            const conversations = dataResult.rows.map((row: Record<string, unknown>) => ({
-                id: String(row['id']),
-                session_id: row['session_id'] as string,
-                role: row['role'] as string,
-                content: row['content'] as string,
-                model: (row['model'] as string | null) ?? null,
-                created_at: row['created_at'] as string,
-                session_title: (row['session_title'] as string | null) ?? null,
-                user_email: (row['user_email'] as string | null) ?? null
-            }));
-
-            res.json(success({ conversations, total, page, limit }));
-        } catch (error) {
-            log.error('[Admin Conversations] 오류:', error);
-            res.status(500).json(internalError('대화 목록 조회 실패'));
-        }
-    }
-
-    /**
-     * GET /api/admin/stats - 관리자 대시보드 통계
-     */
-    private async getStats(req: Request, res: Response): Promise<void> {
-        try {
-            const pool = getPool();
-            const todayStart = new Date();
-            todayStart.setHours(0, 0, 0, 0);
-
-            const result = await pool.query(
-                `SELECT
-                    (SELECT COUNT(*) FROM conversation_messages
-                     WHERE role = 'user' AND created_at >= $1) AS today_queries,
-                    (SELECT COUNT(*) FROM conversation_messages) AS total_messages,
-                    (SELECT COUNT(*) FROM conversation_sessions) AS total_sessions`,
-                [todayStart.toISOString()]
-            );
-
-            res.json(success({
-                today_queries: parseInt(result.rows[0].today_queries, 10),
-                total_messages: parseInt(result.rows[0].total_messages, 10),
-                total_sessions: parseInt(result.rows[0].total_sessions, 10)
-            }));
-        } catch (error) {
-            log.error('[Admin Stats] 오류:', error);
-            res.status(500).json(internalError('통계 조회 실패'));
-        }
-    }
-
-    /**
-     * GET /api/admin/conversations/export - 대화 기록 CSV 내보내기
-     */
-    private async exportConversations(req: Request, res: Response): Promise<void> {
-        try {
-            const pool = getPool();
-            const format = (req.query.format as string) || 'csv';
-
-            const result = await pool.query(
-                `SELECT
-                    cm.created_at,
-                    cm.role,
-                    cm.content,
-                    cm.model,
-                    cs.title AS session_title,
-                    u.email AS user_email
-                 FROM conversation_messages cm
-                 LEFT JOIN conversation_sessions cs ON cs.id = cm.session_id
-                 LEFT JOIN users u ON u.id = cs.user_id
-                 ORDER BY cm.created_at DESC
-                 LIMIT $1`,
-                [CAPACITY.ADMIN_EXPORT_LIMIT]
-            );
-
-            if (format === 'csv') {
-                const headers = ['created_at', 'role', 'content', 'model', 'session_title', 'user_email'];
-                const csvLines = [
-                    headers.join(','),
-                    ...result.rows.map((row: Record<string, unknown>) =>
-                        headers.map(h => csvCell(row[h] instanceof Date ? row[h] : (row[h] === null || row[h] === undefined ? '' : String(row[h])))).join(',')
-                    )
-                ];
-                res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-                res.setHeader('Content-Disposition', 'attachment; filename="conversations.csv"');
-                res.send(csvLines.join('\n'));
-            } else {
-                res.json(success({ conversations: result.rows }));
-            }
-        } catch (error) {
-            log.error('[Admin Export] 오류:', error);
-            res.status(500).json(internalError('내보내기 실패'));
-        }
-    }
-
 
     /**
      * POST /api/admin/users - 새 사용자 생성 (관리자)

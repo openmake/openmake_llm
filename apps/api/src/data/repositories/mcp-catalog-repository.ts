@@ -18,34 +18,27 @@ import { createLogger } from '../../utils/logger';
 import { SQL_RESULT_LIMITS } from '../../config/http-data-limits';
 import { isControlEnvKey, McpCatalogInputError } from '../../security/spawn-env-policy';
 import { validateCatalogInput } from './mcp-catalog-input';
+import {
+    applyEnvDefaults,
+    encryptEnv,
+    isPidAlive,
+    SERVER_INSTANCE_METRICS_SQL,
+    USER_INSTANCES_SUMMARY_SQL,
+    maskEnv,
+    renderArgs,
+    renderUrl,
+    type UserMcpServerRow,
+} from './mcp-catalog-helpers';
 import type {
     McpCatalogTemplate,
     McpFromCatalogPayload,
-    McpVisibility,
     McpInstance,
     McpInstanceStatus,
 } from '../../schemas/mcp-catalog.schema';
 
 const logger = createLogger('McpCatalogRepository');
 
-export interface UserMcpServerRow {
-    id: string;
-    user_id: string | null;
-    name: string;
-    transport_type: 'stdio' | 'sse' | 'streamable-http';
-    command: string | null;
-    args: unknown[] | null;
-    env: Record<string, string> | null;
-    url: string | null;
-    visibility: McpVisibility;
-    catalog_template_id: string | null;
-    auto_spawn: boolean;
-    enabled: boolean;
-    created_at: string;
-    updated_at: string;
-    /** stdio docker 샌드박스 네트워크 정책 ('full'|'none'). 042 마이그레이션. */
-    sandbox_network?: 'full' | 'none' | 'host' | null;
-}
+export type { UserMcpServerRow } from './mcp-catalog-helpers';
 
 export class McpCatalogRepository {
     constructor(private pool: Pool) {}
@@ -87,7 +80,7 @@ export class McpCatalogRepository {
              ORDER BY (user_id IS NULL) ASC, created_at DESC`,
             [userId],
         );
-        return result.rows.map(this.maskEnv);
+        return result.rows.map(maskEnv);
     }
 
     /**
@@ -124,9 +117,9 @@ export class McpCatalogRepository {
     ): Promise<UserMcpServerRow> {
         validateCatalogInput(template, payload);
         const id = `mcp_${userId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        const args = this.renderArgs(template, payload.args);
-        const env = this.encryptEnv(template, this.applyEnvDefaults(template, payload.env));
-        const url = this.renderUrl(template, payload.args);
+        const args = renderArgs(template, payload.args);
+        const env = encryptEnv(template, applyEnvDefaults(template, payload.env));
+        const url = renderUrl(template, payload.args);
         // command_template 의 첫 토큰만 command 컬럼에 저장 (예: "npx -y firecrawl-mcp" → "npx").
         // 나머지 토큰은 renderArgs 가 args 로 분리. child_process.spawn 은 command 가 단일 실행파일이어야 함.
         const commandOnly = template.transport_type === 'stdio'
@@ -156,7 +149,7 @@ export class McpCatalogRepository {
             ],
         );
         logger.info(`사용자 MCP 서버 등록: ${id} (template=${template.id}, user=${userId})`);
-        return this.maskEnv(result.rows[0]!);
+        return maskEnv(result.rows[0]!);
     }
 
     async deleteUserServer(serverId: string, userId: string, isAdmin: boolean): Promise<boolean> {
@@ -191,7 +184,7 @@ export class McpCatalogRepository {
                        visibility, catalog_template_id, enabled, auto_spawn, created_at, updated_at`,
             [id, name],
         );
-        return r.rows[0] ? this.maskEnv(r.rows[0]) : null;
+        return r.rows[0] ? maskEnv(r.rows[0]) : null;
     }
 
     async updateEnv(
@@ -230,7 +223,7 @@ export class McpCatalogRepository {
                        created_at::text, updated_at::text`,
             [serverId, JSON.stringify(merged)],
         );
-        return result.rows[0] ? this.maskEnv(result.rows[0]) : null;
+        return result.rows[0] ? maskEnv(result.rows[0]) : null;
     }
 
     async getServerById(serverId: string): Promise<UserMcpServerRow | null> {
@@ -241,7 +234,7 @@ export class McpCatalogRepository {
              FROM mcp_servers WHERE id = $1`,
             [serverId],
         );
-        return result.rows[0] ? this.maskEnv(result.rows[0]) : null;
+        return result.rows[0] ? maskEnv(result.rows[0]) : null;
     }
 
     async listInstances(userId: string): Promise<McpInstance[]> {
@@ -289,22 +282,7 @@ export class McpCatalogRepository {
             last_error_at: string | null;
             last_error_message: string | null;
         }>(
-            `SELECT
-                (CASE WHEN (
-                    SELECT status FROM mcp_server_instances
-                    WHERE mcp_server_id = $1 AND user_id = $2
-                    ORDER BY started_at DESC LIMIT 1
-                ) = 'running' THEN 1 ELSE 0 END)::text AS current_running,
-                COUNT(*)::text AS total_spawned,
-                COUNT(*) FILTER (WHERE status='crashed' AND started_at > NOW() - INTERVAL '24 hours')::text AS crashed_24h,
-                AVG(EXTRACT(EPOCH FROM (stopped_at - started_at)))
-                    FILTER (WHERE stopped_at IS NOT NULL)::text AS avg_uptime_sec,
-                MAX(started_at) FILTER (WHERE status='crashed')::text AS last_error_at,
-                (SELECT last_error FROM mcp_server_instances
-                  WHERE mcp_server_id = $1 AND user_id = $2 AND status='crashed'
-                  ORDER BY started_at DESC LIMIT 1) AS last_error_message
-              FROM mcp_server_instances
-              WHERE mcp_server_id = $1 AND user_id = $2`,
+            SERVER_INSTANCE_METRICS_SQL,
             [serverId, userId],
         );
         const row = r.rows[0];
@@ -349,18 +327,7 @@ export class McpCatalogRepository {
                 missingPid++;
                 continue;
             }
-            let alive = false;
-            try {
-                // signal 0 — non-disruptive aliveness probe.
-                // ESRCH (no such process) → dead. EPERM → alive (외부 권한).
-                process.kill(row.pid, 0);
-                alive = true;
-            } catch (e) {
-                const code = (e as NodeJS.ErrnoException).code;
-                if (code === 'EPERM') alive = true; // 외부 권한 — 보수적으로 alive
-                else alive = false;
-            }
-            if (alive) {
+            if (isPidAlive(row.pid)) {
                 verified++;
             } else {
                 declaredDead++;
@@ -392,13 +359,7 @@ export class McpCatalogRepository {
             total_spawned: string;
             crashed_24h: string;
         }>(
-            `SELECT
-                (SELECT COUNT(DISTINCT id)::text FROM mcp_servers WHERE user_id = $1) AS total_servers,
-                COUNT(*) FILTER (WHERE status IN ('starting','running'))::text AS current_running,
-                COUNT(*)::text AS total_spawned,
-                COUNT(*) FILTER (WHERE status='crashed' AND started_at > NOW() - INTERVAL '24 hours')::text AS crashed_24h
-              FROM mcp_server_instances
-              WHERE user_id = $1`,
+            USER_INSTANCES_SUMMARY_SQL,
             [userId],
         );
         const row = r.rows[0];
@@ -545,54 +506,4 @@ export class McpCatalogRepository {
         }
         return decrypted;
     }
-
-    private renderArgs(template: McpCatalogTemplate, args: Record<string, unknown>): unknown[] {
-        if (template.transport_type !== 'stdio') return [];
-        const baseArgs = (template.command_template ?? '').split(/\s+/).slice(1).filter(Boolean);
-        const userArgs = Object.entries(args).map(([k, v]) => `--${k}=${String(v)}`);
-        return [...baseArgs, ...userArgs];
-    }
-
-    private renderUrl(template: McpCatalogTemplate, args: Record<string, unknown>): string | null {
-        if (template.transport_type === 'stdio') return null;
-        let url = template.url_template ?? '';
-        for (const [k, v] of Object.entries(args)) {
-            url = url.replace(`{${k}}`, encodeURIComponent(String(v)));
-        }
-        return url || null;
-    }
-
-    /**
-     * env_schema properties 의 `default` 를 미입력 키에 채운다 (설치 시 1회, 값은 평문 그대로).
-     * 설치 폼은 `required` 키만 입력받으므로, 서버가 동작하는 데 필요하지만 사용자가 알 필요 없는
-     * 고정 env(예: readonly 샌드박스에서 SQLite 캐시 경로를 캐시 볼륨으로 돌리는 HOME)를 카탈로그가
-     * 선언할 수 있다. 사용자가 명시한 값이 우선한다.
-     */
-    private applyEnvDefaults(template: McpCatalogTemplate, env: Record<string, string>): Record<string, string> {
-        const props = (template.env_schema as { properties?: Record<string, { default?: unknown }> }).properties ?? {};
-        const merged: Record<string, string> = { ...env };
-        for (const [k, p] of Object.entries(props)) {
-            if (merged[k] === undefined && typeof p?.default === 'string') merged[k] = p.default;
-        }
-        return merged;
-    }
-
-    private encryptEnv(template: McpCatalogTemplate, env: Record<string, string>): Record<string, string> {
-        const envSchema = template.env_schema as { properties?: Record<string, { secret?: boolean }> };
-        const encrypted: Record<string, string> = {};
-        for (const [k, v] of Object.entries(env)) {
-            const isSecret = envSchema.properties?.[k]?.secret === true;
-            encrypted[k] = isSecret ? encryptToken(v) : v;
-        }
-        return encrypted;
-    }
-
-    private maskEnv = (row: UserMcpServerRow): UserMcpServerRow => {
-        if (!row.env) return row;
-        const masked: Record<string, string> = {};
-        for (const [k, v] of Object.entries(row.env)) {
-            masked[k] = typeof v === 'string' && v.startsWith('v1:') ? '***' : v;
-        }
-        return { ...row, env: masked };
-    };
 }

@@ -18,7 +18,6 @@ describe('resolveEffectiveContext', () => {
 
     function load(): typeof import('./model-pool') {
         jest.resetModules();
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
         return require('./model-pool');
     }
 

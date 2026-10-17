@@ -4,7 +4,7 @@
  * /admin/cost-rates — 비용 단가표 (F25 PR-1, 134). kind × rate_key × unit 당 USD micros.
  * 토큰류 unit 은 "1M 토큰당 USD" 로 입력한다(1 USD/1M = 1 micro/token 이라 값이 같다).
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Coins, Plus, Trash2 } from "lucide-react";
 import { PageHeader, PageBody, Card, CardHeader, CardTitle, CardContent, Button, Table, Th, Td } from "@/components/ui/primitives";
@@ -38,7 +38,7 @@ export default function AdminCostRatesPage() {
   }, [t]);
   useEffect(() => { void load(); }, [load]);
 
-  const units = kinds.find((k) => k.kind === kind)?.units ?? [];
+  const units = useMemo(() => kinds.find((k) => k.kind === kind)?.units ?? [], [kinds, kind]);
   useEffect(() => { if (units.length > 0 && !units.includes(unit)) setUnit(units[0]); }, [units, unit]);
 
   async function save() {

@@ -2,7 +2,6 @@ describe('AGENT_TASK_LONG_RUNNING — 기본값과 상한', () => {
     const load = (env: Record<string, string>) => {
         jest.resetModules();
         for (const [k, v] of Object.entries(env)) process.env[k] = v;
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         return require('../agent-task-long-running').AGENT_TASK_LONG_RUNNING as typeof import('../agent-task-long-running').AGENT_TASK_LONG_RUNNING;
     };
     afterEach(() => {
