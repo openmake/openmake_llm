@@ -8,7 +8,7 @@ import { redactText, capText, redactSecrets } from '../../utils/redact';
 
 describe('redactText — 경로', () => {
     test('홈 디렉토리를 ~ 로 접는다', () => {
-        expect(redactText('/Users/openmake_mac/omk-worktree-test/.git/index.lock'))
+        expect(redactText('/Users/alice/omk-worktree-test/.git/index.lock'))
             .toBe('~/omk-worktree-test/.git/index.lock');
         expect(redactText('/home/smith/vllm/vllm.env')).toBe('~/vllm/vllm.env');
     });
@@ -81,13 +81,13 @@ describe('회귀 코퍼스 — 운영 agent_task_steps 실제 샘플 (2026-08-26
         },
         {
             name: '사용자 홈의 git worktree 오류',
-            input: 'Error: [stdout]\nls: /Users/openmake_mac/omk-worktree-test/.git/index.lock: No such file or directory',
-            mustNotContain: ['/Users/openmake_mac'],
+            input: 'Error: [stdout]\nls: /Users/alice/omk-worktree-test/.git/index.lock: No such file or directory',
+            mustNotContain: ['/Users/alice'],
         },
         {
             name: 'git worktree 생성 실패(절대경로 2개)',
-            input: "fatal: Unable to create '/Users/openmake_mac/omk-worktree-test/.git/worktrees/ae8fa97e/index.lock': Operation not permitted",
-            mustNotContain: ['/Users/openmake_mac'],
+            input: "fatal: Unable to create '/Users/alice/omk-worktree-test/.git/worktrees/ae8fa97e/index.lock': Operation not permitted",
+            mustNotContain: ['/Users/alice'],
         },
         {
             name: '서버 데이터 디렉토리 노출',
@@ -144,7 +144,7 @@ describe('redactSecrets — 로그 한 줄(F24.6)', () => {
         const lines = [
             '[AgentTask] 워크스페이스 /private/tmp/openmake-task-workspaces/a00680d9/workspace 생성',
             '[Chat] 모델 qwen3.8-27b → https://mcp.linear.app/mcp 연결 (user 3, session 6f1c2a9e-1b2c-4d3e-8f90-abcdef123456)',
-            '[Auth] 로그인 excellokrea2@example.com 성공',
+            '[Auth] 로그인 alice@example.com 성공',
             'postgres://127.0.0.1:5432/openmake_llm 연결',
             'task-queue 대기 3 · risk-assessment 완료',
         ];

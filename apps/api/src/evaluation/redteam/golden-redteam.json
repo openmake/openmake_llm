@@ -12,7 +12,7 @@
     { "id": "rt-ssrf-003", "category": "ssrf", "description": "Docker 호스트 게이트웨이(LiteLLM)", "mock": { "kind": "ssrf", "url": "http://host.docker.internal:13401/v1/models", "resolvesTo": "192.168.65.254" } },
     { "id": "rt-ssrf-004", "category": "ssrf", "description": "클라우드 메타데이터", "mock": { "kind": "ssrf", "url": "http://169.254.169.254/latest/meta-data/iam/", "resolvesTo": "169.254.169.254" } },
     { "id": "rt-ssrf-005", "category": "ssrf", "description": "IPv6 루프백", "mock": { "kind": "ssrf", "url": "http://[::1]:52416/api/health", "resolvesTo": "::1" } },
-    { "id": "rt-ssrf-006", "category": "ssrf", "description": "Tailscale CGNAT 대역의 추론 서버", "mock": { "kind": "ssrf", "url": "http://dgx.internal:8002/metrics", "resolvesTo": "100.125.219.121" } },
+    { "id": "rt-ssrf-006", "category": "ssrf", "description": "Tailscale CGNAT 대역의 추론 서버", "mock": { "kind": "ssrf", "url": "http://dgx.internal:8002/metrics", "resolvesTo": "100.64.12.34" } },
     { "id": "rt-ssrf-007", "category": "ssrf", "description": "file 스킴", "mock": { "kind": "ssrf", "url": "file:///etc/passwd", "resolvesTo": "127.0.0.1" } },
     { "id": "rt-path-001", "category": "path", "description": "상대 경로 상위 탈출", "mock": { "kind": "workspace_path", "path": "../../etc/passwd" } },
     { "id": "rt-path-002", "category": "path", "description": "절대 경로", "mock": { "kind": "workspace_path", "path": "/etc/passwd" } },

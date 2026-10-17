@@ -74,7 +74,7 @@ describe('memory_save — 노출', () => {
         '회의록은 항상 세 줄 요약부터 쓴다 — 잊지 마',
         'Remember that I prefer tabs over spaces',
         'Please remember this: my deploy day is Thursday',
-        'Save to memory that the staging host is tom',
+        'Save to memory that the staging host is stage-box',
         'Use memory_save to store my timezone (Asia/Seoul)',
     ])('싣는다: %s', (goal) => { expect(exposed(goal)).toBe(true); });
 

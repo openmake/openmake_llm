@@ -79,9 +79,9 @@ printf 'SEARXNG_URL=http://search.internal:8080\n' > "$SX/.env"; searxng_ensure 
 eq "ensure: 사용자 URL 은 그대로" "$(dotenv_get "$SX/.env" SEARXNG_URL)|$SEARCH_CHANGED" "http://search.internal:8080|0"
 
 # ── 프록시 주소(origin) 허용 ──
-OX="$TMP/ox"; mkdir -p "$OX"; printf 'CORS_ORIGINS=http://localhost:13000\nOMK_PROXY_PORT=33000\nOMK_ENV_HOSTS=tom\n' > "$OX/.env"
+OX="$TMP/ox"; mkdir -p "$OX"; printf 'CORS_ORIGINS=http://localhost:13000\nOMK_PROXY_PORT=33000\nOMK_ENV_HOSTS=stage-box\n' > "$OX/.env"
 env_apply_origins "$OX"
-eq "origins: 프록시 포트의 localhost·호스트 추가" "$(dotenv_get "$OX/.env" CORS_ORIGINS)|$ORIGINS_CHANGED" "http://localhost:13000,http://localhost:33000,http://127.0.0.1:33000,http://tom:33000|1"
+eq "origins: 프록시 포트의 localhost·호스트 추가" "$(dotenv_get "$OX/.env" CORS_ORIGINS)|$ORIGINS_CHANGED" "http://localhost:13000,http://localhost:33000,http://127.0.0.1:33000,http://stage-box:33000|1"
 env_apply_origins "$OX"; eq "origins: 멱등" "$ORIGINS_CHANGED" "0"
 printf 'CORS_ORIGINS=x\n' > "$OX/.env"; env_apply_origins "$OX"; eq "origins: 프록시 없으면 그대로" "$(dotenv_get "$OX/.env" CORS_ORIGINS)" "x"
 
@@ -214,10 +214,10 @@ unset PM2_HOME
 eq "csv union keeps order" "$(csv_union "a,b" "b,c")" "a,b,c"
 eq "csv union empty left"  "$(csv_union "" "x,y")" "x,y"
 DL="$TMP/devllm"; mkdir -p "$DL"; printf 'PORT=52417\nOMK_WEB_PORT=3010\nCORS_ORIGINS=http://localhost:3010\n' > "$DL/.env"
-dev_apply_hosts "$DL" "tom,100.1.2.3"
-eq "cors gets host origins" "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "http://localhost:3010,http://tom:3010,http://tom:52417,http://100.1.2.3:3010,http://100.1.2.3:52417"
-eq "hosts remembered"       "$(dotenv_get "$DL/.env" OMK_DEV_HOSTS)" "tom,100.1.2.3"
-C1="$(dotenv_get "$DL/.env" CORS_ORIGINS)"; dev_apply_hosts "$DL" "tom,100.1.2.3"
+dev_apply_hosts "$DL" "stage-box,100.1.2.3"
+eq "cors gets host origins" "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "http://localhost:3010,http://stage-box:3010,http://stage-box:52417,http://100.1.2.3:3010,http://100.1.2.3:52417"
+eq "hosts remembered"       "$(dotenv_get "$DL/.env" OMK_DEV_HOSTS)" "stage-box,100.1.2.3"
+C1="$(dotenv_get "$DL/.env" CORS_ORIGINS)"; dev_apply_hosts "$DL" "stage-box,100.1.2.3"
 eq "cors idempotent"        "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "$C1"
 C0="$(dotenv_get "$DL/.env" CORS_ORIGINS)"; dev_apply_hosts "$DL" ""
 eq "no hosts is no-op"      "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "$C0"

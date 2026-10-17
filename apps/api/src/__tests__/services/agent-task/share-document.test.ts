@@ -8,7 +8,7 @@ import { buildShareDocument, SHARE_LIMITS } from '../../../services/agent-task/s
 
 const task = {
     id: 'task-1',
-    goal: '/Users/openmake_mac/repo 의 타입 오류를 고쳐라',
+    goal: '/Users/alice/repo 의 타입 오류를 고쳐라',
     result: '완료했습니다. LLM_API_KEY=sk-abcdef1234567890abcd 로 검증했습니다.',
     status: 'completed',
     current_turn: 7,
@@ -41,7 +41,7 @@ describe('buildShareDocument — 선별(allowlist)', () => {
         ['steering(사용자 개입)', 'STEERING_SHOULD_NOT_APPEAR'],
         ['retry 원문', 'RETRY_SHOULD_NOT_APPEAR'],
         ['workspace 절대경로', '/private/tmp/openmake-task-workspaces'],
-        ['홈 디렉토리', '/Users/openmake_mac'],
+        ['홈 디렉토리', '/Users/alice'],
         ['자격증명 값', 'sk-abcdef1234567890abcd'],
         ['이메일', 'riskpw@openmake.cc'],
         ['마크업 아티팩트 본문', 'MARKUP_BODY_SHOULD_NOT_APPEAR'],
