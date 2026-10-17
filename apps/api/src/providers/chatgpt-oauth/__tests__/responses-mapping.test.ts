@@ -238,7 +238,6 @@ describe('ResponsesStreamCollector', () => {
 });
 
 describe('ToolNameCodec (라이브 E2E 회귀: Codex 도구명 패턴)', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { ToolNameCodec } = require('../responses-mapping');
     const CODEX_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
@@ -306,9 +305,7 @@ describe('ToolNameCodec (라이브 E2E 회귀: Codex 도구명 패턴)', () => {
 });
 
 describe('ProviderRoleClient (라이브 E2E 회귀: role 경로 403 폴백)', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { createProviderRoleClient } = require('../role-client');
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { ProviderError } = require('../../provider-errors');
 
     const makeProvider = (impl: unknown) => ({
@@ -392,7 +389,6 @@ describe('ProviderRoleClient (라이브 E2E 회귀: role 경로 403 폴백)', ()
 });
 
 describe('ProviderRoleClient 사용량 기록·쿼터 면제 (2026-07-26 정책)', () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { createProviderRoleClient } = require('../role-client');
 
     const makeProvider = (usage: unknown) => ({

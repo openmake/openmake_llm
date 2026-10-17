@@ -24,23 +24,18 @@ import type { Pool } from 'pg';
 import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
 import { recordExtensionInstallation } from '../../services/addon/addon-state';
-import { LocalDirectoryFetcher, isLocalSourceUrl } from './local-directory-fetcher';
+import { isLocalSourceUrl } from './local-directory-fetcher';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import { GitFetcher } from './git-fetcher';
-import { ArchiveFetcher } from './archive-fetcher';
-import { InternalBundleFetcher, isInternalBundleUrl, isNonGitSourceUrl, nonGitPseudoRepo, type LoadedBundle } from './internal-bundle-fetcher';
+import { isNonGitSourceUrl, nonGitPseudoRepo, type LoadedBundle } from './internal-bundle-fetcher';
 import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, type CatalogSnapshot } from './catalog-snapshot';
 import { translateCatalogDescriptions } from './catalog-translator';
 // 기존 import 경로 호환 재노출 (테스트 등이 이 모듈에서 import)
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
-import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, detectUnsupportedComponents, type ManifestCandidate } from './repo-scanner';
+import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, type ManifestCandidate } from './repo-scanner';
 import { validateExtensionManifest, parseMarketplaceFile } from './extension-manifest-validator';
-import { ADDON_MANIFEST_FILENAME, parseInstallableAddonManifest } from '../../addon-host/manifest';
-import { APP_VERSION } from '../../config/constants';
 import {
     findExtensionManifestPath,
-    discoverSkillPaths,
-    symlinkedSkillPaths,
     synthesizedManifestPath,
     isSynthesizedManifestPath,
     rootOfSynthesizedPath,
@@ -53,6 +48,14 @@ import {
     type ComponentContext,
 } from './extension-components';
 import { GitIngestService } from './git-ingest-service';
+import {
+    makeNonGitFetcher,
+    loadBundledAddonManifest,
+    pushManifestWarnings,
+    collectSkillPaths,
+    importSkillPaths,
+    shapeFromRow,
+} from './extension-ingest-helpers';
 import { UserExtensionRepository } from '../../data/repositories/user-extension-repository';
 import { evaluatePermissionState } from '../../services/extensions/permission-state';
 import { EXTENSION_INGEST, SKILL_CREATOR } from '../../config/constants';
@@ -63,8 +66,6 @@ const logger = createLogger('ExtensionIngestService');
 import type {
     ImportInput,
     SkillInstallResult,
-    AgentInstallResult,
-    McpServerInstallResult,
     ImportResult,
     UpdateCheckResult,
     CandidateListResult,
@@ -85,25 +86,7 @@ export class ExtensionIngestService {
 
     /** git 이 아닌 소스(.zip 아카이브 · 내부 번들 · 로컬 디렉터리) fetcher 생성 — GitFetcher 동형 (duck-typed). */
     private makeArchiveFetcher(url: string): GitFetcher {
-        if (isLocalSourceUrl(url)) {
-            // 서버 파일시스템을 읽는 소스 — 루트 고정(realpath)·관리자 전용(import 에서 게이트).
-            return new LocalDirectoryFetcher(url, {
-                root: EXTENSION_INGEST.localSourceRoot,
-                maxEntries: EXTENSION_INGEST.localSourceMaxEntries,
-                maxTotalBytes: EXTENSION_INGEST.localSourceMaxTotalBytes,
-            }) as unknown as GitFetcher;
-        }
-        if (isInternalBundleUrl(url)) {
-            const loader = this.opts.internalBundleLoader;
-            if (!loader) throw new Error('INTERNAL_BUNDLE_UNSUPPORTED: internalBundleLoader 미주입');
-            return new InternalBundleFetcher(url, loader) as unknown as GitFetcher;
-        }
-        if (this.opts.archiveFetcherFactory) return this.opts.archiveFetcherFactory(url);
-        return new ArchiveFetcher(url, {
-            maxArchiveBytes: EXTENSION_INGEST.archiveMaxBytes,
-            maxEntries: EXTENSION_INGEST.archiveMaxEntries,
-            maxTotalBytes: EXTENSION_INGEST.archiveMaxTotalBytes,
-        }) as unknown as GitFetcher;
+        return makeNonGitFetcher(url, this.opts);
     }
 
     async import(input: ImportInput): Promise<ImportResult | CandidateListResult> {
@@ -241,18 +224,8 @@ export class ExtensionIngestService {
         const root = synthesized ? rootOfSynthesizedPath(candidate.path) : resolveExtensionRoot(candidate.path);
         if (synthesized) warnings.push('MANIFEST_SYNTHESIZED: plugin.json 이 없어 마켓플레이스 엔트리 메타로 설치');
 
-        // (4-1) 번들이 Add-on 매니페스트를 동봉했으면 내장 add-on 과 같은 계약으로 검증한다 (없으면 종전 그대로)
-        const addonManifestPath = `${root}${ADDON_MANIFEST_FILENAME}`; // root 는 '' 또는 '/' 로 끝난다
-        // 동봉했으면 permissions 를 deny-by-default 로 집행한다(미동봉 = undefined = 종전 동작).
-        let addonPermissions: readonly string[] | undefined;
-        let addonScope: string | undefined;
-        if (tree.entries.some(e => e.path === addonManifestPath)) {
-            const addonRaw = await fetcher.fetchFile(owner, repo, sha, addonManifestPath, EXTENSION_INGEST.manifestMaxBytes);
-            const parsedAddon = parseInstallableAddonManifest(addonRaw, APP_VERSION);
-            if (parsedAddon.errors.length > 0) throw new Error(`INVALID_ADDON_MANIFEST: ${parsedAddon.errors.join('; ')}`);
-            addonPermissions = parsedAddon.manifest?.permissions ?? [];
-            addonScope = parsedAddon.manifest?.scope;
-        }
+        // (4-1) 번들 동봉 Add-on 매니페스트 검증 — permissions 는 deny-by-default 집행 (extension-ingest-helpers)
+        const { addonPermissions, addonScope } = await loadBundledAddonManifest(fetcher, { owner, repo, sha, entries: tree.entries, root });
 
         // (5) dedupe + 상한 + 동명 충돌
         const sourceHash = 'sha256:' + crypto.createHash('sha256')
@@ -263,7 +236,7 @@ export class ExtensionIngestService {
         const existing = await extRepo.findRecentByHash(input.userId, sourceHash, EXTENSION_INGEST.dedupeWindowHours);
         if (existing) {
             logger.info(`extension-ingest dedupe hit: ${existing.id}`);
-            return this.shapeFromRow(existing, true);
+            return shapeFromRow(existing, true);
         }
 
         // 동일 이름 active 설치: 같은 소스(같은 repo 또는 같은 아카이브 URL)면 업데이트 모드, 다른 소스면 충돌
@@ -278,7 +251,7 @@ export class ExtensionIngestService {
             if (sameSource) {
                 if (sameName.source_ref === sha) {
                     // 이미 최신 — 변경 없음
-                    return { ...this.shapeFromRow(sameName, false), upToDate: true };
+                    return { ...shapeFromRow(sameName, false), upToDate: true };
                 }
                 updateTarget = sameName;
                 // 회수 전에 승인 상태를 기억한다 — 같은 이름으로 다시 들어온 스킬은 승인·배정을 이어받는다.
@@ -304,27 +277,11 @@ export class ExtensionIngestService {
         const permissionSave = { state: permission.next, granted: permission.granted, requested: permission.requested, reviewedBy: permission.reviewedNow ? input.userId : null };
         if (permission.blocked.length > 0) warnings.push(`PERMISSION_REVIEW_REQUIRED: ${permission.blocked.join(', ')} — 이전에 승인한 범위보다 넓어 재승인 전까지 막았습니다(설정 → 확장에서 재승인)`);
 
-        // (5-c) 이 환경이 설치하지 않는 구성요소 — 조용히 무시하지 않고 리포트한다
-        const unsupported = detectUnsupportedComponents(tree.entries, root, manifest.raw);
-        if (unsupported.length > 0) {
-            warnings.push(`UNSUPPORTED_COMPONENTS: ${unsupported.join(', ')} — 이 환경에 대응 개념이 없어 설치되지 않았습니다`);
-        }
-        // plugin.json mcpServers 항목 단위 사유 (설치는 나머지 항목으로 계속)
-        if (manifest.mcpWarnings.length > 0) {
-            warnings.push(`MCP_ENTRIES_SKIPPED: ${manifest.mcpWarnings.join('; ')}`);
-        }
+        // (5-c) 이 환경이 설치하지 않는 구성요소 · 건너뛴 mcpServers 항목 리포트
+        pushManifestWarnings(tree.entries, root, manifest, warnings);
 
         // (6-a) skills — 기본 레이아웃 + plugin.json `skills` 경로 필드 + 루트 컨테이너 폴백 (extension-discovery)
-        let skillPaths = discoverSkillPaths(tree.entries, root, manifest.skillPaths);
-        const symlinked = symlinkedSkillPaths(tree.entries, root);
-        if (symlinked.length > 0) {
-            warnings.push(`SKILL_SYMLINK_SKIPPED: git 심링크라 설치 불가 — ${symlinked.join(', ')}`);
-        }
-        if (skillPaths.length > EXTENSION_INGEST.maxSkillsPerExtension) {
-            warnings.push(`SKILLS_TRUNCATED: ${skillPaths.length}개 중 ${EXTENSION_INGEST.maxSkillsPerExtension}개만 설치`);
-            skillPaths = skillPaths.slice(0, EXTENSION_INGEST.maxSkillsPerExtension);
-        }
-        const skillResults: SkillInstallResult[] = [];
+        const skillPaths = collectSkillPaths(tree.entries, root, manifest.skillPaths, warnings);
         const skillService = new GitIngestService({
             pool: this.opts.pool,
             llmClientFactory: this.opts.llmClientFactory,
@@ -333,30 +290,9 @@ export class ExtensionIngestService {
             // 거대 마켓플레이스 repo — 확장 경로 상한으로 재조회 (스킬 ingest 기본 상한이면 REPO_TOO_LARGE)
             maxTreeEntries: EXTENSION_INGEST.maxTreeEntries,
         });
-        for (const path of skillPaths) {
-            try {
-                const r = await skillService.import({
-                    userId: input.userId,
-                    isAdmin: input.isAdmin,
-                    gitUrl: effectiveGitUrl,
-                    gitRef: sha,
-                    gitPath: path,
-                    accessToken: input.accessToken,
-                    target: 'user',
-                });
-                if ('selectionRequired' in r && r.selectionRequired) {
-                    // explicit gitPath 라 도달 불가하지만 방어
-                    skillResults.push({ path, error: 'unexpected multi-candidate' });
-                } else {
-                    skillResults.push({
-                        path, skillId: r.skillId, name: r.name, deduped: r.deduped,
-                        ...(r.compatNotes.length > 0 ? { compatNotes: r.compatNotes } : {}),
-                    });
-                }
-            } catch (e) {
-                skillResults.push({ path, error: e instanceof Error ? e.message : String(e) });
-            }
-        }
+        const skillResults: SkillInstallResult[] = await importSkillPaths(skillService, skillPaths, {
+            userId: input.userId, isAdmin: input.isAdmin, gitUrl: effectiveGitUrl, sha, accessToken: input.accessToken,
+        });
 
         // (6-a2~a3) commands/*.md → 스킬, 스킬 번들 파일 보존 (Phase 2)
         const componentCtx: ComponentContext = {
@@ -558,37 +494,5 @@ export class ExtensionIngestService {
     ): Promise<void> {
         const llm = this.opts.llmClientFactory(SKILL_CREATOR.authorModel);
         await translateCatalogDescriptions(llm, snapshot.plugins, previous);
-    }
-
-    /** dedupe hit 시 기존 설치 레코드를 ImportResult shape 로 변환. */
-    private shapeFromRow(
-        row: {
-            id: string; name: string; version: string; description: string | null;
-            source_url: string; source_ref: string; source_path: string;
-            manifest: Record<string, unknown>;
-        },
-        deduped: boolean,
-    ): ImportResult {
-        const components = (row.manifest?.components ?? {}) as {
-            skills?: SkillInstallResult[];
-            mcpServers?: McpServerInstallResult[];
-            agents?: AgentInstallResult[];
-        };
-        return {
-            extensionId: row.id,
-            name: row.name,
-            version: row.version,
-            description: row.description ?? '',
-            status: 'active',
-            source: 'git-url',
-            gitUrl: row.source_url,
-            gitRef: row.source_ref,
-            gitPath: row.source_path,
-            skills: components.skills ?? [],
-            agents: components.agents ?? [],
-            mcpServers: components.mcpServers ?? [],
-            validationWarnings: [],
-            deduped,
-        };
     }
 }

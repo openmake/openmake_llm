@@ -11,23 +11,19 @@ import { ClusterManager } from '../cluster/manager';
 import { selectOptimalModel } from '../chat/model-selector';
 import { dispatchAnswerVerification } from '../services/chat-service/answer-verifier';
 import { resolveCleanedContent } from './ws-chat-completion';
-import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
-import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
-import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { ChatRequestHandler } from '../chat/request-handler';
 import { claimClientRequestShared } from '../chat/request-idempotency';
-import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
-import { ProviderError } from '../providers/provider-errors';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 import { createLogger } from '../utils/logger';
 import { logChatSuccessMetrics } from './chat-metrics-log';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
-import { WS_ERROR_MESSAGES, providerErrorMessage, getLocalizedTemplate } from './ws-chat-locales';
+import { WS_ERROR_MESSAGES, getLocalizedTemplate } from './ws-chat-locales';
+import { createArtifactStreamEmitter, replayFallbackArtifacts } from './ws-chat-artifacts';
+import { sendChatError } from './ws-chat-errors';
 import { systemSkillNamesEn } from '../agents/system-skill-names';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { applySlashCommand, mergeActivatedSkillNames, languageDetectionInput } from '../chat/slash-command';
-import { WS_LIMITS } from '../config/timeouts';
 import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
-import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext, collectMediaFiles } from '../services/chat-service/attach-context';
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { buildTurnAttachments } from '../services/chat-service/turn-attachments';
@@ -246,42 +242,7 @@ export async function handleChatMessage(
         // Artifacts streaming parser (2026-05-26) — token chunk 마다 `<artifact>` XML 태그 incremental 검출.
         // - tokenCallback (아래) 보다 먼저 선언 — TS use-before-declaration 안전.
         // - parser callbacks 가 ws.send 직접 발행 (token / artifact_start/chunk/end).
-        // Phase 3 보완 B.3 (2026-05-26): artifact_chunk WS 메시지 폭주 방지 — 토큰 단위 1회/메시지를
-        // ID 별 throttle 윈도우(WS_LIMITS.ARTIFACT_CHUNK_FLUSH_MS)로 buffer 후 합쳐서 1회 dispatch.
-        const ARTIFACT_CHUNK_FLUSH_MS = WS_LIMITS.ARTIFACT_CHUNK_FLUSH_MS;
-        const chunkBuffers = new Map<string, { delta: string; timer: ReturnType<typeof setTimeout> | null }>();
-        const streamedArtifactIds = new Set<string>();
-        const flushArtifactChunk = (id: string) => {
-            const buf = chunkBuffers.get(id);
-            if (!buf || !buf.delta) return;
-            out({ type: 'artifact_chunk', id, delta: buf.delta, messageId });
-            buf.delta = '';
-            if (buf.timer) { clearTimeout(buf.timer); buf.timer = null; }
-        };
-        const artifactStreamParser = new ArtifactStreamParser({
-            onContent: (delta) => {
-                out({ type: 'token', token: delta, messageId });
-            },
-            onArtifactStart: (info: ArtifactInfo) => {
-                streamedArtifactIds.add(info.id);
-                out({ type: 'artifact_start', artifact: info, messageId });
-            },
-            onArtifactChunk: (id, delta) => {
-                // throttle: 50ms 윈도우에 도착하는 delta 를 합쳐서 한 번에 dispatch
-                let buf = chunkBuffers.get(id);
-                if (!buf) { buf = { delta: '', timer: null }; chunkBuffers.set(id, buf); }
-                buf.delta += delta;
-                if (!buf.timer) {
-                    buf.timer = setTimeout(() => flushArtifactChunk(id), ARTIFACT_CHUNK_FLUSH_MS);
-                }
-            },
-            onArtifactEnd: (id) => {
-                // end 전 미flush 잔여 강제 dispatch
-                flushArtifactChunk(id);
-                chunkBuffers.delete(id);
-                out({ type: 'artifact_end', id, messageId });
-            },
-        });
+        const { artifactStreamParser, streamedArtifactIds } = createArtifactStreamEmitter(out, messageId);
 
         const tokenCallback = (token: string) => {
             if (abortController.signal.aborted) {
@@ -436,15 +397,7 @@ export async function handleChatMessage(
         // 명시적 <artifact> 는 위 스트리밍 parser 가 이미 보냈으므로 중복 replay 하지 않음.
         // 클라이언트는 동일한 artifact_start/chunk/end 시퀀스로 패널 자동 오픈.
         if (result.artifacts && result.artifacts.length > 0) {
-            for (const a of result.artifacts.filter((artifact) => !streamedArtifactIds.has(artifact.id))) {
-                out({
-                    type: 'artifact_start',
-                    artifact: { id: a.id, kind: a.kind, title: a.title, lang: a.lang },
-                    messageId,
-                });
-                out({ type: 'artifact_chunk', id: a.id, delta: a.content, messageId });
-                out({ type: 'artifact_end', id: a.id, messageId });
-            }
+            replayFallbackArtifacts(out, messageId, result.artifacts, streamedArtifactIds);
         }
 
         const cleanedContent = resolveCleanedContent({
@@ -510,82 +463,11 @@ export async function handleChatMessage(
             error_type: error instanceof Error ? error.constructor.name : 'Unknown',
         });
 
-        /** WebSocket 에러 응답 페이로드 */
-        interface ChatWSErrorPayload {
-            type: 'error';
-            message: string;
-            errorType?: string;
-            retryAfter?: number;
-            resetTime?: string;
-            totalKeys?: number;
-            keysInCooldown?: number;
-        }
-
-        const safeSend = (data: ChatWSErrorPayload) => out({ ...data });
-
-        if (error instanceof ChatRequestError) {
-            log.warn('[Chat] 요청 처리 에러:', error.message);
-            safeSend({ type: 'error', message: error.message });
-        } else if (error instanceof QuotaExceededError) {
-            log.warn('[Chat] API 할당량 초과:', error.message);
-            safeSend({
-                type: 'error',
-                message: `⚠️ ${getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).quotaExceeded} (${error.quotaType}). ${error.used}/${error.limit}.`,
-                errorType: 'quota_exceeded',
-                retryAfter: error.retryAfterSeconds,
-                ...(error.approvalRequestId ? { approvalRequestId: error.approvalRequestId } : {}),
-            });
-        } else if (error instanceof QuotaUnavailableError) {
-            log.error('[Chat] 쿼터 저장소 장애 (fail-closed):', error.message);
-            safeSend({ type: 'error', message: `⚠️ ${error.message}`, errorType: 'quota_unavailable', retryAfter: error.retryAfterSeconds });
-        } else if (error instanceof ProviderError) {
-            // 외부 provider(Anthropic/OpenRouter) 에러 — 코드별 사용자 친화 메시지로 분류
-            // raw upstream 메시지(error.message)는 stack/credential 누출 위험으로 노출하지 않음
-            const causeDetail = error.cause instanceof Error
-                ? `${error.cause.message}${(error.cause as { status?: number }).status ? ` [status=${(error.cause as { status?: number }).status}]` : ''}`
-                : (error.cause ? JSON.stringify(error.cause).slice(0, 300) : '');
-            log.warn(`[Chat] 외부 provider 에러 (${error.code}): ${error.message} | cause: ${causeDetail}`);
-            safeSend({
-                type: 'error',
-                message: providerErrorMessage(userLang, error.code, (error as { status?: number }).status),
-                errorType: error.code.toLowerCase(),
-            });
-        } else {
-            log.error('[Chat] 처리 중 오류:', error);
-            // 🔒 Phase 2: 내부 에러 상세 누출 방지 — 제네릭 메시지만 전송
-            safeSend({ type: 'error', message: getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).genericError });
-
-            // B+ Phase B4: 디버그 자동 보존 — 사용자 saveHistory=false 여도
-            // 에러 재현을 위해 본문을 24h 임시 보관 (TTL 후 자동 삭제)
-            if (validSessionId && message) {
-                const auditUserId = extWs._authenticatedUserId || 'anonymous';
-                const errorCode = error instanceof Error ? error.name : 'UnknownError';
-                enqueueDebugCapture({
-                    sessionId: validSessionId,
-                    userId: auditUserId,
-                    reason: 'auto-error',
-                    userMessage: message,
-                    assistantMessage: partialAssistantResponse,
-                    errorCode,
-                    routingMetadata: {
-                        model: selectedModel,
-                        tokenCountAtError: tokenCount,
-                        partialResponseLength: partialAssistantResponse.length,
-                    },
-                }).then((capture) => {
-                    if (capture) {
-                        // 사용자에게 보존 사실 + 만료 시각 알림 (선택적 신뢰 회복)
-                        const expiresInMs = DEBUG_QUEUE_TTL_MS['auto-error'];
-                        out({
-                            type: 'debug_retained',
-                            captureId: capture.id,
-                            expiresAt: capture.expiresAt.toISOString(),
-                            ttlHours: Math.round(expiresInMs / 3600000),
-                        });
-                    }
-                }).catch(() => {/* 디버그 큐 실패는 사용자 흐름 안 막음 */});
-            }
-        }
+        sendChatError(error, {
+            out, log, userLang, validSessionId, message,
+            authenticatedUserId: extWs._authenticatedUserId,
+            selectedModel, tokenCount, partialAssistantResponse,
+        });
     } finally {
         // 중단 컨트롤러 정리 + 레지스트리 정리(detach 로 끝났으면 결과 스냅샷 보존)
         extWs._abortController = null;
