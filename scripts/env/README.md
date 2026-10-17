@@ -348,6 +348,29 @@ omk 를 직접 쓸 때도 같은 옵션을 줄 수 있다. **주지 않으면 �
 
 LiteLLM 버전은 `OMK_LITELLM_SPEC` 로 고정한다 — 설치 스크립트는 `litellm[proxy]==1.100.1`(1.102 지연 회귀로 운영이 고정한 버전)을 넘긴다.
 
+## Node 버전 — 기준은 `.node-version` 하나
+
+Node 버전의 기준은 저장소 루트 `.node-version` 하나다. `mise.toml`·런타임 이미지(`infra/mcp-runtime`·`infra/egress-proxy` 의
+`FROM node:<버전>-bookworm-slim`)·CI(`actions/setup-node` 의 `node-version-file`)가 모두 이 값을 따르고,
+`scripts/ci/node-version.test.mjs`(`npm run test:infra`)가 어긋남을 잡는다. 메이저만 맞추지 않는다 — **정확히 같은 판**이어야 한다.
+
+| 어디서 | 검사 |
+|---|---|
+| `openmake_llm.sh deploy`·`canary-deploy` | 빌드 전에 셸의 node 와 **PM2 데몬의 node** 가 `.node-version` 과 같은지 본다. 다르면 고치는 방법을 보이고 멈춘다 |
+| `install_mac.sh` | brew `node@24` 가 `.node-version` 과 같은지 보고, 통과하면 `brew pin node@24`(`brew upgrade` 가 다른 판으로 올리지 않게) |
+| `install_linux.sh` | 이미 있는 node 가 `.node-version` 과 같을 때만 그대로 쓴다. 다르면 mise → fnm → nvm → brew → 공식 tarball 순으로 그 판을 준비한다 |
+| `apps/desktop-native/build.sh` | 앱에 넣을 node 가 `.node-version` 과 다르면 빌드 실패 |
+
+PM2 데몬은 처음 띄운 node 를 계속 쓴다 — node 를 바꾼 뒤 `pm2 restart` 만 하면 앱이 옛 node 로 뜬다. 데몬이 다르다고 나오면
+셸의 node 를 맞춘 뒤 `pm2 update`(지금 node 로 데몬을 다시 띄우고 저장된 앱을 되살린다)를 실행한다.
+
+버전을 올릴 때:
+
+1. `.node-version`·`mise.toml`·Dockerfile 두 개(`infra/mcp-runtime`·`infra/egress-proxy`)를 **한 PR** 로 바꾼다 (`npm run test:infra` 통과).
+2. 각 환경에서 node 를 새 판으로 바꾼다 — 맥은 `brew unpin node@24` → `brew upgrade node@24`(또는 `mise install node@<버전>`) → `brew pin node@24`.
+3. `pm2 update` 로 데몬을 새 node 로 다시 띄운다.
+4. 런타임 이미지를 다시 빌드한다 (`omk env update`, 또는 `docker build` 를 직접).
+
 ## Docker — macOS 는 전용 Colima
 
 macOS 의 openmake 는 **자기 Colima VM**(프로필 `openmake`)에서만 컨테이너를 돌린다. Docker Desktop 은
