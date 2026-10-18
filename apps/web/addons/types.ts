@@ -104,6 +104,20 @@ export interface WebAddon {
   apiKeyScopePresets?: readonly ApiKeyScopePresetExtension[];
   sidebarSections?: readonly SidebarSectionExtension[];
   chatContextBanners?: readonly ChatContextBannerExtension[];
+  hubTabs?: readonly HubTabExtension[];
+}
+
+/** 허브 탭 바(components/hub-tabs.tsx) — 허브 이름은 Base 가 정한다 */
+export type HubId = "history" | "agents" | "developer" | "admin";
+
+/** 허브 탭 바에 add-on 화면(보통 `pages.ts` 에 등록한 URL)을 끼운다. 꺼진 add-on 의 탭은 보이지 않는다 */
+export interface HubTabExtension {
+  hub: HubId;
+  href: string;
+  /** next-intl 전체 키(예: "pageTabs.research") */
+  labelKey: string;
+  /** Base 탭은 10 단위(10·20·30…) — 그 사이 값으로 위치를 정한다 */
+  order: number;
 }
 
 /** add-on 화면 렌더 입력 — 경로는 `path` 뒤의 조각만, 쿼리는 Next 의 searchParams 그대로 */
