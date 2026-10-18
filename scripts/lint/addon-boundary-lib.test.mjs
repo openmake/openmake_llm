@@ -43,6 +43,22 @@ test('허용 계층(runtime-ports·addon-host·config·utils)·같은 add-on 안
     assert.deepEqual(baseTargetsOf(source, FILE, SRC), []);
 });
 
+test('8개 계층 밖의 Base(tool-contract·llm·tools·agents·최상위 파일)와 다른 add-on 도 센다(2026-10-18 범위 확장)', () => {
+    const source = [
+        "import type { T } from '../../../tool-contract/types';",
+        "import { l } from '../../../llm/client';",
+        "import { t } from '../../../tools/web-search';",
+        "import { a } from '../../../agents/router';",
+        "import { s } from '../../../server';",
+        "import { o } from '../../other-addon/index';",
+        "import { mine } from '../index';",
+        "import type { G } from '../../../types/global';",
+    ].join('\n');
+    assert.deepEqual(baseTargetsOf(source, FILE, SRC), [
+        'addons/other-addon/index', 'agents/router', 'llm/client', 'server', 'tool-contract/types', 'tools/web-search',
+    ]);
+});
+
 test('같은 대상을 여러 번 import 해도 한 번만 센다', () => {
     const source = [
         "import { a } from '../../../data/x';",
