@@ -19,7 +19,7 @@ jest.mock('../../../config/env', () => ({
 }));
 
 import { McpOAuthProvider, consumeMcpOAuthState } from '../oauth-provider';
-import type { McpOAuthRepository } from '../../../data/repositories/mcp-oauth-repository';
+import type { McpOAuthRepository } from '../data/mcp-oauth-repository';
 
 function fakeRepo() {
     const store: Record<string, unknown> = {};

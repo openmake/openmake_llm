@@ -2,8 +2,8 @@
  * McpCatalogRepository — Phase 5 metrics (getServerInstanceMetrics, getUserInstancesSummary).
  */
 import { Pool } from 'pg';
-import { McpCatalogRepository } from '../../../data/repositories/mcp-catalog-repository';
-import { McpAdminMonitoringRepository } from '../../../data/repositories/mcp-admin-monitoring-repository';
+import { McpCatalogRepository } from '../../data/mcp-catalog-repository';
+import { McpAdminMonitoringRepository } from '../../data/mcp-admin-monitoring-repository';
 
 const CONN = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
 const SUFFIX = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);

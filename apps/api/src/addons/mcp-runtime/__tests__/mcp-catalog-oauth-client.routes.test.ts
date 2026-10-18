@@ -17,12 +17,12 @@ jest.mock('../../../auth', () => {
     };
 });
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getPool: () => ({}) }) }));
-jest.mock('../../../data/repositories/mcp-catalog-admin-repository', () => ({
+jest.mock('../data/mcp-catalog-admin-repository', () => ({
     McpCatalogAdminRepository: jest.fn().mockImplementation(() => ({
         getCatalogTemplateForAdmin: async (id: string) => (id === 'mcp-github-remote' ? { id } : null),
     })),
 }));
-jest.mock('../../../data/repositories/mcp-catalog-oauth-client-repository', () => ({
+jest.mock('../data/mcp-catalog-oauth-client-repository', () => ({
     McpCatalogOAuthClientRepository: jest.fn().mockImplementation(() => ({
         getView: async (id: string) => views.get(id),
         upsert: (p: never) => upsert(p),

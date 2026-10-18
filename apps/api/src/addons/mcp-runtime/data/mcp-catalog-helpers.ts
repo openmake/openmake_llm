@@ -3,8 +3,8 @@
  * 와 instance metrics 집계 SQL.
  * mcp-catalog-repository.ts 에서 분리 — 동작은 그대로.
  */
-import { encryptToken } from '../../utils/token-crypto';
-import type { McpCatalogTemplate, McpVisibility } from '../../schemas/mcp-catalog.schema';
+import { encryptToken } from '../../../utils/token-crypto';
+import type { McpCatalogTemplate, McpVisibility } from '../schemas/mcp-catalog.schema';
 
 export interface UserMcpServerRow {
     id: string;

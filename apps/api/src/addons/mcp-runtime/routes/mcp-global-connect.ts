@@ -13,7 +13,7 @@
  */
 import { getUnifiedMCPClient } from '../index';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
-import { McpCatalogRepository } from '../../../data/repositories/mcp-catalog-repository';
+import { McpCatalogRepository } from '../data/mcp-catalog-repository';
 import type { MCPConnectionStatus, MCPTransportType } from '../../../tool-contract/types';
 
 /** 연결 후 registry 상태를 돌려준다. 서버 row 가 없으면 null (호출자가 404). */

@@ -3,7 +3,7 @@
  *
  */
 import { z } from 'zod';
-import { SCHEMA_LIMITS } from '../config/http-data-limits';
+import { SCHEMA_LIMITS } from '../../../config/http-data-limits';
 
 const { mcpCatalog: C } = SCHEMA_LIMITS;
 

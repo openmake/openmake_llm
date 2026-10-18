@@ -23,8 +23,8 @@ import type {
 } from '@modelcontextprotocol/client';
 import { randomBytes } from 'crypto';
 import { getKeyValueStore } from '../../storage';
-import { McpOAuthRepository } from '../../data/repositories/mcp-oauth-repository';
-import { McpCatalogOAuthClientRepository, type StaticOAuthClient } from '../../data/repositories/mcp-catalog-oauth-client-repository';
+import { McpOAuthRepository } from './data/mcp-oauth-repository';
+import { McpCatalogOAuthClientRepository, type StaticOAuthClient } from './data/mcp-catalog-oauth-client-repository';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import {
     MCP_OAUTH_CLIENT_NAME,

@@ -12,11 +12,11 @@
  *
  */
 import type { Pool } from 'pg';
-import { disabledCatalogTemplateIds } from '../../addon-host/pack-catalog';
-import { encryptToken, decryptToken } from '../../utils/token-crypto';
-import { createLogger } from '../../utils/logger';
-import { SQL_RESULT_LIMITS } from '../../config/http-data-limits';
-import { isControlEnvKey, McpCatalogInputError } from '../../security/spawn-env-policy';
+import { disabledCatalogTemplateIds } from '../../../addon-host/pack-catalog';
+import { encryptToken, decryptToken } from '../../../utils/token-crypto';
+import { createLogger } from '../../../utils/logger';
+import { SQL_RESULT_LIMITS } from '../../../config/http-data-limits';
+import { isControlEnvKey, McpCatalogInputError } from '../../../security/spawn-env-policy';
 import { validateCatalogInput } from './mcp-catalog-input';
 import {
     applyEnvDefaults,
@@ -34,7 +34,7 @@ import type {
     McpFromCatalogPayload,
     McpInstance,
     McpInstanceStatus,
-} from '../../schemas/mcp-catalog.schema';
+} from '../schemas/mcp-catalog.schema';
 
 const logger = createLogger('McpCatalogRepository');
 

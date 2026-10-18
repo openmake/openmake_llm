@@ -12,8 +12,8 @@
  */
 import type { Pool } from 'pg';
 import type { OAuthTokens, OAuthClientInformationFull } from '@modelcontextprotocol/client';
-import { encryptToken, decryptToken } from '../../utils/token-crypto';
-import { createLogger } from '../../utils/logger';
+import { encryptToken, decryptToken } from '../../../utils/token-crypto';
+import { createLogger } from '../../../utils/logger';
 
 const logger = createLogger('McpOAuthRepository');
 

@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
-import { McpCatalogRepository } from '../mcp-catalog-repository';
-import { decryptToken, encryptToken } from '../../../utils/token-crypto';
+import { McpCatalogRepository } from '../../data/mcp-catalog-repository';
+import { decryptToken, encryptToken } from '../../../../utils/token-crypto';
 
 describe('McpCatalogRepository.listCatalog', () => {
     it('활성화된 전체 템플릿을 제한 없이 반환 (tier 필터 없음)', async () => {

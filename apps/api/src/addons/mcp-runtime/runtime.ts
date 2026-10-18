@@ -12,6 +12,8 @@ import { MCP_NAMESPACE_SEPARATOR } from '../../tool-contract/types';
 import type { ToolDefinition } from '../../llm/types';
 import type { ToolRuntime, ToolSummary, ToolUserInputContext } from '../../runtime-ports/tool-runtime';
 import { createLogger } from '../../utils/logger';
+import { getPool } from '../../runtime-ports/db-access';
+import { McpCatalogRepository } from './data/mcp-catalog-repository';
 import { getUnifiedMCPClient } from './index';
 import { getLifecycleSupervisor } from './lifecycle-supervisor';
 import { runWithElicitationContext } from './elicitation-bridge';
@@ -73,6 +75,10 @@ export const mcpToolRuntime: ToolRuntime = {
         if (!sv) return null;
         const client = await sv.spawnUserServer(userId, serverId);
         return client.callTool(toolName, args);
+    },
+
+    async findUserServerByTemplate(userId: string, templateId: string): Promise<{ id: string; name: string } | null> {
+        return new McpCatalogRepository(getPool()).findUserServerByTemplate(userId, templateId);
     },
 
     async onUserLogin(userId: string): Promise<void> {

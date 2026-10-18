@@ -10,7 +10,7 @@
  * @module data/repositories/mcp-catalog-admin-repository
  */
 import type { Pool } from 'pg';
-import type { McpCatalogTemplate } from '../../schemas/mcp-catalog.schema';
+import type { McpCatalogTemplate } from '../schemas/mcp-catalog.schema';
 
 type TransportType = 'stdio' | 'sse' | 'streamable-http';
 

@@ -9,7 +9,7 @@
  * @module schemas/mcp-catalog-admin.schema
  */
 import { z } from 'zod';
-import { SCHEMA_LIMITS } from '../config/http-data-limits';
+import { SCHEMA_LIMITS } from '../../../config/http-data-limits';
 
 const { mcpCatalogAdmin: CA } = SCHEMA_LIMITS;
 

@@ -42,7 +42,7 @@ export async function startMcpLifecycleSupervisor(): Promise<void> {
         ] = await Promise.all([
             import('./lifecycle-supervisor'),
             import('./user-pool'),
-            import('../../data/repositories/mcp-catalog-repository'),
+            import('./data/mcp-catalog-repository'),
             import('./external-client'),
             import('../../data/models/unified-database'),
         ]);
