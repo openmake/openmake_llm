@@ -114,7 +114,7 @@ Base ↔ Add-on 계약의 원천이다. **타입과 상수만** 담고 런타임
 | 에이전트 작업 기여 도구(`agentTaskTools`) `precheck`·`run` | `integrationGate`(→ `checkAddonEntitlement`, `getActiveAgentTaskTools` 가 씌움) | 실행 | 승인 카드 없이 위와 같은 문구로 거절 | 같음 | 같음 | 같음 |
 | 팩 스킬 주입 필터 | `entitledAddonIds` | 주입 | 제외 | 제외 | 제외 | **주입 유지(fail-open)** — 선언형 콘텐츠, 피해 없음 |
 
-**판정 기준 열**: 라우트·채팅 훅 게이트의 strict 판정(`readAddonEnabledStrict`)은 `addon_installations.state`(installed·enabled·disabled·failed)를 읽어 `enabled` 가 아니면 차단한다. 그중 부팅 실패(`failed`)는 판정의 `state` 로 구분해 라우트가 503 `ADDON_FAILED`(`Retry-After` 없음 — 재시도로 풀리지 않고 관리자 조치가 필요하다)로 알리고, 웹은 '준비되지 않았습니다(부팅 실패)' 문구(`knowledge.notReady`)를 보인다. 채팅 훅은 건너뛰고 오케스트레이션 도구는 부팅 실패 문구를 돌려준다. `installed`·`disabled` 는 종전대로 404 `ADDON_DISABLED`.
+**판정 기준 열**: 라우트·채팅 훅 게이트의 strict 판정(`readAddonEnabledStrict`)은 `addon_installations.state`(installed·enabled·disabled·failed)를 읽어 `enabled` 가 아니면 차단한다. 그중 부팅 실패(`failed`)는 판정의 `state` 로 구분해 라우트가 503 `ADDON_FAILED`(`Retry-After` 없음 — 재시도로 풀리지 않고 관리자 조치가 필요하다)로 알리고, 웹은 '준비되지 않았습니다(부팅 실패)' 문구(`knowledge.notReady`)를 보인다. 채팅 훅은 건너뛰고 오케스트레이션 도구는 부팅 실패 문구를 돌려준다. `installed`·`disabled` 는 종전대로 404 `ADDON_DISABLED`. **이 프로세스가 부팅 때 그 add-on 을 세우지 못했으면**(런타임 상태 `failed`) 관리자가 DB 에서 다시 켜도 재시작 전까지 `failed` 로 판정한다(`readAddonEnabledStrict`·`isAddonEnabledSync` — 외부 리뷰 A4). 런타임 상태를 기록하지 않는 별도 worker 프로세스(`not_loaded`)는 DB 상태대로다.
 
 env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항상 알 수 있다).
 
