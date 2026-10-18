@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.106.1](https://github.com/openmake/openmake_llm/compare/v1.106.0...v1.106.1) (2026-10-18)
+
+
+### 🐛 버그 수정
+
+* **web:** 관리자 영역의 없는 add-on 경로가 200 대신 404 를 낸다 ([fc02206](https://github.com/openmake/openmake_llm/commit/fc022064f341afcabc70ca4fe9142930017f7700))
+* 남은 결함 3건 — 첫 실행 테스트의 .env 쓰기 · CI 밖 MCP DB 테스트 · 관리자 없는 경로 200 ([f62b855](https://github.com/openmake/openmake_llm/commit/f62b855b1b305c8efd40d1bc935575a41a5e6616))
+
 ## [1.106.0](https://github.com/openmake/openmake_llm/compare/v1.105.4...v1.106.0) (2026-10-18)
 
 
