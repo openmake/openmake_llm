@@ -19,6 +19,9 @@ const eslintConfig = defineConfig([
       "react-hooks/set-state-in-effect": "off",
       // 계층 경계 — 프론트는 백엔드 소스를 직접 참조하지 않는다(현재 위반 0).
       // 공유가 필요한 타입·상수는 @openmake/shared-types · @openmake/config 를 거친다.
+      // Base ↔ add-on — Base 는 add-on 디렉터리(addons/<id>/)를 직접 import 하지 않고 레지스트리
+      // (registry·pages)·계약(types)·공용 배너(progress-banner)만 쓴다(2026-10-18, 현재 위반 0).
+      // add-on 디렉터리 안은 아래 블록이 이 규칙을 백엔드 경계만으로 다시 정의한다(뒤 블록이 옵션을 덮는다).
       "no-restricted-imports": [
         "error",
         {
@@ -26,6 +29,28 @@ const eslintConfig = defineConfig([
             {
               // 주의: 패턴은 import 문자열을 매칭한다(해석된 경로가 아님). 현실적인 침범
               // 경로는 `../../api/src/...` 처럼 'apps/' 가 빠진 상대경로이므로 둘 다 막는다.
+              group: ["**/apps/api/**", "**/api/src/**"],
+              message:
+                "apps/web 은 apps/api 소스를 직접 import 하지 않는다 — 공유 계약은 @openmake/shared-types / @openmake/config 를 경유할 것.",
+            },
+            {
+              regex: "(^@/|/|^)addons/(?!(registry|pages|types|progress-banner)$)",
+              message:
+                "Base 는 add-on 디렉터리를 직접 import 하지 않는다 — @/addons/registry(클라이언트 확장)·@/addons/pages(화면)·@/addons/types 를 경유할 것.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["addons/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
               group: ["**/apps/api/**", "**/api/src/**"],
               message:
                 "apps/web 은 apps/api 소스를 직접 import 하지 않는다 — 공유 계약은 @openmake/shared-types / @openmake/config 를 경유할 것.",

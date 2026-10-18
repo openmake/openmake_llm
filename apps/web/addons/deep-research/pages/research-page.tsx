@@ -177,7 +177,7 @@ function fmtDate(iso?: string): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-export default function ResearchPage() {
+export function ResearchPage() {
   const t = useTranslations("research");
   const router = useRouter();
   const [sourcesOpen, setSourcesOpen] = useState(false);

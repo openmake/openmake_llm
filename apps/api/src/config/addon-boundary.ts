@@ -74,6 +74,22 @@ export const ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = 
     'swagger/schemas-core.ts': '위 REST 응답 필드의 OpenAPI 스키마 (iOS Kit 생성 입력)',
 };
 
+/**
+ * 코드 밖의 공용 자산(저장소 루트 기준) — 공용 패키지 소스(`packages/*\/src`)와 웹 번역 파일(`apps/web/messages`)에 남은
+ * add-on 고유 이름 줄 수 (2026-10-18 범위 확장 시점 동결). 구 클라이언트·iOS WS 계약 필드와 add-on 화면 문구라 당장 옮길 곳이
+ * 없어 남겼다 — **줄어들기만 한다**(래칫). 늘리려면 계약 예외와 같은 수준의 사유가 있어야 하고, 줄었으면 여기 값도 낮춘다.
+ * 목록에 없는 파일은 0 이어야 한다.
+ */
+export const SHARED_ASSET_ADDON_NAME_BASELINE: Readonly<Record<string, number>> = {
+    'packages/shared-types/src/index.ts': 3,      // WS 채팅 구 필드·진행 이벤트 type(토론·딥리서치)
+    'packages/shared-types/src/knowledge.ts': 11, // Knowledge Space API 응답 계약(웹 add-on ↔ API add-on)
+    'apps/web/messages/de.json': 25,
+    'apps/web/messages/en.json': 26,
+    'apps/web/messages/ja.json': 14,
+    'apps/web/messages/ko.json': 14,
+    'apps/web/messages/zh.json': 14,
+};
+
 /** 웹(`apps/web` 기준)의 계약 예외 — 서버 API 응답 필드 이름을 그대로 읽는 화면 */
 export const WEB_ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = {
     'app/(workspace)/admin/metrics/page.tsx': '관리자 지표 API 응답 필드 discussionIntentTurns (routes/metrics.routes.ts)',

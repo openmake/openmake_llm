@@ -123,10 +123,10 @@ export class TaskRuntime {
             : undefined;
         // 갭 C: add-on 이 기여한 작업 도구(예: 복수 전문가 토론). 노출 여부(플래그)는 add-on 이 판단한다 —
         // 작업 도구는 고정 관리되며 기여분만큼 늘어난다. 통합 모듈은 AgentTaskService 를 끌어올 수 있어
-        // 정적 import 하면 순환이 된다 — 생성 시점 require 로 끊는다.
-        const { getActiveChatTurnIntegrations } = require('../chat-service/turn-integrations') as typeof import('../chat-service/turn-integrations');
+        // 정적 import 하면 순환이 된다 — 생성 시점 require 로 끊는다. 실행은 호출마다 add-on 게이트를 거친다.
+        const { getActiveAgentTaskTools } = require('../chat-service/turn-integrations') as typeof import('../chat-service/turn-integrations');
         const contributed = [
-            ...getActiveChatTurnIntegrations().flatMap((i) => i.agentTaskTools?.() ?? []),
+            ...getActiveAgentTaskTools(),
             ...createTaskHistoryTools(taskId, goal ? { goal } : {}), ...createMemorySaveTools(taskId),
         ];
         for (const c of contributed) if (c.precheck) this.prechecks.set(c.tool.name, c.precheck);
