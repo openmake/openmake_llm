@@ -6,10 +6,9 @@
  * - 외부 서비스 연결/파일 관리 (external_connections, external_files)
  * (MCP 서버 설정(mcp_servers) CRUD 는 2026-10-18 MCP 런타임 add-on 으로 옮겼다 — addons/mcp-runtime/data/mcp-server-repository.ts)
  */
-import { BaseRepository, QueryParam } from './base-repository';
+import { BaseRepository } from './base-repository';
 import type { ExternalConnection, ExternalFile, ExternalServiceType } from '../models/unified-database.types';
 import { encryptToken, decryptToken, isDecryptionFailure } from '../../utils/token-crypto';
-import { QUERY_ROW_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ExternalRepository');
@@ -33,8 +32,6 @@ function decryptTokenField(value: unknown, field: string, connectionId?: unknown
     }
     return plain;
 }
-
-type DbRow = Record<string, unknown>;
 
 export class ExternalRepository extends BaseRepository {
     async createExternalConnection(params: {
