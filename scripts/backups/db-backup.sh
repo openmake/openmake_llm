@@ -28,6 +28,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly REPO_ROOT
+# shellcheck source=scripts/backups/backup-lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/backup-lib.sh"
 
 DRY_RUN=0
 for arg in "$@"; do
@@ -77,6 +79,9 @@ readonly RETENTION_DAYS="${RETENTION_DAYS:-14}"
 
 TS="$(date +%Y%m%d-%H%M%S)"
 OUT_FILE="$BACKUP_DIR/${PG_DB}${INSTANCE:+-$INSTANCE}-${TS}.dump"
+# 보존 정리 대상 — 이 DB·인스턴스의 백업만(다른 인스턴스와 같은 폴더를 써도 남의 것은 건드리지 않는다)
+DUMP_GLOB="$(backup_name_glob "$PG_DB" "$INSTANCE")"
+readonly DUMP_GLOB
 
 log_info "대상 컨테이너: $PG_CONTAINER (db=$PG_DB, user=$PG_USER)"
 log_info "백업 디렉터리: $BACKUP_DIR (보존 ${RETENTION_DAYS}일)"
@@ -86,7 +91,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
     log_info "[dry-run] docker exec $PG_CONTAINER pg_dump -U $PG_USER -Fc $PG_DB > $OUT_FILE"
     log_info "[dry-run] docker exec -i $PG_CONTAINER pg_restore --list  < $OUT_FILE  (무결성 확인)"
     if [[ -d "$BACKUP_DIR" ]]; then
-        local_old="$(find "$BACKUP_DIR" -maxdepth 1 -name "${PG_DB}*.dump" -type f -mtime "+${RETENTION_DAYS}" 2>/dev/null | wc -l | tr -d ' ')"
+        local_old="$(find "$BACKUP_DIR" -maxdepth 1 -name "$DUMP_GLOB" -type f -mtime "+${RETENTION_DAYS}" 2>/dev/null | wc -l | tr -d ' ')"
         log_info "[dry-run] 삭제 대상(${RETENTION_DAYS}일 초과): ${local_old}개"
     fi
     log_ok "[dry-run] 완료 — 실제 실행 없음"
@@ -119,12 +124,12 @@ fi
 
 log_ok "백업 완료: $OUT_FILE ($(du -h "$OUT_FILE" | cut -f1))"
 
-# 보존 기간 정리 — 이 DB/인스턴스 접두어를 가진 .dump 파일만 대상으로 한다.
+# 보존 기간 정리 — 이 DB/인스턴스의 이름 규칙에 정확히 맞는 .dump 파일만 대상으로 한다.
 deleted=0
 while IFS= read -r -d '' f; do
     rm -f "$f"
     deleted=$((deleted + 1))
-done < <(find "$BACKUP_DIR" -maxdepth 1 -name "${PG_DB}${INSTANCE:+-$INSTANCE}-*.dump" -type f -mtime "+${RETENTION_DAYS}" -print0 2>/dev/null)
+done < <(find "$BACKUP_DIR" -maxdepth 1 -name "$DUMP_GLOB" -type f -mtime "+${RETENTION_DAYS}" -print0 2>/dev/null)
 
 if [[ "$deleted" -gt 0 ]]; then
     log_ok "보존기간(${RETENTION_DAYS}일) 초과 백업 ${deleted}개 삭제"

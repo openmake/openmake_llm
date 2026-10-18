@@ -118,7 +118,17 @@ fi
 if [[ -f "$BUNDLE_DIR/build-artifacts.tar.gz" ]]; then
     log_info "5/5 빌드 산출물 추출"
     tar -xzf "$BUNDLE_DIR/build-artifacts.tar.gz" -C "$DEST_DIR"
-    log_ok "빌드 산출물 추출 완료 — npm run build 생략 가능"
+    # workspace 패키지 산출물(packages/*/dist)이 빠진 번들(이 검사 이전에 만든 것)은 빌드를 생략하면 모듈 로딩이 실패한다
+    missing_pkgs=()
+    for p in "$DEST_DIR"/packages/*/package.json; do
+        [[ -f "$p" ]] || continue
+        [[ -d "$(dirname "$p")/dist" ]] || missing_pkgs+=("${p#"$DEST_DIR"/}")
+    done
+    if [[ "${#missing_pkgs[@]}" -gt 0 ]]; then
+        log_warn "빌드 산출물 추출 완료 — 단 workspace 패키지 산출물이 없습니다(${#missing_pkgs[@]}개): 설치 후 'npm run build:packages' 필요"
+    else
+        log_ok "빌드 산출물 추출 완료 — npm run build 생략 가능"
+    fi
 else
     log_warn "빌드 산출물 없음 — 설치 후 'npm run build' 필요(devDependencies 포함 node_modules 필수)"
 fi

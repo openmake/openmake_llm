@@ -114,9 +114,11 @@ Base ↔ Add-on 계약의 원천이다. **타입과 상수만** 담고 런타임
 | 에이전트 작업 기여 도구(`agentTaskTools`) `precheck`·`run` | `integrationGate`(→ `checkAddonEntitlement`, `getActiveAgentTaskTools` 가 씌움) | 실행 | 승인 카드 없이 위와 같은 문구로 거절 | 같음 | 같음 | 같음 |
 | 팩 스킬 주입 필터 | `entitledAddonIds` | 주입 | 제외 | 제외 | 제외 | **주입 유지(fail-open)** — 선언형 콘텐츠, 피해 없음 |
 
-**판정 기준 열**: 라우트·채팅 훅 게이트의 strict 판정(`readAddonEnabledStrict`)은 `addon_installations.state`(installed·enabled·disabled·failed)를 읽어 `enabled` 가 아니면 차단한다. 그중 부팅 실패(`failed`)는 판정의 `state` 로 구분해 라우트가 503 `ADDON_FAILED`(`Retry-After` 없음 — 재시도로 풀리지 않고 관리자 조치가 필요하다)로 알리고, 웹은 '준비되지 않았습니다(부팅 실패)' 문구(`knowledge.notReady`)를 보인다. 채팅 훅은 건너뛰고 오케스트레이션 도구는 부팅 실패 문구를 돌려준다. `installed`·`disabled` 는 종전대로 404 `ADDON_DISABLED`.
+**판정 기준 열**: 라우트·채팅 훅 게이트의 strict 판정(`readAddonEnabledStrict`)은 `addon_installations.state`(installed·enabled·disabled·failed)를 읽어 `enabled` 가 아니면 차단한다. 그중 부팅 실패(`failed`)는 판정의 `state` 로 구분해 라우트가 503 `ADDON_FAILED`(`Retry-After` 없음 — 재시도로 풀리지 않고 관리자 조치가 필요하다)로 알리고, 웹은 '준비되지 않았습니다(부팅 실패)' 문구(`knowledge.notReady`)를 보인다. 채팅 훅은 건너뛰고 오케스트레이션 도구는 부팅 실패 문구를 돌려준다. `installed`·`disabled` 는 종전대로 404 `ADDON_DISABLED`. **이 프로세스가 부팅 때 그 add-on 을 세우지 못했으면**(런타임 상태 `failed`) 관리자가 DB 에서 다시 켜도 재시작 전까지 `failed` 로 판정한다(`readAddonEnabledStrict`·`isAddonEnabledSync` — 외부 리뷰 A4). 런타임 상태를 기록하지 않는 별도 worker 프로세스(`not_loaded`)는 DB 상태대로다.
 
 env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항상 알 수 있다).
+
+조직 축(활성 조직·멤버십·조직 정책)도 '확인 불가'에 들어간다 — 사용권 판정은 엄격 조회(`resolveEffectivePolicyStrict`)라 셋 중 하나라도 못 읽으면 `state-unknown` 이다. 다른 조직 정책 소비처(외부 모델·승인 하한·브라우저 사이트·MCP 카탈로그)는 종전대로 fail-open(`resolveEffectivePolicy` — 글로벌만 적용)이고, 실패 결과는 어느 쪽도 캐시하지 않는다.
 
 ## 8.4 채팅 훅의 분류
 
@@ -211,13 +213,13 @@ claim 은 `UPDATE … fencing_token = fencing_token + 1 … FOR UPDATE SKIP LOCK
 
 | 접수 지점 | actor | claim 때 재검사 |
 |---|---|---|
-| 문서 업로드·재시도 | 개인 Space `user` / 조직 Space `org`(조직 id) | 상태 + 조직 사용권(`checkUserEntitlement`) |
+| 문서 업로드·재시도 | 개인 Space `user` / 조직 Space `org`(조직 id) | 상태 + 조직 사용권(`checkUserEntitlement`) — `user` 는 접수자의 지금 활성 조직, `org` 는 **저장된 조직**(그 조직 멤버인지 + 그 조직 허용 목록, 조직 id 가 없으면 `missing-org` 거절) |
 | 관리자 재색인·재청킹 | 그 관리자 `user` | 같음 |
 | 문서·Space 삭제의 정리(cleanup) | `system`(요청자는 기록용) | add-on 단위 게이트만 |
 | 평가 하네스 | `system` | add-on 단위 게이트만 |
 | 004 이전 행(actor NULL) | `system` 으로 본다 | add-on 단위 게이트만 |
 
-접수 때 `policy_revision`(그 시점 `addon_installations.state_revision`, 조회 실패면 NULL)을 함께 남긴다 — 추적용이며 판정은 claim 때 늘 다시 한다. tick 은 먼저 add-on 단위 strict 판정(`readAddonRunVerdict` — 꺼짐·실패·env 차단은 stopped, 조회 실패는 unknown)을 보고 run 이 아니면 그 tick 은 집지 않는다. 집은 사용자·조직 작업의 판정: `ok` 실행, `not-entitled` 최종 실패(작업 `failed`, 문서 버전 `ADDON_NOT_ENTITLED`), `disabled`·`failed`·`state-unknown` 보류(queued 로 되돌리고 attempts −1, `KNOWLEDGE_JOB_ADMISSION_DEFER_MS` 뒤). add-on 은 이 판정을 `runtime-ports/addon-admission` 으로만 묻는다.
+접수 때 `policy_revision`(그 시점 `addon_installations.state_revision`, 조회 실패면 NULL)을 함께 남긴다 — 추적용이며 판정은 claim 때 늘 다시 한다. tick 은 먼저 add-on 단위 strict 판정(`readAddonRunVerdict` — 꺼짐·실패·env 차단은 stopped, 조회 실패는 unknown)을 보고 run 이 아니면 그 tick 은 집지 않는다. 조직 작업은 접수자가 그 뒤 활성 조직을 바꿔도 기준이 바뀌지 않는다(외부 리뷰 A3 — 종전엔 사용자 id 만 넘겨 지금 활성 조직의 정책이 적용됐다). 집은 사용자·조직 작업의 판정: `ok` 실행, `not-entitled`(조직을 떠난 경우 포함) 최종 실패(작업 `failed`, 문서 버전 `ADDON_NOT_ENTITLED`), `disabled`·`failed`·`state-unknown` 보류(queued 로 되돌리고 attempts −1, `KNOWLEDGE_JOB_ADMISSION_DEFER_MS` 뒤). add-on 은 이 판정을 `runtime-ports/addon-admission` 으로만 묻는다.
 
 ### 9.3 취소
 
@@ -275,7 +277,7 @@ manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기�
 
 | 경로 | actor | 판정 함수 | 실행 주체 | 중지 방법 | 보호 훅 |
 |---|---|---|---|---|---|
-| add-on 전용 HTTP 라우트(매니페스트 `routes` 로 건 모든 경로 — 예 `/api/knowledge/*`) | user(쿠키·Bearer), 조직 사용권은 user 의 활성 조직 | `addonGuard` → `checkAddonEntitlement`(strict DB 판정) — 404 `ADDON_DISABLED`·503 `ADDON_FAILED`·403 `ADDON_NOT_ENTITLED`·503 `ADDON_STATE_UNKNOWN` | API 프로세스(요청 처리) | 토글 저장 직후 다음 요청부터 거절(같은 프로세스·다른 프로세스 모두 — 라우트 판정은 캐시를 쓰지 않는다) | 없음(라우트 자체가 소유권 검사 — `resolveUserId`) |
+| add-on 전용 HTTP 라우트(매니페스트 `routes` 로 건 모든 경로 — 예 `/api/knowledge/*`) | user(쿠키·Bearer), 조직 사용권은 user 의 활성 조직 | `addonGuard` → `checkAddonEntitlement`(strict DB 판정) — 404 `ADDON_DISABLED`·503 `ADDON_FAILED`·403 `ADDON_NOT_ENTITLED`·503 `ADDON_STATE_UNKNOWN` | API 프로세스(요청 처리) | 토글을 저장한 프로세스는 다음 요청부터 거절(쓰기가 상태 캐시를 비운다), 다른 프로세스는 상태 캐시 TTL(`ADDON_STATE_CACHE_TTL_MS`, 기본 30초) 안에 — 라우트 판정은 strict(조회 실패를 켜짐으로 읽지 않는다)지만 TTL 캐시를 쓴다. 조직 허용 목록 변경은 조직 캐시(`ORG_CONTEXT_CACHE_TTL_MS`, 기본 60초) 뒤 | 없음(라우트 자체가 소유권 검사 — `resolveUserId`) |
 | `/api/v1/*`(API 키) | user(API 키 소유자) | `requireApiKey`·`requireScope` → 채팅이면 아래 "채팅 턴" 행과 같은 파이프라인 | API 프로세스 | 키 폐기·scope 축소는 다음 요청부터. add-on 기능은 채팅 턴 행과 같다 | 채팅 턴 행과 같다 |
 | 채팅 턴 — WS(`sockets/ws-chat-handler.ts`)·REST(`/api/chat`) 공통 `runMessagePipeline` | user 또는 guest | 기능 훅 `prepareTurnContext`: 턴마다 `integrationGate`(→ `checkAddonEntitlement`). 순수 동기 훅: `isAddonEnabledSync`(턴 시작 `ensureAddonStates` 적재, TTL `ADDON_STATE_CACHE_TTL_MS`) | API 프로세스 | 기능 훅은 다음 턴부터 건너뜀. 동기 훅은 캐시 갱신 뒤 턴부터. 진행 중 턴은 끝까지 가거나 사용자의 `abort` 로 멈춘다 | `isSessionMemoryIsolated`(Space 연결 대화는 전역 메모리 미기록, 판정 실패 시 격리 — fail-closed), `listHiddenSessionIds` |
 | 채팅 오케스트레이션 도구 `run`(매니페스트 기여 도구) | user | `runOrchestrationTool` → `integrationGate` — 거절 문구 `Error: add-on '<id>' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다`(부팅 실패·조직 밖·확인 불가 문구는 §8.3) | API 프로세스 | 실행 시점 거절(노출은 동기 훅 캐시로 빠짐) | 없음 |
