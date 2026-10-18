@@ -134,6 +134,7 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 | 규칙 | 집행 | 실패 조건 |
 |---|---|---|
 | Base 는 add-on 모듈을 import 하지 않는다 | eslint `no-restricted-imports`(`**/addons/**`, addon-host 제외) | 위반 즉시 |
+| 웹 Base 는 add-on 디렉터리(`apps/web/addons/<id>/`)를 import 하지 않는다 — `@/addons/registry`(클라이언트 확장)·`@/addons/pages`(add-on 소유 URL 화면)·`@/addons/types` 만 | `apps/web/eslint.config.mjs` `no-restricted-imports`(regex, `addons/**` 안은 제외) | 위반 즉시. add-on 화면은 Base 의 catch-all 라우트 `app/(workspace)/[...addonPath]` 가 `renderAddonPage` 로 고르고 맞는 것이 없으면 404 — 경로가 Base 정적 라우트와 겹치면 `tests/web/addon-pages.test.tsx` 가 실패 |
 | 계약 패키지는 apps·외부 패키지·자기 디렉터리 밖을 import 하지 않는다 | eslint(`packages/plugin-contracts/src/**`) | 위반 즉시 |
 | apps/api 는 계약 패키지를 type-only 로만 쓴다(테스트 예외) | eslint `@typescript-eslint/no-restricted-imports` | 값 import·재수출 |
 | add-on → Base 내부 계층(data·services·routes·sockets·controllers·middlewares·auth·chat) import 는 **줄어들기만** 한다 | `npm run check:addon-boundary`(CI Gate 4), 허용 목록 `scripts/lint/addon-import-allowlist.json` | 목록 밖의 새 (파일, 대상) 쌍. 사라진 쌍은 권고만 — `npm run gen:addon-boundary` 로 목록을 줄인다 |

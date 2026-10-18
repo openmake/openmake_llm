@@ -1,6 +1,6 @@
 /**
  * knowledge-runtime add-on (웹) — 사이드바 Knowledge 섹션 + 대화 상단 연결 배너.
- * 목록·상세 페이지는 얇은 라우트(app/(workspace)/knowledge/*)가 이 디렉터리의 컴포넌트를 렌더한다.
+ * 목록·상세 페이지는 화면 레지스트리(addons/pages.ts ← pages/index.tsx)에 등록하고 Base 의 catch-all 라우트가 렌더한다.
  * 서버에서 꺼진 경우 useEnabledWebAddons 가 걸러 사이드바 섹션·배너가 사라진다.
  */
 import type { WebAddon } from "../types";

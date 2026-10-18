@@ -105,3 +105,19 @@ export interface WebAddon {
   sidebarSections?: readonly SidebarSectionExtension[];
   chatContextBanners?: readonly ChatContextBannerExtension[];
 }
+
+/** add-on 화면 렌더 입력 — 경로는 `path` 뒤의 조각만, 쿼리는 Next 의 searchParams 그대로 */
+export interface WebAddonPageProps {
+  segments: readonly string[];
+  searchParams: Readonly<Record<string, string | string[] | undefined>>;
+}
+
+/**
+ * add-on 이 소유한 화면 — URL 첫 조각(`/knowledge/...` 의 `knowledge`)으로 찾는다. Base 의 catch-all 라우트가
+ * 서버에서 `addons/pages.ts` 만 보고 렌더하므로, 이 계약은 서버에서 import 해도 안전해야 한다(훅 없음, 화면 컴포넌트는 "use client").
+ */
+export interface WebAddonPage {
+  path: string;
+  /** 이 add-on 이 다루지 않는 하위 경로면 null — Base 가 404 로 응답한다 */
+  render(props: WebAddonPageProps): ReactNode | null;
+}
