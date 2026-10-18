@@ -17,6 +17,7 @@
     "runtime": "index#startKnowledgeRuntime",
     "chatIntegration": "chat-integration#knowledgeChatIntegration",
     "contributions": "contributions#knowledgeContribution",
+    "data": "data-module#knowledgeDataModule",
     "workers": [
       { "name": "knowledge-ingest", "module": "standalone/worker-process#runKnowledgeWorkerProcess" }
     ],
