@@ -8,8 +8,8 @@
  * @module data/repositories/mcp-catalog-oauth-client-repository
  */
 import type { Pool } from 'pg';
-import { encryptToken, decryptToken, isDecryptionFailure } from '../../utils/token-crypto';
-import { createLogger } from '../../utils/logger';
+import { encryptToken, decryptToken, isDecryptionFailure } from '../../../utils/token-crypto';
+import { createLogger } from '../../../utils/logger';
 
 const logger = createLogger('McpCatalogOAuthClientRepository');
 

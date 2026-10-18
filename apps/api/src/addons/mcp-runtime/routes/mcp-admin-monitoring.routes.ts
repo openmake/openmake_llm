@@ -12,7 +12,7 @@ import { Router, type Request, type Response } from 'express';
 import { requireAuth, requireAdmin } from '../../../auth';
 import { asyncHandler } from '../../../utils/error-handler';
 import { success } from '../../../utils/api-response';
-import { McpAdminMonitoringRepository } from '../../../data/repositories/mcp-admin-monitoring-repository';
+import { McpAdminMonitoringRepository } from '../data/mcp-admin-monitoring-repository';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
 
 export const mcpAdminMonitoringRouter = Router();

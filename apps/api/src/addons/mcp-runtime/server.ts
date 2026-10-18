@@ -29,7 +29,7 @@ import {
     MCPTool
 } from '../../tool-contract/types';
 import { getBuiltInTools } from '../../tools/builtin-tools';
-import { negotiateProtocolVersion } from '../../config/mcp-protocol';
+import { negotiateProtocolVersion } from './mcp-protocol';
 
 /**
  * MCP 서버 클래스

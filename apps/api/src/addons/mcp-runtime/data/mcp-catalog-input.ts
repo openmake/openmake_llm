@@ -6,8 +6,8 @@
  *   - 제어 env 키(spawn-env-policy)는 스키마가 선언해도 거부
  *
  */
-import { isControlEnvKey, McpCatalogInputError } from '../../security/spawn-env-policy';
-import type { McpCatalogTemplate, McpFromCatalogPayload } from '../../schemas/mcp-catalog.schema';
+import { isControlEnvKey, McpCatalogInputError } from '../../../security/spawn-env-policy';
+import type { McpCatalogTemplate, McpFromCatalogPayload } from '../schemas/mcp-catalog.schema';
 
 type SchemaShape = { properties?: Record<string, unknown>; required?: unknown };
 

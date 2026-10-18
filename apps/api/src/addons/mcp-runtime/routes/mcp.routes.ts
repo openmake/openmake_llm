@@ -39,8 +39,8 @@ import { classifyConnectError, parseConnectError } from '../connect-error';
 import { validate, validateWithSecurity } from '../../../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema,
     mcpServerEnabledUpdateSchema, mcpServerAutoSpawnUpdateSchema, mcpServerRenameSchema } from '../../../schemas/mcp.schema';
-import { McpCatalogRepository } from '../../../data/repositories/mcp-catalog-repository';
-import { McpOAuthRepository } from '../../../data/repositories/mcp-oauth-repository';
+import { McpCatalogRepository } from '../data/mcp-catalog-repository';
+import { McpOAuthRepository } from '../data/mcp-oauth-repository';
 import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer, canUpdateServerEnv } from './mcp-visibility';
 import { connectGlobalServer } from './mcp-global-connect';
 import { renameMcpServer } from './mcp-server-rename';

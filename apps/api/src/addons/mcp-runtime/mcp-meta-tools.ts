@@ -65,7 +65,7 @@ const mcpListToolsTool: MCPToolDefinition = {
         if (groups.length === 0 && globals.length === 0) {
             let installed: string[] = [];
             try {
-                const { McpCatalogRepository } = await import('../../data/repositories/mcp-catalog-repository');
+                const { McpCatalogRepository } = await import('./data/mcp-catalog-repository');
                 const { getUnifiedDatabase } = await import('../../data/models/unified-database');
                 const rows = await new McpCatalogRepository(getUnifiedDatabase().getPool()).listUserServers(userId);
                 installed = rows.filter(r => r.enabled).map(r => r.name);

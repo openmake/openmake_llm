@@ -175,6 +175,12 @@
     "mcp-runtime/chat-integration.ts": [
       "services/chat-service/turn-integrations"
     ],
+    "mcp-runtime/data/mcp-catalog-input.ts": [
+      "security/spawn-env-policy"
+    ],
+    "mcp-runtime/data/mcp-catalog-repository.ts": [
+      "security/spawn-env-policy"
+    ],
     "mcp-runtime/external-client.ts": [
       "security/spawn-env-policy",
       "security/ssrf-guard",
@@ -185,12 +191,10 @@
       "tool-contract/types"
     ],
     "mcp-runtime/lifecycle-supervisor.ts": [
-      "data/repositories/mcp-catalog-repository",
       "tool-contract/env-placeholder-shell"
     ],
     "mcp-runtime/mcp-meta-tools.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
       "tool-contract/types"
     ],
     "mcp-runtime/mcp-server-ingest-tool.ts": [
@@ -207,42 +211,31 @@
     ],
     "mcp-runtime/oauth-provider.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-oauth-client-repository",
-      "data/repositories/mcp-oauth-repository",
       "storage"
     ],
     "mcp-runtime/routes/mcp-admin-monitoring.routes.ts": [
       "auth",
-      "data/models/unified-database",
-      "data/repositories/mcp-admin-monitoring-repository"
+      "data/models/unified-database"
     ],
     "mcp-runtime/routes/mcp-catalog-admin.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-admin-repository",
-      "data/repositories/mcp-catalog-oauth-client-repository",
-      "schemas/mcp-catalog-admin.schema",
       "services/AuditService"
     ],
     "mcp-runtime/routes/mcp-catalog.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
       "middlewares/validation",
-      "schemas/mcp-catalog.schema",
       "security/spawn-env-policy",
       "services/org/effective-policy"
     ],
     "mcp-runtime/routes/mcp-global-connect.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
       "tool-contract/types"
     ],
     "mcp-runtime/routes/mcp-oauth.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
-      "data/repositories/mcp-oauth-repository",
       "security/ssrf-guard"
     ],
     "mcp-runtime/routes/mcp-server-ingest.mounted.ts": [
@@ -264,19 +257,14 @@
     ],
     "mcp-runtime/routes/mcp-server-rename.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
       "services/AuditService"
     ],
     "mcp-runtime/routes/mcp-visibility.ts": [
-      "data/repositories/mcp-catalog-repository",
-      "data/user-manager",
-      "schemas/mcp-catalog.schema"
+      "data/user-manager"
     ],
     "mcp-runtime/routes/mcp.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
-      "data/repositories/mcp-oauth-repository",
       "middlewares/validation",
       "schemas/mcp.schema",
       "security/ssrf-guard",
@@ -284,8 +272,7 @@
       "tool-contract/types"
     ],
     "mcp-runtime/runtime-boot.ts": [
-      "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository"
+      "data/models/unified-database"
     ],
     "mcp-runtime/runtime.ts": [
       "llm/types",
@@ -341,9 +328,7 @@
       "services/chat-service/turn-integrations"
     ],
     "notebooklm/routes.ts": [
-      "auth",
-      "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository"
+      "auth"
     ],
     "search-providers/external-search-apis.ts": [
       "tools/web-search/providers",
