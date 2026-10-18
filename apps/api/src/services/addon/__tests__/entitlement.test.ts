@@ -20,7 +20,7 @@ jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: 
 
 import { checkAddonEntitlement, entitledAddonIds } from '../entitlement';
 import { __resetAddonStateCacheForTest, ensureAddonStates, isAddonEnabledSync } from '../addon-state';
-import { resetAddonRuntimeStatusesForTest, setAddonRuntimeStatus } from '../../../addon-host/activation';
+import { recordAddonBootCandidates, resetAddonRuntimeStatusesForTest, setAddonRuntimeStatus } from '../../../addon-host/activation';
 
 const ENV_KEY = 'ADDON_BUILTIN_DISABLED';
 
@@ -102,6 +102,31 @@ describe('이 프로세스의 부팅 결과 (외부 리뷰 A4)', () => {
     it('관리자가 끈 add-on 은 부팅 결과와 무관하게 disabled', async () => {
         setAddonRuntimeStatus('sleeping-pack', 'failed', { code: 'runtime_failed', reason: 'x' });
         expect(await checkAddonEntitlement('sleeping-pack', 'u1')).toBe('disabled');
+    });
+
+    it('부팅 때 꺼져 있다가(제외 — not_loaded) 나중에 켠 런타임 add-on 은 재시작 전까지 failed', async () => {
+        recordAddonBootCandidates([{ addonId: 'industry-pack', requiresProcessBoot: true }]);
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('failed');
+        setAddonRuntimeStatus('industry-pack', 'ready');
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('ok');
+    });
+
+    it('껐다 켰는데 재개하지 못한(stopped) 런타임 add-on 도 failed', async () => {
+        recordAddonBootCandidates([{ addonId: 'industry-pack', requiresProcessBoot: true }]);
+        setAddonRuntimeStatus('industry-pack', 'stopped');
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('failed');
+        await ensureAddonStates();
+        expect(isAddonEnabledSync('industry-pack')).toBe(false);
+    });
+
+    it('세울 것이 없는 add-on(라우트·콘텐츠만)은 부팅 때 꺼져 있었어도 켜는 즉시 ok(실시간 토글 유지)', async () => {
+        recordAddonBootCandidates([{ addonId: 'industry-pack', requiresProcessBoot: false }]);
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('ok');
+    });
+
+    it('부팅 후보가 아니던 add-on(설치형 확장 등)은 DB 상태대로', async () => {
+        recordAddonBootCandidates([{ addonId: 'other-pack', requiresProcessBoot: true }]);
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('ok');
     });
 });
 

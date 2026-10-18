@@ -2890,7 +2890,7 @@
     "serverError": "Ein Serverfehler ist aufgetreten",
     "disabledByAdmin": "Ein Administrator hat Knowledge deaktiviert.",
     "unavailable": "Knowledge ist vorübergehend nicht verfügbar. Bitte versuchen Sie es in Kürze erneut.",
-    "notReady": "Knowledge ist nicht verfügbar: der Start ist fehlgeschlagen. Bitte wenden Sie sich an einen Administrator.",
+    "notReady": "Knowledge ist auf diesem Server nicht verfügbar (Start fehlgeschlagen oder Neustart erforderlich). Bitte wenden Sie sich an einen Administrator.",
     "cancel": "Abbrechen",
     "close": "Schließen",
     "save": "Speichern",
