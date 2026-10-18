@@ -19,7 +19,7 @@ const buildSkillPrompt = jest.fn().mockResolvedValue('');
 // 스킬 런타임은 add-on 이고 Base(system-prompt)는 포트만 부른다 — 포트에 가짜 구현을 꽂는다.
 jest.mock('../../runtime-ports/skill-runtime', () => ({
     ...jest.requireActual('../../runtime-ports/skill-runtime'),
-    getSkillRuntime: () => ({ buildManifestPrompt, getSkillsForAgent, buildSkillPrompt, isOfferEnabled: () => false }),
+    getSkillRuntime: () => ({ buildProceduralSkillBlock: async () => '', proceduralHooks: () => undefined, buildManifestPrompt, getSkillsForAgent, buildSkillPrompt, isOfferEnabled: () => false }),
 }));
 
 import { getAgentSystemMessage } from '../system-prompt';
