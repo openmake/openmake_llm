@@ -24,8 +24,8 @@ const logger = createLogger('AddonEntitlement');
 
 /**
  * 'state-unknown' = 상태·정책을 확인하지 못함(DB 장애) — 라우트는 503 으로 알린다(설계 문서 8.3). 꺼짐과 섞지 않는다.
- * 'failed' = 부팅에 실패함(`state=failed`, 또는 이 프로세스의 부팅 실패 — DB 를 다시 켜도 재시작 전까지) — 관리자 조치가 필요하다.
- *   라우트는 503 `ADDON_FAILED`(재시도 안내 없음).
+ * 'failed' = 이 서버에서 준비되지 않음(`state=failed`, 또는 이 프로세스의 부팅 실패·재시작 필요 — DB 를 다시 켜도 재시작 전까지)
+ *   — 관리자 조치가 필요하다. 라우트는 503 `ADDON_FAILED`(재시도 안내 없음).
  */
 export type EntitlementVerdict = 'ok' | 'disabled' | 'failed' | 'not-entitled' | 'state-unknown';
 

@@ -23,7 +23,7 @@ import { ADDON_PERMISSIONS, hasAddonPermission } from '../config/addon-permissio
 import { loadAddonEntry } from './entry-loader';
 import { installPackCatalog } from './pack-catalog';
 import { installPackSkills } from './pack-skills';
-import { setAddonRuntimeStatus } from './activation';
+import { recordAddonBootCandidates, setAddonRuntimeStatus } from './activation';
 import { ensureLegacyCapabilityBridge, LEGACY_BRIDGE_CAPABILITIES } from './legacy-capability-bridge';
 import { checkCapabilityOwnership } from '../capability-contract/registry';
 import { CAPABILITY_CONTRACT_VERSION } from '../capability-contract/types';
@@ -164,6 +164,11 @@ function defaultBootDeps(): AddonBootDeps {
  */
 export async function bootAddons(candidates: readonly BuiltinAddon[], deps: AddonBootDeps): Promise<AddonBootResult[]> {
     const results = new Map<string, AddonBootResult>();
+    // 요청 게이트가 "이 프로세스에서 준비됐나"를 보도록 후보를 남긴다 — 런타임·마이그레이션이 있는 add-on 은 여기서 ready 가 돼야 쓸 수 있다
+    recordAddonBootCandidates(candidates.map(a => ({
+        addonId: a.id,
+        requiresProcessBoot: Boolean(a.manifest.entry?.runtime || a.manifest.components.migrations),
+    })));
     const fail = async (addon: BuiltinAddon, stage: Exclude<AddonBootResult['stage'], 'ready' | 'excluded'>, code: AddonFailureCode, reason: string) => {
         results.set(addon.id, { id: addon.id, stage, reason });
         setAddonRuntimeStatus(addon.id, 'failed', { code, reason });
