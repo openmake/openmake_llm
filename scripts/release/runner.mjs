@@ -3,6 +3,8 @@
  * 시간 초과면 SIGTERM, 10초 뒤에도 살아 있으면 SIGKILL(프로세스 그룹 전체).
  * 로그 WriteStream 의 'finish'(end 콜백)를 기다린 뒤에 결과를 돌려준다.
  * spawn 자체가 실패하면('error' — 없는 cwd·EAGAIN 등) 예외 없이 exitCode null 의 실패 결과로 돌려준다.
+ * spawn 뒤에 'error' 가 오면 시간 초과와 같은 순서로 프로세스 그룹을 끝낸 뒤 exitCode null 의 실패 결과로 돌려준다.
+ * spawnImpl 은 테스트용 이음매다(기본 node:child_process spawn) — 테스트가 자식에 'error' 를 흉내 내려고 넘긴다.
  */
 import { spawn } from 'node:child_process';
 import { createWriteStream, mkdirSync } from 'node:fs';
@@ -43,12 +45,12 @@ export function createChunkMasker(emit) {
     };
 }
 
-export function runCommand({ cmd, cwd, env, timeoutSec, logPath }) {
+export function runCommand({ cmd, cwd, env, timeoutSec, logPath, spawnImpl = spawn }) {
     mkdirSync(dirname(logPath), { recursive: true });
     const log = createWriteStream(logPath);
     const startedAt = new Date();
     return new Promise((resolve) => {
-        const child = spawn('bash', ['-c', cmd], { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+        const child = spawnImpl('bash', ['-c', cmd], { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
         const chunks = [];
         const emit = (text) => {
             if (!text) return;
@@ -62,12 +64,16 @@ export function runCommand({ cmd, cwd, env, timeoutSec, logPath }) {
         child.stderr.on('data', stderrMask.push);
         let timedOut = false;
         let killTimer = null;
-        const timer = setTimeout(() => {
-            timedOut = true;
+        // 프로세스 그룹 전체에 SIGTERM, KILL_GRACE_MS 뒤에도 살아 있으면 SIGKILL
+        const terminateGroup = () => {
             try { process.kill(-child.pid, 'SIGTERM'); } catch { /* 이미 끝남 */ }
             killTimer = setTimeout(() => {
                 try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 이미 끝남 */ }
             }, KILL_GRACE_MS);
+        };
+        const timer = setTimeout(() => {
+            timedOut = true;
+            terminateGroup();
         }, timeoutSec * 1000);
         // 'error' 뒤에 'close' 가 와도 한 번만 끝낸다
         let settled = false;
@@ -91,7 +97,15 @@ export function runCommand({ cmd, cwd, env, timeoutSec, logPath }) {
                 output: chunks.join(''),
             }));
         };
-        child.on('error', (err) => finish(null, null, `[runner] 실행 실패: ${err.message}\n`));
-        child.on('close', (code, signal) => finish(code, signal));
+        // spawn 뒤에 온 'error'(kill 실패 등)는 바로 끝내면 그룹의 자식이 남는다 — 그룹을 끝내고 'close' 에서 실패로 끝낸다
+        let lateError = null;
+        child.on('error', (err) => {
+            const extra = `[runner] 실행 실패: ${err.message}\n`;
+            if (child.pid === undefined) return finish(null, null, extra);
+            if (lateError) return;
+            lateError = extra;
+            if (!killTimer) terminateGroup(); // 시간 초과가 이미 끝내는 중이면 그 순서를 따른다
+        });
+        child.on('close', (code, signal) => (lateError ? finish(null, signal, lateError) : finish(code, signal)));
     });
 }
