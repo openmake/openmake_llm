@@ -13,7 +13,7 @@
  * - audit_logs                      : AUDIT_PII_RETENTION_DAYS(기본 90일) 초과 ip/ua NULL + details.actor 제거
  * - audit_logs (login.succeeded)    : AUDIT_LOGIN_SUCCESS_RETENTION_DAYS(기본 90일) 초과 행 삭제 — 이 action 만, 다른 감사 기록은 삭제하지 않음
  * - alert_history                   : ALERT_PII_RETENTION_DAYS(기본 90일) 초과 data.actor/ipAddress/userAgent 제거
- * - mcp_server_instances            : MCP_INSTANCE_RETENTION_DAYS(기본 30일) 초과 transition 이력 삭제 (각 server·user 의 최신 transition 은 보존)
+ * - add-on 소유 테이블              : 각 add-on 데이터 모듈의 retention 작업 (예: MCP 인스턴스 이력 — MCP_INSTANCE_RETENTION_DAYS)
  * - orchestration_dispatch_decisions: ORCH_PREVIEW_RETENTION_DAYS(기본 30일) 초과 query_preview NULL (집계 지표는 METRICS_RETENTION_DAYS 까지 보존)
  * - orchestrator_runs               : ORCHESTRATOR_RUNS_RETENTION_DAYS(기본 90일) 초과 행 삭제 (멀티모달 오케스트레이터 셰도우)
  * - system_settings_history / organization_policy_history : POLICY_HISTORY_RETENTION_DAYS(기본 365일) 초과 행 삭제 (130)
@@ -22,6 +22,7 @@
  */
 
 import { getUnifiedDatabase } from './models/unified-database';
+import { getAddonDataModules } from '../addon-host/addon-data';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('DbRetention');
@@ -199,27 +200,16 @@ async function runRetention(): Promise<void> {
             }
         }
 
-        // 9. mcp_server_instances 전이 이력 정리 — append-only 이력(매 lifecycle 전이마다 INSERT)이
-        // 무한 증가하는 것을 방지. 각 (mcp_server_id, user_id) 의 최신 transition row 는 무조건 보존하여
-        // current_running 계산(최신 transition 기준, PR #127)의 정확성을 유지하고,
-        // 그 외 N일(기본 30) 초과 이력만 삭제한다.
-        const mcpInstanceRetentionDays = parseInt(
-            process.env.MCP_INSTANCE_RETENTION_DAYS ?? '30',
-            10,
-        );
-        if (Number.isFinite(mcpInstanceRetentionDays) && mcpInstanceRetentionDays > 0) {
-            const mcpResult = await pool.query(
-                `DELETE FROM mcp_server_instances
-                 WHERE started_at < NOW() - ($1 || ' days')::interval
-                   AND id NOT IN (
-                       SELECT DISTINCT ON (mcp_server_id, user_id) id
-                       FROM mcp_server_instances
-                       ORDER BY mcp_server_id, user_id, started_at DESC
-                   )`,
-                [mcpInstanceRetentionDays.toString()]
-            );
-            if ((mcpResult.rowCount ?? 0) > 0) {
-                logger.info(`[DbRetention] MCP 인스턴스 이력 ${mcpResult.rowCount}건 정리 완료 (${mcpInstanceRetentionDays}일 초과, 최신 transition 보존)`);
+        // 9. add-on 소유 테이블의 보존 정리 — 각 add-on 의 데이터 모듈이 선언한 작업(예: MCP 인스턴스 이력).
+        // 꺼진 add-on 도 호스트가 불러온다. 작업 하나의 실패는 그 작업만 건너뛴다.
+        for (const { addonId, data } of getAddonDataModules()) {
+            for (const task of data?.retention ?? []) {
+                try {
+                    const n = await task.run();
+                    if (n > 0) logger.info(`[DbRetention] add-on '${addonId}' ${task.name} ${n}건 정리`);
+                } catch (err) {
+                    logger.warn(`[DbRetention] add-on '${addonId}' ${task.name} 정리 실패 — 건너뜀: ${err instanceof Error ? err.message : String(err)}`);
+                }
             }
         }
 

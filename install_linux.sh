@@ -784,12 +784,14 @@ update_env_app_port() { # API 포트 변경: PORT= 와 URL 류의 :old 를 :new 
     mv "$tmp" "$envf"
 }
 
-update_env_web_port() { # 웹 포트 변경: 공개 주소/CORS 의 :old 를 :new 로
+update_env_web_port() { # 웹 포트 변경: 공개 주소/CORS 의 :old 를 :new 로 + OMK_WEB_PORT 를 새 값으로(없으면 추가)
     local envf="$SCRIPT_DIR/.env" tmp
     [[ -f "$envf" ]] || return 0
     tmp="$(mktemp)"
     sed -E "/^(CORS_ORIGINS|OMK_APP_URL)=/s|:$1|:$2|g" "$envf" > "$tmp"
     mv "$tmp" "$envf"
+    # omk 프록시·smoke·재기동은 OMK_WEB_PORT 를 먼저 읽는다 — 옛 값이 남거나 없으면 설치 때 띄운 포트와 갈린다(macOS 50-env.sh 와 같은 규칙)
+    set_env OMK_WEB_PORT "$2"
 }
 
 # PM2 에 등록된 우리 앱이면 재실행 케이스 — pm2 restart 가 포트를 이어받는다.

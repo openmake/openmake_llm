@@ -8,7 +8,7 @@
  */
 
 import { createLogger } from '../../utils/logger';
-import type { SkillRepository } from '../../data/repositories/skill-repository';
+import type { SkillRepository } from './data/skill-repository';
 import { GENERAL_SYSTEM_SKILL_NAME } from '../../agents/system-skill-names';
 import { GENERAL_AGENT_SKILL_CONTENT, SKILL_AUTHOR_GUIDE_CONTENT } from './prompts';
 
@@ -28,7 +28,7 @@ export async function seedBaseSkills(signal?: AbortSignal): Promise<void> {
     try {
         // 지연 로딩: 순환 참조 및 초기화 순서 문제 방지
         const { getUnifiedDatabase } = await import('../../data/models/unified-database');
-        const { SkillRepository } = await import('../../data/repositories/skill-repository');
+        const { SkillRepository } = await import('./data/skill-repository');
         const repo = new SkillRepository(getUnifiedDatabase().getPool());
 
         let seededCount = 0;

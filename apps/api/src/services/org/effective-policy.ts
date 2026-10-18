@@ -13,7 +13,7 @@ import { resolveExternalModelPolicy, type ExternalModelPolicy } from '../../conf
 import { APPROVAL_POLICY_STRICTNESS, ORG_POLICY_KEYS, ORG_POLICY_SCHEMAS, type OrgPolicyKey } from '../../config/org-policy-registry';
 import { ORG_CONTEXT } from '../../config/runtime-limits';
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
-import { activeOrgFor } from './membership-cache';
+import { activeOrgForStrict, membershipsForStrict, type OrgContext } from './membership-cache';
 
 const logger = createLogger('EffectivePolicy');
 
@@ -93,20 +93,16 @@ export function strictestApprovalPolicy(
 interface Entry { at: number; value: OrgPolicySet }
 const orgPolicyCache = new Map<string, Entry>();
 
+/** 조직 정책 묶음 (60초 캐시) — 조회 실패는 예외(실패는 캐시하지 않는다). */
 async function orgPolicySetFor(orgId: string, now: number): Promise<OrgPolicySet> {
     const hit = orgPolicyCache.get(orgId);
     if (hit && now - hit.at < ORG_CONTEXT.CACHE_TTL_MS) return hit.value;
-    try {
-        const { OrganizationPolicyRepository } = await import('../../data/repositories/organization-policy-repository');
-        const { getPool } = await import('../../data/models/unified-database');
-        const rows = await new OrganizationPolicyRepository(getPool()).list(orgId);
-        const value = parseOrgPolicyRows(rows);
-        orgPolicyCache.set(orgId, { at: now, value });
-        return value;
-    } catch (e) {
-        logger.warn('조직 정책 조회 실패 (fail-open: 글로벌만 적용):', e);
-        return {};
-    }
+    const { OrganizationPolicyRepository } = await import('../../data/repositories/organization-policy-repository');
+    const { getPool } = await import('../../data/models/unified-database');
+    const rows = await new OrganizationPolicyRepository(getPool()).list(orgId);
+    const value = parseOrgPolicyRows(rows);
+    orgPolicyCache.set(orgId, { at: now, value });
+    return value;
 }
 
 /** PURE: 사이트 허용 목록 병합 — deny 합집합, allow 는 둘 다 있으면 교집합 · 한쪽만 있으면 그쪽(외부 모델 정책과 같은 규칙). */
@@ -124,13 +120,50 @@ export function clearOrgPolicyCache(orgId?: string): void {
     if (orgId === undefined) orgPolicyCache.clear(); else orgPolicyCache.delete(orgId);
 }
 
-/** 요청 사용자의 유효 정책 — 활성 조직이 없으면 글로벌 그대로. */
+/**
+ * 요청 사용자의 유효 정책 — 활성 조직이 없으면 글로벌 그대로.
+ * 조직 조회가 실패하면 글로벌만 적용한다(fail-open — 조직은 선택 구조라 장애가 채팅·작업을 막지 않는다).
+ * "확인하지 못하면 막아야" 하는 판정(add-on 사용권)은 `resolveEffectivePolicyStrict` 를 쓴다.
+ */
 export async function resolveEffectivePolicy(userId: string | undefined, now: number = Date.now()): Promise<EffectivePolicy> {
+    let org: OrgContext | null;
+    try {
+        org = await activeOrgForStrict(userId, now);
+    } catch (e) {
+        logger.warn('활성 조직 조회 실패 (fail-open: 글로벌만 적용):', e);
+        org = null;
+    }
+    let set: OrgPolicySet = {};
+    if (org) {
+        try {
+            set = await orgPolicySetFor(org.orgId, now);
+        } catch (e) {
+            logger.warn('조직 정책 조회 실패 (fail-open: 글로벌만 적용):', e);
+        }
+    }
+    return mergeEffectivePolicy(org, set);
+}
+
+/** 조직 축을 확인하지 못하면(활성 조직·멤버십·조직 정책 조회 실패) 예외 — 호출부가 '확인 불가'로 막는다. */
+export async function resolveEffectivePolicyStrict(userId: string | undefined, now: number = Date.now()): Promise<EffectivePolicy> {
+    const org = await activeOrgForStrict(userId, now);
+    return mergeEffectivePolicy(org, org ? await orgPolicySetFor(org.orgId, now) : {});
+}
+
+/**
+ * 지정한 조직 기준의 유효 정책 — 사용자의 지금 활성 조직과 무관하다(조직 자원 작업의 재검사용).
+ * 그 조직의 멤버가 아니면 null. 조회 실패는 예외.
+ */
+export async function resolveOrgPolicyStrict(userId: string, orgId: string, now: number = Date.now()): Promise<EffectivePolicy | null> {
+    const membership = (await membershipsForStrict(userId, now)).find((m) => m.orgId === orgId);
+    if (!membership) return null;
+    return mergeEffectivePolicy({ orgId, orgRole: membership.role }, await orgPolicySetFor(orgId, now));
+}
+
+function mergeEffectivePolicy(org: OrgContext | null, set: OrgPolicySet): EffectivePolicy {
     const global = resolveExternalModelPolicy(getConfig().externalModelPolicy);
-    const org = await activeOrgFor(userId, now);
     const globalSite = parseBrowserSitePolicy(getConfig().browserSitePolicy);
     if (!org) return { externalModel: global, browserSite: globalSite, orgId: null };
-    const set = await orgPolicySetFor(org.orgId, now);
     return {
         externalModel: mergeExternalModelPolicy(global, set.externalModel),
         approvalPolicyMin: set.approvalPolicyMin,

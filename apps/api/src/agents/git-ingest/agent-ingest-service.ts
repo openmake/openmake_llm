@@ -16,6 +16,7 @@
  *
  * @module agents/git-ingest/agent-ingest-service
  */
+import { getComponentStore } from '../../addon-host/addon-data';
 import * as crypto from 'crypto';
 import type { Pool } from 'pg';
 import type { LLMClient } from '../../llm/client';
@@ -197,12 +198,7 @@ export class AgentIngestService {
         // (10) skill_bindings → agent_skill_assignments INSERT (resolved 만)
         for (const r of resolved) {
             if (!r.skillId) continue;
-            await this.opts.pool.query(
-                `INSERT INTO agent_skill_assignments (agent_id, skill_id, priority, created_at)
-                 VALUES ($1, $2, 0, NOW())
-                 ON CONFLICT (agent_id, skill_id) DO NOTHING`,
-                [inserted.id, r.skillId]
-            );
+            await getComponentStore('skills', this.opts.pool).assignToAgent(inserted.id, r.skillId, 0);
         }
 
         logger.info(`agent-ingest created: ${inserted.id} (${owner}/${repo}@${sha.slice(0, 7)}:${candidate.path})`);
@@ -212,11 +208,7 @@ export class AgentIngestService {
     private async resolveSkillBinding(ref: string, input: ImportInput): Promise<SkillBindingResolution> {
         if (ref.startsWith('skill-id:')) {
             const id = ref.slice('skill-id:'.length);
-            const r = await this.opts.pool.query<{ id: string }>(
-                `SELECT id FROM agent_skills WHERE id=$1 LIMIT 1`,
-                [id]
-            );
-            if (r.rows[0]) return { ref, resolved: true, skillId: id };
+            if (await getComponentStore('skills', this.opts.pool).exists(id)) return { ref, resolved: true, skillId: id };
             return { ref, resolved: false, error: `skill not found: ${id}` };
         }
         if (ref.startsWith('git-url:')) {

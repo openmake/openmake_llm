@@ -18,6 +18,7 @@
 import { randomUUID } from 'crypto';
 import { getActiveChatTurnIntegrations, getChatTurnIntegrations, type ContributedOrchestrationTool } from './turn-integrations';
 import { integrationGate } from '../addon/integration-gate';
+import { integrationGateRefusal } from '../addon/integration-gate-refusal';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../tool-contract/types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
@@ -173,11 +174,7 @@ export async function runOrchestrationTool(params: {
         const gate = await integrationGate(owner.id, params.userCtx.userId !== undefined ? String(params.userCtx.userId) : undefined);
         if (!gate.allowed) {
             logger.info(`기여 도구 '${params.name}' 실행 거절 — add-on '${owner.id}' ${gate.reason}${gate.detail ? `: ${gate.detail}` : ''}`);
-            if (gate.reason === 'not_entitled') return `Error: add-on '${owner.id}' 은 이 조직에서 사용할 수 없습니다(허용 목록 밖)`;
-            if (gate.reason === 'failed') return `Error: add-on '${owner.id}' 이 부팅에 실패해 이 도구를 실행할 수 없습니다`;
-            return gate.reason === 'disabled'
-                ? `Error: add-on '${owner.id}' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다`
-                : `Error: add-on '${owner.id}' 상태를 확인할 수 없어 이 도구를 실행하지 않았습니다. 잠시 후 다시 시도하세요`;
+            return `Error: ${integrationGateRefusal(owner.id, gate.reason)}`;
         }
         return owner.orchestrationTool.run({
             args: params.args,

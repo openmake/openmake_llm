@@ -19,11 +19,11 @@ import {
     createCatalogTemplateSchema,
     updateCatalogTemplateSchema,
     catalogOAuthClientSchema,
-} from '../../../schemas/mcp-catalog-admin.schema';
-import { McpCatalogOAuthClientRepository } from '../../../data/repositories/mcp-catalog-oauth-client-repository';
+} from '../schemas/mcp-catalog-admin.schema';
+import { McpCatalogOAuthClientRepository } from '../data/mcp-catalog-oauth-client-repository';
 import { resolveMcpOAuthRedirectUrl } from '../../../config/mcp-oauth';
 import { getAuditService } from '../../../services/AuditService';
-import { McpCatalogAdminRepository } from '../../../data/repositories/mcp-catalog-admin-repository';
+import { McpCatalogAdminRepository } from '../data/mcp-catalog-admin-repository';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
 import { createLogger } from '../../../utils/logger';
 

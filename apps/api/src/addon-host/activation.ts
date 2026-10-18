@@ -51,9 +51,40 @@ export function getAddonRuntimeStatus(addonId: string): { status: AddonRuntimeSt
     return runtimeStatuses.get(addonId) ?? { status: 'not_loaded' };
 }
 
+/** 이 프로세스가 add-on 부팅(`bootAddons`)을 했나 — 별도 worker 프로세스·단위 테스트는 하지 않는다 */
+let bootRanInProcess = false;
+/** 부팅 후보였던 add-on → 이 프로세스에서 코드·스키마를 세워야 쓸 수 있나(런타임 진입점 또는 마이그레이션) */
+const bootRequired = new Map<string, boolean>();
+
+/** 부팅 절차(index.ts bootAddons)가 시작할 때 후보를 기록한다 */
+export function recordAddonBootCandidates(list: ReadonlyArray<{ addonId: string; requiresProcessBoot: boolean }>): void {
+    bootRanInProcess = true;
+    for (const c of list) bootRequired.set(c.addonId, c.requiresProcessBoot);
+}
+
+/**
+ * 이 프로세스에서 그 add-on 이 요청을 받을 준비가 됐나 — 요청 게이트(`services/addon/addon-state`)가 DB 의도 위에 겹친다.
+ *   failed    : 이 프로세스의 부팅이 실패했다
+ *   not_ready : 코드·스키마를 세워야 하는 add-on 인데 `ready` 가 아니다(부팅 때 꺼져 있다가 나중에 켬·재개 실패·종료 중) — 재시작해야 반영
+ *   ready     : 준비됨, 또는 세울 것이 없는 add-on(라우트·콘텐츠만 — 실시간 토글이 그대로 반영된다)
+ *   unknown   : 판정하지 않는다 — 부팅을 하지 않은 프로세스(별도 worker)·부팅 후보가 아니던 add-on(설치형 확장 등)
+ */
+export type AddonProcessReadiness = 'ready' | 'failed' | 'not_ready' | 'unknown';
+
+export function getAddonProcessReadiness(addonId: string): AddonProcessReadiness {
+    const status = getAddonRuntimeStatus(addonId).status;
+    if (status === 'failed') return 'failed';
+    const required = bootRequired.get(addonId);
+    if (!bootRanInProcess || required === undefined) return 'unknown';
+    if (!required) return 'ready';
+    return status === 'ready' ? 'ready' : 'not_ready';
+}
+
 /** 테스트 정리용 */
 export function resetAddonRuntimeStatusesForTest(): void {
     runtimeStatuses.clear();
+    bootRequired.clear();
+    bootRanInProcess = false;
 }
 
 export interface ActivationInput {

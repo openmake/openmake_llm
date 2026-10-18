@@ -75,6 +75,15 @@ SHA="$(git -C "$REPO_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 TS="$(date +%Y%m%d)"
 OUT_DIR="$BUNDLE_ROOT/openmake-llm-airgap-${TS}-${SHA}"
 
+# workspace 패키지(packages/*)의 빌드 산출물 — 레포 상대 경로, 있는 것만.
+# API·웹이 실행 중에 @openmake/config 등을 dist/index.js 로 불러오는데 dist 는 git 에 없다(git archive 에 안 실린다).
+workspace_package_dists() {
+    local d
+    for d in "$REPO_ROOT"/packages/*/dist; do
+        [[ -d "$d" ]] && printf '%s\n' "${d#"$REPO_ROOT"/}"
+    done
+}
+
 # infra/docker-compose.yml 에서 image: 목록을 뽑는다 (하드코딩 대신 compose 파일이 SoT).
 list_compose_images() {
     # \s 는 BSD sed(macOS 기본)에 없다 — POSIX [[:space:]] 로 크로스플랫폼 대응.
@@ -113,6 +122,9 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
         [[ -d "$REPO_ROOT/$d" ]] && echo "  - build-artifacts.tar.gz 포함: $d ($(du -sh "$REPO_ROOT/$d" 2>/dev/null | cut -f1))" \
             || echo "  - build-artifacts: $d 없음 (대상 호스트에서 npm run build 필요)"
     done
+    while IFS= read -r d; do
+        echo "  - build-artifacts.tar.gz 포함: $d ($(du -sh "$REPO_ROOT/$d" 2>/dev/null | cut -f1))"
+    done < <(workspace_package_dists)
     log_ok "[dry-run] 완료 — 실제 아카이브 생성 없음"
     exit 0
 fi
@@ -160,6 +172,8 @@ BUILD_TARGETS=()
 [[ -d "$REPO_ROOT/apps/api/dist" ]] && BUILD_TARGETS+=("apps/api/dist")
 [[ -d "$REPO_ROOT/apps/web/.next" ]] && BUILD_TARGETS+=("apps/web/.next")
 if [[ "${#BUILD_TARGETS[@]}" -gt 0 ]]; then
+    # API·웹 산출물만 싣고 workspace 패키지 산출물을 빼면, 빌드를 생략한 대상 호스트에서 모듈 로딩이 실패한다
+    while IFS= read -r d; do BUILD_TARGETS+=("$d"); done < <(workspace_package_dists)
     ( cd "$REPO_ROOT" && tar -czf "$OUT_DIR/build-artifacts.tar.gz" "${BUILD_TARGETS[@]}" )
     log_ok "빌드 산출물 포함 (${BUILD_TARGETS[*]})"
 else

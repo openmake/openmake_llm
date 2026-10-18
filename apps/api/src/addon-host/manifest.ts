@@ -39,6 +39,11 @@ const addonEntrySchema = z.object({
     /** 설정·API key 스코프·도구 위험 등급 기여 (addon-host/contributions.ts `AddonContribution`) */
     contributions: entryRefSchema.optional(),
     /**
+     * 데이터 의무(내보내기·사용자 삭제·메모리 격리·보존 정리 — runtime-ports/data-data.ts `AddonDataModule`).
+     * 다른 진입점과 달리 **꺼진 add-on 도** 불러온다(addon-host/data-data.ts) — 런타임 없이 SQL 만 쓰는 가벼운 모듈로.
+     */
+    data: entryRefSchema.optional(),
+    /**
      * 별도 프로세스 worker — Base 진입점(`workers/<이름>.ts`)이 이름으로 찾아 부른다(`addon-host/worker-entry.ts`).
      * 이름은 PM2 앱·진입점 파일과 짝인 계약이다(Base 코드에 add-on id 를 쓰지 않으려고 이름으로 찾는다).
      */

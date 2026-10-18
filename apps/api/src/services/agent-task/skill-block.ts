@@ -9,7 +9,6 @@ import { getAgentTaskSystemPrompt, getAgentTaskParallelGuide } from '../../promp
 import { getReportGuideForTask } from '../../prompts/report-guide';
 import { REPORT_PIPELINE, REPORT_INTENT_PATTERNS, AGENT_SPAWN } from '../../config/runtime-limits';
 import { buildLearningBlock } from './task-learning';
-import { buildProceduralSkillBlock } from './procedural-skill';
 import { rankMemoriesForGoal } from './memory-rank';
 import { MEMORY_RANKING } from '../../config/agent-task-skill-memory';
 import { buildUserMemoryBlock } from '../chat-service/user-context-blocks';
@@ -75,7 +74,7 @@ export async function buildAgentTaskSystemContent(userId: string, goal: string, 
         + memory
         + (await buildSkillPromptBlock(userId))
         + (await buildLearningBlock(userId, goal, taskId))
-        + (await buildProceduralSkillBlock(userId, goal));
+        + (await getSkillRuntime().buildProceduralSkillBlock(userId, goal));
 }
 
 /**

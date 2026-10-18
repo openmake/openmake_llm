@@ -10,7 +10,7 @@ import {
     MCP_DEFAULT_PROTOCOL_VERSION,
     MCP_SUPPORTED_PROTOCOL_VERSIONS,
     negotiateProtocolVersion,
-} from '../../../config/mcp-protocol';
+} from '../mcp-protocol';
 
 describe('negotiateProtocolVersion', () => {
     it('지원 리비전을 요청하면 그대로 돌려준다', () => {

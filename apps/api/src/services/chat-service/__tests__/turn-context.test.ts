@@ -5,6 +5,9 @@ const integrationGate = jest.fn();
 jest.mock('../../addon/integration-gate', () => ({ integrationGate: (...a: unknown[]) => integrationGate(...a) }));
 const isAddonEnabledSync = jest.fn((_id: string) => true);
 jest.mock('../../addon/addon-state', () => ({ isAddonEnabledSync: (id: string) => isAddonEnabledSync(id) }));
+// 데이터 모듈(꺼진 add-on 도 불러오는 보호 훅) — 기본은 없음, 격리 판정 테스트에서만 채운다
+let data: unknown[] = [];
+jest.mock('../../../addon-host/addon-data', () => ({ getAddonDataModules: () => data }));
 
 import {
     __setChatTurnIntegrationsForTest, collectTurnContexts, collectHiddenSessionIds, collectContextRefs,
@@ -120,6 +123,35 @@ describe('collectTurnContexts', () => {
         } finally {
             jest.useRealTimers();
         }
+    });
+});
+
+describe('isSessionMemoryIsolated — 데이터 모듈(env 로 꺼진 add-on 도 유지, 외부 검토 A2)', () => {
+    afterEach(() => { data = []; });
+
+    it('채팅 통합 목록에 없어도 데이터 모듈이 격리라 하면 true', async () => {
+        __setChatTurnIntegrationsForTest([]);
+        data = [{ addonId: 'k', data: { isMemoryIsolatedSession: async (_u: string, sid: string) => sid === 's1' }, error: null }];
+        expect(await isSessionMemoryIsolated('u1', 's1')).toBe(true);
+        expect(await isSessionMemoryIsolated('u1', 's2')).toBe(false);
+    });
+
+    it('모듈을 불러오지 못한 add-on 이 있으면 판정을 알 수 없으므로 격리(fail-closed)', async () => {
+        __setChatTurnIntegrationsForTest([]);
+        data = [{ addonId: 'broken', data: null, error: 'Cannot find module' }];
+        expect(await isSessionMemoryIsolated('u1', 's1')).toBe(true);
+    });
+
+    it('판정이 던지면 격리(fail-closed)', async () => {
+        __setChatTurnIntegrationsForTest([]);
+        data = [{ addonId: 'k', data: { isMemoryIsolatedSession: async () => { throw new Error('db'); } }, error: null }];
+        expect(await isSessionMemoryIsolated('u1', 's1')).toBe(true);
+    });
+
+    it('게스트·세션 없음은 판정하지 않는다', async () => {
+        data = [{ addonId: 'broken', data: null, error: 'x' }];
+        expect(await isSessionMemoryIsolated(undefined, 's1')).toBe(false);
+        expect(await isSessionMemoryIsolated('u1', undefined)).toBe(false);
     });
 });
 

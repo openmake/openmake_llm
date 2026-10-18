@@ -29,7 +29,7 @@ jest.mock('../external-client', () => ({
 
 import { MCPServerRegistry } from '../server-registry';
 import type { MCPServerConfig } from '../../../tool-contract/types';
-import type { UnifiedDatabase } from '../../../data/models/unified-database';
+import type { McpServerRowSource } from '../data/mcp-server-repository';
 
 const config: MCPServerConfig = {
     id: 'g1', name: 'global-search', transport_type: 'stdio', command: 'uvx', args: ['pkg'],
@@ -71,7 +71,7 @@ describe('MCPServerRegistry 자동 재연결', () => {
     it('부팅 연결 실패 → 재시도, 실패가 이어지면 백오프가 늘고 상한에서 멈춘다', async () => {
         connectPlan = [false, false, false, false];
         const db = { getGlobalMcpServers: jest.fn().mockResolvedValue([{ ...config, env: null, url: null }]) };
-        await registry.initializeFromDB(db as unknown as UnifiedDatabase);
+        await registry.initializeFromDB(db as unknown as McpServerRowSource);
         expect(clients).toHaveLength(1);
 
         await jest.advanceTimersByTimeAsync(1000);   // 1회차
@@ -94,7 +94,7 @@ describe('MCPServerRegistry 자동 재연결', () => {
     it('부팅 실패 뒤 재시도가 성공하면 도구를 등록한다', async () => {
         connectPlan = [false, true];
         const db = { getGlobalMcpServers: jest.fn().mockResolvedValue([{ ...config, env: null, url: null }]) };
-        await registry.initializeFromDB(db as unknown as UnifiedDatabase);
+        await registry.initializeFromDB(db as unknown as McpServerRowSource);
         expect(router.registerExternalTools).not.toHaveBeenCalled();
 
         await jest.advanceTimersByTimeAsync(1000);

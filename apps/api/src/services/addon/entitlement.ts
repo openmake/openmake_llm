@@ -10,26 +10,38 @@
  * ⚠️ OpenMake 의 add-on 은 **전부 무료**다(2026-09-20 방침) — 이 계층은 과금이 아니라 거버넌스다.
  * allowlist 를 두지 않으면(기본) 모든 add-on 이 모든 사용자에게 열려 있다.
  *
- * 조회 실패는 `state-unknown` — 라우트 게이트가 503 으로 알린다(꺼짐 404 와 구분). 팩 스킬 주입 필터(`entitledAddonIds`)만 종전 fail-open 을 유지한다(선언형 콘텐츠).
+ * 조회 실패는 `state-unknown` — 라우트 게이트가 503 으로 알린다(꺼짐 404 와 구분). 조직 축도 엄격 조회(`resolveEffectivePolicyStrict`)라
+ * 활성 조직·멤버십·조직 정책 중 하나라도 못 읽으면 허용으로 읽지 않는다(종전엔 하위 조회가 실패를 "조직 없음"으로 삼켜 allowlist 가 풀렸다).
+ * 팩 스킬 주입 필터(`entitledAddonIds`)만 종전 fail-open 을 유지한다(선언형 콘텐츠).
  *
  * @module services/addon/entitlement
  */
 import { createLogger } from '../../utils/logger';
-import { resolveEffectivePolicy } from '../org/effective-policy';
+import { resolveEffectivePolicy, resolveEffectivePolicyStrict, resolveOrgPolicyStrict } from '../org/effective-policy';
 import { isAddonEnabled, readAddonEnabledStrict } from './addon-state';
 
 const logger = createLogger('AddonEntitlement');
 
 /**
  * 'state-unknown' = 상태·정책을 확인하지 못함(DB 장애) — 라우트는 503 으로 알린다(설계 문서 8.3). 꺼짐과 섞지 않는다.
- * 'failed' = 부팅에 실패함(`state=failed`) — 관리자 조치가 필요하다. 라우트는 503 `ADDON_FAILED`(재시도 안내 없음).
+ * 'failed' = 이 서버에서 준비되지 않음(`state=failed`, 또는 이 프로세스의 부팅 실패·재시작 필요 — DB 를 다시 켜도 재시작 전까지)
+ *   — 관리자 조치가 필요하다. 라우트는 503 `ADDON_FAILED`(재시도 안내 없음).
  */
 export type EntitlementVerdict = 'ok' | 'disabled' | 'failed' | 'not-entitled' | 'state-unknown';
+
+/** 판정 기준 조직 — 주지 않으면 요청 사용자의 지금 활성 조직(라우트 게이트) */
+export interface EntitlementScope {
+    /**
+     * 조직 자원에 묶인 작업(조직 Space 수집 등)의 재검사 — 접수 때 저장한 조직으로 판정한다. 사용자가 그 뒤 활성 조직을
+     * 바꿔도 기준이 바뀌지 않고, 그 조직을 떠났으면 not-entitled 다.
+     */
+    orgId?: string;
+}
 
 /**
  * @param userId 요청 사용자 — 없으면(게스트·내부 호출) 조직 축은 보지 않는다.
  */
-export async function checkAddonEntitlement(addonId: string, userId?: string): Promise<EntitlementVerdict> {
+export async function checkAddonEntitlement(addonId: string, userId?: string, scope?: EntitlementScope): Promise<EntitlementVerdict> {
     const enabled = await readAddonEnabledStrict(addonId);
     if (!enabled.known) {
         logger.warn(`add-on '${addonId}' 상태 확인 불가: ${enabled.reason}`);
@@ -39,7 +51,8 @@ export async function checkAddonEntitlement(addonId: string, userId?: string): P
     if (!enabled.enabled) return 'disabled';
     if (!userId) return 'ok';
     try {
-        const policy = await resolveEffectivePolicy(userId);
+        const policy = scope?.orgId ? await resolveOrgPolicyStrict(userId, scope.orgId) : await resolveEffectivePolicyStrict(userId);
+        if (!policy) return 'not-entitled'; // 지정한 조직의 멤버가 아니다
         if (policy.addonAllowlist && !policy.addonAllowlist.includes(addonId)) return 'not-entitled';
     } catch (e) {
         logger.warn(`add-on '${addonId}' 조직 사용권 조회 실패(확인 불가): ${e instanceof Error ? e.message : String(e)}`);

@@ -5,12 +5,17 @@
 const integrationGate = jest.fn(async () => ({ allowed: true }));
 jest.mock('../../addon/integration-gate', () => ({ integrationGate: () => integrationGate() }));
 jest.mock('../../addon/addon-state', () => ({ isAddonEnabledSync: () => true }));
+// 채팅 경계만 본다 — 꺼진 add-on 도 불러오는 데이터 모듈은 addon-host/__tests__/all-builtin-addons-off.test.ts 가 본다
+jest.mock('../../../addon-host/addon-data', () => ({ getAddonDataModules: () => [] }));
 
 import {
     __setChatTurnIntegrationsForTest, collectContextRefs, collectHiddenSessionIds, collectIntegrationSystemPromptParts,
-    collectTurnContexts, detectIntegrationIntents, extractIntegrationBlocks, getActiveChatTurnIntegrations, isSessionMemoryIsolated,
-    type IntegrationBlocks,
+    collectTurnContexts, detectIntegrationIntents, extractIntegrationBlocks, getActiveAgentTaskTools, getActiveChatTurnIntegrations,
+    isSessionMemoryIsolated, type IntegrationBlocks,
 } from '../turn-integrations';
+import { createTaskTools } from '../../task-sandbox/tools';
+import { TaskPlan } from '../../task-sandbox/planning';
+import type { TaskExecutor } from '../../task-sandbox/executor';
 import { getToolRuntime, isExternalToolRuntimeRegistered, resetToolRuntime } from '../../../runtime-ports/tool-runtime';
 import { getSkillRuntime, isSkillRuntimeRegistered, resetSkillRuntime } from '../../../runtime-ports/skill-runtime';
 import {
@@ -75,5 +80,15 @@ describe('선택 add-on 을 모두 끈 기본 채팅', () => {
         expect((await getToolRuntime().listLLMTools()).map((t) => t.function.name)).toContain('load_skill');
         expect(unregisterToolContributions('skill-runtime')).toBe(1);
         expect((await getToolRuntime().listLLMTools()).map((t) => t.function.name)).not.toContain('load_skill');
+    });
+
+    it('에이전트 작업 — 기여 도구 없이 Base 작업 도구만으로 구성된다', () => {
+        expect(getActiveAgentTaskTools()).toEqual([]);
+        const executor = { label: 'test', localWorkdir: null, exec: jest.fn() } as unknown as TaskExecutor;
+        const names = createTaskTools(executor, new TaskPlan(), undefined, undefined, undefined, undefined, getActiveAgentTaskTools(), { userId: 'u1' })
+            .map((t) => t.tool.name);
+        expect(names).toEqual(expect.arrayContaining(['bash', 'python_execute', 'str_replace_editor', 'file_ops', 'grep_code', 'repo_map',
+            'plan_create', 'plan_update', 'plan_view', 'delegate', 'terminate', 'ask_human']));
+        expect(names).not.toContain('start_discussion');
     });
 });

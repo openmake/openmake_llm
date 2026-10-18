@@ -11,8 +11,8 @@
  * 사용자 등록 요건 (P6-D3): catalog_template_id 필수 — 임의 stdio command 차단.
  *
  */
-import type { UserMcpServerRow } from '../../../data/repositories/mcp-catalog-repository';
-import type { McpVisibility } from '../../../schemas/mcp-catalog.schema';
+import type { UserMcpServerRow } from '../data/mcp-catalog-repository';
+import type { McpVisibility } from '../schemas/mcp-catalog.schema';
 import { isAdminRole } from '../../../data/user-manager';
 
 export interface Actor {

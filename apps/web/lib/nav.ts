@@ -26,9 +26,9 @@ interface NavItem {
  * 사이드바는 최근 대화 목록이 주인공이 되도록 최상위 항목을 최소화한다.
  * 묶이거나 이동한 페이지들은 기존 라우트를 유지한다:
  * - 딥 리서치(/research): composer 모드 토글 + 채팅 인라인 배너로 진입 (nav 제거)
- * - 스킬 라이브러리(/skill-library): 커스텀 에이전트 허브 탭(AgentsTabs)으로 이동
+ * - 스킬 라이브러리(/skill-library): 커스텀 에이전트 허브 탭(AgentsTabs) — skill-runtime add-on 이 끼운다
  * - 히스토리(/history): 최근 대화 하단 "모두 보기" 링크로 이동
- * - MCP(/mcp-servers): 설정 '커넥터' 탭으로 흡수 (구 라우트는 redirect)
+ * - MCP(/mcp-servers): 설정 '커넥터' 탭으로 흡수 (구 라우트는 redirect) — mcp-runtime add-on 이 끼운다
  * - 설정·사용량·개발자: 사이드바 하단 프로필 메뉴로 이동
  * - 관리자 계열(/admin/*): 단일 '관리자' 항목 + AdminTabs 허브 탭
  */

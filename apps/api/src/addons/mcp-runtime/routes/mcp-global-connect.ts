@@ -13,13 +13,14 @@
  */
 import { getUnifiedMCPClient } from '../index';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
-import { McpCatalogRepository } from '../../../data/repositories/mcp-catalog-repository';
+import { McpServerRepository } from '../data/mcp-server-repository';
+import { McpCatalogRepository } from '../data/mcp-catalog-repository';
 import type { MCPConnectionStatus, MCPTransportType } from '../../../tool-contract/types';
 
 /** 연결 후 registry 상태를 돌려준다. 서버 row 가 없으면 null (호출자가 404). */
 export async function connectGlobalServer(id: string): Promise<MCPConnectionStatus | null | undefined> {
     const db = getUnifiedDatabase();
-    const server = await db.getMcpServerById(id);
+    const server = await new McpServerRepository(db.getPool()).getMcpServerById(id);
     if (!server) return null;
 
     const decryptedEnv = await new McpCatalogRepository(db.getPool()).decryptEnvForSpawn(id);

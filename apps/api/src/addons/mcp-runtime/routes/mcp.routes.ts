@@ -31,6 +31,7 @@ import { requireAuth, optionalAuth } from '../../../auth';
 import { success, badRequest, unauthorized, forbidden, notFound, internalError } from '../../../utils/api-response';
 import { asyncHandler } from '../../../utils/error-handler';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
+import { McpServerRepository } from '../data/mcp-server-repository';
 import type { MCPTransportType, MCPConnectionStatus } from '../../../tool-contract/types';
 import { getLifecycleSupervisor } from '../lifecycle-supervisor';
 import { removeSandboxCacheVolume } from '../sandbox-bootstrap';
@@ -39,8 +40,8 @@ import { classifyConnectError, parseConnectError } from '../connect-error';
 import { validate, validateWithSecurity } from '../../../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema,
     mcpServerEnabledUpdateSchema, mcpServerAutoSpawnUpdateSchema, mcpServerRenameSchema } from '../../../schemas/mcp.schema';
-import { McpCatalogRepository } from '../../../data/repositories/mcp-catalog-repository';
-import { McpOAuthRepository } from '../../../data/repositories/mcp-oauth-repository';
+import { McpCatalogRepository } from '../data/mcp-catalog-repository';
+import { McpOAuthRepository } from '../data/mcp-oauth-repository';
 import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer, canUpdateServerEnv } from './mcp-visibility';
 import { connectGlobalServer } from './mcp-global-connect';
 import { renameMcpServer } from './mcp-server-rename';
@@ -238,7 +239,7 @@ export const mcpRouter = Router();
       const db = getUnifiedDatabase();
       const registry = getUnifiedMCPClient().getServerRegistry();
       // 여기 도달하면 visibility === 'global' (admin) — 즉시 spawn(connect 포함).
-      const status = await registry.registerServer(config, db);
+      const status = await registry.registerServer(config, new McpServerRepository(db.getPool()));
 
       res.status(201).json(success({ server: config, connectionStatus: status }));
   }));
@@ -271,7 +272,7 @@ export const mcpRouter = Router();
           }
       }
       const registry = getUnifiedMCPClient().getServerRegistry();
-      await registry.unregisterServer(id, db);
+      await registry.unregisterServer(id, new McpServerRepository(db.getPool()));
       // 서버별 캐시 볼륨도 치운다 — 컨테이너가 내려가는 동안 재시도하므로 응답을 기다리게 하지 않는다.
       void removeSandboxCacheVolume(id).then((removed) => { if (removed) logger.info(`MCP 캐시 볼륨 제거: ${id}`); });
       res.json(success({ deleted: true }));

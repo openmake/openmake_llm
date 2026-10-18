@@ -59,7 +59,7 @@ describe('runOrchestrationTool 게이트', () => {
         integrationGate.mockResolvedValue({ allowed: false, reason: 'failed' });
         const out = await runOrchestrationTool({ name: 'start_discussion', args: {}, userCtx });
         expect(run).not.toHaveBeenCalled();
-        expect(out).toBe("Error: add-on 'discussion' 이 부팅에 실패해 이 도구를 실행할 수 없습니다");
+        expect(out).toBe("Error: add-on 'discussion' 이 이 서버에서 준비되지 않아(부팅 실패 또는 재시작 필요) 이 도구를 실행할 수 없습니다");
     });
 
     it('조직 허용 목록 밖 add-on 의 도구는 run 없이 허용 목록 Error 문자열', async () => {

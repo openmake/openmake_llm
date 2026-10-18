@@ -79,7 +79,8 @@ function createTestApp() {
         getStats: jest.fn(() => ({
             onlineNodes: 1,
             totalNodes: 1,
-            uniqueModels: ['llama3.2']
+            // /ready 는 기본 모델이 노드 목록에 있는지도 본다 — 이 환경의 기본 모델을 싣는다
+            uniqueModels: ['llama3.2', getConfig().llmDefaultModel]
         }))
     } as unknown as import('../cluster/manager').ClusterManager;
 

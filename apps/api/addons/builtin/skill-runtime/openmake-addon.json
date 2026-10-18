@@ -16,6 +16,7 @@
       { "mountPath": "/api/agents/skills", "module": "routes/skills-usage.routes" },
       { "mountPath": "/api/agents/skills", "module": "routes/skills.routes" },
       { "mountPath": "/api/agents", "module": "routes/agent-skill-assign.routes" }
-    ]
+    ],
+    "data": "data-module#skillDataModule"
   }
 }

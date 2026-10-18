@@ -44,6 +44,7 @@
         "module": "routes/mcp.routes#mcpRouter",
         "within": "v1"
       }
-    ]
+    ],
+    "data": "data-module#mcpDataModule"
   }
 }

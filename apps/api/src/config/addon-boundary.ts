@@ -74,6 +74,36 @@ export const ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = 
     'swagger/schemas-core.ts': '위 REST 응답 필드의 OpenAPI 스키마 (iOS Kit 생성 입력)',
 };
 
+/**
+ * 코드 밖의 공용 자산(저장소 루트 기준) — 공용 패키지 소스(`packages/*\/src`)와 웹 번역 파일(`apps/web/messages`)에 남은
+ * add-on 고유 이름 줄 수 (2026-10-18 범위 확장 시점 동결). 구 클라이언트·iOS WS 계약 필드와 add-on 화면 문구라 당장 옮길 곳이
+ * 없어 남겼다 — **줄어들기만 한다**(래칫). 늘리려면 계약 예외와 같은 수준의 사유가 있어야 하고, 줄었으면 여기 값도 낮춘다.
+ * 목록에 없는 파일은 0 이어야 한다.
+ */
+export const SHARED_ASSET_ADDON_NAME_BASELINE: Readonly<Record<string, number>> = {
+    'packages/shared-types/src/index.ts': 3,      // WS 채팅 구 필드·진행 이벤트 type(토론·딥리서치)
+    'packages/shared-types/src/knowledge.ts': 11, // Knowledge Space API 응답 계약(웹 add-on ↔ API add-on)
+    'apps/web/messages/de.json': 25,
+    'apps/web/messages/en.json': 26,
+    'apps/web/messages/ja.json': 14,
+    'apps/web/messages/ko.json': 14,
+    'apps/web/messages/zh.json': 14,
+};
+
+/**
+ * 코어 마이그레이션에 정의돼 있지만 **소유 코드가 add-on 인** 테이블 (2026-10-18 결정 — 종전 "저장은 Base, 판단은 add-on" 을 바꿨다).
+ * arch_plan S3 의 "기존 테이블은 코어에 유지" 는 스키마 위치로만 지킨다 — 테이블 정의·마이그레이션 이력은 코어에 그대로 두고,
+ * SQL 은 소유 add-on 의 코드만 쓴다. Base 는 포트(`runtime-ports/*`)를 거치고, add-on 이 꺼지면 그 기능을 건너뛴다.
+ * 판정: `__tests__/addons-no-base-table-sql.test.ts`(add-on → 남의 테이블), `__tests__/base-no-addon-table-sql.test.ts`(Base → 여기 테이블).
+ */
+export const ADDON_OWNED_CORE_TABLES: Readonly<Record<string, readonly string[]>> = {
+    'mcp-runtime': ['mcp_catalog_oauth_clients', 'mcp_oauth_credentials', 'mcp_server_catalog', 'mcp_server_instances', 'mcp_servers'],
+    'skill-runtime': [
+        'agent_skill_assignments', 'agent_skills', 'skill_assets', 'skill_audit_log', 'skill_manifests', 'skill_mcp_bundles',
+        'skill_permissions', 'skill_tool_bindings',
+    ],
+};
+
 /** 웹(`apps/web` 기준)의 계약 예외 — 서버 API 응답 필드 이름을 그대로 읽는 화면 */
 export const WEB_ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = {
     'app/(workspace)/admin/metrics/page.tsx': '관리자 지표 API 응답 필드 discussionIntentTurns (routes/metrics.routes.ts)',
