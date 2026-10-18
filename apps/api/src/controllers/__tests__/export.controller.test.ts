@@ -60,6 +60,18 @@ describe('export controller — user_memories', () => {
         expect(body._meta.partial).toBe(false);
     });
 
+    it('스킬 데이터는 스킬 add-on 의 데이터 의무 모듈이 종전과 같은 키·SQL 로 싣는다(응답 호환)', async () => {
+        armPool();
+        const res = await request(app).get('/api/users/me/export').expect(200);
+        const body = JSON.parse(res.text);
+        expect(body.skillManifests).toEqual([]);
+        expect(body.agentSkills).toEqual([]);
+        expect(body._meta.counts).toMatchObject({ skillManifests: 0, agentSkills: 0 });
+        const sqls = query.mock.calls.map(([sql]) => String(sql));
+        expect(sqls.some((q) => q.includes('FROM skill_manifests WHERE created_by = $1'))).toBe(true);
+        expect(sqls.some((q) => q.includes('FROM agent_skills WHERE created_by = $1'))).toBe(true);
+    });
+
     it('한 카테고리 조회가 실패하면 빈 배열로 계속하되 _meta 에 실패를 드러낸다', async () => {
         armPool('custom_agents');
         const res = await request(app).get('/api/users/me/export').expect(200);
