@@ -13,6 +13,7 @@
  * @module services/chat-service/turn-integrations
  */
 import { loadEnabledChatIntegrations } from '../../addon-host/chat-integrations';
+import { getAddonDataModules } from '../../addon-host/addon-data';
 import { integrationGate } from '../addon/integration-gate';
 import { integrationGateRefusal } from '../addon/integration-gate-refusal';
 import { isAddonEnabledSync } from '../addon/addon-state';
@@ -281,6 +282,21 @@ export async function isSessionMemoryIsolated(userId: string | undefined, sessio
             if (await integration.isMemoryIsolatedSession(userId, sessionId)) return true;
         } catch (err) {
             turnContextLog.warn(`[TurnContext] '${integration.id}' 메모리 격리 판정 실패 — 안전하게 격리로 간주(전역 메모리 미기록): ${err instanceof Error ? err.message : String(err)}`);
+            return true;
+        }
+    }
+    // 데이터 모듈의 격리 판정 — env·DB 로 꺼진 add-on 도 호스트가 불러온다(채팅 통합 목록에서 빠져도 보호는 유지).
+    // 모듈을 불러오지 못한 add-on 이 있으면 그 판정을 알 수 없으므로 격리로 본다(fail-closed).
+    for (const { addonId, data, error } of getAddonDataModules()) {
+        if (error) {
+            turnContextLog.warn(`[TurnContext] add-on '${addonId}' 데이터 모듈 없음 — 안전하게 격리로 간주(전역 메모리 미기록): ${error}`);
+            return true;
+        }
+        if (!data?.isMemoryIsolatedSession) continue;
+        try {
+            if (await data.isMemoryIsolatedSession(userId, sessionId)) return true;
+        } catch (err) {
+            turnContextLog.warn(`[TurnContext] add-on '${addonId}' 메모리 격리 판정 실패 — 안전하게 격리로 간주(전역 메모리 미기록): ${err instanceof Error ? err.message : String(err)}`);
             return true;
         }
     }

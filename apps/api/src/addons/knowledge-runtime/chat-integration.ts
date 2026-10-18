@@ -8,7 +8,7 @@
  */
 import type { ChatTurnIntegration, TurnContextInput, TurnContextContribution } from '../../services/chat-service/turn-integrations';
 import { createLogger } from '../../utils/logger';
-import { resolveBoundSpace, sessionHasBinding, listBoundSessionIdsForUser } from './conversations/binding-service';
+import { resolveBoundSpace, listBoundSessionIdsForUser } from './conversations/binding-service';
 import { actorFor } from './config/scope-policy';
 import { touchSpace } from './spaces/repository';
 import { retrieve } from './retrieval/service';
@@ -79,9 +79,7 @@ async function prepareTurnContext(input: TurnContextInput): Promise<TurnContextC
 export const knowledgeChatIntegration: ChatTurnIntegration = {
     id: 'knowledge-runtime',
     prepareTurnContext,
-    // Space 에 연결된 대화는 메모리 격리 세션 — 그 대화의 사용자 메시지를 전역 user_memories 로 쓰지 않는다
-    // (일반 채팅으로의 간접 누출 방지). 판정 실패는 Base 가 fail-closed 로 처리한다.
-    isMemoryIsolatedSession: (_userId, sessionId) => sessionHasBinding(sessionId),
+    // 메모리 격리(Space 연결 대화)는 데이터 모듈(data-data.ts)로 옮겼다 — env 로 꺼도 지켜야 하는 보호라서다.
     // Space 에 연결된 대화는 사이드바 "최근 대화" 에서 빼고, 프로젝트 섹션 안에서만 보인다.
     listHiddenSessionIds: (userId) => listBoundSessionIdsForUser(userId),
 };
