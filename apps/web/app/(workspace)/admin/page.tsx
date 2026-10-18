@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { Shield, Boxes, Gauge, ArrowRight, Pencil, Trash2, Plus, X, Loader2 } from "lucide-react";
+import { Shield, Gauge, ArrowRight, Pencil, Trash2, Plus, X, Loader2 } from "lucide-react";
 import {
   PageHeader,
   PageBody,
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 import { AdminTabs } from "@/components/hub-tabs";
+import { useEnabledWebAddons } from "@/addons/registry";
 
 interface AdminUser {
   id: string;
@@ -55,8 +56,8 @@ function fmtDate(s?: string | null) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Base 바로가기 — 순서 값은 10 단위. 켜진 add-on 의 바로가기(`adminQuickLinks`)는 그 사이 값으로 끼운다 */
 const QUICK_LINKS = [
-  { href: "/mcp-catalog", titleKey: "quickLinks.models.title", descKey: "quickLinks.models.desc", icon: Boxes },
   { href: "/admin/metrics", titleKey: "quickLinks.system.title", descKey: "quickLinks.system.desc", icon: Gauge },
 ];
 
@@ -276,6 +277,14 @@ function DeleteUserModal({
 
 export default function AdminPage() {
   const t = useTranslations("admin");
+  const tRoot = useTranslations();
+  const enabledAddons = useEnabledWebAddons();
+  const quickLinks = [
+    ...QUICK_LINKS.map((q, i) => ({ href: q.href, title: t(q.titleKey), desc: t(q.descKey), Icon: q.icon, order: (i + 1) * 10 })),
+    ...enabledAddons.flatMap((a) => a.adminQuickLinks ?? []).map((q) => ({
+      href: q.href, title: tRoot(q.titleKey), desc: tRoot(q.descKey), Icon: q.Icon, order: q.order,
+    })),
+  ].sort((a, b) => a.order - b.order);
   // 실데이터만 표시 — API 응답 전/실패 시 가짜 값을 실적처럼 보여주지 않는다.
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [stats, setStats] = useState({ total: 0, active: 0, today: 0, status: t("statusNormal") });
@@ -390,17 +399,17 @@ export default function AdminPage() {
 
         <h2 className="mt-8 mb-3 text-sm font-semibold text-fg-2">{t("quickLinksHeading")}</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {QUICK_LINKS.map((q) => (
-            <Link key={q.titleKey + q.href} href={q.href} className="group">
+          {quickLinks.map((q) => (
+            <Link key={q.href} href={q.href} className="group">
               <Card className="h-full p-5 transition hover:border-border-strong hover:shadow-2">
                 <div className="flex items-start justify-between">
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-soft text-accent">
-                    <q.icon className="h-5 w-5" />
+                    <q.Icon className="h-5 w-5" />
                   </span>
                   <ArrowRight className="h-4 w-4 text-faint transition group-hover:translate-x-0.5 group-hover:text-accent" />
                 </div>
-                <p className="mt-4 text-sm font-semibold text-fg">{t(q.titleKey)}</p>
-                <p className="mt-1 text-xs text-muted">{t(q.descKey)}</p>
+                <p className="mt-4 text-sm font-semibold text-fg">{q.title}</p>
+                <p className="mt-1 text-xs text-muted">{q.desc}</p>
               </Card>
             </Link>
           ))}

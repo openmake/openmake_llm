@@ -15,7 +15,7 @@
  */
 import type { Request, Response } from 'express';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
-import { McpCatalogRepository } from '../../../data/repositories/mcp-catalog-repository';
+import { McpCatalogRepository } from '../data/mcp-catalog-repository';
 import { getUnifiedMCPClient } from '../index';
 import { getLifecycleSupervisor } from '../lifecycle-supervisor';
 import { getAuditService } from '../../../services/AuditService';

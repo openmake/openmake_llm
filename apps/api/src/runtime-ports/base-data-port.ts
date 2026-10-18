@@ -12,6 +12,7 @@ import type { Actor } from '@openmake/plugin-contracts';
 import { getSessionOwnerId, getSessionSummaries, listSessionIdsByOwner } from '../data/conversation-session-lookup';
 import { isMigrationApplied } from '../data/migrations/runner';
 import { getPool } from '../data/models/unified-database';
+import { getUserExtensionNames } from '../data/user-extension-lookup';
 
 export interface ConversationSessionSummary {
     id: string;
@@ -36,9 +37,15 @@ export interface MigrationRecordsPort {
     isApplied(version: string): Promise<boolean>;
 }
 
+export interface UserExtensionsPort {
+    /** 확장 id → 이름(없는 id 는 빠짐) — 인가 없음: 호출부가 상위 자원으로 인가한 id 만 넘긴다 */
+    namesByIds(ids: readonly string[]): Promise<Map<string, string>>;
+}
+
 export interface BaseDataPort {
     conversationSessions: ConversationSessionsPort;
     migrations: MigrationRecordsPort;
+    userExtensions: UserExtensionsPort;
 }
 
 export const baseDataPort: BaseDataPort = {
@@ -62,6 +69,11 @@ export const baseDataPort: BaseDataPort = {
     migrations: {
         async isApplied(version) {
             return isMigrationApplied(getPool(), version);
+        },
+    },
+    userExtensions: {
+        async namesByIds(ids) {
+            return getUserExtensionNames([...new Set(ids)]);
         },
     },
 };

@@ -10,61 +10,67 @@
  *
  * Custom Agent 는 승인 개념이 없다(실행 권한 없이 명시 선택 시에만 적용되는 페르소나라
  * 설치 즉시 활성) — 그 사실을 화면에서 알려 "왜 여기 없지"를 없앤다.
+ *
+ * 스킬·MCP 서버 섹션은 그 구성요소를 소유한 add-on(`skill-runtime`·`mcp-runtime`)이 `approvalSections` 로 끼운다
+ * (2026-10-18) — Base 섹션은 에이전트 작업(10)·Custom Agent(40)뿐이다.
  */
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { Puzzle, Server, Bot, ExternalLink, ShieldQuestion } from "lucide-react";
+import { Bot, ExternalLink, ShieldQuestion } from "lucide-react";
 import { PageHeader, PageBody } from "@/components/ui/primitives";
-import { SkillDrafts } from "@/components/approvals/skill-drafts";
-import { McpDrafts } from "@/components/approvals/mcp-drafts";
 import { TaskApprovals } from "@/components/approvals/task-approvals";
 import { CustomAgentDrafts } from "@/components/approvals/custom-agent-drafts";
+import { useEnabledWebAddons } from "@/addons/registry";
+import { cn } from "@/lib/utils";
 
 export default function ApprovalsPage() {
   const t = useTranslations("approvals");
+  const tRoot = useTranslations();
   // 한쪽에서 승인하면 다른 섹션의 개수 표시도 갱신되도록 공용 리프레시 키를 쓴다
   const [, setTick] = useState(0);
   const refresh = () => setTick((n) => n + 1);
+  // 확장 구성요소(스킬·MCP 서버 등)의 승인 섹션은 그 구성요소를 소유한 add-on 이 준다 — 꺼진 add-on 의 섹션은 없다
+  const enabledAddons = useEnabledWebAddons();
+  const addonSections = useMemo(() => enabledAddons.flatMap((a) => a.approvalSections ?? []), [enabledAddons]);
 
-  return (
-    <div className="flex h-full flex-col">
-      <PageHeader title={t("title")} description={t("description")} />
-
-      <PageBody className="space-y-6">
-        {/* 에이전트 작업 HITL — 작업이 실제로 멈춰 대기 중이라 맨 위에 둔다 */}
-        <section className="space-y-3">
+  const sections: { id: string; order: number; node: ReactNode }[] = [
+    {
+      // 에이전트 작업 HITL — 작업이 실제로 멈춰 대기 중이라 맨 위에 둔다
+      id: "tasks",
+      order: 10,
+      node: (
+        <>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
             <ShieldQuestion className="h-4 w-4 text-accent" />
             {t("tasks.title")}
           </h2>
           <p className="text-xs text-muted">{t("tasks.hint")}</p>
           <TaskApprovals onRefreshAction={refresh} />
-        </section>
-
-        {/* 스킬 — 확장별로 묶여 나오며 일괄 승인 가능 */}
-        <section className="space-y-3 border-t border-border pt-6">
+        </>
+      ),
+    },
+    ...addonSections.map((sec) => ({
+      id: sec.id,
+      order: sec.order,
+      node: (
+        <>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
-            <Puzzle className="h-4 w-4 text-accent" />
-            {t("skills.title")}
+            <sec.Icon className="h-4 w-4 text-accent" />
+            {tRoot(sec.titleKey)}
           </h2>
-          <p className="text-xs text-muted">{t("skills.hint")}</p>
-          <SkillDrafts onRefreshAction={refresh} />
-        </section>
-
-        {/* MCP 서버 — 승인 후 연결되어야 채팅에서 도구로 쓰인다 */}
-        <section className="space-y-3 border-t border-border pt-6">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
-            <Server className="h-4 w-4 text-accent" />
-            {t("mcp.title")}
-          </h2>
-          <p className="text-xs text-muted">{t("mcp.hint")}</p>
-          <McpDrafts onRefreshAction={refresh} />
-        </section>
-
-        {/* Custom Agent — Git URL 가져오기 draft 만 승인 대상. 확장 설치분은 즉시 활성이라
-            여기엔 안 뜬다(그 사실도 hint 로 알린다). 구 /custom-agents "Draft 검토" 탭을 이관 */}
-        <section className="space-y-3 border-t border-border pt-6">
+          <p className="text-xs text-muted">{tRoot(sec.hintKey)}</p>
+          <sec.Component onRefreshAction={refresh} />
+        </>
+      ),
+    })),
+    {
+      // Custom Agent — Git URL 가져오기 draft 만 승인 대상. 확장 설치분은 즉시 활성이라
+      // 여기엔 안 뜬다(그 사실도 hint 로 알린다). 구 /custom-agents "Draft 검토" 탭을 이관
+      id: "agents",
+      order: 40,
+      node: (
+        <>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
             <Bot className="h-4 w-4 text-accent" />
             {t("agents.title")}
@@ -80,7 +86,22 @@ export default function ApprovalsPage() {
             </Link>
           </div>
           <CustomAgentDrafts onRefreshAction={refresh} />
-        </section>
+        </>
+      ),
+    },
+  ];
+  sections.sort((a, b) => a.order - b.order);
+
+  return (
+    <div className="flex h-full flex-col">
+      <PageHeader title={t("title")} description={t("description")} />
+
+      <PageBody className="space-y-6">
+        {sections.map((sec, i) => (
+          <section key={sec.id} className={cn("space-y-3", i > 0 && "border-t border-border pt-6")}>
+            {sec.node}
+          </section>
+        ))}
       </PageBody>
     </div>
   );

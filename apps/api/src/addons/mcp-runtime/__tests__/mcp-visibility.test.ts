@@ -1,5 +1,5 @@
 import { canRegisterServer, canViewServer, canDeleteServer } from '../routes/mcp-visibility';
-import type { UserMcpServerRow } from '../../../data/repositories/mcp-catalog-repository';
+import type { UserMcpServerRow } from '../data/mcp-catalog-repository';
 import type { Actor } from '../routes/mcp-visibility';
 
 const adminActor: Actor = { id: 'u-admin', role: 'admin' };

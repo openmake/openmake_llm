@@ -11,9 +11,8 @@ jest.mock('../../../utils/logger', () => ({
 }));
 jest.mock('../../chat-service/memory-policy', () => ({ resolveMemoryLearning: jest.fn().mockResolvedValue(false) }));
 jest.mock('../task-learning', () => ({ buildLearningBlock: jest.fn().mockResolvedValue('') }));
-jest.mock('../procedural-skill', () => ({ buildProceduralSkillBlock: jest.fn().mockResolvedValue('') }));
 jest.mock('../../../runtime-ports/skill-runtime', () => ({
-    getSkillRuntime: () => ({ buildManifestPrompt: jest.fn().mockResolvedValue(null) }),
+    getSkillRuntime: () => ({ buildManifestPrompt: jest.fn().mockResolvedValue(null), buildProceduralSkillBlock: jest.fn().mockResolvedValue('') }),
 }));
 
 import { buildAgentTaskSystemContent } from '../skill-block';

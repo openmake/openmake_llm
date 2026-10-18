@@ -33,12 +33,11 @@ export function HistoryTabs() {
   return <PageTabs tabs={tabs} />;
 }
 
-/** 에이전트 허브 — 커스텀 에이전트 | 스킬 라이브러리 (기존 nav.items 라벨 재사용) */
+/** 에이전트 허브 — 커스텀 에이전트 (+ add-on 탭: 스킬 라이브러리) */
 export function AgentsTabs() {
   const tNav = useTranslations("nav");
   const tabs = useHubTabs("agents", [
     { href: "/custom-agents", label: tNav("items.customAgents") },
-    { href: "/skill-library", label: tNav("items.skillLibrary") },
   ]);
   return <PageTabs tabs={tabs} />;
 }
@@ -55,7 +54,7 @@ export function DeveloperTabs() {
 }
 
 /**
- * 관리자 허브 — 관측(대시보드~에이전트 학습) + 관리(감사 로그~모델 역할) 전체 탭.
+ * 관리자 허브 — 관측(대시보드~에이전트 학습) + 관리(감사 로그~모델 역할) 전체 탭(+ add-on 탭: MCP 모니터링·MCP 카탈로그).
  * 2차 통폐합으로 사이드바 관리자 항목이 /admin 하나로 줄면서 나머지가 탭으로 편입됐다.
  * /admin/* 는 admin/layout.tsx 가드가 막지만, 탭 자체도 admin 역할에서만 렌더한다 —
  * 그 경우 /admin 계열 링크를 노출하지 않도록 admin 역할에서만 렌더.
@@ -72,10 +71,8 @@ export function AdminTabs() {
     { href: "/admin/metrics", label: tNav("items.metrics") },
     { href: "/admin/slo", label: tNav("items.sloAdmin") },
     { href: "/admin/evaluations", label: tNav("items.evaluationsAdmin") },
-    { href: "/admin/mcp-monitoring", label: tNav("items.mcpMonitoring") },
     { href: "/admin/audit", label: tNav("items.auditLog") },
     { href: "/admin/alerts", label: tNav("items.alerts") },
-    { href: "/admin/mcp-catalog", label: tNav("items.mcpCatalogAdmin") },
     { href: "/admin/model-roles", label: tNav("items.modelRolesAdmin") },
     { href: "/admin/system-settings", label: tNav("items.systemSettingsAdmin") },
     { href: "/admin/addons", label: tNav("items.addonsAdmin") },

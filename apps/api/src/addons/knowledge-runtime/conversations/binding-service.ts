@@ -89,18 +89,6 @@ export async function bindExistingConversation(userId: string, spaceId: string, 
     await touchSpace(spaceId).catch(() => undefined);
 }
 
-/**
- * 이 세션이 어떤 Space 에든 연결돼 있는가 — 메모리 격리 판정용(값싼 존재 확인, 권한 재확인 없음).
- * "연결돼 있으면 격리" 로 보수적으로 본다(그 대화 문맥이 전역 메모리로 새 나가지 않게).
- */
-export async function sessionHasBinding(sessionId: string): Promise<boolean> {
-    const r = await kdb().query(
-        `SELECT 1 FROM knowledge_conversation_bindings WHERE session_id = $1 LIMIT 1`,
-        [sessionId],
-    );
-    return (r.rowCount ?? 0) > 0;
-}
-
 /** 이 사용자의 대화 중 Space 에 연결된 세션 id 목록 — 사이드바 "최근 대화" 에서 숨길 대상. 소유 세션은 포트로 받는다. */
 export async function listBoundSessionIdsForUser(userId: string): Promise<string[]> {
     const own = await baseDataPort.conversationSessions.listIdsForUser(userActor(userId));

@@ -5,6 +5,8 @@
 const integrationGate = jest.fn(async () => ({ allowed: true }));
 jest.mock('../../addon/integration-gate', () => ({ integrationGate: () => integrationGate() }));
 jest.mock('../../addon/addon-state', () => ({ isAddonEnabledSync: () => true }));
+// 채팅 경계만 본다 — 꺼진 add-on 도 불러오는 데이터 모듈은 addon-host/__tests__/all-builtin-addons-off.test.ts 가 본다
+jest.mock('../../../addon-host/addon-data', () => ({ getAddonDataModules: () => [] }));
 
 import {
     __setChatTurnIntegrationsForTest, collectContextRefs, collectHiddenSessionIds, collectIntegrationSystemPromptParts,

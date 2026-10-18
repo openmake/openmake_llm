@@ -175,6 +175,15 @@
     "mcp-runtime/chat-integration.ts": [
       "services/chat-service/turn-integrations"
     ],
+    "mcp-runtime/data/mcp-catalog-input.ts": [
+      "security/spawn-env-policy"
+    ],
+    "mcp-runtime/data/mcp-catalog-repository.ts": [
+      "security/spawn-env-policy"
+    ],
+    "mcp-runtime/data/mcp-server-draft-repository.ts": [
+      "tool-contract/env-placeholder"
+    ],
     "mcp-runtime/external-client.ts": [
       "security/spawn-env-policy",
       "security/ssrf-guard",
@@ -184,18 +193,22 @@
     "mcp-runtime/external-resources.ts": [
       "tool-contract/types"
     ],
+    "mcp-runtime/ingest/mcp-server-ingest-service.ts": [
+      "agents/git-ingest/convention-checker",
+      "agents/git-ingest/git-fetcher",
+      "agents/git-ingest/repo-scanner",
+      "llm/client",
+      "schemas/git-ingest.schema"
+    ],
     "mcp-runtime/lifecycle-supervisor.ts": [
-      "data/repositories/mcp-catalog-repository",
       "tool-contract/env-placeholder-shell"
     ],
     "mcp-runtime/mcp-meta-tools.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
       "tool-contract/types"
     ],
     "mcp-runtime/mcp-server-ingest-tool.ts": [
       "agents/git-ingest/git-fetcher",
-      "agents/git-ingest/mcp-server-ingest-service",
       "data/models/unified-database",
       "data/user-manager",
       "llm/client",
@@ -207,42 +220,31 @@
     ],
     "mcp-runtime/oauth-provider.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-oauth-client-repository",
-      "data/repositories/mcp-oauth-repository",
       "storage"
     ],
     "mcp-runtime/routes/mcp-admin-monitoring.routes.ts": [
       "auth",
-      "data/models/unified-database",
-      "data/repositories/mcp-admin-monitoring-repository"
+      "data/models/unified-database"
     ],
     "mcp-runtime/routes/mcp-catalog-admin.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-admin-repository",
-      "data/repositories/mcp-catalog-oauth-client-repository",
-      "schemas/mcp-catalog-admin.schema",
       "services/AuditService"
     ],
     "mcp-runtime/routes/mcp-catalog.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
       "middlewares/validation",
-      "schemas/mcp-catalog.schema",
       "security/spawn-env-policy",
       "services/org/effective-policy"
     ],
     "mcp-runtime/routes/mcp-global-connect.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
       "tool-contract/types"
     ],
     "mcp-runtime/routes/mcp-oauth.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
-      "data/repositories/mcp-oauth-repository",
       "security/ssrf-guard"
     ],
     "mcp-runtime/routes/mcp-server-ingest.mounted.ts": [
@@ -254,29 +256,21 @@
     "mcp-runtime/routes/mcp-server-ingest.routes.ts": [
       "agents/git-ingest/convention-checker",
       "agents/git-ingest/git-fetcher",
-      "agents/git-ingest/mcp-server-ingest-service",
       "auth",
-      "data/repositories/mcp-server-draft-repository",
       "data/user-manager",
       "llm/client",
-      "schemas/mcp-server-ingest.schema",
       "tool-contract/env-placeholder"
     ],
     "mcp-runtime/routes/mcp-server-rename.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
       "services/AuditService"
     ],
     "mcp-runtime/routes/mcp-visibility.ts": [
-      "data/repositories/mcp-catalog-repository",
-      "data/user-manager",
-      "schemas/mcp-catalog.schema"
+      "data/user-manager"
     ],
     "mcp-runtime/routes/mcp.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
-      "data/repositories/mcp-oauth-repository",
       "middlewares/validation",
       "schemas/mcp.schema",
       "security/ssrf-guard",
@@ -284,8 +278,7 @@
       "tool-contract/types"
     ],
     "mcp-runtime/runtime-boot.ts": [
-      "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository"
+      "data/models/unified-database"
     ],
     "mcp-runtime/runtime.ts": [
       "llm/types",
@@ -295,7 +288,6 @@
       "security/spawn-env-policy"
     ],
     "mcp-runtime/server-registry.ts": [
-      "data/models/unified-database",
       "tool-contract/env-placeholder-shell",
       "tool-contract/types"
     ],
@@ -315,7 +307,6 @@
       "tool-contract/types"
     ],
     "mcp-runtime/unified-client.ts": [
-      "data/models/unified-database",
       "tool-contract/tool-execution-guard",
       "tool-contract/types",
       "tool-contract/user-sandbox"
@@ -341,9 +332,7 @@
       "services/chat-service/turn-integrations"
     ],
     "notebooklm/routes.ts": [
-      "auth",
-      "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository"
+      "auth"
     ],
     "search-providers/external-search-apis.ts": [
       "tools/web-search/providers",
@@ -359,16 +348,37 @@
       "tools/web-search/providers",
       "tools/web-search/types"
     ],
+    "skill-runtime/data/skill-assignment-repository.ts": [
+      "data/repositories/base-repository"
+    ],
+    "skill-runtime/data/skill-authz.ts": [
+      "auth/ownership"
+    ],
+    "skill-runtime/data/skill-draft-query.ts": [
+      "data/repositories/base-repository"
+    ],
+    "skill-runtime/data/skill-repository.ts": [
+      "auth/ownership",
+      "data/repositories/base-repository"
+    ],
     "skill-runtime/index.ts": [
       "tool-contract/types"
     ],
     "skill-runtime/load-skill-tool.ts": [
       "data/models/unified-database",
-      "data/repositories/skill-asset-repository",
       "tool-contract/types"
     ],
     "skill-runtime/manifest-importer.ts": [
       "schemas/skill-manifest.schema"
+    ],
+    "skill-runtime/procedural/procedural-dormancy.ts": [
+      "data/models/unified-database"
+    ],
+    "skill-runtime/procedural/procedural-skill.ts": [
+      "prompts/agent-task-skill-memory",
+      "prompts/procedural-skill-prompt",
+      "services/agent-task/procedural-secrets",
+      "services/agent-task/task-learning"
     ],
     "skill-runtime/routes/agent-skill-assign.routes.ts": [
       "auth",
@@ -410,13 +420,11 @@
       "schemas/skills.schema"
     ],
     "skill-runtime/runtime.ts": [
-      "llm/types"
+      "llm/types",
+      "services/task-sandbox/tools-procedural"
     ],
     "skill-runtime/skill-catalog-tool.ts": [
       "llm/types"
-    ],
-    "skill-runtime/skill-catalog.ts": [
-      "data/repositories/skill-repository"
     ],
     "skill-runtime/skill-creator-tool.ts": [
       "data/models/unified-database",
@@ -425,7 +433,6 @@
       "tool-contract/types"
     ],
     "skill-runtime/skill-creator.ts": [
-      "data/repositories/skill-manifest-sync",
       "llm/client",
       "llm/types",
       "schemas/skills.schema"
@@ -435,14 +442,11 @@
     ],
     "skill-runtime/skill-manager.ts": [
       "chat/slash-command",
-      "data/models/unified-database",
-      "data/repositories/skill-manifest-sync",
-      "data/repositories/skill-repository"
+      "data/models/unified-database"
     ],
     "skill-runtime/skill-seeder.ts": [
       "agents/system-skill-names",
-      "data/models/unified-database",
-      "data/repositories/skill-repository"
+      "data/models/unified-database"
     ],
     "skill-runtime/skill-triggers.ts": [
       "agents/manifest-triggers"

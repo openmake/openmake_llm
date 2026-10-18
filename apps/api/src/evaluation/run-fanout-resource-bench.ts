@@ -129,6 +129,7 @@ const benchRuntime: ToolRuntime = {
     async executeTool() { return { content: [{ type: 'text', text: 't'.repeat(TOOL_CHARS) }] }; },
     async listTools() { return []; },
     async callUserServerTool() { return null; },
+    async findUserServerByTemplate() { return null; },
     normalizeToolCall(name, args) { return { name, args }; },
     getUserToolGroups() { return []; },
     async runWithUserInputContext(_ctx, fn) { return fn(); },

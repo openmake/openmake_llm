@@ -13,6 +13,7 @@ import type { MCPToolDefinition } from '../../tool-contract/types';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { TaskSandbox, type ExecResult } from './sandbox';
 import type { TaskExecutor } from './executor';
+import { getSkillRuntime } from '../../runtime-ports/skill-runtime';
 import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } from './tools';
 import { recordBrowserMetric } from './browser-metrics';
 import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS, TOOL_RESULT_TRUNCATION } from '../../config/runtime-limits';
@@ -23,7 +24,6 @@ import { bindSkillRunApproval } from './skill-run-binding';
 import { normalizeAskHuman } from './ask-human';
 import { createTaskHistoryTools } from '../agent-task/task-history-tool';
 import { createMemorySaveTools } from '../agent-task/memory-save-tool';
-import { saveProceduralSkill, revertProceduralSkill, resolveProceduralSpec, recordProceduralRun } from '../agent-task/procedural-skill';
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
 import { withToolNameSuggestions, detectShellToolMisuse, formatShellToolMisuseHint } from '../../tool-contract/tool-name-suggest';
@@ -104,17 +104,10 @@ export class TaskRuntime {
         this.cfg = cfg;
         this.executor = executor ?? new TaskSandbox(taskId, cfg);
         this.seedPlanFromGoal(goal);
-        // #1 절차 스킬: 저장/조회 훅을 userId 로 바인딩(재생 실행은 tools.ts 가 sandbox 로 수행). 플래그 OFF 면 미노출.
+        // #1 절차 스킬: 저장/조회 훅은 스킬 포트가 userId 로 바인딩해 준다(재생 실행은 tools.ts 가 sandbox 로 수행).
+        // 플래그 OFF 이거나 스킬 add-on 이 없으면 미노출.
         const procedural: ProceduralHooks | undefined = AGENT_TASK_LIMITS.PROCEDURAL_SKILLS_ENABLED
-            ? {
-                save: (i) => saveProceduralSkill(this.userId, i.name, i.description, {
-                    kind: i.kind, goal: i.description, params: i.params,
-                    actions: i.actions, allowlist: i.allowlist, lang: i.lang, code: i.code,
-                }, { update: i.update }),
-                revert: (name) => revertProceduralSkill(this.userId, name),
-                load: (id) => resolveProceduralSpec(this.userId, id),
-                recordRun: (run) => recordProceduralRun(this.userId, run),
-            }
+            ? getSkillRuntime().proceduralHooks(this.userId)
             : undefined;
         this.loadProcedure = procedural?.load;
         // Computer Use Stage 0: browser 액션 계측을 taskId/userId 로 바인딩해 주입(fire-and-forget).

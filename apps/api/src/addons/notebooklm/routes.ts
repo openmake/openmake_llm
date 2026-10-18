@@ -16,8 +16,6 @@ import { LRUCache } from 'lru-cache';
 import { requireAuth } from '../../auth';
 import { success, notFound, error as errorResponse } from '../../utils/api-response';
 import { asyncHandler } from '../../utils/error-handler';
-import { getUnifiedDatabase } from '../../data/models/unified-database';
-import { McpCatalogRepository } from '../../data/repositories/mcp-catalog-repository';
 import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import { NOTEBOOKLM_INTEGRATION } from './config';
 import { createLogger } from '../../utils/logger';
@@ -73,8 +71,8 @@ notebooklmRouter.get('/notebooklm/notebooks', requireAuth, asyncHandler(async (r
         }
     }
 
-    const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
-    const server = await repo.findUserServerByTemplate(userId, NOTEBOOKLM_INTEGRATION.TEMPLATE_ID);
+    // 설치 조회는 MCP 런타임 포트로 — 다른 add-on 의 저장소를 직접 import 하지 않는다(런타임이 없으면 null → 404 안내)
+    const server = await getToolRuntime().findUserServerByTemplate(userId, NOTEBOOKLM_INTEGRATION.TEMPLATE_ID);
     if (!server) {
         // 미설치 — 프론트는 404 를 "카탈로그에서 NotebookLM 연결" CTA 로 표시
         res.status(404).json(notFound('NotebookLM 서버 (카탈로그에서 설치 필요)'));
