@@ -4,8 +4,13 @@
  * 조직 허용 목록의 계약이 여기 있다: allowlist 에 없는 add-on 은 전용 라우트 403,
  * 팩 스킬 주입 제외. 판정 실패는 state-unknown(라우트는 503). 스킬 주입 필터(entitledAddonIds)만 fail-open 을 유지한다.
  */
+// 단건 판정은 엄격 조회, 스킬 주입 필터는 fail-open 조회를 쓴다 — 실제 하위 조회 실패는 entitlement-org-failure.test.ts
 const resolveEffectivePolicy = jest.fn();
-jest.mock('../../org/effective-policy', () => ({ resolveEffectivePolicy: (...a: unknown[]) => resolveEffectivePolicy(...a) }));
+const resolveEffectivePolicyStrict = jest.fn();
+jest.mock('../../org/effective-policy', () => ({
+    resolveEffectivePolicy: (...a: unknown[]) => resolveEffectivePolicy(...a),
+    resolveEffectivePolicyStrict: (...a: unknown[]) => resolveEffectivePolicyStrict(...a),
+}));
 
 const listRows = jest.fn();
 jest.mock('../../../data/repositories/addon-state-repository', () => ({
@@ -28,6 +33,7 @@ beforeEach(() => {
         { addon_id: 'broken-pack', state: 'failed' },
     ]);
     resolveEffectivePolicy.mockResolvedValue({ orgId: null });
+    resolveEffectivePolicyStrict.mockResolvedValue({ orgId: null });
 });
 
 describe('checkAddonEntitlement', () => {
@@ -37,7 +43,7 @@ describe('checkAddonEntitlement', () => {
 
     it('부팅에 실패한(state=failed) add-on 은 failed — 조직 축은 보지 않는다', async () => {
         expect(await checkAddonEntitlement('broken-pack', 'u1')).toBe('failed');
-        expect(resolveEffectivePolicy).not.toHaveBeenCalled();
+        expect(resolveEffectivePolicyStrict).not.toHaveBeenCalled();
     });
 
     it('관리자가 DB 에서 끈 add-on 은 disabled', async () => {
@@ -50,24 +56,25 @@ describe('checkAddonEntitlement', () => {
     });
 
     it('조직 allowlist 에 없으면 not-entitled (조직 허용 목록 밖)', async () => {
-        resolveEffectivePolicy.mockResolvedValue({ orgId: 'org1', addonAllowlist: ['other-pack'] });
+        resolveEffectivePolicyStrict.mockResolvedValue({ orgId: 'org1', addonAllowlist: ['other-pack'] });
         expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('not-entitled');
     });
 
     it('조직 allowlist 에 있으면 ok', async () => {
-        resolveEffectivePolicy.mockResolvedValue({ orgId: 'org1', addonAllowlist: ['industry-pack'] });
+        resolveEffectivePolicyStrict.mockResolvedValue({ orgId: 'org1', addonAllowlist: ['industry-pack'] });
         expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('ok');
     });
 
     it('사용자 없이(내부 호출) 부르면 조직 축은 보지 않는다', async () => {
-        resolveEffectivePolicy.mockResolvedValue({ orgId: 'org1', addonAllowlist: [] });
+        resolveEffectivePolicyStrict.mockResolvedValue({ orgId: 'org1', addonAllowlist: [] });
         expect(await checkAddonEntitlement('industry-pack')).toBe('ok');
-        expect(resolveEffectivePolicy).not.toHaveBeenCalled();
+        expect(resolveEffectivePolicyStrict).not.toHaveBeenCalled();
     });
 
     it('조직 정책 조회가 실패하면 state-unknown (허용으로 읽지 않는다)', async () => {
-        resolveEffectivePolicy.mockRejectedValue(new Error('DB 장애'));
+        resolveEffectivePolicyStrict.mockRejectedValue(new Error('DB 장애'));
         expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('state-unknown');
+        expect(resolveEffectivePolicy).not.toHaveBeenCalled();
     });
 
     it('상태를 못 읽으면(DB 미초기화) state-unknown', async () => {

@@ -4,6 +4,8 @@
  * LLM 호출·권한 판정마다 DB 를 치지 않도록 사용자별 60초 캐시. 종전 `llm/user-quota.ts` 의
  * 예산 조직 캐시를 이곳으로 옮겨 쿼터·권한·조직 스위처가 같은 무효화 지점을 쓴다.
  * 실패는 fail-open(빈 목록 / 활성 조직 없음) — 조직은 선택 구조라 조회 실패가 채팅을 막으면 안 된다.
+ * 실패 결과는 캐시하지 않는다 — 엄격 판정(`*Strict`, add-on 사용권)이 장애 중 만든 "조직 없음"을 사실로 읽지 않게.
+ * 엄격 판정은 같은 캐시를 쓰되 조회 실패를 예외로 올린다(호출부가 '확인 불가'로 막는다).
  *
  * 활성 조직은 `users.preferences.activeOrgId` 가 가리키되 **멤버십이 DB 에 실재할 때만** 인정한다
  * (preferences 값만 믿으면 탈퇴 뒤에도 조직 자원이 보이는 IDOR 가 된다).
@@ -34,14 +36,19 @@ async function repo() {
     return new OrganizationRepository(getPool());
 }
 
-/** 사용자가 속한 조직 목록 (60초 캐시, 실패 시 빈 목록). */
-export async function membershipsFor(userId: string, now: number = Date.now()): Promise<OrgMembership[]> {
+/** 사용자가 속한 조직 목록 (60초 캐시) — 조회 실패는 예외. */
+export async function membershipsForStrict(userId: string, now: number = Date.now()): Promise<OrgMembership[]> {
     const hit = memberships.get(userId);
     if (fresh(hit, now)) return hit.value;
+    const value = await (await repo()).listMembershipsForUser(userId);
+    memberships.set(userId, { at: now, value });
+    return value;
+}
+
+/** 사용자가 속한 조직 목록 (60초 캐시, 실패 시 빈 목록). */
+export async function membershipsFor(userId: string, now: number = Date.now()): Promise<OrgMembership[]> {
     try {
-        const value = await (await repo()).listMembershipsForUser(userId);
-        memberships.set(userId, { at: now, value });
-        return value;
+        return await membershipsForStrict(userId, now);
     } catch (e) {
         logger.warn('조직 멤버십 조회 실패 (fail-open):', e);
         return [];
@@ -69,19 +76,24 @@ export function resolveActiveOrg(activeOrgId: unknown, list: OrgMembership[]): O
     return m ? { orgId: m.orgId, orgRole: m.role } : null;
 }
 
-/** 요청 사용자의 활성 조직 컨텍스트 (60초 캐시). guest·미인증은 null. */
-export async function activeOrgFor(userId: string | undefined, now: number = Date.now()): Promise<OrgContext | null> {
+/** 요청 사용자의 활성 조직 컨텍스트 (60초 캐시) — 조회 실패는 예외. guest·미인증은 null. */
+export async function activeOrgForStrict(userId: string | undefined, now: number = Date.now()): Promise<OrgContext | null> {
     if (!userId || userId === 'guest') return null;
     const hit = active.get(userId);
     if (fresh(hit, now)) return hit.value;
+    const { UserRepository } = await import('../../data/repositories/user-repository');
+    const { getPool } = await import('../../data/models/unified-database');
+    const prefs = await new UserRepository(getPool()).getPreferences(userId);
+    const value = resolveActiveOrg(prefs.activeOrgId, await membershipsForStrict(userId, now));
+    if (prefs.activeOrgId && !value) logger.info(`activeOrgId 무시(멤버 아님): userId=${userId}`);
+    active.set(userId, { at: now, value });
+    return value;
+}
+
+/** 요청 사용자의 활성 조직 컨텍스트 (60초 캐시, 실패 시 null — 캐시하지 않는다). guest·미인증은 null. */
+export async function activeOrgFor(userId: string | undefined, now: number = Date.now()): Promise<OrgContext | null> {
     try {
-        const { UserRepository } = await import('../../data/repositories/user-repository');
-        const { getPool } = await import('../../data/models/unified-database');
-        const prefs = await new UserRepository(getPool()).getPreferences(userId);
-        const value = resolveActiveOrg(prefs.activeOrgId, await membershipsFor(userId, now));
-        if (prefs.activeOrgId && !value) logger.info(`activeOrgId 무시(멤버 아님): userId=${userId}`);
-        active.set(userId, { at: now, value });
-        return value;
+        return await activeOrgForStrict(userId, now);
     } catch (e) {
         logger.warn('활성 조직 조회 실패 (fail-open):', e);
         return null;
