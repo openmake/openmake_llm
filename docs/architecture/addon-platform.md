@@ -138,12 +138,14 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 | 웹 Base 는 add-on 디렉터리(`apps/web/addons/<id>/`)를 import 하지 않는다 — `@/addons/registry`(클라이언트 확장)·`@/addons/pages`(add-on 소유 URL 화면)·`@/addons/types` 만 | `apps/web/eslint.config.mjs` `no-restricted-imports`(regex, `addons/**` 안은 제외) | 위반 즉시. add-on 화면(Knowledge `/knowledge`·딥리서치 `/research`)은 Base 의 catch-all 라우트 `app/(workspace)/[...addonPath]` 가 `renderAddonPage` 로 고르고 맞는 것이 없으면 404. 허브 탭 링크는 `WebAddon.hubTabs`(켜진 add-on 만) — 경로가 Base 정적 라우트와 겹치면 `tests/web/addon-pages.test.tsx` 가 실패 |
 | 계약 패키지는 apps·외부 패키지·자기 디렉터리 밖을 import 하지 않는다 | eslint(`packages/plugin-contracts/src/**`) | 위반 즉시 |
 | apps/api 는 계약 패키지를 type-only 로만 쓴다(테스트 예외) | eslint `@typescript-eslint/no-restricted-imports` | 값 import·재수출 |
-| add-on → Base 내부 계층(data·services·routes·sockets·controllers·middlewares·auth·chat) import 는 **줄어들기만** 한다 | `npm run check:addon-boundary`(CI Gate 4), 허용 목록 `scripts/lint/addon-import-allowlist.json` | 목록 밖의 새 (파일, 대상) 쌍. 사라진 쌍은 권고만 — `npm run gen:addon-boundary` 로 목록을 줄인다 |
+| add-on → Base 내부(아래 '써도 되는 문' 밖 전부)·다른 add-on import 는 **줄어들기만** 한다 | `npm run check:addon-boundary`(CI Gate 4), 허용 목록 `scripts/lint/addon-import-allowlist.json` | 목록 밖의 새 (파일, 대상) 쌍. 사라진 쌍은 권고만 — `npm run gen:addon-boundary` 로 목록을 줄인다 |
 | add-on 소스는 Base 테이블을 SQL 로 쓰지 않는다 | Jest `__tests__/addons-no-base-table-sql.test.ts`(테이블 목록은 코어 스키마의 CREATE TABLE) | SQL 키워드 뒤의 Base 테이블 이름. 예외(래칫): 스킬 런타임의 스킬 스키마 6개 표 |
 
-add-on 이 써도 되는 문은 `runtime-ports/*`(포트)·`addon-host`·`config`·`utils`·`@openmake/plugin-contracts` 다. 허용 목록·SQL 검사는 테스트(`__tests__`·`*.test.ts`)와 평가 시드 도구(`evaluation/`)를 보지 않는다. 초기 허용 목록은 141쌍/67파일(2026-10-16) — 새 import 를 목록에 더하는 diff 는 리뷰에서 거절한다.
+add-on 이 써도 되는 문은 `runtime-ports/*`(포트)·`addon-host`·`config`·`utils`·`@openmake/plugin-contracts` 다. 허용 목록·SQL 검사는 테스트(`__tests__`·`*.test.ts`)와 평가 시드 도구(`evaluation/`)를 보지 않는다. 초기 허용 목록은 141쌍/67파일(2026-10-16, 8개 계층), 범위를 Base 전체로 넓힌 뒤 267쌍/98파일(2026-10-18 동결) — 새 import 를 목록에 더하는 diff 는 리뷰에서 거절한다.
 
-ratchet 은 `BASE_LAYERS`(`scripts/lint/addon-boundary-lib.mjs`) 8개 디렉터리 — `data`·`services`·`routes`·`sockets`·`controllers`·`middlewares`·`auth`·`chat` — 로 가는 import 만 센다. `tools/`·`agents/`·`llm/`·`security/`·`workflow/` 등 그 밖의 Base 디렉터리로 가는 import 는 세지 않으며, 범위 확장은 2차 후보다.
+ratchet 은 `ADDON_GATEWAYS`(`scripts/lint/addon-boundary-lib.mjs` — `runtime-ports`·`addon-host`·`config`·`utils`·`types`) 밖의 `apps/api/src` 전부와 다른 add-on 으로 가는 import 를 센다(2026-10-18 확장 — 종전 8개 계층만 세어 `tool-contract`·`llm`·`tools`·`agents` 등 126쌍이 보이지 않았다). 같은 add-on 안은 세지 않는다. `tool-contract`·`capability-contract` 는 Base 의 계약 계층이지만 add-on 문으로 열지 않고 동결해 두었다 — 포트·계약 패키지로 옮겨 가며 줄인다.
+
+공용 패키지 소스(`packages/*/src`)와 웹 번역 파일(`apps/web/messages`)의 add-on 고유 이름(`ADDON_SPECIFIC_NAME_PATTERNS`) 줄 수는 `SHARED_ASSET_ADDON_NAME_BASELINE`(`config/addon-boundary.ts`)에 파일별로 동결하고 `addon-boundary.test.ts` 가 같은지 본다(구 클라이언트 WS 계약·add-on 화면 문구 — 늘면 실패, 줄면 동결값도 낮춘다).
 
 ## 8.6 Base 데이터 포트 (`runtime-ports/base-data-port.ts`)
 

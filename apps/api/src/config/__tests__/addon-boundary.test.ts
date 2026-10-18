@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
     ADDON_CONTENT_ASSET_PATTERNS, ADDON_NAME_ALLOWED_PREFIXES, ADDON_NAME_CONTRACT_EXCEPTIONS, ADDON_SPECIFIC_NAME_PATTERNS,
-    CONTENT_REFERENCE_ALLOWLIST, WEB_ADDON_NAME_CONTRACT_EXCEPTIONS,
+    CONTENT_REFERENCE_ALLOWLIST, SHARED_ASSET_ADDON_NAME_BASELINE, WEB_ADDON_NAME_CONTRACT_EXCEPTIONS,
 } from '../addon-boundary';
 
 const SRC_ROOT = path.resolve(__dirname, '..', '..');
@@ -94,5 +94,33 @@ describe('Base 는 특정 add-on 의 이름을 모른다', () => {
             return !lines.some((line) => !isComment(line) && ADDON_SPECIFIC_NAME_PATTERNS.some((p) => p.test(line)));
         });
         expect(stale).toEqual([]);
+    });
+});
+
+describe('공용 자산(공용 패키지 소스·웹 번역 파일)의 add-on 고유 이름은 늘지 않는다', () => {
+    const REPO_ROOT = path.resolve(SRC_ROOT, '..', '..', '..');
+    const isCommentLine = (line: string): boolean => {
+        const t = line.trim();
+        return t.startsWith('*') || t.startsWith('//') || t.startsWith('/*');
+    };
+    const countNames = (rel: string): number => fs.readFileSync(path.join(REPO_ROOT, rel), 'utf-8').split('\n')
+        .filter((line) => !isCommentLine(line) && ADDON_SPECIFIC_NAME_PATTERNS.some((p) => p.test(line))).length;
+
+    function sharedAssetFiles(): string[] {
+        const out: string[] = [];
+        for (const pkg of fs.readdirSync(path.join(REPO_ROOT, 'packages'), { withFileTypes: true })) {
+            const src = path.join(REPO_ROOT, 'packages', pkg.name, 'src');
+            if (!pkg.isDirectory() || !fs.existsSync(src)) continue;
+            for (const f of listSourceFiles(src)) out.push(path.relative(REPO_ROOT, f).split(path.sep).join('/'));
+        }
+        for (const f of fs.readdirSync(path.join(REPO_ROOT, 'apps', 'web', 'messages'))) {
+            if (f.endsWith('.json')) out.push(`apps/web/messages/${f}`);
+        }
+        return out.sort();
+    }
+
+    it('파일마다 동결값과 같다 — 늘었으면 add-on 쪽으로 옮기고, 줄었으면 동결값(SHARED_ASSET_ADDON_NAME_BASELINE)도 낮춘다', () => {
+        const actual = Object.fromEntries(sharedAssetFiles().map((rel) => [rel, countNames(rel)]).filter(([, n]) => n !== 0));
+        expect(actual).toEqual(SHARED_ASSET_ADDON_NAME_BASELINE);
     });
 });
