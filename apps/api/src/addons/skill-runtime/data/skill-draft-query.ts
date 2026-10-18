@@ -5,7 +5,7 @@
  *
  * @module data/repositories/skill-draft-query
  */
-import type { QueryParam } from './base-repository';
+import type { QueryParam } from '../../../data/repositories/base-repository';
 
 interface DraftQueryOptions {
     target?: 'user' | 'system' | 'all';
@@ -34,9 +34,8 @@ const DEFAULT_LIMIT = 50;
 /**
  * draft 목록 SQL 조립.
  *
- * 목록 쿼리는 `user_extensions` 를 LEFT JOIN 해 **확장 이름을 함께 싣는다** — draft
- * 화면이 확장별로 묶어 일괄 승인/거부할 수 있게 하기 위함이다. LEFT 라 확장 유래가
- * 아닌 draft 도 그대로 나온다.
+ * 확장 이름(draft 화면이 확장별로 묶어 일괄 승인/거부한다)은 여기서 JOIN 하지 않는다 — `user_extensions` 는 Base 테이블이라
+ * 저장소(`listDrafts`)가 Base 데이터 포트(`userExtensions.namesByIds`)로 채운다(2026-10-18 저장 계층 이전).
  */
 export function buildDraftQuery(options: DraftQueryOptions): DraftQuery {
     const conditions: string[] = [`status = 'draft'`];
@@ -60,16 +59,15 @@ export function buildDraftQuery(options: DraftQueryOptions): DraftQuery {
     const limit = Math.min(options.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
     const offset = Math.max(0, options.offset ?? 0);
 
-    // JOIN 쿼리에서는 컬럼이 모호해지므로 별칭을 붙인다
+    // 별칭(s)을 붙인다 — 목록 쿼리는 테이블 별칭으로 컬럼을 고른다
     const scopedWhere = whereClause.replace(/\b(status|created_by)\b/g, 's.$1');
 
     return {
         countSql: `SELECT COUNT(*) AS total FROM agent_skills ${whereClause}`,
         dataSql: `SELECT s.id, s.name, s.description, s.content, s.category, s.is_public, s.created_by,
                     s.created_at, s.updated_at, s.source_repo, s.source_path, s.status, s.manifest_meta,
-                    s.extension_id, e.name AS extension_name
+                    s.extension_id
              FROM agent_skills s
-             LEFT JOIN user_extensions e ON e.id = s.extension_id
              ${scopedWhere}
              ORDER BY s.created_at DESC, s.id ASC
              LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,

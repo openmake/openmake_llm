@@ -6,10 +6,10 @@
  *  - listDrafts: target 별 SQL 조건, 페이지네이션, userId 미입력 시 throw
  */
 import { Pool } from 'pg';
-import { SkillRepository } from '../skill-repository';
+import { SkillRepository } from '../../data/skill-repository';
 
 // retry-wrapper 가 withRetry 로 감싸므로 실제 retry 동작은 통과시키고 mock pool.query 만 어서트
-jest.mock('../../retry-wrapper', () => ({
+jest.mock('../../../../data/retry-wrapper', () => ({
     withRetry: (fn: () => unknown) => fn(),
 }));
 

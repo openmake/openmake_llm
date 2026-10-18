@@ -49,7 +49,7 @@ export interface AddonBootResult {
 
 async function installBuiltinPack(id: string): Promise<void> {
     const { getUnifiedDatabase } = await import('../data/models/unified-database');
-    const { SkillRepository } = await import('../data/repositories/skill-repository');
+    const { SkillRepository } = await import('../addons/skill-runtime/data/skill-repository');
     const { installed, failed } = await installPackSkills(id, new SkillRepository(getUnifiedDatabase().getPool()));
     if (installed > 0 || failed.length > 0) logger.info(`내장 팩 '${id}' 스킬 설치: ${installed}개 성공, ${failed.length}개 실패`);
     for (const reason of failed) logger.error(`내장 팩 '${id}' 스킬 설치 실패 — ${reason}`);
@@ -65,7 +65,7 @@ async function archiveDisabledAddonSkills(addon: BuiltinAddon): Promise<void> {
     const sourcePathLike = addon.manifest.skillSourcePath;
     if (!sourcePathLike) return; // 스킬을 싣지 않는 add-on (통합 기능)
     const { getUnifiedDatabase } = await import('../data/models/unified-database');
-    const { SkillRepository } = await import('../data/repositories/skill-repository');
+    const { SkillRepository } = await import('../addons/skill-runtime/data/skill-repository');
     const archived = await new SkillRepository(getUnifiedDatabase().getPool()).archiveSystemSkillsBySourcePath(sourcePathLike);
     logger.info(`내장 팩 '${id}' 꺼짐 — 시스템 스킬 ${archived}개 보관`);
 }

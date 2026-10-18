@@ -5,11 +5,11 @@
  * 관리자만 수정/삭제할 수 있어야 한다. 종전엔 아무 인증 사용자가 통과했다.
  */
 import { Pool } from 'pg';
-import { SkillRepository } from '../skill-repository';
-import { assertSkillMutationAllowed } from '../skill-authz';
-import { AuthorizationError } from '../../../utils/error-handler';
+import { SkillRepository } from '../../data/skill-repository';
+import { assertSkillMutationAllowed } from '../../data/skill-authz';
+import { AuthorizationError } from '../../../../utils/error-handler';
 
-jest.mock('../../retry-wrapper', () => ({
+jest.mock('../../../../data/retry-wrapper', () => ({
     withRetry: (fn: () => unknown) => fn(),
 }));
 

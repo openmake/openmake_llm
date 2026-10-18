@@ -2,7 +2,7 @@
  * Procedural Skill 순수 함수 유닛 테스트 (#1).
  * DB 를 타는 save/load/find 는 통합 검증(라이브)로 다루고, 여기선 결정적 순수 로직만.
  */
-import { applyParams, deepApplyParams, parseSpec, findPlaintextSecrets, PROCEDURAL_CATEGORY, type ProceduralSpec } from './procedural-skill';
+import { applyParams, deepApplyParams, parseSpec, findPlaintextSecrets, PROCEDURAL_CATEGORY, type ProceduralSpec } from '../../procedural/procedural-skill';
 
 describe('procedural-skill pure helpers', () => {
     describe('applyParams', () => {

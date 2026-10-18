@@ -9,12 +9,16 @@
 import type {
     ActiveSkillBinding, ManifestPromptResult, SkillCatalogOptions, SkillRecordDTO, SkillRuntime, SkillSummary, SkillUsageEvent,
 } from '../../runtime-ports/skill-runtime';
-import { toSkillRecordDTO } from '../../runtime-ports/contract-mappers';
+import { toSkillRecordDTO } from './data/skill-record-dto';
 import type { ToolDefinition } from '../../llm/types';
 import { getSkillManager } from './skill-manager';
 import { isSkillOfferEnabled } from './skill-catalog';
 import { applySkillCatalog } from './skill-catalog-tool';
 import { recordSkillUsage } from './skill-usage-log';
+import type { ProceduralHooks } from '../../services/task-sandbox/tools-procedural';
+import {
+    buildProceduralSkillBlock, recordProceduralRun, resolveProceduralSpec, revertProceduralSkill, saveProceduralSkill,
+} from './procedural/procedural-skill';
 
 export const skillRuntime: SkillRuntime = {
     buildManifestPrompt(
@@ -63,5 +67,21 @@ export const skillRuntime: SkillRuntime = {
 
     isOfferEnabled(): boolean {
         return isSkillOfferEnabled();
+    },
+
+    proceduralHooks(userId: string): ProceduralHooks {
+        return {
+            save: (i) => saveProceduralSkill(userId, i.name, i.description, {
+                kind: i.kind, goal: i.description, params: i.params,
+                actions: i.actions, allowlist: i.allowlist, lang: i.lang, code: i.code,
+            }, { update: i.update }),
+            revert: (name) => revertProceduralSkill(userId, name),
+            load: (id) => resolveProceduralSpec(userId, id),
+            recordRun: (run) => recordProceduralRun(userId, run),
+        };
+    },
+
+    buildProceduralSkillBlock(userId: string, goal: string): Promise<string> {
+        return buildProceduralSkillBlock(userId, goal);
     },
 };

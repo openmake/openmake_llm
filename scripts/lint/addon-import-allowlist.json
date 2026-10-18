@@ -344,6 +344,19 @@
       "tools/web-search/providers",
       "tools/web-search/types"
     ],
+    "skill-runtime/data/skill-assignment-repository.ts": [
+      "data/repositories/base-repository"
+    ],
+    "skill-runtime/data/skill-authz.ts": [
+      "auth/ownership"
+    ],
+    "skill-runtime/data/skill-draft-query.ts": [
+      "data/repositories/base-repository"
+    ],
+    "skill-runtime/data/skill-repository.ts": [
+      "auth/ownership",
+      "data/repositories/base-repository"
+    ],
     "skill-runtime/index.ts": [
       "tool-contract/types"
     ],
@@ -354,6 +367,15 @@
     ],
     "skill-runtime/manifest-importer.ts": [
       "schemas/skill-manifest.schema"
+    ],
+    "skill-runtime/procedural/procedural-dormancy.ts": [
+      "data/models/unified-database"
+    ],
+    "skill-runtime/procedural/procedural-skill.ts": [
+      "prompts/agent-task-skill-memory",
+      "prompts/procedural-skill-prompt",
+      "services/agent-task/procedural-secrets",
+      "services/agent-task/task-learning"
     ],
     "skill-runtime/routes/agent-skill-assign.routes.ts": [
       "auth",
@@ -395,13 +417,11 @@
       "schemas/skills.schema"
     ],
     "skill-runtime/runtime.ts": [
-      "llm/types"
+      "llm/types",
+      "services/task-sandbox/tools-procedural"
     ],
     "skill-runtime/skill-catalog-tool.ts": [
       "llm/types"
-    ],
-    "skill-runtime/skill-catalog.ts": [
-      "data/repositories/skill-repository"
     ],
     "skill-runtime/skill-creator-tool.ts": [
       "data/models/unified-database",
@@ -410,7 +430,6 @@
       "tool-contract/types"
     ],
     "skill-runtime/skill-creator.ts": [
-      "data/repositories/skill-manifest-sync",
       "llm/client",
       "llm/types",
       "schemas/skills.schema"
@@ -420,14 +439,11 @@
     ],
     "skill-runtime/skill-manager.ts": [
       "chat/slash-command",
-      "data/models/unified-database",
-      "data/repositories/skill-manifest-sync",
-      "data/repositories/skill-repository"
+      "data/models/unified-database"
     ],
     "skill-runtime/skill-seeder.ts": [
       "agents/system-skill-names",
-      "data/models/unified-database",
-      "data/repositories/skill-repository"
+      "data/models/unified-database"
     ],
     "skill-runtime/skill-triggers.ts": [
       "agents/manifest-triggers"

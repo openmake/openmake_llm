@@ -11,7 +11,7 @@ jest.mock('../../../utils/logger', () => {
 });
 
 import { SkillManager } from '../skill-manager';
-import type { AgentSkill } from '../../../data/repositories/skill-repository';
+import type { AgentSkill } from '../data/skill-repository';
 
 const logger = (jest.requireMock('../../../utils/logger') as { __shared: { warn: jest.Mock } }).__shared;
 

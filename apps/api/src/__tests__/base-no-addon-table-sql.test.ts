@@ -27,14 +27,9 @@ const BASE_SQL_ON_ADDON_TABLES_ALLOWLIST: Readonly<Record<string, readonly strin
     'data/repositories/marketplace-export-repository.ts': ['agent_skills', 'mcp_servers', 'skill_assets'],
     'data/repositories/mcp-server-draft-repository.ts': ['mcp_servers'],
     'data/repositories/skill-asset-repository.ts': ['skill_assets'],
-    'data/repositories/skill-assignment-repository.ts': ['agent_skill_assignments', 'agent_skills'],
-    'data/repositories/skill-draft-query.ts': ['agent_skills'],
-    'data/repositories/skill-manifest-sync.ts': ['skill_manifests'],
-    'data/repositories/skill-repository.ts': ['agent_skill_assignments', 'agent_skills', 'skill_manifests'],
     'data/repositories/user-extension-permission-repository.ts': ['mcp_servers'],
     'data/repositories/user-extension-repository.ts': ['agent_skill_assignments', 'agent_skills', 'mcp_servers'],
     'data/user-manager.ts': ['agent_skills', 'skill_manifests'],
-    'services/agent-task/procedural-dormancy.ts': ['skill_audit_log'],
 };
 
 function baseSources(dir: string): string[] {

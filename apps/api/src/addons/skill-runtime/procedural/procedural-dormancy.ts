@@ -5,9 +5,9 @@
  *
  * @module services/agent-task/procedural-dormancy
  */
-import { getPool } from '../../data/models/unified-database';
-import { PROCEDURAL_DORMANCY } from '../../config/agent-task-skill-memory';
-import { createLogger } from '../../utils/logger';
+import { getPool } from '../../../data/models/unified-database';
+import { PROCEDURAL_DORMANCY } from '../../../config/agent-task-skill-memory';
+import { createLogger } from '../../../utils/logger';
 
 const logger = createLogger('ProceduralDormancy');
 const DAY_MS = 24 * 60 * 60 * 1000;
