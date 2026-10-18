@@ -329,9 +329,9 @@ infra/               サンドボックスとデータストア用の Docker イ
 | 現在 — 提供中 | 次 | その後 |
 |---|---|---|
 | ロール・機能ルーティングを備えたマルチモデルゲートウェイ | 実行グラフ | スコープ付きメモリ |
-| 永続タスクランタイム: チェックポイント、一時停止・再開、再起動後の復旧 | 宣言的ポリシーエンジンと承認待ち | 組織、プロジェクト、マルチテナンシー |
-| ツール、MCP ゲートウェイ、承認、Docker サンドボックス | エージェント・スキルのマニフェスト | SSO(OIDC、SAML)、予算、デプロイ承認 |
-| ディープリサーチ、アーティファクト、ローカル実行ブリッジ | ターン内の耐久性 | エアギャップ環境へのインストール、HA、Kubernetes |
+| 永続タスクランタイム: チェックポイント、一時停止・再開、再起動後の復旧、ターン内の耐久性 | 宣言的ポリシーエンジンと承認待ち | 組織、プロジェクト、マルチテナンシー |
+| Add-on契約・マニフェスト、ツール、MCP ゲートウェイ、承認、Docker サンドボックス | 再利用可能なワークフローとナレッジ空間 | SSO(OIDC、SAML)、予算、デプロイ承認 |
+| ディープリサーチ、アーティファクト、ローカル実行ブリッジ、独立Knowledge Worker | 複数セグメントタスクのレビューと検証ハーネス | エアギャップ環境へのインストール、HA、Kubernetes |
 
 方向性は定まっていますが、スケジュールは約束ではありません — [リリース](https://github.com/openmake/openmake_llm/releases)に含まれていない機能は計画として扱ってください。詳細: **[openmake.cc/roadmap](https://openmake.cc/ja/roadmap/)**。
 
@@ -346,8 +346,10 @@ OpenMake はオープンに開発しています。実装メモ、失敗、ト�
 - [四回とも、テストは緑だった](https://openmake.cc/ja/blog/green-tests-four-gaps/)
 - [計画と実行をつなぐ作業を、三回に分けてやった](https://openmake.cc/ja/blog/execution-graph-increments/)
 - [推論バックエンドを一日で載せ替え、その請求書を十三日かけて払った](https://openmake.cc/ja/blog/ollama-to-vllm-migration/)
+- [失敗したあとに、できることが何もなかった](https://openmake.cc/ja/blog/recovery-paths-and-audit-trail/)
+- [プロキシを迂回せずに大容量ファイルをアップロードする](https://openmake.cc/ja/blog/chunked-agent-task-uploads/)
 
-毎週の内容は [週次開発ログ](https://openmake.cc/ja/blog/) にもまとめています — 最新: [W37](https://openmake.cc/ja/blog/weekly-log-2026-w37/)。
+毎週の内容は [週次開発ログ](https://openmake.cc/ja/blog/) にもまとめています — 最新: [W42](https://openmake.cc/ja/blog/weekly-log-2026-w42/)。
 
 ---
 

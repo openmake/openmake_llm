@@ -329,9 +329,9 @@ infra/               Docker-Images und Compose-Dateien für Sandboxes und Datens
 | Aktuell — verfügbar | Als Nächstes | Später |
 |---|---|---|
 | Multi-Modell-Gateway mit Rollen- und Fähigkeits-Routing | Ausführungsgraph | Begrenzter Speicher |
-| Dauerhafte Aufgaben-Runtime: Checkpoints, Pausieren/Fortsetzen, Wiederherstellung nach Neustart | Deklarative Policy-Engine und Freigabe-Wartezustände | Organisationen, Projekte und Mandantenfähigkeit |
-| Tools, MCP-Gateway, Freigaben, Docker-Sandboxes | Agenten- und Skill-Manifeste | SSO (OIDC, SAML), Budgets, Deployment-Freigaben |
-| Deep Research, Artefakte, Local-Execution-Bridge | Dauerhaftigkeit innerhalb einer Runde | Air-Gapped-Installation, Hochverfügbarkeit, Kubernetes |
+| Dauerhafte Aufgaben-Runtime: Checkpoints, Pausieren/Fortsetzen, Wiederherstellung nach Neustart, Dauerhaftigkeit innerhalb einer Runde | Deklarative Policy-Engine und Freigabe-Wartezustände | Organisationen, Projekte und Mandantenfähigkeit |
+| Add-on-Verträge & Manifeste, Tools, MCP-Gateway, Freigaben, Docker-Sandboxes | Wiederverwendbare Workflows & Wissensräume | SSO (OIDC, SAML), Budgets, Deployment-Freigaben |
+| Deep Research, Artefakte, Local-Execution-Bridge, unabhängiger Knowledge Worker | Überprüfung mehrteiliger Aufgaben & Verifizierungs-Harness | Air-Gapped-Installation, Hochverfügbarkeit, Kubernetes |
 
 Die Richtung steht fest, der Zeitplan ist kein Versprechen — was nicht in einem [Release](https://github.com/openmake/openmake_llm/releases) enthalten ist, gilt als Plan. Details: **[openmake.cc/roadmap](https://openmake.cc/en/roadmap/)**.
 
@@ -346,8 +346,10 @@ OpenMake wird offen entwickelt. Wir veröffentlichen laufend Implementierungsnot
 - [All four times, the tests were green](https://openmake.cc/en/blog/green-tests-four-gaps/)
 - [Connecting the plan to the execution, in three increments](https://openmake.cc/en/blog/execution-graph-increments/)
 - [Swapping the inference backend in a day, then paying for it](https://openmake.cc/en/blog/ollama-to-vllm-migration/)
+- [There was nothing you could do after it failed](https://openmake.cc/en/blog/recovery-paths-and-audit-trail/)
+- [Uploading beyond the proxy limit without bypassing the proxy](https://openmake.cc/en/blog/chunked-agent-task-uploads/)
 
-Jede Woche wird außerdem im [wöchentlichen Entwicklungslog](https://openmake.cc/en/blog/) zusammengefasst — zuletzt: [W37](https://openmake.cc/en/blog/weekly-log-2026-w37/).
+Jede Woche wird außerdem im [wöchentlichen Entwicklungslog](https://openmake.cc/en/blog/) zusammengefasst — zuletzt: [W42](https://openmake.cc/en/blog/weekly-log-2026-w42/).
 
 ---
 
