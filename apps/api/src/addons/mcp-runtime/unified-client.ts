@@ -29,7 +29,7 @@ import { executeToolSecurely } from '../../tool-contract/tool-execution-guard';
 import { ToolRouter } from './tool-router';
 import { MCPServerRegistry } from './server-registry';
 import { getUserMCPPool } from './user-pool';
-import { type UnifiedDatabase } from '../../data/models/unified-database';
+import type { McpServerRowSource } from './data/mcp-server-repository';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('MCP');
@@ -178,7 +178,7 @@ export class UnifiedMCPClient {
      * DB에서 외부 서버 설정을 로드하고 연결 초기화
      * 앱 시작 시 한 번 호출
      */
-    async initializeExternalServers(db: UnifiedDatabase): Promise<void> {
+    async initializeExternalServers(db: McpServerRowSource): Promise<void> {
         await this.serverRegistry.initializeFromDB(db);
     }
 

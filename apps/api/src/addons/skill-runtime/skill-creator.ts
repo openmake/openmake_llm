@@ -6,7 +6,7 @@
  * @module agents/skill-creator
  */
 
-import { upsertSkillManifest } from '../../data/repositories/skill-manifest-sync';
+import { upsertSkillManifest } from './data/skill-manifest-sync';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import type { Pool } from 'pg';

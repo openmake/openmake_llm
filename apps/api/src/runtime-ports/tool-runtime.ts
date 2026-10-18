@@ -59,6 +59,11 @@ export interface ToolRuntime {
      */
     callUserServerTool(userId: string, serverId: string, toolName: string, args: Record<string, unknown>): Promise<MCPToolResult | null>;
     /**
+     * 사용자가 카탈로그 템플릿으로 설치해 켜 둔 서버(가장 최근 것) — 자기 서버를 소유한 통합 add-on 이 `callUserServerTool` 전에 찾는다.
+     * 외부 런타임이 없으면 `null`(설치 여부를 알 수 없다).
+     */
+    findUserServerByTemplate(userId: string, templateId: string): Promise<{ id: string; name: string } | null>;
+    /**
      * 모델이 부른 도구 호출을 실제 실행 대상으로 정규화한다 — 메타 도구(`mcp_call` 처럼 다른 도구를 감싸는 형태)를
      * 푸는 자리. 런타임이 없거나 감쌀 것이 없으면 입력 그대로 돌려준다(순수 함수).
      */
@@ -103,6 +108,7 @@ const BUILTIN_ONLY_RUNTIME: ToolRuntime = {
         return getBuiltInTools().map(def => ({ name: def.tool.name, description: def.tool.description, external: false }));
     },
     async callUserServerTool(): Promise<MCPToolResult | null> { return null; },
+    async findUserServerByTemplate() { return null; },
     normalizeToolCall(name, args) { return { name, args }; },
     getUserToolGroups() { return []; },
     async runWithUserInputContext<T>(_ctx: ToolUserInputContext, fn: () => Promise<T>): Promise<T> { return fn(); },

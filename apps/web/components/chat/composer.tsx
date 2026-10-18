@@ -23,13 +23,6 @@ import { useEnabledWebAddons } from "@/addons/registry";
 import { useChatSocket } from "@/lib/use-chat-socket";
 import { fetchModels } from "@/lib/models-api";
 import { ApiClient } from "@/lib/api-client";
-import {
-  fetchSkills,
-  groupSkillsByCategory,
-  skillSlug,
-  type SkillSummary,
-} from "@/lib/skills-api";
-import { SlashSkillMenu } from "@/components/chat/slash-skill-menu";
 import { cn } from "@/lib/utils";
 import { canQueueFollowup, FOLLOWUP_QUEUE_MAX } from "@/lib/followup-queue";
 import { detectFileTaskIntent, detectPresentationChatIntent } from "@/lib/file-task-intent";
@@ -241,12 +234,13 @@ export function Composer() {
   // 게스트(비로그인)는 기본 모델만 사용 가능 — 외부 provider(Ollama/OpenRouter)는 가입 이용자 전용.
   const isGuest = !auth.currentUser;
 
-  // ── 슬래시(/) 스킬 호출 드롭다운 ──
+  // ── 슬래시(/) 메뉴 — 후보 조회·표시·삽입 텍스트는 켜진 add-on 의 slashMenu 가 준다(없으면 메뉴 없음) ──
+  const slashExt = enabledAddons.find((a) => a.slashMenu)?.slashMenu;
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState(false);
   const slashMatch = SLASH_PATTERN.exec(text);
-  // 후보 조건: "/토큰" 패턴 + Esc/외부클릭으로 닫지 않음 + 생성중 아님
-  const slashCandidate = !!slashMatch && !slashDismissed && !isGenerating;
+  // 후보 조건: 메뉴를 주는 add-on + "/토큰" 패턴 + Esc/외부클릭으로 닫지 않음 + 생성중 아님
+  const slashCandidate = !!slashExt && !!slashMatch && !slashDismissed && !isGenerating;
   const slashQuery = slashMatch?.[1] ?? "";
   // 디바운스된 검색어 (입력 폭주 시 과도한 요청 방지)
   const [slashDebounced, setSlashDebounced] = useState("");
@@ -256,9 +250,9 @@ export function Composer() {
     return () => clearTimeout(timer);
   }, [slashQuery, slashCandidate]);
 
-  const { data: slashSkillsData, isLoading: slashLoading } = useQuery({
-    queryKey: ["skills", slashDebounced],
-    queryFn: () => fetchSkills(slashDebounced),
+  const { data: slashItemsData, isLoading: slashLoading } = useQuery({
+    queryKey: [slashExt?.queryKey ?? "slash-menu", slashDebounced],
+    queryFn: () => (slashExt ? slashExt.fetch(slashDebounced) : Promise.resolve([])),
     enabled: slashCandidate,
     staleTime: 30_000,
   });
@@ -293,27 +287,27 @@ export function Composer() {
     staleTime: 10_000,
     retry: false, // 구 디바이스(kind 미지원)는 재시도 무의미 — 즉시 미지원 안내
   });
-  // 검색어 없으면("/") 카테고리 그룹핑(전체), 있으면 평면 검색 목록
+  // 검색어 없으면("/") add-on 이 묶음 정렬(전체), 있으면 평면 검색 목록
   const slashGrouped = slashDebounced.trim() === "";
-  const rawSlashSkills: SkillSummary[] = slashCandidate ? slashSkillsData ?? [] : [];
-  const slashSkills: SkillSummary[] = slashGrouped
-    ? groupSkillsByCategory(rawSlashSkills)
-    : rawSlashSkills;
+  const rawSlashItems: unknown[] = slashCandidate ? slashItemsData ?? [] : [];
+  const slashItems: readonly unknown[] = slashGrouped && slashExt?.arrangeGrouped
+    ? slashExt.arrangeGrouped(rawSlashItems)
+    : rawSlashItems;
   // 메뉴 표시: 후보 상태이며 로딩 중이거나 결과가 있을 때
-  const slashMenuOpen = slashCandidate && (slashLoading || slashSkills.length > 0);
-  // 키보드 순회 길이: 스킬 + "전체 보기" 1
-  const slashNavCount = slashSkills.length + 1;
-  const slashViewAllIndex = slashSkills.length;
+  const slashMenuOpen = slashCandidate && (slashLoading || slashItems.length > 0);
+  // 키보드 순회 길이: 항목 + "전체 보기" 1
+  const slashNavCount = slashItems.length + 1;
+  const slashViewAllIndex = slashItems.length;
 
   // 검색 결과가 바뀌면 활성 인덱스 초기화
   useEffect(() => {
     setSlashActiveIndex(0);
-  }, [slashDebounced, slashSkillsData]);
+  }, [slashDebounced, slashItemsData]);
 
-  // "전체 보기" → 스킬 라이브러리로 이동하고 메뉴 닫기
-  const goToSkillLibrary = () => {
+  // "전체 보기" → add-on 이 정한 화면으로 이동하고 메뉴 닫기
+  const goToSlashViewAll = () => {
     setSlashDismissed(true);
-    router.push("/skill-library");
+    if (slashExt) router.push(slashExt.viewAllHref);
   };
 
   // 외부 클릭 시 닫기
@@ -328,9 +322,10 @@ export function Composer() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [slashMenuOpen]);
 
-  // 스킬 선택 → 텍스트를 "/<slug> " 로 채우고 포커스 유지 (이후 메시지 이어쓰기)
-  const selectSlashSkill = (skill: SkillSummary) => {
-    setText(`/${skillSlug(skill.name)} `);
+  // 항목 선택 → add-on 이 준 텍스트로 채우고 포커스 유지 (이후 메시지 이어쓰기)
+  const selectSlashItem = (item: unknown) => {
+    if (!slashExt) return;
+    setText(slashExt.insertText(item));
     setSlashActiveIndex(0);
     const ta = taRef.current;
     if (ta) {
@@ -902,15 +897,15 @@ export function Composer() {
           </div>
         )}
 
-        {slashMenuOpen && (
-          <SlashSkillMenu
-            skills={slashSkills}
+        {slashMenuOpen && slashExt && (
+          <slashExt.View
+            items={slashItems}
             grouped={slashGrouped}
             activeIndex={slashActiveIndex}
             loading={slashLoading}
-            onSelect={selectSlashSkill}
+            onSelect={selectSlashItem}
             onHover={setSlashActiveIndex}
-            onViewAll={goToSkillLibrary}
+            onViewAll={goToSlashViewAll}
           />
         )}
 
@@ -939,7 +934,7 @@ export function Composer() {
             // keyCode 229 는 isComposing 이 false 로 오는 WebKit 조합 커밋 케이스 보강.
             if (e.key === "Enter" && (e.nativeEvent.isComposing || e.keyCode === 229)) return;
             // 슬래시 메뉴가 열려 있으면 네비게이션/선택 우선 처리.
-            // 활성 인덱스는 스킬(0..n-1) + "전체 보기"(n) 를 순회.
+            // 활성 인덱스는 항목(0..n-1) + "전체 보기"(n) 를 순회.
             if (slashMenuOpen) {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
@@ -957,17 +952,16 @@ export function Composer() {
                 return;
               }
               if (e.key === "Enter" && !e.shiftKey) {
-                // "전체 보기" 활성 → 라이브러리 이동
+                // "전체 보기" 활성 → 그 화면으로 이동
                 if (slashActiveIndex === slashViewAllIndex) {
                   e.preventDefault();
-                  goToSkillLibrary();
+                  goToSlashViewAll();
                   return;
                 }
-                // 스킬 항목 활성 → 선택. 없으면 아래 submit 으로 fall-through
-                const sel = slashSkills[slashActiveIndex];
-                if (sel) {
+                // 항목 활성 → 선택. 없으면 아래 submit 으로 fall-through
+                if (slashActiveIndex < slashItems.length) {
                   e.preventDefault();
-                  selectSlashSkill(sel);
+                  selectSlashItem(slashItems[slashActiveIndex]);
                   return;
                 }
               }

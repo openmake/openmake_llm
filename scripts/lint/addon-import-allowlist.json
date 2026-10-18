@@ -1,21 +1,34 @@
 {
-  "description": "apps/api/src/addons/** → Base 내부 계층(data·services·routes·sockets·controllers·middlewares·auth·chat) import 허용 목록. 줄어들기만 한다(ratchet). 새 import 는 runtime-ports 의 포트나 @openmake/plugin-contracts 를 거친다. 재생성: npm run gen:addon-boundary",
+  "description": "apps/api/src/addons/** → Base 내부(add-on 이 써도 되는 문 runtime-ports·addon-host·config·utils·types 밖 전부)·다른 add-on import 허용 목록. 줄어들기만 한다(ratchet). 새 import 는 runtime-ports 의 포트나 @openmake/plugin-contracts 를 거친다. 재생성: npm run gen:addon-boundary",
   "entries": {
     "deep-research/chat-mode.ts": [
       "services/chat-service/chat-modes"
     ],
+    "deep-research/chat-with-timeout.ts": [
+      "llm",
+      "llm/external-throttle"
+    ],
     "deep-research/content-scraper.ts": [
-      "data/models/unified-database"
+      "data/models/unified-database",
+      "tools/web-search"
     ],
     "deep-research/findings-synthesizer.ts": [
-      "data/models/unified-database"
+      "data/models/unified-database",
+      "llm",
+      "llm/external-throttle",
+      "tools/web-search",
+      "workflow/graph-engine"
     ],
     "deep-research/report-generator.ts": [
-      "data/models/unified-database"
+      "data/models/unified-database",
+      "llm",
+      "tools/web-search"
     ],
     "deep-research/research-context.ts": [
+      "llm",
       "services/agent-task/tool-selector-embedding",
-      "services/chat-service/tool-restrictions"
+      "services/chat-service/tool-restrictions",
+      "tools/web-search"
     ],
     "deep-research/routes.ts": [
       "auth",
@@ -27,13 +40,23 @@
       "middlewares/validation",
       "services/model-role-resolver"
     ],
+    "deep-research/schema.ts": [
+      "schemas/security.schema"
+    ],
     "deep-research/service.ts": [
-      "data/models/unified-database"
+      "data/models/unified-database",
+      "llm",
+      "tools/web-search"
     ],
     "deep-research/source-searcher.ts": [
-      "data/models/unified-database"
+      "data/models/unified-database",
+      "llm",
+      "tools/web-search",
+      "tools/web-search/provider-registry",
+      "workflow/graph-engine"
     ],
     "deep-research/strategy-types.ts": [
+      "llm",
       "services/chat-service-types",
       "services/chat-strategies/types"
     ],
@@ -43,7 +66,15 @@
       "services/chat-strategies/types"
     ],
     "deep-research/topic-decomposer.ts": [
-      "data/models/unified-database"
+      "data/models/unified-database",
+      "llm"
+    ],
+    "deep-research/types.ts": [
+      "tools/web-search"
+    ],
+    "deep-research/utils.ts": [
+      "tools/web-search",
+      "tools/web-search/query-cleaner"
     ],
     "discord/routes.ts": [
       "middlewares/api-key-auth",
@@ -51,7 +82,10 @@
       "services/system-settings-service"
     ],
     "discussion/chat-integration.ts": [
-      "services/chat-service/turn-integrations"
+      "llm",
+      "llm/types",
+      "services/chat-service/turn-integrations",
+      "tools/web-search"
     ],
     "discussion/chat-mode.ts": [
       "services/chat-service/chat-modes"
@@ -63,20 +97,36 @@
       "chat/language-policy"
     ],
     "discussion/engine.ts": [
-      "chat/language-policy"
+      "agents/index",
+      "chat/language-policy",
+      "workflow/graph-engine"
+    ],
+    "discussion/recommender.ts": [
+      "agents/agent-data",
+      "agents/keyword-router",
+      "agents/topic-analyzer",
+      "agents/types"
     ],
     "discussion/sources.ts": [
       "sockets/ws-chat-locales"
     ],
     "discussion/strategy-types.ts": [
+      "llm",
       "services/chat-service-types",
       "services/chat-strategies/types"
     ],
     "discussion/strategy.ts": [
       "chat/language-policy",
-      "services/chat-strategies/types"
+      "llm",
+      "observability/otel",
+      "services/chat-strategies/types",
+      "tools/web-search"
+    ],
+    "image-runtime/definition.ts": [
+      "capability-contract/types"
     ],
     "image-runtime/generate.ts": [
+      "capability-contract/types",
       "services/orchestrator/media-io",
       "services/orchestrator/plan-schema",
       "services/orchestrator/types"
@@ -104,93 +154,171 @@
     "knowledge-runtime/http.ts": [
       "data/user-manager"
     ],
+    "knowledge-runtime/ingestion/chunker-registry.ts": [
+      "llm/model-pool"
+    ],
+    "knowledge-runtime/prompts.ts": [
+      "llm/model-pool"
+    ],
+    "knowledge-runtime/retrieval/citation.ts": [
+      "tools/web-search/types"
+    ],
+    "knowledge-runtime/retrieval/context-builder.ts": [
+      "tools/web-search/types"
+    ],
     "knowledge-runtime/routes.ts": [
       "auth"
+    ],
+    "mcp-runtime/boot.ts": [
+      "tool-contract/types"
     ],
     "mcp-runtime/chat-integration.ts": [
       "services/chat-service/turn-integrations"
     ],
+    "mcp-runtime/data/mcp-catalog-input.ts": [
+      "security/spawn-env-policy"
+    ],
+    "mcp-runtime/data/mcp-catalog-repository.ts": [
+      "security/spawn-env-policy"
+    ],
+    "mcp-runtime/data/mcp-server-draft-repository.ts": [
+      "tool-contract/env-placeholder"
+    ],
+    "mcp-runtime/external-client.ts": [
+      "security/spawn-env-policy",
+      "security/ssrf-guard",
+      "tool-contract/tool-error-classifier",
+      "tool-contract/types"
+    ],
+    "mcp-runtime/external-resources.ts": [
+      "tool-contract/types"
+    ],
+    "mcp-runtime/ingest/mcp-server-ingest-service.ts": [
+      "agents/git-ingest/convention-checker",
+      "agents/git-ingest/git-fetcher",
+      "agents/git-ingest/repo-scanner",
+      "llm/client",
+      "schemas/git-ingest.schema"
+    ],
     "mcp-runtime/lifecycle-supervisor.ts": [
-      "data/repositories/mcp-catalog-repository"
+      "tool-contract/env-placeholder-shell"
     ],
     "mcp-runtime/mcp-meta-tools.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository"
+      "tool-contract/types"
     ],
     "mcp-runtime/mcp-server-ingest-tool.ts": [
+      "agents/git-ingest/git-fetcher",
       "data/models/unified-database",
-      "data/user-manager"
+      "data/user-manager",
+      "llm/client",
+      "tool-contract/types",
+      "tool-contract/user-sandbox"
+    ],
+    "mcp-runtime/media-content.ts": [
+      "prompts/agent-task-browser-web"
     ],
     "mcp-runtime/oauth-provider.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-oauth-client-repository",
-      "data/repositories/mcp-oauth-repository"
+      "storage"
     ],
     "mcp-runtime/routes/mcp-admin-monitoring.routes.ts": [
       "auth",
-      "data/models/unified-database",
-      "data/repositories/mcp-admin-monitoring-repository"
+      "data/models/unified-database"
     ],
     "mcp-runtime/routes/mcp-catalog-admin.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-admin-repository",
-      "data/repositories/mcp-catalog-oauth-client-repository",
       "services/AuditService"
     ],
     "mcp-runtime/routes/mcp-catalog.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
       "middlewares/validation",
+      "security/spawn-env-policy",
       "services/org/effective-policy"
     ],
     "mcp-runtime/routes/mcp-global-connect.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository"
+      "tool-contract/types"
     ],
     "mcp-runtime/routes/mcp-oauth.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
-      "data/repositories/mcp-oauth-repository"
+      "security/ssrf-guard"
     ],
     "mcp-runtime/routes/mcp-server-ingest.mounted.ts": [
-      "data/models/unified-database"
+      "agents/git-ingest/__mocks__/mock-git-fetcher",
+      "agents/git-ingest/git-fetcher",
+      "data/models/unified-database",
+      "llm/client"
     ],
     "mcp-runtime/routes/mcp-server-ingest.routes.ts": [
+      "agents/git-ingest/convention-checker",
+      "agents/git-ingest/git-fetcher",
       "auth",
-      "data/repositories/mcp-server-draft-repository",
-      "data/user-manager"
+      "data/user-manager",
+      "llm/client",
+      "tool-contract/env-placeholder"
     ],
     "mcp-runtime/routes/mcp-server-rename.ts": [
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
       "services/AuditService"
     ],
     "mcp-runtime/routes/mcp-visibility.ts": [
-      "data/repositories/mcp-catalog-repository",
       "data/user-manager"
     ],
     "mcp-runtime/routes/mcp.routes.ts": [
       "auth",
       "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository",
-      "data/repositories/mcp-oauth-repository",
       "middlewares/validation",
-      "services/AuditService"
+      "schemas/mcp.schema",
+      "security/ssrf-guard",
+      "services/AuditService",
+      "tool-contract/types"
     ],
     "mcp-runtime/runtime-boot.ts": [
-      "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository"
+      "data/models/unified-database"
+    ],
+    "mcp-runtime/runtime.ts": [
+      "llm/types",
+      "tool-contract/types"
+    ],
+    "mcp-runtime/sandbox-docker.ts": [
+      "security/spawn-env-policy"
     ],
     "mcp-runtime/server-registry.ts": [
-      "data/models/unified-database"
+      "tool-contract/env-placeholder-shell",
+      "tool-contract/types"
+    ],
+    "mcp-runtime/server.ts": [
+      "tool-contract/types",
+      "tools/builtin-tools"
+    ],
+    "mcp-runtime/tool-router.ts": [
+      "tool-contract/tool-dispatch",
+      "tool-contract/tool-error-classifier",
+      "tool-contract/tool-health",
+      "tool-contract/types",
+      "tools/builtin-tools",
+      "workflow/graph-engine"
+    ],
+    "mcp-runtime/tool-schema.ts": [
+      "tool-contract/types"
     ],
     "mcp-runtime/unified-client.ts": [
-      "data/models/unified-database"
+      "tool-contract/tool-execution-guard",
+      "tool-contract/types",
+      "tool-contract/user-sandbox"
+    ],
+    "mcp-runtime/user-pool-tools.ts": [
+      "tool-contract/types"
+    ],
+    "music-runtime/definition.ts": [
+      "capability-contract/types"
     ],
     "music-runtime/generate.ts": [
+      "capability-contract/types",
       "chat/language-policy",
       "services/orchestrator/media-io",
       "services/orchestrator/plan-schema",
@@ -204,22 +332,64 @@
       "services/chat-service/turn-integrations"
     ],
     "notebooklm/routes.ts": [
-      "auth",
-      "data/models/unified-database",
-      "data/repositories/mcp-catalog-repository"
+      "auth"
+    ],
+    "search-providers/external-search-apis.ts": [
+      "tools/web-search/providers",
+      "tools/web-search/types"
+    ],
+    "search-providers/index.ts": [
+      "tools/web-search/provider-registry"
+    ],
+    "search-providers/naver-client.ts": [
+      "storage"
+    ],
+    "search-providers/regional-providers.ts": [
+      "tools/web-search/providers",
+      "tools/web-search/types"
+    ],
+    "skill-runtime/data/skill-assignment-repository.ts": [
+      "data/repositories/base-repository"
+    ],
+    "skill-runtime/data/skill-authz.ts": [
+      "auth/ownership"
+    ],
+    "skill-runtime/data/skill-draft-query.ts": [
+      "data/repositories/base-repository"
+    ],
+    "skill-runtime/data/skill-repository.ts": [
+      "auth/ownership",
+      "data/repositories/base-repository"
+    ],
+    "skill-runtime/index.ts": [
+      "tool-contract/types"
     ],
     "skill-runtime/load-skill-tool.ts": [
       "data/models/unified-database",
-      "data/repositories/skill-asset-repository"
+      "tool-contract/types"
+    ],
+    "skill-runtime/manifest-importer.ts": [
+      "schemas/skill-manifest.schema"
+    ],
+    "skill-runtime/procedural/procedural-dormancy.ts": [
+      "data/models/unified-database"
+    ],
+    "skill-runtime/procedural/procedural-skill.ts": [
+      "prompts/agent-task-skill-memory",
+      "prompts/procedural-skill-prompt",
+      "services/agent-task/procedural-secrets",
+      "services/agent-task/task-learning"
     ],
     "skill-runtime/routes/agent-skill-assign.routes.ts": [
       "auth",
-      "middlewares/validation"
+      "middlewares/validation",
+      "schemas/agents.schema"
     ],
     "skill-runtime/routes/skills-drafts.routes.ts": [
       "auth",
       "data/user-manager",
-      "middlewares/validation"
+      "middlewares/validation",
+      "schemas/skills.schema"
     ],
     "skill-runtime/routes/skills-export.ts": [
       "auth/ownership"
@@ -231,42 +401,64 @@
     ],
     "skill-runtime/routes/skills-user-assign.routes.ts": [
       "auth",
-      "middlewares/validation"
+      "middlewares/validation",
+      "schemas/agents.schema"
     ],
     "skill-runtime/routes/skills.routes.ts": [
+      "agents/git-ingest/git-fetcher",
+      "agents/git-ingest/git-ingest-service",
+      "agents/git-ingest/skill-compat",
+      "agents/git-ingest/skill-rewriter",
+      "agents/manifest-validator",
       "auth",
       "auth/ownership",
       "data/models/unified-database",
       "data/user-manager",
-      "middlewares/validation"
+      "llm/client",
+      "middlewares/validation",
+      "schemas/git-ingest.schema",
+      "schemas/skills.schema"
     ],
-    "skill-runtime/skill-catalog.ts": [
-      "data/repositories/skill-repository"
+    "skill-runtime/runtime.ts": [
+      "llm/types",
+      "services/task-sandbox/tools-procedural"
+    ],
+    "skill-runtime/skill-catalog-tool.ts": [
+      "llm/types"
     ],
     "skill-runtime/skill-creator-tool.ts": [
       "data/models/unified-database",
-      "data/user-manager"
+      "data/user-manager",
+      "llm/client",
+      "tool-contract/types"
     ],
     "skill-runtime/skill-creator.ts": [
-      "data/repositories/skill-manifest-sync"
+      "llm/client",
+      "llm/types",
+      "schemas/skills.schema"
     ],
     "skill-runtime/skill-entitlement-filter.ts": [
       "services/addon/entitlement"
     ],
     "skill-runtime/skill-manager.ts": [
       "chat/slash-command",
-      "data/models/unified-database",
-      "data/repositories/skill-manifest-sync",
-      "data/repositories/skill-repository"
+      "data/models/unified-database"
     ],
     "skill-runtime/skill-seeder.ts": [
-      "data/models/unified-database",
-      "data/repositories/skill-repository"
+      "agents/system-skill-names",
+      "data/models/unified-database"
+    ],
+    "skill-runtime/skill-triggers.ts": [
+      "agents/manifest-triggers"
     ],
     "skill-runtime/skill-usage-log.ts": [
       "data/models/unified-database"
     ],
+    "video-runtime/definition.ts": [
+      "capability-contract/types"
+    ],
     "video-runtime/generate.ts": [
+      "capability-contract/types",
       "data/repositories/job-runtime-repo",
       "services/orchestrator/media-io",
       "services/orchestrator/plan-schema",

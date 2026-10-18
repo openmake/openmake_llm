@@ -26,9 +26,9 @@ import type { GitFetcher } from '../../../agents/git-ingest/git-fetcher';
 import {
     importMcpServerFromGitSchema,
     approveMcpServerDraftSchema,
-} from '../../../schemas/mcp-server-ingest.schema';
-import { McpServerIngestService } from '../../../agents/git-ingest/mcp-server-ingest-service';
-import { McpServerDraftRepository } from '../../../data/repositories/mcp-server-draft-repository';
+} from '../schemas/mcp-server-ingest.schema';
+import { McpServerIngestService } from '../ingest/mcp-server-ingest-service';
+import { McpServerDraftRepository } from '../data/mcp-server-draft-repository';
 import { getLifecycleSupervisor } from '../lifecycle-supervisor';
 import { isEnvPlaceholder } from '../../../tool-contract/env-placeholder';
 import { RL_MCP_INGEST } from '../../../config/rate-limits';

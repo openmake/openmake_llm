@@ -16,7 +16,7 @@ jest.mock('../external-client', () => ({
 }));
 
 import { MCPServerRegistry } from '../server-registry';
-import type { UnifiedDatabase } from '../../../data/models/unified-database';
+import type { McpServerRowSource } from '../data/mcp-server-repository';
 
 const makeRow = (env: Record<string, string> | null) => ({
     id: 'srv1',
@@ -34,7 +34,7 @@ const makeRow = (env: Record<string, string> | null) => ({
 
 const makeDb = (rows: unknown[]) => ({
     getGlobalMcpServers: jest.fn().mockResolvedValue(rows),
-}) as unknown as UnifiedDatabase;
+}) as unknown as McpServerRowSource;
 
 describe('server-registry env 복호화', () => {
     let registry: MCPServerRegistry;

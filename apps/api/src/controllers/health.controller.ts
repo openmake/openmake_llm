@@ -12,9 +12,21 @@ import { success } from '../utils/api-response';
 import { DB_POOL_TIMEOUTS } from '../config/timeouts';
 import { getBuildInfo } from '../config/build-id';
 import { APP_VERSION } from '../config/constants';
+import { getConfig } from '../config/env';
+import { toLocalModelTag } from '../config/model-roles';
 
 // 버전 SoT = 루트 package.json (release-please 가 bump). 여기서 재구현하지 않는다.
 const _cachedVersion = APP_VERSION;
+
+/**
+ * PURE: 기본 모델(`LLM_DEFAULT_MODEL`)이 연결된 LLM 노드의 모델 목록에 있나.
+ * 외부 provider 모델이면 여기서 판정하지 않고(null — 게이트웨이 목록은 로컬 모델 기준), 목록을 받지 못했어도 null.
+ */
+export function defaultModelListed(defaultModel: string, listed: readonly string[]): boolean | null {
+    const tag = toLocalModelTag(defaultModel.trim());
+    if (!tag || listed.length === 0) return null;
+    return listed.includes(tag);
+}
 
 /**
  * 헬스체크 및 서비스 준비 상태 컨트롤러
@@ -68,7 +80,9 @@ class HealthController {
 
     /**
      * GET /ready
-     * 서비스 준비 상태 확인 (클러스터 + DB 연결)
+     * 서비스 준비 상태 확인 — LLM 노드 연결 + DB 연결 + 기본 모델이 노드 목록에 있는지. **아무것도 쓰지 않는다**.
+     * 운영(릴리스) 환경의 배포 스모크가 채팅 대신 이것으로 연결을 확인한다(scripts/env/omk.sh) — 채팅은 대화 기록·모델 호출을
+     * 남기고, 코드 동작은 같은 커밋으로 staging 에서 이미 확인했다.
      */
     private async readinessCheck(req: Request, res: Response): Promise<void> {
         const stats = this.cluster.getStats();
@@ -91,13 +105,17 @@ class HealthController {
             if (timer) clearTimeout(timer);
         }
 
-        const isReady = clusterReady && dbReady;
+        // 기본 모델 이름·키 같은 설정 실수는 노드가 떠 있어도 채팅을 막는다 — 목록에 없다고 확인될 때만 준비 안 됨으로 본다
+        const defaultModel = getConfig().llmDefaultModel;
+        const modelListed = defaultModelListed(defaultModel, stats.uniqueModels);
+        const isReady = clusterReady && dbReady && modelListed !== false;
 
         res.status(isReady ? 200 : 503).json(success({
             ready: isReady,
             onlineNodes: stats.onlineNodes,
             totalNodes: stats.totalNodes,
             dbConnected: dbReady,
+            defaultModel: { id: defaultModel, listed: modelListed },
             timestamp: new Date().toISOString()
         }));
     }

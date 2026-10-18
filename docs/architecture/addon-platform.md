@@ -10,8 +10,10 @@
 | 발견·호환성·등록·런타임 상태·부팅 절차 | Add-on Host | `addon-host/` |
 | 상태 저장·사용권·실행 게이트 | Base(`services/addon/`) | `addon-state.ts`, `entitlement.ts`, `integration-gate.ts` |
 | 기능 구현(라우트·채팅 통합·런타임·팩 콘텐츠) | 각 add-on | `addons/<id>/`, `apps/api/addons/builtin/<id>/` |
+| MCP·스킬 저장(코어 스키마의 표 13개 — `config/addon-boundary.ts` `ADDON_OWNED_CORE_TABLES`) | `mcp-runtime`·`skill-runtime` | 표 정의는 코어 마이그레이션 그대로, SQL 은 그 add-on 안에만(§8.5·§8.7) |
+| MCP·스킬 화면(카탈로그·커넥터·승인 섹션·스킬 라이브러리·관리자 MCP·입력창 `/` 메뉴) | 같은 웹 add-on | `apps/web/addons/{mcp-runtime,skill-runtime}/`(§8.8) |
 
-Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트 `entry` 의 세 가지 — `routes`(전용 라우트), `chatIntegration`(채팅 턴 통합), `runtime`(부팅 때 호출되는 진입점) — 와 팩 콘텐츠(스킬·카탈로그·마이그레이션)뿐이다.
+Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트 `entry` 의 네 가지 — `routes`(전용 라우트), `chatIntegration`(채팅 턴 통합), `runtime`(부팅 때 호출되는 진입점), `data`(꺼져도 불러오는 데이터 모듈, §8.7) — 와 팩 콘텐츠(스킬·카탈로그·마이그레이션)뿐이다.
 
 ## 7.1 부팅 절차 (`addon-host/index.ts`)
 
@@ -108,12 +110,15 @@ Base ↔ Add-on 계약의 원천이다. **타입과 상수만** 담고 런타임
 | add-on 전용 라우트(`addonGuard`) | `checkAddonEntitlement` | 통과 | **404 `ADDON_DISABLED`** | **503 `ADDON_FAILED`**(`Retry-After` 없음 — 관리자 조치 필요) | **403 `ADDON_NOT_ENTITLED`** | **503 `ADDON_STATE_UNKNOWN`** + `Retry-After: 5` |
 | capability 실행(`admitCapability`) | `readAddonStateStrict` | ok | `ADDON_DISABLED` | `ADDON_FAILED` | (해당 없음) | `ADDON_STATE_UNKNOWN` |
 | 채팅 기능 훅 `prepareTurnContext` | `integrationGate`(→ `checkAddonEntitlement`) | 호출 | 건너뜀(info 로그) | 건너뜀(info 로그, reason `failed`) | 건너뜀(info 로그, reason `not_entitled`) | 건너뜀 |
-| 채팅 오케스트레이션 도구 `run` | `integrationGate`(→ `checkAddonEntitlement`) | 실행 | `Error: … 중지되어 실행할 수 없습니다` | `Error: … 부팅에 실패해 이 도구를 실행할 수 없습니다` | `Error: … 이 조직에서 사용할 수 없습니다(허용 목록 밖)` | `Error: … 확인할 수 없어 실행하지 않았습니다` |
+| 채팅 오케스트레이션 도구 `run` | `integrationGate`(→ `checkAddonEntitlement`) | 실행 | `Error: … 중지되어 실행할 수 없습니다` | `Error: … 이 서버에서 준비되지 않아(부팅 실패 또는 재시작 필요) 이 도구를 실행할 수 없습니다` | `Error: … 이 조직에서 사용할 수 없습니다(허용 목록 밖)` | `Error: … 확인할 수 없어 실행하지 않았습니다` |
+| 에이전트 작업 기여 도구(`agentTaskTools`) `precheck`·`run` | `integrationGate`(→ `checkAddonEntitlement`, `getActiveAgentTaskTools` 가 씌움) | 실행 | 승인 카드 없이 위와 같은 문구로 거절 | 같음 | 같음 | 같음 |
 | 팩 스킬 주입 필터 | `entitledAddonIds` | 주입 | 제외 | 제외 | 제외 | **주입 유지(fail-open)** — 선언형 콘텐츠, 피해 없음 |
 
-**판정 기준 열**: 라우트·채팅 훅 게이트의 strict 판정(`readAddonEnabledStrict`)은 `addon_installations.state`(installed·enabled·disabled·failed)를 읽어 `enabled` 가 아니면 차단한다. 그중 부팅 실패(`failed`)는 판정의 `state` 로 구분해 라우트가 503 `ADDON_FAILED`(`Retry-After` 없음 — 재시도로 풀리지 않고 관리자 조치가 필요하다)로 알리고, 웹은 '준비되지 않았습니다(부팅 실패)' 문구(`knowledge.notReady`)를 보인다. 채팅 훅은 건너뛰고 오케스트레이션 도구는 부팅 실패 문구를 돌려준다. `installed`·`disabled` 는 종전대로 404 `ADDON_DISABLED`.
+**판정 기준 열**: 라우트·채팅 훅 게이트의 strict 판정(`readAddonEnabledStrict`)은 `addon_installations.state`(installed·enabled·disabled·failed)를 읽어 `enabled` 가 아니면 차단한다. 그중 부팅 실패(`failed`)는 판정의 `state` 로 구분해 라우트가 503 `ADDON_FAILED`(`Retry-After` 없음 — 재시도로 풀리지 않고 관리자 조치가 필요하다)로 알리고, 웹은 '준비되지 않았습니다(부팅 실패)' 문구(`knowledge.notReady`)를 보인다. 채팅 훅은 건너뛰고 오케스트레이션 도구는 부팅 실패 문구를 돌려준다. `installed`·`disabled` 는 종전대로 404 `ADDON_DISABLED`. **DB 는 관리자의 의도이고, 게이트는 그 위에 이 프로세스의 준비 상태를 겹친다**(`addon-host/activation` `getAddonProcessReadiness` → `readAddonEnabledStrict`·`isAddonEnabledSync` — 외부 리뷰 A4). add-on 부팅을 한 프로세스에서 런타임 진입점이나 마이그레이션이 있는 add-on 이 `ready` 가 아니면 — 부팅 실패, 부팅 때 꺼져 있다가 나중에 켬(`not_loaded`), 껐다 켰는데 재개 실패(`stopped`) — DB 가 enabled 여도 재시작 전까지 `failed`(503 `ADDON_FAILED`, "부팅 실패 또는 재시작 필요")다. 부팅을 하지 않는 별도 worker 프로세스와 세울 것이 없는 add-on(라우트·콘텐츠만 — 실시간 토글 유지)은 DB 상태대로다.
 
 env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항상 알 수 있다).
+
+조직 축(활성 조직·멤버십·조직 정책)도 '확인 불가'에 들어간다 — 사용권 판정은 엄격 조회(`resolveEffectivePolicyStrict`)라 셋 중 하나라도 못 읽으면 `state-unknown` 이다. 다른 조직 정책 소비처(외부 모델·승인 하한·브라우저 사이트·MCP 카탈로그)는 종전대로 fail-open(`resolveEffectivePolicy` — 글로벌만 적용)이고, 실패 결과는 어느 쪽도 캐시하지 않는다.
 
 ## 8.4 채팅 훅의 분류
 
@@ -121,26 +126,31 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 |---|---|---|---|
 | `prepareTurnContext`, 오케스트레이션 도구 `run` | 기능 | **멈춘다(턴마다 `integrationGate`)** | 그 통합만 건너뜀 |
 | 순수 동기 훅 `detectIntent`·`forceIncludeTools`·`forcedFirstTurnTool`·`systemPromptParts`·`userLocationHint`·`enhancedMessagePrefix`·`mcpSelectionHint`·`extractBlocks`·`scrubFinalContent`·`preserveFromRawResult`·`agentTaskTools`·기여 도구 노출 | 기능(프롬프트·노출) | **턴마다 캐시 판정으로 건너뜀**(`getActiveChatTurnIntegrations` → `isAddonEnabledSync`, 턴 시작에 적재·TTL 30초, 첫 적재 전에만 켜짐; 조직 사용권 축은 안 봄) | 해당 없음(동기 — 적재 실패 시 마지막 값, 첫 적재 전엔 켜짐) |
-| `isMemoryIsolatedSession` | 보호 | **계속 돈다** | 격리로 간주(fail-closed) |
+| `isMemoryIsolatedSession` | 보호 | **계속 돈다** — 채팅 통합 훅과 데이터 모듈(§8.7, Knowledge 는 여기) 둘 다 본다. 데이터 모듈은 env 로 꺼도 불러온다 | 격리로 간주(fail-closed). 데이터 모듈을 불러오지 못한 add-on 이 하나라도 있으면 격리 |
 | `listHiddenSessionIds` | 표시 | 계속 돈다 | 숨김만 건너뜀(본인 목록 배치, 누출 아님) |
 
 채팅 기능 훅 게이트(`integrationGate`)는 라우트 게이트와 같은 판정(`checkAddonEntitlement` — 상태 + 조직 사용권)을 쓴다 — 조직 allowlist 밖 add-on 은 라우트 403 과 함께 채팅 기능 훅도 멈춘다(사용자가 없는 게스트 턴은 조직 축을 보지 않는다).
 
-순수 훅(`detectIntent` 등)은 동기라 턴마다 DB 를 묻지 않고 상태 캐시로 판정한다 — 관리자가 끄면(DB 의도 disabled·부팅 실패 failed·env) 캐시가 갱신된 뒤의 턴부터 프롬프트 조각·도구 노출·의도 판정이 빠진다(같은 프로세스는 다음 턴부터, 다른 워커는 TTL 뒤 첫 턴부터). 첫 적재 전(부팅 직후)에만 켜짐으로 본다(fail-open — 선언형 노출; `prepareTurnContext`·오케스트레이션 도구 실행은 `integrationGate` 가 막지만, 기여 작업 도구(`agentTaskTools`)의 `run` 에는 실행 게이트가 없다 — §10). 조직 사용권 축은 동기 훅이 보지 않으며 실행 시점(`runOrchestrationTool`·`prepareTurnContext`)의 게이트가 맡는다. 보호 훅(`isMemoryIsolatedSession`)·표시 훅(`listHiddenSessionIds`)·구 클라이언트 필드 매핑(`collectContextRefs`)은 꺼진 add-on 도 전체 목록으로 계속 돈다. 꺼진 add-on 의 기여 도구가 호출되면(`isOrchestrationTool` 은 전체 목록으로 분류) 실행 시점에서 거절 문구를 돌려준다.
+순수 훅(`detectIntent` 등)은 동기라 턴마다 DB 를 묻지 않고 상태 캐시로 판정한다 — 관리자가 끄면(DB 의도 disabled·부팅 실패 failed·env) 캐시가 갱신된 뒤의 턴부터 프롬프트 조각·도구 노출·의도 판정이 빠진다(같은 프로세스는 다음 턴부터, 다른 워커는 TTL 뒤 첫 턴부터). 첫 적재 전(부팅 직후)에만 켜짐으로 본다(fail-open — 선언형 노출; `prepareTurnContext`·오케스트레이션 도구 실행·기여 작업 도구(`agentTaskTools`)의 승인 전 검사와 실행은 `integrationGate` 가 막는다). 조직 사용권 축은 동기 훅이 보지 않으며 실행 시점(`runOrchestrationTool`·`prepareTurnContext`·`getActiveAgentTaskTools` 가 씌운 `precheck`·`run`)의 게이트가 맡는다. 기여 작업 도구의 노출은 작업을 만들 때 정해지므로, 작업 도중 add-on 을 꺼도 도구 목록에는 남고 호출이 거절된다. 보호 훅(`isMemoryIsolatedSession`)·표시 훅(`listHiddenSessionIds`)·구 클라이언트 필드 매핑(`collectContextRefs`)은 꺼진 add-on 도 전체 목록으로 계속 돈다. 꺼진 add-on 의 기여 도구가 호출되면(`isOrchestrationTool` 은 전체 목록으로 분류) 실행 시점에서 거절 문구를 돌려준다.
 
 ## 8.5 Add-on ↔ Base 경계 규칙
 
 | 규칙 | 집행 | 실패 조건 |
 |---|---|---|
 | Base 는 add-on 모듈을 import 하지 않는다 | eslint `no-restricted-imports`(`**/addons/**`, addon-host 제외) | 위반 즉시 |
+| add-on 을 모두 꺼도 Base 가 선다 | Jest `addon-host/__tests__/all-builtin-addons-off.test.ts`(env 로 내장 add-on 전부 끔 → 코드 로더 0회, 채팅 통합·모드·기여·라우트·worker 빈 결과, 미디어 capability `CAPABILITY_NOT_REGISTERED`) + `services/chat-service/__tests__/base-only-addons-off.test.ts`(채팅 경계 중립값·도구/스킬 포트·에이전트 작업 도구) | add-on 코드를 한 번이라도 불러오거나 확장점이 비지 않으면 |
+| 웹 Base 는 add-on 디렉터리(`apps/web/addons/<id>/`)를 import 하지 않는다 — `@/addons/registry`(클라이언트 확장)·`@/addons/pages`(add-on 소유 URL 화면)·`@/addons/types` 만 | `apps/web/eslint.config.mjs` `no-restricted-imports`(regex, `addons/**` 안은 제외) | 위반 즉시. add-on 화면은 Base 의 catch-all 라우트 두 개(`app/(workspace)/[...addonPath]`·관리자 영역 `app/(workspace)/admin/[...addonPath]`)가 `renderAddonPage` 로 고르고 맞는 것이 없으면 404. 확장점은 §8.8 — 링크가 등록 화면을 가리키지 않거나 경로가 Base 정적 라우트와 겹치면 `tests/web/addon-pages.test.tsx` 가 실패 |
 | 계약 패키지는 apps·외부 패키지·자기 디렉터리 밖을 import 하지 않는다 | eslint(`packages/plugin-contracts/src/**`) | 위반 즉시 |
 | apps/api 는 계약 패키지를 type-only 로만 쓴다(테스트 예외) | eslint `@typescript-eslint/no-restricted-imports` | 값 import·재수출 |
-| add-on → Base 내부 계층(data·services·routes·sockets·controllers·middlewares·auth·chat) import 는 **줄어들기만** 한다 | `npm run check:addon-boundary`(CI Gate 4), 허용 목록 `scripts/lint/addon-import-allowlist.json` | 목록 밖의 새 (파일, 대상) 쌍. 사라진 쌍은 권고만 — `npm run gen:addon-boundary` 로 목록을 줄인다 |
-| add-on 소스는 Base 테이블을 SQL 로 쓰지 않는다 | Jest `__tests__/addons-no-base-table-sql.test.ts`(테이블 목록은 코어 스키마의 CREATE TABLE) | SQL 키워드 뒤의 Base 테이블 이름. 예외(래칫): 스킬 런타임의 스킬 스키마 6개 표 |
+| add-on → Base 내부(아래 '써도 되는 문' 밖 전부)·다른 add-on import 는 **줄어들기만** 한다 | `npm run check:addon-boundary`(CI Gate 4), 허용 목록 `scripts/lint/addon-import-allowlist.json` | 목록 밖의 새 (파일, 대상) 쌍. 사라진 쌍은 권고만 — `npm run gen:addon-boundary` 로 목록을 줄인다 |
+| add-on 소스는 Base 테이블을 SQL 로 쓰지 않는다 | Jest `__tests__/addons-no-base-table-sql.test.ts`(테이블 목록은 코어 스키마의 CREATE TABLE) | SQL 키워드 뒤의 Base 테이블 이름. 소유 표(`ADDON_OWNED_CORE_TABLES`)는 그 add-on 만 쓸 수 있다 — 다른 add-on 이 쓰면 실패 |
+| Base 는 add-on 소유 표를 SQL 로 쓰지 않는다 | Jest `__tests__/base-no-addon-table-sql.test.ts`(Base 소스 전체, 테스트·평가 도구 제외) | 기대값 `{}` — 소유 표 이름이 SQL 키워드 뒤에 나오면 실패. Base 는 데이터 모듈의 훅·저장 연산(§8.7)과 런타임 포트로만 다룬다 |
 
-add-on 이 써도 되는 문은 `runtime-ports/*`(포트)·`addon-host`·`config`·`utils`·`@openmake/plugin-contracts` 다. 허용 목록·SQL 검사는 테스트(`__tests__`·`*.test.ts`)와 평가 시드 도구(`evaluation/`)를 보지 않는다. 초기 허용 목록은 141쌍/67파일(2026-10-16) — 새 import 를 목록에 더하는 diff 는 리뷰에서 거절한다.
+add-on 이 써도 되는 문은 `runtime-ports/*`(포트)·`addon-host`·`config`·`utils`·`@openmake/plugin-contracts` 다. 허용 목록·SQL 검사는 테스트(`__tests__`·`*.test.ts`)와 평가 시드 도구(`evaluation/`)를 보지 않는다. 초기 허용 목록은 141쌍/67파일(2026-10-16, 8개 계층), 범위를 Base 전체로 넓힌 뒤 267쌍/98파일(2026-10-18 동결), MCP·스킬 저장 이전 뒤 253쌍/107파일(같은 날 — 옮긴 코드가 쓰는 DB 접근은 `runtime-ports/db-access` 로) — 새 import 를 목록에 더하는 diff 는 리뷰에서 거절한다.
 
-ratchet 은 `BASE_LAYERS`(`scripts/lint/addon-boundary-lib.mjs`) 8개 디렉터리 — `data`·`services`·`routes`·`sockets`·`controllers`·`middlewares`·`auth`·`chat` — 로 가는 import 만 센다. `tools/`·`agents/`·`llm/`·`security/`·`workflow/` 등 그 밖의 Base 디렉터리로 가는 import 는 세지 않으며, 범위 확장은 2차 후보다.
+ratchet 은 `ADDON_GATEWAYS`(`scripts/lint/addon-boundary-lib.mjs` — `runtime-ports`·`addon-host`·`config`·`utils`·`types`) 밖의 `apps/api/src` 전부와 다른 add-on 으로 가는 import 를 센다(2026-10-18 확장 — 종전 8개 계층만 세어 `tool-contract`·`llm`·`tools`·`agents` 등 126쌍이 보이지 않았다). 같은 add-on 안은 세지 않는다. `tool-contract`·`capability-contract` 는 Base 의 계약 계층이지만 add-on 문으로 열지 않고 동결해 두었다 — 포트·계약 패키지로 옮겨 가며 줄인다.
+
+공용 패키지 소스(`packages/*/src`)와 웹 번역 파일(`apps/web/messages`)의 add-on 고유 이름(`ADDON_SPECIFIC_NAME_PATTERNS`) 줄 수는 `SHARED_ASSET_ADDON_NAME_BASELINE`(`config/addon-boundary.ts`)에 파일별로 동결하고 `addon-boundary.test.ts` 가 같은지 본다(구 클라이언트 WS 계약·add-on 화면 문구 — 늘면 실패, 줄면 동결값도 낮춘다).
 
 ## 8.6 Base 데이터 포트 (`runtime-ports/base-data-port.ts`)
 
@@ -159,6 +169,40 @@ Knowledge 는 바인딩(연결·해제·해석·사이드바 숨김)과 Space �
 
 **DB 테스트**: `*.db.test.ts` 는 `TEST_DATABASE_URL` 이 있을 때만 돈다. CI 는 Gate 1.5 에서 job 안의 일회용 PostgreSQL(`pgvector/pgvector:0.8.3-pg16-trixie`)에 `scripts/setup-test-db.sh` 로 코어+add-on 마이그레이션을 적용하고 `npm run test:db` 로 그 파일들만 `--runInBand` 로 돌린다 — 마지막 줄 `db tests ran: N` 이 0 이면(전부 skip) 실패다. 로컬도 같은 두 명령이다. CI 에서 실제로 도는 DB 테스트는 `*.db.test.ts` 뿐이다 — `TEST_DATABASE_URL||DATABASE_URL` 로 게이트된 다른 테스트 7개(027_mcp_server_draft·128_org_scoped_sharing·mcp-catalog-repository.metrics·mcp-server-draft-repository·mcp-catalog-admin.routes·mcp-server-ingest.routes·mcp-server-ingest-service)는 이름 변경(`*.db.test.ts`)이 후속이다.
 
+## 8.7 데이터 모듈(`entry.data`)과 구성요소 저장
+
+기능을 꺼도 그 add-on 이 소유한 표의 데이터는 남는다. 그래서 사용자 데이터 의무와 확장 플랫폼의 구성요소 연산은 런타임이 아니라 **데이터 모듈**이 맡고, 호스트는 이 모듈만은 env·DB 로 꺼진 add-on 도 불러온다(`addon-host/addon-data.ts` `getAddonDataModules()`, 매니페스트 `entry.data`). 모듈은 런타임·외부 연결 없이 SQL 만 쓴다. 계약은 `runtime-ports/addon-data.ts` `AddonDataModule`.
+
+| 훅 | 부르는 곳(Base) | 실패 처리 |
+|---|---|---|
+| `exportUserData(userId)` | 내보내기 `export.controller`(`collectAddonUserData`) — 키가 응답 최상위 키, 개수는 `_meta.counts` | 그 add-on 을 `_meta.failedCategories` 에 `addon:<id>` 로 싣고 나머지는 내보낸다 |
+| `onUserDelete(tx, userId)` | `UserManager.deleteUser` 트랜잭션 안 | **fail-closed** — 던지거나 모듈을 불러오지 못했으면 사용자 삭제 전체를 되돌린다 |
+| `isMemoryIsolatedSession(userId, sessionId)` | `isSessionMemoryIsolated`(전역 메모리 쓰기 전) | 격리로 간주(§8.4) |
+| `retention[]` | `data/db-retention.ts` 주기 정리 | 그 작업만 건너뛴다 |
+| `stores` | 확장 플랫폼(아래) | `ComponentStoreUnavailableError` |
+
+현재 모듈: `skill-runtime`(내보내기 — `skillManifests`·`agentSkills`, 삭제 — 사용자 스킬 삭제 + 그 사용자 manifest 공개 해제(FK `SET NULL` 이 system 소유로 바꿔 남에게 노출되는 것을 막는다)), `mcp-runtime`(보존 — 인스턴스 이력 정리), `knowledge-runtime`(메모리 격리 — Space 에 연결된 대화). 스킬·MCP 는 `stores` 도 준다.
+
+**구성요소 저장**(`runtime-ports/component-stores.ts`): Base 확장 플랫폼(Git·에이전트 설치, 확장 수명주기·권한, 마켓 게시, 팩 카탈로그 설치)은 스킬·MCP 서버 행을 `getComponentStore('skills' | 'mcpServers', db)` 로 받은 연산으로 다룬다. 저장 연산은 **호출자가 넘긴 DB 연결에 묶이는 팩토리**라 풀이든 트랜잭션 클라이언트든 같은 SQL 이 그 연결로 나간다(트랜잭션 범위·테스트 주입이 종전과 같다). 그 종류를 저장하는 add-on 이 빌드에 없거나 데이터 모듈을 불러오지 못했으면 `ComponentStoreUnavailableError` 다. 런타임 기능(MCP 연결, 스킬 주입·절차 스킬 블록, 템플릿으로 사용자 서버 찾기)은 종전대로 `runtime-ports/tool-runtime.ts`·`skill-runtime.ts` 포트다. add-on 이 Base 의 DB 접근(재시도 래퍼·트랜잭션·`BaseRepository`)을 쓸 때는 `runtime-ports/db-access.ts` 를 거친다.
+
+add-on 을 모두 꺼도 데이터 모듈 로드만 허용된다 — `all-builtin-addons-off.test.ts` 는 코드 로더 호출을 데이터 모듈 진입점으로만 제한한다.
+
+## 8.8 웹 확장점 (`apps/web/addons/types.ts`)
+
+Base 화면은 켜진 add-on(`useEnabledWebAddons` — `GET /api/addons`, 조회 실패·로딩 중엔 전부 켜짐)의 확장만 순회한다. Base 항목은 10 단위 순서 값이고 add-on 은 그 사이 값으로 끼운다.
+
+| 확장점 | Base 소비처 | 지금 쓰는 add-on |
+|---|---|---|
+| `hubTabs` | `components/hub-tabs.tsx`(history·agents·developer·admin 허브) | 딥리서치 `/research` · 스킬 `/skill-library` · MCP `/admin/mcp-monitoring`·`/admin/mcp-catalog` |
+| `approvalSections`(+ `countPending`) | `/approvals` 섹션 · 사이드바 승인 배지 합산 | 스킬 draft(20) · MCP 서버 draft(30) — Base 는 에이전트 작업(10)·Custom Agent(40) |
+| `settingsTabs`(`ownsSaving` 이면 공용 저장 버튼을 숨긴다) | `/settings` 탭 — 모르는·꺼진 탭은 일반 탭으로 연다 | MCP 커넥터(65) |
+| `adminQuickLinks` | `/admin` 바로가기 | MCP 카탈로그(5) |
+| `slashMenu`(첫 번째 것만) | 입력창 `/` 메뉴 — 감지·디바운스·키보드 이동은 Base, 후보·정렬·삽입 텍스트·전체 보기·표시는 add-on. 없으면 메뉴가 뜨지 않는다 | 스킬(`/<slug> ` 삽입) |
+| `messageBlocks`·`composerContext`·`chatMode`·`settingsGroups`·`apiKeyScopePresets`·`sidebarSections`·`chatContextBanners` | 메시지 렌더·컴포저·관리자 시스템 설정·API 키·사이드바·대화 배너 | 지도·노트북·디스코드·토론·딥리서치·Knowledge |
+| 화면 `WebAddonPage`(`addons/pages.ts`, `area: workspace \| admin`) | catch-all 라우트 두 개 — admin 은 관리자 가드 레이아웃 안 | `/knowledge`·`/research`·`/skill-library`·`/mcp-catalog`(+ 구 딥링크 `/mcp-servers`·`/mcp-monitoring` 리다이렉트) · `/admin/mcp-catalog`·`/admin/mcp-monitoring` |
+
+관리자 영역의 없는 경로는 응답 상태가 200 이다 — 가드 레이아웃이 클라이언트 컴포넌트라 SSR 에서 children 을 그리지 않아, notFound 신호가 인증 확인 뒤 클라이언트에서 not-found 화면으로 드러난다(비관리자는 가드 안내만 본다).
+
 ## 9. Knowledge 작업 큐 (`addons/knowledge-runtime/jobs/`)
 
 ### 9.1 lease·fencing
@@ -169,13 +213,13 @@ claim 은 `UPDATE … fencing_token = fencing_token + 1 … FOR UPDATE SKIP LOCK
 
 | 접수 지점 | actor | claim 때 재검사 |
 |---|---|---|
-| 문서 업로드·재시도 | 개인 Space `user` / 조직 Space `org`(조직 id) | 상태 + 조직 사용권(`checkUserEntitlement`) |
+| 문서 업로드·재시도 | 개인 Space `user` / 조직 Space `org`(조직 id) | 상태 + 조직 사용권(`checkUserEntitlement`) — `user` 는 접수자의 지금 활성 조직, `org` 는 **저장된 조직**(그 조직 멤버인지 + 그 조직 허용 목록, 조직 id 가 없으면 `missing-org` 거절) |
 | 관리자 재색인·재청킹 | 그 관리자 `user` | 같음 |
 | 문서·Space 삭제의 정리(cleanup) | `system`(요청자는 기록용) | add-on 단위 게이트만 |
 | 평가 하네스 | `system` | add-on 단위 게이트만 |
 | 004 이전 행(actor NULL) | `system` 으로 본다 | add-on 단위 게이트만 |
 
-접수 때 `policy_revision`(그 시점 `addon_installations.state_revision`, 조회 실패면 NULL)을 함께 남긴다 — 추적용이며 판정은 claim 때 늘 다시 한다. tick 은 먼저 add-on 단위 strict 판정(`readAddonRunVerdict` — 꺼짐·실패·env 차단은 stopped, 조회 실패는 unknown)을 보고 run 이 아니면 그 tick 은 집지 않는다. 집은 사용자·조직 작업의 판정: `ok` 실행, `not-entitled` 최종 실패(작업 `failed`, 문서 버전 `ADDON_NOT_ENTITLED`), `disabled`·`failed`·`state-unknown` 보류(queued 로 되돌리고 attempts −1, `KNOWLEDGE_JOB_ADMISSION_DEFER_MS` 뒤). add-on 은 이 판정을 `runtime-ports/addon-admission` 으로만 묻는다.
+접수 때 `policy_revision`(그 시점 `addon_installations.state_revision`, 조회 실패면 NULL)을 함께 남긴다 — 추적용이며 판정은 claim 때 늘 다시 한다. tick 은 먼저 add-on 단위 strict 판정(`readAddonRunVerdict` — 꺼짐·실패·env 차단은 stopped, 조회 실패는 unknown)을 보고 run 이 아니면 그 tick 은 집지 않는다. 조직 작업은 접수자가 그 뒤 활성 조직을 바꿔도 기준이 바뀌지 않는다(외부 리뷰 A3 — 종전엔 사용자 id 만 넘겨 지금 활성 조직의 정책이 적용됐다). 집은 사용자·조직 작업의 판정: `ok` 실행, `not-entitled`(조직을 떠난 경우 포함) 최종 실패(작업 `failed`, 문서 버전 `ADDON_NOT_ENTITLED`), `disabled`·`failed`·`state-unknown` 보류(queued 로 되돌리고 attempts −1, `KNOWLEDGE_JOB_ADMISSION_DEFER_MS` 뒤). add-on 은 이 판정을 `runtime-ports/addon-admission` 으로만 묻는다.
 
 ### 9.3 취소
 
@@ -199,7 +243,7 @@ PM2 앱 `openmake-knowledge-worker`(`apps/api/dist/workers/knowledge-worker.js`)
 
 ## 10. 범위 밖(다음 묶음)
 
-manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트·작업 도중 토글 반영(2차), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), add-on → Base 내부 import 의 전수 이전(ratchet 으로 줄여 간다 — §8.5), 대화 세션 밖의 Base 테이블 포트(필요해질 때), 물리 SQL 권한 격리.
+manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트(→ §8.3·8.4 에서 구현 — 작업 도중 토글은 호출 거절로 반영, 도구 목록에서 빼지는 않는다), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), add-on → Base 내부 import 의 전수 이전(ratchet 으로 줄여 간다 — §8.5), 대화 세션 밖의 Base 테이블 포트(필요해질 때), 물리 SQL 권한 격리.
 
 ## 11. 설치형 확장의 권한 상태 (`user_extensions.permission_state`, 마이그레이션 190)
 
@@ -233,11 +277,11 @@ manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기�
 
 | 경로 | actor | 판정 함수 | 실행 주체 | 중지 방법 | 보호 훅 |
 |---|---|---|---|---|---|
-| add-on 전용 HTTP 라우트(매니페스트 `routes` 로 건 모든 경로 — 예 `/api/knowledge/*`) | user(쿠키·Bearer), 조직 사용권은 user 의 활성 조직 | `addonGuard` → `checkAddonEntitlement`(strict DB 판정) — 404 `ADDON_DISABLED`·503 `ADDON_FAILED`·403 `ADDON_NOT_ENTITLED`·503 `ADDON_STATE_UNKNOWN` | API 프로세스(요청 처리) | 토글 저장 직후 다음 요청부터 거절(같은 프로세스·다른 프로세스 모두 — 라우트 판정은 캐시를 쓰지 않는다) | 없음(라우트 자체가 소유권 검사 — `resolveUserId`) |
+| add-on 전용 HTTP 라우트(매니페스트 `routes` 로 건 모든 경로 — 예 `/api/knowledge/*`) | user(쿠키·Bearer), 조직 사용권은 user 의 활성 조직 | `addonGuard` → `checkAddonEntitlement`(strict DB 판정) — 404 `ADDON_DISABLED`·503 `ADDON_FAILED`·403 `ADDON_NOT_ENTITLED`·503 `ADDON_STATE_UNKNOWN` | API 프로세스(요청 처리) | 토글을 저장한 프로세스는 다음 요청부터 거절(쓰기가 상태 캐시를 비운다), 다른 프로세스는 상태 캐시 TTL(`ADDON_STATE_CACHE_TTL_MS`, 기본 30초) 안에 — 라우트 판정은 strict(조회 실패를 켜짐으로 읽지 않는다)지만 TTL 캐시를 쓴다. 조직 허용 목록 변경은 조직 캐시(`ORG_CONTEXT_CACHE_TTL_MS`, 기본 60초) 뒤 | 없음(라우트 자체가 소유권 검사 — `resolveUserId`) |
 | `/api/v1/*`(API 키) | user(API 키 소유자) | `requireApiKey`·`requireScope` → 채팅이면 아래 "채팅 턴" 행과 같은 파이프라인 | API 프로세스 | 키 폐기·scope 축소는 다음 요청부터. add-on 기능은 채팅 턴 행과 같다 | 채팅 턴 행과 같다 |
 | 채팅 턴 — WS(`sockets/ws-chat-handler.ts`)·REST(`/api/chat`) 공통 `runMessagePipeline` | user 또는 guest | 기능 훅 `prepareTurnContext`: 턴마다 `integrationGate`(→ `checkAddonEntitlement`). 순수 동기 훅: `isAddonEnabledSync`(턴 시작 `ensureAddonStates` 적재, TTL `ADDON_STATE_CACHE_TTL_MS`) | API 프로세스 | 기능 훅은 다음 턴부터 건너뜀. 동기 훅은 캐시 갱신 뒤 턴부터. 진행 중 턴은 끝까지 가거나 사용자의 `abort` 로 멈춘다 | `isSessionMemoryIsolated`(Space 연결 대화는 전역 메모리 미기록, 판정 실패 시 격리 — fail-closed), `listHiddenSessionIds` |
 | 채팅 오케스트레이션 도구 `run`(매니페스트 기여 도구) | user | `runOrchestrationTool` → `integrationGate` — 거절 문구 `Error: add-on '<id>' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다`(부팅 실패·조직 밖·확인 불가 문구는 §8.3) | API 프로세스 | 실행 시점 거절(노출은 동기 훅 캐시로 빠짐) | 없음 |
-| 기여 작업 도구(`agentTaskTools`) | user(작업 소유자) | 실행 게이트 없음 — 노출만 동기 훅 캐시로 막는다(§8.4) | 에이전트 작업 실행기(API 프로세스) | 작업 취소(`POST /api/agent-tasks/:taskId/cancel`) · graceful-shutdown 의 작업 drain(`AGENT_TASK_DRAIN_TIMEOUT_MS`) | 없음 |
+| 기여 작업 도구(`agentTaskTools`) | user(작업 소유자) | 노출은 동기 훅 캐시, 승인 전 검사·실행은 호출마다 `integrationGate`(§8.3·8.4) | 에이전트 작업 실행기(API 프로세스) | 작업 취소(`POST /api/agent-tasks/:taskId/cancel`) · graceful-shutdown 의 작업 drain(`AGENT_TASK_DRAIN_TIMEOUT_MS`) | 없음 |
 | 팩 스킬 주입(선언형 콘텐츠) | user | `entitledAddonIds` — 확인 불가 시 주입 유지(fail-open, 선언형이라 피해 없음) | API 프로세스(프롬프트 구성) | 다음 턴부터 제외 | 없음 |
 | 스킬 시드(부팅) | system | 부팅 ⑤ 진입점, `host.signal`(시작 시간 제한 `ADDON_START_TIMEOUT_MS`) | API 프로세스(부팅) | `host.signal` 끊김 → 시드 중단. 관리자 토글은 재시작 필요(Skill Runtime 은 handle 없음) | 없음 |
 | MCP 도구(외부 서버·stdio child) | user(서버 소유자) | MCP add-on 상태(라우트·capability 판정) + 설치형 확장 권한 상태(`allowsNetwork` — `legacy_unreviewed` 는 기존 허용 유지, `review_required` 는 초과분 거절, §11) | API 프로세스의 MCP supervisor(외부 연결·child) | 관리자 disabled → handle.stop = `mcpToolRuntime.shutdown()`. 재개 없음(재시작). 포트 등록·supervisor 타이머는 재시작까지 남는다(§7.3) | 권한 상태 초과분 차단 |

@@ -857,6 +857,17 @@ sync_caddyfile() {
 #     (--no-migrate 로 분리 배포하거나, 마이그레이션 자체를 되돌리려면 db/migrations/rollbacks/ 참고).
 #   - 카나리 헬스체크 프로세스도 같은 DATABASE_URL/REDIS_URL 을 공유한다 — 부작용 없는
 #     엔드포인트(/health)만 확인하고 즉시 종료한다.
+# 롤백 스냅샷에 담는 빌드 산출물 — API·웹 + workspace 패키지(packages/*/dist). 패키지 산출물을 빼면 롤백 뒤
+# 예전 API 가 새 빌드의 @openmake/config 등을 불러 두 버전이 섞인다. npm run build 가 셋 다 다시 만든다.
+canary_artifact_dirs() {
+    local d
+    for d in apps/api/dist apps/web/.next "$SCRIPT_DIR"/packages/*/dist; do
+        d="${d#"$SCRIPT_DIR"/}"
+        [[ -d "$SCRIPT_DIR/$d" ]] && printf '%s\n' "$d"
+    done
+    return 0
+}
+
 canary_backup_dist() {
     mkdir -p "$CANARY_RELEASE_DIR"
     local has_backend=0 has_frontend=0
@@ -873,8 +884,8 @@ canary_backup_dist() {
     out="$CANARY_RELEASE_DIR/pre-canary-${ts}-${sha}.tar.gz"
     log_info "롤백용 백업 생성: $out"
     local -a targets=()
-    [[ "$has_backend" -eq 1 ]] && targets+=("apps/api/dist")
-    [[ "$has_frontend" -eq 1 ]] && targets+=("apps/web/.next")
+    local d
+    while IFS= read -r d; do targets+=("$d"); done < <(canary_artifact_dirs)
     ( cd "$SCRIPT_DIR" && tar -czf "$out" "${targets[@]}" ) || {
         log_err "빌드 산출물 백업 실패 — canary-deploy 중단"; return 2;
     }
@@ -901,7 +912,14 @@ canary_restore_dist() {
         return 2
     fi
     log_warn "이전 빌드로 롤백: $CANARY_BACKUP_FILE"
-    rm -rf "$SCRIPT_DIR/apps/api/dist" "$SCRIPT_DIR/apps/web/.next"
+    # 스냅샷에 든 산출물 디렉터리만 지우고 푼다 — 패키지 산출물이 없는 옛 스냅샷으로 지금 packages/*/dist 를 지우지 않게.
+    # 목록은 산출물 자리(apps/api/dist·apps/web/.next·packages/<이름>/dist)로만 받는다.
+    local d
+    while IFS= read -r d; do
+        case "$d" in
+            apps/api/dist|apps/web/.next|packages/*/dist) rm -rf "${SCRIPT_DIR:?}/$d" ;;
+        esac
+    done < <(tar -tzf "$CANARY_BACKUP_FILE" 2>/dev/null | awk -F/ 'NF >= 3 && $3 != "" { print $1 "/" $2 "/" $3 }' | sort -u)
     ( cd "$SCRIPT_DIR" && tar -xzf "$CANARY_BACKUP_FILE" ) || {
         log_err "백업 압축 해제 실패 — 수동 복구 필요: $CANARY_BACKUP_FILE"
         return 2
@@ -1015,7 +1033,7 @@ cmd_canary_deploy() {
     if [[ "$CANARY_DRY_RUN" -eq 1 ]]; then
         log_info "[dry-run] 순서만 출력하고 아무 것도 실행하지 않습니다."
         cat <<EOF
-  1) 백업: $CANARY_RELEASE_DIR/pre-canary-<timestamp>-<sha>.tar.gz (기존 apps/api/dist, apps/web/.next)
+  1) 백업: $CANARY_RELEASE_DIR/pre-canary-<timestamp>-<sha>.tar.gz (기존 apps/api/dist, apps/web/.next, packages/*/dist)
   2) 빌드: npm run build (--no-restart)
   3) 마이그레이션: $([[ "$DEPLOY_NO_MIGRATE" -eq 1 ]] && echo "생략(--no-migrate)" || echo "cli.ts migrate")
   4) 카나리 헬스체크: http://127.0.0.1:$CANARY_HEALTH_PORT/health (최대 $((CANARY_HEALTH_RETRIES * CANARY_HEALTH_INTERVAL))s)

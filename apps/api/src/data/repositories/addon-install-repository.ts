@@ -7,19 +7,11 @@
  * @module data/repositories/addon-install-repository
  */
 import type { Pool } from 'pg';
+import { getComponentStore } from '../../addon-host/addon-data';
+import type { CatalogTemplateInstall } from '../../runtime-ports/component-stores';
 
-export interface CatalogTemplateInstall {
-    id: string;
-    displayName: string;
-    description: string;
-    transportType: 'stdio' | 'streamable-http';
-    commandTemplate?: string;
-    urlTemplate?: string;
-    argsSchema: Record<string, unknown>;
-    envSchema: Record<string, unknown>;
-    toolAllowlist?: string[];
-    defaultEnabled: boolean;
-}
+// 템플릿 모양은 구성요소 저장 계약에 있다(카탈로그 테이블은 MCP add-on 소유)
+export type { CatalogTemplateInstall } from '../../runtime-ports/component-stores';
 
 export class AddonInstallRepository {
     constructor(private pool: Pool) {}
@@ -38,20 +30,8 @@ export class AddonInstallRepository {
                 await client.query('ROLLBACK');
                 return false;
             }
-            await client.query(
-                `INSERT INTO mcp_server_catalog
-                   (id, display_name, description, transport_type, command_template, url_template,
-                    args_schema, env_schema, tool_allowlist, is_enabled)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10)
-                 ON CONFLICT (id) DO NOTHING`,
-                [
-                    template.id, template.displayName, template.description, template.transportType,
-                    template.commandTemplate ?? null, template.urlTemplate ?? null,
-                    JSON.stringify(template.argsSchema), JSON.stringify(template.envSchema),
-                    template.toolAllowlist ? JSON.stringify(template.toolAllowlist) : null,
-                    template.defaultEnabled,
-                ],
-            );
+            // 카탈로그 테이블은 MCP add-on 소유 — 데이터 모듈의 저장 연산으로, 같은 트랜잭션 안에서(이력 claim 과 함께 커밋·롤백)
+            await getComponentStore('mcpServers', client).installCatalogTemplate(template);
             await client.query('COMMIT');
             return true;
         } catch (err) {

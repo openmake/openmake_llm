@@ -45,7 +45,10 @@ describe('사용권·revision·캐시', () => {
     it('checkUserEntitlement 는 라우트 게이트와 같은 판정에 그대로 위임한다', async () => {
         checkAddonEntitlement.mockResolvedValue('not-entitled');
         await expect(checkUserEntitlement('sample-addon', 'u-1')).resolves.toBe('not-entitled');
-        expect(checkAddonEntitlement).toHaveBeenCalledWith('sample-addon', 'u-1');
+        expect(checkAddonEntitlement).toHaveBeenCalledWith('sample-addon', 'u-1', undefined);
+        // 조직 자원 작업은 저장된 조직을 그대로 넘긴다
+        await checkUserEntitlement('sample-addon', 'u-1', { orgId: 'org-a' });
+        expect(checkAddonEntitlement).toHaveBeenLastCalledWith('sample-addon', 'u-1', { orgId: 'org-a' });
     });
 
     it('readAddonStateRevision 은 아는 값이면 숫자, 조회 실패면 null', async () => {

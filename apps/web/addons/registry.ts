@@ -1,5 +1,6 @@
 /**
- * 웹 add-on 레지스트리 — 이 빌드에 포함된 add-on UI 확장. Base 는 여기만 import 한다.
+ * 웹 add-on 레지스트리 — 이 빌드에 포함된 add-on UI 확장. Base 는 여기와 화면 레지스트리(`pages.ts`)·계약(`types.ts`)만
+ * import 한다(eslint `no-restricted-imports` 가 강제). add-on 이 소유한 URL 화면은 `pages.ts` 에 등록한다.
  * 서버에서 꺼진 add-on(`GET /api/addons` 의 enabled=false)은 `useEnabledWebAddons` 가 걸러 낸다.
  */
 import { useMemo } from "react";
@@ -10,10 +11,14 @@ import { discordAddon } from "./discord";
 import { discussionAddon } from "./discussion";
 import { kakaoMapAddon } from "./kakao-map";
 import { knowledgeAddon } from "./knowledge";
+import { mcpRuntimeAddon } from "./mcp-runtime";
 import { notebooklmAddon } from "./notebooklm";
+import { skillRuntimeAddon } from "./skill-runtime";
 import type { WebAddon } from "./types";
 
-export const WEB_ADDONS: readonly WebAddon[] = [kakaoMapAddon, notebooklmAddon, discordAddon, discussionAddon, deepResearchAddon, knowledgeAddon];
+export const WEB_ADDONS: readonly WebAddon[] = [
+  kakaoMapAddon, notebooklmAddon, discordAddon, discussionAddon, deepResearchAddon, knowledgeAddon, skillRuntimeAddon, mcpRuntimeAddon,
+];
 
 /** 채팅 모드를 가진 add-on — 소켓 훅처럼 React 밖에서 진행 이벤트를 매핑할 때 쓴다(꺼진 add-on 은 이벤트를 보내지 않는다) */
 export const WEB_CHAT_MODES = WEB_ADDONS.flatMap((a) => (a.chatMode ? [{ id: a.id, ...a.chatMode }] : []));

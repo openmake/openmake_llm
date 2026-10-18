@@ -16,6 +16,7 @@
  * - 싱글톤 접근: getUserManager()
  */
 
+import { getAddonDataModules } from '../addon-host/addon-data';
 import * as bcrypt from 'bcryptjs';
 import { getPool } from './models/unified-database';
 import { getConfig } from '../config/env';
@@ -454,22 +455,16 @@ class UserManagerImpl {
         try {
             await client.query('BEGIN');
 
-            // ── 1. 커스텀 에이전트 및 스킬 정리 ──
+            // ── 1. 커스텀 에이전트 정리 ──
             await client.query('DELETE FROM custom_agents WHERE created_by = $1', [userId]);
-            await client.query('DELETE FROM agent_skills WHERE created_by = $1', [userId]);
 
-            // ── 1-a. [GDPR Phase A Fix 1] skill_manifests system 전환 차단 ──
-            // skill_manifests.created_by FK 는 ON DELETE SET NULL 정책 — 사용자 삭제 시
-            // manifest 가 system 소유 (created_by=NULL) 로 자동 전환되어 다른 사용자에게
-            // implicit grant 됨 (memory: project_users_fk_cascade_policy.md 의 NULL=system 시맨틱).
-            // 사용자가 사전 동의 없이 본인 manifest 가 공유되는 것을 차단하기 위해 SET NULL
-            // 자동 발동 직전에 is_public=false 강제. is_public=false + created_by=NULL 인
-            // manifest 는 searchSkills 필터에서 어떤 사용자에게도 노출 안 됨 (사실상 dead row).
-            // 운영자 의도적 system manifest (Phase A 시작 시점부터 새로 생성된 것) 는 영향 없음.
-            await client.query(
-                'UPDATE skill_manifests SET is_public = FALSE WHERE created_by = $1 AND is_public = TRUE',
-                [userId],
-            );
+            // ── 1-a. add-on 데이터 의무 — add-on 이 소유한 테이블의 정리(예: 스킬의 GDPR 비공개 전환)는 그 add-on 이 하고,
+            // 꺼진 add-on 도 호스트가 불러온다. 모듈을 불러오지 못했거나 정리가 실패하면 삭제 전체를 되돌린다(fail-closed —
+            // 정리 없이 사용자 행만 지우면 FK SET NULL 로 남의 데이터가 system 소유로 바뀔 수 있다).
+            for (const { addonId, data, error } of getAddonDataModules()) {
+                if (error) throw new Error(`add-on '${addonId}' 데이터 모듈을 불러오지 못해 사용자 삭제를 중단합니다: ${error}`);
+                await data?.onUserDelete?.(client, userId);
+            }
 
             // ── 2. 사용자 데이터 정리 ──
             await client.query('DELETE FROM user_memories WHERE user_id = $1', [userId]);

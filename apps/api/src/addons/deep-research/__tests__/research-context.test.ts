@@ -12,7 +12,7 @@ const selectToolsMock = jest.fn();
 
 jest.mock('../../../runtime-ports/skill-runtime', () => ({
     ...jest.requireActual('../../../runtime-ports/skill-runtime'),
-    getSkillRuntime: () => ({ buildManifestPrompt: buildManifestPromptMock }),
+    getSkillRuntime: () => ({ buildProceduralSkillBlock: async () => '', proceduralHooks: () => undefined, buildManifestPrompt: buildManifestPromptMock }),
 }));
 jest.mock('../../../runtime-ports/tool-runtime', () => ({
     ...jest.requireActual('../../../runtime-ports/tool-runtime'),

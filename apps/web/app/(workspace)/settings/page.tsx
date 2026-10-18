@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
@@ -10,7 +10,6 @@ import {
   Brain,
   Palette,
   Bell,
-  Server,
   ShieldCheck,
   Save,
   Loader2,
@@ -40,22 +39,20 @@ import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale, toBcp47 } from "@/i18n/
 import { ModelPicker } from "@/components/model-picker";
 import { MemorySection } from "@/components/settings/memory-section";
 import { OrganizationSection } from "@/components/settings/organization-section";
-import { ConnectorsSection } from "@/components/settings/connectors-section";
 import { ProviderKeysSection } from "@/components/settings/provider-keys-section";
 import { ModelAssignmentsSection } from "@/components/settings/model-assignments-section";
 import { ExtensionsSection } from "@/components/settings/extensions-section";
+import { useEnabledWebAddons } from "@/addons/registry";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
-type TabId = "general" | "model" | "interface" | "notifications" | "memory" | "extensions" | "connectors" | "privacy" | "security";
-
-const TABS: { id: TabId; labelKey: string; icon: LucideIcon }[] = [
+/** Base 탭 — 순서 값은 10 단위(일반 10 … 보안 80). 켜진 add-on 의 탭(`settingsTabs`)은 그 사이 값으로 끼운다 */
+const BASE_TABS: { id: string; labelKey: string; icon: LucideIcon }[] = [
   { id: "general", labelKey: "tabs.general", icon: Settings },
   { id: "model", labelKey: "tabs.model", icon: Bot },
   { id: "interface", labelKey: "tabs.interface", icon: Palette },
   { id: "notifications", labelKey: "tabs.notifications", icon: Bell },
   { id: "memory", labelKey: "tabs.memory", icon: Brain },
   { id: "extensions", labelKey: "tabs.extensions", icon: Package },
-  { id: "connectors", labelKey: "tabs.connectors", icon: Server },
   { id: "privacy", labelKey: "tabs.privacy", icon: ShieldCheck },
   { id: "security", labelKey: "tabs.security", icon: ShieldCheck },
 ];
@@ -190,14 +187,28 @@ export default function SettingsPage() {
   // /memory·/api-keys 흡수(2026-07-11): 구 라우트 redirect 가 ?tab= 으로 진입한다.
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  const [tab, setTab] = useState<TabId>(
-    TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "general",
+  const tRoot = useTranslations();
+  const enabledAddons = useEnabledWebAddons();
+  const addonTabs = useMemo(() => enabledAddons.flatMap((a) => a.settingsTabs ?? []), [enabledAddons]);
+  const tabs = useMemo(
+    () =>
+      [
+        ...BASE_TABS.map((t, i) => ({ id: t.id, label: tSettings(t.labelKey), icon: t.icon, order: (i + 1) * 10 })),
+        ...addonTabs.map((t) => ({ id: t.id, label: tRoot(t.labelKey), icon: t.Icon, order: t.order })),
+      ].sort((a, b) => a.order - b.order),
+    [addonTabs, tSettings, tRoot],
   );
+  const [tab, setTab] = useState<string>(tabParam ?? "general");
   // 뒤로가기/앞으로가기로 ?tab= 이 바뀌면 상태 동기화 (탭 클릭은 selectTab 이 URL 에 반영)
   useEffect(() => {
     const p = searchParams.get("tab");
-    if (p && TABS.some((t) => t.id === p)) setTab(p as TabId);
+    if (p) setTab(p);
   }, [searchParams]);
+  // 모르는 탭(꺼진 add-on 의 탭 포함)은 일반 탭으로 연다
+  const activeTab = tabs.some((t) => t.id === tab) ? tab : "general";
+  const addonTab = addonTabs.find((t) => t.id === activeTab);
+  // 행 단위로 즉시 저장하는 탭은 공용 저장 버튼이 그 탭의 내용을 저장하지 않아 숨긴다
+  const tabOwnsSaving = addonTab?.ownsSaving ?? false;
 
   // 일반 / 모델
   const selectedModel = useAppStore((s) => s.selectedModel);
@@ -521,14 +532,13 @@ export default function SettingsPage() {
         description={tSettings("pageDescription")}
         actions={
           <div className="flex items-center gap-3">
-            {loadFailed && tab !== "connectors" && (
+            {loadFailed && !tabOwnsSaving && (
               <span className="text-xs text-danger">{tSettings("loadFailedSaveBlocked")}</span>
             )}
             {savedAt && (
               <span className="text-xs text-muted">{tSettings("savedAt", { time: savedAt })}</span>
             )}
-            {/* 커넥터 탭은 행별 버튼이 즉시 저장한다 — 이 버튼은 그 탭의 내용을 저장하지 않아 숨긴다 */}
-            {tab !== "connectors" && (
+            {!tabOwnsSaving && (
               <Button onClick={handleSave} disabled={saving || loading || loadFailed}>
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -545,9 +555,9 @@ export default function SettingsPage() {
       <PageBody className="flex flex-col gap-6 lg:flex-row">
           {/* 좌측 세로 탭 */}
           <nav className="flex shrink-0 gap-1 overflow-x-auto lg:w-48 lg:flex-col">
-            {TABS.map((t) => {
+            {tabs.map((t) => {
               const Icon = t.icon;
-              const active = tab === t.id;
+              const active = activeTab === t.id;
               return (
                 <button
                   key={t.id}
@@ -565,7 +575,7 @@ export default function SettingsPage() {
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {tSettings(t.labelKey)}
+                  {t.label}
                 </button>
               );
             })}
@@ -573,7 +583,7 @@ export default function SettingsPage() {
 
           {/* 우측 폼 */}
           <div className="min-w-0 flex-1 space-y-6">
-            {tab === "general" && (
+            {activeTab === "general" && (
               <Card>
                 <CardHeader>
                   <CardTitle>{tSettings("tabs.general")}</CardTitle>
@@ -594,9 +604,9 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
             )}
-            {tab === "general" && <OrganizationSection />}
+            {activeTab === "general" && <OrganizationSection />}
 
-            {tab === "model" && (
+            {activeTab === "model" && (
               <>
               <Card>
                 <CardHeader>
@@ -698,7 +708,7 @@ export default function SettingsPage() {
               </>
             )}
 
-            {tab === "interface" && (
+            {activeTab === "interface" && (
               <Card>
                 <CardHeader>
                   <CardTitle>{tSettings("tabs.interface")}</CardTitle>
@@ -721,7 +731,7 @@ export default function SettingsPage() {
               </Card>
             )}
 
-            {tab === "notifications" && (
+            {activeTab === "notifications" && (
               <Card>
                 <CardHeader>
                   <CardTitle>{tSettings("tabs.notifications")}</CardTitle>
@@ -755,15 +765,13 @@ export default function SettingsPage() {
               </Card>
             )}
 
-            {tab === "memory" && <MemorySection />}
+            {activeTab === "memory" && <MemorySection />}
 
-            {tab === "extensions" && <ExtensionsSection />}
+            {activeTab === "extensions" && <ExtensionsSection />}
 
-            {tab === "connectors" && (
-              <ConnectorsSection />
-            )}
+            {addonTab && <addonTab.Component />}
 
-            {tab === "privacy" && (
+            {activeTab === "privacy" && (
               <Card>
                 <CardHeader>
                   <CardTitle>{tSettings("tabs.privacy")}</CardTitle>
@@ -825,7 +833,7 @@ export default function SettingsPage() {
               </Card>
             )}
 
-            {tab === "security" && (
+            {activeTab === "security" && (
               <Card>
                 <CardHeader>
                   <CardTitle>{tSettings("passwordChange.title")}</CardTitle>

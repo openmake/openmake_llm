@@ -43,13 +43,16 @@ const JOB = {
 };
 const sqlWith = (s: string) => queries.filter((q) => q.sql.includes(s));
 
-function fakePort(run: AddonRunVerdict, verdict: EntitlementVerdict = 'ok'): AdmissionPort & { calls: string[] } {
+function fakePort(run: AddonRunVerdict, verdict: EntitlementVerdict = 'ok'): AdmissionPort & { calls: string[]; scopes: unknown[] } {
     const calls: string[] = [];
+    const scopes: unknown[] = [];
     return {
         calls,
+        scopes,
         readRunVerdict: async () => run,
-        checkUserEntitlement: async (_addonId: string, userId: string) => {
+        checkUserEntitlement: async (_addonId: string, userId: string, scope?: { orgId?: string }) => {
             calls.push(userId);
+            scopes.push(scope);
             return verdict;
         },
     };
@@ -89,10 +92,23 @@ describe('admitJob', () => {
         await expect(admitJob({ actor_kind: 'org', actor_user_id: null }, fakePort({ run: true }))).resolves.toEqual({ admission: 'reject', verdict: 'missing-user' });
     });
 
-    it('조직 작업은 접수한 사용자로 사용권을 다시 판정한다', async () => {
+    it('조직 작업은 접수한 사용자와 접수 때 저장한 조직으로 사용권을 다시 판정한다(지금 활성 조직이 아니라 — A3)', async () => {
         const port = fakePort({ run: true }, 'ok');
-        await expect(admitJob({ actor_kind: 'org', actor_user_id: 'u-1' }, port)).resolves.toEqual({ admission: 'run', verdict: 'ok' });
+        await expect(admitJob({ actor_kind: 'org', actor_user_id: 'u-1', org_id: 'org-a' }, port)).resolves.toEqual({ admission: 'run', verdict: 'ok' });
         expect(port.calls).toEqual(['u-1']);
+        expect(port.scopes).toEqual([{ orgId: 'org-a' }]);
+    });
+
+    it('개인 작업은 조직을 지정하지 않는다(사용자의 지금 활성 조직 기준 — 종전)', async () => {
+        const port = fakePort({ run: true }, 'ok');
+        await admitJob({ actor_kind: 'user', actor_user_id: 'u-1', org_id: null }, port);
+        expect(port.scopes).toEqual([undefined]);
+    });
+
+    it('조직 작업인데 조직 id 가 없으면 판정하지 않고 거절한다', async () => {
+        const port = fakePort({ run: true }, 'ok');
+        await expect(admitJob({ actor_kind: 'org', actor_user_id: 'u-1', org_id: null }, port)).resolves.toEqual({ admission: 'reject', verdict: 'missing-org' });
+        expect(port.calls).toEqual([]);
     });
 });
 

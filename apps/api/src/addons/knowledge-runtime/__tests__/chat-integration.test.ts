@@ -8,7 +8,6 @@ import { SPACE_INSTRUCTIONS_TAG, SPACE_MEMORY_TAG } from '../prompts';
 
 jest.mock('../conversations/binding-service', () => ({
     resolveBoundSpace: jest.fn(),
-    sessionHasBinding: jest.fn(),
     listBoundSessionIdsForUser: jest.fn(),
 }));
 jest.mock('../config/scope-policy', () => ({
@@ -29,7 +28,6 @@ import * as retrieval from '../retrieval/service';
 import * as memRepo from '../memories/repository';
 
 const resolveBoundSpace = binding.resolveBoundSpace as jest.Mock;
-const sessionHasBinding = binding.sessionHasBinding as jest.Mock;
 const listBoundSessionIdsForUser = binding.listBoundSessionIdsForUser as jest.Mock;
 const retrieve = retrieval.retrieve as jest.Mock;
 const listMemoryRows = memRepo.listMemoryRows as jest.Mock;
@@ -90,11 +88,8 @@ describe('prepareTurnContext — 연결 여부에 따른 검색', () => {
 });
 
 describe('메모리 격리·목록 숨김 훅', () => {
-    it('(c) 연결된 세션은 격리 세션(전역 메모리 미기록)', async () => {
-        sessionHasBinding.mockResolvedValue(true);
-        expect(await knowledgeChatIntegration.isMemoryIsolatedSession!('u1', 'sess1')).toBe(true);
-        sessionHasBinding.mockResolvedValue(false);
-        expect(await knowledgeChatIntegration.isMemoryIsolatedSession!('u1', 'sess2')).toBe(false);
+    it('(c) 메모리 격리는 채팅 통합이 아니라 데이터 모듈이 맡는다(env 로 꺼도 유지 — data-data.test.ts)', () => {
+        expect(knowledgeChatIntegration.isMemoryIsolatedSession).toBeUndefined();
     });
 
     it('숨김 세션 목록은 사용자의 연결 세션 id 를 그대로 준다', async () => {

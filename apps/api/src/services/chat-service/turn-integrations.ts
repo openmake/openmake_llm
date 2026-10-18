@@ -13,7 +13,9 @@
  * @module services/chat-service/turn-integrations
  */
 import { loadEnabledChatIntegrations } from '../../addon-host/chat-integrations';
+import { getAddonDataModules } from '../../addon-host/addon-data';
 import { integrationGate } from '../addon/integration-gate';
+import { integrationGateRefusal } from '../addon/integration-gate-refusal';
 import { isAddonEnabledSync } from '../addon/addon-state';
 import { TURN_CONTEXT_TIMEOUT_MS } from '../../config/service-limits';
 import { createLogger } from '../../utils/logger';
@@ -145,6 +147,34 @@ export function getActiveChatTurnIntegrations(): readonly ChatTurnIntegration[] 
     return getChatTurnIntegrations().filter((i) => isAddonEnabledSync(i.id));
 }
 
+/**
+ * 에이전트 작업 기여 도구 — 노출은 작업을 만들 때의 상태 캐시 판정이지만, 실행은 호출마다 채팅 오케스트레이션 도구와 같은
+ * 게이트(`integrationGate` — 상태 + 조직 사용권)를 거친다(설계 문서 8.4). 작업 도중 관리자가 끄거나 조직 허용 목록 밖이면
+ * 승인 전 검사(precheck)에서 거절해 승인 카드를 띄우지 않고, 그 사이에 바뀐 경우를 위해 실행 직전에도 한 번 더 본다.
+ */
+export function getActiveAgentTaskTools(): ContributedAgentTaskTool[] {
+    return getActiveChatTurnIntegrations().flatMap((i) => (i.agentTaskTools?.() ?? []).map((t) => gateAgentTaskTool(i.id, t)));
+}
+
+function gateAgentTaskTool(addonId: string, t: ContributedAgentTaskTool): ContributedAgentTaskTool {
+    const refusal = async (userId: string): Promise<string | null> => {
+        const gate = await integrationGate(addonId, userId);
+        if (gate.allowed) return null;
+        turnContextLog.info(`작업 기여 도구 '${t.tool.name}' 실행 거절 — add-on '${addonId}' ${gate.reason}${gate.detail ? `: ${gate.detail}` : ''}`);
+        return integrationGateRefusal(addonId, gate.reason);
+    };
+    return {
+        tool: t.tool,
+        async precheck(args, ctx) {
+            return (await refusal(ctx.userId)) ?? (t.precheck ? t.precheck(args, ctx) : null);
+        },
+        async run(args, ctx) {
+            const refused = await refusal(ctx.userId);
+            return refused ? { text: refused, isError: true } : t.run(args, ctx);
+        },
+    };
+}
+
 /** 테스트 전용 — 통합 구성을 바꿔 끼운다. */
 export function __setChatTurnIntegrationsForTest(list: ChatTurnIntegration[] | null): void {
     integrations = list;
@@ -252,6 +282,21 @@ export async function isSessionMemoryIsolated(userId: string | undefined, sessio
             if (await integration.isMemoryIsolatedSession(userId, sessionId)) return true;
         } catch (err) {
             turnContextLog.warn(`[TurnContext] '${integration.id}' 메모리 격리 판정 실패 — 안전하게 격리로 간주(전역 메모리 미기록): ${err instanceof Error ? err.message : String(err)}`);
+            return true;
+        }
+    }
+    // 데이터 모듈의 격리 판정 — env·DB 로 꺼진 add-on 도 호스트가 불러온다(채팅 통합 목록에서 빠져도 보호는 유지).
+    // 모듈을 불러오지 못한 add-on 이 있으면 그 판정을 알 수 없으므로 격리로 본다(fail-closed).
+    for (const { addonId, data, error } of getAddonDataModules()) {
+        if (error) {
+            turnContextLog.warn(`[TurnContext] add-on '${addonId}' 데이터 모듈 없음 — 안전하게 격리로 간주(전역 메모리 미기록): ${error}`);
+            return true;
+        }
+        if (!data?.isMemoryIsolatedSession) continue;
+        try {
+            if (await data.isMemoryIsolatedSession(userId, sessionId)) return true;
+        } catch (err) {
+            turnContextLog.warn(`[TurnContext] add-on '${addonId}' 메모리 격리 판정 실패 — 안전하게 격리로 간주(전역 메모리 미기록): ${err instanceof Error ? err.message : String(err)}`);
             return true;
         }
     }

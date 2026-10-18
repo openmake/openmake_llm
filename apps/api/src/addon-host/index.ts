@@ -23,7 +23,7 @@ import { ADDON_PERMISSIONS, hasAddonPermission } from '../config/addon-permissio
 import { loadAddonEntry } from './entry-loader';
 import { installPackCatalog } from './pack-catalog';
 import { installPackSkills } from './pack-skills';
-import { setAddonRuntimeStatus } from './activation';
+import { recordAddonBootCandidates, setAddonRuntimeStatus } from './activation';
 import { ensureLegacyCapabilityBridge, LEGACY_BRIDGE_CAPABILITIES } from './legacy-capability-bridge';
 import { checkCapabilityOwnership } from '../capability-contract/registry';
 import { CAPABILITY_CONTRACT_VERSION } from '../capability-contract/types';
@@ -49,7 +49,7 @@ export interface AddonBootResult {
 
 async function installBuiltinPack(id: string): Promise<void> {
     const { getUnifiedDatabase } = await import('../data/models/unified-database');
-    const { SkillRepository } = await import('../data/repositories/skill-repository');
+    const { SkillRepository } = await import('../addons/skill-runtime/data/skill-repository');
     const { installed, failed } = await installPackSkills(id, new SkillRepository(getUnifiedDatabase().getPool()));
     if (installed > 0 || failed.length > 0) logger.info(`내장 팩 '${id}' 스킬 설치: ${installed}개 성공, ${failed.length}개 실패`);
     for (const reason of failed) logger.error(`내장 팩 '${id}' 스킬 설치 실패 — ${reason}`);
@@ -65,7 +65,7 @@ async function archiveDisabledAddonSkills(addon: BuiltinAddon): Promise<void> {
     const sourcePathLike = addon.manifest.skillSourcePath;
     if (!sourcePathLike) return; // 스킬을 싣지 않는 add-on (통합 기능)
     const { getUnifiedDatabase } = await import('../data/models/unified-database');
-    const { SkillRepository } = await import('../data/repositories/skill-repository');
+    const { SkillRepository } = await import('../addons/skill-runtime/data/skill-repository');
     const archived = await new SkillRepository(getUnifiedDatabase().getPool()).archiveSystemSkillsBySourcePath(sourcePathLike);
     logger.info(`내장 팩 '${id}' 꺼짐 — 시스템 스킬 ${archived}개 보관`);
 }
@@ -164,6 +164,11 @@ function defaultBootDeps(): AddonBootDeps {
  */
 export async function bootAddons(candidates: readonly BuiltinAddon[], deps: AddonBootDeps): Promise<AddonBootResult[]> {
     const results = new Map<string, AddonBootResult>();
+    // 요청 게이트가 "이 프로세스에서 준비됐나"를 보도록 후보를 남긴다 — 런타임·마이그레이션이 있는 add-on 은 여기서 ready 가 돼야 쓸 수 있다
+    recordAddonBootCandidates(candidates.map(a => ({
+        addonId: a.id,
+        requiresProcessBoot: Boolean(a.manifest.entry?.runtime || a.manifest.components.migrations),
+    })));
     const fail = async (addon: BuiltinAddon, stage: Exclude<AddonBootResult['stage'], 'ready' | 'excluded'>, code: AddonFailureCode, reason: string) => {
         results.set(addon.id, { id: addon.id, stage, reason });
         setAddonRuntimeStatus(addon.id, 'failed', { code, reason });
