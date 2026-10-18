@@ -8,9 +8,9 @@
  * @module runtime-ports/addon-admission
  */
 import { ensureAddonStates, readAddonEnabledStrict, readAddonStateStrict } from '../services/addon/addon-state';
-import { checkAddonEntitlement, type EntitlementVerdict } from '../services/addon/entitlement';
+import { checkAddonEntitlement, type EntitlementScope, type EntitlementVerdict } from '../services/addon/entitlement';
 
-export type { EntitlementVerdict };
+export type { EntitlementScope, EntitlementVerdict };
 
 /** add-on 단위 실행 판정 — stopped(꺼짐·실패·env 차단)와 unknown(상태 조회 실패)을 구분한다 */
 export type AddonRunVerdict =
@@ -24,9 +24,12 @@ export async function readAddonRunVerdict(addonId: string): Promise<AddonRunVerd
     return { run: true };
 }
 
-/** 사용자 작업의 실행 재검사 — 상태 + 조직 사용권. 라우트 게이트와 같은 판정 */
-export async function checkUserEntitlement(addonId: string, userId: string): Promise<EntitlementVerdict> {
-    return checkAddonEntitlement(addonId, userId);
+/**
+ * 사용자 작업의 실행 재검사 — 상태 + 조직 사용권. 라우트 게이트와 같은 판정.
+ * 조직 자원 작업은 `scope.orgId`(접수 때 저장한 조직)로 판정한다 — 사용자의 지금 활성 조직이 아니라.
+ */
+export async function checkUserEntitlement(addonId: string, userId: string, scope?: EntitlementScope): Promise<EntitlementVerdict> {
+    return checkAddonEntitlement(addonId, userId, scope);
 }
 
 /** 접수 시점의 add-on 상태 revision — 조회 실패면 null(접수는 막지 않는다 — 실행 판정은 claim 때 다시 한다) */

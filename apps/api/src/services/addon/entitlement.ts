@@ -17,7 +17,7 @@
  * @module services/addon/entitlement
  */
 import { createLogger } from '../../utils/logger';
-import { resolveEffectivePolicy, resolveEffectivePolicyStrict } from '../org/effective-policy';
+import { resolveEffectivePolicy, resolveEffectivePolicyStrict, resolveOrgPolicyStrict } from '../org/effective-policy';
 import { isAddonEnabled, readAddonEnabledStrict } from './addon-state';
 
 const logger = createLogger('AddonEntitlement');
@@ -28,10 +28,19 @@ const logger = createLogger('AddonEntitlement');
  */
 export type EntitlementVerdict = 'ok' | 'disabled' | 'failed' | 'not-entitled' | 'state-unknown';
 
+/** 판정 기준 조직 — 주지 않으면 요청 사용자의 지금 활성 조직(라우트 게이트) */
+export interface EntitlementScope {
+    /**
+     * 조직 자원에 묶인 작업(조직 Space 수집 등)의 재검사 — 접수 때 저장한 조직으로 판정한다. 사용자가 그 뒤 활성 조직을
+     * 바꿔도 기준이 바뀌지 않고, 그 조직을 떠났으면 not-entitled 다.
+     */
+    orgId?: string;
+}
+
 /**
  * @param userId 요청 사용자 — 없으면(게스트·내부 호출) 조직 축은 보지 않는다.
  */
-export async function checkAddonEntitlement(addonId: string, userId?: string): Promise<EntitlementVerdict> {
+export async function checkAddonEntitlement(addonId: string, userId?: string, scope?: EntitlementScope): Promise<EntitlementVerdict> {
     const enabled = await readAddonEnabledStrict(addonId);
     if (!enabled.known) {
         logger.warn(`add-on '${addonId}' 상태 확인 불가: ${enabled.reason}`);
@@ -41,7 +50,8 @@ export async function checkAddonEntitlement(addonId: string, userId?: string): P
     if (!enabled.enabled) return 'disabled';
     if (!userId) return 'ok';
     try {
-        const policy = await resolveEffectivePolicyStrict(userId);
+        const policy = scope?.orgId ? await resolveOrgPolicyStrict(userId, scope.orgId) : await resolveEffectivePolicyStrict(userId);
+        if (!policy) return 'not-entitled'; // 지정한 조직의 멤버가 아니다
         if (policy.addonAllowlist && !policy.addonAllowlist.includes(addonId)) return 'not-entitled';
     } catch (e) {
         logger.warn(`add-on '${addonId}' 조직 사용권 조회 실패(확인 불가): ${e instanceof Error ? e.message : String(e)}`);
