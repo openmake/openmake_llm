@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.106.0](https://github.com/openmake/openmake_llm/compare/v1.105.4...v1.106.0) (2026-10-18)
+
+
+### ✨ 기능
+
+* **addons:** add-on 데이터 모듈 — 사용자 삭제·내보내기·보존 정리의 add-on 소유 데이터는 그 add-on 이 맡고, 꺼져 있어도 지킨다 ([2fee1a9](https://github.com/openmake/openmake_llm/commit/2fee1a955cc989171065d818baf1a8314da962f0))
+
+
+### 🐛 버그 수정
+
+* **addons:** Base·add-on 경계 공백 보완 — 작업 도구 실행 게이트·웹 화면 레지스트리·모두 끈 배포 테스트·래칫 확장 ([ea8f2e9](https://github.com/openmake/openmake_llm/commit/ea8f2e9769e57ccb74966f6a32e0b852a65ad2bc))
+* **addons:** 부팅에 실패한 add-on 은 DB 에서 다시 켜도 재시작 전까지 실패로 판정한다 ([a41df2a](https://github.com/openmake/openmake_llm/commit/a41df2a00c26b4f10d8bb6aed308a104d2dc14ab))
+* **addons:** 에이전트 작업 기여 도구도 호출마다 add-on 실행 게이트를 거친다 ([6a11cf4](https://github.com/openmake/openmake_llm/commit/6a11cf41707e7c1a799d09c4d44f6c8a7b62c5b6))
+* **addons:** 요청 게이트가 DB 의도 위에 이 프로세스의 준비 상태를 겹친다 ([c05255d](https://github.com/openmake/openmake_llm/commit/c05255ddee1a148b861283c2fde0cb59c8a5a2de))
+* **addons:** 조직 정책을 확인하지 못하면 add-on 사용권을 허용으로 읽지 않는다 ([6ce5865](https://github.com/openmake/openmake_llm/commit/6ce58659e907dc69dd96fede513d525f2024180e))
+* **backup:** 공유 백업 폴더에서 다른 인스턴스의 백업을 지우거나 복원하지 않는다 ([b2de90d](https://github.com/openmake/openmake_llm/commit/b2de90d5b3106262614b216968e3ee8838bd0e26))
+* **deploy:** 오프라인 번들·canary 롤백 스냅샷에 workspace 패키지 산출물을 싣는다 ([4925723](https://github.com/openmake/openmake_llm/commit/4925723520b96ee076cc86ba8f553181a2e00afd))
+* **install:** Linux 재설치에서 대체한 웹 포트를 OMK_WEB_PORT 에도 남긴다 ([1c3610f](https://github.com/openmake/openmake_llm/commit/1c3610f10e98761194def28a50fee4aca26418ac))
+* **install:** 실패 배포 재시도의 잘못된 성공 기록·uninstall 비대화형 자동 삭제 승인 ([0f111ba](https://github.com/openmake/openmake_llm/commit/0f111ba995fc218364ef3ab6aa37b89543e46027))
+* **knowledge:** Space 연결 대화의 메모리 격리를 데이터 모듈로 옮겨 env 로 Knowledge 를 꺼도 유지한다 ([7a65936](https://github.com/openmake/openmake_llm/commit/7a6593659eb41f9baa4fa21e5d4bc637be0e736f))
+* **knowledge:** 조직 Space 작업의 실행 재검사를 접수 때 저장한 조직으로 한다 ([1f20070](https://github.com/openmake/openmake_llm/commit/1f20070bcc62319c9d6c774bde5bbe7ce9e7b931))
+* **omk:** 릴리스 환경의 배포 스모크는 채팅 대신 쓰기 없는 /ready 로 연결을 확인한다 ([472527b](https://github.com/openmake/openmake_llm/commit/472527b575c13ae92c440d9ca08dd9bbec39cb1d))
+* **omk:** 실패한 갱신의 재시도가 배포를 생략하고 예전 빌드를 통과로 기록하지 않게 한다 ([a57f060](https://github.com/openmake/openmake_llm/commit/a57f060007aa897568f398cf7decd96deaed70d1))
+* **uninstall:** 비대화형 입력을 삭제 승인으로 보지 않고, 무엇이든 지우기 전에 한 번 확인한다 ([0c51417](https://github.com/openmake/openmake_llm/commit/0c51417ce1e2ac542b4b858ed3c617ac4c05fb95))
+* 외부 리뷰 잔여 7건 — 백업·오프라인 번들·조직 사용권·부팅 실패 판정·Linux 포트·문서 ([1c19f26](https://github.com/openmake/openmake_llm/commit/1c19f262b117ccb88c6e8d6526121283f602a2f2))
+* 운영 스모크는 쓰기 없는 /ready 로 · 요청 게이트는 이 프로세스의 준비 상태까지 본다 ([561a350](https://github.com/openmake/openmake_llm/commit/561a35038d4ed61ee526db73f509d471a9b79d3d))
+
+
+### ♻️ 리팩터링
+
+* **addons:** MCP·스킬의 저장과 화면을 mcp-runtime·skill-runtime add-on 이 소유한다 ([bd6af41](https://github.com/openmake/openmake_llm/commit/bd6af41f3f7e15064ebb9e61446dc9bb57363129))
+* **addons:** 확장 플랫폼의 스킬·MCP 저장을 add-on 데이터 모듈의 저장 연산으로 — Base 의 add-on 소유 테이블 SQL 0건 ([34444e7](https://github.com/openmake/openmake_llm/commit/34444e7e8fa033e6a9b97ea85a8111f5da2e3e32))
+* **mcp:** add-on 만 쓰던 MCP 저장소·스키마·프로토콜 상수를 mcp-runtime 으로 옮긴다 ([4581fb7](https://github.com/openmake/openmake_llm/commit/4581fb7d0266fdb2ba04fda8d1668466a0a6d5e8))
+* **skills:** 스킬 저장소와 절차 스킬 저장을 skill-runtime 으로 옮기고 Base 는 스킬 포트를 거친다 ([f49af15](https://github.com/openmake/openmake_llm/commit/f49af1546ec98c171e77c3458f0e364c4fd0fa12))
+* **web:** add-on 화면을 레지스트리로 등록하고 Base 의 add-on 직접 import 를 막는다 ([d58292b](https://github.com/openmake/openmake_llm/commit/d58292b7c5925d029fdfa5f95266a3c66bcadbfb))
+* **web:** 딥리서치 화면을 deep-research add-on 소유로 옮기고 허브 탭 확장점을 둔다 ([f555de9](https://github.com/openmake/openmake_llm/commit/f555de93adbf8546a6735fb579a188155f825c6a))
+* **web:** 스킬·MCP 화면을 skill-runtime·mcp-runtime 웹 add-on 으로 옮긴다 ([6f0d61a](https://github.com/openmake/openmake_llm/commit/6f0d61a8308ef7a79045aa636679dd5517911001))
+
 ## [1.105.4](https://github.com/openmake/openmake_llm/compare/v1.105.3...v1.105.4) (2026-10-18)
 
 
