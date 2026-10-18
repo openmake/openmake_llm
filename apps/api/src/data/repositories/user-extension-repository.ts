@@ -12,6 +12,7 @@
  */
 import { v4 as uuidv4 } from 'uuid';
 import { BaseRepository, type QueryParam } from './base-repository';
+import { getComponentStore } from '../../addon-host/addon-data';
 import type { ExtensionPermissionState } from '../../config/addon-permissions';
 import { jsonbParam, type SavePermissionStateInput } from './user-extension-permission-repository';
 
@@ -72,6 +73,10 @@ function permissionParams(p: SavePermissionStateInput): QueryParam[] {
 }
 
 export class UserExtensionRepository extends BaseRepository {
+    /** 스킬·MCP 서버 구성요소는 각 add-on 소유 테이블 — 데이터 모듈의 저장 연산(같은 풀, SQL 동일)으로 다룬다(2026-10-18) */
+    private skills() { return getComponentStore('skills', this.pool); }
+    private mcpServers() { return getComponentStore('mcpServers', this.pool); }
+
     async insert(input: InsertExtensionInput): Promise<UserExtensionRow> {
         const id = `user-ext-${uuidv4()}`;
         const p = input.permission;
@@ -152,20 +157,7 @@ export class UserExtensionRepository extends BaseRepository {
      * `archiveLinkedComponents` 가 구 행을 회수하기 **전에** 불러야 한다(회수 후엔 extension_id 가 NULL 이다).
      */
     async snapshotApprovedSkills(extensionId: string): Promise<Array<{ name: string; assignments: Array<{ agentId: string; priority: number }> }>> {
-        const r = await this.query<{ name: string; agent_id: string | null; priority: number | null }>(
-            `SELECT s.name, a.agent_id, a.priority
-               FROM agent_skills s
-               LEFT JOIN agent_skill_assignments a ON a.skill_id = s.id
-              WHERE s.extension_id = $1 AND s.status = 'active'`,
-            [extensionId]
-        );
-        const byName = new Map<string, Array<{ agentId: string; priority: number }>>();
-        for (const row of r.rows) {
-            const list = byName.get(row.name) ?? [];
-            if (row.agent_id) list.push({ agentId: row.agent_id, priority: row.priority ?? 0 });
-            byName.set(row.name, list);
-        }
-        return [...byName.entries()].map(([name, assignments]) => ({ name, assignments }));
+        return this.skills().snapshotApproved(extensionId);
     }
 
     /**
@@ -179,42 +171,14 @@ export class UserExtensionRepository extends BaseRepository {
         installed: ReadonlyArray<{ skillId: string; name: string }>,
         snapshot: ReadonlyArray<{ name: string; assignments: ReadonlyArray<{ agentId: string; priority: number }> }>,
     ): Promise<string[]> {
-        const prev = new Map(snapshot.map(s => [s.name, s.assignments]));
-        const carried: string[] = [];
-        for (const skill of installed) {
-            const assignments = prev.get(skill.name);
-            if (!assignments) continue;
-            await this.query(
-                `UPDATE agent_skills SET status='active', updated_at=$2 WHERE id=$1 AND status='draft'`,
-                [skill.skillId, new Date().toISOString()]
-            );
-            for (const a of assignments) {
-                await this.query(
-                    `INSERT INTO agent_skill_assignments (agent_id, skill_id, priority) VALUES ($1, $2, $3)
-                     ON CONFLICT DO NOTHING`,
-                    [a.agentId, skill.skillId, a.priority]
-                );
-            }
-            carried.push(skill.skillId);
-        }
-        return carried;
+        return this.skills().carryOverApprovals(installed, snapshot);
     }
 
     async archiveLinkedComponents(extensionId: string): Promise<void> {
-        // 배정도 함께 걷는다 — 남겨 두면 archived 스킬의 배정이 쌓이고(업데이트마다 1행), 도구 바인딩
-        // 조회가 status 를 보지 않던 시절엔 지운 스킬의 denied 바인딩이 계속 먹었다(2026-09-20).
-        await this.query(
-            `DELETE FROM agent_skill_assignments WHERE skill_id IN (SELECT id FROM agent_skills WHERE extension_id=$1)`,
-            [extensionId]
-        );
-        await this.query(
-            `UPDATE agent_skills SET status='archived', extension_id=NULL WHERE extension_id=$1`,
-            [extensionId]
-        );
-        await this.query(
-            `UPDATE mcp_servers SET status='archived', enabled=FALSE, extension_id=NULL, updated_at=NOW() WHERE extension_id=$1`,
-            [extensionId]
-        );
+        // 스킬(배정도 함께 — 남겨 두면 archived 스킬의 배정이 쌓이고 지운 스킬의 denied 바인딩이 계속 먹었다, 2026-09-20)·
+        // MCP 서버는 각 add-on 의 저장 연산으로 회수하고 링크도 끊는다.
+        await this.skills().archiveLinked(extensionId, { unlink: true });
+        await this.mcpServers().archiveLinked(extensionId, { unlink: true });
         // Custom Agent 는 status 컬럼이 없다 — soft-delete 계약(is_active=FALSE)으로 회수한다.
         // ⚠️ 이름도 함께 비켜준다: UNIQUE(user_id, name) 은 soft-delete 행에도 걸리므로,
         // 이름을 남겨두면 재설치된 동명 에이전트가 매번 랜덤 suffix 를 달고 생성돼
@@ -288,18 +252,8 @@ export class UserExtensionRepository extends BaseRepository {
 
     /** ingest 로 생성된 구성요소를 확장에 링크. (구성요소 상한이 작아 개별 UPDATE — QueryParam 배열 미지원) */
     async linkComponents(extensionId: string, skillIds: string[], mcpServerIds: string[], agentIds: string[] = []): Promise<void> {
-        for (const skillId of skillIds) {
-            await this.query(
-                `UPDATE agent_skills SET extension_id=$1 WHERE id=$2`,
-                [extensionId, skillId]
-            );
-        }
-        for (const serverId of mcpServerIds) {
-            await this.query(
-                `UPDATE mcp_servers SET extension_id=$1, updated_at=NOW() WHERE id=$2`,
-                [extensionId, serverId]
-            );
-        }
+        if (skillIds.length > 0) await this.skills().link(extensionId, skillIds);
+        if (mcpServerIds.length > 0) await this.mcpServers().link(extensionId, mcpServerIds);
         // Custom Agent (103, Phase 2) — 확장 유래 에이전트는 즉시 활성이라 상태 전이는 없고 링크만
         for (const agentId of agentIds) {
             await this.query(
@@ -354,20 +308,18 @@ export class UserExtensionRepository extends BaseRepository {
         mcpServers: Array<{ id: string; name: string; status: string; enabled: boolean }>;
         agents: Array<{ id: string; name: string; status: string }>;
     }> {
-        const skills = await this.query<{ id: string; name: string; status: string }>(
-            `SELECT id, name, status FROM agent_skills WHERE extension_id=$1 ORDER BY name`,
-            [extensionId]
-        );
-        const servers = await this.query<{ id: string; name: string; status: string; enabled: boolean }>(
-            `SELECT id, name, status, enabled FROM mcp_servers WHERE extension_id=$1 ORDER BY name`,
-            [extensionId]
-        );
+        const skills = await this.skills().listLinked(extensionId);
+        const servers = await this.mcpServers().listLinked(extensionId);
         const agents = await this.query<{ id: string; name: string; status: string }>(
             `SELECT id, name, CASE WHEN is_active THEN 'active' ELSE 'archived' END AS status
                FROM user_agents WHERE extension_id=$1 ORDER BY name`,
             [extensionId]
         );
-        return { skills: skills.rows, mcpServers: servers.rows, agents: agents.rows };
+        return {
+            skills: skills.map(({ id, name, status }) => ({ id, name, status })),
+            mcpServers: servers.map(({ id, name, status, enabled }) => ({ id, name, status, enabled: enabled === true })),
+            agents: agents.rows,
+        };
     }
 
     /**
@@ -378,23 +330,13 @@ export class UserExtensionRepository extends BaseRepository {
         const existing = await this.getByIdForUser(id, userId, isAdmin);
         if (!existing || existing.status !== 'active') return null;
 
-        // 배정도 함께 걷는다 — archived 스킬에 배정이 남으면 도구 바인딩이 계속 따라온다(2026-09-20).
-        await this.query(
-            `DELETE FROM agent_skill_assignments WHERE skill_id IN (SELECT id FROM agent_skills WHERE extension_id=$1)`,
-            [id]
-        );
-        await this.query(
-            `UPDATE agent_skills SET status='archived' WHERE extension_id=$1`,
-            [id]
-        );
+        // 스킬은 배정도 함께 걷는다 — archived 스킬에 배정이 남으면 도구 바인딩이 계속 따라온다(2026-09-20). 링크는 남긴다(제거 기록)
+        await this.skills().archiveLinked(id, { unlink: false });
         await this.query(
             `UPDATE user_agents SET is_active=FALSE, updated_at=NOW() WHERE extension_id=$1`,
             [id]
         );
-        await this.query(
-            `UPDATE mcp_servers SET status='archived', enabled=FALSE, updated_at=NOW() WHERE extension_id=$1`,
-            [id]
-        );
+        await this.mcpServers().archiveLinked(id, { unlink: false });
         const r = await this.query<UserExtensionRow>(
             `UPDATE user_extensions SET status='removed', updated_at=NOW()
               WHERE id=$1 AND status='active'

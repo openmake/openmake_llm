@@ -9,8 +9,8 @@ import {
     type ImportInput,
     type ImportResult,
     type CandidateListResult,
-} from '../../../agents/git-ingest/mcp-server-ingest-service';
-import type { ConventionFinding } from '../../../agents/git-ingest/convention-checker';
+} from '../../ingest/mcp-server-ingest-service';
+import type { ConventionFinding } from '../../../../agents/git-ingest/convention-checker';
 
 const CONN = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
 const SUFFIX = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);

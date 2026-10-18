@@ -235,28 +235,6 @@ export interface ExternalFile {
 // MCP 외부 서버 인터페이스
 // ============================================
 
-export interface MCPServerRow {
-    id: string;
-    name: string;
-    transport_type: string;
-    command: string | null;
-    args: string[] | null;
-    env: Record<string, string> | null;
-    url: string | null;
-    enabled: boolean;
-    created_at: string;
-    updated_at: string;
-    /** stdio docker 샌드박스 네트워크 정책 ('full'|'none'). 042 마이그레이션. */
-    sandbox_network?: 'full' | 'none' | 'host' | null;
-    /**
-     * 소유자 (NULL=전역 서버).
-     *
-     * ⚠️ 실행 풀이 갈리는 기준이다 — 사용자 소유 서버는 전역 registry 가 아니라
-     * userPool 에 뜨므로, 상태를 registry 만으로 판정하면 연결된 서버도 늘
-     * disconnected 로 보인다. `SELECT *` 로 이미 실려 오던 값의 타입 노출.
-     */
-    user_id?: string | null;
-}
 
 // ============================================
 // API Key 관리 인터페이스

@@ -4,7 +4,7 @@
  * 사용자 결정: 메인 DB 직접 적용. unique UID + try/finally cleanup 으로 격리.
  */
 import { Pool } from 'pg';
-import { McpServerDraftRepository } from '../../../data/repositories/mcp-server-draft-repository';
+import { McpServerDraftRepository } from '../../data/mcp-server-draft-repository';
 
 const CONN = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
 const SUFFIX = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);

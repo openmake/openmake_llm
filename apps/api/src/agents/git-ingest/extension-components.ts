@@ -13,6 +13,8 @@
  *
  * @module agents/git-ingest/extension-components
  */
+import { getComponentStore } from '../../addon-host/addon-data';
+import type { McpServerComponentStore } from '../../runtime-ports/component-stores';
 import { posix } from 'path';
 import { discoverMarkdownComponents, findMcpConfigPath } from './extension-discovery';
 import * as crypto from 'crypto';
@@ -27,9 +29,7 @@ import { parseMcpJsonFile, type NormalizedMcpServer } from './extension-manifest
 import { ADDON_PERMISSIONS, hasAddonPermission } from '../../config/addon-permissions';
 import { collectPlaceholderEnvKeys, buildEnvInputHints, type UserConfigEntry } from '../../tool-contract/env-placeholder';
 import { ConventionChecker, isBlockedByConvention } from './convention-checker';
-import { McpServerDraftRepository } from '../../data/repositories/mcp-server-draft-repository';
 import { UserAgentRepository } from '../../data/repositories/user-agent-repository';
-import { SkillAssetRepository } from '../../data/repositories/skill-asset-repository';
 import { EXTENSION_INGEST, SKILL_CREATOR } from '../../config/constants';
 import { PLUGIN_COMPONENT_LIMITS, UNSUPPORTED_AGENT_FIELDS } from '../../config/skill-compat';
 import type { SkillInstallResult, AgentInstallResult, McpServerInstallResult } from './extension-ingest-types';
@@ -267,7 +267,8 @@ export async function collectSkillAssets(
     ctx: ComponentContext,
     skillResults: SkillInstallResult[],
 ): Promise<void> {
-    const assetRepo = new SkillAssetRepository(ctx.pool);
+    // 스킬 테이블은 스킬 add-on 소유 — 데이터 모듈의 저장 연산으로(같은 풀, SQL 동일)
+    const skills = getComponentStore('skills', ctx.pool);
     for (const result of skillResults) {
         if (!result.skillId) continue;
         const dir = result.path.slice(0, result.path.lastIndexOf('/') + 1);
@@ -324,7 +325,7 @@ export async function collectSkillAssets(
                 }
                 const buf = Buffer.from(raw, 'utf8');
                 total += buf.length;
-                await assetRepo.upsert({
+                await skills.upsertAsset({
                     skillId: result.skillId,
                     relPath,
                     contentType: assetContentType(entry.path),
@@ -384,7 +385,8 @@ export async function collectMcpDrafts(
 
     const results: McpServerInstallResult[] = [];
     const checker = new ConventionChecker(llmClientFactory(SKILL_CREATOR.authorModel));
-    const draftRepo = new McpServerDraftRepository(ctx.pool);
+    // MCP 서버 테이블은 MCP add-on 소유 — 데이터 모듈의 저장 연산으로(같은 풀, SQL 동일)
+    const mcpServers = getComponentStore('mcpServers', ctx.pool);
     // add-on 권한 집행 — 허용 권한이 정해진 설치만(deny by default, legacy_unreviewed 는 undefined 라 종전 동작).
     // 네트워크 권한이 없으면 stdio 서버는 `--network none` 샌드박스로 저장하고, 원격(HTTP) 서버는 성립할 수 없어 제외한다.
     const enforcePermissions = ctx.addonPermissions !== undefined;
@@ -409,8 +411,8 @@ export async function collectMcpDrafts(
                 { command: entry.command, args: entry.args },
             );
             const blockedByConvention = isBlockedByConvention(conv.findings);
-            const finalName = await resolveUniqueServerName(ctx.pool, ctx.userId, `${ctx.extensionName}-${entry.name}`);
-            const inserted = await draftRepo.insertDraft({
+            const finalName = await resolveUniqueServerName(mcpServers, ctx.userId, `${ctx.extensionName}-${entry.name}`);
+            const inserted = await mcpServers.insertDraft({
                 name: finalName,
                 transportType: entry.transportType,
                 command: entry.command ?? null,
@@ -475,31 +477,16 @@ async function appendAssetIndex(pool: Pool, skillId: string, relPaths: string[])
         ...list.split('\n').map(l => `> ${l}`),
     ].join('\n');
     try {
-        const r = await pool.query<{ content: string }>(
-            `UPDATE agent_skills SET content = content || $2, updated_at = NOW()
-              WHERE id = $1 RETURNING content`,
-            [skillId, block],
-        );
-        const updated = r.rows[0]?.content;
-        if (!updated) return;
-        const checksum = crypto.createHash('sha256').update(updated).digest('hex');
-        await pool.query(
-            `UPDATE skill_manifests SET prompt_md = $2, checksum = $3 WHERE id = $1`,
-            [skillId, updated, checksum],
-        );
+        await getComponentStore('skills', pool).appendToContent(skillId, block);
     } catch (e) {
         logger.warn(`번들 파일 안내 추가 실패 (fail-soft): ${skillId} — ${e instanceof Error ? e.message : String(e)}`);
     }
 }
 
 /** mcp_servers (user_id, name) unique 충돌 회피 — McpServerIngestService 관용구 동형. */
-async function resolveUniqueServerName(pool: Pool, userId: string, name: string): Promise<string> {
+async function resolveUniqueServerName(store: McpServerComponentStore, userId: string, name: string): Promise<string> {
     const base = name.slice(0, 100);
-    const r = await pool.query<{ id: string }>(
-        `SELECT id FROM mcp_servers WHERE user_id=$1 AND name=$2 LIMIT 1`,
-        [userId, base]
-    );
-    if (r.rows.length === 0) return base;
+    if (!(await store.findIdByUserAndName(userId, base))) return base;
     const suffix = crypto.randomBytes(3).toString('hex');
     return `${base.slice(0, 93)}-${suffix}`;
 }

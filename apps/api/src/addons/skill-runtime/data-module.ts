@@ -1,13 +1,17 @@
 /**
  * 스킬 add-on 의 데이터 의무 — 꺼져 있어도 호스트가 불러온다(addon-host/data-data.ts). 런타임·매니저 없이 SQL 만 쓴다.
- * 종전 Base 의 사용자 삭제(data/user-manager.ts)·내보내기(controllers/export.controller.ts)에 있던 스킬 부분을 옮겼다(2026-10-18).
+ * 종전 Base 의 사용자 삭제(data/user-manager.ts)·내보내기(controllers/export.controller.ts)에 있던 스킬 부분과, Base 확장
+ * 플랫폼이 쓰는 스킬 구성요소 저장 연산(stores.skills)을 싣는다(2026-10-18).
  *
  * @module addons/skill-runtime/data-module
  */
 import type { AddonDataModule } from '../../runtime-ports/addon-data';
 import { getPool } from '../../runtime-ports/db-access';
+import { skillComponentStore } from './data/skill-component-store';
 
 export const skillDataModule: AddonDataModule = {
+    stores: { skills: skillComponentStore },
+
     async exportUserData(userId) {
         const pool = getPool();
         const [manifests, skills] = await Promise.all([

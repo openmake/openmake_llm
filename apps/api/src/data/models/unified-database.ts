@@ -49,7 +49,6 @@ import type {
     ExternalServiceType,
     ExternalConnection,
     ExternalFile,
-    MCPServerRow,
     UserApiKey,
     UserApiKeyPublic,
     AgentTask,
@@ -60,7 +59,6 @@ import { API_KEY_LIMITS as _API_KEY_LIMITS } from './unified-database.types';
 export type {
     ExternalServiceType,
     ExternalConnection,
-    MCPServerRow,
     UserApiKey,
     UserApiKeyPublic,
 };
@@ -443,34 +441,6 @@ export class UnifiedDatabase {
 
     async getCachedFile(connectionId: string, externalId: string): Promise<ExternalFile | undefined> {
         return this.externalRepository.getCachedFile(connectionId, externalId);
-    }
-
-    // ============================================
-    // 🔌 MCP 외부 서버 메서드
-    // ============================================
-
-    async getMcpServers(): Promise<MCPServerRow[]> {
-        return this.externalRepository.getMcpServers();
-    }
-
-    async getGlobalMcpServers(): Promise<MCPServerRow[]> {
-        return this.externalRepository.getGlobalMcpServers();
-    }
-
-    async getMcpServerById(id: string): Promise<MCPServerRow | null> {
-        return this.externalRepository.getMcpServerById(id);
-    }
-
-    async createMcpServer(server: Omit<MCPServerRow, 'created_at' | 'updated_at'>): Promise<MCPServerRow> {
-        return this.externalRepository.createMcpServer(server);
-    }
-
-    async updateMcpServer(id: string, updates: Partial<Pick<MCPServerRow, 'name' | 'transport_type' | 'command' | 'args' | 'env' | 'url' | 'enabled'>>): Promise<MCPServerRow | null> {
-        return this.externalRepository.updateMcpServer(id, updates);
-    }
-
-    async deleteMcpServer(id: string): Promise<boolean> {
-        return this.externalRepository.deleteMcpServer(id);
     }
 
     // ============================================

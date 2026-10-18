@@ -4,7 +4,7 @@
 import {
     parseMcpServerFile,
     validateMcpServerManifest,
-} from '../../../agents/git-ingest/mcp-server-manifest-validator';
+} from '../../ingest/mcp-server-manifest-validator';
 
 const STDIO_VALID = `---
 type: mcp-server

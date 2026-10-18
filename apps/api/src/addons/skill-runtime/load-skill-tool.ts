@@ -41,7 +41,7 @@ async function loadSkillAssets(
 ): Promise<string> {
     try {
         const { getSkillManager } = await import('./skill-manager');
-        const { SkillAssetRepository } = await import('../../data/repositories/skill-asset-repository');
+        const { SkillAssetRepository } = await import('./data/skill-asset-repository');
         const { getPool } = await import('../../data/models/unified-database');
         const repo = new SkillAssetRepository(getPool());
 

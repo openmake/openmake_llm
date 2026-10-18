@@ -1,5 +1,6 @@
 /**
- * Add-on 데이터 모듈 계약 — 기능이 꺼져 있어도 지켜야 하는 사용자 데이터 처리(의무) (2026-10-18, MCP·스킬 저장 계층 이전).
+ * Add-on 데이터 모듈 계약 — 기능이 꺼져 있어도 지켜야 하는 사용자 데이터 처리(의무)와, Base 확장 플랫폼이 쓰는 구성요소 저장
+ * 연산(stores) (2026-10-18, MCP·스킬 저장 계층 이전).
  *
  * GDPR 이동권(내보내기)·삭제권(사용자 삭제)·전역 메모리 격리·보존 정리는 add-on 의 켜짐과 무관하다 — 기능을 env·DB 로
  * 꺼도 그 add-on 이 소유한 테이블(`config/addon-boundary.ts` `ADDON_OWNED_CORE_TABLES`·add-on 마이그레이션 테이블)의
@@ -12,6 +13,7 @@
  * @module runtime-ports/addon-data
  */
 import type { PoolClient } from 'pg';
+import type { AddonComponentStores } from './component-stores';
 
 export interface AddonDataModule {
     /**
@@ -25,6 +27,8 @@ export interface AddonDataModule {
     isMemoryIsolatedSession?(userId: string, sessionId: string): Promise<boolean>;
     /** 주기 보존 정리(`data/db-retention.ts` 가 부른다) — 지운·바꾼 행 수를 돌려준다. 실패는 그 작업만 건너뛴다 */
     retention?: ReadonlyArray<{ name: string; run(): Promise<number> }>;
+    /** 확장 구성요소 저장 연산(`runtime-ports/component-stores.ts`) — Base 확장 플랫폼이 이 add-on 의 구성요소를 다룰 때 쓴다 */
+    stores?: AddonComponentStores;
 }
 
 /** 호스트가 불러온 결과 — 모듈을 불러오지 못했으면 `data` 가 null 이고 `error` 에 사유가 있다 */

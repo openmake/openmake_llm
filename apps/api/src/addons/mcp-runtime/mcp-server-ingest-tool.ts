@@ -64,7 +64,7 @@ export const importMcpServerFromGitTool: MCPToolDefinition<ImportMcpServerFromGi
         const isAdmin = isAdminRole(context.role);
 
         try {
-            const { McpServerIngestService } = await import('../../agents/git-ingest/mcp-server-ingest-service');
+            const { McpServerIngestService } = await import('./ingest/mcp-server-ingest-service');
             const { GitFetcher } = await import('../../agents/git-ingest/git-fetcher');
             const { LLMClient } = await import('../../llm/client');
             const { getUnifiedDatabase } = await import('../../data/models/unified-database');

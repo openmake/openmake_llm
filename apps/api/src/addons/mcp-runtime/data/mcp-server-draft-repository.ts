@@ -14,9 +14,10 @@
  * @module data/repositories/mcp-server-draft-repository
  */
 import * as crypto from 'crypto';
-import { BaseRepository } from './base-repository';
-import { encryptToken } from '../../utils/token-crypto';
-import type { EnvInputHint } from '../../tool-contract/env-placeholder';
+import { BaseRepository } from '../../../runtime-ports/db-access';
+import type { McpServerDraftInput } from '../../../runtime-ports/component-stores';
+import { encryptToken } from '../../../utils/token-crypto';
+import type { EnvInputHint } from '../../../tool-contract/env-placeholder';
 
 /**
  * manifest_meta.envHints 에서 시크릿으로 선언된 env 키를 추린다.
@@ -30,18 +31,8 @@ function extractSensitiveEnvKeys(manifestMeta: Record<string, unknown> | null): 
     return new Set(hints.filter(h => h?.sensitive === true && typeof h.key === 'string').map(h => h.key));
 }
 
-interface InsertDraftInput {
-    name: string;
-    transportType: 'stdio' | 'sse' | 'streamable-http';
-    command?: string | null;
-    args?: string[] | null;
-    env?: Record<string, string> | null;
-    url?: string | null;
-    createdBy: string;
-    manifestMeta: Record<string, unknown>;
-    /** docker 샌드박스 네트워크 — 미지정이면 컬럼 기본값(full). add-on 권한 집행이 'none' 을 넘긴다 */
-    sandboxNetwork?: 'full' | 'none';
-}
+/** 입력 모양은 구성요소 저장 계약과 같다(`runtime-ports/component-stores.ts`) */
+type InsertDraftInput = McpServerDraftInput;
 
 interface ApproveInput {
     id: string;
