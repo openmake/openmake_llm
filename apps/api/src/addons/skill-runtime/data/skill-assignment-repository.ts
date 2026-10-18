@@ -7,7 +7,7 @@
  *
  * @module data/repositories/skill-assignment-repository
  */
-import { BaseRepository, type QueryParam } from './base-repository';
+import { BaseRepository, type QueryParam } from '../../../data/repositories/base-repository';
 import type { AgentSkill } from './skill-repository';
 import { rowToSkill } from './skill-row-mapper';
 

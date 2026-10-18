@@ -9,8 +9,9 @@
  * 등록이 없으면(= 스킬 add-on 이 꺼진 배포) NULL 구현이 선다 — 주입 0건, 기록 no-op, 카탈로그 없음.
  * 스킬이 없는 것은 오류가 아니므로 Base 경로는 전부 그대로 돈다.
  *
- * ⚠️ DB 스키마(`agent_skills`·`skill_manifests`·`skill_audit_log`)와 저장소 계층은 Base 에 남는다 —
- * 테이블은 코어 자산이고, add-on 은 그 위의 판단만 가져간다(arch_plan S3 "기존 테이블은 코어에 유지").
+ * ⚠️ 2026-10-18 부터 저장소 계층도 add-on 이다 — 테이블 정의는 코어 마이그레이션에 남지만(arch_plan S3 의 스키마 위치)
+ * 소유 코드는 `addons/skill-runtime/data/` 이고 Base 는 SQL 을 쓰지 않는다(`config/addon-boundary.ts` `ADDON_OWNED_CORE_TABLES`).
+ * 종전 결정("저장은 Base, 판단은 add-on", 2026-09-19)을 사용자 결정으로 바꿨다.
  *
  * @module runtime-ports/skill-runtime
  */
@@ -19,6 +20,7 @@ import type {
     ActiveSkillBinding, ManifestPromptResult, SkillCatalogOptions, SkillRecordDTO, SkillSummary, SkillUsageEvent,
 } from '@openmake/plugin-contracts';
 import type { ToolDefinition } from '../llm/types';
+import type { ProceduralHooks } from '../services/task-sandbox/tools-procedural';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('SkillRuntimePort');
@@ -65,6 +67,13 @@ export interface SkillRuntime {
     recordUsage(events: SkillUsageEvent[]): void;
     /** 주입 상한 초과 턴에 후보를 목록으로 넘겨 모델이 load_skill 로 고르게 할지 */
     isOfferEnabled(): boolean;
+    /**
+     * 에이전트 작업 절차 스킬(`skill_save`·`skill_run`)의 저장·조회 훅 — 작업 소유자에 묶는다. 절차는 스킬 테이블에 저장되므로
+     * 스킬 add-on 이 맡는다(2026-10-18 저장 계층 이전). 없으면 undefined — 작업 도구에 절차 스킬을 노출하지 않는다.
+     */
+    proceduralHooks(userId: string): ProceduralHooks | undefined;
+    /** 작업 시스템 프롬프트의 절차 스킬 안내 블록(목표와 비슷한 저장 절차) — 없으면 빈 문자열 */
+    buildProceduralSkillBlock(userId: string, goal: string): Promise<string>;
 }
 
 /** 스킬 add-on 이 꺼졌을 때의 구현 — Base 경로를 막지 않는다 */
@@ -78,6 +87,8 @@ const NULL_SKILL_RUNTIME: SkillRuntime = {
     async searchActiveSkills() { return []; },
     recordUsage() { /* no-op */ },
     isOfferEnabled() { return false; },
+    proceduralHooks() { return undefined; },
+    async buildProceduralSkillBlock() { return ''; },
 };
 
 let runtime: SkillRuntime | null = null;

@@ -5,7 +5,7 @@
  * 확장 설치 스킬 등 기본 카테고리 'general' 은 어떤 에이전트와도 일치하지 않아
  * 지정이 무의미했다 (2026-08-16). 'general' 은 카테고리 무관 통과해야 한다.
  */
-import { SkillAssignmentRepository } from '../skill-assignment-repository';
+import { SkillAssignmentRepository } from '../../data/skill-assignment-repository';
 
 function repoWithCapture() {
     const repo = new SkillAssignmentRepository({} as never);

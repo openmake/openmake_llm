@@ -4,10 +4,10 @@
  * (presentation-designer)이 본문 한 번 수정에 모든 턴 주입으로 풀릴 참이었다.
  */
 import { Pool } from 'pg';
-import { SkillRepository } from '../skill-repository';
-import { parseManifestTriggers } from '../../../agents/manifest-triggers';
+import { SkillRepository } from '../../data/skill-repository';
+import { parseManifestTriggers } from '../../../../agents/manifest-triggers';
 
-jest.mock('../../retry-wrapper', () => ({
+jest.mock('../../../../data/retry-wrapper', () => ({
     withRetry: (fn: () => unknown) => fn(),
 }));
 

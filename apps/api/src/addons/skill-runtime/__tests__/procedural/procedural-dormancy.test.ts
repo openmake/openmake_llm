@@ -1,7 +1,7 @@
 /**
  * 절차 스킬 휴면 판정 — 연속 실패하거나 오래 쓰이지 않은 스킬을 이름 매칭 후보에서 뺀다(삭제하지 않는다).
  */
-import { isProceduralDormant, dropDormantSkills, type SkillRunRow } from './procedural-dormancy';
+import { isProceduralDormant, dropDormantSkills, type SkillRunRow } from '../../procedural/procedural-dormancy';
 
 const DAY = 24 * 60 * 60 * 1000;
 const now = new Date('2026-10-04T00:00:00Z');

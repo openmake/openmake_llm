@@ -1,8 +1,8 @@
 /**
  * 절차 스킬 저장 — 같은 이름이면 새 행을 넣지 않고 갱신(버전 올림)하거나 거절하고, 직전 본문을 보존해 되돌린다.
  */
-import { saveProceduralSkill, revertProceduralSkill, parseSpec, PROCEDURAL_CATEGORY, type ProceduralSpec } from './procedural-skill';
-import type { SkillRepository, AgentSkill } from '../../data/repositories/skill-repository';
+import { saveProceduralSkill, revertProceduralSkill, parseSpec, PROCEDURAL_CATEGORY, type ProceduralSpec } from '../../procedural/procedural-skill';
+import type { SkillRepository, AgentSkill } from '../../data/skill-repository';
 
 function fakeRepo(initial: AgentSkill[] = []) {
     const rows = [...initial];

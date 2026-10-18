@@ -9,13 +9,14 @@
  * @module data/repositories/skill-repository
  */
 
-import { createLogger } from '../../utils/logger';
+import { createLogger } from '../../../utils/logger';
 import { upsertSkillManifest, extractPreservedManifestYaml, SKILL_VERSION_LATEST_ORDER_SQL, type SkillManifestRow } from './skill-manifest-sync';
-import { BaseRepository, QueryParam } from './base-repository';
-import { assertResourceOwnerOrAdmin } from '../../auth/ownership';
+import { BaseRepository, QueryParam } from '../../../data/repositories/base-repository';
+import { assertResourceOwnerOrAdmin } from '../../../auth/ownership';
 import { assertSkillMutationAllowed } from './skill-authz';
 import { rowToSkill } from './skill-row-mapper';
 import { buildDraftQuery } from './skill-draft-query';
+import { baseDataPort } from '../../../runtime-ports/base-data-port';
 import { SkillAssignmentRepository } from './skill-assignment-repository';
 import type {
     ActorContext,
@@ -428,8 +429,13 @@ export class SkillRepository extends BaseRepository {
         const q = buildDraftQuery(options);
         const countResult = await this.query<CountRow>(q.countSql, q.params);
         const dataResult = await this.query(q.dataSql, q.dataParams);
+        // 확장 이름은 Base 테이블(user_extensions)이라 포트로 채운다 — 확장 유래가 아닌 draft 는 이름 없이 그대로
+        const extIds = dataResult.rows.map((row) => row.extension_id).filter((id): id is string => typeof id === 'string' && id !== '');
+        const names = await baseDataPort.userExtensions.namesByIds(extIds);
         return {
-            drafts: dataResult.rows.map((row) => rowToSkill(row)),
+            drafts: dataResult.rows.map((row) => rowToSkill(
+                typeof row.extension_id === 'string' && names.has(row.extension_id) ? { ...row, extension_name: names.get(row.extension_id) } : row,
+            )),
             total: parseInt(countResult.rows[0]?.total ?? '0', 10),
             limit: q.limit,
             offset: q.offset,

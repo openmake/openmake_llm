@@ -1,4 +1,4 @@
-import { buildDraftQuery } from '../skill-draft-query';
+import { buildDraftQuery } from '../../data/skill-draft-query';
 
 describe('buildDraftQuery', () => {
     it('target=user — created_by 조건 + userId 파라미터', () => {
@@ -27,15 +27,14 @@ describe('buildDraftQuery', () => {
     });
 
     // 확장별 묶음을 위해 목록 쿼리만 JOIN 한다 (count 는 JOIN 불필요)
-    it('목록 쿼리는 확장 이름을 LEFT JOIN 으로 싣는다', () => {
+    it('목록 쿼리는 Base 테이블(user_extensions)을 JOIN 하지 않는다 — 확장 이름은 저장소가 포트로 채운다', () => {
         const q = buildDraftQuery({ target: 'all' });
-        expect(q.dataSql).toContain('LEFT JOIN user_extensions');
-        expect(q.dataSql).toContain('e.name AS extension_name');
+        expect(q.dataSql).not.toContain('user_extensions');
         expect(q.dataSql).toContain('s.extension_id');
         expect(q.countSql).not.toContain('JOIN');
     });
 
-    it('JOIN 쿼리의 WHERE 는 별칭이 붙는다 (컬럼 모호성 방지)', () => {
+    it('목록 쿼리의 WHERE 는 별칭이 붙는다', () => {
         const q = buildDraftQuery({ target: 'user', userId: 'u1' });
         expect(q.dataSql).toContain("s.status = 'draft'");
         expect(q.dataSql).toContain('s.created_by = $1');

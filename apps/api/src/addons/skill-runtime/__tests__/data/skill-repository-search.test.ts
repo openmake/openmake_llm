@@ -4,9 +4,9 @@
  * count·data 두 쿼리가 같은 WHERE 를 써야 total 로 카탈로그 상한 초과를 판정할 수 있다.
  */
 import { Pool } from 'pg';
-import { SkillRepository, AGENT_PERSONA_SKILL_ID_PREFIX } from '../skill-repository';
+import { SkillRepository, AGENT_PERSONA_SKILL_ID_PREFIX } from '../../data/skill-repository';
 
-jest.mock('../../retry-wrapper', () => ({
+jest.mock('../../../../data/retry-wrapper', () => ({
     withRetry: (fn: () => unknown) => fn(),
 }));
 

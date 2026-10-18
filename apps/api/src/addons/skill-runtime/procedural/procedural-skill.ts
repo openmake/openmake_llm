@@ -12,17 +12,17 @@
  *
  * @module services/agent-task/procedural-skill
  */
-import { SkillRepository } from '../../data/repositories/skill-repository';
-import { getPool } from '../../data/models/unified-database';
-import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
-import { goalSimilarity } from './task-learning';
-import { createLogger } from '../../utils/logger';
-import { getSkillRuntime } from '../../runtime-ports/skill-runtime';
-import { PROCEDURAL_SKILL } from '../../config/procedural-skill';
-export { findPlaintextSecrets } from './procedural-secrets';
-import { proceduralSkillExistsMessage, proceduralRevertUnavailableMessage } from '../../prompts/agent-task-skill-memory';
+import { SkillRepository } from '../data/skill-repository';
+import { getPool } from '../../../runtime-ports/db-access';
+import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
+import { goalSimilarity } from '../../../services/agent-task/task-learning';
+import { createLogger } from '../../../utils/logger';
+import { getSkillRuntime } from '../../../runtime-ports/skill-runtime';
+import { PROCEDURAL_SKILL } from '../../../config/procedural-skill';
+export { findPlaintextSecrets } from '../../../services/agent-task/procedural-secrets';
+import { proceduralSkillExistsMessage, proceduralRevertUnavailableMessage } from '../../../prompts/agent-task-skill-memory';
 import { dropDormantSkills } from './procedural-dormancy';
-import { PROCEDURAL_SAVE_HINT_LINES, PROCEDURAL_REUSE_LINES } from '../../prompts/procedural-skill-prompt';
+import { PROCEDURAL_SAVE_HINT_LINES, PROCEDURAL_REUSE_LINES } from '../../../prompts/procedural-skill-prompt';
 
 const logger = createLogger('ProceduralSkill');
 
