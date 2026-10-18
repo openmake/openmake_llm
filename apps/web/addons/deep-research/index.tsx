@@ -36,6 +36,8 @@ function ProgressBanner({ progress }: { progress: unknown }) {
 
 export const deepResearchAddon: WebAddon = {
   id: "deep-research",
+  // 화면(`/research`)은 pages/index.tsx → addons/pages.ts 에 등록한다. 진입점은 히스토리 허브의 탭(대화 히스토리 다음)
+  hubTabs: [{ hub: "history", href: "/research", labelKey: "pageTabs.research", order: 20 }],
   chatMode: {
     Icon: Telescope,
     labelKey: "toggle.deepResearch",

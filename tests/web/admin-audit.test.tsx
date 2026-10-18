@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import messages from '../../apps/web/messages/ko.json';
 import AdminAuditPage from '../../apps/web/app/(workspace)/admin/audit/page';
 
@@ -25,9 +26,16 @@ test('audit requests follow period and recorded actions, and failures stay disti
     return Response.json({ success: true, data: { logs: [], total: 0 } });
   };
   const root = createRoot(document.getElementById('root')!);
+  // 앱과 같은 공급자 — 관리자 허브 탭이 켜진 add-on 목록(/api/addons)을 react-query 로 읽는다
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const page = (key?: string) => (
+    <QueryClientProvider client={queryClient}>
+      <NextIntlClientProvider locale="ko" messages={messages} timeZone="Asia/Seoul"><AdminAuditPage key={key} /></NextIntlClientProvider>
+    </QueryClientProvider>
+  );
   const render = async () => {
     await act(async () => {
-      root.render(<NextIntlClientProvider locale="ko" messages={messages} timeZone="Asia/Seoul"><AdminAuditPage /></NextIntlClientProvider>);
+      root.render(page());
     });
   };
   const click = async (label: string) => {
@@ -68,7 +76,7 @@ test('audit requests follow period and recorded actions, and failures stay disti
     fail = false;
     actionsFail = true;
     await act(async () => {
-      root.render(<NextIntlClientProvider locale="ko" messages={messages} timeZone="Asia/Seoul"><AdminAuditPage key="metadata-failure" /></NextIntlClientProvider>);
+      root.render(page('metadata-failure'));
     });
     assert.match(document.body.textContent!, /조건에 맞는 로그가 없습니다/);
     assert.doesNotMatch(document.body.textContent!, /감사 로그를 가져오지 못했습니다/);

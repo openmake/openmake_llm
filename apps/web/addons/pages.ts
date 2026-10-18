@@ -6,9 +6,10 @@
  */
 import type { ReactNode } from "react";
 import type { WebAddonPage, WebAddonPageProps } from "./types";
+import { deepResearchPages } from "./deep-research/pages";
 import { knowledgePages } from "./knowledge/pages";
 
-export const WEB_ADDON_PAGES: readonly WebAddonPage[] = [...knowledgePages];
+export const WEB_ADDON_PAGES: readonly WebAddonPage[] = [...deepResearchPages, ...knowledgePages];
 
 /** URL 조각으로 add-on 화면을 찾아 렌더한다 — 맞는 화면이 없으면 null(Base 가 404) */
 export function renderAddonPage(

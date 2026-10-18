@@ -7,6 +7,8 @@ import { isValidElement, type ReactElement } from 'react';
 import { WEB_ADDON_PAGES, renderAddonPage } from '../../apps/web/addons/pages';
 import { SpaceDetail } from '../../apps/web/addons/knowledge/pages/space-detail';
 import { SpaceListView } from '../../apps/web/addons/knowledge/pages/space-list';
+import { ResearchPage } from '../../apps/web/addons/deep-research/pages/research-page';
+import { WEB_ADDONS } from '../../apps/web/addons/registry';
 
 const element = (node: unknown): ReactElement<Record<string, unknown>> => {
   assert.ok(isValidElement(node), '화면 요소가 아니다');
@@ -22,9 +24,22 @@ test('/knowledge 는 목록, /knowledge/<id> 는 상세(출처 칩의 doc·chunk
   assert.deepEqual(element(renderAddonPage(['knowledge', 'space-1'], { doc: ['a', 'b'] })).props, { spaceId: 'space-1', docId: null, chunkId: null });
 });
 
+test('/research 는 딥리서치 화면, 하위 경로는 없다', () => {
+  assert.equal(element(renderAddonPage(['research'], {})).type, ResearchPage);
+  assert.equal(renderAddonPage(['research', 'x'], {}), null);
+});
+
 test('add-on 이 다루지 않는 경로는 null — Base 가 404', () => {
   assert.equal(renderAddonPage(['knowledge', 'space-1', 'extra'], {}), null);
   assert.equal(renderAddonPage(['no-such-addon-page'], {}), null);
+});
+
+test('허브 탭으로 끼운 add-on 링크는 등록된 add-on 화면을 가리킨다(죽은 링크 없음)', () => {
+  const hrefs = WEB_ADDONS.flatMap((a) => a.hubTabs ?? []).map((t) => t.href);
+  assert.ok(hrefs.includes('/research'));
+  for (const href of hrefs) {
+    assert.notEqual(renderAddonPage(href.split('/').filter(Boolean), {}), null, `${href} 를 렌더할 화면이 없다`);
+  }
 });
 
 test('레지스트리에서 뺀 add-on 의 화면은 렌더되지 않는다', () => {
