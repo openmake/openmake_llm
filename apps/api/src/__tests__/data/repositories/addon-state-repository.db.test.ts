@@ -29,7 +29,8 @@ describeOrSkip('AddonStateRepository (TEMP addon_installations)', () => {
 
     it('관리자 토글 disabled → enabled 가 된다(의도·revision 기록)', async () => {
         const off = await repo.setState('x-runtime', 'disabled', 'test');
-        expect(off).toMatchObject({ state: 'disabled', desired_state: 'disabled', failure_reason: 'test' });
+        // 끄기 사유는 감사 로그 몫 — 실패 사유 칸에는 남기지 않는다
+        expect(off).toMatchObject({ state: 'disabled', desired_state: 'disabled', failure_reason: null });
         const on = await repo.setState('x-runtime', 'enabled');
         expect(on).toMatchObject({ state: 'enabled', desired_state: 'enabled' });
         expect(on!.state_revision).toBeGreaterThan(off!.state_revision);
@@ -41,6 +42,8 @@ describeOrSkip('AddonStateRepository (TEMP addon_installations)', () => {
         await repo.markBootSucceeded('x-runtime');
         expect(await repo.get('x-runtime')).toMatchObject({ state: 'enabled', last_failure_code: null, failure_reason: null });
         const failed = await repo.setState('x-runtime', 'failed', 'manual');
-        expect(failed).toMatchObject({ state: 'failed', desired_state: 'enabled' });
+        expect(failed).toMatchObject({ state: 'failed', desired_state: 'enabled', failure_reason: 'manual' });
+        // failed 에서 다른 상태로 바꾸면 실패 사유가 지워진다
+        expect(await repo.setState('x-runtime', 'enabled', 'back')).toMatchObject({ state: 'enabled', failure_reason: null });
     });
 });

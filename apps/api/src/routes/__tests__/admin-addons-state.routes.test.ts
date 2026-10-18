@@ -6,6 +6,8 @@ const setState = jest.fn();
 const applyDesiredState = jest.fn();
 const logAudit = jest.fn(async (_e: unknown) => undefined);
 const clearAddonStateCache = jest.fn();
+const listRows = jest.fn();
+const listBuiltinAddons = jest.fn((): unknown[] => []);
 
 jest.mock('../../auth', () => {
     const { requireAdmin } = jest.requireActual('../../auth/middleware');
@@ -20,9 +22,9 @@ jest.mock('../../auth', () => {
 jest.mock('../../data/models/unified-database', () => ({ getPool: () => ({}) }));
 jest.mock('../../data/repositories/addon-state-repository', () => ({
     ...jest.requireActual('../../data/repositories/addon-state-repository'),
-    AddonStateRepository: jest.fn().mockImplementation(() => ({ setState: (...a: unknown[]) => setState(...a) })),
+    AddonStateRepository: jest.fn().mockImplementation(() => ({ setState: (...a: unknown[]) => setState(...a), list: () => listRows() })),
 }));
-jest.mock('../../addon-host/routes', () => ({ listBuiltinAddons: () => [] }));
+jest.mock('../../addon-host/routes', () => ({ listBuiltinAddons: () => listBuiltinAddons() }));
 jest.mock('../../addon-host/builtin-registry', () => ({ listBuiltinAddonDefs: () => [], isBuiltinAddonEnabled: () => true }));
 jest.mock('../../addon-host/lifecycle', () => ({ applyDesiredState: (...a: unknown[]) => applyDesiredState(...a) }));
 jest.mock('../../services/addon/model-requirements', () => ({ availableChatModelFacts: async () => [], checkModelRequirement: () => ({ ok: true, satisfiedBy: [] }) }));
@@ -88,5 +90,23 @@ describe('PATCH /api/admin/addons/:addonId/state', () => {
         expect(res.status).toBe(403);
         expect(setState).not.toHaveBeenCalled();
         expect(applyDesiredState).not.toHaveBeenCalled();
+    });
+});
+
+describe('GET /api/admin/addons', () => {
+    it('failureReason 은 state 가 failed 인 행에서만 내보낸다 — 다른 상태에 남은 값은 null', async () => {
+        listBuiltinAddons.mockReturnValue([
+            { id: 'ok', name: 'ok', version: '1.0.0', kind: 'runtime', enabled: true },
+            { id: 'bad', name: 'bad', version: '1.0.0', kind: 'runtime', enabled: true },
+        ]);
+        listRows.mockResolvedValue([
+            { addon_id: 'ok', state: 'enabled', desired_state: 'enabled', state_revision: 1, last_failure_code: null, failure_reason: 'stale', source: 'builtin', entitlement_sku: null, updated_at: null },
+            { addon_id: 'bad', state: 'failed', desired_state: 'enabled', state_revision: 2, last_failure_code: 'runtime_failed', failure_reason: 'boom', source: 'builtin', entitlement_sku: null, updated_at: null },
+        ]);
+        const res = await request(app).get('/api/admin/addons').set('x-test-role', 'admin');
+        expect(res.status).toBe(200);
+        const byId = Object.fromEntries((res.body.data.addons as Array<{ id: string; failureReason: string | null }>).map(a => [a.id, a]));
+        expect(byId.ok).toMatchObject({ state: 'enabled', failureReason: null });
+        expect(byId.bad).toMatchObject({ state: 'failed', failureReason: 'boom' });
     });
 });

@@ -107,7 +107,8 @@ export class AddonStateRepository {
                     updated_at = NOW()
               WHERE addon_id = $1
               RETURNING *`,
-            [addonId, state, failureReason ?? null, desired],
+            // failure_reason 은 failed 일 때만 — 끄기·켜기의 사유는 감사 로그(addon.state_changed)에 남고, 여기 넣으면 정상 add-on 이 실패로 보인다
+            [addonId, state, state === 'failed' ? (failureReason ?? null) : null, desired],
         );
         return r.rows[0] ?? null;
     }
