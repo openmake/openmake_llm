@@ -88,7 +88,7 @@ function mapTemplate(t: ApiCatalogTemplate): CatalogEntry {
 }
 
 
-export default function McpCatalogPage() {
+export function McpCatalogPage() {
   const t = useTranslations("mcpCatalog");
   const tTabs = useTranslations("pageTabs");
   const router = useRouter();

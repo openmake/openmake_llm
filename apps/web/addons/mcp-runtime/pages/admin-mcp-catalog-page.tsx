@@ -18,7 +18,7 @@ import {
 import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
-import { McpOAuthClientModal } from "@/components/admin/mcp-oauth-client-modal";
+import { McpOAuthClientModal } from "@/addons/mcp-runtime/components/mcp-oauth-client-modal";
 
 type TransportType = "stdio" | "sse" | "streamable-http";
 
@@ -268,7 +268,7 @@ function DeleteTemplateModal({
 }
 
 /* ── 페이지 ─────────────────────────────────────────────────── */
-export default function AdminMcpCatalogPage() {
+export function AdminMcpCatalogPage() {
   const t = useTranslations("adminMcpCatalog");
   const [templates, setTemplates] = useState<CatalogTemplate[]>([]);
   const [loading, setLoading] = useState(true);

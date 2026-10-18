@@ -20,7 +20,7 @@ import {
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
-import { McpInstancesPanel } from "@/components/settings/mcp-instances-panel";
+import { McpInstancesPanel } from "@/addons/mcp-runtime/components/mcp-instances-panel";
 import { useAppStore } from "@/lib/store";
 
 /**

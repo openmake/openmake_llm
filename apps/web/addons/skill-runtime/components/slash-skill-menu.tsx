@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef } from "react";
 import { Sparkles, ArrowRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
-import { skillCategoryLabel, skillSlug, type SkillSummary } from "@/lib/skills-api";
+import { skillCategoryLabel, skillSlug, type SkillSummary } from "@/addons/skill-runtime/skills-api";
 
 interface SlashSkillMenuProps {
   /** 표시할 스킬 목록 (검색 시 평면 / 미검색 시 카테고리순 정렬된 단일 배열) */

@@ -629,7 +629,7 @@ function SkillCard({
 
 /* ── Draft 탭 ─────────────────────────────────────────────── */
 /* ── 메인 페이지 ──────────────────────────────────────────── */
-export default function SkillLibraryPage() {
+export function SkillLibraryPage() {
   const t = useTranslations("skillLibrary");
   const router = useRouter();
   const [skills, setSkills] = useState<Skill[]>([]);

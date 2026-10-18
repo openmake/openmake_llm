@@ -105,6 +105,78 @@ export interface WebAddon {
   sidebarSections?: readonly SidebarSectionExtension[];
   chatContextBanners?: readonly ChatContextBannerExtension[];
   hubTabs?: readonly HubTabExtension[];
+  approvalSections?: readonly ApprovalSectionExtension[];
+  settingsTabs?: readonly SettingsTabExtension[];
+  adminQuickLinks?: readonly AdminQuickLinkExtension[];
+  /** 입력창 `/` 메뉴 — 켜진 add-on 중 첫 번째 것만 쓴다 */
+  slashMenu?: SlashMenuExtension;
+}
+
+/** 승인함(/approvals) 섹션 — Base 섹션(에이전트 작업 10 · Custom Agent 40) 사이에 순서 값으로 들어간다 */
+export interface ApprovalSectionExtension {
+  id: string;
+  order: number;
+  Icon: ComponentType<{ className?: string }>;
+  /** next-intl 전체 키 */
+  titleKey: string;
+  hintKey: string;
+  Component: ComponentType<{ onRefreshAction: () => void }>;
+  /**
+   * 사이드바 승인 배지에 더할 대기 건수. 요청은 `redirectOnUnauthorized: false` 로 보내 인증 만료를 ApiError(401)로 던진다 —
+   * 사이드바가 그 신호로 로그인 상태를 다시 맞춘다(삼키면 만료 탭이 폴링을 멈추지 않는다).
+   */
+  countPending(): Promise<number>;
+}
+
+/** 설정(/settings) 탭 — Base 탭은 10 단위 순서 */
+export interface SettingsTabExtension {
+  id: string;
+  order: number;
+  /** next-intl 전체 키 */
+  labelKey: string;
+  Icon: ComponentType<{ className?: string }>;
+  Component: ComponentType;
+  /** 탭이 행 단위로 즉시 저장한다 — 공용 저장 버튼·불러오기 실패 안내를 숨긴다 */
+  ownsSaving?: boolean;
+}
+
+/** 관리자 대시보드(/admin) 바로가기 — Base 링크는 10 단위 순서 */
+export interface AdminQuickLinkExtension {
+  href: string;
+  order: number;
+  /** next-intl 전체 키 */
+  titleKey: string;
+  descKey: string;
+  Icon: ComponentType<{ className?: string }>;
+}
+
+/** 입력창 `/` 메뉴의 표시 컴포넌트 입력 — 항목 모양은 add-on 이 정한다 */
+export interface SlashMenuViewProps {
+  items: readonly unknown[];
+  /** 검색어가 비어 묶어 보이는 중 */
+  grouped: boolean;
+  /** 키보드 활성 인덱스 — items.length 는 "전체 보기" */
+  activeIndex: number;
+  loading: boolean;
+  onSelect: (item: unknown) => void;
+  onHover: (index: number) => void;
+  onViewAll: () => void;
+}
+
+/**
+ * 입력창 `/` 메뉴 — `/토큰` 감지·디바운스·키보드 이동·닫기는 Base 입력창이 하고, 후보 조회·정렬·삽입 텍스트·전체 보기 주소·
+ * 표시는 add-on 이 준다. 켜진 add-on 이 없으면 메뉴가 뜨지 않는다(입력한 `/텍스트` 는 그대로 보낸다).
+ */
+export interface SlashMenuExtension {
+  /** react-query 키 접두 */
+  queryKey: string;
+  fetch(query: string): Promise<unknown[]>;
+  /** 검색어가 비었을 때의 정렬(묶음 헤더용) — 없으면 그대로 */
+  arrangeGrouped?(items: readonly unknown[]): unknown[];
+  /** 선택 시 입력창에 채울 텍스트 */
+  insertText(item: unknown): string;
+  viewAllHref: string;
+  View: ComponentType<SlashMenuViewProps>;
 }
 
 /** 허브 탭 바(components/hub-tabs.tsx) — 허브 이름은 Base 가 정한다 */
@@ -132,6 +204,8 @@ export interface WebAddonPageProps {
  */
 export interface WebAddonPage {
   path: string;
+  /** 놓이는 영역 — admin 이면 `/admin/<path>` 이고 관리자 레이아웃(가드)이 감싼다. 기본 workspace */
+  area?: "workspace" | "admin";
   /** 이 add-on 이 다루지 않는 하위 경로면 null — Base 가 404 로 응답한다 */
   render(props: WebAddonPageProps): ReactNode | null;
 }
