@@ -213,13 +213,13 @@ claim 은 `UPDATE … fencing_token = fencing_token + 1 … FOR UPDATE SKIP LOCK
 
 | 접수 지점 | actor | claim 때 재검사 |
 |---|---|---|
-| 문서 업로드·재시도 | 개인 Space `user` / 조직 Space `org`(조직 id) | 상태 + 조직 사용권(`checkUserEntitlement`) |
+| 문서 업로드·재시도 | 개인 Space `user` / 조직 Space `org`(조직 id) | 상태 + 조직 사용권(`checkUserEntitlement`) — `user` 는 접수자의 지금 활성 조직, `org` 는 **저장된 조직**(그 조직 멤버인지 + 그 조직 허용 목록, 조직 id 가 없으면 `missing-org` 거절) |
 | 관리자 재색인·재청킹 | 그 관리자 `user` | 같음 |
 | 문서·Space 삭제의 정리(cleanup) | `system`(요청자는 기록용) | add-on 단위 게이트만 |
 | 평가 하네스 | `system` | add-on 단위 게이트만 |
 | 004 이전 행(actor NULL) | `system` 으로 본다 | add-on 단위 게이트만 |
 
-접수 때 `policy_revision`(그 시점 `addon_installations.state_revision`, 조회 실패면 NULL)을 함께 남긴다 — 추적용이며 판정은 claim 때 늘 다시 한다. tick 은 먼저 add-on 단위 strict 판정(`readAddonRunVerdict` — 꺼짐·실패·env 차단은 stopped, 조회 실패는 unknown)을 보고 run 이 아니면 그 tick 은 집지 않는다. 집은 사용자·조직 작업의 판정: `ok` 실행, `not-entitled` 최종 실패(작업 `failed`, 문서 버전 `ADDON_NOT_ENTITLED`), `disabled`·`failed`·`state-unknown` 보류(queued 로 되돌리고 attempts −1, `KNOWLEDGE_JOB_ADMISSION_DEFER_MS` 뒤). add-on 은 이 판정을 `runtime-ports/addon-admission` 으로만 묻는다.
+접수 때 `policy_revision`(그 시점 `addon_installations.state_revision`, 조회 실패면 NULL)을 함께 남긴다 — 추적용이며 판정은 claim 때 늘 다시 한다. tick 은 먼저 add-on 단위 strict 판정(`readAddonRunVerdict` — 꺼짐·실패·env 차단은 stopped, 조회 실패는 unknown)을 보고 run 이 아니면 그 tick 은 집지 않는다. 조직 작업은 접수자가 그 뒤 활성 조직을 바꿔도 기준이 바뀌지 않는다(외부 리뷰 A3 — 종전엔 사용자 id 만 넘겨 지금 활성 조직의 정책이 적용됐다). 집은 사용자·조직 작업의 판정: `ok` 실행, `not-entitled`(조직을 떠난 경우 포함) 최종 실패(작업 `failed`, 문서 버전 `ADDON_NOT_ENTITLED`), `disabled`·`failed`·`state-unknown` 보류(queued 로 되돌리고 attempts −1, `KNOWLEDGE_JOB_ADMISSION_DEFER_MS` 뒤). add-on 은 이 판정을 `runtime-ports/addon-admission` 으로만 묻는다.
 
 ### 9.3 취소
 

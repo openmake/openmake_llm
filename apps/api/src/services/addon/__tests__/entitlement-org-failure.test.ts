@@ -74,6 +74,41 @@ describe('조직 축 하위 조회 실패 → state-unknown (허용으로 읽지
     });
 });
 
+describe('조직 지정 판정(scope.orgId) — 접수 때 저장한 조직 기준 (외부 리뷰 A3)', () => {
+    const org2 = { ...member, orgId: 'org2', name: 'org2', slug: 'org2' };
+    beforeEach(() => {
+        // 지금 활성 조직은 org2(제한 없음), 작업은 org1(industry-pack 금지)에서 접수됐다
+        getPreferences.mockResolvedValue({ activeOrgId: 'org2' });
+        listMembershipsForUser.mockResolvedValue([member, org2]);
+        listOrgPolicies.mockImplementation(async (orgId: string) => (orgId === 'org1' ? allowlistRows : []));
+    });
+
+    it('활성 조직을 바꿔도 저장된 조직의 허용 목록으로 판정한다', async () => {
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('ok'); // 라우트 게이트(활성 조직 org2)
+        expect(await checkAddonEntitlement('industry-pack', 'u1', { orgId: 'org1' })).toBe('not-entitled');
+    });
+
+    it('저장된 조직이 허용하면 활성 조직이 금지해도 실행한다', async () => {
+        listOrgPolicies.mockImplementation(async (orgId: string) => (orgId === 'org2' ? allowlistRows : []));
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('not-entitled');
+        expect(await checkAddonEntitlement('industry-pack', 'u1', { orgId: 'org1' })).toBe('ok');
+    });
+
+    it('그 조직을 떠났으면 not-entitled', async () => {
+        listMembershipsForUser.mockResolvedValue([org2]);
+        expect(await checkAddonEntitlement('industry-pack', 'u1', { orgId: 'org1' })).toBe('not-entitled');
+    });
+
+    it('멤버십·조직 정책을 못 읽으면 state-unknown', async () => {
+        listMembershipsForUser.mockRejectedValue(DOWN);
+        expect(await checkAddonEntitlement('industry-pack', 'u1', { orgId: 'org1' })).toBe('state-unknown');
+        clearOrgMembershipCache();
+        listMembershipsForUser.mockResolvedValue([member, org2]);
+        listOrgPolicies.mockRejectedValue(DOWN);
+        expect(await checkAddonEntitlement('industry-pack', 'u1', { orgId: 'org1' })).toBe('state-unknown');
+    });
+});
+
 describe('fail-open 조회(resolveEffectivePolicy)는 종전 동작 그대로', () => {
     it('조직 정책을 못 읽으면 조직은 유지하고 글로벌 정책만 적용', async () => {
         listOrgPolicies.mockRejectedValue(DOWN);

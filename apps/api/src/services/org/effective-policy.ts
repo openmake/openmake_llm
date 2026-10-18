@@ -13,7 +13,7 @@ import { resolveExternalModelPolicy, type ExternalModelPolicy } from '../../conf
 import { APPROVAL_POLICY_STRICTNESS, ORG_POLICY_KEYS, ORG_POLICY_SCHEMAS, type OrgPolicyKey } from '../../config/org-policy-registry';
 import { ORG_CONTEXT } from '../../config/runtime-limits';
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
-import { activeOrgForStrict, type OrgContext } from './membership-cache';
+import { activeOrgForStrict, membershipsForStrict, type OrgContext } from './membership-cache';
 
 const logger = createLogger('EffectivePolicy');
 
@@ -148,6 +148,16 @@ export async function resolveEffectivePolicy(userId: string | undefined, now: nu
 export async function resolveEffectivePolicyStrict(userId: string | undefined, now: number = Date.now()): Promise<EffectivePolicy> {
     const org = await activeOrgForStrict(userId, now);
     return mergeEffectivePolicy(org, org ? await orgPolicySetFor(org.orgId, now) : {});
+}
+
+/**
+ * 지정한 조직 기준의 유효 정책 — 사용자의 지금 활성 조직과 무관하다(조직 자원 작업의 재검사용).
+ * 그 조직의 멤버가 아니면 null. 조회 실패는 예외.
+ */
+export async function resolveOrgPolicyStrict(userId: string, orgId: string, now: number = Date.now()): Promise<EffectivePolicy | null> {
+    const membership = (await membershipsForStrict(userId, now)).find((m) => m.orgId === orgId);
+    if (!membership) return null;
+    return mergeEffectivePolicy({ orgId, orgRole: membership.role }, await orgPolicySetFor(orgId, now));
 }
 
 function mergeEffectivePolicy(org: OrgContext | null, set: OrgPolicySet): EffectivePolicy {
