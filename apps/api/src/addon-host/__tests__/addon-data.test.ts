@@ -10,11 +10,12 @@ const defs = [
 jest.mock('../builtin-registry', () => ({ listBuiltinAddonDefs: () => defs }));
 const loadAddonEntry = jest.fn((addon: { id: string }, _ref: string) => {
     if (addon.id === 'broken-addon') throw new Error('Cannot find module');
-    return { exportUserData: async () => ({}) };
+    return { exportUserData: async () => ({}), stores: { skills: (db: unknown) => ({ boundTo: db }) } };
 });
 jest.mock('../entry-loader', () => ({ loadAddonEntry: (addon: { id: string }, ref: string) => loadAddonEntry(addon, ref) }));
 
-import { getAddonDataModules, resetAddonDataModulesForTest } from '../addon-data';
+import { getAddonDataModules, getComponentStore, resetAddonDataModulesForTest } from '../addon-data';
+import { ComponentStoreUnavailableError } from '../../runtime-ports/component-stores';
 
 beforeEach(() => { resetAddonDataModulesForTest(); loadAddonEntry.mockClear(); });
 
@@ -31,5 +32,17 @@ describe('getAddonDataModules', () => {
         getAddonDataModules();
         getAddonDataModules();
         expect(loadAddonEntry).toHaveBeenCalledTimes(2);
+    });
+
+    it('구성요소 저장 연산은 선언한 데이터 모듈에서 DB 연결에 묶어 돌려준다', () => {
+        const db = { query: jest.fn() };
+        expect(getComponentStore('skills', db)).toEqual({ boundTo: db });
+    });
+
+    it('그 종류를 선언한 모듈이 없으면 조용히 건너뛰지 않고 명시 오류(불러오지 못한 모듈 사유 포함)', () => {
+        let err: unknown;
+        try { getComponentStore('mcpServers', { query: jest.fn() }); } catch (e) { err = e; }
+        expect(err).toBeInstanceOf(ComponentStoreUnavailableError);
+        expect(String((err as Error).message)).toContain('broken-addon: Cannot find module');
     });
 });

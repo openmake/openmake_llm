@@ -6,6 +6,8 @@
  *
  * @module mcp/runtime-boot
  */
+import { getPool } from '../../runtime-ports/db-access';
+import { McpServerRepository } from './data/mcp-server-repository';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ToolRuntime');
@@ -14,7 +16,7 @@ const logger = createLogger('ToolRuntime');
 export async function startToolRuntime(): Promise<void> {
     const { getUnifiedMCPClient } = await import('./index');
     const { getUnifiedDatabase } = await import('../../data/models/unified-database');
-    await getUnifiedMCPClient().initializeExternalServers(getUnifiedDatabase());
+    await getUnifiedMCPClient().initializeExternalServers(new McpServerRepository(getPool()));
     logger.info('외부 MCP 서버 초기화 완료');
     // 샌드박스 자세 관측(1회) — OFF+docker 가용(격리 권장) / ON+docker 부재(fail-closed 조기 경보)
     const { sandboxBootAdvisory, reapOrphanSandboxContainers } = await import('./sandbox-bootstrap');

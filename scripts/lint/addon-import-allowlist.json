@@ -181,6 +181,9 @@
     "mcp-runtime/data/mcp-catalog-repository.ts": [
       "security/spawn-env-policy"
     ],
+    "mcp-runtime/data/mcp-server-draft-repository.ts": [
+      "tool-contract/env-placeholder"
+    ],
     "mcp-runtime/external-client.ts": [
       "security/spawn-env-policy",
       "security/ssrf-guard",
@@ -189,6 +192,13 @@
     ],
     "mcp-runtime/external-resources.ts": [
       "tool-contract/types"
+    ],
+    "mcp-runtime/ingest/mcp-server-ingest-service.ts": [
+      "agents/git-ingest/convention-checker",
+      "agents/git-ingest/git-fetcher",
+      "agents/git-ingest/repo-scanner",
+      "llm/client",
+      "schemas/git-ingest.schema"
     ],
     "mcp-runtime/lifecycle-supervisor.ts": [
       "tool-contract/env-placeholder-shell"
@@ -199,7 +209,6 @@
     ],
     "mcp-runtime/mcp-server-ingest-tool.ts": [
       "agents/git-ingest/git-fetcher",
-      "agents/git-ingest/mcp-server-ingest-service",
       "data/models/unified-database",
       "data/user-manager",
       "llm/client",
@@ -247,12 +256,9 @@
     "mcp-runtime/routes/mcp-server-ingest.routes.ts": [
       "agents/git-ingest/convention-checker",
       "agents/git-ingest/git-fetcher",
-      "agents/git-ingest/mcp-server-ingest-service",
       "auth",
-      "data/repositories/mcp-server-draft-repository",
       "data/user-manager",
       "llm/client",
-      "schemas/mcp-server-ingest.schema",
       "tool-contract/env-placeholder"
     ],
     "mcp-runtime/routes/mcp-server-rename.ts": [
@@ -282,7 +288,6 @@
       "security/spawn-env-policy"
     ],
     "mcp-runtime/server-registry.ts": [
-      "data/models/unified-database",
       "tool-contract/env-placeholder-shell",
       "tool-contract/types"
     ],
@@ -302,7 +307,6 @@
       "tool-contract/types"
     ],
     "mcp-runtime/unified-client.ts": [
-      "data/models/unified-database",
       "tool-contract/tool-execution-guard",
       "tool-contract/types",
       "tool-contract/user-sandbox"
@@ -362,7 +366,6 @@
     ],
     "skill-runtime/load-skill-tool.ts": [
       "data/models/unified-database",
-      "data/repositories/skill-asset-repository",
       "tool-contract/types"
     ],
     "skill-runtime/manifest-importer.ts": [

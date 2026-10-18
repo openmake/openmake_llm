@@ -17,16 +17,16 @@
  */
 import * as crypto from 'crypto';
 import type { Pool } from 'pg';
-import type { LLMClient } from '../../llm/client';
-import { createLogger } from '../../utils/logger';
-import { parseGitUrl } from '../../schemas/git-ingest.schema';
-import type { ImportMcpServerFromGitInput } from '../../schemas/mcp-server-ingest.schema';
-import { GitFetcher } from './git-fetcher';
-import { scanForMcpServerManifests, type ManifestCandidate } from './repo-scanner';
+import type { LLMClient } from '../../../llm/client';
+import { createLogger } from '../../../utils/logger';
+import { parseGitUrl } from '../../../schemas/git-ingest.schema';
+import type { ImportMcpServerFromGitInput } from '../schemas/mcp-server-ingest.schema';
+import { GitFetcher } from '../../../agents/git-ingest/git-fetcher';
+import { scanForMcpServerManifests, type ManifestCandidate } from '../../../agents/git-ingest/repo-scanner';
 import { parseMcpServerFile, validateMcpServerManifest } from './mcp-server-manifest-validator';
-import { ConventionChecker, isBlockedByConvention, type ConventionFinding } from './convention-checker';
-import { McpServerDraftRepository } from '../../data/repositories/mcp-server-draft-repository';
-import { MCP_INGEST, SKILL_CREATOR } from '../../config/constants';
+import { ConventionChecker, isBlockedByConvention, type ConventionFinding } from '../../../agents/git-ingest/convention-checker';
+import { McpServerDraftRepository } from '../data/mcp-server-draft-repository';
+import { MCP_INGEST, SKILL_CREATOR } from '../../../config/constants';
 
 const logger = createLogger('McpServerIngestService');
 

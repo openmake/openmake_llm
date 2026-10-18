@@ -12,6 +12,7 @@
  *
  * @module data/repositories/user-extension-permission-repository
  */
+import { getComponentStore } from '../../addon-host/addon-data';
 import { BaseRepository } from './base-repository';
 import type { UserExtensionRow } from './user-extension-repository';
 import type { ExtensionPermissionState } from '../../config/addon-permissions';
@@ -72,29 +73,9 @@ export class UserExtensionPermissionRepository extends BaseRepository {
         return r.rows[0] ?? null;
     }
 
-    /** 네트워크 권한이 닫혔다 — stdio 는 --network none, 원격(HTTP)은 끈다. 이미 none·꺼진 서버는 건드리지 않는다 */
+    /** 네트워크 권한이 닫혔다 — stdio 는 --network none, 원격(HTTP)은 끈다. 이미 none·꺼진 서버는 건드리지 않는다(MCP add-on 저장 연산) */
     async restrictLinkedMcpNetwork(extensionId: string): Promise<{ sandboxed: number; disabled: number }> {
-        const sandboxed = await this.query(
-            `UPDATE mcp_servers
-                SET sandbox_network = 'none',
-                    manifest_meta = COALESCE(manifest_meta, '{}'::jsonb) || jsonb_build_object('networkRestrictedByPermission', true),
-                    updated_at = NOW()
-              WHERE extension_id = $1
-                AND transport_type = 'stdio'
-                AND sandbox_network IS DISTINCT FROM 'none'`,
-            [extensionId],
-        );
-        const disabled = await this.query(
-            `UPDATE mcp_servers
-                SET enabled = FALSE,
-                    manifest_meta = COALESCE(manifest_meta, '{}'::jsonb) || jsonb_build_object('disabledByPermission', true),
-                    updated_at = NOW()
-              WHERE extension_id = $1
-                AND transport_type <> 'stdio'
-                AND enabled = TRUE`,
-            [extensionId],
-        );
-        return { sandboxed: sandboxed.rowCount ?? 0, disabled: disabled.rowCount ?? 0 };
+        return getComponentStore('mcpServers', this.pool).restrictNetworkForExtension(extensionId);
     }
 
     /**
@@ -102,17 +83,6 @@ export class UserExtensionPermissionRepository extends BaseRepository {
      * 권한 때문에 끈 원격 서버는 켜지 않는다 — 켜기는 사용자의 MCP 승인 행위다.
      */
     async restoreLinkedMcpNetwork(extensionId: string): Promise<number> {
-        const r = await this.query(
-            `UPDATE mcp_servers
-                SET sandbox_network = 'full',
-                    manifest_meta = manifest_meta - 'networkRestrictedByPermission',
-                    updated_at = NOW()
-              WHERE extension_id = $1
-                AND transport_type = 'stdio'
-                AND sandbox_network = 'none'
-                AND manifest_meta->>'networkRestrictedByPermission' = 'true'`,
-            [extensionId],
-        );
-        return r.rowCount ?? 0;
+        return getComponentStore('mcpServers', this.pool).restoreNetworkForExtension(extensionId);
     }
 }

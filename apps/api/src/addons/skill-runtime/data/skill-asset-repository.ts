@@ -12,7 +12,7 @@
  * @module data/repositories/skill-asset-repository
  */
 import { v4 as uuidv4 } from 'uuid';
-import { BaseRepository } from './base-repository';
+import { BaseRepository } from '../../../runtime-ports/db-access';
 
 interface SkillAssetRow {
     id: string;

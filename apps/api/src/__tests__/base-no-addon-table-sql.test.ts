@@ -4,7 +4,7 @@
  *
  * 검사 대상: `apps/api/src` 의 .ts 중 add-on 코드(`addons/`)·테스트·`evaluation/` 시드 도구 밖. SQL 키워드(FROM·JOIN·INTO·UPDATE·USING)
  * 바로 뒤의 테이블 이름만 본다(반대 방향 검사 `addons-no-base-table-sql.test.ts` 와 같은 규칙).
- * `BASE_SQL_ON_ADDON_TABLES_ALLOWLIST` 는 소유를 옮기는 동안의 남은 지점이고 **줄어들기만 한다**(래칫).
+ * 소유를 옮기는 동안 25개 파일을 허용 목록으로 동결했다가 같은 날 0 으로 줄였다 — 이제 예외 없이 0건이다.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,21 +13,6 @@ import { ADDON_OWNED_CORE_TABLES } from '../config/addon-boundary';
 const SRC_ROOT = path.resolve(__dirname, '..');
 const SKIPPED_DIRS = new Set(['__tests__', 'evaluation', 'node_modules']);
 const SQL_TABLE_REF = /\b(?:from|join|into|update|using)\s+([a-z_][a-z0-9_]*)\b/gi;
-
-/** 남은 지점(파일 → 테이블) — 줄어들기만 한다. 비면 지운다 */
-const BASE_SQL_ON_ADDON_TABLES_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
-    'agents/git-ingest/agent-ingest-service.ts': ['agent_skill_assignments', 'agent_skills'],
-    'agents/git-ingest/extension-components.ts': ['agent_skills', 'mcp_servers', 'skill_manifests'],
-    'agents/git-ingest/git-ingest-service.ts': ['agent_skills', 'skill_manifests'],
-    'agents/git-ingest/mcp-server-ingest-service.ts': ['mcp_servers'],
-    'data/repositories/addon-install-repository.ts': ['mcp_server_catalog'],
-    'data/repositories/external-repository.ts': ['mcp_servers'],
-    'data/repositories/marketplace-export-repository.ts': ['agent_skills', 'mcp_servers', 'skill_assets'],
-    'data/repositories/mcp-server-draft-repository.ts': ['mcp_servers'],
-    'data/repositories/skill-asset-repository.ts': ['skill_assets'],
-    'data/repositories/user-extension-permission-repository.ts': ['mcp_servers'],
-    'data/repositories/user-extension-repository.ts': ['agent_skill_assignments', 'agent_skills', 'mcp_servers'],
-};
 
 function baseSources(dir: string): string[] {
     const out: string[] = [];
@@ -55,12 +40,12 @@ describe('Base 소스는 add-on 소유 코어 테이블을 SQL 로 직접 쓰지
         expect(ownedTableRefs("const mcp_servers = 1; import { agent_skills } from './x';", owned)).toEqual([]);
     });
 
-    it('남은 지점은 허용 목록과 같다 — 늘면 포트를 거치고, 줄었으면 목록에서도 지운다', () => {
+    it('Base 에 add-on 소유 테이블 SQL 이 없다 — 필요하면 그 add-on 데이터 모듈의 의무·저장 연산을 거친다', () => {
         const actual: Record<string, string[]> = {};
         for (const file of baseSources(SRC_ROOT)) {
             const refs = ownedTableRefs(fs.readFileSync(file, 'utf8'), owned);
             if (refs.length > 0) actual[path.relative(SRC_ROOT, file).split(path.sep).join('/')] = refs;
         }
-        expect(actual).toEqual(BASE_SQL_ON_ADDON_TABLES_ALLOWLIST);
+        expect(actual).toEqual({});
     });
 });

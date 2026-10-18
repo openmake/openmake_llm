@@ -6,7 +6,7 @@
  * 매니페스트를 동봉하지 않은 종전 확장은 **아무것도 바뀌지 않는다**(하위호환).
  */
 const insertDraft = jest.fn();
-jest.mock('../../../data/repositories/mcp-server-draft-repository', () => ({
+jest.mock('../../../addons/mcp-runtime/data/mcp-server-draft-repository', () => ({
     McpServerDraftRepository: jest.fn().mockImplementation(() => ({ insertDraft })),
 }));
 jest.mock('../convention-checker', () => ({

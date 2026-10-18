@@ -7,47 +7,27 @@
  * @module data/repositories/marketplace-export-repository
  */
 import type { Pool } from 'pg';
+import { getComponentStore } from '../../addon-host/addon-data';
+import type { ExportMcpServer, ExportSkill, ExportSkillAsset } from '../../runtime-ports/component-stores';
 
-export interface ExportSkill {
-    id: string;
-    name: string;
-    description: string | null;
-    content: string;
-    category: string | null;
-    manifest_meta: Record<string, unknown> | null;
-}
-export interface ExportSkillAsset { skill_id: string; rel_path: string; content_type: string | null; content: Buffer }
+// 스킬·MCP 서버의 내보내기 모양은 구성요소 저장 계약에 있다(각 add-on 이 같은 모양으로 돌려준다)
+export type { ExportSkill, ExportSkillAsset, ExportMcpServer } from '../../runtime-ports/component-stores';
 export interface ExportAgent { id: string; name: string; description: string | null; system_prompt: string; model: string | null }
-export interface ExportMcpServer {
-    id: string;
-    name: string;
-    transport_type: 'stdio' | 'sse' | 'streamable-http';
-    command: string | null;
-    args: unknown[] | null;
-    url: string | null;
-    /** env 키 목록만 — 값은 절대 읽지 않는다 */
-    env_keys: string[];
-}
 
 export class MarketplaceExportRepository {
     constructor(private readonly pool: Pool) {}
 
     /** 게시 후보 목록 (소유자 한정, 확장 유래 제외) */
     async listCandidates(userId: string): Promise<{ skills: Omit<ExportSkill, 'content' | 'manifest_meta'>[]; agents: Omit<ExportAgent, 'system_prompt'>[]; mcpServers: ExportMcpServer[] }> {
-        const [s, a, m] = await Promise.all([
-            this.pool.query<Omit<ExportSkill, 'content' | 'manifest_meta'>>(
-                `SELECT id, name, description, category FROM agent_skills
-                  WHERE created_by = $1 AND status = 'active' AND extension_id IS NULL ORDER BY updated_at DESC`, [userId]),
+        // 스킬·MCP 서버는 각 add-on 소유 테이블 — 데이터 모듈의 저장 연산으로(같은 조건·같은 모양)
+        const [skills, a, mcpServers] = await Promise.all([
+            getComponentStore('skills', this.pool).listExportCandidates(userId),
             this.pool.query<Omit<ExportAgent, 'system_prompt'>>(
                 `SELECT id, name, description, model FROM user_agents
                   WHERE user_id = $1 AND is_active = TRUE AND extension_id IS NULL ORDER BY updated_at DESC`, [userId]),
-            this.pool.query<ExportMcpServer>(
-                `SELECT id, name, transport_type, command, args, url,
-                        COALESCE((SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(COALESCE(env, '{}'::jsonb)) k), '{}') AS env_keys
-                   FROM mcp_servers
-                  WHERE user_id = $1 AND status IS DISTINCT FROM 'draft' AND extension_id IS NULL ORDER BY name`, [userId]),
+            getComponentStore('mcpServers', this.pool).listExportCandidates(userId),
         ]);
-        return { skills: s.rows, agents: a.rows, mcpServers: m.rows };
+        return { skills, agents: a.rows, mcpServers };
     }
 
     /** listCandidates 의 fail-open 판 — 한 축의 조회 실패가 목록 전체를 죽이지 않게 */
@@ -57,18 +37,11 @@ export class MarketplaceExportRepository {
     }
 
     async getSkills(userId: string, ids: string[]): Promise<ExportSkill[]> {
-        if (ids.length === 0) return [];
-        const r = await this.pool.query<ExportSkill>(
-            `SELECT id, name, description, content, category, manifest_meta FROM agent_skills
-              WHERE created_by = $1 AND id = ANY($2::text[]) AND status = 'active' AND extension_id IS NULL`, [userId, ids]);
-        return r.rows;
+        return getComponentStore('skills', this.pool).getForExport(userId, ids);
     }
 
     async getSkillAssets(skillIds: string[]): Promise<ExportSkillAsset[]> {
-        if (skillIds.length === 0) return [];
-        const r = await this.pool.query<ExportSkillAsset>(
-            `SELECT skill_id, rel_path, content_type, content FROM skill_assets WHERE skill_id = ANY($1::text[]) ORDER BY skill_id, rel_path`, [skillIds]);
-        return r.rows;
+        return getComponentStore('skills', this.pool).getAssetsForExport(skillIds);
     }
 
     async getAgents(userId: string, ids: string[]): Promise<ExportAgent[]> {
@@ -80,12 +53,6 @@ export class MarketplaceExportRepository {
     }
 
     async getMcpServers(userId: string, ids: string[]): Promise<ExportMcpServer[]> {
-        if (ids.length === 0) return [];
-        const r = await this.pool.query<ExportMcpServer>(
-            `SELECT id, name, transport_type, command, args, url,
-                    COALESCE((SELECT array_agg(k ORDER BY k) FROM jsonb_object_keys(COALESCE(env, '{}'::jsonb)) k), '{}') AS env_keys
-               FROM mcp_servers
-              WHERE user_id = $1 AND id = ANY($2::text[]) AND status IS DISTINCT FROM 'draft' AND extension_id IS NULL`, [userId, ids]);
-        return r.rows;
+        return getComponentStore('mcpServers', this.pool).getForExport(userId, ids);
     }
 }
