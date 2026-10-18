@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.105.4](https://github.com/openmake/openmake_llm/compare/v1.105.3...v1.105.4) (2026-10-18)
+
+
+### 🔧 기타
+
+* **release:** 컴패니언 0.3.7·0.1.8 게시분을 서버 릴리스에 포함 ([490f925](https://github.com/openmake/openmake_llm/commit/490f925b34e30081fdee28935c553216ce498cfb))
+
 ## [1.105.3](https://github.com/openmake/openmake_llm/compare/v1.105.2...v1.105.3) (2026-10-17)
 
 
