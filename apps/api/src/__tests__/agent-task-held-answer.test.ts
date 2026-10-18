@@ -45,7 +45,7 @@ jest.mock('../runtime-ports/tool-runtime', () => ({
 }));
 jest.mock('../runtime-ports/skill-runtime', () => ({
     ...jest.requireActual('../runtime-ports/skill-runtime'),
-    getSkillRuntime: () => ({
+    getSkillRuntime: () => ({ buildProceduralSkillBlock: async () => '', proceduralHooks: () => undefined,
         buildManifestPrompt: jest.fn().mockResolvedValue(null),
         getActiveSkillBindings: jest.fn().mockResolvedValue([]),
         getSkillsForAgent: jest.fn().mockResolvedValue([]),

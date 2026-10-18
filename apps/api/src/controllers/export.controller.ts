@@ -8,10 +8,9 @@
  *
  * 5개 카테고리 병렬 조회:
  *   1. conversation_sessions + 그 안의 messages
- *   2. skill_manifests (created_by 본인)
- *   3. agent_skills (legacy, created_by 본인)
- *   4. custom_agents (created_by 본인)
- *   5. user_memories (user_id 본인)
+ *   2. custom_agents (created_by 본인)
+ *   3. user_memories (user_id 본인)
+ *   4. add-on 소유 데이터 — 각 add-on 의 데이터 모듈(예: 스킬 add-on 의 skillManifests·agentSkills, 응답 키 동일)
  *
  * Rate limit: RL_GDPR_EXPORT (시간당 사용자별 N회).
  *
@@ -20,6 +19,7 @@
 import { Router, Request, Response } from 'express';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { requireAuth } from '../auth/middleware';
+import { getAddonDataModules } from '../addon-host/addon-data';
 import { getPool } from '../data/models/unified-database';
 import { RL_GDPR_EXPORT } from '../config/rate-limits';
 import { createLogger } from '../utils/logger';
@@ -77,6 +77,27 @@ const exportLimiter = rateLimit({
  * 바꿔 `counts.userMemories: 0` 으로 나가 "메모리 없음" 처럼 보였다(Agent Memory Atlas 지적).
  * 사용자가 부분 export 인지 알 수 있어야 GDPR 20조 취지에 맞는다.
  */
+/**
+ * add-on 이 소유한 사용자 데이터(예: 스킬) — 각 add-on 의 데이터 모듈이 돌려준다(꺼진 add-on 도 호스트가 불러온다).
+ * 모듈을 불러오지 못했거나 조회가 실패하면 `addon:<id>` 를 실패 카테고리로 싣고 계속한다(부분 export 임을 알린다).
+ */
+async function collectAddonUserData(userId: string, failed: string[]): Promise<Record<string, unknown[]>> {
+    const merged: Record<string, unknown[]> = {};
+    for (const { addonId, data, error } of getAddonDataModules()) {
+        if (!data?.exportUserData) {
+            if (error) { failed.push(`addon:${addonId}`); log.error(`[Export] add-on '${addonId}' 데이터 모듈 없음 — 부분 export: ${error}`); }
+            continue;
+        }
+        try {
+            Object.assign(merged, await data.exportUserData(userId));
+        } catch (err) {
+            failed.push(`addon:${addonId}`);
+            log.error(`[Export] add-on '${addonId}' 데이터 조회 실패 — 부분 export 로 계속:`, err);
+        }
+    }
+    return merged;
+}
+
 async function collectUserData(userId: string): Promise<Record<string, unknown>> {
     const pool = getPool();
     const failed: string[] = [];
@@ -92,7 +113,7 @@ async function collectUserData(userId: string): Promise<Record<string, unknown>>
         }
     };
 
-    const [user, sessions, manifests, agentSkills, customAgents, memories] = await Promise.all([
+    const [user, sessions, customAgents, memories, addonData] = await Promise.all([
         safeQuery<Record<string, unknown>>('user', `SELECT id, username, email, role, created_at FROM users WHERE id = $1`, [userId]),
         safeQuery<Record<string, unknown>>('conversation_sessions',
             `SELECT s.id, s.title, s.created_at, s.updated_at,
@@ -102,15 +123,6 @@ async function collectUserData(userId: string): Promise<Record<string, unknown>>
                     '[]'::json
                 ) AS messages
              FROM conversation_sessions s WHERE s.user_id = $1 ORDER BY s.created_at DESC LIMIT 500`,
-            [userId]),
-        safeQuery<Record<string, unknown>>('skill_manifests',
-            // skill_manifests 에는 updated_at 이 없다(#783 배포 후 failedCategories 로 드러난 옛 컬럼 참조).
-            `SELECT id, version, manifest_yaml, prompt_md, examples_md, checksum, is_public, created_by, created_at
-             FROM skill_manifests WHERE created_by = $1 ORDER BY created_at DESC`,
-            [userId]),
-        safeQuery<Record<string, unknown>>('agent_skills',
-            `SELECT id, name, description, content, category, is_public, created_by, created_at, updated_at
-             FROM agent_skills WHERE created_by = $1 ORDER BY created_at DESC`,
             [userId]),
         safeQuery<Record<string, unknown>>('custom_agents',
             // custom_agents 에는 model 컬럼이 없다(같은 배포에서 드러남) — 실제 컬럼(keywords/category/emoji/enabled)으로.
@@ -122,6 +134,7 @@ async function collectUserData(userId: string): Promise<Record<string, unknown>>
             `SELECT id, user_id, content, source, is_active, accessed_at, created_at, updated_at
              FROM user_memories WHERE user_id = $1 ORDER BY created_at DESC`,
             [userId]),
+        collectAddonUserData(userId, failed),
     ]);
 
     return {
@@ -129,15 +142,13 @@ async function collectUserData(userId: string): Promise<Record<string, unknown>>
         version: '1.0',
         user: user[0] || null,
         conversationSessions: sessions,
-        skillManifests: manifests,
-        agentSkills,
+        ...addonData,
         customAgents,
         userMemories: memories,
         _meta: {
             counts: {
                 conversationSessions: sessions.length,
-                skillManifests: manifests.length,
-                agentSkills: agentSkills.length,
+                ...Object.fromEntries(Object.entries(addonData).map(([k, rows]) => [k, rows.length])),
                 customAgents: customAgents.length,
                 userMemories: memories.length,
             },

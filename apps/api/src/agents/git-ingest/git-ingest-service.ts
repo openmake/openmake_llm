@@ -22,6 +22,7 @@ import type { Pool } from 'pg';
 import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
 import { parseGitUrl, type ImportFromGitInput } from '../../schemas/git-ingest.schema';
+import { getComponentStore } from '../../addon-host/addon-data';
 import { GitFetcher } from './git-fetcher';
 import { isNonGitSourceUrl, nonGitPseudoRepo } from './internal-bundle-fetcher';
 import { scanForSkillManifests, type ManifestCandidate } from './repo-scanner';
@@ -174,25 +175,16 @@ export class GitIngestService {
         const promptHash = 'sha256:' + crypto.createHash('sha256')
             .update(JSON.stringify({ uid: input.userId, url: input.gitUrl, sha, path: candidate.path }))
             .digest('hex');
-        const existing = await this.opts.pool.query<{ id: string }>(
-            `SELECT id FROM agent_skills
-               WHERE created_by = $1 AND status = 'draft'
-                 AND manifest_meta->>'promptHash' = $2
-                 AND created_at > NOW() - INTERVAL '${SKILL_CREATOR.dedupeWindowHours} hours'
-               LIMIT 1`,
-            [input.userId, promptHash]
-        );
-        if (existing.rows[0]) {
-            logger.info(`git-ingest dedupe hit: ${existing.rows[0].id}`);
-            return this.fetchAndShape(existing.rows[0].id, conv, warnings, true, sha, candidate.path, input.gitUrl);
+        // 스킬 테이블은 스킬 add-on 소유 — 데이터 모듈의 저장 연산으로(같은 풀, SQL 동일)
+        const skills = getComponentStore('skills', this.opts.pool);
+        const existingId = await skills.findRecentImportDraft(input.userId, promptHash, SKILL_CREATOR.dedupeWindowHours);
+        if (existingId) {
+            logger.info(`git-ingest dedupe hit: ${existingId}`);
+            return this.fetchAndShape(existingId, conv, warnings, true, sha, candidate.path, input.gitUrl);
         }
 
         // (8) draft 상한
-        const cnt = await this.opts.pool.query<{ count: string }>(
-            `SELECT COUNT(*)::text AS count FROM agent_skills WHERE created_by=$1 AND status='draft'`,
-            [input.userId]
-        );
-        if (parseInt(cnt.rows[0]?.count ?? '0', 10) >= SKILL_CREATOR.maxDraftsPerUser) {
+        if (await skills.countUserDrafts(input.userId) >= SKILL_CREATOR.maxDraftsPerUser) {
             throw new Error(`DRAFT_LIMIT_EXCEEDED`);
         }
 
@@ -223,47 +215,19 @@ export class GitIngestService {
                 verified: null,
             },
         };
-        await this.opts.pool.query(
-            `INSERT INTO agent_skills
-               (id, name, description, content, category, is_public, created_by, status, manifest_meta)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft', $8::jsonb)`,
-            [
-                skillId,
-                validation.manifest.name,
-                validation.manifest.description ?? '',
-                skillContent,
-                input.category ?? validation.manifest.category ?? 'general',
-                effectiveTarget === 'system',
-                effectiveTarget === 'system' ? null : input.userId,
-                JSON.stringify(manifestMeta),
-            ]
-        );
-
-        // (10) skill_manifests 동시 생성 — 시스템 프롬프트 주입의 SoT 는
-        // buildManifestPrompt(skill_manifests JOIN)라, agent_skills 만 만들면 manifest
-        // 스킬이 하나라도 활성일 때 legacy fallback 이 실행되지 않아 지정해도 조용히
-        // 누락된다(2026-08-16 라이브 실측). buildManifestPrompt 의 status='active' 게이트가
-        // draft 주입을 막으므로 승인 전 노출은 없다. 실패는 fail-soft — ingest 는 유지되고
-        // 개인 지정 union(스킬매니저)이 안전망으로 커버한다.
-        try {
-            await this.opts.pool.query(
-                `INSERT INTO skill_manifests
-                   (id, version, manifest_yaml, prompt_md, checksum, signature, created_by, is_public, created_at)
-                 VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, NOW())
-                 ON CONFLICT (id, version) DO NOTHING`,
-                [
-                    skillId,
-                    validation.manifest.version,
-                    validation.raw_yaml,
-                    skillContent,
-                    skillChecksum,
-                    effectiveTarget === 'system' ? null : input.userId,
-                    effectiveTarget === 'system',
-                ]
-            );
-        } catch (e) {
-            logger.warn(`skill_manifests 생성 실패 (fail-soft, union 안전망 커버): ${skillId}`, e);
-        }
+        // (9)·(10) agent_skills INSERT + skill_manifests 동시 생성(실패는 fail-soft — 저장 연산 안에서) — 시스템 프롬프트 주입의
+        // SoT 는 skill_manifests JOIN 이라 agent_skills 만 만들면 지정해도 조용히 누락된다(2026-08-16 라이브 실측)
+        await skills.createImportedDraft({
+            id: skillId,
+            name: validation.manifest.name,
+            description: validation.manifest.description ?? '',
+            content: skillContent,
+            category: input.category ?? validation.manifest.category ?? 'general',
+            isPublic: effectiveTarget === 'system',
+            createdBy: effectiveTarget === 'system' ? null : input.userId,
+            manifestMeta,
+            manifest: { version: validation.manifest.version, rawYaml: validation.raw_yaml, checksum: skillChecksum },
+        });
         logger.info(`git-ingest created: ${skillId} (${owner}/${repo}@${sha.slice(0, 7)}:${candidate.path})`);
 
         return {
@@ -297,13 +261,7 @@ export class GitIngestService {
         path: string,
         gitUrl: string,
     ): Promise<ImportResult> {
-        const r = await this.opts.pool.query<{
-            id: string; name: string; description: string; category: string; content: string; manifest_meta: Record<string, unknown>;
-        }>(
-            `SELECT id, name, description, category, content, manifest_meta FROM agent_skills WHERE id=$1`,
-            [skillId]
-        );
-        const row = r.rows[0]!;
+        const row = (await getComponentStore('skills', this.opts.pool).getImportedSkill(skillId))!;
         const target: 'user' | 'system' = row.id.startsWith('git-system-skill-') ? 'system' : 'user';
         return {
             skillId: row.id,

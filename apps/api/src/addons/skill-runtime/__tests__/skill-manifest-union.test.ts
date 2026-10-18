@@ -6,8 +6,8 @@
  * 조용히 누락됐다. manifest 결과에 manifest 미보유 개인 지정 스킬을 union 한다.
  */
 import { SkillManager } from '../skill-manager';
-import type { AgentSkill } from '../../../data/repositories/skill-repository';
-import { SKILL_VERSION_LATEST_ORDER_SQL } from '../../../data/repositories/skill-manifest-sync';
+import type { AgentSkill } from '../data/skill-repository';
+import { SKILL_VERSION_LATEST_ORDER_SQL } from '../data/skill-manifest-sync';
 
 const MANIFEST_ROWS = [{
     id: 'user-3-presentation-designer',

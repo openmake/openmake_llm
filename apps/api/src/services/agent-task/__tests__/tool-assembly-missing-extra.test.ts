@@ -7,7 +7,7 @@ jest.mock('../../../utils/logger', () => {
 });
 jest.mock('../../../runtime-ports/skill-runtime', () => ({
     LOAD_SKILL_TOOL_NAME: 'load_skill',
-    getSkillRuntime: () => ({ applyCatalogToTools: async (tools: unknown[]) => tools }),
+    getSkillRuntime: () => ({ buildProceduralSkillBlock: async () => '', proceduralHooks: () => undefined, applyCatalogToTools: async (tools: unknown[]) => tools }),
 }));
 jest.mock('../tool-selector', () => ({ selectRelevantTools: () => [] }));
 jest.mock('../tool-selector-embedding', () => ({ selectRelevantToolsEmbedding: async () => [] }));

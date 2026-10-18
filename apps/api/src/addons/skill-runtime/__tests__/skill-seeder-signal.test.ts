@@ -4,7 +4,7 @@
 const upsertSystemSkill = jest.fn(async (_id: string, _s: unknown) => undefined);
 const assignSkillToAgent = jest.fn(async (_a: string, _s: string, _p: number) => undefined);
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getPool: () => ({}) }) }));
-jest.mock('../../../data/repositories/skill-repository', () => ({
+jest.mock('../data/skill-repository', () => ({
     SkillRepository: jest.fn().mockImplementation(() => ({
         upsertSystemSkill: (id: string, s: unknown) => upsertSystemSkill(id, s),
         assignSkillToAgent: (a: string, s: string, p: number) => assignSkillToAgent(a, s, p),

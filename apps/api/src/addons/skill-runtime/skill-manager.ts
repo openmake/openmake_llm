@@ -20,7 +20,7 @@
  */
 
 import { createLogger } from '../../utils/logger';
-import { SkillRepository, AGENT_PERSONA_SKILL_ID_PREFIX } from '../../data/repositories/skill-repository';
+import { SkillRepository, AGENT_PERSONA_SKILL_ID_PREFIX } from './data/skill-repository';
 import type { Pool } from 'pg';
 
 import type {
@@ -32,13 +32,13 @@ import type {
     SkillStatus,
     DraftListOptions,
     DraftListResult,
-} from '../../data/repositories/skill-repository';
+} from './data/skill-repository';
 import { slugify } from '../../chat/slash-command';
 import { recordSkillUsage } from './skill-usage-log';
 import { filterByAddonEntitlement } from './skill-entitlement-filter';
 import { shouldInjectManifestSkill } from './manifest-injection-filter';
 import { planManifestInjection, buildManifestOfferBlock } from './manifest-injection-plan';
-import { SKILL_VERSION_LATEST_ORDER_SQL } from '../../data/repositories/skill-manifest-sync';
+import { SKILL_VERSION_LATEST_ORDER_SQL } from './data/skill-manifest-sync';
 import { SKILL_MANIFEST_INJECT_MAX_CHARS, SKILL_MANIFEST_PER_SKILL_MAX_CHARS } from '../../config/runtime-limits';
 import { SKILL_CATALOG_MAX_ITEMS, SKILL_CATALOG_EXCLUDE_PERSONAS, SKILL_CATALOG_EXCLUDE_CATEGORIES, formatSkillCatalog, warnIfCatalogTruncated } from './skill-catalog';
 

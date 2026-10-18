@@ -16,7 +16,7 @@
 import type { UserMCPPool } from './user-pool';
 import { wrapEnvPlaceholdersAsShellRefs } from '../../tool-contract/env-placeholder-shell';
 import type { ExternalMCPClient } from './external-client';
-import type { McpCatalogRepository, UserMcpServerRow } from '../../data/repositories/mcp-catalog-repository';
+import type { McpCatalogRepository, UserMcpServerRow } from './data/mcp-catalog-repository';
 import { createLogger } from '../../utils/logger';
 import { classifyConnectError, serializeConnectError } from './connect-error';
 

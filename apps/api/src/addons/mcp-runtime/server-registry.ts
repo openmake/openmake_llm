@@ -24,7 +24,7 @@ import { ExternalMCPClient } from './external-client';
 import { wrapEnvPlaceholdersAsShellRefs } from '../../tool-contract/env-placeholder-shell';
 import { ToolRouter } from './tool-router';
 import type { MCPServerConfig, MCPConnectionStatus } from '../../tool-contract/types';
-import type { UnifiedDatabase, MCPServerRow } from '../../data/models/unified-database';
+import type { MCPServerRow, McpServerRowSource } from './data/mcp-server-repository';
 import { decryptToken } from '../../utils/token-crypto';
 import { MCP_GLOBAL_RECONNECT } from '../../config/timeouts';
 import { createLogger } from '../../utils/logger';
@@ -34,7 +34,7 @@ const logger = createLogger('MCPRegistry');
 /**
  * DB 행(MCPServerRow) → MCPServerConfig 변환
  *
- * UnifiedDatabase에서 조회한 원시 행 데이터를 MCPServerConfig 타입으로 변환합니다.
+ * mcp_servers 에서 조회한 원시 행 데이터를 MCPServerConfig 타입으로 변환합니다.
  *
  * @param row - DB에서 조회한 MCP 서버 행
  * @returns MCPServerConfig 형식의 서버 설정
@@ -118,9 +118,9 @@ export class MCPServerRegistry {
      * 앱 초기화 시 한 번 호출됩니다.
      * 개별 서버 연결 실패는 전체 초기화를 중단하지 않습니다.
      *
-     * @param db - UnifiedDatabase 인스턴스
+     * @param db - MCP 서버 행 저장소(`McpServerRepository`)
      */
-    async initializeFromDB(db: UnifiedDatabase): Promise<void> {
+    async initializeFromDB(db: McpServerRowSource): Promise<void> {
         try {
             // 🔒 전역 서버만 전역 ToolRouter 에 등록. user_private/user_shared 는
             //   LifecycleSupervisor 가 userId 격리 풀로 spawn 하므로 여기서 제외한다
@@ -164,10 +164,10 @@ export class MCPServerRegistry {
      * 연결 실패해도 DB 등록은 유지됩니다.
      *
      * @param config - 등록할 서버 설정
-     * @param db - UnifiedDatabase 인스턴스
+     * @param db - MCP 서버 행 저장소(`McpServerRepository`)
      * @returns 서버 연결 상태
      */
-    async registerServer(config: MCPServerConfig, db: UnifiedDatabase): Promise<MCPConnectionStatus> {
+    async registerServer(config: MCPServerConfig, db: McpServerRowSource): Promise<MCPConnectionStatus> {
         // DB에 저장
         await db.createMcpServer({
             id: config.id,
@@ -203,9 +203,9 @@ export class MCPServerRegistry {
      * 연결을 먼저 끊고, DB에서 서버 설정을 삭제합니다.
      *
      * @param serverId - 해제할 서버 ID
-     * @param db - UnifiedDatabase 인스턴스
+     * @param db - MCP 서버 행 저장소(`McpServerRepository`)
      */
-    async unregisterServer(serverId: string, db: UnifiedDatabase): Promise<void> {
+    async unregisterServer(serverId: string, db: McpServerRowSource): Promise<void> {
         await this.disconnectServer(serverId);
         await db.deleteMcpServer(serverId);
     }
