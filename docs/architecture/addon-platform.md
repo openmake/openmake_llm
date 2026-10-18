@@ -10,8 +10,10 @@
 | 발견·호환성·등록·런타임 상태·부팅 절차 | Add-on Host | `addon-host/` |
 | 상태 저장·사용권·실행 게이트 | Base(`services/addon/`) | `addon-state.ts`, `entitlement.ts`, `integration-gate.ts` |
 | 기능 구현(라우트·채팅 통합·런타임·팩 콘텐츠) | 각 add-on | `addons/<id>/`, `apps/api/addons/builtin/<id>/` |
+| MCP·스킬 저장(코어 스키마의 표 13개 — `config/addon-boundary.ts` `ADDON_OWNED_CORE_TABLES`) | `mcp-runtime`·`skill-runtime` | 표 정의는 코어 마이그레이션 그대로, SQL 은 그 add-on 안에만(§8.5·§8.7) |
+| MCP·스킬 화면(카탈로그·커넥터·승인 섹션·스킬 라이브러리·관리자 MCP·입력창 `/` 메뉴) | 같은 웹 add-on | `apps/web/addons/{mcp-runtime,skill-runtime}/`(§8.8) |
 
-Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트 `entry` 의 세 가지 — `routes`(전용 라우트), `chatIntegration`(채팅 턴 통합), `runtime`(부팅 때 호출되는 진입점) — 와 팩 콘텐츠(스킬·카탈로그·마이그레이션)뿐이다.
+Base 는 개별 add-on 을 import 하지 않는다. 확장점은 매니페스트 `entry` 의 네 가지 — `routes`(전용 라우트), `chatIntegration`(채팅 턴 통합), `runtime`(부팅 때 호출되는 진입점), `data`(꺼져도 불러오는 데이터 모듈, §8.7) — 와 팩 콘텐츠(스킬·카탈로그·마이그레이션)뿐이다.
 
 ## 7.1 부팅 절차 (`addon-host/index.ts`)
 
@@ -122,7 +124,7 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 |---|---|---|---|
 | `prepareTurnContext`, 오케스트레이션 도구 `run` | 기능 | **멈춘다(턴마다 `integrationGate`)** | 그 통합만 건너뜀 |
 | 순수 동기 훅 `detectIntent`·`forceIncludeTools`·`forcedFirstTurnTool`·`systemPromptParts`·`userLocationHint`·`enhancedMessagePrefix`·`mcpSelectionHint`·`extractBlocks`·`scrubFinalContent`·`preserveFromRawResult`·`agentTaskTools`·기여 도구 노출 | 기능(프롬프트·노출) | **턴마다 캐시 판정으로 건너뜀**(`getActiveChatTurnIntegrations` → `isAddonEnabledSync`, 턴 시작에 적재·TTL 30초, 첫 적재 전에만 켜짐; 조직 사용권 축은 안 봄) | 해당 없음(동기 — 적재 실패 시 마지막 값, 첫 적재 전엔 켜짐) |
-| `isMemoryIsolatedSession` | 보호 | **계속 돈다** | 격리로 간주(fail-closed) |
+| `isMemoryIsolatedSession` | 보호 | **계속 돈다** — 채팅 통합 훅과 데이터 모듈(§8.7, Knowledge 는 여기) 둘 다 본다. 데이터 모듈은 env 로 꺼도 불러온다 | 격리로 간주(fail-closed). 데이터 모듈을 불러오지 못한 add-on 이 하나라도 있으면 격리 |
 | `listHiddenSessionIds` | 표시 | 계속 돈다 | 숨김만 건너뜀(본인 목록 배치, 누출 아님) |
 
 채팅 기능 훅 게이트(`integrationGate`)는 라우트 게이트와 같은 판정(`checkAddonEntitlement` — 상태 + 조직 사용권)을 쓴다 — 조직 allowlist 밖 add-on 은 라우트 403 과 함께 채팅 기능 훅도 멈춘다(사용자가 없는 게스트 턴은 조직 축을 보지 않는다).
@@ -135,13 +137,14 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 |---|---|---|
 | Base 는 add-on 모듈을 import 하지 않는다 | eslint `no-restricted-imports`(`**/addons/**`, addon-host 제외) | 위반 즉시 |
 | add-on 을 모두 꺼도 Base 가 선다 | Jest `addon-host/__tests__/all-builtin-addons-off.test.ts`(env 로 내장 add-on 전부 끔 → 코드 로더 0회, 채팅 통합·모드·기여·라우트·worker 빈 결과, 미디어 capability `CAPABILITY_NOT_REGISTERED`) + `services/chat-service/__tests__/base-only-addons-off.test.ts`(채팅 경계 중립값·도구/스킬 포트·에이전트 작업 도구) | add-on 코드를 한 번이라도 불러오거나 확장점이 비지 않으면 |
-| 웹 Base 는 add-on 디렉터리(`apps/web/addons/<id>/`)를 import 하지 않는다 — `@/addons/registry`(클라이언트 확장)·`@/addons/pages`(add-on 소유 URL 화면)·`@/addons/types` 만 | `apps/web/eslint.config.mjs` `no-restricted-imports`(regex, `addons/**` 안은 제외) | 위반 즉시. add-on 화면(Knowledge `/knowledge`·딥리서치 `/research`)은 Base 의 catch-all 라우트 `app/(workspace)/[...addonPath]` 가 `renderAddonPage` 로 고르고 맞는 것이 없으면 404. 허브 탭 링크는 `WebAddon.hubTabs`(켜진 add-on 만) — 경로가 Base 정적 라우트와 겹치면 `tests/web/addon-pages.test.tsx` 가 실패 |
+| 웹 Base 는 add-on 디렉터리(`apps/web/addons/<id>/`)를 import 하지 않는다 — `@/addons/registry`(클라이언트 확장)·`@/addons/pages`(add-on 소유 URL 화면)·`@/addons/types` 만 | `apps/web/eslint.config.mjs` `no-restricted-imports`(regex, `addons/**` 안은 제외) | 위반 즉시. add-on 화면은 Base 의 catch-all 라우트 두 개(`app/(workspace)/[...addonPath]`·관리자 영역 `app/(workspace)/admin/[...addonPath]`)가 `renderAddonPage` 로 고르고 맞는 것이 없으면 404. 확장점은 §8.8 — 링크가 등록 화면을 가리키지 않거나 경로가 Base 정적 라우트와 겹치면 `tests/web/addon-pages.test.tsx` 가 실패 |
 | 계약 패키지는 apps·외부 패키지·자기 디렉터리 밖을 import 하지 않는다 | eslint(`packages/plugin-contracts/src/**`) | 위반 즉시 |
 | apps/api 는 계약 패키지를 type-only 로만 쓴다(테스트 예외) | eslint `@typescript-eslint/no-restricted-imports` | 값 import·재수출 |
 | add-on → Base 내부(아래 '써도 되는 문' 밖 전부)·다른 add-on import 는 **줄어들기만** 한다 | `npm run check:addon-boundary`(CI Gate 4), 허용 목록 `scripts/lint/addon-import-allowlist.json` | 목록 밖의 새 (파일, 대상) 쌍. 사라진 쌍은 권고만 — `npm run gen:addon-boundary` 로 목록을 줄인다 |
-| add-on 소스는 Base 테이블을 SQL 로 쓰지 않는다 | Jest `__tests__/addons-no-base-table-sql.test.ts`(테이블 목록은 코어 스키마의 CREATE TABLE) | SQL 키워드 뒤의 Base 테이블 이름. 예외(래칫): 스킬 런타임의 스킬 스키마 6개 표 |
+| add-on 소스는 Base 테이블을 SQL 로 쓰지 않는다 | Jest `__tests__/addons-no-base-table-sql.test.ts`(테이블 목록은 코어 스키마의 CREATE TABLE) | SQL 키워드 뒤의 Base 테이블 이름. 소유 표(`ADDON_OWNED_CORE_TABLES`)는 그 add-on 만 쓸 수 있다 — 다른 add-on 이 쓰면 실패 |
+| Base 는 add-on 소유 표를 SQL 로 쓰지 않는다 | Jest `__tests__/base-no-addon-table-sql.test.ts`(Base 소스 전체, 테스트·평가 도구 제외) | 기대값 `{}` — 소유 표 이름이 SQL 키워드 뒤에 나오면 실패. Base 는 데이터 모듈의 훅·저장 연산(§8.7)과 런타임 포트로만 다룬다 |
 
-add-on 이 써도 되는 문은 `runtime-ports/*`(포트)·`addon-host`·`config`·`utils`·`@openmake/plugin-contracts` 다. 허용 목록·SQL 검사는 테스트(`__tests__`·`*.test.ts`)와 평가 시드 도구(`evaluation/`)를 보지 않는다. 초기 허용 목록은 141쌍/67파일(2026-10-16, 8개 계층), 범위를 Base 전체로 넓힌 뒤 267쌍/98파일(2026-10-18 동결) — 새 import 를 목록에 더하는 diff 는 리뷰에서 거절한다.
+add-on 이 써도 되는 문은 `runtime-ports/*`(포트)·`addon-host`·`config`·`utils`·`@openmake/plugin-contracts` 다. 허용 목록·SQL 검사는 테스트(`__tests__`·`*.test.ts`)와 평가 시드 도구(`evaluation/`)를 보지 않는다. 초기 허용 목록은 141쌍/67파일(2026-10-16, 8개 계층), 범위를 Base 전체로 넓힌 뒤 267쌍/98파일(2026-10-18 동결), MCP·스킬 저장 이전 뒤 253쌍/107파일(같은 날 — 옮긴 코드가 쓰는 DB 접근은 `runtime-ports/db-access` 로) — 새 import 를 목록에 더하는 diff 는 리뷰에서 거절한다.
 
 ratchet 은 `ADDON_GATEWAYS`(`scripts/lint/addon-boundary-lib.mjs` — `runtime-ports`·`addon-host`·`config`·`utils`·`types`) 밖의 `apps/api/src` 전부와 다른 add-on 으로 가는 import 를 센다(2026-10-18 확장 — 종전 8개 계층만 세어 `tool-contract`·`llm`·`tools`·`agents` 등 126쌍이 보이지 않았다). 같은 add-on 안은 세지 않는다. `tool-contract`·`capability-contract` 는 Base 의 계약 계층이지만 add-on 문으로 열지 않고 동결해 두었다 — 포트·계약 패키지로 옮겨 가며 줄인다.
 
@@ -163,6 +166,40 @@ Knowledge 는 바인딩(연결·해제·해석·사이드바 숨김)과 Space �
 포트의 actor 범위도 코드 경계다. `ownerOf`·`summaries` 는 actor 를 받지 않고, `exists`·`listIdsForUser` 의 actor 는 호출자(add-on)가 만든다 — Base 가 요청 문맥에서 발급한 actor 가 아니다. 물리 SQL 권한 격리와 Base 발급 actor 는 2차 후보다.
 
 **DB 테스트**: `*.db.test.ts` 는 `TEST_DATABASE_URL` 이 있을 때만 돈다. CI 는 Gate 1.5 에서 job 안의 일회용 PostgreSQL(`pgvector/pgvector:0.8.3-pg16-trixie`)에 `scripts/setup-test-db.sh` 로 코어+add-on 마이그레이션을 적용하고 `npm run test:db` 로 그 파일들만 `--runInBand` 로 돌린다 — 마지막 줄 `db tests ran: N` 이 0 이면(전부 skip) 실패다. 로컬도 같은 두 명령이다. CI 에서 실제로 도는 DB 테스트는 `*.db.test.ts` 뿐이다 — `TEST_DATABASE_URL||DATABASE_URL` 로 게이트된 다른 테스트 7개(027_mcp_server_draft·128_org_scoped_sharing·mcp-catalog-repository.metrics·mcp-server-draft-repository·mcp-catalog-admin.routes·mcp-server-ingest.routes·mcp-server-ingest-service)는 이름 변경(`*.db.test.ts`)이 후속이다.
+
+## 8.7 데이터 모듈(`entry.data`)과 구성요소 저장
+
+기능을 꺼도 그 add-on 이 소유한 표의 데이터는 남는다. 그래서 사용자 데이터 의무와 확장 플랫폼의 구성요소 연산은 런타임이 아니라 **데이터 모듈**이 맡고, 호스트는 이 모듈만은 env·DB 로 꺼진 add-on 도 불러온다(`addon-host/addon-data.ts` `getAddonDataModules()`, 매니페스트 `entry.data`). 모듈은 런타임·외부 연결 없이 SQL 만 쓴다. 계약은 `runtime-ports/addon-data.ts` `AddonDataModule`.
+
+| 훅 | 부르는 곳(Base) | 실패 처리 |
+|---|---|---|
+| `exportUserData(userId)` | 내보내기 `export.controller`(`collectAddonUserData`) — 키가 응답 최상위 키, 개수는 `_meta.counts` | 그 add-on 을 `_meta.failedCategories` 에 `addon:<id>` 로 싣고 나머지는 내보낸다 |
+| `onUserDelete(tx, userId)` | `UserManager.deleteUser` 트랜잭션 안 | **fail-closed** — 던지거나 모듈을 불러오지 못했으면 사용자 삭제 전체를 되돌린다 |
+| `isMemoryIsolatedSession(userId, sessionId)` | `isSessionMemoryIsolated`(전역 메모리 쓰기 전) | 격리로 간주(§8.4) |
+| `retention[]` | `data/db-retention.ts` 주기 정리 | 그 작업만 건너뛴다 |
+| `stores` | 확장 플랫폼(아래) | `ComponentStoreUnavailableError` |
+
+현재 모듈: `skill-runtime`(내보내기 — `skillManifests`·`agentSkills`, 삭제 — 사용자 스킬 삭제 + 그 사용자 manifest 공개 해제(FK `SET NULL` 이 system 소유로 바꿔 남에게 노출되는 것을 막는다)), `mcp-runtime`(보존 — 인스턴스 이력 정리), `knowledge-runtime`(메모리 격리 — Space 에 연결된 대화). 스킬·MCP 는 `stores` 도 준다.
+
+**구성요소 저장**(`runtime-ports/component-stores.ts`): Base 확장 플랫폼(Git·에이전트 설치, 확장 수명주기·권한, 마켓 게시, 팩 카탈로그 설치)은 스킬·MCP 서버 행을 `getComponentStore('skills' | 'mcpServers', db)` 로 받은 연산으로 다룬다. 저장 연산은 **호출자가 넘긴 DB 연결에 묶이는 팩토리**라 풀이든 트랜잭션 클라이언트든 같은 SQL 이 그 연결로 나간다(트랜잭션 범위·테스트 주입이 종전과 같다). 그 종류를 저장하는 add-on 이 빌드에 없거나 데이터 모듈을 불러오지 못했으면 `ComponentStoreUnavailableError` 다. 런타임 기능(MCP 연결, 스킬 주입·절차 스킬 블록, 템플릿으로 사용자 서버 찾기)은 종전대로 `runtime-ports/tool-runtime.ts`·`skill-runtime.ts` 포트다. add-on 이 Base 의 DB 접근(재시도 래퍼·트랜잭션·`BaseRepository`)을 쓸 때는 `runtime-ports/db-access.ts` 를 거친다.
+
+add-on 을 모두 꺼도 데이터 모듈 로드만 허용된다 — `all-builtin-addons-off.test.ts` 는 코드 로더 호출을 데이터 모듈 진입점으로만 제한한다.
+
+## 8.8 웹 확장점 (`apps/web/addons/types.ts`)
+
+Base 화면은 켜진 add-on(`useEnabledWebAddons` — `GET /api/addons`, 조회 실패·로딩 중엔 전부 켜짐)의 확장만 순회한다. Base 항목은 10 단위 순서 값이고 add-on 은 그 사이 값으로 끼운다.
+
+| 확장점 | Base 소비처 | 지금 쓰는 add-on |
+|---|---|---|
+| `hubTabs` | `components/hub-tabs.tsx`(history·agents·developer·admin 허브) | 딥리서치 `/research` · 스킬 `/skill-library` · MCP `/admin/mcp-monitoring`·`/admin/mcp-catalog` |
+| `approvalSections`(+ `countPending`) | `/approvals` 섹션 · 사이드바 승인 배지 합산 | 스킬 draft(20) · MCP 서버 draft(30) — Base 는 에이전트 작업(10)·Custom Agent(40) |
+| `settingsTabs`(`ownsSaving` 이면 공용 저장 버튼을 숨긴다) | `/settings` 탭 — 모르는·꺼진 탭은 일반 탭으로 연다 | MCP 커넥터(65) |
+| `adminQuickLinks` | `/admin` 바로가기 | MCP 카탈로그(5) |
+| `slashMenu`(첫 번째 것만) | 입력창 `/` 메뉴 — 감지·디바운스·키보드 이동은 Base, 후보·정렬·삽입 텍스트·전체 보기·표시는 add-on. 없으면 메뉴가 뜨지 않는다 | 스킬(`/<slug> ` 삽입) |
+| `messageBlocks`·`composerContext`·`chatMode`·`settingsGroups`·`apiKeyScopePresets`·`sidebarSections`·`chatContextBanners` | 메시지 렌더·컴포저·관리자 시스템 설정·API 키·사이드바·대화 배너 | 지도·노트북·디스코드·토론·딥리서치·Knowledge |
+| 화면 `WebAddonPage`(`addons/pages.ts`, `area: workspace \| admin`) | catch-all 라우트 두 개 — admin 은 관리자 가드 레이아웃 안 | `/knowledge`·`/research`·`/skill-library`·`/mcp-catalog`(+ 구 딥링크 `/mcp-servers`·`/mcp-monitoring` 리다이렉트) · `/admin/mcp-catalog`·`/admin/mcp-monitoring` |
+
+관리자 영역의 없는 경로는 응답 상태가 200 이다 — 가드 레이아웃이 클라이언트 컴포넌트라 SSR 에서 children 을 그리지 않아, notFound 신호가 인증 확인 뒤 클라이언트에서 not-found 화면으로 드러난다(비관리자는 가드 안내만 본다).
 
 ## 9. Knowledge 작업 큐 (`addons/knowledge-runtime/jobs/`)
 
