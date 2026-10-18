@@ -11,7 +11,8 @@
 #   ./scripts/backups/db-restore.sh <파일명|경로> [--yes]  # 특정 백업으로 복원
 #   ./scripts/backups/db-restore.sh --latest --dry-run   # 어떤 파일을 복원할지만 확인
 #
-# 환경변수: BACKUP_DIR (기본: <repo>/backups) — db-backup.sh 와 동일.
+# 환경변수: BACKUP_DIR (기본: <repo>/backups)·OMK_INSTANCE·POSTGRES_DB — db-backup.sh 와 동일.
+#   --latest 는 이 DB·인스턴스의 백업 중 가장 최근 것만 고른다(같은 폴더의 다른 인스턴스 백업은 제외).
 #
 # ⚠ 이 스크립트는 대상 DB 를 통째로 DROP/CREATE 후 덤프 내용으로 대체한다
 #   (openmake_llm.sh db-restore 위임). 반드시 --dry-run 으로 대상 파일부터 확인할 것.
@@ -20,6 +21,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly REPO_ROOT
+# shellcheck source=scripts/backups/backup-lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/backup-lib.sh"
 
 log_info() { printf "[INFO]  %s\n" "$*"; }
 log_err()  { printf "[ERR]   %s\n" "$*" >&2; }
@@ -31,6 +34,10 @@ env_line() {
 
 BACKUP_DIR="${BACKUP_DIR:-$(env_line BACKUP_DIR)}"
 readonly BACKUP_DIR="${BACKUP_DIR:-$REPO_ROOT/backups}"
+INSTANCE="${OMK_INSTANCE:-$(env_line OMK_INSTANCE)}"
+readonly INSTANCE
+PG_DB="${POSTGRES_DB:-$(env_line POSTGRES_DB)}"
+readonly PG_DB="${PG_DB:-openmake_llm}"
 
 DRY_RUN=0
 YES=0
@@ -55,8 +62,8 @@ done
 
 if [[ "$TARGET" == "--latest" ]]; then
     [[ -d "$BACKUP_DIR" ]] || { log_err "백업 디렉터리 없음: $BACKUP_DIR"; exit 1; }
-    FILE="$(find "$BACKUP_DIR" -maxdepth 1 -name '*.dump' -type f -exec ls -1t {} + 2>/dev/null | head -n 1)"
-    [[ -n "$FILE" ]] || { log_err "복원할 .dump 파일이 없습니다: $BACKUP_DIR"; exit 1; }
+    FILE="$(find "$BACKUP_DIR" -maxdepth 1 -name "$(backup_name_glob "$PG_DB" "$INSTANCE")" -type f -exec ls -1t {} + 2>/dev/null | head -n 1)"
+    [[ -n "$FILE" ]] || { log_err "이 인스턴스(${PG_DB}${INSTANCE:+-$INSTANCE})의 .dump 파일이 없습니다: $BACKUP_DIR"; exit 1; }
 else
     if [[ -f "$TARGET" ]]; then
         FILE="$TARGET"
