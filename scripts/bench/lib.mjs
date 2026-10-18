@@ -215,12 +215,14 @@ export function exitCodeForVerdict(verdict) {
  * tick 을 한 번에 하나씩 돌린다 — 이전 tick 이 끝난(성공·실패 모두) 뒤 intervalMs 를 기다려 다음을 부른다.
  * setInterval 은 느린 응답이 쌓여 측정 대상에 동시 요청을 겹쳐 보내므로 쓰지 않는다.
  * 실패 집계는 tick 이 한다(거부돼도 다음 tick 은 이어진다). stop 뒤에는 새 tick 을 부르지 않는다.
+ * tick 이 동기로 throw 하거나 promise 가 아닌 값을 돌려줘도 promise 로 감싼다 — throw 는 거부로 바뀌고 다음 tick 은 이어진다.
+ * first 는 첫 tick 의 promise 다 — 첫 tick 이 throw·거부하면 first 도 그 오류로 거부된다.
  */
 export function startSerialPoller(tick, intervalMs) {
     let stopped = false;
     let timer = null;
     const run = () => {
-        const p = tick();
+        const p = new Promise((resolve) => { resolve(tick()); });
         const next = () => {
             if (!stopped) timer = setTimeout(run, intervalMs);
         };
