@@ -68,10 +68,11 @@ describeOrSkip('JobRuntimeRepository (TEMP orchestrator_jobs)', () => {
     it('T26: lease 만료 뒤 새 실행자가 token 을 올리면 이전 token 의 완료 쓰기는 거절된다', async () => {
         const { job } = await intent('k5');
         await repo.transition(job.id, 'running', { externalJobId: 'ext-5' });
-        const first = await repo.acquireLease(job.id, 'w1', 1);
+        // lease 는 질의 사이 간격보다 넉넉히 — 1ms 면 질의가 느린 장비(맥북 colima)에서 다음 질의 전에 이미 만료돼 w2 가 잡았다
+        const first = await repo.acquireLease(job.id, 'w1', 500);
         expect(first).not.toBeNull();
         expect(await repo.acquireLease(job.id, 'w2', 60_000)).toBeNull(); // 아직 w1 lease — 잠시 뒤 만료
-        await new Promise((r) => setTimeout(r, 20));
+        await new Promise((r) => setTimeout(r, 600));
         const second = await repo.acquireLease(job.id, 'w2', 60_000);
         expect(second!.token).toBe(first!.token + 1);
         expect(await repo.transition(job.id, 'collecting', {}, first!.token)).toBeNull();
