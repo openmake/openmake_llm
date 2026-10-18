@@ -104,4 +104,34 @@ export interface WebAddon {
   apiKeyScopePresets?: readonly ApiKeyScopePresetExtension[];
   sidebarSections?: readonly SidebarSectionExtension[];
   chatContextBanners?: readonly ChatContextBannerExtension[];
+  hubTabs?: readonly HubTabExtension[];
+}
+
+/** 허브 탭 바(components/hub-tabs.tsx) — 허브 이름은 Base 가 정한다 */
+export type HubId = "history" | "agents" | "developer" | "admin";
+
+/** 허브 탭 바에 add-on 화면(보통 `pages.ts` 에 등록한 URL)을 끼운다. 꺼진 add-on 의 탭은 보이지 않는다 */
+export interface HubTabExtension {
+  hub: HubId;
+  href: string;
+  /** next-intl 전체 키(예: "pageTabs.research") */
+  labelKey: string;
+  /** Base 탭은 10 단위(10·20·30…) — 그 사이 값으로 위치를 정한다 */
+  order: number;
+}
+
+/** add-on 화면 렌더 입력 — 경로는 `path` 뒤의 조각만, 쿼리는 Next 의 searchParams 그대로 */
+export interface WebAddonPageProps {
+  segments: readonly string[];
+  searchParams: Readonly<Record<string, string | string[] | undefined>>;
+}
+
+/**
+ * add-on 이 소유한 화면 — URL 첫 조각(`/knowledge/...` 의 `knowledge`)으로 찾는다. Base 의 catch-all 라우트가
+ * 서버에서 `addons/pages.ts` 만 보고 렌더하므로, 이 계약은 서버에서 import 해도 안전해야 한다(훅 없음, 화면 컴포넌트는 "use client").
+ */
+export interface WebAddonPage {
+  path: string;
+  /** 이 add-on 이 다루지 않는 하위 경로면 null — Base 가 404 로 응답한다 */
+  render(props: WebAddonPageProps): ReactNode | null;
 }

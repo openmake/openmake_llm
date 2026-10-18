@@ -12,7 +12,7 @@ import { ALLOWLIST_PATH, REPO_ROOT, collectAddonBaseImports, countPairs } from '
 
 const entries = collectAddonBaseImports(REPO_ROOT);
 const doc = {
-    description: 'apps/api/src/addons/** → Base 내부 계층(data·services·routes·sockets·controllers·middlewares·auth·chat) import 허용 목록. 줄어들기만 한다(ratchet). 새 import 는 runtime-ports 의 포트나 @openmake/plugin-contracts 를 거친다. 재생성: npm run gen:addon-boundary',
+    description: 'apps/api/src/addons/** → Base 내부(add-on 이 써도 되는 문 runtime-ports·addon-host·config·utils·types 밖 전부)·다른 add-on import 허용 목록. 줄어들기만 한다(ratchet). 새 import 는 runtime-ports 의 포트나 @openmake/plugin-contracts 를 거친다. 재생성: npm run gen:addon-boundary',
     entries,
 };
 writeFileSync(ALLOWLIST_PATH, `${JSON.stringify(doc, null, 2)}\n`);
