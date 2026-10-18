@@ -134,6 +134,7 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 | 규칙 | 집행 | 실패 조건 |
 |---|---|---|
 | Base 는 add-on 모듈을 import 하지 않는다 | eslint `no-restricted-imports`(`**/addons/**`, addon-host 제외) | 위반 즉시 |
+| add-on 을 모두 꺼도 Base 가 선다 | Jest `addon-host/__tests__/all-builtin-addons-off.test.ts`(env 로 내장 add-on 전부 끔 → 코드 로더 0회, 채팅 통합·모드·기여·라우트·worker 빈 결과, 미디어 capability `CAPABILITY_NOT_REGISTERED`) + `services/chat-service/__tests__/base-only-addons-off.test.ts`(채팅 경계 중립값·도구/스킬 포트·에이전트 작업 도구) | add-on 코드를 한 번이라도 불러오거나 확장점이 비지 않으면 |
 | 웹 Base 는 add-on 디렉터리(`apps/web/addons/<id>/`)를 import 하지 않는다 — `@/addons/registry`(클라이언트 확장)·`@/addons/pages`(add-on 소유 URL 화면)·`@/addons/types` 만 | `apps/web/eslint.config.mjs` `no-restricted-imports`(regex, `addons/**` 안은 제외) | 위반 즉시. add-on 화면은 Base 의 catch-all 라우트 `app/(workspace)/[...addonPath]` 가 `renderAddonPage` 로 고르고 맞는 것이 없으면 404 — 경로가 Base 정적 라우트와 겹치면 `tests/web/addon-pages.test.tsx` 가 실패 |
 | 계약 패키지는 apps·외부 패키지·자기 디렉터리 밖을 import 하지 않는다 | eslint(`packages/plugin-contracts/src/**`) | 위반 즉시 |
 | apps/api 는 계약 패키지를 type-only 로만 쓴다(테스트 예외) | eslint `@typescript-eslint/no-restricted-imports` | 값 import·재수출 |
