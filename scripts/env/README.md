@@ -102,7 +102,7 @@ feature PR → dev (CI 통과 시 자동 머지)
 
 | 조각 | 하는 일 | 켜는 곳 |
 |---|---|---|
-| `omk env smoke <env>` | health · 빌드본의 API 포트 · 웹의 `/generated` 경로 · 로그인 · 채팅 1회. 하나라도 실패하면 종료 코드 3 | 그 환경 `.env` 의 `OMK_SMOKE_EMAIL` · `OMK_SMOKE_PASSWORD` (스모크가 로그인할 계정) |
+| `omk env smoke <env>` | health · 빌드본의 API 포트 · 웹의 `/generated` 경로 · 로그인 · `/ready`(LLM 노드·DB·기본 모델, 쓰기 없음) · 채팅 1회. 릴리스를 따르는 환경(`OMK_TRACK=release` — 기본 online)은 채팅을 빼고 쓰기 없는 검사만 한다. 하나라도 실패하면 종료 코드 3 | 그 환경 `.env` 의 `OMK_SMOKE_EMAIL` · `OMK_SMOKE_PASSWORD` (스모크가 로그인할 계정) |
 | 결과 표지 | 갱신 → 스모크 뒤 그 커밋에 GitHub 커밋 상태 `omk/env-<env>` 를 붙인다. 갱신이 실패해도 실패로 붙인다 | 그 환경 `.env` 의 `OMK_STATUS_TOKEN` (커밋 상태 쓰기 권한만) → `omk env autoupdate <env>` 를 다시 실행 |
 | `promote` 워크플로 | dev 에 push 될 때 dev → main PR 을 만들고(있으면 그대로) 자동 머지를 건다 | 저장소 시크릿 `OMK_PROMOTE_TOKEN` · 저장소 설정 "Allow auto-merge" |
 | main 보호 규칙 | 필수 체크에 `omk/env-dev` 를 더한다 — 환경 dev 가 확인하지 않은 커밋은 main 에 들어가지 못한다 | 저장소 설정 |
@@ -113,7 +113,7 @@ feature PR → dev (CI 통과 시 자동 머지)
 - 갱신(빌드·마이그레이션)이 실패한 커밋은 다음 주기에 새 커밋이 없어도 갱신부터 다시 한다 — 갱신 없이 스모크만 보면 예전 빌드본이 통과해 버린다.
 - **켜는 순서**: 환경 dev 가 표지를 붙이기 시작 → main 필수 체크에 `omk/env-dev` 추가 → `OMK_PROMOTE_TOKEN` 등록. `promote` 는 필수 체크에
   `omk/env-dev` 가 없으면 PR 만 만들고 자동 머지를 걸지 않는다.
-- 통과를 기록한 커밋은 다시 보지 않는다 — 스모크의 채팅 1회는 그 계정에 대화 기록을 한 건 남긴다.
+- 통과를 기록한 커밋은 다시 보지 않는다 — 스모크의 채팅 1회는 그 계정에 대화 기록을 한 건 남긴다(릴리스를 따르는 환경은 채팅을 보내지 않는다).
 - `OMK_STATUS_TOKEN` 이 없는 환경의 autoupdate 는 지금까지처럼 갱신만 한다. `OMK_PROMOTE_TOKEN` 이 없으면 `promote` 는 아무것도 하지 않는다.
 - `OMK_PROMOTE_TOKEN` 은 기본 `GITHUB_TOKEN` 이 아니어야 한다 — 기본 토큰으로 만든 PR·머지는 CI 와 release-please 를 깨우지 않는다.
 - 릴리스를 따르는 환경(online)은 대상이 아니다 — 릴리스 게이트가 `verify` 기록을 본다.
@@ -145,7 +145,7 @@ feature PR → dev (CI 통과 시 자동 머지)
 | 할 것 | 하지 말 것 |
 |---|---|
 | 릴리스 직후 `omk env update online` — **최신 릴리스 태그**로만 올라간다(새 태그가 없으면 아무 일도 하지 않는다) | main HEAD·`feature/*` 를 올리지 않는다 (`--ref` 로 브랜치를 주지 않는다) |
-| **스모크만**: 접속 200 · 로그인 · 채팅 1회 · `omk env status online` | 부하 시험·대량 평가·동시 다발 요청 같은 **무거운 검증을 하지 않는다** — 운영 모델 서버를 공유한다. 그런 것은 CI 와 staging 에서 끝낸다 |
+| **스모크만**: 접속 200 · 로그인 · `/ready`(LLM 노드·DB·기본 모델) · `omk env status online` — **채팅은 보내지 않는다**. 코드 동작은 같은 커밋으로 staging 에서 확인했고(릴리스 게이트), online 에서 새로 생길 수 있는 고장은 연결·설정이라 쓰기 없는 `/ready` 로 본다(대화 기록·모델 호출을 남기지 않는다) | 부하 시험·대량 평가·동시 다발 요청 같은 **무거운 검증을 하지 않는다** — 운영 모델 서버를 공유한다. 그런 것은 CI 와 staging 에서 끝낸다 |
 | 매일 백업을 걸어 둔다(`omk env backup online --schedule`). `update` 는 올리기 직전에 한 번 더 뜬다 | `omk env reset online` 을 하지 않는다 — 볼륨(DB)까지 지운다. 옮길 때는 `db-dump` → `db-restore` |
 | 게이트를 켜 둔다(`.env` 의 `OMK_RELEASE_GATE=1`) — staging 에서 확인하지 않은 릴리스는 올라가지 않는다 | `--force-unverified` 를 습관적으로 쓰지 않는다 — 급한 수정에만, 쓴 기록은 `logs/release-gate.log` 에 남는다 |
 | 문제가 나면 수정 → 새 릴리스 → update. 급하면 이전 태그로 되돌리고 `./openmake_llm.sh deploy` | online 에서 실험·설정 시험·모델 교체 시험을 하지 않는다 |
@@ -243,7 +243,7 @@ omk env install <env> [--ref BR] [--bench [--bench-ref BR]] [--public-url URL] [
                       [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate] [--release-gate]
                       [--ops-profile] [--dgx-host H] [--https-host H] [--artifact-viewer] [--discord-token T]
 omk env update  <env> [--if-behind] [--no-backup] [--force-unverified] [--report]   # llm(ff-only → build → migrate → restart) → bench → proxy
-omk env smoke   <env> [--report]        # health · 빌드본의 API 포트 · /generated · 로그인 · 채팅 1회 (--report: 그 커밋에 결과 표지)
+omk env smoke   <env> [--report]        # health · 빌드본의 API 포트 · /generated · 로그인 · /ready · 채팅 1회(릴리스 환경은 제외) (--report: 그 커밋에 결과 표지)
 omk env verify  <env> [--list]          # 확인을 마친 커밋을 origin 에 기록 (릴리스 게이트)
 omk env reset   <env> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
 omk env status|start|stop|logs <env>
@@ -574,6 +574,7 @@ omk env status online
 | `OMK_AUTOUPDATE_CRON` | `*/10 * * * *` | 자동 갱신 주기 |
 | `OMK_BACKUP_CRON` | `30 3 * * *` | `omk env backup --schedule` 의 기본 주기 |
 | `OMK_SMOKE_TIMEOUT` / `OMK_GITHUB_API` | `120` / `https://api.github.com` | 스모크 요청 하나의 제한 시간(초) · 결과 표지를 올릴 API |
+| `OMK_SMOKE_READY_WAIT` | `60` | 스모크의 `/ready` 가 200 이 될 때까지 기다리는 최대 시간(초) — 재기동 직후 LLM 노드 첫 확인 |
 | `OMK_CADDY_VERSION` | 최신 릴리스 | caddy 버전 고정 (폐쇄망) |
 | `OMK_CADDY_ADMIN` | `localhost:2019` | caddy admin 주소 |
 | `OMKB_PORT_BASE` / `OMK_PROXY_PORT_BASE` / `OMK_LITELLM_PORT_BASE` | `9400` / `33000` / `13401` | bench·프록시·LiteLLM 빈 포트 탐색 시작점 |
