@@ -199,9 +199,9 @@ Base 화면은 켜진 add-on(`useEnabledWebAddons` — `GET /api/addons`, 조회
 | `adminQuickLinks` | `/admin` 바로가기 | MCP 카탈로그(5) |
 | `slashMenu`(첫 번째 것만) | 입력창 `/` 메뉴 — 감지·디바운스·키보드 이동은 Base, 후보·정렬·삽입 텍스트·전체 보기·표시는 add-on. 없으면 메뉴가 뜨지 않는다 | 스킬(`/<slug> ` 삽입) |
 | `messageBlocks`·`composerContext`·`chatMode`·`settingsGroups`·`apiKeyScopePresets`·`sidebarSections`·`chatContextBanners` | 메시지 렌더·컴포저·관리자 시스템 설정·API 키·사이드바·대화 배너 | 지도·노트북·디스코드·토론·딥리서치·Knowledge |
-| 화면 `WebAddonPage`(`addons/pages.ts`, `area: workspace \| admin`) | catch-all 라우트 두 개 — admin 은 관리자 가드 레이아웃 안 | `/knowledge`·`/research`·`/skill-library`·`/mcp-catalog`(+ 구 딥링크 `/mcp-servers`·`/mcp-monitoring` 리다이렉트) · `/admin/mcp-catalog`·`/admin/mcp-monitoring` |
+| 화면 `WebAddonPage`(`addons/pages.ts`, `area: workspace \| admin`) | catch-all 라우트 두 개 — admin 은 관리자 가드 레이아웃 밖(`(admin-addons)` route group)에서 서버가 화면 유무를 판정한 뒤 같은 가드(`AdminGuard`)로 감싼다 | `/knowledge`·`/research`·`/skill-library`·`/mcp-catalog`(+ 구 딥링크 `/mcp-servers`·`/mcp-monitoring` 리다이렉트) · `/admin/mcp-catalog`·`/admin/mcp-monitoring` |
 
-관리자 영역의 없는 경로는 응답 상태가 200 이다 — 가드 레이아웃이 클라이언트 컴포넌트라 SSR 에서 children 을 그리지 않아, notFound 신호가 인증 확인 뒤 클라이언트에서 not-found 화면으로 드러난다(비관리자는 가드 안내만 본다).
+관리자 영역의 없는 경로는 404 다. 관리자 가드는 클라이언트 컴포넌트라 SSR 에서 children 을 그리지 않아, 그 안에서 던진 `notFound()` 는 응답 상태에 닿지 않는다(종전 200) — 그래서 add-on 관리자 catch-all 은 가드 레이아웃 밖(`app/(workspace)/(admin-addons)/admin/[...addonPath]`)에서 화면 유무를 서버에서 먼저 판정하고, 있는 화면만 `AdminGuard` 로 감싼다. 이 Next 버전은 루트 레이아웃이 cookies·headers(언어)를 읽어 모든 라우트가 동적이라 `dynamicParams = false` 로는 막히지 않는다.
 
 ## 9. Knowledge 작업 큐 (`addons/knowledge-runtime/jobs/`)
 
