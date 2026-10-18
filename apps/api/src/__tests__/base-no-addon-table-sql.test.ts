@@ -20,8 +20,6 @@ const BASE_SQL_ON_ADDON_TABLES_ALLOWLIST: Readonly<Record<string, readonly strin
     'agents/git-ingest/extension-components.ts': ['agent_skills', 'mcp_servers', 'skill_manifests'],
     'agents/git-ingest/git-ingest-service.ts': ['agent_skills', 'skill_manifests'],
     'agents/git-ingest/mcp-server-ingest-service.ts': ['mcp_servers'],
-    'controllers/export.controller.ts': ['agent_skills', 'skill_manifests'],
-    'data/db-retention.ts': ['mcp_server_instances'],
     'data/repositories/addon-install-repository.ts': ['mcp_server_catalog'],
     'data/repositories/external-repository.ts': ['mcp_servers'],
     'data/repositories/marketplace-export-repository.ts': ['agent_skills', 'mcp_servers', 'skill_assets'],
@@ -29,7 +27,6 @@ const BASE_SQL_ON_ADDON_TABLES_ALLOWLIST: Readonly<Record<string, readonly strin
     'data/repositories/skill-asset-repository.ts': ['skill_assets'],
     'data/repositories/user-extension-permission-repository.ts': ['mcp_servers'],
     'data/repositories/user-extension-repository.ts': ['agent_skill_assignments', 'agent_skills', 'mcp_servers'],
-    'data/user-manager.ts': ['agent_skills', 'skill_manifests'],
 };
 
 function baseSources(dir: string): string[] {
