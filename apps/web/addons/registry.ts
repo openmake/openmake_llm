@@ -1,5 +1,6 @@
 /**
- * 웹 add-on 레지스트리 — 이 빌드에 포함된 add-on UI 확장. Base 는 여기만 import 한다.
+ * 웹 add-on 레지스트리 — 이 빌드에 포함된 add-on UI 확장. Base 는 여기와 화면 레지스트리(`pages.ts`)·계약(`types.ts`)만
+ * import 한다(eslint `no-restricted-imports` 가 강제). add-on 이 소유한 URL 화면은 `pages.ts` 에 등록한다.
  * 서버에서 꺼진 add-on(`GET /api/addons` 의 enabled=false)은 `useEnabledWebAddons` 가 걸러 낸다.
  */
 import { useMemo } from "react";
