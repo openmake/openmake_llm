@@ -328,9 +328,9 @@ infra/               沙箱和数据存储的 Docker 镜像与 compose 文件
 | 当前——已提供 | 下一步 | 之后 |
 |---|---|---|
 | 支持角色与能力路由的多模型网关 | 执行图 | 作用域记忆 |
-| 持久任务运行时：检查点、暂停/恢复、重启后恢复 | 声明式策略引擎与审批等待 | 组织、项目与多租户 |
-| 工具、MCP 网关、审批、Docker 沙箱 | 智能体与技能清单 | SSO（OIDC、SAML）、预算、部署审批 |
-| 深度研究、工件、本地执行桥接 | 轮内持久性 | 离线（气隙）安装、高可用、Kubernetes |
+| 持久任务运行时：检查点、暂停/恢复、重启后恢复、轮内持久性 | 声明式策略引擎与审批等待 | 组织、项目与多租户 |
+| 插件契约与清单、工具、MCP 网关、审批、Docker 沙箱 | 可复用工作流与知识空间 | SSO（OIDC、SAML）、预算、部署审批 |
+| 深度研究、工件、本地执行桥接、独立 Knowledge Worker | 多分段任务审查与验证套件 | 离线（气隙）安装、高可用、Kubernetes |
 
 方向已经确定，但时间表不是承诺——如果某项能力没有出现在 [发布说明](https://github.com/openmake/openmake_llm/releases) 中，请把它视为计划。详情见 **[openmake.cc/roadmap](https://openmake.cc/zh/roadmap/)**。
 
@@ -345,8 +345,10 @@ OpenMake 是公开开发的。我们会持续公开实现笔记、失败经历�
 - [All four times, the tests were green](https://openmake.cc/zh/blog/green-tests-four-gaps/)
 - [Connecting the plan to the execution, in three increments](https://openmake.cc/zh/blog/execution-graph-increments/)
 - [Swapping the inference backend in a day, then paying for it](https://openmake.cc/zh/blog/ollama-to-vllm-migration/)
+- [失败之后无能为力](https://openmake.cc/zh/blog/recovery-paths-and-audit-trail/)
+- [不绕过反向代理上传超限大文件](https://openmake.cc/zh/blog/chunked-agent-task-uploads/)
 
-每周进展也会整理在 [每周开发日志](https://openmake.cc/zh/blog/) 中——最新：[W37](https://openmake.cc/zh/blog/weekly-log-2026-w37/)。
+每周进展也会整理在 [每周开发日志](https://openmake.cc/zh/blog/) 中——最新：[W42](https://openmake.cc/zh/blog/weekly-log-2026-w42/)。
 
 ---
 

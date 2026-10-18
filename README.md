@@ -327,9 +327,9 @@ infra/               Docker images and compose files for sandboxes and data stor
 | Current — shipped | Next | Later |
 |---|---|---|
 | Multi-model gateway with role and capability routing | Execution graph | Scoped memory |
-| Durable task runtime: checkpoints, pause/resume, restart recovery | Declarative policy engine and approval waits | Organizations, projects, and multi-tenancy |
-| Tools, MCP gateway, approvals, Docker sandboxes | Agent and skill manifests | SSO (OIDC, SAML), budgets, deployment approvals |
-| Deep research, artifacts, local execution bridge | Sub-turn durability | Air-gapped installs, HA, Kubernetes |
+| Durable task runtime: checkpoints, pause/resume, restart recovery, sub-turn durability | Declarative policy engine and approval waits | Organizations, projects, and multi-tenancy |
+| Add-on contracts & manifests, tools, MCP gateway, approvals, Docker sandboxes | Reusable workflows & knowledge spaces | SSO (OIDC, SAML), budgets, deployment approvals |
+| Deep research, artifacts, local execution bridge, independent Knowledge Worker | Multi-segment task review & verification harness | Air-gapped installs, HA, Kubernetes |
 
 The direction is set; the schedule is not a promise — if a capability is not in a [release](https://github.com/openmake/openmake_llm/releases), treat it as a plan. Details: **[openmake.cc/roadmap](https://openmake.cc/en/roadmap/)**.
 
@@ -344,8 +344,10 @@ OpenMake is built in the open. We publish implementation notes, failures, trade-
 - [All four times, the tests were green](https://openmake.cc/en/blog/green-tests-four-gaps/)
 - [Connecting the plan to the execution, in three increments](https://openmake.cc/en/blog/execution-graph-increments/)
 - [Swapping the inference backend in a day, then paying for it](https://openmake.cc/en/blog/ollama-to-vllm-migration/)
+- [There was nothing you could do after it failed](https://openmake.cc/en/blog/recovery-paths-and-audit-trail/)
+- [Uploading beyond the proxy limit without bypassing the proxy](https://openmake.cc/en/blog/chunked-agent-task-uploads/)
 
-Each week is also summarized in the [weekly development log](https://openmake.cc/en/blog/) — latest: [W37](https://openmake.cc/en/blog/weekly-log-2026-w37/).
+Each week is also summarized in the [weekly development log](https://openmake.cc/en/blog/) — latest: [W42](https://openmake.cc/en/blog/weekly-log-2026-w42/).
 
 ---
 

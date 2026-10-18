@@ -329,9 +329,9 @@ infra/               샌드박스·데이터 저장소용 Docker 이미지와 co
 | 현재 — 제공 중 | 다음 | 이후 |
 |---|---|---|
 | 역할·기능 라우팅을 갖춘 멀티모델 게이트웨이 | 실행 그래프 | 범위 지정 메모리 |
-| 영속 작업 런타임: 체크포인트, 일시정지·재개, 재시작 복구 | 선언형 정책 엔진과 승인 대기 | 조직, 프로젝트, 멀티테넌시 |
-| 도구, MCP 게이트웨이, 승인, Docker 샌드박스 | 에이전트·스킬 매니페스트 | SSO(OIDC, SAML), 예산, 배포 승인 |
-| 딥 리서치, 아티팩트, 로컬 실행 브리지 | 턴 내부 내구성 | 폐쇄망 설치, HA, Kubernetes |
+| 영속 작업 런타임: 체크포인트, 일시정지·재개, 재시작 복구, 턴 내부 내구성 | 선언형 정책 엔진과 승인 대기 | 조직, 프로젝트, 멀티테넌시 |
+| Add-on 계약·매니페스트, 도구, MCP 게이트웨이, 승인, Docker 샌드박스 | 재사용 워크플로와 지식 공간 | SSO(OIDC, SAML), 예산, 배포 승인 |
+| 딥 리서치, 아티팩트, 로컬 실행 브리지, 독립 Knowledge Worker | 다단계 작업 검토 및 검증 하네스 | 폐쇄망 설치, HA, Kubernetes |
 
 방향은 정해져 있지만 일정은 약속이 아닙니다 — [릴리스](https://github.com/openmake/openmake_llm/releases)에 없는 기능은 계획으로 봐 주세요. 자세한 내용: **[openmake.cc/roadmap](https://openmake.cc/ko/roadmap/)**.
 
@@ -346,8 +346,10 @@ OpenMake 는 공개적으로 만들어집니다. 구현 노트, 실패, 트레�
 - [네 번 모두 테스트는 초록이었다](https://openmake.cc/ko/blog/green-tests-four-gaps/)
 - [계획과 실행을 잇는 일을 세 번에 나눠서 했다](https://openmake.cc/ko/blog/execution-graph-increments/)
 - [추론 백엔드를 하루 만에 갈아끼우고, 그 청구서를 열사흘 동안 갚았다](https://openmake.cc/ko/blog/ollama-to-vllm-migration/)
+- [실패한 다음에 할 수 있는 일이 없었다](https://openmake.cc/ko/blog/recovery-paths-and-audit-trail/)
+- [프록시를 우회하지 않고 대용량 파일 업로드하기](https://openmake.cc/ko/blog/chunked-agent-task-uploads/)
 
-매주 [주간 개발 로그](https://openmake.cc/ko/blog/)로도 정리합니다 — 최신: [W37](https://openmake.cc/ko/blog/weekly-log-2026-w37/).
+매주 [주간 개발 로그](https://openmake.cc/ko/blog/)로도 정리합니다 — 최신: [W42](https://openmake.cc/ko/blog/weekly-log-2026-w42/).
 
 ---
 
