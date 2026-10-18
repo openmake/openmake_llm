@@ -1,5 +1,325 @@
 # Changelog
 
+## [1.106.1](https://github.com/openmake/openmake_llm/compare/v1.106.0...v1.106.1) (2026-10-18)
+
+
+### 🐛 버그 수정
+
+* **web:** 관리자 영역의 없는 add-on 경로가 200 대신 404 를 낸다 ([fc02206](https://github.com/openmake/openmake_llm/commit/fc022064f341afcabc70ca4fe9142930017f7700))
+* 남은 결함 3건 — 첫 실행 테스트의 .env 쓰기 · CI 밖 MCP DB 테스트 · 관리자 없는 경로 200 ([f62b855](https://github.com/openmake/openmake_llm/commit/f62b855b1b305c8efd40d1bc935575a41a5e6616))
+
+## [1.106.0](https://github.com/openmake/openmake_llm/compare/v1.105.4...v1.106.0) (2026-10-18)
+
+
+### ✨ 기능
+
+* **addons:** add-on 데이터 모듈 — 사용자 삭제·내보내기·보존 정리의 add-on 소유 데이터는 그 add-on 이 맡고, 꺼져 있어도 지킨다 ([2fee1a9](https://github.com/openmake/openmake_llm/commit/2fee1a955cc989171065d818baf1a8314da962f0))
+
+
+### 🐛 버그 수정
+
+* **addons:** Base·add-on 경계 공백 보완 — 작업 도구 실행 게이트·웹 화면 레지스트리·모두 끈 배포 테스트·래칫 확장 ([ea8f2e9](https://github.com/openmake/openmake_llm/commit/ea8f2e9769e57ccb74966f6a32e0b852a65ad2bc))
+* **addons:** 부팅에 실패한 add-on 은 DB 에서 다시 켜도 재시작 전까지 실패로 판정한다 ([a41df2a](https://github.com/openmake/openmake_llm/commit/a41df2a00c26b4f10d8bb6aed308a104d2dc14ab))
+* **addons:** 에이전트 작업 기여 도구도 호출마다 add-on 실행 게이트를 거친다 ([6a11cf4](https://github.com/openmake/openmake_llm/commit/6a11cf41707e7c1a799d09c4d44f6c8a7b62c5b6))
+* **addons:** 요청 게이트가 DB 의도 위에 이 프로세스의 준비 상태를 겹친다 ([c05255d](https://github.com/openmake/openmake_llm/commit/c05255ddee1a148b861283c2fde0cb59c8a5a2de))
+* **addons:** 조직 정책을 확인하지 못하면 add-on 사용권을 허용으로 읽지 않는다 ([6ce5865](https://github.com/openmake/openmake_llm/commit/6ce58659e907dc69dd96fede513d525f2024180e))
+* **backup:** 공유 백업 폴더에서 다른 인스턴스의 백업을 지우거나 복원하지 않는다 ([b2de90d](https://github.com/openmake/openmake_llm/commit/b2de90d5b3106262614b216968e3ee8838bd0e26))
+* **deploy:** 오프라인 번들·canary 롤백 스냅샷에 workspace 패키지 산출물을 싣는다 ([4925723](https://github.com/openmake/openmake_llm/commit/4925723520b96ee076cc86ba8f553181a2e00afd))
+* **install:** Linux 재설치에서 대체한 웹 포트를 OMK_WEB_PORT 에도 남긴다 ([1c3610f](https://github.com/openmake/openmake_llm/commit/1c3610f10e98761194def28a50fee4aca26418ac))
+* **install:** 실패 배포 재시도의 잘못된 성공 기록·uninstall 비대화형 자동 삭제 승인 ([0f111ba](https://github.com/openmake/openmake_llm/commit/0f111ba995fc218364ef3ab6aa37b89543e46027))
+* **knowledge:** Space 연결 대화의 메모리 격리를 데이터 모듈로 옮겨 env 로 Knowledge 를 꺼도 유지한다 ([7a65936](https://github.com/openmake/openmake_llm/commit/7a6593659eb41f9baa4fa21e5d4bc637be0e736f))
+* **knowledge:** 조직 Space 작업의 실행 재검사를 접수 때 저장한 조직으로 한다 ([1f20070](https://github.com/openmake/openmake_llm/commit/1f20070bcc62319c9d6c774bde5bbe7ce9e7b931))
+* **omk:** 릴리스 환경의 배포 스모크는 채팅 대신 쓰기 없는 /ready 로 연결을 확인한다 ([472527b](https://github.com/openmake/openmake_llm/commit/472527b575c13ae92c440d9ca08dd9bbec39cb1d))
+* **omk:** 실패한 갱신의 재시도가 배포를 생략하고 예전 빌드를 통과로 기록하지 않게 한다 ([a57f060](https://github.com/openmake/openmake_llm/commit/a57f060007aa897568f398cf7decd96deaed70d1))
+* **uninstall:** 비대화형 입력을 삭제 승인으로 보지 않고, 무엇이든 지우기 전에 한 번 확인한다 ([0c51417](https://github.com/openmake/openmake_llm/commit/0c51417ce1e2ac542b4b858ed3c617ac4c05fb95))
+* 외부 리뷰 잔여 7건 — 백업·오프라인 번들·조직 사용권·부팅 실패 판정·Linux 포트·문서 ([1c19f26](https://github.com/openmake/openmake_llm/commit/1c19f262b117ccb88c6e8d6526121283f602a2f2))
+* 운영 스모크는 쓰기 없는 /ready 로 · 요청 게이트는 이 프로세스의 준비 상태까지 본다 ([561a350](https://github.com/openmake/openmake_llm/commit/561a35038d4ed61ee526db73f509d471a9b79d3d))
+
+
+### ♻️ 리팩터링
+
+* **addons:** MCP·스킬의 저장과 화면을 mcp-runtime·skill-runtime add-on 이 소유한다 ([bd6af41](https://github.com/openmake/openmake_llm/commit/bd6af41f3f7e15064ebb9e61446dc9bb57363129))
+* **addons:** 확장 플랫폼의 스킬·MCP 저장을 add-on 데이터 모듈의 저장 연산으로 — Base 의 add-on 소유 테이블 SQL 0건 ([34444e7](https://github.com/openmake/openmake_llm/commit/34444e7e8fa033e6a9b97ea85a8111f5da2e3e32))
+* **mcp:** add-on 만 쓰던 MCP 저장소·스키마·프로토콜 상수를 mcp-runtime 으로 옮긴다 ([4581fb7](https://github.com/openmake/openmake_llm/commit/4581fb7d0266fdb2ba04fda8d1668466a0a6d5e8))
+* **skills:** 스킬 저장소와 절차 스킬 저장을 skill-runtime 으로 옮기고 Base 는 스킬 포트를 거친다 ([f49af15](https://github.com/openmake/openmake_llm/commit/f49af1546ec98c171e77c3458f0e364c4fd0fa12))
+* **web:** add-on 화면을 레지스트리로 등록하고 Base 의 add-on 직접 import 를 막는다 ([d58292b](https://github.com/openmake/openmake_llm/commit/d58292b7c5925d029fdfa5f95266a3c66bcadbfb))
+* **web:** 딥리서치 화면을 deep-research add-on 소유로 옮기고 허브 탭 확장점을 둔다 ([f555de9](https://github.com/openmake/openmake_llm/commit/f555de93adbf8546a6735fb579a188155f825c6a))
+* **web:** 스킬·MCP 화면을 skill-runtime·mcp-runtime 웹 add-on 으로 옮긴다 ([6f0d61a](https://github.com/openmake/openmake_llm/commit/6f0d61a8308ef7a79045aa636679dd5517911001))
+
+## [1.105.4](https://github.com/openmake/openmake_llm/compare/v1.105.3...v1.105.4) (2026-10-18)
+
+
+### 🔧 기타
+
+* **release:** 컴패니언 0.3.7·0.1.8 게시분을 서버 릴리스에 포함 ([490f925](https://github.com/openmake/openmake_llm/commit/490f925b34e30081fdee28935c553216ce498cfb))
+
+## [1.105.3](https://github.com/openmake/openmake_llm/compare/v1.105.2...v1.105.3) (2026-10-17)
+
+
+### 🐛 버그 수정
+
+* **infra:** node 버전을 .node-version 하나로 고정하고 설치·배포·빌드에서 검사 ([cf6f829](https://github.com/openmake/openmake_llm/commit/cf6f82983862ce2d3d6aba4be88cb8b183890d27))
+* **infra:** node 버전을 .node-version 하나로 고정하고 설치·배포·빌드에서 검사 ([26ef579](https://github.com/openmake/openmake_llm/commit/26ef5798b58404c17218eb481b5950af7f65c391))
+
+## [1.105.2](https://github.com/openmake/openmake_llm/compare/v1.105.1...v1.105.2) (2026-10-17)
+
+
+### 🐛 버그 수정
+
+* **agent-tasks:** 체크포인트 분기 뒤 부모 작업 상태가 남지 않게 ([51f99d5](https://github.com/openmake/openmake_llm/commit/51f99d52805377f374292110603b041a18cd400d))
+
+## [1.105.1](https://github.com/openmake/openmake_llm/compare/v1.105.0...v1.105.1) (2026-10-16)
+
+
+### 🐛 버그 수정
+
+* promote backup ignore and quick-start review fixes ([9b7b601](https://github.com/openmake/openmake_llm/commit/9b7b60104fa1c126dd66115751e06d662bd53772))
+
+
+### ♻️ 리팩터링
+
+* **web:** 빠른 시작 카드 키를 id 로 줄이고 테스트 범위를 그리드로 좁힘 ([abe5c48](https://github.com/openmake/openmake_llm/commit/abe5c4886ce10f895ac36b2446f89d40dfb021f9))
+
+## [1.105.0](https://github.com/openmake/openmake_llm/compare/v1.104.1...v1.105.0) (2026-10-16)
+
+
+### ✨ 기능
+
+* **web:** explain chat quick-start cards ([1af20e1](https://github.com/openmake/openmake_llm/commit/1af20e13d469f3b28868669d500b7f57e6244567))
+* **web:** explain chat quick-start cards ([df1165a](https://github.com/openmake/openmake_llm/commit/df1165ae4bc2a21a015f4b3bb5e4ef01e3dd755e))
+* **web:** promote quick-start card descriptions to main ([7b7775b](https://github.com/openmake/openmake_llm/commit/7b7775b54d47dc03783479c25a4199228deda1ab))
+
+## [1.104.1](https://github.com/openmake/openmake_llm/compare/v1.104.0...v1.104.1) (2026-10-16)
+
+
+### 🐛 버그 수정
+
+* **security:** safeFetch 가 redirect:'manual'·'error' 를 존중 — MCP SDK same-origin 리다이렉트 정책 우회 차단 ([617eb52](https://github.com/openmake/openmake_llm/commit/617eb5243783e4ec2cb7ed85843ec991f75edc99))
+* **security:** safeFetch 가 redirect:'manual'·'error' 를 존중 — MCP SDK same-origin 리다이렉트 정책이 우회되지 않게 ([8fdf032](https://github.com/openmake/openmake_llm/commit/8fdf032224ac389739d9deb4412fbd26f6d0167c))
+
+## [1.104.0](https://github.com/openmake/openmake_llm/compare/v1.103.0...v1.104.0) (2026-10-16)
+
+
+### ✨ 기능
+
+* **addons:** 2차 묶음 1·2 — lease 상실 재선점 attempts 상한, 부팅 실패 add-on ADDON_FAILED 구분 ([fdd9f3d](https://github.com/openmake/openmake_llm/commit/fdd9f3d9ba2fb21f290d4946f44b5617ee3e3bfd))
+* **addons:** 2차 묶음 3 — 순수 동기 채팅 훅의 턴 게이트(상태 캐시) + 턴 시작 캐시 적재 ([49e749b](https://github.com/openmake/openmake_llm/commit/49e749be69d379f7a955fc2cfff17fdf2aebf223))
+* **addons:** add-on 수명주기 — stop/drain/resume 계약, 시작 실패 회수, 토글·종료 반영(Knowledge·MCP 편입) ([4e157fc](https://github.com/openmake/openmake_llm/commit/4e157fce5b49d869d6c8088c06d3153cfa88ae96))
+* **addons:** add-on 수명주기 기록 — 시작 시간 제한, 시작 실패 역순 회수, 정지·재개·전체 정지 ([fec5bdc](https://github.com/openmake/openmake_llm/commit/fec5bdc843ce75ef2c8c6d485beb53fe8ba0e27f))
+* **addons:** Skill 시드 중단 신호, MCP 런타임 handle, 선택 add-on 을 끈 기본 채팅 fixture ([ec141e7](https://github.com/openmake/openmake_llm/commit/ec141e7ad4b6d30b4e4a8b4718b7eb795a639a20))
+* **addons:** 계약 패키지·경계 ratchet·Base 데이터 포트·CI DB 테스트(로드맵 작업 6·7) ([4a6691a](https://github.com/openmake/openmake_llm/commit/4a6691a256c6d1520c6cd6e0ca5e6279a4b4a08b))
+* **addons:** 관리자 토글을 같은 프로세스 런타임에 반영 — disabled 는 drain 정지, enabled 는 resume ([7842d9d](https://github.com/openmake/openmake_llm/commit/7842d9d151076fa19ae3b92a7ce4caeb11de08f3))
+* **addons:** 런타임 수명주기 계약 — AddonRuntimeHandle·호스트 타이머·정지 상태 ([df8f035](https://github.com/openmake/openmake_llm/commit/df8f035ac2b19024a7ab63037d3db1696705117a))
+* **addons:** 부팅 실패 add-on 을 ADDON_FAILED(503) 로 구분 — 라우트·채팅 훅·웹 문구 ([7e34bcb](https://github.com/openmake/openmake_llm/commit/7e34bcb84110fe1947ac77034af5bc7ee192944b))
+* **addons:** 순수 동기 채팅 훅도 상태 캐시로 턴마다 게이트 ([f273aa9](https://github.com/openmake/openmake_llm/commit/f273aa90f8fdb099432ff4288b5abe7663314d28))
+* **addons:** 종료 경로에 add-on 런타임 정지(drain) 단계 — 에이전트 작업 정리 뒤, DB 풀 종료 앞 ([a34304e](https://github.com/openmake/openmake_llm/commit/a34304e55d719b616292d2c94e62b47c35ddefa3))
+* **addons:** 채팅 기능 훅 게이트에 조직 사용권 축 추가 — 라우트와 같은 판정 ([8c30065](https://github.com/openmake/openmake_llm/commit/8c30065ecb2f708f750cde8da905a3d4fd6c11a0))
+* **bench:** API 부하 harness 와 기준선 비교(D6) ([6416051](https://github.com/openmake/openmake_llm/commit/6416051e17bd94e0c1d07b2985dcdc258bc0efa7))
+* **contracts:** 계약 패키지 @openmake/plugin-contracts — 수명주기·활성 상태·매니페스트·기여 DTO ([50fb065](https://github.com/openmake/openmake_llm/commit/50fb065476362d7a90cda7a77aa186e507c9b2ac))
+* **extensions:** 권한 상태 판정 순수 함수 — 레거시 보존, 초과분만 차단 ([80cdb96](https://github.com/openmake/openmake_llm/commit/80cdb968a61241250b661b33af6edbe4a3c71e0d))
+* **extensions:** 설치·업데이트가 권한 상태를 판정·저장하고 초과분만 막는다 ([31e0c72](https://github.com/openmake/openmake_llm/commit/31e0c72cb91dab5c7cc8111e3df76d690c2258e8))
+* **extensions:** 설치형 확장 권한 상태 — 레거시 보존·초과분만 재승인(마이그레이션 190, API, 웹) ([f4994d7](https://github.com/openmake/openmake_llm/commit/f4994d7abc80919769278a55f41bc04dcf3d29c2))
+* **extensions:** 설치형 확장 권한 상태 열(마이그레이션 190)과 저장소 ([8bfa404](https://github.com/openmake/openmake_llm/commit/8bfa404d64498c28b116afbda64616f9d05aafb7))
+* **extensions:** 확장 권한 조회·재승인·철회 API ([9e80160](https://github.com/openmake/openmake_llm/commit/9e80160df5179007a1a6c1f6b4d6719692745de1))
+* **knowledge:** /api/health knowledge 절과 롤백 훈련 스크립트, 두 모드 결과 비교 ([f837151](https://github.com/openmake/openmake_llm/commit/f837151f316c0a9ea99402101b01852f4932cf7f))
+* **knowledge:** 수집 worker 를 add-on 수명주기에 편입 — stop-admission·drain·resume ([06ec5d0](https://github.com/openmake/openmake_llm/commit/06ec5d073ffd8845bad9c23cd80fbd727ec52850))
+* **knowledge:** 수집 worker 별도 프로세스 — workers/knowledge-worker 진입점, PM2 openmake-knowledge-worker ([3887b85](https://github.com/openmake/openmake_llm/commit/3887b85ce14cc771150fe2c44012231fbee94845))
+* **knowledge:** 수집 worker 잔여 — 접수 actor·claim 재검사·취소·소비자 모드·별도 프로세스·롤백 훈련 ([7166d7b](https://github.com/openmake/openmake_llm/commit/7166d7b72fa2474aea4f1e5a64ee320490f03c1f))
+* **knowledge:** 수집 소비자 모드 — claim 이 DB knowledge_worker_mode 와 대조, external 이면 API poller 없음 ([3de0ece](https://github.com/openmake/openmake_llm/commit/3de0ecec4d1de51a94449f9cf93b5061bd62300d))
+* **knowledge:** 수집 작업 접수에 actor·정책 revision, claim 때 add-on 상태·사용권 재검사 ([8c4ffb7](https://github.com/openmake/openmake_llm/commit/8c4ffb7256dcfbc7fe0d1a05fad8d956941c4557))
+* **knowledge:** 수집 작업 취소 — POST /api/knowledge/jobs/:id/cancel, heartbeat 감지, fence 안 cancelled ([c627340](https://github.com/openmake/openmake_llm/commit/c627340b55c7d777391816a807b9e4743ddc1cc6))
+* **knowledge:** 작업 큐 마이그레이션 004 — actor·취소 열, worker 모드 단일 행, heartbeat 표 ([c67aa2a](https://github.com/openmake/openmake_llm/commit/c67aa2aecf8c08d1b5bad9314b8882723fa118b1))
+* **lint:** add-on → Base 내부 import ratchet 과 계약 패키지 경계 규칙 ([bbb2b50](https://github.com/openmake/openmake_llm/commit/bbb2b50ea009f8e7c088d413625ea68fe2a31d33))
+* **migrations:** migrate:addons CLI, 테스트 DB 에 코어+add-on 마이그레이션 적용 ([1440588](https://github.com/openmake/openmake_llm/commit/144058849fe85d6d8fd3a0d97328b8d4d017221f))
+* **web:** 확장 권한 상태 배지·영향 안내·재승인 버튼 ([957c61f](https://github.com/openmake/openmake_llm/commit/957c61fa3f0df7fb3f8642e81c14dcfa823d2d6b))
+
+
+### 🐛 버그 수정
+
+* **addons:** handle 없는 런타임 토글은 상태 유지, 시작 시간 초과 뒤 늦은 handle·등록 회수 ([79c55ef](https://github.com/openmake/openmake_llm/commit/79c55ef5e95dba7cb8387d89a1dc05c2c6783fe5))
+* **addons:** 런타임 진입점 없는 add-on 의 토글은 unchanged — 재시작 안내는 진입점 있는 미기동 add-on 만 ([1da177d](https://github.com/openmake/openmake_llm/commit/1da177dc15cedd156fdc0ff2c4b1dff96c339f0f))
+* **addons:** 수명주기 기다림 상한 — 타이머 상한 2^31-1, 보상·종료의 stop·정리 함수에 시간 제한 ([affe56a](https://github.com/openmake/openmake_llm/commit/affe56afc7b9e4af57b7ec0fa6ac09ec6ccaa135))
+* **addons:** 전체 정지 예산을 정지·정리 함수 전체의 단일 마감으로 — 종료 단계 상한이 정확히 budgetMs ([a8bafe2](https://github.com/openmake/openmake_llm/commit/a8bafe29487013ac4b9bb917aa745d3f29cdaee1))
+* **addons:** 캐시 비우기 세대 카운터, 작업 런타임 생성 전 상태 적재 — 검토 후속 ([1d8193b](https://github.com/openmake/openmake_llm/commit/1d8193b1e64663e9ee0087770c6bf5bd15b68f39))
+* **addons:** 턴 시작에 add-on 상태 캐시 적재, 비우기는 만료로 — 동기 훅 게이트가 REST 경로에서도 듣게 ([529fda7](https://github.com/openmake/openmake_llm/commit/529fda76687a435ff4fafa28b4ab7c5d9040fb2a))
+* **api:** /api/health 가 DB 에 닿지 않게 관리자 여부를 서명된 JWT 로만 판단 ([f431ff6](https://github.com/openmake/openmake_llm/commit/f431ff659089a79ca0a4ab732a713fb4cd65f501))
+* **api:** /api/health 선택 인증 래퍼가 동기 미들웨어·동기 throw 도 받는다 ([789ee47](https://github.com/openmake/openmake_llm/commit/789ee475b5c0b5fb0de3181db16c6f62ff5c4e5a))
+* **api:** /api/health 의 선택 인증 DB 오류는 500 대신 게스트로 응답 ([428c62d](https://github.com/openmake/openmake_llm/commit/428c62d6c5dcb6144765f6abe23b7db965b49a5d))
+* **bench:** RSS 표본을 한 번에 하나만 보낸다(겹침 방지) ([84d4e52](https://github.com/openmake/openmake_llm/commit/84d4e522734093f0b83446e0ba7e364d58f8c6d3))
+* **bench:** settle 인자 오류는 exit 2, 비교 열쇠에 runtime·environment, RSS 실패 표본 기록 ([0fe5a5a](https://github.com/openmake/openmake_llm/commit/0fe5a5a28396db64e3c88e684bee518189570d2e))
+* **bench:** 깨진 기준선으로 비교가 통과하지 않게 막는다 ([6f31410](https://github.com/openmake/openmake_llm/commit/6f31410fa23bebf037c5d5e4173ed82571e85787))
+* **bench:** 측정 전 settle 대기(--settle, 기본 90초) — 부팅 피크 RSS 가 기준선을 오염시키지 않게 ([40838d7](https://github.com/openmake/openmake_llm/commit/40838d74ec32eb10a57888c7765ab6001a9f2bbc))
+* **bridge:** hello 타이머가 연 소켓에만 보내고 끊기면 취소 — 재연결 소켓에 중복 hello 방지 ([0d557ab](https://github.com/openmake/openmake_llm/commit/0d557ab80520cd4b1d0ebfbc657a4d3774f6d631))
+* **bridge:** hello 타이머를 연 소켓에만·끊기면 취소, 연결 테스트 실시간 대기를 fake timers 로 ([831c6a3](https://github.com/openmake/openmake_llm/commit/831c6a37bf377d0c56dcbb4c8a16b52ba1f6800b))
+* **contracts:** 매니페스트 entry.workers 를 가변 배열 DTO 로 — Base zod 타입과 동등 ([91dd2d6](https://github.com/openmake/openmake_llm/commit/91dd2d63791fd202e902c356f5ba6efd4d2389a0))
+* **e2e:** 경계 e2e — afterAll 복원을 실패 경로에서도 보장하고 Knowledge 출처만 센다 ([15c57a8](https://github.com/openmake/openmake_llm/commit/15c57a85d5c408b805285ce751ecb92d93d5762e))
+* **e2e:** 경계 e2e 대상 가드·afterAll 시간 예산·Space 삭제 대체, 승격 SQL 의 tier 제거 ([54b8fd9](https://github.com/openmake/openmake_llm/commit/54b8fd974455d043fc1101fb0610b77b46435b81))
+* **e2e:** 대상 baseURL 규칙을 e2e-target.ts 한 곳에서 쓴다 ([2b09203](https://github.com/openmake/openmake_llm/commit/2b092032fd9aaa0feb35667092ab27a777118db4))
+* **e2e:** 픽스처 DB 를 TEST_DATABASE_URL(_test)로만 — 개발 DB 로 대체하지 않는다 ([b0975a0](https://github.com/openmake/openmake_llm/commit/b0975a0c5cc502d7a7ab9d2c62dc90f04a22e664))
+* **extensions:** 권한 상태를 확장 행 쓰기와 같은 문장으로 저장한다 ([316273a](https://github.com/openmake/openmake_llm/commit/316273abc5e1c1c6080ea7e89f7c5dd899149a06))
+* **extensions:** 바뀐 것 없는 권한 철회는 저장·감사 없이 현재 상태를 돌려준다 ([164bbfd](https://github.com/openmake/openmake_llm/commit/164bbfdbf05f2e83e1795b6a550d9a6030a5d012))
+* **extensions:** 업데이트 도중 철회를 덮어쓰지 않고, 철회 뒤 MCP 제한 실패를 재시도할 수 있게 한다 ([4849ab5](https://github.com/openmake/openmake_llm/commit/4849ab52ca9619884f7c41fa1e6db32a42d7db62))
+* **knowledge:** claim 진행 중 정지되면 집은 작업을 실행하지 않고 lease 반납 ([e1125fe](https://github.com/openmake/openmake_llm/commit/e1125febc280baaaa4823bc0fef1bb74a9129521))
+* **knowledge:** lease 상실로 반복 재선점된 작업에 attempts 상한 적용 ([4503a93](https://github.com/openmake/openmake_llm/commit/4503a9396d2ff32e43730783d698eb53486c2bfd))
+* **knowledge:** worker 기동 스키마 대기 — 조회 오류는 exit 1, 행 없음만 78 ([d43f07f](https://github.com/openmake/openmake_llm/commit/d43f07f400f411501f92fe9e3841d43def89fb32))
+* **knowledge:** worker 기동 스키마 확인을 포트 경유로 — add-on 이 migration_versions 를 직접 읽지 않음 ([054c708](https://github.com/openmake/openmake_llm/commit/054c7082fb8b2f1f7374fc6cbdcbb5e524b095b9))
+* **knowledge:** 롤백 훈련 스크립트 — .env 목표값 검사·인스턴스 앱 이름·복구 안내 ([d4f5439](https://github.com/openmake/openmake_llm/commit/d4f54398b6b35a03259413bf920f04daefaabddb))
+* **knowledge:** 별도 worker 프로세스 로그 파일을 API 와 분리 ([e359ea8](https://github.com/openmake/openmake_llm/commit/e359ea82bff2965884735a7882fc7ab1944d0dad))
+* **knowledge:** 세션 updated_at·제목 null 유지, 바인딩 소유 확인을 actor 범위 exists 로 ([44839a9](https://github.com/openmake/openmake_llm/commit/44839a91fdd200cc0907b535eb45cdb22583d318))
+* **knowledge:** 잃은 lease 를 heartbeat 가 다시 늘리지 않게 — 정지 반납 뒤 바로 다시 집히도록 ([c7e0cc4](https://github.com/openmake/openmake_llm/commit/c7e0cc4181d4db81ae26859489ed6d61a9ee5fa4))
+* **knowledge:** 판정 대기 중 정지·판정 예외 때 집은 작업을 실행하지 않고 lease 반납 ([0d0ad72](https://github.com/openmake/openmake_llm/commit/0d0ad7238ad06d83840b81f289ca880bfea851fb))
+* **plugins:** C5 후속 — db-tests 집계·DB 없는 /api/health·e2e 픽스처 _test 가드·bench 깨진 기준선 방지 ([bc1f489](https://github.com/openmake/openmake_llm/commit/bc1f489ef79464f4c43482391ec3c9697aaf82cc))
+* **plugins:** C5 후속 2 — RSS 샘플러 겹침·runner UTF-8/spawn 오류·commands 검증·e2e baseURL 단일화 ([7b83dcf](https://github.com/openmake/openmake_llm/commit/7b83dcf6cfe0643e19eb1c4b58e6f892443ed761))
+* **release:** db-tests 요약 줄 anchor 가 줄 전체를 덮게 하고 검증 추가 ([33aec52](https://github.com/openmake/openmake_llm/commit/33aec527d153f37ce2ce0fe9aac8d05d1e257ad0))
+* **release:** 드릴 dry-run 도 KNOWLEDGE_DRILL_ENV_FILE 을 증거 디렉터리로 — 저장소 .env 를 읽지 않게 ([2321d80](https://github.com/openmake/openmake_llm/commit/2321d80336764faac7a7528e14d14bcf885da693))
+* **release:** 멀티바이트 디코딩·spawn 실패·commands 검증 보강 ([32d125c](https://github.com/openmake/openmake_llm/commit/32d125c32a6030f55537392a80dfbda2ee7a1d94))
+* **release:** 섞인 git SHA 를 모두 적고 판단 대기로, 입력 오류 exit 2, 청크 경계 마스킹 ([ca9dc59](https://github.com/openmake/openmake_llm/commit/ca9dc597277dbf26ad08928b839c6f6d36d755bb))
+* **web:** Knowledge 실패 사유 CANCELLED·ADDON_NOT_ENTITLED 문구 ([39687a1](https://github.com/openmake/openmake_llm/commit/39687a1f88b1b49ff598715677880064ca5723dc))
+
+
+### ♻️ 리팩터링
+
+* **addons:** Base 공개 계약 타입을 @openmake/plugin-contracts 로 — facade 재수출 ([3cdd491](https://github.com/openmake/openmake_llm/commit/3cdd491c1641cb0d87868f1893d2011a7a635b5c))
+* **auth:** verifyToken·verifyTokenSignature 공용 서명 검증 helper 추출 ([ed906cb](https://github.com/openmake/openmake_llm/commit/ed906cb95cd7f45116ad7bddcc8f70df372eba6d))
+* **knowledge:** 대화 세션 조회를 Base 데이터 포트로 — add-on 의 Base 테이블 SQL 0 ([b8f756e](https://github.com/openmake/openmake_llm/commit/b8f756ef09cb9e7c92b945ae3412a72605cddb78))
+
+## [1.103.0](https://github.com/openmake/openmake_llm/compare/v1.102.3...v1.103.0) (2026-10-15)
+
+
+### ✨ 기능
+
+* **addons:** add-on 실행 정책 통일 — 확인 불가 503, 채팅 기능 훅 게이트, 설계 문서 정리 ([b712bf3](https://github.com/openmake/openmake_llm/commit/b712bf33b1260549d4bad9cb3337f3076174bf77))
+* **addons:** strict 켜짐 판정 readAddonEnabledStrict — 조회 실패를 켜짐으로 읽지 않는다 ([33af461](https://github.com/openmake/openmake_llm/commit/33af4610ad1794d5cf20de081ddecbe5afdaee8d))
+* **addons:** 기여 오케스트레이션 도구도 실행 시점에 add-on 게이트를 거친다 ([f1501ca](https://github.com/openmake/openmake_llm/commit/f1501ca36f0890aa303c5b6eadd83c78c1816bee))
+* **addons:** 사용권 판정에 state-unknown 추가 — 조회 실패를 허용으로 읽지 않는다 ([4bca5f4](https://github.com/openmake/openmake_llm/commit/4bca5f4a4d78898abbe6230d441cf0243f15bc41))
+* **addons:** 채팅 기능 훅 게이트 — 관리자가 끈 add-on 의 prepareTurnContext 를 턴마다 건너뛴다 ([ec309ad](https://github.com/openmake/openmake_llm/commit/ec309ad638d96cf62029a65c6f3aacc8d7740c06))
+* **knowledge:** JobLease·assertLeaseHeld — 확정 쓰기까지 fencing token 을 끌고 가는 lease 문맥 ([9336e50](https://github.com/openmake/openmake_llm/commit/9336e503278e153c82eaa35679bdb46db6b544fc))
+* **web:** Knowledge 목록이 '관리자가 중지'(404)와 '일시 확인 불가'(503)를 구분해 보여 준다 ([218c8bf](https://github.com/openmake/openmake_llm/commit/218c8bf07807b2a363f962dd68589a1b2b55886d))
+
+
+### 🐛 버그 수정
+
+* **addons:** 게이트 보강 — optionalAuth 거절·이중 전송 가드, 게이트를 턴 시간 상한 안으로 ([c9c1b12](https://github.com/openmake/openmake_llm/commit/c9c1b12f4c362a9193146db3ce4ef71d01b20617))
+* **addons:** 라우트 게이트 확인 불가는 통과 대신 503 ADDON_STATE_UNKNOWN ([ecd4f71](https://github.com/openmake/openmake_llm/commit/ecd4f71015d5d52ddc95792ec543d9a28b3725f2))
+* **knowledge:** rechunk 의 새 버전 INSERT 도 lease 검사와 같은 트랜잭션으로 ([ceb0fdc](https://github.com/openmake/openmake_llm/commit/ceb0fdc885a33b99d16fb898f90a0a40176298a1))
+* **knowledge:** reindex 전환·배치 삽입과 rechunk·cleanup 도 lease 검사 뒤에만 쓴다 ([8065725](https://github.com/openmake/openmake_llm/commit/8065725c9a53faf2cd1da3dc702c8ca1159df709))
+* **knowledge:** worker heartbeat 0행을 lease 상실로 처리하고 핸들러에 lease 를 넘긴다 ([22674c9](https://github.com/openmake/openmake_llm/commit/22674c97b3fb3cdc05d3a39f596439128a56ce45))
+* **knowledge:** worker 결과 쓰기 fencing — lease 를 잃은 실행자의 청크·ready·failed·index 전환 거절 ([d830a75](https://github.com/openmake/openmake_llm/commit/d830a75faeb00478d4b2bc0dd2d941c86e80ed32))
+* **knowledge:** 수집 파이프라인의 청크 교체·임베딩·게시를 lease 검사 뒤에만 쓴다 ([10f36ac](https://github.com/openmake/openmake_llm/commit/10f36ac31673466ca5a452ce6a467a53449b0349))
+
+## [1.102.3](https://github.com/openmake/openmake_llm/compare/v1.102.2...v1.102.3) (2026-10-15)
+
+
+### 🐛 버그 수정
+
+* **web:** 넘겨받기 차단 주소 안내 문구와 돌려주기 직후 409 소음 제거 ([b4ded3a](https://github.com/openmake/openmake_llm/commit/b4ded3ad22f45f31a19a7a64ea173eaae891acb4))
+* **web:** 넘겨받기 차단 주소 안내 문구와 돌려주기 직후 409 소음 제거 ([895e7d5](https://github.com/openmake/openmake_llm/commit/895e7d54709624d4b5ec5de88a999e6f49c4b397))
+
+## [1.102.2](https://github.com/openmake/openmake_llm/compare/v1.102.1...v1.102.2) (2026-10-15)
+
+
+### 🐛 버그 수정
+
+* **discord-bot:** 마크다운 표를 굵은 제목 + 목록으로 바꿔 게시 ([5dd312f](https://github.com/openmake/openmake_llm/commit/5dd312fecdf29c35b2bb664c176e21bc195f1689))
+* **discord-bot:** 마크다운 표를 굵은 제목 + 목록으로 바꿔 게시 — Discord 가 표를 렌더하지 않아 열이 공백으로 붙어 보이던 것 ([7ac8be9](https://github.com/openmake/openmake_llm/commit/7ac8be9eddc20fbc7cb02bfbbb67cd3f33584566))
+* **discord-bot:** 채팅 응답 아티팩트 첨부 이름을 디스코드가 보존하는 글자로 ([c1617da](https://github.com/openmake/openmake_llm/commit/c1617da69cf34c714e4c9abaa70563a82f04a785))
+* **discord-bot:** 채팅 응답 아티팩트 첨부 이름을 디스코드가 보존하는 글자로 ([d84c2a8](https://github.com/openmake/openmake_llm/commit/d84c2a85dfaeec31c602d21a47a4c1b858ad83e5))
+* **discord-bot:** 표 변환 리뷰 반영 — 닫는 펜스 판정, 머리 행 보존, 이어쓰기 행, 변환 순서와 세션 이력 원문 ([4a9833d](https://github.com/openmake/openmake_llm/commit/4a9833dfdce01c4bd16626909daea7f8ef10e240))
+
+## [1.102.1](https://github.com/openmake/openmake_llm/compare/v1.102.0...v1.102.1) (2026-10-15)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 이미지 입력 작업에서 vision 미지원 외부 모델은 내부 모델로 시작 ([3d4fa28](https://github.com/openmake/openmake_llm/commit/3d4fa28e9e158e4f1794396f5f675eeb425bd301))
+* **agent-task:** 이미지 입력 작업에서 vision 미지원 외부 모델은 내부 모델로 시작 ([b36c791](https://github.com/openmake/openmake_llm/commit/b36c791e416ed5bbed3caef28baf201daf36f37c))
+* **discord-bot:** 산출물 첨부 이름을 ASCII 로, 완료 본문의 자리표시자를 첨부 안내로 바꾼다 ([49e9917](https://github.com/openmake/openmake_llm/commit/49e9917152e4634f9ba266ff0af512f0d4501cd8))
+* **discord-bot:** 산출물 첨부 이름을 ASCII 로, 완료 본문의 자리표시자를 첨부 안내로 바꾼다 ([3528f3f](https://github.com/openmake/openmake_llm/commit/3528f3f8bb931253691aee758de37aab56542602))
+
+## [1.102.0](https://github.com/openmake/openmake_llm/compare/v1.101.0...v1.102.0) (2026-10-14)
+
+
+### ✨ 기능
+
+* **discord-bot:** 작업 완료 게시에 산출물을 파일로 첨부 ([8c6d652](https://github.com/openmake/openmake_llm/commit/8c6d65264b67817aca72ee7819353feaac664473))
+* **discord-bot:** 작업 완료 게시에 산출물을 파일로 첨부 — 자리표시자뿐인 결과가 "(결과 본문 없음)" 으로 보이던 것 ([377ced6](https://github.com/openmake/openmake_llm/commit/377ced6a7dab0deaf2438d57e9597d420f5989d5))
+* **discord-bot:** 작업 완료 게시에 작업 공간 산출물 파일도 첨부 ([ce3d666](https://github.com/openmake/openmake_llm/commit/ce3d6663ab96e4e2d1c392ba48a5ecae092ab98d))
+* **discord-bot:** 작업 완료 게시에 작업 공간 산출물 파일도 첨부 — file_ops 로 쓴 파일이 빠지던 것 ([1f8affc](https://github.com/openmake/openmake_llm/commit/1f8affc6e22da265143dcc9db25bdaee2b1ee24a))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** [#1301](https://github.com/openmake/openmake_llm/issues/1301) 잔여 정리 — 600줄 여유, 인계 사유 문구, 세그먼트 시간 상한, 목록 세그먼트 수 ([61c388b](https://github.com/openmake/openmake_llm/commit/61c388b821de992af9fe05f0832c7cbfb4e67efd))
+* **agent-task:** 목록 카드의 체인 세그먼트 수를 서버 집계로 ([e504fd8](https://github.com/openmake/openmake_llm/commit/e504fd87b95ce6493d922418f1f133a5797e8b7b))
+* **agent-task:** 세그먼트 시간 상한을 체인 남은 시간으로 묶어 마지막 세그먼트가 체인 상한을 넘지 않게 ([9c826c0](https://github.com/openmake/openmake_llm/commit/9c826c09a8f393c2e12722b2044850bfa92e74e7))
+* **agent-task:** 승인·거절·답변의 결정자를 agent_task_approvals.decided_by 에 기록 ([4ac4642](https://github.com/openmake/openmake_llm/commit/4ac46423b72e370bdffdb3b46138c6dacddfca27))
+* **agent-task:** 승인·거절·답변의 결정자를 agent_task_approvals.decided_by 에 기록 ([f600596](https://github.com/openmake/openmake_llm/commit/f600596a79ff3c0d67fab102c2400aa3722000a2))
+* **agent-task:** 업로드 파일 이름을 200바이트로 잘라 ENAMETOOLONG 방지(확장자 보존) ([2ac39b0](https://github.com/openmake/openmake_llm/commit/2ac39b09fcf4a28cbd83ae86e713ebeb18c60e3e))
+* **agent-task:** 인계 턴 프롬프트의 사유 문구를 실제 이어가기 사유로 ([4191589](https://github.com/openmake/openmake_llm/commit/41915890650a871a150afa4eb55f1894315728ef))
+* **agent-task:** 절차 스킬 비밀 값 검사 — URL·dialog 검사, 토큰 형식·pass/pwd 키 추가, 환경 참조 식 오탐 제거 ([1b91b2f](https://github.com/openmake/openmake_llm/commit/1b91b2fb35a795f9f10a2224eb576516ee11cdb6))
+* **agent-task:** 절차 스킬 비밀 값 검사 결함 5건과 업로드 파일 이름 길이(ENAMETOOLONG) 수정 ([22c038c](https://github.com/openmake/openmake_llm/commit/22c038c97875881adea3cb141debbc22697d78a8))
+* **agent-task:** 체인 폭주 가드 — 도구 없는 텍스트 답은 세그먼트 진행으로 보지 않는다 ([513fb88](https://github.com/openmake/openmake_llm/commit/513fb88fe685dd95109187920378fe243fbea820))
+* **agent-task:** 체인 폭주 가드 — 도구 없는 텍스트 답은 세그먼트 진행으로 보지 않는다 ([59b769e](https://github.com/openmake/openmake_llm/commit/59b769e3fd3388bc2c3196f743885de63bb8fe26))
+
+
+### ♻️ 리팩터링
+
+* **agent-task:** AgentTaskService·agent-task-repository 600줄 상한 여유 확보 — 실행 소유권·체크포인트 저장소, 턴 응답 처리 분리 ([9d36b42](https://github.com/openmake/openmake_llm/commit/9d36b42fc54912ca5b654e247b2ed67086af1718))
+
+## [1.101.0](https://github.com/openmake/openmake_llm/compare/v1.100.3...v1.101.0) (2026-10-14)
+
+
+### ✨ 기능
+
+* **agent-task:** 생성 API 가 longRunning 체인 예산을 받는다 — 기능 게이트·역할·절대 상한 ([2d2132f](https://github.com/openmake/openmake_llm/commit/2d2132fca6d88f70c410efec35a1b201e3aedf8f))
+* **agent-task:** 실행 루프가 장기 실행 작업을 후속 세그먼트로 잇는다 — 작업 공간 보존·종료 알림 억제 ([5f56a51](https://github.com/openmake/openmake_llm/commit/5f56a51056cc2fd580fa03cd30f99b710ed35d2e))
+* **agent-task:** 이어가기 모듈 — 인계 턴·작업 공간 스냅숏·후속 작업 생성(멱등 선점)·디스패치 ([ba2d063](https://github.com/openmake/openmake_llm/commit/ba2d063eae21ba98c713c1a14a3a54b5b0219351))
+* **agent-task:** 장기 실행 작업과 후속 작업 체인 — 상한에 닿으면 끝내는 대신 인계 요약·작업 공간을 넘겨 이어간다 ([a27523a](https://github.com/openmake/openmake_llm/commit/a27523ac7fe624a56bb5998260ef8fcd328cce9e))
+* **agent-task:** 장기 실행 체인 설정·마이그레이션 188·타입 ([7af0907](https://github.com/openmake/openmake_llm/commit/7af090734280475a006b6681a7ec4abebe152c89))
+* **agent-task:** 저장소 — 체인 열 쓰기, 이어가기 선점, 체인 취소 표식, 체인 목록 ([20fe169](https://github.com/openmake/openmake_llm/commit/20fe1696cde3b9c0ff10687a3665974325520b5b))
+* **agent-task:** 조회 응답의 chain 블록, ?chain= 세그먼트 목록, 취소 시 체인 취소 표식 ([4934830](https://github.com/openmake/openmake_llm/commit/4934830d5c3c97fbcffbbefacd175ff601a15c1c))
+* **agent-task:** 턴 게이트가 장기 실행 작업의 상한 사유를 이어가기로 돌린다 — 컨텍스트 사용률 포함 ([6e2b3c8](https://github.com/openmake/openmake_llm/commit/6e2b3c8f2068c7586bea80ddf92509342f28ab9d))
+* **api:** /api/v1/chat/completions 에 files 첨부 확장 — 문서 텍스트 추출을 REST 로 개방 ([c9cfb7e](https://github.com/openmake/openmake_llm/commit/c9cfb7e50337e1897a4a02d820905c2ed65151fb))
+* **chat,discord-bot:** 채팅 첨부를 위임 작업에 전달, /task 첨부 옵션, REST 텍스트 첨부 디코딩 ([01ae98f](https://github.com/openmake/openmake_llm/commit/01ae98f8500a3b8c6f699c3768d5047e5cf9096a))
+* **chat:** 채팅 턴 첨부를 delegate_agent_task 작업의 input_files·images 로 전달 ([7120047](https://github.com/openmake/openmake_llm/commit/7120047ae3a39fd804a7dafa54618c537d59e115))
+* **discord-bot:** /task 에 첨부 옵션 — 내려받아 작업 생성 files·images 로 전달 ([2ba5fc7](https://github.com/openmake/openmake_llm/commit/2ba5fc7073177e980646a5204e70d76803b223cb))
+* **discord-bot:** 작업 감시기가 이어진 후속 세그먼트를 같은 진행 메시지로 따라간다 ([35f0677](https://github.com/openmake/openmake_llm/commit/35f0677655f6a82300743e09fa42b6f31949b29f))
+* **discord-bot:** 채널 첨부(이미지·문서)를 백엔드로 전달해 분석 ([b489722](https://github.com/openmake/openmake_llm/commit/b4897226c53dbc68c26134e2ddc89f544c79b697))
+* **discord-bot:** 채널 첨부(이미지·문서)를 백엔드로 전달해 분석 ([b676f91](https://github.com/openmake/openmake_llm/commit/b676f914ac2e04dec93615cbba52a9af591dccd5))
+* **discord-bot:** 채팅에서 위임한 백그라운드 작업을 봇이 지켜보다 결과를 채널에 올린다 — REST 응답에 agent_tasks 확장 ([866ded0](https://github.com/openmake/openmake_llm/commit/866ded065058488c4480d8a3e26275f85715473e))
+* **discord-bot:** 채팅에서 위임한 백그라운드 작업을 봇이 지켜보다 결과를 채널에 올린다 — REST 응답에 agent_tasks 확장 ([5674609](https://github.com/openmake/openmake_llm/commit/567460936acb23f6572f599687e9fc386087f4ea))
+* **web:** 에이전트 작업 화면에 장기 실행 체인 — 루트로 접기, 이어짐 배지, 체인 사용량 ([334bb1a](https://github.com/openmake/openmake_llm/commit/334bb1aeee3c6bd76530d853577d82117524621c))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 마이그레이션 189 — 옛 188 로 생긴 continued_by FK 제거, 미사용 remainingMs 정리 ([961f914](https://github.com/openmake/openmake_llm/commit/961f914fbf6151f35d71bd9ad10166e71d4f51a0))
+* **agent-task:** 이어가기 — 준비·디스패치 실패 시 후속을 failed 로 닫고 선점 되돌리기, 인계 턴 중 취소 재확인 ([c1715ae](https://github.com/openmake/openmake_llm/commit/c1715ae253accdc29d59d0fa9ecd4cb2929178f7))
+* **agent-task:** 이어가기 실패 시 같은 턴을 종전 마무리 턴으로 — 체인을 끄고 게이트 재판정 ([d841959](https://github.com/openmake/openmake_llm/commit/d841959be81a836744cc7be63832ef79885ed21c))
+* **agent-task:** 진행 없는 세그먼트는 이어가지 않음(폭주 방지), 후속에 승인 정책·추론 수준 전달, 건너뜀 사유 로그 ([26a26ec](https://github.com/openmake/openmake_llm/commit/26a26eccafe418ca04cc2672da859329b330047b))
+* **agent-task:** 최종 검토 — 선점 FK 순서, 세그먼트 시간 예산, 체인 취소가 실행 중 세그먼트를 멈춤, 선점 실패 시 기존 후속 따라가기 ([261889d](https://github.com/openmake/openmake_llm/commit/261889d99219bf3c4d755b77f0fd10ffd2d990ca))
+* **api:** /api/v1/chat/completions 본문 상한 30mb — 봇 첨부 합계 20MB 의 base64 팽창 수용 ([26936e9](https://github.com/openmake/openmake_llm/commit/26936e99c25279d2f1a58e5b806b9479b818f1cc))
+* **api:** 레이트 리미터가 API 키 Bearer 를 JWT 로 검증해 매 요청 경고 찍던 소음 제거 ([d8856d4](https://github.com/openmake/openmake_llm/commit/d8856d4ca3327eec46560eed61940e653e27cd30))
+* **api:** 레이트 리미터가 API 키 Bearer 를 JWT 로 검증해 매 요청 경고 찍던 소음 제거 ([4db5469](https://github.com/openmake/openmake_llm/commit/4db54693ed50473da6e35861021bcc9e39f5ce34))
+* **api:** 레이트 리미터가 Bearer API 키를 IP 로 세고 /api/v1 을 이중 적용하던 결함, 일일 한도 초기화를 한국 자정으로 ([4087c58](https://github.com/openmake/openmake_llm/commit/4087c589fd618e7d9436c8fdda3ab02c0ac30580))
+* **api:** 레이트 리미터가 Bearer API 키를 IP 로 세고 /api/v1 을 이중 적용하던 결함, 일일 한도 초기화를 한국 자정으로 ([d852c6e](https://github.com/openmake/openmake_llm/commit/d852c6efb02f3632f54df4724831a7b9c573406b))
+* **api:** 명시적 아티팩트 요청이 백그라운드 위임·MCP 생성 도구로 이탈해 산출물이 채팅에 안 오던 문제 ([73597df](https://github.com/openmake/openmake_llm/commit/73597df63221ca361eed1a08928b487be41d81a2))
+* **api:** 명시적 아티팩트 요청이 백그라운드 위임·MCP 생성 도구로 이탈해 산출물이 채팅에 안 오던 문제 ([6196837](https://github.com/openmake/openmake_llm/commit/6196837ea9b54ecf475e9d68e26938062995bc58))
+* **api:** 모델이 MCP 서버 이름을 도구로 부르면 서버::도구 후보를 안내 — 운영 하루 13건 턴 낭비 ([38ab15d](https://github.com/openmake/openmake_llm/commit/38ab15dce1746aa0ca51e02dcfbccf9137bf34e6))
+* **api:** 모델이 MCP 서버 이름을 도구로 부르면 서버::도구 후보를 안내 — 운영 하루 13건 턴 낭비 ([4ac2b38](https://github.com/openmake/openmake_llm/commit/4ac2b3877f42f0a892aa38fb4f686f4e097334e4))
+* **api:** 아티팩트·중단 후속 — 에이전트 작업 프롬프트 충돌 분리, 배정 안내 정리, 중단 사용량 코드, 자체 tools 경로 중단 가드 ([09b7cb9](https://github.com/openmake/openmake_llm/commit/09b7cb91f390a55c10fd1d67a99ed2743c7e1b94))
+* **api:** 아티팩트·중단 후속 — 에이전트 작업 프롬프트 충돌 분리, 배정 안내 정리, 중단 사용량 코드, 자체 tools 경로 중단 가드 ([1913fc8](https://github.com/openmake/openmake_llm/commit/1913fc87db5362fb2f44e38149f39b32a11ac953))
+* **api:** 클라이언트가 끊은 요청을 계속 처리하던 결함 — 중단 뒤 도구 실행·추가 턴·잘린 본문 저장 차단 ([940ac4c](https://github.com/openmake/openmake_llm/commit/940ac4cefb27200f55b699159fcec79cb90b34ce))
+* **api:** 클라이언트가 끊은 요청을 계속 처리하던 결함 — 중단 뒤 도구 실행·추가 턴·잘린 본문 저장 차단 ([8182b2c](https://github.com/openmake/openmake_llm/commit/8182b2cf3e9fc7919e0302b4edcd892af9544585))
+* **chat:** REST files[] 의 텍스트 파일(csv·txt·md·json 등)을 content 로 디코딩 — 바이너리 메타로만 들어가던 공백 ([f7e2b26](https://github.com/openmake/openmake_llm/commit/f7e2b26ac4052d91aaaa66677fbbe5c728fdd5db))
+* **discord-bot:** 세그먼트를 넘길 때 진행 메시지에 '작업 완료'가 잠깐 보이던 것 — 이어가기 판정을 진행 표시 앞으로 ([a131e5e](https://github.com/openmake/openmake_llm/commit/a131e5e925556f00820ef0ecf843085719c6902e))
+* **discord-bot:** 응답 제한 시간 초과를 사용자가 알 수 있는 안내로 바꾸고 기본 제한 시간을 10분으로 ([e37dfc6](https://github.com/openmake/openmake_llm/commit/e37dfc6bb63c1237a2c760b36531965caa741e12))
+* **discord-bot:** 응답 제한 시간 초과를 사용자가 알 수 있는 안내로 바꾸고 기본 제한 시간을 10분으로 ([ba3ab4d](https://github.com/openmake/openmake_llm/commit/ba3ab4db974cbb8f828fb78d4c2f633c58a685b3))
+* **mcp-runtime:** 브라우저 uvx MCP 서버는 스폰 전 같은 venv 로 playwright install chromium ([942e1b1](https://github.com/openmake/openmake_llm/commit/942e1b148ee2ece4bf927ef443c2759207958584))
+* **mcp-runtime:** 브라우저 uvx 서버는 스폰 전 같은 venv 로 playwright install chromium — 리비전 드리프트로 google_search 가 죽던 문제 ([f7d6ab4](https://github.com/openmake/openmake_llm/commit/f7d6ab4efcf1dc50d5b2da6dc84257da53033a66))
+* **ops-metrics:** provider 사용량 집계에서 클라이언트 중단(CLIENT_ABORTED)을 오류와 분리 ([27df7f6](https://github.com/openmake/openmake_llm/commit/27df7f6335a6ac87d691c3a586f8b95283c6d0ff))
+* **ops-metrics:** provider 사용량 집계에서 클라이언트 중단(CLIENT_ABORTED)을 오류와 분리 ([f1b6444](https://github.com/openmake/openmake_llm/commit/f1b6444f3bd2e7b1403c76978217fa2c1cb542cd))
+
 ## [1.100.3](https://github.com/openmake/openmake_llm/compare/v1.100.2...v1.100.3) (2026-10-13)
 
 
