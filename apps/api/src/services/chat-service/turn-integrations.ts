@@ -14,6 +14,7 @@
  */
 import { loadEnabledChatIntegrations } from '../../addon-host/chat-integrations';
 import { integrationGate } from '../addon/integration-gate';
+import { integrationGateRefusal } from '../addon/integration-gate-refusal';
 import { isAddonEnabledSync } from '../addon/addon-state';
 import { TURN_CONTEXT_TIMEOUT_MS } from '../../config/service-limits';
 import { createLogger } from '../../utils/logger';
@@ -143,6 +144,34 @@ export function getChatTurnIntegrations(): readonly ChatTurnIntegration[] {
  *  (`collectContextRefs`)은 전체 목록(`getChatTurnIntegrations`)을 그대로 쓴다. */
 export function getActiveChatTurnIntegrations(): readonly ChatTurnIntegration[] {
     return getChatTurnIntegrations().filter((i) => isAddonEnabledSync(i.id));
+}
+
+/**
+ * 에이전트 작업 기여 도구 — 노출은 작업을 만들 때의 상태 캐시 판정이지만, 실행은 호출마다 채팅 오케스트레이션 도구와 같은
+ * 게이트(`integrationGate` — 상태 + 조직 사용권)를 거친다(설계 문서 8.4). 작업 도중 관리자가 끄거나 조직 허용 목록 밖이면
+ * 승인 전 검사(precheck)에서 거절해 승인 카드를 띄우지 않고, 그 사이에 바뀐 경우를 위해 실행 직전에도 한 번 더 본다.
+ */
+export function getActiveAgentTaskTools(): ContributedAgentTaskTool[] {
+    return getActiveChatTurnIntegrations().flatMap((i) => (i.agentTaskTools?.() ?? []).map((t) => gateAgentTaskTool(i.id, t)));
+}
+
+function gateAgentTaskTool(addonId: string, t: ContributedAgentTaskTool): ContributedAgentTaskTool {
+    const refusal = async (userId: string): Promise<string | null> => {
+        const gate = await integrationGate(addonId, userId);
+        if (gate.allowed) return null;
+        turnContextLog.info(`작업 기여 도구 '${t.tool.name}' 실행 거절 — add-on '${addonId}' ${gate.reason}${gate.detail ? `: ${gate.detail}` : ''}`);
+        return integrationGateRefusal(addonId, gate.reason);
+    };
+    return {
+        tool: t.tool,
+        async precheck(args, ctx) {
+            return (await refusal(ctx.userId)) ?? (t.precheck ? t.precheck(args, ctx) : null);
+        },
+        async run(args, ctx) {
+            const refused = await refusal(ctx.userId);
+            return refused ? { text: refused, isError: true } : t.run(args, ctx);
+        },
+    };
 }
 
 /** 테스트 전용 — 통합 구성을 바꿔 끼운다. */

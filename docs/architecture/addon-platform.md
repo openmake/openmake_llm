@@ -109,6 +109,7 @@ Base ↔ Add-on 계약의 원천이다. **타입과 상수만** 담고 런타임
 | capability 실행(`admitCapability`) | `readAddonStateStrict` | ok | `ADDON_DISABLED` | `ADDON_FAILED` | (해당 없음) | `ADDON_STATE_UNKNOWN` |
 | 채팅 기능 훅 `prepareTurnContext` | `integrationGate`(→ `checkAddonEntitlement`) | 호출 | 건너뜀(info 로그) | 건너뜀(info 로그, reason `failed`) | 건너뜀(info 로그, reason `not_entitled`) | 건너뜀 |
 | 채팅 오케스트레이션 도구 `run` | `integrationGate`(→ `checkAddonEntitlement`) | 실행 | `Error: … 중지되어 실행할 수 없습니다` | `Error: … 부팅에 실패해 이 도구를 실행할 수 없습니다` | `Error: … 이 조직에서 사용할 수 없습니다(허용 목록 밖)` | `Error: … 확인할 수 없어 실행하지 않았습니다` |
+| 에이전트 작업 기여 도구(`agentTaskTools`) `precheck`·`run` | `integrationGate`(→ `checkAddonEntitlement`, `getActiveAgentTaskTools` 가 씌움) | 실행 | 승인 카드 없이 위와 같은 문구로 거절 | 같음 | 같음 | 같음 |
 | 팩 스킬 주입 필터 | `entitledAddonIds` | 주입 | 제외 | 제외 | 제외 | **주입 유지(fail-open)** — 선언형 콘텐츠, 피해 없음 |
 
 **판정 기준 열**: 라우트·채팅 훅 게이트의 strict 판정(`readAddonEnabledStrict`)은 `addon_installations.state`(installed·enabled·disabled·failed)를 읽어 `enabled` 가 아니면 차단한다. 그중 부팅 실패(`failed`)는 판정의 `state` 로 구분해 라우트가 503 `ADDON_FAILED`(`Retry-After` 없음 — 재시도로 풀리지 않고 관리자 조치가 필요하다)로 알리고, 웹은 '준비되지 않았습니다(부팅 실패)' 문구(`knowledge.notReady`)를 보인다. 채팅 훅은 건너뛰고 오케스트레이션 도구는 부팅 실패 문구를 돌려준다. `installed`·`disabled` 는 종전대로 404 `ADDON_DISABLED`.
@@ -126,7 +127,7 @@ env 차단은 모든 경로에서 "관리자가 끔"과 같게 취급한다(항�
 
 채팅 기능 훅 게이트(`integrationGate`)는 라우트 게이트와 같은 판정(`checkAddonEntitlement` — 상태 + 조직 사용권)을 쓴다 — 조직 allowlist 밖 add-on 은 라우트 403 과 함께 채팅 기능 훅도 멈춘다(사용자가 없는 게스트 턴은 조직 축을 보지 않는다).
 
-순수 훅(`detectIntent` 등)은 동기라 턴마다 DB 를 묻지 않고 상태 캐시로 판정한다 — 관리자가 끄면(DB 의도 disabled·부팅 실패 failed·env) 캐시가 갱신된 뒤의 턴부터 프롬프트 조각·도구 노출·의도 판정이 빠진다(같은 프로세스는 다음 턴부터, 다른 워커는 TTL 뒤 첫 턴부터). 첫 적재 전(부팅 직후)에만 켜짐으로 본다(fail-open — 선언형 노출; `prepareTurnContext`·오케스트레이션 도구 실행은 `integrationGate` 가 막지만, 기여 작업 도구(`agentTaskTools`)의 `run` 에는 실행 게이트가 없다 — §10). 조직 사용권 축은 동기 훅이 보지 않으며 실행 시점(`runOrchestrationTool`·`prepareTurnContext`)의 게이트가 맡는다. 보호 훅(`isMemoryIsolatedSession`)·표시 훅(`listHiddenSessionIds`)·구 클라이언트 필드 매핑(`collectContextRefs`)은 꺼진 add-on 도 전체 목록으로 계속 돈다. 꺼진 add-on 의 기여 도구가 호출되면(`isOrchestrationTool` 은 전체 목록으로 분류) 실행 시점에서 거절 문구를 돌려준다.
+순수 훅(`detectIntent` 등)은 동기라 턴마다 DB 를 묻지 않고 상태 캐시로 판정한다 — 관리자가 끄면(DB 의도 disabled·부팅 실패 failed·env) 캐시가 갱신된 뒤의 턴부터 프롬프트 조각·도구 노출·의도 판정이 빠진다(같은 프로세스는 다음 턴부터, 다른 워커는 TTL 뒤 첫 턴부터). 첫 적재 전(부팅 직후)에만 켜짐으로 본다(fail-open — 선언형 노출; `prepareTurnContext`·오케스트레이션 도구 실행·기여 작업 도구(`agentTaskTools`)의 승인 전 검사와 실행은 `integrationGate` 가 막는다). 조직 사용권 축은 동기 훅이 보지 않으며 실행 시점(`runOrchestrationTool`·`prepareTurnContext`·`getActiveAgentTaskTools` 가 씌운 `precheck`·`run`)의 게이트가 맡는다. 기여 작업 도구의 노출은 작업을 만들 때 정해지므로, 작업 도중 add-on 을 꺼도 도구 목록에는 남고 호출이 거절된다. 보호 훅(`isMemoryIsolatedSession`)·표시 훅(`listHiddenSessionIds`)·구 클라이언트 필드 매핑(`collectContextRefs`)은 꺼진 add-on 도 전체 목록으로 계속 돈다. 꺼진 add-on 의 기여 도구가 호출되면(`isOrchestrationTool` 은 전체 목록으로 분류) 실행 시점에서 거절 문구를 돌려준다.
 
 ## 8.5 Add-on ↔ Base 경계 규칙
 
@@ -199,7 +200,7 @@ PM2 앱 `openmake-knowledge-worker`(`apps/api/dist/workers/knowledge-worker.js`)
 
 ## 10. 범위 밖(다음 묶음)
 
-manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트·작업 도중 토글 반영(2차), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), add-on → Base 내부 import 의 전수 이전(ratchet 으로 줄여 간다 — §8.5), 대화 세션 밖의 Base 테이블 포트(필요해질 때), 물리 SQL 권한 격리.
+manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기여 작업 도구(`agentTaskTools`) 실행 게이트(→ §8.3·8.4 에서 구현 — 작업 도중 토글은 호출 거절로 반영, 도구 목록에서 빼지는 않는다), 턴 단위 활성 통합 스냅숏(한 턴 안에서 훅 집합이 바뀌지 않게, 2차), add-on → Base 내부 import 의 전수 이전(ratchet 으로 줄여 간다 — §8.5), 대화 세션 밖의 Base 테이블 포트(필요해질 때), 물리 SQL 권한 격리.
 
 ## 11. 설치형 확장의 권한 상태 (`user_extensions.permission_state`, 마이그레이션 190)
 
@@ -237,7 +238,7 @@ manifest 없는 확장의 권한 상태 명시화(→ §11 에서 구현), 기�
 | `/api/v1/*`(API 키) | user(API 키 소유자) | `requireApiKey`·`requireScope` → 채팅이면 아래 "채팅 턴" 행과 같은 파이프라인 | API 프로세스 | 키 폐기·scope 축소는 다음 요청부터. add-on 기능은 채팅 턴 행과 같다 | 채팅 턴 행과 같다 |
 | 채팅 턴 — WS(`sockets/ws-chat-handler.ts`)·REST(`/api/chat`) 공통 `runMessagePipeline` | user 또는 guest | 기능 훅 `prepareTurnContext`: 턴마다 `integrationGate`(→ `checkAddonEntitlement`). 순수 동기 훅: `isAddonEnabledSync`(턴 시작 `ensureAddonStates` 적재, TTL `ADDON_STATE_CACHE_TTL_MS`) | API 프로세스 | 기능 훅은 다음 턴부터 건너뜀. 동기 훅은 캐시 갱신 뒤 턴부터. 진행 중 턴은 끝까지 가거나 사용자의 `abort` 로 멈춘다 | `isSessionMemoryIsolated`(Space 연결 대화는 전역 메모리 미기록, 판정 실패 시 격리 — fail-closed), `listHiddenSessionIds` |
 | 채팅 오케스트레이션 도구 `run`(매니페스트 기여 도구) | user | `runOrchestrationTool` → `integrationGate` — 거절 문구 `Error: add-on '<id>' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다`(부팅 실패·조직 밖·확인 불가 문구는 §8.3) | API 프로세스 | 실행 시점 거절(노출은 동기 훅 캐시로 빠짐) | 없음 |
-| 기여 작업 도구(`agentTaskTools`) | user(작업 소유자) | 실행 게이트 없음 — 노출만 동기 훅 캐시로 막는다(§8.4) | 에이전트 작업 실행기(API 프로세스) | 작업 취소(`POST /api/agent-tasks/:taskId/cancel`) · graceful-shutdown 의 작업 drain(`AGENT_TASK_DRAIN_TIMEOUT_MS`) | 없음 |
+| 기여 작업 도구(`agentTaskTools`) | user(작업 소유자) | 노출은 동기 훅 캐시, 승인 전 검사·실행은 호출마다 `integrationGate`(§8.3·8.4) | 에이전트 작업 실행기(API 프로세스) | 작업 취소(`POST /api/agent-tasks/:taskId/cancel`) · graceful-shutdown 의 작업 drain(`AGENT_TASK_DRAIN_TIMEOUT_MS`) | 없음 |
 | 팩 스킬 주입(선언형 콘텐츠) | user | `entitledAddonIds` — 확인 불가 시 주입 유지(fail-open, 선언형이라 피해 없음) | API 프로세스(프롬프트 구성) | 다음 턴부터 제외 | 없음 |
 | 스킬 시드(부팅) | system | 부팅 ⑤ 진입점, `host.signal`(시작 시간 제한 `ADDON_START_TIMEOUT_MS`) | API 프로세스(부팅) | `host.signal` 끊김 → 시드 중단. 관리자 토글은 재시작 필요(Skill Runtime 은 handle 없음) | 없음 |
 | MCP 도구(외부 서버·stdio child) | user(서버 소유자) | MCP add-on 상태(라우트·capability 판정) + 설치형 확장 권한 상태(`allowsNetwork` — `legacy_unreviewed` 는 기존 허용 유지, `review_required` 는 초과분 거절, §11) | API 프로세스의 MCP supervisor(외부 연결·child) | 관리자 disabled → handle.stop = `mcpToolRuntime.shutdown()`. 재개 없음(재시작). 포트 등록·supervisor 타이머는 재시작까지 남는다(§7.3) | 권한 상태 초과분 차단 |
