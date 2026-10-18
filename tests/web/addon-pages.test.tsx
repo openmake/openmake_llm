@@ -1,6 +1,6 @@
 // add-on 화면 레지스트리 — Base 의 catch-all 라우트(app/(workspace)/[...addonPath])가 쓰는 renderAddonPage 의 경로 판정.
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
 import { isValidElement, type ReactElement } from 'react';
@@ -98,6 +98,12 @@ test('add-on 이 끼우는 승인 섹션·설정 탭의 id 는 서로 겹치지 
   for (const id of ['general', 'model', 'interface', 'notifications', 'memory', 'extensions', 'privacy', 'security']) assert.ok(!tabs.includes(id), id);
   // `/` 메뉴는 첫 번째 것만 쓰이므로 둘 이상이면 조용히 무시된다
   assert.ok(WEB_ADDONS.filter((a) => a.slashMenu).length <= 1);
+});
+
+test('관리자 add-on catch-all 은 관리자 가드 레이아웃 밖에 있고 가드를 직접 쓴다 — 안에 두면 없는 경로가 404 가 아니라 200', () => {
+  const ws = resolve(process.cwd(), 'apps/web/app/(workspace)');
+  assert.ok(!existsSync(resolve(ws, 'admin/[...addonPath]')), '가드 레이아웃 안에 catch-all 이 있다');
+  assert.match(readFileSync(resolve(ws, '(admin-addons)/admin/[...addonPath]/page.tsx'), 'utf8'), /<AdminGuard>\{page\}<\/AdminGuard>/);
 });
 
 test('레지스트리에서 뺀 add-on 의 화면은 렌더되지 않는다', () => {

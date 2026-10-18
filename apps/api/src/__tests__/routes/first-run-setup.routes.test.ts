@@ -28,6 +28,14 @@ jest.mock('../../services/AuditService', () => ({
     getAuditService: () => ({ logAudit }),
 }));
 
+// 첫 실행 훅은 켜진 add-on 이 레포 루트 .env 에 쓴다(MCP 샌드박스 기본값 — docker·런타임 이미지가 있는 장비에서).
+// 라우트 테스트는 호출만 기록한다 — 실제 훅이 돌면 로컬 jest 뒤 작업 트리에 .env 가 생긴다.
+const runFirstRunHooks = jest.fn((_envPath: string) => [] as Array<{ label: string; applied: boolean; reason: string }>);
+jest.mock('../../addon-host/contributions', () => ({
+    ...jest.requireActual('../../addon-host/contributions'),
+    runFirstRunHooks: (envPath: string) => runFirstRunHooks(envPath),
+}));
+
 import { firstRunSetupRouter } from '../../routes/first-run-setup.routes';
 
 const VALID_BODY = {
@@ -79,6 +87,7 @@ describe('first-run-setup.routes', () => {
             '10',
         );
         expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'setup.completed' }));
+        expect(runFirstRunHooks).toHaveBeenCalledWith(expect.stringMatching(/[\\/]\.env$/));
     });
 
     test('POST — LLM 입력 생략 시 설정 저장 없이 관리자만 생성', async () => {
@@ -92,6 +101,7 @@ describe('first-run-setup.routes', () => {
         const r = await request(app).post('/api/setup').send(VALID_BODY);
         expect(r.status).toBe(403);
         expect(createUser).not.toHaveBeenCalled();
+        expect(runFirstRunHooks).not.toHaveBeenCalled();
     });
 
     test('POST — 약한 비밀번호 400 (대문자/숫자/특수문자 정책)', async () => {

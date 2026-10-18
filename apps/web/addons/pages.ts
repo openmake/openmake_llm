@@ -15,7 +15,7 @@ export const WEB_ADDON_PAGES: readonly WebAddonPage[] = [...deepResearchPages, .
 
 /**
  * URL 조각으로 add-on 화면을 찾아 렌더한다 — 맞는 화면이 없으면 null(Base 가 404).
- * `area` 는 catch-all 라우트의 위치다(`app/(workspace)/[...addonPath]` = workspace, `app/(workspace)/admin/[...addonPath]` = admin).
+ * `area` 는 catch-all 라우트의 위치다(`app/(workspace)/[...addonPath]` = workspace, `app/(workspace)/(admin-addons)/admin/[...addonPath]` = admin — 관리자 가드 레이아웃 밖이고 가드를 직접 쓴다).
  */
 export function renderAddonPage(
   pathSegments: readonly string[],

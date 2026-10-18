@@ -56,7 +56,7 @@ export function DeveloperTabs() {
 /**
  * 관리자 허브 — 관측(대시보드~에이전트 학습) + 관리(감사 로그~모델 역할) 전체 탭(+ add-on 탭: MCP 모니터링·MCP 카탈로그).
  * 2차 통폐합으로 사이드바 관리자 항목이 /admin 하나로 줄면서 나머지가 탭으로 편입됐다.
- * /admin/* 는 admin/layout.tsx 가드가 막지만, 탭 자체도 admin 역할에서만 렌더한다 —
+ * /admin/* 는 관리자 가드(AdminGuard)가 막지만, 탭 자체도 admin 역할에서만 렌더한다 —
  * 그 경우 /admin 계열 링크를 노출하지 않도록 admin 역할에서만 렌더.
  */
 export function AdminTabs() {

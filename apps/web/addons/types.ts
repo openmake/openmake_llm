@@ -204,7 +204,7 @@ export interface WebAddonPageProps {
  */
 export interface WebAddonPage {
   path: string;
-  /** 놓이는 영역 — admin 이면 `/admin/<path>` 이고 관리자 레이아웃(가드)이 감싼다. 기본 workspace */
+  /** 놓이는 영역 — admin 이면 `/admin/<path>` 이고 관리자 가드(`AdminGuard`)가 감싼다. 기본 workspace */
   area?: "workspace" | "admin";
   /** 이 add-on 이 다루지 않는 하위 경로면 null — Base 가 404 로 응답한다 */
   render(props: WebAddonPageProps): ReactNode | null;
