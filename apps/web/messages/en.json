@@ -2890,7 +2890,7 @@
     "serverError": "A server error occurred",
     "disabledByAdmin": "An administrator has turned off Knowledge.",
     "unavailable": "Knowledge is temporarily unavailable. Please try again shortly.",
-    "notReady": "Knowledge is not available: its startup failed. Please contact an administrator.",
+    "notReady": "Knowledge is not available on this server (startup failed or a restart is required). Please contact an administrator.",
     "cancel": "Cancel",
     "close": "Close",
     "save": "Save",

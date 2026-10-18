@@ -10,7 +10,7 @@ export type GateRefusalReason = Extract<IntegrationGateVerdict, { allowed: false
 
 const REFUSAL_MESSAGES: Record<GateRefusalReason, (addonId: string) => string> = {
     not_entitled: (id) => `add-on '${id}' 은 이 조직에서 사용할 수 없습니다(허용 목록 밖)`,
-    failed: (id) => `add-on '${id}' 이 부팅에 실패해 이 도구를 실행할 수 없습니다`,
+    failed: (id) => `add-on '${id}' 이 이 서버에서 준비되지 않아(부팅 실패 또는 재시작 필요) 이 도구를 실행할 수 없습니다`,
     disabled: (id) => `add-on '${id}' 이 관리자에 의해 중지되어 이 도구를 실행할 수 없습니다`,
     state_unknown: (id) => `add-on '${id}' 상태를 확인할 수 없어 이 도구를 실행하지 않았습니다. 잠시 후 다시 시도하세요`,
 };

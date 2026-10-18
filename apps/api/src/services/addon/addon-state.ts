@@ -11,16 +11,16 @@
  *
  * DB 를 읽을 수 없으면(부팅 초기·DB 장애) env 판정만으로 답한다(fail-open).
  *
- * **이 프로세스가 부팅 때 그 add-on 을 세우지 못했으면**(런타임 상태 `failed` — 마이그레이션·런타임 등록·버전·소유권 실패)
- * DB 가 enabled 여도 `failed` 로 본다. 관리자가 실패한 add-on 을 다시 켜면 DB 의 state 는 enabled 가 되지만 이 프로세스의
- * 스키마·런타임은 재시작 전까지 준비되지 않는다 — 게이트가 DB 만 보고 열면 미준비 요청·소비자 없는 작업 접수가 생긴다
- * (외부 리뷰 A4). 별도 worker 프로세스는 런타임 상태를 기록하지 않으므로(`not_loaded`) 이 규칙에 걸리지 않는다.
+ * **DB 의도 위에 이 프로세스의 준비 상태를 겹친다**(`addon-host/activation` `getAddonProcessReadiness`). DB 가 enabled 여도
+ * 이 프로세스가 그 add-on 의 코드·스키마를 세우지 못했으면(부팅 실패·부팅 때 꺼져 있다가 나중에 켬·재개 실패) `failed` 로 본다 —
+ * DB 는 관리자의 의도이지 이 프로세스의 사실이 아니다. 게이트가 DB 만 보고 열면 미준비 스키마 요청·소비자 없는 작업 접수가
+ * 생긴다(외부 리뷰 A4). 부팅을 하지 않는 별도 worker 프로세스와 세울 것이 없는 add-on(라우트·콘텐츠만)은 DB 상태대로다.
  *
  * @module services/addon/addon-state
  */
 import { createLogger } from '../../utils/logger';
 import { isBuiltinAddonEnabled } from '../../addon-host/builtin-registry';
-import { getAddonRuntimeStatus } from '../../addon-host/activation';
+import { getAddonProcessReadiness } from '../../addon-host/activation';
 import { ADDON_STATE_CACHE_TTL_MS } from '../../config/runtime-limits';
 import type { AddonDesiredState, AddonFailureCode, AddonState } from '../../data/repositories/addon-state-repository';
 
@@ -90,9 +90,11 @@ export async function readAddonEnabledStrict(addonId: string): Promise<AddonEnab
     return { known: true, enabled: state === 'enabled', state };
 }
 
-/** DB 상태에 이 프로세스의 부팅 결과를 겹친다 — 부팅에 실패한 add-on 은 재시작 전까지 `failed` */
+/** DB 상태에 이 프로세스의 준비 상태를 겹친다 — 켜져 있어도 이 프로세스에서 준비되지 않았으면 재시작 전까지 `failed` */
 function withProcessReadiness(addonId: string, state: AddonState): AddonState {
-    return state === 'enabled' && getAddonRuntimeStatus(addonId).status === 'failed' ? 'failed' : state;
+    if (state !== 'enabled') return state;
+    const readiness = getAddonProcessReadiness(addonId);
+    return readiness === 'failed' || readiness === 'not_ready' ? 'failed' : state;
 }
 
 /**

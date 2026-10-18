@@ -553,7 +553,7 @@ SM_SHA="$(git -C "$SM" rev-parse HEAD)"
 SM_RC="$(
     load_toolchain() { :; }
     smoke_check_health() { return 0; }; smoke_check_manifest() { return 0; }; smoke_check_generated() { return 0; }
-    smoke_check_login() { return 0; }; smoke_check_chat() { return 0; }
+    smoke_check_login() { return 0; }; smoke_check_ready() { return 0; }; smoke_check_chat() { return 0; }
     cmd_env_smoke smk >/dev/null 2>&1; echo $?
 )"
 eq "smoke: 전부 통과하면 0" "$SM_RC" "0"
@@ -561,11 +561,39 @@ eq "smoke: 전부 통과하면 0" "$SM_RC" "0"
 SM_OUT="$(
     load_toolchain() { :; }
     smoke_check_health() { return 0; }; smoke_check_manifest() { SMOKE_WHY=포트; return 1; }; smoke_check_generated() { echo ran-generated; return 0; }
-    smoke_check_login() { return 0; }; smoke_check_chat() { return 0; }
+    smoke_check_login() { return 0; }; smoke_check_ready() { return 0; }; smoke_check_chat() { return 0; }
     cmd_env_smoke smk 2>&1; echo "rc=$?"
 )"
 ok "smoke: 하나라도 실패하면 3"        '[[ "$SM_OUT" == *rc=3* ]]'
 ok "smoke: 실패해도 나머지 항목을 본다" '[[ "$SM_OUT" == *ran-generated* ]]'
+
+# ── /ready: 쓰기 없는 준비 확인(LLM 노드·DB·기본 모델) — 릴리스 환경은 채팅 대신 이것으로 연결을 본다 ──
+eq "smoke ready: 200 은 통과" "$( OMK_SMOKE_READY_WAIT=0; smoke_code() { printf '{}' > "$1"; printf 200; }; smoke_check_ready "$SM" && echo ok )" "ok"
+eq "smoke ready: API 포트의 /ready 로 묻는다" "$( OMK_SMOKE_READY_WAIT=0; smoke_code() { printf '%s' "$2" > "$TMP/ready-url"; printf 200; }; smoke_check_ready "$SM"; cat "$TMP/ready-url" )" "http://localhost:52417/ready"
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+SR_WHY="$( OMK_SMOKE_READY_WAIT=0
+    smoke_code() { printf '{"success":true,"data":{"ready":false,"onlineNodes":1,"dbConnected":true,"defaultModel":{"id":"x","listed":false}}}' > "$1"; printf 503; }
+    smoke_check_ready "$SM" || printf '%s' "$SMOKE_WHY" )"
+ok "smoke ready: 503 은 실패, 이유에 무엇이 안 됐는지" '[[ "$SR_WHY" == *"/ready → 503"* && "$SR_WHY" == *"기본 모델"* && "$SR_WHY" != *"DB 연결"* ]]'
+# shellcheck disable=SC2034  # OMK_SMOKE_READY_WAIT 는 smoke_check_ready 가 읽는다
+SR_N="$( OMK_SMOKE_READY_WAIT=3; sleep() { :; }
+    smoke_code() { local n; n=$(( $(cat "$TMP/ready-n" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$TMP/ready-n"; printf '{}' > "$1"; [[ $n -ge 2 ]] && printf 200 || printf 503; }
+    rm -f "$TMP/ready-n"; smoke_check_ready "$SM" && cat "$TMP/ready-n" )"
+eq "smoke ready: 재기동 직후 503 이면 기다렸다 다시 본다" "$SR_N" "2"
+
+# ── 검사 고르기: 릴리스를 따르는 환경은 쓰기 없는 검사만(채팅 제외), 그 밖은 채팅까지 ──
+eq "smoke: 브랜치 환경은 채팅까지" "$(smoke_checks_for "$SM")" "health manifest generated login ready chat"
+printf 'OMK_TRACK=release\n' >> "$SM/.env"
+eq "smoke: 릴리스 환경은 채팅 제외" "$(smoke_checks_for "$SM")" "health manifest generated login ready"
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+SM_REL="$(
+    load_toolchain() { :; }
+    smoke_check_health() { return 0; }; smoke_check_manifest() { return 0; }; smoke_check_generated() { return 0; }
+    smoke_check_login() { return 0; }; smoke_check_ready() { echo ran-ready; return 0; }; smoke_check_chat() { echo ran-chat; return 0; }
+    cmd_env_smoke smk 2>&1; echo "rc=$?"
+)"
+ok "smoke: 릴리스 환경은 채팅을 보내지 않는다" '[[ "$SM_REL" == *ran-ready* && "$SM_REL" != *ran-chat* && "$SM_REL" == *rc=0* ]]'
+printf 'PORT=52417\nOMK_WEB_PORT=3010\n' > "$SM/.env"
 
 # ── 결과 표지: 확인한 커밋에 GitHub 커밋 상태를 붙인다 (dev → main 자동 머지의 필수 체크가 읽는다) ──
 eq "status: https 원격"  "$( git -C "$SM" remote add origin https://github.com/openmake/openmake_llm.git; status_repo_slug "$SM" )" "openmake/openmake_llm"
