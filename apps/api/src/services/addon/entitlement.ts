@@ -10,12 +10,14 @@
  * ⚠️ OpenMake 의 add-on 은 **전부 무료**다(2026-09-20 방침) — 이 계층은 과금이 아니라 거버넌스다.
  * allowlist 를 두지 않으면(기본) 모든 add-on 이 모든 사용자에게 열려 있다.
  *
- * 조회 실패는 `state-unknown` — 라우트 게이트가 503 으로 알린다(꺼짐 404 와 구분). 팩 스킬 주입 필터(`entitledAddonIds`)만 종전 fail-open 을 유지한다(선언형 콘텐츠).
+ * 조회 실패는 `state-unknown` — 라우트 게이트가 503 으로 알린다(꺼짐 404 와 구분). 조직 축도 엄격 조회(`resolveEffectivePolicyStrict`)라
+ * 활성 조직·멤버십·조직 정책 중 하나라도 못 읽으면 허용으로 읽지 않는다(종전엔 하위 조회가 실패를 "조직 없음"으로 삼켜 allowlist 가 풀렸다).
+ * 팩 스킬 주입 필터(`entitledAddonIds`)만 종전 fail-open 을 유지한다(선언형 콘텐츠).
  *
  * @module services/addon/entitlement
  */
 import { createLogger } from '../../utils/logger';
-import { resolveEffectivePolicy } from '../org/effective-policy';
+import { resolveEffectivePolicy, resolveEffectivePolicyStrict } from '../org/effective-policy';
 import { isAddonEnabled, readAddonEnabledStrict } from './addon-state';
 
 const logger = createLogger('AddonEntitlement');
@@ -39,7 +41,7 @@ export async function checkAddonEntitlement(addonId: string, userId?: string): P
     if (!enabled.enabled) return 'disabled';
     if (!userId) return 'ok';
     try {
-        const policy = await resolveEffectivePolicy(userId);
+        const policy = await resolveEffectivePolicyStrict(userId);
         if (policy.addonAllowlist && !policy.addonAllowlist.includes(addonId)) return 'not-entitled';
     } catch (e) {
         logger.warn(`add-on '${addonId}' 조직 사용권 조회 실패(확인 불가): ${e instanceof Error ? e.message : String(e)}`);
