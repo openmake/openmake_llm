@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -71,12 +71,17 @@ export function Sidebar() {
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  // 승인 대기 배지 — 승인이 필요한 **세 종류를 합산**해 `/approvals` 에 표시한다.
+  // 승인 대기 배지 — 승인이 필요한 것을 **합산**해 `/approvals` 에 표시한다.
   // ① 에이전트 작업 HITL: 위임된 작업이 승인에서 멈춘 것을 어느 화면/재접속 후에도 발견할 수
   //    있게 (WS 인라인 프롬프트는 연결 끊김·세션 이동 시 유실 — 2026-08-08 대형 PDF "인식 못함"
-  //    오인 사례) ② 확장 설치분 스킬 draft ③ 확장 설치분 MCP draft.
-  // ②③ 은 승인 화면이 서브탭에 숨어 있어 사용자가 찾지 못했다 — 배지가 진입점이 된다(2026-08-25).
+  //    오인 사례) ② Custom Agent draft ③ 켜진 add-on 의 승인 섹션(확장 설치분 스킬·MCP draft — `approvalSections`).
+  // ③ 은 승인 화면이 서브탭에 숨어 있어 사용자가 찾지 못했다 — 배지가 진입점이 된다(2026-08-25).
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const enabledAddons = useEnabledWebAddons();
+  const addonPendingCounters = useMemo(
+    () => enabledAddons.flatMap((a) => a.approvalSections ?? []).map((sec) => sec.countPending),
+    [enabledAddons],
+  );
   useEffect(() => {
     if (!user) { setPendingApprovals(0); return; }
     let alive = true;
@@ -92,20 +97,11 @@ export function Sidebar() {
       }
     };
     const poll = async () => {
-      const [hitl, skills, mcp, agents] = await Promise.all([
+      const counts = await Promise.all([
         count(async () => {
           const r = await ApiClient.get<{ data: { pending: unknown[] } }>(
             "/api/agent-tasks/approvals/pending", opts);
           return r.data?.pending?.length ?? 0;
-        }),
-        count(async () => {
-          const r = await ApiClient.get<{ data: { total?: number; drafts?: unknown[] } }>(
-            "/api/agents/skills/drafts?target=user&limit=1", opts);
-          return r.data?.total ?? r.data?.drafts?.length ?? 0;
-        }),
-        count(async () => {
-          const r = await ApiClient.get<{ data: unknown[] }>("/api/mcp/servers/drafts", opts);
-          return r.data?.length ?? 0;
         }),
         // Custom Agent draft(Git URL 가져오기) — /approvals 로 이관하며 합산에 포함 (2026-08-26)
         count(async () => {
@@ -113,17 +109,18 @@ export function Sidebar() {
             "/api/agents/custom/drafts?target=user", opts);
           return r.data?.total ?? r.data?.drafts?.length ?? 0;
         }),
+        ...addonPendingCounters.map((fn) => count(fn)),
       ]);
       if (!alive) return;
       if (unauthorized) { unauthorized = false; void syncAuthFromServer(); return; }
-      setPendingApprovals(hitl + skills + mcp + agents);
+      setPendingApprovals(counts.reduce((sum, n) => sum + n, 0));
     };
     void poll();
     const timer = setInterval(poll, 30_000);
     // 승인이 이관·에스컬레이션·철회되면 폴링 주기를 기다리지 않고 합계를 다시 센다.
     const off = onAgentTaskChange((c) => { if (c.reason !== "plan_edited") void poll(); });
     return () => { alive = false; clearInterval(timer); off(); };
-  }, [user]);
+  }, [user, addonPendingCounters]);
 
   // 라우트 이동·바깥 클릭 시 프로필 메뉴 닫기
   useEffect(() => setMenuOpen(false), [pathname]);
@@ -208,7 +205,6 @@ export function Sidebar() {
   });
 
   // add-on 사이드바 섹션 — 주요 메뉴와 최근 대화 사이 (Base 는 어떤 add-on 인지 모른다)
-  const enabledAddons = useEnabledWebAddons();
   const sidebarSections = enabledAddons
     .flatMap((a) => a.sidebarSections ?? [])
     .slice()

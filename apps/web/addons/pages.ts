@@ -8,16 +8,22 @@ import type { ReactNode } from "react";
 import type { WebAddonPage, WebAddonPageProps } from "./types";
 import { deepResearchPages } from "./deep-research/pages";
 import { knowledgePages } from "./knowledge/pages";
+import { mcpRuntimePages } from "./mcp-runtime/pages";
+import { skillRuntimePages } from "./skill-runtime/pages";
 
-export const WEB_ADDON_PAGES: readonly WebAddonPage[] = [...deepResearchPages, ...knowledgePages];
+export const WEB_ADDON_PAGES: readonly WebAddonPage[] = [...deepResearchPages, ...knowledgePages, ...skillRuntimePages, ...mcpRuntimePages];
 
-/** URL 조각으로 add-on 화면을 찾아 렌더한다 — 맞는 화면이 없으면 null(Base 가 404) */
+/**
+ * URL 조각으로 add-on 화면을 찾아 렌더한다 — 맞는 화면이 없으면 null(Base 가 404).
+ * `area` 는 catch-all 라우트의 위치다(`app/(workspace)/[...addonPath]` = workspace, `app/(workspace)/admin/[...addonPath]` = admin).
+ */
 export function renderAddonPage(
   pathSegments: readonly string[],
   searchParams: WebAddonPageProps["searchParams"],
   pages: readonly WebAddonPage[] = WEB_ADDON_PAGES,
+  area: "workspace" | "admin" = "workspace",
 ): ReactNode | null {
   const [head, ...segments] = pathSegments;
-  const page = pages.find((p) => p.path === head);
+  const page = pages.find((p) => p.path === head && (p.area ?? "workspace") === area);
   return page ? page.render({ segments, searchParams }) : null;
 }

@@ -151,7 +151,7 @@ async function fetchSummaryView(locale: string): Promise<SummaryView | null> {
   }
 }
 
-export default function McpMonitoringPage() {
+export function McpMonitoringPage() {
   const t = useTranslations("mcpMonitoring");
   const locale = toBcp47(useLocale());
   // 실데이터만 — 그전엔 고정 목업(4·12,840·186ms·1.4%)이 실렌더됐고 "평균 지연"은 백엔드 메트릭이 없어 항상 목업이라 타일 자체를 뺐다
