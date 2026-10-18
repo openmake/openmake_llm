@@ -90,6 +90,20 @@ export const SHARED_ASSET_ADDON_NAME_BASELINE: Readonly<Record<string, number>> 
     'apps/web/messages/zh.json': 14,
 };
 
+/**
+ * 코어 마이그레이션에 정의돼 있지만 **소유 코드가 add-on 인** 테이블 (2026-10-18 결정 — 종전 "저장은 Base, 판단은 add-on" 을 바꿨다).
+ * arch_plan S3 의 "기존 테이블은 코어에 유지" 는 스키마 위치로만 지킨다 — 테이블 정의·마이그레이션 이력은 코어에 그대로 두고,
+ * SQL 은 소유 add-on 의 코드만 쓴다. Base 는 포트(`runtime-ports/*`)를 거치고, add-on 이 꺼지면 그 기능을 건너뛴다.
+ * 판정: `__tests__/addons-no-base-table-sql.test.ts`(add-on → 남의 테이블), `__tests__/base-no-addon-table-sql.test.ts`(Base → 여기 테이블).
+ */
+export const ADDON_OWNED_CORE_TABLES: Readonly<Record<string, readonly string[]>> = {
+    'mcp-runtime': ['mcp_catalog_oauth_clients', 'mcp_oauth_credentials', 'mcp_server_catalog', 'mcp_server_instances', 'mcp_servers'],
+    'skill-runtime': [
+        'agent_skill_assignments', 'agent_skills', 'skill_assets', 'skill_audit_log', 'skill_manifests', 'skill_mcp_bundles',
+        'skill_permissions', 'skill_tool_bindings',
+    ],
+};
+
 /** 웹(`apps/web` 기준)의 계약 예외 — 서버 API 응답 필드 이름을 그대로 읽는 화면 */
 export const WEB_ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = {
     'app/(workspace)/admin/metrics/page.tsx': '관리자 지표 API 응답 필드 discussionIntentTurns (routes/metrics.routes.ts)',
