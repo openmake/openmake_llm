@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -255,6 +255,15 @@ test('parseCounts: keysOn anchor 면 anchor 가 잡은 줄 전체를 읽는다 �
     assert.deepEqual(validateCommands(doc([cmd({ counts: { ...NODE, anchor: '^ℹ tests \\d+' } })])), []);
 });
 
+test('parseCounts: anchor 가 줄바꿈부터 잡아도(\\s*·\\n? 로 시작) 앞 줄이 아니라 anchor 가 든 줄을 읽는다', () => {
+    const out = 'Tests: 1 passed, 1 total\nmore\n\nTests:       2 failed, 4321 passed, 1 skipped, 4324 total\n';
+    const want = { passed: 4321, failed: 2, skipped: 1 };
+    for (const anchor of ['\\s*Tests:', '\\n?Tests:', '\\s*^Tests:.*$']) {
+        assert.deepEqual(parseCounts(out, { ...JEST, anchor }), want, anchor);
+    }
+    assert.deepEqual(parseCounts(out.replace(/\n/g, '\r\n'), { ...JEST, anchor: '\\s*Tests:' }), want, 'CRLF');
+});
+
 test('validateCommands: null·객체 아닌 항목은 예외가 아니라 검증 오류', () => {
     for (const bad of [null, 42, 'x']) {
         const errs = validateCommands(doc([cmd(), bad]));
@@ -299,4 +308,27 @@ test('runCommand: spawn 실패(없는 cwd → ENOENT)는 예외 없이 실패 �
     assert.match(res.output, /ENOENT/);
     assert.equal(readFileSync(join(dir, 'err.log'), 'utf8'), res.output);
     assert.equal(buildReceipt(cmd(), res, meta).status, 'failed');
+});
+
+test('runCommand: spawn 뒤에 온 \'error\'(kill 실패 등)는 프로세스 그룹을 끝낸 뒤 실패 결과로 한 번만 돌아온다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    let child;
+    // spawn 은 그대로 쓰고 자식만 붙잡는다 — 'spawn' 이 온 뒤 'error' 를 흉내 낸다
+    const spawnImpl = (...args) => {
+        child = spawn(...args);
+        child.once('spawn', () => child.emit('error', new Error('흉내 낸 kill 실패')));
+        return child;
+    };
+    const res = await runCommand({ cmd: 'sleep 30 & sleep 30; wait', cwd: dir, env: process.env, timeoutSec: 60, logPath: join(dir, 'late.log'), spawnImpl });
+    const groupAlive = () => { try { process.kill(-child.pid, 0); return true; } catch { return false; } };
+    try {
+        assert.equal(groupAlive(), false, '프로세스 그룹이 남았다');
+        assert.equal(res.exitCode, null);
+        assert.equal(res.timedOut, false);
+        assert.ok(res.durationMs < 15_000);
+        assert.match(res.output, /실행 실패: 흉내 낸 kill 실패/);
+        assert.equal(buildReceipt(cmd(), res, meta).status, 'failed');
+    } finally {
+        try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 이미 끝남 */ }
+    }
 });
