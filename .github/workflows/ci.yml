@@ -116,12 +116,15 @@ jobs:
           bash -n scripts/env/omk.sh
           bash -n scripts/env/omk.test.sh
           bash -n scripts/setup/mac-toolchain.test.sh
+          bash -n uninstall.sh
+          bash -n scripts/setup/uninstall.test.sh
           shellcheck -S warning install.sh install_mac.sh install_linux.sh \
             scripts/setup/common/*.sh scripts/setup/mac/*.sh scripts/setup/linux/*.sh \
             openmake_llm.sh scripts/env/omk.sh scripts/env/omk.test.sh \
-            scripts/setup/mac-toolchain.test.sh
+            scripts/setup/mac-toolchain.test.sh scripts/setup/uninstall.test.sh
           bash scripts/env/omk.test.sh
           bash scripts/setup/mac-toolchain.test.sh
+          bash scripts/setup/uninstall.test.sh
           echo "인스톨러 lint 통과 (bash -n + shellcheck + omk.test)"
 
       # ─── Gate 0.7: Dependency Audit ───

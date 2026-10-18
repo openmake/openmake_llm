@@ -7,8 +7,8 @@
 #   PM2 앱 정지·삭제 → Docker 컨테이너·볼륨 제거 → 소스 디렉터리 삭제
 #
 # 사용:
-#   ./uninstall.sh                 # 대화형 — 단계마다 확인
-#   ./uninstall.sh --yes           # 전부 자동 승인
+#   ./uninstall.sh                 # 대화형 — 지울 항목을 보여 주고 확인, 데이터·소스 삭제는 단계마다 한 번 더
+#   ./uninstall.sh --yes           # 전부 자동 승인 (자동화·파이프 입력에서는 이것만 승인으로 본다)
 #   ./uninstall.sh --keep-data     # Docker 볼륨(DB 데이터)은 남김
 #   ./uninstall.sh --keep-source   # 소스 디렉터리는 남김 (.env 포함)
 #   ./uninstall.sh --instance NAME # 지울 인스턴스를 직접 지정 (.env 의 OMK_INSTANCE 보다 우선)
@@ -61,13 +61,28 @@ readonly APP_NAME="openmake-llm${_inst:+-$_inst}" FRONT_APP_NAME="openmake-next$
 readonly PG_CONTAINER="$_pfx-postgres" RD_CONTAINER="$_pfx-redis"
 readonly PG_VOLUME="${_pfx}_pgdata" RD_VOLUME="${_pfx}_redisdata"
 
+# 삭제 승인은 --yes 또는 터미널 입력뿐이다 — 입력이 터미널이 아니면(자동화·리다이렉션) 승인하지 않는다.
+# (종전에는 비대화형을 자동 승인해, --yes 없이 파이프로 돌린 실행이 볼륨·소스·.env 까지 지울 수 있었다.)
 confirm() {
     [[ $ASSUME_YES -eq 1 ]] && { log_info "$1 → 자동 승인"; return 0; }
-    [[ -t 0 ]] || { log_info "$1 → 자동 승인 (비대화형)"; return 0; }
+    [[ -t 0 ]] || { log_warn "$1 → 비대화형이라 승인하지 않음 (자동 승인은 --yes)"; return 1; }
     local reply=""
     read -r -p "$(printf '%s%s%s [y/N]: ' "$C_WARN" "$1" "$C_RESET")" reply || true
     case "$reply" in [yY]|[yY][eE][sS]) return 0 ;; *) return 1 ;; esac
 }
+
+# 무엇이든 지우기 전에 한 번 묻는다 — PM2 앱·컨테이너 제거도 되돌릴 수 없다.
+# 비대화형인데 --yes 가 없으면 아무것도 바꾸지 않고 멈춘다(종료 코드 2).
+if [[ $ASSUME_YES -eq 0 && ! -t 0 ]]; then
+    log_warn "입력이 터미널이 아니라 확인할 수 없습니다 — 아무것도 지우지 않았습니다. 자동으로 제거하려면 --yes 를 주세요."
+    exit 2
+fi
+log_step "제거 대상"
+echo "  PM2 앱     $APP_NAME $FRONT_APP_NAME"
+echo "  컨테이너   $PG_CONTAINER $RD_CONTAINER"
+if [[ $KEEP_DATA -eq 1 ]]; then echo "  볼륨       남김 (--keep-data)"; else echo "  볼륨       $PG_VOLUME $RD_VOLUME (한 번 더 확인)"; fi
+if [[ $KEEP_SOURCE -eq 1 ]]; then echo "  소스       남김 (--keep-source)"; else echo "  소스       $SCRIPT_DIR (한 번 더 확인)"; fi
+confirm "위 PM2 앱을 지우고 컨테이너를 제거합니다. 계속할까요?" || { log_info "취소 — 아무것도 지우지 않았습니다."; exit 0; }
 
 # ── 1. PM2 앱 ────────────────────────────────────────────────────────────────
 log_step "1/3 PM2 앱 정지·삭제"
