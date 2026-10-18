@@ -230,3 +230,22 @@ test('startSerialPoller: 느린 표본이 끝나야 다음을 보낸다 — 동�
     assert.ok(callsAtStop >= 3, `표본 ${callsAtStop}건`);
     assert.ok(calls <= callsAtStop, 'stop 뒤에 새 표본을 보냈다');
 });
+
+test('startSerialPoller: tick 이 동기로 throw 해도 예외가 새지 않고 다음 tick 이 이어진다 — first 는 그 오류로 거부된다', async () => {
+    const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+    let calls = 0;
+    // 처음 두 번은 동기 throw(첫 호출과 타이머에서 부른 호출 모두), 그 뒤로는 성공
+    const tick = () => {
+        calls += 1;
+        if (calls <= 2) throw new Error(`동기 실패 ${calls}`);
+        return Promise.resolve();
+    };
+    const poller = startSerialPoller(tick, 10);
+    await assert.rejects(poller.first, /동기 실패 1/);
+    await sleep(150);
+    poller.stop();
+    const callsAtStop = calls;
+    await sleep(60);
+    assert.ok(callsAtStop >= 4, `표본 ${callsAtStop}건`);
+    assert.ok(calls <= callsAtStop, 'stop 뒤에 새 표본을 보냈다');
+});
