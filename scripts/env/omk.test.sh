@@ -609,13 +609,36 @@ rm -f "$(status_marker smk)"
 # 갱신 없이 예전 빌드본을 스모크해 그 커밋에 통과를 붙인다. 지난 갱신이 실패했으면 건너뛰지 않고 다시 갱신한다.
 ( cmd_env_update() { return 2; }; status_report() { :; }; env_update_report smk --if-behind --yes ) >/dev/null 2>&1
 ok "report: 갱신 실패를 기억한다" '[[ -f "$(update_failed_marker smk)" ]]'
-eq "report: 지난 갱신이 실패했으면 건너뛰지 않고 다시 갱신한다" \
-    "$( cmd_env_update() { echo "update $*"; }; cmd_env_smoke() { :; }; env_update_report smk --if-behind --yes 2>/dev/null )" "update smk --yes"
+eq "report: 지난 갱신이 실패했으면 건너뛰지 않고 다시 배포까지 한다" \
+    "$( cmd_env_update() { echo "update $*"; }; cmd_env_smoke() { :; }; env_update_report smk --if-behind --yes 2>/dev/null )" "update smk --yes --redeploy"
 ( cmd_env_update() { :; }; cmd_env_smoke() { :; }; env_update_report smk --if-behind --yes ) >/dev/null 2>&1
 ok "report: 갱신이 되면 기억을 지운다" '[[ ! -f "$(update_failed_marker smk)" ]]'
 eq "report: 평소에는 최신이면 건너뛴다" \
     "$( cmd_env_update() { echo "update $*"; }; cmd_env_smoke() { :; }; env_update_report smk --if-behind --yes 2>/dev/null )" "update smk --if-behind --yes"
 rm -f "$(status_marker smk)"
+# --redeploy: 하위 openmake_llm.sh 가 실제로 다시 빌드·배포하는가 — 래퍼 인자만 보던 테스트는 "HEAD 같음 → deploy 생략" 을 놓쳤다
+RD="$TMP/redeploy"; mkdir -p "$RD/.git"
+printf '#!/usr/bin/env bash\necho "osh $*" >> "%s/calls"\n' "$RD" > "$RD/openmake_llm.sh"; chmod +x "$RD/openmake_llm.sh"
+redeploy_probe() { # $1=트랙(release|"") $2=릴리스가 앞섰나(0|1) $3…=update 인자 → openmake_llm.sh 호출 기록
+    : > "$RD/calls"
+    ( RP_TRACK="$1" RP_BEHIND="$2"; shift 2   # cmd_env_update 의 지역 변수(track)와 이름이 겹치면 동적 범위로 가려진다
+      log_info() { :; }; log_ok() { :; }; log_step() { :; }; log_warn() { :; }
+      llm_dir() { echo "$RD"; }; bench_dir() { echo "$TMP/no-bench"; }; load_toolchain() { :; }
+      dotenv_get() { [[ "$2" == OMK_TRACK ]] && echo "$RP_TRACK"; return 0; }
+      release_behind() { [[ "$RP_BEHIND" == 1 ]]; }; repo_behind() { return 1; }
+      restore_lockfiles() { :; }; searxng_ensure() { :; }; env_backup_run() { :; }; release_gate_enforce() { :; }
+      runtime_images_ensure() { RUNTIME_CHANGED=0; }; ops_sandbox_guard() { :; }; litellm_dir() { echo "$TMP/no-litellm"; }
+      bench_update() { :; }; proxy_dir() { echo "$TMP/no-proxy"; }
+      git() { [[ "$*" == *"merge -q --ff-only"* ]] && return 0; command git "$@"; }
+      # shellcheck disable=SC2034  # cmd_env_update 가 읽는다
+      RELEASE_TAG=v9.9.9; cmd_env_update smk "$@" ) >/dev/null 2>&1
+    tr '\n' '|' < "$RD/calls"
+}
+eq "redeploy: 일반 트랙은 update --force"            "$(redeploy_probe '' 0 --yes --redeploy)" "osh update --yes --force|"
+eq "redeploy: 일반 트랙 평소엔 종전 그대로"          "$(redeploy_probe '' 0 --yes)" "osh update --yes|"
+eq "redeploy: 릴리스가 최신이어도 다시 deploy"       "$(redeploy_probe release 0 --yes --redeploy)" "osh deploy --yes|"
+eq "redeploy: 릴리스가 최신이면 평소엔 생략"         "$(redeploy_probe release 0 --yes)" ""
+eq "redeploy: 릴리스가 앞섰으면 종전대로 한 번 deploy" "$(redeploy_probe release 1 --yes --redeploy)" "osh deploy --yes|"
 # 승격 워크플로: main 의 필수 체크에 환경 dev 의 표지가 없으면 자동 머지를 걸지 않는다 — 걸면 CI 만으로 main 에 들어간다.
 PW="$HERE/../../.github/workflows/promote.yml"
 ok "promote: 필수 체크에 omk/env-dev 가 있는지 본다" "grep -q 'required_status_checks.contexts' '$PW' && grep -q 'index(\"omk/env-dev\")' '$PW'"

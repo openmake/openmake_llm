@@ -43,7 +43,7 @@
 #                           --dgx-host H      DGX vLLM(:8002 채팅·:8003 임베딩·:8005 음악)을 게이트웨이 업스트림으로 + 연결 확인
 #                           --https-host H    내부망 HTTPS (Caddy tls internal · :443) — 사내 기기는 루트 인증서를 한 번 신뢰 등록
 #                           --artifact-viewer 아티팩트 공유 뷰어 (기본 인스턴스 전용) · --discord-token T  Discord 봇 (이 서버 전용 새 토큰)
-#   omk env update  <env> [--if-behind] [--no-backup] [--force-unverified] [--report]   # llm(ff-only→build→migrate→restart) → bench → proxy
+#   omk env update  <env> [--if-behind] [--no-backup] [--force-unverified] [--redeploy] [--report]   # llm(ff-only→build→migrate→restart) → bench → proxy (--redeploy: 최신이어도 다시 배포)
 #                                                       # --report: 갱신 → 스모크 → 그 커밋에 결과 표지(autoupdate 가 쓴다)
 #   omk env smoke   <env> [--report]                    # health · 빌드본의 API 포트 · /generated · 로그인 · 채팅 1회. 실패하면 종료 코드 3
 #   omk env verify  <env> [--list]                      # 확인을 마친 커밋을 origin 에 기록 — 릴리스 게이트(OMK_RELEASE_GATE=1)가 읽는다
@@ -863,12 +863,14 @@ status_report() { # $1=env $2=커밋 $3=결과 $4=설명 — 같은 커밋·같�
 env_update_report() { # env [update 인자…]
     local env="$1"; shift; local ldir sha a rc=0 had_e=0 retry=0 args=(); ldir="$(llm_dir "$env")"
     # pull 은 됐는데 빌드가 실패한 커밋은 HEAD 가 이미 원격과 같다 — 다음 주기에 --if-behind 를 그대로 두면 갱신 없이
-    # 예전 빌드본을 스모크해 그 커밋에 통과를 붙인다. 지난 갱신이 실패했으면 건너뛰지 않고 다시 갱신한다.
+    # 예전 빌드본을 스모크해 그 커밋에 통과를 붙인다. 지난 갱신이 실패했으면 건너뛰지 않고 다시 갱신하고,
+    # --redeploy 로 "이미 최신이라 deploy 생략" 도 막는다(빼면 하위 update 가 HEAD 가 같다며 0 을 돌려 예전 빌드가 통과로 기록된다).
     [[ ! -f "$(update_failed_marker "$env")" ]] || retry=1
     for a in "$@"; do
         if [[ "$a" == --report ]] || [[ $retry -eq 1 && "$a" == --if-behind ]]; then continue; fi
         args+=("$a")
     done
+    [[ $retry -eq 0 ]] || args+=(--redeploy)
     # 갱신은 errexit 아래에서 돌아야 한다 — `||` 뒤에 두면 안쪽 실패가 묻힌다.
     [[ $- != *e* ]] || had_e=1; set +e
     ( set -e; cmd_env_update "$env" ${args[@]+"${args[@]}"} ); rc=$?
@@ -1603,10 +1605,12 @@ cmd_env_install() {
 }
 
 cmd_env_update() {
-    local env="$1"; shift; local if_behind=0 no_backup=0 force_unverified=0
+    local env="$1"; shift; local if_behind=0 no_backup=0 force_unverified=0 redeploy=0
     local a report=0; for a in "$@"; do [[ "$a" != --report ]] || report=1; done
     if [[ $report -eq 1 ]]; then env_update_report "$env" "$@"; return; fi
-    while [[ $# -gt 0 ]]; do case "$1" in --no-backup) no_backup=1 ;; --if-behind) if_behind=1 ;; --force-unverified) force_unverified=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
+    # --redeploy: 이미 최신(HEAD·릴리스 태그가 같음)이어도 빌드·배포를 다시 한다 — 지난 갱신이 빌드·마이그레이션에서
+    # 실패해 소스만 앞선 환경을 되살릴 때(env_update_report 의 재시도가 붙인다). 주지 않으면 종전 그대로 생략한다.
+    while [[ $# -gt 0 ]]; do case "$1" in --no-backup) no_backup=1 ;; --if-behind) if_behind=1 ;; --force-unverified) force_unverified=1 ;; --redeploy) redeploy=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
     local ldir bdir; ldir="$(llm_dir "$env")"; bdir="$(bench_dir "$env")"
     [[ -d "$ldir/.git" ]] || die "$ldir 가 없습니다 — 'omk env install $env' 먼저"
     load_toolchain "$ldir"
@@ -1635,9 +1639,13 @@ cmd_env_update() {
             git -C "$ldir" merge -q --ff-only "$RELEASE_TAG" || die "릴리스 $RELEASE_TAG 로 fast-forward 할 수 없습니다 ($ldir)"
             log_ok "릴리스 $RELEASE_TAG 로 갱신"
             ( cd "$ldir" && ./openmake_llm.sh deploy --yes < /dev/null | cat ) || die "openmake_llm.sh deploy 실패 ($env)"
+        elif [[ $redeploy -eq 1 ]]; then
+            log_info "$env 는 최신 릴리스(${RELEASE_TAG:-?})지만 지난 배포가 실패해 다시 배포합니다"
+            ( cd "$ldir" && ./openmake_llm.sh deploy --yes < /dev/null | cat ) || die "openmake_llm.sh deploy 실패 ($env)"
         else log_info "$env 는 최신 릴리스입니다 (${RELEASE_TAG:-?})"; fi
     else
-        ( cd "$ldir" && ./openmake_llm.sh update --yes < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
+        local force=(); [[ $redeploy -eq 0 ]] || force=(--force)
+        ( cd "$ldir" && ./openmake_llm.sh update --yes ${force[@]+"${force[@]}"} < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
     fi
     # 운영 프로필로 설치한 환경은 새 버전 프로필에 추가된 키를 덧붙인다(있는 값은 그대로).
     OPS_CHANGED=0
