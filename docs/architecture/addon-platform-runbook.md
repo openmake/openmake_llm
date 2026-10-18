@@ -39,7 +39,7 @@
 
 | 축 | 값 | 저장 위치 | 바꾸는 방법 | 반영 시점 |
 |---|---|---|---|---|
-| add-on 의도 | `installed`·`enabled`·`disabled`·`failed` | `addon_installations.state` | 관리 화면 / `PATCH /api/admin/addons/:addonId/state` | 라우트·기능 훅: 다음 요청. 동기 훅: 캐시 TTL(`ADDON_STATE_CACHE_TTL_MS`, 기본 30초) 뒤 |
+| add-on 의도 | `installed`·`enabled`·`disabled`·`failed` | `addon_installations.state` | 관리 화면 / `PATCH /api/admin/addons/:addonId/state` | 라우트·기능 훅: 토글을 저장한 프로세스는 다음 요청, 다른 프로세스(다른 API 인스턴스·별도 worker)는 캐시 TTL(`ADDON_STATE_CACHE_TTL_MS`, 기본 30초) 안. 동기 훅: 캐시 TTL 뒤 |
 | 런타임 상태 | `not_loaded`·`registering`·`ready`·`stopping`·`stopped`·`failed` | 프로세스 메모리 | 토글(같은 프로세스) · 재시작 | 토글 응답 `runtime`: `stopped`·`resumed`·`restart_required`·`unchanged`·`not_loaded` |
 | 실효 가용성 | `available`·`disabled`·`not_ready`·`failed`·`incompatible`·`state_unknown` | 계산값 | — | 라우트 응답 404 `ADDON_DISABLED`·503 `ADDON_FAILED`·403 `ADDON_NOT_ENTITLED`·503 `ADDON_STATE_UNKNOWN` |
 | 조직 사용권 | `ADDON_ALLOWLIST` 정책 | `organization_policies` | 조직 관리자 | 조직 캐시 `ORG_CONTEXT_CACHE_TTL_MS`(기본 60초) 뒤 |
