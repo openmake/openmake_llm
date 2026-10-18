@@ -19,13 +19,15 @@ jest.mock('../../../data/repositories/addon-state-repository', () => ({
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getPool: () => ({}) }) }));
 
 import { checkAddonEntitlement, entitledAddonIds } from '../entitlement';
-import { __resetAddonStateCacheForTest } from '../addon-state';
+import { __resetAddonStateCacheForTest, ensureAddonStates, isAddonEnabledSync } from '../addon-state';
+import { resetAddonRuntimeStatusesForTest, setAddonRuntimeStatus } from '../../../addon-host/activation';
 
 const ENV_KEY = 'ADDON_BUILTIN_DISABLED';
 
 beforeEach(() => {
     jest.clearAllMocks();
     __resetAddonStateCacheForTest();
+    resetAddonRuntimeStatusesForTest();
     delete process.env[ENV_KEY];
     listRows.mockResolvedValue([
         { addon_id: 'industry-pack', state: 'enabled' },
@@ -80,6 +82,26 @@ describe('checkAddonEntitlement', () => {
     it('상태를 못 읽으면(DB 미초기화) state-unknown', async () => {
         listRows.mockRejectedValue(new Error('부팅 초기'));
         expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('state-unknown');
+    });
+});
+
+describe('이 프로세스의 부팅 결과 (외부 리뷰 A4)', () => {
+    it('부팅에 실패한 add-on 은 관리자가 DB 에서 다시 켜도(enabled) 재시작 전까지 failed', async () => {
+        setAddonRuntimeStatus('industry-pack', 'failed', { code: 'migration_failed', reason: 'boom' });
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('failed');
+        await ensureAddonStates();
+        expect(isAddonEnabledSync('industry-pack')).toBe(false); // 순수 채팅 훅도 같은 판정
+    });
+
+    it('런타임 상태를 기록하지 않는 프로세스(별도 worker — not_loaded)는 DB 상태대로', async () => {
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('ok');
+        setAddonRuntimeStatus('industry-pack', 'ready');
+        expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('ok');
+    });
+
+    it('관리자가 끈 add-on 은 부팅 결과와 무관하게 disabled', async () => {
+        setAddonRuntimeStatus('sleeping-pack', 'failed', { code: 'runtime_failed', reason: 'x' });
+        expect(await checkAddonEntitlement('sleeping-pack', 'u1')).toBe('disabled');
     });
 });
 
