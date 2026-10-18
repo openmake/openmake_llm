@@ -80,7 +80,8 @@ adminAddonsRouter.get('/addons', requireAuth, requireAdmin, asyncHandler(async (
             effectiveAvailability: activation.effectiveAvailability,
             source: row?.source ?? 'builtin',
             entitlementSku: row?.entitlement_sku ?? null,
-            failureReason: row?.failure_reason ?? null,
+            /** failed 일 때만 — 다른 상태로 바뀐 행에 남은 옛 값(상태 전환 사유가 저장되던 시절)을 실패로 보이지 않게 한다 */
+            failureReason: row?.state === 'failed' ? (row.failure_reason ?? null) : null,
             updatedAt: row?.updated_at ?? null,
             /** 매니페스트가 선언한 권한 — 집행 어휘는 config/addon-permissions.ts */
             permissions: manifests.get(a.id)?.permissions ?? [],
