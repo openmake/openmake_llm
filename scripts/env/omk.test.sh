@@ -38,6 +38,16 @@ eq "ref 그 밖의 이름" "$(env_default_ref qa-1)"    "main"
 RB="$TMP/rb"; git init -q "$RB" && git -C "$RB" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m x && git -C "$RB" branch -M main
 eq "remote branch: 있음"        "$(remote_has_branch "$RB" main >/dev/null 2>&1; echo $?)" "0"
 eq "remote branch: 없음"        "$(remote_has_branch "$RB" dev >/dev/null 2>&1; echo $?)"  "1"
+# ── lock 변경 감지: update 가 의존성을 설치할지(바뀐 커밋 범위에 package-lock.json 이 있을 때만) ──
+LR="$TMP/lock"; git init -q "$LR"
+lr_commit() { git -C "$LR" add -A && git -C "$LR" -c user.email=t@example.com -c user.name=t commit -q -m "$1" && git -C "$LR" rev-parse --short HEAD; }
+echo '{"v":1}' > "$LR/package-lock.json"; L1="$(lr_commit one)"
+echo x > "$LR/other.txt";                  L2="$(lr_commit two)"
+echo '{"v":2}' > "$LR/package-lock.json"; L3="$(lr_commit three)"
+eq "lock: 다른 파일만 바뀜 → 설치 안 함" "$(lockfile_changed "$LR" "$L1" "$L2"; echo $?)" "1"
+eq "lock: 바뀜 → 설치"                  "$(lockfile_changed "$LR" "$L2" "$L3"; echo $?)" "0"
+eq "lock: 같은 커밋 → 설치 안 함"        "$(lockfile_changed "$LR" "$L3" "$L3"; echo $?)" "1"
+eq "lock: 범위 전체(HEAD 표기)"          "$(lockfile_changed "$LR" "$L1" HEAD; echo $?)" "0"
 eq "remote branch: 읽지 못함"   "$(remote_has_branch "$TMP/없는-저장소" dev >/dev/null 2>&1; echo $?)" "2"
 ok "validate rejects local" '! ( validate_env local ) >/dev/null 2>&1'
 DV="$TMP/devclone"; mkdir -p "$DV"
@@ -657,7 +667,8 @@ redeploy_probe() { # $1=트랙(release|"") $2=릴리스가 앞섰나(0|1) $3…=
       restore_lockfiles() { :; }; searxng_ensure() { :; }; env_backup_run() { :; }; release_gate_enforce() { :; }
       runtime_images_ensure() { RUNTIME_CHANGED=0; }; ops_sandbox_guard() { :; }; litellm_dir() { echo "$TMP/no-litellm"; }
       bench_update() { :; }; proxy_dir() { echo "$TMP/no-proxy"; }
-      git() { [[ "$*" == *"merge -q --ff-only"* ]] && return 0; command git "$@"; }
+      git() { case "$*" in *"merge -q --ff-only"*) return 0 ;; *"rev-parse HEAD"*) echo deadbeef ;; *) command git "$@" ;; esac; }
+      lockfile_changed() { [[ "${RP_LOCK:-0}" == 1 ]]; }; deps_install() { echo "deps" >> "$RD/calls"; }
       # shellcheck disable=SC2034  # cmd_env_update 가 읽는다
       RELEASE_TAG=v9.9.9; cmd_env_update smk "$@" ) >/dev/null 2>&1
     tr '\n' '|' < "$RD/calls"
@@ -667,6 +678,10 @@ eq "redeploy: 일반 트랙 평소엔 종전 그대로"          "$(redeploy_pro
 eq "redeploy: 릴리스가 최신이어도 다시 deploy"       "$(redeploy_probe release 0 --yes --redeploy)" "osh deploy --yes|"
 eq "redeploy: 릴리스가 최신이면 평소엔 생략"         "$(redeploy_probe release 0 --yes)" ""
 eq "redeploy: 릴리스가 앞섰으면 종전대로 한 번 deploy" "$(redeploy_probe release 1 --yes --redeploy)" "osh deploy --yes|"
+# 릴리스 track: ff 로 받은 범위에 package-lock.json 이 있으면 deploy 전에 의존성을 맞춘다 — 최신이면(ff 없음) 설치하지 않는다
+eq "deps: 릴리스 ff 가 lock 을 바꿨으면 설치 → deploy"   "$(RP_LOCK=1 redeploy_probe release 1 --yes)" "deps|osh deploy --yes|"
+eq "deps: lock 그대로면 종전대로 deploy 만"              "$(RP_LOCK=0 redeploy_probe release 1 --yes)" "osh deploy --yes|"
+eq "deps: 최신(ff 없음)이면 --redeploy 여도 설치 안 함"   "$(RP_LOCK=1 redeploy_probe release 0 --yes --redeploy)" "osh deploy --yes|"
 # 승격 워크플로: main 의 필수 체크에 환경 dev 의 표지가 없으면 자동 머지를 걸지 않는다 — 걸면 CI 만으로 main 에 들어간다.
 PW="$HERE/../../.github/workflows/promote.yml"
 ok "promote: 필수 체크에 omk/env-dev 가 있는지 본다" "grep -q 'required_status_checks.contexts' '$PW' && grep -q 'index(\"omk/env-dev\")' '$PW'"
