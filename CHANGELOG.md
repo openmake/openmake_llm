@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.106.2](https://github.com/openmake/openmake_llm/compare/v1.106.1...v1.106.2) (2026-10-19)
+
+
+### 🐛 버그 수정
+
+* **addons:** 실패 상태가 아닐 때는 상태 전환 사유를 실패 사유로 저장·노출하지 않는다 ([ed4da16](https://github.com/openmake/openmake_llm/commit/ed4da166b5066119a4a94136af3388c238eb107a))
+* **addons:** 실패 상태가 아닐 때는 상태 전환 사유를 실패 사유로 저장·노출하지 않는다 ([ea2f895](https://github.com/openmake/openmake_llm/commit/ea2f89519f2175cfc38fb1c108bd590d91fadd56))
+* **bench:** startSerialPoller 는 tick 의 동기 throw 도 거부로 바꿔 폴링을 이어 간다 ([f1b24e7](https://github.com/openmake/openmake_llm/commit/f1b24e78c53dcd5693c59524e7e6bb21a2bc1f2b))
+* **deps:** align js-yaml API v5 with scoped legacy override ([2623093](https://github.com/openmake/openmake_llm/commit/2623093e156faa384f919aec9f7f3793dbda6a11))
+* **deps:** install js-yaml 5.5.0 for API while preserving legacy overrides ([a78085e](https://github.com/openmake/openmake_llm/commit/a78085e57e628145c6d0338a4e295fa9dc919d0b))
+* **release,bench:** 검토 보류 minor 5건 — anchor 줄 읽기·늦은 spawn error·poller 동기 throw·bridge 테스트 가짜 시계 ([fca93e3](https://github.com/openmake/openmake_llm/commit/fca93e3c7f651ae1335e3f3a981d20c437d98199))
+* **release:** correct counts anchors and clean up surviving process groups ([cd0b972](https://github.com/openmake/openmake_llm/commit/cd0b9725ab6a8266ef8bb6ffcc789c345016b395))
+* **release:** parse summary whitespace and finish process group cleanup ([df976bc](https://github.com/openmake/openmake_llm/commit/df976bc934de181a5840d06e28744a921e21c48d))
+* **release:** 줄바꿈으로 시작하는 anchor 도 매치한 줄을 읽고, spawn 뒤 error 는 프로세스 그룹을 끝낸다 ([b1ffddd](https://github.com/openmake/openmake_llm/commit/b1ffddd31aa803a271f509ac899b1c8a800d9d47))
+
 ## [1.106.1](https://github.com/openmake/openmake_llm/compare/v1.106.0...v1.106.1) (2026-10-18)
 
 
