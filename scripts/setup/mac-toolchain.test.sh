@@ -90,9 +90,13 @@ brew() {
     if [[ "$1" == list ]]; then [[ "$BREW_INSTALLED" == *" $3 "* ]]; return; fi
     BREW_CALLED="$*"
 }
+# The production function is sourced above; the stub below is only for ensure_docker.
+# shellcheck disable=SC2218
 install_colima
 eq "Homebrew CLI 설치" "$BREW_CALLED" "install docker docker-compose docker-buildx"
 BREW_CALLED=""; BREW_INSTALLED=" colima docker docker-compose docker-buildx "
+# The production function is sourced above; the stub below is only for ensure_docker.
+# shellcheck disable=SC2218
 install_colima
 eq "Homebrew 도구 설치 생략" "$BREW_CALLED" ""
 
