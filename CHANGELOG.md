@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.107.0](https://github.com/openmake/openmake_llm/compare/v1.106.2...v1.107.0) (2026-10-19)
+
+
+### ✨ 기능
+
+* use Colima exclusively for macOS OpenMake runtime ([6c65f32](https://github.com/openmake/openmake_llm/commit/6c65f324eb1dd3ada59086281a5c33e2de9a98e4))
+
+
+### 🐛 버그 수정
+
+* clarify sourced toolchain function for installer lint ([23fa0af](https://github.com/openmake/openmake_llm/commit/23fa0afdbd3f49c2a2ed0144ae38986b6282b82a))
+* **env:** align artifact viewer data paths with backend ([59e4e4b](https://github.com/openmake/openmake_llm/commit/59e4e4b43a1512d37707f4a27953b3fa79855b46))
+* **env:** update 가 package-lock.json 변경을 받으면 deploy 전에 의존성을 설치한다 ([9bdef5d](https://github.com/openmake/openmake_llm/commit/9bdef5d840bfca3ad77cebb13470e1608364d3c8))
+* **env:** update 가 package-lock.json 변경을 받으면 deploy 전에 의존성을 설치한다 ([7c64643](https://github.com/openmake/openmake_llm/commit/7c64643fd0734820c8fb9e3e45a285b92cf069f5))
+* **mcp:** isolate playwright server and add ffprobe ([2afe7db](https://github.com/openmake/openmake_llm/commit/2afe7db23732cf5621e5887021aaecf621ae0ac7))
+* **mcp:** keep Chromium state writable in readonly sandbox ([1f0e938](https://github.com/openmake/openmake_llm/commit/1f0e938c5f858b30063d23d6b57937ef2dca9851))
+* unify Colima selection and guard existing installation data ([66f1a5c](https://github.com/openmake/openmake_llm/commit/66f1a5c4ce3de82d8a6792a95830cd1135171bad))
+
 ## [1.106.2](https://github.com/openmake/openmake_llm/compare/v1.106.1...v1.106.2) (2026-10-19)
 
 
