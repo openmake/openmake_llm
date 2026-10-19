@@ -419,6 +419,18 @@ restore_lockfiles() { # $1=dir
     done
     return 0
 }
+# $2→$3 사이에 package-lock.json 이 바뀌었나 (0=바뀜). openmake_llm.sh deploy 는 의존성을 설치하지 않는다 — 비릴리스 track 은
+# openmake_llm.sh update 가, 릴리스 track 은 cmd_env_update 가 이 판정으로 바뀐 lock 에 맞춰 먼저 설치한다
+# (2026-10-20: staging 이 9-28 설치본 위에서 3주간 갱신돼 lock 과 다른 node_modules 로 스모크를 통과하고 있었다).
+lockfile_changed() { # $1=dir $2=before $3=after
+    ! git -C "$1" diff --quiet "$2" "$3" -- package-lock.json
+}
+# lock 에 맞는 버전으로 제자리 갱신 — npm ci 는 node_modules 를 비워 빌드가 도는 동안 실행 중 앱의 지연 로드가 깨진다.
+deps_install() { # $1=dir
+    log_step "의존성 설치 (package-lock.json 변경)"
+    ( cd "$1" && npm install --no-audit --no-fund ) || die "npm install 실패 ($1) — 의존성을 맞추지 못해 중단합니다 (옛 빌드본이 그대로 돕니다)"
+    restore_lockfiles "$1"
+}
 # 원격이 앞서 있는지 (fetch 포함). 0=뒤처짐(갱신 필요) 1=최신
 repo_behind() { # $1=dir
     git -C "$1" fetch -q --prune 2>/dev/null || return 0
@@ -1662,8 +1674,10 @@ cmd_env_update() {
             if [[ $no_backup -eq 0 ]]; then
                 env_backup_run "$env" || die "올리기 전 백업 실패 — 고친 뒤 다시 실행하세요 (건너뛰려면 --no-backup)"
             fi
+            local rel_before; rel_before="$(git -C "$ldir" rev-parse HEAD 2>/dev/null || true)"
             git -C "$ldir" merge -q --ff-only "$RELEASE_TAG" || die "릴리스 $RELEASE_TAG 로 fast-forward 할 수 없습니다 ($ldir)"
             log_ok "릴리스 $RELEASE_TAG 로 갱신"
+            if [[ -n "$rel_before" ]] && lockfile_changed "$ldir" "$rel_before" HEAD; then deps_install "$ldir"; fi
             ( cd "$ldir" && ./openmake_llm.sh deploy --yes < /dev/null | cat ) || die "openmake_llm.sh deploy 실패 ($env)"
         elif [[ $redeploy -eq 1 ]]; then
             log_info "$env 는 최신 릴리스(${RELEASE_TAG:-?})지만 지난 배포가 실패해 다시 배포합니다"

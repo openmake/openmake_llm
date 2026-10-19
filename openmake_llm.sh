@@ -715,6 +715,17 @@ cmd_update() {
         return 0
     fi
     log_ok "업데이트: $before → $after"
+    # 받아온 커밋이 package-lock.json 을 바꿨으면 의존성부터 맞춘다 — deploy 는 설치하지 않으므로("의존성은 그대로 유지")
+    # 그대로 두면 옛 node_modules 로 빌드·기동한다(2026-10-20 staging: 9-28 설치본 위에서 3주간 갱신돼 js-yaml 5·next 16.4 가
+    # 반영되지 않은 채 스모크를 통과했다). npm install 은 lock 에 맞는 버전으로 제자리 갱신한다 — npm ci 는 node_modules 를
+    # 비워, 빌드가 도는 몇 분 동안 실행 중인 앱의 지연 로드(dynamic import)가 깨진다.
+    if ! git -C "$SCRIPT_DIR" diff --quiet "$before" "$after" -- package-lock.json; then
+        log_step "의존성 설치 (package-lock.json 변경: $before → $after)"
+        ( cd "$SCRIPT_DIR" && npm install --no-audit --no-fund ) \
+            || { log_err "npm install 실패 — 의존성을 맞추지 못해 deploy 를 중단합니다 (옛 빌드본이 그대로 돕니다)"; exit 1; }
+        # install 이 다시 쓴 lock 은 설치의 부산물 — 다음 update 의 "미커밋 변경" 검사에 걸리지 않게 되돌린다.
+        git -C "$SCRIPT_DIR" diff --quiet -- package-lock.json || git -C "$SCRIPT_DIR" checkout -- package-lock.json
+    fi
     cmd_deploy "${PASS[@]}"
 }
 

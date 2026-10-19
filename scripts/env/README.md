@@ -30,7 +30,7 @@ feature/<주제> ──PR(CI 필수)──▶ dev ──사람이 `omk env updat
 
 **online 과 외부 설치는 main 이 아니라 최신 릴리스 태그를 따른다.** main 은 공개 저장소이지만 개발이 모이는 곳이다 — staging 에서 확인하기
 전의 main 을 운영이나 외부 설치자가 받으면 안 된다. `omk env install online` 의 기본 ref 는 `release`(가장 높은 `vX.Y.Z` 태그)이고,
-`omk env update online` 은 새 릴리스 태그가 있을 때만 그 태그까지 fast-forward 한 뒤 `openmake_llm.sh deploy` 를 부른다. 어느 환경이든
+`omk env update online` 은 새 릴리스 태그가 있을 때만 그 태그까지 fast-forward 한 뒤(그 사이 `package-lock.json` 이 바뀌었으면 `npm install` 로 의존성을 맞추고) `openmake_llm.sh deploy` 를 부른다. 어느 환경이든
 `--ref release` 로 같은 방식을 고를 수 있다(`.env` 의 `OMK_TRACK=release`). `openmake_bench` 는 릴리스 태그가 없어 main 을 쓴다.
 bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm 의 `--ref` 와 같은 이름**을 찾으므로, llm 에만 있는 `feature/*` 를
 올리면서 bench 도 붙일 때는 `--bench --bench-ref main` 으로 준다(같은 이름의 브랜치가 없으면 bench 클론에서 설치가 멈춘다).
