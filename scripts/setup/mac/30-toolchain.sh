@@ -36,13 +36,15 @@ ensure_pm2() {
 pm2_has_app() { pm2 describe "$1" >/dev/null 2>&1; }
 
 # ── Docker — 전용 Colima (프로필 openmake) ───────────────────────────────────
-# Docker Desktop 은 로그인·약관·업데이트 창에서 사람을 기다린다 — 재부팅 뒤 창 하나에 멈추면 DB 와
-# 샌드박스가 같이 멈춘다. openmake 는 자기 Colima VM 에서만 돌고, 사용자의 기본 docker 컨텍스트
-# (Docker Desktop 등)와 그 위의 컨테이너는 건드리지 않는다.
+# macOS OpenMake 는 Docker Desktop 유무와 무관하게 자기 Colima VM 에서 실행한다.
+# 기본 Docker 컨텍스트는 바꾸지 않으며, OpenMake 명령만 전용 소켓을 선택한다.
 DOCKER_COMPOSE="docker compose"
 readonly COLIMA_PROFILE="openmake"
-# (COLIMA_HOME 은 colima 가 읽는 환경변수 이름이라 쓰지 않는다 — 사용자가 export 해 둔 값을 덮게 된다.)
-readonly COLIMA_DIR="$HOME/.colima/$COLIMA_PROFILE"
+# 명시한 COLIMA_HOME 또는 등록된 프로필의 경로를 자동 기동에도 그대로 쓴다.
+. "$SCRIPT_DIR/scripts/lib/colima.sh"
+OPENMAKE_COLIMA_HOME="$(openmake_colima_home)" || die "Colima 경로를 확인할 수 없습니다."
+readonly OPENMAKE_COLIMA_HOME
+readonly COLIMA_DIR="$OPENMAKE_COLIMA_HOME/$COLIMA_PROFILE"
 readonly COLIMA_SOCK="$COLIMA_DIR/docker.sock"
 readonly COLIMA_AGENT="com.openmake.colima"
 readonly COLIMA_AGENT_PLIST="$HOME/Library/LaunchAgents/$COLIMA_AGENT.plist"
@@ -75,32 +77,16 @@ colima_start_args() {
         --vm-type vz --mount-type virtiofs
 }
 
-# 이 호스트가 사용자의 기본 Docker 로 openmake 를 운영 중인가 — 그렇다면 옮기지 않는다(DB 가 그쪽에 있다).
-# 판정은 호스트 단위다: 접속 규칙(소켓이 있으면 Colima)이 호스트 전체에 걸리므로, 환경 하나만 옮길 수 없다.
-installed_on_other_docker() { # $1=대상 .env
-    has docker || return 1
-    if ( unset DOCKER_HOST; docker info >/dev/null 2>&1 ); then
-        # 목록을 먼저 받는다 — 파이프로 잇면 grep -q 가 먼저 끝날 때 docker 가 SIGPIPE 로 죽고,
-        # pipefail 아래에서는 "없음"으로 읽혀 운영 중인 호스트를 새 설치로 오판한다.
-        local names
-        names="$( unset DOCKER_HOST; docker ps -a --format '{{.Names}}' 2>/dev/null || true )"
-        grep -qE '^openmake(-[a-z0-9-]+)?-postgres$' <<< "$names"
-        return
-    fi
-    # 기본 Docker 가 꺼져 있어 볼 수 없다 — .env 가 있는데 Colima 를 가리키지 않으면 기존 설치본으로 본다.
-    [[ -f "$1" ]] && ! grep -qE '^DOCKER_HOST=' "$1"
-}
-
 install_colima() {
-    local missing="colima"
-    brew list --formula colima >/dev/null 2>&1 && missing=""
-    # docker CLI·플러그인은 없는 것만 — Docker Desktop 이 깔아 둔 CLI 가 있으면 그대로 쓴다.
-    has docker || missing="$missing docker"
-    docker compose version >/dev/null 2>&1 || missing="$missing docker-compose"
-    docker buildx version >/dev/null 2>&1 || missing="$missing docker-buildx"
+    local missing="" formula prefix
+    for formula in colima docker docker-compose docker-buildx; do
+        brew list --formula "$formula" >/dev/null 2>&1 || missing="$missing $formula"
+    done
+    prefix="$(brew --prefix)" || die "Homebrew 경로를 확인할 수 없습니다."
+    export PATH="$prefix/bin:$PATH"
     [[ -z "${missing// /}" ]] && return 0
     log_info "설치:$missing"
-    # 단어 분할이 의도다 — formula 이름 목록.
+    # 단어 분할이 의도다 — brew formula 이름 목록.
     # shellcheck disable=SC2086
     brew install $missing || die "brew install 실패:$missing — 직접 실행한 뒤 재시도하세요."
 }
@@ -123,7 +109,8 @@ docker_cli_plugins() { # $1=config.json $2=플러그인 디렉터리
 
 colima_start() {
     # colima 는 ~/.colima 가 있으면 그곳을, 없고 XDG_CONFIG_HOME 이 있으면 그 아래를 쓴다 — 접속 규칙의 소켓 경로와 맞춘다.
-    mkdir -p "$HOME/.colima"
+    export COLIMA_HOME="$OPENMAKE_COLIMA_HOME"
+    mkdir -p "$COLIMA_HOME"
     if colima status --profile "$COLIMA_PROFILE" >/dev/null 2>&1; then
         return 0
     fi
@@ -170,6 +157,8 @@ write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CL
     </array>
     <key>EnvironmentVariables</key>
     <dict>
+        <key>COLIMA_HOME</key>
+        <string>$OPENMAKE_COLIMA_HOME</string>
         <key>PATH</key>
         <string>$path:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
@@ -198,9 +187,12 @@ enable_docker_autostart() {
     fi
 }
 
-# 판정에 쓸 .env — 전체 설치는 omk 가 만들 환경 디렉터리, --minimal 은 이 클론.
-docker_target_env_file() {
-    if [[ $MINIMAL -eq 1 ]]; then printf '%s' "$ENV_FILE"; else printf '%s/%s/llm/.env' "$OMK_ROOT" "$(omk_env_name)"; fi
+check_docker_desktop_data() {
+    local guard="$SCRIPT_DIR/scripts/setup/check-docker-desktop-data.sh" existing=0 envf
+    if [[ "${MINIMAL:-0}" == 1 ]]; then envf="$ENV_FILE"; else envf="$OMK_ROOT/$(omk_env_name)/llm/.env"; fi
+    [[ ! -f "$envf" ]] || existing=1
+    PG_CONTAINER="$PG_CONTAINER" EXISTING_INSTALL="$existing" bash "$guard" \
+        || die "기존 Docker 데이터 확인이 필요합니다 — Colima 설치를 중단했습니다. 원본 데이터는 변경하지 않았습니다."
 }
 
 ensure_docker() {
@@ -209,20 +201,13 @@ ensure_docker() {
         log_info "--skip-docker — PostgreSQL/Redis 는 직접 운영 중이라고 가정합니다."
         return 0
     fi
-    if ! colima_profile_exists && installed_on_other_docker "$(docker_target_env_file)"; then
-        # 이미 기본 Docker 로 운영 중인 호스트 — DB 가 그쪽에 있다. 설치기가 옮기지 않는다.
-        docker info >/dev/null 2>&1 \
-            || die "이 호스트의 openmake 는 기본 Docker 에서 운영 중인데 Docker 가 응답하지 않습니다 — Docker 를 켠 뒤 재실행하세요."
-        docker compose version >/dev/null 2>&1 || die "docker compose(v2)를 찾을 수 없습니다."
-        log_warn "기존 설치본 — 기본 Docker 를 계속 씁니다 ($(docker --version))"
-        add_todo "전용 Colima 로 옮기려면 scripts/env/README.md 의 'Docker Desktop 에서 옮기기' 절차를 따르세요"
-        return 0
-    fi
     install_colima
     docker_cli_plugins "$HOME/.docker/config.json" "$(brew --prefix)/lib/docker/cli-plugins"
     colima_start
     export DOCKER_HOST="unix://$COLIMA_SOCK"
+    unset DOCKER_CONTEXT
     wait_docker_daemon
+    check_docker_desktop_data
     enable_docker_autostart
     docker compose version >/dev/null 2>&1 || die "docker compose(v2)를 찾을 수 없습니다."
     log_ok "$(docker --version) / compose $(docker compose version --short 2>/dev/null) — Colima 프로필 $COLIMA_PROFILE"

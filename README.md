@@ -172,8 +172,9 @@ An agent task pursues a goal across many tool-calling turns. Agents can:
 | `AGENT_TASK_QUEUE_ENABLED=true` | Global and per-user concurrency limits | — |
 
 ```bash
-docker build -t openmake-mcp-runtime:latest infra/mcp-runtime
-docker build -t openmake-task-runtime:latest infra/task-runtime
+# macOS uses Colima; on Linux/WSL use `docker build` without `--context colima-openmake`.
+docker --context colima-openmake build -t openmake-mcp-runtime:latest infra/mcp-runtime
+docker --context colima-openmake build -t openmake-task-runtime:latest infra/task-runtime
 ```
 
 **Planned**

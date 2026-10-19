@@ -52,10 +52,9 @@ log_warn() { printf "[WARN]  %s\n" "$*"; }
 log_err()  { printf "[ERR]   %s\n" "$*" >&2; }
 
 # macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다
-# (scripts/env/omk.sh 의 omk_docker_host 와 같은 규칙). 이미 정해 둔 DOCKER_HOST 는 존중한다.
-if [[ "$(uname -s)" == "Darwin" && -z "${DOCKER_HOST:-}" && -S "$HOME/.colima/openmake/docker.sock" ]]; then
-    export DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"
-fi
+# (scripts/env/omk.sh 의 omk_docker_host 와 같은 규칙). macOS 에서는 항상 Colima 를 선택한다.
+. "$REPO_ROOT/scripts/lib/colima.sh"
+openmake_select_docker
 
 # .env 에서 키 하나만 추출 (openmake_llm.sh 의 env_line 과 동일 규칙 — 전체 source 안 함).
 env_line() {
