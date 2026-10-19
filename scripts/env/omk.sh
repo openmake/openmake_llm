@@ -156,12 +156,13 @@ platform_guard() {
     esac
 }
 # macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다.
-# 사용자의 기본 docker(Docker Desktop 등)는 건드리지 않는다. 이미 정해 둔 DOCKER_HOST 는 존중한다.
+# 기본 Docker 컨텍스트 및 DOCKER_HOST 값과 무관하게 OpenMake 명령은 Colima 를 선택한다.
 # shellcheck disable=SC2120  # 인자는 omk.test.sh 가 준다 — 이 파일 안에서는 인자 없이 부른다
 omk_docker_host() { # [$1=uname -s] [$2=홈] — 인자는 테스트용
     local os="${1:-$(uname -s)}" sock="${2:-$HOME}/.colima/openmake/docker.sock"
-    [[ "$os" == "Darwin" && -z "${DOCKER_HOST:-}" && -S "$sock" ]] || return 0
+    [[ "$os" == "Darwin" ]] || return 0
     export DOCKER_HOST="unix://$sock"
+    unset DOCKER_CONTEXT
 }
 
 # ── .env 읽기/쓰기 (source 하지 않는다 — 값의 공백/특수문자 안전) ──────────────

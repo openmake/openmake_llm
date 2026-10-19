@@ -25,6 +25,8 @@
 # ==============================================================================
 set -euo pipefail
 
+if [[ "$(uname -s)" == Darwin ]]; then export DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"; unset DOCKER_CONTEXT; fi
+
 log_info() { printf "[INFO]  %s\n" "$*"; }
 log_ok()   { printf "[OK]    %s\n" "$*"; }
 log_warn() { printf "[WARN]  %s\n" "$*"; }
@@ -140,7 +142,8 @@ cat <<EOF
 남은 수동 단계 (운영 영향이 있어 이 스크립트가 대신 실행하지 않습니다):
   1) cd $DEST_DIR && cp .env.example .env  →  DATABASE_URL 등 필수값 채우기
   2) infra/docker-compose.yml 로 PostgreSQL/Redis 기동
-       docker compose --env-file .env -f infra/docker-compose.yml up -d
+       macOS: docker --context colima-openmake compose --env-file .env -f infra/docker-compose.yml up -d
+       Linux: docker compose --env-file .env -f infra/docker-compose.yml up -d
   3) (node_modules/build-artifacts 를 안 옮겼다면) npm install && npm run build
   4) DB 마이그레이션 + PM2 기동
        ./openmake_llm.sh migrate && ./openmake_llm.sh start

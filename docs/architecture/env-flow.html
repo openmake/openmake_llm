@@ -820,7 +820,7 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/
   </table></div>
 
   <h2>macOS — 전용 Colima</h2>
-  <p>macOS 의 openmake 는 자기 Colima VM(프로필 <code>openmake</code>)에서만 컨테이너를 돌린다. Docker Desktop 이 있어도 지우거나 설정을 바꾸지 않는다 — 터미널의 <code>docker</code> 는 계속 그쪽을 가리킨다.</p>
+  <p>macOS 의 OpenMake 는 전용 Colima VM(프로필 <code>openmake</code>)에서 컨테이너를 돌린다. Docker Desktop 설치는 선택 사항이며, 기존 OpenMake 데이터 이전과 확인을 마치면 제거해도 된다. OpenMake 명령은 기본 Docker 컨텍스트와 무관하게 Colima 를 선택한다.</p>
   <div class="code"><pre>docker --context colima-openmake ps      <span class="cm"># openmake 의 컨테이너 보기</span>
 colima status --profile openmake</pre></div>
 </section>

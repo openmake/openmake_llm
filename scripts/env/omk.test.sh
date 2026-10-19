@@ -390,13 +390,13 @@ ok "gate: 없는 태그 거부"             '! release_gate_check "$GC" v9.9.9'
 ok "enforce: force 기록"              "grep -q 'force-unverified v1.0.4' '$OMK_ROOT/gateenv/logs/release-gate.log'"
 ( release_gate_enforce gateenv "$GC" v1.0.1 0 ) >/dev/null 2>&1; eq "enforce: 확인된 릴리스 진행" "$?" "0"
 
-# ── docker 접속: macOS 의 전용 Colima (소켓이 있을 때만, 이미 정한 값은 존중) ──
+# ── docker 접속: macOS 의 전용 Colima 를 강제하고 Linux 는 건드리지 않는다 ──
 DH="$TMP/dh"; mkdir -p "$DH/.colima/openmake"
-eq "docker host: 소켓 없음"   "$( unset DOCKER_HOST; omk_docker_host Darwin "$DH"; echo "${DOCKER_HOST:-}" )" ""
+eq "docker host: 소켓이 없어도 Colima 선택" "$( unset DOCKER_HOST DOCKER_CONTEXT; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST" )" "unix://$DH/.colima/openmake/docker.sock"
+eq "docker host: desktop 호스트와 컨텍스트 덮어씀" "$( DOCKER_HOST=unix:///desktop DOCKER_CONTEXT=desktop-linux; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST|${DOCKER_CONTEXT:-}" )" "unix://$DH/.colima/openmake/docker.sock|"
 if python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])' "$DH/.colima/openmake/docker.sock" 2>/dev/null; then
-    eq "docker host: macOS + 소켓"  "$( unset DOCKER_HOST; omk_docker_host Darwin "$DH"; echo "${DOCKER_HOST:-}" )" "unix://$DH/.colima/openmake/docker.sock"
     eq "docker host: Linux 는 그대로" "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "${DOCKER_HOST:-}" )" ""
-    eq "docker host: 정해 둔 값 존중" "$( DOCKER_HOST=tcp://x:1; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST" )" "tcp://x:1"
+    eq "docker host: Linux 컨텍스트도 그대로" "$( DOCKER_HOST=tcp://x:1 DOCKER_CONTEXT=custom; omk_docker_host Linux "$DH"; echo "$DOCKER_HOST|$DOCKER_CONTEXT" )" "tcp://x:1|custom"
     eq "docker host: 항상 0"        "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "$?" )" "0"
 else
     FAIL=$((FAIL+1)); echo "FAIL docker host: 시험용 소켓을 만들지 못했다 (python3 없음 또는 경로가 너무 길다: $DH)"

@@ -23,6 +23,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ "$(uname -s)" == Darwin ]]; then export DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"; unset DOCKER_CONTEXT; fi
 
 if [[ -n "${TEST_DATABASE_URL:-}" ]]; then
     MODE="url"
