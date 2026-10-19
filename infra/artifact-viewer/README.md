@@ -30,12 +30,17 @@ ARTIFACT_VIEWER_SIGNING_KEY=<운영 랜덤키>              # 미설정 시 JWT_
 ## 기동 (ops — 직접 실행)
 
 ```bash
+# 저장소 루트에서 실행한다. .env 에 사용자 지정 데이터 경로가 있으면
+# vendor 준비에도 그 경로를 전달한다(.env 파일 자체를 source 하지 않는다).
+# export ARTIFACT_VIEWER_DATA_DIR=/path/to/data
+
 # 1) 라이브러리 + bootstrap 준비 (1회 / 업데이트 시)
 bash infra/artifact-viewer/fetch-vendor.sh
 
 # 2) nginx 뷰어 컨테이너 기동
-docker --context colima-openmake compose -f infra/artifact-viewer/docker-compose.yml up -d  # macOS
-# Linux/WSL: docker compose -f infra/artifact-viewer/docker-compose.yml up -d
+docker --context colima-openmake compose --env-file .env -f infra/artifact-viewer/docker-compose.yml up -d  # macOS
+# Linux/WSL: docker compose --env-file .env -f infra/artifact-viewer/docker-compose.yml up -d
+
 
 # 3) 백엔드 .env 에 ARTIFACT_VIEWER_* 설정 후 재시작
 #    (publish 시 self-contained HTML 이 data/a/<pubId>/index.html 로 export 됨)
@@ -43,6 +48,12 @@ docker --context colima-openmake compose -f infra/artifact-viewer/docker-compose
 # 확인
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8088/vendor/bootstrap.js   # 200
 ```
+
+Docker 엔진을 옮긴 뒤에는 `docker inspect openmake-artifact-viewer` 의 `/srv`
+마운트 원본이 백엔드의 `ARTIFACT_VIEWER_DATA_DIR` 과 같은지 확인한다. 미설정 시
+백엔드 기본값은 `<repo>/data/artifact-viewer` 다. nginx 의 `/` 응답(의도적인 404)만으로
+검증하지 말고, 기존 게시물의 **뷰어 열기**로 HTML·스크립트 렌더링과 접근 제어를 확인한다.
+원본 게시 파일이 다른 경로에 남아 있다면 재게시하거나 복사하기 전에 마운트부터 대조한다.
 
 ## 외부 공개 (Cloudflare Tunnel)
 

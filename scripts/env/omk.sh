@@ -1443,7 +1443,7 @@ https_export_root_ca() {
 
 # ── artifact-viewer (선택) ───────────────────────────────────────────────────
 viewer_ensure() { # $1=llm dir
-    local ldir="$1" envf="$1/.env" host origin
+    local ldir="$1" envf="$1/.env" host origin data
     [[ "$(dotenv_get "$envf" OMK_ARTIFACT_VIEWER)" == "1" ]] || return 0
     if [[ "$(llm_api_port "$ldir")" != "$VIEWER_API_PORT" ]]; then
         log_warn "artifact-viewer 는 백엔드 :$VIEWER_API_PORT 를 전제로 합니다(nginx.conf) — API :$(llm_api_port "$ldir") 인 이 환경은 건너뜁니다"
@@ -1451,8 +1451,14 @@ viewer_ensure() { # $1=llm dir
     fi
     has docker && docker info >/dev/null 2>&1 || { log_warn "docker 를 쓸 수 없어 artifact-viewer 를 건너뜁니다"; return 0; }
     log_step "artifact-viewer"
-    ( cd "$ldir" && bash infra/artifact-viewer/fetch-vendor.sh >/dev/null ) || { log_warn "artifact-viewer 라이브러리 준비 실패 — 건너뜁니다"; return 0; }
-    ( cd "$ldir" && ARTIFACT_VIEWER_PORT="$VIEWER_PORT" docker compose -p openmake-artifact-viewer \
+    data="${ARTIFACT_VIEWER_DATA_DIR:-}"
+    if [[ -z "${ARTIFACT_VIEWER_DATA_DIR+x}" ]]; then
+        data="$(node -e 'const fs = require("node:fs"); const { parseEnv } = require("node:util"); process.stdout.write(parseEnv(fs.readFileSync(process.argv[1], "utf8")).ARTIFACT_VIEWER_DATA_DIR || "")' "$envf")" || return 1
+    fi
+    [[ -n "$data" ]] || data="data/artifact-viewer"
+    case "$data" in /*) ;; *) data="$ldir/$data" ;; esac
+    ( cd "$ldir" && ARTIFACT_VIEWER_DATA_DIR="$data" bash infra/artifact-viewer/fetch-vendor.sh >/dev/null ) || { log_warn "artifact-viewer 라이브러리 준비 실패 — 건너뜁니다"; return 0; }
+    ( cd "$ldir" && ARTIFACT_VIEWER_DATA_DIR="$data" ARTIFACT_VIEWER_PORT="$VIEWER_PORT" docker compose --env-file "$envf" -p openmake-artifact-viewer \
         -f infra/artifact-viewer/docker-compose.yml up -d >/dev/null ) || { log_warn "artifact-viewer 기동 실패 — 건너뜁니다"; return 0; }
     host="$(dotenv_get "$envf" OMK_HTTPS_HOST)"
     if [[ -n "$host" ]]; then
