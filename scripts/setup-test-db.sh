@@ -23,6 +23,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$SCRIPT_DIR/scripts/lib/colima.sh"
+openmake_select_docker
 
 if [[ -n "${TEST_DATABASE_URL:-}" ]]; then
     MODE="url"

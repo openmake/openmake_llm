@@ -44,6 +44,7 @@ const { apiPort: API_PORT, webPort: WEB_PORT, instanceSuffix: INSTANCE_SUFFIX } 
 // (openmake_llm.sh 도 안 함) 여기서 직접 읽지 않으면 설정이 있어도 /tmp 로 떨어진다.
 // /tmp 는 재부팅·주기 정리로 사라져 장애 후 원인 로그가 없을 수 있다(2026-08-27 점검).
 try { require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true }); } catch { /* dotenv 없으면 셸 env 만 */ }
+const DOCKER_ENV = require('./scripts/resolve-docker.cjs').resolveDockerEnv();
 const LOG_DIR = process.env.OMK_LOG_DIR || '/tmp';
 const logFile = (name) => path.join(LOG_DIR, name);
 
@@ -141,6 +142,7 @@ const apps = [{
 
         // 환경 설정
         env: {
+            ...DOCKER_ENV,
             NODE_ENV: 'production',
             PORT: API_PORT,
             // 문서 첨부 추출(opendataloader-pdf)은 Java 11+ 가 필요하다.
@@ -268,6 +270,7 @@ if (process.env.KNOWLEDGE_WORKER_MODE === 'external' && fs.existsSync(KNOWLEDGE_
         cwd: __dirname,
         env: {
             NODE_ENV: 'production',
+            ...DOCKER_ENV,
             KNOWLEDGE_WORKER_MODE: 'external',
             // PDF 텍스트 추출(opendataloader-pdf)은 Java 11+ — API 앱과 같은 탐지 결과를 넘긴다
             ...(JAVA_HOME ? { JAVA_HOME } : {}),

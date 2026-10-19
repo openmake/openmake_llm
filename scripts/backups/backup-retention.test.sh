@@ -11,6 +11,7 @@ PASS=0; FAIL=0
 eq() { if [[ "$2" == "$3" ]]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); printf 'FAIL %s\n  expected: %s\n  actual:   %s\n' "$1" "$3" "$2"; fi; }
 
 REPO="$TMP/repo"; mkdir -p "$REPO/scripts/backups"
+mkdir -p "$REPO/scripts/lib"; cp "$HERE/../lib/colima.sh" "$REPO/scripts/lib/"
 cp "$HERE/db-backup.sh" "$HERE/db-restore.sh" "$HERE/backup-lib.sh" "$REPO/scripts/backups/"
 BIN="$TMP/bin"; mkdir -p "$BIN"
 # 가짜 docker — 대상 컨테이너가 떠 있다고 답하고, pg_dump 는 바이트를 내고, pg_restore --list 는 성공한다

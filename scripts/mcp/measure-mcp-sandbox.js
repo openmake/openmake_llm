@@ -97,7 +97,7 @@ function classify(s) {
         }
         console.log('\nℹ️  docker 네트워크: 서버별 full(bridge) | none(--network none).');
         console.log('    internal-net flag 서버는 full 유지(127.0.0.1→host.docker.internal 자동 치환으로 호스트 DB 접속).');
-        console.log('    선행: 런타임 이미지 빌드 — docker build -t openmake-mcp-runtime:latest infra/mcp-runtime');
+        console.log('    선행: macOS — docker --context colima-openmake build -t openmake-mcp-runtime:latest infra/mcp-runtime; Linux/WSL — docker build ...');
     } catch (e) {
         console.error('ERR:', e.message);
         process.exit(1);

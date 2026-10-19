@@ -171,6 +171,10 @@ describe('task-sandbox pure functions', () => {
             expect(resolveWriteViaContainer({ TASK_SANDBOX_WRITE_VIA_CONTAINER: 'true' })).toBe(true);
             expect(resolveWriteViaContainer({ TASK_SANDBOX_WRITE_VIA_CONTAINER: 'false', DOCKER_HOST: 'unix:///Users/u/.colima/openmake/docker.sock' })).toBe(false);
         });
+        it('resolveWriteViaContainer: 외장 COLIMA_HOME 의 전용 소켓도 인식한다', () => {
+            expect(resolveWriteViaContainer({ COLIMA_HOME: '/Volumes/App Data/Colima', DOCKER_HOST: 'unix:///Volumes/App Data/Colima/openmake/docker.sock' })).toBe(true);
+            expect(resolveWriteViaContainer({ COLIMA_HOME: '/Volumes/App Data/Colima', DOCKER_HOST: 'unix:///var/run/docker.sock' })).toBe(false);
+        });
 
         /** docker 대역 — 받은 인자를 기록하고, `exec -i … sh <경로>` 는 stdin 을 workspace 의 그 경로에 쓴다. */
         async function fakeDocker(dir: string, opts: { execFails?: boolean } = {}): Promise<{ bin: string; log: string }> {
