@@ -83,5 +83,10 @@ RUN cd /home/node/kakao-mcp \
     && npm prune --omit=dev \
     && rm -rf /home/node/.cache/npm/_cacache 2>/dev/null || true
 
+# Chromium crashpad/NSS 는 read-only 샌드박스에서도 설정 디렉토리에 써야 한다.
+# 도구를 영속 경로에 설치한 뒤 적용한다(/tmp 는 런타임 tmpfs 로 가려진다).
+ENV XDG_CONFIG_HOME=/tmp/.config \
+    XDG_DATA_HOME=/tmp/.local/share
+
 # 진입점 없음 — sandbox-docker 가 `docker run ... <image> <command> <args>` 로
 # 실행할 MCP command(npx/uvx/바이너리/사전설치 바이너리)를 직접 지정한다.
