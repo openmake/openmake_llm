@@ -15,7 +15,7 @@ FROM node:24.21.0-bookworm-slim
 # uv (uvx) + python + git — uvx 계열 MCP 서버용. uv 는 /usr/local/bin 에 설치(비-root 도 사용 가능).
 # git: uvx 의 git+https 의존성 fetch 용 (Qwen-MM-Plugins 등 git 배포 MCP 서버 — 2026-08-16 실측).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl python3 git \
+    && apt-get install -y --no-install-recommends ca-certificates curl python3 git ffmpeg \
     && curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh \
     && apt-get purge -y curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -82,6 +82,11 @@ RUN cd /home/node/kakao-mcp \
     && npm install --no-audit --no-fund \
     && npm prune --omit=dev \
     && rm -rf /home/node/.cache/npm/_cacache 2>/dev/null || true
+
+# Chromium crashpad/NSS 는 read-only 샌드박스에서도 설정 디렉토리에 써야 한다.
+# 도구를 영속 경로에 설치한 뒤 적용한다(/tmp 는 런타임 tmpfs 로 가려진다).
+ENV XDG_CONFIG_HOME=/tmp/.config \
+    XDG_DATA_HOME=/tmp/.local/share
 
 # 진입점 없음 — sandbox-docker 가 `docker run ... <image> <command> <args>` 로
 # 실행할 MCP command(npx/uvx/바이너리/사전설치 바이너리)를 직접 지정한다.

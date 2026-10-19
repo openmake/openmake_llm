@@ -126,6 +126,8 @@ export function resolveWriteViaContainer(env: Record<string, string | undefined>
     const v = env.TASK_SANDBOX_WRITE_VIA_CONTAINER;
     if (v === 'true') return true;
     if (v === 'false') return false;
+    const colimaHome = env.COLIMA_HOME?.replace(/\/$/, '');
+    if (colimaHome && env.DOCKER_HOST === `unix://${colimaHome}/openmake/docker.sock`) return true;
     return /^unix:\/\/.*\/\.colima\//.test(env.DOCKER_HOST ?? '');
 }
 

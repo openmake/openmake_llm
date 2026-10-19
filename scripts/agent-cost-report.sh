@@ -19,6 +19,8 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$REPO/scripts/lib/colima.sh"
+openmake_select_docker
 DAYS="${1:-30}"
 CONTAINER="${PG_CONTAINER:-openmake-postgres}"
 
