@@ -15,7 +15,7 @@ FROM node:24.21.0-bookworm-slim
 # uv (uvx) + python + git — uvx 계열 MCP 서버용. uv 는 /usr/local/bin 에 설치(비-root 도 사용 가능).
 # git: uvx 의 git+https 의존성 fetch 용 (Qwen-MM-Plugins 등 git 배포 MCP 서버 — 2026-08-16 실측).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl python3 git \
+    && apt-get install -y --no-install-recommends ca-certificates curl python3 git ffmpeg \
     && curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh \
     && apt-get purge -y curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
