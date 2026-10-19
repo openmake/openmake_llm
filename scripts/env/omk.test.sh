@@ -392,8 +392,8 @@ ok "enforce: force 기록"              "grep -q 'force-unverified v1.0.4' '$OMK
 
 # ── docker 접속: macOS 의 전용 Colima 를 강제하고 Linux 는 건드리지 않는다 ──
 DH="$TMP/dh"; mkdir -p "$DH/.colima/openmake"
-eq "docker host: 소켓이 없어도 Colima 선택" "$( unset DOCKER_HOST DOCKER_CONTEXT; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST" )" "unix://$DH/.colima/openmake/docker.sock"
-eq "docker host: desktop 호스트와 컨텍스트 덮어씀" "$( DOCKER_HOST=unix:///desktop DOCKER_CONTEXT=desktop-linux; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST|${DOCKER_CONTEXT:-}" )" "unix://$DH/.colima/openmake/docker.sock|"
+eq "docker host: 소켓이 없어도 Colima 선택" "$( unset COLIMA_HOME DOCKER_HOST DOCKER_CONTEXT; docker() { return 1; }; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST" )" "unix://$DH/.colima/openmake/docker.sock"
+eq "docker host: desktop 호스트와 컨텍스트 덮어씀" "$( unset COLIMA_HOME; docker() { return 1; }; DOCKER_HOST=unix:///desktop DOCKER_CONTEXT=desktop-linux; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST|${DOCKER_CONTEXT:-}" )" "unix://$DH/.colima/openmake/docker.sock|"
 if python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])' "$DH/.colima/openmake/docker.sock" 2>/dev/null; then
     eq "docker host: Linux 는 그대로" "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "${DOCKER_HOST:-}" )" ""
     eq "docker host: Linux 컨텍스트도 그대로" "$( DOCKER_HOST=tcp://x:1 DOCKER_CONTEXT=custom; omk_docker_host Linux "$DH"; echo "$DOCKER_HOST|$DOCKER_CONTEXT" )" "tcp://x:1|custom"
@@ -487,6 +487,8 @@ eq "dev up 래퍼: 클론 안의 dev 는 클론 것" "$(cd "$WC" && OMK_ROOT="$D
 # ── 웹 빌드: Next 는 rewrites(/api · /generated)의 대상을 빌드 때 굳힌다 — 빌드가 그 환경의 API 포트를 받아야 한다 ──
 # (실행 때 넣은 API_PROXY_TARGET 은 이미 굳은 빌드본에 닿지 않는다. 기본 포트가 아닌 환경에서 생성 이미지가 500 이던 원인.)
 BT="$TMP/buildtarget"; mkdir -p "$BT/bin"
+mkdir -p "$BT/scripts/lib"
+cp "$HERE/../../scripts/lib/colima.sh" "$BT/scripts/lib/"
 cp "$HERE/../../openmake_llm.sh" "$BT/"
 printf 'PORT=52417\n' > "$BT/.env"
 printf '#!/usr/bin/env bash\nprintf "%%s" "${API_PROXY_TARGET:-}" > "%s/seen"\n' "$BT" > "$BT/bin/npm"; chmod +x "$BT/bin/npm"
@@ -500,6 +502,7 @@ done
 # `pm2 restart <이름>` 은 ecosystem 을 다시 읽지 않는다 — kill_timeout 을 10000→35000 으로 올린 변경이 기존
 # 설치본에 닿지 않아 종료 절차가 10초에 SIGKILL 로 끊겼다(2026-10-11 staging 실측). 가짜 pm2 로 호출만 기록한다.
 RS="$TMP/restarttarget"; mkdir -p "$RS/bin" "$RS/apps/api/dist"
+mkdir -p "$RS/scripts/lib"; cp "$HERE/../../scripts/lib/colima.sh" "$RS/scripts/lib/"
 cp "$HERE/../../openmake_llm.sh" "$RS/"; : > "$RS/apps/api/dist/cli.js"; : > "$RS/next.js"
 printf 'OMK_INSTANCE=rs\nPORT=52499\nRS_FROM_DOTENV=fresh\n' > "$RS/.env"
 cat > "$RS/ecosystem.config.js" <<'EOF'

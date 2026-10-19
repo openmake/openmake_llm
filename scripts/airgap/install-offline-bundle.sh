@@ -25,7 +25,6 @@
 # ==============================================================================
 set -euo pipefail
 
-if [[ "$(uname -s)" == Darwin ]]; then export DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"; unset DOCKER_CONTEXT; fi
 
 log_info() { printf "[INFO]  %s\n" "$*"; }
 log_ok()   { printf "[OK]    %s\n" "$*"; }
@@ -110,6 +109,12 @@ fi
 if [[ -f "$BUNDLE_DIR/docker-images.tar" ]]; then
     log_info "4/5 docker 이미지 로드"
     command -v docker >/dev/null 2>&1 || { log_err "docker 미설치 — 먼저 설치하세요"; exit 1; }
+    if [[ -f "$DEST_DIR/scripts/lib/colima.sh" ]]; then
+        . "$DEST_DIR/scripts/lib/colima.sh"
+        openmake_select_docker
+    elif [[ "$(uname -s)" == Darwin ]]; then
+        export DOCKER_CONTEXT=colima-openmake; unset DOCKER_HOST
+    fi
     docker load -i "$BUNDLE_DIR/docker-images.tar"
     log_ok "docker 이미지 로드 완료"
 else

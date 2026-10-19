@@ -158,11 +158,14 @@ platform_guard() {
 # macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다.
 # 기본 Docker 컨텍스트 및 DOCKER_HOST 값과 무관하게 OpenMake 명령은 Colima 를 선택한다.
 # shellcheck disable=SC2120  # 인자는 omk.test.sh 가 준다 — 이 파일 안에서는 인자 없이 부른다
-omk_docker_host() { # [$1=uname -s] [$2=홈] — 인자는 테스트용
-    local os="${1:-$(uname -s)}" sock="${2:-$HOME}/.colima/openmake/docker.sock"
-    [[ "$os" == "Darwin" ]] || return 0
-    export DOCKER_HOST="unix://$sock"
-    unset DOCKER_CONTEXT
+# curl|bash bootstrap has no checkout yet; the named context is its only macOS target.
+[[ -z "$SCRIPT_DIR" || ! -f "$SCRIPT_DIR/../lib/colima.sh" ]] || . "$SCRIPT_DIR/../lib/colima.sh"
+# shellcheck disable=SC2120  # Explicit parameters are used by fixture tests.
+omk_docker_host() { # [$1=platform] [$2=user home]
+    if declare -F openmake_select_docker >/dev/null; then openmake_select_docker "$@"; return; fi
+    [[ "${1:-$(uname -s)}" == Darwin ]] || return 0
+    export DOCKER_CONTEXT=colima-openmake
+    unset DOCKER_HOST
 }
 
 # ── .env 읽기/쓰기 (source 하지 않는다 — 값의 공백/특수문자 안전) ──────────────
@@ -1230,7 +1233,7 @@ runtime_image_tag()   { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf 'latest' || p
 runtime_image_names() { local t; t="$(runtime_image_tag "$1")"; printf 'openmake-mcp-runtime:%s openmake-task-runtime:%s' "$t" "$t"; }
 # 작업 workspace 는 컨테이너에 bind mount 된다. 기본값(/tmp)은 재부팅 때 사라지고, macOS 의 Colima 는
 # 홈 디렉터리만 VM 에 공유해 /tmp 가 컨테이너에서 보이지 않는다 — 환경 디렉터리 안에 둔다.
-uses_colima() { [[ "${DOCKER_HOST:-}" == "unix://$HOME/.colima/openmake/docker.sock" ]]; }
+uses_colima() { [[ "${DOCKER_CONTEXT:-}" == colima-openmake || "${DOCKER_HOST:-}" == "unix://${COLIMA_HOME:-$HOME/.colima}/openmake/docker.sock" ]]; }
 sandbox_root_ensure() { # $1=.env $2=env
     dotenv_ensure "$1" TASK_SANDBOX_ROOT "$(env_dir "$2")/task-workspaces"
     mkdir -p "$(dotenv_get "$1" TASK_SANDBOX_ROOT)"

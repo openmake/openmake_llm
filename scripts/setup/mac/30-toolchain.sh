@@ -40,8 +40,11 @@ pm2_has_app() { pm2 describe "$1" >/dev/null 2>&1; }
 # 기본 Docker 컨텍스트는 바꾸지 않으며, OpenMake 명령만 전용 소켓을 선택한다.
 DOCKER_COMPOSE="docker compose"
 readonly COLIMA_PROFILE="openmake"
-# (COLIMA_HOME 은 colima 가 읽는 환경변수 이름이라 쓰지 않는다 — 사용자가 export 해 둔 값을 덮게 된다.)
-readonly COLIMA_DIR="$HOME/.colima/$COLIMA_PROFILE"
+# 명시한 COLIMA_HOME 또는 등록된 프로필의 경로를 자동 기동에도 그대로 쓴다.
+. "$SCRIPT_DIR/scripts/lib/colima.sh"
+OPENMAKE_COLIMA_HOME="$(openmake_colima_home)" || die "Colima 경로를 확인할 수 없습니다."
+readonly OPENMAKE_COLIMA_HOME
+readonly COLIMA_DIR="$OPENMAKE_COLIMA_HOME/$COLIMA_PROFILE"
 readonly COLIMA_SOCK="$COLIMA_DIR/docker.sock"
 readonly COLIMA_AGENT="com.openmake.colima"
 readonly COLIMA_AGENT_PLIST="$HOME/Library/LaunchAgents/$COLIMA_AGENT.plist"
@@ -75,10 +78,12 @@ colima_start_args() {
 }
 
 install_colima() {
-    local missing="" formula
+    local missing="" formula prefix
     for formula in colima docker docker-compose docker-buildx; do
         brew list --formula "$formula" >/dev/null 2>&1 || missing="$missing $formula"
     done
+    prefix="$(brew --prefix)" || die "Homebrew 경로를 확인할 수 없습니다."
+    export PATH="$prefix/bin:$PATH"
     [[ -z "${missing// /}" ]] && return 0
     log_info "설치:$missing"
     # 단어 분할이 의도다 — brew formula 이름 목록.
@@ -104,7 +109,8 @@ docker_cli_plugins() { # $1=config.json $2=플러그인 디렉터리
 
 colima_start() {
     # colima 는 ~/.colima 가 있으면 그곳을, 없고 XDG_CONFIG_HOME 이 있으면 그 아래를 쓴다 — 접속 규칙의 소켓 경로와 맞춘다.
-    mkdir -p "$HOME/.colima"
+    export COLIMA_HOME="$OPENMAKE_COLIMA_HOME"
+    mkdir -p "$COLIMA_HOME"
     if colima status --profile "$COLIMA_PROFILE" >/dev/null 2>&1; then
         return 0
     fi
@@ -151,6 +157,8 @@ write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CL
     </array>
     <key>EnvironmentVariables</key>
     <dict>
+        <key>COLIMA_HOME</key>
+        <string>$OPENMAKE_COLIMA_HOME</string>
         <key>PATH</key>
         <string>$path:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
@@ -179,10 +187,12 @@ enable_docker_autostart() {
     fi
 }
 
-migrate_docker_desktop_data() {
-    local migration="$SCRIPT_DIR/scripts/setup/mac/migrate-docker-desktop-data.sh"
-    [[ -x "$migration" ]] || return 0
-    "$migration" --if-available || die "Docker Desktop 데이터 이전 실패 — 원본 볼륨은 보존했습니다. 위 오류를 해결한 뒤 재실행하세요."
+check_docker_desktop_data() {
+    local guard="$SCRIPT_DIR/scripts/setup/check-docker-desktop-data.sh" existing=0 envf
+    if [[ "${MINIMAL:-0}" == 1 ]]; then envf="$ENV_FILE"; else envf="$OMK_ROOT/$(omk_env_name)/llm/.env"; fi
+    [[ ! -f "$envf" ]] || existing=1
+    PG_CONTAINER="$PG_CONTAINER" EXISTING_INSTALL="$existing" bash "$guard" \
+        || die "기존 Docker 데이터 확인이 필요합니다 — Colima 설치를 중단했습니다. 원본 데이터는 변경하지 않았습니다."
 }
 
 ensure_docker() {
@@ -197,7 +207,7 @@ ensure_docker() {
     export DOCKER_HOST="unix://$COLIMA_SOCK"
     unset DOCKER_CONTEXT
     wait_docker_daemon
-    migrate_docker_desktop_data
+    check_docker_desktop_data
     enable_docker_autostart
     docker compose version >/dev/null 2>&1 || die "docker compose(v2)를 찾을 수 없습니다."
     log_ok "$(docker --version) / compose $(docker compose version --short 2>/dev/null) — Colima 프로필 $COLIMA_PROFILE"
