@@ -1,6 +1,7 @@
 /**
  * 명령 한 건 실행 — bash -c 로 돌리고 stdout·stderr 를 로그 파일과 메모리에 함께 남긴다.
  * 시간 초과면 SIGTERM, 10초 뒤에도 살아 있으면 SIGKILL(프로세스 그룹 전체).
+ * bash 가 먼저 끝나도 그룹에 남은 프로세스가 있으면 SIGKILL 을 보낸 뒤에 결과를 돌려준다.
  * 로그 WriteStream 의 'finish'(end 콜백)를 기다린 뒤에 결과를 돌려준다.
  * spawn 자체가 실패하면('error' — 없는 cwd·EAGAIN 등) 예외 없이 exitCode null 의 실패 결과로 돌려준다.
  * spawn 뒤에 'error' 가 오면 시간 초과와 같은 순서로 프로세스 그룹을 끝낸 뒤 exitCode null 의 실패 결과로 돌려준다.
@@ -64,11 +65,19 @@ export function runCommand({ cmd, cwd, env, timeoutSec, logPath, spawnImpl = spa
         child.stderr.on('data', stderrMask.push);
         let timedOut = false;
         let killTimer = null;
+        let killSent = false;
+        // bash 가 먼저 끝났는데 그룹이 남아 SIGKILL 을 기다리는 동안의 'close' 결과
+        let pendingClose = null;
+        const groupAlive = () => {
+            try { process.kill(-child.pid, 0); return true; } catch { return false; }
+        };
         // 프로세스 그룹 전체에 SIGTERM, KILL_GRACE_MS 뒤에도 살아 있으면 SIGKILL
         const terminateGroup = () => {
             try { process.kill(-child.pid, 'SIGTERM'); } catch { /* 이미 끝남 */ }
             killTimer = setTimeout(() => {
                 try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 이미 끝남 */ }
+                killSent = true;
+                if (pendingClose) finish(...pendingClose);
             }, KILL_GRACE_MS);
         };
         const timer = setTimeout(() => {
@@ -106,6 +115,15 @@ export function runCommand({ cmd, cwd, env, timeoutSec, logPath, spawnImpl = spa
             lateError = extra;
             if (!killTimer) terminateGroup(); // 시간 초과가 이미 끝내는 중이면 그 순서를 따른다
         });
-        child.on('close', (code, signal) => (lateError ? finish(null, signal, lateError) : finish(code, signal)));
+        child.on('close', (code, signal) => {
+            const result = lateError ? [null, signal, lateError] : [code, signal];
+            // 끝내는 중에 bash 만 먼저 끝나고 그룹(SIGTERM 을 무시한 손자 등)이 남았으면 SIGKILL 을 보낸 뒤에 끝낸다
+            if (killTimer && !killSent && groupAlive()) {
+                clearTimeout(timer);
+                pendingClose = result;
+                return;
+            }
+            finish(...result);
+        });
     });
 }
