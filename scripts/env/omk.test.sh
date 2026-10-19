@@ -38,6 +38,16 @@ eq "ref 그 밖의 이름" "$(env_default_ref qa-1)"    "main"
 RB="$TMP/rb"; git init -q "$RB" && git -C "$RB" -c user.email=t@example.com -c user.name=t commit -q --allow-empty -m x && git -C "$RB" branch -M main
 eq "remote branch: 있음"        "$(remote_has_branch "$RB" main >/dev/null 2>&1; echo $?)" "0"
 eq "remote branch: 없음"        "$(remote_has_branch "$RB" dev >/dev/null 2>&1; echo $?)"  "1"
+# ── lock 변경 감지: update 가 의존성을 설치할지(바뀐 커밋 범위에 package-lock.json 이 있을 때만) ──
+LR="$TMP/lock"; git init -q "$LR"
+lr_commit() { git -C "$LR" add -A && git -C "$LR" -c user.email=t@example.com -c user.name=t commit -q -m "$1" && git -C "$LR" rev-parse --short HEAD; }
+echo '{"v":1}' > "$LR/package-lock.json"; L1="$(lr_commit one)"
+echo x > "$LR/other.txt";                  L2="$(lr_commit two)"
+echo '{"v":2}' > "$LR/package-lock.json"; L3="$(lr_commit three)"
+eq "lock: 다른 파일만 바뀜 → 설치 안 함" "$(lockfile_changed "$LR" "$L1" "$L2"; echo $?)" "1"
+eq "lock: 바뀜 → 설치"                  "$(lockfile_changed "$LR" "$L2" "$L3"; echo $?)" "0"
+eq "lock: 같은 커밋 → 설치 안 함"        "$(lockfile_changed "$LR" "$L3" "$L3"; echo $?)" "1"
+eq "lock: 범위 전체(HEAD 표기)"          "$(lockfile_changed "$LR" "$L1" HEAD; echo $?)" "0"
 eq "remote branch: 읽지 못함"   "$(remote_has_branch "$TMP/없는-저장소" dev >/dev/null 2>&1; echo $?)" "2"
 ok "validate rejects local" '! ( validate_env local ) >/dev/null 2>&1'
 DV="$TMP/devclone"; mkdir -p "$DV"
@@ -380,13 +390,13 @@ ok "gate: 없는 태그 거부"             '! release_gate_check "$GC" v9.9.9'
 ok "enforce: force 기록"              "grep -q 'force-unverified v1.0.4' '$OMK_ROOT/gateenv/logs/release-gate.log'"
 ( release_gate_enforce gateenv "$GC" v1.0.1 0 ) >/dev/null 2>&1; eq "enforce: 확인된 릴리스 진행" "$?" "0"
 
-# ── docker 접속: macOS 의 전용 Colima (소켓이 있을 때만, 이미 정한 값은 존중) ──
+# ── docker 접속: macOS 의 전용 Colima 를 강제하고 Linux 는 건드리지 않는다 ──
 DH="$TMP/dh"; mkdir -p "$DH/.colima/openmake"
-eq "docker host: 소켓 없음"   "$( unset DOCKER_HOST; omk_docker_host Darwin "$DH"; echo "${DOCKER_HOST:-}" )" ""
+eq "docker host: 소켓이 없어도 Colima 선택" "$( unset COLIMA_HOME DOCKER_HOST DOCKER_CONTEXT; docker() { return 1; }; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST" )" "unix://$DH/.colima/openmake/docker.sock"
+eq "docker host: desktop 호스트와 컨텍스트 덮어씀" "$( unset COLIMA_HOME; docker() { return 1; }; DOCKER_HOST=unix:///desktop DOCKER_CONTEXT=desktop-linux; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST|${DOCKER_CONTEXT:-}" )" "unix://$DH/.colima/openmake/docker.sock|"
 if python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])' "$DH/.colima/openmake/docker.sock" 2>/dev/null; then
-    eq "docker host: macOS + 소켓"  "$( unset DOCKER_HOST; omk_docker_host Darwin "$DH"; echo "${DOCKER_HOST:-}" )" "unix://$DH/.colima/openmake/docker.sock"
     eq "docker host: Linux 는 그대로" "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "${DOCKER_HOST:-}" )" ""
-    eq "docker host: 정해 둔 값 존중" "$( DOCKER_HOST=tcp://x:1; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST" )" "tcp://x:1"
+    eq "docker host: Linux 컨텍스트도 그대로" "$( DOCKER_HOST=tcp://x:1 DOCKER_CONTEXT=custom; omk_docker_host Linux "$DH"; echo "$DOCKER_HOST|$DOCKER_CONTEXT" )" "tcp://x:1|custom"
     eq "docker host: 항상 0"        "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "$?" )" "0"
 else
     FAIL=$((FAIL+1)); echo "FAIL docker host: 시험용 소켓을 만들지 못했다 (python3 없음 또는 경로가 너무 길다: $DH)"
@@ -477,6 +487,8 @@ eq "dev up 래퍼: 클론 안의 dev 는 클론 것" "$(cd "$WC" && OMK_ROOT="$D
 # ── 웹 빌드: Next 는 rewrites(/api · /generated)의 대상을 빌드 때 굳힌다 — 빌드가 그 환경의 API 포트를 받아야 한다 ──
 # (실행 때 넣은 API_PROXY_TARGET 은 이미 굳은 빌드본에 닿지 않는다. 기본 포트가 아닌 환경에서 생성 이미지가 500 이던 원인.)
 BT="$TMP/buildtarget"; mkdir -p "$BT/bin"
+mkdir -p "$BT/scripts/lib"
+cp "$HERE/../../scripts/lib/colima.sh" "$BT/scripts/lib/"
 cp "$HERE/../../openmake_llm.sh" "$BT/"
 printf 'PORT=52417\n' > "$BT/.env"
 printf '#!/usr/bin/env bash\nprintf "%%s" "${API_PROXY_TARGET:-}" > "%s/seen"\n' "$BT" > "$BT/bin/npm"; chmod +x "$BT/bin/npm"
@@ -490,6 +502,7 @@ done
 # `pm2 restart <이름>` 은 ecosystem 을 다시 읽지 않는다 — kill_timeout 을 10000→35000 으로 올린 변경이 기존
 # 설치본에 닿지 않아 종료 절차가 10초에 SIGKILL 로 끊겼다(2026-10-11 staging 실측). 가짜 pm2 로 호출만 기록한다.
 RS="$TMP/restarttarget"; mkdir -p "$RS/bin" "$RS/apps/api/dist"
+mkdir -p "$RS/scripts/lib"; cp "$HERE/../../scripts/lib/colima.sh" "$RS/scripts/lib/"
 cp "$HERE/../../openmake_llm.sh" "$RS/"; : > "$RS/apps/api/dist/cli.js"; : > "$RS/next.js"
 printf 'OMK_INSTANCE=rs\nPORT=52499\nRS_FROM_DOTENV=fresh\n' > "$RS/.env"
 cat > "$RS/ecosystem.config.js" <<'EOF'
@@ -657,7 +670,8 @@ redeploy_probe() { # $1=트랙(release|"") $2=릴리스가 앞섰나(0|1) $3…=
       restore_lockfiles() { :; }; searxng_ensure() { :; }; env_backup_run() { :; }; release_gate_enforce() { :; }
       runtime_images_ensure() { RUNTIME_CHANGED=0; }; ops_sandbox_guard() { :; }; litellm_dir() { echo "$TMP/no-litellm"; }
       bench_update() { :; }; proxy_dir() { echo "$TMP/no-proxy"; }
-      git() { [[ "$*" == *"merge -q --ff-only"* ]] && return 0; command git "$@"; }
+      git() { case "$*" in *"merge -q --ff-only"*) return 0 ;; *"rev-parse HEAD"*) echo deadbeef ;; *) command git "$@" ;; esac; }
+      lockfile_changed() { [[ "${RP_LOCK:-0}" == 1 ]]; }; deps_install() { echo "deps" >> "$RD/calls"; }
       # shellcheck disable=SC2034  # cmd_env_update 가 읽는다
       RELEASE_TAG=v9.9.9; cmd_env_update smk "$@" ) >/dev/null 2>&1
     tr '\n' '|' < "$RD/calls"
@@ -667,6 +681,10 @@ eq "redeploy: 일반 트랙 평소엔 종전 그대로"          "$(redeploy_pro
 eq "redeploy: 릴리스가 최신이어도 다시 deploy"       "$(redeploy_probe release 0 --yes --redeploy)" "osh deploy --yes|"
 eq "redeploy: 릴리스가 최신이면 평소엔 생략"         "$(redeploy_probe release 0 --yes)" ""
 eq "redeploy: 릴리스가 앞섰으면 종전대로 한 번 deploy" "$(redeploy_probe release 1 --yes --redeploy)" "osh deploy --yes|"
+# 릴리스 track: ff 로 받은 범위에 package-lock.json 이 있으면 deploy 전에 의존성을 맞춘다 — 최신이면(ff 없음) 설치하지 않는다
+eq "deps: 릴리스 ff 가 lock 을 바꿨으면 설치 → deploy"   "$(RP_LOCK=1 redeploy_probe release 1 --yes)" "deps|osh deploy --yes|"
+eq "deps: lock 그대로면 종전대로 deploy 만"              "$(RP_LOCK=0 redeploy_probe release 1 --yes)" "osh deploy --yes|"
+eq "deps: 최신(ff 없음)이면 --redeploy 여도 설치 안 함"   "$(RP_LOCK=1 redeploy_probe release 0 --yes --redeploy)" "osh deploy --yes|"
 # 승격 워크플로: main 의 필수 체크에 환경 dev 의 표지가 없으면 자동 머지를 걸지 않는다 — 걸면 CI 만으로 main 에 들어간다.
 PW="$HERE/../../.github/workflows/promote.yml"
 ok "promote: 필수 체크에 omk/env-dev 가 있는지 본다" "grep -q 'required_status_checks.contexts' '$PW' && grep -q 'index(\"omk/env-dev\")' '$PW'"
@@ -680,6 +698,44 @@ printf 'PORT=52417\n' > "$SM/.env"
 # shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
 AU="$( load_toolchain() { :; }; require_pm2() { :; }; pm2() { [[ "$1" != start ]] || printf '%s ' "$@" > "$TMP/pm2-args"; [[ "$1" != describe ]]; }; cmd_env_autoupdate smk >/dev/null 2>&1; cat "$TMP/pm2-args" )"
 ok "autoupdate: 토큰이 없으면 예전 그대로" '[[ "$AU" == *"--if-behind --yes "* && "$AU" != *--report* ]]'
+
+# ── 뷰어: exporter 의 .env 경로를 vendor 준비와 nginx mount 에 함께 전달 ──
+viewer_data_probe() {
+    local probe="$TMP/viewer-probe" configured="$1"
+    mkdir -p "$probe/infra/artifact-viewer"
+    printf 'OMK_ARTIFACT_VIEWER=1\nPORT=52416\n' > "$probe/.env"
+    [[ -z "$configured" ]] || printf 'ARTIFACT_VIEWER_DATA_DIR="%s"\n' "$configured" >> "$probe/.env"
+    [[ -z "${3:-}" ]] || printf '%s\n' "$3" >> "$probe/.env"
+    printf '#!/usr/bin/env bash\nprintf "vendor:%%s\\n" "${ARTIFACT_VIEWER_DATA_DIR:-UNSET}" >> "$VIEWER_PROBE_LOG"\n' > "$probe/infra/artifact-viewer/fetch-vendor.sh"
+    : > "$probe/calls"
+    ( export VIEWER_PROBE_LOG="$probe/calls"
+      if [[ $# -ge 2 && "$2" != __UNSET__ ]]; then export ARTIFACT_VIEWER_DATA_DIR="$2"; else unset ARTIFACT_VIEWER_DATA_DIR; fi
+      docker() {
+          [[ "$1" != compose ]] || {
+              printf 'compose:%s\n' "${ARTIFACT_VIEWER_DATA_DIR:-UNSET}" >> "$VIEWER_PROBE_LOG"
+              printf 'arg:%s\n' "$@" >> "$VIEWER_PROBE_LOG"
+          }
+          return 0
+      }
+      viewer_ensure "$probe"
+    ) >/dev/null 2>&1
+    cat "$probe/calls"
+}
+VD="$(viewer_data_probe "$TMP/published artifacts")"
+eq "viewer: vendor 와 compose 에 설정 경로 전달(공백 포함)" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/published artifacts" "$TMP/published artifacts")"
+eq "viewer: compose 가 앱 .env 를 명시적으로 읽음" "$(printf '%s\n' "$VD" | grep -A1 '^arg:--env-file$')" "$(printf 'arg:--env-file\narg:%s' "$TMP/viewer-probe/.env")"
+VD="$(viewer_data_probe '')"
+eq "viewer: 미설정 시 같은 repo 기본 경로 사용" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/viewer-probe/data/artifact-viewer" "$TMP/viewer-probe/data/artifact-viewer")"
+VD="$(viewer_data_probe 'data/published artifacts')"
+eq "viewer: 상대 경로도 앱 repo 기준으로 mount" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/viewer-probe/data/published artifacts" "$TMP/viewer-probe/data/published artifacts")"
+VD="$(viewer_data_probe "$TMP/from-file" "$TMP/from-shell")"
+eq "viewer: shell 환경이 .env 보다 우선" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/from-shell" "$TMP/from-shell")"
+VD="$(viewer_data_probe '' __UNSET__ 'ARTIFACT_VIEWER_DATA_DIR=/data/artifacts # publications')"
+eq "viewer: 인라인 주석은 경로에 포함하지 않음" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:/data/artifacts\ncompose:/data/artifacts')"
+VD="$(viewer_data_probe '' __UNSET__ 'ARTIFACT_VIEWER_DATA_DIR="/data/hash # file" # publications')"
+eq "viewer: 따옴표 내부 hash 는 보존하고 외부 주석만 제거" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:/data/hash # file\ncompose:/data/hash # file')"
+VD="$(viewer_data_probe "$TMP/from-file" '')"
+eq "viewer: 명시적인 빈 shell 환경이면 backend 기본 경로 사용" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/viewer-probe/data/artifact-viewer" "$TMP/viewer-probe/data/artifact-viewer")"
 
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]

@@ -30,7 +30,7 @@ feature/<주제> ──PR(CI 필수)──▶ dev ──사람이 `omk env updat
 
 **online 과 외부 설치는 main 이 아니라 최신 릴리스 태그를 따른다.** main 은 공개 저장소이지만 개발이 모이는 곳이다 — staging 에서 확인하기
 전의 main 을 운영이나 외부 설치자가 받으면 안 된다. `omk env install online` 의 기본 ref 는 `release`(가장 높은 `vX.Y.Z` 태그)이고,
-`omk env update online` 은 새 릴리스 태그가 있을 때만 그 태그까지 fast-forward 한 뒤 `openmake_llm.sh deploy` 를 부른다. 어느 환경이든
+`omk env update online` 은 새 릴리스 태그가 있을 때만 그 태그까지 fast-forward 한 뒤(그 사이 `package-lock.json` 이 바뀌었으면 `npm install` 로 의존성을 맞추고) `openmake_llm.sh deploy` 를 부른다. 어느 환경이든
 `--ref release` 로 같은 방식을 고를 수 있다(`.env` 의 `OMK_TRACK=release`). `openmake_bench` 는 릴리스 태그가 없어 main 을 쓴다.
 bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm 의 `--ref` 와 같은 이름**을 찾으므로, llm 에만 있는 `feature/*` 를
 올리면서 bench 도 붙일 때는 `--bench --bench-ref main` 으로 준다(같은 이름의 브랜치가 없으면 bench 클론에서 설치가 멈춘다).
@@ -369,19 +369,19 @@ PM2 데몬은 처음 띄운 node 를 계속 쓴다 — node 를 바꾼 뒤 `pm2 
 1. `.node-version`·`mise.toml`·Dockerfile 두 개(`infra/mcp-runtime`·`infra/egress-proxy`)를 **한 PR** 로 바꾼다 (`npm run test:infra` 통과).
 2. 각 환경에서 node 를 새 판으로 바꾼다 — 맥은 `brew unpin node@24` → `brew upgrade node@24`(또는 `mise install node@<버전>`) → `brew pin node@24`.
 3. `pm2 update` 로 데몬을 새 node 로 다시 띄운다.
-4. 런타임 이미지를 다시 빌드한다 (`omk env update`, 또는 `docker build` 를 직접).
+4. 런타임 이미지를 다시 빌드한다 (`omk env update`, 또는 macOS 에서 `docker --context colima-openmake build` 를 직접).
 
 ## Docker — macOS 는 전용 Colima
 
-macOS 의 openmake 는 **자기 Colima VM**(프로필 `openmake`)에서만 컨테이너를 돌린다. Docker Desktop 은
-로그인·약관·업데이트 창에서 사람을 기다리므로 서버에 맞지 않는다. Mac 에 Docker Desktop 이 있어도
-지우거나 설정을 바꾸지 않는다 — 터미널의 `docker` 는 계속 그쪽을 가리키고, openmake 만 Colima 를 쓴다.
+macOS 의 OpenMake 는 **자기 Colima VM**(프로필 `openmake`)에서만 컨테이너를 돌린다. Docker Desktop 은
+필요하지 않다. 새 설치는 Homebrew Docker CLI 와 Colima 를 준비하며, OpenMake 명령은 Desktop 기본 컨텍스트나
+`DOCKER_HOST`·`DOCKER_CONTEXT` 환경변수에 기대지 않고 전용 Colima 소켓을 선택한다. Docker Desktop 은 기존 데이터 이전을 확인한 뒤 제거해도 된다.
 
 | | |
 |---|---|
-| 최소 사양 | Apple Silicon · RAM 16GB (Docker Desktop 을 함께 쓰면 32GB 권장) |
+| 최소 사양 | Apple Silicon · RAM 16GB |
 | VM 크기 | 옵션 없이 설치하면 호스트에 맞춘다 — 메모리는 호스트의 절반(최대 8GB · 최소 2GB), CPU 는 코어 수(최대 4), 디스크 60GB. 직접 정하려면 처음 만들 때 `OMK_COLIMA_CPU`·`OMK_COLIMA_MEMORY`·`OMK_COLIMA_DISK` |
-| 접속 | `DOCKER_HOST=unix://$HOME/.colima/openmake/docker.sock` — omk·`openmake_llm.sh`·`uninstall.sh`·`db-backup.sh` 는 소켓이 있으면 스스로 설정하고, 앱은 `.env` 의 값을 쓴다 |
+| 접속 | `DOCKER_HOST=unix://<COLIMA_HOME>/openmake/docker.sock` — 명시한 Colima 홈, 등록된 프로필 경로, `~/.colima` 순서로 고르고 `.env`·PM2·자동 기동에 같은 값을 전달한다. Desktop 컨텍스트는 사용하지 않는다 |
 | 자동 시작 | LaunchAgent `com.openmake.colima` (로그인 시). 로그는 `~/.openmake/logs/colima.log` |
 | 컨테이너 보기 | `omk env status <env>` 또는 `docker --context colima-openmake ps` (Docker Desktop 화면에는 나오지 않는다) |
 | VM 크기 바꾸기 | `colima stop --profile openmake` → `colima start --profile openmake --activate=false --memory 12` |
@@ -397,33 +397,24 @@ workspace 를 밖에서 직접 고치는 도구를 붙일 때는 같은 점을 �
 `--no-runtime-images` 로 준비한 뒤 샌드박스를 직접 켤 때는 `.env` 의 `TASK_SANDBOX_ROOT` 를 홈 아래 경로로 둔다 —
 Colima 는 홈 디렉터리만 VM 에 공유해, 기본값(`/tmp/…`)은 컨테이너에서 보이지 않는다.
 
-### Docker Desktop 에서 옮기기
+### Docker Desktop 에서 이전
 
-이미 Docker Desktop(또는 다른 Docker)으로 운영 중인 호스트는 설치기를 다시 돌려도 옮기지 않는다 — DB 가 그쪽에 있다.
-**한 호스트는 한 Docker 만 쓴다** — 기본 Docker 에 `openmake[-<env>]-postgres` 컨테이너가 하나라도 남아 있으면 Colima 를 설치하지 않는다.
+macOS 명령은 기본 Docker 컨텍스트와 무관하게 OpenMake 전용 Colima 프로필을 사용한다.
+`COLIMA_HOME` 을 명시하면 그 경로를 사용하며, 미설정 시 등록된 `colima-openmake` 컨텍스트의
+소켓 경로를 확인하고, 신규 설치는 `~/.colima` 를 사용한다. 외장 디스크 경로도 설치기·PM2·자동 기동·백업에 함께 전달된다.
 
-옮기는 동안 **기본 Docker 는 켜 둔다**(꺼져 있으면 설치기가 컨테이너 유무를 볼 수 없어 멈춘다).
-`reset` 은 환경 디렉터리를 통째로 지운다 — DB 는 백업에서, `.env` 는 `--keep-env` 가 보존한 것에서 되살리고,
-그 밖에 남길 파일(업로드·생성 파일 등 `~/.openmake/<env>/llm` 아래의 것)은 먼저 다른 곳에 복사해 둔다.
+설치기는 기존 PostgreSQL 컨테이너·Compose 데이터 볼륨을 **메타데이터로만** 검사한다.
+이미 해당 인스턴스의 Colima 컨테이너가 있으면 보존하고, Docker Desktop 에만 OpenMake 데이터가 있거나
+기존 설치의 원본을 확인할 수 없으면 새 빈 DB 를 만들지 않고 설치를 중단한다.
+설치 중 DB 볼륨을 자동 복사하거나 별도 PostgreSQL/Redis 검증 서버를 띄우지 않는다.
 
-환경이 하나인 호스트:
+기존 데이터는 먼저 원본·암호화 키·bind mount/볼륨 구성을 백업하고 서비스를 정상 종료한 뒤,
+DB 논리 백업·복원 등으로 이전한다. 외부 캐시·메일·아티팩트 경로도 실제 사용 경로와 대조해야 한다.
+복원한 DB 의 테이블·서비스 응답과 앱의 로그인·채팅·공유 뷰어를 확인한 뒤 설치를 다시 실행한다.
+원본 Docker Desktop 컨테이너·볼륨은 검증이 끝날 때까지 보존한다.
 
-```bash
-omk env backup <env>                                   # 1. DB 백업 → ~/.openmake/backups/<env>/ (reset 에도 남는다)
-omk env reset <env> --keep-env --reinstall --yes       # 2. 정리 후 같은 .env 로 다시 설치 — 이제 Colima 로 간다
-cd ~/.openmake/<env>/llm && ./openmake_llm.sh db-restore ~/.openmake/backups/<env>/<백업 파일>   # 3. 복원
-```
-
-환경이 여럿인 호스트는 **전부 정리한 뒤에** 다시 설치한다:
-
-```bash
-omk env backup <env>                                   # 환경마다
-omk env reset <env> --keep-env --yes                   # 환경마다 — 끝에 보존한 .env 의 위치를 알려준다
-OMK_RESTORE_ENV_FROM="<그 위치>" omk env install <env>   # 환경마다 — .env 를 되살려야 암호화 키·비밀번호가 백업과 맞는다
-cd ~/.openmake/<env>/llm && ./openmake_llm.sh db-restore ~/.openmake/backups/<env>/<백업 파일>
-```
-
-`.env` 를 되살리지 않고 설치하면 암호화 키가 새로 만들어져, 복원한 DB 의 자격증명을 풀 수 없고 발급한 API 키가 통하지 않는다.
+Docker Desktop 을 지워도 CLI 가 남도록 설치기는 Homebrew 의 `docker`, `docker-compose`, `docker-buildx` 를 준비한다.
+Linux·WSL 의 Docker Engine 설정은 변경하지 않는다.
 
 ### Colima 를 걷어낼 때
 
@@ -489,7 +480,7 @@ omk env reset staging --keep-data            # DB 볼륨은 남김 (.env 도 함
 
 **소유권 가드** — 이름이 환경 이름에서 파생되기 때문에, omk 밖의 설치본이 같은 인스턴스 이름을 쓰고 있으면 위험하다. 예를 들어 예전 방식(`./install.sh --instance staging` → `~/.openmake/chat-staging`)으로 설치한 호스트에서 `omk env reset staging` 은 **그 설치본의 DB 볼륨**을 지우게 된다. 그래서 `install`·`reset` 은 컨테이너의 compose 라벨과 PM2 앱의 cwd 로 주인을 확인하고, `~/.openmake/<env>/` 밖의 것이면 거부한다. 기존 설치본을 omk 로 옮기려면 그 디렉터리에서 `./openmake_llm.sh db-dump` → `./uninstall.sh` → `omk env install <env>` → `db-restore` 순서로 한다. 가드를 끄는 것은 `OMK_FORCE_FOREIGN=1` 뿐이다.
 
-손으로 하려면 위 표 그대로 `pm2 delete …` → `docker rm -f …` → `docker volume rm …` → `rm -rf ~/.openmake/staging`. 전역 도구(Node·Docker·PM2·Caddy)는 다른 환경이 쓰므로 건드리지 않는다.
+손으로 하려면 위 표 그대로 `pm2 delete …` → `docker --context colima-openmake rm -f …` → `docker --context colima-openmake volume rm …` → `rm -rf ~/.openmake/staging`. 전역 도구(Node·Docker CLI·PM2·Caddy)는 다른 환경이 쓰므로 건드리지 않는다.
 
 ## 로컬 개발 — `omk dev` (작업 클론 · 핫 리로드)
 
