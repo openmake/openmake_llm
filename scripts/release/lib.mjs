@@ -91,12 +91,21 @@ function lineAt(text, index) {
 /**
  * spec 이 null 이면 null(해당 없음). anchor 를 못 찾으면 모두 null(미확인). 찾았는데 항목이 없으면 0, 수가 아니면 null.
  * keysOn anchor 면 마지막 anchor 가 시작한 줄 전체를 읽는다 — anchor 가 접두만 잡든 `.*$` 로 끝나든 결과가 같다.
+ * anchor 가 공백부터 잡으면(`\\s*Tests:`·`\\n?Tests:`·`(?=\\nTests:)`) 출력에서 anchor 위치부터 공백(앞 줄 꼬리 공백·
+ * 공백뿐인 줄·\r·\n·탭)을 건너뛴 첫 글자의 줄을 읽는다. 그 뒤에 공백만 남으면 모두 null(미확인).
  */
 export function parseCounts(output, spec) {
     if (spec === null) return null;
+    const unknown = { passed: null, failed: null, skipped: null };
     const anchors = [...output.matchAll(new RegExp(spec.anchor, 'gm'))];
-    if (anchors.length === 0) return { passed: null, failed: null, skipped: null };
-    const scope = spec.keysOn === 'anchor' ? lineAt(output, anchors[anchors.length - 1].index) : output;
+    if (anchors.length === 0) return unknown;
+    const last = anchors[anchors.length - 1];
+    let scope = output;
+    if (spec.keysOn === 'anchor') {
+        const skip = output.slice(last.index).search(/\S/);
+        if (skip === -1) return unknown;
+        scope = lineAt(output, last.index + skip);
+    }
     const read = (k) => {
         if (!spec[k]) return null;
         const v = lastMatchNumber(scope, spec[k]);

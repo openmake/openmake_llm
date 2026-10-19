@@ -125,11 +125,14 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
     }
 
     it('hello 프레임(deviceId/label/folderName) → bridge_ready → 연결됨 상태', async () => {
-        await makeConn().connect();
-        const hello = await server.waitFor((f) => f.type === 'bridge_hello');
-        expect(hello).toMatchObject({ deviceId: 'test-device-1', label: 'unit · test', folderName: path.basename(base) });
-        await new Promise((r) => setTimeout(r, 50));
-        expect(statuses.some((s) => s.startsWith('연결됨'))).toBe(true);
+        await withFakeClock(async () => {
+            await makeConn().connect();
+            await openAndHello(1);
+            const hello = await server.waitFor((f) => f.type === 'bridge_hello');
+            expect(hello).toMatchObject({ deviceId: 'test-device-1', label: 'unit · test', folderName: path.basename(base) });
+            await until('bridge_ready', () => statuses.some((s) => s.startsWith('연결됨')));
+            expect(statuses.some((s) => s.startsWith('연결됨'))).toBe(true);
+        });
     });
 
     it('hello 프레임에 지원 요청 종류와 PC 식별자를 싣는다', async () => {
@@ -138,16 +141,22 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
             serverUrl: `http://127.0.0.1:${server.port}`, core, deviceId: 'pc-1-r-abc', hostId: 'pc-1', label: 'unit · test',
             headers: () => ({ Authorization: 'Bearer omk_test' }),
         });
-        await conn.connect();
-        const hello = await server.waitFor((f) => f.type === 'bridge_hello') as Frame & { capabilities?: string[]; hostId?: string };
-        expect(hello.hostId).toBe('pc-1');
-        expect(hello.capabilities).toEqual([...BRIDGE_KINDS]);
+        await withFakeClock(async () => {
+            await conn!.connect();
+            await openAndHello(1);
+            const hello = await server.waitFor((f) => f.type === 'bridge_hello') as Frame & { capabilities?: string[]; hostId?: string };
+            expect(hello.hostId).toBe('pc-1');
+            expect(hello.capabilities).toEqual([...BRIDGE_KINDS]);
+        });
     });
 
     it('hostId 를 주지 않으면 hello 에 싣지 않는다 (서버가 deviceId 로 본다)', async () => {
-        await makeConn().connect();
-        const hello = await server.waitFor((f) => f.type === 'bridge_hello') as Frame & { hostId?: string };
-        expect('hostId' in hello).toBe(false);
+        await withFakeClock(async () => {
+            await makeConn().connect();
+            await openAndHello(1);
+            const hello = await server.waitFor((f) => f.type === 'bridge_hello') as Frame & { hostId?: string };
+            expect('hostId' in hello).toBe(false);
+        });
     });
 
     it('만료된 요청은 실행하지 않고 거절한다', async () => {
@@ -338,6 +347,9 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
             headers: () => ({ Authorization: 'Bearer omk_test' }), onStatus: (s) => statuses.push(s),
             reconnectMs: 50, handshakeTimeoutMs: 100,
         });
+        // 이 테스트만 실시간이다 — ws 는 handshakeTimeout 을 http.request({ timeout }) → socket.setTimeout 으로 넘기는데,
+        // 그 타이머는 Node 내부 타이머 목록에서 돌아 Jest 가짜 시계로 밀 수 없다. 그래서 상한 있는 폴링(4초, Jest 기본 5초 안)으로 기다린다.
+        // 결정적으로 만들려면 소스에 접속 시간 제한 타이머를 주입할 이음매가 필요하다.
         try {
             await conn.connect();
             const deadline = Date.now() + 4000;
@@ -384,23 +396,31 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
 
     it('bridge_notice(approval_pending)는 검증 후 onNotice 로 넘기고 서버로 아무 프레임도 보내지 않는다', async () => {
         const notices: BridgeNotice[] = [];
-        await noticeConn(notices).connect();
-        await server.waitFor((f) => f.type === 'bridge_hello');
-        await new Promise((r) => setTimeout(r, 50));
-        const before = server.received.length;
-        server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: 'file_ops' });
-        await new Promise((r) => setTimeout(r, 150));
-        expect(notices).toEqual([{ notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: 'file_ops' }]);
-        expect(server.received.length).toBe(before); // 단방향 — 응답·실행 없음
+        await withFakeClock(async () => {
+            await noticeConn(notices).connect();
+            await openAndHello(1);
+            await until('bridge_ready', () => statuses.some((s) => s.startsWith('연결됨')));
+            const before = server.received.length;
+            server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: 'file_ops' });
+            await until('알림 도착', () => notices.length > 0);
+            // 알림 처리 뒤 probe 를 보낸다 — 같은 소켓이라 알림에 대한 응답 프레임이 있었다면 probe 보다 먼저 도착한다
+            conn!.socket()!.send(JSON.stringify({ type: 'probe' }));
+            await until('probe 도착', () => server.received.some((f) => f.type === 'probe'));
+            expect(notices).toEqual([{ notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: 'file_ops' }]);
+            expect(server.received.filter((f) => f.type !== 'probe').length).toBe(before); // 단방향 — 응답·실행 없음
+        });
     });
 
     it('notifyBrowserControl 은 bridge_event(browser_control) 단방향 프레임을 보낸다', async () => {
-        await noticeConn([]).connect();
-        await server.waitFor((f) => f.type === 'bridge_hello');
-        await new Promise((r) => setTimeout(r, 50));
-        conn!.notifyBrowserControl(false);
-        const f = await server.waitFor((x) => x.type === 'bridge_event');
-        expect(f).toEqual({ type: 'bridge_event', kind: 'browser_control', user: false });
+        await withFakeClock(async () => {
+            await noticeConn([]).connect();
+            await openAndHello(1);
+            await until('bridge_ready', () => statuses.some((s) => s.startsWith('연결됨')));
+            conn!.notifyBrowserControl(false);
+            await until('bridge_event', () => server.received.some((x) => x.type === 'bridge_event'));
+            const f = await server.waitFor((x) => x.type === 'bridge_event');
+            expect(f).toEqual({ type: 'bridge_event', kind: 'browser_control', user: false });
+        });
     });
 
     it('연결 전 notifyBrowserControl 은 아무것도 하지 않는다(던지지 않는다)', () => {
@@ -409,14 +429,18 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
 
     it('종류·taskId·toolName 이 부적합한 알림은 버린다', async () => {
         const notices: BridgeNotice[] = [];
-        await noticeConn(notices).connect();
-        await server.waitFor((f) => f.type === 'bridge_hello');
-        server.send({ type: 'bridge_notice', notice: 'run_command', taskId: 'task-aaaaaaaa-0001', toolName: 'x' });
-        server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: '../../etc', toolName: 'x' });
-        server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001' });
-        server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: '   ' });
-        await new Promise((r) => setTimeout(r, 150));
-        expect(notices).toEqual([]);
+        await withFakeClock(async () => {
+            await noticeConn(notices).connect();
+            await openAndHello(1);
+            server.send({ type: 'bridge_notice', notice: 'run_command', taskId: 'task-aaaaaaaa-0001', toolName: 'x' });
+            server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: '../../etc', toolName: 'x' });
+            server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001' });
+            server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: '   ' });
+            // 끝 표지 — 만료 요청은 코어 없이 곧바로 거절 응답이 온다. 프레임은 순서대로 처리되니 앞 알림 넷은 이미 처리됐다
+            server.send({ type: 'bridge_exec', kind: 'read', path: 'f.txt', reqId: 'r-sentinel', expiresAt: Date.now() - EXPIRY_SKEW_TOLERANCE_MS - 1000 });
+            await until('끝 표지 응답', () => server.received.some((f) => f.type === 'bridge_result' && f.reqId === 'r-sentinel'));
+            expect(notices).toEqual([]);
+        });
     });
 
     it('도구 이름은 제어문자를 걷어내고 길이를 자른다 (서버 발 텍스트는 표시 전용)', () => {
@@ -431,19 +455,24 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
 
     it('상태 알림에 코드와 치환값을 함께 준다 — 호스트 다국어 표시용', async () => {
         const codes: Array<[string, string | undefined]> = [];
-        await noticeConn([], codes).connect();
-        await server.waitFor((f) => f.type === 'bridge_hello');
-        await new Promise((r) => setTimeout(r, 50));
-        expect(codes).toEqual(expect.arrayContaining([['connecting', undefined], ['connected', path.basename(fs.realpathSync(base))]]));
-        conn!.disconnect();
-        await new Promise((r) => setTimeout(r, 100));
-        expect(codes[codes.length - 1]).toEqual(['closed', undefined]);
+        await withFakeClock(async () => {
+            await noticeConn([], codes).connect();
+            await openAndHello(1);
+            await until('bridge_ready', () => codes.some(([c]) => c === 'connected'));
+            expect(codes).toEqual(expect.arrayContaining([['connecting', undefined], ['connected', path.basename(fs.realpathSync(base))]]));
+            conn!.disconnect();
+            await until('종료', () => codes[codes.length - 1]?.[0] === 'closed');
+            expect(codes[codes.length - 1]).toEqual(['closed', undefined]);
+        });
     });
 
     it('hello 에 authClose 를 싣는다 — 서버가 인증 실패를 사유와 함께 닫아도 된다는 표시', async () => {
-        await makeConn().connect();
-        const hello = await server.waitFor((f) => f.type === 'bridge_hello') as Frame & { authClose?: boolean };
-        expect(hello.authClose).toBe(true);
+        await withFakeClock(async () => {
+            await makeConn().connect();
+            await openAndHello(1);
+            const hello = await server.waitFor((f) => f.type === 'bridge_hello') as Frame & { authClose?: boolean };
+            expect(hello.authClose).toBe(true);
+        });
     });
 
     /** 닫는 사유 검증용 연결 — 상태 코드와 재연결 대기를 기록한다. */

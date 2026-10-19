@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -255,6 +255,34 @@ test('parseCounts: keysOn anchor 면 anchor 가 잡은 줄 전체를 읽는다 �
     assert.deepEqual(validateCommands(doc([cmd({ counts: { ...NODE, anchor: '^ℹ tests \\d+' } })])), []);
 });
 
+test('parseCounts: anchor 가 줄바꿈부터 잡아도(\\s*·\\n? 로 시작) 앞 줄이 아니라 anchor 가 든 줄을 읽는다', () => {
+    const out = 'Tests: 1 passed, 1 total\nmore\n\nTests:       2 failed, 4321 passed, 1 skipped, 4324 total\n';
+    const want = { passed: 4321, failed: 2, skipped: 1 };
+    for (const anchor of ['\\s*Tests:', '\\n?Tests:', '\\s*^Tests:.*$']) {
+        assert.deepEqual(parseCounts(out, { ...JEST, anchor }), want, anchor);
+    }
+    assert.deepEqual(parseCounts(out.replace(/\n/g, '\r\n'), { ...JEST, anchor: '\\s*Tests:' }), want, 'CRLF');
+});
+
+test('parseCounts: anchor 가 앞 줄의 꼬리 공백·공백뿐인 줄·탭·0폭 앞보기로 시작해도 anchor 가 든 줄을 읽는다', () => {
+    const want = { passed: 5, failed: 0, skipped: 1 };
+    const cases = [
+        ['꼬리 공백 LF', 'Previous: 91 passed, 7 failed, 8 skipped   \nTests: 5 passed, 1 skipped\n', '\\s*Tests:'],
+        ['꼬리 공백 CRLF', 'Previous: 91 passed, 7 failed, 8 skipped   \r\nTests: 5 passed, 1 skipped\r\n', '\\s*Tests:'],
+        ['공백뿐인 줄', 'Previous: 91 passed, 7 failed, 8 skipped\n   \nTests: 5 passed, 1 skipped\n', '\\s*Tests:'],
+        ['탭', 'Previous: 91 passed, 7 failed, 8 skipped\t\n\t\nTests: 5 passed, 1 skipped\n', '\\s*Tests:'],
+        ['0폭 앞보기', 'Previous: 91 passed, 7 failed, 8 skipped\nTests: 5 passed, 1 skipped\n', '(?=\\nTests:)'],
+    ];
+    for (const [name, out, anchor] of cases) {
+        assert.deepEqual(parseCounts(out, { ...JEST, anchor }), want, name);
+    }
+});
+
+test('parseCounts: 마지막 anchor 뒤에 공백만 남으면 앞 줄을 읽지 않고 미확인(null)', () => {
+    const out = 'Previous: 91 passed, 7 failed, 8 skipped\n  \n';
+    assert.deepEqual(parseCounts(out, { ...JEST, anchor: '\\s+$' }), { passed: null, failed: null, skipped: null });
+});
+
 test('validateCommands: null·객체 아닌 항목은 예외가 아니라 검증 오류', () => {
     for (const bad of [null, 42, 'x']) {
         const errs = validateCommands(doc([cmd(), bad]));
@@ -299,4 +327,105 @@ test('runCommand: spawn 실패(없는 cwd → ENOENT)는 예외 없이 실패 �
     assert.match(res.output, /ENOENT/);
     assert.equal(readFileSync(join(dir, 'err.log'), 'utf8'), res.output);
     assert.equal(buildReceipt(cmd(), res, meta).status, 'failed');
+});
+
+test('runCommand: spawn 뒤에 온 \'error\'(kill 실패 등)는 프로세스 그룹을 끝낸 뒤 실패 결과로 한 번만 돌아온다', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    let child;
+    // spawn 은 그대로 쓰고 자식만 붙잡는다 — 'spawn' 이 온 뒤 'error' 를 흉내 낸다
+    const spawnImpl = (...args) => {
+        child = spawn(...args);
+        child.once('spawn', () => child.emit('error', new Error('흉내 낸 kill 실패')));
+        return child;
+    };
+    const res = await runCommand({ cmd: 'sleep 30 & sleep 30; wait', cwd: dir, env: process.env, timeoutSec: 60, logPath: join(dir, 'late.log'), spawnImpl });
+    const groupAlive = () => { try { process.kill(-child.pid, 0); return true; } catch { return false; } };
+    try {
+        assert.equal(groupAlive(), false, '프로세스 그룹이 남았다');
+        assert.equal(res.exitCode, null);
+        assert.equal(res.timedOut, false);
+        assert.ok(res.durationMs < 15_000);
+        assert.match(res.output, /실행 실패: 흉내 낸 kill 실패/);
+        assert.equal(buildReceipt(cmd(), res, meta).status, 'failed');
+    } finally {
+        try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 이미 끝남 */ }
+    }
+});
+
+// bash 가 exec 한 node 부모가 SIGTERM 을 무시하는 node 손자를 띄운다. 손자는 stdio 를 넘겨받지 않아(ignore + ipc)
+// 부모가 죽으면 runner 의 'close' 가 손자보다 먼저 온다 — 그래도 그룹이 남아 있으면 SIGKILL 까지 보내야 한다
+function writeTermIgnoringTree(dir) {
+    const childPath = join(dir, 'grandchild.mjs');
+    const parentPath = join(dir, 'parent.mjs');
+    writeFileSync(childPath, "process.on('SIGTERM', () => {});\nsetInterval(() => {}, 1000);\nprocess.send('ready');\n");
+    writeFileSync(parentPath, [
+        "import { spawn } from 'node:child_process';",
+        `const c = spawn(process.execPath, [${JSON.stringify(childPath)}], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });`,
+        "c.on('message', (m) => { if (m === 'ready') process.stdout.write(`READY ${c.pid}\\n`); });",
+        '',
+    ].join('\n'));
+    return `exec ${JSON.stringify(process.execPath)} ${JSON.stringify(parentPath)}`;
+}
+const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+async function waitGone(pid, ms = 3000) {
+    const until = Date.now() + ms;
+    while (pidAlive(pid) && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
+    return !pidAlive(pid);
+}
+const readyPid = (output) => Number(/READY (\d+)/.exec(output)?.[1]);
+
+test('runCommand: 시간 초과 때 bash 가 먼저 끝나도 SIGTERM 을 무시한 손자까지 SIGKILL 로 끝낸다', { timeout: 30_000 }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    let child;
+    const spawnImpl = (...args) => (child = spawn(...args));
+    let grandchild;
+    try {
+        const res = await runCommand({ cmd: writeTermIgnoringTree(dir), cwd: dir, env: process.env, timeoutSec: 1, logPath: join(dir, 'term.log'), spawnImpl });
+        grandchild = readyPid(res.output);
+        assert.ok(Number.isInteger(grandchild), `손자가 준비되지 않았다: ${res.output}`);
+        assert.equal(res.timedOut, true);
+        assert.equal(res.exitCode, null);
+        assert.equal(readFileSync(join(dir, 'term.log'), 'utf8'), res.output);
+        assert.equal(buildReceipt(cmd(), res, meta).status, 'failed');
+        assert.equal(await waitGone(grandchild), true, 'SIGTERM 을 무시한 손자가 남았다');
+        assert.equal(await waitGone(-child.pid), true, '프로세스 그룹이 남았다');
+    } finally {
+        if (grandchild) try { process.kill(grandchild, 'SIGKILL'); } catch { /* 이미 끝남 */ }
+        if (child?.pid) try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 이미 끝남 */ }
+    }
+});
+
+test('runCommand: spawn 뒤 \'error\' 때 bash 가 먼저 끝나도 SIGTERM 을 무시한 손자까지 SIGKILL 로 끝낸다', { timeout: 30_000 }, async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    let child;
+    let grandchild;
+    // 실제 spawn 을 쓰고, 손자가 준비됐다는 줄(READY)을 본 뒤에 'error' 를 흉내 낸다
+    const spawnImpl = (...args) => {
+        child = spawn(...args);
+        let seen = '';
+        child.stdout.on('data', (b) => {
+            seen += b.toString();
+            const pid = readyPid(seen);
+            if (Number.isInteger(pid) && grandchild === undefined) {
+                grandchild = pid;
+                child.emit('error', new Error('흉내 낸 kill 실패'));
+            }
+        });
+        return child;
+    };
+    try {
+        const res = await runCommand({ cmd: writeTermIgnoringTree(dir), cwd: dir, env: process.env, timeoutSec: 60, logPath: join(dir, 'late-term.log'), spawnImpl });
+        assert.ok(Number.isInteger(grandchild), `손자가 준비되지 않았다: ${res.output}`);
+        assert.equal(readyPid(res.output), grandchild);
+        assert.equal(res.timedOut, false);
+        assert.equal(res.exitCode, null);
+        assert.match(res.output, /실행 실패: 흉내 낸 kill 실패/);
+        assert.equal(readFileSync(join(dir, 'late-term.log'), 'utf8'), res.output);
+        assert.equal(buildReceipt(cmd(), res, meta).status, 'failed');
+        assert.equal(await waitGone(grandchild), true, 'SIGTERM 을 무시한 손자가 남았다');
+        assert.equal(await waitGone(-child.pid), true, '프로세스 그룹이 남았다');
+    } finally {
+        if (grandchild) try { process.kill(grandchild, 'SIGKILL'); } catch { /* 이미 끝남 */ }
+        if (child?.pid) try { process.kill(-child.pid, 'SIGKILL'); } catch { /* 이미 끝남 */ }
+    }
 });
