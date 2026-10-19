@@ -46,7 +46,7 @@
         "@openmake/config": "*",
         "@opentelemetry/api": "^1.9.1",
         "@opentelemetry/exporter-trace-otlp-http": "^0.223.0",
-        "@opentelemetry/instrumentation-express": "^0.71.0",
+        "@opentelemetry/instrumentation-express": "^0.71.1",
         "@opentelemetry/instrumentation-http": "^0.223.0",
         "@opentelemetry/resources": "^2.8.0",
         "@opentelemetry/sdk-node": "^0.223.0",
