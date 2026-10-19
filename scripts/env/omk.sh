@@ -32,7 +32,7 @@
 # 사용:
 #   # 아무것도 없는 PC 에서 한 줄 (macOS / Linux / Windows→WSL2 안에서)
 #   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
-#     | bash -s -- env install staging --public-url https://staging-chat.example.com
+#     | bash -s -- env install staging --tailscale
 #
 #   omk env install <env> [--ref BR] [--bench [--bench-ref BR]] [--public-url URL] [--no-proxy] [--no-searxng] [--no-runtime-images] [--tailscale] [--host H]…
 #                         [--no-litellm] [--no-default-model] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
@@ -1779,7 +1779,13 @@ env_summary() { # $1=env
     echo "  llm       $ldir  ($(git -C "$ldir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?') @ $(git -C "$ldir" rev-parse --short HEAD 2>/dev/null || echo '?'))"
     echo "            web http://localhost:$web   api http://localhost:$api"
     [[ -d "$bdir" ]] && echo "  bench     $bdir  → http://localhost:${bport:-?}"
-    [[ -n "$pport" ]] && echo "  proxy     http://localhost:$pport  (외부 공개는 터널/DNS 를 이 포트로: scripts/cloudflared/config.yml.example)"
+    if [[ -n "$pport" ]]; then
+        if [[ "$env" == staging ]]; then
+            echo "  proxy     http://localhost:$pport  (staging: Tailscale 호스트명:$pport 로 직접 접속)"
+        else
+            echo "  proxy     http://localhost:$pport  (외부 공개는 터널/DNS 를 이 포트로: scripts/cloudflared/config.yml.example)"
+        fi
+    fi
     local eh; for eh in $(dotenv_get "$ldir/.env" OMK_ENV_HOSTS | tr ',' ' '); do [[ -z "$pport" ]] || echo "  다른 기기  http://$eh:$pport"; done
     [[ -n "$(dotenv_get "$ldir/.env" OMK_APP_URL | grep -E '^https?://' | grep -v localhost || true)" ]] && echo "  공개 주소  $(dotenv_get "$ldir/.env" OMK_APP_URL)"
     [[ -z "$(dotenv_get "$ldir/.env" OMK_HTTPS_HOST)" ]] || echo "  HTTPS     https://$(dotenv_get "$ldir/.env" OMK_HTTPS_HOST)  (루트 인증서: $(https_root_ca_out))"

@@ -696,5 +696,24 @@ printf 'PORT=52417\n' > "$SM/.env"
 AU="$( load_toolchain() { :; }; require_pm2() { :; }; pm2() { [[ "$1" != start ]] || printf '%s ' "$@" > "$TMP/pm2-args"; [[ "$1" != describe ]]; }; cmd_env_autoupdate smk >/dev/null 2>&1; cat "$TMP/pm2-args" )"
 ok "autoupdate: 토큰이 없으면 예전 그대로" '[[ "$AU" == *"--if-behind --yes "* && "$AU" != *--report* ]]'
 
+# staging 은 Cloudflare Tunnel 없이 Tailscale 로 접속하고, online 안내는 유지한다.
+summary_probe() (
+    llm_dir() { echo "$TMP/no-llm"; }
+    bench_dir() { echo "$TMP/no-bench"; }
+    dotenv_get() { case "$2" in OMK_PROXY_PORT) echo 43210 ;; OMK_ENV_HOSTS) echo tailhost ;; OMK_APP_URL) echo http://localhost:3000 ;; esac; }
+    search_line() { :; }
+    litellm_line() { :; }
+    default_model_base() { :; }
+    https_root_ca_out() { :; }
+    env_summary "$1"
+)
+# shellcheck disable=SC2034  # ok below evaluates this summary variable
+STAGING_SUMMARY="$(summary_probe staging)"
+# shellcheck disable=SC2034  # ok below evaluates this summary variable
+ONLINE_SUMMARY="$(summary_probe online)"
+ok "status staging: Tailscale 직접 접속 안내" '[[ "$STAGING_SUMMARY" == *"Tailscale 호스트명:43210"* ]]'
+ok "status staging: 터널 설정 참조 없음" '[[ "$STAGING_SUMMARY" != *"cloudflared"* ]]'
+ok "status online: 기존 터널 안내 유지" '[[ "$ONLINE_SUMMARY" == *"scripts/cloudflared/config.yml.example"* ]]'
+
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]

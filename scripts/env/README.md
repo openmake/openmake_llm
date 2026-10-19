@@ -9,7 +9,7 @@
    │ push
 feature/<주제> ──PR(CI 필수)──▶ dev ──사람이 `omk env update dev`──▶ ~/.openmake/dev       개발 서버
                           │                    (설치·기능 확인)
-                          └──PR(일반 머지 · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   스테이징 서버 · staging-chat.<도메인>
+                          └──PR(일반 머지 · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   스테이징 서버 · Tailscale 직결
                                                          │                     (기능 확인 → `omk env verify staging` 으로 확인한 커밋 기록)
                                                          └──(release-please 릴리스 직후) 사람이 `omk env update online`──▶ ~/.openmake/online   온라인 서버 · chat.<도메인>
                                                                                (릴리스 게이트 → 스모크만)
@@ -196,7 +196,7 @@ OMK_VERIFY_PUSH_URL=git@github.com:openmake/openmake_llm.git omk env verify stag
 ```bash
 # macOS / Linux / WSL2
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
-  | bash -s -- env install staging --public-url https://staging-chat.example.com
+  | bash -s -- env install staging --tailscale
 
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
   | bash -s -- env install online  --public-url https://chat.example.com     # 최신 릴리스 태그를 설치한다
@@ -205,7 +205,7 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/
 ```powershell
 # Windows — WSL2(Ubuntu) 를 확인하고 그 안에서 같은 스크립트를 실행한다
 irm https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.ps1 -OutFile omk.ps1
-.\omk.ps1 env install staging --public-url https://staging-chat.example.com
+.\omk.ps1 env install staging --tailscale
 ```
 
 한 번에 되는 일(순서대로):
@@ -296,7 +296,7 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
 `omk env expose <env> --tailscale` (또는 `--host <이름>`) — 그 호스트의 **프록시 주소**(`http://<호스트>:<OMK_PROXY_PORT>`)를
 `CORS_ORIGINS` 에 허용하고 API 를 재시작한다. 호스트 목록은 `.env` 의 `OMK_ENV_HOSTS` 에 기억된다. 프록시의
 `localhost` 주소는 설치 때 자동으로 허용된다. 설치할 때 같이 하려면 `omk env install <env> --tailscale`(또는 `--host`) — `reset` 후 재설치해도 유지된다. 웹·REST·채팅 소켓이 전부 프록시 한 주소로 다니므로 그 주소 하나만 허용하면 된다.
-평문 HTTP 라 **신뢰하는 망(Tailscale·사내망)에서만** 쓴다 — 밖으로 공개할 때는 `--public-url` + 터널.
+평문 HTTP 라 **신뢰하는 망(Tailscale·사내망)에서만** 쓴다. staging 은 `--tailscale` 로 직접 접속하며 Cloudflare Tunnel 을 사용하지 않는다. online 외부 공개는 `--public-url` 과 운영 호스트의 tunnel/DNS 설정을 사용한다.
 
 ## LiteLLM 게이트웨이 — 환경마다 하나
 
@@ -543,9 +543,9 @@ scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.en
 
 Caddy 는 시스템 서비스가 아니라 **PM2 앱 `omk-proxy`** 로 돈다 (호스트당 1개, macOS·Linux·WSL2 동일). 설정은 `~/.openmake/caddy/Caddyfile` 이 `caddy.d/*.caddy` 를 import 하고, 환경마다 `scripts/caddy/instance.caddy.tmpl` 을 그 환경의 `.env` 값으로 렌더링한 블록 하나를 갖는다. `caddy` 가 PATH 에 없으면 공식 릴리스를 `~/.openmake/bin/caddy` 로 받는다.
 
-도메인은 스크립트 어디에도 없다 — `--public-url` 로 받아 llm `.env`(`OMK_APP_URL`·`CORS_ORIGINS`·secure cookie)에 반영한다. 외부 공개는 터널/DNS 를 **그 환경의 프록시 포트**(`OMK_PROXY_PORT`)로 향하게 한다: [`scripts/cloudflared/config.yml.example`](../cloudflared/config.yml.example).
+도메인은 스크립트 어디에도 없다 — `--public-url` 로 받아 llm `.env`(`OMK_APP_URL`·`CORS_ORIGINS`·secure cookie)에 반영한다. staging 은 `--tailscale` 로 허용한 Tailscale 호스트명과 프록시 포트로 직접 접속한다. online 외부 공개의 Cloudflare Tunnel 예시는 [`scripts/cloudflared/config.yml.example`](../cloudflared/config.yml.example) 에 있다.
 
-bench 는 프록시 뒤에 두지 않고 자기 포트(`OMKB_PORT`)로 직접 공개한다. llm 의 로그인 쿠키가 host-only 라서 `staging-chat.…` 의 로그인이 `bench-staging.…` 으로 넘어가지 않는다 — 공개 도메인에서는 bench 에 API 키 또는 초대 코드로 로그인하고, SSO 는 같은 호스트명(예: Tailscale 호스트명 + 포트)으로 접속할 때만 동작한다.
+bench 는 프록시 뒤에 두지 않고 자기 포트(`OMKB_PORT`)로 직접 공개한다. llm 의 로그인 쿠키가 host-only 라서 채팅과 bench 가 서로 다른 호스트명일 때 로그인이 공유되지 않는다 — Tailscale 직결에서는 같은 호스트명에 각 포트를 사용하면 SSO 가 동작한다.
 
 이 방식으로 관리되는 인스턴스는 `.env` 에 `OMK_PROXY_DIR` 이 있고, `openmake_llm.sh deploy` 는 이를 보고 예전의 호스트 Caddyfile 복사(`/opt/homebrew/etc/Caddyfile`)를 건너뛴다.
 
