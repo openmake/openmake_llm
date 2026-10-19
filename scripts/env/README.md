@@ -381,7 +381,7 @@ macOS 의 OpenMake 는 **자기 Colima VM**(프로필 `openmake`)에서만 컨�
 |---|---|
 | 최소 사양 | Apple Silicon · RAM 16GB |
 | VM 크기 | 옵션 없이 설치하면 호스트에 맞춘다 — 메모리는 호스트의 절반(최대 8GB · 최소 2GB), CPU 는 코어 수(최대 4), 디스크 60GB. 직접 정하려면 처음 만들 때 `OMK_COLIMA_CPU`·`OMK_COLIMA_MEMORY`·`OMK_COLIMA_DISK` |
-| 접속 | `DOCKER_HOST=unix://$HOME/.colima/openmake/docker.sock` — OpenMake 명령은 Colima 소켓을 강제하고 `DOCKER_CONTEXT` 를 해제한다. 앱 `.env` 에도 같은 호스트를 기록한다 |
+| 접속 | `DOCKER_HOST=unix://<COLIMA_HOME>/openmake/docker.sock` — 명시한 Colima 홈, 등록된 프로필 경로, `~/.colima` 순서로 고르고 `.env`·PM2·자동 기동에 같은 값을 전달한다. Desktop 컨텍스트는 사용하지 않는다 |
 | 자동 시작 | LaunchAgent `com.openmake.colima` (로그인 시). 로그는 `~/.openmake/logs/colima.log` |
 | 컨테이너 보기 | `omk env status <env>` 또는 `docker --context colima-openmake ps` (Docker Desktop 화면에는 나오지 않는다) |
 | VM 크기 바꾸기 | `colima stop --profile openmake` → `colima start --profile openmake --activate=false --memory 12` |
@@ -399,27 +399,22 @@ Colima 는 홈 디렉터리만 VM 에 공유해, 기본값(`/tmp/…`)은 컨테
 
 ### Docker Desktop 에서 이전
 
-macOS 설치기는 Colima 를 준비한 뒤 `desktop-linux` 컨텍스트가 실행 중이면 OpenMake Compose 볼륨을 자동으로 찾는다.
-`openmake[-<env>]` 프로젝트의 PostgreSQL·Redis 볼륨만 대상으로 하며, 각 원본은 읽기 전용으로 백업해
-`~/.openmake/backups/docker-migration/<UTC시각>/` 에 체크섬과 함께 보관한다. Colima 에 같은 이름의 대상 볼륨이
-이미 있으면 덮어쓰지 않고 일치하는 Compose 표식인지 확인한 뒤 복사 없이 검증한다. Docker Desktop 원본 볼륨은 삭제하거나 수정하지 않는다.
+macOS 명령은 기본 Docker 컨텍스트와 무관하게 OpenMake 전용 Colima 프로필을 사용한다.
+`COLIMA_HOME` 을 명시하면 그 경로를 사용하며, 미설정 시 등록된 `colima-openmake` 컨텍스트의
+소켓 경로를 확인하고, 신규 설치는 `~/.colima` 를 사용한다. 외장 디스크 경로도 설치기·PM2·자동 기동·백업에 함께 전달된다.
 
-기존 Mac 에서 설치기를 실행하기 전에 Docker Desktop 을 켜 두고, 완료 로그의 `migration complete` 를 확인한다.
-자동 이전이 건너뛰어졌다면 아래 명령을 직접 실행한다:
+설치기는 기존 PostgreSQL 컨테이너·Compose 데이터 볼륨을 **메타데이터로만** 검사한다.
+이미 해당 인스턴스의 Colima 컨테이너가 있으면 보존하고, Docker Desktop 에만 OpenMake 데이터가 있거나
+기존 설치의 원본을 확인할 수 없으면 새 빈 DB 를 만들지 않고 설치를 중단한다.
+설치 중 DB 볼륨을 자동 복사하거나 별도 PostgreSQL/Redis 검증 서버를 띄우지 않는다.
 
-```bash
-bash scripts/setup/mac/migrate-docker-desktop-data.sh
-```
+기존 데이터는 먼저 원본·암호화 키·bind mount/볼륨 구성을 백업하고 서비스를 정상 종료한 뒤,
+DB 논리 백업·복원 등으로 이전한다. 외부 캐시·메일·아티팩트 경로도 실제 사용 경로와 대조해야 한다.
+복원한 DB 의 테이블·서비스 응답과 앱의 로그인·채팅·공유 뷰어를 확인한 뒤 설치를 다시 실행한다.
+원본 Docker Desktop 컨테이너·볼륨은 검증이 끝날 때까지 보존한다.
 
-이름 없는 익명 PostgreSQL 볼륨은 소유 프로젝트를 입증할 수 없어 자동 이전 대상이 아니다. 확인이 필요한 호스트에서는
-다음 명령으로 PostgreSQL 16 익명 볼륨을 `openmake-recovered-*` 이름으로 별도 복사한다. 이 볼륨은 서비스에 자동 연결되지 않는다.
-
-```bash
-bash scripts/setup/mac/migrate-docker-desktop-data.sh --include-orphan-postgres
-```
-
-이전 후 `docker --context colima-openmake volume ls` 와 `omk env status <env>` 를 확인하고, OpenMake 서비스가 정상인 것을 본 뒤에만
-Docker Desktop 을 제거한다. Colima 의 원본과 별도 백업 파일이 모두 남아 있으므로, 전환 후에도 이전 상태로 돌아갈 수 있다.
+Docker Desktop 을 지워도 CLI 가 남도록 설치기는 Homebrew 의 `docker`, `docker-compose`, `docker-buildx` 를 준비한다.
+Linux·WSL 의 Docker Engine 설정은 변경하지 않는다.
 
 ### Colima 를 걷어낼 때
 

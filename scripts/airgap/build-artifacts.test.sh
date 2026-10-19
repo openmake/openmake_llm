@@ -26,6 +26,7 @@ chmod +x "$BIN/docker"
 
 # ── 오프라인 번들: 만들고 → 설치하면 packages/*/dist 가 따라온다 ──
 REPO="$TMP/repo"; mkdir -p "$REPO/scripts/airgap" "$REPO/infra" "$REPO/packages/config"
+mkdir -p "$REPO/scripts/lib"; cp "$HERE/../lib/colima.sh" "$REPO/scripts/lib/"
 cp "$HERE/build-offline-bundle.sh" "$HERE/install-offline-bundle.sh" "$REPO/scripts/airgap/"
 printf 'services:\n  db:\n    image: postgres:16\n' > "$REPO/infra/docker-compose.yml"
 printf '{"name":"@openmake/config","main":"dist/index.js"}\n' > "$REPO/packages/config/package.json"

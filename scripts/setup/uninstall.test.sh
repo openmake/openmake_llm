@@ -31,6 +31,7 @@ chmod +x "$BIN/pm2" "$BIN/docker"
 # 한 번 실행: $@ = uninstall.sh 인자 → "종료코드|기록된 명령(줄바꿈은 ;)|소스 남음(yes/no)"
 run_uninstall() {
     local dir="$TMP/app-$RANDOM"; mkdir -p "$dir"
+    mkdir -p "$dir/scripts/lib"; cp "$HERE/../lib/colima.sh" "$dir/scripts/lib/"
     cp "$HERE/../../uninstall.sh" "$dir/"; : > "$dir/package.json"; : > "$dir/openmake_llm.sh"; : > "$dir/.env"
     export CALLS="$TMP/calls-$RANDOM"; : > "$CALLS"
     local rc; ( cd "$TMP" && PATH="$BIN:$PATH" DOCKER_HOST=unix:///nonexistent bash "$dir/uninstall.sh" "$@" < /dev/null >/dev/null 2>&1 ); rc=$?

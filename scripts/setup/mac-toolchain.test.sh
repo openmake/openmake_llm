@@ -76,9 +76,17 @@ ok "agent: 같은 위치는 한 번만" 'grep -q "<string>/opt/homebrew/bin:/usr
 ok "colima 의 환경변수 이름을 쓰지 않는다" '[[ -z "${COLIMA_HOME:-}" ]]'
 if command -v plutil >/dev/null 2>&1; then ok "agent: plist 문법" 'plutil -lint "$P" >/dev/null'; fi
 
+# 외장 Colima 경로를 자동 기동에도 보존한다 — 실제 launchctl 은 호출하지 않는다.
+COLIMA_HOME="$TMP/external Colima" SCRIPT_DIR="$SCRIPT_DIR" TEST_AGENT="$TMP/external.plist" bash -c '
+    . "$SCRIPT_DIR/scripts/setup/mac/30-toolchain.sh"
+    write_colima_agent "$TEST_AGENT" /opt/homebrew/bin/colima /tmp/colima-test.log /usr/local/bin
+    [[ "$COLIMA_SOCK" == "$COLIMA_HOME/openmake/docker.sock" ]] && grep -qF "<string>$COLIMA_HOME</string>" "$TEST_AGENT"
+' && eq "agent: 외장 Colima 경로 보존" yes yes || eq "agent: 외장 Colima 경로 보존" no yes
+
 # ── Homebrew Docker CLI 보장 및 기존 Desktop 설치의 Colima 전환 ──
 BREW_INSTALLED=" colima "; BREW_CALLED=""
 brew() {
+    if [[ "$1" == --prefix ]]; then printf /opt/homebrew; return; fi
     if [[ "$1" == list ]]; then [[ "$BREW_INSTALLED" == *" $3 "* ]]; return; fi
     BREW_CALLED="$*"
 }
@@ -96,7 +104,7 @@ docker_cli_plugins() { :; }
 colima_start() { :; }
 wait_docker_daemon() { docker info >/dev/null; }
 enable_docker_autostart() { :; }
-migrate_docker_desktop_data() { :; }
+check_docker_desktop_data() { :; }
 DOCKER_HOST=unix:///Users/test/.docker/run/docker.sock DOCKER_CONTEXT=desktop-linux
 ensure_docker >/dev/null
 eq "기존 Desktop 설치도 Colima 사용" "$DOCKER_HOST" "unix://$COLIMA_SOCK"

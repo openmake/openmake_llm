@@ -60,10 +60,8 @@ readonly SCRIPT_DIR
 
 # macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다
 # (scripts/env/omk.sh 의 omk_docker_host 와 같은 규칙). macOS 에서는 항상 Colima 를 선택한다.
-if [[ "$(uname -s)" == "Darwin" ]]; then
-    export DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"
-    unset DOCKER_CONTEXT
-fi
+. "$SCRIPT_DIR/scripts/lib/colima.sh"
+openmake_select_docker
 
 # .env 에서 키 하나만 추출한다 (전체 source 안 함 — 값에 공백/특수문자가 있어도 안전).
 # `|| true` 필수: 키가 없으면 grep 이 1 로 끝나고 pipefail+set -e 가 스크립트를 즉시 종료시킨다.
@@ -118,6 +116,7 @@ export_dotenv_for_pm2() {
         fi
         export "$key=$val"
     done < "$file"
+    openmake_select_docker
 }
 
 # 포트 우선순위: 셸 환경변수 > .env > 기본값.
