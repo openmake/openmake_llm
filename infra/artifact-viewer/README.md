@@ -34,7 +34,8 @@ ARTIFACT_VIEWER_SIGNING_KEY=<운영 랜덤키>              # 미설정 시 JWT_
 bash infra/artifact-viewer/fetch-vendor.sh
 
 # 2) nginx 뷰어 컨테이너 기동
-docker compose -f infra/artifact-viewer/docker-compose.yml up -d
+docker --context colima-openmake compose -f infra/artifact-viewer/docker-compose.yml up -d  # macOS
+# Linux/WSL: docker compose -f infra/artifact-viewer/docker-compose.yml up -d
 
 # 3) 백엔드 .env 에 ARTIFACT_VIEWER_* 설정 후 재시작
 #    (publish 시 self-contained HTML 이 data/a/<pubId>/index.html 로 export 됨)

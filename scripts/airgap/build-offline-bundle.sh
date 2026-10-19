@@ -39,6 +39,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly REPO_ROOT
+if [[ "$(uname -s)" == Darwin ]]; then export DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"; unset DOCKER_CONTEXT; fi
 
 log_info() { printf "[INFO]  %s\n" "$*"; }
 log_ok()   { printf "[OK]    %s\n" "$*"; }

@@ -76,38 +76,31 @@ ok "agent: 같은 위치는 한 번만" 'grep -q "<string>/opt/homebrew/bin:/usr
 ok "colima 의 환경변수 이름을 쓰지 않는다" '[[ -z "${COLIMA_HOME:-}" ]]'
 if command -v plutil >/dev/null 2>&1; then ok "agent: plist 문법" 'plutil -lint "$P" >/dev/null'; fi
 
-# ── 기존 설치본 판정: 기본 Docker 로 운영 중인 호스트는 옮기지 않는다 ──
-E="$TMP/e.env"
-DOCKER_UP=1; DOCKER_NAMES=""
-docker() { # 기본 Docker 의 대역 — DOCKER_HOST 가 있으면 잘못 부른 것이다
-    [[ -z "${DOCKER_HOST:-}" ]] || { echo "BUG: DOCKER_HOST 가 설정된 채 기본 Docker 를 조회" >&2; return 9; }
-    case "$1" in
-        info) [[ $DOCKER_UP -eq 1 ]] ;;
-        ps)   [[ $DOCKER_UP -eq 1 ]] && printf '%s\n' $DOCKER_NAMES   # 단어 분할이 의도다 — 이름 목록 ;;
-    esac
+# ── Homebrew Docker CLI 보장 및 기존 Desktop 설치의 Colima 전환 ──
+BREW_INSTALLED=" colima "; BREW_CALLED=""
+brew() {
+    if [[ "$1" == list ]]; then [[ "$BREW_INSTALLED" == *" $3 "* ]]; return; fi
+    BREW_CALLED="$*"
 }
-rm -f "$E"; DOCKER_NAMES="openmake-postgres"
-ok "기존: 기본 Docker 에 openmake 컨테이너"        'installed_on_other_docker "$E"'
-DOCKER_NAMES="openmake-staging-postgres"
-ok "기존: 다른 환경의 컨테이너도 (호스트 단위)"     'installed_on_other_docker "$E"'
-DOCKER_NAMES="postgres other-openmake-postgres openmake-postgres-exporter"
-ok "새 설치: 남의 컨테이너는 무시"                '! installed_on_other_docker "$E"'
-DOCKER_NAMES=""
-ok "새 설치: 컨테이너도 .env 도 없음"              '! installed_on_other_docker "$E"'
-printf 'PORT=52416\n' > "$E"; DOCKER_UP=0
-ok "기존: .env 는 있는데 Docker 가 꺼져 있음"      'installed_on_other_docker "$E"'
-printf 'PORT=52416\nDOCKER_HOST=unix:///x\n' > "$E"
-ok "새 설치: .env 가 Colima 를 가리킴"            '! installed_on_other_docker "$E"'
-printf 'PORT=52416\n' > "$E"; DOCKER_UP=1; DOCKER_NAMES=""
-ok "새 설치: 기본 Docker 를 비웠음 (이전 완료)"    '! installed_on_other_docker "$E"'
-HAS_LIST=" "
-ok "새 설치: docker CLI 가 없음"                  '! installed_on_other_docker "$E"'
-HAS_LIST=" docker "
-# 컨테이너가 많은 호스트 — grep 이 먼저 끝나 docker ps 가 SIGPIPE 로 죽어도 판정이 뒤집히면 안 된다
-DOCKER_NAMES="openmake-postgres $(seq 1 20000 | sed 's/^/c/' | tr '\n' ' ')"
-ok "기존: 컨테이너가 많아도 (pipefail)" '( set -o pipefail; installed_on_other_docker "$E" )'
-DOCKER_NAMES=""
-eq "판정은 DOCKER_HOST 를 빼고 조회" "$( export DOCKER_HOST=unix:///colima; DOCKER_NAMES=openmake-postgres; rm -f "$E"; installed_on_other_docker "$E" 2>&1; echo "$?" )" "0"
+install_colima
+eq "Homebrew CLI 설치" "$BREW_CALLED" "install docker docker-compose docker-buildx"
+BREW_CALLED=""; BREW_INSTALLED=" colima docker docker-compose docker-buildx "
+install_colima
+eq "Homebrew 도구 설치 생략" "$BREW_CALLED" ""
+
+E="$TMP/e.env"; MINIMAL=1; ENV_FILE="$E"; DOCKER_NAMES="openmake-postgres"; SKIP_DOCKER=0
+docker() { case "$1" in info) [[ "${DOCKER_HOST:-}" == "unix://$COLIMA_SOCK" && -z "${DOCKER_CONTEXT:-}" ]];; compose) echo "Docker Compose version v2";; esac; }
+colima_profile_exists() { return 1; }
+install_colima() { :; }
+docker_cli_plugins() { :; }
+colima_start() { :; }
+wait_docker_daemon() { docker info >/dev/null; }
+enable_docker_autostart() { :; }
+migrate_docker_desktop_data() { :; }
+DOCKER_HOST=unix:///Users/test/.docker/run/docker.sock DOCKER_CONTEXT=desktop-linux
+ensure_docker >/dev/null
+eq "기존 Desktop 설치도 Colima 사용" "$DOCKER_HOST" "unix://$COLIMA_SOCK"
+eq "설치 후 Desktop context 무시" "${DOCKER_CONTEXT:-}" ""
 
 # ── 포트 충돌: 이 클론의 개발 서버('omk dev up', PM2 아님)가 잡은 포트는 옮기지 않는다 ──
 PC="$TMP/clone"; mkdir -p "$PC/apps/api" "$PC/apps/web"

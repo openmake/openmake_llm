@@ -19,6 +19,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ "$(uname -s)" == Darwin ]]; then export DOCKER_HOST="unix://$HOME/.colima/openmake/docker.sock"; unset DOCKER_CONTEXT; fi
 DAYS="${1:-30}"
 CONTAINER="${PG_CONTAINER:-openmake-postgres}"
 

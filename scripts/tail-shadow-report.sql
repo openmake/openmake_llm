@@ -1,5 +1,5 @@
 -- Tail 라우팅 셰도우 관측 리포트 (Q1~Q4) — 2026-07-10-tail-routing.md §6 정의 준수.
--- 재사용: docker exec -i openmake-postgres psql -U openmake -d openmake_llm < scripts/tail-shadow-report.sql
+-- 재사용 (macOS): docker --context colima-openmake exec -i openmake-postgres psql -U openmake -d openmake_llm < scripts/tail-shadow-report.sql
 -- 라벨 컬럼(a_was_correct 등)이 채워지기 전엔 Q4/Q3-FP는 비어 있음(오프라인 라벨링 배치 이후 유효).
 
 \echo '===== Q0 표본 규모 · 라벨 커버리지 (승격 판단 전제) ====='
