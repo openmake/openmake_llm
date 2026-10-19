@@ -696,5 +696,43 @@ printf 'PORT=52417\n' > "$SM/.env"
 AU="$( load_toolchain() { :; }; require_pm2() { :; }; pm2() { [[ "$1" != start ]] || printf '%s ' "$@" > "$TMP/pm2-args"; [[ "$1" != describe ]]; }; cmd_env_autoupdate smk >/dev/null 2>&1; cat "$TMP/pm2-args" )"
 ok "autoupdate: 토큰이 없으면 예전 그대로" '[[ "$AU" == *"--if-behind --yes "* && "$AU" != *--report* ]]'
 
+# ── 뷰어: exporter 의 .env 경로를 vendor 준비와 nginx mount 에 함께 전달 ──
+viewer_data_probe() {
+    local probe="$TMP/viewer-probe" configured="$1"
+    mkdir -p "$probe/infra/artifact-viewer"
+    printf 'OMK_ARTIFACT_VIEWER=1\nPORT=52416\n' > "$probe/.env"
+    [[ -z "$configured" ]] || printf 'ARTIFACT_VIEWER_DATA_DIR="%s"\n' "$configured" >> "$probe/.env"
+    [[ -z "${3:-}" ]] || printf '%s\n' "$3" >> "$probe/.env"
+    printf '#!/usr/bin/env bash\nprintf "vendor:%%s\\n" "${ARTIFACT_VIEWER_DATA_DIR:-UNSET}" >> "$VIEWER_PROBE_LOG"\n' > "$probe/infra/artifact-viewer/fetch-vendor.sh"
+    : > "$probe/calls"
+    ( export VIEWER_PROBE_LOG="$probe/calls"
+      if [[ $# -ge 2 && "$2" != __UNSET__ ]]; then export ARTIFACT_VIEWER_DATA_DIR="$2"; else unset ARTIFACT_VIEWER_DATA_DIR; fi
+      docker() {
+          [[ "$1" != compose ]] || {
+              printf 'compose:%s\n' "${ARTIFACT_VIEWER_DATA_DIR:-UNSET}" >> "$VIEWER_PROBE_LOG"
+              printf 'arg:%s\n' "$@" >> "$VIEWER_PROBE_LOG"
+          }
+          return 0
+      }
+      viewer_ensure "$probe"
+    ) >/dev/null 2>&1
+    cat "$probe/calls"
+}
+VD="$(viewer_data_probe "$TMP/published artifacts")"
+eq "viewer: vendor 와 compose 에 설정 경로 전달(공백 포함)" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/published artifacts" "$TMP/published artifacts")"
+eq "viewer: compose 가 앱 .env 를 명시적으로 읽음" "$(printf '%s\n' "$VD" | grep -A1 '^arg:--env-file$')" "$(printf 'arg:--env-file\narg:%s' "$TMP/viewer-probe/.env")"
+VD="$(viewer_data_probe '')"
+eq "viewer: 미설정 시 같은 repo 기본 경로 사용" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/viewer-probe/data/artifact-viewer" "$TMP/viewer-probe/data/artifact-viewer")"
+VD="$(viewer_data_probe 'data/published artifacts')"
+eq "viewer: 상대 경로도 앱 repo 기준으로 mount" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/viewer-probe/data/published artifacts" "$TMP/viewer-probe/data/published artifacts")"
+VD="$(viewer_data_probe "$TMP/from-file" "$TMP/from-shell")"
+eq "viewer: shell 환경이 .env 보다 우선" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/from-shell" "$TMP/from-shell")"
+VD="$(viewer_data_probe '' __UNSET__ 'ARTIFACT_VIEWER_DATA_DIR=/data/artifacts # publications')"
+eq "viewer: 인라인 주석은 경로에 포함하지 않음" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:/data/artifacts\ncompose:/data/artifacts')"
+VD="$(viewer_data_probe '' __UNSET__ 'ARTIFACT_VIEWER_DATA_DIR="/data/hash # file" # publications')"
+eq "viewer: 따옴표 내부 hash 는 보존하고 외부 주석만 제거" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:/data/hash # file\ncompose:/data/hash # file')"
+VD="$(viewer_data_probe "$TMP/from-file" '')"
+eq "viewer: 명시적인 빈 shell 환경이면 backend 기본 경로 사용" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/viewer-probe/data/artifact-viewer" "$TMP/viewer-probe/data/artifact-viewer")"
+
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]
