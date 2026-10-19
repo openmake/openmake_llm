@@ -3,7 +3,7 @@
  * MCP Sandbox — playwright 브라우저 사전 설치 래핑
  * ============================================================
  *
- * playwright 를 고정하지 않는 uvx 서버(noapi-google-search-mcp 등)는 스폰할 때마다 최신 playwright 를
+ * playwright 를 사용하는 uvx 서버(noapi-google-search-mcp 등)는 스폰할 때마다 최신 playwright 를
  * 받는데, 브라우저 본체는 서버별 캐시 볼륨(~/.cache/ms-playwright)에 옛 리비전만 남아 launch 가
  * "Executable doesn't exist" 로 죽는다(2026-10-15 운영 실측: 하루에 chromium v1243 → v1248).
  * 그래서 서버 실행 전에 같은 컨테이너·같은 venv 로 `python -m playwright install <브라우저>` 를 먼저
@@ -14,8 +14,9 @@
  * @module mcp/sandbox-playwright
  */
 
-/** 이름만으로 브라우저 사전 설치 대상으로 판정하는 uvx 패키지. */
+/** 이름만으로 브라우저 사전 설치 대상으로 판정하는 패키지. */
 export const PLAYWRIGHT_UVX_PACKAGES: readonly string[] = ['noapi-google-search-mcp'];
+export const PLAYWRIGHT_NPX_PACKAGES: readonly string[] = ['@playwright/mcp'];
 
 /** 서버 env opt-in 키 — 값은 설치할 브라우저 목록(쉼표/공백 구분, 예: `chromium`). */
 export const PLAYWRIGHT_BROWSERS_ENV_KEY = 'OMK_PLAYWRIGHT_BROWSERS';
@@ -44,8 +45,11 @@ export function playwrightBrowsersFromEnv(env?: Record<string, string>): string[
     return String(raw).split(/[\s,]+/).filter((b) => /^[A-Za-z0-9_-]+$/.test(b));
 }
 
-/** PURE: 스폰 전 playwright 브라우저 설치가 필요한 uvx 서버인지. */
+/** PURE: 스폰 전 playwright 브라우저 설치가 필요한 MCP 서버인지. */
 export function needsPlaywrightBrowser(input: PlaywrightInput): boolean {
+    if (input.command === 'npx') {
+        return input.args.some((a) => PLAYWRIGHT_NPX_PACKAGES.some((name) => String(a) === name || String(a).startsWith(`${name}@`)));
+    }
     if (input.command !== 'uvx') return false;
     if (playwrightBrowsersFromEnv(input.env).length > 0) return true;
     return input.args.some((a) => PLAYWRIGHT_UVX_PACKAGES.includes(packageName(String(a))));
@@ -57,10 +61,21 @@ export function shellQuote(s: string): string {
 }
 
 /**
- * PURE: uvx 호출을 `sh -c '<같은 venv 로 playwright install> || true; exec <원래 호출>'` 로 감싼다.
+ * PURE: uvx/npx 호출을 브라우저 사전 설치 후 원래 MCP 서버 실행으로 감싼다.
  * 설치 실패는 서버 기동을 막지 않는다(종전처럼 도구 오류로 드러난다).
  */
 export function wrapWithPlaywrightInstall(command: string, args: string[], browsers: string[] = ['chromium']): string[] {
+    if (command === 'npx') {
+        const packageIndex = args.findIndex((a) => PLAYWRIGHT_NPX_PACKAGES.some((name) => String(a) === name || String(a).startsWith(`${name}@`)));
+        if (packageIndex < 0) return [command, ...args];
+        const npxPackage = args.slice(0, packageIndex + 1).map(String);
+        const serverArgs = args.map(String);
+        if (!serverArgs.includes('--isolated')) serverArgs.push('--isolated');
+        const q = (xs: string[]): string => xs.map(shellQuote).join(' ');
+        const install = `${q([command, ...npxPackage, 'install-browser', 'chrome-for-testing'])} </dev/null >&2 || true`;
+        return ['sh', '-c', `${install}; exec ${q([command, ...serverArgs])}`];
+    }
+
     // uvx 옵션(값 포함)과 첫 위치 인자(패키지 스펙 또는 --from 이 있을 때의 실행 이름)를 가른다.
     const opts: string[] = [];
     let fromSpec: string | undefined;

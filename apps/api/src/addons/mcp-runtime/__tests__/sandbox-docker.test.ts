@@ -185,6 +185,22 @@ describe('playwright 브라우저 사전 설치 래핑 (sandbox-playwright)', ()
         expect(script).toMatch(/playwright install 'chromium' <\/dev\/null >&2 \|\| true; exec 'uvx' /);
     });
 
+    it('Playwright MCP npx 서버 → 같은 npm 패키지로 chrome-for-testing 설치 후 exec', () => {
+        const input = {
+            command: 'npx',
+            args: ['-y', '@playwright/mcp@0.0.79', '--headless', '--browser', 'chromium'],
+            serverId: 'playwright-mcp',
+        };
+        expect(needsPlaywrightBrowser(input)).toBe(true);
+
+        const a = buildDockerArgs(input, cfg());
+        const img = a.indexOf('openmake-mcp-runtime:latest');
+        expect(a.slice(img + 1, img + 3)).toEqual(['sh', '-c']);
+        const script = a[a.length - 1];
+        expect(script).toContain("'npx' '-y' '@playwright/mcp@0.0.79' 'install-browser' 'chrome-for-testing'");
+        expect(script).toContain("exec 'npx' '-y' '@playwright/mcp@0.0.79' '--headless' '--browser' 'chromium' '--isolated'");
+    });
+
     it('다른 uvx/npx 서버 → 래핑 없이 종전 그대로', () => {
         for (const input of [
             { command: 'uvx', args: ['mcp-server-fetch'], serverId: 'f1' },
