@@ -1,0 +1,24 @@
+{
+  "specs": {
+    "docs/superpowers/specs/2026-10-20-pipeline-flow-design.md": "pipeline"
+  },
+  "prefixes": {
+    "apps/web/": "web",
+    "tests/web/": "web",
+    "scripts/pipeline/": "pipeline",
+    "scripts/env/": "pipeline",
+    "tests/pipeline/": "pipeline",
+    "scripts/ci/": "pipeline",
+    ".github/workflows/": "pipeline",
+    "infra/": "infra",
+    "packages/local-bridge-core/": "bridge"
+  },
+  "e2e": {
+    "specs": {
+      "tests/e2e/pipeline-basic.spec.ts": {
+        "target": "api"
+      }
+    },
+    "sourcePrefixes": {}
+  }
+}

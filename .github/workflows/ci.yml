@@ -41,13 +41,9 @@ jobs:
     # 35분 02초에 cancelled 됐다(#912 1차 — 그 앞 게이트 전부 success). Jest 병렬화는 여전히 별도 과제.
     timeout-minutes: 50
 
-    # GITHUB_TOKEN 권한 명시 (PR 코멘트 게시용)
-    # - contents: read  → 체크아웃에 필요
-    # - pull-requests: write → PR 코멘트 작성/업데이트
-    # 주의: fork에서 올라온 PR은 보안상 항상 read-only 토큰만 발급됨 → sticky 코멘트 step이 403으로 silent skip됨
+    # Source CI executes repository code with a read-only token.
     permissions:
       contents: read
-      pull-requests: write
 
     # DB 통합 테스트(*.db.test.ts)용 일회용 PostgreSQL(pgvector — knowledge add-on 마이그레이션이 vector 확장을 만든다).
     # Gate 1.5 만 TEST_DATABASE_URL 로 쓴다. 포트 5433 — model-assignments DB 테스트는 :5432 URL 이면 스스로 skip 한다.
@@ -69,6 +65,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -113,8 +112,7 @@ jobs:
           bash -n install_linux.sh
           for f in scripts/setup/common/*.sh scripts/setup/mac/*.sh scripts/setup/linux/*.sh; do bash -n "$f"; done
           bash -n openmake_llm.sh
-          bash -n scripts/env/omk.sh
-          bash -n scripts/env/omk.test.sh
+          for f in scripts/env/*.sh; do bash -n "$f"; done
           bash -n scripts/setup/mac-toolchain.test.sh
           bash -n uninstall.sh
           bash -n scripts/setup/uninstall.test.sh
@@ -122,10 +120,10 @@ jobs:
           for f in scripts/backups/*.sh scripts/airgap/*.sh; do bash -n "$f"; done
           shellcheck -S warning install.sh install_mac.sh install_linux.sh \
             scripts/setup/common/*.sh scripts/setup/mac/*.sh scripts/setup/linux/*.sh \
-            openmake_llm.sh scripts/env/omk.sh scripts/env/omk.test.sh \
+            openmake_llm.sh scripts/env/*.sh \
             scripts/setup/mac-toolchain.test.sh scripts/setup/uninstall.test.sh scripts/setup/linux-web-port.test.sh \
             scripts/backups/*.sh scripts/airgap/*.sh
-          bash scripts/env/omk.test.sh
+          for f in scripts/env/*.test.sh; do bash "$f"; done
           bash scripts/setup/mac-toolchain.test.sh
           bash scripts/setup/uninstall.test.sh
           bash scripts/setup/linux-web-port.test.sh </dev/null
@@ -170,6 +168,23 @@ jobs:
       # 빌드 전체가 깨진다(2026-10-03 #1069 실측: 재실행으로 통과). 일시 실패만 한 번 다시 시도한다.
       - name: "Gate 2: TypeScript Build"
         run: npm run build || { echo "::warning::빌드 실패 — 30초 뒤 한 번 재시도합니다"; sleep 30; npm run build; }
+
+      # Only actual merged-dev push SHA; no entire Playwright suite.
+      - name: "Merged dev: isolated basic app and changed-feature checks"
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        env:
+          TEST_DATABASE_URL: postgresql://openmake:openmake_test@localhost:5433/openmake_llm_test
+          TESTED_SHA: ${{ github.sha }}
+        run: npm run test:dev -- "$TESTED_SHA"
+
+      - name: Upload merged-dev check evidence
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        uses: actions/upload-artifact@v7
+        with:
+          name: dev-checks-${{ github.sha }}
+          path: logs/dev-checks.json
+          if-no-files-found: error
+          retention-days: 30
 
       # ─── Gate 3: File Size Guard (max 600 lines) ───
       - name: "Gate 3: File Size Guard"
@@ -279,119 +294,3 @@ jobs:
           path: apps/api/logs/*-evaluation-*.json
           if-no-files-found: ignore
           retention-days: 30
-
-      # ─── PR 평가 회귀 리포트 코멘트 (sticky) ───
-      # PR 이벤트일 때만 동작. Routing/Response 평가 JSON에서 통과율을 읽어 마크다운 표 생성.
-      # actions/github-script(@v9, GitHub 공식)로 PR 코멘트 listComments → marker 검색 → update or create.
-      # if: always() — 평가 게이트가 실패(exit 1)해도 회귀 리포트는 게시되어야 한다 (회귀 가시성 확보).
-      - name: "Post evaluation pass-rate comment (PR only)"
-        # fork PR 의 GITHUB_TOKEN 은 read-only 라 코멘트 작성이 403 으로 실패한다 — 같은 리포의 PR 에서만 단다.
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v9
-        env:
-          ROUTING_BASELINE: ${{ env.OMK_EVAL_PASS_THRESHOLD || '0.5' }}
-          RESPONSE_BASELINE: ${{ env.OMK_EVAL_RESPONSE_THRESHOLD || '0.5' }}
-          TOOLS_BASELINE: '0.97'
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-
-            const LOGS_DIR = 'apps/api/logs';
-            // 동일 PR에 코멘트가 누적되지 않도록 식별용 HTML 마커
-            const MARKER = '<!-- eval-regression-report -->';
-            const commit = (context.sha || '').slice(0, 7);
-
-            // 가장 최근의 평가 JSON 파일 한 개를 prefix 기준으로 찾는다.
-            // - prefix 'evaluation-' 만 매치하기 위해 'response-evaluation-' 은 제외 (Gate 5 결과)
-            // - prefix 'response-evaluation-' 은 Gate 6 결과
-            // 파일이 없으면 null 반환하여 행을 누락 처리 (코멘트는 그래도 게시).
-            function findLatest(prefix, exclude) {
-              if (!fs.existsSync(LOGS_DIR)) return null;
-              const candidates = fs.readdirSync(LOGS_DIR)
-                .filter((f) => f.startsWith(prefix) && f.endsWith('.json'))
-                .filter((f) => !exclude || !f.startsWith(exclude))
-                .map((f) => {
-                  const full = path.join(LOGS_DIR, f);
-                  return { full, mtime: fs.statSync(full).mtimeMs };
-                })
-                .sort((a, b) => b.mtime - a.mtime);
-              return candidates[0]?.full || null;
-            }
-
-            function loadEval(file) {
-              if (!file) return null;
-              try {
-                return JSON.parse(fs.readFileSync(file, 'utf8'));
-              } catch (err) {
-                core.warning(`평가 JSON 파싱 실패: ${file} — ${err.message}`);
-                return null;
-              }
-            }
-
-            function fmtPct(rate) {
-              if (typeof rate !== 'number') return 'n/a';
-              return `${(rate * 100).toFixed(1)}%`;
-            }
-
-            const routingFile = findLatest('evaluation-', 'response-evaluation-');
-            const responseFile = findLatest('response-evaluation-', null);
-            const routing = loadEval(routingFile);
-            const response = loadEval(responseFile);
-            const budget = loadEval(findLatest('budget-evaluation-', null));
-            const tools = loadEval(findLatest('tool-selection-evaluation-mock-', null));
-            const redteam = loadEval(findLatest('redteam-evaluation-mock-', null));
-            const toolsBaseline = parseFloat(process.env.TOOLS_BASELINE || '0.97');
-
-            const routingBaseline = parseFloat(process.env.ROUTING_BASELINE || '0.5');
-            const responseBaseline = parseFloat(process.env.RESPONSE_BASELINE || '0.5');
-
-            function row(label, data, baseline) {
-              if (!data) {
-                return `| ${label} | n/a | n/a | ${fmtPct(baseline)} | 결과 파일 없음 |`;
-              }
-              const passed = data.passRate >= baseline ? '✅' : '❌';
-              return `| ${label} | ${fmtPct(data.passRate)} | ${data.passedCases}/${data.totalCases} | ${fmtPct(baseline)} | ${passed} |`;
-            }
-
-            const body = [
-              MARKER,
-              `## 평가 회귀 리포트 (\`${commit}\`)`,
-              '',
-              '| 평가 | 통과율 | 통과/전체 | 베이스라인 | 상태 |',
-              '|---|---|---|---|---|',
-              row('Routing (Gate 5)', routing, routingBaseline),
-              row('Response (Gate 6)', response, responseBaseline),
-              budget
-                ? `| Prompt·Tool Budget (Gate 7) | ${budget.rows.filter((r) => r.ok).length}/${budget.rows.length} 지표 | 증가율 ≤ ${budget.limits.driftPct}% | 기준선 ${budget.baselineUpdatedAt ? budget.baselineUpdatedAt.slice(0, 10) : '없음'} | ${budget.ok ? '✅' : '❌ ' + budget.rows.filter((r) => !r.ok).map((r) => r.metric).join(', ')} |`
-                : '| Prompt·Tool Budget (Gate 7) | n/a | n/a | n/a | 결과 파일 없음 |',
-              row('Tool Selection (Gate 8)', tools, toolsBaseline),
-              row('Runtime Red Team (Gate 9)', redteam, 1),
-              '',
-              `- 데이터셋 버전: routing=\`${routing?.datasetVersion ?? 'n/a'}\`, response=\`${response?.datasetVersion ?? 'n/a'}\``,
-              `- 베이스라인은 \`OMK_EVAL_PASS_THRESHOLD\` / \`OMK_EVAL_RESPONSE_THRESHOLD\` 환경변수 기준 (이력 비교 아님)`,
-              `- 상세 결과: Actions 실행의 \`evaluation-results-${context.sha}\` 아티팩트 참조`,
-            ].join('\n');
-
-            const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-
-            // marker가 포함된 기존 코멘트를 찾아 update; 없으면 create. 페이지네이션 처리.
-            const existing = await github.paginate(
-              github.rest.issues.listComments,
-              { owner, repo, issue_number, per_page: 100 },
-            );
-            const previous = existing.find((c) => c.body && c.body.includes(MARKER));
-
-            if (previous) {
-              await github.rest.issues.updateComment({
-                owner, repo, comment_id: previous.id, body,
-              });
-              core.info(`평가 회귀 코멘트 업데이트 완료: comment_id=${previous.id}`);
-            } else {
-              await github.rest.issues.createComment({
-                owner, repo, issue_number, body,
-              });
-              core.info('평가 회귀 코멘트 신규 생성 완료');
-            }

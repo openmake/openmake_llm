@@ -244,7 +244,7 @@
     <a href="#steps"><span class="n">02</span>단계별 작업 순서</a>
     <div class="grp">어디서 무엇을</div>
     <a href="#local-dev" data-c="local"><span class="n">03</span>로컬 개발 (작업 클론)</a>
-    <a href="#env-dev" data-c="dev"><span class="n">04</span>환경 dev</a>
+    <a href="#env-dev" data-c="dev"><span class="n">04</span>병합 dev 검사</a>
     <a href="#env-staging" data-c="stg"><span class="n">05</span>환경 staging</a>
     <a href="#env-online" data-c="onl"><span class="n">06</span>환경 online</a>
     <div class="grp">참고</div>
@@ -256,7 +256,7 @@
   </nav>
   <div class="side-foot">
     기준 문서 <code>scripts/env/README.md</code><br>
-    정리 2026-09-30
+    정리 2026-10-20
     <div><button type="button" id="theme">밝게 / 어둡게</button></div>
   </div>
 </aside>
@@ -264,298 +264,87 @@
 <main>
 
 <!-- ═══════════════════════════ 01 개요 ═══════════════════════════ -->
-<section class="page" id="overview" data-title="개요 · 전체 흐름">
-  <div class="eyebrow">01 · 개요</div>
-  <h1>고친 코드가 실사용 환경에 닿기까지</h1>
-  <p class="lead">로컬 장비에서 고치고(<strong>로컬 개발</strong>), 세 환경 — <strong>dev · staging · online</strong> — 을 차례로 거쳐 올린다. 환경은 서로 <code>.env</code>·docker·PM2 가 분리되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 <code>scripts/env/omk.sh</code> 하나다.</p>
-
-  <h2 id="terms">용어</h2>
-  <div class="tw"><table>
-    <thead><tr><th>이름</th><th>장소 · 경로</th><th>무엇</th><th>무엇을 담나</th></tr></thead>
-    <tbody>
-      <tr><th class="c-local">로컬 개발</th><td>로컬 장비<br>작업 클론 (예: <code>~/openmake/openmake_llm</code>)</td><td><code>omk dev up</code> — 고치면서 바로 보는 핫 리로드. <strong>환경이 아니다</strong></td><td>지금 고치고 있는 소스 (커밋 전 포함)</td></tr>
-      <tr><th class="c-dev">환경 dev</th><td>개발 서버<br><code>~/.openmake/dev</code></td><td><code>omk env install dev</code> 로 설치한 배포본</td><td>브랜치 <code>dev</code></td></tr>
-      <tr><th class="c-stg">환경 staging</th><td>스테이징 서버<br><code>~/.openmake/staging</code></td><td>설치한 배포본. 데이터를 유지한다</td><td>브랜치 <code>main</code></td></tr>
-      <tr><th class="c-onl">환경 online</th><td>온라인 서버<br><code>~/.openmake/online</code></td><td>실사용</td><td>최신 릴리스 태그</td></tr>
-    </tbody>
-  </table></div>
-  <div class="note p-dev">
-    <div class="h">dev 는 브랜치 이름이기도 하고 환경 이름이기도 하다</div>
-    <p><strong>브랜치 <code>dev</code></strong> 는 <code>feature/*</code> 가 모이는 git 브랜치이고, <strong>환경 dev</strong> 는 그 브랜치를 설치해 돌리는 곳이다. staging 이 <code>main</code> 을 따르는 것과 같은 관계다.</p>
-  </div>
-
-  <h2 id="flow">전체 흐름</h2>
-  <p>위 줄은 <strong>git</strong>(코드가 어디에 있는가), 아래 줄은 <strong>도는 곳</strong>(이름 · 장소 · 경로)이다. 번호는 <a href="#steps">단계별 작업 순서</a>의 번호와 같다.</p>
-
-  <div class="flow">
-    <svg viewBox="0 0 1000 392" role="img" aria-label="로컬 개발에서 push 한 feature 브랜치가 dev 브랜치, main, 릴리스 태그로 이어지고, dev 는 환경 dev 에, main 은 환경 staging 에, 릴리스 태그는 환경 online 에 올라간다">
-      <defs>
-        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0 0 L10 5 L0 10 z" fill="var(--ink-2)"/>
-        </marker>
-        <marker id="ahd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M0 0 L10 5 L0 10 z" fill="var(--mute)"/>
-        </marker>
-      </defs>
-
-      <text class="band" x="24" y="34">GIT — 코드가 있는 곳</text>
-      <line x1="24" y1="44" x2="976" y2="44" stroke="var(--rule)" />
-      <text class="band" x="24" y="262">도는 곳</text>
-      <line x1="24" y1="242" x2="976" y2="242" stroke="var(--rule)" />
-
-      <!-- git 노드 -->
-      <g>
-        <rect class="git" x="40"  y="78" width="170" height="62" rx="31"/>
-        <text class="ttl m" x="125" y="106" text-anchor="middle">feature/&lt;주제&gt;</text>
-        <text class="sm" x="125" y="125" text-anchor="middle">작업 브랜치</text>
-
-        <rect class="git" x="306" y="78" width="150" height="62" rx="31"/>
-        <text class="ttl m" x="381" y="106" text-anchor="middle">dev</text>
-        <text class="sm" x="381" y="125" text-anchor="middle">개발용 브랜치</text>
-
-        <rect class="git" x="552" y="78" width="150" height="62" rx="31"/>
-        <text class="ttl m" x="627" y="106" text-anchor="middle">main</text>
-        <text class="sm" x="627" y="125" text-anchor="middle">staging·릴리스가 따른다</text>
-
-        <rect class="git" x="798" y="78" width="162" height="62" rx="31"/>
-        <text class="ttl m" x="879" y="106" text-anchor="middle">vX.Y.Z</text>
-        <text class="sm" x="879" y="125" text-anchor="middle">릴리스 태그</text>
-      </g>
-
-      <!-- git 간선 -->
-      <path class="edge" d="M210 109 H302" marker-end="url(#ah)"/>
-      <text class="lb" x="256" y="98" text-anchor="middle">PR</text>
-      <text class="sm" x="256" y="162" text-anchor="middle">CI · 일반 머지</text>
-      <g class="num" transform="translate(256 132)"><circle r="11"/><text y="4" text-anchor="middle">2</text></g>
-
-      <path class="edge" d="M456 109 H548" marker-end="url(#ah)"/>
-      <text class="lb" x="502" y="98" text-anchor="middle">PR</text>
-      <text class="sm" x="502" y="162" text-anchor="middle">CI · 일반 머지</text>
-      <g class="num" transform="translate(502 132)"><circle r="11"/><text y="4" text-anchor="middle">4</text></g>
-
-      <path class="edge" d="M702 109 H794" marker-end="url(#ah)"/>
-      <text class="lb" x="748" y="98" text-anchor="middle">릴리스 PR</text>
-      <text class="sm" x="748" y="162" text-anchor="middle">release-please</text>
-      <g class="num" transform="translate(748 132)"><circle r="11"/><text y="4" text-anchor="middle">7</text></g>
-
-      <!-- 도는 곳 -->
-      <g>
-        <rect x="50" y="276" width="150" height="76" rx="8" fill="var(--local-bg)" stroke="var(--local)" stroke-width="1.8"/>
-        <text class="ttl" x="125" y="302" text-anchor="middle">로컬 개발</text>
-        <text class="pl" x="125" y="322" text-anchor="middle">로컬 장비</text>
-        <text class="sm m" x="125" y="340" text-anchor="middle">작업 클론</text>
-
-        <rect x="306" y="276" width="150" height="76" rx="8" fill="var(--dev-bg)" stroke="var(--dev)" stroke-width="1.8"/>
-        <text class="ttl" x="381" y="302" text-anchor="middle">환경 dev</text>
-        <text class="pl" x="381" y="322" text-anchor="middle">개발 서버</text>
-        <text class="sm m" x="381" y="340" text-anchor="middle">~/.openmake/dev</text>
-
-        <rect x="552" y="276" width="150" height="76" rx="8" fill="var(--stg-bg)" stroke="var(--stg)" stroke-width="1.8"/>
-        <text class="ttl" x="627" y="302" text-anchor="middle">환경 staging</text>
-        <text class="pl" x="627" y="322" text-anchor="middle">스테이징 서버</text>
-        <text class="sm m" x="627" y="340" text-anchor="middle">~/.openmake/staging</text>
-
-        <rect x="804" y="276" width="150" height="76" rx="8" fill="var(--onl-bg)" stroke="var(--onl)" stroke-width="1.8"/>
-        <text class="ttl" x="879" y="302" text-anchor="middle">환경 online</text>
-        <text class="pl" x="879" y="322" text-anchor="middle">온라인 서버</text>
-        <text class="sm m" x="879" y="340" text-anchor="middle">~/.openmake/online</text>
-      </g>
-
-      <!-- 로컬 개발 → feature (push) -->
-      <path class="edge" d="M125 272 V144" marker-end="url(#ah)"/>
-      <g class="cmd"><rect x="53.5" y="178" width="143" height="22" rx="11"/><text x="125" y="193" text-anchor="middle">omk dev up → push</text></g>
-      <g class="num" transform="translate(125 222)"><circle r="11"/><text y="4" text-anchor="middle">1</text></g>
-
-      <!-- git → 환경 -->
-      <path class="edge" d="M381 140 V272" marker-end="url(#ah)"/>
-      <g class="cmd"><rect x="306" y="178" width="150" height="22" rx="11"/><text x="381" y="193" text-anchor="middle">omk env update dev</text></g>
-      <g class="num" transform="translate(381 222)"><circle r="11"/><text y="4" text-anchor="middle">3</text></g>
-
-      <path class="edge" d="M627 140 V272" marker-end="url(#ah)"/>
-      <g class="cmd"><rect x="538" y="178" width="178" height="22" rx="11"/><text x="627" y="193" text-anchor="middle">omk env update staging</text></g>
-      <g class="num" transform="translate(627 222)"><circle r="11"/><text y="4" text-anchor="middle">5</text></g>
-
-      <path class="edge" d="M879 140 V272" marker-end="url(#ah)"/>
-      <g class="cmd"><rect x="793.5" y="178" width="171" height="22" rx="11"/><text x="879" y="193" text-anchor="middle">omk env update online</text></g>
-      <g class="num" transform="translate(879 222)"><circle r="11"/><text y="4" text-anchor="middle">8</text></g>
-
-      <!-- verify 기록 -->
-      <path class="edge dash" d="M702 314 H800" marker-end="url(#ahd)"/>
-      <text class="sm" x="751" y="372" text-anchor="middle">확인 기록 → 게이트</text>
-      <g class="num" transform="translate(751 338)"><circle r="11"/><text y="4" text-anchor="middle">6</text></g>
-    </svg>
-    <div class="legend">
-      <span><i style="background:var(--local)"></i>로컬 개발 — 고치면서 바로 본다</span>
-      <span><i style="background:var(--dev)"></i>dev — 합쳐진 dev 가 설치되고 도는가</span>
-      <span><i style="background:var(--stg)"></i>staging — 합쳐진 main 이 올라가도 되는가</span>
-      <span><i style="background:var(--onl)"></i>online — 실사용</span>
-    </div>
-  </div>
-
-  <h2 id="principles">세 가지 원칙</h2>
-  <div class="rules">
-    <div class="rule"><div class="k">원칙 1</div><div class="t">배포는 전부 수동이다</div><p>머지·릴리스만으로는 어떤 환경도 바뀌지 않는다. 사람이 <code>omk env update &lt;env&gt;</code> 를 실행해야 올라간다.</p></div>
-    <div class="rule"><div class="k">원칙 2</div><div class="t">앞 단계를 통과해야 다음으로 간다</div><p>환경 dev 통과 전에는 <code>main</code> 으로 올리지 않는다. staging 통과 전에는 릴리스하지 않는다.</p></div>
-    <div class="rule"><div class="k">원칙 3</div><div class="t">online 은 릴리스 태그만 따른다</div><p><code>main</code> 은 개발이 모이는 곳이다. staging 에서 확인하기 전의 <code>main</code> 을 운영이 받지 않는다.</p></div>
-  </div>
-
-  <h2 id="glance">한눈에 보는 단계</h2>
-  <div class="tw"><table>
-    <thead><tr><th>#</th><th>어디서</th><th>무엇을</th><th>명령</th></tr></thead>
-    <tbody>
-      <tr><th class="c-local">①</th><td><strong>로컬 개발</strong></td><td>브랜치 <code>dev</code> 에서 브랜치를 따 핫 리로드로 수정 → 로컬 테스트 → push</td><td><code>omk dev up</code></td></tr>
-      <tr><th>②</th><td>GitHub</td><td><code>feature/*</code> → <code>dev</code> PR → CI → 일반 머지</td><td><code>gh pr create --base dev</code></td></tr>
-      <tr><th class="c-dev">③</th><td><strong>환경 dev</strong></td><td>합쳐진 <code>dev</code> 가 실제로 설치되고 도는지 확인</td><td><code>omk env update dev</code></td></tr>
-      <tr><th>④</th><td>GitHub</td><td><code>dev</code> → <code>main</code> PR → CI → 리뷰 → 일반 머지</td><td><code>gh pr create --base main --head dev</code></td></tr>
-      <tr><th class="c-stg">⑤</th><td><strong>환경 staging</strong></td><td>머지된 main 을 기존 데이터 위에서 update 로 확인</td><td><code>omk env update staging</code></td></tr>
-      <tr><th class="c-stg">⑥</th><td><strong>환경 staging</strong></td><td>확인을 마친 커밋을 기록</td><td><code>omk env verify staging</code></td></tr>
-      <tr><th>⑦</th><td>GitHub</td><td>릴리스 PR 머지 → <code>vX.Y.Z</code> 태그</td><td>릴리스 PR 머지</td></tr>
-      <tr><th class="c-onl">⑧</th><td><strong>환경 online</strong></td><td>새 릴리스 태그로 올리고 스모크 확인</td><td><code>omk env update online</code></td></tr>
-    </tbody>
-  </table></div>
-
-  <h2 id="rules">환경 규칙</h2>
-  <div class="tw"><table>
-    <thead><tr><th></th><th class="c-dev">dev</th><th class="c-stg">staging</th><th class="c-onl">online</th></tr></thead>
-    <tbody>
-      <tr><th>위치</th><td><code>~/.openmake/dev/llm</code></td><td><code>~/.openmake/staging/llm</code></td><td><code>~/.openmake/online/llm</code></td></tr>
-      <tr><th>따르는 것</th><td>브랜치 <code>dev</code> 최신</td><td><code>main</code> 최신</td><td><strong>최신 릴리스 태그</strong></td></tr>
-      <tr><th>인스턴스</th><td><code>dev</code></td><td><code>staging</code></td><td><strong>기본 (접미사 없음)</strong></td></tr>
-      <tr><th>포트</th><td>install.sh 가 할당</td><td>install.sh 가 할당</td><td>소스의 기본 포트<br>52416 / 3000 / 5432 / 6379</td></tr>
-      <tr><th>PM2</th><td><code>openmake-{llm,next,litellm}-dev</code></td><td><code>openmake-{llm,next,litellm}-staging</code></td><td><code>openmake-{llm,next,litellm}</code></td></tr>
-      <tr><th>docker</th><td><code>openmake-dev-*</code></td><td><code>openmake-staging-*</code></td><td><code>openmake-*</code></td></tr>
-      <tr><th>올리는 방식</th><td>update (꼬이면 reset + install)</td><td><strong>update 만</strong></td><td><strong>update 만</strong></td></tr>
-      <tr><th>데이터</th><td>버림</td><td>유지</td><td>절대 보존</td></tr>
-      <tr><th>검증 깊이</th><td>기능 전부 (배선·구조)</td><td>기능 + update·마이그레이션</td><td>스모크만</td></tr>
-      <tr><th>모델</th><td>호스트 기본 모델 또는 지정</td><td>같음</td><td>운영 모델 서버</td></tr>
-    </tbody>
-  </table></div>
-  <ul>
-    <li><strong>이름 있는 인스턴스의 포트</strong>는 한 칸 옆(52417 / 3010 / 5433 / 6380)부터 잡고, 쓰이고 있으면 옮긴다. omk 는 포트를 기억하지 않는다 — 실제 값은 <code>omk env status &lt;env&gt;</code> 로 본다.</li>
-    <li>충돌 판정은 <strong>설치하는 순간 열려 있는 포트</strong>만 본다. 같은 장비에서 나란히 쓸 환경·로컬 개발은 띄워 둔 채 설치한다.</li>
-    <li>장소는 <strong>역할의 이름</strong>이다. 개발 서버·스테이징 서버·온라인 서버가 같은 호스트여도 되고 달라도 된다. 로컬 개발은 개발자마다 자기 로컬 장비에 둔다.</li>
-  </ul>
-</section>
+<section class="page" id="overview" data-title="개발에서 운영까지 · 8단계"><h1>개발에서 운영까지 · 8단계</h1><p>local MacBook에서 개발하고 GitHub가 dev/main 검사를 처리합니다. tom은 main을 설치·검증하고, 사람의 실사용 OK 후 검증된 릴리스만 ome-on으로 이어집니다.</p><p><a href="http://rasplay.tplinkdns.com:34321/workflow-map.html">합의 흐름 원본</a> · <a href="http://rasplay.tplinkdns.com:34321/board.html">현황 보드</a> · <a href="../../scripts/env/README.md">실행 명령과 활성화 조건</a></p><div class="code"><pre>local 개발·테스트·PR → PR CI·dev 자동 병합
+ → 병합 dev CI·기본/변경 기능 검사 → main 자동 승격
+ → tom 설치·검증·SHA 고정 → 사람 실사용 OK·verify
+ → 검증 릴리스 자동 발행 → ome-on 고정 태그 설치·스모크
+bean ── 주기적 외부 실사용 검사 ──▶ tom / ome-on</pre></div><table><thead><tr><th>단계</th><th>담당</th><th>하는 일</th><th>진입점</th></tr></thead><tbody><tr><th>1</th><td>local · 사람+에이전트</td><td>개발·관련 테스트·PR</td><td><code>omk dev up</code></td></tr><tr><th>2</th><td>GitHub · 자동</td><td>작업 PR → dev</td><td><code>auto-merge workflow</code></td></tr><tr><th>3</th><td>GitHub runner · 자동</td><td>병합 dev 소스·기능 검사</td><td><code>npm run test:dev -- FULL_SHA</code></td></tr><tr><th>4</th><td>GitHub · 자동</td><td>dev → main 승격</td><td><code>promote workflow</code></td></tr><tr><th>5</th><td>tom · 자동</td><td>설치·스모크·필수 검증</td><td><code>omk env pipeline staging</code></td></tr><tr><th>6</th><td>사람 + tom 명령</td><td>실사용 OK → verify</td><td><code>omk env approve staging --sha FULL_SHA --yes</code></td></tr><tr><th>7</th><td>GitHub · 자동</td><td>검증 릴리스 발행</td><td><code>release-verified / release-please</code></td></tr><tr><th>8</th><td>ome-on · 자동</td><td>고정 태그 설치·운영 스모크</td><td><code>omk env pipeline online</code></td></tr></tbody></table><h2>역할과 판정</h2><p>별도 배포 dev 서버는 필수 구성에서 폐지됐습니다. dev는 Git 브랜치이며 local은 개발 호스트입니다. 사람의 판단은 1번과 6번에 있습니다. bean은 검증·배포 담당을 대신하지 않습니다.</p><p>문서·소스 구현, 로컬 검사, 원격 활성화, 실제 단계 완료를 구분합니다. 보드의 기록 미연결을 성공이나 실패로 단정하지 않습니다.</p></section>
 
 <!-- ═══════════════════════════ 02 단계 ═══════════════════════════ -->
-<section class="page" id="steps" data-title="단계별 작업 순서">
-  <div class="eyebrow">02 · 작업 순서</div>
-  <h1>단계별 작업 순서</h1>
-  <p class="lead">브랜치를 따는 것부터 online 에 올리는 것까지. 각 단계 끝의 <strong>통과 조건</strong>을 채운 뒤 다음으로 간다.</p>
-
-  <div class="note">
-    <div class="h">omk 명령을 어떻게 부르나</div>
-    <p>환경이 설치된 호스트에서는 <code>omk …</code> 로 부른다(래퍼 <code>~/.openmake/bin/omk</code>). 래퍼는 online → staging → 그 밖의 환경 순으로 처음 찾은 환경의 스크립트를 실행한다. 환경이 하나도 없는 장비(로컬 개발만 하는 로컬 장비)에서는 작업 클론의 스크립트를 직접 부른다: <code>scripts/env/omk.sh …</code></p>
-  </div>
-
-  <div class="step p-local" id="s1">
-    <div class="no">1</div>
-    <div class="where">로컬 개발 · 로컬 장비</div>
-    <h3>브랜치를 따서 고치고, 로컬에서 확인하고, push</h3>
-    <p>브랜치는 <code>origin/dev</code> 에서 딴다. 핫 리로드로 고치면서 확인한다.</p>
-    <div class="code"><pre><span class="cm"># 브랜치</span>
-git fetch origin
-git switch -c feature/<span class="ph">&lt;주제&gt;</span> origin/dev
-
-<span class="cm"># 로컬 개발 — 최초 1회 준비, 그 뒤로는 up 만</span>
-scripts/env/omk.sh dev setup
-scripts/env/omk.sh dev up
-
-<span class="cm"># 고친 뒤 — CI 는 40분쯤 걸린다. 올리기 전에 여기서 먼저 돌린다</span>
-npm test
-npm run lint
-bash scripts/env/omk.test.sh        <span class="cm"># omk.sh 를 고쳤을 때</span>
-
-git push -u origin feature/<span class="ph">&lt;주제&gt;</span></pre></div>
-    <p class="pass"><b>통과 조건</b>로컬 테스트·lint 통과, 로컬 개발에서 바꾼 기능이 동작, 원격에 push 됨</p>
-    <p>고친 것에 따라 무엇을 다시 해야 하는지는 <a href="#local-dev/after-edit">로컬 개발 — 고친 뒤 할 일</a>.</p>
-  </div>
-
-  <div class="step" id="s2">
-    <div class="no">2</div>
-    <div class="where">GitHub</div>
-    <h3>PR 로 브랜치 dev 에 합친다</h3>
-    <p><code>dev</code> 에는 직접 push 하지 않는다. PR 을 열면 <strong>CI 가 돌고, 통과해야 머지할 수 있다.</strong> 일반 머지로 합친다.</p>
-    <div class="code"><pre>gh pr create --base dev
-gh pr checks --watch               <span class="cm"># CI 진행 보기</span>
-gh pr merge --merge                <span class="cm"># 일반 머지 (squash 아님)</span></pre></div>
-    <p>CI 는 테스트·빌드·lint 를 본다. "설치해서 도는지"는 보지 않는다 — 그것은 다음 단계다.</p>
-    <p class="pass"><b>통과 조건</b>CI Gate 통과, <code>origin/dev</code> 에 합쳐짐</p>
-  </div>
-
-  <div class="step p-dev" id="s3">
-    <div class="no">3</div>
-    <div class="where">환경 dev · 개발 서버</div>
-    <h3>합쳐진 dev 가 실제로 설치되고 도는지 확인</h3>
-    <p>브랜치 <code>dev</code> 를 받아 <strong>빌드하고 PM2 로 띄운다.</strong> 로컬 개발에서 되던 것이 여기서 안 될 수 있다 — 빌드 실패, push 에서 빠진 파일, PM2 기동 문제는 여기서만 드러난다.</p>
-    <div class="code"><pre><span class="cm"># 처음 한 번 — 기본으로 브랜치 dev 를 설치한다</span>
-omk env install dev --tailscale
-
-<span class="cm"># 그 뒤로는 dev 에 머지될 때마다</span>
-omk env update dev
-omk env status dev</pre></div>
-    <p>확인할 것: 설치가 끝까지 되는가 → 바꾼 기능 → 기본 동작(채팅 · 웹 검색 · 에이전트 작업 · 아티팩트 내보내기).</p>
-    <p class="pass"><b>통과 조건</b>요약에 <code>[ERR]</code> 없음, <code>omk env status dev</code> 의 health 가 OK, 위 기능 확인</p>
-    <p>문제가 나오면 ① 로 돌아가 고친다. 자세한 것은 <a href="#env-dev">환경 dev</a>.</p>
-  </div>
-
-  <div class="step" id="s4">
-    <div class="no">4</div>
-    <div class="where">GitHub</div>
-    <h3>dev 를 main 으로 올린다</h3>
-    <p><code>dev</code> 에 쌓인 것을 한꺼번에 올린다. CI 를 다시 지나고 <strong>일반 머지</strong>한다.</p>
-    <div class="code"><pre>gh pr create --base main --head dev</pre></div>
-    <div class="note p-warn">
-      <div class="h">squash 하지 않는다</div>
-      <p>squash 는 <code>dev</code> 와 <code>main</code> 의 연결을 끊어, 다음에 올릴 때마다 이미 올린 변경이 충돌한다. 일반 머지라 <code>dev</code> 의 커밋 제목이 그대로 <code>main</code> 에 들어가고 release-please 가 그것을 CHANGELOG 에 쓴다 — 커밋 제목은 <code>feat(…):</code> · <code>fix(…):</code> 형식을 지킨다.</p>
-    </div>
-    <p class="pass"><b>통과 조건</b>③ 환경 dev 통과, CI Gate 통과, <code>main</code> 에 머지됨</p>
-  </div>
-
-  <div class="step p-stg" id="s5">
-    <div class="no">5</div>
-    <div class="where">환경 staging · 스테이징 서버</div>
-    <h3>머지된 main 을 기존 데이터 위에서 update 로 확인</h3>
-    <p>staging 은 <strong>머지된 main</strong> 을 본다 — 합쳐진 결과와, update·마이그레이션 경로. online 도 update 로 올라가므로 같은 길을 먼저 밟는다.</p>
-    <div class="code"><pre>omk env update staging
-omk env status staging</pre></div>
-    <p class="pass"><b>통과 조건</b>update 가 끝까지 됨, 마이그레이션이 기존 데이터에서 통과, 합쳐진 기능 확인</p>
-    <p>자세한 것은 <a href="#env-staging">환경 staging</a>.</p>
-  </div>
-
-  <div class="step p-stg" id="s6">
-    <div class="no">6</div>
-    <div class="where">환경 staging · 스테이징 서버</div>
-    <h3>확인을 마친 커밋을 기록</h3>
-    <p>이 기록이 있는 커밋에서 나온 릴리스만 online 에 올라간다.</p>
-    <div class="code"><pre>omk env verify staging
-omk env verify staging --list      <span class="cm"># 기록 보기</span>
-
-<span class="cm"># 설치된 클론의 origin 은 https(읽기 전용)다 — push 할 주소를 준다</span>
-OMK_VERIFY_PUSH_URL=git@github.com:openmake/openmake_llm.git omk env verify staging</pre></div>
-    <p class="pass"><b>통과 조건</b>기록이 origin 에 남음. verify 뒤에 main 에 머지가 더 들어왔으면 ⑤ 부터 다시</p>
-    <p>자세한 것은 <a href="#gate">릴리스 게이트</a>.</p>
-  </div>
-
-  <div class="step" id="s7">
-    <div class="no">7</div>
-    <div class="where">GitHub</div>
-    <h3>릴리스 PR 을 머지해 태그를 만든다</h3>
-    <p>release-please 가 만든 릴리스 PR 을 머지하면 <code>vX.Y.Z</code> 태그가 찍힌다. 태그는 <strong>머지한 순간의 main</strong> 에 찍히므로, ⑥ 뒤에 main 에 들어온 것이 없을 때 머지한다.</p>
-    <p class="pass"><b>통과 조건</b>새 <code>vX.Y.Z</code> 태그</p>
-  </div>
-
-  <div class="step p-onl" id="s8">
-    <div class="no">8</div>
-    <div class="where">환경 online · 온라인 서버</div>
-    <h3>새 릴리스 태그로 올리고 스모크 확인</h3>
-    <p>올리기 직전에 DB 백업을 한 번 뜬다(실패하면 올리지 않는다). 게이트가 켜져 있으면 ⑥ 의 기록을 본다.</p>
-    <div class="code"><pre>omk env update online
-omk env status online</pre></div>
-    <p>스모크: 접속 200 · 로그인 · 채팅 1회 · <code>omk env status online</code>. 무거운 검증은 하지 않는다.</p>
-    <p class="pass"><b>통과 조건</b>스모크 통과</p>
-    <p>자세한 것은 <a href="#env-online">환경 online</a>.</p>
-  </div>
+<section class="page" id="steps" data-title="단계별 실행과 다음 조건">
+<h1>단계별 실행과 다음 조건</h1>
+<div class="step" id="s1">
+<div class="no">1</div>
+<div class="where">local · 사람+에이전트</div>
+<h3>개발·관련 테스트·PR</h3>
+<p>origin/dev에서 작업 브랜치를 만들고, 변경 기능 회귀 테스트·lint·필요 빌드 후 dev PR을 올립니다.</p>
+<div class="code">
+<pre>omk dev up</pre>
+</div>
+</div>
+<div class="step" id="s2">
+<div class="no">2</div>
+<div class="where">GitHub · 자동</div>
+<h3>작업 PR → dev</h3>
+<p>최신 PR 변경의 CI와 결정적 구조 검사를 충족하면 일반 병합합니다. 사람 PR 승인 단계는 없습니다.</p>
+<div class="code">
+<pre>auto-merge workflow</pre>
+</div>
+</div>
+<div class="step" id="s3">
+<div class="no">3</div>
+<div class="where">GitHub runner · 자동</div>
+<h3>병합 dev 소스·기능 검사</h3>
+<p>실제로 병합된 SHA의 소스/DB/빌드/린트와 임시 앱 기본 스모크+신규·수정 기능/관련 소스를 검사합니다. 전체 E2E를 무조건 돌리지 않습니다.</p>
+<div class="code">
+<pre>npm run test:dev -- FULL_SHA</pre>
+</div>
+</div>
+<div class="step" id="s4">
+<div class="no">4</div>
+<div class="where">GitHub · 자동</div>
+<h3>dev → main 승격</h3>
+<p>현재 dev push CI 통과와 최신 main 조합의 PR CI가 모두 필요합니다. 폐지된 별도 dev 서버나 omk/env-dev 표지는 요구하지 않습니다.</p>
+<div class="code">
+<pre>promote workflow</pre>
+</div>
+</div>
+<div class="step" id="s5">
+<div class="no">5</div>
+<div class="where">tom · 자동</div>
+<h3>설치·스모크·필수 검증</h3>
+<p>main 설치 후 기본 스모크와 구성된 필수 고강도 검증을 수행합니다. 성공한 설치 SHA를 사람 확인을 위해 고정합니다.</p>
+<div class="code">
+<pre>omk env pipeline staging</pre>
+</div>
+</div>
+<div class="step" id="s6">
+<div class="no">6</div>
+<div class="where">사람 + tom 명령</div>
+<h3>실사용 OK → verify</h3>
+<p>사람이 고정된 tom을 직접 써보고 OK하면 동일 SHA를 명령으로 기록합니다. 실행/디스크 빌드·고정 SHA·검증 근거를 다시 대조합니다.</p>
+<div class="code">
+<pre>omk env approve staging --sha FULL_SHA --yes</pre>
+</div>
+</div>
+<div class="step" id="s7">
+<div class="no">7</div>
+<div class="where">GitHub · 자동</div>
+<h3>검증 릴리스 발행</h3>
+<p>verified ref와 각 커밋의 metadata-only 계보 및 릴리스 PR CI를 확인하고 release-please PR을 자동 병합합니다. 추가 사람 승인은 없습니다.</p>
+<div class="code">
+<pre>release-verified / release-please</pre>
+</div>
+</div>
+<div class="step" id="s8">
+<div class="no">8</div>
+<div class="where">ome-on · 자동</div>
+<h3>고정 태그 설치·운영 스모크</h3>
+<p>한 번 선택한 태그 SHA를 검증하고 백업 후 관리형 갱신합니다. 설치/실행 SHA 일치와 스모크 통과가 완료 조건입니다.</p>
+<div class="code">
+<pre>omk env pipeline online</pre>
+</div>
+</div>
 </section>
 
 <!-- ═══════════════════════════ 03 로컬 개발 ═══════════════════════════ -->
@@ -633,154 +422,33 @@ scripts/env/omk.sh dev setup --no-runtime-images \
   </ul>
 </section>
 
-<!-- ═══════════════════════════ 04 환경 dev ═══════════════════════════ -->
-<section class="page p-dev" id="env-dev" data-title="환경 dev">
-  <div class="eyebrow">04 · 환경 dev</div>
-  <h1>"합쳐진 dev 가 실제 환경에서 도는가"</h1>
-  <p class="lead">개발 서버에 설치한 배포본이다. 브랜치 <code>dev</code> 를 따르고, <code>main</code> 으로 올리기 전에 거친다. 데이터는 버리는 것이다 — 꼬이면 망설이지 말고 reset.</p>
-
-  <h2>명령</h2>
-  <div class="code"><pre>omk env install dev --tailscale      <span class="cm"># 처음 한 번 — 기본으로 브랜치 dev 를 설치한다</span>
-omk env update dev                   <span class="cm"># dev 에 머지될 때마다</span>
-omk env status dev
-omk env logs dev
-omk env reset dev --reinstall        <span class="cm"># 꼬였을 때</span></pre></div>
-
-  <h3>머지 전에 따로 보고 싶은 브랜치 — 임시 환경</h3>
-  <p>위험한 변경이나 남의 PR 은 환경 dev 를 건드리지 않고 임시 환경에 올린다. 끝나면 지운다.</p>
-  <div class="code"><pre>omk env install pr-123 --ref feature/<span class="ph">&lt;주제&gt;</span>
-omk env reset pr-123</pre></div>
-  <p><code>omk.sh</code> 자체를 고친 브랜치는 래퍼 대신 그 소스의 스크립트를 직접 부른다: <code>&lt;작업 클론&gt;/scripts/env/omk.sh env install pr-123 --ref feature/&lt;주제&gt;</code></p>
-
-  <div class="note p-dev">
-    <div class="h">브랜치 dev 가 없는 저장소</div>
-    <p>포크처럼 브랜치 <code>dev</code> 가 없는 저장소에서는 <code>--ref main</code> 을 준다. <code>openmake_bench</code> 도 브랜치 <code>dev</code> 가 없다 — 환경 dev 에 <code>--bench</code> 로 붙이면 bench 는 <code>main</code> 을 쓴다.</p>
-  </div>
-
-  <h2>확인할 것</h2>
-  <ol>
-    <li>설치·update 가 <strong>끝까지</strong> 되는가</li>
-    <li>바꾼 기능</li>
-    <li>기본 동작 — 채팅 · 웹 검색 · 에이전트 작업 · 아티팩트 내보내기</li>
-  </ol>
-  <p>dev 가 증명하는 것은 <strong>배선과 구조</strong>다. 기본 모델(1.7B)은 작다 — 답변 품질과 에이전트 성공률은 판단하지 않는다.</p>
-
-  <h2>할 것 / 하지 말 것</h2>
-  <div class="tw"><table class="dd">
-    <thead><tr><th>할 것</th><th>하지 말 것</th></tr></thead>
-    <tbody>
-      <tr><td>브랜치 <code>dev</code> 에 머지될 때마다 <code>omk env update dev</code> — 설치가 끝까지 되는지부터 본다</td><td>환경 dev 를 건너뛰고 <code>dev</code> 를 <code>main</code> 으로 올리지 않는다 — CI 는 "설치해서 도는지"를 보지 않는다</td></tr>
-      <tr><td>바꾼 기능 + 기본 동작을 확인한다</td><td>dev 의 결과로 답변 품질·에이전트 성공률을 판단하지 않는다</td></tr>
-      <tr><td>꼬이면 <code>omk env reset dev --reinstall</code></td><td>남기고 싶은 데이터를 dev 에 두지 않는다</td></tr>
-      <tr><td>문제가 나오면 로컬 개발에서 고쳐 → push → 브랜치 <code>dev</code> 에 머지 → <code>omk env update dev</code></td><td>환경 디렉터리(<code>~/.openmake/dev/llm</code>)의 소스를 직접 고치지 않는다</td></tr>
-      <tr><td>머지 전에 따로 볼 브랜치는 <strong>임시 환경</strong>에 올린다</td><td>환경 dev 에 <code>--ref</code> 만 바꿔 다시 install 하지 않는다 — 이미 있는 클론이 재사용되어 <strong>이전 브랜치가 설치된다</strong></td></tr>
-      <tr><td>무거운 실험(새 모델, 설정 변경, 일부러 깨뜨리기)은 여기서 한다</td><td>임시 환경을 방치하지 않는다 — 환경마다 DB·게이트웨이·이미지가 따로 생긴다</td></tr>
-    </tbody>
-  </table></div>
+<!-- ═══════════════════════════ 04 병합 dev 검사 ═══════════════════════════ -->
+<section class="page" id="env-dev" data-title="병합 dev 검사 · GitHub runner">
+<h1>병합 dev 검사 · GitHub runner</h1>
+<p>전용 개발 서버 설치를 main 승격의 전제로 두지 않습니다. GitHub에서 실제 병합 dev SHA의 CI를 수행합니다.</p>
+<h2>소스와 실행 기능</h2>
+<ul>
+<li>기존 단위/DB 통합 테스트·빌드·lint·Base/Add-on 경계 검사를 유지합니다.</li>
+<li>격리된 임시 앱/DB/model fixture로 앱 기동·DB·로그인·기본 채팅·웹 응답을 확인합니다.</li>
+<li>변경 기능/관련 소스 테스트를 선택합니다. 전체 브라우저 테스트를 일괄 실행하지 않습니다.</li>
+<li>선택할 검사가 없거나 미실행이면 통과로 숨기지 않습니다. 실패 시 local에서 수정합니다.</li>
+</ul>
+<p>fixture 검사는 실제 모델 품질 검증이 아닙니다. 통과한 dev SHA만 승격하고, main 조합이 바뀌면 PR 검사도 다시 필요합니다.</p>
 </section>
 
 <!-- ═══════════════════════════ 05 staging ═══════════════════════════ -->
-<section class="page p-stg" id="env-staging" data-title="환경 staging">
-  <div class="eyebrow">05 · 환경 staging</div>
-  <h1>"합쳐진 main 이 online 에 올라가도 되는가"</h1>
-  <p class="lead">항상 <code>main</code> 을 따른다. 데이터를 유지한 채 <strong>update 경로</strong>로 올려, online 이 밟을 길을 먼저 밟는다.</p>
-
-  <h2>명령</h2>
-  <div class="code"><pre>omk env update staging            <span class="cm"># main 에 머지될 때마다</span>
-omk env status staging
-omk env verify staging            <span class="cm"># 확인을 마친 뒤</span></pre></div>
-
-  <h2>확인할 것</h2>
-  <ol>
-    <li>update 가 끝까지 되는가 (ff-only → build → migrate → restart)</li>
-    <li>마이그레이션이 <strong>기존 데이터</strong>에서 도는가</li>
-    <li>여러 PR 이 합쳐진 결과의 기능 — <strong>기능 확인은 여기까지 끝낸다</strong></li>
-  </ol>
-
-  <h2>할 것 / 하지 말 것</h2>
-  <div class="tw"><table class="dd">
-    <thead><tr><th>할 것</th><th>하지 말 것</th></tr></thead>
-    <tbody>
-      <tr><td><strong>항상 main</strong> (<code>--ref</code> 없이 설치). 머지될 때마다 <code>omk env update staging</code></td><td><code>--ref feature/*</code> 로 PR 을 시험하지 않는다 — 그것은 임시 환경의 일이다</td></tr>
-      <tr><td><strong>update 경로</strong>로 올린다</td><td>습관적으로 reset → 재설치하지 않는다 — 마이그레이션이 기존 데이터에서 도는지 볼 수 없게 된다</td></tr>
-      <tr><td>데이터를 <strong>유지</strong>한다. reset 은 정말 꼬였을 때만</td><td>실사용 데이터·비밀값을 가져다 넣지 않는다</td></tr>
-      <tr><td>여러 PR 이 합쳐진 결과의 기능 확인은 여기까지 끝낸다</td><td>통과하기 전에 릴리스 PR 을 머지하지 않는다</td></tr>
-      <tr><td>확인이 끝나면 <code>omk env verify staging</code></td><td>확인하지 않고 verify 하지 않는다. verify 뒤에 머지가 더 들어왔으면 update → 확인 → verify 를 다시 한다</td></tr>
-      <tr><td>문제가 나오면 수정(① 부터) 또는 revert</td><td>staging 에서 직접 핫픽스하지 않는다</td></tr>
-    </tbody>
-  </table></div>
-</section>
+<section class="page" id="env-staging" data-title="tom · main 설치와 사람 확인"><h1>tom · main 설치와 사람 확인</h1><p>main 설치 → 스모크 → 필수 검증 → 설치 SHA 고정까지 자동화합니다. 빈 검증 설정은 차단합니다.</p><div class="code"><pre>omk env pipeline staging
+omk env pipeline staging --schedule '*/10 * * * *'
+# 사람이 실제로 사용한 뒤 OK한 동일 SHA
+omk env approve staging --sha FULL_SHA --yes</pre></div><p>검증 중 hold로 자동 갱신을 막고 실행/디스크 빌드와 검증 결과를 대조합니다. 취소 후 새 설치본을 확인하려면 <code>omk env hold staging --release</code>로 해제합니다.</p><p>6번 버튼 연동은 <a href="pipeline-monitor-contract.md">모니터 계약</a>을 따릅니다. 웹 인증·권한·CSRF를 확인하고 고정 argv만 실행해야 합니다. 중앙 모니터 소스가 없으므로 버튼이 이미 연결됐다고 표시하지 않습니다.</p></section>
 
 <!-- ═══════════════════════════ 06 online ═══════════════════════════ -->
-<section class="page p-onl" id="env-online" data-title="환경 online">
-  <div class="eyebrow">06 · 환경 online</div>
-  <h1>"실사용"</h1>
-  <p class="lead">최신 릴리스 태그로만 올라간다. 확인은 스모크만 한다 — 무거운 검증은 CI 와 staging 에서 끝났어야 한다.</p>
-
-  <h2>명령</h2>
-  <div class="code"><pre>omk env update online             <span class="cm"># 새 릴리스 태그가 있을 때만 올라간다. 직전에 DB 백업</span>
-omk env status online
-omk env backup online --schedule  <span class="cm"># 매일 03:30 백업 — 한 번 걸어 둔다</span></pre></div>
-
-  <h2>스모크</h2>
-  <ol>
-    <li>접속 200</li>
-    <li>로그인</li>
-    <li>채팅 1회</li>
-    <li><code>omk env status online</code></li>
-  </ol>
-
-  <h2>문제가 났을 때</h2>
-  <p>수정 → 새 릴리스 → update 가 기본이다. 급하면 이전 태그로 되돌리고 그 환경 디렉터리에서 <code>./openmake_llm.sh deploy</code>.</p>
-
-  <h2>할 것 / 하지 말 것</h2>
-  <div class="tw"><table class="dd">
-    <thead><tr><th>할 것</th><th>하지 말 것</th></tr></thead>
-    <tbody>
-      <tr><td>릴리스 직후 <code>omk env update online</code></td><td>main HEAD · <code>feature/*</code> 를 올리지 않는다 (<code>--ref</code> 로 브랜치를 주지 않는다)</td></tr>
-      <tr><td><strong>스모크만</strong> 한다</td><td>부하 시험·대량 평가·동시 다발 요청을 하지 않는다 — 운영 모델 서버를 공유한다</td></tr>
-      <tr><td>매일 백업을 걸어 둔다</td><td><code>omk env reset online</code> 을 하지 않는다 — 볼륨(DB)까지 지운다</td></tr>
-      <tr><td>게이트를 켜 둔다 (<code>.env</code> 의 <code>OMK_RELEASE_GATE=1</code>)</td><td><code>--force-unverified</code> 를 습관적으로 쓰지 않는다</td></tr>
-      <tr><td>호스트별 값(도메인·모델 서버 주소·키)은 그 환경의 <code>.env</code> · <code>litellm.env</code> 에만 둔다</td><td>저장소에 호스트 경로·주소·키를 적지 않는다</td></tr>
-      <tr><td>문제가 나면 수정 → 새 릴리스 → update</td><td>online 에서 실험·설정 시험·모델 교체 시험을 하지 않는다</td></tr>
-    </tbody>
-  </table></div>
-</section>
+<section class="page" id="env-online" data-title="ome-on · 검증된 태그만 설치"><h1>ome-on · 검증된 태그만 설치</h1><div class="code"><pre>omk env pipeline online
+omk env pipeline online --schedule '*/10 * * * *'
+omk env pipeline online --off</pre></div><p>captured 태그 SHA의 검증 계보를 확인하고 기존 백업·관리형 배포를 사용합니다. 배포 중 latest를 다시 선택하지 않습니다. 설치/실행 SHA가 고정 태그 SHA와 같고 스모크가 통과해야 완료입니다.</p><p>운영 업데이트 스모크와 bean의 주기적 외부 검사는 별개입니다. OS 자동기동 권한과 재부팅 복원은 호스트별로 검증합니다.</p></section>
 
 <!-- ═══════════════════════════ 07 게이트 ═══════════════════════════ -->
-<section class="page" id="gate" data-title="릴리스 게이트">
-  <div class="eyebrow">07 · 릴리스 게이트</div>
-  <h1>staging 에서 확인한 커밋만 online 에</h1>
-  <p class="lead">릴리스 태그는 릴리스 PR 을 머지한 순간의 main 에 찍힌다. staging 을 마지막으로 올린 뒤에 머지된 PR 은 확인 없이 릴리스에 들어간다 — 게이트는 그 경우를 막는다.</p>
-
-  <div class="code"><pre><span class="cm"># 스테이징 서버 — 기능·마이그레이션 확인을 마친 뒤</span>
-omk env verify staging            <span class="cm"># 검사(깨끗한 작업 트리 · origin/main 에 있는 커밋 · health) → origin 에 기록</span>
-omk env verify staging --list
-
-<span class="cm"># 온라인 서버 — 한 번 켠다 (.env 에 OMK_RELEASE_GATE=1, 또는 설치할 때 --release-gate)</span>
-omk env update online             <span class="cm"># 확인된 릴리스만 올라간다</span></pre></div>
-
-  <div class="tw"><table>
-    <tbody>
-      <tr><th>기록</th><td>origin 의 <code>refs/omk/verified/&lt;커밋&gt;</code>. 브랜치·태그가 아니라 GitHub 화면에는 보이지 않는다. 환경들이 다른 호스트에 있어도 읽힌다</td></tr>
-      <tr><th>통과 조건</th><td>기록된 커밋이 릴리스 태그의 조상이고, 그 사이에 바뀐 것이 <strong>릴리스 메타데이터뿐</strong>이다 (버전·CHANGELOG). 릴리스 커밋에 섞인 의존성 변경은 거부한다</td></tr>
-      <tr><th>거부되면</th><td>아무것도 바꾸지 않고 종료 코드 2. 환경은 지금 버전 그대로 돈다</td></tr>
-      <tr><th>급한 수정</th><td><code>omk env update online --force-unverified</code> — 물어본 뒤 진행하고 <code>~/.openmake/online/logs/release-gate.log</code> 에 남긴다</td></tr>
-      <tr><th>범위</th><td>게이트는 <strong>켠 환경에서만</strong> 동작한다. 외부 설치본은 기본으로 꺼져 있다</td></tr>
-    </tbody>
-  </table></div>
-
-  <h2>스테이징 서버의 쓰기 권한</h2>
-  <p><code>verify</code> 는 origin 에 push 한다. 설치된 클론의 origin 은 https(읽기 전용)이므로 push 할 주소를 따로 준다.</p>
-  <div class="code"><pre>OMK_VERIFY_PUSH_URL=git@github.com:openmake/openmake_llm.git omk env verify staging</pre></div>
-  <div class="tw"><table>
-    <thead><tr><th>방법</th><th>설명</th></tr></thead>
-    <tbody>
-      <tr><th>SSH agent forwarding (권장)</th><td><code>ssh -A staging-host</code> 로 들어가 실행한다 — 호스트에 자격 증명이 남지 않는다</td></tr>
-      <tr><th>쓰기 권한 deploy key</th><td>호스트에 저장해야 할 때. 그 키로 <code>main</code> · <code>v*</code> 태그를 고칠 수 없게 브랜치 보호를 먼저 확인한다</td></tr>
-    </tbody>
-  </table></div>
-</section>
+<section class="page" id="gate" data-title="verify → 릴리스의 코드 계보"><h1>verify → 릴리스의 코드 계보</h1><p><code>refs/omk/verified/FULL_SHA</code>가 사람 확인 뒤의 검증 기록입니다. verify는 단순 health 확인을 넘어 고정 SHA·필수 검증·실행 빌드 일치를 요구합니다.</p><p>릴리스 PR과 태그는 verify의 자손이며 모든 중간 커밋이 허용된 버전/변경 로그 메타데이터여야 합니다. JSON 버전 외 의존성 변경이나 기능 변경은 되돌려도 차단합니다. 허용 경로는 검증된 설정에서 읽습니다.</p><p>릴리스 PR 최신 CI와 계보를 검사한 뒤 자동 병합하고 release-please가 태그·릴리스·SBOM/증명을 생성합니다. 코드 포함과 검증 완료는 별도 사실입니다.</p></section>
 
 <!-- ═══════════════════════════ 08 설치 ═══════════════════════════ -->
 <section class="page" id="install" data-title="새 호스트에 설치">
@@ -928,56 +596,22 @@ omk dev down | status | reset [--keep-data]</pre></div>
 </section>
 
 <!-- ═══════════════════════════ 11 공백 ═══════════════════════════ -->
-<section class="page p-warn" id="gaps" data-title="자동 검사 · 브랜치 보호">
-  <div class="eyebrow">11 · 자동 검사</div>
-  <h1>무엇이 자동으로 막아 주는가</h1>
-  <p class="lead">개발 인원이 늘어도 흐름이 지켜지려면, 사람이 기억하는 규칙이 아니라 저장소가 막아야 한다. 아래는 어디에서 무엇이 검사되는지다.</p>
-
-  <h2>어디서 무엇을 검사하나</h2>
-  <div class="tw"><table>
-    <thead><tr><th>단계</th><th>검사</th><th>보는 것</th><th>누가</th></tr></thead>
-    <tbody>
-      <tr><th class="c-local">① 로컬 개발</th><td>로컬 테스트</td><td>테스트 · lint</td><td>개발자</td></tr>
-      <tr><th>② <code>feature/*</code> → <code>dev</code></th><td><strong>CI Gate</strong></td><td>계약 · 의존성 감사 · 테스트 · 빌드 · 크기 · lint</td><td>자동</td></tr>
-      <tr><th class="c-dev">③ 환경 dev</th><td>설치 확인</td><td>설치해서 도는가, 기능</td><td>사람</td></tr>
-      <tr><th>④ <code>dev</code> → <code>main</code></th><td><strong>CI Gate</strong></td><td>② 와 같음</td><td>자동</td></tr>
-      <tr><th class="c-stg">⑤⑥ 환경 staging</th><td>update 확인 · verify</td><td>마이그레이션, 합쳐진 기능</td><td>사람</td></tr>
-      <tr><th class="c-onl">⑧ 환경 online</th><td>릴리스 게이트 · 스모크</td><td>⑥ 의 기록이 있는 릴리스인가</td><td>자동 + 사람</td></tr>
-    </tbody>
-  </table></div>
-  <p>CI 는 한 번에 40분쯤 걸린다. 그래서 ① 에서 로컬 테스트를 먼저 돌린다.</p>
-
-  <h2>브랜치 보호</h2>
-  <div class="tw"><table>
-    <thead><tr><th></th><th><code>main</code></th><th><code>dev</code></th></tr></thead>
-    <tbody>
-      <tr><th>PR 로만 합친다</th><td>예</td><td>예</td></tr>
-      <tr><th>CI Gate 통과 필수</th><td>예</td><td>예</td></tr>
-      <tr><th>force push · 삭제</th><td>금지</td><td>금지</td></tr>
-      <tr><th>리뷰 승인 필수</th><td>아니오</td><td>아니오 — 인원이 늘면 켠다</td></tr>
-    </tbody>
-  </table></div>
-  <div class="note p-warn">
-    <div class="h">이 표는 목표 상태다</div>
-    <p>브랜치 보호는 저장소 파일이 아니라 GitHub 설정이다. <code>dev</code> 의 보호는 워크플로 수정이 <code>dev</code> 에 들어가 CI 가 한 번 통과한 <strong>뒤에</strong> 건다 — 먼저 걸면 아무도 머지할 수 없다. 지금 상태는 아래 명령으로 본다.</p>
-  </div>
-  <div class="code"><pre>gh api repos/openmake/openmake_llm/branches/dev/protection
-gh api repos/openmake/openmake_llm/branches/main/protection</pre></div>
-
-  <h2>CI 가 보지 않는 것</h2>
-  <ul>
-    <li><strong>설치해서 도는가</strong> — 빌드 뒤 PM2 기동, docker, 게이트웨이 연결. ③ 환경 dev 에서 본다.</li>
-    <li><strong>기존 데이터 위의 마이그레이션</strong> — ⑤ 환경 staging 에서 본다.</li>
-    <li><strong><code>openmake_bench</code></strong> — 브랜치 <code>dev</code> 가 없다. <code>main</code> 에서 따서 <code>main</code> 으로 합친다.</li>
-  </ul>
-
-  <h2>의존성 감사에 걸렸을 때</h2>
-  <p>CI 의 <code>Gate 0.7</code> 은 운영 의존성에 high 이상 보안 권고가 새로 생기면 실패한다. 내 변경과 무관하게 어느 날 갑자기 실패할 수 있다.</p>
-  <div class="code"><pre>npm run audit:gate                                   <span class="cm"># 무엇이 걸렸는지</span>
-npm ls <span class="ph">&lt;패키지&gt;</span> --omit=dev                          <span class="cm"># 누가 끌어오는지</span>
-npm update <span class="ph">&lt;패키지&gt;</span> --package-lock-only             <span class="cm"># 고친 버전이 있으면 lockfile 만 올린다</span>
-npm run audit:gate</pre></div>
-  <p>당장 올릴 수 없으면 사유와 만료일을 적어 <code>.audit-allowlist.json</code> 에 넣는다. 만료가 지나면 다시 실패한다.</p>
+<section class="page" id="gaps" data-title="자동 검사 · 활성화와 남는 경계">
+<h1>자동 검사 · 활성화와 남는 경계</h1>
+<h2>도입 조건</h2>
+<ul>
+<li>자동화 workflow와 신뢰된 스크립트가 기본 브랜치에 존재해야 합니다.</li>
+<li>dev/main의 필수 CI와 strict 최신 기준이 필요합니다. 컨트롤러는 준비 상태를 재확인해 즉시 일반 병합하며 --auto 예약은 만들지 않습니다.</li>
+<li>
+<code>OMK_AUTOMATION_TOKEN</code>과 tom/ome-on 실제 스케줄·QA 계정·필수 검증 시나리오를 준비해야 합니다.</li>
+<li>credential이 없거나 검사가 실패하면 오류/대기로 기록하며 성공 skip으로 숨기지 않습니다.</li>
+</ul>
+<h2>bean과 모니터</h2>
+<p>bean은 대상별 시나리오·주기·관측 SHA/버전·근거를 기록합니다. 주기를 임의 활성화하지 않으며 사람 OK·verify를 대신하지 않습니다.</p>
+<p>중앙 보드 소스가 로컬에 없어 기존 7단계 API를 변경·배포하지 않았습니다. 새 8단계 증거 연결과 6번 버튼의 실제 서버 구현은 <a href="pipeline-monitor-contract.md">연동 계약</a>을 기준으로 합니다.</p>
+<p>
+<a href="pipeline-source-audit.md">전체 소스 조사와 구현/활성화 구분</a> · <a href="../../scripts/env/README.md">현재 명령 안내</a>
+</p>
 </section>
 
 <div class="pager no-js-hide" id="pager"></div>

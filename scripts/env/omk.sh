@@ -47,7 +47,11 @@
 #                                                       # --report: 갱신 → 스모크 → 그 커밋에 결과 표지(autoupdate 가 쓴다)
 #   omk env smoke   <env> [--report]                    # health · 빌드본의 API 포트 · /generated · 로그인 · /ready(LLM·DB·기본 모델)
 #                                                        # + 채팅 1회(릴리스를 따르는 환경은 빼고 쓰기 없는 검사만). 실패하면 종료 코드 3
-#   omk env verify  <env> [--list]                      # 확인을 마친 커밋을 origin 에 기록 — 릴리스 게이트(OMK_RELEASE_GATE=1)가 읽는다
+#   omk env pipeline staging|online [--schedule [CRON]|--off] # managed update/smoke/validation/hold or verified release
+#   omk env approve staging --sha FULL_SHA [--yes]     # human OK: verified ref + private receipt, then release hold
+#   omk env hold <env> [--release]                      # hold installed SHA against update
+#   omk env validate staging                          # local .pipeline/checks.json mandatory argv commands
+#   omk env verify  <env> [--sha FULL_SHA] [--list]                      # 확인을 마친 커밋을 origin 에 기록 — 릴리스 게이트(OMK_RELEASE_GATE=1)가 읽는다
 #   omk env reset   <env> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
 #   omk env status|start|stop|logs <env>
 #   omk env expose <env> [--tailscale] [--host H]…      # 다른 기기에서 프록시 포트로 보기 — 호스트를 CORS 에 허용(.env 에 기억)
@@ -230,6 +234,11 @@ release_checkout() { # $1=dir $2=tag
     git -C "$1" checkout -q -B release "$2" || die "릴리스 $2 체크아웃 실패: $1"
 }
 release_behind() { # $1=dir → 새 릴리스가 있으면 0. RELEASE_TAG 에 최신 태그
+    if [[ -n "${OMK_PIPELINE_RELEASE_SHA:-}" ]]; then
+        [[ "$OMK_PIPELINE_RELEASE_SHA" =~ ^[a-f0-9]{40}$ ]] || die 'Invalid captured pipeline release SHA'
+        RELEASE_TAG="$(git -C "$1" rev-parse --verify "$OMK_PIPELINE_RELEASE_SHA^{commit}")" || die 'Captured release commit unavailable'
+        [[ "$(git -C "$1" rev-parse HEAD)" != "$RELEASE_TAG" ]]; return
+    fi
     git -C "$1" fetch -q --tags --prune 2>/dev/null || return 1
     RELEASE_TAG="$(latest_release_tag "$1")"; [[ -n "$RELEASE_TAG" ]] || return 1
     [[ "$(git -C "$1" rev-parse HEAD)" != "$(git -C "$1" rev-parse "$RELEASE_TAG^{commit}")" ]]
@@ -250,18 +259,12 @@ release_meta_paths() { # $1=dir $2=커밋 → release-please 가 고치는 경�
         | grep -oE '"(path|changelog-path)"[[:space:]]*:[[:space:]]*"[^"]+"' | sed -E 's/.*:[[:space:]]*"([^"]+)"$/\1/' || true
 }
 # 경로만 보면 릴리스 커밋에 섞인 의존성 변경이 통과한다 — JSON 은 바뀐 줄이 버전뿐인지도 본다.
-release_gate_offending() { # $1=dir $2=확인한 커밋 $3=태그 커밋 → 메타데이터가 아닌 변경 (한 줄에 하나, 없으면 빈 출력)
-    local allowed f bad
-    allowed="$(release_meta_paths "$1" "$2")"
-    while IFS= read -r f; do
-        [[ -n "$f" ]] || continue
-        if ! printf '%s\n' "$allowed" | grep -qxF -- "$f"; then printf '%s\n' "$f"; continue; fi
-        case "$f" in *.json)
-            bad="$(git -C "$1" diff -U0 "$2" "$3" -- "$f" | awk '/^@@/{h=1;next} h && /^[+-]/' \
-                | grep -vE '^[+-][[:space:]]*"(version|\.)"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+[^"]*",?[[:space:]]*$' || true)"
-            [[ -z "$bad" ]] || printf '%s (버전 외 변경)\n' "$f" ;;
-        esac
-    done < <(git -C "$1" diff --name-only "$2" "$3")
+release_gate_offending() { # Shared per-commit policy used by GitHub release automation.
+    local checker output rc=0
+    checker="$SCRIPT_DIR/../pipeline/github.mjs"
+    [[ -f "$checker" ]] || { printf '%s\n' 'Release metadata checker unavailable'; return; }
+    output="$(cd "$1" && node "$checker" metadata-range "$2" "$3" 2>&1)" || rc=$?
+    [[ $rc -eq 0 ]] || printf '%s\n' "${output:-Release metadata check failed}"
 }
 release_gate_fetch() { # $1=dir
     git -C "$1" fetch -q --prune origin "+$OMK_VERIFIED_REFS/*:$OMK_VERIFIED_REFS/*" 2>/dev/null
@@ -312,7 +315,7 @@ verified_push() { # $1=dir $2=원격 → HEAD 를 확인 기록으로 남긴다 
 # 이름 규칙은 install.sh / ecosystem.config.js / infra/docker-compose.yml 과 같다.
 pm2_names() { # $1=env → llm next discord bench litellm updater backup
     local s; s="$(env_suffix "$1")"
-    printf 'openmake-llm%s openmake-next%s openmake-discord%s openmake-bench%s openmake-litellm%s omk-updater-%s omk-backup-%s' "$s" "$s" "$s" "$s" "$s" "$1" "$1"
+    printf 'openmake-llm%s openmake-next%s openmake-discord%s openmake-bench%s openmake-litellm%s omk-updater-%s omk-backup-%s omk-pipeline-%s' "$s" "$s" "$s" "$s" "$s" "$1" "$1" "$1"
 }
 docker_containers() { local s; s="$(env_suffix "$1")"; printf 'openmake%s-postgres openmake%s-redis openmake%s-searxng' "$s" "$s" "$s"; }
 searxng_name()      { printf 'openmake%s-searxng' "$(env_suffix "$1")"; }
@@ -739,9 +742,10 @@ cmd_env_backup() { # env [--schedule ['CRON']] [--off] [--list] [--dry-run]
     esac
 }
 
-cmd_env_verify() { # env [--list]
-    local env="$1"; shift; local list=0
-    while [[ $# -gt 0 ]]; do case "$1" in --list) list=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
+cmd_env_verify_unlocked() { # env [--list] [--sha FULL_SHA]
+    local env="$1"; shift; local list=0 requested_sha=""
+    OMK_VERIFY_COMPLETED_SHA=""
+    while [[ $# -gt 0 ]]; do case "$1" in --sha) requested_sha="${2:-}"; shift ;; --list) list=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
     local ldir v; ldir="$(llm_dir "$env")"
     [[ -d "$ldir/.git" ]] || die "$ldir 가 없습니다 — 'omk env install $env' 먼저"
     if [[ $list -eq 1 ]]; then
@@ -751,13 +755,17 @@ cmd_env_verify() { # env [--list]
     fi
     [[ "$(dotenv_get "$ldir/.env" OMK_TRACK)" != "release" ]] || die "$env 는 릴리스를 따르는 환경입니다 — 확인은 main 을 따르는 환경(staging)에서 합니다"
     log_step "확인 기록: $env"
-    restore_lockfiles "$ldir"
     [[ -z "$(git -C "$ldir" status --porcelain)" ]] || die "$ldir 에 커밋되지 않은 변경이 있습니다 — 확인한 것이 이 커밋이라고 할 수 없습니다"
     git -C "$ldir" fetch -q origin || die "origin 을 받을 수 없습니다 ($ldir)"
     git -C "$ldir" merge-base --is-ancestor HEAD refs/remotes/origin/main 2>/dev/null || die "HEAD 가 origin/main 에 없습니다 — 머지된 main 만 확인 대상입니다"
-    wait_http "http://localhost:$(llm_api_port "$ldir")/health" "llm" 5 || exit 3
+    local sha; sha="$(git -C "$ldir" rev-parse HEAD)"
+    [[ -z "$requested_sha" ]] || [[ "$requested_sha" == "$sha" ]] || die "Requested SHA differs from HEAD"
+    [[ "$sha" == "$(git -C "$ldir" rev-parse refs/remotes/origin/main)" ]] || die "Verify requires current origin/main SHA"
+    pipeline_verify_proof "$env" "$sha"
     confirm "$env 의 $(git -C "$ldir" log -1 --format='%h %s') 을(를) 확인 완료로 기록합니다. 계속할까요?" || return 0
     verified_push "$ldir" "$OMK_VERIFY_PUSH_URL" || die "기록을 push 하지 못했습니다 ($OMK_VERIFY_PUSH_URL) — 쓰기 권한이 필요합니다 (README 의 '릴리스 게이트')"
+    # shellcheck disable=SC2034 # Consumed by pipeline_approve in pipeline.sh.
+    OMK_VERIFY_COMPLETED_SHA="$sha"
     log_ok "$(git -C "$ldir" rev-parse --short HEAD) 확인 완료 — 이 커밋에서 나온 릴리스만 게이트를 통과합니다"
 }
 
@@ -1652,7 +1660,7 @@ cmd_env_install() {
     env_summary "$env"
 }
 
-cmd_env_update() {
+cmd_env_update_unlocked() {
     local env="$1"; shift; local if_behind=0 no_backup=0 force_unverified=0 redeploy=0
     local a report=0; for a in "$@"; do [[ "$a" != --report ]] || report=1; done
     if [[ $report -eq 1 ]]; then env_update_report "$env" "$@"; return; fi
@@ -1887,10 +1895,15 @@ cmd_env() {
     local sub="${1:-}" env="${2:-}"
     [[ -n "$sub" && -n "$env" ]] || usage_die "omk env <install|update|smoke|verify|reset|status|start|stop|logs|autoupdate> <env>"
     validate_env "$env"; shift 2
+    case "$sub" in update|verify|approve|pipeline|hold|validate) pipeline_helpers_require "$env" ;; esac
     case "$sub" in
         install)    cmd_env_install "$env" "$@" ;;
         update)     cmd_env_update "$env" "$@" ;;
         verify)     cmd_env_verify "$env" "$@" ;;
+        approve)    cmd_env_approve "$env" "$@" ;;
+        pipeline)   cmd_env_pipeline "$env" "$@" ;;
+        hold)       cmd_env_hold "$env" "$@" ;;
+        validate)   cmd_env_validate "$env" "$@" ;;
         smoke)      cmd_env_smoke "$env" "$@" ;;
         reset)      cmd_env_reset "$env" "$@" ;;
         status)     cmd_env_status "$env" ;;
@@ -2199,5 +2212,19 @@ main() {
         *) usage_die "알 수 없는 명령: $group" ;;
     esac
 }
+# Shared command lock also covers legacy manual and report update paths.
+# shellcheck source=/dev/null
+[[ -z "$SCRIPT_DIR" || ! -f "$SCRIPT_DIR/pipeline.sh" ]] || . "$SCRIPT_DIR/pipeline.sh"
+pipeline_helpers_require() {
+    declare -F pipeline_locked >/dev/null && return 0
+    local installed; installed="$(llm_dir "$1")/scripts/env"
+    [[ -f "$installed/pipeline.sh" && -f "$installed/omk.sh" ]] || die "Pipeline helpers unavailable: $installed/pipeline.sh — update the installed source or run omk from a complete checkout"
+    SCRIPT_DIR="$installed"; SCRIPT_PATH="$installed/omk.sh"
+    # shellcheck source=/dev/null
+    . "$installed/pipeline.sh"
+}
+cmd_env_update() { pipeline_helpers_require "$1"; pipeline_locked "$1" pipeline_update_command "$@"; }
+pipeline_update_command() { pipeline_update_allowed "$1"; cmd_env_update_unlocked "$@"; }
+cmd_env_verify() { pipeline_helpers_require "$1"; pipeline_locked "$1" cmd_env_verify_unlocked "$@"; }
 # 테스트에서 함수만 불러 쓸 수 있게 한다 (scripts/env/omk.test.sh).
 [[ "${OMK_SOURCE_ONLY:-}" == "1" ]] || main "$@"
