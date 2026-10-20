@@ -8,6 +8,15 @@ const PNG = Buffer.from('fake-png-bytes-0123456789').toString('base64');   // 25
 const WAV = Buffer.alloc(3000, 7).toString('base64');
 
 describe('offloadMediaBlocks', () => {
+    it('저장처가 반환한 전달 URL 을 안내하고 로컬 경로와 base64 를 노출하지 않는다', async () => {
+        const sink = { save: async () => '/generated/mcp-image-private.png' };
+        const result = await offloadMediaBlocks({ content: [
+            { type: 'image', data: PNG, mimeType: 'image/png' },
+        ] }, 'browser_take_screenshot', sink);
+        expect(result.content).toEqual([{ type: 'text', text: '[이미지 저장됨: /generated/mcp-image-private.png (image/png, 25B)]' }]);
+        expect(JSON.stringify(result)).not.toContain(PNG);
+    });
+
     it('작업 공간이 있으면 파일로 저장하고 블록을 경로 안내로 바꾼다', async () => {
         const saved: Array<{ path: string; data: Buffer }> = [];
         const sink = { save: async (path: string, data: Buffer) => { saved.push({ path, data }); } };
