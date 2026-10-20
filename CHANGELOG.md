@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.107.2](https://github.com/openmake/openmake_llm/compare/v1.107.1...v1.107.2) (2026-10-20)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** preserve failed files and ground chain completion ([c22938c](https://github.com/openmake/openmake_llm/commit/c22938c87a87b4d1dcd9806b96a5029599a7557d))
+* **agent-task:** preserve failed files and ground chain completion ([356a9b8](https://github.com/openmake/openmake_llm/commit/356a9b8214b0dfc0bf79b96eca5ce1c2e0c48363))
+* **agent-task:** promote chain completion and file preservation fixes ([fb518b0](https://github.com/openmake/openmake_llm/commit/fb518b08526c1126e8cfb1a83e411ef978aae400))
+
 ## [1.107.1](https://github.com/openmake/openmake_llm/compare/v1.107.0...v1.107.1) (2026-10-20)
 
 
