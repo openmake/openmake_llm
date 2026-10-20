@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.107.3](https://github.com/openmake/openmake_llm/compare/v1.107.2...v1.107.3) (2026-10-20)
+
+
+### 🐛 버그 수정
+
+* **agent:** reconcile incomplete reports with execution evidence ([8c4fd17](https://github.com/openmake/openmake_llm/commit/8c4fd1773ae827c384e47016999b13beed47c59a))
+* **agent:** reconcile incomplete reports with execution evidence ([5bb0156](https://github.com/openmake/openmake_llm/commit/5bb0156cd004b0c1b87b9630c0f3f0f6e8b224d3))
+
 ## [1.107.2](https://github.com/openmake/openmake_llm/compare/v1.107.1...v1.107.2) (2026-10-20)
 
 
