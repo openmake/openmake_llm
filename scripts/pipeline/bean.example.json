@@ -1,6 +1,0 @@
-{
-  "targets": [
-    {"id":"tom","baseUrl":"http://staging-host.example:33000","checks":["health","ready","login","chat"],"emailEnv":"BEAN_STAGING_EMAIL","passwordEnv":"BEAN_STAGING_PASSWORD"},
-    {"id":"ome-on","baseUrl":"https://chat.example.com","checks":["health","ready","login"],"emailEnv":"BEAN_ONLINE_EMAIL","passwordEnv":"BEAN_ONLINE_PASSWORD"}
-  ]
-}
