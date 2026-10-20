@@ -1,5 +1,67 @@
 # Changelog
 
+## [1.107.3](https://github.com/openmake/openmake_llm/compare/v1.107.2...v1.107.3) (2026-10-20)
+
+
+### 🐛 버그 수정
+
+* **agent:** reconcile incomplete reports with execution evidence ([8c4fd17](https://github.com/openmake/openmake_llm/commit/8c4fd1773ae827c384e47016999b13beed47c59a))
+* **agent:** reconcile incomplete reports with execution evidence ([5bb0156](https://github.com/openmake/openmake_llm/commit/5bb0156cd004b0c1b87b9630c0f3f0f6e8b224d3))
+
+## [1.107.2](https://github.com/openmake/openmake_llm/compare/v1.107.1...v1.107.2) (2026-10-20)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** preserve failed files and ground chain completion ([c22938c](https://github.com/openmake/openmake_llm/commit/c22938c87a87b4d1dcd9806b96a5029599a7557d))
+* **agent-task:** preserve failed files and ground chain completion ([356a9b8](https://github.com/openmake/openmake_llm/commit/356a9b8214b0dfc0bf79b96eca5ce1c2e0c48363))
+* **agent-task:** promote chain completion and file preservation fixes ([fb518b0](https://github.com/openmake/openmake_llm/commit/fb518b08526c1126e8cfb1a83e411ef978aae400))
+
+## [1.107.1](https://github.com/openmake/openmake_llm/compare/v1.107.0...v1.107.1) (2026-10-20)
+
+
+### 🐛 버그 수정
+
+* **artifacts:** promote hidden-install media delivery repair ([20df85b](https://github.com/openmake/openmake_llm/commit/20df85b057f8f7c4ffea2ebdcabd244b3bf0b2a0))
+* **artifacts:** serve authorized files from hidden install roots ([3ee96f9](https://github.com/openmake/openmake_llm/commit/3ee96f9155ac28a8f95677596aa725abe187a4e5))
+* **artifacts:** serve authorized media from hidden install roots ([b2db27e](https://github.com/openmake/openmake_llm/commit/b2db27e9486307b1c3d95268e32203446764cb47))
+* **mcp:** deliver chat media through account-owned artifacts ([78f3b79](https://github.com/openmake/openmake_llm/commit/78f3b79a7ddc6874c6406f1cfb73a852824b3e95))
+* **mcp:** promote account-owned chat media delivery ([f0bb96f](https://github.com/openmake/openmake_llm/commit/f0bb96f85b0ac61c6453f1c9bf7080c449d76541))
+* **mcp:** save chat media as account-owned artifacts ([fd753a0](https://github.com/openmake/openmake_llm/commit/fd753a08601f7042a020f707300fcf816bc5c8e3))
+
+## [1.107.0](https://github.com/openmake/openmake_llm/compare/v1.106.2...v1.107.0) (2026-10-19)
+
+
+### ✨ 기능
+
+* use Colima exclusively for macOS OpenMake runtime ([6c65f32](https://github.com/openmake/openmake_llm/commit/6c65f324eb1dd3ada59086281a5c33e2de9a98e4))
+
+
+### 🐛 버그 수정
+
+* clarify sourced toolchain function for installer lint ([23fa0af](https://github.com/openmake/openmake_llm/commit/23fa0afdbd3f49c2a2ed0144ae38986b6282b82a))
+* **env:** align artifact viewer data paths with backend ([59e4e4b](https://github.com/openmake/openmake_llm/commit/59e4e4b43a1512d37707f4a27953b3fa79855b46))
+* **env:** update 가 package-lock.json 변경을 받으면 deploy 전에 의존성을 설치한다 ([9bdef5d](https://github.com/openmake/openmake_llm/commit/9bdef5d840bfca3ad77cebb13470e1608364d3c8))
+* **env:** update 가 package-lock.json 변경을 받으면 deploy 전에 의존성을 설치한다 ([7c64643](https://github.com/openmake/openmake_llm/commit/7c64643fd0734820c8fb9e3e45a285b92cf069f5))
+* **mcp:** isolate playwright server and add ffprobe ([2afe7db](https://github.com/openmake/openmake_llm/commit/2afe7db23732cf5621e5887021aaecf621ae0ac7))
+* **mcp:** keep Chromium state writable in readonly sandbox ([1f0e938](https://github.com/openmake/openmake_llm/commit/1f0e938c5f858b30063d23d6b57937ef2dca9851))
+* unify Colima selection and guard existing installation data ([66f1a5c](https://github.com/openmake/openmake_llm/commit/66f1a5c4ce3de82d8a6792a95830cd1135171bad))
+
+## [1.106.2](https://github.com/openmake/openmake_llm/compare/v1.106.1...v1.106.2) (2026-10-19)
+
+
+### 🐛 버그 수정
+
+* **addons:** 실패 상태가 아닐 때는 상태 전환 사유를 실패 사유로 저장·노출하지 않는다 ([ed4da16](https://github.com/openmake/openmake_llm/commit/ed4da166b5066119a4a94136af3388c238eb107a))
+* **addons:** 실패 상태가 아닐 때는 상태 전환 사유를 실패 사유로 저장·노출하지 않는다 ([ea2f895](https://github.com/openmake/openmake_llm/commit/ea2f89519f2175cfc38fb1c108bd590d91fadd56))
+* **bench:** startSerialPoller 는 tick 의 동기 throw 도 거부로 바꿔 폴링을 이어 간다 ([f1b24e7](https://github.com/openmake/openmake_llm/commit/f1b24e78c53dcd5693c59524e7e6bb21a2bc1f2b))
+* **deps:** align js-yaml API v5 with scoped legacy override ([2623093](https://github.com/openmake/openmake_llm/commit/2623093e156faa384f919aec9f7f3793dbda6a11))
+* **deps:** install js-yaml 5.5.0 for API while preserving legacy overrides ([a78085e](https://github.com/openmake/openmake_llm/commit/a78085e57e628145c6d0338a4e295fa9dc919d0b))
+* **release,bench:** 검토 보류 minor 5건 — anchor 줄 읽기·늦은 spawn error·poller 동기 throw·bridge 테스트 가짜 시계 ([fca93e3](https://github.com/openmake/openmake_llm/commit/fca93e3c7f651ae1335e3f3a981d20c437d98199))
+* **release:** correct counts anchors and clean up surviving process groups ([cd0b972](https://github.com/openmake/openmake_llm/commit/cd0b9725ab6a8266ef8bb6ffcc789c345016b395))
+* **release:** parse summary whitespace and finish process group cleanup ([df976bc](https://github.com/openmake/openmake_llm/commit/df976bc934de181a5840d06e28744a921e21c48d))
+* **release:** 줄바꿈으로 시작하는 anchor 도 매치한 줄을 읽고, spawn 뒤 error 는 프로세스 그룹을 끝낸다 ([b1ffddd](https://github.com/openmake/openmake_llm/commit/b1ffddd31aa803a271f509ac899b1c8a800d9d47))
+
 ## [1.106.1](https://github.com/openmake/openmake_llm/compare/v1.106.0...v1.106.1) (2026-10-18)
 
 
