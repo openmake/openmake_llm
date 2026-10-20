@@ -13,6 +13,24 @@
     "infra/": "infra",
     "packages/local-bridge-core/": "bridge"
   },
+  "exactFiles": {
+    "packages/shared-types/src/index.ts": "web",
+    "packages/shared-types/src/mcp-monitoring.ts": "web"
+  },
+  "hostSetup": [
+    "scripts/setup/colima-boot-guard.cjs",
+    "scripts/setup/colima-boot-guard.test.sh",
+    "scripts/setup/docker-config-reconcile.cjs",
+    "scripts/setup/fake-launchctl.test-lib.sh",
+    "scripts/setup/mac-host-repair.sh",
+    "scripts/setup/mac-host-repair.test.sh",
+    "scripts/setup/mac-pm2-boot.sh",
+    "scripts/setup/mac-pm2-boot.test.sh",
+    "scripts/setup/mac-toolchain.test.sh",
+    "scripts/setup/mac/30-toolchain.sh",
+    "scripts/setup/mac/80-finish.sh",
+    "scripts/setup/pm2-boot-guard.sh"
+  ],
   "e2e": {
     "specs": {
       "tests/e2e/pipeline-basic.spec.ts": {
