@@ -102,3 +102,16 @@ test('denied owned-group signal fails with bounded PID, UID and member diagnosti
     await once(child, 'exit');
   }
 });
+
+test('EPERM probe is absent only for a nonempty verified owned zombie-only group', async () => {
+  const { handleSignalFailure } = await import('../../scripts/ci/dev-checks-process.mjs');
+  const uid = process.getuid(), child = { pid: 12345, exitCode: null };
+  const denied = () => Object.assign(new Error('kill EPERM'), { code: 'EPERM' });
+  const snapshot = rows => ({ status: 0, stdout: rows });
+  const zombie = `12345 100 12345 ${uid} Z\n12346 1 12345 ${uid} Zs`;
+  assert.equal(handleSignalFailure(denied(), child, 0, snapshot(zombie)), false);
+  for (const unsafe of [snapshot(''), snapshot(`12345 100 12345 ${uid} S`), snapshot(`12345 100 12345 ${uid + 1} Z`), snapshot(`${zombie}\n12347 100 12345 ${uid} S`), snapshot(`${zombie}\n12347 100 12345 ${uid + 1} Z`), snapshot(Array.from({length: 20}, (_, i) => `${12345+i} 100 12345 ${uid} Z`).join('\n') + `\n12399 100 12345 ${uid} S`), snapshot('12345 100 12345 unknown Z'), { status: 1, stdout: zombie }, {status: 0, stdout: zombie, error: new Error('snapshot truncated')}]) {
+    assert.throws(() => handleSignalFailure(denied(), child, 0, unsafe), error => error.code === 'EPERM');
+  }
+  assert.throws(() => handleSignalFailure(denied(), child, 'SIGTERM', snapshot(zombie)), /EPERM/);
+});
