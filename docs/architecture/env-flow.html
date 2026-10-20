@@ -440,7 +440,7 @@ scripts/env/omk.sh dev setup --no-runtime-images \
 <section class="page" id="env-staging" data-title="tom · main 설치와 사람 확인"><h1>tom · main 설치와 사람 확인</h1><p>main 설치 → 스모크 → 필수 검증 → 설치 SHA 고정까지 자동화합니다. 빈 검증 설정은 차단합니다.</p><div class="code"><pre>omk env pipeline staging
 omk env pipeline staging --schedule '*/10 * * * *'
 # 사람이 실제로 사용한 뒤 OK한 동일 SHA
-omk env approve staging --sha FULL_SHA --yes</pre></div><p>검증 중 hold로 자동 갱신을 막고 실행/디스크 빌드와 검증 결과를 대조합니다. 취소 후 새 설치본을 확인하려면 <code>omk env hold staging --release</code>로 해제합니다.</p><p>6번 버튼 연동은 <a href="pipeline-monitor-contract.md">모니터 계약</a>을 따릅니다. 웹 인증·권한·CSRF를 확인하고 고정 argv만 실행해야 합니다. 중앙 모니터 소스가 없으므로 버튼이 이미 연결됐다고 표시하지 않습니다.</p></section>
+omk env approve staging --sha FULL_SHA --yes</pre></div><p>검증 중 hold로 자동 갱신을 막고 실행/디스크 빌드와 검증 결과를 대조합니다. 취소 후 새 설치본을 확인하려면 <code>omk env hold staging --release</code>로 해제합니다.</p><p>외부 모니터의 6번 버튼이 이 명령을 호출하려면 웹 인증·권한·CSRF를 확인하고 고정 argv만 실행해야 합니다. 버튼과 요청 규격은 별도 저장소 <a href="https://github.com/openmake/monitor">openmake/monitor</a>(비공개, 조직 접근 필요) 소유이며, 이 문서는 버튼이 연결됐다고 표시하지 않습니다.</p></section>
 
 <!-- ═══════════════════════════ 06 online ═══════════════════════════ -->
 <section class="page" id="env-online" data-title="ome-on · 검증된 태그만 설치"><h1>ome-on · 검증된 태그만 설치</h1><div class="code"><pre>omk env pipeline online
@@ -608,7 +608,7 @@ omk dev down | status | reset [--keep-data]</pre></div>
 </ul>
 <h2>bean과 모니터</h2>
 <p>bean은 대상별 시나리오·주기·관측 SHA/버전·근거를 기록합니다. 주기를 임의 활성화하지 않으며 사람 OK·verify를 대신하지 않습니다.</p>
-<p>중앙 보드 소스가 로컬에 없어 기존 7단계 API를 변경·배포하지 않았습니다. 새 8단계 증거 연결과 6번 버튼의 실제 서버 구현은 <a href="pipeline-monitor-contract.md">연동 계약</a>을 기준으로 합니다.</p>
+<p>bean 실행기·현황 보드·6번 버튼 요청 규격은 별도 저장소 <a href="https://github.com/openmake/monitor">openmake/monitor</a>(비공개, 조직 접근 필요)가 소유하며 이 저장소에 포함하지 않습니다. 모니터의 기존 7단계 API·새 8단계 증거 연결·버튼 서버 구현은 그 저장소에서 다룹니다.</p>
 <p>
 <a href="pipeline-source-audit.md">전체 소스 조사와 구현/활성화 구분</a> · <a href="../../scripts/env/README.md">현재 명령 안내</a>
 </p>
