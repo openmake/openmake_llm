@@ -138,16 +138,19 @@ repair_docker_shim() {
 agent_field() { printf '%s\n' "$1" | sed -n "s/^$2=//p"; }
 
 repair_colima_agent() {
-    local report state log reasons
-    report="$(reconciler agent --plist "$COLIMA_AGENT_PLIST" --colima "$BREW_BIN/colima" --colima-home "$OPENMAKE_COLIMA_HOME")"
-    state="$(agent_field "$report" state)"; log="$(agent_field "$report" log)"
+    local report state log err flag home reasons
+    report="$(reconciler agent --plist "$COLIMA_AGENT_PLIST" --colima "$BREW_BIN/colima" --colima-home "$OPENMAKE_COLIMA_HOME" --owner-home "$HOME")"
+    state="$(agent_field "$report" state)"; log="$(agent_field "$report" log)"; err="$(agent_field "$report" err)"
+    # 알려진 예전 에이전트에서 이어받는 값 (그 밖의 정의는 conflict 로 손대지 않는다)
+    flag="$(agent_field "$report" flags)"; home="$(agent_field "$report" home)"
     reasons="$(agent_field "$report" reason | paste -sd ';' -)"
     if [[ $state == conflict ]]; then
         manual "$COLIMA_AGENT_PLIST has custom settings ($reasons); left unchanged"
         return 0
     fi
     log="${log:-$OMK_ROOT/logs/colima.log}"
-    if [[ $state == healthy ]] && colima_agent_loaded_matches "$BREW_BIN/colima" "$BREW_BIN" "$log"; then
+    err="${err:-$log}"
+    if [[ $state == healthy ]] && colima_agent_loaded_matches "$BREW_BIN/colima" "$BREW_BIN" "$log" "$err" "$flag" "$home"; then
         say ok "LaunchAgent $COLIMA_AGENT defined and loaded as expected (proof of start after reboot needs a reboot)"
         return 0
     fi
@@ -155,11 +158,11 @@ repair_colima_agent() {
         PENDING=$((PENDING + 1)); say fix "write/register LaunchAgent $COLIMA_AGENT (${reasons:-definition not loaded}); registering starts the existing profile if it is stopped"
         return 0
     fi
-    if ! PATH="$BREW_BIN:$PATH" enable_docker_autostart "$log"; then
+    if ! PATH="$BREW_BIN:$PATH" enable_docker_autostart "$log" "$err" "$flag" "$home"; then
         failure "LaunchAgent $COLIMA_AGENT was not changed"
         return 0
     fi
-    if colima_agent_loaded_matches "$BREW_BIN/colima" "$BREW_BIN" "$log"; then
+    if colima_agent_loaded_matches "$BREW_BIN/colima" "$BREW_BIN" "$log" "$err" "$flag" "$home"; then
         say ok "LaunchAgent $COLIMA_AGENT registered and verified (proof of start after reboot needs a reboot)"
     elif colima_gui_domain_available; then
         pending "LaunchAgent $COLIMA_AGENT registration could not be verified"

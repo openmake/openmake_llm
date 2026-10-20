@@ -151,6 +151,70 @@ ok "root 헬퍼: 보류 안내" 'grep -qF "pending: Docker Desktop root helper r
 eq "root 헬퍼: sudo 없음" "$(cat "$BREW_CALLS")" ""
 desktop_root_artifacts() { :; }
 
+# ── 알려진 예전 손수 만든 에이전트: --save-config=false·소유자 HOME·외장 COLIMA_HOME·두 로그를 지키며 guard 로 바꾼다 ──
+desktop_root_artifacts() { :; }
+P="$HOME/Library/LaunchAgents/com.openmake.colima.plist"; LOGS="$HOME/Library/Logs"
+legacy_agent() { # [$1=추가 인자]
+    cat > "$P" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.openmake.colima</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$BB/colima</string>
+        <string>start</string>
+        <string>openmake</string>
+        <string>--save-config=false</string>${1:-}
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>$(xml_escape "$HOME")</string>
+        <key>COLIMA_HOME</key>
+        <string>$(xml_escape "$COLIMA_HOME")</string>
+        <key>PATH</key>
+        <string>$BB:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$(xml_escape "$LOGS/colima-openmake.log")</string>
+    <key>StandardErrorPath</key>
+    <string>$(xml_escape "$LOGS/colima-openmake.error.log")</string>
+</dict>
+</plist>
+EOF
+}
+legacy_agent; fake_lctl_reset; fake_lctl_load "$P"
+eq "legacy: check → 1" "$(run --check)" "1"
+ok "legacy: check 가 이어받을 설정을 알림" 'grep -q "save-config=false (kept" "$OUT"'
+eq "legacy: apply → 0" "$(run --apply)" "0"
+LA=(); LE=""; LK=""; LC=""; LO=""; LR=""
+while IFS=$'\t' read -r tag v; do
+    case "$tag" in A) LA+=("$v") ;; K) LK="$v" ;; V) [[ $LK == HOME ]] && LE="$v"; [[ $LK == COLIMA_HOME ]] && LC="$v" ;; O) LO="$v" ;; E) LR="$v" ;; esac
+done < <(fake_plist_fields "$P")
+eq "legacy: guard + 이어받은 플래그" "$(printf '%s|' "${LA[@]}")" "/bin/sh|-c|$COLIMA_AGENT_GUARD_WITH_FLAGS|$BB/colima|openmake|--save-config=false|"
+eq "legacy: HOME·외장 COLIMA_HOME·두 로그 보존" "$LE|$LC|$LO|$LR" "$HOME|$COLIMA_HOME|$LOGS/colima-openmake.log|$LOGS/colima-openmake.error.log"
+ok "legacy: plist 문법" 'plutil -lint "$P" >/dev/null'
+ok "legacy: 이전 정의 백업" 'grep -l -- "<string>--save-config=false</string>" "$OMK_ROOT/backups/launchd/"*.before-colima-* >/dev/null'
+eq "legacy: 다시 등록" "$(fake_lctl_log)" "bootout bootstrap"
+BEFORE="$(snapshot)"; : > "$LCTL_STATE/log"
+eq "legacy repeat: 성공" "$(run --apply)" "0"
+eq "legacy repeat: 파일 변경 없음" "$(snapshot)" "$BEFORE"
+eq "legacy repeat: 등록 그대로" "$(fake_lctl_log)" ""
+# 비슷하지만 다른 정의(추가 인자)는 수동 항목으로 남기고 건드리지 않는다
+legacy_agent "
+        <string>--cpu</string>
+        <string>4</string>"
+fake_lctl_reset; fake_lctl_load "$P"; cp "$P" "$TMP/near-miss.plist"
+eq "near-miss: 수동 → 1" "$(run --apply)" "1"
+ok "near-miss: 수동 안내" 'grep -q "^manual:.*custom arguments" "$OUT"'
+ok "near-miss: 파일 그대로" 'cmp -s "$TMP/near-miss.plist" "$P"'
+eq "near-miss: launchctl 변경 없음" "$(fake_lctl_log)" ""
+
 # ── 사용법 ──
 eq "usage: 인자 없음" "$(run '')" "2"
 

@@ -80,6 +80,27 @@ if command -v plutil >/dev/null 2>&1; then ok "agent: 이스케이프한 plist �
 . "$HERE/fake-launchctl.test-lib.sh"
 FB="$TMP/fakebin"; mkdir -p "$FB"; printf '#!/bin/sh\n' > "$FB/colima"; printf '#!/bin/sh\n' > "$FB/docker"; chmod +x "$FB/colima" "$FB/docker"
 agent_run() { PATH="$FB:$PATH" enable_docker_autostart "$TMP/agent-log/colima.log"; }
+# XML 이스케이프는 셸 판에 기대지 않는다 — bash 5.2+ 의 patsub_replacement 는 ${v//x/&...} 의 & 를 바꿔 넣는다 (tom 사고).
+# plist 를 다시 읽은 값이 입력과 글자 그대로 같아야 하고, guard 는 sh 문법으로 유효해야 한다.
+RT_COLIMA="/opt/b&b \"q\" <x>/bin/colima"; RT_LOG="/tmp/l&g \"o\" <g> 'a'.log"; RT_HOME="$TMP/Ext & \"Q\" <C> 'a'"
+COLIMA_HOME="$RT_HOME" SCRIPT_DIR="$SCRIPT_DIR" TEST_AGENT="$TMP/roundtrip.plist" RT_COLIMA="$RT_COLIMA" RT_LOG="$RT_LOG" bash -c '
+    . "$SCRIPT_DIR/scripts/setup/mac/30-toolchain.sh"
+    write_colima_agent "$TEST_AGENT" "$RT_COLIMA" "$RT_LOG" /usr/local/bin
+'
+RTA=(); RTE=""; RTO=""; RTK=""
+while IFS=$'\t' read -r tag v; do
+    case "$tag" in A) RTA+=("$v") ;; K) RTK="$v" ;; V) [[ $RTK == COLIMA_HOME ]] && RTE="$v" ;; O) RTO="$v" ;; esac
+done < <(fake_plist_fields "$TMP/roundtrip.plist")
+eq "xml: guard 인자 = 상수 (bash ${BASH_VERSINFO[0]})" "${RTA[2]:-}" "$COLIMA_AGENT_GUARD"
+eq "xml: colima 경로 그대로" "${RTA[3]:-}" "$RT_COLIMA"
+eq "xml: COLIMA_HOME 그대로" "$RTE" "$RT_HOME"
+eq "xml: 로그 경로 그대로" "$RTO" "$RT_LOG"
+printf '%s\n' "${RTA[2]:-}" > "$TMP/guard.sh"
+ok "xml: guard 는 sh 문법으로 유효 (/bin/sh -n)" '/bin/sh -n "$TMP/guard.sh"'
+if command -v plutil >/dev/null 2>&1; then
+    ok "xml: plutil 이 읽은 guard = 상수" '[[ "$(plutil -extract ProgramArguments.2 raw -o - "$TMP/roundtrip.plist")" == "$COLIMA_AGENT_GUARD" ]]'
+fi
+
 # 로그인 때 저장소(외장 디스크)가 없으면 새 VM 을 만들지 않는다 — LaunchAgent 의 명령을 그대로 실행해 본다.
 GC="$TMP/guard-bin/colima"; mkdir -p "$TMP/guard-bin"
 printf '#!/bin/sh\nprintf "%%s " "$@" > "%s"\n' "$TMP/guard-called" > "$GC"; chmod +x "$GC"
@@ -105,6 +126,24 @@ eq "autostart: 등록이 없으면 bootstrap 만" "$(fake_lctl_log)" "bootstrap"
 sed "s|<string>$OPENMAKE_COLIMA_HOME</string>|<string>/old/colima</string>|" "$COLIMA_AGENT_PLIST" > "$TMP/loaded-old.plist"
 fake_lctl_reset; fake_lctl_load "$TMP/loaded-old.plist"; printf '%s' "$COLIMA_AGENT_PLIST" > "$LCTL_STATE/path"
 ok "autostart: 예전 환경으로 로드된 정의는 불일치" '! PATH="$FB:$PATH" colima_agent_loaded_matches "$FB/colima" "$FB" "$TMP/agent-log/colima.log"'
+# 알려진 예전 에이전트에서 이어받는 설정: --save-config=false · 소유자 HOME · 따로 둔 stderr — 같은 작성기·같은 비교기
+KP="$TMP/kept.plist"; KH="$TMP/owner home"
+write_colima_agent "$KP" "$GC" "$TMP/out.log" "$TMP/guard-bin" "$TMP/err.log" --save-config=false "$KH"
+KA=(); KE=""; KO=""; KR=""; KK=""
+while IFS=$'\t' read -r tag v; do
+    case "$tag" in A) KA+=("$v") ;; K) KK="$v" ;; V) [[ $KK == HOME ]] && KE="$v" ;; O) KO="$v" ;; E) KR="$v" ;; esac
+done < <(fake_plist_fields "$KP")
+eq "kept: 인자" "$(printf '%s|' "${KA[@]}")" "/bin/sh|-c|$COLIMA_AGENT_GUARD_WITH_FLAGS|$GC|openmake|--save-config=false|"
+eq "kept: HOME·stdout·stderr" "$KE|$KO|$KR" "$KH|$TMP/out.log|$TMP/err.log"
+rm -f "$TMP/guard-called"; grc=0; (COLIMA_HOME="$GH" "${KA[@]}") || grc=$?
+eq "kept: guard 가 플래그를 넘긴다" "$grc|$(cat "$TMP/guard-called" 2>/dev/null)" "0|start --profile openmake --save-config=false --activate=false "
+printf '%s\n' "$COLIMA_AGENT_GUARD_WITH_FLAGS" > "$TMP/guard-flags.sh"; ok "kept: guard 문법 (/bin/sh -n)" '/bin/sh -n "$TMP/guard-flags.sh"'
+fake_lctl_reset; fake_lctl_load "$KP" "$COLIMA_AGENT_PLIST"
+ok "kept: 같은 설정으로 로드된 정의는 일치" 'colima_agent_loaded_matches "$GC" "$TMP/guard-bin" "$TMP/out.log" "$TMP/err.log" --save-config=false "$KH"'
+ok "kept: 플래그를 빼면 불일치" '! colima_agent_loaded_matches "$GC" "$TMP/guard-bin" "$TMP/out.log" "$TMP/err.log" "" "$KH"'
+ok "kept: HOME 을 빼면 불일치" '! colima_agent_loaded_matches "$GC" "$TMP/guard-bin" "$TMP/out.log" "$TMP/err.log" --save-config=false ""'
+ok "kept: stderr 가 다르면 불일치" '! colima_agent_loaded_matches "$GC" "$TMP/guard-bin" "$TMP/out.log" "$TMP/out.log" --save-config=false "$KH"'
+
 # 로드된 정의는 인자 순서·개수와 환경 전체까지 같아야 한다 (launchd 가 넣는 키는 제외)
 loaded_variant() { # $1=이름 $2=sed 식
     sed "$2" "$COLIMA_AGENT_PLIST" > "$TMP/variant.plist"; fake_lctl_reset; fake_lctl_load "$TMP/variant.plist" "$COLIMA_AGENT_PLIST"
@@ -169,9 +208,16 @@ mkdir -p "$TMP/pinned-node"; printf '#!/bin/sh\necho v24\n' > "$TMP/pinned-node/
 eq "install_colima: 고정 node 우선" "$(OMK_NODE_BIN="$TMP/pinned-node"; PATH="$TMP/pinned-node:/usr/bin:/bin"; install_colima; printf '%s' "${PATH%%:*}")" "$TMP/pinned-node"
 
 # 이미 만든 프로필의 저장소가 없으면(외장 디스크 미마운트) 새 VM 을 만들지 않는다
-storage_run() { # $1=colima-openmake 컨텍스트 소켓(없으면 미등록) → 출력|colima 호출
+storage_run() { # $1=colima-openmake 컨텍스트 소켓(없으면 미등록) [$2=기존 설치 .env 내용] [$3=full: 전체 설치 경로] → 출력|colima 호출
     (
-        : > "$TMP/colima-calls"
+        : > "$TMP/colima-calls"; rm -rf "$OPENMAKE_COLIMA_HOME"
+        if [[ "${3:-}" == full ]]; then
+            MINIMAL=0; omk_env_name() { printf staging; }; ENV_FILE="$TMP/unused.env"
+            [[ -z "${2:-}" ]] || { mkdir -p "$OMK_ROOT/staging/llm"; printf '%s\n' "$2" > "$OMK_ROOT/staging/llm/.env"; }
+        else
+            MINIMAL=1; ENV_FILE="$TMP/storage.env"; rm -f "$ENV_FILE"
+            [[ -z "${2:-}" ]] || printf '%s\n' "$2" > "$ENV_FILE"
+        fi
         colima() { printf ' %s' "$1" >> "$TMP/colima-calls"; [[ $1 != status ]]; }
         docker() { [[ "$1 $2" == "context inspect" && -n "$CTX_ENDPOINT" ]] && echo "$CTX_ENDPOINT"; [[ "$1 $2" != "context inspect" || -n "$CTX_ENDPOINT" ]]; }
         CTX_ENDPOINT="$1"
@@ -181,6 +227,14 @@ storage_run() { # $1=colima-openmake 컨텍스트 소켓(없으면 미등록) �
 eq "colima_start: 등록된 프로필의 저장소 없음 → 중단" "$(storage_run "unix://$COLIMA_SOCK")" "1|"
 ok "colima_start: 중단 시 COLIMA_HOME 을 만들지 않는다" '[[ ! -d "$OPENMAKE_COLIMA_HOME" ]]'
 eq "colima_start: 새 설치는 VM 생성" "$(storage_run "")" "0| status start"
+# 컨텍스트 조회가 실패하고 /Volumes 경로도 아니어도, 이 설치의 .env 가 전용 Colima 소켓을 쓰던 설치면 새 VM 을 만들지 않는다
+MANAGED_ENV="DOCKER_HOST=unix://$COLIMA_SOCK"
+eq "colima_start: 기존 Colima 설치(.env, --minimal) + 컨텍스트 없음 → 중단" "$(storage_run "" "$MANAGED_ENV")" "1|"
+ok "colima_start: 기존 설치 중단 시 COLIMA_HOME 을 만들지 않는다" '[[ ! -d "$OPENMAKE_COLIMA_HOME" ]]'
+eq "colima_start: 기존 Colima 설치(.env, 전체 설치) + 컨텍스트 없음 → 중단" "$(storage_run "" "$MANAGED_ENV" full)" "1|"
+rm -rf "$OMK_ROOT/staging"
+# Desktop 시절 설치(.env 에 Colima 소켓 없음)는 첫 Colima VM 을 만들 수 있다 — 기존 데이터는 check_docker_desktop_data 가 지킨다
+eq "colima_start: Desktop 시절 설치는 첫 VM 생성 허용" "$(storage_run "" "DOCKER_HOST=")" "0| status start"
 
 # 설치기: 정리 명령의 오류(2)는 설치를 멈추고, 보류(1)는 경고로 남긴다
 mkdir -p "$TMP/fake-repo/scripts/setup"; printf '#!/bin/sh\nexit "$FAKE_REPAIR_RC"\n' > "$TMP/fake-repo/scripts/setup/mac-host-repair.sh"

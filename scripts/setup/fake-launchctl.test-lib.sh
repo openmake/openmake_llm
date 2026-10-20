@@ -71,4 +71,4 @@ launchctl() {
         *) printf 'unexpected launchctl %s\n' "$*" >&2; return 99 ;;
     esac
 }
-fake_lctl_reset
+fake_lctl_reset 1

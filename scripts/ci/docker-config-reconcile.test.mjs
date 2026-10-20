@@ -393,7 +393,8 @@ test('Docker shim refuses conflicting shim entries, foreign PATH files and Deskt
 
 const GUARD = '[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$1" --activate=false';
 const xml = v => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-function plist(t, { colima = '/opt/homebrew/bin/colima', home = '/Volumes/MAC_APP/Colima', path = '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin', extraEnv = '', args, stderr = '/Users/x/.openmake/logs/colima.log' } = {}) {
+const GUARD_WITH_FLAGS = '[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$@" --activate=false';
+function plist(t, { colima = '/opt/homebrew/bin/colima', home = '/Volumes/MAC_APP/Colima', path = '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin', extraEnv = '', args, stdout = '/Users/x/.openmake/logs/colima.log', stderr = '/Users/x/.openmake/logs/colima.log' } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'omk-agent-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const file = join(dir, 'com.openmake.colima.plist');
   const argv = args ?? ['/bin/sh', '-c', GUARD, colima, 'openmake'];
@@ -404,13 +405,13 @@ function plist(t, { colima = '/opt/homebrew/bin/colima', home = '/Volumes/MAC_AP
 <key>ProgramArguments</key><array>${argv.map(a => `<string>${xml(a)}</string>`).join('')}</array>
 <key>EnvironmentVariables</key><dict><key>COLIMA_HOME</key><string>${home}</string><key>PATH</key><string>${path}</string>${extraEnv}</dict>
 <key>RunAtLoad</key><true/>
-<key>StandardOutPath</key><string>/Users/x/.openmake/logs/colima.log</string>
+<key>StandardOutPath</key><string>${stdout}</string>
 ${stderr === null ? '' : `<key>StandardErrorPath</key><string>${stderr}</string>`}
 </dict></plist>
 `);
   return file;
 }
-const expected = { colima: '/opt/homebrew/bin/colima', colimaHome: '/Volumes/MAC_APP/Colima', brewPrefix: '/opt/homebrew' };
+const expected = { colima: '/opt/homebrew/bin/colima', colimaHome: '/Volumes/MAC_APP/Colima', brewPrefix: '/opt/homebrew', ownerHome: '/Users/x' };
 const LEGACY_ARGS = ['/opt/homebrew/bin/colima', 'start', '--profile', 'openmake', '--activate=false'];
 
 test('agent inspection uses the installer contract: guarded start, exact environment, one log', { skip: process.platform !== 'darwin' && 'plutil is macOS only' }, t => {
@@ -425,6 +426,9 @@ test('agent inspection uses the installer contract: guarded start, exact environ
   assert.equal(desktopPath.state, 'stale'); assert.match(desktopPath.reasons.join(' '), /Docker\.app/);
   assert.equal(state({ colima: '/usr/local/bin/colima', path: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin' }).state, 'stale');
   assert.equal(state({ stderr: null }).state, 'stale');
+  // Only the PATH shapes earlier installers generated are migratable (docker CLI dir: /usr/local/bin or Docker.app)
+  assert.equal(state({ args: LEGACY_ARGS, path: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin' }).state, 'stale');
+  assert.equal(state({ args: LEGACY_ARGS, path: `/opt/homebrew/bin:${DESKTOP_APP}/bin:/usr/bin:/bin:/usr/sbin:/sbin` }).state, 'stale');
   // Anything else is a custom setting: reported, never replaced
   for (const [name, opts] of Object.entries({
     'custom PATH': { path: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' },
@@ -433,10 +437,47 @@ test('agent inspection uses the installer contract: guarded start, exact environ
     'stop instead of start': { args: ['/opt/homebrew/bin/colima', 'stop', '--profile', 'openmake', '--activate=false'] },
     'reordered arguments': { args: ['/opt/homebrew/bin/colima', 'start', '--activate=false', '--profile', 'openmake'] },
     'extra argument': { args: [...LEGACY_ARGS, '--cpu', '8'] },
-    'custom stderr': { stderr: '/tmp/other.log' },
+    // An unrecognised middle PATH entry is the operator's, even in an otherwise generated shape: never dropped.
+    'legacy start with custom middle PATH': { args: LEGACY_ARGS, path: '/opt/homebrew/bin:/opt/company/bin:/usr/bin:/bin:/usr/sbin:/sbin' },
+    'guarded start with custom middle PATH': { path: '/opt/homebrew/bin:/opt/company/bin:/usr/bin:/bin:/usr/sbin:/sbin' },
+    'custom first PATH entry': { args: LEGACY_ARGS, path: '/opt/company/bin:/usr/bin:/bin:/usr/sbin:/sbin' },
   })) {
     const r = state(opts);
     assert.equal(r.state, 'conflict', name);
   }
   assert.match(state({ home: '/Users/x/.colima' }).reasons.join(' '), /COLIMA_HOME/);
+});
+
+// The exact earlier hand-made agent seen on a host: positional profile, --save-config=false, HOME, separate logs.
+const ONLINE_ARGS = ['/opt/homebrew/bin/colima', 'start', 'openmake', '--save-config=false'];
+const onlineAgent = { args: ONLINE_ARGS, path: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+  extraEnv: '<key>HOME</key><string>/Users/x</string>', stdout: '/Users/x/Library/Logs/colima-openmake.log', stderr: '/Users/x/Library/Logs/colima-openmake.error.log' };
+
+test('known legacy agent migrates keeping --save-config=false, owner HOME, external Colima and both logs', { skip: process.platform !== 'darwin' && 'plutil is macOS only' }, t => {
+  const r = inspectColimaAgent({ plistPath: plist(t, onlineAgent), ...expected });
+  assert.equal(r.state, 'stale', r.reasons.join('; '));
+  assert.deepEqual(r.startFlags, ['--save-config=false']); assert.equal(r.home, '/Users/x');
+  assert.equal(r.logPath, '/Users/x/Library/Logs/colima-openmake.log'); assert.equal(r.errPath, '/Users/x/Library/Logs/colima-openmake.error.log');
+  // What the writer produces from that is healthy (repeat apply is a no-op)
+  const migrated = inspectColimaAgent({ plistPath: plist(t, { ...onlineAgent, args: ['/bin/sh', '-c', GUARD_WITH_FLAGS, '/opt/homebrew/bin/colima', 'openmake', '--save-config=false'], path: '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin' }), ...expected });
+  assert.equal(migrated.state, 'healthy', migrated.reasons.join('; ')); assert.deepEqual(migrated.startFlags, ['--save-config=false']);
+  // Separate stdout/stderr on the standard agent are kept, not a conflict
+  const logs = inspectColimaAgent({ plistPath: plist(t, { stderr: '/tmp/other.log' }), ...expected });
+  assert.equal(logs.state, 'healthy'); assert.equal(logs.errPath, '/tmp/other.log'); assert.deepEqual(logs.startFlags, []); assert.equal(logs.home, null);
+});
+
+test('near-miss legacy agents stay manual', { skip: process.platform !== 'darwin' && 'plutil is macOS only' }, t => {
+  for (const [name, opts] of Object.entries({
+    'extra start argument': { ...onlineAgent, args: [...ONLINE_ARGS, '--cpu', '4'] },
+    'other save-config value': { ...onlineAgent, args: ['/opt/homebrew/bin/colima', 'start', 'openmake', '--save-config=true'] },
+    'other profile': { ...onlineAgent, args: ['/opt/homebrew/bin/colima', 'start', 'other', '--save-config=false'] },
+    'flags reordered': { ...onlineAgent, args: ['/opt/homebrew/bin/colima', 'start', '--save-config=false', 'openmake'] },
+    'HOME of another user': { ...onlineAgent, extraEnv: '<key>HOME</key><string>/Users/y</string>' },
+    'extra environment': { ...onlineAgent, extraEnv: '<key>HOME</key><string>/Users/x</string><key>DOCKER_HOST</key><string>unix:///x</string>' },
+    'custom PATH': { ...onlineAgent, path: '/opt/homebrew/bin:/opt/company/bin:/usr/bin:/bin:/usr/sbin:/sbin' },
+    'guarded with unknown flag': { args: ['/bin/sh', '-c', GUARD_WITH_FLAGS, '/opt/homebrew/bin/colima', 'openmake', '--cpu=4'] },
+    'flag guard without flag': { args: ['/bin/sh', '-c', GUARD_WITH_FLAGS, '/opt/homebrew/bin/colima', 'openmake'] },
+  })) {
+    assert.equal(inspectColimaAgent({ plistPath: plist(t, opts), ...expected }).state, 'conflict', name);
+  }
 });

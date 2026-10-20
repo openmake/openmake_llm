@@ -94,12 +94,20 @@ install_colima() {
     brew install $missing || die "brew install 실패:$missing — 직접 실행한 뒤 재시도하세요."
 }
 
-# 이미 만든 프로필의 저장소가 사라졌는가 — 외장 볼륨이 없거나, colima-openmake 컨텍스트가 이 소켓으로 등록돼 있는데 프로필이 없다.
+# 이 설치의 .env — --minimal 은 클론의 .env, 전체 설치는 omk 규칙 위치.
+openmake_install_env() {
+    if [[ "${MINIMAL:-0}" == 1 ]]; then printf '%s' "$ENV_FILE"; else printf '%s' "$OMK_ROOT/$(omk_env_name)/llm/.env"; fi
+}
+
+# 이미 만든 프로필의 저장소가 사라졌는가 — 외장 볼륨이 없거나, 이 설치의 .env 가 전용 Colima 소켓을 쓰고 있었거나
+# (50-env.sh 가 Colima 를 쓸 때만 DOCKER_HOST 를 남긴다), colima-openmake 컨텍스트가 이 소켓으로 등록돼 있는데 프로필이 없다.
 colima_storage_missing() {
-    local volume endpoint
+    local volume endpoint envf
     case "$OPENMAKE_COLIMA_HOME" in
         /Volumes/*) volume="${OPENMAKE_COLIMA_HOME#/Volumes/}"; [[ -d "/Volumes/${volume%%/*}" ]] || return 0 ;;
     esac
+    envf="$(openmake_install_env)"
+    if [[ -f "$envf" ]] && grep -qE '^DOCKER_HOST=unix://.+/openmake/docker\.sock$' "$envf"; then return 0; fi
     endpoint="$(docker context inspect colima-openmake --format '{{.Endpoints.docker.Host}}' 2>/dev/null)" || return 1
     [[ "$endpoint" == "unix://$COLIMA_SOCK" ]]
 }
@@ -139,11 +147,15 @@ wait_docker_daemon() {
 # docker-config-reconcile.cjs 의 COLIMA_GUARD 와 같은 글자여야 한다. 인자: $0=colima 경로 $1=프로필
 # shellcheck disable=SC2016  # launchd 가 실행하는 sh 가 펼친다
 readonly COLIMA_AGENT_GUARD='[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$1" --activate=false'
+# 알려진 예전 에이전트의 시작 플래그(--save-config=false)를 이어받을 때만 쓴다 — 프로필과 플래그가 "$@" 로 이어진다.
+# shellcheck disable=SC2016  # launchd 가 실행하는 sh 가 펼친다
+readonly COLIMA_AGENT_GUARD_WITH_FLAGS='[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$@" --activate=false'
+colima_agent_guard() { if [[ -n "${1:-}" ]]; then printf '%s' "$COLIMA_AGENT_GUARD_WITH_FLAGS"; else printf '%s' "$COLIMA_AGENT_GUARD"; fi; }
 
-xml_escape() { # plist <string> 값 — 경로의 & " ' < > (외장 디스크 이름 등)
-    local v="$1"
-    v="${v//&/&amp;}"; v="${v//</&lt;}"; v="${v//>/&gt;}"; v="${v//\"/&quot;}"; v="${v//\'/&apos;}"
-    printf '%s' "$v"
+# plist <string> 값 — 경로의 & " ' < > (외장 디스크 이름 등). sed 로 한다:
+# bash 5.2+ 는 patsub_replacement 가 켜져 ${v//x/&amp;} 의 & 를 찾은 글자로 바꾼다 (같은 스크립트가 셸 판마다 다른 plist 를 쓴다).
+xml_escape() {
+    printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g' -e "s/'/\\&apos;/g"
 }
 
 colima_agent_path() { # $1=colima 경로 $2=docker CLI 디렉터리 → LaunchAgent 의 PATH
@@ -154,13 +166,17 @@ colima_agent_path() { # $1=colima 경로 $2=docker CLI 디렉터리 → LaunchAg
 }
 
 # LaunchAgent 를 쓰는 곳은 이것 하나다 (설치기·mac-host-repair.sh 공용).
-write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CLI 디렉터리
+# 알려진 예전 에이전트에서 이어받는 설정은 선택 인자다: [$5=stderr 파일(기본 $3)] [$6=시작 플래그] [$7=HOME]
+# — 없으면 출력은 기본 정의와 바이트까지 같다.
+write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CLI 디렉터리 [$5 $6 $7]
     # colima 는 기동할 때 호스트의 docker CLI 를 찾는다 — launchd 는 셸 프로파일을 읽지 않으므로 PATH 에 직접 넣는다.
-    local label profile colima home path log guard
-    label="$(xml_escape "$COLIMA_AGENT")"; profile="$(xml_escape "$COLIMA_PROFILE")"; guard="$(xml_escape "$COLIMA_AGENT_GUARD")"
-    colima="$(xml_escape "$2")"; home="$(xml_escape "$OPENMAKE_COLIMA_HOME")"; log="$(xml_escape "$3")"
+    local label profile colima home path log err guard flag_xml="" home_xml="" nl=$'\n'
+    label="$(xml_escape "$COLIMA_AGENT")"; profile="$(xml_escape "$COLIMA_PROFILE")"; guard="$(xml_escape "$(colima_agent_guard "${6:-}")")"
+    colima="$(xml_escape "$2")"; home="$(xml_escape "$OPENMAKE_COLIMA_HOME")"; log="$(xml_escape "$3")"; err="$(xml_escape "${5:-$3}")"
     path="$(xml_escape "$(colima_agent_path "$2" "${4:-}")")"
-    mkdir -p "$(dirname "$1")" "$(dirname "$3")"
+    [[ -z "${6:-}" ]] || flag_xml="$nl        <string>$(xml_escape "$6")</string>"
+    [[ -z "${7:-}" ]] || home_xml="$nl        <key>HOME</key>$nl        <string>$(xml_escape "$7")</string>"
+    mkdir -p "$(dirname "$1")" "$(dirname "$3")" "$(dirname "${5:-$3}")"
     cat > "$1" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -174,10 +190,10 @@ write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CL
         <string>-c</string>
         <string>$guard</string>
         <string>$colima</string>
-        <string>$profile</string>
+        <string>$profile</string>$flag_xml
     </array>
     <key>EnvironmentVariables</key>
-    <dict>
+    <dict>$home_xml
         <key>COLIMA_HOME</key>
         <string>$home</string>
         <key>PATH</key>
@@ -188,7 +204,7 @@ write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CL
     <key>StandardOutPath</key>
     <string>$log</string>
     <key>StandardErrorPath</key>
-    <string>$log</string>
+    <string>$err</string>
 </dict>
 </plist>
 EOF
@@ -222,35 +238,38 @@ colima_agent_print_canonical() {
         }'
 }
 
-colima_agent_expected_print() { # $1=colima 경로 $2=docker CLI 디렉터리 $3=로그 파일
-    printf '%s\n' "path = $COLIMA_AGENT_PLIST" "program = /bin/sh" "arg=/bin/sh" "arg=-c" "arg=$COLIMA_AGENT_GUARD" "arg=$1" "arg=$COLIMA_PROFILE" \
-        "stdout path = $3" "stderr path = $3" "env=COLIMA_HOME => $OPENMAKE_COLIMA_HOME" "env=PATH => $(colima_agent_path "$1" "$2")"
+colima_agent_expected_print() { # $1=colima 경로 $2=docker CLI 디렉터리 $3=로그 파일 [$4=stderr $5=시작 플래그 $6=HOME]
+    printf '%s\n' "path = $COLIMA_AGENT_PLIST" "program = /bin/sh" "arg=/bin/sh" "arg=-c" "arg=$(colima_agent_guard "${5:-}")" "arg=$1" "arg=$COLIMA_PROFILE"
+    [[ -z "${5:-}" ]] || printf '%s\n' "arg=$5"
+    printf '%s\n' "stdout path = $3" "stderr path = ${4:-$3}" "env=COLIMA_HOME => $OPENMAKE_COLIMA_HOME"
+    [[ -z "${6:-}" ]] || printf '%s\n' "env=HOME => $6"
+    printf '%s\n' "env=PATH => $(colima_agent_path "$1" "$2")"
 }
 
 # 등록 여부만이 아니라 launchd 가 실제로 들고 있는 정의(파일·실행 파일·인자·환경·로그)가 이 계약과 같은지 본다.
 # (plist 가 있음 ≠ 등록됨 ≠ 재부팅 후 실제 기동 — 마지막은 재부팅해야만 증명된다.)
-colima_agent_loaded_matches() { # $1=colima 경로 $2=docker CLI 디렉터리 $3=로그 파일
+colima_agent_loaded_matches() { # $1=colima 경로 $2=docker CLI 디렉터리 $3=로그 파일 [$4=stderr $5=시작 플래그 $6=HOME]
     local out
     out="$(launchctl print "$(colima_gui_domain)/$COLIMA_AGENT" 2>/dev/null)" || return 1
-    [[ "$(printf '%s\n' "$out" | colima_agent_print_canonical)" == "$(colima_agent_expected_print "$1" "$2" "$3")" ]]
+    [[ "$(printf '%s\n' "$out" | colima_agent_print_canonical)" == "$(colima_agent_expected_print "$1" "$2" "$3" "${4:-}" "${5:-}" "${6:-}")" ]]
 }
 
 # 같은 정의가 이미 로드돼 있으면 건드리지 않는다 — bootout 은 정의가 바뀌었거나 로드된 것이 다를 때만.
 # 이전 정의는 LaunchAgents 밖에 백업한다 (그 폴더의 파일은 launchd 가 같은 라벨로 읽을 수 있다).
 # 생성·검사·백업·설치가 모두 성공해야 등록을 바꾼다 — 하나라도 실패하면 정의·등록을 그대로 두고 1 을 돌려준다.
 # GUI 세션이 없으면(SSH 전용) 정의만 두고 등록 보류를 알린다 — sudo·system 도메인으로 우회하지 않는다.
-enable_docker_autostart() { # [$1=로그 파일]
-    local domain tmp backup colima docker_dir log
+enable_docker_autostart() { # [$1=로그 파일] [$2=stderr 파일 $3=시작 플래그 $4=HOME — 알려진 예전 에이전트에서 이어받은 값]
+    local domain tmp backup colima docker_dir log err="${2:-}" flag="${3:-}" home="${4:-}"
     domain="$(colima_gui_domain)"; colima="$(command -v colima)"; docker_dir="$(dirname "$(command -v docker)")"
     log="${1:-$OMK_ROOT/logs/colima.log}"
     tmp="$(mktemp)" || return 1
-    if ! write_colima_agent "$tmp" "$colima" "$log" "$docker_dir" \
+    if ! write_colima_agent "$tmp" "$colima" "$log" "$docker_dir" "$err" "$flag" "$home" \
         || { command -v plutil >/dev/null 2>&1 && ! plutil -lint -s "$tmp" >/dev/null; }; then
         rm -f "$tmp"; log_warn "Colima LaunchAgent 정의를 만들지 못했습니다 — 정의·등록을 바꾸지 않았습니다."; return 1
     fi
     if [[ -f "$COLIMA_AGENT_PLIST" ]] && cmp -s "$tmp" "$COLIMA_AGENT_PLIST"; then
         rm -f "$tmp"
-        if colima_agent_loaded_matches "$colima" "$docker_dir" "$log"; then log_ok "Colima 자동 시작 등록 유지 ($COLIMA_AGENT)"; return 0; fi
+        if colima_agent_loaded_matches "$colima" "$docker_dir" "$log" "$err" "$flag" "$home"; then log_ok "Colima 자동 시작 등록 유지 ($COLIMA_AGENT)"; return 0; fi
     else
         if [[ -f "$COLIMA_AGENT_PLIST" ]]; then
             backup="$OMK_ROOT/backups/launchd/$COLIMA_AGENT.plist.before-colima-$(date +%Y%m%d%H%M%S)-$$"
@@ -294,9 +313,8 @@ run_mac_host_repair() {
 }
 
 check_docker_desktop_data() {
-    local guard="$SCRIPT_DIR/scripts/setup/check-docker-desktop-data.sh" existing=0 envf
-    if [[ "${MINIMAL:-0}" == 1 ]]; then envf="$ENV_FILE"; else envf="$OMK_ROOT/$(omk_env_name)/llm/.env"; fi
-    [[ ! -f "$envf" ]] || existing=1
+    local guard="$SCRIPT_DIR/scripts/setup/check-docker-desktop-data.sh" existing=0
+    [[ ! -f "$(openmake_install_env)" ]] || existing=1
     PG_CONTAINER="$PG_CONTAINER" EXISTING_INSTALL="$existing" bash "$guard" \
         || die "기존 Docker 데이터 확인이 필요합니다 — Colima 설치를 중단했습니다. 원본 데이터는 변경하지 않았습니다."
 }
