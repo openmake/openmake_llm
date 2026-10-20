@@ -12,7 +12,8 @@
 #   2) 새 터미널: ~/.local/share/openmake/docker-bin (Homebrew docker·키체인 헬퍼 링크만)을 PATH 앞에 둔다.
 #      node 등 다른 도구·기본 Docker 컨텍스트·DOCKER_HOST/DOCKER_CONTEXT/COLIMA_HOME 은 건드리지 않는다.
 #   3) LaunchAgent com.openmake.colima: 기존 Colima 위치(외장 디스크 포함)로 정의·등록을 맞춘다.
-#      기동 가드(colima-boot-guard.sh)를 ~/.local/share/openmake 에 먼저 둔다 — 지난 부팅이 남긴 Lima pid 파일만 보관 후 시작.
+#      Node 기동 가드(colima-boot-guard.cjs)를 ~/.local/share/openmake 에 먼저 두고 기존 node 로 직접 실행한다 —
+#      지난 부팅이 남긴 Lima pid 파일만 보관 후 시작. 예전 셸 가드 사본(.sh)은 지우지 않는다.
 #      건강하게 로드돼 있으면 그대로 둔다. GUI 세션이 없으면 등록을 보류로 알린다.
 #      LaunchAgent 는 기존 프로필이 있을 때만 시작한다. 새로 등록하면(RunAtLoad) 멈춰 있던 기존 프로필이 시작된다.
 # --apply 는 한 단계라도 오류면 그 자리에서 멈춘다 — 자격 증명 오류 뒤에 PATH·launchd 를 바꾸지 않는다.
@@ -140,7 +141,13 @@ agent_field() { printf '%s\n' "$1" | sed -n "s/^$2=//p"; }
 
 repair_colima_agent() {
     local report state log err flag home reasons
-    report="$(reconciler agent --plist "$COLIMA_AGENT_PLIST" --colima "$BREW_BIN/colima" --colima-home "$OPENMAKE_COLIMA_HOME" --owner-home "$HOME" --guard "$COLIMA_BOOT_GUARD")"
+    # 가드는 이 정리가 쓰는 기존 node(Homebrew·mise 등)의 실제 실행 파일로 실행한다 — .node-version 과 같아야 한다.
+    if ! resolve_colima_guard_node "$NODE_BIN"; then
+        failure "no node matching .node-version to run the Colima boot guard; LaunchAgent $COLIMA_AGENT was not changed"
+        return 0
+    fi
+    say evidence "Colima boot guard node $COLIMA_GUARD_NODE"
+    report="$(reconciler agent --plist "$COLIMA_AGENT_PLIST" --colima "$BREW_BIN/colima" --colima-home "$OPENMAKE_COLIMA_HOME" --owner-home "$HOME" --guard "$COLIMA_BOOT_GUARD" --node "$COLIMA_GUARD_NODE")"
     state="$(agent_field "$report" state)"; log="$(agent_field "$report" log)"; err="$(agent_field "$report" err)"
     # 알려진 예전 에이전트에서 이어받는 값 (그 밖의 정의는 conflict 로 손대지 않는다)
     flag="$(agent_field "$report" flags)"; home="$(agent_field "$report" home)"

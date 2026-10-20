@@ -45,6 +45,8 @@ sudo() { echo "sudo $*" >> "$BREW_CALLS"; return 1; }
 # shellcheck source=/dev/null
 . "$HERE/mac-host-repair.sh"
 desktop_root_artifacts() { :; }
+# 가드를 실행할 node = 정리가 쓰는 node(대역 PATH 의 링크)의 실제 실행 파일
+GN="$(node -p process.execPath)"
 
 PASS=0; FAIL=0
 eq() { if [[ "$2" == "$3" ]]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); printf 'FAIL %s\n  expected: %s\n  actual:   %s\n' "$1" "$3" "$2"; fi; }
@@ -115,7 +117,9 @@ ok "apply: 등록이 기존 프로필을 시작함을 알림" 'grep -q "기존 �
 ok "apply: 외장 COLIMA_HOME 을 자동 시작에 보존" 'grep -qF "<string>$TMP/Ext &amp; &apos;Colima&apos;</string>" "$HOME/Library/LaunchAgents/com.openmake.colima.plist"'
 ok "apply: 자동 시작 plist 문법" 'plutil -lint "$HOME/Library/LaunchAgents/com.openmake.colima.plist" >/dev/null'
 eq "apply: 등록" "$(fake_lctl_log)" "bootstrap"
-ok "apply: 기동 가드 설치 (저장소 밖 사본)" 'cmp -s "$HERE/colima-boot-guard.sh" "$HOME/.local/share/openmake/colima-boot-guard.sh" && [[ -x "$HOME/.local/share/openmake/colima-boot-guard.sh" ]]'
+ok "apply: Node 기동 가드 설치 (저장소 밖 사본)" 'cmp -s "$HERE/colima-boot-guard.cjs" "$HOME/.local/share/openmake/colima-boot-guard.cjs"'
+ok "apply: 가드 node 근거 (실제 실행 파일)" 'grep -qF "evidence: Colima boot guard node $GN" "$OUT"'
+ok "apply: 에이전트는 그 node 로 가드를 직접 실행" '[[ "$(plutil -extract ProgramArguments.0 raw -o - "$HOME/Library/LaunchAgents/com.openmake.colima.plist")" == "$GN" ]]'
 ok "apply: 등록 확인과 재부팅 증명은 구분" 'grep -q "reboot" "$OUT"'
 
 # ── 두 번째 --apply: 아무것도 바꾸지 않는다 ──
@@ -144,7 +148,11 @@ ok "custom agent: 파일 그대로" 'cmp -s "$TMP/custom.plist" "$P"'
 eq "custom agent: launchctl 변경 없음" "$(fake_lctl_log)" ""
 
 # ── Desktop 의 root 헬퍼는 sudo 없이 보류로만 알린다 ──
-cat "$P" > /dev/null; write_colima_agent "$P" "$BB/colima" "$OMK_ROOT/logs/colima.log" "$BB"
+# 운영 정리처럼 작성 전에 가드 node 를 정한다 (run 의 서브셸에서 정한 값은 여기에 남지 않는다)
+ok "직접 작성: 가드 node 를 정리와 같은 후보로 정함" 'resolve_colima_guard_node "$TMP/node24/bin/node" && [[ "$COLIMA_GUARD_NODE" == "$GN" ]]'
+wrc=0; write_colima_agent "$P" "$BB/colima" "$OMK_ROOT/logs/colima.log" "$BB" 2> "$TMP/write.err" || wrc=$?
+eq "직접 작성: 성공·숨은 오류 없음" "$wrc|$(cat "$TMP/write.err")" "0|"
+eq "직접 작성: 첫 인자는 가드 node" "$(plutil -extract ProgramArguments.0 raw -o - "$P" 2>&1)" "$GN"
 desktop_root_artifacts() { printf '%s\n' "$TMP"; }
 : > "$BREW_CALLS"
 eq "root 헬퍼: 보류 → 1" "$(run --apply)" "1"
@@ -197,7 +205,7 @@ LA=(); LE=""; LK=""; LC=""; LO=""; LR=""
 while IFS=$'\t' read -r tag v; do
     case "$tag" in A) LA+=("$v") ;; K) LK="$v" ;; V) [[ $LK == HOME ]] && LE="$v"; [[ $LK == COLIMA_HOME ]] && LC="$v" ;; O) LO="$v" ;; E) LR="$v" ;; esac
 done < <(fake_plist_fields "$P")
-eq "legacy: 기동 가드 + 이어받은 플래그" "$(printf '%s|' "${LA[@]}")" "/bin/bash|$COLIMA_BOOT_GUARD|$BB/colima|openmake|--save-config=false|"
+eq "legacy: 기동 가드 + 이어받은 플래그" "$(printf '%s|' "${LA[@]}")" "$GN|$COLIMA_BOOT_GUARD|$BB/colima|openmake|--save-config=false|"
 eq "legacy: HOME·외장 COLIMA_HOME·두 로그 보존" "$LE|$LC|$LO|$LR" "$HOME|$COLIMA_HOME|$LOGS/colima-openmake.log|$LOGS/colima-openmake.error.log"
 ok "legacy: plist 문법" 'plutil -lint "$P" >/dev/null'
 ok "legacy: 이전 정의 백업" 'grep -l -- "<string>--save-config=false</string>" "$OMK_ROOT/backups/launchd/"*.before-colima-* >/dev/null'
@@ -209,7 +217,7 @@ eq "legacy repeat: 등록 그대로" "$(fake_lctl_log)" ""
 # 지난 릴리스가 쓴 인라인 가드(sh -c, 플래그 이어받음)가 로드돼 있으면 같은 설정을 지키며 기동 가드로 바꾼다
 # shellcheck disable=SC2016  # 예전 정의의 글자 그대로
 OLD_GUARD_WITH_FLAGS='[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$@" --activate=false'
-sed -e "s|<string>/bin/bash</string>|<string>/bin/sh</string><string>-c</string>|" \
+sed -e "s|<string>$GN</string>|<string>/bin/sh</string><string>-c</string>|" \
     -e "s|<string>$(xml_escape "$COLIMA_BOOT_GUARD")</string>|<string>$(xml_escape "$OLD_GUARD_WITH_FLAGS" | sed 's/[&|]/\\&/g')</string>|" "$P" > "$TMP/inline.plist"
 cat "$TMP/inline.plist" > "$P"; fake_lctl_reset; fake_lctl_load "$P"
 ok "inline: 예전 가드 글자 그대로" '[[ "$(plutil -extract ProgramArguments.2 raw -o - "$P")" == "$OLD_GUARD_WITH_FLAGS" ]]'
@@ -217,9 +225,22 @@ eq "inline: check → 1" "$(run --check)" "1"
 ok "inline: 바꿀 이유를 알림" 'grep -q "earlier inline guard" "$OUT"'
 eq "inline: apply → 0" "$(run --apply)" "0"
 LA=(); while IFS=$'\t' read -r tag v; do [[ $tag == A ]] && LA+=("$v"); done < <(fake_plist_fields "$P")
-eq "inline: 기동 가드 + 플래그 유지" "$(printf '%s|' "${LA[@]}")" "/bin/bash|$COLIMA_BOOT_GUARD|$BB/colima|openmake|--save-config=false|"
+eq "inline: 기동 가드 + 플래그 유지" "$(printf '%s|' "${LA[@]}")" "$GN|$COLIMA_BOOT_GUARD|$BB/colima|openmake|--save-config=false|"
 ok "inline: HOME·로그 유지" 'grep -qF "<string>$LOGS/colima-openmake.error.log</string>" "$P" && grep -q "<key>HOME</key>" "$P"'
 eq "inline: 다시 등록" "$(fake_lctl_log)" "bootout bootstrap"
+# 지난 릴리스의 셸 기동 가드(/bin/bash …/colima-boot-guard.sh)도 같은 설정으로 Node 가드로 바꾼다 — 설치돼 있던 .sh 사본은 지우지 않는다
+OLD_SH="$HOME/.local/share/openmake/colima-boot-guard.sh"; printf '#!/bin/bash\n# previous release\n' > "$OLD_SH"
+sed -e "s|<string>$GN</string>|<string>/bin/bash</string>|" -e "s|colima-boot-guard.cjs|colima-boot-guard.sh|" "$P" > "$TMP/shell.plist"
+cat "$TMP/shell.plist" > "$P"; fake_lctl_reset; fake_lctl_load "$P"
+ok "shell guard: 예전 모양" '[[ "$(plutil -extract ProgramArguments.0 raw -o - "$P")|$(plutil -extract ProgramArguments.1 raw -o - "$P")" == "/bin/bash|$OLD_SH" ]]'
+eq "shell guard: check → 1" "$(run --check)" "1"
+ok "shell guard: 바꿀 이유를 알림" 'grep -q "earlier shell boot guard" "$OUT"'
+eq "shell guard: apply → 0" "$(run --apply)" "0"
+LA=(); while IFS=$'\t' read -r tag v; do [[ $tag == A ]] && LA+=("$v"); done < <(fake_plist_fields "$P")
+eq "shell guard: Node 가드 + 플래그 유지" "$(printf '%s|' "${LA[@]}")" "$GN|$COLIMA_BOOT_GUARD|$BB/colima|openmake|--save-config=false|"
+ok "shell guard: HOME·로그 유지" 'grep -qF "<string>$LOGS/colima-openmake.error.log</string>" "$P" && grep -q "<key>HOME</key>" "$P"'
+eq "shell guard: 다시 등록" "$(fake_lctl_log)" "bootout bootstrap"
+ok "shell guard: 설치돼 있던 .sh 사본은 그대로" 'grep -q "previous release" "$OLD_SH"'
 # 비슷하지만 다른 정의(추가 인자)는 수동 항목으로 남기고 건드리지 않는다
 legacy_agent "
         <string>--cpu</string>

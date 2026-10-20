@@ -21,10 +21,13 @@ const SHIM_HEADER = '# Managed by OpenMake scripts/setup/mac-host-repair.sh: Doc
 const SHIM_TOOLS = ['docker', 'docker-credential-osxkeychain'];
 const AGENT_LABEL = 'com.openmake.colima';
 const PROFILE = 'openmake';
-// The agent runs the installed boot guard (scripts/setup/colima-boot-guard.sh, copied to --guard by 30-toolchain.sh):
-// /bin/bash <guard> <colima> openmake [kept flags]. The two inline guards below are what earlier releases wrote;
-// they are recognised only to upgrade them (they cannot recover stale Lima pid files after an unclean shutdown).
-const GUARD_SHELL = '/bin/bash';
+// The agent runs the installed Node boot guard (scripts/setup/colima-boot-guard.cjs, copied to --guard by
+// 30-toolchain.sh) with the owner's resolved node directly: <node> <guard> <colima> openmake [kept flags].
+// Earlier releases wrote /bin/bash <colima-boot-guard.sh next to it> … and the two inline guards below; they are
+// recognised only to upgrade them (bash lacks the external-volume access the approved node has; inline guards
+// cannot recover stale Lima pid files after an unclean shutdown).
+const SHELL_GUARD_RUNNER = '/bin/bash';
+const SHELL_GUARD_NAME = 'colima-boot-guard.sh';
 const COLIMA_GUARD = '[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$1" --activate=false';
 // Used instead when a known start flag is kept: the profile and flags follow as "$@".
 const COLIMA_GUARD_WITH_FLAGS = '[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$@" --activate=false';
@@ -315,7 +318,7 @@ function writeDockerShim({ home, brewPrefix, apply = true }) {
 // Compares the Colima LaunchAgent with the one contract the installer writes; never touches launchd.
 // Earlier installer output is 'stale' (rewritten); any other difference is 'conflict' (reported, kept).
 // Settings kept from a migratable agent come back as logPath/errPath/startFlags/home for the shell writer.
-function inspectColimaAgent({ plistPath, colima, colimaHome, brewPrefix, ownerHome, guard }) {
+function inspectColimaAgent({ plistPath, colima, colimaHome, brewPrefix, ownerHome, guard, node }) {
     const none = { logPath: null, errPath: null, startFlags: [], home: null };
     if (!fs.existsSync(plistPath)) return { state: 'missing', reasons: [`${plistPath} does not exist`], ...none };
     let p;
@@ -330,13 +333,22 @@ function inspectColimaAgent({ plistPath, colima, colimaHome, brewPrefix, ownerHo
     const args = Array.isArray(p.ProgramArguments) ? p.ProgramArguments : [];
     const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     let startFlags = [];
-    const bootGuarded = flags => args.length === 4 + flags.length && args[0] === GUARD_SHELL && typeof guard === 'string' && args[1] === guard && args[3] === PROFILE && same(args.slice(4), flags);
+    const shellGuard = typeof guard === 'string' ? path.join(path.dirname(guard), SHELL_GUARD_NAME) : null;
+    // <runner> <guard file> <colima> openmake [flags]
+    const fileGuarded = (file, flags) => args.length === 4 + flags.length && typeof file === 'string' && args[1] === file && args[3] === PROFILE && same(args.slice(4), flags);
     const inlineGuarded = (text, flags) => same(args.slice(0, 3), ['/bin/sh', '-c', text]) && args.length === 5 + flags.length && args[4] === PROFILE && same(args.slice(5), flags);
-    if (bootGuarded([]) || bootGuarded(KEPT_START_FLAGS)) {
-        startFlags = args.slice(4);
+    let agentColima = args[0];
+    // The node that runs the guard is any absolute node executable (resolved per host); only --node is healthy.
+    const nodeRunner = typeof args[0] === 'string' && path.isAbsolute(args[0]) && path.basename(args[0]) === 'node';
+    if (nodeRunner && (fileGuarded(guard, []) || fileGuarded(guard, KEPT_START_FLAGS))) {
+        startFlags = args.slice(4); agentColima = args[2];
+        if (args[0] !== node) stale.push(`node ${args[0]} is not ${node}`);
         if (args[2] !== colima) stale.push(`program ${args[2]} is not ${colima}`);
+    } else if (args[0] === SHELL_GUARD_RUNNER && (fileGuarded(shellGuard, []) || fileGuarded(shellGuard, KEPT_START_FLAGS))) {
+        startFlags = args.slice(4); agentColima = args[2];
+        stale.push('earlier shell boot guard (replaced by the Node boot guard)');
     } else if (inlineGuarded(COLIMA_GUARD, []) || inlineGuarded(COLIMA_GUARD_WITH_FLAGS, KEPT_START_FLAGS)) {
-        startFlags = args.slice(5);
+        startFlags = args.slice(5); agentColima = args[3];
         stale.push('earlier inline guard (replaced by the boot guard that recovers stale Lima pid files)');
     } else if (args.length === 5 && same(args.slice(1), ['start', '--profile', PROFILE, '--activate=false'])) {
         stale.push('earlier unguarded colima start (starts even when the Colima storage is missing)');
@@ -359,7 +371,6 @@ function inspectColimaAgent({ plistPath, colima, colimaHome, brewPrefix, ownerHo
     const generated = agentPath.match(new RegExp(`^([^:]+)(?::([^:]+))?${AGENT_SYSTEM_PATH.replace(/[/]/g, '\\/')}$`));
     const knownDockerDir = d => d === undefined || d === bin || d === LEGACY_DOCKER_CLI_DIR || d.includes(DESKTOP_MARK);
     // The first entry is the directory of the colima that agent ran (args[3] guarded, args[0] earlier start).
-    const agentColima = args[0] === '/bin/sh' ? args[3] : args[0] === GUARD_SHELL ? args[2] : args[0];
     const knownColimaDir = d => d === colimaBin || d === bin || (typeof agentColima === 'string' && d === path.dirname(agentColima));
     if (!generated || !knownColimaDir(generated[1]) || !knownDockerDir(generated[2])) conflict.push(`custom PATH ${agentPath}`);
     else if (agentPath !== wantedPath) stale.push(agentPath.includes(DESKTOP_MARK) ? 'PATH includes Docker.app' : `PATH ${agentPath} is not ${wantedPath}`);
@@ -405,7 +416,7 @@ if (require.main === module) {
             for (const file of r.files) console.log(`${o.apply ? 'ok: updated' : 'fix: update'} ${file}`);
             process.exitCode = r.changed && !o.apply ? 1 : 0;
         } else if (command === 'agent') {
-            const r = inspectColimaAgent({ plistPath: o.plist, colima: o.colima, colimaHome: o['colima-home'], brewPrefix: o['brew-prefix'], ownerHome: o['owner-home'], guard: o.guard });
+            const r = inspectColimaAgent({ plistPath: o.plist, colima: o.colima, colimaHome: o['colima-home'], brewPrefix: o['brew-prefix'], ownerHome: o['owner-home'], guard: o.guard, node: o.node });
             console.log(`state=${r.state}`); console.log(`log=${r.logPath || ''}`); console.log(`err=${r.errPath || ''}`);
             console.log(`flags=${r.startFlags.join(' ')}`); console.log(`home=${r.home || ''}`);
             for (const reason of r.reasons) console.log(`reason=${reason}`);

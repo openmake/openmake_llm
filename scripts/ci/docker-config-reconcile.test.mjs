@@ -395,11 +395,15 @@ test('Docker shim refuses conflicting shim entries, foreign PATH files and Deskt
 const GUARD = '[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$1" --activate=false';
 const xml = v => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const GUARD_WITH_FLAGS = '[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$@" --activate=false';
-const BOOT_GUARD = '/Users/x/.local/share/openmake/colima-boot-guard.sh';
+// The agent runs the installed Node boot guard with the owner's resolved node directly (no bash parent).
+const BOOT_GUARD = '/Users/x/.local/share/openmake/colima-boot-guard.cjs';
+const GUARD_NODE = '/Users/x/.local/share/mise/installs/node/24.21.0/bin/node';
+// What the previous release wrote: /bin/bash + the shell boot guard next to it (upgradeable).
+const SHELL_GUARD = '/Users/x/.local/share/openmake/colima-boot-guard.sh';
 function plist(t, { colima = '/opt/homebrew/bin/colima', home = '/Volumes/MAC_APP/Colima', path = '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin', extraEnv = '', args, stdout = '/Users/x/.openmake/logs/colima.log', stderr = '/Users/x/.openmake/logs/colima.log' } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'omk-agent-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const file = join(dir, 'com.openmake.colima.plist');
-  const argv = args ?? ['/bin/bash', BOOT_GUARD, colima, 'openmake'];
+  const argv = args ?? [GUARD_NODE, BOOT_GUARD, colima, 'openmake'];
   writeFileSync(file, `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -413,7 +417,7 @@ ${stderr === null ? '' : `<key>StandardErrorPath</key><string>${stderr}</string>
 `);
   return file;
 }
-const expected = { colima: '/opt/homebrew/bin/colima', colimaHome: '/Volumes/MAC_APP/Colima', brewPrefix: '/opt/homebrew', ownerHome: '/Users/x', guard: BOOT_GUARD };
+const expected = { colima: '/opt/homebrew/bin/colima', colimaHome: '/Volumes/MAC_APP/Colima', brewPrefix: '/opt/homebrew', ownerHome: '/Users/x', guard: BOOT_GUARD, node: GUARD_NODE };
 const LEGACY_ARGS = ['/opt/homebrew/bin/colima', 'start', '--profile', 'openmake', '--activate=false'];
 
 test('agent inspection uses the installer contract: guarded start, exact environment, one log', { skip: process.platform !== 'darwin' && 'plutil is macOS only' }, t => {
@@ -426,6 +430,11 @@ test('agent inspection uses the installer contract: guarded start, exact environ
   const inline = state({ args: ['/bin/sh', '-c', GUARD, '/opt/homebrew/bin/colima', 'openmake'] });
   assert.equal(inline.state, 'stale', inline.reasons.join('; ')); assert.deepEqual(inline.startFlags, []);
   assert.match(inline.reasons.join(' '), /boot guard/);
+  // The shell boot guard of the previous release and an older node path are ours too: upgraded
+  const shell = state({ args: ['/bin/bash', SHELL_GUARD, '/opt/homebrew/bin/colima', 'openmake'] });
+  assert.equal(shell.state, 'stale', shell.reasons.join('; ')); assert.match(shell.reasons.join(' '), /shell boot guard/);
+  const oldNode = state({ args: ['/opt/homebrew/opt/node@24/bin/node', BOOT_GUARD, '/opt/homebrew/bin/colima', 'openmake'] });
+  assert.equal(oldNode.state, 'stale', oldNode.reasons.join('; ')); assert.match(oldNode.reasons.join(' '), /node/);
   assert.equal(state({ path: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin' }).state, 'stale');
   const desktopPath = state({ path: `/opt/homebrew/bin:${DESKTOP_APP}/bin:/usr/bin:/bin:/usr/sbin:/sbin` });
   assert.equal(desktopPath.state, 'stale'); assert.match(desktopPath.reasons.join(' '), /Docker\.app/);
@@ -445,9 +454,12 @@ test('agent inspection uses the installer contract: guarded start, exact environ
     // An unrecognised middle PATH entry is the operator's, even in an otherwise generated shape: never dropped.
     'legacy start with custom middle PATH': { args: LEGACY_ARGS, path: '/opt/homebrew/bin:/opt/company/bin:/usr/bin:/bin:/usr/sbin:/sbin' },
     'guarded start with custom middle PATH': { path: '/opt/homebrew/bin:/opt/company/bin:/usr/bin:/bin:/usr/sbin:/sbin' },
-    'boot guard at another path': { args: ['/bin/bash', '/opt/company/colima-guard.sh', '/opt/homebrew/bin/colima', 'openmake'] },
-    'boot guard with unknown flag': { args: ['/bin/bash', BOOT_GUARD, '/opt/homebrew/bin/colima', 'openmake', '--cpu=4'] },
-    'boot guard other profile': { args: ['/bin/bash', BOOT_GUARD, '/opt/homebrew/bin/colima', 'other'] },
+    'boot guard at another path': { args: [GUARD_NODE, '/opt/company/colima-guard.cjs', '/opt/homebrew/bin/colima', 'openmake'] },
+    'boot guard with unknown flag': { args: [GUARD_NODE, BOOT_GUARD, '/opt/homebrew/bin/colima', 'openmake', '--cpu=4'] },
+    'boot guard other profile': { args: [GUARD_NODE, BOOT_GUARD, '/opt/homebrew/bin/colima', 'other'] },
+    'boot guard run by another interpreter': { args: ['/bin/sh', BOOT_GUARD, '/opt/homebrew/bin/colima', 'openmake'] },
+    'shell guard at another path': { args: ['/bin/bash', '/opt/company/colima-guard.sh', '/opt/homebrew/bin/colima', 'openmake'] },
+    'shell guard with unknown flag': { args: ['/bin/bash', SHELL_GUARD, '/opt/homebrew/bin/colima', 'openmake', '--cpu=4'] },
     'edited inline guard': { args: ['/bin/sh', '-c', GUARD.replace('exit 78', 'exit 0'), '/opt/homebrew/bin/colima', 'openmake'] },
     'custom first PATH entry': { args: LEGACY_ARGS, path: '/opt/company/bin:/usr/bin:/bin:/usr/sbin:/sbin' },
   })) {
@@ -468,12 +480,16 @@ test('known legacy agent migrates keeping --save-config=false, owner HOME, exter
   assert.deepEqual(r.startFlags, ['--save-config=false']); assert.equal(r.home, '/Users/x');
   assert.equal(r.logPath, '/Users/x/Library/Logs/colima-openmake.log'); assert.equal(r.errPath, '/Users/x/Library/Logs/colima-openmake.error.log');
   // What the writer produces from that is healthy (repeat apply is a no-op)
-  const migrated = inspectColimaAgent({ plistPath: plist(t, { ...onlineAgent, args: ['/bin/bash', BOOT_GUARD, '/opt/homebrew/bin/colima', 'openmake', '--save-config=false'], path: '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin' }), ...expected });
+  const migrated = inspectColimaAgent({ plistPath: plist(t, { ...onlineAgent, args: [GUARD_NODE, BOOT_GUARD, '/opt/homebrew/bin/colima', 'openmake', '--save-config=false'], path: '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin' }), ...expected });
   assert.equal(migrated.state, 'healthy', migrated.reasons.join('; ')); assert.deepEqual(migrated.startFlags, ['--save-config=false']);
   // The earlier inline guard with the kept flag (written by the previous release) upgrades keeping the flag, HOME and logs
   const inline = inspectColimaAgent({ plistPath: plist(t, { ...onlineAgent, args: ['/bin/sh', '-c', GUARD_WITH_FLAGS, '/opt/homebrew/bin/colima', 'openmake', '--save-config=false'], path: '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin' }), ...expected });
   assert.equal(inline.state, 'stale', inline.reasons.join('; ')); assert.deepEqual(inline.startFlags, ['--save-config=false']); assert.equal(inline.home, '/Users/x');
   assert.equal(inline.errPath, '/Users/x/Library/Logs/colima-openmake.error.log');
+  // The shell boot guard with the kept flag (previous release) upgrades keeping the flag, HOME and logs
+  const shell = inspectColimaAgent({ plistPath: plist(t, { ...onlineAgent, args: ['/bin/bash', SHELL_GUARD, '/opt/homebrew/bin/colima', 'openmake', '--save-config=false'], path: '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin' }), ...expected });
+  assert.equal(shell.state, 'stale', shell.reasons.join('; ')); assert.deepEqual(shell.startFlags, ['--save-config=false']); assert.equal(shell.home, '/Users/x');
+  assert.equal(shell.logPath, '/Users/x/Library/Logs/colima-openmake.log');
   // Separate stdout/stderr on the standard agent are kept, not a conflict
   const logs = inspectColimaAgent({ plistPath: plist(t, { stderr: '/tmp/other.log' }), ...expected });
   assert.equal(logs.state, 'healthy'); assert.equal(logs.errPath, '/tmp/other.log'); assert.deepEqual(logs.startFlags, []); assert.equal(logs.home, null);
