@@ -1,5 +1,5 @@
 // Only fixed runner arguments: changed filenames and manifest data never become shell code.
-import { readFileSync, existsSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -45,6 +45,11 @@ export function changedFiles(sha, base = 'origin/main') {
   const files = git(['diff', '--name-only', '-z', ancestor, sha]).split('\0').filter(Boolean);
   return { base: ancestor, files };
 }
+export function environmentTests(root = repoRoot) {
+  const files = ['approve.test.sh', 'omk.test.sh', 'pipeline-distribution.test.sh', 'pipeline-errexit.test.sh', 'pipeline.test.sh'];
+  for (const file of files) if (!existsSync(resolve(root, 'scripts/env', file))) throw new Error(`Missing required environment test: ${file}`);
+  return files.map(file => `scripts/env/${file}`);
+}
 export function runFeatures(files, options = {}) {
   const root = options.cwd || repoRoot;
   const run = (command, args, config = {}) => execute(command, args, { cwd: root, env: options.env || process.env, ...config });
@@ -73,7 +78,7 @@ export function runFeatures(files, options = {}) {
     if (!files.length) throw new Error('Empty required pipeline test suite');
     const additional = ['scripts/ci', 'scripts/pipeline'].flatMap(dir => readdirSync(resolve(root, dir)).filter(f => f.endsWith('.test.mjs')).map(f => `${dir}/${f}`));
     run(process.execPath, ['--test', ...files.map(f => `tests/pipeline/${f}`), ...additional]);
-    run('bash', ['scripts/env/omk.test.sh']);
+    for (const script of environmentTests(root)) run('bash', [script]);
   }
   if (selection.infra) run('npm', ['run', 'test:infra']);
   if (selection.bridge) run('npm', ['test', '--workspace=@openmake/local-bridge-core']);
@@ -81,8 +86,16 @@ export function runFeatures(files, options = {}) {
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const sha = process.argv[2];
-    const change = changedFiles(sha);
-    console.log(JSON.stringify({ sha, ...change, ...runFeatures(change.files) }, null, 2));
+    let sha, change;
+    if (process.argv[2] === '--files') {
+      const input = JSON.parse(readFileSync(process.argv[3]));
+      sha = input.sha;
+      const head = execute('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', stdio: 'pipe' }).stdout.trim();
+      if (!/^[0-9a-f]{40}$/.test(sha) || head !== sha || !Array.isArray(input.files) || input.files.some(file => typeof file !== 'string')) throw new Error('Invalid tested SHA or feature input');
+      change = { files: input.files };
+    } else { sha = process.argv[2]; change = changedFiles(sha); }
+    const report = { sha, ...change, ...runFeatures(change.files) };
+    if (process.argv[4] === '--report') writeFileSync(process.argv[5], JSON.stringify(report, null, 2) + '\n');
+    console.log(JSON.stringify(report, null, 2));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

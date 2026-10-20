@@ -21,6 +21,10 @@ export function validateConfig(config) {
     return config;
 }
 
+export function assertChatResponse(body) {
+    if (body?.success !== true || typeof body.data?.response !== 'string' || !body.data.response.trim()) throw new Error('Chat response is not a successful nonempty assistant output');
+}
+
 export async function runTarget(target, env = process.env) {
     const result = { schemaVersion: 1, stage: 'bean', target: target.id, baseUrl: target.baseUrl, sha: null, version: null, status: 'failed', checks: [], startedAt: new Date().toISOString() };
     let csrf, cookie;
@@ -64,8 +68,7 @@ export async function runTarget(target, env = process.env) {
                 if (check === 'chat') {
                     await login();
                     const response = await request('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookie, 'X-CSRF-Token': csrf }, body: JSON.stringify({ message: 'Reply with OK.' }) });
-                    const text = await response.text();
-                    if (!text.trim()) throw new Error('Chat response is empty');
+                    assertChatResponse(await response.json());
                 }
                 result.checks.push({ name: check, status: 'passed', startedAt, finishedAt: new Date().toISOString() });
             } catch (error) {

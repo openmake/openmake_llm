@@ -42,12 +42,14 @@ CI 모델 fixture는 네트워크·인증·채팅 연결 검증용입니다. 실
 ## GitHub 자동화 활성화
 
 1. 자동화 소스가 **기본 브랜치 main에 먼저 존재**해야 `workflow_run`·스케줄 이벤트가 동작합니다. 초기 도입 PR은 기존 관리 절차로 검증·병합합니다.
-2. 저장소에 `Allow auto-merge`를 켜고 dev/main 모두 `CI Gate (Test → Build → Size → Lint)`를 필수·최신 기준(strict)으로 설정합니다. 이전 `omk/env-dev`는 제거합니다. 사람의 PR 리뷰 승인 수는 0입니다. 설정 변경 전 기존 다른 보호 규칙을 보존합니다.
+2. dev/main 모두 `CI Gate (Test → Build → Size → Lint)`를 필수·최신 기준(strict)으로 설정합니다. 컨트롤러가 준비 상태를 매번 확인해 즉시 일반 병합하며, 변경 후에도 남는 GitHub `--auto` 예약은 만들지 않습니다. 이전 `omk/env-dev`는 제거합니다. 사람의 PR 리뷰 승인 수는 0입니다. 설정 변경 전 기존 다른 보호 규칙을 보존합니다.
 3. Actions secret `OMK_AUTOMATION_TOKEN`을 등록합니다. 호환용 `OMK_PROMOTE_TOKEN`도 지원합니다. 저장소 contents·pull requests 쓰기, actions/checks 읽기 및 보호 규칙 읽기 권한이 필요합니다. GitHub App 토큰은 유효기간과 발급/갱신 방식을 별도로 마련해야 합니다. 개발자의 로컬 인증을 자동 복사하지 않습니다.
 4. 기본 `GITHUB_TOKEN`으로 PR을 생성·병합하면 다음 CI가 트리거되지 않을 수 있어 자동화 자격증명을 분리합니다. 미설정은 정상 완료로 숨기지 않고 오류로 알립니다.
 5. 권한 있는 오케스트레이터는 신뢰된 기본 브랜치 코드만 실행합니다. PR 소스·PR artifact를 내려받아 권한 토큰으로 실행하지 않습니다.
 
 `auto-merge`는 작업 PR의 최신 CI 뒤에, `promote`는 병합 dev의 push CI 뒤에 실행합니다. `release-verified`는 유효한 verify와 릴리스 PR CI를 주기적으로 확인합니다. 실패/대기는 해당 SHA와 이유를 남깁니다.
+
+활성화 상태는 `node scripts/pipeline/configuration.mjs OWNER/REPO`로 읽기 전용 확인할 수 있습니다. 자격증명 값은 요청하지 않으며, 미설정 항목이 있으면 종료 코드 1과 `blocked`를 반환합니다. `configured`도 실제 배포 완료를 뜻하지 않습니다.
 
 ## 환경 규칙
 
