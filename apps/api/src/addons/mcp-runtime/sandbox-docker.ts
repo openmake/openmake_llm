@@ -196,7 +196,7 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     const command = rewriteLoopback(input.command);
     const args = input.args.map((x) => rewriteLoopback(String(x)));
     if (needsPlaywrightBrowser(input)) {
-        // 브라우저 uvx 서버 — 스폰 전 같은 venv 로 playwright 브라우저 설치(리비전 드리프트 대응, sandbox-playwright).
+        // 브라우저 MCP 서버 — 스폰 전 Playwright 브라우저 설치와 원래 서버 실행(sandbox-playwright).
         const browsers = playwrightBrowsersFromEnv(input.env);
         a.push(...wrapWithPlaywrightInstall(command, args, browsers.length > 0 ? browsers : undefined));
     } else {
