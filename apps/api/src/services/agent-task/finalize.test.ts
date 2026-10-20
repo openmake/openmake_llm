@@ -52,6 +52,7 @@ import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import type { ChatMessage } from '../../llm/types';
 import { VERIFY_EVIDENCE } from '../../config/agent-task-tools';
+import { judgeClientFor } from './role-client';
 
 const judgeMock = judgeGoal as jest.MockedFunction<typeof judgeGoal>;
 const judgeStepMock = persistJudgeStep as jest.MockedFunction<typeof persistJudgeStep>;
@@ -97,6 +98,57 @@ beforeEach(() => {
 });
 
 describe('finalizeTask — 완료 관문 단일화(091)', () => {
+    it('실제 실행 증거가 목표 달성을 확인하면 자기신고 미완료 마커를 재판정한다', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'continuity.txt 에 두 단어를 읽음', raw: '' });
+        const i = input({
+            rawContent: `${AGENT_TASK_INCOMPLETE_MARKER}\n턴이 소진되었습니다. 파일에는 FIRST와 SECOND가 있습니다.`,
+            usedTools: new Set(['str_replace_editor']),
+            toolEvidence: '- str_replace_editor [view continuity.txt]: FIRST SECOND',
+            taskRuntime: { getPlanSnapshot: () => [], listWorkspace: async () => ['continuity.txt'] } as unknown as TaskRuntime,
+        });
+        expect((await finalizeTask(i)).kind).toBe('completed');
+        expect(judgeMock.mock.calls[0][4]).toContain('continuity.txt');
+        expect(lastUpdate(i)).toMatchObject({ status: 'completed', judgeVerdict: 'achieved' });
+        expect(String(lastUpdate(i).result)).not.toContain(AGENT_TASK_INCOMPLETE_MARKER);
+    });
+
+    it.each([false, null])('자기신고 미완료를 뒤집을 확실한 판정이 없으면 실패를 유지한다: %s', async (achieved) => {
+        judgeMock.mockResolvedValue({ achieved, reason: '', raw: '' });
+        const i = input({ rawContent: `${AGENT_TASK_INCOMPLETE_MARKER}\n남은 파일을 만들지 못했습니다.`, toolEvidence: '- str_replace_editor [view partial.txt]: PARTIAL' });
+        expect((await finalizeTask(i)).kind).toBe('goal_incomplete');
+        expect(judgeMock).toHaveBeenCalledTimes(1);
+        expect(lastUpdate(i)).toMatchObject({ status: 'failed', error: 'goal_incomplete' });
+    });
+
+    it('judge 가 꺼져 있으면 실행 증거가 있어도 미완료 자기신고를 그대로 유지한다', async () => {
+        const { AGENT_TASK_LIMITS } = jest.requireMock('../../config/runtime-limits') as typeof import('../../config/runtime-limits');
+        const flag = jest.replaceProperty(AGENT_TASK_LIMITS, 'GOAL_JUDGE_ENABLED', false);
+        try {
+            const i = input({ rawContent: AGENT_TASK_INCOMPLETE_MARKER, toolEvidence: '- str_replace_editor [view a.txt]: done' });
+            expect((await finalizeTask(i)).kind).toBe('goal_incomplete');
+            expect(judgeMock).not.toHaveBeenCalled();
+        } finally { flag.restore(); }
+    });
+
+    it.each([false, null])('아티팩트가 있어도 미완료 신고 재판정은 셰도우로 우회하지 않는다: %s', async (achieved) => {
+        const { AGENT_TASK_LIMITS } = jest.requireMock('../../config/runtime-limits') as typeof import('../../config/runtime-limits');
+        const flag = jest.replaceProperty(AGENT_TASK_LIMITS, 'GOAL_JUDGE_SHADOW_ENABLED', false);
+        judgeMock.mockResolvedValue({ achieved, reason: '', raw: '' });
+        try {
+            const i = input({ rawContent: `${AGENT_TASK_INCOMPLETE_MARKER}\n${WITH_ARTIFACT}`, toolEvidence: '- bash: file operation incomplete' });
+            expect((await finalizeTask(i)).kind).toBe('goal_incomplete');
+            expect(judgeMock).toHaveBeenCalledTimes(1);
+            expect(judgeStepMock.mock.calls[0][6]).toEqual({ shadow: false });
+        } finally { flag.restore(); }
+    });
+
+    it.each([true, false])('판정 모델 해석 실패는 자기신고 여부에 맞는 기존 결과를 보존한다: %s', async (incomplete) => {
+        jest.mocked(judgeClientFor).mockRejectedValueOnce(new Error('judge role unavailable'));
+        const i = input({ rawContent: `${incomplete ? AGENT_TASK_INCOMPLETE_MARKER : ''}작업 결과`, toolEvidence: '- bash: execution result' });
+        expect((await finalizeTask(i)).kind).toBe(incomplete ? 'goal_incomplete' : 'completed');
+        expect(lastUpdate(i)).toMatchObject({ status: incomplete ? 'failed' : 'completed', result: '작업 결과', judgeVerdict: 'unknown' });
+    });
+
     it('파일 작업의 보고서 아티팩트가 있어도 실제 파일 목록으로 판정해 거짓 완료를 막는다', async () => {
         judgeMock.mockResolvedValue({ achieved: false, reason: 'chain-two.txt 없음', raw: '' });
         const i = input({
