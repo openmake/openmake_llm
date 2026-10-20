@@ -110,7 +110,7 @@ export function digestToolCall(toolName: string | undefined, args: Args | undefi
 }
 
 /** PURE: conversation[toolIndex](tool 메시지)의 호출 인자를 앞선 assistant 의 tool_calls 에서 찾는다. */
-export function findToolCallArgs(conversation: ChatMessage[], toolIndex: number): Args | undefined {
+export function findToolCallArgs(conversation: ReadonlyArray<{ role: string; content?: string | null; tool_name?: string; tool_call_id?: string; tool_calls?: ChatMessage['tool_calls'] }>, toolIndex: number): Args | undefined {
     const id = conversation[toolIndex]?.tool_call_id;
     if (!id) return undefined;
     for (let i = toolIndex - 1; i >= 0; i--) {

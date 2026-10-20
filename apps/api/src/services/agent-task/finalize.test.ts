@@ -44,7 +44,7 @@ jest.mock('../../data/models/unified-database', () => ({ getPool: jest.fn(() => 
 
 import { finalizeTask, type FinalizeInput } from './finalize';
 import { judgeGoal } from './goal-judge';
-import { persistJudgeStep, persistVerifySkippedStep } from './task-steps';
+import { persistArtifactSteps, persistJudgeStep, persistVerifySkippedStep } from './task-steps';
 import { verifyCodeArtifacts } from './deliverable-verify';
 import { verifyWorkspaceTests } from './workspace-test-verify';
 import { AGENT_TASK_INCOMPLETE_MARKER } from '../../prompts/agent-task-prompt';
@@ -97,6 +97,35 @@ beforeEach(() => {
 });
 
 describe('finalizeTask — 완료 관문 단일화(091)', () => {
+    it('파일 작업의 보고서 아티팩트가 있어도 실제 파일 목록으로 판정해 거짓 완료를 막는다', async () => {
+        judgeMock.mockResolvedValue({ achieved: false, reason: 'chain-two.txt 없음', raw: '' });
+        const i = input({
+            goal: 'chain-one.txt 와 chain-two.txt 를 생성한다',
+            rawContent: '<artifact kind="markdown" title="결과">chain-two.txt 생성 완료</artifact>',
+            usedTools: new Set(['str_replace_editor']),
+            taskRuntime: { getPlanSnapshot: () => [], listWorkspace: async () => ['chain-one.txt'] } as unknown as TaskRuntime,
+        });
+        const out = await finalizeTask(i);
+        expect(out.kind).toBe('goal_incomplete');
+        expect(judgeMock.mock.calls[0][4]).toContain('chain-one.txt');
+        expect(judgeStepMock.mock.calls[0][5]).toContain('chain-one.txt');
+        expect(lastUpdate(i)).toMatchObject({ status: 'failed', judgeVerdict: 'not_achieved' });
+        expect(persistArtifactSteps).toHaveBeenCalledWith('task-1', expect.arrayContaining([
+            expect.objectContaining({ kind: 'markdown', content: 'chain-two.txt 생성 완료' }),
+        ]), expect.any(Number), '3');
+    });
+
+    it('조회 성공한 빈 workspace 와 파일 목록 조회 실패를 구분해 판정한다', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+        await finalizeTask(input({ usedTools: new Set(['file_ops']), taskRuntime: { getPlanSnapshot: () => [], listWorkspace: async () => [] } as unknown as TaskRuntime }));
+        const emptyCtx = judgeMock.mock.calls[0][4];
+        expect(emptyCtx).toContain('WORKSPACE_FILES');
+        expect(emptyCtx).toContain('0');
+        judgeMock.mockClear();
+        const failed = input({ usedTools: new Set(['file_ops']), taskRuntime: { getPlanSnapshot: () => [], listWorkspace: async () => { throw new Error('unavailable'); } } as unknown as TaskRuntime });
+        expect((await finalizeTask(failed)).kind).toBe('completed');
+        expect(judgeMock.mock.calls[0][4]).not.toContain('WORKSPACE_FILES');
+    });
     it('goal judge 호출은 그 작업의 비용 귀속 문맥 안에서 돈다', async () => {
         const { getCostSessionId } = jest.requireActual('../../utils/cost-attribution-context') as typeof import('../../utils/cost-attribution-context');
         const seen: Array<string | undefined> = [];
