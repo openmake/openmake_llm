@@ -44,3 +44,8 @@ export async function startModelFixture() {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   return { server, url: `http://127.0.0.1:${server.address().port}/v1`, calls: () => calls };
 }
+
+export function assertHealthIdentity(health, sha, expectedHash) {
+  const hash = health?.data?.build?.gitHash;
+  if (health?.success !== true || health?.data?.status !== 'healthy' || typeof hash !== 'string' || !/^[0-9a-f]{7,40}$/.test(hash) || hash !== expectedHash || !sha.startsWith(hash)) throw new Error('Running API health build identity differs from tested build');
+}

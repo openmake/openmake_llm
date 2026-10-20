@@ -13,7 +13,7 @@ test('web and known pipeline spec use fixed suites, unknown specs fail closed', 
   assert.throws(() => selectFeatures(['docs/specs/new-feature.md']), /Unmapped/);
 });
 test('documentation only does not invent changed feature coverage', () => {
-  assert.deepEqual(selectFeatures(['README.md']), { api: [], web: false, pipeline: false, infra: false, bridge: false });
+  assert.deepEqual(selectFeatures(['README.md']), { api: [], web: false, pipeline: false, infra: false, bridge: false, e2e: [] });
 });
 
 test('Jest success with skipped or missing assertions is not feature coverage', () => {
