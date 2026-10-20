@@ -116,6 +116,9 @@ jobs:
           bash -n scripts/setup/mac-toolchain.test.sh
           bash -n scripts/setup/mac-host-repair.sh
           bash -n scripts/setup/mac-host-repair.test.sh
+          bash -n scripts/setup/mac-pm2-boot.sh
+          bash -n scripts/setup/pm2-boot-guard.sh
+          bash -n scripts/setup/mac-pm2-boot.test.sh
           bash -n uninstall.sh
           bash -n scripts/setup/uninstall.test.sh
           bash -n scripts/setup/linux-web-port.test.sh
@@ -125,10 +128,12 @@ jobs:
             openmake_llm.sh scripts/env/*.sh \
             scripts/setup/mac-toolchain.test.sh scripts/setup/uninstall.test.sh scripts/setup/linux-web-port.test.sh \
             scripts/setup/mac-host-repair.sh scripts/setup/mac-host-repair.test.sh scripts/setup/fake-launchctl.test-lib.sh \
+            scripts/setup/mac-pm2-boot.sh scripts/setup/pm2-boot-guard.sh scripts/setup/mac-pm2-boot.test.sh \
             scripts/backups/*.sh scripts/airgap/*.sh
           for f in scripts/env/*.test.sh; do bash "$f"; done
           bash scripts/setup/mac-toolchain.test.sh
           bash scripts/setup/mac-host-repair.test.sh
+          bash scripts/setup/mac-pm2-boot.test.sh
           bash scripts/setup/uninstall.test.sh
           bash scripts/setup/linux-web-port.test.sh </dev/null
           bash scripts/backups/backup-retention.test.sh </dev/null
@@ -321,6 +326,7 @@ jobs:
           node --test scripts/ci/docker-config-reconcile.test.mjs
           /bin/bash scripts/setup/mac-toolchain.test.sh
           /bin/bash scripts/setup/mac-host-repair.test.sh
+          /bin/bash scripts/setup/mac-pm2-boot.test.sh
       # 운영 Mac 은 Homebrew bash 5(patsub_replacement 기본 켜짐)로 설치기를 돌릴 수 있다 — 같은 시험을 그 셸로도 돌린다.
       # (이 러너는 일회용 CI 기계다. 실제 호스트의 소프트웨어는 바꾸지 않는다.)
       - name: Host repair fixtures (Homebrew bash 5)
@@ -330,3 +336,4 @@ jobs:
           "$B5" -c 'shopt -q patsub_replacement' || { echo "patsub_replacement is not on in $("$B5" --version | head -1)"; exit 1; }
           PATH="$(dirname "$B5"):$PATH" "$B5" scripts/setup/mac-toolchain.test.sh
           PATH="$(dirname "$B5"):$PATH" "$B5" scripts/setup/mac-host-repair.test.sh
+          PATH="$(dirname "$B5"):$PATH" BASH5="$B5" "$B5" scripts/setup/mac-pm2-boot.test.sh

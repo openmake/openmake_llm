@@ -346,6 +346,36 @@ Desktop 의 root 헬퍼(`com.docker.vmnetd` 등)는 보류 항목으로만 알�
 등록 확인은 재부팅 후 실제 기동의 증명이 아니다 — 그것은 재부팅해서만 확인된다.
 종료 코드: `0` 남은 항목 없음 · `1` 바꿀(--check)·수동·보류 항목 남음 · `2` 오류·거부.
 
+### PM2 부팅 복구 — `mac-pm2-boot.sh`
+
+Docker 정리(`mac-host-repair.sh`)는 PM2 를 건드리지 않는다. 재부팅 후 앱 복구는 이 별도 명령으로 맞춘다. 설치기(`80-finish` 의 `setup_autostart`)도 이 명령의 `--apply` 를 부른다 (예전의 `sudo pm2 startup` 은 쓰지 않는다 — root 로 실행되면 사용자 세션이 아닌 곳에 등록되거나 아무 데도 등록되지 않았다).
+OpenMake 를 설치한 사용자로, 쓰는 `node`·`pm2`·`PM2_HOME` 이 잡힌 셸에서 실행한다 (root·sudo 를 쓰지 않는다).
+
+```bash
+bash scripts/setup/mac-pm2-boot.sh --check               # 읽기만 — 근거(PM2_HOME·node·pm2·저장된 앱·기다릴 컨테이너)와 바꿀 항목
+bash scripts/setup/mac-pm2-boot.sh --apply               # 명시적으로 적용
+bash scripts/setup/mac-pm2-boot.sh --apply --no-docker   # Docker 없이(--skip-docker) 설치한 호스트 — DB/Redis 를 기다리지 않는다
+```
+
+| 대상 | 동작 |
+|---|---|
+| 저장된 앱 `$PM2_HOME/dump.pm2` | 있어야 하고 유효해야 하며(빈 목록·깨진 JSON 거부), 그 작업 폴더·실행 파일·절대 경로 인터프리터가 지금 있어야 한다. 아니면 아무것도 바꾸지 않는다. dump 는 쓰지 않는다(`pm2 save` 없음) — 적용 전 본인만 읽는 백업(`~/.openmake/backups/pm2`, 0600)만 남긴다 |
+| 다른 PM2 부팅 등록 | 사용자·`/Library` LaunchAgents·LaunchDaemons 의 PM2 정의와 로드된 작업을 찾는다. 사용자 본인의 건강한 `pm2 startup` 에이전트(`pm2.<user>`, 같은 `PM2_HOME`, 로드됨)면 그대로 두고 끝낸다. 그 밖(root·시스템·다른 `PM2_HOME`·로드 안 된 파일·알 수 없는 작업, 둘 다 있는 이중 등록)은 거부한다 |
+| 기다릴 DB/Redis | 전용 Colima 소켓(OpenMake 명령과 같은 선택 규칙)에서 지금 실행 중이고 재시작 정책이 `unless-stopped`·`always` 인 `openmake[-<env>]-postgres`·`-redis` 를 고른다 (직접 멈춘 컨테이너는 VM 과 함께 다시 뜨지 않으므로 기다리지 않는다). PostgreSQL·Redis 가 하나씩은 있어야 한다. 나중에 환경을 더하면 다시 `--apply` |
+| 가드 `~/.local/share/openmake/pm2-boot-guard.sh` | 저장소 밖(내장 디스크)에 복사한다 — 저장소가 외장 디스크여도 로그인 때 실행된다 |
+| LaunchAgent `com.openmake.pm2` | 소유자 `HOME`·`PM2_HOME`, 지금 `node`·`pm2` 경로를 그대로 쓴다. PATH 는 그 node 디렉터리 + 시스템 경로뿐, Docker 환경변수는 넣지 않는다. `RunAtLoad`, `KeepAlive` 없음. 로드된 정의가 같으면 손대지 않는다. GUI 세션이 없으면(SSH 전용) 정의만 두고 보류로 알린다 |
+
+로그인 때 가드는 dump 경로·`pm2`·지정한 컨테이너(running, healthcheck 가 있으면 healthy)를 최대 15분 기다린 뒤(`OMK_PM2_BOOT_WAIT_SECONDS`) 부팅 직전 dump 를 `dump.pm2.last-boot`(0600)로 남기고 `pm2 resurrect` 한다. 그 뒤 dump 의 모든 앱이 PM2 목록에 있어야 성공이다.
+VM·컨테이너를 만들거나 시작하지 않고(Colima 는 `com.openmake.colima` 가 띄운다), 빌드·마이그레이션·업데이트·환경 변경을 하지 않는다. 깨진 dump 로는 `pm2 resurrect` 를 부르지 않는다 (PM2 가 그 파일을 지운다).
+실패는 `~/.openmake/logs/pm2-boot.log` 와 0 이 아닌 종료 코드로 남는다 (`launchctl print gui/$(id -u)/com.openmake.pm2` 의 last exit code): `75` 시간 안에 경로·DB 준비 안 됨 · `78` dump 없음·깨짐 · `1` 복구 후 빠진 앱.
+등록하면 가드가 곧바로 한 번 돈다 — 이미 실행 중인 이름은 `pm2 resurrect` 가 건너뛴다.
+`docker inspect` 는 호출마다 `OMK_PM2_BOOT_DOCKER_TIMEOUT`(기본 20초) 뒤 끊는다 — 응답 없는 Docker 가 기한을 무한히 늘리지 않는다.
+가드는 로그인당 한 번만 돈다(`KeepAlive` 없음). 마지막 실행이 실패로 끝났으면 `--check` 는 오류(`2`)로 알리고, `--apply` 는 같은 정의의 우리 작업만 `launchctl kickstart` 로 다시 돌린다(보류 `1`, 결과는 로그). 실행 중이거나 성공했으면 손대지 않는다.
+다른 PM2 등록 탐지는 파일 이름과 실제 정의(`plutil` 로 읽은 Program/ProgramArguments, 라벨 무관)로 한다.
+
+설치기의 `pm2 save` 는 지금 실행 중인 앱이 있고, dump 에 저장된 앱이 모두 지금 목록에 있을 때만 한다 (먼저 0600 백업). 빈 목록이나 일부만 떠 있는 상태로는 dump 를 덮지 않고 할 일로 남긴다. 등록이 끝나지 않으면 성공으로 알리지 않는다.
+종료 코드: `0` 남은 항목 없음 · `1` 바꿀(--check)·보류 항목 남음 · `2` 오류·거부. 재부팅 후 실제 복구는 재부팅해서만 확인된다.
+
 ### Colima 를 걷어낼 때
 
 ```bash
