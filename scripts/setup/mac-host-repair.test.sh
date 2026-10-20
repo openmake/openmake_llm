@@ -115,6 +115,7 @@ ok "apply: 등록이 기존 프로필을 시작함을 알림" 'grep -q "기존 �
 ok "apply: 외장 COLIMA_HOME 을 자동 시작에 보존" 'grep -qF "<string>$TMP/Ext &amp; &apos;Colima&apos;</string>" "$HOME/Library/LaunchAgents/com.openmake.colima.plist"'
 ok "apply: 자동 시작 plist 문법" 'plutil -lint "$HOME/Library/LaunchAgents/com.openmake.colima.plist" >/dev/null'
 eq "apply: 등록" "$(fake_lctl_log)" "bootstrap"
+ok "apply: 기동 가드 설치 (저장소 밖 사본)" 'cmp -s "$HERE/colima-boot-guard.sh" "$HOME/.local/share/openmake/colima-boot-guard.sh" && [[ -x "$HOME/.local/share/openmake/colima-boot-guard.sh" ]]'
 ok "apply: 등록 확인과 재부팅 증명은 구분" 'grep -q "reboot" "$OUT"'
 
 # ── 두 번째 --apply: 아무것도 바꾸지 않는다 ──
@@ -196,7 +197,7 @@ LA=(); LE=""; LK=""; LC=""; LO=""; LR=""
 while IFS=$'\t' read -r tag v; do
     case "$tag" in A) LA+=("$v") ;; K) LK="$v" ;; V) [[ $LK == HOME ]] && LE="$v"; [[ $LK == COLIMA_HOME ]] && LC="$v" ;; O) LO="$v" ;; E) LR="$v" ;; esac
 done < <(fake_plist_fields "$P")
-eq "legacy: guard + 이어받은 플래그" "$(printf '%s|' "${LA[@]}")" "/bin/sh|-c|$COLIMA_AGENT_GUARD_WITH_FLAGS|$BB/colima|openmake|--save-config=false|"
+eq "legacy: 기동 가드 + 이어받은 플래그" "$(printf '%s|' "${LA[@]}")" "/bin/bash|$COLIMA_BOOT_GUARD|$BB/colima|openmake|--save-config=false|"
 eq "legacy: HOME·외장 COLIMA_HOME·두 로그 보존" "$LE|$LC|$LO|$LR" "$HOME|$COLIMA_HOME|$LOGS/colima-openmake.log|$LOGS/colima-openmake.error.log"
 ok "legacy: plist 문법" 'plutil -lint "$P" >/dev/null'
 ok "legacy: 이전 정의 백업" 'grep -l -- "<string>--save-config=false</string>" "$OMK_ROOT/backups/launchd/"*.before-colima-* >/dev/null'
@@ -205,6 +206,20 @@ BEFORE="$(snapshot)"; : > "$LCTL_STATE/log"
 eq "legacy repeat: 성공" "$(run --apply)" "0"
 eq "legacy repeat: 파일 변경 없음" "$(snapshot)" "$BEFORE"
 eq "legacy repeat: 등록 그대로" "$(fake_lctl_log)" ""
+# 지난 릴리스가 쓴 인라인 가드(sh -c, 플래그 이어받음)가 로드돼 있으면 같은 설정을 지키며 기동 가드로 바꾼다
+# shellcheck disable=SC2016  # 예전 정의의 글자 그대로
+OLD_GUARD_WITH_FLAGS='[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$@" --activate=false'
+sed -e "s|<string>/bin/bash</string>|<string>/bin/sh</string><string>-c</string>|" \
+    -e "s|<string>$(xml_escape "$COLIMA_BOOT_GUARD")</string>|<string>$(xml_escape "$OLD_GUARD_WITH_FLAGS" | sed 's/[&|]/\\&/g')</string>|" "$P" > "$TMP/inline.plist"
+cat "$TMP/inline.plist" > "$P"; fake_lctl_reset; fake_lctl_load "$P"
+ok "inline: 예전 가드 글자 그대로" '[[ "$(plutil -extract ProgramArguments.2 raw -o - "$P")" == "$OLD_GUARD_WITH_FLAGS" ]]'
+eq "inline: check → 1" "$(run --check)" "1"
+ok "inline: 바꿀 이유를 알림" 'grep -q "earlier inline guard" "$OUT"'
+eq "inline: apply → 0" "$(run --apply)" "0"
+LA=(); while IFS=$'\t' read -r tag v; do [[ $tag == A ]] && LA+=("$v"); done < <(fake_plist_fields "$P")
+eq "inline: 기동 가드 + 플래그 유지" "$(printf '%s|' "${LA[@]}")" "/bin/bash|$COLIMA_BOOT_GUARD|$BB/colima|openmake|--save-config=false|"
+ok "inline: HOME·로그 유지" 'grep -qF "<string>$LOGS/colima-openmake.error.log</string>" "$P" && grep -q "<key>HOME</key>" "$P"'
+eq "inline: 다시 등록" "$(fake_lctl_log)" "bootout bootstrap"
 # 비슷하지만 다른 정의(추가 인자)는 수동 항목으로 남기고 건드리지 않는다
 legacy_agent "
         <string>--cpu</string>

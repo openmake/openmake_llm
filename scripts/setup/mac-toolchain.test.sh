@@ -46,7 +46,7 @@ P="$TMP/agent.plist"; write_colima_agent "$P" /opt/homebrew/bin/colima "$TMP/col
 ok "agent: 라벨"     'grep -q "<string>com.openmake.colima</string>" "$P"'
 ok "agent: 실행 파일" 'grep -q "<string>/opt/homebrew/bin/colima</string>" "$P"'
 ok "agent: 프로필"    'grep -q "<string>openmake</string>" "$P"'
-ok "agent: 컨텍스트 유지" 'grep -q -- "--activate=false" "$P"'
+ok "agent: 컨텍스트 유지 (가드가 --activate=false 로 시작)" 'grep -q -- "start --profile \"\$PROFILE\" \"\$@\" --activate=false" "$COLIMA_BOOT_GUARD_SRC"'
 ok "agent: 로그인 시 실행" 'grep -A1 "<key>RunAtLoad</key>" "$P" | grep -q "<true/>"'
 ok "agent: 로그 경로" 'grep -q "<string>$TMP/colima.log</string>" "$P"'
 # colima 는 기동할 때 호스트의 docker CLI 를 찾는다 — Docker Desktop 의 CLI(/usr/local/bin)를 쓰는 Mac 에서도 보여야 한다
@@ -81,7 +81,7 @@ if command -v plutil >/dev/null 2>&1; then ok "agent: 이스케이프한 plist �
 FB="$TMP/fakebin"; mkdir -p "$FB"; printf '#!/bin/sh\n' > "$FB/colima"; printf '#!/bin/sh\n' > "$FB/docker"; chmod +x "$FB/colima" "$FB/docker"
 agent_run() { PATH="$FB:$PATH" enable_docker_autostart "$TMP/agent-log/colima.log"; }
 # XML 이스케이프는 셸 판에 기대지 않는다 — bash 5.2+ 의 patsub_replacement 는 ${v//x/&...} 의 & 를 바꿔 넣는다 (tom 사고).
-# plist 를 다시 읽은 값이 입력과 글자 그대로 같아야 하고, guard 는 sh 문법으로 유효해야 한다.
+# plist 를 다시 읽은 값이 입력과 글자 그대로 같아야 한다. 에이전트는 설치된 기동 가드를 /bin/bash 로 실행한다.
 RT_COLIMA="/opt/b&b \"q\" <x>/bin/colima"; RT_LOG="/tmp/l&g \"o\" <g> 'a'.log"; RT_HOME="$TMP/Ext & \"Q\" <C> 'a'"
 COLIMA_HOME="$RT_HOME" SCRIPT_DIR="$SCRIPT_DIR" TEST_AGENT="$TMP/roundtrip.plist" RT_COLIMA="$RT_COLIMA" RT_LOG="$RT_LOG" bash -c '
     . "$SCRIPT_DIR/scripts/setup/mac/30-toolchain.sh"
@@ -91,14 +91,12 @@ RTA=(); RTE=""; RTO=""; RTK=""
 while IFS=$'\t' read -r tag v; do
     case "$tag" in A) RTA+=("$v") ;; K) RTK="$v" ;; V) [[ $RTK == COLIMA_HOME ]] && RTE="$v" ;; O) RTO="$v" ;; esac
 done < <(fake_plist_fields "$TMP/roundtrip.plist")
-eq "xml: guard 인자 = 상수 (bash ${BASH_VERSINFO[0]})" "${RTA[2]:-}" "$COLIMA_AGENT_GUARD"
-eq "xml: colima 경로 그대로" "${RTA[3]:-}" "$RT_COLIMA"
+eq "xml: 가드 인자 (bash ${BASH_VERSINFO[0]})" "${RTA[0]:-}|${RTA[1]:-}|${RTA[3]:-}" "/bin/bash|$COLIMA_BOOT_GUARD|openmake"
+eq "xml: colima 경로 그대로" "${RTA[2]:-}" "$RT_COLIMA"
 eq "xml: COLIMA_HOME 그대로" "$RTE" "$RT_HOME"
 eq "xml: 로그 경로 그대로" "$RTO" "$RT_LOG"
-printf '%s\n' "${RTA[2]:-}" > "$TMP/guard.sh"
-ok "xml: guard 는 sh 문법으로 유효 (/bin/sh -n)" '/bin/sh -n "$TMP/guard.sh"'
 if command -v plutil >/dev/null 2>&1; then
-    ok "xml: plutil 이 읽은 guard = 상수" '[[ "$(plutil -extract ProgramArguments.2 raw -o - "$TMP/roundtrip.plist")" == "$COLIMA_AGENT_GUARD" ]]'
+    ok "xml: plutil 이 읽은 colima 경로 그대로" '[[ "$(plutil -extract ProgramArguments.2 raw -o - "$TMP/roundtrip.plist")" == "$RT_COLIMA" ]]'
 fi
 
 # 로그인 때 저장소(외장 디스크)가 없으면 새 VM 을 만들지 않는다 — LaunchAgent 의 명령을 그대로 실행해 본다.
@@ -107,9 +105,14 @@ printf '#!/bin/sh\nprintf "%%s " "$@" > "%s"\n' "$TMP/guard-called" > "$GC"; chm
 write_colima_agent "$TMP/guard.plist" "$GC" "$TMP/g.log" "$TMP/guard-bin"
 GARGS=(); while IFS=$'\t' read -r tag v; do [[ $tag == A ]] && GARGS+=("$v"); done < <(fake_plist_fields "$TMP/guard.plist")
 GH="$TMP/guard home & 'q'"
+install_colima_boot_guard >/dev/null
+ok "agent: 기동 가드 설치 (저장소 밖 사본)" 'colima_boot_guard_installed && bash -n "$COLIMA_BOOT_GUARD"'
 grc=0; (COLIMA_HOME="$GH" "${GARGS[@]}") 2>/dev/null || grc=$?
 eq "agent: 프로필이 없으면 colima 를 실행하지 않는다" "$grc|$([[ -e "$TMP/guard-called" ]] && echo called)" "78|"
 mkdir -p "$GH/openmake"; : > "$GH/openmake/colima.yaml"
+grc=0; (COLIMA_HOME="$GH" "${GARGS[@]}") 2>/dev/null || grc=$?
+eq "agent: Lima 인스턴스가 없으면 colima 를 실행하지 않는다" "$grc|$([[ -e "$TMP/guard-called" ]] && echo called)" "78|"
+mkdir -p "$GH/_lima/colima-openmake"; : > "$GH/_lima/colima-openmake/lima.yaml"
 grc=0; (COLIMA_HOME="$GH" "${GARGS[@]}") || grc=$?
 eq "agent: 프로필이 있으면 기존 프로필만 띄운다" "$grc|$(cat "$TMP/guard-called" 2>/dev/null)" "0|start --profile openmake --activate=false "
 
@@ -117,6 +120,11 @@ fake_lctl_reset
 agent_run >/dev/null
 eq "autostart: 새 등록은 bootstrap 만" "$(fake_lctl_log)" "bootstrap"
 ok "autostart: 로드된 정의 확인" 'PATH="$FB:$PATH" colima_agent_loaded_matches "$FB/colima" "$FB" "$TMP/agent-log/colima.log"'
+ok "autostart: 기동 가드 설치" 'colima_boot_guard_installed'
+# 가드 사본이 예전 내용이면 바꾼다 — 정의·등록은 같으므로 launchctl 은 그대로
+printf '#!/bin/bash\nexit 0\n' > "$COLIMA_BOOT_GUARD"; : > "$LCTL_STATE/log"; agent_run >/dev/null
+ok "autostart: 예전 가드 사본 교체" 'colima_boot_guard_installed'
+eq "autostart: 가드만 바뀌면 launchctl 변경 없음" "$(fake_lctl_log)" ""
 : > "$LCTL_STATE/log"; agent_run >/dev/null
 eq "autostart: 같은 정의·로드 상태는 그대로" "$(fake_lctl_log)" ""
 ok "autostart: 백업을 만들지 않는다" '[[ ! -d "$OMK_ROOT/backups/launchd" ]]'
@@ -133,11 +141,10 @@ KA=(); KE=""; KO=""; KR=""; KK=""
 while IFS=$'\t' read -r tag v; do
     case "$tag" in A) KA+=("$v") ;; K) KK="$v" ;; V) [[ $KK == HOME ]] && KE="$v" ;; O) KO="$v" ;; E) KR="$v" ;; esac
 done < <(fake_plist_fields "$KP")
-eq "kept: 인자" "$(printf '%s|' "${KA[@]}")" "/bin/sh|-c|$COLIMA_AGENT_GUARD_WITH_FLAGS|$GC|openmake|--save-config=false|"
+eq "kept: 인자" "$(printf '%s|' "${KA[@]}")" "/bin/bash|$COLIMA_BOOT_GUARD|$GC|openmake|--save-config=false|"
 eq "kept: HOME·stdout·stderr" "$KE|$KO|$KR" "$KH|$TMP/out.log|$TMP/err.log"
 rm -f "$TMP/guard-called"; grc=0; (COLIMA_HOME="$GH" "${KA[@]}") || grc=$?
 eq "kept: guard 가 플래그를 넘긴다" "$grc|$(cat "$TMP/guard-called" 2>/dev/null)" "0|start --profile openmake --save-config=false --activate=false "
-printf '%s\n' "$COLIMA_AGENT_GUARD_WITH_FLAGS" > "$TMP/guard-flags.sh"; ok "kept: guard 문법 (/bin/sh -n)" '/bin/sh -n "$TMP/guard-flags.sh"'
 fake_lctl_reset; fake_lctl_load "$KP" "$COLIMA_AGENT_PLIST"
 ok "kept: 같은 설정으로 로드된 정의는 일치" 'colima_agent_loaded_matches "$GC" "$TMP/guard-bin" "$TMP/out.log" "$TMP/err.log" --save-config=false "$KH"'
 ok "kept: 플래그를 빼면 불일치" '! colima_agent_loaded_matches "$GC" "$TMP/guard-bin" "$TMP/out.log" "$TMP/err.log" "" "$KH"'
@@ -150,6 +157,7 @@ loaded_variant() { # $1=이름 $2=sed 식
     ok "loaded: $1 → 불일치" '! PATH="$FB:$PATH" colima_agent_loaded_matches "$FB/colima" "$FB" "$TMP/agent-log/colima.log"'
 }
 loaded_variant "프로필 인자 없음" '/<string>openmake<\/string>/d'
+loaded_variant "예전 인라인 가드 (sh -c)" 's|<string>/bin/bash</string>|<string>/bin/sh</string><string>-c</string>|'
 loaded_variant "다른 실행 파일" "s|<string>$FB/colima</string>|<string>/other/colima</string>|"
 loaded_variant "추가 인자" "s|<string>openmake</string>|<string>openmake</string><string>--cpu</string>|"
 loaded_variant "추가 환경" 's|<key>PATH</key>|<key>DOCKER_CONTEXT</key><string>colima</string><key>PATH</key>|'
@@ -178,6 +186,13 @@ eq "autostart: 백업 실패 → 정의 그대로" "$(cat "$COLIMA_AGENT_PLIST")
 eq "autostart: 백업 실패 → launchctl 변경 없음" "$(fake_lctl_log)" ""
 ok "autostart: 백업 실패 → 로드된 정의 그대로" '[[ -f "$LCTL_STATE/loaded.plist" ]]'
 rm -f "$OMK_ROOT/backups"; mv "$TMP/backups.saved" "$OMK_ROOT/backups"
+# 가드를 설치할 수 없으면 정의·등록을 바꾸지 않고 실패를 돌려준다
+GD="$(dirname "$COLIMA_BOOT_GUARD")"; mv "$GD" "$TMP/guard-dir.saved"; printf 'not a directory' > "$GD"
+brc=0; agent_run >/dev/null 2>&1 || brc=$?
+eq "autostart: 가드 설치 실패 → 실패 반환" "$([[ $brc -ne 0 ]] && echo failed)" "failed"
+eq "autostart: 가드 설치 실패 → 정의 그대로" "$(cat "$COLIMA_AGENT_PLIST")" "kept definition"
+eq "autostart: 가드 설치 실패 → launchctl 변경 없음" "$(fake_lctl_log)" ""
+rm -f "$GD"; mv "$TMP/guard-dir.saved" "$GD"
 # GUI 세션이 없으면(SSH 전용) 정의만 두고 등록은 보류로 알린다 — sudo·system 도메인으로 우회하지 않는다
 rm -f "$COLIMA_AGENT_PLIST"; fake_lctl_reset 0
 sudo() { echo "sudo $*" >> "$LCTL_STATE/log"; return 1; }
