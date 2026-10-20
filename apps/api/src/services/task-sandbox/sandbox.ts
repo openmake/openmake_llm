@@ -448,8 +448,8 @@ export class TaskSandbox implements TaskExecutor {
     }
 
     /** 산출물 회수용 — workspace 전체 파일을 상대경로로 재귀 나열. */
-    async listWorkspaceFiles(): Promise<string[]> {
-        return listWorkspaceFilesAt(this.hostWorkdir);
+    async listWorkspaceFiles(strict = false): Promise<string[]> {
+        return listWorkspaceFilesAt(this.hostWorkdir, undefined, strict);
     }
 
     /** workspace 내 파일/디렉토리 삭제. 경로 가드(어휘+실경로) 적용. */
@@ -516,12 +516,12 @@ export async function dirSizeBytes(root: string, cap = Number.MAX_SAFE_INTEGER):
  * **숨김 파일/디렉토리(dotfile) 제외** — `.git`(diff 캡처 메타), `.verify_*.py`(코드검증 임시),
  * 기타 시스템 dotfile 이 산출물 목록에 새어 "이상한 파일" 로 다운로드되던 것을 막는다.
  */
-export async function listWorkspaceFilesAt(root: string, maxFiles = 1000): Promise<string[]> {
+export async function listWorkspaceFilesAt(root: string, maxFiles = 1000, strict = false): Promise<string[]> {
     const out: string[] = [];
     async function walk(dir: string): Promise<void> {
         if (out.length >= maxFiles) return;
         let entries;
-        try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+        try { entries = await readdir(dir, { withFileTypes: true }); } catch (e) { if (strict) throw e; return; }
         for (const e of entries) {
             if (out.length >= maxFiles) return;
             if (e.name.startsWith('.')) continue; // 숨김 파일/디렉토리(.git·.verify_* 등) 제외

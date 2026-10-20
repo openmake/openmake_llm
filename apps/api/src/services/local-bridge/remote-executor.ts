@@ -336,8 +336,9 @@ export class RemoteExecutor implements TaskExecutor {
     }
 
     /** listAll 은 연결 폴더 전체를 훑으므로, 격리 시 worktree 하위만 남기고 prefix 를 벗긴다. */
-    async listWorkspaceFiles(): Promise<string[]> {
+    async listWorkspaceFiles(strict = false): Promise<string[]> {
         const r = await this.req({ kind: 'listAll' });
+        if (strict && !r.ok) throw new Error(r.error ?? '로컬 디렉토리 조회 실패');
         const all = r.ok ? (r.entries ?? []) : [];
         if (!this.worktreeRel) return all;
         const prefix = `${this.worktreeRel}/`;

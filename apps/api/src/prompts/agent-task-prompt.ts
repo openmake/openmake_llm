@@ -254,6 +254,11 @@ export function getAgentTaskGoalJudgeMessages(
             '  실제로 수행한 흔적이 전혀 없는데 수행했다고 주장하면 미달성입니다.',
             '- 반대로 EXECUTION 의 도구 실행 결과가 목표 수행(파일 생성·수정·조회·실행 등)과 부합하면',
             '  달성입니다 — 답변이 짧은 완료 보고여도 도구 결과 자체가 수행 증거입니다.',
+            '- 파일 작업은 도구의 동작·경로·결과와 실제 파일 목록(WORKSPACE_FILES)을 대조하세요.',
+            '  다른 파일을 읽은 결과를 목표 파일의 증거로 쓰지 마세요. 이전 세션의 실행 기록도 수행 증거입니다.',
+            '  목표가 작업 공간의 파일 생성을 요구하면, 보고서에 생성했다고 쓴 문장은 파일 자체의 증거가 아닙니다.',
+            '  전체 파일 목록에 목표 파일이 없으면 미달성입니다. 일부 생략된 목록이나 조회 실패는 없다는 증거가 아닙니다.',
+            '  읽기 결과가 목표 파일의 요구 내용을 확인했으면 실행 턴이 소진됐다는 이유만으로 미달성으로 보지 마세요.',
             '- 계획 완료 단계 수가 낮거나 없는 것은 상태 표시 누락일 수 있으니 그것만으로 미달성',
             '  판정하지 마세요.',
             '- 산출물(ARTIFACTS)이 주어지면 그것이 에이전트가 제출한 결과물입니다. ANSWER 에는',
@@ -270,6 +275,11 @@ export function getAgentTaskGoalJudgeMessages(
             + (executionContext ? `\n\n## EXECUTION\n${executionContext}` : '')
             + '\n\n판정 JSON 을 출력하세요.',
     };
+}
+
+/** 실행기에서 직접 조회한 파일 목록 — 답변·보고서의 자기신고와 구분한다. */
+export function getWorkspaceJudgeNote(listing: string, total: number, truncated: boolean): string {
+    return `WORKSPACE_FILES (${total}; ${truncated ? '일부 생략 — 목록에 없다는 이유만으로 파일이 없다고 판정하지 마세요' : '전체 목록'}; 숨김 경로 제외 — 숨김 파일의 부재 증거가 아님):\n${listing || '(파일 없음)'}`;
 }
 
 /**
@@ -461,6 +471,7 @@ export function getAgentTaskFinalTurnNudge(reason: 'turns' | 'tokens'): string {
         `${cause} 이번 턴이 마지막입니다 — 도구는 더 이상 사용할 수 없습니다.`,
         '추가 조사·실행·검증을 시도하지 말고, 지금까지 수행한 작업을 근거로 최종 답변을 지금 작성하세요.',
         '이미 만든 산출물(파일·아티팩트·게시물)이 있다면 무엇을 어디에 만들었는지 명시하세요.',
+        '도구 결과로 확인한 사실만 보고하세요. 이미 목표를 달성했다면 턴·토큰 소진 자체는 미달성 사유가 아닙니다.',
         '목표를 달성하지 못했다면 첫 줄에 [GOAL_INCOMPLETE] 를 쓰고, 무엇까지 했고 무엇이 남았는지 적으세요.',
     ].join('\n');
 }

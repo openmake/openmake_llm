@@ -3,9 +3,13 @@
  * @module services/agent-task/goal-judge
  */
 import type { LLMClient } from '../../llm';
-import { getAgentTaskGoalJudgeMessages, getUserRejectionsJudgeNote } from '../../prompts/agent-task-prompt';
+import { getAgentTaskGoalJudgeMessages, getUserRejectionsJudgeNote, getWorkspaceJudgeNote } from '../../prompts/agent-task-prompt';
 import { AGENT_TASK_LIMITS, JUDGE_EVIDENCE_EXCLUDED_TOOLS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
+import { CONTEXT_HANDOFF, TOOL_DIGEST } from '../../config/agent-task-context';
+import { handoffToolCallLines } from './context-handoff';
+import { findToolCallArgs } from './tool-digest';
+import type { ChatMessage } from '../../llm/types';
 
 const logger = createLogger('AgentTaskService');
 
@@ -15,21 +19,34 @@ const logger = createLogger('AgentTaskService');
  * (실측 2회) 완화: 도구 결과 자체가 "실제로 수행했다"는 증거다.
  */
 export function buildJudgeToolEvidence(
-    conversation: ReadonlyArray<{ role: string; content?: string | null; tool_name?: string }>,
+    conversation: ReadonlyArray<{ role: string; content?: string | null; tool_name?: string; tool_call_id?: string; tool_calls?: ChatMessage['tool_calls'] }>,
 ): string {
     const items = conversation
-        .filter((m) => m.role === 'tool' && typeof m.content === 'string' && m.content.trim().length > 0)
-        // terminate 결과는 곧 ANSWER 이고 plan_* 결과는 계획 스냅샷과 중복이다 — 마지막 N개 창에서
-        // 이 둘이 자리를 차지하면 실제 수행 증거(파일 목록·렌더 검증 로그)가 밀려난다(2026-08-19 81b954b7,
-        // 2026-08-25 4185ca15 오판의 직접 원인). 증거 창은 실행 도구 결과만으로 채운다.
-        .filter((m) => !JUDGE_EVIDENCE_EXCLUDED_TOOLS.has(m.tool_name ?? '') && !(m.content as string).startsWith('__TASK_TERMINATE__'))
-        .slice(-AGENT_TASK_LIMITS.GOAL_JUDGE_EVIDENCE_MAX_ITEMS)
-        .map((m) => {
-            const oneLine = (m.content as string).replace(/\s+/g, ' ').trim()
+        .flatMap((m, index) => {
+            if (m.role === 'user' && typeof m.content === 'string') {
+                return handoffToolCallLines(m.content).map((line) => `- ${line.slice(0, AGENT_TASK_LIMITS.GOAL_JUDGE_EVIDENCE_ITEM_CHARS)}`);
+            }
+            if (m.role !== 'tool' || typeof m.content !== 'string' || !m.content.trim()) return [];
+            // terminate·plan 결과가 실제 파일 목록·검증 로그를 증거 창에서 밀어내지 않게 한다.
+            if (JUDGE_EVIDENCE_EXCLUDED_TOOLS.has(m.tool_name ?? '') || m.content.startsWith('__TASK_TERMINATE__')) return [];
+            const args = TOOL_DIGEST.FILE_TOOLS.includes(m.tool_name ?? '') ? findToolCallArgs(conversation, index) : undefined;
+            const operation = args ? `${String(args.command ?? args.op ?? '')} ${String(args.path ?? '')}`.trim() : '';
+            const subject = operation ? ` [${operation}]` : '';
+            const oneLine = `${subject}: ${m.content.replace(/\s+/g, ' ').trim()}`
                 .slice(0, AGENT_TASK_LIMITS.GOAL_JUDGE_EVIDENCE_ITEM_CHARS);
-            return `- ${m.tool_name || '(도구)'}: ${oneLine}`;
-        });
+            return [`- ${m.tool_name || '(도구)'}${oneLine}`];
+        })
+        .slice(-AGENT_TASK_LIMITS.GOAL_JUDGE_EVIDENCE_MAX_ITEMS);
     return items.join('\n');
+}
+
+/** 실제 파일 목록. 일부만 실린 목록은 빠진 파일이 없다는 증거로 쓰지 않는다. */
+export function withWorkspaceJudgeNote(context: string, files: readonly string[]): string {
+    const shown = files.slice(0, CONTEXT_HANDOFF.MAX_FILES);
+    const listing = shown.map((file) => JSON.stringify(file)).join('\n');
+    const clipped = listing.slice(0, CONTEXT_HANDOFF.SUMMARY_MAX_CHARS);
+    const truncated = shown.length < files.length || clipped.length < listing.length;
+    return `${context}\n\n${getWorkspaceJudgeNote(clipped, files.length, truncated)}`;
 }
 
 /**
