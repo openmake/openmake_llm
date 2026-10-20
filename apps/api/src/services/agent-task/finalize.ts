@@ -10,7 +10,7 @@
  *
  * 판정 순서는 **결정적 검사 → LLM 판정** 이다. 코드가 깨졌으면 목표 달성 여부를 물을 것
  * 없이 자가수정 루프로 돌려보내는 편이 싸고 정확하다(실행 grounding > self-critique).
- *   1. `[GOAL_INCOMPLETE]` 마커(모델 자기신고) → failed(goal_incomplete)
+ *   1. `[GOAL_INCOMPLETE]` 자기신고 → 실행 증거가 있으면 후단 판정과 대조, 없으면 failed(goal_incomplete)
  *   2. deliverable verify(코드 산출물 문법/컴파일) → 실패 시 자가수정 유도로 반환
  *   3. goal judge(LLM 1회) → 미달성 확정 시 failed(goal_incomplete), 판정 실패는 fail-open
  *   4. 아티팩트·코드 diff 영속 → completed
@@ -147,16 +147,20 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     const extracted = extractAndStripArtifacts(applyReportRender(rawContent ?? ''));
     const artifacts = extracted.artifacts;
     // terminate 는 summary 를 결과 본문으로 우선(도구 인자가 곧 모델의 완료 선언).
-    const body = path === 'terminate'
+    const rawBody = path === 'terminate'
         ? (terminateSummary || extracted.cleanedContent || '작업을 완료했습니다.')
         : extracted.cleanedContent;
+    const selfReportedIncomplete = rawBody.includes(AGENT_TASK_INCOMPLETE_MARKER);
+    const body = selfReportedIncomplete ? rawBody.replace(AGENT_TASK_INCOMPLETE_MARKER, '').trim() : rawBody;
+    // C형 후단 판정: 실제 실행 증거가 있으면 자기신고도 대조한다. 확실한 달성 판정만 신고를 뒤집는다.
+    const reviewIncomplete = selfReportedIncomplete && AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED && !!toolEvidence?.trim();
 
-    // 1. 목표 미달성 자기신고 — 마커를 뗀 사유를 결과로 남기고 failed 로 종료.
-    if (body && body.includes(AGENT_TASK_INCOMPLETE_MARKER)) {
+    // 1. 실행 증거가 없거나 판정이 꺼져 있으면 종전처럼 자기신고를 유지한다.
+    if (selfReportedIncomplete && !reviewIncomplete) {
         await update({
             status: 'failed',
             error: 'goal_incomplete',
-            result: body.replace(AGENT_TASK_INCOMPLETE_MARKER, '').trim(),
+            result: body,
             checkpoint: null,
             completionPath: path,
             judgeVerdict: 'skipped',
@@ -211,7 +215,7 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     let verdict: JudgeVerdict = 'skipped';
     // 파일 도구를 쓴 작업은 보고서 아티팩트만으로 실제 파일 작업 판정을 우회하지 않는다(C형 후단 판정).
     const workspaceTask = taskRuntime !== null && [...usedTools].some((name) => Object.hasOwn(FILE_MUTATING_CALLS, name));
-    const judgeApplies = artifacts.length === 0 || workspaceTask;
+    const judgeApplies = reviewIncomplete || artifacts.length === 0 || workspaceTask;
     if (AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED
         && (judgeApplies || AGENT_TASK_LIMITS.GOAL_JUDGE_SHADOW_ENABLED)) {
         // 실행 환경 없이 진행한 작업이면 그 사실을 판정에 알린다(sandbox-unavailable).
@@ -224,11 +228,18 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
             catch (e) { logger.warn(`[AgentTask] 파일 목록 조회 실패 — 목록 없이 판정: ${taskId}: ${e instanceof Error ? e.message : String(e)}`); }
         }
         // 셰도우 경로에선 ANSWER 에서 떨어져 나간 산출물을 함께 싣는다(적용 경로는 아티팩트 0 이라 빈 값).
-        const judgeClient = await judgeClientFor(userId, { internalOnly: sandboxCfg.internalOnly });
         // 원장 귀속 — 판정 호출의 비용도 이 작업 id 로 묶는다.
-        const outcome = await runWithCostSession(taskId, () => judgeGoal(
-            judgeClient, goal, body ?? '', signal, execCtx,
-            artifacts.length > 0 ? buildJudgeArtifactSummary(artifacts) : undefined));
+        const outcome = await runWithCostSession(taskId, async () => {
+            try {
+                const judgeClient = await judgeClientFor(userId, { internalOnly: sandboxCfg.internalOnly });
+                return await judgeGoal(judgeClient, goal, body ?? '', signal, execCtx,
+                    artifacts.length > 0 ? buildJudgeArtifactSummary(artifacts) : undefined);
+            } catch (e) {
+                const message = e instanceof Error ? e.message : String(e);
+                logger.warn(`[AgentTask] 판정 호출 실패 — 기존 결과 보존: ${taskId}: ${message}`);
+                return { achieved: null, reason: '', raw: `error: ${message.slice(0, AGENT_TASK_LIMITS.GOAL_JUDGE_RAW_KEEP_CHARS)}` };
+            }
+        });
         const achieved = outcome.achieved;
         const judged: JudgeVerdict = achieved === null ? 'unknown' : achieved ? 'achieved' : 'not_achieved';
         // 판정·사유·입력 요약을 스텝으로 남긴다 — 오판 사후 규명용(관측 전용, fail-open).
@@ -241,7 +252,7 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         // 깨진다(셰도우 표본은 step_type='judge_shadow' 로 읽는다).
         if (judgeApplies) {
             verdict = judged;
-            if (achieved === false) {
+            if (achieved === false || (reviewIncomplete && achieved !== true)) {
                 // 파일 작업 판정으로 실패해도 제출한 보고서 참조가 끊기지 않게 남긴다.
                 stepNumber = await persistArtifactSteps(taskId, artifacts, stepNumber, userId);
                 await update({
