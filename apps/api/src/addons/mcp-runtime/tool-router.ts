@@ -30,6 +30,8 @@
 
 import type { MCPTool, MCPToolResult, ExternalToolEntry, UserContext } from '../../tool-contract/types';
 import { dispatchTool, type ExternalToolDispatch } from '../../tool-contract/tool-dispatch';
+import { runWithToolMediaSink } from '../../utils/tool-media-sink';
+import { chatMediaSinkFor } from './chat-media-sink';
 import { MCP_NAMESPACE_SEPARATOR } from '../../tool-contract/types';
 import type { MCPToolDefinition } from '../../tool-contract/types';
 import { getBuiltInTools } from '../../tools/builtin-tools';
@@ -268,7 +270,8 @@ export class ToolRouter implements ExternalToolDispatch {
      * ⚙️ UserContext 전달 (2026-02-07): 내장 도구 handler 에 context 를 넘겨 사용자 정보를 참조하게 한다.
      */
     async executeTool(name: string, args: Record<string, unknown>, context?: UserContext): Promise<MCPToolResult> {
-        return dispatchTool(name, args, context, { builtInTools: getBuiltInTools, external: this });
+        return runWithToolMediaSink(chatMediaSinkFor(context), () =>
+            dispatchTool(name, args, context, { builtInTools: getBuiltInTools, external: this }));
     }
 
     /** 오타 교정 제안용 — Base 디스패처가 not-found 메시지를 만들 때 부른다. */
