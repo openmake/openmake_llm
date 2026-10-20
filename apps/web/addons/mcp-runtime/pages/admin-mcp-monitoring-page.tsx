@@ -19,37 +19,21 @@ import {
   Th,
   Td,
 } from "@/components/ui/primitives";
-import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
+import type {
+  ApiSuccess as ApiEnvelope,
+  McpCrashTrendBucket,
+  McpMonitoringSummary,
+  McpTopCrashedServer,
+} from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { AdminTabs } from "@/components/hub-tabs";
 
-/* ── 백엔드 응답 타입 (admin 전용) ───────────────────────── */
-interface ApiMonitoringSummary {
-  totalServers: number;
-  totalUsers: number;
-  currentRunning: number;
-  totalSpawned: number;
-  crashed24h: number;
-  crashRate24hPct: number | null;
-}
-
+/* 요약 카드 — 값마다 모집단이 다르다(실행 중 (서버, 사용자) 쌍 · 등록 서버 정의 · 라이프사이클 기록) */
 interface SummaryView {
-  activeServers: string;
-  totalCalls: string;
-  errorRate: string;
-}
-
-/* ── 추가 타입 ───────────────────────────────────────────── */
-interface TopCrashedItem {
-  server_name: string;
-  crash_count: number;
-  last_crash_at: string;
-}
-
-interface CrashTrendItem {
-  hour: string;
-  spawned: number;
-  crashed: number;
+  runningInstances: string;
+  registeredServers: string;
+  lifecycleRecords: string;
+  crashShare24h: string;
 }
 
 /* ── 타입 ────────────────────────────────────────────────── */
@@ -134,15 +118,16 @@ async function fetchToolActivity(
 async function fetchSummaryView(locale: string): Promise<SummaryView | null> {
   try {
     const res = await ApiClient.get<
-      ApiEnvelope<{ summary: ApiMonitoringSummary }>
+      ApiEnvelope<{ summary: McpMonitoringSummary }>
     >("/api/admin/mcp/monitoring/summary");
     const s = res?.data?.summary;
     if (!s) return null;
     return {
-      activeServers: String(s.currentRunning),
-      // 백엔드엔 "총 도구 호출" 메트릭이 없어 누적 spawn 수로 대체 표시
-      totalCalls: s.totalSpawned.toLocaleString(locale),
-      errorRate:
+      runningInstances: s.currentRunning.toLocaleString(locale),
+      registeredServers: s.totalServers.toLocaleString(locale),
+      // 도구 호출 수가 아니라 상태 전이마다 쌓이는 라이프사이클 기록 행 수
+      lifecycleRecords: s.totalSpawned.toLocaleString(locale),
+      crashShare24h:
         s.crashRate24hPct != null ? `${s.crashRate24hPct.toFixed(1)}%` : "—",
     };
   } catch {
@@ -155,9 +140,14 @@ export function McpMonitoringPage() {
   const t = useTranslations("mcpMonitoring");
   const locale = toBcp47(useLocale());
   // 실데이터만 — 그전엔 고정 목업(4·12,840·186ms·1.4%)이 실렌더됐고 "평균 지연"은 백엔드 메트릭이 없어 항상 목업이라 타일 자체를 뺐다
-  const [summary, setSummary] = useState<SummaryView>({ activeServers: "—", totalCalls: "—", errorRate: "—" });
-  const [topCrashed, setTopCrashed] = useState<TopCrashedItem[]>([]);
-  const [crashTrend, setCrashTrend] = useState<CrashTrendItem[]>([]);
+  const [summary, setSummary] = useState<SummaryView>({
+    runningInstances: "—",
+    registeredServers: "—",
+    lifecycleRecords: "—",
+    crashShare24h: "—",
+  });
+  const [topCrashed, setTopCrashed] = useState<McpTopCrashedServer[]>([]);
+  const [crashTrend, setCrashTrend] = useState<McpCrashTrendBucket[]>([]);
   const [serverUsage, setServerUsage] = useState<ServerUsage[]>([]);
   const [logs, setLogs] = useState<ToolLog[]>([]);
   const maxCalls = Math.max(1, ...serverUsage.map((s) => s.calls));
@@ -165,10 +155,10 @@ export function McpMonitoringPage() {
   const loadExtraStats = useCallback(async () => {
     try {
       const [tc, ct] = await Promise.allSettled([
-        ApiClient.get<ApiEnvelope<{ items: TopCrashedItem[]; limit: number }>>(
+        ApiClient.get<ApiEnvelope<{ items: McpTopCrashedServer[]; limit: number }>>(
           "/api/admin/mcp/monitoring/top-crashed?limit=10",
         ),
-        ApiClient.get<ApiEnvelope<{ timeline: CrashTrendItem[] }>>(
+        ApiClient.get<ApiEnvelope<{ timeline: McpCrashTrendBucket[] }>>(
           "/api/admin/mcp/monitoring/crash-trend",
         ),
       ]);
@@ -223,16 +213,19 @@ export function McpMonitoringPage() {
       <PageBody>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
-            label={t("activeServers")}
-            value={summary.activeServers}
-            delta={t("activeServersDelta")}
+            label={t("runningInstances")}
+            value={summary.runningInstances}
+            delta={t("runningInstancesHint")}
           />
-          <StatCard label={t("totalCalls")} value={summary.totalCalls} />
+          <StatCard label={t("lifecycleRecords")} value={summary.lifecycleRecords} />
           <StatCard
-            label={t("errorRate")}
-            value={summary.errorRate}
+            label={t("crashShare24h")}
+            value={summary.crashShare24h}
           />
         </div>
+        <p className="mt-2 text-xs text-muted">
+          {t("registeredServers", { count: summary.registeredServers })}
+        </p>
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
           {/* 서버별 호출 추이 — 순수 CSS 바 차트. 감사 로그(mcp_tool_call) 기반 실집계. */}
@@ -254,7 +247,7 @@ export function McpMonitoringPage() {
                       <span className="text-faint">
                         {t("callCount", { count: s.calls.toLocaleString(locale) })} ·{" "}
                         <span className={highErr ? "text-danger" : "text-muted"}>
-                          {(s.errorRate * 100).toFixed(1)}%
+                          {t("sampledErrorRate", { pct: (s.errorRate * 100).toFixed(1) })}
                         </span>
                       </span>
                     </div>
@@ -344,11 +337,11 @@ export function McpMonitoringPage() {
                   </thead>
                   <tbody>
                     {topCrashed.map((item) => (
-                      <tr key={item.server_name} className="transition hover:bg-surface-2">
+                      <tr key={item.mcp_server_id} className="transition hover:bg-surface-2">
                         <Td>
                           <div className="flex items-center gap-2">
                             <AlertTriangle className="h-3.5 w-3.5 text-warn" />
-                            <span className="font-mono text-xs text-fg-2">{item.server_name}</span>
+                            <span className="font-mono text-xs text-fg-2">{item.name || item.mcp_server_id}</span>
                           </div>
                         </Td>
                         <Td className="text-right font-mono text-danger">{item.crash_count}</Td>
@@ -383,9 +376,9 @@ export function McpMonitoringPage() {
                         <div className="mb-0.5 flex items-center justify-between text-[11px]">
                           <span className="font-mono text-muted">{item.hour}</span>
                           <span className="text-faint">
-                            spawn {item.spawned} ·{" "}
+                            {t("trendRecords", { count: item.spawned })} ·{" "}
                             <span className={item.crashed > 0 ? "text-danger" : "text-muted"}>
-                              crash {item.crashed}
+                              {t("trendCrashed", { count: item.crashed })}
                             </span>
                           </span>
                         </div>

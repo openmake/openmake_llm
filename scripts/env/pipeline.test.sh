@@ -84,5 +84,7 @@ if ( pipeline_run online ); then echo 'FAIL: failed update marked successful'; e
 pm2() { [[ "$1" != describe ]] || return 1; printf '%s\n' "$@" > "$TMP/pm2-arguments"; }
 pipeline_run staging --schedule '0 * * * *'
 [[ "$(tail -3 "$TMP/pm2-arguments")" == $'env\npipeline\nstaging' ]]
-if rg -q -- '--report|env update' "$TMP/pm2-arguments"; then echo 'FAIL: schedule invokes partial flow'; exit 1; fi
+# 0=발견(실패), 1=없음(통과), 2 이상=검사 자체 오류(실패) — if 문은 127(도구 없음)도 '없음'으로 삼킨다
+found=0; grep -Eq -- '--report|env update' "$TMP/pm2-arguments" || found=$?
+[[ "$found" == 1 ]] || { echo "FAIL: schedule invokes partial flow (grep status $found)"; exit 1; }
 echo 'pipeline schedules invoke the full flow without requiring status credentials'
