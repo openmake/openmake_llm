@@ -10,7 +10,7 @@ export function readiness({ repository, secrets, branches, workflows, defaultBra
         ...['dev', 'main'].map(branch => ({ name: `${branch}-required-current-ci`, passed: branches[branch]?.required_status_checks?.strict === true && [...(branches[branch]?.required_status_checks?.contexts ?? []), ...(branches[branch]?.required_status_checks?.checks ?? []).map(c => c.context)].includes(CI) })),
         ...['auto-merge.yml', 'promote.yml', 'release-verified.yml'].map(file => ({ name: `default-branch-${file}`, passed: defaultBranchFiles.includes(file) && workflows.some(w => w.path === `.github/workflows/${file}` && w.state === 'active') })),
     ];
-    return { schemaVersion: 1, stage: 'configuration-audit', repository, observedAt: new Date().toISOString(), status: checks.every(c => c.passed) ? 'configured' : 'blocked', checks, note: 'Configured is not execution or deployment proof. Audit tom/ome-on/bean schedules and validation separately.' };
+    return { schemaVersion: 1, stage: 'configuration-audit', repository, observedAt: new Date().toISOString(), status: checks.every(c => c.passed) ? 'configured' : 'blocked', checks, note: 'Configured is not execution or deployment proof. Audit tom/ome-on schedules and validation separately.' };
 }
 function main() {
     const repo = process.argv[2];
