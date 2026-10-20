@@ -9,30 +9,7 @@
  * @module data/repositories/mcp-admin-monitoring-repository
  */
 import type { Pool } from 'pg';
-
-interface GlobalInstanceSummary {
-    totalServers: number;
-    totalUsers: number;
-    currentRunning: number;
-    totalSpawned: number;
-    crashed24h: number;
-    crashRate24hPct: number | null;
-}
-
-interface TopCrashedServer {
-    mcp_server_id: string;
-    name: string;
-    user_id: string | null;
-    visibility: string;
-    crash_count: number;
-    last_crash_at: string | null;
-}
-
-interface CrashTrendBucket {
-    hour: string;
-    spawned: number;
-    crashed: number;
-}
+import type { McpCrashTrendBucket, McpMonitoringSummary, McpTopCrashedServer } from '@openmake/shared-types';
 
 export class McpAdminMonitoringRepository {
     constructor(private pool: Pool) {}
@@ -40,7 +17,7 @@ export class McpAdminMonitoringRepository {
     /**
      * 전체 사용자의 instance summary (admin 전용 — 격리 없음).
      */
-    async getGlobalInstanceSummary(): Promise<GlobalInstanceSummary> {
+    async getGlobalInstanceSummary(): Promise<McpMonitoringSummary> {
         const r = await this.pool.query<{
             total_servers: string;
             total_users: string;
@@ -78,7 +55,7 @@ export class McpAdminMonitoringRepository {
     /**
      * Crash count desc 로 N개 server (지난 7일).
      */
-    async getTopCrashedServers(limit: number = 10): Promise<TopCrashedServer[]> {
+    async getTopCrashedServers(limit: number = 10): Promise<McpTopCrashedServer[]> {
         const r = await this.pool.query<{
             mcp_server_id: string;
             name: string;
@@ -115,7 +92,7 @@ export class McpAdminMonitoringRepository {
     /**
      * 24시간 timeline — 각 시간대 spawn / crash 카운트. 빈 슬롯은 0.
      */
-    async getCrashTrendByHour(): Promise<CrashTrendBucket[]> {
+    async getCrashTrendByHour(): Promise<McpCrashTrendBucket[]> {
         const r = await this.pool.query<{
             hour: string;
             spawned: string;
