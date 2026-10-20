@@ -1,0 +1,84 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { main } from '../../scripts/ci/dev-checks.mjs';
+import { runCommand } from '../../scripts/ci/dev-checks-process.mjs';
+
+test('preflight errors replace stale passing evidence before any app or DB starts', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'omk-stale-evidence-'));
+  const output = join(directory, 'receipt.json');
+  const previous = process.env.TEST_DATABASE_URL;
+  try {
+    await writeFile(output, JSON.stringify({ sha: 'old', status: 'passed' }));
+    delete process.env.TEST_DATABASE_URL;
+    await assert.rejects(main('bad-sha', { output }), /TEST_DATABASE_URL/);
+    const receipt = JSON.parse(await readFile(output));
+    assert.equal(receipt.sha, 'bad-sha');
+    assert.equal(receipt.status, 'failed');
+    assert.match(receipt.error, /TEST_DATABASE_URL/);
+    process.env.TEST_DATABASE_URL = 'postgresql://u:p@127.0.0.1:1/pipeline_test';
+    await assert.rejects(main('bad-sha', { output }), /SHA/);
+    assert.equal(JSON.parse(await readFile(output)).status, 'failed');
+  } finally {
+    if (previous === undefined) delete process.env.TEST_DATABASE_URL; else process.env.TEST_DATABASE_URL = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+for (const mode of ['timeout', 'abort']) test(`${mode} kills TERM-ignoring descendant after group leader exits`, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'omk-descendant-'));
+  const pidFile = join(directory, 'child.pid');
+  const controller = new AbortController();
+  // The descendant ignores TERM; its parent exits immediately on TERM.
+  const childCode = `process.on('SIGTERM',()=>{});require('fs').writeFileSync(${JSON.stringify(pidFile)},String(process.pid));setInterval(()=>{},1000)`;
+  const leaderCode = `require('child_process').spawn(process.execPath,['-e',${JSON.stringify(childCode)}],{stdio:'ignore'});process.on('SIGTERM',()=>process.exit(0));setInterval(()=>{},1000)`;
+  let pid;
+  try {
+    const promise = runCommand(process.execPath, ['-e', leaderCode], { timeoutMs: mode === 'timeout' ? 400 : 10000, graceMs: 100, signal: controller.signal, stdio: 'ignore' });
+    const rejection = assert.rejects(promise, mode === 'timeout' ? /timed out/ : /aborted/);
+    for (let i = 0; i < 100; i++) {
+      try { pid = Number(await readFile(pidFile)); break; } catch { await new Promise(resolve => setTimeout(resolve, 10)); }
+    }
+    assert.ok(pid, 'descendant started');
+    if (mode === 'abort') controller.abort(new Error('aborted by test'));
+    await rejection;
+    const status = spawnSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' }).stdout.trim();
+    assert.ok(!status || status.startsWith('Z'), `descendant still alive: ${pid} ${status}`);
+  } finally {
+    if (pid) { try { process.kill(pid, 'SIGKILL'); } catch {} }
+    controller.abort();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+for (const signal of ['SIGINT', 'SIGTERM']) test(`${signal} records failure and closes a pending DB connection`, async () => {
+  const { createServer } = await import('node:net');
+  const { spawn, execFileSync } = await import('node:child_process');
+  const { once } = await import('node:events');
+  const directory = await mkdtemp(join(tmpdir(), 'omk-signal-'));
+  const output = join(directory, 'receipt.json');
+  const sockets = new Set();
+  const server = createServer(socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const code = `import {main} from ${JSON.stringify(new URL('../../scripts/ci/dev-checks.mjs', import.meta.url).href)};main(${JSON.stringify(sha)},{output:${JSON.stringify(output)}}).catch(e=>{console.error(e.message);process.exitCode=1})`;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', code], { env: { ...process.env, TEST_DATABASE_URL: `postgresql://u:p@127.0.0.1:${server.address().port}/signal_test` }, stdio: 'ignore' });
+  try {
+    await Promise.race([once(server, 'connection'), new Promise((_, reject) => setTimeout(() => reject(new Error('No DB connection')), 2000))]);
+    const exited = once(child, 'exit');
+    child.kill(signal);
+    const [status] = await Promise.race([exited, new Promise((_, reject) => setTimeout(() => reject(new Error('Signal did not interrupt DB connection')), 2000))]);
+    assert.equal(status, 1);
+    const receipt = JSON.parse(await readFile(output));
+    assert.equal(receipt.status, 'failed');
+    assert.match(receipt.error, /aborted/);
+  } finally {
+    if (child.exitCode === null) child.kill('SIGKILL');
+    for (const socket of sockets) socket.destroy();
+    await new Promise(resolve => server.close(resolve));
+    await rm(directory, { recursive: true, force: true });
+  }
+});

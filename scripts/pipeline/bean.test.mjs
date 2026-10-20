@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { runTarget, validateConfig, scheduleArgs } from './bean.mjs';
+import { runTarget, validateConfig, scheduleArgs, assertChatResponse } from './bean.mjs';
 
 const sha = 'a'.repeat(40);
 async function fixture(fn) {
@@ -13,7 +13,7 @@ async function fixture(fn) {
   if(req.url==='/api/auth/login' && req.headers['x-csrf-token']==='csrf-test') {
    res.setHeader('Set-Cookie','auth_token=secret-test; HttpOnly'); return res.end('{"success":true}');
   }
-  if(req.url==='/api/chat' && req.headers.cookie?.includes('auth_token=secret-test')) return res.end('{"response":"ok"}');
+  if(req.url==='/api/chat' && req.headers.cookie?.includes('auth_token=secret-test')) return res.end('{"success":true,"data":{"response":"ok"}}');
   res.statusCode=403;res.end('{}');
  });
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -50,4 +50,9 @@ test('scheduling requires explicit cron and uses argv without a shell',()=>{
  const args=scheduleArgs('/tmp/check.json','/tmp/out','*/30 * * * *');
  assert(args.includes('--no-autorestart'));assert(args.includes('*/30 * * * *'));
  assert(args.includes('run'));assert(!args.includes('bash'));
+});
+
+test('chat HTTP 200 still requires a successful nonempty assistant response',()=>{
+ assert.doesNotThrow(()=>assertChatResponse({success:true,data:{response:'OK'}}));
+ for(const body of [{},{success:false,error:{message:'failed'}},{success:true,data:{}},{success:true,data:{response:''}},{response:'fake'}]) assert.throws(()=>assertChatResponse(body),/Chat/);
 });

@@ -7,6 +7,7 @@ test('metadata JSON permits version only and rejects additions and dependency ch
     assert.equal(metadataOnly('{"version":"1.0.0"}', '{"version":"2.0.0","scripts":{"x":"bad"}}', 'package.json', allow), false);
     assert.equal(metadataOnly('{"version":"1.0.0","dependencies":{"x":"1"}}', '{"version":"2.0.0","dependencies":{"x":"2"}}', 'package.json', allow), false);
     assert.equal(metadataOnly('{"version":"1.0.0"}', '{"version":"malicious"}', 'package.json', allow), false);
+    assert.equal(metadataOnly('{"version":"1.0.0"}', '{"version":"1.0.1-.."}', 'package.json', allow), false);
     assert.equal(metadataOnly(null, '{"version":"1.0.0"}', 'package.json', allow), false);
     assert.equal(metadataOnly('{"version":"1.0.0"}', '{"version":"2.0.0"}', 'evil.json', allow), false);
 });
@@ -135,5 +136,81 @@ test('metadata-only release branch and its ordinary main merge retain verified a
     }
     finally {
         process.chdir(cwd);
+    }
+});
+
+test('promotion merges immediately only for current dev head and both latest CI events', async () => {
+    const saved = {...process.env};
+    const dir = mkdtempSync(join(tmpdir(), 'pipeline-promote-'));
+    const eventPath = join(dir, 'event.json');
+    Object.assign(process.env, {OMK_AUTOMATION_TOKEN: 'test-token', GITHUB_REPOSITORY: 'o/r', GITHUB_EVENT_PATH: eventPath});
+    try {
+        for (const scenario of ['ready', 'delayed-pr-ci', 'new-dev-head', 'failed-push', 'blocked']) {
+            writeFileSync(eventPath, JSON.stringify({workflow_run: {event: 'pull_request', conclusion: 'success', head_branch: 'dev', head_sha: 'a'}}));
+            const calls = [];
+            const pr = {number: 1, head: {sha: 'a'}, base: {ref: 'main'}, mergeable_state: scenario === 'blocked' ? 'blocked' : 'clean'};
+            await orchestrate('promote', args => {
+                calls.push(args);
+                if (args[0] === 'pr') return '';
+                const path = args[1];
+                if (path.endsWith('/branches/dev')) return JSON.stringify({commit: {sha: scenario === 'new-dev-head' ? 'b' : 'a'}});
+                if (path.endsWith('/branches/main')) return JSON.stringify({commit: {sha: 'base'}});
+                if (path.includes('/runs?')) return JSON.stringify({workflow_runs: [{id: 2, head_sha: 'a', conclusion: path.includes('event=push') && scenario === 'failed-push' ? 'failure' : path.includes('event=pull_request') && scenario === 'delayed-pr-ci' ? null : 'success'}]});
+                if (path.endsWith('/protection')) return JSON.stringify({required_status_checks: {strict: true, contexts: ['CI Gate (Test → Build → Size → Lint)']}});
+                if (path.endsWith('/compare/main...dev')) return '{"ahead_by":1}';
+                if (path.includes('/pulls?')) return JSON.stringify([pr]);
+                if (path.endsWith('/pulls/1')) return JSON.stringify(pr);
+                throw new Error(`Unexpected ${args}`);
+            });
+            const merges = calls.filter(args => args[0] === 'pr' && args[1] === 'merge');
+            assert.equal(merges.length, scenario === 'ready' ? 1 : 0, scenario);
+            if (merges.length) {
+                assert.ok(!merges[0].includes('--auto'));
+                assert.deepEqual(merges[0].slice(-3), ['--merge', '--match-head-commit', 'a']);
+            }
+        }
+    } finally {
+        for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+        Object.assign(process.env, saved);
+    }
+});
+
+test('release polling does not retain merge approval while main gains functional changes', async () => {
+    const saved = {...process.env}, cwd = process.cwd();
+    const dir = mkdtempSync(join(tmpdir(), 'pipeline-release-poll-'));
+    const git = (...args) => execFileSync('git', args, {cwd: dir, encoding: 'utf8'}).trim();
+    git('init', '-q', '-b', 'main'); git('config', 'user.email', 'test@example.com'); git('config', 'user.name', 'test');
+    git('remote', 'add', 'origin', dir);
+    writeFileSync(join(dir, 'release-please-config.json'), '{"packages":{".":{"extra-files":[]}}}');
+    writeFileSync(join(dir, 'package.json'), '{"version":"1.0.0"}'); git('add', '.'); git('commit', '-qm', 'verified');
+    const verified = git('rev-parse', 'HEAD'); git('update-ref', `refs/omk/verified/${verified}`, verified);
+    git('checkout', '-qb', 'release-please--branches--main');
+    writeFileSync(join(dir, 'package.json'), '{"version":"1.0.1"}'); git('commit', '-qam', 'release');
+    const head = git('rev-parse', 'HEAD'); git('checkout', '-q', 'main');
+    Object.assign(process.env, {OMK_AUTOMATION_TOKEN: 'test-token', GITHUB_REPOSITORY: 'o/r'});
+    const calls = [];
+    try {
+        process.chdir(dir);
+        for (const scenario of ['waiting-ci', 'new-functional-main']) {
+            if (scenario === 'new-functional-main') {
+                writeFileSync(join(dir, 'code.js'), 'functional change'); git('add', '.'); git('commit', '-qm', 'code');
+            }
+            const main = git('rev-parse', 'main');
+            await orchestrate('release', args => {
+                calls.push(args);
+                if (args[0] !== 'api') throw new Error('Unexpected merge mutation');
+                const path = args[1];
+                if (path.endsWith('/branches/main')) return JSON.stringify({commit: {sha: main}});
+                if (path.includes('/git/matching-refs/')) return JSON.stringify([{ref: `refs/omk/verified/${verified}`, object: {sha: verified}}]);
+                if (path.includes('/pulls?')) return JSON.stringify([{number: 1, head: {sha: head, ref: 'release-please--branches--main', repo: {full_name: 'o/r'}}, labels: [{name: 'autorelease: pending'}], draft: false}]);
+                if (path.includes('/runs?')) return JSON.stringify({workflow_runs: [{id: 1, head_sha: head, conclusion: scenario === 'waiting-ci' ? null : 'success'}]});
+                throw new Error(`Unexpected ${args}`);
+            });
+        }
+        assert.equal(calls.some(args => args[0] === 'pr'), false);
+    } finally {
+        process.chdir(cwd);
+        for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+        Object.assign(process.env, saved);
     }
 });

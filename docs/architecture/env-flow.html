@@ -271,7 +271,81 @@
 bean ── 주기적 외부 실사용 검사 ──▶ tom / ome-on</pre></div><table><thead><tr><th>단계</th><th>담당</th><th>하는 일</th><th>진입점</th></tr></thead><tbody><tr><th>1</th><td>local · 사람+에이전트</td><td>개발·관련 테스트·PR</td><td><code>omk dev up</code></td></tr><tr><th>2</th><td>GitHub · 자동</td><td>작업 PR → dev</td><td><code>auto-merge workflow</code></td></tr><tr><th>3</th><td>GitHub runner · 자동</td><td>병합 dev 소스·기능 검사</td><td><code>npm run test:dev -- FULL_SHA</code></td></tr><tr><th>4</th><td>GitHub · 자동</td><td>dev → main 승격</td><td><code>promote workflow</code></td></tr><tr><th>5</th><td>tom · 자동</td><td>설치·스모크·필수 검증</td><td><code>omk env pipeline staging</code></td></tr><tr><th>6</th><td>사람 + tom 명령</td><td>실사용 OK → verify</td><td><code>omk env approve staging --sha FULL_SHA --yes</code></td></tr><tr><th>7</th><td>GitHub · 자동</td><td>검증 릴리스 발행</td><td><code>release-verified / release-please</code></td></tr><tr><th>8</th><td>ome-on · 자동</td><td>고정 태그 설치·운영 스모크</td><td><code>omk env pipeline online</code></td></tr></tbody></table><h2>역할과 판정</h2><p>별도 배포 dev 서버는 필수 구성에서 폐지됐습니다. dev는 Git 브랜치이며 local은 개발 호스트입니다. 사람의 판단은 1번과 6번에 있습니다. bean은 검증·배포 담당을 대신하지 않습니다.</p><p>문서·소스 구현, 로컬 검사, 원격 활성화, 실제 단계 완료를 구분합니다. 보드의 기록 미연결을 성공이나 실패로 단정하지 않습니다.</p></section>
 
 <!-- ═══════════════════════════ 02 단계 ═══════════════════════════ -->
-<section class="page" id="steps" data-title="단계별 실행과 다음 조건"><h1>단계별 실행과 다음 조건</h1><div class="step" id="s1"><div class="no">1</div><div class="where">local · 사람+에이전트</div><h3>개발·관련 테스트·PR</h3><p>origin/dev에서 작업 브랜치를 만들고, 변경 기능 회귀 테스트·lint·필요 빌드 후 dev PR을 올립니다.</p><div class="code"><pre>omk dev up</pre></div></div><div class="step" id="s2"><div class="no">2</div><div class="where">GitHub · 자동</div><h3>작업 PR → dev</h3><p>최신 PR 변경의 CI와 결정적 구조 검사를 충족하면 일반 병합합니다. 사람 PR 승인 단계는 없습니다.</p><div class="code"><pre>auto-merge workflow</pre></div></div><div class="step" id="s3"><div class="no">3</div><div class="where">GitHub runner · 자동</div><h3>병합 dev 소스·기능 검사</h3><p>실제로 병합된 SHA의 소스/DB/빌드/린트와 임시 앱 기본 스모크+신규·수정 기능/관련 소스를 검사합니다. 전체 E2E를 무조건 돌리지 않습니다.</p><div class="code"><pre>npm run test:dev -- FULL_SHA</pre></div></div><div class="step" id="s4"><div class="no">4</div><div class="where">GitHub · 자동</div><h3>dev → main 승격</h3><p>현재 dev push CI 통과와 최신 main 조합의 PR CI가 모두 필요합니다. 폐지된 별도 dev 서버나 omk/env-dev 표지는 요구하지 않습니다.</p><div class="code"><pre>promote workflow</pre></div></div><div class="step" id="s5"><div class="no">5</div><div class="where">tom · 자동</div><h3>설치·스모크·필수 검증</h3><p>main 설치 후 기본 스모크와 구성된 필수 고강도 검증을 수행합니다. 성공한 설치 SHA를 사람 확인을 위해 고정합니다.</p><div class="code"><pre>omk env pipeline staging</pre></div></div><div class="step" id="s6"><div class="no">6</div><div class="where">사람 + tom 명령</div><h3>실사용 OK → verify</h3><p>사람이 고정된 tom을 직접 써보고 OK하면 동일 SHA를 명령으로 기록합니다. 실행/디스크 빌드·고정 SHA·검증 근거를 다시 대조합니다.</p><div class="code"><pre>omk env approve staging --sha FULL_SHA --yes</pre></div></div><div class="step" id="s7"><div class="no">7</div><div class="where">GitHub · 자동</div><h3>검증 릴리스 발행</h3><p>verified ref와 각 커밋의 metadata-only 계보 및 릴리스 PR CI를 확인하고 release-please PR을 자동 병합합니다. 추가 사람 승인은 없습니다.</p><div class="code"><pre>release-verified / release-please</pre></div></div><div class="step" id="s8"><div class="no">8</div><div class="where">ome-on · 자동</div><h3>고정 태그 설치·운영 스모크</h3><p>한 번 선택한 태그 SHA를 검증하고 백업 후 관리형 갱신합니다. 설치/실행 SHA 일치와 스모크 통과가 완료 조건입니다.</p><div class="code"><pre>omk env pipeline online</pre></div></div></section>
+<section class="page" id="steps" data-title="단계별 실행과 다음 조건">
+<h1>단계별 실행과 다음 조건</h1>
+<div class="step" id="s1">
+<div class="no">1</div>
+<div class="where">local · 사람+에이전트</div>
+<h3>개발·관련 테스트·PR</h3>
+<p>origin/dev에서 작업 브랜치를 만들고, 변경 기능 회귀 테스트·lint·필요 빌드 후 dev PR을 올립니다.</p>
+<div class="code">
+<pre>omk dev up</pre>
+</div>
+</div>
+<div class="step" id="s2">
+<div class="no">2</div>
+<div class="where">GitHub · 자동</div>
+<h3>작업 PR → dev</h3>
+<p>최신 PR 변경의 CI와 결정적 구조 검사를 충족하면 일반 병합합니다. 사람 PR 승인 단계는 없습니다.</p>
+<div class="code">
+<pre>auto-merge workflow</pre>
+</div>
+</div>
+<div class="step" id="s3">
+<div class="no">3</div>
+<div class="where">GitHub runner · 자동</div>
+<h3>병합 dev 소스·기능 검사</h3>
+<p>실제로 병합된 SHA의 소스/DB/빌드/린트와 임시 앱 기본 스모크+신규·수정 기능/관련 소스를 검사합니다. 전체 E2E를 무조건 돌리지 않습니다.</p>
+<div class="code">
+<pre>npm run test:dev -- FULL_SHA</pre>
+</div>
+</div>
+<div class="step" id="s4">
+<div class="no">4</div>
+<div class="where">GitHub · 자동</div>
+<h3>dev → main 승격</h3>
+<p>현재 dev push CI 통과와 최신 main 조합의 PR CI가 모두 필요합니다. 폐지된 별도 dev 서버나 omk/env-dev 표지는 요구하지 않습니다.</p>
+<div class="code">
+<pre>promote workflow</pre>
+</div>
+</div>
+<div class="step" id="s5">
+<div class="no">5</div>
+<div class="where">tom · 자동</div>
+<h3>설치·스모크·필수 검증</h3>
+<p>main 설치 후 기본 스모크와 구성된 필수 고강도 검증을 수행합니다. 성공한 설치 SHA를 사람 확인을 위해 고정합니다.</p>
+<div class="code">
+<pre>omk env pipeline staging</pre>
+</div>
+</div>
+<div class="step" id="s6">
+<div class="no">6</div>
+<div class="where">사람 + tom 명령</div>
+<h3>실사용 OK → verify</h3>
+<p>사람이 고정된 tom을 직접 써보고 OK하면 동일 SHA를 명령으로 기록합니다. 실행/디스크 빌드·고정 SHA·검증 근거를 다시 대조합니다.</p>
+<div class="code">
+<pre>omk env approve staging --sha FULL_SHA --yes</pre>
+</div>
+</div>
+<div class="step" id="s7">
+<div class="no">7</div>
+<div class="where">GitHub · 자동</div>
+<h3>검증 릴리스 발행</h3>
+<p>verified ref와 각 커밋의 metadata-only 계보 및 릴리스 PR CI를 확인하고 release-please PR을 자동 병합합니다. 추가 사람 승인은 없습니다.</p>
+<div class="code">
+<pre>release-verified / release-please</pre>
+</div>
+</div>
+<div class="step" id="s8">
+<div class="no">8</div>
+<div class="where">ome-on · 자동</div>
+<h3>고정 태그 설치·운영 스모크</h3>
+<p>한 번 선택한 태그 SHA를 검증하고 백업 후 관리형 갱신합니다. 설치/실행 SHA 일치와 스모크 통과가 완료 조건입니다.</p>
+<div class="code">
+<pre>omk env pipeline online</pre>
+</div>
+</div>
+</section>
 
 <!-- ═══════════════════════════ 03 로컬 개발 ═══════════════════════════ -->
 <section class="page p-local" id="local-dev" data-title="로컬 개발 (작업 클론)">
@@ -349,7 +423,18 @@ scripts/env/omk.sh dev setup --no-runtime-images \
 </section>
 
 <!-- ═══════════════════════════ 04 환경 dev ═══════════════════════════ -->
-<section class="page" id="env-dev" data-title="병합 dev 검사 · GitHub runner"><h1>병합 dev 검사 · GitHub runner</h1><p>전용 개발 서버 설치를 main 승격의 전제로 두지 않습니다. GitHub에서 실제 병합 dev SHA의 CI를 수행합니다.</p><h2>소스와 실행 기능</h2><ul><li>기존 단위/DB 통합 테스트·빌드·lint·Base/Add-on 경계 검사를 유지합니다.</li><li>격리된 임시 앱/DB/model fixture로 앱 기동·DB·로그인·기본 채팅·웹 응답을 확인합니다.</li><li>변경 기능/관련 소스 테스트를 선택합니다. 전체 브라우저 테스트를 일괄 실행하지 않습니다.</li><li>선택할 검사가 없거나 미실행이면 통과로 숨기지 않습니다. 실패 시 local에서 수정합니다.</li></ul><p>fixture 검사는 실제 모델 품질 검증이 아닙니다. 통과한 dev SHA만 승격하고, main 조합이 바뀌면 PR 검사도 다시 필요합니다.</p></section>
+<section class="page" id="env-dev" data-title="병합 dev 검사 · GitHub runner">
+<h1>병합 dev 검사 · GitHub runner</h1>
+<p>전용 개발 서버 설치를 main 승격의 전제로 두지 않습니다. GitHub에서 실제 병합 dev SHA의 CI를 수행합니다.</p>
+<h2>소스와 실행 기능</h2>
+<ul>
+<li>기존 단위/DB 통합 테스트·빌드·lint·Base/Add-on 경계 검사를 유지합니다.</li>
+<li>격리된 임시 앱/DB/model fixture로 앱 기동·DB·로그인·기본 채팅·웹 응답을 확인합니다.</li>
+<li>변경 기능/관련 소스 테스트를 선택합니다. 전체 브라우저 테스트를 일괄 실행하지 않습니다.</li>
+<li>선택할 검사가 없거나 미실행이면 통과로 숨기지 않습니다. 실패 시 local에서 수정합니다.</li>
+</ul>
+<p>fixture 검사는 실제 모델 품질 검증이 아닙니다. 통과한 dev SHA만 승격하고, main 조합이 바뀌면 PR 검사도 다시 필요합니다.</p>
+</section>
 
 <!-- ═══════════════════════════ 05 staging ═══════════════════════════ -->
 <section class="page" id="env-staging" data-title="tom · main 설치와 사람 확인"><h1>tom · main 설치와 사람 확인</h1><p>main 설치 → 스모크 → 필수 검증 → 설치 SHA 고정까지 자동화합니다. 빈 검증 설정은 차단합니다.</p><div class="code"><pre>omk env pipeline staging
@@ -511,7 +596,23 @@ omk dev down | status | reset [--keep-data]</pre></div>
 </section>
 
 <!-- ═══════════════════════════ 11 공백 ═══════════════════════════ -->
-<section class="page" id="gaps" data-title="자동 검사 · 활성화와 남는 경계"><h1>자동 검사 · 활성화와 남는 경계</h1><h2>도입 조건</h2><ul><li>자동화 workflow와 신뢰된 스크립트가 기본 브랜치에 존재해야 합니다.</li><li>dev/main의 필수 CI와 strict 최신 기준, 저장소 auto-merge가 필요합니다.</li><li><code>OMK_AUTOMATION_TOKEN</code>과 tom/ome-on 실제 스케줄·QA 계정·필수 검증 시나리오를 준비해야 합니다.</li><li>credential이 없거나 검사가 실패하면 오류/대기로 기록하며 성공 skip으로 숨기지 않습니다.</li></ul><h2>bean과 모니터</h2><p>bean은 대상별 시나리오·주기·관측 SHA/버전·근거를 기록합니다. 주기를 임의 활성화하지 않으며 사람 OK·verify를 대신하지 않습니다.</p><p>중앙 보드 소스가 로컬에 없어 기존 7단계 API를 변경·배포하지 않았습니다. 새 8단계 증거 연결과 6번 버튼의 실제 서버 구현은 <a href="pipeline-monitor-contract.md">연동 계약</a>을 기준으로 합니다.</p><p><a href="pipeline-source-audit.md">전체 소스 조사와 구현/활성화 구분</a> · <a href="../../scripts/env/README.md">현재 명령 안내</a></p></section>
+<section class="page" id="gaps" data-title="자동 검사 · 활성화와 남는 경계">
+<h1>자동 검사 · 활성화와 남는 경계</h1>
+<h2>도입 조건</h2>
+<ul>
+<li>자동화 workflow와 신뢰된 스크립트가 기본 브랜치에 존재해야 합니다.</li>
+<li>dev/main의 필수 CI와 strict 최신 기준이 필요합니다. 컨트롤러는 준비 상태를 재확인해 즉시 일반 병합하며 --auto 예약은 만들지 않습니다.</li>
+<li>
+<code>OMK_AUTOMATION_TOKEN</code>과 tom/ome-on 실제 스케줄·QA 계정·필수 검증 시나리오를 준비해야 합니다.</li>
+<li>credential이 없거나 검사가 실패하면 오류/대기로 기록하며 성공 skip으로 숨기지 않습니다.</li>
+</ul>
+<h2>bean과 모니터</h2>
+<p>bean은 대상별 시나리오·주기·관측 SHA/버전·근거를 기록합니다. 주기를 임의 활성화하지 않으며 사람 OK·verify를 대신하지 않습니다.</p>
+<p>중앙 보드 소스가 로컬에 없어 기존 7단계 API를 변경·배포하지 않았습니다. 새 8단계 증거 연결과 6번 버튼의 실제 서버 구현은 <a href="pipeline-monitor-contract.md">연동 계약</a>을 기준으로 합니다.</p>
+<p>
+<a href="pipeline-source-audit.md">전체 소스 조사와 구현/활성화 구분</a> · <a href="../../scripts/env/README.md">현재 명령 안내</a>
+</p>
+</section>
 
 <div class="pager no-js-hide" id="pager"></div>
 

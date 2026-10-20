@@ -41,7 +41,7 @@ export function metadataOnly(before, after, path, allowed) {
         return false;
     }
 }
-const semver = value => typeof value === 'string' && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(value);
+const semver = value => typeof value === 'string' && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(value);
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 function blob(ref, path) {
     try {
@@ -91,22 +91,30 @@ export async function orchestrate(mode, commandGh) {
     const branch = (name) => api(`branches/${name}`).commit.sha;
     const ci = (sha, event) => latestCI(api(`actions/workflows/ci.yml/runs?head_sha=${sha}&event=${event}&per_page=100`).workflow_runs, sha);
     const pulls = (base, head) => api(`pulls?state=open&base=${base}${head ? `&head=${repo.split('/')[0]}:${head}` : ''}&per_page=100`);
-    const merge = (pr, sha) => {
+    const merge = (pr, sha, expectedBase) => {
         const fresh = api(`pulls/${pr.number}`);
         if (fresh.head.sha !== sha) {
             throw new Error('PR head changed before merge');
+        }
+        if (expectedBase && branch(pr.base.ref) !== expectedBase) {
+            console.log(`Base changed for PR #${pr.number}; waiting for a new proof`);
+            return;
         }
         if (fresh.mergeable_state === 'behind') {
             gh(['api', '--method', 'PUT', `repos/${repo}/pulls/${pr.number}/update-branch`, '-f', `expected_head_sha=${sha}`]);
             console.log(`Updated PR #${pr.number} base at head ${sha}; waiting for fresh CI`);
             return;
         }
-        if (!ci(sha, 'pull_request')) {
+        if (fresh.mergeable_state !== 'clean' || !ci(sha, 'pull_request')) {
             console.log(`Waiting for latest PR CI at ${sha}`);
             return;
         }
-        console.log(`Enabling ordinary merge PR #${pr.number} exact head ${sha}`);
-        gh(['pr', 'merge', String(pr.number), '--auto', '--merge', '--match-head-commit', sha]);
+        if (expectedBase && branch(pr.base.ref) !== expectedBase) {
+            console.log(`Base changed before merge of PR #${pr.number}; waiting for a new proof`);
+            return;
+        }
+        console.log(`Performing ordinary merge PR #${pr.number} exact head ${sha}`);
+        gh(['pr', 'merge', String(pr.number), '--merge', '--match-head-commit', sha]);
     };
     const protection = (name) => {
         const p = api(`branches/${name}/protection`);
@@ -161,7 +169,7 @@ export async function orchestrate(mode, commandGh) {
         if (pr.head.sha !== sha || branch('dev') !== sha) {
             throw new Error('dev changed during promotion');
         }
-        merge(pr, sha);
+        merge(pr, sha, branch('main'));
     }
     else if (mode === 'release') {
         const main = branch('main');
@@ -198,7 +206,7 @@ export async function orchestrate(mode, commandGh) {
                 throw new Error('Release base or head changed during verification');
             }
             console.log(`Release proof verified ${verified}, main ${main}, PR #${pr.number} head ${pr.head.sha}`);
-            merge(pr, pr.head.sha);
+            merge(pr, pr.head.sha, main);
         }
     }
     else {
