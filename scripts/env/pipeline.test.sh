@@ -6,9 +6,9 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export OMK_ROOT="$TMP/root" OMK_SOURCE_ONLY=1
 . "$HERE/omk.sh"
 mkdir -p "$OMK_ROOT/staging/llm"
-git -C "$OMK_ROOT/staging/llm" init -q
-git -C "$OMK_ROOT/staging/llm" -c user.name=test -c user.email=t@example.com commit -q --allow-empty -m fixture
-sha="$(git -C "$OMK_ROOT/staging/llm" rev-parse HEAD)"
+command git -C "$OMK_ROOT/staging/llm" init -q
+command git -C "$OMK_ROOT/staging/llm" -c user.name=test -c user.email=t@example.com commit -q --allow-empty -m fixture
+sha="$(command git -C "$OMK_ROOT/staging/llm" rev-parse HEAD)"
 cmd_env_hold staging
 [[ "$(cat "$OMK_ROOT/staging/.pipeline/hold")" == "$sha" ]]
 if ( pipeline_update_allowed staging ); then echo 'FAIL: held update allowed'; exit 1; fi
@@ -36,7 +36,7 @@ printf '{"schemaVersion":1,"stage":"staging-validation","sha":"%s","status":"pas
 if ( pipeline_verify_proof staging "$sha" ) >/dev/null 2>&1; then echo 'FAIL: empty validation allowed'; exit 1; fi
 # Pipeline always smokes without a status token and holds the checked SHA.
 cmd_env_hold staging --release
-git -C "$ldir" branch -M main
+command git -C "$ldir" branch -M main
 printf 'OMK_TRACK=main\n' > "$ldir/.env"
 pipeline_update_step() { printf 'update\n' >> "$TMP/order"; }
 cmd_env_smoke() { printf 'smoke\n' >> "$TMP/order"; }
@@ -46,14 +46,14 @@ pipeline_run staging
 [[ "$(cat "$OMK_ROOT/staging/.pipeline/hold")" == "$sha" ]]
 # Online chooses once; even if latest changes during update it uses captured commit.
 mkdir -p "$OMK_ROOT/online/llm"
-git -C "$OMK_ROOT/online/llm" init -q
+command git -C "$OMK_ROOT/online/llm" init -q
 online="$OMK_ROOT/online/llm"
-git -C "$online" -c user.name=test -c user.email=t@example.com commit -q --allow-empty -m old
-old="$(git -C "$online" rev-parse HEAD)"
-git -C "$online" -c user.name=test -c user.email=t@example.com commit -q --allow-empty -m release
-captured_test="$(git -C "$online" rev-parse HEAD)"
-git -C "$online" tag v1.0.0
-git -C "$online" reset -q --hard "$old"
+command git -C "$online" -c user.name=test -c user.email=t@example.com commit -q --allow-empty -m old
+old="$(command git -C "$online" rev-parse HEAD)"
+command git -C "$online" -c user.name=test -c user.email=t@example.com commit -q --allow-empty -m release
+captured_test="$(command git -C "$online" rev-parse HEAD)"
+command git -C "$online" tag v1.0.0
+command git -C "$online" reset -q --hard "$old"
 printf 'OMK_TRACK=release\n' > "$online/.env"
 git() { if [[ "${3:-}" == fetch ]]; then return 0; fi; command git "$@"; }
 release_gate_fetch() { return 0; }
@@ -66,14 +66,14 @@ if ( pipeline_run online ) >/dev/null 2>&1; then echo 'FAIL: unverified release 
 echo 'pipeline identity, staging and captured release checks passed'
 # Release gate rejects functional changes even when a later commit reverts them.
 unset -f git
-fixture="$TMP/release-gate"; git init -q "$fixture"
+fixture="$TMP/release-gate"; command git init -q "$fixture"
 printf '{"version":"1.0.0","dependencies":{"x":"1"}}\n' > "$fixture/package.json"
-git -C "$fixture" add .; git -C "$fixture" -c user.name=t -c user.email=t@e commit -qm base
-base="$(git -C "$fixture" rev-parse HEAD)"
+command git -C "$fixture" add .; command git -C "$fixture" -c user.name=t -c user.email=t@e commit -qm base
+base="$(command git -C "$fixture" rev-parse HEAD)"
 printf '{"version":"1.0.0","dependencies":{"x":"2"}}\n' > "$fixture/package.json"
-git -C "$fixture" add .; git -C "$fixture" -c user.name=t -c user.email=t@e commit -qm unsafe
+command git -C "$fixture" add .; command git -C "$fixture" -c user.name=t -c user.email=t@e commit -qm unsafe
 printf '{"version":"1.0.0","dependencies":{"x":"1"}}\n' > "$fixture/package.json"
-git -C "$fixture" add .; git -C "$fixture" -c user.name=t -c user.email=t@e commit -qm revert
+command git -C "$fixture" add .; command git -C "$fixture" -c user.name=t -c user.email=t@e commit -qm revert
 [[ -n "$(release_gate_offending "$fixture" "$base" HEAD)" ]] || { echo 'FAIL: reverted dependency change accepted'; exit 1; }
 [[ "$(pm2_names staging)" == *'omk-pipeline-staging'* ]] || { echo 'FAIL: reset/status do not manage pipeline schedule'; exit 1; }
 # Update failures cannot fall through to smoke/success, even in conditional callers.

@@ -3,12 +3,12 @@ import { setTimeout as delay } from 'node:timers/promises';
 export function handleSignalFailure(error, child, signal, snapshot) {
   const uid = process.getuid?.();
   const members = snapshot.status === 0 && !snapshot.error && !snapshot.signal && typeof snapshot.stdout === 'string' ? snapshot.stdout.split('\n').map(line => line.trim()).filter(line => line.split(/\s+/)[2] === String(child.pid)) : null;
-  // Darwin may deny a signal-0 probe before Node reaps its exited child. Zombies
-  // cannot execute; require every observed group member to be owned and a zombie.
+  // Darwin may deny signal-0 while a child exits. Verified owned non-zombies
+  // remain alive for bounded polling; only an entirely zombie group is finished.
   if (error.code === 'EPERM' && signal === 0 && uid !== undefined && members?.length && members.every(line => {
     const fields = line.split(/\s+/);
-    return fields.length === 5 && /^\d+$/.test(fields[0]) && /^\d+$/.test(fields[1]) && fields[3] === String(uid) && fields[4].startsWith('Z');
-  })) return false;
+    return fields.length === 5 && /^\d+$/.test(fields[0]) && /^\d+$/.test(fields[1]) && fields[3] === String(uid);
+  })) return members.some(line => !line.split(/\s+/)[4].startsWith('Z'));
   error.message = `${error.message}; signal=${signal} pgid=${child.pid} uid=${uid ?? 'unknown'} leaderExit=${child.exitCode ?? child.signalCode ?? 'running'} members=[${(members || ['snapshot unavailable']).slice(0, 20).join('; ')}]`;
   throw error;
 }

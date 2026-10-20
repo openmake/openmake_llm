@@ -6,14 +6,14 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export OMK_ROOT="$TMP/root" OMK_SOURCE_ONLY=1
 . "$HERE/omk.sh"
 ldir="$(llm_dir staging)"; mkdir -p "$ldir/apps/api/dist"
-git -C "$ldir" init -q
-git -C "$ldir" -c user.name=t -c user.email=t@e commit -qm fixture --allow-empty
-git -C "$ldir" branch -M main
-sha="$(git -C "$ldir" rev-parse HEAD)"
+command git -C "$ldir" init -q
+command git -C "$ldir" -c user.name=t -c user.email=t@e commit -qm fixture --allow-empty
+command git -C "$ldir" branch -M main
+sha="$(command git -C "$ldir" rev-parse HEAD)"
 printf '.env\napps/\n' > "$ldir/.git/info/exclude"
 printf 'OMK_TRACK=main\n' > "$ldir/.env"
 printf '{"gitHash":"%s"}' "$sha" > "$ldir/apps/api/dist/build-info.json"
-git -C "$ldir" update-ref refs/remotes/origin/main "$sha"
+command git -C "$ldir" update-ref refs/remotes/origin/main "$sha"
 git() { if [[ "${3:-}" == fetch ]]; then return 0; fi; command git "$@"; }
 curl() { printf '{"data":{"build":{"gitHash":"%s"}}}' "$sha"; }
 verified_push() { touch "$TMP/pushed"; }
