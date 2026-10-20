@@ -11,6 +11,6 @@ test('running API reports the tested build and protects ordinary user data', asy
   expect(body.data.build.gitHash).toMatch(/^[0-9a-f]{7,40}$/);
   expect(body.data.build.gitHash).toBe(process.env.E2E_EXPECTED_BUILD_HASH);
   expect(sha?.startsWith(body.data.build.gitHash)).toBe(true);
-  const protectedResponse = await request.get('/api/auth/me');
+  const protectedResponse = await request.get('/api/users/me/memories');
   expect(protectedResponse.status()).toBe(401);
 });

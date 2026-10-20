@@ -1,9 +1,15 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 function signalGroup(child, signal) {
   if (!child?.pid) return false;
   try { process.kill(-child.pid, signal); return true; }
-  catch (error) { if (error.code === 'ESRCH') return false; throw error; }
+  catch (error) {
+    if (error.code === 'ESRCH') return false;
+    const snapshot = spawnSync('ps', ['-axo', 'pid,ppid,pgid,uid,stat'], { encoding: 'utf8', timeout: 1000, maxBuffer: 256 * 1024 });
+    const members = snapshot.status === 0 ? snapshot.stdout.split('\n').map(line => line.trim()).filter(line => line.split(/\s+/)[2] === String(child.pid)).slice(0, 20) : ['snapshot unavailable'];
+    error.message = `${error.message}; signal=${signal} pgid=${child.pid} uid=${process.getuid?.() ?? 'unknown'} leaderExit=${child.exitCode ?? child.signalCode ?? 'running'} members=[${members.join('; ')}]`;
+    throw error;
+  }
 }
 // Group lifetime is independent of the leader's exitCode: npm may exit before its child.
 export async function stopGroup(child, { graceMs = 5000 } = {}) {
