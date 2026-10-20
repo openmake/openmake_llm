@@ -156,12 +156,16 @@ platform_guard() {
     esac
 }
 # macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다.
-# 사용자의 기본 docker(Docker Desktop 등)는 건드리지 않는다. 이미 정해 둔 DOCKER_HOST 는 존중한다.
+# 기본 Docker 컨텍스트 및 DOCKER_HOST 값과 무관하게 OpenMake 명령은 Colima 를 선택한다.
 # shellcheck disable=SC2120  # 인자는 omk.test.sh 가 준다 — 이 파일 안에서는 인자 없이 부른다
-omk_docker_host() { # [$1=uname -s] [$2=홈] — 인자는 테스트용
-    local os="${1:-$(uname -s)}" sock="${2:-$HOME}/.colima/openmake/docker.sock"
-    [[ "$os" == "Darwin" && -z "${DOCKER_HOST:-}" && -S "$sock" ]] || return 0
-    export DOCKER_HOST="unix://$sock"
+# curl|bash bootstrap has no checkout yet; the named context is its only macOS target.
+[[ -z "$SCRIPT_DIR" || ! -f "$SCRIPT_DIR/../lib/colima.sh" ]] || . "$SCRIPT_DIR/../lib/colima.sh"
+# shellcheck disable=SC2120  # Explicit parameters are used by fixture tests.
+omk_docker_host() { # [$1=platform] [$2=user home]
+    if declare -F openmake_select_docker >/dev/null; then openmake_select_docker "$@"; return; fi
+    [[ "${1:-$(uname -s)}" == Darwin ]] || return 0
+    export DOCKER_CONTEXT=colima-openmake
+    unset DOCKER_HOST
 }
 
 # ── .env 읽기/쓰기 (source 하지 않는다 — 값의 공백/특수문자 안전) ──────────────
@@ -1229,7 +1233,7 @@ runtime_image_tag()   { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf 'latest' || p
 runtime_image_names() { local t; t="$(runtime_image_tag "$1")"; printf 'openmake-mcp-runtime:%s openmake-task-runtime:%s' "$t" "$t"; }
 # 작업 workspace 는 컨테이너에 bind mount 된다. 기본값(/tmp)은 재부팅 때 사라지고, macOS 의 Colima 는
 # 홈 디렉터리만 VM 에 공유해 /tmp 가 컨테이너에서 보이지 않는다 — 환경 디렉터리 안에 둔다.
-uses_colima() { [[ "${DOCKER_HOST:-}" == "unix://$HOME/.colima/openmake/docker.sock" ]]; }
+uses_colima() { [[ "${DOCKER_CONTEXT:-}" == colima-openmake || "${DOCKER_HOST:-}" == "unix://${COLIMA_HOME:-$HOME/.colima}/openmake/docker.sock" ]]; }
 sandbox_root_ensure() { # $1=.env $2=env
     dotenv_ensure "$1" TASK_SANDBOX_ROOT "$(env_dir "$2")/task-workspaces"
     mkdir -p "$(dotenv_get "$1" TASK_SANDBOX_ROOT)"
@@ -1442,7 +1446,7 @@ https_export_root_ca() {
 
 # ── artifact-viewer (선택) ───────────────────────────────────────────────────
 viewer_ensure() { # $1=llm dir
-    local ldir="$1" envf="$1/.env" host origin
+    local ldir="$1" envf="$1/.env" host origin data
     [[ "$(dotenv_get "$envf" OMK_ARTIFACT_VIEWER)" == "1" ]] || return 0
     if [[ "$(llm_api_port "$ldir")" != "$VIEWER_API_PORT" ]]; then
         log_warn "artifact-viewer 는 백엔드 :$VIEWER_API_PORT 를 전제로 합니다(nginx.conf) — API :$(llm_api_port "$ldir") 인 이 환경은 건너뜁니다"
@@ -1450,8 +1454,14 @@ viewer_ensure() { # $1=llm dir
     fi
     has docker && docker info >/dev/null 2>&1 || { log_warn "docker 를 쓸 수 없어 artifact-viewer 를 건너뜁니다"; return 0; }
     log_step "artifact-viewer"
-    ( cd "$ldir" && bash infra/artifact-viewer/fetch-vendor.sh >/dev/null ) || { log_warn "artifact-viewer 라이브러리 준비 실패 — 건너뜁니다"; return 0; }
-    ( cd "$ldir" && ARTIFACT_VIEWER_PORT="$VIEWER_PORT" docker compose -p openmake-artifact-viewer \
+    data="${ARTIFACT_VIEWER_DATA_DIR:-}"
+    if [[ -z "${ARTIFACT_VIEWER_DATA_DIR+x}" ]]; then
+        data="$(node -e 'const fs = require("node:fs"); const { parseEnv } = require("node:util"); process.stdout.write(parseEnv(fs.readFileSync(process.argv[1], "utf8")).ARTIFACT_VIEWER_DATA_DIR || "")' "$envf")" || return 1
+    fi
+    [[ -n "$data" ]] || data="data/artifact-viewer"
+    case "$data" in /*) ;; *) data="$ldir/$data" ;; esac
+    ( cd "$ldir" && ARTIFACT_VIEWER_DATA_DIR="$data" bash infra/artifact-viewer/fetch-vendor.sh >/dev/null ) || { log_warn "artifact-viewer 라이브러리 준비 실패 — 건너뜁니다"; return 0; }
+    ( cd "$ldir" && ARTIFACT_VIEWER_DATA_DIR="$data" ARTIFACT_VIEWER_PORT="$VIEWER_PORT" docker compose --env-file "$envf" -p openmake-artifact-viewer \
         -f infra/artifact-viewer/docker-compose.yml up -d >/dev/null ) || { log_warn "artifact-viewer 기동 실패 — 건너뜁니다"; return 0; }
     host="$(dotenv_get "$envf" OMK_HTTPS_HOST)"
     if [[ -n "$host" ]]; then

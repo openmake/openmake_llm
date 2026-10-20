@@ -3,15 +3,15 @@
  * (외부 MCP 클라이언트)까지 인자 없이 전한다(utils/tool-call-context 와 같은 방식).
  *
  * 에이전트 작업의 도구 호출은 작업 공간이 있어, 외부 도구가 돌려준 이미지·오디오를 파일로 저장할 수 있다.
- * 문맥 밖(채팅 경로 등)에서는 저장처가 없다 — 그때는 호출부가 생략 안내만 적는다.
+ * 채팅 런타임은 계정 소유 저장처를 제공할 수 있다. 저장처가 없으면 호출부가 생략 안내만 적는다.
  *
  * @module utils/tool-media-sink
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 export interface ToolMediaSink {
-    /** 작업 공간 상대경로에 저장한다(경로 가드·쿼터는 저장처가 적용). 실패하면 throw. */
-    save(relPath: string, data: Buffer): Promise<void>;
+    /** 저장처가 경로 가드·쿼터를 적용한다. 전달 URL 이 있으면 반환하고, 실패하면 throw. */
+    save(relPath: string, data: Buffer, media?: { kind: 'image' | 'audio'; mime: string }): Promise<void | string>;
 }
 
 const storage = new AsyncLocalStorage<ToolMediaSink>();

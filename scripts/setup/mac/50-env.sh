@@ -55,5 +55,7 @@ setup_env() {
     [[ -z "$PUBLIC_URL" ]] || apply_public_url "$PUBLIC_URL"
     # 앱이 띄우는 docker 가 같은 데몬을 가리키게 한다 (ensure_docker 가 Colima 를 골랐을 때만 값이 있다).
     [[ -z "${DOCKER_HOST:-}" ]] || set_env DOCKER_HOST "$DOCKER_HOST"
+    [[ -z "${COLIMA_HOME:-}" ]] || set_env COLIMA_HOME "$COLIMA_HOME"
+    set_env DOCKER_CONTEXT ""
     log_ok ".env 준비 완료 ($ENV_FILE)"
 }

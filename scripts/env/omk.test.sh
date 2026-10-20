@@ -390,13 +390,13 @@ ok "gate: 없는 태그 거부"             '! release_gate_check "$GC" v9.9.9'
 ok "enforce: force 기록"              "grep -q 'force-unverified v1.0.4' '$OMK_ROOT/gateenv/logs/release-gate.log'"
 ( release_gate_enforce gateenv "$GC" v1.0.1 0 ) >/dev/null 2>&1; eq "enforce: 확인된 릴리스 진행" "$?" "0"
 
-# ── docker 접속: macOS 의 전용 Colima (소켓이 있을 때만, 이미 정한 값은 존중) ──
+# ── docker 접속: macOS 의 전용 Colima 를 강제하고 Linux 는 건드리지 않는다 ──
 DH="$TMP/dh"; mkdir -p "$DH/.colima/openmake"
-eq "docker host: 소켓 없음"   "$( unset DOCKER_HOST; omk_docker_host Darwin "$DH"; echo "${DOCKER_HOST:-}" )" ""
+eq "docker host: 소켓이 없어도 Colima 선택" "$( unset COLIMA_HOME DOCKER_HOST DOCKER_CONTEXT; docker() { return 1; }; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST" )" "unix://$DH/.colima/openmake/docker.sock"
+eq "docker host: desktop 호스트와 컨텍스트 덮어씀" "$( unset COLIMA_HOME; docker() { return 1; }; DOCKER_HOST=unix:///desktop DOCKER_CONTEXT=desktop-linux; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST|${DOCKER_CONTEXT:-}" )" "unix://$DH/.colima/openmake/docker.sock|"
 if python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])' "$DH/.colima/openmake/docker.sock" 2>/dev/null; then
-    eq "docker host: macOS + 소켓"  "$( unset DOCKER_HOST; omk_docker_host Darwin "$DH"; echo "${DOCKER_HOST:-}" )" "unix://$DH/.colima/openmake/docker.sock"
     eq "docker host: Linux 는 그대로" "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "${DOCKER_HOST:-}" )" ""
-    eq "docker host: 정해 둔 값 존중" "$( DOCKER_HOST=tcp://x:1; omk_docker_host Darwin "$DH"; echo "$DOCKER_HOST" )" "tcp://x:1"
+    eq "docker host: Linux 컨텍스트도 그대로" "$( DOCKER_HOST=tcp://x:1 DOCKER_CONTEXT=custom; omk_docker_host Linux "$DH"; echo "$DOCKER_HOST|$DOCKER_CONTEXT" )" "tcp://x:1|custom"
     eq "docker host: 항상 0"        "$( unset DOCKER_HOST; omk_docker_host Linux "$DH"; echo "$?" )" "0"
 else
     FAIL=$((FAIL+1)); echo "FAIL docker host: 시험용 소켓을 만들지 못했다 (python3 없음 또는 경로가 너무 길다: $DH)"
@@ -487,6 +487,8 @@ eq "dev up 래퍼: 클론 안의 dev 는 클론 것" "$(cd "$WC" && OMK_ROOT="$D
 # ── 웹 빌드: Next 는 rewrites(/api · /generated)의 대상을 빌드 때 굳힌다 — 빌드가 그 환경의 API 포트를 받아야 한다 ──
 # (실행 때 넣은 API_PROXY_TARGET 은 이미 굳은 빌드본에 닿지 않는다. 기본 포트가 아닌 환경에서 생성 이미지가 500 이던 원인.)
 BT="$TMP/buildtarget"; mkdir -p "$BT/bin"
+mkdir -p "$BT/scripts/lib"
+cp "$HERE/../../scripts/lib/colima.sh" "$BT/scripts/lib/"
 cp "$HERE/../../openmake_llm.sh" "$BT/"
 printf 'PORT=52417\n' > "$BT/.env"
 printf '#!/usr/bin/env bash\nprintf "%%s" "${API_PROXY_TARGET:-}" > "%s/seen"\n' "$BT" > "$BT/bin/npm"; chmod +x "$BT/bin/npm"
@@ -500,6 +502,7 @@ done
 # `pm2 restart <이름>` 은 ecosystem 을 다시 읽지 않는다 — kill_timeout 을 10000→35000 으로 올린 변경이 기존
 # 설치본에 닿지 않아 종료 절차가 10초에 SIGKILL 로 끊겼다(2026-10-11 staging 실측). 가짜 pm2 로 호출만 기록한다.
 RS="$TMP/restarttarget"; mkdir -p "$RS/bin" "$RS/apps/api/dist"
+mkdir -p "$RS/scripts/lib"; cp "$HERE/../../scripts/lib/colima.sh" "$RS/scripts/lib/"
 cp "$HERE/../../openmake_llm.sh" "$RS/"; : > "$RS/apps/api/dist/cli.js"; : > "$RS/next.js"
 printf 'OMK_INSTANCE=rs\nPORT=52499\nRS_FROM_DOTENV=fresh\n' > "$RS/.env"
 cat > "$RS/ecosystem.config.js" <<'EOF'
@@ -714,6 +717,44 @@ ONLINE_SUMMARY="$(summary_probe online)"
 ok "status staging: Tailscale 직접 접속 안내" '[[ "$STAGING_SUMMARY" == *"Tailscale 호스트명:43210"* ]]'
 ok "status staging: 터널 설정 참조 없음" '[[ "$STAGING_SUMMARY" != *"cloudflared"* ]]'
 ok "status online: 기존 터널 안내 유지" '[[ "$ONLINE_SUMMARY" == *"scripts/cloudflared/config.yml.example"* ]]'
+
+# ── 뷰어: exporter 의 .env 경로를 vendor 준비와 nginx mount 에 함께 전달 ──
+viewer_data_probe() {
+    local probe="$TMP/viewer-probe" configured="$1"
+    mkdir -p "$probe/infra/artifact-viewer"
+    printf 'OMK_ARTIFACT_VIEWER=1\nPORT=52416\n' > "$probe/.env"
+    [[ -z "$configured" ]] || printf 'ARTIFACT_VIEWER_DATA_DIR="%s"\n' "$configured" >> "$probe/.env"
+    [[ -z "${3:-}" ]] || printf '%s\n' "$3" >> "$probe/.env"
+    printf '#!/usr/bin/env bash\nprintf "vendor:%%s\\n" "${ARTIFACT_VIEWER_DATA_DIR:-UNSET}" >> "$VIEWER_PROBE_LOG"\n' > "$probe/infra/artifact-viewer/fetch-vendor.sh"
+    : > "$probe/calls"
+    ( export VIEWER_PROBE_LOG="$probe/calls"
+      if [[ $# -ge 2 && "$2" != __UNSET__ ]]; then export ARTIFACT_VIEWER_DATA_DIR="$2"; else unset ARTIFACT_VIEWER_DATA_DIR; fi
+      docker() {
+          [[ "$1" != compose ]] || {
+              printf 'compose:%s\n' "${ARTIFACT_VIEWER_DATA_DIR:-UNSET}" >> "$VIEWER_PROBE_LOG"
+              printf 'arg:%s\n' "$@" >> "$VIEWER_PROBE_LOG"
+          }
+          return 0
+      }
+      viewer_ensure "$probe"
+    ) >/dev/null 2>&1
+    cat "$probe/calls"
+}
+VD="$(viewer_data_probe "$TMP/published artifacts")"
+eq "viewer: vendor 와 compose 에 설정 경로 전달(공백 포함)" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/published artifacts" "$TMP/published artifacts")"
+eq "viewer: compose 가 앱 .env 를 명시적으로 읽음" "$(printf '%s\n' "$VD" | grep -A1 '^arg:--env-file$')" "$(printf 'arg:--env-file\narg:%s' "$TMP/viewer-probe/.env")"
+VD="$(viewer_data_probe '')"
+eq "viewer: 미설정 시 같은 repo 기본 경로 사용" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/viewer-probe/data/artifact-viewer" "$TMP/viewer-probe/data/artifact-viewer")"
+VD="$(viewer_data_probe 'data/published artifacts')"
+eq "viewer: 상대 경로도 앱 repo 기준으로 mount" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/viewer-probe/data/published artifacts" "$TMP/viewer-probe/data/published artifacts")"
+VD="$(viewer_data_probe "$TMP/from-file" "$TMP/from-shell")"
+eq "viewer: shell 환경이 .env 보다 우선" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/from-shell" "$TMP/from-shell")"
+VD="$(viewer_data_probe '' __UNSET__ 'ARTIFACT_VIEWER_DATA_DIR=/data/artifacts # publications')"
+eq "viewer: 인라인 주석은 경로에 포함하지 않음" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:/data/artifacts\ncompose:/data/artifacts')"
+VD="$(viewer_data_probe '' __UNSET__ 'ARTIFACT_VIEWER_DATA_DIR="/data/hash # file" # publications')"
+eq "viewer: 따옴표 내부 hash 는 보존하고 외부 주석만 제거" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:/data/hash # file\ncompose:/data/hash # file')"
+VD="$(viewer_data_probe "$TMP/from-file" '')"
+eq "viewer: 명시적인 빈 shell 환경이면 backend 기본 경로 사용" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/viewer-probe/data/artifact-viewer" "$TMP/viewer-probe/data/artifact-viewer")"
 
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]
