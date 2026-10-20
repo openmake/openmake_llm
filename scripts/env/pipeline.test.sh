@@ -5,6 +5,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export OMK_ROOT="$TMP/root" OMK_SOURCE_ONLY=1
 . "$HERE/omk.sh"
+git() { if [[ "${3:-}" == fetch ]]; then return 0; fi; command git "$@"; }
 mkdir -p "$OMK_ROOT/staging/llm"
 command git -C "$OMK_ROOT/staging/llm" init -q
 command git -C "$OMK_ROOT/staging/llm" -c user.name=test -c user.email=t@example.com commit -q --allow-empty -m fixture
@@ -55,7 +56,6 @@ captured_test="$(command git -C "$online" rev-parse HEAD)"
 command git -C "$online" tag v1.0.0
 command git -C "$online" reset -q --hard "$old"
 printf 'OMK_TRACK=release\n' > "$online/.env"
-git() { if [[ "${3:-}" == fetch ]]; then return 0; fi; command git "$@"; }
 release_gate_fetch() { return 0; }
 release_gate_check() { [[ "$2" == "$captured_test" ]]; }
 pipeline_update_step() { command git -C "$online" tag -f v1.0.0 "$old" >/dev/null; OMK_PIPELINE_RELEASE_SHA="$2" release_behind "$online"; [[ "$RELEASE_TAG" == "$captured_test" ]]; command git -C "$online" reset -q --hard "$RELEASE_TAG"; }
@@ -65,7 +65,6 @@ release_gate_check() { GATE_REASON=unverified; return 1; }
 if ( pipeline_run online ) >/dev/null 2>&1; then echo 'FAIL: unverified release allowed'; exit 1; fi
 echo 'pipeline identity, staging and captured release checks passed'
 # Release gate rejects functional changes even when a later commit reverts them.
-unset -f git
 fixture="$TMP/release-gate"; command git init -q "$fixture"
 printf '{"version":"1.0.0","dependencies":{"x":"1"}}\n' > "$fixture/package.json"
 command git -C "$fixture" add .; command git -C "$fixture" -c user.name=t -c user.email=t@e commit -qm base
@@ -77,7 +76,6 @@ command git -C "$fixture" add .; command git -C "$fixture" -c user.name=t -c use
 [[ -n "$(release_gate_offending "$fixture" "$base" HEAD)" ]] || { echo 'FAIL: reverted dependency change accepted'; exit 1; }
 [[ "$(pm2_names staging)" == *'omk-pipeline-staging'* ]] || { echo 'FAIL: reset/status do not manage pipeline schedule'; exit 1; }
 # Update failures cannot fall through to smoke/success, even in conditional callers.
-git() { if [[ "${3:-}" == fetch ]]; then return 0; fi; command git "$@"; }
 release_gate_check() { return 0; }
 pipeline_update_step() { return 2; }
 cmd_env_smoke() { touch "$TMP/should-not-smoke"; }
