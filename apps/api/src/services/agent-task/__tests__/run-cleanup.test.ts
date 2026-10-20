@@ -36,15 +36,21 @@ describe('cleanupTaskRun', () => {
         expect(rt.cleanup).toHaveBeenCalledWith(false);
     });
 
-    it('실패는 승인 정리·diff 캡처 후 workspace 삭제, 완료는 보존', async () => {
+    it('실패도 승인 정리·diff 캡처 후 workspace 를 보존해 산출물을 회수할 수 있다', async () => {
         const failed = runtime();
         await cleanupTaskRun({ taskId: 't1', taskRuntime: failed as unknown as TaskRuntime, status: 'failed', parked: false, stepNumber: 5 });
         expect(closeTask).toHaveBeenCalledWith('t1');
         expect(captureDiffOnCleanup).toHaveBeenCalledWith(failed, 't1', 5);
-        expect(failed.cleanup).toHaveBeenCalledWith(true);
+        expect(failed.cleanup).toHaveBeenCalledWith(false);
         const done = runtime();
         await cleanupTaskRun({ taskId: 't2', taskRuntime: done as unknown as TaskRuntime, status: 'completed', parked: false, stepNumber: 1 });
         expect(done.cleanup).toHaveBeenCalledWith(false);
+    });
+
+    it('취소된 작업은 기존처럼 workspace 를 삭제한다', async () => {
+        const rt = runtime();
+        await cleanupTaskRun({ taskId: 'cancelled', taskRuntime: rt as unknown as TaskRuntime, status: 'cancelled', parked: false, stepNumber: 0 });
+        expect(rt.cleanup).toHaveBeenCalledWith(true);
     });
 
     it('런타임이 없으면 승인·steering 만 정리한다', async () => {

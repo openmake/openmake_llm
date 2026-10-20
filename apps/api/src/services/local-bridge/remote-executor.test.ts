@@ -13,6 +13,13 @@ import { getAuditService } from '../AuditService';
 describe('RemoteExecutor 경로 — 컨테이너 표기(/workspace) 정규화', () => {
     afterEach(() => jest.restoreAllMocks());
 
+    it('판정용 strict 파일 목록은 기기 조회 실패를 빈 목록으로 바꾸지 않는다', async () => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: false, error: 'device unavailable' });
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await expect(ex.listWorkspaceFiles(true)).rejects.toThrow('device unavailable');
+        await expect(ex.listWorkspaceFiles()).resolves.toEqual([]);
+    });
+
     it('worktree 격리가 없으면 /workspace/… 를 연결 폴더 기준 상대경로로 푼다', async () => {
         const spy = jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: true, content: 'x' });
         const ex = new RemoteExecutor('task-1', 'user-1');
