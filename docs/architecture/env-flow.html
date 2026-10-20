@@ -264,11 +264,10 @@
 <main>
 
 <!-- ═══════════════════════════ 01 개요 ═══════════════════════════ -->
-<section class="page" id="overview" data-title="개발에서 운영까지 · 8단계"><h1>개발에서 운영까지 · 8단계</h1><p>local MacBook에서 개발하고 GitHub가 dev/main 검사를 처리합니다. tom은 main을 설치·검증하고, 사람의 실사용 OK 후 검증된 릴리스만 ome-on으로 이어집니다.</p><p><a href="http://rasplay.tplinkdns.com:34321/workflow-map.html">합의 흐름 원본</a> · <a href="http://rasplay.tplinkdns.com:34321/board.html">현황 보드</a> · <a href="../../scripts/env/README.md">실행 명령과 활성화 조건</a></p><div class="code"><pre>local 개발·테스트·PR → PR CI·dev 자동 병합
+<section class="page" id="overview" data-title="개발에서 운영까지 · 8단계"><h1>개발에서 운영까지 · 8단계</h1><p>local MacBook에서 개발하고 GitHub가 dev/main 검사를 처리합니다. tom은 main을 설치·검증하고, 사람의 실사용 OK 후 검증된 릴리스만 ome-on으로 이어집니다.</p><p><a href="../../scripts/env/README.md">실행 명령과 활성화 조건</a></p><div class="code"><pre>local 개발·테스트·PR → PR CI·dev 자동 병합
  → 병합 dev CI·기본/변경 기능 검사 → main 자동 승격
  → tom 설치·검증·SHA 고정 → 사람 실사용 OK·verify
- → 검증 릴리스 자동 발행 → ome-on 고정 태그 설치·스모크
-bean ── 주기적 외부 실사용 검사 ──▶ tom / ome-on</pre></div><table><thead><tr><th>단계</th><th>담당</th><th>하는 일</th><th>진입점</th></tr></thead><tbody><tr><th>1</th><td>local · 사람+에이전트</td><td>개발·관련 테스트·PR</td><td><code>omk dev up</code></td></tr><tr><th>2</th><td>GitHub · 자동</td><td>작업 PR → dev</td><td><code>auto-merge workflow</code></td></tr><tr><th>3</th><td>GitHub runner · 자동</td><td>병합 dev 소스·기능 검사</td><td><code>npm run test:dev -- FULL_SHA</code></td></tr><tr><th>4</th><td>GitHub · 자동</td><td>dev → main 승격</td><td><code>promote workflow</code></td></tr><tr><th>5</th><td>tom · 자동</td><td>설치·스모크·필수 검증</td><td><code>omk env pipeline staging</code></td></tr><tr><th>6</th><td>사람 + tom 명령</td><td>실사용 OK → verify</td><td><code>omk env approve staging --sha FULL_SHA --yes</code></td></tr><tr><th>7</th><td>GitHub · 자동</td><td>검증 릴리스 발행</td><td><code>release-verified / release-please</code></td></tr><tr><th>8</th><td>ome-on · 자동</td><td>고정 태그 설치·운영 스모크</td><td><code>omk env pipeline online</code></td></tr></tbody></table><h2>역할과 판정</h2><p>별도 배포 dev 서버는 필수 구성에서 폐지됐습니다. dev는 Git 브랜치이며 local은 개발 호스트입니다. 사람의 판단은 1번과 6번에 있습니다. bean은 검증·배포 담당을 대신하지 않습니다.</p><p>문서·소스 구현, 로컬 검사, 원격 활성화, 실제 단계 완료를 구분합니다. 보드의 기록 미연결을 성공이나 실패로 단정하지 않습니다.</p></section>
+ → 검증 릴리스 자동 발행 → ome-on 고정 태그 설치·스모크</pre></div><table><thead><tr><th>단계</th><th>담당</th><th>하는 일</th><th>진입점</th></tr></thead><tbody><tr><th>1</th><td>local · 사람+에이전트</td><td>개발·관련 테스트·PR</td><td><code>omk dev up</code></td></tr><tr><th>2</th><td>GitHub · 자동</td><td>작업 PR → dev</td><td><code>auto-merge workflow</code></td></tr><tr><th>3</th><td>GitHub runner · 자동</td><td>병합 dev 소스·기능 검사</td><td><code>npm run test:dev -- FULL_SHA</code></td></tr><tr><th>4</th><td>GitHub · 자동</td><td>dev → main 승격</td><td><code>promote workflow</code></td></tr><tr><th>5</th><td>tom · 자동</td><td>설치·스모크·필수 검증</td><td><code>omk env pipeline staging</code></td></tr><tr><th>6</th><td>사람 + tom 명령</td><td>실사용 OK → verify</td><td><code>omk env approve staging --sha FULL_SHA --yes</code></td></tr><tr><th>7</th><td>GitHub · 자동</td><td>검증 릴리스 발행</td><td><code>release-verified / release-please</code></td></tr><tr><th>8</th><td>ome-on · 자동</td><td>고정 태그 설치·운영 스모크</td><td><code>omk env pipeline online</code></td></tr></tbody></table><h2>역할과 판정</h2><p>별도 배포 dev 서버는 필수 구성에서 폐지됐습니다. dev는 Git 브랜치이며 local은 개발 호스트입니다. 사람의 판단은 1번과 6번에 있습니다.</p><p>문서·소스 구현, 로컬 검사, 원격 활성화, 실제 단계 완료를 구분합니다.</p></section>
 
 <!-- ═══════════════════════════ 02 단계 ═══════════════════════════ -->
 <section class="page" id="steps" data-title="단계별 실행과 다음 조건">
@@ -440,12 +439,12 @@ scripts/env/omk.sh dev setup --no-runtime-images \
 <section class="page" id="env-staging" data-title="tom · main 설치와 사람 확인"><h1>tom · main 설치와 사람 확인</h1><p>main 설치 → 스모크 → 필수 검증 → 설치 SHA 고정까지 자동화합니다. 빈 검증 설정은 차단합니다.</p><div class="code"><pre>omk env pipeline staging
 omk env pipeline staging --schedule '*/10 * * * *'
 # 사람이 실제로 사용한 뒤 OK한 동일 SHA
-omk env approve staging --sha FULL_SHA --yes</pre></div><p>검증 중 hold로 자동 갱신을 막고 실행/디스크 빌드와 검증 결과를 대조합니다. 취소 후 새 설치본을 확인하려면 <code>omk env hold staging --release</code>로 해제합니다.</p><p>외부 모니터의 6번 버튼이 이 명령을 호출하려면 웹 인증·권한·CSRF를 확인하고 고정 argv만 실행해야 합니다. 버튼과 요청 규격은 별도 저장소 <a href="https://github.com/openmake/monitor">openmake/monitor</a>(비공개, 조직 접근 필요) 소유이며, 이 문서는 버튼이 연결됐다고 표시하지 않습니다.</p></section>
+omk env approve staging --sha FULL_SHA --yes</pre></div><p>검증 중 hold로 자동 갱신을 막고 실행/디스크 빌드와 검증 결과를 대조합니다. 취소 후 새 설치본을 확인하려면 <code>omk env hold staging --release</code>로 해제합니다.</p></section>
 
 <!-- ═══════════════════════════ 06 online ═══════════════════════════ -->
 <section class="page" id="env-online" data-title="ome-on · 검증된 태그만 설치"><h1>ome-on · 검증된 태그만 설치</h1><div class="code"><pre>omk env pipeline online
 omk env pipeline online --schedule '*/10 * * * *'
-omk env pipeline online --off</pre></div><p>captured 태그 SHA의 검증 계보를 확인하고 기존 백업·관리형 배포를 사용합니다. 배포 중 latest를 다시 선택하지 않습니다. 설치/실행 SHA가 고정 태그 SHA와 같고 스모크가 통과해야 완료입니다.</p><p>운영 업데이트 스모크와 bean의 주기적 외부 검사는 별개입니다. OS 자동기동 권한과 재부팅 복원은 호스트별로 검증합니다.</p></section>
+omk env pipeline online --off</pre></div><p>captured 태그 SHA의 검증 계보를 확인하고 기존 백업·관리형 배포를 사용합니다. 배포 중 latest를 다시 선택하지 않습니다. 설치/실행 SHA가 고정 태그 SHA와 같고 스모크가 통과해야 완료입니다.</p><p>OS 자동기동 권한과 재부팅 복원은 호스트별로 검증합니다.</p></section>
 
 <!-- ═══════════════════════════ 07 게이트 ═══════════════════════════ -->
 <section class="page" id="gate" data-title="verify → 릴리스의 코드 계보"><h1>verify → 릴리스의 코드 계보</h1><p><code>refs/omk/verified/FULL_SHA</code>가 사람 확인 뒤의 검증 기록입니다. verify는 단순 health 확인을 넘어 고정 SHA·필수 검증·실행 빌드 일치를 요구합니다.</p><p>릴리스 PR과 태그는 verify의 자손이며 모든 중간 커밋이 허용된 버전/변경 로그 메타데이터여야 합니다. JSON 버전 외 의존성 변경이나 기능 변경은 되돌려도 차단합니다. 허용 경로는 검증된 설정에서 읽습니다.</p><p>릴리스 PR 최신 CI와 계보를 검사한 뒤 자동 병합하고 release-please가 태그·릴리스·SBOM/증명을 생성합니다. 코드 포함과 검증 완료는 별도 사실입니다.</p></section>
@@ -606,9 +605,6 @@ omk dev down | status | reset [--keep-data]</pre></div>
 <code>OMK_AUTOMATION_TOKEN</code>과 tom/ome-on 실제 스케줄·QA 계정·필수 검증 시나리오를 준비해야 합니다.</li>
 <li>credential이 없거나 검사가 실패하면 오류/대기로 기록하며 성공 skip으로 숨기지 않습니다.</li>
 </ul>
-<h2>bean과 모니터</h2>
-<p>bean은 대상별 시나리오·주기·관측 SHA/버전·근거를 기록합니다. 주기를 임의 활성화하지 않으며 사람 OK·verify를 대신하지 않습니다.</p>
-<p>bean 실행기·현황 보드·6번 버튼 요청 규격은 별도 저장소 <a href="https://github.com/openmake/monitor">openmake/monitor</a>(비공개, 조직 접근 필요)가 소유하며 이 저장소에 포함하지 않습니다. 모니터의 기존 7단계 API·새 8단계 증거 연결·버튼 서버 구현은 그 저장소에서 다룹니다.</p>
 <p>
 <a href="pipeline-source-audit.md">전체 소스 조사와 구현/활성화 구분</a> · <a href="../../scripts/env/README.md">현재 명령 안내</a>
 </p>
