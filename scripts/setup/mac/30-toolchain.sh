@@ -16,6 +16,7 @@ ensure_node() {
     [[ -x "$bin/node" ]] || die "node@$NODE_MAJOR 가 없습니다 (brew install node@$NODE_MAJOR)"
     # keg-only formula 라 PATH 에 직접 올린다 — PM2 가 기동 시점 PATH 의 node 를 쓴다.
     export PATH="$bin:$PATH"
+    OMK_NODE_BIN="$bin"
     persist_path "$bin"
     # 메이저만이 아니라 .node-version 과 정확히 같아야 한다 (안내는 require_node_version 이 stderr 에 낸다).
     require_node_version "$SCRIPT_DIR" \
@@ -84,6 +85,8 @@ install_colima() {
     done
     prefix="$(brew --prefix)" || die "Homebrew 경로를 확인할 수 없습니다."
     export PATH="$prefix/bin:$PATH"
+    # Homebrew bin 에 다른 node 가 있어도 ensure_node 가 고른 고정 판이 먼저다.
+    [[ -z "${OMK_NODE_BIN:-}" ]] || export PATH="$OMK_NODE_BIN:$PATH"
     [[ -z "${missing// /}" ]] && return 0
     log_info "설치:$missing"
     # 단어 분할이 의도다 — brew formula 이름 목록.
@@ -91,25 +94,23 @@ install_colima() {
     brew install $missing || die "brew install 실패:$missing — 직접 실행한 뒤 재시도하세요."
 }
 
-# brew 의 compose·buildx 는 docker 가 찾는 기본 위치에 없다 — 플러그인 디렉터리를 알려준다.
-# Docker Desktop 과 같이 쓰는 파일이라 다른 키(currentContext·credsStore 등)는 건드리지 않는다.
-docker_cli_plugins() { # $1=config.json $2=플러그인 디렉터리
-    mkdir -p "$(dirname "$1")"
-    node -e '
-        const fs = require("fs"); const [p, dir] = process.argv.slice(1);
-        let c = {};
-        if (fs.existsSync(p)) { try { c = JSON.parse(fs.readFileSync(p, "utf8")); } catch { process.exit(3); } }
-        const dirs = Array.isArray(c.cliPluginsExtraDirs) ? c.cliPluginsExtraDirs : [];
-        if (dirs.includes(dir)) process.exit(0);
-        c.cliPluginsExtraDirs = [...dirs, dir];
-        fs.writeFileSync(p, JSON.stringify(c, null, 2) + "\n");
-    ' "$1" "$2" 2>/dev/null \
-        || log_warn "$1 을 읽을 수 없어 고치지 않았습니다 — \"cliPluginsExtraDirs\": [\"$2\"] 를 직접 넣으세요."
+# 이미 만든 프로필의 저장소가 사라졌는가 — 외장 볼륨이 없거나, colima-openmake 컨텍스트가 이 소켓으로 등록돼 있는데 프로필이 없다.
+colima_storage_missing() {
+    local volume endpoint
+    case "$OPENMAKE_COLIMA_HOME" in
+        /Volumes/*) volume="${OPENMAKE_COLIMA_HOME#/Volumes/}"; [[ -d "/Volumes/${volume%%/*}" ]] || return 0 ;;
+    esac
+    endpoint="$(docker context inspect colima-openmake --format '{{.Endpoints.docker.Host}}' 2>/dev/null)" || return 1
+    [[ "$endpoint" == "unix://$COLIMA_SOCK" ]]
 }
 
 colima_start() {
     # colima 는 ~/.colima 가 있으면 그곳을, 없고 XDG_CONFIG_HOME 이 있으면 그 아래를 쓴다 — 접속 규칙의 소켓 경로와 맞춘다.
     export COLIMA_HOME="$OPENMAKE_COLIMA_HOME"
+    # 처음 설치만 VM 을 만든다 — 기존 설치의 저장소가 없으면 빈 VM 으로 바꿔치지 않는다 (경로도 만들지 않는다).
+    if ! colima_profile_exists && colima_storage_missing; then
+        die "Colima 프로필 $COLIMA_PROFILE 이 $COLIMA_DIR 에 없습니다 — 외장 디스크가 연결됐는지 확인하세요. 새 VM 을 만들지 않았습니다."
+    fi
     mkdir -p "$COLIMA_HOME"
     if colima status --profile "$COLIMA_PROFILE" >/dev/null 2>&1; then
         return 0
@@ -134,11 +135,31 @@ wait_docker_daemon() {
     die "Docker 데몬이 2분 안에 준비되지 않았습니다 — 'colima status --profile $COLIMA_PROFILE' 을 확인한 뒤 재실행하세요."
 }
 
+# LaunchAgent 는 이 명령으로 기존 프로필만 띄운다 — 로그인 때 저장소가 없으면 시작하지 않는다 (빈 VM 생성 방지).
+# docker-config-reconcile.cjs 의 COLIMA_GUARD 와 같은 글자여야 한다. 인자: $0=colima 경로 $1=프로필
+# shellcheck disable=SC2016  # launchd 가 실행하는 sh 가 펼친다
+readonly COLIMA_AGENT_GUARD='[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$1" --activate=false'
+
+xml_escape() { # plist <string> 값 — 경로의 & " ' < > (외장 디스크 이름 등)
+    local v="$1"
+    v="${v//&/&amp;}"; v="${v//</&lt;}"; v="${v//>/&gt;}"; v="${v//\"/&quot;}"; v="${v//\'/&apos;}"
+    printf '%s' "$v"
+}
+
+colima_agent_path() { # $1=colima 경로 $2=docker CLI 디렉터리 → LaunchAgent 의 PATH
+    local bin path
+    bin="$(dirname "$1")"; path="$bin"
+    [[ -z "${2:-}" || "$2" == "$bin" ]] || path="$path:$2"
+    printf '%s' "$path:/usr/bin:/bin:/usr/sbin:/sbin"
+}
+
+# LaunchAgent 를 쓰는 곳은 이것 하나다 (설치기·mac-host-repair.sh 공용).
 write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CLI 디렉터리
     # colima 는 기동할 때 호스트의 docker CLI 를 찾는다 — launchd 는 셸 프로파일을 읽지 않으므로 PATH 에 직접 넣는다.
-    local bin path
-    bin="$(dirname "$2")"; path="$bin"
-    [[ -z "${4:-}" || "$4" == "$bin" ]] || path="$path:$4"
+    local label profile colima home path log guard
+    label="$(xml_escape "$COLIMA_AGENT")"; profile="$(xml_escape "$COLIMA_PROFILE")"; guard="$(xml_escape "$COLIMA_AGENT_GUARD")"
+    colima="$(xml_escape "$2")"; home="$(xml_escape "$OPENMAKE_COLIMA_HOME")"; log="$(xml_escape "$3")"
+    path="$(xml_escape "$(colima_agent_path "$2" "${4:-}")")"
     mkdir -p "$(dirname "$1")" "$(dirname "$3")"
     cat > "$1" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -146,28 +167,28 @@ write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CL
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>$COLIMA_AGENT</string>
+    <string>$label</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$2</string>
-        <string>start</string>
-        <string>--profile</string>
-        <string>$COLIMA_PROFILE</string>
-        <string>--activate=false</string>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>$guard</string>
+        <string>$colima</string>
+        <string>$profile</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>
         <key>COLIMA_HOME</key>
-        <string>$OPENMAKE_COLIMA_HOME</string>
+        <string>$home</string>
         <key>PATH</key>
-        <string>$path:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>$path</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>$3</string>
+    <string>$log</string>
     <key>StandardErrorPath</key>
-    <string>$3</string>
+    <string>$log</string>
 </dict>
 </plist>
 EOF
@@ -175,16 +196,101 @@ EOF
 
 # 로그인 시 전용 프로필을 띄운다 — 재부팅 후 DB·Redis·SearXNG 복구에 필요.
 # (brew services 는 기본 프로필만 띄운다.) 컨테이너는 restart 정책으로 VM 과 함께 올라온다.
-enable_docker_autostart() {
-    local domain; domain="gui/$(id -u)"
-    write_colima_agent "$COLIMA_AGENT_PLIST" "$(command -v colima)" "$OMK_ROOT/logs/colima.log" "$(dirname "$(command -v docker)")"
-    launchctl bootout "$domain/$COLIMA_AGENT" 2>/dev/null || true
+colima_gui_domain() { printf 'gui/%s' "$(id -u)"; }
+colima_gui_domain_available() { launchctl print "$(colima_gui_domain)" >/dev/null 2>&1; }
+colima_agent_registered() { launchctl print "$(colima_gui_domain)/$COLIMA_AGENT" >/dev/null 2>&1; }
+
+# `launchctl print` 에서 비교할 부분만 정해진 순서로: 파일·실행 파일·인자(순서 그대로)·로그·환경(정렬, launchd 가 넣는 키 제외)
+colima_agent_print_canonical() {
+    sed 's/^[[:space:]]*//' | awk '
+        block == "args" { if ($0 == "}") block = ""; else args = args "arg=" $0 "\n"; next }
+        block == "env" {
+            if ($0 == "}") { block = ""; next }
+            if ($0 !~ /^(XPC_SERVICE_NAME|OSLogRateLimit) => /) env[++n] = "env=" $0
+            next
+        }
+        $0 == "arguments = {" { block = "args"; next }
+        $0 == "environment = {" { block = "env"; next }
+        /^path = / && path == "" { path = $0; next }
+        /^program = / && program == "" { program = $0; next }
+        /^stdout path = / { out = $0; next }
+        /^stderr path = / { err = $0; next }
+        END {
+            for (i = 2; i <= n; i++) { v = env[i]; for (j = i - 1; j >= 1 && env[j] > v; j--) env[j + 1] = env[j]; env[j + 1] = v }
+            printf "%s\n%s\n%s%s\n%s\n", path, program, args, out, err
+            for (i = 1; i <= n; i++) print env[i]
+        }'
+}
+
+colima_agent_expected_print() { # $1=colima 경로 $2=docker CLI 디렉터리 $3=로그 파일
+    printf '%s\n' "path = $COLIMA_AGENT_PLIST" "program = /bin/sh" "arg=/bin/sh" "arg=-c" "arg=$COLIMA_AGENT_GUARD" "arg=$1" "arg=$COLIMA_PROFILE" \
+        "stdout path = $3" "stderr path = $3" "env=COLIMA_HOME => $OPENMAKE_COLIMA_HOME" "env=PATH => $(colima_agent_path "$1" "$2")"
+}
+
+# 등록 여부만이 아니라 launchd 가 실제로 들고 있는 정의(파일·실행 파일·인자·환경·로그)가 이 계약과 같은지 본다.
+# (plist 가 있음 ≠ 등록됨 ≠ 재부팅 후 실제 기동 — 마지막은 재부팅해야만 증명된다.)
+colima_agent_loaded_matches() { # $1=colima 경로 $2=docker CLI 디렉터리 $3=로그 파일
+    local out
+    out="$(launchctl print "$(colima_gui_domain)/$COLIMA_AGENT" 2>/dev/null)" || return 1
+    [[ "$(printf '%s\n' "$out" | colima_agent_print_canonical)" == "$(colima_agent_expected_print "$1" "$2" "$3")" ]]
+}
+
+# 같은 정의가 이미 로드돼 있으면 건드리지 않는다 — bootout 은 정의가 바뀌었거나 로드된 것이 다를 때만.
+# 이전 정의는 LaunchAgents 밖에 백업한다 (그 폴더의 파일은 launchd 가 같은 라벨로 읽을 수 있다).
+# 생성·검사·백업·설치가 모두 성공해야 등록을 바꾼다 — 하나라도 실패하면 정의·등록을 그대로 두고 1 을 돌려준다.
+# GUI 세션이 없으면(SSH 전용) 정의만 두고 등록 보류를 알린다 — sudo·system 도메인으로 우회하지 않는다.
+enable_docker_autostart() { # [$1=로그 파일]
+    local domain tmp backup colima docker_dir log
+    domain="$(colima_gui_domain)"; colima="$(command -v colima)"; docker_dir="$(dirname "$(command -v docker)")"
+    log="${1:-$OMK_ROOT/logs/colima.log}"
+    tmp="$(mktemp)" || return 1
+    if ! write_colima_agent "$tmp" "$colima" "$log" "$docker_dir" \
+        || { command -v plutil >/dev/null 2>&1 && ! plutil -lint -s "$tmp" >/dev/null; }; then
+        rm -f "$tmp"; log_warn "Colima LaunchAgent 정의를 만들지 못했습니다 — 정의·등록을 바꾸지 않았습니다."; return 1
+    fi
+    if [[ -f "$COLIMA_AGENT_PLIST" ]] && cmp -s "$tmp" "$COLIMA_AGENT_PLIST"; then
+        rm -f "$tmp"
+        if colima_agent_loaded_matches "$colima" "$docker_dir" "$log"; then log_ok "Colima 자동 시작 등록 유지 ($COLIMA_AGENT)"; return 0; fi
+    else
+        if [[ -f "$COLIMA_AGENT_PLIST" ]]; then
+            backup="$OMK_ROOT/backups/launchd/$COLIMA_AGENT.plist.before-colima-$(date +%Y%m%d%H%M%S)-$$"
+            if ! { mkdir -p "$(dirname "$backup")" 2>/dev/null && (umask 077; cp "$COLIMA_AGENT_PLIST" "$backup"); }; then
+                rm -f "$tmp"; log_warn "이전 정의 백업 실패 ($backup) — 정의·등록을 바꾸지 않았습니다."; return 1
+            fi
+            log_info "이전 정의 백업: $backup"
+        fi
+        if ! { mkdir -p "$(dirname "$COLIMA_AGENT_PLIST")" && chmod 644 "$tmp" && mv "$tmp" "$COLIMA_AGENT_PLIST"; }; then
+            rm -f "$tmp"; log_warn "$COLIMA_AGENT_PLIST 을 쓰지 못했습니다 — 등록을 바꾸지 않았습니다."; return 1
+        fi
+    fi
+    if ! colima_gui_domain_available; then
+        log_warn "Colima 자동 시작 등록 보류 — $domain 세션이 없습니다 (SSH 전용). 정의는 $COLIMA_AGENT_PLIST 에 있고 다음 GUI 로그인 때 읽힙니다."
+        add_todo "Colima 자동 시작 등록: GUI 로그인 세션에서 launchctl bootstrap $domain $COLIMA_AGENT_PLIST"
+        return 0
+    fi
+    if colima_agent_registered; then
+        launchctl bootout "$domain/$COLIMA_AGENT" 2>/dev/null || true
+    fi
+    # RunAtLoad — 등록하면 곧바로 기존 프로필을 띄운다 (멈춰 있었다면 시작된다).
     if launchctl bootstrap "$domain" "$COLIMA_AGENT_PLIST" 2>/dev/null; then
-        log_ok "Colima 로그인 시 자동 시작 ($COLIMA_AGENT)"
+        log_ok "Colima 로그인 시 자동 시작 ($COLIMA_AGENT) — 등록하면서 기존 프로필 $COLIMA_PROFILE 을 시작합니다"
     else
         log_warn "Colima 자동 시작 등록 실패"
         add_todo "Colima 자동 시작 등록: launchctl bootstrap $domain $COLIMA_AGENT_PLIST"
     fi
+}
+
+# Docker 설정·CLI PATH·자동 시작은 기존 서버와 같은 명령으로 맞춘다 — 설치가 Desktop 의존을 다시 만들지 않게.
+# 오류(2: 자격 증명 충돌·잠긴 키체인·깨진 설정 등)는 설치를 멈춘다. 보류·수동 항목(1)은 할 일로 남긴다.
+run_mac_host_repair() {
+    local rc=0
+    OMK_ROOT="$OMK_ROOT" COLIMA_HOME="$OPENMAKE_COLIMA_HOME" bash "$SCRIPT_DIR/scripts/setup/mac-host-repair.sh" --apply || rc=$?
+    case $rc in
+        0) return 0 ;;
+        1) log_warn "Docker 호스트 정리에 남은 항목이 있습니다 (위 출력)."
+           add_todo "Docker 호스트 정리 확인: bash $SCRIPT_DIR/scripts/setup/mac-host-repair.sh --check" ;;
+        *) die "Docker 호스트 정리 실패 — 위 출력을 확인하세요. 설치를 중단했습니다 (바꾸기 전 설정은 보존됩니다)." ;;
+    esac
 }
 
 check_docker_desktop_data() {
@@ -202,14 +308,13 @@ ensure_docker() {
         return 0
     fi
     install_colima
-    docker_cli_plugins "$HOME/.docker/config.json" "$(brew --prefix)/lib/docker/cli-plugins"
     colima_start
     export DOCKER_HOST="unix://$COLIMA_SOCK"
     unset DOCKER_CONTEXT
     wait_docker_daemon
     check_docker_desktop_data
-    enable_docker_autostart
-    docker compose version >/dev/null 2>&1 || die "docker compose(v2)를 찾을 수 없습니다."
+    run_mac_host_repair
+    docker compose version >/dev/null 2>&1 || die "docker compose(v2)를 찾을 수 없습니다 — bash scripts/setup/mac-host-repair.sh --check 로 플러그인 설정을 확인하세요."
     log_ok "$(docker --version) / compose $(docker compose version --short 2>/dev/null) — Colima 프로필 $COLIMA_PROFILE"
 }
 
