@@ -154,6 +154,8 @@ colima_boot_guard_installed() { [[ -f "$COLIMA_BOOT_GUARD" ]] && cmp -s "$COLIMA
 
 # 가드를 실행할 node — 이 호스트에 이미 있는 node(Homebrew·mise 등, 인자 또는 PATH)의 실제 실행 파일(shim 이 아닌 process.execPath).
 # .node-version 과 정확히 같아야 한다. 설치·PATH·전역 선택은 바꾸지 않는다. 성공하면 COLIMA_GUARD_NODE 를 정한다.
+# 인자는 다른 파일(mac-host-repair.sh 가 "$NODE_BIN")이 넘긴다 — 이 파일 안의 호출만 보는 ShellCheck(CI 판)는 SC2120 을 낸다.
+# shellcheck disable=SC2120
 resolve_colima_guard_node() { # [$1=node 후보]
     local candidate="${1:-$(command -v node 2>/dev/null)}" exe version pinned
     pinned="$(node_version_pinned "$SCRIPT_DIR")" || { log_warn ".node-version 을 읽을 수 없습니다"; return 1; }
