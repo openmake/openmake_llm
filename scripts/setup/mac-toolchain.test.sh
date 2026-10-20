@@ -110,11 +110,18 @@ ok "agent: 기동 가드 설치 (저장소 밖 사본)" 'colima_boot_guard_insta
 grc=0; (COLIMA_HOME="$GH" "${GARGS[@]}") 2>/dev/null || grc=$?
 eq "agent: 프로필이 없으면 colima 를 실행하지 않는다" "$grc|$([[ -e "$TMP/guard-called" ]] && echo called)" "78|"
 mkdir -p "$GH/openmake"; : > "$GH/openmake/colima.yaml"
-grc=0; (COLIMA_HOME="$GH" "${GARGS[@]}") 2>/dev/null || grc=$?
-eq "agent: Lima 인스턴스가 없으면 colima 를 실행하지 않는다" "$grc|$([[ -e "$TMP/guard-called" ]] && echo called)" "78|"
-mkdir -p "$GH/_lima/colima-openmake"; : > "$GH/_lima/colima-openmake/lima.yaml"
-grc=0; (COLIMA_HOME="$GH" "${GARGS[@]}") || grc=$?
-eq "agent: 프로필이 있으면 기존 프로필만 띄운다" "$grc|$(cat "$TMP/guard-called" 2>/dev/null)" "0|start --profile openmake --activate=false "
+# 이 뒤의 실제 가드 실행은 macOS 의 /usr/bin/lockf·stat -f 가 있어야 한다 (가드 자체는 colima-boot-guard.test.sh 가 macOS 에서 시험).
+# 다른 OS(Ubuntu CI)는 설치·plist 인자·환경·비교기·예전 가드 이전 시험만 돈다.
+GUARD_RUNS=0; [[ "$(uname -s)" == Darwin ]] && GUARD_RUNS=1
+if [[ $GUARD_RUNS -eq 1 ]]; then
+    grc=0; (COLIMA_HOME="$GH" "${GARGS[@]}") 2>/dev/null || grc=$?
+    eq "agent: Lima 인스턴스가 없으면 colima 를 실행하지 않는다" "$grc|$([[ -e "$TMP/guard-called" ]] && echo called)" "78|"
+    mkdir -p "$GH/_lima/colima-openmake"; : > "$GH/_lima/colima-openmake/lima.yaml"
+    grc=0; (COLIMA_HOME="$GH" "${GARGS[@]}") || grc=$?
+    eq "agent: 프로필이 있으면 기존 프로필만 띄운다" "$grc|$(cat "$TMP/guard-called" 2>/dev/null)" "0|start --profile openmake --activate=false "
+else
+    echo "SKIP agent: 실제 기동 가드 실행 3건 (Lima 인스턴스 없음·기존 프로필·플래그 전달) — macOS 전용 ($(uname -s))"
+fi
 
 fake_lctl_reset
 agent_run >/dev/null
@@ -143,8 +150,10 @@ while IFS=$'\t' read -r tag v; do
 done < <(fake_plist_fields "$KP")
 eq "kept: 인자" "$(printf '%s|' "${KA[@]}")" "/bin/bash|$COLIMA_BOOT_GUARD|$GC|openmake|--save-config=false|"
 eq "kept: HOME·stdout·stderr" "$KE|$KO|$KR" "$KH|$TMP/out.log|$TMP/err.log"
-rm -f "$TMP/guard-called"; grc=0; (COLIMA_HOME="$GH" "${KA[@]}") || grc=$?
-eq "kept: guard 가 플래그를 넘긴다" "$grc|$(cat "$TMP/guard-called" 2>/dev/null)" "0|start --profile openmake --save-config=false --activate=false "
+if [[ $GUARD_RUNS -eq 1 ]]; then
+    rm -f "$TMP/guard-called"; grc=0; (COLIMA_HOME="$GH" "${KA[@]}") || grc=$?
+    eq "kept: guard 가 플래그를 넘긴다" "$grc|$(cat "$TMP/guard-called" 2>/dev/null)" "0|start --profile openmake --save-config=false --activate=false "
+fi
 fake_lctl_reset; fake_lctl_load "$KP" "$COLIMA_AGENT_PLIST"
 ok "kept: 같은 설정으로 로드된 정의는 일치" 'colima_agent_loaded_matches "$GC" "$TMP/guard-bin" "$TMP/out.log" "$TMP/err.log" --save-config=false "$KH"'
 ok "kept: 플래그를 빼면 불일치" '! colima_agent_loaded_matches "$GC" "$TMP/guard-bin" "$TMP/out.log" "$TMP/err.log" "" "$KH"'
