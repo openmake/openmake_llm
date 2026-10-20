@@ -3,7 +3,7 @@
  *
  * 도구 결과는 모델에 텍스트로 간다. 비텍스트 블록은 JSON 으로 직렬화돼 base64 가 그대로 본문에 실렸고
  * (결과 상한을 base64 가 차지해 진짜 본문이 잘린다), 모델은 그 문자열로 아무것도 하지 못한다.
- * 작업 공간이 있으면(에이전트 작업) 파일로 저장해 경로를 적고, 없으면(채팅) 건수·종류·크기만 적는다.
+ * 작업 공간이 있으면(에이전트 작업) 파일로 저장해 경로를 적고, 저장처가 없으면 건수·종류·크기만 적는다.
  *
  * @module addons/mcp-runtime/media-content
  */
@@ -58,8 +58,8 @@ export async function offloadMediaBlocks<T extends { content?: ContentBlock[] }>
         if (sink && bytes <= maxSaveBytes) {
             const relPath = `${MCP_MEDIA.DIR}/${safeTool}-${randomUUID().slice(0, 8)}.${MCP_MEDIA.EXT_BY_MIME[mime] ?? 'bin'}`;
             try {
-                await sink.save(relPath, Buffer.from(block.data, 'base64'));
-                content.push({ type: 'text', text: getMcpMediaSavedNote(block.type, relPath, mime, formatBytes(bytes)) });
+                const savedPath = await sink.save(relPath, Buffer.from(block.data, 'base64'), { kind: block.type, mime });
+                content.push({ type: 'text', text: getMcpMediaSavedNote(block.type, savedPath || relPath, mime, formatBytes(bytes)) });
                 continue;
             } catch (e) {
                 logger.warn(`MCP 결과 미디어 저장 실패 → 생략 안내 (${toolName}): ${e instanceof Error ? e.message : String(e)}`);
