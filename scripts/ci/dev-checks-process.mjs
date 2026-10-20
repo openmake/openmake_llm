@@ -1,14 +1,24 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+export function handleSignalFailure(error, child, signal, snapshot) {
+  const uid = process.getuid?.();
+  const members = snapshot.status === 0 && !snapshot.error && !snapshot.signal && typeof snapshot.stdout === 'string' ? snapshot.stdout.split('\n').map(line => line.trim()).filter(line => line.split(/\s+/)[2] === String(child.pid)) : null;
+  // Darwin may deny a signal-0 probe before Node reaps its exited child. Zombies
+  // cannot execute; require every observed group member to be owned and a zombie.
+  if (error.code === 'EPERM' && signal === 0 && uid !== undefined && members?.length && members.every(line => {
+    const fields = line.split(/\s+/);
+    return fields.length === 5 && /^\d+$/.test(fields[0]) && /^\d+$/.test(fields[1]) && fields[3] === String(uid) && fields[4].startsWith('Z');
+  })) return false;
+  error.message = `${error.message}; signal=${signal} pgid=${child.pid} uid=${uid ?? 'unknown'} leaderExit=${child.exitCode ?? child.signalCode ?? 'running'} members=[${(members || ['snapshot unavailable']).slice(0, 20).join('; ')}]`;
+  throw error;
+}
 function signalGroup(child, signal) {
   if (!child?.pid) return false;
   try { process.kill(-child.pid, signal); return true; }
   catch (error) {
     if (error.code === 'ESRCH') return false;
     const snapshot = spawnSync('ps', ['-axo', 'pid,ppid,pgid,uid,stat'], { encoding: 'utf8', timeout: 1000, maxBuffer: 256 * 1024 });
-    const members = snapshot.status === 0 ? snapshot.stdout.split('\n').map(line => line.trim()).filter(line => line.split(/\s+/)[2] === String(child.pid)).slice(0, 20) : ['snapshot unavailable'];
-    error.message = `${error.message}; signal=${signal} pgid=${child.pid} uid=${process.getuid?.() ?? 'unknown'} leaderExit=${child.exitCode ?? child.signalCode ?? 'running'} members=[${members.join('; ')}]`;
-    throw error;
+    return handleSignalFailure(error, child, signal, snapshot);
   }
 }
 // Group lifetime is independent of the leader's exitCode: npm may exit before its child.
@@ -17,7 +27,7 @@ export async function stopGroup(child, { graceMs = 5000 } = {}) {
   const deadline = Date.now() + graceMs;
   while (Date.now() < deadline) {
     await delay(Math.min(25, deadline - Date.now()));
-    if (!signalGroup(child, 0)) return;
+    if (!signalGroup(child, 0)) { await delay(0); return; }
   }
   signalGroup(child, 'SIGKILL');
   // Give the OS an opportunity to reap the killed group before deleting its working tree.
