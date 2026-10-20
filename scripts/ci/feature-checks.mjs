@@ -8,11 +8,15 @@ import { selectE2E } from './feature-checks-e2e.mjs';
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const manifest = JSON.parse(readFileSync(new URL('./feature-checks.manifest.json', import.meta.url)));
 export function selectFeatures(files) {
-  const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, e2e: selectE2E(files) };
+  const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, hostSetup: false, e2e: selectE2E(files) };
   for (const file of files) {
     if (result.e2e.some(spec => spec.file === file)) continue;
     if (file.startsWith('apps/api/src/')) { result.api.push(file); continue; }
     if (manifest.specs[file]) { result[manifest.specs[file]] = true; continue; }
+    // Exact host setup files only — a new setup script stays unmapped until it is listed with fixture coverage.
+    if (manifest.hostSetup.includes(file)) { result.hostSetup = true; continue; }
+    // Exact non-API files with a fixed consumer suite (e.g. type-only shared contracts) — never a package prefix.
+    if (manifest.exactFiles[file]) { result[manifest.exactFiles[file]] = true; continue; }
     if (/(?:^|\/)(?:specs|specifications)\//.test(file)) throw new Error(`Unmapped changed spec: ${file}; add a fixed manifest suite`);
     const match = Object.entries(manifest.prefixes).find(([prefix]) => file.startsWith(prefix));
     if (match) { result[match[1]] = true; continue; }
@@ -53,9 +57,17 @@ export function environmentTests(root = repoRoot) {
   for (const file of files) if (!existsSync(resolve(root, 'scripts/env', file))) throw new Error(`Missing required environment test: ${file}`);
   return files.map(file => `scripts/env/${file}`);
 }
+// Host setup fixtures: the first two run everywhere; the rest need macOS (lockf, plutil, launchd fakes) and run on
+// darwin here — elsewhere the required CI mac-host-repair job runs them on the same commit with bash 3.2 and 5.
+export function hostSetupTests(root = repoRoot) {
+  const portable = ['scripts/ci/docker-config-reconcile.test.mjs', 'scripts/setup/mac-toolchain.test.sh'];
+  const macOnly = ['scripts/setup/colima-boot-guard.test.sh', 'scripts/setup/mac-host-repair.test.sh', 'scripts/setup/mac-pm2-boot.test.sh'];
+  for (const file of [...portable, ...macOnly]) if (!existsSync(resolve(root, file))) throw new Error(`Missing required host setup test: ${file}`);
+  return { portable, macOnly };
+}
 export function runFeatures(files, options = {}) {
   const root = options.cwd || repoRoot;
-  const run = (command, args, config = {}) => execute(command, args, { cwd: root, env: options.env || process.env, ...config });
+  const run = (command, args, config = {}) => execute(command, args, { cwd: root, env: options.env || process.env, ...(options.stdio ? { stdio: options.stdio } : {}), ...config });
   const selection = selectFeatures(files);
   const tests = new Set();
   const related = new Map();
@@ -85,7 +97,15 @@ export function runFeatures(files, options = {}) {
   }
   if (selection.infra) run('npm', ['run', 'test:infra']);
   if (selection.bridge) run('npm', ['test', '--workspace=@openmake/local-bridge-core']);
-  return { selection, relatedTests: [...tests].map(path => relative(root, path)) };
+  let hostSetup;
+  if (selection.hostSetup) {
+    const { portable, macOnly } = hostSetupTests(root);
+    const platform = options.platform || process.platform;
+    const executed = platform === 'darwin' ? [...portable, ...macOnly] : portable;
+    for (const file of executed) run(...(file.endsWith('.mjs') ? [process.execPath, ['--test', file]] : ['bash', [file]]));
+    hostSetup = { platform, executed, delegatedToMacJob: platform === 'darwin' ? [] : macOnly };
+  }
+  return { selection, relatedTests: [...tests].map(path => relative(root, path)), ...(hostSetup ? { hostSetup } : {}) };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
