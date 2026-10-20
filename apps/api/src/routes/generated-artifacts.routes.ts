@@ -46,7 +46,8 @@ generatedArtifactsRouter.get('/*path', (req: Request, res: Response, next: NextF
             res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
             res.setHeader('X-Content-Type-Options', 'nosniff');
             res.type(v.mime);
-            res.sendFile(v.absPath);
+            // 소유권·실경로 검사 후 전달한다. 설치 경로의 .openmake 같은 숨김 상위 디렉터리도 허용한다.
+            res.sendFile(v.absPath, { dotfiles: 'allow' });
         }).catch(next);
     });
 });

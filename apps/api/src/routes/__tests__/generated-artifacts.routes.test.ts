@@ -34,6 +34,19 @@ function app() {
 beforeEach(() => { verdicts.clear(); verdicts.set('ok.png', { ok: true, absPath: path.join(tmp, 'ok.png'), mime: 'image/png', row: null, reason: 'owner' }); });
 
 describe('generatedArtifactsRouter', () => {
+    it('숨김 설치 디렉터리 안에서도 소유권 판정을 통과한 파일만 전달한다', async () => {
+        const hidden = path.join(tmp, '.openmake', 'generated-private');
+        fs.mkdirSync(hidden, { recursive: true });
+        const file = path.join(hidden, 'private.png');
+        fs.writeFileSync(file, 'PRIVATEPNG');
+        verdicts.set('private.png', { ok: true, absPath: file, mime: 'image/png', reason: 'owner' });
+        const r = await request(app()).get('/generated/private.png').set('x-test-user', 'A');
+        expect(r.status).toBe(200);
+        expect(r.body.toString()).toBe('PRIVATEPNG');
+        verdicts.set('private.png', { ok: false, status: 403, reason: 'forbidden' });
+        expect((await request(app()).get('/generated/private.png').set('x-test-user', 'B')).status).toBe(403);
+    });
+
     it('판정 통과 파일은 sendFile, 격리·거절은 상태코드 그대로(T28 — 같은 핸들러)', async () => {
         const r = await request(app()).get('/generated/ok.png').set('x-test-user', 'A');
         expect(r.status).toBe(200);
