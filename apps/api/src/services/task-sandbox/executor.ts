@@ -124,8 +124,8 @@ export interface TaskExecutor {
     /** workspace 디렉토리 목록. 경로 가드 적용. */
     listDir(relPath?: string): Promise<string[]>;
 
-    /** 산출물 회수용 — workspace 전체 파일 상대경로 재귀 나열. */
-    listWorkspaceFiles(): Promise<string[]>;
+    /** 산출물 회수용 — workspace 파일 상대경로 재귀 나열. strict 는 조회 오류를 빈 목록으로 숨기지 않는다. */
+    listWorkspaceFiles(strict?: boolean): Promise<string[]>;
 
     /** workspace 파일/디렉토리 삭제. 루트 삭제 금지. */
     deleteFile(relPath: string): Promise<void>;

@@ -4,7 +4,7 @@
  * - 승인: 자동승인 해제 + 저장소의 남은 pending 만료. 주차(F16.7)는 질문 승인을 **남긴다**(답이 오면 재개 근거).
  * - steering: 미소비 지시 정리(다음 동명 실행으로 새지 않게).
  * - 실행 환경 없음 표식(sandbox-unavailable): 지운다(다음 실행의 결과에 각주가 따라붙지 않게).
- * - 샌드박스: 완료·주차는 workspace 보존(다운로드·재개), 그 외는 삭제 직전 코드 diff 캡처 후 삭제.
+ * - 샌드박스: 완료·실패·주차는 workspace 보존(다운로드·재개, 기존 TTL 적용). 실패·취소는 코드 diff 를 캡처한다.
  * - 서버 종료로 끊긴 실행(interrupted)은 주차와 같이 남긴다: 저장소의 승인 기록을 만료시키지 않고 workspace 를 지우지 않는다
  *   (비정상 종료 때 남는 것과 같다 — 부팅 복구가 체크포인트에서 이어받는다). 컨테이너만 내린다.
  *
@@ -39,7 +39,7 @@ export async function cleanupTaskRun(opts: {
     getSteeringRegistry().clear(taskId);
     clearSandboxUnavailable(taskId);
     if (!taskRuntime) return;
-    const keepWorkspace = opts.status === 'completed' || parked;
-    if (!keepWorkspace) await captureDiffOnCleanup(taskRuntime, taskId, stepNumber).catch(() => { /* fail-open */ });
+    const keepWorkspace = opts.status === 'completed' || opts.status === 'failed' || parked;
+    if (opts.status !== 'completed' && !parked) await captureDiffOnCleanup(taskRuntime, taskId, stepNumber).catch(() => { /* fail-open */ });
     await taskRuntime.cleanup(!keepWorkspace).catch((e) => logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
 }
