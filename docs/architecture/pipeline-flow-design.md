@@ -1,0 +1,18 @@
+# OpenMake eight-stage development and delivery flow
+
+Source of requested behavior: http://rasplay.tplinkdns.com:34321/workflow-map.html and /board.html, inspected 2026-10-20. User explicitly requests source audit, documentation/configuration/command updates and implementation. This work is local implementation, not an instruction to roll out an unreviewed version to production.
+
+1. Local MacBook: branch from origin/dev; implement and run relevant local tests, lint/build as needed; push PR to dev. Record results.
+2. GitHub: current-head CI plus automated structural quality review; enable ordinary merge to dev automatically. No human approval step. No privileged execution of PR code.
+3. GitHub: test the actual merged dev SHA. Keep current source/DB/build/lint gates, add basic running-app checks (startup, DB, login, chat, web) plus selected changed-feature/source regression tests. Never run the entire browser suite by default. A deterministic model fixture here tests transport/integration, not real-model quality.
+4. GitHub: only a successful current dev push CI may create/update and automatically merge the dev-to-main PR; the PR's current combination still requires its own CI. Stale SHA results must not promote a new head. Remove retired omk/env-dev deployment gate.
+5. tom: managed main update and smoke, then configured mandatory strong validation commands. Record exact installed/build SHA and command results. Missing configuration or skipped checks is not success.
+6. Human uses tom. Hold its installed SHA against automatic update. Explicit human OK is represented by an operator-invoked verify command with that exact SHA; require passed validation/build identity and clean main ancestry. Automated checks and bean cannot invoke human approval implicitly.
+7. GitHub: automatically merge release-please PR only if current main has valid verification, release PR's CI is successful and every intervening change is permitted release metadata. Check metadata keys/content, not just filenames. Release and tag publication remain release-please responsibilities.
+8. ome-on: managed schedule follows one captured immutable release tag, verifies its code lineage before mutation, retains backups, deploys and checks installed SHA/smoke. Do not mark a skipped/unverified run successful.
+
+Bean is a separate configurable periodic external scenario runner for tom and ome-on. It records target, exact SHA/version, checks, times and results; it cannot create human verify or change deployments. Default cadence is not inferred: scenarios/schedule can be configured; activation is reported separately.
+
+Implementation choices: retain Node 24, Bash/PM2 and current GitHub Actions; preserve Base/Add-on boundaries and app-on-PM2 deployment. No new LLM reviewer dependency: automatic review is deterministic structural/test coverage review and existing source gates, explicitly named as such. Automation credentials are injected via documented OMK_AUTOMATION_TOKEN; never copy a developer's stored token to Actions. Fail with an actionable error if missing. Monitor central source is absent locally; emit SHA-stamped evidence and document the integration contract without inventing a successful monitor ACK. Existing monitor's seven-stage RC record is not eight-stage completion evidence.
+
+Safety/invariants: isolated worktree; no secrets committed; serialize update/verify/validation and preserve holds; stale HEAD/build/result fails; metadata-only changes checked per commit; no shared operational DB fixture mutation in CI. Configuration installation and schedules must clearly distinguish configured from active. Remote production activation and OS permissions are separate from local implementation verification.
