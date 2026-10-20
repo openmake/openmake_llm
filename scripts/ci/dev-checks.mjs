@@ -100,6 +100,8 @@ export async function main(sha, { output = resolve(root, 'logs/dev-checks.json')
     };
     // A fresh local clone excludes all untracked .env, operational data and developer credentials.
     await command('git', ['clone', '--shared', '--no-checkout', root, checkout], temporary, env);
+    // Local clones copy local heads, but CI has no local main branch. Preserve the comparison ref explicitly.
+    await command('git', ['fetch', root, 'refs/remotes/origin/main:refs/remotes/origin/main'], checkout, env);
     await command('git', ['checkout', '--detach', sha], checkout, env);
     await command('npm', ['ci', '--include=dev'], checkout, env);
     await command('npm', ['run', 'build'], checkout, { ...env, NODE_ENV: 'production' });
