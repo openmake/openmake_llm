@@ -320,6 +320,31 @@ DB 논리 백업·복원 등으로 이전한다. 외부 캐시·메일·아티�
 Docker Desktop 을 지워도 CLI 가 남도록 설치기는 Homebrew 의 `docker`, `docker-compose`, `docker-buildx` 를 준비한다.
 Linux·WSL 의 Docker Engine 설정은 변경하지 않는다.
 
+### 호스트 정리 — `mac-host-repair.sh`
+
+이미 운영 중인 Mac 은 앱 업그레이드 없이 같은 명령으로 Desktop 의존을 걷어낸다. 설치기(`ensure_docker`)도 이 명령의 `--apply` 를 부른다.
+OpenMake 를 설치한 사용자로 실행한다 (root·sudo 를 쓰지 않는다).
+
+```bash
+bash scripts/setup/mac-host-repair.sh --check   # 읽기만 — 바꿀 항목·근거(node·docker 경로, Docker 환경변수)를 보여 준다
+bash scripts/setup/mac-host-repair.sh --apply   # 명시적으로 적용
+```
+
+| 대상 | 동작 |
+|---|---|
+| `config.json` (`DOCKER_CONFIG` 존중) | 실제로 Desktop 헬퍼를 쓰는 레지스트리만 키체인(`osxkeychain`)으로 복사·검증한 뒤 바꾼다. 다른 헬퍼를 지정한 레지스트리는 그대로. 키체인에 다른 값이 있거나 조회가 실패(잠김 등)하면 아무것도 바꾸지 않고 멈춘다. 원본 Desktop 자격 증명은 지우지 않고, 바꾸기 전 설정은 본인만 읽는 백업으로 남긴다. Desktop 이 준 플러그인 디렉터리·링크·훅만 걷어낸다 |
+| 키체인 헬퍼 | 이전에 필요한데 없을 때만 `brew install docker-credential-helper` (업그레이드 없음) |
+| 새 터미널 PATH | `~/.local/share/openmake/docker-bin` (Homebrew `docker`·`docker-credential-osxkeychain` 링크만)을 앞에 둔다. `~/.zshrc`(있으면 `~/.bash_profile`)는 관리 블록 하나만 더한다. node·다른 도구·기본 컨텍스트·`DOCKER_HOST`·`DOCKER_CONTEXT`·`COLIMA_HOME` 은 바꾸지 않는다 — 같은 Mac 의 다른 Docker 작업(기본 `colima` 컨텍스트 등)을 보존한다 |
+| LaunchAgent `com.openmake.colima` | 기존 Colima 위치(외장 디스크 포함)로 정의·등록을 맞춘다. 로그인 때 프로필(`<COLIMA_HOME>/openmake/colima.yaml`)이 없으면 시작하지 않는다 — 빈 VM 을 만들지 않는다. 로드된 정의(인자 순서·개수, 환경 전체, 로그)가 같으면 손대지 않는다. 예전 설치기 정의는 바꾸고, 그 밖의 사용자 설정(다른 PATH·환경·인자·로그)은 수동 항목으로만 알린다. 새로 등록하면(RunAtLoad) 멈춰 있던 기존 프로필이 시작된다. GUI 세션이 없으면(SSH 전용) 등록을 보류로 알린다 |
+
+하지 않는 일: 버전 변경·`brew upgrade`·재부팅·VM 생성·PM2 조작·Docker Desktop 엔진 정지·이미지/볼륨 삭제·root 파일 변경.
+Colima 프로필 경로가 없으면(외장 디스크 미마운트 등) 새 VM 을 만들지 않고 멈춘다. 설치기도 이미 등록된 프로필의 저장소가 없으면 VM 을 만들지 않고 중단한다.
+`--apply` 는 한 단계라도 오류(자격 증명 충돌·잠긴 키체인·깨진 설정 등)면 그 자리에서 멈춰 PATH·launchd 를 바꾸지 않고, 설치기도 중단한다.
+적용 전후를 실제 로그인 셸(`env -i <셸> -l -i`)로 비교한다 — node 실행 파일·버전과 `DOCKER_CONTEXT`·`DOCKER_HOST`·`COLIMA_HOME` 이 같고 docker 만 shim 이어야 한다.
+Desktop 의 root 헬퍼(`com.docker.vmnetd` 등)는 보류 항목으로만 알린다 — Desktop 을 걷어낼 때 그 제거 도구로 지운다.
+등록 확인은 재부팅 후 실제 기동의 증명이 아니다 — 그것은 재부팅해서만 확인된다.
+종료 코드: `0` 남은 항목 없음 · `1` 바꿀(--check)·수동·보류 항목 남음 · `2` 오류·거부.
+
 ### Colima 를 걷어낼 때
 
 ```bash
