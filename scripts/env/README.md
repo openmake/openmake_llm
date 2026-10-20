@@ -335,10 +335,11 @@ bash scripts/setup/mac-host-repair.sh --apply   # 명시적으로 적용
 | `config.json` (`DOCKER_CONFIG` 존중) | 실제로 Desktop 헬퍼를 쓰는 레지스트리만 키체인(`osxkeychain`)으로 복사·검증한 뒤 바꾼다. 다른 헬퍼를 지정한 레지스트리는 그대로. 키체인에 다른 값이 있거나 조회가 실패(잠김 등)하면 아무것도 바꾸지 않고 멈춘다. 원본 Desktop 자격 증명은 지우지 않고, 바꾸기 전 설정은 본인만 읽는 백업으로 남긴다. Desktop 이 준 플러그인 디렉터리·링크·훅만 걷어낸다 |
 | 키체인 헬퍼 | 이전에 필요한데 없을 때만 `brew install docker-credential-helper` (업그레이드 없음) |
 | 새 터미널 PATH | `~/.local/share/openmake/docker-bin` (Homebrew `docker`·`docker-credential-osxkeychain` 링크만)을 앞에 둔다. `~/.zshrc`(있으면 `~/.bash_profile`)는 관리 블록 하나만 더한다. node·다른 도구·기본 컨텍스트·`DOCKER_HOST`·`DOCKER_CONTEXT`·`COLIMA_HOME` 은 바꾸지 않는다 — 같은 Mac 의 다른 Docker 작업(기본 `colima` 컨텍스트 등)을 보존한다 |
-| LaunchAgent `com.openmake.colima` | 기존 Colima 위치(외장 디스크 포함)로 정의·등록을 맞춘다. 로그인 때 프로필(`<COLIMA_HOME>/openmake/colima.yaml`)이 없으면 시작하지 않는다 — 빈 VM 을 만들지 않는다. 로드된 정의(인자 순서·개수, 환경 전체, 로그)가 같으면 손대지 않는다. 예전 설치기 정의는 바꾸고, 그 밖의 사용자 설정(다른 PATH·환경·인자·로그)은 수동 항목으로만 알린다. 새로 등록하면(RunAtLoad) 멈춰 있던 기존 프로필이 시작된다. GUI 세션이 없으면(SSH 전용) 등록을 보류로 알린다 |
+| LaunchAgent `com.openmake.colima` | 기존 Colima 위치(외장 디스크 포함)로 정의·등록을 맞춘다. 로그인 때 프로필(`<COLIMA_HOME>/openmake/colima.yaml`)이 없으면 시작하지 않는다 — 빈 VM 을 만들지 않는다. 로드된 정의(인자 순서·개수, 환경 전체, 로그)가 같으면 손대지 않는다. 예전 설치기 정의와, 알려진 예전 수동 정의(`colima start openmake --save-config=false` + 소유자 `HOME`)는 바꾼다 — `--save-config=false`·소유자 `HOME`·외장 `COLIMA_HOME`·기존 stdout/stderr 경로를 그대로 두고 저장소 확인과 `--activate=false` 만 더한다. 그 밖의 사용자 설정(다른 PATH 항목·환경·인자)은 수동 항목으로만 알린다. 새로 등록하면(RunAtLoad) 멈춰 있던 기존 프로필이 시작된다. GUI 세션이 없으면(SSH 전용) 등록을 보류로 알린다 |
 
 하지 않는 일: 버전 변경·`brew upgrade`·재부팅·VM 생성·PM2 조작·Docker Desktop 엔진 정지·이미지/볼륨 삭제·root 파일 변경.
-Colima 프로필 경로가 없으면(외장 디스크 미마운트 등) 새 VM 을 만들지 않고 멈춘다. 설치기도 이미 등록된 프로필의 저장소가 없으면 VM 을 만들지 않고 중단한다.
+Colima 프로필 경로가 없으면(외장 디스크 미마운트 등) 새 VM 을 만들지 않고 멈춘다. 설치기도 기존 Colima 설치(이 설치의 `.env` 가 전용 Colima 소켓을 쓰거나, 등록된 `colima-openmake` 컨텍스트·외장 볼륨 경로)인데 프로필이 없으면 VM 을 만들지 않고 중단한다. 처음 설치와 Desktop 시절 설치의 첫 Colima VM 은 만든다.
+시스템 bash 3.2 와 Homebrew bash 5(`patsub_replacement`) 모두에서 같은 plist 를 쓴다 (CI 의 macOS 잡이 두 셸로 시험한다).
 `--apply` 는 한 단계라도 오류(자격 증명 충돌·잠긴 키체인·깨진 설정 등)면 그 자리에서 멈춰 PATH·launchd 를 바꾸지 않고, 설치기도 중단한다.
 적용 전후를 실제 로그인 셸(`env -i <셸> -l -i`)로 비교한다 — node 실행 파일·버전과 `DOCKER_CONTEXT`·`DOCKER_HOST`·`COLIMA_HOME` 이 같고 docker 만 shim 이어야 한다.
 Desktop 의 root 헬퍼(`com.docker.vmnetd` 등)는 보류 항목으로만 알린다 — Desktop 을 걷어낼 때 그 제거 도구로 지운다.

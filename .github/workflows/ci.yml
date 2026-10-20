@@ -316,8 +316,17 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: '.node-version'
-      - name: Host repair fixtures
+      - name: Host repair fixtures (system bash 3.2)
         run: |
           node --test scripts/ci/docker-config-reconcile.test.mjs
-          bash scripts/setup/mac-toolchain.test.sh
-          bash scripts/setup/mac-host-repair.test.sh
+          /bin/bash scripts/setup/mac-toolchain.test.sh
+          /bin/bash scripts/setup/mac-host-repair.test.sh
+      # 운영 Mac 은 Homebrew bash 5(patsub_replacement 기본 켜짐)로 설치기를 돌릴 수 있다 — 같은 시험을 그 셸로도 돌린다.
+      # (이 러너는 일회용 CI 기계다. 실제 호스트의 소프트웨어는 바꾸지 않는다.)
+      - name: Host repair fixtures (Homebrew bash 5)
+        run: |
+          brew list --formula bash >/dev/null 2>&1 || HOMEBREW_NO_AUTO_UPDATE=1 brew install bash
+          B5="$(brew --prefix)/bin/bash"
+          "$B5" -c 'shopt -q patsub_replacement' || { echo "patsub_replacement is not on in $("$B5" --version | head -1)"; exit 1; }
+          PATH="$(dirname "$B5"):$PATH" "$B5" scripts/setup/mac-toolchain.test.sh
+          PATH="$(dirname "$B5"):$PATH" "$B5" scripts/setup/mac-host-repair.test.sh

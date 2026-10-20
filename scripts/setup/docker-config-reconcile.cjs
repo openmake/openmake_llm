@@ -23,7 +23,12 @@ const AGENT_LABEL = 'com.openmake.colima';
 const PROFILE = 'openmake';
 // Same text as COLIMA_AGENT_GUARD in scripts/setup/mac/30-toolchain.sh: start only an existing profile.
 const COLIMA_GUARD = '[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$1" --activate=false';
+// Used instead when a known start flag is kept: the profile and flags follow as "$@".
+const COLIMA_GUARD_WITH_FLAGS = '[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$@" --activate=false';
+// Start flags of known earlier agents that are carried over (and only these).
+const KEPT_START_FLAGS = ['--save-config=false'];
 const AGENT_SYSTEM_PATH = ':/usr/bin:/bin:/usr/sbin:/sbin';
+const LEGACY_DOCKER_CLI_DIR = '/usr/local/bin'; // Docker Desktop's CLI links, used by earlier installer agents
 const PRESERVED = 'existing Docker configuration was preserved';
 
 let sequence = 0;
@@ -306,11 +311,13 @@ function writeDockerShim({ home, brewPrefix, apply = true }) {
 
 // Compares the Colima LaunchAgent with the one contract the installer writes; never touches launchd.
 // Earlier installer output is 'stale' (rewritten); any other difference is 'conflict' (reported, kept).
-function inspectColimaAgent({ plistPath, colima, colimaHome, brewPrefix }) {
-    if (!fs.existsSync(plistPath)) return { state: 'missing', reasons: [`${plistPath} does not exist`], logPath: null };
+// Settings kept from a migratable agent come back as logPath/errPath/startFlags/home for the shell writer.
+function inspectColimaAgent({ plistPath, colima, colimaHome, brewPrefix, ownerHome }) {
+    const none = { logPath: null, errPath: null, startFlags: [], home: null };
+    if (!fs.existsSync(plistPath)) return { state: 'missing', reasons: [`${plistPath} does not exist`], ...none };
     let p;
     try { p = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', plistPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })); } catch {
-        return { state: 'conflict', reasons: [`${plistPath} could not be parsed`], logPath: null };
+        return { state: 'conflict', reasons: [`${plistPath} could not be parsed`], ...none };
     }
     const conflict = []; const stale = [];
     const known = ['Label', 'ProgramArguments', 'EnvironmentVariables', 'RunAtLoad', 'StandardOutPath', 'StandardErrorPath'];
@@ -319,26 +326,42 @@ function inspectColimaAgent({ plistPath, colima, colimaHome, brewPrefix }) {
     if (p.Label !== AGENT_LABEL) conflict.push(`Label is ${p.Label}`);
     const args = Array.isArray(p.ProgramArguments) ? p.ProgramArguments : [];
     const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-    if (same(args, ['/bin/sh', '-c', COLIMA_GUARD, colima, PROFILE])) { /* current contract */ }
-    else if (same(args.slice(0, 3), ['/bin/sh', '-c', COLIMA_GUARD]) && same(args.slice(4), [PROFILE])) stale.push(`program ${args[3]} is not ${colima}`);
-    else if (args.length === 5 && same(args.slice(1), ['start', '--profile', PROFILE, '--activate=false'])) stale.push('earlier unguarded colima start (starts even when the Colima storage is missing)');
-    else conflict.push(`custom arguments ${args.join(' ')}`);
+    let startFlags = [];
+    const guarded = (guard, flags) => same(args.slice(0, 3), ['/bin/sh', '-c', guard]) && args.length === 5 + flags.length && args[4] === PROFILE && same(args.slice(5), flags);
+    if (guarded(COLIMA_GUARD, []) || guarded(COLIMA_GUARD_WITH_FLAGS, KEPT_START_FLAGS)) {
+        startFlags = args.slice(5);
+        if (args[3] !== colima) stale.push(`program ${args[3]} is not ${colima}`);
+    } else if (args.length === 5 && same(args.slice(1), ['start', '--profile', PROFILE, '--activate=false'])) {
+        stale.push('earlier unguarded colima start (starts even when the Colima storage is missing)');
+    } else if (same(args.slice(1), ['start', PROFILE, ...KEPT_START_FLAGS])) {
+        startFlags = [...KEPT_START_FLAGS];
+        stale.push(`earlier unguarded colima start ${PROFILE} ${KEPT_START_FLAGS.join(' ')} (kept; guard and --activate=false added)`);
+    } else conflict.push(`custom arguments ${args.join(' ')}`);
     const env = p.EnvironmentVariables && typeof p.EnvironmentVariables === 'object' ? p.EnvironmentVariables : {};
-    const extraEnv = Object.keys(env).filter(k => k !== 'COLIMA_HOME' && k !== 'PATH');
+    const extraEnv = Object.keys(env).filter(k => k !== 'COLIMA_HOME' && k !== 'PATH' && k !== 'HOME');
     if (extraEnv.length) conflict.push(`custom launchd environment ${extraEnv.join(', ')}`);
+    // HOME is kept only when it is the owner's own home.
+    if (env.HOME !== undefined && (!ownerHome || env.HOME !== ownerHome)) conflict.push(`HOME ${env.HOME} is not the owner's home`);
     if (env.COLIMA_HOME === undefined) stale.push('COLIMA_HOME is not set');
     else if (String(env.COLIMA_HOME).replace(/\/$/, '') !== colimaHome) conflict.push(`COLIMA_HOME ${env.COLIMA_HOME} differs from discovered ${colimaHome}`);
     const bin = path.join(brewPrefix, 'bin'); const colimaBin = path.dirname(colima);
-    const wantedPath = `${colimaBin}${colimaBin === bin ? '' : `:${bin}`}${AGENT_SYSTEM_PATH}`;
-    const installerPath = new RegExp(`^[^:]+(:[^:]+)?${AGENT_SYSTEM_PATH.replace(/[/]/g, '\\/')}$`);
     const agentPath = String(env.PATH ?? '');
-    if (!installerPath.test(agentPath)) conflict.push(`custom PATH ${agentPath}`);
+    const wantedPath = `${colimaBin}${colimaBin === bin ? '' : `:${bin}`}${AGENT_SYSTEM_PATH}`;
+    // Earlier installers wrote "<colima dir>[:<docker CLI dir>]<system>"; only those known docker CLI dirs are migratable.
+    // Any other entry belongs to the operator and must not be dropped.
+    const generated = agentPath.match(new RegExp(`^([^:]+)(?::([^:]+))?${AGENT_SYSTEM_PATH.replace(/[/]/g, '\\/')}$`));
+    const knownDockerDir = d => d === undefined || d === bin || d === LEGACY_DOCKER_CLI_DIR || d.includes(DESKTOP_MARK);
+    // The first entry is the directory of the colima that agent ran (args[3] guarded, args[0] earlier start).
+    const agentColima = args[0] === '/bin/sh' ? args[3] : args[0];
+    const knownColimaDir = d => d === colimaBin || d === bin || (typeof agentColima === 'string' && d === path.dirname(agentColima));
+    if (!generated || !knownColimaDir(generated[1]) || !knownDockerDir(generated[2])) conflict.push(`custom PATH ${agentPath}`);
     else if (agentPath !== wantedPath) stale.push(agentPath.includes(DESKTOP_MARK) ? 'PATH includes Docker.app' : `PATH ${agentPath} is not ${wantedPath}`);
     if (p.RunAtLoad !== true) conflict.push('RunAtLoad is not true');
+    // Existing stdout/stderr paths are kept as they are (separate files included).
     if (!p.StandardOutPath || !p.StandardErrorPath) stale.push('log path is not set for both stdout and stderr');
-    else if (p.StandardOutPath !== p.StandardErrorPath) conflict.push(`custom stderr ${p.StandardErrorPath}`);
     const state = conflict.length ? 'conflict' : stale.length ? 'stale' : 'healthy';
-    return { state, reasons: conflict.length ? conflict : stale, logPath: p.StandardOutPath || null };
+    const logPath = p.StandardOutPath || null;
+    return { state, reasons: conflict.length ? conflict : stale, logPath, errPath: p.StandardErrorPath || logPath, startFlags, home: env.HOME === undefined ? null : env.HOME };
 }
 
 module.exports = { reconcileDockerConfig, writeDockerShim, inspectColimaAgent };
@@ -375,8 +398,9 @@ if (require.main === module) {
             for (const file of r.files) console.log(`${o.apply ? 'ok: updated' : 'fix: update'} ${file}`);
             process.exitCode = r.changed && !o.apply ? 1 : 0;
         } else if (command === 'agent') {
-            const r = inspectColimaAgent({ plistPath: o.plist, colima: o.colima, colimaHome: o['colima-home'], brewPrefix: o['brew-prefix'] });
-            console.log(`state=${r.state}`); console.log(`log=${r.logPath || ''}`);
+            const r = inspectColimaAgent({ plistPath: o.plist, colima: o.colima, colimaHome: o['colima-home'], brewPrefix: o['brew-prefix'], ownerHome: o['owner-home'] });
+            console.log(`state=${r.state}`); console.log(`log=${r.logPath || ''}`); console.log(`err=${r.errPath || ''}`);
+            console.log(`flags=${r.startFlags.join(' ')}`); console.log(`home=${r.home || ''}`);
             for (const reason of r.reasons) console.log(`reason=${reason}`);
         } else {
             console.error('usage: docker-config-reconcile.cjs config|needs-keychain-helper|shim|agent [options]');
