@@ -37,3 +37,11 @@ test('invalid fixture JSON is rejected without killing HTTP fixture', async () =
     assert.equal((await fetch(`${fixture.url}/models`)).status, 200);
   } finally { fixture.server.closeAllConnections(); await new Promise(resolve => fixture.server.close(resolve)); }
 });
+
+test('health identity must be the successful data.build object, never an unrelated substring', async () => {
+  const { assertHealthIdentity } = await import('../../scripts/ci/dev-checks-fixture.mjs');
+  const sha = 'a'.repeat(40), hash = sha.slice(0, 7);
+  const health = { success: true, data: { status: 'healthy', build: { gitHash: hash } } };
+  assert.doesNotThrow(() => assertHealthIdentity(health, sha, hash));
+  for (const invalid of [{ message: hash }, { success: true, build: { gitHash: hash } }, { success: false, data: health.data }, { success: true, data: { status: 'healthy', build: { gitHash: 'bbbbbbb' }, message: hash } }]) assert.throws(() => assertHealthIdentity(invalid, sha, hash), /identity/);
+});

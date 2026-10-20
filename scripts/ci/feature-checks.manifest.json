@@ -12,5 +12,13 @@
     ".github/workflows/": "pipeline",
     "infra/": "infra",
     "packages/local-bridge-core/": "bridge"
+  },
+  "e2e": {
+    "specs": {
+      "tests/e2e/pipeline-basic.spec.ts": {
+        "target": "api"
+      }
+    },
+    "sourcePrefixes": {}
   }
 }

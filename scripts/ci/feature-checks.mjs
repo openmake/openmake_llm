@@ -4,11 +4,13 @@ import { tmpdir } from 'node:os';
 import { resolve, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { selectE2E } from './feature-checks-e2e.mjs';
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const manifest = JSON.parse(readFileSync(new URL('./feature-checks.manifest.json', import.meta.url)));
 export function selectFeatures(files) {
-  const result = { api: [], web: false, pipeline: false, infra: false, bridge: false };
+  const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, e2e: selectE2E(files) };
   for (const file of files) {
+    if (result.e2e.some(spec => spec.file === file)) continue;
     if (file.startsWith('apps/api/src/')) { result.api.push(file); continue; }
     if (manifest.specs[file]) { result[manifest.specs[file]] = true; continue; }
     if (/(?:^|\/)(?:specs|specifications)\//.test(file)) throw new Error(`Unmapped changed spec: ${file}; add a fixed manifest suite`);
@@ -17,6 +19,7 @@ export function selectFeatures(files) {
     if (/\.(?:md|html|svg|png|json)$/.test(file) && !file.startsWith('packages/')) continue;
     if (file.startsWith('packages/')) { result.api.push(file); continue; }
     // Unknown executable source requires an explicit mapping instead of silently claiming coverage.
+    if (selectE2E([file]).length) continue;
     if (/\.(?:[cm]?[jt]sx?|sh|ya?ml)$/.test(file)) throw new Error(`Unmapped changed source: ${file}`);
   }
   return result;

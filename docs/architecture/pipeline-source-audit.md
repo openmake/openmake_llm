@@ -8,7 +8,7 @@
 |---|---|---|
 | 로컬 | package.json, scripts/env/omk.sh, tests/e2e, tests/web | 로컬 관련 검사 유지; dev 기능 검사도 명령으로 재사용 |
 | PR·소스 CI | .github/workflows/ci.yml | PR/main/dev 소스·DB·빌드 검사 존재. 웹 단위 검사 추가, 테스트 job 토큰 읽기 전용으로 축소 |
-| dev 기능 | scripts/ci, playwright.config.ts | 기존 CI에 실행 앱/브라우저 검사 없음. 격리 앱/DB/model fixture와 기본+변경 소스 검사 추가. 전체 E2E 기본 실행 안 함 |
+| dev 기능 | scripts/ci, playwright.config.ts | 기존 CI에 실행 앱/브라우저 검사 없음. 격리 앱/DB/model fixture와 기본+변경 소스 검사 추가. 선택된 E2E만 api/web 대상으로 실행, 실제 통과 0건이면 차단. 전체 E2E 기본 실행 안 함 |
 | 자동 병합 | .github/workflows/auto-merge.yml, scripts/pipeline/github.mjs | 없던 작업 PR 자동 구조 검사/자동 병합 추가. 신뢰된 기본 브랜치 코드만 권한 실행 |
 | main 승격 | .github/workflows/promote.yml | dev push 즉시 실행·미설정 토큰 성공 skip·폐지된 omk/env-dev 의존 제거. 실제 병합 dev CI/current SHA로 승격 |
 | tom | scripts/env/omk.sh, pipeline.sh | 기존 update/smoke 재사용. 필수 검증·실행 SHA 확인·잠금·hold 추가 |
@@ -26,7 +26,7 @@
 - 저장소 auto-merge 옵션은 true였지만 모든 작업 PR에 자동 설정하는 workflow는 없었다.
 - promote 실행 39374514643은 OMK_PROMOTE_TOKEN 미설정으로 실제 승격을 건너뛰었다. workflow success는 승격 성공을 의미하지 않았다.
 - 모니터 `/api/meta`는 기존 7단계였다. matrix에는 코드가 운영에 있어도 검증 릴리스가 미연결인 항목이 있었다.
-- private 로컬 역할 원본 OPENMAKE-ROLES-2는 tom 수동 병합/별도 운영 승인 규칙으로 새 문서와 충돌했다. 현재 사용자 지시가 우선하며, 전환된 지침과 실제 활성화 상태는 구분해야 한다.
+- private 로컬 역할 원본 OPENMAKE-ROLES-2는 tom 수동 병합/별도 운영 승인 규칙으로 새 문서와 충돌했다. 현재 사용자 지시로 로컬 역할 원본은 OPENMAKE-ROLES-3으로 갱신했다. 원격 담당자의 적용/ACK와 실제 활성화는 별도 확인 대상이다.
 
 ## 소스만으로 완료할 수 없는 항목
 
