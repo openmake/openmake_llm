@@ -130,9 +130,8 @@ export async function main(sha, { output = resolve(root, 'logs/dev-checks.json')
     const fixtureDB = new Client({ connectionString: isolated.href });
     await fixtureDB.connect();
     try {
-      const stored = await fixtureDB.query('SELECT id FROM users WHERE id=$1', [userId]);
-      if (stored.rowCount !== 1) throw new Error('Registered user not persisted to isolated DB');
-      await fixtureDB.query("UPDATE users SET role='admin' WHERE id=$1", [userId]);
+      const stored = await fixtureDB.query('SELECT id, role FROM users WHERE id=$1', [userId]);
+      if (stored.rowCount !== 1 || stored.rows[0].role !== 'user') throw new Error('Registered ordinary user not persisted to isolated DB');
     } finally { await fixtureDB.end(); }
     const login = await post('/api/auth/login', { email, password });
     const token = /auth_token=([^;]+)/.exec(login.headers.get('set-cookie') || '');
