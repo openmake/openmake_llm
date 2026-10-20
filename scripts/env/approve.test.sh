@@ -5,6 +5,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export OMK_ROOT="$TMP/root" OMK_SOURCE_ONLY=1
 . "$HERE/omk.sh"
+git() { if [[ "${3:-}" == fetch ]]; then return 0; fi; command git "$@"; }
 ldir="$(llm_dir staging)"; mkdir -p "$ldir/apps/api/dist"
 command git -C "$ldir" init -q
 command git -C "$ldir" -c user.name=t -c user.email=t@e commit -qm fixture --allow-empty
@@ -14,7 +15,6 @@ printf '.env\napps/\n' > "$ldir/.git/info/exclude"
 printf 'OMK_TRACK=main\n' > "$ldir/.env"
 printf '{"gitHash":"%s"}' "$sha" > "$ldir/apps/api/dist/build-info.json"
 command git -C "$ldir" update-ref refs/remotes/origin/main "$sha"
-git() { if [[ "${3:-}" == fetch ]]; then return 0; fi; command git "$@"; }
 curl() { printf '{"data":{"build":{"gitHash":"%s"}}}' "$sha"; }
 verified_push() { touch "$TMP/pushed"; }
 cmd_env_hold staging
