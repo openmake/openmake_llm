@@ -17,7 +17,7 @@
         "start:api": "node apps/api/dist/server.js",
         "test": "npm run build:packages && npm run test:infra && npm test --workspace=@openmake/local-bridge-core && npm test --workspace=apps/api",
         "test:db": "node scripts/ci/run-db-tests.mjs",
-        "test:infra": "node --test \"infra/**/*.test.mjs\" \"scripts/lint/*.test.mjs\" \"scripts/ci/*.test.mjs\" \"scripts/bench/*.test.mjs\" \"scripts/release/*.test.mjs\"",
+        "test:infra": "node --test \"infra/**/*.test.mjs\" \"scripts/lint/*.test.mjs\" \"scripts/ci/*.test.mjs\" \"scripts/bench/*.test.mjs\" \"scripts/release/*.test.mjs\" \"tests/pipeline/*.test.mjs\" \"scripts/pipeline/*.test.mjs\"",
         "verify:matrix": "node scripts/release/verify-matrix.mjs",
         "release:candidate": "node scripts/release/release-candidate.mjs",
         "bench:api": "node scripts/bench/api-load.mjs",
@@ -33,7 +33,9 @@
         "contracts:export": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"bundler\"}' ts-node --transpile-only scripts/export-openapi.ts",
         "clean": "rm -rf */dist **/dist",
         "version": "node -e \"const v=require('./package.json').version;const fs=require('fs');['apps/api/package.json','apps/web/package.json'].forEach(f=>{const p=JSON.parse(fs.readFileSync(f,'utf8'));p.version=v;fs.writeFileSync(f,JSON.stringify(p,null,4)+'\\n')});console.log('✅ 모든 workspace 버전 동기화 완료:',v)\" && git add apps/api/package.json apps/web/package.json",
-        "build:discord-bot": "cd apps/discord-bot && npm run build"
+        "build:discord-bot": "cd apps/discord-bot && npm run build",
+        "test:dev": "node scripts/ci/dev-checks.mjs",
+        "test:features": "node scripts/ci/feature-checks.mjs"
     },
     "keywords": [
         "ai",

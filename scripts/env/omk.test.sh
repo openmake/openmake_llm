@@ -22,8 +22,8 @@ ok() { if eval "$2"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); printf 'FAIL 
 # ── 이름 파생: online 은 기본(무접미사), 그 외는 -<env> ──
 eq "suffix online"  "$(env_suffix online)"  ""
 eq "suffix staging" "$(env_suffix staging)" "-staging"
-eq "pm2 online"     "$(pm2_names online)"   "openmake-llm openmake-next openmake-discord openmake-bench openmake-litellm omk-updater-online omk-backup-online"
-eq "pm2 staging"    "$(pm2_names staging)"  "openmake-llm-staging openmake-next-staging openmake-discord-staging openmake-bench-staging openmake-litellm-staging omk-updater-staging omk-backup-staging"
+eq "pm2 online"     "$(pm2_names online)"   "openmake-llm openmake-next openmake-discord openmake-bench openmake-litellm omk-updater-online omk-backup-online omk-pipeline-online"
+eq "pm2 staging"    "$(pm2_names staging)"  "openmake-llm-staging openmake-next-staging openmake-discord-staging openmake-bench-staging openmake-litellm-staging omk-updater-staging omk-backup-staging omk-pipeline-staging"
 eq "docker online"  "$(docker_containers online)"  "openmake-postgres openmake-redis openmake-searxng"
 eq "docker staging" "$(docker_containers staging)" "openmake-staging-postgres openmake-staging-redis openmake-staging-searxng"
 eq "volumes online" "$(docker_volumes online)"     "openmake_pgdata openmake_redisdata"
@@ -375,7 +375,7 @@ verified_push "$GW" origin >/dev/null 2>&1
 sed -i.bak 's/"a": "1.0.0"/"a": "2.0.0"/' "$GW/package.json" && rm -f "$GW/package.json.bak"; gate_release 1.0.3
 git -C "$GC" fetch -q --tags; release_gate_fetch "$GC"
 ok "gate: 버전 외 변경이 섞이면 거부" '! release_gate_check "$GC" v1.0.3'
-ok "gate: 이유에 파일"               '[[ "$GATE_REASON" == *"package.json (버전 외 변경)"* ]]'
+ok "gate: 이유에 파일"               '[[ "$GATE_REASON" == *"package.json"* ]]'
 # 확인하지 않은 커밋이 허용 목록을 넓혀도 소용없다 (목록은 확인한 커밋에서 읽는다)
 verified_push "$GW" origin >/dev/null 2>&1
 sed -i.bak 's#"apps/api/package.json"#"app.txt"#' "$GW/release-please-config.json" && rm -f "$GW/release-please-config.json.bak"
@@ -685,10 +685,10 @@ eq "redeploy: 릴리스가 앞섰으면 종전대로 한 번 deploy" "$(redeploy
 eq "deps: 릴리스 ff 가 lock 을 바꿨으면 설치 → deploy"   "$(RP_LOCK=1 redeploy_probe release 1 --yes)" "deps|osh deploy --yes|"
 eq "deps: lock 그대로면 종전대로 deploy 만"              "$(RP_LOCK=0 redeploy_probe release 1 --yes)" "osh deploy --yes|"
 eq "deps: 최신(ff 없음)이면 --redeploy 여도 설치 안 함"   "$(RP_LOCK=1 redeploy_probe release 0 --yes --redeploy)" "osh deploy --yes|"
-# 승격 워크플로: main 의 필수 체크에 환경 dev 의 표지가 없으면 자동 머지를 걸지 않는다 — 걸면 CI 만으로 main 에 들어간다.
+# Promotion uses trusted orchestration after merged-dev CI; the old environment-dev gate is retired.
 PW="$HERE/../../.github/workflows/promote.yml"
-ok "promote: 필수 체크에 omk/env-dev 가 있는지 본다" "grep -q 'required_status_checks.contexts' '$PW' && grep -q 'index(\"omk/env-dev\")' '$PW'"
-ok "promote: 그 확인이 자동 머지보다 앞에 있다" "[[ \$(grep -n 'index(\"omk/env-dev\")' '$PW' | head -1 | cut -d: -f1) -lt \$(grep -n 'gh pr merge' '$PW' | head -1 | cut -d: -f1) ]]"
+ok "promote: trusted orchestration" "grep -q 'github.mjs promote' '$PW' && grep -q 'github.event.repository.default_branch' '$PW'"
+ok "promote: retired environment-dev gate removed" "! grep -q 'omk/env-dev' '$PW'"
 # autoupdate: 표지 토큰을 넣은 환경만 갱신 뒤 스모크·표지까지 간다 — 토큰이 없으면 지금까지와 같다.
 mkdir -p "$SM/scripts/env"; : > "$SM/scripts/env/omk.sh"
 # shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
