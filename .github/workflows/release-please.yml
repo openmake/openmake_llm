@@ -32,10 +32,18 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      - name: Require downstream-triggering automation credential
+        env:
+          AUTOMATION_TOKEN: ${{ secrets.OMK_AUTOMATION_TOKEN || secrets.OMK_PROMOTE_TOKEN }}
+        run: |
+          if [[ -z "$AUTOMATION_TOKEN" ]]; then
+            echo "::error::Set OMK_AUTOMATION_TOKEN (GitHub App or PAT); release PRs need a separate credential to trigger CI. OMK_PROMOTE_TOKEN is accepted for migration."
+            exit 1
+          fi
       - uses: googleapis/release-please-action@v5
         id: release
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.OMK_AUTOMATION_TOKEN || secrets.OMK_PROMOTE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
