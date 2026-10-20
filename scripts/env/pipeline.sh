@@ -102,8 +102,7 @@ pipeline_run() {
     fi
 }
 
-# Trusted CLI operator approval. A monitor button must authenticate its own user,
-# enforce CSRF/idempotency, and call this fixed argv interface (never arbitrary shell).
+# Trusted CLI operator approval for the exact SHA reviewed by the operator.
 cmd_env_approve() { pipeline_locked "$1" pipeline_approve "$@"; }
 pipeline_approve() {
     local env="$1"; shift
