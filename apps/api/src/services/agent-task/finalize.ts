@@ -15,7 +15,8 @@
  *   3. goal judge(LLM 1회) → 미달성 확정 시 failed(goal_incomplete), 판정 실패는 fail-open
  *   4. 아티팩트·코드 diff 영속 → completed
  *
- * judge **적용** 조건(아티팩트 0)은 종전 그대로다. 다만 아티팩트가 있는 완료도 2026-08-27 부터
+ * 파일 도구를 쓴 작업은 실제 파일 목록과 대조하며, 보고서 아티팩트가 있어도 판정을 적용한다.
+ * 그 밖의 아티팩트가 있는 완료도 2026-08-27 부터
  * 셰도우로 판정만 돌려 기록한다(`judge_shadow` 스텝) — 확대 여부를 가를 오판율을 재려면
  * 표본이 필요하고, 적용 조건으로는 completed 의 18% 만 판정을 거치기 때문이다. 적용 확대는
  * 그 표본으로 오판율을 재측정한 뒤 결정한다.
@@ -29,7 +30,7 @@ import { applyReportRender } from '../chat-service/report-block';
 import { AGENT_TASK_INCOMPLETE_MARKER, getAgentTaskVerifyFailedNudge, getAgentTaskTestsFailedNudge } from '../../prompts/agent-task-prompt';
 import { getVerifyHeldAnswerNote } from '../../prompts/agent-task-turn-loop';
 import { AGENT_TASK_TURN_LOOP } from '../../config/agent-task-turn-loop';
-import { judgeGoal, buildJudgeExecutionContext, buildJudgeArtifactSummary, withUserRejectionsJudgeNote, type JudgeUserRejection } from './goal-judge';
+import { judgeGoal, buildJudgeExecutionContext, buildJudgeArtifactSummary, withUserRejectionsJudgeNote, withWorkspaceJudgeNote, type JudgeUserRejection } from './goal-judge';
 import { AgentTaskApprovalRepository } from '../../data/repositories/agent-task-approval-repository';
 import { getPool } from '../../data/models/unified-database';
 import { verifyCodeArtifacts } from './deliverable-verify';
@@ -40,7 +41,7 @@ import { judgeClientFor } from './role-client';
 import { withWriteFailureFootnote } from './write-failure-footnote';
 import { withSandboxUnavailableFootnote, withSandboxUnavailableJudgeNote } from './sandbox-unavailable';
 import { collectVerificationEvidence } from './verification-evidence';
-import { VERIFY_EVIDENCE } from '../../config/agent-task-tools';
+import { FILE_MUTATING_CALLS, VERIFY_EVIDENCE } from '../../config/agent-task-tools';
 import { VERIFY_EVIDENCE_SKIP_NOTES } from '../../prompts/agent-task-tools';
 import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { createLogger } from '../../utils/logger';
@@ -202,20 +203,26 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         }
     }
 
-    // 3. goal judge — 판정을 **적용**하는 대상은 종전 그대로 아티팩트 없는 완료뿐이다.
-    //    아티팩트가 있는 완료도 셰도우로 판정만 돌려 기록한다(완료 흐름 불변, fail-open):
+    // 3. goal judge — 아티팩트 없는 완료와 파일 도구 작업에 판정을 적용한다.
+    //    그 밖의 아티팩트가 있는 완료는 셰도우로 판정만 돌려 기록한다(fail-open):
     //    발동 조건 확대의 게이트가 judge 오판율인데, 현행 조건으로는 completed 의 18% 만
     //    판정을 거쳐 잴 표본이 쌓이지 않는다(2026-08-27 실측 30일: 120건 중 achieved 22 ·
     //    skipped 43 · 미판정 55, 그중 34건이 아티팩트 보유로 우회).
     let verdict: JudgeVerdict = 'skipped';
-    const judgeApplies = artifacts.length === 0;
+    // 파일 도구를 쓴 작업은 보고서 아티팩트만으로 실제 파일 작업 판정을 우회하지 않는다(C형 후단 판정).
+    const workspaceTask = taskRuntime !== null && [...usedTools].some((name) => Object.hasOwn(FILE_MUTATING_CALLS, name));
+    const judgeApplies = artifacts.length === 0 || workspaceTask;
     if (AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED
         && (judgeApplies || AGENT_TASK_LIMITS.GOAL_JUDGE_SHADOW_ENABLED)) {
         // 실행 환경 없이 진행한 작업이면 그 사실을 판정에 알린다(sandbox-unavailable).
         // 사용자가 승인 카드로 거절한 동작도 알린다 — 사용자가 스스로 뺀 동작 때문에 미달성으로 잡히지 않게.
-        const execCtx = withUserRejectionsJudgeNote(withSandboxUnavailableJudgeNote(
+        let execCtx = withUserRejectionsJudgeNote(withSandboxUnavailableJudgeNote(
             buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence), taskId),
         await loadUserRejections(taskId));
+        if (workspaceTask) {
+            try { execCtx = withWorkspaceJudgeNote(execCtx, await taskRuntime!.listWorkspace(true)); }
+            catch (e) { logger.warn(`[AgentTask] 파일 목록 조회 실패 — 목록 없이 판정: ${taskId}: ${e instanceof Error ? e.message : String(e)}`); }
+        }
         // 셰도우 경로에선 ANSWER 에서 떨어져 나간 산출물을 함께 싣는다(적용 경로는 아티팩트 0 이라 빈 값).
         const judgeClient = await judgeClientFor(userId, { internalOnly: sandboxCfg.internalOnly });
         // 원장 귀속 — 판정 호출의 비용도 이 작업 id 로 묶는다.
@@ -235,6 +242,8 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         if (judgeApplies) {
             verdict = judged;
             if (achieved === false) {
+                // 파일 작업 판정으로 실패해도 제출한 보고서 참조가 끊기지 않게 남긴다.
+                stepNumber = await persistArtifactSteps(taskId, artifacts, stepNumber, userId);
                 await update({
                     status: 'failed',
                     error: 'goal_incomplete',

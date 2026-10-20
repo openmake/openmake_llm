@@ -49,6 +49,11 @@ function sectionItems(summary: string, title: string): string[] {
     return items;
 }
 
+/** 인계 요약의 결정적 실행 기록만 읽는다. 모델이 쓴 "다음에 할 일" 은 수행 증거가 아니다. */
+export function handoffToolCallLines(summary: string): string[] {
+    return isHandoffSummary(summary) ? sectionItems(summary, HANDOFF_SECTIONS.calls) : [];
+}
+
 /** 최근 max 개만 남기고, 뺀 것이 있으면 맨 앞에 생략 줄을 둔다. */
 function section(title: string, items: string[], max: number): string[] {
     if (items.length === 0) return [];
