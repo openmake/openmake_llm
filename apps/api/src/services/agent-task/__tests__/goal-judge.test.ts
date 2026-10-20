@@ -6,9 +6,11 @@
  * 종료는 호출자(AgentTaskService)가 담당하며 agent-task-input-files.test.ts 가 통합 커버한다.
  * 여기서는 judge 가 false 를 돌려주는 경로(계약의 goal-judge 쪽 절반)와 fail-open 을 고정한다.
  */
-import { judgeGoalAchieved, buildJudgeExecutionContext, buildJudgeToolEvidence,  judgeGoal, buildJudgeArtifactSummary, withUserRejectionsJudgeNote } from '../goal-judge';
+import { judgeGoalAchieved, buildJudgeExecutionContext, buildJudgeToolEvidence,  judgeGoal, buildJudgeArtifactSummary, withUserRejectionsJudgeNote, withWorkspaceJudgeNote } from '../goal-judge';
 import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 import type { LLMClient } from '../../../llm';
+import { buildContinuationSummary } from '../continuation';
+import type { ChatMessage } from '../../../llm/types';
 
 /** chat mock 을 심은 LLMClient 스텁 생성. */
 function makeClient(chat: jest.Mock): LLMClient {
@@ -16,6 +18,21 @@ function makeClient(chat: jest.Mock): LLMClient {
 }
 
 const signal = new AbortController().signal;
+
+describe('withWorkspaceJudgeNote', () => {
+    it('실제 파일 목록과 조회 성공한 빈 목록을 구분한다', () => {
+        expect(withWorkspaceJudgeNote('ctx', ['output.txt'])).toContain('"output.txt"');
+        expect(withWorkspaceJudgeNote('ctx', [])).toContain('WORKSPACE_FILES (0;');
+    });
+
+    it('파일이 많으면 전체 수를 남기고 일부 생략임을 표시한다', () => {
+        const files = Array.from({ length: 200 }, (_, i) => `file-${i}.txt`);
+        const note = withWorkspaceJudgeNote('ctx', files);
+        expect(note).toContain('WORKSPACE_FILES (200;');
+        expect(note).toContain('일부 생략');
+        expect(note).not.toContain('file-199.txt');
+    });
+});
 
 describe('judgeGoalAchieved', () => {
     it('응답이 {"achieved": true} 면 true(달성) 를 반환한다', async () => {
@@ -142,6 +159,25 @@ describe('buildJudgeExecutionContext', () => {
 });
 
 describe('buildJudgeToolEvidence', () => {
+    it('같은 내용이라도 어떤 파일을 읽었는지 판정에 전달한다', () => {
+        const evidence = buildJudgeToolEvidence([
+            { role: 'assistant', content: '', tool_calls: [{ id: 'read', type: 'function', function: { name: 'str_replace_editor', arguments: { command: 'view', path: 'continuity.txt' } } }] },
+            { role: 'tool', tool_call_id: 'read', tool_name: 'str_replace_editor', content: 'FIRST\nSECOND' },
+        ]);
+        expect(evidence).toContain('view continuity.txt');
+        expect(evidence).toContain('FIRST SECOND');
+    });
+
+    it('이전 세그먼트의 결정적 도구 기록은 남기고 모델의 다음 단계 주장은 증거에서 뺀다', () => {
+        const conv: ChatMessage[] = [
+            { role: 'system', content: 'system' }, { role: 'user', content: 'create chain-one.txt' },
+            { role: 'assistant', content: '', tool_calls: [{ id: 'write', type: 'function', function: { name: 'str_replace_editor', arguments: { command: 'create', path: 'chain-one.txt', file_text: 'FIRST' } } }] },
+            { role: 'tool', tool_call_id: 'write', tool_name: 'str_replace_editor', content: '생성 완료: chain-one.txt' },
+        ];
+        const evidence = buildJudgeToolEvidence([{ role: 'user', content: buildContinuationSummary(conv, 'goal', 'unverified-next-step-claim') }]);
+        expect(evidence).toContain('create chain-one.txt');
+        expect(evidence).not.toContain('unverified-next-step-claim');
+    });
     it('tool 메시지만 골라 최근 N개를 도구명과 함께 한 줄씩 렌더한다', () => {
         const evidence = buildJudgeToolEvidence([
             { role: 'user', content: '목표' },

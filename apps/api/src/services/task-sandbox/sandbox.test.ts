@@ -150,6 +150,20 @@ describe('task-sandbox pure functions', () => {
             const files = await listWorkspaceFilesAt(base);
             expect(files).toEqual(['report.md', join('src', 'a.ts')]);
         });
+
+        it('판정용 strict 조회는 없는 루트를 빈 목록으로 취급하지 않는다', async () => {
+            await expect(listWorkspaceFilesAt(join(base, 'missing'), 1000, true)).rejects.toThrow();
+            await expect(listWorkspaceFilesAt(join(base, 'missing'))).resolves.toEqual([]);
+        });
+
+        it('판정용 strict 조회는 하위 폴더 읽기 실패도 부분 성공으로 취급하지 않는다', async () => {
+            const denied = join(base, 'denied');
+            await mkdir(denied);
+            await writeFile(join(denied, 'result.txt'), 'exists');
+            await chmod(denied, 0);
+            try { await expect(listWorkspaceFilesAt(base, 1000, true)).rejects.toThrow(); }
+            finally { await chmod(denied, 0o700); await rm(denied, { recursive: true }); }
+        });
     });
 
     // workspace 는 호스트 디렉터리를 bind mount 한 것이다. macOS 의 Colima(virtiofs)는 컨테이너가 방금 본 파일을
