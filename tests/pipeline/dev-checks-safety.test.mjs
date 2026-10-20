@@ -82,3 +82,23 @@ for (const signal of ['SIGINT', 'SIGTERM']) test(`${signal} records failure and 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('denied owned-group signal fails with bounded PID, UID and member diagnostics', async context => {
+  const { spawn } = await import('node:child_process');
+  const { once } = await import('node:events');
+  const child = spawn(process.execPath, ['-e', "console.log('ready');setInterval(()=>{},1000)"], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
+  await once(child.stdout, 'data');
+  const kill = process.kill.bind(process);
+  context.mock.method(process, 'kill', (pid, signal) => {
+    if (pid === -child.pid) throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' });
+    return kill(pid, signal);
+  });
+  try {
+    const { stopGroup } = await import('../../scripts/ci/dev-checks-process.mjs');
+    await assert.rejects(stopGroup(child), error => error.code === 'EPERM' && error.message.includes(`pgid=${child.pid}`) && error.message.includes(`uid=${process.getuid()}`) && error.message.includes('members=['));
+  } finally {
+    context.mock.restoreAll();
+    kill(-child.pid, 'SIGKILL');
+    await once(child, 'exit');
+  }
+});

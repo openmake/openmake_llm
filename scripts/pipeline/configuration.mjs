@@ -15,7 +15,7 @@ export function readiness({ repository, secrets, branches, workflows, defaultBra
 function main() {
     const repo = process.argv[2];
     if (!/^[\w.-]+\/[\w.-]+$/.test(repo ?? '')) throw new Error('Usage: node scripts/pipeline/configuration.mjs OWNER/REPO');
-    const api = path => JSON.parse(execFileSync('gh', ['api', `repos/${repo}/${path}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+    const api = path => JSON.parse(execFileSync('gh', ['api', `repos/${repo}${path ? `/${path}` : ''}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
     const defaultBranch = api('').default_branch;
     const defaultBranchFiles = ['auto-merge.yml', 'promote.yml', 'release-verified.yml'].filter(file => {
         try { return api(`contents/.github/workflows/${file}?ref=${encodeURIComponent(defaultBranch)}`).type === 'file'; } catch { return false; }
