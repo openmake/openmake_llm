@@ -100,13 +100,11 @@ omk env verify staging --list
 
 ## bean 외부 실사용 검사
 
-`node scripts/pipeline/bean.mjs run --config /private/bean.json --output /private/qa`로 대상별 결과를 남깁니다. 설정은 [`../pipeline/bean.example.json`](../pipeline/bean.example.json)을 참고합니다. health·ready·로그인·짧은 채팅을 명시적으로 선택하며, 로그인은 기존 QA 계정 환경변수를 읽습니다. 채팅 검사는 일반 사용자의 채팅 기록을 만들 수 있습니다. 배포·계정 권한 변경·verify는 실행하지 않습니다.
-
-주기는 임의 활성화하지 않습니다. 운영자가 정한 주기로 `node scripts/pipeline/bean.mjs schedule --config /private/bean.json --output /private/qa --every '*/30 * * * *'`를 실행합니다. PM2 영구 등록(`pm2 save`)과 재부팅 복원은 해당 호스트에서 별도로 확인합니다. 결과에는 대상 호스트·관측 SHA/버전·시나리오·시각·통과/실패가 포함되며 짧은 SHA는 짧은 것으로 표시합니다.
+bean 실행기·설정 예시·테스트와 실행 방법은 별도 모니터 저장소 [openmake/monitor](https://github.com/openmake/monitor)(비공개, 조직 접근 권한 필요)가 소유하며 이 저장소에는 없습니다. bean은 tom·ome-on을 외부에서 검사할 뿐 배포·계정 권한 변경·verify는 실행하지 않습니다. 채팅 검사는 일반 사용자의 채팅 기록을 만들 수 있습니다. 주기는 임의 활성화하지 않습니다. 결과에는 대상 호스트·관측 SHA/버전·시나리오·시각·통과/실패가 포함되며 짧은 SHA는 짧은 것으로 표시합니다.
 
 ## 모니터링 버튼과 증거 연결
 
-6번 “실사용 OK” 버튼은 [`../../docs/architecture/pipeline-monitor-contract.md`](../../docs/architecture/pipeline-monitor-contract.md)의 요청 규격을 사용합니다. 웹서버에서 로그인·승인 권한·CSRF를 확인한 뒤 고정 argv의 `approve` 명령을 요청해야 합니다. 서버 소스가 없는 상태에서 버튼이 이미 연결됐다고 표시하지 않습니다.
+6번 “실사용 OK”는 이 저장소의 `omk env approve staging --sha FULL_SHA --yes`로 기록합니다. 외부 모니터의 버튼이 이 명령을 호출하려면 모니터 웹서버가 로그인·승인 권한·CSRF를 확인한 뒤 쉘 없이 고정 argv로 실행해야 합니다. 버튼과 요청 규격은 모니터 저장소 소유이며, 이 저장소는 버튼이 연결됐다고 표시하지 않습니다.
 
 현황 보드의 기존 7단계 RC/승인 결과와 새 8단계 결과를 구분합니다. 코드가 운영에 포함된 사실만으로 사용자 OK·검증 완료를 추정하지 않습니다. 전체 소스 조사와 미연결 항목은 [`../../docs/architecture/pipeline-source-audit.md`](../../docs/architecture/pipeline-source-audit.md)를 참고하세요.
 
