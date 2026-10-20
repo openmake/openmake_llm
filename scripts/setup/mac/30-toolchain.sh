@@ -143,20 +143,33 @@ wait_docker_daemon() {
     die "Docker 데몬이 2분 안에 준비되지 않았습니다 — 'colima status --profile $COLIMA_PROFILE' 을 확인한 뒤 재실행하세요."
 }
 
-# LaunchAgent 는 설치된 기동 가드(scripts/setup/colima-boot-guard.sh 의 사본)로 기존 프로필만 띄운다 —
-# 저장소·Lima 인스턴스가 없으면 시작하지 않고(빈 VM 생성 방지), 지난 부팅의 비정상 종료가 남긴 ha.pid·vz.pid 만 보관 후 시작한다.
-# 저장소가 외장 디스크일 수 있어 사본은 내장 홈에 둔다. docker-config-reconcile.cjs 가 같은 인자 모양(/bin/bash <가드> <colima> openmake [플래그])을 안다.
-readonly COLIMA_BOOT_GUARD_SRC="$SCRIPT_DIR/scripts/setup/colima-boot-guard.sh"
-readonly COLIMA_BOOT_GUARD="$HOME/.local/share/openmake/colima-boot-guard.sh"
+# LaunchAgent 는 설치된 Node 기동 가드(scripts/setup/colima-boot-guard.cjs 의 사본)를 소유자의 node 로 직접 실행한다 —
+# 외장 볼륨 접근이 승인된 node 가 책임 프로세스가 되도록 bash 부모를 두지 않는다. 저장소·Lima 인스턴스가 없으면 시작하지 않고
+# (빈 VM 생성 방지), 지난 부팅의 비정상 종료가 남긴 ha.pid·vz.pid 만 보관 후 시작한다. 저장소가 외장 디스크일 수 있어 사본은 내장 홈에 둔다.
+# docker-config-reconcile.cjs 가 같은 인자 모양(<node> <가드> <colima> openmake [플래그])과 예전 모양을 안다.
+readonly COLIMA_BOOT_GUARD_SRC="$SCRIPT_DIR/scripts/setup/colima-boot-guard.cjs"
+readonly COLIMA_BOOT_GUARD="$HOME/.local/share/openmake/colima-boot-guard.cjs"
 
-colima_boot_guard_installed() { [[ -x "$COLIMA_BOOT_GUARD" ]] && cmp -s "$COLIMA_BOOT_GUARD_SRC" "$COLIMA_BOOT_GUARD"; }
+colima_boot_guard_installed() { [[ -f "$COLIMA_BOOT_GUARD" ]] && cmp -s "$COLIMA_BOOT_GUARD_SRC" "$COLIMA_BOOT_GUARD"; }
+
+# 가드를 실행할 node — 이 호스트에 이미 있는 node(Homebrew·mise 등, 인자 또는 PATH)의 실제 실행 파일(shim 이 아닌 process.execPath).
+# .node-version 과 정확히 같아야 한다. 설치·PATH·전역 선택은 바꾸지 않는다. 성공하면 COLIMA_GUARD_NODE 를 정한다.
+resolve_colima_guard_node() { # [$1=node 후보]
+    local candidate="${1:-$(command -v node 2>/dev/null)}" exe version pinned
+    pinned="$(node_version_pinned "$SCRIPT_DIR")" || { log_warn ".node-version 을 읽을 수 없습니다"; return 1; }
+    [[ -n "$candidate" && -x "$candidate" ]] || { log_warn "node 를 찾을 수 없습니다 (기준 $pinned)"; return 1; }
+    exe="$("$candidate" -p 'process.execPath' 2>/dev/null)" && version="$("$exe" -p 'process.versions.node' 2>/dev/null)" \
+        || { log_warn "$candidate 로 node 실행 파일을 확인할 수 없습니다"; return 1; }
+    [[ "$version" == "$pinned" ]] || { log_warn "Colima 기동 가드의 node $exe ($version) 가 .node-version($pinned) 과 다릅니다"; return 1; }
+    COLIMA_GUARD_NODE="$exe"
+}
 
 # 같은 내용이면 그대로. 바꿀 때는 임시 파일에 쓴 뒤 옮긴다 — 실패하면 1 (에이전트 정의·등록을 바꾸지 않게).
 install_colima_boot_guard() {
     colima_boot_guard_installed && return 0
     local tmp
     if mkdir -p "$(dirname "$COLIMA_BOOT_GUARD")" && tmp="$(mktemp "$COLIMA_BOOT_GUARD.XXXXXX")" \
-        && cp "$COLIMA_BOOT_GUARD_SRC" "$tmp" && chmod 755 "$tmp" && mv "$tmp" "$COLIMA_BOOT_GUARD"; then
+        && cp "$COLIMA_BOOT_GUARD_SRC" "$tmp" && chmod 644 "$tmp" && mv "$tmp" "$COLIMA_BOOT_GUARD"; then
         log_info "Colima 기동 가드 설치: $COLIMA_BOOT_GUARD"; return 0
     fi
     rm -f "${tmp:-}"; log_warn "Colima 기동 가드를 설치하지 못했습니다 ($COLIMA_BOOT_GUARD) — 정의·등록을 바꾸지 않았습니다."; return 1
@@ -180,8 +193,9 @@ colima_agent_path() { # $1=colima 경로 $2=docker CLI 디렉터리 → LaunchAg
 # — 없으면 출력은 기본 정의와 바이트까지 같다.
 write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CLI 디렉터리 [$5 $6 $7]
     # colima 는 기동할 때 호스트의 docker CLI 를 찾는다 — launchd 는 셸 프로파일을 읽지 않으므로 PATH 에 직접 넣는다.
-    local label profile colima home path log err guard flag_xml="" home_xml="" nl=$'\n'
-    label="$(xml_escape "$COLIMA_AGENT")"; profile="$(xml_escape "$COLIMA_PROFILE")"; guard="$(xml_escape "$COLIMA_BOOT_GUARD")"
+    # 가드를 실행할 node 는 COLIMA_GUARD_NODE (resolve_colima_guard_node 가 정한다).
+    local label profile colima home path log err guard node flag_xml="" home_xml="" nl=$'\n'
+    label="$(xml_escape "$COLIMA_AGENT")"; profile="$(xml_escape "$COLIMA_PROFILE")"; guard="$(xml_escape "$COLIMA_BOOT_GUARD")"; node="$(xml_escape "$COLIMA_GUARD_NODE")"
     colima="$(xml_escape "$2")"; home="$(xml_escape "$OPENMAKE_COLIMA_HOME")"; log="$(xml_escape "$3")"; err="$(xml_escape "${5:-$3}")"
     path="$(xml_escape "$(colima_agent_path "$2" "${4:-}")")"
     [[ -z "${6:-}" ]] || flag_xml="$nl        <string>$(xml_escape "$6")</string>"
@@ -196,7 +210,7 @@ write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CL
     <string>$label</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/bash</string>
+        <string>$node</string>
         <string>$guard</string>
         <string>$colima</string>
         <string>$profile</string>$flag_xml
@@ -248,7 +262,7 @@ colima_agent_print_canonical() {
 }
 
 colima_agent_expected_print() { # $1=colima 경로 $2=docker CLI 디렉터리 $3=로그 파일 [$4=stderr $5=시작 플래그 $6=HOME]
-    printf '%s\n' "path = $COLIMA_AGENT_PLIST" "program = /bin/bash" "arg=/bin/bash" "arg=$COLIMA_BOOT_GUARD" "arg=$1" "arg=$COLIMA_PROFILE"
+    printf '%s\n' "path = $COLIMA_AGENT_PLIST" "program = $COLIMA_GUARD_NODE" "arg=$COLIMA_GUARD_NODE" "arg=$COLIMA_BOOT_GUARD" "arg=$1" "arg=$COLIMA_PROFILE"
     [[ -z "${5:-}" ]] || printf '%s\n' "arg=$5"
     printf '%s\n' "stdout path = $3" "stderr path = ${4:-$3}" "env=COLIMA_HOME => $OPENMAKE_COLIMA_HOME"
     [[ -z "${6:-}" ]] || printf '%s\n' "env=HOME => $6"
@@ -272,6 +286,7 @@ enable_docker_autostart() { # [$1=로그 파일] [$2=stderr 파일 $3=시작 플
     domain="$(colima_gui_domain)"; colima="$(command -v colima)"; docker_dir="$(dirname "$(command -v docker)")"
     log="${1:-$OMK_ROOT/logs/colima.log}"
     # 정의가 가리킬 가드를 먼저 둔다 — 설치에 실패하면 정의·등록을 바꾸지 않는다.
+    [[ -n "${COLIMA_GUARD_NODE:-}" ]] || resolve_colima_guard_node || { log_warn "Colima LaunchAgent 정의·등록을 바꾸지 않았습니다."; return 1; }
     install_colima_boot_guard || return 1
     tmp="$(mktemp)" || return 1
     if ! write_colima_agent "$tmp" "$colima" "$log" "$docker_dir" "$err" "$flag" "$home" \

@@ -118,7 +118,7 @@ jobs:
           bash -n scripts/setup/mac-host-repair.test.sh
           bash -n scripts/setup/mac-pm2-boot.sh
           bash -n scripts/setup/pm2-boot-guard.sh
-          bash -n scripts/setup/colima-boot-guard.sh
+          node --check scripts/setup/colima-boot-guard.cjs
           bash -n scripts/setup/colima-boot-guard.test.sh
           bash -n scripts/setup/mac-pm2-boot.test.sh
           bash -n uninstall.sh
@@ -131,7 +131,7 @@ jobs:
             scripts/setup/mac-toolchain.test.sh scripts/setup/uninstall.test.sh scripts/setup/linux-web-port.test.sh \
             scripts/setup/mac-host-repair.sh scripts/setup/mac-host-repair.test.sh scripts/setup/fake-launchctl.test-lib.sh \
             scripts/setup/mac-pm2-boot.sh scripts/setup/pm2-boot-guard.sh scripts/setup/mac-pm2-boot.test.sh \
-            scripts/setup/colima-boot-guard.sh scripts/setup/colima-boot-guard.test.sh \
+            scripts/setup/colima-boot-guard.test.sh \
             scripts/backups/*.sh scripts/airgap/*.sh
           for f in scripts/env/*.test.sh; do bash "$f"; done
           bash scripts/setup/mac-toolchain.test.sh
@@ -342,4 +342,3 @@ jobs:
           PATH="$(dirname "$B5"):$PATH" "$B5" scripts/setup/mac-toolchain.test.sh
           PATH="$(dirname "$B5"):$PATH" "$B5" scripts/setup/mac-host-repair.test.sh
           PATH="$(dirname "$B5"):$PATH" BASH5="$B5" "$B5" scripts/setup/mac-pm2-boot.test.sh
-          PATH="$(dirname "$B5"):$PATH" GUARD_BASH="$B5" "$B5" scripts/setup/colima-boot-guard.test.sh

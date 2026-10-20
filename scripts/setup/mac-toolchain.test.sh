@@ -20,6 +20,9 @@ HAS_LIST=" docker "
 has() { [[ "$HAS_LIST" == *" $1 "* ]]; }
 # shellcheck source=/dev/null
 . "$HERE/mac/30-toolchain.sh"
+# 가드를 실행할 node — 이 기계의 .node-version 과 같은 node 의 실제 실행 파일 (CI 는 setup-node 가 맞춘다)
+resolve_colima_guard_node || die "node matching .node-version is needed for this test"
+GN="$COLIMA_GUARD_NODE"; export COLIMA_GUARD_NODE
 
 PASS=0; FAIL=0
 eq() { if [[ "$2" == "$3" ]]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); printf 'FAIL %s\n  expected: %s\n  actual:   %s\n' "$1" "$3" "$2"; fi; }
@@ -46,7 +49,7 @@ P="$TMP/agent.plist"; write_colima_agent "$P" /opt/homebrew/bin/colima "$TMP/col
 ok "agent: 라벨"     'grep -q "<string>com.openmake.colima</string>" "$P"'
 ok "agent: 실행 파일" 'grep -q "<string>/opt/homebrew/bin/colima</string>" "$P"'
 ok "agent: 프로필"    'grep -q "<string>openmake</string>" "$P"'
-ok "agent: 컨텍스트 유지 (가드가 --activate=false 로 시작)" 'grep -q -- "start --profile \"\$PROFILE\" \"\$@\" --activate=false" "$COLIMA_BOOT_GUARD_SRC"'
+ok "agent: 컨텍스트 유지 (가드가 --activate=false 로 시작)" 'grep -qF -- "['"'"'start'"'"', '"'"'--profile'"'"', PROFILE, ...flags, '"'"'--activate=false'"'"']" "$COLIMA_BOOT_GUARD_SRC"'
 ok "agent: 로그인 시 실행" 'grep -A1 "<key>RunAtLoad</key>" "$P" | grep -q "<true/>"'
 ok "agent: 로그 경로" 'grep -q "<string>$TMP/colima.log</string>" "$P"'
 # colima 는 기동할 때 호스트의 docker CLI 를 찾는다 — Docker Desktop 의 CLI(/usr/local/bin)를 쓰는 Mac 에서도 보여야 한다
@@ -91,7 +94,7 @@ RTA=(); RTE=""; RTO=""; RTK=""
 while IFS=$'\t' read -r tag v; do
     case "$tag" in A) RTA+=("$v") ;; K) RTK="$v" ;; V) [[ $RTK == COLIMA_HOME ]] && RTE="$v" ;; O) RTO="$v" ;; esac
 done < <(fake_plist_fields "$TMP/roundtrip.plist")
-eq "xml: 가드 인자 (bash ${BASH_VERSINFO[0]})" "${RTA[0]:-}|${RTA[1]:-}|${RTA[3]:-}" "/bin/bash|$COLIMA_BOOT_GUARD|openmake"
+eq "xml: 가드 인자 (bash ${BASH_VERSINFO[0]})" "${RTA[0]:-}|${RTA[1]:-}|${RTA[3]:-}" "$GN|$COLIMA_BOOT_GUARD|openmake"
 eq "xml: colima 경로 그대로" "${RTA[2]:-}" "$RT_COLIMA"
 eq "xml: COLIMA_HOME 그대로" "$RTE" "$RT_HOME"
 eq "xml: 로그 경로 그대로" "$RTO" "$RT_LOG"
@@ -106,7 +109,7 @@ write_colima_agent "$TMP/guard.plist" "$GC" "$TMP/g.log" "$TMP/guard-bin"
 GARGS=(); while IFS=$'\t' read -r tag v; do [[ $tag == A ]] && GARGS+=("$v"); done < <(fake_plist_fields "$TMP/guard.plist")
 GH="$TMP/guard home & 'q'"
 install_colima_boot_guard >/dev/null
-ok "agent: 기동 가드 설치 (저장소 밖 사본)" 'colima_boot_guard_installed && bash -n "$COLIMA_BOOT_GUARD"'
+ok "agent: 기동 가드 설치 (저장소 밖 사본)" 'colima_boot_guard_installed && "$GN" --check "$COLIMA_BOOT_GUARD"'
 grc=0; (COLIMA_HOME="$GH" "${GARGS[@]}") 2>/dev/null || grc=$?
 eq "agent: 프로필이 없으면 colima 를 실행하지 않는다" "$grc|$([[ -e "$TMP/guard-called" ]] && echo called)" "78|"
 mkdir -p "$GH/openmake"; : > "$GH/openmake/colima.yaml"
@@ -148,7 +151,7 @@ KA=(); KE=""; KO=""; KR=""; KK=""
 while IFS=$'\t' read -r tag v; do
     case "$tag" in A) KA+=("$v") ;; K) KK="$v" ;; V) [[ $KK == HOME ]] && KE="$v" ;; O) KO="$v" ;; E) KR="$v" ;; esac
 done < <(fake_plist_fields "$KP")
-eq "kept: 인자" "$(printf '%s|' "${KA[@]}")" "/bin/bash|$COLIMA_BOOT_GUARD|$GC|openmake|--save-config=false|"
+eq "kept: 인자" "$(printf '%s|' "${KA[@]}")" "$GN|$COLIMA_BOOT_GUARD|$GC|openmake|--save-config=false|"
 eq "kept: HOME·stdout·stderr" "$KE|$KO|$KR" "$KH|$TMP/out.log|$TMP/err.log"
 if [[ $GUARD_RUNS -eq 1 ]]; then
     rm -f "$TMP/guard-called"; grc=0; (COLIMA_HOME="$GH" "${KA[@]}") || grc=$?
@@ -166,7 +169,9 @@ loaded_variant() { # $1=이름 $2=sed 식
     ok "loaded: $1 → 불일치" '! PATH="$FB:$PATH" colima_agent_loaded_matches "$FB/colima" "$FB" "$TMP/agent-log/colima.log"'
 }
 loaded_variant "프로필 인자 없음" '/<string>openmake<\/string>/d'
-loaded_variant "예전 인라인 가드 (sh -c)" 's|<string>/bin/bash</string>|<string>/bin/sh</string><string>-c</string>|'
+loaded_variant "예전 인라인 가드 (sh -c)" "s|<string>$GN</string>|<string>/bin/sh</string><string>-c</string>|"
+loaded_variant "예전 셸 가드 (/bin/bash …sh)" "s|<string>$GN</string>|<string>/bin/bash</string>|; s|colima-boot-guard.cjs|colima-boot-guard.sh|"
+loaded_variant "다른 node" "s|<string>$GN</string>|<string>/other/bin/node</string>|"
 loaded_variant "다른 실행 파일" "s|<string>$FB/colima</string>|<string>/other/colima</string>|"
 loaded_variant "추가 인자" "s|<string>openmake</string>|<string>openmake</string><string>--cpu</string>|"
 loaded_variant "추가 환경" 's|<key>PATH</key>|<key>DOCKER_CONTEXT</key><string>colima</string><key>PATH</key>|'
