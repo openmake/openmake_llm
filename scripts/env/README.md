@@ -335,7 +335,7 @@ bash scripts/setup/mac-host-repair.sh --apply   # 명시적으로 적용
 | `config.json` (`DOCKER_CONFIG` 존중) | 실제로 Desktop 헬퍼를 쓰는 레지스트리만 키체인(`osxkeychain`)으로 복사·검증한 뒤 바꾼다. 다른 헬퍼를 지정한 레지스트리는 그대로. 키체인에 다른 값이 있거나 조회가 실패(잠김 등)하면 아무것도 바꾸지 않고 멈춘다. 원본 Desktop 자격 증명은 지우지 않고, 바꾸기 전 설정은 본인만 읽는 백업으로 남긴다. Desktop 이 준 플러그인 디렉터리·링크·훅만 걷어낸다 |
 | 키체인 헬퍼 | 이전에 필요한데 없을 때만 `brew install docker-credential-helper` (업그레이드 없음) |
 | 새 터미널 PATH | `~/.local/share/openmake/docker-bin` (Homebrew `docker`·`docker-credential-osxkeychain` 링크만)을 앞에 둔다. `~/.zshrc`(있으면 `~/.bash_profile`)는 관리 블록 하나만 더한다. node·다른 도구·기본 컨텍스트·`DOCKER_HOST`·`DOCKER_CONTEXT`·`COLIMA_HOME` 은 바꾸지 않는다 — 같은 Mac 의 다른 Docker 작업(기본 `colima` 컨텍스트 등)을 보존한다 |
-| LaunchAgent `com.openmake.colima` | 기존 Colima 위치(외장 디스크 포함)로 정의·등록을 맞춘다. 로그인 때 프로필(`<COLIMA_HOME>/openmake/colima.yaml`)이 없으면 시작하지 않는다 — 빈 VM 을 만들지 않는다. 로드된 정의(인자 순서·개수, 환경 전체, 로그)가 같으면 손대지 않는다. 예전 설치기 정의와, 알려진 예전 수동 정의(`colima start openmake --save-config=false` + 소유자 `HOME`)는 바꾼다 — `--save-config=false`·소유자 `HOME`·외장 `COLIMA_HOME`·기존 stdout/stderr 경로를 그대로 두고 저장소 확인과 `--activate=false` 만 더한다. 그 밖의 사용자 설정(다른 PATH 항목·환경·인자)은 수동 항목으로만 알린다. 새로 등록하면(RunAtLoad) 멈춰 있던 기존 프로필이 시작된다. GUI 세션이 없으면(SSH 전용) 등록을 보류로 알린다 |
+| LaunchAgent `com.openmake.colima` | 기존 Colima 위치(외장 디스크 포함)로 정의·등록을 맞춘다. 에이전트는 기동 가드 사본(`~/.local/share/openmake/colima-boot-guard.sh`, 정의보다 먼저 설치 — 실패하면 정의·등록을 바꾸지 않는다)을 `/bin/bash` 로 실행한다. 로그인 때 프로필(`<COLIMA_HOME>/openmake/colima.yaml`)이나 기존 Lima 인스턴스(`<COLIMA_HOME>/_lima/colima-openmake`)가 없으면 시작하지 않는다 — 빈 VM 을 만들지 않는다. 지난 부팅의 비정상 종료(예: `vz: CanRequestStop is not supported`)가 남긴 `ha.pid`·`vz.pid` 는 아래 조건에서만 보관 후 시작한다. 지난 릴리스의 인라인 가드(`/bin/sh -c …`)는 같은 플래그·`HOME`·로그로 바꾼다. 로드된 정의(인자 순서·개수, 환경 전체, 로그)가 같으면 손대지 않는다. 예전 설치기 정의와, 알려진 예전 수동 정의(`colima start openmake --save-config=false` + 소유자 `HOME`)는 바꾼다 — `--save-config=false`·소유자 `HOME`·외장 `COLIMA_HOME`·기존 stdout/stderr 경로를 그대로 두고 저장소 확인과 `--activate=false` 만 더한다. 그 밖의 사용자 설정(다른 PATH 항목·환경·인자)은 수동 항목으로만 알린다. 새로 등록하면(RunAtLoad) 멈춰 있던 기존 프로필이 시작된다. GUI 세션이 없으면(SSH 전용) 등록을 보류로 알린다 |
 
 하지 않는 일: 버전 변경·`brew upgrade`·재부팅·VM 생성·PM2 조작·Docker Desktop 엔진 정지·이미지/볼륨 삭제·root 파일 변경.
 Colima 프로필 경로가 없으면(외장 디스크 미마운트 등) 새 VM 을 만들지 않고 멈춘다. 설치기도 기존 Colima 설치(이 설치의 `.env` 가 전용 Colima 소켓을 쓰거나, 등록된 `colima-openmake` 컨텍스트·외장 볼륨 경로)인데 프로필이 없으면 VM 을 만들지 않고 중단한다. 처음 설치와 Desktop 시절 설치의 첫 Colima VM 은 만든다.
@@ -375,6 +375,14 @@ VM·컨테이너를 만들거나 시작하지 않고(Colima 는 `com.openmake.co
 
 설치기의 `pm2 save` 는 지금 실행 중인 앱이 있고, dump 에 저장된 앱이 모두 지금 목록에 있을 때만 한다 (먼저 0600 백업). 빈 목록이나 일부만 떠 있는 상태로는 dump 를 덮지 않고 할 일로 남긴다. 등록이 끝나지 않으면 성공으로 알리지 않는다.
 종료 코드: `0` 남은 항목 없음 · `1` 바꿀(--check)·보류 항목 남음 · `2` 오류·거부. 재부팅 후 실제 복구는 재부팅해서만 확인된다.
+
+### Colima 기동 가드 — 지난 부팅의 Lima pid 파일
+
+재부팅 전에 VM 이 깨끗이 멈추지 않으면 Lima 가 `<COLIMA_HOME>/_lima/colima-openmake/vz.pid`·`ha.pid` 를 남긴다. 재부팅 뒤 그 번호를 무관한 프로세스가 쓰면 `colima start` 가 `vz driver is running but host agent is not` 로 멈춘다.
+가드는 전용 프로필 `openmake` 만 다룬다 (기본 `colima` 등 다른 프로필·경로 인자는 잠금·상태도 만들지 않고 거부). 한 번에 하나만 돈다 (`lockf`, 다른 가드가 돌면 `75`).
+두 파일만, 이 인스턴스 디렉터리 안의 실행 사용자 소유 일반 파일(링크 아님, 경로에 링크 없음)이고 mtime·ctime 이 모두 `kern.boottime` 보다 앞설 때만 `<COLIMA_HOME>/.openmake-boot-guard/quarantine/…` 로 옮긴다 (같은 볼륨 rename, 0600, `evidence.txt` 에 부팅 시각·inode·mtime·ctime·cksum).
+파일 속 PID 는 판단에 쓰지 않고 신호를 보내지 않는다. 이번 부팅의 파일이 있거나 이 인스턴스의 host agent 가 보이면(`75`) 치우지 않는다. 옮기기 직전에 두 파일(처음에 없던 짝 파일 포함)을 다시 보고 하나라도 다르면 치우지 않고 시작하지 않는다(`78`).
+그 뒤 기존 프로필을 평소대로 `colima start --profile openmake [--save-config=false] --activate=false` 한다. 강제 정지·VM/디스크/설정 변경은 하지 않는다. 처음 설치의 VM 생성은 설치기(`colima_start`)가 따로 한다.
 
 ### Colima 를 걷어낼 때
 

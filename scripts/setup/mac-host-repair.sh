@@ -12,6 +12,7 @@
 #   2) 새 터미널: ~/.local/share/openmake/docker-bin (Homebrew docker·키체인 헬퍼 링크만)을 PATH 앞에 둔다.
 #      node 등 다른 도구·기본 Docker 컨텍스트·DOCKER_HOST/DOCKER_CONTEXT/COLIMA_HOME 은 건드리지 않는다.
 #   3) LaunchAgent com.openmake.colima: 기존 Colima 위치(외장 디스크 포함)로 정의·등록을 맞춘다.
+#      기동 가드(colima-boot-guard.sh)를 ~/.local/share/openmake 에 먼저 둔다 — 지난 부팅이 남긴 Lima pid 파일만 보관 후 시작.
 #      건강하게 로드돼 있으면 그대로 둔다. GUI 세션이 없으면 등록을 보류로 알린다.
 #      LaunchAgent 는 기존 프로필이 있을 때만 시작한다. 새로 등록하면(RunAtLoad) 멈춰 있던 기존 프로필이 시작된다.
 # --apply 는 한 단계라도 오류면 그 자리에서 멈춘다 — 자격 증명 오류 뒤에 PATH·launchd 를 바꾸지 않는다.
@@ -139,7 +140,7 @@ agent_field() { printf '%s\n' "$1" | sed -n "s/^$2=//p"; }
 
 repair_colima_agent() {
     local report state log err flag home reasons
-    report="$(reconciler agent --plist "$COLIMA_AGENT_PLIST" --colima "$BREW_BIN/colima" --colima-home "$OPENMAKE_COLIMA_HOME" --owner-home "$HOME")"
+    report="$(reconciler agent --plist "$COLIMA_AGENT_PLIST" --colima "$BREW_BIN/colima" --colima-home "$OPENMAKE_COLIMA_HOME" --owner-home "$HOME" --guard "$COLIMA_BOOT_GUARD")"
     state="$(agent_field "$report" state)"; log="$(agent_field "$report" log)"; err="$(agent_field "$report" err)"
     # 알려진 예전 에이전트에서 이어받는 값 (그 밖의 정의는 conflict 로 손대지 않는다)
     flag="$(agent_field "$report" flags)"; home="$(agent_field "$report" home)"
@@ -150,10 +151,11 @@ repair_colima_agent() {
     fi
     log="${log:-$OMK_ROOT/logs/colima.log}"
     err="${err:-$log}"
-    if [[ $state == healthy ]] && colima_agent_loaded_matches "$BREW_BIN/colima" "$BREW_BIN" "$log" "$err" "$flag" "$home"; then
+    if [[ $state == healthy ]] && colima_boot_guard_installed && colima_agent_loaded_matches "$BREW_BIN/colima" "$BREW_BIN" "$log" "$err" "$flag" "$home"; then
         say ok "LaunchAgent $COLIMA_AGENT defined and loaded as expected (proof of start after reboot needs a reboot)"
         return 0
     fi
+    colima_boot_guard_installed || reasons="${reasons:+$reasons; }boot guard $COLIMA_BOOT_GUARD missing or outdated"
     if [[ $MODE == check ]]; then
         PENDING=$((PENDING + 1)); say fix "write/register LaunchAgent $COLIMA_AGENT (${reasons:-definition not loaded}); registering starts the existing profile if it is stopped"
         return 0
@@ -162,7 +164,7 @@ repair_colima_agent() {
         failure "LaunchAgent $COLIMA_AGENT was not changed"
         return 0
     fi
-    if colima_agent_loaded_matches "$BREW_BIN/colima" "$BREW_BIN" "$log" "$err" "$flag" "$home"; then
+    if colima_boot_guard_installed && colima_agent_loaded_matches "$BREW_BIN/colima" "$BREW_BIN" "$log" "$err" "$flag" "$home"; then
         say ok "LaunchAgent $COLIMA_AGENT registered and verified (proof of start after reboot needs a reboot)"
     elif colima_gui_domain_available; then
         pending "LaunchAgent $COLIMA_AGENT registration could not be verified"

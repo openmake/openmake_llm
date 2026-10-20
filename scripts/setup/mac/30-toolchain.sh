@@ -143,14 +143,24 @@ wait_docker_daemon() {
     die "Docker 데몬이 2분 안에 준비되지 않았습니다 — 'colima status --profile $COLIMA_PROFILE' 을 확인한 뒤 재실행하세요."
 }
 
-# LaunchAgent 는 이 명령으로 기존 프로필만 띄운다 — 로그인 때 저장소가 없으면 시작하지 않는다 (빈 VM 생성 방지).
-# docker-config-reconcile.cjs 의 COLIMA_GUARD 와 같은 글자여야 한다. 인자: $0=colima 경로 $1=프로필
-# shellcheck disable=SC2016  # launchd 가 실행하는 sh 가 펼친다
-readonly COLIMA_AGENT_GUARD='[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$1" --activate=false'
-# 알려진 예전 에이전트의 시작 플래그(--save-config=false)를 이어받을 때만 쓴다 — 프로필과 플래그가 "$@" 로 이어진다.
-# shellcheck disable=SC2016  # launchd 가 실행하는 sh 가 펼친다
-readonly COLIMA_AGENT_GUARD_WITH_FLAGS='[ -f "$COLIMA_HOME/$1/colima.yaml" ] || { echo "OpenMake Colima profile $1 is missing under $COLIMA_HOME; not starting (no replacement VM)" >&2; exit 78; }; exec "$0" start --profile "$@" --activate=false'
-colima_agent_guard() { if [[ -n "${1:-}" ]]; then printf '%s' "$COLIMA_AGENT_GUARD_WITH_FLAGS"; else printf '%s' "$COLIMA_AGENT_GUARD"; fi; }
+# LaunchAgent 는 설치된 기동 가드(scripts/setup/colima-boot-guard.sh 의 사본)로 기존 프로필만 띄운다 —
+# 저장소·Lima 인스턴스가 없으면 시작하지 않고(빈 VM 생성 방지), 지난 부팅의 비정상 종료가 남긴 ha.pid·vz.pid 만 보관 후 시작한다.
+# 저장소가 외장 디스크일 수 있어 사본은 내장 홈에 둔다. docker-config-reconcile.cjs 가 같은 인자 모양(/bin/bash <가드> <colima> openmake [플래그])을 안다.
+readonly COLIMA_BOOT_GUARD_SRC="$SCRIPT_DIR/scripts/setup/colima-boot-guard.sh"
+readonly COLIMA_BOOT_GUARD="$HOME/.local/share/openmake/colima-boot-guard.sh"
+
+colima_boot_guard_installed() { [[ -x "$COLIMA_BOOT_GUARD" ]] && cmp -s "$COLIMA_BOOT_GUARD_SRC" "$COLIMA_BOOT_GUARD"; }
+
+# 같은 내용이면 그대로. 바꿀 때는 임시 파일에 쓴 뒤 옮긴다 — 실패하면 1 (에이전트 정의·등록을 바꾸지 않게).
+install_colima_boot_guard() {
+    colima_boot_guard_installed && return 0
+    local tmp
+    if mkdir -p "$(dirname "$COLIMA_BOOT_GUARD")" && tmp="$(mktemp "$COLIMA_BOOT_GUARD.XXXXXX")" \
+        && cp "$COLIMA_BOOT_GUARD_SRC" "$tmp" && chmod 755 "$tmp" && mv "$tmp" "$COLIMA_BOOT_GUARD"; then
+        log_info "Colima 기동 가드 설치: $COLIMA_BOOT_GUARD"; return 0
+    fi
+    rm -f "${tmp:-}"; log_warn "Colima 기동 가드를 설치하지 못했습니다 ($COLIMA_BOOT_GUARD) — 정의·등록을 바꾸지 않았습니다."; return 1
+}
 
 # plist <string> 값 — 경로의 & " ' < > (외장 디스크 이름 등). sed 로 한다:
 # bash 5.2+ 는 patsub_replacement 가 켜져 ${v//x/&amp;} 의 & 를 찾은 글자로 바꾼다 (같은 스크립트가 셸 판마다 다른 plist 를 쓴다).
@@ -171,7 +181,7 @@ colima_agent_path() { # $1=colima 경로 $2=docker CLI 디렉터리 → LaunchAg
 write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CLI 디렉터리 [$5 $6 $7]
     # colima 는 기동할 때 호스트의 docker CLI 를 찾는다 — launchd 는 셸 프로파일을 읽지 않으므로 PATH 에 직접 넣는다.
     local label profile colima home path log err guard flag_xml="" home_xml="" nl=$'\n'
-    label="$(xml_escape "$COLIMA_AGENT")"; profile="$(xml_escape "$COLIMA_PROFILE")"; guard="$(xml_escape "$(colima_agent_guard "${6:-}")")"
+    label="$(xml_escape "$COLIMA_AGENT")"; profile="$(xml_escape "$COLIMA_PROFILE")"; guard="$(xml_escape "$COLIMA_BOOT_GUARD")"
     colima="$(xml_escape "$2")"; home="$(xml_escape "$OPENMAKE_COLIMA_HOME")"; log="$(xml_escape "$3")"; err="$(xml_escape "${5:-$3}")"
     path="$(xml_escape "$(colima_agent_path "$2" "${4:-}")")"
     [[ -z "${6:-}" ]] || flag_xml="$nl        <string>$(xml_escape "$6")</string>"
@@ -186,8 +196,7 @@ write_colima_agent() { # $1=plist $2=colima 경로 $3=로그 파일 $4=docker CL
     <string>$label</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/sh</string>
-        <string>-c</string>
+        <string>/bin/bash</string>
         <string>$guard</string>
         <string>$colima</string>
         <string>$profile</string>$flag_xml
@@ -239,7 +248,7 @@ colima_agent_print_canonical() {
 }
 
 colima_agent_expected_print() { # $1=colima 경로 $2=docker CLI 디렉터리 $3=로그 파일 [$4=stderr $5=시작 플래그 $6=HOME]
-    printf '%s\n' "path = $COLIMA_AGENT_PLIST" "program = /bin/sh" "arg=/bin/sh" "arg=-c" "arg=$(colima_agent_guard "${5:-}")" "arg=$1" "arg=$COLIMA_PROFILE"
+    printf '%s\n' "path = $COLIMA_AGENT_PLIST" "program = /bin/bash" "arg=/bin/bash" "arg=$COLIMA_BOOT_GUARD" "arg=$1" "arg=$COLIMA_PROFILE"
     [[ -z "${5:-}" ]] || printf '%s\n' "arg=$5"
     printf '%s\n' "stdout path = $3" "stderr path = ${4:-$3}" "env=COLIMA_HOME => $OPENMAKE_COLIMA_HOME"
     [[ -z "${6:-}" ]] || printf '%s\n' "env=HOME => $6"
@@ -262,6 +271,8 @@ enable_docker_autostart() { # [$1=로그 파일] [$2=stderr 파일 $3=시작 플
     local domain tmp backup colima docker_dir log err="${2:-}" flag="${3:-}" home="${4:-}"
     domain="$(colima_gui_domain)"; colima="$(command -v colima)"; docker_dir="$(dirname "$(command -v docker)")"
     log="${1:-$OMK_ROOT/logs/colima.log}"
+    # 정의가 가리킬 가드를 먼저 둔다 — 설치에 실패하면 정의·등록을 바꾸지 않는다.
+    install_colima_boot_guard || return 1
     tmp="$(mktemp)" || return 1
     if ! write_colima_agent "$tmp" "$colima" "$log" "$docker_dir" "$err" "$flag" "$home" \
         || { command -v plutil >/dev/null 2>&1 && ! plutil -lint -s "$tmp" >/dev/null; }; then
