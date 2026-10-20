@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.107.1](https://github.com/openmake/openmake_llm/compare/v1.107.0...v1.107.1) (2026-10-20)
+
+
+### 🐛 버그 수정
+
+* **artifacts:** promote hidden-install media delivery repair ([20df85b](https://github.com/openmake/openmake_llm/commit/20df85b057f8f7c4ffea2ebdcabd244b3bf0b2a0))
+* **artifacts:** serve authorized files from hidden install roots ([3ee96f9](https://github.com/openmake/openmake_llm/commit/3ee96f9155ac28a8f95677596aa725abe187a4e5))
+* **artifacts:** serve authorized media from hidden install roots ([b2db27e](https://github.com/openmake/openmake_llm/commit/b2db27e9486307b1c3d95268e32203446764cb47))
+* **mcp:** deliver chat media through account-owned artifacts ([78f3b79](https://github.com/openmake/openmake_llm/commit/78f3b79a7ddc6874c6406f1cfb73a852824b3e95))
+* **mcp:** promote account-owned chat media delivery ([f0bb96f](https://github.com/openmake/openmake_llm/commit/f0bb96f85b0ac61c6453f1c9bf7080c449d76541))
+* **mcp:** save chat media as account-owned artifacts ([fd753a0](https://github.com/openmake/openmake_llm/commit/fd753a08601f7042a020f707300fcf816bc5c8e3))
+
 ## [1.107.0](https://github.com/openmake/openmake_llm/compare/v1.106.2...v1.107.0) (2026-10-19)
 
 
