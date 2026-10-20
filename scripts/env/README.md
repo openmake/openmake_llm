@@ -1,195 +1,112 @@
-# 환경 운영 — dev / staging / online
+# 개발·검증·배포 — 8단계 운영 흐름
 
-> `omk` 사용 설명서. 스크립트는 이 디렉터리의 [`omk.sh`](omk.sh) 이고, Windows 진입점은 [`omk.ps1`](omk.ps1), 순수 함수 테스트는 [`omk.test.sh`](omk.test.sh) 다.
+`omk`의 명령 원본은 [`omk.sh`](omk.sh), Windows/WSL 진입점은 [`omk.ps1`](omk.ps1)입니다. 역할과 단계는 [운영 흐름 페이지](http://rasplay.tplinkdns.com:34321/workflow-map.html)의 8단계를 따릅니다. [현황 보드](http://rasplay.tplinkdns.com:34321/board.html)는 관측 도구이며, 코드 위치와 실행·검증 증거를 구분합니다. 문서나 소스 변경만으로 원격 자동화가 활성화되지는 않습니다.
 
-`openmake_llm` 을 세 환경으로 나눠 운영한다(`openmake_bench` 는 add-on — `--bench` 로 고른 환경에만 붙는다). 환경은 서로 **env 파일·docker·PM2 가 분리**되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 `scripts/env/omk.sh` 하나다.
+## 개발에서 운영까지
 
+| 단계 | 담당 | 실행과 다음 조건 |
+|---|---|---|
+| 1 | local · MacBook / 사람+에이전트 | `origin/dev`에서 작업 브랜치 → 구현 → 로컬 관련 테스트·lint·필요 빌드 → dev 대상 PR. 테스트 근거를 함께 남깁니다. |
+| 2 | GitHub | PR 최신 변경의 CI·자동 구조 검사를 충족하면 dev로 일반 병합. 사람 PR 승인 단계는 없습니다. |
+| 3 | GitHub runner | **실제로 병합된 dev SHA**의 소스·DB·빌드·lint와 임시 앱의 **기본 스모크+변경 기능/관련 소스 테스트**. 전체 브라우저 테스트를 무조건 실행하지 않습니다. |
+| 4 | GitHub | 현재 dev의 push CI 통과 후 dev→main PR 생성·자동 병합. 최신 main 조합의 PR CI도 필요합니다. 실패·SHA 변경 시 중단/재검사합니다. |
+| 5 | tom · staging | main 설치 → 스모크 → 구성된 필수 고강도 검증 → 정확한 SHA의 결과 저장 → 사람 실사용을 위해 설치본 고정. |
+| 6 | 사람 + tom 명령 | 사람이 tom을 직접 사용해 OK하면 `omk env approve staging --sha FULL_SHA --yes`. 고정 SHA·실행 빌드·통과 근거를 다시 확인하고 verify ref를 기록합니다. |
+| 7 | GitHub | verify한 코드에 연결된 release-please PR만 자동 병합 → 버전 태그·릴리스·공급망 증명 발행. verify 이후 기능 변경은 허용하지 않습니다. |
+| 8 | ome-on · online | 한 번 선택한 릴리스 태그의 SHA 고정 → verify 계보 검사 → 백업 → 관리형 갱신 → 설치 SHA 일치·운영 스모크 확인. |
+
+bean은 5번 이후 tom, 8번 이후 ome-on에 주기적으로 접속하는 **별도 외부 QA 호스트**입니다. tom 자체 검증과 사람의 OK를 대체하지 않습니다. 반복 검사 실패를 자동 승격 차단·복구로 연결하는 정책은 현재 없습니다.
+
+```text
+local: 개발·관련 테스트·PR
+    → GitHub: PR CI/구조 검사 → dev 병합
+    → GitHub: 병합 dev 소스 검사 + 기본·변경 기능 검사
+    → GitHub: dev→main PR CI → main 병합
+    → tom: 설치·스모크·필수 검증 → SHA 고정
+    → 사람: 실사용 OK → approve(동일 SHA의 verify)
+    → GitHub: 검증 계보 확인 → release-please 자동 병합·태그
+    → ome-on: 고정 태그 검증·백업·설치·스모크
+bean ── 주기적 실사용 검사 ──▶ tom / ome-on
 ```
-로컬 개발(로컬 장비 · `omk dev up`)
-   │ push
-feature/<주제> ──PR(CI 필수)──▶ dev ──사람이 `omk env update dev`──▶ ~/.openmake/dev       개발 서버
-                          │                    (설치·기능 확인)
-                          └──PR(일반 머지 · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   스테이징 서버 · Tailscale 직결
-                                                         │                     (기능 확인 → `omk env verify staging` 으로 확인한 커밋 기록)
-                                                         └──(release-please 릴리스 직후) 사람이 `omk env update online`──▶ ~/.openmake/online   온라인 서버 · chat.<도메인>
-                                                                               (릴리스 게이트 → 스모크만)
-```
 
-| 이름 | 장소 | 경로 | 무엇 |
-|---|---|---|---|
-| **로컬 개발** | 로컬 장비 | 작업 클론 | `omk dev up` — 고치면서 바로 보는 핫 리로드. 환경이 아니다 |
-| **환경 dev** | 개발 서버 | `~/.openmake/dev` | `omk env install dev` 로 설치한 배포본. 브랜치 `dev` 를 따른다 |
-| **환경 staging** | 스테이징 서버 | `~/.openmake/staging` | 설치한 배포본. `main` 을 따른다 |
-| **환경 online** | 온라인 서버 | `~/.openmake/online` | 실사용. 최신 릴리스 태그를 따른다 |
+별도 **배포 dev 서버는 필수 흐름에서 폐지**됐습니다. Git 브랜치 `dev`와 로컬 `omk dev`는 유지합니다. 레거시 `omk env install dev`는 호환 명령이며 main 승격 게이트로 사용하지 않습니다. `omk/env-dev`를 필수 체크에 추가하지 마세요.
 
-장소는 **역할의 이름**이다 — 한 대가 여러 역할을 맡아도 된다(예: 개발 서버와 스테이징 서버가 같은 호스트). 환경은 서로 분리되어 있다.
+## 로컬 및 GitHub 검사
 
-장수 브랜치는 **`main` 과 `dev` 둘**이다. `dev` 는 `feature/*` 가 모이는 개발용 브랜치이고, `main` 은 staging·릴리스가 따르는 브랜치다.
-환경은 브랜치가 아니라 설치본의 이름이다 — **환경 dev 는 브랜치 `dev` 를, 환경 staging 은 `main` 을** 따르고, online 은 릴리스 직후의 main 을 사람이 올린다.
-무거운 검증은 GitHub 러너의 CI 와 staging 에서 하고, online 에서는 스모크만 한다.
+로컬에서는 변경 범위의 회귀 테스트를 먼저 작성하고 실행합니다. PR에서는 기존 전체 소스/DB CI를 실행하며, 병합된 dev에서도 같은 소스 CI를 다시 실행합니다. dev의 기능 검사는 시작·DB 연결·로그인·기본 채팅·웹 응답과 변경된 기능/소스의 선택 검사로 한정합니다.
 
-**online 과 외부 설치는 main 이 아니라 최신 릴리스 태그를 따른다.** main 은 공개 저장소이지만 개발이 모이는 곳이다 — staging 에서 확인하기
-전의 main 을 운영이나 외부 설치자가 받으면 안 된다. `omk env install online` 의 기본 ref 는 `release`(가장 높은 `vX.Y.Z` 태그)이고,
-`omk env update online` 은 새 릴리스 태그가 있을 때만 그 태그까지 fast-forward 한 뒤(그 사이 `package-lock.json` 이 바뀌었으면 `npm install` 로 의존성을 맞추고) `openmake_llm.sh deploy` 를 부른다. 어느 환경이든
-`--ref release` 로 같은 방식을 고를 수 있다(`.env` 의 `OMK_TRACK=release`). `openmake_bench` 는 릴리스 태그가 없어 main 을 쓴다.
-bench 의 브랜치는 `--bench-ref` 로 정한다 — 주지 않으면 **llm 의 `--ref` 와 같은 이름**을 찾으므로, llm 에만 있는 `feature/*` 를
-올리면서 bench 도 붙일 때는 `--bench --bench-ref main` 으로 준다(같은 이름의 브랜치가 없으면 bench 클론에서 설치가 멈춘다).
+CI 모델 fixture는 네트워크·인증·채팅 연결 검증용입니다. 실제 모델 품질이나 실서비스 MCP 동작을 검증했다고 기록하지 않습니다. 실제 서비스 검증은 tom/bean 단계에서 수행합니다. 변경 기능의 관련 테스트를 선택할 수 없으면 통과로 간주하지 않고 테스트/매핑 보완을 요청합니다.
 
-**브랜치 `dev` 에 합친 것을 확인하는 곳은 환경 dev 다** — 머지한 뒤 `omk env update dev` 로 올려 실제 설치를 확인하고, 통과한 뒤에 `dev` 를 `main` 으로 올린다.
-머지 전에 따로 보고 싶은 브랜치는 임시 환경에 올린다(`omk env install pr-123 --ref <브랜치>`). staging 은 **머지된 main** 을 본다(여러 PR 이 합쳐진 결과, update·마이그레이션 경로).
+자동 리뷰는 현재 **결정적 구조 검사와 기존 CI 품질 게이트**입니다. 의미적 AI 코드 리뷰를 수행했다고 표현하지 않습니다. 코드 리뷰가 필요한 복잡한 변경은 개발 과정에서 별도로 수행합니다.
 
-**CI 는 `main` 과 `dev` 의 push/PR 에서 돈다.** `feature/*` 는 PR 로만 `dev` 에 합치고, CI 를 통과해야 머지한다 — 검사가 `dev` → `main` PR 에
-몰리면 실패한 커밋을 찾기 어렵다. CI 는 "설치해서 도는지"를 보지 않으므로, 그것은 머지 뒤에 환경 dev 에서 본다.
-리뷰 승인은 지금은 필수가 아니다(개발 인원이 늘면 브랜치 보호에서 켠다). `openmake_bench` 는 `dev` 브랜치가 없다 — `main` 에서 따서 `main` 으로 합치고,
-환경 dev 에 `--bench` 로 붙이면 bench 는 `main` 을 쓴다.
+## GitHub 자동화 활성화
+
+1. 자동화 소스가 **기본 브랜치 main에 먼저 존재**해야 `workflow_run`·스케줄 이벤트가 동작합니다. 초기 도입 PR은 기존 관리 절차로 검증·병합합니다.
+2. 저장소에 `Allow auto-merge`를 켜고 dev/main 모두 `CI Gate (Test → Build → Size → Lint)`를 필수·최신 기준(strict)으로 설정합니다. 이전 `omk/env-dev`는 제거합니다. 사람의 PR 리뷰 승인 수는 0입니다. 설정 변경 전 기존 다른 보호 규칙을 보존합니다.
+3. Actions secret `OMK_AUTOMATION_TOKEN`을 등록합니다. 호환용 `OMK_PROMOTE_TOKEN`도 지원합니다. 저장소 contents·pull requests 쓰기, actions/checks 읽기 및 보호 규칙 읽기 권한이 필요합니다. GitHub App 토큰은 유효기간과 발급/갱신 방식을 별도로 마련해야 합니다. 개발자의 로컬 인증을 자동 복사하지 않습니다.
+4. 기본 `GITHUB_TOKEN`으로 PR을 생성·병합하면 다음 CI가 트리거되지 않을 수 있어 자동화 자격증명을 분리합니다. 미설정은 정상 완료로 숨기지 않고 오류로 알립니다.
+5. 권한 있는 오케스트레이터는 신뢰된 기본 브랜치 코드만 실행합니다. PR 소스·PR artifact를 내려받아 권한 토큰으로 실행하지 않습니다.
+
+`auto-merge`는 작업 PR의 최신 CI 뒤에, `promote`는 병합 dev의 push CI 뒤에 실행합니다. `release-verified`는 유효한 verify와 릴리스 PR CI를 주기적으로 확인합니다. 실패/대기는 해당 SHA와 이유를 남깁니다.
 
 ## 환경 규칙
 
-| | dev | staging | online |
+| 항목 | local | tom · staging | ome-on · online |
 |---|---|---|---|
-| 위치 | `~/.openmake/dev/llm` | `~/.openmake/staging/llm` | `~/.openmake/online/llm` |
-| 따르는 것 | 브랜치 `dev` 최신 (브랜치 `dev` 가 없는 저장소는 `--ref main`) | `main` 최신 | **최신 릴리스 태그** (`release`) |
-| 인스턴스 | `dev` (이름 있음) | `staging` (이름 있음) | **기본(무접미사)** |
-| 포트 | install.sh 가 할당 | install.sh 가 할당 | **소스의 기본 포트** (52416 / 3000 / 5432 / 6379 / 9400 / 33000) |
-| PM2 | `openmake-{llm,next,litellm}-dev` | `openmake-{llm,next,litellm}-staging` | `openmake-{llm,next,litellm}` |
-| docker | `openmake-dev-*` | `openmake-staging-*` | `openmake-*` |
-| 배포 | **수동** `omk env update dev` | **수동** `omk env update staging` | **수동** `omk env update online` |
+| 소스 | 개발 작업 클론 | `~/.openmake/staging/llm` 또는 관리형 기존 경로 | `~/.openmake/online/llm` 또는 관리형 기존 경로 |
+| 추적 | 작업 브랜치 | main | release |
+| 앱 | 로컬 개발 프로세스 | PM2 | PM2 |
+| 인프라 | macOS Colima / Linux Docker | 같은 플랫폼 규칙 | 같은 플랫폼 규칙 |
+| 갱신 | 에이전트의 개발 작업 | pipeline 스케줄, 검증 중 hold | 검증 릴리스 pipeline 스케줄 |
 
-`--bench` 로 설치한 환경은 `~/.openmake/<env>/bench` 와 PM2 `openmake-bench[-<env>]` 가 더 생긴다.
+포트·사용자·도메인·실제 경로는 해당 `.env`와 `omk env status`를 읽습니다. 호스트 이름이 환경 이름을 대신하지 않습니다. staging은 Tailscale 호스트와 프록시 포트로 접속하고, online의 외부 공개는 운영 Cloudflare/DNS 설정을 따릅니다. Base와 Add-on 분리, 앱 PM2 실행 방식은 유지합니다.
 
-**작업 클론의 로컬 개발(`omk dev …`)은 환경이 아니다** — `~/.openmake` 아래에 두지 않고, 인스턴스 이름 `local`(docker `openmake-local-*`)로
-앱이 PM2 없이 포그라운드에서 돈다. 환경 `dev` 와 이름이 비슷하지만 별개다 — 다만 앱이 기대는 것(검색·런타임 이미지·게이트웨이·기본 모델)은
-환경 설치와 **같은 함수**로 준비한다([로컬 개발](#로컬-개발--omk-dev-작업-클론--핫-리로드)).
+## tom 설치·검증·사람 확인
 
-- **online 이 기본 인스턴스인 이유** — 소스(`install.sh`·`gen-env.mjs`·`resolve-ports.cjs`·문서)의 기본 포트와 이름이 곧 운영 값이다. online 을 기본 인스턴스로 두면 포트 표를 어디에도 다시 적을 필요가 없다.
-- **이름 있는 인스턴스의 포트**는 `install.sh` 규칙을 따른다 — 기본은 한 칸 옆(52417/3010/5433/6380)이고, 그 포트가 쓰이고 있으면 옮긴다
-  (API 는 다음 빈 포트, 웹 13000~, PostgreSQL 15432~, Redis 16379~). **omk 는 포트를 기억하지 않고 각 환경의 `.env` 를 읽는다** — 실제 값은 `omk env status <env>` 로 본다.
-- 충돌 판정은 **설치하는 순간 열려 있는 포트**만 본다. 같은 호스트의 다른 환경이나 로컬 개발이 멈춰 있을 때 설치하면 같은 포트를 받을 수 있다 —
-  나란히 쓸 환경은 띄워 둔 채 설치한다. 로컬 개발이 겹쳤으면 `omk dev setup` 을 다시 돌리면 옮겨진다. 환경끼리 겹친 것은 자동으로 옮기지 않는다
-  (PM2 에 등록된 앱의 포트는 자기 것으로 본다) — 한쪽을 `omk env reset` 한 뒤, 다른 쪽을 띄워 둔 채 다시 설치한다.
-- 호스트 구성은 자유다. 개발 서버·스테이징 서버·온라인 서버가 같은 호스트여도 되고 달라도 된다. 로컬 개발은 개발자마다 자기 로컬 장비에 둔다.
+최초 활성화 전 스모크 계정 `OMK_SMOKE_EMAIL/PASSWORD`와 필수 검증 설정을 준비합니다. 계정 비밀번호·토큰을 검증 JSON이나 Git에 넣지 않습니다. 검증 설정은 기본 `<환경 디렉터리>/.pipeline/checks.json`이며 `OMK_VALIDATION_CONFIG`로 지정할 수 있습니다.
 
-## 개발에서 배포까지 — 환경별로 할 것 / 하지 말 것
-
-| # | 어디서 | 무엇을 | 명령 |
-|---|---|---|---|
-| ① | **로컬 개발** (로컬 장비) | 브랜치 `dev` 에서 브랜치를 따 핫 리로드로 수정 → 로컬 테스트 → push | `git switch -c feature/<주제> origin/dev` · `omk dev up` … `git push -u origin feature/<주제>` |
-| ② | GitHub | `feature/*` → `dev` PR → CI → **일반 머지** (직접 push 하지 않는다) | `gh pr create --base dev` |
-| ③ | **환경 dev** (개발 서버) | 합쳐진 `dev` 가 실제로 설치되고 도는지 확인 | `omk env update dev` (처음 한 번: `omk env install dev --tailscale`) |
-| ④ | GitHub | `dev` → `main` PR → CI → 리뷰 → **일반 머지** | `gh pr create --base main --head dev` |
-| ⑤ | **환경 staging** (스테이징 서버) | 머지된 main 을 기존 데이터 위에서 update 로 확인 | `omk env update staging` |
-| ⑥ | **환경 staging** (스테이징 서버) | 확인을 마친 커밋을 기록 | `omk env verify staging` |
-| ⑦ | GitHub | release-please 의 릴리스 PR 머지 → `vX.Y.Z` 태그 (⑥ 뒤에 main 에 머지된 것이 없을 때) | 릴리스 PR 머지 |
-| ⑧ | **환경 online** (온라인 서버) | 새 릴리스 태그로 올리고 스모크 확인 — 게이트가 ⑥ 의 기록을 본다 | `omk env update online` |
-
-기본은 전부 **수동**이다 — 머지·릴리스만으로는 어떤 환경도 바뀌지 않는다. 앞 단계를 통과하기 전에는 다음 단계로 가지 않는다
-(환경 dev 통과 전 `main` 으로 올리지 않는다, staging 통과 전 릴리스 금지). ②~⑤ 를 사람 없이 잇는 방법은 아래 [자동 승격](#자동-승격--staging-까지-사람-없이-선택).
-
-`dev` 를 `main` 으로 올릴 때는 squash 하지 않는다 — squash 는 `dev` 와 `main` 의 연결을 끊어, 다음에 올릴 때마다 이미 올린 변경이 충돌한다.
-커밋 제목은 `feat(…):` · `fix(…):` 형식을 지킨다 — 일반 머지라 `dev` 의 커밋 제목이 그대로 `main` 에 들어가고, release-please 가 그것을 CHANGELOG 에 쓴다.
-
-### 자동 승격 — staging 까지 사람 없이 (선택)
-
-환경이 스스로 갱신하고, 갱신한 커밋에 결과를 붙이고, 그 결과가 다음 단계를 연다. 사람의 관문은 staging 확인과 `verify` 부터다(⑥~⑧ 은 그대로).
-
-```
-feature PR → dev (CI 통과 시 자동 머지)
-  → 환경 dev 가 주기마다 dev 를 받아 update → 스모크 → 그 커밋에 표지 omk/env-dev
-  → dev → main PR 자동 생성 · CI 와 omk/env-dev 가 모두 통과하면 자동 머지 (일반 머지)
-  → 환경 staging 이 주기마다 main 을 받아 update → 스모크 → 표지 omk/env-staging
-  → 사람: staging 확인 → verify → 릴리스 PR → online
+```json
+{"checks":[{"name":"changed-feature-regression","argv":["node","scripts/my-staging-check.mjs"]}]}
 ```
 
-| 조각 | 하는 일 | 켜는 곳 |
-|---|---|---|
-| `omk env smoke <env>` | health · 빌드본의 API 포트 · 웹의 `/generated` 경로 · 로그인 · `/ready`(LLM 노드·DB·기본 모델, 쓰기 없음) · 채팅 1회. 릴리스를 따르는 환경(`OMK_TRACK=release` — 기본 online)은 채팅을 빼고 쓰기 없는 검사만 한다. 하나라도 실패하면 종료 코드 3 | 그 환경 `.env` 의 `OMK_SMOKE_EMAIL` · `OMK_SMOKE_PASSWORD` (스모크가 로그인할 계정) |
-| 결과 표지 | 갱신 → 스모크 뒤 그 커밋에 GitHub 커밋 상태 `omk/env-<env>` 를 붙인다. 갱신이 실패해도 실패로 붙인다 | 그 환경 `.env` 의 `OMK_STATUS_TOKEN` (커밋 상태 쓰기 권한만) → `omk env autoupdate <env>` 를 다시 실행 |
-| `promote` 워크플로 | dev 에 push 될 때 dev → main PR 을 만들고(있으면 그대로) 자동 머지를 건다 | 저장소 시크릿 `OMK_PROMOTE_TOKEN` · 저장소 설정 "Allow auto-merge" |
-| main 보호 규칙 | 필수 체크에 `omk/env-dev` 를 더한다 — 환경 dev 가 확인하지 않은 커밋은 main 에 들어가지 못한다 | 저장소 설정 |
-
-- 표지는 **확인한 커밋**에 붙는다. PR 의 최신 커밋을 환경이 아직 받지 않았으면 표지가 없어 자동 머지가 기다린다.
-- 실패하면 표지가 실패로 남고 다음 단계가 열리지 않는다. 환경은 이전 버전 그대로 돈다. 실패로 남은 커밋은 다음 주기에 스모크를 다시 본다 —
-  바로 다시 보려면 `omk env smoke <env> --report`.
-- 갱신(빌드·마이그레이션)이 실패한 커밋은 다음 주기에 새 커밋이 없어도 갱신부터 다시 한다 — 갱신 없이 스모크만 보면 예전 빌드본이 통과해 버린다.
-- **켜는 순서**: 환경 dev 가 표지를 붙이기 시작 → main 필수 체크에 `omk/env-dev` 추가 → `OMK_PROMOTE_TOKEN` 등록. `promote` 는 필수 체크에
-  `omk/env-dev` 가 없으면 PR 만 만들고 자동 머지를 걸지 않는다.
-- 통과를 기록한 커밋은 다시 보지 않는다 — 스모크의 채팅 1회는 그 계정에 대화 기록을 한 건 남긴다(릴리스를 따르는 환경은 채팅을 보내지 않는다).
-- `OMK_STATUS_TOKEN` 이 없는 환경의 autoupdate 는 지금까지처럼 갱신만 한다. `OMK_PROMOTE_TOKEN` 이 없으면 `promote` 는 아무것도 하지 않는다.
-- `OMK_PROMOTE_TOKEN` 은 기본 `GITHUB_TOKEN` 이 아니어야 한다 — 기본 토큰으로 만든 PR·머지는 CI 와 release-please 를 깨우지 않는다.
-- 릴리스를 따르는 환경(online)은 대상이 아니다 — 릴리스 게이트가 `verify` 기록을 본다.
-
-### dev — "합쳐진 dev 가 실제 환경에서 도는가"
-
-| 할 것 | 하지 말 것 |
-|---|---|
-| 브랜치 `dev` 에 머지될 때마다 `omk env update dev` — **설치가 끝까지 되는지**부터 본다 | 환경 dev 를 건너뛰고 `dev` 를 `main` 으로 올리지 않는다 — CI 는 "설치해서 도는지"를 보지 않는다 |
-| 바꾼 기능 + 기본 동작(채팅·웹 검색·에이전트 작업·아티팩트 내보내기)을 확인한다 | dev 의 결과로 **답변 품질·에이전트 성공률**을 판단하지 않는다 — 기본 모델은 작다. dev 가 증명하는 것은 배선과 구조다 |
-| 꼬이면 망설이지 말고 `omk env reset dev --reinstall` — 데이터는 버리는 것이다 | 남기고 싶은 데이터를 dev 에 두지 않는다 |
-| 문제가 나오면 로컬 개발에서 고쳐 → push → 브랜치 `dev` 에 머지 → `omk env update dev` | 환경 디렉터리(`~/.openmake/dev/llm`)의 소스를 직접 고치지 않는다 |
-| 머지 전에 따로 볼 브랜치는 **임시 환경**에 올린다: `omk env install pr-123 --ref <브랜치>` → 끝나면 `omk env reset pr-123` | 환경 dev 에 `--ref` 만 바꿔 다시 install 하지 않는다 — 이미 있는 클론은 그대로 재사용되어 **이전 브랜치가 설치된다**(로그의 "소스 재사용: … (브랜치)" 한 줄로만 드러난다) |
-| 무거운 실험(새 모델, 설정 변경, 일부러 깨뜨리기)은 여기서 한다 | 임시 환경을 방치하지 않는다 — 환경마다 DB·게이트웨이·이미지가 따로 생긴다 |
-
-### staging — "합쳐진 main 이 online 에 올라가도 되는가"
-
-| 할 것 | 하지 말 것 |
-|---|---|
-| **항상 main** (`--ref` 없이 설치). 머지될 때마다 `omk env update staging` | `--ref feature/*` 로 PR 을 시험하지 않는다 — 그것은 임시 환경의 일이다 (예외: 환경 매니저 자체를 바꾸는 브랜치의 공존 시험) |
-| **update 경로**로 올린다 — online 도 update 로 올라가므로 같은 길을 먼저 밟는다 | 습관적으로 reset → 재설치하지 않는다 — 마이그레이션이 기존 데이터에서 도는지 볼 수 없게 된다 |
-| 데이터를 **유지**한다(계정·대화·작업이 쌓여 있어야 마이그레이션 검증이 된다). reset 은 정말 꼬였을 때만 | 실사용 데이터·비밀값을 가져다 넣지 않는다 — 환경은 소스에서 설치한 것만으로 선다 |
-| 여러 PR 이 합쳐진 결과의 **기능 확인은 여기까지** 끝낸다 | 통과하기 전에 릴리스 PR 을 머지하지 않는다 |
-| 확인이 끝나면 `omk env verify staging` — 그 커밋에서 나온 릴리스만 online 에 올라간다 | 확인하지 않고 verify 하지 않는다. verify 뒤에 main 에 머지가 더 들어왔으면 update → 확인 → verify 를 다시 한다 |
-| 문제가 나오면 수정(①부터) 또는 revert | staging 에서 직접 핫픽스하지 않는다 |
-
-### online — "실사용"
-
-| 할 것 | 하지 말 것 |
-|---|---|
-| 릴리스 직후 `omk env update online` — **최신 릴리스 태그**로만 올라간다(새 태그가 없으면 아무 일도 하지 않는다) | main HEAD·`feature/*` 를 올리지 않는다 (`--ref` 로 브랜치를 주지 않는다) |
-| **스모크만**: 접속 200 · 로그인 · `/ready`(LLM 노드·DB·기본 모델) · `omk env status online` — **채팅은 보내지 않는다**. 코드 동작은 같은 커밋으로 staging 에서 확인했고(릴리스 게이트), online 에서 새로 생길 수 있는 고장은 연결·설정이라 쓰기 없는 `/ready` 로 본다(대화 기록·모델 호출을 남기지 않는다) | 부하 시험·대량 평가·동시 다발 요청 같은 **무거운 검증을 하지 않는다** — 운영 모델 서버를 공유한다. 그런 것은 CI 와 staging 에서 끝낸다 |
-| 매일 백업을 걸어 둔다(`omk env backup online --schedule`). `update` 는 올리기 직전에 한 번 더 뜬다 | `omk env reset online` 을 하지 않는다 — 볼륨(DB)까지 지운다. 옮길 때는 `db-dump` → `db-restore` |
-| 게이트를 켜 둔다(`.env` 의 `OMK_RELEASE_GATE=1`) — staging 에서 확인하지 않은 릴리스는 올라가지 않는다 | `--force-unverified` 를 습관적으로 쓰지 않는다 — 급한 수정에만, 쓴 기록은 `logs/release-gate.log` 에 남는다 |
-| 문제가 나면 수정 → 새 릴리스 → update. 급하면 이전 태그로 되돌리고 `./openmake_llm.sh deploy` | online 에서 실험·설정 시험·모델 교체 시험을 하지 않는다 |
-| 호스트별 값(도메인·모델 서버 주소·키)은 그 환경의 `.env`·`litellm.env` 에만 둔다 | 저장소에 호스트 경로·주소·키를 적지 않는다 |
-
-| | dev | staging | online |
-|---|---|---|---|
-| 올리는 방식 | update (꼬이면 reset + install) | **update 만** | **update 만** |
-| 데이터 | 버림 | 유지 | 절대 보존 |
-| 검증 깊이 | 기능 전부(배선·구조) | 기능 + update·마이그레이션 | 스모크만 |
-| 모델 | 호스트 기본 모델 또는 지정 | 같음 | 운영 모델 서버 (`--qwen-vllm-base …`) |
-
-## 릴리스 게이트 — staging 에서 확인한 커밋만 online 에
-
-릴리스 태그는 **릴리스 PR 을 머지한 순간의 main** 에 찍힌다. staging 을 마지막으로 올린 뒤에 머지된 PR 은 확인 없이 릴리스에 들어간다 —
-게이트는 그 경우를 막는다. 브랜치를 늘리지 않고, 확인한 커밋과 릴리스 사이의 연결만 강제한다.
+`argv`는 신뢰된 운영자 설정이며 쉘 문자열로 평가하지 않습니다. **예시를 그대로 통과 검사로 사용하지 말고 실제 기능 시나리오를 지정**하세요. 모든 항목은 필수이며 빈 설정·미실행·실패는 검증 통과가 아닙니다. 검증 명령은 tom의 대상 앱에 맞는 테스트 계정을 사용해야 하며, CI 전용 `_test` DB fixture를 실사용 DB에 적용하지 않습니다.
 
 ```bash
-# 스테이징 서버 — 기능·마이그레이션 확인을 마친 뒤
-omk env verify staging            # 검사(깨끗한 작업 트리 · origin/main 에 있는 커밋 · health) → origin 에 기록
-omk env verify staging --list     # 기록 보기 (어느 환경에서든)
-
-# 온라인 서버 — 한 번 켠다 (.env 에 OMK_RELEASE_GATE=1 을 적거나, 설치할 때 --release-gate)
-omk env update online             # 확인된 릴리스만 올라간다
+omk env pipeline staging                  # 설치 → 스모크 → 필수 검증 → hold
+omk env pipeline staging --schedule '*/10 * * * *'
+omk env status staging
+# 사람이 tom을 실제로 사용하고 OK한 뒤, 확인했던 정확한 40자리 SHA로:
+omk env approve staging --sha FULL_SHA --yes
+# 수동 호환 명령: 동일 근거 검사를 수행한다
+omk env verify staging --sha FULL_SHA --yes
 ```
 
-- **기록**은 origin 의 `refs/omk/verified/<커밋>` 이다. 브랜치·태그가 아니라 GitHub 화면에는 보이지 않고, 환경들이 다른 호스트에 있어도 읽힌다.
-- **통과 조건** — 기록된 커밋이 릴리스 태그의 조상이고, 그 사이에 바뀐 것이 릴리스 메타데이터뿐이다: `release-please-config.json` 의 `extra-files`·
-  `changelog-path`, 루트 `package.json`·`package-lock.json`·`.release-please-manifest.json`. JSON 은 바뀐 줄이 버전뿐이어야 한다(릴리스 커밋에 섞인 의존성 변경은 거부).
-  허용 목록은 **확인한 커밋**의 설정에서 읽는다.
-- **거부되면** 아무것도 바꾸지 않고 종료 코드 2 로 끝난다 — 환경은 지금 버전 그대로 돈다. 확인하지 않은 커밋과 경로를 출력한다. `autoupdate` 도 같은 게이트를 지난다.
-- **급한 수정**은 `omk env update online --force-unverified` — 물어본 뒤 진행하고 `~/.openmake/online/logs/release-gate.log` 에 남긴다.
-- 게이트는 **켠 환경에서만** 동작한다. 외부 설치본은 기록을 쓸 권한도 staging 도 없으므로 기본은 꺼져 있다. `openmake_bench` 는 릴리스 태그가 없어 대상이 아니다.
+명령은 현재 HEAD·실행 중 빌드·디스크 빌드·고정 SHA·검증 결과가 일치하는지 검사합니다. 사람이 확인하는 중 자동 갱신을 허용하지 않습니다. 이전 통과 결과를 다른 SHA에 재사용하지 않습니다. 검증이 실패하면 local에 재현과 증거를 전달해 수정합니다. hold를 취소하고 재검증하려면 `omk env hold staging --release`를 명시적으로 실행합니다. 작업 잠금이 남으면 먼저 실행 중 프로세스를 확인하고 복구합니다.
 
-**스테이징 서버의 쓰기 권한** — `verify` 는 origin 에 push 한다. 설치된 클론의 origin 은 https(읽기 전용)이므로 push 할 주소를 따로 준다.
+## 릴리스 게이트와 운영
+
+`refs/omk/verified/FULL_SHA`가 검증 근거입니다. verify한 커밋과 태그 커밋은 버전/변경 로그 메타데이터 때문에 달라도 됩니다. **각 중간 커밋**에서 허용된 메타데이터만 바뀌었는지 검사하며, 의존성·코드 변경은 나중에 되돌렸어도 차단합니다. 허용 경로는 검증된 커밋의 release-please 설정에서 읽습니다. JSON은 버전 필드 외 변경을 허용하지 않습니다.
 
 ```bash
-OMK_VERIFY_PUSH_URL=git@github.com:openmake/openmake_llm.git omk env verify staging
+omk env pipeline online                  # 고정 태그 → 게이트 → 백업·갱신 → 스모크
+omk env pipeline online --schedule '*/10 * * * *'
+omk env pipeline online --off
+omk env verify staging --list
 ```
 
-| 방법 | 설명 |
-|---|---|
-| SSH agent forwarding (권장) | `ssh -A staging-host` 로 들어가 실행한다 — 확인한 사람의 키를 그때만 쓰고, 호스트에 자격 증명이 남지 않는다 |
-| 쓰기 권한 deploy key | 호스트에 저장해야 할 때. 그 키로 `main`·`v*` 태그를 고칠 수 없게 브랜치 보호·태그 ruleset 을 먼저 확인한다 |
+새 pipeline은 운영 게이트를 강제합니다. 기존 `env update`·`autoupdate`는 호환/복구용 명령이며 8단계 완료 근거로 대신 사용하지 않습니다. 기본 설치·기존 설치본 이관은 아래 별도 절차이며, 첫 운영 설치도 검증된 릴리스인지 확인한 후 수행합니다. 백업 실패·검증 부재·태그/설치 SHA 불일치·스모크 실패는 완료로 처리하지 않습니다. 운영 자동 갱신의 OS 자동기동 권한·재부팅 검증은 별도 실제 호스트 검증입니다.
+
+## bean 외부 실사용 검사
+
+`node scripts/pipeline/bean.mjs run --config /private/bean.json --output /private/qa`로 대상별 결과를 남깁니다. 설정은 [`../pipeline/bean.example.json`](../pipeline/bean.example.json)을 참고합니다. health·ready·로그인·짧은 채팅을 명시적으로 선택하며, 로그인은 기존 QA 계정 환경변수를 읽습니다. 채팅 검사는 일반 사용자의 채팅 기록을 만들 수 있습니다. 배포·계정 권한 변경·verify는 실행하지 않습니다.
+
+주기는 임의 활성화하지 않습니다. 운영자가 정한 주기로 `node scripts/pipeline/bean.mjs schedule --config /private/bean.json --output /private/qa --every '*/30 * * * *'`를 실행합니다. PM2 영구 등록(`pm2 save`)과 재부팅 복원은 해당 호스트에서 별도로 확인합니다. 결과에는 대상 호스트·관측 SHA/버전·시나리오·시각·통과/실패가 포함되며 짧은 SHA는 짧은 것으로 표시합니다.
+
+## 모니터링 버튼과 증거 연결
+
+6번 “실사용 OK” 버튼은 [`../../docs/architecture/pipeline-monitor-contract.md`](../../docs/architecture/pipeline-monitor-contract.md)의 요청 규격을 사용합니다. 웹서버에서 로그인·승인 권한·CSRF를 확인한 뒤 고정 argv의 `approve` 명령을 요청해야 합니다. 서버 소스가 없는 상태에서 버튼이 이미 연결됐다고 표시하지 않습니다.
+
+현황 보드의 기존 7단계 RC/승인 결과와 새 8단계 결과를 구분합니다. 코드가 운영에 포함된 사실만으로 사용자 OK·검증 완료를 추정하지 않습니다. 전체 소스 조사와 미연결 항목은 [`../../docs/architecture/pipeline-source-audit.md`](../../docs/architecture/pipeline-source-audit.md)를 참고하세요.
 
 ## 설치 — 아무것도 없는 PC 에서 한 줄
 

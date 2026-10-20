@@ -14,6 +14,9 @@
   irm https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.ps1 -OutFile omk.ps1
   .\omk.ps1 env install staging --tailscale
   .\omk.ps1 env status staging
+  .\omk.ps1 env pipeline staging
+  # 실사용 OK 후 해당 SHA만 확인 기록
+  .\omk.ps1 env approve staging --sha FULL_SHA --yes
 
 .NOTES
   환경변수: OMK_DISTRO(기본 Ubuntu)  OMK_REF(omk.sh 를 받을 브랜치, 기본 main)  OMK_RAW_BASE(원본 URL 베이스)
