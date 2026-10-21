@@ -22,6 +22,7 @@ import { interpretExitCode } from './exit-code';
 import { maskedPipeFailureNote } from './pipe-status';
 import { ASK_HUMAN_STRUCTURED_SCHEMA, normalizeAskHuman } from './ask-human';
 import { ASK_HUMAN } from '../../config/agent-task-tools';
+import { liveFrameSpec } from '../../config/agent-task-live-view';
 import { ASK_HUMAN_STRUCTURED_DESCRIPTION } from '../../prompts/agent-task-tools';
 import { FILE_VIEW_MAX_CHARS } from '../../config/runtime-limits';
 import { randomUUID } from 'crypto';
@@ -358,10 +359,12 @@ export function createTaskTools(
             }
             const urlBlock = await browserUrlBlock(actions);
             if (urlBlock) return textResult(urlBlock, true);
+            const live = liveFrameSpec(); // 실행 중 화면을 작업 폴더 숨김 파일에 쓰게 한다(꺼져 있으면 null)
             const spec = {
                 actions,
                 ...(Array.isArray(args.allowlist) ? { allowlist: args.allowlist } : {}),
                 ...(sandbox.browserStatePath ? { statePath: sandbox.browserStatePath } : {}),
+                ...(live ? { live } : {}),
             };
             let r: ExecResult;
             try {
