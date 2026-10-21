@@ -43,7 +43,7 @@ export class MemoryStore implements KeyValueStore {
         const entry: Entry = { value: JSON.stringify(value) };
         this.store.set(key, entry);
         if (ttlMs && ttlMs > 0) {
-            this.armExpiry(key, entry, Date.now() + ttlMs);
+            this.armExpiry(key, entry, ttlMs);
         }
     }
 
@@ -82,7 +82,7 @@ export class MemoryStore implements KeyValueStore {
         const entry = this.liveEntry(key);
         if (!entry) return false;
         this.clearTimer(key);
-        this.armExpiry(key, entry, Date.now() + ttlMs);
+        this.armExpiry(key, entry, ttlMs);
         return true;
     }
 
@@ -98,8 +98,13 @@ export class MemoryStore implements KeyValueStore {
         return entry;
     }
 
-    /** expiresAt 을 기록하고 상한 이하 지연으로 타이머를 건다. 일찍 깨면 남은 시간만큼 다시 건다. */
-    private armExpiry(key: string, entry: Entry, expiresAt: number): void {
+    /**
+     * expiresAt 을 기록하고 상한 이하 지연으로 타이머를 건다. 일찍 깨면 남은 시간만큼 다시 건다.
+     * ttlMs 가 NaN·Infinity 처럼 유한하지 않으면 즉시 만료로 본다 — 종전 setTimeout 이 이런 값을 1ms 로 바꿔
+     * 곧바로 지우던 동작과 같다(NaN 을 그대로 두면 만료 비교가 늘 거짓이라 키가 영구히 남는다).
+     */
+    private armExpiry(key: string, entry: Entry, ttlMs: number): void {
+        const expiresAt = Date.now() + (Number.isFinite(ttlMs) ? ttlMs : 0);
         entry.expiresAt = expiresAt;
         const schedule = (): void => {
             const remaining = Math.max(0, expiresAt - Date.now());
@@ -112,6 +117,8 @@ export class MemoryStore implements KeyValueStore {
                     schedule();
                 }
             }, Math.min(remaining, MAX_TIMER_DELAY_MS));
+            // 만료 타이머가 프로세스를 붙잡지 않게 한다(최대 24.8일). 서버는 소켓이 살려 두므로 동작 변화 없음.
+            entry.timer.unref?.();
         };
         schedule();
     }
