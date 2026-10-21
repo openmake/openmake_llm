@@ -634,10 +634,19 @@ const PLAN_MARK: Record<PlanStepStatus, LucideIcon> = {
 
 function TaskDetailModal({
   taskId,
+  onLiveEligibleChange,
 }: {
   taskId: string;
+  /** 실시간 작업 화면 대상 여부 — 대상일 때만 모달을 넓힌다 */
+  onLiveEligibleChange?: (taskId: string, eligible: boolean) => void;
 }) {
   const t = useTranslations("agentTasks");
+  // 실시간 작업 화면 대상일 때만 두 칸 — 판정 전·대상 아님은 예전 한 칸 모습
+  const [liveEligible, setLiveEligible] = useState(false);
+  const handleLiveEligible = useCallback((eligible: boolean) => {
+    setLiveEligible(eligible);
+    onLiveEligibleChange?.(taskId, eligible);
+  }, [taskId, onLiveEligibleChange]);
   const router = useRouter();
   const [detail, setDetail] = useState<{ task: ApiAgentTask; steps: ApiTaskStep[] } | null>(null);
   const [files, setFiles] = useState<string[]>([]);
@@ -727,7 +736,7 @@ function TaskDetailModal({
         <p className="text-sm text-danger py-8 text-center">{t("detailLoadError")}</p>
       ) : (
         // 넓은 화면은 두 칸 — 왼쪽 기존 내용, 오른쪽 실시간 작업 화면. 좁은 화면은 기존 내용 아래에 붙는다.
-        <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-5 lg:space-y-0">
+        <div className={cn("space-y-4", liveEligible && "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-5 lg:space-y-0")}>
         <div className="min-w-0 space-y-4">
           <div className="rounded-md border border-border bg-surface-2 p-4">
             <p className="mb-1 text-xs font-medium text-muted">{t("goalLabel")}</p>
@@ -949,7 +958,7 @@ function TaskDetailModal({
           )}
         </div>
         <div className="min-w-0 self-start lg:sticky lg:top-0">
-          <LiveView taskId={taskId} status={detail.task.status} />
+          <LiveView taskId={taskId} status={detail.task.status} onEligibleChange={handleLiveEligible} />
         </div>
         </div>
       )}
@@ -1280,6 +1289,11 @@ export default function AgentTasksPage() {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  // 실시간 작업 화면 대상으로 판정된 작업 — 열린 작업과 같을 때만 상세 모달을 넓힌다(작업이 바뀌면 자연히 좁아진다)
+  const [liveTaskId, setLiveTaskId] = useState<string | null>(null);
+  const onLiveEligibleChange = useCallback((id: string, eligible: boolean) => {
+    setLiveTaskId((cur) => (eligible ? id : cur === id ? null : cur));
+  }, []);
   const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null); // taskId being acted on
 
@@ -1676,9 +1690,9 @@ export default function AgentTasksPage() {
 
       {/* 작업 상세 모달 */}
       {detailTaskId && (
-        <Modal open={!!detailTaskId} onClose={() => setDetailTaskId(null)} title={t("modalTitle")} wide>
+        <Modal open={!!detailTaskId} onClose={() => { setDetailTaskId(null); setLiveTaskId(null); }} title={t("modalTitle")} wide={liveTaskId === detailTaskId}>
           {/* 작업이 바뀌면(체크포인트 분기 등) 새로 그린다 — 이전 작업의 파일·편집 상태가 남지 않게. */}
-          <TaskDetailModal key={detailTaskId} taskId={detailTaskId} />
+          <TaskDetailModal key={detailTaskId} taskId={detailTaskId} onLiveEligibleChange={onLiveEligibleChange} />
         </Modal>
       )}
       {previewTaskId && (

@@ -23,3 +23,10 @@ export function frameAgeSeconds(at: number, now: number): number | null {
   const seconds = Math.floor((now - at) / 1000);
   return seconds < FRESH_FRAME_SECONDS ? null : seconds;
 }
+
+/** 조회 오류 중 패널을 숨길 것 — 403(소유자·관리자 아님)·404(작업 없음). 그 밖(5xx·네트워크·재기동)은 일시 오류로 보고 다음 폴링에서 다시 읽는다. */
+const HIDDEN_ERROR_STATUSES: ReadonlySet<number> = new Set([403, 404]);
+
+export function isLiveViewHiddenError(status: number | undefined): boolean {
+  return status !== undefined && HIDDEN_ERROR_STATUSES.has(status);
+}

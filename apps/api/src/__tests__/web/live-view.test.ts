@@ -2,8 +2,9 @@
 // apps/api tsconfig rootDir 밖 파일이라 require 로 런타임만 불러온다(ts-jest 가 변환)
 export {}; // 모듈로 만들어 다른 테스트 파일의 전역 타입 이름과 겹치지 않게 한다
 type PollInput = { status: string | undefined; visible: boolean; eligible: boolean | null };
-const { nextLivePollDelay, frameAgeSeconds, LIVE_RUNNING_STATUSES } = require('../../../../web/lib/live-view') as {
+const { nextLivePollDelay, frameAgeSeconds, isLiveViewHiddenError, LIVE_RUNNING_STATUSES } = require('../../../../web/lib/live-view') as {
     nextLivePollDelay: (s: PollInput) => number | null;
+    isLiveViewHiddenError: (status: number | undefined) => boolean;
     frameAgeSeconds: (at: number, now: number) => number | null;
     LIVE_RUNNING_STATUSES: readonly string[];
 };
@@ -37,5 +38,17 @@ describe('frameAgeSeconds', () => {
     });
     it('몇 초 전인지 정수로', () => {
         expect(frameAgeSeconds(1000, 11000)).toBe(10);
+    });
+});
+
+describe('isLiveViewHiddenError', () => {
+    it('403·404 는 패널을 숨긴다', () => {
+        expect(isLiveViewHiddenError(403)).toBe(true);
+        expect(isLiveViewHiddenError(404)).toBe(true);
+    });
+    it('서버 오류·네트워크 오류는 일시 오류 — 숨기지 않는다', () => {
+        expect(isLiveViewHiddenError(500)).toBe(false);
+        expect(isLiveViewHiddenError(502)).toBe(false);
+        expect(isLiveViewHiddenError(undefined)).toBe(false);
     });
 });

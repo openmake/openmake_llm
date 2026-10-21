@@ -4,12 +4,13 @@
  * 실시간 작업 화면 — 작업 상세 오른쪽에 에이전트 브라우저의 마지막 화면과 터미널 출력 끝부분을 보여 준다.
  * 보기 전용(클릭 처리 없음). 조작이 필요하면 기존 "브라우저 넘겨받기"를 쓴다.
  * 실행 중·탭이 보일 때만 1초마다 다시 읽고, 끝난 작업은 한 번만 읽는다.
- * 백엔드: routes/agent-task-live.routes.ts (소유자 전용 — 대상이 아니면 200 + eligible:false, 그 밖의 오류도 조용히 숨긴다)
+ * 백엔드: routes/agent-task-live.routes.ts (소유자 전용 — 대상이 아니면 200 + eligible:false, 403·404 도 조용히 숨긴다.
+ * 일시 오류(5xx·네트워크)는 마지막 내용을 그대로 두고 다음 폴링에서 다시 읽는다)
  */
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ApiClient } from "@/lib/api-client";
-import { frameAgeSeconds, nextLivePollDelay } from "@/lib/live-view";
+import { ApiClient, ApiError } from "@/lib/api-client";
+import { frameAgeSeconds, isLiveViewHiddenError, nextLivePollDelay } from "@/lib/live-view";
 import { cn } from "@/lib/utils";
 
 interface LiveBrowser { image: string | null; unchanged?: boolean; url: string; title: string; at: number }
@@ -26,7 +27,12 @@ type LiveResponse = {
 };
 type Tab = "screen" | "terminal";
 
-export function LiveView({ taskId, status }: { taskId: string; status: string | undefined }) {
+export function LiveView({ taskId, status, onEligibleChange }: {
+  taskId: string;
+  status: string | undefined;
+  /** 대상 여부가 정해지거나 바뀔 때 — 부모가 두 칸 배치·모달 폭을 정한다 */
+  onEligibleChange?: (eligible: boolean) => void;
+}) {
   const t = useTranslations("agentTasks.live");
   // null = 아직 모름, false = 대상 아님(아무것도 그리지 않는다)
   const [eligible, setEligible] = useState<boolean | null>(null);
@@ -41,6 +47,9 @@ export function LiveView({ taskId, status }: { taskId: string; status: string | 
   // 마지막으로 받은 browser.at — 화면이 그대로면 서버가 이미지를 다시 보내지 않는다
   const frameAt = useRef<number | null>(null);
   const preRef = useRef<HTMLPreElement>(null);
+  // 부모 콜백은 ref 로 — 바뀔 때마다 폴링 효과를 다시 돌리지 않도록
+  const onEligibleRef = useRef(onEligibleChange);
+  useEffect(() => { onEligibleRef.current = onEligibleChange; }, [onEligibleChange]);
 
   useEffect(() => {
     const onChange = () => setVisible(document.visibilityState === "visible");
@@ -54,6 +63,12 @@ export function LiveView({ taskId, status }: { taskId: string; status: string | 
     if (loadedOnce.current && !visible) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const decide = (next: boolean) => {
+      if (eligibleRef.current === next) return;
+      eligibleRef.current = next;
+      setEligible(next);
+      onEligibleRef.current?.(next);
+    };
     const load = async () => {
       let nextStatus: string | undefined = status;
       try {
@@ -61,9 +76,8 @@ export function LiveView({ taskId, status }: { taskId: string; status: string | 
         const r = await ApiClient.get<LiveResponse>(`/api/agent-tasks/${taskId}/live${q}`, { redirectOnUnauthorized: false });
         if (!alive) return;
         const d = r?.data;
-        if (!d || !d.eligible) { eligibleRef.current = false; setEligible(false); return; }
-        eligibleRef.current = true;
-        setEligible(true);
+        if (!d || !d.eligible) { decide(false); return; }
+        decide(true);
         nextStatus = d.status;
         const b = d.browser;
         // unchanged — 갖고 있던 이미지를 그대로 쓴다
@@ -72,10 +86,10 @@ export function LiveView({ taskId, status }: { taskId: string; status: string | 
         setTerminal(d.terminal);
         setReceivedAt(Date.now());
         loadedOnce.current = true;
-      } catch {
-        // 403(소유자·관리자 아님)·404 등 — 조용히 숨긴다
-        if (alive) { eligibleRef.current = false; setEligible(false); }
-        return;
+      } catch (e) {
+        if (!alive) return;
+        // 403(소유자·관리자 아님)·404 — 조용히 숨긴다. 그 밖은 일시 오류 — 마지막 내용을 두고 아래에서 다시 잡는다.
+        if (isLiveViewHiddenError(e instanceof ApiError ? e.status : undefined)) { decide(false); return; }
       }
       const delay = nextLivePollDelay({ status: nextStatus, visible, eligible: eligibleRef.current });
       if (alive && delay !== null) timer = setTimeout(() => void load(), delay);
