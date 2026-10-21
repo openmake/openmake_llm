@@ -522,6 +522,15 @@ describe('task-sandbox tools', () => {
             expect(recordRun).toHaveBeenCalledWith(expect.objectContaining({ skillId: 'skill-1', kind: 'script', status: 'ok' }));
         });
 
+        it('browser 절차 재생도 액션 파일에 실시간 화면 설정(live)을 싣는다', async () => {
+            const sb = fakeSandbox();
+            const browserSpec = { id: 'skill-b', kind: 'browser' as const, actions: [{ type: 'goto', url: 'https://example.com' }] };
+            const tools = createTaskTools(sb, undefined, undefined, undefined, { save: async () => ({ id: 'id', version: 1, updated: false }), load: async () => browserSpec });
+            await byName(tools, 'skill_run').handler({ skill_id: 'skill-b' });
+            expect(liveFrameSpec()).not.toBeNull();
+            expect(JSON.parse(sb.lastBrowserSpec).live).toEqual(liveFrameSpec());
+        });
+
         it('절차를 찾지 못하면 기록하지 않는다', async () => {
             const recordRun = jest.fn();
             const tools = createTaskTools(fakeSandbox(), undefined, undefined, undefined, { save: async () => ({ id: 'id', version: 1, updated: false }), load: async () => null, recordRun });
