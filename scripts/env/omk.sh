@@ -797,6 +797,7 @@ cmd_env_autoupdate() { # env [--every CRON] [--off]
 # 환경이 아직 받지 않은 커밋은 저절로 기다린다.
 #   .env 키:  OMK_SMOKE_EMAIL / OMK_SMOKE_PASSWORD   스모크가 로그인할 그 환경의 계정
 #            OMK_STATUS_TOKEN                        커밋 상태 쓰기 권한만 있는 토큰
+#            OMK_DISPATCH_TOKEN                      Actions 쓰기 권한만 있는 토큰 — approve 직후 release-verified 를 깨운다
 SMOKE_WHY=""     # 방금 실패한 항목의 이유
 SMOKE_TOKEN=""   # 로그인이 받은 토큰 — 채팅이 쓴다
 json_str() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; printf '"%s"' "$s"; }
@@ -902,6 +903,16 @@ status_post() { # $1=llm dir $2=env $3=커밋 $4=success|failure $5=설명
         -d "{\"state\":\"$4\",\"context\":\"$(status_context "$2")\",\"description\":$(json_str "$5")}" 2>/dev/null)" || c=000
     [[ "$c" == 201 ]] || { log_warn "결과 표지 실패 ($c) — 토큰의 커밋 상태 쓰기 권한을 확인하세요"; return 1; }
     log_ok "결과 표지 $(status_context "$2")=$4 → ${3:0:8}"
+}
+release_verified_dispatch() { # $1=llm dir — 사람 확인을 기록한 뒤 release-verified 워크플로를 바로 깨운다
+    local token slug c
+    token="$(dotenv_get "$1/.env" OMK_DISPATCH_TOKEN)"; slug="$(status_repo_slug "$1")"
+    [[ -n "$token" && -n "$slug" ]] || { log_warn ".env 에 OMK_DISPATCH_TOKEN 이 없어 release-verified 를 깨우지 않습니다 — 예약 실행을 기다립니다"; return 1; }
+    c="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -X POST "$OMK_GITHUB_API/repos/$slug/actions/workflows/release-verified.yml/dispatches" \
+        -H "Authorization: Bearer $token" -H 'Accept: application/vnd.github+json' \
+        -d '{"ref":"main"}' 2>/dev/null)" || c=000
+    [[ "$c" == 204 ]] || { log_warn "release-verified 깨우기 실패 ($c) — 토큰의 Actions 쓰기 권한을 확인하세요 · 예약 실행을 기다립니다"; return 1; }
+    log_ok "release-verified 워크플로를 깨웠습니다 — 릴리스 PR 자동 병합"
 }
 status_report() { # $1=env $2=커밋 $3=결과 $4=설명 — 같은 커밋·같은 결과는 다시 올리지 않는다
     local m; m="$(status_marker "$1")"
