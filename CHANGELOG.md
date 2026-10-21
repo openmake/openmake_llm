@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.109.1](https://github.com/openmake/openmake_llm/compare/v1.109.0...v1.109.1) (2026-10-21)
+
+
+### 🐛 버그 수정
+
+* **env:** wake release-verified right after human approve ([5d2d391](https://github.com/openmake/openmake_llm/commit/5d2d391478e8b3da82d20f2d43381ee113c71b41))
+* **env:** wake release-verified right after human approve ([057975a](https://github.com/openmake/openmake_llm/commit/057975a296c7bd8d30bfeaac425ca2f783ccdcad))
+* **release:** let metadata gate accept lockfile workspace versions ([708841c](https://github.com/openmake/openmake_llm/commit/708841cf3a3cc6db4c975248d24fd7ad0b4326d4))
+* **release:** let metadata gate accept lockfile workspace versions ([2e908ca](https://github.com/openmake/openmake_llm/commit/2e908cac428934e1b08565b7a9547143ca6df414))
+
 ## [1.109.0](https://github.com/openmake/openmake_llm/compare/v1.108.1...v1.109.0) (2026-10-21)
 
 
