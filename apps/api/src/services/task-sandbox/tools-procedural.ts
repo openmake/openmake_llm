@@ -11,6 +11,7 @@ import { findPlaintextSecrets } from '../agent-task/procedural-secrets';
 import { proceduralSecretRejection } from '../../prompts/procedural-skill-prompt';
 import { findStructureProblems, staticGotoActions } from '../agent-task/procedural-structure';
 import { PROCEDURAL_STRUCTURE } from '../../config/agent-task-skill-memory';
+import { liveFrameSpec } from '../../config/agent-task-live-view';
 import { SKILL_SAVE_UPDATE_ARG_DESCRIPTION, SKILL_SAVE_REVERT_ARG_DESCRIPTION, proceduralSavedMessage, proceduralStructureRejection, PROCEDURAL_URL_REJECTION_PREFIX } from '../../prompts/agent-task-skill-memory';
 
 /** 절차 스킬(save/load) 훅 — userId·repo 를 아는 TaskRuntime 이 바인딩한다.
@@ -184,10 +185,12 @@ export function createProceduralTools(
                     const renderedActions = deepSub(spec.actions ?? []);
                     const urlBlock = await h.browserUrlBlock(Array.isArray(renderedActions) ? renderedActions : []);
                     if (urlBlock) return h.textResult(urlBlock, true);
+                    const live = liveFrameSpec(); // tools.ts browser 와 같이 실행 중 화면을 남긴다(꺼져 있으면 null)
                     const specOut = {
                         actions: renderedActions,
                         ...(Array.isArray(spec.allowlist) ? { allowlist: deepSub(spec.allowlist) } : {}),
                         ...(sandbox.browserStatePath ? { statePath: sandbox.browserStatePath } : {}),
+                        ...(live ? { live } : {}),
                     };
                     const { result: r } = await h.runFresh(
                         sandbox, { prefix: '.browser-actions', ext: '.json' }, JSON.stringify(specOut),

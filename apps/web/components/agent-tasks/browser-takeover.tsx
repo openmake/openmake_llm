@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl";
 import { ArrowLeft, Loader2, MousePointerClick, Undo2 } from "lucide-react";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { classifyInputError, keyToInput, toViewportPoint } from "@/lib/browser-takeover";
+import { ineligibleRecheckDelay } from "@/lib/live-view";
 import {
   BROWSER_TAKEOVER_INPUT_SETTLE_MS, BROWSER_TAKEOVER_POLL_MS, BROWSER_TAKEOVER_SCROLL_FLUSH_MS,
 } from "@/lib/constants/ui-limits";
@@ -26,7 +27,7 @@ type SessionInput =
 
 const base = (taskId: string) => `/api/agent-tasks/${taskId}/browser-session`;
 
-export function BrowserTakeover({ taskId }: { taskId: string }) {
+export function BrowserTakeover({ taskId, status }: { taskId: string; status?: string }) {
   const t = useTranslations("agentTasks.takeover");
   // null = 아직 모름, false = 이 작업은 넘겨받을 수 없음(버튼을 숨긴다)
   const [eligible, setEligible] = useState<boolean | null>(null);
@@ -34,15 +35,36 @@ export function BrowserTakeover({ taskId }: { taskId: string }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [visible, setVisible] = useState(() => typeof document === "undefined" || document.visibilityState === "visible");
+
+  // 탭이 숨겨진 동안 끊긴 대상 재확인을 탭이 다시 보이면 이어 간다
+  useEffect(() => {
+    const onChange = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onChange);
+    return () => document.removeEventListener("visibilitychange", onChange);
+  }, []);
 
   useEffect(() => {
     let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     // 넘겨받을 수 없는 작업(브라우저 꺼짐·로컬 실행·작업 공간 정리·다른 사용자 작업)은 200 + eligible:false 로 온다 — 콘솔 오류 없이 숨긴다.
-    ApiClient.get<{ data: { active: boolean; eligible?: boolean } }>(base(taskId), { redirectOnUnauthorized: false })
-      .then((r) => { if (alive) { setEligible(r?.data?.eligible !== false); setActive(!!r?.data?.active); } })
-      .catch(() => { if (alive) setEligible(false); });
-    return () => { alive = false; };
-  }, [taskId]);
+    // 작업 폴더가 아직 없는 진행 중 작업(시작·재개 직후)은 잠시 뒤 다시 묻는다(상태가 바뀌거나 탭이 다시 보여도 다시 묻는다).
+    const check = () => {
+      ApiClient.get<{ data: { active: boolean; eligible?: boolean; reason?: string } }>(base(taskId), { redirectOnUnauthorized: false })
+        .then((r) => {
+          if (!alive) return;
+          const ok = r?.data?.eligible !== false;
+          setEligible(ok);
+          setActive(!!r?.data?.active);
+          if (ok) return;
+          const delay = ineligibleRecheckDelay({ reason: r?.data?.reason, status, visible });
+          if (delay !== null) timer = setTimeout(check, delay);
+        })
+        .catch(() => { if (alive) setEligible(false); });
+    };
+    check();
+    return () => { alive = false; if (timer) clearTimeout(timer); };
+  }, [taskId, status, visible]);
 
   async function start() {
     setBusy(true);

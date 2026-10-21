@@ -9,6 +9,7 @@ afterAll(() => __setChatTurnIntegrationsForTest(null));
 import { toLLMTool, TaskRuntime, resultToString } from './runtime';
 import * as approvalGate from './approval-gate';
 import { getApprovalRegistry } from './approval-gate';
+import { waitFor } from './__tests__/helpers/wait-for';
 import { AgentTaskParked } from '../agent-task/types';
 import { getTaskSandboxConfig } from '../../config/task-sandbox';
 import type { MCPToolDefinition } from '../../tool-contract/types';
@@ -51,7 +52,7 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
             onApprovalPending: (p) => { approvalId = p.approvalId; },
         });
         // 승인 대기 진입 — 잠깐 양보 후 reject
-        await new Promise((r) => setImmediate(r));
+        await waitFor(() => approvalId, '승인 대기 등록');
         expect(approvalId).toBeTruthy();
         getApprovalRegistry().reject(approvalId);
         const out = await exec;
@@ -62,7 +63,7 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         const rt = new TaskRuntime('t-reject-reason', 'u1', cfgAll);
         let approvalId = '';
         const exec = rt.executeTaskTool('bash', { command: 'rm -rf build' }, { onApprovalPending: (p) => { approvalId = p.approvalId; } });
-        await new Promise((r) => setImmediate(r));
+        await waitFor(() => approvalId, '승인 대기 등록');
         getApprovalRegistry().reject(approvalId, 'u1', 'build 폴더는 지우지 마세요');
         const out = await exec;
         expect(out).toContain('build 폴더는 지우지 마세요');
@@ -80,7 +81,7 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         const exec = new TaskRuntime('t-before-rej', 'u1', cfgAll).executeTaskTool('bash', { command: 'ls' }, {
             onApprovalPending: (p) => { approvalId = p.approvalId; }, onBeforeExecute: rejectedBefore,
         });
-        await new Promise((r) => setImmediate(r));
+        await waitFor(() => approvalId, '승인 대기 등록');
         getApprovalRegistry().reject(approvalId);
         await exec;
         expect(rejectedBefore).not.toHaveBeenCalled();
@@ -98,7 +99,7 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         const exec = rt.executeTaskTool('ask_human', { question: '계속할까요?' }, {
             onApprovalPending: (p) => { approvalId = p.approvalId; },
         });
-        await new Promise((r) => setImmediate(r));
+        await waitFor(() => approvalId, '승인 대기 등록');
         expect(approvalId).toBeTruthy();
         getApprovalRegistry().approve(approvalId);
         const out = await exec;
@@ -113,7 +114,7 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         const exec = rt.executeTaskTool('ask_human', {
             questions: [{ question: '어느 리전을 쓸까요?', options: ['서울', '도쿄'], recommended: '서울' }, { question: '예산 상한은요?' }],
         }, { onApprovalPending: (p) => { pending = p; } });
-        await new Promise((r) => setImmediate(r));
+        await waitFor(() => pending, '승인 대기 등록');
         expect(pending).toBeDefined();
         // 구조를 모르는 클라이언트(CLI·iOS)는 question 문자열만 읽는다 — 질문과 선택지가 줄글로 들어 있어야 한다
         expect(String(pending!.args?.question)).toContain('1) 어느 리전을 쓸까요?');
@@ -169,7 +170,7 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         const exec = rt.executeTaskTool('ask_human', { question: 'q' }, {
             onApprovalPending: (p) => { approvalId = p.approvalId; },
         });
-        await new Promise((r) => setImmediate(r));
+        await waitFor(() => approvalId, '승인 대기 등록');
         getApprovalRegistry().reject(approvalId);
         const out = await exec;
         expect(out).toContain('거절');
@@ -201,12 +202,13 @@ describe('도구 이름 교정 (P0-b)', () => {
 
     it('작업이 취소되면 실행 중인 샌드박스 명령을 중단시킨다(타임아웃까지 기다리지 않는다)', async () => {
         let finish: (r: unknown) => void = () => undefined;
+        let started = false;
         const abortRunning = jest.fn(() => finish({ stdout: '', stderr: '', exitCode: 137, truncated: false, timedOut: false, durationMs: 1 }));
-        const executor = { exec: () => new Promise((r) => { finish = r; }), abortRunning, isBrowserEnabled: false };
+        const executor = { exec: () => new Promise((r) => { finish = r; started = true; }), abortRunning, isBrowserEnabled: false };
         const rt = new TaskRuntime('t-abort', 'u1', cfgNone, undefined, undefined, executor as never);
         const ac = new AbortController();
         const run = rt.executeTaskTool('bash', { command: 'sleep 999' }, { signal: ac.signal });
-        await new Promise((r) => setImmediate(r));
+        await waitFor(() => started, '샌드박스 명령 시작');
         expect(abortRunning).not.toHaveBeenCalled();
         ac.abort();
         await run;
