@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.109.0](https://github.com/openmake/openmake_llm/compare/v1.108.1...v1.109.0) (2026-10-21)
+
+
+### ✨ 기능
+
+* **agent-task:** 실시간 작업 화면 조회 라우트(소유자 전용) ([143476a](https://github.com/openmake/openmake_llm/commit/143476a104d0209eb1eb3bcff7bd6374a78dde3e))
+* **agent-task:** 실시간 작업 화면(브라우저·터미널) ([7052ac4](https://github.com/openmake/openmake_llm/commit/7052ac4a537613335576f04547d320e9a2bdb2f7))
+* **web:** 작업 상세 오른쪽에 실시간 작업 화면 패널 ([bbb9453](https://github.com/openmake/openmake_llm/commit/bbb94538eb527b9377574037961afa9ca14cd263))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 기준점·체인 스냅숏에서 내부 숨김 파일 제외 ([336f0a8](https://github.com/openmake/openmake_llm/commit/336f0a837f5ebcbb651c2655423815f655b5e0e1))
+* **agent-task:** 실시간 터미널 기록 쓰기의 심링크·FIFO 차단 ([71b4267](https://github.com/openmake/openmake_llm/commit/71b4267c78d1a0c083b536e5c5c0fbbb4fbd0769))
+* **agent-task:** 실시간 터미널 기록을 bash 명령으로 한정하고 표식·임시 파일 정리 ([75d8e4b](https://github.com/openmake/openmake_llm/commit/75d8e4b0b749a5fb2ce7cfd4f6caddc7133c2393))
+* **agent-task:** 실시간 화면 응답 크기 줄이기 — 명령 길이 제한·같은 화면 재전송 생략 ([52d5241](https://github.com/openmake/openmake_llm/commit/52d524192beffd75684fe0da6dae233caf9ee63c))
+* **agent-task:** 실시간 화면·넘겨받기 대상 재확인, 승인 시험 DB 대기 ([a4e9ec2](https://github.com/openmake/openmake_llm/commit/a4e9ec25b1717fab746cb6fcdb928a9195f3aa63))
+* **agent-task:** 저장된 browser 절차 재생에도 실시간 화면 설정 싣기 ([ae45713](https://github.com/openmake/openmake_llm/commit/ae45713ca1ec96290a722c72ef85045364286cde))
+* **storage:** 만료 타이머 unref·시험의 저장소 백엔드 고정 ([4c41ae2](https://github.com/openmake/openmake_llm/commit/4c41ae202398d4e789d17ebf6df008cf726d9420))
+* **storage:** 메모리 저장소 만료가 24.8일을 넘으면 즉시 지워지던 문제 ([24803c0](https://github.com/openmake/openmake_llm/commit/24803c0a8c955c593532410c4d9c9249645c543f))
+* **storage:** 메모리 저장소 만료가 24.8일을 넘으면 즉시 지워지던 문제 ([7bcc3c2](https://github.com/openmake/openmake_llm/commit/7bcc3c23fa4149ad1043f2e324a8fdfb2a5fd8db))
+* **task-runtime:** 짧은 브라우저 실행에도 마지막 화면을 남긴다 ([839cc41](https://github.com/openmake/openmake_llm/commit/839cc41da1e33e172737f9ccd626d7e25caca74b))
+* **task-runtime:** 짧은 브라우저 실행에도 마지막 화면을 남긴다 ([961c84b](https://github.com/openmake/openmake_llm/commit/961c84b8791a866ff750437cdcd0cdcb6fd2117b))
+* **task-runtime:** 화면 전송 정리에도 상한을 두고 늦은 마지막 쓰기를 막는다 ([8ad13ae](https://github.com/openmake/openmake_llm/commit/8ad13aeda472bb995ffb24e1295c879cf332c41d))
+* **web:** 넘겨받기 버튼 대상 재확인 — 탭이 다시 보이면 이어서 확인 ([f2287d1](https://github.com/openmake/openmake_llm/commit/f2287d1414470e389724ec95a572c235a972e472))
+* **web:** 실시간 작업 화면 — 대상일 때만 두 칸 배치, 일시 오류에도 패널 유지 ([1366119](https://github.com/openmake/openmake_llm/commit/1366119b36728002de30a4956cb22777acc8a3ef))
+* **web:** 실시간 터미널 — 맨 아래 근처일 때만 새 출력을 따라간다 ([505d987](https://github.com/openmake/openmake_llm/commit/505d9873d06bb8100cbe87bb3920f3e890ceeb8f))
+* **web:** 진행 중 작업의 실시간 화면·넘겨받기 대상 여부를 다시 확인 ([aa5a367](https://github.com/openmake/openmake_llm/commit/aa5a367bc9fbcc2b940d4e32eaabf0dd185f3054))
+
 ## [1.108.1](https://github.com/openmake/openmake_llm/compare/v1.108.0...v1.108.1) (2026-10-21)
 
 
