@@ -3,6 +3,7 @@ import { tmpdir } from 'os';
 import { join, sep } from 'path';
 import { buildRunArgs, buildBrowserRunArgs, buildWriteArgs, buildKillExecArgs, safeResolveWorkspacePath, safeRealWorkspacePath, sanitizeId, dirSizeBytes, listWorkspaceFilesAt, runProcess, TaskSandbox } from './sandbox';
 import { getTaskSandboxConfig, resolveWriteViaContainer, browserDestGuardEnv } from '../../config/task-sandbox';
+import { PIPE_STATUS_TAG_PREFIX } from './pipe-status';
 
 describe('task-sandbox pure functions', () => {
     const cfg = getTaskSandboxConfig();
@@ -466,11 +467,25 @@ describe('exec — 파이프라인 단계별 종료 코드(pipe-status)', () => 
 
     it('실행한 명령의 원래 문장·출력·종료 코드가 작업 폴더 .live-terminal.json 에 남는다', async () => {
         await withSandbox('p0', async (sb, ws) => {
-            const r = await sb.exec('echo out; echo err >&2 | cat; exit 4', { pipeStatus: true });
+            const r = await sb.exec('sh -c "echo out; exit 3" | cat', { pipeStatus: true });
+            expect(r.pipeStages).toHaveLength(1); // 표식을 실제로 쓴 실행이다
             const s = JSON.parse(await readFile(join(ws, '.live-terminal.json'), 'utf8'));
-            expect(s).toMatchObject({ command: 'echo out; echo err >&2 | cat; exit 4', truncatedHead: false, exitCode: r.exitCode });
+            expect(s).toMatchObject({ command: 'sh -c "echo out; exit 3" | cat', truncatedHead: false, exitCode: r.exitCode });
             expect(s.output).toContain('out\n');
+            expect(s.output).not.toContain(PIPE_STATUS_TAG_PREFIX);
             expect(typeof s.endedAt).toBe('number');
+        });
+    });
+
+    it('pipeStatus 없는 내부 exec 는 .live-terminal.json 을 만들거나 바꾸지 않는다', async () => {
+        await withSandbox('p00', async (sb, ws) => {
+            const live = join(ws, '.live-terminal.json');
+            await sb.exec('echo internal');
+            await expect(readFile(live, 'utf8')).rejects.toThrow();
+            await sb.exec('echo bash', { pipeStatus: true });
+            const before = await readFile(live, 'utf8');
+            await sb.exec('echo internal2');
+            expect(await readFile(live, 'utf8')).toBe(before);
         });
     });
 

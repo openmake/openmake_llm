@@ -71,6 +71,7 @@ describe('config/agent-task-live-view', () => {
         expect(CODE_DIFF_INTERNAL_FILES).toEqual(expect.arrayContaining([
             '/.browser-state.json', '/.omk-browser-session.mjs', '/_exec.py',
             '/.live-frame.jpg', '/.live-frame.json', '/.live-terminal.json',
+            '/.live-frame.jpg.tmp', '/.live-frame.json.tmp', '/.live-terminal.json.tmp',
         ]));
     });
 });

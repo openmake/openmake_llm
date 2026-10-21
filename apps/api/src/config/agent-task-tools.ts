@@ -193,4 +193,4 @@ export const ASK_HUMAN = {
  * AGENT_TASK_DIFF_INTERNAL_FILES 로 바꾼다(쉼표 구분, .gitignore 패턴).
  */
 export const CODE_DIFF_INTERNAL_FILES: readonly string[] = (process.env.AGENT_TASK_DIFF_INTERNAL_FILES
-    ?? '/.browser-state.json,/.omk-browser-session.mjs,/_exec.py,/.live-frame.jpg,/.live-frame.json,/.live-terminal.json').split(',').map((s) => s.trim()).filter(Boolean);
+    ?? '/.browser-state.json,/.omk-browser-session.mjs,/_exec.py,/.live-frame.jpg,/.live-frame.json,/.live-terminal.json,/.live-frame.jpg.tmp,/.live-frame.json.tmp,/.live-terminal.json.tmp').split(',').map((s) => s.trim()).filter(Boolean);

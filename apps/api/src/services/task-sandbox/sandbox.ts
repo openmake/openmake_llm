@@ -197,7 +197,7 @@ export function runProcess(
     args: string[],
     /** signal·onStop — 타임아웃/중단으로 끝낼 때 CLI 를 죽이기 전에 onStop 으로 컨테이너 안 프로세스를 정리한다.
      *  onOutput — stdout·stderr 조각마다 출력 상한과 무관하게 부른다(실시간 기록용, 예외는 삼킨다 — tapOutput). */
-    opts: { timeoutMs: number; outputCap: number; input?: string | Buffer; signal?: AbortSignal; onStop?: () => Promise<unknown>; onOutput?: (chunk: string) => void },
+    opts: { timeoutMs: number; outputCap: number; input?: string | Buffer; signal?: AbortSignal; onStop?: () => Promise<unknown>; onOutput?: (chunk: string, stream: 'out' | 'err') => void },
 ): Promise<ExecResult> {
     return new Promise((resolvePromise) => {
         const started = Date.now();
@@ -327,8 +327,9 @@ export class TaskSandbox implements TaskExecutor {
         const ac = new AbortController();
         this.running.add(ac);
         try {
-            // 실행 중 출력 끝부분을 작업 폴더 숨김 파일로 남긴다(실시간 작업 화면, fail-open). 쿼터 초과 분기는 기록하지 않는다.
-            const r = await withLiveTerminal(this.hostWorkdir, command, (onOutput) => runProcess(
+            // 실행 중 출력 끝부분을 작업 폴더 숨김 파일로 남긴다(실시간 작업 화면, fail-open). bash 도구 경로(pipeStatus)만 —
+            // 내부 도구 실행(검색·문법 검사)은 덮어쓰지 않는다. 쿼터 초과 분기는 기록하지 않는다.
+            const r = await withLiveTerminal(this.hostWorkdir, opts?.pipeStatus ? { command, hideTag: wrapped?.tag } : null, (onOutput) => runProcess(
                 this.cfg.dockerPath,
                 ['exec', '-e', `${EXEC_ID_ENV}=${execId}`, this.containerName, 'sh', '-c', wrapped?.command ?? command],
                 {
