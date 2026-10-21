@@ -98,3 +98,19 @@ it('terminal output 은 TERMINAL_TAIL_CHARS 로 자른다', async () => {
     expect(t.truncatedHead).toBe(true);
     expect(t.endedAt).toBeNull();
 });
+
+it('terminal command 는 앞 2000자만 남긴다', async () => {
+    writeFileSync(join(dir, LIVE_VIEW.TERMINAL_FILE), JSON.stringify({ ...TERMINAL, command: 'c'.repeat(2500) }));
+    expect((await readLiveView(dir)).terminal?.command).toBe('c'.repeat(2000));
+});
+
+describe('frameAt — 같은 화면은 이미지를 다시 보내지 않는다', () => {
+    const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9]);
+    beforeEach(() => { writeFileSync(join(dir, LIVE_VIEW.FRAME_FILE), jpg); writeMeta(META); });
+    it('frameAt 이 meta.at 과 같으면 image null · unchanged true', async () => {
+        expect((await readLiveView(dir, { frameAt: META.at })).browser).toEqual({ image: null, unchanged: true, ...META });
+    });
+    it('frameAt 이 다르면 image 를 보낸다(unchanged 필드 없음)', async () => {
+        expect((await readLiveView(dir, { frameAt: META.at - 1 })).browser).toEqual({ image: jpg.toString('base64'), ...META });
+    });
+});

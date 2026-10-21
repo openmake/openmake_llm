@@ -41,7 +41,7 @@ function mockRes() {
 const PATH = '/:taskId/live';
 let workdir: string;
 const task = (extra: Record<string, unknown> = {}) => ({ id: 't1', user_id: 'u1', status: 'running', executor: 'sandbox', workspace_path: workdir, ...extra });
-const req = (user = { id: 'u1', role: 'user' }) => ({ params: { taskId: 't1' }, body: {}, user });
+const req = (user = { id: 'u1', role: 'user' }, query: Record<string, unknown> = {}) => ({ params: { taskId: 't1' }, body: {}, query, user });
 
 beforeAll(() => { workdir = mkdtempSync(join(tmpdir(), 'omk-live-r-')); });
 afterAll(() => { rmSync(workdir, { recursive: true, force: true }); });
@@ -52,7 +52,7 @@ it('소유자는 eligible true 와 읽은 내용을 받는다', async () => {
     await handler(PATH)(req(), res);
     expect(res.statusCode).toBe(200);
     expect(res.body.data).toEqual({ eligible: true, status: 'running', ...LIVE });
-    expect(readLiveView).toHaveBeenCalledWith(workdir);
+    expect(readLiveView).toHaveBeenCalledWith(workdir, { frameAt: undefined });
 });
 
 it('관리자가 남의 작업을 보면 eligible false · not_owner', async () => {
@@ -97,4 +97,15 @@ it('응답에 Cache-Control no-store', async () => {
     const res = mockRes();
     await handler(PATH)(req(), res);
     expect(res.headers['cache-control']).toBe('no-store');
+});
+
+it.each([
+    ['1761030000123', 1761030000123],
+    ['abc', undefined],
+    ['', undefined],
+    [['1', '2'], undefined],
+])('frameAt 쿼리 %p 는 %p 로 넘긴다', async (q, expected) => {
+    const res = mockRes();
+    await handler(PATH)(req(undefined, { frameAt: q }), res);
+    expect(readLiveView).toHaveBeenCalledWith(workdir, { frameAt: expected });
 });

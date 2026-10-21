@@ -17,12 +17,17 @@ import { LIVE_VIEW } from '../../config/agent-task-live-view';
 const META_URL_MAX_CHARS = 2000;
 /** 프레임 메타 제목의 길이 상한(자). */
 const META_TITLE_MAX_CHARS = 300;
+/** 터미널 명령의 길이 상한(자) — 앞부분을 남긴다. */
+const TERMINAL_COMMAND_MAX_CHARS = 2000;
 /** JSON 숨김 파일(meta·terminal)의 크기 상한(byte) — 출력 꼬리(자)에 UTF-8·JSON 이스케이프 여유를 둔다. */
 const JSON_MAX_BYTES = 1024 * 1024;
 
 export interface LiveViewData {
-    /** image = JPEG base64 — 이미지가 없거나 상한을 넘으면 null(메타는 남는다). */
-    browser: { image: string | null; url: string; title: string; at: number } | null;
+    /**
+     * image = JPEG base64 — 이미지가 없거나 상한을 넘으면 null(메타는 남는다).
+     * unchanged = 요청한 frameAt 이 meta.at 과 같아 이미지를 다시 보내지 않았다(그때만 true 로 붙는다).
+     */
+    browser: { image: string | null; unchanged?: boolean; url: string; title: string; at: number } | null;
     terminal: LiveTerminalState | null;
 }
 
@@ -65,26 +70,27 @@ function toTerminal(j: Record<string, unknown> | null): LiveTerminalState | null
     // 에이전트가 파일을 부풀려도 응답이 커지지 않게 꼬리 길이로 다시 자른다
     const cut = j.output.length > LIVE_VIEW.TERMINAL_TAIL_CHARS;
     return {
-        command: j.command,
+        command: j.command.slice(0, TERMINAL_COMMAND_MAX_CHARS),
         output: cut ? j.output.slice(-LIVE_VIEW.TERMINAL_TAIL_CHARS) : j.output,
         truncatedHead: j.truncatedHead || cut,
         startedAt: j.startedAt, endedAt: j.endedAt, exitCode: j.exitCode,
     };
 }
 
-export async function readLiveView(hostWorkdir: string): Promise<LiveViewData> {
-    const [meta, image, terminal] = await Promise.all([
+/** opts.frameAt — 화면이 이미 가진 프레임 시각(meta.at). 같으면 이미지를 읽지 않는다(1초 폴링의 응답 크기 줄이기). */
+export async function readLiveView(hostWorkdir: string, opts: { frameAt?: number } = {}): Promise<LiveViewData> {
+    const [meta, terminal] = await Promise.all([
         readJson(hostWorkdir, LIVE_VIEW.META_FILE),
-        readBounded(hostWorkdir, LIVE_VIEW.FRAME_FILE, LIVE_VIEW.FRAME_MAX_BYTES),
         readJson(hostWorkdir, LIVE_VIEW.TERMINAL_FILE),
     ]);
-    const browser = meta && typeof meta.url === 'string' && typeof meta.title === 'string' && isNum(meta.at)
-        ? {
-            image: image && image.length > 0 ? image.toString('base64') : null,
-            url: meta.url.slice(0, META_URL_MAX_CHARS),
-            title: meta.title.slice(0, META_TITLE_MAX_CHARS),
-            at: meta.at,
-        }
-        : null;
-    return { browser, terminal: toTerminal(terminal) };
+    if (!meta || typeof meta.url !== 'string' || typeof meta.title !== 'string' || !isNum(meta.at)) {
+        return { browser: null, terminal: toTerminal(terminal) };
+    }
+    const head = { url: meta.url.slice(0, META_URL_MAX_CHARS), title: meta.title.slice(0, META_TITLE_MAX_CHARS), at: meta.at };
+    if (opts.frameAt === meta.at) return { browser: { image: null, unchanged: true, ...head }, terminal: toTerminal(terminal) };
+    const image = await readBounded(hostWorkdir, LIVE_VIEW.FRAME_FILE, LIVE_VIEW.FRAME_MAX_BYTES);
+    return {
+        browser: { image: image && image.length > 0 ? image.toString('base64') : null, ...head },
+        terminal: toTerminal(terminal),
+    };
 }
