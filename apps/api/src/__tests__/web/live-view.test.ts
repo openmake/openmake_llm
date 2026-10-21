@@ -2,7 +2,8 @@
 // apps/api tsconfig rootDir 밖 파일이라 require 로 런타임만 불러온다(ts-jest 가 변환)
 export {}; // 모듈로 만들어 다른 테스트 파일의 전역 타입 이름과 겹치지 않게 한다
 type PollInput = { status: string | undefined; visible: boolean; eligible: boolean | null };
-const { nextLivePollDelay, frameAgeSeconds, isLiveViewHiddenError, LIVE_RUNNING_STATUSES } = require('../../../../web/lib/live-view') as {
+const { nextLivePollDelay, frameAgeSeconds, isLiveViewHiddenError, shouldFollowTail, LIVE_RUNNING_STATUSES } = require('../../../../web/lib/live-view') as {
+    shouldFollowTail: (scrollTop: number, clientHeight: number, scrollHeight: number) => boolean;
     nextLivePollDelay: (s: PollInput) => number | null;
     isLiveViewHiddenError: (status: number | undefined) => boolean;
     frameAgeSeconds: (at: number, now: number) => number | null;
@@ -50,5 +51,21 @@ describe('isLiveViewHiddenError', () => {
         expect(isLiveViewHiddenError(500)).toBe(false);
         expect(isLiveViewHiddenError(502)).toBe(false);
         expect(isLiveViewHiddenError(undefined)).toBe(false);
+    });
+});
+
+describe('shouldFollowTail', () => {
+    it('맨 아래면 따라간다', () => {
+        expect(shouldFollowTail(500, 100, 600)).toBe(true);
+    });
+    it('맨 아래에서 24px 이내면 따라간다', () => {
+        expect(shouldFollowTail(476, 100, 600)).toBe(true);
+    });
+    it('그보다 위로 올렸으면 따라가지 않는다(위쪽 출력을 읽는 중)', () => {
+        expect(shouldFollowTail(475, 100, 600)).toBe(false);
+        expect(shouldFollowTail(0, 100, 600)).toBe(false);
+    });
+    it('내용이 상자보다 짧으면 따라간다', () => {
+        expect(shouldFollowTail(0, 100, 80)).toBe(true);
     });
 });

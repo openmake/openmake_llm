@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ApiClient, ApiError } from "@/lib/api-client";
-import { frameAgeSeconds, isLiveViewHiddenError, nextLivePollDelay } from "@/lib/live-view";
+import { frameAgeSeconds, isLiveViewHiddenError, nextLivePollDelay, shouldFollowTail } from "@/lib/live-view";
 import { cn } from "@/lib/utils";
 
 interface LiveBrowser { image: string | null; unchanged?: boolean; url: string; title: string; at: number }
@@ -47,6 +47,8 @@ export function LiveView({ taskId, status, onEligibleChange }: {
   // 마지막으로 받은 browser.at — 화면이 그대로면 서버가 이미지를 다시 보내지 않는다
   const frameAt = useRef<number | null>(null);
   const preRef = useRef<HTMLPreElement>(null);
+  /** 사용자가 맨 아래 근처에 있는지 — 위로 올려 읽는 중이면 새 출력에 끌어내리지 않는다. */
+  const followTail = useRef(true);
   // 부모 콜백은 ref 로 — 바뀔 때마다 폴링 효과를 다시 돌리지 않도록
   const onEligibleRef = useRef(onEligibleChange);
   useEffect(() => { onEligibleRef.current = onEligibleChange; }, [onEligibleChange]);
@@ -103,11 +105,12 @@ export function LiveView({ taskId, status, onEligibleChange }: {
   const autoTab: Tab = terminalAt !== null && (!browser || terminalAt > browser.at) ? "terminal" : "screen";
   const tab = pickedTab ?? autoTab;
 
-  // 새 출력이 오거나 터미널 탭으로 오면 맨 아래로
+  // 터미널 탭으로 오면 맨 아래부터, 새 출력은 맨 아래 근처에 있을 때만 따라간다
   const output = terminal?.output;
+  useEffect(() => { followTail.current = true; }, [tab]);
   useEffect(() => {
     const el = preRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el && followTail.current) el.scrollTop = el.scrollHeight;
   }, [output, tab]);
 
   if (!eligible) return null;
@@ -170,6 +173,10 @@ export function LiveView({ taskId, status, onEligibleChange }: {
             <>
               <pre
                 ref={preRef}
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  followTail.current = shouldFollowTail(el.scrollTop, el.clientHeight, el.scrollHeight);
+                }}
                 className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-words rounded bg-surface-2 px-2 py-1.5 font-mono text-xs leading-relaxed text-fg-2"
               >
                 {terminal.truncatedHead && <span className="block text-faint">… {t("truncated")}</span>}
