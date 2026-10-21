@@ -1164,6 +1164,18 @@
       "inputTimeout": "页面未能在规定时间内打开。请重试。",
       "releaseFailed": "无法交还:{error}"
     },
+    "live": {
+      "title": "工作画面",
+      "tabScreen": "画面",
+      "tabTerminal": "终端",
+      "noFrame": "智能体尚未使用浏览器。",
+      "noTerminal": "尚未执行任何命令。",
+      "frameAge": "{seconds} 秒前的画面",
+      "running": "运行中",
+      "exitCode": "退出代码 {code}",
+      "truncated": "已省略前面部分",
+      "ownerOnly": "此画面仅对任务所有者可见。"
+    },
     "thinkingBadge": "推理 {level}",
     "thinkingLabel": "推理",
     "thinkingLevel": {
