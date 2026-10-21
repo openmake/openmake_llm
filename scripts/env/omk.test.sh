@@ -629,6 +629,16 @@ rm -f "$(status_marker smk)"
 ( status_post() { return 1; }; status_report smk "$SM_SHA" success ok ) >/dev/null 2>&1
 ok "status: 못 붙였으면 기억하지 않는다" '[[ ! -f "$(status_marker smk)" ]]'
 
+# ── approve 직후 release-verified 깨우기 (workflow_dispatch) ──
+ok "dispatch: 토큰이 없으면 깨우지 않는다" '! ( curl() { touch "$TMP/rv-called"; printf 204; }; release_verified_dispatch "$SM" >/dev/null 2>&1 ) && [[ ! -f "$TMP/rv-called" ]]'
+printf 'OMK_DISPATCH_TOKEN=d1sp\n' >> "$SM/.env"
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+RV_ARGS="$( curl() { printf '%s\n' "$@" > "$TMP/rv-args"; printf 204; }; release_verified_dispatch "$SM" >/dev/null 2>&1; echo "rc=$?"; cat "$TMP/rv-args" )"
+ok "dispatch: 204 면 성공"                 '[[ "$RV_ARGS" == rc=0* ]]'
+ok "dispatch: 워크플로 dispatches 로 보낸다" '[[ "$RV_ARGS" == *"/repos/openmake/openmake_llm/actions/workflows/release-verified.yml/dispatches"* ]]'
+ok "dispatch: main 을 깨운다"              '[[ "$RV_ARGS" == *"\"ref\":\"main\""* && "$RV_ARGS" == *"Authorization: Bearer d1sp"* ]]'
+ok "dispatch: 204 가 아니면 실패"          '! ( curl() { printf 403; }; release_verified_dispatch "$SM" >/dev/null 2>&1 )'
+
 # ── 갱신 → 스모크 → 표지 (autoupdate 가 부른다) ──
 # shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
 UR="$(
