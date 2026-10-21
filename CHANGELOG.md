@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.108.1](https://github.com/openmake/openmake_llm/compare/v1.108.0...v1.108.1) (2026-10-21)
+
+
+### 🐛 버그 수정
+
+* **web:** add missing eval runner label for pack runs ([9ace327](https://github.com/openmake/openmake_llm/commit/9ace32724eead226357066ae08a7ce0ec67bf6d2))
+* **web:** add missing eval runner label for pack runs ([51217c4](https://github.com/openmake/openmake_llm/commit/51217c4ab7b40c9918fb5151a1e946b867ff813e))
+
 ## [1.108.0](https://github.com/openmake/openmake_llm/compare/v1.107.3...v1.108.0) (2026-10-20)
 
 
