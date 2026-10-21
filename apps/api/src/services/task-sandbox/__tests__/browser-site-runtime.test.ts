@@ -13,6 +13,7 @@ jest.mock('../../../data/models/unified-database', () => ({
 
 import { TaskRuntime } from '../runtime';
 import { getApprovalRegistry, requiresApproval, type PendingApproval } from '../approval-gate';
+import { waitFor } from './helpers/wait-for';
 import { approvalFloorReason } from '../approval-floor';
 import { approvedHostsOf, areSiteWritesApproved, hasOffListSiteWrites, markSiteWritesApproved, withSitePlan } from '../browser-site-approval';
 import { getTaskSandboxConfig } from '../../../config/task-sandbox';
@@ -22,7 +23,6 @@ beforeAll(() => __setChatTurnIntegrationsForTest([]));
 afterAll(() => __setChatTurnIntegrationsForTest(null));
 
 const POLICY = { allow: ['groupware.example.co.kr'], deny: [] };
-const tick = () => new Promise((r) => setImmediate(r));
 const ok = (stdout: string): ExecResult => ({ stdout, stderr: '', exitCode: 0, truncated: false, timedOut: false, durationMs: 1 });
 
 function localExecutor() {
@@ -48,7 +48,7 @@ describe('TaskRuntime — 로컬 브라우저 사이트 정책', () => {
         const rt = runtime('t-site-none', 'none', executor);
         let pending: PendingApproval | undefined;
         const exec = rt.executeTaskTool('browser', { actions: OFF_LIST }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         expect(pending?.toolName).toBe('browser');
         const writes = (pending?.args as { offListWrites: Array<{ host: string; detail: string }> }).offListWrites;
         expect(writes).toEqual([expect.objectContaining({ host: 'translate.example.com', type: 'fill' })]);
@@ -64,7 +64,7 @@ describe('TaskRuntime — 로컬 브라우저 사이트 정책', () => {
         const rt = runtime('t-site-reject', 'none', executor);
         let pending: PendingApproval | undefined;
         const exec = rt.executeTaskTool('browser', { actions: OFF_LIST }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         await getApprovalRegistry().reject(pending!.approvalId, 'u1');
         await exec;
         expect(runBrowserSpec).not.toHaveBeenCalled();
@@ -76,7 +76,7 @@ describe('TaskRuntime — 로컬 브라우저 사이트 정책', () => {
         getApprovalRegistry().setAutoApprove('t-site-auto', true);
         let pending: PendingApproval | undefined;
         const exec = rt.executeTaskTool('browser', { actions: OFF_LIST }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         expect(pending).toBeDefined();
         expect(runBrowserSpec).not.toHaveBeenCalled();
         await getApprovalRegistry().reject(pending!.approvalId, 'u1');
@@ -103,7 +103,7 @@ describe('TaskRuntime — 로컬 브라우저 사이트 정책', () => {
         const { executor, runBrowserSpec } = localExecutor();
         let pending: PendingApproval | undefined;
         const exec = runtime('t-site-auto-write', 'high-risk', executor).executeTaskTool('browser', { actions: OFF_LIST }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         expect(pending).toBeDefined();
         await getApprovalRegistry().reject(pending!.approvalId, 'u1');
         await exec;
@@ -114,7 +114,7 @@ describe('TaskRuntime — 로컬 브라우저 사이트 정책', () => {
         const { executor, runBrowserSpec } = localExecutor();
         let pending: PendingApproval | undefined;
         const exec = runtime('t-site-manual-read', 'all', executor).executeTaskTool('browser', { actions: READ_ONLY }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         expect(pending).toBeDefined();
         await getApprovalRegistry().reject(pending!.approvalId, 'u1');
         await exec;
@@ -126,7 +126,7 @@ describe('TaskRuntime — 로컬 브라우저 사이트 정책', () => {
         const rt = runtime('t-site-spoof', 'none', executor);
         let pending: PendingApproval | undefined;
         const exec = rt.executeTaskTool('browser', { actions: OFF_LIST, offListWrites: [] }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         expect((pending?.args as { offListWrites: unknown[] }).offListWrites).toHaveLength(1);
         await getApprovalRegistry().reject(pending!.approvalId, 'u1');
         await exec;

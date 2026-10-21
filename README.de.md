@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/openmake/openmake_llm?color=blue" alt="License: MIT" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/openmake/openmake_llm?color=blue" alt="License: Apache-2.0" /></a>
   <a href="https://github.com/openmake/openmake_llm/releases"><img src="https://img.shields.io/github/v/release/openmake/openmake_llm?color=green" alt="Latest release" /></a>
   <a href="https://github.com/openmake/openmake_llm/actions/workflows/ci.yml"><img src="https://github.com/openmake/openmake_llm/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://github.com/openmake/openmake_llm"><img src="https://img.shields.io/github/stars/openmake/openmake_llm?style=flat" alt="GitHub stars" /></a>
@@ -367,4 +367,4 @@ Die CI führt bei jedem Push und Pull Request ein einziges **CI Gate** aus (Test
 
 ## Lizenz
 
-Veröffentlicht unter der [MIT-Lizenz](LICENSE).
+Veröffentlicht unter der [Apache-Lizenz 2.0](LICENSE).

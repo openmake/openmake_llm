@@ -107,10 +107,15 @@ export function wrapPipeline(command: string, tag: string, enabled: boolean = PI
     };
 }
 
+/** PURE: 표식 줄 `<tag>:<단계>:<종료 코드>\n` 을 찾는 정규식(g). lineEndOptional=false 면 줄바꿈까지 온 것만. */
+export function pipeStatusMarkerPattern(tag: string, lineEndOptional = true): RegExp {
+    return new RegExp(`${tag}:(\\d+):(\\d+)\\n${lineEndOptional ? '?' : ''}`, 'g');
+}
+
 /** PURE: 실행 결과의 stderr 에서 표식 줄을 지우고 단계별 종료 코드를 싣는다. */
 export function readPipeStatus(result: ExecResult, wrapped: WrappedPipeline): ExecResult {
     const pipeStages: NonNullable<ExecResult['pipeStages']> = [];
-    const stderr = result.stderr.replace(new RegExp(`${wrapped.tag}:(\\d+):(\\d+)\\n?`, 'g'), (_m, n: string, code: string) => {
+    const stderr = result.stderr.replace(pipeStatusMarkerPattern(wrapped.tag), (_m, n: string, code: string) => {
         const index = Number(n);
         if (wrapped.stages[index - 1] !== undefined) pipeStages.push({ index, command: wrapped.stages[index - 1], exitCode: Number(code) });
         return '';

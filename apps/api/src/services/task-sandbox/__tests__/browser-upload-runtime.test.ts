@@ -13,6 +13,7 @@ jest.mock('../../../data/models/unified-database', () => ({
 
 import { TaskRuntime } from '../runtime';
 import { getApprovalRegistry, requiresApproval, type PendingApproval } from '../approval-gate';
+import { waitFor } from './helpers/wait-for';
 import { approvalFloorReason } from '../approval-floor';
 import { approvedUploadsOf, withSitePlan } from '../browser-site-approval';
 import { getTaskSandboxConfig } from '../../../config/task-sandbox';
@@ -24,7 +25,6 @@ beforeAll(() => __setChatTurnIntegrationsForTest([]));
 afterAll(() => __setChatTurnIntegrationsForTest(null));
 
 const POLICY = { allow: ['upload.example.com'], deny: [] };
-const tick = () => new Promise((r) => setImmediate(r));
 const ok = (stdout: string): ExecResult => ({ stdout, stderr: '', exitCode: 0, truncated: false, timedOut: false, durationMs: 1 });
 
 function localExecutor(supportsBrowserUpload = true) {
@@ -50,7 +50,7 @@ describe('TaskRuntime — 로컬 브라우저 업로드', () => {
         const { executor, runBrowserSpec } = localExecutor();
         let pending: PendingApproval | undefined;
         const exec = runtime(`t-up-${policy}`, policy, executor).executeTaskTool('browser', { actions: UPLOAD }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         expect(pending?.toolName).toBe('browser');
         expect((pending?.args as { siteUploads: unknown }).siteUploads).toEqual([{ index: 1, host: 'upload.example.com', files: ['docs/report.pdf', 'photo.png'] }]);
         expect(runBrowserSpec).not.toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe('TaskRuntime — 로컬 브라우저 업로드', () => {
         getApprovalRegistry().setAutoApprove('t-up-auto', true);
         let pending: PendingApproval | undefined;
         const exec = runtime('t-up-auto', 'high-risk', executor).executeTaskTool('browser', { actions: UPLOAD }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         expect(pending).toBeDefined();
         await getApprovalRegistry().reject(pending!.approvalId, 'u1');
         await exec;
@@ -80,7 +80,7 @@ describe('TaskRuntime — 로컬 브라우저 업로드', () => {
         for (let n = 0; n < 2; n++) {
             let pending: PendingApproval | undefined;
             const exec = rt.executeTaskTool('browser', { actions: UPLOAD }, { onApprovalPending: (p) => { pending = p; } });
-            await tick(); await tick();
+            await waitFor(() => pending, '승인 대기 등록');
             expect(pending).toBeDefined();
             await getApprovalRegistry().approve(pending!.approvalId);
             await exec;
