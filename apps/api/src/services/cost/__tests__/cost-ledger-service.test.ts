@@ -10,6 +10,9 @@ jest.mock('../../org/membership-cache', () => ({ activeOrgFor: async () => ({ or
 
 import { resolveRateFromTable, fallbackRate, recordCostAsync, clearCostRateCache } from '../cost-ledger-service';
 import { runWithCostSession } from '../../../utils/cost-attribution-context';
+import { getKeyValueStore, resetKeyValueStoreForTests } from '../../../storage';
+import { resetConfig } from '../../../config/env';
+import { costMonthKey } from '../../../llm/user-quota';
 
 describe('resolveRateFromTable', () => {
     const table = new Map<string, number>([['llm.local|qwen3.8-27b|token_in', 0.5], ['llm.local|*|token_out', 1.5]]);
@@ -26,7 +29,21 @@ describe('resolveRateFromTable', () => {
 });
 
 describe('recordCostAsync', () => {
-    beforeEach(() => { clearCostRateCache(); listAll.mockReset(); insert.mockReset(); listAll.mockResolvedValue([]); });
+    // 루트 .env·셸이 STORAGE_BACKEND=redis 여도 실제 Redis 에 쓰지 않도록(연결이 남아 워커가 끝나지 않는다)
+    // 그리고 메모리 저장소 회귀를 검증하도록 백엔드를 메모리로 고정한다.
+    const originalBackend = process.env.STORAGE_BACKEND;
+    beforeEach(() => {
+        process.env.STORAGE_BACKEND = 'memory';
+        resetConfig();
+        resetKeyValueStoreForTests();
+        clearCostRateCache(); listAll.mockReset(); insert.mockReset(); listAll.mockResolvedValue([]);
+    });
+    afterEach(() => {
+        if (originalBackend === undefined) delete process.env.STORAGE_BACKEND;
+        else process.env.STORAGE_BACKEND = originalBackend;
+        resetConfig();
+        resetKeyValueStoreForTests();
+    });
     test('DB 단가 × 수량 을 반올림해 적재하고 활성 조직을 귀속', async () => {
         listAll.mockResolvedValue([{ kind: 'llm.local', rate_key: '*', unit: 'token_in', usd_micros_per_unit: '2' }]);
         await recordCostAsync({ userId: 'u1', kind: 'llm.local', rateKey: 'm', unit: 'token_in', quantity: 1001, costOwner: 'user' });
@@ -52,5 +69,15 @@ describe('recordCostAsync', () => {
         expect(insert).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'explicit' }));
         await recordCostAsync({ userId: 'u1', kind: 'llm.local', rateKey: 'm', unit: 'token_in', quantity: 5, costOwner: 'user' });
         expect(insert).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: null }));
+    });
+
+    test('메모리 저장소에서도 월 비용 버킷이 기록 직후 사라지지 않는다(62일 TTL 이 1ms 로 줄던 문제)', async () => {
+        const now = Date.now();
+        const store = getKeyValueStore();
+        expect(store.backend).toBe('memory');
+        const k = costMonthKey('u-bucket', now);
+        await recordCostAsync({ userId: 'u-bucket', kind: 'llm.external', rateKey: 'openrouter:x', unit: 'token_out', quantity: 10, costOwner: 'byok', directCostUsdMicros: 500 }, now);
+        await new Promise((r) => setTimeout(r, 20));
+        expect(await store.get(k)).toBe(500);
     });
 });
