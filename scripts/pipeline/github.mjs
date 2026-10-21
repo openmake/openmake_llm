@@ -15,7 +15,7 @@ export function latestCI(runs, sha) {
 export function eligiblePull(pr, sha, repo) {
     return pr.state === 'open' && !pr.draft && pr.head.sha === sha && pr.head.repo?.full_name === repo && pr.base.ref === 'dev' && /^(feature|feat|fix|docs|chore|test|refactor)\/.+/.test(pr.head.ref);
 }
-export function metadataOnly(before, after, path, allowed) {
+export function metadataOnly(before, after, path, allowed, lockWorkspaces = []) {
     if (before === null || after === null || !allowed.has(path)) {
         return false;
     }
@@ -30,12 +30,15 @@ export function metadataOnly(before, after, path, allowed) {
         const strip = o => {
             const c = structuredClone(o);
             delete c.version;
-            if (path === 'package-lock.json' && c.packages?.['']) {
-                delete c.packages[''].version;
+            if (path === 'package-lock.json') {
+                for (const ws of ['', ...lockWorkspaces]) {
+                    delete c.packages?.[ws]?.version;
+                }
             }
             return JSON.stringify(c);
         };
-        return semver(b.version) && strip(a) === strip(b);
+        const workspaceVersions = path === 'package-lock.json' ? lockWorkspaces.map(ws => b.packages?.[ws]?.version).filter(v => v !== undefined) : [];
+        return semver(b.version) && workspaceVersions.every(v => semver(v)) && strip(a) === strip(b);
     }
     catch {
         return false;
@@ -54,9 +57,15 @@ function blob(ref, path) {
 export function metadataRange(base, head) {
     const config = JSON.parse(git('show', `${base}:release-please-config.json`));
     const allowed = new Set(['package.json', 'package-lock.json', '.release-please-manifest.json', 'CHANGELOG.md']);
+    const lockWorkspaces = [];
     for (const entry of config.packages?.['.']?.['extra-files'] || []) {
         if (entry.type === 'json' && entry.jsonpath === '$.version') {
             allowed.add(entry.path);
+        }
+        // release-please also bumps workspace versions inside the lockfile: $.packages['apps/api'].version
+        const ws = entry.type === 'json' && entry.path === 'package-lock.json' && /^\$\.packages\['([^']+)'\]\.version$/.exec(entry.jsonpath);
+        if (ws) {
+            lockWorkspaces.push(ws[1]);
         }
     }
     if (!git('merge-base', base, head).includes(base)) {
@@ -68,7 +77,7 @@ export function metadataRange(base, head) {
             return false;
         }
         for (const path of git('diff', '--name-only', parents[0], sha).split('\n').filter(Boolean)) {
-            if (!metadataOnly(blob(parents[0], path), blob(sha, path), path, allowed)) {
+            if (!metadataOnly(blob(parents[0], path), blob(sha, path), path, allowed, lockWorkspaces)) {
                 console.log(`Metadata gate blocked ${sha}: ${path}`);
                 return false;
             }
