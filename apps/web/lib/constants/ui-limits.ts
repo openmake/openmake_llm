@@ -55,3 +55,5 @@ export const FAILURE_REASON_MAX_CHARS = 120;
 export const LIVE_VIEW_POLL_MS = 1000;
 /** 실시간 작업 화면 터미널 — 맨 아래까지 남은 거리가 이 이하(px)일 때만 새 출력을 따라 내려간다. */
 export const LIVE_VIEW_FOLLOW_TAIL_PX = 24;
+/** 실시간 작업 화면·넘겨받기 — 진행 중 작업이 아직 대상 아님(작업 폴더 준비 전 등)일 때 다시 묻는 간격(ms). */
+export const LIVE_VIEW_RECHECK_MS = 3000;
