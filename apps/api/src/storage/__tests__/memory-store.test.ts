@@ -10,19 +10,16 @@ const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 describe('MemoryStore TTL', () => {
     let store: MemoryStore;
     let setTimeoutSpy: jest.SpyInstance;
-    let warningSpy: jest.SpyInstance;
 
     beforeEach(() => {
         jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
         jest.setSystemTime(new Date('2026-10-21T00:00:00Z'));
         setTimeoutSpy = jest.spyOn(global, 'setTimeout');
-        warningSpy = jest.spyOn(process, 'emitWarning');
         store = new MemoryStore();
     });
 
     afterEach(() => {
         setTimeoutSpy.mockRestore();
-        warningSpy.mockRestore();
         jest.useRealTimers();
     });
 
@@ -43,7 +40,7 @@ describe('MemoryStore TTL', () => {
         expect(await store.get('k')).toBeNull();
     });
 
-    it('어떤 setTimeout 호출도 2^31-1ms 를 넘는 지연을 받지 않고 TimeoutOverflowWarning 도 없다', async () => {
+    it('어떤 setTimeout 호출도 2^31-1ms 를 넘는 지연을 받지 않는다(TimeoutOverflowWarning 의 원인)', async () => {
         await store.set('a', 'x', 62 * DAY_MS);
         await store.incrBy('b', 1);
         await store.expire('b', 62 * DAY_MS);
@@ -51,8 +48,6 @@ describe('MemoryStore TTL', () => {
 
         expect(setTimeoutSpy).toHaveBeenCalled();
         expect(maxDelayPassed()).toBeLessThanOrEqual(MAX_TIMER_DELAY_MS);
-        const overflow = warningSpy.mock.calls.filter((c) => String(c[0]).includes('TimeoutOverflow') || String(c[1]).includes('TimeoutOverflow'));
-        expect(overflow).toHaveLength(0);
     });
 
     it('set 에 긴 TTL 을 줘도 바로 지워지지 않는다', async () => {
@@ -124,6 +119,25 @@ describe('MemoryStore TTL', () => {
         await store.set('g', 'x', 1000);
         jest.setSystemTime(Date.now() + 1500);
         expect(await store.get('g')).toBeNull();
+    });
+
+    it('expire 에 NaN 을 주면 즉시 만료로 본다(키가 영구히 남지 않는다)', async () => {
+        await store.incrBy('nan', 1);
+        expect(await store.expire('nan', NaN)).toBe(true);
+        expect(await store.get('nan')).toBeNull();
+        jest.advanceTimersByTime(1);
+        const internal = (store as unknown as { store: Map<string, unknown> }).store;
+        expect(internal.has('nan')).toBe(false);
+        expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('만료 타이머는 unref 되어 프로세스를 붙잡지 않는다', async () => {
+        jest.useRealTimers();
+        const real = new MemoryStore();
+        await real.set('u', 'x', 62 * DAY_MS);
+        const timer = (real as unknown as { store: Map<string, { timer?: NodeJS.Timeout }> }).store.get('u')?.timer;
+        expect(timer?.hasRef()).toBe(false);
+        await real.del('u');
     });
 
     it('없는 키에 expire 하면 false', async () => {
