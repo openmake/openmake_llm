@@ -824,7 +824,7 @@ function TaskDetailModal({
 
           {/* 브라우저 넘겨받기 — 로그인·CAPTCHA 처럼 사람이 해야 하는 단계. 샌드박스 실행 작업만(대상이 아니면 스스로 숨는다). */}
           {(detail.task.status === "running" || detail.task.status === "paused") && detail.task.executor !== "local" && (
-            <BrowserTakeover taskId={taskId} />
+            <BrowserTakeover taskId={taskId} status={detail.task.status} />
           )}
 
           {/* 체크포인트 분기(141) — 완료·실패·취소·일시정지 작업에서 지난 턴으로 갈라내기 */}

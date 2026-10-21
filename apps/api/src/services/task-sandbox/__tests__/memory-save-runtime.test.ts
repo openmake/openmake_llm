@@ -22,6 +22,7 @@ jest.mock('../../chat-service/memory-extraction', () => ({
 
 import { TaskRuntime } from '../runtime';
 import { getApprovalRegistry, type PendingApproval } from '../approval-gate';
+import { waitFor } from './helpers/wait-for';
 import { getTaskSandboxConfig } from '../../../config/task-sandbox';
 
 beforeAll(() => __setChatTurnIntegrationsForTest([]));
@@ -30,7 +31,6 @@ beforeEach(() => { repo.create.mockClear(); });
 
 const GOAL = '나는 보고서를 항상 표로 받는 걸 좋아해. 이걸 기억해 줘';
 const CONTENT = '사용자는 보고서를 표로 받는 것을 선호한다';
-const tick = () => new Promise((r) => setImmediate(r));
 const cfg = (approvalPolicy: 'all' | 'high-risk' | 'none') => ({ ...getTaskSandboxConfig(), approvalPolicy });
 const runtime = (taskId: string, policy: 'all' | 'high-risk' | 'none', goal = GOAL) =>
     new TaskRuntime(taskId, 'u1', cfg(policy), undefined, undefined, undefined, goal);
@@ -45,7 +45,7 @@ describe('TaskRuntime — memory_save', () => {
         const rt = runtime(`t-mem-${policy}`, policy);
         let pending: PendingApproval | undefined;
         const exec = rt.executeTaskTool('memory_save', { content: CONTENT }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         expect(pending?.toolName).toBe('memory_save');
         expect(pending?.args).toEqual({ content: CONTENT });
         expect(repo.create).not.toHaveBeenCalled();
@@ -60,7 +60,7 @@ describe('TaskRuntime — memory_save', () => {
         getApprovalRegistry().setAutoApprove('t-mem-auto', true);
         let pending: PendingApproval | undefined;
         const exec = rt.executeTaskTool('memory_save', { content: CONTENT }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         expect(pending).toBeDefined();
         expect(repo.create).not.toHaveBeenCalled();
         await getApprovalRegistry().reject(pending!.approvalId, 'u1');
@@ -72,7 +72,7 @@ describe('TaskRuntime — memory_save', () => {
         const rt = runtime('t-mem-reject', 'all');
         let pending: PendingApproval | undefined;
         const exec = rt.executeTaskTool('memory_save', { content: CONTENT }, { onApprovalPending: (p) => { pending = p; } });
-        await tick(); await tick();
+        await waitFor(() => pending, '승인 대기 등록');
         await getApprovalRegistry().reject(pending!.approvalId, 'u1', '표가 아니라 목록을 선호합니다');
         const out = await exec;
         expect(out).toContain('승인하지 않았습니다');

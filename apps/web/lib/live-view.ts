@@ -3,7 +3,7 @@
  * 조회는 components/agent-tasks/live-view 가 한다. 백엔드: routes/agent-task-live.routes.ts
  * 상수는 상대 경로로 가져온다 — api Jest 가 이 파일을 직접 require 하는데 거기서 `@/` 는 api src 를 가리킨다.
  */
-import { LIVE_VIEW_FOLLOW_TAIL_PX, LIVE_VIEW_POLL_MS } from "./constants/ui-limits";
+import { LIVE_VIEW_FOLLOW_TAIL_PX, LIVE_VIEW_POLL_MS, LIVE_VIEW_RECHECK_MS } from "./constants/ui-limits";
 
 /** 화면을 계속 다시 읽는 작업 상태. */
 export const LIVE_RUNNING_STATUSES: readonly string[] = ["running", "paused"];
@@ -16,6 +16,19 @@ export function nextLivePollDelay(s: { status: string | undefined; visible: bool
   if (s.eligible === false || !s.visible) return null;
   if (!s.status || !LIVE_RUNNING_STATUSES.includes(s.status)) return null;
   return LIVE_VIEW_POLL_MS;
+}
+
+/** 시간이 지나면 풀릴 수 있는 "대상 아님" 이유 — 작업 폴더 경로가 아직 없음·폴더 없음(시작 직후·재개 직후). */
+export const LIVE_RECHECK_REASONS: readonly string[] = ["not_sandbox", "workspace_gone"];
+
+/** "대상 아님"을 다시 물어볼 진행 중 작업 상태. */
+export const LIVE_RECHECK_STATUSES: readonly string[] = ["running", "paused", "pending", "queued"];
+
+/** "대상 아님" 응답 뒤 다시 물을 때까지 ms, 다시 묻지 않으면 null. 소유자 아님·꺼짐·끝난 작업·탭 숨김은 null. */
+export function ineligibleRecheckDelay(s: { reason: string | undefined; status: string | undefined; visible: boolean }): number | null {
+  if (!s.visible || !s.reason || !s.status) return null;
+  if (!LIVE_RECHECK_REASONS.includes(s.reason) || !LIVE_RECHECK_STATUSES.includes(s.status)) return null;
+  return LIVE_VIEW_RECHECK_MS;
 }
 
 /** 프레임이 몇 초 전 것인지 — 3초 미만이면 null("지금"으로 본다). */
