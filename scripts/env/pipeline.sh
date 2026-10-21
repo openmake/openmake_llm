@@ -130,4 +130,6 @@ fs.writeFileSync(temporary,JSON.stringify(receipt,null,2)+'\n',{mode:0o600});fs.
 NODE
     rm -f "$(pipeline_dir "$env")/hold"
     log_ok "Human approval recorded: $sha; staging hold released"
+    # Approval is already recorded; a dispatch failure must not fail approve (the cron remains the fallback).
+    release_verified_dispatch "$(llm_dir "$env")" || true
 }
