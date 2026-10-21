@@ -2840,7 +2840,8 @@
       "response": "回答",
       "tools": "工具选择",
       "redteam": "红队",
-      "matrix": "矩阵"
+      "matrix": "矩阵",
+      "pack": "扩展包"
     }
   },
   "adminAddons": {
