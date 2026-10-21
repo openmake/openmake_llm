@@ -6,6 +6,7 @@ import { createTaskTools, TASK_TERMINATE_SENTINEL, TASK_ASK_HUMAN_SENTINEL } fro
 import { procedureChecksum, SKILL_RUN_CHECKSUM_ARG } from './skill-run-binding';
 import type { TaskSandbox, ExecResult } from './sandbox';
 import type { MCPToolResult } from '../../tool-contract/types';
+import { liveFrameSpec } from '../../config/agent-task-live-view';
 
 /** 인메모리 가짜 샌드박스 — docker 없이 도구 로직만 검증. */
 type FakeSandbox = TaskSandbox & { files: Map<string, string>; lastCmd: string; lastBrowser: string; lastBrowserSpec: string; ranCode: string };
@@ -352,6 +353,29 @@ describe('task-sandbox tools', () => {
             await byName(createTaskTools(sb), 'browser').handler({ actions: { type: 'goto', url: 'https://example.com' } });
             const spec = JSON.parse(sb.lastBrowserSpec);
             expect(spec.actions).toEqual([{ type: 'goto', url: 'https://example.com' }]);
+        });
+        it('docker 샌드박스 경로: 액션 파일에 실시간 화면 설정(live)을 싣는다', async () => {
+            const sb = fakeSandbox();
+            await byName(createTaskTools(sb), 'browser').handler({ actions: [{ type: 'goto', url: 'https://example.com' }] });
+            const spec = JSON.parse(sb.lastBrowserSpec);
+            expect(liveFrameSpec()).not.toBeNull();
+            expect(spec.live).toEqual(liveFrameSpec());
+        });
+        it('로컬 기기 경로(runBrowserSpec): spec 에 live 가 없다(기존 동작 유지)', async () => {
+            const sb = fakeSandbox();
+            const seen: unknown[] = [];
+            Object.assign(sb, {
+                planBrowserSitePolicy: async () => ({ blocked: [], offListWrites: [], uploads: [] }),
+                runBrowserSpec: async (spec: unknown) => {
+                    seen.push(spec);
+                    return { stdout: 'local-ran', stderr: '', exitCode: 0, truncated: false, timedOut: false, durationMs: 1 };
+                },
+            });
+            const r = await byName(createTaskTools(sb), 'browser').handler({ actions: [{ type: 'goto', url: 'https://example.com' }] });
+            expect(txt(r)).toContain('local-ran');
+            expect(seen).toHaveLength(1);
+            expect(seen[0]).not.toHaveProperty('live');
+            expect(sb.lastBrowser).toBe('');
         });
     });
 
