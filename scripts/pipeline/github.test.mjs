@@ -214,3 +214,33 @@ test('release polling does not retain merge approval while main gains functional
         Object.assign(process.env, saved);
     }
 });
+test('release gate accepts lockfile workspace versions listed in extra-files and nothing else', () => {
+    const cwd = process.cwd(), dir = mkdtempSync(join(tmpdir(), 'pipeline-lock-'));
+    const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
+    const lock = (root, ws, dep = '1.0.0') => JSON.stringify({ name: 'r', version: root, packages: { '': { version: root }, 'apps/api': { version: ws, dependencies: { x: dep } }, 'node_modules/x': { version: dep } } });
+    git('init', '-q');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+    writeFileSync(join(dir, 'release-please-config.json'), JSON.stringify({ packages: { '.': { 'extra-files': [{ type: 'json', path: 'package-lock.json', jsonpath: "$.packages['apps/api'].version" }] } } }));
+    writeFileSync(join(dir, 'package-lock.json'), lock('1.0.0', '0.9.0'));
+    git('add', '.');
+    git('commit', '-qm', 'initial');
+    const base = git('rev-parse', 'HEAD');
+    try {
+        process.chdir(dir);
+        writeFileSync(join(dir, 'package-lock.json'), lock('1.0.1', '1.0.1'));
+        git('commit', '-qam', 'release');
+        assert.equal(metadataRange(base, git('rev-parse', 'HEAD')), true);
+        git('reset', '-q', '--hard', base);
+        writeFileSync(join(dir, 'package-lock.json'), lock('1.0.1', 'malicious'));
+        git('commit', '-qam', 'bad version');
+        assert.equal(metadataRange(base, git('rev-parse', 'HEAD')), false);
+        git('reset', '-q', '--hard', base);
+        writeFileSync(join(dir, 'package-lock.json'), lock('1.0.1', '1.0.1', '2.0.0'));
+        git('commit', '-qam', 'dependency change');
+        assert.equal(metadataRange(base, git('rev-parse', 'HEAD')), false);
+    }
+    finally {
+        process.chdir(cwd);
+    }
+});
