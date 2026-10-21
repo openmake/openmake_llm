@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.108.0](https://github.com/openmake/openmake_llm/compare/v1.107.3...v1.108.0) (2026-10-20)
+
+
+### ✨ 기능
+
+* **ci:** run only declared changed functional scenarios ([09046fd](https://github.com/openmake/openmake_llm/commit/09046fd853bcb7ddf32c6912990ccaef2ccfbc44))
+* **pipeline:** connect eight-stage verification and delivery flow ([f92e5ac](https://github.com/openmake/openmake_llm/commit/f92e5ac8b4d7aaaaad20bc18b3bdbf5afc165255))
+* **pipeline:** connect staged checks and verified release automation ([d516a38](https://github.com/openmake/openmake_llm/commit/d516a38fa399925e9ec1ffaab3fc3c4a2f1ad298))
+
+
+### 🐛 버그 수정
+
+* **ci:** check protected API and preserve cleanup diagnostics ([e7d7b0e](https://github.com/openmake/openmake_llm/commit/e7d7b0e092b45bdd0aa23ab9a1fdbad512c91ce4))
+* **ci:** document external Colima guard Node resolver argument ([61da827](https://github.com/openmake/openmake_llm/commit/61da8273e653efd8bafc72a3024960ea49e410e4))
+* **ci:** map host setup and monitoring contract checks ([a54b906](https://github.com/openmake/openmake_llm/commit/a54b9061599c559725679341097783cb037ff776))
+* **ci:** map host setup and monitoring contract checks ([d9bfeac](https://github.com/openmake/openmake_llm/commit/d9bfeac84f14ce23d50f8ba85ab958860e4bea70))
+* **ci:** poll exiting processes and clarify shell fixture commands ([16727de](https://github.com/openmake/openmake_llm/commit/16727de311093a11b648618f3a5e4e73c5186271))
+* **ci:** recognize completed owned zombie groups on macOS ([dcb745b](https://github.com/openmake/openmake_llm/commit/dcb745b0673123184f2b3ce535398f520e85b191))
+* **deps:** patch markdown-it reference parsing vulnerability ([2c43f12](https://github.com/openmake/openmake_llm/commit/2c43f1223d7fa9dafe034e5063a5f6ad8f6d97c5))
+* **deps:** patch markdown-it reference parsing vulnerability ([ee408a4](https://github.com/openmake/openmake_llm/commit/ee408a42e20ee5ab0405448efe8bc868b973fcee))
+* **deps:** patch markdown-it smartquotes advisory ([f2f9b2a](https://github.com/openmake/openmake_llm/commit/f2f9b2a7b5c7b2b2ca5a4c6e9e2fec2d24151ceb))
+* **mcp:** correct monitoring contracts and metric labels ([e145142](https://github.com/openmake/openmake_llm/commit/e1451429b0441d72d30cb4159aa0b5c3bcbb7d1b))
+* **pipeline:** bind immediate merges and clean cancelled validation runs ([5dfd21a](https://github.com/openmake/openmake_llm/commit/5dfd21af8106002b4ee0fe325f2235a1bcebb0d5))
+* **pipeline:** preserve main comparison ref in disposable checkout ([a954aa0](https://github.com/openmake/openmake_llm/commit/a954aa0963f6bf3c86231de4ff9e062472afaf2e))
+* **pipeline:** preserve main ref in disposable CI checkout ([e95e78e](https://github.com/openmake/openmake_llm/commit/e95e78eeb8f3656c4b487d127cba6e0463b37931))
+* reconcile macOS Colima hosts and correct MCP monitoring ([a1a99e2](https://github.com/openmake/openmake_llm/commit/a1a99e2ea2ef22fb97a4189a43938289abd9936f))
+* **setup:** preserve legacy agents and escape plists across Bash versions ([562f43c](https://github.com/openmake/openmake_llm/commit/562f43ccfdbce2f072ce097d16759efd99a51fac))
+* **setup:** quarantine preboot Colima PID metadata safely ([59f43ef](https://github.com/openmake/openmake_llm/commit/59f43ef5c8caaf1df8ef8243839874d146195cca))
+* **setup:** reconcile macOS Docker tooling with dedicated Colima ([8a06d31](https://github.com/openmake/openmake_llm/commit/8a06d31505eb080461b44cc3da26a2248a1a33b3))
+* **setup:** restore saved PM2 apps after macOS login ([7957ffe](https://github.com/openmake/openmake_llm/commit/7957ffe23c8de36f1a0977992933eaae24b40cf4))
+* **setup:** run Colima boot guard with owner Node runtime ([244a37e](https://github.com/openmake/openmake_llm/commit/244a37ef2d9d921832fff2fc802a066962dac107))
+
+
+### ♻️ 리팩터링
+
+* **monitor:** move external QA and monitor contract to separate repository ([a152005](https://github.com/openmake/openmake_llm/commit/a152005a06d8a16a99b7555c04524ff158845c15))
+* **monitor:** separate monitor-owned QA source and contract ([39573b6](https://github.com/openmake/openmake_llm/commit/39573b6e164b43a107f331a647f61378f301aac7))
+
 ## [1.107.3](https://github.com/openmake/openmake_llm/compare/v1.107.2...v1.107.3) (2026-10-20)
 
 
