@@ -2,7 +2,9 @@
 // apps/api tsconfig rootDir 밖 파일이라 require 로 런타임만 불러온다(ts-jest 가 변환)
 export {}; // 모듈로 만들어 다른 테스트 파일의 전역 타입 이름과 겹치지 않게 한다
 type PollInput = { status: string | undefined; visible: boolean; eligible: boolean | null };
-const { nextLivePollDelay, frameAgeSeconds, isLiveViewHiddenError, shouldFollowTail, LIVE_RUNNING_STATUSES } = require('../../../../web/lib/live-view') as {
+type RecheckInput = { reason: string | undefined; status: string | undefined; visible: boolean };
+const { nextLivePollDelay, frameAgeSeconds, isLiveViewHiddenError, shouldFollowTail, ineligibleRecheckDelay, LIVE_RUNNING_STATUSES } = require('../../../../web/lib/live-view') as {
+    ineligibleRecheckDelay: (s: RecheckInput) => number | null;
     shouldFollowTail: (scrollTop: number, clientHeight: number, scrollHeight: number) => boolean;
     nextLivePollDelay: (s: PollInput) => number | null;
     isLiveViewHiddenError: (status: number | undefined) => boolean;
@@ -67,5 +69,31 @@ describe('shouldFollowTail', () => {
     });
     it('내용이 상자보다 짧으면 따라간다', () => {
         expect(shouldFollowTail(0, 100, 80)).toBe(true);
+    });
+});
+
+describe('ineligibleRecheckDelay', () => {
+    it('작업 폴더가 아직 없는 진행 중 작업은 3초 뒤 다시 묻는다', () => {
+        expect(ineligibleRecheckDelay({ reason: 'not_sandbox', status: 'running', visible: true })).toBe(3000);
+    });
+    it('폴더 없음 + 일시정지도 다시 묻는다', () => {
+        expect(ineligibleRecheckDelay({ reason: 'workspace_gone', status: 'paused', visible: true })).toBe(3000);
+    });
+    it('대기 중(queued·pending)도 다시 묻는다', () => {
+        expect(ineligibleRecheckDelay({ reason: 'not_sandbox', status: 'queued', visible: true })).toBe(3000);
+        expect(ineligibleRecheckDelay({ reason: 'not_sandbox', status: 'pending', visible: true })).toBe(3000);
+    });
+    it('소유자 아님·꺼짐은 바뀌지 않으니 멈춘다', () => {
+        expect(ineligibleRecheckDelay({ reason: 'not_owner', status: 'running', visible: true })).toBeNull();
+        expect(ineligibleRecheckDelay({ reason: 'disabled', status: 'running', visible: true })).toBeNull();
+    });
+    it('끝난 작업은 멈춘다', () => {
+        expect(ineligibleRecheckDelay({ reason: 'not_sandbox', status: 'completed', visible: true })).toBeNull();
+    });
+    it('탭이 가려지면 멈춘다', () => {
+        expect(ineligibleRecheckDelay({ reason: 'not_sandbox', status: 'running', visible: false })).toBeNull();
+    });
+    it('이유가 없으면 멈춘다', () => {
+        expect(ineligibleRecheckDelay({ reason: undefined, status: 'running', visible: true })).toBeNull();
     });
 });

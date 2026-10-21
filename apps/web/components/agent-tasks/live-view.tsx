@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ApiClient, ApiError } from "@/lib/api-client";
-import { frameAgeSeconds, isLiveViewHiddenError, nextLivePollDelay, shouldFollowTail } from "@/lib/live-view";
+import { frameAgeSeconds, ineligibleRecheckDelay, isLiveViewHiddenError, nextLivePollDelay, shouldFollowTail } from "@/lib/live-view";
 import { cn } from "@/lib/utils";
 
 interface LiveBrowser { image: string | null; unchanged?: boolean; url: string; title: string; at: number }
@@ -61,6 +61,7 @@ export function LiveView({ taskId, status, onEligibleChange }: {
 
   // 상태·보임이 바뀌면 다시 계산한다 — 끝난 작업도 마지막 상태(종료 코드)를 한 번 더 읽는다.
   // 대상 아님도 상태가 바뀌면 한 번 다시 묻는다(대기 중엔 작업 폴더가 없어 not_sandbox → 시작 뒤엔 대상).
+  // 상태가 그대로여도 바뀔 수 있는 이유(not_sandbox·workspace_gone)면 ineligibleRecheckDelay 간격으로 다시 묻는다.
   useEffect(() => {
     if (loadedOnce.current && !visible) return;
     let alive = true;
@@ -78,7 +79,13 @@ export function LiveView({ taskId, status, onEligibleChange }: {
         const r = await ApiClient.get<LiveResponse>(`/api/agent-tasks/${taskId}/live${q}`, { redirectOnUnauthorized: false });
         if (!alive) return;
         const d = r?.data;
-        if (!d || !d.eligible) { decide(false); return; }
+        if (!d || !d.eligible) {
+          decide(false);
+          // 작업 폴더가 아직 없는 진행 중 작업(시작·재개 직후)은 잠시 뒤 다시 묻는다 — 대상이 되면 위 1초 폴링으로 넘어간다
+          const recheck = ineligibleRecheckDelay({ reason: d?.eligible === false ? d.reason : undefined, status, visible });
+          if (recheck !== null) timer = setTimeout(() => void load(), recheck);
+          return;
+        }
         decide(true);
         nextStatus = d.status;
         const b = d.browser;
