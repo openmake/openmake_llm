@@ -20,6 +20,7 @@ import { resolve } from 'node:path';
 import { createGuardProxy, parseAllowedHosts } from './guard-proxy.mjs';
 import { createDialogPolicy } from './dialog-policy.mjs';
 import { filledValue, readTextOrValue } from './field-value.mjs';
+import { createLiveFrameWriter } from './live-frame.mjs';
 
 const WORKSPACE = '/workspace';
 const MAX_ACTIONS = 40;
@@ -87,6 +88,16 @@ const allowlist = Array.isArray(spec.allowlist) && spec.allowlist.length > 0 ? s
 const statePath = typeof spec.statePath === 'string' && spec.statePath
     ? resolve(WORKSPACE, spec.statePath.replace(/[^A-Za-z0-9._-]/g, '_'))
     : null;
+// 실시간 작업 화면: spec.live 가 있으면 실행 중 화면을 작업 폴더의 숨김 파일에 덮어쓴다(live-frame.mjs).
+// 경로는 statePath 와 같은 방식으로 workspace 안으로 가둔다.
+const live = spec.live && typeof spec.live === 'object' && typeof spec.live.framePath === 'string'
+    && typeof spec.live.metaPath === 'string'
+    ? {
+        framePath: resolve(WORKSPACE, spec.live.framePath.replace(/[^A-Za-z0-9._-]/g, '_')),
+        metaPath: resolve(WORKSPACE, spec.live.metaPath.replace(/[^A-Za-z0-9._-]/g, '_')),
+        minIntervalMs: Number(spec.live.minIntervalMs) > 0 ? Number(spec.live.minIntervalMs) : 0,
+    }
+    : null;
 
 function hostAllowed(url) {
     if (!allowlist) return true;
@@ -110,6 +121,7 @@ const results = [];
 let finalUrl = '';
 let browser;
 let guard;
+let writer;
 const denied = [];
 const dialogPolicy = createDialogPolicy();
 try {
@@ -148,6 +160,16 @@ try {
         } catch { /* 이미 닫힌 확인창 */ }
     });
     const page = await context.newPage();
+    if (live) {
+        try {
+            const cdp = await context.newCDPSession(page);
+            writer = createLiveFrameWriter({
+                cdp, ...live,
+                getMeta: async () => ({ url: page.url(), title: await page.title().catch(() => '') }),
+            });
+            await writer.start();
+        } catch { writer = null; /* 화면 전송 없이 진행 */ }
+    }
 
     for (let i = 0; i < actions.length; i++) {
         const a = actions[i];
@@ -234,6 +256,7 @@ try {
 } catch (e) {
     out({ ok: false, error: e.message, results });
 } finally {
+    await writer?.stop();
     if (browser) await browser.close().catch(() => {});
     if (guard) guard.close();
 }

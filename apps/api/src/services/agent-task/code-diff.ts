@@ -10,11 +10,11 @@
  *
  * @module services/agent-task/code-diff
  */
-import { CODE_DIFF_INTERNAL_FILES } from '../../config/agent-task-tools';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { getTaskSandboxConfig } from '../../config/task-sandbox';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import { restoreForkedWorkspace, type ForkOrigin } from './fork-workspace';
+import { writeInternalExcludeCmd } from './git-internal-exclude';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
@@ -23,9 +23,6 @@ const logger = createLogger('AgentTaskService');
  * git 공통 옵션 — bind-mount workspace 는 호스트 uid 소유라 컨테이너 uid 와 다를 수 있어
  * safe.directory 필수. 커밋 identity 는 전역 config 없이 인라인(-c) 지정(루트 read-only).
  */
-/** PURE: 셸 단일 인용 */
-const shq = (v: string): string => `'${v.replace(/'/g, `'\\''`)}'`;
-
 const GIT = 'git -c safe.directory=/workspace -c user.email=agent@openmake.local -c user.name=openmake-agent';
 
 /**
@@ -41,7 +38,8 @@ export async function initWorkspaceBaseline(runtime: TaskRuntime, forkOrigin?: F
     const restored = await restoreForkedWorkspace(runtime, forkOrigin, { force: !!opts.forceRestore });
     try {
         const r = await runtime.execRaw(
-            `[ -d .git ] || { ${GIT} init -q && ${GIT} add -A && ${GIT} commit -q --allow-empty -m baseline; }`,
+            // 내부 파일은 기준점부터 추적하지 않는다(git-internal-exclude 참고).
+            `[ -d .git ] || { ${GIT} init -q && ${writeInternalExcludeCmd()} && ${GIT} add -A && ${GIT} commit -q --allow-empty -m baseline; }`,
         );
         if (r.exitCode !== 0) {
             logger.warn(`[AgentTask] git baseline 실패 (${runtime.workspacePath}): ${r.stderr || r.stdout}`);
@@ -70,7 +68,7 @@ export async function captureWorkspaceDiff(runtime: TaskRuntime): Promise<string
     try {
         const r = await runtime.execRaw(
             // 내부 파일은 추적하지 않게 제외 목록에 적은 뒤 add 한다(매번 덮어써 멱등 — 재개·옛 작업 공간에도 적용된다).
-            `[ -d .git ] && printf '%s\\n' ${CODE_DIFF_INTERNAL_FILES.map(shq).join(' ')} > .git/info/exclude && ${GIT} add -A && ${GIT} diff --cached --no-color`,
+            `[ -d .git ] && ${writeInternalExcludeCmd()} && ${GIT} add -A && ${GIT} diff --cached --no-color`,
         );
         if (r.exitCode !== 0) return null;
         const diff = r.stdout.trim();

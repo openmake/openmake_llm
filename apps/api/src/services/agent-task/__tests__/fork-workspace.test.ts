@@ -11,7 +11,12 @@ jest.mock('../../../config/task-sandbox', () => ({
     getTaskSandboxConfig: () => ({ workspaceRoot: '/tmp/ws', image: 'img', dockerPath: 'docker', user: '1000:1000' }),
 }));
 
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { execFileSync, spawnSync } from 'child_process';
 import { snapshotWorkspaceTurn, restoreForkedWorkspace, turnSnapshotRef } from '../fork-workspace';
+import { initWorkspaceBaseline, captureWorkspaceDiff } from '../code-diff';
 import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 import type { TaskRuntime } from '../../task-sandbox/runtime';
 
@@ -40,6 +45,41 @@ describe('snapshotWorkspaceTurn', () => {
         expect(cmd).toContain('commit-tree');
         expect(cmd).toContain('update-ref refs/omk/turn-2');
         expect(cmd).not.toMatch(/ commit -/); // HEAD 를 옮기면 완료 시 diff(baseline 대비)가 비게 된다
+    });
+
+    it('내부 숨김 파일은 스냅숏에 넣지 않는다 — add -A 앞에 제외 목록을 쓴다', async () => {
+        enable();
+        const execRaw = jest.fn().mockResolvedValue(ok());
+        await snapshotWorkspaceTurn(runtime(execRaw), 2);
+        const cmd = execRaw.mock.calls[0][0] as string;
+        expect(cmd).toContain('.live-frame.jpg');
+        expect(cmd.indexOf('.git/info/exclude')).toBeLessThan(cmd.indexOf('add -A'));
+    });
+
+    it('실제 git: 기준점→턴 스냅숏→diff 어디에도 실시간 화면 숨김 파일이 추적되지 않는다', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'omk-fork-ws-'));
+        try {
+            const execRaw = jest.fn(async (cmd: string) => {
+                const r = spawnSync('bash', ['-c', cmd], { cwd: dir, encoding: 'utf8' });
+                return { stdout: r.stdout, stderr: r.stderr, exitCode: r.status ?? 1, truncated: false, timedOut: false, durationMs: 1 };
+            });
+            const rt = runtime(execRaw as unknown as jest.Mock, dir);
+            writeFileSync(join(dir, 'a.txt'), 'a');
+            writeFileSync(join(dir, '.live-terminal.json'), '{}');
+            await initWorkspaceBaseline(rt);
+            writeFileSync(join(dir, 'b.txt'), 'b');
+            writeFileSync(join(dir, '.live-frame.jpg'), 'jpg');
+            writeFileSync(join(dir, '.live-terminal.json'), '{"x":1}');
+            await snapshotWorkspaceTurn(rt, 1, { force: true });
+            const ls = (ref: string) => execFileSync('git', ['ls-tree', '-r', '--name-only', ref], { cwd: dir, encoding: 'utf8' }).split('\n').filter(Boolean);
+            expect(ls('HEAD')).toEqual(['a.txt']);
+            expect(ls(turnSnapshotRef(1))).toEqual(['a.txt', 'b.txt']);
+            const diff = await captureWorkspaceDiff(rt);
+            expect(diff).toContain('b.txt');
+            expect(diff).not.toContain('.live-');
+        } finally {
+            rmSync(dir, { recursive: true, force: true });
+        }
     });
 
     it('꺼져 있으면(기본) 아무것도 하지 않는다', async () => {

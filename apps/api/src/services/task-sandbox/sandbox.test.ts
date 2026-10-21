@@ -1,8 +1,9 @@
 import { mkdtemp, mkdir, writeFile, readFile, symlink, rm, chmod } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, sep } from 'path';
-import { buildRunArgs, buildBrowserRunArgs, buildWriteArgs, buildKillExecArgs, safeResolveWorkspacePath, safeRealWorkspacePath, sanitizeId, dirSizeBytes, listWorkspaceFilesAt, TaskSandbox } from './sandbox';
+import { buildRunArgs, buildBrowserRunArgs, buildWriteArgs, buildKillExecArgs, safeResolveWorkspacePath, safeRealWorkspacePath, sanitizeId, dirSizeBytes, listWorkspaceFilesAt, runProcess, TaskSandbox } from './sandbox';
 import { getTaskSandboxConfig, resolveWriteViaContainer, browserDestGuardEnv } from '../../config/task-sandbox';
+import { PIPE_STATUS_TAG_PREFIX } from './pipe-status';
 
 describe('task-sandbox pure functions', () => {
     const cfg = getTaskSandboxConfig();
@@ -464,6 +465,30 @@ describe('exec — 파이프라인 단계별 종료 코드(pipe-status)', () => 
         });
     });
 
+    it('실행한 명령의 원래 문장·출력·종료 코드가 작업 폴더 .live-terminal.json 에 남는다', async () => {
+        await withSandbox('p0', async (sb, ws) => {
+            const r = await sb.exec('sh -c "echo out; exit 3" | cat', { pipeStatus: true });
+            expect(r.pipeStages).toHaveLength(1); // 표식을 실제로 쓴 실행이다
+            const s = JSON.parse(await readFile(join(ws, '.live-terminal.json'), 'utf8'));
+            expect(s).toMatchObject({ command: 'sh -c "echo out; exit 3" | cat', truncatedHead: false, exitCode: r.exitCode });
+            expect(s.output).toContain('out\n');
+            expect(s.output).not.toContain(PIPE_STATUS_TAG_PREFIX);
+            expect(typeof s.endedAt).toBe('number');
+        });
+    });
+
+    it('pipeStatus 없는 내부 exec 는 .live-terminal.json 을 만들거나 바꾸지 않는다', async () => {
+        await withSandbox('p00', async (sb, ws) => {
+            const live = join(ws, '.live-terminal.json');
+            await sb.exec('echo internal');
+            await expect(readFile(live, 'utf8')).rejects.toThrow();
+            await sb.exec('echo bash', { pipeStatus: true });
+            const before = await readFile(live, 'utf8');
+            await sb.exec('echo internal2');
+            expect(await readFile(live, 'utf8')).toBe(before);
+        });
+    });
+
     it('요청하지 않으면(다른 도구의 내부 실행) 감싸지 않는다', async () => {
         await withSandbox('p2', async (sb) => {
             const r = await sb.exec('false | true');
@@ -502,5 +527,22 @@ describe('exec — 파이프라인 단계별 종료 코드(pipe-status)', () => 
             }
             expect(await readFile(join(ws, 'out.txt'), 'utf8')).toBe('hi\n');
         });
+    });
+});
+
+describe('runProcess — 실행 중 출력 조각(onOutput)', () => {
+    it('runProcess 는 출력 상한을 넘어도 onOutput 에 모든 조각을 준다', async () => {
+        const chunks: string[] = [];
+        const r = await runProcess(process.execPath, ['-e', 'process.stdout.write("x".repeat(5000)); process.stderr.write("e".repeat(300))'],
+            { timeoutMs: 10_000, outputCap: 10, onOutput: (c) => chunks.push(c) });
+        expect(r.stdout.length).toBe(10);
+        expect(r.truncated).toBe(true);
+        expect(chunks.join('').length).toBe(5300);
+    });
+
+    it('onOutput 콜백이 throw 해도 결과는 그대로다', async () => {
+        const r = await runProcess(process.execPath, ['-e', 'process.stdout.write("ok")'],
+            { timeoutMs: 10_000, outputCap: 100, onOutput: () => { throw new Error('boom'); } });
+        expect(r).toMatchObject({ stdout: 'ok', exitCode: 0, truncated: false, timedOut: false });
     });
 });
