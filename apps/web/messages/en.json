@@ -2840,7 +2840,8 @@
       "response": "Response",
       "tools": "Tool selection",
       "redteam": "Red team",
-      "matrix": "Matrix"
+      "matrix": "Matrix",
+      "pack": "Pack"
     }
   },
   "adminAddons": {
