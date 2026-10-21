@@ -1164,6 +1164,18 @@
       "inputTimeout": "Die Seite wurde nicht rechtzeitig geöffnet. Versuchen Sie es erneut.",
       "releaseFailed": "Zurückgeben fehlgeschlagen: {error}"
     },
+    "live": {
+      "title": "Arbeitsansicht",
+      "tabScreen": "Bildschirm",
+      "tabTerminal": "Terminal",
+      "noFrame": "Der Agent hat den Browser noch nicht verwendet.",
+      "noTerminal": "Es wurden noch keine Befehle ausgeführt.",
+      "frameAge": "Bildschirm von vor {seconds} s",
+      "running": "Läuft",
+      "exitCode": "Exit-Code {code}",
+      "truncated": "Anfang ausgelassen",
+      "ownerOnly": "Diese Ansicht sieht nur der Besitzer der Aufgabe."
+    },
     "thinkingBadge": "Denken {level}",
     "thinkingLabel": "Denken",
     "thinkingLevel": {

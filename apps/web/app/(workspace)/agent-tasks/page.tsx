@@ -47,6 +47,7 @@ import { DiffView } from "@/components/chat/diff-view";
 import { PlanEditor } from "@/components/agent-tasks/plan-editor";
 import { BrowserTakeover } from "@/components/agent-tasks/browser-takeover";
 import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
+import { LiveView } from "@/components/agent-tasks/live-view";
 import { onAgentTaskChange, onOpenAgentTask, requestOpenAgentTask } from "@/lib/agent-task-change";
 import { failureLabelKey, failureNextKey } from "@/lib/agent-task-failure";
 import { taskStatusLabelKey } from "@/lib/approval-input";
@@ -290,11 +291,14 @@ function Modal({
   onClose,
   title,
   children,
+  wide,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  /** 넓은 모달(작업 상세 — 오른쪽 작업 화면 패널) */
+  wide?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -309,7 +313,7 @@ function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div ref={trapRef} role="dialog" aria-modal="true" tabIndex={-1} className="outline-none relative z-10 w-full max-w-xl max-h-[90vh] overflow-y-auto mx-4 rounded-lg border border-border bg-app shadow-xl">
+      <div ref={trapRef} role="dialog" aria-modal="true" tabIndex={-1} className={cn("outline-none relative z-10 w-full max-h-[90vh]", wide ? "max-w-6xl" : "max-w-xl", "overflow-y-auto mx-4 rounded-lg border border-border bg-app shadow-xl")}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-sm font-semibold text-fg">{title}</h2>
           <button onClick={onClose} className="text-muted hover:text-fg">
@@ -722,7 +726,9 @@ function TaskDetailModal({
       ) : !detail ? (
         <p className="text-sm text-danger py-8 text-center">{t("detailLoadError")}</p>
       ) : (
-        <>
+        // 넓은 화면은 두 칸 — 왼쪽 기존 내용, 오른쪽 실시간 작업 화면. 좁은 화면은 기존 내용 아래에 붙는다.
+        <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-5 lg:space-y-0">
+        <div className="min-w-0 space-y-4">
           <div className="rounded-md border border-border bg-surface-2 p-4">
             <p className="mb-1 text-xs font-medium text-muted">{t("goalLabel")}</p>
             <GoalBlock goal={detail.task.goal} />
@@ -941,7 +947,11 @@ function TaskDetailModal({
               </div>
             </div>
           )}
-        </>
+        </div>
+        <div className="min-w-0 self-start lg:sticky lg:top-0">
+          <LiveView taskId={taskId} status={detail.task.status} />
+        </div>
+        </div>
       )}
     </div>
   );
@@ -1666,7 +1676,7 @@ export default function AgentTasksPage() {
 
       {/* 작업 상세 모달 */}
       {detailTaskId && (
-        <Modal open={!!detailTaskId} onClose={() => setDetailTaskId(null)} title={t("modalTitle")}>
+        <Modal open={!!detailTaskId} onClose={() => setDetailTaskId(null)} title={t("modalTitle")} wide>
           {/* 작업이 바뀌면(체크포인트 분기 등) 새로 그린다 — 이전 작업의 파일·편집 상태가 남지 않게. */}
           <TaskDetailModal key={detailTaskId} taskId={detailTaskId} />
         </Modal>

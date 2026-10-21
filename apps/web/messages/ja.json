@@ -1164,6 +1164,18 @@
       "inputTimeout": "ページが時間内に開きませんでした。もう一度お試しください。",
       "releaseFailed": "返せませんでした: {error}"
     },
+    "live": {
+      "title": "作業画面",
+      "tabScreen": "画面",
+      "tabTerminal": "ターミナル",
+      "noFrame": "エージェントはまだブラウザを使っていません。",
+      "noTerminal": "まだ実行したコマンドはありません。",
+      "frameAge": "{seconds}秒前の画面",
+      "running": "実行中",
+      "exitCode": "終了コード {code}",
+      "truncated": "先頭を省略",
+      "ownerOnly": "この画面はタスクの所有者にのみ表示されます。"
+    },
     "thinkingBadge": "推論 {level}",
     "thinkingLabel": "推論",
     "thinkingLevel": {
