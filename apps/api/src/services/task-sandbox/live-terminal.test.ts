@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, symlinkSync, lstatSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { spawn } from 'child_process';
@@ -117,5 +118,41 @@ describe('live-terminal — 실행 중 터미널 출력 기록', () => {
         const child = tapOutput(spawn(process.execPath, ['-e', 'process.stdout.write(Buffer.from([0x61, 0xea, 0xb0]))'], { stdio: ['pipe', 'pipe', 'pipe'] }), (c) => chunks.push(c));
         await new Promise((r) => child.on('close', r));
         expect(chunks.join('')).toBe('a\ufffd');
+    });
+
+    describe('작업 폴더 쪽에서 바꿔 둔 기록 파일 경로를 따라가지 않는다', () => {
+        let outside: string;
+        beforeEach(() => {
+            outside = join(mkdtempSync(join(tmpdir(), 'omk-live-out-')), 'host.txt');
+            writeFileSync(outside, 'HOST');
+        });
+        afterEach(() => { rmSync(join(outside, '..'), { recursive: true, force: true }); });
+
+        it('.tmp 가 바깥 파일로 가는 심링크여도 바깥 파일은 그대로', async () => {
+            symlinkSync(outside, `${file()}.tmp`);
+            const t = startLiveTerminal(dir, 'x');
+            t.append('evil');
+            await t.finish(0);
+            expect(readFileSync(outside, 'utf8')).toBe('HOST');
+        });
+
+        it('.tmp 가 FIFO 여도 finish 가 제한 시간 안에 끝난다', async () => {
+            execFileSync('mkfifo', [`${file()}.tmp`]);
+            const t = startLiveTerminal(dir, 'x');
+            let timer: NodeJS.Timeout | undefined;
+            const timeout = new Promise((r) => { timer = setTimeout(() => r('timeout'), 2000); });
+            const done = await Promise.race([t.finish(0).then(() => 'done'), timeout]);
+            clearTimeout(timer);
+            expect(done).toBe('done');
+        });
+
+        it('최종 파일이 바깥을 가리키는 심링크여도 바깥 파일은 그대로', async () => {
+            symlinkSync(outside, file());
+            const t = startLiveTerminal(dir, 'x');
+            t.append('evil');
+            await t.finish(0);
+            expect(readFileSync(outside, 'utf8')).toBe('HOST');
+            expect(lstatSync(file()).isSymbolicLink()).toBe(false);
+        });
     });
 });

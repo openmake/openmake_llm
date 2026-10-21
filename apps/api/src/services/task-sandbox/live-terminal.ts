@@ -9,7 +9,7 @@
  *
  * @module services/task-sandbox/live-terminal
  */
-import { writeFile, rename } from 'fs/promises';
+import { writeFile, rename, rm } from 'fs/promises';
 import { join } from 'path';
 import type { Readable } from 'stream';
 import { StringDecoder } from 'string_decoder';
@@ -69,7 +69,11 @@ export function startLiveTerminal(
         const json = JSON.stringify(state);
         chain = chain.then(async () => {
             try {
-                await writeFile(tmp, json, 'utf8');
+                // 이 쓰기는 호스트 API 권한으로 한다 — 에이전트가 .tmp 를 심링크(폴더 밖 덮어쓰기)나
+                // FIFO(영원히 대기)로 바꿔 둘 수 있으므로 지우고 새로 만든다(wx: 이미 있으면 EEXIST 로 실패).
+                // rename 은 최종 파일이 심링크여도 링크 자체를 바꾼다.
+                await rm(tmp, { force: true });
+                await writeFile(tmp, json, { encoding: 'utf8', flag: 'wx' });
                 await rename(tmp, file);
             } catch { /* 실시간 기록 실패는 명령 실행에 영향을 주지 않는다 */ }
         });
