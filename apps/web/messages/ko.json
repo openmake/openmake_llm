@@ -1164,6 +1164,18 @@
       "inputTimeout": "페이지가 시간 안에 열리지 않았습니다. 다시 시도하세요.",
       "releaseFailed": "돌려주지 못했습니다: {error}"
     },
+    "live": {
+      "title": "작업 화면",
+      "tabScreen": "화면",
+      "tabTerminal": "터미널",
+      "noFrame": "에이전트가 아직 브라우저를 쓰지 않았습니다.",
+      "noTerminal": "아직 실행한 명령이 없습니다.",
+      "frameAge": "{seconds}초 전 화면",
+      "running": "실행 중",
+      "exitCode": "종료 코드 {code}",
+      "truncated": "앞부분 생략",
+      "ownerOnly": "이 화면은 작업 소유자에게만 보입니다."
+    },
     "thinkingBadge": "추론 {level}",
     "thinkingLabel": "추론",
     "thinkingLevel": {

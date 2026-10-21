@@ -50,3 +50,8 @@ export const REJECT_REASON_MAX_CHARS = 500;
 export const QUEUE_POSITION_POLL_MS = 5000;
 /** 번역 라벨이 없는 실패 사유 원문을 카드에 보일 때의 길이 상한. */
 export const FAILURE_REASON_MAX_CHARS = 120;
+
+/** 실시간 작업 화면 — 실행 중·탭이 보일 때 다시 읽는 주기(ms). */
+export const LIVE_VIEW_POLL_MS = 1000;
+/** 실시간 작업 화면 터미널 — 맨 아래까지 남은 거리가 이 이하(px)일 때만 새 출력을 따라 내려간다. */
+export const LIVE_VIEW_FOLLOW_TAIL_PX = 24;

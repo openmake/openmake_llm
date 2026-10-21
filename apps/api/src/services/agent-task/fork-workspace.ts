@@ -20,6 +20,7 @@ import { getTaskSandboxConfig } from '../../config/task-sandbox';
 import { sanitizeId } from '../task-sandbox/sandbox';
 import { restoreWorkspaceSnapshot } from '../task-sandbox/snapshot-restore';
 import type { TaskRuntime } from '../task-sandbox/runtime';
+import { writeInternalExcludeCmd } from './git-internal-exclude';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
@@ -37,7 +38,8 @@ export async function snapshotWorkspaceTurn(runtime: TaskRuntime, turn: number, 
     if ((!AGENT_TASK_LIMITS.FORK_WORKSPACE_RESTORE_ENABLED && !opts.force) || runtime.localWorkdir === null) return;
     try {
         const r = await runtime.execRaw(
-            `[ -d .git ] && ${GIT} add -A && t=$(${GIT} write-tree) && c=$(${GIT} commit-tree "$t" -p HEAD -m turn-${turn}) && ${GIT} update-ref ${turnSnapshotRef(turn)} "$c"`,
+            // 내부 파일은 스냅숏에 넣지 않는다 — 후속 작업에 옛 화면이 따라가지 않게(git-internal-exclude 참고).
+            `[ -d .git ] && ${writeInternalExcludeCmd()} && ${GIT} add -A && t=$(${GIT} write-tree) && c=$(${GIT} commit-tree "$t" -p HEAD -m turn-${turn}) && ${GIT} update-ref ${turnSnapshotRef(turn)} "$c"`,
         );
         if (r.exitCode !== 0) logger.debug(`[AgentTask] 턴 스냅숏 건너뜀 (turn ${turn}): ${r.stderr || r.stdout}`);
     } catch (e) {

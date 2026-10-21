@@ -1164,6 +1164,18 @@
       "inputTimeout": "The page didn't open in time. Please try again.",
       "releaseFailed": "Could not hand back: {error}"
     },
+    "live": {
+      "title": "Work view",
+      "tabScreen": "Screen",
+      "tabTerminal": "Terminal",
+      "noFrame": "The agent hasn't used the browser yet.",
+      "noTerminal": "No commands have run yet.",
+      "frameAge": "Screen from {seconds}s ago",
+      "running": "Running",
+      "exitCode": "Exit code {code}",
+      "truncated": "Earlier output omitted",
+      "ownerOnly": "Only the task owner can see this view."
+    },
     "thinkingBadge": "Reasoning {level}",
     "thinkingLabel": "Reasoning",
     "thinkingLevel": {

@@ -39,6 +39,15 @@ describe('code-diff', () => {
             expect(cmd).toContain('commit -q --allow-empty -m baseline');
         });
 
+        it('내부 숨김 파일은 기준점에 넣지 않는다 — init 뒤, add -A 앞에 제외 목록을 쓴다', async () => {
+            const execRaw = jest.fn().mockResolvedValue(ok(''));
+            await initWorkspaceBaseline(fakeRuntime(execRaw));
+            const cmd = execRaw.mock.calls[0][0] as string;
+            expect(cmd).toContain('.live-terminal.json');
+            expect(cmd.indexOf('init -q')).toBeLessThan(cmd.indexOf('.git/info/exclude'));
+            expect(cmd.indexOf('.git/info/exclude')).toBeLessThan(cmd.indexOf('add -A'));
+        });
+
         it('fork 출처를 받으면 기준점을 만들기 전에 작업 공간 복원을 먼저 부른다', async () => {
             const order: string[] = [];
             restoreForkedWorkspace.mockImplementationOnce(async () => { order.push('restore'); return true; });
