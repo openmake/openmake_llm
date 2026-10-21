@@ -52,6 +52,7 @@ import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, sendWorkspaceFile,
 import { approvalsRouter } from './agent-task-approvals.routes';
 import { forkRouter } from './agent-task-fork.routes';
 import { browserSessionRouter } from './agent-task-browser-session.routes';
+import { liveViewRouter } from './agent-task-live.routes';
 import { cancelRouter } from './agent-task-cancel.routes';
 import { longRunningCreateFields } from './agent-task-long-running';
 import { chainTaskList, detailPayload, withChainSegmentCounts } from './agent-task-chain';
@@ -511,7 +512,7 @@ router.put('/:taskId/plan', validate(updatePlanSchema), asyncHandler(async (req:
 
 // 승인(HITL) 라우트는 agent-task-approvals.routes.ts (600줄 게이트로 분리, 2026-09-17) — 라우트 순서(answer → :decision)는 그 파일이 지킨다.
 router.use(approvalsRouter);
-// 체크포인트 이력·분기(141)는 agent-task-fork.routes.ts, 브라우저 넘겨받기는 agent-task-browser-session.routes.ts, 취소는 agent-task-cancel.routes.ts
-router.use(forkRouter, browserSessionRouter, cancelRouter);
+// 체크포인트 이력·분기(141)는 agent-task-fork.routes.ts, 브라우저 넘겨받기는 agent-task-browser-session.routes.ts, 취소는 agent-task-cancel.routes.ts, 실시간 작업 화면은 agent-task-live.routes.ts
+router.use(forkRouter, browserSessionRouter, cancelRouter, liveViewRouter);
 
 export default router;
