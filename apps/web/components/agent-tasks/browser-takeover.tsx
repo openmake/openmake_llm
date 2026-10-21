@@ -35,12 +35,20 @@ export function BrowserTakeover({ taskId, status }: { taskId: string; status?: s
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [visible, setVisible] = useState(() => typeof document === "undefined" || document.visibilityState === "visible");
+
+  // 탭이 숨겨진 동안 끊긴 대상 재확인을 탭이 다시 보이면 이어 간다
+  useEffect(() => {
+    const onChange = () => setVisible(document.visibilityState === "visible");
+    document.addEventListener("visibilitychange", onChange);
+    return () => document.removeEventListener("visibilitychange", onChange);
+  }, []);
 
   useEffect(() => {
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     // 넘겨받을 수 없는 작업(브라우저 꺼짐·로컬 실행·작업 공간 정리·다른 사용자 작업)은 200 + eligible:false 로 온다 — 콘솔 오류 없이 숨긴다.
-    // 작업 폴더가 아직 없는 진행 중 작업(시작·재개 직후)은 잠시 뒤 다시 묻는다(상태가 바뀌어도 다시 묻는다).
+    // 작업 폴더가 아직 없는 진행 중 작업(시작·재개 직후)은 잠시 뒤 다시 묻는다(상태가 바뀌거나 탭이 다시 보여도 다시 묻는다).
     const check = () => {
       ApiClient.get<{ data: { active: boolean; eligible?: boolean; reason?: string } }>(base(taskId), { redirectOnUnauthorized: false })
         .then((r) => {
@@ -49,14 +57,14 @@ export function BrowserTakeover({ taskId, status }: { taskId: string; status?: s
           setEligible(ok);
           setActive(!!r?.data?.active);
           if (ok) return;
-          const delay = ineligibleRecheckDelay({ reason: r?.data?.reason, status, visible: document.visibilityState === "visible" });
+          const delay = ineligibleRecheckDelay({ reason: r?.data?.reason, status, visible });
           if (delay !== null) timer = setTimeout(check, delay);
         })
         .catch(() => { if (alive) setEligible(false); });
     };
     check();
     return () => { alive = false; if (timer) clearTimeout(timer); };
-  }, [taskId, status]);
+  }, [taskId, status, visible]);
 
   async function start() {
     setBusy(true);
