@@ -10,6 +10,8 @@ jest.mock('../../org/membership-cache', () => ({ activeOrgFor: async () => ({ or
 
 import { resolveRateFromTable, fallbackRate, recordCostAsync, clearCostRateCache } from '../cost-ledger-service';
 import { runWithCostSession } from '../../../utils/cost-attribution-context';
+import { getKeyValueStore } from '../../../storage';
+import { costMonthKey } from '../../../llm/user-quota';
 
 describe('resolveRateFromTable', () => {
     const table = new Map<string, number>([['llm.local|qwen3.8-27b|token_in', 0.5], ['llm.local|*|token_out', 1.5]]);
@@ -52,5 +54,16 @@ describe('recordCostAsync', () => {
         expect(insert).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'explicit' }));
         await recordCostAsync({ userId: 'u1', kind: 'llm.local', rateKey: 'm', unit: 'token_in', quantity: 5, costOwner: 'user' });
         expect(insert).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: null }));
+    });
+
+    test('메모리 저장소에서도 월 비용 버킷이 기록 직후 사라지지 않는다(62일 TTL 이 1ms 로 줄던 문제)', async () => {
+        const now = Date.now();
+        const store = getKeyValueStore();
+        const k = costMonthKey('u-bucket', now);
+        await store.del(k);
+        await recordCostAsync({ userId: 'u-bucket', kind: 'llm.external', rateKey: 'openrouter:x', unit: 'token_out', quantity: 10, costOwner: 'byok', directCostUsdMicros: 500 }, now);
+        await new Promise((r) => setTimeout(r, 20));
+        expect(await store.get(k)).toBe(500);
+        await store.del(k);
     });
 });
