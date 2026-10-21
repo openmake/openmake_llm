@@ -22,7 +22,13 @@
         { "type": "json", "path": "apps/discord-bot/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "packages/api-client/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "packages/config/package.json", "jsonpath": "$.version" },
-        { "type": "json", "path": "packages/shared-types/package.json", "jsonpath": "$.version" }
+        { "type": "json", "path": "packages/shared-types/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "package-lock.json", "jsonpath": "$.packages['apps/api'].version" },
+        { "type": "json", "path": "package-lock.json", "jsonpath": "$.packages['apps/web'].version" },
+        { "type": "json", "path": "package-lock.json", "jsonpath": "$.packages['apps/discord-bot'].version" },
+        { "type": "json", "path": "package-lock.json", "jsonpath": "$.packages['packages/api-client'].version" },
+        { "type": "json", "path": "package-lock.json", "jsonpath": "$.packages['packages/config'].version" },
+        { "type": "json", "path": "package-lock.json", "jsonpath": "$.packages['packages/shared-types'].version" }
       ]
     }
   }
