@@ -12,6 +12,11 @@ describe('spawn-env-policy — 제어 env 키 거부 목록', () => {
     it.each(['HOME', 'FIRECRAWL_API_KEY', 'GH_HOST', 'NPM_TOKEN', 'DATABASE_URL', 'LANG'])('%s 는 허용', (k) =>
         expect(isControlEnvKey(k)).toBe(false));
 
+    it.each(['GIT_SSH_COMMAND', 'GIT_CONFIG_PARAMETERS', 'GIT_EXEC_PATH', 'GIT_ASKPASS', 'HTTP_PROXY', 'https_proxy', 'ALL_PROXY', 'NO_PROXY', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'REQUESTS_CA_BUNDLE', 'CURL_CA_BUNDLE', 'GIT_SSL_NO_VERIFY'])(
+        '제어 키 %s 는 거부', (k) => expect(isControlEnvKey(k)).toBe(true));
+
+    it.each(['GITHUB_TOKEN', 'GIT_TOKEN', 'PROXY_HOST', 'HOME'])('%s 는 허용', (k) => expect(isControlEnvKey(k)).toBe(false));
+
     it('stripControlEnv 는 제어 키만 뺀 사본을 돌려주고 원본은 건드리지 않는다', () => {
         const src = { NODE_OPTIONS: '--require x', API_KEY: 'k', HOME: '/h' };
         expect(stripControlEnv(src)).toEqual({ API_KEY: 'k', HOME: '/h' });
