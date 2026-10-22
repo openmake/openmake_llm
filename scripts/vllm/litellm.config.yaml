@@ -7,7 +7,7 @@
 # 토폴로지:
 #   앱(LLM_BASE_URL=http://127.0.0.1:13401) → 이 게이트웨이
 #     ├─ 로컬: Tailscale → DGX vLLM (:8002 qwen / :8003 bge)
-#     └─ 외부: openrouter/* · ollama-cloud/* · nvidia/* · hasa/* · bai/* · orcarouter/* · logfare/* · gemini/* wildcard (사용자 BYOK 는 요청 헤더)
+#     └─ 외부: openrouter/* · ollama-cloud/* · nvidia/* · hasa/* · bai/* · orcarouter/* · logfare/* · gemini/* · demonroute/* wildcard (사용자 BYOK 는 요청 헤더)
 #
 # 헤더 계약 (LiteLLM 1.89.4 라이브 검증):
 #   Authorization: Bearer <LITELLM_MASTER_KEY>  → 게이트웨이 인증 (upstream 미전달)
@@ -107,6 +107,13 @@ model_list:
     litellm_params:
       model: openai/*
       api_base: https://generativelanguage.googleapis.com/v1beta/openai
+      api_key: os.environ/DUMMY_UPSTREAM_KEY
+
+  # LLM_GATEWAY_PROVIDERS 에 demonroute 를 넣은 환경에서만 쓰임 — 운영 프로필 기본 미포함, 실측 전
+  - model_name: demonroute/*
+    litellm_params:
+      model: openai/*
+      api_base: https://api.demonroute.com/v1
       api_key: os.environ/DUMMY_UPSTREAM_KEY
 
 general_settings:
