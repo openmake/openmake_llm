@@ -79,8 +79,9 @@ export async function runChatDelegate(params: {
             subgoal,
             tools: buildSubagentTools(params.chatTools),
             userCtx: params.userCtx,
-            taskId: '__chat__', // 정책 'none' 이라 승인 레지스트리 미사용 — 식별용 문자열일 뿐
-            sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 0 },
+            taskId: '__chat__', // 승인 레지스트리 미사용 — 식별용 문자열일 뿐
+            // 채팅 경로 — 승인 게이트 없음(정책 none 의 바닥 거절도 적용하지 않는다, 2026-10-22 S1)
+            sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 0, skipApprovalGate: true },
             signal: params.signal,
             onTokens: (n) => logger.debug(`[ChatDelegate] 서브 토큰 +${n}`),
         });
