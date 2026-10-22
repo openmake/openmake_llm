@@ -43,6 +43,12 @@ describe('priorRepetition — 대화에서 직전까지의 같은 호출 반복�
         round(conv, 'web_search', { query: 'x' }, '<tool_output>\nError: timeout\n</tool_output>\n목표: ...');
         expect(priorRepetition(conv, 'web_search', { query: 'x' }).failures).toBe(1);
     });
+
+    it('출처 태그가 붙은 래퍼(<tool_output tool="…">)에 싸인 오류도 실패로 본다', () => {
+        const conv = base();
+        round(conv, 'web_search', { query: 'x' }, '<tool_output tool="web_search">\nError: timeout\n</tool_output>\n목표: ...');
+        expect(priorRepetition(conv, 'web_search', { query: 'x' }).failures).toBe(1);
+    });
 });
 
 describe('priorRepetition — 중복 호출 안내 결과', () => {
@@ -52,6 +58,14 @@ describe('priorRepetition — 중복 호출 안내 결과', () => {
         round(conv, 'grep_code', { pattern: 'x' }, getDuplicateToolCallResult('grep_code', 'c0'));
         round(conv, 'grep_code', { pattern: 'x' }, '결과 A');
         expect(priorRepetition(conv, 'grep_code', { pattern: 'x' })).toEqual(expect.objectContaining({ sameResult: 2, lastResult: '결과 A' }));
+    });
+
+    it('출처 태그 래퍼에 싸인 중복 호출 안내도 반복 집계에서 뺀다', () => {
+        const conv = base();
+        round(conv, 'web_search', { query: 'x' }, '결과 A');
+        round(conv, 'web_search', { query: 'x' }, `<tool_output tool="web_search">\n${getDuplicateToolCallResult('web_search', 'c0')}\n</tool_output>`);
+        round(conv, 'web_search', { query: 'x' }, '결과 A');
+        expect(priorRepetition(conv, 'web_search', { query: 'x' })).toEqual(expect.objectContaining({ sameResult: 2, lastResult: '결과 A' }));
     });
 });
 

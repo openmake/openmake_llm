@@ -1,4 +1,4 @@
-import { digestToolCall, findToolCallArgs } from './tool-digest';
+import { digestToolCall, findToolCallArgs, toolErrorLine } from './tool-digest';
 import { foldOldToolResults } from './context-fold';
 import type { ChatMessage } from '../../llm/types';
 
@@ -50,6 +50,10 @@ describe('digestToolCall', () => {
 
     it('데이터 래퍼(<tool_output>)로 감싼 오류도 오류로 읽는다', () => {
         expect(digestToolCall('web_search', { query: 'q' }, '<tool_output>\nError: 502\n</tool_output>\n안내')).toContain('오류');
+    });
+
+    it('출처 태그가 붙은 래퍼의 오류도 머리를 떼고 첫 줄을 읽는다', () => {
+        expect(toolErrorLine('<tool_output tool="web_search" url="https://e.com">\nError: 502\n</tool_output>\n안내')).toBe('502');
     });
 
     it('모르는 도구·인자 없음은 null', () => {

@@ -6,6 +6,7 @@
  *
  * @module config/task-sandbox
  */
+import { boolEnvDefault } from './secure-defaults';
 
 /** 컨테이너 네트워크 정책. C1 은 none 출발, restricted(allowlist) fast-follow. full 미허용. */
 export type TaskSandboxNetwork = 'none' | 'restricted';
@@ -80,13 +81,15 @@ export interface TaskSandboxConfig {
     /** 브라우저 전용 일회성 컨테이너의 네트워크(기본 bridge — 브라우저는 인터넷 필요). egress 프록시 ON 시 무시. */
     browserNetwork: string;
     /**
-     * 브라우저 egress 프록시(네트워크 레벨 도메인 allowlist) 활성 여부(기본 false).
+     * 브라우저 egress 프록시(네트워크 레벨 도메인 allowlist) 활성 여부(운영 기본 ON(W3), dev/test 기본 OFF).
      * ON 시 브라우저 컨테이너는 internal 망(인터넷 차단)에만 연결되고 프록시 통해서만 allowlist 도메인에 도달.
      * 외부 출시 전 권장. bash/python 은 network=none 이라 무관.
      */
     egressProxyEnabled: boolean;
-    /** egress 프록시 허용 도메인(쉼표/배열). 비면 전부 거부(fail-safe). */
+    /** egress 프록시 허용 도메인(쉼표/배열). 비면 egressPublicWhenEmpty 에 따라 public 모드 또는 전부 거부. */
     egressAllowlist: string[];
+    /** 허용 목록이 비었을 때 public 모드(도메인 제한 없음, 사설망·메타데이터·포트만 차단)로 둘지(기본 true). false 면 전부 거부. */
+    egressPublicWhenEmpty: boolean;
     /** egress 프록시 이미지(infra/egress-proxy). */
     egressProxyImage: string;
     /** internal Docker 네트워크 이름(브라우저 컨테이너 인터넷 차단망). */
@@ -158,9 +161,10 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         browserEnabled: process.env.TASK_SANDBOX_BROWSER_ENABLED !== 'false',
         browserPersist: process.env.TASK_SANDBOX_BROWSER_PERSIST === 'true',
         browserNetwork: process.env.TASK_SANDBOX_BROWSER_NETWORK || 'bridge',
-        egressProxyEnabled: process.env.TASK_SANDBOX_EGRESS_PROXY_ENABLED === 'true',
+        egressProxyEnabled: boolEnvDefault(process.env.TASK_SANDBOX_EGRESS_PROXY_ENABLED, true),
         egressAllowlist: (process.env.TASK_SANDBOX_EGRESS_ALLOWLIST || '')
             .split(',').map((s) => s.trim()).filter(Boolean),
+        egressPublicWhenEmpty: process.env.TASK_SANDBOX_EGRESS_PUBLIC_WHEN_EMPTY !== 'false',
         egressProxyImage: process.env.TASK_SANDBOX_EGRESS_PROXY_IMAGE || 'openmake-egress-proxy:latest',
         egressNetwork: process.env.TASK_SANDBOX_EGRESS_NETWORK || 'omk-egress-internal',
         egressProxyContainer: process.env.TASK_SANDBOX_EGRESS_PROXY_CONTAINER || 'omk-egress-proxy',
