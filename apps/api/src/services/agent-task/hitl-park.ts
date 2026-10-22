@@ -65,7 +65,10 @@ export async function resumeParkedTask(taskId: string): Promise<boolean> {
     }
     // 소유권도 같은 문장에서 쓴다 — claim 과 running 사이에서 죽어도 pending 고아로 남지 않고 소유권 점검이 다시 잡는다(2026-10-22 R2)
     const lease = AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined;
-    if (!(await new AgentTaskRepository(getPool()).claimParkedTask(taskId, lease))) return false;
+    // 소유권 컬럼이 아직 없으면(176 적용 전) 소유권 없이 다시 claim 한다 — boot-recovery 의 종전 조회 폴백과 같다
+    const repo = new AgentTaskRepository(getPool());
+    const claimed = lease ? await repo.claimParkedTask(taskId, lease).catch(() => repo.claimParkedTask(taskId)) : await repo.claimParkedTask(taskId);
+    if (!claimed) return false;
 
     const role = await resolveUserRole(db, task.user_id);
     const steps = await db.getAgentTaskSteps(taskId);

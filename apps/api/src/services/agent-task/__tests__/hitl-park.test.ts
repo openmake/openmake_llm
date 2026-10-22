@@ -48,6 +48,18 @@ describe('resumeParkedTask', () => {
         }));
     });
 
+    // 소유권 컬럼이 아직 없는 DB(176 적용 전) — 소유권을 쓰는 claim 이 실패하면 소유권 없이 다시 claim 한다(boot-recovery 와 같은 폴백)
+    it('소유권을 쓰는 claim 이 실패하면 소유권 없이 다시 claim 해 재개를 이어간다', async () => {
+        expect(AGENT_TASK_LIMITS.LEASE_ENABLED).toBe(true); // 기본 설정
+        getAgentTask.mockResolvedValue(parkedTask);
+        claimParkedTask.mockRejectedValueOnce(new Error('column "lease_owner" does not exist'));
+        await expect(resumeParkedTask('t1')).resolves.toBe(true);
+        expect(claimParkedTask).toHaveBeenCalledTimes(2);
+        expect(claimParkedTask).toHaveBeenNthCalledWith(1, 't1', { owner: expect.any(String), leaseMs: AGENT_TASK_LIMITS.LEASE_MS });
+        expect(claimParkedTask).toHaveBeenNthCalledWith(2, 't1');
+        expect(dispatchAgentTask).toHaveBeenCalledTimes(1);
+    });
+
     it('paused 가 아니거나 체크포인트가 없거나 claim 에 지면 재개하지 않는다', async () => {
         getAgentTask.mockResolvedValueOnce({ ...parkedTask, status: 'running' });
         await expect(resumeParkedTask('t1')).resolves.toBe(false);
