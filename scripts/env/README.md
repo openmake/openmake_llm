@@ -462,6 +462,7 @@ scripts/env/omk.sh dev setup          # 최초 1회: 툴체인·.env(OMK_INSTANC
 scripts/env/omk.sh dev up             # 전부: DB/Redis/SearXNG/게이트웨이 + api + web (+ bench 클론이 있으면 bench) — Ctrl+C 로 종료
 scripts/env/omk.sh dev up api         # 개별: deps | api | web | bench
 scripts/env/omk.sh dev up --tailscale     # 다른 기기에서 보기 (또는 --host <이름|IP> 를 여러 번)
+scripts/env/omk.sh dev sync           # 로컬 dev 를 origin/dev 로 fast-forward 만 (dev up 이 먼저 한다)
 scripts/env/omk.sh dev status
 scripts/env/omk.sh dev down           # DB/Redis/SearXNG/게이트웨이 정지 (데이터 유지 · 기본 모델 서버는 남긴다)
 scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.env 유지). --keep-data 면 볼륨은 남긴다
@@ -469,6 +470,9 @@ scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.en
 
 `dev setup` 은 앱 빌드와 앱의 PM2 기동을 하지 않는다(`install.sh --minimal --skip-build --no-start`) — 워크스페이스 패키지(`packages/*/dist`)만 빌드한다.
 `.env` 나 `node_modules` 가 없으면 `dev up` 이 `dev setup` 을 먼저 돌린다.
+
+`dev up` 은 시작할 때 `dev sync` 를 먼저 한다 — 로컬 `dev` 가 origin/dev 보다 뒤처져 있으면 fast-forward 로만 따라간다(작업은 feature/* 에서 하므로 그걸로 충분하다).
+`dev` 가 체크아웃돼 있고 추적 파일에 변경 사항이 있거나, 로컬 `dev` 에 원격에 없는 커밋이 있으면 건드리지 않고 경고만 낸다(reset·rebase 는 하지 않는다). 원격을 못 읽어도 `dev up` 은 그대로 이어지고, 끄려면 `--no-sync`.
 
 **설치 직후 바로 채팅이 된다.** 검색·런타임 이미지·게이트웨이·기본 모델은 `omk env install` 과 같은 함수(`stack_ensure`)로 준비하고 옵션의 뜻도 같다 —
 `--no-searxng` · `--no-runtime-images`(약 7GB 빌드를 뺀다) · `--no-litellm` · `--no-default-model` · `--llm-base-url U --llm-model M`(예: 이미 있는 Ollama).
