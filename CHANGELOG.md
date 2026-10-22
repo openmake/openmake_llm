@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.112.0](https://github.com/openmake/openmake_llm/compare/v1.111.0...v1.112.0) (2026-10-22)
+
+
+### ✨ 기능
+
+
+
+### 🐛 버그 수정
+
+* **ci:** map scripts/vllm config to the pipeline suite with real coverage ([3fd0170](https://github.com/openmake/openmake_llm/commit/3fd01703040d64543867cccfaae43d4ad9d08a11))
+* **ci:** validate scripts/vllm/litellm.config.yaml and map it to the pipeline suite ([365ebde](https://github.com/openmake/openmake_llm/commit/365ebde59086f96e690618beb1ae0e944df6f4fc))
+
+
+### ♻️ 리팩터링
+
+* **api:** split agent-task-repository lifecycle queries (max-lines) ([270b9a6](https://github.com/openmake/openmake_llm/commit/270b9a6724790bd1aae189f6944de472b5bf159a))
+* **api:** split chat request-handler post-processing helpers (max-lines) ([8c708e4](https://github.com/openmake/openmake_llm/commit/8c708e4a33ce12fd911e6161dd04a725844c8aa7))
+* **api:** split four max-lines-bound files ahead of W3 (no behavior change) ([7dd57fd](https://github.com/openmake/openmake_llm/commit/7dd57fd92b4615186becf901f7a3d51872e67147))
+* **api:** split task-sandbox sandbox.ts docker CLI and workspace fs helpers (max-lines) ([a832efa](https://github.com/openmake/openmake_llm/commit/a832efa0e366b936d0eb0afe3707c222c83e0f28))
+* **api:** split task-sandbox tools browser and delegation tools (max-lines) ([59fb3d3](https://github.com/openmake/openmake_llm/commit/59fb3d38c428db118a694fe695c103c63f07fb42))
+
 ## [1.111.0](https://github.com/openmake/openmake_llm/compare/v1.110.0...v1.111.0) (2026-10-22)
 
 
