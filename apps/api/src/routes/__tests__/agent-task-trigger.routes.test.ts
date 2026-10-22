@@ -14,7 +14,7 @@ jest.mock('../../data/repositories/agent-task-trigger-repository', () => ({ Agen
 const getTemplate = jest.fn();
 jest.mock('../../data/repositories/agent-task-template-repository', () => ({ AgentTaskTemplateRepository: jest.fn().mockImplementation(() => ({ get: getTemplate })) }));
 jest.mock('../../data/models/unified-database', () => ({ getPool: () => ({}), getUnifiedDatabase: () => ({}) }));
-jest.mock('../../utils/token-crypto', () => ({ encryptToken: (s: string) => `enc:${s}`, decryptToken: (s: string) => s.replace(/^enc:/, ''), isDecryptionFailure: () => false }));
+jest.mock('../../utils/token-crypto', () => ({ encryptToken: (s: string) => `enc:${s}`, decryptToken: (s: string) => s.replace(/^enc:/, ''), isDecryptionFailure: () => false, tryDecryptToken: (s: string) => (s.startsWith('v1:') ? null : s.replace(/^enc:/, '')) }));
 jest.mock('../../auth', () => ({ requireAuth: (req: Request, _res: Response, next: NextFunction) => { (req as any).user = { id: 'u1', role: 'user' }; next(); } }));
 const fireTrigger = jest.fn();
 const templateReadable = jest.fn(async () => true);
@@ -70,6 +70,9 @@ describe('POST /api/triggers/:id (수신)', () => {
         trig.getForVerification.mockResolvedValueOnce(undefined);
         expect((await request(app()).post('/api/triggers/nope').set('X-Openmake-Timestamp', ts).set('X-Openmake-Signature', signed().sig).send(payload)).status).toBe(401);
         trig.getForVerification.mockResolvedValueOnce({ ...stored, enabled: false });
+        expect((await request(app()).post('/api/triggers/tr1').set('X-Openmake-Timestamp', ts).set('X-Openmake-Signature', signed().sig).send(payload)).status).toBe(401);
+        // 복호화할 수 없는 시크릿(S9 후속: tryDecryptToken → null)도 같은 401 경로
+        trig.getForVerification.mockResolvedValueOnce({ ...stored, secret_encrypted: 'v1:broken' });
         expect((await request(app()).post('/api/triggers/tr1').set('X-Openmake-Timestamp', ts).set('X-Openmake-Signature', signed().sig).send(payload)).status).toBe(401);
         expect(fireTrigger).not.toHaveBeenCalled();
         expect(trig.recordFailure).not.toHaveBeenCalled(); // 서명 실패는 연속 실패로 세지 않는다
