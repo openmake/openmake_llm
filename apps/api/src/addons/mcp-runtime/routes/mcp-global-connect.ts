@@ -34,6 +34,8 @@ export async function connectGlobalServer(id: string): Promise<MCPConnectionStat
         args: server.args || undefined,
         env: Object.keys(decryptedEnv).length > 0 ? decryptedEnv : undefined,
         url: server.url || undefined,
+        // 전역 서버의 호스트 실행 opt-out('host')·네트워크 정책 — 빠뜨리면 docker 기본('full')으로 뜬다.
+        sandbox_network: server.sandbox_network ?? undefined,
         enabled: server.enabled,
         created_at: server.created_at,
         updated_at: server.updated_at,
