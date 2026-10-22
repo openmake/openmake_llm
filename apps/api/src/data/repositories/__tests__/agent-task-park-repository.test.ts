@@ -28,4 +28,16 @@ describe('AgentTaskParkRepository.parkForDeviceRecovery', () => {
         const { pool } = fakePool([{ rows: [], rowCount: 0 }]);
         await expect(new AgentTaskParkRepository(pool).parkForDeviceRecovery('t1', 'running')).resolves.toBe(false);
     });
+
+    // (2026-10-22 R2) claim 과 running 사이에서 죽은 행 — 소유권 있는 pending 만, 소유권 없는(실행한 적 없는) pending 은 아니다
+    it('소유권 있는 pending(claim 고아)도 주차한다 — 그 상태를 읽었을 때만 소유권 컬럼을 본다', async () => {
+        const { pool, calls } = fakePool([{ rows: [{ id: 1 }], rowCount: 1 }, { rows: [], rowCount: 0 }]);
+        const repo = new AgentTaskParkRepository(pool);
+        await expect(repo.parkForDeviceRecovery('t1', 'pending')).resolves.toBe(true);
+        expect(calls[0].sql).toContain("(o.prev = 'pending' AND o.lease_until IS NOT NULL)");
+        expect(calls[0].sql).toContain('o.prev = $2');
+        expect(calls[0].params).toEqual(['t1', 'pending', 'server restarted', 'boot recovery claim', 'device_wait']);
+        await repo.parkForDeviceRecovery('t1', 'failed');
+        expect(calls[1].sql).not.toContain('lease_until'); // 176 적용 전 폴백 경로는 pending 을 넘기지 않는다 — 종전 문장
+    });
 });

@@ -248,6 +248,22 @@ describe('claim 고아(pending + 소유권) 회수', () => {
         expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'failed', error: 'interrupted_local_device' }));
         expect(claim).not.toHaveBeenCalled();
     });
+
+    it('기기 대기를 쓰는 로컬 작업 pending 고아는 읽은 상태(pending)로 기기 대기 주차를 요청한다', async () => {
+        expired.push({ ...orphan, executor: 'local' });
+        localBridge.ENABLED = true;
+        await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 0 });
+        expect(parkForDeviceRecovery).toHaveBeenCalledWith('t1', 'pending');
+        expect(claim).not.toHaveBeenCalled();
+    });
+
+    it('진행 없는 복구 상한에 닿은 pending 고아는 읽은 상태(pending)로 failed(recovery_limit) 닫기를 요청한다', async () => {
+        expired.push(orphan);
+        countRecoveries.mockResolvedValueOnce(3);
+        await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 1 });
+        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'pending');
+        expect(dispatch).not.toHaveBeenCalled();
+    });
 });
 
 // 작업 하나가 프로세스를 죽이면(메모리 한도 재시작 등) 재시작 → 자동 재개 → 다시 죽음이 끝없이 돈다
