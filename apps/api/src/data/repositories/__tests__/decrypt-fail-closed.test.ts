@@ -9,6 +9,7 @@
 import { ExternalKeysRepository } from '../external-keys-repo';
 import { ExternalRepository } from '../external-repository';
 import { ServerExternalKeysRepository } from '../server-external-keys-repo';
+import { SystemSettingsRepository } from '../system-settings-repo';
 import { encryptToken } from '../../../utils/token-crypto';
 
 /** BaseRepository.query 는 protected — 고정 결과를 돌려주는 스텁으로 대체 */
@@ -90,5 +91,43 @@ describe('ExternalRepository OAuth 토큰 — fail-closed', () => {
         expect(list).toHaveLength(2); // 전체 실패 금지
         expect(list.find((c) => c.id === 'broken')?.access_token).toBeUndefined();
         expect(list.find((c) => c.id === 'healthy')?.access_token).toBe('gho_ok');
+    });
+});
+
+describe('비-dev(NODE_ENV=staging) 에서도 조용한 실패 유지 — decryptToken 이 throw 해도 (S9 후속)', () => {
+    const prevEnv = process.env.NODE_ENV;
+    const prevKey = process.env.TOKEN_ENCRYPTION_KEY;
+    beforeEach(() => {
+        process.env.NODE_ENV = 'staging';
+        if (!prevKey) process.env.TOKEN_ENCRYPTION_KEY = 'a'.repeat(64);
+    });
+    afterEach(() => {
+        process.env.NODE_ENV = prevEnv;
+        if (prevKey === undefined) delete process.env.TOKEN_ENCRYPTION_KEY;
+        else process.env.TOKEN_ENCRYPTION_KEY = prevKey;
+    });
+
+    it('ExternalKeysRepository.decryptKey 는 null', async () => {
+        const repo = stubQuery(new ExternalKeysRepository({} as never), [{ encrypted_key: BROKEN }]);
+        await expect(repo.decryptKey('u1', 'openai')).resolves.toBeNull();
+    });
+
+    it('ExternalRepository 목록은 손상 건만 토큰 undefined', async () => {
+        const repo = stubQuery(new ExternalRepository({} as never), [
+            { id: 'broken', user_id: 'u1', service_type: 'github', access_token: BROKEN, refresh_token: null, is_active: true, metadata: {}, created_at: '', updated_at: '' },
+            { id: 'healthy', user_id: 'u1', service_type: 'github', access_token: encryptToken('gho_ok'), refresh_token: null, is_active: true, metadata: {}, created_at: '', updated_at: '' },
+        ]);
+        const list = await repo.getUserConnections('u1');
+        expect(list).toHaveLength(2);
+        expect(list.find((c) => c.id === 'broken')?.access_token).toBeUndefined();
+        expect(list.find((c) => c.id === 'healthy')?.access_token).toBe('gho_ok');
+    });
+
+    it('SystemSettingsRepository.findAll 은 손상 시크릿을 value=null 로(env 폴백)', async () => {
+        const repo = stubQuery(new SystemSettingsRepository({} as never), [
+            { key: 'K', value: BROKEN, is_secret: true, updated_at: '' },
+        ]);
+        const rows = await repo.findAll();
+        expect(rows[0].value).toBeNull();
     });
 });

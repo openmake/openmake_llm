@@ -158,3 +158,42 @@ describe('비-dev 환경 실패(S9)', () => {
         expect(m.decryptToken('v1:abc')).toBe('v1:abc');
     });
 });
+
+describe('tryDecryptToken (S9 후속)', () => {
+    beforeEach(() => {
+        process.env.TOKEN_ENCRYPTION_KEY = TEST_KEY;
+        jest.resetModules();
+    });
+
+    afterEach(() => {
+        process.env.NODE_ENV = 'test';
+    });
+
+    const tamper = (enc: string): string => enc.slice(0, -2) + (enc.endsWith('00') ? 'ff' : '00');
+
+    test('레거시 평문은 그대로', async () => {
+        const m = await import('../utils/token-crypto');
+        expect(m.tryDecryptToken('plain')).toBe('plain');
+    });
+
+    test('정상 암호문은 평문', async () => {
+        const m = await import('../utils/token-crypto');
+        expect(m.tryDecryptToken(m.encryptToken('my-secret'))).toBe('my-secret');
+    });
+
+    test('NODE_ENV=staging 에서 변조 암호문은 throw 없이 null', async () => {
+        process.env.NODE_ENV = 'staging';
+        jest.resetModules();
+        const m = await import('../utils/token-crypto');
+        const bad = tamper(m.encryptToken('s'));
+        expect(m.tryDecryptToken(bad)).toBeNull();
+        expect(m.tryDecryptToken('v1:abc')).toBeNull();
+    });
+
+    test('NODE_ENV=test 에서 변조 암호문도 암호문 대신 null', async () => {
+        const m = await import('../utils/token-crypto');
+        const bad = tamper(m.encryptToken('s'));
+        expect(m.tryDecryptToken(bad)).toBeNull();
+        expect(m.tryDecryptToken('v1:abc')).toBeNull();
+    });
+});

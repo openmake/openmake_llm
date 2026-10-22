@@ -187,6 +187,21 @@ export function decryptToken(value: string): string {
     }
 }
 
+/**
+ * 실패를 조용히 처리할 호출부용 — 실패면 null(어느 환경에서도 throw 하지 않고 암호문도 돌려주지 않는다).
+ * `v1:` 접두사 없는 레거시 평문은 그대로 반환합니다. (2026-10-22 S9 후속)
+ */
+export function tryDecryptToken(value: string): string | null {
+    try {
+        const plain = decryptToken(value);
+        return isDecryptionFailure(plain) ? null : plain;
+    } catch (err) {
+        // TokenCryptoError 는 decryptToken 이 이미 로그를 남겼다. 그 밖(키 누락 등)만 기록.
+        if (!(err instanceof TokenCryptoError)) logger.error('토큰 복호화 실패:', err);
+        return null;
+    }
+}
+
 // 내부 상수 노출 (테스트용)
 export const _internals = {
     ALGORITHM,

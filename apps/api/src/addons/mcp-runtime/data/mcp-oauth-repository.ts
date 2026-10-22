@@ -12,7 +12,7 @@
  */
 import type { Pool } from 'pg';
 import type { OAuthTokens, OAuthClientInformationFull } from '@modelcontextprotocol/client';
-import { encryptToken, decryptToken, isDecryptionFailure } from '../../../utils/token-crypto';
+import { encryptToken, decryptToken, tryDecryptToken } from '../../../utils/token-crypto';
 import { createLogger } from '../../../utils/logger';
 
 const logger = createLogger('McpOAuthRepository');
@@ -35,16 +35,14 @@ export class McpOAuthRepository {
         if (!row?.client_info || typeof row.client_info.client_id !== 'string') return undefined;
         const info = { ...row.client_info } as OAuthClientInformationFull;
         if (row.client_secret_enc) {
-            // 비-dev 는 복호화 실패 시 throw(2026-10-22 S9). 깨진 client_secret 을 쓰는 대신
-            // undefined 를 돌려 OAuth 클라이언트 재등록을 유도한다.
-            try {
-                const plain = decryptToken(row.client_secret_enc);
-                if (!isDecryptionFailure(plain)) info.client_secret = plain;
-                else logger.warn(`client_secret 복호화 실패(암호문 잔존) s=${serverId} u=${userId}`);
-            } catch (e) {
-                logger.warn(`client_secret 복호화 실패 → 재등록 유도 s=${serverId} u=${userId}: ${e instanceof Error ? e.message : String(e)}`);
+            // 복호화 실패면(어느 환경이든) 깨진 client_secret 을 쓰는 대신 undefined 를 돌려
+            // OAuth 클라이언트 재등록을 유도한다(2026-10-22 S9).
+            const plain = tryDecryptToken(row.client_secret_enc);
+            if (plain === null) {
+                logger.warn(`client_secret 복호화 실패 → 재등록 유도 s=${serverId} u=${userId}`);
                 return undefined;
             }
+            info.client_secret = plain;
         }
         return info;
     }
