@@ -406,6 +406,36 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             { id: 'kimi-k2.7-code', displayName: 'Kimi K2.7 Code (opt-in)',  isFree: true, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
         ],
     },
+    {
+        id: 'demonroute',
+        displayName: 'Demon Route',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://api.demonroute.com/v1',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 100,
+        helpText:
+            'Demon Route (https://demonroute.com/dashboard) 의 API 키를 입력하세요. OpenAI 호환 API 로 ' +
+            '오픈웨이트 모델(Llama·Qwen·Gemma·Hermes 등과 커뮤니티 파인튜닝)만 제공합니다. 모델 ID 는 ' +
+            '"huihui-ai/Huihui-gemma-4-31B-it-abliterated-v2" 처럼 허깅페이스식 "org/model" 형식이며 별도 접두사는 없습니다. ' +
+            '선불제라 잔액이 0 이 되면 호출이 멈추고, "free lane" 모델도 계정에 잔액이 있어야 동작합니다. ' +
+            '모델 목록 API 가 키를 요구하므로 등록할 때 키 유효성이 실제로 검증됩니다. ' +
+            '⚠️ 상당수가 uncensored/abliterated(거절 학습을 걷어낸) 커뮤니티 파인튜닝 모델이므로 조직 정책에 맞게 사용하세요.',
+        homepage: 'https://demonroute.com',
+        keyUrl: 'https://demonroute.com/dashboard',
+        logo: '/images/providers/demonroute.svg',
+        authMethods: ['api_key'] as const,
+        // 2026-10-23 공개 목록 기준, 실측 안 됨 — 키 확보 뒤 재측정.
+        // 출처: demonroute.com/models 모델 상세 페이지(채널 이름 = 모델 ID, 컨텍스트 256K~128K). 공개 메타데이터에
+        // tools·이미지 입력·reasoning 표시가 없어 streaming 만 true. "free lane" 은 잔액이 있어야 동작해 isFree 는 모두 false.
+        fallbackModels: [
+            { id: 'huihui-ai/Huihui-gemma-4-31B-it-abliterated-v2', displayName: 'Huihui Gemma 4 31B (abliterated)',     isFree: false, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+            { id: 'huihui-ai/Huihui-Qwen3.6-35B-A3B-abliterated',   displayName: 'Huihui Qwen3.6 35B A3B (abliterated)', isFree: false, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+            { id: 'huihui-ai/Llama-3.3-70B-Instruct-abliterated',   displayName: 'Llama 3.3 70B (abliterated)',          isFree: false, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+            { id: 'NousResearch/Hermes-4-70B',                      displayName: 'Hermes 4 70B',                         isFree: false, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+            { id: 'TheDrummer/Anubis-70B-v1.2',                     displayName: 'Anubis 70B v1.2',                      isFree: false, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+        ],
+    },
 ] as const;
 
 /**
