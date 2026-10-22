@@ -18,3 +18,7 @@ export interface AddonAuditEntry {
 export async function recordAddonAudit(entry: AddonAuditEntry): Promise<void> {
     await getAuditService().logAudit(entry);
 }
+
+// add-on 이 security/security-audit 를 직접 import 하지 않게 하는 문(S10, 2026-10-22).
+export type { SecurityAuditInput, SecurityAuditAction } from '../security/security-audit';
+export { auditSecurityEvent as recordSecurityAudit, isSsrfBlockedError } from '../security/security-audit';
