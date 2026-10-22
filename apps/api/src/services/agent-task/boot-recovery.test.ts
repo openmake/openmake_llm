@@ -56,6 +56,8 @@ jest.mock('../AgentTaskService', () => ({
 const dispatch = jest.fn(async (entry: { run: () => Promise<void> }) => { await entry.run(); return 'started'; });
 const queueHas = jest.fn((_id: string) => false);
 jest.mock('./task-queue', () => ({ dispatchAgentTask: (e: never) => dispatch(e), getAgentTaskQueue: () => ({ has: queueHas }) }));
+const sendAgentTaskAlert = jest.fn(async (..._a: unknown[]) => undefined);
+jest.mock('../../monitoring/agent-task-alerts', () => ({ ...jest.requireActual('../../monitoring/agent-task-alerts'), sendAgentTaskAlert: (...a: unknown[]) => sendAgentTaskAlert(...a) }));
 
 import { recoverInterruptedAgentTasks, sweepExpiredTaskLeases } from './boot-recovery';
 import { leaseOwner } from './task-lease';
@@ -382,5 +384,27 @@ describe('로컬 기기 작업 — 재시작 뒤 기기 대기로 주차', () =>
         await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 1 });
         expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ error: 'interrupted' }));
         expect(parkForDeviceRecovery).not.toHaveBeenCalled();
+    });
+});
+
+// R8·R9 — 복구 상한 도달·소유권 이어받기는 운영자 알림으로도 드러낸다
+describe('복구 알림', () => {
+    const cp = { conversation: [{ role: 'user', content: 'x' }], completedTurn: 2 };
+
+    it('복구 상한에 닿아 닫으면 recovery_limit 알림 1건', async () => {
+        interrupted.push({ ...base, status: 'failed', checkpoint: cp });
+        countRecoveries.mockResolvedValueOnce(3);
+        await recoverInterruptedAgentTasks();
+        const calls = sendAgentTaskAlert.mock.calls.filter((c) => c[0] === 'agent_task_recovery_limit');
+        expect(calls).toHaveLength(1);
+        expect(calls[0][3]).toEqual({ taskId: 't1', attempts: 3 });
+    });
+
+    it('지난 소유권을 가져오면 lease_takeover 알림 1건', async () => {
+        expired.push({ ...base, status: 'running', checkpoint: cp, lease_owner: 'other:0' });
+        await sweepExpiredTaskLeases();
+        const calls = sendAgentTaskAlert.mock.calls.filter((c) => c[0] === 'agent_task_lease_takeover');
+        expect(calls).toHaveLength(1);
+        expect(calls[0][3]).toEqual({ taskId: 't1', previousOwner: 'other:0' });
     });
 });
