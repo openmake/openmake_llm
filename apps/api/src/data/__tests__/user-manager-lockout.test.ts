@@ -176,7 +176,7 @@ describe('UserManager.authenticateDetailed — 계정 잠금', () => {
         expect(result).toEqual({ user: null, locked: true });
         expect(compareSpy).not.toHaveBeenCalled();
         expect(updates()).toHaveLength(0);
-        const select = queries.find(q => q.sql.startsWith('SELECT'));
+        const select = queries.find(q => /^SELECT \*/.test(q.sql));
         expect(select?.sql).toContain('(locked_until IS NOT NULL AND locked_until > NOW()) AS locked_now');
         expect(select?.params).toEqual(['lockme@example.com']);
     });
