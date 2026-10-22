@@ -108,7 +108,6 @@ export class AgentTaskService {
     async execute(input: AgentTaskRunInput): Promise<void> { return trackAgentTaskRun(this, input.taskId, () => this.runLoop(input)); } // 종료 중이면 시작하지 않는다
     private async runLoop(input: AgentTaskRunInput): Promise<void> {
         const { taskId, goal, userId, userRole, maxTurns, allowedSkills } = input;
-        touchProgress(taskId); // 마지막 진행 시각(191, R8) — 실행 시작도 진행이다
         const db = getUnifiedDatabase();
         const mcp = getToolRuntime();
         const signal = this.abortController.signal;
@@ -186,6 +185,7 @@ export class AgentTaskService {
         const lease = await beginTaskLease(taskId, () => { leaseLost = true; this.abortController.abort(); }); // 실행 소유권(176): 잃으면 루프를 멈춘다
         if (!lease.acquired) { AgentTaskService.running.delete(taskId); return; }
         try {
+            touchProgress(taskId); // 마지막 진행 시각(191, R8) — 소유권을 잡은 실행의 시작도 진행이다(finally 가 clear)
             // 레지스트리 등록 전(detached 스케줄링 창)에 접수된 취소는 DB 에만 기록됨 — 시작 전 존중. 재개도 같다(2026-10-09 점검 ①):
             // 모든 재개 진입점이 먼저 claim 으로 cancelled 를 벗어나므로(라우트 claimForExecute→queued, 주차 claimParkedTask→pending,
             // 부팅 claimAgentTaskForRecovery→pending) 여기서 보이는 cancelled 는 항상 claim 뒤에 들어온 새 취소다.

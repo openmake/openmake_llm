@@ -93,6 +93,7 @@ jest.mock('../services/task-sandbox/approval-gate', () => ({
 }));
 
 import { AgentTaskService } from '../services/AgentTaskService';
+import { getProgressSnapshot } from '../services/agent-task/progress-tracker';
 
 const statuses = (): Array<string | undefined> => updateAgentTask.mock.calls.map(([, u]) => (u as { status?: string }).status);
 
@@ -112,6 +113,7 @@ describe('Agent Task — 실행 소유권', () => {
         expect(updateAgentTask).not.toHaveBeenCalled();
         expect(closeTask).not.toHaveBeenCalled();
         expect(AgentTaskService.cancel('t1')).toBe(false); // 실행 중 목록에 남지 않는다
+        expect(getProgressSnapshot().has('t1')).toBe(false); // 다른 서버가 실행 중인 작업의 진행 시각을 올리지 않는다(R8)
     });
 
     it('실행 도중 소유권을 잃으면 멈추고, 그 뒤로 상태를 쓰지 않으며 승인·작업 공간을 정리하지 않는다', async () => {
