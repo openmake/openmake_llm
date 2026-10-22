@@ -175,6 +175,21 @@ test('selectRelatedTests requires related Jest tests per API source and never li
   assert.deepEqual(docs.selection.api, []);
 });
 
+// Jest bootstrap files (config/setup) are imported by no test but run before every suite: a change selects every suite.
+test('selectRelatedTests selects every Jest suite for a Jest bootstrap file', async () => {
+  const { selectFeatures, selectRelatedTests } = await import('../../scripts/ci/feature-checks.mjs');
+  const setup = 'apps/api/jest.setup-after-env.ts';
+  assert.deepEqual(selectFeatures([setup]).api, [setup]);
+  assert.deepEqual(selectFeatures(['apps/api/jest.config.js']).api, ['apps/api/jest.config.js']);
+  const all = ['/repo/apps/api/src/a.test.ts', '/repo/apps/api/src/b/__tests__/c.test.ts'];
+  let related = 0;
+  const selected = selectRelatedTests([setup], { listAll: () => all, listRelated: () => { related += 1; return []; } });
+  assert.equal(related, 0);
+  assert.deepEqual(selected.related.get(setup), all);
+  assert.equal(selected.tests.size, 2);
+  assert.throws(() => selectRelatedTests([setup], { listAll: () => [] }), /No related Jest tests for apps\/api\/jest\.setup-after-env\.ts/);
+});
+
 test('--select-only refuses a SHA that is not the checkout HEAD', async () => {
   const { spawnSync } = await import('node:child_process');
   const { fileURLToPath } = await import('node:url');
