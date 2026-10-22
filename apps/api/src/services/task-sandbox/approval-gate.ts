@@ -25,8 +25,24 @@ import { AgentTaskApprovalRepository, hashApprovalArgs, type ApprovalRow } from 
 import { getConfig } from '../../config/env';
 import { AGENT_TASK_LIMITS, APPROVAL_RECENT_WINDOW_MS } from '../../config/runtime-limits';
 import { UNATTENDED_APPROVAL_OUTCOME, resolveUnattendedOutcome } from '../../config/agent-task-approval';
+import { auditSecurityEvent } from '../../security/security-audit';
+import { hashToolArgs } from '../../utils/args-hash';
 
 const logger = createLogger('TaskApprovalGate');
+
+/** 사람 없이 내린 승인 거절 감사(S10, fire-and-forget) — 인자 값은 넣지 않는다(해시만). */
+function auditAutoRejected(
+    input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown> },
+    reason: 'policy_floor' | 'unattended', deniedFloor: string | null,
+): void {
+    void auditSecurityEvent({
+        action: 'security.approval_auto_rejected',
+        userId: input.userId,
+        resourceType: 'agent_task',
+        resourceId: input.taskId,
+        details: { toolName: input.toolName, reason, floor: deniedFloor ?? undefined, argsHash: hashToolArgs(input.args) },
+    }).catch(() => undefined);
+}
 
 /** 디바이스(로컬 브리지)가 실행 직전 자체 확인하는 코드 실행 도구 — 서버 승인 중복이라 skip 대상. */
 const DEVICE_GATED_SHELL = new Set(['bash', 'python_execute']);
@@ -256,6 +272,7 @@ export class ApprovalRegistry {
         const deniedFloor = opts.policy === 'none' ? floorDeniedUnderPolicy('none', input.toolName, input.args) : null;
         if (deniedFloor) {
             logger.info(`[${input.taskId}] 정책 none — 바닥 호출(${deniedFloor}) 거절: ${input.toolName}`);
+            auditAutoRejected(input, 'policy_floor', deniedFloor);
             return { decision: 'rejected', reason: 'policy_floor', waitedMs: 0 };
         }
         // 무인 작업 — 기다려도 승인할 사람이 없다. 질문 도구는 종전대로 답을 기다린다(예약의 기본 동작을 바꾸지 않는다).
@@ -263,6 +280,7 @@ export class ApprovalRegistry {
             const outcome = resolveUnattendedOutcome(UNATTENDED_APPROVAL_OUTCOME, approvalFloorReason(input.toolName, input.args) !== null);
             if (outcome !== 'wait') {
                 logger.info(`[${input.taskId}] 무인 실행 — 승인 대기 없이 ${outcome === 'approve' ? '통과' : '거절'}: ${input.toolName}`);
+                if (outcome === 'reject') auditAutoRejected(input, 'unattended', null);
                 return outcome === 'approve' ? { decision: 'approved', waitedMs: 0 } : { decision: 'rejected', reason: 'unattended', waitedMs: 0 };
             }
         }

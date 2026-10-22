@@ -9,8 +9,8 @@
  *
  * @module data/repositories/agent-task-approval-repository
  */
-import { createHash } from 'crypto';
 import { BaseRepository } from './base-repository';
+import { hashToolArgs } from '../../utils/args-hash';
 
 export type ApprovalRowStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'aborted' | 'revoked';
 export type ApprovalEventKind = 'requested' | 'approved' | 'rejected' | 'answered' | 'revoked' | 'reassigned' | 'escalated' | 'expired' | 'aborted';
@@ -39,19 +39,9 @@ export interface ApprovalRow {
     escalation_reason?: string | null;
 }
 
-/** PURE: 객체 키를 정렬한 JSON — 같은 인자가 키 순서 때문에 다른 호출로 보이지 않게 한다(배열 순서는 의미가 있어 그대로). */
-function canonicalJson(v: unknown): string {
-    if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`;
-    if (v && typeof v === 'object') {
-        const o = v as Record<string, unknown>;
-        return `{${Object.keys(o).sort().filter((k) => o[k] !== undefined).map((k) => `${JSON.stringify(k)}:${canonicalJson(o[k])}`).join(',')}}`;
-    }
-    return JSON.stringify(v) ?? 'null';
-}
-
-/** PURE: 같은 도구 호출을 재시작 후 다시 알아보기 위한 키 — 키를 정렬한 인자 JSON 의 sha256. */
+/** PURE: 같은 도구 호출을 재시작 후 다시 알아보기 위한 키 — 키를 정렬한 인자 JSON 의 sha256(utils/args-hash). */
 export function hashApprovalArgs(args: Record<string, unknown>): string {
-    return createHash('sha256').update(canonicalJson(args ?? {})).digest('hex');
+    return hashToolArgs(args);
 }
 
 export class AgentTaskApprovalRepository extends BaseRepository {

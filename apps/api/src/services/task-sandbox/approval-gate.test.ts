@@ -1,4 +1,11 @@
+jest.mock('../../security/security-audit', () => ({
+    ...jest.requireActual('../../security/security-audit'),
+    auditSecurityEvent: jest.fn().mockResolvedValue(undefined),
+}));
 import { requiresApproval, stripApprovalGatedTools, ApprovalRegistry } from './approval-gate';
+import { auditSecurityEvent } from '../../security/security-audit';
+
+const audit = auditSecurityEvent as jest.Mock;
 
 describe('requiresApproval', () => {
     it("정책 all — 부작용 도구 전부 승인, 제어 시그널 제외", async () => {
@@ -210,5 +217,33 @@ describe('정책 none 의 바닥 호출(S1)', () => {
         const p = reg.request({ taskId: 't1', userId: 'u1', toolName: 'memory_save', args: { text: 'x' } }, { timeoutMs: 50, policy: 'none' });
         expect(await reg.list('u1')).toHaveLength(1);
         await expect(p).resolves.toMatchObject({ decision: 'rejected', reason: 'timeout' });
+    });
+});
+
+describe('자동 거절 감사(S10)', () => {
+    it('policy none 바닥 호출 거절 → security.approval_auto_rejected(reason policy_floor, floor 있음)', async () => {
+        audit.mockClear();
+        const reg = new ApprovalRegistry();
+        await reg.request({ taskId: 't-a', userId: 'u1', toolName: 'notion::create_page', args: { title: 'secret-title' } }, { timeoutMs: 1000, policy: 'none' });
+        await new Promise((r) => setImmediate(r));
+        expect(audit).toHaveBeenCalledTimes(1);
+        const input = audit.mock.calls[0][0];
+        expect(input).toMatchObject({ action: 'security.approval_auto_rejected', userId: 'u1', resourceType: 'agent_task', resourceId: 't-a' });
+        expect(input.details).toMatchObject({ toolName: 'notion::create_page', reason: 'policy_floor' });
+        expect(typeof input.details.floor).toBe('string');
+        expect(input.details.argsHash).toMatch(/^[0-9a-f]{64}$/);
+        expect(input.details).not.toHaveProperty('args');
+        expect(JSON.stringify(input)).not.toContain('secret-title');
+    });
+    it('무인 작업 거절 → reason unattended', async () => {
+        audit.mockClear();
+        const reg = new ApprovalRegistry();
+        reg.setUnattended('t-b', true);
+        const r = await reg.request({ taskId: 't-b', userId: 'u1', toolName: 'bash', args: { command: 'ls' } }, { timeoutMs: 1000, policy: 'all' });
+        expect(r).toEqual({ decision: 'rejected', reason: 'unattended', waitedMs: 0 });
+        await new Promise((r2) => setImmediate(r2));
+        expect(audit).toHaveBeenCalledTimes(1);
+        expect(audit.mock.calls[0][0]).toMatchObject({ action: 'security.approval_auto_rejected', resourceId: 't-b' });
+        expect(audit.mock.calls[0][0].details).toMatchObject({ toolName: 'bash', reason: 'unattended' });
     });
 });
