@@ -14,6 +14,8 @@ test('web and known pipeline spec use fixed suites, unknown specs fail closed', 
 });
 test('documentation only does not invent changed feature coverage', () => {
   assert.deepEqual(selectFeatures(['README.md']), { api: [], web: false, pipeline: false, infra: false, bridge: false, hostSetup: false, e2e: [] });
+  assert.deepEqual(selectFeatures(['apps/api/src/evaluation/README.md']).api, []);
+  assert.deepEqual(selectFeatures(['apps/api/src/evaluation/redteam/golden-redteam.json']).api, []);
 });
 
 test('Jest success with skipped or missing assertions is not feature coverage', () => {
