@@ -8,6 +8,8 @@
  * @module config/rate-limits
  */
 
+import { boolEnvDefault } from './secure-defaults';
+
 // ============================================
 // 공통 윈도우 크기
 // ============================================
@@ -46,6 +48,16 @@ export const RL_AUTH = {
     providersLimit: Number(process.env.RL_AUTH_PROVIDERS) || 500,
     loginLimit: Number(process.env.RL_AUTH_LOGIN) || 8,
     registerLimit: Number(process.env.RL_AUTH_REGISTER) || 6,
+} as const;
+
+/**
+ * 로그인 실패 계정 잠금(W3 S7) — IP 가 아닌 계정 단위. 연속 THRESHOLD 회 틀리면 LOCK_MS 동안 로그인 거부.
+ * 운영(production) 기본 ON, dev/test 기본 OFF — `AUTH_LOCKOUT_ENABLED=true|false` 로 명시 가능.
+ */
+export const AUTH_LOCKOUT = {
+    ENABLED: boolEnvDefault(process.env.AUTH_LOCKOUT_ENABLED, true),
+    THRESHOLD: Number(process.env.AUTH_LOCKOUT_THRESHOLD) || 10,
+    LOCK_MS: Number(process.env.AUTH_LOCKOUT_MS) || 15 * 60_000,
 } as const;
 
 /**

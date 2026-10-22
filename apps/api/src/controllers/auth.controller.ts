@@ -130,14 +130,15 @@ class AuthController {
             const result = await authService.login(req.body);
 
             if (!result.success) {
-                // GDPR follow-up — login.failed audit + brute-force 감지
+                // GDPR follow-up — login.failed audit + brute-force 감지. 잠긴 계정은 login.locked(W3 S7) —
+                // 응답은 아래 같은 401·같은 문구라 감사에서만 구분된다.
                 void (async () => {
                     try {
                         const { getAuditService } = await import('../services/AuditService');
                         await getAuditService().logAudit({
-                            action: 'login.failed',
+                            action: result.locked ? 'login.locked' : 'login.failed',
                             resourceType: 'auth',
-                            details: { email: req.body?.email, reason: result.error },
+                            details: result.locked ? { email: req.body?.email } : { email: req.body?.email, reason: result.error },
                             ipAddress: req.ip,
                             userAgent: req.headers['user-agent'],
                             // 실패 — req.user 없음. 시도한 email 만 actor 로 표시.

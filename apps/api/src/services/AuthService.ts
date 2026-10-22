@@ -73,6 +73,8 @@ interface AuthResult {
     token?: string;
     // GDPR Phase D — 14세 미만 가입 시 활성화 대기 표시
     pendingGuardianConsent?: boolean;
+    // W3 S7 — 잠긴 계정의 로그인 실패(응답 문구는 일반 실패와 같다, 감사 구분용)
+    locked?: boolean;
 }
 
 /**
@@ -250,10 +252,11 @@ export class AuthService {
             return { success: false, error: '이메일과 비밀번호를 입력하세요' };
         }
 
-        const user = await this.userManager.authenticate(email, password);
+        const { user, locked } = await this.userManager.authenticateDetailed(email, password);
 
         if (!user) {
-            return { success: false, error: '이메일 또는 비밀번호가 올바르지 않습니다' };
+            // 잠긴 계정도 같은 문구 — 계정 존재·잠금 여부를 응답으로 드러내지 않는다.
+            return { success: false, error: '이메일 또는 비밀번호가 올바르지 않습니다', locked };
         }
 
         const token = generateToken(user);

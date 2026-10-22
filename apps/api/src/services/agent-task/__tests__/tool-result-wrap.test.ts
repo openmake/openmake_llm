@@ -1,7 +1,8 @@
 /**
  * 도구 결과 데이터 래퍼 — 외부에서 온 도구 결과를 데이터로 감싸고 뒤에 작업 목표를 다시 적는다.
  */
-import { wrapUntrustedToolResult } from '../tool-result-wrap';
+import { TOOL_OUTPUT_ATTR_MAX_CHARS, wrapUntrustedToolResult } from '../tool-result-wrap';
+import { getAgentTaskToolResultReminder } from '../../../prompts/agent-task-prompt';
 
 describe('wrapUntrustedToolResult', () => {
     it('결과를 <tool_output> 으로 감싸고 뒤에 작업 목표를 다시 적는다', () => {
@@ -25,5 +26,24 @@ describe('wrapUntrustedToolResult', () => {
         const goal = '가'.repeat(5000);
         const out = wrapUntrustedToolResult('x', goal);
         expect(out.length).toBeLessThan(2000);
+    });
+});
+
+describe('wrapUntrustedToolResult — 출처 태그(W3 S4)', () => {
+    it('source 가 있으면 여는 태그에 tool·server·url 속성을 싣고, 없는 속성은 생략한다', () => {
+        const full = wrapUntrustedToolResult('본문', '목표', { tool: 'notion::get_page', server: 'notion', url: 'https://example.com/a?b=1' });
+        expect(full.startsWith('<tool_output tool="notion::get_page" server="notion" url="https://example.com/a?b=1">\n본문\n</tool_output>')).toBe(true);
+        expect(wrapUntrustedToolResult('본문', '목표', { tool: 'web_search' }).startsWith('<tool_output tool="web_search">\n본문\n</tool_output>')).toBe(true);
+    });
+
+    it('속성값의 " < > & 를 이스케이프하고(& 먼저) 길이를 상한으로 자른다', () => {
+        const out = wrapUntrustedToolResult('x', '목표', { tool: 'a"b<c>d&quot;', url: 'u'.repeat(500) });
+        expect(out).toContain('tool="a&quot;b&lt;c&gt;d&amp;quot;"');
+        expect(out).toContain(`url="${'u'.repeat(TOOL_OUTPUT_ATTR_MAX_CHARS)}">`);
+        expect(out).not.toContain('u'.repeat(TOOL_OUTPUT_ATTR_MAX_CHARS + 1));
+    });
+
+    it('source 가 없으면 종전 출력과 같다', () => {
+        expect(wrapUntrustedToolResult('본문', '목표')).toBe(`<tool_output>\n본문\n</tool_output>\n${getAgentTaskToolResultReminder('목표')}`);
     });
 });

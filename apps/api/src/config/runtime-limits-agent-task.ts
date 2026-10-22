@@ -4,6 +4,7 @@
  *
  * @module config/runtime-limits-agent-task
  */
+import { boolEnvDefault } from './secure-defaults';
 
 /**
  * 응답 스크립트 순수성 교정 (2026-08-02) — 한글 문장에 섞인 한자·가나를 후단에서 교정.
@@ -329,8 +330,8 @@ export const AGENT_TASK_LIMITS = {
     DYNAMIC_TOOLS_BUDGET: parseInt(process.env.AGENT_TASK_DYNAMIC_TOOLS_BUDGET || '30', 10),
     /** 도구 결과 데이터 래퍼 — 호스트·외부 도구(검색·MCP)와 browser 결과를 <tool_output> 으로 감싸고 뒤에 작업 목표를
      *  다시 적는다(간접 프롬프트 주입 완화, Meta-SecAlign 2507.02735 의 학습 없는 방어). 대화에 싣는 내용만 바뀌고 스텝 기록은 원문.
-     *  기본 OFF — 도구 결과마다 토큰이 늘므로 레드팀 평가(evaluation/redteam)로 효과를 잰 뒤 켠다. AGENT_TASK_TOOL_RESULT_WRAP_ENABLED=true. */
-    TOOL_RESULT_WRAP_ENABLED: process.env.AGENT_TASK_TOOL_RESULT_WRAP_ENABLED === 'true',
+     *  운영 기본 ON(W3), dev/test OFF — 끄려면 AGENT_TASK_TOOL_RESULT_WRAP_ENABLED=false 명시(효과 측정은 eval:redteam --real 의 ti-wrap-*). */
+    TOOL_RESULT_WRAP_ENABLED: boolEnvDefault(process.env.AGENT_TASK_TOOL_RESULT_WRAP_ENABLED, true),
     /** 래퍼 뒤에 다시 적는 작업 목표의 최대 글자 수. AGENT_TASK_TOOL_RESULT_WRAP_GOAL_MAX_CHARS */
     TOOL_RESULT_WRAP_GOAL_MAX_CHARS: parseInt(process.env.AGENT_TASK_TOOL_RESULT_WRAP_GOAL_MAX_CHARS || '300', 10),
     /** 산출물 실행 검증(Phase 2-B) — 샌드박스 활성 시 코드 deliverable 을 완료 전 문법/컴파일

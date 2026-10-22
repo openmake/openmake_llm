@@ -31,6 +31,7 @@ jest.mock('../../../config/runtime-limits', () => {
 
 import { executeTurnToolCalls } from '../turn-executor';
 import { AGENT_TASK_TURN_LOOP } from '../../../config/agent-task-turn-loop';
+import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 import type { ChatMessage, ToolCall } from '../../../llm/types';
 
 const call = (id: string, name: string, args: Record<string, unknown>, extra: Partial<ToolCall> = {}): ToolCall =>
@@ -101,5 +102,31 @@ describe('executeTurnToolCalls — 한 응답 안의 중복 호출', () => {
     it('부작용이 있는 호출은 같아도 모두 실행한다', async () => {
         await run([call('a', 'bash', { command: 'date' }), call('b', 'bash', { command: 'date' })]);
         expect(runTool).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('executeTurnToolCalls — 래퍼가 켜진 같은 결과 반복(W3 S4)', () => {
+    const limits = AGENT_TASK_LIMITS as unknown as Record<string, unknown>;
+    afterEach(() => { limits.TOOL_RESULT_WRAP_ENABLED = false; });
+
+    it('호스트 읽기 도구가 같은 인자로 같은 결과를 되풀이하면 경고 임계 번째 결과에 반복 안내가 붙는다', async () => {
+        limits.TOOL_RESULT_WRAP_ENABLED = true;
+        const conversation: ChatMessage[] = [{ role: 'user', content: 'g' }];
+        const results: string[] = [];
+        for (let i = 0; i < AGENT_TASK_LIMITS.TOOL_LOOP_WARN_SAME_RESULT; i++) {
+            const toolCalls = [call(`c${i}`, 'mcp_read_resource', { uri: 'res://same' })];
+            conversation.push({ role: 'assistant', content: '', tool_calls: toolCalls });
+            await executeTurnToolCalls({
+                toolCalls, taskRuntime: null, sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 1000 },
+                extraToolNames: new Set<string>(), mcp: {}, userCtx: { userId: 'u1' }, userId: 'u1', taskId: 't1', turn: i + 1, goal: 'g',
+                conversation, usedTools: new Set<string>(), signal: new AbortController().signal,
+                stepNumber: i, searchCalls: 0, browserCalls: 0, pausedMs: 0, approvalTimeouts: 0,
+                getCurStatus: () => 'running', update: jest.fn(async () => undefined), emitStep: jest.fn(),
+            } as unknown as Parameters<typeof executeTurnToolCalls>[0]);
+            results.push(String(conversation[conversation.length - 1].content));
+        }
+        expect(results[0].startsWith('<tool_output tool="mcp_read_resource">')).toBe(true);
+        expect(results.slice(0, -1).some((r) => r.includes('[반복 안내]'))).toBe(false);
+        expect(results[results.length - 1]).toContain('[반복 안내]');
     });
 });
