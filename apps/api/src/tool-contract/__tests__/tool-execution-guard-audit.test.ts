@@ -52,6 +52,17 @@ describe('executeToolSecurely × 인자 차단 감사', () => {
         expect(JSON.stringify(input)).not.toContain('/etc/passwd');
     });
 
+    it('순환 참조 인자도 isError 결과 그대로, 해시는 unhashable 로 남긴다', async () => {
+        const args: Record<string, unknown> = { cmd: 'rm -rf /; ' };
+        args.self = args;
+        const result = await executeToolSecurely(ok, 'run_cmd', args, ctx);
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('차단된 도구 인자: cmd');
+        await new Promise((r) => setImmediate(r));
+        expect(audit).toHaveBeenCalledTimes(1);
+        expect(audit.mock.calls[0][0].details.argsHash).toBe('unhashable');
+    });
+
     it('정상 인자 → 감사 0회(차단 감사 기준)', async () => {
         const result = await executeToolSecurely(ok, 'web_search', { query: 'hello world' }, ctx);
         expect(result.isError).toBeUndefined();

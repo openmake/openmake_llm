@@ -43,11 +43,27 @@ describe('auditSecurityEvent', () => {
         expect((entry().details as Record<string, unknown>).actorId).toBe('guest');
     });
 
-    it('빈·null userId 도 user_id 없이 남긴다', async () => {
+    it("빈·null userId 도 user_id 없이, details.actorId 는 'anonymous'", async () => {
         await auditSecurityEvent({ action: 'security.authz_denied', userId: '' });
         await auditSecurityEvent({ action: 'security.authz_denied', userId: null });
-        expect((logAudit.mock.calls[0][0] as Record<string, unknown>).userId).toBeUndefined();
-        expect((logAudit.mock.calls[1][0] as Record<string, unknown>).userId).toBeUndefined();
+        for (const call of logAudit.mock.calls) {
+            const e = call[0] as Record<string, unknown>;
+            expect(e.userId).toBeUndefined();
+            expect((e.details as Record<string, unknown>).actorId).toBe('anonymous');
+        }
+    });
+
+    it("userId 가 없으면 details.actorId 는 'anonymous' — 손님('guest')과 구분된다", async () => {
+        await auditSecurityEvent({ action: 'security.ssrf_blocked' });
+        expect(entry().userId).toBeUndefined();
+        expect((entry().details as Record<string, unknown>).actorId).toBe('anonymous');
+    });
+
+    it('resourceId 는 capText(200) 으로 자른다', async () => {
+        await auditSecurityEvent({ action: 'security.authz_denied', userId: 'u1', resourceId: `GET /${'p'.repeat(300)}` });
+        const rid = entry().resourceId as string;
+        expect(rid.startsWith(`GET /${'p'.repeat(195)}`)).toBe(true);
+        expect(rid.length).toBeLessThan(300);
     });
 
     it('details 키가 많아도 actorId 는 남고 호출부가 덮어쓰지 못한다', async () => {
