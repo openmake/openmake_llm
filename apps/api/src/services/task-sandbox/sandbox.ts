@@ -14,243 +14,32 @@
  *
  * @module services/task-sandbox/sandbox
  */
-import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
-import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, lstat, realpath, copyFile as fsCopyFile } from 'fs/promises';
-import { resolve, sep, join, dirname, basename, relative } from 'path';
-import { getTaskSandboxConfig, BROWSER_SESSION, browserDestGuardEnv, type TaskSandboxConfig } from '../../config/task-sandbox';
+import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, realpath, copyFile as fsCopyFile } from 'fs/promises';
+import { resolve, sep, join, dirname, relative } from 'path';
+import { getTaskSandboxConfig, BROWSER_SESSION, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { BROWSER_RUN } from '../../config/agent-task-browser-web';
 import { BROWSER_TAKEOVER_DISCARDED_MESSAGE } from '../../prompts/agent-task-browser-web';
 import { guardBrowserResult } from './browser-result-guard';
 import type { TaskExecutor, ExecResult } from './executor';
 import { wrapPipeline, readPipeStatus, PIPE_STATUS_TAG_PREFIX } from './pipe-status';
-import { SANDBOX_WORKSPACE_DIR, stripWorkspacePrefix } from './workspace-path';
+import { SANDBOX_WORKSPACE_DIR } from './workspace-path';
 import { createLogger } from '../../utils/logger';
-import { withLiveTerminal, tapOutput } from './live-terminal';
+import { withLiveTerminal } from './live-terminal';
+import { sanitizeId, buildRunArgs, buildBrowserRunArgs, browserRunContainerName, buildWriteArgs, EXEC_ID_ENV, buildKillExecArgs, runProcess } from './sandbox-docker-cli';
+import { safeRealWorkspacePath, dirSizeBytes, listWorkspaceFilesAt } from './sandbox-workspace-fs';
 
 // 기존 소비처(runtime/tools 등)가 './sandbox' 에서 ExecResult 를 import 하므로 재노출 유지.
 export type { ExecResult } from './executor';
+// docker 인자 조립·runProcess 와 workspace 경로 가드·나열은 max-lines 가드로 분리 — 기존 import 경로 유지용 재노출.
+export { sanitizeId, buildRunArgs, buildBrowserRunArgs, browserRunContainerName, buildWriteArgs, buildKillExecArgs, runProcess } from './sandbox-docker-cli';
+export { safeResolveWorkspacePath, safeRealWorkspacePath, dirSizeBytes, listWorkspaceFilesAt } from './sandbox-workspace-fs';
 
 const logger = createLogger('TaskSandbox');
 
 const CONTAINER_PREFIX = 'omk-task-';
 const WORKSPACE = SANDBOX_WORKSPACE_DIR;
-
-/** docker 식별자 안전화. */
-export function sanitizeId(id: string): string {
-    return id.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64) || 'unknown';
-}
-
-/**
- * PURE: 영속 컨테이너 `docker run` 인자 조립 (유닛테스트 대상).
- * mcp/sandbox-docker buildDockerArgs 보안 플래그를 영속(-d + tail) 형태로 미러.
- */
-export function buildRunArgs(
-    containerName: string,
-    hostWorkdir: string,
-    cfg: TaskSandboxConfig,
-): string[] {
-    // restricted(allowlist egress)는 메인 샌드박스에 대한 enforcement 가 미구현 —
-    // bridge 로 열면 무제한 egress 가 되므로 구현 전까지 none 으로 fail-safe 매핑한다.
-    // (browser 도구는 별도 일회성 컨테이너 + egress proxy 로 네트워크를 얻는다.)
-    const net = 'none';
-    const a: string[] = ['run', '-d', '--init', '--name', containerName];
-    a.push('--network', net);
-    a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
-    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--memory-swap', cfg.memory, '--cpus', cfg.cpus);
-    a.push('--user', cfg.user);
-    a.push('--read-only', '--tmpfs', '/tmp:rw,exec', '--tmpfs', '/run:rw');
-    a.push('-v', `${hostWorkdir}:${WORKSPACE}:rw`);
-    a.push('-w', WORKSPACE);
-    a.push(cfg.image, 'tail', '-f', '/dev/null');
-    return a;
-}
-
-/**
- * PURE: 브라우저 전용 일회성 컨테이너 `docker run --rm` 인자 (유닛테스트 대상).
- * 메인 샌드박스(network none)와 분리 — browser 만 browserNetwork(기본 bridge)에서 실행해
- * bash/python 의 인터넷 미접근을 보장한다. workspace 는 공유(스크린샷·결과 저장).
- */
-export function buildBrowserRunArgs(
-    hostWorkdir: string,
-    actionsRelPath: string,
-    cfg: TaskSandboxConfig,
-    proxyUrl?: string,
-    /** 시간 초과 때 지울 수 있게 붙이는 이름(browserRunContainerName). */
-    containerName?: string,
-    /** 러너의 목적지 검사 설정(`KEY=값`). */
-    guardEnv: readonly string[] = browserDestGuardEnv(),
-): string[] {
-    const a: string[] = ['run', '--rm', '--init', ...(containerName ? ['--name', containerName] : [])];
-    // egress 프록시 ON: internal 망(인터넷 직접 차단) + 프록시 env. OFF: browserNetwork(bridge).
-    a.push('--network', proxyUrl ? cfg.egressNetwork : (cfg.browserNetwork || 'bridge'));
-    a.push('--cap-drop', 'ALL', '--security-opt', 'no-new-privileges');
-    a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--memory-swap', cfg.memory, '--cpus', cfg.cpus);
-    a.push('--user', cfg.user);
-    a.push('--read-only', '--tmpfs', '/tmp:rw,exec', '--tmpfs', '/run:rw');
-    a.push('-v', `${hostWorkdir}:${WORKSPACE}:rw`);
-    a.push('-w', WORKSPACE);
-    if (proxyUrl) a.push('-e', `BROWSER_PROXY=${proxyUrl}`);
-    for (const kv of guardEnv) a.push('-e', kv);
-    a.push(cfg.image, 'node', '/opt/browser/browser-runner.mjs', actionsRelPath);
-    return a;
-}
-
-/** 일회성 브라우저 컨테이너 이름 — 접두 + 작업 id + 호출마다 다른 꼬리(같은 작업의 호출이 겹쳐도 충돌하지 않는다). */
-export function browserRunContainerName(taskId: string): string {
-    return `${BROWSER_RUN.CONTAINER_PREFIX}${sanitizeId(taskId)}-${randomUUID().slice(0, 8)}`;
-}
-
-/**
- * PURE: 컨테이너 안에서 파일을 쓰는 `docker exec` 인자 (유닛테스트 대상). 내용은 stdin 으로 넘긴다.
- * 경로는 셸 문자열에 넣지 않고 위치 인자($1)로 넘긴다 — 공백·메타문자가 있어도 명령으로 해석되지 않는다.
- */
-export function buildWriteArgs(containerName: string, containerPath: string): string[] {
-    return ['exec', '-i', containerName, 'sh', '-c', 'mkdir -p "$(dirname "$1")" && cat > "$1"', 'sh', containerPath];
-}
-
-/**
- * PURE: workspace 내부로만 해석되는 안전 경로 반환 (유닛테스트 대상).
- * `..`/절대경로 표기 탈출을 차단하는 **어휘적(1차)** 가드 — 심링크는 해석하지 않으므로
- * 실제 파일 I/O 전에는 반드시 safeRealWorkspacePath 로 실경로까지 검증할 것.
- *
- * 컨테이너 절대경로(`/workspace/...`)는 **탈출이 아니라 같은 파일의 다른 표기**다. 에이전트는
- * 컨테이너 안에서 bash 로 작업하므로 `/workspace/data.json` 이 눈에 보이는 정확한 경로이고,
- * 실제로 그렇게 쓴다 — 그런데 이 검사는 호스트 경로(hostWorkdir) 기준이라 탈출로 판정했다.
- * 2026-07-22 ~ 08-02 사이 예약 리포트가 `/workspace/data.json`·`/workspace/report.html` 로
- * 반복 차단당하며 턴을 낭비했고, 08-03 실행은 마지막 턴에 이 차단을 맞아 재시도할 턴이 없어
- * 리포트 없이 끝났다. 마운트 지점을 상대경로로 정규화해 같은 대상을 같게 해석한다.
- * 정규화 뒤에도 검사는 그대로 적용되므로 `/workspace/../etc/passwd` 는 여전히 차단된다.
- */
-export function safeResolveWorkspacePath(hostWorkdir: string, userPath: string): string {
-    const root = resolve(hostWorkdir);
-    const normalized = stripWorkspacePrefix(userPath);
-    const abs = resolve(root, normalized);
-    if (abs !== root && !abs.startsWith(root + sep)) {
-        throw new Error(
-            `workspace 경로 탈출 차단: ${userPath}`
-            + ' (파일 도구는 /workspace 내부만 접근 가능 — /opt/... 같은 컨테이너 경로는'
-            + ' bash 로 `cp -r <경로> ./` 하여 workspace 에 복사한 뒤 사본을 여세요)',
-        );
-    }
-    return abs;
-}
-
-/**
- * workspace 내부로만 해석되는 안전 **실경로** 반환 — 심링크 탈출 차단(2차 가드).
- *
- * 컨테이너의 bash 가 bind-mount 안에 호스트 경로를 가리키는 심링크를 만들 수 있고,
- * 파일 I/O(fs.readFile/writeFile/rm)와 res.download 는 호스트에서 심링크를 따라가므로
- * 어휘적 검사만으로는 호스트 임의 파일 읽기/쓰기로 탈출한다. 여기서는 대상 경로의
- * 가장 깊은 실존 조상을 realpath 로 해석해 그 실경로가 workspace 실경로 내부인지
- * 강제한다(미실존 꼬리 세그먼트는 실존 조상의 실경로에 다시 붙여 반환).
- */
-export async function safeRealWorkspacePath(hostWorkdir: string, userPath: string): Promise<string> {
-    const abs = safeResolveWorkspacePath(hostWorkdir, userPath);
-    const realRoot = await realpath(resolve(hostWorkdir));
-    let probe = abs;
-    let rest = '';
-    for (;;) {
-        let real: string | null = null;
-        try {
-            real = await realpath(probe);
-        } catch (e) {
-            if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
-            // realpath ENOENT 는 "경로 없음" 과 "대상이 없는 심링크" 를 구분하지 못한다. 후자를 미실존으로
-            // 넘기면 부모 실경로 + 이름으로 통과해 writeFile 이 링크를 따라 밖에 파일을 만든다(2026-09-06).
-            if (await lstat(probe).then(() => true, () => false)) {
-                throw new Error(`workspace 경로 탈출 차단(symlink): ${userPath}`);
-            }
-            const parent = dirname(probe);
-            if (parent === probe) throw e; // 파일시스템 루트까지 미실존 — 비정상
-            rest = rest ? join(basename(probe), rest) : basename(probe);
-            probe = parent;
-            continue;
-        }
-        const mapped = rest ? join(real, rest) : real;
-        if (mapped !== realRoot && !mapped.startsWith(realRoot + sep)) {
-            throw new Error(`workspace 경로 탈출 차단(symlink): ${userPath}`);
-        }
-        return mapped;
-    }
-}
-
-/** exec 한 번을 식별하는 환경변수 — 그 명령이 띄운 프로세스(백그라운드·데몬 포함)가 모두 물려받는다. */
-const EXEC_ID_ENV = 'OMK_EXEC_ID';
-
-/**
- * PURE: 실행 id 꼬리표가 붙은 컨테이너 안 프로세스를 모두 죽이는 `docker exec` 인자 (유닛테스트 대상).
- * `docker exec` CLI 를 죽여도 컨테이너 안 프로세스는 남는다(실측) — 타임아웃·취소 때 이걸로 정리한다.
- * 죽이는 사이 새로 생긴 자식을 잡으려고 남은 것이 없을 때까지 최대 3회 훑는다. 이미지에 ps/pkill 이 없어 /proc 을 읽는다.
- */
-export function buildKillExecArgs(containerName: string, execId: string): string[] {
-    const script = 'for i in 1 2 3; do n=0; for p in /proc/[0-9]*; do '
-        + `if { tr '\\0' '\\n' < "$p/environ"; } 2>/dev/null | grep -qx "${EXEC_ID_ENV}=$1"; then kill -9 "\${p#/proc/}" 2>/dev/null; n=1; fi; `
-        + 'done; [ "$n" = 0 ] && break; done; exit 0';
-    return ['exec', containerName, 'sh', '-c', script, 'sh', execId];
-}
-
-/** 자식 프로세스를 실행하고 출력 캡/timeout 을 적용 (docker CLI 호출 공용). */
-export function runProcess(
-    dockerPath: string,
-    args: string[],
-    /** signal·onStop — 타임아웃/중단으로 끝낼 때 CLI 를 죽이기 전에 onStop 으로 컨테이너 안 프로세스를 정리한다.
-     *  onOutput — stdout·stderr 조각마다 출력 상한과 무관하게 부른다(실시간 기록용, 예외는 삼킨다 — tapOutput). */
-    opts: { timeoutMs: number; outputCap: number; input?: string | Buffer; signal?: AbortSignal; onStop?: () => Promise<unknown>; onOutput?: (chunk: string, stream: 'out' | 'err') => void },
-): Promise<ExecResult> {
-    return new Promise((resolvePromise) => {
-        const started = Date.now();
-        const child = tapOutput(spawn(dockerPath, args, { stdio: ['pipe', 'pipe', 'pipe'] }), opts.onOutput);
-        let stdout = '';
-        let stderr = '';
-        let truncated = false, timedOut = false;
-
-        const onData = (buf: Buffer, which: 'out' | 'err') => {
-            const cur = which === 'out' ? stdout.length : stderr.length;
-            if (cur >= opts.outputCap) { truncated = true; return; }
-            const chunk = buf.toString('utf8', 0, Math.max(0, opts.outputCap - cur));
-            if (which === 'out') stdout += chunk; else stderr += chunk;
-            if (cur + buf.length > opts.outputCap) truncated = true;
-        };
-        child.stdout.on('data', (b) => onData(b, 'out'));
-        child.stderr.on('data', (b) => onData(b, 'err'));
-
-        const stop = (): void => {
-            void Promise.resolve(opts.onStop?.()).catch(() => { /* 정리 실패해도 CLI 는 끝낸다 */ }).finally(() => child.kill('SIGKILL'));
-        };
-        const timer = setTimeout(() => {
-            timedOut = true;
-            stop();
-        }, opts.timeoutMs);
-        opts.signal?.addEventListener('abort', stop, { once: true });
-
-        child.on('close', (code) => {
-            clearTimeout(timer);
-            opts.signal?.removeEventListener('abort', stop);
-            resolvePromise({
-                stdout, stderr,
-                exitCode: code ?? -1,
-                truncated, timedOut,
-                durationMs: Date.now() - started,
-            });
-        });
-        child.on('error', (err) => {
-            clearTimeout(timer);
-            resolvePromise({
-                stdout, stderr: stderr + String(err),
-                exitCode: -1, truncated, timedOut,
-                durationMs: Date.now() - started,
-            });
-        });
-
-        // 자식이 stdin 을 다 읽기 전에 끝나면 EPIPE 가 난다 — 결과는 종료 코드로 판정하므로 여기서는 삼킨다
-        // (처리하지 않으면 'error' 이벤트가 API 프로세스를 죽인다).
-        child.stdin.on('error', () => { /* 종료 코드로 판정 */ });
-        if (opts.input !== undefined) { child.stdin.write(opts.input); }
-        child.stdin.end();
-    });
-}
 
 /**
  * 단일 task 의 영속 샌드박스. create() → exec()/파일 I/O 반복 → cleanup().
@@ -486,58 +275,6 @@ export class TaskSandbox implements TaskExecutor {
     private assertCreated(): void {
         if (!this.created) throw new Error(`샌드박스 미생성 (${this.taskId}) — create() 선행 필요`);
     }
-}
-
-/**
- * 디렉토리 사용량(byte) 재귀 합산 — workspace 디스크 쿼터 검사용.
- * cap 초과가 확정되면 조기 중단한다(반환값은 "cap 이상" 판정에만 유효).
- * 심링크는 따라가지 않는다(Dirent 는 심링크를 file/dir 로 분류하지 않음).
- */
-export async function dirSizeBytes(root: string, cap = Number.MAX_SAFE_INTEGER): Promise<number> {
-    let total = 0;
-    async function walk(dir: string): Promise<void> {
-        if (total >= cap) return;
-        let entries;
-        try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
-        for (const e of entries) {
-            if (total >= cap) return;
-            const full = join(dir, e.name);
-            if (e.isDirectory()) {
-                await walk(full);
-            } else if (e.isFile()) {
-                try { total += (await stat(full)).size; } catch { /* 삭제 경합 등 — 무시 */ }
-            }
-        }
-    }
-    await walk(resolve(root));
-    return total;
-}
-
-/**
- * 주어진 workspace 디렉토리의 전체 파일을 상대경로로 재귀 나열 (산출물 다운로드 엔드포인트용).
- * 라이브 TaskSandbox 인스턴스 없이도 동작(task 완료 후 workspace_path 로 호출).
- * **숨김 파일/디렉토리(dotfile) 제외** — `.git`(diff 캡처 메타), `.verify_*.py`(코드검증 임시),
- * 기타 시스템 dotfile 이 산출물 목록에 새어 "이상한 파일" 로 다운로드되던 것을 막는다.
- */
-export async function listWorkspaceFilesAt(root: string, maxFiles = 1000, strict = false): Promise<string[]> {
-    const out: string[] = [];
-    async function walk(dir: string): Promise<void> {
-        if (out.length >= maxFiles) return;
-        let entries;
-        try { entries = await readdir(dir, { withFileTypes: true }); } catch (e) { if (strict) throw e; return; }
-        for (const e of entries) {
-            if (out.length >= maxFiles) return;
-            if (e.name.startsWith('.')) continue; // 숨김 파일/디렉토리(.git·.verify_* 등) 제외
-            const full = join(dir, e.name);
-            if (e.isDirectory()) {
-                await walk(full);
-            } else {
-                out.push(relative(root, full));
-            }
-        }
-    }
-    await walk(resolve(root));
-    return out.sort();
 }
 
 /**

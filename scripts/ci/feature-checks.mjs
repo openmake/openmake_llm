@@ -98,7 +98,7 @@ export function runFeatures(files, options = {}) {
   if (selection.pipeline) {
     const files = readdirSync(resolve(root, 'tests/pipeline')).filter(f => f.endsWith('.test.mjs'));
     if (!files.length) throw new Error('Empty required pipeline test suite');
-    const additional = ['scripts/ci', 'scripts/pipeline'].flatMap(dir => readdirSync(resolve(root, dir)).filter(f => f.endsWith('.test.mjs')).map(f => `${dir}/${f}`));
+    const additional = ['scripts/ci', 'scripts/pipeline', 'scripts/vllm'].flatMap(dir => readdirSync(resolve(root, dir)).filter(f => f.endsWith('.test.mjs')).map(f => `${dir}/${f}`));
     run(process.execPath, ['--test', ...files.map(f => `tests/pipeline/${f}`), ...additional]);
     for (const script of environmentTests(root)) run('bash', [script]);
   }

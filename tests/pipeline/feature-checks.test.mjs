@@ -19,6 +19,10 @@ test('documentation only does not invent changed feature coverage', () => {
   assert.deepEqual(selectFeatures(['packages/api-client/package.json']).api, []);
   assert.deepEqual(selectFeatures(['packages/shared-types/README.md']).api, []);
 });
+test('LiteLLM gateway config selects the pipeline suite; unmapped YAML elsewhere still fails closed', () => {
+  assert.equal(selectFeatures(['scripts/vllm/litellm.config.yaml']).pipeline, true);
+  assert.throws(() => selectFeatures(['scripts/foo/bar.yaml']), /Unmapped changed source: scripts\/foo\/bar\.yaml/);
+});
 
 test('Jest success with skipped or missing assertions is not feature coverage', () => {
   const related = new Map([['source', ['/apps/api/src/a.test.ts']]]);
