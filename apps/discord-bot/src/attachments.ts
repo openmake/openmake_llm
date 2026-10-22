@@ -69,10 +69,15 @@ function safeFilename(title: string, fallback: string): string {
     return (discordSafe(title) || discordSafe(fallback)).slice(0, 60) || 'artifact';
 }
 
-/** /generated/* 이미지를 백엔드에서 내려받아 Buffer 로 반환 (실패/초과 시 null) */
+/**
+ * /generated/* 산출물을 백엔드에서 내려받아 Buffer 로 반환 (실패/초과 시 null).
+ * 생성 파일은 소유자만 받을 수 있어 채팅과 같은 API 키를 붙인다(없으면 401 로 전부 첨부 실패).
+ */
 async function downloadGenerated(relPath: string): Promise<Buffer | null> {
     try {
-        const res = await fetch(`${config.apiBaseUrl}${relPath}`);
+        const res = await fetch(`${config.apiBaseUrl}${relPath}`, {
+            headers: { Authorization: `Bearer ${config.apiKey}` },
+        });
         if (!res.ok) return null;
         const buf = Buffer.from(await res.arrayBuffer());
         if (buf.length === 0 || buf.length > MAX_ATTACHMENT_BYTES) return null;
