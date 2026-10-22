@@ -1,6 +1,7 @@
 /**
  * 에이전트 작업 알림 5종(R8, R9) — 복구 상한·소유권 이어받기·대기열 적체·모델 대기 장기화·진행 멈춤.
  * AlertSystem(monitoring/alerts) 에 종류별 심각도로 보낸다. 같은 종류의 반복은 AlertSystem 쿨다운(type:severity)이 거른다.
+ * 단 recovery_limit 은 쿨다운을 지우고 보낸다 — 쿨다운 키에 작업 id 가 없어 부팅 복구가 한 번에 닫은 작업 중 첫 것만 알려지기 때문(작업당 RECOVERY_MAX_ATTEMPTS 로 유한).
  * 보내기 실패는 호출부(부팅 복구·watchdog)를 깨지 않는다 — 절대 throw 하지 않는다.
  *
  * @module monitoring/agent-task-alerts
@@ -54,7 +55,9 @@ export const ALERT_TEXT: Record<AgentTaskAlertType, { title: string; message: (d
 /** 알림을 보낸다 — 실패는 경고 로그만 남기고 삼킨다 */
 export async function sendAgentTaskAlert(type: AgentTaskAlertType, title: string, message: string, data?: Record<string, unknown>): Promise<void> {
     try {
-        await (await import('./alerts')).getAlertSystem().sendAlert(type, AGENT_TASK_ALERT_SEVERITY[type], title, message, data);
+        const alerts = (await import('./alerts')).getAlertSystem();
+        if (type === 'agent_task_recovery_limit') alerts.clearCooldown(type, AGENT_TASK_ALERT_SEVERITY[type]);
+        await alerts.sendAlert(type, AGENT_TASK_ALERT_SEVERITY[type], title, message, data);
     } catch (err) {
         logger.warn(`알림 보내기 실패(무시): ${type} — ${err instanceof Error ? err.message : String(err)}`);
     }
