@@ -26,13 +26,19 @@ function run(docker: string, args: string[]): Promise<{ code: number; stdout: st
     });
 }
 
-/** PURE: 프록시 컨테이너 실행 인자 — internal 망, 권한 축소, 허용 도메인·허용 포트. */
+/** 허용 목록이 비었고 public 모드를 쓰는가 — 프록시가 도메인 제한 없이 사설망·메타데이터·포트만 막는다. */
+function isPublicMode(cfg: TaskSandboxConfig): boolean {
+    return cfg.egressAllowlist.length === 0 && cfg.egressPublicWhenEmpty;
+}
+
+/** PURE: 프록시 컨테이너 실행 인자 — internal 망, 권한 축소, 허용 도메인·허용 포트(목록이 비면 public 모드 선택). */
 export function buildEgressProxyRunArgs(cfg: TaskSandboxConfig): string[] {
     return [
         'run', '-d', '--name', cfg.egressProxyContainer,
         '--network', cfg.egressNetwork,
         '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--read-only',
         '-e', `EGRESS_ALLOWLIST=${cfg.egressAllowlist.join(',')}`,
+        ...(isPublicMode(cfg) ? ['-e', 'EGRESS_ALLOWLIST_MODE=public'] : []),
         '-e', `EGRESS_ALLOWED_PORTS=${cfg.egressAllowedPorts.join(',')}`,
         '-e', `EGRESS_PROXY_PORT=${cfg.egressProxyPort}`,
         cfg.egressProxyImage,
@@ -63,7 +69,7 @@ export async function ensureEgressProxy(cfg: TaskSandboxConfig): Promise<string>
         if (connect.code !== 0 && !/already exists|endpoint/i.test(connect.stderr)) {
             logger.warn(`egress 프록시 bridge 연결 경고: ${connect.stderr}`);
         }
-        logger.info(`egress 프록시 기동 (${cfg.egressProxyContainer}, allowlist=${cfg.egressAllowlist.length}개)`);
+        logger.info(`egress 프록시 기동 (${cfg.egressProxyContainer}, allowlist=${cfg.egressAllowlist.length}개${isPublicMode(cfg) ? ', mode=public' : ''})`);
     }
     return `http://${cfg.egressProxyContainer}:${cfg.egressProxyPort}`;
 }

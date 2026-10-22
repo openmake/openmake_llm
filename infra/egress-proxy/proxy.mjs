@@ -7,10 +7,11 @@
  * 사설 주소로 풀리거나 리다이렉트로 내부 포트에 닿는 것을 막는다. 검사 본체는 guard-proxy.mjs.
  *
  * EGRESS_ALLOWLIST=쉼표목록 (비면 전부 거부 = fail-safe). 하위도메인 매칭.
+ * EGRESS_ALLOWLIST_MODE=public — 목록이 비었을 때만 도메인 제한을 풀고 사설망·메타데이터·포트만 막는다.
  * EGRESS_ALLOWED_PORTS=쉼표목록 (기본 80,443).
  * 포트 8888.
  */
-import { createGuardProxy } from './guard-proxy.mjs';
+import { createGuardProxy, resolveDomains } from './guard-proxy.mjs';
 
 const PORT = Number(process.env.EGRESS_PROXY_PORT) || 8888;
 const ALLOW = (process.env.EGRESS_ALLOWLIST || '')
@@ -18,11 +19,14 @@ const ALLOW = (process.env.EGRESS_ALLOWLIST || '')
 const PORTS = (process.env.EGRESS_ALLOWED_PORTS || '80,443')
     .split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0);
 
+const DOMAINS = resolveDomains(ALLOW, process.env.EGRESS_ALLOWLIST_MODE);
+const ALLOW_LABEL = DOMAINS === undefined ? '(empty) mode=public' : (ALLOW.join(',') || '(empty=deny-all)');
+
 function log(msg) { process.stdout.write(`[egress-proxy] ${msg}\n`); }
 
 const server = createGuardProxy({
-    domains: ALLOW,
+    domains: DOMAINS,
     ports: PORTS,
     onDeny: (d) => log(`DENY ${d.host}:${d.port} (${d.code})`),
 });
-server.listen(PORT, () => log(`listening :${PORT} allowlist=[${ALLOW.join(',') || '(empty=deny-all)'}] ports=[${PORTS.join(',')}]`));
+server.listen(PORT, () => log(`listening :${PORT} allowlist=[${ALLOW_LABEL}] ports=[${PORTS.join(',')}]`));

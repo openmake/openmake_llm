@@ -7,7 +7,7 @@ import http from 'node:http';
 import net from 'node:net';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { isBlockedAddress, parseAllowedHosts, checkDestination, createGuardProxy } from './guard-proxy.mjs';
+import { isBlockedAddress, parseAllowedHosts, checkDestination, createGuardProxy, resolveDomains } from './guard-proxy.mjs';
 
 /** 이름을 정해진 주소로 풀어 주는 조회기. */
 const lookupTo = (...addresses) => async () => addresses.map((address) => ({ address, family: net.isIP(address) }));
@@ -174,6 +174,12 @@ test('프록시: 도메인 목록 밖 호스트의 CONNECT 를 거절한다', as
     const port = await listen(proxy);
     t.after(() => proxy.close());
     assert.match(await connectVia(port, 'evil.example:443'), /^HTTP\/1\.1 403 /);
+});
+
+test('resolveDomains: 목록이 비고 public 모드면 도메인 제한을 풀고(undefined), 아니면 목록 그대로', () => {
+    assert.equal(resolveDomains([], 'public'), undefined);
+    assert.deepEqual(resolveDomains([], undefined), []); // 모드 미설정 — 종전처럼 전부 거부
+    assert.deepEqual(resolveDomains(['a.com'], 'public'), ['a.com']); // 목록이 있으면 모드와 무관하게 목록만
 });
 
 test('task-runtime 의 사본이 원본과 같다', () => {
