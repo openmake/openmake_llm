@@ -11,6 +11,8 @@ jest.mock('../../config/env', () => {
     const actual = jest.requireActual('../../config/env');
     return { ...actual, getConfig: () => ({ ...actual.getConfig(), llmDefaultModel: defaultModel }) };
 });
+let backgroundOk = true;
+jest.mock('../../services/agent-task/background-liveness', () => ({ getBackgroundLiveness: () => ({ ok: backgroundOk, loops: {} }) }));
 
 import { createHealthController, defaultModelListed } from '../health.controller';
 import type { ClusterManager } from '../../cluster/manager';
@@ -24,6 +26,7 @@ function app(stats: { onlineNodes: number; uniqueModels: string[] }) {
 
 beforeEach(() => {
     defaultModel = 'qwen3.8-27b';
+    backgroundOk = true;
     dbQuery = jest.fn(async () => ({ rows: [] }));
 });
 
@@ -64,6 +67,13 @@ describe('GET /ready', () => {
         expect((await request(app({ onlineNodes: 0, uniqueModels: [] })).get('/ready')).status).toBe(503);
         dbQuery = jest.fn(async () => { throw new Error('db down'); });
         expect((await request(app({ onlineNodes: 1, uniqueModels: ['qwen3.8-27b'] })).get('/ready')).status).toBe(503);
+    });
+
+    it('백그라운드 루프(소유권 점검·스케줄·watchdog)가 멈췄으면 503 이고 background 를 함께 돌려준다', async () => {
+        backgroundOk = false;
+        const res = await request(app({ onlineNodes: 1, uniqueModels: ['qwen3.8-27b'] })).get('/ready');
+        expect(res.status).toBe(503);
+        expect(res.body.data.background).toEqual({ ok: false, loops: {} });
     });
 
     it('아무것도 쓰지 않는다 — DB 에는 SELECT 1 만', async () => {

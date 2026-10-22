@@ -336,7 +336,7 @@ class MetricsCollector extends EventEmitter {
         }
         const labelStr = Object.entries(labels)
             .sort(([a], [b]) => a.localeCompare(b))
-            .map(([k, v]) => `${k}="${v}"`)
+            .map(([k, v]) => `${k}="${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`) // Prometheus 텍스트 규칙의 라벨 값 이스케이프
             .join(',');
         return `${name}{${labelStr}}`;
     }
