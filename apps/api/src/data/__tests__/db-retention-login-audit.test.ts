@@ -72,17 +72,21 @@ describe('db-retention — login.succeeded 보존', () => {
 
 describe('db-retention — security.authz_denied 보존(S10)', () => {
     const KEY = 'AUDIT_AUTHZ_DENIED_RETENTION_DAYS';
-    const saved = process.env[KEY];
+    // login.succeeded 기간(ENV_KEY)도 비운다 — CI env 가 0 이면 "DELETE 문장 2개" 기대가 깨진다.
+    const saved = { [KEY]: process.env[KEY], [ENV_KEY]: process.env[ENV_KEY] };
 
     beforeEach(() => {
         mockQuery.mockReset();
         mockQuery.mockResolvedValue({ rowCount: 0, rows: [] });
         delete process.env[KEY];
+        delete process.env[ENV_KEY];
     });
 
-    afterAll(() => {
-        if (saved === undefined) delete process.env[KEY];
-        else process.env[KEY] = saved;
+    afterEach(() => {
+        for (const [k, v] of Object.entries(saved)) {
+            if (v === undefined) delete process.env[k];
+            else process.env[k] = v;
+        }
     });
 
     it('기본 30일이 지난 security.authz_denied 행만 지운다', async () => {

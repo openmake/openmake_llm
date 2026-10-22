@@ -4,7 +4,8 @@
  * 인가 실패·SSRF 차단·도구 인자 차단·승인 자동 거절, BYOK 키·MCP 서버 등록/삭제를 audit_logs 에 남긴다.
  * 거부 지점에서 부르는 헬퍼라 **절대 throw 하지 않는다** — 기록 실패는 warn 로그만 남기고 삼킨다(fail-open).
  *
- * - audit_logs.user_id 는 users FK — 게스트('guest')·빈값은 user_id 없이 넣고 details.actorId 에 원값을 남긴다
+ * - audit_logs.user_id 는 users FK — 게스트('guest')·빈값은 user_id 없이 넣는다. details.actorId 는 손님이면 'guest',
+ *   userId 가 없으면(undefined·null·빈 문자열) 'anonymous' 로 구분한다
  *   (tool-contract/tool-execution-guard 의 auditToolCall 선례).
  * - AuditService 는 동적 import — security 모듈이 서비스 계층을 정적으로 끌어오지 않게 한다(순환 의존 방지).
  *
@@ -56,15 +57,16 @@ export function securityAuditDetails(d: Record<string, unknown>): Record<string,
 export async function auditSecurityEvent(input: SecurityAuditInput): Promise<void> {
     try {
         const rawUid = input.userId !== undefined && input.userId !== null ? String(input.userId) : undefined;
-        const isRealUser = rawUid !== undefined && rawUid !== '' && rawUid !== 'guest';
+        const hasUid = rawUid !== undefined && rawUid !== '';
+        const isRealUser = hasUid && rawUid !== 'guest';
         // actorId 는 캡 뒤에 얹는다 — 호출부 details 가 덮어쓰거나 키 상한에 밀려 빠지지 않게.
-        const details = { ...securityAuditDetails(input.details ?? {}), actorId: rawUid ?? 'guest' };
+        const details = { ...securityAuditDetails(input.details ?? {}), actorId: hasUid ? rawUid : 'anonymous' };
         const { getAuditService } = await import('../services/AuditService');
         await getAuditService().logAudit({
             action: input.action,
             userId: isRealUser ? rawUid : undefined,
             resourceType: input.resourceType,
-            resourceId: input.resourceId,
+            resourceId: input.resourceId !== undefined ? capText(input.resourceId, DETAIL_TEXT_MAX_CHARS) : undefined,
             details,
             ipAddress: input.ipAddress,
             userAgent: input.userAgent,

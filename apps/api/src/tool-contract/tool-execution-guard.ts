@@ -89,12 +89,15 @@ function sanitizeToolArgs(args: Record<string, unknown>, toolName: string): Reco
 /** 인자 차단 감사(S10, fire-and-forget) — 값은 넣지 않는다(키 이름·사유·인자 해시만). */
 function auditBlockedArgs(toolName: string, args: Record<string, unknown>, context: UserContext, error: unknown): void {
     if (!(error instanceof BlockedArgError)) return;
+    // 순환 참조·BigInt 인자는 해시가 동기 throw — 차단 응답(isError)이 reject 로 바뀌지 않게 막는다.
+    let argsHash: string;
+    try { argsHash = hashToolArgs(args); } catch { argsHash = 'unhashable'; }
     void auditSecurityEvent({
         action: 'security.tool_args_blocked',
         userId: context.userId,
         resourceType: toolName.includes('::') ? 'mcp_external_tool' : 'mcp_builtin_tool',
         resourceId: toolName,
-        details: { reason: error.reason, key: error.key, argsHash: hashToolArgs(args), role: context.role },
+        details: { reason: error.reason, key: error.key, argsHash, role: context.role },
     }).catch(() => undefined);
 }
 
