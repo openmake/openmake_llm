@@ -39,18 +39,21 @@ export class AgentTaskProgressRepository extends BaseRepository {
         return updated;
     }
 
-    /** 진행이 staleMs 보다 오래 멈춘 실행 중 작업 — 주차·살아 있는 승인 대기는 기다리는 중이라 뺀다. 오래 멈춘 순 */
+    /**
+     * 진행이 staleMs 보다 오래 멈춘 실행 중 작업 — 주차·살아 있는 승인 대기는 기다리는 중이라 뺀다. 오래 멈춘 순.
+     * 기준은 last_progress_at 과 updated_at 중 늦은 쪽 — 재개 직후(다음 flush 전)엔 상태 전이가 올린 updated_at 이 옛 진행 시각을 이긴다.
+     */
     async listStaleRunningTasks(staleMs: number, limit = 50): Promise<StaleTaskRow[]> {
         try {
             const r = await this.query<Omit<StaleTaskRow, 'stalled_ms'> & { stalled_ms: string | number }>(
                 `SELECT t.id, t.user_id, t.current_turn, t.lease_owner,
-                        (EXTRACT(EPOCH FROM (NOW() - COALESCE(t.last_progress_at, t.updated_at))) * 1000)::bigint AS stalled_ms
+                        (EXTRACT(EPOCH FROM (NOW() - GREATEST(COALESCE(t.last_progress_at, to_timestamp(0)), t.updated_at))) * 1000)::bigint AS stalled_ms
                  FROM agent_tasks t
                  WHERE t.status = 'running'
                    AND NOT (${parkedTaskCondition('t')})
                    AND NOT EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status = 'pending' AND a.expires_at > NOW())
-                   AND COALESCE(t.last_progress_at, t.updated_at) < NOW() - make_interval(secs => $1 / 1000.0)
-                 ORDER BY COALESCE(t.last_progress_at, t.updated_at) ASC LIMIT $2`,
+                   AND GREATEST(COALESCE(t.last_progress_at, to_timestamp(0)), t.updated_at) < NOW() - make_interval(secs => $1 / 1000.0)
+                 ORDER BY GREATEST(COALESCE(t.last_progress_at, to_timestamp(0)), t.updated_at) ASC LIMIT $2`,
                 [staleMs, limit]);
             return r.rows.map((row) => ({ ...row, stalled_ms: Number(row.stalled_ms) })); // pg 는 bigint 를 문자열로 준다
         } catch (err) {

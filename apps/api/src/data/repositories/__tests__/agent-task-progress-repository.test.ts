@@ -48,7 +48,9 @@ describe('AgentTaskProgressRepository', () => {
         expect(sql).toContain('agent_task_approvals');
         expect(sql).toContain('expires_at > NOW()');
         expect(sql).toContain('make_interval');
-        expect(sql).toContain('COALESCE(t.last_progress_at, t.updated_at)');
+        // 재개 직후(다음 flush 전)엔 상태 전이가 올린 updated_at 이 옛 last_progress_at 을 이긴다 — 조건·정렬·stalled_ms 모두 같은 식
+        expect(sql.split('GREATEST(COALESCE(t.last_progress_at, to_timestamp(0)), t.updated_at)')).toHaveLength(4);
+        expect(sql).not.toContain('COALESCE(t.last_progress_at, t.updated_at)');
         expect(calls[0].params).toEqual([900_000, 50]);
     });
 
