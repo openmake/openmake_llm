@@ -221,7 +221,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                         p.onPausedMs?.(r.waitedMs);
                         if (r.decision !== 'approved') return getApprovalRejectedNotice(name, r.reason, r.text);
                     }
-                    return runTool(mcp, name, args, p.userCtx);
+                    return runTool(mcp, name, args, p.userCtx, undefined, p.signal);
                 },
                 { path: 'subagent', ...(p.signal ? { signal: p.signal } : {}) },
             );
@@ -258,7 +258,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                     rejected = r;
                 }
                 const toolResult = approved
-                    ? await runTool(mcp, name, args, p.userCtx)
+                    ? await runTool(mcp, name, args, p.userCtx, undefined, p.signal)
                     : getApprovalRejectedNotice(name, rejected.reason, rejected.text);
                 p.trace?.record('tool_result', toolResult, name);
                 conversation.push({ role: 'tool', content: toolResult, tool_name: name, tool_call_id: tc.id });

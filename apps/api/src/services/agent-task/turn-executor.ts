@@ -164,7 +164,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             : result;
     // 호스트·외부 도구 호출 — 공통 시간 상한을 걸고, 중단 신호가 오면 호출이 끝나기를 기다리지 않는다(tool-call-cap).
     const execTool = (name: string, args: Record<string, unknown>): Promise<string> => runWithToolCallCap(
-        () => runWithToolMediaSink(toolMediaSinkFor(taskRuntime), () => getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx, taskRuntime?.spillLargeResult))),
+        () => runWithToolMediaSink(toolMediaSinkFor(taskRuntime), () => getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx, taskRuntime?.spillLargeResult, signal))),
         {
             capMs: AGENT_TASK_TURN_LOOP.TOOL_CALL_TIMEOUT_MS, signal, isWaitingForUser: () => waitingForUser > 0,
             onTimeout: () => { logger.warn(`[AgentTask] 도구 호출 시간 상한 초과: ${taskId} — ${name}`); return getToolCallTimeoutResult(name, AGENT_TASK_TURN_LOOP.TOOL_CALL_TIMEOUT_MS); },

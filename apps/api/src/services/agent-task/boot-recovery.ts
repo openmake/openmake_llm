@@ -42,12 +42,14 @@ async function recoverTask(
     task: AgentTask,
     db: ReturnType<typeof getUnifiedDatabase>,
     taskRepo: AgentTaskRepository,
+    lease: { owner: string; leaseMs: number } | undefined,
 ): Promise<'resumed' | 'failed' | 'skipped' | 'parked'> {
     const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;
     const hasCheckpoint = !!cp && Array.isArray(cp.conversation) && cp.conversation.length > 0;
     // 'queued' 는 인메모리 대기열에 있다가 재시작으로 증발한 것 — 시작한 적이 없으니
     // checkpoint 도 없다. 처음부터 다시 디스패치한다(로컬 실행은 아래 규칙대로 보류).
-    const wasQueued = task.status === 'queued';
+    // 체크포인트 없는 pending(소유권 있는 claim 고아)도 같다 — 대기·처음부터 재개를 claim 한 뒤 running 전에 죽은 것이다(2026-10-22 R2).
+    const wasQueued = task.status === 'queued' || (task.status === 'pending' && !hasCheckpoint);
     if (!hasCheckpoint && !wasQueued) {
         // 재개 지점이 없음. restart 마킹(failed)은 이미 정리된 상태이므로 건드리지 않고,
         // 잔존 running/paused 만 실패(interrupted)로 정리(완료 오표시·영구 polling 방지).
@@ -63,11 +65,11 @@ async function recoverTask(
     // 종전대로 failed(interrupted)로 정리해 사용자가 디바이스 재연결 후 /resume 으로 수동 재개하게 한다.
     const parkLocal = task.executor === 'local' && LOCAL_BRIDGE.ENABLED && LOCAL_BRIDGE.DEVICE_WAIT_ENABLED;
     if (task.executor === 'local' && !parkLocal) {
-        if (task.status === 'running' || task.status === 'paused' || wasQueued) {
+        if (task.status === 'running' || task.status === 'paused' || task.status === 'pending' || wasQueued) {
             await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted_local_device', terminalNotifyPending: true });
             logger.info(`[BootRecovery] 로컬 실행 작업 자동재개 보류 → failed(디바이스 재연결 후 수동 resume): ${task.id}`);
         }
-        return task.status === 'running' || task.status === 'paused' || wasQueued ? 'failed' : 'skipped';
+        return task.status === 'running' || task.status === 'paused' || task.status === 'pending' || wasQueued ? 'failed' : 'skipped';
     }
 
     // 이 프로세스의 큐에 이미 있으면(조회 뒤 /execute·/resume 가 먼저 제출) 건드리지 않는다 — claim 하면 디스패치는
@@ -76,8 +78,9 @@ async function recoverTask(
 
     // 진행 없이 되풀이되는 복구 끊기 — 작업 하나가 프로세스를 죽이면(메모리 한도 재시작 등) 재시작 → 자동 재개 → 다시 죽음이 끝없이 돈다.
     // 새 턴 체크포인트 없이 상한만큼 복구된 작업은 더 재개하지 않고 닫는다(체크포인트는 남아 사용자가 이어 할 수 있다).
-    // 실행한 적 없는 대기(queued) 재제출은 해당 없다. 횟수 조회 실패는 복구를 막지 않는다.
-    if (!wasQueued && await recoveryLimitReached(task.id)) {
+    // 실행한 적 없는 대기(queued) 재제출은 해당 없다 — 체크포인트 없는 pending 고아는 센다(claim → running 전 죽음이 끝없이 돌지 않게, R2).
+    // 횟수 조회 실패는 복구를 막지 않는다.
+    if (task.status !== 'queued' && await recoveryLimitReached(task.id)) {
         if (!(await new AgentTaskRunRepository(getPool()).failRecoveryLimit(task.id, task.status))) return 'skipped';
         logger.warn(`[BootRecovery] 진행 없는 복구가 ${AGENT_TASK_LIMITS.RECOVERY_MAX_ATTEMPTS}회 되풀이됨 → 자동 재개 중단(recovery_limit): ${task.id}`);
         return 'failed';
@@ -100,7 +103,8 @@ async function recoverTask(
 
     // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀. 읽을 때의 상태를 넘긴다: 위 확인은 이미
     // 디스패치된 것만 잡으므로, 목록을 읽은 뒤 /execute·/resume 가 claim 만 하고 아직 디스패치 전인 행(queued)도 여기서 걸러야 한다.
-    const claimed = await taskRepo.claimAgentTaskForRecovery(task.id, task.status);
+    // 소유권도 같은 문장에서 쓴다 — claim 과 running 사이에서 죽어도 pending 고아로 남지 않고 소유권 점검·부팅 복구가 다시 잡는다(2026-10-22 R2).
+    const claimed = await taskRepo.claimAgentTaskForRecovery(task.id, task.status, lease);
     if (!claimed) return 'skipped';
 
     const role = await resolveUserRole(db, task.user_id);
@@ -160,11 +164,12 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
     const taskRepo = new AgentTaskRepository(getPool());
 
     let interrupted;
+    let lease = AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined;
     try {
         const windowMs = AGENT_TASK_LIMITS.BOOT_RECOVERY_WINDOW_MS;
-        // 소유권(176)이 켜져 있으면 다른 서버의 실행 중 작업을 뺀다. 컬럼이 아직 없으면(176 적용 전) 종전 조회로 다시 시도한다.
-        interrupted = AGENT_TASK_LIMITS.LEASE_ENABLED
-            ? await taskRepo.getInterruptedAgentTasks(windowMs, leaseOwner()).catch(() => taskRepo.getInterruptedAgentTasks(windowMs))
+        // 소유권(176)이 켜져 있으면 다른 서버의 실행 중 작업을 뺀다. 컬럼이 아직 없으면(176 적용 전) 종전 조회로 다시 시도하고, claim 도 소유권 없이 한다.
+        interrupted = lease
+            ? await taskRepo.getInterruptedAgentTasks(windowMs, lease.owner).catch(() => { lease = undefined; return taskRepo.getInterruptedAgentTasks(windowMs); })
             : await taskRepo.getInterruptedAgentTasks(windowMs);
     } catch (e) {
         logger.warn(`[BootRecovery] 중단 task 조회 실패 — 건너뜀: ${e instanceof Error ? e.message : e}`);
@@ -177,7 +182,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
     let failed = 0;
     for (const task of interrupted) {
         try {
-            const outcome = await recoverTask(task, db, taskRepo);
+            const outcome = await recoverTask(task, db, taskRepo, lease);
             if (outcome === 'resumed') resumed++;
             else if (outcome === 'failed') failed++;
         } catch (e) {
@@ -189,7 +194,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
 }
 
 /**
- * 지난 소유권 점검(176, 주기) — 실행 중(running·paused, 주차 제외)인데 소유권이 지난 작업은 그 서버가 죽은 것이다.
+ * 지난 소유권 점검(176, 주기) — 실행 중(running·paused, 주차 제외)이거나 claim 중(pending)인데 소유권이 지난 작업은 그 서버가 죽은 것이다.
  * 소유권을 원자적으로 가져온 뒤 부팅 복구와 같은 규칙으로 이어 실행한다. 이 프로세스가 실행 중인 작업은 건너뛴다
  * (연장이 잠깐 밀렸을 뿐 — 다음 연장이 소유권을 되살린다). 절대 throw 하지 않는다.
  */
@@ -213,7 +218,7 @@ export async function sweepExpiredTaskLeases(): Promise<{ resumed: number; faile
             if (AgentTaskService.isRunning(task.id)) continue;
             if (!(await leaseRepo.takeOverExpiredLease(task.id, leaseOwner(), AGENT_TASK_LIMITS.LEASE_MS))) continue;
             logger.info(`[LeaseSweep] 소유권이 지난 작업을 가져옴: ${task.id} (이전 소유자 ${task.lease_owner ?? '-'})`);
-            const outcome = await recoverTask(task, db, taskRepo);
+            const outcome = await recoverTask(task, db, taskRepo, { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS });
             if (outcome === 'resumed') out.resumed++;
             else if (outcome === 'failed') out.failed++;
         } catch (e) {
