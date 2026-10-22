@@ -38,6 +38,7 @@ import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunI
 import { parkForMissingDevice } from './agent-task/device-wait';
 import { parkForModelOutage } from './agent-task/model-wait';
 import { isInternalOnlyRun } from '../config/internal-only-policy';
+import { touchProgress, clearProgress } from './agent-task/progress-tracker';
 import { auditInternalOnly } from './agent-task/internal-only-audit';
 import { partialResultOf } from './agent-task/turn-call';
 import { injectTaskInputs } from './agent-task/task-inputs';
@@ -107,6 +108,7 @@ export class AgentTaskService {
     async execute(input: AgentTaskRunInput): Promise<void> { return trackAgentTaskRun(this, input.taskId, () => this.runLoop(input)); } // 종료 중이면 시작하지 않는다
     private async runLoop(input: AgentTaskRunInput): Promise<void> {
         const { taskId, goal, userId, userRole, maxTurns, allowedSkills } = input;
+        touchProgress(taskId); // 마지막 진행 시각(191, R8) — 실행 시작도 진행이다
         const db = getUnifiedDatabase();
         const mcp = getToolRuntime();
         const signal = this.abortController.signal;
@@ -161,6 +163,7 @@ export class AgentTaskService {
         let leaseLost = false; // 소유권을 잃음(176) — 다른 서버가 가져갔다. 이후로는 상태를 쓰지 않는다(새 소유자의 것)
         const update = async (u: Parameters<typeof db.updateAgentTask>[1]): Promise<void> => {
             if (leaseLost) return;
+            touchProgress(taskId);
             curStatus = (u.status ?? curStatus) as string;
             curProgress = u.progress ?? curProgress;
             curTurn = u.currentTurn ?? curTurn;
@@ -514,7 +517,7 @@ export class AgentTaskService {
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             if (AgentTaskService.running.get(taskId) === this) AgentTaskService.running.delete(taskId); // 내 등록일 때만 — 다른 인스턴스 것을 지우지 않는다
-            await lease.end();
+            await lease.end(); clearProgress(taskId); // 끝난 실행의 쓰지 않은 진행은 버린다(R8)
             // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup. 소유권을 잃었으면 새 소유자가 쓰고 있어 건너뛴다.
             if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber, interrupted, keepWorkspace: continuedToSuccessor });
         }

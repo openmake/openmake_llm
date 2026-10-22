@@ -297,6 +297,8 @@ export const AGENT_TASK_LIMITS = {
     LEASE_MS: parseInt(process.env.AGENT_TASK_LEASE_MS || '', 10) || 60_000,
     /** 지난 소유권 점검 주기(ms). AGENT_TASK_LEASE_SWEEP_MS(기본 30초) */
     LEASE_SWEEP_MS: parseInt(process.env.AGENT_TASK_LEASE_SWEEP_MS || '', 10) || 30_000,
+    /** 마지막 진행 시각(191, R8)을 메모리에서 DB 로 쓰는 주기(ms). AGENT_TASK_PROGRESS_FLUSH_MS(기본 20초) */
+    PROGRESS_FLUSH_MS: parseInt(process.env.AGENT_TASK_PROGRESS_FLUSH_MS || '', 10) || 20_000,
     /** 부팅 복구 인정 window(ms) — '이번 재시작'으로 마킹된 task 만 자동 resume 하고, 과거
      *  재시작이 남긴 오래된 failed('server restarted') 는 건드리지 않는다(수동 resume 대상).
      *  AGENT_TASK_BOOT_RECOVERY_WINDOW_MS 로 오버라이드(기본 15분). */
