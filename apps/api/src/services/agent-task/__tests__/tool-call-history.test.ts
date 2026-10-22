@@ -96,6 +96,7 @@ describe('finishedToolCalls', () => {
     it.each([
         ['Error: 로 시작', 'Error: ENOENT', true],
         ['<tool_output> 래퍼 안의 Error:', '<tool_output>\nError: denied\n</tool_output>', true],
+        ['출처 태그 래퍼 안의 Error:', '<tool_output tool="web_search">\nError: denied\n</tool_output>', true],
         ['접힌 스텁 둘째 줄의 Error:', `${FOLD_MARKER} write_file 결과 접힘\nError: disk full`, true],
         ['접힌 스텁 + 래퍼', `${FOLD_MARKER} x\n<tool_output>Error: y`, true],
         ['소문자 error:', 'error: lowercase', false],

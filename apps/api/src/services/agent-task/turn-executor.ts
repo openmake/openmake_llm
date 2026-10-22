@@ -14,7 +14,7 @@ import { TASK_TERMINATE_SENTINEL } from '../task-sandbox/tools';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { currentPlanStepIndex } from '../task-sandbox/planning';
 import { runTool, isSearchTool } from './task-steps';
-import { wrapUntrustedToolResult } from './tool-result-wrap';
+import { toolOutputSource, wrapUntrustedToolResult } from './tool-result-wrap';
 import { prepareToolArgs } from './tool-args';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import { notifyApprovalPending } from './approval-pending';
@@ -159,9 +159,10 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         return r.reason === 'user' ? getAgentTaskUnknownOutcomeDeclinedNotice(name, cause) : getAgentTaskUnknownOutcomeNotice(name);
     };
     // 모델에 보이는 도구 결과 — 샌드박스 밖에서 온 결과(호스트·외부 도구)와 browser 는 데이터로 감싼다(플래그 ON·목표가 있을 때만).
-    const forModel = (name: string, result: string): string =>
+    // 출처 태그(tool·server·url)는 호출 이름·인자에서 만든다(toolOutputSource).
+    const forModel = (name: string, args: Record<string, unknown>, result: string): string =>
         AGENT_TASK_LIMITS.TOOL_RESULT_WRAP_ENABLED && input.goal && (name === 'browser' || !taskRuntime?.isTaskTool(name))
-            ? wrapUntrustedToolResult(result, input.goal)
+            ? wrapUntrustedToolResult(result, input.goal, toolOutputSource(name, args))
             : result;
     // 호스트·외부 도구 호출 — 공통 시간 상한을 걸고, 중단 신호가 오면 호출이 끝나기를 기다리지 않는다(tool-call-cap).
     const execTool = (name: string, args: Record<string, unknown>): Promise<string> => runWithToolCallCap(
@@ -249,7 +250,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         touchProgress(taskId); // 도구 실행 직전 — 긴 도구 호출을 멈춤으로 오판하지 않게(191, R8)
         if (journaled !== undefined) {
             // 저널 재사용(124) — 결과는 이미 스텝에 있으므로 대화에만 싣고 스텝·체크포인트는 건너뛴다.
-            conversation.push({ role: 'tool', content: forModel(name, journaled), tool_name: name, tool_call_id: tc.id });
+            conversation.push({ role: 'tool', content: forModel(name, args, journaled), tool_name: name, tool_call_id: tc.id });
             continue;
         } else if (unknownResult !== undefined) {
             toolResult = unknownResult;
@@ -317,10 +318,10 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         // 서버 종료로 끊긴 호출의 결과(중단 오류·승인 자동 거절)는 저널에 남기지 않는다 — 남기면 재개가 그것을 실제 결과로 읽는다.
         // 비정상 종료와 같이 둔다: 재개 때 읽기 호출은 다시 실행하고, 부작용 호출은 실행 중 표식으로 결과 불명 처리된다.
         if (isShutdownAbort(signal)) throw new AgentTaskAbort('aborted');
-        if (loop && !loop.block && !cycle?.block) toolResult += loop.noteFor(toolResult) || cycle!.noteFor(forModel(name, toolResult)) || rereadNote(conversation, name, args, toolResult);
+        if (loop && !loop.block && !cycle?.block) toolResult += loop.noteFor(toolResult) || cycle!.noteFor(forModel(name, args, toolResult)) || rereadNote(conversation, name, args, toolResult);
         conversation.push({
             role: 'tool',
-            content: forModel(name, toolResult),
+            content: forModel(name, args, toolResult),
             tool_name: name,
             tool_call_id: tc.id,
         });
