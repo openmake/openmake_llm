@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.111.0](https://github.com/openmake/openmake_llm/compare/v1.110.0...v1.111.0) (2026-10-22)
+
+
+### ✨ 기능
+
+* **agent-task:** readiness checks background loops; add agent_task.run/turn spans (R9) ([da52ef9](https://github.com/openmake/openmake_llm/commit/da52ef9c988635f538ced7d866a73581f2b7f1db))
+* **agent-task:** record last_progress_at via in-memory tracker and periodic flush (R8) ([7068fe3](https://github.com/openmake/openmake_llm/commit/7068fe386cd77b019cd74d84b05a91f8f6dd6138))
+* **agent-task:** stale/queue/model-wait watchdog and five agent-task alert kinds (R8, R9) ([b886618](https://github.com/openmake/openmake_llm/commit/b88661860d9e5efecaa679293052da2f5b64f8ef))
+* **monitoring:** expose in-memory metrics as Prometheus text at /metrics behind token or admin (R9) ([6201367](https://github.com/openmake/openmake_llm/commit/620136787b32dd470db517eb0fc5f23b16348747))
+* **observability:** W2 — progress watchdog, agent-task alerts, /metrics, readiness, spans (R8, R9) ([c7b9b44](https://github.com/openmake/openmake_llm/commit/c7b9b44c1b3b217fe3ce2aa0475a9ea15f278a7b))
+* **security:** audit authz denials, SSRF blocks, blocked tool args and auto-rejected approvals (S10) ([bc9c321](https://github.com/openmake/openmake_llm/commit/bc9c321beff92713e21a69b0ffd4ec91d027e65b))
+* **security:** audit BYOK key set/delete and MCP server create/delete/denied; retention for authz_denied (S10) ([42414be](https://github.com/openmake/openmake_llm/commit/42414be388448374e606288203a47b51f8209c03))
+* **security:** register security audit actions, shared args hash, non-throwing security audit helper (S10) ([cf47733](https://github.com/openmake/openmake_llm/commit/cf4773332a1369c69f11bb3c1c565cccf88c11e7))
+* **security:** W2 — audit security denials, BYOK and MCP server changes (S10) ([f43686e](https://github.com/openmake/openmake_llm/commit/f43686e59f80a0ad6d421c17d5db53e7d95362a5))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** chat sub-agents skip the approval gate explicitly; S1 docs ([bf58445](https://github.com/openmake/openmake_llm/commit/bf58445baac4ed3c1de0b692a1c6938aad519876))
+* **agent-task:** device-park and recovery-limit also handle leased pending rows (R2) ([907930f](https://github.com/openmake/openmake_llm/commit/907930fa78d581133ccf933f170a4e3ba4c152ce))
+* **agent-task:** keep recovery limit for leased pending rows; park resume falls back without lease (R2) ([f01dee3](https://github.com/openmake/openmake_llm/commit/f01dee32f216cb6806dfb1c8a038ece662470741))
+* **agent-task:** lease claimed pending rows so recovery and lease sweep pick up orphans (R2) ([e4b1da2](https://github.com/openmake/openmake_llm/commit/e4b1da25b54a455d041e6e207ab9513f38a472ad))
+* **agent-task:** redispatch orphaned pending successor instead of treating it as alive (R3) ([1cc8a98](https://github.com/openmake/openmake_llm/commit/1cc8a986dde0df9d2a21e576134f25c283bf0ce3))
+* **agent-task:** reject approval-floor calls under policy none (S1) ([336cf52](https://github.com/openmake/openmake_llm/commit/336cf529c32db41d8344bd63e1544fc3213d6794))
+* **agent-task:** touch progress only after lease; stale query uses newest of progress/updated_at (R8) ([3a00b69](https://github.com/openmake/openmake_llm/commit/3a00b69b290feedc3e838726e752871cd9c84a7f))
+* **agent-task:** W1 close gaps — leased pending orphans, successor liveness, abort signal to MCP ([5bc6618](https://github.com/openmake/openmake_llm/commit/5bc66184aa5b0830c1ea35cfa5165c917c3c909a))
+* **auth:** API key auth rejects inactive key owner (S5) ([4a5786f](https://github.com/openmake/openmake_llm/commit/4a5786f0dcc42888fae0eead18c6978435f0e403))
+* **auth:** API-key auth treats NULL is_active as inactive (S5) ([75022aa](https://github.com/openmake/openmake_llm/commit/75022aaa6623f5513ba45e999d711bdefb58d744))
+* **ci:** cover mcp-catalog.routes audit wiring and check related tests on PRs ([1204ccb](https://github.com/openmake/openmake_llm/commit/1204ccb89d0056fc6279831dfe63a42cf4cbd895))
+* **ci:** skip non-source files under apps/api/src in changed-feature checks ([c0c4e40](https://github.com/openmake/openmake_llm/commit/c0c4e40368b99a88e82fa83f8200c77f333aa5f1))
+* **ci:** skip non-source files under apps/api/src in changed-feature checks ([ceadb6d](https://github.com/openmake/openmake_llm/commit/ceadb6d038bff09a1e4cb79fc1320ac424fd815c))
+* **ci:** skip non-source files under packages/ in changed-feature selection ([83e54db](https://github.com/openmake/openmake_llm/commit/83e54db7f70e290fe48031e1dc91228cc7639955))
+* **ci:** skip non-source files under packages/ in changed-feature selection ([a647093](https://github.com/openmake/openmake_llm/commit/a6470930db4245c78f96ccd089d902022f49c657))
+* **mcp:** propagate AbortSignal from agent task loop to external MCP tool calls (R4) ([52f10b5](https://github.com/openmake/openmake_llm/commit/52f10b5804d2ee4e410f08fbfd43abcf7bedc7db))
+* **mcp:** route MCP server audit through runtime-ports/audit-port (add-on boundary) ([a079ee4](https://github.com/openmake/openmake_llm/commit/a079ee42c13b4cf204fde8d5553418fad954d6f0))
+* **monitoring:** recovery_limit alert bypasses type-level cooldown so every task is reported (R9) ([7769d7e](https://github.com/openmake/openmake_llm/commit/7769d7ea0bcc94e3300b0428a7ef7ecce08da977))
+* **observability:** stale threshold 30m with pre-tool touch, escape Prometheus labels, window gauges for summaries, drop unused index (R8, R9) ([814c6b5](https://github.com/openmake/openmake_llm/commit/814c6b5267e828262fa452a203e950f9571ca8a2))
+* **security:** audit URL rejections as ssrf_blocked only for SSRF guard errors (S10) ([cde4005](https://github.com/openmake/openmake_llm/commit/cde4005c4f502b2447f952bd1162735dcbef2ae9))
+* **security:** distinguish anonymous actor, cap resourceId, guard args hash; add MCP route audit wiring tests (S10) ([5113fe0](https://github.com/openmake/openmake_llm/commit/5113fe0b167b76b7bf8481e1affadc1c49728ae3))
+* **security:** escape webhook payload tag, widen spawn env denylist, guard guest session meta (S12) ([d286464](https://github.com/openmake/openmake_llm/commit/d286464e3ededa41c1dcd2b7c01a17579d8ead49))
+* **security:** graceful callers use tryDecryptToken (S9 follow-up) ([3d49211](https://github.com/openmake/openmake_llm/commit/3d49211447b7850e8cacc451b0020c859f9c395b))
+* **security:** token crypto fails closed outside dev/test (S9) ([03dc8a9](https://github.com/openmake/openmake_llm/commit/03dc8a98d18b136b12e4a25bd072d011619d277d))
+* **security:** W1 close gaps — approval floor under none, inactive API-key owner, token crypto fail-closed, S12 ([b36bc41](https://github.com/openmake/openmake_llm/commit/b36bc418c7ffdb61065c42735307866bd4b6f8db))
+
 ## [1.110.0](https://github.com/openmake/openmake_llm/compare/v1.109.1...v1.110.0) (2026-10-22)
 
 
