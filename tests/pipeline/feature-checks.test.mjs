@@ -153,3 +153,27 @@ test('the two exact MCP monitoring shared-type files select the web suite, not r
   assert.deepEqual(selectFeatures(['packages/shared-types/src/new-contract.ts']).api, ['packages/shared-types/src/new-contract.ts']);
   assert.equal(selectFeatures(['packages/shared-types/src/new-contract.ts']).web, false);
 });
+
+// PR CI selection: the same "related Jest tests must exist" rule as merged dev, without running anything.
+test('selectRelatedTests requires related Jest tests per API source and never lists for docs', async () => {
+  const { selectRelatedTests } = await import('../../scripts/ci/feature-checks.mjs');
+  const source = 'apps/api/src/llm/client.ts';
+  assert.throws(() => selectRelatedTests([source], { listRelated: () => [] }), /No related Jest tests for apps\/api\/src\/llm\/client\.ts/);
+  const related = '/repo/apps/api/src/llm/__tests__/client.test.ts';
+  const selected = selectRelatedTests([source], { listRelated: file => (assert.equal(file, source), [related]) });
+  assert.deepEqual(selected.related.get(source), [related]);
+  assert.equal(selected.tests.has(related), true);
+  let calls = 0;
+  const docs = selectRelatedTests(['README.md'], { listRelated: () => { calls += 1; return []; } });
+  assert.equal(calls, 0);
+  assert.deepEqual(docs.selection.api, []);
+});
+
+test('--select-only refuses a SHA that is not the checkout HEAD', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const result = spawnSync(process.execPath, ['scripts/ci/feature-checks.mjs', '--select-only', '0'.repeat(40)], { cwd: root, env: childEnv, encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Tested SHA differs from checkout HEAD/);
+});
