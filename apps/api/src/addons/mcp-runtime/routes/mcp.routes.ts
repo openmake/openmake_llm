@@ -47,6 +47,7 @@ import { connectGlobalServer } from './mcp-global-connect';
 import { renameMcpServer } from './mcp-server-rename';
 import { getAuditService } from '../../../services/AuditService';
 import { validateOutboundUrl } from '../../../security/ssrf-guard';
+import { auditMcpServerCreated, auditMcpServerDeleted, auditMcpDeleteDenied, auditMcpRegisterDenied, auditMcpUrlBlocked, urlHost } from './mcp-server-audit';
 
 const logger = createLogger('McpRoutes');
 
@@ -197,6 +198,7 @@ export const mcpRouter = Router();
 
       const check = canRegisterServer(actor, { visibility, catalog_template_id });
       if (!check.allowed) {
+          auditMcpRegisterDenied(req, check.reason, { visibility });
           res.status(403).json(forbidden(check.reason));
           return;
       }
@@ -206,6 +208,7 @@ export const mcpRouter = Router();
       // 템플릿에서만 취하는 POST /api/mcp/servers/from-catalog 로만 등록해야 한다. 이 레거시 라우트는
       // admin 이 관리하는 global 서버 등록 전용으로 제한한다.
       if (visibility !== 'global') {
+          auditMcpRegisterDenied(req, 'non_global_on_legacy_route', { visibility });
           res.status(403).json(forbidden(
               '사용자 서버(user_private/user_shared)는 POST /api/mcp/servers/from-catalog 로 등록하세요 (임의 stdio command 금지)',
           ));
@@ -217,6 +220,7 @@ export const mcpRouter = Router();
           try {
               await validateOutboundUrl(url);
           } catch (e) {
+              auditMcpUrlBlocked(req, urlHost(url), e instanceof Error ? e.message : String(e));
               res.status(400).json(badRequest(`URL 거부: ${e instanceof Error ? e.message : String(e)}`));
               return;
           }
@@ -241,6 +245,7 @@ export const mcpRouter = Router();
       // 여기 도달하면 visibility === 'global' (admin) — 즉시 spawn(connect 포함).
       const status = await registry.registerServer(config, new McpServerRepository(db.getPool()));
 
+      auditMcpServerCreated(req, { id, name: config.name, source: 'manual' });
       res.status(201).json(success({ server: config, connectionStatus: status }));
   }));
 
@@ -258,6 +263,7 @@ export const mcpRouter = Router();
           return;
       }
       if (!canDeleteServer(actor, server)) {
+          auditMcpDeleteDenied(req, id);
           res.status(403).json(forbidden('해당 서버를 삭제할 권한이 없습니다'));
           return;
       }
@@ -275,6 +281,7 @@ export const mcpRouter = Router();
       await registry.unregisterServer(id, new McpServerRepository(db.getPool()));
       // 서버별 캐시 볼륨도 치운다 — 컨테이너가 내려가는 동안 재시도하므로 응답을 기다리게 하지 않는다.
       void removeSandboxCacheVolume(id).then((removed) => { if (removed) logger.info(`MCP 캐시 볼륨 제거: ${id}`); });
+      auditMcpServerDeleted(req, { id, name: server.name });
       res.json(success({ deleted: true }));
   }));
 

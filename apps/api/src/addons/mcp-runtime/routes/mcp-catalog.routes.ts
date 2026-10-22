@@ -22,6 +22,7 @@ import { getUnifiedMCPClient } from '../index';
 import { connectGlobalServer } from './mcp-global-connect';
 import { createLogger } from '../../../utils/logger';
 import { McpCatalogInputError } from '../../../security/spawn-env-policy';
+import { auditMcpServerCreated, auditMcpRegisterDenied } from './mcp-server-audit';
 
 const logger = createLogger('McpCatalogRoutes');
 
@@ -54,6 +55,7 @@ mcpCatalogRouter.post(
         // 조직 허용 서버 목록(129) — 활성 조직이 MCP_ALLOWED_SERVERS 를 두면 목록 밖 템플릿 설치를 막는다.
         const { mcpAllowedServers } = await resolveEffectivePolicy(userId);
         if (mcpAllowedServers && !mcpAllowedServers.includes(payload.template_id)) {
+            auditMcpRegisterDenied(req, 'org_policy', { templateId: payload.template_id });
             res.status(403).json(forbidden('조직 정책으로 허용되지 않은 MCP 서버입니다.'));
             return;
         }
@@ -63,6 +65,7 @@ mcpCatalogRouter.post(
             catalog_template_id: payload.template_id,
         });
         if (!check.allowed) {
+            auditMcpRegisterDenied(req, check.reason, { templateId: payload.template_id, visibility: payload.visibility });
             res.status(403).json(forbidden(check.reason));
             return;
         }
@@ -75,6 +78,7 @@ mcpCatalogRouter.post(
             throw e;
         }
         logger.info(`from-catalog 등록: ${created.id} (template=${template.id}, user=${actor.id})`);
+        auditMcpServerCreated(req, { id: created.id, name: created.name, source: 'catalog' });
 
         // 설치 즉시 spawn — auto_spawn 서버를 바로 풀에 연결해 재로그인/다음 채팅을 기다리지 않고
         // LLM 도구로 사용 가능하게 한다(완전 통합). best-effort: spawn 실패해도 등록은 유지되며

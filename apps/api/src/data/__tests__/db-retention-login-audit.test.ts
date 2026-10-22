@@ -21,7 +21,11 @@ async function runOnce(): Promise<Array<[string, unknown[] | undefined]>> {
 }
 
 function auditDeletes(calls: Array<[string, unknown[] | undefined]>): Array<[string, unknown[] | undefined]> {
-    return calls.filter(([sql]) => /DELETE\s+FROM\s+audit_logs/i.test(sql));
+    return calls.filter(([sql]) => /DELETE\s+FROM\s+audit_logs/i.test(sql) && /'login\.succeeded'/.test(sql));
+}
+
+function authzDeniedDeletes(calls: Array<[string, unknown[] | undefined]>): Array<[string, unknown[] | undefined]> {
+    return calls.filter(([sql]) => /DELETE\s+FROM\s+audit_logs/i.test(sql) && /'security\.authz_denied'/.test(sql));
 }
 
 describe('db-retention — login.succeeded 보존', () => {
@@ -63,5 +67,42 @@ describe('db-retention — login.succeeded 보존', () => {
         const anonymize = calls.filter(([sql]) => /UPDATE\s+audit_logs/i.test(sql));
         expect(anonymize).toHaveLength(1);
         expect(anonymize[0][0]).not.toMatch(/action\s*=/);
+    });
+});
+
+describe('db-retention — security.authz_denied 보존(S10)', () => {
+    const KEY = 'AUDIT_AUTHZ_DENIED_RETENTION_DAYS';
+    const saved = process.env[KEY];
+
+    beforeEach(() => {
+        mockQuery.mockReset();
+        mockQuery.mockResolvedValue({ rowCount: 0, rows: [] });
+        delete process.env[KEY];
+    });
+
+    afterAll(() => {
+        if (saved === undefined) delete process.env[KEY];
+        else process.env[KEY] = saved;
+    });
+
+    it('기본 30일이 지난 security.authz_denied 행만 지운다', async () => {
+        const deletes = authzDeniedDeletes(await runOnce());
+        expect(deletes).toHaveLength(1);
+        expect(deletes[0][0]).toMatch(/action\s*=\s*'security\.authz_denied'/);
+        expect(deletes[0][0]).toMatch(/timestamp\s*<\s*NOW\(\)/);
+        expect(deletes[0][1]).toEqual(['30']);
+    });
+
+    it('환경 변수로 기간을 바꾸고, 0 이면 지우지 않는다', async () => {
+        process.env[KEY] = '7';
+        expect(authzDeniedDeletes(await runOnce())[0][1]).toEqual(['7']);
+        mockQuery.mockClear();
+        process.env[KEY] = '0';
+        expect(authzDeniedDeletes(await runOnce())).toHaveLength(0);
+    });
+
+    it('audit_logs 를 지우는 문장은 login.succeeded·security.authz_denied 두 action 뿐이다', async () => {
+        const all = (await runOnce()).filter(([sql]) => /DELETE\s+FROM\s+audit_logs/i.test(sql));
+        expect(all).toHaveLength(2);
     });
 });
