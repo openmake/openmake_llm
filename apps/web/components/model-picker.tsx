@@ -31,6 +31,7 @@ const EXTERNAL_PROVIDER_LABELS: Record<string, string> = {
   bai: "🌐 B.AI",
   orcarouter: "🌐 OrcaRouter",
   logfare: "🌐 Logfare",
+  demonroute: "🌐 Demon Route",
 };
 
 export function ModelPicker({
