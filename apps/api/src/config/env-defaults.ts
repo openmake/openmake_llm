@@ -114,8 +114,9 @@ export const DEFAULT_CONFIG: EnvConfig = {
     languageDetectionMinConfidence: 0.7,
     languageFallbackLanguage: 'en',
 
-    // Security — Trusted Proxies
-    trustedProxies: ['loopback', 'linklocal', 'uniquelocal'],
+    // Security — Trusted Proxies. 기본 loopback 만(W3 S7) — 사설망의 아무 호스트가 X-Forwarded-For 로
+    // 클라이언트 IP 를 꾸미지 못하게. 리버스 프록시가 다른 호스트/컨테이너면 TRUSTED_PROXIES 에 그 주소를 명시.
+    trustedProxies: ['loopback'],
 
     // Security — Blacklist Policy (additive; 'open' maintains legacy fail-open behavior)
     blacklistFailMode: 'open' as const,

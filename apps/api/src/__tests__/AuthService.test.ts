@@ -99,6 +99,8 @@ beforeEach(() => {
     (getUserManager as jest.Mock).mockReturnValue({
         createUser: mockCreateUser,
         authenticate: mockAuthenticate,
+        // login 은 authenticateDetailed(W3 S7) — 같은 mockAuthenticate 결과를 잠금 없음으로 감싼다.
+        authenticateDetailed: async (email: string, password: string) => ({ user: await mockAuthenticate(email, password), locked: false }),
         getUserByEmail: mockGetUserByEmail,
         getUserById: mockGetUserById,
         changePassword: mockChangePassword,
