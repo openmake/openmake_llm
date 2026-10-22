@@ -37,6 +37,7 @@ it('큐가 꺼져 있어도, 조회 뒤 먼저 시작해 실행 중인 작업은
     finish();
     await new Promise((r) => setImmediate(r));
     await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
-    expect(claim).toHaveBeenCalledWith(task.id, 'running');
+    // claim 이 소유권도 같은 문장에서 쓴다(2026-10-22 R2)
+    expect(claim).toHaveBeenCalledWith(task.id, 'running', AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: expect.any(String), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined);
     expect(execute).toHaveBeenCalledTimes(1);
 });

@@ -146,10 +146,11 @@ export class UnifiedMCPClient {
     async executeToolWithContext(
         toolName: string,
         args: Record<string, unknown>,
-        context: UserContext
+        context: UserContext,
+        opts?: { signal?: AbortSignal }
     ): Promise<MCPToolResult> {
         return executeToolSecurely(
-            (name, sandboxedArgs, ctx) => this.toolRouter.executeTool(name, sandboxedArgs, ctx),
+            (name, sandboxedArgs, ctx) => this.toolRouter.executeTool(name, sandboxedArgs, ctx, opts),
             toolName, args, context,
         );
     }

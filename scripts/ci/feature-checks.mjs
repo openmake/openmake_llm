@@ -1,4 +1,6 @@
 // Only fixed runner arguments: changed filenames and manifest data never become shell code.
+// Modes: `<sha>` selects and runs changed-feature checks; `--files <json>` does the same for a given file list;
+// `--select-only <sha>` only selects and requires related Jest tests to exist (PR CI — nothing runs).
 import { readFileSync, existsSync, readdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, relative } from 'node:path';
@@ -11,7 +13,7 @@ export function selectFeatures(files) {
   const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, hostSetup: false, e2e: selectE2E(files) };
   for (const file of files) {
     if (result.e2e.some(spec => spec.file === file)) continue;
-    if (file.startsWith('apps/api/src/')) { result.api.push(file); continue; }
+    if (file.startsWith('apps/api/src/') && /\.[cm]?[jt]sx?$/.test(file)) { result.api.push(file); continue; }
     if (manifest.specs[file]) { result[manifest.specs[file]] = true; continue; }
     // Exact host setup files only — a new setup script stays unmapped until it is listed with fixture coverage.
     if (manifest.hostSetup.includes(file)) { result.hostSetup = true; continue; }
@@ -65,20 +67,25 @@ export function hostSetupTests(root = repoRoot) {
   for (const file of [...portable, ...macOnly]) if (!existsSync(resolve(root, file))) throw new Error(`Missing required host setup test: ${file}`);
   return { portable, macOnly };
 }
-export function runFeatures(files, options = {}) {
+export function selectRelatedTests(files, options = {}) {
   const root = options.cwd || repoRoot;
-  const run = (command, args, config = {}) => execute(command, args, { cwd: root, env: options.env || process.env, ...(options.stdio ? { stdio: options.stdio } : {}), ...config });
+  const listRelated = options.listRelated || (file => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout));
   const selection = selectFeatures(files);
   const tests = new Set();
   const related = new Map();
   for (const file of selection.api) {
     // Deleted source cannot be resolved by Jest: fail explicitly until a regression test is mapped.
     if (!existsSync(resolve(root, file))) throw new Error(`Deleted source requires explicit regression mapping: ${file}`);
-    const result = run(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand'], { encoding: 'utf8', stdio: 'pipe' });
-    const paths = requireRelated(file, JSON.parse(result.stdout));
+    const paths = requireRelated(file, listRelated(file));
     related.set(file, paths);
     for (const path of paths) tests.add(path);
   }
+  return { selection, related, tests };
+}
+export function runFeatures(files, options = {}) {
+  const root = options.cwd || repoRoot;
+  const run = (command, args, config = {}) => execute(command, args, { cwd: root, env: options.env || process.env, ...(options.stdio ? { stdio: options.stdio } : {}), ...config });
+  const { selection, related, tests } = selectRelatedTests(files, { cwd: root, env: options.env });
   if (tests.size) {
     const temporary = mkdtempSync(resolve(tmpdir(), 'omk-feature-jest-'));
     try {
@@ -107,7 +114,15 @@ export function runFeatures(files, options = {}) {
   }
   return { selection, relatedTests: [...tests].map(path => relative(root, path)), ...(hostSetup ? { hostSetup } : {}) };
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMain && process.argv[2] === '--select-only') {
+  try {
+    const sha = process.argv[3];
+    const change = changedFiles(sha);
+    const { selection, tests } = selectRelatedTests(change.files);
+    console.log(JSON.stringify({ sha, ...change, selection, relatedTests: [...tests].map(path => relative(repoRoot, path)) }, null, 2));
+  } catch (error) { console.error(error.message); process.exitCode = 1; }
+} else if (isMain) {
   try {
     let sha, change;
     if (process.argv[2] === '--files') {

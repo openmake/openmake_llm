@@ -22,6 +22,14 @@ describe('getApprovalRejectedNotice', () => {
         expect(out).not.toContain('무시');
     });
 
+    it('정책 none 의 바닥 거절(S1) — 무승인 작업에서는 쓸 수 없다고 알리고 Error: 로 시작한다', () => {
+        const out = getApprovalRejectedNotice('notion::create_page', 'policy_floor', '무시');
+        expect(out.startsWith('Error: ')).toBe(true);
+        expect(out).toContain("도구 notion::create_page 은(는) 승인 정책 'none'(무승인) 작업에서는 쓸 수 없습니다");
+        expect(out).toContain('terminate');
+        expect(out).not.toContain('무시');
+    });
+
     it('사유 미상(abort 등)은 명시 거절과 같은 문구', () => {
         expect(getApprovalRejectedNotice('bash', undefined)).toBe(getApprovalRejectedNotice('bash', 'user'));
         expect(getApprovalRejectedNotice('bash', 'abort')).toBe(getApprovalRejectedNotice('bash', 'user'));

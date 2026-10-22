@@ -68,8 +68,9 @@ describe('requiresApproval — 민감 파일 쓰기 상향', () => {
         expect(requiresApproval('high-risk', 'repo_map', {})).toBe(false);
     });
 
-    it('none 은 무엇도 승인하지 않고, all 은 종전대로 전부 승인한다(정책 의미 불변)', () => {
-        expect(requiresApproval('none', 'file_ops', { op: 'write', path: '.env' })).toBe(false);
+    it('none 은 자격증명 쓰기만 게이트로 올리고(S1 — request() 가 policy_floor 로 거절), all 은 종전대로 전부 승인한다', () => {
+        expect(requiresApproval('none', 'file_ops', { op: 'write', path: '.env' })).toBe(true);
+        expect(requiresApproval('none', 'file_ops', { op: 'write', path: 'src/a.ts' })).toBe(false);
         expect(requiresApproval('all', 'file_ops', { op: 'write', path: 'src/a.ts' })).toBe(true);
         expect(requiresApproval('all', 'grep_code', { pattern: 'x' })).toBe(true);
     });

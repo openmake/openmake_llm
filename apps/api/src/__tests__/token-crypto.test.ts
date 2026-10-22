@@ -121,3 +121,79 @@ describe('isDecryptionFailure', () => {
         expect(isDecryptionFailure(out)).toBe(true);
     });
 });
+
+describe('비-dev 환경 실패(S9)', () => {
+    beforeEach(() => {
+        process.env.NODE_ENV = 'staging';
+        process.env.TOKEN_ENCRYPTION_KEY = TEST_KEY;
+        jest.resetModules();
+    });
+
+    afterEach(() => {
+        process.env.NODE_ENV = 'test';
+    });
+
+    test('변조된 암호문은 TokenCryptoError', async () => {
+        const m = await import('../utils/token-crypto');
+        const enc = m.encryptToken('s');
+        // 태그 마지막 바이트를 바꾼다(이미 00 이면 ff 로 — 1/256 확률의 우연 일치 방지)
+        const bad = enc.slice(0, -2) + (enc.endsWith('00') ? 'ff' : '00');
+        expect(() => m.decryptToken(bad)).toThrow(m.TokenCryptoError);
+    });
+
+    test('파트 수가 틀린 v1: 값은 TokenCryptoError', async () => {
+        const m = await import('../utils/token-crypto');
+        expect(() => m.decryptToken('v1:abc')).toThrow(m.TokenCryptoError);
+    });
+
+    test('레거시 평문은 그대로', async () => {
+        const m = await import('../utils/token-crypto');
+        expect(m.decryptToken('plain')).toBe('plain');
+    });
+
+    test('NODE_ENV=test 면 종전처럼 입력을 돌려준다', async () => {
+        process.env.NODE_ENV = 'test';
+        jest.resetModules();
+        const m = await import('../utils/token-crypto');
+        expect(m.decryptToken('v1:abc')).toBe('v1:abc');
+    });
+});
+
+describe('tryDecryptToken (S9 후속)', () => {
+    beforeEach(() => {
+        process.env.TOKEN_ENCRYPTION_KEY = TEST_KEY;
+        jest.resetModules();
+    });
+
+    afterEach(() => {
+        process.env.NODE_ENV = 'test';
+    });
+
+    const tamper = (enc: string): string => enc.slice(0, -2) + (enc.endsWith('00') ? 'ff' : '00');
+
+    test('레거시 평문은 그대로', async () => {
+        const m = await import('../utils/token-crypto');
+        expect(m.tryDecryptToken('plain')).toBe('plain');
+    });
+
+    test('정상 암호문은 평문', async () => {
+        const m = await import('../utils/token-crypto');
+        expect(m.tryDecryptToken(m.encryptToken('my-secret'))).toBe('my-secret');
+    });
+
+    test('NODE_ENV=staging 에서 변조 암호문은 throw 없이 null', async () => {
+        process.env.NODE_ENV = 'staging';
+        jest.resetModules();
+        const m = await import('../utils/token-crypto');
+        const bad = tamper(m.encryptToken('s'));
+        expect(m.tryDecryptToken(bad)).toBeNull();
+        expect(m.tryDecryptToken('v1:abc')).toBeNull();
+    });
+
+    test('NODE_ENV=test 에서 변조 암호문도 암호문 대신 null', async () => {
+        const m = await import('../utils/token-crypto');
+        const bad = tamper(m.encryptToken('s'));
+        expect(m.tryDecryptToken(bad)).toBeNull();
+        expect(m.tryDecryptToken('v1:abc')).toBeNull();
+    });
+});

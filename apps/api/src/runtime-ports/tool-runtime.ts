@@ -40,8 +40,11 @@ export type { ToolSummary, ToolUserInputContext, ToolUserInputResult } from '@op
 export interface ToolRuntime {
     /** LLM function-calling 형식의 도구 목록. userContext 가 있으면 그 사용자의 외부 도구도 포함된다. */
     listLLMTools(userContext?: { userId: string }): Promise<ToolDefinition[]>;
-    /** 사용자 문맥이 있는 도구 실행 — 경로 샌드박스·인자 검증·감사를 통과한다. */
-    executeTool(name: string, args: Record<string, unknown>, context: UserContext): Promise<MCPToolResult>;
+    /**
+     * 사용자 문맥이 있는 도구 실행 — 경로 샌드박스·인자 검증·감사를 통과한다.
+     * (2026-10-22 R4) 중단 신호를 외부 MCP 호출까지 전달 — 내장 도구는 opts 를 쓰지 않는다.
+     */
+    executeTool(name: string, args: Record<string, unknown>, context: UserContext, opts?: { signal?: AbortSignal }): Promise<MCPToolResult>;
 
     // 세션 수명주기 — 외부 MCP 서버 풀을 띄우고 내리는 신호. 내장 전용 런타임에서는 no-op.
     onUserLogin(userId: string): Promise<void>;
