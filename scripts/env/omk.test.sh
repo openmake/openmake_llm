@@ -766,5 +766,78 @@ eq "viewer: 따옴표 내부 hash 는 보존하고 외부 주석만 제거" "$(p
 VD="$(viewer_data_probe "$TMP/from-file" '')"
 eq "viewer: 명시적인 빈 shell 환경이면 backend 기본 경로 사용" "$(printf '%s\n' "$VD" | head -2)" "$(printf 'vendor:%s\ncompose:%s' "$TMP/viewer-probe/data/artifact-viewer" "$TMP/viewer-probe/data/artifact-viewer")"
 
+# ── dev sync: 로컬 dev 를 origin/dev 로 ff-only 만 (임시 bare 원격, 네트워크 없음) ──
+# 0=최신·앞으로 옮김·건너뛸 이유가 없는 경우, 3=옮기지 못함(변경 사항·갈라짐·다른 작업 트리) — 어느 쪽이든 아무것도 지우지 않는다.
+dsg() { local r="$1"; shift; git -C "$r" -c user.email=t@example.com -c user.name=t -c commit.gpgsign=false "$@"; }
+ds_new() { # → $TMP/ds-<이름>/{origin.git,up,me}  me 는 dev 를 체크아웃한 클론, up 은 원격에 밀어 넣는 다른 클론
+    local d="$TMP/ds-$1"; mkdir -p "$d"
+    git init -q --bare "$d/origin.git"
+    git init -q "$d/up"; dsg "$d/up" checkout -q -b dev
+    echo a > "$d/up/f.txt"; dsg "$d/up" add f.txt; dsg "$d/up" commit -q -m one
+    dsg "$d/up" remote add origin "$d/origin.git"; dsg "$d/up" push -q origin dev
+    git clone -q -b dev "$d/origin.git" "$d/me" 2>/dev/null
+    printf '%s' "$d"
+}
+ds_advance() { echo "$2" >> "$1/up/f.txt"; dsg "$1/up" commit -q -am "$2"; dsg "$1/up" push -q origin dev; }
+ds_rev() { git -C "$1" rev-parse --verify -q "${2:-HEAD}"; }
+ds_rc() { dev_sync_branch "$@" >/dev/null 2>&1; echo $?; }
+
+D="$(ds_new latest)"; H0="$(ds_rev "$D/me")"
+eq "dev sync: 최신 → 종료 0"             "$(ds_rc "$D/me")" "0"
+eq "dev sync: 최신 → 그대로"             "$(ds_rev "$D/me")" "$H0"
+
+D="$(ds_new ff)"; ds_advance "$D" two
+# shellcheck disable=SC2034  # ok below evaluates this output variable
+DS_OUT="$(dev_sync_branch "$D/me" 2>&1)"; DS_RC=$?
+eq "dev sync: 뒤처짐·깨끗 → 종료 0"      "$DS_RC" "0"
+eq "dev sync: 뒤처짐·깨끗 → ff"          "$(ds_rev "$D/me")" "$(ds_rev "$D/up")"
+ok "dev sync: ff 보고에 커밋 수"         '[[ "$DS_OUT" == *"(1커밋)"* ]]'
+
+D="$(ds_new dirty)"; ds_advance "$D" two; H0="$(ds_rev "$D/me")"; echo mine >> "$D/me/f.txt"
+eq "dev sync: 추적 파일 수정 → 종료 3"   "$(ds_rc "$D/me")" "3"
+eq "dev sync: 추적 파일 수정 → 그대로"   "$(ds_rev "$D/me")" "$H0"
+ok "dev sync: 수정 내용 보존"            'grep -q mine "$D/me/f.txt"'
+
+D="$(ds_new untracked)"; ds_advance "$D" two; echo scratch > "$D/me/new.txt"
+eq "dev sync: 추적 안 된 파일만 → 종료 0" "$(ds_rc "$D/me")" "0"
+eq "dev sync: 추적 안 된 파일만 → ff"    "$(ds_rev "$D/me")" "$(ds_rev "$D/up")"
+ok "dev sync: 추적 안 된 파일 보존"      '[[ -f "$D/me/new.txt" ]]'
+
+D="$(ds_new feature)"; dsg "$D/me" checkout -q -b feature/x; ds_advance "$D" two; H0="$(ds_rev "$D/me")"
+eq "dev sync: feature 체크아웃 → 종료 0" "$(ds_rc "$D/me")" "0"
+eq "dev sync: feature 체크아웃 → dev 포인터만 앞으로" "$(ds_rev "$D/me" refs/heads/dev)" "$(ds_rev "$D/up")"
+eq "dev sync: feature 체크아웃 → HEAD 그대로" "$(git -C "$D/me" symbolic-ref --short HEAD)|$(ds_rev "$D/me")" "feature/x|$H0"
+
+D="$(ds_new worktree)"; dsg "$D/me" checkout -q -b feature/x; git -C "$D/me" worktree add -q "$D/wt" dev 2>/dev/null; ds_advance "$D" two; H0="$(ds_rev "$D/me" refs/heads/dev)"
+eq "dev sync: 다른 작업 트리의 dev → 종료 3" "$(ds_rc "$D/me")" "3"
+eq "dev sync: 다른 작업 트리의 dev → 그대로" "$(ds_rev "$D/me" refs/heads/dev)" "$H0"
+
+D="$(ds_new diverged)"; ds_advance "$D" two; echo local > "$D/me/g.txt"; dsg "$D/me" add g.txt; dsg "$D/me" commit -q -m local; H0="$(ds_rev "$D/me")"
+eq "dev sync: 갈라짐 → 종료 3"           "$(ds_rc "$D/me")" "3"
+eq "dev sync: 갈라짐 → 그대로"           "$(ds_rev "$D/me")" "$H0"
+
+D="$(ds_new ahead)"; echo local > "$D/me/g.txt"; dsg "$D/me" add g.txt; dsg "$D/me" commit -q -m local; H0="$(ds_rev "$D/me")"
+eq "dev sync: 로컬이 앞섬 → 종료 3"      "$(ds_rc "$D/me")" "3"
+eq "dev sync: 로컬이 앞섬 → 그대로"      "$(ds_rev "$D/me")" "$H0"
+
+D="$(ds_new noremote)"; ds_advance "$D" two; H0="$(ds_rev "$D/me")"; git -C "$D/me" remote set-url origin "$TMP/없는-원격"
+eq "dev sync: 원격 읽지 못함 → 종료 0"   "$(ds_rc "$D/me")" "0"
+eq "dev sync: 원격 읽지 못함 → 그대로"   "$(ds_rev "$D/me")" "$H0"
+
+D="$(ds_new nobranch)"; dsg "$D/me" checkout -q -b feature/x; git -C "$D/me" branch -q -D dev; ds_advance "$D" two
+eq "dev sync: 로컬 dev 없음 → 종료 0"    "$(ds_rc "$D/me")" "0"
+ok "dev sync: 로컬 dev 없음 → 만들지 않음" '! ds_rev "$D/me" refs/heads/dev >/dev/null'
+
+D="$(ds_new noorigin)"
+eq "dev sync: origin 에 그 브랜치 없음 → 종료 0" "$(ds_rc "$D/me" release)" "0"
+
+# omk dev sync — 옮기지 못한 경우는 종료 1 로 알린다
+D="$(ds_new cmd)"; ds_advance "$D" two; touch "$D/me/openmake_llm.sh"
+# shellcheck disable=SC2034  # dev_locate 가 읽는다
+eq "dev sync 명령: 뒤처짐 → 종료 0"      "$( ( OMK_DEV_LLM="$D/me"; cmd_dev sync ) >/dev/null 2>&1; echo $?)" "0"
+ds_advance "$D" three; echo mine >> "$D/me/f.txt"
+# shellcheck disable=SC2034  # dev_locate 가 읽는다
+eq "dev sync 명령: 변경 사항 → 종료 1"   "$( ( OMK_DEV_LLM="$D/me"; cmd_dev sync ) >/dev/null 2>&1; echo $?)" "1"
+
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]
