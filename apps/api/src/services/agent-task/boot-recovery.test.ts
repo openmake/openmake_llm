@@ -264,6 +264,16 @@ describe('claim 고아(pending + 소유권) 회수', () => {
         expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'pending');
         expect(dispatch).not.toHaveBeenCalled();
     });
+
+    // claim → running 전 죽음 → 다시 claim 이 끝없이 돌지 않게 — 체크포인트 없는 pending 고아도 상한을 센다(진짜 queued 만 면제)
+    it('체크포인트 없는 pending 고아도 진행 없는 복구가 상한에 닿으면 failed(recovery_limit)로 닫는다', async () => {
+        expired.push({ ...orphan, checkpoint: null });
+        countRecoveries.mockResolvedValueOnce(3);
+        await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 1 });
+        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'pending');
+        expect(claim).not.toHaveBeenCalled();
+        expect(dispatch).not.toHaveBeenCalled();
+    });
 });
 
 // 작업 하나가 프로세스를 죽이면(메모리 한도 재시작 등) 재시작 → 자동 재개 → 다시 죽음이 끝없이 돈다

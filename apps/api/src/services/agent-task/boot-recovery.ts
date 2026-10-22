@@ -78,8 +78,9 @@ async function recoverTask(
 
     // 진행 없이 되풀이되는 복구 끊기 — 작업 하나가 프로세스를 죽이면(메모리 한도 재시작 등) 재시작 → 자동 재개 → 다시 죽음이 끝없이 돈다.
     // 새 턴 체크포인트 없이 상한만큼 복구된 작업은 더 재개하지 않고 닫는다(체크포인트는 남아 사용자가 이어 할 수 있다).
-    // 실행한 적 없는 대기(queued) 재제출은 해당 없다. 횟수 조회 실패는 복구를 막지 않는다.
-    if (!wasQueued && await recoveryLimitReached(task.id)) {
+    // 실행한 적 없는 대기(queued) 재제출은 해당 없다 — 체크포인트 없는 pending 고아는 센다(claim → running 전 죽음이 끝없이 돌지 않게, R2).
+    // 횟수 조회 실패는 복구를 막지 않는다.
+    if (task.status !== 'queued' && await recoveryLimitReached(task.id)) {
         if (!(await new AgentTaskRunRepository(getPool()).failRecoveryLimit(task.id, task.status))) return 'skipped';
         logger.warn(`[BootRecovery] 진행 없는 복구가 ${AGENT_TASK_LIMITS.RECOVERY_MAX_ATTEMPTS}회 되풀이됨 → 자동 재개 중단(recovery_limit): ${task.id}`);
         return 'failed';
