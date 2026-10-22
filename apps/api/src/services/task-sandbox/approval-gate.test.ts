@@ -22,7 +22,7 @@ describe('requiresApproval', () => {
     it('정책 high-risk — 외부 MCP 서버 도구(server::tool)는 승인, 내장 도구는 종전대로 자동', async () => {
         expect(requiresApproval('high-risk', 'notion::create_page', {})).toBe(true);
         expect(requiresApproval('high-risk', 'web_search', {})).toBe(false);
-        expect(requiresApproval('none', 'notion::create_page', {})).toBe(false);
+        expect(requiresApproval('none', 'notion::create_page', {})).toBe(true); // S1(2026-10-22): 정책 none 의 바닥 호출은 게이트로 올라가 거절된다
     });
     it('deviceGatesShell — 로컬 브리지: 코드 실행은 디바이스가 게이트하므로 서버 승인 skip', async () => {
         // exec 계열은 정책 all 이어도 서버 승인 불요(디바이스 confirmExec 가 담당) — 이중 프롬프트 제거
@@ -188,5 +188,27 @@ describe('ApprovalRegistry', () => {
 
     it('없는 approvalId approve 는 false', async () => {
         expect(await new ApprovalRegistry().approve('nope')).toBe(false);
+    });
+});
+
+describe('정책 none 의 바닥 호출(S1)', () => {
+    it('requiresApproval — none 에서도 외부 MCP·자격증명·지시 파일 쓰기는 게이트로 올린다', () => {
+        expect(requiresApproval('none', 'notion::create_page', {})).toBe(true);
+        expect(requiresApproval('none', 'file_ops', { op: 'write', path: '.env' })).toBe(true);
+        expect(requiresApproval('none', 'str_replace_editor', { command: 'create', path: 'AGENTS.md' })).toBe(true);
+        expect(requiresApproval('none', 'bash', {})).toBe(false);
+        expect(requiresApproval('none', 'file_ops', { op: 'write', path: 'src/index.ts' })).toBe(false);
+    });
+    it('request — policy none 의 바닥 호출은 대기 없이 policy_floor 로 거절한다', async () => {
+        const reg = new ApprovalRegistry();
+        const r = await reg.request({ taskId: 't1', userId: 'u1', toolName: 'notion::create_page', args: {} }, { timeoutMs: 1000, policy: 'none' });
+        expect(r).toEqual({ decision: 'rejected', reason: 'policy_floor', waitedMs: 0 });
+        expect(await reg.list('u1')).toHaveLength(0);
+    });
+    it('request — policy none 의 memory_save 는 거절이 아니라 묻는다(종전 동작)', async () => {
+        const reg = new ApprovalRegistry();
+        const p = reg.request({ taskId: 't1', userId: 'u1', toolName: 'memory_save', args: { text: 'x' } }, { timeoutMs: 50, policy: 'none' });
+        expect(await reg.list('u1')).toHaveLength(1);
+        await expect(p).resolves.toMatchObject({ decision: 'rejected', reason: 'timeout' });
     });
 });
