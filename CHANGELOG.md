@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.112.0](https://github.com/openmake/openmake_llm/compare/v1.111.0...v1.112.0) (2026-10-22)
+
+
+### ✨ 기능
+
+* **providers:** add Demon Route to the BYO-key external provider catalog ([#1420](https://github.com/openmake/openmake_llm/issues/1420)) ([ffdac0e](https://github.com/openmake/openmake_llm/commit/ffdac0e2cb2aa1dfa1ab278a4af30b72ef32ed88))
+* **providers:** Demon Route 외부 provider 추가 — BYOK + LiteLLM 게이트웨이 wildcard ([9dac11a](https://github.com/openmake/openmake_llm/commit/9dac11a53a1a63d8ece3bb6c5a261703383d97bd))
+
+
+### 🐛 버그 수정
+
+* **ci:** map scripts/vllm config to the pipeline suite with real coverage ([3fd0170](https://github.com/openmake/openmake_llm/commit/3fd01703040d64543867cccfaae43d4ad9d08a11))
+* **ci:** validate scripts/vllm/litellm.config.yaml and map it to the pipeline suite ([365ebde](https://github.com/openmake/openmake_llm/commit/365ebde59086f96e690618beb1ae0e944df6f4fc))
+* **providers:** Demon Route helpText 미검증 과금 주장 제거·게이트웨이 편입 보류 명시 ([ed270e7](https://github.com/openmake/openmake_llm/commit/ed270e756be1b88444faf9c351b8f2d8b16f9abd))
+
+
+### ♻️ 리팩터링
+
+* **api:** split agent-task-repository lifecycle queries (max-lines) ([270b9a6](https://github.com/openmake/openmake_llm/commit/270b9a6724790bd1aae189f6944de472b5bf159a))
+* **api:** split chat request-handler post-processing helpers (max-lines) ([8c708e4](https://github.com/openmake/openmake_llm/commit/8c708e4a33ce12fd911e6161dd04a725844c8aa7))
+* **api:** split four max-lines-bound files ahead of W3 (no behavior change) ([7dd57fd](https://github.com/openmake/openmake_llm/commit/7dd57fd92b4615186becf901f7a3d51872e67147))
+* **api:** split task-sandbox sandbox.ts docker CLI and workspace fs helpers (max-lines) ([a832efa](https://github.com/openmake/openmake_llm/commit/a832efa0e366b936d0eb0afe3707c222c83e0f28))
+* **api:** split task-sandbox tools browser and delegation tools (max-lines) ([59fb3d3](https://github.com/openmake/openmake_llm/commit/59fb3d38c428db118a694fe695c103c63f07fb42))
+
 ## [1.111.0](https://github.com/openmake/openmake_llm/compare/v1.110.0...v1.111.0) (2026-10-22)
 
 
