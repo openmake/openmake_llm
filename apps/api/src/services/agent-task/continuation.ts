@@ -11,6 +11,7 @@
 import { randomUUID } from 'crypto';
 import { createLogger } from '../../utils/logger';
 import { AGENT_TASK_LONG_RUNNING as C } from '../../config/agent-task-long-running';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import { AgentTaskChainRepository } from '../../data/repositories/agent-task-chain-repository';
@@ -110,19 +111,64 @@ const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(
 /**
  * 선점을 놓쳤을 때 — 이미 만들어진 후속을 따른다(설계: "선점 실패면 이미 만들어진 쪽을 따른다").
  * 선점·디스패치 뒤 completed/continued 갱신 전에 프로세스가 죽고 부팅 복구로 이 작업이 다시 돌면 여기로 온다.
- * 후속이 살아 있으면(failed/cancelled 아님) 그 id 를 돌려 호출부가 이 작업을 '이어짐'으로 끝내게 하고(종료 알림 없음),
- * 후속 행이 없거나 실패·취소면 skipped — 호출부는 종전대로 마무리한다.
+ * 살아 있음 판정(2026-10-22 R3) — 디스패치되지 못한 pending 후속을 살아 있다고 보면 체인이 조용히 멈춘다:
+ * - running·paused·queued·completed → 살아 있음.
+ * - pending 이고 lease_until 이 미래 → 살아 있음(누가 쥐고 있다).
+ * - pending 이고 lease 가 없거나 지났고 updated_at 이 LEASE_MS 보다 오래됐고 체크포인트 대화가 있으면 → 그 대화로 재디스패치.
+ * - pending 이고 updated_at 이 LEASE_MS 이내 → 살아 있음(다른 실행이 디스패치 중).
+ * 살아 있으면(재디스패치 포함) 그 id 를 돌려 호출부가 이 작업을 '이어짐'으로 끝내게 하고(종료 알림 없음),
+ * 후속 행이 없거나 실패·취소·체크포인트 없음이면 skipped — 호출부는 종전대로 마무리한다.
  */
-async function followExistingSuccessor(taskId: string): Promise<ContinueOutcome> {
+async function followExistingSuccessor(taskId: string, p: Pick<ContinueInput, 'userRole'>): Promise<ContinueOutcome> {
     const db = getUnifiedDatabase();
     const cur = await db.getAgentTask(taskId).catch(() => undefined);
     const existingId = cur?.continued_by_task_id;
     const existing = existingId ? await db.getAgentTask(existingId).catch(() => undefined) : undefined;
-    if (existing && existing.status !== 'failed' && existing.status !== 'cancelled') {
+    const skipped = { skipped: `이미 다른 실행이 이어갔습니다${existingId ? ` (후속 ${existingId} 없음·실패·취소)` : ''}` };
+    if (!existing) return skipped;
+    if (['running', 'paused', 'queued', 'completed'].includes(existing.status)) {
         logger.info(`[Continuation] 선점 실패 — 이미 만들어진 후속을 따른다: ${taskId} → ${existing.id} (${existing.status})`);
         return { successorId: existing.id };
     }
-    return { skipped: `이미 다른 실행이 이어갔습니다${existingId ? ` (후속 ${existingId} 없음·실패·취소)` : ''}` };
+    if (existing.status !== 'pending') return skipped;
+    const now = Date.now();
+    const leased = existing.lease_until ? new Date(existing.lease_until).getTime() > now : false;
+    const stale = now - new Date(existing.updated_at).getTime() > AGENT_TASK_LIMITS.LEASE_MS;
+    if (leased || !stale) {
+        logger.info(`[Continuation] 선점 실패 — 후속이 아직 살아 있다(pending${leased ? '·lease' : '·방금 갱신'}): ${taskId} → ${existing.id}`);
+        return { successorId: existing.id };
+    }
+    const seeded = (existing.checkpoint as { conversation?: unknown } | null | undefined)?.conversation;
+    if (!Array.isArray(seeded)) return { skipped: `이미 다른 실행이 이어갔습니다 (후속 ${existing.id} 체크포인트 없음)` };
+    try {
+        await dispatchSuccessor({
+            successor: existing, seeded: seeded as ChatMessage[], userRole: p.userRole,
+            approvalPolicy: (existing.approval_policy ?? undefined) as AgentTaskRunInput['approvalPolicy'],
+            thinkingLevel: (existing.thinking_level ?? undefined) as AgentTaskThinkingLevel | undefined,
+        });
+    } catch (e) {
+        return { skipped: `후속 재디스패치 실패: ${errMsg(e)}` };
+    }
+    logger.warn(`[Continuation] 디스패치되지 못한 후속을 다시 디스패치: ${taskId} → ${existing.id}`);
+    return { successorId: existing.id };
+}
+
+/** 후속 디스패치 — resume 은 체크포인트에 쓴 것과 같은 seeded 배열을 쓴다(DB 를 다시 읽지 않는다). */
+async function dispatchSuccessor(p: { successor: AgentTask; seeded: ChatMessage[]; userRole: AgentTaskUserRole; approvalPolicy?: AgentTaskRunInput['approvalPolicy']; thinkingLevel?: AgentTaskThinkingLevel }): Promise<void> {
+    const s = p.successor;
+    const { AgentTaskService } = await import('../AgentTaskService'); // 순환 import 회피
+    const service = new AgentTaskService();
+    await dispatchAgentTask({
+        taskId: s.id, userId: String(s.user_id),
+        run: () => service.execute({
+            taskId: s.id, goal: s.goal, userId: String(s.user_id), userRole: p.userRole, maxTurns: s.max_turns,
+            files: Array.isArray(s.input_files) ? s.input_files as AgentTaskInputFile[] : undefined,
+            images: Array.isArray(s.input_images) ? s.input_images as string[] : undefined,
+            executor: s.executor === 'local' ? 'local' : undefined, deviceId: s.device_id ?? undefined, folderRel: s.folder_rel ?? undefined,
+            approvalPolicy: p.approvalPolicy, thinkingLevel: p.thinkingLevel,
+            resume: { conversation: p.seeded, fromTurn: 0, fromStep: 0, ...(s.plan ? { plan: s.plan } : {}) },
+        }),
+    });
 }
 
 /** 정리 대상 추적 — 예상 밖 예외에서도 abandon 이 무엇을 되돌릴지 안다. */
@@ -172,7 +218,7 @@ async function runContinuation(p: ContinueInput, chainRepo: AgentTaskChainReposi
     const approvalPolicy = (p.approvalPolicy ?? p.task.approval_policy ?? undefined) as AgentTaskRunInput['approvalPolicy'];
     const thinkingLevel = (p.thinkingLevel ?? p.task.thinking_level ?? undefined) as AgentTaskThinkingLevel | undefined;
     // 순서: 선점(UPDATE) → 후속 INSERT. 선점이 먼저라 continued_by_task_id 에는 FK 가 없다(마이그레이션 188).
-    if (!(await chainRepo.claimContinuation(p.task.id, successorId))) return followExistingSuccessor(p.task.id);
+    if (!(await chainRepo.claimContinuation(p.task.id, successorId))) return followExistingSuccessor(p.task.id, p);
     track.claimed = true;
 
     const segmentIndex = state.segmentIndex + 1;
@@ -201,20 +247,8 @@ async function runContinuation(p: ContinueInput, chainRepo: AgentTaskChainReposi
     }
 
     try {
-        const { AgentTaskService } = await import('../AgentTaskService'); // 순환 import 회피
-        const service = new AgentTaskService();
-        await dispatchAgentTask({
-            taskId: successorId, userId: String(p.task.user_id),
-            run: () => service.execute({
-                taskId: successorId, goal: p.task.goal, userId: String(p.task.user_id), userRole: p.userRole, maxTurns: p.task.max_turns,
-                files: Array.isArray(p.task.input_files) ? p.task.input_files as AgentTaskInputFile[] : undefined,
-                images: Array.isArray(p.task.input_images) ? p.task.input_images as string[] : undefined,
-                executor: p.task.executor === 'local' ? 'local' : undefined, deviceId: p.task.device_id ?? undefined, folderRel: p.task.folder_rel ?? undefined,
-                approvalPolicy, thinkingLevel,
-                // 체크포인트에 쓴 것과 같은 seeded 배열 — DB 를 다시 읽지 않는다
-                resume: { conversation: seeded, fromTurn: 0, fromStep: 0, ...(p.task.plan ? { plan: p.task.plan } : {}) },
-            }),
-        });
+        // 후속 행은 현재 작업의 goal·max_turns·첨부·실행기·plan 을 그대로 물려받았다 — 같은 값으로 디스패치
+        await dispatchSuccessor({ successor: { ...p.task, id: successorId }, seeded, userRole: p.userRole, approvalPolicy, thinkingLevel });
     } catch (e) {
         return abandon(`디스패치 실패: ${errMsg(e)}`);
     }
