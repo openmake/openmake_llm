@@ -233,7 +233,8 @@ export async function dispatchAgentTask(entry: QueueEntry): Promise<'started' | 
     const priority = entry.priority && entry.priority !== AGENT_TASK_LIMITS.QUEUE_PRIORITY_DEFAULT ? { priority: entry.priority } : {};
     // duplicate 는 행을 건드리지 않는다 — 이 제출은 버려지므로 실행 중인 작업의 우선순위를 덮으면 안 되고, 호출부의 claim 되돌리기(updated_at 조건)도 깨진다
     if (outcome !== 'duplicate' && (outcome === 'queued' || 'priority' in priority)) {
-        await getUnifiedDatabase().updateAgentTask(entry.taskId, { ...(outcome === 'queued' ? { status: 'queued' as const } : {}), ...priority }).catch(() => { /* noop */ });
+        await getUnifiedDatabase().updateAgentTask(entry.taskId, { ...(outcome === 'queued' ? { status: 'queued' as const } : {}), ...priority })
+            .catch((e) => logger.warn(`[Queue] queued 상태 기록 실패(부팅 복구가 소유권으로 집는다): ${entry.taskId} — ${e instanceof Error ? e.message : e}`));
     }
     return outcome;
 }

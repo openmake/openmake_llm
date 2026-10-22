@@ -23,6 +23,8 @@ import { AgentTaskService, type AgentTaskInputFile } from '../AgentTaskService';
 import { dispatchAgentTask, getAgentTaskQueue } from './task-queue';
 import { resolveUserRole } from './boot-recovery';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { leaseOwner } from '../../config/lease-owner';
 import { getLocalBridgeRegistry } from '../local-bridge/registry';
 import { createLogger } from '../../utils/logger';
 import { AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_BROWSER_TAKEOVER_REASON, AGENT_TASK_MODEL_WAIT_REASON } from '../../config/agent-task-park-reasons';
@@ -61,7 +63,12 @@ export async function resumeParkedTask(taskId: string): Promise<boolean> {
         logger.info(`[${taskId}] 주차 재개 보류 — 직전 실행의 종료 정리가 아직 안 끝남(자리 반납 뒤 다시 시도)`);
         return false;
     }
-    if (!(await new AgentTaskRepository(getPool()).claimParkedTask(taskId))) return false;
+    // 소유권도 같은 문장에서 쓴다 — claim 과 running 사이에서 죽어도 pending 고아로 남지 않고 소유권 점검이 다시 잡는다(2026-10-22 R2)
+    const lease = AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined;
+    // 소유권 컬럼이 아직 없으면(176 적용 전) 소유권 없이 다시 claim 한다 — boot-recovery 의 종전 조회 폴백과 같다
+    const repo = new AgentTaskRepository(getPool());
+    const claimed = lease ? await repo.claimParkedTask(taskId, lease).catch(() => repo.claimParkedTask(taskId)) : await repo.claimParkedTask(taskId);
+    if (!claimed) return false;
 
     const role = await resolveUserRole(db, task.user_id);
     const steps = await db.getAgentTaskSteps(taskId);

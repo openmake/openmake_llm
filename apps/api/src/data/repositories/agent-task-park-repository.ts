@@ -63,11 +63,13 @@ export class AgentTaskParkRepository extends BaseRepository {
      * 표식 없는 paused 는 아무도 재개하지 않는다. 그 사이 /execute·/resume·다른 서버의 복구가 잡았으면 0행(false)이고 건드리지 않는다.
      */
     async parkForDeviceRecovery(taskId: string, expectedPrev: string): Promise<boolean> {
+        // (2026-10-22 R2) 소유권 있는 pending 은 claim 중 죽은 행 — pending 을 읽었을 때만 소유권 컬럼을 본다(176 적용 전 폴백은 pending 을 넘기지 않는다)
+        const leased = expectedPrev === 'pending';
         const r = await this.query(
             `WITH parked AS (
                  UPDATE agent_tasks t SET status = 'paused', error = NULL, failure_class = NULL, completed_at = NULL, terminal_notify_pending = FALSE, updated_at = NOW()
-                 FROM (SELECT id, status AS prev, error AS prev_error FROM agent_tasks WHERE id = $1 FOR UPDATE) o
-                 WHERE t.id = o.id AND o.prev = $2 AND (o.prev IN ('running', 'paused', 'queued') OR (o.prev = 'failed' AND o.prev_error = $3))
+                 FROM (SELECT id, status AS prev, error AS prev_error${leased ? ', lease_until' : ''} FROM agent_tasks WHERE id = $1 FOR UPDATE) o
+                 WHERE t.id = o.id AND o.prev = $2 AND (o.prev IN ('running', 'paused', 'queued') OR (o.prev = 'failed' AND o.prev_error = $3)${leased ? " OR (o.prev = 'pending' AND o.lease_until IS NOT NULL)" : ''})
                  RETURNING t.id, o.prev
              ), claimed AS (
                  INSERT INTO agent_task_events (task_id, from_status, to_status, reason) SELECT id, prev, 'paused', $4 FROM parked RETURNING task_id

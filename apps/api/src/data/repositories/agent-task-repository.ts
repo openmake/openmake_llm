@@ -31,6 +31,9 @@ export function parkedTaskCondition(alias: string): string {
     return `(${alias}.status = 'paused' AND COALESCE((SELECT e.reason FROM agent_task_events e WHERE e.task_id = ${alias}.id ORDER BY e.id DESC LIMIT 1), '') IN (${PARK_REASONS_SQL}))`;
 }
 
+/** claim 이 같은 문장에서 쓰는 실행 소유권 SET 조각 — $n = owner, $n+1 = 초(2026-10-22 R2). */
+const leaseSetSql = (n: number): string => `, lease_owner = $${n}, lease_until = NOW() + make_interval(secs => $${n + 1})`;
+
 export class AgentTaskRepository extends BaseRepository {
     async createAgentTask(params: {
         id: string;
@@ -295,11 +298,11 @@ export class AgentTaskRepository extends BaseRepository {
         );
     }
 
-    /** 주차 작업 재개 claim — 주차 중일 때만 pending 으로(동시 답변·스윕 중복 재개 방지). */
-    async claimParkedTask(taskId: string): Promise<boolean> {
+    /** 주차 작업 재개 claim — 주차 중일 때만 pending 으로(동시 답변·스윕 중복 재개 방지). lease: 같은 문장에서 실행 소유권도 쓴다(claimAgentTaskForRecovery 참고). */
+    async claimParkedTask(taskId: string, lease?: { owner: string; leaseMs: number }): Promise<boolean> {
         const r = await this.query(
-            `UPDATE agent_tasks t SET status = 'pending', updated_at = NOW() WHERE t.id = $1 AND ${parkedTaskCondition('t')} RETURNING t.id`,
-            [taskId],
+            `UPDATE agent_tasks t SET status = 'pending', updated_at = NOW()${lease ? leaseSetSql(2) : ''} WHERE t.id = $1 AND ${parkedTaskCondition('t')} RETURNING t.id`,
+            lease ? [taskId, lease.owner, lease.leaseMs / 1000] : [taskId],
         );
         if ((r.rowCount ?? 0) === 0) return false;
         await this.recordEvent(taskId, 'paused', 'pending', 'hitl_park_resume');
@@ -421,13 +424,17 @@ export class AgentTaskRepository extends BaseRepository {
      * 'queued' 도 포함한다 — 큐(3-B)는 인메모리라 재시작하면 대기열이 증발하는데, DB 행은
      * 'queued' 로 남아 UI 가 영구 '대기 중' 을 그리고 아무도 실행하지 않았다(2026-08-25 발견).
      * queued 는 시작한 적이 없으므로 checkpoint 없이 처음부터 다시 디스패치한다.
+     *
+     * pending+lease = claim 과 running 사이에서 죽은 행(2026-10-22 R2) — claim 이 같은 문장에서 소유권을 쓰므로 소유권 있는 pending 은
+     * 진행 중이던 claim 이다. 새로 만들어 실행한 적 없는 pending 은 소유권이 NULL 이라 빠진다. 소유권 컬럼을 읽으므로 owner 를 줄 때만.
      */
     async getInterruptedAgentTasks(windowMs: number, leaseOwner?: string): Promise<AgentTask[]> {
         // 실행 소유권(176) — 다른 서버가 살아 있는 소유권으로 실행 중인 작업은 중단된 것이 아니다. owner 없이 부르면 종전 조회.
         const notOthers = leaseOwner ? ' AND (lease_owner IS NULL OR lease_owner = $2 OR lease_until < NOW())' : '';
+        const claimOrphan = leaseOwner ? " OR (status = 'pending' AND lease_until IS NOT NULL)" : '';
         const result = await this.query<AgentTask>(
             `SELECT * FROM agent_tasks
-             WHERE (status IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('agent_tasks')}${notOthers})
+             WHERE ((status IN ('running', 'paused', 'queued')${claimOrphan}) AND NOT ${parkedTaskCondition('agent_tasks')}${notOthers})
                 OR (status = 'failed' AND error = 'server restarted'
                     AND completed_at > NOW() - make_interval(secs => $1))
              ORDER BY updated_at ASC`,
@@ -441,16 +448,20 @@ export class AgentTaskRepository extends BaseRepository {
      * 성공 여부 반환. 다중 프로세스가 동시에 복구를 시도해도 조건부 UPDATE 가 한 번만
      * 성공(나머지는 rowCount=0)해 이중 실행을 막는다. restart 마킹의 error/completed_at 도
      * 함께 정리(재개 task 가 목록에서 '실패·완료시각'으로 보이지 않게). expectedPrev: 목록을 읽을 때의 상태 — 그 뒤 바뀐 행은 0행.
+     * lease: 같은 문장에서 실행 소유권도 쓴다 — claim 과 running 사이에서 죽어도 소유권 점검·부팅 복구가 이 pending 을 다시 잡는다
+     * (2026-10-22 R2). 소유권 있는 pending(진행 중이던 claim)도 복구 대상이다 — 단 소유권이 지났거나 내 것일 때만(목록을 읽은 뒤 다른 서버가
+     * 가져가 다시 claim 했으면 0행 — 두 곳이 같이 디스패치하지 않게). 소유권을 끄거나 176 적용 전이면 lease 없이 종전 문장.
      */
-    async claimAgentTaskForRecovery(taskId: string, expectedPrev?: string): Promise<boolean> {
+    async claimAgentTaskForRecovery(taskId: string, expectedPrev?: string, lease?: { owner: string; leaseMs: number }): Promise<boolean> {
+        const claimOrphan = lease ? " OR (o.prev = 'pending' AND o.lease_until IS NOT NULL AND (o.lease_until < NOW() OR o.lease_owner = $3))" : '';
         const result = await this.query<{ prev: string }>(
             `UPDATE agent_tasks t
-             SET status = 'pending', error = NULL, failure_class = NULL, completed_at = NULL, updated_at = NOW()
-             FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $1 FOR UPDATE) o
-             WHERE t.id = o.id AND ((o.prev IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('t')})
+             SET status = 'pending', error = NULL, failure_class = NULL, completed_at = NULL, updated_at = NOW()${lease ? leaseSetSql(3) : ''}
+             FROM (SELECT id, status AS prev${lease ? ', lease_until, lease_owner' : ''} FROM agent_tasks WHERE id = $1 FOR UPDATE) o
+             WHERE t.id = o.id AND ((o.prev IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('t')})${claimOrphan}
                 OR (o.prev = 'failed' AND t.error = 'server restarted')) AND ($2::text IS NULL OR o.prev = $2)
              RETURNING o.prev`,
-            [taskId, expectedPrev ?? null]
+            lease ? [taskId, expectedPrev ?? null, lease.owner, lease.leaseMs / 1000] : [taskId, expectedPrev ?? null]
         );
         if ((result.rowCount ?? 0) === 0) return false;
         await this.recordEvent(taskId, result.rows[0]?.prev, 'pending', 'boot recovery claim');

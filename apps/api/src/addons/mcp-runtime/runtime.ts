@@ -37,8 +37,8 @@ export const mcpToolRuntime: ToolRuntime = {
         return (userContext ? await router.getLLMTools(userContext) : await router.getLLMTools()) as unknown as ToolDefinition[];
     },
 
-    executeTool(name: string, args: Record<string, unknown>, context: UserContext): Promise<MCPToolResult> {
-        return getUnifiedMCPClient().executeToolWithContext(name, args, context);
+    executeTool(name: string, args: Record<string, unknown>, context: UserContext, opts?: { signal?: AbortSignal }): Promise<MCPToolResult> {
+        return getUnifiedMCPClient().executeToolWithContext(name, args, context, opts);
     },
 
     async listTools(userContext?: { userId: string }): Promise<ToolSummary[]> {

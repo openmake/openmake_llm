@@ -74,6 +74,12 @@ describe('dispatchTool — 외부 위임자가 붙은 경우', () => {
         expect(textOf(r)).toBe('ext');
     });
 
+    it('중단 신호(opts)를 위임자 execute 의 4번째 인자로 넘긴다 (2026-10-22 R4)', async () => {
+        const ac = new AbortController();
+        await dispatchTool('srv::echo', { a: 1 }, undefined, { builtInTools, external }, { signal: ac.signal });
+        expect(external.execute).toHaveBeenLastCalledWith('srv::echo', { a: 1 }, undefined, { signal: ac.signal });
+    });
+
     it('위임자가 모르는 이름이면 not-found 로 수렴한다', async () => {
         const r = await dispatchTool('srv::none', {}, undefined, { builtInTools, external });
         expect(r.isError).toBe(true);
