@@ -24,6 +24,7 @@ import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
 import { ContextOverflowError } from '../errors/context-overflow.error';
 import { ProviderError, PROVIDER_ERROR_HTTP_STATUS } from '../providers/provider-errors';
+import { auditSecurityEvent } from '../security/security-audit';
 
 const logger = createLogger('ErrorHandler');
 
@@ -212,6 +213,18 @@ export function errorHandler(
             stack: err.stack,
             code: err.code,
         });
+        // 인가 거부(403) 감사(S10) — fire-and-forget, 응답 코드·본문은 그대로.
+        if (err.statusCode === 403) {
+            void auditSecurityEvent({
+                action: 'security.authz_denied',
+                userId: (req as RequestWithAuditUser).user?.id,
+                resourceType: 'http',
+                resourceId: `${req.method} ${req.path}`,
+                details: { code: err.code, message: err.message },
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent'],
+            }).catch(() => undefined);
+        }
         // NOTE: Use process.env.NODE_ENV directly (not getConfig()) because
         // NODE_ENV can change at runtime in test environments
         const includeStack = process.env.NODE_ENV === 'development';

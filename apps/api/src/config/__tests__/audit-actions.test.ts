@@ -55,6 +55,13 @@ describe('audit action registry', () => {
             'user.register': 'info',
             'consent.granted': 'info',
             'login.failed': 'info',
+            // 보안 거부·자격 변경(S10)
+            'security.ssrf_blocked': 'warning',
+            'security.tool_args_blocked': 'warning',
+            'external_key.set': 'info',
+            'external_key.delete': 'warning',
+            'mcp_server.create': 'info',
+            'mcp_server.delete': 'warning',
         }));
     });
 

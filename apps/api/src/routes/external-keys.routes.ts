@@ -32,6 +32,7 @@ import {
     getProviderCatalogEntry,
 } from '../config/external-providers';
 import { validateOutboundUrl } from '../security/ssrf-guard';
+import { auditSecurityEvent, isSsrfBlockedError } from '../security/security-audit';
 import { OpenAICompatProvider } from '../providers/openai-compat-provider';
 import {
     createExternalProviderInstance,
@@ -68,6 +69,11 @@ function getUserId(req: Request): string | null {
         return String((req.user as { id: unknown }).id);
     }
     return null;
+}
+
+/** 감사 기록용 — base_url 의 host 만(경로·쿼리·계정 제외), 파싱 실패는 'invalid'. */
+function baseUrlHost(raw: string): string {
+    try { return new URL(raw).host; } catch { return 'invalid'; }
 }
 
 const upsertKeySchema = z.object({
@@ -169,6 +175,13 @@ router.post('/:providerId',
                 await validateOutboundUrl(req.body.base_url);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : 'invalid base_url';
+                // SSRF 가드 차단만 감사 — DNS 실패 등은 400 만(web-scraper-tools 와 같은 기준).
+                if (isSsrfBlockedError(err)) {
+                    void auditSecurityEvent({
+                        action: 'security.ssrf_blocked', userId, resourceType: 'url', resourceId: baseUrlHost(req.body.base_url),
+                        details: { target: 'external_key', providerId, reason: msg }, ipAddress: req.ip, userAgent: req.get('user-agent'),
+                    });
+                }
                 res.status(400).json(badRequest(`base_url 차단: ${msg}`));
                 return;
             }
@@ -245,6 +258,12 @@ router.post('/:providerId',
         }
 
         logger.info(`외부 키 등록: user=${userId} provider=${providerId} validated=${validated}`);
+        // 감사 — 키 값·base_url 은 싣지 않는다(입력 여부만).
+        void auditSecurityEvent({
+            action: 'external_key.set', userId, resourceType: 'external_key', resourceId: providerId,
+            details: { providerId, validated, hasBaseUrl: typeof req.body.base_url === 'string' && req.body.base_url.trim() !== '' },
+            ipAddress: req.ip, userAgent: req.get('user-agent'),
+        });
         res.status(201).json(
             success({
                 provider_id: row.providerId,
@@ -278,6 +297,10 @@ router.delete('/:providerId',
         // 삭제 시 모델 카탈로그 캐시도 제거
         await getRepo().invalidateCachedModels(userId, providerId);
         logger.info(`외부 키 삭제: user=${userId} provider=${providerId}`);
+        void auditSecurityEvent({
+            action: 'external_key.delete', userId, resourceType: 'external_key', resourceId: providerId,
+            details: { providerId }, ipAddress: req.ip, userAgent: req.get('user-agent'),
+        });
         res.json(success({ deleted: true, provider_id: providerId }));
     }),
 );
