@@ -5,6 +5,7 @@
  * 샌드박스)에서도 한 번 더 걷어낸다(심층 방어 — 과거에 저장된 행도 막는다). 2026-10-09 점검 ④.
  *
  * HOME 은 포함하지 않는다 — 카탈로그 env_schema default 가 readonly 샌드박스의 캐시 경로로 쓴다.
+ * GIT_TOKEN 같은 자격증명 이름은 막지 않는다(제어 변수만).
  *
  * @module security/spawn-env-policy
  */
@@ -18,6 +19,9 @@ export const CONTROL_ENV_KEY_PATTERNS: readonly RegExp[] = [
     /^BASH_ENV$/i, /^ENV$/i, /^ZDOTDIR$/i, /^PERL5OPT$/i, /^RUBYOPT$/i,
     /^JAVA_TOOL_OPTIONS$/i, /^_JAVA_OPTIONS$/i, /^GCONV_PATH$/i, /^IFS$/i,
     /^DOCKER_/i,
+    /^GIT_(SSH|SSH_COMMAND|EXEC_PATH|ASKPASS|PROXY_COMMAND|TEMPLATE_DIR|CONFIG_[A-Z0-9_]*|SSL_[A-Z0-9_]*|CEILING_DIRECTORIES|EXTERNAL_DIFF|PAGER|EDITOR)$/i,
+    /_PROXY$/i,
+    /^(SSL_CERT_FILE|SSL_CERT_DIR|REQUESTS_CA_BUNDLE|CURL_CA_BUNDLE|AWS_CA_BUNDLE|PYTHONHTTPSVERIFY)$/i,
 ];
 
 export function isControlEnvKey(key: string): boolean {
