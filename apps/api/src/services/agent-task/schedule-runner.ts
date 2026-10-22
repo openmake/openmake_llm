@@ -25,6 +25,7 @@ import { getScheduleSilentNote } from '../../prompts/agent-task-schedule';
 import { AGENT_TASK_SCHEDULE } from '../../config/agent-task-schedule';
 import type { AgentTaskUserRole } from './types';
 import { isAdminRole } from '../../data/user-manager';
+import { resolveEffectivePolicy, strictestApprovalPolicy } from '../org/effective-policy';
 
 const logger = createLogger('AgentTaskSchedule');
 
@@ -93,6 +94,8 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
             return;
         }
         const role = await resolveRole(s.user_id);
+        // 조직 승인 하한(129) — 예약도 대화형 실행·트리거와 같이 활성 조직의 TOOL_APPROVAL_POLICY_MIN 보다 느슨하게 돌지 않는다.
+        const approvalPolicy = strictestApprovalPolicy(AGENT_TASK_LIMITS.SCHEDULE_APPROVAL_POLICY, (await resolveEffectivePolicy(String(s.user_id))).approvalPolicyMin);
         const service = new AgentTaskService();
         // "보고할 것 없음" 선언(기본 켜짐) — 목표 뒤에 표식 안내를 붙인다. 결과 반영이 꺼져 있으면 표식을 읽을 곳이 없어 붙이지 않는다.
         const runGoal = AGENT_TASK_SCHEDULE.RUN_OUTCOME_ENABLED && AGENT_TASK_SCHEDULE.SILENT_ENABLED ? s.goal + getScheduleSilentNote() : s.goal;
@@ -108,7 +111,7 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
                     taskId, goal: runGoal, userId: String(s.user_id), userRole: role, maxTurns: s.max_turns,
                     // 예약 task 는 무인 실행 — 사람이 승인할 수 없으므로 승인정책을 분리(기본 none).
                     // 전역 approvalPolicy='all' 이면 첫 도구서 pause 되어 예약이 영영 멈추는 것을 방지.
-                    approvalPolicy: AGENT_TASK_LIMITS.SCHEDULE_APPROVAL_POLICY,
+                    approvalPolicy,
                     // 무거운 리포트 생성은 대화형 10분을 넘길 수 있어 예약 전용 총 예산(기본 20분) 부여.
                     totalTimeoutMs: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS,
                     // 종료 결과를 예약에 반영 — 같은 실패는 한 번만 알리고 연속 실패면 예약을 끈다.

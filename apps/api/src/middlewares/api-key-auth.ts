@@ -97,24 +97,31 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
             return;
         }
 
+        // 키 소유자 활성 확인 — JWT 경로처럼 비활성·없는 사용자의 키는 거른다(req.user 유무와 무관)
+        const user = await db.getUserById(keyRecord.user_id);
+        if (!user || !user.is_active) {
+            res.status(401).json(apiError(
+                ErrorCodes.UNAUTHORIZED,
+                'API key owner is inactive.'
+            ));
+            return;
+        }
+
         // Request에 API Key 정보 첨부
         req.authMethod = 'api-key';
         req.apiKeyId = keyRecord.id;
         req.apiKeyRecord = keyRecord;
 
-        // user 정보도 채워서 기존 requireAuth 의존 코드와 호환
+        // user 정보도 채워서 기존 requireAuth 의존 코드와 호환 (위 조회 결과 재사용)
         if (!req.user) {
-            const user = await db.getUserById(keyRecord.user_id);
-            if (user) {
-                req.user = {
-                    userId: user.id,
-                    id: user.id,
-                    username: user.username,
-                    email: user.email,
-                    role: user.role as 'admin' | 'user' | 'guest',
-                    is_active: user.is_active
-                };
-            }
+            req.user = {
+                userId: user.id,
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                role: user.role as 'admin' | 'user' | 'guest',
+                is_active: user.is_active
+            };
         }
 
         // 사용 기록(마지막 사용·요청 수) — 응답을 기다리게 하지 않고, 기록 실패가 인증 결과를 바꾸지 않게 한다.

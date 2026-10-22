@@ -8,7 +8,7 @@
  * @module data/repositories/mcp-catalog-oauth-client-repository
  */
 import type { Pool } from 'pg';
-import { encryptToken, decryptToken, isDecryptionFailure } from '../../../utils/token-crypto';
+import { encryptToken, tryDecryptToken } from '../../../utils/token-crypto';
 import { createLogger } from '../../../utils/logger';
 
 const logger = createLogger('McpCatalogOAuthClientRepository');
@@ -123,8 +123,8 @@ export class McpCatalogOAuthClientRepository {
     private toClient(row: Row): StaticOAuthClient {
         let clientSecret: string | undefined;
         if (row.client_secret_enc) {
-            const plain = decryptToken(row.client_secret_enc);
-            if (isDecryptionFailure(plain)) logger.warn(`client_secret 복호화 실패 — secret 없이 진행 catalog=${row.catalog_id}`);
+            const plain = tryDecryptToken(row.client_secret_enc);
+            if (plain === null) logger.warn(`client_secret 복호화 실패 — secret 없이 진행 catalog=${row.catalog_id}`);
             else clientSecret = plain;
         }
         return {

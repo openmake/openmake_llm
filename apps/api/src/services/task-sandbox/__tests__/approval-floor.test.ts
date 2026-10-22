@@ -82,12 +82,12 @@ describe('approvalFloorReason — 지시 파일 쓰기', () => {
         expect(approvalFloorReason('file_ops', { op: 'write', path: '../..' })).toBeNull();
     });
 
-    it('정책 high-risk 에서도 승인 대상이다(바닥은 정책 high-risk 가 묻는 범위 안에 있다). 정책 none 은 그대로 자동', () => {
+    it('정책 high-risk 에서도 승인 대상이다(바닥은 정책 high-risk 가 묻는 범위 안에 있다). 정책 none 은 게이트로 올라가 거절된다(S1)', () => {
         expect(requiresApproval('high-risk', 'file_ops', { op: 'write', path: 'x/../CLAUDE.md' })).toBe(true);
         expect(requiresApproval('high-risk', 'str_replace_editor', { command: 'create', path: 'agents.md' })).toBe(true);
         expect(requiresApproval('high-risk', 'file_ops', { op: 'write', path: 'README.md' })).toBe(false);
         expect(requiresApproval('high-risk', 'file_ops', { op: 'read', path: 'CLAUDE.md' })).toBe(false);
-        expect(requiresApproval('none', 'file_ops', { op: 'write', path: 'CLAUDE.md' })).toBe(false);
+        expect(requiresApproval('none', 'file_ops', { op: 'write', path: 'CLAUDE.md' })).toBe(true); // S1(2026-10-22): request() 가 policy_floor 로 거절
     });
 
     it('자동승인 작업에서도 지시 파일 쓰기는 대기한다', async () => {

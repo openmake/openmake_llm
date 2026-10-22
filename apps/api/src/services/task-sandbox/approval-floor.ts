@@ -11,6 +11,7 @@
  * @module services/task-sandbox/approval-floor
  */
 import { APPROVAL_FLOOR, INSTRUCTION_FILE_PATTERNS, type ApprovalFloorKind } from '../../config/agent-task-approval';
+import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { isThirdPartyTool } from '../../config/tool-policy';
 import { MEMORY_SAVE_TOOL_NAME } from '../../config/agent-task-skill-memory';
 import { isSensitivePath } from './sensitive-paths';
@@ -85,4 +86,15 @@ export function approvalFloorReason(toolName: string, args: Record<string, unkno
     if (APPROVAL_FLOOR.has('credential_write') && isSensitivePath(target)) return 'credential_write';
     if (APPROVAL_FLOOR.has('instruction_write') && isInstructionPath(target)) return 'instruction_write';
     return null;
+}
+
+/** 정책 none 에서 묻지 않고 거절하는 바닥 — 사용자 메모리·사이트 쓰기·업로드는 종전대로 묻는다. */
+const DENIED_UNDER_NONE: ReadonlySet<ApprovalFloorKind> = new Set<ApprovalFloorKind>(['credential_write', 'third_party_tool', 'instruction_write']);
+
+/** PURE: 정책 none 은 승인할 사람이 없다는 뜻이라 바닥 호출은 묻지 않고 거절한다(2026-10-22 S1).
+ *  거절할 바닥이면 그 종류, 아니면 null. */
+export function floorDeniedUnderPolicy(policy: TaskSandboxApprovalPolicy, toolName: string, args: Record<string, unknown>): ApprovalFloorKind | null {
+    if (policy !== 'none') return null;
+    const floor = approvalFloorReason(toolName, args);
+    return floor !== null && DENIED_UNDER_NONE.has(floor) ? floor : null;
 }
