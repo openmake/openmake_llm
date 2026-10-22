@@ -299,6 +299,18 @@ export const AGENT_TASK_LIMITS = {
     LEASE_SWEEP_MS: parseInt(process.env.AGENT_TASK_LEASE_SWEEP_MS || '', 10) || 30_000,
     /** 마지막 진행 시각(191, R8)을 메모리에서 DB 로 쓰는 주기(ms). AGENT_TASK_PROGRESS_FLUSH_MS(기본 20초) */
     PROGRESS_FLUSH_MS: parseInt(process.env.AGENT_TASK_PROGRESS_FLUSH_MS || '', 10) || 20_000,
+    /** watchdog(R8·R9) — 진행 멈춤·대기열 적체·모델 대기 장기화를 게이지·알림으로 드러낸다(작업 상태는 바꾸지 않는다). AGENT_TASK_WATCHDOG_ENABLED=false 로 끈다 */
+    WATCHDOG_ENABLED: process.env.AGENT_TASK_WATCHDOG_ENABLED !== 'false',
+    /** watchdog 점검 주기(ms). AGENT_TASK_WATCHDOG_MS(기본 60초) */
+    WATCHDOG_MS: parseInt(process.env.AGENT_TASK_WATCHDOG_MS || '', 10) || 60_000,
+    /** 실행 중인데 진행이 이만큼 없으면 멈춘 것으로 본다(ms). AGENT_TASK_STALE_MS(기본 15분) */
+    STALE_MS: parseInt(process.env.AGENT_TASK_STALE_MS || '', 10) || 900_000,
+    /** 대기열 적체 알림 — 대기 건수 기준. AGENT_TASK_QUEUE_BACKLOG_PENDING(기본 20) */
+    QUEUE_BACKLOG_PENDING: parseInt(process.env.AGENT_TASK_QUEUE_BACKLOG_PENDING || '', 10) || 20,
+    /** 대기열 적체 알림 — 가장 오래 기다린 시간 기준(ms). AGENT_TASK_QUEUE_BACKLOG_WAIT_MS(기본 5분) */
+    QUEUE_BACKLOG_WAIT_MS: parseInt(process.env.AGENT_TASK_QUEUE_BACKLOG_WAIT_MS || '', 10) || 300_000,
+    /** 모델 대기 장기화 알림 기준(ms). AGENT_TASK_MODEL_WAIT_ALERT_MS(기본 30분) */
+    MODEL_WAIT_ALERT_MS: parseInt(process.env.AGENT_TASK_MODEL_WAIT_ALERT_MS || '', 10) || 1_800_000,
     /** 부팅 복구 인정 window(ms) — '이번 재시작'으로 마킹된 task 만 자동 resume 하고, 과거
      *  재시작이 남긴 오래된 failed('server restarted') 는 건드리지 않는다(수동 resume 대상).
      *  AGENT_TASK_BOOT_RECOVERY_WINDOW_MS 로 오버라이드(기본 15분). */
