@@ -17,7 +17,7 @@ type Args = Record<string, unknown>;
 /** 셸 결과 끝의 종료 줄 — task-sandbox/tools.ts formatExec 가 만든다. */
 const EXIT_LINE = /\[exit=(-?\d+)( TIMEOUT)?[^\]]*\]/g;
 /** 오류 결과 머리 — runtime.resultToString·runTool 이 붙인다. 데이터 래퍼(tool-result-wrap) 안쪽일 수도 있다. */
-const ERROR_HEAD = /^(?:<tool_output>\n)?Error:\s*/;
+const ERROR_HEAD = /^(?:<tool_output(?:\s[^>]*)?>\n)?Error:\s*/;
 
 function oneLine(text: string, max: number): string {
     const flat = text.replace(/\s+/g, ' ').trim();

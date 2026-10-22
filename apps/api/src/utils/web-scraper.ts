@@ -24,6 +24,7 @@ import { SCRAPER_CONFIG, browserHeaders } from '../config/web-scraper';
 import { WEB_SCRAPE_LIMITS } from '../config/core-runtime-limits';
 import { resolveStructuredSource, resolveBlockedSource, tryRssFallback } from './web-scraper-handlers';
 import { impersonateFetch } from './impersonate-fetch';
+import { createRouteGuard } from './web-scraper-route-guard';
 
 /** Cloudflare 등 봇 챌린지 안내 페이지 여부 — 제목 패턴 부분일치 (config 관리). */
 export function isBotChallengeResult(result: Pick<ScrapeResult, 'title'>): boolean {
@@ -352,19 +353,15 @@ async function scrapeWithPlaywright(
     try {
         const page = await browser.newPage();
         // SSRF 방어: Playwright 는 자체 네트워크 스택을 써서 safeFetch 의 redirect 재검증·DNS 핀을
-        // 우회한다. 문서 네비게이션(초기 goto + 서버 redirect)마다 validateOutboundUrl 로 재검증해
-        // 공격자 도메인이 내부/메타데이터 엔드포인트로 redirect 시키는 것을 차단한다. 리소스(img/css/
-        // script)는 본문 추출 대상이 아니라 성능 위해 통과.
+        // 우회한다. 문서 네비게이션(초기 goto + 서버 redirect)뿐 아니라 하위 리소스(img/css/script/fetch)까지
+        // 모든 요청을 validateOutboundUrl 로 검사해 내부/메타데이터 엔드포인트 접근을 차단한다(같은 origin 은 한 번만).
+        const guard = createRouteGuard(validateOutboundUrl);
         await page.route('**/*', async (route) => {
             const request = route.request();
-            if (request.isNavigationRequest()) {
-                try {
-                    await validateOutboundUrl(request.url());
-                } catch {
-                    logger.warn(`[${url}] Playwright 네비게이션 SSRF 차단: ${request.url()}`);
-                    await route.abort('blockedbyclient');
-                    return;
-                }
+            if (!(await guard(request.url()))) {
+                logger.warn(`[${url}] Playwright 네비게이션 SSRF 차단: ${request.url()}`);
+                await route.abort('blockedbyclient');
+                return;
             }
             await route.continue();
         });

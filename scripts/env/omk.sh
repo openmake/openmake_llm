@@ -1259,7 +1259,8 @@ sandbox_root_ensure() { # $1=.env $2=env
     dotenv_ensure "$1" TASK_SANDBOX_ROOT "$(env_dir "$2")/task-workspaces"
     mkdir -p "$(dotenv_get "$1" TASK_SANDBOX_ROOT)"
 }
-# egress 프록시 이미지(수십 MB) — 브라우저 컨테이너의 네트워크 레벨 allowlist(TASK_SANDBOX_EGRESS_PROXY_ENABLED, 기본 꺼짐).
+# egress 프록시 이미지(수십 MB) — 브라우저 컨테이너의 네트워크 레벨 allowlist(TASK_SANDBOX_EGRESS_PROXY_ENABLED, 운영 기본 켬(W3)).
+# 운영은 .env 에 값이 없어도 켜지므로 스위치와 무관하게 docker 가 있으면 빌드한다(실패는 경고만).
 # 태그·컨테이너 이름은 .env 값(없으면 소스 기본값)을 그대로 쓴다 — .env 는 고치지 않는다. API 는 떠 있는 프록시
 # 컨테이너를 재사용하므로, 옛 이미지로 떠 있으면 지운다 — 다음 브라우저 작업 때 API 가 새 이미지로 다시 띄운다.
 egress_proxy_src_hash() { cat "$1"/infra/egress-proxy/* 2>/dev/null | cksum | tr ' ' '-'; }   # $1=llm dir
@@ -1282,6 +1283,7 @@ runtime_images_ensure() { # $1=llm dir $2=env
     RUNTIME_CHANGED=0
     [[ "$(dotenv_get "$envf" OMK_RUNTIME_IMAGES)" != "off" ]] || { log_info "런타임 이미지 생략 (OMK_RUNTIME_IMAGES=off)"; return 0; }
     has docker && docker info >/dev/null 2>&1 || { log_warn "docker 를 쓸 수 없어 런타임 이미지를 건너뜁니다"; return 0; }
+    egress_proxy_image_ensure "$ldir"   # 작고 독립적 — 아래 큰 이미지 빌드가 실패해도 프록시 이미지는 만든다
     mcp="openmake-mcp-runtime:$(runtime_image_tag "$env")"; task="openmake-task-runtime:$(runtime_image_tag "$env")"
     log_step "런타임 이미지 빌드: $mcp · $task (첫 빌드는 수 분)"
     docker build -q -t "$mcp" "$ldir/infra/mcp-runtime" >/dev/null \
@@ -1298,7 +1300,6 @@ runtime_images_ensure() { # $1=llm dir $2=env
     after="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED|ROOT)=' "$envf" | sort)"
     [[ "$before" == "$after" ]] || RUNTIME_CHANGED=1
     log_ok "런타임 이미지 준비: $mcp · $task"
-    egress_proxy_image_ensure "$ldir"
 }
 runtime_images_remove() { # $1=env — 환경별 태그만 지운다. :latest 는 omk 밖에서도 쓰므로 남긴다.
     [[ "$1" != "$OMK_DEFAULT_ENV" ]] && has docker || return 0

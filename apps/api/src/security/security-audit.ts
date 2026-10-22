@@ -30,7 +30,8 @@ export type SecurityAuditAction =
     | 'external_key.delete'
     | 'mcp_server.create'
     | 'mcp_server.delete'
-    | 'mcp_server.register_denied';
+    | 'mcp_server.register_denied'
+    | 'mcp_server.spawn_refused';
 
 export type SecurityAuditInput = {
     action: SecurityAuditAction;

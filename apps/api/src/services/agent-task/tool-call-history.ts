@@ -19,7 +19,7 @@ export interface FinishedToolCall {
 /** PURE: 결과가 오류인가 — 데이터 래퍼(<tool_output>)나 접힌 스텁(첫 줄이 안내)에 싸여 있어도 본다. */
 function isFailedResult(content: string): boolean {
     const body = content.startsWith(FOLD_MARKER) ? content.slice(content.indexOf('\n') + 1) : content;
-    return /^(?:<tool_output>\s*)?Error:/.test(body);
+    return /^(?:<tool_output(?:\s[^>]*)?>\s*)?Error:/.test(body);
 }
 
 /** PURE: 결과가 붙은 호출만, 결과가 기록된 순서로. id 가 없는 호출은 짝지을 수 없어 뺀다. */

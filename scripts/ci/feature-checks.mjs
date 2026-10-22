@@ -9,10 +9,13 @@ import { fileURLToPath } from 'node:url';
 import { selectE2E } from './feature-checks-e2e.mjs';
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const manifest = JSON.parse(readFileSync(new URL('./feature-checks.manifest.json', import.meta.url)));
+// Jest bootstrap files are imported by no test, yet every apps/api suite runs through them: a change selects every suite.
+const JEST_BOOTSTRAP = ['apps/api/jest.config.js', 'apps/api/jest.setup.ts', 'apps/api/jest.setup-after-env.ts'];
 export function selectFeatures(files) {
   const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, hostSetup: false, e2e: selectE2E(files) };
   for (const file of files) {
     if (result.e2e.some(spec => spec.file === file)) continue;
+    if (JEST_BOOTSTRAP.includes(file)) { result.api.push(file); continue; }
     if (file.startsWith('apps/api/src/') && /\.[cm]?[jt]sx?$/.test(file)) { result.api.push(file); continue; }
     if (manifest.specs[file]) { result[manifest.specs[file]] = true; continue; }
     // Exact host setup files only — a new setup script stays unmapped until it is listed with fixture coverage.
@@ -70,13 +73,14 @@ export function hostSetupTests(root = repoRoot) {
 export function selectRelatedTests(files, options = {}) {
   const root = options.cwd || repoRoot;
   const listRelated = options.listRelated || (file => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout));
+  const listAll = options.listAll || (() => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--listTests', '--json', '--runInBand'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout));
   const selection = selectFeatures(files);
   const tests = new Set();
   const related = new Map();
   for (const file of selection.api) {
     // Deleted source cannot be resolved by Jest: fail explicitly until a regression test is mapped.
     if (!existsSync(resolve(root, file))) throw new Error(`Deleted source requires explicit regression mapping: ${file}`);
-    const paths = requireRelated(file, listRelated(file));
+    const paths = requireRelated(file, JEST_BOOTSTRAP.includes(file) ? listAll() : listRelated(file));
     related.set(file, paths);
     for (const path of paths) tests.add(path);
   }
