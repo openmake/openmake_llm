@@ -470,6 +470,7 @@ export class ExternalMCPClient extends EventEmitter {
                     serverId: this.config.id,
                     network: this.config.sandbox_network ?? 'full',
                     env: this.config.env,
+                    ownerScope: this.config.user_id ? 'user' : 'global',
                 });
                 if (sb.sandboxed) {
                     logger.info(`MCP 서버 "${this.config.name}" docker 격리 적용 (net=${this.config.sandbox_network ?? 'full'})`);

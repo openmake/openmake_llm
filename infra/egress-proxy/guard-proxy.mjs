@@ -68,6 +68,14 @@ function isExempt(entries, host, address, port) {
 }
 
 /**
+ * 프록시에 넘길 도메인 목록. 목록이 비고 mode 가 'public' 이면 undefined(도메인 제한 없음 — 사설망·포트 검사는
+ * 그대로), 그 밖에는 목록 그대로(빈 목록이면 전부 거절).
+ */
+export function resolveDomains(allow, mode) {
+    return allow.length === 0 && mode === 'public' ? undefined : allow;
+}
+
+/**
  * 목적지 검사. 통과면 { ok: true, address }(연결할 주소), 막으면 { ok: false, code, reason }.
  *   opts.domains — 허용 도메인 목록(하위 도메인 포함). 없으면 도메인 제한 없음, 빈 배열이면 전부 거절.
  *   opts.ports   — 허용 포트 목록. 없으면 포트 제한 없음.

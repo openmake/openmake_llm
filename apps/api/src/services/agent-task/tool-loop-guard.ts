@@ -36,11 +36,11 @@ interface LoopLimits {
 
 /** PURE: 결과가 실패인가 — 데이터 래퍼(<tool_output>)에 싸여 있어도 본다. */
 function isErrorResult(content: string): boolean {
-    return /^(?:<tool_output>\s*)?Error:/.test(content);
+    return /^(?:<tool_output(?:\s[^>]*)?>\s*)?Error:/.test(content);
 }
 
 /** 중복 호출 안내 결과 — 데이터 래퍼(<tool_output>)에 싸여 있어도 본다. */
-const DUPLICATE_TOOL_CALL_RE = new RegExp(`^(?:<tool_output>\\s*)?${DUPLICATE_TOOL_CALL_PREFIX.replace(/[[\]]/g, '\\$&')}`);
+const DUPLICATE_TOOL_CALL_RE = new RegExp(`^(?:<tool_output(?:\\s[^>]*)?>\\s*)?${DUPLICATE_TOOL_CALL_PREFIX.replace(/[[\]]/g, '\\$&')}`);
 
 const signature = (name: string, args: unknown): string => `${name}:${hashApprovalArgs((args ?? {}) as Record<string, unknown>)}`;
 

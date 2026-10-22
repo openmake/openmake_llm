@@ -203,9 +203,16 @@ describe('executeTurnToolCalls — 도구 결과 데이터 래퍼', () => {
         const { args, conversation } = input({ toolCalls: calls, goal: '가격을 조사한다' });
         await executeTurnToolCalls(args);
         const content = String(toolMessage(conversation)?.content);
-        expect(content).toContain('<tool_output>\n도구 결과\n</tool_output>');
+        expect(content).toContain('<tool_output tool="web_search">\n도구 결과\n</tool_output>');
         expect(content).toContain('가격을 조사한다');
         expect(addAgentTaskStep).toHaveBeenCalledWith(expect.objectContaining({ stepType: 'tool_result', content: '도구 결과' }));
+    });
+
+    it('외부 MCP 도구는 server, 인자의 url 은 url 로 출처 태그에 싣는다', async () => {
+        jest.replaceProperty(AGENT_TASK_LIMITS, 'TOOL_RESULT_WRAP_ENABLED', true);
+        const { args, conversation } = input({ toolCalls: [{ id: 'c1', function: { name: 'notion::fetch', arguments: { url: 'https://example.com/p' } } }], goal: '목표' });
+        await executeTurnToolCalls(args);
+        expect(String(toolMessage(conversation)?.content)).toContain('<tool_output tool="notion::fetch" server="notion" url="https://example.com/p">\n도구 결과\n</tool_output>');
     });
 
     it('꺼져 있으면(기본) 결과를 그대로 싣는다', async () => {
