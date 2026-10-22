@@ -21,9 +21,11 @@ jest.mock('../../../runtime-ports/tool-runtime', () => ({
 jest.mock('../turn-reentry', () => ({ writeTurnCheckpoint: async () => undefined, markToolCallInFlight: async () => undefined }));
 jest.mock('../tool-receipt', () => ({ ...jest.requireActual('../tool-receipt'), startReceipt: async () => 'k', finishReceipt: async () => undefined }));
 jest.mock('../../../data/repositories/agent-task-repository', () => ({ AgentTaskRepository: jest.fn(() => ({ markParked: async () => undefined })) }));
+jest.mock('../progress-tracker');
 
 import { executeTurnToolCalls } from '../turn-executor';
 import { getToolMediaSink } from '../../../utils/tool-media-sink';
+import { touchProgress } from '../progress-tracker';
 import type { ChatMessage } from '../../../llm/types';
 
 async function run(taskRuntime: unknown): Promise<ChatMessage[]> {
@@ -63,5 +65,13 @@ describe('executeTurnToolCalls — 도구 결과 미디어 저장처', () => {
     it('샌드박스 없는 작업에도 싣지 않는다', async () => {
         const conversation = await run(null);
         expect(conversation[conversation.length - 1].content).toContain('no-sink');
+    });
+});
+
+describe('executeTurnToolCalls — 마지막 진행 시각(R8)', () => {
+    it('도구 결과 1건마다 진행을 기록한다', async () => {
+        await run(null);
+        expect(touchProgress).toHaveBeenCalledTimes(1);
+        expect(touchProgress).toHaveBeenCalledWith('t1');
     });
 });

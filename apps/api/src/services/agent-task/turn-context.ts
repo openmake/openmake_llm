@@ -22,6 +22,7 @@ import { estimateConversationTokens, estimateToolSchemaTokens, calibrationScale,
 import { callAgentTurnWithBudget } from './turn-call';
 import { retryRepeatedAnswer } from './output-repetition';
 import { noteContextTrim } from './context-pressure';
+import { touchProgress } from './progress-tracker';
 import { createLogger } from '../../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
@@ -107,6 +108,7 @@ function shrinkAfterOverflow(conversation: ChatMessage[], tools: ToolDefinition[
 }
 
 export async function callAgentTurnWithContext(p: TurnContextInput): ReturnType<typeof callAgentTurnWithBudget> {
+    touchProgress(p.taskId); // 마지막 진행 시각(191, R8) — 턴 시작
     if (AGENT_TASK_LIMITS.CONTEXT_FOLD_ENABLED) {
         const fold = foldOldToolResults(p.conversation, FOLD_OPTIONS());
         if (fold.folded > 0) logger.info(`[AgentTask] 도구 결과 접기: ${p.taskId} (turn ${p.turn + 1}, ${fold.folded}건, -${fold.savedChars}자)`);

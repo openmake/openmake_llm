@@ -35,6 +35,7 @@ import { createLogger } from '../../utils/logger';
 import { getAgentTaskUnknownOutcomeNotice, getAgentTaskUnknownOutcomeQuestion, getAgentTaskUnknownOutcomeDeclinedNotice, getAgentTaskUnknownOutcomeAnswerNotice, type UnknownOutcomeCause } from '../../prompts/agent-task-prompt';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
+import { touchProgress } from './progress-tracker';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import type { UserContext } from '../../tool-contract/types';
@@ -340,6 +341,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         else if (unknownResult !== undefined && needsReceipt(name, args)) await finishReceipt(taskId, tc.id!, 'outcome_unknown');
         if (inFlightMarked) await markToolCallInFlight(taskId, null);
         emitStep('tool_result', name, toolResult);
+        touchProgress(taskId); // 마지막 진행 시각(191, R8)
         // 턴 중간 체크포인트(6-4, opt-in): 도구 결과 단위로 저장 — 이 시점 conversation 은
         // assistant(tool_calls)+실행된 tool 결과들로 유효하며, resume 이 같은 턴(fromTurn=turn)
         // 에서 LLM 호출로 자연 이어져 이미 실행된 도구(특히 write)를 재실행하지 않는다.

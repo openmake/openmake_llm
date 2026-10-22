@@ -133,6 +133,8 @@ export interface AgentTask {
     /** 실행 소유권(176) — 지금 이 작업을 실행 중인 프로세스와 소유권 만료 시각 */
     lease_owner?: string | null;
     lease_until?: string | Date | null;
+    /** 마지막 진행 시각(191, R8) — 진행 추적기가 주기적으로 쓴다. 191 미적용이면 없음 */
+    last_progress_at?: string | null;
     id: string;
     user_id?: string;
     goal: string;

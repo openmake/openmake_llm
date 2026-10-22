@@ -195,6 +195,15 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('실행 소유권 점검 등록 실패(무시):', err);
     }
 
+    // 7-d. 마지막 진행 시각 쓰기(191, R8) — 진행 추적기가 메모리에 모은 진행을 주기적으로 DB 에 쓴다. 소유권과 무관하게 항상 돈다.
+    try {
+        const { AGENT_TASK_LIMITS } = await import('../config/runtime-limits');
+        const { flushProgressNow } = await import('../services/agent-task/progress-tracker');
+        track(setInterval(() => { void flushProgressNow(); }, AGENT_TASK_LIMITS.PROGRESS_FLUSH_MS));
+    } catch (err) {
+        logger.warn('진행 시각 쓰기 등록 실패(무시):', err);
+    }
+
     // 8-B. Agent Task 부팅 자동 복구 — 재시작으로 running/paused 로 박제된 task 를 스윕.
     //      샌드박스 플래그와 무관하게 실행(비-샌드박스 task 도 좀비가 된다). 반드시 위
     //      reapOrphanTaskSandboxes() 이후 — 먼저 돌면 resume 이 만든 컨테이너를 reap 이 죽인다.
