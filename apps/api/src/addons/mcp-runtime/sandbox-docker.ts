@@ -36,6 +36,8 @@ interface SandboxInput {
     network?: SandboxNetwork;
     /** 컨테이너에 -e 로 주입할 env (서버 config.env). 호스트 env 는 상속하지 않는다. */
     env?: Record<string, string>;
+    /** 서버 소유 범위 — 'user'(사용자 소유)는 운영에서 비격리 실행을 거부한다(W3 S2). 미지정은 종전 판정. */
+    ownerScope?: 'user' | 'global';
 }
 
 interface SandboxResult {
@@ -84,13 +86,20 @@ export const MCP_SANDBOX_PID_LABEL_KEY = 'openmake.pid';
 
 // docker 경로 해석은 Base 유틸(utils/docker-path)로 옮겼다 — 아티팩트 실행·보고서 내보내기도 같은 것을 쓴다 (2026-09-19).
 import { resolveDocker } from '../../utils/docker-path';
+import { boolEnvDefault, isProductionEnv } from '../../config/secure-defaults';
 import { isControlEnvKey } from '../../security/spawn-env-policy';
 import { needsPlaywrightBrowser, playwrightBrowsersFromEnv, wrapWithPlaywrightInstall } from './sandbox-playwright';
 export { resolveDocker };
 
+/** 운영에서 사용자 MCP 서버를 격리할 수 없을 때의 거부 문구 (W3 S2). */
+export const MCP_SANDBOX_REQUIRED_MESSAGE = '운영 환경에서는 사용자 MCP 서버를 격리 없이 실행하지 않습니다 — MCP_SANDBOX_ENABLED 와 Docker 를 확인하세요(관리자 전역 서버만 비격리 허용)';
+/** 위 거부의 오류 code — lifecycle-supervisor 가 감사 기록(mcp_server.spawn_refused) 판별에 쓴다. */
+export const MCP_SANDBOX_REQUIRED_CODE = 'MCP_SANDBOX_REQUIRED';
+
 /** 환경에서 SandboxConfig 조립 (No-Hardcoding — env override). */
 export function defaultSandboxConfig(): SandboxConfig {
-    const enabled = process.env.MCP_SANDBOX_ENABLED === 'true';
+    // 운영(NODE_ENV=production)은 미설정이면 ON(W3) — 끄려면 false 명시. dev/test 는 종전대로 OFF.
+    const enabled = boolEnvDefault(process.env.MCP_SANDBOX_ENABLED, true);
     const dockerPath = enabled ? resolveDocker(process.env.MCP_SANDBOX_DOCKER_PATH || 'docker') : null;
     return {
         enabled,
@@ -211,9 +220,15 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
  * StdioClientTransport env 로 넘겨야 한다(값이 docker 프로세스를 거쳐 컨테이너에 전달됨).
  */
 export function buildSandboxedCommand(input: SandboxInput, cfg: SandboxConfig = defaultSandboxConfig()): SandboxResult {
+    // W3 S2: 운영의 사용자 소유 서버는 격리 없이 돌리지 않는다 — 샌드박스 꺼짐·docker 부재면 거부,
+    // network='host' opt-out 도 무시하고 격리한다. 관리자 전역 서버(global)·dev/test 는 아래 종전 판정.
+    const prodUser = isProductionEnv() && input.ownerScope === 'user';
+    if (prodUser && (!cfg.enabled || !cfg.dockerPath)) {
+        throw Object.assign(new Error(MCP_SANDBOX_REQUIRED_MESSAGE), { code: MCP_SANDBOX_REQUIRED_CODE });
+    }
     // per-server opt-out — 호스트 설치 바이너리 의존 등으로 컨테이너 미동작인 신뢰 서버는
     // sandbox_network='host' 로 비격리 호스트 실행 (플래그 ON 여부와 무관).
-    if (input.network === 'host') return { command: input.command, args: input.args, sandboxed: false };
+    if (input.network === 'host' && !prodUser) return { command: input.command, args: input.args, sandboxed: false };
     if (!cfg.enabled) return { command: input.command, args: input.args, sandboxed: false };
     if (!cfg.dockerPath) {
         // fail-closed: 샌드박스가 명시적으로 활성(cfg.enabled)인데 docker 가 없으면 비격리로 조용히

@@ -151,6 +151,8 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     'mcp_server.create': 'info',
     'mcp_server.delete': 'warning',
     'mcp_server.register_denied': null,
+    // 운영에서 격리 불가한 사용자 MCP 서버 spawn 거부(W3 S2)
+    'mcp_server.spawn_refused': 'warning',
 } as const satisfies Record<string, AuditSeverity | null>;
 
 /**
