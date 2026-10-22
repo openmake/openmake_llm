@@ -137,6 +137,20 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     'mcp_catalog.oauth_client_changed': null,
     'mcp_server_env_update': null,
     'mcp_server_rename': null,
+
+    // ── 보안 거부·자격 변경(S10, 2026-10-22) ──
+    // 인가 실패 — 빈도가 높을 수 있어 알림 없음. db-retention 이 AUDIT_AUTHZ_DENIED_RETENTION_DAYS 뒤 지운다.
+    'security.authz_denied': null,
+    'security.ssrf_blocked': 'warning',
+    'security.tool_args_blocked': 'warning',
+    'security.approval_auto_rejected': null,
+    // BYOK 외부 키 등록·삭제
+    'external_key.set': 'info',
+    'external_key.delete': 'warning',
+    // MCP 서버 등록·삭제와 등록 거부
+    'mcp_server.create': 'info',
+    'mcp_server.delete': 'warning',
+    'mcp_server.register_denied': null,
 } as const satisfies Record<string, AuditSeverity | null>;
 
 /**
