@@ -15,6 +15,7 @@ import { sendAgentTaskAlert, ALERT_TEXT } from '../../monitoring/agent-task-aler
 import { createLogger } from '../../utils/logger';
 import { getAgentTaskQueue } from './task-queue';
 import { isAgentTaskShutdown } from './shutdown-drain';
+import { markLoopRun } from './background-liveness';
 
 const logger = createLogger('AgentTaskWatchdog');
 
@@ -24,6 +25,7 @@ const errText = (e: unknown): string => (e instanceof Error ? e.message : String
 
 /** watchdog 한 번 — 절대 throw 하지 않는다. 대기·멈춤 시간은 DB·큐가 재므로 now 는 쓰지 않는다(계획서 시그니처 유지) */
 export async function runWatchdogTick(now = Date.now()): Promise<WatchdogTickResult> {
+    markLoopRun('watchdog'); // readiness 가 보는 생존 기록(R9-b) — 꺼짐·종료 검사보다 앞
     const out: WatchdogTickResult = { stale: 0, queueBacklog: false, modelWaitLong: 0 };
     if (!AGENT_TASK_LIMITS.WATCHDOG_ENABLED) return { ...out, skipped: 'disabled' };
     if (isAgentTaskShutdown()) return { ...out, skipped: 'shutdown' };
