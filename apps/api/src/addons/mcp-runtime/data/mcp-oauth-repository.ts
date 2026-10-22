@@ -4,7 +4,7 @@
  * 사용자×서버 단위. 토큰·client_secret 은 AES-256-GCM(`utils/token-crypto`) 으로 암호화해
  * 저장하고 읽을 때 복호화한다 — 외부 provider BYOK 키와 같은 방식이다.
  *
- * ⚠️ `decryptToken` 은 fail-open 이다(복호화 실패 시 입력을 그대로 돌려줌). 토큰 JSON 파싱이
+ * ⚠️ `decryptToken` 은 dev/test 에서 fail-open 이다(복호화 실패 시 입력을 그대로 돌려줌, 비-dev 는 throw(2026-10-22 S9)). 토큰 JSON 파싱이
  *    실패하면 "토큰 없음" 으로 취급해 SDK 가 새 인가 흐름을 시작하게 한다 — 깨진 암호문을
  *    Bearer 로 보내는 것보다 재로그인이 낫다.
  *
@@ -12,7 +12,7 @@
  */
 import type { Pool } from 'pg';
 import type { OAuthTokens, OAuthClientInformationFull } from '@modelcontextprotocol/client';
-import { encryptToken, decryptToken } from '../../../utils/token-crypto';
+import { encryptToken, decryptToken, isDecryptionFailure } from '../../../utils/token-crypto';
 import { createLogger } from '../../../utils/logger';
 
 const logger = createLogger('McpOAuthRepository');
@@ -34,7 +34,18 @@ export class McpOAuthRepository {
         const row = r.rows[0];
         if (!row?.client_info || typeof row.client_info.client_id !== 'string') return undefined;
         const info = { ...row.client_info } as OAuthClientInformationFull;
-        if (row.client_secret_enc) info.client_secret = decryptToken(row.client_secret_enc);
+        if (row.client_secret_enc) {
+            // 비-dev 는 복호화 실패 시 throw(2026-10-22 S9). 깨진 client_secret 을 쓰는 대신
+            // undefined 를 돌려 OAuth 클라이언트 재등록을 유도한다.
+            try {
+                const plain = decryptToken(row.client_secret_enc);
+                if (!isDecryptionFailure(plain)) info.client_secret = plain;
+                else logger.warn(`client_secret 복호화 실패(암호문 잔존) s=${serverId} u=${userId}`);
+            } catch (e) {
+                logger.warn(`client_secret 복호화 실패 → 재등록 유도 s=${serverId} u=${userId}: ${e instanceof Error ? e.message : String(e)}`);
+                return undefined;
+            }
+        }
         return info;
     }
 

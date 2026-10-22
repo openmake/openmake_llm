@@ -8,6 +8,7 @@
  * 암호화 포맷: `v1:${iv_hex}:${ciphertext_hex}:${tag_hex}`
  * - v1: prefix로 암호화 여부를 감지 (하위 호환: prefix 없으면 평문으로 반환)
  * - TOKEN_ENCRYPTION_KEY 미설정 시 dev/test 환경은 no-op, 그 외 (production/staging/uat/...) 는 throw
+ * - 암호화·복호화 실패는 dev/test 에서 fail-open(입력 반환), 비-dev 는 throw(2026-10-22 S9) — {@link TokenCryptoError}
  *
  * 키 생성 방법: openssl rand -hex 32
  */
@@ -30,6 +31,11 @@ let _keyWarningLogged = false;
  * 화이트리스트 (production 만 강제) 패턴은 staging 환경에서 silent 평문 저장 위험이 있어 사용 안 함.
  */
 const SAFE_TO_SKIP_ENVS = new Set(['development', 'test']);
+
+/** 비-dev 환경에서 암호화·복호화가 실패했을 때 던지는 오류 (2026-10-22 S9). */
+export class TokenCryptoError extends Error {
+    override name = 'TokenCryptoError';
+}
 
 function isUnsafeEnvironment(): boolean {
     return !SAFE_TO_SKIP_ENVS.has(process.env.NODE_ENV ?? '');
@@ -87,6 +93,7 @@ export function assertTokenEncryptionKeyForProduction(): void {
 /**
  * 토큰을 AES-256-GCM으로 암호화합니다.
  * TOKEN_ENCRYPTION_KEY가 없으면 원문을 그대로 반환합니다 (no-op).
+ * 암호화 예외 시 dev/test 는 평문으로 fallback, 비-dev 는 throw(2026-10-22 S9).
  */
 export function encryptToken(plaintext: string): string {
     if (!plaintext) return plaintext;
@@ -105,6 +112,7 @@ export function encryptToken(plaintext: string): string {
         return `${ENCRYPTED_PREFIX}${iv.toString('hex')}:${encrypted.toString('hex')}:${tag.toString('hex')}`;
     } catch (err) {
         logger.error('토큰 암호화 실패:', err);
+        if (isUnsafeEnvironment()) throw new TokenCryptoError('토큰 암호화 실패');
         return plaintext; // 암호화 실패 시 평문으로 fallback
     }
 }
@@ -112,7 +120,7 @@ export function encryptToken(plaintext: string): string {
 /**
  * 복호화 결과가 실패인지 판별합니다.
  *
- * decryptToken 은 fail-open 이라 키 부재·포맷 오류 시 예외 없이 **암호문을 그대로**
+ * decryptToken 은 dev/test 에서 fail-open 이라(비-dev 는 throw(2026-10-22 S9)) 키 부재·포맷 오류 시 예외 없이 **암호문을 그대로**
  * 돌려줍니다. 따라서 "decryptToken 을 호출했다"가 "평문을 얻었다"를 보장하지 않습니다.
  * 반환값이 여전히 v1: 로 시작하면 복호화가 되지 않은 것이므로, 그 값을 실제 자격증명처럼
  * 쓰면 안 됩니다(자식 프로세스 env 주입·외부 API 호출 등에서 조용한 인증 실패로 나타남).
@@ -133,8 +141,9 @@ export function isDecryptionFailure(decrypted: string): boolean {
  * v1: prefix가 없으면 레거시 평문 토큰으로 간주하고 그대로 반환합니다.
  * TOKEN_ENCRYPTION_KEY가 없으면 값을 그대로 반환합니다.
  *
- * ⚠️ fail-open — 실패해도 throw 하지 않고 입력을 그대로 반환합니다. 반환값을 자격증명으로
+ * ⚠️ dev/test 는 fail-open — 실패해도 throw 하지 않고 입력을 그대로 반환합니다. 반환값을 자격증명으로
  * 쓰기 전에 {@link isDecryptionFailure} 로 검사하세요.
+ * 비-dev 는 throw(2026-10-22 S9) — `v1:` 값의 포맷 오류·GCM 인증 실패 시 {@link TokenCryptoError}.
  */
 export function decryptToken(value: string): string {
     if (!value) return value;
@@ -153,6 +162,7 @@ export function decryptToken(value: string): string {
         const parts = value.slice(ENCRYPTED_PREFIX.length).split(':');
         if (parts.length !== 3) {
             logger.error('암호화 토큰 포맷 오류: 파트 수가 맞지 않습니다.');
+            if (isUnsafeEnvironment()) throw new TokenCryptoError('암호화 토큰 포맷 오류: 파트 수가 맞지 않습니다.');
             return value;
         }
         const [ivHex, ctHex, tagHex] = parts;
@@ -162,6 +172,7 @@ export function decryptToken(value: string): string {
 
         if (iv.length !== IV_LENGTH || tag.length !== TAG_LENGTH) {
             logger.error('암호화 토큰 포맷 오류: IV 또는 태그 길이 불일치.');
+            if (isUnsafeEnvironment()) throw new TokenCryptoError('암호화 토큰 포맷 오류: IV 또는 태그 길이 불일치.');
             return value;
         }
 
@@ -169,7 +180,9 @@ export function decryptToken(value: string): string {
         decipher.setAuthTag(tag);
         return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8');
     } catch (err) {
+        if (err instanceof TokenCryptoError) throw err;
         logger.error('토큰 복호화 실패 (GCM 인증 실패 또는 데이터 손상):', err);
+        if (isUnsafeEnvironment()) throw new TokenCryptoError('토큰 복호화 실패 (GCM 인증 실패 또는 데이터 손상)');
         return value; // 복호화 실패 시 원본값 반환
     }
 }
