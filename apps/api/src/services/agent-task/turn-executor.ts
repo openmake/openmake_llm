@@ -318,7 +318,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         // 서버 종료로 끊긴 호출의 결과(중단 오류·승인 자동 거절)는 저널에 남기지 않는다 — 남기면 재개가 그것을 실제 결과로 읽는다.
         // 비정상 종료와 같이 둔다: 재개 때 읽기 호출은 다시 실행하고, 부작용 호출은 실행 중 표식으로 결과 불명 처리된다.
         if (isShutdownAbort(signal)) throw new AgentTaskAbort('aborted');
-        if (loop && !loop.block && !cycle?.block) toolResult += loop.noteFor(toolResult) || cycle!.noteFor(forModel(name, args, toolResult)) || rereadNote(conversation, name, args, toolResult);
+        if (loop && !loop.block && !cycle?.block) toolResult += loop.noteFor(forModel(name, args, toolResult)) || cycle!.noteFor(forModel(name, args, toolResult)) || rereadNote(conversation, name, args, toolResult);
         conversation.push({
             role: 'tool',
             content: forModel(name, args, toolResult),
