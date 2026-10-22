@@ -99,7 +99,7 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
 
         // 키 소유자 활성 확인 — JWT 경로처럼 비활성·없는 사용자의 키는 거른다(req.user 유무와 무관)
         const user = await db.getUserById(keyRecord.user_id);
-        if (!user || user.is_active === false) {
+        if (!user || !user.is_active) {
             res.status(401).json(apiError(
                 ErrorCodes.UNAUTHORIZED,
                 'API key owner is inactive.'
