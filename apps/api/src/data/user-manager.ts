@@ -22,7 +22,7 @@ import { getPool } from './models/unified-database';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
-import { isLockedNow, isLockoutActive, recordFailedLogin, recordSuccessfulLogin } from './user-login-lockout';
+import { isLockoutActive, recordFailedLogin, recordSuccessfulLogin, selectLoginRow } from './user-login-lockout';
 
 const logger = createLogger('UserManager');
 
@@ -97,8 +97,8 @@ interface UserRow {
     created_at: string;
     updated_at: string;
     last_login: string | null;
-    /** 마이그레이션 192(W3 S7) — 적용 전 DB 에는 없다(undefined). */
-    locked_until?: Date | string | null;
+    /** W3 S7 — 잠금이 켜졌을 때만 SELECT 가 싣는 DB 판정(locked_until > NOW()). 그 밖에는 undefined. */
+    locked_now?: boolean;
 }
 
 /**
@@ -307,13 +307,12 @@ class UserManagerImpl {
      * AUTH_LOCKOUT.LOCK_MS 동안 비밀번호를 비교하지 않고 `locked: true`. 성공하면 카운터·잠금을 초기화한다.
      */
     async authenticateDetailed(email: string, password: string): Promise<{ user: PublicUser | null; locked: boolean }> {
-        const pool = getPool();
-        const result = await pool.query('SELECT * FROM users WHERE (email = $1 OR username = $1) AND is_active = TRUE', [email]);
-        const row = result.rows[0] as UserRow | undefined;
+        const row = await selectLoginRow<UserRow>(email);
         if (!row) return { user: null, locked: false };
 
+        // selectLoginRow 가 42703 을 보면 잠금이 꺼지므로 조회 뒤에 읽는다.
         const lockoutActive = isLockoutActive();
-        if (lockoutActive && isLockedNow(row.locked_until)) {
+        if (lockoutActive && row.locked_now === true) {
             return { user: null, locked: true };
         }
 

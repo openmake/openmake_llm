@@ -1,5 +1,5 @@
 /**
- * W3 S7 — 계정 잠금(authenticateDetailed): 계정 단위 실패 카운터·잠금 시각, 192 미적용(42703) 폴백.
+ * W3 S7 — 계정 잠금(authenticateDetailed): 계정 단위 실패 카운터·잠금 시각(DB 시계 판정), 만료 뒤 재계수, 192 미적용(42703) 폴백.
  *
  * AUTH_LOCKOUT 은 모듈 로드 시 env 를 읽으므로 테스트마다 env 를 정하고 모듈을 새로 불러온다.
  */
@@ -30,6 +30,8 @@ const BASE_ROW = {
     last_login: null,
     failed_login_count: 0,
     locked_until: null as Date | null,
+    /** SELECT 의 (locked_until > NOW()) — 모의 DB 이므로 테스트가 DB 판정값을 직접 정한다. */
+    locked_now: false,
 };
 
 const ENV_KEYS = ['NODE_ENV', 'AUTH_LOCKOUT_ENABLED', 'AUTH_LOCKOUT_THRESHOLD', 'AUTH_LOCKOUT_MS'] as const;
@@ -52,16 +54,17 @@ describe('UserManager.authenticateDetailed — 계정 잠금', () => {
         (db.getPool as jest.Mock).mockReturnValue({
             query: jest.fn(async (sql: string, params?: unknown[]) => {
                 queries.push({ sql, params });
-                if (opts.missingColumns && /failed_login_count/.test(sql)) {
+                if (opts.missingColumns && /failed_login_count|locked_until/.test(sql)) {
                     throw Object.assign(new Error('column "failed_login_count" does not exist'), { code: '42703' });
                 }
-                if (sql.startsWith('SELECT * FROM users')) return { rowCount: 1, rows: [{ ...row }] };
+                if (/^SELECT \*.* FROM users/.test(sql)) return { rowCount: 1, rows: [{ ...row }] };
                 return { rowCount: 1, rows: [] };
             }),
         });
         return (require('../user-manager') as typeof UserManagerModule).getUserManager();
     }
 
+    const EXPIRED_RESET_CASE = 'CASE WHEN locked_until IS NOT NULL AND locked_until <= NOW() THEN 1 ELSE failed_login_count + 1 END';
     const updates = () => queries.filter(q => q.sql.trimStart().startsWith('UPDATE users'));
 
     beforeAll(() => { for (const k of ENV_KEYS) saved[k] = process.env[k]; });
@@ -80,8 +83,9 @@ describe('UserManager.authenticateDetailed — 계정 잠금', () => {
         expect(result).toEqual({ user: null, locked: false });
         const ups = updates();
         expect(ups).toHaveLength(1);
-        expect(ups[0].sql).toContain('failed_login_count = failed_login_count + 1');
-        expect(ups[0].sql).toMatch(/CASE WHEN failed_login_count \+ 1 >= \$2 THEN .* ELSE locked_until END/s);
+        expect(ups[0].sql).toContain(`failed_login_count = ${EXPIRED_RESET_CASE}`);
+        expect(ups[0].sql).toContain(`locked_until = CASE WHEN (${EXPIRED_RESET_CASE}) >= $2 THEN`);
+        expect(ups[0].sql).toContain('ELSE NULL END');
         expect(ups[0].params).toEqual(['42', 10, 900000]);
     });
 
@@ -95,15 +99,15 @@ describe('UserManager.authenticateDetailed — 계정 잠금', () => {
         expect(ups[0].params).toEqual(['42', 3, 60000]);
     });
 
-    test('(c) locked_until 이 미래 — bcrypt 비교 없이 locked:true, UPDATE 없음', async () => {
-        const manager = load({ NODE_ENV: 'production' }, { ...BASE_ROW, failed_login_count: 10, locked_until: new Date(Date.now() + 60_000) });
+    test('(c) 잠금 진행 중(locked_now) — bcrypt 비교 없이 locked:true, UPDATE 없음', async () => {
+        const manager = load({ NODE_ENV: 'production' }, { ...BASE_ROW, failed_login_count: 10, locked_until: new Date(Date.now() + 60_000), locked_now: true });
         const result = await manager.authenticateDetailed('lockme@example.com', 'correct');
         expect(result).toEqual({ user: null, locked: true });
         expect(compareSpy).not.toHaveBeenCalled();
         expect(updates()).toHaveLength(0);
     });
 
-    test('(c-2) locked_until 이 지났으면 다시 비밀번호를 비교한다', async () => {
+    test('(c-2) 잠금이 지났으면(locked_now=false) 다시 비밀번호를 비교한다', async () => {
         const manager = load({ NODE_ENV: 'production' }, { ...BASE_ROW, failed_login_count: 10, locked_until: new Date(Date.now() - 1000) });
         compareSpy.mockResolvedValue(true);
         const result = await manager.authenticateDetailed('lockme@example.com', 'correct');
@@ -151,8 +155,34 @@ describe('UserManager.authenticateDetailed — 계정 잠금', () => {
         expect(updates().map(q => q.sql)).toEqual(['UPDATE users SET last_login = $1 WHERE id = $2']);
     });
 
+    test('(g) 만료된 잠금(count≥THRESHOLD, locked_now=false)에서 1회 실패 — 1부터 다시 세는 UPDATE, 잠기지 않음', async () => {
+        const manager = load({ NODE_ENV: 'production' }, { ...BASE_ROW, failed_login_count: 10, locked_until: new Date(Date.now() - 1000), locked_now: false });
+        compareSpy.mockResolvedValue(false);
+        const result = await manager.authenticateDetailed('lockme@example.com', 'wrong');
+        expect(result).toEqual({ user: null, locked: false });
+        expect(compareSpy).toHaveBeenCalledTimes(1);
+        const ups = updates();
+        expect(ups).toHaveLength(1);
+        // 만료 분기: 카운트를 1 로 되돌리고, 새 카운트(1)가 THRESHOLD 미만이면 locked_until 을 NULL 로 정리한다.
+        expect(ups[0].sql).toContain('WHEN locked_until IS NOT NULL AND locked_until <= NOW() THEN 1');
+        expect(ups[0].sql).toContain(`locked_until = CASE WHEN (${EXPIRED_RESET_CASE}) >= $2 THEN NOW() + make_interval(secs => $3 / 1000.0) ELSE NULL END`);
+        expect(ups[0].sql).not.toContain('ELSE locked_until END');
+        expect(ups[0].params).toEqual(['42', 10, 900000]);
+    });
+
+    test('(h) locked_now=true 면 앱 시계로 지난 locked_until 이어도 bcrypt 없이 locked:true(DB 시계가 판정)', async () => {
+        const manager = load({ NODE_ENV: 'production' }, { ...BASE_ROW, failed_login_count: 10, locked_until: new Date(Date.now() - 60_000), locked_now: true });
+        const result = await manager.authenticateDetailed('lockme@example.com', 'correct');
+        expect(result).toEqual({ user: null, locked: true });
+        expect(compareSpy).not.toHaveBeenCalled();
+        expect(updates()).toHaveLength(0);
+        const select = queries.find(q => q.sql.startsWith('SELECT'));
+        expect(select?.sql).toContain('(locked_until IS NOT NULL AND locked_until > NOW()) AS locked_now');
+        expect(select?.params).toEqual(['lockme@example.com']);
+    });
+
     test('authenticate() 는 authenticateDetailed().user 를 돌려주는 래퍼다', async () => {
-        const manager = load({ NODE_ENV: 'production' }, { ...BASE_ROW, locked_until: new Date(Date.now() + 60_000) });
+        const manager = load({ NODE_ENV: 'production' }, { ...BASE_ROW, locked_until: new Date(Date.now() + 60_000), locked_now: true });
         await expect(manager.authenticate('lockme@example.com', 'correct')).resolves.toBeNull();
     });
 });
