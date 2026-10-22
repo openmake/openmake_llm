@@ -134,10 +134,12 @@ export class AgentTaskRunRepository extends BaseRepository {
      * 복구가 잡았으면 0행(false)이고 건드리지 않는다.
      */
     async failRecoveryLimit(taskId: string, expectedPrev: string): Promise<boolean> {
+        // (2026-10-22 R2) 소유권 있는 pending 은 claim 중 죽은 행 — pending 을 읽었을 때만 소유권 컬럼을 본다(176 적용 전 폴백은 pending 을 넘기지 않는다)
+        const leased = expectedPrev === 'pending';
         const r = await this.query<{ prev: string }>(
             `UPDATE agent_tasks t SET status = 'failed', error = $2, failure_class = $3, completed_at = NOW(), updated_at = NOW(), terminal_notify_pending = TRUE
-             FROM (SELECT id, status AS prev, error AS prev_error FROM agent_tasks WHERE id = $1 FOR UPDATE) o
-             WHERE t.id = o.id AND o.prev = $4 AND (o.prev IN ('running', 'paused') OR (o.prev = 'failed' AND o.prev_error = $5))
+             FROM (SELECT id, status AS prev, error AS prev_error${leased ? ', lease_until' : ''} FROM agent_tasks WHERE id = $1 FOR UPDATE) o
+             WHERE t.id = o.id AND o.prev = $4 AND (o.prev IN ('running', 'paused') OR (o.prev = 'failed' AND o.prev_error = $5)${leased ? " OR (o.prev = 'pending' AND o.lease_until IS NOT NULL)" : ''})
              RETURNING o.prev`,
             [taskId, AGENT_TASK_RECOVERY_LIMIT_ERROR, classifyAgentTaskFailure(AGENT_TASK_RECOVERY_LIMIT_ERROR), expectedPrev, 'server restarted'],
         );

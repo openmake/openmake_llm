@@ -46,8 +46,9 @@ export const APPROVAL_SECRET_KEY_WORDS = {
  *   memory_write      사용자 메모리에 쓰는 호출(memory_save) — 다음 대화·작업의 프롬프트에 계속 실린다
  *   site_write        로컬 브라우저로 허용 목록 밖 사이트에 입력·누르기를 하는 호출 — 내용이 OpenMake 밖으로 나간다(Companion P2).
  *                     memory_write 처럼 정책 none 에서도 묻는다
- * 바닥 검사는 자동승인보다 먼저 돈다. 승인 정책 none(승인 자체가 없음)에는 적용되지 않는다 — memory_write 만 예외로
- * 정책 none 에서도 묻는다(approval-gate 의 requiresApproval). memory_write 를 바닥에서 빼면 memory_save 도구는 실리지 않는다.
+ * 바닥 검사는 자동승인보다 먼저 돈다. 승인 정책 none(승인할 사람이 없음)에서는 credential_write·third_party_tool·instruction_write
+ * 호출을 묻지 않고 거절한다(policy_floor, 2026-10-22 S1) — memory_write·site_write·site_upload 는 정책 none 에서도 묻는다
+ * (approval-gate 의 requiresApproval·ApprovalRegistry.request). memory_write 를 바닥에서 빼면 memory_save 도구는 실리지 않는다.
  * AGENT_TASK_APPROVAL_FLOOR(쉼표 구분)로 고른다. 빈 값이나 none 이면 바닥 없음(종전 동작).
  */
 export const APPROVAL_FLOOR_KINDS = ['credential_write', 'third_party_tool', 'instruction_write', 'memory_write', 'site_write'] as const;
@@ -81,8 +82,10 @@ export const INSTRUCTION_FILE_PATTERNS: readonly string[] = (process.env.AGENT_T
  *   reject  기다리지 않고 거절하고 이유를 모델에 알린다(기본)
  *   approve 기다리지 않고 통과시킨다. 바닥 호출(위 APPROVAL_FLOOR)은 이때도 거절한다
  *   wait    종전 동작 — 승인 대기 상한(TASK_SANDBOX_APPROVAL_TIMEOUT_MS, 기본 30분)까지 사람을 기다린다
- * 예약의 기본 승인 정책은 none(전부 자동)이라 승인 자체가 생기지 않는다 — 정책을 올린 예약
- * (AGENT_TASK_SCHEDULE_APPROVAL_POLICY=high-risk|all)에서만 달라진다. 질문 도구(ask_human·mcp_elicit)는 대상이 아니다.
+ * 예약의 기본 승인 정책은 none(전부 자동)이라 대부분의 호출은 승인 없이 돈다 — 다만 바닥 호출 중 credential_write·
+ * third_party_tool·instruction_write 는 이 설정과 무관하게 거절되고(policy_floor, S1), memory_write·site_write·site_upload 는
+ * 정책 none 에서도 승인 대상이라 이 결론을 따른다. 정책을 올린 예약(AGENT_TASK_SCHEDULE_APPROVAL_POLICY=high-risk|all)에서는
+ * 승인이 필요한 호출 전부가 이 결론을 따른다. 질문 도구(ask_human·mcp_elicit)는 대상이 아니다.
  * AGENT_TASK_UNATTENDED_APPROVAL 로 고른다.
  */
 export type UnattendedApprovalOutcome = 'reject' | 'approve' | 'wait';

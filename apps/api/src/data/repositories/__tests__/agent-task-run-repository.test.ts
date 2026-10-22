@@ -178,6 +178,18 @@ describe('AgentTaskRunRepository.failRecoveryLimit', () => {
         await expect(new AgentTaskRunRepository(pool).failRecoveryLimit('t1', 'running')).resolves.toBe(false);
         expect(calls).toHaveLength(1);
     });
+
+    // (2026-10-22 R2) claim 과 running 사이에서 죽은 행 — 소유권 있는 pending 만, 소유권 없는(실행한 적 없는) pending 은 아니다
+    it('소유권 있는 pending(claim 고아)도 닫는다 — 그 상태를 읽었을 때만 소유권 컬럼을 본다', async () => {
+        const { pool, calls } = fakePool([{ rows: [{ prev: 'pending' }], rowCount: 1 }, { rows: [], rowCount: 1 }, { rows: [], rowCount: 0 }]);
+        const repo = new AgentTaskRunRepository(pool);
+        await expect(repo.failRecoveryLimit('t1', 'pending')).resolves.toBe(true);
+        expect(calls[0].sql).toContain("(o.prev = 'pending' AND o.lease_until IS NOT NULL)");
+        expect(calls[0].params).toEqual(['t1', 'recovery_limit', 'interrupted', 'pending', 'server restarted']);
+        expect(calls[1].params).toEqual(['t1', 'pending', 'failed', 'recovery_limit']);
+        await repo.failRecoveryLimit('t1', 'running');
+        expect(calls[2].sql).not.toContain('lease_until');
+    });
 });
 
 // 종료 알림 보류 — 부팅 복구가 되살릴 행은 알리지 않는다. 로컬 기기 작업도 기기 대기로 주차하게 되면 되살릴 행이다

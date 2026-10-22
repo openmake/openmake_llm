@@ -297,12 +297,20 @@ export class ExternalMCPClient extends EventEmitter {
      *
      * @param name - 원본 도구 이름 (네임스페이스 미포함)
      * @param args - 도구 실행 인자
+     * @param opts - 중단 신호(2026-10-22 R4) — 에이전트 작업 취소·시간 초과·lease 상실 시 SDK 요청을 끊는다
      * @returns MCPToolResult 형식의 실행 결과
      */
-    async callTool(name: string, args: Record<string, unknown>): Promise<MCPToolResult> {
+    async callTool(name: string, args: Record<string, unknown>, opts?: { signal?: AbortSignal }): Promise<MCPToolResult> {
         if (!this.client || this.status !== 'connected') {
             return {
                 content: [{ type: 'text', text: `서버 "${this.config.name}"에 연결되어 있지 않습니다.` }],
+                isError: true,
+            };
+        }
+        const signal = opts?.signal;
+        if (signal?.aborted) {
+            return {
+                content: [{ type: 'text', text: `도구 호출이 중단되었습니다(${this.config.name}::${name})` }],
                 isError: true,
             };
         }
@@ -319,7 +327,10 @@ export class ExternalMCPClient extends EventEmitter {
             // 멱등 키(175) — 에이전트 작업의 외부 도구 호출이면 문맥에 키가 있다. 같은 호출의 재실행도 같은 키다.
             const idempotencyKey = getToolCallIdempotencyKey();
             const params = { name, arguments: args, ...(idempotencyKey ? { _meta: { [MCP_IDEMPOTENCY_META_KEY]: idempotencyKey } } : {}) };
-            const call = (opts?: { signal: AbortSignal; timeout: number }) => (opts ? client.callTool(params, opts) : client.callTool(params)) as Promise<SDKCallToolResult>;
+            // elicitation 경로는 브리지 마감 신호와 호출자 중단 신호 중 먼저 오는 쪽으로 끊는다.
+            const call = (eopts?: { signal: AbortSignal; timeout: number }) => (eopts
+                ? client.callTool(params, signal ? { signal: AbortSignal.any([eopts.signal, signal]), timeout: eopts.timeout } : eopts)
+                : signal ? client.callTool(params, { signal }) : client.callTool(params)) as Promise<SDKCallToolResult>;
             const result = this.elicitation ? await this.elicitation.call(call) : await call();
             return this.sdkResultToMCPToolResult(await offloadMediaBlocks(result, name));
         } catch (error) {

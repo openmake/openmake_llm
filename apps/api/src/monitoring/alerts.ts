@@ -23,6 +23,7 @@ import { createLogger } from '../utils/logger';
 import { ALERT_THRESHOLDS } from '../config/timeouts';
 import { ALERT_DEFAULTS } from '../config/core-runtime-limits';
 import { getConfig } from '../config/env';
+import type { AgentTaskAlertType } from './agent-task-alerts';
 
 const logger = createLogger('AlertSystem');
 
@@ -66,7 +67,8 @@ type AlertType =
     | 'response_time_spike'
     | 'error_rate_spike'
     | 'minor_pending_registered'  // GDPR Phase D — 14세 미만 가입 대기
-    | 'slo_burn_rate';  // F24.8 — SLO 에러 버짓 burn-rate(monitoring/slo-runner)
+    | 'slo_burn_rate'  // F24.8 — SLO 에러 버짓 burn-rate(monitoring/slo-runner)
+    | AgentTaskAlertType;  // R8·R9 — 에이전트 작업 알림 5종(monitoring/agent-task-alerts)
 
 /**
  * 알림 메시지 인터페이스

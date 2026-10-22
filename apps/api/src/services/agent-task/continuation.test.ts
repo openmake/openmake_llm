@@ -278,3 +278,64 @@ describe('continueAsNewSegment — 최종 검토 수정', () => {
         expect(db.createAgentTask).not.toHaveBeenCalled();
     });
 });
+
+describe('followExistingSuccessor — 후속 생존 판정(R3)', () => {
+    const input = () => ({
+        task: { id: 'root', user_id: 'u', goal: '목표', max_turns: 32, chain_root_task_id: 'root', long_running: budget, executor: 'sandbox', input_files: null, input_images: null } as never,
+        root, reason: 'context' as const, conversation: conv(), turn: 7,
+        roleState: {} as never, signal: new AbortController().signal, taskRuntime: null,
+        userRole: 'admin' as const, activeMs: 1_000, totalTokens: 100,
+    });
+    const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+    const seeded: ChatMessage[] = [{ role: 'system', content: 'sys' }, { role: 'user', content: '목표' }, { role: 'user', content: '인계' }];
+    const succ = (over: Record<string, unknown>) => ({
+        id: 's-old', user_id: 'u', goal: '목표', max_turns: 32, executor: 'sandbox', input_files: null, input_images: null,
+        approval_policy: 'none', thinking_level: 'high', lease_until: null, checkpoint: { conversation: seeded, completedTurn: -1 }, ...over,
+    });
+    const withSuccessor = (s: unknown) => db.getAgentTask.mockImplementation(async (id: string) => (id === 'root' ? { ...(root as object), continued_by_task_id: 's-old' } : id === 's-old' ? s : undefined));
+    beforeEach(() => {
+        jest.clearAllMocks();
+        chainRepo.claimContinuation.mockResolvedValue(false);
+        chatMock.mockResolvedValue({ content: '1. 다음' });
+        dispatchMock.mockResolvedValue('started');
+    });
+
+    it('(a) pending·lease 없음·updated_at 2분 전·체크포인트 있음 → 저장된 대화로 재디스패치하고 successorId', async () => {
+        withSuccessor(succ({ status: 'pending', updated_at: ago(120_000) }));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ successorId: 's-old' });
+        expect(dispatchMock).toHaveBeenCalledTimes(1);
+        const entry = dispatchMock.mock.calls[0][0];
+        expect(entry).toMatchObject({ taskId: 's-old', userId: 'u' });
+        await entry.run();
+        expect(executeMock.mock.calls[0][0]).toMatchObject({ taskId: 's-old', goal: '목표', userRole: 'admin', maxTurns: 32, approvalPolicy: 'none', thinkingLevel: 'high' });
+        expect(executeMock.mock.calls[0][0].resume).toEqual({ conversation: seeded, fromTurn: 0, fromStep: 0 });
+        expect(db.createAgentTask).not.toHaveBeenCalled();
+    });
+    it('(a-2) 재디스패치가 실패하면 skipped(후속 재디스패치 실패)', async () => {
+        withSuccessor(succ({ status: 'pending', updated_at: ago(120_000) }));
+        dispatchMock.mockRejectedValueOnce(new Error('queue full'));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ skipped: expect.stringMatching(/^후속 재디스패치 실패: .*queue full/) });
+    });
+    it('(b) 후속 running → 디스패치 없이 successorId', async () => {
+        withSuccessor(succ({ status: 'running', updated_at: ago(120_000) }));
+        expect(await continueAsNewSegment(input())).toEqual({ successorId: 's-old' });
+        expect(dispatchMock).not.toHaveBeenCalled();
+    });
+    it('(c) 후속 pending·updated_at 10초 전(다른 실행이 디스패치 중) → 디스패치 없이 successorId', async () => {
+        withSuccessor(succ({ status: 'pending', updated_at: ago(10_000) }));
+        expect(await continueAsNewSegment(input())).toEqual({ successorId: 's-old' });
+        expect(dispatchMock).not.toHaveBeenCalled();
+    });
+    it('(d) 후속 pending·오래됨·체크포인트 없음 → skipped', async () => {
+        withSuccessor(succ({ status: 'pending', updated_at: ago(120_000), checkpoint: null }));
+        expect(await continueAsNewSegment(input())).toEqual({ skipped: expect.any(String) });
+        expect(dispatchMock).not.toHaveBeenCalled();
+    });
+    it('(e) 후속 pending·lease_until 미래 → 디스패치 없이 successorId', async () => {
+        withSuccessor(succ({ status: 'pending', updated_at: ago(120_000), lease_until: new Date(Date.now() + 30_000).toISOString() }));
+        expect(await continueAsNewSegment(input())).toEqual({ successorId: 's-old' });
+        expect(dispatchMock).not.toHaveBeenCalled();
+    });
+});

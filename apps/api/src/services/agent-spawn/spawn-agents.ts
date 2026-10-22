@@ -201,9 +201,9 @@ interface SpawnAgentsParams {
     /** 서브에이전트 도구 서브셋 — 호출부가 선별을 마친 목록(여기서 위임 계열만 재차 제외). */
     tools: ToolDefinition[];
     userCtx: UserContext;
-    /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 정책 'none' 이라 식별용일 뿐. */
+    /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 승인 게이트를 건너뛰어(skipApprovalGate) 식별용일 뿐. */
     taskId: string;
-    sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs'>;
+    sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs'> & { skipApprovalGate?: boolean };
     signal?: AbortSignal;
     onTokens?: (n: number, metrics?: UsageMetrics) => void;
     /** 부모 작업의 남은 토큰 예산(에이전트 작업 경로만) — 병렬 서브의 합이 이를 넘지 않게 한다. */
@@ -422,8 +422,9 @@ export async function runChatSpawnAgents(params: {
         client: resolved.client,
         tools: filterChatSubTools(params.chatTools),
         userCtx: params.userCtx,
-        taskId: CHAT_PSEUDO_TASK_ID, // 정책 'none' 이라 승인 레지스트리 미사용 — 식별용 문자열일 뿐
-        sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 0 },
+        taskId: CHAT_PSEUDO_TASK_ID, // 승인 레지스트리 미사용 — 식별용 문자열일 뿐
+        // 채팅 경로 — 승인 게이트 없음(정책 none 의 바닥 거절도 적용하지 않는다, 2026-10-22 S1)
+        sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 0, skipApprovalGate: true },
         ...(params.signal ? { signal: params.signal } : {}),
         onTokens: (n) => logger.debug(`[AgentSpawn] 채팅 서브 토큰 +${n}`),
     });

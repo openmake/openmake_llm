@@ -50,10 +50,11 @@ interface SubagentParams {
     /** 안전 도구 서브셋 — 부모의 호스트 화이트리스트(extraTools). delegate 류는 호출부가 제외. */
     tools: ToolDefinition[];
     userCtx: UserContext;
-    /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 정책 'none' 이라 실사용 안 됨. */
+    /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 승인 게이트를 건너뛰어(skipApprovalGate) 실사용 안 됨. */
     taskId: string;
-    /** 승인 정책·대기 상한만 사용 — 채팅 경로는 {approvalPolicy:'none', approvalTimeoutMs:0} 전달. */
-    sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs' | 'deviceGatesShell'>;
+    /** 승인 정책·대기 상한만 사용. skipApprovalGate — 채팅 경로만 true: 승인 게이트를 아예 거치지 않는다
+     *  (정책 none 의 바닥 거절도 적용하지 않는다 — 채팅 부모 루프가 같은 도구를 게이트 없이 부른다, 2026-10-22 S1). */
+    sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs' | 'deviceGatesShell'> & { skipApprovalGate?: boolean };
     signal?: AbortSignal;
     /** 서브 LLM 호출 토큰을 부모 누적에 합산. */
     onTokens?: (n: number, metrics?: UsageMetrics) => void;
@@ -207,12 +208,12 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             // 읽기 전용 도구 병렬 선실행 — 승인 필요 호출은 자동 승인 작업에서만(부모 루프와 같은 규칙).
             const prefetched = await prefetchReadOnlyCalls(
                 result.tool_calls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
-                ({ name, tc }) => !requiresApproval(p.sandboxCfg.approvalPolicy, name,
+                ({ name, tc }) => !!p.sandboxCfg.skipApprovalGate || !requiresApproval(p.sandboxCfg.approvalPolicy, name,
                     (tc.function.arguments ?? {}) as Record<string, unknown>, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })
                     || getApprovalRegistry().autoApproves(p.taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>),
                 async ({ name, tc }) => {
                     const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
-                    if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
+                    if (!p.sandboxCfg.skipApprovalGate && requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
                         const r = await getApprovalRegistry().request(
                             { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
                             { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal, policy: p.sandboxCfg.approvalPolicy },
@@ -220,7 +221,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                         p.onPausedMs?.(r.waitedMs);
                         if (r.decision !== 'approved') return getApprovalRejectedNotice(name, r.reason, r.text);
                     }
-                    return runTool(mcp, name, args, p.userCtx);
+                    return runTool(mcp, name, args, p.userCtx, undefined, p.signal);
                 },
                 { path: 'subagent', ...(p.signal ? { signal: p.signal } : {}) },
             );
@@ -236,7 +237,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 // 부모와 동일한 승인 게이트 — 정책 우회 없음(자동승인 task 면 즉시 approved).
                 let approved = true;
                 let rejected: { reason?: string; text?: string } = {};
-                if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
+                if (!p.sandboxCfg.skipApprovalGate && requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
                     let pended = false;
                     const r = await getApprovalRegistry().request(
                         { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
@@ -257,7 +258,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                     rejected = r;
                 }
                 const toolResult = approved
-                    ? await runTool(mcp, name, args, p.userCtx)
+                    ? await runTool(mcp, name, args, p.userCtx, undefined, p.signal)
                     : getApprovalRejectedNotice(name, rejected.reason, rejected.text);
                 p.trace?.record('tool_result', toolResult, name);
                 conversation.push({ role: 'tool', content: toolResult, tool_name: name, tool_call_id: tc.id });

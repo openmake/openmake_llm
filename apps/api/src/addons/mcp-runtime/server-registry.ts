@@ -266,7 +266,7 @@ export class MCPServerRegistry {
             serverId,
             config.name,
             tools,
-            (name, args) => client.callTool(name, args)
+            (name, args, opts) => (opts ? client.callTool(name, args, opts) : client.callTool(name, args))
         );
     }
 

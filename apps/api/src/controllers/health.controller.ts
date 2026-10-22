@@ -14,6 +14,7 @@ import { getBuildInfo } from '../config/build-id';
 import { APP_VERSION } from '../config/constants';
 import { getConfig } from '../config/env';
 import { toLocalModelTag } from '../config/model-roles';
+import { getBackgroundLiveness } from '../services/agent-task/background-liveness';
 
 // 버전 SoT = 루트 package.json (release-please 가 bump). 여기서 재구현하지 않는다.
 const _cachedVersion = APP_VERSION;
@@ -80,7 +81,7 @@ class HealthController {
 
     /**
      * GET /ready
-     * 서비스 준비 상태 확인 — LLM 노드 연결 + DB 연결 + 기본 모델이 노드 목록에 있는지. **아무것도 쓰지 않는다**.
+     * 서비스 준비 상태 확인 — LLM 노드 연결 + DB 연결 + 기본 모델이 노드 목록에 있는지 + 백그라운드 루프 생존. **아무것도 쓰지 않는다**.
      * 운영(릴리스) 환경의 배포 스모크가 채팅 대신 이것으로 연결을 확인한다(scripts/env/omk.sh) — 채팅은 대화 기록·모델 호출을
      * 남기고, 코드 동작은 같은 커밋으로 staging 에서 이미 확인했다.
      */
@@ -108,7 +109,9 @@ class HealthController {
         // 기본 모델 이름·키 같은 설정 실수는 노드가 떠 있어도 채팅을 막는다 — 목록에 없다고 확인될 때만 준비 안 됨으로 본다
         const defaultModel = getConfig().llmDefaultModel;
         const modelListed = defaultModelListed(defaultModel, stats.uniqueModels);
-        const isReady = clusterReady && dbReady && modelListed !== false;
+        // 백그라운드 루프(소유권 점검·스케줄 tick·watchdog)가 멈췄으면 준비 안 됨 — 단일 프로세스 운영에서 루프가 죽으면 복구·예약이 멈춘다
+        const background = getBackgroundLiveness();
+        const isReady = clusterReady && dbReady && modelListed !== false && background.ok;
 
         res.status(isReady ? 200 : 503).json(success({
             ready: isReady,
@@ -116,6 +119,7 @@ class HealthController {
             totalNodes: stats.totalNodes,
             dbConnected: dbReady,
             defaultModel: { id: defaultModel, listed: modelListed },
+            background,
             timestamp: new Date().toISOString()
         }));
     }

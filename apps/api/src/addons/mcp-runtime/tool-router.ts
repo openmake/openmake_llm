@@ -63,7 +63,7 @@ function resultText(result: MCPToolResult): string {
  * @param args - 도구 실행 인자
  * @returns 도구 실행 결과
  */
-type ExternalToolExecutor = (name: string, args: Record<string, unknown>) => Promise<MCPToolResult>;
+type ExternalToolExecutor = (name: string, args: Record<string, unknown>, opts?: { signal?: AbortSignal }) => Promise<MCPToolResult>;
 
 /**
  * LLM Function Calling 도구 형식 (OpenAI 호환)
@@ -269,9 +269,9 @@ export class ToolRouter implements ExternalToolDispatch {
      *
      * ⚙️ UserContext 전달 (2026-02-07): 내장 도구 handler 에 context 를 넘겨 사용자 정보를 참조하게 한다.
      */
-    async executeTool(name: string, args: Record<string, unknown>, context?: UserContext): Promise<MCPToolResult> {
+    async executeTool(name: string, args: Record<string, unknown>, context?: UserContext, opts?: { signal?: AbortSignal }): Promise<MCPToolResult> {
         return runWithToolMediaSink(chatMediaSinkFor(context), () =>
-            dispatchTool(name, args, context, { builtInTools: getBuiltInTools, external: this }));
+            dispatchTool(name, args, context, { builtInTools: getBuiltInTools, external: this }, opts));
     }
 
     /** 오타 교정 제안용 — Base 디스패처가 not-found 메시지를 만들 때 부른다. */
@@ -284,7 +284,7 @@ export class ToolRouter implements ExternalToolDispatch {
      * 이름을 모르면 `undefined` 를 돌려 not-found 처리를 Base 디스패처에 맡기고,
      * 실행 실패는 throw 해서 같은 곳에서 분류·기록되게 한다.
      */
-    async execute(name: string, args: Record<string, unknown>, context?: UserContext): Promise<MCPToolResult | undefined> {
+    async execute(name: string, args: Record<string, unknown>, context?: UserContext, opts?: { signal?: AbortSignal }): Promise<MCPToolResult | undefined> {
         // 1a. 사용자별 풀 우선 검색 (Phase 7 LifecycleSupervisor 가 채운 인스턴스)
         //     context.userId 가 있으면 user_private/user_shared 서버는 사용자 풀에서만 접근.
         if (context?.userId) {
@@ -302,7 +302,7 @@ export class ToolRouter implements ExternalToolDispatch {
             };
             // 서버가 사용자 입력을 기다리는 동안(elicitation, F13.10)은 마감을 다시 건다
             const callTarget = (t: NonNullable<ReturnType<typeof findTarget>>) => Promise.race([
-                t.client.callTool(t.entry.originalToolName, args),
+                opts ? t.client.callTool(t.entry.originalToolName, args, opts) : t.client.callTool(t.entry.originalToolName, args),
                 new Promise<never>((_, reject) => inputAwareTimer(MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS, () => t.client.isAwaitingInput?.() ?? false,
                     () => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)))),
             ]);
@@ -347,7 +347,7 @@ export class ToolRouter implements ExternalToolDispatch {
 
         // 외부 도구 실행 (타임아웃 — 출력 크기 제한은 Base 디스패처가 적용)
         return Promise.race([
-            executor(externalEntry.originalName, args),
+            opts ? executor(externalEntry.originalName, args, opts) : executor(externalEntry.originalName, args),
             new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
             )

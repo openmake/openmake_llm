@@ -12,6 +12,7 @@
  * - consent_logs                    : CONSENT_PII_RETENTION_DAYS(기본 90일) 초과 ip/ua NULL (GDPR Article 5(1)(c))
  * - audit_logs                      : AUDIT_PII_RETENTION_DAYS(기본 90일) 초과 ip/ua NULL + details.actor 제거
  * - audit_logs (login.succeeded)    : AUDIT_LOGIN_SUCCESS_RETENTION_DAYS(기본 90일) 초과 행 삭제 — 이 action 만, 다른 감사 기록은 삭제하지 않음
+ * - audit_logs (security.authz_denied): AUDIT_AUTHZ_DENIED_RETENTION_DAYS(기본 30일) 초과 행 삭제 — 403 인가 실패 기록(S10)만
  * - alert_history                   : ALERT_PII_RETENTION_DAYS(기본 90일) 초과 data.actor/ipAddress/userAgent 제거
  * - add-on 소유 테이블              : 각 add-on 데이터 모듈의 retention 작업 (예: MCP 인스턴스 이력 — MCP_INSTANCE_RETENTION_DAYS)
  * - orchestration_dispatch_decisions: ORCH_PREVIEW_RETENTION_DAYS(기본 30일) 초과 query_preview NULL (집계 지표는 METRICS_RETENTION_DAYS 까지 보존)
@@ -176,6 +177,24 @@ async function runRetention(): Promise<void> {
             );
             if ((loginAuditResult.rowCount ?? 0) > 0) {
                 logger.info(`[DbRetention] 성공 로그인 감사 기록 ${loginAuditResult.rowCount}건 정리 완료 (${loginAuditRetentionDays}일 초과)`);
+            }
+        }
+
+        // 7-b. 인가 실패 기록(security.authz_denied, S10) 보존 (env: AUDIT_AUTHZ_DENIED_RETENTION_DAYS, 기본 30일)
+        // 403 마다 한 행이 쌓여 빈도가 높을 수 있다 — 7-a 와 같이 이 action 행만 지운다.
+        const authzDeniedRetentionDays = parseInt(
+            process.env.AUDIT_AUTHZ_DENIED_RETENTION_DAYS ?? '30',
+            10,
+        );
+        if (Number.isFinite(authzDeniedRetentionDays) && authzDeniedRetentionDays > 0) {
+            const authzDeniedResult = await pool.query(
+                `DELETE FROM audit_logs
+                 WHERE action = 'security.authz_denied'
+                   AND timestamp < NOW() - ($1 || ' days')::interval`,
+                [authzDeniedRetentionDays.toString()]
+            );
+            if ((authzDeniedResult.rowCount ?? 0) > 0) {
+                logger.info(`[DbRetention] 인가 실패 감사 기록 ${authzDeniedResult.rowCount}건 정리 완료 (${authzDeniedRetentionDays}일 초과)`);
             }
         }
 
