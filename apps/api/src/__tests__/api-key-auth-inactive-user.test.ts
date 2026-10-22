@@ -62,6 +62,15 @@ describe('requireApiKey — 키 소유자 활성 확인', () => {
         expectRejected(res, next);
     });
 
+    it('키 소유자의 is_active 가 NULL 이면 비활성으로 보고 401 (JWT·WS 경로와 같은 판정)', async () => {
+        mockGetUserById.mockResolvedValue({ ...ACTIVE_USER, is_active: null });
+        const res = makeRes();
+        const next = jest.fn();
+        await requireApiKey(makeReq(), res, next);
+        await flush();
+        expectRejected(res, next);
+    });
+
     it('키 소유자 행이 없으면 401', async () => {
         mockGetUserById.mockResolvedValue(undefined);
         const res = makeRes();
