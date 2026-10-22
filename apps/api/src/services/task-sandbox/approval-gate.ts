@@ -17,7 +17,7 @@
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { isSensitivePath } from './sensitive-paths';
 import { redactApprovalArgs, redactApprovalPreview } from './approval-redact';
-import { approvalFloorReason, writeTargetPath } from './approval-floor';
+import { approvalFloorReason, floorDeniedUnderPolicy, writeTargetPath } from './approval-floor';
 import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
 import { classifyToolRisk, policyRequiresApproval, isThirdPartyTool, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
@@ -51,6 +51,7 @@ export function requiresApproval(
 ): boolean {
     if (opts.deviceGatesShell && DEVICE_GATED_SHELL.has(toolName)) return false;
     const floor = approvalFloorReason(toolName, args);
+    if (policy === 'none' && floor !== null) return true;
     if (floor === 'memory_write' || floor === 'site_write' || floor === 'site_upload') return true;
     if (opts.siteGoverned && toolName === 'browser' && policy === 'high-risk') return false;
     return policyRequiresApproval(policy, classifyToolRisk(toolName, args),
@@ -68,8 +69,9 @@ type ApprovalDecision = 'approved' | 'rejected';
  *  HITL 무응답 강등(연속 N회 시 승인 필요 도구 제거 → 산출물 유도)의 카운트 대상이다.
  *  'parked'(F16.7): 질문형 승인이 만료됐지만 AGENT_TASK_HITL_PARK_ON_TIMEOUT 이라 저장소에 pending 으로 남긴 경우 —
  *  호출부는 작업을 주차(AgentTaskParked)하고, 답이 오면 재개된 작업이 같은 호출에서 결정을 이어받는다.
- *  'unattended': 무인 작업(예약 실행)이라 기다리지 않고 설정된 결론으로 끝낸 경우 — 사용자의 거절이 아니다. */
-export type ApprovalRejectReason = 'timeout' | 'user' | 'abort' | 'parked' | 'unattended';
+ *  'unattended': 무인 작업(예약 실행)이라 기다리지 않고 설정된 결론으로 끝낸 경우 — 사용자의 거절이 아니다.
+ *  'policy_floor': 정책 none 에서 바닥 호출(승인할 사람이 없으므로 거절). */
+export type ApprovalRejectReason = 'timeout' | 'user' | 'abort' | 'parked' | 'unattended' | 'policy_floor';
 
 /** 승인 요청의 해소 결과 — 결정 + (ask_human 자유텍스트 응답 시) 사용자 답변 본문. */
 interface ApprovalResult {
@@ -248,6 +250,11 @@ export class ApprovalRegistry {
     ): Promise<ApprovalResult> {
         if (this.autoApproves(input.taskId, input.toolName, input.args)) {
             return { decision: 'approved', waitedMs: 0 };
+        }
+        const deniedFloor = opts.policy === 'none' ? floorDeniedUnderPolicy('none', input.toolName, input.args) : null;
+        if (deniedFloor) {
+            logger.info(`[${input.taskId}] 정책 none — 바닥 호출(${deniedFloor}) 거절: ${input.toolName}`);
+            return { decision: 'rejected', reason: 'policy_floor', waitedMs: 0 };
         }
         // 무인 작업 — 기다려도 승인할 사람이 없다. 질문 도구는 종전대로 답을 기다린다(예약의 기본 동작을 바꾸지 않는다).
         if (this.unattendedTasks.has(input.taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)) {
