@@ -24,7 +24,7 @@ import { validate } from '../middlewares/validation';
 import { asyncHandler, AppError, ValidationError } from '../utils/error-handler';
 import { success } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
-import { encryptToken, decryptToken, isDecryptionFailure } from '../utils/token-crypto';
+import { encryptToken, tryDecryptToken } from '../utils/token-crypto';
 import { getPool } from '../data/models/unified-database';
 import { AgentTaskTriggerRepository, type AgentTaskTrigger } from '../data/repositories/agent-task-trigger-repository';
 import { AgentTaskTemplateRepository } from '../data/repositories/agent-task-template-repository';
@@ -126,8 +126,9 @@ export const triggerReceiverRouter = Router();
 triggerReceiverRouter.post('/:triggerId', receiverLimiter, asyncHandler(async (req: Request, res: Response) => {
     const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
     const trigger = await repo().getForVerification(req.params.triggerId);
-    const secret = trigger?.enabled ? decryptToken(trigger.secret_encrypted) : '';
-    const verdict = trigger?.enabled && secret && !isDecryptionFailure(secret)
+    // 복호화할 수 없는 시크릿은 null → 서명 불일치와 같은 401 (비-dev 도 throw 하지 않음, S9 후속)
+    const secret = trigger?.enabled ? tryDecryptToken(trigger.secret_encrypted) : null;
+    const verdict = trigger?.enabled && secret
         ? verifyTriggerSignature({ secret, timestamp: req.get('X-Openmake-Timestamp'), signature: req.get('X-Openmake-Signature'), rawBody, nowMs: Date.now() })
         : 'bad';
     if (verdict !== 'ok') {
