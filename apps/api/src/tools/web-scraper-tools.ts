@@ -13,14 +13,32 @@
  * - web_crawl: 웹사이트 크롤링 (다중 페이지)
  */
 
-import { MCPToolDefinition, MCPToolResult } from '../tool-contract/types';
+import { MCPToolDefinition, MCPToolResult, UserContext } from '../tool-contract/types';
 import { TRUNCATION, TOOL_RESULT_COMPACTION } from '../config/runtime-limits';
 import { WEB_SCRAPER_TOOL_DEFAULTS } from '../config/addon-tool-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { scrapePage, mapSiteUrls, crawlSite } from '../utils/web-scraper';
 import { validateOutboundUrl } from '../security/ssrf-guard';
+import { auditSecurityEvent, isSsrfBlockedError } from '../security/security-audit';
 import { semanticCompact } from '../services/semantic-compactor';
 import { registerPageSource } from './web-search/page-source';
+
+/** URL 의 host 만 — 감사에 URL 전체(경로·쿼리)를 남기지 않는다. 파싱 실패는 'invalid'. */
+function safeHost(url: unknown): string {
+    try { return new URL(String(url)).host; } catch { return 'invalid'; }
+}
+
+/** SSRF 가드 차단이면 감사로 남긴다(S10, fire-and-forget) — 도구 반환값은 그대로. */
+function auditIfSsrfBlocked(e: unknown, url: unknown, toolName: string, context: UserContext | undefined): void {
+    if (!isSsrfBlockedError(e)) return;
+    void auditSecurityEvent({
+        action: 'security.ssrf_blocked',
+        userId: context?.userId,
+        resourceType: 'url',
+        resourceId: safeHost(url),
+        details: { tool: toolName, reason: (e as Error).message },
+    }).catch(() => undefined);
+}
 
 // ============================================
 // web_scrape — 웹 페이지 스크래핑
@@ -74,6 +92,7 @@ export const webScrapeTool: MCPToolDefinition = {
                 ...(pageSource ? { sources: pageSource.sources } : {})
             };
         } catch (error: unknown) {
+            auditIfSsrfBlocked(error, args.url, 'web_scrape', context);
             return {
                 content: [{ type: 'text', text: `스크래핑 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true
@@ -109,7 +128,7 @@ export const webMapTool: MCPToolDefinition = {
             required: ['url']
         }
     },
-    async handler(args: Record<string, unknown>): Promise<MCPToolResult> {
+    async handler(args: Record<string, unknown>, context): Promise<MCPToolResult> {
         try {
             const url = args.url as string;
             await validateOutboundUrl(url);
@@ -133,6 +152,7 @@ export const webMapTool: MCPToolDefinition = {
                 isError: false
             };
         } catch (error: unknown) {
+            auditIfSsrfBlocked(error, args.url, 'web_map', context);
             return {
                 content: [{ type: 'text', text: `URL 매핑 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true
@@ -173,7 +193,7 @@ export const webCrawlTool: MCPToolDefinition = {
             required: ['url']
         }
     },
-    async handler(args: Record<string, unknown>): Promise<MCPToolResult> {
+    async handler(args: Record<string, unknown>, context): Promise<MCPToolResult> {
         try {
             const url = args.url as string;
             await validateOutboundUrl(url);
@@ -200,6 +220,7 @@ export const webCrawlTool: MCPToolDefinition = {
                 isError: false
             };
         } catch (error: unknown) {
+            auditIfSsrfBlocked(error, args.url, 'web_crawl', context);
             return {
                 content: [{ type: 'text', text: `크롤링 실패: ${(error instanceof Error ? error.message : String(error))}` }],
                 isError: true

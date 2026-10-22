@@ -13,6 +13,8 @@ import type { MCPToolResult, UserContext } from './types';
 import type { ToolErrorCategory } from './tool-error-classifier';
 import { UserSandbox } from './user-sandbox';
 import { createLogger } from '../utils/logger';
+import { auditSecurityEvent } from '../security/security-audit';
+import { hashToolArgs } from '../utils/args-hash';
 
 const logger = createLogger('ToolExecutionGuard');
 
@@ -49,6 +51,11 @@ export function detectDangerousArg(key: string, value: string): string | null {
     return null;
 }
 
+/** 차단된 인자 — 감사(S10)에 키 이름·사유만 넘기려고 메시지와 별도로 싣는다(값은 싣지 않는다). */
+class BlockedArgError extends Error {
+    constructor(message: string, readonly key: string, readonly reason: string) { super(message); }
+}
+
 /** 경로 인자를 사용자 샌드박스 안의 실제 경로로 바꾼다. 밖을 가리키면 throw. */
 function applySandboxPaths(args: Record<string, unknown>, userId: string | number): Record<string, unknown> {
     const result = { ...args };
@@ -60,7 +67,7 @@ function applySandboxPaths(args: Record<string, unknown>, userId: string | numbe
                 result[key] = safePath;
             } else {
                 delete result[key];
-                throw new Error(`차단된 경로 인자: ${key}`);
+                throw new BlockedArgError(`차단된 경로 인자: ${key}`, key, 'sandbox-path');
             }
         }
     }
@@ -73,10 +80,22 @@ function sanitizeToolArgs(args: Record<string, unknown>, toolName: string): Reco
         if (typeof value !== 'string') continue;
         const violation = detectDangerousArg(key, value);
         if (violation) {
-            throw new Error(`차단된 도구 인자: ${key} (도구: ${toolName}) — 위험한 패턴 감지 [${violation}]`);
+            throw new BlockedArgError(`차단된 도구 인자: ${key} (도구: ${toolName}) — 위험한 패턴 감지 [${violation}]`, key, violation);
         }
     }
     return result;
+}
+
+/** 인자 차단 감사(S10, fire-and-forget) — 값은 넣지 않는다(키 이름·사유·인자 해시만). */
+function auditBlockedArgs(toolName: string, args: Record<string, unknown>, context: UserContext, error: unknown): void {
+    if (!(error instanceof BlockedArgError)) return;
+    void auditSecurityEvent({
+        action: 'security.tool_args_blocked',
+        userId: context.userId,
+        resourceType: toolName.includes('::') ? 'mcp_external_tool' : 'mcp_builtin_tool',
+        resourceId: toolName,
+        details: { reason: error.reason, key: error.key, argsHash: hashToolArgs(args), role: context.role },
+    }).catch(() => undefined);
 }
 
 /** 도구 호출 감사 영속화 (fire-and-forget·비차단). 공개 운영 포렌식용. */
@@ -127,6 +146,7 @@ export async function executeToolSecurely(
     } catch (error) {
         const message = error instanceof Error ? error.message : '샌드박스 경로 검증 실패';
         logger.warn(`⚠️ 도구 실행 차단: ${toolName} (user: ${context.userId}) - ${message}`);
+        auditBlockedArgs(toolName, args, context, error);
         return { content: [{ type: 'text', text: message }], isError: true };
     }
 
@@ -136,6 +156,7 @@ export async function executeToolSecurely(
     } catch (error) {
         const message = error instanceof Error ? error.message : '도구 인자 검증 실패';
         logger.warn(`⚠️ 도구 인자 차단: ${toolName} (user: ${context.userId}) - ${message}`);
+        auditBlockedArgs(toolName, args, context, error);
         return { content: [{ type: 'text', text: message }], isError: true };
     }
 
