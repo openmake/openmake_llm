@@ -15,19 +15,16 @@
  */
 import { findBlockedBrowserUrls } from './browser-url-guard';
 import { BROWSER_URL_GUARD_ENABLED } from '../../config/task-sandbox';
-import { getBrowserLocalBlockedMessage, getBrowserSiteApprovalRequiredMessage, getBrowserUrlBlockedMessage, getLocalBrowserToolDescription } from '../../prompts/agent-task-prompt';
+import { getBrowserUrlBlockedMessage } from '../../prompts/agent-task-prompt';
 import { viewWindow } from './file-view';
 import { resolveMissedStrReplace } from './str-replace-match';
 import { interpretExitCode } from './exit-code';
 import { maskedPipeFailureNote } from './pipe-status';
 import { ASK_HUMAN_STRUCTURED_SCHEMA, normalizeAskHuman } from './ask-human';
 import { ASK_HUMAN } from '../../config/agent-task-tools';
-import { liveFrameSpec } from '../../config/agent-task-live-view';
 import { ASK_HUMAN_STRUCTURED_DESCRIPTION } from '../../prompts/agent-task-tools';
 import { FILE_VIEW_MAX_CHARS } from '../../config/runtime-limits';
 import { randomUUID } from 'crypto';
-import { AgentTaskParked } from '../agent-task/types';
-import { approvedHostsOf, approvedUploadsOf, areSiteWritesApproved, browserUploadRefusal, sitePlanNeedsApproval } from './browser-site-approval';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import type { ContributedAgentTaskTool } from '../chat-service/turn-integrations';
 import type { TaskExecutor, ExecResult } from './executor';
@@ -35,12 +32,9 @@ import { withDiagnostics } from './diagnostics-attach';
 import { createCodeNavTools } from './tools-code-nav';
 import { TaskPlan } from './planning';
 import { createPlanTools } from './tools-plan';
-import {
-    SPAWN_AGENTS_TOOL_NAME,
-    SPAWN_AGENTS_TOOL_DESCRIPTION,
-    SPAWN_AGENTS_PARAMETERS_SCHEMA,
-    type SpawnFn,
-} from '../agent-spawn/spawn-agents';
+import type { SpawnFn } from '../agent-spawn/spawn-agents';
+import { createBrowserTool } from './tools-browser';
+import { createDelegationTools } from './tools-delegation';
 
 export type { SpawnFn } from '../agent-spawn/spawn-agents';
 
@@ -299,151 +293,14 @@ export function createTaskTools(
         },
     };
 
-    const browser: MCPToolDefinition = {
-        tool: {
-            name: 'browser',
-            description: sandbox.runBrowserSpec ? getLocalBrowserToolDescription(sandbox.supportsBrowserUpload === true) : '일회성 컨테이너의 chromium 으로 웹 브라우저를 자동화합니다(G2). 호출마다 빈 페이지(about:blank)에서 새로 시작하므로(쿠키·로그인만 유지) goto 와 이어지는 액션을 한 actions 배열에 함께 넣으세요. actions 배열을 순서대로 실행: ' +
-                'goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · ' +
-                'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. ' +
-                '페이지가 띄운 확인창은 그 액션 결과의 dialogs 에 실립니다 — confirm·prompt 는 기본으로 취소되고, 수락하려면 ' +
-                '확인창을 띄우는 액션 앞에 dialog{accept:true,promptText?} 를 넣으세요. ' +
-                'CSS 셀렉터(click/fill)가 실패하면 snapshot 으로 상호작용 요소를 {role,name,index} 목록으로 얻은 뒤 ' +
-                'smartClick{role,name,nth?}·smartFill{role,name,text,nth?} 로 재시도하세요(CSS 변동에 견고). ' +
-                '네트워크는 샌드박스 정책(none/restricted)에 따라 제한됩니다.',
-            inputSchema: {
-                type: 'object',
-                properties: {
-                    actions: {
-                        type: 'array',
-                        items: { type: 'object' },
-                        minItems: 1,
-                        description: '액션 객체 배열. 예: [{"type":"goto","url":"https://example.com"},{"type":"extractText"}]',
-                    },
-                    allowlist: {
-                        type: 'array',
-                        description: '허용 도메인 목록(예 ["example.com"]). 비허용 호스트 요청은 차단됩니다.',
-                    },
-                },
-                required: ['actions'],
-            },
-        },
-        handler: async (args): Promise<MCPToolResult> => {
-            if (!sandbox.isBrowserEnabled) {
-                return textResult(BROWSER_UNAVAILABLE, true);
-            }
-            // 단일 액션 객체를 넘기는 실수는 배열로 감싼다(계약 유지).
-            const actions = Array.isArray(args.actions)
-                ? args.actions
-                : (args.actions && typeof args.actions === 'object' ? [args.actions] : null);
-            if (!actions || actions.length === 0) {
-                return textResult(
-                    Array.isArray(args.actions)
-                        ? 'actions 가 빈 배열입니다 — 실제 액션 객체를 최소 1개 넣으세요. '
-                            + '예: [{"type":"goto","url":"https://example.com"},{"type":"extractText"}].'
-                        : 'actions 배열이 필요합니다 — 예: [{"type":"goto","url":"https://example.com"},{"type":"extractText"}].',
-                    true,
-                );
-            }
-            const uploadRefusal = browserUploadRefusal(actions, sandbox); // 업로드는 업로드를 아는 로컬 기기에서만(런타임도 묻기 전에 거른다)
-            if (uploadRefusal) return textResult(uploadRefusal, true);
-            // 로컬 브라우저(P2) — 사용자 PC 의 전용 프로필 Chrome 에서 실행한다. 서버용 주소 검사(사설망 차단)는 쓰지 않는다:
-            // 사내 사이트가 주된 대상이다. 대신 사이트 정책을 적용하고, 기기가 실제 탭 주소로 다시 판정한다.
-            if (sandbox.planBrowserSitePolicy && sandbox.runBrowserSpec) {
-                const plan = await sandbox.planBrowserSitePolicy(actions);
-                if (plan.blocked.length > 0) return textResult(getBrowserLocalBlockedMessage(plan.blocked.map((b) => b.url)), true);
-                // 허용 목록 밖 쓰기·업로드는 승인 경로(런타임의 site_write·site_upload 바닥)를 거친 호출만 실행한다.
-                if (sitePlanNeedsApproval(plan) && !areSiteWritesApproved(args)) return textResult(getBrowserSiteApprovalRequiredMessage(), true);
-                const lr = await sandbox.runBrowserSpec({ actions, approvedHosts: approvedHostsOf(plan.offListWrites), ...(plan.uploads.length > 0 ? { approvedUploads: approvedUploadsOf(plan.uploads) } : {}) });
-                browserMetrics?.(lr.stdout);
-                return formatExec(lr);
-            }
-            const urlBlock = await browserUrlBlock(actions);
-            if (urlBlock) return textResult(urlBlock, true);
-            const live = liveFrameSpec(); // 실행 중 화면을 작업 폴더 숨김 파일에 쓰게 한다(꺼져 있으면 null)
-            const spec = {
-                actions,
-                ...(Array.isArray(args.allowlist) ? { allowlist: args.allowlist } : {}),
-                ...(sandbox.browserStatePath ? { statePath: sandbox.browserStatePath } : {}),
-                ...(live ? { live } : {}),
-            };
-            let r: ExecResult;
-            try {
-                // 메인 샌드박스(network none)가 아닌 별도 일회성 컨테이너에서 실행.
-                ({ result: r } = await runFresh(
-                    sandbox, { prefix: '.browser-actions', ext: '.json' }, JSON.stringify(spec),
-                    (p) => sandbox.runBrowser(p),
-                ));
-            } catch (e) {
-                return textResult(`액션 파일 쓰기 실패: ${e instanceof Error ? e.message : String(e)}`, true);
-            }
-            browserMetrics?.(r.stdout); // Stage 0 계측(fail-open)
-            return formatExec(r);
-        },
-    };
+    // ── 브라우저 — tools-browser.ts ──
+    const browser = createBrowserTool(sandbox, browserMetrics, { textResult, formatExec, runFresh, browserUnavailable: BROWSER_UNAVAILABLE, browserUrlBlock });
 
     // ── G3 플래닝 — tools-plan.ts(노드 속성 done_when/after, Execution Graph 증분 4) ──
     const [planCreate, planUpdate, planView] = createPlanTools(plan);
 
-    // ── G4 멀티에이전트: 전문가 위임(자문) ──
-    const delegateTool: MCPToolDefinition = {
-        tool: {
-            name: 'delegate',
-            description: '특정 하위 문제를 적합한 산업 전문가(금융/법률/엔지니어링/의료/과학 등)에게 위임해 ' +
-                '전문 자문을 받습니다. 자문 결과를 참고해 당신이 직접 다음 작업을 수행하세요. ' +
-                '전문 지식·검토·판단이 필요한 단계에서 사용하세요.',
-            inputSchema: {
-                type: 'object',
-                properties: {
-                    subgoal: { type: 'string', description: '전문가에게 위임할 구체적 하위 문제/질문' },
-                    role: { type: 'string', description: '원하는 전문 분야(선택, 예: finance/legal/engineering)' },
-                },
-                required: ['subgoal'],
-            },
-        },
-        handler: async (args): Promise<MCPToolResult> => {
-            const subgoal = str(args.subgoal).trim();
-            if (!subgoal) return textResult('subgoal 이 필요합니다.', true);
-            if (!delegate) return textResult('위임 기능을 사용할 수 없습니다.', true);
-            try {
-                const advice = await delegate(subgoal, str(args.role) || undefined);
-                return textResult(advice);
-            } catch (e) {
-                if (e instanceof AgentTaskParked) throw e; // 서브에이전트 승인 주차(173) — 부모가 받아 주차한다
-                return textResult(`전문가 위임 실패: ${e instanceof Error ? e.message : String(e)}`, true);
-            }
-        },
-    };
-
-    // ── 병렬 fan-out: spawn_agents — 독립 하위 작업 N개 병렬 위임 (services/agent-spawn).
-    //    AGENT_SPAWN.ENABLED 시에만 AgentTaskService 가 spawn 을 전달 → 미전달이면 도구 자체 미노출. ──
-    const spawnAgentsTool: MCPToolDefinition = {
-        tool: {
-            name: SPAWN_AGENTS_TOOL_NAME,
-            description: SPAWN_AGENTS_TOOL_DESCRIPTION,
-            inputSchema: SPAWN_AGENTS_PARAMETERS_SCHEMA,
-        },
-        handler: async (args): Promise<MCPToolResult> => {
-            if (!spawn) return textResult('병렬 위임 기능을 사용할 수 없습니다.', true);
-            try {
-                return textResult(await spawn(args as Record<string, unknown>));
-            } catch (e) {
-                return textResult(`병렬 위임 실패: ${e instanceof Error ? e.message : String(e)}`, true);
-            }
-        },
-    };
-
-    // ── add-on 기여 도구 — 실패해도 예외를 던지지 않고 오류 결과를 돌려준다(스텝 중단 방지) ──
-    const contributedTools: MCPToolDefinition[] = contributed.map((c) => ({
-        tool: c.tool,
-        handler: async (args): Promise<MCPToolResult> => {
-            try {
-                const r = await c.run(args as Record<string, unknown>, contributedCtx);
-                return textResult(r.text, r.isError === true);
-            } catch (e) {
-                return textResult(`${c.tool.name} 실패: ${e instanceof Error ? e.message : String(e)}`, true);
-            }
-        },
-    }));
+    // ── G4 멀티에이전트(delegate·spawn_agents)·add-on 기여 도구 — tools-delegation.ts ──
+    const delegationTools = createDelegationTools(delegate, spawn, contributed, contributedCtx, { textResult, str });
 
     // ── #1 절차 스킬(skill_save / skill_run) — tools-procedural.ts ──
     const [skillSave, skillRun] = createProceduralTools(sandbox, procedural, browserMetrics, { textResult, str, formatExec, runFresh, browserUnavailable: BROWSER_UNAVAILABLE, browserUrlBlock });
@@ -484,5 +341,5 @@ export function createTaskTools(
             textResult(`${TASK_ASK_HUMAN_SENTINEL} ${normalizeAskHuman(args).question}`),
     };
 
-    return [bash, pythonExecute, strReplaceEditor, fileOps, ...createCodeNavTools(sandbox), ...(sandbox.isBrowserEnabled ? [browser] : []), planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), ...contributedTools, ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];
+    return [bash, pythonExecute, strReplaceEditor, fileOps, ...createCodeNavTools(sandbox), ...(sandbox.isBrowserEnabled ? [browser] : []), planCreate, planUpdate, planView, ...delegationTools, ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];
 }
