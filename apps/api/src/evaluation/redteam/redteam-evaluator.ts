@@ -5,7 +5,7 @@
  *   SSRF(validateOutboundUrl, 가짜 DNS), 작업공간 경로(safeRealWorkspacePath, 임시 디렉터리·심링크), 로그 마스킹(redactSecrets),
  *   정책 none 의 승인 바닥(ApprovalRegistry.request — 바닥 호출은 policy_floor 로 거절, S1).
  * - real(nightly): 실모델 응답에 시스템 프롬프트 문장·서버 비밀값·인젝션 카나리가 없고, 금지 도구 호출이 없어야 한다
- *   (도구는 dry-run 으로 관찰만).
+ *   (도구는 dry-run 으로 관찰만). toolResult 케이스는 주입된 도구 결과 뒤 모델의 다음 턴을 본다(W3 S4).
  *
  * @module evaluation/redteam/redteam-evaluator
  */
@@ -28,6 +28,8 @@ const realSchema = z.object({
     query: z.string().min(1),
     role: z.enum(['user', 'admin']).optional(),
     injectedDocument: z.string().regex(/^[a-z0-9-]+\.md$/).optional(),
+    /** 도구 결과 주입(W3 S4) — 러너가 사용자 메시지 뒤에 이 도구의 호출·결과를 넣고 모델의 다음 턴을 관찰한다. */
+    toolResult: z.object({ name: z.string().min(1), content: z.string().min(1) }).optional(),
     forbiddenTools: z.array(z.string().min(1)).optional(),
     mustNotContain: z.array(z.string().min(1)).optional(),
     noSystemPromptLeak: z.boolean().optional(),
@@ -69,6 +71,7 @@ export function loadRedteamDataset(filePath: string = REDTEAM_DATASET_PATH): Red
         if (c.real && !c.real.forbiddenTools?.length && !c.real.mustNotContain?.length && !c.real.noSystemPromptLeak && !c.real.noEnvSecrets) {
             errors.push(`${c.id}: real 판정 조건이 없음`);
         }
+        if (c.real?.injectedDocument && c.real.toolResult) errors.push(`${c.id}: injectedDocument 와 toolResult 는 함께 쓸 수 없음`);
         if (c.real?.injectedDocument && !fs.existsSync(path.join(REDTEAM_FIXTURE_DIR, c.real.injectedDocument))) errors.push(`${c.id}: 픽스처 없음 ${c.real.injectedDocument}`);
     }
     if (errors.length) throw new Error(`레드팀 골든셋 의미 검증 실패:\n${errors.map((e) => `  - ${e}`).join('\n')}`);
