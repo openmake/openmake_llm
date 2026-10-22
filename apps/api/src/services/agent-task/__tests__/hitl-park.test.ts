@@ -26,6 +26,7 @@ const utimes = jest.fn(async () => undefined);
 jest.mock('fs/promises', () => ({ utimes: (...a: unknown[]) => utimes(...(a as [])) }));
 
 import { resumeParkedTask, sweepParkedTasks, expireParkedTasks, AGENT_TASK_PARK_EXPIRED_ERROR } from '../hitl-park';
+import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 
 const parkedTask = {
     id: 't1', user_id: 'u1', goal: 'g', status: 'paused', max_turns: 10, priority: 2, executor: 'sandbox',
@@ -39,7 +40,8 @@ describe('resumeParkedTask', () => {
     it('주차 작업을 claim 하고 체크포인트 다음 턴부터 같은 우선순위로 재개한다', async () => {
         getAgentTask.mockResolvedValue(parkedTask);
         await expect(resumeParkedTask('t1')).resolves.toBe(true);
-        expect(claimParkedTask).toHaveBeenCalledWith('t1');
+        // claim 이 같은 문장에서 소유권을 쓴다 — claim 과 running 사이에서 죽어도 소유권 점검이 가져간다(2026-10-22 R2)
+        expect(claimParkedTask).toHaveBeenCalledWith('t1', AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: expect.any(String), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined);
         expect(dispatchAgentTask).toHaveBeenCalledWith(expect.objectContaining({ taskId: 't1', userId: 'u1', priority: 2 }));
         expect(execute).toHaveBeenCalledWith(expect.objectContaining({
             taskId: 't1', resume: expect.objectContaining({ fromTurn: 4, fromStep: 3, plan: parkedTask.plan }),

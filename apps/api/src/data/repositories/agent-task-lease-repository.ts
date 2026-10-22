@@ -31,11 +31,14 @@ export class AgentTaskLeaseRepository extends BaseRepository {
         await this.query(`UPDATE agent_tasks SET lease_owner = NULL, lease_until = NULL WHERE id = $1 AND lease_owner = $2`, [taskId, owner]);
     }
 
-    /** 소유권이 지난 실행 중 작업(주차 제외) — 소유권을 잡아 본 적 없는 작업(lease_until NULL)은 대상이 아니다. */
+    /**
+     * 소유권이 지난 실행 중 작업(주차 제외) — 소유권을 잡아 본 적 없는 작업(lease_until NULL)은 대상이 아니다.
+     * pending 도 본다 — claim 이 같은 문장에서 소유권을 쓰므로 소유권 있는 pending 은 claim 과 running 사이에서 죽은 행이다(2026-10-22 R2).
+     */
     async listExpiredLeaseTasks(): Promise<AgentTask[]> {
         const r = await this.query<AgentTask>(
             `SELECT * FROM agent_tasks
-             WHERE status IN ('running', 'paused') AND lease_until IS NOT NULL AND lease_until < NOW()
+             WHERE status IN ('running', 'paused', 'pending') AND lease_until IS NOT NULL AND lease_until < NOW()
                AND NOT ${parkedTaskCondition('agent_tasks')}
              ORDER BY lease_until ASC LIMIT 50`);
         return r.rows;
@@ -45,7 +48,7 @@ export class AgentTaskLeaseRepository extends BaseRepository {
     async takeOverExpiredLease(taskId: string, owner: string, leaseMs: number): Promise<boolean> {
         const r = await this.query(
             `UPDATE agent_tasks SET lease_owner = $2, lease_until = NOW() + make_interval(secs => $3)
-             WHERE id = $1 AND status IN ('running', 'paused') AND lease_until IS NOT NULL AND lease_until < NOW()`,
+             WHERE id = $1 AND status IN ('running', 'paused', 'pending') AND lease_until IS NOT NULL AND lease_until < NOW()`,
             [taskId, owner, leaseMs / 1000]);
         return (r.rowCount ?? 0) > 0;
     }

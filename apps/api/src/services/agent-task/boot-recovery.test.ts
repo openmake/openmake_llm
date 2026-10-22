@@ -64,13 +64,15 @@ import { beginAgentTaskShutdown, resetAgentTaskShutdownForTest } from './shutdow
 beforeEach(() => { interrupted.length = 0; expired.length = 0; runningHere.clear(); jest.clearAllMocks(); takeOver.mockResolvedValue(true); claim.mockResolvedValue(true); countRecoveries.mockResolvedValue(0); failRecoveryLimit.mockResolvedValue(true); localBridge.ENABLED = false; localBridge.DEVICE_WAIT_ENABLED = true; parkForDeviceRecovery.mockResolvedValue(true); resumeParkedTask.mockResolvedValue(false); });
 
 const base = { id: 't1', user_id: 'u1', goal: '목표', max_turns: 10, executor: 'server', input_files: null, input_images: null };
+/** claim 이 같은 문장에서 쓰는 소유권(2026-10-22 R2) — 모의 AGENT_TASK_LIMITS.LEASE_MS 와 같다 */
+const lease = () => ({ owner: leaseOwner(), leaseMs: 60_000 });
 
 describe('recoverInterruptedAgentTasks — queued 고아', () => {
     it('queued 는 checkpoint 없이도 처음부터 재디스패치된다', async () => {
         interrupted.push({ ...base, status: 'queued', checkpoint: null });
         const r = await recoverInterruptedAgentTasks();
         expect(r).toEqual({ resumed: 1, failed: 0 });
-        expect(claim).toHaveBeenCalledWith('t1', 'queued'); // 읽을 때의 상태 — 그 뒤 /execute 가 잡아 바뀐 행은 claim 이 0행이다
+        expect(claim).toHaveBeenCalledWith('t1', 'queued', lease()); // 읽을 때의 상태 — 그 뒤 /execute 가 잡아 바뀐 행은 claim 이 0행이다
         expect(execute).toHaveBeenCalledTimes(1);
         const input = (execute.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
         expect(input.resume).toBeUndefined();          // 처음부터
@@ -141,7 +143,7 @@ describe('sweepExpiredTaskLeases — 소유권이 지난 작업을 가져와 이
         const r = await sweepExpiredTaskLeases();
         expect(r).toEqual({ resumed: 1, failed: 0 });
         expect(takeOver).toHaveBeenCalledWith('t1', leaseOwner(), 60_000);
-        expect(claim).toHaveBeenCalledWith('t1', 'running');
+        expect(claim).toHaveBeenCalledWith('t1', 'running', lease());
         const input = (execute.mock.calls[0] as unknown[])[0] as { resume?: { fromTurn: number } };
         expect(input.resume?.fromTurn).toBe(3);
     });
@@ -200,6 +202,51 @@ describe('recoverInterruptedAgentTasks — 소유권 컬럼이 아직 없는 DB(
         const r = await recoverInterruptedAgentTasks();
         expect(getInterruptedAgentTasks).toHaveBeenCalledTimes(2);
         expect(r).toEqual({ resumed: 1, failed: 0 });
+        expect(claim).toHaveBeenCalledWith('t1', 'queued', undefined); // 소유권 컬럼이 없으니 claim 도 종전 문장으로
+    });
+});
+
+// claim(pending 전이)과 running 사이에서 프로세스가 죽으면 행이 영원히 pending 으로 남았다 — 복구 조회·소유권 점검 어느 쪽도 pending 을
+// 보지 않았다. claim 이 소유권을 같이 쓰므로 'pending + 소유권' 이 곧 진행 중이던 claim 이다(2026-10-22 R2).
+describe('claim 고아(pending + 소유권) 회수', () => {
+    const cp = { conversation: [{ role: 'user', content: '목표' }], completedTurn: 4 };
+    const orphan = { ...base, status: 'pending', lease_owner: 'dead:0', lease_until: new Date(Date.now() - 120_000).toISOString(), checkpoint: cp };
+
+    it('소유권 있는 pending 작업을 복구 대상으로 받으면 claim 에 소유권(owner·LEASE_MS)을 넘기고 디스패치한다', async () => {
+        interrupted.push(orphan);
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
+        expect(claim).toHaveBeenCalledWith('t1', 'pending', { owner: expect.any(String), leaseMs: 60_000 });
+        expect(dispatch).toHaveBeenCalledTimes(1);
+        const input = (execute.mock.calls[0] as unknown[])[0] as { resume?: { fromTurn: number } };
+        expect(input.resume?.fromTurn).toBe(5); // 체크포인트 다음 턴부터
+        expect(updateAgentTask).not.toHaveBeenCalled();
+    });
+
+    it('소유권 점검이 지난 소유권의 pending 행을 받아도 같은 경로로 재개한다', async () => {
+        expired.push(orphan);
+        await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 1, failed: 0 });
+        expect(takeOver).toHaveBeenCalledWith('t1', leaseOwner(), 60_000);
+        expect(claim).toHaveBeenCalledWith('t1', 'pending', lease());
+        expect(dispatch).toHaveBeenCalledTimes(1);
+        const input = (execute.mock.calls[0] as unknown[])[0] as { resume?: { fromTurn: number } };
+        expect(input.resume?.fromTurn).toBe(5);
+    });
+
+    it('체크포인트 없는 pending 고아(대기·처음부터 재개를 claim 한 뒤 죽음)는 처음부터 다시 디스패치한다', async () => {
+        expired.push({ ...orphan, checkpoint: null });
+        await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 1, failed: 0 });
+        expect(claim).toHaveBeenCalledWith('t1', 'pending', lease());
+        const input = (execute.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
+        expect(input.resume).toBeUndefined();
+        expect(updateAgentTask).not.toHaveBeenCalled();
+    });
+
+    it('기기 대기를 쓰지 않는 설정의 로컬 작업 pending 고아는 running 과 같이 failed 로 닫는다(skipped 로 남겨 주기마다 다시 가져오지 않게)', async () => {
+        expired.push({ ...orphan, executor: 'local' });
+        localBridge.ENABLED = false;
+        await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 1 });
+        expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'failed', error: 'interrupted_local_device' }));
+        expect(claim).not.toHaveBeenCalled();
     });
 });
 
