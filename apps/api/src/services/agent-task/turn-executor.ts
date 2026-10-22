@@ -246,6 +246,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             : undefined;
         // 주기 반복(A-B-A-B) — 서로 다른 호출이 같은 결과로 번갈아 되풀이되면 같은 두 단계로 다룬다.
         const cycle = loop ? cycleVerdict(conversation, name, args) : undefined;
+        touchProgress(taskId); // 도구 실행 직전 — 긴 도구 호출을 멈춤으로 오판하지 않게(191, R8)
         if (journaled !== undefined) {
             // 저널 재사용(124) — 결과는 이미 스텝에 있으므로 대화에만 싣고 스텝·체크포인트는 건너뛴다.
             conversation.push({ role: 'tool', content: forModel(name, journaled), tool_name: name, tool_call_id: tc.id });

@@ -303,8 +303,8 @@ export const AGENT_TASK_LIMITS = {
     WATCHDOG_ENABLED: process.env.AGENT_TASK_WATCHDOG_ENABLED !== 'false',
     /** watchdog 점검 주기(ms). AGENT_TASK_WATCHDOG_MS(기본 60초) */
     WATCHDOG_MS: parseInt(process.env.AGENT_TASK_WATCHDOG_MS || '', 10) || 60_000,
-    /** 실행 중인데 진행이 이만큼 없으면 멈춘 것으로 본다(ms). AGENT_TASK_STALE_MS(기본 15분) */
-    STALE_MS: parseInt(process.env.AGENT_TASK_STALE_MS || '', 10) || 900_000,
+    /** 실행 중인데 진행이 이만큼 없으면 멈춘 것으로 본다(ms). 도구 호출 상한(15분) + 모델 호출 상한 + 기록 지연보다 길게. AGENT_TASK_STALE_MS(기본 30분) */
+    STALE_MS: parseInt(process.env.AGENT_TASK_STALE_MS || '', 10) || 1_800_000,
     /** 대기열 적체 알림 — 대기 건수 기준. AGENT_TASK_QUEUE_BACKLOG_PENDING(기본 20) */
     QUEUE_BACKLOG_PENDING: parseInt(process.env.AGENT_TASK_QUEUE_BACKLOG_PENDING || '', 10) || 20,
     /** 대기열 적체 알림 — 가장 오래 기다린 시간 기준(ms). AGENT_TASK_QUEUE_BACKLOG_WAIT_MS(기본 5분) */
