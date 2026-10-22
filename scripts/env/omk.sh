@@ -63,6 +63,8 @@
 #                 [--dgx-host H [--vllm-api-key K]]
 #   omk dev up|down|status|reset [api|web|bench|deps|all]
 #   omk dev up [대상] [--tailscale] [--host H]…   # 다른 기기에서 보기 — 호스트를 CORS·Next·vite 에 허용(.env 에 기억)
+#   omk dev up [대상] [--no-sync]                  # 기본은 먼저 'dev sync' 를 한다 — 끄려면 --no-sync
+#   omk dev sync                                    # 로컬 dev 를 origin/dev 로 fast-forward 만 (변경 사항·갈라짐이면 그대로 두고 종료 1)
 #
 # 환경변수:
 #   OMK_ROOT(~/.openmake)  OMK_REPO_URL  OMKB_REPO_URL  OMK_CADDY_VERSION  OMK_CADDY_ADMIN(localhost:2019)
@@ -2081,17 +2083,44 @@ cmd_dev_setup() {
     install_wrapper   # 환경을 설치하지 않은 장비에서도 'omk dev …' 가 되도록
     log_ok "dev 준비 완료 — 'omk dev up' 으로 기동"
 }
+# 로컬 <branch>(기본 dev)를 origin 에 맞춰 fast-forward 만 한다 — reset·rebase·force 는 하지 않는다.
+# 이 호스트는 dev 에 직접 커밋하지 않고 feature/* 로만 작업하므로 ff 로 충분하다.
+# 반환: 0 = 최신·옮김·건너뛸 이유가 없음(원격을 못 읽음·브랜치 없음), 3 = 옮기지 못함(변경 사항·갈라짐·다른 작업 트리)
+dev_sync_branch() { # $1=저장소 $2=브랜치(dev)
+    local repo="$1" br="${2:-dev}" old new cur n
+    GIT_TERMINAL_PROMPT=0 git -C "$repo" fetch -q origin --prune 2>/dev/null || { log_warn "원격을 읽지 못해 dev 동기화를 건너뜁니다"; return 0; }
+    new="$(git -C "$repo" rev-parse --verify -q "refs/remotes/origin/$br" 2>/dev/null)" || { log_warn "origin/$br 가 없어 dev 동기화를 건너뜁니다"; return 0; }
+    old="$(git -C "$repo" rev-parse --verify -q "refs/heads/$br" 2>/dev/null)" || { log_info "로컬 $br 브랜치가 없어 동기화하지 않습니다"; return 0; }
+    [[ "$old" != "$new" ]] || { log_info "$br 최신 (${old:0:7})"; return 0; }
+    git -C "$repo" merge-base --is-ancestor "$old" "$new" 2>/dev/null || { log_warn "로컬 $br 에 원격에 없는 커밋이 있어 건드리지 않았습니다 — 확인 필요"; return 3; }
+    n="$(git -C "$repo" rev-list --count "$old..$new" 2>/dev/null || echo "?")"
+    cur="$(git -C "$repo" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+    if [[ "$cur" == "$br" ]]; then
+        [[ -z "$(git -C "$repo" status --porcelain --untracked-files=no 2>/dev/null)" ]] || { log_warn "변경 사항이 있어 $br 를 옮기지 않았습니다"; return 3; }
+        git -C "$repo" merge -q --ff-only "$new" >/dev/null 2>&1 || { log_warn "$br fast-forward 실패 — 옮기지 않았습니다"; return 3; }
+    else
+        # 다른 작업 트리에 체크아웃된 브랜치는 git 이 거부한다 — 그대로 둔다.
+        GIT_TERMINAL_PROMPT=0 git -C "$repo" fetch -q origin "$br:$br" >/dev/null 2>&1 || { log_warn "$br 가 다른 작업 트리에 체크아웃돼 있어 옮기지 않았습니다"; return 3; }
+    fi
+    log_ok "$br: ${old:0:7}→${new:0:7} (${n}커밋)"
+}
+cmd_dev_sync() {
+    dev_locate
+    dev_sync_branch "$DEV_LLM" || exit 1
+}
 cmd_dev_up() {
     dev_locate; dev_warn_legacy
-    local target="all" hosts_arg="" use_ts=0
+    local target="all" hosts_arg="" use_ts=0 no_sync=0
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --tailscale) use_ts=1 ;;
+            --no-sync)   no_sync=1 ;;
             --host)      hosts_arg="$(csv_union "$hosts_arg" "${2:-}")"; shift ;;
             -*)          usage_die "알 수 없는 옵션: $1" ;;
             *)           target="$1" ;;
         esac; shift
     done
+    [[ $no_sync -eq 1 ]] || dev_sync_branch "$DEV_LLM" || true
     [[ -f "$DEV_LLM/.env" && -d "$DEV_LLM/node_modules" ]] || cmd_dev_setup
     # ~/.openmake 를 지워도 .env·node_modules 는 클론에 남아 setup 을 건너뛴다 — 래퍼는 여기서 되살린다.
     [[ -x "$OMK_ROOT/bin/omk" ]] || install_wrapper
@@ -2171,7 +2200,8 @@ cmd_dev() {
         down)   cmd_dev_down ;;
         status) cmd_dev_status ;;
         reset)  cmd_dev_reset "$@" ;;
-        *) usage_die "omk dev setup|up|down|status|reset" ;;
+        sync)   cmd_dev_sync ;;
+        *) usage_die "omk dev setup|up|down|status|reset|sync" ;;
     esac
 }
 
