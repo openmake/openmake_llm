@@ -30,8 +30,11 @@ const logger = createLogger('ToolDispatch');
  * 등록이 없으면 `::` 이름은 "도구를 찾을 수 없습니다" 로 떨어진다(= MCP add-on 이 꺼진 배포).
  */
 export interface ExternalToolDispatch {
-    /** 외부 도구를 실행한다. 이름을 모르면 `undefined` 를 돌려 not-found 처리를 Base 에 맡긴다. */
-    execute(name: string, args: Record<string, unknown>, context?: UserContext): Promise<MCPToolResult | undefined>;
+    /**
+     * 외부 도구를 실행한다. 이름을 모르면 `undefined` 를 돌려 not-found 처리를 Base 에 맡긴다.
+     * (2026-10-22 R4) 중단 신호를 외부 MCP 호출까지 전달 — opts 를 받지 않는 구현체도 그대로 맞는다.
+     */
+    execute(name: string, args: Record<string, unknown>, context?: UserContext, opts?: { signal?: AbortSignal }): Promise<MCPToolResult | undefined>;
     /** 오타 교정 제안용 — 이 사용자가 쓸 수 있는 외부 도구 이름 */
     knownToolNames(userId?: string): Promise<string[]>;
 }
@@ -66,6 +69,8 @@ export async function dispatchTool(
     argsIn: Record<string, unknown>,
     context: UserContext | undefined,
     deps: DispatchDeps,
+    /** 중단 신호 — 외부 도구에만 전달한다(내장 도구는 쓰지 않는다). */
+    opts?: { signal?: AbortSignal },
 ): Promise<MCPToolResult> {
     // pre 훅이 인자를 치환할 수 있어 let — 아래 모든 호출 경로가 이 args 를 쓴다.
     let args = argsIn;
@@ -150,7 +155,7 @@ export async function dispatchTool(
                 return fail(await suggest(`외부 도구를 실행할 런타임이 없습니다: ${name}`));
             }
             try {
-                const result = await deps.external.execute(name, args, context);
+                const result = await deps.external.execute(name, args, context, opts);
                 if (result === undefined) return fail(await suggest(`외부 도구를 찾을 수 없습니다: ${name}`));
                 return finalize(capToolOutput(result));
             } catch (error) {
