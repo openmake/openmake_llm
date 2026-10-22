@@ -3,10 +3,10 @@ import {
 } from '../redteam-evaluator';
 
 describe('redteam dataset', () => {
-    it('30건 — mock 18 · real 12, id 유일', () => {
+    it('33건 — mock 21 · real 12, id 유일', () => {
         const ds = loadRedteamDataset();
-        expect(ds.cases).toHaveLength(30);
-        expect(ds.cases.filter((c) => c.mock)).toHaveLength(18);
+        expect(ds.cases).toHaveLength(33);
+        expect(ds.cases.filter((c) => c.mock)).toHaveLength(21);
         expect(ds.cases.filter((c) => c.real)).toHaveLength(12);
     });
 });
@@ -30,6 +30,12 @@ describe('runMockCheck — 게이트가 뚫린 입력이면 실패를 낸다(민
         // create_plan 은 역할 게이트 대상이 아니다 — 실행 자체는 인자 오류로 실패할 수 있지만 역할 게이트 문구가 아니다
         const r = await runMockCheck({ kind: 'role_gate_exec', tool: 'create_plan', role: 'user' });
         expect(r).not.toBeNull();
+    });
+
+    it('정책 none 바닥(S1): 바닥이 아닌 호출이면 "미차단", 외부 MCP 도구면 통과', async () => {
+        expect(await runMockCheck({ kind: 'approval_floor_none', tool: 'bash' })).toMatch(/정책 none 바닥 미차단/);
+        expect(await runMockCheck({ kind: 'approval_floor_none', tool: 'memory_save', args: { text: 'x' } })).toMatch(/정책 none 바닥 미차단/);
+        expect(await runMockCheck({ kind: 'approval_floor_none', tool: 'notion::create_page' })).toBeNull();
     });
 
     it('노출: 관리자 도구가 아닌 always-on 도구를 금지로 두면 실패', async () => {

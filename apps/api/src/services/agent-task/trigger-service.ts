@@ -64,7 +64,7 @@ export function buildTriggerGoal(
     maxChars: number = AGENT_TASK_LIMITS.GOAL_MAX_CHARS,
 ): string {
     const base = instantiateGoal(template.goal_template, template.params, {});
-    const wrap = (body: string) => `${TRIGGER_PAYLOAD_NOTICE}\n<webhook_payload>\n${body}\n</webhook_payload>`;
+    const wrap = (body: string) => `${TRIGGER_PAYLOAD_NOTICE}\n<webhook_payload>\n${body.replace(/<\/webhook_payload\s*>/gi, '&lt;/webhook_payload&gt;')}\n</webhook_payload>`;
     const compose = (body: string) => (base.includes(PAYLOAD_PLACEHOLDER) ? base.split(PAYLOAD_PLACEHOLDER).join(wrap(body)) : `${base}\n\n${wrap(body)}`);
     const full = payloadText(rawBody);
     const overflow = compose(full).length - maxChars;

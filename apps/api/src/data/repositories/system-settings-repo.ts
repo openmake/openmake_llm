@@ -9,7 +9,7 @@
  * @see config/system-settings-registry.ts (허용 키 화이트리스트)
  */
 import { BaseRepository } from './base-repository';
-import { encryptToken, decryptToken, isDecryptionFailure } from '../../utils/token-crypto';
+import { encryptToken, tryDecryptToken } from '../../utils/token-crypto';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('SystemSettingsRepo');
@@ -33,10 +33,10 @@ interface DbRow {
 function toRow(row: DbRow): SystemSettingRow {
     let value: string | null = row.value;
     if (row.is_secret) {
-        const plain = decryptToken(row.value);
-        // decryptToken 은 fail-open — 실패 시 암호문을 그대로 반환하므로 명시 판별.
+        const plain = tryDecryptToken(row.value);
+        // 복호화 실패는 tryDecryptToken 이 null 로 내린다(비-dev 도 throw 하지 않음).
         // 실패한 키는 null(미설정 취급) 로 돌려 env 폴백이 살아나게 한다.
-        if (isDecryptionFailure(plain)) {
+        if (plain === null) {
             logger.error(`설정 복호화 실패 (${row.key}) — TOKEN_ENCRYPTION_KEY 확인 필요, env 폴백으로 동작`);
             value = null;
         } else {
