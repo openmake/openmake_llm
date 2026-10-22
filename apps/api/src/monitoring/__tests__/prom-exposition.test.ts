@@ -20,12 +20,14 @@ describe('renderPromText', () => {
             + 'response_time_ms{model="m1",quantile="0.5"} 2\n'
             + 'response_time_ms{model="m1",quantile="0.95"} 3\n'
             + 'response_time_ms{model="m1",quantile="0.99"} 3\n'
-            + 'response_time_ms_sum{model="m1"} 6\n'
-            + 'response_time_ms_count{model="m1"} 3\n',
+            + '# TYPE response_time_ms_window_sum gauge\n'
+            + 'response_time_ms_window_sum{model="m1"} 6\n'
+            + '# TYPE response_time_ms_window_count gauge\n'
+            + 'response_time_ms_window_count{model="m1"} 3\n',
         );
     });
 
-    test('라벨 없는 히스토그램 → name{quantile=…}·name_sum·name_count', () => {
+    test('라벨 없는 히스토그램 → name{quantile=…}·name_window_sum·name_window_count(게이지)', () => {
         const m = new MetricsCollector();
         m.recordHistogram('lat', 5);
         expect(renderPromText(m.getAllMetrics())).toBe(
@@ -33,8 +35,19 @@ describe('renderPromText', () => {
             + 'lat{quantile="0.5"} 5\n'
             + 'lat{quantile="0.95"} 5\n'
             + 'lat{quantile="0.99"} 5\n'
-            + 'lat_sum 5\n'
-            + 'lat_count 1\n',
+            + '# TYPE lat_window_sum gauge\n'
+            + 'lat_window_sum 5\n'
+            + '# TYPE lat_window_count gauge\n'
+            + 'lat_window_count 1\n',
+        );
+    });
+
+    test('라벨 값의 "·\\·줄바꿈을 Prometheus 규칙대로 이스케이프한다', () => {
+        const m = new MetricsCollector();
+        m.incrementCounter('esc_total', 1, { v: 'a"b\\c\nd' });
+        expect(renderPromText(m.getAllMetrics())).toBe(
+            '# TYPE esc_total counter\n'
+            + 'esc_total{v="a\\"b\\\\c\\nd"} 1\n',
         );
     });
 

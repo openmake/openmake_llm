@@ -69,9 +69,9 @@ describe('executeTurnToolCalls — 도구 결과 미디어 저장처', () => {
 });
 
 describe('executeTurnToolCalls — 마지막 진행 시각(R8)', () => {
-    it('도구 결과 1건마다 진행을 기록한다', async () => {
+    it('도구 1건마다 실행 직전·결과 뒤 진행을 기록한다', async () => {
         await run(null);
-        expect(touchProgress).toHaveBeenCalledTimes(1);
+        expect(touchProgress).toHaveBeenCalledTimes(2);
         expect(touchProgress).toHaveBeenCalledWith('t1');
     });
 });
