@@ -97,6 +97,7 @@ import { collectHealthSections } from '../runtime-ports/health-sections';
 import { csrfProtectionMiddleware, csrfTokenIssuer } from '../middlewares/csrf-protection';
 import { authLimiter } from '../middlewares/rate-limiters';
 import { readHealthProcessSection } from './health-process-section';
+import { createMetricsExpositionHandler } from './metrics-exposition.routes';
 import { mountAddonRoutes } from '../addon-host/routes';
 
 
@@ -125,6 +126,8 @@ export function setupApiRoutes(
     // 토큰 발급 엔드포인트는 비-mutating GET이며 CSRF_POLICY.SKIP_PATHS에 의해 자체 스킵됨.
     app.get('/api/csrf-token', csrfTokenIssuer);
     app.use('/api', csrfProtectionMiddleware);
+
+    app.get('/metrics', createMetricsExpositionHandler()); // Prometheus 텍스트(R9-a) — 기본 OFF, 토큰 또는 관리자 JWT
 
     // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환). 인증 미들웨어 없음 — DB 에 닿지 않게
     // 관리자 process 필드는 서명된 JWT 만으로 가른다(health-process-section.ts 의 대가 설명 참고)

@@ -30,6 +30,8 @@ import type { ChatMessage } from '../../llm/types';
 import type { AgentTaskUserRole } from './types';
 import { leaseOwner } from './task-lease';
 import { isAgentTaskShutdown } from './shutdown-drain';
+import { markLoopRun } from './background-liveness';
+import { sendAgentTaskAlert, ALERT_TEXT } from '../../monitoring/agent-task-alerts';
 import type { AgentTask } from '../../data/models/unified-database.types';
 
 const logger = createLogger('AgentTaskBootRecovery');
@@ -83,6 +85,8 @@ async function recoverTask(
     if (task.status !== 'queued' && await recoveryLimitReached(task.id)) {
         if (!(await new AgentTaskRunRepository(getPool()).failRecoveryLimit(task.id, task.status))) return 'skipped';
         logger.warn(`[BootRecovery] 진행 없는 복구가 ${AGENT_TASK_LIMITS.RECOVERY_MAX_ATTEMPTS}회 되풀이됨 → 자동 재개 중단(recovery_limit): ${task.id}`);
+        const limitAlert = { taskId: task.id, attempts: AGENT_TASK_LIMITS.RECOVERY_MAX_ATTEMPTS };
+        void sendAgentTaskAlert('agent_task_recovery_limit', ALERT_TEXT.agent_task_recovery_limit.title, ALERT_TEXT.agent_task_recovery_limit.message(limitAlert), limitAlert);
         return 'failed';
     }
 
@@ -199,6 +203,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
  * (연장이 잠깐 밀렸을 뿐 — 다음 연장이 소유권을 되살린다). 절대 throw 하지 않는다.
  */
 export async function sweepExpiredTaskLeases(): Promise<{ resumed: number; failed: number }> {
+    markLoopRun('lease_sweep'); // readiness 가 보는 생존 기록(R9-b) — 꺼짐·종료 검사보다 앞
     const out = { resumed: 0, failed: 0 };
     if (!AGENT_TASK_LIMITS.LEASE_ENABLED || isAgentTaskShutdown()) return out; // 종료 중엔 가져오지 않는다 — 가져와도 실행을 시작하지 못한다
     const db = getUnifiedDatabase();
@@ -218,6 +223,8 @@ export async function sweepExpiredTaskLeases(): Promise<{ resumed: number; faile
             if (AgentTaskService.isRunning(task.id)) continue;
             if (!(await leaseRepo.takeOverExpiredLease(task.id, leaseOwner(), AGENT_TASK_LIMITS.LEASE_MS))) continue;
             logger.info(`[LeaseSweep] 소유권이 지난 작업을 가져옴: ${task.id} (이전 소유자 ${task.lease_owner ?? '-'})`);
+            const takeoverAlert = { taskId: task.id, previousOwner: task.lease_owner ?? null };
+            void sendAgentTaskAlert('agent_task_lease_takeover', ALERT_TEXT.agent_task_lease_takeover.title, ALERT_TEXT.agent_task_lease_takeover.message(takeoverAlert), takeoverAlert);
             const outcome = await recoverTask(task, db, taskRepo, { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS });
             if (outcome === 'resumed') out.resumed++;
             else if (outcome === 'failed') out.failed++;

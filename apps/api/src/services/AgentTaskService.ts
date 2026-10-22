@@ -38,6 +38,7 @@ import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunI
 import { parkForMissingDevice } from './agent-task/device-wait';
 import { parkForModelOutage } from './agent-task/model-wait';
 import { isInternalOnlyRun } from '../config/internal-only-policy';
+import { touchProgress, clearProgress } from './agent-task/progress-tracker';
 import { auditInternalOnly } from './agent-task/internal-only-audit';
 import { partialResultOf } from './agent-task/turn-call';
 import { injectTaskInputs } from './agent-task/task-inputs';
@@ -47,6 +48,7 @@ import { loadChainContext, gateTurnWithContinuation, prepareSegmentWorkspace, ef
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
 import { trackAgentTaskRun, isShutdownAbort, recordShutdownInterrupt } from './agent-task/shutdown-drain';
+import { withSpan } from '../observability/otel';
 import { findDanglingToolCalls, loadReentryState, writeTurnCheckpoint, usedToolNamesFrom } from './agent-task/turn-reentry';
 import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
 import { nextTurnProgress } from './agent-task/turn-progress';
@@ -104,7 +106,7 @@ export class AgentTaskService {
      * 자율 도구 루프 실행. 백그라운드 detached 호출 전제 — 예외를 던지지 않고
      * 모든 종료 경로에서 agent_tasks 상태를 갱신한다.
      */
-    async execute(input: AgentTaskRunInput): Promise<void> { return trackAgentTaskRun(this, input.taskId, () => this.runLoop(input)); } // 종료 중이면 시작하지 않는다
+    async execute(input: AgentTaskRunInput): Promise<void> { return withSpan('agent-task', 'agent_task.run', () => trackAgentTaskRun(this, input.taskId, () => this.runLoop(input)), { attributes: { 'agent_task.id': input.taskId } }); } // 종료 중이면 시작하지 않는다
     private async runLoop(input: AgentTaskRunInput): Promise<void> {
         const { taskId, goal, userId, userRole, maxTurns, allowedSkills } = input;
         const db = getUnifiedDatabase();
@@ -161,6 +163,7 @@ export class AgentTaskService {
         let leaseLost = false; // 소유권을 잃음(176) — 다른 서버가 가져갔다. 이후로는 상태를 쓰지 않는다(새 소유자의 것)
         const update = async (u: Parameters<typeof db.updateAgentTask>[1]): Promise<void> => {
             if (leaseLost) return;
+            touchProgress(taskId);
             curStatus = (u.status ?? curStatus) as string;
             curProgress = u.progress ?? curProgress;
             curTurn = u.currentTurn ?? curTurn;
@@ -183,6 +186,7 @@ export class AgentTaskService {
         const lease = await beginTaskLease(taskId, () => { leaseLost = true; this.abortController.abort(); }); // 실행 소유권(176): 잃으면 루프를 멈춘다
         if (!lease.acquired) { AgentTaskService.running.delete(taskId); return; }
         try {
+            touchProgress(taskId); // 마지막 진행 시각(191, R8) — 소유권을 잡은 실행의 시작도 진행이다(finally 가 clear)
             // 레지스트리 등록 전(detached 스케줄링 창)에 접수된 취소는 DB 에만 기록됨 — 시작 전 존중. 재개도 같다(2026-10-09 점검 ①):
             // 모든 재개 진입점이 먼저 claim 으로 cancelled 를 벗어나므로(라우트 claimForExecute→queued, 주차 claimParkedTask→pending,
             // 부팅 claimAgentTaskForRecovery→pending) 여기서 보이는 cancelled 는 항상 claim 뒤에 들어온 새 취소다.
@@ -514,7 +518,7 @@ export class AgentTaskService {
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             if (AgentTaskService.running.get(taskId) === this) AgentTaskService.running.delete(taskId); // 내 등록일 때만 — 다른 인스턴스 것을 지우지 않는다
-            await lease.end();
+            await lease.end(); clearProgress(taskId); // 끝난 실행의 쓰지 않은 진행은 버린다(R8)
             // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup. 소유권을 잃었으면 새 소유자가 쓰고 있어 건너뛴다.
             if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber, interrupted, keepWorkspace: continuedToSuccessor });
         }
