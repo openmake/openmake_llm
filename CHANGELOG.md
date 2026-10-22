@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.110.0](https://github.com/openmake/openmake_llm/compare/v1.109.1...v1.110.0) (2026-10-22)
+
+
+### ✨ 기능
+
+* **env:** add 'omk dev sync' and run it before 'dev up' ([c749be6](https://github.com/openmake/openmake_llm/commit/c749be61517b7588d51d18a618c084dd9b8f75cf))
+* **env:** add 'omk dev sync' and run it before 'dev up' ([f909046](https://github.com/openmake/openmake_llm/commit/f909046f308482b298a4971504c2a9f974c07cf0))
+
 ## [1.109.1](https://github.com/openmake/openmake_llm/compare/v1.109.0...v1.109.1) (2026-10-21)
 
 

@@ -11,7 +11,7 @@ export function selectFeatures(files) {
   const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, hostSetup: false, e2e: selectE2E(files) };
   for (const file of files) {
     if (result.e2e.some(spec => spec.file === file)) continue;
-    if (file.startsWith('apps/api/src/')) { result.api.push(file); continue; }
+    if (file.startsWith('apps/api/src/') && /\.[cm]?[jt]sx?$/.test(file)) { result.api.push(file); continue; }
     if (manifest.specs[file]) { result[manifest.specs[file]] = true; continue; }
     // Exact host setup files only — a new setup script stays unmapped until it is listed with fixture coverage.
     if (manifest.hostSetup.includes(file)) { result.hostSetup = true; continue; }
