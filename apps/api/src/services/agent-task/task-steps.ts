@@ -105,9 +105,11 @@ export async function runTool(
     userCtx: UserContext,
     /** 상한을 넘는 결과를 작업 공간 파일로 보관(TaskRuntime.spillLargeResult) — 없거나 null 을 돌려주면 종전대로 절단한다. */
     spill?: (toolName: string, raw: string) => Promise<string | null>,
+    /** (2026-10-22 R4) 작업 중단 신호 — 외부 MCP 호출까지 내려가 진행 중 요청을 끊는다. */
+    signal?: AbortSignal,
 ): Promise<string> {
     try {
-        const r = await mcp.executeTool(name, args, userCtx);
+        const r = await mcp.executeTool(name, args, userCtx, signal ? { signal } : undefined);
         // 문자열/JSON 양쪽 모두 캡 적용 — 대형 결과가 통째로 대화에 들어가면
         // 컨텍스트·체크포인트가 부풀어 token_limit abort 로 작업이 실패한다.
         const raw = typeof r.content === 'string' ? r.content : JSON.stringify(r.content);
