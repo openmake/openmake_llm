@@ -22,6 +22,7 @@ import { getPool } from './models/unified-database';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
+import { isLockedNow, isLockoutActive, recordFailedLogin, recordSuccessfulLogin } from './user-login-lockout';
 
 const logger = createLogger('UserManager');
 
@@ -96,6 +97,8 @@ interface UserRow {
     created_at: string;
     updated_at: string;
     last_login: string | null;
+    /** 마이그레이션 192(W3 S7) — 적용 전 DB 에는 없다(undefined). */
+    locked_until?: Date | string | null;
 }
 
 /**
@@ -296,20 +299,36 @@ class UserManagerImpl {
     }
 
     async authenticate(email: string, password: string): Promise<PublicUser | null> {
+        return (await this.authenticateDetailed(email, password)).user;
+    }
+
+    /**
+     * 로그인 검증 + 계정 잠금(W3 S7). 카운터는 계정 단위 — 연속 AUTH_LOCKOUT.THRESHOLD 회 틀리면
+     * AUTH_LOCKOUT.LOCK_MS 동안 비밀번호를 비교하지 않고 `locked: true`. 성공하면 카운터·잠금을 초기화한다.
+     */
+    async authenticateDetailed(email: string, password: string): Promise<{ user: PublicUser | null; locked: boolean }> {
         const pool = getPool();
         const result = await pool.query('SELECT * FROM users WHERE (email = $1 OR username = $1) AND is_active = TRUE', [email]);
         const row = result.rows[0] as UserRow | undefined;
-        if (!row) return null;
+        if (!row) return { user: null, locked: false };
+
+        const lockoutActive = isLockoutActive();
+        if (lockoutActive && isLockedNow(row.locked_until)) {
+            return { user: null, locked: true };
+        }
 
         // 🔒 bcrypt로 비밀번호 비교 (해시 비교)
-        if (!(await bcrypt.compare(password, row.password_hash))) return null;
+        if (!(await bcrypt.compare(password, row.password_hash))) {
+            if (lockoutActive) await recordFailedLogin(row.id);
+            return { user: null, locked: false };
+        }
 
-        // last_login 업데이트
+        // last_login 업데이트 (+ 잠금 카운터 초기화)
         const now = new Date().toISOString();
-        await pool.query('UPDATE users SET last_login = $1 WHERE id = $2', [now, row.id]);
+        await recordSuccessfulLogin(row.id, now, lockoutActive);
 
         row.last_login = now;
-        return this.rowToPublicUser(row);
+        return { user: this.rowToPublicUser(row), locked: false };
     }
 
     /** OAuth 등 authenticate 를 거치지 않는 로그인 경로에서 last_login 갱신용. */

@@ -2,6 +2,7 @@
  * W3 secure/stable-by-default — 명시 'true'/'false' 가 우선하고, 미설정이면 운영(production)만 prodDefault.
  */
 import { boolEnvDefault, isProductionEnv } from '../secure-defaults';
+import { DEFAULT_CONFIG } from '../env-defaults';
 
 describe('boolEnvDefault', () => {
     const originalNodeEnv = process.env.NODE_ENV;
@@ -39,5 +40,11 @@ describe('boolEnvDefault', () => {
         expect(boolEnvDefault(undefined, true)).toBe(false);
         process.env.NODE_ENV = 'production';
         expect(boolEnvDefault(undefined, true)).toBe(true);
+    });
+});
+
+describe('DEFAULT_CONFIG.trustedProxies (W3 S7)', () => {
+    it('기본은 loopback 만 — 사설망·링크로컬 주소의 X-Forwarded-For 는 믿지 않는다', () => {
+        expect(DEFAULT_CONFIG.trustedProxies).toEqual(['loopback']);
     });
 });

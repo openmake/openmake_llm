@@ -37,6 +37,8 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     // 보안 변화
     'password.changed': 'warning',
     'login.failed': 'info',
+    // 잠긴 계정에 로그인 시도(W3 S7) — 응답은 login.failed 와 같은 401, 감사에서만 구분한다.
+    'login.locked': 'warning',
     // 성공 로그인 — 세션이 새로 만들어질 때마다 한 행(계정 탈취 조사용). 빈도가 높아 알림은 없다.
     // 이 action 행만 db-retention 이 AUDIT_LOGIN_SUCCESS_RETENTION_DAYS 뒤 지운다.
     'login.succeeded': null,
