@@ -270,7 +270,7 @@ describe('buildSpawnAgentsTool', () => {
 });
 
 describe('runChatSpawnAgents — 채팅 편의 래퍼', () => {
-    it('승인 정책 none + 로컬 클라이언트로 실행한다', async () => {
+    it('승인 게이트를 건너뛰는 채팅 설정(skipApprovalGate) + 로컬 클라이언트로 실행한다', async () => {
         const out = await runChatSpawnAgents({
             args: { tasks: [{ prompt: 'chat task' }] },
             chatTools: [llmTool('web_search')],
@@ -278,7 +278,8 @@ describe('runChatSpawnAgents — 채팅 편의 래퍼', () => {
         });
         expect(out).toContain('RESULT<chat task>');
         const p = runSubagentMock.mock.calls[0][0];
-        expect(p.sandboxCfg).toEqual({ approvalPolicy: 'none', approvalTimeoutMs: 0 });
+        // 채팅 경로는 정책 none 의 바닥 거절(S1)을 받지 않는다 — 부모 채팅 루프가 같은 도구를 게이트 없이 부른다.
+        expect(p.sandboxCfg).toEqual({ approvalPolicy: 'none', approvalTimeoutMs: 0, skipApprovalGate: true });
         expect(p.taskId).toBe('__chat__');
     });
 

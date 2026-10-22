@@ -55,7 +55,7 @@ router.get('/sessions/:sid/meta', requireAuth, asyncHandler(async (req: Request,
         res.status(404).json(notFound('session'));
         return;
     }
-    if (!isAdmin && row.userId && row.userId !== userId) {
+    if (!isAdmin && row.userId !== userId) {
         res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
         return;
     }

@@ -24,6 +24,11 @@ const setUnattended = jest.fn((_taskId: string, _on: boolean) => { calls.push('u
 jest.mock('../../task-sandbox/approval-gate', () => ({ getApprovalRegistry: () => ({ setUnattended }) }));
 jest.mock('../../PushService', () => ({ getPushService: () => ({ sendPush: async () => undefined }) }));
 jest.mock('../schedule-publish', () => ({ publishScheduleOutput: async () => undefined }));
+const resolveEffectivePolicy = jest.fn(async (_userId: string) => ({} as { approvalPolicyMin?: string }));
+jest.mock('../../org/effective-policy', () => ({
+    ...jest.requireActual('../../org/effective-policy'),
+    resolveEffectivePolicy: (userId: string) => resolveEffectivePolicy(userId),
+}));
 jest.mock('../../../data/user-manager', () => ({ isAdminRole: () => false, getUserManager: () => ({ getUserById: async () => ({ role: 'user' }) }) }));
 
 import { runScheduleTick } from '../schedule-runner';
@@ -100,6 +105,29 @@ describe('runScheduleTick — 실행 결과 반영', () => {
         await runScheduleTick(NOW);
         expect(repo.markRun).toHaveBeenCalledWith('s1', expect.any(Number), expect.any(String), false);
         expect(typeof execute.mock.calls[0][0].onTerminal).toBe('function');
+    });
+});
+
+describe('runScheduleTick — 조직 승인 하한(S1)', () => {
+    const runWith = async (min: string | undefined): Promise<string> => {
+        resolveEffectivePolicy.mockResolvedValueOnce(min ? { approvalPolicyMin: min } : {});
+        repo.getDue.mockResolvedValue([schedule()]);
+        repo.getLastTaskState.mockResolvedValue(null);
+        const execute = jest.fn(async (_input: { approvalPolicy?: string }) => undefined);
+        (jest.requireMock('../../AgentTaskService').AgentTaskService as jest.Mock).mockImplementation(() => ({ execute }));
+        dispatchAgentTask.mockImplementationOnce(async (p: { taskId: string; run?: () => Promise<void> }) => { await p.run?.(); });
+        await runScheduleTick(NOW);
+        expect(resolveEffectivePolicy).toHaveBeenCalledWith('u1');
+        return execute.mock.calls[0][0].approvalPolicy as string;
+    };
+
+    it('조직이 하한을 두면 예약 정책보다 엄격한 쪽으로 실행한다', async () => {
+        expect(await runWith('high-risk')).toBe('high-risk');
+    });
+
+    it('하한이 없으면 예약 정책 그대로', async () => {
+        const { AGENT_TASK_LIMITS } = jest.requireActual('../../../config/runtime-limits');
+        expect(await runWith(undefined)).toBe(AGENT_TASK_LIMITS.SCHEDULE_APPROVAL_POLICY);
     });
 });
 
