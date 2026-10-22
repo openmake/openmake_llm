@@ -22,8 +22,8 @@ export function selectFeatures(files) {
     if (/(?:^|\/)(?:specs|specifications)\//.test(file)) throw new Error(`Unmapped changed spec: ${file}; add a fixed manifest suite`);
     const match = Object.entries(manifest.prefixes).find(([prefix]) => file.startsWith(prefix));
     if (match) { result[match[1]] = true; continue; }
-    if (/\.(?:md|html|svg|png|json)$/.test(file) && !file.startsWith('packages/')) continue;
-    if (file.startsWith('packages/')) { result.api.push(file); continue; }
+    if (/\.(?:md|html|svg|png|json)$/.test(file)) continue;
+    if (file.startsWith('packages/') && /\.[cm]?[jt]sx?$/.test(file)) { result.api.push(file); continue; }
     // Unknown executable source requires an explicit mapping instead of silently claiming coverage.
     if (selectE2E([file]).length) continue;
     if (/\.(?:[cm]?[jt]sx?|sh|ya?ml)$/.test(file)) throw new Error(`Unmapped changed source: ${file}`);
