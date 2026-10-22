@@ -8,14 +8,14 @@
  * @module addons/mcp-runtime/routes/mcp-server-audit
  */
 import type { Request } from 'express';
-import { auditSecurityEvent } from '../../../security/security-audit';
+import { auditSecurityEvent, isSsrfBlockedError } from '../../../security/security-audit';
 
 function actor(req: Request) {
     return { userId: req.user?.id, ipAddress: req.ip, userAgent: req.get('user-agent') };
 }
 
 /** URL 의 host(포트 포함)만 — 경로·쿼리·계정은 버린다. 파싱 실패는 'invalid'. */
-export function urlHost(raw: string): string {
+function urlHost(raw: string): string {
     try { return new URL(raw).host; } catch { return 'invalid'; }
 }
 
@@ -47,9 +47,11 @@ export function auditMcpRegisterDenied(req: Request, reason: string, details?: R
     });
 }
 
-export function auditMcpUrlBlocked(req: Request, host: string, reason: string): void {
+/** URL 거부 — SSRF 가드 차단만 남긴다(DNS 실패 등 다른 오류는 감사 안 함, web-scraper-tools 와 같은 기준). */
+export function auditMcpUrlBlocked(req: Request, rawUrl: string, err: unknown): void {
+    if (!isSsrfBlockedError(err)) return;
     void auditSecurityEvent({
-        action: 'security.ssrf_blocked', ...actor(req), resourceType: 'url', resourceId: host,
-        details: { target: 'mcp_server', reason },
+        action: 'security.ssrf_blocked', ...actor(req), resourceType: 'url', resourceId: urlHost(rawUrl),
+        details: { target: 'mcp_server', reason: (err as Error).message },
     });
 }

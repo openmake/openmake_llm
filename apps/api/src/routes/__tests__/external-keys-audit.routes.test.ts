@@ -41,6 +41,7 @@ jest.mock('../../services/model-availability-probe', () => ({ probeProviderModel
 const audit = jest.fn(async (_input: Record<string, unknown>) => undefined);
 jest.mock('../../security/security-audit', () => ({
     auditSecurityEvent: (input: Record<string, unknown>) => audit(input),
+    isSsrfBlockedError: jest.requireActual('../../security/security-audit').isSsrfBlockedError,
 }));
 
 import externalKeysRouter from '../external-keys.routes';
@@ -121,5 +122,14 @@ describe('external-keys 감사', () => {
         });
         expect(JSON.stringify(input)).not.toContain('token=abc');
         expect(JSON.stringify(input)).not.toContain(API_KEY);
+    });
+
+    it('SSRF 가드 차단이 아닌 실패(DNS)는 400 만, 감사 0회', async () => {
+        validateOutboundUrl.mockRejectedValueOnce(new Error('getaddrinfo ENOTFOUND x'));
+        const res = await request(app()).post('/api/external-keys/openrouter')
+            .send(body({ base_url: 'https://x.invalid/v1' }));
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toBe('base_url 차단: getaddrinfo ENOTFOUND x');
+        expect(audit).not.toHaveBeenCalled();
     });
 });

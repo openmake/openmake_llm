@@ -32,7 +32,7 @@ import {
     getProviderCatalogEntry,
 } from '../config/external-providers';
 import { validateOutboundUrl } from '../security/ssrf-guard';
-import { auditSecurityEvent } from '../security/security-audit';
+import { auditSecurityEvent, isSsrfBlockedError } from '../security/security-audit';
 import { OpenAICompatProvider } from '../providers/openai-compat-provider';
 import {
     createExternalProviderInstance,
@@ -175,10 +175,13 @@ router.post('/:providerId',
                 await validateOutboundUrl(req.body.base_url);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : 'invalid base_url';
-                void auditSecurityEvent({
-                    action: 'security.ssrf_blocked', userId, resourceType: 'url', resourceId: baseUrlHost(req.body.base_url),
-                    details: { target: 'external_key', providerId, reason: msg }, ipAddress: req.ip, userAgent: req.get('user-agent'),
-                });
+                // SSRF 가드 차단만 감사 — DNS 실패 등은 400 만(web-scraper-tools 와 같은 기준).
+                if (isSsrfBlockedError(err)) {
+                    void auditSecurityEvent({
+                        action: 'security.ssrf_blocked', userId, resourceType: 'url', resourceId: baseUrlHost(req.body.base_url),
+                        details: { target: 'external_key', providerId, reason: msg }, ipAddress: req.ip, userAgent: req.get('user-agent'),
+                    });
+                }
                 res.status(400).json(badRequest(`base_url 차단: ${msg}`));
                 return;
             }

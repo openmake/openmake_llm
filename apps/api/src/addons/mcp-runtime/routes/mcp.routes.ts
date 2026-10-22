@@ -47,7 +47,7 @@ import { connectGlobalServer } from './mcp-global-connect';
 import { renameMcpServer } from './mcp-server-rename';
 import { getAuditService } from '../../../services/AuditService';
 import { validateOutboundUrl } from '../../../security/ssrf-guard';
-import { auditMcpServerCreated, auditMcpServerDeleted, auditMcpDeleteDenied, auditMcpRegisterDenied, auditMcpUrlBlocked, urlHost } from './mcp-server-audit';
+import { auditMcpServerCreated, auditMcpServerDeleted, auditMcpDeleteDenied, auditMcpRegisterDenied, auditMcpUrlBlocked } from './mcp-server-audit';
 
 const logger = createLogger('McpRoutes');
 
@@ -220,7 +220,7 @@ export const mcpRouter = Router();
           try {
               await validateOutboundUrl(url);
           } catch (e) {
-              auditMcpUrlBlocked(req, urlHost(url), e instanceof Error ? e.message : String(e));
+              auditMcpUrlBlocked(req, url, e);
               res.status(400).json(badRequest(`URL 거부: ${e instanceof Error ? e.message : String(e)}`));
               return;
           }

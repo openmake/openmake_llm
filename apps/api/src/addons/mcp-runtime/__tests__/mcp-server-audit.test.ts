@@ -6,12 +6,13 @@
 const audit = jest.fn(async (_input: Record<string, unknown>) => undefined);
 jest.mock('../../../security/security-audit', () => ({
     auditSecurityEvent: (input: Record<string, unknown>) => audit(input),
+    isSsrfBlockedError: jest.requireActual('../../../security/security-audit').isSsrfBlockedError,
 }));
 
 import type { Request } from 'express';
 import {
     auditMcpServerCreated, auditMcpServerDeleted, auditMcpDeleteDenied,
-    auditMcpRegisterDenied, auditMcpUrlBlocked, urlHost,
+    auditMcpRegisterDenied, auditMcpUrlBlocked,
 } from '../routes/mcp-server-audit';
 
 function req(user?: { id: string | number; role?: string }): Request {
@@ -60,7 +61,8 @@ describe('mcp-server-audit', () => {
     });
 
     it('URL 차단 → security.ssrf_blocked, resourceId 는 host 만', () => {
-        auditMcpUrlBlocked(req({ id: 'u-4' }), 'internal.example:8080', 'SSRF blocked: resolved to blocked IP range: 10.0.0.1');
+        auditMcpUrlBlocked(req({ id: 'u-4' }), 'https://u:p@internal.example:8080/a?token=s',
+            new Error('SSRF blocked: resolved to blocked IP range: 10.0.0.1'));
         expect(only()).toEqual({
             action: 'security.ssrf_blocked', userId: 'u-4', resourceType: 'url', resourceId: 'internal.example:8080',
             details: { target: 'mcp_server', reason: 'SSRF blocked: resolved to blocked IP range: 10.0.0.1' },
@@ -73,8 +75,9 @@ describe('mcp-server-audit', () => {
         expect(only().userId).toBeUndefined();
     });
 
-    it('urlHost — 경로·쿼리·계정은 버리고 host 만, 깨진 주소는 invalid', () => {
-        expect(urlHost('https://u:p@internal.example:8080/a?token=s')).toBe('internal.example:8080');
-        expect(urlHost('not a url')).toBe('invalid');
+    it('SSRF 가드 차단이 아닌 오류(DNS 실패·깨진 URL)는 감사하지 않는다', () => {
+        auditMcpUrlBlocked(req({ id: 'u-5' }), 'https://x.invalid/', new Error('getaddrinfo ENOTFOUND x'));
+        auditMcpUrlBlocked(req({ id: 'u-5' }), 'not a url', new TypeError('Invalid URL'));
+        expect(audit).not.toHaveBeenCalled();
     });
 });
