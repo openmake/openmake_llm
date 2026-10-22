@@ -30,6 +30,7 @@ import type { ChatMessage } from '../../llm/types';
 import type { AgentTaskUserRole } from './types';
 import { leaseOwner } from './task-lease';
 import { isAgentTaskShutdown } from './shutdown-drain';
+import { markLoopRun } from './background-liveness';
 import { sendAgentTaskAlert, ALERT_TEXT } from '../../monitoring/agent-task-alerts';
 import type { AgentTask } from '../../data/models/unified-database.types';
 
@@ -202,6 +203,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
  * (연장이 잠깐 밀렸을 뿐 — 다음 연장이 소유권을 되살린다). 절대 throw 하지 않는다.
  */
 export async function sweepExpiredTaskLeases(): Promise<{ resumed: number; failed: number }> {
+    markLoopRun('lease_sweep'); // readiness 가 보는 생존 기록(R9-b) — 꺼짐·종료 검사보다 앞
     const out = { resumed: 0, failed: 0 };
     if (!AGENT_TASK_LIMITS.LEASE_ENABLED || isAgentTaskShutdown()) return out; // 종료 중엔 가져오지 않는다 — 가져와도 실행을 시작하지 못한다
     const db = getUnifiedDatabase();

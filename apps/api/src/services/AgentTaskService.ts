@@ -48,6 +48,7 @@ import { loadChainContext, gateTurnWithContinuation, prepareSegmentWorkspace, ef
 import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { beginTaskLease } from './agent-task/task-lease';
 import { trackAgentTaskRun, isShutdownAbort, recordShutdownInterrupt } from './agent-task/shutdown-drain';
+import { withSpan } from '../observability/otel';
 import { findDanglingToolCalls, loadReentryState, writeTurnCheckpoint, usedToolNamesFrom } from './agent-task/turn-reentry';
 import { isEmptyTurn, pushStuckSignature } from './agent-task/turn-guards';
 import { nextTurnProgress } from './agent-task/turn-progress';
@@ -105,7 +106,7 @@ export class AgentTaskService {
      * 자율 도구 루프 실행. 백그라운드 detached 호출 전제 — 예외를 던지지 않고
      * 모든 종료 경로에서 agent_tasks 상태를 갱신한다.
      */
-    async execute(input: AgentTaskRunInput): Promise<void> { return trackAgentTaskRun(this, input.taskId, () => this.runLoop(input)); } // 종료 중이면 시작하지 않는다
+    async execute(input: AgentTaskRunInput): Promise<void> { return withSpan('agent-task', 'agent_task.run', () => trackAgentTaskRun(this, input.taskId, () => this.runLoop(input)), { attributes: { 'agent_task.id': input.taskId } }); } // 종료 중이면 시작하지 않는다
     private async runLoop(input: AgentTaskRunInput): Promise<void> {
         const { taskId, goal, userId, userRole, maxTurns, allowedSkills } = input;
         const db = getUnifiedDatabase();

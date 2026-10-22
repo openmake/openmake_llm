@@ -23,6 +23,7 @@ import { callAgentTurnWithBudget } from './turn-call';
 import { retryRepeatedAnswer } from './output-repetition';
 import { noteContextTrim } from './context-pressure';
 import { touchProgress } from './progress-tracker';
+import { withSpan } from '../../observability/otel';
 import { createLogger } from '../../utils/logger';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 
@@ -107,7 +108,12 @@ function shrinkAfterOverflow(conversation: ChatMessage[], tools: ToolDefinition[
     return fold.folded > 0 || dropped > 0;
 }
 
+/** 한 턴을 agent_task.turn span 으로 감싼다(R9-d) — 작업 id·턴 번호(1부터)를 단다. */
 export async function callAgentTurnWithContext(p: TurnContextInput): ReturnType<typeof callAgentTurnWithBudget> {
+    return withSpan('agent-task', 'agent_task.turn', () => callAgentTurnWithContextInner(p), { attributes: { 'agent_task.id': p.taskId, 'agent_task.turn': p.turn + 1 } });
+}
+
+async function callAgentTurnWithContextInner(p: TurnContextInput): ReturnType<typeof callAgentTurnWithBudget> {
     touchProgress(p.taskId); // 마지막 진행 시각(191, R8) — 턴 시작
     if (AGENT_TASK_LIMITS.CONTEXT_FOLD_ENABLED) {
         const fold = foldOldToolResults(p.conversation, FOLD_OPTIONS());
