@@ -17,7 +17,7 @@
         "start:api": "node apps/api/dist/server.js",
         "test": "npm run build:packages && npm run test:infra && npm test --workspace=@openmake/local-bridge-core && npm test --workspace=apps/api",
         "test:db": "node scripts/ci/run-db-tests.mjs",
-        "test:infra": "node --test \"infra/**/*.test.mjs\" \"scripts/lint/*.test.mjs\" \"scripts/ci/*.test.mjs\" \"scripts/bench/*.test.mjs\" \"scripts/release/*.test.mjs\" \"tests/pipeline/*.test.mjs\" \"scripts/pipeline/*.test.mjs\"",
+        "test:infra": "node --test \"infra/**/*.test.mjs\" \"scripts/lint/*.test.mjs\" \"scripts/ci/*.test.mjs\" \"scripts/bench/*.test.mjs\" \"scripts/release/*.test.mjs\" \"tests/pipeline/*.test.mjs\" \"scripts/pipeline/*.test.mjs\" \"scripts/vllm/*.test.mjs\"",
         "verify:matrix": "node scripts/release/verify-matrix.mjs",
         "release:candidate": "node scripts/release/release-candidate.mjs",
         "bench:api": "node scripts/bench/api-load.mjs",
