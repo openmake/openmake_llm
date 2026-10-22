@@ -182,6 +182,13 @@ jobs:
       - name: "Gate 2: TypeScript Build"
         run: npm run build || { echo "::warning::빌드 실패 — 30초 뒤 한 번 재시도합니다"; sleep 30; npm run build; }
 
+      # PR 에서 미리 본다: 바뀐 소스마다 관련 Jest 테스트가 있는지(선정만, 실행 없음).
+      # dev 푸시의 "Merged dev" 단계가 같은 기준(origin/main 과의 merge-base)으로 보므로, PR 의 머지 커밋(HEAD)으로 재면 머지 뒤 결과를 미리 안다.
+      # pull_request 체크아웃 HEAD 는 refs/pull/N/merge 머지 커밋이라 github.sha 가 아니라 git rev-parse HEAD 를 쓴다.
+      - name: "PR: changed-feature selection (related Jest tests must exist)"
+        if: github.event_name == 'pull_request'
+        run: node scripts/ci/feature-checks.mjs --select-only "$(git rev-parse HEAD)"
+
       # Only actual merged-dev push SHA; no entire Playwright suite.
       - name: "Merged dev: isolated basic app and changed-feature checks"
         if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
