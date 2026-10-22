@@ -30,17 +30,15 @@ import { resolveLanguagePolicy } from '../services/chat-service/language-resolve
 import { detectFastPath } from './fast-path-detector';
 import { buildTaskGateSessionInput, startTaskGateSession } from './task-gate-session';
 import { historySummaryCache } from '../services/chat-service/history-summary-cache';
-import { summarizeHistory } from './history-summarizer';
-import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
+import { scheduleHistoryPresummary } from './history-presummary';
 import { createLogger } from '../utils/logger';
 import { LocalLLMProvider } from '../providers/local-llm-provider';
 import { ProviderRouter } from '../providers/provider-router';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
-import { extractAndStripArtifacts, findArtifactPlaceholderIds, stripArtifactPlaceholders } from '../llm/artifact-parser';
-import { takeReportSource } from '../services/chat-service/report-block';
-import { ArtifactRepository, ArtifactSizeError, type ArtifactKind } from '../data/repositories/artifact-repository';
 import { ensureSession, saveUserMessage, saveAssistantMessage } from './request-persistence';
+import { persistResponseArtifacts } from './request-artifacts';
+import { validateBranchMeta } from './request-branch-meta';
 import { handleToolCallingPath } from './tool-calling-path';
 import { createThinkingSummarySession } from '../services/chat-service/thinking-summarizer';
 import { getConversationDB } from '../data/conversation-db';
@@ -239,32 +237,7 @@ export class ChatRequestHandler {
             ?? createDirectClient({ model: engineModel, ...(quotaUserId ? { userId: quotaUserId } : {}) });
 
         // 3. 세션 확보 (Phase 3.4: branchFromSessionId 명시 시 metadata.parentSessionId 저장)
-        // Phase 3 보완 D.3 (2026-05-26): branchFromSessionId 의 ownership 검증 —
-        // 다른 사용자의 sessionId 가 parent 로 저장되지 않도록. 검증 실패 시 silent skip + warn.
-        let validatedBranchMeta: { parentSessionId: string; parentMessageId?: string } | undefined;
-        if (params.branchFromSessionId && userContext.authenticatedUserId) {
-            try {
-                const { getPool } = await import('../data/models/unified-database');
-                const r = await getPool().query<{ user_id: string | null }>(
-                    'SELECT user_id FROM conversation_sessions WHERE id = $1',
-                    [params.branchFromSessionId]
-                );
-                const ownerUid = r.rows[0]?.user_id;
-                if (ownerUid && ownerUid === userContext.authenticatedUserId) {
-                    validatedBranchMeta = {
-                        parentSessionId: params.branchFromSessionId,
-                        parentMessageId: params.branchFromMessageId,
-                    };
-                } else {
-                    log.warn(`branchFromSessionId 권한 거부: parent.user=${ownerUid} != actor=${userContext.authenticatedUserId} — branch metadata 미저장`);
-                }
-            } catch (e) {
-                log.warn(`branchFromSessionId 권한 검증 실패 (continue, branch 무시): ${e instanceof Error ? e.message : e}`);
-            }
-        } else if (params.branchFromSessionId) {
-            // 비인증 사용자 — branch 정보 무시 (anon session 분기는 의미 없음)
-            log.warn(`branchFromSessionId 무시 — 비인증 사용자 (anon session)`);
-        }
+        const validatedBranchMeta = await validateBranchMeta(params, userContext);
         let currentSessionId: string;
         try {
             currentSessionId = await ensureSession(
@@ -427,81 +400,8 @@ export class ChatRequestHandler {
         const endTime = Date.now();
         const responseTime = endTime - startTime;
 
-        // 6. Artifacts 후처리 (2026-05-26): 응답에서 `<artifact>...</artifact>` 블록 분리.
-        // - artifacts 테이블에 영속화 (같은 id 면 version 자동 증가)
-        // - message 본문은 [[artifact:id]] placeholder 로 정리 — 다음 턴 prompt 에 본문 미포함
-        // - 추출된 artifact 목록을 result.artifacts 로 노출 → ws-handler 가 WS 이벤트로 발행
-        let cleanedResponse = response;
-        const extractedArtifacts: ChatResult['artifacts'] = [];
-        try {
-            const { cleanedContent, artifacts } = extractAndStripArtifacts(response);
-            if (artifacts.length > 0) {
-                const repo = new ArtifactRepository(getPool());
-                for (const a of artifacts) {
-                    // Harness 결정론 검증 게이트: 깨진 산출물을 비차단으로 surface (저장은 계속).
-                    if (a.validation && a.validation.checked && !a.validation.valid) {
-                        log.warn(`[Artifact] 구문 검증 실패 id=${a.id} kind=${a.kind} lang=${a.lang}: ${a.validation.issues.join('; ')}`);
-                    }
-                    try {
-                        // 보고서 아티팩트면 reportdata 원본을 함께 영속 — docx 등 구조 기반 export 용.
-                        const sourceData = takeReportSource(a.id);
-                        const row = await repo.insertArtifact({
-                            artifactId: a.id,
-                            sessionId: currentSessionId,
-                            userId: userContext.authenticatedUserId,
-                            kind: a.kind as ArtifactKind,
-                            title: a.title,
-                            language: a.lang,
-                            content: a.content,
-                            ...(sourceData ? { sourceData } : {}),
-                        });
-                        log.info(`[Artifact] saved id=${a.id} v=${row.version} kind=${a.kind} bytes=${a.content.length}`);
-                        extractedArtifacts.push({
-                            id: row.artifact_id,
-                            kind: row.kind,
-                            title: row.title,
-                            lang: row.language,
-                            version: row.version,
-                            content: row.content,
-                        });
-                    } catch (e) {
-                        if (e instanceof ArtifactSizeError) {
-                            log.warn(`[Artifact] 20MB 초과 — id=${a.id} skip`);
-                        } else {
-                            log.warn(`[Artifact] INSERT 실패 id=${a.id}: ${e instanceof Error ? e.message : e}`);
-                        }
-                    }
-                }
-                cleanedResponse = cleanedContent;
-            }
-        } catch (e) {
-            log.warn(`[Artifact] 후처리 실패 (continue): ${e instanceof Error ? e.message : e}`);
-        }
-
-        // 6.5 유령 placeholder 가드 (2026-07-21): 소형 모델이 히스토리의 [[artifact:id]]
-        // 표기를 모방해 실체 없는 placeholder 를 직접 출력하는 경우가 있다 (Discord 경로
-        // 실측 — 응답 전체가 placeholder 한 줄, artifacts 미생성). 이번 턴 추출분에도
-        // 세션 영속분에도 없는 id 는 본문에서 제거해 클라이언트 원문 노출을 막는다.
-        try {
-            const extractedIds = new Set(extractedArtifacts.map((a) => a.id));
-            const candidateIds = findArtifactPlaceholderIds(cleanedResponse)
-                .filter((id) => !extractedIds.has(id));
-            if (candidateIds.length > 0) {
-                const repo = new ArtifactRepository(getPool());
-                const ghostIds: string[] = [];
-                for (const id of candidateIds) {
-                    const versions = await repo.listVersionsByArtifactId(currentSessionId, id);
-                    if (versions.length === 0) ghostIds.push(id);
-                }
-                if (ghostIds.length > 0) {
-                    log.warn(`[Artifact] 유령 placeholder 제거 (모델 모방 출력): ${ghostIds.join(', ')}`);
-                    cleanedResponse = stripArtifactPlaceholders(cleanedResponse, ghostIds).trim()
-                        || '죄송합니다. 요청하신 산출물 생성에 실패했습니다. 다시 한번 요청해 주세요.';
-                }
-            }
-        } catch (e) {
-            log.warn(`[Artifact] 유령 placeholder 가드 실패 (continue): ${e instanceof Error ? e.message : e}`);
-        }
+        // 6·6.5 Artifacts 후처리·유령 placeholder 가드 — request-artifacts.ts
+        const { cleanedResponse, extractedArtifacts } = await persistResponseArtifacts(response, currentSessionId, userContext);
 
         // 7. AI 응답 저장 — placeholder 적용된 cleanedResponse 사용
         void summarySession.startFinal(); // 안전망: 응답 토큰 없이 종료된 경우에도 최종 요약
@@ -524,25 +424,8 @@ export class ChatRequestHandler {
         }
         const taskSuggestion = taskGate.finish({ sessionId: currentSessionId, messageId: savedMessageId });
 
-        // 8. 다음 턴을 위한 사전 요약 (백그라운드, fire-and-forget)
-        // 새 history = 기존 + user message + cleanedResponse (placeholder 포함).
-        // 길이가 임계값 이상일 때만 요약 LLM 호출. 실패는 무시 (다음 턴이 inline fallback).
-        // 캐시는 ChatRequest 시 cached.length === request.history.length 정확 일치만 사용.
-        const newHistoryLength = (history?.length ?? 0) + 2;
-        if (newHistoryLength >= HISTORY_SUMMARIZER.MIN_MESSAGES_TO_SUMMARIZE) {
-            const newHistory = [
-                ...(history ?? []),
-                { role: 'user', content: message },
-                { role: 'assistant', content: cleanedResponse },
-            ];
-            void summarizeHistory(newHistory, maskedModel)
-                .then((s) => {
-                    if (s.wasSummarized) {
-                        historySummaryCache.set(currentSessionId, newHistoryLength, s.messages);
-                    }
-                })
-                .catch((err) => log.warn(`[RequestHandler] 사전 요약 백그라운드 실패 (무시): ${err instanceof Error ? err.message : err}`));
-        }
+        // 8. 다음 턴을 위한 사전 요약 (백그라운드, fire-and-forget) — history-presummary.ts
+        scheduleHistoryPresummary(history, message, cleanedResponse, maskedModel, currentSessionId);
 
         // routingMeta.agentBypass 는 ChatService.handleChat 의 agentBypassed 조건과
         // 동기화되어야 함 — drift 시 ChatMetrics 의 agent_bypass= 가 거짓 N 으로 표시됨.
