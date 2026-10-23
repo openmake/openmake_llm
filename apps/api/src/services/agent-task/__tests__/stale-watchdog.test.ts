@@ -3,8 +3,12 @@
  * 작업 상태는 바꾸지 않는다. 단계 하나가 실패해도 다음 단계는 돈다.
  */
 const listStaleRunningTasks = jest.fn();
+const summarizeParkedByReason = jest.fn();
 jest.mock('../../../data/repositories/agent-task-progress-repository', () => ({
-    AgentTaskProgressRepository: jest.fn().mockImplementation(() => ({ listStaleRunningTasks: (...a: unknown[]) => listStaleRunningTasks(...a) })),
+    AgentTaskProgressRepository: jest.fn().mockImplementation(() => ({
+        listStaleRunningTasks: (...a: unknown[]) => listStaleRunningTasks(...a),
+        summarizeParkedByReason: (...a: unknown[]) => summarizeParkedByReason(...a),
+    })),
 }));
 const listParkedTasks = jest.fn();
 const countActiveAgentTasksByStatus = jest.fn();
@@ -47,6 +51,7 @@ beforeEach(() => {
     listStaleRunningTasks.mockResolvedValue([]);
     stats.mockReturnValue({ globalActive: 1, pending: 0, wait: { oldestPendingMs: null } });
     listParkedTasks.mockResolvedValue([]);
+    summarizeParkedByReason.mockResolvedValue({ count: 0, longCount: 0, oldest: [] });
     countActiveAgentTasksByStatus.mockResolvedValue({ queued: 0, running: 1, paused: 0, pending: 0 });
 });
 
@@ -108,19 +113,26 @@ describe('runWatchdogTick — 대기열 적체', () => {
 });
 
 describe('runWatchdogTick — 모델 대기 장기화', () => {
-    it('모델 대기 31분 1건 + 10분 1건이면 알림 1건(count 1), 게이지는 모델 대기 전체 2', async () => {
-        listParkedTasks.mockResolvedValue([
-            { id: 'm1', reason: 'model_wait', waited_ms: String(31 * MIN) }, // pg bigint 는 문자열로 온다
-            { id: 'm2', reason: 'model_wait', waited_ms: 10 * MIN },
-            { id: 'h1', reason: 'hitl_parked', waited_ms: 999 * MIN },
-        ]);
+    it('DB 집계로 센다 — 200건 목록이 아니라 전체 건수·장기 건수, 알림 taskIds 는 오래 기다린 표본 중 기준을 넘긴 것', async () => {
+        summarizeParkedByReason.mockResolvedValue({
+            count: 250, longCount: 230,
+            oldest: [{ id: 'm1', waited_ms: 90 * MIN }, { id: 'm2', waited_ms: 31 * MIN }, { id: 'm3', waited_ms: 10 * MIN }],
+        });
         const r = await runWatchdogTick();
-        expect(listParkedTasks).toHaveBeenCalledWith(200);
-        expect(r.modelWaitLong).toBe(1);
+        expect(summarizeParkedByReason).toHaveBeenCalledWith('model_wait', 1_800_000, 5);
+        expect(listParkedTasks).not.toHaveBeenCalled();
+        expect(r.modelWaitLong).toBe(230);
         const calls = alertsOf('agent_task_model_wait_long');
         expect(calls).toHaveLength(1);
-        expect(calls[0][3]).toMatchObject({ count: 1, taskIds: ['m1'] });
-        expect(gauge('agent_task_model_wait_parked')).toBe(2);
+        expect(calls[0][3]).toEqual({ count: 230, taskIds: ['m1', 'm2'], thresholdMs: 1_800_000 });
+        expect(gauge('agent_task_model_wait_parked')).toBe(250);
+    });
+
+    it('장기 0건이면 알림 없음, 게이지는 모델 대기 전체', async () => {
+        summarizeParkedByReason.mockResolvedValue({ count: 3, longCount: 0, oldest: [{ id: 'm1', waited_ms: MIN }] });
+        expect((await runWatchdogTick()).modelWaitLong).toBe(0);
+        expect(alertsOf('agent_task_model_wait_long')).toHaveLength(0);
+        expect(gauge('agent_task_model_wait_parked')).toBe(3);
     });
 });
 
@@ -141,7 +153,7 @@ describe('runWatchdogTick — 건너뜀', () => {
         await expect(runWatchdogTick()).resolves.toEqual({ stale: 0, queueBacklog: false, modelWaitLong: 0, skipped: 'shutdown' });
         expect(listStaleRunningTasks).not.toHaveBeenCalled();
         expect(stats).not.toHaveBeenCalled();
-        expect(listParkedTasks).not.toHaveBeenCalled();
+        expect(summarizeParkedByReason).not.toHaveBeenCalled();
         expect(countActiveAgentTasksByStatus).not.toHaveBeenCalled();
     });
 
@@ -194,7 +206,7 @@ describe('runWatchdogTick — 단계 조회 실패와 회복(#1478)', () => {
 
     it('조회 실패는 오류 1 — 그 단계의 알려진 값은 0 으로 덮지 않고 마지막 성공 시각도 갱신하지 않는다', async () => {
         listStaleRunningTasks.mockRejectedValue(new Error('db down'));
-        listParkedTasks.mockRejectedValue(new Error('db down'));
+        summarizeParkedByReason.mockRejectedValue(new Error('db down'));
         countActiveAgentTasksByStatus.mockRejectedValue(new Error('db down'));
         await runWatchdogTick();
         for (const s of ['stale', 'model_wait', 'status_count']) {
