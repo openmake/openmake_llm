@@ -378,9 +378,9 @@ export const AGENT_TASK_LIMITS = {
      *  파일 내용을 통째로 넘기는 write 계열 인자가 있어 캡이 필요하다. */
     TOOL_ARGS_MAX_CHARS: parseInt(process.env.AGENT_TASK_TOOL_ARGS_MAX_CHARS || '2000', 10),
     /** 동시성 큐(Phase 3-B) — /execute·resume·부팅복구가 즉시 발사 대신 큐에 제출. 전역·유저별
-     *  동시 실행 상한을 넘으면 'queued' 로 대기, 슬롯이 비면 dequeue. 기본 OFF(켜면 즉시발사→큐).
-     *  ⚠️ 단일 프로세스 전제(API instances:1). 멀티프로세스 확장 시 Redis 백엔드 필요. */
-    QUEUE_ENABLED: process.env.AGENT_TASK_QUEUE_ENABLED === 'true',
+     *  동시 실행 상한을 넘으면 'queued' 로 대기, 슬롯이 비면 dequeue. 운영 기본 ON(W3), dev/test 기본 OFF — 끄려면 false 명시.
+     *  ⚠️ 단일 프로세스 전제(ecosystem instances:1). 멀티프로세스 확장 시 Redis 백엔드 필요. */
+    QUEUE_ENABLED: boolEnvDefault(process.env.AGENT_TASK_QUEUE_ENABLED, true),
     /** 전역 동시 실행 상한. AGENT_TASK_QUEUE_GLOBAL_MAX 로 오버라이드(기본 4). */
     QUEUE_GLOBAL_MAX: parseInt(process.env.AGENT_TASK_QUEUE_GLOBAL_MAX || '4', 10),
     /** 유저별 동시 실행 상한. AGENT_TASK_QUEUE_USER_MAX 로 오버라이드(기본 2). */

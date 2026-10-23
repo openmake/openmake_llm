@@ -75,20 +75,25 @@ export function providerConcurrency(providerId: string): number {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1;
 }
 
+/** 로컬 LLM 슬롯을 쓰는가 — LOCAL_LLM_MAX_CONCURRENT 가 양수일 때만(0 은 종전대로 무제한). */
+function localSlotsEnabled(): boolean {
+    return EXTERNAL_PROVIDER_THROTTLE.LOCAL_CONCURRENCY > 0;
+}
+
 function semaphoreFor(providerId: string): Semaphore {
     let s = semaphores.get(providerId);
-    const limit = providerConcurrency(providerId);
+    const limit = providerId === 'local-llm' ? EXTERNAL_PROVIDER_THROTTLE.LOCAL_CONCURRENCY : providerConcurrency(providerId);
     if (!s || s.limit !== limit) { s = new Semaphore(limit); semaphores.set(providerId, s); }
     return s;
 }
 
 /**
  * LLMClient 가 아닌 호출(모달리티 도구의 fetch 등)이 같은 provider 세마포어를 공유하기 위한 진입점.
- * 로컬(local-llm)은 세마포어 없이 그대로 실행. 429 백오프는 하지 않는다 — 비스트림 단발 호출은
+ * 로컬(local-llm)은 LOCAL_LLM_MAX_CONCURRENT>0 일 때만 세마포어를 거치고, 0 이면 그대로 실행. 429 백오프는 하지 않는다 — 비스트림 단발 호출은
  * 호출부가 결과 코드를 그대로 사용자에게 안내한다(조용한 재시도로 이미지 생성이 수 분 늦어지는 것 방지).
  */
 export async function withProviderSlot<T>(providerId: string, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
-    if (providerId === 'local-llm') return fn();
+    if (providerId === 'local-llm' && !localSlotsEnabled()) return fn();
     const release = await semaphoreFor(providerId).acquire(signal);
     try { return await fn(); } finally { release(); }
 }
@@ -165,9 +170,10 @@ export function getExternalClientHints(client: unknown): ExternalClientHints | n
 /**
  * 외부 provider 용 LLMClient 를 세마포어+429 재시도 프록시로 감싼다.
  * `chat`·`generate` 만 가로채고 나머지 속성/메서드는 원본에 그대로 위임(this 는 원본 인스턴스).
+ * 로컬(local-llm)은 LOCAL_LLM_MAX_CONCURRENT>0 일 때만 슬롯을 거친다 — 429 재시도·실행 힌트는 붙이지 않는다.
  */
 export function throttleExternalClient<T extends LLMClient>(client: T, providerId: string): T {
-    if (providerId === 'local-llm') return client;
+    if (providerId === 'local-llm') return localSlotsEnabled() ? slotOnlyClient(client) : client;
     const sem = semaphoreFor(providerId);
     const { RETRY_429_MAX } = EXTERNAL_PROVIDER_THROTTLE;
 
@@ -199,6 +205,19 @@ export function throttleExternalClient<T extends LLMClient>(client: T, providerI
     return new Proxy(client, {
         get(target, prop) {
             if (prop === EXTERNAL_CLIENT_HINTS) return hints;
+            if (prop === 'chat' || prop === 'generate') return wrap(prop);
+            const v = Reflect.get(target, prop, target);
+            return typeof v === 'function' ? v.bind(target) : v;
+        },
+    }) as T;
+}
+
+/** 로컬 LLM 용 — chat·generate 를 슬롯만 잡고 그대로 실행(429 재시도·힌트 없음). 나머지는 원본에 위임. */
+function slotOnlyClient<T extends LLMClient>(client: T): T {
+    const wrap = (method: 'chat' | 'generate') => (...args: unknown[]) =>
+        withProviderSlot('local-llm', () => (client[method] as (...a: unknown[]) => Promise<unknown>).apply(client, args), signalOf(method, args));
+    return new Proxy(client, {
+        get(target, prop) {
             if (prop === 'chat' || prop === 'generate') return wrap(prop);
             const v = Reflect.get(target, prop, target);
             return typeof v === 'function' ? v.bind(target) : v;
