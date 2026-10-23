@@ -37,6 +37,7 @@ const limits = { WATCHDOG_ENABLED: true, STALE_MS: 900_000, QUEUE_BACKLOG_PENDIN
 jest.mock('../../../config/runtime-limits', () => ({ ...jest.requireActual('../../../config/runtime-limits'), AGENT_TASK_LIMITS: limits }));
 
 import { runWatchdogTick } from '../stale-watchdog';
+import { ALERT_TEXT } from '../../../monitoring/agent-task-alerts';
 
 const MIN = 60_000;
 const stale = (id: string, stalledMs: number) => ({ id, user_id: 'u1', current_turn: 3, lease_owner: 'h:1', stalled_ms: stalledMs });
@@ -229,5 +230,71 @@ describe('runWatchdogTick — 단계 조회 실패와 회복(#1478)', () => {
         expect(stageError('stale')).toBe(0);
         expect(gauge('agent_task_stale_running')).toBe(0);
         expect(lastSuccess('stale')).toBeDefined();
+    });
+});
+
+describe('runWatchdogTick — 해소 알림(#1478)', () => {
+    beforeEach(async () => {
+        await runWatchdogTick(); // 앞 테스트가 남긴 경고 기억을 정상 tick 으로 비운다
+        jest.clearAllMocks();
+    });
+    const resolvedOf = (type: string) => alertsOf(`${type}_resolved`);
+
+    it('처음부터 정상이고 정상이 반복되면 해소 알림은 없다', async () => {
+        await runWatchdogTick();
+        await runWatchdogTick();
+        expect(sendAgentTaskAlert.mock.calls.filter((c) => String(c[0]).endsWith('_resolved'))).toHaveLength(0);
+    });
+
+    it('멈춤 → 정상 전이에 해소 1건, 이후 정상 tick 은 더 보내지 않는다', async () => {
+        listStaleRunningTasks.mockResolvedValueOnce([stale('a', 30 * MIN)]);
+        await runWatchdogTick();
+        expect(alertsOf('agent_task_stale')).toHaveLength(1);
+        await runWatchdogTick();
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_stale')).toHaveLength(1);
+        expect(resolvedOf('agent_task_stale')[0][1]).toBe(ALERT_TEXT.agent_task_stale_resolved.title);
+    });
+
+    it('조회 실패는 해소가 아니다 — 경고 기억을 지우지 않고, 다음 성공 정상 tick 에서 해소 1건', async () => {
+        listStaleRunningTasks.mockResolvedValueOnce([stale('a', 30 * MIN)]);
+        await runWatchdogTick();
+        listStaleRunningTasks.mockRejectedValueOnce(new Error('db down'));
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_stale')).toHaveLength(0);
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_stale')).toHaveLength(1);
+    });
+
+    it('두 번 멈췄다 두 번 회복하면 전이마다 해소 1건씩', async () => {
+        listStaleRunningTasks.mockResolvedValueOnce([stale('a', 30 * MIN)]);
+        await runWatchdogTick();
+        await runWatchdogTick();
+        listStaleRunningTasks.mockResolvedValueOnce([stale('b', 30 * MIN)]);
+        await runWatchdogTick();
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_stale')).toHaveLength(2);
+    });
+
+    it('대기열 적체 → 정상 전이에 해소 1건(현재 값을 싣는다)', async () => {
+        stats.mockReturnValueOnce({ globalActive: 4, pending: 25, wait: { oldestPendingMs: 1000 } });
+        await runWatchdogTick();
+        stats.mockReturnValue({ globalActive: 1, pending: 2, wait: { oldestPendingMs: 500 } });
+        await runWatchdogTick();
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_queue_backlog')).toHaveLength(1);
+        expect(resolvedOf('agent_task_queue_backlog')[0][3]).toEqual({ pending: 2, active: 1, oldestWaitMs: 500 });
+    });
+
+    it('모델 대기 장기화 → 정상 전이에 해소 1건, 집계 실패 tick 은 해소가 아니다', async () => {
+        summarizeParkedByReason.mockResolvedValueOnce({ count: 2, longCount: 1, oldest: [{ id: 'm1', waited_ms: 40 * MIN }] });
+        await runWatchdogTick();
+        summarizeParkedByReason.mockRejectedValueOnce(new Error('db down'));
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_model_wait_long')).toHaveLength(0);
+        summarizeParkedByReason.mockResolvedValueOnce({ count: 1, longCount: 0, oldest: [{ id: 'm2', waited_ms: MIN }] });
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_model_wait_long')).toHaveLength(1);
+        expect(resolvedOf('agent_task_model_wait_long')[0][3]).toEqual({ parked: 1, thresholdMs: 1_800_000 });
     });
 });
