@@ -42,11 +42,14 @@ export function requireRelated(source, tests) {
 // Jest's dependency graph ignores `import type`/`export type`, so a module of only types can be "related" to no test.
 // It has no runtime to test (tsc/build checks it): a TS source whose CommonJS emit is only the module preamble.
 // Only an empty related list is excused this way; related tests that Jest does find are still selected and must run.
+// Declaration files have no emit by definition; a source with syntax errors is never excused (its emit proves nothing).
 const COMMONJS_PREAMBLE = new Set(['"use strict";', 'Object.defineProperty(exports, "__esModule", { value: true });']);
 export function isTypeOnlySource(file, text) {
   if (!/\.[cm]?tsx?$/.test(file)) return false;
+  if (/\.d\.[cm]?ts$/.test(file)) return true;
   const ts = createRequire(import.meta.url)('typescript');
-  const { outputText } = ts.transpileModule(text, { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, removeComments: true } });
+  const { outputText, diagnostics } = ts.transpileModule(text, { fileName: file, reportDiagnostics: true, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, removeComments: true } });
+  if (diagnostics?.length) return false;
   return outputText.split('\n').every(line => !line.trim() || COMMONJS_PREAMBLE.has(line.trim()));
 }
 export function assertExecuted(related, report) {
@@ -108,7 +111,7 @@ export function selectRelatedTests(files, options = {}) {
 export function runFeatures(files, options = {}) {
   const root = options.cwd || repoRoot;
   const run = (command, args, config = {}) => execute(command, args, { cwd: root, env: options.env || process.env, ...(options.stdio ? { stdio: options.stdio } : {}), ...config });
-  const { selection, related, tests } = selectRelatedTests(files, { cwd: root, env: options.env, log: options.log });
+  const { selection, related, tests, typeOnly } = selectRelatedTests(files, { cwd: root, env: options.env, log: options.log });
   if (tests.size) {
     const temporary = mkdtempSync(resolve(tmpdir(), 'omk-feature-jest-'));
     try {
@@ -137,15 +140,15 @@ export function runFeatures(files, options = {}) {
     for (const file of executed) run(...(file.endsWith('.mjs') ? [process.execPath, ['--test', file]] : ['bash', [file]]));
     hostSetup = { platform, executed, delegatedToMacJob: platform === 'darwin' ? [] : macOnly };
   }
-  return { selection, relatedTests: [...tests].map(path => relative(root, path)), ...(hostSetup ? { hostSetup } : {}) };
+  return { selection, relatedTests: [...tests].map(path => relative(root, path)), typeOnly, ...(hostSetup ? { hostSetup } : {}) };
 }
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain && process.argv[2] === '--select-only') {
   try {
     const sha = process.argv[3];
     const change = changedFiles(sha);
-    const { selection, tests } = selectRelatedTests(change.files);
-    console.log(JSON.stringify({ sha, ...change, selection, relatedTests: [...tests].map(path => relative(repoRoot, path)) }, null, 2));
+    const { selection, tests, typeOnly } = selectRelatedTests(change.files);
+    console.log(JSON.stringify({ sha, ...change, selection, relatedTests: [...tests].map(path => relative(repoRoot, path)), typeOnly }, null, 2));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 } else if (isMain) {
   try {
