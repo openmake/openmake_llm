@@ -36,6 +36,7 @@ import { MCP_INGEST } from '../../../config/constants';
 import { createLogger } from '../../../utils/logger';
 import { requireAuth } from '../../../auth';
 import { isAdminRole } from '../../../data/user-manager';
+import { auditMcpServerCreated, auditMcpIngestDenied } from './mcp-server-audit';
 
 const logger = createLogger('McpServerIngestRoutes');
 
@@ -192,6 +193,7 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
                 return;
             }
             if (draft.user_id !== userId && !isAdminRole(role)) {
+                auditMcpIngestDenied(req, draft.id, 'ingest_approve');
                 res.status(403).json({ success: false, error: 'FORBIDDEN' });
                 return;
             }
@@ -235,6 +237,7 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
                 return;
             }
             logger.info(`mcp-server approved: ${req.params.id} (user=${userId})`);
+            auditMcpServerCreated(req, { id: approved.id, name: approved.name, source: 'git_ingest' });
 
             // 승인 즉시 spawn — from-catalog 설치와 대칭. 그전엔 DB 만 갱신하고 끝나서 첫 연결이
             // 다음 로그인/채팅 시작으로 미뤄졌다(그마저 auto_spawn=FALSE 로 막혀 영영 안 붙었음,
@@ -277,6 +280,7 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
                 return;
             }
             if (draft.user_id !== userId && !isAdminRole(role)) {
+                auditMcpIngestDenied(req, draft.id, 'ingest_reject');
                 res.status(403).json({ success: false, error: 'FORBIDDEN' });
                 return;
             }

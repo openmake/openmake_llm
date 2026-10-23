@@ -11,6 +11,7 @@
  *
  * @module security/security-audit
  */
+import type { Request } from 'express';
 import { createLogger } from '../utils/logger';
 import { capText } from '../utils/redact';
 
@@ -75,6 +76,28 @@ export async function auditSecurityEvent(input: SecurityAuditInput): Promise<voi
     } catch (e) {
         logger.warn(`보안 감사 기록 실패(${input.action}): ${e instanceof Error ? e.message : String(e)}`);
     }
+}
+
+/**
+ * 미들웨어가 AppError 를 거치지 않고 직접 응답하는 거부(requireAdmin·API key 스코프·CSRF·비활성 계정, #1475)를
+ * security.authz_denied 로 남긴다 — fire-and-forget, 응답 코드·본문에 영향 없음. 자원은 `METHOD 경로`(쿼리 제외),
+ * details 는 고정 사유·상태와 호출부가 준 식별자만 — 헤더·본문·토큰·키 값은 넣지 않는다.
+ * userId 는 요청에 붙은 사용자가 기본이고, 아직 붙기 전(인증 미들웨어 안)이면 호출부가 넘긴다.
+ */
+export function auditHttpDenied(
+    req: Request,
+    reason: string,
+    opts: { status?: number; userId?: string | number | null; details?: Record<string, unknown> } = {},
+): void {
+    void auditSecurityEvent({
+        action: 'security.authz_denied',
+        userId: opts.userId ?? req.user?.id,
+        resourceType: 'http',
+        resourceId: `${req.method} ${req.baseUrl ?? ''}${req.path ?? ''}`,
+        details: { reason, status: opts.status ?? 403, ...opts.details },
+        ipAddress: req.ip,
+        userAgent: req.headers?.['user-agent'],
+    }).catch(() => undefined);
 }
 
 /** SSRF 가드(security/ssrf-guard)가 던진 차단 오류인지 — 오류 문구 접두로 판별한다. */

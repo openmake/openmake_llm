@@ -23,6 +23,7 @@ import crypto from 'node:crypto';
 import { getConfig } from '../config';
 import { CSRF_POLICY } from '../config/security';
 import { createLogger } from '../utils/logger';
+import { auditHttpDenied } from '../security/security-audit';
 
 const logger = createLogger('CsrfProtection');
 
@@ -81,6 +82,7 @@ export function csrfProtectionMiddleware(req: Request, res: Response, next: Next
 
     // mode === 'enforce'
     logger.warn('CSRF token mismatch (rejected)', meta);
+    auditHttpDenied(req, 'csrf_token_mismatch', { details: { hasCookie: meta.hasCookie, hasHeader: meta.hasHeader } });
     res.status(403).json({
         error: 'CSRF validation failed',
         code: 'CSRF_TOKEN_MISMATCH',
