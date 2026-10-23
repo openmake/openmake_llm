@@ -39,6 +39,40 @@ test('extract adds nothing for code without type-only module edges', () => {
   assert.deepEqual([...extract(code, '/x.ts', fakeDefault)], ['./runtime']);
 });
 
+// Import-like text that is not a declaration (strings, templates, comments, regex) adds no edge.
+test('extract ignores type-only import text inside strings, templates, comments and regex literals', () => {
+  const none = () => new Set();
+  assert.deepEqual([...extract(`const text = "import type { X } from './not-an-import'";`, '/fixture.ts', none)], []);
+  const code = [
+    "const single = 'export type { S } from \"./single\"';",
+    'const tpl = `import type { T } from "./template"`;',
+    'const sub = `${1} import type * as U from \'./template-sub\' ${2}`;',
+    "const re = /import type { R } from '.\\/regex'/;",
+    "/** @example import type { J } from './jsdoc'; */",
+    "const after = 1; // export type * from './line-comment'",
+  ].join('\n');
+  assert.deepEqual([...extract(code, '/fixture.ts', none)], []);
+});
+
+// A string before a declaration must not hide it (the old comment stripper read `//` inside the URL as a comment).
+test('extract keeps a type-only declaration that follows a string containing //', () => {
+  assert.deepEqual([...extract(`const url = "https://example.com"; import type { T } from './actual-types';`, '/fixture.ts', () => new Set())], ['./actual-types']);
+  const code = "const a = '/* not a comment';\nimport type { B } from './after-block-opener';\nconst c = '*/';\n";
+  assert.deepEqual([...extract(code, '/fixture.ts', () => new Set())], ['./after-block-opener']);
+});
+
+// filePath decides the syntax: JSX text in a .tsx file is not an import declaration.
+test('extract parses .tsx files as TSX', () => {
+  const code = "import type { Props } from './props';\nexport const V = (p: Props) => <p>import type X from './jsx-text'</p>;\n";
+  assert.deepEqual([...extract(code, '/view.tsx', () => new Set())], ['./props']);
+});
+
+// Syntax errors never throw out of the haste worker; only declarations the parser recovers count.
+test('extract tolerates malformed sources', () => {
+  const code = "import type { A } from './before-error';\nconst = ;\nimport type { Q } from ;\nconst open = `import type { Z } from './unterminated'\n";
+  assert.deepEqual([...extract(code, '/broken.ts', fakeDefault)].sort(), ['./before-error', './runtime']);
+});
+
 test('getCacheKey follows the extractor source so a changed extractor invalidates the haste cache', () => {
   assert.equal(getCacheKey(), createHash('sha1').update(readFileSync(extractorPath)).digest('hex'));
 });
@@ -72,6 +106,15 @@ test('jest --findRelatedTests selects consumers of type-only modules with the ex
   assert.deepEqual(related('types-inline.ts', false), ['consumer-types-inline.test.ts']);
   assert.deepEqual(related('types-query.ts', false), ['consumer-types-query.test.ts']);
   for (const types of Object.keys(forms)) assert.deepEqual(related(types, true), [`consumer-${basename(types, '.ts')}.test.ts`], types);
+  // A .tsx consumer's declaration is an edge; import-like text in a string is not.
+  writeFileSync(join(dir, 'types-tsx.ts'), 'export type T = string;\n');
+  writeFileSync(join(dir, 'consumer-types-tsx.tsx'), "import type { T } from './types-tsx';\nexport const f = (t: T) => <b>{t}</b>;\n");
+  writeFileSync(join(dir, 'consumer-types-tsx.test.ts'), "import './consumer-types-tsx';\n");
+  writeFileSync(join(dir, 'types-string.ts'), 'export type T = string;\n');
+  writeFileSync(join(dir, 'consumer-types-string.ts'), "export const s = \"import type { T } from './types-string'\";\n");
+  writeFileSync(join(dir, 'consumer-types-string.test.ts'), "import './consumer-types-string';\n");
+  assert.deepEqual(related('types-tsx.ts', true), ['consumer-types-tsx.test.ts']);
+  assert.deepEqual(related('types-string.ts', true), []);
 });
 
 test('apps/api jest.config.js wires the extractor', () => {
