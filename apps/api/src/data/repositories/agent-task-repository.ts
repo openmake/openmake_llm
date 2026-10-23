@@ -11,7 +11,7 @@
  * DB 에 영속하여 연결이 끊겨도 taskId 로 복구 조회 가능하게 한다.
  */
 import { QueryParam } from './base-repository';
-import { withTransaction, type TransactionClient } from '../retry-wrapper';
+import { withTransaction } from '../retry-wrapper';
 import type { AgentTask, AgentTaskStatus, AgentTaskStep } from '../models/unified-database.types';
 import { allowedSources, AgentTaskTransitionError } from '../../services/agent-task/task-state';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
@@ -130,7 +130,7 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
             placeholders.push(`NOW() + make_interval(secs => $${values.length})`);
         }
         const insert = `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`;
-        return withTransaction(this.pool as unknown as { connect: () => Promise<TransactionClient> }, async (client) => {
+        return withTransaction(this.pool, async (client) => {
             const claim = await client.query(CLAIM_CONTINUATION_SQL, [seed.parentTaskId, seed.create.id]);
             if ((claim.rowCount ?? 0) !== 1) return false;
             await client.query(insert, values);
