@@ -113,7 +113,8 @@ function bringsExternalContent(name: string, args: Record<string, unknown>): boo
 
 /**
  * 채팅 도구 승인(W3 S3) — 정책이 요구하는 호출이면 사람의 결정을 기다린다. 실행해도 되면 null, 아니면 모델에게 줄 거절 결과.
- * 대기 키는 대화 id(없으면 — REST 경로 — 사용자 id). 대기 없이 끝난 거절(정책 none 의 바닥 호출)은 알릴 대기 카드가 없어 decided 를 보내지 않는다.
+ * 대기 키는 대화 id(없으면 — REST 경로 — 사용자 id). 정책 none 은 호출부가 게이트를 건너뛰므로 policy_floor 거절은 여기서 나오지 않는다.
+ * 대기 없이 끝난 거절(승인 채널 없음·앞선 무응답)은 알릴 대기 카드가 없어 decided 를 보내지 않는다.
  */
 async function gateChatToolCall(p: {
     deps: ExternalProviderDeps;
