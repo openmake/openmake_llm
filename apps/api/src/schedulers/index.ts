@@ -263,11 +263,12 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('Agent Task 업로드 보존 스윕 등록 실패(무시):', err);
     }
 
-    // 8-E. Agent Task 보존 스윕(AGENT_TASK_RETENTION_ENABLED, 기본 꺼짐) — 끝난 지 N일 지난 작업 기록·작업 감사 로그와
-    //      작업 공간의 오래된 화면 캡처 삭제(부팅 + 6h 주기). 부팅 복구 뒤에 둔다 — 복구가 다시 살린 작업은 진행형이라 빠진다.
+    // 8-E. Agent Task 보존 스윕(AGENT_TASK_RETENTION_ENABLED, 운영 기본 ON·dev/test OFF, 또는 DRY_RUN) — 끝난 지 N일 지난
+    //      작업 기록·작업 감사 로그, 작업 공간의 오래된 화면 캡처 삭제와 끝난 작업의 체크포인트 압축(부팅 + 6h 주기).
+    //      DRY_RUN 이면 건수만 로그에 남긴다. 부팅 복구 뒤에 둔다 — 복구가 다시 살린 작업은 진행형이라 빠진다.
     try {
         const { AGENT_TASK_RETENTION } = await import('../config/runtime-limits');
-        if (AGENT_TASK_RETENTION.ENABLED) {
+        if (AGENT_TASK_RETENTION.ENABLED || AGENT_TASK_RETENTION.DRY_RUN) {
             const { sweepAgentTaskRetention } = await import('../services/agent-task/task-retention');
             const { getPool } = await import('../data/models/unified-database');
             const sweep = () => sweepAgentTaskRetention(getPool()).catch(() => { /* 항목별로 이미 로그 — 다음 주기에 재시도 */ });
