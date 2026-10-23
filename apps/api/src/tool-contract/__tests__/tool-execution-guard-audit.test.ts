@@ -70,3 +70,32 @@ describe('executeToolSecurely × 인자 차단 감사', () => {
         expect(audit).not.toHaveBeenCalled();
     });
 });
+
+describe('executeToolSecurely × 호출 감사(mcp_tool_call) actor', () => {
+    beforeEach(() => { ok.mockClear(); logAudit.mockClear(); });
+
+    const callAudit = async (userId: unknown) => {
+        await executeToolSecurely(ok, 'web_search', { query: 'hello' }, { userId, role: 'user' } as unknown as UserContext);
+        await new Promise((r) => setImmediate(r));
+        expect(logAudit).toHaveBeenCalledTimes(1);
+        return logAudit.mock.calls[0][0] as { userId?: string; details: Record<string, unknown> };
+    };
+
+    it("손님('guest')·빈값·없음은 user_id 없이 actorId 'anonymous'(#1476)", async () => {
+        for (const uid of ['guest', '', undefined, null]) {
+            logAudit.mockClear();
+            const e = await callAudit(uid);
+            expect(e.userId).toBeUndefined();
+            expect(e.details.actorId).toBe('anonymous');
+        }
+    });
+
+    it('실제 사용자 id 는 user_id·actorId 에 그대로 남는다', async () => {
+        const e = await callAudit('u-9');
+        expect(e.userId).toBe('u-9');
+        expect(e.details.actorId).toBe('u-9');
+        const n = await (async () => { logAudit.mockClear(); return callAudit(42); })();
+        expect(n.userId).toBe('42');
+        expect(n.details.actorId).toBe('42');
+    });
+});
