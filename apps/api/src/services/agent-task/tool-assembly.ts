@@ -148,5 +148,8 @@ export async function assembleAgentTools(params: {
 
     // 샌드박스 OFF(legacy) 경로 — 기존대로 전체 MCP 도구 사용.
     // 이 경로엔 이미 전체 카탈로그(load_skill 포함)가 들어있으므로 카탈로그 주입만 적용.
-    return { tools: await withSkillCatalog(mcpTools), extraToolNames, removedForInternalOnly };
+    // 모든 도구가 호스트에서 실행되므로 전부 extraToolNames 에 올려 샌드박스 ON 과 같은 승인 게이트를 태운다(#1469).
+    const tools = await withSkillCatalog(mcpTools);
+    for (const t of tools) extraToolNames.add(t.function.name);
+    return { tools, extraToolNames, removedForInternalOnly };
 }
