@@ -187,6 +187,14 @@ import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { AGENT_TASK_LONG_RUNNING } from '../config/agent-task-long-running';
 import { HANDOFF_SUMMARY_MARKER } from '../prompts/agent-task-context';
 import { CONTINUATION_NEXT_STEPS_HEADING, getContinuationNextStepsPrompt, getContinuationNotice } from '../prompts/agent-task-continuation';
+import { startTestApprover, type TestApprover } from './utils/test-approver';
+
+// 샌드박스 OFF + 승인 정책 all(기본) — 호스트 도구 호출마다 승인을 기다린다(#1469). 이 파일의 주제는 장기 실행 체인이라
+// 사용자가 승인함에서 승인한다고 둔다(실제 ApprovalRegistry). 질문(ask_human)은 승인자가 건드리지 않고 각 테스트가 답한다.
+// 승인 전 대기·거절은 agent-task-max-turns 의 '승인 경계' 묶음이 본다.
+let approver: TestApprover;
+beforeEach(() => { approver = startTestApprover('u1'); });
+afterEach(() => approver.stop());
 
 const GOAL = '오늘의 날씨를 여러 번 검색해서 한 문장으로 알려 줘';
 const FINAL = '검색 결과에 따르면 오늘은 맑습니다. 요청하신 내용을 한 문장으로 정리했습니다.';

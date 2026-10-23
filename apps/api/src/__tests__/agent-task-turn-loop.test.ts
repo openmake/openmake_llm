@@ -69,6 +69,13 @@ jest.mock('../runtime-ports/skill-runtime', () => ({
 process.env.TASK_SANDBOX_ENABLED = 'false';
 
 import { AgentTaskService } from '../services/AgentTaskService';
+import { startTestApprover, type TestApprover } from './utils/test-approver';
+
+// 샌드박스 OFF + 승인 정책 all(기본) — 호스트 도구 호출마다 승인을 기다린다(#1469). 이 파일의 주제는 턴 루프 재촉·추론 강등이라
+// 사용자가 승인함에서 승인한다고 둔다(실제 ApprovalRegistry). 승인 전 대기·거절은 agent-task-max-turns 의 '승인 경계' 묶음이 본다.
+let approver: TestApprover;
+beforeEach(() => { approver = startTestApprover('u1'); });
+afterEach(() => approver.stop());
 
 type Msg = { role: string; content?: unknown };
 const record = (c: Msg[], a?: ChatAdvanced): void => { chatCalls.push({ conversation: [...c], advanced: a ?? {} }); };
