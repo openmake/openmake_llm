@@ -27,6 +27,9 @@ type WatchdogStage = 'stale' | 'queue' | 'model_wait' | 'status_count';
 
 const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+/** 알림에 싣는 작업 id 표본 수 */
+const ALERT_SAMPLE_SIZE = 5;
+
 /** 앞 tick 이 아직 도는 중인가 — 겹친 tick 은 조회도 생존 기록도 하지 않는다(멈춘 tick 을 readiness 가 잡게) */
 let ticking = false;
 
@@ -69,7 +72,7 @@ async function runAcceptedTick(out: WatchdogTickResult): Promise<WatchdogTickRes
         out.stale = rows.length;
         metrics.setGauge('agent_task_stale_running', rows.length);
         if (rows.length > 0) {
-            const data = { count: rows.length, taskIds: rows.slice(0, 5).map((r) => r.id), oldestStalledMs: Math.max(...rows.map((r) => r.stalled_ms)) };
+            const data = { count: rows.length, taskIds: rows.slice(0, ALERT_SAMPLE_SIZE).map((r) => r.id), oldestStalledMs: Math.max(...rows.map((r) => r.stalled_ms)) };
             void sendAgentTaskAlert('agent_task_stale', ALERT_TEXT.agent_task_stale.title, ALERT_TEXT.agent_task_stale.message(data), data);
             logger.warn(`진행이 멈춘 실행 중 작업 ${rows.length}건: ${data.taskIds.join(', ')}`);
         }
@@ -89,23 +92,22 @@ async function runAcceptedTick(out: WatchdogTickResult): Promise<WatchdogTickRes
         }
     });
 
-    const taskRepo = new AgentTaskRepository(getPool());
-
-    // 3. 모델 대기 장기화 — 게이지는 모델 대기 전체, 알림은 기준을 넘긴 것만
+    // 3. 모델 대기 장기화 — 게이지는 모델 대기 전체, 알림은 기준을 넘긴 것만. 건수는 목록 상한 없이 DB 가 센다(#1478)
     await runStage(metrics, 'model_wait', '모델 대기', async () => {
-        const waiting = (await taskRepo.listParkedTasks(200)).filter((t) => t.reason === AGENT_TASK_MODEL_WAIT_REASON);
-        const long = waiting.filter((t) => Number(t.waited_ms ?? 0) >= AGENT_TASK_LIMITS.MODEL_WAIT_ALERT_MS); // pg bigint 는 문자열로 온다
-        out.modelWaitLong = long.length;
-        metrics.setGauge('agent_task_model_wait_parked', waiting.length);
-        if (long.length > 0) {
-            const data = { count: long.length, taskIds: long.slice(0, 5).map((t) => t.id), thresholdMs: AGENT_TASK_LIMITS.MODEL_WAIT_ALERT_MS };
+        const thresholdMs = AGENT_TASK_LIMITS.MODEL_WAIT_ALERT_MS;
+        const s = await new AgentTaskProgressRepository(getPool()).summarizeParkedByReason(AGENT_TASK_MODEL_WAIT_REASON, thresholdMs, ALERT_SAMPLE_SIZE);
+        out.modelWaitLong = s.longCount;
+        metrics.setGauge('agent_task_model_wait_parked', s.count);
+        if (s.longCount > 0) {
+            // 표본은 오래 기다린 순이라 기준을 넘긴 것이 앞에 모인다
+            const data = { count: s.longCount, taskIds: s.oldest.filter((t) => t.waited_ms >= thresholdMs).map((t) => t.id), thresholdMs };
             void sendAgentTaskAlert('agent_task_model_wait_long', ALERT_TEXT.agent_task_model_wait_long.title, ALERT_TEXT.agent_task_model_wait_long.message(data), data);
         }
     });
 
     // 4. 활성 상태별 건수 — 저장소가 네 상태를 모두 채워 돌려줘 사라진 상태도 0 으로 갱신된다
     await runStage(metrics, 'status_count', '상태별 건수', async () => {
-        const counts = await taskRepo.countActiveAgentTasksByStatus();
+        const counts = await new AgentTaskRepository(getPool()).countActiveAgentTasksByStatus();
         for (const [status, n] of Object.entries(counts)) metrics.setGauge('agent_task_status_count', n, { status });
     });
 
