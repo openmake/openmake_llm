@@ -175,6 +175,43 @@ test('selectRelatedTests requires related Jest tests per API source and never li
   assert.deepEqual(docs.selection.api, []);
 });
 
+// Jest's graph ignores `import type`, so a module of only types can be related to no test: then no runtime emit → no requirement.
+test('selectRelatedTests skips type-only API sources but still requires tests for any runtime code', async t => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { selectRelatedTests, isTypeOnlySource, runFeatures } = await import('../../scripts/ci/feature-checks.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'omk-type-only-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, 'apps/api/src/chat'), { recursive: true });
+  const typesOnly = 'apps/api/src/chat/types.ts';
+  const mixed = 'apps/api/src/chat/mixed.ts';
+  writeFileSync(join(root, typesOnly), "// params\nimport type { A } from './a';\nexport interface P { a?: A; approvalCards?: boolean }\nexport type Q = P | null;\nexport type { R } from './r';\n");
+  writeFileSync(join(root, mixed), 'export interface P { a: string }\nexport const LIMIT = 3;\n');
+  const logs = [];
+  const selected = selectRelatedTests([typesOnly], { cwd: root, log: line => logs.push(line), listRelated: () => [] });
+  assert.deepEqual(selected.typeOnly, [typesOnly]);
+  assert.equal(selected.related.size, 0);
+  assert.equal(selected.tests.size, 0);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /Type-only source .*: apps\/api\/src\/chat\/types\.ts$/);
+  assert.throws(() => selectRelatedTests([mixed], { cwd: root, log: () => {}, listRelated: () => [] }), /No related Jest tests for apps\/api\/src\/chat\/mixed\.ts/);
+  const consumer = '/repo/apps/api/src/chat/consumer.test.ts';
+  const found = selectRelatedTests([typesOnly], { cwd: root, log: line => logs.push(line), listRelated: () => [consumer] });
+  assert.deepEqual([...found.related], [[typesOnly, [consumer]]]);
+  assert.deepEqual(found.typeOnly, []);
+  assert.equal(logs.length, 1);
+  const test = '/repo/apps/api/src/chat/mixed.test.ts';
+  const both = selectRelatedTests([typesOnly, mixed], { cwd: root, log: () => {}, listRelated: file => (file === mixed ? [test] : []) });
+  assert.deepEqual([...both.related], [[mixed, [test]]]);
+  for (const text of ["import './side-effect';\n", 'export enum E { A }\n', "export { x } from './x';\n", 'export interface P {}\nexport function f() {}\n']) assert.equal(isTypeOnlySource('a.ts', text), false, text);
+  assert.equal(isTypeOnlySource('a.js', ''), false);
+  // Run mode (`<sha>` / `--files`): a stand-in Jest finds nothing related, so nothing runs and no "No executed related tests".
+  mkdirSync(join(root, 'node_modules/jest/bin'), { recursive: true });
+  writeFileSync(join(root, 'node_modules/jest/bin/jest.js'), "if (!process.argv.includes('--listTests')) process.exit(1);\nconsole.log('[]');\n");
+  assert.deepEqual(runFeatures([typesOnly], { cwd: root, stdio: 'ignore', env: childEnv, log: () => {} }).relatedTests, []);
+});
+
 // apps/discord-bot is a separate workspace with its own node --test suite — its sources select that suite, never apps/api Jest.
 test('discord-bot sources select the discord-bot workspace suite', () => {
   const selection = selectFeatures(['apps/discord-bot/src/attachments.ts', 'apps/discord-bot/src/attachments.test.ts']);

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { resolve, relative } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { selectE2E } from './feature-checks-e2e.mjs';
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const manifest = JSON.parse(readFileSync(new URL('./feature-checks.manifest.json', import.meta.url)));
@@ -37,6 +38,16 @@ export function requireRelated(source, tests) {
   if (!tests.length) throw new Error(`No related Jest tests for ${source}; add coverage or a fixed mapping`);
   if (tests.some(path => !path.includes('/apps/api/src/') || !/\.(test|spec)\.ts$/.test(path))) throw new Error('Unexpected Jest test selection');
   return tests;
+}
+// Jest's dependency graph ignores `import type`/`export type`, so a module of only types can be "related" to no test.
+// It has no runtime to test (tsc/build checks it): a TS source whose CommonJS emit is only the module preamble.
+// Only an empty related list is excused this way; related tests that Jest does find are still selected and must run.
+const COMMONJS_PREAMBLE = new Set(['"use strict";', 'Object.defineProperty(exports, "__esModule", { value: true });']);
+export function isTypeOnlySource(file, text) {
+  if (!/\.[cm]?tsx?$/.test(file)) return false;
+  const ts = createRequire(import.meta.url)('typescript');
+  const { outputText } = ts.transpileModule(text, { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, removeComments: true } });
+  return outputText.split('\n').every(line => !line.trim() || COMMONJS_PREAMBLE.has(line.trim()));
 }
 export function assertExecuted(related, report) {
   for (const [source, paths] of related) {
@@ -77,19 +88,27 @@ export function selectRelatedTests(files, options = {}) {
   const selection = selectFeatures(files);
   const tests = new Set();
   const related = new Map();
+  const typeOnly = [];
+  const log = options.log || (line => console.error(line));
   for (const file of selection.api) {
     // Deleted source cannot be resolved by Jest: fail explicitly until a regression test is mapped.
     if (!existsSync(resolve(root, file))) throw new Error(`Deleted source requires explicit regression mapping: ${file}`);
-    const paths = requireRelated(file, JEST_BOOTSTRAP.includes(file) ? listAll() : listRelated(file));
+    const listed = JEST_BOOTSTRAP.includes(file) ? listAll() : listRelated(file);
+    if (!listed.length && file.startsWith('apps/api/src/') && isTypeOnlySource(file, readFileSync(resolve(root, file), 'utf8'))) {
+      typeOnly.push(file);
+      log(`Type-only source (no runtime emit), related Jest tests not required: ${file}`);
+      continue;
+    }
+    const paths = requireRelated(file, listed);
     related.set(file, paths);
     for (const path of paths) tests.add(path);
   }
-  return { selection, related, tests };
+  return { selection, related, tests, typeOnly };
 }
 export function runFeatures(files, options = {}) {
   const root = options.cwd || repoRoot;
   const run = (command, args, config = {}) => execute(command, args, { cwd: root, env: options.env || process.env, ...(options.stdio ? { stdio: options.stdio } : {}), ...config });
-  const { selection, related, tests } = selectRelatedTests(files, { cwd: root, env: options.env });
+  const { selection, related, tests } = selectRelatedTests(files, { cwd: root, env: options.env, log: options.log });
   if (tests.size) {
     const temporary = mkdtempSync(resolve(tmpdir(), 'omk-feature-jest-'));
     try {
