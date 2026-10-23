@@ -67,6 +67,12 @@ test('extract parses .tsx files as TSX', () => {
   assert.deepEqual([...extract(code, '/view.tsx', () => new Set())], ['./props']);
 });
 
+// Module augmentation blocks hold real declarations too (the regex found them; the parser must not lose them).
+test('extract adds type-only declarations inside declare module blocks', () => {
+  const code = "declare module 'express-serve-static-core' {\n  import type { AuthUser } from '@/auth/types';\n  export type { Role } from '@/auth/roles';\n  interface Request { user?: AuthUser }\n}\nexport {};\n";
+  assert.deepEqual([...extract(code, '/augment.d.ts', () => new Set())].sort(), ['@/auth/roles', '@/auth/types']);
+});
+
 // Syntax errors never throw out of the haste worker; only declarations the parser recovers count.
 test('extract tolerates malformed sources', () => {
   const code = "import type { A } from './before-error';\nconst = ;\nimport type { Q } from ;\nconst open = `import type { Z } from './unterminated'\n";

@@ -11,17 +11,23 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 
-// TypeScript 파서로 최상위 선언만 본다 — 문자열·템플릿·주석·정규식·JSX 텍스트 안의 비슷한 글자는 선언이 아니다.
+// TypeScript 파서로 선언만 본다 — 문자열·템플릿·주석·정규식·JSX 텍스트 안의 비슷한 글자는 선언이 아니다.
+// import/export 선언은 최상위와 `declare module '…' { }` 블록 안에만 올 수 있다.
 // 구문은 filePath 확장자(.ts/.tsx/…)로 정해지고, 구문 오류가 있어도 던지지 않고 파서가 복구한 선언만 센다.
-export function extract(code, filePath, defaultExtract) {
-    const dependencies = new Set(defaultExtract(code, filePath));
-    // 타입 전용 선언에는 `type` 키워드가 그대로 있어야 한다(키워드는 escape 로 쓸 수 없다) — 없으면 파싱하지 않는다.
-    if (!/\btype\b/.test(code)) return dependencies;
-    for (const node of ts.createSourceFile(filePath, code, ts.ScriptTarget.Latest).statements) {
+function addTypeOnlyEdges(statements, dependencies) {
+    for (const node of statements) {
+        if (ts.isModuleDeclaration(node) && node.body && ts.isModuleBlock(node.body)) addTypeOnlyEdges(node.body.statements, dependencies);
         const typeOnly = ts.isImportDeclaration(node) ? node.importClause?.isTypeOnly : ts.isExportDeclaration(node) && node.isTypeOnly;
         // 지정자가 빠진 선언(`from ;`)은 파서가 빈 식별자로 채운다 — 문자열 리터럴만 센다.
         if (typeOnly && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) dependencies.add(node.moduleSpecifier.text);
     }
+}
+
+export function extract(code, filePath, defaultExtract) {
+    const dependencies = new Set(defaultExtract(code, filePath));
+    // 타입 전용 선언에는 `type` 키워드가 그대로 있어야 한다(키워드는 escape 로 쓸 수 없다) — 없으면 파싱하지 않는다.
+    if (!/\btype\b/.test(code)) return dependencies;
+    addTypeOnlyEdges(ts.createSourceFile(filePath, code, ts.ScriptTarget.Latest).statements, dependencies);
     return dependencies;
 }
 
