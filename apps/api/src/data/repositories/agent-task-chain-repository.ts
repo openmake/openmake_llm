@@ -26,18 +26,12 @@ export function chainCreateColumns(params: AgentTaskChainCreateParams): Array<[s
     return out;
 }
 
+/** 이어가기 선점 SQL(188) — 비어 있을 때만 후속 id 를 적는다. 원자적 후속 생성(#1473)이 후속 INSERT 와 같은 트랜잭션에서 쓴다. $1 = 부모, $2 = 후속 */
+export const CLAIM_CONTINUATION_SQL = 'UPDATE agent_tasks SET continued_by_task_id = $2 WHERE id = $1 AND continued_by_task_id IS NULL';
+
 export type AgentTaskChainRow = Pick<AgentTask, 'id' | 'status' | 'total_tokens' | 'completion_path' | 'continuation' | 'continued_by_task_id' | 'created_at'>;
 
 export class AgentTaskChainRepository extends BaseRepository {
-    /** 이어가기 선점(188) — 비어 있을 때만 후속 id 를 적는다. false 면 다른 실행이 먼저 이었다. */
-    async claimContinuation(fromTaskId: string, successorId: string): Promise<boolean> {
-        const r = await this.query(
-            'UPDATE agent_tasks SET continued_by_task_id = $2 WHERE id = $1 AND continued_by_task_id IS NULL',
-            [fromTaskId, successorId],
-        );
-        return (r.rowCount ?? 0) === 1;
-    }
-
     /** 선점 되돌리기(188) — 후속 생성이 실패했을 때 continued_by_task_id 를 비운다. */
     async resetContinuation(fromTaskId: string, successorId: string): Promise<void> {
         await this.query('UPDATE agent_tasks SET continued_by_task_id = NULL WHERE id = $1 AND continued_by_task_id = $2', [fromTaskId, successorId]);

@@ -8,6 +8,19 @@ import { BaseRepository } from './base-repository';
 import type { AgentTask } from '../models/unified-database.types';
 import { parkedTaskCondition } from './agent-task-repository';
 
+/**
+ * 지난 소유권 조건(#1473) — 소유권을 잡은 적 있고(NOT NULL) 만료됐다. NULL(소유권을 잡은 적 없음 — 레거시·소유권 꺼짐)은
+ * 살아 있지도 지나지도 않았다. TS 짝은 hasLiveLease — 둘이 같은 경계를 쓴다.
+ */
+export function expiredLeaseSql(col = 'lease_until'): string {
+    return `${col} IS NOT NULL AND ${col} < NOW()`;
+}
+
+/** 살아 있는 소유권인가(#1473) — expiredLeaseSql 의 반대쪽. NULL 은 false(살아 있는 소유자가 없다). */
+export function hasLiveLease(leaseUntil: string | Date | null | undefined, now: number = Date.now()): boolean {
+    return leaseUntil != null && new Date(leaseUntil).getTime() >= now;
+}
+
 export class AgentTaskLeaseRepository extends BaseRepository {
     /** 실행 소유권(176) 잡기 — 소유권이 없거나, 내 것이거나, 지났을 때만. 다른 서버의 살아 있는 소유권이면 false. */
     async acquireLease(taskId: string, owner: string, leaseMs: number): Promise<boolean> {
@@ -38,7 +51,7 @@ export class AgentTaskLeaseRepository extends BaseRepository {
     async listExpiredLeaseTasks(): Promise<AgentTask[]> {
         const r = await this.query<AgentTask>(
             `SELECT * FROM agent_tasks
-             WHERE status IN ('running', 'paused', 'pending') AND lease_until IS NOT NULL AND lease_until < NOW()
+             WHERE status IN ('running', 'paused', 'pending') AND ${expiredLeaseSql()}
                AND NOT ${parkedTaskCondition('agent_tasks')}
              ORDER BY lease_until ASC LIMIT 50`);
         return r.rows;
@@ -48,8 +61,22 @@ export class AgentTaskLeaseRepository extends BaseRepository {
     async takeOverExpiredLease(taskId: string, owner: string, leaseMs: number): Promise<boolean> {
         const r = await this.query(
             `UPDATE agent_tasks SET lease_owner = $2, lease_until = NOW() + make_interval(secs => $3)
-             WHERE id = $1 AND status IN ('running', 'paused', 'pending') AND lease_until IS NOT NULL AND lease_until < NOW()`,
+             WHERE id = $1 AND status IN ('running', 'paused', 'pending') AND ${expiredLeaseSql()}`,
             [taskId, owner, leaseMs / 1000]);
+        return (r.rowCount ?? 0) > 0;
+    }
+
+    /**
+     * 소유권 없는 pending 후속의 재디스패치 claim(#1473, R3) — 소유권을 잡은 적 없고(lease_until NULL) 마지막 갱신이 staleMs 보다
+     * 오래된 행만, 여러 복구자 중 한 곳만 잡는다. lease 를 주면 같은 문장에서 소유권을 쓴다(실행이 같은 owner 로 이어 잡는다).
+     * 없으면(소유권 꺼짐) updated_at 만 갱신한다 — 다른 복구자는 "방금 갱신(디스패치 중)" 으로 보고, 꺼진 R2 만 기다리는 소유권
+     * 표식은 남기지 않는다. 소유권이 있는 행(살아 있든 지났든)은 대상이 아니다 — 지난 것은 takeOverExpiredLease(R2)가 맡는다.
+     */
+    async claimUnleasedPendingForRedispatch(taskId: string, staleMs: number, lease?: { owner: string; leaseMs: number }): Promise<boolean> {
+        const r = await this.query(
+            `UPDATE agent_tasks SET updated_at = NOW()${lease ? ', lease_owner = $3, lease_until = NOW() + make_interval(secs => $4)' : ''}
+             WHERE id = $1 AND status = 'pending' AND lease_until IS NULL AND updated_at < NOW() - make_interval(secs => $2)`,
+            lease ? [taskId, staleMs / 1000, lease.owner, lease.leaseMs / 1000] : [taskId, staleMs / 1000]);
         return (r.rowCount ?? 0) > 0;
     }
 }
