@@ -23,6 +23,8 @@ import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { requiresApproval, getApprovalRegistry, auditAutoRejected } from '../task-sandbox/approval-gate';
+import { bringsExternalContent } from '../../config/tool-policy';
+import { CHAT_TOOL_APPROVAL } from '../../config/chat-approval';
 import { floorDeniedUnderPolicy } from '../task-sandbox/approval-floor';
 import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { runTool } from './task-steps';
@@ -43,6 +45,12 @@ const logger = createLogger('AgentTaskSubagent');
  *  XML 만 남으면 빈 문자열이 되어 호출부의 명시적 실패 문구로 대체된다. */
 function stripRawToolCallXml(text: string): string {
     return text.replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '').trim();
+}
+
+/** 채팅 서브의 오염 문맥(W3 S3 taint) — 부모에게서 물려받은 값과, 서브가 외부 결과를 받았을 때 부모에 알리는 콜백. */
+export interface SubagentChatTaint {
+    inherited: boolean;
+    onExternalOutput?: () => void;
 }
 
 interface SubagentParams {
@@ -80,6 +88,8 @@ interface SubagentParams {
     onExit?: (reason: SubagentExitReason) => void;
     /** 최종 답 검사 — 교정 요청문을 돌려주면 그 문장을 대화에 싣고 도구 없이 한 번만 더 부른다. null 이면 그대로 끝낸다. */
     finalCheck?: (text: string) => string | null;
+    /** 채팅 경로만 — 오염 문맥(#1469). 있으면 부모 채팅 루프와 같은 taint 규칙(TAINT_ENABLED·예외 도구·requiresApproval)으로 판정한다. */
+    chatTaint?: SubagentChatTaint;
 }
 
 /** 주차된 서브에이전트의 재개 지점 — 결과 없는 tool_call 로 끝나는 대화 + 그 턴·누적 토큰. */
@@ -130,6 +140,15 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
     if (restored) p.trace?.record('resumed', '');
 
     const exposed = new Set(p.tools.map((t) => t.function.name));
+    // 오염 문맥(채팅 경로만) — 물려받은 taint 에서 시작해 외부 결과를 받으면 켠다(되돌리지 않는다). 판정은 부모 채팅 루프와 같다.
+    let tainted = p.chatTaint?.inherited ?? false;
+    const taintedFor = (name: string): boolean => !!p.chatTaint && CHAT_TOOL_APPROVAL.TAINT_ENABLED && tainted && !CHAT_TOOL_APPROVAL.TAINT_EXEMPT_TOOLS.has(name);
+    const noteResult = (name: string, args: Record<string, unknown>): void => {
+        if (!p.chatTaint || !bringsExternalContent(name, args)) return;
+        tainted = true;
+        p.chatTaint.onExternalOutput?.();
+    };
+    const approvalOpts = (name: string) => ({ deviceGatesShell: p.sandboxCfg.deviceGatesShell, taintedContext: taintedFor(name) });
     /**
      * 실행 전 권한 거절 — 거절이면 모델에 줄 결과, 아니면 null. 두 실행 경로(선실행·순차)가 실행 직전에 똑같이 부른다.
      * 노출 목록 밖 이름은 늘 거절. 채팅 서브(skipApprovalGate)는 승인이 필요하면 대기 없이 거절하고 기존 무인 거절 감사를 남긴다.
@@ -139,7 +158,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             logger.warn(`[Subagent] 받지 않은 도구 호출 거절: ${name}`);
             return getSubagentToolNotExposedNotice(name);
         }
-        if (!p.sandboxCfg.skipApprovalGate || !requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) return null;
+        if (!p.sandboxCfg.skipApprovalGate || !requiresApproval(p.sandboxCfg.approvalPolicy, name, args, approvalOpts(name))) return null;
         const input = { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args };
         const floor = floorDeniedUnderPolicy(p.sandboxCfg.approvalPolicy, name, args);
         auditAutoRejected(input, floor ? 'policy_floor' : 'unattended', floor);
@@ -225,17 +244,18 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
     async function runCalls(calls: ToolCall[], turn: number): Promise<void> {
         {
             const result = { tool_calls: calls };
+            const prefetchDenied = new Set<string>();
             // 읽기 전용 도구 병렬 선실행 — 승인 필요 호출은 자동 승인 작업에서만(부모 루프와 같은 규칙).
             const prefetched = await prefetchReadOnlyCalls(
                 result.tool_calls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
                 // 받은 도구만, 채팅 서브는 승인이 필요 없는 호출만 선실행한다(나머지는 아래 순차 경로가 거절한다).
                 ({ name, tc }) => exposed.has(name) && (!requiresApproval(p.sandboxCfg.approvalPolicy, name,
-                    (tc.function.arguments ?? {}) as Record<string, unknown>, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })
+                    (tc.function.arguments ?? {}) as Record<string, unknown>, approvalOpts(name))
                     || (!p.sandboxCfg.skipApprovalGate && getApprovalRegistry().autoApproves(p.taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>))),
                 async ({ name, tc }) => {
                     const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
                     const denied = childRejection(name, args);
-                    if (denied !== null) return denied;
+                    if (denied !== null) { prefetchDenied.add(tc.id ?? ''); return denied; }
                     if (!p.sandboxCfg.skipApprovalGate && requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
                         const r = await getApprovalRegistry().request(
                             { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
@@ -253,6 +273,8 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
                 const pre = tc.id !== undefined ? prefetched.get(tc.id) : undefined;
                 if (pre !== undefined) {
+                    // 선실행 결과는 원래 순서대로 소비하면서 taint 를 켠다 — 같은 응답의 뒤 호출(쓰기 등)이 그 결과 뒤에 판정되게.
+                    if (!prefetchDenied.has(tc.id ?? '')) noteResult(name, args);
                     p.trace?.record('tool_result', pre, name);
                     conversation.push({ role: 'tool', content: pre, tool_name: name, tool_call_id: tc.id });
                     continue;
@@ -289,6 +311,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 const toolResult = approved
                     ? await runTool(mcp, name, args, p.userCtx, undefined, p.signal)
                     : getApprovalRejectedNotice(name, rejected.reason, rejected.text);
+                if (approved) noteResult(name, args);
                 p.trace?.record('tool_result', toolResult, name);
                 conversation.push({ role: 'tool', content: toolResult, tool_name: name, tool_call_id: tc.id });
             }

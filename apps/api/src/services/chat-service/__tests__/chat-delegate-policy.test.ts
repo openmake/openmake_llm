@@ -26,3 +26,11 @@ describe('runChatDelegate — 부모 승인 정책 전달', () => {
         expect((runSubagentMock.mock.calls[0][0] as { sandboxCfg: { approvalPolicy: string } }).sandboxCfg.approvalPolicy).toBe('none');
     });
 });
+
+describe('runChatDelegate — 부모 오염 문맥 전달', () => {
+    it('chatTaint(물려받은 taint·외부 결과 알림)를 서브에 그대로 넘긴다', async () => {
+        const chatTaint = { inherited: true, onExternalOutput: jest.fn() };
+        await runChatDelegate({ args: { subgoal: '조사' }, chatTools: [tool('web_search')] as never, userCtx: { userId: 'u1', role: 'user' } as never, parentPolicy: 'high-risk', chatTaint } as never);
+        expect((runSubagentMock.mock.calls[0][0] as { chatTaint: unknown }).chatTaint).toBe(chatTaint);
+    });
+});

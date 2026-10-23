@@ -266,3 +266,46 @@ describe('runToolCallBatch — 채팅 승인 게이트', () => {
         expect(state.tainted).toBe(true);
     });
 });
+
+describe('runToolCallBatch — 위임 경계의 오염 문맥(#1469)', () => {
+    beforeEach(() => {
+        exec.mockClear(); delegate.mockReset().mockResolvedValue('delegated'); spawn.mockReset().mockResolvedValue('spawned'); effective.mockReset();
+        (CHAT_TOOL_APPROVAL as { TAINT_ENABLED: boolean }).TAINT_ENABLED = true;
+    });
+    type TaintArg = { chatTaint?: { inherited: boolean; onExternalOutput?: () => void } };
+
+    it('부모 taint 를 위임·병렬 서브 모두에 물려준다', async () => {
+        usePolicy('high-risk');
+        // 오염된 대화에서 delegate_expert(기존 분류 external)는 그 자체로 묻는다 — 사용자가 승인한다. spawn_agents(제어)는 묻지 않는다.
+        const { pendings, state, run } = setup({ onPending: (p) => { void getChatApprovalRegistry().approve(p.approvalId); } });
+        state.tainted = true;
+        await run([{ id: 'd1', name: CHAT_DELEGATE_TOOL_NAME, args: { subgoal: 'x' } }, { id: 'd2', name: SPAWN_AGENTS_TOOL_NAME, args: { tasks: ['x'] } }], [fn('web_search')]);
+        expect((delegate.mock.calls[0][0] as TaintArg).chatTaint?.inherited).toBe(true);
+        expect((spawn.mock.calls[0][0] as TaintArg).chatTaint?.inherited).toBe(true);
+        expect(pendings.map((p) => p.toolName)).toEqual([CHAT_DELEGATE_TOOL_NAME]);
+    });
+
+    it.each([
+        ['delegate', CHAT_DELEGATE_TOOL_NAME, { subgoal: 'x' }],
+        ['spawn', SPAWN_AGENTS_TOOL_NAME, { tasks: ['x'] }],
+    ] as const)('%s 서브가 외부 결과를 받았다고 알리면, 다음 부모 쓰기는 오염 문맥으로 묻는다(high-risk)', async (which, name, args) => {
+        usePolicy('high-risk');
+        const sub = which === 'delegate' ? delegate : spawn;
+        sub.mockImplementationOnce(async (p: TaintArg) => { p.chatTaint?.onExternalOutput?.(); return 'sub result with web content'; });
+        const { pendings, state, run } = setup({ onPending: (p) => { void getChatApprovalRegistry().reject(p.approvalId); } });
+        await run([{ id: 'd1', name, args }, { id: 'w1', name: 'file_ops', args: { op: 'write', path: 'notes.txt', content: 'x' } }], [fn('web_search'), fn('file_ops')]);
+        expect(state.tainted).toBe(true);
+        expect(pendings.map((p) => p.toolName)).toEqual(['file_ops']);
+        expect(exec).not.toHaveBeenCalled();
+    });
+
+    // delegate_expert 는 위험 등급표에 없어 기존 분류(external)로 이미 부모 taint 를 켠다 — 대조는 제어 등급인 spawn_agents 로 본다.
+    it('대조: spawn 서브가 외부 결과를 알리지 않으면 다음 부모 일반 쓰기는 high-risk 에서 묻지 않는다', async () => {
+        usePolicy('high-risk');
+        const { pendings, state, run } = setup();
+        await run([{ id: 'd1', name: SPAWN_AGENTS_TOOL_NAME, args: { tasks: ['x'] } }, { id: 'w1', name: 'file_ops', args: { op: 'write', path: 'notes.txt', content: 'x' } }], [fn('file_ops')]);
+        expect(state.tainted).toBe(false);
+        expect(pendings).toHaveLength(0);
+        expect(exec).toHaveBeenCalledTimes(1);
+    });
+});
