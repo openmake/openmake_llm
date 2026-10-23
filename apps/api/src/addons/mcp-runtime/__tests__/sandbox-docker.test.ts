@@ -168,6 +168,11 @@ describe('buildSandboxedCommand (gate)', () => {
         expect(r.env).toEqual({ HOME: '/cache', API_KEY: 'k1' });
         expect(r.args.join(' ')).not.toContain('NODE_OPTIONS');
     });
+
+    it('git 제어 env(GIT_DIR·GIT_TRACE)도 컨테이너에 넣지 않는다(#1471)', () => {
+        const r = buildSandboxedCommand({ ...input, env: { GIT_DIR: '/x/.git', GIT_TRACE: '/tmp/t', GIT_TOKEN: 't1' } }, cfg());
+        expect(r.env).toEqual({ GIT_TOKEN: 't1' });
+    });
 });
 
 describe('playwright 브라우저 사전 설치 래핑 (sandbox-playwright)', () => {
