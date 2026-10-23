@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.114.0](https://github.com/openmake/openmake_llm/compare/v1.113.0...v1.114.0) (2026-10-23)
+
+
+### ✨ 기능
+
+* **agent-task:** concurrency queue on by default in production, optional local LLM semaphore (R1) ([de3ba1a](https://github.com/openmake/openmake_llm/commit/de3ba1ab9f428f87ae6c570475ebc061ffeea55d))
+* **agent-task:** retention sweep on by default in production with dry-run and checkpoint compaction (R5) ([601cdb5](https://github.com/openmake/openmake_llm/commit/601cdb51a598e60206b89258957eb825837fd13b))
+* **agent-task:** stable-by-default in production — concurrency queue, retention with dry-run and checkpoint compaction, user MCP idle reclaim (W3 R1·R5·R6) ([3763115](https://github.com/openmake/openmake_llm/commit/376311525969a2a4103986ff9cc13b11a005fc56))
+* **chat:** approval gate for chat tool calls in production (W3 S3) ([2b1cf86](https://github.com/openmake/openmake_llm/commit/2b1cf867a1a7966c781cd66c1ad31dfb976d4079))
+* **chat:** approval policy config and memory-only approval registry for the chat tool loop (S3) ([21a9255](https://github.com/openmake/openmake_llm/commit/21a9255546f7d86e386f88f30ef5e1e69b1ce1fa))
+* **chat:** gate chat tool calls with the approval policy and taint rule (S3) ([21b20c3](https://github.com/openmake/openmake_llm/commit/21b20c35d1e6631046d395a73b473e9d322b02b7))
+* **chat:** REST and WS surface for chat tool approvals (S3) ([e221163](https://github.com/openmake/openmake_llm/commit/e22116395d81ff5c872f0b4d51324ac25db4d278))
+* **mcp:** release user MCP pool on task end and reclaim idle pools (R6) ([67d1dd7](https://github.com/openmake/openmake_llm/commit/67d1dd7d9af6da5befc87ad4d50b4cf04c7c34b3))
+* **web:** inline approval card for chat tool calls (S3) ([b78f435](https://github.com/openmake/openmake_llm/commit/b78f4356923e8a98abe812e3dd6b7cae8b54ab68))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** checkpoint compaction selects only finished tasks past the cutoff, oldest first (R5) ([929fdc0](https://github.com/openmake/openmake_llm/commit/929fdc0dc2ba029234f77217c9123600ec8c1896))
+* **agent-task:** warn when retention is on by default, show disabled items in dry-run log (R5) ([5f0e058](https://github.com/openmake/openmake_llm/commit/5f0e0581c065b0b9f496995c1dc04a326b136411))
+* **chat:** exclude approval wait from the tool-loop budget, policy none means no chat gate (S3) ([46c3119](https://github.com/openmake/openmake_llm/commit/46c3119f46ea38b55914f8403b76130ff55172db))
+* **chat:** reject tool approvals immediately when the client has no approval channel (S3) ([2c8e992](https://github.com/openmake/openmake_llm/commit/2c8e992bc7b10ae1825920a64234835a3decf191))
+* **chat:** taint exemption for read-only lookup tools, no repeated waits after a timeout (S3) ([a5d26d4](https://github.com/openmake/openmake_llm/commit/a5d26d47da492f14899a01ab78130dea6dbff4b8))
+* **chat:** taint rule skips control tools, abort-specific denied text, timeout guard (S3) ([35ff882](https://github.com/openmake/openmake_llm/commit/35ff88263778de5ad52b393b85b8898f08d446ae))
+* **discord-bot:** 생성 파일(/generated)을 API 키로 내려받아 채널에 첨부 ([ddce4b9](https://github.com/openmake/openmake_llm/commit/ddce4b96de084c05eb9a5aaa5caab6f85bfcac61))
+* **llm:** preserve tool-call extra_content so Gemini 3 thought signatures survive multi-turn tool calls ([54c77c4](https://github.com/openmake/openmake_llm/commit/54c77c4a78298b945379116e5f8c5df1c1730ba9))
+* **llm:** preserve tool-call extra_content so Gemini 3 thought signatures survive multi-turn tool calls ([2b19cf6](https://github.com/openmake/openmake_llm/commit/2b19cf6ba60be64d2d8a19d3b027a3a4520b24c9))
+* **mcp:** re-check idle and task refs before reclaiming user MCP servers (R6) ([258294a](https://github.com/openmake/openmake_llm/commit/258294a77ad84e8805c8da8bab1f2818e578d7f9))
+* **tool-policy:** treat mcp_call as a third-party tool so the approval gate covers the generic MCP dispatcher (S3) ([f05d99c](https://github.com/openmake/openmake_llm/commit/f05d99cb71c3f2682a05f42e51200513ddab8b7d))
+* **web:** inline error on chat approval failure, clear cards on send, chat-specific reject placeholder (S3) ([af45189](https://github.com/openmake/openmake_llm/commit/af4518964c001dfc6a13a7eb69102ef187d6e6ab))
+
 ## [1.113.0](https://github.com/openmake/openmake_llm/compare/v1.112.0...v1.113.0) (2026-10-23)
 
 
