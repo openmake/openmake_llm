@@ -199,6 +199,12 @@ export interface ToolCall {
      * 요청으로 내보낼 때는 싣지 않는다. 에이전트 작업은 이 호출을 실행하지 않고 오류 결과를 돌려준다.
      */
     argumentsInvalid?: boolean;
+    /**
+     * OpenAI 호환 응답이 tool_call 에 실어 준 불투명 값(예: Google 의 Gemini 3 thought signature
+     * `{ google: { thought_signature } }`). 다음 요청의 assistant.tool_calls 에 그대로 되돌려야 2턴째가 400 나지 않는다.
+     * 해석·로그 금지. 응답에 없으면 키도 없다.
+     */
+    extra_content?: Record<string, unknown>;
     /** 호출할 함수 정보 */
     function: {
         /** 스트리밍 시 도구 호출 인덱스 (순서 식별용) */

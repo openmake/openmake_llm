@@ -37,6 +37,8 @@ type OpenAIMessage = {
     tool_calls?: Array<{
         id: string;
         type: 'function';
+        /** 응답이 준 불투명 값(Gemini 3 thought signature 등) — 그대로 되돌린다 */
+        extra_content?: Record<string, unknown>;
         function: { name: string; arguments: string };
     }>;
     tool_call_id?: string;
@@ -109,6 +111,8 @@ export function toOpenAIMessages(
                     // provider 발급 id (Anthropic/OpenAI/Gemini) 우선 — fake 합성은 fallback 만.
                     id: tc.id ?? `call_${tc.function.name}_${i}`,
                     type: 'function' as const,
+                    // 없으면 키도 없다 — 종전 요청 바이트와 같게.
+                    ...(tc.extra_content && { extra_content: tc.extra_content }),
                     function: {
                         // 히스토리의 tool_calls 도 요청 방향이라 tools 와 같은 이름으로 내보낸다.
                         name: codec ? codec.register(tc.function.name) : tc.function.name,

@@ -82,6 +82,8 @@ export function toOpenAIMessages(messages: ChatMessage[], modelId?: string): unk
                     // 진짜 id (vLLM 발급) 우선, 누락 시에만 합성 fallback.
                     id: tc.id ?? `call_${tc.function.name}_${i}`,
                     type: 'function' as const,
+                    // 응답이 준 불투명 값(Gemini 3 thought signature 등)을 그대로 되돌린다 — 없으면 키도 없다.
+                    ...(tc.extra_content && { extra_content: tc.extra_content }),
                     function: {
                         name: tc.function.name,
                         arguments: JSON.stringify(tc.function.arguments ?? {}),
