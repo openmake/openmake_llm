@@ -29,6 +29,7 @@ import { CHAT_TOOL_APPROVAL } from '../../config/chat-approval';
 import { classifyToolRisk, isThirdPartyTool } from '../../config/tool-policy';
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { requiresApproval, stripApprovalGatedTools } from '../task-sandbox/approval-gate';
+import { floorDeniedUnderPolicy } from '../task-sandbox/approval-floor';
 import { hasChatApprovalChannel, rejectWithoutApprovalChannel, requestChatApproval, resolveChatApprovalPolicy } from './chat-approval';
 import { getChatApprovalDeniedResult } from '../../prompts/chat-approval';
 import { createLogger } from '../../utils/logger';
@@ -113,8 +114,10 @@ function bringsExternalContent(name: string, args: Record<string, unknown>): boo
 
 /**
  * 채팅 도구 승인(W3 S3) — 정책이 요구하는 호출이면 사람의 결정을 기다린다. 실행해도 되면 null, 아니면 모델에게 줄 거절 결과.
- * 대기 키는 대화 id(없으면 — REST 경로 — 사용자 id). 정책 none 은 호출부가 게이트를 건너뛰므로 policy_floor 거절은 여기서 나오지 않는다.
- * 대기 없이 끝난 거절(승인 채널 없음·앞선 무응답)은 알릴 대기 카드가 없어 decided 를 보내지 않는다.
+ * 대기 키는 대화 id(없으면 — REST 경로 — 사용자 id). 정책 none 에서 늘 거절되는 바닥(외부 MCP·자격증명/지시 파일 쓰기)은
+ * 승인 채널·앞선 무응답과 무관하게 레지스트리가 대기 없이 policy_floor 로 거절하고 감사한다(바닥은 정책으로 내려가지 않는다 — #1469,
+ * 설계 2026-10-22 §2.3). 묻는 바닥(memory_save·사이트 쓰기)은 none 에서도 종전 승인 경로를 탄다.
+ * 대기 없이 끝난 거절(승인 채널 없음·앞선 무응답·policy_floor)은 알릴 대기 카드가 없어 decided 를 보내지 않는다.
  */
 async function gateChatToolCall(p: {
     deps: ExternalProviderDeps;
@@ -132,11 +135,12 @@ async function gateChatToolCall(p: {
     const args = tc.args as Record<string, unknown>;
     if (!requiresApproval(policy, tc.name, args, { taintedContext: p.taintedContext })) return null;
     const chatId = req.sessionId || userId;
-    if (!p.hasChannel) {
+    const floorDenied = floorDeniedUnderPolicy(policy, tc.name, args) !== null;
+    if (!floorDenied && !p.hasChannel) {
         const r = rejectWithoutApprovalChannel({ chatId, userId, toolName: tc.name, args });
         return getChatApprovalDeniedResult(tc.name, r.reason, p.langCode);
     }
-    if (p.state.approvalUnanswered) {
+    if (!floorDenied && p.state.approvalUnanswered) {
         logger.info(`[chat:${chatId}] 앞선 승인이 무응답으로 끝나 대기 없이 거절: ${tc.name}`);
         return getChatApprovalDeniedResult(tc.name, 'timeout', p.langCode);
     }
@@ -189,8 +193,8 @@ export async function runToolCallBatch(params: {
         return;
     }
 
-    // 채팅 도구 승인(W3 S3) — 정책(채팅 기본 ∨ 조직 하한)은 배치당 1회 정한다. none 이면 게이트가 없다(종전 동작 —
-    // 정책 none 의 바닥 거절은 사람이 없는 agent-task 무인 실행의 규칙이고, 채팅에는 사람이 있다).
+    // 채팅 도구 승인(W3 S3) — 정책(채팅 기본 ∨ 조직 하한)은 배치당 1회 정한다. none 에서도 게이트는 돈다 — 해 없는 호출은
+    // requiresApproval 이 false 라 즉시 실행되고, 바닥 호출은 작업 경로와 같은 규칙으로 거절·승인된다(#1469).
     const userCtx = deps.currentUserContext ?? { userId: 'guest', role: 'guest' };
     const userId = String(userCtx.userId);
     const policy = await resolveChatApprovalPolicy({ userId, role: userCtx.role });
@@ -200,20 +204,20 @@ export async function runToolCallBatch(params: {
     // 오염 문맥 — 읽기성 조회 예외(TAINT_EXEMPT_TOOLS)는 taint 로 묻지 않는다(자기 등급이 승인 대상이면 그대로 묻는다).
     const taintedFor = (name: string) => CHAT_TOOL_APPROVAL.TAINT_ENABLED && state.tainted && !CHAT_TOOL_APPROVAL.TAINT_EXEMPT_TOOLS.has(name);
     // 서브에이전트는 승인 게이트를 건너뛰므로(skipApprovalGate) 승인이 필요한 도구는 주지 않는다 — 부모가 승인 뒤 직접 부른다.
-    const subagentTools = policy === 'none' ? tools : stripApprovalGatedTools(tools, policy);
+    const subagentTools = stripApprovalGatedTools(tools, policy);
 
     // 읽기 전용 도구(web_search·extract_webpage …) 2건 이상이면 동시에 선실행 — 결과는 아래
     // 순차 루프가 원래 호출 순서대로 배치한다. 승인이 필요한 호출은 선실행하지 않는다(루프에서 묻는다).
     const parallelReadOnlyResults = await prefetchReadOnlyCalls(
         toolCalls,
-        (tc) => policy === 'none' || !requiresApproval(policy, tc.name, tc.args as Record<string, unknown>, { taintedContext: taintedFor(tc.name) }),
+        (tc) => !requiresApproval(policy, tc.name, tc.args as Record<string, unknown>, { taintedContext: taintedFor(tc.name) }),
         (tc) => executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>, state.toolSources),
         { path: 'chat', ...(req.abortSignal ? { signal: req.abortSignal } : {}) },
     );
     for (const tc of toolCalls) {
         let toolResult: string;
         // 선실행된 호출은 이미 실행됐다(배치 시작 시점의 문맥에서 승인 불요로 판정) — 다시 묻지 않는다.
-        const denied = policy === 'none' || parallelReadOnlyResults.has(tc.id) ? null : await gateChatToolCall({
+        const denied = parallelReadOnlyResults.has(tc.id) ? null : await gateChatToolCall({
             deps, req, tc, policy, taintedContext: taintedFor(tc.name), hasChannel, userId,
             langCode: ctx.resolvedLanguage || req.userLanguagePreference, state,
         });
