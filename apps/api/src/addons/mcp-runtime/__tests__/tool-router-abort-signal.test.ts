@@ -48,7 +48,8 @@ beforeEach(async () => {
 });
 
 describe('ToolRouter — 중단 신호 전달', () => {
-    it('사용자 풀 경로: client.callTool 이 opts 를 받는다', async () => {
+    // 라우터는 상위 신호와 마감을 묶은 신호를 넘긴다(#1472) — 동일 객체가 아니라 "상위 중단이 하위 신호에 닿는가"를 본다.
+    it('사용자 풀 경로: client.callTool 이 받은 신호는 상위 중단을 따른다', async () => {
         const client = fakePoolClient();
         pool.add('3', 'mcp_3_od', client as unknown as ExternalMCPClient);
         const ac = new AbortController();
@@ -56,7 +57,11 @@ describe('ToolRouter — 중단 신호 전달', () => {
         const r = await new ToolRouter().executeTool('open-design::list_projects', {}, USER, { signal: ac.signal });
 
         expect(r.isError).toBeFalsy();
-        expect(client.callTool).toHaveBeenCalledWith('list_projects', {}, { signal: ac.signal });
+        expect(client.callTool).toHaveBeenCalledWith('list_projects', {}, { signal: expect.any(AbortSignal) });
+        const passed = (client.callTool.mock.calls[0][2] as { signal: AbortSignal }).signal;
+        expect(passed.aborted).toBe(false);
+        ac.abort();
+        expect(passed.aborted).toBe(true);
     });
 
     it('전역 경로: server-registry 가 등록한 실행기가 opts 를 ExternalMCPClient.callTool 까지 넘긴다', async () => {
@@ -69,17 +74,23 @@ describe('ToolRouter — 중단 신호 전달', () => {
         const r = await router.executeTool('g::echo', {}, undefined, { signal: ac.signal });
 
         expect(r.isError).toBeFalsy();
-        expect(globalClients[0].callTool).toHaveBeenCalledWith('echo', {}, { signal: ac.signal });
+        expect(globalClients[0].callTool).toHaveBeenCalledWith('echo', {}, { signal: expect.any(AbortSignal) });
+        const passed = (globalClients[0].callTool.mock.calls[0][2] as { signal: AbortSignal }).signal;
+        ac.abort();
+        expect(passed.aborted).toBe(true);
     });
 
-    it('전역 경로: opts 가 없으면 종전처럼 2인자로 부른다', async () => {
+    it('전역 경로: opts 가 없어도 마감 신호를 넘긴다(타임아웃이 하위 호출을 끊는다) — 중단되지 않은 상태로', async () => {
         const router = new ToolRouter();
         const registry = new MCPServerRegistry(router);
         await registry.connectServer('srv1', { id: 'srv1', name: 'g', transport_type: 'stdio', command: 'node', args: [] } as unknown as MCPServerConfig);
 
-        await router.executeTool('g::echo', {}, undefined);
+        const r = await router.executeTool('g::echo', {}, undefined);
 
-        expect(globalClients[0].callTool.mock.calls[0]).toEqual(['echo', {}]);
+        expect(r.isError).toBeFalsy();
+        const [name, args, opts] = globalClients[0].callTool.mock.calls[0] as [string, unknown, { signal: AbortSignal }];
+        expect([name, args]).toEqual(['echo', {}]);
+        expect(opts.signal.aborted).toBe(false);
     });
 });
 

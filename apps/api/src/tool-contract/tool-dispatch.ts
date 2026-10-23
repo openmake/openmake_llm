@@ -14,7 +14,7 @@
 import type { MCPToolResult, MCPToolDefinition, UserContext } from './types';
 import { MCP_NAMESPACE_SEPARATOR } from './types';
 import { isToolRestrictedForRole } from './tool-role-gate';
-import { classifyToolError, formatToolError } from './tool-error-classifier';
+import { ABORTED_CLASSIFICATION, classifyToolError, formatToolError } from './tool-error-classifier';
 import { withToolNameSuggestions } from './tool-name-suggest';
 import { isToolCircuitOpen, recordToolResult } from './tool-health';
 import { runPreHooks, runPostHooks, type ToolHookContext } from './tool-hooks';
@@ -87,9 +87,10 @@ export async function dispatchTool(
             return result;
         };
         /** `record:false` 는 서킷 자신이 낸 거절 — 세면 차단이 스스로를 연장한다. */
-        const fail = (rawMessage: string, opts: { record?: boolean } = {}): MCPToolResult => {
-            const c = classifyToolError(rawMessage);
-            if (opts.record !== false) recordToolResult(name, false, c.category);
+        /** `aborted`: 호출자가 끊었다(#1472) — 서킷에는 실패도 성공도 아니다(기록하지 않는다). */
+        const fail = (rawMessage: string, opts: { record?: boolean; aborted?: boolean } = {}): MCPToolResult => {
+            const c = opts.aborted ? ABORTED_CLASSIFICATION : classifyToolError(rawMessage);
+            if (opts.record !== false && !opts.aborted) recordToolResult(name, false, c.category);
             span.setAttribute('tool.duration_ms', Date.now() - startedAt);
             span.setAttribute('tool.success', false);
             span.setAttribute('tool.error_category', c.category);
@@ -117,10 +118,16 @@ export async function dispatchTool(
                     .map((c) => ('text' in c && typeof c.text === 'string' ? c.text : ''))
                     .filter(Boolean)
                     .join('\n') || '도구 실행 오류';
-                return fail(text);
+                return fail(text, { aborted: aborted() });
             }
             return ok(result);
         };
+        // 호출자 중단 판정(#1472) — 결과 문구가 아니라 호출자 신호로. 중단 뒤 끝난 호출은 성공·실패 어느 쪽으로도 세지 않는다.
+        const aborted = (): boolean => opts?.signal?.aborted === true;
+        const abortedMessage = `도구 호출이 중단되었습니다: ${name}`;
+
+        // 이미 중단된 요청은 어떤 실행도 시작하지 않는다 — 서킷 반개방 전이·훅·실제 호출 모두 앞에서 끊는다.
+        if (aborted()) return fail(abortedMessage, { aborted: true });
 
         // 서킷 차단 도구는 실행하지 않고 즉시 거절한다. 노출에서 빠져도 모델이 이름을
         // 기억해 호출할 수 있으므로 2차 방어가 필요하다(그리고 죽은 서버를 두드리지 않는다).
@@ -157,9 +164,10 @@ export async function dispatchTool(
             try {
                 const result = await deps.external.execute(name, args, context, opts);
                 if (result === undefined) return fail(await suggest(`외부 도구를 찾을 수 없습니다: ${name}`));
+                if (aborted()) return fail(abortedMessage, { aborted: true });
                 return finalize(capToolOutput(result));
             } catch (error) {
-                return fail(error instanceof Error ? error.message : '외부 도구 실행 실패');
+                return fail(error instanceof Error ? error.message : '외부 도구 실행 실패', { aborted: aborted() });
             }
         }
 
