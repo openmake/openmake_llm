@@ -302,13 +302,17 @@ async function performEvaluateAndIncrement(
 // createAdvancedRateLimiter
 // ================================================
 
-function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
+/**
+ * resolveIdentity — 액터 신원 해석기(기본: JWT 서명 + 블랙리스트 확인). 블랙리스트 DB 조회가 없어야 하는 경로(/metrics)는
+ * `async () => null` 을 넘겨 IP 로만 센다(관리자 배수 없음, API 키 액터는 `apiKeyActor:false` 로 함께 끈다).
+ */
+export function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions, resolveIdentity = resolveLimiterIdentity) {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         // 비용 리미터 등에서 read-only 요청을 제외 — 카운트/차단 없이 통과.
         if (options.skip?.(req)) { next(); return; }
         const now = Date.now();
         const ip = getRequestIP(req);
-        const identity = await resolveLimiterIdentity(req);
+        const identity = await resolveIdentity(req);
         const userKey = identity?.userId ?? null;
         const actorKey = resolveActorKey(req, userKey, ip, options.apiKeyActor !== false);
 
