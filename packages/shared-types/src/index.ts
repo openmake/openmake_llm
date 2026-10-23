@@ -179,6 +179,12 @@ export interface McpToolResource {
   text?: string;
 }
 
+/** 도구 위험 등급 — 승인 카드가 "왜 승인이 필요한지"를 보여 주는 근거. 백엔드 config/tool-policy 의 ToolRiskClass 와 같은 값. */
+export type ToolRiskClass = "read" | "write" | "destructive" | "exec" | "network" | "external" | "control";
+
+/** 승인 거절 사유 — 백엔드 approval-gate 의 ApprovalRejectReason 과 같은 값(user: 사람이 거절, timeout: 무응답 만료, abort: 요청 중단 등). */
+export type ApprovalRejectReason = "timeout" | "user" | "abort" | "parked" | "unattended" | "policy_floor";
+
 /**
  * 스트림 이벤트 공통 봉투(F19.11, 2026-09-17) — 채팅 스트림 이벤트에 서버가 덧붙이는 이어받기 커서.
  * `streamId` 는 스트림(한 번의 생성)마다 새로 발급되고 `seq` 는 그 안에서 1부터 단조 증가한다(토큰 포함).
@@ -320,6 +326,19 @@ export type WsServerEvent =
     }
   // MCP 도구 호출 진행 (백엔드 ws-chat-handler onMcpToolStart/onMcpToolResult)
   | { type: "mcp_tool_start"; toolName: string; messageId?: string }
+  // 채팅 도구 승인(W3 S3, ws-chat-handler onChatApprovalPending/Decided) — 결정은 REST /api/chat/approvals/:approvalId/approve|reject
+  | {
+      type: "chat_approval_pending";
+      approvalId: string;
+      toolName: string;
+      /** 승인 카드에 보일 인자 — 비밀 값을 가린 사본(실행은 원래 인자로 한다) */
+      args: Record<string, unknown>;
+      riskClass: ToolRiskClass;
+      /** 무응답 만료 시각(epoch ms) — 지나면 거절(timeout)로 끝난다 */
+      expiresAt: number;
+      messageId?: string;
+    }
+  | { type: "chat_approval_decided"; approvalId: string; decision: "approved" | "rejected"; reason?: ApprovalRejectReason; messageId?: string }
   | {
       type: "mcp_tool_result";
       toolName: string;

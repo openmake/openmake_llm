@@ -12,6 +12,7 @@ import type { ExecutionPlan } from './profile-resolver';
 import type { ClusterManager } from '../cluster/manager';
 import type { SystemEventCallback } from '../services/chat-service-types';
 import type { ToolDefinition } from '../llm';
+import type { ExternalProviderDeps } from '../services/chat-service/external-provider-types';
 
 /**
  * 사용자 컨텍스트 — Express req 또는 WebSocket 연결에서 추출
@@ -166,6 +167,10 @@ export interface ChatRequestParams {
      * frontend "🔍 {도구} 실행 중" 진행 표시를 트리거 ("생각 중..." 멈춤 혼선 해소).
      */
     onMcpToolStart?: (event: { toolName: string }) => void;
+    /** 채팅 도구 승인 대기 시작(W3 S3) — ws-chat-handler 가 `chat_approval_pending` 으로 emit. args 는 가린 사본 */
+    onChatApprovalPending?: ExternalProviderDeps['chatApprovalPendingCallback'];
+    /** 채팅 도구 승인 결정(W3 S3) — ws-chat-handler 가 `chat_approval_decided` 로 emit */
+    onChatApprovalDecided?: ExternalProviderDeps['chatApprovalDecidedCallback'];
     /**
      * Phase 3.4 (2026-05-26) 메시지 편집 분기:
      * 새 session 생성 시 부모 session 추적 (conversation_sessions.metadata.parentSessionId).

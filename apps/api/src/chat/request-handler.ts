@@ -395,6 +395,8 @@ export class ChatRequestHandler {
             onSystemEvent,
             params.onMcpToolResult,
             params.onMcpToolStart,
+            params.onChatApprovalPending,
+            params.onChatApprovalDecided,
         );
 
         const endTime = Date.now();

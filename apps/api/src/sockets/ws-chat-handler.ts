@@ -347,6 +347,9 @@ export async function handleChatMessage(
                     messageId,
                 });
             },
+            // 채팅 도구 승인(W3 S3) — 대기 카드 표시·결정 반영. 결정 자체는 REST /api/chat/approvals/:approvalId/approve|reject
+            onChatApprovalPending: (p) => out({ type: 'chat_approval_pending', ...p, messageId }),
+            onChatApprovalDecided: (p) => out({ type: 'chat_approval_decided', ...p, messageId }),
             // 시스템 이벤트 (자동 토론 활성화 등 메타 알림) — UI 토스트 분리 표시
             onSystemEvent: (event) => {
                 out({
