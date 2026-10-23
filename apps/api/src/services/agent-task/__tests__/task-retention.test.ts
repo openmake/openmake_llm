@@ -194,7 +194,12 @@ describe('체크포인트 압축(compactFinishedCheckpoints)', () => {
         expect(sql).toMatch(/t\.status IN \('completed','failed','cancelled'\)/);
         expect(sql).toMatch(/COALESCE\(t\.completed_at, t\.updated_at\) < \$1/);
         expect(sql).toMatch(/c\.turn < \(SELECT MAX\(x\.turn\) FROM agent_task_checkpoints x WHERE x\.task_id = c\.task_id\)/);
-        expect(sql).toMatch(/HAVING COUNT\(\*\) > 1 LIMIT \$2/);
+        // 배치 하위질의도 끝난 작업·기준 시각 이전만, 오래 끝난 것부터 고른다 — 진행형·최근 작업이 배치를 채우지 않게
+        const sub = sql.match(/c\.task_id IN \(([\s\S]*)\)\s*$/)![1];
+        expect(sub).toMatch(/FROM agent_tasks t2 JOIN agent_task_checkpoints c2 ON c2\.task_id = t2\.id/);
+        expect(sub).toMatch(/t2\.status IN \('completed','failed','cancelled'\)/);
+        expect(sub).toMatch(/COALESCE\(t2\.completed_at, t2\.updated_at\) < \$1/);
+        expect(sub).toMatch(/GROUP BY t2\.id HAVING COUNT\(\*\) > 1\s+ORDER BY MIN\(COALESCE\(t2\.completed_at, t2\.updated_at\)\) LIMIT \$2$/);
         expect((params[0] as Date).getTime()).toBe(NOW - DAY);
         expect(params).toEqual([params[0], 500]);
         // 지운 건수는 감사 기록에 남는다
@@ -205,8 +210,10 @@ describe('체크포인트 압축(compactFinishedCheckpoints)', () => {
         const { pool, calls } = mockPool();
         await sweepAgentTaskRetention(pool, { now: NOW, cfg: COMPACT, workspaceRoot: WS_ROOT });
         const { sql } = calls.find((c) => /DELETE FROM agent_task_checkpoints/.test(c.sql))!;
-        const statusIn = sql.match(/t\.status IN \(([^)]*)\)/)![1];
-        for (const live of ['running', 'paused', 'queued', 'pending']) expect(statusIn).not.toContain(live);
+        // 바깥 조건과 배치 하위질의 모두 상태 목록에 진행형이 없다
+        const statusLists = [...sql.matchAll(/status IN \(([^)]*)\)/g)].map((m) => m[1]);
+        expect(statusLists).toEqual(["'completed','failed','cancelled'", "'completed','failed','cancelled'"]);
+        for (const list of statusLists) for (const live of ['running', 'paused', 'queued', 'pending']) expect(list).not.toContain(live);
         // 상태 조건은 OR 로 풀리지 않는다 — 다른 상태가 끼어들 길이 없다
         expect(sql).not.toMatch(/\bOR\b/i);
     });
@@ -240,12 +247,14 @@ describe('dry-run', () => {
         const ckpt = counts.find((c) => /agent_task_checkpoints c/.test(c.sql))!;
         expect(ckpt.sql).toMatch(/t\.status IN \('completed','failed','cancelled'\)/);
         expect(ckpt.sql).toMatch(/MAX\(x\.turn\)/);
+        expect(ckpt.sql).toMatch(/t2\.status IN \('completed','failed','cancelled'\)/);
+        expect(ckpt.params).toEqual([new Date(NOW - DAY), 500]);
         expect(r).toEqual({ tasks: 4, auditLogs: 4, screenshots: 1, checkpoints: 4 });
         // 파일도 지우지 않는다
         expect(await exists(path.join(WS_ROOT, 'done', 'shot-old.png'))).toBe(true);
         expect(logAudit).not.toHaveBeenCalled();
         const line = mockLogInfo.mock.calls.map((c) => String(c[0])).find((m) => m.includes('dry-run'));
-        expect(line).toBe('에이전트 작업 보존 정리(dry-run): 작업 4 / 감사 로그 4 / 캡처 1 / 체크포인트 4 — 삭제하지 않음');
+        expect(line).toBe('에이전트 작업 보존 정리(dry-run): 작업 4 / 감사 로그 4 / 캡처 1 / 체크포인트 4(이번 배치 기준) — 삭제하지 않음');
     });
 });
 

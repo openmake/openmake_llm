@@ -44,11 +44,19 @@ const SKIP_DIRS = new Set(['.git', 'node_modules']);
 
 interface RetentionResult { tasks: number; auditLogs: number; screenshots: number; checkpoints: number }
 
-/** 체크포인트 압축 조건 — 끝난 작업만, 작업마다 마지막 턴은 남긴다. 삭제와 dry-run 건수가 같은 조건을 쓴다. */
+/**
+ * 체크포인트 압축 조건 — 끝난 작업만, 작업마다 마지막 턴은 남긴다. 삭제와 dry-run 건수가 같은 조건을 쓴다.
+ * 배치 하위질의도 같은 상태·기준 시각으로 거르고 오래 끝난 작업부터 고른다 — 진행형·최근 작업이 배치를 채워
+ * 압축이 멈추지 않게. 바깥 조건의 상태·기준 시각은 이중 방어로 남긴다.
+ */
 const CHECKPOINT_COMPACT_WHERE = `c.task_id = t.id AND t.status IN ('completed','failed','cancelled')
     AND COALESCE(t.completed_at, t.updated_at) < $1
     AND c.turn < (SELECT MAX(x.turn) FROM agent_task_checkpoints x WHERE x.task_id = c.task_id)
-    AND c.task_id IN (SELECT task_id FROM agent_task_checkpoints GROUP BY task_id HAVING COUNT(*) > 1 LIMIT $2)`;
+    AND c.task_id IN (
+        SELECT t2.id FROM agent_tasks t2 JOIN agent_task_checkpoints c2 ON c2.task_id = t2.id
+         WHERE t2.status IN ('completed','failed','cancelled') AND COALESCE(t2.completed_at, t2.updated_at) < $1
+         GROUP BY t2.id HAVING COUNT(*) > 1
+         ORDER BY MIN(COALESCE(t2.completed_at, t2.updated_at)) LIMIT $2)`;
 
 /** dry-run 건수 — 실패하면 0(다른 항목을 막지 않는다). */
 async function countRows(pool: Pool, sql: string, params: unknown[], label: string): Promise<number> {
@@ -191,7 +199,7 @@ export async function sweepAgentTaskRetention(
     }
 
     if (dryRun) {
-        logger.info(`에이전트 작업 보존 정리(dry-run): 작업 ${result.tasks} / 감사 로그 ${result.auditLogs} / 캡처 ${result.screenshots} / 체크포인트 ${result.checkpoints} — 삭제하지 않음`);
+        logger.info(`에이전트 작업 보존 정리(dry-run): 작업 ${result.tasks} / 감사 로그 ${result.auditLogs} / 캡처 ${result.screenshots} / 체크포인트 ${result.checkpoints}(이번 배치 기준) — 삭제하지 않음`);
         return result;
     }
     if (result.tasks || result.auditLogs || result.screenshots || result.checkpoints) {
