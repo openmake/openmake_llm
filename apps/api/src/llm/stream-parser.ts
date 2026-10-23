@@ -50,6 +50,8 @@ type OpenAIChatChunk = {
                 index: number;
                 id?: string;
                 function?: { name?: string; arguments?: string };
+                /** Gemini 3 thought signature 등 불투명 값 — 그대로 보존(ToolCall.extra_content) */
+                extra_content?: Record<string, unknown>;
             }>;
         };
         finish_reason?: string | null;
@@ -68,6 +70,7 @@ type OpenAIChatResponse = {
             tool_calls?: Array<{
                 id: string;
                 function: { name: string; arguments: string };
+                extra_content?: Record<string, unknown>;
             }>;
         };
         finish_reason?: string | null;
@@ -115,7 +118,7 @@ export async function streamChat(
 
     let content = '';
     let thinking = '';
-    const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string }>();
+    const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string; extra?: Record<string, unknown> }>();
 
     // Artifact parser — callbacks 제공 시 token 스트림을 본문/artifact 채널로 분리.
     // parser.onContent → 기존 onToken 으로 위임 (UI 가 즉시 보는 일반 토큰)
@@ -243,6 +246,7 @@ export async function streamChat(
                 }
                 if (tc.function?.name && !buf.name) buf.name = tc.function.name;
                 if (tc.function?.arguments) buf.jsonBuffer += tc.function.arguments;
+                if (tc.extra_content && !buf.extra) buf.extra = tc.extra_content;
             }
         }
         if (choice?.finish_reason) finishReason = choice.finish_reason;
@@ -282,7 +286,8 @@ export async function streamChat(
         // 인자 JSON 절단/불량은 {} 로 강등 + 관측 로그 + 표식(argumentsInvalid) — tool-call-args.
         const { args, invalid } = parseToolCallArguments(buf.jsonBuffer, buf.name);
         // vLLM 발급 id 보존 — agent-loop 다음 턴에서 tool 메시지 tool_call_id 와 일치 필요.
-        toolCalls.push({ type: 'function', id: buf.id, ...(invalid && { argumentsInvalid: true }), function: { name: buf.name, arguments: args } });
+        // extra_content(Gemini 3 thought signature 등)는 다음 턴 재전송용으로 그대로 보존.
+        toolCalls.push({ type: 'function', id: buf.id, ...(invalid && { argumentsInvalid: true }), ...(buf.extra && { extra_content: buf.extra }), function: { name: buf.name, arguments: args } });
     }
 
     // 네이티브 tool_calls 가 하나도 없을 때만 텍스트 툴콜을 승격한다 — 정상 파싱된 호출과
@@ -407,7 +412,7 @@ export async function nonStreamChat(
         // 인자 JSON 불량 — {} 강등 + 관측 로그 + 표식 (스트리밍 경로와 동일 원칙)
         const { args, invalid } = parseToolCallArguments(tc.function.arguments, tc.function.name);
         // vLLM 발급 id 보존 — non-stream 응답에서도 동일 원칙.
-        return { type: 'function' as const, id: tc.id, ...(invalid && { argumentsInvalid: true as const }), function: { name: tc.function.name, arguments: args } };
+        return { type: 'function' as const, id: tc.id, ...(invalid && { argumentsInvalid: true as const }), ...(tc.extra_content && { extra_content: tc.extra_content }), function: { name: tc.function.name, arguments: args } };
     });
 
     // Defensive client-side reasoning-tag split (non-stream 동일 원칙):
