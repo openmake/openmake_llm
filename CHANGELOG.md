@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.113.0](https://github.com/openmake/openmake_llm/compare/v1.112.0...v1.113.0) (2026-10-23)
+
+
+### ✨ 기능
+
+* **auth:** account lockout after repeated failed logins, trusted proxies default to loopback (S7) ([fdac5db](https://github.com/openmake/openmake_llm/commit/fdac5db66a6c7962765dc0e409ec1336c46e8866))
+* **security:** W3 PR-E — secure-by-default in production (S2 MCP sandbox, S4 tool-result wrap, S6 egress proxy, S7 account lockout) ([d7f1a52](https://github.com/openmake/openmake_llm/commit/d7f1a52db675ce85f0556a57d32a0fdfa4ba5e2f))
+
+
+### 🐛 버그 수정
+
+* **auth:** restart failed-login count after a lockout expires, judge lock on the DB clock (S7) ([3f7d399](https://github.com/openmake/openmake_llm/commit/3f7d39923525a670b3dec0ebd138f27bf8b51d36))
+* **ci:** close real pg pools after each Jest file so merged-dev checks stop dying at teardown ([e461da9](https://github.com/openmake/openmake_llm/commit/e461da99d48e7da74135294352b6ada7d2712f1e))
+* **mcp:** carry sandbox_network when manually connecting a global server (S2) ([30a4613](https://github.com/openmake/openmake_llm/commit/30a461323786feab7406968a184ac1fbc16982df))
+
 ## [1.112.0](https://github.com/openmake/openmake_llm/compare/v1.111.0...v1.112.0) (2026-10-22)
 
 
