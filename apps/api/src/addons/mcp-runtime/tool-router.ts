@@ -54,6 +54,39 @@ function resultText(result: MCPToolResult): string {
 }
 
 /**
+ * 외부 호출 마감(#1472) — 상위 중단과 마감을 한 신호로 묶어 하위 호출에 넘긴다. 마감이 나면 타임아웃으로 끝내면서
+ * 하위 호출도 끊고(관찰자만 끝나고 부작용이 계속 도는 일이 없게), 성공·실패·중단 어느 경로든 타이머를 치운다.
+ * arm 은 마감 타이머를 건다 — 전역 경로는 단순 setTimeout, 사용자 풀은 입력 대기 중 재무장(inputAwareTimer).
+ */
+async function callWithDeadline<T>(
+    name: string,
+    outer: AbortSignal | undefined,
+    arm: (onTimeout: () => void) => { cancel(): void },
+    call: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+    const deadline = new AbortController();
+    const signal = outer ? AbortSignal.any([outer, deadline.signal]) : deadline.signal;
+    let timer: { cancel(): void } | undefined;
+    const expired = new Promise<never>((_, reject) => {
+        timer = arm(() => {
+            const err = new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`);
+            reject(err); // 먼저 — 하위 호출이 끊기며 내는 "aborted" 거부가 타임아웃 분류를 가리지 않게
+            deadline.abort(err);
+        });
+    });
+    try {
+        return await Promise.race([call(signal), expired]);
+    } finally {
+        timer?.cancel();
+    }
+}
+
+const plainTimer = (onTimeout: () => void): { cancel(): void } => {
+    const t = setTimeout(onTimeout, MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS);
+    return { cancel: () => clearTimeout(t) };
+};
+
+/**
  * 외부 도구 실행기 함수 타입
  *
  * ExternalMCPClient.callTool을 래핑한 함수입니다.
@@ -301,11 +334,9 @@ export class ToolRouter implements ExternalToolDispatch {
                 return entry && client ? { entry, client } : undefined;
             };
             // 서버가 사용자 입력을 기다리는 동안(elicitation, F13.10)은 마감을 다시 건다
-            const callTarget = (t: NonNullable<ReturnType<typeof findTarget>>) => Promise.race([
-                opts ? t.client.callTool(t.entry.originalToolName, args, opts) : t.client.callTool(t.entry.originalToolName, args),
-                new Promise<never>((_, reject) => inputAwareTimer(MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS, () => t.client.isAwaitingInput?.() ?? false,
-                    () => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)))),
-            ]);
+            const callTarget = (t: NonNullable<ReturnType<typeof findTarget>>) => callWithDeadline(name, opts?.signal,
+                (onTimeout) => inputAwareTimer(MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS, () => t.client.isAwaitingInput?.() ?? false, onTimeout),
+                (signal) => t.client.callTool(t.entry.originalToolName, args, { signal }));
             // 끊긴 사용자 서버 복구 — stdio 자식은 유휴 종료(open-design MCP 30분) 등으로 조용히 죽는다.
             // 끊긴 client 는 빼고, 풀에 없는데 전역 도구도 아니면 풀을 보장한 뒤 다시 찾는다(2026-09-15).
             let target = findTarget();
@@ -320,8 +351,8 @@ export class ToolRouter implements ExternalToolDispatch {
             if (target) {
                 try {
                     let result = await callTarget(target);
-                    // 종료 감지보다 호출이 먼저 닿은 경우 — 빼고 새로 띄워 1회만 재시도한다.
-                    if (result?.isError && isConnectionDeathError(resultText(result))) {
+                    // 종료 감지보다 호출이 먼저 닿은 경우 — 빼고 새로 띄워 1회만 재시도한다. 중단된 요청은 재시도하지 않는다.
+                    if (result?.isError && !opts?.signal?.aborted && isConnectionDeathError(resultText(result))) {
                         logger.warn(`사용자 MCP 연결 끊김 — 재기동 후 재시도: ${name}`);
                         await pool.remove(userId, target.entry.serverId);
                         await this.ensureUserPool(userId, 'tool-retry');
@@ -346,12 +377,7 @@ export class ToolRouter implements ExternalToolDispatch {
         }
 
         // 외부 도구 실행 (타임아웃 — 출력 크기 제한은 Base 디스패처가 적용)
-        return Promise.race([
-            opts ? executor(externalEntry.originalName, args, opts) : executor(externalEntry.originalName, args),
-            new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
-            )
-        ]);
+        return callWithDeadline(name, opts?.signal, plainTimer, (signal) => executor(externalEntry.originalName, args, { signal }));
     }
 
     /**
