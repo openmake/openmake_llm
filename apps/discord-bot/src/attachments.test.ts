@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import { prepareReply, type ResponseArtifact } from './attachments';
+import { config } from './config';
 
 function artifact(over: Partial<ResponseArtifact>): ResponseArtifact {
     return { id: 'a1', kind: 'markdown', title: '', language: null, version: 1, content: '# hi', ...over };
@@ -57,4 +58,16 @@ test('표 셀 안의 생성 이미지를 지운 뒤 변환하므로 빈 목록 �
     assert.ok(!/^-\s*$/m.test(r.content), r.content);
     assert.ok(r.content.includes('**사진**'));
     assert.ok(r.content.includes('⚠️ 이미지 첨부 실패/생략: `abc.png`'));
+});
+
+test('생성 산출물은 채팅과 같은 API 키로 내려받아 첨부한다 — 키가 없으면 /generated 가 401', async () => {
+    let auth: string | undefined;
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+        auth = (init?.headers as Record<string, string> | undefined)?.Authorization;
+        return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+    }) as typeof fetch;
+    const r = await prepareReply('완성 ![x](/generated/img-1.png) [🔊 음성](/generated/tts-1.mp3)');
+    assert.equal(auth, `Bearer ${config.apiKey}`);
+    assert.deepEqual(r.files.map((f) => f.name), ['img-1.png', 'tts-1.mp3']);
+    assert.ok(!r.content.includes('첨부 실패'), r.content);
 });
