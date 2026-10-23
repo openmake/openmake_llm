@@ -4,7 +4,7 @@
  */
 type ChatApprovalModule = typeof import('../chat-approval');
 
-const KEYS = ['NODE_ENV', 'CHAT_TOOL_APPROVAL_POLICY', 'CHAT_TOOL_APPROVAL_TIMEOUT_MS', 'CHAT_TOOL_APPROVAL_TAINT'] as const;
+const KEYS = ['NODE_ENV', 'CHAT_TOOL_APPROVAL_POLICY', 'CHAT_TOOL_APPROVAL_TIMEOUT_MS', 'CHAT_TOOL_APPROVAL_TAINT', 'CHAT_TOOL_APPROVAL_TAINT_EXEMPT'] as const;
 
 function loadWith(env: Partial<Record<(typeof KEYS)[number], string>>): ChatApprovalModule {
     for (const k of KEYS) {
@@ -56,6 +56,18 @@ describe('CHAT_TOOL_APPROVAL (W3 S3)', () => {
 
     it('오염 판정 — 명시 false 는 운영에서도 끈다', () => {
         expect(loadWith({ NODE_ENV: 'production', CHAT_TOOL_APPROVAL_TAINT: 'false' }).CHAT_TOOL_APPROVAL.TAINT_ENABLED).toBe(false);
+    });
+
+    it('taint 예외 — 기본은 읽기성 조회 도구, 임의 URL·경로를 받는 도구는 없다', () => {
+        const set = loadWith({ NODE_ENV: 'production' }).CHAT_TOOL_APPROVAL.TAINT_EXEMPT_TOOLS;
+        expect([...set].sort()).toEqual(['agent_task_get', 'agent_task_list', 'fact_check', 'load_skill', 'web_search']);
+        for (const t of ['extract_webpage', 'web_scrape', 'vision_ocr', 'analyze_image', 'mcp_call']) expect(set.has(t)).toBe(false);
+    });
+
+    it('taint 예외 — env 를 설정하면 기본을 대체한다(공백 정리, 빈 값 = 예외 없음)', () => {
+        const set = loadWith({ NODE_ENV: 'production', CHAT_TOOL_APPROVAL_TAINT_EXEMPT: ' fact_check , load_skill,' }).CHAT_TOOL_APPROVAL.TAINT_EXEMPT_TOOLS;
+        expect([...set].sort()).toEqual(['fact_check', 'load_skill']);
+        expect(loadWith({ NODE_ENV: 'production', CHAT_TOOL_APPROVAL_TAINT_EXEMPT: '' }).CHAT_TOOL_APPROVAL.TAINT_EXEMPT_TOOLS.size).toBe(0);
     });
 
     it('parseApprovalPolicy — all|high-risk|none 만 받는다', () => {

@@ -75,6 +75,11 @@ interface ToolBatchState {
     tainted: boolean;
     /** 승인 대기로 흐른 시간 누적(ms, W3 S3) — 사람이 결정하는 시간이라 도구 루프 wall-clock 예산·도구 시간(toolMs)에서 뺀다. */
     approvalWaitMs: number;
+    /**
+     * 승인 요청이 무응답(timeout)으로 끝났는가(W3 S3) — 켜지면 같은 요청의 다음 승인 대상 호출은 기다리지 않고 시간 초과 문구로 거절한다
+     * (사용자가 자리를 비웠다 — 턴마다 TIMEOUT_MS 씩 쌓이지 않게). 도구 목록은 줄이지 않는다.
+     */
+    approvalUnanswered: boolean;
 }
 
 /** 빈 배치 상태 — 요청 1건마다 새로 만든다. */
@@ -89,6 +94,7 @@ export function createToolBatchState(): ToolBatchState {
         toolSources: [],
         tainted: false,
         approvalWaitMs: 0,
+        approvalUnanswered: false,
     };
 }
 
@@ -129,6 +135,10 @@ async function gateChatToolCall(p: {
         const r = rejectWithoutApprovalChannel({ chatId, userId, toolName: tc.name, args });
         return getChatApprovalDeniedResult(tc.name, r.reason, p.langCode);
     }
+    if (p.state.approvalUnanswered) {
+        logger.info(`[chat:${chatId}] 앞선 승인이 무응답으로 끝나 대기 없이 거절: ${tc.name}`);
+        return getChatApprovalDeniedResult(tc.name, 'timeout', p.langCode);
+    }
     const shown: { approvalId?: string } = {};
     const r = await requestChatApproval({
         chatId,
@@ -146,6 +156,7 @@ async function gateChatToolCall(p: {
         },
     });
     p.state.approvalWaitMs += r.waitedMs;
+    if (r.reason === 'timeout') p.state.approvalUnanswered = true;
     const approvalId = shown.approvalId;
     if (approvalId) {
         notifySafely('결정', () => deps.chatApprovalDecidedCallback?.({ approvalId, decision: r.decision, ...(r.reason ? { reason: r.reason } : {}) }));
@@ -185,7 +196,8 @@ export async function runToolCallBatch(params: {
     const hasChannel = hasChatApprovalChannel({
         hasPendingCallback: !!deps.chatApprovalPendingCallback, userId, role: userCtx.role, approvalCards: req.approvalCards,
     });
-    const taintedContext = () => CHAT_TOOL_APPROVAL.TAINT_ENABLED && state.tainted;
+    // 오염 문맥 — 읽기성 조회 예외(TAINT_EXEMPT_TOOLS)는 taint 로 묻지 않는다(자기 등급이 승인 대상이면 그대로 묻는다).
+    const taintedFor = (name: string) => CHAT_TOOL_APPROVAL.TAINT_ENABLED && state.tainted && !CHAT_TOOL_APPROVAL.TAINT_EXEMPT_TOOLS.has(name);
     // 서브에이전트는 승인 게이트를 건너뛰므로(skipApprovalGate) 승인이 필요한 도구는 주지 않는다 — 부모가 승인 뒤 직접 부른다.
     const subagentTools = policy === 'none' ? tools : stripApprovalGatedTools(tools, policy);
 
@@ -193,7 +205,7 @@ export async function runToolCallBatch(params: {
     // 순차 루프가 원래 호출 순서대로 배치한다. 승인이 필요한 호출은 선실행하지 않는다(루프에서 묻는다).
     const parallelReadOnlyResults = await prefetchReadOnlyCalls(
         toolCalls,
-        (tc) => policy === 'none' || !requiresApproval(policy, tc.name, tc.args as Record<string, unknown>, { taintedContext: taintedContext() }),
+        (tc) => policy === 'none' || !requiresApproval(policy, tc.name, tc.args as Record<string, unknown>, { taintedContext: taintedFor(tc.name) }),
         (tc) => executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>, state.toolSources),
         { path: 'chat', ...(req.abortSignal ? { signal: req.abortSignal } : {}) },
     );
@@ -201,7 +213,7 @@ export async function runToolCallBatch(params: {
         let toolResult: string;
         // 선실행된 호출은 이미 실행됐다(배치 시작 시점의 문맥에서 승인 불요로 판정) — 다시 묻지 않는다.
         const denied = policy === 'none' || parallelReadOnlyResults.has(tc.id) ? null : await gateChatToolCall({
-            deps, req, tc, policy, taintedContext: taintedContext(), hasChannel, userId,
+            deps, req, tc, policy, taintedContext: taintedFor(tc.name), hasChannel, userId,
             langCode: ctx.resolvedLanguage || req.userLanguagePreference, state,
         });
         if (denied !== null) {
