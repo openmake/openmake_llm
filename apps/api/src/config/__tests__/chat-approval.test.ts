@@ -51,6 +51,7 @@ describe('CHAT_TOOL_APPROVAL (W3 S3)', () => {
         expect(loadWith({ NODE_ENV: 'test' }).CHAT_TOOL_APPROVAL.TIMEOUT_MS).toBe(120_000);
         expect(loadWith({ NODE_ENV: 'test', CHAT_TOOL_APPROVAL_TIMEOUT_MS: 'x' }).CHAT_TOOL_APPROVAL.TIMEOUT_MS).toBe(120_000);
         expect(loadWith({ NODE_ENV: 'test', CHAT_TOOL_APPROVAL_TIMEOUT_MS: '5000' }).CHAT_TOOL_APPROVAL.TIMEOUT_MS).toBe(5000);
+        expect(loadWith({ NODE_ENV: 'test', CHAT_TOOL_APPROVAL_TIMEOUT_MS: '-5' }).CHAT_TOOL_APPROVAL.TIMEOUT_MS).toBe(120_000);
     });
 
     it('오염 판정 — 명시 false 는 운영에서도 끈다', () => {

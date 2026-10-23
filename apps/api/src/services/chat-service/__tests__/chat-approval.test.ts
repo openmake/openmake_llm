@@ -91,6 +91,16 @@ describe('getChatApprovalDeniedResult', () => {
         expect(getChatApprovalDeniedResult('bash', undefined)).toBe(user);
     });
 
+    it('중단(abort)은 거절이 아니라 중단 문구, 사람이 답하지 않은 경우(parked·unattended)는 시간 초과 문구', () => {
+        const abort = getChatApprovalDeniedResult('bash', 'abort');
+        expect(abort).toContain('bash');
+        expect(abort).toContain('중단');
+        expect(abort).not.toBe(getChatApprovalDeniedResult('bash', 'user'));
+        expect(getChatApprovalDeniedResult('bash', 'abort', 'en')).toContain('stopped');
+        expect(getChatApprovalDeniedResult('bash', 'parked')).toBe(getChatApprovalDeniedResult('bash', 'timeout'));
+        expect(getChatApprovalDeniedResult('bash', 'unattended')).toBe(getChatApprovalDeniedResult('bash', 'timeout'));
+    });
+
     it('한국어 외 언어는 영어 문구', () => {
         expect(getChatApprovalDeniedResult('bash', 'timeout', 'en')).not.toBe(getChatApprovalDeniedResult('bash', 'timeout', 'ko'));
         expect(getChatApprovalDeniedResult('bash', 'timeout', 'ja')).toBe(getChatApprovalDeniedResult('bash', 'timeout', 'en'));

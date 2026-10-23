@@ -51,6 +51,9 @@ describe('requiresApproval — 오염 문맥(taintedContext, W3 S3)', () => {
     it('high-risk + 오염 문맥 → 읽기 등급 도구는 묻지 않는다', () => {
         expect(requiresApproval('high-risk', 'file_ops', { op: 'read', path: 'a.txt' }, { taintedContext: true })).toBe(false);
     });
+    it('high-risk + 오염 문맥 → 제어 등급 도구(ask_human)는 묻지 않는다', () => {
+        expect(requiresApproval('high-risk', 'ask_human', { question: 'q' }, { taintedContext: true })).toBe(false);
+    });
     it('정책 none + 오염 문맥 → 묻지 않는다(바닥은 종전 규칙)', () => {
         expect(requiresApproval('none', 'str_replace_editor', { command: 'create', path: 'a.txt' }, { taintedContext: true })).toBe(false);
         expect(requiresApproval('none', 'notion::create_page', {}, { taintedContext: true })).toBe(true);
