@@ -47,7 +47,7 @@ import { MigrationRunner } from '../../../data/migrations/runner';
 import { AgentTaskLeaseRepository } from '../../../data/repositories/agent-task-lease-repository';
 import { AgentTaskRepository } from '../../../data/repositories/agent-task-repository';
 import { continueAsNewSegment } from '../continuation';
-import { sweepExpiredTaskLeases } from '../boot-recovery';
+import { recoverInterruptedAgentTasks, sweepExpiredTaskLeases } from '../boot-recovery';
 import { leaseOwner } from '../task-lease';
 import type { AgentTask } from '../../../data/models/unified-database.types';
 import type { ChatMessage } from '../../../llm/types';
@@ -119,7 +119,7 @@ describeOrSkip('이어가기 원자성·복구 (실제 Postgres, #1473)', () => 
     });
 
     beforeEach(() => {
-        Object.assign(limits, originalLimits, { LEASE_ENABLED: true, LEASE_MS: 60_000, RECOVERY_MAX_ATTEMPTS: 0 });
+        Object.assign(limits, originalLimits, { LEASE_ENABLED: true, LEASE_MS: 60_000, RECOVERY_MAX_ATTEMPTS: 0, BOOT_RECOVERY_ENABLED: true });
         dispatchMock.mockReset().mockResolvedValue('started');
         executeMock.mockClear();
         currentPool = real;
@@ -354,6 +354,87 @@ describeOrSkip('이어가기 원자성·복구 (실제 Postgres, #1473)', () => 
             for (const id of Object.values(ids)) expect(expired.some((t) => t.id === id)).toBe(false);
             await sweepExpiredTaskLeases();
             for (const id of Object.values(ids)) expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === id)).toHaveLength(0);
+        });
+    });
+    describe('실제 부팅 흐름 — 소유권 없는 pending 후속(#1473 리뷰 보정)', () => {
+        /** 프로세스 재시작 — 새 프로세스는 방금 떴다(uptime 이 짧다). DB 행은 건드리지 않는다(수동 aging 없음). */
+        const restart = async (): Promise<jest.SpyInstance> => {
+            currentPool = real;
+            dispatchMock.mockReset().mockResolvedValue('started');
+            await new Promise((r) => setTimeout(r, 80));
+            const startedAt = Date.now() - 20; // 새 프로세스는 20ms 전에 떴다 — 가동 시간은 그 뒤로 흐른다
+            return jest.spyOn(process, 'uptime').mockImplementation(() => (Date.now() - startedAt) / 1000);
+        };
+        afterEach(() => jest.restoreAllMocks());
+
+        it('lease OFF: 커밋 뒤 디스패치 전 크래시 → 재시작 부팅 복구가 후속을 정확히 한 번 디스패치하고, 부모 재실행은 그 후속을 따라 마무리한다', async () => {
+            limits.LEASE_ENABLED = false;
+            const { parent } = await seedParent();
+            const crashing = new CrashingPool(real, admin);
+            currentPool = crashing.asPool();
+            dispatchMock.mockImplementationOnce(async () => { crashing.crash(); throw new Error('process crashed'); });
+            await continueAsNewSegment(input(parent));
+            const s = (await assertParentLinkComplete(parent.id, { leased: false }))!;
+            expect(s).not.toBeNull();
+
+            await restart();
+            const fresh = await row(parent.id) as AgentTask;
+            // 부팅 복구와 부팅이 되살린 부모의 이어가기 재진입(한 번)이 동시에 돈다
+            const [, parentAgain] = await Promise.all([recoverInterruptedAgentTasks(), continueAsNewSegment(input(fresh))]);
+            expect(parentAgain).toEqual({ successorId: s.id });
+            const mine = dispatchMock.mock.calls.filter((c) => c[0].taskId === s.id);
+            expect(mine).toHaveLength(1);
+            await mine[0][0].run();
+            const exec = executeMock.mock.calls.find((c) => c[0].taskId === s.id)![0];
+            expect(exec.resume.conversation).toHaveLength(3);
+            expect(exec).toMatchObject({ approvalPolicy: 'none', thinkingLevel: 'high' });
+            expect((await row(s.id)).lease_until).toBeNull();
+            // 같은 프로세스의 다음 복구는 다시 디스패치하지 않는다
+            await recoverInterruptedAgentTasks();
+            expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === s.id)).toHaveLength(1);
+        });
+
+        async function legacyPending(over: { status?: string } = {}): Promise<{ parent: AgentTask; sid: string }> {
+            const { parent, userId } = await seedParent();
+            const sid = randomUUID();
+            await admin.query(
+                `INSERT INTO agent_tasks (id, user_id, goal, status, max_turns, chain_root_task_id, continued_from_task_id, checkpoint, approval_policy, thinking_level, updated_at)
+                 VALUES ($1, $2, '목표', $3, 32, $4, $4, $5, 'none', 'high', NOW() - interval '1 hour')`,
+                [sid, userId, over.status ?? 'pending', parent.id, JSON.stringify({ conversation: conv(), completedTurn: -1 })]);
+            await admin.query('UPDATE agent_tasks SET continued_by_task_id = $2 WHERE id = $1', [parent.id, sid]);
+            return { parent: await row(parent.id) as AgentTask, sid };
+        }
+
+        it('lease OFF: R3 가 claim 한 뒤 디스패치 전에 죽어도 재시작 부팅 복구가 한 번 디스패치한다(소유권 표식 없음)', async () => {
+            limits.LEASE_ENABLED = false;
+            const { parent, sid } = await legacyPending();
+            const crashing = new CrashingPool(real, admin);
+            currentPool = crashing.asPool();
+            dispatchMock.mockImplementationOnce(async () => { crashing.crash(); throw new Error('process crashed'); });
+            await continueAsNewSegment(input(parent)); // R3 claim(updated_at 갱신) → 디스패치 중 크래시
+            await restart();
+            await Promise.all([recoverInterruptedAgentTasks(), recoverInterruptedAgentTasks()]);
+            expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === sid)).toHaveLength(1);
+            expect((await row(sid)).lease_until).toBeNull();
+        });
+
+        it('lease ON: 레거시 NULL-lease pending 후속은 부팅 복구가 소유권을 쓰며 한 번만 디스패치한다', async () => {
+            const { sid } = await legacyPending();
+            await restart();
+            await Promise.all([recoverInterruptedAgentTasks(), recoverInterruptedAgentTasks()]);
+            expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === sid)).toHaveLength(1);
+            expect((await row(sid)).lease_owner).toBe(leaseOwner());
+        });
+
+        it('이 프로세스가 시작한 뒤 만든 후속·종료된 후속은 부팅 복구가 건드리지 않는다', async () => {
+            limits.LEASE_ENABLED = false;
+            const { sid: terminal } = await legacyPending({ status: 'completed' });
+            const { parent } = await seedParent();
+            await continueAsNewSegment(input(parent)); // 이 프로세스가 만들고 디스패치한 후속
+            const own = (await row(parent.id)).continued_by_task_id as string;
+            dispatchMock.mockClear();
+            await recoverInterruptedAgentTasks();
+            expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === own || c[0].taskId === terminal)).toHaveLength(0);
         });
     });
 });

@@ -67,7 +67,22 @@ export class AgentTaskLeaseRepository extends BaseRepository {
     }
 
     /**
-     * 소유권 없는 pending 후속의 재디스패치 claim(#1473, R3) — 소유권을 잡은 적 없고(lease_until NULL) 마지막 갱신이 staleMs 보다
+     * 소유권 없는 pending 이어가기 후속(#1473) — 체크포인트 시드가 있고 마지막 갱신이 staleMs 보다 오래된 것. 부팅 복구가
+     * "이 프로세스가 뜨기 전에" 커밋된 채 디스패치되지 못한 후속을 찾는 데 쓴다(staleMs = 프로세스 가동 시간). 종료·실행 중·주차·
+     * 소유권 있는 행은 대상이 아니다 — 소유권 있는 것은 R2 가 맡는다.
+     */
+    async listUnleasedPendingSuccessors(staleMs: number, limit = 50): Promise<AgentTask[]> {
+        const r = await this.query<AgentTask>(
+            `SELECT * FROM agent_tasks
+             WHERE status = 'pending' AND lease_until IS NULL AND continued_from_task_id IS NOT NULL AND checkpoint IS NOT NULL
+               AND updated_at < NOW() - make_interval(secs => $1)
+             ORDER BY updated_at ASC LIMIT $2`,
+            [staleMs / 1000, limit]);
+        return r.rows;
+    }
+
+    /**
+     * 소유권 없는 pending 후속의 재디스패치 claim(#1473, R3·부팅 복구) — 소유권을 잡은 적 없고(lease_until NULL) 마지막 갱신이 staleMs 보다
      * 오래된 행만, 여러 복구자 중 한 곳만 잡는다. lease 를 주면 같은 문장에서 소유권을 쓴다(실행이 같은 owner 로 이어 잡는다).
      * 없으면(소유권 꺼짐) updated_at 만 갱신한다 — 다른 복구자는 "방금 갱신(디스패치 중)" 으로 보고, 꺼진 R2 만 기다리는 소유권
      * 표식은 남기지 않는다. 소유권이 있는 행(살아 있든 지났든)은 대상이 아니다 — 지난 것은 takeOverExpiredLease(R2)가 맡는다.

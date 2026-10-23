@@ -33,6 +33,7 @@ import { isAgentTaskShutdown } from './shutdown-drain';
 import { markLoopRun } from './background-liveness';
 import { sendAgentTaskAlert, ALERT_TEXT } from '../../monitoring/agent-task-alerts';
 import type { AgentTask } from '../../data/models/unified-database.types';
+import { redispatchUnleasedSuccessor } from './continuation';
 
 const logger = createLogger('AgentTaskBootRecovery');
 
@@ -179,11 +180,11 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
         logger.warn(`[BootRecovery] 중단 task 조회 실패 — 건너뜀: ${e instanceof Error ? e.message : e}`);
         return { resumed: 0, failed: 0 };
     }
-    if (interrupted.length === 0) return { resumed: 0, failed: 0 };
+    let resumed = await recoverUnleasedSuccessors(db);
+    let failed = 0;
+    if (interrupted.length === 0) return { resumed, failed };
     logger.info(`[BootRecovery] 중단된 task ${interrupted.length}건 발견 — 복구 시작`);
 
-    let resumed = 0;
-    let failed = 0;
     for (const task of interrupted) {
         try {
             const outcome = await recoverTask(task, db, taskRepo, lease);
@@ -195,6 +196,37 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
     }
     logger.info(`[BootRecovery] 복구 완료 — 재개 ${resumed}건, 실패정리 ${failed}건`);
     return { resumed, failed };
+}
+
+/**
+ * 디스패치되지 못한 소유권 없는 이어가기 후속(#1473) — 이어가기가 후속을 커밋한 뒤(또는 R3 가 claim 한 뒤) 디스패치 전에 이전 프로세스가
+ * 죽은 것. 소유권이 꺼져 있으면 R2 가 없고, 부팅이 되살린 부모의 R3 는 갓 갱신된 후속을 "디스패치 중" 으로 보고 마무리하므로 여기서
+ * 회수한다. 이 프로세스가 뜨기 전에 마지막으로 갱신된 행만 본다(가동 시간 기준 — 이 프로세스가 만든 후속은 스스로 디스패치한다).
+ * R3 와 같은 원자 claim 이라 한 곳만 디스패치한다. 실패는 건너뛴다(부팅을 막지 않는다).
+ */
+async function recoverUnleasedSuccessors(db: ReturnType<typeof getUnifiedDatabase>): Promise<number> {
+    const startedMsAgo = Math.floor(process.uptime() * 1000);
+    let rows: AgentTask[];
+    try {
+        rows = await new AgentTaskLeaseRepository(getPool()).listUnleasedPendingSuccessors(startedMsAgo);
+    } catch (e) {
+        logger.warn(`[BootRecovery] 소유권 없는 후속 조회 실패 — 건너뜀: ${e instanceof Error ? e.message : e}`);
+        return 0;
+    }
+    let resumed = 0;
+    for (const task of rows) {
+        const seeded = (task.checkpoint as { conversation?: unknown } | null | undefined)?.conversation;
+        if (!Array.isArray(seeded) || getAgentTaskQueue().has(task.id)) continue;
+        try {
+            if (await redispatchUnleasedSuccessor(task, seeded as ChatMessage[], await resolveUserRole(db, task.user_id), startedMsAgo)) {
+                resumed++;
+                logger.info(`[BootRecovery] 디스패치되지 못한 이어가기 후속 재디스패치: ${task.id}`);
+            }
+        } catch (e) {
+            logger.warn(`[BootRecovery] 이어가기 후속 재디스패치 실패(건너뜀): ${task.id} — ${e instanceof Error ? e.message : e}`);
+        }
+    }
+    return resumed;
 }
 
 /**
