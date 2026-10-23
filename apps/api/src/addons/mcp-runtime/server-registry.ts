@@ -28,6 +28,7 @@ import type { MCPServerRow, McpServerRowSource } from './data/mcp-server-reposit
 import { decryptToken } from '../../utils/token-crypto';
 import { MCP_GLOBAL_RECONNECT } from '../../config/timeouts';
 import { createLogger } from '../../utils/logger';
+import { assertNoControlEnv } from './data/mcp-catalog-input';
 
 const logger = createLogger('MCPRegistry');
 
@@ -168,6 +169,8 @@ export class MCPServerRegistry {
      * @returns 서버 연결 상태
      */
     async registerServer(config: MCPServerConfig, db: McpServerRowSource): Promise<MCPConnectionStatus> {
+        // 제어 env 는 저장 전에 거부한다(spawn 의 strip 은 과거 행 방어선) — McpCatalogInputError → 라우트 400
+        assertNoControlEnv(config.env);
         // DB에 저장
         await db.createMcpServer({
             id: config.id,

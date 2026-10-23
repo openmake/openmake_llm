@@ -37,6 +37,7 @@ import { createLogger } from '../../../utils/logger';
 import { requireAuth } from '../../../auth';
 import { isAdminRole } from '../../../data/user-manager';
 import { auditMcpServerCreated, auditMcpIngestDenied } from './mcp-server-audit';
+import { assertNoControlEnv, McpCatalogInputError } from '../data/mcp-catalog-input';
 
 const logger = createLogger('McpServerIngestRoutes');
 
@@ -215,6 +216,12 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
 
             const requiredEnv = ((draft.manifest_meta as { requiredEnv?: string[] } | null)?.requiredEnv) || [];
             const mergedEnv: Record<string, string> = { ...(draft.env || {}), ...(parsed.data.envOverrides || {}) };
+            // 저장될 env 의 제어 키(NODE_OPTIONS·GIT_DIR 등)는 활성화 전에 거부 — 키 이름만 돌려준다(값 미노출)
+            try { assertNoControlEnv(mergedEnv); } catch (e) {
+                if (!(e instanceof McpCatalogInputError)) throw e;
+                res.status(400).json({ success: false, error: 'INVALID_ENV_KEYS', message: e.message });
+                return;
+            }
             const missing = requiredEnv.filter(k => isPlaceholder(mergedEnv[k]));
             if (missing.length > 0) {
                 res.status(422).json({
