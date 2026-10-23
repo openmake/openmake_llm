@@ -124,7 +124,7 @@ function benchClient(baseUrl: string): LLMClient {
 }
 
 /** 가짜 도구 런타임 — bench_lookup 하나만 알고 고정 길이 텍스트를 돌려준다. */
-const benchRuntime: ToolRuntime = {
+export const benchRuntime: ToolRuntime = {
     async listLLMTools() { return []; },
     async executeTool() { return { content: [{ type: 'text', text: 't'.repeat(TOOL_CHARS) }] }; },
     async listTools() { return []; },
@@ -138,6 +138,7 @@ const benchRuntime: ToolRuntime = {
     async onChatStart() { /* no-op */ },
     async onChatEnd() { /* no-op */ },
     async ensureUserToolsForTask() { /* no-op */ },
+    async releaseUserToolsForTask() { /* no-op */ },
     async onServerReady() { /* no-op */ },
     async shutdown() { /* no-op */ },
 };
@@ -232,7 +233,9 @@ async function main(): Promise<void> {
     console.log(`\n결과 → ${path.relative(process.cwd(), out)}`);
 }
 
-main().then(() => process.exit(0)).catch((e) => {
-    console.error('[fanout-resource-bench] 실패:', e);
-    process.exit(1);
-});
+if (require.main === module) {
+    main().then(() => process.exit(0)).catch((e) => {
+        console.error('[fanout-resource-bench] 실패:', e);
+        process.exit(1);
+    });
+}
