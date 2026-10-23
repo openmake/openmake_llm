@@ -83,8 +83,14 @@ export async function startMcpLifecycleSupervisor(): Promise<void> {
         // 기동을 막지 않도록 await 하지 않는다(자식 프로세스 spawn 이 수 초 걸린다).
         void supervisor.restoreOnBoot();
         if (USER_POOL_IDLE_TTL_MS > 0) {
+            // 한 회차가 주기보다 길면(도커 정지 등) 다음 회차가 같은 사용자를 다시 고르지 않게 겹침을 막는다
+            let sweeping = false;
             idleSweepTimer = setInterval(() => {
-                supervisor.sweepIdleUsers().catch(e => logger.warn(`사용자 MCP 풀 유휴 회수 실패: ${e}`));
+                if (sweeping) return;
+                sweeping = true;
+                supervisor.sweepIdleUsers()
+                    .catch(e => logger.warn(`사용자 MCP 풀 유휴 회수 실패: ${e}`))
+                    .finally(() => { sweeping = false; });
             }, USER_POOL_IDLE_SWEEP_MS);
             idleSweepTimer.unref();
         }
