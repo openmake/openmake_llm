@@ -146,21 +146,31 @@ async function followExistingSuccessor(taskId: string, p: Pick<ContinueInput, 'u
     const seeded = (existing.checkpoint as { conversation?: unknown } | null | undefined)?.conversation;
     if (!Array.isArray(seeded)) return { skipped: `이미 다른 실행이 이어갔습니다 (후속 ${existing.id} 체크포인트 없음)` };
     try {
-        const lease = AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined;
-        if (!(await new AgentTaskLeaseRepository(getPool()).claimUnleasedPendingForRedispatch(existing.id, AGENT_TASK_LIMITS.LEASE_MS, lease))) {
+        if (!(await redispatchUnleasedSuccessor(existing, seeded as ChatMessage[], p.userRole, AGENT_TASK_LIMITS.LEASE_MS))) {
             logger.info(`[Continuation] 선점 실패 — 다른 복구자가 후속 재디스패치를 잡았다: ${taskId} → ${existing.id}`);
             return { successorId: existing.id };
         }
-        await dispatchSuccessor({
-            successor: existing, seeded: seeded as ChatMessage[], userRole: p.userRole,
-            approvalPolicy: (existing.approval_policy ?? undefined) as AgentTaskRunInput['approvalPolicy'],
-            thinkingLevel: (existing.thinking_level ?? undefined) as AgentTaskThinkingLevel | undefined,
-        });
     } catch (e) {
         return { skipped: `후속 재디스패치 실패: ${errMsg(e)}` };
     }
     logger.warn(`[Continuation] 디스패치되지 못한 후속을 다시 디스패치: ${taskId} → ${existing.id}`);
     return { successorId: existing.id };
+}
+
+/**
+ * 소유권 없는 pending 후속의 재디스패치(#1473) — 원자 claim(마지막 갱신이 staleMs 보다 오래됐을 때만)을 잡은 한 곳만 디스패치한다.
+ * 부모 재실행(R3, staleMs = LEASE_MS)과 부팅 복구(staleMs = 프로세스 가동 시간)가 같이 쓴다. 소유권이 켜져 있으면 claim 이
+ * 기존 owner·TTL 을 쓰고, 꺼져 있으면 updated_at 만 갱신한다(소유권 표식 없음). false 면 다른 곳이 잡았다.
+ */
+export async function redispatchUnleasedSuccessor(successor: AgentTask, seeded: ChatMessage[], userRole: AgentTaskUserRole, staleMs: number): Promise<boolean> {
+    const lease = AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined;
+    if (!(await new AgentTaskLeaseRepository(getPool()).claimUnleasedPendingForRedispatch(successor.id, staleMs, lease))) return false;
+    await dispatchSuccessor({
+        successor, seeded, userRole,
+        approvalPolicy: (successor.approval_policy ?? undefined) as AgentTaskRunInput['approvalPolicy'],
+        thinkingLevel: (successor.thinking_level ?? undefined) as AgentTaskThinkingLevel | undefined,
+    });
+    return true;
 }
 
 /** 후속 디스패치 — resume 은 체크포인트에 쓴 것과 같은 seeded 배열을 쓴다(DB 를 다시 읽지 않는다). */
