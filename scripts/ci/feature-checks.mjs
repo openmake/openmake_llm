@@ -11,7 +11,8 @@ import { selectE2E } from './feature-checks-e2e.mjs';
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const manifest = JSON.parse(readFileSync(new URL('./feature-checks.manifest.json', import.meta.url)));
 // Jest bootstrap files are imported by no test, yet every apps/api suite runs through them: a change selects every suite.
-const JEST_BOOTSTRAP = ['apps/api/jest.config.js', 'apps/api/jest.setup.ts', 'apps/api/jest.setup-after-env.ts'];
+// The dependency extractor decides which tests are "related" at all, so it is bootstrap too.
+const JEST_BOOTSTRAP = ['apps/api/jest.config.js', 'apps/api/jest.setup.ts', 'apps/api/jest.setup-after-env.ts', 'apps/api/jest.dependency-extractor.mjs'];
 export function selectFeatures(files) {
   const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, discordBot: false, hostSetup: false, e2e: selectE2E(files) };
   for (const file of files) {
@@ -39,14 +40,16 @@ export function requireRelated(source, tests) {
   if (tests.some(path => !path.includes('/apps/api/src/') || !/\.(test|spec)\.ts$/.test(path))) throw new Error('Unexpected Jest test selection');
   return tests;
 }
-// Jest's dependency graph ignores `import type`/`export type`, so a module of only types can be "related" to no test.
-// It has no runtime to test (tsc/build checks it): a TS source whose CommonJS emit is only the module preamble.
-// Only an empty related list is excused this way; related tests that Jest does find are still selected and must run.
-// Declaration files have no emit by definition; a source with syntax errors is never excused (its emit proves nothing).
+// apps/api/jest.dependency-extractor.mjs counts `import type`/`export type … from` as edges, so a changed type module
+// selects the tests of the code using it. Last resort only: a type-only source (CommonJS emit is just the preamble)
+// that still has no related test is excused when nothing imports it, or when it is a declaration file (ambient
+// declarations apply without import edges). A type module whose importers reach no test still fails.
+// A source with syntax errors is never excused (its emit proves nothing).
+const DECLARATION_RE = /\.d\.[cm]?ts$/;
 const COMMONJS_PREAMBLE = new Set(['"use strict";', 'Object.defineProperty(exports, "__esModule", { value: true });']);
 export function isTypeOnlySource(file, text) {
   if (!/\.[cm]?tsx?$/.test(file)) return false;
-  if (/\.d\.[cm]?ts$/.test(file)) return true;
+  if (DECLARATION_RE.test(file)) return true;
   const ts = createRequire(import.meta.url)('typescript');
   const { outputText, diagnostics } = ts.transpileModule(text, { fileName: file, reportDiagnostics: true, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, removeComments: true } });
   if (diagnostics?.length) return false;
@@ -87,6 +90,8 @@ export function hostSetupTests(root = repoRoot) {
 export function selectRelatedTests(files, options = {}) {
   const root = options.cwd || repoRoot;
   const listRelated = options.listRelated || (file => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout));
+  // Every module (not only tests) that reaches the file through the same graph — its transitive importers.
+  const listImporters = options.listImporters || (file => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand', '--testMatch', '<rootDir>/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout).filter(path => path !== resolve(root, file)));
   const listAll = options.listAll || (() => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--listTests', '--json', '--runInBand'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout));
   const selection = selectFeatures(files);
   const tests = new Set();
@@ -98,8 +103,11 @@ export function selectRelatedTests(files, options = {}) {
     if (!existsSync(resolve(root, file))) throw new Error(`Deleted source requires explicit regression mapping: ${file}`);
     const listed = JEST_BOOTSTRAP.includes(file) ? listAll() : listRelated(file);
     if (!listed.length && file.startsWith('apps/api/src/') && isTypeOnlySource(file, readFileSync(resolve(root, file), 'utf8'))) {
+      const declaration = DECLARATION_RE.test(file);
+      const importers = declaration ? [] : listImporters(file);
+      if (importers.length) throw new Error(`No related Jest tests for ${file}; its importers reach no test (${importers.map(path => relative(root, path)).join(', ')}) — add coverage or a fixed mapping`);
       typeOnly.push(file);
-      log(`Type-only source (no runtime emit), related Jest tests not required: ${file}`);
+      log(`Type-only ${declaration ? 'declaration file' : 'source with no importers'}, related Jest tests not required: ${file}`);
       continue;
     }
     const paths = requireRelated(file, listed);

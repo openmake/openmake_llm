@@ -48,6 +48,8 @@ module.exports = {
         '^turndown$': '<rootDir>/__mocks__/empty.js',
         '^turndown-plugin-gfm$': '<rootDir>/__mocks__/empty.js'
     },
+    // `import type`/`export type … from` 도 의존성으로 센다 — 타입 모듈이 바뀌면 그 타입을 쓰는 코드의 테스트가 골라진다
+    dependencyExtractor: '<rootDir>/jest.dependency-extractor.mjs',
     setupFiles: ['<rootDir>/jest.setup.ts'],
     setupFilesAfterEnv: ['<rootDir>/jest.setup-after-env.ts'],
     testTimeout: 10000,
