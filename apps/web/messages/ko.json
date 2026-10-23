@@ -2564,7 +2564,8 @@
     "reject": "거절",
     "expiresIn": "{seconds}초 뒤 자동 거절",
     "denied": "응답 시간이 지나 거절되었습니다",
-    "waiting": "답변이 이 도구 실행의 승인을 기다리고 있습니다"
+    "waiting": "답변이 이 도구 실행의 승인을 기다리고 있습니다",
+    "rejectReasonPlaceholder": "거절 사유(선택) — 적으면 모델에 전달됩니다"
   },
   "marketplacePublish": {
     "title": "마켓플레이스에 게시",

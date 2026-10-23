@@ -731,7 +731,7 @@ export function useChatSocket() {
       appendMessage({ role: "user", content: displayContent, images, ...(hasFiles ? { hasAttachments: true } : {}) });
       setActiveAgent(null); // 새 질문 — 이전 에이전트/스킬 표시 초기화
       setActiveSkills([]);
-      useAppStore.setState({ turnToolCalls: [] }); // 새 질문 — 이전 답변의 미확정 도구 표시를 비운다
+      useAppStore.setState({ turnToolCalls: [], pendingChatApprovals: [] }); // 새 질문 — 이전 답변의 미확정 도구 표시·승인 카드를 비운다
       setStreaming(true); // assistant placeholder 는 첫 token 에서 생성, isGenerating=true
 
       activeStreamIdRef.current = null; // 이번 요청의 스트림 id 는 첫 이벤트에서 안다
