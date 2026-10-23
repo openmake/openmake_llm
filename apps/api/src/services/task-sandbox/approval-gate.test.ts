@@ -43,6 +43,20 @@ describe('requiresApproval', () => {
     });
 });
 
+describe('requiresApproval — 오염 문맥(taintedContext, W3 S3)', () => {
+    it('high-risk + 오염 문맥 → 쓰기 등급 도구도 승인', () => {
+        expect(requiresApproval('high-risk', 'str_replace_editor', { command: 'create', path: 'a.txt' })).toBe(false);
+        expect(requiresApproval('high-risk', 'str_replace_editor', { command: 'create', path: 'a.txt' }, { taintedContext: true })).toBe(true);
+    });
+    it('high-risk + 오염 문맥 → 읽기 등급 도구는 묻지 않는다', () => {
+        expect(requiresApproval('high-risk', 'file_ops', { op: 'read', path: 'a.txt' }, { taintedContext: true })).toBe(false);
+    });
+    it('정책 none + 오염 문맥 → 묻지 않는다(바닥은 종전 규칙)', () => {
+        expect(requiresApproval('none', 'str_replace_editor', { command: 'create', path: 'a.txt' }, { taintedContext: true })).toBe(false);
+        expect(requiresApproval('none', 'notion::create_page', {}, { taintedContext: true })).toBe(true);
+    });
+});
+
 describe('stripApprovalGatedTools (HITL 무응답 강등)', () => {
     const tool = (name: string) => ({ function: { name } });
     const names = (ts: Array<{ function: { name: string } }>) => ts.map((t) => t.function.name);
