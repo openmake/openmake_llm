@@ -50,9 +50,12 @@ import { getCurrentDate } from '../utils/datetime';
 import { getConversationDB } from '../data/conversation-db';
 import { createLogger } from '../utils/logger';
 import { abortOnClientDisconnect } from '../utils/abort-on-client-disconnect';
+import { chatApprovalsRouter } from './chat-approvals.routes';
 
 const logger = createLogger('ChatRoutes');
 const router = Router();
+// 채팅 도구 승인(W3 S3) — /api/chat/approvals/* (인증은 그 라우터의 라우트마다)
+router.use(chatApprovalsRouter);
 let clusterManager: ClusterManager;
 
 /**

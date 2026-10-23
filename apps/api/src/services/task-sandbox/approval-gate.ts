@@ -58,6 +58,8 @@ const DEVICE_GATED_SHELL = new Set(['bash', 'python_execute']);
  *  사용자 메모리 쓰기(memory_write)는 정책 none 에서도 승인한다 — 사람이 문장을 보지 않은 채 메모리에 남는 길을 두지 않는다.
  *  정책 none 에서 나머지 바닥(credential_write·third_party_tool·instruction_write)도 true 를 돌려 게이트로 올린다 —
  *  ApprovalRegistry.request 가 묻지 않고 policy_floor 로 거절한다(2026-10-22 S1). 채팅 서브에이전트는 이 게이트를 건너뛴다(skipApprovalGate).
+ *  opts.taintedContext=true(외부 내용이 들어온 채팅 문맥, W3 S3)면 정책 none 이 아닌 한 읽기·제어 등급이 아닌 호출은 모두 묻는다
+ *  (제어 등급 — ask_human·plan_* 등 — 은 부작용이 없고 정책 all 도 묻지 않는다).
  *  opts.siteGoverned=true(로컬 브라우저 — 서버가 사이트 정책으로 액션을 훑은 호출)면 high-risk 에서 browser 를 등급(network)으로
  *  묻지 않는다: 허용 목록 밖 쓰기·누르기는 위의 site_write 바닥이 이미 잡았고, 남은 것은 읽기와 허용 목록 안 쓰기다
  *  (설계 "읽기는 자유"). 종전엔 읽기까지 매번 물어 작업당 7~10회 승인이 났다. 정책 all 은 종전대로 전부 묻는다. */
@@ -65,15 +67,19 @@ export function requiresApproval(
     policy: TaskSandboxApprovalPolicy,
     toolName: string,
     args: Record<string, unknown>,
-    opts: { deviceGatesShell?: boolean; siteGoverned?: boolean } = {},
+    opts: { deviceGatesShell?: boolean; siteGoverned?: boolean; taintedContext?: boolean } = {},
 ): boolean {
     if (opts.deviceGatesShell && DEVICE_GATED_SHELL.has(toolName)) return false;
     const floor = approvalFloorReason(toolName, args);
     if (policy === 'none' && floor !== null) return true;
     if (floor === 'memory_write' || floor === 'site_write' || floor === 'site_upload') return true;
+    if (opts.taintedContext && policy !== 'none') {
+        const risk = classifyToolRisk(toolName, args);
+        if (risk !== 'read' && risk !== 'control') return true;
+    }
     if (opts.siteGoverned && toolName === 'browser' && policy === 'high-risk') return false;
     return policyRequiresApproval(policy, classifyToolRisk(toolName, args),
-        isSensitiveWrite(toolName, args) || floor !== null, isThirdPartyTool(toolName));
+        isSensitiveWrite(toolName, args) || floor !== null, isThirdPartyTool(toolName, args));
 }
 
 /** PURE: 이 호출이 자격증명 파일을 바꾸려 하는가. args 미지({})면 false(보수 판정 — 강등 계산과 동일 계약). */
@@ -92,7 +98,7 @@ type ApprovalDecision = 'approved' | 'rejected';
 export type ApprovalRejectReason = 'timeout' | 'user' | 'abort' | 'parked' | 'unattended' | 'policy_floor';
 
 /** 승인 요청의 해소 결과 — 결정 + (ask_human 자유텍스트 응답 시) 사용자 답변 본문. */
-interface ApprovalResult {
+export interface ApprovalResult {
     decision: ApprovalDecision;
     /** rejected 인 경우에만 채워짐 — 무응답 만료/명시 거절/실행 중단 구분. */
     reason?: ApprovalRejectReason;

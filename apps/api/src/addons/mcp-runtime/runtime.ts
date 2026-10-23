@@ -101,6 +101,10 @@ export const mcpToolRuntime: ToolRuntime = {
     async ensureUserToolsForTask(userId: string, taskId: string): Promise<void> {
         await withSupervisor('ensureUserToolsForTask', sv => sv.ensureUserServers(userId, `task=${taskId}`));
     },
+    /** 작업 종료(R6) — ensureUserToolsForTask 의 짝. 참조를 놓고 채팅·다른 작업이 없으면 per_chat 서버를 닫는다. */
+    async releaseUserToolsForTask(userId: string, taskId: string): Promise<void> {
+        await withSupervisor('releaseUserToolsForTask', sv => sv.onTaskEnd(userId, taskId));
+    },
 
     /** listen 완료 후 1회 — 사용자 MCP 풀 supervisor 기동(멱등). */
     async onServerReady(): Promise<void> {
@@ -109,6 +113,8 @@ export const mcpToolRuntime: ToolRuntime = {
     },
 
     async shutdown(): Promise<void> {
+        const { stopMcpIdleSweep } = await import('./runtime-boot');
+        stopMcpIdleSweep();
         try {
             await getUnifiedMCPClient().getServerRegistry().disconnectAll();
         } catch (e) { logger.warn('외부 MCP 서버 연결 해제 실패', e); }

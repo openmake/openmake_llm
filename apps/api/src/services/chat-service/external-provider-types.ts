@@ -10,6 +10,8 @@ import type { ToolDefinition } from '../../llm';
 import type { Style } from '../../chat/style';
 import type { UserContext } from '../../tool-contract/types';
 import type { ProviderRouter } from '../../providers/provider-router';
+import type { ToolRiskClass } from '../../config/tool-policy';
+import type { ApprovalRejectReason } from '../task-sandbox/approval-gate';
 
 export interface ExternalProviderDeps {
     /** Provider router — `getExternalKeysRepo()` 등 사용 */
@@ -20,6 +22,10 @@ export interface ExternalProviderDeps {
     mcpToolResultCallback?: (data: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../../tools/web-search/types').SearchSourceRef[]; /** 도구 호출 요약 — 채팅의 도구 카드 */ summary?: { ok: boolean; durationMs: number; args?: string; preview?: string } }) => void;
     /** MCP tool 호출 시작 콜백 (frontend "실행 중" 진행 표시용) */
     mcpToolStartCallback?: (data: { toolName: string }) => void;
+    /** 채팅 도구 승인 대기 시작(W3 S3) — 사람의 승인 전엔 실행하지 않는다. args 는 비밀 값을 가린 사본 */
+    chatApprovalPendingCallback?: (p: { approvalId: string; toolName: string; args: Record<string, unknown>; riskClass: ToolRiskClass; expiresAt: number }) => void;
+    /** 채팅 도구 승인 결정(W3 S3) — 승인·거절·만료·중단 모두 */
+    chatApprovalDecidedCallback?: (p: { approvalId: string; decision: 'approved' | 'rejected'; reason?: ApprovalRejectReason }) => void;
     /** Provider usage 누적 — ChatService.lastProviderUsage setter */
     onUsage?: (usage: import('../../llm').UsageMetrics) => void;
     /** 시스템 이벤트 콜백 — provider 폴백 고지 등 메타 알림 (WS 'system_event') */
