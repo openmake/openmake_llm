@@ -8,15 +8,10 @@
  * @module addons/mcp-runtime/routes/mcp-server-audit
  */
 import type { Request } from 'express';
-import { recordSecurityAudit, isSsrfBlockedError } from '../../../runtime-ports/audit-port';
+import { recordSecurityAudit, isSsrfBlockedError, auditUrlHost } from '../../../runtime-ports/audit-port';
 
 function actor(req: Request) {
     return { userId: req.user?.id, ipAddress: req.ip, userAgent: req.get('user-agent') };
-}
-
-/** URL 의 host(포트 포함)만 — 경로·쿼리·계정은 버린다. 파싱 실패는 'invalid'. */
-function urlHost(raw: string): string {
-    try { return new URL(raw).host; } catch { return 'invalid'; }
 }
 
 /** 등록 성공 — git_ingest 는 draft 승인으로 서버가 활성화된 경우(#1475). */
@@ -60,7 +55,7 @@ export function auditMcpRegisterDenied(req: Request, reason: string, details?: R
 export function auditMcpUrlBlocked(req: Request, rawUrl: string, err: unknown): void {
     if (!isSsrfBlockedError(err)) return;
     void recordSecurityAudit({
-        action: 'security.ssrf_blocked', ...actor(req), resourceType: 'url', resourceId: urlHost(rawUrl),
+        action: 'security.ssrf_blocked', ...actor(req), resourceType: 'url', resourceId: auditUrlHost(rawUrl),
         details: { target: 'mcp_server', reason: (err as Error).message },
     });
 }

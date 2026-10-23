@@ -74,7 +74,7 @@ function audit(req: Request, op: string, c: Pick<ArtifactCommentRow, 'id' | 'ses
         userId: resolveUserId(req),
         details: { op, commentId: c.id, sessionId: c.session_id, artifactId: c.artifact_id },
         actor: { email: req.user?.email, role: req.user?.role },
-    });
+    }).catch(() => { /* 감사 실패는 응답에 영향 없음 — 원인은 AuditService 가 이미 남긴다 */ });
 }
 
 router.get('/sessions/:sid/artifacts/:aid/comments', optionalAuth, asyncHandler(async (req: Request, res: Response) => {

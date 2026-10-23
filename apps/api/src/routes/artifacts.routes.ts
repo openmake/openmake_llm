@@ -271,7 +271,7 @@ router.post('/artifacts/execute', requireAuth, artifactExecLimiter, asyncHandler
                 codeBytes: Buffer.byteLength(code, 'utf8'),
             },
             actor: { email: req.user?.email, role: req.user?.role },
-        });
+        }).catch(() => { /* 감사 실패는 응답에 영향 없음 — 원인은 AuditService 가 이미 남긴다 */ });
         // 실행 히스토리 영속 — 아티팩트 컨텍스트가 있고 본인 아티팩트일 때만(best-effort, 실패는 응답 안 막음).
         void persistExecution(userId, ctxSid, ctxAid, ctxVersion, result);
         res.json(success(result));
