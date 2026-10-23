@@ -1,5 +1,6 @@
 /**
  * 에이전트 작업 마지막 진행 시각(191, R8) — 진행 추적기가 모은 시각을 쓰고, watchdog 이 멈춘 실행 중 작업을 찾는다.
+ * watchdog 의 주차 사유별 집계(#1478)도 여기 둔다 — 목록 상한 없이 DB 가 센다.
  * agent-task-repository 가 파일 크기 한계에 닿아 따로 둔다. 191 미적용(컬럼 없음, 42703)이면 한 번만 경고하고 건너뛴다.
  *
  * @module data/repositories/agent-task-progress-repository
@@ -12,6 +13,9 @@ const logger = createLogger('AgentTaskProgressRepo');
 
 /** 진행이 오래 멈춘 실행 중 작업 — stalled_ms 는 마지막 진행(없으면 마지막 갱신)부터 지금까지 */
 export interface StaleTaskRow { id: string; user_id: string; current_turn: number; lease_owner: string | null; stalled_ms: number }
+
+/** 주차 사유별 집계 — count·longCount 는 조건에 맞는 전체 행, oldest 는 가장 오래 기다린 순(같은 시각이면 id 순) 표본 */
+export interface ParkedReasonStats { count: number; longCount: number; oldest: Array<{ id: string; waited_ms: number }> }
 
 let columnMissingWarned = false;
 /** 컬럼 없음(42703)이면 한 번만 경고하고 true — 호출부는 건너뛴다 */
@@ -60,5 +64,26 @@ export class AgentTaskProgressRepository extends BaseRepository {
             if (skipIfColumnMissing(err)) return [];
             throw err;
         }
+    }
+
+    /**
+     * 그 사유로 주차된 작업 전체의 집계(#1478) — 대기 시간은 마지막 전이 이벤트(주차 표식)부터. 주차 판정은 parkedTaskCondition 그대로다.
+     * longMs 이상 기다린 건수와 가장 오래 기다린 sampleLimit 개 표본을 한 문장에서 낸다.
+     */
+    async summarizeParkedByReason(reason: string, longMs: number, sampleLimit: number): Promise<ParkedReasonStats> {
+        const r = await this.query<{ count: number; long_count: number; oldest: Array<{ id: string; waited_ms: number }> }>(
+            `WITH w AS (
+                 SELECT t.id, le.created_at, (EXTRACT(EPOCH FROM (NOW() - le.created_at)) * 1000)::bigint AS waited_ms
+                   FROM agent_tasks t
+                   CROSS JOIN LATERAL (SELECT e.reason, e.created_at FROM agent_task_events e WHERE e.task_id = t.id ORDER BY e.id DESC LIMIT 1) le
+                  WHERE ${parkedTaskCondition('t')} AND le.reason = $1
+             )
+             SELECT (SELECT COUNT(*) FROM w)::int AS count,
+                    (SELECT COUNT(*) FROM w WHERE w.waited_ms >= $2)::int AS long_count,
+                    COALESCE((SELECT json_agg(json_build_object('id', s.id, 'waited_ms', s.waited_ms) ORDER BY s.created_at ASC, s.id ASC)
+                                FROM (SELECT id, created_at, waited_ms FROM w ORDER BY created_at ASC, id ASC LIMIT $3) s), '[]'::json) AS oldest`,
+            [reason, longMs, sampleLimit]);
+        const row = r.rows[0];
+        return { count: row.count, longCount: row.long_count, oldest: row.oldest.map((o) => ({ id: o.id, waited_ms: Number(o.waited_ms) })) };
     }
 }

@@ -593,6 +593,26 @@ SR_N="$( OMK_SMOKE_READY_WAIT=3; sleep() { :; }
     smoke_code() { local n; n=$(( $(cat "$TMP/ready-n" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$TMP/ready-n"; printf '{}' > "$1"; [[ $n -ge 2 ]] && printf 200 || printf 503; }
     rm -f "$TMP/ready-n"; smoke_check_ready "$SM" && cat "$TMP/ready-n" )"
 eq "smoke ready: 재기동 직후 503 이면 기다렸다 다시 본다" "$SR_N" "2"
+# /ready 503 의 백그라운드 루프 사유(#1478) — 본문 판독은 node 로 한다. 기준(.node-version)과 같은 node 일 때만 본다.
+# shellcheck source=/dev/null
+. "$HERE/../lib/node-version.sh"
+if has node && [[ "$(node_version_current)" == "$(node_version_pinned "$HERE/../..")" ]]; then
+    SR_LOOPS='"lease_sweep":{"enabled":true,"lastRunAt":null,"staleAfterMs":90000,"ok":false},"schedule_tick":{"enabled":false,"lastRunAt":null,"staleAfterMs":180000,"ok":true},"watchdog":{"enabled":true,"lastRunAt":"2026-10-24T00:00:00.000Z","staleAfterMs":180000,"ok":false}'
+    # shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+    SR_BG="$( OMK_SMOKE_READY_WAIT=0
+        smoke_code() { printf '{"success":true,"data":{"ready":false,"onlineNodes":1,"dbConnected":true,"defaultModel":{"id":"x","listed":true},"background":{"ok":false,"loops":{%s}}}}' "$SR_LOOPS" > "$1"; printf 503; }
+        smoke_check_ready "$SM" || printf '%s' "$SMOKE_WHY" )"
+    ok "smoke ready: 503 이유에 멈춘 백그라운드 루프와 마지막 실행 시각" '[[ "$SR_BG" == *"/ready → 503"* && "$SR_BG" == *"백그라운드 루프 멈춤(lease_sweep 마지막 실행 없음, watchdog 마지막 실행 2026-10-24T00:00:00.000Z)"* && "$SR_BG" != *schedule_tick* ]]'
+    # shellcheck disable=SC2034
+    SR_BGOK="$( OMK_SMOKE_READY_WAIT=0
+        smoke_code() { printf '{"success":true,"data":{"ready":false,"onlineNodes":1,"dbConnected":true,"defaultModel":{"id":"x","listed":false},"background":{"ok":true,"loops":{}}}}' > "$1"; printf 503; }
+        smoke_check_ready "$SM" || printf '%s' "$SMOKE_WHY" )"
+    ok "smoke ready: 백그라운드가 정상이면 그 사유를 붙이지 않는다" '[[ "$SR_BGOK" == *"기본 모델"* && "$SR_BGOK" != *"백그라운드"* ]]'
+    # shellcheck disable=SC2034  # OMK_SMOKE_READY_WAIT 는 smoke_check_ready 가 읽는다
+    eq "smoke ready: 본문을 읽지 못하면 코드만 적는다" "$( OMK_SMOKE_READY_WAIT=0; smoke_code() { printf 'not json' > "$1"; printf 503; }; smoke_check_ready "$SM" || printf '%s' "$SMOKE_WHY" )" "/ready → 503"
+else
+    echo "SKIP smoke ready: 백그라운드 루프 사유 (node 가 없거나 .node-version 과 다름)"
+fi
 
 # ── 검사 고르기: 릴리스를 따르는 환경은 쓰기 없는 검사만(채팅 제외), 그 밖은 채팅까지 ──
 eq "smoke: 브랜치 환경은 채팅까지" "$(smoke_checks_for "$SM")" "health manifest generated login ready chat"
