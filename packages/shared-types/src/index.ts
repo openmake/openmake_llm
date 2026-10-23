@@ -160,6 +160,11 @@ export interface WsChatRequest {
    * 지시를 덧붙일 뿐, 내용/기능 분기는 하지 않는다.
    */
   client?: "ios";
+  /**
+   * 채팅 도구 승인 카드를 그리는 클라이언트(W3 S3) — true 일 때만 서버가 승인이 필요한 도구 호출에서 `chat_approval_pending` 을 보내고 결정을 기다린다.
+   * 미지정이면(카드를 못 그리는 클라이언트) 그런 호출은 기다리지 않고 거절된다.
+   */
+  approvalCards?: boolean;
   /** 비교 모드(두 모델 동시 답변) 패널 식별자. 같은 사용자의 스트림 키에 접미사로 붙어 레인별로 독립 스트림을 가진다. 형식 `^[a-z0-9_-]{1,16}$`, 그 외는 무시(레인 없음). (2026-09-09) */
   lane?: string;
 }
@@ -178,6 +183,12 @@ export interface McpToolResource {
   mimeType?: string;
   text?: string;
 }
+
+/** 도구 위험 등급 — 승인 카드가 "왜 승인이 필요한지"를 보여 주는 근거. 백엔드 config/tool-policy 의 ToolRiskClass 와 같은 값. */
+export type ToolRiskClass = "read" | "write" | "destructive" | "exec" | "network" | "external" | "control";
+
+/** 승인 거절 사유 — 백엔드 approval-gate 의 ApprovalRejectReason 과 같은 값(user: 사람이 거절, timeout: 무응답 만료, abort: 요청 중단 등). */
+export type ApprovalRejectReason = "timeout" | "user" | "abort" | "parked" | "unattended" | "policy_floor";
 
 /**
  * 스트림 이벤트 공통 봉투(F19.11, 2026-09-17) — 채팅 스트림 이벤트에 서버가 덧붙이는 이어받기 커서.
@@ -320,6 +331,19 @@ export type WsServerEvent =
     }
   // MCP 도구 호출 진행 (백엔드 ws-chat-handler onMcpToolStart/onMcpToolResult)
   | { type: "mcp_tool_start"; toolName: string; messageId?: string }
+  // 채팅 도구 승인(W3 S3, ws-chat-handler onChatApprovalPending/Decided) — 결정은 REST /api/chat/approvals/:approvalId/approve|reject
+  | {
+      type: "chat_approval_pending";
+      approvalId: string;
+      toolName: string;
+      /** 승인 카드에 보일 인자 — 비밀 값을 가린 사본(실행은 원래 인자로 한다) */
+      args: Record<string, unknown>;
+      riskClass: ToolRiskClass;
+      /** 무응답 만료 시각(epoch ms) — 지나면 거절(timeout)로 끝난다 */
+      expiresAt: number;
+      messageId?: string;
+    }
+  | { type: "chat_approval_decided"; approvalId: string; decision: "approved" | "rejected"; reason?: ApprovalRejectReason; messageId?: string }
   | {
       type: "mcp_tool_result";
       toolName: string;
