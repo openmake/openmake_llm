@@ -106,7 +106,7 @@ export class AgentTaskService {
      * 자율 도구 루프 실행. 백그라운드 detached 호출 전제 — 예외를 던지지 않고
      * 모든 종료 경로에서 agent_tasks 상태를 갱신한다.
      */
-    async execute(input: AgentTaskRunInput): Promise<void> { return withSpan('agent-task', 'agent_task.run', () => trackAgentTaskRun(this, input.taskId, () => this.runLoop(input)), { attributes: { 'agent_task.id': input.taskId } }); } // 종료 중이면 시작하지 않는다
+    async execute(input: AgentTaskRunInput): Promise<void> { return withSpan('agent-task', 'agent_task.run', () => trackAgentTaskRun(this, input.taskId, () => this.runLoop(input)), { root: true, attributes: { 'agent_task.id': input.taskId } }); } // 종료 중이면 시작하지 않는다. 루트 span(#1478) — 시작 요청 trace 에 매달리지 않는다
     private async runLoop(input: AgentTaskRunInput): Promise<void> {
         const { taskId, goal, userId, userRole, maxTurns, allowedSkills } = input;
         const db = getUnifiedDatabase();
