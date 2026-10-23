@@ -8,6 +8,10 @@ jest.mock('../chat-delegate', () => ({
     ...jest.requireActual('../chat-delegate'),
     runChatDelegate: jest.fn(async () => 'delegated'),
 }));
+jest.mock('../../agent-spawn/spawn-agents', () => ({
+    ...jest.requireActual('../../agent-spawn/spawn-agents'),
+    runChatSpawnAgents: jest.fn(async () => 'spawned'),
+}));
 jest.mock('../../../security/security-audit', () => ({
     ...jest.requireActual('../../../security/security-audit'),
     auditSecurityEvent: jest.fn().mockResolvedValue(undefined),
@@ -25,6 +29,7 @@ jest.mock('../../org/effective-policy', () => ({
 import { runToolCallBatch, createToolBatchState } from '../external-tool-batch';
 import { executeExternalTool } from '../external-tool-exec';
 import { runChatDelegate, CHAT_DELEGATE_TOOL_NAME } from '../chat-delegate';
+import { runChatSpawnAgents, SPAWN_AGENTS_TOOL_NAME } from '../../agent-spawn/spawn-agents';
 import { resolveEffectivePolicy } from '../../org/effective-policy';
 import { getChatApprovalRegistry } from '../chat-approval';
 import { getChatApprovalDeniedResult } from '../../../prompts/chat-approval';
@@ -33,6 +38,7 @@ import type { ExternalProviderDeps } from '../external-provider-types';
 
 const exec = executeExternalTool as jest.Mock;
 const delegate = runChatDelegate as jest.Mock;
+const spawn = runChatSpawnAgents as jest.Mock;
 const effective = resolveEffectivePolicy as jest.Mock;
 
 type Pending = Parameters<NonNullable<ExternalProviderDeps['chatApprovalPendingCallback']>>[0];
@@ -43,7 +49,7 @@ function usePolicy(min: 'high-risk' | 'all' | undefined): void {
     effective.mockResolvedValue(min ? { approvalPolicyMin: min } : {});
 }
 
-function setup(opts: { onPending?: (p: Pending) => void; sessionId?: string } = {}) {
+function setup(opts: { onPending?: (p: Pending) => void; onDecided?: () => void; sessionId?: string; abortSignal?: AbortSignal } = {}) {
     const pendings: Pending[] = [];
     const decideds: Decided[] = [];
     const messages: Array<{ role: string; content: string; tool_name?: string }> = [];
@@ -52,9 +58,13 @@ function setup(opts: { onPending?: (p: Pending) => void; sessionId?: string } = 
         currentUserContext: { userId: 'u1', role: 'user' as const },
         allowedTools: [],
         chatApprovalPendingCallback: (p: Pending) => { pendings.push(p); opts.onPending?.(p); },
-        chatApprovalDecidedCallback: (d: Decided) => { decideds.push(d); },
+        chatApprovalDecidedCallback: (d: Decided) => { decideds.push(d); opts.onDecided?.(); },
     } as ExternalProviderDeps;
-    const req = { message: 'q', ...(opts.sessionId ? { sessionId: opts.sessionId } : {}) } as never;
+    const req = {
+        message: 'q',
+        ...(opts.sessionId !== undefined ? { sessionId: opts.sessionId } : {}),
+        ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
+    } as never;
     const run = (toolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }>, tools: unknown[] = []) =>
         runToolCallBatch({ deps, req, ctx: {}, tools: tools as never, messages: messages as never, toolCalls: toolCalls as never, state });
     return { pendings, decideds, messages, state, run };
@@ -63,8 +73,9 @@ function setup(opts: { onPending?: (p: Pending) => void; sessionId?: string } = 
 const fn = (name: string) => ({ type: 'function', function: { name, description: name, parameters: { type: 'object', properties: {} } } });
 
 describe('runToolCallBatch — 채팅 승인 게이트', () => {
+    afterEach(() => { jest.useRealTimers(); });
     beforeEach(() => {
-        exec.mockClear(); delegate.mockClear(); effective.mockReset();
+        exec.mockClear(); delegate.mockClear(); spawn.mockClear(); effective.mockReset();
         (CHAT_TOOL_APPROVAL as { TAINT_ENABLED: boolean }).TAINT_ENABLED = true;
     });
 
@@ -72,11 +83,12 @@ describe('runToolCallBatch — 채팅 승인 게이트', () => {
         usePolicy('high-risk');
         let execCallsAtPending = -1;
         let taskIdAtPending: string | undefined;
+        let createdAt = 0;
         const { pendings, decideds, messages, run } = setup({
             sessionId: 's1',
             onPending: (p) => {
                 execCallsAtPending = exec.mock.calls.length;
-                void getChatApprovalRegistry().get(p.approvalId).then((pa) => { taskIdAtPending = pa?.taskId; })
+                void getChatApprovalRegistry().get(p.approvalId).then((pa) => { taskIdAtPending = pa?.taskId; createdAt = pa?.createdAt ?? 0; })
                     .then(() => getChatApprovalRegistry().approve(p.approvalId));
             },
         });
@@ -84,7 +96,7 @@ describe('runToolCallBatch — 채팅 승인 게이트', () => {
 
         expect(pendings).toHaveLength(1);
         expect(pendings[0]).toMatchObject({ toolName: 'bash', args: { command: 'ls' }, riskClass: 'exec' });
-        expect(pendings[0].expiresAt).toBeGreaterThan(Date.now() - 1000);
+        expect(pendings[0].expiresAt - createdAt).toBe(CHAT_TOOL_APPROVAL.TIMEOUT_MS);
         expect(execCallsAtPending).toBe(0);
         expect(taskIdAtPending).toBe('chat:s1');
         expect(exec).toHaveBeenCalledTimes(1);
@@ -92,10 +104,11 @@ describe('runToolCallBatch — 채팅 승인 게이트', () => {
         expect(messages[0].content).toContain('ran');
     });
 
-    it('(b) reject → tool 메시지에 거절 문구, 실행 0회, decided rejected — 세션 id 가 없으면 키는 chat:<userId>', async () => {
+    it('(b) reject → tool 메시지에 거절 문구, 실행 0회, decided rejected — 세션 id 가 없거나 빈 값이면 키는 chat:<userId>', async () => {
         usePolicy('high-risk');
         let taskIdAtPending: string | undefined;
         const { decideds, messages, run } = setup({
+            sessionId: '',
             onPending: (p) => {
                 void getChatApprovalRegistry().get(p.approvalId).then((pa) => { taskIdAtPending = pa?.taskId; })
                     .then(() => getChatApprovalRegistry().reject(p.approvalId));
@@ -148,14 +161,25 @@ describe('runToolCallBatch — 채팅 승인 게이트', () => {
         expect(exec).toHaveBeenCalledTimes(2);
     });
 
-    it('(e) 정책 none 에서 외부 MCP 도구 — 실행 0회·policy_floor 문구', async () => {
+    it('(e) 정책 none 은 채팅에 게이트가 없다 — 외부 MCP 도구도 콜백 없이 실행(종전 동작)', async () => {
         usePolicy(undefined);
-        const { pendings, messages, run } = setup();
+        const { pendings, decideds, messages, run } = setup();
         await run([{ id: 'm1', name: 'srv::search', args: { q: 'x' } }]);
 
-        expect(exec).not.toHaveBeenCalled();
+        expect(exec).toHaveBeenCalledTimes(1);
         expect(pendings).toHaveLength(0);
-        expect(messages[0].content).toContain(getChatApprovalDeniedResult('srv::search', 'policy_floor'));
+        expect(decideds).toHaveLength(0);
+        expect(messages[0].content).toContain('ran');
+    });
+
+    it('(e\') high-risk 에서는 외부 MCP 도구가 여전히 묻는다 — 거절하면 실행 0회', async () => {
+        usePolicy('high-risk');
+        const { pendings, messages, run } = setup({ onPending: (p) => { void getChatApprovalRegistry().reject(p.approvalId); } });
+        await run([{ id: 'm1', name: 'srv::search', args: { q: 'x' } }]);
+
+        expect(pendings.map((p) => p.toolName)).toEqual(['srv::search']);
+        expect(exec).not.toHaveBeenCalled();
+        expect(messages[0].content).toContain(getChatApprovalDeniedResult('srv::search', 'user'));
     });
 
     it('(f) 위임 서브에이전트는 승인이 필요한 도구를 받지 않는다', async () => {
@@ -167,6 +191,47 @@ describe('runToolCallBatch — 채팅 승인 게이트', () => {
         const names = (delegate.mock.calls[0][0].chatTools as Array<{ function: { name: string } }>).map((t) => t.function.name);
         expect(names).not.toContain('bash');
         expect(names).toEqual(expect.arrayContaining(['web_search', 'file_ops']));
+
+        await run([{ id: 's1', name: SPAWN_AGENTS_TOOL_NAME, args: { tasks: [] } }], [fn('bash'), fn('web_search'), fn('file_ops')]);
+        expect(spawn).toHaveBeenCalledTimes(1);
+        const spawnNames = (spawn.mock.calls[0][0].chatTools as Array<{ function: { name: string } }>).map((t) => t.function.name);
+        expect(spawnNames).not.toContain('bash');
+        expect(spawnNames).toEqual(expect.arrayContaining(['web_search', 'file_ops']));
+    });
+
+    it('대기 중 중단(abort) → 중단 문구, decided rejected(abort), 실행 0회', async () => {
+        usePolicy('high-risk');
+        const ac = new AbortController();
+        const { decideds, messages, run } = setup({ abortSignal: ac.signal, onPending: () => { queueMicrotask(() => ac.abort()); } });
+        await run([{ id: 't1', name: 'bash', args: { command: 'ls' } }]);
+
+        expect(exec).not.toHaveBeenCalled();
+        expect(decideds).toEqual([expect.objectContaining({ decision: 'rejected', reason: 'abort' })]);
+        expect(messages[0].content).toContain(getChatApprovalDeniedResult('bash', 'abort'));
+    });
+
+    it('콜백이 던져도(WS 전송 실패) 대기·실행은 그대로 진행된다', async () => {
+        usePolicy('high-risk');
+        const { run } = setup({
+            onPending: (p) => { void getChatApprovalRegistry().approve(p.approvalId); throw new Error('ws closed'); },
+            onDecided: () => { throw new Error('ws closed'); },
+        });
+        await expect(run([{ id: 't1', name: 'bash', args: { command: 'ls' } }])).resolves.toBeUndefined();
+        expect(exec).toHaveBeenCalledTimes(1);
+    });
+
+    it('승인 대기 시간은 state.approvalWaitMs 로 쌓인다(도구 루프 예산·도구 시간에서 뺄 값)', async () => {
+        usePolicy('high-risk');
+        jest.useFakeTimers();
+        const WAIT = 50_000;
+        const { state, run } = setup({ onPending: (p) => { setTimeout(() => { void getChatApprovalRegistry().approve(p.approvalId); }, WAIT); } });
+        expect(state.approvalWaitMs).toBe(0);
+        const done = run([{ id: 't1', name: 'bash', args: { command: 'ls' } }]);
+        await jest.advanceTimersByTimeAsync(WAIT);
+        await done;
+
+        expect(exec).toHaveBeenCalledTimes(1);
+        expect(state.approvalWaitMs).toBe(WAIT);
     });
 
     it('선실행된 읽기 전용 호출은 같은 배치에서 뒤늦게 켜진 taint 로 다시 묻지 않는다', async () => {
