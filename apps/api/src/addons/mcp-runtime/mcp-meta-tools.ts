@@ -116,7 +116,7 @@ const mcpCallTool: MCPToolDefinition = {
             required: ['server', 'tool'],
         },
     },
-    handler: async (args, context): Promise<MCPToolResult> => {
+    handler: async (args, context, opts): Promise<MCPToolResult> => {
         const userId = context?.userId != null ? String(context.userId) : undefined;
         if (!userId || userId === 'guest') return text('로그인 사용자만 MCP 도구를 호출할 수 있습니다.');
         const server = typeof args.server === 'string' ? args.server.trim() : '';
@@ -131,8 +131,9 @@ const mcpCallTool: MCPToolDefinition = {
         if (!g) return text(`서버 '${server}' 를 찾을 수 없습니다.`);
 
         // 네임스페이스 이름으로 재구성 → executeTool 의 해석 경로 재사용(사용자 풀 우선, 없으면 전역).
+        // 바깥 실행의 중단 신호를 그대로 넘긴다(#1474) — 이미 중단됐으면 디스패처가 외부 호출을 시작하지 않는다.
         const namespaced = `${g.displayName}${MCP_NAMESPACE_SEPARATOR}${tool}`;
-        return router.executeTool(namespaced, toolArgs, context);
+        return router.executeTool(namespaced, toolArgs, context, opts);
     },
 };
 

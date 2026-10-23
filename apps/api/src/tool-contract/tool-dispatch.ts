@@ -69,7 +69,7 @@ export async function dispatchTool(
     argsIn: Record<string, unknown>,
     context: UserContext | undefined,
     deps: DispatchDeps,
-    /** 중단 신호 — 외부 도구에만 전달한다(내장 도구는 쓰지 않는다). */
+    /** 중단 신호 — 외부 도구와 내장 도구 핸들러에 전달한다(다른 도구를 부르는 내장 도구가 이어 넘긴다, #1474). */
     opts?: { signal?: AbortSignal },
 ): Promise<MCPToolResult> {
     // pre 훅이 인자를 치환할 수 있어 let — 아래 모든 호출 경로가 이 args 를 쓴다.
@@ -185,7 +185,7 @@ export async function dispatchTool(
                 return fail(`필수 인자 누락 (${name}): ${missing.join(', ')} — 누락된 인자를 모두 포함해 도구를 다시 호출하세요.`);
             }
             try {
-                return finalize(await builtIn.handler(args, context));
+                return finalize(await builtIn.handler(args, context, opts));
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
                 return fail(`도구 실행 오류 (${name}): ${message}`);

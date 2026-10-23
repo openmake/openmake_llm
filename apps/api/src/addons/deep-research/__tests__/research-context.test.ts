@@ -131,6 +131,29 @@ describe('gatherMcpEvidence', () => {
         expect(out[0].source).toBe('mcp/b');
     });
 
+    it('리서치 중단 신호를 도구 실행에 그대로 넘긴다(#1474)', async () => {
+        executeToolMock.mockResolvedValue({ content: [{ type: 'text', text: '사내 매출 데이터 요약: 2026년 1분기 매출 42억원, 전년 동기 대비 18% 증가했습니다.' }] });
+        const ac = new AbortController();
+        await gatherMcpEvidence({ client: makeClient([{ function: { name: 'notebook_query', arguments: {} } }]), topic: 't', userId: 'u1', abortSignal: ac.signal });
+        expect(executeToolMock).toHaveBeenCalledWith('notebook_query', {}, { userId: 'u1', role: 'user' }, { signal: ac.signal });
+    });
+
+    it('중단되면 남은 도구 호출을 시작하지 않는다(#1474)', async () => {
+        const ac = new AbortController();
+        executeToolMock.mockImplementationOnce(async () => { ac.abort(); return { content: [{ type: 'text', text: 'x'.repeat(200) }] }; });
+        await gatherMcpEvidence({
+            client: makeClient([{ function: { name: 'a', arguments: {} } }, { function: { name: 'b', arguments: {} } }]),
+            topic: 't', userId: 'u1', abortSignal: ac.signal,
+        });
+        expect(executeToolMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('신호가 없으면 종전처럼 3인자로 부른다', async () => {
+        executeToolMock.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
+        await gatherMcpEvidence({ client: makeClient([{ function: { name: 'a', arguments: {} } }]), topic: 't', userId: 'u1' });
+        expect(executeToolMock.mock.calls[0]).toHaveLength(3);
+    });
+
     it('LLM 호출 실패는 빈 배열 — 리서치 본류를 막지 않는다', async () => {
         const client = { chat: jest.fn().mockRejectedValue(new Error('llm down')) } as never;
         expect(await gatherMcpEvidence({ client, topic: 't', userId: 'u1' })).toEqual([]);

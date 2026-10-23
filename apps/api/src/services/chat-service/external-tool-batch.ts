@@ -207,7 +207,7 @@ export async function runToolCallBatch(params: {
     const parallelReadOnlyResults = await prefetchReadOnlyCalls(
         toolCalls,
         (tc) => policy === 'none' || !requiresApproval(policy, tc.name, tc.args as Record<string, unknown>, { taintedContext: taintedFor(tc.name) }),
-        (tc) => executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>, state.toolSources),
+        (tc) => executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>, state.toolSources, req.abortSignal),
         { path: 'chat', ...(req.abortSignal ? { signal: req.abortSignal } : {}) },
     );
     for (const tc of toolCalls) {
@@ -272,7 +272,7 @@ export async function runToolCallBatch(params: {
         } else {
             // 병렬 선실행된 읽기 전용 결과가 있으면 재실행 없이 소비.
             toolResult = parallelReadOnlyResults.get(tc.id)
-                ?? await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>, state.toolSources);
+                ?? await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>, state.toolSources, req.abortSignal);
         }
         if (denied === null && bringsExternalContent(tc.name, tc.args as Record<string, unknown>)) state.tainted = true;
         // 오픈디자인 HTML 산출물 캡처 — 저장 성공한 자체완결 HTML 만, 마지막 것 유지.
