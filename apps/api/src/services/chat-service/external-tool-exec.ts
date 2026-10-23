@@ -42,6 +42,11 @@ export function summarizeToolCall(toolArgs: Record<string, unknown>, resultText:
     return { ok: !resultText.startsWith('Error:'), durationMs, ...(args ? { args } : {}), ...(preview ? { preview } : {}) };
 }
 
+/** 요청 중단으로 실행하지 않은 도구 호출의 결과 문구(#1474) — 도구 실행부와 배치 루프가 같은 문구를 쓴다. */
+export function abortedToolResult(toolName: string): string {
+    return `Error: 요청이 중단되어 도구를 실행하지 않았습니다: ${toolName}`;
+}
+
 /**
  * 외부 LLM Tool Calling — MCP 도구 실행 + user sandbox. 끝나면 결과 요약(+리소스·출처)을 콜백으로 한 번 알린다.
  * toolSources 를 넘기면 이 호출의 출처 목록을 거기에 쌓는다 — 답변 끝 출처 목록의 번호표용(콜백 유무와 무관).
@@ -78,7 +83,7 @@ async function runExternalTool(
     signal?: AbortSignal,
 ): Promise<string> {
     // 이미 중단된 요청은 도구를 시작하지 않는다 — 진행 표시("실행 중")도 보내지 않는다.
-    if (signal?.aborted) return `Error: 요청이 중단되어 도구를 실행하지 않았습니다: ${toolName}`;
+    if (signal?.aborted) return abortedToolResult(toolName);
     try {
         const mcpClient = getToolRuntime();
         const userCtx = deps.currentUserContext || {

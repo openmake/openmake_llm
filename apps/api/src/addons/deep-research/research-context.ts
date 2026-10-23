@@ -125,6 +125,13 @@ export async function gatherMcpEvidence(params: {
                 const args = (call.function.arguments ?? {}) as Record<string, unknown>;
                 const ctx = { userId, role: userRole ?? 'user' } as const;
                 const out = abortSignal ? await mcp.executeTool(name, args, ctx, { signal: abortSignal }) : await mcp.executeTool(name, args, ctx);
+                // 실행 중 중단 — 그 결과(중단 안내 문구)는 근거가 아니다. 앞서 모은 근거만 두고 남은 호출을 멈춘다.
+                if (abortSignal?.aborted) break;
+                // 도구 오류 결과는 길어도 근거가 아니다(오류·교정 안내 문구가 출처로 인용되지 않게)
+                if (out.isError) {
+                    logger.info(`[DeepResearch] MCP 도구 '${name}' 오류 결과 — 근거에서 제외`);
+                    continue;
+                }
                 // MCPToolResult → 텍스트 (content 배열의 text 파트 결합)
                 const text = (out.content ?? [])
                     .map((c) => (typeof c === 'object' && c && 'text' in c ? String((c as { text?: unknown }).text ?? '') : ''))
