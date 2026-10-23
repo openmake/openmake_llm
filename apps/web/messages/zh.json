@@ -2558,6 +2558,14 @@
       "elicitJsonHint": "字段多于一个时请用 JSON 回答: {example}"
     }
   },
+  "chatApproval": {
+    "title": "需要批准工具执行",
+    "approve": "批准",
+    "reject": "拒绝",
+    "expiresIn": "{seconds} 秒后自动拒绝",
+    "denied": "未及时响应，已拒绝",
+    "waiting": "回答正在等待您批准执行此工具"
+  },
   "marketplacePublish": {
     "title": "发布到市场",
     "description": "将你自己创建的技能、智能体和 MCP 配置打包为插件，发布到本服务器的画廊。同一服务器的其他用户可以安装，不会传到外部。",

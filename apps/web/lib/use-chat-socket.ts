@@ -414,6 +414,7 @@ export function useChatSocket() {
           setActiveTool(null);
           flushPendingMcpResources();
           useAppStore.getState().commitTurnToolCalls();
+          useAppStore.setState({ pendingChatApprovals: [] }); // 답변이 끝났으면 기다리던 승인도 없다
           runDeferredAfterStream();
           sendNextFollowup();
           break;
@@ -424,6 +425,7 @@ export function useChatSocket() {
           setActiveTool(null);
           flushPendingMcpResources();
           useAppStore.getState().commitTurnToolCalls();
+          useAppStore.setState({ pendingChatApprovals: [] });
           runDeferredAfterStream();
           break;
         case "error": {
@@ -446,6 +448,7 @@ export function useChatSocket() {
           setOrchestratorProgress(null);
           setActiveTool(null);
           useAppStore.getState().commitTurnToolCalls();
+          useAppStore.setState({ pendingChatApprovals: [] });
           runDeferredAfterStream();
           break;
         }
@@ -453,6 +456,17 @@ export function useChatSocket() {
           // 도구 실행 시작 — "🔍 {도구} 실행 중" 인디케이터(스트리밍 멈춘 듯한 혼선 해소).
           setActiveTool(data.toolName);
           useAppStore.getState().toolCallStarted(data.toolName); // 도구 카드
+          break;
+        // 채팅 도구 승인(W3 S3) — 대기는 스트리밍 답변 아래 카드로, 결정(승인·거절·만료)이 오면 카드를 뺀다.
+        case "chat_approval_pending": {
+          const { approvalId, toolName, args, riskClass, expiresAt } = data;
+          useAppStore.setState((s) => ({
+            pendingChatApprovals: [...s.pendingChatApprovals.filter((a) => a.approvalId !== approvalId), { approvalId, toolName, args, riskClass, expiresAt }],
+          }));
+          break;
+        }
+        case "chat_approval_decided":
+          useAppStore.setState((s) => ({ pendingChatApprovals: s.pendingChatApprovals.filter((a) => a.approvalId !== data.approvalId) }));
           break;
         case "search_sources":
           // 웹검색 출처(F19.4) — 본문 [N] 인용 칩. 같은 턴에 여러 번 오면 마지막 목록이 이긴다
@@ -790,6 +804,7 @@ export function useChatSocket() {
     discardRef.current = discardOnReset(discardRef.current, prev.isGenerating, activeStreamIdRef.current);
     if (prev.isGenerating && wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify({ type: "abort" }));
     if (switched) useAppStore.getState().setStreaming(false); // 지우기는 clearChat 이 이미 끈다
+    if (switched) useAppStore.setState({ pendingChatApprovals: [] }); // 이전 대화의 승인 카드를 남기지 않는다(지우기는 clearChat 이 비운다)
   }), []);
 
   // 에이전트 토글 ON: 메시지를 목표(goal)로 자율 에이전트 작업을 생성·실행한다.
