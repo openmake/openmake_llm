@@ -5,9 +5,26 @@ jest.mock('../../auth', () => ({
     optionalAuth: async (req: { headers: Record<string, string>; user?: unknown }, _res: unknown, next: () => void) => { if (req.headers['x-test-user']) req.user = { id: req.headers['x-test-user'], role: req.headers['x-test-role'] ?? 'user' }; next(); },
     requireAuth: (req: { headers: Record<string, string>; user?: unknown }, res: { status: (n: number) => { json: (b: unknown) => void } }, next: () => void) => { if (!req.headers['x-test-user']) { res.status(401).json({}); return; } req.user = { id: req.headers['x-test-user'], role: 'user' }; next(); },
 }));
+// 키 검증(DB)만 대체 — 추출·스코프 검사는 실제 구현. 키 이름으로 소유자·스코프를 정한다
+const API_KEYS: Record<string, { userId: string; scopes: string[] }> = {
+    omk_live_chatkey0000000000000000: { userId: 'A', scopes: ['*'] },
+    omk_live_bridgekey00000000000000: { userId: 'A', scopes: ['bridge'] },
+};
+jest.mock('../../middlewares/api-key-auth', () => ({
+    ...jest.requireActual('../../middlewares/api-key-auth'),
+    optionalApiKey: async (req: { headers: Record<string, string>; user?: unknown; authMethod?: string; apiKeyRecord?: unknown }, res: { status: (n: number) => { json: (b: unknown) => void } }, next: () => void) => {
+        const key = API_KEYS[(req.headers.authorization ?? '').replace('Bearer ', '')];
+        if (!key) { res.status(401).json({}); return; }
+        req.authMethod = 'api-key';
+        req.apiKeyRecord = { scopes: key.scopes };
+        req.user = { id: key.userId, role: 'user' };
+        next();
+    },
+}));
 const verdicts = new Map<string, unknown>();
+const viewers: Array<{ userId?: string }> = [];
 jest.mock('../../runtime-ports/artifact-store', () => ({
-    resolveArtifactForRead: async (name: string) => verdicts.get(name) ?? { ok: false, status: 404, reason: 'not_found' },
+    resolveArtifactForRead: async (name: string, viewer: { userId?: string }) => { viewers.push(viewer); return verdicts.get(name) ?? { ok: false, status: 404, reason: 'not_found' }; },
     issueDeliveryTicket: () => '123.sig',
 }));
 
@@ -31,7 +48,7 @@ function app() {
     return a;
 }
 
-beforeEach(() => { verdicts.clear(); verdicts.set('ok.png', { ok: true, absPath: path.join(tmp, 'ok.png'), mime: 'image/png', row: null, reason: 'owner' }); });
+beforeEach(() => { verdicts.clear(); viewers.length = 0;verdicts.set('ok.png', { ok: true, absPath: path.join(tmp, 'ok.png'), mime: 'image/png', row: null, reason: 'owner' }); });
 
 describe('generatedArtifactsRouter', () => {
     it('숨김 설치 디렉터리 안에서도 소유권 판정을 통과한 파일만 전달한다', async () => {
@@ -55,6 +72,17 @@ describe('generatedArtifactsRouter', () => {
         verdicts.set('iso.png', { ok: false, status: 403, reason: 'isolated' });
         expect((await request(app()).get('/generated/iso.png')).status).toBe(403);
         expect((await request(app()).get('/generated/none.png')).status).toBe(404);
+    });
+
+    it('API 키(chat 스코프)로도 키 소유자로 판정한다 — JWT 가 없는 봇 클라이언트 경로', async () => {
+        const r = await request(app()).get('/generated/ok.png').set('Authorization', 'Bearer omk_live_chatkey0000000000000000');
+        expect(r.status).toBe(200);
+        expect(viewers.at(-1)?.userId).toBe('A');
+        // 무효 키는 401, chat 스코프 밖 키는 판정 전에 403
+        expect((await request(app()).get('/generated/ok.png').set('Authorization', 'Bearer omk_live_unknownkey000000000000')).status).toBe(401);
+        const before = viewers.length;
+        expect((await request(app()).get('/generated/ok.png').set('Authorization', 'Bearer omk_live_bridgekey00000000000000')).status).toBe(403);
+        expect(viewers.length).toBe(before);
     });
 
     it('reports/ 하위는 핸들러를 지나지 않고 static 으로 공개', async () => {
