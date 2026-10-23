@@ -8,9 +8,10 @@
  *
  */
 import { isControlEnvKey, McpCatalogInputError } from '../../../security/spawn-env-policy';
-
-export { McpCatalogInputError };
 import type { McpCatalogTemplate, McpFromCatalogPayload } from '../schemas/mcp-catalog.schema';
+
+// 수동 등록·ingest 라우트가 이 모듈 하나로 검사와 오류 형식을 쓰게 다시 내보낸다(add-on 경계 — 새 Base import 없이).
+export { McpCatalogInputError };
 
 /**
  * 저장 전 제어 env 검사 — 제어 키(spawn-env-policy)가 있으면 키 이름만 담아 McpCatalogInputError(라우트 400)를 던진다.
