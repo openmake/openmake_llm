@@ -130,7 +130,7 @@ router.post('/sessions/:sid/artifacts/:aid/publish', requireAuth, asyncHandler(a
         userId,
         details: { publicationId: pub.publication_id, artifactId: aid, visibility, sharedVersion },
         actor: { email: req.user?.email, role: req.user?.role },
-    });
+    }).catch(() => { /* 감사 실패는 응답에 영향 없음 — 원인은 AuditService 가 이미 남긴다 */ });
 
     res.json(success({
         publicationId: pub.publication_id,
@@ -169,7 +169,7 @@ router.delete('/sessions/:sid/artifacts/:aid/publish', requireAuth, asyncHandler
         userId,
         details: { publicationId: pub.publication_id, artifactId: aid },
         actor: { email: req.user?.email, role: req.user?.role },
-    });
+    }).catch(() => { /* 감사 실패는 응답에 영향 없음 — 원인은 AuditService 가 이미 남긴다 */ });
     res.json(success({ unpublished: true }));
 }));
 
