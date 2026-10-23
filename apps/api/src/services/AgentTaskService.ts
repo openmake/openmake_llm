@@ -521,6 +521,7 @@ export class AgentTaskService {
             await lease.end(); clearProgress(taskId); // 끝난 실행의 쓰지 않은 진행은 버린다(R8)
             // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup. 소유권을 잃었으면 새 소유자가 쓰고 있어 건너뛴다.
             if (!leaseLost) await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber, interrupted, keepWorkspace: continuedToSuccessor });
+            if (!leaseLost) void getToolRuntime().releaseUserToolsForTask(userId, taskId).catch(() => { /* noop */ }); // 작업이 잡은 사용자 MCP 풀 참조 해제(R6)
         }
     }
 }

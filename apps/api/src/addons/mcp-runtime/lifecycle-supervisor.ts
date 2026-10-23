@@ -3,7 +3,7 @@
  *
  * Lifecycle 분리 (P7-D3):
  *   - per_session : onUserLogin 에서 spawn, onUserLogout 에서 kill
- *   - per_chat    : onChatStart 에서 spawn, onChatEnd 에서 kill
+ *   - per_chat    : onChatStart 에서 spawn, onChatEnd 에서 kill (에이전트 작업이 띄운 것은 onTaskEnd — 채팅·다른 작업이 없을 때)
  *   - long_lived  : 서버 부팅 시 (initializeFromDB) spawn — 본 supervisor 영역 외
  *
  * Crash detection (P7-D5):
@@ -11,6 +11,7 @@
  *   - crash 감지 시: 풀에서 제거 + mcp_server_instances 에 'crashed' 기록
  *
  * 자동 재시작 (P7-D8): off by default — crash 시 풀 제거만, 명시적 /start 만 재시작.
+ * 유휴 회수 (R6): 채팅·작업 참조 없이 TTL 을 넘긴 사용자 풀은 sweepIdleUsers 가 닫는다(타이머는 runtime-boot).
  *
  */
 import type { UserMCPPool } from './user-pool';
@@ -21,6 +22,7 @@ import { createLogger } from '../../utils/logger';
 import { classifyConnectError, serializeConnectError } from './connect-error';
 import { MCP_SANDBOX_REQUIRED_CODE } from './sandbox-docker';
 import { recordSecurityAudit } from '../../runtime-ports/audit-port';
+import { USER_POOL_IDLE_TTL_MS } from '../../config/timeouts';
 
 const logger = createLogger('LifecycleSupervisor');
 
@@ -56,6 +58,8 @@ interface LifecycleSupervisor {
     onChatStart(userId: string, chatId: string): Promise<void>;
     ensureUserServers(userId: string, ctx?: string): Promise<void>;
     onChatEnd(userId: string, chatId: string): Promise<void>;
+    onTaskEnd(userId: string, taskId: string): Promise<void>;
+    sweepIdleUsers(now?: number): Promise<string[]>;
     spawnUserServer(userId: string, serverId: string): Promise<ExternalMCPClient>;
     killUserServer(userId: string, serverId: string): Promise<void>;
     getUserClient(userId: string, serverId: string): ExternalMCPClient | undefined;
@@ -77,6 +81,8 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
     private readonly repo: SupervisorDeps['repo'];
     private readonly clientFactory: ClientFactory;
     private readonly chatOwners = new Map<string, string>();
+    /** 사용자별 진행 중 에이전트 작업(ensureUserServers ctx `task=<id>`) — onTaskEnd 가 지운다 */
+    private readonly taskRefs = new Map<string, Set<string>>();
     /** 진행 중 spawn(user:server) — 동시 호출이 같은 Promise 를 공유해 컨테이너 이중 기동을 막는다 */
     private readonly inFlightSpawns = new Map<string, Promise<ExternalMCPClient>>();
 
@@ -127,6 +133,11 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
      * onChatStart(채팅 시작) 외에 도구 picker 엔드포인트도 호출 — 목록 표시 전 풀 보장.
      */
     async ensureUserServers(userId: string, ctx = ''): Promise<void> {
+        if (ctx.startsWith('task=')) {
+            const refs = this.taskRefs.get(userId) ?? new Set<string>();
+            refs.add(ctx.slice('task='.length));
+            this.taskRefs.set(userId, refs);
+        }
         const servers = await this.repo.listUserServers(userId);
         const targets = servers.filter(s => {
             if (s.user_id !== userId || s.auto_spawn !== true || s.enabled !== true) return false;
@@ -142,7 +153,49 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
 
     async onChatEnd(userId: string, chatId: string): Promise<void> {
         this.chatOwners.delete(chatId);
+        await this.killPerChatServers(userId);
+    }
+
+    /** 작업 종료(R6) — 참조를 지우고, 열린 채팅도 다른 작업도 없으면 per_chat 만 닫는다(per_session 은 유휴 회수까지) */
+    async onTaskEnd(userId: string, taskId: string): Promise<void> {
+        // ensure 에 닿지 못한 작업(시작 전 취소 등)은 잡은 것이 없다 — 남의 per_chat 을 닫지 않는다
+        const refs = this.taskRefs.get(userId);
+        if (!refs?.has(taskId)) return;
+        refs.delete(taskId);
+        if (refs.size === 0) this.taskRefs.delete(userId);
+        if (this.isInUse(userId)) return;
+        // 목록을 기다리는 사이 후속 작업·채팅이 잡았으면 닫지 않는다(이어가기 체인)
+        await this.killPerChatServers(userId, true);
+    }
+
+    /** 유휴 회수(R6) — 채팅·작업 없이 마지막 활동이 TTL 을 넘긴 사용자를 onUserLogout 으로 닫고 목록 반환(TTL 0 = 끔) */
+    async sweepIdleUsers(now = Date.now()): Promise<string[]> {
+        if (!(USER_POOL_IDLE_TTL_MS > 0)) return [];
+        const isIdle = (u: string): boolean => !this.isInUse(u) && this.userPool.lastActivity(u) < now - USER_POOL_IDLE_TTL_MS;
+        const closed: string[] = [];
+        for (const userId of [...this.userPool.userIds()].filter(isIdle)) {
+            // 앞 사용자를 닫는(await) 사이 작업·채팅이 시작됐을 수 있다 — 닫기 직전에 다시 본다
+            if (!isIdle(userId)) continue;
+            logger.info(`유휴 회수 u=${userId}: 마지막 활동 ${Math.round((now - this.userPool.lastActivity(userId)) / 1000)}초 전`);
+            await this.onUserLogout(userId).catch(e => logger.warn(`유휴 회수 실패 u=${userId}: ${e}`));
+            closed.push(userId);
+        }
+        return closed;
+    }
+
+    /** 진행 중 작업 참조나 열린 채팅이 있는가 */
+    private isInUse(userId: string): boolean {
+        return this.taskRefs.has(userId) || this.hasOpenChat(userId);
+    }
+
+    private hasOpenChat(userId: string): boolean {
+        for (const owner of this.chatOwners.values()) if (owner === userId) return true;
+        return false;
+    }
+
+    private async killPerChatServers(userId: string, skipIfInUse = false): Promise<void> {
         const servers = await this.repo.listUserServers(userId);
+        if (skipIfInUse && this.isInUse(userId)) return;
         const targets = servers.filter(s =>
             s.user_id === userId &&
             (s as ServerWithLifecycle).lifecycle === 'per_chat',
