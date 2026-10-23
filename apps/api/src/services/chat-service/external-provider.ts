@@ -196,7 +196,8 @@ export async function runExternalStream(
             // 도구 실행 중 중단됐으면 다음 턴(최종 턴 전환 포함)을 돌지 않는다.
             throwIfAborted(req, 0);
             // Wall-clock 예산 가드 — 상세는 external-loop-guards.
-            if (!suppressTools && applyWallClockGuard({ startedAt, messages })) {
+            // 채팅 승인 대기(사람이 결정하는 시간, W3 S3)는 예산에서 뺀다 — 시작 시각을 기다린 만큼 뒤로 민다.
+            if (!suppressTools && applyWallClockGuard({ startedAt: startedAt + state.approvalWaitMs, messages })) {
                 suppressTools = true;
             }
             const turnTools = suppressTools ? [] : tools;
@@ -324,13 +325,15 @@ export async function runExternalStream(
 
             // 도구 실행 시간 누적 — TTFT 분해에서 "모델이 느린가 / 도구가 느린가"를 가른다.
             const toolBatchStartedAt = Date.now();
+            const approvalWaitBefore = state.approvalWaitMs;
             // 도구 호출 배치 실행(이미지 병렬 선실행 · 위임/오케스트레이션 분기와 호출 캡 ·
             // 결정적 첨부 블록 수집)은 external-tool-batch 로 분리.
             await runToolCallBatch({
                 deps, req, ctx, tools, messages, toolCalls: result.toolCalls, state,
             });
 
-            timings.toolMs += Date.now() - toolBatchStartedAt;
+            // 승인 대기는 도구 시간이 아니다(W3 S3) — 이 배치에서 기다린 몫을 뺀다.
+            timings.toolMs += Date.now() - toolBatchStartedAt - (state.approvalWaitMs - approvalWaitBefore);
 
             // 같은 도구 반복 사용 가드 (인자 무관, WARN/BREAK) — 상세는 external-loop-guards.
             if (applyToolOveruseGuard({ toolCalls: result.toolCalls, toolUseCounts, warnedTools, messages })) {
