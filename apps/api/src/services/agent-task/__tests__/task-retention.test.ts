@@ -26,7 +26,7 @@ const ON: AgentTaskRetentionConfig = {
     ENABLED: true, DRY_RUN: false, RECORD_RETENTION_DAYS: 90, SCREENSHOT_RETENTION_DAYS: 30, BATCH_LIMIT: 500,
     SCREENSHOT_EXTENSIONS: ['.png', '.jpg', '.jpeg', '.webp'],
     // 기존 항목 테스트는 압축을 끈 채로 본다 — 압축은 아래 describe 에서 켠다
-    CHECKPOINT_COMPACT_ENABLED: false, CHECKPOINT_COMPACT_AFTER_MS: DAY,
+    CHECKPOINT_COMPACT_ENABLED: false, CHECKPOINT_COMPACT_AFTER_MS: DAY, DEFAULT_ON: false,
 };
 
 interface Q { sql: string; params: unknown[] }
@@ -256,6 +256,16 @@ describe('dry-run', () => {
         const line = mockLogInfo.mock.calls.map((c) => String(c[0])).find((m) => m.includes('dry-run'));
         expect(line).toBe('에이전트 작업 보존 정리(dry-run): 작업 4 / 감사 로그 4 / 캡처 1 / 체크포인트 4(이번 배치 기준) — 삭제하지 않음');
     });
+
+    it('꺼진 항목(기간 0·압축 끔)은 0 이 아니라 "끔"으로 찍는다', async () => {
+        mockLogInfo.mockClear();
+        const { pool } = mockPool((sql) => (/COUNT\(\*\)/.test(sql) ? { rows: [{ n: '4' }] } : { rows: [], rowCount: 0 }));
+        await sweepAgentTaskRetention(pool, {
+            now: NOW, cfg: { ...ON, DRY_RUN: true, RECORD_RETENTION_DAYS: 0, CHECKPOINT_COMPACT_ENABLED: false }, workspaceRoot: path.join(WS_ROOT, 'none'),
+        });
+        const line = mockLogInfo.mock.calls.map((c) => String(c[0])).find((m) => m.includes('dry-run'));
+        expect(line).toBe('에이전트 작업 보존 정리(dry-run): 작업 끔 / 감사 로그 끔 / 캡처 0 / 체크포인트 끔(이번 배치 기준) — 삭제하지 않음');
+    });
 });
 
 describe('AGENT_TASK_RETENTION — 운영 기본 ON(W3 R5)', () => {
@@ -282,6 +292,13 @@ describe('AGENT_TASK_RETENTION — 운영 기본 ON(W3 R5)', () => {
         expect(c.DRY_RUN).toBe(false);
         expect(c.CHECKPOINT_COMPACT_ENABLED).toBe(true);
         expect(c.CHECKPOINT_COMPACT_AFTER_MS).toBe(24 * 60 * 60_000);
+        expect(c.DEFAULT_ON).toBe(true); // 기본값으로 켜졌다 — 부팅 경고 대상
+    });
+
+    it('명시한 true·false 와 dev 는 기본값으로 켜진 것이 아니다(부팅 경고 없음)', () => {
+        expect(load('production', { AGENT_TASK_RETENTION_ENABLED: 'true' }).DEFAULT_ON).toBe(false);
+        expect(load('production', { AGENT_TASK_RETENTION_ENABLED: 'false' }).DEFAULT_ON).toBe(false);
+        expect(load('development').DEFAULT_ON).toBe(false);
     });
 
     it('운영에서도 false 를 명시하면 끈다, dry-run 은 true 명시로만 켠다', () => {

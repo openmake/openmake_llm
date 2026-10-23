@@ -199,7 +199,10 @@ export async function sweepAgentTaskRetention(
     }
 
     if (dryRun) {
-        logger.info(`에이전트 작업 보존 정리(dry-run): 작업 ${result.tasks} / 감사 로그 ${result.auditLogs} / 캡처 ${result.screenshots} / 체크포인트 ${result.checkpoints}(이번 배치 기준) — 삭제하지 않음`);
+        // 꺼진 항목은 0 이 아니라 '끔' — 건수 0(대상 없음)과 구분한다
+        const n = (on: boolean, count: number): string => (on ? String(count) : '끔');
+        const rec = cfg.RECORD_RETENTION_DAYS > 0;
+        logger.info(`에이전트 작업 보존 정리(dry-run): 작업 ${n(rec, result.tasks)} / 감사 로그 ${n(rec, result.auditLogs)} / 캡처 ${n(cfg.SCREENSHOT_RETENTION_DAYS > 0, result.screenshots)} / 체크포인트 ${n(cfg.CHECKPOINT_COMPACT_ENABLED, result.checkpoints)}(이번 배치 기준) — 삭제하지 않음`);
         return result;
     }
     if (result.tasks || result.auditLogs || result.screenshots || result.checkpoints) {

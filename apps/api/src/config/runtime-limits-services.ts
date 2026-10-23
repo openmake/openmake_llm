@@ -6,7 +6,7 @@
  */
 
 import { MAX_TOOL_RESULT_CHARS } from './runtime-limits-tools';
-import { boolEnvDefault } from './secure-defaults';
+import { boolEnvDefault, isProductionEnv } from './secure-defaults';
 
 /**
  * 채팅 사용자 확인 질문(ask_user) — 요청이 모호할 때 모델이 산출물을 만들기 전에 질문으로 턴을 끝낸다.
@@ -387,6 +387,8 @@ const nonNegIntEnv = (v: string | undefined, def: number): number => {
  */
 export const AGENT_TASK_RETENTION = {
     ENABLED: boolEnvDefault(process.env.AGENT_TASK_RETENTION_ENABLED, true),
+    /** 명시 없이 운영 기본값(W3)으로 켜졌는가 — 스케줄러 등록 때 경고 1줄(되돌릴 수 없는 삭제를 알린다) */
+    DEFAULT_ON: isProductionEnv() && !['true', 'false'].includes(process.env.AGENT_TASK_RETENTION_ENABLED?.trim().toLowerCase() ?? ''),
     /** true 명시 때만 — 지우는 대신 같은 조건의 건수만 세어 로그에 남긴다(ENABLED 가 꺼져 있어도 스윕은 돈다) */
     DRY_RUN: process.env.AGENT_TASK_RETENTION_DRY_RUN === 'true',
     /** 끝난(completed·failed·cancelled) 지 N일 지난 작업의 작업·단계·승인 기록, 같은 기간 지난 작업 감사 로그 삭제 */

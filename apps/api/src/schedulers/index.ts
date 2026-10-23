@@ -269,6 +269,10 @@ export async function startAllSchedulers(): Promise<void> {
     try {
         const { AGENT_TASK_RETENTION } = await import('../config/runtime-limits');
         if (AGENT_TASK_RETENTION.ENABLED || AGENT_TASK_RETENTION.DRY_RUN) {
+            if (AGENT_TASK_RETENTION.DEFAULT_ON && !AGENT_TASK_RETENTION.DRY_RUN) {
+                logger.warn('Agent Task 보존 정리가 운영 기본값(W3)으로 켜져 있다 — 끝난 작업 기록을 지금부터 지운다. '
+                    + '끄려면 AGENT_TASK_RETENTION_ENABLED=false, 미리 보려면 AGENT_TASK_RETENTION_DRY_RUN=true');
+            }
             const { sweepAgentTaskRetention } = await import('../services/agent-task/task-retention');
             const { getPool } = await import('../data/models/unified-database');
             const sweep = () => sweepAgentTaskRetention(getPool()).catch(() => { /* 항목별로 이미 로그 — 다음 주기에 재시도 */ });
