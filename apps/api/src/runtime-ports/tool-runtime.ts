@@ -56,6 +56,8 @@ export interface ToolRuntime {
      * 일회성 실행이라 도구 목록을 모으는 시점에 풀이 비어 있으면 그 실행 내내 사용자 MCP 도구가 없다.
      */
     ensureUserToolsForTask(userId: string, taskId: string): Promise<void>;
+    /** 에이전트 작업 종료(R6) — 그 작업의 사용자 도구 참조를 놓는다. 채팅·다른 작업이 없으면 per_chat 서버를 닫는다. */
+    releaseUserToolsForTask(userId: string, taskId: string): Promise<void>;
     /**
      * 특정 사용자 MCP 서버의 도구를 이름 그대로 호출 — **자기 서버를 소유한 통합 add-on** 이 쓴다
      * (네임스페이스 라우팅을 거치지 않는다). 외부 런타임이 없으면 `null` 을 돌려 호출부가 503 을 낸다.
@@ -120,6 +122,7 @@ const BUILTIN_ONLY_RUNTIME: ToolRuntime = {
     async onChatStart() { /* no-op */ },
     async onChatEnd() { /* no-op */ },
     async ensureUserToolsForTask() { /* no-op */ },
+    async releaseUserToolsForTask() { /* no-op */ },
     async onServerReady() { /* no-op */ },
     async shutdown() { /* no-op */ },
 };
