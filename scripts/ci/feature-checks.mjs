@@ -12,7 +12,7 @@ const manifest = JSON.parse(readFileSync(new URL('./feature-checks.manifest.json
 // Jest bootstrap files are imported by no test, yet every apps/api suite runs through them: a change selects every suite.
 const JEST_BOOTSTRAP = ['apps/api/jest.config.js', 'apps/api/jest.setup.ts', 'apps/api/jest.setup-after-env.ts'];
 export function selectFeatures(files) {
-  const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, hostSetup: false, e2e: selectE2E(files) };
+  const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, discordBot: false, hostSetup: false, e2e: selectE2E(files) };
   for (const file of files) {
     if (result.e2e.some(spec => spec.file === file)) continue;
     if (JEST_BOOTSTRAP.includes(file)) { result.api.push(file); continue; }
@@ -108,6 +108,8 @@ export function runFeatures(files, options = {}) {
   }
   if (selection.infra) run('npm', ['run', 'test:infra']);
   if (selection.bridge) run('npm', ['test', '--workspace=@openmake/local-bridge-core']);
+  // apps/discord-bot is its own workspace (node --test, see its package.json), not part of the apps/api Jest project.
+  if (selection.discordBot) run('npm', ['test', '--workspace=openmake-discord-bot']);
   let hostSetup;
   if (selection.hostSetup) {
     const { portable, macOnly } = hostSetupTests(root);

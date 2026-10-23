@@ -12,7 +12,8 @@
     "scripts/ci/": "pipeline",
     ".github/workflows/": "pipeline",
     "infra/": "infra",
-    "packages/local-bridge-core/": "bridge"
+    "packages/local-bridge-core/": "bridge",
+    "apps/discord-bot/": "discordBot"
   },
   "exactFiles": {
     "packages/shared-types/src/index.ts": "web",
