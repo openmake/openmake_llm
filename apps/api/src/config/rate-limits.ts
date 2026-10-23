@@ -245,6 +245,15 @@ export const RL_ADMIN = {
 } as const;
 
 /**
+ * GET /metrics 스크레이프 레이트 리밋(#1477) — IP 당 1분 창. 스크레이퍼는 보통 15~60초 주기라 60회면 정상 scrape 를
+ * 막지 않고, 인증 실패 반복도 같은 예산을 쓴다. 신원(JWT·API 키)은 보지 않는다 — 블랙리스트 DB 조회가 없게.
+ */
+export const RL_METRICS = {
+    windowMs: WINDOW_1M,
+    ipLimit: Number(process.env.RL_METRICS_IP) || 60,
+} as const;
+
+/**
  * GDPR Article 20 데이터 export 레이트 리밋.
  *
  * 적용: GET /api/users/me/export
@@ -289,6 +298,7 @@ const _windowMsInvariant = [
     { name: 'RL_MCP_INGEST', cfg: RL_MCP_INGEST },
     { name: 'RL_PUSH', cfg: RL_PUSH },
     { name: 'RL_ADMIN', cfg: RL_ADMIN },
+    { name: 'RL_METRICS', cfg: RL_METRICS },
     { name: 'RL_GDPR_EXPORT', cfg: RL_GDPR_EXPORT },
 ];
 for (const { name, cfg } of _windowMsInvariant) {
