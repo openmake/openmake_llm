@@ -269,7 +269,9 @@ export const MCP_EXTERNAL_TOOL_LIMITS = {
  *
  * 채팅도 진행 중 작업도 없고 마지막 활동(connect·도구 호출)이 TTL 을 넘긴 사용자의 풀(per_session 포함)을
  * 닫는다 — 로그아웃 없이 떠난 사용자의 자식 프로세스가 무기한 남던 누수를 막는다. 다음 채팅·작업의
- * ensureUserServers 가 멱등으로 다시 띄운다. 모든 환경에서 기본 ON(30분), 0 이면 끈다.
+ * ensureUserServers 가 멱등으로 다시 띄우는 것은 자동 실행(auto_spawn) 서버뿐이다 — 수동 [연결] 서버는 사용자가
+ * 다시 연결해야 하고, 회수 뒤 다시 뜰 때까지 설정 화면 목록에는 '연결 끊김'으로 보인다.
+ * 모든 환경에서 기본 ON(30분), 0 이면 끈다.
  */
 export const USER_POOL_IDLE_TTL_MS = parseInt(process.env.MCP_USER_POOL_IDLE_TTL_MS || '1800000', 10);
 /** 유휴 회수 스윕 주기(ms) */

@@ -4,7 +4,9 @@
  * 왜: 토론(전문가 5명 병렬)·딥리서치(검색/종합 fan-out)가 외부 BYOK 모델로 돌면 무료/개발 키의
  * 분당 한도에 걸려 전문가가 전멸하거나(B.AI 5/5 429) 절반이 빠진다(hasa 3/5 429) — 2026-09-03 실측.
  * OpenAI SDK 의 내장 재시도(짧은 백오프)만으론 부족하다. 호출부(토론 엔진·딥리서치·역할 클라이언트)는
- * 그대로 두고 model-role-resolver 가 만드는 외부 LLMClient 를 이 프록시로 감싼다 — 로컬 vLLM 은 무관.
+ * 그대로 두고 model-role-resolver 가 만드는 외부 LLMClient 를 이 프록시로 감싼다.
+ * 로컬(local-llm)은 LOCAL_LLM_MAX_CONCURRENT>0 일 때만 슬롯을 잡는다(429 재시도 없음) — 현재 그 슬롯을 거치는 운영 호출은
+ * 오케스트레이터 capability 호출(withProviderSlot)뿐이고, 채팅·에이전트 작업 본 루프의 로컬 호출은 거치지 않는다.
  *
  * 세마포어는 프로세스 전역·provider 단위(rate limit 은 키 단위지만 배포당 키가 사실상 1개).
  */
