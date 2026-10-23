@@ -31,6 +31,9 @@ import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { requiresApproval, stripApprovalGatedTools } from '../task-sandbox/approval-gate';
 import { requestChatApproval, resolveChatApprovalPolicy } from './chat-approval';
 import { getChatApprovalDeniedResult } from '../../prompts/chat-approval';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('ChatToolApproval');
 
 type ExternalToolCall = NonNullable<ChatStreamResult['toolCalls']>[number];
 
@@ -70,6 +73,8 @@ interface ToolBatchState {
      * (CHAT_TOOL_APPROVAL.TAINT_ENABLED). 한 번 켜지면 요청 끝까지 유지.
      */
     tainted: boolean;
+    /** 승인 대기로 흐른 시간 누적(ms, W3 S3) — 사람이 결정하는 시간이라 도구 루프 wall-clock 예산·도구 시간(toolMs)에서 뺀다. */
+    approvalWaitMs: number;
 }
 
 /** 빈 배치 상태 — 요청 1건마다 새로 만든다. */
@@ -83,7 +88,15 @@ export function createToolBatchState(): ToolBatchState {
         odArtifact: null,
         toolSources: [],
         tainted: false,
+        approvalWaitMs: 0,
     };
+}
+
+/** 승인 알림 콜백(WS 전송) 실패가 대기·실행을 깨지 않게 — onPending 은 레지스트리 Promise 안에서 돈다. */
+function notifySafely(what: string, fn: () => void): void {
+    try { fn(); } catch (e) {
+        logger.warn(`채팅 승인 ${what} 알림 실패(무시): ${e instanceof Error ? e.message : String(e)}`);
+    }
 }
 
 /** PURE: 이 도구의 결과가 대화를 오염시키는가(W3 S3) — 외부 내용을 들여오는 등급(external·network)이거나 외부 MCP 도구. */
@@ -104,13 +117,14 @@ async function gateChatToolCall(p: {
     taintedContext: boolean;
     userId: string;
     langCode: string | undefined;
+    state: ToolBatchState;
 }): Promise<string | null> {
     const { deps, req, tc, policy, userId } = p;
     const args = tc.args as Record<string, unknown>;
     if (!requiresApproval(policy, tc.name, args, { taintedContext: p.taintedContext })) return null;
     const shown: { approvalId?: string } = {};
     const r = await requestChatApproval({
-        chatId: req.sessionId ?? userId,
+        chatId: req.sessionId || userId,
         userId,
         toolName: tc.name,
         args,
@@ -118,14 +132,16 @@ async function gateChatToolCall(p: {
         ...(req.abortSignal ? { signal: req.abortSignal } : {}),
         onPending: (pa) => {
             shown.approvalId = pa.approvalId;
-            deps.chatApprovalPendingCallback?.({
+            notifySafely('대기', () => deps.chatApprovalPendingCallback?.({
                 approvalId: pa.approvalId, toolName: pa.toolName, args: pa.args, riskClass: pa.riskClass,
                 expiresAt: pa.createdAt + CHAT_TOOL_APPROVAL.TIMEOUT_MS,
-            });
+            }));
         },
     });
-    if (shown.approvalId) {
-        deps.chatApprovalDecidedCallback?.({ approvalId: shown.approvalId, decision: r.decision, ...(r.reason ? { reason: r.reason } : {}) });
+    p.state.approvalWaitMs += r.waitedMs;
+    const approvalId = shown.approvalId;
+    if (approvalId) {
+        notifySafely('결정', () => deps.chatApprovalDecidedCallback?.({ approvalId, decision: r.decision, ...(r.reason ? { reason: r.reason } : {}) }));
     }
     return r.decision === 'approved' ? null : getChatApprovalDeniedResult(tc.name, r.reason, p.langCode);
 }
@@ -154,7 +170,8 @@ export async function runToolCallBatch(params: {
         return;
     }
 
-    // 채팅 도구 승인(W3 S3) — 정책(채팅 기본 ∨ 조직 하한)은 배치당 1회 정한다.
+    // 채팅 도구 승인(W3 S3) — 정책(채팅 기본 ∨ 조직 하한)은 배치당 1회 정한다. none 이면 게이트가 없다(종전 동작 —
+    // 정책 none 의 바닥 거절은 사람이 없는 agent-task 무인 실행의 규칙이고, 채팅에는 사람이 있다).
     const userCtx = deps.currentUserContext ?? { userId: 'guest', role: 'guest' };
     const userId = String(userCtx.userId);
     const policy = await resolveChatApprovalPolicy({ userId, role: userCtx.role });
@@ -166,16 +183,16 @@ export async function runToolCallBatch(params: {
     // 순차 루프가 원래 호출 순서대로 배치한다. 승인이 필요한 호출은 선실행하지 않는다(루프에서 묻는다).
     const parallelReadOnlyResults = await prefetchReadOnlyCalls(
         toolCalls,
-        (tc) => !requiresApproval(policy, tc.name, tc.args as Record<string, unknown>, { taintedContext: taintedContext() }),
+        (tc) => policy === 'none' || !requiresApproval(policy, tc.name, tc.args as Record<string, unknown>, { taintedContext: taintedContext() }),
         (tc) => executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>, state.toolSources),
         { path: 'chat', ...(req.abortSignal ? { signal: req.abortSignal } : {}) },
     );
     for (const tc of toolCalls) {
         let toolResult: string;
         // 선실행된 호출은 이미 실행됐다(배치 시작 시점의 문맥에서 승인 불요로 판정) — 다시 묻지 않는다.
-        const denied = parallelReadOnlyResults.has(tc.id) ? null : await gateChatToolCall({
+        const denied = policy === 'none' || parallelReadOnlyResults.has(tc.id) ? null : await gateChatToolCall({
             deps, req, tc, policy, taintedContext: taintedContext(), userId,
-            langCode: ctx.resolvedLanguage || req.userLanguagePreference,
+            langCode: ctx.resolvedLanguage || req.userLanguagePreference, state,
         });
         if (denied !== null) {
             toolResult = denied;
