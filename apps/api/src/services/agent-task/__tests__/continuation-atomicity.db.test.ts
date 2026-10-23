@@ -20,6 +20,8 @@ const describeOrSkip = CONN ? describe : describe.skip;
 
 // ── 실행 환경 대역: 모델·작업 공간·큐·실행기만 대역이고 DB 는 진짜다 ──
 let currentPool: Pool;
+/** 부팅 복구의 역할 조회(getUserById) 지연 훅 — 지연 경쟁자 재현용. 기본은 즉시 */
+let userLookupHook: (userId: string) => Promise<void> = async () => undefined;
 const dispatchMock = jest.fn();
 const executeMock = jest.fn().mockResolvedValue(undefined);
 jest.mock('../role-client', () => ({ chatTurnWithRoleFallback: jest.fn().mockResolvedValue({ content: '1. 다음 할 일' }) }));
@@ -37,7 +39,7 @@ jest.mock('../../../data/models/unified-database', () => {
             updateAgentTask: (id: string, u: unknown) => repo().updateAgentTask(id, u),
             getAgentTask: (id: string) => repo().getAgentTask(id),
             getAgentTaskSteps: (id: string) => repo().getAgentTaskSteps(id),
-            getUserById: async () => ({ role: 'user' }),
+            getUserById: async (id: string) => { await userLookupHook(id); return { role: 'user' }; },
         }),
     };
 });
@@ -365,7 +367,7 @@ describeOrSkip('이어가기 원자성·복구 (실제 Postgres, #1473)', () => 
             const startedAt = Date.now() - 20; // 새 프로세스는 20ms 전에 떴다 — 가동 시간은 그 뒤로 흐른다
             return jest.spyOn(process, 'uptime').mockImplementation(() => (Date.now() - startedAt) / 1000);
         };
-        afterEach(() => jest.restoreAllMocks());
+        afterEach(() => { jest.restoreAllMocks(); userLookupHook = async () => undefined; });
 
         it('lease OFF: 커밋 뒤 디스패치 전 크래시 → 재시작 부팅 복구가 후속을 정확히 한 번 디스패치하고, 부모 재실행은 그 후속을 따라 마무리한다', async () => {
             limits.LEASE_ENABLED = false;
@@ -435,6 +437,98 @@ describeOrSkip('이어가기 원자성·복구 (실제 Postgres, #1473)', () => 
             dispatchMock.mockClear();
             await recoverInterruptedAgentTasks();
             expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === own || c[0].taskId === terminal)).toHaveLength(0);
+        });
+            // ── 두 번째 리뷰 보정: 끝까지 훑기·고정된 시작 시각 기준 ──
+        /** 앞선 시험이 남긴 pending 행(대역 실행은 상태를 바꾸지 않는다)을 이 파일이 만든 사용자 범위에서만 닫는다 */
+        const retireLeftovers = async (): Promise<void> => {
+            await admin.query(`UPDATE agent_tasks SET status = 'cancelled' WHERE user_id = ANY($1::text[]) AND status = 'pending'`, [userIds]);
+        };
+        /** 실제 경로로 커밋 뒤 디스패치 전 크래시한 소유권 없는 후속 하나(lease OFF) */
+        const crashedUnleasedSuccessor = async (): Promise<{ sid: string; userId: string }> => {
+            const { parent, userId } = await seedParent();
+            const crashing = new CrashingPool(real, admin);
+            currentPool = crashing.asPool();
+            dispatchMock.mockImplementationOnce(async () => { crashing.crash(); throw new Error('process crashed'); });
+            await continueAsNewSegment(input(parent));
+            currentPool = real;
+            return { sid: (await row(parent.id)).continued_by_task_id as string, userId };
+        };
+        /** 체크포인트가 깨진(대화 없음) pending 후속 — 조회에는 걸리지만 복구할 수 없다. id 로 정렬 앞쪽에 둔다 */
+        const invalidSuccessors = async (prefix: string, n: number): Promise<void> => {
+            const { parent, userId } = await seedParent();
+            for (let i = 0; i < n; i++) {
+                await admin.query(
+                    `INSERT INTO agent_tasks (id, user_id, goal, status, chain_root_task_id, continued_from_task_id, checkpoint)
+                     VALUES ($1, $2, '목표', 'pending', $3, $3, '{}'::jsonb)`,
+                    [`${prefix}-0000-4000-8000-${String(i).padStart(12, '0')}`, userId, parent.id]);
+            }
+        };
+        const gateFor = (userId: string) => {
+            let release!: () => void;
+            let hit!: () => void;
+            const reachedP = new Promise<void>((r) => { hit = r; });
+            const gate = new Promise<void>((r) => { release = r; });
+            let first = true;
+            userLookupHook = async (id) => { if (id === userId && first) { first = false; hit(); await gate; } };
+            return { reached: reachedP, release };
+        };
+
+        it('51건 이상: 앞쪽 페이지가 전부 복구 불가여도 한 번의 부팅 복구가 51건 모두를 한 번씩 디스패치한다', async () => {
+            limits.LEASE_ENABLED = false;
+            await retireLeftovers();
+            await invalidSuccessors('00000001', 50);
+            const valid: string[] = [];
+            for (let i = 0; i < 51; i++) valid.push((await crashedUnleasedSuccessor()).sid);
+            await restart();
+            await recoverInterruptedAgentTasks();
+            for (const sid of valid) expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === sid)).toHaveLength(1);
+            expect(dispatchMock.mock.calls.filter((c) => String(c[0].taskId).startsWith('00000001-'))).toHaveLength(0);
+        }, 60_000);
+
+        it('지연된 경쟁자: 다른 복구자가 먼저 claim·디스패치한 뒤 한참 늦게 claim 해도 다시 디스패치하지 않는다', async () => {
+            limits.LEASE_ENABLED = false;
+            await retireLeftovers();
+            const { sid, userId } = await crashedUnleasedSuccessor();
+            await restart();
+            const gate = gateFor(userId);
+            const slow = recoverInterruptedAgentTasks(); // 목록은 읽었고, claim 직전 역할 조회에서 멈춘다
+            await gate.reached;
+            await recoverInterruptedAgentTasks(); // 다른 복구자 — claim(updated_at 갱신)·디스패치
+            expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === sid)).toHaveLength(1);
+            await new Promise((r) => setTimeout(r, 300)); // 실제로 시간이 흐른다(행은 건드리지 않는다)
+            gate.release();
+            await slow;
+            expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === sid)).toHaveLength(1);
+            expect((await row(sid)).lease_until).toBeNull();
+        });
+
+        it('지연 중 이 프로세스가 커밋한 후속은 뒤 페이지에서도 부팅 복구가 건드리지 않는다', async () => {
+            limits.LEASE_ENABLED = false;
+            await retireLeftovers();
+            await invalidSuccessors('00000002', 49);
+            // 첫 페이지 50번째 자리 — 복구 가능한 시작 전 후속(역할 조회에서 지연된다)
+            const { parent, userId } = await seedParent();
+            const early = '00000002-0000-4000-8000-999999999999';
+            await admin.query(
+                `INSERT INTO agent_tasks (id, user_id, goal, status, max_turns, chain_root_task_id, continued_from_task_id, checkpoint)
+                 VALUES ($1, $2, '목표', 'pending', 32, $3, $3, $4)`,
+                [early, userId, parent.id, JSON.stringify({ conversation: conv(), completedTurn: -1 })]);
+            await restart();
+            const gate = gateFor(userId);
+            const boot = recoverInterruptedAgentTasks();
+            await gate.reached;
+            // 이 프로세스가 지금 커밋한 소유권 없는 후속(스스로 디스패치할 몫) — 정렬상 뒤 페이지
+            const own = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+            await admin.query(
+                `INSERT INTO agent_tasks (id, user_id, goal, status, max_turns, chain_root_task_id, continued_from_task_id, checkpoint)
+                 VALUES ($1, $2, '목표', 'pending', 32, $3, $3, $4)`,
+                [own, userId, parent.id, JSON.stringify({ conversation: conv(), completedTurn: -1 })]);
+            await new Promise((r) => setTimeout(r, 300));
+            gate.release();
+            await boot;
+            expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === early)).toHaveLength(1);
+            expect(dispatchMock.mock.calls.filter((c) => c[0].taskId === own)).toHaveLength(0);
+            await admin.query(`UPDATE agent_tasks SET status = 'cancelled' WHERE id = $1`, [own]);
         });
     });
 });

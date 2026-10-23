@@ -318,7 +318,7 @@ describe('followExistingSuccessor — 후속 생존 판정(R3)', () => {
         withSuccessor(succ({ status: 'pending', updated_at: ago(120_000) }));
         const r = await continueAsNewSegment(input());
         expect(r).toEqual({ successorId: 's-old' });
-        expect(leaseRepo.claimUnleasedPendingForRedispatch).toHaveBeenCalledWith('s-old', AGENT_TASK_LIMITS.LEASE_MS, { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS });
+        expect(leaseRepo.claimUnleasedPendingForRedispatch).toHaveBeenCalledWith('s-old', { staleMs: AGENT_TASK_LIMITS.LEASE_MS }, { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS });
         expect(leaseRepo.claimUnleasedPendingForRedispatch.mock.invocationCallOrder[0]).toBeLessThan(dispatchMock.mock.invocationCallOrder[0]);
         expect(dispatchMock).toHaveBeenCalledTimes(1);
         const entry = dispatchMock.mock.calls[0][0];

@@ -16,7 +16,7 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import { AgentTaskChainRepository } from '../../data/repositories/agent-task-chain-repository';
-import { AgentTaskLeaseRepository, hasLiveLease } from '../../data/repositories/agent-task-lease-repository';
+import { AgentTaskLeaseRepository, hasLiveLease, type UnleasedClaimCutoff } from '../../data/repositories/agent-task-lease-repository';
 import { leaseOwner } from '../../config/lease-owner';
 import type { AgentTask } from '../../data/models/unified-database.types';
 import type { ChatMessage } from '../../llm/types';
@@ -146,7 +146,7 @@ async function followExistingSuccessor(taskId: string, p: Pick<ContinueInput, 'u
     const seeded = (existing.checkpoint as { conversation?: unknown } | null | undefined)?.conversation;
     if (!Array.isArray(seeded)) return { skipped: `이미 다른 실행이 이어갔습니다 (후속 ${existing.id} 체크포인트 없음)` };
     try {
-        if (!(await redispatchUnleasedSuccessor(existing, seeded as ChatMessage[], p.userRole, AGENT_TASK_LIMITS.LEASE_MS))) {
+        if (!(await redispatchUnleasedSuccessor(existing, seeded as ChatMessage[], p.userRole, { staleMs: AGENT_TASK_LIMITS.LEASE_MS }))) {
             logger.info(`[Continuation] 선점 실패 — 다른 복구자가 후속 재디스패치를 잡았다: ${taskId} → ${existing.id}`);
             return { successorId: existing.id };
         }
@@ -158,13 +158,13 @@ async function followExistingSuccessor(taskId: string, p: Pick<ContinueInput, 'u
 }
 
 /**
- * 소유권 없는 pending 후속의 재디스패치(#1473) — 원자 claim(마지막 갱신이 staleMs 보다 오래됐을 때만)을 잡은 한 곳만 디스패치한다.
- * 부모 재실행(R3, staleMs = LEASE_MS)과 부팅 복구(staleMs = 프로세스 가동 시간)가 같이 쓴다. 소유권이 켜져 있으면 claim 이
+ * 소유권 없는 pending 후속의 재디스패치(#1473) — 원자 claim(마지막 갱신이 cutoff 보다 오래됐을 때만)을 잡은 한 곳만 디스패치한다.
+ * 부모 재실행(R3, LEASE_MS 보다 오래됨)과 부팅 복구(이 프로세스가 뜬 고정 시각 이전)가 같이 쓴다. 소유권이 켜져 있으면 claim 이
  * 기존 owner·TTL 을 쓰고, 꺼져 있으면 updated_at 만 갱신한다(소유권 표식 없음). false 면 다른 곳이 잡았다.
  */
-export async function redispatchUnleasedSuccessor(successor: AgentTask, seeded: ChatMessage[], userRole: AgentTaskUserRole, staleMs: number): Promise<boolean> {
+export async function redispatchUnleasedSuccessor(successor: AgentTask, seeded: ChatMessage[], userRole: AgentTaskUserRole, cutoff: UnleasedClaimCutoff): Promise<boolean> {
     const lease = AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined;
-    if (!(await new AgentTaskLeaseRepository(getPool()).claimUnleasedPendingForRedispatch(successor.id, staleMs, lease))) return false;
+    if (!(await new AgentTaskLeaseRepository(getPool()).claimUnleasedPendingForRedispatch(successor.id, cutoff, lease))) return false;
     await dispatchSuccessor({
         successor, seeded, userRole,
         approvalPolicy: (successor.approval_policy ?? undefined) as AgentTaskRunInput['approvalPolicy'],
