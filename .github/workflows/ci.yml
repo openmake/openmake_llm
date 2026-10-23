@@ -346,6 +346,9 @@ jobs:
           brew list --formula bash >/dev/null 2>&1 || HOMEBREW_NO_AUTO_UPDATE=1 brew install bash
           B5="$(brew --prefix)/bin/bash"
           "$B5" -c 'shopt -q patsub_replacement' || { echo "patsub_replacement is not on in $("$B5" --version | head -1)"; exit 1; }
-          PATH="$(dirname "$B5"):$PATH" "$B5" scripts/setup/mac-toolchain.test.sh
-          PATH="$(dirname "$B5"):$PATH" "$B5" scripts/setup/mac-host-repair.test.sh
-          PATH="$(dirname "$B5"):$PATH" BASH5="$B5" "$B5" scripts/setup/mac-pm2-boot.test.sh
+          # Homebrew bin 에 다른 버전 node 가 있을 수 있다 — setup-node 가 맞춘 node 를 bash 5 디렉터리보다 앞에 둔다.
+          NODE_BIN="$(command -v node)" || { echo "setup-node node not on PATH"; exit 1; }
+          NODE_DIR="$(dirname "$NODE_BIN")"
+          PATH="$NODE_DIR:$(dirname "$B5"):$PATH" "$B5" scripts/setup/mac-toolchain.test.sh
+          PATH="$NODE_DIR:$(dirname "$B5"):$PATH" "$B5" scripts/setup/mac-host-repair.test.sh
+          PATH="$NODE_DIR:$(dirname "$B5"):$PATH" BASH5="$B5" "$B5" scripts/setup/mac-pm2-boot.test.sh
