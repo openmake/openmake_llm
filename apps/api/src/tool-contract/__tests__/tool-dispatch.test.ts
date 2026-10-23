@@ -50,6 +50,18 @@ describe('dispatchTool — 내장 도구(외부 런타임 없음)', () => {
         expect(handler).not.toHaveBeenCalled();
     });
 
+    it('이미 중단된 신호면 훅·핸들러를 하나도 돌리지 않고 aborted 로 돌려준다(#1472)', async () => {
+        const pre = jest.fn(() => ({}));
+        registerToolHook({ id: 'spy', pre });
+        const ac = new AbortController();
+        ac.abort();
+        const r = await dispatchTool('fake_search', { query: 'x' }, undefined, { builtInTools }, { signal: ac.signal });
+        expect(r.isError).toBe(true);
+        expect(r.errorCategory).toBe('aborted');
+        expect(handler).not.toHaveBeenCalled();
+        expect(pre).not.toHaveBeenCalled();
+    });
+
     it('MCP 런타임이 없으면 `::` 도구는 실행되지 않고 오류로 떨어진다', async () => {
         const r = await dispatchTool('srv::echo', {}, undefined, { builtInTools });
         expect(r.isError).toBe(true);
