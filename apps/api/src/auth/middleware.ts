@@ -22,6 +22,7 @@ import { unauthorized, forbidden } from '../utils/api-response';
 import { AUTH_COOKIES } from '../config/security';
 
 import { createLogger } from '../utils/logger';
+import { auditHttpDenied } from '../security/security-audit';
 const log = createLogger('AuthMiddleware');
 /**
  * JWT 토큰에서 추출된 인증 정보 (미들웨어용)
@@ -144,6 +145,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
 
     if (!user.is_active) {
+        auditHttpDenied(req, 'inactive_account', { userId: user.id });
         res.status(403).json(forbidden('비활성화된 계정입니다'));
         return;
     }
@@ -164,6 +166,7 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     }
 
     if (!isAdmin(req.user.role)) {
+        auditHttpDenied(req, 'admin_required');
         res.status(403).json(forbidden('관리자 권한이 필요합니다'));
         return;
     }
