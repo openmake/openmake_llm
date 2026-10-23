@@ -204,12 +204,22 @@ test('selectRelatedTests skips type-only API sources but still requires tests fo
   const test = '/repo/apps/api/src/chat/mixed.test.ts';
   const both = selectRelatedTests([typesOnly, mixed], { cwd: root, log: () => {}, listRelated: file => (file === mixed ? [test] : []) });
   assert.deepEqual([...both.related], [[mixed, [test]]]);
-  for (const text of ["import './side-effect';\n", 'export enum E { A }\n', "export { x } from './x';\n", 'export interface P {}\nexport function f() {}\n']) assert.equal(isTypeOnlySource('a.ts', text), false, text);
+  for (const text of ["import './side-effect';\n", 'export enum E { A }\n', 'const enum C { A }\n', "export { x } from './x';\n", 'export interface P {}\nexport function f() {}\n', 'export namespace N { export const v = 1 }\n']) assert.equal(isTypeOnlySource('a.ts', text), false, text);
   assert.equal(isTypeOnlySource('a.js', ''), false);
+  // A syntax error emits only the preamble too — never excused.
+  assert.equal(isTypeOnlySource('a.ts', 'export interface P { a: string\n'), false);
+  for (const text of ['export {};\n', 'declare const x: number;\ndeclare function f(): void;\n', 'declare enum E { A }\n', 'export namespace N { export type T = string; export interface I {} }\n']) assert.equal(isTypeOnlySource('a.ts', text), true, text);
+  // Declaration files cannot be transpiled (TypeScript throws) and have no emit by definition.
+  for (const file of ['a.d.ts', 'a.d.mts', 'a.d.cts']) assert.equal(isTypeOnlySource(file, 'export interface P {}\n'), true, file);
+  const declaration = 'apps/api/src/chat/globals.d.ts';
+  writeFileSync(join(root, declaration), 'declare global { interface Window { omk?: string } }\nexport {};\n');
+  assert.deepEqual(selectRelatedTests([declaration], { cwd: root, log: () => {}, listRelated: () => [] }).typeOnly, [declaration]);
   // Run mode (`<sha>` / `--files`): a stand-in Jest finds nothing related, so nothing runs and no "No executed related tests".
   mkdirSync(join(root, 'node_modules/jest/bin'), { recursive: true });
   writeFileSync(join(root, 'node_modules/jest/bin/jest.js'), "if (!process.argv.includes('--listTests')) process.exit(1);\nconsole.log('[]');\n");
-  assert.deepEqual(runFeatures([typesOnly], { cwd: root, stdio: 'ignore', env: childEnv, log: () => {} }).relatedTests, []);
+  const report = runFeatures([typesOnly], { cwd: root, stdio: 'ignore', env: childEnv, log: () => {} });
+  assert.deepEqual(report.relatedTests, []);
+  assert.deepEqual(report.typeOnly, [typesOnly]);
 });
 
 // apps/discord-bot is a separate workspace with its own node --test suite — its sources select that suite, never apps/api Jest.
