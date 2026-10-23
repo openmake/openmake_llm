@@ -31,6 +31,11 @@ describe('requiresApproval', () => {
         expect(requiresApproval('high-risk', 'web_search', {})).toBe(false);
         expect(requiresApproval('none', 'notion::create_page', {})).toBe(true); // S1(2026-10-22): 정책 none 의 바닥 호출은 게이트로 올라가 거절된다
     });
+    it('범용 MCP 실행기 mcp_call 도 외부 MCP 서버 도구와 같다 — 목록 조회 mcp_list_tools 는 묻지 않는다', () => {
+        expect(requiresApproval('high-risk', 'mcp_call', { server: 's', tool: 't' })).toBe(true);
+        expect(requiresApproval('none', 'mcp_call', { server: 's', tool: 't' })).toBe(true); // 바닥(third_party_tool) — server::tool 과 같은 규칙
+        expect(requiresApproval('high-risk', 'mcp_list_tools', {})).toBe(false);
+    });
     it('deviceGatesShell — 로컬 브리지: 코드 실행은 디바이스가 게이트하므로 서버 승인 skip', async () => {
         // exec 계열은 정책 all 이어도 서버 승인 불요(디바이스 confirmExec 가 담당) — 이중 프롬프트 제거
         expect(requiresApproval('all', 'bash', {}, { deviceGatesShell: true })).toBe(false);
@@ -72,6 +77,11 @@ describe('stripApprovalGatedTools (HITL 무응답 강등)', () => {
     it('정책 high-risk — bash·browser·python·skill_run 제거, 나머지(+인자 의존 file_ops)는 유지', async () => {
         const tools = ['bash', 'browser', 'python_execute', 'skill_run', 'file_ops', 'str_replace_editor', 'ask_human'].map(tool);
         expect(names(stripApprovalGatedTools(tools, 'high-risk'))).toEqual(['file_ops', 'str_replace_editor']);
+    });
+
+    it('정책 high-risk — mcp_call 은 인자 없이도 제거, mcp_list_tools 는 유지', () => {
+        const tools = ['mcp_list_tools', 'mcp_call', 'web_search'].map(tool);
+        expect(names(stripApprovalGatedTools(tools, 'high-risk'))).toEqual(['mcp_list_tools', 'web_search']);
     });
 
     it('정책 none — ask_human 만 제거(항상 사람 대기라 부재 시 무의미)', async () => {

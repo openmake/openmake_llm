@@ -102,7 +102,7 @@ function notifySafely(what: string, fn: () => void): void {
 /** PURE: 이 도구의 결과가 대화를 오염시키는가(W3 S3) — 외부 내용을 들여오는 등급(external·network)이거나 외부 MCP 도구. */
 function bringsExternalContent(name: string, args: Record<string, unknown>): boolean {
     const risk = classifyToolRisk(name, args);
-    return risk === 'external' || risk === 'network' || isThirdPartyTool(name);
+    return risk === 'external' || risk === 'network' || isThirdPartyTool(name, args);
 }
 
 /**

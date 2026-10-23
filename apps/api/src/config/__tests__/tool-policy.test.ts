@@ -61,6 +61,18 @@ describe('isThirdPartyTool', () => {
         expect(isThirdPartyTool('web_search')).toBe(false);
         expect(isThirdPartyTool('bash')).toBe(false);
     });
+    it('범용 MCP 실행기 mcp_call 은 인자와 무관하게 외부 MCP 서버 도구다 — 목록 조회(mcp_list_tools)는 아니다', () => {
+        expect(isThirdPartyTool('mcp_call', { server: 'x', tool: 'y' })).toBe(true);
+        expect(isThirdPartyTool('mcp_call')).toBe(true);
+        expect(isThirdPartyTool('mcp_list_tools')).toBe(false);
+    });
+});
+
+describe('MCP 메타 도구 등급', () => {
+    it('mcp_list_tools 는 읽기, mcp_call 은 external', () => {
+        expect(classifyToolRisk('mcp_list_tools')).toBe('read');
+        expect(classifyToolRisk('mcp_call', { server: 'x', tool: 'y' })).toBe('external');
+    });
 });
 
 describe('TOOL_RISK_OVERRIDES_JSON', () => {
