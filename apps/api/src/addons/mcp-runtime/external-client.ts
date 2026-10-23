@@ -115,6 +115,8 @@ export class ExternalMCPClient extends EventEmitter {
     private serverCapabilities: ReturnType<Client['getServerCapabilities']> = undefined;
     /** 사용자 입력 요청(F13.10) — 플래그 ON + 사용자 풀 서버만. 채팅·전역 서버는 elicitation 을 광고하지 않는다 */
     private readonly elicitation: ElicitationCallTracker | null;
+    /** 마지막 활동 시각(ms) — connect·callTool 에서 갱신. 사용자 풀 유휴 회수(R6)의 입력 */
+    lastUsedAt = 0;
 
     /**
      * ExternalMCPClient 인스턴스를 생성합니다.
@@ -179,6 +181,7 @@ export class ExternalMCPClient extends EventEmitter {
             this.toolsRefreshedAt = Date.now();
 
             this.status = 'connected';
+            this.lastUsedAt = Date.now();
             this.lastPing = new Date().toISOString();
             logger.info(`Connected to "${this.config.name}" — ${this.discoveredTools.length} tools discovered`);
         } catch (error) {
@@ -307,6 +310,7 @@ export class ExternalMCPClient extends EventEmitter {
                 isError: true,
             };
         }
+        this.lastUsedAt = Date.now();
         const signal = opts?.signal;
         if (signal?.aborted) {
             return {
