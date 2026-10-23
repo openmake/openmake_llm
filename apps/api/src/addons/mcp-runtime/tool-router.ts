@@ -64,6 +64,8 @@ async function callWithDeadline<T>(
     arm: (onTimeout: () => void) => { cancel(): void },
     call: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
+    // 준비 대기(풀 보장·재기동) 동안 호출자가 끊었으면 부르지 않는다 — 디스패처가 호출자 신호로 aborted 로 분류한다.
+    if (outer?.aborted) throw new Error(`외부 도구 호출이 중단되었습니다: ${name}`);
     const deadline = new AbortController();
     const signal = outer ? AbortSignal.any([outer, deadline.signal]) : deadline.signal;
     let timer: { cancel(): void } | undefined;
