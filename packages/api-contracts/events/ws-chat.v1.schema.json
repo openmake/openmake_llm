@@ -4,6 +4,18 @@
   "description": "WS 채팅 프로토콜 계약 — SoT: packages/shared-types (WsChatRequest 송신 / WsServerEvent 수신). 클라이언트는 미지 이벤트 type 을 무시해야 한다 (forward-compat).",
   "version": "1.0.0",
   "definitions": {
+    "ApprovalRejectReason": {
+      "type": "string",
+      "enum": [
+        "timeout",
+        "user",
+        "abort",
+        "parked",
+        "unattended",
+        "policy_floor"
+      ],
+      "description": "승인 거절 사유 — 백엔드 approval-gate 의 ApprovalRejectReason 과 같은 값(user: 사람이 거절, timeout: 무응답 만료, abort: 요청 중단 등)."
+    },
     "ArtifactMeta": {
       "type": "object",
       "properties": {
@@ -84,6 +96,19 @@
         "snippet"
       ],
       "description": "웹검색 구조화 출처(F19.4) — 본문 [N] 인용과 같은 번호. 서버 formatSearchSources 와 같은 순서·캡"
+    },
+    "ToolRiskClass": {
+      "type": "string",
+      "enum": [
+        "read",
+        "write",
+        "destructive",
+        "exec",
+        "network",
+        "external",
+        "control"
+      ],
+      "description": "도구 위험 등급 — 승인 카드가 \"왜 승인이 필요한지\"를 보여 주는 근거. 백엔드 config/tool-policy 의 ToolRiskClass 와 같은 값."
     },
     "WsAgentTaskResumeRequest": {
       "type": "object",
@@ -841,6 +866,74 @@
           "required": [
             "type",
             "toolName"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "chat_approval_pending"
+            },
+            "approvalId": {
+              "type": "string"
+            },
+            "toolName": {
+              "type": "string"
+            },
+            "args": {
+              "type": "object",
+              "additionalProperties": {},
+              "description": "승인 카드에 보일 인자 — 비밀 값을 가린 사본(실행은 원래 인자로 한다)"
+            },
+            "riskClass": {
+              "$ref": "#/definitions/ToolRiskClass"
+            },
+            "expiresAt": {
+              "type": "number",
+              "description": "무응답 만료 시각(epoch ms) — 지나면 거절(timeout)로 끝난다"
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "approvalId",
+            "toolName",
+            "args",
+            "riskClass",
+            "expiresAt"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "chat_approval_decided"
+            },
+            "approvalId": {
+              "type": "string"
+            },
+            "decision": {
+              "type": "string",
+              "enum": [
+                "approved",
+                "rejected"
+              ]
+            },
+            "reason": {
+              "$ref": "#/definitions/ApprovalRejectReason"
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "approvalId",
+            "decision"
           ]
         },
         {
