@@ -103,9 +103,9 @@ const BUILTIN_ONLY_RUNTIME: ToolRuntime = {
     async listLLMTools(): Promise<ToolDefinition[]> {
         return getBuiltInTools().map(def => toLLMTool(def.tool.name, def.tool.description, def.tool.inputSchema));
     },
-    async executeTool(name, args, context) {
+    async executeTool(name, args, context, opts) {
         return executeToolSecurely(
-            (toolName, sandboxedArgs, ctx) => dispatchTool(toolName, sandboxedArgs, ctx, { builtInTools: getBuiltInTools }),
+            (toolName, sandboxedArgs, ctx) => dispatchTool(toolName, sandboxedArgs, ctx, { builtInTools: getBuiltInTools }, opts),
             name, args, context,
         );
     },
