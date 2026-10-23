@@ -2558,6 +2558,15 @@
       "elicitJsonHint": "項目が複数ある場合は JSON で回答してください: {example}"
     }
   },
+  "chatApproval": {
+    "title": "ツール実行の承認が必要です",
+    "approve": "承認",
+    "reject": "拒否",
+    "expiresIn": "{seconds}秒後に自動で拒否されます",
+    "denied": "応答がなかったため拒否されました",
+    "waiting": "回答はこのツール実行の承認を待っています",
+    "rejectReasonPlaceholder": "拒否の理由(任意)— 入力するとモデルに伝わります"
+  },
   "marketplacePublish": {
     "title": "マーケットプレイスに公開",
     "description": "自作のスキル・エージェント・MCP 設定をプラグインにまとめ、このサーバーのギャラリーに公開します。同じサーバーの他ユーザーがインストールでき、外部には出ません。",

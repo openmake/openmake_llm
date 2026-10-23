@@ -6,6 +6,7 @@
  */
 
 import { MAX_TOOL_RESULT_CHARS } from './runtime-limits-tools';
+import { boolEnvDefault, isProductionEnv } from './secure-defaults';
 
 /**
  * 채팅 사용자 확인 질문(ask_user) — 요청이 모호할 때 모델이 산출물을 만들기 전에 질문으로 턴을 끝낸다.
@@ -381,11 +382,15 @@ const nonNegIntEnv = (v: string | undefined, def: number): number => {
 
 /**
  * 에이전트 작업 보존(Companion 설계 01장 — 작업 기록·감사 로그 90일, 화면 캡처 30일). 주기 작업은 schedulers/index.ts,
- * 본체는 services/agent-task/task-retention.ts. 전체 스위치 AGENT_TASK_RETENTION_ENABLED 기본 꺼짐 —
- * 기존 설치의 자료를 배포만으로 지우지 않는다. 각 기간은 0 이면 그 항목만 끈다.
+ * 본체는 services/agent-task/task-retention.ts. 전체 스위치 AGENT_TASK_RETENTION_ENABLED 는 운영 기본 ON(W3),
+ * dev/test 기본 OFF — 끄려면 false 명시. 각 기간은 0 이면 그 항목만 끈다. DRY_RUN 이면 건수만 세고 지우지 않는다.
  */
 export const AGENT_TASK_RETENTION = {
-    ENABLED: process.env.AGENT_TASK_RETENTION_ENABLED === 'true',
+    ENABLED: boolEnvDefault(process.env.AGENT_TASK_RETENTION_ENABLED, true),
+    /** 명시 없이 운영 기본값(W3)으로 켜졌는가 — 스케줄러 등록 때 경고 1줄(되돌릴 수 없는 삭제를 알린다) */
+    DEFAULT_ON: isProductionEnv() && !['true', 'false'].includes(process.env.AGENT_TASK_RETENTION_ENABLED?.trim().toLowerCase() ?? ''),
+    /** true 명시 때만 — 지우는 대신 같은 조건의 건수만 세어 로그에 남긴다(ENABLED 가 꺼져 있어도 스윕은 돈다) */
+    DRY_RUN: process.env.AGENT_TASK_RETENTION_DRY_RUN === 'true',
     /** 끝난(completed·failed·cancelled) 지 N일 지난 작업의 작업·단계·승인 기록, 같은 기간 지난 작업 감사 로그 삭제 */
     RECORD_RETENTION_DAYS: nonNegIntEnv(process.env.AGENT_TASK_RECORD_RETENTION_DAYS, 90),
     /** 서버 샌드박스 작업 공간의 화면 캡처(이미지 파일) — 수정된 지 N일 지난 것 삭제(작업 기록은 남김) */
@@ -394,6 +399,10 @@ export const AGENT_TASK_RETENTION = {
     BATCH_LIMIT: nonNegIntEnv(process.env.AGENT_TASK_RETENTION_BATCH_LIMIT, 500) || 500,
     /** 화면 캡처로 보는 확장자(소문자) — 브라우저 도구 screenshot 은 jpeg/png */
     SCREENSHOT_EXTENSIONS: ['.png', '.jpg', '.jpeg', '.webp'] as readonly string[],
+    /** 끝난(completed·failed·cancelled) 작업의 체크포인트를 작업마다 마지막 턴만 남기고 지운다 — 운영 기본 ON(W3) */
+    CHECKPOINT_COMPACT_ENABLED: boolEnvDefault(process.env.AGENT_TASK_CHECKPOINT_COMPACT_ENABLED, true),
+    /** 끝난 지 이만큼(ms) 지난 작업만 압축 — 기본 24시간 */
+    CHECKPOINT_COMPACT_AFTER_MS: nonNegIntEnv(process.env.AGENT_TASK_CHECKPOINT_COMPACT_AFTER_MS, 24 * 60 * 60_000),
 };
 
 /** 메시지 웹검색 출처(F19.4, 156) — 스트리밍 중 모아 assistant 행 저장 때 영속. 인메모리 대기는 TTL·개수 상한 */

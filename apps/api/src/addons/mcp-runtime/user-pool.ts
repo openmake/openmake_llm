@@ -41,6 +41,13 @@ export class UserMCPPool {
         for (const entry of userPool.entries()) yield entry;
     }
 
+    /** 그 사용자 클라이언트들의 마지막 활동 시각(ms) 최댓값 — 클라이언트가 없으면 0 (R6 유휴 회수) */
+    lastActivity(userId: string): number {
+        let max = 0;
+        for (const client of this.pools.get(userId)?.values() ?? []) max = Math.max(max, client.lastUsedAt);
+        return max;
+    }
+
     userIds(): IterableIterator<string> {
         return this.pools.keys();
     }

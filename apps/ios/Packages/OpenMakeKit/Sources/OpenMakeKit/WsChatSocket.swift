@@ -167,6 +167,8 @@ public extension WsChatRequest {
     ) -> WsChatRequest {
         WsChatRequest(
             anonSessionID: nil,
+            // 채팅 도구 승인 카드(W3 S3) — iOS 는 아직 카드를 그리지 않아 보내지 않는다(서버는 승인이 필요한 호출을 기다리지 않고 거절).
+            approvalCards: nil,
             artifactMode: artifactMode,
             // 좁은 화면 표면 — 서버가 답변 형식에 폭 제약(표 3열 이하·짧은 문단)을 덧붙인다
             client: .ios,

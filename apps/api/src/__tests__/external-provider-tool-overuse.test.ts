@@ -27,6 +27,7 @@ jest.mock('../runtime-ports/tool-runtime', () => ({
         callUserServerTool: jest.fn().mockResolvedValue(null),
         runWithUserInputContext: (_c: unknown, fn: () => unknown) => fn(),
         ensureUserToolsForTask: jest.fn().mockResolvedValue(undefined),
+        releaseUserToolsForTask: jest.fn().mockResolvedValue(undefined),
         onUserLogin: jest.fn(), onUserLogout: jest.fn(), onChatStart: jest.fn(), onChatEnd: jest.fn(),
         onServerReady: jest.fn(), shutdown: jest.fn(),
     }),
