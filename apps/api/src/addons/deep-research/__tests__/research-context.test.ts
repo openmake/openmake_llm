@@ -148,6 +148,35 @@ describe('gatherMcpEvidence', () => {
         expect(executeToolMock).toHaveBeenCalledTimes(1);
     });
 
+    it('도구 실행 중 중단되면 그 결과(형식화된 aborted 오류 문구)를 근거로 쓰지 않고, 앞서 모은 근거만 돌려준다(#1474)', async () => {
+        const ac = new AbortController();
+        const evidence = '첫 번째 도구가 반환한 사내 근거 본문입니다. 최소 채택 길이를 넘도록 충분히 길게 서술합니다.';
+        // 디스패처가 중단을 돌려주는 실제 모양 — formatToolError 가 붙인 안내 문구까지 40자를 훌쩍 넘는다
+        const { formatToolError, ABORTED_CLASSIFICATION } = jest.requireActual('../../../tool-contract/tool-error-classifier');
+        const abortedText = formatToolError('도구 호출이 중단되었습니다: b', ABORTED_CLASSIFICATION);
+        expect(abortedText.length).toBeGreaterThan(40);
+        executeToolMock
+            .mockResolvedValueOnce({ content: [{ type: 'text', text: evidence }] })
+            .mockImplementationOnce(async () => { ac.abort(); return { content: [{ type: 'text', text: abortedText }], isError: true, errorCategory: 'aborted' }; });
+        const out = await gatherMcpEvidence({
+            client: makeClient([{ function: { name: 'a', arguments: {} } }, { function: { name: 'b', arguments: {} } }, { function: { name: 'c', arguments: {} } }]),
+            topic: 't', userId: 'u1', abortSignal: ac.signal,
+        });
+        expect(out.map((r) => r.source)).toEqual(['mcp/a']);
+        expect(executeToolMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('도구 오류 결과(isError)는 길어도 근거로 쓰지 않고 다음 도구로 넘어간다', async () => {
+        executeToolMock
+            .mockResolvedValueOnce({ content: [{ type: 'text', text: '도구 실행 오류: upstream 502 bad gateway — 외부 서비스 일시 장애로 보입니다. 잠시 후 재시도하세요.' }], isError: true })
+            .mockResolvedValueOnce({ content: [{ type: 'text', text: '두 번째 도구가 반환한 근거 본문입니다. 최소 채택 길이를 넘도록 충분히 서술합니다.' }] });
+        const out = await gatherMcpEvidence({
+            client: makeClient([{ function: { name: 'a', arguments: {} } }, { function: { name: 'b', arguments: {} } }]),
+            topic: 't', userId: 'u1',
+        });
+        expect(out.map((r) => r.source)).toEqual(['mcp/b']);
+    });
+
     it('신호가 없으면 종전처럼 3인자로 부른다', async () => {
         executeToolMock.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
         await gatherMcpEvidence({ client: makeClient([{ function: { name: 'a', arguments: {} } }]), topic: 't', userId: 'u1' });

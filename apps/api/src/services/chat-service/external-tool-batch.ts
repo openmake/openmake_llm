@@ -15,7 +15,7 @@ import { extractIntegrationBlocks, type IntegrationBlocks } from './turn-integra
 import { CHAT_DELEGATE_TOOL_NAME, runChatDelegate } from './chat-delegate';
 import { SPAWN_AGENTS_TOOL_NAME, runChatSpawnAgents } from '../agent-spawn/spawn-agents';
 import { isOrchestrationTool, runOrchestrationTool } from './orchestration-dispatch';
-import { executeExternalTool } from './external-tool-exec';
+import { abortedToolResult, executeExternalTool } from './external-tool-exec';
 import { recordDelegatedTask } from './delegated-task-record';
 import { captureOdArtifactHtml, normalizeOdToolCall, type OdArtifactCapture } from './external-deterministic-append';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
@@ -210,13 +210,22 @@ export async function runToolCallBatch(params: {
         (tc) => executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>, state.toolSources, req.abortSignal),
         { path: 'chat', ...(req.abortSignal ? { signal: req.abortSignal } : {}) },
     );
+    // 요청 중단(#1474) — 앞선 호출·승인 대기 중에 끊겼으면 이 호출은 어느 분기(외부 도구·위임·병렬 위임·오케스트레이션)도
+    // 시작하지 않는다. tool 결과는 남겨 대화 구조(호출마다 결과 1개)를 지킨다.
+    const skipIfAborted = (tc: ExternalToolCall): boolean => {
+        if (!req.abortSignal?.aborted) return false;
+        messages.push({ role: 'tool', content: abortedToolResult(tc.name), tool_name: tc.name, tool_call_id: tc.id });
+        return true;
+    };
     for (const tc of toolCalls) {
         let toolResult: string;
+        if (skipIfAborted(tc)) continue;
         // 선실행된 호출은 이미 실행됐다(배치 시작 시점의 문맥에서 승인 불요로 판정) — 다시 묻지 않는다.
         const denied = policy === 'none' || parallelReadOnlyResults.has(tc.id) ? null : await gateChatToolCall({
             deps, req, tc, policy, taintedContext: taintedFor(tc.name), hasChannel, userId,
             langCode: ctx.resolvedLanguage || req.userLanguagePreference, state,
         });
+        if (denied === null && skipIfAborted(tc)) continue; // 승인 대기 중 중단 — 승인이 났어도 실행하지 않는다(거절이면 그 문구를 그대로 쓴다)
         if (denied !== null) {
             toolResult = denied;
         } else if (tc.name === CHAT_DELEGATE_TOOL_NAME) {
