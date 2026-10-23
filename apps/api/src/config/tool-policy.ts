@@ -22,7 +22,7 @@
  *
  * 재분류는 배포 없이 env `TOOL_RISK_OVERRIDES_JSON`('{"도구명":"등급"}') 으로(L1). 표 밖 도구는
  * `external` 이다. 그중 외부 MCP 서버 도구(`server::tool`)는 제3자 코드라 high-risk 에서도 승인하고,
- * 내장 도구는 종전대로 정책 all 에서만 승인한다.
+ * 내장 도구는 종전대로 정책 all 에서만 승인한다. 범용 MCP 실행기 `mcp_call` 도 제3자 도구로 본다(isThirdPartyTool).
  *
  * @module config/tool-policy
  */
@@ -57,6 +57,9 @@ const TOOL_RISK: Readonly<Record<string, RiskRule>> = {
     mcp_list_resources: 'read',
     mcp_read_resource: 'read',
     mcp_get_prompt: 'read',
+    // 범용 MCP 메타 도구(addons/mcp-runtime/mcp-meta-tools) — 목록 조회는 읽기, mcp_call 은 외부 MCP 서버 도구 실행(isThirdPartyTool)
+    mcp_list_tools: 'read',
+    mcp_call: 'external',
     // 과거 작업 검색(agent-task/task-history-tool) — 본인 작업 읽기 전용
     task_history: 'read',
     skill_save: 'write',
@@ -125,9 +128,16 @@ export function hasSideEffects(toolName: string, args: Record<string, unknown> =
  */
 export const HITL_ALWAYS_WAIT_TOOLS: ReadonlySet<string> = new Set(['ask_human', 'mcp_elicit']);
 
-/** PURE: 외부 MCP 서버가 제공한 도구인가 — 이름이 `server::tool` 꼴이다(tool-router 와 같은 판정). */
-export function isThirdPartyTool(toolName: string): boolean {
-    return toolName.includes(MCP_NAMESPACE_SEPARATOR);
+/** 범용 MCP 실행기 — `server` 인자가 가리키는 사용자·전역 MCP 서버의 도구를 실행한다(addons/mcp-runtime/mcp-meta-tools). */
+const MCP_GENERIC_CALL_TOOL = 'mcp_call';
+
+/**
+ * PURE: 외부 MCP 서버가 제공한 도구를 실행하는 호출인가 — 이름이 `server::tool` 꼴(tool-router 와 같은 판정)이거나
+ * 범용 실행기 mcp_call 이다. mcp_call 은 인자와 무관하게(늘 MCP 서버 도구를 부른다) true — 인자를 모르는 도구 선별
+ * (stripApprovalGatedTools 의 `{}` 판정)에서도 걸러지게. args 는 호출 판정 경로의 계약을 맞추려 받는다.
+ */
+export function isThirdPartyTool(toolName: string, _args: Record<string, unknown> = {}): boolean {
+    return toolName.includes(MCP_NAMESPACE_SEPARATOR) || toolName === MCP_GENERIC_CALL_TOOL;
 }
 
 /** high-risk 정책이 승인으로 올리는 등급. */
