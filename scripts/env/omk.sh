@@ -838,7 +838,16 @@ smoke_check_login() {
     SMOKE_TOKEN="$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' "$body" | head -1)"; rm -f "$body"
     [[ "$c" == 200 && -n "$SMOKE_TOKEN" ]] || { SMOKE_WHY="로그인 → $c"; return 1; }
 }
-# 쓰기 없는 준비 확인 — LLM 노드 연결·DB·기본 모델이 노드 목록에 있는지(apps/api health.controller 의 GET /ready).
+# /ready 본문의 멈춘 백그라운드 루프 → "이름 마지막 실행 시각" 을 쉼표로 (#1478). node 가 없거나 본문을 읽지 못하면 빈 값.
+ready_background_failures() { # $1=/ready 본문 파일
+    has node || return 0
+    node -e '
+        let d = {}; try { const j = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); d = (j && j.data) || j || {}; } catch {}
+        const b = d.background; if (!b || b.ok !== false) process.exit(0);
+        const bad = Object.entries(b.loops || {}).filter(([, v]) => v && v.enabled && v.ok === false);
+        process.stdout.write(bad.map(([k, v]) => `${k} 마지막 실행 ${v.lastRunAt || "없음"}`).join(", "));' "$1" 2>/dev/null || true
+}
+# 쓰기 없는 준비 확인 — LLM 노드 연결·DB·기본 모델이 노드 목록에 있는지·백그라운드 루프가 도는지(apps/api health.controller 의 GET /ready).
 # 재기동 직후에는 노드 첫 확인 전이라 잠깐 503 일 수 있어 OMK_SMOKE_READY_WAIT 까지 기다린다.
 smoke_check_ready() {
     local body c waited=0 why=""; body="$(mktemp)"
@@ -850,6 +859,8 @@ smoke_check_ready() {
     grep -q '"dbConnected":false' "$body" 2>/dev/null && why="$why DB 연결 안 됨"
     grep -q '"onlineNodes":0' "$body" 2>/dev/null && why="$why LLM 노드 없음"
     grep -q '"listed":false' "$body" 2>/dev/null && why="$why 기본 모델이 LLM 노드 목록에 없음(LLM_DEFAULT_MODEL·게이트웨이 확인)"
+    local bg; bg="$(ready_background_failures "$body")"
+    [[ -n "$bg" ]] && why="$why 백그라운드 루프 멈춤($bg)"
     rm -f "$body"
     [[ "$c" == 200 ]] || { SMOKE_WHY="/ready → $c${why:+ —$why}"; return 1; }
 }
