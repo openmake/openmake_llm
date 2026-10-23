@@ -314,6 +314,8 @@ export async function runExternalStream(
                 tool_calls: result.toolCalls.map((tc) => ({
                     type: 'function' as const,
                     id: tc.id,
+                    // Gemini 3 thought signature 등 — 다음 턴 요청에 그대로 되돌려야 400 이 나지 않는다.
+                    ...(tc.extra_content && { extra_content: tc.extra_content }),
                     function: {
                         name: tc.name,
                         arguments: tc.args as Record<string, unknown>,
