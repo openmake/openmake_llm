@@ -54,7 +54,16 @@ function mkSupervisor(Supervisor: typeof MCPLifecycleSupervisor, Pool: typeof Us
     repo.getServerById.mockImplementation(async (id: string) => rows.find(r => r.id === id));
     const { factory, created } = mkClientFactory(lastUsedAt);
     const sv = new Supervisor({ userPool, repo: repo as never, clientFactory: factory as never });
-    return { sv, userPool, created };
+    return { sv, userPool, created, repo, rows };
+}
+
+/** await 창을 결정적으로 열고 닫는 문 — enter() 는 대상 await 에 들어섰다는 신호 */
+function mkGate() {
+    let release!: () => void;
+    let enter!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    const reached = new Promise<void>(r => { enter = r; });
+    return { gate, reached, release, enter };
 }
 
 describe('MCPLifecycleSupervisor — 작업 참조(R6)', () => {
@@ -92,6 +101,36 @@ describe('MCPLifecycleSupervisor — 작업 참조(R6)', () => {
         await sv.onTaskEnd('u-1', 't2');
         expect(created['u-1:s-chat'].disconnect).toHaveBeenCalledTimes(1);
     });
+
+    test('(e) ensure 에 닿지 않은 작업의 onTaskEnd 는 아무것도 닫지 않는다', async () => {
+        const { sv, userPool, created } = mkSupervisor(MCPLifecycleSupervisor, UserMCPPool);
+        await sv.ensureUserServers('u-1', 'boot');
+
+        await sv.onTaskEnd('u-1', 't-never');
+
+        expect(created['u-1:s-chat'].disconnect).not.toHaveBeenCalled();
+        expect(userPool.has('u-1', 's-chat')).toBe(true);
+    });
+
+    test('(f) onTaskEnd 가 서버 목록을 기다리는 사이 같은 사용자 작업이 ensure 하면 닫지 않는다', async () => {
+        const { sv, userPool, created, repo, rows } = mkSupervisor(MCPLifecycleSupervisor, UserMCPPool);
+        await sv.ensureUserServers('u-1', 'task=t1');
+        const g = mkGate();
+        repo.listUserServers.mockImplementationOnce(async (userId: string) => {
+            g.enter();
+            await g.gate;
+            return rows.filter(r => r.user_id === userId);
+        });
+
+        const ending = sv.onTaskEnd('u-1', 't1');
+        await g.reached;
+        await sv.ensureUserServers('u-1', 'task=t2');
+        g.release();
+        await ending;
+
+        expect(created['u-1:s-chat'].disconnect).not.toHaveBeenCalled();
+        expect(userPool.has('u-1', 's-chat')).toBe(true);
+    });
 });
 
 describe('MCPLifecycleSupervisor.sweepIdleUsers(R6)', () => {
@@ -117,6 +156,26 @@ describe('MCPLifecycleSupervisor.sweepIdleUsers(R6)', () => {
         // 작업이 끝나면 다음 스윕에서 닫힌다(per_chat 은 onTaskEnd 가 먼저 닫는다)
         await sv.onTaskEnd('u-2', 't9');
         expect(await sv.sweepIdleUsers(NOW)).toEqual(['u-2']);
+    });
+
+    test('(e) 판정 뒤 앞 사용자를 닫는 사이 task= 가 들어온 사용자는 닫지 않는다', async () => {
+        const { sv, userPool, created, repo } = mkSupervisor(MCPLifecycleSupervisor, UserMCPPool, NOW - TTL - 1);
+        await sv.ensureUserServers('u-1', 'boot');
+        await sv.ensureUserServers('u-2', 'boot');
+        const g = mkGate();
+        repo.recordInstanceTransition.mockImplementation(async (_s: string, userId: string, state: string) => {
+            if (userId === 'u-1' && state === 'stopped') { g.enter(); await g.gate; }
+        });
+
+        const sweeping = sv.sweepIdleUsers(NOW);   // u-1·u-2 둘 다 유휴로 판정
+        await g.reached;                            // u-1 을 닫는 중
+        await sv.ensureUserServers('u-2', 'task=t1');
+        g.release();
+
+        expect(await sweeping).toEqual(['u-1']);
+        expect(created['u-1:s-session'].disconnect).toHaveBeenCalledTimes(1);
+        expect(created['u-2:s-session'].disconnect).not.toHaveBeenCalled();
+        expect(userPool.has('u-2', 's-session')).toBe(true);
     });
 
     test('(c\') 채팅이 열린 사용자는 활동이 오래돼도 제외', async () => {

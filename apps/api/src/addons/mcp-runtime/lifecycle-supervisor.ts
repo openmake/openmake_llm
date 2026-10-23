@@ -158,23 +158,34 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
 
     /** 작업 종료(R6) — 참조를 지우고, 열린 채팅도 다른 작업도 없으면 per_chat 만 닫는다(per_session 은 유휴 회수까지) */
     async onTaskEnd(userId: string, taskId: string): Promise<void> {
+        // ensure 에 닿지 못한 작업(시작 전 취소 등)은 잡은 것이 없다 — 남의 per_chat 을 닫지 않는다
         const refs = this.taskRefs.get(userId);
-        refs?.delete(taskId);
-        if (refs && refs.size === 0) this.taskRefs.delete(userId);
-        if (this.taskRefs.has(userId) || this.hasOpenChat(userId)) return;
-        await this.killPerChatServers(userId);
+        if (!refs?.has(taskId)) return;
+        refs.delete(taskId);
+        if (refs.size === 0) this.taskRefs.delete(userId);
+        if (this.isInUse(userId)) return;
+        // 목록을 기다리는 사이 후속 작업·채팅이 잡았으면 닫지 않는다(이어가기 체인)
+        await this.killPerChatServers(userId, true);
     }
 
     /** 유휴 회수(R6) — 채팅·작업 없이 마지막 활동이 TTL 을 넘긴 사용자를 onUserLogout 으로 닫고 목록 반환(TTL 0 = 끔) */
     async sweepIdleUsers(now = Date.now()): Promise<string[]> {
         if (!(USER_POOL_IDLE_TTL_MS > 0)) return [];
-        const idle = [...this.userPool.userIds()].filter(u =>
-            !this.taskRefs.has(u) && !this.hasOpenChat(u) && this.userPool.lastActivity(u) < now - USER_POOL_IDLE_TTL_MS);
-        for (const userId of idle) {
+        const isIdle = (u: string): boolean => !this.isInUse(u) && this.userPool.lastActivity(u) < now - USER_POOL_IDLE_TTL_MS;
+        const closed: string[] = [];
+        for (const userId of [...this.userPool.userIds()].filter(isIdle)) {
+            // 앞 사용자를 닫는(await) 사이 작업·채팅이 시작됐을 수 있다 — 닫기 직전에 다시 본다
+            if (!isIdle(userId)) continue;
             logger.info(`유휴 회수 u=${userId}: 마지막 활동 ${Math.round((now - this.userPool.lastActivity(userId)) / 1000)}초 전`);
             await this.onUserLogout(userId).catch(e => logger.warn(`유휴 회수 실패 u=${userId}: ${e}`));
+            closed.push(userId);
         }
-        return idle;
+        return closed;
+    }
+
+    /** 진행 중 작업 참조나 열린 채팅이 있는가 */
+    private isInUse(userId: string): boolean {
+        return this.taskRefs.has(userId) || this.hasOpenChat(userId);
     }
 
     private hasOpenChat(userId: string): boolean {
@@ -182,8 +193,9 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         return false;
     }
 
-    private async killPerChatServers(userId: string): Promise<void> {
+    private async killPerChatServers(userId: string, skipIfInUse = false): Promise<void> {
         const servers = await this.repo.listUserServers(userId);
+        if (skipIfInUse && this.isInUse(userId)) return;
         const targets = servers.filter(s =>
             s.user_id === userId &&
             (s as ServerWithLifecycle).lifecycle === 'per_chat',
