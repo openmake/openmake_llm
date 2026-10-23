@@ -71,7 +71,8 @@ public struct WsServerEvent: Codable {
     public let buildID: String?
     public let message: String?
     public let captureID: String?
-    public let expiresAt: String?
+    /// 무응답 만료 시각(epoch ms) — 지나면 거절(timeout)로 끝난다
+    public let expiresAt: ExpiresAt?
     public let ttlHours: Double?
     public let payload: Payload?
     /// 아티팩트가 있으면 raw 코드펜스가 placeholder 로 치환된 본문 — 클라가 누적 본문을 이걸로 reset.
@@ -108,16 +109,20 @@ public struct WsServerEvent: Codable {
     /// 시스템 시드 스킬의 영어 표시 이름(스킬 이름 → 영어) — 사용자·확장 스킬은 없다
     public let skillNamesEn: [String: String]?
     public let toolName: String?
+    /// 승인 이관·에스컬레이션·철회 대상 승인 id(HITL 2단계) — 계획 편집 알림엔 없다
+    public let approvalID: String?
+    /// 승인 카드에 보일 인자 — 비밀 값을 가린 사본(실행은 원래 인자로 한다)
+    public let args: [String: JSONAny]?
+    public let riskClass: ToolRiskClass?
+    public let decision: Decision?
+    /// 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다
+    public let reason: ApprovalRejectReason?
     public let resources: [MCPToolResource]?
     public let progress: ProgressUnion?
     public let artifact: ArtifactMeta?
     public let delta: String?
     public let id: String?
-    /// 승인 이관·에스컬레이션·철회 대상 승인 id(HITL 2단계) — 계획 편집 알림엔 없다
-    public let approvalID: String?
     public let currentTurn: Double?
-    /// 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다
-    public let reason: Reason?
     /// 사용자별 순번(증가) — 재연결 때 `agent_task_resume{afterSeq}` 로 보내면 그 뒤 이벤트만 다시 받는다
     public let seq: Double?
     public let status: String?
@@ -166,14 +171,17 @@ public struct WsServerEvent: Codable {
         case skillNames = "skillNames"
         case skillNamesEn = "skillNamesEn"
         case toolName = "toolName"
+        case approvalID = "approvalId"
+        case args = "args"
+        case riskClass = "riskClass"
+        case decision = "decision"
+        case reason = "reason"
         case resources = "resources"
         case progress = "progress"
         case artifact = "artifact"
         case delta = "delta"
         case id = "id"
-        case approvalID = "approvalId"
         case currentTurn = "currentTurn"
-        case reason = "reason"
         case seq = "seq"
         case status = "status"
         case step = "step"
@@ -182,7 +190,7 @@ public struct WsServerEvent: Codable {
         case waitReason = "waitReason"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, approvalID: String?, currentTurn: Double?, reason: Reason?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: ExpiresAt?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, approvalID: String?, args: [String: JSONAny]?, riskClass: ToolRiskClass?, decision: Decision?, reason: ApprovalRejectReason?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -218,14 +226,17 @@ public struct WsServerEvent: Codable {
         self.skillNames = skillNames
         self.skillNamesEn = skillNamesEn
         self.toolName = toolName
+        self.approvalID = approvalID
+        self.args = args
+        self.riskClass = riskClass
+        self.decision = decision
+        self.reason = reason
         self.resources = resources
         self.progress = progress
         self.artifact = artifact
         self.delta = delta
         self.id = id
-        self.approvalID = approvalID
         self.currentTurn = currentTurn
-        self.reason = reason
         self.seq = seq
         self.status = status
         self.step = step
@@ -264,7 +275,7 @@ public extension WsServerEvent {
         buildID: String?? = nil,
         message: String?? = nil,
         captureID: String?? = nil,
-        expiresAt: String?? = nil,
+        expiresAt: ExpiresAt?? = nil,
         ttlHours: Double?? = nil,
         payload: Payload?? = nil,
         cleanedContent: String?? = nil,
@@ -289,14 +300,17 @@ public extension WsServerEvent {
         skillNames: [String]?? = nil,
         skillNamesEn: [String: String]?? = nil,
         toolName: String?? = nil,
+        approvalID: String?? = nil,
+        args: [String: JSONAny]?? = nil,
+        riskClass: ToolRiskClass?? = nil,
+        decision: Decision?? = nil,
+        reason: ApprovalRejectReason?? = nil,
         resources: [MCPToolResource]?? = nil,
         progress: ProgressUnion?? = nil,
         artifact: ArtifactMeta?? = nil,
         delta: String?? = nil,
         id: String?? = nil,
-        approvalID: String?? = nil,
         currentTurn: Double?? = nil,
-        reason: Reason?? = nil,
         seq: Double?? = nil,
         status: String?? = nil,
         step: Step?? = nil,
@@ -340,14 +354,17 @@ public extension WsServerEvent {
             skillNames: skillNames ?? self.skillNames,
             skillNamesEn: skillNamesEn ?? self.skillNamesEn,
             toolName: toolName ?? self.toolName,
+            approvalID: approvalID ?? self.approvalID,
+            args: args ?? self.args,
+            riskClass: riskClass ?? self.riskClass,
+            decision: decision ?? self.decision,
+            reason: reason ?? self.reason,
             resources: resources ?? self.resources,
             progress: progress ?? self.progress,
             artifact: artifact ?? self.artifact,
             delta: delta ?? self.delta,
             id: id ?? self.id,
-            approvalID: approvalID ?? self.approvalID,
             currentTurn: currentTurn ?? self.currentTurn,
-            reason: reason ?? self.reason,
             seq: seq ?? self.seq,
             status: status ?? self.status,
             step: step ?? self.step,
@@ -506,6 +523,39 @@ public extension ArtifactMeta {
 
     func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
         return String(data: try self.jsonData(), encoding: encoding)
+    }
+}
+
+public enum Decision: String, Codable {
+    case approved = "approved"
+    case rejected = "rejected"
+}
+
+public enum ExpiresAt: Codable {
+    case double(Double)
+    case string(String)
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let x = try? container.decode(Double.self) {
+            self = .double(x)
+            return
+        }
+        if let x = try? container.decode(String.self) {
+            self = .string(x)
+            return
+        }
+        throw DecodingError.typeMismatch(ExpiresAt.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Wrong type for ExpiresAt"))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .double(let x):
+            try container.encode(x)
+        case .string(let x):
+            try container.encode(x)
+        }
     }
 }
 
@@ -760,12 +810,21 @@ public enum Phase: String, Codable {
     case synthesizing = "synthesizing"
 }
 
+/// 승인 거절 사유 — 백엔드 approval-gate 의 ApprovalRejectReason 과 같은 값(user: 사람이 거절, timeout: 무응답 만료,
+/// abort: 요청 중단 등).
+///
 /// 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다
-public enum Reason: String, Codable {
+public enum ApprovalRejectReason: String, Codable {
+    case abort = "abort"
     case assigned = "assigned"
     case escalated = "escalated"
+    case parked = "parked"
     case planEdited = "plan_edited"
+    case policyFloor = "policy_floor"
     case revoked = "revoked"
+    case timeout = "timeout"
+    case unattended = "unattended"
+    case user = "user"
 }
 
 /// MCP 도구 결과의 resource content (백엔드 external-tool-exec 가 추출해 emit).
@@ -825,6 +884,17 @@ public extension MCPToolResource {
     func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
         return String(data: try self.jsonData(), encoding: encoding)
     }
+}
+
+/// 도구 위험 등급 — 승인 카드가 "왜 승인이 필요한지"를 보여 주는 근거. 백엔드 config/tool-policy 의 ToolRiskClass 와 같은 값.
+public enum ToolRiskClass: String, Codable {
+    case control = "control"
+    case destructive = "destructive"
+    case exec = "exec"
+    case external = "external"
+    case network = "network"
+    case read = "read"
+    case write = "write"
 }
 
 /// 웹검색 구조화 출처(F19.4) — 본문 [N] 인용과 같은 번호. 서버 formatSearchSources 와 같은 순서·캡
@@ -1107,6 +1177,8 @@ public enum WsServerEventType: String, Codable {
     case artifactEnd = "artifact_end"
     case artifactStart = "artifact_start"
     case buildID = "build_id"
+    case chatApprovalDecided = "chat_approval_decided"
+    case chatApprovalPending = "chat_approval_pending"
     case debugRetained = "debug_retained"
     case discussionProgress = "discussion_progress"
     case done = "done"
@@ -1132,6 +1204,9 @@ public enum WsServerEventType: String, Codable {
 public struct WsChatRequest: Codable {
     /// Browser-scoped anonymous owner id for guest sessions.
     public let anonSessionID: String?
+    /// 채팅 도구 승인 카드를 그리는 클라이언트(W3 S3) — true 일 때만 서버가 승인이 필요한 도구 호출에서 `chat_approval_pending` 을
+    /// 보내고 결정을 기다린다. 미지정이면(카드를 못 그리는 클라이언트) 그런 호출은 기다리지 않고 거절된다.
+    public let approvalCards: Bool?
     /// 아티팩트 모드 — ON 이면 모델이 <artifact> 산출물을 생성하도록 유도
     public let artifactMode: Bool?
     /// 클라이언트 표면 — 좁은 화면(모바일 네이티브)에 맞는 답변 형식을 요청할 때 'ios'. 미지정은 기존 동작(데스크톱 기준). 서버는 이 값으로
@@ -1181,6 +1256,7 @@ public struct WsChatRequest: Codable {
 
     public enum CodingKeys: String, CodingKey {
         case anonSessionID = "anonSessionId"
+        case approvalCards = "approvalCards"
         case artifactMode = "artifactMode"
         case client = "client"
         case clientRequestID = "clientRequestId"
@@ -1208,8 +1284,9 @@ public struct WsChatRequest: Codable {
         case webSearch = "webSearch"
     }
 
-    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, clientRequestID: String?, contextRefs: [String: ContextRef]?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, modes: [String: Bool]?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
+    public init(anonSessionID: String?, approvalCards: Bool?, artifactMode: Bool?, client: Client?, clientRequestID: String?, contextRefs: [String: ContextRef]?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, modes: [String: Bool]?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
         self.anonSessionID = anonSessionID
+        self.approvalCards = approvalCards
         self.artifactMode = artifactMode
         self.client = client
         self.clientRequestID = clientRequestID
@@ -1258,6 +1335,7 @@ public extension WsChatRequest {
 
     func with(
         anonSessionID: String?? = nil,
+        approvalCards: Bool?? = nil,
         artifactMode: Bool?? = nil,
         client: Client?? = nil,
         clientRequestID: String?? = nil,
@@ -1286,6 +1364,7 @@ public extension WsChatRequest {
     ) -> WsChatRequest {
         return WsChatRequest(
             anonSessionID: anonSessionID ?? self.anonSessionID,
+            approvalCards: approvalCards ?? self.approvalCards,
             artifactMode: artifactMode ?? self.artifactMode,
             client: client ?? self.client,
             clientRequestID: clientRequestID ?? self.clientRequestID,

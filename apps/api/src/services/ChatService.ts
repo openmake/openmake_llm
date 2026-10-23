@@ -100,6 +100,10 @@ export class ChatService {
      */
     private currentSystemEventCallback?: SystemEventCallback;
 
+    /** 현재 채팅의 도구 승인 대기·결정 콜백(W3 S3) — ws-chat-handler 가 `chat_approval_pending`/`chat_approval_decided` 로 emit. */
+    private currentChatApprovalPendingCallback?: ExternalProviderDeps['chatApprovalPendingCallback'];
+    private currentChatApprovalDecidedCallback?: ExternalProviderDeps['chatApprovalDecidedCallback'];
+
     /** 멀티 에이전트 토론 전략 */
     /** 심층 연구 오케스트레이션 전략 */
 
@@ -262,11 +266,16 @@ export class ChatService {
         onSystemEvent?: SystemEventCallback,
         onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../tools/web-search/types').SearchSourceRef[]; /** 도구 호출 요약 — 채팅의 도구 카드 */ summary?: { ok: boolean; durationMs: number; args?: string; preview?: string } }) => void,
         onMcpToolStart?: (event: { toolName: string }) => void,
+        onChatApprovalPending?: ExternalProviderDeps['chatApprovalPendingCallback'],
+        onChatApprovalDecided?: ExternalProviderDeps['chatApprovalDecidedCallback'],
     ): Promise<string> {
         // MCP tool resource content 콜백을 인스턴스 상태로 저장 — executeExternalTool 및 strategy 가 공유
         this.currentMcpToolResultCallback = onMcpToolResult;
         // MCP tool 시작 콜백 — 도구 실행 직전 진행 표시용 (동일 경로 공유)
         this.currentMcpToolStartCallback = onMcpToolStart;
+        // 채팅 도구 승인 대기·결정 콜백(W3 S3) — 도구 배치가 승인을 기다릴 때 사용자에게 알린다
+        this.currentChatApprovalPendingCallback = onChatApprovalPending;
+        this.currentChatApprovalDecidedCallback = onChatApprovalDecided;
         // 시스템 이벤트 콜백 — provider 폴백 고지 등 메타 알림에 사용 (external-fallback)
         this.currentSystemEventCallback = onSystemEvent;
         // 채팅 요청 전체를 root span으로 추적 (모든 LLM/도구 호출이 자식 span으로 자동 연결)
@@ -402,6 +411,8 @@ export class ChatService {
             currentUserContext: reqCtx.userContext,
             mcpToolResultCallback: this.currentMcpToolResultCallback,
             mcpToolStartCallback: this.currentMcpToolStartCallback,
+            chatApprovalPendingCallback: this.currentChatApprovalPendingCallback,
+            chatApprovalDecidedCallback: this.currentChatApprovalDecidedCallback,
             onUsage: (usage) => { this.lastProviderUsage = usage; },
             ...(this.currentSystemEventCallback ? { onSystemEvent: this.currentSystemEventCallback } : {}),
             allowedTools: await this.getAllowedTools(reqCtx),
