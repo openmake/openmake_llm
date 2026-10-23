@@ -57,12 +57,13 @@ async function legacyInput(policy: TaskSandboxApprovalPolicy, calls: Array<{ id:
 }
 
 const toolResults = (conversation: ChatMessage[]) => conversation.filter((m) => m.role === 'tool').map((m) => m.content);
-/** 대기 등록까지 마이크로태스크를 흘린다(저장소 없는 레지스트리는 동기 등록). */
-const waitForPending = async (): Promise<Awaited<ReturnType<ApprovalRegistry['list']>>> => {
-    for (let i = 0; i < 50; i++) {
-        const p = await registry.list('u1');
+/** 새 승인 대기가 등록될 때까지 기다린다(최대 2초) — exclude 의 id 는 이미 본 대기라 건너뛴다. */
+const waitForPending = async (exclude: ReadonlySet<string> = new Set()): Promise<Awaited<ReturnType<ApprovalRegistry['list']>>> => {
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline) {
+        const p = (await registry.list('u1')).filter((x) => !exclude.has(x.approvalId));
         if (p.length > 0) return p;
-        await new Promise((r) => setImmediate(r));
+        await new Promise((r) => setTimeout(r, 5));
     }
     return [];
 };
@@ -135,14 +136,55 @@ describe('executeTurnToolCalls — legacy OFF 승인 경계', () => {
         expect(runTool).not.toHaveBeenCalled();
     });
 
-    it('all + 자동승인: 읽기 선실행은 같은 레지스트리를 거치고 호출마다 한 번만 실행한다', async () => {
+    it('all + 자동승인: 읽기 선실행(병렬)은 같은 레지스트리를 거친 뒤 실행하고 호출마다 한 번만 실행한다', async () => {
         registry.setAutoApprove('t1', true);
-        const request = jest.spyOn(registry, 'request');
+        const events: string[] = [];
+        const realRequest = registry.request.bind(registry);
+        const request = jest.spyOn(registry, 'request').mockImplementation(async (req, opts) => {
+            events.push(`request:${String(req.args.query)}`);
+            return realRequest(req, opts);
+        });
+        // 두 호출이 모두 실행에 들어올 때까지 결과를 잡아 둔다 — 순차 실행이면 두 번째가 들어오지 못해 동시 진입이 1 에 머문다.
+        let inFlight = 0; let maxInFlight = 0;
+        let releaseAll!: () => void;
+        const bothEntered = new Promise<void>((r) => { releaseAll = r; });
+        runTool.mockImplementation(async (...a: unknown[]) => {
+            events.push(`run:${String((a[2] as Record<string, unknown>).query)}`);
+            inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+            if (inFlight === 2) releaseAll();
+            await Promise.race([bothEntered, new Promise((r) => setTimeout(r, 200))]);
+            inFlight--;
+            return '도구 결과';
+        });
         const { args, conversation } = await legacyInput('all', [{ id: 'c1', name: 'web_search', args: { query: 'a' } }, { id: 'c2', name: 'web_search', args: { query: 'b' } }]);
         await executeTurnToolCalls(args);
+        expect(maxInFlight).toBe(2); // 선실행 경로로 병렬 실행됐다
         expect(runTool).toHaveBeenCalledTimes(2);
         expect(request).toHaveBeenCalledTimes(2);
+        // 각 호출의 실행은 그 호출의 레지스트리 통과 뒤다(선실행이 게이트를 건너뛰지 않는다)
+        for (const q of ['a', 'b']) expect(events.indexOf(`request:${q}`)).toBeLessThan(events.indexOf(`run:${q}`));
         expect(toolResults(conversation)).toEqual(['도구 결과', '도구 결과']);
+    });
+
+    it('all(자동승인 없음): 승인이 필요한 읽기 호출은 선실행하지 않고 순차로 승인을 기다린다', async () => {
+        const ac = new AbortController();
+        const { args } = await legacyInput('all', [{ id: 'c1', name: 'web_search', args: { query: 'a' } }, { id: 'c2', name: 'web_search', args: { query: 'b' } }], { signal: ac.signal });
+        const done = executeTurnToolCalls(args).catch((e: unknown) => e);
+        try {
+            const first = await waitForPending();
+            expect(first).toHaveLength(1); // 동시에 두 승인 창이 뜨지 않는다
+            expect(runTool).not.toHaveBeenCalled();
+            await registry.approve(first[0].approvalId, 'u1');
+            const second = await waitForPending(new Set([first[0].approvalId]));
+            expect(second).toHaveLength(1);
+            expect(runTool).toHaveBeenCalledTimes(1);
+            await registry.approve(second[0].approvalId, 'u1');
+            await done;
+            expect(runTool).toHaveBeenCalledTimes(2);
+        } finally {
+            ac.abort(); // 실패해도 남은 대기가 다음 테스트로 새지 않게
+            await done;
+        }
     });
 
     it('none: 바닥이 아닌 도구(web_search)와 제어 도구는 묻지 않고 종전대로 실행한다', async () => {
