@@ -13,7 +13,7 @@ test('web and known pipeline spec use fixed suites, unknown specs fail closed', 
   assert.throws(() => selectFeatures(['docs/specs/new-feature.md']), /Unmapped/);
 });
 test('documentation only does not invent changed feature coverage', () => {
-  assert.deepEqual(selectFeatures(['README.md']), { api: [], web: false, pipeline: false, infra: false, bridge: false, hostSetup: false, e2e: [] });
+  assert.deepEqual(selectFeatures(['README.md']), { api: [], web: false, pipeline: false, infra: false, bridge: false, discordBot: false, hostSetup: false, e2e: [] });
   assert.deepEqual(selectFeatures(['apps/api/src/evaluation/README.md']).api, []);
   assert.deepEqual(selectFeatures(['apps/api/src/evaluation/redteam/golden-redteam.json']).api, []);
   assert.deepEqual(selectFeatures(['packages/api-client/package.json']).api, []);
@@ -173,6 +173,29 @@ test('selectRelatedTests requires related Jest tests per API source and never li
   const docs = selectRelatedTests(['README.md'], { listRelated: () => { calls += 1; return []; } });
   assert.equal(calls, 0);
   assert.deepEqual(docs.selection.api, []);
+});
+
+// apps/discord-bot is a separate workspace with its own node --test suite — its sources select that suite, never apps/api Jest.
+test('discord-bot sources select the discord-bot workspace suite', () => {
+  const selection = selectFeatures(['apps/discord-bot/src/attachments.ts', 'apps/discord-bot/src/attachments.test.ts']);
+  assert.equal(selection.discordBot, true);
+  assert.deepEqual(selection.api, []);
+  assert.equal(selectFeatures(['README.md']).discordBot, false);
+});
+
+// Jest bootstrap files (config/setup) are imported by no test but run before every suite: a change selects every suite.
+test('selectRelatedTests selects every Jest suite for a Jest bootstrap file', async () => {
+  const { selectFeatures, selectRelatedTests } = await import('../../scripts/ci/feature-checks.mjs');
+  const setup = 'apps/api/jest.setup-after-env.ts';
+  assert.deepEqual(selectFeatures([setup]).api, [setup]);
+  assert.deepEqual(selectFeatures(['apps/api/jest.config.js']).api, ['apps/api/jest.config.js']);
+  const all = ['/repo/apps/api/src/a.test.ts', '/repo/apps/api/src/b/__tests__/c.test.ts'];
+  let related = 0;
+  const selected = selectRelatedTests([setup], { listAll: () => all, listRelated: () => { related += 1; return []; } });
+  assert.equal(related, 0);
+  assert.deepEqual(selected.related.get(setup), all);
+  assert.equal(selected.tests.size, 2);
+  assert.throws(() => selectRelatedTests([setup], { listAll: () => [] }), /No related Jest tests for apps\/api\/jest\.setup-after-env\.ts/);
 });
 
 test('--select-only refuses a SHA that is not the checkout HEAD', async () => {
