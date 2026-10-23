@@ -262,7 +262,12 @@ async function runContinuation(p: ContinueInput, track: ContinueTrack, abandon: 
             approvalPolicy, thinkingLevel, lease,
         });
     } catch (e) {
-        return abandon(`후속 작업 저장 실패: ${errMsg(e)}`); // 트랜잭션이 되돌렸다 — 되돌릴 선점·행이 없다
+        // 저장 오류가 곧 롤백은 아니다 — COMMIT 응답만 잃었으면 커밋됐다. 부모 링크를 다시 읽어 이 후속이면 그대로 디스패치한다.
+        // 아니면 되돌려진 것(되돌릴 선점·행이 없다). 다시 읽기도 실패하면 확인할 수 없다 — 커밋됐다면 R2(소유권 ON)·부팅 복구(OFF)가 회수한다.
+        const committed = await db.getAgentTask(p.task.id).then((t) => t?.continued_by_task_id === successorId).catch(() => false);
+        if (!committed) return abandon(`후속 작업 저장 실패: ${errMsg(e)}`);
+        logger.warn(`[Continuation] 저장 응답 오류였지만 커밋됐다 — 이어서 디스패치: ${p.task.id} → ${successorId} (${errMsg(e)})`);
+        claimed = true;
     }
     if (!claimed) return followExistingSuccessor(p.task.id, p);
     track.claimed = true;

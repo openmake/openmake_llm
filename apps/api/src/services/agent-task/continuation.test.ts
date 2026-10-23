@@ -190,6 +190,22 @@ describe('continueAsNewSegment', () => {
         expect(chainRepo.resetContinuation).not.toHaveBeenCalled();
         expect(dispatchMock).not.toHaveBeenCalled();
     });
+    it('저장 오류여도 COMMIT 이 실제로 됐으면(응답 유실) 부모 링크를 다시 읽어 그 후속을 디스패치한다', async () => {
+        let sid = '';
+        repo.createContinuationSuccessor.mockImplementationOnce(async (seed: { create: { id: string } }) => { sid = seed.create.id; throw new Error('Connection terminated unexpectedly'); });
+        db.getAgentTask.mockImplementation(async (id: string) => (id === 'root' ? { ...(root as object), continued_by_task_id: sid } : undefined));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ successorId: sid });
+        expect(dispatchMock).toHaveBeenCalledTimes(1);
+        expect(dispatchMock.mock.calls[0][0].taskId).toBe(sid);
+        expect(chainRepo.resetContinuation).not.toHaveBeenCalled();
+    });
+    it('저장 오류 뒤 부모 링크가 이 후속이 아니면(되돌려졌다) 디스패치 없이 skipped', async () => {
+        repo.createContinuationSuccessor.mockRejectedValueOnce(new Error('Connection terminated unexpectedly'));
+        const r = await continueAsNewSegment(input());
+        expect(r).toEqual({ skipped: expect.stringMatching(/저장 실패/) });
+        expect(dispatchMock).not.toHaveBeenCalled();
+    });
     it('디스패치가 실패하면 후속을 failed 로 닫고 선점을 되돌린다', async () => {
         dispatchMock.mockRejectedValueOnce(new Error('queue full'));
         const r = await continueAsNewSegment(input());
