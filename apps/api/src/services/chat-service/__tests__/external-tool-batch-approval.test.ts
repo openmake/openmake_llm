@@ -182,6 +182,23 @@ describe('runToolCallBatch — 채팅 승인 게이트', () => {
         expect(messages[0].content).toContain(getChatApprovalDeniedResult('srv::search', 'user'));
     });
 
+    it('high-risk 에서 범용 MCP 실행기 mcp_call 은 묻고(승인 뒤 실행), mcp_list_tools 는 카드 없이 실행', async () => {
+        usePolicy('high-risk');
+        const list = setup();
+        await list.run([{ id: 'l1', name: 'mcp_list_tools', args: { server: 'noapi-google-search' } }]);
+        expect(list.pendings).toHaveLength(0);
+        expect(list.state.tainted).toBe(false);
+        expect(exec).toHaveBeenCalledTimes(1);
+
+        // 오염되지 않은 새 대화 — taint 가 아니라 제3자 도구 규칙으로 묻는지 본다
+        const { pendings, decideds, state, run } = setup({ onPending: (p) => { void getChatApprovalRegistry().approve(p.approvalId); } });
+        expect(state.tainted).toBe(false);
+        await run([{ id: 'c1', name: 'mcp_call', args: { server: 'noapi-google-search', tool: 'search', arguments: { q: 'x' } } }]);
+        expect(pendings.map((p) => p.toolName)).toEqual(['mcp_call']);
+        expect(decideds).toEqual([expect.objectContaining({ decision: 'approved' })]);
+        expect(exec).toHaveBeenCalledTimes(2);
+    });
+
     it('(f) 위임 서브에이전트는 승인이 필요한 도구를 받지 않는다', async () => {
         usePolicy('high-risk');
         const { run } = setup();

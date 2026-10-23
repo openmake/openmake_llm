@@ -79,7 +79,7 @@ export function requiresApproval(
     }
     if (opts.siteGoverned && toolName === 'browser' && policy === 'high-risk') return false;
     return policyRequiresApproval(policy, classifyToolRisk(toolName, args),
-        isSensitiveWrite(toolName, args) || floor !== null, isThirdPartyTool(toolName));
+        isSensitiveWrite(toolName, args) || floor !== null, isThirdPartyTool(toolName, args));
 }
 
 /** PURE: 이 호출이 자격증명 파일을 바꾸려 하는가. args 미지({})면 false(보수 판정 — 강등 계산과 동일 계약). */
