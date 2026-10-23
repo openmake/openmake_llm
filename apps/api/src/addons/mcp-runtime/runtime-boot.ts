@@ -9,8 +9,17 @@
 import { getPool } from '../../runtime-ports/db-access';
 import { McpServerRepository } from './data/mcp-server-repository';
 import { createLogger } from '../../utils/logger';
+import { USER_POOL_IDLE_SWEEP_MS, USER_POOL_IDLE_TTL_MS } from '../../config/timeouts';
 
 const logger = createLogger('ToolRuntime');
+
+/** 사용자 MCP 풀 유휴 회수 타이머(R6) — supervisor 기동 때 걸고 shutdown 에서 푼다 */
+let idleSweepTimer: NodeJS.Timeout | null = null;
+
+export function stopMcpIdleSweep(): void {
+    if (idleSweepTimer) clearInterval(idleSweepTimer);
+    idleSweepTimer = null;
+}
 
 /** 외부 MCP 서버 초기화(DB 설정 로드 → 연결) + 샌드박스 자세 관측·고아 컨테이너 정리. 실패는 호출부가 fail-open 으로 다룬다. */
 export async function startToolRuntime(): Promise<void> {
@@ -73,6 +82,12 @@ export async function startMcpLifecycleSupervisor(): Promise<void> {
         // 재시작 후 user MCP 풀은 비어 있다 — enabled+auto_spawn 서버를 다시 띄운다.
         // 기동을 막지 않도록 await 하지 않는다(자식 프로세스 spawn 이 수 초 걸린다).
         void supervisor.restoreOnBoot();
+        if (USER_POOL_IDLE_TTL_MS > 0) {
+            idleSweepTimer = setInterval(() => {
+                supervisor.sweepIdleUsers().catch(e => logger.warn(`사용자 MCP 풀 유휴 회수 실패: ${e}`));
+            }, USER_POOL_IDLE_SWEEP_MS);
+            idleSweepTimer.unref();
+        }
     } catch (err) {
         logger.error('MCP Lifecycle Supervisor 초기화 실패 (graceful skip):', err);
     }

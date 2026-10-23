@@ -265,6 +265,17 @@ export const MCP_EXTERNAL_TOOL_LIMITS = {
 } as const;
 
 /**
+ * 사용자 MCP 풀 유휴 회수 (2026-10-23 R6).
+ *
+ * 채팅도 진행 중 작업도 없고 마지막 활동(connect·도구 호출)이 TTL 을 넘긴 사용자의 풀(per_session 포함)을
+ * 닫는다 — 로그아웃 없이 떠난 사용자의 자식 프로세스가 무기한 남던 누수를 막는다. 다음 채팅·작업의
+ * ensureUserServers 가 멱등으로 다시 띄운다. 모든 환경에서 기본 ON(30분), 0 이면 끈다.
+ */
+export const USER_POOL_IDLE_TTL_MS = parseInt(process.env.MCP_USER_POOL_IDLE_TTL_MS || '1800000', 10);
+/** 유휴 회수 스윕 주기(ms) */
+export const USER_POOL_IDLE_SWEEP_MS = 60_000;
+
+/**
  * 전역 MCP 서버 자동 재연결 (2026-09-30).
  *
  * 재부팅 직후 앱이 Docker 보다 먼저 떠서, 부팅 때 붙은 전역 서버(샌드박스 컨테이너)가 Docker 재기동과
