@@ -138,6 +138,7 @@ const benchRuntime: ToolRuntime = {
     async onChatStart() { /* no-op */ },
     async onChatEnd() { /* no-op */ },
     async ensureUserToolsForTask() { /* no-op */ },
+    async releaseUserToolsForTask() { /* no-op */ },
     async onServerReady() { /* no-op */ },
     async shutdown() { /* no-op */ },
 };
