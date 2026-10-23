@@ -22,6 +22,7 @@ import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
 import { ServedModelBadge } from "./served-model-badge";
 import { ToolCallCards } from "./tool-call-cards";
+import { ChatApprovalCards } from "./chat-approval-card";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
 import { ApprovalArgsFull, ApprovalPreview, ApprovalSiteUploads, ApprovalSiteWrites, summarizeApprovalArgs } from "@/components/approvals/approval-args";
@@ -733,6 +734,7 @@ export function MessageList() {
   const orchestratorProgress = useAppStore((s) => s.orchestratorProgress);
   const activeTool = useAppStore((s) => s.activeTool);
   const turnToolCalls = useAppStore((s) => s.turnToolCalls);
+  const hasChatApprovals = useAppStore((s) => s.pendingChatApprovals.length > 0);
   const bottomRef = useRef<HTMLDivElement>(null);
   // 따라가기 — 사용자가 맨 아래 근처에 있을 때만 새 내용을 따라간다. 위로 올려 과거 대화를 읽는 중이면
   // 답변이 흘러도 자리를 지키고 "최신으로" 버튼을 띄운다(lib/chat-scroll).
@@ -787,6 +789,7 @@ export function MessageList() {
     activeSkills,
     activeTool,
     turnToolCalls,
+    hasChatApprovals,
     chatHistory,
     modeProgress,
     orchestratorProgress,
@@ -1001,6 +1004,8 @@ export function MessageList() {
       ) : (
         activeTool && <ToolIndicator />
       )}
+      {/* 채팅 도구 승인(W3 S3) — 지금 답변이 기다리는 승인. 에이전트 작업 인라인 승인과 같은 모양. */}
+      {hasChatApprovals && <div className="pl-10"><ChatApprovalCards /></div>}
       {showThinking && <ThinkingIndicator agent={activeAgent} skills={activeSkills} />}
       {showJump && (
         <div className="pointer-events-none sticky bottom-3 flex justify-center">
