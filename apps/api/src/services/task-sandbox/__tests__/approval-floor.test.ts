@@ -28,6 +28,11 @@ describe('approvalFloorReason', () => {
     it('외부 MCP 서버 도구(server::tool)', () => {
         expect(approvalFloorReason('notion::create_page', {})).toBe('third_party_tool');
     });
+    it('범용 MCP 실행기 mcp_call 도 제3자 도구 바닥이다(인자 유무와 무관) — mcp_list_tools 는 아니다', () => {
+        expect(approvalFloorReason('mcp_call', { server: 'notion', tool: 'create_page', arguments: { title: 'x' } })).toBe('third_party_tool');
+        expect(approvalFloorReason('mcp_call', {})).toBe('third_party_tool');
+        expect(approvalFloorReason('mcp_list_tools', { server: 'notion' })).toBeNull();
+    });
     it('그 밖은 바닥이 아니다 — 읽기, 일반 파일 쓰기, 셸, 내장 도구', () => {
         expect(approvalFloorReason('file_ops', { op: 'read', path: '.env' })).toBeNull();
         expect(approvalFloorReason('str_replace_editor', { command: 'view', path: '.env' })).toBeNull();

@@ -291,6 +291,8 @@ export async function handleChatMessage(
             clientRequestId,
             // 좁은 화면 클라이언트(iOS 앱) — 답변 형식에 폭 제약만 덧붙인다
             client: msg.client === 'ios' ? 'ios' : undefined,
+            // 채팅 도구 승인 카드를 그리는 클라이언트(W3 S3) — 명시 true 만. 아니면 승인이 필요한 호출은 기다리지 않고 거절된다
+            approvalCards: msg.approvalCards === true,
             // Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 생성 시 부모 추적
             branchFromSessionId: typeof msg.branchFromSessionId === 'string' ? msg.branchFromSessionId : undefined,
             branchFromMessageId: typeof msg.branchFromMessageId === 'string' ? msg.branchFromMessageId : undefined,
@@ -347,6 +349,9 @@ export async function handleChatMessage(
                     messageId,
                 });
             },
+            // 채팅 도구 승인(W3 S3) — 대기 카드 표시·결정 반영. 결정 자체는 REST /api/chat/approvals/:approvalId/approve|reject
+            onChatApprovalPending: (p) => out({ type: 'chat_approval_pending', ...p, messageId }),
+            onChatApprovalDecided: (p) => out({ type: 'chat_approval_decided', ...p, messageId }),
             // 시스템 이벤트 (자동 토론 활성화 등 메타 알림) — UI 토스트 분리 표시
             onSystemEvent: (event) => {
                 out({
