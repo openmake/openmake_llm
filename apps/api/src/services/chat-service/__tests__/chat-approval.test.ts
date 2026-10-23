@@ -10,7 +10,7 @@ jest.mock('../../org/effective-policy', () => ({
     resolveEffectivePolicy: jest.fn(),
 }));
 import {
-    getChatApprovalRegistry, chatApprovalKey, requestChatApproval, resolveChatApprovalPolicy, closeChat, hasChatApprovalChannel,
+    getChatApprovalRegistry, chatApprovalKey, requestChatApproval, resolveChatApprovalPolicy, hasChatApprovalChannel,
 } from '../chat-approval';
 import { getApprovalRegistry, type PendingApproval } from '../../task-sandbox/approval-gate';
 import { resolveEffectivePolicy } from '../../org/effective-policy';
@@ -61,13 +61,6 @@ describe('채팅 승인 레지스트리', () => {
         const r = await requestChatApproval({ chatId: 'c-d', userId: 'u1', toolName: 'notion::create_page', args: {}, policy: 'none', onPending });
         expect(r).toEqual({ decision: 'rejected', reason: 'policy_floor', waitedMs: 0 });
         expect(onPending).not.toHaveBeenCalled();
-    });
-
-    it('closeChat 은 대화 키로 레지스트리를 정리한다', () => {
-        const spy = jest.spyOn(getChatApprovalRegistry(), 'closeTask');
-        closeChat('c-e');
-        expect(spy).toHaveBeenCalledWith('chat:c-e');
-        spy.mockRestore();
     });
 });
 

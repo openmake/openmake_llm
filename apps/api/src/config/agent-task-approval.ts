@@ -42,6 +42,7 @@ export const APPROVAL_SECRET_KEY_WORDS = {
  * 자동승인의 바닥 — 작업의 "나머지 모두 승인"에서도 계속 묻는 호출 종류.
  *   credential_write  자격증명 파일(SENSITIVE_FILE_PATTERNS)을 만들거나 고치거나 지우는 호출
  *   third_party_tool  외부 MCP 서버 도구(`server::tool`) — 제3자 코드가 호스트 밖으로 나간다
+ *                     범용 MCP 실행기 `mcp_call`(server·tool 인자로 같은 도구를 부른다)도 여기에 든다
  *   instruction_write 에이전트 지시 파일(아래 INSTRUCTION_FILE_PATTERNS)을 만들거나 고치거나 지우는 호출
  *   memory_write      사용자 메모리에 쓰는 호출(memory_save) — 다음 대화·작업의 프롬프트에 계속 실린다
  *   site_write        로컬 브라우저로 허용 목록 밖 사이트에 입력·누르기를 하는 호출 — 내용이 OpenMake 밖으로 나간다(Companion P2).

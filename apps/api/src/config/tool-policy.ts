@@ -22,7 +22,7 @@
  *
  * 재분류는 배포 없이 env `TOOL_RISK_OVERRIDES_JSON`('{"도구명":"등급"}') 으로(L1). 표 밖 도구는
  * `external` 이다. 그중 외부 MCP 서버 도구(`server::tool`)는 제3자 코드라 high-risk 에서도 승인하고,
- * 내장 도구는 종전대로 정책 all 에서만 승인한다.
+ * 내장 도구는 종전대로 정책 all 에서만 승인한다. 범용 MCP 실행기 `mcp_call` 도 제3자 도구로 본다(isThirdPartyTool).
  *
  * @module config/tool-policy
  */

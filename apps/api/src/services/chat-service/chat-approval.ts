@@ -74,8 +74,3 @@ export function requestChatApproval(p: {
         { timeoutMs: CHAT_TOOL_APPROVAL.TIMEOUT_MS, signal: p.signal, onPending: p.onPending, policy: p.policy },
     );
 }
-
-/** 대화(요청) 종료 시 레지스트리 정리. 살아 있는 대기는 호출부의 signal 중단이 이미 해소한다. */
-export function closeChat(chatId: string): void {
-    getChatApprovalRegistry().closeTask(chatApprovalKey(chatId));
-}
