@@ -31,7 +31,7 @@ export function extract(code, filePath, defaultExtract) {
     return dependencies;
 }
 
-// haste 캐시 키 — 이 파일이 바뀌면 캐시된 의존성 목록을 버리고 다시 추출한다.
+// haste 캐시 키 — 이 파일이나 TypeScript 파서(버전)가 바뀌면 캐시된 의존성 목록을 버리고 다시 추출한다.
 export function getCacheKey() {
-    return createHash('sha1').update(readFileSync(new URL(import.meta.url))).digest('hex');
+    return createHash('sha1').update(readFileSync(new URL(import.meta.url))).update('\0').update(ts.version).digest('hex');
 }
