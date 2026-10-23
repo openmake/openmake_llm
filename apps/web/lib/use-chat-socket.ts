@@ -768,6 +768,8 @@ export function useChatSocket() {
         memoryLearning: s.memoryLearning,
         // 커스텀 에이전트(페르소나) 적용 — 지정 시 백엔드가 산업 에이전트 자동라우팅을 우회하고 해당 system_prompt 주입.
         userAgentId: s.activeUserAgent?.id,
+        // 채팅 도구 승인 카드를 그린다(W3 S3) — 서버가 승인이 필요한 호출을 이 카드로 묻는다(안 보내면 기다리지 않고 거절)
+        approvalCards: true,
       };
       ws.send(JSON.stringify(payload));
 

@@ -62,6 +62,7 @@ function setup(opts: { onPending?: (p: Pending) => void; onDecided?: () => void;
     } as ExternalProviderDeps;
     const req = {
         message: 'q',
+        approvalCards: true, // 웹 채팅(카드를 그리는 클라이언트) — 채널 없는 경로는 external-tool-batch-approval-channel.test
         ...(opts.sessionId !== undefined ? { sessionId: opts.sessionId } : {}),
         ...(opts.abortSignal ? { abortSignal: opts.abortSignal } : {}),
     } as never;

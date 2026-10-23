@@ -45,3 +45,17 @@ it('승인 대기·결정 콜백이 messageId 를 단 WS 이벤트로 나간다'
     });
     expect(decided).toEqual({ type: 'chat_approval_decided', approvalId: 'apv_chat:s1_a_0', decision: 'rejected', reason: 'user', messageId: pending!.messageId });
 });
+
+it('approvalCards 는 명시 true 일 때만 processChat 에 true 로 간다(웹 채팅만 보낸다) — 없거나 다른 값이면 false', async () => {
+    processChat.mockImplementation(async () => { throw new Error('ABORTED'); });
+    const ws = { OPEN: 1, readyState: 1, send: () => undefined } as unknown as WebSocket;
+    const log = { info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() } as never;
+    const seen: unknown[] = [];
+    for (const extra of [{ approvalCards: true }, {}, { approvalCards: 'true' }]) {
+        processChat.mockClear();
+        const extWs = { _abortController: null } as unknown as ExtendedWebSocket;
+        await handleChatMessage(ws, { type: 'chat', message: '검색해 줘', model: 'm1', ...extra } as WSMessage, { cluster: {} as never, extWs, logger: log });
+        seen.push((processChat.mock.calls[0][0] as ChatRequestParams).approvalCards);
+    }
+    expect(seen).toEqual([true, false, false]);
+});

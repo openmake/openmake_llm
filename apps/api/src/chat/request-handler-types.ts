@@ -92,6 +92,8 @@ export interface ChatRequestParams {
     userAgentId?: string;
     /** 클라이언트 표면 — 'ios' 면 좁은 화면용 답변 형식 지시 추가 (2026-08-18) */
     client?: 'ios';
+    /** 클라이언트가 채팅 도구 승인 카드를 그린다(W3 S3, WS approvalCards) — 아니면 승인이 필요한 호출은 기다리지 않고 거절된다 */
+    approvalCards?: boolean;
     /**
      * 메시지 본문을 conversation_messages 에 저장할지 여부.
      * undefined/true → 저장 (기본). false → 본문 저장 스킵, audit log 만 기록.
