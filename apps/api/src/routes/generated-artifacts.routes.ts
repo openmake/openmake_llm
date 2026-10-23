@@ -4,7 +4,8 @@
  * 종전엔 express.static 이 공개 root 를 그대로 내렸다(누구나 어떤 파일이든). 이제 이 라우터가 static 앞에 서서
  * `runtime-ports/artifact-store` 의 소유권 판정을 지난 뒤에만 파일을 내려준다 — 백엔드 직결과 Next rewrite(`/generated/:path*`)
  * 경유가 같은 핸들러를 지난다(T28). 예약 리포트 게시(`/generated/reports/*`)는 공개 유지 — static 으로 넘긴다.
- * `?download=1` 은 종전대로 첨부 헤더. 인증은 쿠키(브라우저)·Bearer(optionalAuth)·전달 티켓(`?t=`) 셋 중 하나.
+ * `?download=1` 은 종전대로 첨부 헤더. 인증은 쿠키(브라우저)·Bearer(optionalAuth)·전달 티켓(`?t=`)·API 키 넷 중 하나.
+ * API 키(`omk_live_`, chat 스코프)는 봇처럼 JWT 가 없는 클라이언트가 chat 응답에 실린 자기 산출물을 받는 경로다.
  *
  * @module routes/generated-artifacts.routes
  */
@@ -17,8 +18,17 @@ import { issueDeliveryTicket, resolveArtifactForRead } from '../runtime-ports/ar
 import { asyncHandler } from '../utils/error-handler';
 import { success } from '../utils/api-response';
 import { GENERATED_ARTIFACT_LIMITS } from '../config/runtime-limits';
+import { extractApiKey, optionalApiKey, requireScope } from '../middlewares/api-key-auth';
+import { API_KEY_SCOPES } from '../config/api-key-scopes';
 
 const REPORTS_PREFIX = '/reports/';
+const requireChatScope = requireScope(API_KEY_SCOPES.CHAT);
+
+/** API 키가 있으면 키로만(무효 401·스코프 밖 403), 없으면 종전 쿠키·JWT — 판정 후의 소유권 검사는 같다 */
+function authenticateViewer(req: Request, res: Response, next: () => void): void {
+    if (!extractApiKey(req)) { void optionalAuth(req, res, next); return; }
+    void optionalApiKey(req, res, () => requireChatScope(req, res, next));
+}
 
 function viewerOf(req: Request): { userId?: string; isAdmin?: boolean; ticket?: string } {
     const user = req.user as { id?: string | number; role?: string } | undefined;
@@ -34,7 +44,7 @@ generatedArtifactsRouter.use(cookieParser());
 generatedArtifactsRouter.get('/*path', (req: Request, res: Response, next: NextFunction) => {
     // 예약 리포트 게시물은 공개 정적 자산 그대로
     if (req.path.startsWith(REPORTS_PREFIX)) { next(); return; }
-    void optionalAuth(req, res, () => {
+    authenticateViewer(req, res, () => {
         const name = path.basename(req.path);
         if (!GENERATED_NAME_PATTERN.test(name) || req.path !== `/${name}`) { res.status(404).end(); return; }
         resolveArtifactForRead(name, viewerOf(req)).then((v) => {
