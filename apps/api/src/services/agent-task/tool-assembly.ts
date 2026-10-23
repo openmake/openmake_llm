@@ -12,6 +12,7 @@ import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { splitInternalOnlyTools } from '../../config/internal-only-policy';
+import { floorDeniedUnderPolicy } from '../task-sandbox/approval-floor';
 import { getSkillRuntime, LOAD_SKILL_TOOL_NAME } from '../../runtime-ports/skill-runtime';
 import { selectRelevantTools } from './tool-selector';
 import { selectRelevantToolsEmbedding } from './tool-selector-embedding';
@@ -58,9 +59,21 @@ export async function assembleAgentTools(params: {
     // 내부 전용 실행(config/internal-only-policy) — 호스트에서 도는 추가 도구는 허용 목록만 남긴다. 카탈로그 자체를 좁혀
     // 정적·동적·degrade·legacy 어느 분기에서도 외부 도구가 모델에 보이지 않게 한다(작업 도구는 taskRuntime 이 따로 준다).
     const split = sandboxCfg.internalOnly ? splitInternalOnlyTools(params.mcpTools) : { kept: params.mcpTools, removed: [] as string[] };
-    const mcpTools = split.kept;
     const removedForInternalOnly = split.removed;
     if (removedForInternalOnly.length > 0) logger.info(`[AgentTask] 내부 전용 — 추가 도구 ${removedForInternalOnly.length}개 제외`);
+    // 정책 none 에서 인자와 무관하게 늘 거절되는 바닥 도구(외부 MCP 등)는 모델에 보이지 않게 한다(#1470) — 호출 시도·거절·재시도 낭비 방지.
+    // 판정은 실행 게이트와 같은 floorDeniedUnderPolicy(인자 {}) — memory_save·사이트 쓰기처럼 묻는 바닥과 인자 의존 도구는 남는다.
+    // 카탈로그 단계에서 좁혀 정적·동적·degrade·legacy 모두에 적용하고(동적 예산도 쓸 수 있는 도구에 쓴다), 조립 결과에도 한 번 더 건다.
+    // 실행 시점 거절(ApprovalRegistry policy_floor)은 방어선으로 그대로 둔다.
+    const hiddenByFloor = new Set<string>();
+    const hideFloorDenied = (tools: ToolDefinition[]): ToolDefinition[] => tools.filter((t) => {
+        if (floorDeniedUnderPolicy(sandboxCfg.approvalPolicy, t.function.name, {}) === null) return true;
+        hiddenByFloor.add(t.function.name);
+        extraToolNames.delete(t.function.name);
+        return false;
+    });
+    const mcpTools = hideFloorDenied(split.kept);
+    if (hiddenByFloor.size > 0) logger.info(`[AgentTask] 승인 정책 none — 늘 거절되는 바닥 도구 ${hiddenByFloor.size}개 제외`);
 
     /**
      * 조립된 도구 세트에 load_skill(스킬 카탈로그 포함)을 합류시킨다.
@@ -98,7 +111,7 @@ export async function assembleAgentTools(params: {
             }
             const tool = mcpTools.find((t) => t.function.name === name);
             if (!tool) {
-                if (removedForInternalOnly.includes(name)) continue; // 내부 전용으로 뺀 것 — 설정 오류가 아니다
+                if (removedForInternalOnly.includes(name) || hiddenByFloor.has(name)) continue; // 내부 전용·정책 none 으로 뺀 것 — 설정 오류가 아니다
                 if (warnedMissingExtraTools.has(name)) {
                     logger.debug(`[AgentTask] extraTools '${name}' 를 도구 카탈로그에서 찾지 못함 — 노출 생략`);
                 } else {
@@ -133,7 +146,7 @@ export async function assembleAgentTools(params: {
             }
         }
         return {
-            tools: await withSkillCatalog([...staticExtra, ...dynamicExtra, ...sandboxTools]),
+            tools: hideFloorDenied(await withSkillCatalog([...staticExtra, ...dynamicExtra, ...sandboxTools])),
             extraToolNames, removedForInternalOnly,
         };
     }
@@ -143,13 +156,13 @@ export async function assembleAgentTools(params: {
         // 화이트리스트 도구만으로 진행 — 셸 작업은 불가하나 검색·이미지·작성 작업은 계속 가능.
         const tools = buildExtra(new Set<string>());
         logger.warn(`[AgentTask] 샌드박스 미가용 — extraTools(${extraToolNames.size}개)만으로 진행 (전체 카탈로그 미전달)`);
-        return { tools: await withSkillCatalog(tools), extraToolNames, removedForInternalOnly };
+        return { tools: hideFloorDenied(await withSkillCatalog(tools)), extraToolNames, removedForInternalOnly };
     }
 
     // 샌드박스 OFF(legacy) 경로 — 기존대로 전체 MCP 도구 사용.
     // 이 경로엔 이미 전체 카탈로그(load_skill 포함)가 들어있으므로 카탈로그 주입만 적용.
     // 모든 도구가 호스트에서 실행되므로 전부 extraToolNames 에 올려 샌드박스 ON 과 같은 승인 게이트를 태운다(#1469).
-    const tools = await withSkillCatalog(mcpTools);
+    const tools = hideFloorDenied(await withSkillCatalog(mcpTools));
     for (const t of tools) extraToolNames.add(t.function.name);
     return { tools, extraToolNames, removedForInternalOnly };
 }
