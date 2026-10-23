@@ -59,6 +59,7 @@ import request from 'supertest';
 import * as jwt from 'jsonwebtoken';
 import { getConfig } from '../config/env';
 import { METRICS_EXPOSITION } from '../config/metrics-exposition';
+import { getTokenBlacklist } from '../data/models/token-blacklist';
 import { setupApiRoutes } from '../routes/setup';
 
 const cfg = METRICS_EXPOSITION as { ENABLED: boolean; TOKEN: string };
@@ -136,6 +137,48 @@ describe('GET /metrics', () => {
             const res = await request(app).get('/metrics').set('Authorization', bearerJwt('admin'));
             expect(res.status).toBe(200);
             expect(res.text).toContain('# TYPE process_uptime_seconds gauge\n');
+        });
+    });
+
+    // 실제 라우트 조립(setupApiRoutes)으로 검사한다. 테스트마다 다른 CF-Connecting-IP 로 IP 버킷을 나눈다(피어가 루프백일 때만 채택)
+    describe('스크레이프 레이트 리밋 — IP 당 분당 기본 60(RL_METRICS_IP)', () => {
+        const LIMIT = 60;
+        const scrape = (ip: string, auth?: string) => {
+            const req = request(app).get('/metrics').set('CF-Connecting-IP', ip);
+            return auth ? req.set('Authorization', auth) : req;
+        };
+
+        test('맞는 토큰 — 한도까지 200(text/plain 0.0.4), 넘으면 429 + Retry-After', async () => {
+            cfg.ENABLED = true; cfg.TOKEN = 'secret';
+            for (let i = 0; i < LIMIT; i++) {
+                const res = await scrape('203.0.113.10', 'Bearer secret');
+                expect(res.status).toBe(200);
+                expect(res.headers['content-type']).toContain('version=0.0.4');
+            }
+            const over = await scrape('203.0.113.10', 'Bearer secret');
+            expect(over.status).toBe(429);
+            expect(over.headers['retry-after']).toBeDefined();
+            expect(over.body.error.code).toBe('RATE_LIMITED');
+            // 다른 IP 는 영향 없음
+            expect((await scrape('203.0.113.20', 'Bearer secret')).status).toBe(200);
+        });
+
+        test('인증 실패도 같은 예산 — 401 을 한도만큼 받은 뒤 429', async () => {
+            cfg.ENABLED = true; cfg.TOKEN = 'secret';
+            for (let i = 0; i < LIMIT; i++) expect((await scrape('203.0.113.11', 'Bearer wrong')).status).toBe(401);
+            expect((await scrape('203.0.113.11', 'Bearer wrong')).status).toBe(429);
+        });
+
+        test('관리자 JWT 도 IP 로만 센다 — 토큰 블랙리스트(DB) 조회 없음, 관리자 배수 없음', async () => {
+            cfg.ENABLED = true; cfg.TOKEN = '';
+            const calls = (getTokenBlacklist as jest.Mock).mock.calls.length;
+            for (let i = 0; i < LIMIT; i++) expect((await scrape('203.0.113.12', bearerJwt('admin'))).status).toBe(200);
+            expect((await scrape('203.0.113.12', bearerJwt('admin'))).status).toBe(429);
+            expect((getTokenBlacklist as jest.Mock).mock.calls.length).toBe(calls);
+        });
+
+        test('OFF 면 한도를 넘겨도 404 — 리미터가 기본 OFF 응답을 바꾸지 않는다', async () => {
+            for (let i = 0; i <= LIMIT; i++) expect((await scrape('203.0.113.13', 'Bearer secret')).status).toBe(404);
         });
     });
 });
