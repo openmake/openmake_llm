@@ -175,8 +175,9 @@ test('selectRelatedTests requires related Jest tests per API source and never li
   assert.deepEqual(docs.selection.api, []);
 });
 
-// Jest's graph ignores `import type`, so a module of only types can be related to no test: then no runtime emit → no requirement.
-test('selectRelatedTests skips type-only API sources but still requires tests for any runtime code', async t => {
+// Type-only edges are in Jest's graph (apps/api/jest.dependency-extractor.mjs). Last resort: a type-only source with no related
+// test is excused only when nothing imports it (or it is a declaration file); importers that reach no test still fail.
+test('selectRelatedTests excuses only unimported type-only API sources and still requires tests for any runtime code', async t => {
   const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
   const { join } = await import('node:path');
   const { tmpdir } = await import('node:os');
@@ -189,20 +190,25 @@ test('selectRelatedTests skips type-only API sources but still requires tests fo
   writeFileSync(join(root, typesOnly), "// params\nimport type { A } from './a';\nexport interface P { a?: A; approvalCards?: boolean }\nexport type Q = P | null;\nexport type { R } from './r';\n");
   writeFileSync(join(root, mixed), 'export interface P { a: string }\nexport const LIMIT = 3;\n');
   const logs = [];
-  const selected = selectRelatedTests([typesOnly], { cwd: root, log: line => logs.push(line), listRelated: () => [] });
+  const asked = [];
+  const selected = selectRelatedTests([typesOnly], { cwd: root, log: line => logs.push(line), listRelated: () => [], listImporters: file => { asked.push(file); return []; } });
+  assert.deepEqual(asked, [typesOnly]);
   assert.deepEqual(selected.typeOnly, [typesOnly]);
   assert.equal(selected.related.size, 0);
   assert.equal(selected.tests.size, 0);
   assert.equal(logs.length, 1);
-  assert.match(logs[0], /Type-only source .*: apps\/api\/src\/chat\/types\.ts$/);
-  assert.throws(() => selectRelatedTests([mixed], { cwd: root, log: () => {}, listRelated: () => [] }), /No related Jest tests for apps\/api\/src\/chat\/mixed\.ts/);
+  assert.match(logs[0], /Type-only source with no importers, .*: apps\/api\/src\/chat\/types\.ts$/);
+  // Imported, but no importer reaches a test: the type change cannot be exercised — fail like any untested source.
+  const importer = join(root, 'apps/api/src/chat/strategy.ts');
+  assert.throws(() => selectRelatedTests([typesOnly], { cwd: root, log: () => {}, listRelated: () => [], listImporters: () => [importer] }), /No related Jest tests for apps\/api\/src\/chat\/types\.ts; its importers reach no test \(apps\/api\/src\/chat\/strategy\.ts\)/);
+  assert.throws(() => selectRelatedTests([mixed], { cwd: root, log: () => {}, listRelated: () => [], listImporters: () => [] }), /No related Jest tests for apps\/api\/src\/chat\/mixed\.ts/);
   const consumer = '/repo/apps/api/src/chat/consumer.test.ts';
-  const found = selectRelatedTests([typesOnly], { cwd: root, log: line => logs.push(line), listRelated: () => [consumer] });
+  const found = selectRelatedTests([typesOnly], { cwd: root, log: line => logs.push(line), listRelated: () => [consumer], listImporters: () => { throw new Error('not asked when related tests exist'); } });
   assert.deepEqual([...found.related], [[typesOnly, [consumer]]]);
   assert.deepEqual(found.typeOnly, []);
   assert.equal(logs.length, 1);
   const test = '/repo/apps/api/src/chat/mixed.test.ts';
-  const both = selectRelatedTests([typesOnly, mixed], { cwd: root, log: () => {}, listRelated: file => (file === mixed ? [test] : []) });
+  const both = selectRelatedTests([typesOnly, mixed], { cwd: root, log: () => {}, listRelated: file => (file === mixed ? [test] : []), listImporters: () => [] });
   assert.deepEqual([...both.related], [[mixed, [test]]]);
   for (const text of ["import './side-effect';\n", 'export enum E { A }\n', 'const enum C { A }\n', "export { x } from './x';\n", 'export interface P {}\nexport function f() {}\n', 'export namespace N { export const v = 1 }\n']) assert.equal(isTypeOnlySource('a.ts', text), false, text);
   assert.equal(isTypeOnlySource('a.js', ''), false);
@@ -213,7 +219,10 @@ test('selectRelatedTests skips type-only API sources but still requires tests fo
   for (const file of ['a.d.ts', 'a.d.mts', 'a.d.cts']) assert.equal(isTypeOnlySource(file, 'export interface P {}\n'), true, file);
   const declaration = 'apps/api/src/chat/globals.d.ts';
   writeFileSync(join(root, declaration), 'declare global { interface Window { omk?: string } }\nexport {};\n');
-  assert.deepEqual(selectRelatedTests([declaration], { cwd: root, log: () => {}, listRelated: () => [] }).typeOnly, [declaration]);
+  // Ambient declarations apply without import edges, so importers are not asked.
+  const declared = [];
+  assert.deepEqual(selectRelatedTests([declaration], { cwd: root, log: line => declared.push(line), listRelated: () => [], listImporters: () => { throw new Error('not asked for a declaration file'); } }).typeOnly, [declaration]);
+  assert.match(declared[0], /Type-only declaration file, .*globals\.d\.ts$/);
   // Run mode (`<sha>` / `--files`): a stand-in Jest finds nothing related, so nothing runs and no "No executed related tests".
   mkdirSync(join(root, 'node_modules/jest/bin'), { recursive: true });
   writeFileSync(join(root, 'node_modules/jest/bin/jest.js'), "if (!process.argv.includes('--listTests')) process.exit(1);\nconsole.log('[]');\n");
@@ -230,12 +239,13 @@ test('discord-bot sources select the discord-bot workspace suite', () => {
   assert.equal(selectFeatures(['README.md']).discordBot, false);
 });
 
-// Jest bootstrap files (config/setup) are imported by no test but run before every suite: a change selects every suite.
+// Jest bootstrap files (config/setup/dependency extractor) are imported by no test but run before every suite: a change selects every suite.
 test('selectRelatedTests selects every Jest suite for a Jest bootstrap file', async () => {
   const { selectFeatures, selectRelatedTests } = await import('../../scripts/ci/feature-checks.mjs');
   const setup = 'apps/api/jest.setup-after-env.ts';
   assert.deepEqual(selectFeatures([setup]).api, [setup]);
   assert.deepEqual(selectFeatures(['apps/api/jest.config.js']).api, ['apps/api/jest.config.js']);
+  assert.deepEqual(selectFeatures(['apps/api/jest.dependency-extractor.mjs']).api, ['apps/api/jest.dependency-extractor.mjs']);
   const all = ['/repo/apps/api/src/a.test.ts', '/repo/apps/api/src/b/__tests__/c.test.ts'];
   let related = 0;
   const selected = selectRelatedTests([setup], { listAll: () => all, listRelated: () => { related += 1; return []; } });
