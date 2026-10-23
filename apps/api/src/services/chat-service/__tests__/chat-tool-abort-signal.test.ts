@@ -10,9 +10,14 @@ jest.mock('../../../runtime-ports/tool-runtime', () => ({
     getToolRuntime: () => ({ executeTool, normalizeToolCall: (name: string, args: Record<string, unknown>) => ({ name, args }) }),
 }));
 jest.mock('../../tool-result-truncation-recorder', () => ({ recordToolResultTruncation: jest.fn() }));
+jest.mock('../../org/effective-policy', () => ({
+    ...jest.requireActual('../../org/effective-policy'),
+    resolveEffectivePolicy: async () => ({ approvalPolicyMin: 'high-risk' }),
+}));
 
 import { executeExternalTool } from '../external-tool-exec';
 import { runToolCallBatch, createToolBatchState } from '../external-tool-batch';
+import { getChatApprovalRegistry } from '../chat-approval';
 
 const userContext = { userId: '3', role: 'user' as const };
 const OK = { content: [{ type: 'text', text: 'ok' }] };
@@ -44,8 +49,12 @@ describe('executeExternalTool — 중단 신호(#1474)', () => {
 
 describe('runToolCallBatch — 요청 신호가 배치의 모든 도구 호출에 닿는다(#1474)', () => {
     const base = (signal: AbortSignal) => ({
-        deps: { currentUserContext: userContext, allowedTools: [] } as never,
-        req: { message: 'q', abortSignal: signal } as never,
+        // 외부 MCP 호출은 승인 후 신호를 검사한다 — none 바닥 차단을 우회하는 예전 전제는 쓰지 않는다.
+        deps: {
+            currentUserContext: userContext, allowedTools: [],
+            chatApprovalPendingCallback: (p: { approvalId: string }) => { void getChatApprovalRegistry().approve(p.approvalId); },
+        } as never,
+        req: { message: 'q', abortSignal: signal, approvalCards: true } as never,
         ctx: {}, tools: [], messages: [] as never, state: createToolBatchState(),
     });
 
