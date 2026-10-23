@@ -11,65 +11,87 @@
  * DB 에 영속하여 연결이 끊겨도 taskId 로 복구 조회 가능하게 한다.
  */
 import { QueryParam } from './base-repository';
+import { withTransaction, type TransactionClient } from '../retry-wrapper';
 import type { AgentTask, AgentTaskStatus, AgentTaskStep } from '../models/unified-database.types';
 import { allowedSources, AgentTaskTransitionError } from '../../services/agent-task/task-state';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
-import { chainCreateColumns, type AgentTaskChainCreateParams } from './agent-task-chain-repository';
+import { chainCreateColumns, CLAIM_CONTINUATION_SQL, type AgentTaskChainCreateParams } from './agent-task-chain-repository';
 import { AgentTaskLifecycleRepository } from './agent-task-lifecycle-repository';
 
 // 이벤트·주차·복구 claim·실패 큐 뷰는 agent-task-lifecycle-repository.ts (max-lines 가드로 분리, 상속)
 export { parkedTaskCondition } from './agent-task-lifecycle-repository';
 
+/** createAgentTask 의 입력 — 이어가기 후속의 원자적 생성(#1473)도 같은 입력으로 같은 열을 만든다. */
+export type AgentTaskCreateParams = {
+    id: string;
+    userId?: string;
+    goal: string;
+    maxTurns?: number;
+    model?: string;
+    /** 입력 첨부 파일(추출 텍스트+원본 base64) — [{name,type,content,data,size,truncated,extracted}] */
+    inputFiles?: unknown;
+    /** 입력 첨부 이미지(dataURL 배열) — vision 주입 + 샌드박스 기록용 */
+    inputImages?: unknown;
+    /** Cowork D1a: 실행 백엔드 — 'sandbox'(기본) | 'local'(로컬 브리지) */
+    executor?: 'sandbox' | 'local';
+    /** 로컬 실행 대상 브리지 디바이스 (다중 디바이스, 093) — 미지정은 최근 접속 디바이스 폴백 */
+    deviceId?: string;
+    /** 로컬 실행 대상 폴더 (102) — 연결 루트 기준 상대경로. 미지정은 루트 */
+    folderRel?: string;
+    /** 생성 요청의 Idempotency-Key (174) — 같은 사용자·같은 키의 행이 이미 있으면 만들지 않는다 */
+    idempotencyKey?: string;
+} & AgentTaskChainCreateParams;
+
+/** 이어가기 후속 시드(#1473) — 생성 입력에 더해 후속이 처음부터 가져야 하는 값 전부. lease 가 없으면(소유권 꺼짐) 소유권 열을 비운다. */
+export interface ContinuationSuccessorSeed {
+    parentTaskId: string;
+    create: AgentTaskCreateParams;
+    checkpoint: unknown;
+    plan?: unknown;
+    forkedFromTurn: number;
+    approvalPolicy?: string;
+    thinkingLevel?: string;
+    lease?: { owner: string; leaseMs: number };
+}
+
+/** PURE: INSERT 열·값 — createAgentTask 와 후속 원자 생성이 같은 준비를 쓴다(기본값이 갈리지 않게). */
+function createColumns(params: AgentTaskCreateParams): { cols: string[]; values: QueryParam[] } {
+    // input_files/input_images 는 값이 있을 때만 컬럼에 포함 — 056/057 마이그레이션
+    // 미적용 배포에서도 해당 값 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
+    const cols = ['id', 'user_id', 'goal', 'max_turns', 'model'];
+    const values: QueryParam[] = [params.id, params.userId, params.goal, params.maxTurns ?? 10, params.model];
+    if (params.inputFiles !== undefined) {
+        cols.push('input_files');
+        values.push(JSON.stringify(params.inputFiles));
+    }
+    if (params.inputImages !== undefined) {
+        cols.push('input_images');
+        values.push(JSON.stringify(params.inputImages));
+    }
+    if (params.executor !== undefined) {
+        cols.push('executor');
+        values.push(params.executor);
+    }
+    if (params.deviceId !== undefined) {
+        cols.push('device_id');
+        values.push(params.deviceId);
+    }
+    if (params.folderRel !== undefined) {
+        cols.push('folder_rel');
+        values.push(params.folderRel);
+    }
+    // 멱등 키도 값이 있을 때만 — 키 없는 생성 경로(스케줄·트리거·분기)는 174 미적용 배포에서도 그대로 돈다.
+    if (params.idempotencyKey !== undefined) {
+        cols.push('create_idempotency_key');
+        values.push(params.idempotencyKey);
+    }
+    for (const [col, v] of chainCreateColumns(params)) { cols.push(col); values.push(v); } // 장기 실행 체인(188) — 값이 있을 때만
+    return { cols, values };
+}
+
 export class AgentTaskRepository extends AgentTaskLifecycleRepository {
-    async createAgentTask(params: {
-        id: string;
-        userId?: string;
-        goal: string;
-        maxTurns?: number;
-        model?: string;
-        /** 입력 첨부 파일(추출 텍스트+원본 base64) — [{name,type,content,data,size,truncated,extracted}] */
-        inputFiles?: unknown;
-        /** 입력 첨부 이미지(dataURL 배열) — vision 주입 + 샌드박스 기록용 */
-        inputImages?: unknown;
-        /** Cowork D1a: 실행 백엔드 — 'sandbox'(기본) | 'local'(로컬 브리지) */
-        executor?: 'sandbox' | 'local';
-        /** 로컬 실행 대상 브리지 디바이스 (다중 디바이스, 093) — 미지정은 최근 접속 디바이스 폴백 */
-        deviceId?: string;
-        /** 로컬 실행 대상 폴더 (102) — 연결 루트 기준 상대경로. 미지정은 루트 */
-        folderRel?: string;
-        /** 생성 요청의 Idempotency-Key (174) — 같은 사용자·같은 키의 행이 이미 있으면 만들지 않는다 */
-        idempotencyKey?: string;
-    } & AgentTaskChainCreateParams): Promise<boolean> {
-        // input_files/input_images 는 값이 있을 때만 컬럼에 포함 — 056/057 마이그레이션
-        // 미적용 배포에서도 해당 값 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
-        const cols = ['id', 'user_id', 'goal', 'max_turns', 'model'];
-        const values: QueryParam[] = [params.id, params.userId, params.goal, params.maxTurns ?? 10, params.model];
-        if (params.inputFiles !== undefined) {
-            cols.push('input_files');
-            values.push(JSON.stringify(params.inputFiles));
-        }
-        if (params.inputImages !== undefined) {
-            cols.push('input_images');
-            values.push(JSON.stringify(params.inputImages));
-        }
-        if (params.executor !== undefined) {
-            cols.push('executor');
-            values.push(params.executor);
-        }
-        if (params.deviceId !== undefined) {
-            cols.push('device_id');
-            values.push(params.deviceId);
-        }
-        if (params.folderRel !== undefined) {
-            cols.push('folder_rel');
-            values.push(params.folderRel);
-        }
-        // 멱등 키도 값이 있을 때만 — 키 없는 생성 경로(스케줄·트리거·분기)는 174 미적용 배포에서도 그대로 돈다.
-        if (params.idempotencyKey !== undefined) {
-            cols.push('create_idempotency_key');
-            values.push(params.idempotencyKey);
-        }
-        for (const [col, v] of chainCreateColumns(params)) { cols.push(col); values.push(v); } // 장기 실행 체인(188) — 값이 있을 때만
+    async createAgentTask(params: AgentTaskCreateParams): Promise<boolean> {
+        const { cols, values } = createColumns(params);
         const insert = `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`;
         if (params.idempotencyKey === undefined) {
             await this.query(insert, values);
@@ -81,6 +103,39 @@ export class AgentTaskRepository extends AgentTaskLifecycleRepository {
             values
         );
         return result.rows.length > 0;
+    }
+
+    /**
+     * 이어가기 후속의 원자적 생성(#1473) — 부모 선점(continued_by_task_id 조건부 UPDATE)과 완전히 시드된 후속 INSERT
+     * (체크포인트·plan·fork 표시·실효 승인 정책·추론 수준·실행 소유권)를 한 트랜잭션에 저장한다. 어느 문장이 실패하거나
+     * 커밋 전에 프로세스가 죽으면 둘 다 남지 않는다 — 부모 링크가 없는 후속·불완전한 후속을 가리키는 일이 없다.
+     * false 면 다른 실행이 먼저 이었다(아무것도 쓰지 않았다). 네트워크·모델·작업 공간 준비는 호출부가 트랜잭션 밖에서 끝낸다.
+     */
+    async createContinuationSuccessor(seed: ContinuationSuccessorSeed): Promise<boolean> {
+        const { cols, values } = createColumns(seed.create);
+        const seedCols: Array<[string, QueryParam]> = [
+            ['checkpoint', JSON.stringify(seed.checkpoint)],
+            ['forked_from_task_id', seed.parentTaskId],
+            ['forked_from_turn', seed.forkedFromTurn],
+        ];
+        if (seed.plan !== undefined && seed.plan !== null) seedCols.push(['plan', JSON.stringify(seed.plan)]);
+        if (seed.approvalPolicy) seedCols.push(['approval_policy', seed.approvalPolicy]);
+        if (seed.thinkingLevel) seedCols.push(['thinking_level', seed.thinkingLevel]);
+        if (seed.lease) seedCols.push(['lease_owner', seed.lease.owner]);
+        for (const [col, v] of seedCols) { cols.push(col); values.push(v); }
+        const placeholders = values.map((_, i) => `$${i + 1}`);
+        if (seed.lease) { // 소유권 만료는 DB 시계 기준 — acquireLease 와 같은 식
+            cols.push('lease_until');
+            values.push(seed.lease.leaseMs / 1000);
+            placeholders.push(`NOW() + make_interval(secs => $${values.length})`);
+        }
+        const insert = `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${placeholders.join(', ')})`;
+        return withTransaction(this.pool as unknown as { connect: () => Promise<TransactionClient> }, async (client) => {
+            const claim = await client.query(CLAIM_CONTINUATION_SQL, [seed.parentTaskId, seed.create.id]);
+            if ((claim.rowCount ?? 0) !== 1) return false;
+            await client.query(insert, values);
+            return true;
+        });
     }
 
     /** 생성 멱등 키로 작업 조회(174) — 재시작·다른 서버가 만든 작업도 찾는다. */
