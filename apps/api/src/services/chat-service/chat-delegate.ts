@@ -21,7 +21,7 @@ import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { getModelForRole } from '../../config/model-roles';
 import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
-import { runSubagent } from '../agent-task/subagent';
+import { runSubagent, type SubagentChatTaint } from '../agent-task/subagent';
 import { ASK_USER_TOOL_NAME } from './ask-user';
 import { createLogger } from '../../utils/logger';
 
@@ -68,6 +68,8 @@ export async function runChatDelegate(params: {
     signal?: AbortSignal;
     /** 부모 채팅의 실효 승인 정책 — 서브의 권한 판정에 쓴다(#1469). 미지정이면 종전 기본 none. */
     parentPolicy?: TaskSandboxApprovalPolicy;
+    /** 부모 채팅의 오염 문맥 — 서브에 물려주고 서브의 외부 결과를 부모에 알린다(#1469). */
+    chatTaint?: SubagentChatTaint;
 }): Promise<string> {
     const subgoal = String(params.args.subgoal ?? '').trim();
     if (!subgoal) return 'Error: subgoal 이 필요합니다.';
@@ -86,6 +88,7 @@ export async function runChatDelegate(params: {
             // 채팅 경로 — 서브에는 승인 창이 없어 대기만 생략한다(skipApprovalGate). 권한은 부모 채팅의 실효 정책과
             // 실제 인자로 판정해 승인이 필요하면 거절한다(#1469) — 정책을 주지 않는 호출은 종전 기본 none(바닥은 그대로 거절).
             sandboxCfg: { approvalPolicy: params.parentPolicy ?? 'none', approvalTimeoutMs: 0, skipApprovalGate: true },
+            ...(params.chatTaint ? { chatTaint: params.chatTaint } : {}),
             signal: params.signal,
             onTokens: (n) => logger.debug(`[ChatDelegate] 서브 토큰 +${n}`),
         });

@@ -26,7 +26,7 @@ import type { ExternalProviderDeps, StreamFromExternalContext } from './external
 import type { SearchSourceRef } from '../../tools/web-search/types';
 import { withLanguageNote } from './tool-result-language';
 import { CHAT_TOOL_APPROVAL } from '../../config/chat-approval';
-import { classifyToolRisk, isThirdPartyTool } from '../../config/tool-policy';
+import { bringsExternalContent } from '../../config/tool-policy';
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { requiresApproval, stripApprovalGatedTools } from '../task-sandbox/approval-gate';
 import { floorDeniedUnderPolicy } from '../task-sandbox/approval-floor';
@@ -104,12 +104,6 @@ function notifySafely(what: string, fn: () => void): void {
     try { fn(); } catch (e) {
         logger.warn(`채팅 승인 ${what} 알림 실패(무시): ${e instanceof Error ? e.message : String(e)}`);
     }
-}
-
-/** PURE: 이 도구의 결과가 대화를 오염시키는가(W3 S3) — 외부 내용을 들여오는 등급(external·network)이거나 외부 MCP 도구. */
-function bringsExternalContent(name: string, args: Record<string, unknown>): boolean {
-    const risk = classifyToolRisk(name, args);
-    return risk === 'external' || risk === 'network' || isThirdPartyTool(name, args);
 }
 
 /**
@@ -206,6 +200,9 @@ export async function runToolCallBatch(params: {
     // 서브에이전트에는 승인 창이 없어(skipApprovalGate — 대기만 생략) 승인이 필요한 도구는 주지 않고, 실제 인자로 승인이 필요해지는
     // 호출은 서브가 같은 정책(parentPolicy)으로 거절한다 — 부모가 승인 뒤 직접 부른다(#1469).
     const subagentTools = stripApprovalGatedTools(tools, policy);
+    // 위임 경계의 오염 문맥 — 서브는 지금의 taint 를 물려받고, 외부 결과를 받으면 부모에 알려 다음 부모 호출도 오염 문맥으로 판정한다
+    // (spawn_agents 는 제어 등급이라 이름만으로는 외부 결과를 알 수 없다). 판정 규칙은 같은 TAINT_ENABLED·예외 도구·requiresApproval.
+    const subagentTaint = () => ({ inherited: state.tainted, onExternalOutput: () => { state.tainted = true; } });
 
     // 읽기 전용 도구(web_search·extract_webpage …) 2건 이상이면 동시에 선실행 — 결과는 아래
     // 순차 루프가 원래 호출 순서대로 배치한다. 승인이 필요한 호출은 선실행하지 않는다(루프에서 묻는다).
@@ -234,6 +231,7 @@ export async function runToolCallBatch(params: {
                     args: tc.args as Record<string, unknown>,
                     chatTools: subagentTools,
                     parentPolicy: policy,
+                    chatTaint: subagentTaint(),
                     userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },
                     ...(req.abortSignal ? { signal: req.abortSignal } : {}),
                 });
@@ -247,6 +245,7 @@ export async function runToolCallBatch(params: {
                     args: tc.args as Record<string, unknown>,
                     chatTools: subagentTools,
                     parentPolicy: policy,
+                    chatTaint: subagentTaint(),
                     userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },
                     ...(req.abortSignal ? { signal: req.abortSignal } : {}),
                 });

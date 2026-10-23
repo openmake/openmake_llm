@@ -33,7 +33,7 @@ import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { approvalFloorReason } from '../task-sandbox/approval-floor';
-import { runSubagent } from '../agent-task/subagent';
+import { runSubagent, type SubagentChatTaint } from '../agent-task/subagent';
 import { SubagentTrace, newTraceId, subagentLabel } from '../agent-task/subagent-trace';
 import type { DelegateFactoryParams } from '../agent-task/delegate';
 import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
@@ -209,6 +209,8 @@ interface SpawnAgentsParams {
     /** 부모 작업의 남은 토큰 예산(에이전트 작업 경로만) — 병렬 서브의 합이 이를 넘지 않게 한다. */
     remainingTokens?: () => number;
     onPausedMs?: (ms: number) => void;
+    /** 채팅 경로만 — 부모의 오염 문맥(W3 S3 taint)을 서브마다 물려주고 외부 결과를 부모에 알린다(#1469). */
+    chatTaint?: SubagentChatTaint;
 }
 
 /** role 지정 시 산업 전문가 페르소나, 미지정 시 범용 프롬프트. 실패는 범용으로 폴백. */
@@ -353,6 +355,7 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
                         ...(p.onTokens ? { onTokens: p.onTokens } : {}),
                         ...(p.remainingTokens ? { remainingTokens: p.remainingTokens } : {}),
                         ...(p.onPausedMs ? { onPausedMs: p.onPausedMs } : {}),
+                        ...(p.chatTaint ? { chatTaint: p.chatTaint } : {}),
                         onExit: (reason) => { exits[idx] = reason; },
                     });
                     const exit = exits[idx];
@@ -415,6 +418,8 @@ export async function runChatSpawnAgents(params: {
     signal?: AbortSignal;
     /** 부모 채팅의 실효 승인 정책 — 서브의 권한 판정에 쓴다(#1469). 미지정이면 종전 기본 none. */
     parentPolicy?: TaskSandboxApprovalPolicy;
+    /** 부모 채팅의 오염 문맥 — 서브에 물려주고 서브의 외부 결과를 부모에 알린다(#1469). */
+    chatTaint?: SubagentChatTaint;
 }): Promise<string> {
     const resolved = await resolveRoleClientForUser('spawn', String(params.userCtx.userId));
     if (resolved.degraded) {
@@ -428,6 +433,7 @@ export async function runChatSpawnAgents(params: {
         taskId: CHAT_PSEUDO_TASK_ID, // 승인 레지스트리 미사용 — 식별용 문자열일 뿐
         // 채팅 경로 — 서브에는 승인 창이 없어 대기만 생략한다(skipApprovalGate). 권한은 부모 정책과 실제 인자로 판정한다(#1469).
         sandboxCfg: { approvalPolicy: params.parentPolicy ?? 'none', approvalTimeoutMs: 0, skipApprovalGate: true },
+        ...(params.chatTaint ? { chatTaint: params.chatTaint } : {}),
         ...(params.signal ? { signal: params.signal } : {}),
         onTokens: (n) => logger.debug(`[AgentSpawn] 채팅 서브 토큰 +${n}`),
     });
