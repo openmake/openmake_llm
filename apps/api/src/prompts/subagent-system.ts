@@ -67,3 +67,13 @@ export function partialSubagentResult(reason: 'turns' | 'tokens', text: string):
     const why = reason === 'turns' ? '턴 상한 도달' : '토큰 상한 도달';
     return `[서브에이전트 상태: ${why} — 부분 결과]\n${text || '(부분 결과 없음)'}`;
 }
+
+/** 서브에이전트가 받지 않은 도구 이름을 불렀다(위조·환각) — 실행하지 않았다고 알린다(#1469). */
+export function getSubagentToolNotExposedNotice(toolName: string): string {
+    return `Error: 도구 ${toolName} 은(는) 이 서브에이전트에게 주어진 도구가 아니라 실행하지 않았습니다. 주어진 도구 목록 안에서만 진행하세요.`;
+}
+
+/** 채팅 서브에이전트의 승인이 필요한 호출 — 서브에는 승인 창이 없어 기다리지 않고 실행하지 않았다(#1469). 부모가 승인을 받아 할 수 있다. */
+export function getSubagentApprovalRequiredNotice(toolName: string): string {
+    return `Error: 이 호출(${toolName})은 사용자 승인이 필요한데, 서브에이전트에서는 승인을 받을 수 없어 실행하지 않았습니다. 같은 결과를 다른 경로로 얻으려 하지 말고, 필요한 작업과 그 이유를 결과에 적으세요 — 부모가 사용자 승인을 받아 직접 실행할 수 있습니다.`;
+}

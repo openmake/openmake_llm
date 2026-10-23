@@ -10,6 +10,8 @@
  *  - 턴 상한 SUBAGENT_MAX_TURNS(기본 3) · 위임당 토큰 상한 SUBAGENT_MAX_TOKENS.
  *  - 토큰은 onTokens 로 부모 totalTokens 에 합산 — 부모 runaway 가드도 함께 적용.
  *  - 도구는 부모와 동일한 HITL 승인 게이트 경유(정책 우회 없음) — 자동승인 task 면 즉시.
+ *  - 받은 도구 목록 밖 이름(위조·환각)은 어떤 실행 경로로도 실행하지 않는다. 채팅 서브(skipApprovalGate)는 승인 창이 없어
+ *    기다리지 않을 뿐 권한 판정은 그대로 한다 — 부모 정책과 실제 인자로 승인이 필요하면 거절(바닥은 policy_floor, 그 밖은 unattended).
  *  - 샌드박스(쓰기) 도구는 제외 — 부모 컨테이너 상태를 서브가 변경하지 못함.
  *
  * @module services/agent-task/subagent
@@ -20,7 +22,8 @@ import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
-import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
+import { requiresApproval, getApprovalRegistry, auditAutoRejected } from '../task-sandbox/approval-gate';
+import { floorDeniedUnderPolicy } from '../task-sandbox/approval-floor';
 import { runWithCostSession } from '../../utils/cost-attribution-context';
 import { runTool } from './task-steps';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
@@ -29,7 +32,7 @@ import { AgentTaskParked } from './types';
 import { findDanglingToolCalls } from './turn-reentry';
 import { createLogger } from '../../utils/logger';
 import { detectLanguage, LANGUAGE_DISPLAY_NAMES } from '../../chat/language-policy';
-import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE, partialSubagentResult } from '../../prompts/subagent-system';
+import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE, partialSubagentResult, getSubagentToolNotExposedNotice, getSubagentApprovalRequiredNotice } from '../../prompts/subagent-system';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 import { prepareToolArgs } from './tool-args';
 import { exitReasonForError, type SubagentExitReason } from '../../config/agent-task-delegation';
@@ -50,10 +53,10 @@ interface SubagentParams {
     /** 안전 도구 서브셋 — 부모의 호스트 화이트리스트(extraTools). delegate 류는 호출부가 제외. */
     tools: ToolDefinition[];
     userCtx: UserContext;
-    /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 승인 게이트를 건너뛰어(skipApprovalGate) 실사용 안 됨. */
+    /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 대기를 만들지 않아(skipApprovalGate) 감사 식별용일 뿐. */
     taskId: string;
-    /** 승인 정책·대기 상한만 사용. skipApprovalGate — 채팅 경로만 true: 승인 게이트를 아예 거치지 않는다
-     *  (정책 none 의 바닥 거절도 적용하지 않는다 — 채팅 부모 루프가 같은 도구를 게이트 없이 부른다, 2026-10-22 S1). */
+    /** 승인 정책·대기 상한. skipApprovalGate — 채팅 경로만 true: 승인 창이 없어 **대기만** 생략한다. 권한 판정은 그대로 —
+     *  approvalPolicy(부모 채팅의 실효 정책)와 실제 인자로 승인이 필요하면 기다리지 않고 거절한다(#1469). */
     sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs' | 'deviceGatesShell'> & { skipApprovalGate?: boolean };
     signal?: AbortSignal;
     /** 서브 LLM 호출 토큰을 부모 누적에 합산. */
@@ -125,6 +128,23 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
     };
 
     if (restored) p.trace?.record('resumed', '');
+
+    const exposed = new Set(p.tools.map((t) => t.function.name));
+    /**
+     * 실행 전 권한 거절 — 거절이면 모델에 줄 결과, 아니면 null. 두 실행 경로(선실행·순차)가 실행 직전에 똑같이 부른다.
+     * 노출 목록 밖 이름은 늘 거절. 채팅 서브(skipApprovalGate)는 승인이 필요하면 대기 없이 거절하고 기존 무인 거절 감사를 남긴다.
+     */
+    const childRejection = (name: string, args: Record<string, unknown>): string | null => {
+        if (!exposed.has(name)) {
+            logger.warn(`[Subagent] 받지 않은 도구 호출 거절: ${name}`);
+            return getSubagentToolNotExposedNotice(name);
+        }
+        if (!p.sandboxCfg.skipApprovalGate || !requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) return null;
+        const input = { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args };
+        const floor = floorDeniedUnderPolicy(p.sandboxCfg.approvalPolicy, name, args);
+        auditAutoRejected(input, floor ? 'policy_floor' : 'unattended', floor);
+        return floor ? getApprovalRejectedNotice(name, 'policy_floor') : getSubagentApprovalRequiredNotice(name);
+    };
 
     try {
         for (let turn = restored?.turn ?? 0; turn < maxTurns; turn++) {
@@ -208,11 +228,14 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             // 읽기 전용 도구 병렬 선실행 — 승인 필요 호출은 자동 승인 작업에서만(부모 루프와 같은 규칙).
             const prefetched = await prefetchReadOnlyCalls(
                 result.tool_calls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
-                ({ name, tc }) => !!p.sandboxCfg.skipApprovalGate || !requiresApproval(p.sandboxCfg.approvalPolicy, name,
+                // 받은 도구만, 채팅 서브는 승인이 필요 없는 호출만 선실행한다(나머지는 아래 순차 경로가 거절한다).
+                ({ name, tc }) => exposed.has(name) && (!requiresApproval(p.sandboxCfg.approvalPolicy, name,
                     (tc.function.arguments ?? {}) as Record<string, unknown>, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })
-                    || getApprovalRegistry().autoApproves(p.taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>),
+                    || (!p.sandboxCfg.skipApprovalGate && getApprovalRegistry().autoApproves(p.taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>))),
                 async ({ name, tc }) => {
                     const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
+                    const denied = childRejection(name, args);
+                    if (denied !== null) return denied;
                     if (!p.sandboxCfg.skipApprovalGate && requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
                         const r = await getApprovalRegistry().request(
                             { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
@@ -232,6 +255,12 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 if (pre !== undefined) {
                     p.trace?.record('tool_result', pre, name);
                     conversation.push({ role: 'tool', content: pre, tool_name: name, tool_call_id: tc.id });
+                    continue;
+                }
+                const denied = childRejection(name, args);
+                if (denied !== null) {
+                    p.trace?.record('tool_result', denied, name);
+                    conversation.push({ role: 'tool', content: denied, tool_name: name, tool_call_id: tc.id });
                     continue;
                 }
                 // 부모와 동일한 승인 게이트 — 정책 우회 없음(자동승인 task 면 즉시 approved).

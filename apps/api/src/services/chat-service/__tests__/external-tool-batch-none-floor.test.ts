@@ -117,7 +117,18 @@ describe('runToolCallBatch — 채팅 정책 none 의 바닥 거절', () => {
         for (const m of [delegate, spawn]) {
             const names = (m.mock.calls[0][0] as { chatTools: Array<{ function: { name: string } }> }).chatTools.map((t) => t.function.name);
             expect(names).toEqual(['web_search', 'mcp_list_tools']);
+            // 서브는 같은 정책으로 실제 인자를 판정한다(#1469) — 부모 정책을 넘긴다
+            expect(m.mock.calls[0][0]).toMatchObject({ parentPolicy: 'none' });
         }
+    });
+
+    it('조직 하한이 high-risk 면 위임·병렬 서브 모두에 high-risk 를 넘긴다', async () => {
+        const { resolveEffectivePolicy } = jest.requireMock('../../org/effective-policy') as { resolveEffectivePolicy: jest.Mock };
+        resolveEffectivePolicy.mockResolvedValueOnce({ approvalPolicyMin: 'high-risk' });
+        const { run } = setup();
+        await run([{ id: 'd1', name: CHAT_DELEGATE_TOOL_NAME, args: { task: 'x' } }, { id: 'd2', name: SPAWN_AGENTS_TOOL_NAME, args: { tasks: ['x'] } }], [fn('web_search')]);
+        expect(delegate.mock.calls[0][0]).toMatchObject({ parentPolicy: 'high-risk' });
+        expect(spawn.mock.calls[0][0]).toMatchObject({ parentPolicy: 'high-risk' });
     });
 
     it('해 없는 읽기(web_search)·제어 도구는 묻지 않고 즉시 실행한다', async () => {

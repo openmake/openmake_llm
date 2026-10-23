@@ -283,6 +283,16 @@ describe('runChatSpawnAgents — 채팅 편의 래퍼', () => {
         expect(p.taskId).toBe('__chat__');
     });
 
+    it('부모 채팅의 실효 승인 정책을 서브에 넘긴다 — 게이트 생략은 대기만 생략하고 권한 판정은 그 정책으로 한다(#1469)', async () => {
+        await runChatSpawnAgents({
+            args: { tasks: [{ prompt: 'chat task' }] },
+            chatTools: [llmTool('web_search')],
+            userCtx: { userId: 'u1', role: 'user' } as never,
+            parentPolicy: 'high-risk',
+        } as never);
+        expect(runSubagentMock.mock.calls[0][0].sandboxCfg).toEqual({ approvalPolicy: 'high-risk', approvalTimeoutMs: 0, skipApprovalGate: true });
+    });
+
     it('서브 도구를 리서치 키워드로 압축한다 (도구폭주 차단)', async () => {
         await runChatSpawnAgents({
             args: { tasks: [{ prompt: 'x' }] },

@@ -7,8 +7,8 @@
  *
  * 안전 원칙:
  *  - 서브 도구 = 부모 채팅이 이미 실행 가능한 도구만(자기 자신 제외) — 권한 증분 0.
- *  - 승인 정책 'none' 고정 — 채팅 도구는 원래 승인 없이 실행되는 모델과 정합
- *    (승인 레지스트리를 아예 타지 않음 → agent task HITL 과 간섭 없음).
+ *  - 승인은 부모 채팅의 실효 정책(parentPolicy)으로 판정 — 서브에는 승인 창이 없어 대기만 생략하고(skipApprovalGate),
+ *    승인이 필요한 호출은 거절한다(바닥은 policy_floor). 승인 대기를 만들지 않아 agent task HITL 과 간섭 없음(#1469).
  *  - 메시지당 호출 캡(CHAT_SUBAGENT.MAX_CALLS, 기본 1) — 지연·남용 억제(호출부가 집계).
  *  - 서브 LLM 은 항상 로컬 모델(createClient) — 외부 provider 채팅이어도 위임 비용은 로컬.
  *
@@ -17,6 +17,7 @@
 import { createClient } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../tool-contract/types';
+import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { getModelForRole } from '../../config/model-roles';
 import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
@@ -65,6 +66,8 @@ export async function runChatDelegate(params: {
     chatTools: ToolDefinition[];
     userCtx: UserContext;
     signal?: AbortSignal;
+    /** 부모 채팅의 실효 승인 정책 — 서브의 권한 판정에 쓴다(#1469). 미지정이면 종전 기본 none. */
+    parentPolicy?: TaskSandboxApprovalPolicy;
 }): Promise<string> {
     const subgoal = String(params.args.subgoal ?? '').trim();
     if (!subgoal) return 'Error: subgoal 이 필요합니다.';
@@ -80,8 +83,9 @@ export async function runChatDelegate(params: {
             tools: buildSubagentTools(params.chatTools),
             userCtx: params.userCtx,
             taskId: '__chat__', // 승인 레지스트리 미사용 — 식별용 문자열일 뿐
-            // 채팅 경로 — 승인 게이트 없음(정책 none 의 바닥 거절도 적용하지 않는다, 2026-10-22 S1)
-            sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 0, skipApprovalGate: true },
+            // 채팅 경로 — 서브에는 승인 창이 없어 대기만 생략한다(skipApprovalGate). 권한은 부모 채팅의 실효 정책과
+            // 실제 인자로 판정해 승인이 필요하면 거절한다(#1469) — 정책을 주지 않는 호출은 종전 기본 none(바닥은 그대로 거절).
+            sandboxCfg: { approvalPolicy: params.parentPolicy ?? 'none', approvalTimeoutMs: 0, skipApprovalGate: true },
             signal: params.signal,
             onTokens: (n) => logger.debug(`[ChatDelegate] 서브 토큰 +${n}`),
         });
