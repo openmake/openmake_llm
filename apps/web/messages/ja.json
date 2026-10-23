@@ -2564,7 +2564,8 @@
     "reject": "拒否",
     "expiresIn": "{seconds}秒後に自動で拒否されます",
     "denied": "応答がなかったため拒否されました",
-    "waiting": "回答はこのツール実行の承認を待っています"
+    "waiting": "回答はこのツール実行の承認を待っています",
+    "rejectReasonPlaceholder": "拒否の理由(任意)— 入力するとモデルに伝わります"
   },
   "marketplacePublish": {
     "title": "マーケットプレイスに公開",

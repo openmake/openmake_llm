@@ -6,7 +6,7 @@
  * (use-chat-socket 이 store 의 pendingChatApprovals 를 채우고 비운다). 결정은 REST 로 보낸다.
  * 남은 시간이 0 이 되면 서버가 거절(timeout)로 끝내므로 버튼을 거두고 거절 문구를 보인다(decided 가 오면 카드가 빠진다).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Clock, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/primitives";
@@ -46,18 +46,34 @@ export function ChatApprovalCards() {
   // 결정을 보낸(또는 보내는 중인) 승인 — decided 이벤트로 카드가 빠질 때까지 버튼을 막는다.
   const [inFlight, setInFlight] = useState<Record<string, boolean>>({});
   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
+  // 결정 실패 문구 — 그 승인 줄 안에 보인다(모달 alert 는 채팅 흐름을 막는다). 다음 클릭에서 지운다.
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const now = useNow(approvals.length > 0);
   if (approvals.length === 0) return null;
 
   async function decide(a: PendingChatApproval, decision: "approve" | "reject") {
     setInFlight((prev) => ({ ...prev, [a.approvalId]: true }));
+    setErrors((prev) => ({ ...prev, [a.approvalId]: "" }));
     const reason = decision === "reject" ? (rejectReasons[a.approvalId] ?? "").trim() : "";
     try {
       // id 에 콜론이 들어간다(apv_chat:<chatId>_<n>) — 경로 조각으로 인코딩한다.
       await ApiClient.post(`/api/chat/approvals/${encodeURIComponent(a.approvalId)}/${decision}`, reason ? { reason } : {});
     } catch (e) {
+      // 늦게 온 실패 — 카드가 이미 사라졌으면(결정·스트림 종료·대화 전환) 버린다.
+      const stillPending = useAppStore.getState().pendingChatApprovals.some((x) => x.approvalId === a.approvalId);
+      if (!mountedRef.current || !stillPending) return;
       setInFlight((prev) => ({ ...prev, [a.approvalId]: false }));
-      alert(tChat("approvals.processFailed", { error: e instanceof Error ? e.message : tChat("approvals.errorFallback") }));
+      setErrors((prev) => ({
+        ...prev,
+        [a.approvalId]: tChat("approvals.processFailed", { error: e instanceof Error ? e.message : tChat("approvals.errorFallback") }),
+      }));
     }
   }
 
@@ -105,14 +121,15 @@ export function ChatApprovalCards() {
                 <input
                   value={rejectReasons[a.approvalId] ?? ""}
                   onChange={(e) => setRejectReasons((prev) => ({ ...prev, [a.approvalId]: e.target.value }))}
-                  placeholder={tApprovals("tasks.rejectReasonPlaceholder")}
-                  aria-label={tApprovals("tasks.rejectReasonPlaceholder")}
+                  placeholder={t("rejectReasonPlaceholder")}
+                  aria-label={t("rejectReasonPlaceholder")}
                   maxLength={REJECT_REASON_MAX_CHARS}
                   disabled={disabled}
                   className="w-full rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs text-fg-1 outline-none focus:border-accent disabled:opacity-50"
                 />
               </>
             )}
+            {errors[a.approvalId] && <p className="break-words text-[11px] text-danger">{errors[a.approvalId]}</p>}
           </div>
         );
       })}

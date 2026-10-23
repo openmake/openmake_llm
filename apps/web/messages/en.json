@@ -2564,7 +2564,8 @@
     "reject": "Reject",
     "expiresIn": "Auto-rejects in {seconds}s",
     "denied": "Rejected — no response in time",
-    "waiting": "The answer is waiting for your approval to run this tool"
+    "waiting": "The answer is waiting for your approval to run this tool",
+    "rejectReasonPlaceholder": "Reason for rejecting (optional) — passed on to the model"
   },
   "marketplacePublish": {
     "title": "Publish to marketplace",

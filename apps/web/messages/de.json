@@ -2564,7 +2564,8 @@
     "reject": "Ablehnen",
     "expiresIn": "Automatische Ablehnung in {seconds} s",
     "denied": "Abgelehnt – keine Antwort innerhalb der Frist",
-    "waiting": "Die Antwort wartet auf Ihre Freigabe für dieses Tool"
+    "waiting": "Die Antwort wartet auf Ihre Freigabe für dieses Tool",
+    "rejectReasonPlaceholder": "Grund der Ablehnung (optional) – wird an das Modell weitergegeben"
   },
   "marketplacePublish": {
     "title": "Auf dem Marktplatz veröffentlichen",
