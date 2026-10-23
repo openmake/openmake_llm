@@ -221,8 +221,8 @@ export function buildResultBlock(results: TaskResult[], lang: string): string {
  */
 function fallbackNote(lang: string, reason: string): string {
     return lang === 'ko'
-        ? `[시스템: 이번 턴에는 이미지·오디오·영상 등 미디어 기능이 실행되지 않았습니다 — 작업 계획 단계가 실패했습니다(사유: ${reason.slice(0, 120)}). 텍스트로만 답하고, 미디어를 만들었다고 말하거나 파일 링크를 지어내지 마세요. 미디어가 만들어지지 않았다는 사실과 사유를 쉬운 말로 한 문장 알리세요. 같은 요청을 그대로 다시 보내라고 권하지 마세요 — 같은 이유로 다시 실패할 수 있습니다. 사유가 시간 초과면 요청을 짧게 나누는 방법을, 그 밖이면 관리자에게 모델 배정 확인을 권하세요.]`
-        : `[System: media capabilities (image/audio/video) did not run this turn — the task planning step failed (reason: ${reason.slice(0, 120)}). Answer in text only; do not claim media was generated or invent file links. Tell the user in one plain sentence that no media was produced and why. Do not suggest sending the same request again — it may fail for the same reason. If the reason is a timeout, suggest splitting the request into shorter parts; otherwise suggest asking an administrator to check the model assignment.]`;
+        ? `[시스템: 이번 턴에는 이미지·오디오·영상 등 미디어 기능이 실행되지 않았습니다 — 작업 계획 단계가 실패했습니다(사유: ${reason.slice(0, 120)}). 텍스트로만 답하고, 미디어를 만들었다고 말하거나 파일 링크를 지어내지 마세요. 텍스트로 답할 수 있는 요청에는 계획 실패나 미디어 미실행을 언급하지 말고 정상적으로 답하세요. 사용자가 미디어 생성을 요청한 경우에만 미디어가 만들어지지 않았다는 사실과 사유를 쉬운 말로 한 문장 알리세요. 그 경우 같은 요청을 그대로 다시 보내라고 권하지 마세요 — 같은 이유로 다시 실패할 수 있습니다. 사유가 시간 초과면 요청을 짧게 나누는 방법을, 그 밖이면 관리자에게 모델 배정 확인을 권하세요.]`
+        : `[System: media capabilities (image/audio/video) did not run this turn — the task planning step failed (reason: ${reason.slice(0, 120)}). Answer in text only; do not claim media was generated or invent file links. For requests that can be answered in text, answer normally without mentioning planning or media failures. Only if the user requested media generation, tell the user in one plain sentence that no media was produced and why. In that case, do not suggest sending the same request again — it may fail for the same reason. If the reason is a timeout, suggest splitting the request into shorter parts; otherwise suggest asking an administrator to check the model assignment.]`;
 }
 
 /**
