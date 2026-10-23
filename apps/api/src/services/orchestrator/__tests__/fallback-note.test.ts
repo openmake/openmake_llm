@@ -16,7 +16,7 @@ import { runOrchestrator } from '../orchestrate';
 
 describe('계획 실패 안내', () => {
     beforeEach(() => {
-        jest.mocked(planRequest).mockResolvedValue({ error: 'timeout 15000ms', ms: 15000, model: 'gemini:test' });
+        jest.mocked(planRequest).mockResolvedValue({ plan: null, registryRevision: 0, schemaHash: '', attempts: 1, error: 'timeout 15000ms', ms: 15000, model: 'gemini:test' });
     });
 
     it.each([
@@ -40,7 +40,7 @@ describe('계획 실패 안내', () => {
     });
 
     it('취소된 계획은 실패 안내 없이 종료한다', async () => {
-        jest.mocked(planRequest).mockResolvedValue({ error: 'cancelled', ms: 1 });
+        jest.mocked(planRequest).mockResolvedValue({ plan: null, registryRevision: 0, schemaHash: '', attempts: 1, error: 'cancelled', ms: 1, model: 'gemini:test' });
         const result = await runOrchestrator({ req: { message: 'cancel' }, lang: 'en' });
         expect(result.mode).toBe('cancelled');
         expect(result.contextBlock).toBeUndefined();
