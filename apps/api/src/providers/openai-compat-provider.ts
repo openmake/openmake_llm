@@ -403,7 +403,7 @@ export class OpenAICompatProvider implements IProvider {
 
             let content = '';
             const pseudoGate = new PseudoToolCallGate();
-            const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string }>();
+            const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string; extra?: Record<string, unknown> }>();
             let promptTokens = 0;
             let completionTokens = 0;
 
@@ -426,6 +426,8 @@ export class OpenAICompatProvider implements IProvider {
                             index: number;
                             id?: string;
                             function?: { name?: string; arguments?: string };
+                            /** Gemini 3 thought signature 등 불투명 값 — 다음 턴 재전송용으로 그대로 보존 */
+                            extra_content?: Record<string, unknown>;
                         }>;
                     };
                 }>;
@@ -460,6 +462,7 @@ export class OpenAICompatProvider implements IProvider {
                         }
                         if (tc.function?.name && !buf.name) buf.name = tc.function.name;
                         if (tc.function?.arguments) buf.jsonBuffer += tc.function.arguments;
+                        if (tc.extra_content && !buf.extra) buf.extra = tc.extra_content;
                     }
                 }
                 if (chunk.usage) {
@@ -481,7 +484,7 @@ export class OpenAICompatProvider implements IProvider {
                     + `raw=${pseudoFlush.unparsedRaw.slice(0, 200)}`);
             }
 
-            const toolCalls: Array<{ id: string; name: string; args: unknown }> = [];
+            const toolCalls: NonNullable<ChatStreamResult['toolCalls']> = [];
             for (const buf of toolBuffers.values()) {
                 let args: unknown = {};
                 try {
@@ -489,7 +492,7 @@ export class OpenAICompatProvider implements IProvider {
                 } catch (parseErr) {
                     logger.warn(`tool_call arguments 파싱 실패 — {} 로 강등: tool=${buf.name} raw=${buf.jsonBuffer.slice(0, 200)} (${parseErr})`);
                 }
-                const call = { id: buf.id, name: codec.restore(buf.name), args };
+                const call = { id: buf.id, name: codec.restore(buf.name), args, ...(buf.extra && { extra_content: buf.extra }) };
                 toolCalls.push(call);
                 callbacks.onToolCall?.(call);
             }
