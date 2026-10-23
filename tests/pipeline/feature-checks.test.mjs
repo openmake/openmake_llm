@@ -231,6 +231,47 @@ test('selectRelatedTests excuses only unimported type-only API sources and still
   assert.deepEqual(report.typeOnly, [typesOnly]);
 });
 
+// Same exemption against a real Jest graph: the broad `--testMatch` importer discovery (not a stub) decides it.
+test('selectRelatedTests with real Jest fails a type module imported by untested code and excuses an unreferenced one', async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync, realpathSync, existsSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { fileURLToPath } = await import('node:url');
+  const { selectRelatedTests } = await import('../../scripts/ci/feature-checks.mjs');
+  const repo = fileURLToPath(new URL('../../', import.meta.url));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'omk-feature-real-jest-')));
+  try {
+    // The fixture borrows the installed Jest through a link; apps/api's roots/testMatch and the real extractor.
+    symlinkSync(join(repo, 'node_modules'), join(root, 'node_modules'), 'dir');
+    writeFileSync(join(root, 'package.json'), '{ "private": true }\n'); // Jest needs a project root, as in the repo
+    const src = join(root, 'apps/api/src');
+    mkdirSync(join(src, 'types'), { recursive: true });
+    const config = { roots: ['<rootDir>/src'], testMatch: ['**/*.test.ts'], cacheDirectory: join(root, '.jest-cache'), dependencyExtractor: join(repo, 'apps/api/jest.dependency-extractor.mjs') };
+    writeFileSync(join(root, 'apps/api/jest.config.js'), `module.exports = ${JSON.stringify(config)};\n`);
+    writeFileSync(join(src, 'types/used.ts'), 'export interface Used { a: string }\n');
+    writeFileSync(join(src, 'consumer.ts'), "import type { Used } from './types/used';\nexport const make = (): Used => ({ a: '' });\n");
+    writeFileSync(join(src, 'types/orphan.ts'), 'export type Orphan = string;\n');
+    writeFileSync(join(src, 'types/tested.ts'), 'export type Tested = number;\n');
+    writeFileSync(join(src, 'tested.ts'), "import type { Tested } from './types/tested';\nexport const n: Tested = 1;\n");
+    writeFileSync(join(src, 'tested.test.ts'), "import './tested';\n");
+    const logs = [];
+    const options = { cwd: root, log: line => logs.push(line) };
+    assert.throws(() => selectRelatedTests(['apps/api/src/types/used.ts'], options), /No related Jest tests for apps\/api\/src\/types\/used\.ts; its importers reach no test \(apps\/api\/src\/consumer\.ts\)/);
+    const orphan = selectRelatedTests(['apps/api/src/types/orphan.ts'], options);
+    assert.deepEqual(orphan.typeOnly, ['apps/api/src/types/orphan.ts']);
+    assert.equal(orphan.tests.size, 0);
+    assert.deepEqual(logs, ['Type-only source with no importers, related Jest tests not required: apps/api/src/types/orphan.ts']);
+    const tested = selectRelatedTests(['apps/api/src/types/tested.ts'], options);
+    assert.deepEqual([...tested.tests], [join(src, 'tested.test.ts')]);
+    assert.deepEqual(tested.typeOnly, []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  // Cleanup removed exactly the fixture: the link went, the installed Jest it pointed at did not.
+  assert.equal(existsSync(root), false);
+  assert.equal(existsSync(join(repo, 'node_modules/jest/bin/jest.js')), true);
+});
+
 // apps/discord-bot is a separate workspace with its own node --test suite — its sources select that suite, never apps/api Jest.
 test('discord-bot sources select the discord-bot workspace suite', () => {
   const selection = selectFeatures(['apps/discord-bot/src/attachments.ts', 'apps/discord-bot/src/attachments.test.ts']);
