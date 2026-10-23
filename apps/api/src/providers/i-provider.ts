@@ -86,7 +86,7 @@ export interface ChatStreamCallbacks {
     /** Thinking 토큰 수신 (thinking 모델 전용) */
     onThinking?: (token: string) => void;
     /** 툴 호출 요청 수신 (tool calling 모델 전용) */
-    onToolCall?: (call: { id: string; name: string; args: unknown }) => void;
+    onToolCall?: (call: { id: string; name: string; args: unknown; extra_content?: Record<string, unknown> }) => void;
     /** 최종 사용량 메트릭 수신 (스트림 종료 시 1회) */
     onUsage?: (usage: UsageMetrics) => void;
 }
@@ -156,8 +156,11 @@ export interface ChatStreamResult {
     content: string;
     /** 누적된 thinking 텍스트 (선택) */
     thinking?: string;
-    /** 발생한 툴 호출 목록 (선택) */
-    toolCalls?: Array<{ id: string; name: string; args: unknown }>;
+    /**
+     * 발생한 툴 호출 목록 (선택). extra_content 는 OpenAI 호환 응답이 준 불투명 값(Gemini 3 thought signature 등) —
+     * 다음 턴 assistant.tool_calls 에 그대로 되돌린다(ChatMessage ToolCall.extra_content).
+     */
+    toolCalls?: Array<{ id: string; name: string; args: unknown; extra_content?: Record<string, unknown> }>;
     /** 사용량 메트릭 */
     usage: UsageMetrics;
     /** 종료 사유 — 'stop' 정상, 'length' 토큰 한도, 'tool_calls' 툴 호출 대기, 'aborted' 사용자 중단, 'error' 오류 */
