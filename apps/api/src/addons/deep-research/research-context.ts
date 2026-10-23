@@ -118,13 +118,13 @@ export async function gatherMcpEvidence(params: {
         const results: SearchResult[] = [];
         const mcp = getToolRuntime();
         for (const [i, call] of calls.slice(0, RESEARCH_CONTEXT.MCP_MAX_CALLS).entries()) {
+            // 리서치가 중단되면 남은 도구 호출을 시작하지 않는다(#1474) — 이미 모은 근거는 그대로 돌려준다.
+            if (abortSignal?.aborted) break;
             const name = call.function.name;
             try {
-                const out = await mcp.executeTool(
-                    name,
-                    (call.function.arguments ?? {}) as Record<string, unknown>,
-                    { userId, role: userRole ?? 'user' },
-                );
+                const args = (call.function.arguments ?? {}) as Record<string, unknown>;
+                const ctx = { userId, role: userRole ?? 'user' } as const;
+                const out = abortSignal ? await mcp.executeTool(name, args, ctx, { signal: abortSignal }) : await mcp.executeTool(name, args, ctx);
                 // MCPToolResult → 텍스트 (content 배열의 text 파트 결합)
                 const text = (out.content ?? [])
                     .map((c) => (typeof c === 'object' && c && 'text' in c ? String((c as { text?: unknown }).text ?? '') : ''))

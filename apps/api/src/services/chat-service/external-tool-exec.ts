@@ -45,16 +45,18 @@ export function summarizeToolCall(toolArgs: Record<string, unknown>, resultText:
 /**
  * 외부 LLM Tool Calling — MCP 도구 실행 + user sandbox. 끝나면 결과 요약(+리소스·출처)을 콜백으로 한 번 알린다.
  * toolSources 를 넘기면 이 호출의 출처 목록을 거기에 쌓는다 — 답변 끝 출처 목록의 번호표용(콜백 유무와 무관).
+ * signal: 채팅 요청의 중단 신호(#1474) — 런타임 포트 → 라우터 → 외부 MCP 호출까지 그대로 내려간다.
  */
 export async function executeExternalTool(
     deps: ExternalProviderDeps,
     toolName: string,
     toolArgs: Record<string, unknown>,
     toolSources?: NonNullable<ToolSideOutput['sources']>[],
+    signal?: AbortSignal,
 ): Promise<string> {
     const startedAt = Date.now();
     const side: ToolSideOutput = { resources: [] };
-    const text = await runExternalTool(deps, toolName, toolArgs, side);
+    const text = await runExternalTool(deps, toolName, toolArgs, side, signal);
     if (side.sources) toolSources?.push(side.sources);
     if (deps.mcpToolResultCallback) {
         try {
@@ -73,7 +75,10 @@ async function runExternalTool(
     toolName: string,
     toolArgs: Record<string, unknown>,
     side: ToolSideOutput,
+    signal?: AbortSignal,
 ): Promise<string> {
+    // 이미 중단된 요청은 도구를 시작하지 않는다 — 진행 표시("실행 중")도 보내지 않는다.
+    if (signal?.aborted) return `Error: 요청이 중단되어 도구를 실행하지 않았습니다: ${toolName}`;
     try {
         const mcpClient = getToolRuntime();
         const userCtx = deps.currentUserContext || {
@@ -87,7 +92,7 @@ async function runExternalTool(
             catch (e) { logger.warn(`onMcpToolStart 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
         }
 
-        const result = await mcpClient.executeTool(toolName, toolArgs, userCtx);
+        const result = signal ? await mcpClient.executeTool(toolName, toolArgs, userCtx, { signal }) : await mcpClient.executeTool(toolName, toolArgs, userCtx);
 
         if (Array.isArray(result.content)) {
             side.resources = result.content
