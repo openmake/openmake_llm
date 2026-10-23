@@ -348,6 +348,7 @@ export class ChatRequestHandler {
             userRole: userContext.userRole,
             enabledTools,
             contextRefs: params.contextRefs,
+            ...(params.approvalCards ? { approvalCards: true } : {}),
             abortSignal,
             userLanguagePreference,
             // 언어 감지용 원문 — WS 는 확장 전 원문을 넘기고, REST 는 여기서 확장하므로 입력이 곧 원문

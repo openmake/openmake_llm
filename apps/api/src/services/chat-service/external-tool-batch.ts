@@ -29,7 +29,7 @@ import { CHAT_TOOL_APPROVAL } from '../../config/chat-approval';
 import { classifyToolRisk, isThirdPartyTool } from '../../config/tool-policy';
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { requiresApproval, stripApprovalGatedTools } from '../task-sandbox/approval-gate';
-import { requestChatApproval, resolveChatApprovalPolicy } from './chat-approval';
+import { hasChatApprovalChannel, rejectWithoutApprovalChannel, requestChatApproval, resolveChatApprovalPolicy } from './chat-approval';
 import { getChatApprovalDeniedResult } from '../../prompts/chat-approval';
 import { createLogger } from '../../utils/logger';
 
@@ -115,6 +115,8 @@ async function gateChatToolCall(p: {
     tc: ExternalToolCall;
     policy: TaskSandboxApprovalPolicy;
     taintedContext: boolean;
+    /** 승인 채널이 있는가(hasChatApprovalChannel) — 없으면 기다리지 않고 바로 거절한다. */
+    hasChannel: boolean;
     userId: string;
     langCode: string | undefined;
     state: ToolBatchState;
@@ -122,9 +124,14 @@ async function gateChatToolCall(p: {
     const { deps, req, tc, policy, userId } = p;
     const args = tc.args as Record<string, unknown>;
     if (!requiresApproval(policy, tc.name, args, { taintedContext: p.taintedContext })) return null;
+    const chatId = req.sessionId || userId;
+    if (!p.hasChannel) {
+        const r = rejectWithoutApprovalChannel({ chatId, userId, toolName: tc.name, args });
+        return getChatApprovalDeniedResult(tc.name, r.reason, p.langCode);
+    }
     const shown: { approvalId?: string } = {};
     const r = await requestChatApproval({
-        chatId: req.sessionId || userId,
+        chatId,
         userId,
         toolName: tc.name,
         args,
@@ -175,6 +182,9 @@ export async function runToolCallBatch(params: {
     const userCtx = deps.currentUserContext ?? { userId: 'guest', role: 'guest' };
     const userId = String(userCtx.userId);
     const policy = await resolveChatApprovalPolicy({ userId, role: userCtx.role });
+    const hasChannel = hasChatApprovalChannel({
+        hasPendingCallback: !!deps.chatApprovalPendingCallback, userId, role: userCtx.role, approvalCards: req.approvalCards,
+    });
     const taintedContext = () => CHAT_TOOL_APPROVAL.TAINT_ENABLED && state.tainted;
     // 서브에이전트는 승인 게이트를 건너뛰므로(skipApprovalGate) 승인이 필요한 도구는 주지 않는다 — 부모가 승인 뒤 직접 부른다.
     const subagentTools = policy === 'none' ? tools : stripApprovalGatedTools(tools, policy);
@@ -191,7 +201,7 @@ export async function runToolCallBatch(params: {
         let toolResult: string;
         // 선실행된 호출은 이미 실행됐다(배치 시작 시점의 문맥에서 승인 불요로 판정) — 다시 묻지 않는다.
         const denied = policy === 'none' || parallelReadOnlyResults.has(tc.id) ? null : await gateChatToolCall({
-            deps, req, tc, policy, taintedContext: taintedContext(), userId,
+            deps, req, tc, policy, taintedContext: taintedContext(), hasChannel, userId,
             langCode: ctx.resolvedLanguage || req.userLanguagePreference, state,
         });
         if (denied !== null) {

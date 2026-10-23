@@ -10,7 +10,7 @@ jest.mock('../../org/effective-policy', () => ({
     resolveEffectivePolicy: jest.fn(),
 }));
 import {
-    getChatApprovalRegistry, chatApprovalKey, requestChatApproval, resolveChatApprovalPolicy, closeChat,
+    getChatApprovalRegistry, chatApprovalKey, requestChatApproval, resolveChatApprovalPolicy, closeChat, hasChatApprovalChannel,
 } from '../chat-approval';
 import { getApprovalRegistry, type PendingApproval } from '../../task-sandbox/approval-gate';
 import { resolveEffectivePolicy } from '../../org/effective-policy';
@@ -71,6 +71,19 @@ describe('채팅 승인 레지스트리', () => {
     });
 });
 
+describe('hasChatApprovalChannel', () => {
+    it('대기 콜백 + 로그인 사용자 + approvalCards:true 셋이 모두 있어야 채널이 있다', () => {
+        const ok = { hasPendingCallback: true, userId: 'u1', role: 'user', approvalCards: true };
+        expect(hasChatApprovalChannel(ok)).toBe(true);
+        expect(hasChatApprovalChannel({ ...ok, hasPendingCallback: false })).toBe(false);
+        expect(hasChatApprovalChannel({ ...ok, role: 'guest' })).toBe(false);
+        expect(hasChatApprovalChannel({ ...ok, userId: 'guest' })).toBe(false);
+        expect(hasChatApprovalChannel({ ...ok, userId: '' })).toBe(false);
+        expect(hasChatApprovalChannel({ ...ok, approvalCards: undefined })).toBe(false);
+        expect(hasChatApprovalChannel({ ...ok, approvalCards: false })).toBe(false);
+    });
+});
+
 describe('resolveChatApprovalPolicy', () => {
     it('조직 하한이 더 엄격하면 하한을, 없으면 채팅 기본을 쓴다', async () => {
         effective.mockResolvedValueOnce({ approvalPolicyMin: 'all' });
@@ -91,14 +104,22 @@ describe('getChatApprovalDeniedResult', () => {
         expect(getChatApprovalDeniedResult('bash', undefined)).toBe(user);
     });
 
-    it('중단(abort)은 거절이 아니라 중단 문구, 사람이 답하지 않은 경우(parked·unattended)는 시간 초과 문구', () => {
+    it('중단(abort)은 거절이 아니라 중단 문구, 사람이 답하지 않은 경우(parked)는 시간 초과 문구', () => {
         const abort = getChatApprovalDeniedResult('bash', 'abort');
         expect(abort).toContain('bash');
         expect(abort).toContain('중단');
         expect(abort).not.toBe(getChatApprovalDeniedResult('bash', 'user'));
         expect(getChatApprovalDeniedResult('bash', 'abort', 'en')).toContain('stopped');
         expect(getChatApprovalDeniedResult('bash', 'parked')).toBe(getChatApprovalDeniedResult('bash', 'timeout'));
-        expect(getChatApprovalDeniedResult('bash', 'unattended')).toBe(getChatApprovalDeniedResult('bash', 'timeout'));
+    });
+
+    it('승인 채널 없음(unattended)은 전용 문구 — 이 클라이언트에선 승인할 수 없고 웹 채팅에서 다시 시도하라고 안내한다', () => {
+        const ko = getChatApprovalDeniedResult('srv::search', 'unattended');
+        expect(ko).toContain('srv::search');
+        expect(ko).toContain('이 클라이언트에서는 도구 실행 승인을 받을 수 없어');
+        expect(ko).toContain('웹 채팅에서 다시 시도');
+        for (const other of ['timeout', 'user', 'policy_floor', 'abort'] as const) expect(ko).not.toBe(getChatApprovalDeniedResult('srv::search', other));
+        expect(getChatApprovalDeniedResult('srv::search', 'unattended', 'en')).toContain('web chat');
     });
 
     it('한국어 외 언어는 영어 문구', () => {

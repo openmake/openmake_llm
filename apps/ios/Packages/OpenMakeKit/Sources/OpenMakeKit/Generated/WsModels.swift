@@ -1204,6 +1204,9 @@ public enum WsServerEventType: String, Codable {
 public struct WsChatRequest: Codable {
     /// Browser-scoped anonymous owner id for guest sessions.
     public let anonSessionID: String?
+    /// 채팅 도구 승인 카드를 그리는 클라이언트(W3 S3) — true 일 때만 서버가 승인이 필요한 도구 호출에서 `chat_approval_pending` 을
+    /// 보내고 결정을 기다린다. 미지정이면(카드를 못 그리는 클라이언트) 그런 호출은 기다리지 않고 거절된다.
+    public let approvalCards: Bool?
     /// 아티팩트 모드 — ON 이면 모델이 <artifact> 산출물을 생성하도록 유도
     public let artifactMode: Bool?
     /// 클라이언트 표면 — 좁은 화면(모바일 네이티브)에 맞는 답변 형식을 요청할 때 'ios'. 미지정은 기존 동작(데스크톱 기준). 서버는 이 값으로
@@ -1253,6 +1256,7 @@ public struct WsChatRequest: Codable {
 
     public enum CodingKeys: String, CodingKey {
         case anonSessionID = "anonSessionId"
+        case approvalCards = "approvalCards"
         case artifactMode = "artifactMode"
         case client = "client"
         case clientRequestID = "clientRequestId"
@@ -1280,8 +1284,9 @@ public struct WsChatRequest: Codable {
         case webSearch = "webSearch"
     }
 
-    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, clientRequestID: String?, contextRefs: [String: ContextRef]?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, modes: [String: Bool]?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
+    public init(anonSessionID: String?, approvalCards: Bool?, artifactMode: Bool?, client: Client?, clientRequestID: String?, contextRefs: [String: ContextRef]?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, modes: [String: Bool]?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
         self.anonSessionID = anonSessionID
+        self.approvalCards = approvalCards
         self.artifactMode = artifactMode
         self.client = client
         self.clientRequestID = clientRequestID
@@ -1330,6 +1335,7 @@ public extension WsChatRequest {
 
     func with(
         anonSessionID: String?? = nil,
+        approvalCards: Bool?? = nil,
         artifactMode: Bool?? = nil,
         client: Client?? = nil,
         clientRequestID: String?? = nil,
@@ -1358,6 +1364,7 @@ public extension WsChatRequest {
     ) -> WsChatRequest {
         return WsChatRequest(
             anonSessionID: anonSessionID ?? self.anonSessionID,
+            approvalCards: approvalCards ?? self.approvalCards,
             artifactMode: artifactMode ?? self.artifactMode,
             client: client ?? self.client,
             clientRequestID: clientRequestID ?? self.clientRequestID,
