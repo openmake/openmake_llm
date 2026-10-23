@@ -105,6 +105,10 @@ export async function dispatchTool(
                 retryable: c.retryable,
             };
         };
+        // 호출자 중단 판정(#1472) — 결과 문구가 아니라 호출자 신호로. 대기(훅·실제 호출)가 끝날 때마다 다시 본다 —
+        // 중단 뒤 끝난 호출은 성공·실패 어느 쪽으로도 세지 않는다.
+        const aborted = (): boolean => opts?.signal?.aborted === true;
+        const abortedMessage = `도구 호출이 중단되었습니다: ${name}`;
         const hookCtx: ToolHookContext = {
             name, external: isExternal, startedAt,
             userId: context?.userId != null ? String(context.userId) : undefined, role: context?.role,
@@ -113,18 +117,16 @@ export async function dispatchTool(
         // post 훅(F13.5)은 정규화 전에 돈다 — 훅이 결과를 바꾸면 그 결과가 분류된다.
         const finalize = async (raw: MCPToolResult): Promise<MCPToolResult> => {
             const result = await runPostHooks(raw, hookCtx);
+            if (aborted()) return fail(abortedMessage, { aborted: true }); // post 훅 대기 중 중단 — 성공·실패 분류 전에
             if (result?.isError) {
                 const text = (result.content ?? [])
                     .map((c) => ('text' in c && typeof c.text === 'string' ? c.text : ''))
                     .filter(Boolean)
                     .join('\n') || '도구 실행 오류';
-                return fail(text, { aborted: aborted() });
+                return fail(text);
             }
             return ok(result);
         };
-        // 호출자 중단 판정(#1472) — 결과 문구가 아니라 호출자 신호로. 중단 뒤 끝난 호출은 성공·실패 어느 쪽으로도 세지 않는다.
-        const aborted = (): boolean => opts?.signal?.aborted === true;
-        const abortedMessage = `도구 호출이 중단되었습니다: ${name}`;
 
         // 이미 중단된 요청은 어떤 실행도 시작하지 않는다 — 서킷 반개방 전이·훅·실제 호출 모두 앞에서 끊는다.
         if (aborted()) return fail(abortedMessage, { aborted: true });
@@ -148,6 +150,7 @@ export async function dispatchTool(
         // pre 훅(F13.5) — 서킷·역할 게이트 뒤, 실제 호출 앞. deny 는 서킷 집계에 넣지 않는다(도구 잘못이 아니다).
         const pre = await runPreHooks(args, hookCtx);
         if (pre.deny) return fail(`도구 "${name}" 호출이 정책 훅에 의해 거절되었습니다: ${pre.deny}`, { record: false });
+        if (aborted()) return fail(abortedMessage, { aborted: true }); // pre 훅 대기 중 중단 — 실제 호출 전에
         args = pre.args;
 
         const suggest = async (message: string): Promise<string> =>
