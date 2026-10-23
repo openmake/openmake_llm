@@ -203,7 +203,8 @@ export async function runToolCallBatch(params: {
     });
     // 오염 문맥 — 읽기성 조회 예외(TAINT_EXEMPT_TOOLS)는 taint 로 묻지 않는다(자기 등급이 승인 대상이면 그대로 묻는다).
     const taintedFor = (name: string) => CHAT_TOOL_APPROVAL.TAINT_ENABLED && state.tainted && !CHAT_TOOL_APPROVAL.TAINT_EXEMPT_TOOLS.has(name);
-    // 서브에이전트는 승인 게이트를 건너뛰므로(skipApprovalGate) 승인이 필요한 도구는 주지 않는다 — 부모가 승인 뒤 직접 부른다.
+    // 서브에이전트에는 승인 창이 없어(skipApprovalGate — 대기만 생략) 승인이 필요한 도구는 주지 않고, 실제 인자로 승인이 필요해지는
+    // 호출은 서브가 같은 정책(parentPolicy)으로 거절한다 — 부모가 승인 뒤 직접 부른다(#1469).
     const subagentTools = stripApprovalGatedTools(tools, policy);
 
     // 읽기 전용 도구(web_search·extract_webpage …) 2건 이상이면 동시에 선실행 — 결과는 아래
@@ -232,6 +233,7 @@ export async function runToolCallBatch(params: {
                 : await runChatDelegate({
                     args: tc.args as Record<string, unknown>,
                     chatTools: subagentTools,
+                    parentPolicy: policy,
                     userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },
                     ...(req.abortSignal ? { signal: req.abortSignal } : {}),
                 });
@@ -244,6 +246,7 @@ export async function runToolCallBatch(params: {
                 : await runChatSpawnAgents({
                     args: tc.args as Record<string, unknown>,
                     chatTools: subagentTools,
+                    parentPolicy: policy,
                     userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },
                     ...(req.abortSignal ? { signal: req.abortSignal } : {}),
                 });

@@ -1,7 +1,7 @@
 /**
- * 채팅 서브에이전트의 승인 게이트 생략(2026-10-22 S1 후속).
- * 정책 none 의 바닥 거절(policy_floor)은 에이전트 작업에만 걸린다 — 채팅 delegate_expert·spawn_agents 는
- * skipApprovalGate 로 게이트를 건너뛰어 외부 MCP 도구(server::tool)를 부모 채팅 루프처럼 실행한다.
+ * 채팅 서브에이전트의 승인 게이트 생략(2026-10-22 S1 후속, #1469 에서 정정).
+ * skipApprovalGate 는 대화형 대기만 생략한다 — 정책 none 의 바닥 거절(policy_floor)은 채팅 서브에도 그대로 걸린다
+ * (바닥은 정책으로 내려가지 않고 채팅·작업 도구 경계는 하나 — 설계 2026-10-22 §2.3). 차이는 대기 여부뿐이다.
  */
 const executeTool = jest.fn();
 jest.mock('../../../runtime-ports/tool-runtime', () => ({
@@ -26,7 +26,8 @@ function run(sandboxCfg: Record<string, unknown>) {
         .mockResolvedValue({ content: '완료', metrics: {} });
     const client = { requestTimeout: 120_000, derive: jest.fn(() => ({ chat })), chat: jest.fn() };
     const out = runSubagent({
-        client, personaPrompt: 'persona', subgoal: '하위 목표', tools: [], userCtx: { userId: '3' }, taskId: 'task-1',
+        client, personaPrompt: 'persona', subgoal: '하위 목표',
+        tools: [{ type: 'function', function: { name: 'x::search', description: '', parameters: { type: 'object', properties: {} } } }], userCtx: { userId: '3' }, taskId: 'task-1',
         sandboxCfg,
     } as never);
     return { out, chat };
@@ -38,13 +39,12 @@ beforeEach(() => {
 });
 
 describe('runSubagent — 승인 게이트 생략(채팅 경로)', () => {
-    it('채팅 서브(skipApprovalGate)는 정책 none 에서도 외부 MCP 도구를 실행한다 — policy_floor 거절 없음', async () => {
+    it('채팅 서브(skipApprovalGate)도 정책 none 에서 외부 MCP 도구는 바닥 거절된다 — 대기 없이 policy_floor', async () => {
         const { out, chat } = run({ approvalPolicy: 'none', approvalTimeoutMs: 0, skipApprovalGate: true });
         expect(await out).toBe('완료');
-        expect(executeTool).toHaveBeenCalledWith('x::search', { q: '검색어' }, { userId: '3' });
+        expect(executeTool).not.toHaveBeenCalled();
         const toolMsg = chat.mock.calls[1][0].find((m: { role: string }) => m.role === 'tool');
-        expect(toolMsg.content).toBe('외부 검색 결과');
-        expect(toolMsg.content).not.toBe(getApprovalRejectedNotice('x::search', 'policy_floor'));
+        expect(toolMsg.content).toBe(getApprovalRejectedNotice('x::search', 'policy_floor'));
     });
 
     it('에이전트 작업 서브(플래그 없음)는 정책 none 에서 외부 MCP 도구가 바닥 거절된다', async () => {

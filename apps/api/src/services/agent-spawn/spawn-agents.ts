@@ -24,7 +24,7 @@ import { z } from 'zod';
 import { type LLMClient } from '../../llm';
 import type { ToolDefinition, UsageMetrics } from '../../llm/types';
 import type { UserContext } from '../../tool-contract/types';
-import type { TaskSandboxConfig } from '../../config/task-sandbox';
+import type { TaskSandboxConfig, TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { AGENT_SPAWN, TOOL_RESULT_TRUNCATION } from '../../config/runtime-limits';
 import { composeSpawnResult } from './spawn-result';
 import { resolveRoleClientForUser } from '../model-role-resolver';
@@ -201,7 +201,7 @@ interface SpawnAgentsParams {
     /** 서브에이전트 도구 서브셋 — 호출부가 선별을 마친 목록(여기서 위임 계열만 재차 제외). */
     tools: ToolDefinition[];
     userCtx: UserContext;
-    /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 승인 게이트를 건너뛰어(skipApprovalGate) 식별용일 뿐. */
+    /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 대기를 만들지 않아(skipApprovalGate) 감사 식별용일 뿐. */
     taskId: string;
     sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs'> & { skipApprovalGate?: boolean };
     signal?: AbortSignal;
@@ -404,7 +404,8 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
 /**
  * 채팅 경로 편의 래퍼 — runChatDelegate 와 대칭. 서브 LLM 은 'spawn' role 해석
  * (사용자 매핑 → 전역 env → 로컬 default, 외부는 BYOK 키 필요 — fail-open 폴백),
- * 승인 정책 'none' 고정(채팅 도구는 원래 승인 없이 실행되는 모델과 정합).
+ * 승인은 부모 채팅의 실효 정책(parentPolicy, 미지정이면 종전 기본 none)으로 판정한다 — 서브에는 승인 창이 없어 대기만 생략하고
+ * 승인이 필요한 호출은 거절한다(#1469, runSubagent).
  */
 export async function runChatSpawnAgents(params: {
     args: Record<string, unknown>;
@@ -412,6 +413,8 @@ export async function runChatSpawnAgents(params: {
     chatTools: ToolDefinition[];
     userCtx: UserContext;
     signal?: AbortSignal;
+    /** 부모 채팅의 실효 승인 정책 — 서브의 권한 판정에 쓴다(#1469). 미지정이면 종전 기본 none. */
+    parentPolicy?: TaskSandboxApprovalPolicy;
 }): Promise<string> {
     const resolved = await resolveRoleClientForUser('spawn', String(params.userCtx.userId));
     if (resolved.degraded) {
@@ -423,8 +426,8 @@ export async function runChatSpawnAgents(params: {
         tools: filterChatSubTools(params.chatTools),
         userCtx: params.userCtx,
         taskId: CHAT_PSEUDO_TASK_ID, // 승인 레지스트리 미사용 — 식별용 문자열일 뿐
-        // 채팅 경로 — 승인 게이트 없음(정책 none 의 바닥 거절도 적용하지 않는다, 2026-10-22 S1)
-        sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 0, skipApprovalGate: true },
+        // 채팅 경로 — 서브에는 승인 창이 없어 대기만 생략한다(skipApprovalGate). 권한은 부모 정책과 실제 인자로 판정한다(#1469).
+        sandboxCfg: { approvalPolicy: params.parentPolicy ?? 'none', approvalTimeoutMs: 0, skipApprovalGate: true },
         ...(params.signal ? { signal: params.signal } : {}),
         onTokens: (n) => logger.debug(`[AgentSpawn] 채팅 서브 토큰 +${n}`),
     });
