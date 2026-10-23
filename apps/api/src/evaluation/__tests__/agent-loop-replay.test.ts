@@ -92,6 +92,13 @@ jest.mock('../../runtime-ports/skill-runtime', () => ({
 process.env.TASK_SANDBOX_ENABLED = 'false';
 
 import { AgentTaskService } from '../../services/AgentTaskService';
+import { startTestApprover, type TestApprover } from '../../__tests__/utils/test-approver';
+
+// 샌드박스 OFF + 승인 정책 all(기본) — 호스트 도구 호출마다 승인을 기다린다(#1469). 이 평가의 주제는 루프 성질이라
+// 사용자가 승인함에서 승인한다고 둔다(실제 ApprovalRegistry). 승인은 모델이 받는 대화에 들어가지 않으므로 접두 불변 검사와 무관하다.
+let approver: TestApprover;
+beforeEach(() => { approver = startTestApprover('u1'); });
+afterEach(() => approver.stop());
 
 const call = (id: string, query: string, tin: number, tout: number): Reply => ({ content: '', tool: { id, query }, in: tin, out: tout });
 const answer = (content: string, tin: number, tout: number): Reply => ({ content, in: tin, out: tout });

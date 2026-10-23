@@ -84,16 +84,29 @@ const beginTaskLease = jest.fn(async () => ({ acquired: true, end: leaseEnd }));
 jest.mock('../services/agent-task/task-lease', () => ({ beginTaskLease: () => beginTaskLease() }));
 const closeTask = jest.fn();
 const clearAutoApprove = jest.fn();
-jest.mock('../services/task-sandbox/approval-gate', () => ({
-    ...jest.requireActual('../services/task-sandbox/approval-gate'),
-    getApprovalRegistry: () => ({ closeTask, clearAutoApprove, setAutoApprove: jest.fn(), isAutoApprove: () => false, autoApproves: () => false, request: jest.fn() }),
-}));
+// 실제 ApprovalRegistry(저장소 없음) — 승인 경계는 그대로 두고 작업 종료 정리 호출만 엿본다.
+jest.mock('../services/task-sandbox/approval-gate', () => {
+    const actual = jest.requireActual('../services/task-sandbox/approval-gate');
+    const registry = new actual.ApprovalRegistry();
+    const realClose = registry.closeTask.bind(registry);
+    const realClear = registry.clearAutoApprove.bind(registry);
+    registry.closeTask = (taskId: string) => { closeTask(taskId); realClose(taskId); };
+    registry.clearAutoApprove = (taskId: string) => { clearAutoApprove(taskId); realClear(taskId); };
+    return { ...actual, getApprovalRegistry: () => registry };
+});
 
 import { AgentTaskService } from '../services/AgentTaskService';
 import {
     drainAgentTasksForShutdown, beginAgentTaskShutdown, isAgentTaskShutdown, resetAgentTaskShutdownForTest,
 } from '../services/agent-task/shutdown-drain';
 import { cleanupTaskRun } from '../services/agent-task/run-cleanup';
+import { startTestApprover, type TestApprover } from './utils/test-approver';
+
+// 샌드박스 OFF + 승인 정책 all(기본) — 호스트 도구 호출마다 승인을 기다린다(#1469). 이 파일의 주제는 종료 정리라
+// 사용자가 승인함에서 승인한다고 둔다(실제 ApprovalRegistry). 승인 전 대기·거절은 agent-task-max-turns 의 '승인 경계' 묶음이 본다.
+let approver: TestApprover;
+beforeEach(() => { approver = startTestApprover('u1'); });
+afterEach(() => approver.stop());
 
 type Update = { status?: string; error?: string | null; terminalNotifyPending?: boolean; totalTokens?: number };
 const updates = (): Update[] => updateAgentTask.mock.calls.map(([, u]) => u as Update);

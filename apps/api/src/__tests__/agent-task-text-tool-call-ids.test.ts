@@ -79,6 +79,14 @@ jest.mock('../runtime-ports/skill-runtime', () => ({
 process.env.TASK_SANDBOX_ENABLED = 'false';
 
 import { AgentTaskService } from '../services/AgentTaskService';
+import { startTestApprover, type TestApprover } from './utils/test-approver';
+
+// 샌드박스 OFF + 승인 정책 all(기본) — 호스트 도구 호출마다 승인을 기다린다(#1469). 이 파일의 주제는 텍스트 누출 도구 호출 복구이라
+// 사용자가 승인함에서 승인한다고 둔다(실제 ApprovalRegistry). 승인 전 대기·거절은 agent-task-max-turns 의 '승인 경계' 묶음이 본다.
+let approver: TestApprover;
+// 아래 실행은 describe 의 beforeAll 에서 한 번 돈다 — 승인자도 파일 단위로 켠다.
+beforeAll(() => { approver = startTestApprover('u1'); });
+afterAll(() => approver.stop());
 
 describe('Agent Task — 텍스트 누출 도구 호출 복구분의 대화 기록', () => {
     beforeAll(async () => {
