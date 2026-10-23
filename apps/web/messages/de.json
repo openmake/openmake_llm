@@ -2558,6 +2558,14 @@
       "elicitJsonHint": "Bei mehreren Feldern bitte als JSON antworten: {example}"
     }
   },
+  "chatApproval": {
+    "title": "Freigabe für Tool-Ausführung erforderlich",
+    "approve": "Freigeben",
+    "reject": "Ablehnen",
+    "expiresIn": "Automatische Ablehnung in {seconds} s",
+    "denied": "Abgelehnt – keine Antwort innerhalb der Frist",
+    "waiting": "Die Antwort wartet auf Ihre Freigabe für dieses Tool"
+  },
   "marketplacePublish": {
     "title": "Auf dem Marktplatz veröffentlichen",
     "description": "Bündeln Sie Ihre eigenen Skills, Agents und MCP-Einstellungen zu einem Plugin und veröffentlichen Sie es in der Galerie dieses Servers. Andere Nutzer auf demselben Server können es installieren; nichts verlässt den Server.",

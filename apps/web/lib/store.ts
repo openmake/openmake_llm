@@ -4,6 +4,7 @@ import type {
   ChatMessage as SharedChatMessage,
   ChatRole,
   SearchSourceRef,
+  ToolRiskClass,
   UserRole,
 } from "@openmake/shared-types";
 import { enqueueFollowup, removeFollowup, type QueuedFollowup } from "./followup-queue";
@@ -89,6 +90,17 @@ export interface PendingApproval {
   args: Record<string, unknown>;
   /** 실행 전 미리보기(unified diff, 138) — 파일 쓰기 도구만 */
   preview?: string;
+}
+
+/** 채팅 도구 승인 대기(W3 S3, ws chat_approval_pending) — 스트리밍 답변 아래 승인 카드로 그린다. */
+export interface PendingChatApproval {
+  approvalId: string;
+  toolName: string;
+  /** 비밀 값을 가린 사본 */
+  args: Record<string, unknown>;
+  riskClass: ToolRiskClass;
+  /** 무응답 만료 시각(epoch ms) — 지나면 서버가 거절(timeout)로 끝낸다 */
+  expiresAt: number;
 }
 
 /** 채팅 모드(add-on) 진행상황 — 모양은 그 모드의 웹 add-on 이 정한다(addons/types.ts ChatModeExtension.toProgress). */
@@ -209,6 +221,8 @@ interface AppState {
   followupQueue: QueuedFollowup[];
   /** 지금 답변에서 모델이 부른 도구 — 답변이 끝나면 그 답변 메시지의 toolCalls 로 옮긴다 */
   turnToolCalls: ToolCallView[];
+  /** 지금 답변이 기다리는 채팅 도구 승인 — 결정(chat_approval_decided)·스트림 종료·대화 전환 시 비운다 */
+  pendingChatApprovals: PendingChatApproval[];
 
   // 아티팩트
   artifacts: Artifact[];
@@ -368,6 +382,7 @@ export const useAppStore = create<AppState>()(
   resendRequest: null,
   followupQueue: [],
   turnToolCalls: [],
+  pendingChatApprovals: [],
 
   artifacts: [],
   activeArtifactId: null,
@@ -583,6 +598,7 @@ export const useAppStore = create<AppState>()(
       resendRequest: null,
       followupQueue: [],
       turnToolCalls: [],
+      pendingChatApprovals: [],
       artifacts: [],
       activeArtifactId: null,
       artifactPanelOpen: false,

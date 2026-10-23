@@ -2558,6 +2558,14 @@
       "elicitJsonHint": "For more than one field, answer in JSON: {example}"
     }
   },
+  "chatApproval": {
+    "title": "Tool execution approval required",
+    "approve": "Approve",
+    "reject": "Reject",
+    "expiresIn": "Auto-rejects in {seconds}s",
+    "denied": "Rejected — no response in time",
+    "waiting": "The answer is waiting for your approval to run this tool"
+  },
   "marketplacePublish": {
     "title": "Publish to marketplace",
     "description": "Bundle your own skills, agents and MCP settings into a plugin and publish it to this server's gallery. Other users on the same server can install it; nothing leaves the server.",
