@@ -1,12 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { createHash } from 'node:crypto';
-import { readFileSync, mkdtempSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const extractorPath = join(root, 'apps/api/jest.dependency-extractor.mjs');
@@ -79,8 +78,24 @@ test('extract tolerates malformed sources', () => {
   assert.deepEqual([...extract(code, '/broken.ts', fakeDefault)].sort(), ['./before-error', './runtime']);
 });
 
-test('getCacheKey follows the extractor source so a changed extractor invalidates the haste cache', () => {
-  assert.equal(getCacheKey(), createHash('sha1').update(readFileSync(extractorPath)).digest('hex'));
+// Cached dependency lists come from this source and the TypeScript parser: a change in either must invalidate them.
+test('getCacheKey changes with the extractor source and with the TypeScript version', async t => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'omk-jest-key-')));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = readFileSync(extractorPath, 'utf8');
+  // A copy of the extractor next to a stand-in `typescript` package whose version we choose.
+  const keyFor = async (name, text, version) => {
+    mkdirSync(join(dir, name, 'node_modules/typescript'), { recursive: true });
+    writeFileSync(join(dir, name, 'node_modules/typescript/package.json'), '{"name":"typescript","main":"index.js"}\n');
+    writeFileSync(join(dir, name, 'node_modules/typescript/index.js'), `module.exports = { version: ${JSON.stringify(version)} };\n`);
+    writeFileSync(join(dir, name, 'extractor.mjs'), text);
+    return (await import(pathToFileURL(join(dir, name, 'extractor.mjs')).href)).getCacheKey();
+  };
+  const { version } = createRequire(join(root, 'package.json'))('typescript');
+  assert.equal(await keyFor('installed', source, version), getCacheKey());
+  assert.equal(await keyFor('same', source, '6.0.3'), await keyFor('same-again', source, '6.0.3'));
+  assert.notEqual(await keyFor('upgraded', source, '6.0.4'), await keyFor('same', source, '6.0.3'));
+  assert.notEqual(await keyFor('edited', `${source}// edited\n`, '6.0.3'), await keyFor('same', source, '6.0.3'));
 });
 
 // Real Jest graph: a type module consumed through each form must select its consumer's test.
