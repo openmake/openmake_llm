@@ -162,15 +162,15 @@ describe('runToolCallBatch — 채팅 승인 게이트', () => {
         expect(exec).toHaveBeenCalledTimes(2);
     });
 
-    it('(e) 정책 none 은 채팅에 게이트가 없다 — 외부 MCP 도구도 콜백 없이 실행(종전 동작)', async () => {
+    it('(e) 정책 none 에서도 외부 MCP 도구는 바닥 — 실행 0회·대기 카드 없이 policy_floor(W3 Task 7 (e), #1469)', async () => {
         usePolicy(undefined);
         const { pendings, decideds, messages, run } = setup();
         await run([{ id: 'm1', name: 'srv::search', args: { q: 'x' } }]);
 
-        expect(exec).toHaveBeenCalledTimes(1);
+        expect(exec).not.toHaveBeenCalled();
         expect(pendings).toHaveLength(0);
         expect(decideds).toHaveLength(0);
-        expect(messages[0].content).toContain('ran');
+        expect(messages[0].content).toContain(getChatApprovalDeniedResult('srv::search', 'policy_floor'));
     });
 
     it('(e\') high-risk 에서는 외부 MCP 도구가 여전히 묻는다 — 거절하면 실행 0회', async () => {
