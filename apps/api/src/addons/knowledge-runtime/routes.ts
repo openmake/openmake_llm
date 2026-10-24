@@ -10,6 +10,7 @@ import type { ZodTypeAny } from 'zod';
 import { requireAuth } from '../../auth';
 import { success } from '../../utils/api-response';
 import { asyncHandler, ValidationError } from '../../utils/error-handler';
+import { decodeMultipartFilename } from '../../utils/multipart-filename';
 import { resolveUserId, assertAdmin, isAdminRequest } from './http';
 import { requestJobCancel, type JobCancelOutcome } from './jobs/cancel';
 import { getDefaultLimits } from './config/profiles';
@@ -85,7 +86,7 @@ knowledgeRouter.post('/spaces/:id/documents', requireAuth, uploadMiddleware, asy
     const file = req.file;
     if (!file) throw new ValidationError('업로드할 파일(file)이 없습니다');
     const doc = await documents.uploadDocument(resolveUserId(req), req.params.id, {
-        buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype, size: file.size,
+        buffer: file.buffer, originalname: decodeMultipartFilename(file.originalname), mimetype: file.mimetype, size: file.size,
     });
     res.status(201).json(success({ document: doc }));
 }));
