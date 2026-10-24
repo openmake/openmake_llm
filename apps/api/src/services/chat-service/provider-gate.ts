@@ -49,7 +49,6 @@ const KNOWN_FULLID_PREFIXES: readonly string[] = [
     'bai',
     'orcarouter',
     'logfare',
-    'demonroute',
 ];
 
 interface ProviderGateInput {

@@ -121,15 +121,12 @@
 
 ### ✨ 기능
 
-* **providers:** add Demon Route to the BYO-key external provider catalog ([#1420](https://github.com/openmake/openmake_llm/issues/1420)) ([ffdac0e](https://github.com/openmake/openmake_llm/commit/ffdac0e2cb2aa1dfa1ab278a4af30b72ef32ed88))
-* **providers:** Demon Route 외부 provider 추가 — BYOK + LiteLLM 게이트웨이 wildcard ([9dac11a](https://github.com/openmake/openmake_llm/commit/9dac11a53a1a63d8ece3bb6c5a261703383d97bd))
 
 
 ### 🐛 버그 수정
 
 * **ci:** map scripts/vllm config to the pipeline suite with real coverage ([3fd0170](https://github.com/openmake/openmake_llm/commit/3fd01703040d64543867cccfaae43d4ad9d08a11))
 * **ci:** validate scripts/vllm/litellm.config.yaml and map it to the pipeline suite ([365ebde](https://github.com/openmake/openmake_llm/commit/365ebde59086f96e690618beb1ae0e944df6f4fc))
-* **providers:** Demon Route helpText 미검증 과금 주장 제거·게이트웨이 편입 보류 명시 ([ed270e7](https://github.com/openmake/openmake_llm/commit/ed270e756be1b88444faf9c351b8f2d8b16f9abd))
 
 
 ### ♻️ 리팩터링
