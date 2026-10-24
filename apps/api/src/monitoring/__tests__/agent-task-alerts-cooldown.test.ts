@@ -16,3 +16,11 @@ it('경고 쿨다운 중에도 해소는 기록되고, 해소는 두 번째 전�
     await sendAgentTaskAlert('agent_task_stale_resolved', '해소', '본문');
     expect(types()).toEqual(['agent_task_stale', 'agent_task_stale_resolved', 'agent_task_stale_resolved']);
 });
+
+it('오래된 pending(#1478) — 경고 반복은 쿨다운이 거르고, 해소는 경고 쿨다운 중에도 전이마다 기록된다', async () => {
+    await sendAgentTaskAlert('agent_task_stale_pending', '오래된 대기', '본문');
+    await sendAgentTaskAlert('agent_task_stale_pending_resolved', '해소', '본문');
+    await sendAgentTaskAlert('agent_task_stale_pending', '오래된 대기', '본문');
+    await sendAgentTaskAlert('agent_task_stale_pending_resolved', '해소', '본문');
+    expect(types().filter((t) => t.startsWith('agent_task_stale_pending'))).toEqual(['agent_task_stale_pending', 'agent_task_stale_pending_resolved', 'agent_task_stale_pending_resolved']);
+});
