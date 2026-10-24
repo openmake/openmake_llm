@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.115.2](https://github.com/openmake/openmake_llm/compare/v1.115.1...v1.115.2) (2026-10-24)
+
+
+### 🐛 버그 수정
+
+* **knowledge:** 업로드 파일명을 UTF-8 로 복원한다 ([80b07ce](https://github.com/openmake/openmake_llm/commit/80b07ce4e403830022ec0bfd99d82d5221792e8a))
+* **knowledge:** 업로드 한글 파일명 UTF-8 복원 + 깨진 문서 이름 복구 마이그레이션(005) ([a7b81fa](https://github.com/openmake/openmake_llm/commit/a7b81fa49c91e423a29eedac4c6af97453e29b86))
+* **knowledge:** 이미 깨져 저장된 문서 이름을 UTF-8 로 복구하는 마이그레이션(005) ([1063e2d](https://github.com/openmake/openmake_llm/commit/1063e2d290c8df4c3ab033fccba29f2ce4381a9b))
+* **tools:** fetch 실패의 원인(cause)을 도구 오류에 남기고 네트워크 오류로 분류한다 ([1a4dedc](https://github.com/openmake/openmake_llm/commit/1a4dedc4323f0a95835f1565e90e9fc549b12de6))
+* **tools:** fetch 실패의 원인(cause)을 도구 오류에 남기고 네트워크 오류로 분류한다 ([efe52b1](https://github.com/openmake/openmake_llm/commit/efe52b1a7c7d89d5608314ea70516966957c98de))
+
 ## [1.115.1](https://github.com/openmake/openmake_llm/compare/v1.115.0...v1.115.1) (2026-10-24)
 
 
