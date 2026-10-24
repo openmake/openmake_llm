@@ -89,7 +89,7 @@ const CATEGORY_RULES: readonly CategoryRule[] = [
     },
     {
         category: 'provider',
-        pattern: /\b5\d\d\b|upstream|bad gateway|service unavailable|ECONNREFUSED|ECONNRESET|socket hang up|network|연결|connect/i,
+        pattern: /\b5\d\d\b|upstream|bad gateway|service unavailable|ECONNREFUSED|ECONNRESET|socket hang up|fetch failed|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH|network|연결|connect/i,
         retryable: true,
         hint: '외부 서비스/제공자 측 일시 장애로 보입니다. 잠시 후 재시도하거나 대체 도구를 사용하세요.',
     },
