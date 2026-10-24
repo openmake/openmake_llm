@@ -4,10 +4,13 @@
  * 종료로 끊긴 작업은 사용자 취소(cancelled)가 아니라 부팅 복구가 집는 표식(failed + 'server restarted')으로 남고,
  * 소유권을 반납한 뒤에야 정리 대기가 끝난다. 종료가 시작된 뒤의 실행 요청은 시작하지 않는다.
  */
+/** 이 파일이 만든 gate 의 resolve — 실패한 테스트가 풀지 못한 gate 를 afterEach 가 푼다 */
+const openGates: Array<() => void> = [];
 /** 밖에서 끝낼 수 있는 promise */
 function deferred<T = void>(): { promise: Promise<T>; resolve: (v: T) => void } {
     let resolve!: (v: T) => void;
     const promise = new Promise<T>((r) => { resolve = r; });
+    openGates.push(() => resolve(undefined as T));
     return { promise, resolve };
 }
 
@@ -111,12 +114,31 @@ afterEach(() => approver.stop());
 type Update = { status?: string; error?: string | null; terminalNotifyPending?: boolean; totalTokens?: number };
 const updates = (): Update[] => updateAgentTask.mock.calls.map(([, u]) => u as Update);
 const statuses = (): Array<string | undefined> => updates().map((u) => u.status);
+// 조건 중에는 승인자 타이머(setInterval)가 돌아야 충족되는 것이 있다(도구 실행) — 루프 회전 수가 아니라 실제 시간으로 기다린다.
+// 회전 수 한도는 타이머가 한 번도 돌기 전에 끝날 수 있다(병합 dev CI 40060409128, --runInBand).
+const WAIT_MS = 2_000;
 const waitFor = async (cond: () => boolean): Promise<void> => {
-    for (let i = 0; i < 200 && !cond(); i++) await new Promise((r) => setImmediate(r));
+    const deadline = Date.now() + WAIT_MS;
+    while (!cond() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 1));
     if (!cond()) throw new Error('waitFor: 조건이 충족되지 않음');
 };
-const run = (maxTurns = 5): Promise<void> =>
-    new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '작업', maxTurns } as never);
+/** 이 파일이 시작한 실행 — 실패한 테스트가 남긴 t1 이 다음 테스트로 새지 않게 afterEach 가 거둔다 */
+const ownRuns: Array<{ svc: AgentTaskService; done: Promise<void>; settled: boolean }> = [];
+const run = (maxTurns = 5): Promise<void> => {
+    const svc = new AgentTaskService();
+    const done = svc.execute({ taskId: 't1', userId: 'u1', goal: '작업', maxTurns } as never);
+    const entry = { svc, done, settled: false };
+    const settle = (): void => { entry.settled = true; };
+    void done.then(settle, settle);
+    ownRuns.push(entry);
+    return done;
+};
+// 끝나지 않은 실행은 중단하고, 풀리지 않은 gate 를 푼 뒤, 실행이 끝날 때까지 기다린다(끝난 실행은 건드리지 않는다).
+afterEach(async () => {
+    for (const r of ownRuns) if (!r.settled) r.svc.abort();
+    for (const open of openGates.splice(0)) open();
+    await Promise.allSettled(ownRuns.splice(0).map((r) => r.done));
+});
 
 beforeEach(() => {
     jest.clearAllMocks();
