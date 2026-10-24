@@ -175,6 +175,26 @@ test('selectRelatedTests requires related Jest tests per API source and never li
   assert.deepEqual(docs.selection.api, []);
 });
 
+// A deleted test file was itself the regression test: it passes without a mapping (one log line).
+// Deleted non-test API source still fails closed until a regression test is mapped.
+test('selectRelatedTests lets deleted test files through and still rejects deleted API source', async t => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { selectRelatedTests } = await import('../../scripts/ci/feature-checks.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'omk-deleted-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const never = () => { throw new Error('Jest is not consulted for deleted files'); };
+  const opts = log => ({ cwd: root, log, listRelated: never, listImporters: never, listAll: never });
+  const logs = [];
+  const deletedTests = ['apps/api/src/__tests__/gone-provider.test.ts', 'apps/api/src/chat/__tests__/helper.ts'];
+  const selected = selectRelatedTests(deletedTests, opts(line => logs.push(line)));
+  assert.equal(selected.related.size, 0);
+  assert.equal(selected.tests.size, 0);
+  assert.deepEqual(logs, deletedTests.map(file => `Deleted test file, regression mapping not required: ${file}`));
+  assert.throws(() => selectRelatedTests(['apps/api/src/chat/gone.ts'], opts(() => {})), /Deleted source requires explicit regression mapping: apps\/api\/src\/chat\/gone\.ts/);
+});
+
 // Type-only edges are in Jest's graph (apps/api/jest.dependency-extractor.mjs). Last resort: a type-only source with no related
 // test is excused only when nothing imports it (or it is a declaration file); importers that reach no test still fail.
 test('selectRelatedTests excuses only unimported type-only API sources and still requires tests for any runtime code', async t => {
