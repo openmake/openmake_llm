@@ -6,7 +6,7 @@
  * - Custom span helpers for DB, WebSocket, LLM calls
  */
 
-import { context, Span, SpanKind, SpanStatusCode, trace, type Tracer } from '@opentelemetry/api';
+import { context, ROOT_CONTEXT, Span, SpanKind, SpanStatusCode, trace, type Tracer } from '@opentelemetry/api';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
@@ -30,8 +30,8 @@ const OTEL_OTLP_ENDPOINT = process.env.OTEL_OTLP_ENDPOINT;
 let telemetrySdk: NodeSDK | null = null;
 let telemetryInitAttempted = false;
 
-function createFallbackSpan(tracerName: string, spanName: string, kind: SpanKind): Span {
-    return trace.getTracer(tracerName).startSpan(spanName, { kind });
+function createFallbackSpan(tracerName: string, spanName: string, kind: SpanKind, root: boolean): Span {
+    return trace.getTracer(tracerName).startSpan(spanName, { kind }, root ? ROOT_CONTEXT : context.active());
 }
 
 export function initTelemetry(): NodeSDK | null {
@@ -92,16 +92,21 @@ export function getTracer(name: string): Tracer {
     return trace.getTracer(name);
 }
 
+/**
+ * fn 을 span 안에서 실행한다. root 를 주면 활성 부모와 상관없이 ROOT_CONTEXT 에서 새 trace 를 시작한다(#1478 — 요청이 끝난 뒤에도
+ * 오래 도는 작업이 시작 요청의 trace 에 매달리지 않게). fn 안의 span·로그 trace id 는 어느 쪽이든 새 span 을 따른다.
+ */
 export async function withSpan<T>(
     tracerName: string,
     spanName: string,
     fn: (span: Span) => Promise<T>,
-    options?: { kind?: SpanKind; attributes?: Record<string, string | number | boolean> }
+    options?: { kind?: SpanKind; attributes?: Record<string, string | number | boolean>; root?: boolean }
 ): Promise<T> {
     const kind = options?.kind ?? SpanKind.INTERNAL;
+    const root = options?.root === true;
 
     if (!OTEL_ENABLED) {
-        const fallbackSpan = createFallbackSpan(tracerName, spanName, kind);
+        const fallbackSpan = createFallbackSpan(tracerName, spanName, kind, root);
         try {
             const result = await fn(fallbackSpan);
             return result;
@@ -111,7 +116,7 @@ export async function withSpan<T>(
     }
 
     const tracer = getTracer(tracerName);
-    const span = tracer.startSpan(spanName, { kind });
+    const span = tracer.startSpan(spanName, { kind }, root ? ROOT_CONTEXT : context.active());
 
     if (options?.attributes) {
         for (const [key, value] of Object.entries(options.attributes)) {

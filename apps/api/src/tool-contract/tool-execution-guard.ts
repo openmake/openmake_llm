@@ -13,7 +13,7 @@ import type { MCPToolResult, UserContext } from './types';
 import type { ToolErrorCategory } from './tool-error-classifier';
 import { UserSandbox } from './user-sandbox';
 import { createLogger } from '../utils/logger';
-import { auditSecurityEvent } from '../security/security-audit';
+import { auditSecurityEvent, securityAuditActor } from '../security/security-audit';
 import { hashToolArgs } from '../utils/args-hash';
 
 const logger = createLogger('ToolExecutionGuard');
@@ -109,12 +109,11 @@ async function auditToolCall(
     try {
         const { getAuditService } = await import('../services/AuditService');
         const isExternal = toolName.includes('::');
-        const rawUid = context.userId !== undefined && context.userId !== null ? String(context.userId) : undefined;
-        // audit_logs.user_id 는 users FK — 게스트('guest')는 user_id=null 로 넣고 details 에 표시(FK 위반 방지).
-        const isRealUser = rawUid !== undefined && rawUid !== 'guest';
+        // audit_logs.user_id 는 users FK — 게스트('guest')·빈값은 user_id 없이 넣고 details.actorId 는 'anonymous'(#1476, FK 위반 방지).
+        const actor = securityAuditActor(context.userId);
         await getAuditService().logAudit({
             action: 'mcp_tool_call',
-            userId: isRealUser ? rawUid : undefined,
+            userId: actor.userId,
             resourceType: isExternal ? 'mcp_external_tool' : 'mcp_builtin_tool',
             resourceId: toolName,
             details: {
@@ -122,7 +121,7 @@ async function auditToolCall(
                 durationMs,
                 server: isExternal ? toolName.split('::')[0] : 'builtin',
                 role: context.role,
-                actorId: rawUid ?? 'guest',
+                actorId: actor.actorId,
                 // 실패 분류 — 도구별 실패 원인 집계(도구 헬스)의 소스. 성공 호출엔 없다.
                 ...(classification.errorCategory ? { errorCategory: classification.errorCategory } : {}),
                 ...(classification.retryable !== undefined ? { retryable: classification.retryable } : {}),

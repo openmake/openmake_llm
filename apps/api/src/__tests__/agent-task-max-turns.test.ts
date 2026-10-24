@@ -52,6 +52,7 @@ jest.mock('../data/models/unified-database', () => ({
         deleteAgentTaskSteps: jest.fn().mockResolvedValue(undefined),
     }),
 }));
+const mockExecuteTool = jest.fn().mockResolvedValue({ content: [{ type: 'text', text: '결과' }] });
 jest.mock('../runtime-ports/tool-runtime', () => ({
     ...jest.requireActual('../runtime-ports/tool-runtime'),
     getToolRuntime: () => ({
@@ -59,7 +60,7 @@ jest.mock('../runtime-ports/tool-runtime', () => ({
             { type: 'function', function: { name: 'web_search', description: '', parameters: {} } },
         ]),
         listTools: jest.fn().mockResolvedValue([]),
-        executeTool: jest.fn().mockResolvedValue({ content: [{ type: 'text', text: '결과' }] }),
+        executeTool: (...a: unknown[]) => mockExecuteTool(...a),
         getUserToolGroups: () => [],
         normalizeToolCall: (name: string, args: Record<string, unknown>) => ({ name, args }),
         callUserServerTool: jest.fn().mockResolvedValue(null),
@@ -89,6 +90,14 @@ process.env.TASK_SANDBOX_ENABLED = 'false';
 
 import { AgentTaskService } from '../services/AgentTaskService';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
+import { startTestApprover, type TestApprover } from './utils/test-approver';
+import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
+
+// 샌드박스 OFF + 승인 정책 all(기본) — 호스트 도구 호출마다 승인을 기다린다(#1469). 이 파일은 턴 상한이 주제라
+// 사용자가 승인함에서 승인한다고 두고(실제 ApprovalRegistry), 승인 전 대기는 아래 '승인 경계' 묶음이 확인한다.
+let approver: TestApprover;
+beforeEach(() => { approver = startTestApprover('u1'); });
+afterEach(() => approver.stop());
 
 describe('Agent Task — 턴 상한 종료', () => {
     beforeEach(() => {
@@ -317,5 +326,42 @@ describe('Agent Task — stuck 안내의 자리', () => {
             if (m.role === 'assistant' && m.tool_calls?.length) expect(last[i + 1]?.role).toBe('tool');
         });
         expect(last[nudgeAt - 1].role).toBe('tool');
+    });
+});
+
+describe('Agent Task — 승인 경계(샌드박스 OFF, 정책 all, #1469)', () => {
+    beforeEach(() => {
+        approver.stop(); // 이 묶음은 사람이 아직 승인하지 않은 상태를 본다
+        updateAgentTask.mockClear(); mockChat.mockClear(); mockExecuteTool.mockClear();
+        chatCalls.length = 0; tokensPerTurn = 5; cachedPerTurn = undefined;
+    });
+    const firstPending = async () => {
+        const deadline = Date.now() + 2000;
+        while (Date.now() < deadline) {
+            const p = await getApprovalRegistry().list('u1');
+            if (p.length > 0) return p[0];
+            await new Promise((r) => setTimeout(r, 5));
+        }
+        throw new Error('승인 대기가 생기지 않았다');
+    };
+
+    it('승인 전에는 도구를 실행하지 않고 승인함에서 기다린다 — 거절하면 실행 0회로 끝난다', async () => {
+        const done = new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '끝나지 않는 작업', maxTurns: 1 } as never);
+        const pending = await firstPending();
+        expect(pending.toolName).toBe('web_search');
+        expect(mockExecuteTool).not.toHaveBeenCalled();
+        await getApprovalRegistry().reject(pending.approvalId, 'u1');
+        await done;
+        expect(mockExecuteTool).not.toHaveBeenCalled();
+    });
+
+    it('승인하면 그 호출을 한 번 실행한다', async () => {
+        const done = new AgentTaskService().execute({ taskId: 't1', userId: 'u1', goal: '끝나지 않는 작업', maxTurns: 1 } as never);
+        const pending = await firstPending();
+        expect(mockExecuteTool).not.toHaveBeenCalled();
+        await getApprovalRegistry().approve(pending.approvalId, 'u1');
+        await done;
+        expect(mockExecuteTool).toHaveBeenCalledTimes(1);
+        expect(mockExecuteTool.mock.calls[0][0]).toBe('web_search');
     });
 });

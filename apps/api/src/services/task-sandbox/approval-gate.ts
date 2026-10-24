@@ -30,8 +30,8 @@ import { hashToolArgs } from '../../utils/args-hash';
 
 const logger = createLogger('TaskApprovalGate');
 
-/** 사람 없이 내린 승인 거절 감사(S10, fire-and-forget) — 인자 값은 넣지 않는다(해시만). */
-function auditAutoRejected(
+/** 사람 없이 내린 승인 거절 감사(S10, fire-and-forget) — 인자 값은 넣지 않는다(해시만). 대기 없는 채팅 서브에이전트 거절도 쓴다. */
+export function auditAutoRejected(
     input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown> },
     reason: 'policy_floor' | 'unattended', deniedFloor: string | null,
 ): void {
@@ -57,7 +57,7 @@ const DEVICE_GATED_SHELL = new Set(['bash', 'python_execute']);
  *  바닥 호출(approval-floor — 지시 파일 쓰기 포함)도 high-risk 에서 승인한다: 자동승인에서도 묻는 호출이 정책에서 빠지면 안 된다.
  *  사용자 메모리 쓰기(memory_write)는 정책 none 에서도 승인한다 — 사람이 문장을 보지 않은 채 메모리에 남는 길을 두지 않는다.
  *  정책 none 에서 나머지 바닥(credential_write·third_party_tool·instruction_write)도 true 를 돌려 게이트로 올린다 —
- *  ApprovalRegistry.request 가 묻지 않고 policy_floor 로 거절한다(2026-10-22 S1). 채팅 서브에이전트는 이 게이트를 건너뛴다(skipApprovalGate).
+ *  ApprovalRegistry.request 가 묻지 않고 policy_floor 로 거절한다(2026-10-22 S1). 채팅 서브에이전트(skipApprovalGate)는 대기만 건너뛰고 같은 판정으로 거절한다(#1469).
  *  opts.taintedContext=true(외부 내용이 들어온 채팅 문맥, W3 S3)면 정책 none 이 아닌 한 읽기·제어 등급이 아닌 호출은 모두 묻는다
  *  (제어 등급 — ask_human·plan_* 등 — 은 부작용이 없고 정책 all 도 묻지 않는다).
  *  opts.siteGoverned=true(로컬 브라우저 — 서버가 사이트 정책으로 액션을 훑은 호출)면 high-risk 에서 browser 를 등급(network)으로

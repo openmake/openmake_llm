@@ -195,7 +195,8 @@ export interface UserContext {
     sourceNumberBase?: number;
 }
 
-export type MCPToolHandler<T extends Record<string, unknown> = Record<string, unknown>> = (args: T, context?: UserContext) => Promise<MCPToolResult>;
+/** opts.signal — 호출자(채팅 요청·작업)의 중단 신호(#1474). 다른 도구를 부르는 내장 도구(mcp_call 등)가 그 호출로 넘긴다. 쓰지 않는 핸들러는 무시해도 된다. */
+export type MCPToolHandler<T extends Record<string, unknown> = Record<string, unknown>> = (args: T, context?: UserContext, opts?: { signal?: AbortSignal }) => Promise<MCPToolResult>;
 
 /**
  * MCP 도구 정의 (메타데이터 + 핸들러)

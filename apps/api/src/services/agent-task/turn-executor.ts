@@ -51,7 +51,8 @@ interface TurnToolExecInput {
     toolCalls: ToolCall[];
     taskRuntime: TaskRuntime | null;
     sandboxCfg: TaskSandboxConfig;
-    /** 샌드박스 밖 호스트에서 실행되는 화이트리스트 도구 이름. */
+    /** 샌드박스 밖 호스트에서 실행되는 도구 이름(tool-assembly). 승인 게이트는 이 집합과 무관하게 task 도구가 아닌
+     *  모든 호출에 적용한다 — 목록 밖 이름(위조·환각 호출)도 게이트를 비켜 가지 않게(#1469). */
     extraToolNames: Set<string>;
     mcp: ToolRuntime;
     userCtx: UserContext;
@@ -97,7 +98,7 @@ interface TurnToolExecResult {
  */
 export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<TurnToolExecResult> {
     const {
-        toolCalls, taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx, userId, taskId,
+        toolCalls, taskRuntime, sandboxCfg, mcp, userCtx, userId, taskId,
         turn, conversation, usedTools, signal, getCurStatus, update, emitStep,
     } = input;
     const db = getUnifiedDatabase();
@@ -193,7 +194,8 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 || getApprovalRegistry().autoApproves(taskId, name, (tc.function.arguments ?? {}) as Record<string, unknown>)),
         async ({ name, tc }) => {
             const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
-            if (extraToolNames.has(name) && requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
+            // task 도구가 아닌 호출은 모두 호스트 실행 — 아래 순차 경로와 같이 extra 집합 여부와 무관하게 게이트를 거친다(#1469).
+            if (requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
                 // 자동 승인 작업만 여기 온다 — 감사·집계를 위해 같은 레지스트리를 거친다(즉시 approved).
                 const r = await getApprovalRegistry().request(
                     { taskId, userId, toolName: name, args },
@@ -286,10 +288,9 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 terminated = true;
                 terminateSummary = String(args.summary ?? '');
             }
-        } else if (extraToolNames.has(name)) {
-            // extra(화이트리스트) 도구 — 샌드박스 밖 호스트에서 실행되지만 HITL 승인은 task 도구와 동일 적용.
-            // (이 도구들은 격리 컨테이너가 아니라 API 프로세스에서 실행되므로 승인 우회를 닫는다.)
-            // extraToolNames 는 샌드박스 ENABLED(활성·degrade) 일 때만 채워지므로 legacy OFF 경로엔 영향 없음.
+        } else {
+            // 호스트 실행 도구(extra·동적·legacy OFF 전체, 그리고 노출 목록 밖 이름) — 샌드박스 밖 API 프로세스에서 실행되지만
+            // HITL 승인은 task 도구와 동일 적용한다. 실행 위치(샌드박스 ON/OFF)나 목록 노출 여부로 승인이 빠지지 않는다(#1469).
             let decision: 'approved' | 'rejected' = 'approved';
             let rejectReason: string | undefined;
             let rejectText: string | undefined;
@@ -304,15 +305,13 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 pausedMs += r.waitedMs; // 4-1 pause-aware
                 if (rejectReason === 'parked') await park(); // 유예 초과 → 주차: 실행 전이라 결과 없이 체크포인트, 재개 때 결정 이어받음
                 if (decision === 'rejected') onApprovalRejected({ toolName: name, reason: rejectReason ?? 'user' });
+                // 승인 대기가 남긴 paused 만 되돌린다 — 승인 없이 실행하는 호출은 상태를 건드리지 않는다(mcp_elicit 주차 계약).
+                if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             }
-            if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             if (decision === 'approved') await beforeExecute?.();
             toolResult = decision === 'approved'
                 ? await execWithReceipt(name, args, tc.id)
                 : getApprovalRejectedNotice(name, rejectReason, rejectText);
-        } else {
-            await beforeExecute?.();
-            toolResult = await execWithReceipt(name, args, tc.id);
         }
         if (parkRequested) await park(); // mcp_elicit 주차 — 결과(cancel 응답)는 기록하지 않는다
         // 서버 종료로 끊긴 호출의 결과(중단 오류·승인 자동 거절)는 저널에 남기지 않는다 — 남기면 재개가 그것을 실제 결과로 읽는다.

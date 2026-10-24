@@ -11,6 +11,8 @@ const configState = {
 jest.mock('../config', () => ({
     getConfig: () => configState,
 }));
+const logAudit = jest.fn(async (..._a: unknown[]) => undefined);
+jest.mock('../services/AuditService', () => ({ getAuditService: () => ({ logAudit: (...a: unknown[]) => logAudit(...a) }) }));
 
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -149,5 +151,48 @@ describe('CSRF — Double-Submit Cookie middleware (Stage 2-H4)', () => {
     test('mode=enforce: DELETE also protected', async () => {
         const res = await request(app).delete('/api/test');
         expect(res.status).toBe(403);
+    });
+});
+
+describe('CSRF 거부 감사(#1475)', () => {
+    const app = createApp();
+    const flush = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r)); };
+    beforeEach(() => { logAudit.mockReset().mockImplementation(async () => undefined); configState.csrfProtection = 'enforce'; });
+
+    test('enforce 거부는 응답 그대로 security.authz_denied 를 한 번 남기고 토큰 값은 넣지 않는다', async () => {
+        const tokenRes = await request(app).get('/api/csrf-token');
+        const token = tokenFromSetCookie(tokenRes.headers['set-cookie'] as unknown as string[]);
+        const fake = 'B'.repeat(token.length);
+        const res = await request(app).post('/api/test').set('Cookie', `csrf_token=${token}`).set('X-CSRF-Token', fake).send({});
+        expect(res.status).toBe(403);
+        expect(res.body).toEqual({ error: 'CSRF validation failed', code: 'CSRF_TOKEN_MISMATCH' });
+        await flush();
+        expect(logAudit).toHaveBeenCalledTimes(1);
+        expect(logAudit.mock.calls[0][0]).toEqual(expect.objectContaining({
+            action: 'security.authz_denied', resourceType: 'http', resourceId: 'POST /api/test',
+            details: expect.objectContaining({ reason: 'csrf_token_mismatch', status: 403, actorId: 'anonymous' }),
+        }));
+        const logged = JSON.stringify(logAudit.mock.calls);
+        expect(logged).not.toContain(token);
+        expect(logged).not.toContain(fake);
+    });
+
+    test('warn 모드(통과)와 일치 토큰은 감사하지 않는다', async () => {
+        configState.csrfProtection = 'warn';
+        await request(app).post('/api/test').send({});
+        configState.csrfProtection = 'enforce';
+        const tokenRes = await request(app).get('/api/csrf-token');
+        const token = tokenFromSetCookie(tokenRes.headers['set-cookie'] as unknown as string[]);
+        await request(app).post('/api/test').set('Cookie', `csrf_token=${token}`).set('X-CSRF-Token', token).send({});
+        await flush();
+        expect(logAudit).not.toHaveBeenCalled();
+    });
+
+    test('감사 저장이 실패해도 403 응답은 그대로다', async () => {
+        logAudit.mockImplementation(async () => { throw new Error('db down'); });
+        const res = await request(app).post('/api/test').send({});
+        await flush();
+        expect(res.status).toBe(403);
+        expect(res.body).toEqual({ error: 'CSRF validation failed', code: 'CSRF_TOKEN_MISMATCH' });
     });
 });
