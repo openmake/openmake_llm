@@ -266,6 +266,9 @@ export async function handleChatMessage(
             out({ type: 'skills_activated', skillNames: explicitSkillNames, skillNamesEn: systemSkillNamesEn(explicitSkillNames) });
         }
 
+        // 조기 알림한 새 세션 id — 알림 전용. 오류 보존(partial·debug)은 계속 입력 세션(validSessionId)만 쓴다.
+        let notifiedSessionId: string | undefined;
+
         // ChatRequestHandler.processChat으로 통합 처리
         const result = await ChatRequestHandler.processChat({
             message, originalMessage: rawMessage, taskSuggestionDeliverable: true,
@@ -307,6 +310,13 @@ export async function handleChatMessage(
             userContext,
             clusterManager: cluster,
             abortSignal: abortController.signal,
+            // WS 고유: 새 세션 생성 알림 — 사용자 메시지 저장 직후(모델 응답 전)에 보낸다.
+            // 응답 완료 뒤에만 보내면 그 전에 중단한 첫 턴의 다음 전송이 새 세션으로 갈라진다.
+            onSessionReady: (readySessionId) => {
+                if (validSessionId || notifiedSessionId) return;
+                notifiedSessionId = readySessionId;
+                out({ type: 'session_created', sessionId: readySessionId });
+            },
             onToken: tokenCallback,
             onThinking: (thinking) => {
                 if (abortController.signal.aborted) throw new Error('ABORTED');
@@ -364,11 +374,6 @@ export async function handleChatMessage(
                 });
             },
         });
-
-        // WS 고유: 새 세션 생성 알림
-        if (!validSessionId) {
-            out({ type: 'session_created', sessionId: result.sessionId });
-        }
 
         // 이번 턴의 새 첨부 컨텍스트를 세션 캐시에 누적 — 첫 턴은 result.sessionId 로
         // 새 세션 ID 확보 후 저장. saveHistory=false 면 서버 보관 자체를 생략 (프라이버시).
@@ -430,8 +435,8 @@ export async function handleChatMessage(
         });
 
     } catch (error: unknown) {
-        // 중단 컨트롤러 정리
-        extWs._abortController = null;
+        // 중단 컨트롤러 정리 — 자기 것일 때만(중단 뒤 시작한 다음 요청의 컨트롤러를 지우지 않는다)
+        if (extWs._abortController === abortController) extWs._abortController = null;
 
         // 중단된 경우
         if (error instanceof Error && error.message === 'ABORTED') {
@@ -443,7 +448,7 @@ export async function handleChatMessage(
         // 부분 응답 보존 (2026-08-03): 스트림 도중 실패 시 이미 화면에 나간 partial 을
         // 히스토리에 저장 — 사용자가 본 내용이 새로고침으로 소실되는 단절을 막는다.
         // saveHistory=false(프라이버시)는 기존 정책대로 미저장. 신규 세션 첫 턴은
-        // 세션 id 를 모르는 채 실패한 경우라 제외(사용자 메시지도 새 세션에 있음).
+        // 기존 보존 정책상 제외(조기 session_created 의 id 로 넓히지 않는다 — validSessionId 는 입력 세션만).
         if (partialAssistantResponse.length > 0 && validSessionId && msg.saveHistory !== false) {
             const partialNotice = getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).partialInterrupted;
             const partialAuditUserId = extWs._authenticatedUserId || anonSessionId || 'anonymous';
@@ -474,8 +479,8 @@ export async function handleChatMessage(
             selectedModel, tokenCount, partialAssistantResponse,
         });
     } finally {
-        // 중단 컨트롤러 정리 + 레지스트리 정리(detach 로 끝났으면 결과 스냅샷 보존)
-        extWs._abortController = null;
+        // 중단 컨트롤러 정리(자기 것일 때만) + 레지스트리 정리(detach 로 끝났으면 결과 스냅샷 보존)
+        if (extWs._abortController === abortController) extWs._abortController = null;
         if (streamEntry) streamRegistry.close(streamEntry);
 
         // Phase 7 lifecycle hook — per_chat MCP 서버 graceful kill.
