@@ -25,6 +25,8 @@ describe('sendAgentTaskAlert', () => {
             agent_task_stale_resolved: 'info',
             agent_task_queue_backlog_resolved: 'info',
             agent_task_model_wait_long_resolved: 'info',
+            agent_task_stale_pending: 'warning',
+            agent_task_stale_pending_resolved: 'info',
         });
     });
 
@@ -33,6 +35,7 @@ describe('sendAgentTaskAlert', () => {
             agent_task_stale: 'agent_task_stale_resolved',
             agent_task_queue_backlog: 'agent_task_queue_backlog_resolved',
             agent_task_model_wait_long: 'agent_task_model_wait_long_resolved',
+            agent_task_stale_pending: 'agent_task_stale_pending_resolved',
         });
         await sendAgentTaskAlert('agent_task_stale_resolved', '제목', '본문');
         await sendAgentTaskAlert('agent_task_stale_resolved', '제목', '본문');
@@ -54,6 +57,15 @@ describe('sendAgentTaskAlert', () => {
         expect(sendAlert).toHaveBeenCalledTimes(2);
     });
 
+    it('오래된 pending(#1478) — 경고는 warning, 해소는 info 이고 해소만 보낼 때마다 자기 쿨다운을 지운다', async () => {
+        await sendAgentTaskAlert('agent_task_stale_pending', '제목', '본문', { count: 3 });
+        expect(sendAlert).toHaveBeenCalledWith('agent_task_stale_pending', 'warning', '제목', '본문', { count: 3 });
+        expect(clearCooldown).not.toHaveBeenCalled();
+        await sendAgentTaskAlert('agent_task_stale_pending_resolved', '제목', '본문');
+        expect(clearCooldown).toHaveBeenCalledWith('agent_task_stale_pending_resolved', 'info');
+        expect(sendAlert).toHaveBeenCalledWith('agent_task_stale_pending_resolved', 'info', '제목', '본문', undefined);
+    });
+
     it('나머지 종류는 쿨다운을 그대로 탄다', async () => {
         await sendAgentTaskAlert('agent_task_stale', '제목', '본문');
         await sendAgentTaskAlert('agent_task_stale', '제목', '본문');
@@ -66,5 +78,10 @@ describe('sendAgentTaskAlert', () => {
         expect(ALERT_TEXT.agent_task_lease_takeover.message({ taskId: 't9', previousOwner: 'h:1' })).toContain('t9');
         expect(ALERT_TEXT.agent_task_queue_backlog_resolved.message({ pending: 2, active: 1, oldestWaitMs: 0 })).toContain('2건');
         expect(ALERT_TEXT.agent_task_model_wait_long_resolved.message({ parked: 4, thresholdMs: 30 * 60_000 })).toContain('30분');
+        expect(ALERT_TEXT.agent_task_stale_pending.title).toBeTruthy();
+        expect(ALERT_TEXT.agent_task_stale_pending.message({ count: 57, oldestStalledMs: 45 * 60_000, taskIds: ['p1'] })).toContain('57건');
+        expect(ALERT_TEXT.agent_task_stale_pending.message({ count: 57, oldestStalledMs: 45 * 60_000, taskIds: ['p1'] })).toContain('45분');
+        expect(ALERT_TEXT.agent_task_stale_pending_resolved.title).toBeTruthy();
+        expect(ALERT_TEXT.agent_task_stale_pending_resolved.message({ count: 0 })).toEqual(expect.any(String));
     });
 });

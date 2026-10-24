@@ -7,6 +7,7 @@ jest.mock('../../../data/repositories/agent-task-progress-repository', () => ({
     AgentTaskProgressRepository: jest.fn().mockImplementation(() => ({
         listStaleRunningTasks: (...a: unknown[]) => listStaleRunningTasks(...a),
         summarizeParkedByReason: async () => ({ count: 0, longCount: 0, oldest: [] }),
+        summarizeStalePendingTasks: async () => ({ count: 0, oldestStalledMs: 0, taskIds: [] }),
     })),
 }));
 jest.mock('../../../data/repositories/agent-task-repository', () => ({
