@@ -1,9 +1,10 @@
 /**
  * 이어가기(188) — 장기 실행 작업이 턴·토큰·컨텍스트 상한에 닿으면 끝내는 대신 후속 작업으로 잇는다.
  *
- * 순서: 인계 턴(도구 없이 "다음에 할 일") → 작업 공간 스냅숏(fork-workspace 의 턴 ref) → 선점(continued_by 조건부 UPDATE)
- * → 후속 생성(fork 와 같은 방식: 체크포인트 시드 + resume) → 디스패치. 어느 단계가 실패해도 현재 작업은 호출부가
- * 종전대로 마무리 턴으로 끝낸다(이어가기 실패는 결과에 사유만 남긴다).
+ * 순서: 인계 턴(도구 없이 "다음에 할 일") → 작업 공간 스냅숏(fork-workspace 의 턴 ref) → **한 트랜잭션**으로 선점(continued_by
+ * 조건부 UPDATE)과 완전히 시드된 후속 INSERT(체크포인트·fork·plan·실효 정책·실행 소유권, #1473) → 커밋 뒤 디스패치.
+ * 커밋 전에 죽으면 아무것도 남지 않고, 커밋 뒤 디스패치 전에 죽으면 소유권 점검(R2)이 완성된 후속을 회수한다.
+ * 어느 단계가 실패해도 현재 작업은 호출부가 종전대로 마무리 턴으로 끝낸다(이어가기 실패는 결과에 사유만 남긴다).
  * 체인 누적 사용량은 후속 행의 continuation 에 실어 둔다 — 조회·판정이 현재 행만 보면 되게.
  *
  * @module services/agent-task/continuation
@@ -15,7 +16,8 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import { AgentTaskChainRepository } from '../../data/repositories/agent-task-chain-repository';
-import { AgentTaskParkRepository } from '../../data/repositories/agent-task-park-repository';
+import { AgentTaskLeaseRepository, hasLiveLease, type UnleasedClaimCutoff } from '../../data/repositories/agent-task-lease-repository';
+import { leaseOwner } from '../../config/lease-owner';
 import type { AgentTask } from '../../data/models/unified-database.types';
 import type { ChatMessage } from '../../llm/types';
 import type { AgentRoleState } from './role-client';
@@ -111,11 +113,13 @@ const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(
 /**
  * 선점을 놓쳤을 때 — 이미 만들어진 후속을 따른다(설계: "선점 실패면 이미 만들어진 쪽을 따른다").
  * 선점·디스패치 뒤 completed/continued 갱신 전에 프로세스가 죽고 부팅 복구로 이 작업이 다시 돌면 여기로 온다.
- * 살아 있음 판정(2026-10-22 R3) — 디스패치되지 못한 pending 후속을 살아 있다고 보면 체인이 조용히 멈춘다:
+ * 살아 있음 판정(2026-10-22 R3, #1473) — 디스패치되지 못한 pending 후속을 살아 있다고 보면 체인이 조용히 멈춘다:
  * - running·paused·queued·completed → 살아 있음.
- * - pending 이고 lease_until 이 미래 → 살아 있음(누가 쥐고 있다).
- * - pending 이고 lease 가 없거나 지났고 updated_at 이 LEASE_MS 보다 오래됐고 체크포인트 대화가 있으면 → 그 대화로 재디스패치.
+ * - pending 이고 소유권이 있다 → 살아 있음. 살아 있으면 쥔 쪽이 실행하고, 지났으면 소유권 점검(R2)의 원자 takeover 가 회수한다
+ *   — 여기서 직접 디스패치하면 R2 와 두 곳이 같이 실행한다.
  * - pending 이고 updated_at 이 LEASE_MS 이내 → 살아 있음(다른 실행이 디스패치 중).
+ * - pending 이고 소유권을 잡은 적 없고(lease_until NULL — 레거시·소유권 꺼짐) 오래됐고 체크포인트 대화가 있으면 → 원자 claim 을
+ *   잡은 한 곳만 그 대화로 재디스패치한다(claim 을 놓치면 다른 복구자가 잡은 것 — 살아 있음).
  * 살아 있으면(재디스패치 포함) 그 id 를 돌려 호출부가 이 작업을 '이어짐'으로 끝내게 하고(종료 알림 없음),
  * 후속 행이 없거나 실패·취소·체크포인트 없음이면 skipped — 호출부는 종전대로 마무리한다.
  */
@@ -131,26 +135,42 @@ async function followExistingSuccessor(taskId: string, p: Pick<ContinueInput, 'u
         return { successorId: existing.id };
     }
     if (existing.status !== 'pending') return skipped;
-    const now = Date.now();
-    const leased = existing.lease_until ? new Date(existing.lease_until).getTime() > now : false;
-    const stale = now - new Date(existing.updated_at).getTime() > AGENT_TASK_LIMITS.LEASE_MS;
-    if (leased || !stale) {
-        logger.info(`[Continuation] 선점 실패 — 후속이 아직 살아 있다(pending${leased ? '·lease' : '·방금 갱신'}): ${taskId} → ${existing.id}`);
+    if (existing.lease_until != null) {
+        logger.info(`[Continuation] 선점 실패 — 후속이 소유권을 가졌다(${hasLiveLease(existing.lease_until) ? '살아 있음' : '지남 — 소유권 점검이 회수'}): ${taskId} → ${existing.id}`);
+        return { successorId: existing.id };
+    }
+    if (Date.now() - new Date(existing.updated_at).getTime() <= AGENT_TASK_LIMITS.LEASE_MS) {
+        logger.info(`[Continuation] 선점 실패 — 후속이 아직 살아 있다(pending·방금 갱신): ${taskId} → ${existing.id}`);
         return { successorId: existing.id };
     }
     const seeded = (existing.checkpoint as { conversation?: unknown } | null | undefined)?.conversation;
     if (!Array.isArray(seeded)) return { skipped: `이미 다른 실행이 이어갔습니다 (후속 ${existing.id} 체크포인트 없음)` };
     try {
-        await dispatchSuccessor({
-            successor: existing, seeded: seeded as ChatMessage[], userRole: p.userRole,
-            approvalPolicy: (existing.approval_policy ?? undefined) as AgentTaskRunInput['approvalPolicy'],
-            thinkingLevel: (existing.thinking_level ?? undefined) as AgentTaskThinkingLevel | undefined,
-        });
+        if (!(await redispatchUnleasedSuccessor(existing, seeded as ChatMessage[], p.userRole, { staleMs: AGENT_TASK_LIMITS.LEASE_MS }))) {
+            logger.info(`[Continuation] 선점 실패 — 다른 복구자가 후속 재디스패치를 잡았다: ${taskId} → ${existing.id}`);
+            return { successorId: existing.id };
+        }
     } catch (e) {
         return { skipped: `후속 재디스패치 실패: ${errMsg(e)}` };
     }
     logger.warn(`[Continuation] 디스패치되지 못한 후속을 다시 디스패치: ${taskId} → ${existing.id}`);
     return { successorId: existing.id };
+}
+
+/**
+ * 소유권 없는 pending 후속의 재디스패치(#1473) — 원자 claim(마지막 갱신이 cutoff 보다 오래됐을 때만)을 잡은 한 곳만 디스패치한다.
+ * 부모 재실행(R3, LEASE_MS 보다 오래됨)과 부팅 복구(이 프로세스가 뜬 고정 시각 이전)가 같이 쓴다. 소유권이 켜져 있으면 claim 이
+ * 기존 owner·TTL 을 쓰고, 꺼져 있으면 updated_at 만 갱신한다(소유권 표식 없음). false 면 다른 곳이 잡았다.
+ */
+export async function redispatchUnleasedSuccessor(successor: AgentTask, seeded: ChatMessage[], userRole: AgentTaskUserRole, cutoff: UnleasedClaimCutoff): Promise<boolean> {
+    const lease = AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined;
+    if (!(await new AgentTaskLeaseRepository(getPool()).claimUnleasedPendingForRedispatch(successor.id, cutoff, lease))) return false;
+    await dispatchSuccessor({
+        successor, seeded, userRole,
+        approvalPolicy: (successor.approval_policy ?? undefined) as AgentTaskRunInput['approvalPolicy'],
+        thinkingLevel: (successor.thinking_level ?? undefined) as AgentTaskThinkingLevel | undefined,
+    });
+    return true;
 }
 
 /** 후속 디스패치 — resume 은 체크포인트에 쓴 것과 같은 seeded 배열을 쓴다(DB 를 다시 읽지 않는다). */
@@ -180,7 +200,7 @@ interface ContinueTrack { successorId: string; claimed: boolean; rowCreated: boo
  */
 export async function continueAsNewSegment(p: ContinueInput): Promise<ContinueOutcome> {
     const db = getUnifiedDatabase();
-    const chainRepo = new AgentTaskChainRepository(getPool()); // claimContinuation·resetContinuation (Task 2 분리, Ruling 2)
+    const chainRepo = new AgentTaskChainRepository(getPool()); // resetContinuation — 선점은 원자적 후속 생성(#1473)이 한다
     const track: ContinueTrack = { successorId: '', claimed: false, rowCreated: false };
     // 행을 만든 뒤 실패하면 고아 후속(체크포인트·디스패치 없는 pending)이 남지 않게 failed 로 닫고, 쥔 선점을 되돌린다
     const abandon = async (why: string): Promise<{ skipped: string }> => {
@@ -189,15 +209,15 @@ export async function continueAsNewSegment(p: ContinueInput): Promise<ContinueOu
         return { skipped: why };
     };
     try {
-        return await runContinuation(p, chainRepo, track, abandon);
+        return await runContinuation(p, track, abandon);
     } catch (e) {
         return abandon(`이어가기 예외: ${errMsg(e)}`);
     }
 }
 
-async function runContinuation(p: ContinueInput, chainRepo: AgentTaskChainRepository, track: ContinueTrack, abandon: (why: string) => Promise<{ skipped: string }>): Promise<ContinueOutcome> {
+async function runContinuation(p: ContinueInput, track: ContinueTrack, abandon: (why: string) => Promise<{ skipped: string }>): Promise<ContinueOutcome> {
     const db = getUnifiedDatabase();
-    const repo = new AgentTaskRepository(getPool()); // markForked
+    const repo = new AgentTaskRepository(getPool()); // createContinuationSuccessor(#1473)
     const state = chainBudgetState(p.task, p.root, p.activeMs, p.totalTokens);
     if (!state) return { skipped: '체인 작업이 아닙니다' };
     if (p.root.long_running?.cancelled || p.task.status === 'cancelled') return { skipped: '체인이 취소되었습니다' };
@@ -217,9 +237,6 @@ async function runContinuation(p: ContinueInput, chainRepo: AgentTaskChainReposi
     // 후속이 물려받을 승인 정책·추론 수준 — 실행의 실효 값(요청 본문 override 포함), 없으면 현재 행 값
     const approvalPolicy = (p.approvalPolicy ?? p.task.approval_policy ?? undefined) as AgentTaskRunInput['approvalPolicy'];
     const thinkingLevel = (p.thinkingLevel ?? p.task.thinking_level ?? undefined) as AgentTaskThinkingLevel | undefined;
-    // 순서: 선점(UPDATE) → 후속 INSERT. 선점이 먼저라 continued_by_task_id 에는 FK 가 없다(마이그레이션 188).
-    if (!(await chainRepo.claimContinuation(p.task.id, successorId))) return followExistingSuccessor(p.task.id, p);
-    track.claimed = true;
 
     const segmentIndex = state.segmentIndex + 1;
     const summary = buildContinuationSummary(p.conversation, p.task.goal, nextSteps);
@@ -227,24 +244,34 @@ async function runContinuation(p: ContinueInput, chainRepo: AgentTaskChainReposi
     // fork 와 같은 시드: [원 system 그대로, 목표, 인계 요약+안내] — 체크포인트와 resume 둘 다 이 배열을 쓴다
     const systemMsg = p.conversation[0]?.role === 'system' ? p.conversation[0] : { role: 'system' as const, content: '' };
     const seeded: ChatMessage[] = [systemMsg, { role: 'user', content: p.task.goal }, { role: 'user', content: `${summary}\n\n${getContinuationNotice(segmentIndex, p.reason)}` }];
+    // 선점과 완전한 후속을 한 트랜잭션으로(#1473) — forked_from·턴은 후속의 작업 공간 복원(initWorkspaceBaseline)이, 승인 정책·추론 수준은
+    // 재개 실행이 행에서 읽는다. 소유권은 이 프로세스의 기존 owner·TTL — 디스패치된 실행이 같은 owner 로 이어 잡고, 디스패치 전에 죽으면
+    // 만료 뒤 소유권 점검(R2)이 회수한다. 소유권을 끄면 비워 둔다(R2 가 없으니 레거시 R3 가 회수한다).
+    const lease = AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: leaseOwner(), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined;
+    let claimed: boolean;
     try {
-        const created = await db.createAgentTask({
-            id: successorId, userId: String(p.task.user_id), goal: p.task.goal, maxTurns: p.task.max_turns,
-            inputFiles: p.task.input_files ?? undefined, inputImages: p.task.input_images ?? undefined,
-            executor: p.task.executor === 'local' ? 'local' : undefined, deviceId: p.task.device_id ?? undefined, folderRel: p.task.folder_rel ?? undefined,
-            chainRootTaskId: p.root.id, continuedFromTaskId: p.task.id, continuation,
+        claimed = await repo.createContinuationSuccessor({
+            parentTaskId: p.task.id,
+            create: {
+                id: successorId, userId: String(p.task.user_id), goal: p.task.goal, maxTurns: p.task.max_turns,
+                inputFiles: p.task.input_files ?? undefined, inputImages: p.task.input_images ?? undefined,
+                executor: p.task.executor === 'local' ? 'local' : undefined, deviceId: p.task.device_id ?? undefined, folderRel: p.task.folder_rel ?? undefined,
+                chainRootTaskId: p.root.id, continuedFromTaskId: p.task.id, continuation,
+            },
+            checkpoint: { conversation: seeded, completedTurn: -1 }, plan: p.task.plan ?? undefined, forkedFromTurn: p.turn,
+            approvalPolicy, thinkingLevel, lease,
         });
-        if (!created) throw new Error('작업을 저장하지 못했습니다');
-        track.rowCreated = true;
-        await db.updateAgentTask(successorId, { checkpoint: { conversation: seeded, completedTurn: -1 }, ...(p.task.plan ? { plan: p.task.plan } : {}) });
-        // forked_from·턴 표시는 후속의 작업 공간 복원(initWorkspaceBaseline)이 읽는다 — 실패하면 후속이 파일을 못 받으므로 abandon
-        await repo.markForked(successorId, p.task.id, p.turn);
-        const park = new AgentTaskParkRepository(getPool());
-        if (approvalPolicy) await park.setApprovalPolicy(successorId, approvalPolicy).catch(() => { /* execute 입력으로도 넘긴다 */ });
-        if (thinkingLevel) await park.setThinkingLevel(successorId, thinkingLevel).catch(() => { /* execute 입력으로도 넘긴다 */ });
     } catch (e) {
-        return abandon(`후속 작업 저장 실패: ${errMsg(e)}`);
+        // 저장 오류가 곧 롤백은 아니다 — COMMIT 응답만 잃었으면 커밋됐다. 부모 링크를 다시 읽어 이 후속이면 그대로 디스패치한다.
+        // 아니면 되돌려진 것(되돌릴 선점·행이 없다). 다시 읽기도 실패하면 확인할 수 없다 — 커밋됐다면 R2(소유권 ON)·부팅 복구(OFF)가 회수한다.
+        const committed = await db.getAgentTask(p.task.id).then((t) => t?.continued_by_task_id === successorId).catch(() => false);
+        if (!committed) return abandon(`후속 작업 저장 실패: ${errMsg(e)}`);
+        logger.warn(`[Continuation] 저장 응답 오류였지만 커밋됐다 — 이어서 디스패치: ${p.task.id} → ${successorId} (${errMsg(e)})`);
+        claimed = true;
     }
+    if (!claimed) return followExistingSuccessor(p.task.id, p);
+    track.claimed = true;
+    track.rowCreated = true;
 
     try {
         // 후속 행은 현재 작업의 goal·max_turns·첨부·실행기·plan 을 그대로 물려받았다 — 같은 값으로 디스패치

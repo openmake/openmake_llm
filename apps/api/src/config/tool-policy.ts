@@ -140,6 +140,13 @@ export function isThirdPartyTool(toolName: string, _args: Record<string, unknown
     return toolName.includes(MCP_NAMESPACE_SEPARATOR) || toolName === MCP_GENERIC_CALL_TOOL;
 }
 
+/** PURE: 이 도구의 결과가 대화를 오염시키는가(W3 S3) — 외부 내용을 들여오는 등급(external·network)이거나 외부 MCP 도구.
+ *  채팅 도구 루프와 채팅 서브에이전트(위임 경계, #1469)가 같은 판정을 쓴다. */
+export function bringsExternalContent(name: string, args: Record<string, unknown>): boolean {
+    const risk = classifyToolRisk(name, args);
+    return risk === 'external' || risk === 'network' || isThirdPartyTool(name, args);
+}
+
 /** high-risk 정책이 승인으로 올리는 등급. */
 const HIGH_RISK_CLASSES: ReadonlySet<ToolRiskClass> = new Set(['exec', 'network', 'destructive']);
 

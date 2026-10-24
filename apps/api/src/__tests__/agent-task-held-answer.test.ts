@@ -69,6 +69,13 @@ jest.mock('../services/agent-task/finalize', () => ({
 process.env.TASK_SANDBOX_ENABLED = 'false';
 
 import { AgentTaskService } from '../services/AgentTaskService';
+import { startTestApprover, type TestApprover } from './utils/test-approver';
+
+// 샌드박스 OFF + 승인 정책 all(기본) — 호스트 도구 호출마다 승인을 기다린다(#1469). 이 파일의 주제는 검증 보류 답변이라
+// 사용자가 승인함에서 승인한다고 둔다(실제 ApprovalRegistry). 승인 전 대기·거절은 agent-task-max-turns 의 '승인 경계' 묶음이 본다.
+let approver: TestApprover;
+beforeEach(() => { approver = startTestApprover('u1'); });
+afterEach(() => approver.stop());
 
 type Held = { rawContent: string; hold?: { answer?: unknown } };
 const toolTurn = { role: 'assistant', content: '', tool_calls: [{ type: 'function', id: 'c1', function: { name: 'web_search', arguments: { query: 'x' } } }], metrics: { prompt_tokens: 5, completion_tokens: 0 } };

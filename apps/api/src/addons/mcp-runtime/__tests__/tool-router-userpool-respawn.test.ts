@@ -46,7 +46,7 @@ describe('ToolRouter.executeTool — 끊긴 사용자 MCP 복구', () => {
 
         expect(r.isError).toBeFalsy();
         expect(ensureUserServers).toHaveBeenCalledWith('3', 'tool-call');
-        expect(fresh.callTool).toHaveBeenCalledWith('list_projects', {});
+        expect(fresh.callTool).toHaveBeenCalledWith('list_projects', {}, { signal: expect.any(AbortSignal) });
     });
 
     it('풀에 남은 끊긴 client 는 호출하지 않고 빼낸 뒤 새 client 로 실행한다', async () => {

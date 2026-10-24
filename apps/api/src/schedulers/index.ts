@@ -11,6 +11,7 @@ import { startDbRetention } from '../data/db-retention';
 import { startPeriodicCleanup, stopPeriodicCleanup } from '../utils/token-cleanup';
 import { createLogger } from '../utils/logger';
 import { CLEANUP_INTERVALS } from '../config/timeouts';
+import { markLoopRegistered } from '../services/agent-task/background-liveness';
 
 const logger = createLogger('Schedulers');
 
@@ -188,6 +189,7 @@ export async function startAllSchedulers(): Promise<void> {
     try {
         const { AGENT_TASK_LIMITS } = await import('../config/runtime-limits');
         if (AGENT_TASK_LIMITS.LEASE_ENABLED) {
+            markLoopRegistered('lease_sweep'); // readiness 부팅 유예는 여기서부터(#1478) — 아래 등록이 실패해도 루프가 안 돌면 기한 뒤 잡힌다
             const { sweepExpiredTaskLeases } = await import('../services/agent-task/boot-recovery');
             track(setInterval(() => { void sweepExpiredTaskLeases(); }, AGENT_TASK_LIMITS.LEASE_SWEEP_MS));
         }
@@ -207,8 +209,11 @@ export async function startAllSchedulers(): Promise<void> {
     // 7-e. 에이전트 작업 watchdog(R8·R9) — 진행 멈춤·대기열 적체·모델 대기 장기화를 게이지·알림으로. 작업 상태는 바꾸지 않는다.
     try {
         const { AGENT_TASK_LIMITS } = await import('../config/runtime-limits');
-        const { runWatchdogTick } = await import('../services/agent-task/stale-watchdog');
-        if (AGENT_TASK_LIMITS.WATCHDOG_ENABLED) track(setInterval(() => { void runWatchdogTick(); }, AGENT_TASK_LIMITS.WATCHDOG_MS));
+        if (AGENT_TASK_LIMITS.WATCHDOG_ENABLED) {
+            markLoopRegistered('watchdog'); // readiness 부팅 유예는 여기서부터(#1478)
+            const { runWatchdogTick } = await import('../services/agent-task/stale-watchdog');
+            track(setInterval(() => { void runWatchdogTick(); }, AGENT_TASK_LIMITS.WATCHDOG_MS));
+        }
     } catch (err) {
         logger.warn('watchdog 등록 실패(무시):', err);
     }
@@ -235,6 +240,8 @@ export async function startAllSchedulers(): Promise<void> {
 
     // 8-C. Agent Task 스케줄/반복 트리거 — 플래그 ON 시 cron/interval due 스캔(tick 주기).
     try {
+        const { AGENT_TASK_LIMITS } = await import('../config/runtime-limits');
+        if (AGENT_TASK_LIMITS.SCHEDULES_ENABLED) markLoopRegistered('schedule_tick'); // readiness 부팅 유예는 여기서부터(#1478) — 부팅 복구 뒤라 늦다
         const { startAgentTaskScheduleScheduler } = await import('../services/agent-task/schedule-runner');
         const scheduleTimer = startAgentTaskScheduleScheduler();
         if (scheduleTimer) { track(scheduleTimer); logger.debug('Agent Task 스케줄러 등록 완료'); }

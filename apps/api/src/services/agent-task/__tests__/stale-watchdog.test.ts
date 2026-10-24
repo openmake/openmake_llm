@@ -3,8 +3,12 @@
  * 작업 상태는 바꾸지 않는다. 단계 하나가 실패해도 다음 단계는 돈다.
  */
 const listStaleRunningTasks = jest.fn();
+const summarizeParkedByReason = jest.fn();
 jest.mock('../../../data/repositories/agent-task-progress-repository', () => ({
-    AgentTaskProgressRepository: jest.fn().mockImplementation(() => ({ listStaleRunningTasks: (...a: unknown[]) => listStaleRunningTasks(...a) })),
+    AgentTaskProgressRepository: jest.fn().mockImplementation(() => ({
+        listStaleRunningTasks: (...a: unknown[]) => listStaleRunningTasks(...a),
+        summarizeParkedByReason: (...a: unknown[]) => summarizeParkedByReason(...a),
+    })),
 }));
 const listParkedTasks = jest.fn();
 const countActiveAgentTasksByStatus = jest.fn();
@@ -23,13 +27,17 @@ jest.mock('../../../monitoring/agent-task-alerts', () => ({
     sendAgentTaskAlert: (...a: unknown[]) => sendAgentTaskAlert(...a),
 }));
 const setGauge = jest.fn();
-jest.mock('../../../monitoring/metrics', () => ({ getMetrics: () => ({ setGauge: (...a: unknown[]) => setGauge(...a) }) }));
+const getMetrics = jest.fn(() => ({ setGauge: (...a: unknown[]) => setGauge(...a) }));
+jest.mock('../../../monitoring/metrics', () => ({ getMetrics: () => getMetrics() }));
+const markLoopRun = jest.fn();
+jest.mock('../background-liveness', () => ({ markLoopRun: (...a: unknown[]) => markLoopRun(...a) }));
 let shuttingDown = false;
 jest.mock('../shutdown-drain', () => ({ isAgentTaskShutdown: () => shuttingDown }));
 const limits = { WATCHDOG_ENABLED: true, STALE_MS: 900_000, QUEUE_BACKLOG_PENDING: 20, QUEUE_BACKLOG_WAIT_MS: 300_000, MODEL_WAIT_ALERT_MS: 1_800_000 };
 jest.mock('../../../config/runtime-limits', () => ({ ...jest.requireActual('../../../config/runtime-limits'), AGENT_TASK_LIMITS: limits }));
 
 import { runWatchdogTick } from '../stale-watchdog';
+import { ALERT_TEXT } from '../../../monitoring/agent-task-alerts';
 
 const MIN = 60_000;
 const stale = (id: string, stalledMs: number) => ({ id, user_id: 'u1', current_turn: 3, lease_owner: 'h:1', stalled_ms: stalledMs });
@@ -44,6 +52,7 @@ beforeEach(() => {
     listStaleRunningTasks.mockResolvedValue([]);
     stats.mockReturnValue({ globalActive: 1, pending: 0, wait: { oldestPendingMs: null } });
     listParkedTasks.mockResolvedValue([]);
+    summarizeParkedByReason.mockResolvedValue({ count: 0, longCount: 0, oldest: [] });
     countActiveAgentTasksByStatus.mockResolvedValue({ queued: 0, running: 1, paused: 0, pending: 0 });
 });
 
@@ -105,19 +114,26 @@ describe('runWatchdogTick — 대기열 적체', () => {
 });
 
 describe('runWatchdogTick — 모델 대기 장기화', () => {
-    it('모델 대기 31분 1건 + 10분 1건이면 알림 1건(count 1), 게이지는 모델 대기 전체 2', async () => {
-        listParkedTasks.mockResolvedValue([
-            { id: 'm1', reason: 'model_wait', waited_ms: String(31 * MIN) }, // pg bigint 는 문자열로 온다
-            { id: 'm2', reason: 'model_wait', waited_ms: 10 * MIN },
-            { id: 'h1', reason: 'hitl_parked', waited_ms: 999 * MIN },
-        ]);
+    it('DB 집계로 센다 — 200건 목록이 아니라 전체 건수·장기 건수, 알림 taskIds 는 오래 기다린 표본 중 기준을 넘긴 것', async () => {
+        summarizeParkedByReason.mockResolvedValue({
+            count: 250, longCount: 230,
+            oldest: [{ id: 'm1', waited_ms: 90 * MIN }, { id: 'm2', waited_ms: 31 * MIN }, { id: 'm3', waited_ms: 10 * MIN }],
+        });
         const r = await runWatchdogTick();
-        expect(listParkedTasks).toHaveBeenCalledWith(200);
-        expect(r.modelWaitLong).toBe(1);
+        expect(summarizeParkedByReason).toHaveBeenCalledWith('model_wait', 1_800_000, 5);
+        expect(listParkedTasks).not.toHaveBeenCalled();
+        expect(r.modelWaitLong).toBe(230);
         const calls = alertsOf('agent_task_model_wait_long');
         expect(calls).toHaveLength(1);
-        expect(calls[0][3]).toMatchObject({ count: 1, taskIds: ['m1'] });
-        expect(gauge('agent_task_model_wait_parked')).toBe(2);
+        expect(calls[0][3]).toEqual({ count: 230, taskIds: ['m1', 'm2'], thresholdMs: 1_800_000 });
+        expect(gauge('agent_task_model_wait_parked')).toBe(250);
+    });
+
+    it('장기 0건이면 알림 없음, 게이지는 모델 대기 전체', async () => {
+        summarizeParkedByReason.mockResolvedValue({ count: 3, longCount: 0, oldest: [{ id: 'm1', waited_ms: MIN }] });
+        expect((await runWatchdogTick()).modelWaitLong).toBe(0);
+        expect(alertsOf('agent_task_model_wait_long')).toHaveLength(0);
+        expect(gauge('agent_task_model_wait_parked')).toBe(3);
     });
 });
 
@@ -138,7 +154,7 @@ describe('runWatchdogTick — 건너뜀', () => {
         await expect(runWatchdogTick()).resolves.toEqual({ stale: 0, queueBacklog: false, modelWaitLong: 0, skipped: 'shutdown' });
         expect(listStaleRunningTasks).not.toHaveBeenCalled();
         expect(stats).not.toHaveBeenCalled();
-        expect(listParkedTasks).not.toHaveBeenCalled();
+        expect(summarizeParkedByReason).not.toHaveBeenCalled();
         expect(countActiveAgentTasksByStatus).not.toHaveBeenCalled();
     });
 
@@ -146,5 +162,139 @@ describe('runWatchdogTick — 건너뜀', () => {
         limits.WATCHDOG_ENABLED = false;
         await expect(runWatchdogTick()).resolves.toMatchObject({ skipped: 'disabled' });
         expect(listStaleRunningTasks).not.toHaveBeenCalled();
+    });
+});
+
+describe('runWatchdogTick — 겹친 tick(#1478)', () => {
+    it('앞 tick 이 끝나기 전 tick 은 조회하지 않고 생존 기록도 갱신하지 않는다 — 끝나면 다시 돈다', async () => {
+        let release: () => void = () => undefined;
+        listStaleRunningTasks.mockImplementationOnce(() => new Promise((r) => { release = () => r([]); }));
+        const first = runWatchdogTick();
+        await expect(runWatchdogTick()).resolves.toEqual({ stale: 0, queueBacklog: false, modelWaitLong: 0, skipped: 'overlap' });
+        expect(listStaleRunningTasks).toHaveBeenCalledTimes(1);
+        expect(markLoopRun).toHaveBeenCalledTimes(1);
+        release();
+        await first;
+        await runWatchdogTick();
+        expect(listStaleRunningTasks).toHaveBeenCalledTimes(2);
+        expect(markLoopRun).toHaveBeenCalledTimes(2);
+        expect(markLoopRun).toHaveBeenCalledWith('watchdog');
+    });
+
+    it('tick 이 예외로 끝나도 resolve 하고 guard 를 푼다(finally) — 다음 tick 은 정상으로 돈다', async () => {
+        getMetrics.mockImplementationOnce(() => { throw new Error('metrics broken'); });
+        await expect(runWatchdogTick()).resolves.toMatchObject({ stale: 0 });
+        listStaleRunningTasks.mockResolvedValue([stale('a', 30 * MIN)]);
+        const r = await runWatchdogTick();
+        expect(r.skipped).toBeUndefined();
+        expect(r.stale).toBe(1);
+    });
+});
+
+describe('runWatchdogTick — 단계 조회 실패와 회복(#1478)', () => {
+    const STAGES = ['stale', 'queue', 'model_wait', 'status_count'];
+    const stageError = (stage: string) => gauge('agent_task_watchdog_stage_error', { stage });
+    const lastSuccess = (stage: string) => gauge('agent_task_watchdog_stage_last_success_seconds', { stage });
+
+    it('모든 단계가 성공하면 단계별 오류 0, 마지막 성공 시각(초)을 남긴다', async () => {
+        const before = Date.now() / 1000;
+        await runWatchdogTick();
+        for (const s of STAGES) {
+            expect(stageError(s)).toBe(0);
+            expect(lastSuccess(s)).toBeGreaterThanOrEqual(Math.floor(before));
+        }
+    });
+
+    it('조회 실패는 오류 1 — 그 단계의 알려진 값은 0 으로 덮지 않고 마지막 성공 시각도 갱신하지 않는다', async () => {
+        listStaleRunningTasks.mockRejectedValue(new Error('db down'));
+        summarizeParkedByReason.mockRejectedValue(new Error('db down'));
+        countActiveAgentTasksByStatus.mockRejectedValue(new Error('db down'));
+        await runWatchdogTick();
+        for (const s of ['stale', 'model_wait', 'status_count']) {
+            expect(stageError(s)).toBe(1);
+            expect(lastSuccess(s)).toBeUndefined();
+        }
+        expect(stageError('queue')).toBe(0);
+        expect(gauge('agent_task_stale_running')).toBeUndefined();
+        expect(gauge('agent_task_model_wait_parked')).toBeUndefined();
+        expect(setGauge.mock.calls.filter((c) => c[0] === 'agent_task_status_count')).toHaveLength(0);
+    });
+
+    it('실패 뒤 회복하면 최신 값으로 갱신하고 오류를 0 으로 되돌린다', async () => {
+        listStaleRunningTasks.mockRejectedValueOnce(new Error('db down'));
+        await runWatchdogTick();
+        expect(stageError('stale')).toBe(1);
+        setGauge.mockClear();
+        listStaleRunningTasks.mockResolvedValue([]);
+        await runWatchdogTick();
+        expect(stageError('stale')).toBe(0);
+        expect(gauge('agent_task_stale_running')).toBe(0);
+        expect(lastSuccess('stale')).toBeDefined();
+    });
+});
+
+describe('runWatchdogTick — 해소 알림(#1478)', () => {
+    beforeEach(async () => {
+        await runWatchdogTick(); // 앞 테스트가 남긴 경고 기억을 정상 tick 으로 비운다
+        jest.clearAllMocks();
+    });
+    const resolvedOf = (type: string) => alertsOf(`${type}_resolved`);
+
+    it('처음부터 정상이고 정상이 반복되면 해소 알림은 없다', async () => {
+        await runWatchdogTick();
+        await runWatchdogTick();
+        expect(sendAgentTaskAlert.mock.calls.filter((c) => String(c[0]).endsWith('_resolved'))).toHaveLength(0);
+    });
+
+    it('멈춤 → 정상 전이에 해소 1건, 이후 정상 tick 은 더 보내지 않는다', async () => {
+        listStaleRunningTasks.mockResolvedValueOnce([stale('a', 30 * MIN)]);
+        await runWatchdogTick();
+        expect(alertsOf('agent_task_stale')).toHaveLength(1);
+        await runWatchdogTick();
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_stale')).toHaveLength(1);
+        expect(resolvedOf('agent_task_stale')[0][1]).toBe(ALERT_TEXT.agent_task_stale_resolved.title);
+    });
+
+    it('조회 실패는 해소가 아니다 — 경고 기억을 지우지 않고, 다음 성공 정상 tick 에서 해소 1건', async () => {
+        listStaleRunningTasks.mockResolvedValueOnce([stale('a', 30 * MIN)]);
+        await runWatchdogTick();
+        listStaleRunningTasks.mockRejectedValueOnce(new Error('db down'));
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_stale')).toHaveLength(0);
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_stale')).toHaveLength(1);
+    });
+
+    it('두 번 멈췄다 두 번 회복하면 전이마다 해소 1건씩', async () => {
+        listStaleRunningTasks.mockResolvedValueOnce([stale('a', 30 * MIN)]);
+        await runWatchdogTick();
+        await runWatchdogTick();
+        listStaleRunningTasks.mockResolvedValueOnce([stale('b', 30 * MIN)]);
+        await runWatchdogTick();
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_stale')).toHaveLength(2);
+    });
+
+    it('대기열 적체 → 정상 전이에 해소 1건(현재 값을 싣는다)', async () => {
+        stats.mockReturnValueOnce({ globalActive: 4, pending: 25, wait: { oldestPendingMs: 1000 } });
+        await runWatchdogTick();
+        stats.mockReturnValue({ globalActive: 1, pending: 2, wait: { oldestPendingMs: 500 } });
+        await runWatchdogTick();
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_queue_backlog')).toHaveLength(1);
+        expect(resolvedOf('agent_task_queue_backlog')[0][3]).toEqual({ pending: 2, active: 1, oldestWaitMs: 500 });
+    });
+
+    it('모델 대기 장기화 → 정상 전이에 해소 1건, 집계 실패 tick 은 해소가 아니다', async () => {
+        summarizeParkedByReason.mockResolvedValueOnce({ count: 2, longCount: 1, oldest: [{ id: 'm1', waited_ms: 40 * MIN }] });
+        await runWatchdogTick();
+        summarizeParkedByReason.mockRejectedValueOnce(new Error('db down'));
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_model_wait_long')).toHaveLength(0);
+        summarizeParkedByReason.mockResolvedValueOnce({ count: 1, longCount: 0, oldest: [{ id: 'm2', waited_ms: MIN }] });
+        await runWatchdogTick();
+        expect(resolvedOf('agent_task_model_wait_long')).toHaveLength(1);
+        expect(resolvedOf('agent_task_model_wait_long')[0][3]).toEqual({ parked: 1, thresholdMs: 1_800_000 });
     });
 });

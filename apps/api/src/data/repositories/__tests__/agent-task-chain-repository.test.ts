@@ -6,7 +6,7 @@
 import type { Pool } from 'pg';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { AgentTaskChainRepository } from '../agent-task-chain-repository';
+import { AgentTaskChainRepository, CLAIM_CONTINUATION_SQL } from '../agent-task-chain-repository';
 
 function fakePool(rowCount = 1) {
     const calls: Array<{ sql: string; params: unknown[] }> = [];
@@ -17,18 +17,11 @@ function fakePool(rowCount = 1) {
 const MIGRATIONS = join(__dirname, '../../../../../../db/migrations');
 const MIGRATION = join(MIGRATIONS, '188_agent_task_chain.sql');
 
-describe('AgentTaskChainRepository.claimContinuation — 선점 후 INSERT 순서', () => {
-    it('선점은 아직 없는 후속 id 를 적는 조건부 UPDATE 하나다(후속 행을 만들지 않는다)', async () => {
-        const { pool, calls } = fakePool(1);
-        expect(await new AgentTaskChainRepository(pool).claimContinuation('t1', 'succ-not-inserted-yet')).toBe(true);
-        expect(calls).toHaveLength(1);
-        expect(calls[0].sql).toMatch(/^UPDATE agent_tasks SET continued_by_task_id = \$2 WHERE id = \$1 AND continued_by_task_id IS NULL$/);
-        expect(calls[0].sql).not.toMatch(/INSERT/i);
-        expect(calls[0].params).toEqual(['t1', 'succ-not-inserted-yet']);
-    });
-    it('다른 실행이 먼저 선점했으면 false', async () => {
-        const { pool } = fakePool(0);
-        expect(await new AgentTaskChainRepository(pool).claimContinuation('t1', 's')).toBe(false);
+describe('CLAIM_CONTINUATION_SQL — 선점 후 INSERT 순서', () => {
+    // 선점은 같은 트랜잭션의 후속 INSERT 보다 먼저 도는 조건부 UPDATE 다(AgentTaskRepository.createContinuationSuccessor, #1473)
+    it('선점은 아직 없는 후속 id 를 적는 조건부 UPDATE 하나다(후속 행을 만들지 않는다)', () => {
+        expect(CLAIM_CONTINUATION_SQL).toMatch(/^UPDATE agent_tasks SET continued_by_task_id = \$2 WHERE id = \$1 AND continued_by_task_id IS NULL$/);
+        expect(CLAIM_CONTINUATION_SQL).not.toMatch(/INSERT/i);
     });
 });
 

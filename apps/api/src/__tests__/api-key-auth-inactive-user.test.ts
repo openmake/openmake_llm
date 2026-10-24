@@ -15,6 +15,8 @@ jest.mock('../data/models/unified-database', () => ({
         recordApiKeyUsage: mockRecordApiKeyUsage,
     }),
 }));
+const mockLogAudit = jest.fn(async (..._a: unknown[]) => undefined);
+jest.mock('../services/AuditService', () => ({ getAuditService: () => ({ logAudit: (...a: unknown[]) => mockLogAudit(...a) }) }));
 jest.mock('../auth/api-key-utils', () => ({
     API_KEY_PREFIX: 'omk_live_',
     isValidApiKeyFormat: () => true,
@@ -102,5 +104,41 @@ describe('requireApiKey — 키 소유자 활성 확인', () => {
         expect(res.status).not.toHaveBeenCalled();
         expect(mockGetUserById).toHaveBeenCalledTimes(1);
         expect(req.user).toEqual(expect.objectContaining({ id: 'u-1', userId: 'u-1', is_active: true }));
+    });
+});
+
+describe('requireApiKey — 비활성 소유자 거부 감사(#1475)', () => {
+    beforeEach(() => mockLogAudit.mockReset().mockImplementation(async () => undefined));
+
+    it('비활성 소유자 거부는 응답 그대로 그 소유자로 security.authz_denied 를 한 번 남기고 키 값은 넣지 않는다', async () => {
+        mockGetUserById.mockResolvedValue({ ...ACTIVE_USER, is_active: false });
+        const res = makeRes();
+        const next = jest.fn();
+        await requireApiKey(makeReq(), res, next);
+        await flush(); await flush();
+        expectRejected(res, next);
+        expect(mockLogAudit).toHaveBeenCalledTimes(1);
+        expect(mockLogAudit.mock.calls[0][0]).toEqual(expect.objectContaining({
+            action: 'security.authz_denied', userId: 'u-1', resourceType: 'http',
+            details: expect.objectContaining({ reason: 'inactive_account', status: 401, apiKeyId: 'key-1' }),
+        }));
+        expect(JSON.stringify(mockLogAudit.mock.calls)).not.toContain('omk_live_sk_test');
+    });
+
+    it('소유자 행이 없는 401 은 비활성 계정 감사 대상이 아니다', async () => {
+        mockGetUserById.mockResolvedValue(undefined);
+        await requireApiKey(makeReq(), makeRes(), jest.fn());
+        await flush(); await flush();
+        expect(mockLogAudit).not.toHaveBeenCalled();
+    });
+
+    it('감사 저장이 실패해도 401 응답은 그대로다', async () => {
+        mockLogAudit.mockImplementation(async () => { throw new Error('db down'); });
+        mockGetUserById.mockResolvedValue({ ...ACTIVE_USER, is_active: false });
+        const res = makeRes();
+        const next = jest.fn();
+        await requireApiKey(makeReq(), res, next);
+        await flush(); await flush();
+        expectRejected(res, next);
     });
 });

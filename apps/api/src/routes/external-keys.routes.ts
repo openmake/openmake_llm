@@ -33,6 +33,7 @@ import {
 } from '../config/external-providers';
 import { validateOutboundUrl } from '../security/ssrf-guard';
 import { auditSecurityEvent, isSsrfBlockedError } from '../security/security-audit';
+import { auditUrlHost } from '../security/url-host';
 import { OpenAICompatProvider } from '../providers/openai-compat-provider';
 import {
     createExternalProviderInstance,
@@ -69,11 +70,6 @@ function getUserId(req: Request): string | null {
         return String((req.user as { id: unknown }).id);
     }
     return null;
-}
-
-/** 감사 기록용 — base_url 의 host 만(경로·쿼리·계정 제외), 파싱 실패는 'invalid'. */
-function baseUrlHost(raw: string): string {
-    try { return new URL(raw).host; } catch { return 'invalid'; }
 }
 
 const upsertKeySchema = z.object({
@@ -178,7 +174,7 @@ router.post('/:providerId',
                 // SSRF 가드 차단만 감사 — DNS 실패 등은 400 만(web-scraper-tools 와 같은 기준).
                 if (isSsrfBlockedError(err)) {
                     void auditSecurityEvent({
-                        action: 'security.ssrf_blocked', userId, resourceType: 'url', resourceId: baseUrlHost(req.body.base_url),
+                        action: 'security.ssrf_blocked', userId, resourceType: 'url', resourceId: auditUrlHost(req.body.base_url),
                         details: { target: 'external_key', providerId, reason: msg }, ipAddress: req.ip, userAgent: req.get('user-agent'),
                     });
                 }
