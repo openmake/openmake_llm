@@ -123,6 +123,27 @@ export class MigrationRunner {
             return { applied, skipped };
         }
 
+        // 마이그레이션 SQL 의 RAISE NOTICE(데이터 정리 건수 등)를 서버 로그로 옮긴다 — 값·키는 SQL 쪽에서 싣지 않는다.
+        const onNotice = (msg: { message?: string }) => logger.info(`migration notice: ${msg.message ?? ''}`);
+        const canListen = typeof client.on === 'function';
+        if (canListen) client.on('notice', onNotice);
+        try {
+            await this.applyEach(client, migrationFiles, appliedVersions, applied, skipped);
+        } finally {
+            if (canListen) client.removeListener('notice', onNotice);
+        }
+
+        logger.info(`Migration run complete. Applied: ${applied.length}, Skipped: ${skipped.length}`);
+        return { applied, skipped };
+    }
+
+    private async applyEach(
+        client: PoolClient,
+        migrationFiles: MigrationFile[],
+        appliedVersions: Set<string>,
+        applied: string[],
+        skipped: string[],
+    ): Promise<void> {
         for (const migration of migrationFiles) {
             if (appliedVersions.has(migration.version)) {
                 skipped.push(migration.filename);
@@ -151,9 +172,6 @@ export class MigrationRunner {
                 throw error;
             }
         }
-
-        logger.info(`Migration run complete. Applied: ${applied.length}, Skipped: ${skipped.length}`);
-        return { applied, skipped };
     }
 
     async status(): Promise<MigrationStatus[]> {
