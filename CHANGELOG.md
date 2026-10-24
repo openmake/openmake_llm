@@ -1,5 +1,55 @@
 # Changelog
 
+## [1.115.0](https://github.com/openmake/openmake_llm/compare/v1.114.0...v1.115.0) (2026-10-24)
+
+
+### ✨ 기능
+
+* **agent-task:** send one resolved alert per watchdog recovery ([de723bf](https://github.com/openmake/openmake_llm/commit/de723bf34beb3c30bff78d8e9c140d8277638177)), closes [#1478](https://github.com/openmake/openmake_llm/issues/1478)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** authorize chat subagent tool calls by exposure and parent policy ([f8c8a9f](https://github.com/openmake/openmake_llm/commit/f8c8a9fa77163b1f6fb941f854a267c6869362f1)), closes [#1469](https://github.com/openmake/openmake_llm/issues/1469)
+* **agent-task:** count parked model waits with a DB aggregate ([4dc00ec](https://github.com/openmake/openmake_llm/commit/4dc00ec927172580071c1beab128fba81aa38db4)), closes [#1478](https://github.com/openmake/openmake_llm/issues/1478)
+* **agent-task:** drain unleased successor recovery against a fixed startup cutoff ([a113849](https://github.com/openmake/openmake_llm/commit/a113849520a8755a76a56bdfe736c11ce7d1668b))
+* **agent-task:** enforce approval for legacy host tools ([50521c2](https://github.com/openmake/openmake_llm/commit/50521c29c417838ff2af15fd46d11f22f04ab3b0)), closes [#1469](https://github.com/openmake/openmake_llm/issues/1469)
+* **agent-task:** hide statically denied tools under none policy ([04f3da6](https://github.com/openmake/openmake_llm/commit/04f3da65aa27af88fa2bfb6fe5de7786a0216d4e)), closes [#1470](https://github.com/openmake/openmake_llm/issues/1470)
+* **agent-task:** persist prepared successors atomically with lease ownership ([590f867](https://github.com/openmake/openmake_llm/commit/590f867d6ed0de8ad117ca2149b60fbd3261795f))
+* **agent-task:** recover unleased continuation successors on boot ([913b792](https://github.com/openmake/openmake_llm/commit/913b79230076c66429e203500855139f39277e55))
+* **agent-task:** skip overlapping watchdog ticks and expose stage failures ([1d79778](https://github.com/openmake/openmake_llm/commit/1d797785870e1edd47f7db347306cd735b887087)), closes [#1478](https://github.com/openmake/openmake_llm/issues/1478)
+* **agent-task:** start readiness grace when background loops register ([8bb1005](https://github.com/openmake/openmake_llm/commit/8bb10054cde1ecbab87683587e119afb5d32fbe5)), closes [#1478](https://github.com/openmake/openmake_llm/issues/1478)
+* **agent-task:** start the agent_task.run span from ROOT_CONTEXT ([df54fe9](https://github.com/openmake/openmake_llm/commit/df54fe9a155e951507463af96c917e8b00c19cf2)), closes [#1478](https://github.com/openmake/openmake_llm/issues/1478)
+* **agent-task:** treat an ambiguous successor commit by re-reading the parent link ([8320404](https://github.com/openmake/openmake_llm/commit/8320404efa5cfa257084621ebc7adb2a73c0c943))
+* **audit:** contain persistence failures and bound nested metadata ([2ad5abe](https://github.com/openmake/openmake_llm/commit/2ad5abe3222309d1c33674848c441739d7e54a98)), closes [#1476](https://github.com/openmake/openmake_llm/issues/1476)
+* **audit:** cover direct authorization rejection paths ([b219945](https://github.com/openmake/openmake_llm/commit/b219945dd60e26fdd5ef6d97d8e15175866a1e08)), closes [#1475](https://github.com/openmake/openmake_llm/issues/1475)
+* **chat:** carry the taint boundary across chat subagent delegation ([f60a214](https://github.com/openmake/openmake_llm/commit/f60a2143df6eb86f97ebd7dacbc6232fcf5c782f)), closes [#1469](https://github.com/openmake/openmake_llm/issues/1469)
+* **chat:** keep the approval floor under chat policy none ([fdc2ea3](https://github.com/openmake/openmake_llm/commit/fdc2ea3cf34f9bd57e7fc757765cce13a76cec01)), closes [#1469](https://github.com/openmake/openmake_llm/issues/1469)
+* **chat:** limit planner failure explanations to media requests ([b72fe91](https://github.com/openmake/openmake_llm/commit/b72fe913b6a8f875ddc10e825b9f71676c0a564e))
+* **chat:** stop every cancelled tool branch and drop error output from research evidence ([cc900fb](https://github.com/openmake/openmake_llm/commit/cc900fbb10d31b751f97ca8218c118b958cd3837))
+* **ci:** count type-only declarations inside declare module blocks ([2a7132f](https://github.com/openmake/openmake_llm/commit/2a7132f904557aa28e1bee0d239a83abfc58c173))
+* **ci:** include the TypeScript version in the extractor cache key ([6a69a54](https://github.com/openmake/openmake_llm/commit/6a69a54a3f865a1ab77aa8ba76e51b71f35ae4dd))
+* **ci:** parse type-only declarations with TypeScript instead of regex ([08405e5](https://github.com/openmake/openmake_llm/commit/08405e5297c4d0c6faaacb04a5cd0ad522237516))
+* **ci:** select consumer tests for type-only dependency changes ([c0a5432](https://github.com/openmake/openmake_llm/commit/c0a5432e9c06aaa63c1f53d8ebcd9bcd8b412866))
+* **deps:** patch vulnerable request parsers and kordoc validation ([92294c7](https://github.com/openmake/openmake_llm/commit/92294c7d1dd7ea5e643ae946a23feb7348eeb389))
+* integrate cancellation, approval-floor, audit and watchdog follow-ups ([fdcebc9](https://github.com/openmake/openmake_llm/commit/fdcebc900bb8994a7ebc5092a2bfedccd33607c2))
+* **mcp:** block git control environment overrides ([520d9df](https://github.com/openmake/openmake_llm/commit/520d9df2d86a276e8e1e7c7c56d586c0e87eb2b0)), closes [#1471](https://github.com/openmake/openmake_llm/issues/1471)
+* **mcp:** recheck caller cancellation after every awaited tool boundary ([a47448c](https://github.com/openmake/openmake_llm/commit/a47448c621bcd7cf57d64d5df4addb463f423093))
+* **mcp:** reject control env keys before saving manual and git-ingest servers ([eca79b4](https://github.com/openmake/openmake_llm/commit/eca79b40cea5cf5c3cfedbf0b296bd0ded5bb237)), closes [#1471](https://github.com/openmake/openmake_llm/issues/1471)
+* **mcp:** separate cancellation from tool faults and clean timeouts ([53d7174](https://github.com/openmake/openmake_llm/commit/53d7174796c7e9858a12f8e04df8203df02c0b33))
+* **metrics:** assign collision-free exported family names deterministically ([17762fa](https://github.com/openmake/openmake_llm/commit/17762fa45b30c3d1c4e9869bf88b0856025120f6)), closes [#1477](https://github.com/openmake/openmake_llm/issues/1477)
+* **metrics:** keep exported names unique and rate limit scrapes ([6db05f0](https://github.com/openmake/openmake_llm/commit/6db05f03655027e170f7b16e682d50e73935ebd3))
+* **metrics:** rate limit /metrics scrapes per IP before auth ([d5128ef](https://github.com/openmake/openmake_llm/commit/d5128ef2586fa5d32cb1aa5e26369df3e45769a2)), closes [#1477](https://github.com/openmake/openmake_llm/issues/1477)
+* **omk:** report stalled background loops in /ready smoke failures ([2855e61](https://github.com/openmake/openmake_llm/commit/2855e61b887c66e91ac9b91793f772e6daad70da)), closes [#1478](https://github.com/openmake/openmake_llm/issues/1478)
+* **runtime:** propagate cancellation through chat research and MCP meta calls ([67b6021](https://github.com/openmake/openmake_llm/commit/67b602132cb9ae550b2f5ce6941eebfaeb43e39a))
+* **watchdog:** detect stale pending tasks without a live lease ([db52999](https://github.com/openmake/openmake_llm/commit/db52999d4ed73090d40d01b977ace14658b41f6c))
+* **watchdog:** detect stale pending tasks without a live lease ([bae3797](https://github.com/openmake/openmake_llm/commit/bae3797cfd5b864e566e65014600498802eed5dc)), closes [#1478](https://github.com/openmake/openmake_llm/issues/1478)
+
+
+### ♻️ 리팩터링
+
+* **agent-task:** pass the pool to withTransaction without a cast ([4c04ae9](https://github.com/openmake/openmake_llm/commit/4c04ae9021e2e5b9b1819f7bbcc8a174092fb528))
+
 ## [1.114.0](https://github.com/openmake/openmake_llm/compare/v1.113.0...v1.114.0) (2026-10-23)
 
 
