@@ -271,6 +271,10 @@ export class ChatRequestHandler {
         // 다음 턴 history 로 재전송돼 토큰까지 낭비된다.
         await saveUserMessage(currentSessionId, auditUserId, userFacingMessage, maskedModel, persistContent, params.clientRequestId);
 
+        // 저장 대기 중 중단됐으면 늦은 세션 알림·모델 실행 없이 기존 ABORTED 경로로 끝낸다.
+        if (abortSignal?.aborted) throw new Error('ABORTED');
+        params.onSessionReady?.(currentSessionId);
+
         const startTime = Date.now();
 
         // ═══════════════════════════════════════════════════════

@@ -307,6 +307,13 @@ export async function handleChatMessage(
             userContext,
             clusterManager: cluster,
             abortSignal: abortController.signal,
+            // WS 고유: 새 세션 생성 알림 — 사용자 메시지 저장 직후(모델 응답 전)에 보낸다.
+            // 응답 완료 뒤에만 보내면 그 전에 중단한 첫 턴의 다음 전송이 새 세션으로 갈라진다.
+            onSessionReady: (readySessionId) => {
+                if (validSessionId) return;
+                validSessionId = readySessionId;
+                out({ type: 'session_created', sessionId: readySessionId });
+            },
             onToken: tokenCallback,
             onThinking: (thinking) => {
                 if (abortController.signal.aborted) throw new Error('ABORTED');
@@ -364,11 +371,6 @@ export async function handleChatMessage(
                 });
             },
         });
-
-        // WS 고유: 새 세션 생성 알림
-        if (!validSessionId) {
-            out({ type: 'session_created', sessionId: result.sessionId });
-        }
 
         // 이번 턴의 새 첨부 컨텍스트를 세션 캐시에 누적 — 첫 턴은 result.sessionId 로
         // 새 세션 ID 확보 후 저장. saveHistory=false 면 서버 보관 자체를 생략 (프라이버시).
@@ -430,8 +432,8 @@ export async function handleChatMessage(
         });
 
     } catch (error: unknown) {
-        // 중단 컨트롤러 정리
-        extWs._abortController = null;
+        // 중단 컨트롤러 정리 — 자기 것일 때만(중단 뒤 시작한 다음 요청의 컨트롤러를 지우지 않는다)
+        if (extWs._abortController === abortController) extWs._abortController = null;
 
         // 중단된 경우
         if (error instanceof Error && error.message === 'ABORTED') {
@@ -474,8 +476,8 @@ export async function handleChatMessage(
             selectedModel, tokenCount, partialAssistantResponse,
         });
     } finally {
-        // 중단 컨트롤러 정리 + 레지스트리 정리(detach 로 끝났으면 결과 스냅샷 보존)
-        extWs._abortController = null;
+        // 중단 컨트롤러 정리(자기 것일 때만) + 레지스트리 정리(detach 로 끝났으면 결과 스냅샷 보존)
+        if (extWs._abortController === abortController) extWs._abortController = null;
         if (streamEntry) streamRegistry.close(streamEntry);
 
         // Phase 7 lifecycle hook — per_chat MCP 서버 graceful kill.

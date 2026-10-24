@@ -133,6 +133,23 @@ describe('InFlightStreamRegistry', () => {
         expect(reg.size).toBe(0);
     });
 
+    it('토큰 전 조기 session_created 는 재부착 스냅샷에 남고, 명시 abort 뒤 새 소켓엔 이전 id 가 가지 않는다', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096);
+        const ws1 = fakeWs();
+        const entry = reg.open('u:u1', ws1, new AbortController());
+        reg.send(entry, { type: 'session_created', sessionId: 's-early' });
+        expect(reg.detach(ws1)).toBe(true);
+
+        const ws2 = fakeWs();
+        expect(reg.attach('u:u1', ws2)).toBe(true);
+        expect(plain(ws2.sent[0])).toMatchObject({ type: 'stream_resume', sessionId: 's-early', content: '' });
+
+        expect(reg.abortByWs(ws2)).toBe(true);
+        const ws3 = fakeWs();
+        expect(reg.attach('u:u1', ws3)).toBe(false);
+        expect(ws3.sent).toEqual([]);
+    });
+
     it('링 바이트 상한을 넘으면 오래된 이벤트부터 밀어내고 종료 이벤트는 남긴다 — 재생 범위와 겹치면 gap', () => {
         const reg = new InFlightStreamRegistry(1000, 500, 260);
         const ws = fakeWs();
