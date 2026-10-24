@@ -15,6 +15,7 @@ import { performWebSearch } from './search-orchestrator';
 import { memoizedWebSearch } from './search-memo';
 import { formatSearchSources, toSourceRefs } from './format-sources';
 import { registerPageSource } from './page-source';
+import { describeFetchError } from './providers';
 
 /**
  * 웹 검색 MCP 도구 (web_search)
@@ -121,7 +122,8 @@ export const extractWebpageTool: MCPToolDefinition = {
             if (pageSource) return { content: [{ type: 'text', text: `${pageSource.header}\n\n${content}` }], sources: pageSource.sources };
             return { content: [{ type: 'text', text: content }] };
         } catch (e) {
-            return { content: [{ type: 'text', text: `오류: ${e}` }], isError: true };
+            // undici 의 진짜 원인(error.cause)을 남긴다 — `TypeError: fetch failed` 만으로는 모델이 재시도·대체를 판단할 수 없다
+            return { content: [{ type: 'text', text: `오류: ${describeFetchError(e)}` }], isError: true };
         }
     }
 };
