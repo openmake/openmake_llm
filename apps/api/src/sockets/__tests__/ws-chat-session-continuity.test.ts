@@ -10,6 +10,7 @@ const mockEnsureSession = jest.fn();
 const mockSaveUser = jest.fn();
 const mockSaveAssistant = jest.fn();
 const mockProcessMessage = jest.fn();
+const mockEnqueueDebugCapture = jest.fn();
 
 jest.mock('../../chat/request-persistence', () => ({
     ensureSession: (...a: unknown[]) => mockEnsureSession(...a),
@@ -33,7 +34,9 @@ jest.mock('../../chat/slash-command', () => ({
 }));
 jest.mock('../../chat/model-selector', () => ({ selectOptimalModel: async () => ({ model: 'm1', reason: '' }) }));
 jest.mock('../../services/chat-service/answer-verifier', () => ({ dispatchAnswerVerification: () => undefined }));
-jest.mock('../../data/conversation-debug-queue', () => ({ enqueueDebugCapture: async () => null, DEBUG_QUEUE_TTL_MS: { 'auto-error': 1 } }));
+jest.mock('../../data/conversation-debug-queue', () => ({
+    enqueueDebugCapture: (...a: unknown[]) => mockEnqueueDebugCapture(...a), DEBUG_QUEUE_TTL_MS: { 'auto-error': 1 },
+}));
 jest.mock('../../runtime-ports/tool-runtime', () => ({ getToolRuntime: () => ({ onChatStart: async () => undefined, onChatEnd: async () => undefined }) }));
 jest.mock('../../llm', () => ({ createClient: () => ({ model: 'engine-m' }) }));
 jest.mock('../../chat/profile-resolver', () => ({ buildExecutionPlan: () => ({ resolvedEngine: 'engine-m' }) }));
@@ -90,7 +93,7 @@ const sessionEvents = (sent: Sent) => sent.filter((e) => e.type === 'session_cre
 let created = 0;
 beforeEach(() => {
     jest.clearAllMocks();
-    [mockEnsureSession, mockSaveUser, mockSaveAssistant, mockProcessMessage].forEach((m) => m.mockReset()); // Once 큐가 다음 테스트로 새지 않게
+    [mockEnsureSession, mockSaveUser, mockSaveAssistant, mockProcessMessage, mockEnqueueDebugCapture].forEach((m) => m.mockReset()); // Once 큐가 다음 테스트로 새지 않게
     created = 0;
     mockEnsureSession.mockImplementation(async (sid?: string, userId?: string | null) => {
         if (sid) return sid;
@@ -99,6 +102,7 @@ beforeEach(() => {
     });
     mockSaveUser.mockResolvedValue(undefined);
     mockSaveAssistant.mockResolvedValue('msg-1');
+    mockEnqueueDebugCapture.mockResolvedValue(null);
 });
 
 describe('WS 첫 턴 세션 연속성', () => {
@@ -201,15 +205,55 @@ describe('WS 첫 턴 세션 연속성', () => {
         expect(controllerB?.signal.aborted).toBe(true);
     });
 
-    it('첫 턴이 id 를 받은 뒤 스트림 도중 실패하면 부분 응답을 그 새 세션에 남긴다', async () => {
+    // 기존 오류 보존 정책(partial 저장·debug capture)은 **입력 세션** 기준 그대로다 — 조기 session_created 가 넓히지 않는다.
+    const EXISTING = 's-existing-0001';
+    async function failTurn(opts: { existing: boolean; saveHistory: boolean; error: string; token: boolean }) {
         const s = socket();
         mockProcessMessage.mockImplementationOnce(async (_req: ChatReq, onToken: (t: string) => void) => {
-            onToken('부분 답');
-            throw new Error('upstream broke');
+            if (opts.token) onToken('부분 답');
+            throw new Error(opts.error);
         });
-        await chat(s, { message: '질문' });
-        expect(mockSaveAssistant).toHaveBeenCalledTimes(1);
-        expect(mockSaveAssistant.mock.calls[0][0]).toBe('s-guest-0001');
-        expect(String(mockSaveAssistant.mock.calls[0][2])).toContain('부분 답');
+        await chat(s, { message: '질문', saveHistory: opts.saveHistory, ...(opts.existing ? { sessionId: EXISTING } : {}) } as Partial<WSMessage>);
+        await flush();
+        expect(mockProcessMessage).toHaveBeenCalledTimes(1);
+        expect(sessionEvents(s.sent)).toHaveLength(opts.existing ? 0 : 1); // 신규는 오류 전에 조기 알림 1회
+        return s;
+    }
+
+    it.each([
+        // [입력 세션, saveHistory, 종료, partial 저장, debug capture]
+        ['신규', true, 'upstream broke', 0, 0],
+        ['신규', false, 'upstream broke', 0, 0],
+        ['기존', true, 'upstream broke', 1, 1],
+        ['기존', false, 'upstream broke', 0, 1],
+        ['신규', true, 'ABORTED', 0, 0],
+        ['신규', false, 'ABORTED', 0, 0],
+        ['기존', true, 'ABORTED', 0, 0],
+        ['기존', false, 'ABORTED', 0, 0],
+    ] as const)('preserves_error_retention_policy: %s 세션 saveHistory=%s %s → partial %i·debug %i', async (kind, saveHistory, error, partial, debug) => {
+        await failTurn({ existing: kind === '기존', saveHistory, error, token: true });
+        expect(mockSaveAssistant).toHaveBeenCalledTimes(partial);
+        expect(mockEnqueueDebugCapture).toHaveBeenCalledTimes(debug);
+        if (partial) {
+            expect(mockSaveAssistant.mock.calls[0][0]).toBe(EXISTING);
+            expect(String(mockSaveAssistant.mock.calls[0][2])).toContain('부분 답');
+        }
+        if (debug) {
+            expect(mockEnqueueDebugCapture.mock.calls[0][0]).toMatchObject({ sessionId: EXISTING, userMessage: '질문', assistantMessage: '부분 답' });
+        }
+    });
+
+    it.each([
+        ['신규', true, 0],
+        ['신규', false, 0],
+        ['기존', true, 1],
+        ['기존', false, 1],
+    ] as const)('preserves_debug_policy_without_tokens: %s 세션 saveHistory=%s 일반 오류 → partial 0·debug %i', async (kind, saveHistory, debug) => {
+        await failTurn({ existing: kind === '기존', saveHistory, error: 'upstream broke', token: false });
+        expect(mockSaveAssistant).not.toHaveBeenCalled();
+        expect(mockEnqueueDebugCapture).toHaveBeenCalledTimes(debug);
+        if (debug) {
+            expect(mockEnqueueDebugCapture.mock.calls[0][0]).toMatchObject({ sessionId: EXISTING, userMessage: '질문', assistantMessage: '' });
+        }
     });
 });
