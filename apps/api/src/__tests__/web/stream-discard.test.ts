@@ -34,4 +34,16 @@ describe('stream-discard', () => {
         const s = discardOnReset(EMPTY_DISCARD, true, 's1');
         expect(filterStreamEvent(s, undefined).drop).toBe(false);
     });
+    it('조기 session_created 를 보낸 옛 스트림은 새 대화 전환 뒤 그 이벤트를 모두 버리고 새 요청 스트림은 받는다', () => {
+        // 이미 받은 경우: 옛 스트림 s1 의 session_created 가 도착한 뒤 지움
+        const after = discardOnSend(discardOnReset(EMPTY_DISCARD, true, 's1'));
+        expect(filterStreamEvent(after, 's1').drop).toBe(true);
+        expect(filterStreamEvent(after, 's2').drop).toBe(false);
+        // 아직 못 받은 경우: 첫 이벤트(session_created) 전에 지움 → 그 스트림의 session_created 부터 버린다
+        const first = filterStreamEvent(discardOnReset(EMPTY_DISCARD, true, null), 's1');
+        expect(first.drop).toBe(true);
+        const next = discardOnSend(first.state);
+        expect(filterStreamEvent(next, 's1').drop).toBe(true);
+        expect(filterStreamEvent(next, 's2').drop).toBe(false);
+    });
 });
