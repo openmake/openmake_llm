@@ -1,12 +1,13 @@
 /**
  * 에이전트 작업 마지막 진행 시각(191, R8) — 진행 추적기가 모은 시각을 쓰고, watchdog 이 멈춘 실행 중 작업을 찾는다.
- * watchdog 의 주차 사유별 집계(#1478)도 여기 둔다 — 목록 상한 없이 DB 가 센다.
+ * watchdog 의 주차 사유별 집계·오래된 pending 집계(#1478)도 여기 둔다 — 목록 상한 없이 DB 가 센다.
  * agent-task-repository 가 파일 크기 한계에 닿아 따로 둔다. 191 미적용(컬럼 없음, 42703)이면 한 번만 경고하고 건너뛴다.
  *
  * @module data/repositories/agent-task-progress-repository
  */
 import { BaseRepository } from './base-repository';
 import { parkedTaskCondition } from './agent-task-repository';
+import { expiredLeaseSql } from './agent-task-lease-repository';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskProgressRepo');
@@ -16,6 +17,9 @@ export interface StaleTaskRow { id: string; user_id: string; current_turn: numbe
 
 /** 주차 사유별 집계 — count·longCount 는 조건에 맞는 전체 행, oldest 는 가장 오래 기다린 순(같은 시각이면 id 순) 표본 */
 export interface ParkedReasonStats { count: number; longCount: number; oldest: Array<{ id: string; waited_ms: number }> }
+
+/** 오래된 pending 집계 — count·oldestStalledMs 는 조건에 맞는 전체 행, taskIds 는 가장 오래 멈춘 순(같은 시각이면 id 순) 표본 */
+export interface StalePendingStats { count: number; oldestStalledMs: number; taskIds: string[] }
 
 let columnMissingWarned = false;
 /** 컬럼 없음(42703)이면 한 번만 경고하고 true — 호출부는 건너뛴다 */
@@ -85,5 +89,30 @@ export class AgentTaskProgressRepository extends BaseRepository {
             [reason, longMs, sampleLimit]);
         const row = r.rows[0];
         return { count: row.count, longCount: row.long_count, oldest: row.oldest.map((o) => ({ id: o.id, waited_ms: Number(o.waited_ms) })) };
+    }
+
+    /**
+     * 최근 활동이 staleMs 보다 오래된 pending 전체의 집계(#1478) — 소유권이 없거나(NULL) 지난 것만. 살아 있는 소유권(lease_until >= NOW())은
+     * 누군가 디스패치 중이라 뺀다 — 경계는 expiredLeaseSql 그대로. 최근 활동·주차·살아 있는 승인 대기 판정은 listStaleRunningTasks 와 같다.
+     * 읽기만 한다(claim·복구 없음). DB 오류는 삼키지 않는다 — 호출부(watchdog)가 단계 오류로 남긴다.
+     */
+    async summarizeStalePendingTasks(staleMs: number, sampleLimit: number): Promise<StalePendingStats> {
+        const r = await this.query<{ count: number; oldest_stalled_ms: string | number; task_ids: string[] }>(
+            `WITH s AS (
+                 SELECT t.id, GREATEST(COALESCE(t.last_progress_at, to_timestamp(0)), t.updated_at) AS active_at
+                   FROM agent_tasks t
+                  WHERE t.status = 'pending'
+                    AND NOT (${parkedTaskCondition('t')})
+                    AND NOT EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status = 'pending' AND a.expires_at > NOW())
+                    AND (t.lease_until IS NULL OR (${expiredLeaseSql('t.lease_until')}))
+                    AND GREATEST(COALESCE(t.last_progress_at, to_timestamp(0)), t.updated_at) < NOW() - make_interval(secs => $1 / 1000.0)
+             )
+             SELECT (SELECT COUNT(*) FROM s)::int AS count,
+                    COALESCE((SELECT (EXTRACT(EPOCH FROM (NOW() - MIN(s.active_at))) * 1000)::bigint FROM s), 0) AS oldest_stalled_ms,
+                    COALESCE((SELECT json_agg(x.id ORDER BY x.active_at ASC, x.id ASC)
+                                FROM (SELECT id, active_at FROM s ORDER BY active_at ASC, id ASC LIMIT $2) x), '[]'::json) AS task_ids`,
+            [staleMs, sampleLimit]);
+        const row = r.rows[0];
+        return { count: row.count, oldestStalledMs: Number(row.oldest_stalled_ms), taskIds: row.task_ids }; // pg 는 bigint 를 문자열로 준다
     }
 }
