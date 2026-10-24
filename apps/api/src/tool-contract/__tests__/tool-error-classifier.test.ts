@@ -44,6 +44,20 @@ describe('classifyToolError', () => {
         expect(classifyToolError('connect ECONNREFUSED 127.0.0.1:5432').retryable).toBe(true);
     });
 
+    it('fetch 실패·DNS 오류를 provider(재시도 가능)로 분류', () => {
+        for (const message of [
+            'TypeError: fetch failed',
+            'getaddrinfo ENOTFOUND nohost.example',
+            'getaddrinfo EAI_AGAIN nohost.example',
+            'connect EHOSTUNREACH 10.0.0.1:443',
+            'connect ENETUNREACH 10.0.0.1:443',
+        ]) {
+            const r = classifyToolError(message);
+            expect(r.category).toBe('provider');
+            expect(r.retryable).toBe(true);
+        }
+    });
+
     it('미매칭은 execution(비재시도) 기본값', () => {
         const r = classifyToolError('something completely unexpected happened');
         expect(r.category).toBe('execution');
