@@ -43,14 +43,27 @@ export function searchFetch(url: string, externalSignal?: AbortSignal, init?: Re
 /**
  * 검색 fetch 에러를 사람이 읽을 수 있게 기술 — timeout/abort 를 일반 실패와 구분한다.
  * (12초 fetch timeout 으로 정상 응답이 잘리는 경우를 silent 실패와 구분해 진단 가능하게 함)
+ * undici 는 `fetch failed` 만 message 에 두고 진짜 원인(ENOTFOUND·ECONNREFUSED·TLS 등)을 cause 에 담는다 —
+ * cause 의 code·message 를 괄호로 덧붙인다(중첩 cause 는 1단계만).
  */
 export function describeFetchError(e: unknown): string {
     if (e instanceof Error) {
         if (e.name === 'TimeoutError') return `timeout(${LLM_TIMEOUTS.WEB_SEARCH_FETCH_TIMEOUT_MS}ms 초과)`;
         if (e.name === 'AbortError') return '요청 중단(abort)';
-        return e.message;
+        const cause = describeErrorCause(e.cause);
+        return cause ? `${e.message} (${cause})` : e.message;
     }
     return String(e);
+}
+
+/** error.cause 1단계를 `code message` 로 — message 가 이미 code 를 담고 있으면 code 를 겹쳐 쓰지 않는다 */
+function describeErrorCause(cause: unknown): string {
+    if (!cause || typeof cause !== 'object') return '';
+    const { code, message } = cause as { code?: unknown; message?: unknown };
+    const codeText = typeof code === 'string' ? code : '';
+    const messageText = typeof message === 'string' ? message : '';
+    if (codeText && !messageText.includes(codeText)) return `${codeText} ${messageText}`.trim();
+    return messageText;
 }
 
 /**
