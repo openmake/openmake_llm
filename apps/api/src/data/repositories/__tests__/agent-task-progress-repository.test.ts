@@ -9,6 +9,7 @@ jest.mock('../../../utils/logger', () => ({
 }));
 import { AgentTaskProgressRepository } from '../agent-task-progress-repository';
 import { parkedTaskCondition } from '../agent-task-repository';
+import { expiredLeaseSql } from '../agent-task-lease-repository';
 
 const COLUMN_MISSING_WARNING = 'last_progress_at 컬럼 없음(191 미적용) — 진행 기록 생략';
 
@@ -66,5 +67,33 @@ describe('AgentTaskProgressRepository', () => {
     it('그 밖의 오류는 던진다', async () => {
         const pool = { query: jest.fn(async () => { throw Object.assign(new Error('boom'), { code: '23505' }); }) } as unknown as Pool;
         await expect(new AgentTaskProgressRepository(pool).flushProgress([{ taskId: 't1', at: new Date() }])).rejects.toThrow('boom');
+    });
+});
+
+describe('AgentTaskProgressRepository.summarizeStalePendingTasks — 오래된 pending(#1478)', () => {
+    it('한 문장의 읽기 조회 — pending·주차 아님·살아 있는 승인 대기 없음·소유권 없음 또는 지난 소유권(expiredLeaseSql 재사용)·최근 활동이 staleMs 보다 오래됨', async () => {
+        const { pool, calls } = fakePool([]);
+        await new AgentTaskProgressRepository(pool).summarizeStalePendingTasks(900_000, 5).catch(() => undefined);
+        expect(calls).toHaveLength(1);
+        const sql = calls[0].sql;
+        expect(sql).toContain("t.status = 'pending'");
+        expect(sql).toContain(parkedTaskCondition('t'));
+        expect(sql).toContain('agent_task_approvals');
+        expect(sql).toContain('expires_at > NOW()');
+        // 살아 있는 소유권 제외 — 병합된 B 의 경계를 그대로 쓴다(NULL 은 소유자 없음, < NOW() 만 지남)
+        expect(sql).toContain(`t.lease_until IS NULL OR (${expiredLeaseSql('t.lease_until')})`);
+        // 최근 활동은 실행 중 멈춤과 같은 식 — 생성 시각만으로 판단하지 않는다
+        expect(sql).toContain('GREATEST(COALESCE(t.last_progress_at, to_timestamp(0)), t.updated_at)');
+        expect(sql).not.toContain('created_at <');
+        expect(sql).not.toMatch(/\b(UPDATE|DELETE|INSERT)\b|FOR UPDATE/i);
+        // 값은 SQL 에 박지 않고 매개변수로 넘긴다
+        expect(sql).not.toContain('900000');
+        expect(calls[0].params).toEqual(expect.arrayContaining([900_000, 5]));
+    });
+
+    it('DB 오류는 빈 결과로 삼키지 않고 던진다 — 컬럼 없음(42703)도', async () => {
+        const failing = (code: string) => ({ query: jest.fn(async () => { throw Object.assign(new Error(`fail ${code}`), { code }); }) } as unknown as Pool);
+        await expect(new AgentTaskProgressRepository(failing('23505')).summarizeStalePendingTasks(900_000, 5)).rejects.toThrow('fail 23505');
+        await expect(new AgentTaskProgressRepository(failing('42703')).summarizeStalePendingTasks(900_000, 5)).rejects.toThrow('fail 42703');
     });
 });
