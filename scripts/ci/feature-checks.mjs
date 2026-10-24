@@ -87,6 +87,7 @@ export function hostSetupTests(root = repoRoot) {
   for (const file of [...portable, ...macOnly]) if (!existsSync(resolve(root, file))) throw new Error(`Missing required host setup test: ${file}`);
   return { portable, macOnly };
 }
+const DELETED_TEST_RE = /\.test\.[cm]?[jt]sx?$|\/__tests__\//;
 export function selectRelatedTests(files, options = {}) {
   const root = options.cwd || repoRoot;
   const listRelated = options.listRelated || (file => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout));
@@ -99,7 +100,9 @@ export function selectRelatedTests(files, options = {}) {
   const typeOnly = [];
   const log = options.log || (line => console.error(line));
   for (const file of selection.api) {
-    // Deleted source cannot be resolved by Jest: fail explicitly until a regression test is mapped.
+    // A deleted test file was itself the regression test — nothing to map. Deleted source cannot be resolved by Jest:
+    // fail explicitly until a regression test is mapped.
+    if (!existsSync(resolve(root, file)) && DELETED_TEST_RE.test(file)) { log(`Deleted test file, regression mapping not required: ${file}`); continue; }
     if (!existsSync(resolve(root, file))) throw new Error(`Deleted source requires explicit regression mapping: ${file}`);
     const listed = JEST_BOOTSTRAP.includes(file) ? listAll() : listRelated(file);
     if (!listed.length && file.startsWith('apps/api/src/') && isTypeOnlySource(file, readFileSync(resolve(root, file), 'utf8'))) {
