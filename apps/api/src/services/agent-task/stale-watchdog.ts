@@ -1,5 +1,5 @@
 /**
- * 에이전트 작업 watchdog(R8-b, R9-c) — 주기마다 진행이 멈춘 실행 중 작업, 대기열 적체, 모델 대기 장기화를 게이지와 알림으로 드러낸다.
+ * 에이전트 작업 watchdog(R8-b, R9-c) — 주기마다 진행이 멈춘 실행 중 작업, 대기열 적체, 모델 대기 장기화, 소유자 없이 오래 멈춘 pending(#1478)을 게이지와 알림으로 드러낸다.
  * 작업 상태는 바꾸지 않는다(알림·게이지·로그만) — 멈춘 작업을 끊거나 되살리는 판단은 사람·기존 복구 장치의 몫이다.
  * 단계마다 따로 잡는다 — 한 단계의 조회 실패가 다음 단계를 막지 않는다. 반복 알림은 AlertSystem 쿨다운이 거른다.
  * 실패한 단계는 오류 게이지만 올리고 그 단계의 값은 그대로 둔다(0 이나 정상으로 위장하지 않는다). 앞 tick 이 아직 돌면 건너뛴다.
@@ -21,10 +21,10 @@ import { markLoopRun } from './background-liveness';
 
 const logger = createLogger('AgentTaskWatchdog');
 
-export interface WatchdogTickResult { stale: number; queueBacklog: boolean; modelWaitLong: number; skipped?: 'shutdown' | 'disabled' | 'overlap' }
+export interface WatchdogTickResult { stale: number; queueBacklog: boolean; modelWaitLong: number; stalePending: number; skipped?: 'shutdown' | 'disabled' | 'overlap' }
 
-/** 단계 이름 — 오류·마지막 성공 게이지의 stage 라벨(고정 4개라 cardinality 가 늘지 않는다) */
-type WatchdogStage = 'stale' | 'queue' | 'model_wait' | 'status_count';
+/** 단계 이름 — 오류·마지막 성공 게이지의 stage 라벨(고정 5개라 cardinality 가 늘지 않는다) */
+type WatchdogStage = 'stale' | 'queue' | 'model_wait' | 'stale_pending' | 'status_count';
 
 const errText = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
@@ -34,7 +34,7 @@ const ALERT_SAMPLE_SIZE = 5;
 type WatchdogWarning = keyof typeof AGENT_TASK_RESOLVED_ALERT;
 
 /** 경고 중인 종류 — 성공 조회가 정상을 보면 해소를 한 번 보내고 지운다. 조회 실패는 건드리지 않는다. 프로세스 메모리에만 있다(시작은 정상) */
-const warning: Record<WatchdogWarning, boolean> = { agent_task_stale: false, agent_task_queue_backlog: false, agent_task_model_wait_long: false };
+const warning: Record<WatchdogWarning, boolean> = { agent_task_stale: false, agent_task_queue_backlog: false, agent_task_model_wait_long: false, agent_task_stale_pending: false };
 
 /** 성공 조회의 판정을 기억에 반영한다 — 경고 → 정상 전이일 때만 해소 알림 */
 function settle(type: WatchdogWarning, unhealthy: boolean, data: Record<string, unknown>): void {
@@ -62,7 +62,7 @@ async function runStage(metrics: ReturnType<typeof getMetrics>, stage: WatchdogS
 
 /** watchdog 한 번 — 절대 throw 하지 않는다. 대기·멈춤 시간은 DB·큐가 잰다 */
 export async function runWatchdogTick(): Promise<WatchdogTickResult> {
-    const out: WatchdogTickResult = { stale: 0, queueBacklog: false, modelWaitLong: 0 };
+    const out: WatchdogTickResult = { stale: 0, queueBacklog: false, modelWaitLong: 0, stalePending: 0 };
     if (ticking) return { ...out, skipped: 'overlap' };
     ticking = true;
     try {
@@ -123,7 +123,20 @@ async function runAcceptedTick(out: WatchdogTickResult): Promise<WatchdogTickRes
         settle('agent_task_model_wait_long', s.longCount > 0, { parked: s.count, thresholdMs });
     });
 
-    // 4. 활성 상태별 건수 — 저장소가 네 상태를 모두 채워 돌려줘 사라진 상태도 0 으로 갱신된다
+    // 4. 오래된 pending(#1478) — 소유권이 없거나 지난 대기 작업 중 최근 활동이 STALE_MS 보다 오래된 것. 살아 있는 소유권 경계는 lease 저장소 것 그대로, 건수는 DB 가 센다
+    await runStage(metrics, 'stale_pending', '오래된 대기', async () => {
+        const s = await new AgentTaskProgressRepository(getPool()).summarizeStalePendingTasks(AGENT_TASK_LIMITS.STALE_MS, ALERT_SAMPLE_SIZE);
+        out.stalePending = s.count;
+        metrics.setGauge('agent_task_stale_pending', s.count);
+        if (s.count > 0) {
+            const data = { count: s.count, taskIds: s.taskIds, oldestStalledMs: s.oldestStalledMs };
+            void sendAgentTaskAlert('agent_task_stale_pending', ALERT_TEXT.agent_task_stale_pending.title, ALERT_TEXT.agent_task_stale_pending.message(data), data);
+            logger.warn(`소유자 없이 오래 멈춘 대기 작업 ${s.count}건: ${s.taskIds.join(', ')}`);
+        }
+        settle('agent_task_stale_pending', s.count > 0, { count: 0 });
+    });
+
+    // 5. 활성 상태별 건수 — 저장소가 네 상태를 모두 채워 돌려줘 사라진 상태도 0 으로 갱신된다
     await runStage(metrics, 'status_count', '상태별 건수', async () => {
         const counts = await new AgentTaskRepository(getPool()).countActiveAgentTasksByStatus();
         for (const [status, n] of Object.entries(counts)) metrics.setGauge('agent_task_status_count', n, { status });
