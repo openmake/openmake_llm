@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.115.1](https://github.com/openmake/openmake_llm/compare/v1.115.0...v1.115.1) (2026-10-24)
+
+
+### 🐛 버그 수정
+
+* **chat:** keep error retention scoped to the input session ([97fd72b](https://github.com/openmake/openmake_llm/commit/97fd72b05ac52e51ba1b53339b4d9b8270f542ab))
+* **chat:** preserve session continuity after first-turn abort ([989c76d](https://github.com/openmake/openmake_llm/commit/989c76d375adc082f9a9214943cdba78e57350b9))
+* **chat:** 첫 턴 중단 후 대화 세션 연속성 유지 ([22ecc46](https://github.com/openmake/openmake_llm/commit/22ecc46ea86ab86de4e068f2a1fafdfc724a5b07))
+
 ## [1.115.0](https://github.com/openmake/openmake_llm/compare/v1.114.0...v1.115.0) (2026-10-24)
 
 
