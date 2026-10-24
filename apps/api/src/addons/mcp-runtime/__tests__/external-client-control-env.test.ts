@@ -47,6 +47,16 @@ describe('ExternalMCPClient — 비샌드박스 spawn env', () => {
         expect(transportOptions[0]!.env).toEqual({ API_KEY: 'k1', HOME: '/cache' });
     });
 
+    it('과거에 저장된 git 제어 키(GIT_CONFIG·GIT_DIR·GIT_WORK_TREE·GIT_TRACE*)도 spawn 전에 뺀다(#1471)', async () => {
+        const config = {
+            id: 'mcp_3_g', name: 'g', transport_type: 'stdio', command: '/usr/bin/node', args: ['cli.js'],
+            env: { GIT_CONFIG: '/x/cfg', GIT_DIR: '/x/.git', GIT_WORK_TREE: '/x', GIT_TRACE_SETUP: '1', git_trace: '1', GIT_TOKEN: 't1', API_KEY: 'k1' },
+        } as unknown as MCPServerConfig;
+        await new ExternalMCPClient(config).connect();
+
+        expect(transportOptions[0]!.env).toEqual({ GIT_TOKEN: 't1', API_KEY: 'k1' });
+    });
+
     it('env 가 없으면 undefined 를 넘긴다(SDK 기본 환경 사용)', async () => {
         const config = {
             id: 'mcp_3_y', name: 'y', transport_type: 'stdio', command: '/usr/bin/node', args: ['cli.js'],

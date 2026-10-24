@@ -10,6 +10,11 @@
  * 가짜로 바꾸면 시작 함수가 핸들을 내주지 않는 빈틈을 못 잡는다.
  */
 const HOUR = 60 * 60 * 1000;
+/** 에이전트 작업 루프 플래그 — 등록 유예 테스트(#1478)가 바꾼다 */
+const mockAgentTaskLimits = {
+    HITL_PARK_SWEEP_MS: 600_000, HITL_PARK_EXPIRE_SWEEP_MS: 60_000, LEASE_ENABLED: true, LEASE_SWEEP_MS: 30_000,
+    WATCHDOG_ENABLED: true, WATCHDOG_MS: 60_000, SCHEDULES_ENABLED: true, SCHEDULE_TICK_MS: 60_000,
+};
 
 jest.mock('../../data/conversation-db', () => ({ startSessionCleanupScheduler: jest.fn(), stopSessionCleanupScheduler: jest.fn() }));
 jest.mock('../../services/cost/quota-reconcile-job', () => ({ startQuotaReconcileJob: jest.fn(), stopQuotaReconcileJob: jest.fn() }));
@@ -23,7 +28,7 @@ jest.mock('../../config/runtime-limits', () => ({
     CHAT_REQUESTS: { ENABLED: true, RETENTION_DAYS: 90, FINGERPRINT_RETENTION_DAYS: 180 },
     NODE_METRICS: { ENABLED: true, POLL_MS: 60_000, QUEUE_SAMPLE_MS: 30_000, RETENTION_DAYS: 14 },
     LLM_REQUEST_METRICS: { RETENTION_DAYS: 90 },
-    AGENT_TASK_LIMITS: { HITL_PARK_SWEEP_MS: 600_000, HITL_PARK_EXPIRE_SWEEP_MS: 60_000, LEASE_ENABLED: true, LEASE_SWEEP_MS: 30_000 },
+    AGENT_TASK_LIMITS: mockAgentTaskLimits,
     AGENT_TASK_RETENTION: { ENABLED: true },
     AGENT_SELF_IMPROVE: { FIRST_RUN_DELAY_MS: 60_000, INTERVAL_MS: 24 * 60 * 60 * 1000 },
 }));
@@ -65,6 +70,7 @@ jest.mock('../../agents/learning', () => ({
 
 import { startAllSchedulers, stopAllSchedulers } from '../index';
 import { stopPeriodicCleanup } from '../../utils/token-cleanup';
+import { getBackgroundLiveness, resetBackgroundLiveness } from '../../services/agent-task/background-liveness';
 
 describe('stopAllSchedulers — 타이머 잔존', () => {
     afterEach(() => { jest.restoreAllMocks(); });
@@ -88,5 +94,32 @@ describe('stopAllSchedulers — 타이머 잔존', () => {
     test('토큰 정리(자체 타이머)를 중지한다', () => {
         stopAllSchedulers();
         expect(stopPeriodicCleanup).toHaveBeenCalled();
+    });
+});
+
+describe('startAllSchedulers — 루프 생존 유예는 등록 시각부터(#1478)', () => {
+    const LOOPS = ['lease_sweep', 'schedule_tick', 'watchdog'] as const;
+    const saved = { ...mockAgentTaskLimits };
+    beforeEach(() => resetBackgroundLiveness());
+    afterEach(() => { stopAllSchedulers(); Object.assign(mockAgentTaskLimits, saved); });
+
+    test('등록 전(모듈 import 만)에는 판정하지 않고, 켜진 루프는 등록 시각부터 3×주기 뒤 안 돌았으면 false', async () => {
+        expect(getBackgroundLiveness(Date.now() + HOUR).ok).toBe(true);
+        await startAllSchedulers();
+        const registered = Date.now();
+        const soon = getBackgroundLiveness(registered + 1_000);
+        const late = getBackgroundLiveness(registered + 3 * 60_000 + 5_000);
+        for (const l of LOOPS) {
+            expect(soon.loops[l].ok).toBe(true);
+            expect(late.loops[l].ok).toBe(false);
+        }
+    });
+
+    test('꺼진 루프는 등록하지 않는다 — 나중에 켜져도 등록 전이라 판정하지 않는다', async () => {
+        Object.assign(mockAgentTaskLimits, { LEASE_ENABLED: false, WATCHDOG_ENABLED: false, SCHEDULES_ENABLED: false });
+        await startAllSchedulers();
+        Object.assign(mockAgentTaskLimits, { LEASE_ENABLED: true, WATCHDOG_ENABLED: true, SCHEDULES_ENABLED: true });
+        const r = getBackgroundLiveness(Date.now() + HOUR);
+        for (const l of LOOPS) expect(r.loops[l]).toMatchObject({ enabled: true, lastRunAt: null, ok: true });
     });
 });

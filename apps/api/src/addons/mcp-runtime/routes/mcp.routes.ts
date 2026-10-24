@@ -48,6 +48,7 @@ import { renameMcpServer } from './mcp-server-rename';
 import { getAuditService } from '../../../services/AuditService';
 import { validateOutboundUrl } from '../../../security/ssrf-guard';
 import { auditMcpServerCreated, auditMcpServerDeleted, auditMcpDeleteDenied, auditMcpRegisterDenied, auditMcpUrlBlocked } from './mcp-server-audit';
+import { McpCatalogInputError } from '../data/mcp-catalog-input';
 
 const logger = createLogger('McpRoutes');
 
@@ -243,7 +244,14 @@ export const mcpRouter = Router();
       const db = getUnifiedDatabase();
       const registry = getUnifiedMCPClient().getServerRegistry();
       // 여기 도달하면 visibility === 'global' (admin) — 즉시 spawn(connect 포함).
-      const status = await registry.registerServer(config, new McpServerRepository(db.getPool()));
+      let status: MCPConnectionStatus;
+      try {
+          status = await registry.registerServer(config, new McpServerRepository(db.getPool()));
+      } catch (e) {
+          // 제어 env 키(NODE_OPTIONS·GIT_DIR 등) — 저장 전에 거부된 입력 오류(키 이름만, 값 미노출)
+          if (e instanceof McpCatalogInputError) { res.status(400).json(badRequest(e.message)); return; }
+          throw e;
+      }
 
       auditMcpServerCreated(req, { id, name: config.name, source: 'manual' });
       res.status(201).json(success({ server: config, connectionStatus: status }));

@@ -18,6 +18,7 @@ import { BaseRepository } from '../../../runtime-ports/db-access';
 import type { McpServerDraftInput } from '../../../runtime-ports/component-stores';
 import { encryptToken } from '../../../utils/token-crypto';
 import type { EnvInputHint } from '../../../tool-contract/env-placeholder';
+import { assertNoControlEnv } from './mcp-catalog-input';
 
 /**
  * manifest_meta.envHints 에서 시크릿으로 선언된 env 키를 추린다.
@@ -138,6 +139,8 @@ export class McpServerDraftRepository extends BaseRepository {
         // 카탈로그 경로(mcp-catalog-repository.updateEnv)가 env_schema 의 secret 을
         // 쓰는 것과 같은 규칙이다. 읽기는 server-registry.decryptEnvValues 가 `v1:`
         // 접두사를 보고 복호화하므로 평문 값과 섞여 있어도 안전하다.
+        // 실제로 저장될 env(draft.env + override)에 제어 키가 있으면 활성화 전에 거부한다(McpCatalogInputError → 라우트 400).
+        assertNoControlEnv({ ...(existing.env || {}), ...(input.envOverrides || {}) });
         const sensitiveKeys = extractSensitiveEnvKeys(existing.manifest_meta);
         const encryptedOverrides = input.envOverrides
             ? Object.fromEntries(Object.entries(input.envOverrides).map(

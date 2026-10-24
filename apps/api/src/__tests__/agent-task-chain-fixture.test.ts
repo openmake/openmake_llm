@@ -80,6 +80,19 @@ jest.mock('../data/repositories/agent-task-repository', () => ({
             return true;
         },
         markForked: async (id: never, from: never, turn: never) => { Object.assign(rowOf(id), { forked_from_task_id: from, forked_from_turn: turn }); },
+        // 이어가기 후속의 원자적 생성(#1473) — 실제 SQL 처럼 선점(continued_by 가 비어 있을 때만)과 완전한 후속 행을 함께 쓴다
+        createContinuationSuccessor: async (seed: never) => {
+            const s = seed as unknown as { parentTaskId: string; create: Record<string, unknown> & { id: string }; checkpoint: unknown; plan?: unknown; forkedFromTurn: number; approvalPolicy?: string; thinkingLevel?: string; lease?: { owner: string } };
+            const parent = rowOf(s.parentTaskId);
+            if (parent.continued_by_task_id != null) return false;
+            parent.continued_by_task_id = s.create.id;
+            await fakeDb.createAgentTask(s.create);
+            Object.assign(rowOf(s.create.id), {
+                checkpoint: clone(s.checkpoint), plan: clone(s.plan ?? null), forked_from_task_id: s.parentTaskId, forked_from_turn: s.forkedFromTurn,
+                approval_policy: s.approvalPolicy ?? null, thinking_level: s.thinkingLevel ?? null, lease_owner: s.lease?.owner ?? null,
+            });
+            return true;
+        },
     })),
 }));
 // 턴 재진입 기록(실행 중 호출·도구 결과 저널)은 체크포인트 저장소로 분리됐다 — 같은 Map 위에서 구현
@@ -92,16 +105,10 @@ jest.mock('../data/repositories/agent-task-checkpoint-repository', () => ({
             .map((s) => [String(s.toolCallId), String(s.content)])),
     })),
 }));
-// 체인 저장소 — 실제 SQL 의 조건(선점은 continued_by 가 비어 있을 때만, 취소 표식은 long_running 병합)을 그대로 옮긴다
+// 체인 저장소 — 실제 SQL 의 조건(선점 되돌리기는 그 후속일 때만, 취소 표식은 long_running 병합)을 그대로 옮긴다. 선점은 위 createContinuationSuccessor
 jest.mock('../data/repositories/agent-task-chain-repository', () => ({
     ...jest.requireActual('../data/repositories/agent-task-chain-repository'),
     AgentTaskChainRepository: jest.fn().mockImplementation(() => ({
-        claimContinuation: async (from: string, successor: string) => {
-            const r = rowOf(from);
-            if (r.continued_by_task_id != null) return false;
-            r.continued_by_task_id = successor;
-            return true;
-        },
         resetContinuation: async (from: string, successor: string) => { const r = rowOf(from); if (r.continued_by_task_id === successor) r.continued_by_task_id = null; },
         markChainCancelled: async (rootId: string) => { const r = rowOf(rootId); r.long_running = { ...(r.long_running as object ?? {}), cancelled: true }; },
         listChain: async (rootId: string) => [...store.rows.values()].filter((r) => r.chain_root_task_id === rootId)
@@ -180,6 +187,14 @@ import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { AGENT_TASK_LONG_RUNNING } from '../config/agent-task-long-running';
 import { HANDOFF_SUMMARY_MARKER } from '../prompts/agent-task-context';
 import { CONTINUATION_NEXT_STEPS_HEADING, getContinuationNextStepsPrompt, getContinuationNotice } from '../prompts/agent-task-continuation';
+import { startTestApprover, type TestApprover } from './utils/test-approver';
+
+// 샌드박스 OFF + 승인 정책 all(기본) — 호스트 도구 호출마다 승인을 기다린다(#1469). 이 파일의 주제는 장기 실행 체인이라
+// 사용자가 승인함에서 승인한다고 둔다(실제 ApprovalRegistry). 질문(ask_human)은 승인자가 건드리지 않고 각 테스트가 답한다.
+// 승인 전 대기·거절은 agent-task-max-turns 의 '승인 경계' 묶음이 본다.
+let approver: TestApprover;
+beforeEach(() => { approver = startTestApprover('u1'); });
+afterEach(() => approver.stop());
 
 const GOAL = '오늘의 날씨를 여러 번 검색해서 한 문장으로 알려 줘';
 const FINAL = '검색 결과에 따르면 오늘은 맑습니다. 요청하신 내용을 한 문장으로 정리했습니다.';

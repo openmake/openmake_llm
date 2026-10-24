@@ -43,13 +43,55 @@ describe('AgentTaskRepository — 체인 열(188)', () => {
         expect(params).toContain(JSON.stringify(continuation));
     });
 
-    it('claimContinuation 은 continued_by_task_id 가 비어 있을 때만 채우고 true', async () => {
-        const query = jest.fn().mockResolvedValueOnce({ rowCount: 1, rows: [] }).mockResolvedValueOnce({ rowCount: 0, rows: [] });
-        const repo = chainRepoWith(query);
-        await expect(repo.claimContinuation('a', 'b')).resolves.toBe(true);
-        await expect(repo.claimContinuation('a', 'c')).resolves.toBe(false);
-        expect(String(query.mock.calls[0][0])).toMatch(/continued_by_task_id IS NULL/);
-        expect(query.mock.calls[0][1]).toEqual(['a', 'b']);
+    // 원자적 후속 생성(#1473) — 한 연결에서 BEGIN → 선점 → 완전한 INSERT → COMMIT. 실제 PG 의 롤백·경합은 continuation-atomicity.db.test.ts
+    function txPool(claimRows: number, failInsert = false) {
+        const sqls: string[] = [];
+        const params: unknown[][] = [];
+        const client = {
+            query: jest.fn(async (sql: string, p: unknown[] = []) => {
+                sqls.push(sql); params.push(p);
+                if (failInsert && sql.startsWith('INSERT')) throw new Error('insert failed');
+                return { rows: [], rowCount: sql.startsWith('UPDATE') ? claimRows : 1 };
+            }),
+            release: jest.fn(),
+        };
+        return { pool: { connect: async () => client } as unknown as import('pg').Pool, sqls, params, client };
+    }
+    const seed = {
+        parentTaskId: 'a', create: { id: 'b', userId: 'u', goal: 'g', maxTurns: 32, chainRootTaskId: 'a', continuedFromTaskId: 'a' },
+        checkpoint: { conversation: [], completedTurn: -1 }, plan: { items: [] }, forkedFromTurn: 7,
+        approvalPolicy: 'none', thinkingLevel: 'high', lease: { owner: 'h:0', leaseMs: 60_000 },
+    };
+
+    it('createContinuationSuccessor 는 한 트랜잭션에서 선점 뒤 시드·소유권까지 담은 INSERT 를 하고 true', async () => {
+        const { pool, sqls, params } = txPool(1);
+        await expect(new AgentTaskRepository(pool).createContinuationSuccessor(seed)).resolves.toBe(true);
+        expect(sqls[0]).toBe('BEGIN');
+        expect(sqls[1]).toMatch(/continued_by_task_id IS NULL/);
+        expect(params[1]).toEqual(['a', 'b']);
+        expect(sqls[2]).toMatch(/^INSERT INTO agent_tasks \(.*checkpoint, forked_from_task_id, forked_from_turn, plan, approval_policy, thinking_level, lease_owner, lease_until\)/);
+        expect(sqls[2]).toMatch(/NOW\(\) \+ make_interval\(secs => \$\d+\)\)$/);
+        expect(params[2]).toEqual(expect.arrayContaining(['b', 'a', 7, 'none', 'high', 'h:0', 60]));
+        expect(sqls[3]).toBe('COMMIT');
+    });
+
+    it('선점을 놓치면 INSERT 없이 false', async () => {
+        const { pool, sqls } = txPool(0);
+        await expect(new AgentTaskRepository(pool).createContinuationSuccessor(seed)).resolves.toBe(false);
+        expect(sqls.some((s) => s.startsWith('INSERT'))).toBe(false);
+    });
+
+    it('INSERT 가 실패하면 ROLLBACK 하고 던진다(선점도 남지 않는다)', async () => {
+        const { pool, sqls } = txPool(1, true);
+        await expect(new AgentTaskRepository(pool).createContinuationSuccessor(seed)).rejects.toThrow('insert failed');
+        expect(sqls.at(-1)).toBe('ROLLBACK');
+        expect(sqls).not.toContain('COMMIT');
+    });
+
+    it('소유권을 끄면 소유권 열 없이 INSERT 한다', async () => {
+        const { pool, sqls } = txPool(1);
+        await new AgentTaskRepository(pool).createContinuationSuccessor({ ...seed, lease: undefined });
+        expect(sqls[2]).not.toMatch(/lease_/);
     });
 
     it('resetContinuation 은 그 후속 id 일 때만 continued_by_task_id 를 비운다', async () => {

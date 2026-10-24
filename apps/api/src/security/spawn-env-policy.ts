@@ -9,6 +9,9 @@
  *
  * @module security/spawn-env-policy
  */
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('SpawnEnvPolicy');
 
 /** 거부 키 패턴 — 이름 그대로(대소문자 무시) 또는 접두사. */
 export const CONTROL_ENV_KEY_PATTERNS: readonly RegExp[] = [
@@ -20,6 +23,8 @@ export const CONTROL_ENV_KEY_PATTERNS: readonly RegExp[] = [
     /^JAVA_TOOL_OPTIONS$/i, /^_JAVA_OPTIONS$/i, /^GCONV_PATH$/i, /^IFS$/i,
     /^DOCKER_/i,
     /^GIT_(SSH|SSH_COMMAND|EXEC_PATH|ASKPASS|PROXY_COMMAND|TEMPLATE_DIR|CONFIG_[A-Z0-9_]*|SSL_[A-Z0-9_]*|CEILING_DIRECTORIES|EXTERNAL_DIFF|PAGER|EDITOR)$/i,
+    // 설정 파일·저장소/작업 트리 위치·추적 출력(GIT_TRACE·GIT_TRACE2·GIT_TRACE_* — 파일 경로를 주면 그 파일에 쓴다) — #1471
+    /^GIT_(CONFIG|DIR|WORK_TREE|TRACE[A-Z0-9_]*)$/i,
     /_PROXY$/i,
     /^(SSL_CERT_FILE|SSL_CERT_DIR|REQUESTS_CA_BUNDLE|CURL_CA_BUNDLE|AWS_CA_BUNDLE|PYTHONHTTPSVERIFY)$/i,
 ];
@@ -28,13 +33,16 @@ export function isControlEnvKey(key: string): boolean {
     return CONTROL_ENV_KEY_PATTERNS.some((re) => re.test(key));
 }
 
-/** 제어 키를 뺀 사본. 입력이 없으면 undefined. */
+/** 제어 키를 뺀 사본. 입력이 없으면 undefined. 뺀 키가 있으면 그 이름만 한 번 경고한다(값은 남기지 않는다). */
 export function stripControlEnv<T extends Record<string, unknown>>(env: T | undefined | null): Partial<T> | undefined {
     if (!env) return undefined;
     const out: Partial<T> = {};
+    const removed: string[] = [];
     for (const [k, v] of Object.entries(env)) {
         if (!isControlEnvKey(k)) (out as Record<string, unknown>)[k] = v;
+        else removed.push(k);
     }
+    if (removed.length > 0) logger.warn(`spawn env 에서 제어 키 ${removed.length}개 제거: ${removed.join(', ')}`);
     return out;
 }
 
