@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.115.3](https://github.com/openmake/openmake_llm/compare/v1.115.2...v1.115.3) (2026-10-24)
+
+
+### 🐛 버그 수정
+
+* **tool-contract:** 도구 결과 content 배열을 JSON 이 아닌 텍스트로 모델에 전달 ([c1cd45b](https://github.com/openmake/openmake_llm/commit/c1cd45bc19746f3c742bfa74e32d7a26394686a5))
+* **tool-contract:** 도구 결과 content 배열을 JSON 이 아닌 텍스트로 모델에 전달 ([04f7025](https://github.com/openmake/openmake_llm/commit/04f7025ac11474858b2783071f1826e81913dba8))
+
 ## [1.115.2](https://github.com/openmake/openmake_llm/compare/v1.115.1...v1.115.2) (2026-10-24)
 
 
