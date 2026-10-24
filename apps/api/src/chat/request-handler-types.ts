@@ -140,6 +140,11 @@ export interface ChatRequestParams {
     clientMessageId?: string;
     /** 클라이언트 발급 멱등 키(140) — user 행 client_message_id */
     clientRequestId?: string;
+    /**
+     * 세션 확보·사용자 메시지 저장이 성공한 직후(모델·도구 실행 전) 1회 호출 — 확보한 세션 id.
+     * WS 는 이 시점에 새 세션을 알려, 응답 완료 전에 중단돼도 다음 요청이 같은 세션을 잇게 한다.
+     */
+    onSessionReady?: (sessionId: string) => void;
     /** 스트리밍 토큰 콜백 */
     onToken: (token: string) => void;
     /** Thinking 토큰 콜백 (추론 과정 실시간 전달) */
