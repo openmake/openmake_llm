@@ -59,6 +59,14 @@ describe('knowledge 라우트 응답 계약', () => {
         expect(r.body.data).toHaveProperty('document.id', 'd1');
     });
 
+    it('문서 업로드 — busboy 가 latin1 로 디코드한 한글 파일명을 UTF-8 로 복원해 서비스에 넘긴다', async () => {
+        const { uploadDocument } = jest.requireMock('../documents/service') as { uploadDocument: jest.Mock };
+        uploadDocument.mockClear();
+        // form-data 는 파일명을 UTF-8 바이트로 쓰고 busboy 는 latin1 로 읽는다 — 운영 증상(`ë²¤ì²˜…`) 재현
+        await request(app).post('/api/knowledge/spaces/s1/documents').attach('file', Buffer.from('abc'), { filename: '벤처 보고서.md', contentType: 'text/markdown' });
+        expect(uploadDocument).toHaveBeenCalledWith('3', 's1', expect.objectContaining({ originalname: '벤처 보고서.md' }));
+    });
+
     it('새 대화는 { sessionId }, 관리자 상태·프로필은 공유 계약 모양', async () => {
         expect((await request(app).post('/api/knowledge/spaces/s1/conversations')).body.data).toEqual({ sessionId: 'sess-1' });
         const status = (await request(app).get('/api/knowledge/admin/status')).body.data;
