@@ -8,22 +8,18 @@
  * @module addons/mcp-runtime/routes/mcp-server-audit
  */
 import type { Request } from 'express';
-import { recordSecurityAudit, isSsrfBlockedError } from '../../../runtime-ports/audit-port';
+import { recordSecurityAudit, isSsrfBlockedError, auditUrlHost } from '../../../runtime-ports/audit-port';
 
 function actor(req: Request) {
     return { userId: req.user?.id, ipAddress: req.ip, userAgent: req.get('user-agent') };
 }
 
-/** URL 의 host(포트 포함)만 — 경로·쿼리·계정은 버린다. 파싱 실패는 'invalid'. */
-function urlHost(raw: string): string {
-    try { return new URL(raw).host; } catch { return 'invalid'; }
-}
-
-export function auditMcpServerCreated(req: Request, server: { id: string; name: string; source?: 'manual' | 'catalog' }): void {
+/** 등록 성공 — git_ingest 는 draft 승인으로 서버가 활성화된 경우(#1475). */
+export function auditMcpServerCreated(req: Request, server: { id: string; name: string; source?: 'manual' | 'catalog' | 'git_ingest' }): void {
     void recordSecurityAudit({
         action: 'mcp_server.create', ...actor(req), resourceType: 'mcp_server', resourceId: server.id,
         details: { name: server.name, source: server.source },
-    });
+    }).catch(() => undefined);
 }
 
 export function auditMcpServerDeleted(req: Request, server: { id: string; name?: string }): void {
@@ -40,6 +36,14 @@ export function auditMcpDeleteDenied(req: Request, serverId: string): void {
     });
 }
 
+/** git ingest draft 승인·거절 권한 없음(403, #1475) — 인가 실패로 남긴다. */
+export function auditMcpIngestDenied(req: Request, draftId: string, op: 'ingest_approve' | 'ingest_reject'): void {
+    void recordSecurityAudit({
+        action: 'security.authz_denied', ...actor(req), resourceType: 'mcp_server', resourceId: draftId,
+        details: { op },
+    }).catch(() => undefined);
+}
+
 export function auditMcpRegisterDenied(req: Request, reason: string, details?: Record<string, unknown>): void {
     void recordSecurityAudit({
         action: 'mcp_server.register_denied', ...actor(req), resourceType: 'mcp_server',
@@ -51,7 +55,7 @@ export function auditMcpRegisterDenied(req: Request, reason: string, details?: R
 export function auditMcpUrlBlocked(req: Request, rawUrl: string, err: unknown): void {
     if (!isSsrfBlockedError(err)) return;
     void recordSecurityAudit({
-        action: 'security.ssrf_blocked', ...actor(req), resourceType: 'url', resourceId: urlHost(rawUrl),
+        action: 'security.ssrf_blocked', ...actor(req), resourceType: 'url', resourceId: auditUrlHost(rawUrl),
         details: { target: 'mcp_server', reason: (err as Error).message },
     });
 }

@@ -26,6 +26,7 @@ export type ToolErrorCategory =
     | 'rate_limit' // 요청 한도 초과 (일시적)
     | 'provider' // 외부 서비스/네트워크 장애 (일시적)
     | 'output_truncated' // 출력 과대로 잘림 (영구)
+    | 'aborted' // 호출자(사용자·상위 작업)가 중단 — 도구 장애가 아니다. 메시지가 아니라 중단 신호로만 정한다
     | 'execution'; // 그 외 일반 실행 오류
 
 /** 에러 분류 결과 */
@@ -99,6 +100,16 @@ const DEFAULT_CLASSIFICATION: ToolErrorClassification = {
     category: 'execution',
     retryable: false,
     hint: '도구 실행 중 오류가 발생했습니다. 인자를 점검하거나 다른 접근 방식을 시도하세요.',
+};
+
+/**
+ * 호출자 중단 분류(#1472) — 메시지 패턴이 아니라 호출자의 AbortSignal 상태로 정한다(tool-dispatch).
+ * 도구가 "aborted" 를 말해도 신호가 살아 있으면 도구 쪽 실패이므로 CATEGORY_RULES 에 넣지 않는다.
+ */
+export const ABORTED_CLASSIFICATION: ToolErrorClassification = {
+    category: 'aborted',
+    retryable: false,
+    hint: '요청이 중단되어 도구 호출을 시작하지 않았거나 중간에 멈췄습니다. 같은 호출을 다시 시도하지 마세요.',
 };
 
 /**

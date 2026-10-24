@@ -237,6 +237,14 @@ describe('McpCatalogRepository.createFromCatalog — 입력 검증(2026-10-09 �
             .rejects.toThrow(/NODE_OPTIONS/);
     });
 
+    it.each(['GIT_CONFIG', 'GIT_DIR', 'GIT_WORK_TREE', 'GIT_TRACE_SETUP'])('스키마가 선언했어도 git 제어 키 %s 는 거부한다(#1471)', async (k) => {
+        const { pool, queryMock } = makePool();
+        const declared = { ...(template as { env_schema: { properties: Record<string, unknown> } }), env_schema: { required: ['FIRECRAWL_API_KEY'], properties: { FIRECRAWL_API_KEY: { secret: true }, [k]: {} } } } as never;
+        await expect(new McpCatalogRepository(pool).createFromCatalog(payload({ region: 'kr' }, { FIRECRAWL_API_KEY: 'k', [k]: '/x' }), declared, 'u1'))
+            .rejects.toThrow(new RegExp(k));
+        expect(queryMock).not.toHaveBeenCalled();
+    });
+
     it('스키마 default 의 HOME 은 사용자 입력 없이도 채워진다(거부 목록 아님)', async () => {
         const { queryMock, pool } = makePool();
         await new McpCatalogRepository(pool).createFromCatalog(payload({ region: 'kr' }, { FIRECRAWL_API_KEY: 'k' }), template, 'u1');
@@ -256,6 +264,13 @@ describe('McpCatalogRepository.updateEnv — 제어 키 거부', () => {
         const queryMock = jest.fn().mockResolvedValueOnce({ rowCount: 1, rows: [{ env: { NODE_OPTIONS: 'old', API_KEY: 'v1:x' } }] });
         const repo = new McpCatalogRepository({ query: queryMock } as unknown as Pool);
         await expect(repo.updateEnv('s1', { NODE_OPTIONS: '--require /x' }, null)).rejects.toThrow(/NODE_OPTIONS/);
+        expect(queryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('과거에 저장된 git 제어 키(GIT_DIR)라도 env 교체는 거부한다(#1471)', async () => {
+        const queryMock = jest.fn().mockResolvedValueOnce({ rowCount: 1, rows: [{ env: { GIT_DIR: '/old/.git', API_KEY: 'v1:x' } }] });
+        const repo = new McpCatalogRepository({ query: queryMock } as unknown as Pool);
+        await expect(repo.updateEnv('s1', { GIT_DIR: '/x/.git' }, null)).rejects.toThrow(/GIT_DIR/);
         expect(queryMock).toHaveBeenCalledTimes(1);
     });
 });

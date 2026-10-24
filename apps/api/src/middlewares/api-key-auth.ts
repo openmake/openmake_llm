@@ -14,6 +14,7 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import { error as apiError, ErrorCodes } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 import { apiKeyHasScope, type ApiKeyScope } from '../config/api-key-scopes';
+import { auditHttpDenied } from '../security/security-audit';
 
 const logger = createLogger('ApiKeyAuth');
 
@@ -100,6 +101,8 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
         // 키 소유자 활성 확인 — JWT 경로처럼 비활성·없는 사용자의 키는 거른다(req.user 유무와 무관)
         const user = await db.getUserById(keyRecord.user_id);
         if (!user || !user.is_active) {
+            // 비활성 계정 거부만 감사한다(#1475) — 소유자 행이 없는 키는 계정 거부가 아니다.
+            if (user) auditHttpDenied(req, 'inactive_account', { status: 401, userId: user.id, details: { apiKeyId: keyRecord.id } });
             res.status(401).json(apiError(
                 ErrorCodes.UNAUTHORIZED,
                 'API key owner is inactive.'
@@ -158,6 +161,7 @@ function enforceApiKeyScope(req: Request, res: Response, scope: ApiKeyScope): bo
     if (req.authMethod !== 'api-key') return true; // JWT/쿠키 유저는 스코프 개념 없음
     const scopes = req.apiKeyRecord?.scopes as string[] | undefined;
     if (apiKeyHasScope(scopes, scope)) return true;
+    auditHttpDenied(req, 'api_key_scope', { details: { scope, apiKeyId: req.apiKeyId } });
     res.status(403).json(apiError(
         ErrorCodes.FORBIDDEN,
         `이 API key 는 '${scope}' 스코프가 없습니다. 해당 스코프의 키를 발급하세요.`,

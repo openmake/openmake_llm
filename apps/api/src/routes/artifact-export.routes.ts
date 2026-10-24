@@ -68,7 +68,7 @@ router.post('/sessions/:sid/artifacts/:aid/export', requireAuth, artifactExportL
                 durationMs: result.durationMs, outputChars: result.dataBase64.length,
             },
             actor: { email: req.user?.email, role: req.user?.role },
-        });
+        }).catch(() => { /* 감사 실패는 응답에 영향 없음 — 원인은 AuditService 가 이미 남긴다 */ });
 
         const safeBase = (latest.title || aid).replace(/[\\/:*?"<>|\n\r]+/g, '_').slice(0, 80) || 'artifact';
         res.json(success({
@@ -137,7 +137,7 @@ router.post('/agent-tasks/:taskId/artifacts/:aid/export', requireAuth, artifactE
             userId,
             details: { taskId, artifactId: aid, format, durationMs: result.durationMs },
             actor: { email: req.user?.email, role: req.user?.role },
-        });
+        }).catch(() => { /* 감사 실패는 응답에 영향 없음 — 원인은 AuditService 가 이미 남긴다 */ });
 
         const title = (found as { title?: string }).title || aid;
         const safeBase = title.replace(/[\\/:*?"<>|\n\r]+/g, '_').slice(0, 80) || 'artifact';

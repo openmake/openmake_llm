@@ -20,13 +20,9 @@ import { LLM_TIMEOUTS } from '../config/timeouts';
 import { scrapePage, mapSiteUrls, crawlSite } from '../utils/web-scraper';
 import { validateOutboundUrl } from '../security/ssrf-guard';
 import { auditSecurityEvent, isSsrfBlockedError } from '../security/security-audit';
+import { auditUrlHost } from '../security/url-host';
 import { semanticCompact } from '../services/semantic-compactor';
 import { registerPageSource } from './web-search/page-source';
-
-/** URL 의 host 만 — 감사에 URL 전체(경로·쿼리)를 남기지 않는다. 파싱 실패는 'invalid'. */
-function safeHost(url: unknown): string {
-    try { return new URL(String(url)).host; } catch { return 'invalid'; }
-}
 
 /** SSRF 가드 차단이면 감사로 남긴다(S10, fire-and-forget) — 도구 반환값은 그대로. */
 function auditIfSsrfBlocked(e: unknown, url: unknown, toolName: string, context: UserContext | undefined): void {
@@ -35,7 +31,7 @@ function auditIfSsrfBlocked(e: unknown, url: unknown, toolName: string, context:
         action: 'security.ssrf_blocked',
         userId: context?.userId,
         resourceType: 'url',
-        resourceId: safeHost(url),
+        resourceId: auditUrlHost(url),
         details: { tool: toolName, reason: (e as Error).message },
     }).catch(() => undefined);
 }

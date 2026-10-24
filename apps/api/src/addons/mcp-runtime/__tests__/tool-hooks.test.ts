@@ -52,7 +52,8 @@ describe('ToolRouter × 훅', () => {
             post: (r) => ({ ...r, content: [{ type: 'text', text: textOf(r) + '|post' }] }),
         });
         const r = await router.executeTool('srv::echo', { q: 'x' }, { userId: 'u1', role: 'user' } as never);
-        expect(executor).toHaveBeenCalledWith('echo', { q: 'x', injected: 1 });
+        // 실행기는 항상 마감 신호를 받는다(#1472 — 타임아웃이 하위 호출도 끊는다)
+        expect(executor).toHaveBeenCalledWith('echo', { q: 'x', injected: 1 }, { signal: expect.any(AbortSignal) });
         expect(textOf(r)).toBe('echo:{"q":"x","injected":1}|post');
     });
     it('deny 는 호출 없이 isError 로 돌아오고 서킷 실패로 세지 않는다', async () => {
