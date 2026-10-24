@@ -11,6 +11,7 @@ import multer from 'multer';
 import * as fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import { badRequest } from '../utils/api-response';
+import { decodeMultipartFilename } from '../utils/multipart-filename';
 import { validateWithSecurity } from '../middlewares/validation';
 import { createAgentTaskSchema } from '../schemas/agent-task.schema';
 import type { AgentTaskInputFile } from '../services/AgentTaskService';
@@ -52,9 +53,7 @@ export async function storeMultipartInputFiles(taskId: string, parts: Express.Mu
     const stored: AgentTaskInputFile[] = [];
     for (const [i, p] of parts.entries()) {
         // busboy 가 latin1 로 넘긴 한글 파일명 복원 (이미 UTF-8 이면 고문자 부재로 무변환)
-        const rawName = /[\u0080-ÿ]/.test(p.originalname)
-            ? Buffer.from(p.originalname, 'latin1').toString('utf8')
-            : p.originalname;
+        const rawName = decodeMultipartFilename(p.originalname);
         const name = safeBaseName(rawName, `file_${i}`);
         const storedPath = await finalizeUploadedFile(taskId, p.path, rawName, i);
         const entry: AgentTaskInputFile = { name, type: p.mimetype, size: p.size, storedPath };
