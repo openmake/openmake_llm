@@ -37,8 +37,8 @@ export const TOOL_USER_INPUT_APPROVAL_NAME: typeof CONTRACT_TOOL_USER_INPUT_APPR
  */
 export type { ToolSummary, ToolUserInputContext, ToolUserInputResult } from '@openmake/plugin-contracts';
 
-/** 중첩 도구 인자 위험 패턴 검사(Base 거버넌스) — add-on 의 메타 도구(mcp_call)가 이 포트로 쓴다. */
-export { detectDangerousArgsDeep } from '../tool-contract/tool-execution-guard';
+/** 보안 실행기(경로 샌드박스·인자 검사·감사, Base 거버넌스) — add-on 의 메타 도구(mcp_call)가 안쪽 도구 실행에 이 포트로 쓴다. */
+export { executeToolSecurely } from '../tool-contract/tool-execution-guard';
 
 export interface ToolRuntime {
     /** LLM function-calling 형식의 도구 목록. userContext 가 있으면 그 사용자의 외부 도구도 포함된다. */

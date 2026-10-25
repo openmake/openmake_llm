@@ -43,7 +43,7 @@ describe('detectDangerousArgsDeep', () => {
         expect(detectDangerousArgsDeep(cyclic)).toEqual({ key: 'a.cmd', violation: 'shell' });
     });
 
-    it(`깊이 ${TOOL_ARG_SCAN_LIMITS.MAX_DEPTH} 까지 검사하고 그보다 깊은 곳은 내려가지 않는다`, () => {
+    it(`깊이 ${TOOL_ARG_SCAN_LIMITS.MAX_DEPTH} 까지 검사하고, 그보다 깊은 객체·배열은 위반(depth)으로 막는다(fail-closed)`, () => {
         const nest = (levels: number): Record<string, unknown> => {
             let v: Record<string, unknown> = { cmd: 'x; y' };
             for (let i = 0; i < levels; i++) v = { n: v };
@@ -52,7 +52,13 @@ describe('detectDangerousArgsDeep', () => {
         const max = TOOL_ARG_SCAN_LIMITS.MAX_DEPTH;
         // cmd 문자열의 깊이 = 감싼 단계 + 1
         expect(detectDangerousArgsDeep(nest(max - 1))).toEqual({ key: `${'n.'.repeat(max - 1)}cmd`, violation: 'shell' });
-        expect(detectDangerousArgsDeep(nest(max))).toBeNull();
+        // 감싼 단계가 max 면 { cmd } 객체가 깊이 max — 내려가지 않고 그 경로에서 막는다
+        expect(detectDangerousArgsDeep(nest(max))).toEqual({ key: Array(max).fill('n').join('.'), violation: 'depth' });
+        // 위험 패턴이 없어도 상한을 넘으면 막는다(우회 방지)
+        let safe: unknown = 'hello';
+        for (let i = 0; i < max + 1; i++) safe = [safe];
+        expect(detectDangerousArgsDeep({ list: safe })).toEqual({ key: `list${'[0]'.repeat(max - 1)}`, violation: 'depth' });
         expect(() => detectDangerousArgsDeep(nest(100_000))).not.toThrow();
+        expect(detectDangerousArgsDeep(nest(100_000))).toMatchObject({ violation: 'depth' });
     });
 });
