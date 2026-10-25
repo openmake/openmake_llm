@@ -23,7 +23,7 @@
  */
 
 import { MCPServer, createMCPServer } from './server';
-import { MCPToolResult } from '../../tool-contract/types';
+import { MCPToolResult, MCP_NAMESPACE_SEPARATOR } from '../../tool-contract/types';
 import type { UserContext } from '../../tool-contract/user-sandbox';
 import { executeToolSecurely } from '../../tool-contract/tool-execution-guard';
 import { ToolRouter } from './tool-router';
@@ -149,9 +149,10 @@ export class UnifiedMCPClient {
         context: UserContext,
         opts?: { signal?: AbortSignal }
     ): Promise<MCPToolResult> {
+        // E6: 외부 도구(`server::tool`)는 mcp_call 을 거치지 않은 직접 호출도 중첩 인자까지 검사한다.
         return executeToolSecurely(
             (name, sandboxedArgs, ctx) => this.toolRouter.executeTool(name, sandboxedArgs, ctx, opts),
-            toolName, args, context,
+            toolName, args, context, { deepArgScan: toolName.includes(MCP_NAMESPACE_SEPARATOR) },
         );
     }
 
