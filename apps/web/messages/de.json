@@ -1370,6 +1370,7 @@
       "unreachable": "Server nicht erreichbar",
       "timeout": "Zeitüberschreitung bei der Verbindung",
       "protocol": "Fehler in der MCP-Protokollantwort",
+      "sandbox_required": "Sandbox erforderlich — Benutzer-MCP-Server benötigen die Docker-Sandbox (wenden Sie sich an Ihren Administrator)",
       "unknown": "Verbindung fehlgeschlagen — für Details den Mauszeiger darüber bewegen"
     },
     "disabledLabel": "Deaktiviert",

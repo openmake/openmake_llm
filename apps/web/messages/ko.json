@@ -1370,6 +1370,7 @@
       "unreachable": "서버에 연결할 수 없음",
       "timeout": "연결 시간 초과",
       "protocol": "MCP 프로토콜 응답 오류",
+      "sandbox_required": "격리 실행 불가 — 사용자 MCP 서버는 Docker 샌드박스가 필요합니다(관리자에게 문의)",
       "unknown": "연결 실패 — 자세한 내용은 항목에 마우스를 올려 확인"
     },
     "disabledLabel": "사용 안 함",

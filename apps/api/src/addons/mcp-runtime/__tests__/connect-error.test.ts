@@ -6,6 +6,7 @@
  * 분류되지 않으면 화면에 다시 원인 없는 "연결 안 됨"만 남는다.
  */
 import { classifyConnectError, serializeConnectError, parseConnectError } from '../connect-error';
+import { MCP_SANDBOX_REQUIRED_MESSAGE } from '../sandbox-docker';
 
 describe('classifyConnectError', () => {
     it.each([
@@ -36,6 +37,11 @@ describe('classifyConnectError', () => {
 
     it('타임아웃은 timeout — unreachable 보다 먼저 잡는다', () => {
         expect(classifyConnectError(new Error('Request timed out after 30000ms')).code).toBe('timeout');
+    });
+
+    it('사용자 서버 격리 거부(MCP_SANDBOX_REQUIRED)는 sandbox_required', () => {
+        expect(classifyConnectError(new Error(MCP_SANDBOX_REQUIRED_MESSAGE)).code).toBe('sandbox_required');
+        expect(classifyConnectError(new Error('MCP_SANDBOX_REQUIRED')).code).toBe('sandbox_required');
     });
 
     it('분류 불가는 unknown 이되 원문을 버리지 않는다', () => {

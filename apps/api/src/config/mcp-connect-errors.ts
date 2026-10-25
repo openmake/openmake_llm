@@ -19,6 +19,7 @@ export type McpConnectErrorCode =
     | 'unreachable'
     | 'timeout'
     | 'protocol'
+    | 'sandbox_required'
     | 'unknown';
 
 /**
@@ -29,6 +30,8 @@ export type McpConnectErrorCode =
  * "연결 실패"로 뭉뚱그리면 재시도만 반복하게 된다.
  */
 export const MCP_CONNECT_ERROR_RULES: readonly { code: McpConnectErrorCode; pattern: RegExp }[] = [
+    // 사용자 MCP 서버 격리 거부(mcp-runtime sandbox-docker 의 MCP_SANDBOX_REQUIRED 문구) — 관리자가 Docker·샌드박스를 켜야 한다.
+    { code: 'sandbox_required', pattern: /MCP_SANDBOX_REQUIRED|사용자 MCP 서버는 격리 없이 실행하지 않습니다/ },
     { code: 'auth_required', pattern: /\b(401|403)\b|unauthorized|forbidden|invalid_token|missing_token|access token|authorization header/i },
     { code: 'not_found', pattern: /\b404\b|not found/i },
     { code: 'timeout', pattern: /timeout|timed out|ETIMEDOUT|ESOCKETTIMEDOUT/i },
