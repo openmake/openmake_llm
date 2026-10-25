@@ -28,8 +28,6 @@ import { auditSecurityEvent } from '../security/security-audit';
 
 const logger = createLogger('ErrorHandler');
 
-const SENSITIVE_KEY_PATTERNS = ['password', 'token', 'api_key', 'secret', 'key', 'authorization', 'auth', 'credential'];
-
 type RequestAuditUser = {
     id?: string | number;
     email?: string;
@@ -40,14 +38,12 @@ type RequestWithAuditUser = Request & {
     user?: RequestAuditUser;
 };
 
-function sanitizeForLog(obj: Record<string, unknown>): Record<string, unknown> {
-    return Object.fromEntries(
-        Object.entries(obj).map(([k, v]) => {
-            const lk = k.toLowerCase();
-            const isSensitive = SENSITIVE_KEY_PATTERNS.some(p => lk.includes(p));
-            return isSensitive ? [k, '[REDACTED]'] : [k, v];
-        })
-    );
+/** development 밖에서 알 수 없는 오류 대신 내보내는 응답 문구 (내부 오류 원문 — 테이블 이름·경로 등 — 비노출) */
+const GENERIC_INTERNAL_ERROR_MESSAGE = '서버 내부 오류가 발생했습니다';
+
+/** 로그용: 요청 본문·쿼리는 값 없이 키 이름만 남긴다 */
+function keysForLog(value: unknown): string[] | undefined {
+    return value && typeof value === 'object' ? Object.keys(value as Record<string, unknown>) : undefined;
 }
 
 /**
@@ -104,12 +100,13 @@ class NotFoundError extends AppError {
 /**
  * Format error for response (#24 연동: 표준 ApiErrorResponse 형식)
  */
-function formatError(err: Error, includeStack: boolean): ApiErrorResponse & { stack?: string } {
+function formatError(err: Error, includeStack: boolean, exposeMessage: boolean): ApiErrorResponse & { stack?: string } {
     const code = err instanceof AppError && err.code 
         ? err.code 
         : ErrorCodes.INTERNAL_ERROR;
     
-    const response = apiError(code, err.message);
+    const message = exposeMessage || err instanceof AppError ? err.message : GENERIC_INTERNAL_ERROR_MESSAGE;
+    const response = apiError(code, message);
     
     if (includeStack && err.stack) {
         return { ...response, stack: err.stack };
@@ -228,28 +225,22 @@ export function errorHandler(
         // NOTE: Use process.env.NODE_ENV directly (not getConfig()) because
         // NODE_ENV can change at runtime in test environments
         const includeStack = process.env.NODE_ENV === 'development';
-        res.status(err.statusCode).json(formatError(err, includeStack));
+        res.status(err.statusCode).json(formatError(err, includeStack, includeStack));
         return;
     }
 
     // ── 기타 알 수 없는 에러 → 500 ──
-    const safeBody = req.body && typeof req.body === 'object'
-        ? sanitizeForLog(req.body as Record<string, unknown>)
-        : req.body;
-    const safeQuery = req.query && typeof req.query === 'object'
-        ? sanitizeForLog(req.query as Record<string, unknown>)
-        : req.query;
     logger.error(`[${req.method}] ${req.path}: ${err.message}`, {
         stack: err.stack,
-        body: safeBody,
-        query: safeQuery
+        bodyKeys: keysForLog(req.body),
+        queryKeys: keysForLog(req.query)
     });
 
     const statusCode = err.status || 500;
     // NOTE: Use process.env.NODE_ENV directly (not getConfig()) because
     // NODE_ENV can change at runtime in test environments
-    const includeStack = process.env.NODE_ENV === 'development';
-    res.status(statusCode).json(formatError(err, includeStack));
+    const exposeMessage = process.env.NODE_ENV === 'development';
+    res.status(statusCode).json(formatError(err, exposeMessage, exposeMessage));
 }
 
 /**
