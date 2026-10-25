@@ -49,7 +49,7 @@ services:
       ADMIN_INITIAL_USERNAME: ${ADMIN_INITIAL_USERNAME:-admin}
       ADMIN_INITIAL_EMAIL: ${ADMIN_INITIAL_EMAIL:-support@openmake.cc}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - openmake_pgdata:/var/lib/postgresql/data
       # init 스크립트 (첫 기동·빈 볼륨에서만 실행). read-only 마운트.
@@ -67,7 +67,7 @@ services:
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_BIND:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
     volumes:
       - openmake_redisdata:/data
     healthcheck:
