@@ -1,4 +1,4 @@
-import { createCodeNavTools, shq, normalizeRelPath } from './tools-code-nav';
+import { createCodeNavTools, shq, normalizeRelPath, relArg } from './tools-code-nav';
 import type { TaskExecutor, ExecResult, CodeNavSpec, CodeNavData } from './executor';
 
 function exec(stdout: string, exitCode = 0, stderr = ''): ExecResult {
@@ -37,6 +37,57 @@ describe('shq / normalizeRelPath', () => {
         expect(normalizeRelPath('./src')).toBe('src');
         expect(normalizeRelPath('/etc')).toBeNull();
         expect(normalizeRelPath('a/../b')).toBeNull();
+    });
+    it('- 로 시작하는 경로 세그먼트는 옵션 주입이라 거절한다', () => {
+        expect(normalizeRelPath('-delete')).toBeNull();
+        expect(normalizeRelPath('src/-x')).toBeNull();
+        expect(normalizeRelPath('--files0-from=/etc/passwd')).toBeNull();
+        expect(normalizeRelPath('./-exec')).toBeNull();
+        // 일반 경로는 그대로 통과(세그먼트 중간의 - 는 허용).
+        expect(normalizeRelPath('src')).toBe('src');
+        expect(normalizeRelPath('.')).toBe('.');
+        expect(normalizeRelPath('apps/web')).toBe('apps/web');
+        expect(normalizeRelPath('my-app/src')).toBe('my-app/src');
+    });
+    it('relArg 는 셸 인자를 ./ 로 고정하되 "." 는 그대로 둔다', () => {
+        expect(relArg('.')).toBe('.');
+        expect(relArg('src')).toBe('./src');
+        expect(relArg('apps/web')).toBe('./apps/web');
+    });
+});
+
+describe('셸 경로 인자는 ./ 로 고정된다', () => {
+    it("repo_map 의 find 와 skipped find 가 './src' 로 시작한다", async () => {
+        const { sandbox, cmds } = fakeSandbox(() => exec(''));
+        const map = createCodeNavTools(sandbox).find((t) => t.tool.name === 'repo_map')!;
+        await map.handler({ path: 'src', symbols: false });
+        expect(cmds[0]).toContain("find './src' ");
+        expect(cmds[0]).toContain("$(find './src' ");
+        expect(cmds[0]).not.toContain("find 'src'");
+    });
+    it("grep_code 의 rg·grep 경로가 './apps/web' 이다", async () => {
+        const { sandbox, cmds } = fakeSandbox((cmd) => cmd.startsWith('rg') ? exec('', 127) : exec(''));
+        const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+        await grep.handler({ pattern: 'foo', path: 'apps/web' });
+        expect(cmds[0]).toContain("-- './apps/web' |");
+        expect(cmds[1]).toContain("-- './apps/web' |");
+        expect(cmds[0]).toContain("$(find './apps/web' ");
+    });
+    it("path 생략·'.' 은 '.' 그대로 쓴다('./.' 아님)", async () => {
+        const { sandbox, cmds } = fakeSandbox(() => exec(''));
+        const tools = createCodeNavTools(sandbox);
+        await tools.find((t) => t.tool.name === 'grep_code')!.handler({ pattern: 'foo', path: '.' });
+        await tools.find((t) => t.tool.name === 'repo_map')!.handler({ symbols: false });
+        expect(cmds[0]).toContain("-- '.' |");
+        expect(cmds[cmds.length - 1]).toMatch(/^find '\.' /);
+        expect(cmds.join('\n')).not.toContain('./.');
+    });
+    it('- 로 시작하는 path 는 명령을 실행하지 않고 오류', async () => {
+        const { sandbox, cmds } = fakeSandbox(() => exec(''));
+        const tools = createCodeNavTools(sandbox);
+        expect((await tools.find((t) => t.tool.name === 'grep_code')!.handler({ pattern: 'x', path: '-delete' })).isError).toBe(true);
+        expect((await tools.find((t) => t.tool.name === 'repo_map')!.handler({ path: 'src/-x' })).isError).toBe(true);
+        expect(cmds.length).toBe(0);
     });
 });
 
