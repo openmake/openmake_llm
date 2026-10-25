@@ -1,5 +1,5 @@
 /**
- * 업로드 매직 바이트 검사(E10) — 신고 MIME 과 파일 앞 8바이트가 어긋나면 파서 전에 400 으로 거부한다.
+ * 업로드 매직 바이트 검사(E10) — 신고 MIME 과 파일 앞부분(PDF 는 앞 1024바이트 안 헤더)이 어긋나면 파서 전에 400 으로 거부한다.
  * 표에 없는 MIME(텍스트류)은 검사하지 않는다. 서비스 경로는 큐·DB·저장소·인가를 mock 하고 거부 시 저장이 일어나지 않는지 본다.
  */
 const storeOriginal = jest.fn(async (_s: string, v: string) => v);
@@ -67,6 +67,17 @@ describe('sniffMimeMismatch', () => {
         }
     });
 
+    it('PDF 는 앞 1024바이트 안 어디든 %PDF- 가 있으면 통과, 없으면 불일치(M-3)', () => {
+        const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+        expect(sniffMimeMismatch(Buffer.concat([bom, Buffer.from('%PDF-1.7\n')]), 'application/pdf')).toBe(false);
+        expect(sniffMimeMismatch(Buffer.from('   %PDF-1.4'), 'application/pdf')).toBe(false);
+        expect(sniffMimeMismatch(Buffer.concat([Buffer.alloc(1000, 0x20), Buffer.from('%PDF-1.4')]), 'application/pdf')).toBe(false);
+        expect(sniffMimeMismatch(Buffer.concat([Buffer.alloc(1100, 0x20), Buffer.from('%PDF-1.4')]), 'application/pdf')).toBe(true);
+        expect(sniffMimeMismatch(Buffer.from('<html>no pdf header here</html>'), 'application/pdf')).toBe(true);
+        // 다른 MIME 은 여전히 접두 비교 — 앞에 바이트가 붙으면 불일치
+        expect(sniffMimeMismatch(Buffer.concat([bom, Buffer.from([0x89, 0x50, 0x4e, 0x47])]), 'image/png')).toBe(true);
+    });
+
     it('매직보다 짧은 앞부분은 있는 바이트가 어긋날 때만 불일치', () => {
         expect(sniffMimeMismatch(Buffer.alloc(0), 'application/pdf')).toBe(false);
         expect(sniffMimeMismatch(Buffer.from('%PD'), 'application/pdf')).toBe(false);
@@ -89,6 +100,15 @@ describe('uploadDocument 매직 바이트 거부', () => {
         await expect(uploadDocument('u-1', 's1', { buffer, originalname: 'x.pdf', mimetype: 'application/octet-stream', size: buffer.length }))
             .rejects.toMatchObject({ statusCode: 400 });
         expect(storeOriginal).not.toHaveBeenCalled();
+    });
+
+    it('헤더 앞에 BOM·공백이 붙은 PDF 는 업로드된다(앞 1024바이트 안 %PDF-)', async () => {
+        for (const pre of [Buffer.from([0xef, 0xbb, 0xbf]), Buffer.alloc(600, 0x20)]) {
+            const pdf = Buffer.concat([pre, Buffer.from('%PDF-1.4\n...')]);
+            await expect(uploadDocument('u-1', 's1', { buffer: pdf, originalname: 'b.pdf', mimetype: 'application/pdf', size: pdf.length }))
+                .resolves.toMatchObject({ mimeType: 'application/pdf' });
+        }
+        expect(storeOriginal).toHaveBeenCalledTimes(2);
     });
 
     it('진짜 PDF 헤더와 텍스트 파일은 그대로 업로드된다', async () => {

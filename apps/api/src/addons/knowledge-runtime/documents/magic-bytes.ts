@@ -5,8 +5,11 @@
  * @module addons/knowledge-runtime/documents/magic-bytes
  */
 
-/** 앞부분 검사에 읽는 바이트 수. */
-export const MAGIC_HEAD_BYTES = 8;
+/** PDF 규격: `%PDF-` 헤더는 파일 앞 1024바이트 안 어디에 있어도 유효하다(BOM·공백·드라이버 접두 허용). */
+const PDF_HEADER_WINDOW = 1024;
+
+/** 앞부분 검사에 읽는 바이트 수 — PDF 헤더 탐색 창(다른 MIME 은 매직 길이만큼만 본다). */
+export const MAGIC_HEAD_BYTES = PDF_HEADER_WINDOW;
 
 const ZIP_LOCAL_HEADER = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
 
@@ -32,11 +35,15 @@ function magicFor(mime: string): Buffer | null {
 
 /**
  * 앞부분이 신고 MIME 의 매직과 어긋나면 true. 표에 없는 MIME 은 false.
+ * PDF 는 앞 1024바이트 안 어디든 `%PDF-` 가 있으면 일치로 본다.
  * 앞부분이 매직보다 짧으면 있는 바이트만 비교한다 — 이미 어긋난 바이트가 있을 때만 불일치(빈 파일은 여기서 거부하지 않는다).
  */
 export function sniffMimeMismatch(head: Buffer, mime: string): boolean {
     const magic = magicFor(mime);
     if (!magic) return false;
     const n = Math.min(head.length, magic.length);
-    return !head.subarray(0, n).equals(magic.subarray(0, n));
+    const prefixMatches = head.subarray(0, n).equals(magic.subarray(0, n));
+    // PDF 만 앞 1024바이트 안에서 헤더를 찾는다 — 나머지 MIME 은 접두 비교 그대로.
+    if (mime === 'application/pdf' && !prefixMatches) return head.subarray(0, PDF_HEADER_WINDOW).indexOf(magic) === -1;
+    return !prefixMatches;
 }

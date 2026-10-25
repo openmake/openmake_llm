@@ -54,7 +54,7 @@ export async function uploadDocument(userId: string, spaceId: string, file: Uplo
     const profiles = await resolveSpaceProfiles(space.config_profile_id);
     const { limits, chunker } = profiles;
 
-    // ① MIME 검증(신고값 → 확장자 보정, 앞 8바이트 매직 대조) ② 크기 ③ 문서 수 상한
+    // ① MIME 검증(신고값 → 확장자 보정, 앞부분 매직 대조 — PDF 는 앞 1024바이트 안 헤더) ② 크기 ③ 문서 수 상한
     const mime = resolveMime(file, limits.allowedMimeTypes);
     if (!mime) throw new AppError('지원하지 않는 파일 형식입니다', 415, true, 'FAILED_VALIDATION');
     if (sniffMimeMismatch(file.buffer.subarray(0, MAGIC_HEAD_BYTES), mime)) {
