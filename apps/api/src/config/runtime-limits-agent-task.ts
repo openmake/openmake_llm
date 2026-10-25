@@ -84,6 +84,9 @@ export const AGENT_TASK_LIMITS = {
      *  채우는 것을 막는다. 기본값은 기존 배포의 대용량 첨부를 막지 않도록 넉넉히 잡았다.
      *  AGENT_TASK_UPLOAD_USER_QUOTA_BYTES(기본 20GiB). */
     UPLOAD_USER_QUOTA_BYTES: parseInt(process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES || '', 10) || 20 * 1024 ** 3,
+    /** 사용자당 대기 중(미클레임) 청크 업로드 개수 상한 — 작은 선언 init 반복으로 대기 디렉터리를
+     *  늘려 init 마다의 순회 비용을 키우는 것을 막는다. AGENT_TASK_UPLOAD_USER_MAX_PENDING(기본 256). */
+    UPLOAD_USER_MAX_PENDING: parseInt(process.env.AGENT_TASK_UPLOAD_USER_MAX_PENDING || '', 10) || 256,
     /** 종료(completed/failed/cancelled) 후 업로드 원본 보존 기간(ms) — 지나면 보존 스윕이
      *  디스크 원본만 회수한다. DB 메타(input_files 추출텍스트·input_images base64)는 유지되므로
      *  이후 재시도는 추출텍스트로 degrade 될 뿐 실패하지 않는다(task-inputs 의 복사 실패 내성).

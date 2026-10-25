@@ -146,6 +146,30 @@ describe('chunk-store 용량 상한 (E4)', () => {
             else process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES = prev;
         }
     });
+
+    it('사용자별 대기 업로드 개수가 상한에 이르면 다음 init 은 413 — 다른 사용자·폐기 후에는 영향 없음', async () => {
+        const prev = process.env.AGENT_TASK_UPLOAD_USER_MAX_PENDING;
+        process.env.AGENT_TASK_UPLOAD_USER_MAX_PENDING = '3';
+        try {
+            let store!: typeof import('../chunk-store');
+            jest.isolateModules(() => { store = require('../chunk-store'); });
+            const user = 'count-user';
+            const ids: string[] = [];
+            for (let i = 0; i < 3; i++) {
+                ids.push((await store.initChunkedUpload(user, { name: `${i}.bin`, size: 1, totalChunks: 1 })).uploadId);
+            }
+            await expect(store.initChunkedUpload(user, { name: 'x.bin', size: 1, totalChunks: 1 }))
+                .rejects.toMatchObject({ statusCode: 413 });
+            const other = await store.initChunkedUpload('count-other', { name: 'o.bin', size: 1, totalChunks: 1 });
+            await store.abortChunkedUpload(ids.pop()!, user);
+            ids.push((await store.initChunkedUpload(user, { name: 'y.bin', size: 1, totalChunks: 1 })).uploadId);
+            for (const id of ids) await store.abortChunkedUpload(id, user);
+            await store.abortChunkedUpload(other.uploadId, 'count-other');
+        } finally {
+            if (prev === undefined) delete process.env.AGENT_TASK_UPLOAD_USER_MAX_PENDING;
+            else process.env.AGENT_TASK_UPLOAD_USER_MAX_PENDING = prev;
+        }
+    });
 });
 
 /** 사전 검사와 쓰기 사이에 다른 요청(다른 프로세스 포함)이 끼어드는 경합 — fs.writeFile 을
