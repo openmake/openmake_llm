@@ -536,6 +536,11 @@ if has node; then
     eq "restart: 띄울 script 가 없으면 지우지 않는다" "$(cut -d'|' -f1 "$RS/pm2.log" | tr '\n' ';')" "restart openmake-llm-rs --update-env ;"
 else echo "SKIP restart: ecosystem 재적용 (node 없음)"; fi
 eq "restart: 이름만으로 재시작하는 곳은 폴백 한 곳뿐" "$(grep -cE '^[^#]*pm2 restart "\$' "$HERE/../../openmake_llm.sh")" "1"
+# deploy 는 빌드 뒤·마이그레이션 전에 DB·Redis 컨테이너에 compose 변경(포트 바인딩 등)을 반영한다 — up -d 는 설정이 바뀐 컨테이너만 다시 만든다.
+DEPLOY_BODY="$(awk '/^cmd_deploy\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$HERE/../../openmake_llm.sh")"
+eq "deploy: 빌드 → postgres·redis up -d → 마이그레이션 순서" \
+    "$(grep -nE 'cmd_build --no-restart|ensure_docker_service up (postgres|redis)|cmd_migrate$' <<<"$DEPLOY_BODY" | sed -E 's/^[0-9]+:[[:space:]]*//; s/ +\|\|.*//; s/ "[^"]*"$//' | tr '\n' ';')" \
+    "cmd_build --no-restart;ensure_docker_service up postgres;ensure_docker_service up redis;cmd_migrate;"
 # 스크립트가 만드는 이름과 실제 ecosystem 이 만드는 이름이 같아야 --only 가 맞는 앱을 집는다.
 if ( cd "$HERE/../.." && node -e 'require("./ecosystem.config.js")' ) >/dev/null 2>&1; then
     eq "restart: ecosystem 의 앱 이름 = 스크립트의 앱 이름" \

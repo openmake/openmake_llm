@@ -872,6 +872,7 @@ smoke_check_chat() {
     [[ -n "$SMOKE_COOKIE_JAR" && -s "$SMOKE_COOKIE_JAR" ]] || { SMOKE_WHY="로그인하지 못해 건너뜀"; return 1; }
     # 쿠키 인증 요청은 CSRF 검사를 받는다(Bearer 만 면제) — jar 의 csrf_token 을 헤더에도 싣는다.
     local body c good=0; body="$(mktemp)"
+    # jar 는 http://localhost 로 보낸다 — Secure 쿠키는 curl 의 localhost 예외(curl ≥ 7.79)로만 실린다.
     c="$(smoke_code "$body" "http://localhost:$(llm_api_port "$1")/api/chat" -b "$SMOKE_COOKIE_JAR" -H 'Content-Type: application/json' \
         -H "X-CSRF-Token: $(smoke_jar_cookie "$SMOKE_COOKIE_JAR" csrf_token)" -d '{"message":"ping"}')"
     grep -q '"success":true' "$body" 2>/dev/null && good=1; rm -f "$body"
