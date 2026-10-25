@@ -1,6 +1,7 @@
 /**
  * 브라우저 세션 스크립트 호스트 쓰기 — 컨테이너 안에서 심어 둔 심링크를 따라가지 않는다 (보안 점검 E7).
  */
+import { existsSync } from 'fs';
 import { mkdtemp, writeFile, readFile, symlink, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -17,8 +18,9 @@ describe('startBrowserSession 세션 스크립트 쓰기', () => {
         await writeFile(outside, 'original');
         const ws = await mkdtemp(join(base, 'ws-'));
         await symlink(outside, join(ws, BROWSER_SESSION.SCRIPT_FILE));
-        // docker 대신 /usr/bin/false — inspect 실패 → 세션 없음 → 스크립트 쓰기로 진행
-        const cfg = { ...getTaskSandboxConfig(), dockerPath: '/usr/bin/false', egressProxyEnabled: false };
+        // docker 대신 false(없으면 존재하지 않는 절대경로 — spawn ENOENT 도 exitCode -1) — inspect 실패 → 세션 없음 → 스크립트 쓰기로 진행
+        const dockerPath = ['/usr/bin/false', '/bin/false'].find((p) => existsSync(p)) ?? join(base, 'no-such-docker');
+        const cfg = { ...getTaskSandboxConfig(), dockerPath, egressProxyEnabled: false };
         await expect(startBrowserSession('t-link', ws, {}, cfg)).rejects.toMatchObject({ code: 'ELOOP' });
         expect(await readFile(outside, 'utf8')).toBe('original');
     });
