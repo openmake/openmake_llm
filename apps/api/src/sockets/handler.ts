@@ -188,7 +188,7 @@ export class WebSocketHandler {
             extWs._authenticatedUserRole = auth.userRole;
             extWs._apiKeyScopes = auth.apiKeyScopes ?? undefined; // API key 연결이면 스코프(브리지 게이트)
             extWs._apiKeyId = auth.apiKeyId; // 키 폐기 시 이 키로 등록한 브리지 연결을 닫는다
-            extWs._authFailure = auth.authFailure; // 인증 실패 사유 — 게스트 브리지 연결을 이 사유로 닫는다
+            extWs._authFailure = auth.authFailure === 'inactive' ? undefined : auth.authFailure; // 게스트 브리지 닫기 사유 — JWT 'inactive' 는 브리지 계약(앱 1:1) 밖
             extWs._abortController = null;
             // 🔒 Phase 2: heartbeat alive 플래그 초기화
             extWs._isAlive = true;
