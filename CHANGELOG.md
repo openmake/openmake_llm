@@ -127,10 +127,6 @@
 ## [1.112.0](https://github.com/openmake/openmake_llm/compare/v1.111.0...v1.112.0) (2026-10-22)
 
 
-### ✨ 기능
-
-
-
 ### 🐛 버그 수정
 
 * **ci:** map scripts/vllm config to the pipeline suite with real coverage ([3fd0170](https://github.com/openmake/openmake_llm/commit/3fd01703040d64543867cccfaae43d4ad9d08a11))
