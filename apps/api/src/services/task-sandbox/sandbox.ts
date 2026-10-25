@@ -16,7 +16,7 @@
  */
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
-import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, realpath, copyFile as fsCopyFile } from 'fs/promises';
+import { mkdir, rm, readFile as fsReadFile, readdir, stat, realpath, copyFile as fsCopyFile } from 'fs/promises';
 import { resolve, sep, join, dirname, relative } from 'path';
 import { getTaskSandboxConfig, BROWSER_SESSION, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { BROWSER_RUN } from '../../config/agent-task-browser-web';
@@ -29,6 +29,7 @@ import { createLogger } from '../../utils/logger';
 import { withLiveTerminal } from './live-terminal';
 import { sanitizeId, buildRunArgs, buildBrowserRunArgs, browserRunContainerName, buildWriteArgs, EXEC_ID_ENV, buildKillExecArgs, runProcess } from './sandbox-docker-cli';
 import { safeRealWorkspacePath, dirSizeBytes, listWorkspaceFilesAt } from './sandbox-workspace-fs';
+import { writeFileNoFollow, ensurePrivateRoot } from './sandbox-host-write';
 
 // 기존 소비처(runtime/tools 등)가 './sandbox' 에서 ExecResult 를 import 하므로 재노출 유지.
 export type { ExecResult } from './executor';
@@ -85,6 +86,8 @@ export class TaskSandbox implements TaskExecutor {
         if (active >= this.cfg.maxConcurrent) {
             throw new TaskSandboxCapacityError(active, this.cfg.maxConcurrent);
         }
+        // 루트는 0o700(다른 계정 차단). task 폴더는 컨테이너 uid 가 호스트와 달라 0o777 로 둔다.
+        await ensurePrivateRoot(this.cfg.workspaceRoot);
         await mkdir(this.hostWorkdir, { recursive: true, mode: 0o777 });
         // 동명 잔존 컨테이너 제거(이전 비정상 종료 대비).
         await runProcess(this.cfg.dockerPath, ['rm', '-f', this.containerName],
@@ -208,7 +211,7 @@ export class TaskSandbox implements TaskExecutor {
             logger.warn(`[${this.taskId}] 컨테이너 쓰기 실패 → 호스트에서 씁니다 (${relPath}): ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
         }
         await mkdir(dirname(abs), { recursive: true });
-        await fsWriteFile(abs, content);
+        await writeFileNoFollow(abs, content);
     }
 
     /** 호스트 파일을 workspace 로 복사 (대용량 입력 첨부 — Buffer 메모리 적재 없이 fs copy).
