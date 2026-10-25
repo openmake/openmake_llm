@@ -2,6 +2,7 @@
  * Agent Task 생성(POST /api/agent-tasks) 입력 처리 — agent-task.routes.ts 에서 분리 (max-lines 가드).
  *
  * - createBodyMw: JSON(validateWithSecurity) / multipart(multer 디스크 스트리밍) 본문 분기 미들웨어
+ * - enforceTotalUploadSize: multer 뒤 파일 합계 상한 검사(초과 시 임시 파일 삭제 후 413)
  * - storeMultipartInputFiles: multipart 로 스트리밍된 원본을 task 디렉토리로 옮기고 입력 첨부 메타를 만든다
  *
  * @module routes/agent-task-create-inputs
@@ -11,6 +12,7 @@ import multer from 'multer';
 import * as fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import { badRequest } from '../utils/api-response';
+import { createLogger } from '../utils/logger';
 import { decodeMultipartFilename } from '../utils/multipart-filename';
 import { validateWithSecurity } from '../middlewares/validation';
 import { createAgentTaskSchema } from '../schemas/agent-task.schema';
@@ -18,6 +20,8 @@ import type { AgentTaskInputFile } from '../services/AgentTaskService';
 import { extractAttachedDocuments, isBinaryDocumentName } from '../services/chat-service/doc-extractor';
 import { AGENT_TASK_LIMITS, FILE_ATTACH_LIMITS, DOC_EXTRACT_LIMITS } from '../config/runtime-limits';
 import { ensureUploadTmpDir, finalizeUploadedFile, resolveStoredPath, safeBaseName } from '../services/agent-task/upload-store';
+
+const logger = createLogger('AgentTaskCreateInputs');
 
 const uploadMw = multer({
     storage: multer.diskStorage({
@@ -36,10 +40,30 @@ const jsonValidateMw = validateWithSecurity(createAgentTaskSchema, {
     preserveFormattingFields: ['goal', 'files'], // 첨부 텍스트(코드·CSV) 들여쓰기 보존 — 기본 정제는 연속 공백을 접는다
 });
 
+/** multer 의 fileSize 는 파일당 상한이라 파일 여러 개의 합은 막지 못한다 — 합계가
+ *  REQUEST_BODY_MAX_BYTES 를 넘으면 이미 디스크에 쓴 임시 파일을 지우고 413. */
+export function enforceTotalUploadSize(req: Request, res: Response, next: NextFunction) {
+    const files = Array.isArray(req.files) ? req.files : [];
+    const total = files.reduce((s, f) => s + f.size, 0);
+    if (total <= AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES) return next();
+    const respond = () => {
+        if (res.headersSent) return;
+        res.status(413).json(badRequest(`첨부 파일 합계가 너무 큽니다 (최대 ${AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES} bytes)`));
+    };
+    void Promise.allSettled(files.map((f) => fs.unlink(f.path)))
+        .then((rs) => {
+            const failed = rs.filter((r) => r.status === 'rejected').length;
+            if (failed > 0) logger.warn(`[AgentTaskCreate] 합계 초과 업로드 임시 파일 삭제 실패 ${failed}/${files.length}건`);
+        })
+        .catch((e) => logger.warn(`[AgentTaskCreate] 합계 초과 업로드 정리 오류: ${e instanceof Error ? e.message : String(e)}`))
+        .then(respond)
+        .catch((e) => logger.error(`[AgentTaskCreate] 413 응답 실패: ${e instanceof Error ? e.message : String(e)}`));
+}
+
 export function createBodyMw(req: Request, res: Response, next: NextFunction) {
     if (!req.is('multipart/form-data')) return jsonValidateMw(req, res, next);
     uploadMw(req, res, (err?: unknown) => {
-        if (!err) return next();
+        if (!err) return enforceTotalUploadSize(req, res, next);
         const msg = err instanceof multer.MulterError
             ? (err.code === 'LIMIT_FILE_SIZE'
                 ? `첨부 파일이 너무 큽니다 (최대 ${AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES} bytes)`

@@ -118,7 +118,7 @@ const mcpCallTool: MCPToolDefinition = {
     },
     handler: async (args, context, opts): Promise<MCPToolResult> => {
         const userId = context?.userId != null ? String(context.userId) : undefined;
-        if (!userId || userId === 'guest') return text('로그인 사용자만 MCP 도구를 호출할 수 있습니다.');
+        if (!context || !userId || userId === 'guest') return text('로그인 사용자만 MCP 도구를 호출할 수 있습니다.');
         const server = typeof args.server === 'string' ? args.server.trim() : '';
         const tool = typeof args.tool === 'string' ? args.tool.trim() : '';
         if (!server || !tool) return text('server 와 tool 이 필요합니다.');
@@ -133,7 +133,13 @@ const mcpCallTool: MCPToolDefinition = {
         // 네임스페이스 이름으로 재구성 → executeTool 의 해석 경로 재사용(사용자 풀 우선, 없으면 전역).
         // 바깥 실행의 중단 신호를 그대로 넘긴다(#1474) — 이미 중단됐으면 디스패처가 외부 호출을 시작하지 않는다.
         const namespaced = `${g.displayName}${MCP_NAMESPACE_SEPARATOR}${tool}`;
-        return router.executeTool(namespaced, toolArgs, context, opts);
+        // 바깥 mcp_call 의 보안 검사는 args 객체 안을 보지 않는다 — 안쪽 도구도 Base 보안 실행기(경로 샌드박스·
+        // 인자 검사·감사)를 거치고, 중첩 인자까지 검사한다(E6). 차단은 isError + security.tool_args_blocked.
+        const { executeToolSecurely } = await import('../../runtime-ports/tool-runtime');
+        return executeToolSecurely(
+            (name, sandboxedArgs, ctx) => router.executeTool(name, sandboxedArgs, ctx, opts),
+            namespaced, toolArgs, context, { deepArgScan: true },
+        );
     },
 };
 

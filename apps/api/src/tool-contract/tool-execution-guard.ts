@@ -15,6 +15,7 @@ import { UserSandbox } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { auditSecurityEvent, securityAuditActor } from '../security/security-audit';
 import { hashToolArgs } from '../utils/args-hash';
+import { TOOL_ARG_SCAN_LIMITS } from '../config/runtime-limits';
 
 const logger = createLogger('ToolExecutionGuard');
 
@@ -49,6 +50,39 @@ export function detectDangerousArg(key: string, value: string): string | null {
         }
     }
     return null;
+}
+
+/**
+ * 중첩 인자(객체·배열)의 문자열 값마다 detectDangerousArg 를 적용한다 (순수, 테스트 가능).
+ * 룰 선택은 가장 가까운 속성 이름 기준(배열 원소는 부모 속성 이름). 깊이 TOOL_ARG_SCAN_LIMITS.MAX_DEPTH
+ * 를 넘는 객체·배열은 검사하지 못하므로 위반('depth')으로 막는다(fail-closed). 이미 본 객체는 다시 보지 않는다(순환 참조 안전).
+ * @param path 반환 key 앞에 붙일 경로(기본 '')
+ * @returns 첫 위반의 점·대괄호 경로(key)와 라벨, 없으면 null
+ */
+export function detectDangerousArgsDeep(args: unknown, path = ''): { key: string; violation: string } | null {
+    const seen = new WeakSet<object>();
+    const walk = (value: unknown, at: string, ruleKey: string, depth: number): { key: string; violation: string } | null => {
+        if (typeof value === 'string') {
+            const violation = ruleKey ? detectDangerousArg(ruleKey, value) : null;
+            return violation ? { key: at, violation } : null;
+        }
+        if (!value || typeof value !== 'object' || seen.has(value)) return null;
+        if (depth >= TOOL_ARG_SCAN_LIMITS.MAX_DEPTH) return { key: at, violation: 'depth' };
+        seen.add(value);
+        if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) {
+                const hit = walk(value[i], `${at}[${i}]`, ruleKey, depth + 1);
+                if (hit) return hit;
+            }
+            return null;
+        }
+        for (const [k, v] of Object.entries(value)) {
+            const hit = walk(v, at ? `${at}.${k}` : k, k, depth + 1);
+            if (hit) return hit;
+        }
+        return null;
+    };
+    return walk(args, path, '', 0);
 }
 
 /** 차단된 인자 — 감사(S10)에 키 이름·사유만 넘기려고 메시지와 별도로 싣는다(값은 싣지 않는다). */
@@ -134,12 +168,14 @@ async function auditToolCall(
  * 사용자 문맥이 있는 도구 실행 — 경로 샌드박스 → 인자 검증 → 실행 → 감사.
  *
  * @param exec 실제 실행자(Base 내장 디스패처 또는 MCP 런타임의 ToolRouter)
+ * @param options.deepArgScan 중첩 인자까지 위험 패턴 검사(detectDangerousArgsDeep) — mcp_call 처럼 args 객체를 통째로 넘기는 경로용
  */
 export async function executeToolSecurely(
     exec: (name: string, args: Record<string, unknown>, context: UserContext) => Promise<MCPToolResult>,
     toolName: string,
     args: Record<string, unknown>,
     context: UserContext,
+    options: { deepArgScan?: boolean } = {},
 ): Promise<MCPToolResult> {
     // 파일 경로 인자가 있으면 샌드박스 경로로 변환
     let sandboxedArgs: Record<string, unknown>;
@@ -155,6 +191,10 @@ export async function executeToolSecurely(
     // 비경로 인자 보안 검증 (SQL 인젝션, 명령어 인젝션 등)
     try {
         sandboxedArgs = sanitizeToolArgs(sandboxedArgs, toolName);
+        const nested = options.deepArgScan ? detectDangerousArgsDeep(sandboxedArgs) : null;
+        if (nested) {
+            throw new BlockedArgError(`차단된 도구 인자: ${nested.key} (도구: ${toolName}) — 위험한 패턴 감지 [${nested.violation}]`, nested.key, nested.violation);
+        }
     } catch (error) {
         const message = error instanceof Error ? error.message : '도구 인자 검증 실패';
         logger.warn(`⚠️ 도구 인자 차단: ${toolName} (user: ${context.userId}) - ${message}`);

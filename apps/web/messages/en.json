@@ -1370,6 +1370,7 @@
       "unreachable": "Cannot reach the server",
       "timeout": "Connection timed out",
       "protocol": "MCP protocol response error",
+      "sandbox_required": "Sandbox required — user MCP servers need the Docker sandbox (contact your administrator)",
       "unknown": "Connection failed — hover for details"
     },
     "disabledLabel": "Disabled",
