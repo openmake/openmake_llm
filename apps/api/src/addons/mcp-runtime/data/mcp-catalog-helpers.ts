@@ -3,6 +3,7 @@
  * 와 instance metrics 집계 SQL.
  * mcp-catalog-repository.ts 에서 분리 — 동작은 그대로.
  */
+import { McpCatalogInputError } from '../../../security/spawn-env-policy';
 import { encryptToken } from '../../../utils/token-crypto';
 import type { McpCatalogTemplate, McpVisibility } from '../schemas/mcp-catalog.schema';
 
@@ -25,10 +26,29 @@ export interface UserMcpServerRow {
     sandbox_network?: 'full' | 'none' | 'host' | null;
 }
 
+const MAX_CATALOG_ARG_VALUE_LENGTH = 512;
+
+/**
+ * 카탈로그 인자 값 검증(E5) — `--key=value` 의 value 에 옵션 모양·공백·제어문자를 싣지 못하게 한다.
+ * 문자열·숫자·불리언만 받고, 렌더한 문자열(String(v))이 512자 이하·공백/제어문자 없음·`-` 로 시작하지 않아야 한다.
+ * 값은 메시지에 넣지 않는다. 키 검증(args_schema.properties)은 validateCatalogInput 이 맡는다.
+ * @throws {McpCatalogInputError} 라우트 400
+ */
+export function assertCatalogArgValue(key: string, v: unknown): string {
+    if (typeof v !== 'string' && typeof v !== 'number' && typeof v !== 'boolean') {
+        throw new McpCatalogInputError(`잘못된 인자 값: ${key}`);
+    }
+    const s = String(v);
+    if (s.length > MAX_CATALOG_ARG_VALUE_LENGTH || /[\s\x00-\x1f]/.test(s) || s.startsWith('-')) {
+        throw new McpCatalogInputError(`잘못된 인자 값: ${key}`);
+    }
+    return s;
+}
+
 export function renderArgs(template: McpCatalogTemplate, args: Record<string, unknown>): unknown[] {
     if (template.transport_type !== 'stdio') return [];
     const baseArgs = (template.command_template ?? '').split(/\s+/).slice(1).filter(Boolean);
-    const userArgs = Object.entries(args).map(([k, v]) => `--${k}=${String(v)}`);
+    const userArgs = Object.entries(args).map(([k, v]) => `--${k}=${assertCatalogArgValue(k, v)}`);
     return [...baseArgs, ...userArgs];
 }
 
