@@ -60,6 +60,18 @@ jest.mock('../auth/middleware', () => ({
 jest.mock('../data/models/token-blacklist', () => ({
     getTokenBlacklist: jest.fn(() => ({ has: () => new Promise<boolean>(() => { /* 대기 */ }) })),
 }));
+// 관리자 판정(isAdminRequest)은 서명된 JWT 가 관리자일 때 DB 로 현재 role·is_active·tokens_valid_after 를 재확인한다 —
+// 토큰의 userId 가 u-admin 으로 시작하면 활성 관리자, 그 밖은 일반 사용자 행을 돌려준다
+const mockUserManager = {
+    getUserById: jest.fn(async (id: string) => ({
+        id, email: `${id}@example.test`, role: id.startsWith('u-admin') ? 'admin' : 'user',
+        created_at: '2026-10-25T00:00:00.000Z', is_active: true, tokens_valid_after: null,
+    })),
+};
+jest.mock('../data/user-manager', () => ({
+    ...jest.requireActual('../data/user-manager'),
+    getUserManager: jest.fn(() => mockUserManager),
+}));
 
 import express from 'express';
 import request from 'supertest';
