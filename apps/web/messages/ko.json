@@ -1569,7 +1569,7 @@
     "avgQueriesPerSession": "세션당 평균 쿼리",
     "peakHoursTop3": "피크 시간대 Top 3",
     "peakHourItem": "{hour}시 · {requests} 요청",
-    "topQueriesTop5": "자주 묻는 쿼리 Top 5",
+    "topQueriesTop5": "인기 쿼리 Top 5 (해시 — 원문은 보관하지 않음)",
     "agentPerformance": "에이전트 성능",
     "period": {
       "7d": "7일",

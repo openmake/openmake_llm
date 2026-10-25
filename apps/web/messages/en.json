@@ -1569,7 +1569,7 @@
     "avgQueriesPerSession": "Avg. Queries per Session",
     "peakHoursTop3": "Peak Hours Top 3",
     "peakHourItem": "{hour}:00 · {requests} requests",
-    "topQueriesTop5": "Top 5 Queries",
+    "topQueriesTop5": "Top 5 Queries (hashed — original text is not retained)",
     "agentPerformance": "Agent Performance",
     "period": {
       "7d": "7 days",
