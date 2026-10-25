@@ -70,6 +70,8 @@ export interface PublicUser {
     last_login?: string;
     /** 계정 활성화 상태 */
     is_active: boolean;
+    /** 이 시각(ISO) 이전에 발급된 토큰 거부 — NULL 이면 검사 안 함(마이그레이션 194, 보안 점검 A2) */
+    tokens_valid_after?: string | null;
 }
 
 /**
@@ -99,6 +101,8 @@ interface UserRow {
     last_login: string | null;
     /** W3 S7 — 잠금이 켜졌을 때만 SELECT 가 싣는 DB 판정(locked_until > NOW()). 그 밖에는 undefined. */
     locked_now?: boolean;
+    /** 마이그레이션 194 — pg 는 TIMESTAMPTZ 를 Date 로 준다. 194 미적용이면 undefined. */
+    tokens_valid_after?: Date | string | null;
 }
 
 /**
@@ -244,7 +248,8 @@ class UserManagerImpl {
             role: row.role as UserRole,
             is_active: !!row.is_active,
             created_at: row.created_at,
-            last_login: row.last_login || undefined
+            last_login: row.last_login || undefined,
+            tokens_valid_after: row.tokens_valid_after ? new Date(row.tokens_valid_after).toISOString() : null
         };
     }
 

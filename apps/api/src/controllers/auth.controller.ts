@@ -12,6 +12,7 @@ import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
 import { requireAuth, optionalAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken, removeSessionFromMap } from '../auth';
 import jwt from 'jsonwebtoken';
+import { isIssuedBeforeInvalidation } from '../auth/token-invalidation';
 import { activeOrgFor } from '../services/org/membership-cache';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError } from '../utils/api-response';
@@ -321,6 +322,12 @@ class AuthController {
             if (!user || !user.is_active) {
                 clearTokenCookie(res);
                 res.status(401).json(unauthorized('사용자를 찾을 수 없습니다'));
+                return;
+            }
+
+            if (isIssuedBeforeInvalidation(payload.iat, user.tokens_valid_after)) {
+                clearTokenCookie(res);
+                res.status(401).json(unauthorized('토큰이 무효화되었습니다'));
                 return;
             }
 

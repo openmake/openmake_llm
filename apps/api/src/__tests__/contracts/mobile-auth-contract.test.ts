@@ -150,6 +150,25 @@ describe('모바일 인증 (iOS 축 2)', () => {
             expect(r.status).toBe(401);
             expectContract('/api/auth/refresh', 'post', '401', r.body);
         });
+
+        test('tokens_valid_after 이전에 발급된 refresh token → 401 + 회전 안 함', async () => {
+            const validAfter = '2026-10-25T06:00:00.000Z';
+            (verifyRefreshToken as jest.Mock).mockResolvedValue({ userId: 'u1', iat: Date.parse(validAfter) / 1000 - 10 });
+            mockUserManager.getUserById.mockResolvedValue({ ...sampleUser, tokens_valid_after: validAfter });
+            const r = await request(app).post('/api/auth/refresh').send({ refreshToken: 'old-rt' });
+            expect(r.status).toBe(401);
+            expect(r.body.error.message).toBe('토큰이 무효화되었습니다');
+            expect(blacklistToken).not.toHaveBeenCalled();
+            expectContract('/api/auth/refresh', 'post', '401', r.body);
+        });
+
+        test('tokens_valid_after 이후에 발급된 refresh token → 200', async () => {
+            const validAfter = '2026-10-25T06:00:00.000Z';
+            (verifyRefreshToken as jest.Mock).mockResolvedValue({ userId: 'u1', iat: Date.parse(validAfter) / 1000 + 10 });
+            mockUserManager.getUserById.mockResolvedValue({ ...sampleUser, tokens_valid_after: validAfter });
+            const r = await request(app).post('/api/auth/refresh').send({ refreshToken: 'new-rt' });
+            expect(r.status).toBe(200);
+        });
     });
 
     describe('login returnRefreshToken', () => {
