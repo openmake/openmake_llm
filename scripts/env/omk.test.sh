@@ -613,6 +613,18 @@ SM_JAR="$(
     cmd_env_smoke smk >/dev/null 2>&1; [[ -e "$TMP/smoke-jar" ]] && echo left || echo gone
 )"
 eq "smoke: 끝나면 쿠키 jar 를 지운다" "$SM_JAR" "gone"
+SM_JAR_INT="$(
+    load_toolchain() { :; }
+    smoke_check_health() { return 0; }; smoke_check_manifest() { return 0; }; smoke_check_generated() { return 0; }
+    smoke_check_login() { SMOKE_COOKIE_JAR="$TMP/smoke-jar-int"; : > "$SMOKE_COOKIE_JAR"; }; smoke_check_ready() { exit 130; }; smoke_check_chat() { return 0; }
+    trap 'echo caller-trap' EXIT
+    cmd_env_smoke smk >/dev/null 2>&1; echo "rc=$? $([[ -e "$TMP/smoke-jar-int" ]] && echo left || echo gone)"
+)"
+eq "smoke: 도중에 끊겨도 쿠키 jar 를 지우고, 호출한 쪽의 EXIT trap 은 그대로" "$SM_JAR_INT" "$(printf 'rc=130 gone\ncaller-trap')"
+SL_NOCSRF="$( smoke_code() { printf 200; }; printf 'PORT=52417\nOMK_SMOKE_EMAIL=s@example.com\nOMK_SMOKE_PASSWORD=pw\n' > "$SM/.env"
+    smoke_check_login "$SM" || echo "fail why=$SMOKE_WHY jar=${SMOKE_COOKIE_JAR:-none}" )"
+printf 'PORT=52417\nOMK_WEB_PORT=3010\n' > "$SM/.env"
+eq "smoke: CSRF 토큰을 못 받으면 로그인 전에 실패" "$SL_NOCSRF" "fail why=CSRF 토큰을 받지 못함 jar=none"
 
 # ── /ready: 쓰기 없는 준비 확인(LLM 노드·DB·기본 모델) — 릴리스 환경은 채팅 대신 이것으로 연결을 본다 ──
 eq "smoke ready: 200 은 통과" "$( OMK_SMOKE_READY_WAIT=0; smoke_code() { printf '{}' > "$1"; printf 200; }; smoke_check_ready "$SM" && echo ok )" "ok"
