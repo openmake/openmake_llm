@@ -108,3 +108,39 @@ describe('chunk-store 방어', () => {
         await abortChunkedUpload(uploadId, USER);
     });
 });
+
+describe('chunk-store 용량 상한 (E4)', () => {
+    it('청크 합계가 선언 크기를 넘으면 400 — 같은 index 재전송은 중복 집계하지 않는다', async () => {
+        const { uploadId } = await initChunkedUpload(USER, { name: 'over.bin', size: 10, totalChunks: 2 });
+        await writeChunk(uploadId, USER, 0, Buffer.alloc(6, 1));
+        await writeChunk(uploadId, USER, 0, Buffer.alloc(6, 2)); // 재시도 덮어쓰기는 허용
+        await expect(writeChunk(uploadId, USER, 1, Buffer.alloc(6, 3)))
+            .rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining('선언 크기 초과') });
+        await writeChunk(uploadId, USER, 1, Buffer.alloc(4, 3)); // 합계 10 은 통과
+        await abortChunkedUpload(uploadId, USER);
+    });
+
+    it('사용자별 미조립 업로드 선언 합계가 쿼터를 넘으면 413 — 다른 사용자·폐기 후에는 영향 없음', async () => {
+        const prev = process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES;
+        process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES = '1024';
+        try {
+            let store!: typeof import('../chunk-store');
+            jest.isolateModules(() => { store = require('../chunk-store'); });
+            const quotaUser = 'quota-user';
+            const first = await store.initChunkedUpload(quotaUser, { name: 'a.bin', size: 600, totalChunks: 1 });
+            // 조립이 끝나도 claim 전까지는 디스크를 차지하므로 쿼터에 포함된다
+            await store.writeChunk(first.uploadId, quotaUser, 0, Buffer.alloc(600, 1));
+            await store.completeChunkedUpload(first.uploadId, quotaUser);
+            await expect(store.initChunkedUpload(quotaUser, { name: 'b.bin', size: 600, totalChunks: 1 }))
+                .rejects.toMatchObject({ statusCode: 413 });
+            const other = await store.initChunkedUpload('quota-other', { name: 'c.bin', size: 600, totalChunks: 1 });
+            await store.abortChunkedUpload(first.uploadId, quotaUser);
+            const second = await store.initChunkedUpload(quotaUser, { name: 'b.bin', size: 600, totalChunks: 1 });
+            await store.abortChunkedUpload(second.uploadId, quotaUser);
+            await store.abortChunkedUpload(other.uploadId, 'quota-other');
+        } finally {
+            if (prev === undefined) delete process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES;
+            else process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES = prev;
+        }
+    });
+});

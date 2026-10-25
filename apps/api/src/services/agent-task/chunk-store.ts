@@ -43,7 +43,7 @@ interface ChunkedUploadMeta {
 
 /** 스토어 오류 — 라우트가 statusCode 로 HTTP 매핑. */
 export class ChunkStoreError extends Error {
-    constructor(message: string, public readonly statusCode: 400 | 403 | 404 | 409) {
+    constructor(message: string, public readonly statusCode: 400 | 403 | 404 | 409 | 413) {
         super(message);
         this.name = 'ChunkStoreError';
     }
@@ -90,6 +90,25 @@ export async function cleanupStaleChunkUploads(): Promise<void> {
     await cleanupStale();
 }
 
+/** 사용자의 대기 중(미클레임 — claim 이 디렉토리를 지운다) 업로드 선언 크기 합. 조립 끝난 것도
+ *  claim 전까지 디스크를 차지하므로 포함하고, TTL 지나 청소 대상인 것은 뺀다. */
+async function pendingBytesForUser(userId: string): Promise<number> {
+    let entries: string[];
+    try { entries = await fs.readdir(CHUNK_ROOT); } catch { return 0; }
+    const cutoff = Date.now() - AGENT_TASK_LIMITS.CHUNK_UPLOAD_TTL_MS;
+    let total = 0;
+    for (const id of entries) {
+        if (!UPLOAD_ID_RE.test(id)) continue;
+        try {
+            const dir = path.join(CHUNK_ROOT, id);
+            if ((await fs.stat(dir)).mtimeMs < cutoff) continue;
+            const meta = JSON.parse(await fs.readFile(path.join(dir, 'meta.json'), 'utf8')) as ChunkedUploadMeta;
+            if (meta.userId === userId) total += meta.size;
+        } catch { /* 경합 삭제·meta 기록 전 — 무시 */ }
+    }
+    return total;
+}
+
 /** 업로드 세션 시작 — 선언(파일명·크기·청크 수)을 기록하고 uploadId 발급. */
 export async function initChunkedUpload(
     userId: string,
@@ -99,6 +118,11 @@ export async function initChunkedUpload(
     if (decl.totalChunks < expectedChunks) {
         throw new ChunkStoreError(
             `totalChunks(${decl.totalChunks})가 선언 크기 대비 부족합니다 — 청크당 최대 ${AGENT_TASK_LIMITS.CHUNK_MAX_BYTES} bytes`, 400);
+    }
+    const pending = await pendingBytesForUser(userId);
+    if (pending + decl.size > AGENT_TASK_LIMITS.UPLOAD_USER_QUOTA_BYTES) {
+        throw new ChunkStoreError(
+            `대기 중인 업로드 용량 초과 — 사용자당 최대 ${AGENT_TASK_LIMITS.UPLOAD_USER_QUOTA_BYTES} bytes (대기 ${pending}, 요청 ${decl.size})`, 413);
     }
     void cleanupStale(); // 비동기 기회적 청소 — init 응답을 막지 않음
     const uploadId = uuidv4();
@@ -126,7 +150,17 @@ export async function writeChunk(uploadId: string, userId: string, index: number
     if (buf.length > AGENT_TASK_LIMITS.CHUNK_MAX_BYTES) {
         throw new ChunkStoreError(`청크가 너무 큽니다 (최대 ${AGENT_TASK_LIMITS.CHUNK_MAX_BYTES} bytes)`, 400);
     }
-    await fs.writeFile(path.join(uploadDir(uploadId), `chunk.${index}`), buf);
+    const dir = uploadDir(uploadId);
+    let received = buf.length; // 같은 index 는 덮어쓰기이므로 기존 크기를 빼고 센다
+    for (let i = 0; i < meta.totalChunks; i++) {
+        if (i === index) continue;
+        const st = await fs.stat(path.join(dir, `chunk.${i}`)).catch(() => null);
+        if (st) received += st.size;
+    }
+    if (received > meta.size) {
+        throw new ChunkStoreError(`선언 크기 초과 — 선언 ${meta.size}, 수신 ${received} bytes`, 400);
+    }
+    await fs.writeFile(path.join(dir, `chunk.${index}`), buf);
 }
 
 /**
