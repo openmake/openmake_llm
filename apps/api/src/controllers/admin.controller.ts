@@ -7,7 +7,8 @@
 
 import { Request, Response, Router } from 'express';
 import { getUserManager, UserRole, USER_ROLES, isUserRole } from '../data/user-manager';
-import { requireAuth, requireAdmin } from '../auth';
+import { requireAuth, requireAdmin, clearSessionsForUser } from '../auth';
+import { invalidateTokensBefore } from '../data/user-manager-token-invalidation';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, internalError } from '../utils/api-response';
 import { validatePasswordComplexity } from '../services/AuthService';
@@ -183,6 +184,12 @@ class AdminController {
             if (!user) {
                 res.status(404).json(notFound('사용자'));
                 return;
+            }
+
+            // 보안 점검 A2 — 관리자 재설정도 자가 변경과 같이 대상 사용자의 기존 토큰·세션을 끊는다.
+            if (password !== undefined) {
+                await invalidateTokensBefore(userId);
+                clearSessionsForUser(userId);
             }
 
             log.info(`사용자 정보 수정: ${user.email}`);

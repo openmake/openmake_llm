@@ -43,6 +43,7 @@ jest.mock('../../auth', () => ({
 const mockAuthService = {
     login: jest.fn(),
     register: jest.fn(),
+    changePassword: jest.fn(),
 };
 jest.mock('../../services/AuthService', () => ({
     getAuthService: () => mockAuthService,
@@ -83,7 +84,7 @@ jest.mock('../../config', () => ({
 
 import { createAuthController } from '../../controllers/auth.controller';
 import { csrfTokenIssuer } from '../../middlewares/csrf-protection';
-import { verifyRefreshToken } from '../../auth';
+import { verifyRefreshToken, clearTokenCookie } from '../../auth';
 import { success } from '../../utils/api-response';
 
 describe('Auth 응답 계약', () => {
@@ -155,6 +156,26 @@ describe('Auth 응답 계약', () => {
         const r = await request(app).post('/api/auth/logout');
         expect(r.status).toBe(200);
         expectContract('/api/auth/logout', 'post', '200', r.body);
+    });
+
+    // 보안 점검 A2 — 비밀번호를 바꾸면 기존 토큰은 무효(tokens_valid_after)이므로 새 토큰을 내주지 않고
+    // 이 브라우저의 인증 쿠키도 지운다(재로그인 유도). 응답 본문은 그대로.
+    test('PUT /api/auth/password 200 — 인증 쿠키를 지우고 새 토큰을 내주지 않는다', async () => {
+        currentUser = sampleUser;
+        mockAuthService.changePassword.mockResolvedValue({ success: true });
+        const r = await request(app).put('/api/auth/password').send({ currentPassword: 'a', newPassword: 'b' });
+        expect(r.status).toBe(200);
+        expect(r.body).toMatchObject({ success: true, data: { success: true } });
+        expect(r.body.data.token).toBeUndefined();
+        expect(clearTokenCookie).toHaveBeenCalledTimes(1);
+    });
+
+    test('PUT /api/auth/password 실패면 쿠키를 지우지 않는다', async () => {
+        currentUser = sampleUser;
+        mockAuthService.changePassword.mockResolvedValue({ success: false, error: '현재 비밀번호가 올바르지 않습니다' });
+        const r = await request(app).put('/api/auth/password').send({ currentPassword: 'a', newPassword: 'b' });
+        expect(r.status).toBe(401);
+        expect(clearTokenCookie).not.toHaveBeenCalled();
     });
 
     test('GET /api/csrf-token 200 (raw JSON — envelope 미적용)', async () => {

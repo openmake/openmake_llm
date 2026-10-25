@@ -146,6 +146,25 @@ export function removeSessionFromMap(userId: string, jti: string): void {
 }
 
 /**
+ * 사용자의 모든 리프레시 세션을 끊는다(보안 점검 A2 — 비밀번호 변경·관리자 재설정).
+ * 세션 맵에서 지우고 남은 jti 는 실제 만료(발급 시각 + 리프레시 수명)까지 블랙리스트에 올린다.
+ * 맵은 이 프로세스 메모리뿐이라 주 방어선은 users.tokens_valid_after(invalidateTokensBefore)이고, 이건 보조다 —
+ * 블랙리스트 저장 실패는 로그만 남긴다.
+ */
+export function clearSessionsForUser(userId: string): void {
+    const sessions = activeSessionMap.get(userId);
+    if (!sessions) return;
+    activeSessionMap.delete(userId);
+    const blacklist = getTokenBlacklist();
+    for (const s of sessions) {
+        blacklist.add(s.jti, s.createdAt + AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS).catch(err =>
+            logger.error('세션 정리 블랙리스트 추가 실패:', err)
+        );
+    }
+    logger.info(`사용자 ${userId} 세션 ${sessions.length}개 정리(블랙리스트)`);
+}
+
+/**
  * 🔒 Phase 2: 리프레시 토큰 검증
  * 액세스 토큰 갱신용 리프레시 토큰을 검증합니다.
  *

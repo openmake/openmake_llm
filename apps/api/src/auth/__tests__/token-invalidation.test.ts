@@ -29,4 +29,9 @@ describe('isIssuedBeforeInvalidation', () => {
         expect(isIssuedBeforeInvalidation(VALID_AFTER_SEC - 1, at)).toBe(true);
         expect(isIssuedBeforeInvalidation(VALID_AFTER_SEC, at)).toBe(false);
     });
+
+    it('tokens_valid_after 가 있는데 시각으로 읽히지 않으면 true(거부, fail-closed)', () => {
+        expect(isIssuedBeforeInvalidation(VALID_AFTER_SEC + 1000, 'not-a-date')).toBe(true);
+        expect(isIssuedBeforeInvalidation(VALID_AFTER_SEC + 1000, new Date('invalid'))).toBe(true);
+    });
 });

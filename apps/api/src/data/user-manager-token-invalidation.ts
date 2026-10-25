@@ -6,8 +6,28 @@
  * @module data/user-manager-token-invalidation
  */
 import { getPool } from './models/unified-database';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('UserTokenInvalidation');
 
 /** `at` 이전에 발급된 이 사용자의 모든 토큰을 무효화한다. */
 export async function invalidateTokensBefore(userId: string, at: Date = new Date()): Promise<void> {
     await getPool().query('UPDATE users SET tokens_valid_after = $1 WHERE id = $2', [at, userId]);
+}
+
+/**
+ * 부팅 관리자 승격·비밀번호 덮어쓰기 UPDATE(보안 점검 A11) — 같은 UPDATE 에서 tokens_valid_after = NOW() 로 이전 토큰을 끊는다.
+ * 부팅 순서상 UserManager 초기화는 마이그레이션 자동 적용보다 먼저라 194 가 아직 없을 수 있다(server.ts). 그때(42703
+ * undefined_column)는 열 없이 같은 UPDATE 를 다시 실행한다 — 열이 없으면 무효화 검사도 없고, 부팅을 막으면 마이그레이션도
+ * 못 돈다. 다른 오류는 그대로 던진다(부팅 Fail-Fast).
+ */
+export async function updateUsersInvalidatingTokens(setSql: string, whereSql: string, params: unknown[]): Promise<void> {
+    const pool = getPool();
+    try {
+        await pool.query(`UPDATE users SET ${setSql}, tokens_valid_after = NOW() WHERE ${whereSql}`, params);
+    } catch (err) {
+        if ((err as { code?: string }).code !== '42703') throw err;
+        logger.warn('users.tokens_valid_after 없음(마이그레이션 194 미적용) — 토큰 무효화 없이 갱신');
+        await pool.query(`UPDATE users SET ${setSql} WHERE ${whereSql}`, params);
+    }
 }

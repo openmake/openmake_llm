@@ -21,6 +21,7 @@ export {
     setRefreshTokenCookie,
     clearTokenCookie,
     removeSessionFromMap,
+    clearSessionsForUser,
 } from './auth-core';
 
 // 모듈 재-export

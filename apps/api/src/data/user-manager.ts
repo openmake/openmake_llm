@@ -23,6 +23,7 @@ import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import { isLockoutActive, recordFailedLogin, recordSuccessfulLogin, selectLoginRow } from './user-login-lockout';
+import { updateUsersInvalidatingTokens } from './user-manager-token-invalidation';
 
 const logger = createLogger('UserManager');
 
@@ -160,8 +161,8 @@ class UserManagerImpl {
                 const cfgAdminPassword = getConfig().adminPassword;
                 if (cfgAdminPassword) {
                     const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
-                    await pool.query(
-                        'UPDATE users SET role = $1, password_hash = $2, updated_at = $3 WHERE username = $4',
+                    await updateUsersInvalidatingTokens(
+                        'role = $1, password_hash = $2, updated_at = $3', 'username = $4',
                         ['admin', passwordHash, new Date().toISOString(), adminEmail]
                     );
                     await pool.query('DELETE FROM users WHERE username = $1 AND role = $2', ['admin', 'admin']);
@@ -173,8 +174,8 @@ class UserManagerImpl {
                 const cfgAdminPassword = getConfig().adminPassword;
                 if (cfgAdminPassword) {
                     const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
-                    await pool.query(
-                        'UPDATE users SET username = $1, email = $2, password_hash = $3, updated_at = $4 WHERE username = $5 AND role = $6',
+                    await updateUsersInvalidatingTokens(
+                        'username = $1, email = $2, password_hash = $3, updated_at = $4', 'username = $5 AND role = $6',
                         [adminEmail, adminEmail, passwordHash, new Date().toISOString(), 'admin', 'admin']
                     );
                     logger.info(`[UserManager] ✅ 관리자 계정 마이그레이션 완료: admin → ${adminEmail}`);
@@ -186,8 +187,8 @@ class UserManagerImpl {
                     const cfgAdminPassword = getConfig().adminPassword;
                     if (cfgAdminPassword) {
                         const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
-                        await pool.query(
-                            'UPDATE users SET role = $1, password_hash = $2, updated_at = $3 WHERE username = $4',
+                        await updateUsersInvalidatingTokens(
+                            'role = $1, password_hash = $2, updated_at = $3', 'username = $4',
                             ['admin', passwordHash, new Date().toISOString(), adminEmail]
                         );
                         logger.info(`[UserManager] ✅ ${adminEmail} 관리자 역할 부여 완료`);

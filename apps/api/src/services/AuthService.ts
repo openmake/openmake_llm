@@ -7,7 +7,8 @@
 
 import crypto from 'node:crypto';
 import { getUserManager, PublicUser, USER_ROLES } from '../data/user-manager';
-import { generateToken } from '../auth';
+import { generateToken, clearSessionsForUser } from '../auth';
+import { invalidateTokensBefore } from '../data/user-manager-token-invalidation';
 import { createLogger } from '../utils/logger';
 import { getConfig } from '../config/env';
 import { PASSWORD_POLICY } from '../config/runtime-limits';
@@ -287,6 +288,11 @@ export class AuthService {
         }
 
         const success = await this.userManager.changePassword(userId, newPassword);
+        if (success) {
+            // 보안 점검 A2 — 이전에 발급된 토큰(이 요청의 토큰 포함)·세션은 모두 끊는다. 새 토큰은 내주지 않는다(재로그인).
+            await invalidateTokensBefore(userId);
+            clearSessionsForUser(userId);
+        }
         return { success };
     }
 

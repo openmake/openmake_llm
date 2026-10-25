@@ -14,6 +14,12 @@ jest.mock('../auth', () => ({
         next();
     },
     requireAdmin: (_req: Request, _res: Response, next: NextFunction) => next(),
+    clearSessionsForUser: (...a: unknown[]) => clearSessionsForUser(...a),
+}));
+const clearSessionsForUser = jest.fn();
+const invalidateTokensBefore = jest.fn();
+jest.mock('../data/user-manager-token-invalidation', () => ({
+    invalidateTokensBefore: (...a: unknown[]) => invalidateTokensBefore(...a),
 }));
 
 const getUserById = jest.fn();
@@ -167,5 +173,42 @@ describe('PUT /api/admin/users/:id 감사 기록', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.data.user.role).toBe('admin');
+    });
+});
+
+// 보안 점검 A2 — 관리자가 비밀번호를 재설정하면 그 사용자의 기존 토큰·세션을 끊는다(자가 변경과 같은 정책).
+describe('PUT /api/admin/users/:id 비밀번호 재설정 시 토큰 무효화', () => {
+    beforeEach(() => {
+        getUserById.mockReset().mockResolvedValue({ ...before });
+        updateUser.mockReset();
+        logAudit.mockReset().mockResolvedValue(undefined);
+        clearSessionsForUser.mockReset();
+        invalidateTokensBefore.mockReset().mockResolvedValue(undefined);
+    });
+
+    it('비밀번호를 바꾸면 대상 사용자 id 로 invalidateTokensBefore·clearSessionsForUser 를 1회씩 호출한다', async () => {
+        const res = await put({ password: NEW_PASSWORD });
+
+        expect(res.status).toBe(200);
+        expect(invalidateTokensBefore).toHaveBeenCalledTimes(1);
+        expect(invalidateTokensBefore).toHaveBeenCalledWith('u-1');
+        expect(clearSessionsForUser).toHaveBeenCalledTimes(1);
+        expect(clearSessionsForUser).toHaveBeenCalledWith('u-1');
+    });
+
+    it('비밀번호 없이 다른 필드만 바꾸면 호출하지 않는다', async () => {
+        await put({ role: 'admin' }, { role: 'admin' });
+
+        expect(invalidateTokensBefore).not.toHaveBeenCalled();
+        expect(clearSessionsForUser).not.toHaveBeenCalled();
+    });
+
+    it('대상 사용자가 없으면(404) 호출하지 않는다', async () => {
+        updateUser.mockResolvedValue(null);
+        const res = await request(makeApp()).put('/api/admin/users/u-1').send({ password: NEW_PASSWORD });
+
+        expect(res.status).toBe(404);
+        expect(invalidateTokensBefore).not.toHaveBeenCalled();
+        expect(clearSessionsForUser).not.toHaveBeenCalled();
     });
 });

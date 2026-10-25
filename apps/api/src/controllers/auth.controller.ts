@@ -284,6 +284,8 @@ class AuthController {
                     });
                 } catch (e) { log.warn('[audit] password.changed 기록 실패:', e); }
             })();
+            // 기존 토큰은 방금 무효화됐다(AuthService.changePassword) — 거부될 쿠키를 남기지 않고 재로그인을 유도한다.
+            clearTokenCookie(res);
             res.json(success(result));
         } catch (error) {
             log.error('[ChangePassword] 오류:', error);
