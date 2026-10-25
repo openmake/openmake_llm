@@ -726,7 +726,9 @@ cmd_update() {
         # install 이 다시 쓴 lock 은 설치의 부산물 — 다음 update 의 "미커밋 변경" 검사에 걸리지 않게 되돌린다.
         git -C "$SCRIPT_DIR" diff --quiet -- package-lock.json || git -C "$SCRIPT_DIR" checkout -- package-lock.json
     fi
-    cmd_deploy "${PASS[@]}"
+    # bash 는 함수 정의를 시작할 때 읽어 두므로 여기서 cmd_deploy 를 부르면 pull 전 옛 deploy 가 돈다 —
+    # 새로 받은 스크립트를 새 프로세스로 띄운다(deploy 는 pull 하지 않으므로 다시 들어오지 않는다).
+    exec "$BASH" "$SCRIPT_DIR/openmake_llm.sh" deploy ${PASS[@]+"${PASS[@]}"}
 }
 
 cmd_deploy() {

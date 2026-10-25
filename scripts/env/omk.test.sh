@@ -541,6 +541,18 @@ DEPLOY_BODY="$(awk '/^cmd_deploy\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$HERE/..
 eq "deploy: 빌드 → postgres·redis up -d → 마이그레이션 순서" \
     "$(grep -nE 'cmd_build --no-restart|ensure_docker_service up (postgres|redis)|cmd_migrate$' <<<"$DEPLOY_BODY" | sed -E 's/^[0-9]+:[[:space:]]*//; s/ +\|\|.*//; s/ "[^"]*"$//' | tr '\n' ';')" \
     "cmd_build --no-restart;ensure_docker_service up postgres;ensure_docker_service up redis;cmd_migrate;"
+# update 는 pull 로 받은 새 스크립트의 deploy 를 돌린다 — bash 는 함수 정의를 시작할 때 읽어 두므로, 같은 프로세스에서
+# cmd_deploy 를 부르면 pull 전 옛 deploy 가 돈다(새 deploy 단계가 비릴리스 track 에 닿지 않았다).
+# 임시 원격·클론: 클론의 deploy 는 "old", 원격의 다음 커밋은 "new" 를 찍고 끝난다.
+UPD="$TMP/updtarget"; mkdir -p "$UPD/origin/scripts/lib"
+cp "$HERE/../../scripts/lib/colima.sh" "$UPD/origin/scripts/lib/"
+upd_stub() { sed "s/^cmd_deploy() {\$/cmd_deploy() { echo \"$1 \$*\" >> \"\$UPD_MARK\"; exit 0/" "$HERE/../../openmake_llm.sh" > "$UPD/origin/openmake_llm.sh"; }
+upd_commit() { git -C "$UPD/origin" add -A && git -C "$UPD/origin" -c user.email=t@example.com -c user.name=t commit -q -m "$1"; }
+git init -q "$UPD/origin"; upd_stub old; upd_commit one
+git clone -q "$UPD/origin" "$UPD/clone"
+upd_stub new; upd_commit two
+( export UPD_MARK="$UPD/mark"; bash "$UPD/clone/openmake_llm.sh" update --yes </dev/null >/dev/null 2>&1 )
+eq "update: pull 뒤 새로 받은 스크립트의 deploy 를 돌린다(옵션 전달)" "$(cat "$UPD/mark" 2>/dev/null)" "new --yes"
 # 스크립트가 만드는 이름과 실제 ecosystem 이 만드는 이름이 같아야 --only 가 맞는 앱을 집는다.
 if ( cd "$HERE/../.." && node -e 'require("./ecosystem.config.js")' ) >/dev/null 2>&1; then
     eq "restart: ecosystem 의 앱 이름 = 스크립트의 앱 이름" \
