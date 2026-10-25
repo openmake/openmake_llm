@@ -10,7 +10,7 @@
  */
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 
-/** 값을 가려야 하는 키 이름 조각 — error-handler 의 sanitizeForLog 와 같은 기준. */
+/** 값을 가려야 하는 키 이름 조각 — 이름에 이 조각이 들어간 키의 값은 저장 전에 가린다. */
 const SENSITIVE_KEY_PATTERNS = [
     'password', 'token', 'api_key', 'apikey', 'secret', 'key',
     'authorization', 'auth', 'credential', 'cookie', 'session',

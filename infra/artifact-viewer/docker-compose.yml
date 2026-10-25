@@ -7,6 +7,7 @@
 # 호스트별 값은 env 로 받는다 (셸 env 또는 --env-file <repo>/.env):
 #   ARTIFACT_VIEWER_DATA_DIR  백엔드 .env 와 같은 값. 미설정 시 <repo>/data/artifact-viewer (백엔드 기본값과 동일)
 #   ARTIFACT_VIEWER_PORT      호스트 공개 포트. 미설정 시 8088
+#   ARTIFACT_VIEWER_BIND      호스트 바인딩 주소. 미설정 시 127.0.0.1 — 외부 접속이 필요할 때만 0.0.0.0
 # 사전: ./fetch-vendor.sh 로 ./data/vendor 에 라이브러리 + bootstrap.js 준비.
 
 services:
@@ -14,7 +15,7 @@ services:
     image: nginx:alpine
     container_name: openmake-artifact-viewer
     ports:
-      - "${ARTIFACT_VIEWER_PORT:-8088}:80"
+      - "${ARTIFACT_VIEWER_BIND:-127.0.0.1}:${ARTIFACT_VIEWER_PORT:-8088}:80"
     volumes:
       # 백엔드가 기록하는 데이터 디렉토리 (config/artifact-viewer.ts dataDir 와 동일 경로)
       - ${ARTIFACT_VIEWER_DATA_DIR:-../../data/artifact-viewer}:/srv:ro

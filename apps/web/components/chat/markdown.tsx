@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import remarkGfm from "remark-gfm";
@@ -92,7 +92,33 @@ function MarkdownLink({ ...props }: LinkProps) {
 
 type ImageProps = ComponentPropsWithoutRef<"img"> & ExtraProps;
 
+/** 동일 출처 경로(`/x`, `//`·`/\` 프로토콜 상대 제외)나 `data:` 는 외부 요청이 없어 바로 그린다. */
+const isLocalImageSrc = (src: string) => /^\/(?![/\\])/.test(src) || /^data:/i.test(src);
+
+const imageHost = (src: string) => {
+  try {
+    return new URL(src).host || src;
+  } catch {
+    return src;
+  }
+};
+
 function MarkdownImage({ ...props }: ImageProps) {
+  const t = useTranslations("chat");
+  const [revealed, setRevealed] = useState(false);
+  // 외부 이미지는 클릭 전까지 요청하지 않는다 — 모델 출력의 외부 URL 이 열람자 IP·열람 시각을 새게 한다(W8).
+  if (typeof props.src === "string" && props.src && !isLocalImageSrc(props.src) && !revealed) {
+    return (
+      <button
+        type="button"
+        onClick={() => setRevealed(true)}
+        className="my-2 inline-flex max-w-full flex-col items-start gap-0.5 rounded-lg border border-dashed border-border px-3 py-2 text-left text-xs text-muted hover:text-accent"
+      >
+        <span>{t("loadExternalImage")}</span>
+        <span className="break-all">{t("externalImageHost", { host: imageHost(props.src) })}</span>
+      </button>
+    );
+  }
   const img = (
     // eslint-disable-next-line @next/next/no-img-element
     <img

@@ -90,6 +90,11 @@ function createTestApp() {
     return app;
 }
 
+// /api/health 의 전체 응답(uptime·memory·add-on 절)은 관리자 전용이다(W4) — 비관리자 축소는 routes/__tests__/health-anon.test.ts
+const adminBearer = (): string => `Bearer ${jwt.sign(
+    { userId: 'u-admin-full', email: 'admin-full@example.test', role: 'admin', type: 'access' },
+    getConfig().jwtSecret, { expiresIn: '5m', jwtid: 'jti-admin-full' })}`;
+
 describe('라우트 설정 — 기본 엔드포인트', () => {
     let app: express.Application;
 
@@ -110,7 +115,7 @@ describe('라우트 설정 — 기본 엔드포인트', () => {
     });
 
     test('GET /api/health → 200, status ok', async () => {
-        const res = await request(app).get('/api/health');
+        const res = await request(app).get('/api/health').set('Authorization', adminBearer());
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('ok');
         expect(res.body.timestamp).toBeDefined();
@@ -118,7 +123,7 @@ describe('라우트 설정 — 기본 엔드포인트', () => {
     });
 
     test('GET /api/health → services 구조 포함', async () => {
-        const res = await request(app).get('/api/health');
+        const res = await request(app).get('/api/health').set('Authorization', adminBearer());
         expect(res.body.services).toBeDefined();
         expect(res.body.services.database).toBeDefined();
         expect(res.body.services.llm).toBeDefined();
@@ -128,7 +133,7 @@ describe('라우트 설정 — 기본 엔드포인트', () => {
     test('GET /api/health → add-on 이 등록한 절이 최상위 키로 붙는다', async () => {
         const off = registerHealthSection('sample', async () => ({ mode: 'inprocess', generation: 3 }));
         try {
-            const res = await request(app).get('/api/health');
+            const res = await request(app).get('/api/health').set('Authorization', adminBearer());
             expect(res.status).toBe(200);
             expect(res.body.sample).toEqual({ mode: 'inprocess', generation: 3 });
         } finally {
@@ -139,7 +144,7 @@ describe('라우트 설정 — 기본 엔드포인트', () => {
     test('GET /api/health → 절 하나가 실패해도 200 이고 그 절만 error', async () => {
         const off = registerHealthSection('broken', async () => { throw new Error('db down'); });
         try {
-            const res = await request(app).get('/api/health');
+            const res = await request(app).get('/api/health').set('Authorization', adminBearer());
             expect(res.status).toBe(200);
             expect(res.body.status).toBe('ok');
             expect(res.body.broken).toEqual({ error: 'db down' });

@@ -16,6 +16,8 @@
     "apps/discord-bot/": "discordBot"
   },
   "exactFiles": {
+    "install_linux.sh": "pipeline",
+    "openmake_llm.sh": "pipeline",
     "packages/shared-types/src/index.ts": "web",
     "packages/shared-types/src/mcp-monitoring.ts": "web"
   },

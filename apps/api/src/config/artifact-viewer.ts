@@ -7,10 +7,16 @@
  *
  * 외부화 (No-Hardcoding L1): 모든 값 env override.
  */
+import { createHmac } from 'crypto';
 import * as path from 'path';
 
 /** 뷰어 공개 base URL (별도 오리진). 로컬: http://localhost:8088, 외부: 전용 공개 호스트 URL. */
 const ORIGIN = process.env.ARTIFACT_VIEWER_ORIGIN || 'http://localhost:8088';
+
+/** JWT_SECRET 에서 뷰어 전용 키를 파생한다 — 같은 비밀이면 같은 키(재기동·다중 프로세스에서 토큰 검증 유지), JWT 서명 키와는 분리. */
+export const deriveViewerKey = (s: string): string => createHmac('sha256', s).update('openmake:artifact-viewer').digest('hex');
+
+const JWT_SECRET = process.env.JWT_SECRET || '';
 
 export const ARTIFACT_VIEWER = {
     /** 기능 게이트 — 미설정 시 off (publish 시 뷰어 export 생략, in-app 만). */
@@ -30,10 +36,10 @@ export const ARTIFACT_VIEWER = {
     /**
      * 뷰어 접근토큰(authenticated/private) 서명 키 — HMAC-SHA256.
      * link visibility 는 share_token(DB) 사용, 그 외는 이 키로 서명한 단기 토큰.
-     * 미설정 시 JWT_SECRET 재사용(별도 운영 키 권장). 예측 가능한 하드코딩 fallback 은
-     * 제거 — 토큰 위조를 막기 위해 JWT_SECRET(프로덕션 필수·검증됨)을 최종 fallback 으로 둔다.
+     * 미설정 시 JWT_SECRET(프로덕션 필수·검증됨)에서 파생한 별도 키를 쓴다 — JWT 서명 키를 그대로 재사용하지 않는다.
+     * 둘 다 없으면 빈 키로 두어 서비스의 fail-closed 가드가 발급·검증을 거부한다(빈 비밀의 파생 키는 누구나 계산 가능).
      */
-    signingKey: process.env.ARTIFACT_VIEWER_SIGNING_KEY || process.env.JWT_SECRET || '',
+    signingKey: process.env.ARTIFACT_VIEWER_SIGNING_KEY || (JWT_SECRET ? deriveViewerKey(JWT_SECRET) : ''),
 
     /** authenticated/private 접근토큰 TTL (초). 갤러리에서 열 때마다 새로 발급. */
     accessTokenTtlSec: parseInt(process.env.ARTIFACT_VIEWER_TOKEN_TTL_SEC || '3600', 10),

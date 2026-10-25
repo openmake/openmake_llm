@@ -403,6 +403,8 @@
     "artifactFallback": "工件",
     "artifactBuilding": "正在生成工件…",
     "mediaDownload": "下载",
+    "loadExternalImage": "加载外部图片",
+    "externalImageHost": "来自 {host} 的图片",
     "reportBuilding": "正在生成报告…",
     "reportData": "报告数据",
     "reasoningLabel": "思考过程",
@@ -1567,7 +1569,7 @@
     "avgQueriesPerSession": "每会话平均查询",
     "peakHoursTop3": "高峰时段 Top 3",
     "peakHourItem": "{hour}时 · {requests} 次请求",
-    "topQueriesTop5": "常见查询 Top 5",
+    "topQueriesTop5": "热门查询 Top 5（哈希 — 不保留原文）",
     "agentPerformance": "智能体性能",
     "period": {
       "7d": "7 天",

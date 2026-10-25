@@ -403,6 +403,8 @@
     "artifactFallback": "アーティファクト",
     "artifactBuilding": "アーティファクトを生成中…",
     "mediaDownload": "ダウンロード",
+    "loadExternalImage": "外部画像を読み込む",
+    "externalImageHost": "{host} の画像",
     "reportBuilding": "レポートを生成中…",
     "reportData": "レポートデータ",
     "reasoningLabel": "思考プロセス",
@@ -1567,7 +1569,7 @@
     "avgQueriesPerSession": "セッションあたり平均クエリ",
     "peakHoursTop3": "ピーク時間帯 Top 3",
     "peakHourItem": "{hour}時 · {requests} 件",
-    "topQueriesTop5": "よく聞かれるクエリ Top 5",
+    "topQueriesTop5": "人気クエリ Top 5（ハッシュ — 原文は保存しません）",
     "agentPerformance": "エージェント性能",
     "period": {
       "7d": "7日",

@@ -23,7 +23,8 @@ ARTIFACT_VIEWER_ENABLED=true
 ARTIFACT_VIEWER_ORIGIN=http://localhost:8088          # 외부공개 시 전용 서브도메인 URL 로 교체
 # ARTIFACT_VIEWER_DATA_DIR=/path/to/data            # 미설정 시 <repo>/data/artifact-viewer — compose·fetch-vendor.sh 도 같은 기본값
 # ARTIFACT_VIEWER_PORT=8088                         # 뷰어 컨테이너의 호스트 포트 (compose 전용)
-ARTIFACT_VIEWER_SIGNING_KEY=<운영 랜덤키>              # 미설정 시 JWT_SECRET 재사용
+# ARTIFACT_VIEWER_BIND=127.0.0.1                    # 뷰어 포트의 호스트 바인딩 주소 (compose 전용) — 다른 장비가 http://<host>:8088 로 직접 열 때만 0.0.0.0
+ARTIFACT_VIEWER_SIGNING_KEY=<운영 랜덤키>              # 미설정 시 JWT_SECRET 에서 파생한 별도 키 사용
 # ARTIFACT_VIEWER_TOKEN_TTL_SEC=3600
 ```
 

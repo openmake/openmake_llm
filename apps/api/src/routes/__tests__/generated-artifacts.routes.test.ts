@@ -33,12 +33,14 @@ import request from 'supertest';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import { generatedArtifactsRouter, generatedTicketRouter } from '../generated-artifacts.routes';
+import { generatedArtifactsRouter, generatedTicketRouter, REPORTS_CSP } from '../generated-artifacts.routes';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-gen-'));
 fs.writeFileSync(path.join(tmp, 'ok.png'), 'PNGDATA');
 fs.mkdirSync(path.join(tmp, 'reports'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'reports', 'r.html'), '<h1>r</h1>');
+fs.mkdirSync(path.join(tmp, 'reports', 'x'), { recursive: true });
+fs.writeFileSync(path.join(tmp, 'reports', 'x', 'latest.html'), '<h1>x</h1><script>1</script>');
 
 function app() {
     const a = express();
@@ -89,6 +91,14 @@ describe('generatedArtifactsRouter', () => {
         const r = await request(app()).get('/generated/reports/r.html');
         expect(r.status).toBe(200);
         expect(r.text).toContain('<h1>r</h1>');
+    });
+
+    it('reports/ 게시물은 CSP sandbox·nosniff 헤더로 앱 origin 과 격리한다(W1)', async () => {
+        const r = await request(app()).get('/generated/reports/x/latest.html');
+        expect(r.status).toBe(200);
+        expect(r.headers['content-security-policy']).toBe(REPORTS_CSP);
+        expect(REPORTS_CSP).toBe("sandbox allow-scripts allow-popups; default-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https:; script-src 'unsafe-inline' https:");
+        expect(r.headers['x-content-type-options']).toBe('nosniff');
     });
 
     it('중첩 경로·이상한 파일명은 404, ?download=1 은 첨부 헤더', async () => {
