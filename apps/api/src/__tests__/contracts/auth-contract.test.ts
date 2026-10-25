@@ -31,6 +31,7 @@ jest.mock('../../auth', () => ({
     },
     extractToken: () => null,
     blacklistToken: jest.fn(),
+    verifySignatureIgnoringExpiry: jest.fn(() => null),
     setTokenCookie: jest.fn(),
     clearTokenCookie: jest.fn(),
     setRefreshTokenCookie: jest.fn(),

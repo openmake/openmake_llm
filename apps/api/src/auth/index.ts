@@ -16,6 +16,7 @@ export {
     verifyRefreshToken,
     verifyToken,
     blacklistToken,
+    verifySignatureIgnoringExpiry,
     extractToken,
     setTokenCookie,
     setRefreshTokenCookie,

@@ -62,7 +62,7 @@ public protocol APIProtocol: Sendable {
     func get_sol_api_sol_auth_sol_me(_ input: Operations.get_sol_api_sol_auth_sol_me.Input) async throws -> Operations.get_sol_api_sol_auth_sol_me.Output
     /// 토큰 갱신 (rotation)
     ///
-    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth/refresh`, 새 토큰도 HttpOnly 쿠키로만 발급하고 body 에는 싣지 않음), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 access·refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
+    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth` — refresh·logout 에 전송, 새 토큰도 HttpOnly 쿠키로만 발급하고 body 에는 싣지 않음), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 access·refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
     ///
     /// - Remark: HTTP `POST /api/auth/refresh`.
     /// - Remark: Generated from `#/paths//api/auth/refresh/post`.
@@ -257,7 +257,7 @@ extension APIProtocol {
     }
     /// 토큰 갱신 (rotation)
     ///
-    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth/refresh`, 새 토큰도 HttpOnly 쿠키로만 발급하고 body 에는 싣지 않음), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 access·refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
+    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth` — refresh·logout 에 전송, 새 토큰도 HttpOnly 쿠키로만 발급하고 body 에는 싣지 않음), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 access·refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
     ///
     /// - Remark: HTTP `POST /api/auth/refresh`.
     /// - Remark: Generated from `#/paths//api/auth/refresh/post`.
@@ -2926,7 +2926,7 @@ public enum Operations {
     }
     /// 토큰 갱신 (rotation)
     ///
-    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth/refresh`, 새 토큰도 HttpOnly 쿠키로만 발급하고 body 에는 싣지 않음), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 access·refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
+    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth` — refresh·logout 에 전송, 새 토큰도 HttpOnly 쿠키로만 발급하고 body 에는 싣지 않음), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 access·refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
     ///
     /// - Remark: HTTP `POST /api/auth/refresh`.
     /// - Remark: Generated from `#/paths//api/auth/refresh/post`.

@@ -35,9 +35,10 @@ jest.mock('../auth', () => ({
     generateToken: () => 'new-access-token',
 }));
 
-// 미들웨어의 verifyToken 이 블랙리스트를 조회한다 — DB 대신 빈 목록
+// 미들웨어의 verifyToken 이 블랙리스트를 조회한다 — DB 대신 빈 목록. add 는 실제 blacklistToken 을 쓰는 테스트가 센다
+const mockBlacklistAdd = jest.fn();
 jest.mock('../data/models/token-blacklist', () => ({
-    getTokenBlacklist: () => ({ has: async () => false, add: async () => undefined }),
+    getTokenBlacklist: () => ({ has: async () => false, add: (...a: unknown[]) => mockBlacklistAdd(...a) }),
 }));
 
 const mockUserManager = { getUserById: jest.fn() };
@@ -74,9 +75,15 @@ function cookieNamed(res: request.Response, name: string): string | undefined {
     return setCookies(res).find((c) => c.startsWith(`${name}=`));
 }
 
-/** 서명된 refresh 토큰 모양(로그아웃은 decode 만 한다) */
-function refreshTokenFor(userId: string, jti: string): string {
-    return jwt.sign({ userId, jti, type: 'refresh' }, getConfig().jwtSecret, { algorithm: 'HS256', expiresIn: '7d' });
+/** 서명된 refresh 토큰 — 로그아웃은 서명만 검증한다(만료 무시) */
+function refreshTokenFor(userId: string, jti: string, secret: string = getConfig().jwtSecret, exp?: number): string {
+    const payload = { userId, jti, type: 'refresh', ...(exp !== undefined ? { exp } : {}) };
+    return jwt.sign(payload, secret, { algorithm: 'HS256', ...(exp === undefined ? { expiresIn: '7d' } : {}) });
+}
+
+/** refresh 쿠키 Set-Cookie 중 토큰 값을 싣는 것(만료 쿠키 제외) */
+function refreshCookieWithValue(res: request.Response, value: string): string | undefined {
+    return setCookies(res).find((c) => c.startsWith(`refresh_token=${value};`));
 }
 
 /** 만료된 access 토큰 — 미들웨어 검증에서 떨어진다 */
@@ -116,7 +123,17 @@ describe('쿠키 모드 인증 응답 (A4) · 로그아웃 (A6)', () => {
             expect(JSON.stringify(r.body)).not.toContain('issued-access-token');
             expect(cookieNamed(r, 'auth_token')).toContain('auth_token=issued-access-token');
             expect(cookieNamed(r, 'auth_token')).toContain('HttpOnly');
-            expect(cookieNamed(r, 'refresh_token')).toContain('refresh_token=new-refresh-token');
+            expect(refreshCookieWithValue(r, 'new-refresh-token')).toBeDefined();
+        });
+
+        test('쿠키 모드 — refresh 쿠키 Path=/api/auth (logout 에도 실리게), 옛 /api/auth/refresh 쿠키는 만료', async () => {
+            const r = await request(app).post('/api/auth/login').send({ email: sampleUser.email, password: 'pw' });
+            const rc = refreshCookieWithValue(r, 'new-refresh-token');
+            expect(rc).toMatch(/; Path=\/api\/auth(;|$)/);
+            expect(rc).not.toContain('Path=/api/auth/refresh');
+            // 배포 전 발급된 옛 경로 쿠키가 남아 있으면 /refresh 에서 먼저 읽혀(긴 path 우선) 회전된 새 토큰을 가린다
+            const legacy = setCookies(r).find((c) => c.startsWith('refresh_token=;') && c.includes('Path=/api/auth/refresh'));
+            expect(legacy).toMatch(/Expires=Thu, 01 Jan 1970/);
         });
 
         test('모바일 모드(returnRefreshToken:true) — token·refreshToken 을 본문으로, 쿠키 없음', async () => {
@@ -138,7 +155,10 @@ describe('쿠키 모드 인증 응답 (A4) · 로그아웃 (A6)', () => {
             expect(r.body.data.refreshToken).toBeUndefined();
             expect(r.body.data.user).toMatchObject({ id: 'u1' });
             expect(cookieNamed(r, 'auth_token')).toContain('auth_token=new-access-token');
-            expect(cookieNamed(r, 'refresh_token')).toContain('refresh_token=new-refresh-token');
+            expect(refreshCookieWithValue(r, 'new-refresh-token')).toMatch(/; Path=\/api\/auth(;|$)/);
+            // 구 path 쿠키 만료(회전된 새 쿠키를 가리지 않게)
+            const legacy = setCookies(r).find((c) => c.startsWith('refresh_token=;') && c.includes('Path=/api/auth/refresh'));
+            expect(legacy).toMatch(/Expires=Thu, 01 Jan 1970/);
         });
 
         test('모바일 모드(body.refreshToken) — token·refreshToken 을 본문으로, 쿠키 없음', async () => {
@@ -192,6 +212,50 @@ describe('쿠키 모드 인증 응답 (A4) · 로그아웃 (A6)', () => {
             expect(r.status).toBe(200);
             expect(mockBlacklistToken).toHaveBeenCalledTimes(2);
             expect(settled).toBe(2);
+        });
+
+        test('로그아웃 응답의 refresh 쿠키 삭제는 /api/auth 와 옛 /api/auth/refresh 경로 둘 다', async () => {
+            const r = await request(app).post('/api/auth/logout');
+            const cleared = setCookies(r).filter((c) => c.startsWith('refresh_token=;'));
+            expect(cleared.some((c) => /; Path=\/api\/auth(;|$)/.test(c))).toBe(true);
+            expect(cleared.some((c) => c.includes('Path=/api/auth/refresh'))).toBe(true);
+        });
+
+        describe('서명 검증 — 실제 blacklistToken (저장소 add 만 mock)', () => {
+            beforeEach(() => {
+                const actual = jest.requireActual('../auth') as typeof import('../auth');
+                mockBlacklistToken.mockImplementation((t: string) => actual.blacklistToken(t));
+                mockBlacklistAdd.mockReset().mockResolvedValue(undefined);
+            });
+
+            test('refresh 쿠키가 올바른 서명 + 만료(exp 과거)여도 블랙리스트·세션맵 정리', async () => {
+                const rt = refreshTokenFor('u1', 'expired-refresh-jti', undefined, Math.floor(Date.now() / 1000) - 60);
+                const r = await request(app).post('/api/auth/logout').set('Cookie', [`refresh_token=${rt}`]);
+                expect(r.status).toBe(200);
+                expect(mockBlacklistAdd).toHaveBeenCalledWith('expired-refresh-jti', expect.any(Number));
+                expect(mockRemoveSessionFromMap).toHaveBeenCalledWith('u1', 'expired-refresh-jti');
+            });
+
+            test('다른 secret 으로 서명한 refresh 쿠키 — 블랙리스트 add·세션맵 정리 0회, 200, 쿠키 삭제', async () => {
+                const forged = refreshTokenFor('u1', 'forged-refresh-jti', 'another-secret-not-the-server-one-0000');
+                const r = await request(app).post('/api/auth/logout').set('Cookie', [`refresh_token=${forged}`]);
+                expect(r.status).toBe(200);
+                expect(mockBlacklistAdd).not.toHaveBeenCalled();
+                expect(mockRemoveSessionFromMap).not.toHaveBeenCalled();
+                expect(cookieNamed(r, 'auth_token')).toMatch(/Expires=Thu, 01 Jan 1970/);
+                expect(cookieNamed(r, 'refresh_token')).toMatch(/Expires=Thu, 01 Jan 1970/);
+            });
+
+            test('access 쿠키가 위조 서명 — 블랙리스트 add 0회', async () => {
+                const forgedAccess = jwt.sign(
+                    { userId: 'u1', jti: 'forged-access-jti', type: 'access' },
+                    'another-secret-not-the-server-one-0000',
+                    { algorithm: 'HS256', expiresIn: '15m' },
+                );
+                const r = await request(app).post('/api/auth/logout').set('Cookie', [`auth_token=${forgedAccess}`]);
+                expect(r.status).toBe(200);
+                expect(mockBlacklistAdd).not.toHaveBeenCalled();
+            });
         });
     });
 });

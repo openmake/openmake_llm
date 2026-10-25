@@ -298,20 +298,43 @@ export function verifyTokenSignature(token: string): JWTPayload | null {
     }
 }
 
+/** verifySignatureIgnoringExpiry 결과 — 서명이 확인된 클레임 */
+export type SignedTokenClaims = Record<string, unknown> & { jti?: string; userId?: string | number; type?: string; exp?: number };
+
+/**
+ * 서버 secret(HS256) 서명만 검증하고 만료는 무시한다 — 로그아웃·블랙리스트 전용.
+ * 만료된 토큰도 폐기 대상이지만, 서명이 다른(위조) 토큰은 null. 인증·권한 부여에는 쓰지 않는다.
+ */
+export function verifySignatureIgnoringExpiry(token: string): SignedTokenClaims | null {
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] as Algorithm[], ignoreExpiration: true });
+        return typeof decoded === 'object' && decoded !== null ? decoded as SignedTokenClaims : null;
+    } catch {
+        return null;
+    }
+}
+
 /**
  * 토큰을 블랙리스트에 추가 (로그아웃 시 호출)
  * #8 연동: PostgreSQL 기반 영속 블랙리스트
+ * 보안 점검 A6 보강: 서명이 맞는 토큰만 기록하고(익명 /logout 으로 임의 jti 기록 방지),
+ * expiresAt 은 리프레시 수명 상한으로 자른다(위조·과대 exp 로 행이 오래 남지 않게).
  */
 export async function blacklistToken(token: string): Promise<boolean> {
     try {
-        const decoded = jwt.decode(token) as Record<string, unknown> | null;
-        if (!decoded?.jti || typeof decoded.jti !== 'string') {
+        const decoded = verifySignatureIgnoringExpiry(token);
+        if (!decoded) {
+            logger.warn('블랙리스트 요청 무시: 서명 불일치');
+            return false;
+        }
+        if (!decoded.jti || typeof decoded.jti !== 'string') {
             // jti 없는 레거시 토큰 — 블랙리스트 불가
             return false;
         }
+        const now = Date.now();
         const expiresAt = typeof decoded.exp === 'number'
-            ? decoded.exp * 1000
-            : Date.now() + AUTH_CONFIG.ACCESS_TOKEN_MAX_AGE_MS; // 기본 15분
+            ? Math.min(decoded.exp * 1000, now + AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS)
+            : now + AUTH_CONFIG.ACCESS_TOKEN_MAX_AGE_MS; // 기본 15분
 
         const blacklist = getTokenBlacklist();
          await blacklist.add(decoded.jti, expiresAt);
@@ -376,16 +399,25 @@ export function setTokenCookie(res: Response, token: string): void {
     });
 }
 
+/** 리프레시 쿠키 경로 — /api/auth 아래(refresh·logout 등 인증 라우트)에서만 전송 */
+const REFRESH_COOKIE_PATH = '/api/auth';
+/**
+ * 구 path 호환, 다음 메이저에서 제거. 예전 경로로 발급된 쿠키가 남아 있으면 /api/auth/refresh 요청에서
+ * 긴 path 가 먼저 실려(같은 이름은 첫 값이 읽힌다) 회전된 새 쿠키를 가리므로, 설정·삭제 때 함께 지운다.
+ */
+const LEGACY_REFRESH_COOKIE_PATH = '/api/auth/refresh';
+
 /**
  * 🔒 Phase 2: 리프레시 토큰을 httpOnly 쿠키에 설정 (7일 만료)
  */
 export function setRefreshTokenCookie(res: Response, refreshToken: string): void {
+    res.clearCookie(AUTH_COOKIES.REFRESH, { path: LEGACY_REFRESH_COOKIE_PATH }); // 구 path 호환, 다음 메이저에서 제거
     res.cookie(AUTH_COOKIES.REFRESH, refreshToken, {
         httpOnly: true,
         secure: resolveCookieSecure(res),
         sameSite: 'lax',
         maxAge: AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS, // 7일
-        path: '/api/auth/refresh' // 리프레시 엔드포인트에서만 전송
+        path: REFRESH_COOKIE_PATH // refresh·logout 엔드포인트에서만 전송
     });
 }
 
@@ -395,5 +427,6 @@ export function setRefreshTokenCookie(res: Response, refreshToken: string): void
  */
 export function clearTokenCookie(res: Response): void {
     res.clearCookie(AUTH_COOKIES.ACCESS, { path: '/' });
-    res.clearCookie(AUTH_COOKIES.REFRESH, { path: '/api/auth/refresh' });
+    res.clearCookie(AUTH_COOKIES.REFRESH, { path: REFRESH_COOKIE_PATH });
+    res.clearCookie(AUTH_COOKIES.REFRESH, { path: LEGACY_REFRESH_COOKIE_PATH }); // 구 path 호환, 다음 메이저에서 제거
 }

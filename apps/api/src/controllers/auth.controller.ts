@@ -10,7 +10,7 @@
 import { Request, Response, Router } from 'express';
 import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
-import { requireAuth, optionalAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken, removeSessionFromMap } from '../auth';
+import { requireAuth, optionalAuth, extractToken, blacklistToken, verifySignatureIgnoringExpiry, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken, removeSessionFromMap } from '../auth';
 import jwt from 'jsonwebtoken';
 import { isIssuedBeforeInvalidation } from '../auth/token-invalidation';
 import { activeOrgFor } from '../services/org/membership-cache';
@@ -199,7 +199,8 @@ class AuthController {
         const bodyRefreshToken = typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : undefined;
         for (const refreshToken of new Set([req.cookies?.refresh_token, bodyRefreshToken])) {
             if (!refreshToken) continue;
-            const decoded = jwt.decode(refreshToken) as { userId?: string | number; jti?: string } | null;
+            // 서명이 맞는 토큰만(만료 무시) — 위조 토큰으로 다른 사용자의 세션을 지우지 못하게
+            const decoded = verifySignatureIgnoringExpiry(refreshToken);
             if (decoded?.userId && decoded.jti) {
                 removeSessionFromMap(String(decoded.userId), decoded.jti);
             }
