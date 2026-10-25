@@ -1,7 +1,7 @@
 /**
  * /api/health 의 관리자 전용 process 필드 — 부하 harness(scripts/bench/api-load.mjs)가
  * 같은 프로세스의 RSS 를 바이트 단위로 표본하고, pid 로 측정 중 재시작을 알아챈다.
- * 이 값이 있을 때(관리자)만 /api/health 가 전체 응답(services.memory.rssMB 등)을 준다 — 비관리자는 상태 필드만(W4).
+ * 이 값이 있을 때(관리자)만 /api/health 가 전체 응답(services.memory.rssMB 등)을 준다 — 비관리자는 상태 필드·add-on 절만(W4).
  *
  * 헬스는 DB 장애를 알리려고 있으므로 이 경로는 DB 에 닿지 않는다: 관리자 여부는 서명된 JWT 의
  * role 로만 판단한다(블랙리스트·사용자 조회 없음). 잘못됐거나 만료된 토큰은 게스트로 본다(401·500 없음).
