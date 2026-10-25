@@ -135,7 +135,7 @@ describe('모바일 인증 (iOS 축 2)', () => {
             expect(r.headers['set-cookie']).toBeUndefined();
             expect(cookieSpies.setTokenCookie).not.toHaveBeenCalled();
             expect(cookieSpies.setRefreshTokenCookie).not.toHaveBeenCalled();
-            expect(blacklistToken).toHaveBeenCalledWith('mobile-rt'); // rotation
+            expect(blacklistToken).toHaveBeenCalledWith('mobile-rt', 'rotated'); // rotation — 재사용 탐지 대상
             expectContract('/api/auth/refresh', 'post', '200', r.body);
         });
 

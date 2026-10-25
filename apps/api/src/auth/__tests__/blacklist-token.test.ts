@@ -40,7 +40,15 @@ describe('blacklistToken', () => {
     it('유효 서명 + 만료(exp 과거) — true, jti 를 기록', async () => {
         const exp = nowSec() - 60;
         await expect(blacklistToken(sign({ userId: 'u1', jti: 'expired-jti', exp }))).resolves.toBe(true);
-        expect(mockBlacklistAdd).toHaveBeenCalledWith('expired-jti', exp * 1000);
+        expect(mockBlacklistAdd).toHaveBeenCalledWith('expired-jti', exp * 1000, 'revoked');
+    });
+
+    it("reason 생략 — 'revoked'(로그아웃), 'rotated' 를 넘기면 그대로 저장소에 전달", async () => {
+        const exp = nowSec() + 600;
+        await expect(blacklistToken(sign({ userId: 'u1', jti: 'logout-jti', exp }))).resolves.toBe(true);
+        await expect(blacklistToken(sign({ userId: 'u1', jti: 'rotated-jti', exp }), 'rotated')).resolves.toBe(true);
+        expect(mockBlacklistAdd).toHaveBeenNthCalledWith(1, 'logout-jti', exp * 1000, 'revoked');
+        expect(mockBlacklistAdd).toHaveBeenNthCalledWith(2, 'rotated-jti', exp * 1000, 'rotated');
     });
 
     it('exp 가 지금+10년 — expiresAt 은 지금 + 리프레시 수명 이하로 자른다', async () => {

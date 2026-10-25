@@ -340,8 +340,8 @@ class AuthController {
                 return;
             }
 
-            // 사용된 리프레시 토큰 블랙리스트 (토큰 로테이션)
-            await blacklistToken(refreshToken);
+            // 사용된 리프레시 토큰 블랙리스트 (토큰 로테이션) — 'rotated': 다시 오면 재사용 탐지(verifyRefreshToken)
+            await blacklistToken(refreshToken, 'rotated');
 
             // bug_004: activeSessionMap에서 이전 세션 제거 (generateRefreshToken의 FIFO splice가
             //          다른 기기의 유효 세션을 실수로 blacklist 처리하는 것을 방지)

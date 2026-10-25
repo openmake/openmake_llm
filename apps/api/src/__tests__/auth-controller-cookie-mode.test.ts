@@ -38,7 +38,7 @@ jest.mock('../auth', () => ({
 // 미들웨어의 verifyToken 이 블랙리스트를 조회한다 — DB 대신 빈 목록. add 는 실제 blacklistToken 을 쓰는 테스트가 센다
 const mockBlacklistAdd = jest.fn();
 jest.mock('../data/models/token-blacklist', () => ({
-    getTokenBlacklist: () => ({ has: async () => false, add: (...a: unknown[]) => mockBlacklistAdd(...a) }),
+    getTokenBlacklist: () => ({ has: async () => false, getReason: async () => null, add: (...a: unknown[]) => mockBlacklistAdd(...a) }),
 }));
 
 const mockUserManager = { getUserById: jest.fn() };
@@ -232,7 +232,7 @@ describe('쿠키 모드 인증 응답 (A4) · 로그아웃 (A6)', () => {
                 const rt = refreshTokenFor('u1', 'expired-refresh-jti', undefined, Math.floor(Date.now() / 1000) - 60);
                 const r = await request(app).post('/api/auth/logout').set('Cookie', [`refresh_token=${rt}`]);
                 expect(r.status).toBe(200);
-                expect(mockBlacklistAdd).toHaveBeenCalledWith('expired-refresh-jti', expect.any(Number));
+                expect(mockBlacklistAdd).toHaveBeenCalledWith('expired-refresh-jti', expect.any(Number), 'revoked');
                 expect(mockRemoveSessionFromMap).toHaveBeenCalledWith('u1', 'expired-refresh-jti');
             });
 
