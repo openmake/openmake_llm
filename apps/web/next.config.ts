@@ -31,7 +31,7 @@ const API_PROXY_TARGET = process.env.API_PROXY_TARGET || "http://localhost:52416
  * 아래 전역 `frame-ancestors 'self'` 가 rewrite 응답의 백엔드 CSP 를 덮으므로 이 경로엔 합친 값을 준다.
  */
 const REPORTS_CSP =
-  "sandbox allow-scripts allow-popups; default-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https:";
+  "sandbox allow-scripts allow-popups; default-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https:; script-src 'unsafe-inline' https:";
 
 const nextConfig: NextConfig = {
   // 클라이언트 번들로 인라인될 공개 설정 — 위 주석 참고. 셸에서 직접 지정한 값이 있으면

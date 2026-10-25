@@ -23,7 +23,7 @@ import { API_KEY_SCOPES } from '../config/api-key-scopes';
 
 const REPORTS_PREFIX = '/reports/';
 /** 예약 리포트 게시물(LLM 생성 HTML)은 앱 origin 과 격리 — sandbox(allow-same-origin 없음)로 고유 origin 에서 실행 */
-export const REPORTS_CSP = "sandbox allow-scripts allow-popups; default-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https:";
+export const REPORTS_CSP = "sandbox allow-scripts allow-popups; default-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https:; script-src 'unsafe-inline' https:";
 const requireChatScope = requireScope(API_KEY_SCOPES.CHAT);
 
 /** API 키가 있으면 키로만(무효 401·스코프 밖 403), 없으면 종전 쿠키·JWT — 판정 후의 소유권 검사는 같다 */

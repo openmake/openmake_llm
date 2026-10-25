@@ -97,7 +97,7 @@ describe('generatedArtifactsRouter', () => {
         const r = await request(app()).get('/generated/reports/x/latest.html');
         expect(r.status).toBe(200);
         expect(r.headers['content-security-policy']).toBe(REPORTS_CSP);
-        expect(REPORTS_CSP).toBe("sandbox allow-scripts allow-popups; default-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https:");
+        expect(REPORTS_CSP).toBe("sandbox allow-scripts allow-popups; default-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https:; script-src 'unsafe-inline' https:");
         expect(r.headers['x-content-type-options']).toBe('nosniff');
     });
 
