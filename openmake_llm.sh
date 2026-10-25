@@ -675,7 +675,7 @@ cmd_update() {
             *) PASS+=("$arg") ;;   # --yes / --no-migrate 는 deploy 로 전달
         esac
     done
-    parse_deploy_opts "${PASS[@]}"
+    parse_deploy_opts ${PASS[@]+"${PASS[@]}"}
 
     log_step "Update: git pull(ff-only) → deploy"
     command -v git >/dev/null 2>&1 || { log_err "git 이 필요합니다"; exit 1; }
