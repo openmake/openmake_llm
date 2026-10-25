@@ -71,7 +71,7 @@ describe('buildDockerArgs (pure)', () => {
         expect(a.slice(imgIdx + 1)).toEqual(['npx', '-y', 'pkg']);
     });
 
-    it('read-only opt-in 시 --read-only + tmpfs 추가', () => {
+    it('readonly=true(기본) 이면 --read-only + tmpfs 추가, false 면 없음', () => {
         const ro = buildDockerArgs(input, cfg({ readonly: true })).join(' ');
         expect(ro).toContain('--read-only');
         expect(ro).toContain('--tmpfs /tmp');
