@@ -159,16 +159,16 @@ describe('Auth 응답 계약', () => {
         expectContract('/api/auth/logout', 'post', '200', r.body);
     });
 
-    // 보안 점검 A2 — 비밀번호를 바꾸면 기존 토큰은 무효(tokens_valid_after)이므로 새 토큰을 내주지 않고
-    // 이 브라우저의 인증 쿠키도 지운다(재로그인 유도). 응답 본문은 그대로.
-    test('PUT /api/auth/password 200 — 인증 쿠키를 지우고 새 토큰을 내주지 않는다', async () => {
+    // 보안 점검 A2 — 비밀번호를 바꾸면 기존 토큰은 무효(tokens_valid_after)이고, 바꾼 이 기기에는 새 토큰을 준다.
+    // 쿠키 없이(헤더로) 인증한 요청은 본문으로 받는다(쿠키 모드는 auth-controller-cookie-mode.test).
+    test('PUT /api/auth/password 200 (헤더 모드) — 본문에 새 token·refreshToken, 쿠키는 건드리지 않는다', async () => {
         currentUser = sampleUser;
+        mockUserManager.getUserById.mockResolvedValue(sampleUser);
         mockAuthService.changePassword.mockResolvedValue({ success: true });
         const r = await request(app).put('/api/auth/password').send({ currentPassword: 'a', newPassword: 'b' });
         expect(r.status).toBe(200);
-        expect(r.body).toMatchObject({ success: true, data: { success: true } });
-        expect(r.body.data.token).toBeUndefined();
-        expect(clearTokenCookie).toHaveBeenCalledTimes(1);
+        expect(r.body).toMatchObject({ success: true, data: { success: true, token: 'new-access-token', refreshToken: 'new-refresh-token' } });
+        expect(clearTokenCookie).not.toHaveBeenCalled();
     });
 
     test('PUT /api/auth/password 실패면 쿠키를 지우지 않는다', async () => {

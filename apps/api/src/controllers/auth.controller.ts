@@ -291,8 +291,23 @@ class AuthController {
                     });
                 } catch (e) { log.warn('[audit] password.changed 기록 실패:', e); }
             })();
-            // 기존 토큰은 방금 무효화됐다(AuthService.changePassword) — 거부될 쿠키를 남기지 않고 재로그인을 유도한다.
-            clearTokenCookie(res);
+            // 보안 점검 A2 — 기존 토큰(다른 기기 포함)은 방금 무효화됐다(AuthService.changePassword). 비밀번호를 바꾼
+            // 이 기기에는 새 access·refresh 를 준다 — 무효화와 같은 초에 발급돼도 통과한다(token-invalidation 초 단위 비교).
+            // 쿠키로 인증한 요청(웹)은 쿠키로만, 헤더로 인증한 요청(모바일·CLI)은 본문으로 준다.
+            const fresh = await getUserManager().getUserById(String(user.id));
+            if (!fresh) {
+                clearTokenCookie(res);
+                res.json(success(result));
+                return;
+            }
+            const newAccessToken = generateToken(fresh);
+            const newRefreshToken = generateRefreshToken(fresh);
+            if (!req.cookies?.[AUTH_COOKIES.ACCESS]) {
+                res.json(success({ ...result, token: newAccessToken, refreshToken: newRefreshToken }));
+                return;
+            }
+            setTokenCookie(res, newAccessToken);
+            setRefreshTokenCookie(res, newRefreshToken);
             res.json(success(result));
         } catch (error) {
             log.error('[ChangePassword] 오류:', error);

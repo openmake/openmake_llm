@@ -293,7 +293,7 @@ export class AuthService {
         const success = await this.userManager.changePassword(userId, newPassword);
         if (success) {
             // 보안 점검 A2 — 이전에 발급된 토큰(이 요청의 토큰 포함)은 위 UPDATE 가 tokens_valid_after 로 함께 끊었다.
-            // 남은 리프레시 세션도 정리한다. 새 토큰은 내주지 않는다(재로그인).
+            // 남은 리프레시 세션도 정리한다. 비밀번호를 바꾼 기기의 새 토큰은 컨트롤러(PUT /api/auth/password)가 발급한다.
             clearSessionsForUser(userId);
         }
         return { success };

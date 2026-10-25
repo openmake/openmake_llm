@@ -5,6 +5,8 @@
  *     모바일(returnRefreshToken / body.refreshToken)은 종전대로 body 로 받는다.
  * A6: /logout 은 access 토큰이 없거나 만료돼도 200 — refresh 토큰을 폐기하고 쿠키를 지운다.
  *     블랙리스트 기록은 응답 전에 끝낸다(await).
+ * A2: 비밀번호 변경 성공 — 다른 기기 토큰은 무효화, 바꾼 이 기기에는 새 access·refresh 를 준다
+ *     (쿠키 모드는 쿠키로만, 헤더 모드는 본문으로).
  *
  * 무DB — 실제 인증 미들웨어(optionalAuth/requireAuth)·쿠키 설정 함수를 쓰고, 블랙리스트 기록·
  * 사용자 조회·AuthService 만 mock 한다.
@@ -84,6 +86,15 @@ function refreshTokenFor(userId: string, jti: string, secret: string = getConfig
 /** refresh 쿠키 Set-Cookie 중 토큰 값을 싣는 것(만료 쿠키 제외) */
 function refreshCookieWithValue(res: request.Response, value: string): string | undefined {
     return setCookies(res).find((c) => c.startsWith(`refresh_token=${value};`));
+}
+
+/** 유효한 access 토큰 — requireAuth 를 통과한다 */
+function validAccessToken(): string {
+    return jwt.sign(
+        { userId: 'u1', email: sampleUser.email, role: 'user', type: 'access' },
+        getConfig().jwtSecret,
+        { algorithm: 'HS256', expiresIn: '15m', jwtid: 'current-access-jti' },
+    );
 }
 
 /** 만료된 access 토큰 — 미들웨어 검증에서 떨어진다 */
@@ -166,6 +177,47 @@ describe('쿠키 모드 인증 응답 (A4) · 로그아웃 (A6)', () => {
             expect(r.status).toBe(200);
             expect(r.body.data.token).toBe('new-access-token');
             expect(r.body.data.refreshToken).toBe('new-refresh-token');
+            expect(setCookies(r)).toEqual([]);
+        });
+    });
+
+    describe('PUT /password', () => {
+        const body = { currentPassword: 'OldPassw0rd!x', newPassword: 'NewPassw0rd!x' };
+
+        beforeEach(() => {
+            mockAuthService.changePassword.mockResolvedValue({ success: true });
+        });
+
+        test('쿠키 모드 — auth_token·refresh_token 을 새 값으로 설정, 본문에 토큰 없음', async () => {
+            const r = await request(app)
+                .put('/api/auth/password')
+                .set('Cookie', [`auth_token=${validAccessToken()}`, 'refresh_token=old-refresh-token'])
+                .send(body);
+            expect(r.status).toBe(200);
+            expect(r.body.data).toEqual({ success: true });
+            expect(cookieNamed(r, 'auth_token')).toContain('auth_token=new-access-token');
+            expect(cookieNamed(r, 'auth_token')).toContain('HttpOnly');
+            expect(refreshCookieWithValue(r, 'new-refresh-token')).toMatch(/; Path=\/api\/auth(;|$)/);
+            expect(JSON.stringify(r.body)).not.toContain('new-access-token');
+        });
+
+        test('헤더(비쿠키) 모드 — 본문에 token·refreshToken, 쿠키 없음', async () => {
+            const r = await request(app)
+                .put('/api/auth/password')
+                .set('Authorization', `Bearer ${validAccessToken()}`)
+                .send(body);
+            expect(r.status).toBe(200);
+            expect(r.body.data).toEqual({ success: true, token: 'new-access-token', refreshToken: 'new-refresh-token' });
+            expect(setCookies(r)).toEqual([]);
+        });
+
+        test('실패 — 새 토큰도 쿠키 변경도 없다', async () => {
+            mockAuthService.changePassword.mockResolvedValue({ success: false, error: '현재 비밀번호가 올바르지 않습니다' });
+            const r = await request(app)
+                .put('/api/auth/password')
+                .set('Cookie', [`auth_token=${validAccessToken()}`])
+                .send(body);
+            expect(r.status).toBe(401);
             expect(setCookies(r)).toEqual([]);
         });
     });
