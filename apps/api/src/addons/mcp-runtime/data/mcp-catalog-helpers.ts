@@ -3,7 +3,7 @@
  * 와 instance metrics 집계 SQL.
  * mcp-catalog-repository.ts 에서 분리 — 동작은 그대로.
  */
-import { McpCatalogInputError } from '../../../security/spawn-env-policy';
+import { McpCatalogInputError } from './mcp-catalog-input';
 import { encryptToken } from '../../../utils/token-crypto';
 import type { McpCatalogTemplate, McpVisibility } from '../schemas/mcp-catalog.schema';
 
