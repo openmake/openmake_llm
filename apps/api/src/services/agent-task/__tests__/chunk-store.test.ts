@@ -128,6 +128,9 @@ describe('chunk-store 용량 상한 (E4)', () => {
             jest.isolateModules(() => { store = require('../chunk-store'); });
             const quotaUser = 'quota-user';
             const first = await store.initChunkedUpload(quotaUser, { name: 'a.bin', size: 600, totalChunks: 1 });
+            // 청크를 하나도 안 보낸(init 만 한) 미조립 업로드도 쿼터에 든다
+            await expect(store.initChunkedUpload(quotaUser, { name: 'b.bin', size: 600, totalChunks: 1 }))
+                .rejects.toMatchObject({ statusCode: 413 });
             // 조립이 끝나도 claim 전까지는 디스크를 차지하므로 쿼터에 포함된다
             await store.writeChunk(first.uploadId, quotaUser, 0, Buffer.alloc(600, 1));
             await store.completeChunkedUpload(first.uploadId, quotaUser);
@@ -138,6 +141,84 @@ describe('chunk-store 용량 상한 (E4)', () => {
             const second = await store.initChunkedUpload(quotaUser, { name: 'b.bin', size: 600, totalChunks: 1 });
             await store.abortChunkedUpload(second.uploadId, quotaUser);
             await store.abortChunkedUpload(other.uploadId, 'quota-other');
+        } finally {
+            if (prev === undefined) delete process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES;
+            else process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES = prev;
+        }
+    });
+});
+
+/** 사전 검사와 쓰기 사이에 다른 요청(다른 프로세스 포함)이 끼어드는 경합 — fs.writeFile 을
+ *  가로채 "실제 쓰기 직전"에 경쟁 요청의 결과물을 디스크에 먼저 만들어 순서를 고정한다. */
+describe('chunk-store 경합 재확인 (E4)', () => {
+    const fsp = require('fs/promises') as typeof import('fs/promises');
+    const realWriteFile = fsp.writeFile;
+    const chunkRoot = path.join(TMP_ROOT, 'chunked');
+    const diskTotal = async (uploadId: string) => {
+        const dir = path.join(chunkRoot, uploadId);
+        let total = 0;
+        for (const f of await fs.readdir(dir)) {
+            if (f.startsWith('chunk.')) total += (await fs.stat(path.join(dir, f))).size;
+        }
+        return total;
+    };
+
+    afterEach(() => { jest.restoreAllMocks(); });
+
+    it('사전 검사 뒤 다른 청크가 먼저 쓰이면 방금 쓴 청크를 지우고 400', async () => {
+        const { uploadId } = await initChunkedUpload(USER, { name: 'race.bin', size: 10, totalChunks: 2 });
+        const dir = path.join(chunkRoot, uploadId);
+        jest.spyOn(fsp, 'writeFile').mockImplementation((async (file: string, data: Buffer) => {
+            if (String(file).endsWith('chunk.1')) await realWriteFile(path.join(dir, 'chunk.0'), Buffer.alloc(6, 9));
+            return realWriteFile(file, data);
+        }) as typeof fsp.writeFile);
+        await expect(writeChunk(uploadId, USER, 1, Buffer.alloc(6, 1)))
+            .rejects.toMatchObject({ statusCode: 400, message: expect.stringContaining('선언 크기 초과') });
+        expect(await fs.readdir(dir)).not.toContain('chunk.1');
+        expect(await diskTotal(uploadId)).toBe(6);
+        jest.restoreAllMocks();
+        await abortChunkedUpload(uploadId, USER);
+    });
+
+    it('두 index 를 동시에 쓰면 디스크 합계는 선언 크기를 넘지 않고 하나 이상은 400', async () => {
+        const { uploadId } = await initChunkedUpload(USER, { name: 'race2.bin', size: 10, totalChunks: 2 });
+        const results = await Promise.allSettled([
+            writeChunk(uploadId, USER, 0, Buffer.alloc(6, 1)),
+            writeChunk(uploadId, USER, 1, Buffer.alloc(6, 2)),
+        ]);
+        const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+        expect(rejected.length).toBeGreaterThanOrEqual(1);
+        for (const r of rejected) expect(r.reason).toMatchObject({ statusCode: 400 });
+        expect(await diskTotal(uploadId)).toBeLessThanOrEqual(10);
+        await abortChunkedUpload(uploadId, USER);
+    });
+
+    it('사전 검사 뒤 같은 사용자의 다른 init 이 먼저 기록되면 방금 만든 업로드를 지우고 413', async () => {
+        const prev = process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES;
+        process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES = '1024';
+        try {
+            let store!: typeof import('../chunk-store');
+            jest.isolateModules(() => { store = require('../chunk-store'); });
+            const user = 'race-quota-user';
+            const rivalId = '00000000-0000-4000-8000-000000000001';
+            let injected = false;
+            jest.spyOn(fsp, 'writeFile').mockImplementation((async (file: string, data: string, enc?: BufferEncoding) => {
+                if (!injected && String(file).endsWith('meta.json')) {
+                    injected = true;
+                    await fs.mkdir(path.join(chunkRoot, rivalId), { recursive: true });
+                    await realWriteFile(path.join(chunkRoot, rivalId, 'meta.json'), JSON.stringify({
+                        userId: user, name: 'rival.bin', size: 600, totalChunks: 1, createdAt: Date.now(),
+                    }), 'utf8');
+                }
+                return realWriteFile(file, data, enc);
+            }) as typeof fsp.writeFile);
+            const before = new Set(await fs.readdir(chunkRoot));
+            await expect(store.initChunkedUpload(user, { name: 'mine.bin', size: 600, totalChunks: 1 }))
+                .rejects.toMatchObject({ statusCode: 413 });
+            jest.restoreAllMocks();
+            const added = (await fs.readdir(chunkRoot)).filter((id) => !before.has(id));
+            expect(added).toEqual([rivalId]); // 내 업로드 디렉토리는 지워졌고 경쟁자 것만 남는다
+            await store.abortChunkedUpload(rivalId, user);
         } finally {
             if (prev === undefined) delete process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES;
             else process.env.AGENT_TASK_UPLOAD_USER_QUOTA_BYTES = prev;

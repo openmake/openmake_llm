@@ -47,4 +47,19 @@ describe('createBodyMw multipart 합계 상한', () => {
         expect(JSON.stringify(res.body)).toContain('100');
         expect(tmpFiles()).toEqual([]);
     });
+
+    it('임시 파일 삭제가 실패해도 413 으로 응답한다', async () => {
+        const fsp = require('fs/promises') as typeof import('fs/promises');
+        const spy = jest.spyOn(fsp, 'unlink').mockRejectedValue(new Error('EBUSY'));
+        try {
+            const res = await request(app).post('/')
+                .attach('files', Buffer.alloc(60, 1), 'a.bin')
+                .attach('files', Buffer.alloc(60, 2), 'b.bin');
+            expect(res.status).toBe(413);
+            expect(spy).toHaveBeenCalledTimes(2);
+        } finally {
+            spy.mockRestore();
+            for (const f of tmpFiles()) fs.rmSync(path.join(TMP_ROOT, 'tmp', f), { force: true });
+        }
+    });
 });

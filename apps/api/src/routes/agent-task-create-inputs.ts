@@ -12,6 +12,7 @@ import multer from 'multer';
 import * as fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import { badRequest } from '../utils/api-response';
+import { createLogger } from '../utils/logger';
 import { decodeMultipartFilename } from '../utils/multipart-filename';
 import { validateWithSecurity } from '../middlewares/validation';
 import { createAgentTaskSchema } from '../schemas/agent-task.schema';
@@ -19,6 +20,8 @@ import type { AgentTaskInputFile } from '../services/AgentTaskService';
 import { extractAttachedDocuments, isBinaryDocumentName } from '../services/chat-service/doc-extractor';
 import { AGENT_TASK_LIMITS, FILE_ATTACH_LIMITS, DOC_EXTRACT_LIMITS } from '../config/runtime-limits';
 import { ensureUploadTmpDir, finalizeUploadedFile, resolveStoredPath, safeBaseName } from '../services/agent-task/upload-store';
+
+const logger = createLogger('AgentTaskCreateInputs');
 
 const uploadMw = multer({
     storage: multer.diskStorage({
@@ -43,9 +46,18 @@ export function enforceTotalUploadSize(req: Request, res: Response, next: NextFu
     const files = Array.isArray(req.files) ? req.files : [];
     const total = files.reduce((s, f) => s + f.size, 0);
     if (total <= AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES) return next();
-    void Promise.all(files.map((f) => fs.unlink(f.path).catch(() => undefined))).then(() => {
+    const respond = () => {
+        if (res.headersSent) return;
         res.status(413).json(badRequest(`첨부 파일 합계가 너무 큽니다 (최대 ${AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES} bytes)`));
-    });
+    };
+    void Promise.allSettled(files.map((f) => fs.unlink(f.path)))
+        .then((rs) => {
+            const failed = rs.filter((r) => r.status === 'rejected').length;
+            if (failed > 0) logger.warn(`[AgentTaskCreate] 합계 초과 업로드 임시 파일 삭제 실패 ${failed}/${files.length}건`);
+        })
+        .catch((e) => logger.warn(`[AgentTaskCreate] 합계 초과 업로드 정리 오류: ${e instanceof Error ? e.message : String(e)}`))
+        .then(respond)
+        .catch((e) => logger.error(`[AgentTaskCreate] 413 응답 실패: ${e instanceof Error ? e.message : String(e)}`));
 }
 
 export function createBodyMw(req: Request, res: Response, next: NextFunction) {

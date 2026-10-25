@@ -119,11 +119,10 @@ export async function initChunkedUpload(
         throw new ChunkStoreError(
             `totalChunks(${decl.totalChunks})가 선언 크기 대비 부족합니다 — 청크당 최대 ${AGENT_TASK_LIMITS.CHUNK_MAX_BYTES} bytes`, 400);
     }
-    const pending = await pendingBytesForUser(userId);
-    if (pending + decl.size > AGENT_TASK_LIMITS.UPLOAD_USER_QUOTA_BYTES) {
-        throw new ChunkStoreError(
-            `대기 중인 업로드 용량 초과 — 사용자당 최대 ${AGENT_TASK_LIMITS.UPLOAD_USER_QUOTA_BYTES} bytes (대기 ${pending}, 요청 ${decl.size})`, 413);
-    }
+    const quotaError = (pending: number) => new ChunkStoreError(
+        `대기 중인 업로드 용량 초과 — 사용자당 최대 ${AGENT_TASK_LIMITS.UPLOAD_USER_QUOTA_BYTES} bytes (대기 ${pending}, 요청 ${decl.size})`, 413);
+    const pending = await pendingBytesForUser(userId); // 빠른 거절 — 최종 판정은 기록 뒤 재확인
+    if (pending + decl.size > AGENT_TASK_LIMITS.UPLOAD_USER_QUOTA_BYTES) throw quotaError(pending);
     void cleanupStale(); // 비동기 기회적 청소 — init 응답을 막지 않음
     const uploadId = uuidv4();
     const dir = uploadDir(uploadId);
@@ -137,6 +136,13 @@ export async function initChunkedUpload(
         createdAt: Date.now(),
     };
     await fs.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta), 'utf8');
+    // 기록 뒤 재확인 — 동시 init 은 서로를 못 본 채 사전 검사를 함께 통과할 수 있다(잠금 없음,
+    // 프로세스 간에도 성립). 자기 meta 를 쓴 뒤 다시 세므로 마지막으로 센 쪽이 반드시 초과를 본다.
+    const after = await pendingBytesForUser(userId);
+    if (after > AGENT_TASK_LIMITS.UPLOAD_USER_QUOTA_BYTES) {
+        await fs.rm(dir, { recursive: true, force: true });
+        throw quotaError(after - decl.size);
+    }
     return { uploadId };
 }
 
@@ -151,16 +157,31 @@ export async function writeChunk(uploadId: string, userId: string, index: number
         throw new ChunkStoreError(`청크가 너무 큽니다 (최대 ${AGENT_TASK_LIMITS.CHUNK_MAX_BYTES} bytes)`, 400);
     }
     const dir = uploadDir(uploadId);
-    let received = buf.length; // 같은 index 는 덮어쓰기이므로 기존 크기를 빼고 센다
-    for (let i = 0; i < meta.totalChunks; i++) {
-        if (i === index) continue;
+    const overError = (received: number) =>
+        new ChunkStoreError(`선언 크기 초과 — 선언 ${meta.size}, 수신 ${received} bytes`, 400);
+    // 빠른 거절 — 같은 index 는 덮어쓰기이므로 기존 크기를 빼고 센다
+    const pre = buf.length + await sumChunkBytes(dir, meta.totalChunks, index);
+    if (pre > meta.size) throw overError(pre);
+    const file = path.join(dir, `chunk.${index}`);
+    await fs.writeFile(file, buf);
+    // 쓰기 뒤 재확인 — 동시 PUT 은 서로의 청크를 못 본 채 사전 검사를 함께 통과할 수 있다.
+    // 자기 청크를 쓴 뒤 전체를 다시 세므로 마지막으로 센 쪽이 반드시 초과를 본다(초과분은 남지 않음).
+    const post = await sumChunkBytes(dir, meta.totalChunks);
+    if (post > meta.size) {
+        await fs.rm(file, { force: true });
+        throw overError(post);
+    }
+}
+
+/** 디스크에 있는 청크 파일 크기 합(exceptIndex 제외). */
+async function sumChunkBytes(dir: string, totalChunks: number, exceptIndex?: number): Promise<number> {
+    let total = 0;
+    for (let i = 0; i < totalChunks; i++) {
+        if (i === exceptIndex) continue;
         const st = await fs.stat(path.join(dir, `chunk.${i}`)).catch(() => null);
-        if (st) received += st.size;
+        if (st) total += st.size;
     }
-    if (received > meta.size) {
-        throw new ChunkStoreError(`선언 크기 초과 — 선언 ${meta.size}, 수신 ${received} bytes`, 400);
-    }
-    await fs.writeFile(path.join(dir, `chunk.${index}`), buf);
+    return total;
 }
 
 /**
