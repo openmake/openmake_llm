@@ -3,7 +3,7 @@
  *
  * 기본 OFF(404). METRICS_TOKEN 이 있으면 `Authorization: Bearer <토큰>` 을 상수 시간 비교로만 받고(DB 없음),
  * 비어 있으면 /api/health 의 관리자 process 필드와 같은 판정(isAdminRequest — 서명된 JWT 의 role 이 관리자일 때만
- * DB 로 현재 role·is_active 재확인, 조회 실패는 비관리자)으로 관리자만 받는다. 토큰 값은 로그에 남기지 않는다.
+ * DB 로 현재 role·is_active·tokens_valid_after 재확인, 조회 실패는 비관리자)으로 관리자만 받는다. 토큰 값은 로그에 남기지 않는다.
  * 켜져 있으면 인증 전에 IP 당 1분 RL_METRICS 한도를 건다(#1477) — 인증 실패 반복도 같은 예산이다.
  */
 import { timingSafeEqual } from 'crypto';

@@ -56,6 +56,18 @@ describe('readHealthProcessSection — /api/health 의 관리자 전용 process 
         await expect(readHealthProcessSection(cookieReq(sign('admin')), mem)).resolves.toBeUndefined();
     });
 
+    it('DB role=admin 이지만 tokens_valid_after 가 토큰 iat 이후(무효화 이전 발급) → 비관리자', async () => {
+        const token = sign('admin');
+        const iat = (jwt.decode(token) as { iat: number }).iat;
+        mockGetUserById.mockResolvedValue({ ...dbUser('admin'), tokens_valid_after: new Date((iat + 5) * 1000).toISOString() });
+        await expect(readHealthProcessSection(cookieReq(token), mem)).resolves.toBeUndefined();
+    });
+
+    it('DB role=admin 이고 tokens_valid_after 가 NULL → 관리자 유지', async () => {
+        mockGetUserById.mockResolvedValue({ ...dbUser('admin'), tokens_valid_after: null });
+        await expect(readHealthProcessSection(cookieReq(sign('admin')), mem)).resolves.toEqual(expect.objectContaining({ rss: 123_456 }));
+    });
+
     it('DB 조회가 던지면 비관리자로 본다(축소 응답, 던지지 않는다)', async () => {
         mockGetUserById.mockRejectedValue(new Error('db down'));
         await expect(readHealthProcessSection(cookieReq(sign('admin')), mem)).resolves.toBeUndefined();

@@ -4,9 +4,10 @@
  * 이 값이 있을 때(관리자)만 /api/health 가 전체 응답(services.memory.rssMB 등)을 준다 — 비관리자는 상태 필드·add-on 절만(W4).
  *
  * 헬스는 DB 장애를 알리려고 있으므로 관리자 판정만 DB 를 본다: 서명된 JWT 의 role 이 관리자일 때만
- * getUserById 로 현재 role·is_active 를 다시 확인한다(보안 점검 M-4 — 강등·비활성 관리자의 만료 전 토큰 차단).
+ * getUserById 로 현재 role·is_active·tokens_valid_after 를 다시 확인한다(보안 점검 M-4 — 강등·비활성 관리자,
+ * 비밀번호 변경 등으로 무효화된 관리자 토큰의 만료 전 사용 차단).
  * 블랙리스트는 보지 않는다. 잘못됐거나 만료된 토큰·일반 사용자 토큰은 DB 없이 게스트로 보고, DB 조회 실패·
- * 사용자 없음·비활성·관리자 아님은 모두 비관리자로 본다(축소 응답, 401·500 없음).
+ * 사용자 없음·비활성·관리자 아님·무효화 이전 발급은 모두 비관리자로 본다(축소 응답, 401·500 없음).
  * 받아들인 대가: 폐기(로그아웃)됐지만 만료 전인 관리자 토큰으로도 process 필드(pid·rss·heapUsed·uptimeSec —
  * 민감도 낮음)를 읽을 수 있다. access 토큰은 단명이라 노출 창이 짧다.
  */
@@ -14,6 +15,7 @@ import type { Request } from 'express';
 import { extractToken, isAdmin, looksLikeJWT, verifyTokenSignature } from '../auth/auth-core';
 import { AUTH_COOKIES } from '../config/security';
 import { getUserManager } from '../data/user-manager';
+import { isIssuedBeforeInvalidation } from '../auth/token-invalidation';
 
 export interface HealthProcessSection {
     pid: number;
@@ -32,7 +34,7 @@ export async function isAdminRequest(req: Pick<Request, 'cookies' | 'headers'>):
     if (!payload?.role || !isAdmin(payload.role)) return false;
     try {
         const user = await getUserManager().getUserById(String(payload.userId));
-        return !!user && user.is_active && isAdmin(user.role);
+        return !!user && user.is_active && isAdmin(user.role) && !isIssuedBeforeInvalidation(payload.iat, user.tokens_valid_after);
     } catch {
         return false;
     }
