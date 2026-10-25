@@ -23,6 +23,13 @@ test('LiteLLM gateway config selects the pipeline suite; unmapped YAML elsewhere
   assert.equal(selectFeatures(['scripts/vllm/litellm.config.yaml']).pipeline, true);
   assert.throws(() => selectFeatures(['scripts/foo/bar.yaml']), /Unmapped changed source: scripts\/foo\/bar\.yaml/);
 });
+test('root shell scripts select the pipeline suite', () => {
+  const r = selectFeatures(['install_linux.sh', 'openmake_llm.sh']);
+  assert.equal(r.pipeline, true); assert.deepEqual(r.api, []); assert.equal(r.web, false);
+});
+test('an unmapped root shell script still throws', () => {
+  assert.throws(() => selectFeatures(['never-mapped.sh']), /Unmapped changed source: never-mapped\.sh/);
+});
 
 test('Jest success with skipped or missing assertions is not feature coverage', () => {
   const related = new Map([['source', ['/apps/api/src/a.test.ts']]]);
