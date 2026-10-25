@@ -161,7 +161,7 @@ export const CSRF_POLICY = {
 export const AUTH_COOKIES = {
     /** 액세스 토큰 (HttpOnly) */
     ACCESS: AUTH.COOKIE_NAME,
-    /** 리프레시 토큰 (HttpOnly, path=/api/auth/refresh) */
+    /** 리프레시 토큰 (HttpOnly, path=/api/auth) */
     REFRESH: AUTH.REFRESH_COOKIE_NAME,
 } as const;
 

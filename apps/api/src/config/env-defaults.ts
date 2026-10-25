@@ -118,7 +118,8 @@ export const DEFAULT_CONFIG: EnvConfig = {
     // 클라이언트 IP 를 꾸미지 못하게. 리버스 프록시가 다른 호스트/컨테이너면 TRUSTED_PROXIES 에 그 주소를 명시.
     trustedProxies: ['loopback'],
 
-    // Security — Blacklist Policy (additive; 'open' maintains legacy fail-open behavior)
+    // Security — Blacklist Policy. 실제 기본은 env.ts 가 resolveBlacklistFailMode 로 정한다(production 'safe', 그 밖 'open').
+    // 이 값은 비운영 기본과 같게 둔 자리표시다.
     blacklistFailMode: 'open' as const,
 
     // Security — CSRF Double-Submit Cookie. 프론트(@openmake/api-client)가 mutating 요청에

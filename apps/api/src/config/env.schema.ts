@@ -26,6 +26,15 @@ function isUnsafeEnv(env: string | undefined): boolean {
 }
 const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
 
+/**
+ * BLACKLIST_FAIL_MODE(블랙리스트 DB 조회 실패 시 refresh 처리) 파생 — 명시값('open'/'safe')은 그대로 쓰고,
+ * 미설정이면 NODE_ENV=production 은 'safe'(거부: 탈취 refresh 재사용 창 봉쇄), 그 밖은 'open'(통과).
+ */
+export function resolveBlacklistFailMode(raw: string | undefined, nodeEnv: string | undefined): 'open' | 'safe' {
+    if (raw === 'open' || raw === 'safe') return raw;
+    return nodeEnv === 'production' ? 'safe' : 'open';
+}
+
 const booleanFromString = (defaultValue: boolean) =>
     z.preprocess((value) => {
         if (typeof value === 'boolean') {
@@ -74,8 +83,8 @@ export const envSchema = z
         // dev/test 외 모든 환경 (production, staging, uat, qa) 에서 필수 — superRefine 검증.
         TOKEN_ENCRYPTION_KEY: z.string().default(''),
 
-        // Security — Blacklist Policy (additive; default 'open' preserves legacy behavior)
-        BLACKLIST_FAIL_MODE: z.enum(['open', 'safe']).default('open'),
+        // Security — Blacklist Policy. 기본값은 스키마가 아니라 resolveBlacklistFailMode(NODE_ENV 따라)가 정한다
+        BLACKLIST_FAIL_MODE: z.enum(['open', 'safe']).optional(),
 
         // Security — CSRF Double-Submit Cookie policy (additive)
         // off: disabled / warn: log mismatches, allow / enforce: 403 on mismatch

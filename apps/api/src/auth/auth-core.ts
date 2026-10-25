@@ -19,6 +19,7 @@ import { JWTPayload } from './types';
 import { PublicUser, UserRole, isAdminRole } from '../data/user-manager';
 import * as crypto from 'crypto';
 import { getTokenBlacklist } from '../data/models/token-blacklist';
+import { invalidateTokensBefore } from '../data/user-manager-token-invalidation';
 import { getConfig } from '../config/env';
 import { AUTH_CONFIG } from '../config/constants';
 import { AUTH_COOKIES } from '../config/security';
@@ -165,6 +166,25 @@ export function clearSessionsForUser(userId: string): void {
 }
 
 /**
+ * refresh 재사용 탐지(보안 점검 A7) — 블랙리스트에 오른 refresh(이미 회전·로그아웃·세션 정리로 폐기됨)가 다시 오면
+ * 탈취 토큰의 재사용으로 보고 그 사용자의 토큰 전체(access·refresh)를 users.tokens_valid_after 로 끊는다.
+ * 서명이 맞는 refresh 만 대상 — jwt.decode 값만 믿으면 위조 토큰(남의 userId + 아는 블랙리스트 jti)으로
+ * 다른 사용자를 강제 로그아웃시킬 수 있다. 무효화 실패는 경고만 — 호출부의 거부는 그대로다.
+ */
+async function revokeFamilyOnReuse(token: string): Promise<void> {
+    const signed = verifySignatureIgnoringExpiry(token);
+    if (signed?.type !== 'refresh' || signed.userId === undefined || signed.userId === null) return;
+    const userId = String(signed.userId);
+    try {
+        await invalidateTokensBefore(userId);
+        logger.warn('refresh 재사용 탐지 — 사용자 토큰 전체 무효화', { userId });
+    } catch (err) {
+        logger.warn('refresh 재사용 탐지 — 토큰 무효화 실패(거부는 유지)',
+            { userId, error: err instanceof Error ? err.message : String(err) });
+    }
+}
+
+/**
  * 🔒 Phase 2: 리프레시 토큰 검증
  * 액세스 토큰 갱신용 리프레시 토큰을 검증합니다.
  *
@@ -179,10 +199,11 @@ export async function verifyRefreshToken(token: string): Promise<JWTPayload | nu
                  const blacklist = getTokenBlacklist();
                  if (await blacklist.has(preCheck.jti)) {
                      logger.warn('블랙리스트된 리프레시 토큰 사용 시도');
+                     await revokeFamilyOnReuse(token);
                      return null;
                  }
              } catch (blacklistError) {
-                 // BLACKLIST_FAIL_MODE로 DB 장애 시 정책 선택 (additive: default 'open' = 기존 동작)
+                 // BLACKLIST_FAIL_MODE로 DB 장애 시 정책 선택 (미설정이면 production 'safe', 그 밖 'open' — config/env.schema resolveBlacklistFailMode)
                  const failMode = getConfig().blacklistFailMode;
                  logger.warn('블랙리스트 DB 접근 실패 (refresh)',
                      { jti: preCheck.jti, failMode, error: blacklistError instanceof Error ? blacklistError.message : String(blacklistError) });
