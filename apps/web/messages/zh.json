@@ -1370,6 +1370,7 @@
       "unreachable": "无法连接到服务器",
       "timeout": "连接超时",
       "protocol": "MCP 协议响应错误",
+      "sandbox_required": "无法隔离运行 — 用户 MCP 服务器需要 Docker 沙箱（请联系管理员）",
       "unknown": "连接失败 — 悬停查看详情"
     },
     "disabledLabel": "未启用",

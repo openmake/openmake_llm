@@ -37,12 +37,18 @@ export function shq(s: string): string {
     return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-/** 상대 경로만 허용(빈 값·"." 은 workspace 루트). 절대 경로·상위 탈출은 거절 — bash 와 달리 승인 없이 도는 도구라 범위를 좁힌다. */
+/** 상대 경로만 허용(빈 값·"." 은 workspace 루트). 절대 경로·상위 탈출·`-` 로 시작하는 세그먼트(옵션 주입)는 거절 — bash 와 달리 승인 없이 도는 도구라 범위를 좁힌다. */
 export function normalizeRelPath(p: string): string | null {
     const t = p.trim();
     if (!t || t === '.') return '.';
-    if (t.startsWith('/') || t.split(/[\\/]/).includes('..')) return null;
+    const segs = t.split(/[\\/]/);
+    if (t.startsWith('/') || segs.includes('..') || segs.some((s) => s.startsWith('-'))) return null;
     return t.replace(/^\.\//, '');
+}
+
+/** 셸 명령에 넣는 경로 인자 — `./` 로 고정해 find·rg·grep 이 옵션으로 읽지 못하게 한다("." 은 그대로). */
+export function relArg(rel: string): string {
+    return rel === '.' ? '.' : './' + rel;
 }
 
 function excludeGlobsRg(): string {
@@ -67,7 +73,7 @@ function countSkippedShell(rel: string): string {
     const dirs = TASK_CODE_NAV.EXCLUDED_DIRS.map((d) => `-name ${shq(d)}`).join(' -o ');
     const secrets = TASK_CODE_NAV.EXCLUDED_FILES.map((f) => `-name ${shq(f)}`).join(' -o ');
     // 제외 디렉토리 안은 세지 않고, 자격증명 이름은 파일·디렉토리 모두 1건으로 센다(디렉토리는 내려가지 않음).
-    return `printf '\\n${SKIPPED_SENTINEL} %s\\n' "$(find ${shq(rel)} \\( ${dirs} \\) -prune -o \\( ${secrets} \\) -prune -print 2>/dev/null | head -n 10000 | wc -l | tr -d ' ')"`;
+    return `printf '\\n${SKIPPED_SENTINEL} %s\\n' "$(find ${shq(relArg(rel))} \\( ${dirs} \\) -prune -o \\( ${secrets} \\) -prune -print 2>/dev/null | head -n 10000 | wc -l | tr -d ' ')"`;
 }
 /** stdout 에서 sentinel 을 떼어내고 건너뛴 수를 돌려준다. 없으면 0(캡으로 잘린 경우 등 — 안내 생략). */
 function splitSkipped(stdout: string): { body: string; skipped: number } {
@@ -139,9 +145,9 @@ async function runGrep(sandbox: TaskExecutor, o: {
     const ic = o.ignoreCase === true;
     const tail = `; ${countSkippedShell(o.rel)}`;
     const rgCmd = `rg -n --no-heading --color never --no-messages -m ${TASK_CODE_NAV.GREP_PER_FILE_MAX}`
-        + `${ic ? ' -i' : ''}${o.hidden ? ' --hidden --no-ignore' : ''} ${excludeGlobsRg()}${o.glob ? ` -g ${shq(o.glob)}` : ''} -e ${shq(o.pattern)} -- ${shq(o.rel)} | ${head}${tail}`;
+        + `${ic ? ' -i' : ''}${o.hidden ? ' --hidden --no-ignore' : ''} ${excludeGlobsRg()}${o.glob ? ` -g ${shq(o.glob)}` : ''} -e ${shq(o.pattern)} -- ${shq(relArg(o.rel))} | ${head}${tail}`;
     const grepCmd = `grep -rnI -E${ic ? 'i' : ''} ${excludeDirsGrep()}${o.glob ? ` --include=${shq(o.glob.replace(/^.*\//, ''))}` : ''}`
-        + ` -e ${shq(o.pattern)} -- ${shq(o.rel)} | ${head}${tail}`;
+        + ` -e ${shq(o.pattern)} -- ${shq(relArg(o.rel))} | ${head}${tail}`;
     const { r, via } = await execWithGrepFallback(sandbox, rgCmd, grepCmd);
     if (r.timedOut) return { lines: [], overflow: false, via, error: '검색 시간 초과 — path/glob 으로 범위를 좁히세요.' };
     const { body, skipped } = splitSkipped(r.stdout);
@@ -233,7 +239,7 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
                 nativeSkipped = native.skipped ?? 0;
             } else {
                 // 파일별 줄 수 — GNU 전용 옵션 없이(find -printf·xargs -d 는 macOS 로컬 브리지에 없다).
-                const listCmd = `find ${shq(rel)} ${pruneFind()} | head -n ${maxFiles + 1} | while IFS= read -r f; do `
+                const listCmd = `find ${shq(relArg(rel))} ${pruneFind()} | head -n ${maxFiles + 1} | while IFS= read -r f; do `
                     + `printf '%s\\t%s\\n' "$(wc -l < "$f" 2>/dev/null | tr -d ' ')" "$f"; done; ${countSkippedShell(rel)}`;
                 const list = await sandbox.exec(listCmd);
                 if (list.timedOut) return textResult('구조 수집 시간 초과 — path 로 범위를 좁히세요.', true);

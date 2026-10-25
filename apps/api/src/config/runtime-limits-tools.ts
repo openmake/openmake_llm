@@ -47,6 +47,11 @@ export const TOOL_RESULT_COMPACTION = {
 /** 도구 결과를 LLM 컨텍스트로 주입할 때 단일 결과 최대 문자 수 (외부 provider · agent task 공용). */
 export const MAX_TOOL_RESULT_CHARS = parseInt(process.env.MAX_TOOL_RESULT_CHARS || '8000', 10);
 
+/** 중첩 도구 인자 위험 패턴 검사(tool-execution-guard 의 detectDangerousArgsDeep) — 순회 최대 깊이. TOOL_ARG_SCAN_MAX_DEPTH(기본 8). */
+export const TOOL_ARG_SCAN_LIMITS = {
+    MAX_DEPTH: parseInt(process.env.TOOL_ARG_SCAN_MAX_DEPTH || '', 10) || 8,
+} as const;
+
 /**
  * 에이전트 작업의 도구 결과 절단 방식 — 상한(MAX_TOOL_RESULT_CHARS)을 넘으면 앞·뒤를 남기고 가운데를 생략한다
  * (services/agent-task/tool-result-truncate). 채팅 경로는 종전대로 앞부분만 남긴다.

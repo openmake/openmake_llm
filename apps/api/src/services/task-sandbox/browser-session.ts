@@ -13,13 +13,13 @@
  *
  * @module services/task-sandbox/browser-session
  */
-import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import { z } from 'zod';
 import { getTaskSandboxConfig, BROWSER_SESSION, BROWSER_URL_GUARD_ENABLED, browserDestGuardEnv, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { validateOutboundUrl } from '../../security/ssrf-guard';
 import { runProcess, sanitizeId } from './sandbox';
 import { SANDBOX_WORKSPACE_DIR } from './workspace-path';
+import { writeFileNoFollow } from './sandbox-host-write';
 import { BROWSER_SESSION_SCRIPT } from './browser-session-script';
 import { createLogger } from '../../utils/logger';
 
@@ -176,7 +176,8 @@ export async function startBrowserSession(
 ): Promise<void> {
     if (await isBrowserSessionActive(taskId, cfg)) return;
     const name = browserSessionContainerName(taskId);
-    await writeFile(join(hostWorkdir, BROWSER_SESSION.SCRIPT_FILE), BROWSER_SESSION_SCRIPT);
+    // 컨테이너 안에서 이 자리에 심링크를 심어 둘 수 있다 — 따라가지 않는다(E7).
+    await writeFileNoFollow(join(hostWorkdir, BROWSER_SESSION.SCRIPT_FILE), BROWSER_SESSION_SCRIPT);
     let proxyUrl: string | undefined;
     if (cfg.egressProxyEnabled) {
         const { ensureEgressProxy } = await import('./egress-proxy');

@@ -1370,6 +1370,7 @@
       "unreachable": "サーバーに接続できません",
       "timeout": "接続がタイムアウトしました",
       "protocol": "MCP プロトコル応答エラー",
+      "sandbox_required": "分離実行不可 — ユーザー MCP サーバーには Docker サンドボックスが必要です（管理者にお問い合わせください）",
       "unknown": "接続に失敗しました — 詳細はホバーで確認"
     },
     "disabledLabel": "使用しない",

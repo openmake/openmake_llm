@@ -14,6 +14,7 @@ import { actorFor } from '../config/scope-policy';
 import { resolveSpaceProfiles, getDefaultLimits } from '../config/profiles';
 import { getSpaceScopeRow, touchSpace } from '../spaces/repository';
 import { contentHash, storeOriginal } from './storage';
+import { MAGIC_HEAD_BYTES, sniffMimeMismatch } from './magic-bytes';
 import * as repo from './repository';
 
 /** 확장자 → MIME 룩업(if-체인 금지). 브라우저가 generic octet-stream 을 보낼 때 보정. */
@@ -53,9 +54,12 @@ export async function uploadDocument(userId: string, spaceId: string, file: Uplo
     const profiles = await resolveSpaceProfiles(space.config_profile_id);
     const { limits, chunker } = profiles;
 
-    // ① MIME 검증(신고값 → 확장자 보정) ② 크기 ③ 문서 수 상한
+    // ① MIME 검증(신고값 → 확장자 보정, 앞부분 매직 대조 — PDF 는 앞 1024바이트 안 헤더) ② 크기 ③ 문서 수 상한
     const mime = resolveMime(file, limits.allowedMimeTypes);
     if (!mime) throw new AppError('지원하지 않는 파일 형식입니다', 415, true, 'FAILED_VALIDATION');
+    if (sniffMimeMismatch(file.buffer.subarray(0, MAGIC_HEAD_BYTES), mime)) {
+        throw new AppError('파일 내용이 형식과 일치하지 않습니다', 400, true, 'FAILED_VALIDATION');
+    }
     if (file.size > limits.maxFileBytes) {
         throw new AppError(`파일이 상한(${limits.maxFileBytes} bytes)을 초과했습니다`, 413, true, 'PAYLOAD_TOO_LARGE');
     }
