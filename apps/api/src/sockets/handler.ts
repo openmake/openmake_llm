@@ -58,6 +58,7 @@ import { runWithRequestContext } from '../utils/request-context';
 import { isOriginAllowed } from '../security/cors-policy';
 import { WsConnectionGuard } from './ws-connection-guard';
 import { broadcastWithBackpressure, sendToConnections, sweepHeartbeat } from './ws-broadcast';
+import { subscribeUserAuthRevoked } from './ws-user-eviction';
 
 const log = createLogger('WebSocketHandler');
 
@@ -76,6 +77,7 @@ export class WebSocketHandler {
     private slowClientCounters: WeakMap<WebSocket, number> = new WeakMap();
     /** 연결 수락 제어(IP/user rate limit + user 레지스트리) — ws-connection-guard.ts */
     private guard = new WsConnectionGuard();
+    private unsubscribeAuthRevoked = subscribeUserAuthRevoked(this.guard, (ws) => this.unregisterConnection(ws));
     /** 하트비트 인터벌 타이머 (30초 주기) */
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -549,6 +551,7 @@ export class WebSocketHandler {
             this.heartbeatInterval = null;
         }
         this.guard.stopCleanup();
+        this.unsubscribeAuthRevoked();
     }
 
     /**

@@ -24,6 +24,7 @@ import { createLogger } from '../utils/logger';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import { isLockoutActive, recordFailedLogin, recordSuccessfulLogin, selectLoginRow } from './user-login-lockout';
 import { updateUsersInvalidatingTokens } from './user-manager-token-invalidation';
+import { emitRevokedIfUpdated, emitUserAuthRevoked, prepareUpdateUserRevocations } from './user-manager-auth-revocation';
 
 const logger = createLogger('UserManager');
 
@@ -430,7 +431,8 @@ class UserManagerImpl {
             'UPDATE users SET password_hash = $1, updated_at = $2, tokens_valid_after = $3 WHERE id = $4',
             [passwordHash, new Date().toISOString(), new Date(), userId]
         );
-        return (result.rowCount || 0) > 0;
+        // 열린 채팅 소켓도 닫는다(ws-user-eviction) — 남은 토큰은 위 tokens_valid_after 가 끊는다.
+        return emitRevokedIfUpdated(result.rowCount, userId, 'password_changed');
     }
 
     async changeRole(userId: string, newRole: UserRole): Promise<PublicUser | null> {
@@ -439,7 +441,7 @@ class UserManagerImpl {
             'UPDATE users SET role = $1, updated_at = $2 WHERE id = $3',
             [newRole, new Date().toISOString(), userId]
         );
-        if ((result.rowCount || 0) === 0) return null;
+        if (!emitRevokedIfUpdated(result.rowCount, userId, 'role_changed')) return null;
 
         const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         const row = userResult.rows[0] as UserRow | undefined;
@@ -474,11 +476,13 @@ class UserManagerImpl {
             params.push(new Date());
         }
 
+        const emitRevocations = await prepareUpdateUserRevocations(userId, updates);
         params.push(userId);
         const result = await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
         if ((result.rowCount || 0) === 0) return null;
         // 브리지 연결은 연결할 때만 계정을 검증한다 — 비활성화하면 이미 붙어 있는 연결을 여기서 닫는다.
         if (updates.is_active === false) getLocalBridgeRegistry().disconnectByUser(userId, 'account_disabled');
+        emitRevocations();
 
         const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         const row = userResult.rows[0] as UserRow | undefined;
@@ -523,6 +527,7 @@ class UserManagerImpl {
 
             await client.query('COMMIT');
             if (deleted) getLocalBridgeRegistry().disconnectByUser(userId, 'account_deleted');
+            if (deleted) emitUserAuthRevoked({ userId, reason: 'account_deleted' });
             return deleted;
         } catch (err) {
             await client.query('ROLLBACK');
