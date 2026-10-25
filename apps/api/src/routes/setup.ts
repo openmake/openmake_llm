@@ -129,12 +129,12 @@ export function setupApiRoutes(
 
     app.get('/metrics', metricsScrapeLimiter, createMetricsExpositionHandler()); // Prometheus 텍스트(R9-a) — 기본 OFF, 토큰 또는 관리자 JWT, IP 당 분당 RL_METRICS_IP
 
-    // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환). 인증 미들웨어 없음 — DB 에 닿지 않게
-    // 관리자 process 필드는 서명된 JWT 만으로 가른다(health-process-section.ts 의 대가 설명 참고)
+    // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환). 인증 미들웨어 없음 — DB 장애에도 답하게
+    // 관리자 process 필드만 DB 로 role·is_active 를 재확인하고, 실패하면 비관리자로 본다(health-process-section.ts)
     // 비관리자(익명·일반 사용자)는 상태 필드와 add-on 절만 받는다 — 풀 수·노드·모델 수·메모리·uptime 은 관리자 전용.
     // add-on 절(예: knowledge 모드·generation·heartbeat)은 운영 모드 표시라 공개로 둔다(롤백 훈련 스크립트가 익명으로 읽는다)
     app.get('/api/health', async (req: Request, res: Response) => {
-        const processSection = readHealthProcessSection(req);
+        const processSection = await readHealthProcessSection(req);
         const dbPool = getPool();
         const clusterStats = cluster.getStats();
         const databaseStatus = dbPool ? 'connected' : 'disconnected';

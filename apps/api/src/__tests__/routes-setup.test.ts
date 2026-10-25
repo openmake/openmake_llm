@@ -56,7 +56,7 @@ jest.mock('../auth/middleware', () => ({
     requireAdmin: (_req: unknown, _res: unknown, next: () => void) => next()
 }));
 
-// /api/health 는 DB 를 건드리지 않는다 — 블랙리스트 조회가 불리면 영원히 멈추게 해 둔다(멈춘 풀 흉내)
+// /api/health 는 블랙리스트를 보지 않는다 — 불리면 영원히 멈추게 해 둔다(멈춘 풀 흉내). 관리자 판정만 사용자 조회를 쓴다
 jest.mock('../data/models/token-blacklist', () => ({
     getTokenBlacklist: jest.fn(() => ({ has: () => new Promise<boolean>(() => { /* 대기 */ }) })),
 }));
@@ -67,6 +67,7 @@ import * as jwt from 'jsonwebtoken';
 import { getConfig } from '../config/env';
 import { optionalAuth } from '../auth/middleware';
 import { getTokenBlacklist } from '../data/models/token-blacklist';
+import { getUserManager } from '../data/user-manager';
 import { setupApiRoutes } from '../routes/setup';
 import { registerHealthSection } from '../runtime-ports/health-sections';
 
@@ -153,17 +154,22 @@ describe('라우트 설정 — 기본 엔드포인트', () => {
         }
     });
 
-    describe('GET /api/health → 관리자 process 필드는 서명된 JWT 만으로 판단한다(DB 조회 없음)', () => {
+    describe('GET /api/health → 관리자 process 필드는 서명된 JWT + DB 의 현재 role 로 판단한다(블랙리스트 조회 없음)', () => {
         const bearer = (role: string): string => `Bearer ${jwt.sign(
             { userId: `u-${role}`, email: `${role}@example.test`, role, type: 'access' },
             getConfig().jwtSecret, { expiresIn: '5m', jwtid: `jti-${role}` })}`;
+        let lookup: jest.SpyInstance;
         beforeEach(() => {
             (optionalAuth as jest.Mock).mockClear();
             (getTokenBlacklist as jest.Mock).mockClear();
+            lookup = jest.spyOn(getUserManager(), 'getUserById').mockImplementation(async (id: string) => ({
+                id, email: `${id}@example.test`, role: id === 'u-admin' ? 'admin' : 'user', created_at: '2026-10-25T00:00:00.000Z', is_active: true,
+            }));
         });
         afterEach(() => {
             expect(optionalAuth).not.toHaveBeenCalled();
             expect(getTokenBlacklist).not.toHaveBeenCalled();
+            lookup.mockRestore();
         });
 
         test('토큰 없음 → 200, process 없음', async () => {
@@ -188,6 +194,21 @@ describe('라우트 설정 — 기본 엔드포인트', () => {
             const res = await request(app).get('/api/health').set('Authorization', bearer('admin'));
             expect(res.status).toBe(200);
             expect(res.body.process).toEqual({ pid: process.pid, rss: expect.any(Number), heapUsed: expect.any(Number), uptimeSec: expect.any(Number) });
+        });
+
+        test('관리자 토큰이지만 DB 의 현재 role 이 user → 200 축소 응답(process 없음)', async () => {
+            lookup.mockResolvedValue({ id: 'u-admin', email: 'u-admin@example.test', role: 'user', created_at: '2026-10-25T00:00:00.000Z', is_active: true });
+            const res = await request(app).get('/api/health').set('Authorization', bearer('admin'));
+            expect(res.status).toBe(200);
+            expect(res.body.process).toBeUndefined();
+        });
+
+        test('관리자 토큰이지만 DB 조회가 던짐 → 200 축소 응답(500 아님)', async () => {
+            lookup.mockRejectedValue(new Error('db down'));
+            const res = await request(app).get('/api/health').set('Authorization', bearer('admin'));
+            expect(res.status).toBe(200);
+            expect(res.body.status).toBe('ok');
+            expect(res.body.process).toBeUndefined();
         });
     });
 
