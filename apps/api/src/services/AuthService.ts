@@ -131,13 +131,17 @@ export class AuthService {
             return { success: false, error: '유효한 이메일 주소를 입력하세요' };
         }
 
-        // 보안: 역할은 클라이언트 입력(data.role)을 신뢰하지 않고 ADMIN_EMAILS allowlist 로만 결정한다.
-        // (self-register 로 role:'admin' 을 보내 권한 상승하던 취약점 차단 — OAuth 경로와 동일 정책.)
+        // 보안(A1): 셀프 가입은 항상 일반 사용자다. 클라이언트 입력(data.role)도, ADMIN_EMAILS 일치도 믿지 않는다 —
+        // 셀프 가입은 이메일 소유를 확인하지 않으므로 ADMIN_EMAILS 주소를 먼저 가입하면 관리자를 가로챌 수 있었다.
+        // 관리자 승격은 OAuth 검증 이메일(findOrCreateOAuthUser)·관리자 화면에서만 한다.
         const adminEmails = getConfig().adminEmails
             .split(',')
             .map(e => e.toLowerCase().trim())
             .filter(e => e);
-        const role = adminEmails.includes(email.toLowerCase()) ? USER_ROLES.ADMIN : USER_ROLES.USER;
+        if (adminEmails.includes(email.toLowerCase().trim())) {
+            log.info('관리자 승격은 OAuth 검증 이메일 또는 관리자 화면에서만');
+        }
+        const role = USER_ROLES.USER;
 
         const user = await this.userManager.createUser({ username, email, password, role });
 

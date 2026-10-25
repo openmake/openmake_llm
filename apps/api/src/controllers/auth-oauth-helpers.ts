@@ -201,9 +201,13 @@ export function buildRedirectUri(req: Request, provider: 'google' | 'github' | '
     // 프록시 destination(예: localhost:52416)이 되어 redirect_uri 가 외부 주소로 생성되지 않는다.
     // 원본 Host(예: example.com:33000)는 x-forwarded-host 에 담기므로 이를 우선 사용해
     // Google Console 등록 URI 와 일치시켜 redirect_uri_mismatch 를 방지한다. (trust proxy 신뢰 + Google 승인목록 2차검증)
-    const forwardedHost = req.get('x-forwarded-host');
+    // 보안(A5): x-forwarded-* 는 trust proxy 가 신뢰하는 주소(직전 홉)에서 온 요청일 때만 쓴다. 그 밖의 요청이
+    // x-forwarded-host 를 꾸며 redirect_uri 를 바꾸지 못하게 한다. 'trust proxy fn' 은 Express 가 trust proxy 설정으로 만든다.
+    const trustFn = req.app?.get('trust proxy fn') as ((addr: string | undefined, i: number) => boolean) | undefined;
+    const trusted = typeof trustFn === 'function' && trustFn(req.socket?.remoteAddress, 0);
+    const forwardedHost = trusted ? req.get('x-forwarded-host') : undefined;
     const requestHost = (forwardedHost ? forwardedHost.split(',')[0].trim() : req.get('host')) || `localhost:${serverPort}`;
-    const forwardedProto = req.get('x-forwarded-proto');
+    const forwardedProto = trusted ? req.get('x-forwarded-proto') : undefined;
     const requestProtocol = (forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol) || 'http';
 
     const dynamicRedirectUri = `${requestProtocol}://${requestHost}/api/auth/callback/${provider}`;

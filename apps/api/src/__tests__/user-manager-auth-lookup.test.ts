@@ -15,6 +15,12 @@ jest.mock('../utils/logger', () => ({
     logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
 }));
 
+// bcryptjs 의 export 는 재정의 불가라 spyOn 대신 실제 구현을 감싼 jest.fn 으로 호출 횟수를 센다.
+jest.mock('bcryptjs', () => {
+    const actual = jest.requireActual('bcryptjs');
+    return { ...actual, compare: jest.fn((plain: string, hash: string) => actual.compare(plain, hash)) };
+});
+
 import * as bcrypt from 'bcryptjs';
 import { getUserManager } from '../data/user-manager';
 import { getPool } from '../data/models/unified-database';
@@ -122,6 +128,32 @@ describe('UserManager 계정 조회·비밀번호 변경', () => {
             const at = (updates[0].params as unknown[])[Number(m![1]) - 1];
             expect(at).toBeInstanceOf(Date);
             expect((at as Date).getTime()).toBeGreaterThanOrEqual(before);
+        });
+    });
+
+    // 보안 점검 A9 — 미존재 계정도 bcrypt.compare 를 1회 수행해 응답 시간으로 계정 존재를 구분하지 못하게 한다.
+    describe('authenticate — 미존재 계정 타이밍 균일화', () => {
+        const compareMock = bcrypt.compare as unknown as jest.Mock;
+        beforeEach(() => compareMock.mockClear());
+
+        test('조회 행이 없어도 bcrypt.compare 를 같은 rounds 의 더미 해시로 1회 수행하고 null 을 돌려준다', async () => {
+            mockQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+                queries.push({ sql, params });
+                return { rowCount: 0, rows: [] };
+            });
+            const compareSpy = compareMock;
+            await expect(manager.authenticate('nobody@example.com', 'some-password-1')).resolves.toBeNull();
+            expect(compareSpy).toHaveBeenCalledTimes(1);
+            const [plain, hash] = compareSpy.mock.calls[0] as [string, string];
+            expect(plain).toBe('some-password-1');
+            expect(bcrypt.getRounds(hash)).toBe(12);
+        });
+
+        test('존재하는 계정의 비밀번호 비교도 1회(회귀)', async () => {
+            const compareSpy = compareMock;
+            await expect(manager.authenticate('rockyhan@openmake.cc', 'wrong-password')).resolves.toBeNull();
+            expect(compareSpy).toHaveBeenCalledTimes(1);
+            expect(compareSpy.mock.calls[0][1]).toBe('hash-placeholder');
         });
     });
 

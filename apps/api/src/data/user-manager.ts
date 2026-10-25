@@ -30,6 +30,10 @@ const logger = createLogger('UserManager');
 // 비밀번호 해싱 라운드 (높을수록 안전하지만 느림)
 const BCRYPT_ROUNDS = 12;
 
+// 존재하지 않는 계정에도 compare 1회를 수행해 타이밍을 맞추는 더미 해시(비밀값 아님).
+// 버린 임의 비밀번호를 BCRYPT_ROUNDS(12) 로 해시한 값 — rounds 가 실제 해시와 같아야 소요 시간이 같다.
+const DUMMY_HASH = '$2b$12$NqjBuTc.NHR3sYpYBVIYpe2daJMNE6azO/i6ccpy2HJLD/.JfhD7G';
+
 export type UserRole = 'admin' | 'user' | 'guest';
 
 /** UserRole 값 상수 — 인라인 문자열 사용 방지 (CLAUDE.md No-Hardcoding) */
@@ -314,7 +318,11 @@ class UserManagerImpl {
      */
     async authenticateDetailed(email: string, password: string): Promise<{ user: PublicUser | null; locked: boolean }> {
         const row = await selectLoginRow<UserRow>(email);
-        if (!row) return { user: null, locked: false };
+        if (!row) {
+            // 보안(A9): 미존재 계정도 bcrypt 비교 1회 — 응답 시간으로 계정 존재 여부를 알 수 없게 한다.
+            await bcrypt.compare(password, DUMMY_HASH);
+            return { user: null, locked: false };
+        }
 
         // selectLoginRow 가 42703 을 보면 잠금이 꺼지므로 조회 뒤에 읽는다.
         const lockoutActive = isLockoutActive();
