@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.115.4](https://github.com/openmake/openmake_llm/compare/v1.115.3...v1.115.4) (2026-10-25)
+
+
+### 🔧 기타
+
+* **release:** 1.115.4 — CHANGELOG 1.112.0 빈 '✨ 기능' 절 정리, 외부 provider 제거([#1520](https://github.com/openmake/openmake_llm/issues/1520)) 릴리스 유도 ([36c03b8](https://github.com/openmake/openmake_llm/commit/36c03b8e8f7de914689963b19446c37a68c75a93))
+
 ## [1.115.3](https://github.com/openmake/openmake_llm/compare/v1.115.2...v1.115.3) (2026-10-24)
 
 
