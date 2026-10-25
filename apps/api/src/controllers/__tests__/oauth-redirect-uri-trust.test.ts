@@ -5,8 +5,9 @@
 jest.mock('../../config/env', () => ({
     getConfig: () => ({ oauthRedirectUri: '' }),
 }));
+const mockLogInfo = jest.fn();
 jest.mock('../../utils/logger', () => ({
-    createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
+    createLogger: () => ({ info: (...a: unknown[]) => mockLogInfo(...a), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
 }));
 
 import express from 'express';
@@ -51,6 +52,16 @@ describe('buildRedirectUri — x-forwarded-* 는 trust proxy 일 때만', () => 
     test('trust proxy fn 이 없는 요청(app 미연결)도 forwarded 헤더를 무시한다', () => {
         const req = makeReq(undefined, '127.0.0.1', FORWARDED);
         expect(buildRedirectUri(req, 'google', PORT)).toBe(`http://localhost:${PORT}/api/auth/callback/google`);
+    });
+
+    test('host 해석 로그에 trusted 플래그를 남긴다(신뢰 프록시 true, 범위 밖 false)', () => {
+        const hostLog = () => mockLogInfo.mock.calls.find((c) => String(c[0]).startsWith('[OAuth] host 해석'));
+        mockLogInfo.mockClear();
+        buildRedirectUri(makeReq(appWithTrust(['loopback']), '127.0.0.1', FORWARDED), 'google', PORT);
+        expect(hostLog()?.[1]).toEqual({ trusted: true });
+        mockLogInfo.mockClear();
+        buildRedirectUri(makeReq(appWithTrust(['loopback']), '203.0.113.7', FORWARDED), 'google', PORT);
+        expect(hostLog()?.[1]).toEqual({ trusted: false });
     });
 
     test('forwarded 헤더가 없으면 신뢰 여부와 무관하게 Host 와 req.protocol 을 쓴다', () => {

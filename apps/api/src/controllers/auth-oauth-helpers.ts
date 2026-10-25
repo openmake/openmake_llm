@@ -211,7 +211,7 @@ export function buildRedirectUri(req: Request, provider: 'google' | 'github' | '
     const requestProtocol = (forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol) || 'http';
 
     const dynamicRedirectUri = `${requestProtocol}://${requestHost}/api/auth/callback/${provider}`;
-    log.info(`[OAuth] host 해석: x-forwarded-host=${forwardedHost ?? '(none)'}, raw-host=${req.get('host') ?? '(none)'}, 사용=${requestHost}`);
+    log.info(`[OAuth] host 해석: x-forwarded-host=${forwardedHost ?? '(none)'}, raw-host=${req.get('host') ?? '(none)'}, 사용=${requestHost}`, { trusted });
 
     // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우(프로덕션), 요청 host 와 무관하게 항상 이
     // canonical URI 로 고정한다. example.com 등 다른 host 로 진입하면 리버스 프록시가

@@ -9,8 +9,9 @@ const mockBlacklistAdd = jest.fn();
 jest.mock('../../data/models/token-blacklist', () => ({
     getTokenBlacklist: () => ({ add: (...a: unknown[]) => mockBlacklistAdd(...a) }),
 }));
+const mockLog = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
 jest.mock('../../utils/logger', () => ({
-    createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
+    createLogger: () => mockLog,
 }));
 
 import { blacklistToken, verifySignatureIgnoringExpiry } from '../auth-core';
@@ -23,6 +24,7 @@ const nowSec = (): number => Math.floor(Date.now() / 1000);
 
 beforeEach(() => {
     mockBlacklistAdd.mockReset().mockResolvedValue(undefined);
+    Object.values(mockLog).forEach((fn) => fn.mockClear());
 });
 
 describe('blacklistToken', () => {
@@ -30,6 +32,9 @@ describe('blacklistToken', () => {
         const forged = sign({ userId: 'u1', jti: 'forged-jti', exp: nowSec() + 600 }, 'another-secret-not-the-server-one-0000');
         await expect(blacklistToken(forged)).resolves.toBe(false);
         expect(mockBlacklistAdd).not.toHaveBeenCalled();
+        // 익명 /logout 의 만료·위조 쿠키는 정상 경로 — warn 이 아니라 debug(로그 노이즈·경보 오탐 방지)
+        expect(mockLog.debug).toHaveBeenCalledWith('블랙리스트 요청 무시: 서명 불일치');
+        expect(mockLog.warn).not.toHaveBeenCalled();
     });
 
     it('무서명 문자열 — false, 저장소 add 없음', async () => {

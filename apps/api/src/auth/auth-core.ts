@@ -349,7 +349,8 @@ export async function blacklistToken(token: string, reason: BlacklistReason = 'r
     try {
         const decoded = verifySignatureIgnoringExpiry(token);
         if (!decoded) {
-            logger.warn('블랙리스트 요청 무시: 서명 불일치');
+            // 익명 /logout 의 만료·위조 쿠키는 정상 경로라 debug — warn 은 로그 노이즈·경보 오탐을 만든다
+            logger.debug('블랙리스트 요청 무시: 서명 불일치');
             return false;
         }
         if (!decoded.jti || typeof decoded.jti !== 'string') {
