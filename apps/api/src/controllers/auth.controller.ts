@@ -57,7 +57,8 @@ class AuthController {
         // ===== 기본 인증 API =====
         this.router.post('/register', validate(registerSchema), this.register.bind(this));
         this.router.post('/login', validate(loginSchema), this.login.bind(this));
-        this.router.post('/logout', requireAuth, this.logout.bind(this));
+        // 보안 점검 A6 — access 토큰이 만료·무효여도 refresh 토큰 폐기와 쿠키 정리는 해야 한다
+        this.router.post('/logout', optionalAuth, this.logout.bind(this));
         this.router.get('/me', optionalAuth, this.getCurrentUser.bind(this));
         this.router.put('/password', requireAuth, validate(changePasswordSchema), this.changePassword.bind(this));
 
@@ -165,7 +166,9 @@ class AuthController {
                     setRefreshTokenCookie(res, generateRefreshToken(result.user));
                 }
             }
-            res.json(success(result));
+            // 보안 점검 A4 — 쿠키 모드는 access 토큰을 httpOnly 쿠키에만 둔다(본문에 실으면 XSS 로 반출 가능)
+            const { token: _cookieOnlyToken, ...body } = result;
+            res.json(success(body));
         } catch (error) {
             log.error('[Login] 오류:', error);
             res.status(500).json(internalError('로그인 처리 중 오류가 발생했습니다'));
@@ -177,18 +180,19 @@ class AuthController {
      * #8 연동: 토큰 블랙리스트에 추가하여 재사용 방지
      * #24 연동: 표준 API 응답 형식
      */
-    private logout(req: Request, res: Response): void {
+    private async logout(req: Request, res: Response): Promise<void> {
+        const pending: Promise<boolean>[] = [];
         const authHeader = req.headers.authorization;
         if (authHeader) {
             const token = extractToken(authHeader);
             if (token) {
-                blacklistToken(token);
+                pending.push(blacklistToken(token));
             }
         }
         // 쿠키 토큰도 블랙리스트에 추가
         const cookieToken = req.cookies?.[AUTH_COOKIES.ACCESS];
         if (cookieToken) {
-            blacklistToken(cookieToken);
+            pending.push(blacklistToken(cookieToken));
         }
         // Refresh 토큰: 블랙리스트 + activeSessionMap 정리 (bug_004)
         // 모바일(iOS)은 쿠키가 없어 body.refreshToken 으로 전달 (축 2) — 웹 쿠키와 병존, 둘 다 폐기
@@ -199,8 +203,10 @@ class AuthController {
             if (decoded?.userId && decoded.jti) {
                 removeSessionFromMap(String(decoded.userId), decoded.jti);
             }
-            blacklistToken(refreshToken);
+            pending.push(blacklistToken(refreshToken));
         }
+        // 보안 점검 A6 — 폐기 기록이 끝난 뒤 응답한다(응답 직후 같은 토큰 재사용 경쟁 방지)
+        await Promise.all(pending);
         clearTokenCookie(res);
 
         // Phase 7 lifecycle hook — 사용자별 MCP 서버 graceful kill (per_session)
@@ -357,7 +363,8 @@ class AuthController {
             setRefreshTokenCookie(res, newRefreshToken);
 
             log.info(`[Auth] 토큰 갱신 성공: ${user.email}`);
-            res.json(success({ token: newAccessToken, user }));
+            // 보안 점검 A4 — 쿠키 모드는 새 access 토큰을 쿠키로만 준다
+            res.json(success({ user }));
         } catch (error) {
             log.error('[Auth] 토큰 갱신 오류:', error);
             clearTokenCookie(res);

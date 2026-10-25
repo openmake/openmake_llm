@@ -134,10 +134,12 @@ public actor OpenMakeClient {
                 post: "/api/auth/refresh", body: RefreshRequest(refreshToken: tokens.refresh), csrf: true)
             let payload = try decodeContract(
                 Operations.post_sol_api_sol_auth_sol_refresh.Output.Ok.Body.jsonPayload.self, from: data)
-            guard let newRefresh = payload.data.refreshToken else {
+            // 계약상 token 은 모바일 모드(body.refreshToken) 응답에만 있다(웹 쿠키 모드는 body 에 싣지 않음)
+            guard let newAccess = payload.data.token,
+                  let newRefresh = payload.data.refreshToken else {
                 throw OpenMakeAPIError.invalidResponse
             }
-            tokenStore.save(AuthTokens(access: payload.data.token, refresh: newRefresh))
+            tokenStore.save(AuthTokens(access: newAccess, refresh: newRefresh))
         } catch let error as OpenMakeAPIError {
             if case .server(let status, _, _) = error, status == 401 {
                 tokenStore.clear()
