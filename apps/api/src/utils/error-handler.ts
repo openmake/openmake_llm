@@ -127,7 +127,7 @@ function formatError(err: Error, includeStack: boolean, exposeMessage: boolean):
  * #24 연동: 표준 API 응답 형식 적용
  */
 export function errorHandler(
-    err: Error & { code?: string; status?: number; name?: string },
+    err: Error & { code?: string; status?: number; statusCode?: number; name?: string },
     req: Request,
     res: Response,
     _next: NextFunction
@@ -236,11 +236,13 @@ export function errorHandler(
         queryKeys: keysForLog(req.query)
     });
 
-    const statusCode = err.status || 500;
+    const statusCode = err.status || err.statusCode || 500;
     // NOTE: Use process.env.NODE_ENV directly (not getConfig()) because
     // NODE_ENV can change at runtime in test environments
-    const exposeMessage = process.env.NODE_ENV === 'development';
-    res.status(statusCode).json(formatError(err, exposeMessage, exposeMessage));
+    const includeStack = process.env.NODE_ENV === 'development';
+    // 클라이언트 오류(4xx — body-parser 의 잘못된 JSON·본문 초과 등)는 문구를 유지하고, 5xx 만 development 밖에서 고정 문구
+    const exposeMessage = includeStack || statusCode < 500;
+    res.status(statusCode).json(formatError(err, includeStack, exposeMessage));
 }
 
 /**

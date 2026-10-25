@@ -71,6 +71,46 @@ describe('errorHandler × 알 수 없는 오류 문구', () => {
         expect(res.body?.error?.message).toBe('x');
     });
 
+    it('production: status 400 클라이언트 오류(잘못된 JSON) → 문구 유지', () => {
+        process.env.NODE_ENV = 'production';
+        const res = mockRes();
+        errorHandler(Object.assign(new Error('Unexpected token'), { status: 400 }), mockReq(), res, next);
+        expect(res.statusCode).toBe(400);
+        expect(res.body?.error?.message).toBe('Unexpected token');
+    });
+
+    it('production: status 413 본문 초과 → 문구 유지', () => {
+        process.env.NODE_ENV = 'production';
+        const res = mockRes();
+        errorHandler(Object.assign(new Error('request entity too large'), { status: 413 }), mockReq(), res, next);
+        expect(res.statusCode).toBe(413);
+        expect(res.body?.error?.message).toBe('request entity too large');
+    });
+
+    it('production: statusCode 필드만 있는 4xx 도 그 상태·문구 유지', () => {
+        process.env.NODE_ENV = 'production';
+        const res = mockRes();
+        errorHandler(Object.assign(new Error('bad input'), { statusCode: 422 }), mockReq(), res, next);
+        expect(res.statusCode).toBe(422);
+        expect(res.body?.error?.message).toBe('bad input');
+    });
+
+    it('production: plain Error → 500 + 고정 문구', () => {
+        process.env.NODE_ENV = 'production';
+        const res = mockRes();
+        errorHandler(new Error('ECONNREFUSED 10.0.0.1:5432'), mockReq(), res, next);
+        expect(res.statusCode).toBe(500);
+        expect(res.body?.error?.message).toBe(GENERIC);
+    });
+
+    it('production: status 502 서버 오류도 고정 문구', () => {
+        process.env.NODE_ENV = 'production';
+        const res = mockRes();
+        errorHandler(Object.assign(new Error('upstream /internal/path failed'), { status: 502 }), mockReq(), res, next);
+        expect(res.statusCode).toBe(502);
+        expect(res.body?.error?.message).toBe(GENERIC);
+    });
+
     it('500 로그에는 body·query 의 키만 남고 값은 없다', () => {
         process.env.NODE_ENV = 'production';
         errorHandler(new Error('boom'), mockReq(), mockRes(), next);
