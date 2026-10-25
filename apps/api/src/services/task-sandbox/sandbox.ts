@@ -16,7 +16,7 @@
  */
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
-import { mkdir, rm, readFile as fsReadFile, readdir, stat, realpath, copyFile as fsCopyFile } from 'fs/promises';
+import { mkdir, rm, readFile as fsReadFile, readdir, stat, realpath } from 'fs/promises';
 import { resolve, sep, join, dirname, relative } from 'path';
 import { getTaskSandboxConfig, BROWSER_SESSION, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { BROWSER_RUN } from '../../config/agent-task-browser-web';
@@ -29,7 +29,7 @@ import { createLogger } from '../../utils/logger';
 import { withLiveTerminal } from './live-terminal';
 import { sanitizeId, buildRunArgs, buildBrowserRunArgs, browserRunContainerName, buildWriteArgs, EXEC_ID_ENV, buildKillExecArgs, runProcess } from './sandbox-docker-cli';
 import { safeRealWorkspacePath, dirSizeBytes, listWorkspaceFilesAt } from './sandbox-workspace-fs';
-import { writeFileNoFollow, ensurePrivateRoot } from './sandbox-host-write';
+import { writeFileNoFollow, copyFileNoFollow, ensurePrivateRoot } from './sandbox-host-write';
 
 // 기존 소비처(runtime/tools 등)가 './sandbox' 에서 ExecResult 를 import 하므로 재노출 유지.
 export type { ExecResult } from './executor';
@@ -224,7 +224,7 @@ export class TaskSandbox implements TaskExecutor {
             throw new Error(`workspace 디스크 쿼터 초과(상한 ${Math.round(this.cfg.workspaceQuota / 1024 / 1024)}MB) — 파일이 너무 큽니다.`);
         }
         await mkdir(dirname(abs), { recursive: true });
-        await fsCopyFile(srcAbsPath, abs);
+        await copyFileNoFollow(srcAbsPath, abs);
     }
 
     /** workspace 내 파일 읽기. 경로 가드(어휘+실경로) 적용. */

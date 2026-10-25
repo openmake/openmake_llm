@@ -8,7 +8,15 @@
 import { mkdtemp, mkdir, writeFile, readFile, symlink, rm, stat, chmod } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { writeFileNoFollow, ensurePrivateRoot } from '../sandbox-host-write';
+// chmod EPERM 을 흉내 내려고 chmod 만 감싼다(나머지는 실제 구현).
+jest.mock('fs/promises', () => {
+    const actual = jest.requireActual('fs/promises');
+    return { ...actual, chmod: jest.fn(actual.chmod) };
+});
+import { writeFileNoFollow, copyFileNoFollow, ensurePrivateRoot } from '../sandbox-host-write';
+import { TaskSandbox } from '../sandbox';
+import * as workspaceFs from '../sandbox-workspace-fs';
+import { getTaskSandboxConfig } from '../../../config/task-sandbox';
 
 describe('sandbox-host-write', () => {
     let base: string;
@@ -42,7 +50,72 @@ describe('sandbox-host-write', () => {
         });
     });
 
+    describe('copyFileNoFollow', () => {
+        it('대상이 심링크면 ELOOP 로 거부하고 링크 대상 파일을 건드리지 않는다', async () => {
+            const src = join(base, 'src.txt');
+            await writeFile(src, 'payload');
+            const outside = join(base, 'outside.txt');
+            await writeFile(outside, 'original');
+            const link = join(base, 'dest.txt');
+            await symlink(outside, link);
+            await expect(copyFileNoFollow(src, link)).rejects.toMatchObject({ code: 'ELOOP' });
+            expect(await readFile(outside, 'utf8')).toBe('original');
+        });
+
+        it('일반 대상에는 원본 내용을 복사하고 기존 내용은 잘라낸다', async () => {
+            const src = join(base, 'src.bin');
+            const big = Buffer.alloc(200_000, 7);
+            await writeFile(src, big);
+            const dest = join(base, 'dest.bin');
+            await writeFile(dest, Buffer.alloc(300_000, 1));
+            await copyFileNoFollow(src, dest);
+            expect((await readFile(dest)).equals(big)).toBe(true);
+        });
+    });
+
+    describe('TaskSandbox.importFile', () => {
+        it('경로 검사 뒤 대상이 심링크로 바뀌면(TOCTOU) ELOOP 로 거부하고 링크 대상 파일을 덮어쓰지 않는다', async () => {
+            const cfg = { ...getTaskSandboxConfig(), workspaceRoot: join(base, 'ws') };
+            const sb = new TaskSandbox('t-import', cfg);
+            await mkdir(sb.hostWorkdir, { recursive: true });
+            const dest = join(sb.hostWorkdir, 'in.txt');
+            await writeFile(dest, 'old');
+            const outside = join(base, 'host-secret.txt');
+            await writeFile(outside, 'original');
+            const src = join(base, 'upload.bin');
+            await writeFile(src, 'payload');
+            // 경로 검사(safeRealWorkspacePath)와 쓰기 사이 — 쿼터 계산 시점에 대상을 바깥을 가리키는 심링크로 바꿔치기
+            const spy = jest.spyOn(workspaceFs, 'dirSizeBytes').mockImplementationOnce(async () => {
+                await rm(dest);
+                await symlink(outside, dest);
+                return 0;
+            });
+            try {
+                await expect(sb.importFile('in.txt', src)).rejects.toMatchObject({ code: 'ELOOP' });
+            } finally {
+                spy.mockRestore();
+            }
+            expect(await readFile(outside, 'utf8')).toBe('original');
+        });
+    });
+
     describe('ensurePrivateRoot', () => {
+        it('루트 자체가 심링크면 거부한다', async () => {
+            const real = join(base, 'real');
+            await mkdir(real);
+            await chmod(real, 0o755);
+            const link = join(base, 'root-link');
+            await symlink(real, link);
+            await expect(ensurePrivateRoot(link)).rejects.toThrow(/TASK_SANDBOX_ROOT/);
+            expect((await stat(real)).mode & 0o777).toBe(0o755);
+        });
+
+        it('chmod 가 EPERM 이면 TASK_SANDBOX_ROOT 소유자 안내로 다시 던진다', async () => {
+            const root = join(base, 'root');
+            (chmod as unknown as jest.Mock).mockRejectedValueOnce(Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' }));
+            await expect(ensurePrivateRoot(root)).rejects.toThrow(/TASK_SANDBOX_ROOT.*(소유|owned)/);
+        });
+
         it('없는 디렉터리를 만들고 0o700 으로 둔다', async () => {
             const root = join(base, 'nested', 'root');
             await ensurePrivateRoot(root);
