@@ -45,11 +45,6 @@ jest.mock('../auth', () => ({
     clearSessionsForUser: jest.fn(),
 }));
 
-const mockInvalidateTokensBefore = jest.fn();
-jest.mock('../data/user-manager-token-invalidation', () => ({
-    invalidateTokensBefore: (...args: unknown[]) => mockInvalidateTokensBefore(...args),
-}));
-
 jest.mock('../config/env', () => ({
     getConfig: jest.fn().mockReturnValue({
         adminEmails: 'admin@example.com',
@@ -131,7 +126,6 @@ beforeEach(() => {
     mockChangePassword.mockResolvedValue(false);
     mockChangeRole.mockResolvedValue(null);
     mockUpdateLastLogin.mockResolvedValue(undefined);
-    mockInvalidateTokensBefore.mockResolvedValue(undefined);
 });
 
 // ─────────────────────────────────────────────
@@ -310,24 +304,22 @@ describe('AuthService', () => {
             expect(mockChangePassword).toHaveBeenCalledWith('user-001', 'NewSecure@456');
         });
 
-        // 보안 점검 A2 — 비밀번호를 바꾸면 그 전에 발급된 토큰·세션은 모두 못 쓴다.
-        test('성공 시 invalidateTokensBefore 를 userId 로 1회 호출하고 세션 맵을 비운다', async () => {
+        // 보안 점검 A2 — 비밀번호를 바꾸면 그 전에 발급된 토큰·세션은 모두 못 쓴다. 토큰 무효화 기준 시각은
+        // userManager.changePassword 의 같은 UPDATE 가 쓰고(user-manager-auth-lookup.test), 서비스는 세션 맵을 비운다.
+        test('성공 시 세션 맵을 userId 로 1회 비운다', async () => {
             mockAuthenticate.mockResolvedValue(makePublicUser());
             mockChangePassword.mockResolvedValue(true);
             await service.changePassword(baseData);
-            expect(mockInvalidateTokensBefore).toHaveBeenCalledTimes(1);
-            expect(mockInvalidateTokensBefore).toHaveBeenCalledWith('user-001');
             expect(clearSessionsForUser).toHaveBeenCalledTimes(1);
             expect(clearSessionsForUser).toHaveBeenCalledWith('user-001');
         });
 
-        test('비밀번호가 바뀌지 않았으면(현재 비밀번호 틀림·갱신 0행) 토큰을 무효화하지 않는다', async () => {
+        test('비밀번호가 바뀌지 않았으면(현재 비밀번호 틀림·갱신 0행) 세션을 건드리지 않는다', async () => {
             mockAuthenticate.mockResolvedValue(null);
             await service.changePassword(baseData);
             mockAuthenticate.mockResolvedValue(makePublicUser());
             mockChangePassword.mockResolvedValue(false);
             await service.changePassword(baseData);
-            expect(mockInvalidateTokensBefore).not.toHaveBeenCalled();
             expect(clearSessionsForUser).not.toHaveBeenCalled();
         });
     });

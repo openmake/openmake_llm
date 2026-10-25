@@ -417,9 +417,10 @@ class UserManagerImpl {
         const pool = getPool();
         // 🔒 새 비밀번호도 해싱하여 저장
         const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+        // 보안 점검 A2 — 이전에 발급된 토큰 무효화(tokens_valid_after)를 같은 UPDATE 로 — 비밀번호만 바뀌는 상태가 없다.
         const result = await pool.query(
-            'UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3',
-            [passwordHash, new Date().toISOString(), userId]
+            'UPDATE users SET password_hash = $1, updated_at = $2, tokens_valid_after = $3 WHERE id = $4',
+            [passwordHash, new Date().toISOString(), new Date(), userId]
         );
         return (result.rowCount || 0) > 0;
     }
@@ -440,7 +441,7 @@ class UserManagerImpl {
     async updateUser(userId: string, updates: { email?: string; role?: UserRole; is_active?: boolean; password?: string }): Promise<PublicUser | null> {
         const pool = getPool();
         const sets: string[] = ['updated_at = $1'];
-        const params: (string | number | boolean)[] = [new Date().toISOString()];
+        const params: (string | number | boolean | Date)[] = [new Date().toISOString()];
         let paramIdx = 2;
 
         if (updates.email !== undefined) {
@@ -460,6 +461,9 @@ class UserManagerImpl {
         if (updates.password !== undefined) {
             sets.push(`password_hash = $${paramIdx++}`);
             params.push(await bcrypt.hash(updates.password, BCRYPT_ROUNDS));
+            // 보안 점검 A2 — 관리자 재설정도 같은 UPDATE 로 이전 토큰을 끊는다.
+            sets.push(`tokens_valid_after = $${paramIdx++}`);
+            params.push(new Date());
         }
 
         params.push(userId);

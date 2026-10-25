@@ -4,7 +4,8 @@
  * 열이 NULL(기본값)이면 검사하지 않는다 — 기존 토큰 영향 없음. 열이 있는데 iat 가 없거나 값이 시각으로 읽히지 않으면
  * 기준을 알 수 없으므로 거부(fail-closed).
  * 호출부: auth/middleware.ts(optionalAuth·requireAuth), controllers/auth.controller.ts(refresh).
- * 갱신: data/user-manager-token-invalidation.ts invalidateTokensBefore.
+ * 갱신: data/user-manager.ts changePassword·updateUser(password, 같은 UPDATE), data/user-manager-token-invalidation.ts
+ *       invalidateTokensBefore·updateUsersInvalidatingTokens(부팅 승격).
  *
  * @module auth/token-invalidation
  */

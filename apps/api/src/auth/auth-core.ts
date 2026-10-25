@@ -148,7 +148,7 @@ export function removeSessionFromMap(userId: string, jti: string): void {
 /**
  * 사용자의 모든 리프레시 세션을 끊는다(보안 점검 A2 — 비밀번호 변경·관리자 재설정).
  * 세션 맵에서 지우고 남은 jti 는 실제 만료(발급 시각 + 리프레시 수명)까지 블랙리스트에 올린다.
- * 맵은 이 프로세스 메모리뿐이라 주 방어선은 users.tokens_valid_after(invalidateTokensBefore)이고, 이건 보조다 —
+ * 맵은 이 프로세스 메모리뿐이라 주 방어선은 users.tokens_valid_after(비밀번호 UPDATE 가 함께 씀)이고, 이건 보조다 —
  * 블랙리스트 저장 실패는 로그만 남긴다.
  */
 export function clearSessionsForUser(userId: string): void {
