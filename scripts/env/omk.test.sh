@@ -556,7 +556,34 @@ printf 'PORT=52417\nOMK_WEB_PORT=3010\n' > "$SM/.env"
 eq "smoke: JSON 문자열 이스케이프" "$(json_str 'a"b\c')" '"a\"b\\c"'
 ok "smoke: 계정이 없으면 로그인 실패"    '! smoke_check_login "$SM"'
 ok "smoke: 계정이 없다고 이유를 적는다"  '[[ "$SMOKE_WHY" == *OMK_SMOKE_EMAIL* ]]'
-ok "smoke: 로그인 없이는 채팅을 건너뛴다" '! ( SMOKE_TOKEN=""; smoke_check_chat "$SM" )'
+ok "smoke: 로그인 없이는 채팅을 건너뛴다" '! ( SMOKE_COOKIE_JAR=""; smoke_check_chat "$SM" )'
+# 로그인은 본문의 토큰이 아니라 쿠키 jar 로 받는다 — smoke_code 대역이 -c 로 받은 jar 에 서버처럼 쿠키를 적고, 인자를 기록한다.
+smoke_fake_jar() { # $1=out $2=url [curl 인자…]
+    local url="$2"; printf '{"success":true}' > "$1"; shift 2; printf '%s\n' "$url" "$@" >> "$TMP/smoke-args"
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == -c ]]; then case "$url" in
+            */api/csrf-token) printf 'localhost\tFALSE\t/\tFALSE\t0\tcsrf_token\tCSRF1\n' >> "$2" ;;
+            */api/auth/login) [[ -n "${SMOKE_FAKE_NO_AUTH:-}" ]] || printf '#HttpOnly_localhost\tFALSE\t/\tFALSE\t0\tauth_token\tAUTH1\n' >> "$2" ;;
+        esac; fi; shift
+    done
+    printf 200
+}
+printf 'PORT=52417\nOMK_WEB_PORT=3010\nOMK_SMOKE_EMAIL=s@example.com\nOMK_SMOKE_PASSWORD=pw\n' > "$SM/.env"
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+SL_OUT="$( rm -f "$TMP/smoke-args"; smoke_code() { smoke_fake_jar "$@"; }
+    smoke_check_login "$SM" && echo "login-ok jar=$( [[ -s "$SMOKE_COOKIE_JAR" ]] && echo yes )"
+    rm -f "$TMP/smoke-args"; smoke_check_chat "$SM" && echo chat-ok; cat "$TMP/smoke-args"; rm -f "$SMOKE_COOKIE_JAR" )"
+ok "smoke: 로그인은 쿠키 jar 에 인증 쿠키를 받는다"     '[[ "$SL_OUT" == *"login-ok jar=yes"* ]]'
+ok "smoke: 채팅은 jar 의 쿠키와 jar 의 CSRF 토큰을 싣는다" '[[ "$SL_OUT" == *chat-ok* && "$SL_OUT" == *$'"'"'\n-b\n'"'"'* && "$SL_OUT" == *"X-CSRF-Token: CSRF1"* ]]'
+ok "smoke: 채팅은 Bearer 토큰을 쓰지 않는다"           '[[ "$SL_OUT" != *Bearer* && "$SL_OUT" != *Authorization* ]]'
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+SL_LOGIN="$( rm -f "$TMP/smoke-args"; smoke_code() { smoke_fake_jar "$@"; }; smoke_check_login "$SM"; cat "$TMP/smoke-args"; rm -f "$SMOKE_COOKIE_JAR" )"
+ok "smoke: 로그인은 발급받은 CSRF 토큰을 헤더와 jar 쿠키로 싣는다" '[[ "$SL_LOGIN" == *"X-CSRF-Token: CSRF1"* && "$SL_LOGIN" == *$'"'"'\n-b\n'"'"'* ]]'
+# shellcheck disable=SC2034  # 아래 ok 의 eval 문자열이 읽는다
+SL_NOAUTH="$( SMOKE_FAKE_NO_AUTH=1; smoke_code() { smoke_fake_jar "$@"; }
+    smoke_check_login "$SM" || echo "fail why=$SMOKE_WHY jar=${SMOKE_COOKIE_JAR:-none}" )"
+ok "smoke: 200 이어도 인증 쿠키가 없으면 로그인 실패, jar 를 남기지 않는다" '[[ "$SL_NOAUTH" == *"fail why=로그인 → 200"* && "$SL_NOAUTH" == *jar=none* ]]'
+printf 'PORT=52417\nOMK_WEB_PORT=3010\n' > "$SM/.env"
 # /generated 는 웹 포트로 묻는다 — API 까지 닿으면 없는 파일은 404, 빌드본이 엉뚱한 포트를 보면 500 이다.
 eq "smoke: /generated 404 는 통과" "$( smoke_code() { printf 404; }; smoke_check_generated "$SM" && echo ok )" "ok"
 eq "smoke: /generated 500 은 실패" "$( smoke_code() { printf 500; }; smoke_check_generated "$SM" || echo fail )" "fail"
@@ -579,6 +606,13 @@ SM_OUT="$(
 )"
 ok "smoke: 하나라도 실패하면 3"        '[[ "$SM_OUT" == *rc=3* ]]'
 ok "smoke: 실패해도 나머지 항목을 본다" '[[ "$SM_OUT" == *ran-generated* ]]'
+SM_JAR="$(
+    load_toolchain() { :; }
+    smoke_check_health() { return 0; }; smoke_check_manifest() { return 0; }; smoke_check_generated() { return 0; }
+    smoke_check_login() { SMOKE_COOKIE_JAR="$TMP/smoke-jar"; : > "$SMOKE_COOKIE_JAR"; }; smoke_check_ready() { return 0; }; smoke_check_chat() { return 0; }
+    cmd_env_smoke smk >/dev/null 2>&1; [[ -e "$TMP/smoke-jar" ]] && echo left || echo gone
+)"
+eq "smoke: 끝나면 쿠키 jar 를 지운다" "$SM_JAR" "gone"
 
 # ── /ready: 쓰기 없는 준비 확인(LLM 노드·DB·기본 모델) — 릴리스 환경은 채팅 대신 이것으로 연결을 본다 ──
 eq "smoke ready: 200 은 통과" "$( OMK_SMOKE_READY_WAIT=0; smoke_code() { printf '{}' > "$1"; printf 200; }; smoke_check_ready "$SM" && echo ok )" "ok"
