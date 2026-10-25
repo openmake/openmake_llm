@@ -25,6 +25,14 @@ const { apiPort, webPort } = createRequire(import.meta.url)(
  */
 const API_PROXY_TARGET = process.env.API_PROXY_TARGET || "http://localhost:52416";
 
+/**
+ * 예약 리포트 게시물(`/generated/reports/*`, LLM 생성 HTML) CSP — apps/api `REPORTS_CSP` 와 같은 값을 유지한다
+ * (web 은 apps/api 를 import 할 수 없다). sandbox(allow-same-origin 없음)로 앱 origin 과 격리한다.
+ * 아래 전역 `frame-ancestors 'self'` 가 rewrite 응답의 백엔드 CSP 를 덮으므로 이 경로엔 합친 값을 준다.
+ */
+const REPORTS_CSP =
+  "sandbox allow-scripts allow-popups; default-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; img-src 'self' data: https:";
+
 const nextConfig: NextConfig = {
   // 클라이언트 번들로 인라인될 공개 설정 — 위 주석 참고. 셸에서 직접 지정한 값이 있으면
   // resolve-ports 가 그쪽을 우선하므로 install.sh 의 기존 주입도 그대로 유효하다.
@@ -77,6 +85,14 @@ const nextConfig: NextConfig = {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains",
           },
+        ],
+      },
+      // 예약 리포트 게시물 — 같은 키는 뒤 항목이 앞 항목을 덮으므로 전역 항목 뒤에 둔다.
+      // 나머지 공통 보안 헤더(X-Frame-Options·nosniff·Referrer-Policy·HSTS)는 위 전역 항목이 그대로 붙인다.
+      {
+        source: "/generated/reports/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: `${REPORTS_CSP}; frame-ancestors 'self'` },
         ],
       },
       // manifest 는 항상 재검증시킨다(기본 max-age=14400 이면 아이콘 목록 교체가 4시간 늦게 반영).
