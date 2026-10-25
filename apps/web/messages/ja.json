@@ -403,6 +403,8 @@
     "artifactFallback": "アーティファクト",
     "artifactBuilding": "アーティファクトを生成中…",
     "mediaDownload": "ダウンロード",
+    "loadExternalImage": "外部画像を読み込む",
+    "externalImageHost": "{host} の画像",
     "reportBuilding": "レポートを生成中…",
     "reportData": "レポートデータ",
     "reasoningLabel": "思考プロセス",

@@ -403,6 +403,8 @@
     "artifactFallback": "Artefakt",
     "artifactBuilding": "Artefakt wird erstellt …",
     "mediaDownload": "Herunterladen",
+    "loadExternalImage": "Externes Bild laden",
+    "externalImageHost": "Bild von {host}",
     "reportBuilding": "Bericht wird erstellt …",
     "reportData": "Berichtsdaten",
     "reasoningLabel": "Reasoning",

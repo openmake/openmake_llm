@@ -403,6 +403,8 @@
     "artifactFallback": "Artifact",
     "artifactBuilding": "Building artifact…",
     "mediaDownload": "Download",
+    "loadExternalImage": "Load external image",
+    "externalImageHost": "Image from {host}",
     "reportBuilding": "Building report…",
     "reportData": "Report data",
     "reasoningLabel": "Reasoning",
