@@ -92,6 +92,22 @@ describe('MCP 샌드박스 운영 기본값·사용자 서버 격리 (S2)', () =
         expect(global.args.join(' ')).toContain('--add-host host.docker.internal:host-gateway');
     });
 
+    it('(d4) 사용자 서버는 loopback 을 host.docker.internal 로 치환하지 않는다(command·args·env), 전역 서버는 치환 (E3)', () => {
+        const loop = {
+            command: 'http://localhost:52418/bin', args: ['--url', 'http://localhost:52418'],
+            env: { API_URL: 'http://127.0.0.1:52418' }, serverId: 's1',
+        };
+        const user = buildSandboxedCommand({ ...loop, ownerScope: 'user' }, cfg());
+        expect(user.args).toContain('http://localhost:52418');
+        expect(user.args).toContain('http://localhost:52418/bin');
+        expect(user.env).toEqual({ API_URL: 'http://127.0.0.1:52418' });
+        expect(user.args.join(' ')).not.toContain('host.docker.internal');
+        const global = buildSandboxedCommand({ ...loop, ownerScope: 'global' }, cfg());
+        expect(global.args).toContain('http://host.docker.internal:52418');
+        expect(global.args).toContain('http://host.docker.internal:52418/bin');
+        expect(global.env).toEqual({ API_URL: 'http://host.docker.internal:52418' });
+    });
+
     it('(e) production 에서 MCP_SANDBOX_ENABLED 미설정 → 켜짐, false 명시 → 꺼짐 (test 미설정은 종전 꺼짐)', () => {
         process.env.NODE_ENV = 'production';
         delete process.env.MCP_SANDBOX_ENABLED;

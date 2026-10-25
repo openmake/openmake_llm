@@ -131,14 +131,23 @@ export function rewriteLoopback(s: string): string {
 }
 
 /**
+ * E3: 사용자 소유 서버는 loopback 을 치환하지 않는다 — 그 localhost 는 컨테이너 자신이라 호스트에 닿지 않는다
+ * (런타임이 host.docker.internal 을 기본 해석하는 플랫폼에서도 fail-closed). 관리자 전역 서버만 종전 치환.
+ */
+function loopbackRewriter(input: SandboxInput): (s: string) => string {
+    return input.ownerScope === 'user' ? (s) => s : rewriteLoopback;
+}
+
+/**
  * PURE: 컨테이너에 전달할 env 값 조립 (loopback 치환 적용).
  * buildDockerArgs 가 `-e KEY`(이름만) 를 넣으므로, 실제 값은 이 결과를 docker 프로세스의
  * spawn env 로 넘겨야 컨테이너까지 도달한다.
  */
 export function buildSandboxedEnv(input: SandboxInput): Record<string, string> {
     const out: Record<string, string> = {};
+    const rewrite = loopbackRewriter(input);
     for (const [k, v] of Object.entries(serverEnv(input))) {
-        out[k] = rewriteLoopback(String(v));
+        out[k] = rewrite(String(v));
     }
     return out;
 }
@@ -204,8 +213,9 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
         a.push('-e', k);
     }
     a.push(cfg.image);
-    const command = rewriteLoopback(input.command);
-    const args = input.args.map((x) => rewriteLoopback(String(x)));
+    const rewrite = loopbackRewriter(input);
+    const command = rewrite(input.command);
+    const args = input.args.map((x) => rewrite(String(x)));
     if (needsPlaywrightBrowser(input)) {
         // 브라우저 MCP 서버 — 스폰 전 Playwright 브라우저 설치와 원래 서버 실행(sandbox-playwright).
         const browsers = playwrightBrowsersFromEnv(input.env);
