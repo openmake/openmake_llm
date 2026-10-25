@@ -56,6 +56,11 @@ jest.mock('../services/AuditService', () => ({
     getAuditService: () => ({ logAudit: jest.fn().mockResolvedValue(undefined) }),
 }));
 
+const mockOnUserLogout = jest.fn();
+jest.mock('../runtime-ports/tool-runtime', () => ({
+    getToolRuntime: () => ({ onUserLogin: jest.fn(), onUserLogout: (...a: unknown[]) => mockOnUserLogout(...a) }),
+}));
+
 jest.mock('../controllers/auth-oauth.controller', () => ({
     createAuthOAuthController: () => {
         const { Router } = jest.requireActual('express');
@@ -240,6 +245,22 @@ describe('쿠키 모드 인증 응답 (A4) · 로그아웃 (A6)', () => {
             expect(r.status).toBe(200);
             expect(mockBlacklistToken).toHaveBeenCalledWith(at);
             expect(mockBlacklistToken).toHaveBeenCalledWith(rt);
+        });
+
+        test('만료된 access + 서명이 맞는 refresh — refresh 의 userId 로 MCP 세션 정리(onUserLogout)', async () => {
+            const rt = refreshTokenFor('u1', 'refresh-jti-mcp');
+            const r = await request(app).post('/api/auth/logout').set('Cookie', [`auth_token=${expiredAccessToken()}`, `refresh_token=${rt}`]);
+            expect(r.status).toBe(200);
+            await new Promise((resolve) => setImmediate(resolve)); // fire-and-forget 동적 import
+            expect(mockOnUserLogout).toHaveBeenCalledWith('u1');
+        });
+
+        test('위조 서명 refresh 만 — onUserLogout 을 부르지 않는다', async () => {
+            const forged = refreshTokenFor('u2', 'forged-jti-mcp', 'another-secret-not-the-server-one-0000');
+            const r = await request(app).post('/api/auth/logout').set('Cookie', [`refresh_token=${forged}`]);
+            expect(r.status).toBe(200);
+            await new Promise((resolve) => setImmediate(resolve));
+            expect(mockOnUserLogout).not.toHaveBeenCalled();
         });
 
         test('쿠키·헤더 모두 없음 — 200, 블랙리스트 호출 없음, 쿠키 삭제', async () => {

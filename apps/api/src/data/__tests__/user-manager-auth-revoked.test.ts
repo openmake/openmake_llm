@@ -70,6 +70,25 @@ describe('UserManager — USER_AUTH_REVOKED 발행', () => {
         expect(events).toEqual([]);
     });
 
+    test('changeRole 같은 역할 재저장 → 발행 안 함, 사용자는 그대로 반환(성공)', async () => {
+        // role IS DISTINCT FROM 조건으로 같은 값이면 UPDATE 가 행을 바꾸지 않는다(rowCount 0)
+        mockPool(0);
+        const user = await manager.changeRole('u-1', 'user');
+        expect(events).toEqual([]);
+        expect(user).toMatchObject({ id: 'u-1', role: 'user' });
+        const { query } = (getPool as jest.Mock)() as { query: jest.Mock };
+        expect(query.mock.calls[0][0]).toContain('role IS DISTINCT FROM $1');
+    });
+
+    test('updateUser({password, is_active:false}) → account_disabled 다음 password_changed(순서 고정)', async () => {
+        mockPool(1);
+        await manager.updateUser('u-1', { password: 'New-secret-123!', is_active: false });
+        expect(events).toEqual([
+            { userId: 'u-1', reason: 'account_disabled' },
+            { userId: 'u-1', reason: 'password_changed' },
+        ]);
+    });
+
     test('updateUser({is_active:false}) → account_disabled, 활성화는 발행 안 함', async () => {
         mockPool(1);
         await manager.updateUser('u-1', { is_active: false });

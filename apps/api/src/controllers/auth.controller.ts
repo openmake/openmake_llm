@@ -197,12 +197,14 @@ class AuthController {
         // Refresh 토큰: 블랙리스트 + activeSessionMap 정리 (bug_004)
         // 모바일(iOS)은 쿠키가 없어 body.refreshToken 으로 전달 (축 2) — 웹 쿠키와 병존, 둘 다 폐기
         const bodyRefreshToken = typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : undefined;
+        let refreshUserId: string | undefined;
         for (const refreshToken of new Set([req.cookies?.refresh_token, bodyRefreshToken])) {
             if (!refreshToken) continue;
             // 서명이 맞는 토큰만(만료 무시) — 위조 토큰으로 다른 사용자의 세션을 지우지 못하게
             const decoded = verifySignatureIgnoringExpiry(refreshToken);
             if (decoded?.userId && decoded.jti) {
-                removeSessionFromMap(String(decoded.userId), decoded.jti);
+                refreshUserId = String(decoded.userId);
+                removeSessionFromMap(refreshUserId, decoded.jti);
             }
             pending.push(blacklistToken(refreshToken));
         }
@@ -211,7 +213,8 @@ class AuthController {
         clearTokenCookie(res);
 
         // Phase 7 lifecycle hook — 사용자별 MCP 서버 graceful kill (per_session)
-        const uid = req.user?.id;
+        // access 가 만료·무효라 req.user 가 없으면(optionalAuth) 서명 검증된 refresh 의 userId 를 쓴다
+        const uid = req.user?.id ?? refreshUserId;
         if (uid !== undefined) {
             void import('../runtime-ports/tool-runtime').then(m => m.getToolRuntime().onUserLogout(String(uid))).catch(() => { /* noop */ });
         }

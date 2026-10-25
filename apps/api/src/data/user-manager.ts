@@ -437,11 +437,13 @@ class UserManagerImpl {
 
     async changeRole(userId: string, newRole: UserRole): Promise<PublicUser | null> {
         const pool = getPool();
+        // 같은 역할 재저장은 행을 바꾸지 않는다 — role_changed 는 실제 변경 때만(열린 채팅 소켓을 괜히 닫지 않게).
+        // 반환은 그대로: 사용자가 있으면 그 사용자(같은 값 저장도 성공), 없으면 null.
         const result = await pool.query(
-            'UPDATE users SET role = $1, updated_at = $2 WHERE id = $3',
+            'UPDATE users SET role = $1, updated_at = $2 WHERE id = $3 AND role IS DISTINCT FROM $1',
             [newRole, new Date().toISOString(), userId]
         );
-        if (!emitRevokedIfUpdated(result.rowCount, userId, 'role_changed')) return null;
+        emitRevokedIfUpdated(result.rowCount, userId, 'role_changed');
 
         const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         const row = userResult.rows[0] as UserRow | undefined;
