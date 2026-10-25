@@ -1,5 +1,6 @@
 /**
- * W3 S2 — 운영(NODE_ENV=production)에서 MCP 샌드박스 기본 ON + 비격리 사용자 서버 spawn 거부.
+ * W3 S2 — 운영(NODE_ENV=production)에서 MCP 샌드박스 기본 ON.
+ * E1 — 사용자 MCP 서버는 환경과 무관하게 비격리 spawn 거부. E9 — 사용자 서버엔 host-gateway 미부여.
  */
 import { buildSandboxedCommand, defaultSandboxConfig, MCP_SANDBOX_REQUIRED_MESSAGE, type SandboxConfig } from '../sandbox-docker';
 import { MCPLifecycleSupervisor } from '../lifecycle-supervisor';
@@ -62,11 +63,33 @@ describe('MCP 샌드박스 운영 기본값·사용자 서버 격리 (S2)', () =
         expect(buildSandboxedCommand({ ...input, network: 'host', ownerScope: 'global' }, cfg()).sandboxed).toBe(false);
     });
 
-    it('(d) test 환경·샌드박스 꺼짐·사용자 서버 → 종전대로 비격리', () => {
+    it('(d) test 환경에서도 샌드박스 꺼짐·사용자 서버 → MCP_SANDBOX_REQUIRED 로 거부 (E1 — 환경 무관)', () => {
         process.env.NODE_ENV = 'test';
-        const r = buildSandboxedCommand({ ...input, ownerScope: 'user' }, cfg({ enabled: false }));
+        let err: unknown;
+        try { buildSandboxedCommand({ ...input, ownerScope: 'user' }, cfg({ enabled: false })); } catch (e) { err = e; }
+        expect((err as { code?: string }).code).toBe('MCP_SANDBOX_REQUIRED');
+        expect((err as Error).message).toBe(MCP_SANDBOX_REQUIRED_MESSAGE);
+        expect(() => buildSandboxedCommand({ ...input, ownerScope: 'user' }, cfg({ dockerPath: null })))
+            .toThrow(MCP_SANDBOX_REQUIRED_MESSAGE);
+        // network=host opt-out 도 사용자 서버에는 적용되지 않는다
+        const r = buildSandboxedCommand({ ...input, network: 'host', ownerScope: 'user' }, cfg());
+        expect(r.sandboxed).toBe(true);
+        expect(r.args.join(' ')).toContain('--network bridge');
+    });
+
+    it('(d2) test 환경·샌드박스 꺼짐·관리자 전역 서버 → 종전대로 비격리', () => {
+        process.env.NODE_ENV = 'test';
+        const r = buildSandboxedCommand({ ...input, ownerScope: 'global' }, cfg({ enabled: false }));
         expect(r).toEqual({ command: 'npx', args: ['-y', 'pkg'], sandboxed: false });
-        expect(buildSandboxedCommand({ ...input, network: 'host', ownerScope: 'user' }, cfg()).sandboxed).toBe(false);
+        expect(buildSandboxedCommand({ ...input, network: 'host', ownerScope: 'global' }, cfg()).sandboxed).toBe(false);
+    });
+
+    it('(d3) loopback 인자: 사용자 서버엔 --add-host 를 주지 않고, 전역 서버엔 준다 (E9)', () => {
+        const loop = { command: 'npx', args: ['http://localhost:1'], serverId: 's1' };
+        const user = buildSandboxedCommand({ ...loop, ownerScope: 'user' }, cfg());
+        expect(user.args).not.toContain('--add-host');
+        const global = buildSandboxedCommand({ ...loop, ownerScope: 'global' }, cfg());
+        expect(global.args.join(' ')).toContain('--add-host host.docker.internal:host-gateway');
     });
 
     it('(e) production 에서 MCP_SANDBOX_ENABLED 미설정 → 켜짐, false 명시 → 꺼짐 (test 미설정은 종전 꺼짐)', () => {

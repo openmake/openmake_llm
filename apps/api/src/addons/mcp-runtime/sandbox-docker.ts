@@ -36,7 +36,7 @@ interface SandboxInput {
     network?: SandboxNetwork;
     /** 컨테이너에 -e 로 주입할 env (서버 config.env). 호스트 env 는 상속하지 않는다. */
     env?: Record<string, string>;
-    /** 서버 소유 범위 — 'user'(사용자 소유)는 운영에서 비격리 실행을 거부한다(W3 S2). 미지정은 종전 판정. */
+    /** 서버 소유 범위 — 'user'(사용자 소유)는 환경과 무관하게 비격리 실행을 거부한다(W3 S2·E1). 미지정은 종전 판정. */
     ownerScope?: 'user' | 'global';
 }
 
@@ -69,7 +69,7 @@ export interface SandboxConfig {
     /** CPU 상한 (CPU DoS 방어) */
     cpus: string;
     user: string;
-    /** read-only rootfs + tmpfs (opt-in — 일부 서버가 home 외 쓰기 시 깨질 수 있어 기본 off) */
+    /** read-only rootfs + tmpfs (기본 on — 일부 서버가 home 외 쓰기 시 깨지면 MCP_SANDBOX_READONLY=false 로 해제) */
     readonly: boolean;
     /**
      * 컨테이너 라벨(openmake.pid)에 새길 소유 프로세스 pid — 부팅 고아 스윕
@@ -86,13 +86,13 @@ export const MCP_SANDBOX_PID_LABEL_KEY = 'openmake.pid';
 
 // docker 경로 해석은 Base 유틸(utils/docker-path)로 옮겼다 — 아티팩트 실행·보고서 내보내기도 같은 것을 쓴다 (2026-09-19).
 import { resolveDocker } from '../../utils/docker-path';
-import { boolEnvDefault, isProductionEnv } from '../../config/secure-defaults';
+import { boolEnvDefault } from '../../config/secure-defaults';
 import { isControlEnvKey } from '../../security/spawn-env-policy';
 import { needsPlaywrightBrowser, playwrightBrowsersFromEnv, wrapWithPlaywrightInstall } from './sandbox-playwright';
 export { resolveDocker };
 
-/** 운영에서 사용자 MCP 서버를 격리할 수 없을 때의 거부 문구 (W3 S2). */
-export const MCP_SANDBOX_REQUIRED_MESSAGE = '운영 환경에서는 사용자 MCP 서버를 격리 없이 실행하지 않습니다 — MCP_SANDBOX_ENABLED 와 Docker 를 확인하세요(관리자 전역 서버만 비격리 허용)';
+/** 사용자 MCP 서버를 격리할 수 없을 때의 거부 문구 (W3 S2·E1 — 환경 무관). */
+export const MCP_SANDBOX_REQUIRED_MESSAGE = '사용자 MCP 서버는 격리 없이 실행하지 않습니다 — MCP_SANDBOX_ENABLED 와 Docker 를 확인하세요(관리자 전역 서버만 비격리 허용)';
 /** 위 거부의 오류 code — lifecycle-supervisor 가 감사 기록(mcp_server.spawn_refused) 판별에 쓴다. */
 export const MCP_SANDBOX_REQUIRED_CODE = 'MCP_SANDBOX_REQUIRED';
 
@@ -110,7 +110,8 @@ export function defaultSandboxConfig(): SandboxConfig {
         pidsLimit: Number(process.env.MCP_SANDBOX_PIDS_LIMIT) || 256,
         cpus: process.env.MCP_SANDBOX_CPUS || '1.0',
         user: process.env.MCP_SANDBOX_USER || '1000:1000',
-        readonly: process.env.MCP_SANDBOX_READONLY === 'true',
+        // E3: read-only rootfs 기본 on — 끄려면 MCP_SANDBOX_READONLY=false 명시.
+        readonly: process.env.MCP_SANDBOX_READONLY !== 'false',
         ownerPid: process.pid,
         dockerHost: process.env.DOCKER_HOST || undefined,
     };
@@ -168,6 +169,7 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     const cacheVol = sandboxCacheVolumeName(input.serverId, cfg.cacheVolume);
     // 내부 서비스(127.0.0.1/localhost) 를 참조하는 서버에만 host.docker.internal 부여 —
     // 그 외 서버가 호스트 내부 서비스에 도달하는 over-grant 차단.
+    // E9: 사용자 소유 서버는 loopback 을 참조해도 host-gateway 를 주지 않는다(관리자 전역 서버만).
     const referencesLoopback = LOOPBACK_TEST.test(
         [input.command, ...input.args.map(String), ...Object.values(input.env ?? {}).map(String)].join(' '),
     );
@@ -184,7 +186,7 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     a.push('--label', `openmake.serverId=${sanitizeId(input.serverId)}`);
     if (cfg.readonly) a.push('--read-only', '--tmpfs', '/tmp:rw,exec', '--tmpfs', '/run:rw');
     a.push('-v', `${cacheVol}:/home/node/.cache`);
-    if (referencesLoopback) a.push('--add-host', 'host.docker.internal:host-gateway');
+    if (input.ownerScope !== 'user' && referencesLoopback) a.push('--add-host', 'host.docker.internal:host-gateway');
     a.push('-w', '/home/node');
     a.push('-e', 'HOME=/home/node');
     a.push('-e', 'NPM_CONFIG_CACHE=/home/node/.cache/npm');
@@ -220,15 +222,15 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
  * StdioClientTransport env 로 넘겨야 한다(값이 docker 프로세스를 거쳐 컨테이너에 전달됨).
  */
 export function buildSandboxedCommand(input: SandboxInput, cfg: SandboxConfig = defaultSandboxConfig()): SandboxResult {
-    // W3 S2: 운영의 사용자 소유 서버는 격리 없이 돌리지 않는다 — 샌드박스 꺼짐·docker 부재면 거부,
-    // network='host' opt-out 도 무시하고 격리한다. 관리자 전역 서버(global)·dev/test 는 아래 종전 판정.
-    const prodUser = isProductionEnv() && input.ownerScope === 'user';
-    if (prodUser && (!cfg.enabled || !cfg.dockerPath)) {
+    // W3 S2·E1: 사용자 소유 서버는 환경과 무관하게 격리 없이 돌리지 않는다 — 샌드박스 꺼짐·docker 부재면 거부,
+    // network='host' opt-out 도 무시하고 격리한다. 관리자 전역 서버(global)는 아래 종전 판정.
+    const userOwned = input.ownerScope === 'user';
+    if (userOwned && (!cfg.enabled || !cfg.dockerPath)) {
         throw Object.assign(new Error(MCP_SANDBOX_REQUIRED_MESSAGE), { code: MCP_SANDBOX_REQUIRED_CODE });
     }
     // per-server opt-out — 호스트 설치 바이너리 의존 등으로 컨테이너 미동작인 신뢰 서버는
     // sandbox_network='host' 로 비격리 호스트 실행 (플래그 ON 여부와 무관).
-    if (input.network === 'host' && !prodUser) return { command: input.command, args: input.args, sandboxed: false };
+    if (input.network === 'host' && !userOwned) return { command: input.command, args: input.args, sandboxed: false };
     if (!cfg.enabled) return { command: input.command, args: input.args, sandboxed: false };
     if (!cfg.dockerPath) {
         // fail-closed: 샌드박스가 명시적으로 활성(cfg.enabled)인데 docker 가 없으면 비격리로 조용히

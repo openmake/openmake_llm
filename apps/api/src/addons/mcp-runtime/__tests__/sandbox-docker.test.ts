@@ -1,7 +1,7 @@
 /**
  * MCP docker 샌드박스 단위 테스트 — 게이트 + docker run 인자 조립 + loopback 치환.
  */
-import { buildDockerArgs, buildSandboxedCommand, buildSandboxedEnv, rewriteLoopback, SandboxConfig } from '../sandbox-docker';
+import { buildDockerArgs, buildSandboxedCommand, buildSandboxedEnv, defaultSandboxConfig, rewriteLoopback, SandboxConfig } from '../sandbox-docker';
 import { needsPlaywrightBrowser, shellQuote, wrapWithPlaywrightInstall } from '../sandbox-playwright';
 
 const cfg = (over: Partial<SandboxConfig> = {}): SandboxConfig => ({
@@ -23,6 +23,23 @@ describe('rewriteLoopback', () => {
         expect(rewriteLoopback('postgresql://u:p@127.0.0.1:5432/db')).toBe('postgresql://u:p@host.docker.internal:5432/db');
         expect(rewriteLoopback('http://localhost:4000')).toBe('http://host.docker.internal:4000');
         expect(rewriteLoopback('https://api.example.com')).toBe('https://api.example.com');
+    });
+});
+
+describe('defaultSandboxConfig readonly (E3)', () => {
+    const saved = process.env.MCP_SANDBOX_READONLY;
+    afterEach(() => {
+        if (saved === undefined) delete process.env.MCP_SANDBOX_READONLY;
+        else process.env.MCP_SANDBOX_READONLY = saved;
+    });
+
+    it('env 미설정이면 read-only 기본 켜짐, false 명시만 끈다', () => {
+        delete process.env.MCP_SANDBOX_READONLY;
+        expect(defaultSandboxConfig().readonly).toBe(true);
+        process.env.MCP_SANDBOX_READONLY = 'true';
+        expect(defaultSandboxConfig().readonly).toBe(true);
+        process.env.MCP_SANDBOX_READONLY = 'false';
+        expect(defaultSandboxConfig().readonly).toBe(false);
     });
 });
 
