@@ -15,6 +15,7 @@ import { UserSandbox } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { auditSecurityEvent, securityAuditActor } from '../security/security-audit';
 import { hashToolArgs } from '../utils/args-hash';
+import { TOOL_ARG_SCAN_LIMITS } from '../config/runtime-limits';
 
 const logger = createLogger('ToolExecutionGuard');
 
@@ -49,6 +50,38 @@ export function detectDangerousArg(key: string, value: string): string | null {
         }
     }
     return null;
+}
+
+/**
+ * 중첩 인자(객체·배열)의 문자열 값마다 detectDangerousArg 를 적용한다 (순수, 테스트 가능).
+ * 룰 선택은 가장 가까운 속성 이름 기준(배열 원소는 부모 속성 이름). 깊이 TOOL_ARG_SCAN_LIMITS.MAX_DEPTH
+ * 까지만 내려가고, 이미 본 객체는 다시 보지 않는다(순환 참조 안전).
+ * @param path 반환 key 앞에 붙일 경로(기본 '')
+ * @returns 첫 위반의 점·대괄호 경로(key)와 라벨, 없으면 null
+ */
+export function detectDangerousArgsDeep(args: unknown, path = ''): { key: string; violation: string } | null {
+    const seen = new WeakSet<object>();
+    const walk = (value: unknown, at: string, ruleKey: string, depth: number): { key: string; violation: string } | null => {
+        if (typeof value === 'string') {
+            const violation = ruleKey ? detectDangerousArg(ruleKey, value) : null;
+            return violation ? { key: at, violation } : null;
+        }
+        if (!value || typeof value !== 'object' || depth >= TOOL_ARG_SCAN_LIMITS.MAX_DEPTH || seen.has(value)) return null;
+        seen.add(value);
+        if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) {
+                const hit = walk(value[i], `${at}[${i}]`, ruleKey, depth + 1);
+                if (hit) return hit;
+            }
+            return null;
+        }
+        for (const [k, v] of Object.entries(value)) {
+            const hit = walk(v, at ? `${at}.${k}` : k, k, depth + 1);
+            if (hit) return hit;
+        }
+        return null;
+    };
+    return walk(args, path, '', 0);
 }
 
 /** 차단된 인자 — 감사(S10)에 키 이름·사유만 넘기려고 메시지와 별도로 싣는다(값은 싣지 않는다). */

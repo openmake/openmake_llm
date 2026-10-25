@@ -133,6 +133,10 @@ const mcpCallTool: MCPToolDefinition = {
         // 네임스페이스 이름으로 재구성 → executeTool 의 해석 경로 재사용(사용자 풀 우선, 없으면 전역).
         // 바깥 실행의 중단 신호를 그대로 넘긴다(#1474) — 이미 중단됐으면 디스패처가 외부 호출을 시작하지 않는다.
         const namespaced = `${g.displayName}${MCP_NAMESPACE_SEPARATOR}${tool}`;
+        // 바깥 mcp_call 의 최상위 인자 검사는 args 객체 안을 보지 않는다 — 중첩 인자를 여기서 검사한다(E6).
+        const { detectDangerousArgsDeep } = await import('../../runtime-ports/tool-runtime');
+        const blocked = detectDangerousArgsDeep(toolArgs);
+        if (blocked) return text(`차단된 도구 인자: ${blocked.key} (도구: ${namespaced}) — 위험한 패턴 감지 [${blocked.violation}]`);
         return router.executeTool(namespaced, toolArgs, context, opts);
     },
 };
