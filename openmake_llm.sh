@@ -746,6 +746,14 @@ cmd_deploy() {
     # 1) 빌드 (재시작은 마이그레이션 뒤 3) 단계에서 일괄 수행)
     cmd_build --no-restart
 
+    # 1.5) DB·Redis 컨테이너에 compose 변경 반영 — `up -d` 는 설정(포트 바인딩 등)이 바뀐 컨테이너만
+    #      다시 만들고, 그대로인 컨테이너는 건드리지 않는다(멱등). 빠뜨리면 compose 변경이 다음 수동 재기동까지 닿지 않는다.
+    log_step "PostgreSQL·Redis compose 반영 (up -d)"
+    ensure_docker_service up postgres "PostgreSQL" || exit 2
+    wait_for_port "$POSTGRES_PORT" "PostgreSQL" || exit 2
+    ensure_docker_service up redis "Redis" || exit 2
+    wait_for_port "$REDIS_PORT" "Redis" || exit 2
+
     # 2) 마이그레이션 (확인 프롬프트, --no-migrate면 skip)
     if [[ "$DEPLOY_NO_MIGRATE" -eq 1 ]]; then
         log_info "마이그레이션 생략 (--no-migrate)"

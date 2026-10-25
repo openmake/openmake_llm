@@ -19,6 +19,7 @@
 import { createLogger } from '../utils/logger';
 import { getApiUsageTracker } from '../llm';
 import * as os from 'os';
+import { createHash } from 'crypto';
 
 import { AGENTS } from '../agents/agent-data';
 import { CAPACITY } from '../config/runtime-limits';
@@ -46,6 +47,15 @@ interface AgentPerformance {
     avgTokens: number;
     /** 인기도 순위 (1이 가장 높음) */
     popularity: number;
+}
+
+/** 쿼리 기록 항목 — 원문 질의는 보관하지 않는다 */
+interface QueryLogEntry {
+    /** 원문 길이(문자 수) */
+    length: number;
+    /** 정규화 쿼리의 sha256 앞 16자 */
+    hash: string;
+    timestamp: Date;
 }
 
 /**
@@ -148,8 +158,8 @@ export class AnalyticsSystem {
         totalTokens: number;
     }> = new Map();
 
-    /** 쿼리 기록 배열 (최대 MAX_QUERY_LOG건) */
-    private queryLog: { query: string; timestamp: Date }[] = [];
+    /** 쿼리 기록 배열 (최대 MAX_QUERY_LOG건) — 원문 대신 길이·해시(sha256 앞 16자)만 보관 */
+    private queryLog: QueryLogEntry[] = [];
     /** 세션 기록 배열 (최대 MAX_SESSION_LOG건) */
     private sessionLog: { sessionId: string; start: Date; end?: Date; queries: number }[] = [];
     /** 시스템 시작 시간 */
@@ -233,12 +243,22 @@ export class AnalyticsSystem {
      * @param query - 사용자 쿼리 문자열
      */
     recordQuery(query: string): void {
-        this.queryLog.push({ query, timestamp: new Date() });
+        // 원문은 보관하지 않는다. 인기 쿼리 집계가 대소문자·앞뒤 공백·100자 이후 차이를 묶도록 정규화한 문자열을 해시한다.
+        const normalized = String(query).toLowerCase().trim().substring(0, 100);
+        const hash = createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+        this.queryLog.push({ length: String(query).length, hash, timestamp: new Date() });
 
         // 최대 MAX_QUERY_LOG개 유지 — splice로 배치 제거 (shift()의 O(n) 반복 방지)
         if (this.queryLog.length > AnalyticsSystem.MAX_QUERY_LOG * 1.2) {
             this.queryLog = this.queryLog.slice(-AnalyticsSystem.MAX_QUERY_LOG);
         }
+    }
+
+    /**
+     * 쿼리 기록 사본을 반환합니다(원문 없음 — 길이·해시·시각).
+     */
+    getQueryLog(): QueryLogEntry[] {
+        return this.queryLog.map(e => ({ ...e }));
     }
 
     /**
@@ -346,18 +366,16 @@ export class AnalyticsSystem {
     /**
      * 인기 쿼리를 분석합니다.
      *
-     * 쿼리를 소문자 정규화(100자 제한) 후 빈도를 집계합니다.
+     * 정규화 쿼리(소문자·100자 제한)의 해시별 빈도를 집계합니다. 원문은 보관하지 않으므로 query 에는 해시가 들어갑니다.
      *
      * @param limit - 반환할 최대 쿼리 수 (기본값: 10)
-     * @returns 인기 쿼리 배열 (빈도 내림차순)
+     * @returns 인기 쿼리 배열 (빈도 내림차순, query = 해시)
      */
     getTopQueries(limit: number = 10): { query: string; count: number }[] {
         const queryCounts: Map<string, number> = new Map();
 
         for (const log of this.queryLog) {
-            // 정규화된 쿼리
-            const normalized = log.query.toLowerCase().trim().substring(0, 100);
-            queryCounts.set(normalized, (queryCounts.get(normalized) || 0) + 1);
+            queryCounts.set(log.hash, (queryCounts.get(log.hash) || 0) + 1);
         }
 
         return Array.from(queryCounts.entries())

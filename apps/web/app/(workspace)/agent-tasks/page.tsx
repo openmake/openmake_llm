@@ -51,6 +51,7 @@ import { LiveView } from "@/components/agent-tasks/live-view";
 import { onAgentTaskChange, onOpenAgentTask, requestOpenAgentTask } from "@/lib/agent-task-change";
 import { failureLabelKey, failureNextKey } from "@/lib/agent-task-failure";
 import { taskStatusLabelKey } from "@/lib/approval-input";
+import { openSandboxedDocument } from "@/lib/open-sandboxed-document";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -381,7 +382,11 @@ function ArtifactStepView({ artifact }: { artifact: StepArtifact }) {
     a.download = `${artifact.id}.${ext}`;
     a.click();
   });
-  const openTab = () => withBlobUrl((url) => window.open(url, "_blank", "noopener"));
+  // HTML/SVG 는 앱 origin 의 blob: 가 아니라 sandbox iframe 셸로 연다(산출물 스크립트가 쿠키·API 에 닿지 않게).
+  const openTab = () =>
+    artifact.kind === "html" || artifact.kind === "svg"
+      ? openSandboxedDocument(artifact.content, mime, artifact.title)
+      : withBlobUrl((url) => window.open(url, "_blank", "noopener"));
 
   return (
     <div className="mt-1 rounded-md border border-accent/40 bg-surface-2">

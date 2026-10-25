@@ -801,7 +801,8 @@ cmd_env_autoupdate() { # env [--every CRON] [--off]
 #            OMK_STATUS_TOKEN                        커밋 상태 쓰기 권한만 있는 토큰
 #            OMK_DISPATCH_TOKEN                      Actions 쓰기 권한만 있는 토큰 — approve 직후 release-verified 를 깨운다
 SMOKE_WHY=""     # 방금 실패한 항목의 이유
-SMOKE_TOKEN=""   # 로그인이 받은 토큰 — 채팅이 쓴다
+SMOKE_COOKIE_JAR=""   # 로그인이 받은 쿠키 jar(인증·CSRF 쿠키) — 채팅이 쓰고, 스모크가 끝나면(중단돼도) 지운다
+smoke_cleanup_jar() { [[ -z "$SMOKE_COOKIE_JAR" ]] || rm -f "$SMOKE_COOKIE_JAR"; SMOKE_COOKIE_JAR=""; }
 json_str() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; printf '"%s"' "$s"; }
 smoke_code() { # $1=본문을 받을 파일 $2=url [curl 인자…] → HTTP 코드 (연결 실패 000)
     local out="$1" url="$2" c; shift 2
@@ -824,19 +825,22 @@ smoke_check_generated() { # 웹 포트로 묻는다 — API 까지 닿으면 없
     local c; c="$(smoke_code /dev/null "http://localhost:$(llm_web_port "$1")/generated/omk-smoke-none.png")"
     [[ "$c" == 404 ]] || { SMOKE_WHY="웹의 /generated → $c (API 에 닿으면 404)"; return 1; }
 }
+smoke_jar_cookie() { awk -v n="$2" '$6==n{print $7}' "$1" 2>/dev/null | tail -1; } # $1=jar $2=쿠키 이름 → 값
 smoke_check_login() {
-    local email pass body c
+    local email pass c jar csrf
     email="$(dotenv_get "$1/.env" OMK_SMOKE_EMAIL)"; pass="$(dotenv_get "$1/.env" OMK_SMOKE_PASSWORD)"
     [[ -n "$email" && -n "$pass" ]] || { SMOKE_WHY=".env 에 OMK_SMOKE_EMAIL / OMK_SMOKE_PASSWORD 가 없습니다"; return 1; }
-    body="$(mktemp)"
-    # 로그인은 CSRF 검사를 받는다(쿠키와 헤더의 토큰이 같아야 한다) — 브라우저처럼 먼저 발급받아 둘 다에 싣는다.
-    local csrf; smoke_code "$body" "http://localhost:$(llm_api_port "$1")/api/csrf-token" >/dev/null
-    csrf="$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' "$body" | head -1)"
-    c="$(smoke_code "$body" "http://localhost:$(llm_api_port "$1")/api/auth/login" -H 'Content-Type: application/json' \
-        -H "X-CSRF-Token: $csrf" -H "Cookie: csrf_token=$csrf" \
+    # 브라우저처럼 쿠키로 로그인한다 — 토큰을 본문에서 읽어 헤더로 넘기지 않는다(인증 쿠키는 jar 에만 남는다).
+    # 로그인은 CSRF 검사를 받는다(쿠키와 헤더의 토큰이 같아야 한다) — 먼저 발급받아 jar 의 쿠키와 헤더 둘 다에 싣는다.
+    jar="$(mktemp)"
+    smoke_code /dev/null "http://localhost:$(llm_api_port "$1")/api/csrf-token" -c "$jar" >/dev/null
+    csrf="$(smoke_jar_cookie "$jar" csrf_token)"
+    [[ -n "$csrf" ]] || { rm -f "$jar"; SMOKE_WHY="CSRF 토큰을 받지 못함"; return 1; }
+    c="$(smoke_code /dev/null "http://localhost:$(llm_api_port "$1")/api/auth/login" -b "$jar" -c "$jar" \
+        -H 'Content-Type: application/json' -H "X-CSRF-Token: $csrf" \
         -d "{\"email\":$(json_str "$email"),\"password\":$(json_str "$pass")}")"
-    SMOKE_TOKEN="$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' "$body" | head -1)"; rm -f "$body"
-    [[ "$c" == 200 && -n "$SMOKE_TOKEN" ]] || { SMOKE_WHY="로그인 → $c"; return 1; }
+    if [[ "$c" == 200 && -n "$(smoke_jar_cookie "$jar" auth_token)" ]]; then SMOKE_COOKIE_JAR="$jar"; return 0; fi
+    rm -f "$jar"; SMOKE_WHY="로그인 → $c"; return 1
 }
 # /ready 본문의 멈춘 백그라운드 루프 → "이름 마지막 실행 시각" 을 쉼표로 (#1478). node 가 없거나 본문을 읽지 못하면 빈 값.
 ready_background_failures() { # $1=/ready 본문 파일
@@ -865,10 +869,12 @@ smoke_check_ready() {
     [[ "$c" == 200 ]] || { SMOKE_WHY="/ready → $c${why:+ —$why}"; return 1; }
 }
 smoke_check_chat() {
-    [[ -n "$SMOKE_TOKEN" ]] || { SMOKE_WHY="로그인하지 못해 건너뜀"; return 1; }
+    [[ -n "$SMOKE_COOKIE_JAR" && -s "$SMOKE_COOKIE_JAR" ]] || { SMOKE_WHY="로그인하지 못해 건너뜀"; return 1; }
+    # 쿠키 인증 요청은 CSRF 검사를 받는다(Bearer 만 면제) — jar 의 csrf_token 을 헤더에도 싣는다.
     local body c good=0; body="$(mktemp)"
-    c="$(smoke_code "$body" "http://localhost:$(llm_api_port "$1")/api/chat" -H 'Content-Type: application/json' \
-        -H "Authorization: Bearer $SMOKE_TOKEN" -d '{"message":"ping"}')"
+    # jar 는 http://localhost 로 보낸다 — Secure 쿠키는 curl 의 localhost 예외(curl ≥ 7.79)로만 실린다.
+    c="$(smoke_code "$body" "http://localhost:$(llm_api_port "$1")/api/chat" -b "$SMOKE_COOKIE_JAR" -H 'Content-Type: application/json' \
+        -H "X-CSRF-Token: $(smoke_jar_cookie "$SMOKE_COOKIE_JAR" csrf_token)" -d '{"message":"ping"}')"
     grep -q '"success":true' "$body" 2>/dev/null && good=1; rm -f "$body"
     [[ "$c" == 200 && $good -eq 1 ]] || { SMOKE_WHY="채팅 1회 → $c"; return 1; }
 }
@@ -887,18 +893,23 @@ cmd_env_smoke() { # env [--report]
     log_step "스모크: $env"
     local checks; checks="$(smoke_checks_for "$ldir")"
     [[ " $checks " == *" chat "* ]] || log_info "릴리스를 따르는 환경 — 쓰기 없는 검사만(채팅 제외)"
-    SMOKE_TOKEN=""
-    for c in $checks; do
-        SMOKE_WHY=""
-        if "smoke_check_$c" "$ldir"; then log_ok "$c"; else log_err "$c — $SMOKE_WHY"; failed="$failed $c"; fi
-    done
-    SMOKE_TOKEN=""
-    if [[ $report -eq 1 ]]; then
-        local state=success desc="스모크 통과"; [[ -z "$failed" ]] || { state=failure; desc="스모크 실패:$failed"; }
-        status_report "$env" "$(git -C "$ldir" rev-parse HEAD)" "$state" "$desc" || log_warn "결과 표지를 붙이지 못했습니다"
-    fi
-    [[ -z "$failed" ]] || { log_err "$env 스모크 실패:$failed"; return 3; }
-    log_ok "$env 스모크 통과"
+    # 검사는 subshell 에서 돈다 — 인증 쿠키가 든 jar 를 그 subshell 의 trap 이 지운다(정상 종료·die·Ctrl-C·TERM 모두).
+    # 호출한 쪽의 trap(예: pipeline_locked 의 lock 해제)은 읽지도 바꾸지도 않는다.
+    (
+        trap smoke_cleanup_jar EXIT; trap 'exit 130' INT; trap 'exit 143' TERM
+        SMOKE_COOKIE_JAR=""
+        for c in $checks; do
+            SMOKE_WHY=""
+            if "smoke_check_$c" "$ldir"; then log_ok "$c"; else log_err "$c — $SMOKE_WHY"; failed="$failed $c"; fi
+        done
+        smoke_cleanup_jar
+        if [[ $report -eq 1 ]]; then
+            state=success desc="스모크 통과"; [[ -z "$failed" ]] || { state=failure; desc="스모크 실패:$failed"; }
+            status_report "$env" "$(git -C "$ldir" rev-parse HEAD)" "$state" "$desc" || log_warn "결과 표지를 붙이지 못했습니다"
+        fi
+        [[ -z "$failed" ]] || { log_err "$env 스모크 실패:$failed"; exit 3; }
+        log_ok "$env 스모크 통과"
+    )
 }
 
 status_context()   { printf 'omk/env-%s' "$1"; }

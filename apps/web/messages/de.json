@@ -403,6 +403,8 @@
     "artifactFallback": "Artefakt",
     "artifactBuilding": "Artefakt wird erstellt …",
     "mediaDownload": "Herunterladen",
+    "loadExternalImage": "Externes Bild laden",
+    "externalImageHost": "Bild von {host}",
     "reportBuilding": "Bericht wird erstellt …",
     "reportData": "Berichtsdaten",
     "reasoningLabel": "Reasoning",
@@ -1567,7 +1569,7 @@
     "avgQueriesPerSession": "Durchschn. Anfragen pro Sitzung",
     "peakHoursTop3": "Top 3 Spitzenzeiten",
     "peakHourItem": "{hour}:00 · {requests} Anfragen",
-    "topQueriesTop5": "Top 5 Anfragen",
+    "topQueriesTop5": "Top 5 Anfragen (Hash — Originaltext wird nicht gespeichert)",
     "agentPerformance": "Agent-Leistung",
     "period": {
       "7d": "7 Tage",

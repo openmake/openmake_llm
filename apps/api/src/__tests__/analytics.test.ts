@@ -133,7 +133,9 @@ describe('AnalyticsSystem — recordQuery()', () => {
         analytics.recordQuery('안녕하세요');
         const top = analytics.getTopQueries(10);
         expect(top).toHaveLength(1);
-        expect(top[0].query).toBe('안녕하세요');
+        // 원문은 보관하지 않는다 — query 는 sha256 앞 16자
+        expect(top[0].query).toMatch(/^[0-9a-f]{16}$/);
+        expect(top[0].query).not.toBe('안녕하세요');
         expect(top[0].count).toBe(1);
     });
 
@@ -152,16 +154,17 @@ describe('AnalyticsSystem — recordQuery()', () => {
         analytics.recordQuery('hello');
 
         const top = analytics.getTopQueries();
+        expect(top).toHaveLength(1);
         expect(top[0].count).toBe(3);
-        expect(top[0].query).toBe('hello');
     });
 
-    test('100자 초과 쿼리는 100자로 잘린다', () => {
-        const longQuery = 'a'.repeat(200);
-        analytics.recordQuery(longQuery);
+    test('100자 초과 쿼리는 앞 100자로 묶인다', () => {
+        analytics.recordQuery('a'.repeat(200));
+        analytics.recordQuery('a'.repeat(150));
 
         const top = analytics.getTopQueries();
-        expect(top[0].query.length).toBe(100);
+        expect(top).toHaveLength(1);
+        expect(top[0].count).toBe(2);
     });
 
     test('limit 파라미터가 반환 수를 제한한다', () => {
@@ -178,8 +181,7 @@ describe('AnalyticsSystem — recordQuery()', () => {
         analytics.recordQuery('common');
 
         const top = analytics.getTopQueries();
-        expect(top[0].query).toBe('common');
-        expect(top[1].query).toBe('rare');
+        expect(top.map(q => q.count)).toEqual([3, 1]);
     });
 });
 

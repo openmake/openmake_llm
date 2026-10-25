@@ -131,13 +131,26 @@ export function setupApiRoutes(
 
     // /api/health — 전용 헬스체크 엔드포인트 (상세 상태 반환). 인증 미들웨어 없음 — DB 에 닿지 않게
     // 관리자 process 필드는 서명된 JWT 만으로 가른다(health-process-section.ts 의 대가 설명 참고)
+    // 비관리자(익명·일반 사용자)는 상태 필드와 add-on 절만 받는다 — 풀 수·노드·모델 수·메모리·uptime 은 관리자 전용.
+    // add-on 절(예: knowledge 모드·generation·heartbeat)은 운영 모드 표시라 공개로 둔다(롤백 훈련 스크립트가 익명으로 읽는다)
     app.get('/api/health', async (req: Request, res: Response) => {
         const processSection = readHealthProcessSection(req);
         const dbPool = getPool();
-        const memory = process.memoryUsage();
         const clusterStats = cluster.getStats();
+        const databaseStatus = dbPool ? 'connected' : 'disconnected';
+        const llmStatus = clusterStats.onlineNodes > 0 ? 'online' : 'offline';
         // add-on 이 등록한 상태 절(예: 수집 소비자 모드·대기열) — 절마다 시간 상한, 실패는 그 절만 { error }
         const sections = await collectHealthSections();
+        if (!processSection) {
+            res.json({
+                status: 'ok',
+                timestamp: new Date().toISOString(),
+                services: { database: { status: databaseStatus }, llm: { status: llmStatus } },
+                ...sections,
+            });
+            return;
+        }
+        const memory = process.memoryUsage();
 
         res.json({
             status: 'ok',
@@ -145,13 +158,13 @@ export function setupApiRoutes(
             uptime: process.uptime(),
             services: {
                 database: {
-                    status: dbPool ? 'connected' : 'disconnected',
+                    status: databaseStatus,
                     total: dbPool?.totalCount || 0,
                     idle: dbPool?.idleCount || 0,
                     waiting: dbPool?.waitingCount || 0
                 },
                 llm: {
-                    status: clusterStats.onlineNodes > 0 ? 'online' : 'offline',
+                    status: llmStatus,
                     totalNodes: clusterStats.totalNodes,
                     onlineNodes: clusterStats.onlineNodes,
                     models: clusterStats.uniqueModels.length
@@ -163,7 +176,7 @@ export function setupApiRoutes(
                 }
             },
             ...sections,
-            ...(processSection ? { process: processSection } : {}),
+            process: processSection,
         });
     });
 

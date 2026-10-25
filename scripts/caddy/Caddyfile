@@ -8,7 +8,7 @@
 # 목적: 프론트 + REST + WebSocket 을 단일 origin(:33000)으로 묶는다.
 #       백엔드(52416)는 직접 노출하지 않는다.
 #
-# ⚠️ 2026-08-04 정정: 구 rasplay.tplinkdns.com:33000 외부 직결 경로는 폐기됨
+# ⚠️ 2026-08-04 정정: 구 example.com:33000 외부 직결 경로는 폐기됨
 #    (라우터 포트포워딩 제거 — DDNS 레코드만 잔존하므로 DNS 가 resolve 된다고
 #    살아있다고 판단하지 말 것). 외부 공개는 chat.openmake.cc(Cloudflare Tunnel)
 #    단일 경로다. 이 :33000 블록의 현재 역할은 두 가지뿐:
@@ -55,10 +55,10 @@
 # ============================================================
 # 외부 공개 = Cloudflare Tunnel (chat.openmake.cc)
 # ============================================================
-# rasplay.tplinkdns.com 직접 HTTPS 는 불가:
+# example.com 직접 HTTPS 는 불가:
 #   - TP-Link DDNS 라 DNS 존 제어 불가 → Let's Encrypt DNS-01 불가
 #   - 가정회선 80/443 인바운드 차단 → HTTP-01 / TLS-ALPN-01 불가
-# 따라서 과거의 `rasplay.tplinkdns.com { ... }` wss 우회 블록(자동 HTTPS)은 인증서 발급이
+# 따라서 과거의 `example.com { ... }` wss 우회 블록(자동 HTTPS)은 인증서 발급이
 # 영구 실패하여 폐기했다. 대신 Cloudflare edge 가 공개 443 에서 TLS 를 종단한 뒤
 # cloudflared 가 위 :33000 Caddy 로 평문 프록시하며, 외부 트래픽도 결국 이 :33000
 # 블록(@chatws 라우팅)을 그대로 탄다 (Next HMR /_next/* 제외 가드 포함).

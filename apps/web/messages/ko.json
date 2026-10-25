@@ -403,6 +403,8 @@
     "artifactFallback": "아티팩트",
     "artifactBuilding": "아티팩트 생성 중…",
     "mediaDownload": "다운로드",
+    "loadExternalImage": "외부 이미지 불러오기",
+    "externalImageHost": "{host} 의 이미지",
     "reportBuilding": "보고서 생성 중…",
     "reportData": "보고서 데이터",
     "reasoningLabel": "생각 과정",
@@ -1567,7 +1569,7 @@
     "avgQueriesPerSession": "세션당 평균 쿼리",
     "peakHoursTop3": "피크 시간대 Top 3",
     "peakHourItem": "{hour}시 · {requests} 요청",
-    "topQueriesTop5": "자주 묻는 쿼리 Top 5",
+    "topQueriesTop5": "인기 쿼리 Top 5 (해시 — 원문은 보관하지 않음)",
     "agentPerformance": "에이전트 성능",
     "period": {
       "7d": "7일",

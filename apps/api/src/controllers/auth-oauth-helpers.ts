@@ -199,7 +199,7 @@ export function buildRedirectUri(req: Request, provider: 'google' | 'github' | '
     const configuredUri = getConfig().oauthRedirectUri;
     // 외부 접속은 리버스 프록시(Next.js rewrites / Nginx)를 거치므로 req.get('host') 는
     // 프록시 destination(예: localhost:52416)이 되어 redirect_uri 가 외부 주소로 생성되지 않는다.
-    // 원본 Host(예: rasplay.tplinkdns.com:33000)는 x-forwarded-host 에 담기므로 이를 우선 사용해
+    // 원본 Host(예: example.com:33000)는 x-forwarded-host 에 담기므로 이를 우선 사용해
     // Google Console 등록 URI 와 일치시켜 redirect_uri_mismatch 를 방지한다. (trust proxy 신뢰 + Google 승인목록 2차검증)
     const forwardedHost = req.get('x-forwarded-host');
     const requestHost = (forwardedHost ? forwardedHost.split(',')[0].trim() : req.get('host')) || `localhost:${serverPort}`;
@@ -210,7 +210,7 @@ export function buildRedirectUri(req: Request, provider: 'google' | 'github' | '
     log.info(`[OAuth] host 해석: x-forwarded-host=${forwardedHost ?? '(none)'}, raw-host=${req.get('host') ?? '(none)'}, 사용=${requestHost}`);
 
     // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우(프로덕션), 요청 host 와 무관하게 항상 이
-    // canonical URI 로 고정한다. rasplay 등 다른 host 로 진입하면 리버스 프록시가
+    // canonical URI 로 고정한다. example.com 등 다른 host 로 진입하면 리버스 프록시가
     // 평문이라 proto=http 로 동적 URI 가 만들어져 Google redirect_uri_mismatch 로 실패하던 문제를
     // 차단한다. 어느 진입점이든 로그인 완료는 chat.openmake.cc 단일 origin 으로 착지한다.
     // (redirect_uri 를 요청 host 가 아닌 신뢰된 상수로 고정 → open-redirect 관점에서도 더 안전)
