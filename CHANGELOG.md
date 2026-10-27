@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.115.6](https://github.com/openmake/openmake_llm/compare/v1.115.5...v1.115.6) (2026-10-27)
+
+
+### 🐛 버그 수정
+
+* **security:** auth & session hardening — token invalidation, WS revocation, refresh reuse detection (audit PR-3) ([2b9e92d](https://github.com/openmake/openmake_llm/commit/2b9e92d23aeee59dcb8f2bb111b94b69613cfe7e))
+
 ## [1.115.5](https://github.com/openmake/openmake_llm/compare/v1.115.4...v1.115.5) (2026-10-25)
 
 
