@@ -310,8 +310,16 @@ ensure_docker_service() {
     # compose 파일이 infra/ 에 있으면 project directory 도 infra/ 라서 compose 가 infra/.env 를
     # 찾는다 → 루트 .env 의 POSTGRES_PASSWORD 가 안 읽혀 `:?` 로 기동이 실패한다.
     # 루트 .env 를 명시적으로 넘겨 이 함정을 없앤다.
-    local env_args=()
-    [[ -f "$SCRIPT_DIR/.env" ]] && env_args=(--env-file "$SCRIPT_DIR/.env")
+    # 외부 compose(COMPOSE_FILE 로 다른 파일 지정)에는 루트 .env 를 넘기지 않는다 — 외부의 이미지 설정(POSTGRES_IMAGE 등)이
+    # 앱 값으로 덮여 deploy 가 DB 이미지를 바꾼다. compose 옆 .env 하나만 넘기고, 없으면 /dev/null 로 자동 .env 탐색도 막는다.
+    local env_args=() compose_env
+    if [[ "$COMPOSE_FILE" -ef "$SCRIPT_DIR/infra/docker-compose.yml" ]]; then
+        if [[ -f "$SCRIPT_DIR/.env" ]]; then env_args=(--env-file "$SCRIPT_DIR/.env"); fi
+    else
+        compose_env="$(dirname "$COMPOSE_FILE")/.env"
+        [[ -f "$compose_env" ]] || compose_env=/dev/null
+        env_args=(--env-file "$compose_env")
+    fi
 
     if [[ "$action" == "up" ]]; then
         log_info "$label 시작 중 ($dc up -d $svc)"
