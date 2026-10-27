@@ -31,6 +31,9 @@ export default [
       "**/*.d.ts",
       "mcp-venv/**",
       "coverage/**",
+      // 로컬 git worktree — 각자 eslint.config.mjs 를 가진 저장소 사본이다. 함께 읽으면
+      // typescript-eslint 가 tsconfig 루트 후보를 여러 개 보고 모든 파일에서 파싱 오류를 낸다.
+      ".worktrees/**",
     ],
   },
   ...tseslint.configs.recommended,
