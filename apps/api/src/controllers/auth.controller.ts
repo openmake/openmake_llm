@@ -10,8 +10,9 @@
 import { Request, Response, Router } from 'express';
 import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
-import { requireAuth, optionalAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken, removeSessionFromMap } from '../auth';
+import { requireAuth, optionalAuth, extractToken, blacklistToken, verifySignatureIgnoringExpiry, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken, removeSessionFromMap } from '../auth';
 import jwt from 'jsonwebtoken';
+import { isIssuedBeforeInvalidation } from '../auth/token-invalidation';
 import { activeOrgFor } from '../services/org/membership-cache';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError } from '../utils/api-response';
@@ -56,7 +57,8 @@ class AuthController {
         // ===== 기본 인증 API =====
         this.router.post('/register', validate(registerSchema), this.register.bind(this));
         this.router.post('/login', validate(loginSchema), this.login.bind(this));
-        this.router.post('/logout', requireAuth, this.logout.bind(this));
+        // 보안 점검 A6 — access 토큰이 만료·무효여도 refresh 토큰 폐기와 쿠키 정리는 해야 한다
+        this.router.post('/logout', optionalAuth, this.logout.bind(this));
         this.router.get('/me', optionalAuth, this.getCurrentUser.bind(this));
         this.router.put('/password', requireAuth, validate(changePasswordSchema), this.changePassword.bind(this));
 
@@ -164,7 +166,9 @@ class AuthController {
                     setRefreshTokenCookie(res, generateRefreshToken(result.user));
                 }
             }
-            res.json(success(result));
+            // 보안 점검 A4 — 쿠키 모드는 access 토큰을 httpOnly 쿠키에만 둔다(본문에 실으면 XSS 로 반출 가능)
+            const { token: _cookieOnlyToken, ...body } = result;
+            res.json(success(body));
         } catch (error) {
             log.error('[Login] 오류:', error);
             res.status(500).json(internalError('로그인 처리 중 오류가 발생했습니다'));
@@ -176,34 +180,41 @@ class AuthController {
      * #8 연동: 토큰 블랙리스트에 추가하여 재사용 방지
      * #24 연동: 표준 API 응답 형식
      */
-    private logout(req: Request, res: Response): void {
+    private async logout(req: Request, res: Response): Promise<void> {
+        const pending: Promise<boolean>[] = [];
         const authHeader = req.headers.authorization;
         if (authHeader) {
             const token = extractToken(authHeader);
             if (token) {
-                blacklistToken(token);
+                pending.push(blacklistToken(token));
             }
         }
         // 쿠키 토큰도 블랙리스트에 추가
         const cookieToken = req.cookies?.[AUTH_COOKIES.ACCESS];
         if (cookieToken) {
-            blacklistToken(cookieToken);
+            pending.push(blacklistToken(cookieToken));
         }
         // Refresh 토큰: 블랙리스트 + activeSessionMap 정리 (bug_004)
         // 모바일(iOS)은 쿠키가 없어 body.refreshToken 으로 전달 (축 2) — 웹 쿠키와 병존, 둘 다 폐기
         const bodyRefreshToken = typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : undefined;
+        let refreshUserId: string | undefined;
         for (const refreshToken of new Set([req.cookies?.refresh_token, bodyRefreshToken])) {
             if (!refreshToken) continue;
-            const decoded = jwt.decode(refreshToken) as { userId?: string | number; jti?: string } | null;
+            // 서명이 맞는 토큰만(만료 무시) — 위조 토큰으로 다른 사용자의 세션을 지우지 못하게
+            const decoded = verifySignatureIgnoringExpiry(refreshToken);
             if (decoded?.userId && decoded.jti) {
-                removeSessionFromMap(String(decoded.userId), decoded.jti);
+                refreshUserId = String(decoded.userId);
+                removeSessionFromMap(refreshUserId, decoded.jti);
             }
-            blacklistToken(refreshToken);
+            pending.push(blacklistToken(refreshToken));
         }
+        // 보안 점검 A6 — 폐기 기록이 끝난 뒤 응답한다(응답 직후 같은 토큰 재사용 경쟁 방지)
+        await Promise.all(pending);
         clearTokenCookie(res);
 
         // Phase 7 lifecycle hook — 사용자별 MCP 서버 graceful kill (per_session)
-        const uid = req.user?.id;
+        // access 가 만료·무효라 req.user 가 없으면(optionalAuth) 서명 검증된 refresh 의 userId 를 쓴다
+        const uid = req.user?.id ?? refreshUserId;
         if (uid !== undefined) {
             void import('../runtime-ports/tool-runtime').then(m => m.getToolRuntime().onUserLogout(String(uid))).catch(() => { /* noop */ });
         }
@@ -283,6 +294,23 @@ class AuthController {
                     });
                 } catch (e) { log.warn('[audit] password.changed 기록 실패:', e); }
             })();
+            // 보안 점검 A2 — 기존 토큰(다른 기기 포함)은 방금 무효화됐다(AuthService.changePassword). 비밀번호를 바꾼
+            // 이 기기에는 새 access·refresh 를 준다 — 무효화와 같은 초에 발급돼도 통과한다(token-invalidation 초 단위 비교).
+            // 쿠키로 인증한 요청(웹)은 쿠키로만, 헤더로 인증한 요청(모바일·CLI)은 본문으로 준다.
+            const fresh = await getUserManager().getUserById(String(user.id));
+            if (!fresh) {
+                clearTokenCookie(res);
+                res.json(success(result));
+                return;
+            }
+            const newAccessToken = generateToken(fresh);
+            const newRefreshToken = generateRefreshToken(fresh);
+            if (!req.cookies?.[AUTH_COOKIES.ACCESS]) {
+                res.json(success({ ...result, token: newAccessToken, refreshToken: newRefreshToken }));
+                return;
+            }
+            setTokenCookie(res, newAccessToken);
+            setRefreshTokenCookie(res, newRefreshToken);
             res.json(success(result));
         } catch (error) {
             log.error('[ChangePassword] 오류:', error);
@@ -324,8 +352,14 @@ class AuthController {
                 return;
             }
 
-            // 사용된 리프레시 토큰 블랙리스트 (토큰 로테이션)
-            await blacklistToken(refreshToken);
+            if (isIssuedBeforeInvalidation(payload.iat, user.tokens_valid_after)) {
+                clearTokenCookie(res);
+                res.status(401).json(unauthorized('토큰이 무효화되었습니다'));
+                return;
+            }
+
+            // 사용된 리프레시 토큰 블랙리스트 (토큰 로테이션) — 'rotated': 다시 오면 재사용 탐지(verifyRefreshToken)
+            await blacklistToken(refreshToken, 'rotated');
 
             // bug_004: activeSessionMap에서 이전 세션 제거 (generateRefreshToken의 FIFO splice가
             //          다른 기기의 유효 세션을 실수로 blacklist 처리하는 것을 방지)
@@ -348,7 +382,8 @@ class AuthController {
             setRefreshTokenCookie(res, newRefreshToken);
 
             log.info(`[Auth] 토큰 갱신 성공: ${user.email}`);
-            res.json(success({ token: newAccessToken, user }));
+            // 보안 점검 A4 — 쿠키 모드는 새 access 토큰을 쿠키로만 준다
+            res.json(success({ user }));
         } catch (error) {
             log.error('[Auth] 토큰 갱신 오류:', error);
             clearTokenCookie(res);

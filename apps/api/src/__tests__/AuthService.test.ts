@@ -42,6 +42,7 @@ jest.mock('../data/user-manager', () => ({
 
 jest.mock('../auth', () => ({
     generateToken: jest.fn().mockReturnValue('jwt-token-abc'),
+    clearSessionsForUser: jest.fn(),
 }));
 
 jest.mock('../config/env', () => ({
@@ -69,8 +70,9 @@ jest.mock('../utils/logger', () => ({
 
 import { AuthService, getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
-import { generateToken } from '../auth';
+import { generateToken, clearSessionsForUser } from '../auth';
 import { getConfig } from '../config/env';
+import { createLogger } from '../utils/logger';
 import type { PublicUser } from '../data/user-manager';
 
 // ─────────────────────────────────────────────
@@ -209,12 +211,32 @@ describe('AuthService', () => {
             expect(result.token).toBeUndefined();
         });
 
-        test('role을 전달하면 createUser에 role이 전달된다', async () => {
-            mockCreateUser.mockResolvedValue(makePublicUser({ role: 'admin' }));
+        // 보안 점검 A1 — 셀프 가입은 이메일 소유 확인이 없으므로 ADMIN_EMAILS 에 든 주소라도 관리자가 되지 않는다.
+        test('ADMIN_EMAILS 에 든 이메일로 셀프 가입해도(role:admin 전달 포함) role=user 로 만든다', async () => {
+            mockCreateUser.mockResolvedValue(makePublicUser({ email: 'admin@example.com' }));
             await service.register({ email: 'admin@example.com', password: VALID_PASSWORD, role: 'admin' });
             expect(mockCreateUser).toHaveBeenCalledWith(
+                expect.objectContaining({ role: 'user' })
+            );
+            expect(mockCreateUser).not.toHaveBeenCalledWith(
                 expect.objectContaining({ role: 'admin' })
             );
+        });
+
+        test('ADMIN_EMAILS 대소문자가 달라도 셀프 가입은 role=user 이고 승격 경로 안내를 info 로 남긴다', async () => {
+            mockCreateUser.mockResolvedValue(makePublicUser({ email: 'Admin@Example.com' }));
+            await service.register({ email: 'Admin@Example.com', password: VALID_PASSWORD });
+            expect(mockCreateUser).toHaveBeenCalledWith(expect.objectContaining({ role: 'user' }));
+            const log = (createLogger as jest.Mock)();
+            expect(log.info).toHaveBeenCalledWith('관리자 승격은 OAuth 검증 이메일 또는 관리자 화면에서만');
+        });
+
+        test('일반 이메일 셀프 가입은 승격 안내 로그 없이 role=user', async () => {
+            mockCreateUser.mockResolvedValue(makePublicUser());
+            await service.register({ email: 'user@example.com', password: VALID_PASSWORD });
+            expect(mockCreateUser).toHaveBeenCalledWith(expect.objectContaining({ role: 'user' }));
+            const log = (createLogger as jest.Mock)();
+            expect(log.info).not.toHaveBeenCalledWith('관리자 승격은 OAuth 검증 이메일 또는 관리자 화면에서만');
         });
     });
 
@@ -301,6 +323,25 @@ describe('AuthService', () => {
             mockChangePassword.mockResolvedValue(true);
             await service.changePassword(baseData);
             expect(mockChangePassword).toHaveBeenCalledWith('user-001', 'NewSecure@456');
+        });
+
+        // 보안 점검 A2 — 비밀번호를 바꾸면 그 전에 발급된 토큰·세션은 모두 못 쓴다. 토큰 무효화 기준 시각은
+        // userManager.changePassword 의 같은 UPDATE 가 쓰고(user-manager-auth-lookup.test), 서비스는 세션 맵을 비운다.
+        test('성공 시 세션 맵을 userId 로 1회 비운다', async () => {
+            mockAuthenticate.mockResolvedValue(makePublicUser());
+            mockChangePassword.mockResolvedValue(true);
+            await service.changePassword(baseData);
+            expect(clearSessionsForUser).toHaveBeenCalledTimes(1);
+            expect(clearSessionsForUser).toHaveBeenCalledWith('user-001');
+        });
+
+        test('비밀번호가 바뀌지 않았으면(현재 비밀번호 틀림·갱신 0행) 세션을 건드리지 않는다', async () => {
+            mockAuthenticate.mockResolvedValue(null);
+            await service.changePassword(baseData);
+            mockAuthenticate.mockResolvedValue(makePublicUser());
+            mockChangePassword.mockResolvedValue(false);
+            await service.changePassword(baseData);
+            expect(clearSessionsForUser).not.toHaveBeenCalled();
         });
     });
 

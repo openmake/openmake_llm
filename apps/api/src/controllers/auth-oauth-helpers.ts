@@ -190,7 +190,7 @@ function validateAndConsumeStateFallback(state: string, expectedProvider: string
  *
  * 우선순위:
  * 1. OAUTH_REDIRECT_URI 환경변수 (명시적 설정 시) -- 요청 host 와 무관하게 이 canonical
- *    URI 로 항상 고정 (외부 접속을 chat.openmake.cc 단일 origin 으로 수렴)
+ *    URI 로 항상 고정 (외부 접속을 공개 도메인 단일 origin 으로 수렴)
  * 2. 요청의 Host/Origin 기반 동적 생성 (개발 환경 localhost 폴백)
  *
  * OAUTH_REDIRECT_URI는 Google용으로 설정되어 있어도 provider 부분을 자동 교체합니다.
@@ -201,18 +201,22 @@ export function buildRedirectUri(req: Request, provider: 'google' | 'github' | '
     // 프록시 destination(예: localhost:52416)이 되어 redirect_uri 가 외부 주소로 생성되지 않는다.
     // 원본 Host(예: example.com:33000)는 x-forwarded-host 에 담기므로 이를 우선 사용해
     // Google Console 등록 URI 와 일치시켜 redirect_uri_mismatch 를 방지한다. (trust proxy 신뢰 + Google 승인목록 2차검증)
-    const forwardedHost = req.get('x-forwarded-host');
+    // 보안(A5): x-forwarded-* 는 trust proxy 가 신뢰하는 주소(직전 홉)에서 온 요청일 때만 쓴다. 그 밖의 요청이
+    // x-forwarded-host 를 꾸며 redirect_uri 를 바꾸지 못하게 한다. 'trust proxy fn' 은 Express 가 trust proxy 설정으로 만든다.
+    const trustFn = req.app?.get('trust proxy fn') as ((addr: string | undefined, i: number) => boolean) | undefined;
+    const trusted = typeof trustFn === 'function' && trustFn(req.socket?.remoteAddress, 0);
+    const forwardedHost = trusted ? req.get('x-forwarded-host') : undefined;
     const requestHost = (forwardedHost ? forwardedHost.split(',')[0].trim() : req.get('host')) || `localhost:${serverPort}`;
-    const forwardedProto = req.get('x-forwarded-proto');
+    const forwardedProto = trusted ? req.get('x-forwarded-proto') : undefined;
     const requestProtocol = (forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol) || 'http';
 
     const dynamicRedirectUri = `${requestProtocol}://${requestHost}/api/auth/callback/${provider}`;
-    log.info(`[OAuth] host 해석: x-forwarded-host=${forwardedHost ?? '(none)'}, raw-host=${req.get('host') ?? '(none)'}, 사용=${requestHost}`);
+    log.info(`[OAuth] host 해석: x-forwarded-host=${forwardedHost ?? '(none)'}, raw-host=${req.get('host') ?? '(none)'}, 사용=${requestHost}`, { trusted });
 
     // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우(프로덕션), 요청 host 와 무관하게 항상 이
     // canonical URI 로 고정한다. example.com 등 다른 host 로 진입하면 리버스 프록시가
     // 평문이라 proto=http 로 동적 URI 가 만들어져 Google redirect_uri_mismatch 로 실패하던 문제를
-    // 차단한다. 어느 진입점이든 로그인 완료는 chat.openmake.cc 단일 origin 으로 착지한다.
+    // 차단한다. 어느 진입점이든 로그인 완료는 공개 도메인 단일 origin 으로 착지한다.
     // (redirect_uri 를 요청 host 가 아닌 신뢰된 상수로 고정 → open-redirect 관점에서도 더 안전)
     if (configuredUri && !configuredUri.includes('localhost')) {
         try {

@@ -20,6 +20,7 @@ import { extractToken, verifyToken, isAdmin, clearTokenCookie, looksLikeJWT } fr
 import { getUserManager, PublicUser, UserRole } from '../data/user-manager';
 import { unauthorized, forbidden } from '../utils/api-response';
 import { AUTH_COOKIES } from '../config/security';
+import { isIssuedBeforeInvalidation } from './token-invalidation';
 
 import { createLogger } from '../utils/logger';
 import { auditHttpDenied } from '../security/security-audit';
@@ -100,7 +101,12 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
             const userManager = getUserManager();
             const user = await userManager.getUserById(payload.userId);
 
-            if (user && user.is_active) {
+            if (user && isIssuedBeforeInvalidation(payload.iat, user.tokens_valid_after)) {
+                // 무효화된 토큰 — 만료 토큰처럼 게스트로 통과시키고 쿠키를 정리한다.
+                if (req.cookies?.[AUTH_COOKIES.ACCESS]) {
+                    clearTokenCookie(res);
+                }
+            } else if (user && user.is_active) {
                 req.user = user;
                 req.token = token;
             }
@@ -147,6 +153,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     if (!user.is_active) {
         auditHttpDenied(req, 'inactive_account', { userId: user.id });
         res.status(403).json(forbidden('비활성화된 계정입니다'));
+        return;
+    }
+
+    if (isIssuedBeforeInvalidation(payload.iat, user.tokens_valid_after)) {
+        res.status(401).json(unauthorized('토큰이 무효화되었습니다'));
         return;
     }
 

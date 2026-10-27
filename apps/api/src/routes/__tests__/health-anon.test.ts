@@ -1,7 +1,7 @@
 /**
  * /api/health 비관리자 응답 축소(W4) — 익명·일반 사용자는 상태 필드와 add-on 절만, 관리자는 종전 전체 응답.
  * add-on 절(knowledge 모드·generation·heartbeat 등)은 운영 모드 표시라 공개다 — 롤백 훈련 스크립트가 익명으로 읽는다.
- * 관리자 여부는 readHealthProcessSection(서명된 JWT 의 role, DB 조회 없음)으로 가른다.
+ * 관리자 여부는 readHealthProcessSection(서명된 JWT 의 role + DB 의 현재 role·is_active·tokens_valid_after)으로 가른다.
  */
 jest.mock('../../data/models/unified-database', () => ({
     getPool: jest.fn(() => ({ totalCount: 5, idleCount: 3, waitingCount: 0, query: jest.fn().mockResolvedValue({ rows: [], rowCount: 0 }) })),
@@ -17,9 +17,21 @@ jest.mock('../../auth/middleware', () => ({
     optionalAuth: jest.fn((_req: unknown, _res: unknown, next: () => void) => next()),
     requireAdmin: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
-// /api/health 는 DB 를 건드리지 않는다 — 블랙리스트 조회가 불리면 영원히 멈추게 해 둔다
+// /api/health 는 블랙리스트를 보지 않는다 — 조회가 불리면 영원히 멈추게 해 둔다
 jest.mock('../../data/models/token-blacklist', () => ({
     getTokenBlacklist: jest.fn(() => ({ has: () => new Promise<boolean>(() => { /* 대기 */ }) })),
+}));
+// 관리자 판정(isAdminRequest)은 서명된 JWT 가 관리자일 때 DB 로 현재 role·is_active·tokens_valid_after 를 재확인한다 —
+// 토큰의 userId 가 u-admin 으로 시작하면 활성 관리자, 그 밖은 일반 사용자 행을 돌려준다
+const mockUserManager = {
+    getUserById: jest.fn(async (id: string) => ({
+        id, email: `${id}@example.test`, role: id.startsWith('u-admin') ? 'admin' : 'user',
+        created_at: '2026-10-25T00:00:00.000Z', is_active: true, tokens_valid_after: null,
+    })),
+};
+jest.mock('../../data/user-manager', () => ({
+    ...jest.requireActual('../../data/user-manager'),
+    getUserManager: jest.fn(() => mockUserManager),
 }));
 
 import express from 'express';

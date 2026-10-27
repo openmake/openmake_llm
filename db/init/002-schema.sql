@@ -396,7 +396,8 @@ CREATE TABLE IF NOT EXISTS oauth_states (
 CREATE TABLE IF NOT EXISTS token_blacklist (
     jti TEXT PRIMARY KEY,
     expires_at BIGINT NOT NULL,
-    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
+    reason TEXT NOT NULL DEFAULT 'revoked'
 );
 
 -- ============================================

@@ -38,6 +38,11 @@ export interface AgentTaskProgressEvent {
     waitReason?: string;
 }
 
+/** 사용자 인증 철회(보안 점검 A3 보조 방어) — 데이터 계층이 발행, ws 계층(ws-user-eviction)이 그 사용자의 열린 채팅 소켓을 닫는다 */
+export const USER_AUTH_REVOKED = 'user_auth_revoked';
+export const USER_AUTH_REVOKED_REASONS = ['account_disabled', 'account_deleted', 'role_changed', 'password_changed'] as const;
+export type UserAuthRevokedEvent = { userId: string; reason: (typeof USER_AUTH_REVOKED_REASONS)[number] };
+
 const bus = new EventEmitter();
 bus.setMaxListeners(50);
 
@@ -48,4 +53,9 @@ export function getEventBus(): EventEmitter {
 /** 진행상황 발행 (fire-and-forget). 리스너 없으면 무해. */
 export function emitAgentTaskProgress(ev: AgentTaskProgressEvent): void {
     bus.emit(AGENT_TASK_PROGRESS, ev);
+}
+
+/** 인증 철회 발행 (fire-and-forget). 리스너 없으면 무해. */
+export function emitUserAuthRevoked(ev: UserAuthRevokedEvent): void {
+    bus.emit(USER_AUTH_REVOKED, ev);
 }

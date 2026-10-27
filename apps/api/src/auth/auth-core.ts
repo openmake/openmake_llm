@@ -18,7 +18,8 @@ import type { Response } from 'express';
 import { JWTPayload } from './types';
 import { PublicUser, UserRole, isAdminRole } from '../data/user-manager';
 import * as crypto from 'crypto';
-import { getTokenBlacklist } from '../data/models/token-blacklist';
+import { getTokenBlacklist, type BlacklistReason } from '../data/models/token-blacklist';
+import { invalidateTokensBefore } from '../data/user-manager-token-invalidation';
 import { getConfig } from '../config/env';
 import { AUTH_CONFIG } from '../config/constants';
 import { AUTH_COOKIES } from '../config/security';
@@ -146,6 +147,45 @@ export function removeSessionFromMap(userId: string, jti: string): void {
 }
 
 /**
+ * 사용자의 모든 리프레시 세션을 끊는다(보안 점검 A2 — 비밀번호 변경·관리자 재설정).
+ * 세션 맵에서 지우고 남은 jti 는 실제 만료(발급 시각 + 리프레시 수명)까지 블랙리스트에 올린다.
+ * 맵은 이 프로세스 메모리뿐이라 주 방어선은 users.tokens_valid_after(비밀번호 UPDATE 가 함께 씀)이고, 이건 보조다 —
+ * 블랙리스트 저장 실패는 로그만 남긴다.
+ */
+export function clearSessionsForUser(userId: string): void {
+    const sessions = activeSessionMap.get(userId);
+    if (!sessions) return;
+    activeSessionMap.delete(userId);
+    const blacklist = getTokenBlacklist();
+    for (const s of sessions) {
+        blacklist.add(s.jti, s.createdAt + AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS).catch(err =>
+            logger.error('세션 정리 블랙리스트 추가 실패:', err)
+        );
+    }
+    logger.info(`사용자 ${userId} 세션 ${sessions.length}개 정리(블랙리스트)`);
+}
+
+/**
+ * refresh 재사용 탐지(보안 점검 A7) — 회전으로 폐기된(reason 'rotated') refresh 가 다시 오면
+ * 탈취 토큰의 재사용으로 보고 그 사용자의 토큰 전체(access·refresh)를 users.tokens_valid_after 로 끊는다.
+ * 로그아웃·세션 상한 정리·비밀번호 변경('revoked')은 대상이 아니다(밀려난 기기의 refresh 로 전 기기 로그아웃 방지).
+ * 서명이 맞는 refresh 만 대상 — jwt.decode 값만 믿으면 위조 토큰(남의 userId + 아는 블랙리스트 jti)으로
+ * 다른 사용자를 강제 로그아웃시킬 수 있다. 무효화 실패는 경고만 — 호출부의 거부는 그대로다.
+ */
+async function revokeFamilyOnReuse(token: string): Promise<void> {
+    const signed = verifySignatureIgnoringExpiry(token);
+    if (signed?.type !== 'refresh' || signed.userId === undefined || signed.userId === null) return;
+    const userId = String(signed.userId);
+    try {
+        await invalidateTokensBefore(userId);
+        logger.warn('refresh 재사용 탐지 — 사용자 토큰 전체 무효화', { userId });
+    } catch (err) {
+        logger.warn('refresh 재사용 탐지 — 토큰 무효화 실패(거부는 유지)',
+            { userId, error: err instanceof Error ? err.message : String(err) });
+    }
+}
+
+/**
  * 🔒 Phase 2: 리프레시 토큰 검증
  * 액세스 토큰 갱신용 리프레시 토큰을 검증합니다.
  *
@@ -156,14 +196,12 @@ export async function verifyRefreshToken(token: string): Promise<JWTPayload | nu
         // 블랙리스트 확인
          const preCheck = jwt.decode(token) as Record<string, unknown> | null;
          if (preCheck?.jti && typeof preCheck.jti === 'string') {
+             // 조회만 try 안에서 — catch 는 블랙리스트 DB 장애(BLACKLIST_FAIL_MODE)만 다룬다
+             let reason: BlacklistReason | null = null;
              try {
-                 const blacklist = getTokenBlacklist();
-                 if (await blacklist.has(preCheck.jti)) {
-                     logger.warn('블랙리스트된 리프레시 토큰 사용 시도');
-                     return null;
-                 }
+                 reason = await getTokenBlacklist().getReason(preCheck.jti);
              } catch (blacklistError) {
-                 // BLACKLIST_FAIL_MODE로 DB 장애 시 정책 선택 (additive: default 'open' = 기존 동작)
+                 // BLACKLIST_FAIL_MODE로 DB 장애 시 정책 선택 (미설정이면 production 'safe', 그 밖 'open' — config/env.schema resolveBlacklistFailMode)
                  const failMode = getConfig().blacklistFailMode;
                  logger.warn('블랙리스트 DB 접근 실패 (refresh)',
                      { jti: preCheck.jti, failMode, error: blacklistError instanceof Error ? blacklistError.message : String(blacklistError) });
@@ -171,6 +209,11 @@ export async function verifyRefreshToken(token: string): Promise<JWTPayload | nu
                      return null;
                  }
                  // open: 기존 동작 유지 — 토큰 통과
+             }
+             if (reason !== null) {
+                 logger.warn('블랙리스트된 리프레시 토큰 사용 시도', { reason });
+                 if (reason === 'rotated') await revokeFamilyOnReuse(token);
+                 return null;
              }
          }
 
@@ -279,23 +322,48 @@ export function verifyTokenSignature(token: string): JWTPayload | null {
     }
 }
 
+/** verifySignatureIgnoringExpiry 결과 — 서명이 확인된 클레임 */
+export type SignedTokenClaims = Record<string, unknown> & { jti?: string; userId?: string | number; type?: string; exp?: number };
+
+/**
+ * 서버 secret(HS256) 서명만 검증하고 만료는 무시한다 — 로그아웃·블랙리스트 전용.
+ * 만료된 토큰도 폐기 대상이지만, 서명이 다른(위조) 토큰은 null. 인증·권한 부여에는 쓰지 않는다.
+ */
+export function verifySignatureIgnoringExpiry(token: string): SignedTokenClaims | null {
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] as Algorithm[], ignoreExpiration: true });
+        return typeof decoded === 'object' && decoded !== null ? decoded as SignedTokenClaims : null;
+    } catch {
+        return null;
+    }
+}
+
 /**
  * 토큰을 블랙리스트에 추가 (로그아웃 시 호출)
  * #8 연동: PostgreSQL 기반 영속 블랙리스트
+ * 보안 점검 A6 보강: 서명이 맞는 토큰만 기록하고(익명 /logout 으로 임의 jti 기록 방지),
+ * expiresAt 은 리프레시 수명 상한으로 자른다(위조·과대 exp 로 행이 오래 남지 않게).
+ * reason: 로그아웃 등은 'revoked'(기본), refresh 회전의 옛 토큰만 'rotated'(재사용 탐지 대상 — 보안 점검 A7).
  */
-export async function blacklistToken(token: string): Promise<boolean> {
+export async function blacklistToken(token: string, reason: BlacklistReason = 'revoked'): Promise<boolean> {
     try {
-        const decoded = jwt.decode(token) as Record<string, unknown> | null;
-        if (!decoded?.jti || typeof decoded.jti !== 'string') {
+        const decoded = verifySignatureIgnoringExpiry(token);
+        if (!decoded) {
+            // 익명 /logout 의 만료·위조 쿠키는 정상 경로라 debug — warn 은 로그 노이즈·경보 오탐을 만든다
+            logger.debug('블랙리스트 요청 무시: 서명 불일치');
+            return false;
+        }
+        if (!decoded.jti || typeof decoded.jti !== 'string') {
             // jti 없는 레거시 토큰 — 블랙리스트 불가
             return false;
         }
+        const now = Date.now();
         const expiresAt = typeof decoded.exp === 'number'
-            ? decoded.exp * 1000
-            : Date.now() + AUTH_CONFIG.ACCESS_TOKEN_MAX_AGE_MS; // 기본 15분
+            ? Math.min(decoded.exp * 1000, now + AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS)
+            : now + AUTH_CONFIG.ACCESS_TOKEN_MAX_AGE_MS; // 기본 15분
 
         const blacklist = getTokenBlacklist();
-         await blacklist.add(decoded.jti, expiresAt);
+         await blacklist.add(decoded.jti, expiresAt, reason);
          logger.info(`🚫 토큰 블랙리스트 추가: ${decoded.jti.substring(0, 8)}...`);
          return true;
      } catch (error) {
@@ -357,16 +425,25 @@ export function setTokenCookie(res: Response, token: string): void {
     });
 }
 
+/** 리프레시 쿠키 경로 — /api/auth 아래(refresh·logout 등 인증 라우트)에서만 전송 */
+const REFRESH_COOKIE_PATH = '/api/auth';
+/**
+ * 구 path 호환, 다음 메이저에서 제거. 예전 경로로 발급된 쿠키가 남아 있으면 /api/auth/refresh 요청에서
+ * 긴 path 가 먼저 실려(같은 이름은 첫 값이 읽힌다) 회전된 새 쿠키를 가리므로, 설정·삭제 때 함께 지운다.
+ */
+const LEGACY_REFRESH_COOKIE_PATH = '/api/auth/refresh';
+
 /**
  * 🔒 Phase 2: 리프레시 토큰을 httpOnly 쿠키에 설정 (7일 만료)
  */
 export function setRefreshTokenCookie(res: Response, refreshToken: string): void {
+    res.clearCookie(AUTH_COOKIES.REFRESH, { path: LEGACY_REFRESH_COOKIE_PATH }); // 구 path 호환, 다음 메이저에서 제거
     res.cookie(AUTH_COOKIES.REFRESH, refreshToken, {
         httpOnly: true,
         secure: resolveCookieSecure(res),
         sameSite: 'lax',
         maxAge: AUTH_CONFIG.REFRESH_TOKEN_MAX_AGE_MS, // 7일
-        path: '/api/auth/refresh' // 리프레시 엔드포인트에서만 전송
+        path: REFRESH_COOKIE_PATH // refresh·logout 엔드포인트에서만 전송
     });
 }
 
@@ -376,5 +453,6 @@ export function setRefreshTokenCookie(res: Response, refreshToken: string): void
  */
 export function clearTokenCookie(res: Response): void {
     res.clearCookie(AUTH_COOKIES.ACCESS, { path: '/' });
-    res.clearCookie(AUTH_COOKIES.REFRESH, { path: '/api/auth/refresh' });
+    res.clearCookie(AUTH_COOKIES.REFRESH, { path: REFRESH_COOKIE_PATH });
+    res.clearCookie(AUTH_COOKIES.REFRESH, { path: LEGACY_REFRESH_COOKIE_PATH }); // 구 path 호환, 다음 메이저에서 제거
 }

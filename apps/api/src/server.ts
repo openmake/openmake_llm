@@ -198,18 +198,13 @@ export class DashboardServer {
             console.warn('[Server] 로컬 모델 가용성 probe 실패 (계속 진행):', err);
         }
 
-        // ConversationDB / UserManager 초기화 완료 보장 (race condition 방지)
+        // baseline 스키마 / ConversationDB 초기화 완료 보장 (race condition 방지)
         // 스키마 마이그레이션이 완료되기 전에 API 요청을 처리하지 않도록 대기
         try {
-            const { getUserManager } = await import('./data/user-manager');
-            // 스키마가 먼저다 — 관리자 계정 보장 등은 테이블이 있어야 성공한다. 스키마 초기화가
-            // 실패하면 여기서 reject 되어 아래 Fail-Fast 로 간다.
+            // 스키마가 먼저다 — 스키마 초기화가 실패하면 여기서 reject 되어 아래 Fail-Fast 로 간다.
             const { getUnifiedDatabase } = await import('./data/models/unified-database');
             await getUnifiedDatabase().ensureReady();
-            await Promise.all([
-                getConversationDB().ensureReady(),
-                getUserManager().ensureReady()
-            ]);
+            await getConversationDB().ensureReady();
             console.log('[Server] DB 초기화 완료');
         } catch (err) {
             console.error('[Server] DB 초기화 실패 — Fail-Fast:', err);
@@ -231,6 +226,18 @@ export class DashboardServer {
                 console.error('[Server] 마이그레이션 자동 적용 실패 — Fail-Fast:', err);
                 process.exit(1);
             }
+        }
+
+        // UserManager(관리자·시스템 계정 보장)는 마이그레이션 뒤다 — 부팅 관리자 승격이 같은 UPDATE 로
+        // users.tokens_valid_after(마이그레이션 194)를 쓰고(보안 점검 A11), 계정 생성은 users_id_seq(009)를 쓴다.
+        // 이 시점 전에는 getUserManager() 를 부르지 않는다(첫 호출이 초기화를 시작한다).
+        try {
+            const { getUserManager } = await import('./data/user-manager');
+            await getUserManager().ensureReady();
+            console.log('[Server] 사용자 초기화 완료');
+        } catch (err) {
+            console.error('[Server] 사용자 초기화 실패 — Fail-Fast:', err);
+            process.exit(1);
         }
 
         // 시스템 설정(DB system_settings) 로드 → config overlay 적용 (DB > env > 기본값).

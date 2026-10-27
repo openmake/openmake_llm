@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
 CREATE TABLE IF NOT EXISTS token_blacklist (
     jti TEXT PRIMARY KEY,
     expires_at BIGINT NOT NULL,
-    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
+    created_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
+    reason TEXT NOT NULL DEFAULT 'revoked'
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_session ON conversation_messages(session_id);

@@ -7,6 +7,7 @@
 import express, { type Request, type Response, type NextFunction } from 'express';
 import request from 'supertest';
 import cookieParser from 'cookie-parser';
+import jwt from 'jsonwebtoken';
 import type { PublicUser } from '../../data/user-manager';
 import { expectContract } from './contract-validator';
 
@@ -31,6 +32,8 @@ jest.mock('../../auth', () => ({
     optionalAuth: (_req: Request, _res: Response, next: NextFunction) => next(),
     extractToken: () => null,
     blacklistToken: jest.fn(),
+    // 로그아웃 세션맵 정리는 실제 서명 검증(testConfig.jwtSecret)을 쓴다
+    verifySignatureIgnoringExpiry: (t: string) => jest.requireActual('../../auth/auth-core').verifySignatureIgnoringExpiry(t),
     setTokenCookie: (...args: unknown[]) => cookieSpies.setTokenCookie(...args),
     clearTokenCookie: jest.fn(),
     setRefreshTokenCookie: (...args: unknown[]) => cookieSpies.setRefreshTokenCookie(...args),
@@ -95,6 +98,7 @@ const testConfig = {
     googleClientId: 'gid',
     googleClientSecret: 'gsecret',
     oauthRedirectUri: '',
+    jwtSecret: 'mobile-contract-test-secret-0000000000',
 };
 jest.mock('../../config/env', () => ({ getConfig: () => testConfig }));
 jest.mock('../../config', () => ({ getConfig: () => testConfig }));
@@ -105,7 +109,7 @@ import {
     validateAndConsumeState,
     issueMobileExchangeRedirect,
 } from '../../controllers/auth-oauth-helpers';
-import { verifyRefreshToken, blacklistToken } from '../../auth';
+import { verifyRefreshToken, blacklistToken, removeSessionFromMap } from '../../auth';
 
 describe('모바일 인증 (iOS 축 2)', () => {
     let app: express.Express;
@@ -131,7 +135,7 @@ describe('모바일 인증 (iOS 축 2)', () => {
             expect(r.headers['set-cookie']).toBeUndefined();
             expect(cookieSpies.setTokenCookie).not.toHaveBeenCalled();
             expect(cookieSpies.setRefreshTokenCookie).not.toHaveBeenCalled();
-            expect(blacklistToken).toHaveBeenCalledWith('mobile-rt'); // rotation
+            expect(blacklistToken).toHaveBeenCalledWith('mobile-rt', 'rotated'); // rotation — 재사용 탐지 대상
             expectContract('/api/auth/refresh', 'post', '200', r.body);
         });
 
@@ -149,6 +153,25 @@ describe('모바일 인증 (iOS 축 2)', () => {
             const r = await request(app).post('/api/auth/refresh').send({ refreshToken: 'bad' });
             expect(r.status).toBe(401);
             expectContract('/api/auth/refresh', 'post', '401', r.body);
+        });
+
+        test('tokens_valid_after 이전에 발급된 refresh token → 401 + 회전 안 함', async () => {
+            const validAfter = '2026-10-25T06:00:00.000Z';
+            (verifyRefreshToken as jest.Mock).mockResolvedValue({ userId: 'u1', iat: Date.parse(validAfter) / 1000 - 10 });
+            mockUserManager.getUserById.mockResolvedValue({ ...sampleUser, tokens_valid_after: validAfter });
+            const r = await request(app).post('/api/auth/refresh').send({ refreshToken: 'old-rt' });
+            expect(r.status).toBe(401);
+            expect(r.body.error.message).toBe('토큰이 무효화되었습니다');
+            expect(blacklistToken).not.toHaveBeenCalled();
+            expectContract('/api/auth/refresh', 'post', '401', r.body);
+        });
+
+        test('tokens_valid_after 이후에 발급된 refresh token → 200', async () => {
+            const validAfter = '2026-10-25T06:00:00.000Z';
+            (verifyRefreshToken as jest.Mock).mockResolvedValue({ userId: 'u1', iat: Date.parse(validAfter) / 1000 + 10 });
+            mockUserManager.getUserById.mockResolvedValue({ ...sampleUser, tokens_valid_after: validAfter });
+            const r = await request(app).post('/api/auth/refresh').send({ refreshToken: 'new-rt' });
+            expect(r.status).toBe(200);
         });
     });
 
@@ -179,9 +202,12 @@ describe('모바일 인증 (iOS 축 2)', () => {
 
     describe('logout body refreshToken', () => {
         test('body.refreshToken 블랙리스트 처리', async () => {
-            const r = await request(app).post('/api/auth/logout').send({ refreshToken: 'mobile-rt' });
+            // 서명된 fixture — 로그아웃은 서명이 맞는 토큰만 세션맵에서 지운다
+            const mobileRt = jwt.sign({ userId: 'u1', jti: 'mobile-rt-jti', type: 'refresh' }, testConfig.jwtSecret, { algorithm: 'HS256', expiresIn: '7d' });
+            const r = await request(app).post('/api/auth/logout').send({ refreshToken: mobileRt });
             expect(r.status).toBe(200);
-            expect(blacklistToken).toHaveBeenCalledWith('mobile-rt');
+            expect(blacklistToken).toHaveBeenCalledWith(mobileRt);
+            expect(removeSessionFromMap).toHaveBeenCalledWith('u1', 'mobile-rt-jti');
         });
     });
 

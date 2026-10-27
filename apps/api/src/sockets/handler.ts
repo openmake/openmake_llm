@@ -58,6 +58,7 @@ import { runWithRequestContext } from '../utils/request-context';
 import { isOriginAllowed } from '../security/cors-policy';
 import { WsConnectionGuard } from './ws-connection-guard';
 import { broadcastWithBackpressure, sendToConnections, sweepHeartbeat } from './ws-broadcast';
+import { subscribeUserAuthRevoked } from './ws-user-eviction';
 
 const log = createLogger('WebSocketHandler');
 
@@ -76,6 +77,7 @@ export class WebSocketHandler {
     private slowClientCounters: WeakMap<WebSocket, number> = new WeakMap();
     /** 연결 수락 제어(IP/user rate limit + user 레지스트리) — ws-connection-guard.ts */
     private guard = new WsConnectionGuard();
+    private unsubscribeAuthRevoked = subscribeUserAuthRevoked(this.guard, (ws) => this.unregisterConnection(ws));
     /** 하트비트 인터벌 타이머 (30초 주기) */
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -188,7 +190,7 @@ export class WebSocketHandler {
             extWs._authenticatedUserRole = auth.userRole;
             extWs._apiKeyScopes = auth.apiKeyScopes ?? undefined; // API key 연결이면 스코프(브리지 게이트)
             extWs._apiKeyId = auth.apiKeyId; // 키 폐기 시 이 키로 등록한 브리지 연결을 닫는다
-            extWs._authFailure = auth.authFailure; // 인증 실패 사유 — 게스트 브리지 연결을 이 사유로 닫는다
+            extWs._authFailure = auth.authFailure === 'inactive' ? undefined : auth.authFailure; // 게스트 브리지 닫기 사유 — JWT 'inactive' 는 브리지 계약(앱 1:1) 밖
             extWs._abortController = null;
             // 🔒 Phase 2: heartbeat alive 플래그 초기화
             extWs._isAlive = true;
@@ -549,6 +551,7 @@ export class WebSocketHandler {
             this.heartbeatInterval = null;
         }
         this.guard.stopCleanup();
+        this.unsubscribeAuthRevoked();
     }
 
     /**

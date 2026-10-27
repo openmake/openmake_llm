@@ -23,11 +23,17 @@ import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import { isLockoutActive, recordFailedLogin, recordSuccessfulLogin, selectLoginRow } from './user-login-lockout';
+import { updateUsersInvalidatingTokens } from './user-manager-token-invalidation';
+import { emitRevokedIfUpdated, emitUserAuthRevoked, prepareUpdateUserRevocations } from './user-manager-auth-revocation';
 
 const logger = createLogger('UserManager');
 
 // 비밀번호 해싱 라운드 (높을수록 안전하지만 느림)
 const BCRYPT_ROUNDS = 12;
+
+// 존재하지 않는 계정에도 compare 1회를 수행해 타이밍을 맞추는 더미 해시(비밀값 아님).
+// 버린 임의 비밀번호를 BCRYPT_ROUNDS(12) 로 해시한 값 — rounds 가 실제 해시와 같아야 소요 시간이 같다.
+const DUMMY_HASH = '$2b$12$NqjBuTc.NHR3sYpYBVIYpe2daJMNE6azO/i6ccpy2HJLD/.JfhD7G';
 
 export type UserRole = 'admin' | 'user' | 'guest';
 
@@ -70,6 +76,8 @@ export interface PublicUser {
     last_login?: string;
     /** 계정 활성화 상태 */
     is_active: boolean;
+    /** 이 시각(ISO) 이전에 발급된 토큰 거부 — NULL 이면 검사 안 함(마이그레이션 194, 보안 점검 A2) */
+    tokens_valid_after?: string | null;
 }
 
 /**
@@ -99,6 +107,8 @@ interface UserRow {
     last_login: string | null;
     /** W3 S7 — 잠금이 켜졌을 때만 SELECT 가 싣는 DB 판정(locked_until > NOW()). 그 밖에는 undefined. */
     locked_now?: boolean;
+    /** 마이그레이션 194 — pg 는 TIMESTAMPTZ 를 Date 로 준다. 194 미적용이면 undefined. */
+    tokens_valid_after?: Date | string | null;
 }
 
 /**
@@ -156,8 +166,8 @@ class UserManagerImpl {
                 const cfgAdminPassword = getConfig().adminPassword;
                 if (cfgAdminPassword) {
                     const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
-                    await pool.query(
-                        'UPDATE users SET role = $1, password_hash = $2, updated_at = $3 WHERE username = $4',
+                    await updateUsersInvalidatingTokens(
+                        'role = $1, password_hash = $2, updated_at = $3', 'username = $4',
                         ['admin', passwordHash, new Date().toISOString(), adminEmail]
                     );
                     await pool.query('DELETE FROM users WHERE username = $1 AND role = $2', ['admin', 'admin']);
@@ -169,8 +179,8 @@ class UserManagerImpl {
                 const cfgAdminPassword = getConfig().adminPassword;
                 if (cfgAdminPassword) {
                     const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
-                    await pool.query(
-                        'UPDATE users SET username = $1, email = $2, password_hash = $3, updated_at = $4 WHERE username = $5 AND role = $6',
+                    await updateUsersInvalidatingTokens(
+                        'username = $1, email = $2, password_hash = $3, updated_at = $4', 'username = $5 AND role = $6',
                         [adminEmail, adminEmail, passwordHash, new Date().toISOString(), 'admin', 'admin']
                     );
                     logger.info(`[UserManager] ✅ 관리자 계정 마이그레이션 완료: admin → ${adminEmail}`);
@@ -182,8 +192,8 @@ class UserManagerImpl {
                     const cfgAdminPassword = getConfig().adminPassword;
                     if (cfgAdminPassword) {
                         const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);
-                        await pool.query(
-                            'UPDATE users SET role = $1, password_hash = $2, updated_at = $3 WHERE username = $4',
+                        await updateUsersInvalidatingTokens(
+                            'role = $1, password_hash = $2, updated_at = $3', 'username = $4',
                             ['admin', passwordHash, new Date().toISOString(), adminEmail]
                         );
                         logger.info(`[UserManager] ✅ ${adminEmail} 관리자 역할 부여 완료`);
@@ -244,7 +254,8 @@ class UserManagerImpl {
             role: row.role as UserRole,
             is_active: !!row.is_active,
             created_at: row.created_at,
-            last_login: row.last_login || undefined
+            last_login: row.last_login || undefined,
+            tokens_valid_after: row.tokens_valid_after ? new Date(row.tokens_valid_after).toISOString() : null
         };
     }
 
@@ -308,7 +319,11 @@ class UserManagerImpl {
      */
     async authenticateDetailed(email: string, password: string): Promise<{ user: PublicUser | null; locked: boolean }> {
         const row = await selectLoginRow<UserRow>(email);
-        if (!row) return { user: null, locked: false };
+        if (!row) {
+            // 보안(A9): 미존재 계정도 bcrypt 비교 1회 — 응답 시간으로 계정 존재 여부를 알 수 없게 한다.
+            await bcrypt.compare(password, DUMMY_HASH);
+            return { user: null, locked: false };
+        }
 
         // selectLoginRow 가 42703 을 보면 잠금이 꺼지므로 조회 뒤에 읽는다.
         const lockoutActive = isLockoutActive();
@@ -411,20 +426,24 @@ class UserManagerImpl {
         const pool = getPool();
         // 🔒 새 비밀번호도 해싱하여 저장
         const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+        // 보안 점검 A2 — 이전에 발급된 토큰 무효화(tokens_valid_after)를 같은 UPDATE 로 — 비밀번호만 바뀌는 상태가 없다.
         const result = await pool.query(
-            'UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3',
-            [passwordHash, new Date().toISOString(), userId]
+            'UPDATE users SET password_hash = $1, updated_at = $2, tokens_valid_after = $3 WHERE id = $4',
+            [passwordHash, new Date().toISOString(), new Date(), userId]
         );
-        return (result.rowCount || 0) > 0;
+        // 열린 채팅 소켓도 닫는다(ws-user-eviction) — 남은 토큰은 위 tokens_valid_after 가 끊는다.
+        return emitRevokedIfUpdated(result.rowCount, userId, 'password_changed');
     }
 
     async changeRole(userId: string, newRole: UserRole): Promise<PublicUser | null> {
         const pool = getPool();
+        // 같은 역할 재저장은 행을 바꾸지 않는다 — role_changed 는 실제 변경 때만(열린 채팅 소켓을 괜히 닫지 않게).
+        // 반환은 그대로: 사용자가 있으면 그 사용자(같은 값 저장도 성공), 없으면 null.
         const result = await pool.query(
-            'UPDATE users SET role = $1, updated_at = $2 WHERE id = $3',
+            'UPDATE users SET role = $1, updated_at = $2 WHERE id = $3 AND role IS DISTINCT FROM $1',
             [newRole, new Date().toISOString(), userId]
         );
-        if ((result.rowCount || 0) === 0) return null;
+        emitRevokedIfUpdated(result.rowCount, userId, 'role_changed');
 
         const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         const row = userResult.rows[0] as UserRow | undefined;
@@ -434,7 +453,7 @@ class UserManagerImpl {
     async updateUser(userId: string, updates: { email?: string; role?: UserRole; is_active?: boolean; password?: string }): Promise<PublicUser | null> {
         const pool = getPool();
         const sets: string[] = ['updated_at = $1'];
-        const params: (string | number | boolean)[] = [new Date().toISOString()];
+        const params: (string | number | boolean | Date)[] = [new Date().toISOString()];
         let paramIdx = 2;
 
         if (updates.email !== undefined) {
@@ -454,13 +473,18 @@ class UserManagerImpl {
         if (updates.password !== undefined) {
             sets.push(`password_hash = $${paramIdx++}`);
             params.push(await bcrypt.hash(updates.password, BCRYPT_ROUNDS));
+            // 보안 점검 A2 — 관리자 재설정도 같은 UPDATE 로 이전 토큰을 끊는다.
+            sets.push(`tokens_valid_after = $${paramIdx++}`);
+            params.push(new Date());
         }
 
+        const emitRevocations = await prepareUpdateUserRevocations(userId, updates);
         params.push(userId);
         const result = await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
         if ((result.rowCount || 0) === 0) return null;
         // 브리지 연결은 연결할 때만 계정을 검증한다 — 비활성화하면 이미 붙어 있는 연결을 여기서 닫는다.
         if (updates.is_active === false) getLocalBridgeRegistry().disconnectByUser(userId, 'account_disabled');
+        emitRevocations();
 
         const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         const row = userResult.rows[0] as UserRow | undefined;
@@ -505,6 +529,7 @@ class UserManagerImpl {
 
             await client.query('COMMIT');
             if (deleted) getLocalBridgeRegistry().disconnectByUser(userId, 'account_deleted');
+            if (deleted) emitUserAuthRevoked({ userId, reason: 'account_deleted' });
             return deleted;
         } catch (err) {
             await client.query('ROLLBACK');

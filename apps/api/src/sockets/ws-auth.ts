@@ -7,10 +7,18 @@ import { IncomingMessage } from 'http';
 import { verifyToken } from '../auth';
 import { hashApiKey, isValidApiKeyFormat, API_KEY_PREFIX } from '../auth/api-key-utils';
 import { getUnifiedDatabase } from '../data/models/unified-database';
+import { getUserManager, type PublicUser } from '../data/user-manager';
+import { isIssuedBeforeInvalidation } from '../auth/token-invalidation';
 import { createLogger } from '../utils/logger';
 import { isOriginAllowed } from '../security/cors-policy';
 import { AUTH_COOKIES } from '../config/security';
 import type { BridgeAuthFailure } from '../config/local-bridge';
+
+/**
+ * WS 인증 실패 사유 — API key 경로는 브리지 닫기 사유(BridgeAuthFailure, 앱과 1:1 계약)를, JWT 경로는
+ * 'inactive'(사용자 없음·비활성·토큰 무효화)와 'auth_unavailable'(사용자 조회 실패)을 쓴다. 'inactive' 는 브리지 계약에 넣지 않는다(handler 가 거른다).
+ */
+export type WebSocketAuthFailure = BridgeAuthFailure | 'inactive';
 
 interface WebSocketAuthResult {
     userId: string | null;
@@ -24,8 +32,8 @@ interface WebSocketAuthResult {
     apiKeyScopes?: string[] | null;
     /** API key 인증 시 그 키의 id(키 폐기 시 브리지 연결 끊기용). */
     apiKeyId?: string;
-    /** API key 인증 실패 사유 — 게스트로 떨어진 브리지 연결을 이 사유로 닫는다(인증 성공·JWT 경로는 undefined). */
-    authFailure?: BridgeAuthFailure;
+    /** 인증 실패 사유 — API key 경로는 브리지 닫기 사유, JWT 경로는 'inactive'·'auth_unavailable'(인증 성공은 undefined). */
+    authFailure?: WebSocketAuthFailure;
 }
 
 function tokenFingerprint(token: string): string {
@@ -125,9 +133,22 @@ async function resolveAuthFromToken(
         };
     }
 
+    // 권한·활성 여부는 토큰 페이로드가 아니라 DB 기준(보안 점검 A3) — 강등·비활성화·비밀번호 변경 뒤 남은
+    // access 토큰이 옛 role 로 WS 를 쓰지 못하게. 조회 실패 시 페이로드로 대체하지 않고 게스트(fail-closed).
+    let user: PublicUser | null;
+    try {
+        user = await getUserManager().getUserById(String(decoded.userId));
+    } catch (e) {
+        logger.warn('[WS] 사용자 조회 실패 — 게스트로 처리:', e);
+        return { ...GUEST_RESULT, authFailure: 'auth_unavailable' };
+    }
+    if (!user || !user.is_active || isIssuedBeforeInvalidation(decoded.iat, user.tokens_valid_after)) {
+        return { ...GUEST_RESULT, authFailure: 'inactive' };
+    }
+
     return {
-        userId: String(decoded.userId),
-        userRole: (decoded.role as 'admin' | 'user' | 'guest') || 'user',
+        userId: String(user.id),
+        userRole: (user.role as 'admin' | 'user' | 'guest') || 'user',
         tokenExpiresAtMs,
         tokenIssuedAtMs,
         tokenJti: typeof decoded.jti === 'string' ? decoded.jti : null,

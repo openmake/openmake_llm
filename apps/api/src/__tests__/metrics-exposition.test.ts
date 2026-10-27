@@ -60,6 +60,7 @@ import * as jwt from 'jsonwebtoken';
 import { getConfig } from '../config/env';
 import { METRICS_EXPOSITION } from '../config/metrics-exposition';
 import { getTokenBlacklist } from '../data/models/token-blacklist';
+import { getUserManager, type PublicUser } from '../data/user-manager';
 import { setupApiRoutes } from '../routes/setup';
 
 const cfg = METRICS_EXPOSITION as { ENABLED: boolean; TOKEN: string };
@@ -78,10 +79,18 @@ const bearerJwt = (role: string): string => `Bearer ${jwt.sign(
     { userId: `u-${role}`, email: `${role}@example.test`, role, type: 'access' },
     getConfig().jwtSecret, { expiresIn: '5m', jwtid: `jti-m-${role}` })}`;
 
+// 관리자 JWT 판정은 DB 의 현재 role·is_active 로 재확인한다 — 기본은 토큰과 같은 role 의 활성 사용자
+const dbUserFor = (id: string): PublicUser => ({ id, email: `${id}@example.test`, role: id === 'u-admin' ? 'admin' : 'user', created_at: '2026-10-25T00:00:00.000Z', is_active: true });
+
 describe('GET /metrics', () => {
     let app: express.Application;
+    let lookup: jest.SpyInstance;
     beforeAll(() => { app = createTestApp(); });
-    beforeEach(() => { cfg.ENABLED = false; cfg.TOKEN = ''; });
+    beforeEach(() => {
+        cfg.ENABLED = false; cfg.TOKEN = '';
+        lookup = jest.spyOn(getUserManager(), 'getUserById').mockImplementation(async (id: string) => dbUserFor(id));
+    });
+    afterEach(() => { lookup.mockRestore(); });
 
     test('OFF → 404', async () => {
         const res = await request(app).get('/metrics').set('Authorization', bearerJwt('admin'));
@@ -133,10 +142,21 @@ describe('GET /metrics', () => {
             expect((await request(app).get('/metrics').set('Authorization', bearerJwt('user'))).status).toBe(401);
         });
 
-        test('관리자 JWT → 200', async () => {
+        test('관리자 JWT + DB 에서도 활성 관리자 → 200', async () => {
             const res = await request(app).get('/metrics').set('Authorization', bearerJwt('admin'));
             expect(res.status).toBe(200);
             expect(res.text).toContain('# TYPE process_uptime_seconds gauge\n');
+            expect(lookup).toHaveBeenCalledWith('u-admin');
+        });
+
+        test('관리자 JWT 지만 DB 의 현재 role 이 user(강등) → 401', async () => {
+            lookup.mockResolvedValue({ ...dbUserFor('u-admin'), role: 'user' });
+            expect((await request(app).get('/metrics').set('Authorization', bearerJwt('admin'))).status).toBe(401);
+        });
+
+        test('관리자 JWT 지만 DB 조회가 던짐 → 401(500 아님)', async () => {
+            lookup.mockRejectedValue(new Error('db down'));
+            expect((await request(app).get('/metrics').set('Authorization', bearerJwt('admin'))).status).toBe(401);
         });
     });
 

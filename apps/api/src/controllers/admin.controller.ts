@@ -7,7 +7,7 @@
 
 import { Request, Response, Router } from 'express';
 import { getUserManager, UserRole, USER_ROLES, isUserRole } from '../data/user-manager';
-import { requireAuth, requireAdmin } from '../auth';
+import { requireAuth, requireAdmin, clearSessionsForUser } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, internalError } from '../utils/api-response';
 import { validatePasswordComplexity } from '../services/AuthService';
@@ -184,6 +184,10 @@ class AdminController {
                 res.status(404).json(notFound('사용자'));
                 return;
             }
+
+            // 보안 점검 A2 — 관리자 재설정도 자가 변경과 같다: 이전 토큰은 updateUser 의 같은 UPDATE 가
+            // tokens_valid_after 로 끊었고, 여기서 남은 리프레시 세션을 정리한다.
+            if (password !== undefined) clearSessionsForUser(userId);
 
             log.info(`사용자 정보 수정: ${user.email}`);
             // changeUserRole 과 같은 정책 — 이 경로로 바꿔도 같은 기록이 남아야 한다.

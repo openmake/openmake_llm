@@ -31,6 +31,7 @@ jest.mock('../../auth', () => ({
     },
     extractToken: () => null,
     blacklistToken: jest.fn(),
+    verifySignatureIgnoringExpiry: jest.fn(() => null),
     setTokenCookie: jest.fn(),
     clearTokenCookie: jest.fn(),
     setRefreshTokenCookie: jest.fn(),
@@ -43,6 +44,7 @@ jest.mock('../../auth', () => ({
 const mockAuthService = {
     login: jest.fn(),
     register: jest.fn(),
+    changePassword: jest.fn(),
 };
 jest.mock('../../services/AuthService', () => ({
     getAuthService: () => mockAuthService,
@@ -83,7 +85,7 @@ jest.mock('../../config', () => ({
 
 import { createAuthController } from '../../controllers/auth.controller';
 import { csrfTokenIssuer } from '../../middlewares/csrf-protection';
-import { verifyRefreshToken } from '../../auth';
+import { verifyRefreshToken, clearTokenCookie } from '../../auth';
 import { success } from '../../utils/api-response';
 
 describe('Auth 응답 계약', () => {
@@ -155,6 +157,26 @@ describe('Auth 응답 계약', () => {
         const r = await request(app).post('/api/auth/logout');
         expect(r.status).toBe(200);
         expectContract('/api/auth/logout', 'post', '200', r.body);
+    });
+
+    // 보안 점검 A2 — 비밀번호를 바꾸면 기존 토큰은 무효(tokens_valid_after)이고, 바꾼 이 기기에는 새 토큰을 준다.
+    // 쿠키 없이(헤더로) 인증한 요청은 본문으로 받는다(쿠키 모드는 auth-controller-cookie-mode.test).
+    test('PUT /api/auth/password 200 (헤더 모드) — 본문에 새 token·refreshToken, 쿠키는 건드리지 않는다', async () => {
+        currentUser = sampleUser;
+        mockUserManager.getUserById.mockResolvedValue(sampleUser);
+        mockAuthService.changePassword.mockResolvedValue({ success: true });
+        const r = await request(app).put('/api/auth/password').send({ currentPassword: 'a', newPassword: 'b' });
+        expect(r.status).toBe(200);
+        expect(r.body).toMatchObject({ success: true, data: { success: true, token: 'new-access-token', refreshToken: 'new-refresh-token' } });
+        expect(clearTokenCookie).not.toHaveBeenCalled();
+    });
+
+    test('PUT /api/auth/password 실패면 쿠키를 지우지 않는다', async () => {
+        currentUser = sampleUser;
+        mockAuthService.changePassword.mockResolvedValue({ success: false, error: '현재 비밀번호가 올바르지 않습니다' });
+        const r = await request(app).put('/api/auth/password').send({ currentPassword: 'a', newPassword: 'b' });
+        expect(r.status).toBe(401);
+        expect(clearTokenCookie).not.toHaveBeenCalled();
     });
 
     test('GET /api/csrf-token 200 (raw JSON — envelope 미적용)', async () => {
