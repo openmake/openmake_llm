@@ -71,7 +71,7 @@
         "ts-json-schema-generator": "^2.9.0",
         "typescript": "^6.0.3",
         "typescript7": "npm:typescript@^7.0.2",
-        "typescript-eslint": "^8.71.2"
+        "typescript-eslint": "^8.72.0"
     },
     "overrides": {
         "js-yaml@<5": "^4.2.0",

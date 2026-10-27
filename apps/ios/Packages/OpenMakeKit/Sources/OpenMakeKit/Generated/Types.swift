@@ -34,7 +34,7 @@ public protocol APIProtocol: Sendable {
     func get_sol_api_sol_v1_sol_models(_ input: Operations.get_sol_api_sol_v1_sol_models.Input) async throws -> Operations.get_sol_api_sol_v1_sol_models.Output
     /// 로그인
     ///
-    /// 이메일과 비밀번호로 로그인합니다. access token 은 응답 body 와 HttpOnly 쿠키 양쪽에 발급됩니다. `returnRefreshToken: true`(모바일) 지정 시 쿠키를 설정하지 않고 refresh token 을 body 로 반환합니다 (앱은 Keychain 저장). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).
+    /// 이메일과 비밀번호로 로그인합니다. 웹(쿠키 모드)은 access·refresh token 을 HttpOnly 쿠키로만 발급하고 응답 body 에는 싣지 않습니다. `returnRefreshToken: true`(모바일) 지정 시 쿠키를 설정하지 않고 access·refresh token 을 body 로 반환합니다 (앱은 Keychain 저장). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).
     ///
     /// - Remark: HTTP `POST /api/auth/login`.
     /// - Remark: Generated from `#/paths//api/auth/login/post`.
@@ -48,7 +48,7 @@ public protocol APIProtocol: Sendable {
     func post_sol_api_sol_auth_sol_register(_ input: Operations.post_sol_api_sol_auth_sol_register.Input) async throws -> Operations.post_sol_api_sol_auth_sol_register.Output
     /// 로그아웃
     ///
-    /// 현재 access token (Bearer 헤더 + 쿠키) 을 블랙리스트에 추가하고 인증 쿠키를 제거합니다.
+    /// access token (Bearer 헤더 + 쿠키) 과 refresh token (쿠키 + 모바일 `body.refreshToken`) 을 블랙리스트에 추가하고 인증 쿠키를 제거합니다. access token 이 없거나 만료돼도 200 입니다.
     ///
     /// - Remark: HTTP `POST /api/auth/logout`.
     /// - Remark: Generated from `#/paths//api/auth/logout/post`.
@@ -62,7 +62,7 @@ public protocol APIProtocol: Sendable {
     func get_sol_api_sol_auth_sol_me(_ input: Operations.get_sol_api_sol_auth_sol_me.Input) async throws -> Operations.get_sol_api_sol_auth_sol_me.Output
     /// 토큰 갱신 (rotation)
     ///
-    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth/refresh`), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
+    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth` — refresh·logout 에 전송, 새 토큰도 HttpOnly 쿠키로만 발급하고 body 에는 싣지 않음), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 access·refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
     ///
     /// - Remark: HTTP `POST /api/auth/refresh`.
     /// - Remark: Generated from `#/paths//api/auth/refresh/post`.
@@ -209,7 +209,7 @@ extension APIProtocol {
     }
     /// 로그인
     ///
-    /// 이메일과 비밀번호로 로그인합니다. access token 은 응답 body 와 HttpOnly 쿠키 양쪽에 발급됩니다. `returnRefreshToken: true`(모바일) 지정 시 쿠키를 설정하지 않고 refresh token 을 body 로 반환합니다 (앱은 Keychain 저장). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).
+    /// 이메일과 비밀번호로 로그인합니다. 웹(쿠키 모드)은 access·refresh token 을 HttpOnly 쿠키로만 발급하고 응답 body 에는 싣지 않습니다. `returnRefreshToken: true`(모바일) 지정 시 쿠키를 설정하지 않고 access·refresh token 을 body 로 반환합니다 (앱은 Keychain 저장). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).
     ///
     /// - Remark: HTTP `POST /api/auth/login`.
     /// - Remark: Generated from `#/paths//api/auth/login/post`.
@@ -239,7 +239,7 @@ extension APIProtocol {
     }
     /// 로그아웃
     ///
-    /// 현재 access token (Bearer 헤더 + 쿠키) 을 블랙리스트에 추가하고 인증 쿠키를 제거합니다.
+    /// access token (Bearer 헤더 + 쿠키) 과 refresh token (쿠키 + 모바일 `body.refreshToken`) 을 블랙리스트에 추가하고 인증 쿠키를 제거합니다. access token 이 없거나 만료돼도 200 입니다.
     ///
     /// - Remark: HTTP `POST /api/auth/logout`.
     /// - Remark: Generated from `#/paths//api/auth/logout/post`.
@@ -257,7 +257,7 @@ extension APIProtocol {
     }
     /// 토큰 갱신 (rotation)
     ///
-    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth/refresh`), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
+    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth` — refresh·logout 에 전송, 새 토큰도 HttpOnly 쿠키로만 발급하고 body 에는 싣지 않음), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 access·refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
     ///
     /// - Remark: HTTP `POST /api/auth/refresh`.
     /// - Remark: Generated from `#/paths//api/auth/refresh/post`.
@@ -1902,7 +1902,7 @@ public enum Operations {
     }
     /// 로그인
     ///
-    /// 이메일과 비밀번호로 로그인합니다. access token 은 응답 body 와 HttpOnly 쿠키 양쪽에 발급됩니다. `returnRefreshToken: true`(모바일) 지정 시 쿠키를 설정하지 않고 refresh token 을 body 로 반환합니다 (앱은 Keychain 저장). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).
+    /// 이메일과 비밀번호로 로그인합니다. 웹(쿠키 모드)은 access·refresh token 을 HttpOnly 쿠키로만 발급하고 응답 body 에는 싣지 않습니다. `returnRefreshToken: true`(모바일) 지정 시 쿠키를 설정하지 않고 access·refresh token 을 body 로 반환합니다 (앱은 Keychain 저장). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).
     ///
     /// - Remark: HTTP `POST /api/auth/login`.
     /// - Remark: Generated from `#/paths//api/auth/login/post`.
@@ -1983,7 +1983,7 @@ public enum Operations {
                         public struct dataPayload: Codable, Hashable, Sendable {
                             /// - Remark: Generated from `#/paths/api/auth/login/POST/responses/200/content/json/data/success`.
                             public var success: Swift.Bool
-                            /// JWT access token
+                            /// JWT access token — returnRefreshToken=true 요청에만 존재 (웹은 HttpOnly 쿠키)
                             ///
                             /// - Remark: Generated from `#/paths/api/auth/login/POST/responses/200/content/json/data/token`.
                             public var token: Swift.String?
@@ -1997,7 +1997,7 @@ public enum Operations {
                             ///
                             /// - Parameters:
                             ///   - success:
-                            ///   - token: JWT access token
+                            ///   - token: JWT access token — returnRefreshToken=true 요청에만 존재 (웹은 HttpOnly 쿠키)
                             ///   - refreshToken: returnRefreshToken=true 요청에만 존재
                             ///   - user:
                             public init(
@@ -2528,7 +2528,7 @@ public enum Operations {
     }
     /// 로그아웃
     ///
-    /// 현재 access token (Bearer 헤더 + 쿠키) 을 블랙리스트에 추가하고 인증 쿠키를 제거합니다.
+    /// access token (Bearer 헤더 + 쿠키) 과 refresh token (쿠키 + 모바일 `body.refreshToken`) 을 블랙리스트에 추가하고 인증 쿠키를 제거합니다. access token 이 없거나 만료돼도 200 입니다.
     ///
     /// - Remark: HTTP `POST /api/auth/logout`.
     /// - Remark: Generated from `#/paths//api/auth/logout/post`.
@@ -2646,57 +2646,6 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            public struct Unauthorized: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/auth/logout/POST/responses/401/content`.
-                @frozen public enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/auth/logout/POST/responses/401/content/application\/json`.
-                    case json(Components.Schemas.ApiFailure)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    public var json: Components.Schemas.ApiFailure {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                public var body: Operations.post_sol_api_sol_auth_sol_logout.Output.Unauthorized.Body
-                /// Creates a new `Unauthorized`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                public init(body: Operations.post_sol_api_sol_auth_sol_logout.Output.Unauthorized.Body) {
-                    self.body = body
-                }
-            }
-            /// 인증 필요
-            ///
-            /// - Remark: Generated from `#/paths//api/auth/logout/post/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Operations.post_sol_api_sol_auth_sol_logout.Output.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Operations.post_sol_api_sol_auth_sol_logout.Output.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
                             response: self
                         )
                     }
@@ -2977,7 +2926,7 @@ public enum Operations {
     }
     /// 토큰 갱신 (rotation)
     ///
-    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth/refresh`), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
+    /// refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth` — refresh·logout 에 전송, 새 토큰도 HttpOnly 쿠키로만 발급하고 body 에는 싣지 않음), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 access·refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.
     ///
     /// - Remark: HTTP `POST /api/auth/refresh`.
     /// - Remark: Generated from `#/paths//api/auth/refresh/post`.
@@ -3042,10 +2991,10 @@ public enum Operations {
                         public var success: Swift.Bool
                         /// - Remark: Generated from `#/paths/api/auth/refresh/POST/responses/200/content/json/data`.
                         public struct dataPayload: Codable, Hashable, Sendable {
-                            /// 새 JWT access token
+                            /// 모바일 모드 요청에만 존재 — 새 JWT access token (웹은 HttpOnly 쿠키)
                             ///
                             /// - Remark: Generated from `#/paths/api/auth/refresh/POST/responses/200/content/json/data/token`.
-                            public var token: Swift.String
+                            public var token: Swift.String?
                             /// 모바일 모드 요청에만 존재 — 새 refresh token
                             ///
                             /// - Remark: Generated from `#/paths/api/auth/refresh/POST/responses/200/content/json/data/refreshToken`.
@@ -3055,11 +3004,11 @@ public enum Operations {
                             /// Creates a new `dataPayload`.
                             ///
                             /// - Parameters:
-                            ///   - token: 새 JWT access token
+                            ///   - token: 모바일 모드 요청에만 존재 — 새 JWT access token (웹은 HttpOnly 쿠키)
                             ///   - refreshToken: 모바일 모드 요청에만 존재 — 새 refresh token
                             ///   - user:
                             public init(
-                                token: Swift.String,
+                                token: Swift.String? = nil,
                                 refreshToken: Swift.String? = nil,
                                 user: Components.Schemas.PublicUser
                             ) {

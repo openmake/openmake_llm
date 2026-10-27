@@ -16,11 +16,13 @@ export {
     verifyRefreshToken,
     verifyToken,
     blacklistToken,
+    verifySignatureIgnoringExpiry,
     extractToken,
     setTokenCookie,
     setRefreshTokenCookie,
     clearTokenCookie,
     removeSessionFromMap,
+    clearSessionsForUser,
 } from './auth-core';
 
 // 모듈 재-export

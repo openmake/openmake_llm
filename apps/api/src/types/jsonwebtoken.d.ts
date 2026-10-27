@@ -18,6 +18,7 @@ declare module 'jsonwebtoken' {
 
     export interface VerifyOptions {
         algorithms?: Algorithm[];
+        ignoreExpiration?: boolean;
     }
 
     export function sign(

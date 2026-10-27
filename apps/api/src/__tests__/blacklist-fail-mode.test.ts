@@ -1,10 +1,11 @@
 import * as jwt from 'jsonwebtoken';
 
 const mockHas = jest.fn();
+const mockGetReason = jest.fn();
 const mockGetConfig = jest.fn();
 
 jest.mock('../data/models/token-blacklist', () => ({
-    getTokenBlacklist: () => ({ has: mockHas }),
+    getTokenBlacklist: () => ({ has: mockHas, getReason: mockGetReason }),
 }));
 
 jest.mock('../config/env', () => {
@@ -21,6 +22,7 @@ describe('verifyToken — BLACKLIST_FAIL_MODE', () => {
 
     beforeEach(() => {
         mockHas.mockReset();
+        mockGetReason.mockReset();
         mockGetConfig.mockReset();
     });
 
@@ -37,7 +39,7 @@ describe('verifyToken — BLACKLIST_FAIL_MODE', () => {
 
     test('refresh 토큰: failMode=open 이면 DB 장애 시 통과 (로그인 가용성 보존)', async () => {
         mockGetConfig.mockReturnValue({ jwtSecret: secret, blacklistFailMode: 'open', nodeEnv: 'test' });
-        mockHas.mockRejectedValue(new Error('DB down'));
+        mockGetReason.mockRejectedValue(new Error('DB down'));
 
         const { verifyRefreshToken } = await import('../auth/auth-core');
         const refreshToken = jwt.sign({ userId: 'u1', type: 'refresh' }, secret, { jwtid: 'jti-r1', expiresIn: '7d' });
@@ -59,7 +61,7 @@ describe('verifyToken — BLACKLIST_FAIL_MODE', () => {
 
     test('fail-safe + refresh 토큰: DB 장애 시 거부', async () => {
         mockGetConfig.mockReturnValue({ jwtSecret: secret, blacklistFailMode: 'safe', nodeEnv: 'test' });
-        mockHas.mockRejectedValue(new Error('DB down'));
+        mockGetReason.mockRejectedValue(new Error('DB down'));
 
         const { verifyRefreshToken } = await import('../auth/auth-core');
         const refreshToken = jwt.sign({ userId: 'u1', type: 'refresh' }, secret, { jwtid: 'jti-2', expiresIn: '7d' });

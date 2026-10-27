@@ -1052,7 +1052,7 @@
           "Auth"
         ],
         "summary": "로그인",
-        "description": "이메일과 비밀번호로 로그인합니다. access token 은 응답 body 와 HttpOnly 쿠키 양쪽에 발급됩니다. `returnRefreshToken: true`(모바일) 지정 시 쿠키를 설정하지 않고 refresh token 을 body 로 반환합니다 (앱은 Keychain 저장). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).",
+        "description": "이메일과 비밀번호로 로그인합니다. 웹(쿠키 모드)은 access·refresh token 을 HttpOnly 쿠키로만 발급하고 응답 body 에는 싣지 않습니다. `returnRefreshToken: true`(모바일) 지정 시 쿠키를 설정하지 않고 access·refresh token 을 body 로 반환합니다 (앱은 Keychain 저장). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).",
         "security": [],
         "requestBody": {
           "required": true,
@@ -1114,7 +1114,7 @@
                         },
                         "token": {
                           "type": "string",
-                          "description": "JWT access token"
+                          "description": "JWT access token — returnRefreshToken=true 요청에만 존재 (웹은 HttpOnly 쿠키)"
                         },
                         "refreshToken": {
                           "type": "string",
@@ -1261,11 +1261,12 @@
           "Auth"
         ],
         "summary": "로그아웃",
-        "description": "현재 access token (Bearer 헤더 + 쿠키) 을 블랙리스트에 추가하고 인증 쿠키를 제거합니다.",
+        "description": "access token (Bearer 헤더 + 쿠키) 과 refresh token (쿠키 + 모바일 `body.refreshToken`) 을 블랙리스트에 추가하고 인증 쿠키를 제거합니다. access token 이 없거나 만료돼도 200 입니다.",
         "security": [
           {
             "bearerAuth": []
-          }
+          },
+          {}
         ],
         "responses": {
           "200": {
@@ -1301,16 +1302,6 @@
                       "$ref": "#/components/schemas/ApiMeta"
                     }
                   }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "인증 필요",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiFailure"
                 }
               }
             }
@@ -1400,7 +1391,7 @@
           "Auth"
         ],
         "summary": "토큰 갱신 (rotation)",
-        "description": "refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth/refresh`), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.",
+        "description": "refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth` — refresh·logout 에 전송, 새 토큰도 HttpOnly 쿠키로만 발급하고 body 에는 싣지 않음), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 access·refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.",
         "security": [],
         "requestBody": {
           "required": false,
@@ -1440,13 +1431,12 @@
                     "data": {
                       "type": "object",
                       "required": [
-                        "token",
                         "user"
                       ],
                       "properties": {
                         "token": {
                           "type": "string",
-                          "description": "새 JWT access token"
+                          "description": "모바일 모드 요청에만 존재 — 새 JWT access token (웹은 HttpOnly 쿠키)"
                         },
                         "refreshToken": {
                           "type": "string",

@@ -10,7 +10,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { envSchema } from './env.schema';
+import { envSchema, resolveBlacklistFailMode } from './env.schema';
 import { parseEnvFile } from './env-file';
 import { validateConfig } from './env-validate';
 import { DEFAULT_CONFIG } from './env-defaults';
@@ -453,7 +453,7 @@ export function loadConfig(): EnvConfig {
         trustedProxies: parsed.TRUSTED_PROXIES?.split(',').map((p: string) => p.trim()) || DEFAULT_CONFIG.trustedProxies,
 
         // Security — Blacklist Policy
-        blacklistFailMode: parsed.BLACKLIST_FAIL_MODE ?? DEFAULT_CONFIG.blacklistFailMode,
+        blacklistFailMode: resolveBlacklistFailMode(parsed.BLACKLIST_FAIL_MODE, parsed.NODE_ENV ?? DEFAULT_CONFIG.nodeEnv),
 
         // Security — CSRF Protection
         csrfProtection: parsed.CSRF_PROTECTION ?? DEFAULT_CONFIG.csrfProtection,
