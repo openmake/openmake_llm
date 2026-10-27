@@ -1,5 +1,50 @@
 # Changelog
 
+## [1.115.5](https://github.com/openmake/openmake_llm/compare/v1.115.4...v1.115.5) (2026-10-25)
+
+
+### 🐛 버그 수정
+
+* **deploy:** apply docker compose changes on deploy (postgres/redis up -d) ([ce343de](https://github.com/openmake/openmake_llm/commit/ce343dee5b40166256fe727bdda7594f89d3b0d1))
+* **deploy:** run the freshly pulled script for deploy after update ([1231f23](https://github.com/openmake/openmake_llm/commit/1231f23f95b01f4918d9f239a0b08571aae69f33))
+* **deploy:** tolerate update without options under bash 3.2 set -u ([61f855e](https://github.com/openmake/openmake_llm/commit/61f855e51bcd3b22c5d95305a2c65a774051f975))
+* **deps:** patch fast-uri and nodemailer advisories ([f2185fd](https://github.com/openmake/openmake_llm/commit/f2185fd485d3f54ec108b44d40a328395a1a519c))
+* **security:** accept PDF headers anywhere in the first 1024 bytes ([c33b8de](https://github.com/openmake/openmake_llm/commit/c33b8dec9821cd893261f33af37610fa7a4314ab))
+* **security:** always sandbox user-owned MCP servers, read-only by default, no host-gateway for user servers ([e7427e9](https://github.com/openmake/openmake_llm/commit/e7427e9bbde715f59c58662f1a0fe2d8d9822d7f))
+* **security:** anonymous /api/health keeps add-on sections ([b8fe027](https://github.com/openmake/openmake_llm/commit/b8fe0271a9c7459a79738195b7b3fd8602279e60))
+* **security:** apply dangerous-argument detection to nested mcp_call arguments ([ed372ec](https://github.com/openmake/openmake_llm/commit/ed372ecba6238d954a473bc03b1feedecf20516b))
+* **security:** bind postgres/redis/artifact-viewer ports to loopback by default ([8b6bc01](https://github.com/openmake/openmake_llm/commit/8b6bc016a497042baaeca9a461a4b3c50a9a6c76))
+* **security:** cap pending chunk uploads per user ([4242c3c](https://github.com/openmake/openmake_llm/commit/4242c3c5a4aad9ff1e8e61a4de2cb99c5e593566))
+* **security:** cap total upload size per request and per-user pending upload quota ([00741c0](https://github.com/openmake/openmake_llm/commit/00741c0e38ee34b55bca490c31fe1d1b54007bd2))
+* **security:** classify sandbox-required MCP spawn refusals ([1046479](https://github.com/openmake/openmake_llm/commit/10464792ccd1799d5dd7c944af3d301978cc2bf7))
+* **security:** deep-scan nested args on direct server::tool calls ([8ab6dea](https://github.com/openmake/openmake_llm/commit/8ab6deae3f2066477b57222440202b3c7f6c87d2))
+* **security:** document global-only add-host and loopback rewrite in .env.example ([c2002b5](https://github.com/openmake/openmake_llm/commit/c2002b5d68b55f4f43633adc56427cb297465122))
+* **security:** drop /usr/bin/false assumption in browser-session write test ([9e2792b](https://github.com/openmake/openmake_llm/commit/9e2792be5bf8dc441055f82e12160a56089a5dc4))
+* **security:** execution-surface hardening — MCP sandbox, path/upload/arg guards (audit PR-2) ([3ffbae3](https://github.com/openmake/openmake_llm/commit/3ffbae3fe472a5237ffc3c2cf308d81a5bd3ac4d))
+* **security:** fail closed past nested-arg depth cap; route mcp_call inner tools through the secure executor ([16fcfac](https://github.com/openmake/openmake_llm/commit/16fcfac96f5364a00bac61888e931808f49c7ccd))
+* **security:** generic 500 message outside development, drop request bodies from error logs ([704cc86](https://github.com/openmake/openmake_llm/commit/704cc86b9fb70b790b6a6636a26d8c50b997ef31))
+* **security:** isolate published schedule reports with CSP sandbox ([fbe0c51](https://github.com/openmake/openmake_llm/commit/fbe0c5127a534cb3b24d5e8e6e6883d94386bd05))
+* **security:** keep client-error messages; generic text only for 5xx ([a0ad309](https://github.com/openmake/openmake_llm/commit/a0ad309562c02e294878526f2ee788241baf4d06))
+* **security:** keep loopback as-is for user-owned MCP sandbox servers ([6343e21](https://github.com/openmake/openmake_llm/commit/6343e21885d95d46cb157b6e44fe166446304371))
+* **security:** limit anonymous /api/health to status fields ([299311c](https://github.com/openmake/openmake_llm/commit/299311c2e4d755439ecb3a0504bd88c2f5e2ee26))
+* **security:** network binding, HTTP hardening, scripts and dependency patches (audit PR-1) ([44949bc](https://github.com/openmake/openmake_llm/commit/44949bcf09ec01e6a54894d713505d536ec1d63c))
+* **security:** no-follow host copies and browser-session writes; guard sandbox root ([84572dc](https://github.com/openmake/openmake_llm/commit/84572dcb6809ebdcfe36e0d308459e165568eed3))
+* **security:** O_NOFOLLOW on host fallback writes and 0700 task workspace root ([83e9a81](https://github.com/openmake/openmake_llm/commit/83e9a812e43f971864f42f44139b42e56c9c000d))
+* **security:** open task artifacts in a sandboxed frame instead of app-origin blob ([bca505d](https://github.com/openmake/openmake_llm/commit/bca505de3c0eab990760c2a750b683f68b995ab9))
+* **security:** re-check chunk size and user quota after write to close upload races ([f4f10de](https://github.com/openmake/openmake_llm/commit/f4f10dee9c787098022217cecc9424f6f452886b))
+* **security:** reject dash-prefixed paths and anchor find/rg paths with ./ in code-nav tools ([a166974](https://github.com/openmake/openmake_llm/commit/a1669748f27dbfa47f336cf73c5c559d512c714e))
+* **security:** remove remaining org hostnames from comments; document derived viewer key ([d5d4679](https://github.com/openmake/openmake_llm/commit/d5d467959f3a1a608c08513a84d0484674a09895))
+* **security:** reports CSP allows https styles/fonts; Next header entry for /generated/reports ([726b1d2](https://github.com/openmake/openmake_llm/commit/726b1d22388d6e194f14b5599a60639ba6d8495a))
+* **security:** reports CSP allows inline/https scripts inside the sandbox ([f24e075](https://github.com/openmake/openmake_llm/commit/f24e07575500ebf01949f7ca0ac04623176b3ad6))
+* **security:** require a click before loading external images in chat markdown ([08e6d92](https://github.com/openmake/openmake_llm/commit/08e6d92eed5931a00af4aa82a8ca6eae1d0be8ab))
+* **security:** route catalog arg validation import through the addon boundary ([35ea919](https://github.com/openmake/openmake_llm/commit/35ea919bd832b2a23382298305062cc7a66b4868))
+* **security:** smoke cookie jar cleanup on interrupt; clearer CSRF failure ([19322e6](https://github.com/openmake/openmake_llm/commit/19322e6c93e13eca31a51c1dafc56247b12016e6))
+* **security:** stop printing admin password, smoke via cookie jar, derive viewer key, drop org hostnames ([8f11388](https://github.com/openmake/openmake_llm/commit/8f1138833a5aab5ef4af8c324db21e0ba1c37ff5))
+* **security:** sync .env.example and test names with sandbox defaults ([b0f71cf](https://github.com/openmake/openmake_llm/commit/b0f71cf5013a3dd73a4db8f810ba02b6319a63d8))
+* **security:** validate catalog MCP argument values ([c6ef50c](https://github.com/openmake/openmake_llm/commit/c6ef50cb0d479ce5ecab5d7d2ad0891fdbc3688f))
+* **security:** verify knowledge upload magic bytes against declared MIME ([fec5f9f](https://github.com/openmake/openmake_llm/commit/fec5f9f8b2b798bbdfc2994c469fd27acd94c8d5))
+* **web:** label popular queries as hashes ([0064f04](https://github.com/openmake/openmake_llm/commit/0064f0447efdbe1e355e1daba551881f18bb23c0))
+
 ## [1.115.4](https://github.com/openmake/openmake_llm/compare/v1.115.3...v1.115.4) (2026-10-25)
 
 

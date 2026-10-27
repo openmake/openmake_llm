@@ -1,6 +1,6 @@
 {
     "name": "openmake",
-    "version": "1.115.4",
+    "version": "1.115.5",
     "description": "OpenMake - AI Assistant Platform",
     "main": "apps/api/dist/server.js",
     "scripts": {
@@ -71,7 +71,7 @@
         "ts-json-schema-generator": "^2.9.0",
         "typescript": "^6.0.3",
         "typescript7": "npm:typescript@^7.0.2",
-        "typescript-eslint": "^8.71.2"
+        "typescript-eslint": "^8.72.0"
     },
     "overrides": {
         "js-yaml@<5": "^4.2.0",
