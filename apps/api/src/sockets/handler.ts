@@ -47,6 +47,7 @@ import { getBuildId } from '../config/build-id';
 import { handleChatMessage } from './ws-chat-handler';
 import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
 import { bufferEarlyMessages } from './ws-early-messages';
+import { replyToAppPing } from './ws-app-ping';
 import { handleRequestAgents } from './ws-agents-handler';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import { handleBridgeMessage, closeExpiredBridge } from './ws-bridge-handler';
@@ -284,6 +285,7 @@ export class WebSocketHandler {
                             ws.send(JSON.stringify({ type: 'error', message: '잘못된 메시지 형식입니다' }));
                             return;
                         }
+                        if (replyToAppPing(ws, msg)) return; // 앱 수준 생존 확인 — 빈도 제한·활동·로그 밖(ws-app-ping)
 
                         log.debug(`[WS] 메시지 수신: type=${msg.type}`);
                         this.touchActivity(extWs);
