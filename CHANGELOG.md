@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.115.9](https://github.com/openmake/openmake_llm/compare/v1.115.8...v1.115.9) (2026-10-28)
+
+
+### 🐛 버그 수정
+
+* **deploy:** stop PM2 cron_restart leaking into deployed apps ([c6e7ef3](https://github.com/openmake/openmake_llm/commit/c6e7ef303d177e0a6423c984446132e39793a650))
+* **deps:** migrate tracing to @opentelemetry/sdk-trace 3.x ([17f3fa7](https://github.com/openmake/openmake_llm/commit/17f3fa71af6ddc0ba646ea2dc88aebff31915444))
+* **pipeline:** give automated merge commits a neutral body ([ba13820](https://github.com/openmake/openmake_llm/commit/ba1382085fd9204942cfe7dbbb096b923af21549))
+* **pipeline:** give automated merge commits a neutral body ([5cf557d](https://github.com/openmake/openmake_llm/commit/5cf557d433ef6b271e414a5f79cc10e686c784d8))
+
 ## [1.115.8](https://github.com/openmake/openmake_llm/compare/v1.115.7...v1.115.8) (2026-10-28)
 
 
