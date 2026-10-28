@@ -406,7 +406,10 @@ export function useChatSocket() {
       } catch {
         return;
       }
-      if (data.type === "pong") return; // 생존 확인 응답 — 스트림 이벤트가 아니다(봉투·seq 없음)
+      if (data.type === "pong") {
+        liveness.notePong(); // 생존 확인 응답 — 스트림 이벤트가 아니다(봉투·seq 없음)
+        return;
+      }
       if (clearsPendingAbort(data.type)) pendingAbortRef.current = false;
       // 대화를 지운 뒤에 도착한 그 답변의 이벤트(종료 포함)는 버린다 — 빈 새 대화에 이전 답변이 써지지 않게
       {
@@ -870,6 +873,7 @@ export function useChatSocket() {
     if (useAppStore.getState().isGenerating) pendingAbortRef.current = true;
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "abort" }));
+    socketCtlRef.current?.probe(); // 죽은 소켓이면 제한시간 안에 알아채고 재연결 → 위 중단을 다시 보낸다
   }, []);
 
   // 답변이 흐르는 도중 대화를 지우면(새 대화 등) 서버 생성을 멈추고, 이미 오고 있는 그 답변의 이벤트는 버린다.
