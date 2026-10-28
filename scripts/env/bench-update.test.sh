@@ -24,22 +24,30 @@ git clone -q -b main "$TMP/origin.git" "$BDIR" 2>/dev/null
 printf 'OMKB_PORT=1\n' > "$BDIR/.env"; printf '.env\n' > "$BDIR/.git/info/exclude"
 advance() { git -C "$TMP/seed" "${G[@]}" commit -q --allow-empty -m "$1" && git -C "$TMP/seed" push -q origin HEAD:main 2>/dev/null; }
 
-# ── 무거운 단계는 호출만 센다 ──
-CALLS=""; APP_STATUS=online
-bench_build() { CALLS="$CALLS build"; }
-bench_pm2_start() { CALLS="$CALLS start"; }
+# ── 무거운 단계는 호출만 센다. BUILD_FAIL=1 이면 빌드가 실패한다(실제 bench_build 는 die). ──
+CALLS="$TMP/calls"; APP_STATUS=online; BUILD_FAIL=0
+bench_build() { printf ' build' >> "$CALLS"; [[ $BUILD_FAIL -eq 0 ]] || exit 9; }
+bench_pm2_start() { printf ' start' >> "$CALLS"; }
 wait_http() { return 0; }
 pm2_status_of() { printf '%s' "$APP_STATUS"; }
-run() { CALLS=""; bench_update online "$@" >/dev/null 2>&1; printf '%s' "${CALLS# }"; }
+# 서브셸에서 돌린다(die·exit 가 테스트를 끝내지 않게) — 호출 기록과 종료 코드를 함께 돌려준다.
+run() { : > "$CALLS"; ( bench_update online "$@" ) >/dev/null 2>&1; local rc=$? c; c="$(cat "$CALLS")"; printf '%s rc=%s' "${c# }" "$rc"; }
 
-eq "bench 그대로 + 앱 online → 빌드·재시작 안 함" "$(run)" ""
+eq "기록 없음(이 수정 뒤 첫 갱신) → 한 번 빌드·재시작"   "$(run)" "build start rc=0"
+eq "같은 커밋 + 앱 online → 빌드·재시작 안 함"            "$(run)" " rc=0"
 advance two
-eq "origin 이 앞섬 → 받아서 빌드·재시작"          "$(run)" "build start"
-eq "받은 뒤 다시 돌면 → 그대로"                     "$(run)" ""
+eq "origin 이 앞섬 → 받아서 빌드·재시작"                   "$(run)" "build start rc=0"
+eq "받은 뒤 다시 돌면 → 그대로"                              "$(run)" " rc=0"
 APP_STATUS=stopped
-eq "bench 그대로지만 앱이 안 떠 있음 → 빌드·기동"   "$(run)" "build start"
+eq "같은 커밋이지만 앱이 안 떠 있음 → 빌드·기동"            "$(run)" "build start rc=0"
 APP_STATUS=online
-eq "--redeploy(force) → 그대로여도 다시 배포"        "$(run --force)" "build start"
+eq "--redeploy(force) → 그대로여도 다시 배포"                 "$(run --force)" "build start rc=0"
+advance three
+BUILD_FAIL=1
+eq "받은 뒤 빌드 실패 → 실패로 끝남"                          "$(run)" "build rc=9"
+BUILD_FAIL=0
+eq "다음 주기 — 빌드가 기록되지 않았으니 다시 빌드"          "$(run)" "build start rc=0"
+eq "작업 트리는 깨끗하다(기록은 .git 안)"                     "$(git -C "$BDIR" status --porcelain)" ""
 
 printf 'bench-update: %d passed, %d failed\n' "$PASS" "$FAIL"
 [[ $FAIL -eq 0 ]]
