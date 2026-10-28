@@ -123,7 +123,8 @@ export async function orchestrate(mode, commandGh) {
             return;
         }
         console.log(`Performing ordinary merge PR #${pr.number} exact head ${sha}`);
-        gh(['pr', 'merge', String(pr.number), '--merge', '--match-head-commit', sha]);
+        // 본문을 직접 준다 — 기본값(PR 제목)이 `fix(..): ..` 이면 release-please 가 원래 커밋과 함께 두 번 적는다.
+        gh(['pr', 'merge', String(pr.number), '--merge', '--match-head-commit', sha, '--body', `Merged head ${sha}`]);
     };
     const protection = (name) => {
         const p = api(`branches/${name}/protection`);
