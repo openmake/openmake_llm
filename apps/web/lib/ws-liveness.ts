@@ -108,6 +108,14 @@ export function createWsLiveness(opts: WsLivenessOptions): WsLiveness {
     }, delay);
   };
 
+  const noteInbound = () => {
+    lastInbound = timers.now();
+    if (deadline !== null) {
+      timers.clearTimeout(deadline);
+      deadline = null;
+    }
+  };
+
   return {
     start() {
       if (running) return;
@@ -119,16 +127,10 @@ export function createWsLiveness(opts: WsLivenessOptions): WsLiveness {
       running = false;
       clearAll();
     },
-    noteInbound() {
-      lastInbound = timers.now();
-      if (deadline !== null) {
-        timers.clearTimeout(deadline);
-        deadline = null;
-      }
-    },
+    noteInbound,
     notePong() {
       capability.supported = true;
-      this.noteInbound();
+      noteInbound();
     },
     probe() {
       ping();
