@@ -166,7 +166,9 @@ test('promotion merges immediately only for current dev head and both latest CI 
             assert.equal(merges.length, scenario === 'ready' ? 1 : 0, scenario);
             if (merges.length) {
                 assert.ok(!merges[0].includes('--auto'));
-                assert.deepEqual(merges[0].slice(-3), ['--merge', '--match-head-commit', 'a']);
+                assert.deepEqual(merges[0].slice(-5), ['--merge', '--match-head-commit', 'a', '--body', 'Merged head a']);
+                // 머지 커밋 본문이 PR 제목(fix(..): ..)이면 release-please 가 같은 변경을 두 번 적는다.
+                assert.doesNotMatch(merges[0].at(-1), /^[a-z]+(\(.+\))?!?: /);
             }
         }
     } finally {
