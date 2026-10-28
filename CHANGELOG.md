@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.115.11](https://github.com/openmake/openmake_llm/compare/v1.115.10...v1.115.11) (2026-10-28)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** require expired-or-own lease before boot recovery parks or closes a pending orphan ([#1473](https://github.com/openmake/openmake_llm/issues/1473)) ([3856666](https://github.com/openmake/openmake_llm/commit/38566665267d1622f0423f7a69509f85c8112529))
+
+
+### ♻️ 리팩터링
+
+* **agent-task:** consolidate lease claim SQL into shared helpers ([#1473](https://github.com/openmake/openmake_llm/issues/1473)) ([241f4a1](https://github.com/openmake/openmake_llm/commit/241f4a1afcdc6e0ef90759b676ca2a406d683994))
+
 ## [1.115.10](https://github.com/openmake/openmake_llm/compare/v1.115.9...v1.115.10) (2026-10-28)
 
 
