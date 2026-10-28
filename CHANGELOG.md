@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.115.10](https://github.com/openmake/openmake_llm/compare/v1.115.9...v1.115.10) (2026-10-28)
+
+
+### 🐛 버그 수정
+
+* **env:** key the bench skip on the last successful build ([05a85b4](https://github.com/openmake/openmake_llm/commit/05a85b44241e13be5624dafeb40e89b05c679ae2))
+* **env:** skip bench rebuild and restart when nothing changed ([173f657](https://github.com/openmake/openmake_llm/commit/173f6578cf81e508a12baf5c4b8c93bf2b38f4e1))
+
 ## [1.115.9](https://github.com/openmake/openmake_llm/compare/v1.115.8...v1.115.9) (2026-10-28)
 
 
