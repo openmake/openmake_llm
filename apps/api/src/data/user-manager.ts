@@ -409,8 +409,9 @@ class UserManagerImpl {
         const offset = (page - 1) * limit;
 
         const queryParams = [...params, limit, offset];
+        // 최근 가입순 — 같은 시각은 id 로 고정해 페이지 사이 순서가 흔들리지 않게 한다.
         const rows = await pool.query(
-            `SELECT * FROM users ${whereClause} LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
+            `SELECT * FROM users ${whereClause} ORDER BY created_at DESC NULLS LAST, id DESC LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
             queryParams
         );
 
