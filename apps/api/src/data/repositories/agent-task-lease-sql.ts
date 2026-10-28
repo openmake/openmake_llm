@@ -28,3 +28,11 @@ export function claimableLeaseSql(ownerExpr: string): string {
 export function orphanedClaimSql(statusCol: string, leaseCol: string): string {
     return `(${statusCol} = 'pending' AND ${leaseCol} IS NOT NULL)`;
 }
+
+/**
+ * 다시 잡아도 되는 claim 고아(#1473) — orphanedClaimSql 이면서 소유권이 지났거나 ownerExpr(내 것)이다. 목록을 읽은 뒤 다른 서버가
+ * 다시 claim 한 pending(살아 있는 남의 소유권)은 빠진다 — 복구 claim·기기 대기 주차·복구 상한 종료가 같이 쓴다.
+ */
+export function reclaimableOrphanSql(statusCol: string, leaseCol: string, ownerCol: string, ownerExpr: string): string {
+    return `(${orphanedClaimSql(statusCol, leaseCol)} AND (${leaseCol} < NOW() OR ${ownerCol} = ${ownerExpr}))`;
+}

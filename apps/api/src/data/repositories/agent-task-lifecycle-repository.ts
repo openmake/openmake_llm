@@ -8,7 +8,7 @@
 import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentTask } from '../models/unified-database.types';
 import { recoverableRestartCondition } from './agent-task-run-repository';
-import { claimableLeaseSql, orphanedClaimSql } from './agent-task-lease-sql';
+import { claimableLeaseSql, orphanedClaimSql, reclaimableOrphanSql } from './agent-task-lease-sql';
 import { AGENT_TASK_PARKED_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
 import type { ParkedTaskRow } from './agent-task-park-repository';
 
@@ -144,7 +144,7 @@ export class AgentTaskLifecycleRepository extends BaseRepository {
      * 가져가 다시 claim 했으면 0행 — 두 곳이 같이 디스패치하지 않게). 소유권을 끄거나 176 적용 전이면 lease 없이 종전 문장.
      */
     async claimAgentTaskForRecovery(taskId: string, expectedPrev?: string, lease?: { owner: string; leaseMs: number }): Promise<boolean> {
-        const claimOrphan = lease ? ` OR (${orphanedClaimSql('o.prev', 'o.lease_until')} AND (o.lease_until < NOW() OR o.lease_owner = $3))` : '';
+        const claimOrphan = lease ? ` OR ${reclaimableOrphanSql('o.prev', 'o.lease_until', 'o.lease_owner', '$3')}` : '';
         const result = await this.query<{ prev: string }>(
             `UPDATE agent_tasks t
              SET status = 'pending', error = NULL, failure_class = NULL, completed_at = NULL, updated_at = NOW()${lease ? leaseSetSql(3) : ''}

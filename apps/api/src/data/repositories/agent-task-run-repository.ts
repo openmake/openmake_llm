@@ -7,7 +7,7 @@
 import { BaseRepository } from './base-repository';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
-import { orphanedClaimSql } from './agent-task-lease-sql';
+import { reclaimableOrphanSql } from './agent-task-lease-sql';
 
 /** claimForExecute 가 잡은 실행 시작 claim — 디스패치가 거절되면 revertClaim 이 이것으로 되돌린다. */
 export interface ExecuteClaim {
@@ -134,15 +134,16 @@ export class AgentTaskRunRepository extends BaseRepository {
      * failed(recovery_limit)로 바꾼다. 체크포인트는 그대로 둔다(사용자가 이어 할 수 있다). 그 사이 /execute·/resume·다른 서버의
      * 복구가 잡았으면 0행(false)이고 건드리지 않는다.
      */
-    async failRecoveryLimit(taskId: string, expectedPrev: string): Promise<boolean> {
+    async failRecoveryLimit(taskId: string, expectedPrev: string, leaseOwner?: string): Promise<boolean> {
         // (2026-10-22 R2) 소유권 있는 pending 은 claim 중 죽은 행 — pending 을 읽었을 때만 소유권 컬럼을 본다(176 적용 전 폴백은 pending 을 넘기지 않는다)
-        const leased = expectedPrev === 'pending';
+        // (#1473) 지났거나 내 것일 때만 — 목록을 읽은 뒤 다른 서버가 claim 해 간 pending 은 닫지 않는다. owner 가 없으면 pending 을 맞추지 않는다.
+        const leased = expectedPrev === 'pending' && leaseOwner !== undefined;
         const r = await this.query<{ prev: string }>(
             `UPDATE agent_tasks t SET status = 'failed', error = $2, failure_class = $3, completed_at = NOW(), updated_at = NOW(), terminal_notify_pending = TRUE
-             FROM (SELECT id, status AS prev, error AS prev_error${leased ? ', lease_until' : ''} FROM agent_tasks WHERE id = $1 FOR UPDATE) o
-             WHERE t.id = o.id AND o.prev = $4 AND (o.prev IN ('running', 'paused') OR (o.prev = 'failed' AND o.prev_error = $5)${leased ? ` OR ${orphanedClaimSql('o.prev', 'o.lease_until')}` : ''})
+             FROM (SELECT id, status AS prev, error AS prev_error${leased ? ', lease_until, lease_owner' : ''} FROM agent_tasks WHERE id = $1 FOR UPDATE) o
+             WHERE t.id = o.id AND o.prev = $4 AND (o.prev IN ('running', 'paused') OR (o.prev = 'failed' AND o.prev_error = $5)${leased ? ` OR ${reclaimableOrphanSql('o.prev', 'o.lease_until', 'o.lease_owner', '$6')}` : ''})
              RETURNING o.prev`,
-            [taskId, AGENT_TASK_RECOVERY_LIMIT_ERROR, classifyAgentTaskFailure(AGENT_TASK_RECOVERY_LIMIT_ERROR), expectedPrev, 'server restarted'],
+            [taskId, AGENT_TASK_RECOVERY_LIMIT_ERROR, classifyAgentTaskFailure(AGENT_TASK_RECOVERY_LIMIT_ERROR), expectedPrev, 'server restarted', ...(leased ? [leaseOwner] : [])],
         );
         const row = r.rows[0];
         if ((r.rowCount ?? 0) === 0 || !row) return false;

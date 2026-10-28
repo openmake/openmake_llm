@@ -33,11 +33,22 @@ describe('AgentTaskParkRepository.parkForDeviceRecovery', () => {
     it('소유권 있는 pending(claim 고아)도 주차한다 — 그 상태를 읽었을 때만 소유권 컬럼을 본다', async () => {
         const { pool, calls } = fakePool([{ rows: [{ id: 1 }], rowCount: 1 }, { rows: [], rowCount: 0 }]);
         const repo = new AgentTaskParkRepository(pool);
-        await expect(repo.parkForDeviceRecovery('t1', 'pending')).resolves.toBe(true);
-        expect(calls[0].sql).toContain("(o.prev = 'pending' AND o.lease_until IS NOT NULL)");
+        await expect(repo.parkForDeviceRecovery('t1', 'pending', 'host:0')).resolves.toBe(true);
+        // (#1473) 지났거나 내 것일 때만 — 목록을 읽은 뒤 다른 서버가 claim 해 간 pending 은 주차하지 않는다
+        expect(calls[0].sql).toContain("((o.prev = 'pending' AND o.lease_until IS NOT NULL) AND (o.lease_until < NOW() OR o.lease_owner = $6))");
+        expect(calls[0].sql).toContain('SELECT id, status AS prev, error AS prev_error, lease_until, lease_owner FROM agent_tasks');
         expect(calls[0].sql).toContain('o.prev = $2');
+        expect(calls[0].params).toEqual(['t1', 'pending', 'server restarted', 'boot recovery claim', 'device_wait', 'host:0']);
+        await repo.parkForDeviceRecovery('t1', 'failed', 'host:0');
+        expect(calls[1].sql).not.toContain('lease_'); // pending 이 아니면 종전 문장 그대로
+        expect(calls[1].params).toEqual(['t1', 'failed', 'server restarted', 'boot recovery claim', 'device_wait']);
+    });
+
+    it('소유권 owner 없이 pending 을 넘기면 pending 행을 맞추지 않는다(안전한 기본 — 남의 claim 을 주차하지 않게)', async () => {
+        const { pool, calls } = fakePool([{ rows: [], rowCount: 0 }]);
+        await expect(new AgentTaskParkRepository(pool).parkForDeviceRecovery('t1', 'pending')).resolves.toBe(false);
+        expect(calls[0].sql).not.toContain('lease_');
+        expect(calls[0].sql).not.toContain("o.prev = 'pending'");
         expect(calls[0].params).toEqual(['t1', 'pending', 'server restarted', 'boot recovery claim', 'device_wait']);
-        await repo.parkForDeviceRecovery('t1', 'failed');
-        expect(calls[1].sql).not.toContain('lease_until'); // 176 적용 전 폴백 경로는 pending 을 넘기지 않는다 — 종전 문장
     });
 });
