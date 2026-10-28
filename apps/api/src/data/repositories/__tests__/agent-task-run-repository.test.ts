@@ -183,12 +183,24 @@ describe('AgentTaskRunRepository.failRecoveryLimit', () => {
     it('소유권 있는 pending(claim 고아)도 닫는다 — 그 상태를 읽었을 때만 소유권 컬럼을 본다', async () => {
         const { pool, calls } = fakePool([{ rows: [{ prev: 'pending' }], rowCount: 1 }, { rows: [], rowCount: 1 }, { rows: [], rowCount: 0 }]);
         const repo = new AgentTaskRunRepository(pool);
-        await expect(repo.failRecoveryLimit('t1', 'pending')).resolves.toBe(true);
-        expect(calls[0].sql).toContain("(o.prev = 'pending' AND o.lease_until IS NOT NULL)");
-        expect(calls[0].params).toEqual(['t1', 'recovery_limit', 'interrupted', 'pending', 'server restarted']);
+        await expect(repo.failRecoveryLimit('t1', 'pending', 'host:0')).resolves.toBe(true);
+        // (#1473) 지났거나 내 것일 때만 — 목록을 읽은 뒤 다른 서버가 claim 해 간 pending 은 닫지 않는다
+        expect(calls[0].sql).toContain("((o.prev = 'pending' AND o.lease_until IS NOT NULL) AND (o.lease_until < NOW() OR o.lease_owner = $6))");
+        expect(calls[0].sql).toContain('SELECT id, status AS prev, error AS prev_error, lease_until, lease_owner FROM agent_tasks');
+        expect(calls[0].params).toEqual(['t1', 'recovery_limit', 'interrupted', 'pending', 'server restarted', 'host:0']);
         expect(calls[1].params).toEqual(['t1', 'pending', 'failed', 'recovery_limit']);
-        await repo.failRecoveryLimit('t1', 'running');
-        expect(calls[2].sql).not.toContain('lease_until');
+        await repo.failRecoveryLimit('t1', 'running', 'host:0');
+        expect(calls[2].sql).not.toContain('lease_'); // pending 이 아니면 종전 문장 그대로
+        expect(calls[2].params).toEqual(['t1', 'recovery_limit', 'interrupted', 'running', 'server restarted']);
+    });
+
+    it('소유권 owner 없이 pending 을 넘기면 pending 행을 맞추지 않는다(안전한 기본 — 남의 claim 을 닫지 않게)', async () => {
+        const { pool, calls } = fakePool([{ rows: [], rowCount: 0 }]);
+        await expect(new AgentTaskRunRepository(pool).failRecoveryLimit('t1', 'pending')).resolves.toBe(false);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].sql).not.toContain('lease_');
+        expect(calls[0].sql).not.toContain("o.prev = 'pending'");
+        expect(calls[0].params).toEqual(['t1', 'recovery_limit', 'interrupted', 'pending', 'server restarted']);
     });
 });
 

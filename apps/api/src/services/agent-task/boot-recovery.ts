@@ -84,7 +84,7 @@ async function recoverTask(
     // 실행한 적 없는 대기(queued) 재제출은 해당 없다 — 체크포인트 없는 pending 고아는 센다(claim → running 전 죽음이 끝없이 돌지 않게, R2).
     // 횟수 조회 실패는 복구를 막지 않는다.
     if (task.status !== 'queued' && await recoveryLimitReached(task.id)) {
-        if (!(await new AgentTaskRunRepository(getPool()).failRecoveryLimit(task.id, task.status))) return 'skipped';
+        if (!(await new AgentTaskRunRepository(getPool()).failRecoveryLimit(task.id, task.status, lease?.owner))) return 'skipped';
         logger.warn(`[BootRecovery] 진행 없는 복구가 ${AGENT_TASK_LIMITS.RECOVERY_MAX_ATTEMPTS}회 되풀이됨 → 자동 재개 중단(recovery_limit): ${task.id}`);
         const limitAlert = { taskId: task.id, attempts: AGENT_TASK_LIMITS.RECOVERY_MAX_ATTEMPTS };
         void sendAgentTaskAlert('agent_task_recovery_limit', ALERT_TEXT.agent_task_recovery_limit.title, ALERT_TEXT.agent_task_recovery_limit.message(limitAlert), limitAlert);
@@ -94,7 +94,7 @@ async function recoverTask(
     // 로컬 실행 작업은 기기 대기로 주차한다 — 종전엔 재시작(배포)마다 실패로 남아 사용자가 직접 이어 해야 했다.
     // 기기가 등록되면 device-wait 가, 놓친 것은 주차 스윕이 재개하고, 대기 상한을 넘기면 실패로 끝난다. 이미 붙어 있으면 바로 재개를 시도한다.
     if (parkLocal) {
-        if (!(await new AgentTaskParkRepository(getPool()).parkForDeviceRecovery(task.id, task.status))) return 'skipped';
+        if (!(await new AgentTaskParkRepository(getPool()).parkForDeviceRecovery(task.id, task.status, lease?.owner))) return 'skipped';
         logger.info(`[BootRecovery] 로컬 실행 작업 → 기기 대기로 주차(기기가 연결되면 이어서 실행): ${task.id}`);
         try {
             // hitl-park 는 이 모듈을 끌어온다(resolveUserRole) — 정적으로 묶지 않는다

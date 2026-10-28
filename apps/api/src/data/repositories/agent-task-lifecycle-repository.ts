@@ -8,6 +8,7 @@
 import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentTask } from '../models/unified-database.types';
 import { recoverableRestartCondition } from './agent-task-run-repository';
+import { claimableLeaseSql, orphanedClaimSql, reclaimableOrphanSql } from './agent-task-lease-sql';
 import { AGENT_TASK_PARKED_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
 import type { ParkedTaskRow } from './agent-task-park-repository';
 
@@ -120,8 +121,8 @@ export class AgentTaskLifecycleRepository extends BaseRepository {
      */
     async getInterruptedAgentTasks(windowMs: number, leaseOwner?: string): Promise<AgentTask[]> {
         // 실행 소유권(176) — 다른 서버가 살아 있는 소유권으로 실행 중인 작업은 중단된 것이 아니다. owner 없이 부르면 종전 조회.
-        const notOthers = leaseOwner ? ' AND (lease_owner IS NULL OR lease_owner = $2 OR lease_until < NOW())' : '';
-        const claimOrphan = leaseOwner ? " OR (status = 'pending' AND lease_until IS NOT NULL)" : '';
+        const notOthers = leaseOwner ? ` AND ${claimableLeaseSql('$2')}` : '';
+        const claimOrphan = leaseOwner ? ` OR ${orphanedClaimSql('status', 'lease_until')}` : '';
         const result = await this.query<AgentTask>(
             `SELECT * FROM agent_tasks
              WHERE ((status IN ('running', 'paused', 'queued')${claimOrphan}) AND NOT ${parkedTaskCondition('agent_tasks')}${notOthers})
@@ -143,7 +144,7 @@ export class AgentTaskLifecycleRepository extends BaseRepository {
      * 가져가 다시 claim 했으면 0행 — 두 곳이 같이 디스패치하지 않게). 소유권을 끄거나 176 적용 전이면 lease 없이 종전 문장.
      */
     async claimAgentTaskForRecovery(taskId: string, expectedPrev?: string, lease?: { owner: string; leaseMs: number }): Promise<boolean> {
-        const claimOrphan = lease ? " OR (o.prev = 'pending' AND o.lease_until IS NOT NULL AND (o.lease_until < NOW() OR o.lease_owner = $3))" : '';
+        const claimOrphan = lease ? ` OR ${reclaimableOrphanSql('o.prev', 'o.lease_until', 'o.lease_owner', '$3')}` : '';
         const result = await this.query<{ prev: string }>(
             `UPDATE agent_tasks t
              SET status = 'pending', error = NULL, failure_class = NULL, completed_at = NULL, updated_at = NOW()${lease ? leaseSetSql(3) : ''}
