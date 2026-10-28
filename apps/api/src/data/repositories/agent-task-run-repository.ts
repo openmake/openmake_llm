@@ -7,6 +7,7 @@
 import { BaseRepository } from './base-repository';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
+import { orphanedClaimSql } from './agent-task-lease-sql';
 
 /** claimForExecute 가 잡은 실행 시작 claim — 디스패치가 거절되면 revertClaim 이 이것으로 되돌린다. */
 export interface ExecuteClaim {
@@ -139,7 +140,7 @@ export class AgentTaskRunRepository extends BaseRepository {
         const r = await this.query<{ prev: string }>(
             `UPDATE agent_tasks t SET status = 'failed', error = $2, failure_class = $3, completed_at = NOW(), updated_at = NOW(), terminal_notify_pending = TRUE
              FROM (SELECT id, status AS prev, error AS prev_error${leased ? ', lease_until' : ''} FROM agent_tasks WHERE id = $1 FOR UPDATE) o
-             WHERE t.id = o.id AND o.prev = $4 AND (o.prev IN ('running', 'paused') OR (o.prev = 'failed' AND o.prev_error = $5)${leased ? " OR (o.prev = 'pending' AND o.lease_until IS NOT NULL)" : ''})
+             WHERE t.id = o.id AND o.prev = $4 AND (o.prev IN ('running', 'paused') OR (o.prev = 'failed' AND o.prev_error = $5)${leased ? ` OR ${orphanedClaimSql('o.prev', 'o.lease_until')}` : ''})
              RETURNING o.prev`,
             [taskId, AGENT_TASK_RECOVERY_LIMIT_ERROR, classifyAgentTaskFailure(AGENT_TASK_RECOVERY_LIMIT_ERROR), expectedPrev, 'server restarted'],
         );

@@ -7,6 +7,7 @@
 import { BaseRepository } from './base-repository';
 import { AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
 import { RECOVERY_CLAIM_REASON } from './agent-task-run-repository';
+import { orphanedClaimSql } from './agent-task-lease-sql';
 
 /** 주차 스윕이 보는 행 — reason·waited_ms 는 마지막 전이 이벤트(주차 표식) 기준. */
 export interface ParkedTaskRow {
@@ -69,7 +70,7 @@ export class AgentTaskParkRepository extends BaseRepository {
             `WITH parked AS (
                  UPDATE agent_tasks t SET status = 'paused', error = NULL, failure_class = NULL, completed_at = NULL, terminal_notify_pending = FALSE, updated_at = NOW()
                  FROM (SELECT id, status AS prev, error AS prev_error${leased ? ', lease_until' : ''} FROM agent_tasks WHERE id = $1 FOR UPDATE) o
-                 WHERE t.id = o.id AND o.prev = $2 AND (o.prev IN ('running', 'paused', 'queued') OR (o.prev = 'failed' AND o.prev_error = $3)${leased ? " OR (o.prev = 'pending' AND o.lease_until IS NOT NULL)" : ''})
+                 WHERE t.id = o.id AND o.prev = $2 AND (o.prev IN ('running', 'paused', 'queued') OR (o.prev = 'failed' AND o.prev_error = $3)${leased ? ` OR ${orphanedClaimSql('o.prev', 'o.lease_until')}` : ''})
                  RETURNING t.id, o.prev
              ), claimed AS (
                  INSERT INTO agent_task_events (task_id, from_status, to_status, reason) SELECT id, prev, 'paused', $4 FROM parked RETURNING task_id

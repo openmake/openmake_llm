@@ -7,14 +7,10 @@
 import { BaseRepository } from './base-repository';
 import type { AgentTask } from '../models/unified-database.types';
 import { parkedTaskCondition } from './agent-task-repository';
+import { claimableLeaseSql, expiredLeaseSql } from './agent-task-lease-sql';
 
-/**
- * 지난 소유권 조건(#1473) — 소유권을 잡은 적 있고(NOT NULL) 만료됐다. NULL(소유권을 잡은 적 없음 — 레거시·소유권 꺼짐)은
- * 살아 있지도 지나지도 않았다. TS 짝은 hasLiveLease — 둘이 같은 경계를 쓴다.
- */
-export function expiredLeaseSql(col = 'lease_until'): string {
-    return `${col} IS NOT NULL AND ${col} < NOW()`;
-}
+/** 지난 소유권 조건은 agent-task-lease-sql 로 옮겼다(#1473) — 기존 import 를 위해 다시 내보낸다. */
+export { expiredLeaseSql };
 
 /** 살아 있는 소유권인가(#1473) — expiredLeaseSql 의 반대쪽. NULL 은 false(살아 있는 소유자가 없다). */
 export function hasLiveLease(leaseUntil: string | Date | null | undefined, now: number = Date.now()): boolean {
@@ -39,7 +35,7 @@ export class AgentTaskLeaseRepository extends BaseRepository {
     async acquireLease(taskId: string, owner: string, leaseMs: number): Promise<boolean> {
         const r = await this.query(
             `UPDATE agent_tasks SET lease_owner = $2, lease_until = NOW() + make_interval(secs => $3)
-             WHERE id = $1 AND (lease_owner IS NULL OR lease_owner = $2 OR lease_until < NOW())`,
+             WHERE id = $1 AND ${claimableLeaseSql('$2')}`,
             [taskId, owner, leaseMs / 1000]);
         return (r.rowCount ?? 0) > 0;
     }
