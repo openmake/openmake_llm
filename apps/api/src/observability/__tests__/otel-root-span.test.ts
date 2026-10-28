@@ -4,13 +4,18 @@
  * 그 안의 span·로그 trace id 는 새 span 을 따른다. root 없는 보통 span 은 종전대로 활성 부모 아래에 붙는다.
  */
 import { context, trace } from '@opentelemetry/api';
-import { InMemorySpanExporter, NodeTracerProvider, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
+import { InMemorySpanExporter, SimpleSpanProcessor, TracerProvider } from '@opentelemetry/sdk-trace';
 import { getCurrentTraceId, withSpan } from '../otel';
 
 const exporter = new InMemorySpanExporter();
-const provider = new NodeTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] });
+const provider = new TracerProvider({ spanProcessors: [new SimpleSpanProcessor({ exporter })] });
 
-beforeAll(() => provider.register());
+// sdk-trace 3.x 에는 NodeTracerProvider.register() 가 없다 — 부모·자식 연결에 필요한 컨텍스트 매니저를 직접 등록한다.
+beforeAll(() => {
+    context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
+    trace.setGlobalTracerProvider(provider);
+});
 afterAll(async () => {
     await provider.shutdown();
     trace.disable();
