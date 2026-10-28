@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.115.7](https://github.com/openmake/openmake_llm/compare/v1.115.6...v1.115.7) (2026-10-28)
+
+
+### 🐛 버그 수정
+
+* **deploy:** keep an external compose's own env file ([713e247](https://github.com/openmake/openmake_llm/commit/713e24787010c9c88199d30957b83b8add6d205a))
+* **deploy:** keep an external compose's own env file ([2d4bdd2](https://github.com/openmake/openmake_llm/commit/2d4bdd26521c613c7adb130d5b2000a665c40621))
+* **lint:** ignore local .worktrees in the root eslint config ([9b635c1](https://github.com/openmake/openmake_llm/commit/9b635c1be92aff4812ae89502e9179d25fed454a))
+* **lint:** ignore local .worktrees in the root eslint config ([7746ed5](https://github.com/openmake/openmake_llm/commit/7746ed54013e98aff811178079d5e4acee5e8c21))
+
 ## [1.115.6](https://github.com/openmake/openmake_llm/compare/v1.115.5...v1.115.6) (2026-10-27)
 
 
