@@ -31,6 +31,10 @@ test('the root eslint config selects the pipeline suite', () => {
   const r = selectFeatures(['eslint.config.mjs']);
   assert.equal(r.pipeline, true); assert.deepEqual(r.api, []); assert.equal(r.web, false);
 });
+test('the contract export script selects the pipeline suite', () => {
+  const r = selectFeatures(['scripts/export-openapi.ts']);
+  assert.equal(r.pipeline, true); assert.deepEqual(r.api, []); assert.equal(r.web, false);
+});
 test('an unmapped root shell script still throws', () => {
   assert.throws(() => selectFeatures(['never-mapped.sh']), /Unmapped changed source: never-mapped\.sh/);
 });
