@@ -50,6 +50,7 @@ test-results/
 .spawner/
 .claude/
 .superpowers/
+.worktrees/
 .cursorrules
 .ruff_cache/
 
