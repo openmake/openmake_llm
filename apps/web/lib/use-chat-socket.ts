@@ -7,6 +7,8 @@ import { useLocale, useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile, WsStreamEnvelope } from "@openmake/shared-types";
 import { nextFollowup } from "./followup-queue";
 import { acceptStreamEvent, cursorAfterResume, resumeCursorFields, EMPTY_STREAM_CURSOR, type StreamCursor } from "./ws-seq";
+import { createWsLiveness } from "./ws-liveness";
+import { clearsPendingAbort, messagesOnReopen } from "./ws-pending-abort";
 import { discardOnReset, discardOnSend, filterStreamEvent, EMPTY_DISCARD, type StreamDiscardState } from "./stream-discard";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "./store";
 import { ApiClient, csrfHeaders, refreshOnce } from "./api-client";
@@ -133,6 +135,11 @@ export function useChatSocket() {
   // 스트리밍 도중 소켓이 끊겼음(탭 백그라운드·절전 등) — 재연결 직후 서버에 resume 을 보내
   // 서버가 계속 생성해 둔 답변을 이어받는다(서버 ws-stream-registry 와 페어).
   const pendingResumeRef = useRef(false);
+  // 생성 중에 누른 중단 — 죽은 소켓으로 보냈으면 서버에 닿지 않았다. 재연결 뒤 resume 다음에 다시 보내고,
+  // 서버가 결과(aborted·done·error·resume_none)를 알려 주면 푼다(ws-pending-abort).
+  const pendingAbortRef = useRef(false);
+  // 현재 소켓의 생존 확인 조작 — 네트워크·탭 복귀 때 바로 확인(probe)하거나 닫힌 소켓을 정리(drop)한다.
+  const socketCtlRef = useRef<{ probe: () => void; drop: () => void } | null>(null);
   // 이어받기 커서(F19.11) — 마지막으로 받은 스트림 이벤트의 streamId·seq. resume 에 실어 중복 없이 이어받고,
   // 재생·재연결로 다시 온 seq <= lastSeq 이벤트는 무시한다(서버 ws-stream-registry 와 페어).
   const streamCursorRef = useRef<StreamCursor>(EMPTY_STREAM_CURSOR);
@@ -190,6 +197,50 @@ export function useChatSocket() {
     const ws = new WebSocket(resolveWsUrl());
     wsRef.current = ws;
 
+    // 끊김 처리 — onclose 와 죽은 소켓 버리기(dropSocket)가 함께 쓴다. 소켓마다 한 번만 돈다.
+    let closedHandled = false;
+    const handleClosed = () => {
+      if (closedHandled) return;
+      closedHandled = true;
+      liveness.stop();
+      setConnected(false);
+      // 생성 중에 끊겼으면 재연결 후 이어받기 대상으로 표시(서버는 유예 동안 계속 생성한다).
+      if (useAppStore.getState().isGenerating) pendingResumeRef.current = true;
+      setStreaming(false);
+      if (unmountedRef.current) return;
+      // 지수 백오프 재연결 (최대 10회) — 타이머 핸들을 저장해 언마운트 시 취소 가능하게.
+      if (reconnectRef.current < 10) {
+        const delay = Math.min(
+          CLIENT_TIMING.WS_RECONNECT_BASE_MS * 2 ** reconnectRef.current,
+          CLIENT_TIMING.WS_RECONNECT_MAX_MS,
+        );
+        reconnectRef.current += 1;
+        reconnectTimerRef.current = setTimeout(() => connectRef.current(), delay);
+      }
+    };
+    // 죽은(half-open) 소켓 버리기 — 핸들러를 먼저 떼어 늦게 오는 onclose 가 두 번째 재연결을 걸지 않게 하고,
+    // 1~2분 늦게 올 onclose 를 기다리지 않고 끊김 처리(이어받기 표시·재연결)를 지금 한다.
+    const dropSocket = () => {
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onclose = null;
+      ws.onerror = null;
+      try {
+        ws.close();
+      } catch {
+        /* already closed */
+      }
+      handleClosed();
+    };
+    // 생존 확인(ws-liveness) — 조용하면 앱 ping, 응답이 없으면 버리고 재연결. 서버 sockets/ws-app-ping 과 페어.
+    const liveness = createWsLiveness({
+      intervalMs: CLIENT_TIMING.WS_LIVENESS_INTERVAL_MS,
+      timeoutMs: CLIENT_TIMING.WS_LIVENESS_TIMEOUT_MS,
+      sendPing: () => ws.send(JSON.stringify({ type: "ping", t: Date.now() })),
+      onDead: dropSocket,
+    });
+    socketCtlRef.current = { probe: () => liveness.probe(), drop: dropSocket };
+
     const adoptStreamSessionId = (id: string) => {
       adoptingSessionIdRef.current = true;
       try {
@@ -207,10 +258,16 @@ export function useChatSocket() {
       }
       setConnected(true);
       reconnectRef.current = 0;
+      liveness.start();
+      let resume: Record<string, unknown> | null = null;
       if (pendingResumeRef.current) {
         pendingResumeRef.current = false;
-        ws.send(JSON.stringify({ type: "resume", anonSessionId: getAnonSessionId(), ...resumeCursorFields(streamCursorRef.current) }));
+        resume = { type: "resume", anonSessionId: getAnonSessionId(), ...resumeCursorFields(streamCursorRef.current) };
       }
+      // resume 이 스트림(과 서버 중단 컨트롤러)을 이 소켓에 붙인 뒤에 중단을 다시 보낸다
+      const reopen = messagesOnReopen(resume, pendingAbortRef.current);
+      pendingAbortRef.current = reopen.pendingAbort;
+      for (const m of reopen.messages) ws.send(JSON.stringify(m));
       if (lastTaskSeqRef.current !== null) {
         ws.send(JSON.stringify({ type: "agent_task_resume", afterSeq: lastTaskSeqRef.current }));
       }
@@ -342,12 +399,15 @@ export function useChatSocket() {
     };
 
     ws.onmessage = (ev) => {
+      liveness.noteInbound(); // 무엇이든 받았으면 살아 있다
       let data: WsServerEvent;
       try {
         data = JSON.parse(ev.data) as WsServerEvent;
       } catch {
         return;
       }
+      if (data.type === "pong") return; // 생존 확인 응답 — 스트림 이벤트가 아니다(봉투·seq 없음)
+      if (clearsPendingAbort(data.type)) pendingAbortRef.current = false;
       // 대화를 지운 뒤에 도착한 그 답변의 이벤트(종료 포함)는 버린다 — 빈 새 대화에 이전 답변이 써지지 않게
       {
         const streamId = (data as WsStreamEnvelope).streamId;
@@ -653,22 +713,7 @@ export function useChatSocket() {
       }
     };
 
-    ws.onclose = () => {
-      setConnected(false);
-      // 생성 중에 끊겼으면 재연결 후 이어받기 대상으로 표시(서버는 유예 동안 계속 생성한다).
-      if (useAppStore.getState().isGenerating) pendingResumeRef.current = true;
-      setStreaming(false);
-      if (unmountedRef.current) return;
-      // 지수 백오프 재연결 (최대 10회) — 타이머 핸들을 저장해 언마운트 시 취소 가능하게.
-      if (reconnectRef.current < 10) {
-        const delay = Math.min(
-          CLIENT_TIMING.WS_RECONNECT_BASE_MS * 2 ** reconnectRef.current,
-          CLIENT_TIMING.WS_RECONNECT_MAX_MS,
-        );
-        reconnectRef.current += 1;
-        reconnectTimerRef.current = setTimeout(() => connectRef.current(), delay);
-      }
-    };
+    ws.onclose = handleClosed;
 
     ws.onerror = () => ws.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -704,6 +749,35 @@ export function useChatSocket() {
     };
     window.addEventListener(AUTH_RESTORED_EVENT, onAuthRestored);
     return () => window.removeEventListener(AUTH_RESTORED_EVENT, onAuthRestored);
+  }, []);
+
+  // 네트워크·탭 복귀 — 소켓이 열려 있으면 살아 있는지 바로 확인(죽었으면 ws-liveness 가 제한시간 안에 버리고 재연결),
+  // 이미 닫혔으면 백오프 대기를 버리고 바로 다시 연다.
+  useEffect(() => {
+    const onOnline = () => {
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        socketCtlRef.current?.probe();
+        return;
+      }
+      if (ws?.readyState === WebSocket.CONNECTING) return;
+      socketCtlRef.current?.drop(); // 닫히는 중이면 끊김 처리를 지금 끝낸다(이미 끝났으면 무동작)
+      reconnectRef.current = 0;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      connectRef.current();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && wsRef.current?.readyState === WebSocket.OPEN) socketCtlRef.current?.probe();
+    };
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   // 반환값: 실제 전송 여부 — 재생성(resend) 경로가 히스토리 되감기 원복 판단에 사용.
@@ -792,7 +866,10 @@ export function useChatSocket() {
   );
 
   const abort = useCallback(() => {
-    wsRef.current?.send(JSON.stringify({ type: "abort" }));
+    // 생성 중이면 기억해 둔다 — 소켓이 죽어 있었다면 재연결 뒤 resume 다음에 다시 보낸다(ws-pending-abort).
+    if (useAppStore.getState().isGenerating) pendingAbortRef.current = true;
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "abort" }));
   }, []);
 
   // 답변이 흐르는 도중 대화를 지우면(새 대화 등) 서버 생성을 멈추고, 이미 오고 있는 그 답변의 이벤트는 버린다.

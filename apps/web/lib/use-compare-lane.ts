@@ -7,6 +7,7 @@ import { useAppStore } from "./store";
 import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
 import { resolveWsUrl } from "./use-chat-socket";
+import { createWsLiveness } from "./ws-liveness";
 
 /**
  * 모델 비교 모드 레인 훅 (2026-09-09).
@@ -116,6 +117,45 @@ export function useCompareLane(lane: CompareLaneId): CompareLane {
     const ws = new WebSocket(resolveWsUrl());
     wsRef.current = ws;
 
+    // 끊김 처리 — onclose 와 죽은 소켓 버리기가 함께 쓴다. 소켓마다 한 번만 돈다.
+    let closedHandled = false;
+    const handleClosed = () => {
+      if (closedHandled) return;
+      closedHandled = true;
+      liveness.stop();
+      setConnected(false);
+      if (streamingRef.current) pendingResumeRef.current = true;
+      setStreaming(false);
+      if (unmountedRef.current) return;
+      if (reconnectRef.current < 10) {
+        const delay = Math.min(
+          CLIENT_TIMING.WS_RECONNECT_BASE_MS * 2 ** reconnectRef.current,
+          CLIENT_TIMING.WS_RECONNECT_MAX_MS,
+        );
+        reconnectRef.current += 1;
+        reconnectTimerRef.current = setTimeout(() => connectRef.current(), delay);
+      }
+    };
+    // 생존 확인(ws-liveness, 메인 채팅과 같은 규칙) — 응답이 없는 half-open 소켓은 핸들러를 떼고 버린 뒤
+    // 늦게 올 onclose 를 기다리지 않고 끊김 처리를 지금 한다.
+    const liveness = createWsLiveness({
+      intervalMs: CLIENT_TIMING.WS_LIVENESS_INTERVAL_MS,
+      timeoutMs: CLIENT_TIMING.WS_LIVENESS_TIMEOUT_MS,
+      sendPing: () => ws.send(JSON.stringify({ type: "ping", t: Date.now() })),
+      onDead: () => {
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        try {
+          ws.close();
+        } catch {
+          /* already closed */
+        }
+        handleClosed();
+      },
+    });
+
     ws.onopen = () => {
       // 언마운트 후 뒤늦게 열린 소켓이면 즉시 닫아 좀비를 방지.
       if (unmountedRef.current) {
@@ -124,6 +164,7 @@ export function useCompareLane(lane: CompareLaneId): CompareLane {
       }
       setConnected(true);
       reconnectRef.current = 0;
+      liveness.start();
       if (pendingResumeRef.current) {
         pendingResumeRef.current = false;
         ws.send(
@@ -137,6 +178,7 @@ export function useCompareLane(lane: CompareLaneId): CompareLane {
     };
 
     ws.onmessage = (ev) => {
+      liveness.noteInbound(); // 무엇이든 받았으면 살아 있다(pong 은 아래 default 에서 무시된다)
       let data: WsServerEvent;
       try {
         data = JSON.parse(ev.data) as WsServerEvent;
@@ -240,20 +282,7 @@ export function useCompareLane(lane: CompareLaneId): CompareLane {
       }
     };
 
-    ws.onclose = () => {
-      setConnected(false);
-      if (streamingRef.current) pendingResumeRef.current = true;
-      setStreaming(false);
-      if (unmountedRef.current) return;
-      if (reconnectRef.current < 10) {
-        const delay = Math.min(
-          CLIENT_TIMING.WS_RECONNECT_BASE_MS * 2 ** reconnectRef.current,
-          CLIENT_TIMING.WS_RECONNECT_MAX_MS,
-        );
-        reconnectRef.current += 1;
-        reconnectTimerRef.current = setTimeout(() => connectRef.current(), delay);
-      }
-    };
+    ws.onclose = handleClosed;
 
     ws.onerror = () => ws.close();
   }, [patchLastAssistant, setStreaming]);
