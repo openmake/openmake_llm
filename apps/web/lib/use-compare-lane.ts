@@ -178,11 +178,15 @@ export function useCompareLane(lane: CompareLaneId): CompareLane {
     };
 
     ws.onmessage = (ev) => {
-      liveness.noteInbound(); // 무엇이든 받았으면 살아 있다(pong 은 아래 default 에서 무시된다)
+      liveness.noteInbound(); // 무엇이든 받았으면 살아 있다
       let data: WsServerEvent;
       try {
         data = JSON.parse(ev.data) as WsServerEvent;
       } catch {
+        return;
+      }
+      if (data.type === "pong") {
+        liveness.notePong(); // 생존 확인 응답 — 서버가 앱 ping 을 지원한다
         return;
       }
       switch (data.type) {

@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createWsLiveness, type WsLivenessTimers } from '../../apps/web/lib/ws-liveness';
+import { createWsLiveness, type AppPingCapability, type WsLivenessTimers } from '../../apps/web/lib/ws-liveness';
 import { clearsPendingAbort, messagesOnReopen } from '../../apps/web/lib/ws-pending-abort';
 
 /** 가짜 시계 — advance(ms) 로 그 사이 만기된 타이머를 시각 순서대로 실행한다. */
@@ -33,7 +33,8 @@ function fakeTimers(): WsLivenessTimers & { advance(ms: number): void; pending()
   };
 }
 
-function setup() {
+/** 기본은 "이 페이지가 pong 을 한 번 받아 본" 상태 — 서버가 앱 ping 을 지원한다고 안다. */
+function setup(capability: AppPingCapability = { supported: true }) {
   const timers = fakeTimers();
   const pings: number[] = [];
   let dead = 0;
@@ -43,8 +44,9 @@ function setup() {
     sendPing: () => pings.push(timers.now()),
     onDead: () => { dead += 1; },
     timers,
+    capability,
   });
-  return { timers, pings, live, dead: () => dead };
+  return { timers, pings, live, dead: () => dead, capability };
 }
 
 test('계속 수신이 있으면 ping 을 보내지 않는다', () => {
@@ -139,10 +141,48 @@ test('sendPing 이 던져도(닫히는 소켓) 응답 없음으로 보고 onDead
     intervalMs: 15_000, timeoutMs: 10_000, timers,
     sendPing: () => { throw new Error('InvalidStateError'); },
     onDead: () => { dead += 1; },
+    capability: { supported: true },
   });
   live.start();
   timers.advance(25_000);
   assert.equal(dead, 1);
+});
+
+// ─── 서버 지원 확인 전에는 죽었다고 판정하지 않는다(구 서버·배포 중 혼재) ───
+
+test('pong 을 한 번도 받지 못한 페이지에서는 ping 은 보내되 onDead 는 부르지 않는다', () => {
+  const { timers, pings, live, dead } = setup({ supported: false });
+  live.start();
+  timers.advance(120_000);
+  live.probe();
+  timers.advance(60_000);
+  assert.ok(pings.length >= 2, '지원 여부를 배우려고 ping 은 계속 보낸다');
+  assert.equal(dead(), 0);
+});
+
+test('notePong 은 지원을 기록하고 수신으로 친다 — 그 뒤로는 무응답이면 onDead', () => {
+  const { timers, live, dead, capability } = setup({ supported: false });
+  live.start();
+  timers.advance(15_000); // ping
+  live.notePong();
+  assert.equal(capability.supported, true);
+  timers.advance(9_000);
+  assert.equal(dead(), 0); // 응답으로 대기가 풀렸다
+  timers.advance(16_000 + 10_000); // 다음 ping 에 무응답
+  assert.equal(dead(), 1);
+});
+
+test('지원 여부는 연결끼리 공유된다 — 이전 소켓에서 받은 pong 이면 새 소켓도 판정한다', () => {
+  const shared: AppPingCapability = { supported: false };
+  const first = setup(shared);
+  first.live.start();
+  first.live.notePong();
+  first.live.stop();
+  const second = setup(shared);
+  second.live.start();
+  second.live.probe(); // 중단 버튼 등 — 즉시 확인
+  second.timers.advance(10_000);
+  assert.equal(second.dead(), 1);
 });
 
 // ─── 재연결 뒤 중단 다시 보내기 ───
