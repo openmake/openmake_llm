@@ -16,6 +16,7 @@
     "apps/discord-bot/": "discordBot"
   },
   "exactFiles": {
+    "eslint.config.mjs": "pipeline",
     "install_linux.sh": "pipeline",
     "openmake_llm.sh": "pipeline",
     "packages/shared-types/src/index.ts": "web",
