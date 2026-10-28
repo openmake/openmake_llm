@@ -19,6 +19,7 @@ import { createLogger } from '../../utils/logger';
 import { LEGACY_SCHEMA } from './legacy-schema';
 import { parkedTaskCondition } from '../repositories/agent-task-repository';
 import { leaseOwner } from '../../config/lease-owner';
+import { claimableLeaseSql } from '../repositories/agent-task-lease-sql';
 
 const logger = createLogger('SchemaInitializer');
 
@@ -104,7 +105,7 @@ export async function initSchema(pool: Pool): Promise<void> {
         // 실행 소유권(176) — 다른 서버가 살아 있는 소유권으로 실행 중인 작업은 좀비가 아니다. 소유권이 없거나(종전 작업),
         // 내 것이거나(같은 자리에서 다시 뜸), 지난 작업만 마킹한다. 컬럼이 아직 없으면(176 적용 전 부팅) 종전 조건 그대로.
         const zombie = await pool.query('SELECT lease_owner FROM agent_tasks LIMIT 0')
-            .then(() => `${running} AND (lease_owner IS NULL OR lease_owner = '${leaseOwner()}' OR lease_until < NOW())`)
+            .then(() => `${running} AND ${claimableLeaseSql(`'${leaseOwner()}'`)}`)
             .catch(() => running);
         await pool.query(
             `INSERT INTO agent_task_events (task_id, from_status, to_status, reason)

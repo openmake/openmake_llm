@@ -14,7 +14,7 @@ const expired: unknown[] = [];
 const takeOver = jest.fn(async () => true);
 const runningHere = new Set<string>();
 const countRecoveries = jest.fn(async (_id: string) => 0);
-const failRecoveryLimit = jest.fn(async (_id: string, _prev: string) => true);
+const failRecoveryLimit = jest.fn(async (_id: string, _prev: string, _owner?: string) => true);
 
 jest.mock('../../data/models/unified-database', () => ({
     getUnifiedDatabase: () => ({ updateAgentTask, getAgentTaskSteps, getUserById }),
@@ -43,7 +43,7 @@ jest.mock('../../config/runtime-limits', () => ({
 }));
 const localBridge = { ENABLED: false, DEVICE_WAIT_ENABLED: true };
 jest.mock('../../config/local-bridge', () => ({ LOCAL_BRIDGE: localBridge }));
-const parkForDeviceRecovery = jest.fn(async (_id: string, _prev: string) => true);
+const parkForDeviceRecovery = jest.fn(async (_id: string, _prev: string, _owner?: string) => true);
 jest.mock('../../data/repositories/agent-task-park-repository', () => ({
     AgentTaskParkRepository: jest.fn().mockImplementation(() => ({ parkForDeviceRecovery })),
 }));
@@ -255,7 +255,7 @@ describe('claim 고아(pending + 소유권) 회수', () => {
         expired.push({ ...orphan, executor: 'local' });
         localBridge.ENABLED = true;
         await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 0 });
-        expect(parkForDeviceRecovery).toHaveBeenCalledWith('t1', 'pending');
+        expect(parkForDeviceRecovery).toHaveBeenCalledWith('t1', 'pending', leaseOwner());
         expect(claim).not.toHaveBeenCalled();
     });
 
@@ -263,7 +263,7 @@ describe('claim 고아(pending + 소유권) 회수', () => {
         expired.push(orphan);
         countRecoveries.mockResolvedValueOnce(3);
         await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 1 });
-        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'pending');
+        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'pending', leaseOwner());
         expect(dispatch).not.toHaveBeenCalled();
     });
 
@@ -272,7 +272,7 @@ describe('claim 고아(pending + 소유권) 회수', () => {
         expired.push({ ...orphan, checkpoint: null });
         countRecoveries.mockResolvedValueOnce(3);
         await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 1 });
-        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'pending');
+        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'pending', leaseOwner());
         expect(claim).not.toHaveBeenCalled();
         expect(dispatch).not.toHaveBeenCalled();
     });
@@ -287,7 +287,7 @@ describe('진행 없이 되풀이되는 복구 끊기', () => {
         countRecoveries.mockResolvedValueOnce(3);
         const r = await recoverInterruptedAgentTasks();
         expect(r).toEqual({ resumed: 0, failed: 1 });
-        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'failed');
+        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'failed', leaseOwner());
         expect(claim).not.toHaveBeenCalled();
         expect(dispatch).not.toHaveBeenCalled();
     });
@@ -324,7 +324,7 @@ describe('진행 없이 되풀이되는 복구 끊기', () => {
         expired.push({ ...resumable, status: 'running', lease_owner: 'other:0' });
         countRecoveries.mockResolvedValueOnce(3);
         await expect(sweepExpiredTaskLeases()).resolves.toEqual({ resumed: 0, failed: 1 });
-        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'running');
+        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'running', leaseOwner());
         expect(dispatch).not.toHaveBeenCalled();
     });
 });
@@ -338,7 +338,7 @@ describe('로컬 기기 작업 — 재시작 뒤 기기 대기로 주차', () =>
         interrupted.push(local);
         const r = await recoverInterruptedAgentTasks();
         expect(r).toEqual({ resumed: 0, failed: 0 });
-        expect(parkForDeviceRecovery).toHaveBeenCalledWith('t1', 'failed');
+        expect(parkForDeviceRecovery).toHaveBeenCalledWith('t1', 'failed', leaseOwner());
         expect(updateAgentTask).not.toHaveBeenCalled();
         expect(claim).not.toHaveBeenCalled();
         expect(dispatch).not.toHaveBeenCalled();
@@ -354,7 +354,7 @@ describe('로컬 기기 작업 — 재시작 뒤 기기 대기로 주차', () =>
     it('실행한 적 없는 대기(queued) 로컬 작업도 주차한다', async () => {
         interrupted.push({ ...base, executor: 'local', status: 'queued', checkpoint: null });
         await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 0 });
-        expect(parkForDeviceRecovery).toHaveBeenCalledWith('t1', 'queued');
+        expect(parkForDeviceRecovery).toHaveBeenCalledWith('t1', 'queued', leaseOwner());
         expect(updateAgentTask).not.toHaveBeenCalled();
     });
 
@@ -375,7 +375,7 @@ describe('로컬 기기 작업 — 재시작 뒤 기기 대기로 주차', () =>
         interrupted.push(local);
         countRecoveries.mockResolvedValueOnce(3);
         await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 1 });
-        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'failed');
+        expect(failRecoveryLimit).toHaveBeenCalledWith('t1', 'failed', leaseOwner());
         expect(parkForDeviceRecovery).not.toHaveBeenCalled();
     });
 

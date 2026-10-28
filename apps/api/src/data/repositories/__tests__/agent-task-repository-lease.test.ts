@@ -92,7 +92,7 @@ describe('AgentTaskRepository — 실행 소유권', () => {
         await expect(repo.claimAgentTaskForRecovery('t1', 'pending', { owner: 'host:0', leaseMs: 60_000 })).resolves.toBe(true);
         expect(calls[0].sql).toContain('lease_owner = $3, lease_until = NOW() + make_interval(secs => $4)');
         // 소유권 있는 pending 도 대상 — 단 지났거나 내 것일 때만(목록을 읽은 뒤 다른 서버가 가져갔으면 0행)
-        expect(calls[0].sql).toContain("(o.prev = 'pending' AND o.lease_until IS NOT NULL AND (o.lease_until < NOW() OR o.lease_owner = $3))");
+        expect(calls[0].sql).toContain("((o.prev = 'pending' AND o.lease_until IS NOT NULL) AND (o.lease_until < NOW() OR o.lease_owner = $3))");
         expect(calls[0].sql).toContain('SELECT id, status AS prev, lease_until, lease_owner FROM agent_tasks');
         expect(calls[0].params).toEqual(['t1', 'pending', 'host:0', 60]);
         await repo.claimAgentTaskForRecovery('t1', 'failed');

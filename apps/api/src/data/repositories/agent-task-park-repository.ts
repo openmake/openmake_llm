@@ -7,6 +7,7 @@
 import { BaseRepository } from './base-repository';
 import { AGENT_TASK_DEVICE_WAIT_REASON, AGENT_TASK_PARK_REASONS } from '../../config/agent-task-park-reasons';
 import { RECOVERY_CLAIM_REASON } from './agent-task-run-repository';
+import { reclaimableOrphanSql } from './agent-task-lease-sql';
 
 /** 주차 스윕이 보는 행 — reason·waited_ms 는 마지막 전이 이벤트(주차 표식) 기준. */
 export interface ParkedTaskRow {
@@ -62,20 +63,21 @@ export class AgentTaskParkRepository extends BaseRepository {
      * 복구 이벤트(진행 없는 복구 횟수에 든다)와 주차 표식을 같은 문장에서 이 순서로 남긴다 — 표식이 마지막 이벤트여야 주차로 읽히고,
      * 표식 없는 paused 는 아무도 재개하지 않는다. 그 사이 /execute·/resume·다른 서버의 복구가 잡았으면 0행(false)이고 건드리지 않는다.
      */
-    async parkForDeviceRecovery(taskId: string, expectedPrev: string): Promise<boolean> {
+    async parkForDeviceRecovery(taskId: string, expectedPrev: string, leaseOwner?: string): Promise<boolean> {
         // (2026-10-22 R2) 소유권 있는 pending 은 claim 중 죽은 행 — pending 을 읽었을 때만 소유권 컬럼을 본다(176 적용 전 폴백은 pending 을 넘기지 않는다)
-        const leased = expectedPrev === 'pending';
+        // (#1473) 지났거나 내 것일 때만 — 목록을 읽은 뒤 다른 서버가 claim 해 간 pending 은 주차하지 않는다. owner 가 없으면 pending 을 맞추지 않는다.
+        const leased = expectedPrev === 'pending' && leaseOwner !== undefined;
         const r = await this.query(
             `WITH parked AS (
                  UPDATE agent_tasks t SET status = 'paused', error = NULL, failure_class = NULL, completed_at = NULL, terminal_notify_pending = FALSE, updated_at = NOW()
-                 FROM (SELECT id, status AS prev, error AS prev_error${leased ? ', lease_until' : ''} FROM agent_tasks WHERE id = $1 FOR UPDATE) o
-                 WHERE t.id = o.id AND o.prev = $2 AND (o.prev IN ('running', 'paused', 'queued') OR (o.prev = 'failed' AND o.prev_error = $3)${leased ? " OR (o.prev = 'pending' AND o.lease_until IS NOT NULL)" : ''})
+                 FROM (SELECT id, status AS prev, error AS prev_error${leased ? ', lease_until, lease_owner' : ''} FROM agent_tasks WHERE id = $1 FOR UPDATE) o
+                 WHERE t.id = o.id AND o.prev = $2 AND (o.prev IN ('running', 'paused', 'queued') OR (o.prev = 'failed' AND o.prev_error = $3)${leased ? ` OR ${reclaimableOrphanSql('o.prev', 'o.lease_until', 'o.lease_owner', '$6')}` : ''})
                  RETURNING t.id, o.prev
              ), claimed AS (
                  INSERT INTO agent_task_events (task_id, from_status, to_status, reason) SELECT id, prev, 'paused', $4 FROM parked RETURNING task_id
              )
              INSERT INTO agent_task_events (task_id, from_status, to_status, reason) SELECT task_id, 'paused', 'paused', $5 FROM claimed RETURNING id`,
-            [taskId, expectedPrev, 'server restarted', RECOVERY_CLAIM_REASON, AGENT_TASK_DEVICE_WAIT_REASON],
+            [taskId, expectedPrev, 'server restarted', RECOVERY_CLAIM_REASON, AGENT_TASK_DEVICE_WAIT_REASON, ...(leased ? [leaseOwner] : [])],
         );
         return (r.rowCount ?? 0) > 0;
     }
