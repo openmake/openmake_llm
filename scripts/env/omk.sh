@@ -528,14 +528,21 @@ bench_install() { # $1=env $2=ref $3=llm dir
     wait_http "http://localhost:$port/api/health" "bench" 30 || exit 3
 }
 
-bench_update() { # $1=env
-    local env="$1" bdir name; bdir="$(bench_dir "$env")"; name="$(bench_pm2_name "$env")"
+# bench 가 받은 뒤에도 같은 커밋이고 PM2 앱이 떠 있으면 빌드·재시작을 건너뛴다 — 운영 파이프라인은 같은 릴리스로
+# 10분마다 이 갱신을 끝까지 돌리므로, 건너뛰지 않으면 openmake-bench 가 10분마다 재시작된다(2026-10-28 ome-on).
+bench_update() { # $1=env [--force]  (--force: 그대로여도 다시 배포 — env update --redeploy)
+    local env="$1" force="${2:-}" bdir name before; bdir="$(bench_dir "$env")"; name="$(bench_pm2_name "$env")"
     [[ -d "$bdir/.git" ]] || { log_info "bench 없음 — 생략"; return 0; }
     log_step "bench 갱신 ($env)"
     if [[ -n "$(git -C "$bdir" status --porcelain 2>/dev/null)" ]]; then
         die "bench 에 미커밋 로컬 변경이 있어 갱신을 중단합니다: git -C \"$bdir\" status"
     fi
+    before="$(git -C "$bdir" rev-parse HEAD)"
     git -C "$bdir" fetch --prune -q && git -C "$bdir" pull --ff-only || die "bench git pull(ff-only) 실패"
+    if [[ "$force" != --force && "$(git -C "$bdir" rev-parse HEAD)" == "$before" && "$(pm2_status_of "$name")" == online ]]; then
+        log_info "bench 최신(${before:0:9})·실행 중 — 빌드·재시작 생략"
+        return 0
+    fi
     bench_build "$bdir"
     bench_pm2_start "$bdir" "$env"
     wait_http "http://localhost:$(dotenv_get "$bdir/.env" OMKB_PORT)/api/health" "bench" 30 || exit 3
@@ -1756,7 +1763,7 @@ cmd_env_update_unlocked() {
     # LLM_BASE_URL 을 가로채지 않게. 새로 붙이려면 'omk env install <env>' 를 다시 실행한다(멱등).
     LITELLM_CHANGED=0; [[ ! -d "$(litellm_dir "$env")" ]] || litellm_ensure "$ldir" "$env"
     [[ $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 && $OPS_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
-    bench_update "$env"
+    if [[ $redeploy -eq 1 ]]; then bench_update "$env" --force; else bench_update "$env"; fi
     [[ -f "$(proxy_dir)/caddy.d/$env.caddy" ]] && { proxy_render "$env"; proxy_start_or_reload; https_export_root_ca; }
     log_ok "$env 갱신 완료"
 }
