@@ -206,3 +206,14 @@ test('중단 대기는 aborted·done·error·resume_none 에서만 풀린다', (
   for (const type of ['aborted', 'done', 'error', 'resume_none']) assert.equal(clearsPendingAbort(type), true, type);
   for (const type of ['token', 'stream_resume', 'pong', 'thinking', 'session_created']) assert.equal(clearsPendingAbort(type), false, type);
 });
+
+test('notePong 은 떼어 낸 메서드로 불러도 동작한다', () => {
+  const { timers, live, dead, capability } = setup({ supported: false });
+  const { notePong } = live;
+  live.start();
+  timers.advance(15_000); // ping
+  notePong();
+  assert.equal(capability.supported, true);
+  timers.advance(9_000);
+  assert.equal(dead(), 0);
+});

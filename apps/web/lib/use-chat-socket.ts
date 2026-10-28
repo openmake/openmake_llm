@@ -849,6 +849,7 @@ export function useChatSocket() {
         approvalCards: true,
       };
       ws.send(JSON.stringify(payload));
+      pendingAbortRef.current = false; // 새 생성 — 이전 턴의 남은 중단이 이 생성에 다시 보내지지 않게
 
       // GA4 핵심 인게이지먼트 — 방문자의 채팅 사용을 모드/모델 차원으로 계측(PII 없음).
       gaEvent(GA_EVENTS.chatMessageSent, {
