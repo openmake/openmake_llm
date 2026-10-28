@@ -45,6 +45,11 @@
 # ==============================================================================
 set -euo pipefail
 
+# PM2 는 앱 옵션을 같은 이름의 환경변수로 자식에 넣는다. 예약 작업(omk-pipeline·updater·backup, --cron-restart)
+# 안에서 `pm2 start ecosystem.config.js --only <앱>` 을 하면 PM2 가 상속한 cron_restart 를 앱 옵션으로 읽어
+# 배포한 앱이 10분마다 재시작됐다(2026-10-28 ome-on). 예약 작업 자신의 등록은 --cron-restart 인자로 한다.
+unset cron_restart
+
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 readonly SCRIPT_DIR
 
