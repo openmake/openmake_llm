@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.115.8](https://github.com/openmake/openmake_llm/compare/v1.115.7...v1.115.8) (2026-10-28)
+
+
+### 🐛 버그 수정
+
+* **admin:** order users by signup date ([103cf94](https://github.com/openmake/openmake_llm/commit/103cf94bc3b4144bbef4f5681fb560bec32fb247))
+* **admin:** order users by signup date ([1309282](https://github.com/openmake/openmake_llm/commit/13092823dd1855574fa9c703e836bfa472b04ae1))
+
 ## [1.115.7](https://github.com/openmake/openmake_llm/compare/v1.115.6...v1.115.7) (2026-10-28)
 
 
