@@ -94,6 +94,7 @@ public struct WsServerEvent: Codable {
     /// 이 스트림의 식별자(F19.11) — 클라이언트 커서가 다르면 새 스트림으로 본다
     public let streamID: String?
     public let thinking: String?
+    public let t: Double?
     public let sources: [SearchSourceRef]?
     /// 에러 분류(quota_exceeded / api_keys_exhausted / provider code 등)
     public let errorType: String?
@@ -160,6 +161,7 @@ public struct WsServerEvent: Codable {
         case servedModel = "servedModel"
         case streamID = "streamId"
         case thinking = "thinking"
+        case t = "t"
         case sources = "sources"
         case errorType = "errorType"
         case keysInCooldown = "keysInCooldown"
@@ -190,7 +192,7 @@ public struct WsServerEvent: Codable {
         case waitReason = "waitReason"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: ExpiresAt?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, approvalID: String?, args: [String: JSONAny]?, riskClass: ToolRiskClass?, decision: Decision?, reason: ApprovalRejectReason?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: ExpiresAt?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, t: Double?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, approvalID: String?, args: [String: JSONAny]?, riskClass: ToolRiskClass?, decision: Decision?, reason: ApprovalRejectReason?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -215,6 +217,7 @@ public struct WsServerEvent: Codable {
         self.servedModel = servedModel
         self.streamID = streamID
         self.thinking = thinking
+        self.t = t
         self.sources = sources
         self.errorType = errorType
         self.keysInCooldown = keysInCooldown
@@ -289,6 +292,7 @@ public extension WsServerEvent {
         servedModel: String?? = nil,
         streamID: String?? = nil,
         thinking: String?? = nil,
+        t: Double?? = nil,
         sources: [SearchSourceRef]?? = nil,
         errorType: String?? = nil,
         keysInCooldown: Double?? = nil,
@@ -343,6 +347,7 @@ public extension WsServerEvent {
             servedModel: servedModel ?? self.servedModel,
             streamID: streamID ?? self.streamID,
             thinking: thinking ?? self.thinking,
+            t: t ?? self.t,
             sources: sources ?? self.sources,
             errorType: errorType ?? self.errorType,
             keysInCooldown: keysInCooldown ?? self.keysInCooldown,
@@ -1185,6 +1190,7 @@ public enum WsServerEventType: String, Codable {
     case error = "error"
     case mcpToolResult = "mcp_tool_result"
     case mcpToolStart = "mcp_tool_start"
+    case pong = "pong"
     case researchProgress = "research_progress"
     case resumeNone = "resume_none"
     case searchSources = "search_sources"

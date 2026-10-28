@@ -32,6 +32,10 @@ export const CLIENT_TIMING = {
   AUTH_SYNC_RETRY_LIMIT: envNum(process.env.NEXT_PUBLIC_AUTH_SYNC_RETRY_LIMIT, 9),
   /** WebSocket 재연결 backoff 상한(ms) */
   WS_RECONNECT_MAX_MS: envNum(process.env.NEXT_PUBLIC_WS_RECONNECT_MAX_MS, 10_000),
+  /** WebSocket 생존 확인 — 마지막 수신 뒤 이만큼 조용하면 앱 ping(ms). half-open 소켓을 onclose 보다 먼저 알아챈다 */
+  WS_LIVENESS_INTERVAL_MS: envNum(process.env.NEXT_PUBLIC_WS_LIVENESS_INTERVAL_MS, 15_000),
+  /** 위 ping 뒤 이만큼 아무 수신도 없으면 죽은 소켓으로 보고 재연결(ms) */
+  WS_LIVENESS_TIMEOUT_MS: envNum(process.env.NEXT_PUBLIC_WS_LIVENESS_TIMEOUT_MS, 10_000),
   /** react-query staleTime(ms) */
   QUERY_STALE_MS: envNum(process.env.NEXT_PUBLIC_QUERY_STALE_MS, 30_000),
 } as const;
