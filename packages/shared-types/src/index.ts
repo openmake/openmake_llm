@@ -208,6 +208,16 @@ export interface WsAgentTaskResumeRequest {
   afterSeq: number;
 }
 
+/**
+ * 앱 수준 생존 확인(2026-10-29) — 브라우저는 프로토콜 ping 을 볼 수 없어 half-open 소켓을 늦게 안다.
+ * 클라이언트가 주기적으로 보내면 서버가 즉시 `pong`(같은 t)으로 답한다. 빈도 제한·활동 갱신에 세지 않는다.
+ */
+export interface WsPingRequest {
+  type: "ping";
+  /** 클라이언트가 붙인 값(보낸 시각 등) — pong 에 그대로 돌아온다 */
+  t?: number;
+}
+
 /** 재연결 후 끊긴 스트림 이어받기 요청 — 커서가 없거나 다른 스트림이면 서버는 미전달 이벤트만 재생한다(종전 동작). */
 export interface WsResumeRequest {
   type: "resume";
@@ -287,6 +297,8 @@ export type WsServerEvent =
     }
   /** resume 요청에 이어받을 스트림이 없음 — 클라는 대기 상태를 풀면 된다. */
   | { type: "resume_none" }
+  /** 앱 수준 `ping` 응답 — t 는 ping 이 보낸 값 그대로(숫자가 아니었으면 없음). */
+  | { type: "pong"; t?: number }
   /**
    * 에이전트 작업 진행 이벤트를 일부 놓쳤고 서버에 더는 남아 있지 않다(보관 범위 초과·서버 재시작) —
    * 클라이언트는 보고 있는 작업·승인함을 REST 로 다시 읽는다. `agent_task_resume` 의 응답으로만 온다.
