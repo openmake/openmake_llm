@@ -355,6 +355,23 @@
         "message"
       ]
     },
+    "WsPingRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "ping"
+        },
+        "t": {
+          "type": "number",
+          "description": "클라이언트가 붙인 값(보낸 시각 등) — pong 에 그대로 돌아온다"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "description": "앱 수준 생존 확인(2026-10-29) — 브라우저는 프로토콜 ping 을 볼 수 없어 half-open 소켓을 늦게 안다. 클라이언트가 주기적으로 보내면 서버가 즉시 `pong`(같은 t)으로 답한다. 빈도 제한·활동 갱신에 세지 않는다."
+    },
     "WsResumeRequest": {
       "type": "object",
       "properties": {
@@ -696,6 +713,21 @@
             "type": {
               "type": "string",
               "const": "resume_none"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "pong"
+            },
+            "t": {
+              "type": "number"
             }
           },
           "required": [
