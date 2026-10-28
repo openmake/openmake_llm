@@ -12,7 +12,7 @@ import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { BatchSpanProcessor, ConsoleSpanExporter, TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace-node';
+import { BatchSpanProcessor, ConsoleSpanExporter, TraceIdRatioBasedSampler } from '@opentelemetry/sdk-trace';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import { APP_VERSION } from '../config/constants';
 import { createLogger } from '../utils/logger';
@@ -54,14 +54,14 @@ export function initTelemetry(): NodeSDK | null {
         const spanProcessors: BatchSpanProcessor[] = [];
 
         if (OTEL_EXPORT_TO_CONSOLE) {
-            spanProcessors.push(new BatchSpanProcessor(new ConsoleSpanExporter()));
+            spanProcessors.push(new BatchSpanProcessor({ exporter: new ConsoleSpanExporter() }));
         }
 
         if (OTEL_OTLP_ENDPOINT) {
             const otlpExporter = new OTLPTraceExporter({
                 url: OTEL_OTLP_ENDPOINT,
             });
-            spanProcessors.push(new BatchSpanProcessor(otlpExporter));
+            spanProcessors.push(new BatchSpanProcessor({ exporter: otlpExporter }));
         }
 
         const sdk = new NodeSDK({
