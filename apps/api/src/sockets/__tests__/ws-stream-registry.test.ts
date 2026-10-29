@@ -2,7 +2,7 @@
  * ws-stream-registry — 소켓이 끊겨도 생성을 이어 가고 재연결 시 이어받는 규약 검증.
  * 회귀 대상: "탭 전환/앱 백그라운드 → 응답 없음" (2026-09-05).
  */
-import { InFlightStreamRegistry, resolveStreamKey, normalizeStreamLane } from '../ws-stream-registry';
+import { InFlightStreamRegistry, resolveStreamKey, normalizeStreamLane, normalizeClientStreamId } from '../ws-stream-registry';
 import type { ExtendedWebSocket } from '../ws-types';
 
 function fakeWs(userId: string | null = 'u1'): ExtendedWebSocket & { sent: unknown[] } {
@@ -307,6 +307,113 @@ describe('InFlightStreamRegistry', () => {
         expect(normalizeStreamLane(42)).toBeNull();
         expect(normalizeStreamLane(null)).toBeNull();
         expect(normalizeStreamLane(undefined)).toBeNull();
+    });
+});
+
+/**
+ * 클라이언트 지정 생성 식별자와 정확 이어받기(2026-10-29) — 비교 레인은 첫 이벤트 전에 끊겨도 자기 생성을 지정해 이어받고,
+ * 다른 탭이 같은 키로 시작한 생성을 빼앗지 않는다. exact 가 없으면 종전(커서 불일치여도 재부착) 그대로.
+ */
+describe('InFlightStreamRegistry — 클라이언트 streamId · exact 이어받기', () => {
+    beforeEach(() => { jest.useFakeTimers(); });
+    afterEach(() => { jest.useRealTimers(); });
+
+    const CLIENT_ID = '3f2b9c1e-7d4a-4e21-9b6f-0c8d1e2f3a4b';
+
+    it('유효한 클라이언트 streamId 를 받으면 그 값으로 등록하고 이벤트 봉투에 싣는다', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096);
+        const ws = fakeWs();
+        const entry = reg.open('u:u1#a', ws, new AbortController(), CLIENT_ID);
+        expect(entry.streamId).toBe(CLIENT_ID);
+        reg.send(entry, { type: 'session_created', sessionId: 's1' });
+        expect(ws.sent[0]).toMatchObject({ streamId: CLIENT_ID, seq: 1 });
+    });
+
+    it('클라이언트 streamId 가 없거나 형식이 틀리면 종전처럼 서버가 발급한다', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096);
+        for (const bad of [undefined, '', 'abc', 42, `${CLIENT_ID}x`, '00000000-0000-0000-0000-000000000000', CLIENT_ID.toUpperCase().replace('4E21', '1E21')]) {
+            const entry = reg.open('u:u1#a', fakeWs(), new AbortController(), bad);
+            expect(entry.streamId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+            expect(entry.streamId).not.toBe(bad);
+        }
+    });
+
+    it('normalizeClientStreamId — UUID v4 형식만 받고 소문자로 맞춘다', () => {
+        expect(normalizeClientStreamId(CLIENT_ID)).toBe(CLIENT_ID);
+        expect(normalizeClientStreamId(CLIENT_ID.toUpperCase())).toBe(CLIENT_ID);
+        expect(normalizeClientStreamId('3f2b9c1e-7d4a-1e21-9b6f-0c8d1e2f3a4b')).toBeNull(); // v1
+        expect(normalizeClientStreamId('3f2b9c1e-7d4a-4e21-7b6f-0c8d1e2f3a4b')).toBeNull(); // variant
+        expect(normalizeClientStreamId(null)).toBeNull();
+    });
+
+    it('exact: 등록된 streamId 와 정확히 같을 때만 붙인다(첫 이벤트 전 끊김도 afterSeq 0 으로 전량 재생)', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096, 100);
+        const ws1 = fakeWs();
+        const ac = new AbortController();
+        const entry = reg.open('u:u1#a', ws1, ac, CLIENT_ID);
+        reg.detach(ws1); // 첫 이벤트 전에 끊김
+        reg.send(entry, { type: 'session_created', sessionId: 's1' });
+        const ws2 = fakeWs();
+        expect(reg.attach('u:u1#a', ws2, { streamId: CLIENT_ID, afterSeq: 0 }, { exact: true })).toBe(true);
+        expect(ws2.sent[0]).toMatchObject({ type: 'stream_resume', streamId: CLIENT_ID, finished: false });
+        expect(ws2.sent.slice(1)).toEqual([expect.objectContaining({ type: 'session_created', seq: 1 })]);
+        expect(ws2._abortController).toBe(ac);
+    });
+
+    it('exact: streamId 가 다르거나 없으면 붙이지 않고 기존 소켓·컨트롤러·전달 상태를 바꾸지 않는다(다른 탭 보호)', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096, 100);
+        const otherTab = fakeWs();
+        const ac = new AbortController();
+        otherTab._abortController = ac;
+        const entry = reg.open('u:u1#a', otherTab, ac, CLIENT_ID);
+        reg.send(entry, { type: 'token', token: '가' });
+        for (const cursor of [{ streamId: '11111111-2222-4333-8444-555555555555', afterSeq: 0 }, {}, { afterSeq: 0 }]) {
+            const me = fakeWs();
+            expect(reg.attach('u:u1#a', me, cursor, { exact: true })).toBe(false);
+            expect(me.sent).toEqual([]);
+            expect(me._abortController).toBeNull();
+        }
+        expect(entry.ws).toBe(otherTab);
+        expect(otherTab._abortController).toBe(ac);
+        reg.send(entry, { type: 'token', token: '나' });
+        expect(otherTab.sent).toHaveLength(2); // 다른 탭은 계속 받는다
+        expect(reg.abortByWs(otherTab)).toBe(true); // 다른 탭의 중단도 그대로 동작
+        expect(ac.signal.aborted).toBe(true);
+    });
+
+    it('exact: detach 된 다른 생성에도 붙지 않고 유예 타이머를 건드리지 않는다', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096);
+        const ws1 = fakeWs();
+        const ac = new AbortController();
+        reg.open('u:u1#a', ws1, ac, CLIENT_ID);
+        reg.detach(ws1);
+        expect(reg.attach('u:u1#a', fakeWs(), { streamId: '11111111-2222-4333-8444-555555555555', afterSeq: 0 }, { exact: true })).toBe(false);
+        jest.advanceTimersByTime(1000);
+        expect(ac.signal.aborted).toBe(true); // 유예 만료 규약 유지
+    });
+
+    it('exact 없이는 커서가 달라도 종전대로 재부착한다(구 클라이언트 호환)', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096, 100);
+        const ws1 = fakeWs();
+        reg.open('u:u1#a', ws1, new AbortController(), CLIENT_ID);
+        const ws2 = fakeWs();
+        expect(reg.attach('u:u1#a', ws2, { streamId: '11111111-2222-4333-8444-555555555555', afterSeq: 0 })).toBe(true);
+        expect(ws2.sent[0]).toMatchObject({ type: 'stream_resume', streamId: CLIENT_ID });
+    });
+
+    it('exact 는 키(사용자·레인)를 넘지 않는다 — 같은 streamId 라도 다른 레인 키에는 붙지 않는다', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096);
+        reg.open('u:u1#a', fakeWs(), new AbortController(), CLIENT_ID);
+        expect(reg.attach('u:u1#b', fakeWs(), { streamId: CLIENT_ID, afterSeq: 0 }, { exact: true })).toBe(false);
+        expect(reg.attach('u:u2#a', fakeWs('u2'), { streamId: CLIENT_ID, afterSeq: 0 }, { exact: true })).toBe(false);
+    });
+
+    it('streamIdOf — 소켓에 붙은 스트림의 식별자(중단 응답에 싣는다), 없으면 null', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096);
+        const ws = fakeWs();
+        reg.open('u:u1#a', ws, new AbortController(), CLIENT_ID);
+        expect(reg.streamIdOf(ws)).toBe(CLIENT_ID);
+        expect(reg.streamIdOf(fakeWs())).toBeNull();
     });
 });
 

@@ -45,7 +45,8 @@ import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
 import { WS_SECURITY } from '../config/security';
 import { getBuildId } from '../config/build-id';
 import { handleChatMessage } from './ws-chat-handler';
-import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
+import { getInFlightStreamRegistry } from './ws-stream-registry';
+import { handleStreamAbort, handleStreamResume, WS_CHAT_CAPABILITIES } from './ws-stream-control';
 import { bufferEarlyMessages } from './ws-early-messages';
 import { replyToAppPing } from './ws-app-ping';
 import { handleRequestAgents } from './ws-agents-handler';
@@ -229,7 +230,8 @@ export class WebSocketHandler {
                     name: this.cluster.clusterName,
                     stats: this.cluster.getStats(),
                     nodes: this.cluster.getNodes()
-                }
+                },
+                capabilities: WS_CHAT_CAPABILITIES, // 이 연결이 지원하는 새 계약(정확 이어받기 등) — ws-stream-control
             }));
 
             // 초기 데이터 전송 (MCP)
@@ -375,13 +377,13 @@ export class WebSocketHandler {
                     break;
 
                 case 'abort':
-                    // 현재 진행 중인 채팅 중단
-                    this.handleAbort(ws);
+                    // 현재 진행 중인 채팅 중단 — ws-stream-control
+                    handleStreamAbort(ws);
                     break;
 
                 case 'resume':
-                    // 재연결 후 끊겼던 스트림 이어받기 — 없으면 resume_none
-                    this.handleResume(ws, typedMsg);
+                    // 재연결 후 끊겼던 스트림 이어받기 — 없으면 resume_none (ws-stream-control)
+                    handleStreamResume(ws, typedMsg);
                     break;
             }
         });
@@ -419,38 +421,6 @@ export class WebSocketHandler {
         extWs._authTokenFingerprint = refreshed.tokenFingerprint;
         extWs._authMethod = refreshed.authMethod;
         this.touchActivity(extWs);
-    }
-
-    /**
-     * 채팅 중단 처리
-     */
-    private handleAbort(ws: WebSocket): void {
-        const extWs = ws as ExtendedWebSocket;
-        if (extWs._abortController) {
-            log.info('[WS] 채팅 중단 요청 수신');
-            extWs._abortController.abort();
-            extWs._abortController = null;
-            getInFlightStreamRegistry().abortByWs(extWs);
-            ws.send(JSON.stringify({ type: 'aborted', message: '응답 생성이 중단되었습니다.' }));
-        } else {
-            log.debug('[WS] 중단할 진행 중인 채팅 없음');
-        }
-    }
-
-    /**
-     * 끊겼던 스트림 이어받기 — 인증 사용자는 userId, 게스트는 anonSessionId 로 찾는다.
-     * 스트림이 없으면(이미 끝나 보관도 만료·애초에 없음) resume_none 으로 답해 클라이언트가 대기를 푼다.
-     */
-    private handleResume(ws: WebSocket, msg: WSMessage): void {
-        const extWs = ws as ExtendedWebSocket;
-        const key = resolveStreamKey(extWs, msg.anonSessionId, msg.lane);
-        // 이어받기 커서(F19.11) — 형식이 틀리면 무시하고 종전(커서 없음) 재생
-        const cursor = {
-            ...(typeof msg.streamId === 'string' && /^[0-9a-f-]{36}$/i.test(msg.streamId) ? { streamId: msg.streamId } : {}),
-            ...(Number.isInteger(msg.afterSeq) && (msg.afterSeq as number) >= 0 ? { afterSeq: msg.afterSeq as number } : {}),
-        };
-        const attached = key ? getInFlightStreamRegistry().attach(key, extWs, cursor) : false;
-        if (!attached) ws.send(JSON.stringify({ type: 'resume_none' }));
     }
 
     /**
