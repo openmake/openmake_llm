@@ -96,7 +96,9 @@ export async function handleChatMessage(
     extWs._abortController = abortController;
     const streamRegistry = getInFlightStreamRegistry();
     const streamKey = resolveStreamKey(extWs, anonSessionId, msg.lane);
-    const streamEntry = streamKey ? streamRegistry.open(streamKey, extWs, abortController) : null;
+    const streamEntry = streamKey ? streamRegistry.open(streamKey, extWs, abortController, msg.streamId) : null; // 클라이언트 streamId(비교 레인) — 형식이 틀리면 서버 발급
+    // 위 await 사이에 소켓이 닫혔으면 close 핸들러가 detach 할 엔트리가 없었다 — 지금 detach 해 유예 규약(재연결 시 이어받기, 만료 시 중단)에 태운다
+    if (streamEntry && extWs.readyState !== extWs.OPEN) streamRegistry.detach(extWs);
     const out = (payload: Record<string, unknown>): void => {
         if (streamEntry) streamRegistry.send(streamEntry, payload);
         else if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(payload));

@@ -18,6 +18,10 @@
  * 스냅샷 + `seq > afterSeq` 이벤트만 재생해 중복·유실 없이 잇는다(본문 진실은 여전히 스냅샷 — 토큰은 재생하지 않는다).
  * 커서가 없거나 다른 스트림이면 종전대로 스냅샷 + 어느 소켓에도 전달되지 않은 이벤트만 재생한다(구 클라이언트 호환).
  * 링에서 밀려난 이벤트가 재생 범위에 있었으면 `stream_resume.gap:true` — 클라이언트는 done.cleanedContent 로 재구성한다.
+ *
+ * 정확 이어받기 (2026-10-29): 새 클라이언트(비교 레인)는 chat 에 자기가 만든 UUID v4 `streamId` 를 실어 첫 이벤트 전에도
+ * 생성을 지정할 수 있고, `resume{exact:true}` 는 그 streamId 가 등록된 스트림과 정확히 같을 때만 붙인다 —
+ * 다르면 아무것도 바꾸지 않는다(같은 키로 다른 탭이 시작한 생성을 빼앗지 않는다). 없으면 종전처럼 서버가 발급한다.
  * @module sockets/ws-stream-registry
  */
 import { randomUUID } from 'crypto';
@@ -84,6 +88,14 @@ export function normalizeStreamLane(lane: unknown): string | null {
  */
 const GUEST_STREAM_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
+/** 클라이언트가 정한 생성 식별자 — UUID v4 형식(crypto.randomUUID·lib/local-id 와 같은 모양)만 받는다. */
+const CLIENT_STREAM_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** 클라이언트 streamId 정규화 — 유효하면 소문자, 아니면 null(서버가 발급). */
+export function normalizeClientStreamId(value: unknown): string | null {
+    return typeof value === 'string' && CLIENT_STREAM_ID_RE.test(value) ? value.toLowerCase() : null;
+}
+
 export function resolveStreamKey(extWs: ExtendedWebSocket, anonSessionId?: string, lane?: unknown): string | null {
     let base: string | null = null;
     if (extWs._authenticatedUserId) base = `u:${extWs._authenticatedUserId}`;
@@ -107,15 +119,18 @@ export class InFlightStreamRegistry {
 
     get size(): number { return this.entries.size; }
 
-    /** 새 스트림 등록. 같은 키의 이전 스트림은 사용자가 넘어간 것이므로 abort 하고 버린다. */
-    open(key: string, ws: ExtendedWebSocket, abortController: AbortController): StreamEntry {
+    /**
+     * 새 스트림 등록. 같은 키의 이전 스트림은 사용자가 넘어간 것이므로 abort 하고 버린다.
+     * clientStreamId 가 유효한 UUID v4 면 그 값을 streamId 로 쓰고, 아니면 서버가 발급한다(구 클라이언트).
+     */
+    open(key: string, ws: ExtendedWebSocket, abortController: AbortController, clientStreamId?: unknown): StreamEntry {
         const previous = this.entries.get(key);
         if (previous) {
             log.info(`[WsStream] 같은 키의 이전 스트림 폐기: key=${key} finished=${previous.finished}`);
             this.dispose(previous, !previous.finished);
         }
         const entry: StreamEntry = {
-            key, abortController, streamId: randomUUID(), seq: 0, deliveredSeq: 0, content: '', thinking: '',
+            key, abortController, streamId: normalizeClientStreamId(clientStreamId) ?? randomUUID(), seq: 0, deliveredSeq: 0, content: '', thinking: '',
             ring: [], ringBytes: 0, droppedMaxSeq: 0, overflowed: false, ws, timer: null, finished: false, startedAt: Date.now(),
         };
         this.entries.set(key, entry);
@@ -201,10 +216,17 @@ export class InFlightStreamRegistry {
      * - cursor 의 streamId 가 이 스트림이고 afterSeq 가 유효하면 `seq > afterSeq` 만 재생(중복 없음)
      * - 아니면 어느 소켓에도 전달되지 않은 이벤트(`seq > deliveredSeq`)만 재생(종전 동작)
      * 스트림이 없으면 false — 호출자가 resume_none 을 보낸다.
+     * exact 면 cursor.streamId 가 이 스트림과 정확히 같을 때만 붙인다 — 다르거나 없으면 어떤 상태도 바꾸지 않고 false.
      */
-    attach(key: string, ws: ExtendedWebSocket, cursor: { streamId?: string; afterSeq?: number } = {}): boolean {
+    attach(
+        key: string,
+        ws: ExtendedWebSocket,
+        cursor: { streamId?: string; afterSeq?: number } = {},
+        opts: { exact?: boolean } = {},
+    ): boolean {
         const entry = this.entries.get(key);
         if (!entry) return false;
+        if (opts.exact && cursor.streamId !== entry.streamId) return false;
         if (entry.ws && entry.ws !== ws && entry.ws.readyState === entry.ws.OPEN) {
             // 다른 탭이 이미 받고 있음 — 새 탭으로 옮긴다(마지막 접속이 이긴다).
             this.byWs.delete(entry.ws);
@@ -246,6 +268,11 @@ export class InFlightStreamRegistry {
         }
         if (entry.finished) this.dispose(entry, false);
         return true;
+    }
+
+    /** 이 소켓에 붙은 스트림의 식별자 — 중단 응답(aborted)에 실어 클라이언트가 어느 생성의 결과인지 안다. */
+    streamIdOf(ws: ExtendedWebSocket): string | null {
+        return this.byWs.get(ws)?.streamId ?? null;
     }
 
     /** 명시적 중단(사용자 abort 버튼) — 즉시 abort 하고 버린다. */

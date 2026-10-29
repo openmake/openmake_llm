@@ -10,6 +10,11 @@
  * (연결끼리 공유). 그 전에는 ping 만 보내 지원 여부를 배운다. 구 서버(배포 중 혼재)는 pong 을 보내지 않아서,
  * 이 확인이 없으면 다른 수신이 없을 때마다 재연결을 되풀이한다.
  *
+ * 첫 pong 전 공백(2026-10-29): 열리자마자 ping 을 한 번 보내 지원 여부를 바로 배운다. 그래도 지원 확인 전에 열린 소켓이
+ * 아무것도(init 조차) 받지 못하면 half-open 으로 보고, 호출자가 준 예산(earlyRetry — 흐름마다 하나, 소켓 세대를 넘어
+ * 유지)이 남았을 때만 onDead 를 부른다. 무엇이든 받은 소켓이나 예산이 바닥난 뒤에는 종전 호환 동작(판정 안 함)이라
+ * 구 서버에서 재연결 루프를 만들지 않는다.
+ *
  * 소켓 하나에 하나씩 만든다 — onDead 뒤(또는 stop 뒤)에는 아무것도 하지 않는다.
  * 순수 모듈: 타이머·시계를 주입할 수 있다(테스트).
  *
@@ -27,6 +32,11 @@ export interface AppPingCapability {
   supported: boolean;
 }
 
+/** 지원 확인 전 무응답 재연결 예산 — 흐름(메인 채팅·레인)마다 하나를 만들어 그 흐름의 모든 소켓에 넘긴다. */
+export interface EarlyRetryBudget {
+  remaining: number;
+}
+
 /** 이 페이지 전체가 공유하는 지원 여부(메인 채팅·비교 레인, 재연결 포함). */
 const PAGE_APP_PING_CAPABILITY: AppPingCapability = { supported: false };
 
@@ -40,10 +50,12 @@ export interface WsLivenessOptions {
   timers?: WsLivenessTimers;
   /** 기본은 페이지 공유 값 — 테스트가 주입한다 */
   capability?: AppPingCapability;
+  /** 지원 확인 전, 아무것도 받지 못한 소켓을 버릴 예산(흐름마다 공유). 없으면 종전처럼 판정하지 않는다 */
+  earlyRetry?: EarlyRetryBudget;
 }
 
 export interface WsLiveness {
-  /** 소켓 OPEN 직후 */
+  /** 소켓 OPEN 직후 — 바로 한 번 ping 한다 */
   start(): void;
   /** 소켓을 정리할 때 — 이후 무동작 */
   stop(): void;
@@ -66,6 +78,8 @@ export function createWsLiveness(opts: WsLivenessOptions): WsLiveness {
   const capability = opts.capability ?? PAGE_APP_PING_CAPABILITY;
   let running = false;
   let lastInbound = 0;
+  /** 이 소켓이 start 뒤 무엇이든 받았는지 — 받았으면 그때는 살아 있었다 */
+  let heard = false;
   let idleTimer: unknown = null;
   let deadline: unknown = null;
 
@@ -86,7 +100,12 @@ export function createWsLiveness(opts: WsLivenessOptions): WsLiveness {
     deadline = timers.setTimeout(() => {
       deadline = null;
       if (!running) return;
-      if (!capability.supported) return; // 지원을 확인하기 전에는 무응답이 죽음의 증거가 아니다
+      if (!capability.supported) {
+        // 지원을 확인하기 전에는 무응답이 죽음의 증거가 아니다 — 열린 뒤 아무것도 못 받은 소켓만 예산 안에서 버린다
+        const budget = opts.earlyRetry;
+        if (heard || !budget || budget.remaining <= 0) return;
+        budget.remaining -= 1;
+      }
       running = false;
       clearAll();
       opts.onDead();
@@ -109,6 +128,7 @@ export function createWsLiveness(opts: WsLivenessOptions): WsLiveness {
   };
 
   const noteInbound = () => {
+    heard = true;
     lastInbound = timers.now();
     if (deadline !== null) {
       timers.clearTimeout(deadline);
@@ -120,7 +140,9 @@ export function createWsLiveness(opts: WsLivenessOptions): WsLiveness {
     start() {
       if (running) return;
       running = true;
+      heard = false;
       lastInbound = timers.now();
+      ping(); // 열린 직후 확인 — 첫 pong 전 공백을 줄인다
       scheduleIdle(opts.intervalMs);
     },
     stop() {

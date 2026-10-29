@@ -59,6 +59,7 @@ jest.mock('../../services/chat-service/thinking-summarizer', () => ({
 }));
 
 import { handleChatMessage } from '../ws-chat-handler';
+import { WEBSOCKET_TIMEOUTS } from '../../config/timeouts';
 import type { ExtendedWebSocket, WSMessage } from '../ws-types';
 
 type Sent = Array<Record<string, unknown>>;
@@ -254,6 +255,55 @@ describe('WS 첫 턴 세션 연속성', () => {
         expect(mockEnqueueDebugCapture).toHaveBeenCalledTimes(debug);
         if (debug) {
             expect(mockEnqueueDebugCapture.mock.calls[0][0]).toMatchObject({ sessionId: EXISTING, userMessage: '질문', assistantMessage: '' });
+        }
+    });
+});
+
+// 비교 레인의 정확 이어받기(2026-10-29) — 새 클라이언트가 정한 streamId 로 등록돼야 첫 이벤트 전에도 그 생성을 지정해 이어받는다.
+describe('WS 채팅 생성 식별자', () => {
+    const MINE = '3f2b9c1e-7d4a-4e21-9b6f-0c8d1e2f3a4b';
+
+    it('유효한 클라이언트 streamId 를 받으면 그 생성의 모든 이벤트가 그 streamId 를 싣는다', async () => {
+        const s = socket('u-stream');
+        mockProcessMessage.mockResolvedValueOnce('응답');
+        await chat(s, { message: '질문', lane: 'a', streamId: MINE } as Partial<WSMessage>);
+        const enveloped = s.sent.filter((e) => typeof e.seq === 'number');
+        expect(enveloped.length).toBeGreaterThan(0);
+        expect(enveloped.every((e) => e.streamId === MINE)).toBe(true);
+    });
+
+    it('streamId 가 없거나 형식이 틀리면 서버가 발급한다(구 클라이언트)', async () => {
+        for (const streamId of [undefined, 'not-a-uuid']) {
+            const s = socket('u-stream-legacy');
+            mockProcessMessage.mockResolvedValueOnce('응답');
+            await chat(s, { message: '질문', lane: 'a', ...(streamId ? { streamId } : {}) } as Partial<WSMessage>);
+            const ids = new Set(s.sent.filter((e) => typeof e.seq === 'number').map((e) => e.streamId));
+            expect(ids.size).toBe(1);
+            const [id] = [...ids];
+            expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+            expect(id).not.toBe(streamId);
+        }
+    });
+
+    // 늦은 등록 — 등록(open) 전 await 사이에 소켓이 닫히면 close 핸들러가 detach 할 엔트리가 없다.
+    // 닫힌 소켓에 붙은 채로 두면 유예 타이머가 없어 관찰자 없이 끝까지 생성한다 → 등록 직후 detach 해 유예 규약에 태운다.
+    it('등록 전에 소켓이 닫혔으면 유예 뒤 생성을 중단한다', async () => {
+        jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] });
+        try {
+            const s = socket('u-late-open');
+            (s.ws as unknown as { readyState: number }).readyState = 3;
+            (s.extWs as unknown as { readyState: number }).readyState = 3;
+            let req: ChatReq | undefined;
+            mockProcessMessage.mockImplementationOnce((r: ChatReq) => { req = r; return blockUntilAbort(r); });
+            const run = chat(s, { message: '질문', lane: 'a', streamId: '5a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d' } as Partial<WSMessage>);
+            await flush();
+            expect(req?.abortSignal?.aborted).toBe(false); // 유예 동안은 계속된다(재연결하면 이어받는다)
+            expect(s.extWs._abortController).toBeNull(); // 닫힌 소켓에 컨트롤러를 남기지 않는다
+            jest.advanceTimersByTime(WEBSOCKET_TIMEOUTS.STREAM_DETACH_GRACE_MS);
+            expect(req?.abortSignal?.aborted).toBe(true);
+            await run;
+        } finally {
+            jest.useRealTimers();
         }
     });
 });
