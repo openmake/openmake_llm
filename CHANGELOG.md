@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.115.13](https://github.com/openmake/openmake_llm/compare/v1.115.12...v1.115.13) (2026-10-29)
+
+
+### 🐛 버그 수정
+
+* **chat:** keep compare-lane Stop across reconnects and bind resume to the exact stream ([bb84d23](https://github.com/openmake/openmake_llm/commit/bb84d23620263a8519b28170b275477059f97cdc))
+* **ios:** pass the new optional streamID to the generated WsChatRequest init ([e4b1009](https://github.com/openmake/openmake_llm/commit/e4b10098168762a5bd571ab63094c19412967484))
+
 ## [1.115.12](https://github.com/openmake/openmake_llm/compare/v1.115.11...v1.115.12) (2026-10-28)
 
 
