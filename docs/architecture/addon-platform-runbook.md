@@ -331,20 +331,26 @@ async function processOneUnit(signal: AbortSignal): Promise<void> {
 
 | 묶음 | 코드 완료(PR·dev 머지·CI) | 배포 완료(스테이징) | 배포 완료(운영, SHA·시각) | 운영 완료(관찰·롤백 훈련·F1~F4) |
 |---|---|---|---|---|
-| 수명주기 | PR #1340 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | |
-| 계약·데이터 포트·테스트 DB | PR #1341 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | |
-| 레거시 권한 | PR #1339 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | |
-| worker 잔여·별도 프로세스 | PR #1342 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | |
-| 검증·배포 문서(이 runbook) | PR #1343 · 2026-10-16 dev 머지 · CI 통과 · `task-11/release-candidate.md` "조건부 후보" | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | |
+| 수명주기 | PR #1340 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | 미완료(2026-10-29 판정 · Claude Code 판정(Fable)) — §5 운영 관찰 기록 없음(미관찰) · §7.4·§8 은 2026-10-17 스테이징에서 수행(증거 파일 소실, 아래 각주) · F1~F4 미승인(충족 F1-2·F3-1(`.omo/evidence/f3-local-2026-10-19/`)) · 남은 조건: 현재 릴리스 §5 관찰 기록, F4 운영 화면 확인(토글·drain·부팅 실패 판정), 사용자 승인 |
+| 계약·데이터 포트·테스트 DB | PR #1341 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | 미완료(2026-10-29 판정 · Claude Code 판정(Fable)) — §5 운영 관찰 기록 없음(미관찰) · §7.4·§8 은 2026-10-17 스테이징에서 수행(증거 파일 소실, 아래 각주) · F1~F4 미승인(충족 F1-2·F3-1) · 남은 조건: 현재 릴리스 §5 관찰 기록, F4 운영 화면 확인, 사용자 승인 |
+| 레거시 권한 | PR #1339 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | 미완료(2026-10-29 판정 · Claude Code 판정(Fable)) — §5 운영 관찰 기록 없음(미관찰) · §7.4·§8 은 2026-10-17 스테이징에서 수행(증거 파일 소실, 아래 각주) · F1~F4 미승인(충족 F1-2·F3-1) · 남은 조건: e2e-extension-permissions 기존 실패(pre-existing 수용)의 통과 확인, F4 운영 화면 확인(배지·재승인), 사용자 승인 |
+| worker 잔여·별도 프로세스 | PR #1342 · 2026-10-16 dev 머지 · CI 통과 | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | 미완료(2026-10-29 판정 · Claude Code 판정(Fable)) — §5 운영 관찰 기록 없음(미관찰) · §7.4·§8 은 2026-10-17 스테이징에서 수행(증거 파일 소실, 아래 각주) · F1~F4 미승인(충족 F1-2·F3-1) · §7.4 에서 external↔inprocess 왕복·업로드 5건 ready 확인 · 남은 조건: 현재 릴리스 §5 관찰 기록(heartbeat·lease·큐 나이), F4 운영 화면 확인, 사용자 승인 |
+| 검증·배포 문서(이 runbook) | PR #1343 · 2026-10-16 dev 머지 · CI 통과 · `task-11/release-candidate.md` "조건부 후보" | 2026-10-16 22:30 · main ef0241b2 · update·verify exit 0 · `task-12/deployment-receipt.md` · 세션 자동화 | 2026-10-16 22:38 · v1.104.0(600b58ad) · deploy exit 0·health 1.104.0·addon 상태 불변 · `task-12/deployment-receipt.md` · 세션 자동화 | 미완료(2026-10-29 판정 · Claude Code 판정(Fable)) — §5 운영 관찰 기록 없음(미관찰) · §7.4·§8 은 2026-10-17 스테이징에서 수행(증거 파일 소실, 아래 각주) · F1~F4 미승인(충족 F1-2·F3-1) · 남은 조건: release-candidate "조건부 후보" 의 조건(build-full·canary-dry-run 스테이징 실행) 미이행, F1-1 증거 재생성 여부 결정, 사용자 승인 |
 | Knowledge external 전환(별도 승인) | 해당 없음 | | | |
 
 후속 릴리스 v1.104.1(2026-10-16 23:52, 4e476c58 — #1352 의존성·#1353 safeFetch 리다이렉트 정책)도 같은 절차·같은 증거로 운영에 있다. 2026-10-16 배포는 사용자 결정으로 §3.2 의 스테이징 24시간 관찰·격리 DB e2e·성능 기준선 비교와 `canary-deploy` 경로를 건너뛰고 지난 릴리스와 같은 `omk env update`/`deploy --yes` 로 했다(`task-12/operations-handoff.md` 에 기록) — 운영 완료 칸은 §5 관찰 48시간·§7.4·§8·F1~F4 뒤에 채운다.
 
+관찰 창(2026-10-16 23:52~10-18 23:52) 안에 v1.104.x 코드의 add-on 결함이 발견돼 수정 #1378·#1380·#1381·#1382 가 dev 에 머지됐고, 창이 끝난 뒤 v1.106.0(2026-10-19)·v1.106.1 로 운영에 나갔다. 관찰 기록도 없으므로 v1.104.x 관찰은 중단 없이 넘긴 것으로 볼 수 없고, 이후 릴리스의 운영 완료는 같은 조건으로 따로 판정한다.
+
 칸에는 날짜·증거 경로(`task-11/release-candidate.md`·`task-12/deployment-receipt.md`·`task-12/rollback-drill.txt`·`task-12/operations-handoff.md` 중 해당 파일)·기록자를 적는다. 빈 칸은 "아직 아님" 이다. 이 runbook 이 들어간 묶음은 코드 완료까지다 — 스테이징·운영 배포, 관찰, 롤백 훈련은 사용자 승인 뒤에만 실행하므로 "배포 완료"·"운영 완료" 칸은 그 전까지 비워 둔다.
+
+2026-10-16 실행의 증거 디렉터리 `.omo/evidence/base-plugin-separation/20261016T0320Z-7166d7b7/`(task-1·3·11·12)는 그 실행에 쓴 worktree 를 지울 때 함께 사라졌다(2026-10-29 확인). 그래서 위 표의 `task-11/release-candidate.md`·`task-12/deployment-receipt.md`·`operations-handoff.md` 와 §7.4·§8 의 `rollback-drill.txt`·`restore-check.txt` 는 실행 당시 기록이며 지금은 열어 볼 수 없다. 남은 2차 기록은 PR #1343 본문과 CI 기록, 작업 장부(git 밖)다. 이후 이력 재작성으로 표의 SHA 는 옛 값이다(예: v1.104.0 태그 커밋은 지금 8fb95fb7c, 후보 413fe810 은 48589d89c). 원인은 증거 디렉터리를 worktree 밖에 보존하지 않은 것이다(증거 규약 자체는 바꾸지 않는다).
 
 ## 부록 A. 최종 검증 F1~F4 자가 점검
 
 모든 항목은 실제 산출물·증거·SHA 로 확인한다. 계획 문구나 테스트 개수만으로 체크하지 않는다. 미관찰·승인 대기는 미완료로 둔다.
+
+2026-10-16 묶음 판정(2026-10-29): 충족 F1-2·F3-1, 부분 F1-1·F1-3·F2-1·F2-2·F3-2, 미충족 F4 — 사용자 승인 전이라 체크하지 않는다.
 
 **F1 계획 준수**
 - [ ] 로드맵 작업 1~12 각각에 대해 산출물 경로와 증거(`task-N/`)가 있다 — 표로 대조한다.
