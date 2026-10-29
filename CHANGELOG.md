@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.115.12](https://github.com/openmake/openmake_llm/compare/v1.115.11...v1.115.12) (2026-10-28)
+
+
+### 🐛 버그 수정
+
+* **chat:** answer app-level WebSocket ping with pong ([d8f93a8](https://github.com/openmake/openmake_llm/commit/d8f93a8614f25237b0144fb34b9700786e734b61))
+* **chat:** clear stale pending abort on new send, make notePong detachable ([16d9b2b](https://github.com/openmake/openmake_llm/commit/16d9b2b8e0f5afdc20d18807318e3d8d523c2517))
+* **chat:** detect dead WebSocket with app-level ping and resend pending abort after reconnect ([1239302](https://github.com/openmake/openmake_llm/commit/1239302a5d0c2137fb46e2c640ad4e804db80cb7))
+* **chat:** only declare a socket dead after the server has answered a ping, probe on abort ([0b8c2ab](https://github.com/openmake/openmake_llm/commit/0b8c2ab1180b6b498d8e2db98769fd67a1922705))
+
 ## [1.115.11](https://github.com/openmake/openmake_llm/compare/v1.115.10...v1.115.11) (2026-10-28)
 
 
