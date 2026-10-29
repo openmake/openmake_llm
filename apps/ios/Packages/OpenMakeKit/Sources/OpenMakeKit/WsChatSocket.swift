@@ -192,6 +192,8 @@ public extension WsChatRequest {
             notebook: nil,
             saveHistory: saveHistory,
             sessionID: sessionId,
+            // 클라이언트 지정 스트림 ID(정확한 재개용) — iOS 는 쓰지 않아 보내지 않는다(서버가 UUID 를 발급).
+            streamID: nil,
             style: style,
             thinkingMode: thinkingMode,
             type: .chat,

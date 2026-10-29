@@ -138,6 +138,8 @@ export function useChatSocket() {
   // 생성 중에 누른 중단 — 죽은 소켓으로 보냈으면 서버에 닿지 않았다. 재연결 뒤 resume 다음에 다시 보내고,
   // 서버가 결과(aborted·done·error·resume_none)를 알려 주면 푼다(ws-pending-abort).
   const pendingAbortRef = useRef(false);
+  // 첫 pong 전 무응답 재연결 예산 — 이 훅의 모든 소켓이 공유한다(ws-liveness earlyRetry, 비교 레인과는 따로).
+  const earlyRetryRef = useRef({ remaining: CLIENT_TIMING.WS_LIVENESS_EARLY_RETRY_LIMIT });
   // 현재 소켓의 생존 확인 조작 — 네트워크·탭 복귀 때 바로 확인(probe)하거나 닫힌 소켓을 정리(drop)한다.
   const socketCtlRef = useRef<{ probe: () => void; drop: () => void } | null>(null);
   // 이어받기 커서(F19.11) — 마지막으로 받은 스트림 이벤트의 streamId·seq. resume 에 실어 중복 없이 이어받고,
@@ -238,6 +240,7 @@ export function useChatSocket() {
       timeoutMs: CLIENT_TIMING.WS_LIVENESS_TIMEOUT_MS,
       sendPing: () => ws.send(JSON.stringify({ type: "ping", t: Date.now() })),
       onDead: dropSocket,
+      earlyRetry: earlyRetryRef.current,
     });
     socketCtlRef.current = { probe: () => liveness.probe(), drop: dropSocket };
 

@@ -83,6 +83,8 @@ public struct WsServerEvent: Codable {
     public let metrics: Metrics?
     /// 작업 게이트 제안 — 이 요청은 여러 단계의 작업(agent-task)으로 처리하는 편이 낫다는 판정 확률. 서버 설정이 on 이고 기준 이상일 때만 온다
     public let taskSuggestion: TaskSuggestion?
+    /// 이 스트림의 식별자(F19.11) — 클라이언트 커서가 다르면 새 스트림으로 본다
+    public let streamID: String?
     public let content: String?
     public let finished: Bool?
     /// 재생해야 할 이벤트 일부가 링버퍼에서 밀려났음 — 아티팩트는 done.cleanedContent 로 재구성할 것
@@ -91,8 +93,6 @@ public struct WsServerEvent: Codable {
     public let lastSeq: Double?
     /// 마지막으로 발행한 served_model 값 — 링에서 밀려났어도 답하는 모델을 알 수 있게 스냅샷에 싣는다
     public let servedModel: String?
-    /// 이 스트림의 식별자(F19.11) — 클라이언트 커서가 다르면 새 스트림으로 본다
-    public let streamID: String?
     public let thinking: String?
     public let t: Double?
     public let sources: [SearchSourceRef]?
@@ -104,6 +104,7 @@ public struct WsServerEvent: Codable {
     /// 재시도 가능까지 남은 초(quota/키 소진).
     public let retryAfter: Double?
     public let totalKeys: Double?
+    public let capabilities: WsServerCapabilities?
     public let data: JSONAny?
     public let agent: Agent?
     public let skillNames: [String]?
@@ -154,12 +155,12 @@ public struct WsServerEvent: Codable {
         case deduplicated = "deduplicated"
         case metrics = "metrics"
         case taskSuggestion = "taskSuggestion"
+        case streamID = "streamId"
         case content = "content"
         case finished = "finished"
         case gap = "gap"
         case lastSeq = "lastSeq"
         case servedModel = "servedModel"
-        case streamID = "streamId"
         case thinking = "thinking"
         case t = "t"
         case sources = "sources"
@@ -168,6 +169,7 @@ public struct WsServerEvent: Codable {
         case resetTime = "resetTime"
         case retryAfter = "retryAfter"
         case totalKeys = "totalKeys"
+        case capabilities = "capabilities"
         case data = "data"
         case agent = "agent"
         case skillNames = "skillNames"
@@ -192,7 +194,7 @@ public struct WsServerEvent: Codable {
         case waitReason = "waitReason"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: ExpiresAt?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, t: Double?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, approvalID: String?, args: [String: JSONAny]?, riskClass: ToolRiskClass?, decision: Decision?, reason: ApprovalRejectReason?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: ExpiresAt?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, streamID: String?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, thinking: String?, t: Double?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, capabilities: WsServerCapabilities?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, approvalID: String?, args: [String: JSONAny]?, riskClass: ToolRiskClass?, decision: Decision?, reason: ApprovalRejectReason?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -210,12 +212,12 @@ public struct WsServerEvent: Codable {
         self.deduplicated = deduplicated
         self.metrics = metrics
         self.taskSuggestion = taskSuggestion
+        self.streamID = streamID
         self.content = content
         self.finished = finished
         self.gap = gap
         self.lastSeq = lastSeq
         self.servedModel = servedModel
-        self.streamID = streamID
         self.thinking = thinking
         self.t = t
         self.sources = sources
@@ -224,6 +226,7 @@ public struct WsServerEvent: Codable {
         self.resetTime = resetTime
         self.retryAfter = retryAfter
         self.totalKeys = totalKeys
+        self.capabilities = capabilities
         self.data = data
         self.agent = agent
         self.skillNames = skillNames
@@ -285,12 +288,12 @@ public extension WsServerEvent {
         deduplicated: Bool?? = nil,
         metrics: Metrics?? = nil,
         taskSuggestion: TaskSuggestion?? = nil,
+        streamID: String?? = nil,
         content: String?? = nil,
         finished: Bool?? = nil,
         gap: Bool?? = nil,
         lastSeq: Double?? = nil,
         servedModel: String?? = nil,
-        streamID: String?? = nil,
         thinking: String?? = nil,
         t: Double?? = nil,
         sources: [SearchSourceRef]?? = nil,
@@ -299,6 +302,7 @@ public extension WsServerEvent {
         resetTime: String?? = nil,
         retryAfter: Double?? = nil,
         totalKeys: Double?? = nil,
+        capabilities: WsServerCapabilities?? = nil,
         data: JSONAny?? = nil,
         agent: Agent?? = nil,
         skillNames: [String]?? = nil,
@@ -340,12 +344,12 @@ public extension WsServerEvent {
             deduplicated: deduplicated ?? self.deduplicated,
             metrics: metrics ?? self.metrics,
             taskSuggestion: taskSuggestion ?? self.taskSuggestion,
+            streamID: streamID ?? self.streamID,
             content: content ?? self.content,
             finished: finished ?? self.finished,
             gap: gap ?? self.gap,
             lastSeq: lastSeq ?? self.lastSeq,
             servedModel: servedModel ?? self.servedModel,
-            streamID: streamID ?? self.streamID,
             thinking: thinking ?? self.thinking,
             t: t ?? self.t,
             sources: sources ?? self.sources,
@@ -354,6 +358,7 @@ public extension WsServerEvent {
             resetTime: resetTime ?? self.resetTime,
             retryAfter: retryAfter ?? self.retryAfter,
             totalKeys: totalKeys ?? self.totalKeys,
+            capabilities: capabilities ?? self.capabilities,
             data: data ?? self.data,
             agent: agent ?? self.agent,
             skillNames: skillNames ?? self.skillNames,
@@ -519,6 +524,56 @@ public extension ArtifactMeta {
             kind: kind ?? self.kind,
             lang: lang ?? self.lang,
             title: title ?? self.title
+        )
+    }
+
+    func jsonData() throws -> Data {
+        return try newJSONEncoder().encode(self)
+    }
+
+    func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
+        return String(data: try self.jsonData(), encoding: encoding)
+    }
+}
+
+/// init 의 서버 기능 — 연결마다 온다. 구 서버는 필드가 없다(지원하지 않음으로 본다).
+// MARK: - WsServerCapabilities
+public struct WsServerCapabilities: Codable {
+    /// chat 의 클라이언트 streamId 와 `resume{exact:true}` 를 지원한다
+    public let exactResume: Bool?
+
+    public enum CodingKeys: String, CodingKey {
+        case exactResume = "exactResume"
+    }
+
+    public init(exactResume: Bool?) {
+        self.exactResume = exactResume
+    }
+}
+
+// MARK: WsServerCapabilities convenience initializers and mutators
+
+public extension WsServerCapabilities {
+    init(data: Data) throws {
+        self = try newJSONDecoder().decode(WsServerCapabilities.self, from: data)
+    }
+
+    init(_ json: String, using encoding: String.Encoding = .utf8) throws {
+        guard let data = json.data(using: encoding) else {
+            throw NSError(domain: "JSONDecoding", code: 0, userInfo: nil)
+        }
+        try self.init(data: data)
+    }
+
+    init(fromURL url: URL) throws {
+        try self.init(data: try Data(contentsOf: url))
+    }
+
+    func with(
+        exactResume: Bool?? = nil
+    ) -> WsServerCapabilities {
+        return WsServerCapabilities(
+            exactResume: exactResume ?? self.exactResume
         )
     }
 
@@ -1247,6 +1302,9 @@ public struct WsChatRequest: Codable {
     /// 개인정보: false 면 백엔드가 대화 기록 저장을 생략 (설정 페이지 토글). 기본 true
     public let saveHistory: Bool?
     public let sessionID: String?
+    /// 이 생성의 이어받기 식별자를 클라이언트가 정한다(UUID v4, 2026-10-29) — 첫 이벤트 전에 끊겨도 `resume{exact:true}` 로 이
+    /// 생성을 지정한다. 서버는 형식이 맞을 때만 쓰고, 없거나 틀리면 종전처럼 발급한다(이벤트 봉투의 streamId 로 확인).
+    public let streamID: String?
     /// 응답 스타일 — 백엔드 chat/style.ts 가 system prompt 앞에 style guard 를 prepend (concise=간결,
     /// verbose=상세)
     public let style: Style?
@@ -1282,6 +1340,7 @@ public struct WsChatRequest: Codable {
         case notebook = "notebook"
         case saveHistory = "saveHistory"
         case sessionID = "sessionId"
+        case streamID = "streamId"
         case style = "style"
         case thinkingMode = "thinkingMode"
         case type = "type"
@@ -1290,7 +1349,7 @@ public struct WsChatRequest: Codable {
         case webSearch = "webSearch"
     }
 
-    public init(anonSessionID: String?, approvalCards: Bool?, artifactMode: Bool?, client: Client?, clientRequestID: String?, contextRefs: [String: ContextRef]?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, modes: [String: Bool]?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
+    public init(anonSessionID: String?, approvalCards: Bool?, artifactMode: Bool?, client: Client?, clientRequestID: String?, contextRefs: [String: ContextRef]?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, modes: [String: Bool]?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, streamID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
         self.anonSessionID = anonSessionID
         self.approvalCards = approvalCards
         self.artifactMode = artifactMode
@@ -1312,6 +1371,7 @@ public struct WsChatRequest: Codable {
         self.notebook = notebook
         self.saveHistory = saveHistory
         self.sessionID = sessionID
+        self.streamID = streamID
         self.style = style
         self.thinkingMode = thinkingMode
         self.type = type
@@ -1361,6 +1421,7 @@ public extension WsChatRequest {
         notebook: Notebook?? = nil,
         saveHistory: Bool?? = nil,
         sessionID: String?? = nil,
+        streamID: String?? = nil,
         style: Style?? = nil,
         thinkingMode: Bool?? = nil,
         type: RequestType? = nil,
@@ -1390,6 +1451,7 @@ public extension WsChatRequest {
             notebook: notebook ?? self.notebook,
             saveHistory: saveHistory ?? self.saveHistory,
             sessionID: sessionID ?? self.sessionID,
+            streamID: streamID ?? self.streamID,
             style: style ?? self.style,
             thinkingMode: thinkingMode ?? self.thinkingMode,
             type: type ?? self.type,
