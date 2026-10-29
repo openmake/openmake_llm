@@ -93,9 +93,14 @@ export interface WSMessage {
     approvalCards?: boolean;
     /** 비교 모드(두 모델 동시 답변) 패널 식별자. 같은 사용자의 스트림 키에 접미사로 붙어 레인별로 독립 스트림을 가진다. 형식 `^[a-z0-9_-]{1,16}$`, 그 외는 무시(레인 없음). (2026-09-09) */
     lane?: string;
-    /** resume 커서(F19.11) — 마지막으로 받은 스트림 식별자와 순번. 같은 스트림이면 그 뒤 이벤트만 재생받는다 */
+    /**
+     * resume 커서(F19.11) — 마지막으로 받은 스트림 식별자와 순번. 같은 스트림이면 그 뒤 이벤트만 재생받는다.
+     * chat 에서는 새 생성의 식별자를 클라이언트가 정한다(UUID v4, 2026-10-29) — 형식이 틀리면 서버가 발급한다.
+     */
     streamId?: string;
     afterSeq?: number;
+    /** resume — true 면 streamId 가 등록된 스트림과 정확히 같을 때만 붙는다(아니면 아무것도 바꾸지 않고 resume_none). 2026-10-29 */
+    exact?: boolean;
     /** 통합(add-on)별 외부 컨텍스트 참조 — add-on id → 참조. 컴포저의 컨텍스트 선택기가 보낸다 */
     contextRefs?: Record<string, { id: string; title: string }>;
     /** @deprecated contextRefs 도입 전 클라이언트용 — 통합이 선언한 구 필드로만 읽힌다(turn-integrations.collectContextRefs) */
