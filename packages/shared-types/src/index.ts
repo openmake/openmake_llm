@@ -167,6 +167,17 @@ export interface WsChatRequest {
   approvalCards?: boolean;
   /** 비교 모드(두 모델 동시 답변) 패널 식별자. 같은 사용자의 스트림 키에 접미사로 붙어 레인별로 독립 스트림을 가진다. 형식 `^[a-z0-9_-]{1,16}$`, 그 외는 무시(레인 없음). (2026-09-09) */
   lane?: string;
+  /**
+   * 이 생성의 이어받기 식별자를 클라이언트가 정한다(UUID v4, 2026-10-29) — 첫 이벤트 전에 끊겨도 `resume{exact:true}` 로
+   * 이 생성을 지정한다. 서버는 형식이 맞을 때만 쓰고, 없거나 틀리면 종전처럼 발급한다(이벤트 봉투의 streamId 로 확인).
+   */
+  streamId?: string;
+}
+
+/** init 의 서버 기능 — 연결마다 온다. 구 서버는 필드가 없다(지원하지 않음으로 본다). */
+export interface WsServerCapabilities {
+  /** chat 의 클라이언트 streamId 와 `resume{exact:true}` 를 지원한다 */
+  exactResume?: boolean;
 }
 
 /** 아티팩트 메타 — 백엔드 llm/artifact-parser.ts ArtifactInfo 와 동일 계약. */
@@ -229,6 +240,11 @@ export interface WsResumeRequest {
   streamId?: string;
   /** 마지막으로 받은 이벤트의 seq — 같은 스트림이면 이 뒤 이벤트만 재생 */
   afterSeq?: number;
+  /**
+   * true 면 streamId 가 등록된 스트림과 정확히 같을 때만 이어받는다 — 다르거나 없으면 서버는 아무것도 바꾸지 않고
+   * `resume_none` 으로 답한다(같은 키로 생성 중인 다른 탭을 빼앗지 않는다). init.capabilities.exactResume 인 연결에서만 보낸다. (2026-10-29)
+   */
+  exact?: boolean;
 }
 
 export type WsServerEvent =
@@ -272,7 +288,8 @@ export type WsServerEvent =
       /** 작업 게이트 제안 — 이 요청은 여러 단계의 작업(agent-task)으로 처리하는 편이 낫다는 판정 확률. 서버 설정이 on 이고 기준 이상일 때만 온다 */
       taskSuggestion?: { pTrue: number };
     }
-  | { type: "aborted"; message?: string }
+  /** 중단 확인 — streamId 는 중단한 스트림(레지스트리에 붙어 있었을 때만, 2026-10-29) */
+  | { type: "aborted"; message?: string; streamId?: string }
   /**
    * 끊겼던 스트림 이어받기 (2026-09-05). 클라이언트가 재연결 후 `{type:"resume", anonSessionId?}` 를
    * 보내면 서버가 진행 중(또는 방금 끝난) 스트림의 본문 스냅샷을 주고 이어서 스트리밍한다.
@@ -295,8 +312,8 @@ export type WsServerEvent =
       /** 마지막으로 발행한 served_model 값 — 링에서 밀려났어도 답하는 모델을 알 수 있게 스냅샷에 싣는다 */
       servedModel?: string;
     }
-  /** resume 요청에 이어받을 스트림이 없음 — 클라는 대기 상태를 풀면 된다. */
-  | { type: "resume_none" }
+  /** resume 요청에 이어받을 스트림이 없음 — 클라는 대기 상태를 풀면 된다. exact 요청이면 요청한 streamId 를 돌려준다. */
+  | { type: "resume_none"; streamId?: string }
   /** 앱 수준 `ping` 응답 — t 는 ping 이 보낸 값 그대로(숫자가 아니었으면 없음). */
   | { type: "pong"; t?: number }
   /**
@@ -321,7 +338,7 @@ export type WsServerEvent =
       totalKeys?: number;
       keysInCooldown?: number;
     }
-  | { type: "init"; data?: unknown }
+  | { type: "init"; data?: unknown; capabilities?: WsServerCapabilities }
   | {
       type: "agent_selected";
       agent: {

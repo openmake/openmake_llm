@@ -12,6 +12,8 @@ function envNum(v: string | undefined, d: number): number {
   return Number.isFinite(n) && n > 0 ? n : d;
 }
 
+const WS_LIVENESS_TIMEOUT_MS = envNum(process.env.NEXT_PUBLIC_WS_LIVENESS_TIMEOUT_MS, 10_000);
+
 export const CLIENT_TIMING = {
   /** 딥리서치 진행 폴링 간격(ms) */
   RESEARCH_POLL_MS: envNum(process.env.NEXT_PUBLIC_RESEARCH_POLL_MS, 2500),
@@ -35,7 +37,13 @@ export const CLIENT_TIMING = {
   /** WebSocket 생존 확인 — 마지막 수신 뒤 이만큼 조용하면 앱 ping(ms). half-open 소켓을 onclose 보다 먼저 알아챈다 */
   WS_LIVENESS_INTERVAL_MS: envNum(process.env.NEXT_PUBLIC_WS_LIVENESS_INTERVAL_MS, 15_000),
   /** 위 ping 뒤 이만큼 아무 수신도 없으면 죽은 소켓으로 보고 재연결(ms) */
-  WS_LIVENESS_TIMEOUT_MS: envNum(process.env.NEXT_PUBLIC_WS_LIVENESS_TIMEOUT_MS, 10_000),
+  WS_LIVENESS_TIMEOUT_MS,
+  /** 서버의 앱 ping 지원을 확인하기 전, 열린 뒤 아무것도 받지 못한 소켓을 버리고 다시 열 횟수 — 흐름(메인 채팅·비교 레인)마다, 재연결을 넘어 센다 */
+  WS_LIVENESS_EARLY_RETRY_LIMIT: envNum(process.env.NEXT_PUBLIC_WS_LIVENESS_EARLY_RETRY_LIMIT, 1),
+  /** 비교 레인 — 중단을 보냈거나 서버가 끝났다고 알린 생성의 종료 응답(aborted·done)을 살아 있는 소켓에서 기다리는 최대 시간(ms).
+   *  WS_LIVENESS_TIMEOUT_MS 보다 길어야 한다(죽은 소켓은 생존 확인이 먼저 버리고 재연결 경로로 간다) —
+   *  설정값이 짧으면 하한(WS_LIVENESS_TIMEOUT_MS + 1초)을 쓴다 */
+  WS_TERMINAL_WAIT_MS: Math.max(envNum(process.env.NEXT_PUBLIC_WS_TERMINAL_WAIT_MS, 15_000), WS_LIVENESS_TIMEOUT_MS + 1_000),
   /** react-query staleTime(ms) */
   QUERY_STALE_MS: envNum(process.env.NEXT_PUBLIC_QUERY_STALE_MS, 30_000),
 } as const;
