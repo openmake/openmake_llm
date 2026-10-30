@@ -277,6 +277,19 @@ LiteLLM 버전은 `OMK_LITELLM_SPEC` 로 고정한다 — 설치 스크립트는
    - `env install`·`dev setup` 에서 `OMK_DGX_MODEL` 은 `--dgx-host` 와 함께 줄 때만 쓴다 — 없이 주면 경고 한 줄을 내고 무시한다(기억된 값 그대로).
    - `env update` 는 앱 `.env` 의 `LLM_DEFAULT_MODEL` 이 게이트웨이 이름과 어긋나면(기록된 `OMK_DGX_MODEL` 과 다름, 또는 무기록인데 config 항목·업스트림·와일드카드 라우트 어디에도 없음)
      아무것도 바꾸기 전에 멈춘다. 두 파일을 확인해 같은 값으로 맞추거나 `OMK_DGX_MODEL=<값> omk env install <env> --dgx-host H` 로 기억된 값을 갱신한 뒤 다시 실행한다.
+   - **omk 없는 설치본(`openmake_llm.sh deploy`)** — 게이트웨이 config 를 손으로 관리하는 설치본은 앱 `.env` 에
+     `OMK_LITELLM_CONFIG=<config 절대경로>`·`OMK_LITELLM_PM2_APP=<게이트웨이 PM2 앱 이름>` 두 키를 넣으면 `./openmake_llm.sh deploy`(`update` 포함)가
+     같은 감지·고정 규칙으로 맞춘다. 키가 없으면(omk 환경 포함) 아무것도 하지 않는다. vLLM 주소·키는 config 의 DGX 항목(upstream `openai/<앱 기본 모델|기록값|qwen3.8-27b>`)에서
+     읽는다 — **그 항목의 `api_base` 는 리터럴 주소여야 감지한다**(`os.environ/<이름>` 참조면 배포 셸에 그 환경변수가 없는 한 경고 후 건너뛴다 — 게이트웨이용 env 파일은 배포 셸이 읽지 않는다). 판정은 빌드 전, 쓰기는 마이그레이션 뒤 앱 재시작 직전 — config 는 렌더하지 않고 최소 편집만 한다
+     (정식 항목 하나를 `model_list:` 바로 다음에 넣고 옛 이름 라우트의 upstream 만 새 이름으로, 주소·키 줄은 기존 항목에서 그대로 복사). 바뀌는 배포만
+     `<config>.bak.<시각>` 백업 → 교체 → `pm2 restart <게이트웨이>` → 게이트웨이 `/v1/models` 에 새 이름 확인(최대 60초) 뒤 `.env` 의 `LLM_DEFAULT_MODEL`·
+     `OMK_DGX_MODEL`·`OMK_DGX_MODEL_PINNED` 를 쓴다. 게이트웨이가 새 이름을 올리지 않으면 백업으로 되돌리고 다시 시작하며 `.env` 는 그대로 둔다.
+     앱 기본 모델이 바뀐 배포는 앱 재시작 뒤 PM2 부팅 복구 목록을 저장한다(dump 의 앱을 잃게 되면 저장하지 않는다 — 재부팅 때 옛 이름이 되살아나지 않게).
+     omk 와 다른 점: 자동 감지의 이상(vLLM 미도달·후보 둘 이상·앱 기본 모델이 DGX 이름 아님·게이트웨이 앱 없음·config 형태 불인식·검증 실패)은 **경고만 하고
+     아무것도 바꾸지 않으며 배포는 계속**한다. 실행할 때 준 명시값이 잘못됐거나(미서빙·형식·미도달) 고정값을 vLLM 이 더는 서빙하지 않을 때만 빌드 전에 멈춘다(종료 2).
+     되돌리기: `OMK_DGX_MODEL=qwen3.8-27b ./openmake_llm.sh deploy --yes --no-migrate`(고정, 감지로 돌아가기는 `OMK_DGX_MODEL=auto`), 기능 끄기는 두 키 삭제,
+     config 수동 복원은 `.bak.<시각>` 을 되돌린 뒤 `pm2 restart <게이트웨이>`. 배포 로그의 `PM2 env 의 LLM_DEFAULT_MODEL(…)이 .env(…)와 다릅니다` 경고는
+     스크립트 밖 `pm2 restart` 나 옛 dump 복구를 뜻한다 — `./openmake_llm.sh restart` 뒤 `pm2 save`.
 3. **표시는 ID 기반이다** — 앱은 게이트웨이 `/model/info` 에서 같은 upstream 을 정식 이름 하나로 접어 목록·기본값·응답 배지에 새 ID 를 쓴다.
    어떤 가중치가 그 이름 뒤에 있는지는 운영자가 vLLM 쪽에서 정한다. 목록에 새 ID 가 보인다고 가중치·능력이 검증된 것은 아니다.
 4. **능력은 따로 실측한다** — 새 ID 는 옛 모델의 프로필(도구·추론·이미지·강도)을 물려받지 않고 보수적 기본값 + 부팅 프로브(도구 호출·컨텍스트 길이)로 시작한다.

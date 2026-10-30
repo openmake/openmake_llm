@@ -113,6 +113,7 @@ jobs:
           for f in scripts/setup/common/*.sh scripts/setup/mac/*.sh scripts/setup/linux/*.sh; do bash -n "$f"; done
           bash -n openmake_llm.sh
           for f in scripts/env/*.sh; do bash -n "$f"; done
+          for f in scripts/lib/*.sh; do bash -n "$f"; done
           bash -n scripts/setup/mac-toolchain.test.sh
           bash -n scripts/setup/mac-host-repair.sh
           bash -n scripts/setup/mac-host-repair.test.sh
@@ -127,7 +128,7 @@ jobs:
           for f in scripts/backups/*.sh scripts/airgap/*.sh; do bash -n "$f"; done
           shellcheck -S warning install.sh install_mac.sh install_linux.sh \
             scripts/setup/common/*.sh scripts/setup/mac/*.sh scripts/setup/linux/*.sh \
-            openmake_llm.sh scripts/env/*.sh \
+            openmake_llm.sh scripts/env/*.sh scripts/lib/*.sh \
             scripts/setup/mac-toolchain.test.sh scripts/setup/uninstall.test.sh scripts/setup/linux-web-port.test.sh \
             scripts/setup/mac-host-repair.sh scripts/setup/mac-host-repair.test.sh scripts/setup/fake-launchctl.test-lib.sh \
             scripts/setup/mac-pm2-boot.sh scripts/setup/pm2-boot-guard.sh scripts/setup/mac-pm2-boot.test.sh \
