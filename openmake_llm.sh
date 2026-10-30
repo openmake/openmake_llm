@@ -1125,10 +1125,30 @@ sync_caddyfile() {
         fi
     fi
 
+    # 아래 호스트 경로 재검증이 실패하면 되돌릴 수 있게 기존 운영 파일을 잠시 보관한다.
+    local prev=""
+    if [[ -f "$CADDYFILE_DEST" ]]; then
+        prev="$(mktemp 2>/dev/null)" || prev=""
+        [[ -n "$prev" ]] && { cp "$CADDYFILE_DEST" "$prev" 2>/dev/null || { rm -f "$prev"; prev=""; }; }
+    fi
+
     if ! cp "$src" "$CADDYFILE_DEST" 2>/dev/null; then
+        [[ -n "$prev" ]] && rm -f "$prev"
         log_warn "Caddyfile 복사 실패 (권한 확인 필요): $CADDYFILE_DEST"
         return 0
     fi
+
+    # 레포 경로 검증은 호스트 Caddyfile.d/*.caddy(상대 import)를 보지 못한다 — 복사 뒤 운영 경로로 한 번 더 검증한다.
+    if (( has_caddy )); then
+        local derr
+        if ! derr="$(caddy validate --config "$CADDYFILE_DEST" --adapter caddyfile 2>&1 | tail -n 1)"; then
+            if [[ -n "$prev" ]]; then cp "$prev" "$CADDYFILE_DEST" 2>/dev/null || true; rm -f "$prev"; else rm -f "$CADDYFILE_DEST"; fi
+            log_err "호스트 경로 Caddyfile 검증 실패 (Caddyfile.d 포함) — 운영 파일을 되돌립니다 (기존 설정 유지): $CADDYFILE_DEST"
+            log_err "  $derr"
+            return 0
+        fi
+    fi
+    [[ -n "$prev" ]] && rm -f "$prev"
     log_ok "Caddyfile 갱신 → $CADDYFILE_DEST"
 
     if (( ! has_caddy )); then

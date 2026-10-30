@@ -16,6 +16,10 @@
 
 import webPush from 'web-push';
 import { getConfig } from '../config/env';
+import { createLogger } from './logger';
+
+const logger = createLogger('Vapid');
+let warnedMissingSubject = false;
 
 /**
  * 환경 설정에서 VAPID 키를 로드하고 web-push에 설정합니다.
@@ -23,19 +27,23 @@ import { getConfig } from '../config/env';
  * 공개키와 비밀키가 모두 존재하면 `webPush.setVapidDetails()`를 호출하여
  * 이후 Push 알림 발송 시 자동으로 VAPID 인증이 적용됩니다.
  *
- * @returns VAPID 공개키, 비밀키, subject(연락처 URL/이메일)
+ * @returns VAPID 공개키, 비밀키, subject(연락처 URL/이메일), enabled(셋 다 있어 웹 푸시가 켜졌는지)
  */
-export function getVapidKeys(): { publicKey: string; privateKey: string; subject: string } {
+export function getVapidKeys(): { publicKey: string; privateKey: string; subject: string; enabled: boolean } {
     const publicKey = getConfig().vapidPublicKey;
     const privateKey = getConfig().vapidPrivateKey;
     const subject = getConfig().vapidSubject;
     
     // subject(연락처)는 web-push 가 필수로 요구한다 — 설치마다 다른 값이라 기본값이 없으므로, 비어 있으면 푸시를 켜지 않는다.
-    if (publicKey && privateKey && subject) {
+    const enabled = Boolean(publicKey && privateKey && subject);
+    if (enabled) {
         webPush.setVapidDetails(subject, publicKey, privateKey);
+    } else if (publicKey && privateKey && !warnedMissingSubject) {
+        warnedMissingSubject = true;
+        logger.warn('VAPID_SUBJECT(연락처 mailto:/https:) 미설정 — VAPID 키가 있어도 웹 푸시를 끈다. 켜려면 VAPID_SUBJECT 를 설정한다.');
     }
     
-    return { publicKey, privateKey, subject };
+    return { publicKey, privateKey, subject, enabled };
 }
 
 /**

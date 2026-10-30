@@ -174,7 +174,7 @@ const T = {
     lede: '앱 호스트 (<b>앱 · 게이트웨이 · 데이터 플레인</b>) ⇄ Tailscale ⇄ DGX (<b>vLLM inference 플레인</b>) · 외부 provider 클라우드',
     stamp: ['소스 기준', 'PM2 + Colima(Mac) · PM2(DGX)', 'chat.example.com — Cloudflare Tunnel'],
     clients: ['사용자 &', '클라이언트'],
-    macRole: '앱 · 게이트웨이 · 데이터 플레인', macChip: 'PM2 (launchd 부팅 복구) + Colima',
+    hostTitle: '앱 호스트', macRole: '앱 · 게이트웨이 · 데이터 플레인', macChip: 'PM2 (launchd 부팅 복구) + Colima',
     zEdge: ['엣지', '프록시'], zPm2: ['PM2', '프로세스'], zDocker: ['Colima', '(Linux VM)'],
     tail: ['Tailscale', '사설망'], tailSub: 'OpenAI 호환 API',
     dgx: 'DGX', dgxSub: 'vLLM 전용 inference 플레인 · PM2',
@@ -187,10 +187,10 @@ const T = {
   },
   en: {
     title: 'OpenMake LLM — Deployment Architecture',
-    lede: '앱 호스트 (<b>app · gateway · data plane</b>) ⇄ Tailscale ⇄ DGX (<b>vLLM inference plane</b>) · external provider clouds',
+    lede: 'App host (<b>app · gateway · data plane</b>) ⇄ Tailscale ⇄ DGX (<b>vLLM inference plane</b>) · external provider clouds',
     stamp: ['source of truth', 'PM2 + Colima (Mac) · PM2 (DGX)', 'chat.example.com — Cloudflare Tunnel'],
     clients: ['People &', 'clients'],
-    macRole: 'app · gateway · data plane', macChip: 'PM2 (launchd boot recovery) + Colima',
+    hostTitle: 'App host', macRole: 'app · gateway · data plane', macChip: 'PM2 (launchd boot recovery) + Colima',
     zEdge: ['Edge', 'proxy'], zPm2: ['PM2', 'processes'], zDocker: ['Colima', '(Linux VM)'],
     tail: ['Tailscale', 'private net'], tailSub: 'OpenAI-compatible API',
     dgx: 'DGX', dgxSub: 'vLLM inference plane · PM2',
@@ -199,7 +199,7 @@ const T = {
     extOut: '▲ Outbound calls come from LiteLLM (:13401) and apps/api on the Mac',
     hard: 'Shared hardening — cap-drop ALL · no-new-privileges · read-only · network none by default · --memory = --memory-swap · symlink escape blocked (realpath)',
     legend: ['edge', 'app (PM2)', 'LLM gateway', 'data (Docker)', 'isolated sandbox (Docker)', 'vLLM (DGX)'],
-    flow: ['Clients', 'Cloudflare/LAN', '앱 호스트', 'Tailscale', 'DGX vLLM'],
+    flow: ['Clients', 'Cloudflare/LAN', 'App host', 'Tailscale', 'DGX vLLM'],
   },
 }[L];
 
@@ -269,7 +269,7 @@ document.body.innerHTML = `
   <section class="mac">
     <header>
 ${ART.macMini(120)}
-      <div><div class="t">앱 호스트</div><div class="s">${T.macRole}</div></div>
+      <div><div class="t">${T.hostTitle}</div><div class="s">${T.macRole}</div></div>
       <span class="chip">${T.macChip}</span>
     </header>
 

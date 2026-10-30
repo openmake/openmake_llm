@@ -63,8 +63,9 @@ async function warmCacheIfNeeded(): Promise<void> {
  * VAPID 공개키 반환
  */
 router.get('/vapid-key', asyncHandler(async (req: Request, res: Response) => {
-    const { publicKey } = getVapidKeys();
-    if (!publicKey) {
+    const { publicKey, enabled } = getVapidKeys();
+    // 키가 있어도 연락처(VAPID_SUBJECT)가 없으면 발송할 수 없다 — 구독을 받지 않도록 미설정으로 알린다.
+    if (!enabled) {
         return res.status(503).json(serviceUnavailable('VAPID keys not configured'));
     }
     res.json(success({ publicKey }));
