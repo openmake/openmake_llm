@@ -147,3 +147,32 @@ describe('openai-compat files[] 확장', () => {
         expect(processChatSpy).not.toHaveBeenCalled();
     });
 });
+
+
+describe('openai-compat 문맥 초과', () => {
+    it('모델 문맥에 들어가지 않는 입력은 413', async () => {
+        const { ProviderError } = await import('../../providers/provider-errors');
+        setClusterManager({} as unknown as ClusterManager);
+        const spy = jest.spyOn(ChatRequestHandler, 'processChat').mockRejectedValueOnce(new ProviderError('CONTEXT_TOO_LARGE', 'too many tokens'));
+        try {
+            const res = await request(mkApp()).post('/api/v1/chat/completions').send({ model: 'test-model', messages: [{ role: 'user', content: 'x' }] });
+            expect(res.status).toBe(413);
+            expect(res.body.error.message).toBe('too many tokens');
+        } finally { spy.mockRestore(); }
+    });
+});
+
+
+describe('openai-compat 첨부 사용량 추정', () => {
+    it('보고하는 prompt 추정치에 첨부 추출 내용을 포함한다', async () => {
+        setClusterManager({} as unknown as ClusterManager);
+        const spy = jest.spyOn(ChatRequestHandler, 'processChat').mockResolvedValue({ response: 'ok', sessionId: 'test-session', model: 'test-model' } as never);
+        try {
+            const body = { model: 'test-model', messages: [{ role: 'user', content: 'summary please' }] };
+            const without = await request(mkApp()).post('/api/v1/chat/completions').send(body);
+            const withFile = await request(mkApp()).post('/api/v1/chat/completions').send({ ...body, files: [{ name: 'report.pdf', type: 'application/pdf', data: 'QUJD' }] });
+            expect(withFile.status).toBe(200);
+            expect(withFile.body.usage.prompt_tokens).toBeGreaterThan(without.body.usage.prompt_tokens);
+        } finally { spy.mockRestore(); }
+    });
+});

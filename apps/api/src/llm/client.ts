@@ -18,6 +18,7 @@
  * @module llm/client
  */
 import OpenAI from 'openai';
+import { llmFetch } from './llm-fetch';
 import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
 import { withSpan } from '../observability/otel';
@@ -72,6 +73,7 @@ export class LLMClient {
             baseURL: this.config.baseUrl,
             apiKey: this.config.apiKey && this.config.apiKey.length > 0 ? this.config.apiKey : 'sk-no-key',
             timeout: this.config.timeout,
+            fetch: llmFetch,
             ...(this.config.maxRetries !== undefined && { maxRetries: this.config.maxRetries }),
         });
         logger.debug(`LLMClient init: chat=${this.config.baseUrl} (model=${this.config.model})`);

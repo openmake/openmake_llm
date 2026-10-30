@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import { SERVER_CONFIG } from './constants';
+import { LLM_TIMEOUT_MAX_MS } from './timeouts';
 
 // Language configuration types
 const supportedLanguageSchema = z.enum([
@@ -121,8 +122,8 @@ export const envSchema = z
         LLM_BASE_URL: z.url().default('http://localhost:4000'),
         LLM_API_KEY: z.string().default('sk-no-key'),
         LLM_DEFAULT_MODEL: z.string().min(1).default('qwen3.8-27b'),
-        LLM_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= 600000, {
-            message: 'LLM_TIMEOUT must be between 1 and 600000 milliseconds',
+        LLM_TIMEOUT: positiveIntWithDefault(120000).refine((value) => value <= LLM_TIMEOUT_MAX_MS, {
+            message: `LLM_TIMEOUT must be between 1 and ${LLM_TIMEOUT_MAX_MS} milliseconds`,
         }),
         LLM_WARMUP_TIMEOUT_MS: positiveIntWithDefault(10000).refine((value) => value <= 60000, {
             message: 'LLM_WARMUP_TIMEOUT_MS must be between 1 and 60000 milliseconds',

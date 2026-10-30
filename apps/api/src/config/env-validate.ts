@@ -7,6 +7,7 @@
  * @module config/env-validate
  */
 import type { EnvConfig } from './env';
+import { LLM_TIMEOUT_MAX_MS } from './timeouts';
 
 export function validateConfig(config: EnvConfig): void {
     const errors: string[] = [];
@@ -22,8 +23,8 @@ export function validateConfig(config: EnvConfig): void {
     }
 
     // 타임아웃 검증
-    if (config.llmTimeout <= 0 || config.llmTimeout > 600000) {
-        errors.push(`Invalid LLM_TIMEOUT: ${config.llmTimeout} (must be between 1-600000ms)`);
+    if (config.llmTimeout <= 0 || config.llmTimeout > LLM_TIMEOUT_MAX_MS) {
+        errors.push(`Invalid LLM_TIMEOUT: ${config.llmTimeout} (must be between 1-${LLM_TIMEOUT_MAX_MS}ms)`);
     }
 
     // JWT_SECRET 필수 검증 (test 환경 제외 — 랜덤 생성 금지: PM2 재시작마다 세션 무효화)
