@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.116.0](https://github.com/openmake/openmake_llm/compare/v1.115.13...v1.116.0) (2026-10-30)
+
+
+### ✨ 기능
+
+* **models:** DGX 모델 ID 를 앱·게이트웨이에 일치시키고 옛 로컬 ID 를 정식 ID 로 해석 ([9126e70](https://github.com/openmake/openmake_llm/commit/9126e70c1a9c1a3345efa67673ef8f8dc8c167aa))
+* **models:** qwen3.8-flash-next 실측 프로필 추가 ([02344a8](https://github.com/openmake/openmake_llm/commit/02344a8e6eaa92d6c7b220222efd291ab22a250c))
+* **omk:** 설치·업데이트 때 vLLM 이 서빙하는 이름으로 DGX 모델 ID 를 정한다 ([a20b025](https://github.com/openmake/openmake_llm/commit/a20b025beaccbed173ad29cc21c2e58153c7322d))
+
+
+### 🐛 버그 수정
+
+* **ci:** require a manifest reason when a test file is deleted ([f5ffd52](https://github.com/openmake/openmake_llm/commit/f5ffd5205f22abc6c2a400022b02812afe1eed35))
+* **llm:** 긴 문맥 추론 — 300초 fetch 제한 제거, LLM_TIMEOUT 최대 20분, 문맥 초과는 413 ([2a0a621](https://github.com/openmake/openmake_llm/commit/2a0a6212d1783ca3c076a6dc9918a52a2ba2eb72))
+* **llm:** 긴 문맥 타임아웃 리뷰 반영 — 프록시 1200s, 20분 상한 단일화, 전송 상한 정렬 ([e00fc8a](https://github.com/openmake/openmake_llm/commit/e00fc8a92636010f900ce00d43aad69a7d5d4230))
+* **omk:** DGX 이름 맞춤 쓰기 전 config 시험 렌더·업스트림 재검사, 미도달 설치 명시값 고정 ([01bbc03](https://github.com/openmake/openmake_llm/commit/01bbc0382c7114521912cc37dfc0f9e070527664))
+* **omk:** vLLM 이름 감지 — 어댑터 제외·배포 뒤 쓰기·명시값 고정 ([3df4226](https://github.com/openmake/openmake_llm/commit/3df42264dfc85e6259fcf4c3ab64c69bf45f6129))
+
 ## [1.115.13](https://github.com/openmake/openmake_llm/compare/v1.115.12...v1.115.13) (2026-10-29)
 
 
