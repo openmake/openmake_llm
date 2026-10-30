@@ -161,7 +161,8 @@ export function runFeatures(files, options = {}) {
     const platform = options.platform || process.platform;
     run(resolve(root, 'node_modules/.bin/esbuild'), ['apps/desktop-native/helper/src/helper.mjs', '--bundle', '--platform=node', '--target=node20', '--format=cjs', '--outfile=apps/desktop-native/helper/dist/helper.cjs']);
     if (platform === 'darwin') run(process.execPath, ['apps/desktop-native/helper/harness.cjs']);
-    desktopHelper = { platform, bundled: true, harness: platform === 'darwin' ? 'ran' : 'delegatedToMacJob' };
+    const harness = 'apps/desktop-native/helper/harness.cjs';
+    desktopHelper = { platform, bundled: true, executed: platform === 'darwin' ? [harness] : [], delegatedToMacJob: platform === 'darwin' ? [] : [harness] };
   }
   // The CLI workspace has no Jest project: its tsc build, then the fixtures that drive the built CLI.
   if (selection.cli) {
