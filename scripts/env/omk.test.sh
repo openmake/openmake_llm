@@ -730,7 +730,9 @@ if has node; then
     mv "$RS/ecosystem.config.js.bak" "$RS/ecosystem.config.js"; rm -f "$RS/apps/api/dist/cli.js"; rs_build
     eq "restart: 띄울 script 가 없으면 지우지 않는다" "$(cut -d'|' -f1 "$RS/pm2.log" | tr '\n' ';')" "restart openmake-llm-rs --update-env ;"
 else echo "SKIP restart: ecosystem 재적용 (node 없음)"; fi
-eq "restart: 이름만으로 재시작하는 곳은 폴백 한 곳뿐" "$(grep -cE '^[^#]*pm2 restart "\$' "$HERE/../../openmake_llm.sh")" "1"
+# 손 관리 게이트웨이(ecosystem 밖 앱, deploy 의 DGX 모델 이름 맞춤)는 gateway_restart 한 곳에서만 이름으로 재시작한다 — 앱 규칙과 별개.
+eq "restart: 이름만으로 재시작하는 곳은 폴백 한 곳뿐" "$(grep -E '^[^#]*pm2 restart "\$' "$HERE/../../openmake_llm.sh" | grep -cv '^gateway_restart()')" "1"
+eq "restart: 게이트웨이 이름 재시작은 gateway_restart 한 곳" "$(grep -cE '^gateway_restart\(\) \{ pm2 restart "\$1"' "$HERE/../../openmake_llm.sh")" "1"
 # deploy 는 빌드 뒤·마이그레이션 전에 DB·Redis 컨테이너에 compose 변경(포트 바인딩 등)을 반영한다 — up -d 는 설정이 바뀐 컨테이너만 다시 만든다.
 DEPLOY_BODY="$(awk '/^cmd_deploy\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$HERE/../../openmake_llm.sh")"
 eq "deploy: 빌드 → postgres·redis up -d → 마이그레이션 순서" \
