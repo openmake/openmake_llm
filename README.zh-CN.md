@@ -278,7 +278,7 @@ Application host                                   Inference host (GPU)
 ./openmake_llm.sh start     # PostgreSQL → Redis → 应用，随后输出日志
 ./openmake_llm.sh status    # 端口、容器和 PM2 状态
 ./openmake_llm.sh update    # git pull（仅 fast-forward）→ 构建 → 迁移 → 重启
-./openmake_llm.sh deploy    # 构建 → 迁移 → 重启
+./openmake_llm.sh deploy    # 构建 → 迁移 → 重启（.env 中有 OMK_LITELLM_CONFIG 时同步 DGX 模型名）
 ./openmake_llm.sh stop
 ```
 
