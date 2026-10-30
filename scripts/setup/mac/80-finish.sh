@@ -27,29 +27,9 @@ trust_root_ca() {
 
 # 지금 실행 중인 PM2 앱을 부팅 복구 목록(dump)에 저장한다 — 저장된 앱을 잃지 않을 때만.
 # 실행 중 앱이 없거나, dump 에 있는 앱이 지금 목록에 없으면 저장하지 않는다 (빈·부분 목록이 dump 를 덮지 않게).
-pm2_save_guarded() {
-    local dump="${PM2_HOME:-$HOME/.pm2}/dump.pm2" current lost backup
-    current="$(pm2 jlist 2>/dev/null | node -e '
-        let l = []; try { l = JSON.parse(require("fs").readFileSync(0, "utf8")); } catch {}
-        for (const p of l) if (p && p.name && !(p.pm2_env && p.pm2_env.pmx_module)) console.log(p.name);')"
-    if [[ -z "$current" ]]; then
-        log_warn "실행 중인 PM2 앱이 없습니다 — 부팅 복구 목록(dump)을 저장하지 않았습니다."; return 1
-    fi
-    if [[ -f "$dump" ]]; then
-        lost="$(node -e '
-            const cur = new Set(process.argv[2].split("\n")); let l;
-            try { l = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); } catch { process.exit(3); }
-            process.stdout.write((Array.isArray(l) ? l : []).map(p => p && p.name).filter(n => n && !cur.has(n)).join(" "));' "$dump" "$current")" \
-            || { log_warn "$dump 을 읽을 수 없습니다 — 저장하지 않았습니다 (원본 보존)."; return 1; }
-        if [[ -n "$lost" ]]; then
-            log_warn "저장된 PM2 앱이 지금 실행 중이 아닙니다: $lost — 부팅 복구 목록(dump)을 덮지 않았습니다."; return 1
-        fi
-        backup="$OMK_ROOT/backups/pm2/dump.pm2.before-save-$(date +%Y%m%d%H%M%S)-$$"
-        (umask 077; mkdir -p "$(dirname "$backup")" && cp "$dump" "$backup" && chmod 600 "$backup") \
-            || { log_warn "dump 백업 실패 ($backup) — 저장하지 않았습니다."; return 1; }
-    fi
-    pm2 save >/dev/null || { log_warn "pm2 save 실패"; return 1; }
-}
+# 함수 본문은 scripts/lib/pm2-save.sh (openmake_llm.sh deploy 도 같은 규칙으로 저장한다).
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/scripts/lib/pm2-save.sh"
 
 # PM2 부팅 복구 등록 — sudo pm2 startup 대신 사용자 LaunchAgent(com.openmake.pm2)를 mac-pm2-boot.sh 로 맞춘다.
 run_pm2_boot_repair() {

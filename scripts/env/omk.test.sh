@@ -423,6 +423,8 @@ for bad in 'x;id' 'gpt-3.5-turbo'; do
 done
 ( OMK_DGX_MODEL=qwen3.8-27b dgx_apply "$OL" opsenv 192.168.0.50 vkey >/dev/null )
 eq "dgx: 기본값을 명시하면 되돌린다" "$(dotenv_get "$OL/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$DL" OMK_DGX_MODEL)" "qwen3.8-27b|qwen3.8-27b"
+# 감지 함수는 scripts/lib/dgx-model.sh 에 있다 — omk.sh 를 source 하면 함께 보인다(openmake_llm.sh deploy 도 같은 파일을 쓴다).
+ok "dgx lib: source 뒤 감지 함수·옛 이름 상수" 'declare -F dgx_resolve_model >/dev/null && [[ "$OMK_DGX_LEGACY_MODEL" == qwen3.8-27b ]]'
 # vLLM 서빙 이름 자동 감지 — curl 은 가짜(실제 네트워크 없음). 본문은 실제 vLLM /v1/models 형식(permission[].id=modelperm-…).
 vm_body() { # $@=served id → vLLM /v1/models 본문
     local i out='' sep=''
@@ -728,7 +730,9 @@ if has node; then
     mv "$RS/ecosystem.config.js.bak" "$RS/ecosystem.config.js"; rm -f "$RS/apps/api/dist/cli.js"; rs_build
     eq "restart: 띄울 script 가 없으면 지우지 않는다" "$(cut -d'|' -f1 "$RS/pm2.log" | tr '\n' ';')" "restart openmake-llm-rs --update-env ;"
 else echo "SKIP restart: ecosystem 재적용 (node 없음)"; fi
-eq "restart: 이름만으로 재시작하는 곳은 폴백 한 곳뿐" "$(grep -cE '^[^#]*pm2 restart "\$' "$HERE/../../openmake_llm.sh")" "1"
+# 손 관리 게이트웨이(ecosystem 밖 앱, deploy 의 DGX 모델 이름 맞춤)는 gateway_restart 한 곳에서만 이름으로 재시작한다 — 앱 규칙과 별개.
+eq "restart: 이름만으로 재시작하는 곳은 폴백 한 곳뿐" "$(grep -E '^[^#]*pm2 restart "\$' "$HERE/../../openmake_llm.sh" | grep -cv '^gateway_restart()')" "1"
+eq "restart: 게이트웨이 이름 재시작은 gateway_restart 한 곳" "$(grep -cE '^gateway_restart\(\) \{ pm2 restart "\$1"' "$HERE/../../openmake_llm.sh")" "1"
 # deploy 는 빌드 뒤·마이그레이션 전에 DB·Redis 컨테이너에 compose 변경(포트 바인딩 등)을 반영한다 — up -d 는 설정이 바뀐 컨테이너만 다시 만든다.
 DEPLOY_BODY="$(awk '/^cmd_deploy\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$HERE/../../openmake_llm.sh")"
 eq "deploy: 빌드 → postgres·redis up -d → 마이그레이션 순서" \

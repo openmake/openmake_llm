@@ -278,7 +278,7 @@ Day-to-day operation goes through `openmake_llm.sh`:
 ./openmake_llm.sh start     # PostgreSQL → Redis → app, then stream logs
 ./openmake_llm.sh status    # ports, containers, and PM2 state
 ./openmake_llm.sh update    # git pull (fast-forward only) → build → migrate → restart
-./openmake_llm.sh deploy    # build → migrate → restart
+./openmake_llm.sh deploy    # build → migrate → restart (with OMK_LITELLM_CONFIG in .env, also syncs the DGX model name)
 ./openmake_llm.sh stop
 ```
 

@@ -21,6 +21,8 @@
 #   ./openmake_llm.sh migrate    # DB 마이그레이션 적용 (status로 사전 확인 권장)
 #   ./openmake_llm.sh deploy     # build + migrate + restart + Caddy 설정 동기화 (코드 변경 운영 반영)
 #                                # 옵션: --yes (확인 skip), --no-migrate (마이그 생략)
+#                                # .env 에 OMK_LITELLM_CONFIG 가 있으면 DGX vLLM 서빙 이름으로 앱 기본 모델·게이트웨이 config 를 함께 맞춤
+#                                # (OMK_DGX_MODEL=<값|auto> ./openmake_llm.sh deploy — 고정·해제, scripts/env/README.md)
 #   ./openmake_llm.sh status     # 모든 계층 상태 확인
 #   ./openmake_llm.sh logs       # OpenMake LLM 실시간 로그
 #   ./openmake_llm.sh health     # /health 엔드포인트 응답 확인
@@ -62,6 +64,15 @@ readonly SCRIPT_DIR
 # (스크립트만 복사해 쓰는 시험을 위해 파일이 있을 때만 읽는다 — 없으면 deploy 가 검사 함수 없음으로 멈춘다.)
 # shellcheck source=/dev/null
 [[ -f "$SCRIPT_DIR/scripts/lib/node-version.sh" ]] && . "$SCRIPT_DIR/scripts/lib/node-version.sh"
+# DGX 채팅 모델 이름 감지(scripts/env/omk.sh 와 같은 규칙)·PM2 부팅 복구 목록 저장 — deploy 가 .env 에 OMK_LITELLM_CONFIG 가
+# 있을 때만 쓴다(dgx_ops_sync). 위와 같은 이유로 파일이 있을 때만 읽는다.
+# shellcheck source=/dev/null
+[[ -f "$SCRIPT_DIR/scripts/lib/dgx-model.sh" ]] && . "$SCRIPT_DIR/scripts/lib/dgx-model.sh"
+# shellcheck source=/dev/null
+[[ -f "$SCRIPT_DIR/scripts/lib/pm2-save.sh" ]] && . "$SCRIPT_DIR/scripts/lib/pm2-save.sh"
+# 실행할 때 준 OMK_DGX_MODEL 만 명시값이다 — deploy 의 export_dotenv_for_pm2 가 .env 에 기록된 값을 이 셸에 올린다.
+DGX_EXPLICIT="${OMK_DGX_MODEL:-}"
+DGX_OPS_TARGET="" DGX_OPS_PIN="" DGX_OPS_OLD="" DGX_OPS_ANCHOR="" DGX_OPS_APP="" DGX_OPS_CHANGED=0
 
 # macOS 의 openmake 는 전용 Colima(프로필 openmake)에서 돈다 — 소켓이 있으면 그쪽을 가리킨다
 # (scripts/env/omk.sh 의 omk_docker_host 와 같은 규칙). macOS 에서는 항상 Colima 를 선택한다.
@@ -73,6 +84,26 @@ openmake_select_docker
 env_line() {
     [[ -f "$SCRIPT_DIR/.env" ]] || return 0
     grep -E "^$1=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ' || true
+}
+# env_line 값에서 전체를 감싼 한 쌍의 따옴표만 벗긴다(dotenv 와 같은 규칙).
+env_val() {
+    local v; v="$(env_line "$1")"
+    if [[ "$v" =~ ^\"(.*)\"$ ]] || [[ "$v" =~ ^\'(.*)\'$ ]]; then v="${BASH_REMATCH[1]}"; fi
+    printf '%s' "$v"
+}
+# .env 의 키가 있으면 값을 바꾸고 없으면 붙인다 — scripts/env/omk.sh 의 dotenv_set 과 같은 규칙(그 함수는 curl|bash 모드 때문에
+# 공용 파일로 뺄 수 없어 의도적으로 작게 중복한다). sed -i 는 macOS/Linux 인자가 달라 쓰지 않는다. 권한은 그대로 둔다.
+env_set() { # $1=key $2=value
+    local file="$SCRIPT_DIR/.env" tmp
+    touch "$file"
+    if grep -qE "^$1=" "$file" 2>/dev/null; then
+        tmp="$(mktemp)" && cp -p "$file" "$tmp" \
+            && awk -v k="$1" -v v="$2" 'BEGIN{FS=OFS="="} $1==k && !done {print k"="v; done=1; next} {print}' "$file" > "$tmp" \
+            && mv "$tmp" "$file"
+    else
+        [[ ! -s "$file" || -z "$(tail -c 1 "$file")" ]] || printf '\n' >> "$file"
+        printf '%s=%s\n' "$1" "$2" >> "$file"
+    fi
 }
 
 # 인스턴스 접미사 — ecosystem.config.js(resolve-ports.cjs)·infra/docker-compose.yml 과 같은 규칙으로
@@ -744,6 +775,234 @@ cmd_update() {
     exec "$BASH" "$SCRIPT_DIR/openmake_llm.sh" deploy ${PASS[@]+"${PASS[@]}"}
 }
 
+# ── DGX 채팅 모델 이름 맞춤 (손 관리 게이트웨이 설치본) ─────────────────────────
+# .env 에 OMK_LITELLM_CONFIG(손 관리 LiteLLM config 경로)·OMK_LITELLM_PM2_APP(그 게이트웨이의 PM2 앱 이름)이 있을 때만 동작한다.
+# vLLM 이 서빙하는 이름(scripts/lib/dgx-model.sh — omk env update 와 같은 감지·고정 규칙)으로 앱 기본 모델(.env LLM_DEFAULT_MODEL)과
+# 게이트웨이 config 를 같은 값으로 맞춘다. omk 가 관리하는 환경은 이 키가 없어 아무것도 하지 않는다(omk 가 litellm.env 로 맞춘다).
+# 판정(dgx_ops_sync)은 빌드 전에 읽기만, 쓰기(dgx_ops_apply)는 마이그레이션 뒤 앱 재시작 직전에 한다 — 게이트웨이가 먼저 새 이름(옛 이름
+# 라우트는 그대로)으로 뜬 뒤 앱이 새 이름으로 재시작돼 기본 모델이 게이트웨이에 없는 구간이 없다.
+# 자동 감지의 이상(미도달·후보 둘 이상·앱 기본값이 DGX 이름 아님·config 형태 불인식 등)은 경고만 하고 아무것도 바꾸지 않으며 배포는
+# 계속한다. 실행할 때 준 OMK_DGX_MODEL(명시값)이 잘못됐거나 고정값을 vLLM 이 더는 서빙하지 않으면 빌드 전에 멈춘다(종료 2).
+# 키는 config 안에서 읽어 curl 헤더로만 쓰고 어떤 출력에도 싣지 않는다.
+
+# 게이트웨이 config 에서 DGX 채팅 항목(litellm_params.model == openai/<앵커>, 앵커는 준 순서대로)의 주소·키를 읽는다(js-yaml, 읽기만).
+# 값이 os.environ/<이름> 이면 이 셸의 그 환경변수. 출력 "앵커\napi_base\napi_key\n." — 호출자의 변수로만 받는다.
+# rc 1=항목 없음(또는 읽을 수 없음), 2=node·js-yaml 없음, 3=api_base 값을 알 수 없음(출력은 config 에 적힌 값).
+gateway_dgx_entry() { # $1=config $2…=앵커 후보
+    command -v node >/dev/null 2>&1 || return 2
+    ( cd "$SCRIPT_DIR" && node -e '
+        const path = require("path"), fs = require("fs");
+        let yaml; try { yaml = require("module").createRequire(path.resolve("apps/api/package.json"))("js-yaml"); } catch { process.exit(2); }
+        let doc; try { doc = yaml.load(fs.readFileSync(process.argv[1], "utf8")); } catch { process.exit(1); }
+        const list = doc && Array.isArray(doc.model_list) ? doc.model_list : [];
+        const val = (v) => { const s = v == null ? "" : String(v), m = /^os\.environ\/(.+)$/.exec(s); return m ? (process.env[m[1]] || "") : s; };
+        for (const a of process.argv.slice(2)) {
+            const e = a && list.find((x) => x && x.litellm_params && x.litellm_params.model === "openai/" + a);
+            if (!e) continue;
+            const p = e.litellm_params, base = val(p.api_base);
+            if (!base) { process.stdout.write(String(p.api_base == null ? "" : p.api_base)); process.exit(3); }
+            process.stdout.write([a, base, val(p.api_key), "."].join("\n")); process.exit(0);
+        }
+        process.exit(1);' "$@" )
+}
+
+# 게이트웨이 config 최소 편집(scripts/env/omk.sh litellm_render_config 와 같은 규칙) — 결과를 $5 에 쓴다(원본은 그대로).
+# (R1) 정식 항목(model_name NEW)이 없으면 model_list: 바로 다음에 넣는다 — api_base·api_key 는 앵커 항목의 줄을 그대로 복사한다.
+# (R2) upstream 이 옛 채팅 이름(openai/<OLD>)인 줄을 openai/NEW 로 바꾼다 — 옛 이름·gpt-3.5-turbo 는 같은 upstream 의 호환 라우트가 된다.
+# 그 밖의 줄·주석·순서는 손대지 않는다. 넣어야 하는데 앵커 항목의 두 줄을 못 찾으면 rc 3.
+gateway_config_plan() { # $1=config $2=NEW $3=앵커 $4=OLD(공백 구분) $5=출력
+    awk -v new="$2" -v anchor="$3" -v olds="$4" '
+        function q(s) { return "\"" s "\"" }
+        BEGIN { n = split(olds, o, " "); for (i = 1; i <= n; i++) { old["openai/" o[i]] = 1; old[q("openai/" o[i])] = 1 } }
+        NR == FNR {
+            if ($0 == "  - model_name: " new || $0 == "  - model_name: " q(new)) has = 1
+            if ($0 ~ /^  - model_name:/) { inb = 1; isa = 0; b = ""; k = "" }
+            else if ($0 ~ /^[^ #]/) inb = 0
+            if (!inb) next
+            if (NF == 2 && $1 == "model:" && ($2 == "openai/" anchor || $2 == q("openai/" anchor))) isa = 1
+            if ($1 == "api_base:") b = $0
+            if ($1 == "api_key:") k = $0
+            if (isa && b != "" && k != "" && !found) { base = b; key = k; found = 1 }
+            next
+        }
+        NF == 2 && $1 == "model:" && ($2 in old) { print "      model: " q("openai/" new); next }
+        { print }
+        /^model_list:[[:space:]]*$/ && !has && found && !done {
+            print "  # ── openmake_llm.sh deploy: DGX 채팅 모델 정식 이름(.env OMK_DGX_MODEL) — 옛 이름·gpt-3.5-turbo 는 같은 upstream 호환 라우트 ──"
+            print "  - model_name: " q(new)
+            print "    litellm_params:"
+            print "      model: " q("openai/" new)
+            print base
+            print key
+            done = 1
+        }
+        END { if (!has && !found) exit 3 }' "$1" "$1" > "$5"
+}
+
+# 편집한 config 를 js-yaml 로 읽어 본다 — model_list 가 비지 않은 배열, model_name 중복 없음, NEW 항목이 정확히 하나이고 upstream 이
+# openai/NEW, 항목 수 = 원본 + (0|1). 실패하면 사유 한 줄을 출력하고 rc 1(node·js-yaml 이 없으면 rc 2).
+gateway_config_validate() { # $1=편집한 파일 $2=NEW $3=원본 config
+    command -v node >/dev/null 2>&1 || { printf 'node 없음'; return 2; }
+    ( cd "$SCRIPT_DIR" && node -e '
+        const path = require("path"), fs = require("fs");
+        let yaml; try { yaml = require("module").createRequire(path.resolve("apps/api/package.json"))("js-yaml"); } catch { process.stdout.write("js-yaml 없음"); process.exit(2); }
+        const fail = (m) => { process.stdout.write(m); process.exit(1); };
+        const load = (f) => { try { return yaml.load(fs.readFileSync(f, "utf8")); } catch (e) { fail("YAML 을 읽을 수 없음"); } };
+        const [file, name, orig] = process.argv.slice(1), doc = load(file), before = load(orig);
+        const list = doc && doc.model_list, n0 = before && Array.isArray(before.model_list) ? before.model_list.length : -1;
+        if (!Array.isArray(list) || list.length === 0) fail("model_list 가 비었거나 배열이 아님");
+        const names = list.map((x) => String(x && x.model_name));
+        if (new Set(names).size !== names.length) fail("model_name 중복");
+        const hit = list.filter((x) => x && String(x.model_name) === name);
+        if (hit.length !== 1) fail(name + " 항목이 " + hit.length + "개");
+        if (!hit[0].litellm_params || hit[0].litellm_params.model !== "openai/" + name) fail(name + " 항목의 upstream 이 openai/" + name + " 이 아님");
+        if (list.length !== n0 && list.length !== n0 + 1) fail("항목 수가 " + n0 + " → " + list.length);' "$1" "$2" "$3" )
+}
+
+# 게이트웨이를 다시 시작한다 — 손 관리 앱이라 ecosystem.config.js 로 다시 등록하지 않고 이름으로 재시작한다(env 는 PM2 저장값 그대로).
+gateway_restart() { pm2 restart "$1" >/dev/null 2>&1 || true; }
+
+# 게이트웨이 /v1/models 에 이름이 뜰 때까지 기다린다(앱이 쓰는 주소·키 — .env LLM_BASE_URL·LLM_API_KEY, 2초 간격 최대 60초).
+gateway_wait_model() { # $1=모델 이름
+    local url key out i a=() re="${1//./\\.}"
+    url="$(env_val LLM_BASE_URL)"; url="${url%/}"; url="${url%/v1}"; key="$(env_val LLM_API_KEY)"
+    [[ -n "$url" ]] || return 1
+    [[ -z "$key" ]] || a=(-H "Authorization: Bearer $key")
+    for ((i = 1; i <= 30; i++)); do
+        out="$(curl -s -m 5 ${a[@]+"${a[@]}"} "$url/v1/models" 2>/dev/null || true)"
+        grep -qE "\"id\"[[:space:]]*:[[:space:]]*\"$re\"" <<<"$out" && return 0
+        sleep 2
+    done
+    return 1
+}
+
+# 판정 — 빌드 전, 아무것도 쓰지 않는다. 맞출 값이 있으면 DGX_OPS_TARGET·DGX_OPS_PIN·DGX_OPS_OLD·DGX_OPS_ANCHOR·DGX_OPS_APP 를 채운다.
+dgx_ops_sync() {
+    local cfg gw app dgx pin entry rc=0 anchor base key rest err r model src newpin served vsv="" svrc=0 list is_dgx=0 why old="" v exp="$DGX_EXPLICIT"
+    cfg="$(env_val OMK_LITELLM_CONFIG)"; [[ -n "$cfg" ]] || return 0
+    [[ "$exp" != auto ]] || exp=""   # auto 는 고정 해제일 뿐 명시값이 아니다
+    declare -F dgx_resolve_model >/dev/null 2>&1 \
+        || { log_warn "DGX 감지 라이브러리(scripts/lib/dgx-model.sh)가 없어 DGX 모델 이름을 맞추지 않습니다"; return 0; }
+    gw="$(env_val OMK_LITELLM_PM2_APP)"
+    if [[ -z "$gw" ]] || ! pm2 jlist 2>/dev/null | grep -qF "\"name\":\"$gw\""; then
+        log_warn "게이트웨이 PM2 앱(${gw:-.env 의 OMK_LITELLM_PM2_APP 없음})이 등록돼 있지 않아 DGX 모델 이름을 맞추지 않습니다"; return 0
+    fi
+    [[ -f "$cfg" ]] || { log_warn "게이트웨이 config 가 없어 DGX 모델 이름을 맞추지 않습니다: $cfg"; return 0; }
+    [[ -n "$(env_val LLM_BASE_URL)" ]] || { log_warn "게이트웨이 주소(.env LLM_BASE_URL)가 없어 DGX 모델 이름을 맞추지 않습니다"; return 0; }
+    app="$(env_val LLM_DEFAULT_MODEL)"; dgx="$(env_val OMK_DGX_MODEL)"; pin="$(env_val OMK_DGX_MODEL_PINNED)"; pin="${pin:-0}"
+    entry="$(gateway_dgx_entry "$cfg" "$app" "$dgx" "$OMK_DGX_LEGACY_MODEL")" || rc=$?
+    case $rc in
+        0) ;;
+        2) log_warn "node 또는 js-yaml 을 찾지 못해 게이트웨이 config 를 검증할 수 없습니다 — 모델 이름을 바꾸지 않았습니다"; return 0 ;;
+        3) log_warn "DGX 항목의 api_base 가 $entry 인데 값을 알 수 없어 DGX 모델 이름을 맞추지 않습니다(배포 셸에 그 환경변수가 없음)"; return 0 ;;
+        *) log_warn "게이트웨이 config 에서 DGX 항목(openai/$(printf '%s\n' "$app" "$dgx" "$OMK_DGX_LEGACY_MODEL" | awk 'NF && !s[$0]++' | paste -sd '|' -))을 찾지 못해 DGX 모델 이름을 맞추지 않습니다: $cfg"; return 0 ;;
+    esac
+    anchor="${entry%%$'\n'*}"; rest="${entry#*$'\n'}"; base="${rest%%$'\n'*}"; rest="${rest#*$'\n'}"; key="${rest%$'\n'.}"
+    # 감지 — 제외용 config 는 레포 config 다(손 관리 config 에 이미 있는 새 이름이 "다른 정적 이름" 으로 빠지지 않게, omk 와 같다).
+    # vLLM 목록은 한 번만 읽는다 — 감지와 아래 DGX 이름 판정이 같은 목록을 본다(두 번째 조회의 일시 실패로 오판하지 않게).
+    # 하위 셸 안에서만 dgx_served_models 를 읽어 둔 값으로 바꿔 dgx_resolve_model 에 넘긴다(실패면 HTTP 코드 + rc 1 그대로).
+    # (dgx_resolve_model 의 local served 가 동적 스코프로 가리지 않게 다른 이름에 담는다.)
+    vsv="$(dgx_served_models "$base" "$key")" || svrc=$?
+    err="$(mktemp)"; rc=0
+    r="$( dgx_served_models() { printf '%s\n' "$vsv"; return "$svrc"; }
+          dgx_resolve_model "$base" "$key" "$DGX_EXPLICIT" "$dgx" "$pin" "$SCRIPT_DIR/scripts/vllm/litellm.config.yaml" 2>"$err" )" || rc=$?
+    if [[ $rc -ne 0 ]]; then
+        if [[ -n "$exp" || ( "$pin" == 1 && -n "$dgx" && "$DGX_EXPLICIT" != auto ) ]]; then cat "$err" >&2; rm -f "$err"; exit 2; fi
+        why="$(sed -E 's/^.*\[ERR\][^[:space:]]*[[:space:]]*//' "$err")"; rm -f "$err"
+        log_warn "$why — 배포는 계속합니다"; return 0
+    fi
+    model="${r% *}"; src="${r##* }"
+    if [[ "$src" == fallback ]]; then
+        sed -E '/\[WARN\]/s/$/ (이번 배포는 모델 이름을 바꾸지 않습니다)/' "$err"; rm -f "$err"
+        [[ -z "$exp" ]] || { log_err "vLLM 에 닿지 못해 OMK_DGX_MODEL=$exp 의 서빙 여부를 확인할 수 없습니다 (아무것도 바꾸지 않았습니다)"; exit 2; }
+        return 0
+    fi
+    cat "$err"; rm -f "$err"
+    case "$src" in explicit) newpin=1 ;; pinned) newpin="$pin" ;; *) newpin=0 ;; esac
+    v="${app:-$OMK_DGX_LEGACY_MODEL}"   # 비면 앱 스키마 기본값
+    [[ "$v" != "$model" || "$dgx" != "$model" || "$pin" != "$newpin" ]] || return 0
+    # 옛 이름만 서빙하는 무기록 설치 — 기록할 것도 바꿀 것도 없다.
+    [[ "$v" != "$OMK_DGX_LEGACY_MODEL" || "$model" != "$OMK_DGX_LEGACY_MODEL" || -n "$dgx" || "$newpin" == 1 ]] || return 0
+    served=""; [[ $svrc -ne 0 ]] || served="$vsv"
+    [[ "$v" == "$OMK_DGX_LEGACY_MODEL" || "$v" == "$dgx" ]] && is_dgx=1
+    printf '%s\n' "$served" | grep -qxF -e "$v" && is_dgx=1
+    list="$(printf '%s' "$served" | tr '\n' ',' | sed -e 's/,$//' -e 's/,/, /g')"
+    if [[ $is_dgx -eq 0 && -z "$exp" ]]; then
+        log_warn "앱 기본 모델(LLM_DEFAULT_MODEL=$v)이 vLLM 서빙 이름(${list:-확인 불가})이 아니라 자동으로 바꾸지 않습니다 — DGX 모델로 쓰려면 OMK_DGX_MODEL=$model ./openmake_llm.sh deploy"
+        return 0
+    fi
+    if ! why="$(dgx_model_check "$model" "$SCRIPT_DIR/scripts/vllm/litellm.config.yaml")"; then
+        [[ -z "$exp" ]] || { log_err "OMK_DGX_MODEL — $why (아무것도 바꾸지 않았습니다)"; exit 2; }
+        log_warn "DGX 모델 이름을 맞추지 않습니다 — $why"; return 0
+    fi
+    for v in "$OMK_DGX_LEGACY_MODEL" "$dgx" "$app"; do
+        [[ -z "$v" || "$v" == "$model" || " $old " == *" $v "* ]] || old="${old:+$old }$v"
+    done
+    DGX_OPS_TARGET="$model"; DGX_OPS_PIN="$newpin"; DGX_OPS_OLD="$old"; DGX_OPS_ANCHOR="$anchor"; DGX_OPS_APP="$app"
+    log_info "DGX 모델 이름 맞춤 예정: 앱 ${app:-기본값} / 기록 ${dgx:-없음} → $model (출처 $src) — 마이그레이션 뒤 게이트웨이 config 를 고치고 앱을 재시작합니다"
+}
+
+# 쓰기 — 마이그레이션 뒤, 앱 재시작 직전. config 편집 → 같으면 게이트웨이 단계 생략 → 검증 → 백업 → 교체 → 게이트웨이 재시작 →
+# /v1/models 에 새 이름 확인(실패하면 백업 복원·재시작, .env 는 그대로) → .env 기록(OMK_DGX_MODEL·OMK_DGX_MODEL_PINNED·LLM_DEFAULT_MODEL).
+dgx_ops_apply() {
+    local cfg gw new tmp="" bak why
+    [[ -n "$DGX_OPS_TARGET" ]] || return 0
+    cfg="$(env_val OMK_LITELLM_CONFIG)"; gw="$(env_val OMK_LITELLM_PM2_APP)"; new="$DGX_OPS_TARGET"
+    # 임시 파일은 어느 경로로 끝나든 함수가 돌아갈 때 지운다(교체에 성공하면 이미 mv 로 사라졌다).
+    trap 'rm -f "${tmp:-}"; trap - RETURN' RETURN
+    if ! { tmp="$(mktemp "$cfg.tmp.XXXXXX")" && cp -p "$cfg" "$tmp"; }; then
+        log_warn "게이트웨이 config 옆에 임시 파일을 만들 수 없습니다($cfg) — 모델 이름을 바꾸지 않았습니다"; return 0
+    fi
+    if ! gateway_config_plan "$cfg" "$new" "$DGX_OPS_ANCHOR" "$DGX_OPS_OLD" "$tmp"; then
+        log_warn "새 모델 이름($new)으로 게이트웨이 config 를 만들 수 없습니다(DGX 항목의 api_base·api_key 줄을 찾지 못함) — 바꾸지 않았습니다"; return 0
+    fi
+    if cmp -s "$cfg" "$tmp"; then
+        log_info "게이트웨이 config 는 이미 $new 로 맞춰져 있습니다 — 재시작 없음"
+    else
+        if ! why="$(gateway_config_validate "$tmp" "$new" "$cfg")"; then
+            log_warn "새 모델 이름($new)으로 게이트웨이 config 를 만들 수 없습니다(${why:-검증 실패}) — 바꾸지 않았습니다"; return 0
+        fi
+        bak="$cfg.bak.$(date +%Y%m%d%H%M%S)"
+        if ! { cp -p "$cfg" "$bak" && mv "$tmp" "$cfg"; }; then
+            log_warn "게이트웨이 config 를 백업·교체하지 못했습니다($cfg) — 모델 이름을 바꾸지 않았습니다"; return 0
+        fi
+        log_ok "게이트웨이 config 갱신: $cfg (백업 $bak) → pm2 restart $gw"
+        gateway_restart "$gw"
+        if ! gateway_wait_model "$new"; then
+            cp -p "$bak" "$cfg" || log_warn "백업 복원 실패 — 직접 되돌리십시오: cp -p $bak $cfg"
+            gateway_restart "$gw"
+            log_warn "게이트웨이($gw)가 $new 를 올리지 않아 config 를 백업으로 되돌리고 다시 시작했습니다 — 앱 기본 모델은 바꾸지 않았습니다. pm2 logs $gw 확인"
+            return 0
+        fi
+    fi
+    env_set OMK_DGX_MODEL "$new" && env_set OMK_DGX_MODEL_PINNED "$DGX_OPS_PIN" \
+        || { log_warn ".env 에 DGX 모델 이름을 기록하지 못했습니다 — 앱 기본 모델은 바꾸지 않았습니다"; return 0; }
+    if [[ "$DGX_OPS_APP" == "$new" ]]; then
+        log_info "DGX 모델 이름 기록: .env OMK_DGX_MODEL=$new$([[ "$DGX_OPS_PIN" != 1 ]] || printf ' (고정)') — 앱 기본 모델은 그대로"
+        return 0
+    fi
+    env_set LLM_DEFAULT_MODEL "$new" || { log_warn ".env 의 LLM_DEFAULT_MODEL 을 바꾸지 못했습니다"; return 0; }
+    DGX_OPS_CHANGED=1
+    log_ok "앱 기본 모델: ${DGX_OPS_APP:-기본값} → $new(.env LLM_DEFAULT_MODEL, 기록 OMK_DGX_MODEL$([[ "$DGX_OPS_PIN" != 1 ]] || printf ', 고정'))"
+}
+
+# 재시작한 앱의 PM2 env 값이 .env 와 같은지 본다(진단만, 배포는 계속). deploy 는 .env 를 export 한 뒤 다시 등록하므로 같아야 한다 —
+# 다르면 스크립트 밖의 pm2 restart(옛 env 스냅샷)나 재부팅 때 옛 dump 가 되살아난 경우다.
+pm2_env_check() { # $1=key
+    local want got
+    want="$(env_val "$1")"; [[ -n "$want" ]] || return 0
+    command -v node >/dev/null 2>&1 || return 0
+    got="$(pm2 jlist 2>/dev/null | node -e '
+        let l = []; try { l = JSON.parse(require("fs").readFileSync(0, "utf8")); } catch {}
+        const p = (Array.isArray(l) ? l : []).find((x) => x && x.name === process.argv[1]);
+        if (!p) process.exit(3);
+        const e = p.pm2_env || {}, k = process.argv[2];
+        const v = e.env && e.env[k] !== undefined ? e.env[k] : e[k];
+        process.stdout.write(v === undefined || v === null ? "" : String(v));' "$APP_NAME" "$1" 2>/dev/null)" || return 0
+    [[ "$got" == "$want" ]] \
+        || log_warn "PM2 env 의 $1(${got:-없음})이 .env($want)와 다릅니다 — pm2 restart 를 스크립트 밖에서 했거나 옛 dump 가 되살아났을 수 있습니다. ./openmake_llm.sh restart 뒤 pm2 save"
+}
+
 cmd_deploy() {
     parse_deploy_opts "$@"
     preflight
@@ -751,6 +1010,9 @@ cmd_deploy() {
     # Node 버전 — 빌드·재시작은 .node-version 과 정확히 같은 node(셸·PM2 데몬 모두)로만 한다.
     require_node_version "$SCRIPT_DIR" || exit 1
     require_pm2_daemon_node_version "$SCRIPT_DIR" || exit 1
+
+    # DGX 채팅 모델 이름 판정(.env 에 OMK_LITELLM_CONFIG 가 있을 때만, 읽기만) — 명시값 오류는 여기서 멈춘다(빌드 전).
+    dgx_ops_sync || true
 
     log_step "Deploy: build → migrate → restart"
 
@@ -777,6 +1039,9 @@ cmd_deploy() {
         cmd_migrate
     fi
 
+    # 2.5) DGX 채팅 모델 이름 쓰기 — 게이트웨이 config·재시작을 먼저, 앱 .env 는 그 뒤(바로 아래 재시작이 새 이름으로 띄운다).
+    dgx_ops_apply || true
+
     # 3) 재시작 (앱만)
     log_step "PM2 앱 재시작 (의존성은 그대로 유지)"
     if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
@@ -796,6 +1061,11 @@ cmd_deploy() {
         fi
         wait_for_app_with_logs "$APP_PORT" "OpenMake LLM"
         restart_knowledge_worker_if_registered
+        pm2_env_check LLM_DEFAULT_MODEL || true
+        # 모델 이름을 바꾼 배포만 부팅 복구 목록을 저장한다 — 재부팅 때 pm2 resurrect 가 옛 이름의 env 를 되살리지 않게.
+        if [[ $DGX_OPS_CHANGED -eq 1 ]] && declare -F pm2_save_guarded >/dev/null 2>&1; then
+            pm2_save_guarded && log_ok "PM2 부팅 복구 목록 저장 (앱 기본 모델이 바뀐 배포)" || true
+        fi
     else
         log_info "$APP_NAME PM2 미등록 — 신규 시작 (ecosystem: 백엔드+프론트 함께 기동)"
         ( cd "$SCRIPT_DIR" && pm2 start ecosystem.config.js ) || return 2

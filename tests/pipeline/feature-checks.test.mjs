@@ -27,6 +27,10 @@ test('root shell scripts select the pipeline suite', () => {
   const r = selectFeatures(['install_linux.sh', 'openmake_llm.sh']);
   assert.equal(r.pipeline, true); assert.deepEqual(r.api, []); assert.equal(r.web, false);
 });
+test('the shared DGX model library selects the pipeline suite', () => {
+  const r = selectFeatures(['scripts/lib/dgx-model.sh']);
+  assert.equal(r.pipeline, true); assert.equal(r.hostSetup, false);
+});
 test('the root eslint config selects the pipeline suite', () => {
   const r = selectFeatures(['eslint.config.mjs']);
   assert.equal(r.pipeline, true); assert.deepEqual(r.api, []); assert.equal(r.web, false);
@@ -57,6 +61,7 @@ const HOST_SETUP_FILES = [
   'scripts/setup/fake-launchctl.test-lib.sh', 'scripts/setup/mac-host-repair.sh', 'scripts/setup/mac-host-repair.test.sh',
   'scripts/setup/mac-pm2-boot.sh', 'scripts/setup/mac-pm2-boot.test.sh', 'scripts/setup/mac-toolchain.test.sh',
   'scripts/setup/mac/30-toolchain.sh', 'scripts/setup/mac/80-finish.sh', 'scripts/setup/pm2-boot-guard.sh',
+  'scripts/lib/pm2-save.sh',
 ];
 test('each changed host setup file selects the host setup suite; unknown setup sources still fail closed', () => {
   for (const file of HOST_SETUP_FILES) assert.equal(selectFeatures([file]).hostSetup, true, file);

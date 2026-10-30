@@ -279,7 +279,7 @@ Application host                                   Inference host (GPU)
 ./openmake_llm.sh start     # PostgreSQL → Redis → 앱, 이어서 로그 스트리밍
 ./openmake_llm.sh status    # 포트, 컨테이너, PM2 상태
 ./openmake_llm.sh update    # git pull(fast-forward 만) → 빌드 → 마이그레이션 → 재시작
-./openmake_llm.sh deploy    # 빌드 → 마이그레이션 → 재시작
+./openmake_llm.sh deploy    # 빌드 → 마이그레이션 → 재시작 (.env 의 OMK_LITELLM_CONFIG 가 있으면 DGX 모델 이름 동기화)
 ./openmake_llm.sh stop
 ```
 

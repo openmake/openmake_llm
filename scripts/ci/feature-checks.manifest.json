@@ -20,6 +20,7 @@
     "eslint.config.mjs": "pipeline",
     "install_linux.sh": "pipeline",
     "openmake_llm.sh": "pipeline",
+    "scripts/lib/dgx-model.sh": "pipeline",
     "packages/shared-types/src/index.ts": "web",
     "packages/shared-types/src/mcp-monitoring.ts": "web",
     "scripts/export-openapi.ts": "pipeline"
@@ -36,7 +37,8 @@
     "scripts/setup/mac-toolchain.test.sh",
     "scripts/setup/mac/30-toolchain.sh",
     "scripts/setup/mac/80-finish.sh",
-    "scripts/setup/pm2-boot-guard.sh"
+    "scripts/setup/pm2-boot-guard.sh",
+    "scripts/lib/pm2-save.sh"
   ],
   "e2e": {
     "specs": {
