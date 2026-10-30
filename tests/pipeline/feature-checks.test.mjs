@@ -13,7 +13,7 @@ test('web and known pipeline spec use fixed suites, unknown specs fail closed', 
   assert.throws(() => selectFeatures(['docs/specs/new-feature.md']), /Unmapped/);
 });
 test('documentation only does not invent changed feature coverage', () => {
-  assert.deepEqual(selectFeatures(['README.md']), { api: [], web: false, pipeline: false, infra: false, bridge: false, discordBot: false, hostSetup: false, e2e: [] });
+  assert.deepEqual(selectFeatures(['README.md']), { api: [], web: false, pipeline: false, infra: false, bridge: false, discordBot: false, desktopWindows: false, desktopHelper: false, cli: false, hostSetup: false, e2e: [] });
   assert.deepEqual(selectFeatures(['apps/api/src/evaluation/README.md']).api, []);
   assert.deepEqual(selectFeatures(['apps/api/src/evaluation/redteam/golden-redteam.json']).api, []);
   assert.deepEqual(selectFeatures(['packages/api-client/package.json']).api, []);
@@ -57,8 +57,8 @@ test('pipeline mapping requires all five fixed environment shell suites', async 
 
 // Host setup (macOS installer · Colima/PM2 boot recovery): exact changed files only, fixed fixture runner.
 const HOST_SETUP_FILES = [
-  'scripts/setup/colima-boot-guard.cjs', 'scripts/setup/colima-boot-guard.test.sh', 'scripts/setup/docker-config-reconcile.cjs',
-  'scripts/setup/fake-launchctl.test-lib.sh', 'scripts/setup/mac-host-repair.sh', 'scripts/setup/mac-host-repair.test.sh',
+  'scripts/setup/colima-boot-guard.cjs', 'scripts/setup/colima-boot-guard.test.sh', 'scripts/setup/colima-selection.test.sh',
+  'scripts/setup/docker-config-reconcile.cjs', 'scripts/setup/fake-launchctl.test-lib.sh', 'scripts/setup/gen-env.mjs', 'scripts/setup/gen-env.test.mjs', 'scripts/setup/mac-host-repair.sh', 'scripts/setup/mac-host-repair.test.sh',
   'scripts/setup/mac-pm2-boot.sh', 'scripts/setup/mac-pm2-boot.test.sh', 'scripts/setup/mac-toolchain.test.sh',
   'scripts/setup/mac/30-toolchain.sh', 'scripts/setup/mac/80-finish.sh', 'scripts/setup/pm2-boot-guard.sh',
   'scripts/lib/pm2-save.sh',
@@ -72,6 +72,7 @@ test('each changed host setup file selects the host setup suite; unknown setup s
 });
 
 const HOST_FIXTURES = ['scripts/ci/docker-config-reconcile.test.mjs', 'scripts/setup/mac-toolchain.test.sh',
+  'scripts/setup/colima-selection.test.sh', 'scripts/setup/gen-env.test.mjs',
   'scripts/setup/colima-boot-guard.test.sh', 'scripts/setup/mac-host-repair.test.sh', 'scripts/setup/mac-pm2-boot.test.sh'];
 // Tiny stand-in fixtures that only record that they ran (and can be told to fail).
 // The child `node --test` must not inherit this runner's test context, or it reports instead of running.
@@ -98,8 +99,8 @@ test('host setup runs the fixed portable fixtures on Linux and does not claim th
   const { readFileSync } = await import('node:fs');
   const { root, log } = await fakeHostRoot(t);
   const report = runFeatures(['scripts/setup/mac-host-repair.sh'], { cwd: root, platform: 'linux', stdio: 'ignore', env: childEnv });
-  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['scripts/ci/docker-config-reconcile.test.mjs', 'scripts/setup/mac-toolchain.test.sh']);
-  assert.deepEqual(report.hostSetup, { platform: 'linux', executed: HOST_FIXTURES.slice(0, 2), delegatedToMacJob: HOST_FIXTURES.slice(2) });
+  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), HOST_FIXTURES.slice(0, 4));
+  assert.deepEqual(report.hostSetup, { platform: 'linux', executed: HOST_FIXTURES.slice(0, 4), delegatedToMacJob: HOST_FIXTURES.slice(4) });
 });
 
 test('host setup on macOS also runs the Colima guard, host repair and PM2 boot suites', async t => {
@@ -345,4 +346,42 @@ test('--select-only refuses a SHA that is not the checkout HEAD', async () => {
   const result = spawnSync(process.execPath, ['scripts/ci/feature-checks.mjs', '--select-only', '0'.repeat(40)], { cwd: root, env: childEnv, encoding: 'utf8' });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /Tested SHA differs from checkout HEAD/);
+});
+
+// Root reproducer: the non-API sources of the environment-specific string removal that the PR selection rejected
+// as "Unmapped changed source" (and packages/api-client, which has no apps/api Jest test). Each maps to the suite
+// that actually exercises it.
+test('the org-specific removal change set selects a real suite for every non-API source', () => {
+  const cases = {
+    'apps/cli/src/index.ts': 'cli',
+    'apps/cli/test/login-default.test.mjs': 'cli',
+    'apps/desktop-native/helper/src/helper.mjs': 'desktopHelper',
+    'apps/desktop-windows/src/store.mjs': 'desktopWindows',
+    'db/init/004-admin-user.sh': 'infra',
+    'infra/db-init-admin-user.test.mjs': 'infra',
+    'scripts/release/lib.test.mjs': 'infra',
+    'scripts/setup/colima-selection.test.sh': 'hostSetup',
+    'scripts/setup/gen-env.mjs': 'hostSetup',
+    'scripts/setup/gen-env.test.mjs': 'hostSetup',
+    'packages/api-client/src/index.ts': 'web',
+  };
+  for (const [file, suite] of Object.entries(cases)) {
+    const selection = selectFeatures([file]);
+    assert.equal(selection[suite], true, `${file} → ${suite}`);
+    assert.deepEqual(selection.api, [], file);
+  }
+  const all = selectFeatures(Object.keys(cases));
+  for (const suite of new Set(Object.values(cases))) assert.equal(all[suite], true, suite);
+  // Other db/init and apps/desktop-native sources stay unmapped until they have coverage.
+  for (const file of ['db/init/005-new.sh', 'apps/desktop-native/build.sh']) assert.throws(() => selectFeatures([file]), /Unmapped changed source/, file);
+});
+
+test('desktop, CLI and admin-init fixtures referenced by the new suites exist', async () => {
+  const { existsSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  for (const file of ['apps/desktop-windows/test/store.test.mjs', 'apps/desktop-native/helper/harness.cjs', 'apps/cli/test/login-default.test.mjs',
+    'infra/db-init-admin-user.test.mjs', 'scripts/setup/gen-env.test.mjs', 'scripts/setup/colima-selection.test.sh']) {
+    assert.ok(existsSync(`${root}${file}`), file);
+  }
 });

@@ -81,18 +81,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # ─── Gate 0: API Contract Drift ───
-      # packages/api-contracts 산출물이 TS SoT(swagger/spec-core·shared-types)와 일치하는지 검사.
-      # 스펙 변경 후 `npm run contracts:export` 재생성을 누락한 커밋을 차단한다 (iOS 축 1 Step 5).
-      # git diff 가 아니라 porcelain 인 이유: 신규 산출물 파일(미추적)도 drift 로 잡아야 함.
-      # 수 초짜리 검사라 무거운 게이트들보다 앞에 둔다 (fail-fast, 기존 게이트 번호 유지 위해 Gate 0).
-      # 환경 고유 정보(조직 서버·계정·주소) 차단 — 범용 규칙 + 저장소 밖 조직 목록(비밀값 OMK_FORBIDDEN_STRINGS, 쉼표 구분).
+      # ─── Gate 0.1: Environment-specific strings ───
+      # 환경 고유 정보(조직 서버·계정·주소) 차단 — 범용 규칙 + 저장소 밖 조직 목록(비밀값 OMK_FORBIDDEN_STRINGS, 쉼표·줄바꿈 구분).
       # 비밀값이 없으면(포크 PR 등) 범용 규칙만 본다. 걸린 비밀값은 값이 아니라 번호로만 출력한다.
       - name: "Gate 0.1: Environment-specific strings"
         env:
           OMK_FORBIDDEN_STRINGS: ${{ secrets.OMK_FORBIDDEN_STRINGS }}
         run: node scripts/ci/org-specific-strings.mjs
 
+      # ─── Gate 0: API Contract Drift ───
+      # packages/api-contracts 산출물이 TS SoT(swagger/spec-core·shared-types)와 일치하는지 검사.
+      # 스펙 변경 후 `npm run contracts:export` 재생성을 누락한 커밋을 차단한다 (iOS 축 1 Step 5).
+      # git diff 가 아니라 porcelain 인 이유: 신규 산출물 파일(미추적)도 drift 로 잡아야 함.
+      # 수 초짜리 검사라 무거운 게이트들보다 앞에 둔다 (fail-fast, 기존 게이트 번호 유지 위해 Gate 0).
       - name: "Gate 0: API Contract Drift"
         run: |
           npm run contracts:export
