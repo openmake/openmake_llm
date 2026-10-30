@@ -29,7 +29,12 @@ export const RULES = [
     // 이름 자리는 `<user>` 같은 꺾쇠 자리표시를 통째로 잡는다. 글롭·변수(`*`·`$`·`{`)가 섞인 경로는 실제 계정이 아니다.
     { id: 'personal-path', re: /\/(?:home|Users|Volumes)\/(<[^>\s]+>|[^/\s'"`)\]}<>,;:]+)/g, allow: (m) => PLACEHOLDER.test(m[1]) || /[*${]|^</.test(m[1]) },
     // 개인 메일(무료 메일 서비스) — 제외 파일(README·CHANGELOG·적용된 마이그레이션)에도 적용한다.
-    { id: 'personal-email', personal: true, re: /\b[A-Za-z0-9._%+-]+@(?:gmail|googlemail|naver|nate|daum|hanmail|kakao|icloud|me|outlook|hotmail|live|yahoo|protonmail|proton)\.(?:com|net|me)\b/gi },
+    // 주소 앞부분은 공개 CI 로그로 새지 않게 가린다(mask).
+    { id: 'personal-email', personal: true, mask: (m) => m[0].replace(/^[^@]+/, '***'), re: new RegExp(`\\b[A-Za-z0-9._%+-]+@(?:${[
+        'gmail.com', 'googlemail.com', 'naver.com', 'nate.com', 'daum.net', 'hanmail.net', 'kakao.com', 'icloud.com', 'me.com', 'mac.com',
+        'outlook.com', 'outlook.kr', 'hotmail.com', 'hotmail.co.kr', 'live.com', 'msn.com', 'yahoo.com', 'yahoo.co.kr', 'yahoo.co.jp',
+        'aol.com', 'gmx.com', 'gmx.de', 'gmx.net', 'mail.ru', 'yandex.ru', 'qq.com', '163.com', '126.com', 'protonmail.com', 'proton.me', 'pm.me',
+    ].map((d) => d.replace(/\./g, '\\.')).join('|')})(?![A-Za-z0-9-]|\\.[A-Za-z0-9])`, 'gi') },
 ];
 
 /** 제외 파일에서도 package-lock 은 검사하지 않는다(외부 패키지 작성자 메일이 들어 있다) */
@@ -68,7 +73,7 @@ export function scanText(text, forbidden = [], { personalOnly = false } = {}) {
     lines.forEach((line, i) => {
         for (const r of rules) {
             for (const m of line.matchAll(r.re)) {
-                if (!r.allow || !r.allow(m)) hits.push({ rule: r.id, line: i + 1, match: m[0] });
+                if (!r.allow || !r.allow(m)) hits.push({ rule: r.id, line: i + 1, match: r.mask ? r.mask(m) : m[0] });
             }
         }
         patterns.forEach((re, k) => {
