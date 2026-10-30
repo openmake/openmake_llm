@@ -15,6 +15,7 @@
     "packages/local-bridge-core/": "bridge",
     "apps/discord-bot/": "discordBot"
   },
+  "deletedTests": {},
   "exactFiles": {
     "eslint.config.mjs": "pipeline",
     "install_linux.sh": "pipeline",

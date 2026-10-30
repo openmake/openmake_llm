@@ -15,6 +15,7 @@
  *
  * @see apps/api/src/security/ssrf-guard.ts
  * @see db/migrations/016_external_provider_integration.sql
+ * @see docs/architecture/provider-catalog.md — 추가·제거 절차(실측·노출 승인·DB 정리)
  */
 import type { SdkType } from '../providers/i-provider';
 
