@@ -273,7 +273,7 @@ export class LocalLLMProvider implements IProvider {
                 throw new ProviderError('UPSTREAM_ERROR', `LLM 호출이 중단되었습니다: ${message}`, err);
             }
 
-            // An oversized prompt is deterministic; retrying another local alias cannot make it fit.
+            // 문맥 초과는 입력 크기로 정해지는 결과라 다른 로컬 별칭으로 재시도해도 들어가지 않는다.
             if (err instanceof ContextOverflowError) {
                 throw new ProviderError('CONTEXT_TOO_LARGE', err.message, err);
             }
