@@ -878,13 +878,13 @@ gateway_wait_model() { # $1=모델 이름
 
 # 판정 — 빌드 전, 아무것도 쓰지 않는다. 맞출 값이 있으면 DGX_OPS_TARGET·DGX_OPS_PIN·DGX_OPS_OLD·DGX_OPS_ANCHOR·DGX_OPS_APP 를 채운다.
 dgx_ops_sync() {
-    local cfg gw app dgx pin entry rc=0 anchor base key rest err r model src newpin served list is_dgx=0 why old="" v exp="$DGX_EXPLICIT"
+    local cfg gw app dgx pin entry rc=0 anchor base key rest err r model src newpin served vsv="" svrc=0 list is_dgx=0 why old="" v exp="$DGX_EXPLICIT"
     cfg="$(env_val OMK_LITELLM_CONFIG)"; [[ -n "$cfg" ]] || return 0
     [[ "$exp" != auto ]] || exp=""   # auto 는 고정 해제일 뿐 명시값이 아니다
     declare -F dgx_resolve_model >/dev/null 2>&1 \
         || { log_warn "DGX 감지 라이브러리(scripts/lib/dgx-model.sh)가 없어 DGX 모델 이름을 맞추지 않습니다"; return 0; }
     gw="$(env_val OMK_LITELLM_PM2_APP)"
-    if [[ -z "$gw" ]] || ! pm2 jlist 2>/dev/null | grep -q "\"name\":\"$gw\""; then
+    if [[ -z "$gw" ]] || ! pm2 jlist 2>/dev/null | grep -qF "\"name\":\"$gw\""; then
         log_warn "게이트웨이 PM2 앱(${gw:-.env 의 OMK_LITELLM_PM2_APP 없음})이 등록돼 있지 않아 DGX 모델 이름을 맞추지 않습니다"; return 0
     fi
     [[ -f "$cfg" ]] || { log_warn "게이트웨이 config 가 없어 DGX 모델 이름을 맞추지 않습니다: $cfg"; return 0; }
@@ -899,8 +899,13 @@ dgx_ops_sync() {
     esac
     anchor="${entry%%$'\n'*}"; rest="${entry#*$'\n'}"; base="${rest%%$'\n'*}"; rest="${rest#*$'\n'}"; key="${rest%$'\n'.}"
     # 감지 — 제외용 config 는 레포 config 다(손 관리 config 에 이미 있는 새 이름이 "다른 정적 이름" 으로 빠지지 않게, omk 와 같다).
+    # vLLM 목록은 한 번만 읽는다 — 감지와 아래 DGX 이름 판정이 같은 목록을 본다(두 번째 조회의 일시 실패로 오판하지 않게).
+    # 하위 셸 안에서만 dgx_served_models 를 읽어 둔 값으로 바꿔 dgx_resolve_model 에 넘긴다(실패면 HTTP 코드 + rc 1 그대로).
+    # (dgx_resolve_model 의 local served 가 동적 스코프로 가리지 않게 다른 이름에 담는다.)
+    vsv="$(dgx_served_models "$base" "$key")" || svrc=$?
     err="$(mktemp)"; rc=0
-    r="$(dgx_resolve_model "$base" "$key" "$DGX_EXPLICIT" "$dgx" "$pin" "$SCRIPT_DIR/scripts/vllm/litellm.config.yaml" 2>"$err")" || rc=$?
+    r="$( dgx_served_models() { printf '%s\n' "$vsv"; return "$svrc"; }
+          dgx_resolve_model "$base" "$key" "$DGX_EXPLICIT" "$dgx" "$pin" "$SCRIPT_DIR/scripts/vllm/litellm.config.yaml" 2>"$err" )" || rc=$?
     if [[ $rc -ne 0 ]]; then
         if [[ -n "$exp" || ( "$pin" == 1 && -n "$dgx" && "$DGX_EXPLICIT" != auto ) ]]; then cat "$err" >&2; rm -f "$err"; exit 2; fi
         why="$(sed -E 's/^.*\[ERR\][^[:space:]]*[[:space:]]*//' "$err")"; rm -f "$err"
@@ -918,7 +923,7 @@ dgx_ops_sync() {
     [[ "$v" != "$model" || "$dgx" != "$model" || "$pin" != "$newpin" ]] || return 0
     # 옛 이름만 서빙하는 무기록 설치 — 기록할 것도 바꿀 것도 없다.
     [[ "$v" != "$OMK_DGX_LEGACY_MODEL" || "$model" != "$OMK_DGX_LEGACY_MODEL" || -n "$dgx" || "$newpin" == 1 ]] || return 0
-    served="$(dgx_served_models "$base" "$key")" || served=""
+    served=""; [[ $svrc -ne 0 ]] || served="$vsv"
     [[ "$v" == "$OMK_DGX_LEGACY_MODEL" || "$v" == "$dgx" ]] && is_dgx=1
     printf '%s\n' "$served" | grep -qxF -e "$v" && is_dgx=1
     list="$(printf '%s' "$served" | tr '\n' ',' | sed -e 's/,$//' -e 's/,/, /g')"
@@ -940,24 +945,26 @@ dgx_ops_sync() {
 # 쓰기 — 마이그레이션 뒤, 앱 재시작 직전. config 편집 → 같으면 게이트웨이 단계 생략 → 검증 → 백업 → 교체 → 게이트웨이 재시작 →
 # /v1/models 에 새 이름 확인(실패하면 백업 복원·재시작, .env 는 그대로) → .env 기록(OMK_DGX_MODEL·OMK_DGX_MODEL_PINNED·LLM_DEFAULT_MODEL).
 dgx_ops_apply() {
-    local cfg gw new tmp bak why
+    local cfg gw new tmp="" bak why
     [[ -n "$DGX_OPS_TARGET" ]] || return 0
     cfg="$(env_val OMK_LITELLM_CONFIG)"; gw="$(env_val OMK_LITELLM_PM2_APP)"; new="$DGX_OPS_TARGET"
+    # 임시 파일은 어느 경로로 끝나든 함수가 돌아갈 때 지운다(교체에 성공하면 이미 mv 로 사라졌다).
+    trap 'rm -f "${tmp:-}"; trap - RETURN' RETURN
     if ! { tmp="$(mktemp "$cfg.tmp.XXXXXX")" && cp -p "$cfg" "$tmp"; }; then
         log_warn "게이트웨이 config 옆에 임시 파일을 만들 수 없습니다($cfg) — 모델 이름을 바꾸지 않았습니다"; return 0
     fi
     if ! gateway_config_plan "$cfg" "$new" "$DGX_OPS_ANCHOR" "$DGX_OPS_OLD" "$tmp"; then
-        rm -f "$tmp"; log_warn "새 모델 이름($new)으로 게이트웨이 config 를 만들 수 없습니다(DGX 항목의 api_base·api_key 줄을 찾지 못함) — 바꾸지 않았습니다"; return 0
+        log_warn "새 모델 이름($new)으로 게이트웨이 config 를 만들 수 없습니다(DGX 항목의 api_base·api_key 줄을 찾지 못함) — 바꾸지 않았습니다"; return 0
     fi
     if cmp -s "$cfg" "$tmp"; then
-        rm -f "$tmp"; log_info "게이트웨이 config 는 이미 $new 로 맞춰져 있습니다 — 재시작 없음"
+        log_info "게이트웨이 config 는 이미 $new 로 맞춰져 있습니다 — 재시작 없음"
     else
         if ! why="$(gateway_config_validate "$tmp" "$new" "$cfg")"; then
-            rm -f "$tmp"; log_warn "새 모델 이름($new)으로 게이트웨이 config 를 만들 수 없습니다(${why:-검증 실패}) — 바꾸지 않았습니다"; return 0
+            log_warn "새 모델 이름($new)으로 게이트웨이 config 를 만들 수 없습니다(${why:-검증 실패}) — 바꾸지 않았습니다"; return 0
         fi
         bak="$cfg.bak.$(date +%Y%m%d%H%M%S)"
         if ! { cp -p "$cfg" "$bak" && mv "$tmp" "$cfg"; }; then
-            rm -f "$tmp"; log_warn "게이트웨이 config 를 백업·교체하지 못했습니다($cfg) — 모델 이름을 바꾸지 않았습니다"; return 0
+            log_warn "게이트웨이 config 를 백업·교체하지 못했습니다($cfg) — 모델 이름을 바꾸지 않았습니다"; return 0
         fi
         log_ok "게이트웨이 config 갱신: $cfg (백업 $bak) → pm2 restart $gw"
         gateway_restart "$gw"
