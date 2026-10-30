@@ -41,6 +41,7 @@ function upstreamBasename(model: string | undefined): string | undefined {
  *     채팅 목록에서 빼는 일은 `getLocalChatModels()` 와 `role-model-filter` 가 맡는다.
  *   - 같은 upstream(`litellm_params.model` + `api_base`) 을 가리키는 alias 는 하나로 접는다.
  *     정식 이름 = upstream 모델명과 같은 model_name (없으면 첫 항목)
+ *     나머지 이름은 정식 엔트리의 `aliases` — 옛 ID 요청을 정식 ID 로 해석한다(`local-model-alias`)
  *   - `prev` 에 같은 id 가 있으면 프로브 실측치(가용성·능력·컨텍스트)를 보존한다
  *     (호출부가 현재 카탈로그 + 정적 기본 카탈로그를 합쳐 넘긴다)
  */
@@ -70,6 +71,7 @@ export function selectLocalEntriesFromModelInfo(
             (!!mode && NON_CHAT_MODES.has(mode)) || NON_CHAT_ID_PATTERNS.some((p) => lower.includes(p))
         );
         const old = prev.find((m) => m.id === id);
+        const aliases = [...new Set(g.map((e) => e.model_name).filter((n) => n !== id))];
         out.push({
             id,
             displayName: id,
@@ -80,6 +82,7 @@ export function selectLocalEntriesFromModelInfo(
             available: old?.available,
             unavailableReason: old?.unavailableReason,
             probedCapabilities: old?.probedCapabilities,
+            aliases: aliases.length > 0 ? aliases : undefined,
         });
     }
     return out;
