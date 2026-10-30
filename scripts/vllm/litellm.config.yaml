@@ -19,6 +19,8 @@
 
 model_list:
   # ---------- 로컬 (DGX vLLM inference plane) — 모델명 무프리픽스 유지 (앱 콜사이트 변경 0) ----------
+  # 모델 전환: omk 가 환경의 사본에서만 OMK_DGX_MODEL(litellm.env) 이름의 정식 항목을 더하고, 아래 qwen3.8-27b·gpt-3.5-turbo
+  # 항목의 upstream 을 새 이름으로 바꾼다 — 두 이름은 옛 대화용 호환 라우트가 된다(scripts/env/README.md).
   - model_name: qwen3.8-27b
     litellm_params:
       model: openai/qwen3.8-27b

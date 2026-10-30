@@ -245,12 +245,42 @@ omk 를 직접 쓸 때도 같은 옵션을 줄 수 있다. **주지 않으면 �
 | 옵션 | 하는 일 | `.env` 표시 |
 |---|---|---|
 | `--ops-profile` | `scripts/setup/profiles/ops-features.env` 의 운영 기능 플래그 중 **없는 키만** 덧붙인다(에이전트 작업 큐·예약·서브에이전트, 메모리 추출, 보고서, 샌드박스 등 — 코드 기본값은 대부분 꺼짐). 웹 푸시 VAPID 키 생성, `TASK_SANDBOX_ROOT` 를 환경 디렉터리로, 스크래퍼 파이썬(curl_cffi) 가상환경. 런타임 이미지가 없으면 샌드박스 스위치를 끈다 | `OMK_OPS_PROFILE=1` (update 때 새 프로필 키를 덧붙인다) |
-| `--dgx-host H` | DGX vLLM `:8002`(채팅)·`:8003`(임베딩)·`:8005`(음악)을 게이트웨이 업스트림으로, 앱의 `LLM_TOKENIZE_URL`·`VLLM_METRICS_URLS`·`SSRF_ALLOWED_HOSTS`·기본 모델(`OMK_DGX_MODEL`, 기본 qwen3.8-27b), 연결 확인(HTTP 코드). 키는 `--vllm-api-key` | — |
+| `--dgx-host H` | DGX vLLM `:8002`(채팅)·`:8003`(임베딩)·`:8005`(음악)을 게이트웨이 업스트림으로, 앱의 `LLM_TOKENIZE_URL`·`VLLM_METRICS_URLS`·`SSRF_ALLOWED_HOSTS`·기본 모델(`OMK_DGX_MODEL`, 기본 qwen3.8-27b — [모델 바꾸기](#dgx-채팅-모델-바꾸기--정식-이름--옛-이름-호환)), 연결 확인(HTTP 코드). 키는 `--vllm-api-key` | `litellm.env` 의 `OMK_DGX_MODEL` |
 | `--https-host H` | 내부망 HTTPS — 프록시가 `:443`(Linux 는 설치 스크립트가 caddy 에 `setcap cap_net_bind_service` 를 준다) 에서 `caddy.d/<env>-https.caddy`(`tls internal`)로 같은 라우팅을 한다. 공개 주소·CORS·secure cookie 설정, 루트 인증서를 `$OMK_ROOT/https/openmake-internal-root.crt` 로 내보낸다(사용자 기기마다 1회 신뢰 등록) | `OMK_HTTPS_HOST` |
 | `--artifact-viewer` | 아티팩트 공유 뷰어(nginx 컨테이너 `:8088`, HTTPS 면 `:8443`). nginx.conf 가 백엔드 `:52416` 고정이라 기본 인스턴스 전용 | `OMK_ARTIFACT_VIEWER=1` |
 | `--discord-token T` | Discord 봇 빌드·등록. 앱 API 키(discord 스코프)는 설치 후 발급해 `DISCORD_BOT_API_KEY` 에 넣는다 — 운영 봇 토큰 재사용 금지(두 서버가 같은 봇으로 붙는다) | — |
 
 LiteLLM 버전은 `OMK_LITELLM_SPEC` 로 고정한다 — 설치 스크립트는 `litellm[proxy]==1.100.1`(1.102 지연 회귀로 운영이 고정한 버전)을 넘긴다.
+
+### DGX 채팅 모델 바꾸기 — 정식 이름 + 옛 이름 호환
+
+새 모델은 **새 ID 가 정식 이름**이 되고, 옛 대화가 들고 있는 옛 ID(`qwen3.8-27b`)와 `gpt-3.5-turbo` 는 같은 모델을 부르는 **호환 경로**로 남는다.
+선택 목록에는 정식 이름 하나만 뜬다. 환경(서버)마다 따로 적용한다.
+
+1. **vLLM 먼저** — 실제 런처의 원본은 openmake_vllm 의 `env/chat.env` 다(레포의 `scripts/vllm/qwen-serve.sh` 는 참조본). 정식 이름을 맨 앞에,
+   옛 이름을 alias 로 둔다: `QWEN_SERVED_MODEL_NAME=<새 ID> QWEN_SERVED_MODEL_ALIASES=qwen3.8-27b`. 주지 않으면 종전대로 `qwen3.8-27b` 하나다(참조본은 프로세스 env 나 `vllm.env` 어느 쪽에 둬도 읽는다).
+   게이트웨이를 거치지 않고 vLLM 을 직접 부르는 호출이 있어도 옛 이름이 통하도록 alias 를 남긴다. 이 레포의 변경은 vLLM 서버를 바꾸지 않는다.
+2. **그다음 omk** — `OMK_DGX_MODEL=<새 ID> omk env install <env> --dgx-host H [--vllm-api-key K]`. 앱 `.env` 의 `LLM_DEFAULT_MODEL` 과
+   게이트웨이 `litellm.env` 의 `OMK_DGX_MODEL` 이 같은 값을 받고, 환경의 config 사본에 새 이름 항목이 생기며 `qwen3.8-27b`·`gpt-3.5-turbo` 항목은
+   upstream 이 새 이름으로 바뀐다(레포 config 는 그대로). vLLM 이 새 이름을 서빙하기 전에 바꾸면 게이트웨이가 없는 이름을 불러 채팅이 실패한다.
+   - `env update` 는 기억된 값으로 config 를 다시 그린다. 다시 설치할 때 `OMK_DGX_MODEL` 을 주지 않으면 기억된 값을 유지한다. 되돌리려면 `OMK_DGX_MODEL=qwen3.8-27b`.
+   - 이름은 영숫자와 `.` `_` `-` 만(128자 이하, `/`·`:` 불가). config 의 다른 이름(`gpt-3.5-turbo`·`jev-decision` 등)이나 `OMK_UPSTREAM_MODEL`(이번에 주는 `--llm-model` 포함 — DGX ID 가 기본값 `qwen3.8-27b` 여도)과 겹치면 `.env`·`litellm.env` 를 바꾸기 전에 거부한다.
+     저장된 값이 잘못돼 config 를 만들 수 없으면 `install`·`update`·`dev setup` 이 그 자리에서 멈춘다(기존 config·게이트웨이는 그대로).
+   - `OMK_UPSTREAM_MODEL`(`--llm-model`)이 config 의 정적 이름(`qwen3.8-27b`·`jev-decision`·`gpt-3.5-turbo` 등)과 같으면 DGX 기록이 없어도 멈춘다(자동 수정 없음).
+     DGX 를 쓰는 환경이면 `OMK_DGX_MODEL=<정식 ID> omk env install <env> --dgx-host H` 로 기록하고, 아니면 `--llm-model` 을 다른 이름으로 준다.
+   - `OMK_DGX_MODEL` 은 `--dgx-host` 와 함께 줄 때만 쓴다 — 없이 주면 경고 한 줄을 내고 무시한다(기억된 값 그대로).
+   - `env update` 는 앱 `.env` 의 `LLM_DEFAULT_MODEL` 이 게이트웨이 이름과 어긋나면(기록된 `OMK_DGX_MODEL` 과 다름, 또는 무기록인데 config 항목·업스트림·와일드카드 라우트 어디에도 없음)
+     아무것도 바꾸기 전에 멈춘다. 두 파일을 확인해 같은 값으로 맞추거나 `OMK_DGX_MODEL=<값> omk env install <env> --dgx-host H` 로 기억된 값을 갱신한 뒤 다시 실행한다.
+3. **표시는 ID 기반이다** — 앱은 게이트웨이 `/model/info` 에서 같은 upstream 을 정식 이름 하나로 접어 목록·기본값·응답 배지에 새 ID 를 쓴다.
+   어떤 가중치가 그 이름 뒤에 있는지는 운영자가 vLLM 쪽에서 정한다. 목록에 새 ID 가 보인다고 가중치·능력이 검증된 것은 아니다.
+4. **능력은 따로 실측한다** — 새 ID 는 옛 모델의 프로필(도구·추론·이미지·강도)을 물려받지 않고 보수적 기본값 + 부팅 프로브(도구 호출·컨텍스트 길이)로 시작한다.
+   - 프로필 키는 **접두어 매칭**이다. 새 ID 가 `qwen3.8`·`qwen3.8-27b` 처럼 기존 키로 시작하면 그 값을 받으므로 그런 이름은 피하거나 값을 명시한다.
+   - 옛 이름 `qwen3.8-27b`·`gpt-3.5-turbo` 로 들어온 요청(OpenAI 호환 API·봇·CLI)은 게이트웨이 발견 데이터로 **새 ID 로 해석**돼 배지·대화기록·프로필·컨텍스트가 새 ID 기준이 된다
+     (외부 provider 는 해석하지 않는다, 옛 대화의 저장된 모델 값은 그대로). 게이트웨이에 닿지 못해 정적 카탈로그로 돌면 해석이 없어 옛 프로필 키로 간다 —
+     그래서 실측한 뒤 `LLM_MODEL_PROFILES_JSON` 에 새 ID 와 두 옛 이름을 같은 값으로 적는다(`.env.example` 참고). 실측 전에 추측한 값을 넣지 않는다.
+   - 실측: `npm run eval:probe --workspace=apps/api -- --model <새 ID>`(실제 요청 — 출력이 `LLM_MODEL_PROFILES_JSON` 조각과 판정 근거),
+     프로필 반영 뒤 `npm run eval:matrix --workspace=apps/api -- --gate` 로 전환을 판정한다. 긴 문맥은 실제 긴 입력으로 따로 확인한다.
+     목록·배지·옛 대화 이어짐을 보는 라이브 확인과는 별개 판정이다.
 
 ## Node 버전 — 기준은 `.node-version` 하나
 
@@ -548,7 +578,7 @@ omk env status online
 | `OMK_LITELLM_SPEC` | `litellm[proxy]` | LiteLLM pip 설치 대상 — 버전 고정에 쓴다 |
 | `OMK_LLAMACPP_TAG` | `b10964` | 기본 모델 서버(llama.cpp) 릴리스 태그 |
 | `OMK_DEFAULT_MODEL_HF` / `_NAME` / `_CTX` | `Qwen/Qwen3-1.7B-GGUF:Q8_0` / `qwen3-1.7b` / `16384` | 기본 모델 — 준 값은 `~/.openmake/llamacpp/model.conf` 에 기억된다 |
-| `OMK_DGX_MODEL` | `qwen3.8-27b` | `--dgx-host` 일 때 앱의 기본 모델 이름 |
+| `OMK_DGX_MODEL` | 기억된 값 → `qwen3.8-27b` | `--dgx-host` 일 때 DGX 채팅 모델의 정식 이름 — 앱 기본 모델과 게이트웨이 정식 항목. 준 값은 환경의 `litellm.env` 에 기억된다([모델 바꾸기](#dgx-채팅-모델-바꾸기--정식-이름--옛-이름-호환)) |
 | `OMK_DEV_LLM` / `OMK_DEV_BENCH` | 자동 탐지 | dev 작업 클론 위치 |
 | `OMK_LOG` | 켜짐 | 설치·갱신·리셋(`env install`·`env update`·`env reset`·`dev setup`·`dev reset`)의 출력을 `~/.openmake/logs/omk/<시각>-<명령>[-<환경>].log` 에도 남긴다. 끄려면 `off` |
 | `OMK_VERIFY_PUSH_URL` | `origin` | `omk env verify` 가 확인 기록을 push 할 원격 |

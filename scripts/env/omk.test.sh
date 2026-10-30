@@ -122,6 +122,94 @@ printf 'model_list:\n  - model_name: a\n' > "$LX/repo.yaml"; : > "$LX/l.env"
 litellm_render_config "$LX/repo.yaml" "$LX/l.env" "$LX/out.yaml"; ok "litellm config: 업스트림 없으면 레포 것 그대로" 'cmp -s "$LX/repo.yaml" "$LX/out.yaml"'
 printf 'OMK_UPSTREAM_MODEL=qwen3.5:397b-cloud\n' > "$LX/l.env"; litellm_render_config "$LX/repo.yaml" "$LX/l.env" "$LX/out.yaml"
 eq "litellm config: 업스트림 모델 한 항목 추가" "$(grep -c 'model_name' "$LX/out.yaml")|$(grep -c 'openai/qwen3.5:397b-cloud' "$LX/out.yaml")|$(grep -c 'os.environ/OMK_UPSTREAM_API_BASE' "$LX/out.yaml")" "2|1|1"
+# DGX 채팅 모델 전환(OMK_DGX_MODEL) — 실제 레포 config 로 본다. 새 이름이 정식 항목, 옛 이름·gpt-3.5-turbo 는 같은 upstream 호환 라우트.
+RC="$HERE/../vllm/litellm.config.yaml"; RN="$(grep -c 'model_name:' "$RC")"
+printf 'OMK_DGX_MODEL=qwen3.8-27b\n' > "$LX/l.env"; litellm_render_config "$RC" "$LX/l.env" "$LX/out.yaml" >/dev/null
+ok "litellm config: 기본 DGX 모델이면 레포 것 그대로" 'cmp -s "$RC" "$LX/out.yaml"'
+printf 'OMK_DGX_MODEL=chat-next-32b\n' > "$LX/l.env"; litellm_render_config "$RC" "$LX/l.env" "$LX/out.yaml" >/dev/null
+eq "litellm config: DGX 정식 항목 + 호환 라우트" \
+   "$(grep -c 'model_name:' "$LX/out.yaml")|$(grep -c 'model_name: "chat-next-32b"' "$LX/out.yaml")|$(grep -c 'model_name: qwen3.8-27b' "$LX/out.yaml")|$(grep -c 'openai/qwen3.8-27b' "$LX/out.yaml")|$(grep -c 'model: "openai/chat-next-32b"' "$LX/out.yaml")|$(grep -c 'model: openai/jev-decision' "$LX/out.yaml")" \
+   "$((RN + 1))|1|1|0|3|1"
+eq "litellm config: 정식 항목은 DGX 채팅 주소·키" "$(grep -A4 'model_name: "chat-next-32b"' "$LX/out.yaml" | grep -c -e 'os.environ/QWEN_VLLM_API_BASE' -e 'os.environ/VLLM_API_KEY')" "2"
+printf 'OMK_DGX_MODEL=chat-next-32b\nOMK_UPSTREAM_MODEL=qwen3.5:397b-cloud\n' > "$LX/l.env"; litellm_render_config "$RC" "$LX/l.env" "$LX/out.yaml" >/dev/null
+eq "litellm config: DGX 전환 + 비-DGX 업스트림 공존" "$(grep -c 'model_name:' "$LX/out.yaml")|$(grep -c 'openai/qwen3.5:397b-cloud' "$LX/out.yaml")|$(grep -c 'model: "openai/chat-next-32b"' "$LX/out.yaml")" "$((RN + 2))|1|3"
+# 저장된 값이 잘못됐으면 렌더는 실패하고 기존 config 를 건드리지 않는다 — 조용히 레포 것을 복사해 성공 처리하면 앱 기본값과 어긋난다.
+for bad in 'x"; evil: 1' 'a b' 'org/model' '-flag' 'gpt-3.5-turbo' 'jev-decision' 'same-x|same-x'; do
+    printf 'OMK_DGX_MODEL=%s\nOMK_UPSTREAM_MODEL=%s\n' "${bad%%|*}" "$([[ "$bad" == *'|'* ]] && printf '%s' "${bad#*|}")" > "$LX/l.env"
+    printf 'previous\n' > "$LX/out.yaml"; litellm_render_config "$RC" "$LX/l.env" "$LX/out.yaml" >/dev/null 2>&1; rc=$?
+    eq "litellm config: 거부($bad) → 실패·기존 config 보존" "$([[ $rc -ne 0 ]] && echo fail || echo ok)|$(cat "$LX/out.yaml")" "fail|previous"
+done
+# 사용자 설정(.env·litellm.env)을 바꾸기 전에 DGX ID 와 업스트림 모델의 충돌을 거른다 — env install·dev setup 이 맨 앞에서 부른다.
+PF="$TMP/pf"; mkdir -p "$PF/scripts/vllm" "$(litellm_dir pf)/venv/bin"; cp "$RC" "$PF/scripts/vllm/"; PL="$(litellm_dir pf)/litellm.env"
+printf 'LLM_DEFAULT_MODEL=keep\n' > "$PF/.env"; printf 'OMK_UPSTREAM_MODEL=old-up\n' > "$PL"
+pf_state() { cat "$PF/.env" "$PL" "$(litellm_dir pf)/litellm.config.yaml" 2>/dev/null | cksum; }
+S0="$(pf_state)"
+( OMK_DGX_MODEL=same-y dgx_preflight "$PF" pf 1 http://u same-y >/dev/null 2>&1 ); rc=$?
+eq "dgx preflight: 새 DGX ID = 새 업스트림 모델 → 실패·설정 그대로" "$rc|$(pf_state)" "2|$S0"
+( OMK_DGX_MODEL=old-up dgx_preflight "$PF" pf 1 "" "" >/dev/null 2>&1 ); rc=$?
+eq "dgx preflight: 새 DGX ID = 기억된 업스트림 모델 → 실패" "$rc|$(pf_state)" "2|$S0"
+( OMK_DGX_MODEL=chat-a dgx_preflight "$PF" pf 1 http://u other-up >/dev/null 2>&1 ); rc=$?
+eq "dgx preflight: 겹치지 않으면 통과" "$rc" "0"
+( dgx_preflight "$PF" pf 0 http://u mem-z >/dev/null 2>&1 ); rc=$?
+eq "dgx preflight: DGX 없음·기억값 없음 → 통과" "$rc" "0"
+printf 'OMK_UPSTREAM_MODEL=old-up\nOMK_DGX_MODEL=mem-z\n' > "$PL"; printf 'previous\n' > "$(litellm_dir pf)/litellm.config.yaml"; S1="$(pf_state)"
+( dgx_preflight "$PF" pf 0 http://u mem-z >/dev/null 2>&1 ); rc=$?
+eq "dgx preflight: 기억된 DGX ID = 새 업스트림 모델(--dgx-host 없이) → 실패" "$rc|$(pf_state)" "2|$S1"
+# 사전 검사를 거치지 않은 호출(예: 다른 경로)도 litellm.env 를 바꾸기 전에 멈춘다 — PM2·health 확인은 가짜.
+printf '#!/bin/sh\n' > "$(litellm_dir pf)/venv/bin/litellm"; chmod 755 "$(litellm_dir pf)/venv/bin/litellm"; S1="$(pf_state)"
+( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$PF" pf "" "" "" http://u none mem-z >/dev/null 2>&1 ); rc=$?
+eq "litellm ensure: 새 업스트림 = 기억된 DGX ID → 실패·설정 그대로" "$rc|$(pf_state)" "2|$S1"
+printf 'OMK_UPSTREAM_MODEL=old-up\nOMK_DGX_MODEL=bad/id\n' > "$PL"; S1="$(pf_state)"
+( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$PF" pf >/dev/null 2>&1 ); rc=$?
+eq "litellm ensure: 저장된 값 렌더 실패 → 호출자 중단·config 보존" "$rc|$(cat "$(litellm_dir pf)/litellm.config.yaml")" "2|previous"
+# 이번 실행이 업스트림을 다른 이름으로 바꾸면 기억된 옛 업스트림과는 겹쳐도 된다 — 사전 검사와 dgx_apply 가 같은 값을 본다.
+printf 'OMK_UPSTREAM_MODEL=old-up\n' > "$PL"
+( OMK_DGX_MODEL=old-up dgx_preflight "$PF" pf 1 http://u new-up >/dev/null 2>&1 ); rc=$?
+( curl() { printf 200; }; OMK_DGX_MODEL=old-up dgx_apply "$PF" pf 192.0.2.1 "" new-up >/dev/null 2>&1 ); rc2=$?
+eq "dgx: 업스트림을 바꾸는 실행은 옛 업스트림 이름 사용 가능" "$rc|$rc2|$(dotenv_get "$PF/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$PL" OMK_DGX_MODEL)" "0|0|old-up|old-up"
+# 기본 DGX ID(qwen3.8-27b)도 같은 이름의 업스트림과는 겹친다 — 정적 DGX 라우트와 동적 업스트림 항목이 같은 model_name 이 된다.
+printf 'OMK_DGX_MODEL=qwen3.8-27b\nOMK_UPSTREAM_MODEL=qwen3.8-27b\n' > "$LX/l.env"
+printf 'previous\n' > "$LX/out.yaml"; litellm_render_config "$RC" "$LX/l.env" "$LX/out.yaml" >/dev/null 2>&1; rc=$?
+eq "litellm config: 기억된 기본 DGX ID = 업스트림 → 실패·기존 config 보존" "$([[ $rc -ne 0 ]] && echo fail || echo ok)|$(cat "$LX/out.yaml")" "fail|previous"
+printf 'OMK_UPSTREAM_MODEL=other-up\n' > "$PL"; printf 'LLM_DEFAULT_MODEL=keep\n' > "$PF/.env"; S2="$(pf_state)"
+( dgx_preflight "$PF" pf 1 http://u qwen3.8-27b >/dev/null 2>&1 ); rc=$?
+eq "dgx preflight: --dgx-host(기본 ID) + 업스트림 qwen3.8-27b → 실패·설정 그대로" "$rc|$(pf_state)" "2|$S2"
+( curl() { printf 200; }; dgx_apply "$PF" pf 192.0.2.1 "" qwen3.8-27b >/dev/null 2>&1 ); rc=$?
+eq "dgx apply: 기본 ID + 업스트림 qwen3.8-27b → 실패·설정 그대로" "$rc|$(pf_state)" "2|$S2"
+printf 'OMK_UPSTREAM_MODEL=other-up\nOMK_DGX_MODEL=qwen3.8-27b\n' > "$PL"; S2="$(pf_state)"
+( dgx_preflight "$PF" pf 0 http://u qwen3.8-27b >/dev/null 2>&1 ); rc=$?
+eq "dgx preflight: 기억된 기본 DGX ID + 새 업스트림 qwen3.8-27b(--dgx-host 없이) → 실패" "$rc|$(pf_state)" "2|$S2"
+( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$PF" pf "" "" "" http://u none qwen3.8-27b >/dev/null 2>&1 ); rc=$?
+eq "litellm ensure: 기억된 기본 DGX ID + 새 업스트림 qwen3.8-27b → 실패·설정 그대로" "$rc|$(pf_state)" "2|$S2"
+# DGX 기록이 없는 환경도 업스트림이 config 의 정적 이름과 겹치면 멈춘다(자동 수정 없음) — 정적 이름이 아니면 종전대로 받는다.
+printf 'OMK_UPSTREAM_MODEL=other-up\n' > "$PL"; S3="$(pf_state)"
+( dgx_preflight "$PF" pf 0 http://u qwen3.8-27b >/dev/null 2>&1 ); rc=$?
+printf 'OMK_UPSTREAM_MODEL=qwen3-1.7b\n' > "$LX/l.env"; litellm_render_config "$RC" "$LX/l.env" "$LX/out.yaml" >/dev/null 2>&1; rc2=$?
+eq "비-DGX: 무기록 + 업스트림 qwen3.8-27b → 사전 검사 실패·설정 그대로 · 기본 모델 업스트림 렌더 성공" "$rc|$(pf_state)|$rc2|$(grep -c 'model_name: "qwen3-1.7b"' "$LX/out.yaml")" "2|$S3|0|1"
+printf 'OMK_UPSTREAM_MODEL=qwen3.8-27b\n' > "$LX/l.env"
+printf 'previous\n' > "$LX/out.yaml"; litellm_render_config "$RC" "$LX/l.env" "$LX/out.yaml" >/dev/null 2>&1; rc=$?
+eq "litellm config: 무기록 + 업스트림 = 정적 이름 → 실패·기존 config 보존" "$([[ $rc -ne 0 ]] && echo fail || echo ok)|$(cat "$LX/out.yaml")" "fail|previous"
+( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$PF" pf "" "" "" http://u none jev-decision >/dev/null 2>&1 ); rc=$?
+eq "litellm ensure: 무기록 + 새 업스트림 = 정적 이름 → 실패·litellm.env 그대로" "$rc|$(pf_state)" "2|$S3"
+# env update 가드 — 앱 기본 모델과 게이트웨이 모델 이름이 어긋나면 첫 부작용 전에 멈춘다(파일 그대로).
+UG="$TMP/ug"; mkdir -p "$UG/scripts/vllm" "$(litellm_dir ug)"; cp "$RC" "$UG/scripts/vllm/"; UL="$(litellm_dir ug)/litellm.env"
+ug_run() { # $1=.env 내용 $2=litellm.env 내용(- 면 파일 없음) → rc|파일 그대로(same/changed)
+    printf '%b' "$1" > "$UG/.env"; rm -f "$UL"; [[ "$2" == - ]] || printf '%b' "$2" > "$UL"
+    local before; before="$(cat "$UG/.env" "$UL" 2>/dev/null | cksum)"
+    ( dgx_update_guard "$UG" ug >/dev/null 2>&1 ); local rc=$?
+    printf '%s|%s' "$rc" "$([[ "$(cat "$UG/.env" "$UL" 2>/dev/null | cksum)" == "$before" ]] && echo same || echo changed)"
+}
+eq "update guard: 앱 = DGX 기록 → 통과"           "$(ug_run 'LLM_DEFAULT_MODEL=chat-next-32b\n' 'OMK_DGX_MODEL=chat-next-32b\n')" "0|same"
+eq "update guard: 앱 ≠ DGX 기록 → 중단·파일 그대로" "$(ug_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' 'OMK_DGX_MODEL=chat-next-32b\n')" "2|same"
+eq "update guard: 무기록 + 레포 정적 이름 → 통과"   "$(ug_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' 'OMK_UPSTREAM_MODEL=other-up\n')" "0|same"
+eq "update guard: 무기록 + 업스트림 이름 → 통과"    "$(ug_run 'LLM_DEFAULT_MODEL=other-up\n' 'OMK_UPSTREAM_MODEL=other-up\n')" "0|same"
+eq "update guard: 무기록 + 와일드카드 라우트 → 통과" "$(ug_run 'LLM_DEFAULT_MODEL=openrouter/some-model\n' '')" "0|same"
+eq "update guard: 무기록 + 모르는 이름 → 중단·파일 그대로" "$(ug_run 'LLM_DEFAULT_MODEL=chat-next-32b\n' 'OMK_UPSTREAM_MODEL=other-up\n')" "2|same"
+eq "update guard: OMK_LITELLM=off → 통과"          "$(ug_run 'OMK_LITELLM=off\nLLM_DEFAULT_MODEL=x-1\n' 'OMK_DGX_MODEL=chat-next-32b\n')" "0|same"
+eq "update guard: litellm.env 없음 → 통과"          "$(ug_run 'LLM_DEFAULT_MODEL=x-1\n' -)" "0|same"
+eq "update guard: 앱 기본 모델 비어 있음 → 통과"      "$(ug_run 'OMK_TRACK=main\n' 'OMK_DGX_MODEL=chat-next-32b\n')" "0|same"
+eq "update guard: 기록된 업스트림 = 정적 이름(무기록) → 중단" "$(ug_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' 'OMK_UPSTREAM_MODEL=qwen3.8-27b\n')" "2|same"
+eq "update guard: 기록된 DGX ID = 기록된 업스트림 → 중단"   "$(ug_run 'LLM_DEFAULT_MODEL=chat-next-32b\n' 'OMK_DGX_MODEL=chat-next-32b\nOMK_UPSTREAM_MODEL=chat-next-32b\n')" "2|same"
 
 ok "llamacpp: 이 플랫폼의 릴리스 이름" '[[ "$(llamacpp_platform)" =~ ^(macos|ubuntu)-(arm64|x64)$ ]]'
 ( default_model_resolve; [[ "$OMK_DEFAULT_MODEL_NAME|$OMK_DEFAULT_MODEL_CTX" == "qwen3-1.7b|16384" ]] ) && ok "default model: 기본값" true || ok "default model: 기본값" false
@@ -321,6 +409,20 @@ eq "dgx: 음악 주소"   "$(dotenv_get "$(litellm_dir opsenv)/litellm.env" ACES
 dotenv_set "$OL/.env" SSRF_ALLOWED_HOSTS "a.internal"; dgx_apply "$OL" opsenv 192.168.0.50 vkey >/dev/null
 eq "dgx: SSRF 합집합" "$(dotenv_get "$OL/.env" SSRF_ALLOWED_HOSTS)" "a.internal,192.168.0.50"
 ok "dgx: 연결 요약"   "[[ '$DGX_LINE' == *'채팅 :8002=200'* ]]"
+# DGX 모델 ID — 명시(OMK_DGX_MODEL) > 이 환경 litellm.env 에 기억된 값 > 기본값. 앱 기본 모델과 게이트웨이가 같은 값을 받는다.
+DL="$(litellm_dir opsenv)/litellm.env"
+eq "dgx: 기본값 기억"           "$(dotenv_get "$DL" OMK_DGX_MODEL)" "qwen3.8-27b"
+( OMK_DGX_MODEL=chat-next-32b dgx_apply "$OL" opsenv 192.168.0.50 vkey >/dev/null )
+eq "dgx: 명시한 모델 → 앱·게이트웨이" "$(dotenv_get "$OL/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$DL" OMK_DGX_MODEL)" "chat-next-32b|chat-next-32b"
+dgx_apply "$OL" opsenv 192.168.0.50 vkey >/dev/null
+eq "dgx: 다시 설치해도 기억된 모델 유지" "$(dotenv_get "$OL/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$DL" OMK_DGX_MODEL)" "chat-next-32b|chat-next-32b"
+mkdir -p "$OL/scripts/vllm"; cp "$RC" "$OL/scripts/vllm/"
+for bad in 'x;id' 'gpt-3.5-turbo'; do
+    ( OMK_DGX_MODEL="$bad" dgx_apply "$OL" opsenv 192.168.0.50 vkey >/dev/null 2>&1 ); rc=$?
+    eq "dgx: 거부($bad) — 실패·값 그대로" "$rc|$(dotenv_get "$OL/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$DL" OMK_DGX_MODEL)" "2|chat-next-32b|chat-next-32b"
+done
+( OMK_DGX_MODEL=qwen3.8-27b dgx_apply "$OL" opsenv 192.168.0.50 vkey >/dev/null )
+eq "dgx: 기본값을 명시하면 되돌린다" "$(dotenv_get "$OL/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$DL" OMK_DGX_MODEL)" "qwen3.8-27b|qwen3.8-27b"
 
 port_in_use() { return 1; }   # :443 점유 여부와 무관하게 렌더만 본다
 dotenv_set "$OL/.env" OMK_HTTPS_HOST mac-mini.local; dotenv_set "$OL/.env" OMK_ARTIFACT_VIEWER 1
