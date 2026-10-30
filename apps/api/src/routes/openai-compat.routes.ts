@@ -1,3 +1,4 @@
+import { ProviderError } from '../providers/provider-errors';
 import { Router, Request, Response } from 'express';
 import { createHash } from 'crypto';
 import { ClusterManager } from '../cluster/manager';
@@ -457,7 +458,8 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 for (const p of m.content) if (p.type === 'text') promptTextParts.push(p.text);
             }
         }
-        const promptTokens = OpenAICompatService.estimateTokens(promptTextParts.join(' '));
+        // Usage remains an estimate, but must include extracted file content actually sent to chat.
+        const promptTokens = OpenAICompatService.estimateTokens([...promptTextParts, fileContext].join(' '));
         const completionTokens = OpenAICompatService.estimateTokens(result.response);
 
         const artifactsOut = await buildArtifactsOut(result, body, userContext);
@@ -484,6 +486,11 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
         }
         if (error instanceof ChatRequestError) {
             openaiError(res, error.statusCode, error.message);
+            return;
+        }
+
+        if (error instanceof ProviderError && error.code === 'CONTEXT_TOO_LARGE') {
+            openaiError(res, 413, error.message);
             return;
         }
 
