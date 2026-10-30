@@ -423,6 +423,8 @@ for bad in 'x;id' 'gpt-3.5-turbo'; do
 done
 ( OMK_DGX_MODEL=qwen3.8-27b dgx_apply "$OL" opsenv 192.168.0.50 vkey >/dev/null )
 eq "dgx: 기본값을 명시하면 되돌린다" "$(dotenv_get "$OL/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$DL" OMK_DGX_MODEL)" "qwen3.8-27b|qwen3.8-27b"
+# 감지 함수는 scripts/lib/dgx-model.sh 에 있다 — omk.sh 를 source 하면 함께 보인다(openmake_llm.sh deploy 도 같은 파일을 쓴다).
+ok "dgx lib: source 뒤 감지 함수·옛 이름 상수" 'declare -F dgx_resolve_model >/dev/null && [[ "$OMK_DGX_LEGACY_MODEL" == qwen3.8-27b ]]'
 # vLLM 서빙 이름 자동 감지 — curl 은 가짜(실제 네트워크 없음). 본문은 실제 vLLM /v1/models 형식(permission[].id=modelperm-…).
 vm_body() { # $@=served id → vLLM /v1/models 본문
     local i out='' sep=''

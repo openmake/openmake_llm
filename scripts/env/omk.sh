@@ -1383,8 +1383,17 @@ runtime_images_remove() { # $1=env — 환경별 태그만 지운다. :latest �
 #            OMK_ARTIFACT_VIEWER=1   --artifact-viewer 로 켠 환경
 readonly OPS_PROFILE_REL="scripts/setup/profiles/ops-features.env"
 readonly DGX_CHAT_PORT=8002 DGX_EMBED_PORT=8003 DGX_MUSIC_PORT=8005
-readonly OMK_DGX_LEGACY_MODEL=qwen3.8-27b   # 레포 litellm.config.yaml·qwen-serve.sh 의 기본 served-model-name
-# DGX 채팅 vLLM 의 정식 served-model-name — 비우면 vLLM /models 에서 감지(dgx_resolve_model), 못 읽으면 litellm.env 에 기억된 값, 그것도 없으면 위 기본값.
+# DGX 감지 라이브러리 — OMK_DGX_LEGACY_MODEL(옛 기본 served-model-name)·dgx_model_check·dgx_served_models·dgx_resolve_model.
+# openmake_llm.sh deploy 도 같은 파일을 쓴다. curl|bash 부트스트랩(레포 밖)은 클론을 만든 뒤 dgx_lib_require 로 불러온다.
+# shellcheck source=/dev/null
+[[ -z "$SCRIPT_DIR" || ! -f "$SCRIPT_DIR/../lib/dgx-model.sh" ]] || . "$SCRIPT_DIR/../lib/dgx-model.sh"
+dgx_lib_require() { # $1=llm dir — 이미 불러왔으면 그대로, 아니면 설치된 클론의 것
+    declare -F dgx_resolve_model >/dev/null 2>&1 && return 0
+    [[ -f "$1/scripts/lib/dgx-model.sh" ]] || die "DGX 감지 라이브러리가 없습니다: $1/scripts/lib/dgx-model.sh"
+    # shellcheck source=/dev/null
+    . "$1/scripts/lib/dgx-model.sh"
+}
+# DGX 채팅 vLLM 의 정식 served-model-name — 비우면 vLLM /models 에서 감지(dgx_resolve_model), 못 읽으면 litellm.env 에 기억된 값, 그것도 없으면 OMK_DGX_LEGACY_MODEL.
 # 이름은 ID 일 뿐이다 — 실제 가중치와의 관계는 운영자가 vLLM 쪽에서 정하고, 능력은 모델 프로필·eval 로 따로 확인한다.
 OMK_DGX_MODEL="${OMK_DGX_MODEL:-}"
 readonly VIEWER_PORT=8088 VIEWER_HTTPS_PORT=8443
@@ -1461,18 +1470,7 @@ dgx_http_code() { # $1=host $2=port $3=path $4=key → HTTP 코드 (000 = 연결
 }
 # 게이트웨이의 음악 주소 · 앱의 DGX 파생값(정확 토큰 재계산·GPU 지표·SSRF 허용) · 연결 확인.
 # 채팅·임베딩 주소는 호출자가 litellm_ensure 에 넘긴다(--qwen-vllm-base/--bge-vllm-base 와 같은 경로).
-# DGX 모델 ID 는 게이트웨이 config 의 이름·앱의 모델 ID 로 그대로 쓰인다 — 따옴표·공백·'/'(외부 provider 표기)·':'(provider:model)를
-# 막고, config 의 다른 항목·업스트림 모델과 겹치지 않게 한다. 기본값(옛 이름)은 레포 config 그대로라 겹침을 보지 않는다.
-dgx_model_check() { # $1=ID [$2=레포 litellm config $3=업스트림 모델] → 0=쓸 수 있음, 아니면 사유를 출력
-    local re='^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'
-    [[ "$1" =~ $re ]] || { printf '형식이 올바르지 않습니다(영숫자와 . _ - 만, 128자 이하): %s' "$1"; return 1; }
-    # 업스트림과의 겹침은 기본값도 본다 — 정적 DGX 라우트와 업스트림 항목이 같은 model_name 의 두 배포가 된다.
-    [[ -z "${3:-}" || "$1" != "$3" ]] || { printf '업스트림 모델(OMK_UPSTREAM_MODEL)과 같은 이름입니다: %s' "$1"; return 1; }
-    [[ "$1" != "$OMK_DGX_LEGACY_MODEL" ]] || return 0
-    if [[ -f "${2:-}" ]] && grep -qxF -e "  - model_name: $1" -e "  - model_name: \"$1\"" "$2"; then
-        printf '게이트웨이 config 에 이미 있는 이름입니다: %s' "$1"; return 1
-    fi
-}
+# DGX 모델 ID 검사·vLLM 서빙 이름 감지(dgx_model_check·dgx_served_models·dgx_resolve_model)는 scripts/lib/dgx-model.sh 에 있다.
 # 업스트림 모델 이름은 DGX 기록 유무와 무관하게 레포 config 의 정적 항목 이름과 겹치면 안 된다 — 같은 model_name 의 두 배포가 렌더된다.
 # 자동으로 고치지 않는다. 기록이 없으면 DGX 를 쓰는 환경인지 알 수 없으므로 원인과 두 선택지를 알린다.
 upstream_model_check() { # $1=업스트림 모델 $2=레포 litellm config $3=기억된(또는 이번) DGX 모델 → 0=쓸 수 있음, 아니면 사유를 출력
@@ -1485,55 +1483,7 @@ upstream_model_check() { # $1=업스트림 모델 $2=레포 litellm config $3=�
     fi
     return 1
 }
-# vLLM 의 OpenAI 호환 /models 에서 기본 모델의 served id 만 한 줄씩 — node 없이 읽는다(install 의 사전 검사는 툴체인 준비 전이다).
-# vLLM 은 항목마다 permission[].id(modelperm-…)를 넣으므로 그 블록을 지운 뒤 항목별로 읽고, LoRA 어댑터(parent 가 기본 모델 이름)는 뺀다.
-# 키는 헤더로만 쓴다. 읽지 못하면 HTTP 코드(000 = 연결 불가) 한 줄을 출력하고 rc 1 — 하위 셸에서 불러도 코드가 남게.
-DGX_RESOLVE_SOURCE="" DGX_SYNC_CHANGED=0 DGX_SYNC_TARGET="" DGX_SYNC_PIN=""
-dgx_served_models() { # $1=base $2=key → served id 한 줄씩 | 실패 시 HTTP 코드 + rc 1
-    local a=() out code ids
-    [[ -n "${2:-}" ]] && a=(-H "Authorization: Bearer $2")
-    out="$(curl -s -m 6 -w '\n%{http_code}' ${a[@]+"${a[@]}"} "${1%/}/models" 2>/dev/null || true)"
-    code="${out##*$'\n'}"; [[ "$code" =~ ^[0-9]{3}$ ]] || code=000
-    [[ "$code" == 200 ]] || { printf '%s\n' "$code"; return 1; }
-    ids="$(printf '%s' "${out%$'\n'*}" | tr -d '\n' | sed -E 's/"permission"[[:space:]]*:[[:space:]]*\[[^]]*\]//g' \
-        | grep -oE '\{[^{}]*\}' | grep -vE '"parent"[[:space:]]*:[[:space:]]*"' \
-        | grep -oE '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]*)"$/\1/' || true)"
-    [[ -n "$ids" ]] || { printf '%s\n' "$code"; return 1; }
-    printf '%s\n' "$ids"
-}
-# DGX 채팅 모델의 정식 ID — 명시값 > (명시로 고정해 둔 기억값) > vLLM 이 서빙하는 기본 모델 중 옛 이름·gpt-3.5-turbo·config 의 다른
-# 이름을 뺀 하나 > 옛 이름. 명시값·고정값은 served 에 있어야 한다. 명시값 auto 는 고정을 풀고 감지로 돌아간다. 후보가 둘 이상이면 멈춘다.
-# vLLM 에 닿지 못하면 경고 1줄 뒤 명시값 → 기억값 → 기본값(설치·업데이트를 막지 않는다).
-# 출력은 "ID 출처" 한 줄(출처 served|explicit|pinned|fallback) — 로그는 stderr 로 보내 값과 섞이지 않게 한다.
-dgx_resolve_model() { # $1=base $2=key $3=명시값(auto 가능) $4=기억값 [$5=기억값이 고정인가(1|0) $6=레포 litellm config]
-    local served list cand n v why want="${3:-}" src=explicit
-    if [[ "$want" == auto ]]; then want=""
-    elif [[ -z "$want" && "${5:-0}" == 1 && -n "${4:-}" ]]; then want="$4"; src=pinned; fi
-    if ! served="$(dgx_served_models "$1" "${2:-}")"; then
-        v="${want:-${4:-$OMK_DGX_LEGACY_MODEL}}"
-        log_warn "vLLM 모델 목록을 읽지 못해 이름을 감지하지 않았습니다(${1%/}/models, HTTP $served) — $v 사용${want:+ (서빙 여부 미확인)}$([[ "${3:-}" != auto ]] || printf ' (고정은 그대로 — vLLM 이 응답할 때 다시 실행)')" >&2
-        printf '%s fallback\n' "$v"; return 0
-    fi
-    list="$(printf '%s' "$served" | tr '\n' ',' | sed -e 's/,$//' -e 's/,/, /g')"
-    if [[ -n "$want" ]]; then
-        printf '%s\n' "$served" | grep -qxF -e "$want" \
-            || die "OMK_DGX_MODEL=$want$([[ "$src" != pinned ]] || printf '(고정된 값)') 을 vLLM 이 서빙하지 않습니다(served: $list) — vLLM 의 served-model-name 을 먼저 맞추거나 목록의 이름을 주십시오, 감지로 돌아가려면 OMK_DGX_MODEL=auto (아무것도 바꾸지 않았습니다)"
-        printf '%s %s\n' "$want" "$src"; return 0
-    fi
-    cand="$(printf '%s\n' "$served" | grep -vxF -e "$OMK_DGX_LEGACY_MODEL" -e gpt-3.5-turbo || true)"
-    if [[ -n "$cand" && -f "${6:-}" ]]; then   # config 의 다른 정적 이름(어댑터·임베딩 등)은 채팅 모델 후보가 아니다
-        cand="$(printf '%s\n' "$cand" | while IFS= read -r v; do grep -qxF -e "  - model_name: $v" -e "  - model_name: \"$v\"" "$6" || printf '%s\n' "$v"; done)"
-    fi
-    n="$(printf '%s' "$cand" | grep -c . || true)"
-    [[ "$n" -le 1 ]] || die "vLLM 이 서빙하는 채팅 모델이 둘 이상입니다($(printf '%s' "$cand" | tr '\n' ',' | sed -e 's/,$//' -e 's/,/, /g')) — 정식 ID 를 고를 수 없습니다. OMK_DGX_MODEL=<값> 으로 지정해 다시 실행하십시오 (아무것도 바꾸지 않았습니다)"
-    if [[ "$n" -eq 0 ]]; then
-        log_info "vLLM 서빙 목록($list)에 새 채팅 모델 이름이 없습니다 — $OMK_DGX_LEGACY_MODEL 를 정식 이름으로 씁니다" >&2
-        printf '%s served\n' "$OMK_DGX_LEGACY_MODEL"; return 0
-    fi
-    why="$(dgx_model_check "$cand")" || die "vLLM 서빙 이름을 DGX 모델 ID 로 쓸 수 없습니다 — $why (아무것도 바꾸지 않았습니다)"
-    log_info "DGX 채팅 모델 감지: $cand (vLLM served: $list)" >&2
-    printf '%s served\n' "$cand"
-}
+DGX_SYNC_CHANGED=0 DGX_SYNC_TARGET="" DGX_SYNC_PIN=""
 # 설치·dev setup 이 사용자 설정(.env·litellm.env)을 바꾸기 전에 DGX 모델과 업스트림 모델의 충돌을 거른다 — 뒤 단계(dgx_apply·
 # litellm_ensure)가 앱 기본 모델만 바꾼 채 렌더에서 멈추지 않게. 이번 실행에 준 값이 있으면 그것, 없으면 litellm.env 에 기억된 값으로 본다.
 # --dgx-host 를 준 실행은 vLLM 이 서빙하는 이름으로 OMK_DGX_MODEL 을 확정한다(뒤의 dgx_apply 가 그 값을 두 파일에 쓴다).
@@ -1844,7 +1794,8 @@ cmd_env_install() {
     [[ "$ref" != "dev" ]] || bench_ref="${bench_ref:-main}"   # openmake_bench 는 브랜치 dev 도 없다
     bench_ref="${bench_ref:-$ref}"
     [[ -z "$dgx_host" || "$dgx_host" =~ ^[A-Za-z0-9._-]+$ ]] || usage_die "--dgx-host 형식이 올바르지 않습니다: $dgx_host"
-    [[ -z "$dgx_host" || -z "$OMK_DGX_MODEL" ]] || dgx_model_check "$OMK_DGX_MODEL" >/dev/null || usage_die "OMK_DGX_MODEL $(dgx_model_check "$OMK_DGX_MODEL")"
+    # curl|bash 부트스트랩은 아직 클론이 없어 감지 라이브러리가 없다 — 그때는 클론 뒤 dgx_preflight 가 같은 검사를 한다.
+    [[ -z "$dgx_host" || -z "$OMK_DGX_MODEL" ]] || ! declare -F dgx_model_check >/dev/null || dgx_model_check "$OMK_DGX_MODEL" >/dev/null || usage_die "OMK_DGX_MODEL $(dgx_model_check "$OMK_DGX_MODEL")"
     [[ -n "$dgx_host" || -z "$OMK_DGX_MODEL" ]] || log_warn "OMK_DGX_MODEL 은 --dgx-host 와 함께 줄 때만 씁니다 — 이번 실행에서는 무시합니다(기억된 값 그대로)"
     [[ -z "$https_host" || "$https_host" =~ ^[A-Za-z0-9._-]+$ ]] || usage_die "--https-host 형식이 올바르지 않습니다: $https_host"
     if [[ -n "$https_host" && $no_proxy -eq 1 ]]; then usage_die "--https-host 는 프록시가 필요합니다 (--no-proxy 와 함께 쓸 수 없음)"; fi
@@ -1871,6 +1822,7 @@ cmd_env_install() {
     # 1) openmake_llm — 툴체인·.env·DB·마이그레이션·빌드·PM2 전부 install.sh 가 한다.
     clone_or_keep "$OMK_REPO_URL" "$ref" "$ldir" "openmake_llm"
     [[ -z "$track" ]] || [[ "$(git -C "$ldir" rev-parse --abbrev-ref HEAD)" == "release" ]] || release_checkout "$ldir" "$ref"
+    dgx_lib_require "$ldir"   # curl|bash 부트스트랩은 방금 만든 클론의 감지 라이브러리를 쓴다
     # .env·litellm.env 를 바꾸기 전에 — 뒤의 install.sh·dgx_apply·게이트웨이 단계가 한쪽만 바꾸고 멈추지 않게.
     [[ -z "$dgx_host" ]] || qwen_base="${qwen_base:-http://$dgx_host:$DGX_CHAT_PORT/v1}"
     dgx_preflight "$ldir" "$env" "$([[ -n "$dgx_host" ]] && echo 1 || echo 0)" "$up_base" "$up_model" "$qwen_base" "$vllm_key"
@@ -1952,6 +1904,7 @@ cmd_env_update_unlocked() {
     fi
     # DGX 모델 이름 — vLLM 이 서빙하는 이름으로 맞출 값을 정한다(쓰기는 배포 뒤 dgx_update_apply). 맞출 값이 없으면
     # 앱 기본 모델과 게이트웨이 모델 이름이 어긋났을 때 무엇이든 바꾸기 전에 멈춘다(dgx_update_guard).
+    dgx_lib_require "$ldir"
     dgx_update_sync "$ldir" "$env"
     # 맞출 값이 정해졌으면 쓰기 단계가 두 파일을 같은 값으로 만든다 — 지금의 어긋남으로 멈추지 않는다.
     [[ -n "$DGX_SYNC_TARGET" ]] || dgx_update_guard "$ldir" "$env"
@@ -2306,6 +2259,7 @@ cmd_dev_setup() {
     done
     if [[ -n "$up_base$up_model" ]] && [[ -z "$up_base" || -z "$up_model" ]]; then usage_die "--llm-base-url 과 --llm-model 은 함께 줍니다"; fi
     [[ -z "$dgx_host" || "$dgx_host" =~ ^[A-Za-z0-9._-]+$ ]] || usage_die "--dgx-host 형식이 올바르지 않습니다: $dgx_host"
+    dgx_lib_require "$DEV_LLM"
     [[ -z "$dgx_host" || -z "$OMK_DGX_MODEL" ]] || dgx_model_check "$OMK_DGX_MODEL" >/dev/null || usage_die "OMK_DGX_MODEL $(dgx_model_check "$OMK_DGX_MODEL")"
     [[ -n "$dgx_host" || -z "$OMK_DGX_MODEL" ]] || log_warn "OMK_DGX_MODEL 은 --dgx-host 와 함께 줄 때만 씁니다 — 이번 실행에서는 무시합니다(기억된 값 그대로)"
     log_step "dev 준비: $DEV_LLM"
