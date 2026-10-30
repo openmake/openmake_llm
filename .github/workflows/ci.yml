@@ -89,6 +89,11 @@ jobs:
           OMK_FORBIDDEN_STRINGS: ${{ secrets.OMK_FORBIDDEN_STRINGS }}
         run: node scripts/ci/org-specific-strings.mjs
 
+      # 커밋 작성자·커미터 메일은 GitHub noreply 만 — 공개 저장소에 개인 메일이 남지 않게 PR 범위 커밋을 본다.
+      - name: "Gate 0.2: Commit identity"
+        if: github.event_name == 'pull_request'
+        run: node scripts/ci/commit-identity.mjs "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
+
       # ─── Gate 0: API Contract Drift ───
       # packages/api-contracts 산출물이 TS SoT(swagger/spec-core·shared-types)와 일치하는지 검사.
       # 스펙 변경 후 `npm run contracts:export` 재생성을 누락한 커밋을 차단한다 (iOS 축 1 Step 5).

@@ -370,7 +370,7 @@ Contributions are welcome — bug reports, fixes, documentation, and new skills 
 
 CI runs a single **CI Gate** (test → build → size → lint) on every push and pull request.
 
-**Community & contact** — questions and self-hosting help: support@openmake.cc · maintainers: riskpw@openmake.cc, rockyhan@openmake.cc. If OpenMake is useful to you, a star helps other developers find it.
+**Community & contact** — questions and self-hosting help: support@openmake.cc. If OpenMake is useful to you, a star helps other developers find it.
 
 ## License
 
