@@ -2,7 +2,7 @@
 # PM2 예약 작업의 옵션이 배포한 앱으로 새지 않는지 — 실제 PM2·docker·네트워크를 건드리지 않는다.
 # PM2 는 앱 옵션을 같은 이름의 환경변수로 자식에 넣는다(omk-pipeline-<env> 의 cron_restart='*/10 * * * *').
 # 그 작업 안에서 `pm2 start ecosystem.config.js --only <앱>` 을 하면 PM2 가 그 환경변수를 앱 옵션으로 읽어
-# openmake-llm·next·bench 가 10분마다 재시작됐다(2026-10-28 ome-on). 두 진입점이 시작할 때 지워야 한다.
+# openmake-llm·next·bench 가 10분마다 재시작됐다. 두 진입점이 시작할 때 지워야 한다.
 #   bash scripts/env/pm2-env-leak.test.sh      # macOS 기본 bash 3.2 에서도 통과해야 한다
 set -uo pipefail
 HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"

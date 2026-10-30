@@ -73,6 +73,17 @@ describe('getVapidKeys', () => {
         expect(mockSetVapidDetails).not.toHaveBeenCalled();
     });
 
+    test('연락처(VAPID_SUBJECT)가 비면 키가 있어도 푸시를 켜지 않는다(기본값 없음)', () => {
+        mockGetConfig.mockReturnValue({
+            vapidPublicKey: 'test-public-key',
+            vapidPrivateKey: 'test-private-key',
+            vapidSubject: ''
+        });
+
+        getVapidKeys();
+        expect(mockSetVapidDetails).not.toHaveBeenCalled();
+    });
+
     test('키 미설정 시 빈 문자열 반환', () => {
         mockGetConfig.mockReturnValue({
             vapidPublicKey: '',

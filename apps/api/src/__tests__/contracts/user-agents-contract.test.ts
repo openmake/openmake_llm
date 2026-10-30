@@ -10,7 +10,7 @@ jest.mock('../../auth/middleware', () => ({
     requireAuth: (req: Request, _res: Response, next: NextFunction) => {
         req.user = {
             id: 'u1',
-            email: 'riskpw@openmake.cc',
+            email: 'user@example.com',
             role: 'user',
             created_at: '2026-08-16T00:00:00.000Z',
             is_active: true,

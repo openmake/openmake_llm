@@ -8,7 +8,6 @@
  * admin 역할 사용자가 1명이라도 있으면 POST 는 403 — 기존 배포에는 영구 무영향.
  * 관리자 생성은 audit `setup.completed`(warning) 로 기록된다.
  *
- * @see docs/superpowers/plans/2026-08-12-first-run-setup.md §B
  */
 import { Router, type Request, type Response } from 'express';
 import * as path from 'path';

@@ -9,7 +9,7 @@ test('API sources require nonempty related Jest tests per changed source', () =>
 });
 test('web and known pipeline spec use fixed suites, unknown specs fail closed', () => {
   assert.equal(selectFeatures(['apps/web/src/app/page.tsx']).web, true);
-  assert.equal(selectFeatures(['docs/superpowers/specs/2026-10-20-pipeline-flow-design.md']).pipeline, true);
+  assert.equal(selectFeatures(['docs/architecture/pipeline-flow-design.md']).pipeline, true);
   assert.throws(() => selectFeatures(['docs/specs/new-feature.md']), /Unmapped/);
 });
 test('documentation only does not invent changed feature coverage', () => {

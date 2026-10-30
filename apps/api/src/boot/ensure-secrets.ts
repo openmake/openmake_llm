@@ -13,7 +13,6 @@
  * 영속 실패 시 fail-fast — 임시 시크릿으로 부팅하면 재시작마다 전 세션(JWT)·
  * 암호문(외부 키/토큰)이 무효화되는 조용한 재해라, 명시적 부팅 중단이 옳다.
  *
- * @see docs/superpowers/plans/2026-08-12-first-run-setup.md §A
  */
 import * as fs from 'fs';
 import * as crypto from 'crypto';

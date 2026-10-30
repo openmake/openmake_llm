@@ -65,7 +65,7 @@ export const AGENT_TASK_LIMITS = {
     UPLOAD_ROOT: process.env.AGENT_TASK_UPLOAD_ROOT
         || `${process.cwd()}/data/uploads/agent-tasks`,
     /**
-     * 청크 업로드(2026-08-04) — chat.openmake.cc 외부 경로는 Cloudflare 무료 플랜의
+     * 청크 업로드(2026-08-04) — chat.example.com 외부 경로는 Cloudflare 무료 플랜의
      * 요청당 100MB 상한이 있어 단일 multipart/json 으로는 대용량 첨부가 edge 413 으로
      * 거절된다. 파일을 청크로 나눠 /api/agent-task-uploads 로 올린 뒤 uploadId 참조로
      * 작업을 생성하면 요청당 크기가 CHUNK_MAX_BYTES 이하로 유지돼 상한을 우회한다.

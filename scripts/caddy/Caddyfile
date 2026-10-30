@@ -1,5 +1,5 @@
 # ============================================================
-# OpenMake LLM — 외부 공개용 리버스 프록시 (Caddy)
+# OpenMake LLM — 리버스 프록시 (Caddy, 레거시 단일 인스턴스)
 # ============================================================
 # ⚠️ scripts/env/omk.sh 가 관리하는 멀티 인스턴스 호스트는 이 파일을 쓰지 않는다.
 #    omk 는 scripts/caddy/instance.caddy.tmpl 을 $OMK_ROOT/caddy/caddy.d/<env>.caddy 로
@@ -8,25 +8,20 @@
 # 목적: 프론트 + REST + WebSocket 을 단일 origin(:33000)으로 묶는다.
 #       백엔드(52416)는 직접 노출하지 않는다.
 #
-# ⚠️ 2026-08-04 정정: 구 example.com:33000 외부 직결 경로는 폐기됨
-#    (라우터 포트포워딩 제거 — DDNS 레코드만 잔존하므로 DNS 가 resolve 된다고
-#    살아있다고 판단하지 말 것). 외부 공개는 chat.openmake.cc(Cloudflare Tunnel)
-#    단일 경로다. 이 :33000 블록의 현재 역할은 두 가지뿐:
-#      ① cloudflared 의 로컬 업스트림  ② LAN 내부 접속(http://<Mac LAN IP>:33000)
+# :33000 블록의 역할:
+#   ① 외부 공개 터널(예: Cloudflare Tunnel 의 cloudflared)의 로컬 업스트림
+#   ② LAN 내부 접속(http://<호스트 LAN IP>:33000)
 #
 # 토폴로지:
-#   [Cloudflare edge(chat.openmake.cc) → cloudflared] 또는 [LAN 브라우저]
+#   [외부 공개 터널 → cloudflared] 또는 [LAN 브라우저]
 #        → [Caddy :33000]  ──┬─ WS upgrade ─→ 백엔드 Express WS (localhost:52416)
 #                            ├─ /api/*      ─→ 백엔드 REST       (localhost:52416)
 #                            └─ 그 외        ─→ Next.js 페이지/정적 (localhost:3000)
 #
 # 실행:
-#   brew install caddy
-#   caddy run --config /Volumes/MAC_APP/openmake_llm/scripts/caddy/Caddyfile
-#   # 또는 백그라운드: brew services 로 등록하거나 `caddy start`
-#   (운영: /opt/homebrew/etc/Caddyfile 은 심링크가 아니라 실파일 — launchd 가 외장 볼륨을
-#    읽지 못해 교체함. 이 파일이 SoT 이며 `openmake_llm.sh deploy` 가 validate → 복사 → reload
-#    로 동기화한다. 운영 파일을 직접 고치면 다음 deploy 에 덮어써진다)
+#   caddy run --config <레포 경로>/scripts/caddy/Caddyfile
+#   (`openmake_llm.sh deploy` 가 이 파일을 validate → 호스트 Caddyfile 로 복사 → reload 한다.
+#    호스트 파일을 직접 고치면 다음 deploy 에 덮어써진다 — 호스트 고유 사이트는 아래 Caddyfile.d 에 둔다)
 #
 # 주의:
 #   - Caddy reverse_proxy 는 X-Forwarded-Host/Proto/For 를 자동 전달 →
@@ -53,53 +48,17 @@
 }
 
 # ============================================================
-# 외부 공개 = Cloudflare Tunnel (chat.openmake.cc)
+# 외부 공개 — TLS 를 종단하는 터널/프록시 뒤에 둔다
 # ============================================================
-# example.com 직접 HTTPS 는 불가:
-#   - TP-Link DDNS 라 DNS 존 제어 불가 → Let's Encrypt DNS-01 불가
-#   - 가정회선 80/443 인바운드 차단 → HTTP-01 / TLS-ALPN-01 불가
-# 따라서 과거의 `example.com { ... }` wss 우회 블록(자동 HTTPS)은 인증서 발급이
-# 영구 실패하여 폐기했다. 대신 Cloudflare edge 가 공개 443 에서 TLS 를 종단한 뒤
-# cloudflared 가 위 :33000 Caddy 로 평문 프록시하며, 외부 트래픽도 결국 이 :33000
-# 블록(@chatws 라우팅)을 그대로 탄다 (Next HMR /_next/* 제외 가드 포함).
-# cloudflared 터널 설정은 git 에 두지 않는다(운영 호스트 로컬 보관).
-# OAuth redirect URI 는 .env 의 OAUTH_REDIRECT_URI(=https://chat.openmake.cc/...) 로 고정한다.
+# 공개 443 의 TLS 는 앞단(예: Cloudflare edge + cloudflared)이 종단하고, 이 :33000 으로 평문 프록시한다.
+# 외부 트래픽도 이 :33000 블록(@chatws 라우팅)을 그대로 탄다 (Next HMR /_next/* 제외 가드 포함).
+# 터널 설정은 git 에 두지 않는다(운영 호스트 로컬 보관 — 예시는 scripts/cloudflared/config.yml.example).
+# OAuth redirect URI 는 .env 의 OAUTH_REDIRECT_URI 로 고정한다.
 
 # ============================================================
-# www.openmake.cc — 마케팅/문서 사이트 (Next.js static export)
+# 호스트 고유 사이트 — 호스트 Caddyfile 옆 Caddyfile.d/*.caddy
 # ============================================================
-# 앱(chat.openmake.cc)과 완전히 분리된 정적 사이트다. API·쿠키·WS 를 쓰지 않으므로
-# 위의 "단일 origin 원칙"(앱을 쪼개지 말 것)에 저촉되지 않는다 — artifacts.openmake.cc 와 동일한 예외 성격.
-#
-# 토폴로지:
-#   [사용자 https://www.openmake.cc]
-#        → [Cloudflare edge : TLS 종단]
-#        → [Cloudflare Tunnel]  (~/.cloudflared/config.yml 의 ingress)
-#        → [Caddy :33001]  ─→ /Volumes/MAC_APP/openmake/www/out (정적 파일)
-#
-# 갱신: www 프로젝트에서 `npm run build` 후 out/ 이 갱신되면 즉시 반영된다(재기동 불필요).
-# 보안 헤더: next.config.ts 의 headers() 는 output:'export' 에서 적용되지 않으므로 여기서 지정한다.
-:33001 {
-	root * /Volumes/MAC_APP/openmake/www/out
-	encode gzip zstd
-
-	header {
-		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
-		X-Content-Type-Options    "nosniff"
-		Referrer-Policy           "strict-origin-when-cross-origin"
-		Permissions-Policy        "camera=(), microphone=(), geolocation=()"
-		-Server
-	}
-
-	# 해시 붙은 빌드 자산은 불변 → 강한 캐시
-	@immutable path /_next/static/*
-	header @immutable Cache-Control "public, max-age=31536000, immutable"
-
-	file_server
-
-	handle_errors {
-		@notfound expression {err.status_code} == 404
-		rewrite @notfound /404.html
-		file_server
-	}
-}
+# 이 레포와 무관한 사이트(예: 문서·정적 사이트)는 레포에 두지 않는다. deploy 는 레포 Caddyfile 로
+# 호스트 파일을 덮어쓰므로, 그런 사이트 블록은 호스트 Caddyfile 과 같은 폴더의 Caddyfile.d/ 에 둔다.
+# 맞는 파일이 없으면 Caddy 는 경고만 내고 계속한다(glob import).
+import Caddyfile.d/*.caddy
