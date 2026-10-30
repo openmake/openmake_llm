@@ -30,6 +30,7 @@ import {
     buildFullModelId,
 } from './i-provider';
 import { ProviderError } from './provider-errors';
+import { ContextOverflowError } from '../errors/context-overflow.error';
 import { toFormatOption } from './local-response-format';
 import type { LLMClient } from '../llm';
 import type { ToolCall, UsageMetrics } from '../llm';
@@ -270,6 +271,11 @@ export class LocalLLMProvider implements IProvider {
             if (opts.abortSignal?.aborted) {
                 const message = err instanceof Error ? err.message : String(err);
                 throw new ProviderError('UPSTREAM_ERROR', `LLM 호출이 중단되었습니다: ${message}`, err);
+            }
+
+            // An oversized prompt is deterministic; retrying another local alias cannot make it fit.
+            if (err instanceof ContextOverflowError) {
+                throw new ProviderError('CONTEXT_TOO_LARGE', err.message, err);
             }
 
             // [분기 2] self fast-fail abort — SDK 가 'Request was aborted' 등 임의 메시지로 throw 해도

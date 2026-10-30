@@ -22,8 +22,8 @@ export function validateConfig(config: EnvConfig): void {
     }
 
     // 타임아웃 검증
-    if (config.llmTimeout <= 0 || config.llmTimeout > 600000) {
-        errors.push(`Invalid LLM_TIMEOUT: ${config.llmTimeout} (must be between 1-600000ms)`);
+    if (config.llmTimeout <= 0 || config.llmTimeout > 1200000) {
+        errors.push(`Invalid LLM_TIMEOUT: ${config.llmTimeout} (must be between 1-1200000ms)`);
     }
 
     // JWT_SECRET 필수 검증 (test 환경 제외 — 랜덤 생성 금지: PM2 재시작마다 세션 무효화)

@@ -107,3 +107,14 @@ describe('LocalLLMProvider.streamChat fast-fail', () => {
         expect(result.toolCalls).toHaveLength(1);
     });
 });
+
+
+describe('LocalLLMProvider context overflow', () => {
+    it('reports a permanent context limit rather than an upstream error', async () => {
+        const { ContextOverflowError } = await import('../errors/context-overflow.error');
+        const client = { model: 'stub-model', chat: jest.fn().mockRejectedValue(new ContextOverflowError('too many tokens', 978080, 980000)) };
+        const provider = new LocalLLMProvider(client as never);
+        await expect(provider.streamChat({ modelId: 'stub-model', messages: [{ role: 'user', content: 'x' }] } as never, {})).rejects.toMatchObject({ code: 'CONTEXT_TOO_LARGE' });
+        expect(client.chat).toHaveBeenCalledTimes(1);
+    });
+});
