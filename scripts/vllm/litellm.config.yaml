@@ -132,6 +132,6 @@ general_settings:
 
 litellm_settings:
   drop_params: false
-  # 앱 최대 호출(Deep Research 900s) 커버 —
-  # "프록시 timeout ≥ 앱 timeout" 정합 (채팅/서브에이전트는 LLM_TIMEOUT=120s).
-  request_timeout: 900
+  # 앱 LLM_TIMEOUT 최대값(20분 = 1200s) 커버 —
+  # "프록시 timeout ≥ 앱 timeout" 정합 (LLM_TIMEOUT 기본 120s, 긴 문맥 추론은 최대 1200000ms 까지 올린다).
+  request_timeout: 1200
