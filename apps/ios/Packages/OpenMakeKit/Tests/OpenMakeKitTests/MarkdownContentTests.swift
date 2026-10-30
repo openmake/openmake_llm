@@ -19,13 +19,13 @@ final class MarkdownContentTests: XCTestCase {
     }
 
     func testGeneratedImageURLStaysOnOpenMakeOrigin() {
-        let serverURL = URL(string: "https://chat.openmake.cc")!
+        let serverURL = URL(string: "https://chat.example.com")!
 
         XCTAssertEqual(
             GeneratedImageURLResolver.resolve(
                 source: "/generated/image.png",
                 serverURL: serverURL)?.absoluteString,
-            "https://chat.openmake.cc/generated/image.png")
+            "https://chat.example.com/generated/image.png")
         XCTAssertNil(GeneratedImageURLResolver.resolve(
             source: "https://example.com/image.png",
             serverURL: serverURL))

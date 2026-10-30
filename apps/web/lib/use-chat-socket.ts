@@ -38,7 +38,7 @@ function toWireFile(f: AttachedFileUI): WsAttachedFile {
   return rest;
 }
 
-/** 청크 업로드 임계값 — chat.openmake.cc 는 Cloudflare 무료 플랜이라 요청당 100MB 상한.
+/** 청크 업로드 임계값 — chat.example.com 는 Cloudflare 무료 플랜이라 요청당 100MB 상한.
  *  바이너리 합계가 이를 넘보면 단일 multipart 대신 청크 경로로 전환한다(여유 마진 포함). */
 const CHUNKED_UPLOAD_THRESHOLD_BYTES = 60 * 1024 * 1024;
 /** 청크 크기 — Cloudflare 상한(100MB) 대비 충분히 작게. 서버 상한(기본 32MB) 이하여야 한다. */

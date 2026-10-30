@@ -2,7 +2,9 @@
  * 웹 SSO 클라이언트(config/security.ts SSO_CLIENTS, 예: bench) — 동작 테스트.
  *
  * mobile-auth-contract 와 같은 무DB 구성. optionalAuth 모의는 x-test-user 헤더로 로그인 상태를 흉내낸다.
+ * bench 는 SSO_BENCH_REDIRECT_URI 가 있을 때만 등록된다(기본값 없음) — 이 파일은 등록된 상태를 본다.
  */
+process.env.SSO_BENCH_REDIRECT_URI = 'https://bench.example.com/api/auth/callback';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import request from 'supertest';
 import cookieParser from 'cookie-parser';
@@ -10,7 +12,7 @@ import type { PublicUser } from '../../data/user-manager';
 
 const sampleUser: PublicUser = {
     id: 'u1',
-    email: 'riskpw@openmake.cc',
+    email: 'user@example.com',
     role: 'user',
     created_at: '2026-08-16T00:00:00.000Z',
     is_active: true,

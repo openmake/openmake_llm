@@ -30,7 +30,8 @@ export function getVapidKeys(): { publicKey: string; privateKey: string; subject
     const privateKey = getConfig().vapidPrivateKey;
     const subject = getConfig().vapidSubject;
     
-    if (publicKey && privateKey) {
+    // subject(연락처)는 web-push 가 필수로 요구한다 — 설치마다 다른 값이라 기본값이 없으므로, 비어 있으면 푸시를 켜지 않는다.
+    if (publicKey && privateKey && subject) {
         webPush.setVapidDetails(subject, publicKey, privateKey);
     }
     

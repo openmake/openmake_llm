@@ -2,7 +2,7 @@
 //
 // 계약(WsAttachedFile): 텍스트는 content, PDF/Office 등 바이너리 문서는 base64 `data`
 // (서버 doc-extractor 가 텍스트 추출). 사진은 WsChatRequest.images[] 의 dataURL.
-// 상한: 외부 경로(chat.openmake.cc)는 Cloudflare 요청당 100MB — 클라이언트 캡은 그보다
+// 상한: 외부 경로(chat.example.com)는 Cloudflare 요청당 100MB — 클라이언트 캡은 그보다
 // 훨씬 보수적으로 잡는다 (WS 단일 프레임 페이로드이기도 함).
 import Foundation
 

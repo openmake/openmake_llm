@@ -250,7 +250,7 @@ struct DesignSystemShowcase: View {
             if showDrawer {
                 LumenDrawer(
                     sessions: [],
-                    email: "support@openmake.cc",
+                    email: "user@example.com",
                     onDismiss: { showDrawer = false },
                     onNewChat: { showDrawer = false },
                     onAgentTasks: { showDrawer = false },
