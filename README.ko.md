@@ -363,7 +363,7 @@ OpenMake 는 공개적으로 만들어집니다. 구현 노트, 실패, 트레�
 
 CI 는 모든 푸시와 PR 에서 **CI Gate**(테스트 → 빌드 → 크기 → 린트) 하나를 돌립니다.
 
-**커뮤니티·연락처** — 질문과 셀프호스팅 도움: support@openmake.cc · 메인테이너: riskpw@openmake.cc, rockyhan@openmake.cc. OpenMake 가 도움이 됐다면, 스타는 다른 개발자가 이 프로젝트를 찾는 데 도움이 됩니다.
+**커뮤니티·연락처** — 질문과 셀프호스팅 도움: support@openmake.cc. OpenMake 가 도움이 됐다면, 스타는 다른 개발자가 이 프로젝트를 찾는 데 도움이 됩니다.
 
 ## 라이선스
 

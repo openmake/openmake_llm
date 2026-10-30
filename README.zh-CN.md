@@ -362,7 +362,7 @@ OpenMake 是公开开发的。我们会持续公开实现笔记、失败经历�
 
 CI 会在每次推送和 Pull Request 时运行一个 **CI Gate**（测试 → 构建 → 体积 → lint）。
 
-**社区与联系方式**——问题和自托管帮助：support@openmake.cc · 维护者：riskpw@openmake.cc、rockyhan@openmake.cc。如果 OpenMake 对你有帮助，点一个 Star 能让更多开发者发现它。
+**社区与联系方式**——问题和自托管帮助：support@openmake.cc。如果 OpenMake 对你有帮助，点一个 Star 能让更多开发者发现它。
 
 ## 许可证
 

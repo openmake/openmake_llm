@@ -59,3 +59,17 @@ test('제외: 현재 있는 마이그레이션(195 이하)과 그 rollback 만 �
     assert.equal(excluded('db/migrations/rollbacks/196_new_feature_rollback.sql'), false);
     assert.equal(excluded('db/migrations/README.md'), false);
 });
+
+test('개인 메일: 무료 메일 주소를 잡는다 — 제외 파일(README 등)에서도 잡는다', () => {
+    const j = (...p) => p.join('');
+    const hits = scanText([j('a someone@gm', 'ail.com'), j('b x.y@nav', 'er.com'), j('c ok support@example.com'), j('d z@hanm', 'ail.net')].join('\n'));
+    assert.deepEqual(hits.map((h) => `${h.line}:${h.rule}`), ['1:personal-email', '2:personal-email', '4:personal-email']);
+    // 제외 파일은 개인 메일 규칙만 적용한다 — 범용 경로 규칙은 넘긴다
+    const only = scanText([j('a someone@gm', 'ail.com'), j('b /ho', 'me/realname/x')].join('\n'), [], { personalOnly: true });
+    assert.deepEqual(only.map((h) => `${h.line}:${h.rule}`), ['1:personal-email']);
+});
+
+test('저장소: 제외 파일(README·CHANGELOG·마이그레이션)에도 개인 메일이 없다', () => {
+    const hits = scanRepo(root).filter((h) => h.rule === 'personal-email');
+    assert.deepEqual(hits.map((h) => `${h.file}:${h.line}`), []);
+});
