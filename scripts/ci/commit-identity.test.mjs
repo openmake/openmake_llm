@@ -36,3 +36,15 @@ test('트레일러 주소 뽑기: 대소문자 무관, 꺾쇠 안 주소만', as
     const { trailerEmails } = await import('./commit-identity.mjs');
     assert.deepEqual(trailerEmails('t\n\nsigned-off-by: A <a@x.example>\nCo-authored-by: B <b@y.example>\nSee-also: <c@z.example>'), ['a@x.example', 'b@y.example']);
 });
+
+test('dependabot 의 GitHub 주소 트레일러는 허용한다', () => {
+    const rows = [{ sha: 'ffffffffffff', author: '49699333+dependabot[bot]@users.noreply.github.com', committer: 'noreply@github.com',
+        body: 'chore(deps): bump x\n\nSigned-off-by: dependabot[bot] <support@github.com>', authorName: 'dependabot[bot]', committerName: 'GitHub' }];
+    assert.deepEqual(checkIdentities(rows, ['real person']), []);
+});
+
+test('트레일러의 이름 자리도 조직 목록과 대조한다', () => {
+    const ok = 'octocat@users.noreply.github.com';
+    const rows = [{ sha: '111111111111', author: ok, committer: ok, body: 'x\n\nCo-authored-by: Real Person <octocat@users.noreply.github.com>', authorName: 'octocat', committerName: 'octocat' }];
+    assert.deepEqual(checkIdentities(rows, ['real person']), [{ sha: '111111111111', field: 'trailer' }]);
+});

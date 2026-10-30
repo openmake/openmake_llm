@@ -90,10 +90,11 @@ jobs:
         run: node scripts/ci/org-specific-strings.mjs
 
       # 커밋 작성자·커미터·트레일러 메일은 GitHub noreply 만, 이름은 조직 목록과 대조 — 공개 저장소에 개인정보가 남지 않게 한다.
-      # 이미 올라간 커밋을 보는 백스톱이다(첫 관문은 계정의 노출 push 차단 설정과 로컬 `npm run check:commit-identity`).
-      # PR: 기준 브랜치와의 merge-base 부터. push: 직전 끝(before)부터 — 새 브랜치(before 가 0)는 건너뛴다.
+      # 이미 올라간 커밋을 사후에 잡는 검출이다(기록을 막는 것은 계정의 노출 push 차단 설정, push 전에는 `npm run check:commit-identity` 수동 실행).
+      # PR: 기준 브랜치와의 merge-base 부터. push: 직전 끝(before)부터 — 새 브랜치(before 가 0)와 force-push(이력 재작성 등,
+      # before 가 어느 ref 에서도 닿지 않는다)는 건너뛴다.
       - name: "Gate 0.2: Commit identity"
-        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000')
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && !github.event.forced && github.event.before != '0000000000000000000000000000000000000000')
         env:
           OMK_FORBIDDEN_STRINGS: ${{ secrets.OMK_FORBIDDEN_STRINGS }}
           BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.event.pull_request.base.ref) || github.event.before }}
