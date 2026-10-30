@@ -21,7 +21,7 @@
  * 입력(환경변수 — install.sh 가 주입, 미지정 시 기본값):
  *   OMK_PORT(52416) OMK_WEB_PORT(3000) OMK_POSTGRES_PORT(5432) OMK_REDIS_PORT(6379)
  *   OMK_LLM_BASE_URL OMK_LLM_API_KEY OMK_LLM_MODEL
- *   OMK_ADMIN_USERNAME(admin) OMK_ADMIN_EMAIL(support@openmake.cc)
+ *   OMK_ADMIN_USERNAME(admin) OMK_ADMIN_EMAIL(admin@example.com)
  *   OMK_INSTANCE(없음)  — install.sh --instance NAME. 있으면 OMK_INSTANCE·COMPOSE_PROJECT_NAME 기록
  *
  * 출력: 마지막 줄에 `GENERATED=1` 또는 `REPAIRED=<n>` 또는 `UNCHANGED=0` (install.sh 파싱용)
@@ -65,7 +65,7 @@ const WEB_PORT = env('OMK_WEB_PORT', '3000');
 const PG_PORT = env('OMK_POSTGRES_PORT', '5432');
 const REDIS_PORT = env('OMK_REDIS_PORT', '6379');
 const ADMIN_USERNAME = env('OMK_ADMIN_USERNAME', 'admin');
-const ADMIN_EMAIL = env('OMK_ADMIN_EMAIL', 'support@openmake.cc');
+const ADMIN_EMAIL = env('OMK_ADMIN_EMAIL', 'admin@example.com');
 const LLM_BASE_URL = env('OMK_LLM_BASE_URL', 'http://localhost:4000');
 const LLM_API_KEY = env('OMK_LLM_API_KEY', 'sk-no-key');
 const LLM_MODEL = env('OMK_LLM_MODEL', 'qwen3.8-27b');

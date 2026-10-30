@@ -25,6 +25,8 @@
 	<string>음성 입력을 텍스트로 변환할 때 음성 인식을 사용합니다.</string>
 	<key>OpenMakeRemotePushEnabled</key>
 	<false/>
+	<key>OpenMakeServerURL</key>
+	<string>$(OPENMAKE_SERVER_URL)</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>SpaceGrotesk[wght].ttf</string>

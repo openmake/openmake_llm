@@ -1,13 +1,13 @@
 # OpenMake eight-stage development and delivery flow
 
-1. Local MacBook: branch from origin/dev; implement and run relevant local tests, lint/build as needed; push PR to dev. Record results.
+1. Local development machine: branch from origin/dev; implement and run relevant local tests, lint/build as needed; push PR to dev. Record results.
 2. GitHub: current-head CI plus automated structural quality review; perform immediate ordinary merge to dev automatically once ready (no persistent --auto reservation). No human approval step. No privileged execution of PR code.
 3. GitHub: test the actual merged dev SHA. Keep current source/DB/build/lint gates, add basic running-app checks (startup, DB, login, chat, web) plus selected changed-feature/source regression tests. Never run the entire browser suite by default. A deterministic model fixture here tests transport/integration, not real-model quality.
 4. GitHub: only a successful current dev push CI may create/update and immediately merge the dev-to-main PR once current checks are ready (no persistent reservation); the PR's current combination still requires its own CI. Stale SHA results must not promote a new head. Remove retired omk/env-dev deployment gate.
-5. tom: managed main update and smoke, then configured mandatory strong validation commands. Record exact installed/build SHA and command results. Missing configuration or skipped checks is not success.
-6. Human uses tom. Hold its installed SHA against automatic update. Explicit human OK is represented by an operator-invoked verify command with that exact SHA; require passed validation/build identity and clean main ancestry. Automated checks cannot invoke human approval implicitly.
+5. staging: managed main update and smoke, then configured mandatory strong validation commands. Record exact installed/build SHA and command results. Missing configuration or skipped checks is not success.
+6. Human uses staging. Hold its installed SHA against automatic update. Explicit human OK is represented by an operator-invoked verify command with that exact SHA; require passed validation/build identity and clean main ancestry. Automated checks cannot invoke human approval implicitly.
 7. GitHub: automatically merge release-please PR only if current main has valid verification, release PR's CI is successful and every intervening change is permitted release metadata. Check metadata keys/content, not just filenames. Release and tag publication remain release-please responsibilities.
-8. ome-on: managed schedule follows one captured immutable release tag, verifies its code lineage before mutation, retains backups, deploys and checks installed SHA/smoke. Do not mark a skipped/unverified run successful.
+8. online: managed schedule follows one captured immutable release tag, verifies its code lineage before mutation, retains backups, deploys and checks installed SHA/smoke. Do not mark a skipped/unverified run successful.
 
 Implementation choices: retain Node 24, Bash/PM2 and current GitHub Actions; preserve Base/Add-on boundaries and app-on-PM2 deployment. No new LLM reviewer dependency: automatic review is deterministic structural/test coverage review and existing source gates, explicitly named as such. Automation credentials are injected via documented OMK_AUTOMATION_TOKEN; never copy a developer's stored token to Actions. Fail with an actionable error if missing. This repository emits SHA-stamped evidence and provides the `omk env approve` CLI.
 

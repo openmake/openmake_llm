@@ -264,10 +264,10 @@
 <main>
 
 <!-- ═══════════════════════════ 01 개요 ═══════════════════════════ -->
-<section class="page" id="overview" data-title="개발에서 운영까지 · 8단계"><h1>개발에서 운영까지 · 8단계</h1><p>local MacBook에서 개발하고 GitHub가 dev/main 검사를 처리합니다. tom은 main을 설치·검증하고, 사람의 실사용 OK 후 검증된 릴리스만 ome-on으로 이어집니다.</p><p><a href="../../scripts/env/README.md">실행 명령과 활성화 조건</a></p><div class="code"><pre>local 개발·테스트·PR → PR CI·dev 자동 병합
+<section class="page" id="overview" data-title="개발에서 운영까지 · 8단계"><h1>개발에서 운영까지 · 8단계</h1><p>local 개발 장비에서 개발하고 GitHub가 dev/main 검사를 처리합니다. staging은 main을 설치·검증하고, 사람의 실사용 OK 후 검증된 릴리스만 online으로 이어집니다.</p><p><a href="../../scripts/env/README.md">실행 명령과 활성화 조건</a></p><div class="code"><pre>local 개발·테스트·PR → PR CI·dev 자동 병합
  → 병합 dev CI·기본/변경 기능 검사 → main 자동 승격
- → tom 설치·검증·SHA 고정 → 사람 실사용 OK·verify
- → 검증 릴리스 자동 발행 → ome-on 고정 태그 설치·스모크</pre></div><table><thead><tr><th>단계</th><th>담당</th><th>하는 일</th><th>진입점</th></tr></thead><tbody><tr><th>1</th><td>local · 사람+에이전트</td><td>개발·관련 테스트·PR</td><td><code>omk dev up</code></td></tr><tr><th>2</th><td>GitHub · 자동</td><td>작업 PR → dev</td><td><code>auto-merge workflow</code></td></tr><tr><th>3</th><td>GitHub runner · 자동</td><td>병합 dev 소스·기능 검사</td><td><code>npm run test:dev -- FULL_SHA</code></td></tr><tr><th>4</th><td>GitHub · 자동</td><td>dev → main 승격</td><td><code>promote workflow</code></td></tr><tr><th>5</th><td>tom · 자동</td><td>설치·스모크·필수 검증</td><td><code>omk env pipeline staging</code></td></tr><tr><th>6</th><td>사람 + tom 명령</td><td>실사용 OK → verify</td><td><code>omk env approve staging --sha FULL_SHA --yes</code></td></tr><tr><th>7</th><td>GitHub · 자동</td><td>검증 릴리스 발행</td><td><code>release-verified / release-please</code></td></tr><tr><th>8</th><td>ome-on · 자동</td><td>고정 태그 설치·운영 스모크</td><td><code>omk env pipeline online</code></td></tr></tbody></table><h2>역할과 판정</h2><p>별도 배포 dev 서버는 필수 구성에서 폐지됐습니다. dev는 Git 브랜치이며 local은 개발 호스트입니다. 사람의 판단은 1번과 6번에 있습니다.</p><p>문서·소스 구현, 로컬 검사, 원격 활성화, 실제 단계 완료를 구분합니다.</p></section>
+ → staging 설치·검증·SHA 고정 → 사람 실사용 OK·verify
+ → 검증 릴리스 자동 발행 → online 고정 태그 설치·스모크</pre></div><table><thead><tr><th>단계</th><th>담당</th><th>하는 일</th><th>진입점</th></tr></thead><tbody><tr><th>1</th><td>local · 사람+에이전트</td><td>개발·관련 테스트·PR</td><td><code>omk dev up</code></td></tr><tr><th>2</th><td>GitHub · 자동</td><td>작업 PR → dev</td><td><code>auto-merge workflow</code></td></tr><tr><th>3</th><td>GitHub runner · 자동</td><td>병합 dev 소스·기능 검사</td><td><code>npm run test:dev -- FULL_SHA</code></td></tr><tr><th>4</th><td>GitHub · 자동</td><td>dev → main 승격</td><td><code>promote workflow</code></td></tr><tr><th>5</th><td>staging · 자동</td><td>설치·스모크·필수 검증</td><td><code>omk env pipeline staging</code></td></tr><tr><th>6</th><td>사람 + staging 명령</td><td>실사용 OK → verify</td><td><code>omk env approve staging --sha FULL_SHA --yes</code></td></tr><tr><th>7</th><td>GitHub · 자동</td><td>검증 릴리스 발행</td><td><code>release-verified / release-please</code></td></tr><tr><th>8</th><td>online · 자동</td><td>고정 태그 설치·운영 스모크</td><td><code>omk env pipeline online</code></td></tr></tbody></table><h2>역할과 판정</h2><p>별도 배포 dev 서버는 필수 구성에서 폐지됐습니다. dev는 Git 브랜치이며 local은 개발 호스트입니다. 사람의 판단은 1번과 6번에 있습니다.</p><p>문서·소스 구현, 로컬 검사, 원격 활성화, 실제 단계 완료를 구분합니다.</p></section>
 
 <!-- ═══════════════════════════ 02 단계 ═══════════════════════════ -->
 <section class="page" id="steps" data-title="단계별 실행과 다음 조건">
@@ -310,7 +310,7 @@
 </div>
 <div class="step" id="s5">
 <div class="no">5</div>
-<div class="where">tom · 자동</div>
+<div class="where">staging · 자동</div>
 <h3>설치·스모크·필수 검증</h3>
 <p>main 설치 후 기본 스모크와 구성된 필수 고강도 검증을 수행합니다. 성공한 설치 SHA를 사람 확인을 위해 고정합니다.</p>
 <div class="code">
@@ -319,9 +319,9 @@
 </div>
 <div class="step" id="s6">
 <div class="no">6</div>
-<div class="where">사람 + tom 명령</div>
+<div class="where">사람 + staging 명령</div>
 <h3>실사용 OK → verify</h3>
-<p>사람이 고정된 tom을 직접 써보고 OK하면 동일 SHA를 명령으로 기록합니다. 실행/디스크 빌드·고정 SHA·검증 근거를 다시 대조합니다.</p>
+<p>사람이 고정된 staging을 직접 써보고 OK하면 동일 SHA를 명령으로 기록합니다. 실행/디스크 빌드·고정 SHA·검증 근거를 다시 대조합니다.</p>
 <div class="code">
 <pre>omk env approve staging --sha FULL_SHA --yes</pre>
 </div>
@@ -337,7 +337,7 @@
 </div>
 <div class="step" id="s8">
 <div class="no">8</div>
-<div class="where">ome-on · 자동</div>
+<div class="where">online · 자동</div>
 <h3>고정 태그 설치·운영 스모크</h3>
 <p>한 번 선택한 태그 SHA를 검증하고 백업 후 관리형 갱신합니다. 설치/실행 SHA 일치와 스모크 통과가 완료 조건입니다.</p>
 <div class="code">
@@ -436,13 +436,13 @@ scripts/env/omk.sh dev setup --no-runtime-images \
 </section>
 
 <!-- ═══════════════════════════ 05 staging ═══════════════════════════ -->
-<section class="page" id="env-staging" data-title="tom · main 설치와 사람 확인"><h1>tom · main 설치와 사람 확인</h1><p>main 설치 → 스모크 → 필수 검증 → 설치 SHA 고정까지 자동화합니다. 빈 검증 설정은 차단합니다.</p><div class="code"><pre>omk env pipeline staging
+<section class="page" id="env-staging" data-title="staging · main 설치와 사람 확인"><h1>staging · main 설치와 사람 확인</h1><p>main 설치 → 스모크 → 필수 검증 → 설치 SHA 고정까지 자동화합니다. 빈 검증 설정은 차단합니다.</p><div class="code"><pre>omk env pipeline staging
 omk env pipeline staging --schedule '*/10 * * * *'
 # 사람이 실제로 사용한 뒤 OK한 동일 SHA
 omk env approve staging --sha FULL_SHA --yes</pre></div><p>검증 중 hold로 자동 갱신을 막고 실행/디스크 빌드와 검증 결과를 대조합니다. 취소 후 새 설치본을 확인하려면 <code>omk env hold staging --release</code>로 해제합니다.</p></section>
 
 <!-- ═══════════════════════════ 06 online ═══════════════════════════ -->
-<section class="page" id="env-online" data-title="ome-on · 검증된 태그만 설치"><h1>ome-on · 검증된 태그만 설치</h1><div class="code"><pre>omk env pipeline online
+<section class="page" id="env-online" data-title="online · 검증된 태그만 설치"><h1>online · 검증된 태그만 설치</h1><div class="code"><pre>omk env pipeline online
 omk env pipeline online --schedule '*/10 * * * *'
 omk env pipeline online --off</pre></div><p>captured 태그 SHA의 검증 계보를 확인하고 기존 백업·관리형 배포를 사용합니다. 배포 중 latest를 다시 선택하지 않습니다. 설치/실행 SHA가 고정 태그 SHA와 같고 스모크가 통과해야 완료입니다.</p><p>OS 자동기동 권한과 재부팅 복원은 호스트별로 검증합니다.</p></section>
 
@@ -602,7 +602,7 @@ omk dev down | status | reset [--keep-data]</pre></div>
 <li>자동화 workflow와 신뢰된 스크립트가 기본 브랜치에 존재해야 합니다.</li>
 <li>dev/main의 필수 CI와 strict 최신 기준이 필요합니다. 컨트롤러는 준비 상태를 재확인해 즉시 일반 병합하며 --auto 예약은 만들지 않습니다.</li>
 <li>
-<code>OMK_AUTOMATION_TOKEN</code>과 tom/ome-on 실제 스케줄·QA 계정·필수 검증 시나리오를 준비해야 합니다.</li>
+<code>OMK_AUTOMATION_TOKEN</code>과 staging/online 실제 스케줄·QA 계정·필수 검증 시나리오를 준비해야 합니다.</li>
 <li>credential이 없거나 검사가 실패하면 오류/대기로 기록하며 성공 skip으로 숨기지 않습니다.</li>
 </ul>
 <p>

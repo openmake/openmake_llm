@@ -1,5 +1,5 @@
 /**
- * 공유된 작업의 산출물 뷰어 — 격리 오리진(artifacts.openmake.cc)에 정적 페이지로 export.
+ * 공유된 작업의 산출물 뷰어 — 격리 오리진(artifacts.example.com)에 정적 페이지로 export.
  *
  * 왜 채팅 아티팩트 게시(`artifact_publications`)를 재사용하지 않는가:
  *   작업 아티팩트는 `agent_task_steps(step_type='artifact')` JSON 으로만 남고 `artifacts`

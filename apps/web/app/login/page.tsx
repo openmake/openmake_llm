@@ -187,16 +187,22 @@ export default function LoginPage() {
           </p>
         </form>
 
-        {/* 자매 서비스 링크 — 비로그인 사용자의 유일한 진입점 (로그인 후엔 사이드바 계정 메뉴) */}
-        <p className="mt-5 text-center text-xs text-faint">
-          <a href={EXTERNAL_LINKS.homepage} target="_blank" rel="noopener noreferrer" className="transition hover:text-fg">
-            {t("homepage")}
-          </a>
-          <span className="mx-2">·</span>
-          <a href={EXTERNAL_LINKS.bench} target="_blank" rel="noopener noreferrer" className="transition hover:text-fg">
-            {t("bench")}
-          </a>
-        </p>
+        {/* 자매 서비스 링크 — 비로그인 사용자의 유일한 진입점 (로그인 후엔 사이드바 계정 메뉴). 설정된 것만 보인다 */}
+        {(EXTERNAL_LINKS.homepage || EXTERNAL_LINKS.bench) && (
+          <p className="mt-5 text-center text-xs text-faint">
+            {EXTERNAL_LINKS.homepage && (
+              <a href={EXTERNAL_LINKS.homepage} target="_blank" rel="noopener noreferrer" className="transition hover:text-fg">
+                {t("homepage")}
+              </a>
+            )}
+            {EXTERNAL_LINKS.homepage && EXTERNAL_LINKS.bench && <span className="mx-2">·</span>}
+            {EXTERNAL_LINKS.bench && (
+              <a href={EXTERNAL_LINKS.bench} target="_blank" rel="noopener noreferrer" className="transition hover:text-fg">
+                {t("bench")}
+              </a>
+            )}
+          </p>
+        )}
       </div>
     </div>
   );
