@@ -13,6 +13,12 @@
 // ============================================
 
 /**
+ * 전역 LLM_TIMEOUT(LLMClient SDK 요청 타임아웃) 허용 상한 (ms) — 긴 문맥 추론 기준 20분.
+ * env.schema.ts·env-validate.ts 검증과 llm/llm-fetch.ts 전송 상한이 함께 참조한다.
+ */
+export const LLM_TIMEOUT_MAX_MS = 1_200_000;
+
+/**
  * LLM 호출 및 에이전트 관련 타임아웃
  */
 export const LLM_TIMEOUTS = {
