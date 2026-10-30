@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.117.0](https://github.com/openmake/openmake_llm/compare/v1.116.0...v1.117.0) (2026-10-30)
+
+
+### ✨ 기능
+
+* **deploy:** openmake_llm.sh deploy 가 DGX 채팅 모델 이름을 손 관리 게이트웨이와 함께 맞춘다 ([968dcd2](https://github.com/openmake/openmake_llm/commit/968dcd2bca42c1125f6ed099b6f4d5d177af33a2))
+
+
+### 🐛 버그 수정
+
+* **deploy:** DGX 모델 이름 맞춤 리뷰 반영 — vLLM 목록 1회 조회·검증 실패 시나리오·임시 파일 정리 ([b6e5ef5](https://github.com/openmake/openmake_llm/commit/b6e5ef5fc24621b29fd5fe1a7b4999cb140bf6e5))
+
+
+### ♻️ 리팩터링
+
+* **env:** DGX 감지·PM2 dump 저장 함수를 scripts/lib 공용 파일로 옮긴다 ([dbbe919](https://github.com/openmake/openmake_llm/commit/dbbe9191045f5984965de194104cfaaed1181447))
+
 ## [1.116.0](https://github.com/openmake/openmake_llm/compare/v1.115.13...v1.116.0) (2026-10-30)
 
 
