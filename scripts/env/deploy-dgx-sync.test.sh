@@ -38,7 +38,7 @@ fi
 echo "pm2 $*" >> "$FAKE_LOG"
 EOF
 # curl: vLLM 은 FAKE_VLLM(공백 구분 served, name@parent 는 어댑터, '-' 는 미도달), 게이트웨이는 지금 config 의 model_name 목록
-# (FAKE_GW_STUCK=1 이면 처음 config 의 목록 그대로). 호출은 URL·인증 헤더가 기대값인지만 기록한다(키 값은 기록하지 않는다).
+# (FAKE_GW_STUCK=1 이면 처음 config 의 목록 그대로). FAKE_VLLM_ONCE=1 이면 vLLM 은 첫 조회만 응답한다. 호출은 URL·인증 헤더가 기대값인지만 기록한다(키 값은 기록하지 않는다).
 cat > "$BIN/curl" <<'EOF'
 #!/usr/bin/env bash
 url="" hdr="" w=0 prev=""
@@ -58,6 +58,10 @@ case "$url" in
         ids="$(sed -nE 's/^  - model_name: "?([^"]*)"?$/\1/p' "$src" | while IFS= read -r n; do printf '{"id":"%s","object":"model"},' "$n"; done)"
         printf '{"data":[%s]}' "${ids%,}" ;;
     */models)
+        if [[ "${FAKE_VLLM_ONCE:-0}" == 1 ]]; then
+            [[ ! -f "$FAKE_APP/.vllm-once" ]] || { [[ $w -eq 0 ]] || printf '\n000'; exit 7; }
+            : > "$FAKE_APP/.vllm-once"
+        fi
         if [[ "${FAKE_VLLM:--}" == - ]]; then [[ $w -eq 0 ]] || printf '\n000'; exit 7; fi
         out="" sep=""
         for i in $FAKE_VLLM; do
@@ -107,7 +111,7 @@ awk -v b="$VBASE" -v k="$VKEY" '{ sub(/model: openai\/qwen3\.8-27b$/, "model: op
 LOG="$TMP/calls.log"; OUT="$TMP/out.log"; ALL="$TMP/all-out.log"; : > "$ALL"
 PM2H="$TMP/pm2home"; mkdir -p "$PM2H"
 setup() { # $1=config 원본 $2=.env 추가 줄(\n 구분) — 게이트웨이 config·앱 .env 를 새로 깐다
-    cp "$1" "$CFG"; cp "$CFG" "$TMP/cfg-first.yaml"; rm -f "$CFG".bak.* "$CFG".tmp.*
+    cp "$1" "$CFG"; cp "$CFG" "$TMP/cfg-first.yaml"; rm -f "$CFG".bak.* "$CFG".tmp.* "$APP/.vllm-once"
     printf 'LLM_BASE_URL=%s\nLLM_API_KEY=%s\nOMK_LITELLM_CONFIG=%s\nOMK_LITELLM_PM2_APP=gw\n%b' "$GWURL" "$GKEY" "$CFG" "${2:-}" > "$APP/.env"
 }
 run() { # deploy --yes → 종료 코드 출력. 환경변수(OMK_DGX_MODEL·FAKE_*)는 호출자가 앞에 붙인다.
@@ -157,7 +161,8 @@ eq "전환: 백업 1개 = 원본" "$(baks)|$(sum "$(find "$GW" -name 'litellm.co
 eq "전환: 순서 — 빌드 → 마이그레이션 → 게이트웨이 재시작 → 게이트웨이 확인(앱 아직 옛 이름) → 앱 재시작(새 이름) → pm2 save" \
     "$(grep -vE "^curl ${VBASE}" "$LOG" | tr '\n' ';')" \
     "build;migrate;pm2 restart gw;curl $GWURL/v1/models auth=gw app=qwen3.8-27b;pm2_restart_app openmake-llm app=chat-next;pm2 save;"
-eq "전환: vLLM 은 config 의 주소·키로" "$(grep -c "^curl $VBASE/models auth=vllm" "$LOG" | tr -d ' ')" "2"
+eq "전환: vLLM 은 config 의 주소·키로, 한 번만 조회" "$(grep -c "^curl $VBASE/models auth=vllm" "$LOG" | tr -d ' ')|$(n_of '^curl.*/v1/models auth=vllm')" "1|1"
+ok "전환: 임시 파일이 남지 않는다" '! ls "$CFG".tmp.* >/dev/null 2>&1'
 eq "전환: .env 세 키" "$(envv OMK_DGX_MODEL)|$(envv OMK_DGX_MODEL_PINNED)|$(envv LLM_DEFAULT_MODEL)" "chat-next|0|chat-next"
 ok "전환: 맞춤 예정·갱신·앱 기본 모델 로그" 'grep -q "DGX 모델 이름 맞춤 예정: 앱 qwen3.8-27b / 기록 없음 → chat-next (출처 served)" "$OUT" && grep -q "게이트웨이 config 갱신" "$OUT" && grep -q "앱 기본 모델: qwen3.8-27b → chat-next" "$OUT"'
 ok "전환: 바뀐 config 를 js-yaml 이 읽는다" '( cd "$ROOT" && node -e "require(\"module\").createRequire(require(\"path\").resolve(\"apps/api/package.json\"))(\"js-yaml\").load(require(\"fs\").readFileSync(process.argv[1],\"utf8\"))" "$CFG" )'
@@ -217,6 +222,22 @@ eq "형태 불인식: 배포 계속" "$(FAKE_VLLM='qwen3.8-27b chat-next' run)" 
 ok "형태 불인식: 경고" 'grep -q "WARN.*DGX 항목(openai/qwen3.8-27b)을 찾지 못해" "$OUT"'
 eq "형태 불인식: 무변경·백업 없음" "$(sum "$CFG")|$(sum "$APP/.env")|$(baks)" "$S_CFG|$S_ENV|0"
 
+# ── 10b. 편집한 config 가 검증에 실패(원본에 model_name 중복) → 경고, 백업·재시작 없음, config·.env 그대로, 임시 파일 정리 ──
+awk '{ print } /^model_list:/ { print "  - model_name: bge-m3"; print "    litellm_params:"; print "      model: openai/bge-m3"; print "      api_key: os.environ/DUMMY_UPSTREAM_KEY" }' "$REPO_CFG" > "$TMP/dup.yaml"
+setup "$TMP/dup.yaml" 'LLM_DEFAULT_MODEL=qwen3.8-27b\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "검증 실패: 배포 계속" "$(FAKE_VLLM='qwen3.8-27b chat-next' run)" "0"
+ok "검증 실패: 사유가 검증 단계(model_name 중복)" 'grep -q "WARN.*새 모델 이름(chat-next)으로 게이트웨이 config 를 만들 수 없습니다(model_name 중복)" "$OUT"'
+eq "검증 실패: config·.env 그대로, 백업·게이트웨이 재시작·pm2 save 없음" "$(sum "$CFG")|$(sum "$APP/.env")|$(baks)|$(n_of '^pm2 restart')|$(n_of '^pm2 save')" "$S_CFG|$S_ENV|0|0|0"
+ok "검증 실패: 임시 파일이 남지 않는다" '! ls "$CFG".tmp.* >/dev/null 2>&1'
+eq "검증 실패: 앱은 옛 이름으로 재시작" "$(grep '^pm2_restart_app' "$LOG")" "pm2_restart_app openmake-llm app=qwen3.8-27b"
+
+# ── 2b. vLLM 목록은 한 번만 읽는다 — 운영 상태(앱 기본값이 served 에만 있는 이름)에서 두 번째 조회가 실패하는 vLLM 이어도
+#        "앱 기본 모델이 DGX 이름이 아님" 으로 오판하지 않고 기록한다 ──
+setup "$OPS_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-flash-next\n'
+eq "목록 재사용: 배포 성공" "$(FAKE_VLLM_ONCE=1 FAKE_VLLM='qwen3.8-27b qwen3.8-flash-next' run)" "0"
+eq "목록 재사용: 조회 1회·기록 완료" "$(n_of "^curl $VBASE/models")|$(envv LLM_DEFAULT_MODEL)|$(envv OMK_DGX_MODEL)" "1|qwen3.8-flash-next|qwen3.8-flash-next"
+ok "목록 재사용: 비DGX 경고 없음" '! grep -q "자동으로 바꾸지 않습니다" "$OUT"'
+
 # ── 11. 게이트웨이가 새 이름을 끝까지 올리지 않음 → 백업 복원·재시작 2회, .env 그대로 ──
 setup "$REPO_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-27b\n'; S_ENV="$(sum "$APP/.env")"
 eq "게이트웨이 실패: 배포 계속" "$(FAKE_GW_STUCK=1 FAKE_VLLM='qwen3.8-27b chat-next' run)" "0"
@@ -234,7 +255,7 @@ eq "os.environ 주소 없음: 무변경·curl 없음" "$(sum "$CFG")|$(sum "$APP
 ( cd "$APP" && PATH="$BIN:$PATH" PM2_HOME="$PM2H" FAKE_LOG="$LOG" FAKE_APP="$APP" FAKE_CFG="$CFG" FAKE_CFG_FIRST="$TMP/cfg-first.yaml" \
   FAKE_VKEY="$VKEY" FAKE_GKEY="$GKEY" FAKE_GWURL="$GWURL" FAKE_VLLM='qwen3.8-27b chat-next' QWEN_VLLM_API_BASE_X="http://envbase.test:8002/v1" \
   "$BASH" "$APP/openmake_llm.sh" deploy --yes </dev/null >"$OUT" 2>&1 ); cat "$OUT" >> "$ALL"
-eq "os.environ 주소 있음: 그 주소로 감지·전환" "$(grep -c '^curl http://envbase.test:8002/v1/models auth=vllm' "$LOG" | tr -d ' ')|$(envv LLM_DEFAULT_MODEL)" "2|chat-next"
+eq "os.environ 주소 있음: 그 주소로 감지·전환" "$(grep -c '^curl http://envbase.test:8002/v1/models auth=vllm' "$LOG" | tr -d ' ')|$(envv LLM_DEFAULT_MODEL)" "1|chat-next"
 ok "os.environ 주소 있음: 새 항목의 api_base 도 같은 os.environ 줄" 'grep -A4 "^  - model_name: \"chat-next\"" "$CFG" | grep -q "api_base: os.environ/QWEN_VLLM_API_BASE_X"'
 
 # ── 15. PM2 env 와 .env 의 LLM_DEFAULT_MODEL 비교(진단만) ──

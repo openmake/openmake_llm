@@ -280,7 +280,7 @@ LiteLLM 버전은 `OMK_LITELLM_SPEC` 로 고정한다 — 설치 스크립트는
    - **omk 없는 설치본(`openmake_llm.sh deploy`)** — 게이트웨이 config 를 손으로 관리하는 설치본은 앱 `.env` 에
      `OMK_LITELLM_CONFIG=<config 절대경로>`·`OMK_LITELLM_PM2_APP=<게이트웨이 PM2 앱 이름>` 두 키를 넣으면 `./openmake_llm.sh deploy`(`update` 포함)가
      같은 감지·고정 규칙으로 맞춘다. 키가 없으면(omk 환경 포함) 아무것도 하지 않는다. vLLM 주소·키는 config 의 DGX 항목(upstream `openai/<앱 기본 모델|기록값|qwen3.8-27b>`)에서
-     읽는다(`os.environ/<이름>` 이면 배포 셸의 그 환경변수). 판정은 빌드 전, 쓰기는 마이그레이션 뒤 앱 재시작 직전 — config 는 렌더하지 않고 최소 편집만 한다
+     읽는다 — **그 항목의 `api_base` 는 리터럴 주소여야 감지한다**(`os.environ/<이름>` 참조면 배포 셸에 그 환경변수가 없는 한 경고 후 건너뛴다 — 게이트웨이용 env 파일은 배포 셸이 읽지 않는다). 판정은 빌드 전, 쓰기는 마이그레이션 뒤 앱 재시작 직전 — config 는 렌더하지 않고 최소 편집만 한다
      (정식 항목 하나를 `model_list:` 바로 다음에 넣고 옛 이름 라우트의 upstream 만 새 이름으로, 주소·키 줄은 기존 항목에서 그대로 복사). 바뀌는 배포만
      `<config>.bak.<시각>` 백업 → 교체 → `pm2 restart <게이트웨이>` → 게이트웨이 `/v1/models` 에 새 이름 확인(최대 60초) 뒤 `.env` 의 `LLM_DEFAULT_MODEL`·
      `OMK_DGX_MODEL`·`OMK_DGX_MODEL_PINNED` 를 쓴다. 게이트웨이가 새 이름을 올리지 않으면 백업으로 되돌리고 다시 시작하며 `.env` 는 그대로 둔다.
