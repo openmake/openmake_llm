@@ -1126,10 +1126,16 @@ sync_caddyfile() {
     fi
 
     # 아래 호스트 경로 재검증이 실패하면 되돌릴 수 있게 기존 운영 파일을 잠시 보관한다.
-    local prev=""
+    # 운영 파일이 있는데 보관본을 못 만들면 되돌릴 수 없으므로 아무것도 바꾸지 않는다.
+    local prev="" had_prev=0
     if [[ -f "$CADDYFILE_DEST" ]]; then
+        had_prev=1
         prev="$(mktemp 2>/dev/null)" || prev=""
-        [[ -n "$prev" ]] && { cp "$CADDYFILE_DEST" "$prev" 2>/dev/null || { rm -f "$prev"; prev=""; }; }
+        if [[ -z "$prev" ]] || ! cp "$CADDYFILE_DEST" "$prev" 2>/dev/null; then
+            [[ -n "$prev" ]] && rm -f "$prev"
+            log_warn "Caddyfile 보관본 생성 실패 — 운영 파일을 덮어쓰지 않습니다 (기존 설정 유지): $CADDYFILE_DEST"
+            return 0
+        fi
     fi
 
     if ! cp "$src" "$CADDYFILE_DEST" 2>/dev/null; then
@@ -1142,7 +1148,7 @@ sync_caddyfile() {
     if (( has_caddy )); then
         local derr
         if ! derr="$(caddy validate --config "$CADDYFILE_DEST" --adapter caddyfile 2>&1 | tail -n 1)"; then
-            if [[ -n "$prev" ]]; then cp "$prev" "$CADDYFILE_DEST" 2>/dev/null || true; rm -f "$prev"; else rm -f "$CADDYFILE_DEST"; fi
+            if (( had_prev )); then cp "$prev" "$CADDYFILE_DEST" 2>/dev/null || true; rm -f "$prev"; else rm -f "$CADDYFILE_DEST"; fi
             log_err "호스트 경로 Caddyfile 검증 실패 (Caddyfile.d 포함) — 운영 파일을 되돌립니다 (기존 설정 유지): $CADDYFILE_DEST"
             log_err "  $derr"
             return 0
