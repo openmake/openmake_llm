@@ -471,6 +471,9 @@ eq "vllm 감지: 설치가 앱·게이트웨이에 감지값(고정 아님)" "$r
 eq "vllm 감지: 설치 명시값은 고정"                 "$rc|$(dotenv_get "$VD/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$(litellm_dir vd)/litellm.env" OMK_DGX_MODEL_PINNED)" "0|qwen3.8-27b|1"
 ( vm_fake 'qwen3.8-27b chat-new'; OMK_DGX_MODEL=""; dgx_preflight "$VD" vd 1 "" "" http://v k >/dev/null 2>&1 && dgx_apply "$VD" vd 192.0.2.1 k >/dev/null 2>&1 ); rc=$?
 eq "vllm 감지: 고정 뒤 재설치도 고정값 유지"        "$rc|$(dotenv_get "$VD/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$(litellm_dir vd)/litellm.env" OMK_DGX_MODEL_PINNED)" "0|qwen3.8-27b|1"
+printf 'OMK_DGX_MODEL=chat-new\nOMK_DGX_MODEL_PINNED=0\n' > "$(litellm_dir vd)/litellm.env"
+( vm_fake -; OMK_DGX_MODEL=qwen3.8-27b; dgx_preflight "$VD" vd 1 "" "" http://v k >/dev/null 2>&1 && dgx_apply "$VD" vd 192.0.2.1 k >/dev/null 2>&1 ); rc=$?
+eq "vllm 감지: 미도달이어도 설치 명시값은 고정"     "$rc|$(dotenv_get "$VD/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$(litellm_dir vd)/litellm.env" OMK_DGX_MODEL_PINNED)" "0|qwen3.8-27b|1"
 # 업데이트: DGX 를 쓰는 환경(QWEN_VLLM_API_BASE)이면 vLLM 이름으로 두 파일을 함께 맞춘다 — 아니면 아무것도 바꾸지 않는다.
 US="$TMP/us"; mkdir -p "$US/scripts/vllm" "$(litellm_dir us)"; cp "$RC" "$US/scripts/vllm/"; USL="$(litellm_dir us)/litellm.env"
 us_run() { # $1=.env $2=litellm.env $3=served(- 미도달) [$4=OMK_DGX_MODEL] → rc|동기화 표시|앱값|게이트웨이값|curl 호출|파일 그대로
@@ -497,6 +500,16 @@ eq "update sync: auto 로 고정 해제 → 감지값"        "$(us_run 'LLM_DEF
 eq "update sync: auto 는 앱 외부 기본값을 바꾸지 않음" "$(us_run 'LLM_DEFAULT_MODEL=foreign-1\n' "$UB" 'qwen3.8-27b chat-new' auto)" "2||foreign-1||curl|same"
 eq "update sync: 옛 이름만 서빙·무기록 → 무변경"     "$(us_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' "$UB" 'qwen3.8-27b gpt-3.5-turbo')" "0|f0|qwen3.8-27b||curl|same"
 eq "update sync: 어댑터가 함께 서빙돼도 감지"        "$(us_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' "$UB" 'qwen3.8-27b chat-new jev-decision@chat-new')" "0|f1|chat-new|chat-new|curl|changed"
+eq "update sync: 기록된 업스트림 = 정적 이름 → 판정 단계 중단" "$(us_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' "${UB}OMK_UPSTREAM_MODEL=jev-decision\n" 'qwen3.8-27b chat-new')" "2||qwen3.8-27b||curl|same"
+# 쓰기 단계 — 배포로 상황이 바뀌어 새 값으로 config 를 만들 수 없으면 아무것도 쓰지 않는다.
+# shellcheck disable=SC2034  # dgx_update_apply 가 DGX_SYNC_TARGET·DGX_SYNC_PIN 을 읽는다
+printf 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' > "$US/.env"; printf '%bOMK_UPSTREAM_MODEL=jev-decision\n' "$UB" > "$USL"; S5="$(cat "$US/.env" "$USL" | cksum)"
+( DGX_SYNC_TARGET=chat-new; DGX_SYNC_PIN=0; dgx_update_apply "$US" us >/dev/null 2>&1 ); rc=$?
+eq "update apply: 새 값으로 config 불가 → 중단·두 파일 그대로" "$rc|$(cat "$US/.env" "$USL" | cksum)" "2|$S5"
+printf 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' > "$US/.env"; printf '%b' "$UB" > "$USL"
+# shellcheck disable=SC2034  # dgx_update_apply 가 읽는다
+( DGX_SYNC_TARGET=chat-new; DGX_SYNC_PIN=0; dgx_update_apply "$US" us >/dev/null 2>&1; echo "$DGX_SYNC_CHANGED" > "$TMP/us.flag" ); rc=$?
+eq "update apply: 두 파일 같은 값·재시작 표시" "$rc|$(dotenv_get "$US/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$USL" OMK_DGX_MODEL)|$(dotenv_get "$USL" OMK_DGX_MODEL_PINNED)|$(cat "$TMP/us.flag")" "0|chat-new|chat-new|0|1"
 # 판정만 하고 쓰지 않는다 — 배포 전에 멈춰도 두 파일은 그대로다.
 printf 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' > "$US/.env"; printf '%b' "$UB" > "$USL"; S4="$(cat "$US/.env" "$USL" | cksum)"
 # shellcheck disable=SC2034  # dgx_update_sync 가 OMK_DGX_MODEL 을 읽는다
