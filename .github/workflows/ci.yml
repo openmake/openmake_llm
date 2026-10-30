@@ -81,6 +81,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ─── Gate 0.1: Environment-specific strings ───
+      # 환경 고유 정보(조직 서버·계정·주소) 차단 — 범용 규칙 + 저장소 밖 조직 목록(비밀값 OMK_FORBIDDEN_STRINGS, 쉼표·줄바꿈 구분).
+      # 비밀값이 없으면(포크 PR 등) 범용 규칙만 본다. 걸린 비밀값은 값이 아니라 번호로만 출력한다.
+      - name: "Gate 0.1: Environment-specific strings"
+        env:
+          OMK_FORBIDDEN_STRINGS: ${{ secrets.OMK_FORBIDDEN_STRINGS }}
+        run: node scripts/ci/org-specific-strings.mjs
+
       # ─── Gate 0: API Contract Drift ───
       # packages/api-contracts 산출물이 TS SoT(swagger/spec-core·shared-types)와 일치하는지 검사.
       # 스펙 변경 후 `npm run contracts:export` 재생성을 누락한 커밋을 차단한다 (iOS 축 1 Step 5).

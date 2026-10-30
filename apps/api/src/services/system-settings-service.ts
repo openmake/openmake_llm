@@ -11,7 +11,6 @@
  * (fail-open — DB 조회 실패 시 env 만으로 부팅 지속).
  *
  * @see config/system-settings-registry.ts (허용 키 화이트리스트)
- * @see docs/superpowers/plans/2026-08-12-system-settings-admin-ui.md
  */
 import { applySettingsOverlay, readRawEnvValue } from '../config/env';
 import {

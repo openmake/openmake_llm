@@ -21,7 +21,7 @@ probe() {
 }
 eq 'fresh install default' "$(probe __UNSET__ '')" "$TMP/user/.colima|unix://$TMP/user/.colima/openmake/docker.sock|"
 eq 'custom home with spaces' "$(probe '/Volumes/App Data/Colima' '')" '/Volumes/App Data/Colima|unix:///Volumes/App Data/Colima/openmake/docker.sock|'
-eq 'registered external profile' "$(probe __UNSET__ 'unix:///Volumes/MAC_APP/Colima/openmake/docker.sock')" '/Volumes/MAC_APP/Colima|unix:///Volumes/MAC_APP/Colima/openmake/docker.sock|'
+eq 'registered external profile' "$(probe __UNSET__ 'unix:///Volumes/External/Colima/openmake/docker.sock')" '/Volumes/External/Colima|unix:///Volumes/External/Colima/openmake/docker.sock|'
 eq 'explicit home takes precedence' "$(probe /chosen 'unix:///other/openmake/docker.sock')" '/chosen|unix:///chosen/openmake/docker.sock|'
 eq 'Desktop context endpoint is not adopted' "$(probe __UNSET__ 'unix:///Users/u/.docker/run/docker.sock')" "$TMP/user/.colima|unix://$TMP/user/.colima/openmake/docker.sock|"
 eq 'remote endpoint is not adopted' "$(probe __UNSET__ 'tcp://remote:2375')" "$TMP/user/.colima|unix://$TMP/user/.colima/openmake/docker.sock|"

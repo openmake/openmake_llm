@@ -58,7 +58,7 @@ const SKIP_REFRESH_ENDPOINTS = ["/api/auth/refresh", "/api/auth/login"];
 
 /**
  * 네트워크 계층 실패(fetch 가 TypeError 로 거절 — 응답 자체가 없음) 뒤 멱등 GET 을 한 번 다시 보내기 전 대기.
- * 2026-10-13 운영(chat.openmake.cc, Cloudflare HTTP/3): 브라우저↔edge 세션이 닫히는 순간 30초 폴링 5건이
+ * 2026-10-13 운영(chat.example.com, Cloudflare HTTP/3): 브라우저↔edge 세션이 닫히는 순간 30초 폴링 5건이
  * 함께 `ERR_CONNECTION_CLOSED` 로 실패했고 같은 순간 새 세션에 실린 요청은 성공했다 — 서버 홉은 모두
  * 유휴 125초 뒤에도 재사용이 됐다. 죽은 세션을 브라우저가 버릴 틈만 주고 다시 보낸다.
  */

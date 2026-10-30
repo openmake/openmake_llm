@@ -83,7 +83,7 @@ if command -v plutil >/dev/null 2>&1; then ok "agent: 이스케이프한 plist �
 . "$HERE/fake-launchctl.test-lib.sh"
 FB="$TMP/fakebin"; mkdir -p "$FB"; printf '#!/bin/sh\n' > "$FB/colima"; printf '#!/bin/sh\n' > "$FB/docker"; chmod +x "$FB/colima" "$FB/docker"
 agent_run() { PATH="$FB:$PATH" enable_docker_autostart "$TMP/agent-log/colima.log"; }
-# XML 이스케이프는 셸 판에 기대지 않는다 — bash 5.2+ 의 patsub_replacement 는 ${v//x/&...} 의 & 를 바꿔 넣는다 (tom 사고).
+# XML 이스케이프는 셸 판에 기대지 않는다 — bash 5.2+ 의 patsub_replacement 는 ${v//x/&...} 의 & 를 바꿔 넣는다.
 # plist 를 다시 읽은 값이 입력과 글자 그대로 같아야 한다. 에이전트는 설치된 기동 가드를 /bin/bash 로 실행한다.
 RT_COLIMA="/opt/b&b \"q\" <x>/bin/colima"; RT_LOG="/tmp/l&g \"o\" <g> 'a'.log"; RT_HOME="$TMP/Ext & \"Q\" <C> 'a'"
 COLIMA_HOME="$RT_HOME" SCRIPT_DIR="$SCRIPT_DIR" TEST_AGENT="$TMP/roundtrip.plist" RT_COLIMA="$RT_COLIMA" RT_LOG="$RT_LOG" bash -c '

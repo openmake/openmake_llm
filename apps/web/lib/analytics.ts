@@ -23,7 +23,7 @@ export const GA_MEASUREMENT_IDS = (process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? 
 // 모듈 로드(하이드레이션) 시점에 gtag 명령 큐를 부트스트랩 — React effect·비동기 계측이
 // 로더(gtag.js) 실행 전에 호출돼도 'js'→'config' 뒤에 줄서서 유실되지 않게 순서를 확정한다.
 // (구 인라인 Script 부트스트랩은 첫 로드에서 라우트 effect 가 로더보다 먼저 돌아
-//  랜딩 page_view 를 유실했다 — 2026-08-10 chat.openmake.cc 외부 경로 실측)
+//  랜딩 page_view 를 유실했다 — 2026-08-10 chat.example.com 외부 경로 실측)
 if (typeof window !== "undefined" && GA_MEASUREMENT_IDS.length > 0 && !window.gtag) {
   window.dataLayer = window.dataLayer || [];
   window.gtag = function () {

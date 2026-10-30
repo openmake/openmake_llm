@@ -400,7 +400,7 @@ const BOOT_GUARD = '/Users/x/.local/share/openmake/colima-boot-guard.cjs';
 const GUARD_NODE = '/Users/x/.local/share/mise/installs/node/24.21.0/bin/node';
 // What the previous release wrote: /bin/bash + the shell boot guard next to it (upgradeable).
 const SHELL_GUARD = '/Users/x/.local/share/openmake/colima-boot-guard.sh';
-function plist(t, { colima = '/opt/homebrew/bin/colima', home = '/Volumes/MAC_APP/Colima', path = '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin', extraEnv = '', args, stdout = '/Users/x/.openmake/logs/colima.log', stderr = '/Users/x/.openmake/logs/colima.log' } = {}) {
+function plist(t, { colima = '/opt/homebrew/bin/colima', home = '/Volumes/External/Colima', path = '/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin', extraEnv = '', args, stdout = '/Users/x/.openmake/logs/colima.log', stderr = '/Users/x/.openmake/logs/colima.log' } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'omk-agent-')); t.after(() => rmSync(dir, { recursive: true, force: true }));
   const file = join(dir, 'com.openmake.colima.plist');
   const argv = args ?? [GUARD_NODE, BOOT_GUARD, colima, 'openmake'];
@@ -417,7 +417,7 @@ ${stderr === null ? '' : `<key>StandardErrorPath</key><string>${stderr}</string>
 `);
   return file;
 }
-const expected = { colima: '/opt/homebrew/bin/colima', colimaHome: '/Volumes/MAC_APP/Colima', brewPrefix: '/opt/homebrew', ownerHome: '/Users/x', guard: BOOT_GUARD, node: GUARD_NODE };
+const expected = { colima: '/opt/homebrew/bin/colima', colimaHome: '/Volumes/External/Colima', brewPrefix: '/opt/homebrew', ownerHome: '/Users/x', guard: BOOT_GUARD, node: GUARD_NODE };
 const LEGACY_ARGS = ['/opt/homebrew/bin/colima', 'start', '--profile', 'openmake', '--activate=false'];
 
 test('agent inspection uses the installer contract: guarded start, exact environment, one log', { skip: process.platform !== 'darwin' && 'plutil is macOS only' }, t => {

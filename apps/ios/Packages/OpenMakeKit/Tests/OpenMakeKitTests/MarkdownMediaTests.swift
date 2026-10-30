@@ -31,10 +31,10 @@ final class MarkdownMediaTests: XCTestCase {
     }
 
     func testResolverAcceptsOnlySameOriginGenerated() {
-        let server = URL(string: "https://chat.openmake.cc")!
+        let server = URL(string: "https://chat.example.com")!
         XCTAssertEqual(
             GeneratedMediaURLResolver.resolve(source: "/generated/v.webm", serverURL: server)?.absoluteString,
-            "https://chat.openmake.cc/generated/v.webm")
+            "https://chat.example.com/generated/v.webm")
         XCTAssertNil(GeneratedMediaURLResolver.resolve(source: "https://evil.example/generated/v.webm", serverURL: server))
         XCTAssertNil(GeneratedMediaURLResolver.resolve(source: "/uploads/v.webm", serverURL: server))
     }

@@ -47,7 +47,7 @@ services:
       # 초기 관리자 계정 (004-admin-user.sh). 미설정 시 계정을 만들지 않는다.
       ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
       ADMIN_INITIAL_USERNAME: ${ADMIN_INITIAL_USERNAME:-admin}
-      ADMIN_INITIAL_EMAIL: ${ADMIN_INITIAL_EMAIL:-support@openmake.cc}
+      ADMIN_INITIAL_EMAIL: ${ADMIN_INITIAL_EMAIL:-admin@example.com}
     ports:
       - "${POSTGRES_BIND:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:

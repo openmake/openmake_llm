@@ -1,7 +1,7 @@
-// 라이브 스모크 (opt-in) — 운영 chat.openmake.cc 대상 Kit 실전 왕복.
+// 라이브 스모크 (opt-in) — OPENMAKE_LIVE_BASE 로 준 서버 대상 Kit 실전 왕복(없으면 건너뜀).
 //
 // 실행법 (기본 skip — CI 무영향):
-//   OPENMAKE_LIVE_BEARER=<access-jwt> swift test --filter LiveSmokeTests
+//   OPENMAKE_LIVE_BASE=<서버 주소> OPENMAKE_LIVE_BEARER=<access-jwt> swift test --filter LiveSmokeTests
 //
 // 검증 범위: OpenMakeClient 의 실제 URLSession 경로 + Bearer 인증 + envelope/date-time
 // 디코딩이 운영 서버 응답과 정합하는지. (모바일 로그인/refresh body 모드는 축 2 배포 후
@@ -14,7 +14,9 @@ final class LiveSmokeTests: XCTestCase {
         guard let bearer = ProcessInfo.processInfo.environment["OPENMAKE_LIVE_BEARER"], !bearer.isEmpty else {
             throw XCTSkip("OPENMAKE_LIVE_BEARER 미설정 — 라이브 스모크 생략")
         }
-        let base = ProcessInfo.processInfo.environment["OPENMAKE_LIVE_BASE"] ?? "https://chat.openmake.cc"
+        guard let base = ProcessInfo.processInfo.environment["OPENMAKE_LIVE_BASE"], !base.isEmpty else {
+            throw XCTSkip("OPENMAKE_LIVE_BASE 미설정 — 라이브 스모크 생략")
+        }
 
         let store = InMemoryTokenStore()
         // refresh 는 이 스모크에서 사용하지 않는다 (401 시 실패로 종결)
@@ -42,7 +44,9 @@ final class LiveSmokeTests: XCTestCase {
         guard let bearer = ProcessInfo.processInfo.environment["OPENMAKE_LIVE_BEARER"], !bearer.isEmpty else {
             throw XCTSkip("OPENMAKE_LIVE_BEARER 미설정 — 라이브 스모크 생략")
         }
-        let base = ProcessInfo.processInfo.environment["OPENMAKE_LIVE_BASE"] ?? "https://chat.openmake.cc"
+        guard let base = ProcessInfo.processInfo.environment["OPENMAKE_LIVE_BASE"], !base.isEmpty else {
+            throw XCTSkip("OPENMAKE_LIVE_BASE 미설정 — 라이브 스모크 생략")
+        }
 
         let socket = WsChatSocket(serverURL: URL(string: base)!)
         let events = try await socket.connect(bearer: bearer)
@@ -78,7 +82,9 @@ final class LiveSmokeTests: XCTestCase {
         guard let bearer = ProcessInfo.processInfo.environment["OPENMAKE_LIVE_BEARER"], !bearer.isEmpty else {
             throw XCTSkip("OPENMAKE_LIVE_BEARER 미설정 — 라이브 스모크 생략")
         }
-        let base = ProcessInfo.processInfo.environment["OPENMAKE_LIVE_BASE"] ?? "https://chat.openmake.cc"
+        guard let base = ProcessInfo.processInfo.environment["OPENMAKE_LIVE_BASE"], !base.isEmpty else {
+            throw XCTSkip("OPENMAKE_LIVE_BASE 미설정 — 라이브 스모크 생략")
+        }
 
         let store = InMemoryTokenStore()
         store.save(AuthTokens(access: bearer, refresh: "unused"))

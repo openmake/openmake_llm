@@ -42,8 +42,8 @@ final class HelperManager: NSObject, ObservableObject {
 
     // 서버 주소 — 사용자가 설정에 넣는 주소 하나. 브라우저에서 쓰는 주소(또는 API 주소)를 그대로 넣으면
     // 헬퍼(코어 endpoints)가 서버에 포트를 물어 연결 주소와 웹 주소를 정한다. 종전엔 선택지 2개
-    // (chat.openmake.cc / localhost:52416)를 코드에 박아 두어, 주소·포트가 다른 설치에는 연결할 수 없었다.
-    static let defaultServer = "https://chat.openmake.cc"
+    // (운영 주소 / localhost:52416)를 코드에 박아 두어, 주소·포트가 다른 설치에는 연결할 수 없었다.
+    static let defaultServer = "http://localhost:52416"   // 설치 주소는 설정에서 입력한다
     /** 종전 설정의 "로컬" 선택지가 가리키던 주소 — 최초 1회 옮길 때만 쓴다. */
     private static let legacyLocalServer = "http://localhost:52416"
     var serverAddress: String {

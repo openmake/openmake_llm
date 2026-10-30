@@ -1,7 +1,7 @@
 /**
  * ApiClient — 네트워크 계층 실패(fetch 가 TypeError 를 던짐)의 멱등 GET 1회 재시도.
  *
- * 배경(2026-10-13 운영 chat.openmake.cc): Chrome↔Cloudflare edge 의 HTTP/3 세션이 닫히는 순간
+ * 배경(2026-10-13 운영 chat.example.com): Chrome↔Cloudflare edge 의 HTTP/3 세션이 닫히는 순간
  * 30초 폴링 5건이 함께 `ERR_CONNECTION_CLOSED` 로 실패했고, 같은 순간 새 세션에 실린 1건은 성공했다.
  * 서버 홉(Node·Caddy·edge TCP)은 유휴 125초 뒤에도 재사용이 됐으므로 저장소에서 할 일은 재시도다.
  */

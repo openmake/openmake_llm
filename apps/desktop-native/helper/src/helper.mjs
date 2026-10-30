@@ -42,7 +42,7 @@ import { BridgeConnection, BridgeCore, SANDBOX_ENABLED, discoverEndpoints } from
 
 const serverUrl = (() => {
   const i = process.argv.indexOf('--server');
-  return i >= 0 ? process.argv[i + 1] : 'https://chat.openmake.cc';
+  return i >= 0 ? process.argv[i + 1] : 'http://localhost:52416';
 })();
 // 앱은 stdin 의 auth 명령으로 키를 준다. env 는 개발·하네스 전용 폴백 — 시작 환경은 다른 프로세스가 읽을 수 있다.
 let apiKey = process.env.OMK_COMPANION_API_KEY || '';

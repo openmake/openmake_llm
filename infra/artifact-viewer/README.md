@@ -58,14 +58,14 @@ Docker 엔진을 옮긴 뒤에는 `docker inspect openmake-artifact-viewer` 의 
 
 ## 외부 공개 (Cloudflare Tunnel)
 
-앱(`chat.openmake.cc`)과 **별도 서브도메인**(`artifacts.openmake.cc`)으로 분리한다 —
+앱(`chat.example.com`)과 **별도 서브도메인**(`artifacts.example.com`)으로 분리한다 —
 cloudflared 터널 ingress 에 뷰어용 호스트네임을 하나 더 매핑해 컨테이너 :8088 로 보낸 뒤,
 `ARTIFACT_VIEWER_ORIGIN` 을 그 URL 로 둔다. cloudflared 설정 파일과 DNS 레코드 작업은
 git 에 두지 않는다(운영 호스트 로컬 보관).
 
 ```yaml
 # cloudflared ingress (예시)
-  - hostname: artifacts.openmake.cc
+  - hostname: artifacts.example.com
     service: http://localhost:8088
 ```
 

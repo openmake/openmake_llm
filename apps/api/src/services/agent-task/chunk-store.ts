@@ -1,7 +1,7 @@
 /**
  * Agent Task 청크 업로드 스토어 — Cloudflare 요청당 100MB 상한 우회용.
  *
- * 외부 경로(chat.openmake.cc)는 Cloudflare 무료 플랜이 요청 body 를 100MB 로 제한해
+ * 외부 경로(chat.example.com)는 Cloudflare 무료 플랜이 요청 body 를 100MB 로 제한해
  * 단일 multipart/base64-JSON 으로는 대용량 첨부가 edge 413 으로 거절된다. 파일을
  * CHUNK_MAX_BYTES 이하 조각으로 나눠 올린 뒤(init → chunk×N → complete) uploadId 로
  * 작업 생성 시 참조(claim)하면, 요청당 크기가 상한 아래로 유지된다.

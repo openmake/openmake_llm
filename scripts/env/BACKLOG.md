@@ -7,7 +7,7 @@
 
 ## 1. 개발 단계 기능 검증 — 단순 테스트 다음의 "시뮬레이션" 층 (2026-09-19)
 
-**동기.** dev 에서 "openmake.cc 요약해 줘"가 *웹사이트 정보를 확인할 수 없다*로 끝났다. 검색 기능은 실행됐지만 모든 제공자가 0건이었다(`[WebSearch] 총 0개 (SearXNG:0, Google:0, Wiki:0, News:0, DDG:0, Naver:0)`) — 어느 설치본에도 실제 검색 제공자 키가 없고, 키 없는 3종(DDG 즉답 API·Google News·Wikipedia)은 그런 질의에 원래 결과가 없다. 회귀가 아니라 **설정 공백**인데, 지금 있는 어떤 테스트도 이걸 잡지 못한다.
+**동기.** dev 에서 "우리 웹사이트 요약해 줘"가 *웹사이트 정보를 확인할 수 없다*로 끝났다. 검색 기능은 실행됐지만 모든 제공자가 0건이었다(`[WebSearch] 총 0개 (SearXNG:0, Google:0, Wiki:0, News:0, DDG:0, Naver:0)`) — 어느 설치본에도 실제 검색 제공자 키가 없고, 키 없는 3종(DDG 즉답 API·Google News·Wikipedia)은 그런 질의에 원래 결과가 없다. 회귀가 아니라 **설정 공백**인데, 지금 있는 어떤 테스트도 이걸 잡지 못한다.
 
 **이미 있는 것.** Jest 단위(apps/api 테스트 파일 494개) · Playwright E2E 10개(`tests/e2e`) · 평가 러너 7종(`eval:routing|response|citation|budget|tools|matrix|redteam`) · 골든 데이터셋 170건. 평가 러너는 대부분 mock 이고 E2E 는 일부 화면만 본다 — **떠 있는 인스턴스에서 기능이 끝까지 되는지**를 보는 층이 없다.
 
