@@ -63,6 +63,8 @@ export interface ModelProfile {
  * 기본 프로필. 값의 근거·실측 이력:
  *  - qwen3.8-27b: vLLM `--reasoning-parser qwen3 --tool-call-parser qwen3_coder --limit-mm-per-prompt image=8`,
  *    thinking·toolCalling·vision 라이브 실측(2026-09-02). reasoning_effort `high` 는 400 — xhigh/medium/low 만.
+ *  - qwen3.8-flash-next: DGX 전환 모델(vLLM served 이름, 옛 이름 qwen3.8-27b 와 같은 가중치). `npm run eval:probe` 실측(2026-10-30):
+ *    toolCalling·thinking·vision 가능, reasoning_effort `high` 는 400. 이미지 상한·라이선스는 재지 않아 적지 않는다(전역 기본값).
  *  - qwen3.6-35b-a3b: 구 기본 모델. low~xhigh 모두 200(2026-08-23).
  *  - gpt-3.5-turbo: LiteLLM 의 OpenAI 호환 alias → qwen3.8-27b. 능력은 라우팅 대상과 같게 둔다
  *    (vision:false 면 실제 모델은 받는 이미지 요청을 앱이 400 으로 거절한다, 2026-09-03 정정).
@@ -92,6 +94,10 @@ const DEFAULT_MODEL_PROFILES: Readonly<Record<string, ModelProfile>> = {
         reasoningEfforts: ['low', 'medium', 'xhigh'],
         maxPromptImages: 8,
         license: { id: 'Apache-2.0', commercialUse: true },
+    },
+    'qwen3.8-flash-next': {
+        capabilities: { toolCalling: true, thinking: true, vision: true, streaming: true },
+        reasoningEfforts: ['low', 'medium', 'xhigh'],
     },
     'gpt-3.5-turbo': {
         capabilities: { toolCalling: true, thinking: true, vision: true, streaming: true },

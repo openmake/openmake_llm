@@ -44,6 +44,26 @@ describe('selectLocalEntriesFromModelInfo', () => {
         expect(out.find((m) => m.id === 'gpt-3.5-turbo')).toBeUndefined();
     });
 
+    it('DGX 모델 전환(omk OMK_DGX_MODEL) 뒤: 새 이름이 정식, 옛 이름·gpt-3.5-turbo 는 접히고 옛 실측치를 물려받지 않는다', () => {
+        // omk litellm_render_config 가 만드는 모양 — 세 항목이 같은 upstream(openai/chat-next-32b)을 가리킨다.
+        const switched: GatewayModelInfoEntry[] = [
+            { model_name: 'chat-next-32b', litellm_params: { model: 'openai/chat-next-32b', api_base: QWEN_BASE }, model_info: {} },
+            { model_name: 'qwen3.8-27b', litellm_params: { model: 'openai/chat-next-32b', api_base: QWEN_BASE }, model_info: {} },
+            { model_name: 'jev-decision', litellm_params: { model: 'openai/jev-decision', api_base: QWEN_BASE }, model_info: {} },
+            { model_name: 'gpt-3.5-turbo', litellm_params: { model: 'openai/chat-next-32b', api_base: QWEN_BASE }, model_info: {} },
+        ];
+        const prev: LocalModelEntry[] = [{
+            id: 'qwen3.8-27b', displayName: 'qwen3.8-27b', description: 'old', role: 'chat',
+            contextLength: 262144, contextLengthProbed: true, available: true, probedCapabilities: { toolCalling: true },
+        }];
+        const out = selectLocalEntriesFromModelInfo(switched, prev);
+        expect(out.map((m) => `${m.id}:${m.role}`)).toEqual(['chat-next-32b:chat', 'jev-decision:capability']);
+        const c = out[0];
+        expect([c.contextLength, c.contextLengthProbed, c.available, c.probedCapabilities]).toEqual([undefined, undefined, undefined, undefined]);
+        // 옛 이름·gpt-3.5-turbo 는 정식 엔트리의 aliases — 옛 ID 요청을 정식 ID 로 해석하는 근거(local-model-alias)
+        expect(c.aliases).toEqual(['qwen3.8-27b', 'gpt-3.5-turbo']);
+    });
+
     it('정식 이름이 없는 alias 그룹은 첫 항목을 대표로 쓴다', () => {
         const out = selectLocalEntriesFromModelInfo([
             { model_name: 'chat-default', litellm_params: { model: 'openai/some-upstream', api_base: QWEN_BASE } },

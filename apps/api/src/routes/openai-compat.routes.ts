@@ -10,6 +10,7 @@ import {
     OpenAICompatService,
 } from '../services/OpenAICompatService';
 import { listAvailableModels } from '../chat/profile-resolver';
+import { resolveLocalModelId } from '../config/local-model-alias';
 import { parseFullModelId } from '../providers/i-provider';
 import { getProviderCatalogEntry } from '../config/external-providers';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
@@ -277,7 +278,8 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 }
             } catch { /* invalid fullId 형식 — 그대로 검증 */ }
         }
-        if (!externalAllowed && !available.has(requested) && !available.has(resolvedModelId)) {
+        // 옛 로컬 ID(모델 전환 전 이름·gpt-3.5-turbo)는 정식 ID 로 해석해 본다 — 목록에는 정식 1개만 둔다.
+        if (!externalAllowed && !available.has(requested) && !available.has(resolveLocalModelId(resolvedModelId))) {
             openaiError(
                 res,
                 404,
