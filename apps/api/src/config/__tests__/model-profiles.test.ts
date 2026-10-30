@@ -23,6 +23,14 @@ describe('모델 프로필 해석', () => {
         expect(resolveModelProfile('qwen3.8-flash').reasoningEfforts).toEqual(['low', 'medium', 'xhigh']);
     });
 
+    it('DGX 전환 모델 qwen3.8-flash-next 는 실측 능력을 갖는다(2026-10-30 eval:probe)', () => {
+        const p = resolveModelProfile('qwen3.8-flash-next');
+        expect(p.capabilities).toEqual({ toolCalling: true, thinking: true, vision: true, streaming: true });
+        expect(p.reasoningEfforts).toEqual(['low', 'medium', 'xhigh']);
+        expect(matchCapabilityPreset('qwen3.8-flash-next')?.vision).toBe(true);
+        expect(normalizeEffort('qwen3.8-flash-next', 'high')).toBe('xhigh');
+    });
+
     it('로컬 키와 provider 한정 키는 서로 새어 나가지 않는다', () => {
         expect(resolveModelProfile('glm-5.3', 'bai').reasoningEfforts).toEqual(['low', 'high']);
         expect(resolveModelProfile('glm-5.3').reasoningEfforts).toBeUndefined();
