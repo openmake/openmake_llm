@@ -7,6 +7,8 @@
 #     + attention FP8, MTP 는 bf16). 29G→22G. 서빙 이름은 API 계약이라 qwen3.8-27b 그대로.
 #   - 2026-09-02 구 이름 별칭(qwen3.6-35b-a3b) 제거 — 별칭을 두면 /v1/models 에 옛 이름이 함께 떠서
 #     클라이언트가 구 모델이 뜬 것처럼 표시된다. 이제 노출 이름은 qwen3.8-27b 하나.
+#   - 2026-10-30 서빙 이름을 env(QWEN_SERVED_MODEL_NAME·QWEN_SERVED_MODEL_ALIASES)로 — 모델 전환 때 옛 이름은
+#     vLLM alias 로 남기되, 앱 목록은 게이트웨이(omk OMK_DGX_MODEL)가 정식 이름 하나로 접는다(scripts/env/README.md).
 #   - 2026-09-23 vLLM 0.27.1 → 0.30.0 (venv vllm_env.0300, 롤백 vllm_env.0271). VLLM_USE_DEEP_GEMM=0.
 #   - 2026-10-03 JEV-27B-VL 의사결정 어댑터를 같은 엔진·같은 포트에 LoRA 로 노출(model="jev-decision").
 #     앱 쪽: config/decision.ts, services/decision/jev-decision.ts, services/orchestrator/media-gate.ts.
@@ -52,6 +54,18 @@ export VLLM_USE_DEEP_GEMM=0
 # vLLM API key — env 파일(0600) 주입 (VLLM_API_KEY)
 set -a; [ -f /home/smith/vllm/vllm.env ] && . /home/smith/vllm/vllm.env; set +a
 
+# 서빙 이름 (2026-10-30) — 모델을 바꿀 때 정식 이름(QWEN_SERVED_MODEL_NAME)을 맨 앞에, 옛 대화가 부르는 옛 이름을
+# 호환 alias(QWEN_SERVED_MODEL_ALIASES, 공백 구분)로 뒤에 둔다. vLLM 은 둘 다 받는다. 주지 않으면 종전대로 qwen3.8-27b 하나.
+# 값은 프로세스 env 또는 위 env 파일에서 온다(env 파일을 읽은 뒤 조립 — 둘 다 있으면 env 파일 값).
+# 이름은 ID 일 뿐이다 — 어떤 가중치인지는 위 MODEL_DIR 과 운영자 기록이 정한다. 게이트웨이·앱 쪽은 omk 의 OMK_DGX_MODEL.
+SERVED_NAMES=("${QWEN_SERVED_MODEL_NAME:-qwen3.8-27b}")
+read -r -a _aliases <<< "${QWEN_SERVED_MODEL_ALIASES:-}"
+SERVED_NAMES+=(${_aliases[@]+"${_aliases[@]}"})
+for _n in "${SERVED_NAMES[@]}"; do
+  [[ "$_n" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || { echo "[qwen-serve] 서빙 이름 형식 오류: $_n" >&2; exit 2; }
+done
+[[ "$(printf '%s\n' "${SERVED_NAMES[@]}" | sort | uniq -d)" == "" ]] || { echo "[qwen-serve] 서빙 이름 중복: ${SERVED_NAMES[*]}" >&2; exit 2; }
+
 VLLM_BIND_HOST="${VLLM_BIND_HOST:-127.0.0.1}"
 if [ "$VLLM_BIND_HOST" != "127.0.0.1" ] && [ "$VLLM_BIND_HOST" != "0.0.0.0" ]; then
   for i in $(seq 1 60); do
@@ -65,7 +79,7 @@ exec vllm serve "$MODEL_DIR" \
   --host "$VLLM_BIND_HOST" \
   --tensor-parallel-size 1 \
   --dtype auto \
-  --served-model-name qwen3.8-27b \
+  --served-model-name "${SERVED_NAMES[@]}" \
   --max-model-len 262144 \
   --gpu-memory-utilization 0.47 \
   --max-num-batched-tokens 8192 \
