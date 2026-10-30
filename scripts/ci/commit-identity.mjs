@@ -54,7 +54,7 @@ export function checkIdentities(rows, forbiddenNames = []) {
     return out;
 }
 
-const FIELD_KO = { author: '작성자 메일', committer: '커미터 메일', trailer: '트레일러 메일', name: '작성자·커미터 이름' };
+const FIELD_KO = { author: '작성자 메일', committer: '커미터 메일', trailer: '트레일러 메일·이름', name: '작성자·커미터 이름' };
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
     const [base, head = 'HEAD'] = process.argv.slice(2);
