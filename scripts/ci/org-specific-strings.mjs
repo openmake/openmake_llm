@@ -28,7 +28,17 @@ export const RULES = [
     { id: 'ddns-host', re: /\b[a-z0-9-]+\.(?:tplinkdns\.com|duckdns\.org|ddns\.net|no-ip\.(?:com|org|biz))\b/gi },
     // 이름 자리는 `<user>` 같은 꺾쇠 자리표시를 통째로 잡는다. 글롭·변수(`*`·`$`·`{`)가 섞인 경로는 실제 계정이 아니다.
     { id: 'personal-path', re: /\/(?:home|Users|Volumes)\/(<[^>\s]+>|[^/\s'"`)\]}<>,;:]+)/g, allow: (m) => PLACEHOLDER.test(m[1]) || /[*${]|^</.test(m[1]) },
+    // 개인 메일(무료 메일 서비스) — 제외 파일(README·CHANGELOG·적용된 마이그레이션)에도 적용한다.
+    // 주소 앞부분은 공개 CI 로그로 새지 않게 가린다(mask).
+    { id: 'personal-email', personal: true, mask: (m) => m[0].replace(/^[^@]+/, '***'), re: new RegExp(`\\b[A-Za-z0-9._%+-]+@(?:${[
+        'gmail.com', 'googlemail.com', 'naver.com', 'nate.com', 'daum.net', 'hanmail.net', 'kakao.com', 'icloud.com', 'me.com', 'mac.com',
+        'outlook.com', 'outlook.kr', 'hotmail.com', 'hotmail.co.kr', 'live.com', 'msn.com', 'yahoo.com', 'yahoo.co.kr', 'yahoo.co.jp',
+        'aol.com', 'gmx.com', 'gmx.de', 'gmx.net', 'mail.ru', 'yandex.ru', 'qq.com', '163.com', '126.com', 'protonmail.com', 'proton.me', 'pm.me',
+    ].map((d) => d.replace(/\./g, '\\.')).join('|')})(?![A-Za-z0-9-]|\\.[A-Za-z0-9])`, 'gi') },
 ];
+
+/** 제외 파일에서도 package-lock 은 검사하지 않는다(외부 패키지 작성자 메일이 들어 있다) */
+const NEVER_SCAN = /(^|\/)package-lock\.json$/;
 
 /** 쉼표·줄바꿈 구분 목록 → 비어 있지 않은 문자열들(앞뒤 공백 제거) */
 export function parseForbidden(raw) {
@@ -45,8 +55,11 @@ export function shortForbidden(forbidden) {
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** text 에서 걸린 것 — { rule, line }. 비밀값은 rule 이 `forbidden#<번호>` 이고 값은 싣지 않는다. */
-export function scanText(text, forbidden = []) {
+/** text 에서 걸린 것 — { rule, line }. 비밀값은 rule 이 `forbidden#<번호>` 이고 값은 싣지 않는다.
+ *  personalOnly: 개인정보 규칙만 본다(제외 파일용). */
+export function scanText(text, forbidden = [], { personalOnly = false } = {}) {
+    const rules = personalOnly ? RULES.filter((r) => r.personal) : RULES;
+    if (personalOnly) forbidden = [];
     const hits = [];
     // 앞뒤가 영숫자가 아닐 때만 일치(항목 끝 글자가 영숫자인 쪽만 경계를 본다 — `@corp.example` 같은 항목도 잡힌다).
     // 짧은 항목은 건너뛰되 번호는 그대로 둔다.
@@ -58,9 +71,9 @@ export function scanText(text, forbidden = []) {
     });
     const lines = text.split('\n');
     lines.forEach((line, i) => {
-        for (const r of RULES) {
+        for (const r of rules) {
             for (const m of line.matchAll(r.re)) {
-                if (!r.allow || !r.allow(m)) hits.push({ rule: r.id, line: i + 1, match: m[0] });
+                if (!r.allow || !r.allow(m)) hits.push({ rule: r.id, line: i + 1, match: r.mask ? r.mask(m) : m[0] });
             }
         }
         patterns.forEach((re, k) => {
@@ -74,11 +87,12 @@ export function scanRepo(root, forbidden = []) {
     const files = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
     const out = [];
     for (const f of files) {
-        if (EXCLUDE.some((re) => re.test(f))) continue;
+        if (NEVER_SCAN.test(f)) continue;
+        const personalOnly = EXCLUDE.some((re) => re.test(f));
         let buf;
         try { buf = readFileSync(path.join(root, f)); } catch { continue; }   // 지운 파일·서브모듈
         if (buf.includes(0)) continue;   // 바이너리
-        for (const h of scanText(buf.toString('utf8'), forbidden)) out.push({ file: f, ...h });
+        for (const h of scanText(buf.toString('utf8'), forbidden, { personalOnly })) out.push({ file: f, ...h });
     }
     return out;
 }

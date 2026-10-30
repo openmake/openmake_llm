@@ -59,3 +59,29 @@ test('제외: 현재 있는 마이그레이션(195 이하)과 그 rollback 만 �
     assert.equal(excluded('db/migrations/rollbacks/196_new_feature_rollback.sql'), false);
     assert.equal(excluded('db/migrations/README.md'), false);
 });
+
+test('개인 메일: 무료 메일 주소를 잡는다 — 제외 파일(README 등)에서도 잡는다', () => {
+    const j = (...p) => p.join('');
+    const hits = scanText([j('a someone@gm', 'ail.com'), j('b x.y@nav', 'er.com'), j('c ok support@example.com'), j('d z@hanm', 'ail.net')].join('\n'));
+    assert.deepEqual(hits.map((h) => `${h.line}:${h.rule}`), ['1:personal-email', '2:personal-email', '4:personal-email']);
+    // 제외 파일은 개인 메일 규칙만 적용한다 — 범용 경로 규칙은 넘긴다
+    const only = scanText([j('a someone@gm', 'ail.com'), j('b /ho', 'me/realname/x')].join('\n'), [], { personalOnly: true });
+    assert.deepEqual(only.map((h) => `${h.line}:${h.rule}`), ['1:personal-email']);
+});
+
+test('개인 메일: 공개 CI 로그로 새지 않게 주소 앞부분은 가리고 도메인만 남긴다', () => {
+    const j = (...p) => p.join('');
+    const [hit] = scanText(j('contact: someone@gm', 'ail.com'));
+    assert.equal(hit.match, '***@gmail.com');
+});
+
+test('개인 메일: 도메인은 실제 무료 메일 목록 그대로 — 지역 도메인은 잡고 없는 조합은 넘긴다', () => {
+    const j = (...p) => p.join('');
+    const lines = [j('a x@yahoo.co', '.kr'), j('b x@p', 'm.me'), j('c x@q', 'q.com'), 'd x@gmail.me', 'e x@me.net'];
+    assert.deepEqual(scanText(lines.join('\n')).map((h) => `${h.line}:${h.rule}`), ['1:personal-email', '2:personal-email', '3:personal-email']);
+});
+
+test('저장소: 제외 파일(README·CHANGELOG·마이그레이션)에도 개인 메일이 없다', () => {
+    const hits = scanRepo(root).filter((h) => h.rule === 'personal-email');
+    assert.deepEqual(hits.map((h) => `${h.file}:${h.line}`), []);
+});
