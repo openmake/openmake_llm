@@ -89,10 +89,16 @@ jobs:
           OMK_FORBIDDEN_STRINGS: ${{ secrets.OMK_FORBIDDEN_STRINGS }}
         run: node scripts/ci/org-specific-strings.mjs
 
-      # 커밋 작성자·커미터 메일은 GitHub noreply 만 — 공개 저장소에 개인 메일이 남지 않게 PR 범위 커밋을 본다.
+      # 커밋 작성자·커미터·트레일러 메일은 GitHub noreply 만, 이름은 조직 목록과 대조 — 공개 저장소에 개인정보가 남지 않게 한다.
+      # 이미 올라간 커밋을 보는 백스톱이다(첫 관문은 계정의 노출 push 차단 설정과 로컬 `npm run check:commit-identity`).
+      # PR: 기준 브랜치와의 merge-base 부터. push: 직전 끝(before)부터 — 새 브랜치(before 가 0)는 건너뛴다.
       - name: "Gate 0.2: Commit identity"
-        if: github.event_name == 'pull_request'
-        run: node scripts/ci/commit-identity.mjs "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000')
+        env:
+          OMK_FORBIDDEN_STRINGS: ${{ secrets.OMK_FORBIDDEN_STRINGS }}
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.event.pull_request.base.ref) || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/ci/commit-identity.mjs "$BASE" "$HEAD_SHA"
 
       # ─── Gate 0: API Contract Drift ───
       # packages/api-contracts 산출물이 TS SoT(swagger/spec-core·shared-types)와 일치하는지 검사.
