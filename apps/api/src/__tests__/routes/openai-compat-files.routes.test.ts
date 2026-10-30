@@ -149,8 +149,8 @@ describe('openai-compat files[] 확장', () => {
 });
 
 
-describe('openai-compat context overflow', () => {
-    it('returns 413 for an input that cannot fit the model context', async () => {
+describe('openai-compat 문맥 초과', () => {
+    it('모델 문맥에 들어가지 않는 입력은 413', async () => {
         const { ProviderError } = await import('../../providers/provider-errors');
         setClusterManager({} as unknown as ClusterManager);
         const spy = jest.spyOn(ChatRequestHandler, 'processChat').mockRejectedValueOnce(new ProviderError('CONTEXT_TOO_LARGE', 'too many tokens'));
@@ -163,8 +163,8 @@ describe('openai-compat context overflow', () => {
 });
 
 
-describe('openai-compat attachment usage estimate', () => {
-    it('includes extracted attachment text in the reported prompt estimate', async () => {
+describe('openai-compat 첨부 사용량 추정', () => {
+    it('보고하는 prompt 추정치에 첨부 추출 내용을 포함한다', async () => {
         setClusterManager({} as unknown as ClusterManager);
         const spy = jest.spyOn(ChatRequestHandler, 'processChat').mockResolvedValue({ response: 'ok', sessionId: 'test-session', model: 'test-model' } as never);
         try {

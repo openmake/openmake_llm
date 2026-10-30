@@ -1,4 +1,3 @@
-import { ProviderError } from '../providers/provider-errors';
 import { Router, Request, Response } from 'express';
 import { createHash } from 'crypto';
 import { ClusterManager } from '../cluster/manager';
@@ -13,6 +12,7 @@ import {
 import { listAvailableModels } from '../chat/profile-resolver';
 import { resolveLocalModelId } from '../config/local-model-alias';
 import { parseFullModelId } from '../providers/i-provider';
+import { ProviderError } from '../providers/provider-errors';
 import { getProviderCatalogEntry } from '../config/external-providers';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { OpenAICompatSessionRepository } from '../data/repositories/oaicompat-session-repo';
@@ -458,7 +458,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 for (const p of m.content) if (p.type === 'text') promptTextParts.push(p.text);
             }
         }
-        // Usage remains an estimate, but must include extracted file content actually sent to chat.
+        // 사용량은 추정치지만, 실제로 채팅에 넘긴 첨부 추출 내용까지 포함해야 한다.
         const promptTokens = OpenAICompatService.estimateTokens([...promptTextParts, fileContext].join(' '));
         const completionTokens = OpenAICompatService.estimateTokens(result.response);
 
