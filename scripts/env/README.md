@@ -260,13 +260,16 @@ LiteLLM 버전은 `OMK_LITELLM_SPEC` 로 고정한다 — 설치 스크립트는
 1. **vLLM 먼저** — 실제 런처의 원본은 openmake_vllm 의 `env/chat.env` 다(레포의 `scripts/vllm/qwen-serve.sh` 는 참조본). 정식 이름을 맨 앞에,
    옛 이름을 alias 로 둔다: `QWEN_SERVED_MODEL_NAME=<새 ID> QWEN_SERVED_MODEL_ALIASES=qwen3.8-27b`. 주지 않으면 종전대로 `qwen3.8-27b` 하나다(참조본은 프로세스 env 나 `vllm.env` 어느 쪽에 둬도 읽는다).
    게이트웨이를 거치지 않고 vLLM 을 직접 부르는 호출이 있어도 옛 이름이 통하도록 alias 를 남긴다. 이 레포의 변경은 vLLM 서버를 바꾸지 않는다.
-2. **그다음 omk** — `omk env install <env> --dgx-host H [--vllm-api-key K]` 가 vLLM `/v1/models` 에서 정식 이름을 읽는다(옛 이름·`gpt-3.5-turbo` 를 뺀
-   나머지 하나 — 둘 이상이면 멈추고 `OMK_DGX_MODEL=<값>` 으로 고르게 한다, 준 값은 served 목록에 있어야 한다). 앱 `.env` 의 `LLM_DEFAULT_MODEL` 과
+2. **그다음 omk** — `omk env install <env> --dgx-host H [--vllm-api-key K]` 가 vLLM `/v1/models` 에서 정식 이름을 읽는다(기본 모델 중 옛 이름·`gpt-3.5-turbo`·config 의
+   다른 이름을 뺀 나머지 하나 — LoRA 어댑터(`parent` 가 있는 항목)는 보지 않는다. 둘 이상이면 멈추고 `OMK_DGX_MODEL=<값>` 으로 고르게 한다, 준 값은 served 목록에 있어야 한다). 앱 `.env` 의 `LLM_DEFAULT_MODEL` 과
    게이트웨이 `litellm.env` 의 `OMK_DGX_MODEL` 이 같은 값을 받고, 환경의 config 사본에 새 이름 항목이 생기며 `qwen3.8-27b`·`gpt-3.5-turbo` 항목은
    upstream 이 새 이름으로 바뀐다(레포 config 는 그대로). vLLM 이 새 이름을 서빙하기 전에 바꾸면 게이트웨이가 없는 이름을 불러 채팅이 실패한다.
-   - `env update` 도 DGX 를 쓰는 환경(`litellm.env` 에 `QWEN_VLLM_API_BASE`)이면 같은 vLLM 을 읽어, 이름이 바뀌었으면 첫 부작용 전에 `.env`·`litellm.env` 를
-     같은 값으로 맞추고 끝에 재시작한다. 앱 기본 모델이 DGX 이름(served·기억값·`qwen3.8-27b`)이 아니면 바꾸지 않고 멈춘다. vLLM 에 닿지 못하면
-     경고 한 줄 뒤 기억값·기본값으로 진행한다. 되돌리려면 `OMK_DGX_MODEL=qwen3.8-27b omk env update <env>`(served 에 있어야 한다).
+   - `env update` 도 DGX 를 쓰는 환경(`litellm.env` 에 `QWEN_VLLM_API_BASE`)이면 같은 vLLM 을 읽는다. 판정은 첫 부작용 전에 하고(앱 기본 모델이
+     DGX 이름 — served·기억값·`qwen3.8-27b` — 이 아니면 바꾸지 않고 멈춘다), `.env`·`litellm.env` 쓰기는 배포 뒤 게이트웨이를 다시 그리기 직전에 같은 값으로
+     함께 한 뒤 API 를 재시작한다(배포 중에는 옛 이름 라우트가 그대로라 채팅이 끊기지 않는다). vLLM 에 닿지 못하면 경고 한 줄 뒤 기억값·기본값으로 진행한다.
+   - **명시값은 고정된다** — `OMK_DGX_MODEL=<값>` 으로 준 이름(예: 되돌리기 `OMK_DGX_MODEL=qwen3.8-27b omk env update <env>`)은 `litellm.env` 에
+     `OMK_DGX_MODEL_PINNED=1` 로 남아 다음 자동 update·재설치가 감지값으로 덮어쓰지 않는다. 감지로 돌아가려면 `OMK_DGX_MODEL=auto omk env update <env>`.
+     고정된 값을 vLLM 이 더는 서빙하지 않으면 update 가 멈춘다.
    - 이름은 영숫자와 `.` `_` `-` 만(128자 이하, `/`·`:` 불가). config 의 다른 이름(`gpt-3.5-turbo`·`jev-decision` 등)이나 `OMK_UPSTREAM_MODEL`(이번에 주는 `--llm-model` 포함 — DGX ID 가 기본값 `qwen3.8-27b` 여도)과 겹치면 `.env`·`litellm.env` 를 바꾸기 전에 거부한다.
      저장된 값이 잘못돼 config 를 만들 수 없으면 `install`·`update`·`dev setup` 이 그 자리에서 멈춘다(기존 config·게이트웨이는 그대로).
    - `OMK_UPSTREAM_MODEL`(`--llm-model`)이 config 의 정적 이름(`qwen3.8-27b`·`jev-decision`·`gpt-3.5-turbo` 등)과 같으면 DGX 기록이 없어도 멈춘다(자동 수정 없음).

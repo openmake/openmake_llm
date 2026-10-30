@@ -426,13 +426,15 @@ eq "dgx: 기본값을 명시하면 되돌린다" "$(dotenv_get "$OL/.env" LLM_DE
 # vLLM 서빙 이름 자동 감지 — curl 은 가짜(실제 네트워크 없음). 본문은 실제 vLLM /v1/models 형식(permission[].id=modelperm-…).
 vm_body() { # $@=served id → vLLM /v1/models 본문
     local i out='' sep=''
-    for i in "$@"; do
-        out="$out$sep{\"id\":\"$i\",\"object\":\"model\",\"created\":1,\"owned_by\":\"vllm\",\"root\":\"/models/x-fp4-local\",\"parent\":null,\"max_model_len\":262144,\"permission\":[{\"id\":\"modelperm-$i\",\"object\":\"model_permission\",\"group\":null}]}"; sep=','
+    local id parent
+    for i in "$@"; do   # name@parent = LoRA 어댑터(vLLM 은 parent 에 기본 모델 이름을 넣는다)
+        id="${i%%@*}"; parent=null; [[ "$i" != *@* ]] || parent="\"${i#*@}\""
+        out="$out$sep{\"id\":\"$id\",\"object\":\"model\",\"created\":1,\"owned_by\":\"vllm\",\"root\":\"/models/x-fp4-local\",\"parent\":$parent,\"max_model_len\":262144,\"permission\":[{\"id\":\"modelperm-$id\",\"object\":\"model_permission\",\"group\":null}]}"; sep=','
     done
     printf '{"object":"list","data":[%s]}' "$out"
 }
 vm_fake() { # $1=served(공백 구분) | - (미도달) | raw:<본문> — 이 하위 셸에서만 curl 을 바꾼다
-    case "$1" in -) VM_BODY=""; VM_CODE=000 ;; raw:*) VM_BODY="${1#raw:}"; VM_CODE=200 ;; *) VM_BODY="$(vm_body $1)"; VM_CODE=200 ;; esac
+    case "$1" in -) VM_BODY=""; VM_CODE=000 ;; code:*) VM_BODY=""; VM_CODE="${1#code:}" ;; raw:*) VM_BODY="${1#raw:}"; VM_CODE=200 ;; *) VM_BODY="$(vm_body $1)"; VM_CODE=200 ;; esac
     curl() { [[ -z "${VM_MARK:-}" ]] || : > "$VM_MARK"; printf '%s\n%s' "$VM_BODY" "$VM_CODE"; }
 }
 vm() { # $1=served … 나머지=명령 → "출력|rc"
@@ -449,19 +451,33 @@ eq "vllm 감지: 미도달·기억값 없음 → 옛 이름"  "$(vm - dgx_resolv
 eq "vllm 감지: 명시값 + 미도달 → 명시값"      "$(vm - dgx_resolve_model http://v k a-1 mem-1)" "a-1 fallback|0"
 eq "vllm 감지: 쓸 수 없는 서빙 이름 → 중단"   "$(vm 'qwen3.8-27b bad:id' dgx_resolve_model http://v k '' '')" "|2"
 eq "vllm 목록: id 만(modelperm 제외)"         "$(vm 'qwen3.8-27b chat-new' dgx_served_models http://v/ k)" "$(printf 'qwen3.8-27b\nchat-new')|0"
-eq "vllm 목록: 빈 JSON → 미도달"              "$(vm 'raw:{}' dgx_served_models http://v k)" "|1"
-eq "vllm 목록: HTML 오류 페이지 → 미도달"      "$(vm 'raw:<html>bad gateway</html>' dgx_served_models http://v k)" "|1"
+eq "vllm 목록: 빈 JSON → 미도달(코드 출력)"    "$(vm 'raw:{}' dgx_served_models http://v k)" "200|1"
+eq "vllm 목록: HTML 오류 페이지 → 미도달"      "$(vm 'raw:<html>bad gateway</html>' dgx_served_models http://v k)" "200|1"
+eq "vllm 목록: 401 → 미도달(코드 출력)"        "$(vm code:401 dgx_served_models http://v k)" "401|1"
+eq "vllm 목록: LoRA 어댑터(parent 있음) 제외"   "$(vm 'qwen3.8-27b chat-new jev-decision@qwen3.8-27b' dgx_served_models http://v k)" "$(printf 'qwen3.8-27b\nchat-new')|0"
+eq "vllm 감지: 어댑터만 더 있음 → 옛 이름"      "$(vm 'qwen3.8-27b jev-decision@qwen3.8-27b' dgx_resolve_model http://v k '' '')" "qwen3.8-27b served|0"
+eq "vllm 감지: 새 이름 + 어댑터 → 새 이름"      "$(vm 'chat-new qwen3.8-27b jev-decision@chat-new' dgx_resolve_model http://v k '' '')" "chat-new served|0"
+eq "vllm 감지: config 의 다른 이름은 후보 아님"  "$(vm 'qwen3.8-27b jev-decision chat-new' dgx_resolve_model http://v k '' '' 0 "$RC")" "chat-new served|0"
+eq "vllm 감지: 고정된 기억값 유지"             "$(vm 'qwen3.8-27b chat-new' dgx_resolve_model http://v k '' qwen3.8-27b 1)" "qwen3.8-27b pinned|0"
+eq "vllm 감지: auto 는 고정을 풀고 감지"        "$(vm 'qwen3.8-27b chat-new' dgx_resolve_model http://v k auto qwen3.8-27b 1)" "chat-new served|0"
+eq "vllm 감지: 고정값이 서빙 안 됨 → 중단"      "$(vm 'chat-new' dgx_resolve_model http://v k '' old-pin 1)" "|2"
+ok "vllm 감지: 미도달 경고에 HTTP 코드"         '( vm_fake code:401; dgx_resolve_model http://v k "" "" 2>&1 >/dev/null ) | grep -q "HTTP 401"'
+ok "vllm 감지: 경고·로그에 키가 없다"           '! ( vm_fake code:401; dgx_resolve_model http://v sekret-k "" "" 2>&1 ) | grep -q sekret-k'
 # 설치: --dgx-host 실행의 사전 검사가 OMK_DGX_MODEL 을 감지값으로 확정하고 dgx_apply 가 두 파일에 쓴다.
 VD="$TMP/vd"; mkdir -p "$VD/scripts/vllm"; cp "$RC" "$VD/scripts/vllm/"; printf 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' > "$VD/.env"
 ( vm_fake 'qwen3.8-27b chat-new'; OMK_DGX_MODEL=""; dgx_preflight "$VD" vd 1 "" "" http://v k >/dev/null 2>&1 && dgx_apply "$VD" vd 192.0.2.1 k >/dev/null 2>&1 ); rc=$?
-eq "vllm 감지: 설치가 앱·게이트웨이에 감지값" "$rc|$(dotenv_get "$VD/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$(litellm_dir vd)/litellm.env" OMK_DGX_MODEL)" "0|chat-new|chat-new"
+eq "vllm 감지: 설치가 앱·게이트웨이에 감지값(고정 아님)" "$rc|$(dotenv_get "$VD/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$(litellm_dir vd)/litellm.env" OMK_DGX_MODEL)|$(dotenv_get "$(litellm_dir vd)/litellm.env" OMK_DGX_MODEL_PINNED)" "0|chat-new|chat-new|0"
+( vm_fake 'qwen3.8-27b chat-new'; OMK_DGX_MODEL=qwen3.8-27b; dgx_preflight "$VD" vd 1 "" "" http://v k >/dev/null 2>&1 && dgx_apply "$VD" vd 192.0.2.1 k >/dev/null 2>&1 ); rc=$?
+eq "vllm 감지: 설치 명시값은 고정"                 "$rc|$(dotenv_get "$VD/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$(litellm_dir vd)/litellm.env" OMK_DGX_MODEL_PINNED)" "0|qwen3.8-27b|1"
+( vm_fake 'qwen3.8-27b chat-new'; OMK_DGX_MODEL=""; dgx_preflight "$VD" vd 1 "" "" http://v k >/dev/null 2>&1 && dgx_apply "$VD" vd 192.0.2.1 k >/dev/null 2>&1 ); rc=$?
+eq "vllm 감지: 고정 뒤 재설치도 고정값 유지"        "$rc|$(dotenv_get "$VD/.env" LLM_DEFAULT_MODEL)|$(dotenv_get "$(litellm_dir vd)/litellm.env" OMK_DGX_MODEL_PINNED)" "0|qwen3.8-27b|1"
 # 업데이트: DGX 를 쓰는 환경(QWEN_VLLM_API_BASE)이면 vLLM 이름으로 두 파일을 함께 맞춘다 — 아니면 아무것도 바꾸지 않는다.
 US="$TMP/us"; mkdir -p "$US/scripts/vllm" "$(litellm_dir us)"; cp "$RC" "$US/scripts/vllm/"; USL="$(litellm_dir us)/litellm.env"
 us_run() { # $1=.env $2=litellm.env $3=served(- 미도달) [$4=OMK_DGX_MODEL] → rc|동기화 표시|앱값|게이트웨이값|curl 호출|파일 그대로
     printf '%b' "$1" > "$US/.env"; printf '%b' "$2" > "$USL"; rm -f "$TMP/us.mark"
     local before out; before="$(cat "$US/.env" "$USL" | cksum)"
     # shellcheck disable=SC2034  # dgx_update_sync 가 OMK_DGX_MODEL 을 읽는다
-    out="$( vm_fake "$3"; VM_MARK="$TMP/us.mark"; OMK_DGX_MODEL="${4:-}"; ( dgx_update_sync "$US" us >/dev/null 2>&1; printf 'f%s' "$DGX_SYNC_CHANGED" ); printf '|%s' "$?" )"
+    out="$( vm_fake "$3"; VM_MARK="$TMP/us.mark"; OMK_DGX_MODEL="${4:-}"; ( { dgx_update_sync "$US" us && dgx_update_apply "$US" us; } >/dev/null 2>&1; printf 'f%s' "$DGX_SYNC_CHANGED" ); printf '|%s' "$?" )"
     printf '%s|%s|%s|%s|%s' "${out##*|}" "${out%%|*}" "$(dotenv_get "$US/.env" LLM_DEFAULT_MODEL)" "$(dotenv_get "$USL" OMK_DGX_MODEL)" \
         "$([[ -f "$TMP/us.mark" ]] && echo curl || echo nocurl)|$([[ "$(cat "$US/.env" "$USL" | cksum)" == "$before" ]] && echo same || echo changed)"
 }
@@ -475,6 +491,16 @@ eq "update sync: 감지값 = 업스트림 → 중단"         "$(us_run 'LLM_DEF
 eq "update sync: 미도달 → 그대로(가드가 판정)"     "$(us_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' "$UB" -)" "0|f0|qwen3.8-27b||curl|same"
 eq "update sync: 명시값으로 되돌리기"              "$(us_run 'LLM_DEFAULT_MODEL=chat-new\n' "${UB}OMK_DGX_MODEL=chat-new\n" 'qwen3.8-27b chat-new' qwen3.8-27b)" "0|f1|qwen3.8-27b|qwen3.8-27b|curl|changed"
 eq "update sync: 명시값이 앱 외부 기본값도 바꿈"    "$(us_run 'LLM_DEFAULT_MODEL=foreign-1\n' "$UB" 'qwen3.8-27b chat-new' chat-new)" "0|f1|chat-new|chat-new|curl|changed"
+eq "update sync: 되돌린 값은 고정으로 기록"         "$(us_run 'LLM_DEFAULT_MODEL=chat-new\n' "${UB}OMK_DGX_MODEL=chat-new\n" 'qwen3.8-27b chat-new' qwen3.8-27b)|$(dotenv_get "$USL" OMK_DGX_MODEL_PINNED)" "0|f1|qwen3.8-27b|qwen3.8-27b|curl|changed|1"
+eq "update sync: 고정값은 다음 자동 update 가 유지"  "$(us_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' "${UB}OMK_DGX_MODEL=qwen3.8-27b\nOMK_DGX_MODEL_PINNED=1\n" 'qwen3.8-27b chat-new')" "0|f0|qwen3.8-27b|qwen3.8-27b|curl|same"
+eq "update sync: auto 로 고정 해제 → 감지값"        "$(us_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' "${UB}OMK_DGX_MODEL=qwen3.8-27b\nOMK_DGX_MODEL_PINNED=1\n" 'qwen3.8-27b chat-new' auto)|$(dotenv_get "$USL" OMK_DGX_MODEL_PINNED)" "0|f1|chat-new|chat-new|curl|changed|0"
+eq "update sync: auto 는 앱 외부 기본값을 바꾸지 않음" "$(us_run 'LLM_DEFAULT_MODEL=foreign-1\n' "$UB" 'qwen3.8-27b chat-new' auto)" "2||foreign-1||curl|same"
+eq "update sync: 옛 이름만 서빙·무기록 → 무변경"     "$(us_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' "$UB" 'qwen3.8-27b gpt-3.5-turbo')" "0|f0|qwen3.8-27b||curl|same"
+eq "update sync: 어댑터가 함께 서빙돼도 감지"        "$(us_run 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' "$UB" 'qwen3.8-27b chat-new jev-decision@chat-new')" "0|f1|chat-new|chat-new|curl|changed"
+# 판정만 하고 쓰지 않는다 — 배포 전에 멈춰도 두 파일은 그대로다.
+printf 'LLM_DEFAULT_MODEL=qwen3.8-27b\n' > "$US/.env"; printf '%b' "$UB" > "$USL"; S4="$(cat "$US/.env" "$USL" | cksum)"
+# shellcheck disable=SC2034  # dgx_update_sync 가 OMK_DGX_MODEL 을 읽는다
+eq "update sync: 판정 단계는 파일을 쓰지 않는다"     "$( vm_fake 'qwen3.8-27b chat-new'; OMK_DGX_MODEL=""; dgx_update_sync "$US" us >/dev/null 2>&1; printf '%s|%s' "$DGX_SYNC_TARGET" "$(cat "$US/.env" "$USL" | cksum)" )" "chat-new|$S4"
 
 port_in_use() { return 1; }   # :443 점유 여부와 무관하게 렌더만 본다
 dotenv_set "$OL/.env" OMK_HTTPS_HOST mac-mini.local; dotenv_set "$OL/.env" OMK_ARTIFACT_VIEWER 1
