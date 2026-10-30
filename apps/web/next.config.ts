@@ -19,11 +19,17 @@ const { apiPort, webPort } = createRequire(import.meta.url)(
  * 번들에 인라인한다. 비어 있으면 화면이 링크를 숨긴다. .env 전체를 빌드 환경에 넣지 않고 이 키만 읽는다.
  */
 const rootEnv: Record<string, string> = (() => {
+  let dotenv: { parse(src: Buffer): Record<string, string> };
   try {
-    const dotenv = createRequire(import.meta.url)("dotenv") as { parse(src: Buffer): Record<string, string> };
+    dotenv = createRequire(import.meta.url)("dotenv") as typeof dotenv;
+  } catch {
+    console.warn("[next.config] dotenv 를 불러오지 못해 루트 .env 의 외부 링크 설정을 읽지 않습니다 (셸 환경값만 사용)");
+    return {};
+  }
+  try {
     return dotenv.parse(readFileSync(new URL("../../.env", import.meta.url)));
   } catch {
-    return {};
+    return {}; // 루트 .env 없음 — 셸 환경값만 쓴다
   }
 })();
 const publicSetting = (key: string): string => process.env[key] || rootEnv[key] || "";
