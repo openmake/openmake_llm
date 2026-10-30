@@ -22,6 +22,11 @@ jest.mock('../config/env', () => ({
     getConfig: jest.fn()
 }));
 
+const mockWarn = jest.fn();
+jest.mock('../utils/logger', () => ({
+    createLogger: () => ({ warn: mockWarn, info: jest.fn(), error: jest.fn(), debug: jest.fn() })
+}));
+
 import { getConfig } from '../config/env';
 import { getVapidKeys, generateVapidKeys } from '../utils/vapid';
 
@@ -49,6 +54,7 @@ describe('getVapidKeys', () => {
         expect(result.publicKey).toBe('pub-key');
         expect(result.privateKey).toBe('priv-key');
         expect(result.subject).toBe('mailto:admin@example.com');
+        expect(result.enabled).toBe(true);
     });
 
     test('공개키 없으면 setVapidDetails 호출 안 함', () => {
@@ -80,8 +86,12 @@ describe('getVapidKeys', () => {
             vapidSubject: ''
         });
 
-        getVapidKeys();
+        expect(getVapidKeys().enabled).toBe(false);
         expect(mockSetVapidDetails).not.toHaveBeenCalled();
+        // 꺼졌다는 사실은 한 번만 알린다(부팅 때 1회 — 이후 호출은 조용히)
+        getVapidKeys();
+        expect(mockWarn).toHaveBeenCalledTimes(1);
+        expect(mockWarn.mock.calls[0][0]).toContain('VAPID_SUBJECT');
     });
 
     test('키 미설정 시 빈 문자열 반환', () => {
@@ -94,6 +104,7 @@ describe('getVapidKeys', () => {
         const result = getVapidKeys();
         expect(result.publicKey).toBe('');
         expect(result.privateKey).toBe('');
+        expect(result.enabled).toBe(false);
     });
 });
 

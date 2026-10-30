@@ -22,6 +22,9 @@
 #   caddy run --config <레포 경로>/scripts/caddy/Caddyfile
 #   (`openmake_llm.sh deploy` 가 이 파일을 validate → 호스트 Caddyfile 로 복사 → reload 한다.
 #    호스트 파일을 직접 고치면 다음 deploy 에 덮어써진다 — 호스트 고유 사이트는 아래 Caddyfile.d 에 둔다)
+#   ⚠️ 배포(업그레이드) 전에 호스트 Caddyfile.d/<site>.caddy 를 먼저 만든다 — 호스트 고유 사이트가 이 파일에서
+#      빠졌으므로, 없으면 deploy 의 reload 시점에 그 사이트가 내려간다. deploy 는 복사 뒤 호스트 경로로 다시
+#      validate 하고, 실패하면 이전 파일로 되돌린다.
 #
 # 주의:
 #   - Caddy reverse_proxy 는 X-Forwarded-Host/Proto/For 를 자동 전달 →
