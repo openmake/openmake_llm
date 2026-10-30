@@ -35,6 +35,7 @@ import { licenseBlockReason } from './model-profiles';
 import { createLogger } from '../utils/logger';
 import { MODEL_PROBE } from './model-defaults';
 import { fetchGatewayModelInfo, selectLocalEntriesFromModelInfo } from './local-models-discovery';
+import { resolveLocalModelId } from './local-model-alias';
 
 const logger = createLogger('LocalModels');
 
@@ -75,6 +76,8 @@ export interface LocalModelEntry {
      * 구분해 로그·진단에서 신뢰도를 드러낸다.
      */
     contextLengthProbed?: boolean;
+    /** 같은 upstream 을 가리키는 다른 이름(옛 ID·gpt-3.5-turbo 등) — 발견이 채운다. 해석은 `local-model-alias` */
+    aliases?: string[];
 }
 
 /**
@@ -174,9 +177,10 @@ async function discoverLocalModels(
     return true;
 }
 
-/** id 로 카탈로그 엔트리 조회 (프로브 실측치 참조용). 미등록이면 undefined. */
+/** id 로 카탈로그 엔트리 조회 (프로브 실측치 참조용). alias 는 정식 엔트리로. 미등록이면 undefined. */
 export function findLocalModel(modelId: string): LocalModelEntry | undefined {
-    return getLocalModels().find((m) => m.id === modelId);
+    const id = resolveLocalModelId(modelId);
+    return getLocalModels().find((m) => m.id === id);
 }
 
 

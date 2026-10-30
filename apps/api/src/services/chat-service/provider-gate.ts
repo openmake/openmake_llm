@@ -26,6 +26,7 @@ import { buildFullModelId } from '../../providers/i-provider';
 import { ProviderError } from '../../providers/provider-errors';
 import { isExternalModelAllowed } from '../../config/external-model-policy';
 import { resolveEffectivePolicy } from '../org/effective-policy';
+import { resolveLocalModelId } from '../../config/local-model-alias';
 import type {
     ProviderRouter,
     ResolvedProvider,
@@ -98,6 +99,12 @@ export async function runProviderGate(
     if (resolved.providerId !== 'local-llm'
         && !isExternalModelAllowed(resolved.fullId, (await resolveEffectivePolicy(input.ctx.userId)).externalModel)) {
         throw new ProviderError('MODEL_ACCESS_RESTRICTED', `관리자 정책으로 사용할 수 없는 모델입니다: ${resolved.fullId}`);
+    }
+    // 로컬만: 옛 로컬 ID(모델 전환 전 이름·gpt-3.5-turbo)를 정식 ID 로 — 배지·대화기록·능력·프로필·컨텍스트가
+    // 실제 호출 모델(LLM_DEFAULT_MODEL)과 같은 ID 를 본다. 외부 provider 는 손대지 않는다.
+    if (resolved.providerId === 'local-llm') {
+        const modelId = resolveLocalModelId(resolved.modelId);
+        if (modelId !== resolved.modelId) return { ...resolved, modelId, fullId: buildFullModelId('local-llm', modelId) };
     }
     return resolved;
 }
