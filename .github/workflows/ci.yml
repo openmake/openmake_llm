@@ -93,13 +93,16 @@ jobs:
       # 이미 올라간 커밋을 사후에 잡는 검출이다(기록을 막는 것은 계정의 노출 push 차단 설정, push 전에는 `npm run check:commit-identity` 수동 실행).
       # PR: 기준 브랜치와의 merge-base 부터. push: 직전 끝(before)부터 — 새 브랜치(before 가 0)와 force-push(이력 재작성 등,
       # before 가 어느 ref 에서도 닿지 않는다)는 건너뛴다.
+      # main 이 아닌 쪽(dev push·base 가 main 이 아닌 PR)은 origin/main 에서 닿는 커밋을 뺀다 — main 커밋은 main 의 push·PR 검사가
+      # 판정하므로, main→dev 병합이 검사 도입 전의 옛 main 커밋을 범위로 끌어와 다시 걸리지 않게 한다(main 쪽은 제외 없이 본다).
       - name: "Gate 0.2: Commit identity"
         if: github.event_name == 'pull_request' || (github.event_name == 'push' && !github.event.forced && github.event.before != '0000000000000000000000000000000000000000')
         env:
           OMK_FORBIDDEN_STRINGS: ${{ secrets.OMK_FORBIDDEN_STRINGS }}
           BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.event.pull_request.base.ref) || github.event.before }}
           HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-        run: node scripts/ci/commit-identity.mjs "$BASE" "$HEAD_SHA"
+          EXCLUDE: ${{ ((github.event_name == 'push' && github.ref != 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'main')) && 'origin/main' || '' }}
+        run: node scripts/ci/commit-identity.mjs "$BASE" "$HEAD_SHA" --exclude "$EXCLUDE"
 
       # ─── Gate 0: API Contract Drift ───
       # packages/api-contracts 산출물이 TS SoT(swagger/spec-core·shared-types)와 일치하는지 검사.
