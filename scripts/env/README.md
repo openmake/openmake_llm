@@ -520,6 +520,10 @@ scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.en
 
 `dev setup` 은 앱 빌드와 앱의 PM2 기동을 하지 않는다(`install.sh --minimal --skip-build --no-start`) — 워크스페이스 패키지(`packages/*/dist`)만 빌드한다.
 `.env` 나 `node_modules` 가 없으면 `dev up` 이 `dev setup` 을 먼저 돌린다.
+`dev up` 은 기동 전에 의존성·워크스페이스 패키지를 맞춘다 — 마지막으로 설치한 `package-lock.json`·빌드한 `packages/` 의 해시를
+`node_modules/.omk-installed-lock`·`.omk-built-packages` 에 남기고(설치·빌드가 성공한 뒤, `dev setup` 도 남긴다), 지금과 다르거나 표식이 없으면
+`npm install`·`build:packages` 를 다시 돌린다. 동기화·손으로 한 `git pull`·브랜치 전환·실패 뒤 재실행을 모두 잡는다(표식이 없는 클론은 첫 실행에 한 번 돈다).
+`package-lock.json` 에 커밋하지 않은 변경이 있으면 그 변경을 지우지 않게 설치를 건너뛰고 경로와 정리 방법을 알린다.
 
 `dev up` 은 시작할 때 `dev sync` 를 먼저 한다 — 로컬 `dev` 가 origin/dev 보다 뒤처져 있으면 fast-forward 로만 따라간다(작업은 feature/* 에서 하므로 그걸로 충분하다).
 `dev` 가 체크아웃돼 있고 추적 파일에 변경 사항이 있거나, 로컬 `dev` 에 원격에 없는 커밋이 있으면 건드리지 않고 경고만 낸다(reset·rebase 는 하지 않는다). 원격을 못 읽어도 `dev up` 은 그대로 이어지고, 끄려면 `--no-sync`.
