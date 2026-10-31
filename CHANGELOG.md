@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.117.1](https://github.com/openmake/openmake_llm/compare/v1.117.0...v1.117.1) (2026-10-31)
+
+
+### 🐛 버그 수정
+
+* **ci:** skip commits already on main in the dev-side commit identity gate ([04dd619](https://github.com/openmake/openmake_llm/commit/04dd6198bf775cb72fb6564e00fc404cbdda7ac1))
+* **web:** 글꼴을 fontsource 패키지로 자체 호스팅 — 빌드가 Google Fonts 에 의존하지 않게 ([9065bd5](https://github.com/openmake/openmake_llm/commit/9065bd59914c3085d93181796441b259f77766d1))
+
 ## [1.117.0](https://github.com/openmake/openmake_llm/compare/v1.116.0...v1.117.0) (2026-10-30)
 
 
