@@ -1208,7 +1208,7 @@ echo '{"v":2}' > "$D/me/package-lock.json"; dsg "$D/me" commit -q -am pull; echo
 DU_OUT="$(du_out "$D" deps --no-sync)"
 ok "dev up: 더러운 lock → 설치 안 함"            '[[ "$DU_OUT" != *deps_install* ]]'
 ok "dev up: 더러운 lock → 경고에 경로"           '[[ "$DU_OUT" == *"자동 설치를 건너뜁니다: package-lock.json"* ]]'
-ok "dev up: 더러운 lock → 정리 방법 안내"        '[[ "$DU_OUT" == *"git checkout -- package-lock.json"* ]]'
+ok "dev up: 더러운 lock → 정리 방법 안내(클론 경로)" '[[ "$DU_OUT" == *"git -C \"$D/me\" checkout -- package-lock.json"* ]]'
 eq "dev up: 건너뛰면 표식 그대로"               "$(du_lmark "$D")" "$L0"
 git -C "$D/me" checkout -q -- package-lock.json
 eq "dev up: lock 정리 뒤 다음 실행 → 설치"        "$(du_run "$D" deps --no-sync)" "deps_install $D/me "
