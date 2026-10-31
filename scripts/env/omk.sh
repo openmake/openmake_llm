@@ -442,7 +442,7 @@ lockfile_changed() { # $1=dir $2=before $3=after
 # lock 에 맞는 버전으로 제자리 갱신 — npm ci 는 node_modules 를 비워 빌드가 도는 동안 실행 중 앱의 지연 로드가 깨진다.
 deps_install() { # $1=dir
     log_step "의존성 설치 (package-lock.json 변경)"
-    ( cd "$1" && npm install --no-audit --no-fund ) || die "npm install 실패 ($1) — 의존성을 맞추지 못해 중단합니다 (옛 빌드본이 그대로 돕니다)"
+    ( cd "$1" && npm install --no-audit --no-fund ) || die "npm install 실패 ($1) — 의존성을 맞추지 못해 중단합니다"
     restore_lockfiles "$1"
 }
 # 원격이 앞서 있는지 (fetch 포함). 0=뒤처짐(갱신 필요) 1=최신
@@ -2325,6 +2325,34 @@ dev_sync_branch() { # $1=저장소 $2=브랜치(dev)
     fi
     log_ok "$br: ${old:0:7}→${new:0:7} (${n}커밋)"
 }
+# 마지막으로 설치한 lock·빌드한 packages/ 를 node_modules 안 표식에 남기고, 지금과 다르면 다시 설치·빌드한다.
+# 있는 node_modules·dist 만 보고 기동하면 동기화·손으로 한 pull·브랜치 전환으로 바뀐 의존성이 빠진 채 뜬다
+# (2026-10-31: 웹 Module not found → 500). 표식은 성공한 뒤에만 쓰므로 실패·중단 뒤 다음 실행이 다시 시도한다.
+# node_modules/.package-lock.json(npm 숨은 lock)은 형식이 달라 package-lock.json 과 직접 비교할 수 없다 — 해시를 따로 남긴다.
+dev_lock_hash() { git -C "$DEV_LLM" hash-object package-lock.json 2>/dev/null || true; }
+dev_packages_hash() { # packages/ 의 커밋 트리 + 커밋 안 한 추적 파일 변경 (dist 같은 무시 파일은 빠진다)
+    local t; t="$(git -C "$DEV_LLM" rev-parse -q --verify HEAD:packages 2>/dev/null)" || return 0
+    printf '%s %s\n' "$t" "$(git -C "$DEV_LLM" diff --binary HEAD -- packages 2>/dev/null | git hash-object --stdin)"
+}
+dev_sync_deps() { # $1=1 이면 방금 setup 이 설치·빌드했다 — 표식만 남긴다
+    local lmark="$DEV_LLM/node_modules/.omk-installed-lock" pmark="$DEV_LLM/node_modules/.omk-built-packages" cur
+    cur="$(dev_lock_hash)"
+    if [[ "$1" == 1 ]]; then
+        printf '%s\n' "$cur" 2>/dev/null > "$lmark" || true
+    elif [[ -n "$cur" && "$cur" != "$(cat "$lmark" 2>/dev/null || true)" ]]; then
+        # deps_install 은 npm 이 고친 lock 을 되돌린다 — 개발자가 커밋하지 않은 lock 변경까지 지우지 않게 건너뛴다.
+        if [[ -n "$(git -C "$DEV_LLM" status --porcelain --untracked-files=no -- ':(glob)**/package-lock.json' 2>/dev/null)" ]]; then
+            log_warn "package-lock.json 에 커밋하지 않은 변경이 있어 자동 설치를 건너뜁니다 — 필요하면 직접 'npm install'"
+        else
+            deps_install "$DEV_LLM"
+            printf '%s\n' "$(dev_lock_hash)" 2>/dev/null > "$lmark" || true
+        fi
+    fi
+    cur="$(dev_packages_hash)"
+    if [[ "$1" != 1 && -n "$cur" && "$cur" != "$(cat "$pmark" 2>/dev/null || true)" ]]; then dev_build_packages; cur="$(dev_packages_hash)"; fi
+    [[ -d "$DEV_LLM/packages/shared-types/dist" && -d "$DEV_LLM/packages/plugin-contracts/dist" ]] || { dev_build_packages; cur="$(dev_packages_hash)"; }
+    [[ -z "$cur" ]] || printf '%s\n' "$cur" 2>/dev/null > "$pmark" || true
+}
 cmd_dev_sync() {
     dev_locate
     dev_sync_branch "$DEV_LLM" || exit 1
@@ -2341,21 +2369,13 @@ cmd_dev_up() {
             *)           target="$1" ;;
         esac; shift
     done
-    local before after setup_ran=0
-    before="$(git -C "$DEV_LLM" rev-parse -q --verify HEAD 2>/dev/null || true)"
     [[ $no_sync -eq 1 ]] || dev_sync_branch "$DEV_LLM" || true
-    after="$(git -C "$DEV_LLM" rev-parse -q --verify HEAD 2>/dev/null || true)"
+    local setup_ran=0
     [[ -f "$DEV_LLM/.env" && -d "$DEV_LLM/node_modules" ]] || { cmd_dev_setup; setup_ran=1; }
     # ~/.openmake 를 지워도 .env·node_modules 는 클론에 남아 setup 을 건너뛴다 — 래퍼는 여기서 되살린다.
     [[ -x "$OMK_ROOT/bin/omk" ]] || install_wrapper
     load_toolchain "$DEV_LLM"
-    # 동기화로 작업 트리가 옮겨졌으면 바뀐 lock·공용 패키지를 반영한다 — 있는 node_modules·dist 만 보고 기동하면
-    # 새 의존성이 빠진 채 뜬다(2026-10-31: 웹 Module not found → 500). setup 이 돌았으면 거기서 이미 했다.
-    if [[ $setup_ran -eq 0 && -n "$before" && -n "$after" && "$before" != "$after" ]]; then
-        if lockfile_changed "$DEV_LLM" "$before" "$after"; then deps_install "$DEV_LLM"; fi
-        git -C "$DEV_LLM" diff --quiet "$before" "$after" -- packages || dev_build_packages
-    fi
-    [[ -d "$DEV_LLM/packages/shared-types/dist" && -d "$DEV_LLM/packages/plugin-contracts/dist" ]] || dev_build_packages
+    dev_sync_deps "$setup_ran"
     # 접속 호스트 — 이번에 준 것(--host·--tailscale)을 .env 에 기억된 것과 합친다. 한 번 주면 다음부터는 생략 가능.
     local hosts; hosts="$(dotenv_get "$DEV_LLM/.env" OMK_DEV_HOSTS)"
     [[ $use_ts -eq 1 ]] && { local ts; ts="$(tailscale_hosts)"; [[ -n "$ts" ]] || die "tailscale 주소를 읽을 수 없습니다 (tailscale CLI·로그인 확인)"; hosts="$(csv_union "$hosts" "$ts")"; }
