@@ -2345,7 +2345,7 @@ dev_sync_deps() { # $1=1 이면 방금 setup 이 설치·빌드했다 — 표식
         dirty="$(git -C "$DEV_LLM" status --porcelain --untracked-files=no -- ':(glob)**/package-lock.json' 2>/dev/null | awk '{print $2}' | paste -sd' ' - || true)"
         if [[ -n "$dirty" ]]; then
             log_warn "커밋하지 않은 lock 변경이 있어 자동 설치를 건너뜁니다: $dirty"
-            log_warn "  npm 이 고친 설치 부산물이면 'git checkout -- $dirty' 뒤 다시 'omk dev up', 의도한 변경이면 커밋한 뒤 'omk dev up'"
+            log_warn "  npm 이 고친 설치 부산물이면 'git -C \"$DEV_LLM\" checkout -- $dirty' 뒤 다시 'omk dev up', 의도한 변경이면 커밋한 뒤 'omk dev up'"
         else
             deps_install "$DEV_LLM"
             printf '%s\n' "$(dev_lock_hash)" 2>/dev/null > "$lmark" || true
