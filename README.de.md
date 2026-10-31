@@ -363,7 +363,7 @@ Beiträge sind willkommen — Fehlerberichte, Fixes, Dokumentation sowie neue Sk
 
 Die CI führt bei jedem Push und Pull Request ein einziges **CI Gate** aus (Test → Build → Größe → Lint).
 
-**Community & Kontakt** — Fragen und Hilfe beim Self-Hosting: support@openmake.cc · Maintainer: riskpw@openmake.cc, rockyhan@openmake.cc. Wenn Ihnen OpenMake hilft, hilft ein Stern anderen Entwicklern, das Projekt zu finden.
+**Community & Kontakt** — Fragen und Hilfe beim Self-Hosting: support@openmake.cc. Wenn Ihnen OpenMake hilft, hilft ein Stern anderen Entwicklern, das Projekt zu finden.
 
 ## Lizenz
 

@@ -293,6 +293,14 @@ The installer writes a working `.env`. The essentials:
 
 `.env.example` is the full reference, and many operational settings can be changed at runtime in **Admin → System settings**. Database migrations apply automatically on boot. For a public address, pass `--public-url https://chat.example.com` to the installer; a Caddy configuration is included under `scripts/caddy/`.
 
+**Upgrading an existing install** — installation-specific addresses no longer have built-in defaults. Check these before `update`/`deploy`:
+
+- `VAPID_SUBJECT` (`mailto:` or `https:` contact) — empty means web push stays off even with VAPID keys set.
+- `SSO_BENCH_REDIRECT_URI` together with `NEXT_PUBLIC_BENCH_URL` — both are needed for the bench link and its sign-in hand-off.
+- `NEXT_PUBLIC_HOMEPAGE_URL` — empty hides the homepage link. `NEXT_PUBLIC_*` values are read at web build time.
+- iOS: set the `OPENMAKE_SERVER_URL` build setting (Info.plist `OpenMakeServerURL`); empty falls back to localhost. See `apps/ios/README.md`.
+- Caddy: create the host's `Caddyfile.d/<site>.caddy` for any host-specific site before deploying the updated `scripts/caddy/Caddyfile`.
+
 ---
 
 ## Development
@@ -362,7 +370,7 @@ Contributions are welcome — bug reports, fixes, documentation, and new skills 
 
 CI runs a single **CI Gate** (test → build → size → lint) on every push and pull request.
 
-**Community & contact** — questions and self-hosting help: support@openmake.cc · maintainers: riskpw@openmake.cc, rockyhan@openmake.cc. If OpenMake is useful to you, a star helps other developers find it.
+**Community & contact** — questions and self-hosting help: support@openmake.cc. If OpenMake is useful to you, a star helps other developers find it.
 
 ## License
 

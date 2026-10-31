@@ -5,8 +5,8 @@
 # edge 가 공개 443 에서 TLS 를 종단하고, cloudflared 가 호스트 안의 online
 # 리버스 프록시로 평문 전달한다. staging 은 공개 터널 없이 Tailscale 로 접속한다:
 #
-#   chat.openmake.cc          → online
-#   bench.openmake.cc         → online bench
+#   chat.example.com          → online
+#   bench.example.com         → online bench
 #   staging                   → Tailscale 호스트명:프록시 포트
 #
 # 포트를 여기에 박지 않는 이유: 인스턴스마다 다르고, 각 인스턴스의 .env 가 단일 출처다.
@@ -24,9 +24,9 @@ credentials-file: ~/.cloudflared/<TUNNEL_ID>.json
 
 ingress:
   # ── online ──
-  - hostname: chat.openmake.cc
+  - hostname: chat.example.com
     service: http://localhost:<ONLINE_PROXY_PORT>
-  - hostname: bench.openmake.cc
+  - hostname: bench.example.com
     service: http://localhost:<ONLINE_BENCH_PORT>
 
   # cloudflared 규칙: 마지막은 hostname 없는 catch-all 이어야 한다. 없으면 설정 자체가 거부된다.

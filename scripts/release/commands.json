@@ -122,7 +122,7 @@
       "cmd": "npm run build",
       "timeoutSec": 1800,
       "requiresEnv": [],
-      "skipLocal": "이 맥북은 빌드하지 않는다(로컬 정책) — CI Gate 2 가 같은 SHA 로 잰다",
+      "skipLocal": "로컬 개발 장비에서는 빌드하지 않는다(로컬 정책) — CI Gate 2 가 같은 SHA 로 잰다",
       "counts": null,
       "covers": []
     },
@@ -391,7 +391,7 @@
       "cmd": "./openmake_llm.sh canary-deploy --dry-run",
       "timeoutSec": 120,
       "requiresEnv": [],
-      "skipLocal": "운영 스크립트가 설치본 .env 를 읽는다 — 이 맥북에서는 돌리지 않고 스테이징에서 runbook §3 으로 확인",
+      "skipLocal": "운영 스크립트가 설치본 .env 를 읽는다 — 로컬 개발 장비에서는 돌리지 않고 스테이징에서 runbook §3 으로 확인",
       "counts": null,
       "covers": [
         "롤백"

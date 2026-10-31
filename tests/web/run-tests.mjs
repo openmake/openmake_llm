@@ -23,6 +23,7 @@ try {
     logLevel: 'warning',
   }));
   const result = spawnSync(process.execPath, ['--test', ...outputs], {
+    cwd: root,
     stdio: 'inherit',
     env: { ...process.env, NODE_PATH: resolve(root, 'node_modules') },
   });

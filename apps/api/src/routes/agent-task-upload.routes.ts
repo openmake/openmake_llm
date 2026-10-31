@@ -3,7 +3,7 @@
  * Agent Task 청크 업로드 라우트 — Cloudflare 100MB 상한 우회
  * ============================================================
  *
- * 외부 경로(chat.openmake.cc)는 Cloudflare 무료 플랜의 요청당 100MB 상한 때문에
+ * 외부 경로(chat.example.com)는 Cloudflare 무료 플랜의 요청당 100MB 상한 때문에
  * 대용량 첨부가 edge 413 으로 거절된다. 이 라우트는 파일을 청크 단위로 수신해
  * 서버에서 조립하고, 작업 생성(POST /api/agent-tasks)이 uploadId 로 참조한다.
  *

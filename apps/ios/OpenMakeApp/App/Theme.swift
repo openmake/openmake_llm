@@ -1,5 +1,5 @@
 // Instrument (계측) — iOS 토큰. 웹 apps/web/app/globals.css 의 :root / [data-theme="dark"] 와 같은 값.
-// 기준안: /Volumes/MAC_APP/openmake/OpenMake Color & Type Pairings.html (2026-09-05 채택, PR #746).
+// 기준안: OpenMake Color & Type Pairings (PR #746 채택).
 // 서체: Space Grotesk(제목·라틴) · IBM Plex Mono(수치·경로) 는 번들, 본문은 시스템 서체
 // (Noto Sans KR 은 무게당 수 MB 라 미번들 — 시스템 한글 서체가 Dynamic Type 과 호환).
 import SwiftUI

@@ -37,6 +37,21 @@ cd apps/ios && xcodebuild -project OpenMakeApp.xcodeproj -scheme OpenMakeApp \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
+### 서버 주소
+
+앱이 붙을 서버는 실행 환경변수 `OPENMAKE_SERVER_URL` > 빌드 설정 `OPENMAKE_SERVER_URL`(→ `Info.plist` 의
+`OpenMakeServerURL = $(OPENMAKE_SERVER_URL)`) > `http://localhost:52416` 순으로 정한다. 코드에 운영 주소를 두지 않으므로
+배포 빌드는 빌드 설정으로 값을 준다. 비워 두면 localhost 로 붙는다.
+
+```bash
+# 빌드 명령에 직접
+xcodebuild ... OPENMAKE_SERVER_URL=https://chat.example.com build
+# 또는 Xcode: 타깃 > Build Settings > + User-Defined Setting 에 OPENMAKE_SERVER_URL 추가
+# 개발 중 한 번만 바꿀 때: Scheme > Run > Arguments > Environment Variables 에 OPENMAKE_SERVER_URL
+```
+
+`xcconfig` 의 `//` 는 주석으로 읽히므로 그 파일에 적을 때는 `https:/$()/chat.example.com` 처럼 쓴다.
+
 번들 ID `cc.openmake.chat` · 최소 iOS 17 · 서드파티 의존 0 (Apple 공식 swift-openapi-runtime 만).
 app scheme 은 서버 `MOBILE_AUTH.APP_SCHEME`(기본 `openmake`) 와 일치해야 한다 (축 2).
 

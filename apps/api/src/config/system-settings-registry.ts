@@ -11,7 +11,6 @@
  * 특히 TOKEN_ENCRYPTION_KEY 는 이 테이블 암호화의 뿌리), CORS_ORIGINS/COOKIE_SECURE
  * (admin 탈취 시 UI 로 보안 경계 개방 방지).
  *
- * @see docs/superpowers/plans/2026-08-12-system-settings-admin-ui.md
  */
 import { z } from 'zod';
 import { browserSitePolicyProblems } from '@openmake/config';

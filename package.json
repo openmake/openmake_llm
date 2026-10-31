@@ -35,6 +35,7 @@
         "version": "node -e \"const v=require('./package.json').version;const fs=require('fs');['apps/api/package.json','apps/web/package.json'].forEach(f=>{const p=JSON.parse(fs.readFileSync(f,'utf8'));p.version=v;fs.writeFileSync(f,JSON.stringify(p,null,4)+'\\n')});console.log('✅ 모든 workspace 버전 동기화 완료:',v)\" && git add apps/api/package.json apps/web/package.json",
         "build:discord-bot": "cd apps/discord-bot && npm run build",
         "test:dev": "node scripts/ci/dev-checks.mjs",
+        "check:commit-identity": "node scripts/ci/commit-identity.mjs origin/dev HEAD",
         "test:features": "node scripts/ci/feature-checks.mjs"
     },
     "keywords": [
