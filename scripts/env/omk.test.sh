@@ -1122,10 +1122,13 @@ ds_advance "$D" three; echo mine >> "$D/me/f.txt"
 # shellcheck disable=SC2034  # dev_locate 가 읽는다
 eq "dev sync 명령: 변경 사항 → 종료 1"   "$( ( OMK_DEV_LLM="$D/me"; cmd_dev sync ) >/dev/null 2>&1; echo $?)" "1"
 
-# ── dev up: 동기화로 바뀐 lock·packages/ 를 반영한다 (2026-10-31: lock 이 바뀐 채 기동돼 웹 Module not found 500) ──
+# ── dev up: 마지막으로 설치한 lock·빌드한 packages/ 와 지금을 비교해 반영한다 ──
+# (2026-10-31: 동기화로 lock 이 바뀐 채 기동돼 웹 Module not found 500.) 표식은 node_modules 안 — 지우면 같이 사라진다.
 # 설치·빌드는 표식만 찍는다. 준비된 클론(.env·node_modules·dist)이라 setup·dist 검사로는 설치·빌드가 돌지 않는다.
-du_new() { # $1=이름 → ds_new 클론을 준비된 작업 클론처럼
+du_new() { # $1=이름 → ds_new 클론을 준비된 작업 클론처럼(lock·packages/ 포함, 표식은 없음)
     local d; d="$(ds_new "$1")"
+    mkdir -p "$d/up/packages/shared-types/src"; echo '{"v":1}' > "$d/up/package-lock.json"; echo 'export {}' > "$d/up/packages/shared-types/src/index.ts"
+    dsg "$d/up" add -A; dsg "$d/up" commit -q -m base; dsg "$d/up" push -q origin dev; dsg "$d/me" pull -q --ff-only
     touch "$d/me/openmake_llm.sh"; : > "$d/me/.env"
     mkdir -p "$d/me/node_modules" "$d/me/packages/shared-types/dist" "$d/me/packages/plugin-contracts/dist"
     printf '%s' "$d"
@@ -1134,7 +1137,13 @@ du_push() { # $1=D $2=경로 $3=내용 — up 에서 커밋해 origin/dev 로
     mkdir -p "$(dirname "$1/up/$2")"; echo "$3" > "$1/up/$2"
     dsg "$1/up" add -A; dsg "$1/up" commit -q -m "$2"; dsg "$1/up" push -q origin dev
 }
-du_run() { # $1=D 나머지=cmd_dev_up 인자 → 찍힌 표식(줄 단위)
+du_lock()  { ( DEV_LLM="$1/me"; dev_lock_hash ); }
+du_pkgs()  { ( DEV_LLM="$1/me"; dev_packages_hash ); }
+du_mark()  { du_lock "$1" > "$1/me/node_modules/.omk-installed-lock"; du_pkgs "$1" > "$1/me/node_modules/.omk-built-packages"; }   # 지금 상태로 설치·빌드했던 클론
+du_lmark() { cat "$1/me/node_modules/.omk-installed-lock" 2>/dev/null; }
+du_pmark() { cat "$1/me/node_modules/.omk-built-packages" 2>/dev/null; }
+DU_DEPS_RC=0   # 0 이 아니면 가짜 deps_install 이 그 코드로 끝난다(실제는 die)
+du_run() { # $1=D 나머지=cmd_dev_up 인자 → 찍힌 표식(공백으로 이은 한 줄)
     local d="$1"; shift
     (
         OMK_ROOT="$TMP/du-sync-root"
@@ -1142,36 +1151,58 @@ du_run() { # $1=D 나머지=cmd_dev_up 인자 → 찍힌 표식(줄 단위)
         dev_locate() { DEV_LLM="$d/me"; DEV_BENCH=""; }
         dev_warn_legacy() { :; }; load_toolchain() { :; }; install_wrapper() { :; }; dev_apply_hosts() { :; }
         dev_compose() { :; }; dev_searxng() { :; }; dev_llm_up() { :; }; cmd_dev_status() { :; }
-        cmd_dev_setup() { echo setup; }; deps_install() { echo "deps_install $1"; }; dev_build_packages() { echo build_packages; }
+        cmd_dev_setup() { mkdir -p "$DEV_LLM/node_modules"; echo setup; }
+        deps_install() { echo "deps_install $1"; [[ $DU_DEPS_RC -eq 0 ]] || exit "$DU_DEPS_RC"; }
+        dev_build_packages() { echo build_packages; }
         cmd_dev_up "$@" 2>/dev/null
-    ) | grep -E '^(setup|deps_install|build_packages)'
+    ) | grep -E '^(setup|deps_install|build_packages)' | tr '\n' ' '
 }
-D="$(du_new up-lock)"; du_push "$D" package-lock.json '{"v":2}'
-DU_OUT="$(du_run "$D" deps)"
-eq "dev up: 동기화로 lock 바뀜 → 설치 1회"    "$(printf '%s\n' "$DU_OUT" | grep -c '^deps_install ')" "1"
-eq "dev up: 설치 대상은 작업 클론"           "$(printf '%s\n' "$DU_OUT" | grep '^deps_install ')" "deps_install $D/me"
-eq "dev up: lock 만 바뀜 → 패키지 빌드 안 함" "$(printf '%s\n' "$DU_OUT" | grep -c '^build_packages$')" "0"
-eq "dev up: 동기화로 HEAD 이동"              "$(ds_rev "$D/me")" "$(ds_rev "$D/up")"
+D="$(du_new mk-none)"
+eq "dev up: 표식 없음 → 설치 뒤 빌드(각 1회)"  "$(du_run "$D" deps)" "deps_install $D/me build_packages "
+eq "dev up: 설치 뒤 lock 표식 기록"           "$(du_lmark "$D")" "$(du_lock "$D")"
+eq "dev up: 빌드 뒤 packages 표식 기록"       "$(du_pmark "$D")" "$(du_pkgs "$D")"
+ok "dev up: lock 표식은 해시"                  '[[ "$(du_lmark "$D")" =~ ^[0-9a-f]{40}$ ]]'
+eq "dev up: 표식 = 지금 → 설치·빌드 없음"      "$(du_run "$D" deps)" ""
 
-D="$(du_new up-nolock)"; du_push "$D" apps/web/page.tsx x
-DU_OUT="$(du_run "$D" deps)"
-eq "dev up: lock 그대로 → 설치 안 함"        "$(printf '%s\n' "$DU_OUT" | grep -c '^deps_install ')" "0"
-eq "dev up: packages/ 그대로 → 빌드 안 함"    "$(printf '%s\n' "$DU_OUT" | grep -c '^build_packages$')" "0"
+D="$(du_new mk-sync)"; du_mark "$D"; du_push "$D" package-lock.json '{"v":2}'
+eq "dev up: 동기화로 lock 바뀜 → 설치만"       "$(du_run "$D" deps)" "deps_install $D/me "
+eq "dev up: 동기화로 HEAD 이동"               "$(ds_rev "$D/me")" "$(ds_rev "$D/up")"
+eq "dev up: 새 lock 으로 표식 갱신"            "$(du_lmark "$D")" "$(du_lock "$D")"
 
-D="$(du_new up-pkgs)"; du_push "$D" packages/shared-types/src/index.ts 'export {}'
-DU_OUT="$(du_run "$D" deps)"
-eq "dev up: packages/ 바뀜 → 빌드 1회"       "$(printf '%s\n' "$DU_OUT" | grep -c '^build_packages$')" "1"
-eq "dev up: packages/ 만 바뀜 → 설치 안 함"   "$(printf '%s\n' "$DU_OUT" | grep -c '^deps_install ')" "0"
+D="$(du_new mk-manual)"; du_mark "$D"; echo '{"v":3}' > "$D/me/package-lock.json"; dsg "$D/me" commit -q -am "손으로 pull·브랜치 전환"
+eq "dev up --no-sync: 손으로 바꾼 lock → 설치" "$(du_run "$D" deps --no-sync)" "deps_install $D/me "
 
-D="$(du_new up-latest)"
-eq "dev up: 이미 최신 → 설치·빌드 없음"       "$(du_run "$D" deps | wc -l | tr -d ' ')" "0"
+D="$(du_new mk-fail)"; du_mark "$D"; du_push "$D" package-lock.json '{"v":2}'; L0="$(du_lmark "$D")"
+DU_DEPS_RC=2
+eq "dev up: 설치 실패 → 빌드·기동 전에 멈춤"   "$(du_run "$D" deps)" "deps_install $D/me "
+eq "dev up: 설치 실패 → 표식 그대로"           "$(du_lmark "$D")" "$L0"
+DU_DEPS_RC=0
+eq "dev up: 실패 뒤 다시 실행 → 다시 설치"      "$(du_run "$D" deps)" "deps_install $D/me "
+eq "dev up: 다시 설치 성공 → 표식 갱신"         "$(du_lmark "$D")" "$(du_lock "$D")"
 
-D="$(du_new up-nosync)"; du_push "$D" package-lock.json '{"v":2}'; H0="$(ds_rev "$D/me")"
-eq "dev up --no-sync: 설치·빌드 없음"         "$(du_run "$D" deps --no-sync | wc -l | tr -d ' ')" "0"
-eq "dev up --no-sync: HEAD 그대로"           "$(ds_rev "$D/me")" "$H0"
+D="$(du_new mk-pkgs)"; du_mark "$D"; du_push "$D" packages/shared-types/src/index.ts 'export const x = 1'
+eq "dev up: packages/ 바뀜 → 빌드만"           "$(du_run "$D" deps)" "build_packages "
+eq "dev up: 빌드 뒤 packages 표식 갱신"         "$(du_pmark "$D")" "$(du_pkgs "$D")"
 
-D="$(du_new up-setup)"; rm -rf "$D/me/node_modules"; du_push "$D" package-lock.json '{"v":2}'
-eq "dev up: 첫 설치(setup)면 중복 설치 안 함" "$(du_run "$D" deps | tr '\n' ' ')" "setup "
+D="$(du_new mk-wt)"; du_mark "$D"; echo 'export const y = 2' > "$D/me/packages/shared-types/src/index.ts"
+eq "dev up: packages/ 커밋 안 한 수정 → 빌드"   "$(du_run "$D" deps --no-sync)" "build_packages "
+eq "dev up: 그 수정 그대로 → 다시 빌드 안 함"   "$(du_run "$D" deps --no-sync)" ""
+
+D="$(du_new mk-both)"; du_mark "$D"; du_push "$D" package-lock.json '{"v":2}'; du_push "$D" packages/shared-types/src/index.ts 'export const z = 3'
+eq "dev up: lock·packages/ 같이 → 설치 뒤 빌드" "$(du_run "$D" deps)" "deps_install $D/me build_packages "
+
+D="$(du_new mk-setup)"; rm -rf "$D/me/node_modules"; du_push "$D" package-lock.json '{"v":2}'
+eq "dev up: 첫 설치(setup) → 중복 설치·빌드 없음" "$(du_run "$D" deps)" "setup "
+eq "dev up: setup 뒤 lock 표식 기록"            "$(du_lmark "$D")" "$(du_lock "$D")"
+eq "dev up: setup 뒤 packages 표식 기록"        "$(du_pmark "$D")" "$(du_pkgs "$D")"
+eq "dev up: setup 다음 실행 → 설치·빌드 없음"    "$(du_run "$D" deps)" ""
+
+D="$(du_new mk-dirty)"; du_mark "$D"; echo '{"v":"mine"}' > "$D/me/package-lock.json"
+eq "dev up: 커밋 안 한 lock 변경 → 설치 안 함"   "$(du_run "$D" deps --no-sync)" ""
+eq "dev up: 커밋 안 한 lock 변경 → 내용 보존"    "$(cat "$D/me/package-lock.json")" '{"v":"mine"}'
+
+D="$(du_new mk-dist)"; du_mark "$D"; rm -rf "$D/me/packages/plugin-contracts/dist"
+eq "dev up: dist 없음 → 빌드(표식과 무관)"       "$(du_run "$D" deps)" "build_packages "
 
 echo ""; echo "omk.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]
