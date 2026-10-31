@@ -90,7 +90,7 @@ export const DEFAULT_CONFIG: EnvConfig = {
     // VAPID
     vapidPublicKey: '',
     vapidPrivateKey: '',
-    vapidSubject: 'mailto:support@openmake.cc',
+    vapidSubject: '',   // 연락처(mailto:/https:) — 설치마다 다르므로 기본값 없음. 비면 웹 푸시를 켜지 않는다
     operatorWebhookUrl: '',
     operatorWebhookUrlCritical: '',
     operatorWebhookUrlWarning: '',

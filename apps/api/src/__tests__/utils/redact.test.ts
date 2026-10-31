@@ -10,7 +10,7 @@ describe('redactText — 경로', () => {
     test('홈 디렉토리를 ~ 로 접는다', () => {
         expect(redactText('/Users/alice/omk-worktree-test/.git/index.lock'))
             .toBe('~/omk-worktree-test/.git/index.lock');
-        expect(redactText('/home/smith/vllm/vllm.env')).toBe('~/vllm/vllm.env');
+        expect(redactText('/home/alice/vllm/vllm.env')).toBe('~/vllm/vllm.env');
     });
 
     test('worktree prefix 를 떼어 레포 상대경로로 만든다', () => {
@@ -19,7 +19,7 @@ describe('redactText — 경로', () => {
     });
 
     test('rootPath 이하를 상대경로로 만든다', () => {
-        expect(redactText('/Volumes/MAC_APP/openmake_llm/apps/api/src/x.ts', { rootPath: '/Volumes/MAC_APP/openmake_llm' }))
+        expect(redactText('/Volumes/Data/openmake_llm/apps/api/src/x.ts', { rootPath: '/Volumes/Data/openmake_llm' }))
             .toBe('apps/api/src/x.ts');
     });
 
@@ -68,7 +68,7 @@ describe('redactText — 자격증명', () => {
     });
 
     test('이메일을 가린다', () => {
-        expect(redactText('riskpw@openmake.cc 계정')).toBe('<email> 계정');
+        expect(redactText('user@example.com 계정')).toBe('<email> 계정');
     });
 });
 
@@ -91,8 +91,8 @@ describe('회귀 코퍼스 — 운영 agent_task_steps 실제 샘플 (2026-08-26
         },
         {
             name: '서버 데이터 디렉토리 노출',
-            input: '[{"type":"text","text":"Directory not found: /Volumes/MAC_APP/openmake_llm/data/users/11/workspace/lens"}]',
-            mustNotContain: ['/Volumes/MAC_APP/openmake_llm/data/users'],
+            input: '[{"type":"text","text":"Directory not found: /Volumes/Data/openmake_llm/data/users/11/workspace/lens"}]',
+            mustNotContain: ['/Volumes/Data/openmake_llm/data/users'],
         },
         {
             name: '스크래치패드 경로 stdout',

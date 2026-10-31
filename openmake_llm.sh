@@ -49,7 +49,7 @@ set -euo pipefail
 
 # PM2 는 앱 옵션을 같은 이름의 환경변수로 자식에 넣는다. 예약 작업(omk-pipeline·updater·backup, --cron-restart)
 # 안에서 `pm2 start ecosystem.config.js --only <앱>` 을 하면 PM2 가 상속한 cron_restart 를 앱 옵션으로 읽어
-# 배포한 앱이 10분마다 재시작됐다(2026-10-28 ome-on). 예약 작업 자신의 등록은 --cron-restart 인자로 한다.
+# 배포한 앱이 10분마다 재시작됐다. 예약 작업 자신의 등록은 --cron-restart 인자로 한다.
 unset cron_restart
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -1125,10 +1125,36 @@ sync_caddyfile() {
         fi
     fi
 
+    # 아래 호스트 경로 재검증이 실패하면 되돌릴 수 있게 기존 운영 파일을 잠시 보관한다.
+    # 운영 파일이 있는데 보관본을 못 만들면 되돌릴 수 없으므로 아무것도 바꾸지 않는다.
+    local prev="" had_prev=0
+    if [[ -f "$CADDYFILE_DEST" ]]; then
+        had_prev=1
+        prev="$(mktemp 2>/dev/null)" || prev=""
+        if [[ -z "$prev" ]] || ! cp "$CADDYFILE_DEST" "$prev" 2>/dev/null; then
+            [[ -n "$prev" ]] && rm -f "$prev"
+            log_warn "Caddyfile 보관본 생성 실패 — 운영 파일을 덮어쓰지 않습니다 (기존 설정 유지): $CADDYFILE_DEST"
+            return 0
+        fi
+    fi
+
     if ! cp "$src" "$CADDYFILE_DEST" 2>/dev/null; then
+        [[ -n "$prev" ]] && rm -f "$prev"
         log_warn "Caddyfile 복사 실패 (권한 확인 필요): $CADDYFILE_DEST"
         return 0
     fi
+
+    # 레포 경로 검증은 호스트 Caddyfile.d/*.caddy(상대 import)를 보지 못한다 — 복사 뒤 운영 경로로 한 번 더 검증한다.
+    if (( has_caddy )); then
+        local derr
+        if ! derr="$(caddy validate --config "$CADDYFILE_DEST" --adapter caddyfile 2>&1 | tail -n 1)"; then
+            if (( had_prev )); then cp "$prev" "$CADDYFILE_DEST" 2>/dev/null || true; rm -f "$prev"; else rm -f "$CADDYFILE_DEST"; fi
+            log_err "호스트 경로 Caddyfile 검증 실패 (Caddyfile.d 포함) — 운영 파일을 되돌립니다 (기존 설정 유지): $CADDYFILE_DEST"
+            log_err "  $derr"
+            return 0
+        fi
+    fi
+    [[ -n "$prev" ]] && rm -f "$prev"
     log_ok "Caddyfile 갱신 → $CADDYFILE_DEST"
 
     if (( ! has_caddy )); then

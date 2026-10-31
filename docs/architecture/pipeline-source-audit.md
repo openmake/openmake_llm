@@ -11,7 +11,7 @@
 | dev 기능 | scripts/ci, playwright.config.ts | 기존 CI에 실행 앱/브라우저 검사 없음. 격리 앱/DB/model fixture와 기본+변경 소스 검사 추가. 선택된 E2E만 api/web 대상으로 실행, 실제 통과 0건이면 차단. 전체 E2E 기본 실행 안 함 |
 | 자동 병합 | .github/workflows/auto-merge.yml, scripts/pipeline/github.mjs | 없던 작업 PR 자동 구조 검사/자동 병합 추가. 신뢰된 기본 브랜치 코드만 권한 실행 |
 | main 승격 | .github/workflows/promote.yml | dev push 즉시 실행·미설정 토큰 성공 skip·폐지된 omk/env-dev 의존 제거. 실제 병합 dev CI/current SHA로 승격 |
-| tom | scripts/env/omk.sh, pipeline.sh | 기존 update/smoke 재사용. 필수 검증·실행 SHA 확인·잠금·hold 추가 |
+| staging | scripts/env/omk.sh, pipeline.sh | 기존 update/smoke 재사용. 필수 검증·실행 SHA 확인·잠금·hold 추가 |
 | 검증 | scripts/release/{commands,runner,lib,verify-matrix,release-candidate} | 명령별 결과/skip 분류 도구 존재. 종료0이 승인인 것은 아님. staging의 필수 검증은 비어 있으면 차단하고 별도 SHA 근거 저장 |
 | 사람 OK | scripts/env/omk.sh, pipeline.sh | 기존 health+HEAD만의 verify 강화. 명시적 approve --sha와 audit receipt 추가 |
 | 릴리스 | release-please.yml, release-verified.yml | 기존 PR 생성·태그·SBOM/증명 유지. verified ref와 커밋별 metadata-only 검사 후 release PR 자동 병합 |
@@ -24,11 +24,10 @@
 - dev/main 보호 규칙은 CI Gate만 필수, strict=false였다.
 - 저장소 auto-merge 옵션은 true였지만 모든 작업 PR에 자동 설정하는 workflow는 없었다.
 - promote 실행 39374514643은 OMK_PROMOTE_TOKEN 미설정으로 실제 승격을 건너뛰었다. workflow success는 승격 성공을 의미하지 않았다.
-- private 로컬 역할 원본 OPENMAKE-ROLES-2는 tom 수동 병합/별도 운영 승인 규칙으로 새 문서와 충돌했다. 현재 사용자 지시로 로컬 역할 원본은 OPENMAKE-ROLES-3으로 갱신했다. 원격 담당자의 적용/ACK와 실제 활성화는 별도 확인 대상이다.
 
 ## 소스만으로 완료할 수 없는 항목
 
-자동화 credential 발급/등록, strict 보호 규칙 적용, 기본 브랜치 초기 도입, tom 필수 시나리오 설정/QA 계정/스케줄, 운영 pipeline 스케줄/OS 권한은 실제 환경 설정과 확인이 필요하다. 이 문서는 활성화 완료 목록이 아니다.
+자동화 credential 발급/등록, strict 보호 규칙 적용, 기본 브랜치 초기 도입, staging 필수 시나리오 설정/QA 계정/스케줄, 운영 pipeline 스케줄/OS 권한은 실제 환경 설정과 확인이 필요하다. 이 문서는 활성화 완료 목록이 아니다.
 
 이 저장소는 `omk env approve` CLI와 SHA 근거 출력을 제공합니다.
 

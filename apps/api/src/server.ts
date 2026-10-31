@@ -249,6 +249,10 @@ export class DashboardServer {
             console.error('[Server] 시스템 설정 로드 실패 (env 폴백으로 계속):', err);
         }
 
+        // 웹 푸시 상태 확인(설정 overlay 뒤 1회) — VAPID 키는 있는데 VAPID_SUBJECT 가 비면 웹 푸시가 꺼졌음을 warn 한다.
+        const { getVapidKeys } = await import('./utils/vapid');
+        getVapidKeys();
+
         // 런타임 add-on(도구·스킬)과 내장 콘텐츠 시드 — Base 는 Add-on Host 만 안다
         // (§10-2: 개별 기능의 부팅 절차를 server.ts 가 알지 않는다, config/addon-boundary.ts)
         try {

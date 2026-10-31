@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # omk.sh bench_update — bench 가 바뀌지 않았으면 다시 빌드·재시작하지 않는다. 실제 PM2·네트워크를 건드리지 않는다.
 # 운영 파이프라인은 10분마다 같은 릴리스로 `env update online` 을 끝까지 돌린다. llm 은 "이미 최신"이면 배포를
-# 건너뛰지만 bench_update 는 매번 빌드 + PM2 재등록을 해 openmake-bench 가 10분마다 재시작됐다(2026-10-28 ome-on).
+# 건너뛰지만 bench_update 는 매번 빌드 + PM2 재등록을 해 openmake-bench 가 10분마다 재시작됐다.
 #   bash scripts/env/bench-update.test.sh      # macOS 기본 bash 3.2 에서도 통과해야 한다
 set -uo pipefail
 HERE="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"

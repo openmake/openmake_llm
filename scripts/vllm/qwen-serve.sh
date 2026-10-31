@@ -22,7 +22,7 @@
 #
 # ⚠️ 2026-09-02 동기화: DGX :8002 실체가 qwen3.8-27b-fp8(dense, MTP) 로 교체됐고(DGX 측 2026-08-31)
 #   `--served-model-name qwen3.8-27b qwen3.6-35b-a3b` 로 구 이름을 호환 alias 로 함께 서빙한다.
-#   실행 주체도 바뀜 — PM2 가 아니라 DGX `/home/smith/vllm`(git: openmake/openmake_vllm) 의
+#   실행 주체도 바뀜 — PM2 가 아니라 DGX `$VLLM_HOME`(git: openmake/openmake_vllm) 의
 #   docker compose (`vllm-chat` 컨테이너, `bin/vllm-launch.sh chat` + `env/chat.env`, 2026-08-20 컷오버).
 #   이 파일은 레포 참조본이며 실제 SoT 는 openmake_vllm 의 env/chat.env 다.
 # DGX 실측 serve 명령 기준 (2026-08-19 동기화 — --limit-mm-per-prompt image 4→8:
@@ -39,7 +39,7 @@
 #   앱 실측(표본 4건)은 3건 개선·1건 악화로 유의성 미확보 — [ChatTiming] 로그 축적 후 재판단.
 #   문제 시 이 플래그만 제거하면 종전 동작으로 복귀한다.
 # 실행 주체: (구) DGX PM2 vllm-chat → (현) docker compose `vllm-chat` — 위 2026-09-02 주석 참고.
-# venv: /home/smith/vllm_data/rebuild/vllm_env.0300 (vLLM 0.30.0, 2026-09-23 — 이전 0.27.1 은 vllm_env.0271)
+# venv: $VLLM_HOME 아래 vllm_env.0300 (vLLM 0.30.0, 2026-09-23 — 이전 0.27.1 은 vllm_env.0271)
 #
 # 보안:
 # - API key 는 CLI 인자 금지(ps 노출) — 0600 env 파일의 VLLM_API_KEY 를 vLLM 이 직접 인식
@@ -47,12 +47,13 @@
 #   tailscaled 기동 전 부팅 경쟁은 아래 대기 루프로 방어.
 set -euo pipefail
 
-# 2026-09-14 NVFP4 로 교체. 롤백: QWEN_MODEL_DIR=/home/smith/models/qwen3.8-27b-fp8
-MODEL_DIR="${QWEN_MODEL_DIR:-/home/smith/models/qwen3.8-27b-nvfp4}"
+# 경로는 환경마다 다르다 — VLLM_HOME(기본 ~/vllm)·MODELS_DIR(기본 ~/models). 롤백: QWEN_MODEL_DIR=$MODELS_DIR/qwen3.8-27b-fp8
+VLLM_HOME="${VLLM_HOME:-$HOME/vllm}"; MODELS_DIR="${MODELS_DIR:-$HOME/models}"
+MODEL_DIR="${QWEN_MODEL_DIR:-$MODELS_DIR/qwen3.8-27b-nvfp4}"
 export VLLM_USE_DEEP_GEMM=0
 
 # vLLM API key — env 파일(0600) 주입 (VLLM_API_KEY)
-set -a; [ -f /home/smith/vllm/vllm.env ] && . /home/smith/vllm/vllm.env; set +a
+set -a; [ -f "$VLLM_HOME/vllm.env" ] && . "$VLLM_HOME/vllm.env"; set +a
 
 # 서빙 이름 (2026-10-30) — 모델을 바꿀 때 정식 이름(QWEN_SERVED_MODEL_NAME)을 맨 앞에, 옛 대화가 부르는 옛 이름을
 # 호환 alias(QWEN_SERVED_MODEL_ALIASES, 공백 구분)로 뒤에 둔다. vLLM 은 둘 다 받는다. 주지 않으면 종전대로 qwen3.8-27b 하나.
@@ -95,7 +96,7 @@ exec vllm serve "$MODEL_DIR" \
   --override-generation-config '{"repetition_penalty": 1.05}' \
   --enable-lora \
   --max-lora-rank 32 \
-  --lora-modules jev-decision=/home/smith/models/jev-27b-vl/adapter_vllm \
+  --lora-modules jev-decision="$MODELS_DIR/jev-27b-vl/adapter_vllm" \
   --logprobs-mode processed_logprobs \
   --max-num-seqs 8 \
   --trust-request-chat-template

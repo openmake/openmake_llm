@@ -371,7 +371,7 @@ npm --workspace apps/api run eval:guard-stats -- --since 2026-10-01 --until 2026
 - 서브에이전트 단계 기록(`agent_task_subagent_steps`)은 세지 않는다. 표지 문구가 생기기 전의 기록도 세지 못한다.
 - 표·컬럼이 없는 서버(마이그레이션 전)에서는 해당 항목이 "집계 불가"로 나온다. 한 번에 읽는 스텝 수는 `OMK_EVAL_GUARD_STATS_BATCH`(기본 2000).
 
-### 임계값 실측 (2026-10-04, 이 맥북, qwen3.8-27b)
+### 임계값 실측 (로컬 개발 장비, qwen3.8-27b)
 
 값을 바꾼 것은 봇 차단 패턴뿐이다. 나머지는 표본이 작아 유지했다 — 운영 서버에서 `eval:guard-stats` 로 다시 볼 것.
 

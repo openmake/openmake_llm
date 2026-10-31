@@ -88,8 +88,8 @@ class PushService {
                 error: error instanceof Error ? error.message : String(error),
             });
         });
-        const { publicKey, privateKey } = getVapidKeys(); // setVapidDetails 보장
-        if (!publicKey || !privateKey) {
+        const { enabled } = getVapidKeys(); // setVapidDetails 보장 — 키·연락처(VAPID_SUBJECT) 중 하나라도 없으면 웹 푸시 꺼짐
+        if (!enabled) {
             await nativeDelivery;
             return;
         }

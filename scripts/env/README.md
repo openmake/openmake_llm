@@ -6,24 +6,24 @@
 
 | 단계 | 담당 | 실행과 다음 조건 |
 |---|---|---|
-| 1 | local · MacBook / 사람+에이전트 | `origin/dev`에서 작업 브랜치 → 구현 → 로컬 관련 테스트·lint·필요 빌드 → dev 대상 PR. 테스트 근거를 함께 남깁니다. |
+| 1 | local / 사람+에이전트 | `origin/dev`에서 작업 브랜치 → 구현 → 로컬 관련 테스트·lint·필요 빌드 → dev 대상 PR. 테스트 근거를 함께 남깁니다. |
 | 2 | GitHub | PR 최신 변경의 CI·자동 구조 검사를 충족하면 dev로 일반 병합. 사람 PR 승인 단계는 없습니다. |
 | 3 | GitHub runner | **실제로 병합된 dev SHA**의 소스·DB·빌드·lint와 임시 앱의 **기본 스모크+변경 기능/관련 소스 테스트**. 전체 브라우저 테스트를 무조건 실행하지 않습니다. |
 | 4 | GitHub | 현재 dev의 push CI 통과 후 dev→main PR 생성·자동 병합. 최신 main 조합의 PR CI도 필요합니다. 실패·SHA 변경 시 중단/재검사합니다. |
-| 5 | tom · staging | main 설치 → 스모크 → 구성된 필수 고강도 검증 → 정확한 SHA의 결과 저장 → 사람 실사용을 위해 설치본 고정. |
-| 6 | 사람 + tom 명령 | 사람이 tom을 직접 사용해 OK하면 `omk env approve staging --sha FULL_SHA --yes`. 고정 SHA·실행 빌드·통과 근거를 다시 확인하고 verify ref를 기록합니다. |
+| 5 | staging | main 설치 → 스모크 → 구성된 필수 고강도 검증 → 정확한 SHA의 결과 저장 → 사람 실사용을 위해 설치본 고정. |
+| 6 | 사람 + staging 명령 | 사람이 staging을 직접 사용해 OK하면 `omk env approve staging --sha FULL_SHA --yes`. 고정 SHA·실행 빌드·통과 근거를 다시 확인하고 verify ref를 기록합니다. |
 | 7 | GitHub | verify한 코드에 연결된 release-please PR만 자동 병합 → 버전 태그·릴리스·공급망 증명 발행. verify 이후 기능 변경은 허용하지 않습니다. |
-| 8 | ome-on · online | 한 번 선택한 릴리스 태그의 SHA 고정 → verify 계보 검사 → 백업 → 관리형 갱신 → 설치 SHA 일치·운영 스모크 확인. |
+| 8 | online | 한 번 선택한 릴리스 태그의 SHA 고정 → verify 계보 검사 → 백업 → 관리형 갱신 → 설치 SHA 일치·운영 스모크 확인. |
 
 ```text
 local: 개발·관련 테스트·PR
     → GitHub: PR CI/구조 검사 → dev 병합
     → GitHub: 병합 dev 소스 검사 + 기본·변경 기능 검사
     → GitHub: dev→main PR CI → main 병합
-    → tom: 설치·스모크·필수 검증 → SHA 고정
+    → staging: 설치·스모크·필수 검증 → SHA 고정
     → 사람: 실사용 OK → approve(동일 SHA의 verify)
     → GitHub: 검증 계보 확인 → release-please 자동 병합·태그
-    → ome-on: 고정 태그 검증·백업·설치·스모크
+    → online: 고정 태그 검증·백업·설치·스모크
 ```
 
 별도 **배포 dev 서버는 필수 흐름에서 폐지**됐습니다. Git 브랜치 `dev`와 로컬 `omk dev`는 유지합니다. 레거시 `omk env install dev`는 호환 명령이며 main 승격 게이트로 사용하지 않습니다. `omk/env-dev`를 필수 체크에 추가하지 마세요.
@@ -32,7 +32,7 @@ local: 개발·관련 테스트·PR
 
 로컬에서는 변경 범위의 회귀 테스트를 먼저 작성하고 실행합니다. PR에서는 기존 전체 소스/DB CI를 실행하며, 병합된 dev에서도 같은 소스 CI를 다시 실행합니다. dev의 기능 검사는 시작·DB 연결·로그인·기본 채팅·웹 응답과 변경된 기능/소스의 선택 검사로 한정합니다.
 
-CI 모델 fixture는 네트워크·인증·채팅 연결 검증용입니다. 실제 모델 품질이나 실서비스 MCP 동작을 검증했다고 기록하지 않습니다. 실제 서비스 검증은 tom 단계에서 수행합니다. 새 E2E spec은 `scripts/ci/feature-checks.manifest.json`에 `api` 또는 `web` 대상을 선언하고, 필요하면 source-prefix → spec 매핑을 추가합니다. 선택된 정확한 파일만 임시 앱/DB에서 실행하며 전부 skip이면 실패합니다. 웹 대상이 있을 때만 Chromium을 준비합니다. 변경 기능의 관련 테스트를 선택할 수 없으면 통과로 간주하지 않고 테스트/매핑 보완을 요청합니다.
+CI 모델 fixture는 네트워크·인증·채팅 연결 검증용입니다. 실제 모델 품질이나 실서비스 MCP 동작을 검증했다고 기록하지 않습니다. 실제 서비스 검증은 staging 단계에서 수행합니다. 새 E2E spec은 `scripts/ci/feature-checks.manifest.json`에 `api` 또는 `web` 대상을 선언하고, 필요하면 source-prefix → spec 매핑을 추가합니다. 선택된 정확한 파일만 임시 앱/DB에서 실행하며 전부 skip이면 실패합니다. 웹 대상이 있을 때만 Chromium을 준비합니다. 변경 기능의 관련 테스트를 선택할 수 없으면 통과로 간주하지 않고 테스트/매핑 보완을 요청합니다.
 
 자동 리뷰는 현재 **결정적 구조 검사와 기존 CI 품질 게이트**입니다. 의미적 AI 코드 리뷰를 수행했다고 표현하지 않습니다. 코드 리뷰가 필요한 복잡한 변경은 개발 과정에서 별도로 수행합니다.
 
@@ -50,7 +50,7 @@ CI 모델 fixture는 네트워크·인증·채팅 연결 검증용입니다. 실
 
 ## 환경 규칙
 
-| 항목 | local | tom · staging | ome-on · online |
+| 항목 | local | staging | online |
 |---|---|---|---|
 | 소스 | 개발 작업 클론 | `~/.openmake/staging/llm` 또는 관리형 기존 경로 | `~/.openmake/online/llm` 또는 관리형 기존 경로 |
 | 추적 | 작업 브랜치 | main | release |
@@ -60,7 +60,7 @@ CI 모델 fixture는 네트워크·인증·채팅 연결 검증용입니다. 실
 
 포트·사용자·도메인·실제 경로는 해당 `.env`와 `omk env status`를 읽습니다. 호스트 이름이 환경 이름을 대신하지 않습니다. staging은 Tailscale 호스트와 프록시 포트로 접속하고, online의 외부 공개는 운영 Cloudflare/DNS 설정을 따릅니다. Base와 Add-on 분리, 앱 PM2 실행 방식은 유지합니다.
 
-## tom 설치·검증·사람 확인
+## staging 설치·검증·사람 확인
 
 최초 활성화 전 스모크 계정 `OMK_SMOKE_EMAIL/PASSWORD`와 필수 검증 설정을 준비합니다. 계정 비밀번호·토큰을 검증 JSON이나 Git에 넣지 않습니다. 검증 설정은 기본 `<환경 디렉터리>/.pipeline/checks.json`이며 `OMK_VALIDATION_CONFIG`로 지정할 수 있습니다.
 
@@ -68,13 +68,13 @@ CI 모델 fixture는 네트워크·인증·채팅 연결 검증용입니다. 실
 {"checks":[{"name":"changed-feature-regression","argv":["node","scripts/my-staging-check.mjs"]}]}
 ```
 
-`argv`는 신뢰된 운영자 설정이며 쉘 문자열로 평가하지 않습니다. **예시를 그대로 통과 검사로 사용하지 말고 실제 기능 시나리오를 지정**하세요. 모든 항목은 필수이며 빈 설정·미실행·실패는 검증 통과가 아닙니다. 검증 명령은 tom의 대상 앱에 맞는 테스트 계정을 사용해야 하며, CI 전용 `_test` DB fixture를 실사용 DB에 적용하지 않습니다.
+`argv`는 신뢰된 운영자 설정이며 쉘 문자열로 평가하지 않습니다. **예시를 그대로 통과 검사로 사용하지 말고 실제 기능 시나리오를 지정**하세요. 모든 항목은 필수이며 빈 설정·미실행·실패는 검증 통과가 아닙니다. 검증 명령은 staging의 대상 앱에 맞는 테스트 계정을 사용해야 하며, CI 전용 `_test` DB fixture를 실사용 DB에 적용하지 않습니다.
 
 ```bash
 omk env pipeline staging                  # 설치 → 스모크 → 필수 검증 → hold
 omk env pipeline staging --schedule '*/10 * * * *'
 omk env status staging
-# 사람이 tom을 실제로 사용하고 OK한 뒤, 확인했던 정확한 40자리 SHA로:
+# 사람이 staging을 실제로 사용하고 OK한 뒤, 확인했던 정확한 40자리 SHA로:
 omk env approve staging --sha FULL_SHA --yes
 # 수동 호환 명령: 동일 근거 검사를 수행한다
 omk env verify staging --sha FULL_SHA --yes

@@ -81,7 +81,7 @@ set -euo pipefail
 
 # PM2 는 앱 옵션을 같은 이름의 환경변수로 자식에 넣는다. 예약 작업(omk-pipeline·updater·backup, --cron-restart)
 # 안에서 `pm2 start ecosystem.config.js --only <앱>` 을 하면 PM2 가 상속한 cron_restart 를 앱 옵션으로 읽어
-# 배포한 앱이 10분마다 재시작됐다(2026-10-28 ome-on). 예약 작업 자신의 등록은 --cron-restart 인자로 한다.
+# 배포한 앱이 10분마다 재시작됐다. 예약 작업 자신의 등록은 --cron-restart 인자로 한다.
 unset cron_restart
 
 # ── 필수 하드코딩 (이것뿐이다) ─────────────────────────────────────────────────
@@ -529,7 +529,7 @@ bench_install() { # $1=env $2=ref $3=llm dir
 }
 
 # 마지막으로 빌드·기동에 성공한 커밋이 지금 HEAD 와 같고 PM2 앱이 떠 있으면 빌드·재시작을 건너뛴다 — 운영 파이프라인은
-# 같은 릴리스로 10분마다 이 갱신을 끝까지 돌리므로, 건너뛰지 않으면 openmake-bench 가 10분마다 재시작된다(2026-10-28 ome-on).
+# 같은 릴리스로 10분마다 이 갱신을 끝까지 돌리므로, 건너뛰지 않으면 openmake-bench 가 10분마다 재시작된다.
 # 기록은 .git 안에 둔다(작업 트리에 두면 위의 미커밋 변경 검사에 걸린다). 빌드가 실패하면 기록이 남지 않아 다음에 다시 빌드한다.
 bench_update() { # $1=env [--force]  (--force: 그대로여도 다시 배포 — env update --redeploy)
     local env="$1" force="${2:-}" bdir name built head; bdir="$(bench_dir "$env")"; name="$(bench_pm2_name "$env")"

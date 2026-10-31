@@ -31,7 +31,7 @@ export const MCP_OAUTH_RETURN_PATH = '/settings?tab=connectors';
  * 인가 서버에 등록할 redirect URL 의 origin.
  *
  * 브라우저 요청이 없는 spawn 시점에도 필요하므로 요청 헤더가 아니라 설정에서 유도한다:
- * `MCP_OAUTH_REDIRECT_BASE` > `OAUTH_REDIRECT_URI` 의 origin(운영: https://chat.openmake.cc)
+ * `MCP_OAUTH_REDIRECT_BASE` > `OAUTH_REDIRECT_URI` 의 origin(운영: https://chat.example.com)
  * > `http://localhost:<port>`. 동적 등록은 redirect_uri 를 등록 시점에 고정하므로, 값이 바뀌면
  * 기존 client 등록은 무효가 된다(재로그인 시 SDK 가 invalid_client 로 재등록).
  */

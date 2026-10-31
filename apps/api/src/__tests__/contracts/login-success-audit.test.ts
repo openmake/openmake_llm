@@ -11,7 +11,7 @@ import type { PublicUser } from '../../data/user-manager';
 
 const sampleUser: PublicUser = {
     id: 'u1',
-    email: 'riskpw@openmake.cc',
+    email: 'user@example.com',
     role: 'user',
     created_at: '2026-08-16T00:00:00.000Z',
     is_active: true,

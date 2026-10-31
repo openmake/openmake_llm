@@ -81,6 +81,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # ─── Gate 0.1: Environment-specific strings ───
+      # 환경 고유 정보(조직 서버·계정·주소) 차단 — 범용 규칙 + 저장소 밖 조직 목록(비밀값 OMK_FORBIDDEN_STRINGS, 쉼표·줄바꿈 구분).
+      # 비밀값이 없으면(포크 PR 등) 범용 규칙만 본다. 걸린 비밀값은 값이 아니라 번호로만 출력한다.
+      - name: "Gate 0.1: Environment-specific strings"
+        env:
+          OMK_FORBIDDEN_STRINGS: ${{ secrets.OMK_FORBIDDEN_STRINGS }}
+        run: node scripts/ci/org-specific-strings.mjs
+
+      # 커밋 작성자·커미터·트레일러 메일은 GitHub noreply 만, 이름은 조직 목록과 대조 — 공개 저장소에 개인정보가 남지 않게 한다.
+      # 이미 올라간 커밋을 사후에 잡는 검출이다(기록을 막는 것은 계정의 노출 push 차단 설정, push 전에는 `npm run check:commit-identity` 수동 실행).
+      # PR: 기준 브랜치와의 merge-base 부터. push: 직전 끝(before)부터 — 새 브랜치(before 가 0)와 force-push(이력 재작성 등,
+      # before 가 어느 ref 에서도 닿지 않는다)는 건너뛴다.
+      # main 이 아닌 쪽(dev push·base 가 main 이 아닌 PR)은 origin/main 에서 닿는 커밋을 뺀다 — main 커밋은 main 의 push·PR 검사가
+      # 판정하므로, main→dev 병합이 검사 도입 전의 옛 main 커밋을 범위로 끌어와 다시 걸리지 않게 한다(main 쪽은 제외 없이 본다).
+      - name: "Gate 0.2: Commit identity"
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && !github.event.forced && github.event.before != '0000000000000000000000000000000000000000')
+        env:
+          OMK_FORBIDDEN_STRINGS: ${{ secrets.OMK_FORBIDDEN_STRINGS }}
+          BASE: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.event.pull_request.base.ref) || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          EXCLUDE: ${{ ((github.event_name == 'push' && github.ref != 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'main')) && 'origin/main' || '' }}
+        run: node scripts/ci/commit-identity.mjs "$BASE" "$HEAD_SHA" --exclude "$EXCLUDE"
+
       # ─── Gate 0: API Contract Drift ───
       # packages/api-contracts 산출물이 TS SoT(swagger/spec-core·shared-types)와 일치하는지 검사.
       # 스펙 변경 후 `npm run contracts:export` 재생성을 누락한 커밋을 차단한다 (iOS 축 1 Step 5).
@@ -178,8 +201,8 @@ jobs:
           npm run test:db
 
       # ─── Gate 2: TypeScript Build ───
-      # 웹 빌드는 next/font/google 로 Google 에서 폰트를 받는다 — 그 다운로드가 한 번 실패하면 코드와 무관하게
-      # 빌드 전체가 깨진다(2026-10-03 #1069 실측: 재실행으로 통과). 일시 실패만 한 번 다시 시도한다.
+      # 웹 글꼴은 fontsource 패키지로 자체 호스팅한다(2026-10-31) — 예전 next/font/google 은 빌드 때 Google 응답에
+      # 따라 코드와 무관하게 깨졌다(#1069, 10-30·31 dev push). 러너의 일시 실패에 대비해 재시도 한 번은 남긴다.
       - name: "Gate 2: TypeScript Build"
         run: npm run build || { echo "::warning::빌드 실패 — 30초 뒤 한 번 재시도합니다"; sleep 30; npm run build; }
 

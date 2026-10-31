@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 
 /**
  * 포트 단일 출처 — 루트 scripts/resolve-ports.cjs (우선순위: 셸 환경 > 루트 .env > 기본값).
@@ -12,6 +13,26 @@ import { createRequire } from "node:module";
 const { apiPort, webPort } = createRequire(import.meta.url)(
   "../../scripts/resolve-ports.cjs",
 ) as { apiPort: string; webPort: string };
+
+/**
+ * 자매 서비스 링크 주소(lib/external-links.ts) — 포트와 같은 규칙(셸 환경 > 루트 .env > 빈 값)으로 읽어
+ * 번들에 인라인한다. 비어 있으면 화면이 링크를 숨긴다. .env 전체를 빌드 환경에 넣지 않고 이 키만 읽는다.
+ */
+const rootEnv: Record<string, string> = (() => {
+  let dotenv: { parse(src: Buffer): Record<string, string> };
+  try {
+    dotenv = createRequire(import.meta.url)("dotenv") as typeof dotenv;
+  } catch {
+    console.warn("[next.config] dotenv 를 불러오지 못해 루트 .env 의 외부 링크 설정을 읽지 않습니다 (셸 환경값만 사용)");
+    return {};
+  }
+  try {
+    return dotenv.parse(readFileSync(new URL("../../.env", import.meta.url)));
+  } catch {
+    return {}; // 루트 .env 없음 — 셸 환경값만 쓴다
+  }
+})();
+const publicSetting = (key: string): string => process.env[key] || rootEnv[key] || "";
 
 /**
  * 백엔드(Express + WS, 기본 :52416)와의 연동.
@@ -39,6 +60,8 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_WEB_PORT: webPort,
     NEXT_PUBLIC_WS_PORT: apiPort,
+    NEXT_PUBLIC_HOMEPAGE_URL: publicSetting("NEXT_PUBLIC_HOMEPAGE_URL"),
+    NEXT_PUBLIC_BENCH_URL: publicSetting("NEXT_PUBLIC_BENCH_URL"),
   },
   // 워크스페이스 공통 패키지(.ts 소스)를 Next 가 트랜스파일하도록 지정.
   transpilePackages: [

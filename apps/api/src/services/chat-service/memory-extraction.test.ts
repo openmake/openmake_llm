@@ -45,7 +45,7 @@ describe('isDuplicateMemory', () => {
             ['사용자는 병렬로 업무를 처리하기를 선호한다.'],
         )).toBe(true);
     });
-    // 2026-09-06 라이브(chat.openmake.cc) 실측 — 1회 어미 제거·수식어 미제외로 0.57 에 그쳐 두 행이 저장됐다.
+    // 2026-09-06 라이브(chat.example.com) 실측 — 1회 어미 제거·수식어 미제외로 0.57 에 그쳐 두 행이 저장됐다.
     it('수식어·어간 변형 근접 중복(반복 어미 제거 + 불용어)', () => {
         expect(isDuplicateMemory(
             '사용자는 코드 예시를 TypeScript로 받는 방식을 선호한다.',

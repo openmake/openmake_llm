@@ -64,7 +64,7 @@ test('buildReceipt: exit 0 은 passed, exit≠0·timeout 은 failed', () => {
 });
 
 test('buildReceipt: 로컬 정책·env 부재는 실행하지 않은 receipt', () => {
-    const local = buildReceipt(cmd({ skipLocal: '이 맥북은 빌드하지 않는다' }), { skipped: 'local' }, meta);
+    const local = buildReceipt(cmd({ skipLocal: '로컬 개발 장비에서는 빌드하지 않는다' }), { skipped: 'local' }, meta);
     assert.equal(local.status, 'unmeasured');
     assert.equal(local.exitCode, null);
     const env = buildReceipt(cmd({ requiresEnv: ['X'] }), { skipped: 'env', missing: ['X'] }, meta);

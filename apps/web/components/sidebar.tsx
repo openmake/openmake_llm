@@ -388,7 +388,8 @@ export function Sidebar() {
               {tNav("items.developer")}
             </Link>
             <div className="my-1 border-t border-border" />
-            {/* 자매 서비스 — 홈페이지·bench (bench 는 SSO 경로로 로그인 상태 유지) */}
+            {/* 자매 서비스 — 홈페이지·bench (bench 는 SSO 경로로 로그인 상태 유지). 설정된 것만 보인다 */}
+            {EXTERNAL_LINKS.homepage && (
             <a
               href={EXTERNAL_LINKS.homepage}
               target="_blank"
@@ -399,6 +400,8 @@ export function Sidebar() {
               <Globe className="h-4 w-4" />
               {t("homepage")}
             </a>
+            )}
+            {EXTERNAL_LINKS.bench && (
             <a
               href={EXTERNAL_LINKS.benchSso}
               target="_blank"
@@ -409,6 +412,7 @@ export function Sidebar() {
               <Gauge className="h-4 w-4" />
               {t("bench")}
             </a>
+            )}
             <div className="my-1 border-t border-border" />
             <button
               type="button"

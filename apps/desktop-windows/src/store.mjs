@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 
-export const DEFAULT_SERVER = 'https://chat.openmake.cc';
+export const DEFAULT_SERVER = 'http://localhost:52416';   // 설치 주소는 설정에서 입력한다
 
 export class Store {
   /** crypt: { isAvailable(): boolean, encrypt(text): Buffer, decrypt(buf): string } */

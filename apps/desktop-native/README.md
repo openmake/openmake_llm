@@ -1,7 +1,7 @@
 # OpenMake Companion (SwiftUI 네이티브 데스크톱)
 
 메뉴바 상주 **로컬 에이전트 컴패니언** — 폴더 연결·디바이스 상태·exec 승인·작업 알림(종료·승인 대기)·웹 딥링크만 담당한다.
-채팅 등 깊은 UI 는 웹(chat.openmake.cc)이 전담한다 (plan §1 비목표: 채팅 UI 재구현 금지).
+채팅 등 깊은 UI 는 웹(chat.example.com)이 전담한다 (plan §1 비목표: 채팅 UI 재구현 금지).
 Plan: `docs/proposals/2026-08-22-desktop-native-companion-plan.md` (로컬 보관).
 
 ## 구조
@@ -17,7 +17,7 @@ build.sh                 # helper 번들(esbuild) → 하네스 → l10n 게이�
 
 - 브리지 보안 코어(경로 스코프·exec 3단 방어·git 고정 조립·worktree)는 **`packages/local-bridge-core` 재사용** — Swift 재구현 금지(plan §6 게이트).
 - 앱↔헬퍼 stdio 계약은 `helper.mjs` 상단 주석 참고. confirm 응답은 항상 앱(사용자 다이얼로그)만 발원.
-- **서버 주소(설정)**: 주소 하나를 자유 입력한다 — 브라우저에서 OpenMake 를 여는 주소(또는 API 주소). 헬퍼가 그 주소의 `GET /api/desktop/config` 로 서버의 API·웹 포트를 물어 연결 주소와 웹 주소를 정한다(`packages/local-bridge-core` 의 `endpoints`). 넣은 포트가 웹 포트면 연결은 API 포트로, API 포트면 웹은 웹 포트로, 둘 다 아니면(앞단 프록시) 넣은 주소 그대로. 조회 경로가 없는 구버전 서버는 넣은 주소를 그대로 쓴다. 종전의 선택지 2개(chat.openmake.cc / localhost:52416)는 없앴고, "로컬"로 저장돼 있던 설정은 `http://localhost:52416` 으로 옮긴다.
+- **서버 주소(설정)**: 주소 하나를 자유 입력한다 — 브라우저에서 OpenMake 를 여는 주소(또는 API 주소). 헬퍼가 그 주소의 `GET /api/desktop/config` 로 서버의 API·웹 포트를 물어 연결 주소와 웹 주소를 정한다(`packages/local-bridge-core` 의 `endpoints`). 넣은 포트가 웹 포트면 연결은 API 포트로, API 포트면 웹은 웹 포트로, 둘 다 아니면(앞단 프록시) 넣은 주소 그대로. 조회 경로가 없는 구버전 서버는 넣은 주소를 그대로 쓴다. 종전의 선택지 2개(chat.example.com / localhost:52416)는 없앴고, "로컬"로 저장돼 있던 설정은 `http://localhost:52416` 으로 옮긴다.
 - 인증: API key(`omk_live_*`, bridge 스코프) → Keychain 저장, 헬퍼엔 기동 직후 stdin 의 `auth` 명령으로 전달(인자·환경으로 넘기지 않는다 — 아래 0.3.4). 키 발급은 웹의 **API 액세스 페이지(`/api-access`)** — 설정 화면의 "API 액세스 페이지 열기" 버튼이 연다.
 - **다중 루트(0.2.0)**: 메뉴 "작업 폴더 추가…" 로 여러 루트를 각각 연결 — 루트당 독립 브리지 연결(파생 deviceId = base id + 경로 해시)이라 **서버·프로토콜 무변경**, 웹엔 루트마다 별개 디바이스로 표시(기존 디바이스 선택기 사용). 유저당 총 디바이스 수는 서버 `LOCAL_BRIDGE_MAX_DEVICES`(기본 3)가 강제 — 초과는 해당 루트 상태에 서버 오류로 표면화. 스코프·샌드박스·일괄승인 회수는 루트별 독립(코어 인스턴스 분리).
 - **승인 대기 알림(0.2.6)**: 로컬 실행 작업이 도구 승인·`ask_human` 응답을 기다리며 멈추면 서버가 그 디바이스로 `bridge_notice`(단방향, 필드 화이트리스트)를 보내고 앱이 네이티브 알림을 띄운다(클릭 → `/agent-tasks?task=<id>`). 종전 설계는 "승인 대기 알림은 웹 푸시 담당 — 중복 구현 금지" 였으나, 웹 푸시는 설정에서 켜야 하는 opt-in 이라 운영 구독 0건 = 실제 도달 0 이어서 바꿨다. 코어는 알림을 검증(종류·taskId 형식·도구명 제어문자·길이)해 넘길 뿐 아무것도 실행하지 않고, 구 디바이스는 모르는 type 을 무시한다(추가 전용).
