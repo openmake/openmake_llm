@@ -10,6 +10,7 @@
  * "Block command line pushes that expose my email" 설정이고, push 전에는 `npm run check:commit-identity` 를 손으로 돌린다.
  *
  *   node scripts/ci/commit-identity.mjs <base-ref|sha> <head>   # merge-base(base, head)..head, 걸리면 exit 1
+ *   ... [--exclude <ref>]...   # 그 ref 에서 닿는 커밋은 뺀다(빈 값은 무시) — dev 쪽 검사가 main 커밋을 다시 판정하지 않게
  */
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -57,9 +58,15 @@ export function checkIdentities(rows, forbiddenNames = []) {
 const FIELD_KO = { author: '작성자 메일', committer: '커미터 메일', trailer: '트레일러 메일·이름', name: '작성자·커미터 이름' };
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-    const [base, head = 'HEAD'] = process.argv.slice(2);
+    const positional = [];
+    const excludes = [];
+    const argv = process.argv.slice(2);
+    for (let i = 0; i < argv.length; i++) {
+        if (argv[i] === '--exclude') { if (argv[i + 1]) excludes.push(argv[i + 1]); i++; } else positional.push(argv[i]);
+    }
+    const [base, head = 'HEAD'] = positional;
     if (!base) {
-        console.log('사용: node scripts/ci/commit-identity.mjs <base-ref|sha> [head]');
+        console.log('사용: node scripts/ci/commit-identity.mjs <base-ref|sha> [head] [--exclude <ref>]...');
         process.exit(2);
     }
     let start;
@@ -73,13 +80,24 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
             : `기준 커밋(${base})이 이 체크아웃에 없다 — force-push 로 이력이 바뀐 경우면 그 push 는 검사 범위를 정할 수 없다`);
         process.exit(1);
     }
-    const raw = execFileSync('git', ['log', '-z', '--format=%H%x1f%ae%x1f%ce%x1f%an%x1f%cn%x1f%B', `${start}..${head}`], { encoding: 'utf8' });
+    for (const ref of excludes) {
+        try { execFileSync('git', ['cat-file', '-e', `${ref}^{commit}`], { stdio: 'ignore' }); } catch {
+            console.log(`제외 기준(${ref})이 이 체크아웃에 없다 — 그 ref 를 fetch 한 뒤 다시 돌린다(제외 없이 넘어가지 않는다)`);
+            process.exit(1);
+        }
+    }
+    const notArgs = excludes.length ? ['--not', ...excludes] : [];
+    const raw = execFileSync('git', ['log', '-z', '--format=%H%x1f%ae%x1f%ce%x1f%an%x1f%cn%x1f%B', `${start}..${head}`, ...notArgs], { encoding: 'utf8' });
     const rows = raw.split('\0').filter((s) => s.trim()).map((rec) => {
         const [sha, author, committer, authorName, committerName, body] = rec.replace(/^\n/, '').split('\x1f');
         return { sha, author, committer, authorName, committerName, body };
     });
     const forbidden = String(process.env.OMK_FORBIDDEN_STRINGS ?? '').split(/[,\n]/);
     const bad = checkIdentities(rows, forbidden);
+    if (excludes.length) {
+        const total = Number(execFileSync('git', ['rev-list', '--count', `${start}..${head}`], { encoding: 'utf8' }).trim());
+        console.log(`${excludes.join(', ')} 에 이미 있는 ${total - rows.length}커밋 제외`);
+    }
     for (const b of bad) console.log(`${b.sha.slice(0, 12)}  ${FIELD_KO[b.field]}이 허용되지 않는다`);
     console.log(`커밋 신원 검사: ${rows.length}커밋 중 ${bad.length}건`);
     if (bad.length) {
