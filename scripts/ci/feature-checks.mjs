@@ -154,9 +154,15 @@ export function runFeatures(files, options = {}) {
   // apps/desktop-windows is not a root workspace: its own node --test suite (Electron is not loaded by the tests).
   if (selection.desktopWindows) run('npm', ['test'], { cwd: resolve(root, 'apps/desktop-windows') });
   // Same bundle + harness as the desktop-native workflow (Gate 1), on the bundled helper.
+  // The harness asserts the macOS sandbox (sandbox-exec), so off macOS only the bundle is built here and the
+  // harness is left to the mac job (desktop-native workflow, which also runs on dev/main pushes) — like hostSetup.
+  let desktopHelper;
   if (selection.desktopHelper) {
+    const platform = options.platform || process.platform;
     run(resolve(root, 'node_modules/.bin/esbuild'), ['apps/desktop-native/helper/src/helper.mjs', '--bundle', '--platform=node', '--target=node20', '--format=cjs', '--outfile=apps/desktop-native/helper/dist/helper.cjs']);
-    run(process.execPath, ['apps/desktop-native/helper/harness.cjs']);
+    if (platform === 'darwin') run(process.execPath, ['apps/desktop-native/helper/harness.cjs']);
+    const harness = 'apps/desktop-native/helper/harness.cjs';
+    desktopHelper = { platform, bundled: true, executed: platform === 'darwin' ? [harness] : [], delegatedToMacJob: platform === 'darwin' ? [] : [harness] };
   }
   // The CLI workspace has no Jest project: its tsc build, then the fixtures that drive the built CLI.
   if (selection.cli) {
@@ -171,7 +177,7 @@ export function runFeatures(files, options = {}) {
     for (const file of executed) run(...(file.endsWith('.mjs') ? [process.execPath, ['--test', file]] : ['bash', [file]]));
     hostSetup = { platform, executed, delegatedToMacJob: platform === 'darwin' ? [] : macOnly };
   }
-  return { selection, relatedTests: [...tests].map(path => relative(root, path)), typeOnly, ...(hostSetup ? { hostSetup } : {}) };
+  return { selection, relatedTests: [...tests].map(path => relative(root, path)), typeOnly, ...(hostSetup ? { hostSetup } : {}), ...(desktopHelper ? { desktopHelper } : {}) };
 }
 const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain && process.argv[2] === '--select-only') {
