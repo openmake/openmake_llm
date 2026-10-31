@@ -1,31 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, Noto_Sans_KR, Space_Grotesk } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
+// Instrument 서체 3종 (기준: OpenMake Color & Type Pairings) — 라틴/제목 Space Grotesk,
+// 한글 본문 Noto Sans KR(다크에서 300 사용), 수치·경로 IBM Plex Mono.
+// npm 패키지로 자체 호스팅한다 — 빌드가 Google Fonts 응답에 의존하지 않게(변수 정의는 globals.css).
+import "@fontsource-variable/noto-sans-kr";
+import "@fontsource-variable/space-grotesk";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
 import "./globals.css";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { Providers } from "./providers";
-
-// Instrument 서체 3종 (기준: OpenMake Color & Type Pairings) — 라틴/제목 Space Grotesk,
-// 한글 본문 Noto Sans KR(다크에서 300 사용), 수치·경로 IBM Plex Mono.
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
-  display: "swap",
-});
-const notoSansKr = Noto_Sans_KR({
-  variable: "--font-noto-kr",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  display: "swap",
-});
-const ibmPlexMono = IBM_Plex_Mono({
-  variable: "--font-ibm-plex-mono",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-  display: "swap",
-});
-const FONT_VARIABLES = `${spaceGrotesk.variable} ${notoSansKr.variable} ${ibmPlexMono.variable}`;
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -51,7 +37,7 @@ export default async function RootLayout({
   // NEXT_LOCALE 쿠키 → Accept-Language → ko (i18n/request.ts 에서 결정)
   const locale = await getLocale();
   return (
-    <html lang={locale} suppressHydrationWarning className={FONT_VARIABLES}>
+    <html lang={locale} suppressHydrationWarning>
       <body className="min-h-dvh bg-app text-fg antialiased">
         <GoogleAnalytics />
         <NextIntlClientProvider>

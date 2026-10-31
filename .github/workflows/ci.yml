@@ -201,8 +201,8 @@ jobs:
           npm run test:db
 
       # ─── Gate 2: TypeScript Build ───
-      # 웹 빌드는 next/font/google 로 Google 에서 폰트를 받는다 — 그 다운로드가 한 번 실패하면 코드와 무관하게
-      # 빌드 전체가 깨진다(2026-10-03 #1069 실측: 재실행으로 통과). 일시 실패만 한 번 다시 시도한다.
+      # 웹 글꼴은 fontsource 패키지로 자체 호스팅한다(2026-10-31) — 예전 next/font/google 은 빌드 때 Google 응답에
+      # 따라 코드와 무관하게 깨졌다(#1069, 10-30·31 dev push). 러너의 일시 실패에 대비해 재시도 한 번은 남긴다.
       - name: "Gate 2: TypeScript Build"
         run: npm run build || { echo "::warning::빌드 실패 — 30초 뒤 한 번 재시도합니다"; sleep 30; npm run build; }
 
