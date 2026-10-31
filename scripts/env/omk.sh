@@ -2274,6 +2274,7 @@ cmd_dev_setup() {
     load_toolchain "$DEV_LLM"
     dev_env_defaults "$DEV_LLM/.env"
     dev_build_packages
+    dev_sync_deps 1   # 설치·빌드 표식 — 다음 'dev up' 이 같은 lock·packages/ 로 다시 설치·빌드하지 않게
     inst="$(dev_instance)"
     [[ $no_searxng -eq 1 ]] && dotenv_set "$DEV_LLM/.env" OMK_SEARXNG off
     if [[ "$inst" != "$OMK_LOCAL_INSTANCE" ]]; then
@@ -2335,14 +2336,16 @@ dev_packages_hash() { # packages/ 의 커밋 트리 + 커밋 안 한 추적 파�
     printf '%s %s\n' "$t" "$(git -C "$DEV_LLM" diff --binary HEAD -- packages 2>/dev/null | git hash-object --stdin)"
 }
 dev_sync_deps() { # $1=1 이면 방금 setup 이 설치·빌드했다 — 표식만 남긴다
-    local lmark="$DEV_LLM/node_modules/.omk-installed-lock" pmark="$DEV_LLM/node_modules/.omk-built-packages" cur
+    local lmark="$DEV_LLM/node_modules/.omk-installed-lock" pmark="$DEV_LLM/node_modules/.omk-built-packages" cur dirty
     cur="$(dev_lock_hash)"
     if [[ "$1" == 1 ]]; then
         printf '%s\n' "$cur" 2>/dev/null > "$lmark" || true
     elif [[ -n "$cur" && "$cur" != "$(cat "$lmark" 2>/dev/null || true)" ]]; then
         # deps_install 은 npm 이 고친 lock 을 되돌린다 — 개발자가 커밋하지 않은 lock 변경까지 지우지 않게 건너뛴다.
-        if [[ -n "$(git -C "$DEV_LLM" status --porcelain --untracked-files=no -- ':(glob)**/package-lock.json' 2>/dev/null)" ]]; then
-            log_warn "package-lock.json 에 커밋하지 않은 변경이 있어 자동 설치를 건너뜁니다 — 필요하면 직접 'npm install'"
+        dirty="$(git -C "$DEV_LLM" status --porcelain --untracked-files=no -- ':(glob)**/package-lock.json' 2>/dev/null | awk '{print $2}' | paste -sd' ' - || true)"
+        if [[ -n "$dirty" ]]; then
+            log_warn "커밋하지 않은 lock 변경이 있어 자동 설치를 건너뜁니다: $dirty"
+            log_warn "  npm 이 고친 설치 부산물이면 'git checkout -- $dirty' 뒤 다시 'omk dev up', 의도한 변경이면 커밋한 뒤 'omk dev up'"
         else
             deps_install "$DEV_LLM"
             printf '%s\n' "$(dev_lock_hash)" 2>/dev/null > "$lmark" || true

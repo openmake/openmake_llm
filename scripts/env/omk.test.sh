@@ -1143,7 +1143,7 @@ du_mark()  { du_lock "$1" > "$1/me/node_modules/.omk-installed-lock"; du_pkgs "$
 du_lmark() { cat "$1/me/node_modules/.omk-installed-lock" 2>/dev/null; }
 du_pmark() { cat "$1/me/node_modules/.omk-built-packages" 2>/dev/null; }
 DU_DEPS_RC=0   # 0 이 아니면 가짜 deps_install 이 그 코드로 끝난다(실제는 die)
-du_run() { # $1=D 나머지=cmd_dev_up 인자 → 찍힌 표식(공백으로 이은 한 줄)
+du_out() { # $1=D 나머지=cmd_dev_up 인자 → 출력 전체(표준 출력)
     local d="$1"; shift
     (
         OMK_ROOT="$TMP/du-sync-root"
@@ -1155,8 +1155,9 @@ du_run() { # $1=D 나머지=cmd_dev_up 인자 → 찍힌 표식(공백으로 이
         deps_install() { echo "deps_install $1"; [[ $DU_DEPS_RC -eq 0 ]] || exit "$DU_DEPS_RC"; }
         dev_build_packages() { echo build_packages; }
         cmd_dev_up "$@" 2>/dev/null
-    ) | grep -E '^(setup|deps_install|build_packages)' | tr '\n' ' '
+    )
 }
+du_run() { du_out "$@" | grep -E '^(setup|deps_install|build_packages)' | tr '\n' ' '; }   # 찍힌 표식(공백으로 이은 한 줄)
 D="$(du_new mk-none)"
 eq "dev up: 표식 없음 → 설치 뒤 빌드(각 1회)"  "$(du_run "$D" deps)" "deps_install $D/me build_packages "
 eq "dev up: 설치 뒤 lock 표식 기록"           "$(du_lmark "$D")" "$(du_lock "$D")"
@@ -1200,6 +1201,32 @@ eq "dev up: setup 다음 실행 → 설치·빌드 없음"    "$(du_run "$D" dep
 D="$(du_new mk-dirty)"; du_mark "$D"; echo '{"v":"mine"}' > "$D/me/package-lock.json"
 eq "dev up: 커밋 안 한 lock 변경 → 설치 안 함"   "$(du_run "$D" deps --no-sync)" ""
 eq "dev up: 커밋 안 한 lock 변경 → 내용 보존"    "$(cat "$D/me/package-lock.json")" '{"v":"mine"}'
+# 손으로 pull 해 lock 이 바뀌었는데(표식과 다름) 작업 트리 lock 도 더럽다 — 건너뛰고 경로·정리 방법을 알린 뒤, 정리하면 다음 실행이 설치한다
+D="$(du_new mk-dirty2)"; du_mark "$D"; L0="$(du_lmark "$D")"
+echo '{"v":2}' > "$D/me/package-lock.json"; dsg "$D/me" commit -q -am pull; echo '{"v":"npm"}' > "$D/me/package-lock.json"
+# shellcheck disable=SC2034  # ok below evaluates this output variable
+DU_OUT="$(du_out "$D" deps --no-sync)"
+ok "dev up: 더러운 lock → 설치 안 함"            '[[ "$DU_OUT" != *deps_install* ]]'
+ok "dev up: 더러운 lock → 경고에 경로"           '[[ "$DU_OUT" == *"자동 설치를 건너뜁니다: package-lock.json"* ]]'
+ok "dev up: 더러운 lock → 정리 방법 안내"        '[[ "$DU_OUT" == *"git checkout -- package-lock.json"* ]]'
+eq "dev up: 건너뛰면 표식 그대로"               "$(du_lmark "$D")" "$L0"
+git -C "$D/me" checkout -q -- package-lock.json
+eq "dev up: lock 정리 뒤 다음 실행 → 설치"        "$(du_run "$D" deps --no-sync)" "deps_install $D/me "
+
+# 'omk dev setup' 을 따로 돌린 뒤의 'dev up' — setup 이 표식을 남겨 다시 설치·빌드하지 않는다
+D="$(du_new mk-setup-alone)"; rm -rf "$D/me/node_modules"
+printf '#!/usr/bin/env bash\nmkdir -p node_modules\n' > "$D/me/install.sh"; chmod +x "$D/me/install.sh"
+(
+    OMK_ROOT="$TMP/du-setup-root"
+    # shellcheck disable=SC2034  # cmd_dev_setup 이 읽는다
+    dev_locate() { DEV_LLM="$D/me"; DEV_BENCH=""; }
+    ensure_git() { :; }; dev_warn_legacy() { :; }; load_toolchain() { :; }; dev_build_packages() { :; }; dev_searxng() { :; }
+    stack_ensure() { :; }; omk_docker_host() { :; }; install_wrapper() { :; }
+    cmd_dev_setup >/dev/null 2>&1
+)
+eq "dev setup: lock 표식 기록"                  "$(du_lmark "$D")" "$(du_lock "$D")"
+eq "dev setup: packages 표식 기록"              "$(du_pmark "$D")" "$(du_pkgs "$D")"
+eq "dev setup 뒤 dev up → 설치·빌드 없음"         "$(du_run "$D" deps --no-sync)" ""
 
 D="$(du_new mk-dist)"; du_mark "$D"; rm -rf "$D/me/packages/plugin-contracts/dist"
 eq "dev up: dist 없음 → 빌드(표식과 무관)"       "$(du_run "$D" deps)" "build_packages "
