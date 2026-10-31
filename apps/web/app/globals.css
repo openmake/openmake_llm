@@ -57,6 +57,11 @@
   --sh-2: 0 2px 8px rgba(20, 22, 26, 0.06), 0 1px 2px rgba(20, 22, 26, 0.04);
   --sh-3: 0 16px 40px rgba(20, 22, 26, 0.12), 0 2px 6px rgba(20, 22, 26, 0.06);
 
+  /* layout.tsx 가 불러오는 fontsource 패키지의 글꼴 이름 */
+  --font-space-grotesk: "Space Grotesk Variable";
+  --font-noto-kr: "Noto Sans KR Variable";
+  --font-ibm-plex-mono: "IBM Plex Mono";
+
   --display: var(--font-space-grotesk), var(--font-noto-kr), -apple-system,
     BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
   --sans: var(--font-noto-kr), -apple-system, BlinkMacSystemFont,
