@@ -385,3 +385,47 @@ test('desktop, CLI and admin-init fixtures referenced by the new suites exist', 
     assert.ok(existsSync(`${root}${file}`), file);
   }
 });
+
+// dev 머지 검사는 Linux 러너에서 돈다. helper 하네스는 macOS 샌드박스(sandbox-exec)를 전제로 하므로
+// Linux 에서는 번들만 만들고 하네스는 macOS 작업(desktop-native 워크플로)에 넘긴다 — hostSetup 과 같은 방식.
+async function fakeHelperRoot(t, { failing } = {}) {
+  const { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const root = mkdtempSync(join(tmpdir(), 'omk-helper-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const log = join(root, 'ran.log');
+  mkdirSync(join(root, 'node_modules/.bin'), { recursive: true });
+  mkdirSync(join(root, 'apps/desktop-native/helper/src'), { recursive: true });
+  writeFileSync(join(root, 'node_modules/.bin/esbuild'), `#!/bin/sh\nprintf 'bundle\\n' >> ${JSON.stringify(log)}\nexit ${failing === 'bundle' ? 1 : 0}\n`);
+  chmodSync(join(root, 'node_modules/.bin/esbuild'), 0o755);
+  writeFileSync(join(root, 'apps/desktop-native/helper/harness.cjs'), `require('node:fs').appendFileSync(${JSON.stringify(log)}, 'harness\\n');${failing === 'harness' ? ' process.exit(1);' : ''}\n`);
+  return { root, log };
+}
+
+test('desktop helper on Linux bundles the helper and delegates the macOS-sandbox harness to the mac job', async t => {
+  const { runFeatures } = await import('../../scripts/ci/feature-checks.mjs');
+  const { readFileSync } = await import('node:fs');
+  const { root, log } = await fakeHelperRoot(t);
+  const report = runFeatures(['apps/desktop-native/helper/src/helper.mjs'], { cwd: root, platform: 'linux', stdio: 'ignore', env: childEnv });
+  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['bundle']);
+  assert.deepEqual(report.desktopHelper, { platform: 'linux', bundled: true, executed: [], delegatedToMacJob: ['apps/desktop-native/helper/harness.cjs'] });
+});
+
+test('desktop helper on macOS bundles and runs the harness', async t => {
+  const { runFeatures } = await import('../../scripts/ci/feature-checks.mjs');
+  const { readFileSync } = await import('node:fs');
+  const { root, log } = await fakeHelperRoot(t);
+  const report = runFeatures(['apps/desktop-native/helper/src/helper.mjs'], { cwd: root, platform: 'darwin', stdio: 'ignore', env: childEnv });
+  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), ['bundle', 'harness']);
+  assert.deepEqual(report.desktopHelper, { platform: 'darwin', bundled: true, executed: ['apps/desktop-native/helper/harness.cjs'], delegatedToMacJob: [] });
+});
+
+test('desktop helper fails when the bundle fails (any platform) or the harness fails on macOS', async t => {
+  const { runFeatures } = await import('../../scripts/ci/feature-checks.mjs');
+  const files = ['apps/desktop-native/helper/src/helper.mjs'];
+  const bundle = await fakeHelperRoot(t, { failing: 'bundle' });
+  assert.throws(() => runFeatures(files, { cwd: bundle.root, platform: 'linux', stdio: 'ignore', env: childEnv }), /failed \(1\)/);
+  const harness = await fakeHelperRoot(t, { failing: 'harness' });
+  assert.throws(() => runFeatures(files, { cwd: harness.root, platform: 'darwin', stdio: 'ignore', env: childEnv }), /failed \(1\)/);
+});
