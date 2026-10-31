@@ -2341,11 +2341,20 @@ cmd_dev_up() {
             *)           target="$1" ;;
         esac; shift
     done
+    local before after setup_ran=0
+    before="$(git -C "$DEV_LLM" rev-parse -q --verify HEAD 2>/dev/null || true)"
     [[ $no_sync -eq 1 ]] || dev_sync_branch "$DEV_LLM" || true
-    [[ -f "$DEV_LLM/.env" && -d "$DEV_LLM/node_modules" ]] || cmd_dev_setup
+    after="$(git -C "$DEV_LLM" rev-parse -q --verify HEAD 2>/dev/null || true)"
+    [[ -f "$DEV_LLM/.env" && -d "$DEV_LLM/node_modules" ]] || { cmd_dev_setup; setup_ran=1; }
     # ~/.openmake 를 지워도 .env·node_modules 는 클론에 남아 setup 을 건너뛴다 — 래퍼는 여기서 되살린다.
     [[ -x "$OMK_ROOT/bin/omk" ]] || install_wrapper
     load_toolchain "$DEV_LLM"
+    # 동기화로 작업 트리가 옮겨졌으면 바뀐 lock·공용 패키지를 반영한다 — 있는 node_modules·dist 만 보고 기동하면
+    # 새 의존성이 빠진 채 뜬다(2026-10-31: 웹 Module not found → 500). setup 이 돌았으면 거기서 이미 했다.
+    if [[ $setup_ran -eq 0 && -n "$before" && -n "$after" && "$before" != "$after" ]]; then
+        if lockfile_changed "$DEV_LLM" "$before" "$after"; then deps_install "$DEV_LLM"; fi
+        git -C "$DEV_LLM" diff --quiet "$before" "$after" -- packages || dev_build_packages
+    fi
     [[ -d "$DEV_LLM/packages/shared-types/dist" && -d "$DEV_LLM/packages/plugin-contracts/dist" ]] || dev_build_packages
     # 접속 호스트 — 이번에 준 것(--host·--tailscale)을 .env 에 기억된 것과 합친다. 한 번 주면 다음부터는 생략 가능.
     local hosts; hosts="$(dotenv_get "$DEV_LLM/.env" OMK_DEV_HOSTS)"
