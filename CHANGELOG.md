@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.120.0](https://github.com/openmake/openmake_llm/compare/v1.119.0...v1.120.0) (2026-11-01)
+
+
+### ✨ 기능
+
+* **knowledge:** reindex 핸들러가 작업 행위자를 그대로 넘긴다 ([d51ed04](https://github.com/openmake/openmake_llm/commit/d51ed0410ed1803cbb74a74a53028452501e4b10))
+* **knowledge:** 공간 재색인 전환 때 실패 문서를 다시 수집에 넣는다 ([605caab](https://github.com/openmake/openmake_llm/commit/605caabff9a8f48cf4dbe9a3bdae5a43c7a85a94))
+* **web:** 재색인 확인 문구에 실패 문서 재수집 안내 추가 ([267d378](https://github.com/openmake/openmake_llm/commit/267d3783152be138d05094ebdf503263e52b760c))
+
+
+### 🐛 버그 수정
+
+* **knowledge:** 재색인 실패 문서 재수집 때 이미 대기·실행 중인 ingest 가 있으면 건너뛴다 ([08b8a6e](https://github.com/openmake/openmake_llm/commit/08b8a6e1e6f66f8d04956e193c80ee89b7099557))
+
 ## [1.119.0](https://github.com/openmake/openmake_llm/compare/v1.118.0...v1.119.0) (2026-11-01)
 
 
