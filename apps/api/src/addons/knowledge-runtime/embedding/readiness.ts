@@ -7,7 +7,7 @@
  *
  * @module addons/knowledge-runtime/embedding/readiness
  */
-import type { KnowledgeEmbeddingIndexInfo, KnowledgeEmbeddingStatus, KnowledgeSpaceEmbedding } from '@openmake/shared-types';
+import type { KnowledgeEmbeddingIndexInfo, KnowledgeEmbeddingStatus, KnowledgeEmbeddingState } from '@openmake/shared-types';
 import { AppError } from '../../../utils/error-handler';
 import { kdb } from '../db';
 import {
@@ -68,8 +68,8 @@ export interface SpaceEmbeddingRow {
  * 공간들의 embedding 을 계산한다 — 라이브 해석은 요청당 1회, 가용성은 providerRef 별 1회(공간 N개 → 공급자 수만큼),
  * 재색인 진행 여부는 한 쿼리. 키 복호화·공급자 호출은 없다.
  */
-export async function describeSpaceEmbeddings(spaces: SpaceEmbeddingRow[], userId: string): Promise<Map<string, KnowledgeSpaceEmbedding>> {
-    const out = new Map<string, KnowledgeSpaceEmbedding>();
+export async function describeSpaceEmbeddings(spaces: SpaceEmbeddingRow[], userId: string): Promise<Map<string, KnowledgeEmbeddingState>> {
+    const out = new Map<string, KnowledgeEmbeddingState>();
     if (spaces.length === 0) return out;
     const pinnedIds = [...new Set(spaces.map((s) => s.embedding_index_id).filter((v): v is string => !!v))];
     const [state, indexes, reindexing] = await Promise.all([

@@ -6,7 +6,7 @@
  *
  * @module addons/knowledge-runtime/embedding/space-reindex
  */
-import type { KnowledgeSpaceReindexResponse } from '@openmake/shared-types';
+import type { KnowledgeReindexResponse } from '@openmake/shared-types';
 import { AppError } from '../../../utils/error-handler';
 import { createLogger } from '../../../utils/logger';
 import { recordAddonAudit } from '../../../runtime-ports/audit-port';
@@ -56,7 +56,7 @@ export interface SpaceReindexJob {
  * 재색인 요청(쓰기 권한자) — 요청자의 라이브 배정 색인을 보장(필요하면 요청자 키로 측정 1회)하고 reindex 작업을 넣는다.
  * 같은 색인이면 409 REINDEX_NOT_NEEDED, 진행 중이면 409 REINDEX_IN_PROGRESS, 키 문제 412·측정 실패 502 — 작업은 생기지 않는다.
  */
-export async function requestSpaceReindex(userId: string, spaceId: string): Promise<KnowledgeSpaceReindexResponse> {
+export async function requestSpaceReindex(userId: string, spaceId: string): Promise<KnowledgeReindexResponse> {
     const space = await getSpaceScopeRow(await actorFor(userId), spaceId, 'write');
     if (!space) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
     const { index } = await ensureLiveIndex(userId);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { KnowledgeEmbeddingStatus, KnowledgeSpaceEmbedding } from '@openmake/shared-types';
+import type { KnowledgeEmbeddingStatus, KnowledgeEmbeddingState } from '@openmake/shared-types';
 import {
   blockedReasonKey,
   canOfferReindex,
@@ -43,7 +43,7 @@ test('서버 오류 코드 → 안내 키, 설정 링크는 키·배정 문제�
 });
 
 test('재색인 버튼은 서버 상태로만 — 편집 권한·현재 설정이 있고 mismatch 이거나 키·미고정 상태, 진행 중이면 숨김', () => {
-  const embedding = (over: Partial<KnowledgeSpaceEmbedding>): KnowledgeSpaceEmbedding => ({
+  const embedding = (over: Partial<KnowledgeEmbeddingState>): KnowledgeEmbeddingState => ({
     index: null, status: 'ready', mismatch: false, effective: { providerRef: 'p:m', modelId: 'p/m', source: 'user' }, ...over,
   });
   assert.equal(canOfferReindex({ canEdit: true, embedding: embedding({ mismatch: true }) }), true);

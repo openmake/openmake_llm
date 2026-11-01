@@ -37,6 +37,7 @@
     "scripts/lib/dgx-model.sh": "pipeline",
     "packages/api-client/src/index.ts": "web",
     "packages/shared-types/src/index.ts": "web",
+    "packages/shared-types/src/knowledge.ts": "web",
     "packages/shared-types/src/mcp-monitoring.ts": "web",
     "scripts/export-openapi.ts": "pipeline"
   },

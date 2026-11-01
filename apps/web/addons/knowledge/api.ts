@@ -15,7 +15,7 @@ import type {
   KnowledgeSpaceCreateInput,
   KnowledgeSpaceDetail,
   KnowledgeSpaceMemory,
-  KnowledgeSpaceReindexResponse,
+  KnowledgeReindexResponse,
   KnowledgeSpaceSummary,
   KnowledgeSpaceUpdateInput,
 } from "@openmake/shared-types";
@@ -89,7 +89,7 @@ export const knowledgeApi = {
 
   /** 현재 설정 모델로 다시 색인 — 202 { jobId, indexId }, 409·412·502 는 status·code 를 단 Error */
   reindexSpace: (id: string) =>
-    withCode(() => ApiClient.post<Envelope<KnowledgeSpaceReindexResponse>>(`${base}/spaces/${id}/reindex`)).then((r) => r.data),
+    withCode(() => ApiClient.post<Envelope<KnowledgeReindexResponse>>(`${base}/spaces/${id}/reindex`)).then((r) => r.data),
 
   newConversation: (id: string) =>
     ApiClient.post<Envelope<{ sessionId: string }>>(`${base}/spaces/${id}/conversations`).then(
