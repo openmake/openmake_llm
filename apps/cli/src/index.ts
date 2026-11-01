@@ -18,6 +18,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { loadConfig, saveConfig, deviceId } from './config';
 import { CliBridge, type ConfirmFn } from './bridge';
+import { PORTS } from '@openmake/config';
 import { ApiClient, type ApiTask, type ApiTaskStep } from './api';
 import { structuredQuestions, approvalQuestionText, renderQuestion, renderInputHint, interpretAnswer, composeAnswer, type StructuredQuestion } from './ask-human';
 import { prompt, requireConfig } from './cli-common';
@@ -48,10 +49,12 @@ const terminalConfirm: ConfirmFn = async (command, taskId, folderRoot) => {
     }
 };
 
+const DEFAULT_SERVER_URL = `http://localhost:${PORTS.API}`;
+
 async function cmdLogin(): Promise<void> {
     const existing = loadConfig();
-    const serverUrl = (await prompt(`서버 URL [${existing?.serverUrl ?? 'http://localhost:52416'}]: `))
-        || existing?.serverUrl || 'http://localhost:52416';
+    const serverUrl = (await prompt(`서버 URL [${existing?.serverUrl ?? DEFAULT_SERVER_URL}]: `))
+        || existing?.serverUrl || DEFAULT_SERVER_URL;
     const apiKey = (await prompt('API key (omk_live_...): ')) || existing?.apiKey || '';
     if (!apiKey.startsWith('omk_live_')) {
         console.error('\x1b[31mAPI key 형식이 올바르지 않습니다 (omk_live_ 로 시작). 설정에서 발급하세요.\x1b[0m');
