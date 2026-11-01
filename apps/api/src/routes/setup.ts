@@ -91,6 +91,8 @@ import { createClusterController, createHealthController, createAuthController, 
 import { ClusterManager } from '../cluster/manager';
 import { bootstrapServices } from '../bootstrap';
 import { getConfig } from '../config';
+import { APP_VERSION } from '../config/constants';
+import { getBuildInfo } from '../config/build-id';
 import { success } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
 import { collectHealthSections } from '../runtime-ports/health-sections';
@@ -156,6 +158,9 @@ export function setupApiRoutes(
             status: 'ok',
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
+            // 관리자 전용 — 익명 version 노출은 10-25 보안점검 미결 항목. 값은 루트 /health 와 같다
+            version: APP_VERSION,
+            build: getBuildInfo(),
             services: {
                 database: {
                     status: databaseStatus,
