@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import type { Pool } from 'pg';
 import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 import {
-    assertFullTestSchema, ensureFakeIndex, fakeVector, insertIngestFixture, jobSnapshot, spawnWorker, startFakeGateway,
+    assertFullTestSchema, dropFakeIndex, ensureFakeIndex, fakeVector, insertIngestFixture, jobSnapshot, spawnWorker, startFakeGateway,
     stopWorker, waitFor, workerEnv, type FakeGateway, type WorkerChild,
 } from './helpers/worker-process-harness';
 
@@ -80,6 +80,7 @@ describeOrSkip('knowledge 두 모드 결과 비교 (실 DB)', () => {
             await gateway?.close();
             if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
             if (spaceIds.length) await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [spaceIds]);
+            if (indexId) await dropFakeIndex(pool, indexId);
             await resetWorkerMode(pool);
             if (storageDir) await rm(storageDir, { recursive: true, force: true });
             if (prevStorageDir === undefined) delete process.env.KNOWLEDGE_STORAGE_DIR;

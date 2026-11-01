@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { Pool } from 'pg';
 import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 import {
-    assertFullTestSchema, ensureFakeIndex, fakeVector, freePort, insertIngestFixture, jobSnapshot, setJobLeaseMs, spawnWorker,
+    assertFullTestSchema, dropFakeIndex, ensureFakeIndex, fakeVector, freePort, insertIngestFixture, jobSnapshot, setJobLeaseMs, spawnWorker,
     startFakeGateway, stopWorker, waitFor, workerEnv, type FakeGateway, type WorkerChild,
 } from './helpers/worker-process-harness';
 
@@ -85,6 +85,7 @@ describeOrSkip('knowledge worker 별도 프로세스 (실 DB)', () => {
             await gateway?.close();
             if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
             if (spaceIds.length) await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [spaceIds]);
+            if (indexId) await dropFakeIndex(pool, indexId);
             await restoreLease?.();
             await resetWorkerMode(pool);
             if (storageDir) await rm(storageDir, { recursive: true, force: true });
