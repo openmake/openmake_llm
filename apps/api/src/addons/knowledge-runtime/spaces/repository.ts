@@ -16,6 +16,8 @@ export interface SpaceScopeRow {
     scope_type: KnowledgeScopeType;
     scope_id: string;
     config_profile_id: string | null;
+    /** 공간의 벡터가 사는 색인(006) — 아직 고정되지 않았으면 null */
+    embedding_index_id: string | null;
 }
 
 export interface SpaceSummaryRow extends SpaceScopeRow {
@@ -33,7 +35,7 @@ export interface SpaceSummaryRow extends SpaceScopeRow {
 
 /** 요약 카운트 SELECT 목록 — 목록·상세가 공유. deleted/삭제 문서는 세지 않는다. */
 const SUMMARY_COLUMNS = `
-    s.id, s.name, s.description, s.icon, s.instructions, s.scope_type, s.scope_id, s.last_used_at, s.updated_at,
+    s.id, s.name, s.description, s.icon, s.instructions, s.scope_type, s.scope_id, s.last_used_at, s.updated_at, s.config_profile_id, s.embedding_index_id,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status <> 'deleted') AS document_count,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status = 'processing') AS processing_count,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status = 'failed') AS failed_count,
@@ -64,7 +66,7 @@ export async function getSpaceSummaryRow(actor: KnowledgeActor, id: string, mode
 export async function getSpaceScopeRow(actor: KnowledgeActor, id: string, mode: 'read' | 'write'): Promise<SpaceScopeRow | null> {
     const pred = accessPredicate(actor, mode, 's', 2);
     const r = await kdb().query<SpaceScopeRow>(
-        `SELECT s.id, s.scope_type, s.scope_id, s.config_profile_id FROM knowledge_spaces s WHERE s.id = $1 AND ${pred.sql}`,
+        `SELECT s.id, s.scope_type, s.scope_id, s.config_profile_id, s.embedding_index_id FROM knowledge_spaces s WHERE s.id = $1 AND ${pred.sql}`,
         [id, ...pred.params],
     );
     return r.rows[0] ?? null;

@@ -6,14 +6,23 @@
  *
  * @module addons/knowledge-runtime/embedding/space-reindex
  */
+import type { KnowledgeSpaceReindexResponse } from '@openmake/shared-types';
+import { AppError } from '../../../utils/error-handler';
 import { createLogger } from '../../../utils/logger';
+import { recordAddonAudit } from '../../../runtime-ports/audit-port';
 import { kdb, inTransaction } from '../db';
 import { assertLeaseHeld, LeaseLostError, type JobLease } from '../jobs/lease';
 import { KnowledgeJobPermanentError } from '../jobs/errors';
+import { enqueueJob } from '../jobs/queue';
+import { spaceJobActor } from '../jobs/actor';
+import { actorFor } from '../config/scope-policy';
+import { getSpaceScopeRow } from '../spaces/repository';
 import { FAILURE_CODES, type FailureCode } from '../ingestion/errors';
 import { INDEX_PUBLISH_LOCK_KEY } from '../constants';
+import { KNOWLEDGE_SPACE_REINDEX_AUDIT_ACTION } from '../contributions';
 import { classifyEmbedError, makeIndexEmbedder, type EmbedFn, type EmbeddingFailureReason } from './provider';
 import { getIndexById, insertEmbeddings } from './index-catalog';
+import { ensureLiveIndex } from './readiness';
 
 const logger = createLogger('KnowledgeReindex');
 
@@ -41,6 +50,31 @@ export interface SpaceReindexJob {
     indexId: string;
     /** 요청자 — 외부 모델은 이 사용자의 키로만 임베딩한다 */
     actorUserId: string | null;
+}
+
+/**
+ * 재색인 요청(쓰기 권한자) — 요청자의 라이브 배정 색인을 보장(필요하면 요청자 키로 측정 1회)하고 reindex 작업을 넣는다.
+ * 같은 색인이면 409 REINDEX_NOT_NEEDED, 진행 중이면 409 REINDEX_IN_PROGRESS, 키 문제 412·측정 실패 502 — 작업은 생기지 않는다.
+ */
+export async function requestSpaceReindex(userId: string, spaceId: string): Promise<KnowledgeSpaceReindexResponse> {
+    const space = await getSpaceScopeRow(await actorFor(userId), spaceId, 'write');
+    if (!space) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
+    const { index } = await ensureLiveIndex(userId);
+    if (index.id === space.embedding_index_id) {
+        throw new AppError('이 프로젝트는 이미 현재 설정 모델로 색인되어 있습니다', 409, true, 'REINDEX_NOT_NEEDED');
+    }
+    const running = await kdb().query(
+        `SELECT id FROM knowledge_ingestion_jobs WHERE kind = 'reindex' AND space_id = $1 AND state IN ('queued', 'running') LIMIT 1`,
+        [spaceId],
+    );
+    if (running.rows.length > 0) throw new AppError('이 프로젝트는 이미 다시 색인하는 중입니다', 409, true, 'REINDEX_IN_PROGRESS');
+    const jobId = await enqueueJob({ kind: 'reindex', spaceId, embeddingIndexId: index.id, actor: spaceJobActor(userId, space) });
+    await recordAddonAudit({
+        action: KNOWLEDGE_SPACE_REINDEX_AUDIT_ACTION, userId, resourceType: 'knowledge_space', resourceId: spaceId,
+        details: { spaceId, fromIndexId: space.embedding_index_id, toIndexId: index.id, providerRef: index.providerRef, jobId },
+    });
+    logger.info(`공간 재색인 요청: space=${spaceId} user=${userId} → ${index.id} (${index.providerRef}, dim=${index.dimension})`);
+    return { jobId, indexId: index.id };
 }
 
 async function readPointer(spaceId: string): Promise<{ found: boolean; indexId: string | null }> {

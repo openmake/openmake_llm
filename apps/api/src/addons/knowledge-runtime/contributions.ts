@@ -8,13 +8,16 @@ import type { AddonContribution } from '../../addon-host/contributions';
 
 /** 수집 작업 취소(사용자·관리자) — audit_logs 에 쌓이는 값이라 이름을 바꾸지 않는다 */
 export const KNOWLEDGE_JOB_CANCELLED_AUDIT_ACTION = 'knowledge.job_cancelled';
+/** 공간 재색인 요청(현재 설정 모델로) — 요청자 키로 임베딩하므로 누가 언제 어느 색인으로 옮겼는지 남긴다 */
+export const KNOWLEDGE_SPACE_REINDEX_AUDIT_ACTION = 'knowledge.space_reindex_requested';
 
 declare module '../../config/audit-actions' {
     interface AddonAuditActions {
         [KNOWLEDGE_JOB_CANCELLED_AUDIT_ACTION]: null;
+        [KNOWLEDGE_SPACE_REINDEX_AUDIT_ACTION]: null;
     }
 }
 
 export const knowledgeContribution: AddonContribution = {
-    auditActions: { [KNOWLEDGE_JOB_CANCELLED_AUDIT_ACTION]: null },
+    auditActions: { [KNOWLEDGE_JOB_CANCELLED_AUDIT_ACTION]: null, [KNOWLEDGE_SPACE_REINDEX_AUDIT_ACTION]: null },
 };
