@@ -11,7 +11,7 @@ jest.mock('../../../llm/external-throttle', () => ({
 const safeFetchMock = jest.fn();
 jest.mock('../../../security/ssrf-guard', () => ({ ...jest.requireActual('../../../security/ssrf-guard'), safeFetch: (...a: unknown[]) => safeFetchMock(...a) }));
 
-import { callJson, downloadProviderUrl, HttpCallError } from '../http-call';
+import { callJson, callBinary, downloadProviderUrl, HttpCallError } from '../http-call';
 import { collectAttachments } from '../orchestrate';
 import { collectMediaFiles } from '../../chat-service/attach-context';
 import { stripCredentialHeaders } from '../../../security/ssrf-guard';
@@ -60,6 +60,27 @@ describe('callJson', () => {
         global.fetch = (async () => resp('upstream exploded', { status: 502 })) as unknown as typeof fetch;
         const err = await callJson(target as never, { timeoutMs: 1000 }).catch((e: Error) => e) as Error;
         expect(err.message).toBe('HTTP 502 upstream exploded');
+    });
+    it('keyRejected 플래그 — 401·무효 키 본문이면 true, 그 밖의 HTTP 오류는 false(문구 종전)', async () => {
+        global.fetch = (async () => resp('unauthorized', { status: 401 })) as unknown as typeof fetch;
+        const e401 = await callJson(target as never, { timeoutMs: 1000 }).catch((e: unknown) => e) as HttpCallError;
+        expect(e401).toBeInstanceOf(HttpCallError);
+        expect(e401).toMatchObject({ status: 401, kind: 'http', keyRejected: true });
+        expect(e401.message).toContain('API 키를 거절');
+        global.fetch = (async () => resp('{"error":{"code":"invalid_api_key"}}', { status: 403 })) as unknown as typeof fetch;
+        expect(await callJson(target as never, { timeoutMs: 1000 }).catch((e: unknown) => e)).toMatchObject({ status: 403, keyRejected: true });
+        global.fetch = (async () => resp('rate limited', { status: 429 })) as unknown as typeof fetch;
+        const e429 = await callJson(target as never, { timeoutMs: 1000 }).catch((e: unknown) => e) as HttpCallError;
+        expect(e429).toMatchObject({ status: 429, keyRejected: false });
+        expect(e429.message).toBe('HTTP 429 rate limited');
+        global.fetch = (async () => resp('not json')) as unknown as typeof fetch;
+        expect(await callJson(target as never, { timeoutMs: 1000 }).catch((e: unknown) => e)).toMatchObject({ kind: 'type', keyRejected: false });
+    });
+    it('callBinary 도 같은 keyRejected 판정', async () => {
+        global.fetch = (async () => resp('unauthorized', { status: 401 })) as unknown as typeof fetch;
+        expect(await callBinary(target as never, { timeoutMs: 1000 }).catch((e: unknown) => e)).toMatchObject({ status: 401, keyRejected: true });
+        global.fetch = (async () => resp('boom', { status: 500 })) as unknown as typeof fetch;
+        expect(await callBinary(target as never, { timeoutMs: 1000 }).catch((e: unknown) => e)).toMatchObject({ status: 500, keyRejected: false });
     });
     it('이미 취소된 signal 이면 호출하지 않는다', async () => {
         const ac = new AbortController(); ac.abort();
