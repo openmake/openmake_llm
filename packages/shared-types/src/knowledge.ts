@@ -8,6 +8,32 @@ export type KnowledgeSpaceStatus = "active" | "deleting" | "tombstoned" | "purge
 export type KnowledgeVersionStatus =
   | "uploaded" | "validating" | "extracting" | "chunking" | "embedding" | "verifying" | "ready" | "failed";
 
+/**
+ * 공간 임베딩 상태(서버 판정 — 화면은 그린다).
+ * ready · unpinned(색인 미고정) · unassigned(임베딩 모델 미배정) · key_missing(색인 모델 공급자 키 없음·비활성)
+ * · key_rejected(공급자가 키를 거절) · reindexing(공간 재색인 진행 중)
+ */
+export type KnowledgeEmbeddingStatus = "ready" | "unpinned" | "unassigned" | "key_missing" | "key_rejected" | "reindexing";
+
+/** 임베딩 색인(벡터 공간) — 모델·차원·거리척도 별 1행, 여러 공간이 공유한다 */
+export interface KnowledgeEmbeddingIndexInfo {
+  id: string;
+  providerRef: string;
+  modelId: string;
+  dimension: number;
+  distanceMetric: string;
+}
+
+export interface KnowledgeSpaceEmbedding {
+  /** 이 공간의 벡터가 사는 색인 — 아직 고정되지 않았으면 null */
+  index: KnowledgeEmbeddingIndexInfo | null;
+  status: KnowledgeEmbeddingStatus;
+  /** 요청 사용자의 현재 임베딩 설정 — 해석 실패(미배정 등)면 null */
+  effective: { providerRef: string; modelId: string; source: "user" | "global" | "default" } | null;
+  /** 색인 모델과 현재 설정이 다르다 → "현재 설정 모델로 다시 색인" 안내 */
+  mismatch: boolean;
+}
+
 export interface KnowledgeSpaceSummary {
   id: string;
   name: string;
@@ -26,6 +52,8 @@ export interface KnowledgeSpaceSummary {
   failedCount: number;
   lastUsedAt: string | null;
   updatedAt: string;
+  /** 공간 임베딩 색인·상태(서버 판정) */
+  embedding: KnowledgeSpaceEmbedding;
 }
 
 export interface KnowledgeDocument {
@@ -34,7 +62,7 @@ export interface KnowledgeDocument {
   mimeType: string;
   sizeBytes: number;
   status: KnowledgeVersionStatus;
-  /** 기계 판독 실패 사유 — FAILED_VALIDATION · SCANNED_PDF_UNSUPPORTED · FAILED_EXTRACTION · FAILED_EMBEDDING … */
+  /** 기계 판독 실패 사유 — FAILED_VALIDATION · SCANNED_PDF_UNSUPPORTED · FAILED_EXTRACTION · FAILED_EMBEDDING · EMBEDDING_KEY_MISSING · EMBEDDING_KEY_REJECTED … */
   failureCode: string | null;
   /** 0–100 */
   progress: number;
@@ -92,14 +120,28 @@ export interface KnowledgeNewConversationResponse { sessionId: string }
 /** GET /api/knowledge/bindings/:sessionId — 대화 상단 배너용(표시일 뿐 권한 근거가 아니다) */
 export interface KnowledgeBindingResponse { space: { id: string; name: string; icon: string | null } | null }
 
-/** GET /api/knowledge/capabilities — 사용 가능 여부(pgvector·임베딩 provider·파서) */
+/**
+ * GET /api/knowledge/capabilities — 사용 가능 여부(pgvector·임베딩·파서). 요청 사용자 기준이다.
+ * blockedReasons 코드: PGVECTOR_MISSING · EMBEDDING_UNASSIGNED · EMBEDDING_KEY_MISSING · EMBEDDING_KEY_REJECTED
+ * · NO_SUPPORTED_MIME_TYPES · PARSER_REGISTRY_UNAVAILABLE
+ */
 export interface KnowledgeCapabilities {
   ready: boolean;
   blockedReasons: string[];
   supportedMimeTypes: string[];
   maxFileBytes: number;
-  embedding: { providerRef: string; modelId: string; dimension: number } | null;
+  /** 요청 사용자의 실효 임베딩 모델(공급자 호출·차원 측정 없음). dimension 은 같은 모델의 색인이 있을 때만 숫자 */
+  embedding: {
+    providerRef: string;
+    modelId: string;
+    source: "user" | "global" | "default";
+    status: KnowledgeEmbeddingStatus;
+    dimension: number | null;
+  } | null;
 }
+
+/** POST /api/knowledge/spaces/:id/reindex 202 — 현재 설정 모델로 공간을 다시 색인한다 */
+export interface KnowledgeSpaceReindexResponse { jobId: string; indexId: string }
 
 /** POST·PATCH /api/knowledge/spaces[/:id] 응답 */
 export interface KnowledgeSpaceResponse { space: KnowledgeSpaceSummary }
@@ -120,15 +162,8 @@ export interface KnowledgeChunkPreview {
 /** GET /api/knowledge/admin/status (관리자) */
 export interface KnowledgeAdminStatus {
   capabilities: KnowledgeCapabilities;
-  embeddingIndex: {
-    id: string;
-    providerRef: string;
-    modelId: string;
-    dimension: number;
-    distanceMetric: string;
-    status: string;
-    activatedAt: string | null;
-  } | null;
+  /** 색인 카탈로그 — 모델·차원·상태와 그 색인을 쓰는 공간 수 */
+  embeddingIndexes: Array<KnowledgeEmbeddingIndexInfo & { status: string; spaceCount: number; createdAt: string }>;
   /** 수집 작업 상태별 건수 */
   jobCounts: Record<string, number>;
   pgvectorVersion: string | null;

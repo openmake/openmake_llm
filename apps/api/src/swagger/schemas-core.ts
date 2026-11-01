@@ -188,7 +188,8 @@ export const coreSchemas = {
             fullId: { type: 'string', nullable: true, description: '지금 실제로 쓰이는 모델 — 해석 실패면 null' },
             source: { type: 'string', enum: ['user', 'global', 'default', 'none'] },
             error: { type: 'string' },
-            code: { type: 'string' }
+            code: { type: 'string' },
+            keyPolicy: { type: 'string', enum: ['actor-byok'], description: '외부 모델을 실행하는 사용자 본인의 키로 돌린다(관리자 전역 화면 표시용)' }
         }
     },
     ModelAssignmentsResponse: {

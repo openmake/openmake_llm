@@ -35,6 +35,8 @@ export interface ModelSlotEffective {
   source: "user" | "global" | "default" | "none";
   error?: string;
   code?: string;
+  /** actor-byok — 외부 모델을 실행하는 사용자 본인의 키로 돌린다(사용자 문맥 없는 관리자 전역 화면에서 키 검사 없이 배정만 보인다). 생략 = 종전 */
+  keyPolicy?: "actor-byok";
 }
 
 /** GET 응답 — slots 는 화면 순서 */
