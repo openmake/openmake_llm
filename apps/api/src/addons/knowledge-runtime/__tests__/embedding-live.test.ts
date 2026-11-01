@@ -7,6 +7,20 @@ import { describeLiveEmbedding, makeIndexEmbedder, probeDimension } from '../emb
 
 const live = process.env.KNOWLEDGE_LIVE_EMBED === '1' ? describe : describe.skip;
 
+// 옵트인이 꺼져 있어도 도는 계약 — 라이브 시험이 기대는 provider 모듈 표면이 깨지면 여기서 먼저 잡는다.
+describe('임베딩 provider 라이브 시험 계약', () => {
+    it('라이브 시험이 쓰는 provider 함수가 내보내진다', () => {
+        expect(typeof describeLiveEmbedding).toBe('function');
+        expect(typeof probeDimension).toBe('function');
+        expect(typeof makeIndexEmbedder).toBe('function');
+    });
+
+    it('색인 임베더는 빈 입력이면 provider 를 해석·호출하지 않고 [] 를 돌려준다', async () => {
+        const embed = makeIndexEmbedder({ providerRef: 'local-llm:unregistered-embed', modelId: 'unregistered', dimension: 3 });
+        await expect(embed([])).resolves.toEqual([]);
+    });
+});
+
 live('임베딩 provider 라이브', () => {
     it('라이브 배정의 차원을 측정하고, 그 모델로 입력 수만큼 벡터를 돌려준다', async () => {
         const state = await describeLiveEmbedding(undefined);

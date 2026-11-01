@@ -14,9 +14,14 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_spaces_embedding_index ON knowledge_spa
 -- ③ 같은 모델·차원·척도의 ready 색인은 하나 — 생성 경합은 이 유니크가 막는다.
 --    활성이 아닌데 ready 로 남은 행(옛 reindex 잔재)은 retired 로만 바꾼다(벡터는 그대로).
 --    공간이 가리키는 색인은 제외한다 — 006 이후 코드의 색인은 모두 ready·비활성이라, 다시 적용될 때 살아 있는 색인을 지키게.
+--    진행 중(queued·running) 공간 재색인 작업의 대상 색인도 제외한다 — 아직 어느 공간도 가리키지 않지만 곧 전환된다.
+--    (space_id 가 없는 옛 전역 reindex 작업은 보지 않는다 — 첫 적용은 종전과 같다)
 UPDATE knowledge_embedding_indexes SET status = 'retired', retired_at = COALESCE(retired_at, NOW())
  WHERE status = 'ready' AND is_active = FALSE
-   AND NOT EXISTS (SELECT 1 FROM knowledge_spaces s WHERE s.embedding_index_id = knowledge_embedding_indexes.id);
+   AND NOT EXISTS (SELECT 1 FROM knowledge_spaces s WHERE s.embedding_index_id = knowledge_embedding_indexes.id)
+   AND NOT EXISTS (SELECT 1 FROM knowledge_ingestion_jobs j
+                    WHERE j.embedding_index_id = knowledge_embedding_indexes.id AND j.space_id IS NOT NULL
+                      AND j.state IN ('queued', 'running'));
 CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_embedding_index_ready_model
     ON knowledge_embedding_indexes(provider_ref, dimension, distance_metric) WHERE status = 'ready';
 

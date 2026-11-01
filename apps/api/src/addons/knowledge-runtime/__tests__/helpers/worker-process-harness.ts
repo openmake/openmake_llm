@@ -162,6 +162,18 @@ export async function ensureFakeIndex(pool: Pool): Promise<string> {
     return r.rows[0].id;
 }
 
+/**
+ * ensureFakeIndex 의 색인 행 정리 — 공간을 지운 뒤 부른다. 아직 어느 공간이 가리키면(다른 파일이 쓰는 중) 남긴다.
+ * 남겨 두면 다음 파일의 006 재적용이 고아 ready 행을 retired 로 바꿔 실행마다 행이 쌓인다(임베딩은 CASCADE).
+ */
+export async function dropFakeIndex(pool: Pool, indexId: string): Promise<void> {
+    await pool.query(
+        `DELETE FROM knowledge_embedding_indexes
+          WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM knowledge_spaces WHERE embedding_index_id = $1)`,
+        [indexId],
+    );
+}
+
 export interface IngestFixture { space: string; doc: string; version: string; job: string }
 
 /**

@@ -6,6 +6,7 @@
  *  ③ 같은 (provider_ref, dimension, distance_metric) 의 ready 색인은 둘일 수 없다(유니크)
  *  ④ 두 번째 적용은 오류 없이 아무 공간 행도 바꾸지 않는다(멱등 — xmin 불변)
  *  ⑤ 두 번째 적용은 공간이 가리키는 ready·비활성 색인(006 이후 코드가 만든 모양)을 retired 로 바꾸지 않는다
+ *  ⑥ 두 번째 적용은 진행 중(queued·running) 공간 재색인 작업의 대상 색인도 지킨다(다시 적용해도 같은 결과)
  * 만든 행은 id 로만 지운다.
  */
 import { randomUUID } from 'node:crypto';
@@ -115,5 +116,36 @@ describeOrSkip('knowledge 마이그레이션 006 (실 DB)', () => {
         expect(status[orphan]).toBe('retired');
         const space = await pool.query<{ embedding_index_id: string }>('SELECT embedding_index_id FROM knowledge_spaces WHERE id = $1', [pinnedSpaceId]);
         expect(space.rows[0].embedding_index_id).toBe(pinned);
+    });
+
+    it('두 번째 적용은 진행 중 공간 재색인 작업의 대상 색인을 지키고, 끝난 작업·옛 전역 작업의 대상은 retired 로 바꾼다', async () => {
+        const ids = {
+            queued: `test-idx-${randomUUID()}`, running: `test-idx-${randomUUID()}`,
+            done: `test-idx-${randomUUID()}`, legacy: `test-idx-${randomUUID()}`,
+        };
+        createdIndexIds.push(...Object.values(ids));
+        // 대상 색인은 아직 어느 공간도 가리키지 않는다(전환 전). 작업은 먼 미래 run_after — 다른 worker 가 집지 않게
+        const job = (indexId: string, state: string, spaceId: string | null) => pool.query(
+            `INSERT INTO knowledge_ingestion_jobs (id, kind, space_id, embedding_index_id, state, actor_kind, run_after)
+             VALUES ($1, 'reindex', $2, $3, $4, 'system', NOW() + INTERVAL '1 day')`,
+            [randomUUID(), spaceId, indexId, state],
+        );
+        for (const [key, id] of Object.entries(ids)) await insertIndex(id, `test-006-job-${key}-${randomUUID()}`, 'ready', false);
+        await job(ids.queued, 'queued', pinnedSpaceId);
+        await job(ids.running, 'running', pinnedSpaceId);
+        await job(ids.done, 'done', pinnedSpaceId);
+        await job(ids.legacy, 'queued', null);
+
+        await pool.query(readFileSync(MIGRATION_006, 'utf8'));
+        const rows = await pool.query<{ id: string; status: string }>(
+            'SELECT id, status FROM knowledge_embedding_indexes WHERE id = ANY($1::text[])', [Object.values(ids)]);
+        const status = Object.fromEntries(rows.rows.map((r) => [r.id, r.status]));
+        expect(status).toEqual({ [ids.queued]: 'ready', [ids.running]: 'ready', [ids.done]: 'retired', [ids.legacy]: 'retired' });
+
+        // 세 번째 적용도 같은 결과(멱등)
+        await pool.query(readFileSync(MIGRATION_006, 'utf8'));
+        const again = await pool.query<{ id: string; status: string }>(
+            'SELECT id, status FROM knowledge_embedding_indexes WHERE id = ANY($1::text[])', [Object.values(ids)]);
+        expect(Object.fromEntries(again.rows.map((r) => [r.id, r.status]))).toEqual(status);
     });
 });
