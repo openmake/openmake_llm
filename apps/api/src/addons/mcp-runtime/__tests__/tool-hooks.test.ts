@@ -3,7 +3,7 @@
  */
 jest.mock('../../../config/env', () => ({ getConfig: () => ({ mcpToolListStaleMs: 0 }) }));
 import { ToolRouter } from '../tool-router';
-import { registerToolHook, runPreHooks, runPostHooks, __resetToolHooksForTest, listToolHookIds } from '../../../tool-contract/tool-hooks';
+import { registerToolHook, runPreHooks, runPostHooks, __resetToolHooksForTest } from '../../../tool-contract/tool-hooks';
 import { __resetCircuitsForTest } from '../../../tool-contract/tool-health';
 
 const ctx = { name: 'srv::echo', external: true, startedAt: Date.now() };
@@ -39,7 +39,7 @@ describe('runPreHooks / runPostHooks', () => {
         registerToolHook({ id: 'ok', pre: (a) => ({ args: { ...a, ok: 'replaced' } }) });
         expect((await runPreHooks({}, ctx)).args).toEqual({ ok: 'replaced' });
         off();
-        expect(listToolHookIds()).toEqual(['boom']);
+        expect((await runPreHooks({}, ctx)).args).toEqual({});
     });
 });
 

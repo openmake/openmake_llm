@@ -4,7 +4,7 @@
  */
 import { adaptSkillContent, extractDeclaredToolSpecs, mapClaudeTools, detectBodyToolNames, mcpAliasFor } from '../skill-compat';
 import { referencedBundlePaths } from '../extension-components';
-import { validateInstallableAddonManifest } from '../../../addon-host/manifest';
+import { parseInstallableAddonManifest } from '../../../addon-host/manifest';
 
 describe('compat report', () => {
     it('T16: 선언한 필수 도구에 대응이 없으면 본문 대신 실행 불가 안내 — 원문은 보존, 성공으로 보이지 않는다', () => {
@@ -52,7 +52,7 @@ describe('compat report', () => {
     });
 
     it('T17: 설치형 번들의 entry 선언은 종전처럼 거절', () => {
-        const errors = validateInstallableAddonManifest(JSON.stringify({ id: 'x', name: 'x', version: '1.0.0', requires: { openmake: '>=1.0.0' }, scope: 'user', components: {}, entry: { runtime: 'boot#start' } }), '1.84.0');
+        const { errors } = parseInstallableAddonManifest(JSON.stringify({ id: 'x', name: 'x', version: '1.0.0', requires: { openmake: '>=1.0.0' }, scope: 'user', components: {}, entry: { runtime: 'boot#start' } }), '1.84.0');
         expect(errors.join(' ')).toMatch(/entry/);
     });
 });

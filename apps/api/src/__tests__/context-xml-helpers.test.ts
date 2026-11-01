@@ -1,14 +1,11 @@
 /**
  * context-xml-helpers.ts 단위 테스트
- * xmlTag, systemRulesSection, contextSection, examplesSection, thinkingSection 검증
+ * xmlTag, examplesSection 검증
  */
 
 import {
     xmlTag,
-    systemRulesSection,
-    contextSection,
     examplesSection,
-    thinkingSection,
 } from '../chat/context-xml-helpers';
 
 // ===== xmlTag =====
@@ -64,69 +61,6 @@ describe('xmlTag', () => {
     });
 });
 
-// ===== systemRulesSection =====
-
-describe('systemRulesSection', () => {
-    test('번호가 매겨진 규칙 목록 생성', () => {
-        const rules = ['규칙 A', '규칙 B', '규칙 C'];
-        const result = systemRulesSection(rules);
-        expect(result).toContain('1. 규칙 A');
-        expect(result).toContain('2. 규칙 B');
-        expect(result).toContain('3. 규칙 C');
-    });
-
-    test('<system_rules> 태그로 래핑', () => {
-        const result = systemRulesSection(['규칙 1']);
-        expect(result).toMatch(/^<system_rules>/);
-        expect(result).toMatch(/<\/system_rules>$/);
-    });
-
-    test('내부 콘텐츠 이스케이프 없음 (escapeContent=false)', () => {
-        // 신뢰할 수 있는 내부 콘텐츠이므로 이스케이프하지 않음
-        const rules = ['<strong>중요</strong> 규칙'];
-        const result = systemRulesSection(rules);
-        expect(result).toContain('<strong>중요</strong>');
-    });
-
-    test('빈 배열 처리', () => {
-        const result = systemRulesSection([]);
-        expect(result).toContain('<system_rules>');
-        expect(result).toContain('</system_rules>');
-    });
-
-    test('단일 규칙', () => {
-        const result = systemRulesSection(['단 하나의 규칙']);
-        expect(result).toContain('1. 단 하나의 규칙');
-        expect(result).not.toContain('2.');
-    });
-});
-
-// ===== contextSection =====
-
-describe('contextSection', () => {
-    test('<context> 태그로 래핑', () => {
-        const result = contextSection('some context data');
-        expect(result).toMatch(/^<context>/);
-        expect(result).toMatch(/<\/context>$/);
-    });
-
-    test('사용자 입력 이스케이프 적용', () => {
-        const result = contextSection('<injected>malicious</injected>');
-        expect(result).toContain('&lt;injected&gt;');
-        expect(result).not.toContain('<injected>');
-    });
-
-    test('일반 텍스트 그대로 포함', () => {
-        const result = contextSection('정상 컨텍스트 데이터');
-        expect(result).toContain('정상 컨텍스트 데이터');
-    });
-
-    test('& 문자 이스케이프', () => {
-        const result = contextSection('key=value&other=data');
-        expect(result).toContain('&amp;');
-    });
-});
-
 // ===== examplesSection =====
 
 describe('examplesSection', () => {
@@ -173,32 +107,5 @@ describe('examplesSection', () => {
         ];
         const result = examplesSection(examples);
         expect(result).toContain('\n\n');
-    });
-});
-
-// ===== thinkingSection =====
-
-describe('thinkingSection', () => {
-    test('<thinking> 태그로 시작', () => {
-        const result = thinkingSection();
-        expect(result).toContain('<thinking>');
-        expect(result).toContain('</thinking>');
-    });
-
-    test('4가지 분석 단계 포함', () => {
-        const result = thinkingSection();
-        expect(result).toContain('1.');
-        expect(result).toContain('2.');
-        expect(result).toContain('3.');
-        expect(result).toContain('4.');
-    });
-
-    test('문제 분석 항목 포함', () => {
-        const result = thinkingSection();
-        expect(result).toContain('문제 분석');
-    });
-
-    test('항상 동일한 결과 반환 (순수함수 형태)', () => {
-        expect(thinkingSection()).toBe(thinkingSection());
     });
 });
