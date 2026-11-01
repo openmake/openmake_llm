@@ -7,16 +7,18 @@
 -- ① 색인 행의 요청 params(차원 지정 등) — 색인 임베더가 그대로 보낸다
 ALTER TABLE knowledge_embedding_indexes ADD COLUMN IF NOT EXISTS request_params JSONB NOT NULL DEFAULT '{}'::jsonb;
 
--- ② 같은 모델·차원·척도의 ready 색인은 하나 — 생성 경합은 이 유니크가 막는다.
---    활성이 아닌데 ready 로 남은 행(옛 reindex 잔재)은 retired 로만 바꾼다(벡터는 그대로).
-UPDATE knowledge_embedding_indexes SET status = 'retired', retired_at = COALESCE(retired_at, NOW())
- WHERE status = 'ready' AND is_active = FALSE;
-CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_embedding_index_ready_model
-    ON knowledge_embedding_indexes(provider_ref, dimension, distance_metric) WHERE status = 'ready';
-
--- ③ 공간 → 색인 고정
+-- ② 공간 → 색인 고정(아래 ③ 이 이 열을 본다 — 먼저 만든다)
 ALTER TABLE knowledge_spaces ADD COLUMN IF NOT EXISTS embedding_index_id TEXT REFERENCES knowledge_embedding_indexes(id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_spaces_embedding_index ON knowledge_spaces(embedding_index_id) WHERE embedding_index_id IS NOT NULL;
+
+-- ③ 같은 모델·차원·척도의 ready 색인은 하나 — 생성 경합은 이 유니크가 막는다.
+--    활성이 아닌데 ready 로 남은 행(옛 reindex 잔재)은 retired 로만 바꾼다(벡터는 그대로).
+--    공간이 가리키는 색인은 제외한다 — 006 이후 코드의 색인은 모두 ready·비활성이라, 다시 적용될 때 살아 있는 색인을 지키게.
+UPDATE knowledge_embedding_indexes SET status = 'retired', retired_at = COALESCE(retired_at, NOW())
+ WHERE status = 'ready' AND is_active = FALSE
+   AND NOT EXISTS (SELECT 1 FROM knowledge_spaces s WHERE s.embedding_index_id = knowledge_embedding_indexes.id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_knowledge_embedding_index_ready_model
+    ON knowledge_embedding_indexes(provider_ref, dimension, distance_metric) WHERE status = 'ready';
 
 -- ④ 백필 — 지금 활성 색인으로. 활성이 없으면 NULL 로 두고 첫 수집이 고정한다.
 UPDATE knowledge_spaces s SET embedding_index_id = a.id
