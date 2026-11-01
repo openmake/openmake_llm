@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.117.2](https://github.com/openmake/openmake_llm/compare/v1.117.1...v1.117.2) (2026-10-31)
+
+
+### 🐛 버그 수정
+
+* **omk:** dev up 설치·빌드 판정을 마지막 설치 표식 비교로 바꾼다 ([84b2403](https://github.com/openmake/openmake_llm/commit/84b240365f5a26060caab54c768a9452eac15573))
+* **omk:** dev up 이 동기화로 바뀐 의존성·공용 패키지를 반영 ([3cecdb7](https://github.com/openmake/openmake_llm/commit/3cecdb7b2625df4420c65b6a2361d072c8cd1ad6))
+* **omk:** dev up 이 바뀐 의존성·공용 패키지를 설치 표식으로 맞춘다 ([fc30526](https://github.com/openmake/openmake_llm/commit/fc305260e2d259239895f7dceb73b7ba3f635c5f))
+* **omk:** dev 설치 표식 — 더러운 lock 경로·정리 안내, dev setup 도 표식을 남긴다 ([f8736fc](https://github.com/openmake/openmake_llm/commit/f8736fce78ebb68b93e7a882f7a60575d2e04562))
+* **omk:** lock 정리 안내를 git -C &lt;클론&gt; 으로 ([adbc912](https://github.com/openmake/openmake_llm/commit/adbc912096894ce0a26c230df53f7b2ba0f58fe0))
+
 ## [1.117.1](https://github.com/openmake/openmake_llm/compare/v1.117.0...v1.117.1) (2026-10-31)
 
 
