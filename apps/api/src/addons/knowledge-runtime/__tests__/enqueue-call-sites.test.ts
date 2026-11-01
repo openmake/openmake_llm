@@ -1,5 +1,6 @@
 /**
  * 접수 지점 — 업로드·재시도는 Space actor(user|org), 문서·Space 삭제의 정리는 system(요청자 기록), 관리자 재청킹은 관리자 user.
+ * 업로드·재시도·관리자 재청킹은 작업 전에 공간 색인 모델을 그 행위자 키로 선검사한다(412).
  * 서비스만 태우고 큐·DB·저장소·인가는 mock.
  */
 const enqueueJob = jest.fn(async (..._a: unknown[]) => 'job-1');
@@ -15,8 +16,8 @@ jest.mock('../config/scope-policy', () => ({
     SCOPE_POLICY: {},
     SCOPE_TYPES: ['user', 'organization'],
 }));
-let scopeRow: { id: string; scope_type: 'user' | 'organization'; scope_id: string; config_profile_id: string | null } =
-    { id: 's1', scope_type: 'organization', scope_id: 'org-9', config_profile_id: null };
+let scopeRow: { id: string; scope_type: 'user' | 'organization'; scope_id: string; config_profile_id: string | null; embedding_index_id: string | null } =
+    { id: 's1', scope_type: 'organization', scope_id: 'org-9', config_profile_id: null, embedding_index_id: 'idx-1' };
 jest.mock('../spaces/repository', () => ({
     getSpaceScopeRow: async () => scopeRow,
     touchSpace: async () => undefined,
@@ -39,18 +40,59 @@ jest.mock('../config/profiles', () => ({
     getDefaultLimits: async () => ({ purgeAfterDays: 30 }),
     clearProfileCache: jest.fn(),
 }));
-jest.mock('../documents/storage', () => ({ contentHash: () => 'h'.repeat(64), storeOriginal: async (_s: string, v: string) => v }));
+const storeOriginal = jest.fn(async (_s: string, v: string) => v);
+jest.mock('../documents/storage', () => ({ contentHash: () => 'h'.repeat(64), storeOriginal: (s: string, v: string) => storeOriginal(s, v) }));
 jest.mock('../capabilities', () => ({ getCapabilities: jest.fn(), pgvectorVersion: jest.fn() }));
+const assertSpaceEmbeddingReady = jest.fn(async (..._a: unknown[]) => undefined);
+jest.mock('../embedding/readiness', () => ({
+    assertSpaceEmbeddingReady: (...a: unknown[]) => assertSpaceEmbeddingReady(...a),
+    describeSpaceEmbeddings: jest.fn(), ensureLiveIndex: jest.fn(),
+}));
 
 import { deleteDocument, retryDocument, uploadDocument } from '../documents/service';
 import { deleteSpace } from '../spaces/service';
 import { rechunkSpace } from '../admin/service';
+import { AppError } from '../../../utils/error-handler';
 
 const actorOf = (call: number) => (enqueueJob.mock.calls[call] as unknown as [{ actor: unknown; kind: string }])[0];
 
 beforeEach(() => {
     enqueueJob.mockClear();
-    scopeRow = { id: 's1', scope_type: 'organization', scope_id: 'org-9', config_profile_id: null };
+    storeOriginal.mockClear();
+    assertSpaceEmbeddingReady.mockClear();
+    scopeRow = { id: 's1', scope_type: 'organization', scope_id: 'org-9', config_profile_id: null, embedding_index_id: 'idx-1' };
+});
+
+describe('임베딩 키 선검사(412)', () => {
+    it('업로드: 선검사가 412 면 파일을 저장하지 않고 작업도 만들지 않는다', async () => {
+        assertSpaceEmbeddingReady.mockRejectedValueOnce(new AppError('키 없음', 412, true, 'EMBEDDING_KEY_MISSING'));
+        await expect(uploadDocument('u-1', 's1', { buffer: Buffer.from('hello'), originalname: 'a.txt', mimetype: 'text/plain', size: 5 }))
+            .rejects.toMatchObject({ statusCode: 412, code: 'EMBEDDING_KEY_MISSING' });
+        expect(assertSpaceEmbeddingReady).toHaveBeenCalledWith(scopeRow, 'u-1');
+        expect(storeOriginal).not.toHaveBeenCalled();
+        expect(enqueueJob).not.toHaveBeenCalled();
+    });
+
+    it('재시도: 선검사가 412 면 작업을 만들지 않는다', async () => {
+        assertSpaceEmbeddingReady.mockRejectedValueOnce(new AppError('키 거절', 412, true, 'EMBEDDING_KEY_REJECTED'));
+        await expect(retryDocument('u-1', 's1', 'd1')).rejects.toMatchObject({ statusCode: 412, code: 'EMBEDDING_KEY_REJECTED' });
+        expect(enqueueJob).not.toHaveBeenCalled();
+    });
+
+    it('관리자 재청킹: 공간 색인을 요청한 관리자 키로 선검사하고, 412 면 작업을 만들지 않는다', async () => {
+        fakeClient.query.mockResolvedValueOnce({ rows: [{ id: 's1', embedding_index_id: 'idx-ext' }], rowCount: 1 } as never);
+        assertSpaceEmbeddingReady.mockRejectedValueOnce(new AppError('키 없음', 412, true, 'EMBEDDING_KEY_MISSING'));
+        await expect(rechunkSpace('s1', 'admin-1')).rejects.toMatchObject({ statusCode: 412, code: 'EMBEDDING_KEY_MISSING' });
+        expect(assertSpaceEmbeddingReady).toHaveBeenCalledWith({ id: 's1', embedding_index_id: 'idx-ext' }, 'admin-1');
+        expect(enqueueJob).not.toHaveBeenCalled();
+    });
+
+    it('관리자 재청킹: 없는(삭제된) 공간은 404 — 선검사도 하지 않는다', async () => {
+        fakeClient.query.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never);
+        await expect(rechunkSpace('gone', 'admin-1')).rejects.toMatchObject({ statusCode: 404 });
+        expect(assertSpaceEmbeddingReady).not.toHaveBeenCalled();
+        expect(enqueueJob).not.toHaveBeenCalled();
+    });
 });
 
 describe('접수 지점 actor', () => {
@@ -61,7 +103,7 @@ describe('접수 지점 actor', () => {
     });
 
     it('개인 Space 재시도는 user actor', async () => {
-        scopeRow = { id: 's1', scope_type: 'user', scope_id: 'u-1', config_profile_id: null };
+        scopeRow = { id: 's1', scope_type: 'user', scope_id: 'u-1', config_profile_id: null, embedding_index_id: 'idx-1' };
         await retryDocument('u-1', 's1', 'd1');
         expect(actorOf(0)).toMatchObject({ kind: 'ingest', documentVersionId: 'v-retry', actor: { kind: 'user', userId: 'u-1', orgId: null } });
     });
@@ -74,6 +116,7 @@ describe('접수 지점 actor', () => {
     });
 
     it('관리자 재청킹은 그 관리자의 user actor', async () => {
+        fakeClient.query.mockResolvedValueOnce({ rows: [{ id: 's1', embedding_index_id: 'idx-1' }], rowCount: 1 } as never);
         await rechunkSpace('s1', 'admin-1');
         expect(actorOf(0)).toMatchObject({ kind: 'rechunk', spaceId: 's1', actor: { kind: 'user', userId: 'admin-1', orgId: null } });
     });

@@ -15,6 +15,8 @@ export const KNOWLEDGE_RUNTIME = {
     EXTRACT_TIMEOUT_MS: Number(process.env.KNOWLEDGE_EXTRACT_TIMEOUT_MS) || 120_000,
     /** 임베딩 배치 호출 1회 상한(ms) */
     EMBED_TIMEOUT_MS: Number(process.env.KNOWLEDGE_EMBED_TIMEOUT_MS) || 120_000,
+    /** 공급자가 사용자 키를 거절한 뒤 같은 (사용자, 공급자) 임베딩을 호출 없이 실패시키는 기간(ms) — 무효 키 재호출 방지(프로세스 메모리) */
+    EMBED_KEY_REJECT_MEMO_MS: Number(process.env.KNOWLEDGE_EMBED_KEY_REJECT_MEMO_MS) || 600_000,
     /** 작업 실패 재시도 백오프 기준(ms) — attempts 지수로 늘어난다 */
     JOB_BACKOFF_BASE_MS: Number(process.env.KNOWLEDGE_JOB_BACKOFF_BASE_MS) || 10_000,
     /** 백오프 상한(ms) */

@@ -8,7 +8,8 @@ import request from 'supertest';
 jest.mock('../../../auth', () => ({
     requireAuth: (req: Request, _res: Response, next: NextFunction) => { (req as unknown as { user: object }).user = { id: '3', userId: '3', role: 'admin' }; next(); },
 }));
-const space = { id: 's1', name: 'S', description: null, icon: null, scopeType: 'user', canEdit: true, documentCount: 0, conversationCount: 0, processingCount: 0, failedCount: 0, lastUsedAt: null, updatedAt: '2026-09-24T00:00:00.000Z' };
+const embedding = { index: null, status: 'unpinned', effective: null, mismatch: false };
+const space = { id: 's1', name: 'S', description: null, icon: null, scopeType: 'user', canEdit: true, documentCount: 0, conversationCount: 0, processingCount: 0, failedCount: 0, lastUsedAt: null, updatedAt: '2026-09-24T00:00:00.000Z', embedding };
 jest.mock('../spaces/service', () => ({
     listSpaces: jest.fn(async () => [space]),
     createSpace: jest.fn(async () => space),
@@ -28,7 +29,7 @@ jest.mock('../conversations/binding-service', () => ({
     getBinding: jest.fn(async () => ({ space: null })),
 }));
 jest.mock('../admin/service', () => ({
-    getAdminStatus: jest.fn(async () => ({ capabilities: { ready: true, blockedReasons: [], supportedMimeTypes: [], maxFileBytes: 1, embedding: null }, embeddingIndex: null, jobCounts: {}, pgvectorVersion: '0.8.3' })),
+    getAdminStatus: jest.fn(async () => ({ capabilities: { ready: true, blockedReasons: [], supportedMimeTypes: [], maxFileBytes: 1, embedding: null }, embeddingIndexes: [], jobCounts: {}, pgvectorVersion: '0.8.3' })),
     listProfiles: jest.fn(async () => []),
     updateProfile: jest.fn(async () => ({ id: 'retrieval-default', kind: 'retrieval', name: 'default', config: {}, isDefault: true, updatedAt: '2026-09-24T00:00:00.000Z' })),
     rechunkSpace: jest.fn(async () => undefined),
@@ -39,12 +40,18 @@ jest.mock('../config/profiles', () => ({
 }));
 const requestJobCancel = jest.fn();
 jest.mock('../jobs/cancel', () => ({ requestJobCancel: (...a: unknown[]) => requestJobCancel(...a) }));
+const requestSpaceReindex = jest.fn();
+jest.mock('../embedding/space-reindex', () => ({ requestSpaceReindex: (...a: unknown[]) => requestSpaceReindex(...a) }));
+const getCapabilities = jest.fn(async (..._a: unknown[]) => ({ ready: true, blockedReasons: [], supportedMimeTypes: [], maxFileBytes: 1, embedding: null }));
+jest.mock('../capabilities', () => ({ getCapabilities: (...a: unknown[]) => getCapabilities(...a) }));
 
 import { knowledgeRouter } from '../routes';
+import { AppError, errorHandler } from '../../../utils/error-handler';
 
 const app = express();
 app.use(express.json());
 app.use('/api/knowledge', knowledgeRouter);
+app.use(errorHandler);
 
 describe('knowledge 라우트 응답 계약', () => {
     it('Space 생성·상세·수정은 { space } 로 감싼다', async () => {
@@ -70,7 +77,7 @@ describe('knowledge 라우트 응답 계약', () => {
     it('새 대화는 { sessionId }, 관리자 상태·프로필은 공유 계약 모양', async () => {
         expect((await request(app).post('/api/knowledge/spaces/s1/conversations')).body.data).toEqual({ sessionId: 'sess-1' });
         const status = (await request(app).get('/api/knowledge/admin/status')).body.data;
-        expect(Object.keys(status).sort()).toEqual(['capabilities', 'embeddingIndex', 'jobCounts', 'pgvectorVersion']);
+        expect(Object.keys(status).sort()).toEqual(['capabilities', 'embeddingIndexes', 'jobCounts', 'pgvectorVersion']);
         expect((await request(app).get('/api/knowledge/admin/profiles')).body.data).toHaveProperty('profiles');
         expect((await request(app).put('/api/knowledge/admin/profiles/retrieval-default').send({ config: {} })).body.data).toHaveProperty('profile.isDefault', true);
     });
@@ -86,5 +93,40 @@ describe('knowledge 라우트 응답 계약', () => {
         const queued = await request(app).post('/api/knowledge/jobs/j2/cancel');
         expect(queued.status).toBe(200);
         expect(queued.body.data).toEqual({ jobId: 'j2', state: 'cancelled' });
+    });
+
+    it('공간 재색인 — 202 { jobId, indexId }, 서비스의 409·412 는 상태·코드 그대로', async () => {
+        requestSpaceReindex.mockResolvedValueOnce({ jobId: 'j1', indexId: 'idx-2' });
+        const ok = await request(app).post('/api/knowledge/spaces/s1/reindex');
+        expect(ok.status).toBe(202);
+        expect(ok.body.data).toEqual({ jobId: 'j1', indexId: 'idx-2' });
+        expect(requestSpaceReindex).toHaveBeenCalledWith('3', 's1');
+
+        requestSpaceReindex.mockRejectedValueOnce(new AppError('이미 현재 모델', 409, true, 'REINDEX_NOT_NEEDED'));
+        const same = await request(app).post('/api/knowledge/spaces/s1/reindex');
+        expect(same.status).toBe(409);
+        expect(JSON.stringify(same.body)).toContain('REINDEX_NOT_NEEDED');
+
+        requestSpaceReindex.mockRejectedValueOnce(new AppError('키 없음', 412, true, 'EMBEDDING_KEY_MISSING'));
+        const noKey = await request(app).post('/api/knowledge/spaces/s1/reindex');
+        expect(noKey.status).toBe(412);
+        expect(JSON.stringify(noKey.body)).toContain('EMBEDDING_KEY_MISSING');
+    });
+
+    it('업로드 선검사의 412 는 상태·코드 그대로(파일 저장·작업 없음은 서비스 테스트가 본다)', async () => {
+        const { uploadDocument } = jest.requireMock('../documents/service') as { uploadDocument: jest.Mock };
+        uploadDocument.mockRejectedValueOnce(new AppError('키 거절', 412, true, 'EMBEDDING_KEY_REJECTED'));
+        const r = await request(app).post('/api/knowledge/spaces/s1/documents').attach('file', Buffer.from('abc'), { filename: 'a.md', contentType: 'text/markdown' });
+        expect(r.status).toBe(412);
+        expect(JSON.stringify(r.body)).toContain('EMBEDDING_KEY_REJECTED');
+    });
+
+    it('전역 관리자 재색인(POST /admin/reindex)은 없다', async () => {
+        expect((await request(app).post('/api/knowledge/admin/reindex')).status).toBe(404);
+    });
+
+    it('capabilities 는 요청 사용자 기준으로 계산한다', async () => {
+        await request(app).get('/api/knowledge/capabilities');
+        expect(getCapabilities).toHaveBeenCalledWith('3');
     });
 });

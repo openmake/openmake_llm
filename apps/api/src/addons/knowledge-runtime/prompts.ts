@@ -109,3 +109,21 @@ export function knowledgeInstructions(userLang: string): string {
 export function knowledgeNoEvidenceBlock(userLang: string): string {
     return NO_EVIDENCE[lang(userLang)];
 }
+
+/** 질의 임베딩을 못 한 이유 → 모델이 사용자에게 전할 안내(언어별). {provider} 는 공간 색인 모델의 공급자 id */
+const EMBEDDING_UNAVAILABLE: Record<'key_missing' | 'key_rejected', Record<Lang, string>> = {
+    key_missing: {
+        ko: '연결된 Knowledge Space 의 자료를 검색할 수 없었다 — 이 프로젝트의 임베딩 모델을 실행할 사용자의 \'{provider}\' API 키가 없다(미등록·비활성). 답변에서 이 사실을 알리고, "설정 → 외부 API 키에 \'{provider}\' 키를 등록하거나, 프로젝트를 다른 임베딩 모델로 다시 색인" 하라고 안내하라. 자료 내용을 추측으로 지어내지 말 것.',
+        en: 'The connected Knowledge Space could not be searched — the user has no \'{provider}\' API key (missing or inactive) to run this project\'s embedding model. Tell the user so, and advise them to "register a \'{provider}\' key under Settings → External API keys, or re-index the project with a different embedding model". Do not invent the material\'s content.',
+    },
+    key_rejected: {
+        ko: '연결된 Knowledge Space 의 자료를 검색할 수 없었다 — \'{provider}\' 공급자가 사용자의 API 키를 거절했다. 답변에서 이 사실을 알리고, "설정 → 외부 API 키에서 \'{provider}\' 키를 교체" 하라고 안내하라. 자료 내용을 추측으로 지어내지 말 것.',
+        en: 'The connected Knowledge Space could not be searched — the \'{provider}\' provider rejected the user\'s API key. Tell the user so, and advise them to "replace the \'{provider}\' key under Settings → External API keys". Do not invent the material\'s content.',
+    },
+};
+
+/** 키 문제로 검색하지 못했을 때의 안내 블록 — "관련 자료 없음" 과 구분한다(조용한 폴백 금지). 미배정은 키 누락 안내로 묶는다 */
+export function knowledgeEmbeddingUnavailableBlock(userLang: string, reason: 'unassigned' | 'key_missing' | 'key_rejected', providerId: string): string {
+    const key = reason === 'key_rejected' ? 'key_rejected' : 'key_missing';
+    return EMBEDDING_UNAVAILABLE[key][lang(userLang)].split('{provider}').join(providerId);
+}

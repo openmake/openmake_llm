@@ -1,16 +1,18 @@
 "use client";
 
 /**
- * /knowledge 관리자 패널 — 가용성·차단 사유·활성 임베딩 인덱스·잡 수·재색인·프로파일 JSON 편집.
+ * /knowledge 관리자 패널 — 가용성·차단 사유·임베딩 색인 카탈로그(모델·차원·상태·공간 수)·잡 수·프로파일 JSON 편집.
  * 관리자에게만 렌더된다(호출부에서 role 판정). 서버 계약은 확정 전이라 필드를 방어적으로 읽는다.
+ * 재색인은 관리자 전역 동작이 아니다 — 공간 쓰기 권한자가 프로젝트 상세에서 공간 단위로 한다(요청자 키로 실행).
  */
 import { useState } from "react";
-import { Loader2, RefreshCw, Database, Check, AlertTriangle } from "lucide-react";
+import { Loader2, Database, Check, AlertTriangle } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Badge, Button, Card, Dialog } from "@/components/ui/primitives";
+import { Badge, Button, Card } from "@/components/ui/primitives";
 import { knowledgeApi, type KnowledgeProfile } from "../api";
 import { qk } from "../constants";
+import { blockedReasonKey, indexStatusKey, splitBlockedReasons } from "../helpers";
 
 function ProfileEditor({ profile }: { profile: KnowledgeProfile }) {
   const t = useTranslations("knowledge");
@@ -77,8 +79,6 @@ function ProfileEditor({ profile }: { profile: KnowledgeProfile }) {
 
 export function KnowledgeAdminPanel() {
   const t = useTranslations("knowledge");
-  const [reindexOpen, setReindexOpen] = useState(false);
-  const [reindexing, setReindexing] = useState(false);
 
   const { data: status } = useQuery({
     queryKey: qk.adminStatus(),
@@ -91,18 +91,14 @@ export function KnowledgeAdminPanel() {
     retry: false,
   });
 
-  const runReindex = async () => {
-    setReindexing(true);
-    try {
-      await knowledgeApi.adminReindex();
-    } finally {
-      setReindexing(false);
-      setReindexOpen(false);
-    }
-  };
-
   const cap = status?.capabilities;
   const jobEntries = Object.entries(status?.jobCounts ?? {});
+  const indexes = status?.embeddingIndexes ?? [];
+  const blocked = splitBlockedReasons(cap?.blockedReasons ?? []);
+  const indexStatusLabel = (value: string): string => {
+    const key = indexStatusKey(value);
+    return key ? t(key) : value;
+  };
 
   return (
     <Card className="border-accent/30 bg-accent-soft/20 p-4">
@@ -111,43 +107,40 @@ export function KnowledgeAdminPanel() {
           <Database className="h-4 w-4 text-accent" />
           {t("admin.title")}
         </span>
-        <Button size="sm" variant="outline" onClick={() => setReindexOpen(true)}>
-          <RefreshCw className="h-3.5 w-3.5" />
-          {t("admin.reindex")}
-        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5 text-xs">
+          {/* 배지는 플랫폼 사유만 본다 — 임베딩 사유는 요청한 관리자 개인의 설정·키 기준이라 따로 적는다 */}
           <p className="flex items-center gap-1.5">
-            {cap?.ready ? (
+            {cap && blocked.platform.length === 0 ? (
               <Badge tone="success">{t("admin.ready")}</Badge>
             ) : (
               <Badge tone="warn">{t("admin.notReady")}</Badge>
             )}
           </p>
-          {cap?.blockedReasons?.map((r) => (
-            <p key={r} className="flex items-center gap-1 text-warn">
-              <AlertTriangle className="h-3 w-3 shrink-0" />
-              {r}
-            </p>
-          ))}
-          {status?.embeddingIndex ? (
-            <p className="text-muted">
-              {t("admin.embeddingIndex")}:{" "}
-              <span className="font-mono text-fg-2">
-                {status.embeddingIndex.modelId} · {status.embeddingIndex.dimension}d
-              </span>
-            </p>
-          ) : (
-            cap?.embedding && (
-              <p className="text-muted">
-                {t("admin.embeddingIndex")}:{" "}
-                <span className="font-mono text-fg-2">
-                  {cap.embedding.modelId} · {cap.embedding.dimension}d
-                </span>
+          {blocked.platform.map((r) => {
+            const key = blockedReasonKey(r);
+            return (
+              <p key={r} className="flex items-center gap-1 text-warn">
+                <AlertTriangle className="h-3 w-3 shrink-0" />
+                {key ? t(key) : r}
               </p>
-            )
+            );
+          })}
+          {blocked.embedding.length > 0 && (
+            <div className="space-y-0.5 pt-1">
+              <p className="text-faint">{t("admin.embeddingByRequester")}</p>
+              {blocked.embedding.map((r) => {
+                const key = blockedReasonKey(r);
+                return (
+                  <p key={r} className="flex items-center gap-1 text-muted">
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    {key ? t(key) : r}
+                  </p>
+                );
+              })}
+            </div>
           )}
         </div>
         <div className="space-y-1 text-xs">
@@ -165,6 +158,37 @@ export function KnowledgeAdminPanel() {
         </div>
       </div>
 
+      {/* 임베딩 색인 카탈로그 — 어느 모델·차원으로 몇 프로젝트가 색인돼 있는지(옛 색인은 retired 로 남는다) */}
+      <div className="mt-4 space-y-1 text-xs">
+        <p className="font-medium text-fg-2">{t("admin.embeddingIndex")}</p>
+        {indexes.length === 0 ? (
+          <p className="text-faint">{t("admin.noIndexes")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="text-faint">
+                <tr>
+                  <th className="py-1 pr-3 font-normal">{t("admin.indexModel")}</th>
+                  <th className="py-1 pr-3 font-normal">{t("admin.indexDimension")}</th>
+                  <th className="py-1 pr-3 font-normal">{t("admin.indexStatus")}</th>
+                  <th className="py-1 font-normal">{t("admin.indexSpaces")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {indexes.map((i) => (
+                  <tr key={i.id} className="border-t border-border text-muted">
+                    <td className="break-all py-1 pr-3 font-mono text-fg-2">{i.providerRef}</td>
+                    <td className="py-1 pr-3 font-mono">{i.dimension}</td>
+                    <td className="py-1 pr-3">{indexStatusLabel(i.status)}</td>
+                    <td className="py-1 font-mono">{i.spaceCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {profiles.length > 0 && (
         <div className="mt-4 space-y-2">
           <p className="text-xs font-medium text-fg-2">{t("admin.profiles")}</p>
@@ -173,19 +197,6 @@ export function KnowledgeAdminPanel() {
           ))}
         </div>
       )}
-
-      <Dialog open={reindexOpen} onClose={() => setReindexOpen(false)} title={t("admin.reindexConfirmTitle")}>
-        <p className="text-sm text-muted">{t("admin.reindexConfirmBody")}</p>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setReindexOpen(false)} disabled={reindexing}>
-            {t("cancel")}
-          </Button>
-          <Button variant="danger" onClick={() => void runReindex()} disabled={reindexing}>
-            {reindexing && <Loader2 className="h-4 w-4 animate-spin" />}
-            {t("admin.reindex")}
-          </Button>
-        </div>
-      </Dialog>
     </Card>
   );
 }

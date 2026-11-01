@@ -36,4 +36,5 @@
 - provider 분류: `apps/api/src/services/chat-service/provider-gate.ts`
 - 모델 실측: `apps/api/src/evaluation/model-probe.ts`, `npm run eval:probe`
 - CI 회귀 매핑: `scripts/ci/feature-checks.manifest.json` (`deletedTests` 는 테스트 파일 삭제 사유를 기록한다.
-  이름을 바꾸거나 옮긴 경우 git 은 삭제+추가로 보므로 옛 경로도 함께 적는다)
+  이름을 바꾸거나 옮긴 경우 git 은 삭제+추가로 보므로 옛 경로도 함께 적는다.
+  `deletedSources` 는 삭제한 API 소스 → 대신 돌릴 회귀 테스트 목록이다. 빈 배열·없는 테스트 파일은 실패한다)

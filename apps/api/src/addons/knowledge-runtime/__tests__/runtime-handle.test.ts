@@ -33,7 +33,7 @@ jest.mock('../config/profiles', () => ({
 }));
 const ingestVersion = jest.fn();
 jest.mock('../ingestion/pipeline', () => ({ ingestVersion: (...a: unknown[]) => ingestVersion(...a) }));
-jest.mock('../embedding/index-manager', () => ({ runReindexJob: jest.fn() }));
+jest.mock('../embedding/space-reindex', () => ({ runSpaceReindexJob: jest.fn() }));
 jest.mock('../jobs/rechunk', () => ({ rechunkSpace: jest.fn() }));
 jest.mock('../jobs/cleanup', () => ({ runCleanup: jest.fn() }));
 jest.mock('../documents/storage', () => ({ deleteStoredFile: jest.fn() }));
