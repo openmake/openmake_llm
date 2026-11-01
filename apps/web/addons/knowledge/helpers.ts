@@ -2,7 +2,7 @@
  * Knowledge add-on(웹) 순수 헬퍼 — 상태·실패코드 → i18n 키 매핑, 크기 표시. 부수효과 없음.
  * 컴포넌트는 useTranslations("knowledge") 로 받은 t 에 이 키를 넣어 문자열을 만든다.
  */
-import type { KnowledgeVersionStatus } from "@openmake/shared-types";
+import type { KnowledgeEmbeddingStatus, KnowledgeSpaceSummary, KnowledgeVersionStatus } from "@openmake/shared-types";
 
 /** 처리 중(uploaded~verifying)으로 볼 상태 — 이 상태가 하나라도 있으면 상세가 폴링한다. */
 const PROCESSING_STATUSES: ReadonlySet<KnowledgeVersionStatus> = new Set([
@@ -29,12 +29,72 @@ const FAILURE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   SCANNED_PDF_UNSUPPORTED: "failure.scannedPdf",
   FAILED_EXTRACTION: "failure.extraction",
   FAILED_EMBEDDING: "failure.embedding",
+  FAILED_VERIFICATION: "failure.verification",
+  EMBEDDING_KEY_MISSING: "failure.embeddingKeyMissing",
+  EMBEDDING_KEY_REJECTED: "failure.embeddingKeyRejected",
   CANCELLED: "failure.cancelled",
   ADDON_NOT_ENTITLED: "failure.notEntitled",
 };
 
 export function failureMessageKey(code: string | null | undefined): string {
   return code && Object.hasOwn(FAILURE_MESSAGE_KEYS, code) ? FAILURE_MESSAGE_KEYS[code] : "failure.unknown";
+}
+
+/** 공간 임베딩 상태(서버 판정) → i18n 키(`embedding.status.<status>`) */
+export function embeddingStatusKey(status: KnowledgeEmbeddingStatus): string {
+  return `embedding.status.${status}`;
+}
+
+/** 실패코드 중 임베딩 키 문제 — 문서 목록이 "설정 열기" 링크를 함께 보인다 */
+const EMBEDDING_KEY_FAILURES: ReadonlySet<string> = new Set(["EMBEDDING_KEY_MISSING", "EMBEDDING_KEY_REJECTED"]);
+
+export function isEmbeddingKeyFailure(code: string | null | undefined): boolean {
+  return !!code && EMBEDDING_KEY_FAILURES.has(code);
+}
+
+/** 서버 오류 코드(업로드·재시도·재색인·생성의 412/409/502) → 안내 i18n 키. 미등록 코드는 null(서버 메시지를 그대로 보인다) */
+const EMBEDDING_ERROR_KEYS: Readonly<Record<string, string>> = {
+  EMBEDDING_KEY_MISSING: "embedding.error.keyMissing",
+  EMBEDDING_KEY_REJECTED: "embedding.error.keyRejected",
+  EMBEDDING_UNASSIGNED: "embedding.error.unassigned",
+  EMBEDDING_PROVIDER_UNAVAILABLE: "embedding.error.providerUnavailable",
+  REINDEX_NOT_NEEDED: "embedding.error.reindexNotNeeded",
+  REINDEX_IN_PROGRESS: "embedding.error.reindexInProgress",
+};
+
+export function embeddingErrorKey(code: string | null | undefined): string | null {
+  return code && Object.hasOwn(EMBEDDING_ERROR_KEYS, code) ? EMBEDDING_ERROR_KEYS[code] : null;
+}
+
+/** 설정 화면으로 이끌 오류 코드(키·배정 문제) */
+const SETTINGS_ERROR_CODES: ReadonlySet<string> = new Set(["EMBEDDING_KEY_MISSING", "EMBEDDING_KEY_REJECTED", "EMBEDDING_UNASSIGNED"]);
+
+export function needsEmbeddingSettings(code: string | null | undefined): boolean {
+  return !!code && SETTINGS_ERROR_CODES.has(code);
+}
+
+/** "현재 설정 모델로 다시 색인" 을 보일 상태 — 서버가 준 status·mismatch 로만 고른다 */
+const REINDEX_OFFER_STATUSES: ReadonlySet<KnowledgeEmbeddingStatus> = new Set(["key_missing", "key_rejected", "unpinned"]);
+
+export function canOfferReindex(space: Pick<KnowledgeSpaceSummary, "canEdit" | "embedding">): boolean {
+  const e = space.embedding;
+  if (!space.canEdit || e.status === "reindexing" || !e.effective) return false;
+  return e.mismatch || REINDEX_OFFER_STATUSES.has(e.status);
+}
+
+/** capabilities.blockedReasons 코드 → i18n 키(`blocked.<code>`). 미등록 코드는 null(원문을 보인다) */
+const BLOCKED_REASON_CODES: ReadonlySet<string> = new Set([
+  "PGVECTOR_MISSING",
+  "EMBEDDING_UNASSIGNED",
+  "EMBEDDING_KEY_MISSING",
+  "EMBEDDING_KEY_REJECTED",
+  "EMBEDDING_PROVIDER_UNAVAILABLE",
+  "NO_SUPPORTED_MIME_TYPES",
+  "PARSER_REGISTRY_UNAVAILABLE",
+]);
+
+export function blockedReasonKey(code: string): string | null {
+  return BLOCKED_REASON_CODES.has(code) ? `blocked.${code}` : null;
 }
 
 const KB = 1024;

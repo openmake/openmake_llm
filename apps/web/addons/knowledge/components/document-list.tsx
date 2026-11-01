@@ -8,12 +8,14 @@ import { useTranslations } from "next-intl";
 import type { KnowledgeDocument } from "@openmake/shared-types";
 import { knowledgeApi } from "../api";
 import { qk } from "../constants";
-import { failureMessageKey, formatBytes, isProcessing, statusLabelKey } from "../helpers";
+import { failureMessageKey, formatBytes, isEmbeddingKeyFailure, isProcessing, statusLabelKey } from "../helpers";
+import { EmbeddingErrorText, EmbeddingSettingsLink, toCodedError, type CodedError } from "./embedding-notice";
 
 function DocRow({ spaceId, doc, canEdit }: { spaceId: string; doc: KnowledgeDocument; canEdit: boolean }) {
   const t = useTranslations("knowledge");
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState<"retry" | "delete" | null>(null);
+  const [retryError, setRetryError] = useState<CodedError | null>(null);
   const processing = isProcessing(doc.status);
   const failed = doc.status === "failed";
 
@@ -21,9 +23,13 @@ function DocRow({ spaceId, doc, canEdit }: { spaceId: string; doc: KnowledgeDocu
 
   const retry = async () => {
     setBusy("retry");
+    setRetryError(null);
     try {
       await knowledgeApi.retryDocument(spaceId, doc.id);
       void invalidate();
+    } catch (err) {
+      // 키를 아직 고치지 않았으면 서버가 412 로 거절한다 — 코드별 안내 + 설정 열기
+      setRetryError(toCodedError(err, t("serverError")));
     } finally {
       setBusy(null);
     }
@@ -69,8 +75,12 @@ function DocRow({ spaceId, doc, canEdit }: { spaceId: string; doc: KnowledgeDocu
           </div>
         )}
         {failed && (
-          <p className="mt-1 text-xs text-danger">{t(failureMessageKey(doc.failureCode))}</p>
+          <p className="mt-1 text-xs text-danger">
+            {t(failureMessageKey(doc.failureCode))}
+            {isEmbeddingKeyFailure(doc.failureCode) && <EmbeddingSettingsLink />}
+          </p>
         )}
+        {retryError && <EmbeddingErrorText error={retryError} className="mt-1 text-xs text-danger" />}
       </div>
       {canEdit && (
         <div className="flex shrink-0 items-center gap-1">

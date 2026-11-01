@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * /knowledge 목록 화면 — Space 카드(아이콘·이름·문서/대화 수·최근 사용·처리/실패 배지)와 생성.
- * 관리자에겐 상단에 "관리" 패널(가용성·임베딩 인덱스·잡·재색인·프로파일 편집)을 함께 보인다.
+ * /knowledge 목록 화면 — Space 카드(아이콘·이름·문서/대화 수·최근 사용·처리/실패·임베딩 상태 배지)와 생성.
+ * 관리자에겐 상단에 "관리" 패널(가용성·임베딩 색인 카탈로그·잡·프로파일 편집)을 함께 보인다.
  * 레이아웃 계약: fragment 루트 + 고정 헤더 + min-h-0 flex-1 overflow-y-auto 본문.
  */
 import { useState } from "react";
@@ -16,7 +16,7 @@ import { useAppStore } from "@/lib/store";
 import type { KnowledgeSpaceSummary } from "@openmake/shared-types";
 import { knowledgeApi } from "../api";
 import { qk } from "../constants";
-import { parseDate } from "../helpers";
+import { embeddingStatusKey, parseDate } from "../helpers";
 import { addonAvailabilityMessageKey, addonErrorOf, classifyAddonError } from "@/lib/addon-availability";
 import { CreateSpaceDialog } from "../components/create-dialog";
 import { KnowledgeAdminPanel } from "../components/admin-panel";
@@ -24,6 +24,7 @@ import { KnowledgeAdminPanel } from "../components/admin-panel";
 function SpaceCard({ space }: { space: KnowledgeSpaceSummary }) {
   const t = useTranslations("knowledge");
   const last = parseDate(space.lastUsedAt);
+  const embeddingIssue = space.embedding.status !== "ready";
   return (
     <Link href={`/knowledge/${space.id}`} className="block">
       <Card className="h-full p-4 transition hover:border-border-strong hover:shadow-2">
@@ -32,7 +33,13 @@ function SpaceCard({ space }: { space: KnowledgeSpaceSummary }) {
             {space.icon || "📚"}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-fg">{space.name}</p>
+            <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-fg">
+              {space.name}
+              {/* 색인 모델 ≠ 내 설정 — 상세에서 "다시 색인" 안내 */}
+              {space.embedding.mismatch && (
+                <span aria-label={t("embedding.mismatch", { model: space.embedding.effective?.modelId ?? "" })} className="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" />
+              )}
+            </p>
             {space.description && (
               <p className="mt-0.5 line-clamp-2 text-xs text-muted">{space.description}</p>
             )}
@@ -49,8 +56,14 @@ function SpaceCard({ space }: { space: KnowledgeSpaceSummary }) {
           </span>
           {last && <span className="text-faint">{t("card.lastUsed", { date: last.toLocaleDateString() })}</span>}
         </div>
-        {(space.processingCount > 0 || space.failedCount > 0) && (
+        {(space.processingCount > 0 || space.failedCount > 0 || embeddingIssue) && (
           <div className="mt-2 flex flex-wrap gap-1.5">
+            {embeddingIssue && (
+              <Badge tone={space.embedding.status === "reindexing" ? "accent" : "warn"}>
+                {space.embedding.status === "reindexing" ? <Loader2 className="h-3 w-3 animate-spin" /> : <AlertTriangle className="h-3 w-3" />}
+                {t(embeddingStatusKey(space.embedding.status))}
+              </Badge>
+            )}
             {space.processingCount > 0 && (
               <Badge tone="warn">
                 <Loader2 className="h-3 w-3 animate-spin" />

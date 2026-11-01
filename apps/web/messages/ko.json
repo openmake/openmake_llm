@@ -2978,6 +2978,9 @@
       "embedding": "임베딩에 실패했습니다",
       "cancelled": "처리가 취소되었습니다",
       "notEntitled": "Knowledge 사용 권한이 없어 처리하지 못했습니다",
+      "verification": "임베딩 검증에 실패했습니다",
+      "embeddingKeyMissing": "이 프로젝트의 임베딩 모델을 실행할 API 키가 없습니다 — 키를 등록한 뒤 다시 시도하세요",
+      "embeddingKeyRejected": "공급자가 API 키를 거절했습니다 — 키를 교체한 뒤 다시 시도하세요",
       "unknown": "처리에 실패했습니다"
     },
     "doc": {
@@ -3015,9 +3018,6 @@
     },
     "admin": {
       "title": "관리",
-      "reindex": "재색인",
-      "reindexConfirmTitle": "재색인",
-      "reindexConfirmBody": "임베딩 인덱스를 다시 만듭니다. 시간이 걸릴 수 있습니다.",
       "ready": "사용 가능",
       "notReady": "사용 불가",
       "embeddingIndex": "임베딩 인덱스",
@@ -3026,7 +3026,48 @@
       "profiles": "프로파일",
       "active": "활성",
       "saveProfile": "저장",
-      "invalidJson": "JSON 형식이 올바르지 않습니다"
+      "invalidJson": "JSON 형식이 올바르지 않습니다",
+      "indexModel": "모델",
+      "indexDimension": "차원",
+      "indexStatus": "상태",
+      "indexSpaces": "프로젝트 수",
+      "noIndexes": "아직 임베딩 인덱스가 없습니다"
+    },
+    "blocked": {
+      "PGVECTOR_MISSING": "벡터 확장(pgvector)이 설치되어 있지 않습니다",
+      "EMBEDDING_UNASSIGNED": "임베딩 모델이 배정되어 있지 않습니다",
+      "EMBEDDING_KEY_MISSING": "임베딩 모델을 실행할 API 키가 없습니다",
+      "EMBEDDING_KEY_REJECTED": "공급자가 임베딩 API 키를 거절했습니다",
+      "EMBEDDING_PROVIDER_UNAVAILABLE": "임베딩 모델을 지금 쓸 수 없습니다",
+      "NO_SUPPORTED_MIME_TYPES": "업로드할 수 있는 파일 형식이 없습니다",
+      "PARSER_REGISTRY_UNAVAILABLE": "문서 파서를 불러오지 못했습니다"
+    },
+    "embedding": {
+      "indexModel": "색인 모델: {model} · {dimension}차원",
+      "notPinned": "아직 색인 모델이 정해지지 않았습니다(첫 자료를 올릴 때 정해집니다)",
+      "mismatch": "내 임베딩 설정({model})과 다른 모델로 색인되어 있습니다",
+      "reindex": "현재 설정 모델로 다시 색인",
+      "reindexConfirmTitle": "다시 색인",
+      "reindexConfirmBody": "문서 {count}개를 현재 설정 모델({model})로 다시 색인합니다. 외부 모델이면 내 API 키로 실행되어 비용이 들 수 있습니다. 끝날 때까지는 지금 색인으로 검색됩니다.",
+      "createNotice": "이 프로젝트는 {model} 로 색인됩니다",
+      "createWarn": "지금 임베딩 설정으로는 프로젝트를 만들 수 없을 수 있습니다 — 설정을 확인하세요",
+      "openSettings": "설정 열기",
+      "status": {
+        "ready": "색인 정상",
+        "unpinned": "색인 미정",
+        "unassigned": "임베딩 미배정",
+        "key_missing": "임베딩 키 없음",
+        "key_rejected": "임베딩 키 거절됨",
+        "reindexing": "다시 색인 중"
+      },
+      "error": {
+        "keyMissing": "이 프로젝트의 임베딩 모델을 실행할 API 키가 없습니다. 설정 → 외부 API 키에서 그 공급자 키를 등록하거나, 다른 임베딩 모델로 다시 색인하세요.",
+        "keyRejected": "공급자가 API 키를 거절했습니다. 설정 → 외부 API 키에서 키를 교체하세요.",
+        "unassigned": "임베딩 모델이 배정되어 있지 않습니다. 설정 → 모델 배정 → 임베딩에서 모델을 고르세요.",
+        "providerUnavailable": "임베딩 모델을 지금 쓸 수 없습니다(차원 측정 실패). 임베딩 모델인지, 공급자 상태를 확인하세요.",
+        "reindexNotNeeded": "이 프로젝트는 이미 현재 설정 모델로 색인되어 있습니다.",
+        "reindexInProgress": "이 프로젝트는 이미 다시 색인하는 중입니다."
+      }
     },
     "sidebar": {
       "expandSpace": "{name} 펼치기",
@@ -3158,7 +3199,7 @@
       },
       "text_embed": {
         "title": "임베딩",
-        "description": "문서(프로젝트) 색인·검색에 쓰는 임베딩 모델 — 외부 모델은 사용자 본인의 API 키로 실행되며, 로컬 모델도 선택할 수 있습니다"
+        "description": "문서(프로젝트) 색인·검색에 쓰는 임베딩 모델 — 외부 모델은 사용자 본인의 API 키로 실행되며, 로컬 모델도 선택할 수 있습니다. 바꾼 모델은 새 프로젝트부터 쓰이고, 기존 프로젝트는 “다시 색인” 해야 바뀝니다"
       }
     }
   }

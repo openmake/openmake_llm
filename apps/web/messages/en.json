@@ -2978,6 +2978,9 @@
       "embedding": "Embedding failed",
       "cancelled": "Processing was cancelled",
       "notEntitled": "Not processed — Knowledge access is not available for this account",
+      "verification": "Embedding verification failed",
+      "embeddingKeyMissing": "No API key to run this project's embedding model — register the key and try again",
+      "embeddingKeyRejected": "The provider rejected the API key — replace the key and try again",
       "unknown": "Processing failed"
     },
     "doc": {
@@ -3015,9 +3018,6 @@
     },
     "admin": {
       "title": "Admin",
-      "reindex": "Reindex",
-      "reindexConfirmTitle": "Reindex",
-      "reindexConfirmBody": "This rebuilds the embedding index. It may take a while.",
       "ready": "Available",
       "notReady": "Unavailable",
       "embeddingIndex": "Embedding index",
@@ -3026,7 +3026,48 @@
       "profiles": "Profiles",
       "active": "Active",
       "saveProfile": "Save",
-      "invalidJson": "Invalid JSON"
+      "invalidJson": "Invalid JSON",
+      "indexModel": "Model",
+      "indexDimension": "Dimension",
+      "indexStatus": "Status",
+      "indexSpaces": "Projects",
+      "noIndexes": "No embedding indexes yet"
+    },
+    "blocked": {
+      "PGVECTOR_MISSING": "The vector extension (pgvector) is not installed",
+      "EMBEDDING_UNASSIGNED": "No embedding model is assigned",
+      "EMBEDDING_KEY_MISSING": "No API key to run the embedding model",
+      "EMBEDDING_KEY_REJECTED": "The provider rejected the embedding API key",
+      "EMBEDDING_PROVIDER_UNAVAILABLE": "The embedding model is unavailable right now",
+      "NO_SUPPORTED_MIME_TYPES": "No file types can be uploaded",
+      "PARSER_REGISTRY_UNAVAILABLE": "Document parsers could not be loaded"
+    },
+    "embedding": {
+      "indexModel": "Index model: {model} · {dimension}d",
+      "notPinned": "No index model yet (set when the first file is uploaded)",
+      "mismatch": "Indexed with a different model than your embedding setting ({model})",
+      "reindex": "Re-index with my current model",
+      "reindexConfirmTitle": "Re-index",
+      "reindexConfirmBody": "Re-index {count} documents with your current model ({model}). External models run on your own API key and may incur cost. Search keeps using the current index until it finishes.",
+      "createNotice": "This project will be indexed with {model}",
+      "createWarn": "Your current embedding setting may not allow creating a project — check your settings",
+      "openSettings": "Open settings",
+      "status": {
+        "ready": "Index OK",
+        "unpinned": "Index not set",
+        "unassigned": "No embedding model",
+        "key_missing": "Embedding key missing",
+        "key_rejected": "Embedding key rejected",
+        "reindexing": "Re-indexing"
+      },
+      "error": {
+        "keyMissing": "No API key to run this project's embedding model. Register that provider's key under Settings → External API keys, or re-index with a different embedding model.",
+        "keyRejected": "The provider rejected the API key. Replace the key under Settings → External API keys.",
+        "unassigned": "No embedding model is assigned. Pick one under Settings → Model assignments → Embeddings.",
+        "providerUnavailable": "The embedding model is unavailable right now (dimension check failed). Make sure it is an embedding model and check the provider status.",
+        "reindexNotNeeded": "This project is already indexed with your current model.",
+        "reindexInProgress": "This project is already being re-indexed."
+      }
     },
     "sidebar": {
       "expandSpace": "Expand {name}",
@@ -3158,7 +3199,7 @@
       },
       "text_embed": {
         "title": "Embeddings",
-        "description": "Embedding model for indexing and searching documents (projects) — external models run on the user's own API key, and local models can also be selected"
+        "description": "Embedding model for indexing and searching documents (projects) — external models run on the user's own API key, and local models can also be selected. A changed model applies to new projects; existing projects change only after “Re-index”"
       }
     }
   }

@@ -2978,6 +2978,9 @@
       "embedding": "埋め込みに失敗しました",
       "cancelled": "処理がキャンセルされました",
       "notEntitled": "Knowledge の利用権限がないため処理できませんでした",
+      "verification": "埋め込みの検証に失敗しました",
+      "embeddingKeyMissing": "このプロジェクトの埋め込みモデルを実行する API キーがありません — キーを登録してから再試行してください",
+      "embeddingKeyRejected": "プロバイダーが API キーを拒否しました — キーを差し替えてから再試行してください",
       "unknown": "処理に失敗しました"
     },
     "doc": {
@@ -3015,9 +3018,6 @@
     },
     "admin": {
       "title": "管理",
-      "reindex": "再インデックス",
-      "reindexConfirmTitle": "再インデックス",
-      "reindexConfirmBody": "埋め込みインデックスを再構築します。時間がかかる場合があります。",
       "ready": "利用可能",
       "notReady": "利用不可",
       "embeddingIndex": "埋め込みインデックス",
@@ -3026,7 +3026,48 @@
       "profiles": "プロファイル",
       "active": "有効",
       "saveProfile": "保存",
-      "invalidJson": "JSON の形式が正しくありません"
+      "invalidJson": "JSON の形式が正しくありません",
+      "indexModel": "モデル",
+      "indexDimension": "次元",
+      "indexStatus": "状態",
+      "indexSpaces": "プロジェクト数",
+      "noIndexes": "埋め込みインデックスはまだありません"
+    },
+    "blocked": {
+      "PGVECTOR_MISSING": "ベクトル拡張(pgvector)がインストールされていません",
+      "EMBEDDING_UNASSIGNED": "埋め込みモデルが割り当てられていません",
+      "EMBEDDING_KEY_MISSING": "埋め込みモデルを実行する API キーがありません",
+      "EMBEDDING_KEY_REJECTED": "プロバイダーが埋め込み API キーを拒否しました",
+      "EMBEDDING_PROVIDER_UNAVAILABLE": "埋め込みモデルは現在利用できません",
+      "NO_SUPPORTED_MIME_TYPES": "アップロードできるファイル形式がありません",
+      "PARSER_REGISTRY_UNAVAILABLE": "ドキュメントパーサーを読み込めませんでした"
+    },
+    "embedding": {
+      "indexModel": "索引モデル: {model} · {dimension}次元",
+      "notPinned": "索引モデルはまだ決まっていません(最初の資料をアップロードしたときに決まります)",
+      "mismatch": "自分の埋め込み設定({model})とは別のモデルで索引されています",
+      "reindex": "現在の設定モデルで再索引",
+      "reindexConfirmTitle": "再索引",
+      "reindexConfirmBody": "ドキュメント {count} 件を現在の設定モデル({model})で再索引します。外部モデルは自分の API キーで実行され、費用がかかる場合があります。完了するまでは現在の索引で検索されます。",
+      "createNotice": "このプロジェクトは {model} で索引されます",
+      "createWarn": "現在の埋め込み設定ではプロジェクトを作成できない可能性があります — 設定を確認してください",
+      "openSettings": "設定を開く",
+      "status": {
+        "ready": "索引正常",
+        "unpinned": "索引未設定",
+        "unassigned": "埋め込み未割り当て",
+        "key_missing": "埋め込みキーなし",
+        "key_rejected": "埋め込みキー拒否",
+        "reindexing": "再索引中"
+      },
+      "error": {
+        "keyMissing": "このプロジェクトの埋め込みモデルを実行する API キーがありません。設定 → 外部 API キーでそのプロバイダーのキーを登録するか、別の埋め込みモデルで再索引してください。",
+        "keyRejected": "プロバイダーが API キーを拒否しました。設定 → 外部 API キーでキーを差し替えてください。",
+        "unassigned": "埋め込みモデルが割り当てられていません。設定 → モデル割り当て → 埋め込みでモデルを選んでください。",
+        "providerUnavailable": "埋め込みモデルは現在利用できません(次元の測定に失敗)。埋め込みモデルかどうか、プロバイダーの状態を確認してください。",
+        "reindexNotNeeded": "このプロジェクトはすでに現在の設定モデルで索引されています。",
+        "reindexInProgress": "このプロジェクトはすでに再索引中です。"
+      }
     },
     "sidebar": {
       "expandSpace": "{name} を展開",
@@ -3158,7 +3199,7 @@
       },
       "text_embed": {
         "title": "埋め込み",
-        "description": "ドキュメント(プロジェクト)の索引・検索に使う埋め込みモデル — 外部モデルはユーザー自身の API キーで実行され、ローカルモデルも選択できます"
+        "description": "ドキュメント(プロジェクト)の索引・検索に使う埋め込みモデル — 外部モデルはユーザー自身の API キーで実行され、ローカルモデルも選択できます。変更したモデルは新しいプロジェクトから使われ、既存のプロジェクトは「再索引」すると切り替わります"
       }
     }
   }
