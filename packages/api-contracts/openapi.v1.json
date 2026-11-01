@@ -4181,6 +4181,13 @@
           },
           "code": {
             "type": "string"
+          },
+          "keyPolicy": {
+            "type": "string",
+            "enum": [
+              "actor-byok"
+            ],
+            "description": "외부 모델을 실행하는 사용자 본인의 키로 돌린다(관리자 전역 화면 표시용)"
           }
         }
       },
