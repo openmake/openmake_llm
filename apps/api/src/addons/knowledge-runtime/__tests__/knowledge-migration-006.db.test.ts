@@ -5,6 +5,7 @@
  *  ② 활성이 아닌데 ready 로 남은 색인(옛 reindex 잔재)은 retired 로 바뀌고 벡터 행은 남는다
  *  ③ 같은 (provider_ref, dimension, distance_metric) 의 ready 색인은 둘일 수 없다(유니크)
  *  ④ 두 번째 적용은 오류 없이 아무 공간 행도 바꾸지 않는다(멱등 — xmin 불변)
+ *  ⑤ 두 번째 적용은 공간이 가리키는 ready·비활성 색인(006 이후 코드가 만든 모양)을 retired 로 바꾸지 않는다
  * 만든 행은 id 로만 지운다.
  */
 import { randomUUID } from 'node:crypto';
@@ -20,6 +21,7 @@ const MIGRATION_006 = resolve(__dirname, '../../../../addons/builtin/knowledge-r
 describeOrSkip('knowledge 마이그레이션 006 (실 DB)', () => {
     const pool = new Pool({ connectionString: CONN, max: 3 });
     const spaceIds = [`test-space-${randomUUID()}`, `test-space-${randomUUID()}`];
+    const pinnedSpaceId = `test-space-${randomUUID()}`;
     const leftoverIndexId = `test-idx-${randomUUID()}`;
     const createdIndexIds: string[] = [leftoverIndexId];
     let activeIndexId = '';
@@ -52,7 +54,7 @@ describeOrSkip('knowledge 마이그레이션 006 (실 DB)', () => {
     }, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS);
 
     afterAll(async () => {
-        await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [spaceIds]);
+        await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [[...spaceIds, pinnedSpaceId]]);
         await pool.query('DELETE FROM knowledge_embedding_indexes WHERE id = ANY($1::text[])', [createdIndexIds]);
         await unlock?.();
         await pool.end();
@@ -92,5 +94,26 @@ describeOrSkip('knowledge 마이그레이션 006 (실 DB)', () => {
         await pool.query(readFileSync(MIGRATION_006, 'utf8'));
         const after = await read();
         expect(after.rows).toEqual(before.rows);
+    });
+
+    it('두 번째 적용은 공간이 가리키는 ready·비활성 색인을 retired 로 바꾸지 않는다', async () => {
+        const pinned = `test-idx-${randomUUID()}`;
+        const orphan = `test-idx-${randomUUID()}`;
+        createdIndexIds.push(pinned, orphan);
+        // 006 이후 코드가 만드는 색인은 ready·is_active FALSE — 하나는 공간이 가리키고, 하나는 아무도 가리키지 않는다
+        await insertIndex(pinned, `test-006-pinned-${randomUUID()}`, 'ready', false);
+        await insertIndex(orphan, `test-006-orphan-${randomUUID()}`, 'ready', false);
+        await pool.query(
+            `INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name, embedding_index_id) VALUES ($1, 'user', 'u-006', 'u-006', '006 고정', $2)`,
+            [pinnedSpaceId, pinned],
+        );
+        await pool.query(readFileSync(MIGRATION_006, 'utf8'));
+        const rows = await pool.query<{ id: string; status: string }>(
+            'SELECT id, status FROM knowledge_embedding_indexes WHERE id = ANY($1::text[])', [[pinned, orphan]]);
+        const status = Object.fromEntries(rows.rows.map((r) => [r.id, r.status]));
+        expect(status[pinned]).toBe('ready');
+        expect(status[orphan]).toBe('retired');
+        const space = await pool.query<{ embedding_index_id: string }>('SELECT embedding_index_id FROM knowledge_spaces WHERE id = $1', [pinnedSpaceId]);
+        expect(space.rows[0].embedding_index_id).toBe(pinned);
     });
 });
