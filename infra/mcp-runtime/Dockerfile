@@ -10,7 +10,7 @@
 # 캐시 볼륨(npx/uvx 재다운로드 방지)은 sandbox-docker.ts 가 런타임에 자동 마운트:
 #   -v openmake-mcp-cache:/home/node/.cache   (named volume, 자동 생성)
 # 버전은 저장소 .node-version 과 같아야 한다(scripts/ci/node-version.test.mjs 가 검사).
-FROM node:24.21.0-bookworm-slim
+FROM node:24.22.2-bookworm-slim
 
 # uv (uvx) + python + git — uvx 계열 MCP 서버용. uv 는 /usr/local/bin 에 설치(비-root 도 사용 가능).
 # git: uvx 의 git+https 의존성 fetch 용 (Qwen-MM-Plugins 등 git 배포 MCP 서버 — 2026-08-16 실측).

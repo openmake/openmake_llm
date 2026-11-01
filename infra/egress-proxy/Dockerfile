@@ -8,7 +8,7 @@
 #
 # 실행은 services/task-sandbox/egress-proxy.ts 가 런타임에 관리(ensureEgressProxy).
 # 버전은 저장소 .node-version 과 같아야 한다(scripts/ci/node-version.test.mjs 가 검사).
-FROM node:24.21.0-bookworm-slim
+FROM node:24.22.2-bookworm-slim
 USER node
 WORKDIR /app
 COPY proxy.mjs guard-proxy.mjs /app/
