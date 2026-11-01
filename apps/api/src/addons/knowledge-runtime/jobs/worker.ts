@@ -73,7 +73,9 @@ const HANDLERS: Readonly<Record<JobRow['kind'], Handler>> = {
         if (!job.space_id || !job.embedding_index_id) {
             throw new KnowledgeJobPermanentError('구 전역 reindex 작업 — 공간 단위로 다시 요청하세요(space_id·embedding_index_id 필요)');
         }
-        await runSpaceReindexJob({ spaceId: job.space_id, indexId: job.embedding_index_id, actorUserId: job.actor_user_id }, deps);
+        // 행위자는 작업 행 그대로 — 임베딩 키와 전환 뒤 실패 문서 재수집 작업의 행위자(NULL 은 004 이전 행 → system)
+        const actor = { kind: job.actor_kind ?? 'system', userId: job.actor_user_id, orgId: job.org_id };
+        await runSpaceReindexJob({ spaceId: job.space_id, indexId: job.embedding_index_id, actor }, deps);
     },
     rechunk: async (job, deps) => {
         if (!job.space_id) throw new Error('rechunk 작업에 space_id 없음');
