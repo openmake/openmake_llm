@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.121.0](https://github.com/openmake/openmake_llm/compare/v1.120.0...v1.121.0) (2026-11-01)
+
+
+### ✨ 기능
+
+* **api:** /api/health 관리자 응답에 version·build 포함 ([19f9ed0](https://github.com/openmake/openmake_llm/commit/19f9ed05f95e8cbca26372d01f272bc693f99f87))
+
 ## [1.120.0](https://github.com/openmake/openmake_llm/compare/v1.119.0...v1.120.0) (2026-11-01)
 
 
