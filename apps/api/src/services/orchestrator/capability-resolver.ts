@@ -7,7 +7,10 @@
  *
  * 우선순위: 사용자 오버라이드(model_assignments scope=userId, BYOK 필요)
  *         → 전역 DB(scope='__global__', 외부면 서버 공용 키 필요)
- *         → 코드 기본값(config/capabilities CAPABILITY_DEFAULTS, 로컬만)
+ *         → 코드 기본값(config/capabilities CAPABILITY_DEFAULTS, 보통 로컬)
+ *
+ * 키 정책(config/capabilities CAPABILITY_KEY_POLICY): actor-byok capability(text.embed)는 배정 출처와 무관하게
+ * 외부 모델을 행위자 사용자의 BYOK 로만 실행한다 — 서버 공용 키를 쓰지 않고, 사용자 문맥이 없으면 명시 실패.
  *
  * 불변식 — **호출은 LiteLLM 게이트웨이 하나로만**:
  *  - 로컬: `LLM_BASE_URL` + master key, model = alias 그대로
@@ -28,6 +31,7 @@ import {
     CAPABILITY_DEFAULTS,
     CAPABILITY_ENDPOINT,
     CAPABILITY_LIMITS,
+    capabilityKeyPolicy,
     providerParamDefaults,
     type Capability,
 } from '../../config/capabilities';
@@ -44,7 +48,7 @@ import type { DirectTransport } from '../../capability-contract/types';
 
 const logger = createLogger('CapabilityResolver');
 
-type CapabilityUnavailableCode =
+export type CapabilityUnavailableCode =
     | 'CAPABILITY_UNASSIGNED'
     | 'CAPABILITY_PROVIDER_UNKNOWN'
     | 'CAPABILITY_PROVIDER_NOT_GATEWAY'
@@ -108,6 +112,8 @@ export async function validateCapabilityAssignment(
         return `provider '${providerId}' 는 LiteLLM 게이트웨이에 편입되지 않아 배정할 수 없습니다 (LLM_GATEWAY_PROVIDERS)`;
     }
     if (scope === GLOBAL_CAPABILITY_SCOPE) {
+        // actor-byok 는 전역 배정도 행위자 사용자의 키로 실행한다 — 서버 공용 키를 요구하지 않는다
+        if (capability && capabilityKeyPolicy(capability) === 'actor-byok') return null;
         const repo = deps.serverKeys ?? new ServerExternalKeysRepository(getPool());
         const row = await repo.get(providerId);
         if (!row || !row.isActive) return `'${providerId}' 서버 공용 키가 등록·활성 상태여야 전역 배정할 수 있습니다`;
@@ -169,6 +175,52 @@ function localTarget(capability: Capability, fullId: string, params: Record<stri
     };
 }
 
+type ServerKeyRow = NonNullable<Awaited<ReturnType<ServerExternalKeysRepository['get']>>>;
+interface CheckedExternal {
+    providerId: string;
+    modelId: string;
+    entry: (typeof EXTERNAL_PROVIDER_CATALOG)[number];
+    key: { kind: 'user'; userId: string; baseUrl: string | null } | { kind: 'server'; row: ServerKeyRow };
+}
+
+/**
+ * 외부 대상의 카탈로그·게이트웨이·키 **행** 검증(복호화 없음) — externalTarget 과
+ * checkCapabilityTargetAvailability 가 같은 규칙을 쓴다. 실패는 CapabilityUnavailableError.
+ */
+async function checkExternal(
+    capability: Capability,
+    fullId: string,
+    source: CapabilityTarget['source'],
+    userId: string | undefined,
+    deps: Pick<ResolveDeps, 'userKeys' | 'serverKeys'>,
+): Promise<CheckedExternal> {
+    const { providerId, modelId } = splitFullId(fullId);
+    const entry = EXTERNAL_PROVIDER_CATALOG.find((p) => p.id === providerId);
+    if (!entry) throw new CapabilityUnavailableError(`카탈로그에 없는 provider '${providerId}'`, 'CAPABILITY_PROVIDER_UNKNOWN');
+    if (!getConfig().llmGatewayProviders.includes(providerId)) {
+        throw new CapabilityUnavailableError(`provider '${providerId}' 는 LiteLLM 게이트웨이 미편입 — capability 호출 불가`, 'CAPABILITY_PROVIDER_NOT_GATEWAY');
+    }
+    // 사용자 배정이거나 actor-byok capability 면 행위자 BYOK — 서버 공용 키로 전환하지 않는다
+    if (source === 'user' || capabilityKeyPolicy(capability) === 'actor-byok') {
+        if (!userId) {
+            throw new CapabilityUnavailableError(
+                `${capability} 외부 모델은 사용자 키로만 실행됩니다 — 사용자 문맥 없이 '${providerId}' 모델을 부를 수 없습니다`, 'CAPABILITY_KEY_MISSING',
+            );
+        }
+        // 실행 직전 BYOK 상태 검증 — 누락·비활성·OAuth(direct 전용) 는 각각 명시 실패. 전역/서버 키로 전환하지 않는다.
+        const keyRow = await deps.userKeys.getByUserAndProvider(userId, providerId);
+        if (!keyRow) throw new CapabilityUnavailableError(`'${providerId}' API 키가 등록되어 있지 않아 ${capability} 를 실행할 수 없습니다`, 'CAPABILITY_KEY_MISSING');
+        if (!keyRow.isActive) throw new CapabilityUnavailableError(`'${providerId}' API 키가 비활성 상태입니다 (${capability})`, 'CAPABILITY_KEY_INACTIVE');
+        if (keyRow.authMethod === 'oauth') throw new CapabilityUnavailableError(`'${providerId}' OAuth 연결은 게이트웨이를 거치지 않아 ${capability} 에 쓸 수 없습니다`, 'CAPABILITY_PROVIDER_NOT_GATEWAY');
+        return { providerId, modelId, entry, key: { kind: 'user', userId, baseUrl: keyRow.baseUrl ?? null } };
+    }
+    // 서버 공용 키 — 역할 경로(model-role-resolver)와 같은 정책: 등록·활성·일/월 상한을 실행 전에 검사(Codex 검토 1, 2026-09-12)
+    const row = await deps.serverKeys.get(providerId);
+    if (!row) throw new CapabilityUnavailableError(`'${providerId}' 서버 공용 키가 등록되어 있지 않아 ${capability} 를 실행할 수 없습니다`, 'CAPABILITY_KEY_MISSING');
+    if (!row.isActive) throw new CapabilityUnavailableError(`'${providerId}' 서버 공용 키가 비활성 상태입니다 (${capability})`, 'CAPABILITY_KEY_INACTIVE');
+    return { providerId, modelId, entry, key: { kind: 'server', row } };
+}
+
 async function externalTarget(
     capability: Capability,
     fullId: string,
@@ -178,40 +230,27 @@ async function externalTarget(
     deps: ResolveDeps,
 ): Promise<CapabilityTarget> {
     const cfg = getConfig();
-    const { providerId, modelId } = splitFullId(fullId);
-    params = { ...providerParamDefaults(providerId, capability), ...params };
-    const entry = EXTERNAL_PROVIDER_CATALOG.find((p) => p.id === providerId);
-    if (!entry) throw new CapabilityUnavailableError(`카탈로그에 없는 provider '${providerId}'`, 'CAPABILITY_PROVIDER_UNKNOWN');
-    if (!cfg.llmGatewayProviders.includes(providerId)) {
-        throw new CapabilityUnavailableError(`provider '${providerId}' 는 LiteLLM 게이트웨이 미편입 — capability 호출 불가`, 'CAPABILITY_PROVIDER_NOT_GATEWAY');
-    }
+    params = { ...providerParamDefaults(splitFullId(fullId).providerId, capability), ...params };
+    const { providerId, modelId, entry, key } = await checkExternal(capability, fullId, source, userId, deps);
 
     let apiKey: string | null = null;
     let userBaseUrl: string | null = null;
     let serverBudget: CapabilityTarget['serverBudget'];
-    if (source === 'user' && userId) {
-        // 실행 직전 BYOK 상태 검증 — 누락·비활성·OAuth(direct 전용) 는 각각 명시 실패. 전역/서버 키로 전환하지 않는다.
-        const keyRow = await deps.userKeys.getByUserAndProvider(userId, providerId);
-        if (!keyRow) throw new CapabilityUnavailableError(`'${providerId}' API 키가 등록되어 있지 않아 ${capability} 를 실행할 수 없습니다`, 'CAPABILITY_KEY_MISSING');
-        if (!keyRow.isActive) throw new CapabilityUnavailableError(`'${providerId}' API 키가 비활성 상태입니다 (${capability})`, 'CAPABILITY_KEY_INACTIVE');
-        if (keyRow.authMethod === 'oauth') throw new CapabilityUnavailableError(`'${providerId}' OAuth 연결은 게이트웨이를 거치지 않아 ${capability} 에 쓸 수 없습니다`, 'CAPABILITY_PROVIDER_NOT_GATEWAY');
-        apiKey = await deps.userKeys.decryptKey(userId, providerId);
-        userBaseUrl = keyRow.baseUrl ?? null;
+    if (key.kind === 'user') {
+        apiKey = await deps.userKeys.decryptKey(key.userId, providerId);
+        userBaseUrl = key.baseUrl;
     } else {
-        // 서버 공용 키 — 역할 경로(model-role-resolver)와 같은 정책: 등록·활성·일/월 상한을 실행 전에 검사(Codex 검토 1, 2026-09-12)
-        const row = await deps.serverKeys.get(providerId);
-        if (!row) throw new CapabilityUnavailableError(`'${providerId}' 서버 공용 키가 등록되어 있지 않아 ${capability} 를 실행할 수 없습니다`, 'CAPABILITY_KEY_MISSING');
-        if (!row.isActive) throw new CapabilityUnavailableError(`'${providerId}' 서버 공용 키가 비활성 상태입니다 (${capability})`, 'CAPABILITY_KEY_INACTIVE');
+        const { row } = key;
         const budget = await checkServerKeyBudget(providerId, row.dailyTokenLimit, row.monthlyTokenLimit, Date.now());
         if (budget) throw new CapabilityUnavailableError(budget, 'CAPABILITY_KEY_BUDGET');
         apiKey = await deps.serverKeys.decryptKey(providerId);
         userBaseUrl = row.baseUrl ?? null;
         serverBudget = { dailyTokenLimit: row.dailyTokenLimit, monthlyTokenLimit: row.monthlyTokenLimit };
     }
-    const costOwner: CapabilityTarget['costOwner'] = source === 'user' ? 'user' : 'server';
+    const costOwner: CapabilityTarget['costOwner'] = key.kind === 'user' ? 'user' : 'server';
     if (!apiKey) {
         throw new CapabilityUnavailableError(
-            `'${providerId}' 키가 없어 ${capability} 모델 '${modelId}' 를 호출할 수 없습니다 (${source === 'user' ? 'BYOK 키' : '서버 공용 키'} 필요)`,
+            `'${providerId}' 키가 없어 ${capability} 모델 '${modelId}' 를 호출할 수 없습니다 (${key.kind === 'user' ? 'BYOK 키' : '서버 공용 키'} 필요)`,
             'CAPABILITY_KEY_MISSING',
         );
     }
@@ -291,9 +330,13 @@ export async function resolveCapabilityTarget(
             : localTarget(capability, global.fullId, global.params, 'global');
     }
 
-    // ③ 코드 기본값 (로컬만)
+    // ③ 코드 기본값 — 외부 fullId(env)는 키 정책을 따른다(actor-byok 면 사용자 키, 그 밖은 서버 키 분기에서 명시 실패)
     const fallback = CAPABILITY_DEFAULTS[capability];
-    if (fallback) return localTarget(capability, fallback, {}, 'default');
+    if (fallback) {
+        return isExternalFullId(fallback)
+            ? externalTarget(capability, fallback, {}, 'default', userId, d)
+            : localTarget(capability, fallback, {}, 'default');
+    }
 
     throw new CapabilityUnavailableError(
         `${capability} 모델이 배정되어 있지 않습니다. 설정 → 모델 & 응답 → 모델 배정에서 배정하세요.`,
@@ -305,21 +348,49 @@ export async function resolveCapabilityTarget(
  * 배정을 조회하지 않고 **명시된 fullId** 로 capability 대상을 해석한다.
  * (예: 기록된 임베딩 index 의 provider_ref 로 그 index 와 동일한 모델을 재현할 때)
  * fullId 를 해석할 수 없으면(로컬 태그 아님·카탈로그 밖·키 없음) 조용히 폴백하지 않고 throw 한다.
- * userId 를 주면 사용자 BYOK, 없으면 서버 공용 키(전역) 경로를 쓴다(로컬은 무관).
+ * userId 를 주면 사용자 BYOK, 없으면 서버 공용 키(전역) 경로를 쓴다(로컬은 무관). actor-byok capability 는 userId 가 필수다.
+ * params 는 그대로 요청에 싣는다(예: 색인이 기록한 `dimensions` — 응답 차원이 색인과 어긋나지 않게).
  */
 export async function resolveCapabilityTargetForModel(
     capability: Capability,
     fullId: string,
     userId?: string,
     deps: Partial<ResolveDeps> = {},
+    params: Record<string, string> = {},
 ): Promise<CapabilityTarget> {
     const d: ResolveDeps = { ...defaultDeps(), ...deps };
     if (isExternalFullId(fullId)) {
-        return externalTarget(capability, fullId, {}, userId ? 'user' : 'global', userId, d);
+        return externalTarget(capability, fullId, params, userId ? 'user' : 'global', userId, d);
     }
     if (!toLocalModelTag(fullId)) {
         throw new CapabilityUnavailableError(`해석 불가한 모델 id: '${fullId}'`, 'CAPABILITY_PROVIDER_UNKNOWN');
     }
-    return localTarget(capability, fullId, {}, 'default');
+    return localTarget(capability, fullId, params, 'default');
+}
+
+export type CapabilityAvailability = { ok: true } | { ok: false; code: CapabilityUnavailableCode; message: string };
+
+/**
+ * 명시된 fullId 를 지금 실행할 수 있는지 — 카탈로그·게이트웨이·키 행(존재·활성·OAuth)만 보고 **복호화하지 않는다**
+ * (목록 N개에 키 복호화 N회를 하지 않기 위함). 키 선택 규칙은 resolveCapabilityTargetForModel 과 같다.
+ * 서버 공용 키 경로의 일/월 상한은 보지 않는다(실행 시점 검사).
+ */
+export async function checkCapabilityTargetAvailability(
+    capability: Capability,
+    fullId: string,
+    userId?: string,
+    deps: Partial<ResolveDeps> = {},
+): Promise<CapabilityAvailability> {
+    if (!isExternalFullId(fullId)) {
+        return toLocalModelTag(fullId) ? { ok: true } : { ok: false, code: 'CAPABILITY_PROVIDER_UNKNOWN', message: `해석 불가한 모델 id: '${fullId}'` };
+    }
+    const d: ResolveDeps = { ...defaultDeps(), ...deps };
+    try {
+        await checkExternal(capability, fullId, userId ? 'user' : 'global', userId, d);
+        return { ok: true };
+    } catch (err) {
+        if (err instanceof CapabilityUnavailableError) return { ok: false, code: err.code as CapabilityUnavailableCode, message: err.message };
+        throw err;
+    }
 }
 

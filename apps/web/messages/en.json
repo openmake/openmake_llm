@@ -3157,7 +3157,7 @@
       },
       "text_embed": {
         "title": "Embeddings",
-        "description": "Infrastructure model for search and embeddings"
+        "description": "Embedding model for indexing and searching documents (projects) — external models run on the user's own API key, and local models can also be selected"
       }
     }
   }

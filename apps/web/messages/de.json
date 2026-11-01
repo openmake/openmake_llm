@@ -3157,7 +3157,7 @@
       },
       "text_embed": {
         "title": "Embeddings",
-        "description": "Infrastrukturmodell für Suche und Embeddings"
+        "description": "Embedding-Modell zum Indexieren und Durchsuchen von Dokumenten (Projekten) — externe Modelle laufen mit dem eigenen API-Schlüssel des Nutzers, lokale Modelle sind ebenfalls wählbar"
       }
     }
   }
