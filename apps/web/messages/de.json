@@ -3062,6 +3062,7 @@
     "defaultOption": "Standard (automatisch)",
     "assignedBadge": "Zugewiesen",
     "unavailableBadge": "Nicht verfügbar",
+    "actorByokBadge": "Läuft mit dem Schlüssel des jeweiligen Nutzers",
     "resetLabel": "Auf Standard zurücksetzen",
     "notInList": "(nicht in der Liste)",
     "paramsApply": "Parameter anwenden",

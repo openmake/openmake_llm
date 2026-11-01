@@ -3062,6 +3062,7 @@
     "defaultOption": "默认（自动）",
     "assignedBadge": "已分配",
     "unavailableBadge": "不可用",
+    "actorByokBadge": "使用各用户的密钥运行",
     "resetLabel": "恢复默认",
     "notInList": "（不在列表中）",
     "paramsApply": "应用参数",

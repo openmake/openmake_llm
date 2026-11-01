@@ -3062,6 +3062,7 @@
     "defaultOption": "Default (auto)",
     "assignedBadge": "Assigned",
     "unavailableBadge": "Unavailable",
+    "actorByokBadge": "Runs with each user's key",
     "resetLabel": "Reset to default",
     "notInList": "(not in list)",
     "paramsApply": "Apply params",

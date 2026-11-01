@@ -25,7 +25,7 @@ import { ModelAssignmentsRepository } from '../data/repositories/model-assignmen
 import { ServerExternalKeysRepository } from '../data/repositories/server-external-keys-repo';
 import { validateModelAssignment } from './model-assignment-validation';
 import {
-    resolveCapabilityTarget, validateCapabilityAssignment, CapabilityUnavailableError,
+    describeEffectiveCapabilityTarget, validateCapabilityAssignment, CapabilityUnavailableError,
 } from './orchestrator/capability-resolver';
 import { resolveRoleClientForUser } from './model-role-resolver';
 import { buildCapabilityCatalog } from './capability-catalog';
@@ -65,8 +65,8 @@ async function effectiveForSlot(slot: ModelSlotDef, resolutionUserId: string | u
     if (slot.capabilities.length > 0) {
         const cap = slot.capabilities[0];
         try {
-            const t = await resolveCapabilityTarget(cap, resolutionUserId);
-            return { slot: slot.id, fullId: t.fullId, source: t.source };
+            // actor-byok(text.embed)는 사용자 문맥이 없으면(관리자 전역) 키 검사 없이 배정 + keyPolicy — 실행은 각 사용자 키
+            return { slot: slot.id, ...(await describeEffectiveCapabilityTarget(cap, resolutionUserId)) };
         } catch (err) {
             if (err instanceof CapabilityUnavailableError) {
                 return { slot: slot.id, fullId: null, source: 'none', error: err.message, code: err.code };
