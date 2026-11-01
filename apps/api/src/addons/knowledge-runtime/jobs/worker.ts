@@ -77,7 +77,8 @@ const HANDLERS: Readonly<Record<JobRow['kind'], Handler>> = {
     },
     rechunk: async (job, deps) => {
         if (!job.space_id) throw new Error('rechunk 작업에 space_id 없음');
-        await rechunkSpace(job.space_id, deps);
+        // 재수집도 작업 행위자(요청한 관리자)의 키로 — ingest 와 같다
+        await rechunkSpace(job.space_id, { ...deps, actorUserId: job.actor_user_id ?? undefined });
     },
     cleanup: async (job, deps) => {
         await runCleanup(job.space_id, { deleteStoredFile, ...deps });

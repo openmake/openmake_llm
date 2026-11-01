@@ -12,6 +12,7 @@ import { clearProfileCache } from '../config/profiles';
 import { PROFILE_CONFIG_SCHEMAS } from '../schemas';
 import type { KnowledgeAdminStatus, KnowledgeProfile } from '@openmake/shared-types';
 import { getCapabilities, pgvectorVersion } from '../capabilities';
+import { assertSpaceEmbeddingReady, type SpaceEmbeddingRow } from '../embedding/readiness';
 
 /** 관리자 상태 — capabilities 는 요청한 관리자 기준, 색인 카탈로그는 모델·차원·상태와 그 색인을 쓰는(미삭제) 공간 수 */
 export async function getAdminStatus(userId: string): Promise<KnowledgeAdminStatus> {
@@ -76,12 +77,16 @@ export async function updateProfile(id: string, body: { name?: string; config: R
     return toProfile(r.rows[0]);
 }
 
-/** 관리자 재청킹 — 존재하는(미삭제) Space 만. 청크 정책 변경은 재수집이므로 rechunk 작업을 큐잉(접수 주체는 그 관리자). */
+/**
+ * 관리자 재청킹 — 존재하는(미삭제) Space 만. 청크 정책 변경은 재수집이므로 rechunk 작업을 큐잉(접수 주체는 그 관리자).
+ * 재수집은 공간 색인 모델을 요청한 관리자의 키로 임베딩한다 — 지금 쓸 수 없으면 작업 전에 412(업로드·재시도와 같은 선검사).
+ */
 export async function rechunkSpace(spaceId: string, requestedBy: string): Promise<void> {
-    const exists = await kdb().query(
-        `SELECT 1 FROM knowledge_spaces WHERE id = $1 AND deleted_at IS NULL`,
+    const space = (await kdb().query<SpaceEmbeddingRow>(
+        `SELECT id, embedding_index_id FROM knowledge_spaces WHERE id = $1 AND deleted_at IS NULL`,
         [spaceId],
-    );
-    if ((exists.rowCount ?? 0) === 0) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
+    )).rows[0];
+    if (!space) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
+    await assertSpaceEmbeddingReady(space, requestedBy);
     await enqueueJob({ kind: 'rechunk', spaceId, actor: userJobActor(requestedBy) });
 }
