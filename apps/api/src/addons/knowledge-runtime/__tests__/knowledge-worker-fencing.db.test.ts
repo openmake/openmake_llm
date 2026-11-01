@@ -35,7 +35,7 @@ jest.mock('../config/profiles', () => ({
     getDefaultLimits: async () => ({ ingestConcurrency: 1, jobLeaseMs: 60_000, jobMaxAttempts: 3 }),
 }));
 // 외부 모델·파일 저장소는 부르지 않는다 — deps 로 주입한 readFile·embed 만 쓴다
-jest.mock('../embedding/provider', () => ({ makeIndexEmbedder: () => { throw new Error('모델 호출 금지'); } }));
+jest.mock('../embedding/provider', () => ({ makeIndexEmbedder: () => { throw new Error('모델 호출 금지'); }, classifyEmbedError: () => 'provider' }));
 jest.mock('../documents/storage', () => ({ readStoredFile: () => { throw new Error('파일 읽기 금지'); }, deleteStoredFile: jest.fn() }));
 jest.mock('../../../runtime-ports/addon-admission', () => ({
     readAddonRunVerdict: async () => ({ run: true }),
@@ -46,7 +46,7 @@ jest.mock('../../../runtime-ports/addon-admission', () => ({
 
 import { KnowledgeWorker, type JobRow } from '../jobs/worker';
 import { createJobLease, assertLeaseHeld, LeaseLostError, type JobLease } from '../jobs/lease';
-import type { KnowledgeIndex } from '../embedding/index-manager';
+import type { KnowledgeIndex } from '../embedding/index-catalog';
 
 const dbMock = jest.requireMock('../db') as { __pool: Pool };
 const pool = dbMock.__pool;
@@ -71,7 +71,11 @@ interface IngestFixture { space: string; doc: string; version: string; job: stri
 /** 수집 작업 하나 — space·문서·버전(text/plain, 원본은 deps.readFile 이 준다)·ingest job */
 async function ingestFixture(): Promise<IngestFixture> {
     const f = { space: randomUUID(), doc: randomUUID(), version: randomUUID(), job: randomUUID() };
-    await pool.query(`INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name) VALUES ($1, 'user', 'fence-test', 'fence-test', 'fence')`, [f.space]);
+    // 공간은 테스트 색인에 고정한다(006) — 게시 검사가 공간 포인터를 본다
+    await pool.query(
+        `INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name, embedding_index_id) VALUES ($1, 'user', 'fence-test', 'fence-test', 'fence', $2)`,
+        [f.space, index.id],
+    );
     await pool.query(`INSERT INTO knowledge_documents (id, space_id, logical_name, created_by) VALUES ($1, $2, 'fence.txt', 'fence-test')`, [f.doc, f.space]);
     await pool.query(
         `INSERT INTO knowledge_document_versions (id, document_id, content_hash, mime_type, original_filename, storage_ref, source_size)
@@ -103,20 +107,22 @@ async function state(f: IngestFixture) {
 describeOrSkip('knowledge worker fencing (실 DB)', () => {
     beforeAll(async () => {
         unlock = await lockKnowledgeQueueTests(pool);
-        await applyKnowledgeSchema(pool); // 001 + 004, IF NOT EXISTS — 재실행 안전
+        await applyKnowledgeSchema(pool); // 001 + 004 + 006, IF NOT EXISTS — 재실행 안전
         await resetWorkerMode(pool); // claim 은 inprocess 소비자로 집는다(Task 4)
         const id = randomUUID();
-        await pool.query(`UPDATE knowledge_embedding_indexes SET is_active = FALSE WHERE is_active`);
+        // 공간마다 색인을 고정하므로 전역 활성을 건드리지 않는다 — provider_ref 를 달리해 ready 유니크와도 겹치지 않게
+        const providerRef = `fake-fence:embed-${id.slice(0, 8)}`;
         await pool.query(
             `INSERT INTO knowledge_embedding_indexes (id, provider_ref, model_id, dimension, distance_metric, status, is_active, activated_at)
-             VALUES ($1, 'fake:embed', 'fake', 8, 'cosine', 'ready', TRUE, NOW())`,
-            [id],
+             VALUES ($1, $2, 'fake', 8, 'cosine', 'ready', FALSE, NOW())`,
+            [id, providerRef],
         );
-        index = { id, providerRef: 'fake:embed', modelId: 'fake', dimension: 8, metric: 'cosine', status: 'ready', isActive: true };
+        index = { id, providerRef, modelId: 'fake', dimension: 8, metric: 'cosine', status: 'ready', requestParams: {} };
     }, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS);
     afterAll(async () => {
         if (jobIds.length) await pool.query(`DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])`, [jobIds]);
         if (spaceIds.length) await pool.query(`DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])`, [spaceIds]); // cascade: 문서·버전·청크·임베딩
+        await pool.query(`DELETE FROM knowledge_embedding_indexes WHERE id = $1`, [index.id]);
         await unlock();
         await pool.end();
     });
