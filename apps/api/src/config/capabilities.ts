@@ -90,6 +90,7 @@ export const CAPABILITY_ENDPOINT: Record<Capability, string> = {
 
 /**
  * 코드 기본값 — 전역 DB 행이 없을 때. 로컬 alias 는 LiteLLM `model_name` 과 일치해야 한다.
+ * 외부 fullId 를 주면 키 정책(CAPABILITY_KEY_POLICY)을 따른다 — actor-byok 는 사용자 키, 그 밖은 서버 공용 키.
  * 없는 capability 는 "미배정"(조용한 폴백 금지 — Planner 가 요구하면 명시 실패).
  */
 /**
@@ -105,6 +106,7 @@ function envDefault(name: string, fallback?: string): string | undefined {
 export const CAPABILITY_DEFAULTS: Partial<Record<Capability, string>> = {
     'text.reason': envDefault('CAPABILITY_DEFAULT_TEXT_REASON', 'local-llm:qwen3.8-27b'),
     'text.code': envDefault('CAPABILITY_DEFAULT_TEXT_CODE', 'local-llm:qwen3.8-27b'),
+    // text.embed 는 외부 fullId(`<provider>:<model>`)도 허용 — 키 정책이 actor-byok 라 행위자 사용자의 키로 실행된다
     'text.embed': envDefault('CAPABILITY_DEFAULT_TEXT_EMBED', 'local-llm:bge-m3'),
     'vision.describe': envDefault('CAPABILITY_DEFAULT_VISION_DESCRIBE', 'local-llm:qwen3.8-27b'),
     'vision.ocr': envDefault('CAPABILITY_DEFAULT_VISION_OCR', 'local-llm:qwen3.8-27b'),
@@ -115,6 +117,17 @@ export const CAPABILITY_DEFAULTS: Partial<Record<Capability, string>> = {
     // (게이트웨이에 그 이름이 없으면 호출이 명시 실패한다 — 끄려면 `CAPABILITY_DEFAULT_MUSIC_GENERATE=`).
     'music.generate': envDefault('CAPABILITY_DEFAULT_MUSIC_GENERATE', 'local-llm:acestep-v15-xl-turbo'),
 };
+
+/**
+ * capability 가 외부 모델을 어느 키로 실행하는가.
+ *  assignment-scope(기본): 사용자 배정=BYOK, 전역·기본값=서버 공용 키 (종전)
+ *  actor-byok: 배정 출처와 무관하게 행위자 사용자의 BYOK 만 — 서버 공용 키를 쓰지 않는다 (문서 색인 임베딩)
+ */
+export type CapabilityKeyPolicy = 'assignment-scope' | 'actor-byok';
+export const CAPABILITY_KEY_POLICY: Partial<Record<Capability, CapabilityKeyPolicy>> = { 'text.embed': 'actor-byok' };
+export function capabilityKeyPolicy(c: Capability): CapabilityKeyPolicy {
+    return CAPABILITY_KEY_POLICY[c] ?? 'assignment-scope';
+}
 
 /** 사람이 읽는 라벨(ko) — Planner 프롬프트·UI 안내 공용 (i18n 은 프론트가 별도 보유) */
 export const CAPABILITY_LABELS_KO: Record<Capability, string> = {
