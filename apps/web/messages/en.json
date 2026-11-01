@@ -3054,7 +3054,7 @@
       "mismatch": "Indexed with a different model than your embedding setting ({model})",
       "reindex": "Re-index with my current model",
       "reindexConfirmTitle": "Re-index",
-      "reindexConfirmBody": "Re-index {count} documents with your current model ({model}). External models run on your own API key and may incur cost. Search keeps using the current index until it finishes.",
+      "reindexConfirmBody": "Re-index {count} documents with your current model ({model}). External models run on your own API key and may incur cost. Search keeps using the current index until it finishes. Failed documents are also re-ingested with the new model.",
       "createNotice": "This project will be indexed with {model}",
       "createWarn": "Your current embedding setting may not allow creating a project — check your settings",
       "openSettings": "Open settings",

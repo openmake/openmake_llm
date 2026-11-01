@@ -3054,7 +3054,7 @@
       "mismatch": "当前索引所用模型与我的嵌入设置({model})不同",
       "reindex": "用当前设置的模型重新索引",
       "reindexConfirmTitle": "重新索引",
-      "reindexConfirmBody": "将用当前设置的模型({model})重新索引 {count} 个文档。外部模型使用我的 API 密钥运行，可能产生费用。完成前仍使用现有索引检索。",
+      "reindexConfirmBody": "将用当前设置的模型({model})重新索引 {count} 个文档。外部模型使用我的 API 密钥运行，可能产生费用。完成前仍使用现有索引检索。失败的文档也会用新模型重新导入。",
       "createNotice": "此项目将使用 {model} 建立索引",
       "createWarn": "按当前嵌入设置可能无法创建项目 — 请检查设置",
       "openSettings": "打开设置",
