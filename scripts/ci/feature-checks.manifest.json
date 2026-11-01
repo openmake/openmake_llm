@@ -22,6 +22,13 @@
   "deletedTests": {
     "apps/api/src/addons/knowledge-runtime/__tests__/reindex-lease.test.ts": "전역 reindex(index-manager) 제거로 공간 재색인으로 흡수 — lease 검사(배치 삽입·전환 트랜잭션 앞, 0행이면 LeaseLostError)는 apps/api/src/addons/knowledge-runtime/__tests__/space-reindex.test.ts 가 검증한다"
   },
+  "deletedSources": {
+    "apps/api/src/addons/knowledge-runtime/embedding/index-manager.ts": [
+      "apps/api/src/addons/knowledge-runtime/__tests__/index-catalog.test.ts",
+      "apps/api/src/addons/knowledge-runtime/__tests__/space-reindex.test.ts",
+      "apps/api/src/addons/knowledge-runtime/__tests__/space-reindex-request.test.ts"
+    ]
+  },
   "exactFiles": {
     "db/init/004-admin-user.sh": "infra",
     "eslint.config.mjs": "pipeline",

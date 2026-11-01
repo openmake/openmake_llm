@@ -218,6 +218,26 @@ test('selectRelatedTests requires a manifest reason for deleted test files and s
   assert.throws(() => selectRelatedTests(['apps/api/src/chat/gone.ts'], opts(() => {})), /Deleted source requires explicit regression mapping: apps\/api\/src\/chat\/gone\.ts/);
 });
 
+// The explicit mapping for deleted API source: the manifest "deletedSources" names existing regression tests that must run.
+test('selectRelatedTests maps deleted API source to its manifest regression tests (existing test files only)', async t => {
+  const { mkdtempSync, mkdirSync, rmSync, writeFileSync } = await import('node:fs');
+  const { join, resolve } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { selectRelatedTests } = await import('../../scripts/ci/feature-checks.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'omk-deleted-src-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const never = () => { throw new Error('Jest is not consulted for deleted files'); };
+  const opts = { cwd: root, log: () => {}, listRelated: never, listImporters: never, listAll: never };
+  const regression = 'apps/api/src/chat/__tests__/replacement.test.ts';
+  mkdirSync(join(root, 'apps/api/src/chat/__tests__'), { recursive: true });
+  writeFileSync(join(root, regression), '');
+  const selected = selectRelatedTests(['apps/api/src/chat/gone.ts'], { ...opts, deletedSources: { 'apps/api/src/chat/gone.ts': [regression] } });
+  assert.deepEqual(selected.related.get('apps/api/src/chat/gone.ts'), [resolve(root, regression)]);
+  assert.deepEqual([...selected.tests], [resolve(root, regression)]);
+  assert.throws(() => selectRelatedTests(['apps/api/src/chat/gone.ts'], { ...opts, deletedSources: { 'apps/api/src/chat/gone.ts': ['apps/api/src/chat/__tests__/missing.test.ts'] } }), /Deleted source regression test does not exist/);
+  assert.throws(() => selectRelatedTests(['apps/api/src/chat/gone.ts'], { ...opts, deletedSources: { 'apps/api/src/chat/gone.ts': [] } }), /No related Jest tests/);
+});
+
 // Type-only edges are in Jest's graph (apps/api/jest.dependency-extractor.mjs). Last resort: a type-only source with no related
 // test is excused only when nothing imports it (or it is a declaration file); importers that reach no test still fail.
 test('selectRelatedTests excuses only unimported type-only API sources and still requires tests for any runtime code', async t => {
