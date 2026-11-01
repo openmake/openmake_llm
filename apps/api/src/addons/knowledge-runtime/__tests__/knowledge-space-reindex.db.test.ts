@@ -3,7 +3,8 @@
  *  - 공간 A 를 색인 X(8차원)→Y(4차원)로 옮기면 포인터가 Y 로 바뀌고, X 의 벡터는 그대로 남는다(보존)
  *  - 같은 색인 X 를 쓰는 공간 B 는 영향이 없다(포인터·벡터)
  *  - 전환 뒤 A 는 Y 로 검색되고, 다시 돌려도(이미 Y) 아무것도 바꾸지 않는다
- * 만든 행은 사용자·색인 접두어로만 지운다.
+ *  - 전환 때 A 의 실패(현재 버전) 문서는 다시 시도처럼 초기화되고 작업 행위자로 ingest 가 queued 로 들어간다(ready 문서는 그대로)
+ * 만든 행은 사용자·색인 접두어로만 지운다(작업 행은 버전·공간 CASCADE).
  */
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
@@ -28,6 +29,12 @@ jest.mock('../db', () => {
     };
 });
 jest.mock('../../../services/org/membership-cache', () => ({ activeOrgFor: jest.fn(async () => null) }));
+jest.mock('../../../runtime-ports/addon-admission', () => ({
+    readAddonRunVerdict: async () => ({ run: true }),
+    checkUserEntitlement: async () => 'ok',
+    readAddonStateRevision: async () => 1,
+    warmAddonStates: async () => undefined,
+}));
 
 import { ingestVersion } from '../ingestion/pipeline';
 import { searchChunks } from '../retrieval/search';
@@ -40,6 +47,7 @@ const pool = dbMock.__pool;
 
 const embedOf = (dim: number) => async (texts: string[]): Promise<number[][]> => texts.map(() => Array.from({ length: dim }, (_v, i) => (i === 0 ? 1 : 0)));
 const user = `krtest-${randomUUID()}`;
+const ACTOR = { kind: 'user' as const, userId: user, orgId: null };
 const REF_PREFIX = `fake-rx-${randomUUID().slice(0, 8)}`;
 const text = 'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa';
 
@@ -76,6 +84,23 @@ async function spaceWithDoc(indexId: string, dim: number): Promise<{ spaceId: st
     return { spaceId, verId };
 }
 
+/** 공간에 실패(현재 버전) 문서 하나 — 임베딩 실패로 남은 상태 */
+async function failedDocIn(spaceId: string): Promise<{ docId: string; verId: string }> {
+    const docId = randomUUID();
+    const verId = randomUUID();
+    await pool.query(
+        `INSERT INTO knowledge_documents (id, space_id, logical_name, status, created_by) VALUES ($1, $2, 'f.txt', 'failed', $3)`,
+        [docId, spaceId, user],
+    );
+    await pool.query(
+        `INSERT INTO knowledge_document_versions (id, document_id, content_hash, mime_type, original_filename, storage_ref, source_size, status, failure_code, progress)
+         VALUES ($1, $2, $3, 'text/plain', 'f.txt', $1, 100, 'failed', 'FAILED_EMBEDDING', 40)`,
+        [verId, docId, 'f'.repeat(64)],
+    );
+    await pool.query(`UPDATE knowledge_documents SET current_version_id = $2 WHERE id = $1`, [docId, verId]);
+    return { docId, verId };
+}
+
 const embeddingsIn = async (indexId: string, verId: string): Promise<number> => Number((await pool.query(
     `SELECT COUNT(*)::text AS n FROM knowledge_chunk_embeddings e JOIN knowledge_chunks c ON c.id = e.chunk_id
       WHERE c.document_version_id = $1 AND e.embedding_index_id = $2`, [verId, indexId])).rows[0].n);
@@ -110,7 +135,7 @@ describeOrSkip('공간 재색인 실 DB (K01)', () => {
         const chunksA = await chunksOf(a.verId);
         expect(await embeddingsIn(X.id, a.verId)).toBe(chunksA);
 
-        await runSpaceReindexJob({ spaceId: a.spaceId, indexId: Y.id, actorUserId: user }, { embed: embedOf(4) });
+        await runSpaceReindexJob({ spaceId: a.spaceId, indexId: Y.id, actor: ACTOR }, { embed: embedOf(4) });
 
         expect((await getSpaceIndex(a.spaceId))?.id).toBe(Y.id);
         expect(await embeddingsIn(Y.id, a.verId)).toBe(chunksA);
@@ -123,7 +148,33 @@ describeOrSkip('공간 재색인 실 DB (K01)', () => {
         expect((await searchChunks({ actor, spaceIds: [a.spaceId], queryVector: q4, candidateCount: 10, index: Y })).length).toBeGreaterThan(0);
 
         // 다시 돌려도(이미 Y) 바뀌는 것 없음
-        await runSpaceReindexJob({ spaceId: a.spaceId, indexId: Y.id, actorUserId: user }, { embed: async () => { throw new Error('호출되면 안 된다'); } });
+        await runSpaceReindexJob({ spaceId: a.spaceId, indexId: Y.id, actor: ACTOR }, { embed: async () => { throw new Error('호출되면 안 된다'); } });
         expect((await getSpaceIndex(a.spaceId))?.id).toBe(Y.id);
+    });
+
+    it('전환 때 실패 문서를 다시 시도처럼 초기화하고 작업 행위자로 ingest 1건을 넣는다 — ready 문서·X 벡터는 그대로', async () => {
+        const X = await insertIndex(8);
+        const Y = await insertIndex(4);
+        const a = await spaceWithDoc(X.id, 8);
+        const failed = await failedDocIn(a.spaceId);
+        const chunksA = await chunksOf(a.verId);
+
+        await runSpaceReindexJob({ spaceId: a.spaceId, indexId: Y.id, actor: ACTOR }, { embed: embedOf(4) });
+
+        expect((await getSpaceIndex(a.spaceId))?.id).toBe(Y.id);
+        const ver = (await pool.query(`SELECT status, failure_code, progress FROM knowledge_document_versions WHERE id = $1`, [failed.verId])).rows[0];
+        expect(ver).toEqual({ status: 'uploaded', failure_code: null, progress: 0 });
+        const doc = (await pool.query(`SELECT status FROM knowledge_documents WHERE id = $1`, [failed.docId])).rows[0];
+        expect(doc.status).toBe('processing');
+        const jobs = (await pool.query(
+            `SELECT kind, state, actor_kind, actor_user_id, org_id FROM knowledge_ingestion_jobs WHERE document_version_id = $1`, [failed.verId],
+        )).rows;
+        expect(jobs).toEqual([{ kind: 'ingest', state: 'queued', actor_kind: 'user', actor_user_id: user, org_id: null }]);
+
+        // ready 문서는 그대로 — 버전 상태·X 벡터 보존, 재수집 작업 없음
+        const readyVer = (await pool.query(`SELECT status FROM knowledge_document_versions WHERE id = $1`, [a.verId])).rows[0];
+        expect(readyVer.status).toBe('ready');
+        expect(await embeddingsIn(X.id, a.verId)).toBe(chunksA);
+        expect(Number((await pool.query(`SELECT COUNT(*)::text AS n FROM knowledge_ingestion_jobs WHERE document_version_id = $1`, [a.verId])).rows[0].n)).toBe(0);
     });
 });
