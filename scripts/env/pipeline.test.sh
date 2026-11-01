@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC1091,SC2329,SC2034 # Fixture overrides are invoked by sourced commands.
+# shellcheck disable=SC1091,SC2329,SC2034,SC2016 # Fixture overrides are invoked by sourced commands; probe scripts expand later.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
@@ -20,6 +20,22 @@ if ( pipeline_locked staging true ); then echo 'FAIL: concurrent lock allowed'; 
 rmdir "$OMK_ROOT/staging/.pipeline/lock"
 if ( pipeline_verify_proof staging "$sha" ); then echo 'FAIL: missing proof allowed'; exit 1; fi
 echo 'pipeline shell checks passed'
+# 갱신 단계가 실패하면 기억하고, 다음 주기는 HEAD 가 같아도 --redeploy 로 다시 배포한다(성공하면 지운다).
+printf 'printf "%%s|%%s\\n" "$*" "${OMK_PIPELINE_RELEASE_SHA:-}" >> "$UPDATE_LOG"; exit "${UPDATE_RC:-0}"\n' > "$TMP/update-probe.sh"
+mkdir -p "$OMK_ROOT/online"
+(
+    SCRIPT_PATH="$TMP/update-probe.sh"; export UPDATE_LOG="$TMP/update-log"
+    for e in staging:'' online:"$sha"; do
+        env="${e%%:*}" rel="${e#*:}"; : > "$UPDATE_LOG"
+        if ( export UPDATE_RC=2; pipeline_update_step "$env" "$rel" ); then echo "FAIL: $env failed update passed"; exit 1; fi
+        [[ -f "$(update_failed_marker "$env")" ]] || { echo "FAIL: $env update failure not remembered"; exit 1; }
+        pipeline_update_step "$env" "$rel"
+        [[ ! -f "$(update_failed_marker "$env")" ]] || { echo "FAIL: $env success kept failure marker"; exit 1; }
+        pipeline_update_step "$env" "$rel"
+        [[ "$(cat "$UPDATE_LOG")" == "env update $env --yes|$rel"$'\n'"env update $env --yes --redeploy|$rel"$'\n'"env update $env --yes|$rel" ]] || { echo "FAIL: $env retry arguments: $(cat "$UPDATE_LOG")"; exit 1; }
+    done
+)
+echo 'pipeline update failures redeploy on the next run'
 # A real fixture checks proof against source, validation, disk and running build IDs.
 ldir="$OMK_ROOT/staging/llm"
 mkdir -p "$ldir/apps/api/dist"
