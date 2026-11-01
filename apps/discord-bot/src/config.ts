@@ -6,6 +6,7 @@
  */
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { PORTS } from '@openmake/config';
 
 // apps/api/src/server.ts 와 동일하게 레포 루트 .env 를 로드
 dotenv.config({ path: path.resolve(__dirname, '../../../.env'), quiet: true } as dotenv.DotenvConfigOptions);
@@ -63,7 +64,7 @@ export const config = {
     botToken: process.env.DISCORD_BOT_TOKEN || '',
 
     /** openmake_llm 백엔드 (OpenAI 호환 v1 경로의 origin) */
-    apiBaseUrl: process.env.DISCORD_BOT_API_BASE_URL || 'http://127.0.0.1:52416',
+    apiBaseUrl: process.env.DISCORD_BOT_API_BASE_URL || `http://127.0.0.1:${PORTS.API}`,
     /** openmake_llm API Key (omk_live_...) — /api/v1/* 인증 (필수) */
     apiKey: process.env.DISCORD_BOT_API_KEY || '',
     /** 사용할 모델 id. 미설정 시 GET /api/v1/models 첫 항목 사용 */
