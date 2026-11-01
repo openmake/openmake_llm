@@ -3054,7 +3054,7 @@
       "mismatch": "Mit einem anderen Modell indexiert als in Ihrer Embedding-Einstellung ({model})",
       "reindex": "Mit aktuellem Modell neu indexieren",
       "reindexConfirmTitle": "Neu indexieren",
-      "reindexConfirmBody": "{count} Dokumente werden mit Ihrem aktuellen Modell ({model}) neu indexiert. Externe Modelle laufen mit Ihrem eigenen API-Schlüssel und können Kosten verursachen. Bis zum Abschluss wird weiter im bisherigen Index gesucht.",
+      "reindexConfirmBody": "{count} Dokumente werden mit Ihrem aktuellen Modell ({model}) neu indexiert. Externe Modelle laufen mit Ihrem eigenen API-Schlüssel und können Kosten verursachen. Bis zum Abschluss wird weiter im bisherigen Index gesucht. Fehlgeschlagene Dokumente werden ebenfalls mit dem neuen Modell erneut verarbeitet.",
       "createNotice": "Dieses Projekt wird mit {model} indexiert",
       "createWarn": "Mit Ihrer aktuellen Embedding-Einstellung lässt sich das Projekt eventuell nicht anlegen — prüfen Sie die Einstellungen",
       "openSettings": "Einstellungen öffnen",
