@@ -3054,7 +3054,7 @@
       "mismatch": "내 임베딩 설정({model})과 다른 모델로 색인되어 있습니다",
       "reindex": "현재 설정 모델로 다시 색인",
       "reindexConfirmTitle": "다시 색인",
-      "reindexConfirmBody": "문서 {count}개를 현재 설정 모델({model})로 다시 색인합니다. 외부 모델이면 내 API 키로 실행되어 비용이 들 수 있습니다. 끝날 때까지는 지금 색인으로 검색됩니다.",
+      "reindexConfirmBody": "문서 {count}개를 현재 설정 모델({model})로 다시 색인합니다. 외부 모델이면 내 API 키로 실행되어 비용이 들 수 있습니다. 끝날 때까지는 지금 색인으로 검색됩니다. 실패한 문서도 새 모델로 다시 수집합니다.",
       "createNotice": "이 프로젝트는 {model} 로 색인됩니다",
       "createWarn": "지금 임베딩 설정으로는 프로젝트를 만들 수 없을 수 있습니다 — 설정을 확인하세요",
       "openSettings": "설정 열기",

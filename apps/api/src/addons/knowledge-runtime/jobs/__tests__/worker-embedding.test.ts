@@ -97,14 +97,22 @@ describe('worker — 임베딩 키 정책', () => {
         expect(sqlWith("SET state = 'queued'")).toHaveLength(0);
     });
 
-    it('reindex 는 공간·대상 색인·행위자로 공간 재색인을 돌린다', async () => {
+    it('reindex 는 공간·대상 색인·작업 행위자(actor 세 열)로 공간 재색인을 돌린다 — NULL actor_kind 는 system', async () => {
         claimRows = [REINDEX];
         await new KnowledgeWorker().tick();
         expect(runSpaceReindexJob).toHaveBeenCalledWith(
-            { spaceId: 's1', indexId: 'idx-new', actorUserId: 'u1' },
+            { spaceId: 's1', indexId: 'idx-new', actor: { kind: 'user', userId: 'u1', orgId: null } },
             expect.objectContaining({ lease: expect.anything() }),
         );
         expect(sqlWith("SET state = 'done'")).toHaveLength(1);
+
+        claimRows = [{ ...REINDEX, actor_kind: 'org', org_id: 'o1' }];
+        await new KnowledgeWorker().tick();
+        expect(runSpaceReindexJob.mock.calls[1][0].actor).toEqual({ kind: 'org', userId: 'u1', orgId: 'o1' });
+
+        claimRows = [{ ...REINDEX, actor_kind: null, actor_user_id: null }];
+        await new KnowledgeWorker().tick();
+        expect(runSpaceReindexJob.mock.calls[2][0].actor).toEqual({ kind: 'system', userId: null, orgId: null });
     });
 
     it('space_id 없는 reindex(006 이전 전역 잔재)는 실행 없이 즉시 failed', async () => {
