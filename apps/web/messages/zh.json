@@ -2938,7 +2938,7 @@
     "empty": "还没有项目",
     "noResults": "没有结果",
     "notFound": "未找到",
-    "notReadyNotice": "嵌入尚未就绪，新资料的处理可能会延迟",
+    "notReadyNotice": "Knowledge 处理功能尚未就绪，新资料的处理可能会延迟",
     "noDescription": "暂无描述",
     "editDescription": "编辑描述",
     "deleteSpace": "删除项目",
@@ -2980,7 +2980,7 @@
       "notEntitled": "没有 Knowledge 使用权限，无法处理",
       "verification": "嵌入校验失败",
       "embeddingKeyMissing": "没有可运行此项目嵌入模型的 API 密钥 — 请登记密钥后重试",
-      "embeddingKeyRejected": "提供方拒绝了 API 密钥 — 请更换密钥后重试",
+      "embeddingKeyRejected": "提供方拒绝了 API 密钥 — 请更换密钥后重试（如果刚刚更换过，请稍后再试）",
       "unknown": "处理失败"
     },
     "doc": {
@@ -3030,8 +3030,14 @@
       "indexModel": "模型",
       "indexDimension": "维度",
       "indexStatus": "状态",
+      "indexStatusValue": {
+        "ready": "使用中",
+        "retired": "已停用",
+        "building": "创建中"
+      },
       "indexSpaces": "项目数",
-      "noIndexes": "暂无嵌入索引"
+      "noIndexes": "暂无嵌入索引",
+      "embeddingByRequester": "嵌入相关项目基于发起请求的管理员（您）的嵌入设置和密钥"
     },
     "blocked": {
       "PGVECTOR_MISSING": "未安装向量扩展(pgvector)",
@@ -3062,7 +3068,7 @@
       },
       "error": {
         "keyMissing": "没有可运行此项目嵌入模型的 API 密钥。请在 设置 → 外部 API 密钥 中登记该提供方的密钥，或改用其他嵌入模型重新索引。",
-        "keyRejected": "提供方拒绝了 API 密钥。请在 设置 → 外部 API 密钥 中更换密钥。",
+        "keyRejected": "提供方拒绝了 API 密钥。请在 设置 → 外部 API 密钥 中更换密钥。如果刚刚更换过，请稍后再试。",
         "unassigned": "未分配嵌入模型。请在 设置 → 模型分配 → 嵌入 中选择模型。",
         "providerUnavailable": "嵌入模型当前不可用(维度测量失败)。请确认它是嵌入模型并检查提供方状态。",
         "reindexNotNeeded": "此项目已使用当前设置的模型建立索引。",

@@ -2938,7 +2938,7 @@
     "empty": "Noch keine Projekte",
     "noResults": "Keine Ergebnisse",
     "notFound": "Nicht gefunden",
-    "notReadyNotice": "Das Embedding ist noch nicht bereit; die Verarbeitung neuer Materialien kann sich verzögern",
+    "notReadyNotice": "Die Knowledge-Verarbeitung ist noch nicht bereit; die Verarbeitung neuer Materialien kann sich verzögern",
     "noDescription": "Keine Beschreibung",
     "editDescription": "Beschreibung bearbeiten",
     "deleteSpace": "Projekt löschen",
@@ -2980,7 +2980,7 @@
       "notEntitled": "Nicht verarbeitet — keine Berechtigung für Knowledge",
       "verification": "Prüfung der Embeddings fehlgeschlagen",
       "embeddingKeyMissing": "Kein API-Schlüssel für das Embedding-Modell dieses Projekts — Schlüssel hinterlegen und erneut versuchen",
-      "embeddingKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt — Schlüssel ersetzen und erneut versuchen",
+      "embeddingKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt — Schlüssel ersetzen und erneut versuchen (wenn Sie ihn gerade ersetzt haben, in Kürze erneut versuchen)",
       "unknown": "Verarbeitung fehlgeschlagen"
     },
     "doc": {
@@ -3030,8 +3030,14 @@
       "indexModel": "Modell",
       "indexDimension": "Dimension",
       "indexStatus": "Status",
+      "indexStatusValue": {
+        "ready": "In Verwendung",
+        "retired": "Außer Betrieb",
+        "building": "Wird erstellt"
+      },
       "indexSpaces": "Projekte",
-      "noIndexes": "Noch keine Embedding-Indizes"
+      "noIndexes": "Noch keine Embedding-Indizes",
+      "embeddingByRequester": "Embedding-Einträge beziehen sich auf die Embedding-Einstellungen und Schlüssel des anfragenden Administrators (Sie)"
     },
     "blocked": {
       "PGVECTOR_MISSING": "Die Vektor-Erweiterung (pgvector) ist nicht installiert",
@@ -3062,7 +3068,7 @@
       },
       "error": {
         "keyMissing": "Kein API-Schlüssel für das Embedding-Modell dieses Projekts. Hinterlegen Sie den Schlüssel dieses Anbieters unter Einstellungen → Externe API-Schlüssel oder indexieren Sie mit einem anderen Embedding-Modell neu.",
-        "keyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt. Ersetzen Sie ihn unter Einstellungen → Externe API-Schlüssel.",
+        "keyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt. Ersetzen Sie ihn unter Einstellungen → Externe API-Schlüssel. Wenn Sie ihn gerade ersetzt haben, versuchen Sie es in Kürze erneut.",
         "unassigned": "Kein Embedding-Modell zugewiesen. Wählen Sie eines unter Einstellungen → Modellzuweisung → Embeddings.",
         "providerUnavailable": "Das Embedding-Modell ist derzeit nicht verfügbar (Dimensionsmessung fehlgeschlagen). Prüfen Sie, ob es ein Embedding-Modell ist, und den Status des Anbieters.",
         "reindexNotNeeded": "Dieses Projekt ist bereits mit Ihrem aktuellen Modell indexiert.",
