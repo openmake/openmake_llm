@@ -83,7 +83,7 @@ const chunksOf = async (verId: string): Promise<number> => Number((await pool.qu
     `SELECT COUNT(*)::text AS n FROM knowledge_chunks WHERE document_version_id = $1`, [verId])).rows[0].n);
 
 describeOrSkip('공간 재색인 실 DB (K01)', () => {
-    let unlock: () => Promise<void>;
+    let unlock: (() => Promise<void>) | undefined;
 
     beforeAll(async () => {
         unlock = await lockKnowledgeQueueTests(pool);
@@ -98,7 +98,7 @@ describeOrSkip('공간 재색인 실 DB (K01)', () => {
         await pool.query(`DELETE FROM knowledge_spaces WHERE created_by = $1`, [user]);
         await pool.query(`DELETE FROM knowledge_embedding_indexes WHERE provider_ref LIKE $1`, [`${REF_PREFIX}:%`]);
         await pool.query(`DELETE FROM users WHERE id = $1`, [user]);
-        await unlock();
+        await unlock?.();
         await pool.end();
     });
 

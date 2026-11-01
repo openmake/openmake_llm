@@ -23,7 +23,7 @@ describeOrSkip('knowledge 마이그레이션 006 (실 DB)', () => {
     const leftoverIndexId = `test-idx-${randomUUID()}`;
     const createdIndexIds: string[] = [leftoverIndexId];
     let activeIndexId = '';
-    let unlock: () => Promise<void>;
+    let unlock: (() => Promise<void>) | undefined;
 
     const insertIndex = (id: string, providerRef: string, status: string, isActive: boolean) => pool.query(
         `INSERT INTO knowledge_embedding_indexes (id, provider_ref, model_id, dimension, distance_metric, status, is_active)
@@ -54,7 +54,7 @@ describeOrSkip('knowledge 마이그레이션 006 (실 DB)', () => {
     afterAll(async () => {
         await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [spaceIds]);
         await pool.query('DELETE FROM knowledge_embedding_indexes WHERE id = ANY($1::text[])', [createdIndexIds]);
-        await unlock();
+        await unlock?.();
         await pool.end();
     });
 

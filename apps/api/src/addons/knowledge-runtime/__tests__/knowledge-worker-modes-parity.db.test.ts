@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import type { Pool } from 'pg';
 import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 import {
-    activateFakeIndex, assertFullTestSchema, fakeVector, insertIngestFixture, jobSnapshot, spawnWorker, startFakeGateway,
+    assertFullTestSchema, ensureFakeIndex, fakeVector, insertIngestFixture, jobSnapshot, spawnWorker, startFakeGateway,
     stopWorker, waitFor, workerEnv, type FakeGateway, type WorkerChild,
 } from './helpers/worker-process-harness';
 
@@ -56,9 +56,10 @@ describeOrSkip('knowledge 두 모드 결과 비교 (실 DB)', () => {
     const jobIds: string[] = [];
     const spaceIds: string[] = [];
     let child: WorkerChild | null = null;
-    let unlock: () => Promise<void>;
+    let unlock: (() => Promise<void>) | undefined;
     let gateway: FakeGateway;
     let storageDir: string;
+    let indexId: string;
     const prevStorageDir = process.env.KNOWLEDGE_STORAGE_DIR;
 
     beforeAll(async () => {
@@ -66,28 +67,32 @@ describeOrSkip('knowledge 두 모드 결과 비교 (실 DB)', () => {
         await assertFullTestSchema(pool);
         await applyKnowledgeSchema(pool);
         await resetWorkerMode(pool);
-        await activateFakeIndex(pool);
+        indexId = await ensureFakeIndex(pool);
         gateway = await startFakeGateway(fakeVector);
         storageDir = await mkdtemp(join(tmpdir(), 'knowledge-parity-'));
         // inprocess 쪽(이 프로세스 안 worker)도 fixture 원본을 같은 곳에서 읽는다 — STORAGE_DIR 은 env 를 매번 읽는 getter
         process.env.KNOWLEDGE_STORAGE_DIR = storageDir;
     }, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS);
     afterAll(async () => {
-        if (child) await stopWorker(child, 'SIGKILL', 5_000);
-        await gateway.close();
-        if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
-        if (spaceIds.length) await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [spaceIds]);
-        await resetWorkerMode(pool);
-        await rm(storageDir, { recursive: true, force: true });
-        if (prevStorageDir === undefined) delete process.env.KNOWLEDGE_STORAGE_DIR;
-        else process.env.KNOWLEDGE_STORAGE_DIR = prevStorageDir;
-        await unlock();
-        await pool.end();
+        // beforeAll 이 중간에 실패해도 정리·lock 해제까지 간다(다음 파일이 lock 대기로 연쇄 실패하지 않게)
+        try {
+            if (child) await stopWorker(child, 'SIGKILL', 5_000);
+            await gateway?.close();
+            if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
+            if (spaceIds.length) await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [spaceIds]);
+            await resetWorkerMode(pool);
+            if (storageDir) await rm(storageDir, { recursive: true, force: true });
+            if (prevStorageDir === undefined) delete process.env.KNOWLEDGE_STORAGE_DIR;
+            else process.env.KNOWLEDGE_STORAGE_DIR = prevStorageDir;
+        } finally {
+            await unlock?.();
+            await pool.end();
+        }
     });
 
     it('같은 문서 → inprocess 와 external 의 청크·임베딩·상태가 같다', async () => {
         // inprocess — 테스트 프로세스 안 worker 가 집는다
-        const a = await insertIngestFixture(pool, storageDir, TEXT);
+        const a = await insertIngestFixture(pool, storageDir, TEXT, indexId);
         jobIds.push(a.job);
         spaceIds.push(a.space);
         const local = new KnowledgeWorker({ consumerKind: 'inprocess', embed: async (texts: string[]) => texts.map(fakeVector) });
@@ -96,7 +101,7 @@ describeOrSkip('knowledge 두 모드 결과 비교 (실 DB)', () => {
 
         // external — 모드를 바꾸고 별도 프로세스가 집는다
         await pool.query(`UPDATE knowledge_worker_mode SET mode = 'external', generation = generation + 1, updated_at = NOW() WHERE id = 1`);
-        const b = await insertIngestFixture(pool, storageDir, TEXT);
+        const b = await insertIngestFixture(pool, storageDir, TEXT, indexId);
         jobIds.push(b.job);
         spaceIds.push(b.space);
         child = spawnWorker(workerEnv({ databaseUrl: CONN ?? '', gatewayUrl: gateway.url, storageDir }));

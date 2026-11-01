@@ -103,7 +103,7 @@ const ingestDeps = (body: string, embed = fakeEmbed) => ({ embed, actorUserId: u
 
 describeOrSkip('Knowledge 수집·검색 실 DB (K01)', () => {
     let index: KnowledgeIndex;
-    let unlock: () => Promise<void>;
+    let unlock: (() => Promise<void>) | undefined;
 
     beforeAll(async () => {
         // 스키마 적용(006 포함)은 다른 실 DB 파일과 겹치지 않게 같은 lock 아래에서
@@ -118,7 +118,7 @@ describeOrSkip('Knowledge 수집·검색 실 DB (K01)', () => {
         await pool.query(`DELETE FROM knowledge_spaces WHERE created_by = ANY($1::text[])`, [[userA, userB]]);
         await pool.query(`DELETE FROM knowledge_embedding_indexes WHERE provider_ref LIKE $1`, [`${REF_PREFIX}:%`]);
         await pool.query(`DELETE FROM users WHERE id = ANY($1::text[])`, [[userA, userB]]);
-        await unlock();
+        await unlock?.();
         await pool.end();
     });
 

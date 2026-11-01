@@ -99,7 +99,7 @@ describeOrSkip('Knowledge 실 DB (K01)', () => {
     // 업로드 원본은 임시 디렉터리에 쓴다 — 레포 트리에 파일을 남기지 않는다
     const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'knowledge-test-'));
     const prevStorageDir = process.env.KNOWLEDGE_STORAGE_DIR;
-    let unlock: () => Promise<void>;
+    let unlock: (() => Promise<void>) | undefined;
     beforeAll(async () => {
         process.env.KNOWLEDGE_STORAGE_DIR = storageDir;
         // 006(공간 색인 열) 포함 스키마 — 다른 실 DB 파일과 겹치지 않게 같은 lock 아래에서 멱등 적용
@@ -119,7 +119,7 @@ describeOrSkip('Knowledge 실 DB (K01)', () => {
         await pool.query(`DELETE FROM knowledge_spaces WHERE scope_id = ANY($1::text[]) OR created_by = ANY($1::text[])`, [[userA, userB]]);
         await pool.query(`DELETE FROM knowledge_embedding_indexes WHERE provider_ref = $1`, [mockFakeEmbedRef]);
         await pool.query(`DELETE FROM users WHERE id = ANY($1::text[])`, [[userA, userB]]);
-        await unlock();
+        await unlock?.();
         await pool.end();
         if (prevStorageDir === undefined) delete process.env.KNOWLEDGE_STORAGE_DIR; else process.env.KNOWLEDGE_STORAGE_DIR = prevStorageDir;
         fs.rmSync(storageDir, { recursive: true, force: true });

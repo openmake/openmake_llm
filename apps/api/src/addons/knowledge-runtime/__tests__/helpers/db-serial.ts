@@ -5,7 +5,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Pool } from 'pg';
+import { Client, type Pool } from 'pg';
 
 /** 테스트 직렬화 키 — 값은 이 용도의 고유 식별자일 뿐이다(INDEX_PUBLISH_LOCK_KEY 와 겹치지 않게 둔다) */
 export const KNOWLEDGE_DB_TEST_LOCK_KEY = 7_041_902_500;
@@ -18,26 +18,41 @@ export const KNOWLEDGE_DB_TEST_LOCK_WAIT_MS = 150_000;
 /** lock 을 잡는 beforeAll 의 jest 시간 상한 — lock 대기 상한보다 길어야 기본 hook 시간 초과 대신 분명한 lock 오류로 끝난다 */
 export const KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS = KNOWLEDGE_DB_TEST_LOCK_WAIT_MS + 30_000;
 
-/** 세션 advisory lock 을 잡고, 놓는 함수를 돌려준다 — beforeAll(시간 상한 KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS)에서 잡고 afterAll 에서 놓는다 */
+/** 아직 놓지 않은 lock 의 해제 함수 — 스위트 afterAll 이 정리 중에 실패해 unlock 에 닿지 못해도 아래 안전망이 놓는다 */
+const heldLocks = new Set<() => Promise<void>>();
+// 파일 최상위(root) afterAll — 스위트 describe 의 afterAll 뒤에 돈다. 남은 lock 을 놓아 다음 파일이 lock 대기로 연쇄 실패하지 않게 한다
+afterAll(async () => {
+    for (const release of [...heldLocks]) await release();
+});
+
+/**
+ * 세션 advisory lock 을 잡고, 놓는 함수를 돌려준다 — beforeAll(시간 상한 KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS)에서 잡고 afterAll 에서 놓는다.
+ * lock 은 풀 밖 전용 연결이 쥔다 — 풀 클라이언트로 쥐면 해제 전 pool.end() 가 그 클라이언트를 기다리며 멈춘다.
+ * 해제 함수는 여러 번 불러도 안전하다(연결을 닫으면 세션 lock 도 풀린다).
+ */
 export async function lockKnowledgeQueueTests(pool: Pool): Promise<() => Promise<void>> {
-    const client = await pool.connect();
+    const client = new Client(pool.options);
+    await client.connect();
     try {
         await client.query("SELECT set_config('lock_timeout', $1, false)", [String(KNOWLEDGE_DB_TEST_LOCK_WAIT_MS)]);
         await client.query('SELECT pg_advisory_lock($1)', [KNOWLEDGE_DB_TEST_LOCK_KEY]);
         await client.query('RESET lock_timeout');
     } catch (err) {
-        client.release();
+        await client.end().catch(() => undefined);
         throw new Error(
             `Knowledge 실 DB 테스트 lock 을 ${KNOWLEDGE_DB_TEST_LOCK_WAIT_MS}ms 안에 잡지 못했다 — 다른 jest 워커가 쥐고 있다(--runInBand 로 돌린다): ${err instanceof Error ? err.message : String(err)}`,
         );
     }
-    return async () => {
+    const release = async (): Promise<void> => {
+        if (!heldLocks.delete(release)) return;
         try {
             await client.query('SELECT pg_advisory_unlock($1)', [KNOWLEDGE_DB_TEST_LOCK_KEY]);
         } finally {
-            client.release();
+            await client.end();
         }
     };
+    heldLocks.add(release);
+    return release;
 }
 
 /** 이 헬퍼가 적용하고 migration_versions 에 기록하는 add-on 마이그레이션(순서대로) */
