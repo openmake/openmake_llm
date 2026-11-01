@@ -131,6 +131,13 @@ describe('checkCapabilityTargetAvailability — 복호화 없는 상태 검사',
         expect(r.ok === false && r.message).toMatch(/openrouter/);
     });
 
+    it('다른 capability·userId 없음 → 서버 키 행만 보고 ok, decryptKey 는 부르지 않는다', async () => {
+        const d = deps({ serverKey: 'srv' });
+        expect(await checkCapabilityTargetAvailability('audio.speech', 'openrouter:tts-1', undefined, d)).toEqual({ ok: true });
+        expect(d.serverKeys.get).toHaveBeenCalled();
+        expect(d.serverKeys.decryptKey).not.toHaveBeenCalled();
+    });
+
     it('로컬 fullId 는 해석 가능하면 ok, 아니면 CAPABILITY_PROVIDER_UNKNOWN', async () => {
         expect(await checkCapabilityTargetAvailability('text.embed', 'local-llm:emb-local', undefined, deps())).toEqual({ ok: true });
         expect(await checkCapabilityTargetAvailability('text.embed', 'local-llm:', undefined, deps())).toMatchObject({ ok: false, code: 'CAPABILITY_PROVIDER_UNKNOWN' });
