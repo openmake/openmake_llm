@@ -56,8 +56,13 @@ pipeline_verify_proof() {
 }
 # A fresh Bash process preserves updater errexit even in conditional callers.
 # The parent retains the shared lock while the child uses that exact ownership.
+# A failed update is remembered so the next run redeploys even when HEAD already matches.
 pipeline_update_step() {
-    OMK_PIPELINE_LOCK_ENV="$1" OMK_PIPELINE_RELEASE_SHA="${2:-}" bash "$SCRIPT_PATH" env update "$1" --yes
+    local rc=0 args=(--yes)
+    ! update_retry_pending "$1" || args+=(--redeploy)
+    OMK_PIPELINE_LOCK_ENV="$1" OMK_PIPELINE_RELEASE_SHA="${2:-}" bash "$SCRIPT_PATH" env update "$1" "${args[@]}" || rc=$?
+    update_failed_record "$1" "$rc"
+    return "$rc"
 }
 cmd_env_pipeline() { pipeline_locked "$1" pipeline_run "$@"; }
 pipeline_run() {

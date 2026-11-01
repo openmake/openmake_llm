@@ -929,6 +929,10 @@ cmd_env_smoke() { # env [--report]
 status_context()   { printf 'omk/env-%s' "$1"; }
 status_marker()    { printf '%s/.omk-status' "$(env_dir "$1")"; }   # 마지막으로 붙인 "<커밋> <결과>"
 update_failed_marker() { printf '%s/.omk-update-failed' "$(env_dir "$1")"; }   # 지난 갱신이 실패했다는 표시
+update_retry_pending() { [[ -f "$(update_failed_marker "$1")" ]]; }   # 지난 갱신이 실패했나 — 그러면 --redeploy 로 다시 갱신
+update_failed_record() { # $1=env $2=갱신 종료 코드 — 실패면 기억하고, 성공이면 지운다(env_update_report·파이프라인 공용)
+    if [[ $2 -ne 0 ]]; then : > "$(update_failed_marker "$1")"; else rm -f "$(update_failed_marker "$1")"; fi
+}
 status_repo_slug() { # $1=dir → owner/repo
     git -C "$1" remote get-url origin 2>/dev/null | sed -E 's#^(https?://[^/]+/|ssh://[^/]+/|[^@/]+@[^:/]+:)##; s#\.git$##'
 }
@@ -964,7 +968,7 @@ env_update_report() { # env [update 인자…]
     # pull 은 됐는데 빌드가 실패한 커밋은 HEAD 가 이미 원격과 같다 — 다음 주기에 --if-behind 를 그대로 두면 갱신 없이
     # 예전 빌드본을 스모크해 그 커밋에 통과를 붙인다. 지난 갱신이 실패했으면 건너뛰지 않고 다시 갱신하고,
     # --redeploy 로 "이미 최신이라 deploy 생략" 도 막는다(빼면 하위 update 가 HEAD 가 같다며 0 을 돌려 예전 빌드가 통과로 기록된다).
-    [[ ! -f "$(update_failed_marker "$env")" ]] || retry=1
+    ! update_retry_pending "$env" || retry=1
     for a in "$@"; do
         if [[ "$a" == --report ]] || [[ $retry -eq 1 && "$a" == --if-behind ]]; then continue; fi
         args+=("$a")
@@ -975,12 +979,11 @@ env_update_report() { # env [update 인자…]
     ( set -e; cmd_env_update "$env" ${args[@]+"${args[@]}"} ); rc=$?
     [[ $had_e -eq 0 ]] || set -e
     sha="$(git -C "$ldir" rev-parse HEAD)"
+    update_failed_record "$env" "$rc"
     if [[ $rc -ne 0 ]]; then
-        : > "$(update_failed_marker "$env")"
         status_report "$env" "$(git -C "$ldir" rev-parse --verify -q '@{u}' || printf '%s' "$sha")" failure "update 실패 (종료 코드 $rc)" || true
         return "$rc"
     fi
-    rm -f "$(update_failed_marker "$env")"
     [[ "$(cat "$(status_marker "$env")" 2>/dev/null)" != "$sha success" ]] || return 0   # 이미 통과를 기록한 커밋
     cmd_env_smoke "$env" --report
 }
