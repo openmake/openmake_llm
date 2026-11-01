@@ -1,5 +1,6 @@
 /**
- * Knowledge 관리자 서비스 — 상태·프로필·재색인·재청킹. 라우트에서 관리자 게이트 뒤에만 호출한다.
+ * Knowledge 관리자 서비스 — 상태(색인 카탈로그)·프로필·재청킹. 라우트에서 관리자 게이트 뒤에만 호출한다.
+ * 재색인은 관리자 전역이 아니라 공간 쓰기 권한자가 공간 단위로 한다(embedding/space-reindex — 요청자 키로 임베딩).
  *
  * @module addons/knowledge-runtime/admin/service
  */
@@ -11,27 +12,29 @@ import { clearProfileCache } from '../config/profiles';
 import { PROFILE_CONFIG_SCHEMAS } from '../schemas';
 import type { KnowledgeAdminStatus, KnowledgeProfile } from '@openmake/shared-types';
 import { getCapabilities, pgvectorVersion } from '../capabilities';
+import { assertSpaceEmbeddingReady, type SpaceEmbeddingRow } from '../embedding/readiness';
 
-export async function getAdminStatus(): Promise<KnowledgeAdminStatus> {
+/** 관리자 상태 — capabilities 는 요청한 관리자 기준, 색인 카탈로그는 모델·차원·상태와 그 색인을 쓰는(미삭제) 공간 수 */
+export async function getAdminStatus(userId: string): Promise<KnowledgeAdminStatus> {
     const idx = await kdb().query<{
         id: string; provider_ref: string; model_id: string; dimension: number;
-        distance_metric: string; status: string; activated_at: string | null;
-    }>(`SELECT id, provider_ref, model_id, dimension, distance_metric, status, activated_at
-        FROM knowledge_embedding_indexes WHERE is_active = TRUE LIMIT 1`);
+        distance_metric: string; status: string; created_at: Date | string; space_count: string;
+    }>(`SELECT i.id, i.provider_ref, i.model_id, i.dimension, i.distance_metric, i.status, i.created_at,
+               (SELECT COUNT(*) FROM knowledge_spaces s WHERE s.embedding_index_id = i.id AND s.deleted_at IS NULL)::text AS space_count
+          FROM knowledge_embedding_indexes i
+         ORDER BY i.created_at DESC`);
     const jobs = await kdb().query<{ state: string; n: string }>(
         `SELECT state, COUNT(*)::text AS n FROM knowledge_ingestion_jobs GROUP BY state`,
     );
     const jobCounts: Record<string, number> = {};
     for (const r of jobs.rows) jobCounts[r.state] = parseInt(r.n, 10);
-    const row = idx.rows[0];
     return {
-        capabilities: await getCapabilities(),
-        embeddingIndex: row
-            ? {
-                id: row.id, providerRef: row.provider_ref, modelId: row.model_id, dimension: row.dimension,
-                distanceMetric: row.distance_metric, status: row.status, activatedAt: row.activated_at,
-            }
-            : null,
+        capabilities: await getCapabilities(userId),
+        embeddingIndexes: idx.rows.map((row) => ({
+            id: row.id, providerRef: row.provider_ref, modelId: row.model_id, dimension: row.dimension,
+            distanceMetric: row.distance_metric, status: row.status, spaceCount: parseInt(row.space_count, 10),
+            createdAt: new Date(row.created_at).toISOString(),
+        })),
         jobCounts,
         pgvectorVersion: await pgvectorVersion().catch(() => null),
     };
@@ -74,12 +77,16 @@ export async function updateProfile(id: string, body: { name?: string; config: R
     return toProfile(r.rows[0]);
 }
 
-/** 관리자 재청킹 — 존재하는(미삭제) Space 만. 청크 정책 변경은 재수집이므로 rechunk 작업을 큐잉(접수 주체는 그 관리자). */
+/**
+ * 관리자 재청킹 — 존재하는(미삭제) Space 만. 청크 정책 변경은 재수집이므로 rechunk 작업을 큐잉(접수 주체는 그 관리자).
+ * 재수집은 공간 색인 모델을 요청한 관리자의 키로 임베딩한다 — 지금 쓸 수 없으면 작업 전에 412(업로드·재시도와 같은 선검사).
+ */
 export async function rechunkSpace(spaceId: string, requestedBy: string): Promise<void> {
-    const exists = await kdb().query(
-        `SELECT 1 FROM knowledge_spaces WHERE id = $1 AND deleted_at IS NULL`,
+    const space = (await kdb().query<SpaceEmbeddingRow>(
+        `SELECT id, embedding_index_id FROM knowledge_spaces WHERE id = $1 AND deleted_at IS NULL`,
         [spaceId],
-    );
-    if ((exists.rowCount ?? 0) === 0) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
+    )).rows[0];
+    if (!space) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
+    await assertSpaceEmbeddingReady(space, requestedBy);
     await enqueueJob({ kind: 'rechunk', spaceId, actor: userJobActor(requestedBy) });
 }

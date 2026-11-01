@@ -32,7 +32,7 @@ describeOrSkip('knowledge 마이그레이션 005 (실 DB)', () => {
     const spaceId = `test-space-${randomUUID()}`;
     const docIds = {} as Record<SeedKey, string>;
     const versionIds = {} as Record<SeedKey, string>;
-    let unlock: () => Promise<void>;
+    let unlock: (() => Promise<void>) | undefined;
 
     const readRows = async () => {
         const docs = await pool.query<{ id: string; logical_name: string; xmin: string }>(
@@ -67,7 +67,7 @@ describeOrSkip('knowledge 마이그레이션 005 (실 DB)', () => {
         await pool.query('DELETE FROM knowledge_document_versions WHERE id = ANY($1::text[])', [Object.values(versionIds)]);
         await pool.query('DELETE FROM knowledge_documents WHERE id = ANY($1::text[])', [Object.values(docIds)]);
         await pool.query('DELETE FROM knowledge_spaces WHERE id = $1', [spaceId]);
-        await unlock();
+        await unlock?.();
         await pool.end();
     });
 

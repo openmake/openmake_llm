@@ -1,7 +1,8 @@
 /**
- * 배선 테스트 — retrieve·수집·reindex 가 어느 임베더를 고르는지 검증한다(DB 는 mock).
- * - retrieve/수집: 활성 index 의 모델(makeIndexEmbedder(index)) — 라이브 embedTexts 아님
- * - reindex: startReindex 가 라이브 배정을 building index 에 기록하고, runReindexJob 은 그 index 모델로 임베딩
+ * 수집 배선 테스트 — ingestVersion 이 어느 색인·어느 키로 임베딩하는지 검증한다(DB 는 mock).
+ * - 공간 색인(ensureIndex(spaceId, actorUserId)) + 행위자 키(makeIndexEmbedder(index, { userId }))
+ * - 게시 검사는 공간 포인터(knowledge_spaces.embedding_index_id)를 본다 — 전역 is_active 가 아니다
+ * - 임베딩 실패 사유 → 실패 코드: key_missing·unassigned → EMBEDDING_KEY_MISSING, key_rejected → EMBEDDING_KEY_REJECTED, 그 밖 FAILED_EMBEDDING
  */
 const mockQuery = jest.fn();
 
@@ -9,11 +10,14 @@ jest.mock('../db', () => ({
     kdb: () => ({ query: (...a: unknown[]) => mockQuery(...a), connect: async () => ({ query: (...a: unknown[]) => mockQuery(...a), release() { /* noop */ } }) }),
     inTransaction: async (fn: (c: { query: (...a: unknown[]) => unknown }) => unknown) => fn({ query: (...a: unknown[]) => mockQuery(...a) }),
 }));
-jest.mock('../embedding/provider', () => ({
-    makeIndexEmbedder: jest.fn(),
-    embedTexts: jest.fn(),
-    describeEmbeddingProvider: jest.fn(),
-}));
+jest.mock('../embedding/provider', () => {
+    class EmbeddingError extends Error { constructor(public readonly reason: string, m: string) { super(m); } }
+    return {
+        EmbeddingError,
+        makeIndexEmbedder: jest.fn(),
+        classifyEmbedError: (e: unknown) => (e instanceof EmbeddingError ? e.reason : 'provider'),
+    };
+});
 jest.mock('../config/profiles', () => ({
     getDefaultLimits: jest.fn(async () => ({ allowedMimeTypes: ['text/plain'], maxFileBytes: 1_000_000, minCharsPerPdfPage: 1, embedBatchSize: 16 })),
     resolveSpaceProfiles: jest.fn(async () => ({
@@ -23,122 +27,82 @@ jest.mock('../config/profiles', () => ({
     })),
     applyRetrievalOverride: (p: unknown) => p,
 }));
-jest.mock('../retrieval/search', () => ({ searchChunks: jest.fn(async () => []) }));
-jest.mock('../jobs/queue', () => ({ enqueueJob: jest.fn() }));
 
-import { retrieve } from '../retrieval/service';
 import { ingestVersion } from '../ingestion/pipeline';
-import { startReindex, runReindexJob, type KnowledgeIndex } from '../embedding/index-manager';
-import { enqueueJob } from '../jobs/queue';
-import { userJobActor } from '../jobs/actor';
-import { makeIndexEmbedder, embedTexts, describeEmbeddingProvider } from '../embedding/provider';
-import type { KnowledgeActor } from '../config/scope-policy';
+import type { KnowledgeIndex } from '../embedding/index-catalog';
+import { makeIndexEmbedder, EmbeddingError } from '../embedding/provider';
 
 const mockMakeIndexEmbedder = makeIndexEmbedder as jest.Mock;
-const mockEmbedTexts = embedTexts as jest.Mock;
-const mockDescribe = describeEmbeddingProvider as jest.Mock;
 
-const actor: KnowledgeActor = { userId: 'u1', activeOrg: null, orgWriteRoles: [] };
-
-function activeIndex(over: Partial<KnowledgeIndex> = {}): KnowledgeIndex {
-    return { id: 'idx-1', providerRef: 'local-llm:idx-model', modelId: 'idx-model', dimension: 2, metric: 'cosine', status: 'ready', isActive: true, ...over };
+function spaceIndex(over: Partial<KnowledgeIndex> = {}): KnowledgeIndex {
+    return { id: 'idx-1', providerRef: 'gemini:emb-1', modelId: 'gemini/emb-1', dimension: 2, metric: 'cosine', status: 'ready', requestParams: {}, ...over };
 }
+
+/** 공간 포인터가 pointer 를 가리키는 수집 DB 응답 */
+function respond(pointer: string): void {
+    mockQuery.mockImplementation(async (sql: string) => {
+        if (/v\.storage_ref/.test(sql)) {
+            return { rows: [{ id: 'v1', document_id: 'd1', storage_ref: 'ref', mime_type: 'text/plain', source_size: '11', space_id: 's1', config_profile_id: null }] };
+        }
+        if (/SELECT id, content FROM knowledge_chunks WHERE document_version_id/.test(sql)) return { rows: [{ id: 'ch1', content: 'hello world' }] };
+        if (/COUNT\(\*\)::text AS n FROM knowledge_chunk_embeddings/.test(sql)) return { rows: [{ n: '1' }] };
+        if (/SELECT embedding_index_id FROM knowledge_spaces WHERE id = \$1/.test(sql)) return { rows: [{ embedding_index_id: pointer }] };
+        return { rows: [] };
+    });
+}
+
+const versionFailure = () => mockQuery.mock.calls.find((c) => /SET status = 'failed', failure_code/.test(String(c[0])))?.[1]?.[1];
 
 beforeEach(() => {
     jest.clearAllMocks();
-    mockQuery.mockResolvedValue({ rows: [] });
+    respond('idx-1');
 });
 
-describe('retrieve — 활성 index 모델로 질의 임베딩', () => {
-    it('라이브 배정이 바뀌어도 makeIndexEmbedder(activeIndex) 를 쓰고 embedTexts 는 쓰지 않는다', async () => {
+describe('ingestVersion — 공간 색인·행위자 키', () => {
+    it('ensureIndex(spaceId, actorUserId) 의 색인을 행위자 키로 임베딩하고 공간 포인터를 보고 게시한다', async () => {
+        const index = spaceIndex();
         const embedder = jest.fn(async (t: string[]) => t.map(() => [0.1, 0.2]));
         mockMakeIndexEmbedder.mockReturnValue(embedder);
-        const index = activeIndex();
+        const ensureIndex = jest.fn(async () => index);
 
-        await retrieve(
-            { actor, spaceIds: ['s1'], query: 'q', sourceOffset: 0, userLang: 'en' },
-            { getActiveIndex: async () => index },
-        );
-
-        expect(mockMakeIndexEmbedder).toHaveBeenCalledWith(index);
-        expect(embedder).toHaveBeenCalledWith(['q']);
-        expect(mockEmbedTexts).not.toHaveBeenCalled();
-    });
-});
-
-describe('ingestVersion — 활성 index 모델로 청크 임베딩', () => {
-    it('makeIndexEmbedder(ensuredIndex) 로 임베딩하고 embedTexts 는 쓰지 않는다', async () => {
-        const index = activeIndex();
-        const embedder = jest.fn(async (t: string[]) => t.map(() => [0.1, 0.2]));
-        mockMakeIndexEmbedder.mockReturnValue(embedder);
-
-        mockQuery.mockImplementation(async (sql: string) => {
-            if (/v\.storage_ref/.test(sql)) {
-                return { rows: [{ id: 'v1', document_id: 'd1', storage_ref: 'ref', mime_type: 'text/plain', source_size: '11', space_id: 's1', config_profile_id: null }] };
-            }
-            if (/SELECT id, content FROM knowledge_chunks WHERE document_version_id/.test(sql)) {
-                return { rows: [{ id: 'ch1', content: 'hello world' }] };
-            }
-            if (/COUNT\(\*\)::text AS n FROM knowledge_chunk_embeddings/.test(sql)) return { rows: [{ n: '1' }] };
-            if (/SELECT id FROM knowledge_embedding_indexes WHERE is_active/.test(sql)) return { rows: [{ id: index.id }] };
-            return { rows: [] };
-        });
-
-        const res = await ingestVersion('v1', {
-            ensureIndex: async () => index,
-            readFile: async () => Buffer.from('hello world'),
-        });
+        const res = await ingestVersion('v1', { ensureIndex, actorUserId: 'u1', readFile: async () => Buffer.from('hello world') });
 
         expect(res.status).toBe('ready');
-        expect(mockMakeIndexEmbedder).toHaveBeenCalledWith(index);
+        expect(ensureIndex).toHaveBeenCalledWith('s1', 'u1');
+        expect(mockMakeIndexEmbedder).toHaveBeenCalledWith(index, { userId: 'u1' }, { spaceId: 's1' });
         expect(embedder).toHaveBeenCalledTimes(1);
-        expect(mockEmbedTexts).not.toHaveBeenCalled();
-    });
-});
-
-describe('reindex — 라이브 배정으로', () => {
-    it('startReindex 는 라이브 배정(describeEmbeddingProvider)을 building index 에 기록한다', async () => {
-        mockDescribe.mockResolvedValue({ providerRef: 'local-llm:new-model', modelId: 'new-model', dimension: 3 });
-
-        await startReindex(userJobActor('admin-1'));
-        expect(enqueueJob).toHaveBeenCalledWith(
-            expect.objectContaining({ kind: 'reindex', actor: { kind: 'user', userId: 'admin-1', orgId: null } }),
-            expect.anything(),
-        );
-
-        const insert = mockQuery.mock.calls.find((c) => /INSERT INTO knowledge_embedding_indexes/.test(String(c[0])));
-        expect(insert).toBeDefined();
-        // params: [id, provider_ref, model_id, dimension, metric]
-        expect(insert![1][1]).toBe('local-llm:new-model');
-        expect(insert![1][2]).toBe('new-model');
-        expect(mockDescribe).toHaveBeenCalled();
+        expect(mockQuery.mock.calls.some((c) => /WHERE is_active/.test(String(c[0])))).toBe(false);
     });
 
-    it('runReindexJob 은 building index 의 (라이브에서 기록된) 모델로 임베딩한다', async () => {
-        const embedder = jest.fn(async (t: string[]) => t.map(() => [0.1, 0.2, 0.3]));
-        mockMakeIndexEmbedder.mockReturnValue(embedder);
-        let batchServed = false;
+    it('게시 직전 공간 색인이 바뀌었으면(재색인 전환) 새 색인으로 다시 임베딩한다', async () => {
+        const indexes = [spaceIndex({ id: 'old' }), spaceIndex({ id: 'new' })];
+        let n = 0;
+        const ensureIndex = jest.fn(async () => indexes[Math.min(n++, 1)]);
+        mockMakeIndexEmbedder.mockReturnValue(async (t: string[]) => t.map(() => [0.1, 0.2]));
+        respond('new');
 
-        mockQuery.mockImplementation(async (sql: string) => {
-            if (/knowledge_embedding_indexes WHERE id = \$1/.test(sql)) {
-                return { rows: [{ id: 'bi', provider_ref: 'local-llm:new-model', model_id: 'new-model', dimension: 3, distance_metric: 'cosine', status: 'building', is_active: false }] };
-            }
-            if (/COUNT\(\*\)::text AS n FROM knowledge_chunk_embeddings/.test(sql)) return { rows: [{ n: '1' }] }; // got
-            if (/COUNT\(\*\)::text AS n/.test(sql) && /NOT EXISTS/.test(sql)) return { rows: [{ n: '0' }] }; // 전환 직전 missing
-            if (/COUNT\(\*\)::text AS n/.test(sql)) return { rows: [{ n: '1' }] }; // expected
-            if (/LIMIT \$2/.test(sql)) {
-                if (!batchServed) { batchServed = true; return { rows: [{ id: 'ch1', content: 'x' }] }; }
-                return { rows: [] };
-            }
-            return { rows: [] };
-        });
+        const res = await ingestVersion('v1', { ensureIndex, actorUserId: 'u1', readFile: async () => Buffer.from('hello world') });
 
-        await runReindexJob('bi');
+        expect(res.status).toBe('ready');
+        expect(ensureIndex).toHaveBeenCalledTimes(2);
+    });
 
-        expect(mockMakeIndexEmbedder).toHaveBeenCalledWith(
-            expect.objectContaining({ providerRef: 'local-llm:new-model', modelId: 'new-model', dimension: 3 }),
-        );
-        expect(embedder).toHaveBeenCalled();
-        expect(mockEmbedTexts).not.toHaveBeenCalled();
+    it.each([
+        ['key_missing', 'EMBEDDING_KEY_MISSING'],
+        ['unassigned', 'EMBEDDING_KEY_MISSING'],
+        ['key_rejected', 'EMBEDDING_KEY_REJECTED'],
+        ['provider', 'FAILED_EMBEDDING'],
+    ])('임베딩 실패 사유 %s → 버전 failed %s', async (reason, code) => {
+        mockMakeIndexEmbedder.mockReturnValue(async () => { throw new EmbeddingError(reason as never, '실패'); });
+        const res = await ingestVersion('v1', { ensureIndex: async () => spaceIndex(), actorUserId: 'u1', readFile: async () => Buffer.from('hello world') });
+        expect(res).toEqual({ status: 'failed', failureCode: code });
+        expect(versionFailure()).toBe(code);
+    });
+
+    it('색인 고정 단계의 키 문제(행위자 없음 + 외부 라이브 배정)도 EMBEDDING_KEY_MISSING', async () => {
+        const ensureIndex = jest.fn(async () => { throw new EmbeddingError('key_missing', '사용자 문맥 없이 외부 모델 불가'); });
+        const res = await ingestVersion('v1', { ensureIndex, readFile: async () => Buffer.from('hello world') });
+        expect(res).toEqual({ status: 'failed', failureCode: 'EMBEDDING_KEY_MISSING' });
+        expect(ensureIndex).toHaveBeenCalledWith('s1', undefined);
     });
 });

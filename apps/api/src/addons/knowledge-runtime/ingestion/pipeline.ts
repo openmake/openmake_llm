@@ -1,9 +1,10 @@
 /**
  * 수집 파이프라인 상태머신 — uploaded→validating→extracting→chunking→embedding→verifying→ready | failed.
  *
- * 원자 게시: 청크·임베딩을 쓰고 **개수 검증**(활성 index 의 임베딩 수 == 청크 수)한 뒤에야
+ * 원자 게시: 청크·임베딩을 쓰고 **개수 검증**(공간 색인의 임베딩 수 == 청크 수)한 뒤에야
  * 한 트랜잭션에서 version.status='ready' + document.current_version_id/status='ready' 로 올린다.
- * 부분 임베딩 성공은 절대 검색되지 않는다(검색은 v.status='ready' + 현재 버전 + 활성 index 를 함께 요구).
+ * 부분 임베딩 성공은 절대 검색되지 않는다(검색은 v.status='ready' + 현재 버전 + 공간 색인을 함께 요구).
+ * 임베딩은 공간에 고정된 색인의 모델로, 작업 행위자(actor_user_id)의 키로 한다 — 키 문제는 재시도하지 않는 실패 코드로 남긴다.
  * 재시작·재시도 안전: 재수집은 먼저 그 버전의 기존 청크를 (cascade) 지우므로 UNIQUE(version, sequence)가 중복 0 을 보장한다.
  *
  * @module addons/knowledge-runtime/ingestion/pipeline
@@ -12,8 +13,8 @@ import { randomUUID } from 'node:crypto';
 import { createLogger } from '../../../utils/logger';
 import { kdb, inTransaction } from '../db';
 import { resolveSpaceProfiles } from '../config/profiles';
-import { countEmbeddings, ensureActiveIndex, insertEmbeddings, type KnowledgeIndex } from '../embedding/index-manager';
-import { makeIndexEmbedder, type EmbedFn } from '../embedding/provider';
+import { countEmbeddings, ensureSpaceIndex, insertEmbeddings, type KnowledgeIndex } from '../embedding/index-catalog';
+import { classifyEmbedError, makeIndexEmbedder, type EmbedFn, type EmbeddingFailureReason } from '../embedding/provider';
 import { readStoredFile } from '../documents/storage';
 import { chunkerFor, type ProducedChunk } from './chunker-registry';
 import { parserFor, supportedMimeTypes } from './parser-registry';
@@ -36,12 +37,22 @@ const STAGE = {
 } as const;
 type Stage = keyof typeof STAGE;
 
+/** 임베딩 실패 사유 → 실패 코드(Record 룩업). 키 코드 둘은 worker 의 재시도 대상(RETRYABLE_FAILURES)이 아니다 */
+const EMBED_FAILURE: Readonly<Record<EmbeddingFailureReason, FailureCode>> = {
+    unassigned: FAILURE_CODES.EMBEDDING_KEY_MISSING,
+    key_missing: FAILURE_CODES.EMBEDDING_KEY_MISSING,
+    key_rejected: FAILURE_CODES.EMBEDDING_KEY_REJECTED,
+    provider: FAILURE_CODES.EMBEDDING,
+};
+
 export interface IngestDeps {
     embed?: EmbedFn;
-    ensureIndex?: () => Promise<KnowledgeIndex>;
+    ensureIndex?: (spaceId: string, actorUserId: string | undefined) => Promise<KnowledgeIndex>;
     readFile?: (storageRef: string) => Promise<Buffer>;
     /** worker 가 넘기는 lease — 단계 경계·확정 쓰기에서 검사한다. 없으면(평가 하네스 직접 호출) 검사하지 않는다 */
     lease?: JobLease;
+    /** 작업 행위자(업로드·재시도한 사용자) — 외부 임베딩은 이 사용자의 키로만 돈다. 없으면(시스템 작업) 로컬 모델만 */
+    actorUserId?: string;
 }
 
 export interface IngestResult {
@@ -136,7 +147,7 @@ async function replaceChunks(versionId: string, chunks: ProducedChunk[], lease: 
  */
 export async function ingestVersion(versionId: string, deps: IngestDeps = {}): Promise<IngestResult> {
     const embedOverride = deps.embed;
-    const ensureIndex = deps.ensureIndex ?? ensureActiveIndex;
+    const ensureIndex = deps.ensureIndex ?? ensureSpaceIndex;
     const readFile = deps.readFile ?? readStoredFile;
     let stage: Stage = 'validating';
     try {
@@ -183,20 +194,28 @@ export async function ingestVersion(versionId: string, deps: IngestDeps = {}): P
         });
         await replaceChunks(versionId, chunks, deps.lease);
 
-        // 임베딩→검증→게시 — 게시 직전 활성 index 가 바뀌었으면(동시 reindex 전환) 새 index 로 다시 한다
+        // 임베딩→검증→게시 — 게시 직전 공간 색인이 바뀌었으면(동시 공간 재색인 전환) 새 색인으로 다시 한다
         for (let attempt = 0; ; attempt++) {
             // ── embedding ──
             deps.lease?.throwIfLost();
             stage = 'embedding';
             await setStage(versionId, stage, deps.lease);
-            const index = await ensureIndex();
-            // 활성 index 에 넣을 벡터는 그 index 에 기록된 모델로 임베딩한다(라이브 배정 변경이 활성 index 를 오염시키지 않게).
-            const embed = embedOverride ?? makeIndexEmbedder(index);
             const chunkRows = (await kdb().query<{ id: string; content: string }>(
                 `SELECT id, content FROM knowledge_chunks WHERE document_version_id = $1 ORDER BY sequence`,
                 [versionId],
             )).rows;
-            const vectors = chunkRows.length > 0 ? await embed(chunkRows.map((r) => r.content)) : [];
+            let index: KnowledgeIndex;
+            let vectors: number[][];
+            try {
+                // 공간 색인(비었으면 행위자의 라이브 배정으로 고정)에 넣을 벡터는 그 색인에 기록된 모델·행위자 키로 임베딩한다
+                index = await ensureIndex(ctx.spaceId, deps.actorUserId);
+                const embed = embedOverride ?? makeIndexEmbedder(index, { userId: deps.actorUserId }, { spaceId: ctx.spaceId });
+                vectors = chunkRows.length > 0 ? await embed(chunkRows.map((r) => r.content)) : [];
+            } catch (err) {
+                if (err instanceof LeaseLostError) throw err;
+                const code = EMBED_FAILURE[classifyEmbedError(err)];
+                throw new KnowledgeIngestError(code, err instanceof Error ? err.message : String(err));
+            }
             if (vectors.length !== chunkRows.length) {
                 throw new KnowledgeIngestError(FAILURE_CODES.EMBEDDING, `임베딩 개수 불일치 (${vectors.length} vs ${chunkRows.length})`);
             }
@@ -216,12 +235,14 @@ export async function ingestVersion(versionId: string, deps: IngestDeps = {}): P
                 throw new KnowledgeIngestError(FAILURE_CODES.VERIFICATION, `임베딩 검증 실패 (${embedded}/${chunkRows.length})`);
             }
 
-            // ── 원자 게시 ── index 전환과 같은 잠금 아래에서, 임베딩한 index 가 여전히 활성일 때만 ready 로 바꾼다
+            // ── 원자 게시 ── 공간 색인 전환과 같은 잠금 아래에서, 임베딩한 색인이 여전히 공간의 색인일 때만 ready 로 바꾼다
             const published = await inTransaction(async (client) => {
                 await assertLeaseHeld(client, deps.lease);
                 await client.query('SELECT pg_advisory_xact_lock($1)', [INDEX_PUBLISH_LOCK_KEY]);
-                const active = await client.query<{ id: string }>('SELECT id FROM knowledge_embedding_indexes WHERE is_active');
-                if (active.rows[0]?.id !== index.id) return false;
+                const pinned = await client.query<{ embedding_index_id: string | null }>(
+                    'SELECT embedding_index_id FROM knowledge_spaces WHERE id = $1', [ctx.spaceId],
+                );
+                if (pinned.rows[0]?.embedding_index_id !== index.id) return false;
                 await client.query(
                     `UPDATE knowledge_document_versions SET status = 'ready', chunker_profile_id = $2, progress = 100, failure_code = NULL, updated_at = NOW() WHERE id = $1`,
                     [versionId, profiles.chunker.id],
@@ -237,9 +258,9 @@ export async function ingestVersion(versionId: string, deps: IngestDeps = {}): P
                 return { status: 'ready', chunkCount: chunkRows.length };
             }
             if (attempt >= KNOWLEDGE_RUNTIME.PUBLISH_INDEX_SWITCH_RETRIES) {
-                throw new KnowledgeIngestError(FAILURE_CODES.VERIFICATION, `게시 중 활성 index 가 계속 바뀜(${attempt + 1}회)`);
+                throw new KnowledgeIngestError(FAILURE_CODES.VERIFICATION, `게시 중 공간 색인이 계속 바뀜(${attempt + 1}회)`);
             }
-            logger.info(`게시 직전 활성 index 변경 감지 — 새 index 로 다시 임베딩: version=${versionId}`);
+            logger.info(`게시 직전 공간 색인 변경 감지 — 새 색인으로 다시 임베딩: version=${versionId}`);
         }
     } catch (err) {
         // lease 를 잃은 실행자는 상태를 쓰지 않는다 — 행·버전은 새 실행자의 것(worker 가 받아 로그만 남긴다)

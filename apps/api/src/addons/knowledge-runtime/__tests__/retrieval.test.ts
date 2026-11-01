@@ -1,12 +1,31 @@
 /**
  * 검색 컨텍스트·인용 단위 테스트 — DB 불필요. 번호 연속성·예산 절단·근거 없음 처리를 검증한다.
+ * retrieve: 공간 색인으로·검색한 사용자의 키로 질의 임베딩, 키 문제는 "검색 불가" 안내 블록(출처 0), 429·5xx 는 throw.
  */
+jest.mock('../config/profiles', () => ({
+    resolveSpaceProfiles: async () => ({ retrieval: { id: 'r', topK: 5, candidateCount: 10, minSimilarity: 0, maxContextChars: 5000, maxTopK: 10 } }),
+    applyRetrievalOverride: (p: unknown) => p,
+}));
+jest.mock('../retrieval/search', () => ({ searchChunks: jest.fn(async () => []) }));
+jest.mock('../embedding/provider', () => ({
+    ...jest.requireActual('../embedding/provider'),
+    makeIndexEmbedder: jest.fn(),
+}));
+
 import { buildKnowledgeContext } from '../retrieval/context-builder';
 import { buildSource, pageLabel, chunkUrl } from '../retrieval/citation';
 import { retrieve } from '../retrieval/service';
 import { EVIDENCE_TAG } from '../prompts';
 import type { SearchHit } from '../retrieval/search';
 import type { KnowledgeActor } from '../config/scope-policy';
+import type { KnowledgeIndex } from '../embedding/index-catalog';
+import { EmbeddingError, makeIndexEmbedder } from '../embedding/provider';
+import { HttpCallError } from '../../../services/orchestrator/http-call';
+
+const mockMakeIndexEmbedder = makeIndexEmbedder as jest.Mock;
+const spaceIndex = (over: Partial<KnowledgeIndex> = {}): KnowledgeIndex => ({
+    id: 'i', providerRef: 'gemini:emb-1', modelId: 'gemini/emb-1', dimension: 2, metric: 'cosine', status: 'ready', requestParams: {}, ...over,
+});
 
 function hit(over: Partial<SearchHit>): SearchHit {
     return {
@@ -55,10 +74,10 @@ describe('buildKnowledgeContext', () => {
 });
 
 describe('retrieve (근거 없음 경로)', () => {
-    it('활성 index 가 없으면 "관련 자료 없음" 블록·출처 0', async () => {
+    it('공간 색인이 없으면(문서 없는 새 공간) "관련 자료 없음" 블록·출처 0', async () => {
         const res = await retrieve(
             { actor, spaceIds: ['s1'], query: 'q', sourceOffset: 0, userLang: 'en' },
-            { embed: async (t) => t.map(() => [1, 0]), getActiveIndex: async () => null },
+            { embed: async (t) => t.map(() => [1, 0]), getSpaceIndex: async () => null },
         );
         expect(res.hadEvidence).toBe(false);
         expect(res.sources).toHaveLength(0);
@@ -69,9 +88,51 @@ describe('retrieve (근거 없음 경로)', () => {
         const embed = jest.fn(async (t: string[]) => t.map(() => [1, 0]));
         const res = await retrieve(
             { actor, spaceIds: [], query: 'q', sourceOffset: 0, userLang: 'en' },
-            { embed, getActiveIndex: async () => ({ id: 'i', providerRef: 'x', modelId: 'm', dimension: 2, metric: 'cosine', status: 'ready', isActive: true }) },
+            { embed, getSpaceIndex: async () => spaceIndex() },
         );
         expect(res.hadEvidence).toBe(false);
         expect(embed).not.toHaveBeenCalled();
+    });
+});
+
+describe('retrieve (공간 색인·검색한 사용자의 키)', () => {
+    beforeEach(() => mockMakeIndexEmbedder.mockReset());
+
+    it('공간 색인 모델을 검색한 사용자의 키로 임베딩한다', async () => {
+        const embedder = jest.fn(async (t: string[]) => t.map(() => [1, 0]));
+        mockMakeIndexEmbedder.mockReturnValue(embedder);
+        const index = spaceIndex();
+        const getSpaceIndex = jest.fn(async () => index);
+        await retrieve({ actor, spaceIds: ['s1'], query: 'q', sourceOffset: 0, userLang: 'en' }, { getSpaceIndex });
+        expect(getSpaceIndex).toHaveBeenCalledWith('s1');
+        expect(mockMakeIndexEmbedder).toHaveBeenCalledWith(index, { userId: 'u1' }, { spaceId: 's1' });
+        expect(embedder).toHaveBeenCalledWith(['q']);
+    });
+
+    it.each([
+        ['key_missing', /키|key/i],
+        ['key_rejected', /교체|replace/i],
+    ])('%s → "검색할 수 없었다" 안내 블록·출처 0·hadEvidence false (관련 자료 없음으로 위장하지 않는다)', async (reason, pattern) => {
+        const embed = async () => { throw new EmbeddingError(reason as 'key_missing', '키 문제'); };
+        for (const lang of ['ko', 'en']) {
+            const res = await retrieve({ actor, spaceIds: ['s1'], query: 'q', sourceOffset: 0, userLang: lang }, { embed, getSpaceIndex: async () => spaceIndex() });
+            expect(res).toMatchObject({ sources: [], hadEvidence: false, unavailableReason: reason });
+            expect(res.contextBlock).toMatch(pattern);
+            expect(res.contextBlock).toContain('gemini');
+            const noEvidence = await retrieve({ actor, spaceIds: ['s1'], query: 'q', sourceOffset: 0, userLang: lang }, { embed: async (t) => t.map(() => [1, 0]), getSpaceIndex: async () => null });
+            expect(res.contextBlock).not.toBe(noEvidence.contextBlock);
+        }
+    });
+
+    it('429·5xx 는 throw — Base 가 이 통합만 건너뛴다(채팅은 계속)', async () => {
+        const embed = async () => { throw new HttpCallError('429 Too Many Requests', 429); };
+        await expect(retrieve({ actor, spaceIds: ['s1'], query: 'q', sourceOffset: 0, userLang: 'en' }, { embed, getSpaceIndex: async () => spaceIndex() }))
+            .rejects.toThrow(/429/);
+    });
+
+    it('여러 공간의 색인이 다르면 throw(한 질의 벡터로 섞어 검색하지 않는다)', async () => {
+        const getSpaceIndex = async (id: string) => spaceIndex({ id: `i-${id}` });
+        await expect(retrieve({ actor, spaceIds: ['a', 'b'], query: 'q', sourceOffset: 0, userLang: 'en' }, { embed: async (t) => t.map(() => [1, 0]), getSpaceIndex }))
+            .rejects.toThrow(/색인/);
     });
 });

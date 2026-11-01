@@ -22,8 +22,7 @@ import * as binding from './conversations/binding-service';
 import { getChunkPreview } from './preview';
 import { getCapabilities } from './capabilities';
 import * as admin from './admin/service';
-import { startReindex } from './embedding/index-manager';
-import { userJobActor } from './jobs/actor';
+import { requestSpaceReindex } from './embedding/space-reindex';
 
 /** Zod 파싱 — 실패하면 ValidationError(400). 첫 이슈 메시지를 사람이 읽게 붙인다. */
 function parse<T>(schema: ZodTypeAny, data: unknown): T {
@@ -51,9 +50,9 @@ function uploadMiddleware(req: Request, res: Response, next: NextFunction): void
 
 export const knowledgeRouter = Router();
 
-// ── Capabilities ──
-knowledgeRouter.get('/capabilities', requireAuth, asyncHandler(async (_req, res) => {
-    res.json(success(await getCapabilities()));
+// ── Capabilities (요청 사용자의 실효 임베딩 기준) ──
+knowledgeRouter.get('/capabilities', requireAuth, asyncHandler(async (req, res) => {
+    res.json(success(await getCapabilities(resolveUserId(req))));
 }));
 
 // ── Spaces ──
@@ -79,6 +78,11 @@ knowledgeRouter.patch('/spaces/:id', requireAuth, asyncHandler(async (req, res) 
 knowledgeRouter.delete('/spaces/:id', requireAuth, asyncHandler(async (req, res) => {
     await spaces.deleteSpace(resolveUserId(req), req.params.id);
     res.status(204).end();
+}));
+
+// 현재 설정 모델로 다시 색인(쓰기 권한자, 요청자 키) — 202 { jobId, indexId }, 409 REINDEX_NOT_NEEDED·REINDEX_IN_PROGRESS, 412 키·미배정
+knowledgeRouter.post('/spaces/:id/reindex', requireAuth, asyncHandler(async (req, res) => {
+    res.status(202).json(success(await requestSpaceReindex(resolveUserId(req), req.params.id)));
 }));
 
 // ── Documents ──
@@ -160,7 +164,7 @@ knowledgeRouter.get('/spaces/:id/chunks/:chunkId', requireAuth, asyncHandler(asy
 // ── Admin (관리자 전용) ──
 knowledgeRouter.get('/admin/status', requireAuth, asyncHandler(async (req, res) => {
     assertAdmin(req);
-    res.json(success(await admin.getAdminStatus()));
+    res.json(success(await admin.getAdminStatus(resolveUserId(req))));
 }));
 
 knowledgeRouter.get('/admin/profiles', requireAuth, asyncHandler(async (req, res) => {
@@ -172,11 +176,6 @@ knowledgeRouter.put('/admin/profiles/:id', requireAuth, asyncHandler(async (req,
     assertAdmin(req);
     const body = parse<import('./schemas').UpdateProfileBody>(updateProfileSchema, req.body);
     res.json(success({ profile: await admin.updateProfile(req.params.id, body) }));
-}));
-
-knowledgeRouter.post('/admin/reindex', requireAuth, asyncHandler(async (req, res) => {
-    assertAdmin(req);
-    res.status(202).json(success(await startReindex(userJobActor(resolveUserId(req)))));
 }));
 
 knowledgeRouter.post('/admin/spaces/:id/rechunk', requireAuth, asyncHandler(async (req, res) => {

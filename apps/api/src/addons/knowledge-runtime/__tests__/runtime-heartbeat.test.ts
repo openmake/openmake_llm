@@ -7,7 +7,7 @@ import type { AddonRuntimeHost } from '../../../addon-host';
 jest.mock('../db', () => ({ kdb: () => ({ query: async () => ({ rows: [], rowCount: 0 }) }), inTransaction: jest.fn() }));
 jest.mock('../config/profiles', () => ({ getDefaultLimits: async () => ({ ingestConcurrency: 1, jobLeaseMs: 60_000, jobMaxAttempts: 3 }) }));
 jest.mock('../ingestion/pipeline', () => ({ ingestVersion: jest.fn() }));
-jest.mock('../embedding/index-manager', () => ({ runReindexJob: jest.fn() }));
+jest.mock('../embedding/space-reindex', () => ({ runSpaceReindexJob: jest.fn() }));
 jest.mock('../jobs/rechunk', () => ({ rechunkSpace: jest.fn() }));
 jest.mock('../jobs/cleanup', () => ({ runCleanup: jest.fn() }));
 jest.mock('../documents/storage', () => ({ deleteStoredFile: jest.fn() }));

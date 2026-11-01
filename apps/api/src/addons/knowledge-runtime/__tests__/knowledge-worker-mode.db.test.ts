@@ -54,7 +54,7 @@ async function setMode(mode: 'inprocess' | 'external'): Promise<number> {
 }
 
 describeOrSkip('knowledge worker 모드 (실 DB)', () => {
-    let unlock: () => Promise<void>;
+    let unlock: (() => Promise<void>) | undefined;
     beforeAll(async () => {
         unlock = await lockKnowledgeQueueTests(pool);
         await applyKnowledgeSchema(pool);
@@ -64,7 +64,7 @@ describeOrSkip('knowledge worker 모드 (실 DB)', () => {
         if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
         await pool.query(`INSERT INTO knowledge_worker_mode (id) VALUES (1) ON CONFLICT (id) DO NOTHING`);
         await resetWorkerMode(pool);
-        await unlock();
+        await unlock?.();
         await pool.end();
     });
 

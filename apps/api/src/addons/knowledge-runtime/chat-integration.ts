@@ -70,6 +70,8 @@ async function prepareTurnContext(input: TurnContextInput): Promise<TurnContextC
 
     // 사용 시각 갱신(표시·정렬용) — 실패해도 검색에는 영향 없음
     void touchSpace(bound.spaceId).catch((e) => logger.warn('last_used_at 갱신 실패(무시):', e));
+    // 임베딩 키 문제로 검색하지 못했다 — 블록은 "검색할 수 없었다" 안내(출처 0). 키 값은 남기지 않는다
+    if (result.unavailableReason) logger.info(`Knowledge 검색 불가(${result.unavailableReason}): user=${input.userId} space=${bound.spaceId}`);
 
     // 근거가 있으면 블록+출처, 없으면 "관련 자료 없음" 블록만(모델이 없다고 말하게).
     // 소유자 지침·메모리는 시스템 프롬프트 조각으로(연결 대화만).
