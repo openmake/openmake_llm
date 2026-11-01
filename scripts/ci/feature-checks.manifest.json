@@ -20,13 +20,25 @@
     "scripts/release/": "infra"
   },
   "deletedTests": {
-    "apps/api/src/addons/knowledge-runtime/__tests__/reindex-lease.test.ts": "전역 reindex(index-manager) 제거로 공간 재색인으로 흡수 — lease 검사(배치 삽입·전환 트랜잭션 앞, 0행이면 LeaseLostError)는 apps/api/src/addons/knowledge-runtime/__tests__/space-reindex.test.ts 가 검증한다"
+    "apps/api/src/addons/knowledge-runtime/__tests__/reindex-lease.test.ts": "전역 reindex(index-manager) 제거로 공간 재색인으로 흡수 — lease 검사(배치 삽입·전환 트랜잭션 앞, 0행이면 LeaseLostError)는 apps/api/src/addons/knowledge-runtime/__tests__/space-reindex.test.ts 가 검증한다",
+    "apps/api/src/__tests__/routing-verifier.test.ts": "운영 import 0 인 chat/routing-verifier.ts(+ROUTING_VERIFICATION 설정)를 지우며 함께 삭제 — 남은 라우팅 지표 기록은 apps/api/src/data/repositories/__tests__/routing-metrics-repository.test.ts 가 검증한다",
+    "apps/api/src/__tests__/db-helpers.test.ts": "운영 import 0 인 SQLite 시대 헬퍼 utils/db-helpers.ts 를 지우며 함께 삭제 — Postgres 저장소는 boolean·JSON 을 드라이버가 매핑하고 행 매핑은 저장소별 테스트가 본다",
+    "apps/api/src/services/agent-task/__tests__/compaction-hooks.test.ts": "등록자 0 인 compaction 훅 레지스트리를 지우며 함께 삭제 — 접기 동작은 apps/api/src/services/agent-task/context-fold.test.ts 가 검증한다"
   },
   "deletedSources": {
     "apps/api/src/addons/knowledge-runtime/embedding/index-manager.ts": [
       "apps/api/src/addons/knowledge-runtime/__tests__/index-catalog.test.ts",
       "apps/api/src/addons/knowledge-runtime/__tests__/space-reindex.test.ts",
       "apps/api/src/addons/knowledge-runtime/__tests__/space-reindex-request.test.ts"
+    ],
+    "apps/api/src/chat/routing-verifier.ts": [
+      "apps/api/src/data/repositories/__tests__/routing-metrics-repository.test.ts"
+    ],
+    "apps/api/src/utils/db-helpers.ts": [
+      "apps/api/src/data/repositories/__tests__/external-keys-oauth-prefix.test.ts"
+    ],
+    "apps/api/src/services/agent-task/compaction-hooks.ts": [
+      "apps/api/src/services/agent-task/context-fold.test.ts"
     ]
   },
   "exactFiles": {
