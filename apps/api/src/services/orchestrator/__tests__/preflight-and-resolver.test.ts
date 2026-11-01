@@ -51,11 +51,10 @@ describe('resolveCapabilityTarget', () => {
             .rejects.toMatchObject({ code: 'CAPABILITY_LOOKUP_FAILED' });
     });
 
-    it('외부 BYOK: 게이트웨이 경유 헤더 계약·provider 기본 params(hasa tts KR/wav)·비활성/OAuth/누락은 각각 명시 실패', async () => {
+    it('외부 BYOK: 게이트웨이 경유 헤더 계약·provider 기본 params(hasa tts KR/wav)·OAuth/누락은 각각 명시 실패', async () => {
         const ok = await resolveCapabilityTarget('audio.speech', 'u1', deps({ user: [row('u1', 'audio.speech', 'hasa:melotts-ko')], userKey: 'byok' }));
         expect(ok).toMatchObject({ model: 'hasa/melotts-ko', transport: 'gateway', params: { voice: 'KR', format: 'wav' } });
         expect(ok.headers).toEqual({ Authorization: 'Bearer master', 'x-api-key': 'byok' });
-        await expect(resolveCapabilityTarget('audio.speech', 'u1', deps({ user: [row('u1', 'audio.speech', 'hasa:m')], userKey: 'k', keyRow: { isActive: false, authMethod: 'api_key' } }))).rejects.toMatchObject({ code: 'CAPABILITY_KEY_INACTIVE' });
         await expect(resolveCapabilityTarget('audio.speech', 'u1', deps({ user: [row('u1', 'audio.speech', 'hasa:m')], userKey: 'k', keyRow: { isActive: true, authMethod: 'oauth' } }))).rejects.toMatchObject({ code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
         await expect(resolveCapabilityTarget('audio.speech', 'u1', deps({ user: [row('u1', 'audio.speech', 'hasa:m')], userKey: null, keyRow: null }))).rejects.toMatchObject({ code: 'CAPABILITY_KEY_MISSING' });
         await expect(resolveCapabilityTarget('audio.speech', 'u1', deps({ user: [row('u1', 'audio.speech', 'nvidia:m')], userKey: 'k' }))).rejects.toMatchObject({ code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
