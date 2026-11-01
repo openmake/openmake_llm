@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.119.0](https://github.com/openmake/openmake_llm/compare/v1.118.0...v1.119.0) (2026-11-01)
+
+
+### ✨ 기능
+
+* **capability-resolver:** 키 검사 없는 배정 조회·actor-byok 관리자 실효 줄 구분 표시 ([e71f6ec](https://github.com/openmake/openmake_llm/commit/e71f6ec2125670b6d190c8abac9d48068f8d0433))
+* **knowledge-runtime:** worker 행위자 임베딩·영구 실패 분기·공간 재색인 실행 ([19745c2](https://github.com/openmake/openmake_llm/commit/19745c200e4697c3c58cafa03101f9284d5a1cb7))
+* **knowledge-runtime:** 검색은 공간 색인·검색한 사용자의 키 — 키 문제는 '검색할 수 없었다' 안내 블록(출처 0) ([8d93c9a](https://github.com/openmake/openmake_llm/commit/8d93c9a4ba4a2efab5100ba4b25bc65fe7594935))
+* **knowledge-runtime:** 공간 임베딩 상태·업로드/재시도 412 선검사·생성 시 색인 고정·사용자별 capabilities ([8c5cc27](https://github.com/openmake/openmake_llm/commit/8c5cc27a4da9db36d32fe2cff20b60d2c67bfc58))
+* **knowledge-runtime:** 공간 재색인 요청 POST /spaces/:id/reindex — 전역 admin/reindex 제거·감사 기록 ([efb666b](https://github.com/openmake/openmake_llm/commit/efb666b70fa7a4086e85fd202cb24649c9c3dfb6))
+* **knowledge-runtime:** 마이그레이션 006 — 공간별 임베딩 색인 고정·request_params·ready 유니크(보존적 백필) ([67f380e](https://github.com/openmake/openmake_llm/commit/67f380e0e76f5b5e909e862b6c8c6be03a319e03))
+* **knowledge-runtime:** 수집 파이프라인 공간 색인·행위자 키 — EMBEDDING_KEY_MISSING/REJECTED(비재시도)·공간 포인터 게시 검사 ([1c8ec75](https://github.com/openmake/openmake_llm/commit/1c8ec75bee0b4e461aa56f6620e7628d104ab4c3))
+* **knowledge-runtime:** 임베더 행위자 BYOK — EmbeddingError 분류·키 거절 메모·복호화 없는 라이브 상태·차원 측정 ([2427c9c](https://github.com/openmake/openmake_llm/commit/2427c9c602c330a2bb7b0cff9c3da39b357e8e72))
+* **knowledge-runtime:** 임베딩 색인 카탈로그 — 모델별 ready 색인 재사용·차원 측정 1회 생성·공간 고정 ([346cb42](https://github.com/openmake/openmake_llm/commit/346cb42fb5ccb3105e4baae8d1c353b908d54af1))
+* **shared-types:** 공간 임베딩 색인·상태 계약 — 재색인 응답·색인 카탈로그·actor-byok 실효 표시 ([30da3ea](https://github.com/openmake/openmake_llm/commit/30da3ea3a8c2859174870b3662ca85ca86be690a))
+* **web/knowledge:** 공간 임베딩 상태·현재 설정 모델로 다시 색인·412 코드별 안내 — 전역 재색인 제거 ([e8d3c88](https://github.com/openmake/openmake_llm/commit/e8d3c880e2adff4984f01166d6af210c92f65415))
+
+
+### 🐛 버그 수정
+
+* **env:** 파이프라인 갱신 실패 뒤 다음 주기에 다시 배포 ([db9d702](https://github.com/openmake/openmake_llm/commit/db9d7020998f36d35447c978256c6a5f226d3480))
+* **knowledge-runtime/eval:** 재시작 평가·시딩을 공간 색인 기준으로 — teardown 은 시딩이 만든 색인만 지운다 ([dddec5d](https://github.com/openmake/openmake_llm/commit/dddec5d73f00f961aea5af1f6e235f781c648744))
+* **knowledge-runtime/migration:** 006 재적용이 공간이 가리키는 ready 색인을 retired 로 바꾸지 않게 — 열 추가를 앞으로, NOT EXISTS 조건 ([b51d4af](https://github.com/openmake/openmake_llm/commit/b51d4af56f6706472760c9125f22d7ff6765f8c3))
+* **knowledge-runtime/reindex:** 같은 공간 동시 재색인 — 요청은 공간별 xact lock 아래 진행 중 검사+작업 넣기, 전환은 잠금 뒤 포인터를 다시 읽어 이미 대상이면 성공 ([ad7d35e](https://github.com/openmake/openmake_llm/commit/ad7d35eb557c72c10400aa9623d925830a89576e))
+* **knowledge-runtime:** PR-2 마무리 — 라이브 시험 상시 계약·fake 색인 정리·006 진행 중 재색인 대상 보존·manifest 문서 ([61d34e8](https://github.com/openmake/openmake_llm/commit/61d34e8dce3aa3e84d0dfa16f516e97b0fcf36a8))
+* **knowledge-runtime:** 관리자 rechunk 는 요청 시 공간 색인을 관리자 키로 412 선검사, worker 는 행위자를 파이프라인에 넘긴다 ([3a8ae95](https://github.com/openmake/openmake_llm/commit/3a8ae95d4b985592648a845c8301508c00478571))
+* **web/knowledge:** capabilities 임베딩 사유를 공간 상태와 분리 표시 + 키 거절 문구·목록 점 role=img·색인 상태 i18n ([b12cebe](https://github.com/openmake/openmake_llm/commit/b12cebe56cbc2b332bcba75717c9fd1885f0512b))
+
+
+### ♻️ 리팩터링
+
+* **shared-types/knowledge:** 새 계약 타입 이름에서 add-on 고유 이름을 뺀다 — 공용 자산 동결값 11 유지 ([4208b4d](https://github.com/openmake/openmake_llm/commit/4208b4d674e47b159d44d2bd3c0cc9644bfb6642))
+
 ## [1.118.0](https://github.com/openmake/openmake_llm/compare/v1.117.2...v1.118.0) (2026-11-01)
 
 
