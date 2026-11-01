@@ -38,6 +38,7 @@ import express from 'express';
 import request from 'supertest';
 import * as jwt from 'jsonwebtoken';
 import { getConfig } from '../../config/env';
+import { APP_VERSION } from '../../config/constants';
 import { setupApiRoutes } from '../setup';
 import { registerHealthSection } from '../../runtime-ports/health-sections';
 
@@ -78,6 +79,8 @@ describe('GET /api/health — 비관리자는 상태 필드와 add-on 절만(W4)
         });
         expect(res.body).not.toHaveProperty('uptime');
         expect(res.body).not.toHaveProperty('process');
+        expect(res.body.version).toBeUndefined();
+        expect(res.body.build).toBeUndefined();
         expect(res.body.services).not.toHaveProperty('memory');
         for (const key of ADMIN_ONLY_SERVICE_KEYS.database) expect(res.body.services.database).not.toHaveProperty(key);
         for (const key of ADMIN_ONLY_SERVICE_KEYS.llm) expect(res.body.services.llm).not.toHaveProperty(key);
@@ -89,16 +92,23 @@ describe('GET /api/health — 비관리자는 상태 필드와 add-on 절만(W4)
             expect(res.status).toBe(200);
             expect(Object.keys(res.body).sort()).toEqual(['sample', 'services', 'status', 'timestamp']);
             expect(res.body.services).toEqual({ database: { status: 'connected' }, llm: { status: 'online' } });
+            expect(res.body.version).toBeUndefined();
+            expect(res.body.build).toBeUndefined();
         }
     });
 
-    test('관리자 → 종전 전체 응답(uptime·풀 수·모델 수·memory·add-on 절·process)', async () => {
+    test('관리자 → 종전 전체 응답(uptime·version·build·풀 수·모델 수·memory·add-on 절·process)', async () => {
         const res = await request(app).get('/api/health').set('Authorization', bearer('admin'));
         expect(res.status).toBe(200);
+        expect(res.body.version).toBe(APP_VERSION);
+        expect(typeof res.body.build).toBe('object');
+        expect(typeof res.body.build.gitHash).toBe('string');
         expect(res.body).toEqual({
             status: 'ok',
             timestamp: expect.any(String),
             uptime: expect.any(Number),
+            version: APP_VERSION,
+            build: expect.objectContaining({ gitHash: expect.any(String) }),
             services: {
                 database: { status: 'connected', total: 5, idle: 3, waiting: 0 },
                 llm: { status: 'online', totalNodes: 2, onlineNodes: 1, models: 2 },
