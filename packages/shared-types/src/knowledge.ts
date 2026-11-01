@@ -24,7 +24,7 @@ export interface KnowledgeEmbeddingIndexInfo {
   distanceMetric: string;
 }
 
-export interface KnowledgeSpaceEmbedding {
+export interface KnowledgeEmbeddingState {
   /** 이 공간의 벡터가 사는 색인 — 아직 고정되지 않았으면 null */
   index: KnowledgeEmbeddingIndexInfo | null;
   status: KnowledgeEmbeddingStatus;
@@ -53,7 +53,7 @@ export interface KnowledgeSpaceSummary {
   lastUsedAt: string | null;
   updatedAt: string;
   /** 공간 임베딩 색인·상태(서버 판정) */
-  embedding: KnowledgeSpaceEmbedding;
+  embedding: KnowledgeEmbeddingState;
 }
 
 export interface KnowledgeDocument {
@@ -141,7 +141,7 @@ export interface KnowledgeCapabilities {
 }
 
 /** POST /api/knowledge/spaces/:id/reindex 202 — 현재 설정 모델로 공간을 다시 색인한다 */
-export interface KnowledgeSpaceReindexResponse { jobId: string; indexId: string }
+export interface KnowledgeReindexResponse { jobId: string; indexId: string }
 
 /** POST·PATCH /api/knowledge/spaces[/:id] 응답 */
 export interface KnowledgeSpaceResponse { space: KnowledgeSpaceSummary }

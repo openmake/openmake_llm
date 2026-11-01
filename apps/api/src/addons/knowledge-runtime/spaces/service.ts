@@ -4,7 +4,7 @@
  * @module addons/knowledge-runtime/spaces/service
  */
 import type {
-    KnowledgeScopeType, KnowledgeSpaceSummary, KnowledgeSpaceDetail, KnowledgeDocument, KnowledgeConversation, KnowledgeSpaceEmbedding,
+    KnowledgeScopeType, KnowledgeSpaceSummary, KnowledgeSpaceDetail, KnowledgeDocument, KnowledgeConversation, KnowledgeEmbeddingState,
 } from '@openmake/shared-types';
 import { AppError } from '../../../utils/error-handler';
 import { inTransaction } from '../db';
@@ -22,7 +22,7 @@ function canEditScope(actor: KnowledgeActor, scopeType: KnowledgeScopeType, scop
     return !!rule && rule.canWrite(actor) && rule.scopeIdFor(actor) === scopeId;
 }
 
-function toSummary(row: repo.SpaceSummaryRow, actor: KnowledgeActor, embedding: KnowledgeSpaceEmbedding): KnowledgeSpaceSummary {
+function toSummary(row: repo.SpaceSummaryRow, actor: KnowledgeActor, embedding: KnowledgeEmbeddingState): KnowledgeSpaceSummary {
     return {
         id: row.id,
         name: row.name,
