@@ -191,6 +191,18 @@ describe('runSpaceReindexJob — 전환 뒤 실패 문서 재수집', () => {
         expect(sqlWith('UPDATE knowledge_document_versions')).toHaveLength(0);
     });
 
+    it('queued·running ingest 가 이미 붙은 실패 버전은 재큐잉하지 않는다', async () => {
+        failedRows = []; // NOT EXISTS 절이 그 버전을 걸러 낸 결과
+        await runSpaceReindexJob(JOB, { embed });
+        const select = sqlWith("v.status = 'failed'");
+        expect(select).toHaveLength(1);
+        expect(select[0].sql).toMatch(/NOT EXISTS \(SELECT 1 FROM knowledge_ingestion_jobs j\s+WHERE j\.document_version_id = v\.id AND j\.state IN \('queued', 'running'\)\)/);
+        expect(select[0].sql.indexOf('NOT EXISTS')).toBeLessThan(select[0].sql.indexOf('FOR UPDATE OF v'));
+        expect(sqlWith('INSERT INTO knowledge_ingestion_jobs')).toHaveLength(0);
+        expect(sqlWith('UPDATE knowledge_document_versions')).toHaveLength(0);
+        expect(sqlWith('UPDATE knowledge_documents')).toHaveLength(0);
+    });
+
     it('전환하지 않은 경로(다른 작업이 먼저 전환·전환 뒤 재실행)는 실패 버전 조회도 작업도 없다', async () => {
         failedRows = [{ document_id: 'd1', version_id: 'v1' }];
         lockedPointer = 'idx-new';

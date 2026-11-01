@@ -105,7 +105,7 @@ async function embedOrFail(embed: EmbedFn, texts: string[]): Promise<number[][]>
 }
 
 /**
- * 전환 트랜잭션 안 — 공간의 실패 현재 버전(실패 코드 불문, retryDocument 와 같은 조건)을 다시 시도와 같게 초기화하고
+ * 전환 트랜잭션 안 — 공간의 실패 현재 버전(실패 코드 불문, queued·running ingest 가 이미 붙은 버전은 제외)을 다시 시도와 같게 초기화하고
  * ingest 를 넣는다. FOR UPDATE OF v 로 같은 순간의 수동 재시도가 이 커밋을 기다린다. 넣은 개수를 돌려준다.
  */
 async function requeueFailedDocuments(client: PoolClient, spaceId: string, actor: JobActor): Promise<number> {
@@ -114,6 +114,8 @@ async function requeueFailedDocuments(client: PoolClient, spaceId: string, actor
            FROM knowledge_documents d
            JOIN knowledge_document_versions v ON v.id = d.current_version_id
           WHERE d.space_id = $1 AND d.deleted_at IS NULL AND d.status <> 'deleted' AND v.status = 'failed'
+            AND NOT EXISTS (SELECT 1 FROM knowledge_ingestion_jobs j
+                             WHERE j.document_version_id = v.id AND j.state IN ('queued', 'running'))
           FOR UPDATE OF v`,
         [spaceId],
     );
