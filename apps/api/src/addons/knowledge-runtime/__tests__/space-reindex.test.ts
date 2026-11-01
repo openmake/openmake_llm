@@ -44,7 +44,7 @@ jest.mock('../embedding/provider', () => {
 
 import { runSpaceReindexJob } from '../embedding/space-reindex';
 import { KnowledgeJobPermanentError } from '../jobs/errors';
-import { EmbeddingError } from '../embedding/provider';
+import { EmbeddingError, type EmbeddingFailureReason } from '../embedding/provider';
 
 const JOB = { spaceId: 's1', indexId: 'idx-new', actorUserId: 'u1' };
 const embed = async (t: string[]) => t.map(() => [1, 0]);
@@ -96,7 +96,7 @@ describe('runSpaceReindexJob', () => {
     });
 
     it('키 오류(key_missing·key_rejected)는 코드를 담은 영구 실패, 그 밖 오류는 그대로 throw(백오프 재시도)', async () => {
-        const failing = (reason: string) => async () => { throw new EmbeddingError(reason, '키'); };
+        const failing = (reason: EmbeddingFailureReason) => async () => { throw new EmbeddingError(reason, '키'); };
         await expect(runSpaceReindexJob(JOB, { embed: failing('key_rejected') })).rejects.toMatchObject({ code: 'EMBEDDING_KEY_REJECTED' });
         batches = 1;
         await expect(runSpaceReindexJob(JOB, { embed: failing('key_missing') })).rejects.toMatchObject({ code: 'EMBEDDING_KEY_MISSING' });
