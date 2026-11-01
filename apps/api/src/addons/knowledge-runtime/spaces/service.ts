@@ -4,7 +4,7 @@
  * @module addons/knowledge-runtime/spaces/service
  */
 import type {
-    KnowledgeScopeType, KnowledgeSpaceSummary, KnowledgeSpaceDetail, KnowledgeDocument, KnowledgeConversation,
+    KnowledgeScopeType, KnowledgeSpaceSummary, KnowledgeSpaceDetail, KnowledgeDocument, KnowledgeConversation, KnowledgeSpaceEmbedding,
 } from '@openmake/shared-types';
 import { AppError } from '../../../utils/error-handler';
 import { inTransaction } from '../db';
@@ -13,6 +13,7 @@ import { systemJobActor } from '../jobs/actor';
 import { actorFor, creatableScopeId, SCOPE_POLICY, type KnowledgeActor } from '../config/scope-policy';
 import { getDefaultLimits } from '../config/profiles';
 import { listDocumentRowsForSpace } from '../documents/repository';
+import { describeSpaceEmbeddings, ensureLiveIndex } from '../embedding/readiness';
 import * as repo from './repository';
 
 /** 이 Space 를 현재 actor 가 편집(이름·자료·삭제)할 수 있는가 — scope 규칙표로 판정 */
@@ -21,7 +22,7 @@ function canEditScope(actor: KnowledgeActor, scopeType: KnowledgeScopeType, scop
     return !!rule && rule.canWrite(actor) && rule.scopeIdFor(actor) === scopeId;
 }
 
-function toSummary(row: repo.SpaceSummaryRow, actor: KnowledgeActor): KnowledgeSpaceSummary {
+function toSummary(row: repo.SpaceSummaryRow, actor: KnowledgeActor, embedding: KnowledgeSpaceEmbedding): KnowledgeSpaceSummary {
     return {
         id: row.id,
         name: row.name,
@@ -36,7 +37,14 @@ function toSummary(row: repo.SpaceSummaryRow, actor: KnowledgeActor): KnowledgeS
         failedCount: parseInt(row.failed_count, 10),
         lastUsedAt: row.last_used_at,
         updatedAt: row.updated_at,
+        embedding,
     };
+}
+
+/** 요약 행들 → DTO(임베딩 상태는 한 번에 계산 — 라이브 해석 1회, 공급자별 가용성 1회) */
+async function toSummaries(rows: repo.SpaceSummaryRow[], actor: KnowledgeActor): Promise<KnowledgeSpaceSummary[]> {
+    const embeddings = await describeSpaceEmbeddings(rows, actor.userId);
+    return rows.map((r) => toSummary(r, actor, embeddings.get(r.id)!));
 }
 
 function toDocument(row: import('../documents/repository').DocumentDetailRow): KnowledgeDocument {
@@ -55,8 +63,7 @@ function toDocument(row: import('../documents/repository').DocumentDetailRow): K
 
 export async function listSpaces(userId: string): Promise<KnowledgeSpaceSummary[]> {
     const actor = await actorFor(userId);
-    const rows = await repo.listSpaceRows(actor);
-    return rows.map((r) => toSummary(r, actor));
+    return toSummaries(await repo.listSpaceRows(actor), actor);
 }
 
 export async function createSpace(
@@ -74,26 +81,29 @@ export async function createSpace(
         throw new AppError(`프로젝트 수 상한(${limits.maxSpacesPerScope})을 초과했습니다`, 409, true, 'SPACE_LIMIT_EXCEEDED');
     }
 
+    // 색인은 생성자의 실효 임베딩으로 고정한다(조직 공간도 생성자 기준) — 미배정·키 없음 412, 측정 실패 502 면 공간을 만들지 않는다
+    const { index } = await ensureLiveIndex(userId);
     const id = await repo.insertSpace({
         scopeType, scopeId, createdBy: userId,
         name: input.name, description: input.description ?? null, icon: input.icon ?? null,
-        instructions: input.instructions ?? null,
+        instructions: input.instructions ?? null, embeddingIndexId: index.id,
     });
     const row = await repo.getSpaceSummaryRow(actor, id);
     if (!row) throw new AppError('Space 생성 직후 조회에 실패했습니다', 500, true, 'INTERNAL_ERROR');
-    return toSummary(row, actor);
+    return (await toSummaries([row], actor))[0];
 }
 
 export async function getSpaceDetail(userId: string, id: string): Promise<KnowledgeSpaceDetail> {
     const actor = await actorFor(userId);
     const row = await repo.getSpaceSummaryRow(actor, id);
     if (!row) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
-    const [docRows, convRows] = await Promise.all([
+    const [docRows, convRows, [summary]] = await Promise.all([
         listDocumentRowsForSpace(id),
         repo.listConversationsForSpace(id),
+        toSummaries([row], actor),
     ]);
     const conversations: KnowledgeConversation[] = convRows.map((c) => ({ sessionId: c.session_id, title: c.title, updatedAt: c.updated_at }));
-    return { ...toSummary(row, actor), documents: docRows.map(toDocument), conversations };
+    return { ...summary, documents: docRows.map(toDocument), conversations };
 }
 
 export async function updateSpace(
@@ -106,7 +116,7 @@ export async function updateSpace(
     if (!ok) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
     const row = await repo.getSpaceSummaryRow(actor, id, 'write');
     if (!row) throw new AppError('프로젝트', 404, true, 'NOT_FOUND');
-    return toSummary(row, actor);
+    return (await toSummaries([row], actor))[0];
 }
 
 /** 삭제 = tombstone + deleted_at(즉시 비노출) + 유예 후 물리 정리 작업. 한 트랜잭션. */

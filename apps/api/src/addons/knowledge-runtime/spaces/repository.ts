@@ -89,15 +89,17 @@ export interface InsertSpaceInput {
     description: string | null;
     icon: string | null;
     instructions: string | null;
+    /** 생성자의 실효 임베딩 모델 색인 — 공간 벡터가 사는 곳(바꾸는 길은 공간 재색인) */
+    embeddingIndexId: string;
 }
 
-/** Space 생성 — 생성한 id 를 돌려준다. config_profile_id 는 비워 두고 해석 시 기본 프로필을 쓴다. */
+/** Space 생성 — 생성한 id 를 돌려준다. config_profile_id 는 비워 두고 해석 시 기본 프로필을 쓴다. 색인은 한 INSERT 로 고정한다. */
 export async function insertSpace(input: InsertSpaceInput): Promise<string> {
     const id = randomUUID();
     await kdb().query(
-        `INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name, description, icon, instructions, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')`,
-        [id, input.scopeType, input.scopeId, input.createdBy, input.name, input.description, input.icon, input.instructions],
+        `INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name, description, icon, instructions, status, embedding_index_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9)`,
+        [id, input.scopeType, input.scopeId, input.createdBy, input.name, input.description, input.icon, input.instructions, input.embeddingIndexId],
     );
     return id;
 }
