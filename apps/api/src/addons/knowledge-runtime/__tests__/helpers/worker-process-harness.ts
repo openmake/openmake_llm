@@ -143,24 +143,37 @@ export async function waitFor<T>(read: () => Promise<T>, done: (v: T) => boolean
     }
 }
 
-/** 가짜 모델의 활성 index — local-llm 태그라 게이트웨이(LLM_BASE_URL)로 임베딩한다 */
-export async function activateFakeIndex(pool: Pool): Promise<string> {
-    const id = randomUUID();
-    await pool.query('UPDATE knowledge_embedding_indexes SET is_active = FALSE WHERE is_active');
+/**
+ * 가짜 모델의 ready 색인 — local-llm 태그라 게이트웨이(LLM_BASE_URL)로 임베딩한다. 같은 모델·차원·척도의 ready 색인은
+ * 하나뿐이므로(006 유니크) 있으면 그 행을 다시 쓴다 — 전역 is_active 는 건드리지 않는다(공간이 색인을 고정한다).
+ */
+export async function ensureFakeIndex(pool: Pool): Promise<string> {
+    const providerRef = `local-llm:${FAKE_MODEL}`;
     await pool.query(
         `INSERT INTO knowledge_embedding_indexes (id, provider_ref, model_id, dimension, distance_metric, status, is_active, activated_at)
-         VALUES ($1, $2, $3, $4, 'cosine', 'ready', TRUE, NOW())`,
-        [id, `local-llm:${FAKE_MODEL}`, FAKE_MODEL, FAKE_DIM],
+         VALUES ($1, $2, $3, $4, 'cosine', 'ready', FALSE, NOW())
+         ON CONFLICT (provider_ref, dimension, distance_metric) WHERE status = 'ready' DO NOTHING`,
+        [randomUUID(), providerRef, FAKE_MODEL, FAKE_DIM],
     );
-    return id;
+    const r = await pool.query<{ id: string }>(
+        `SELECT id FROM knowledge_embedding_indexes WHERE provider_ref = $1 AND dimension = $2 AND distance_metric = 'cosine' AND status = 'ready'`,
+        [providerRef, FAKE_DIM],
+    );
+    return r.rows[0].id;
 }
 
 export interface IngestFixture { space: string; doc: string; version: string; job: string }
 
-/** text/plain 수집 작업 하나 — 원본을 storageDir/<versionId> 에 쓰고, 시스템 actor·하루 전 due 로 넣는다(가장 먼저 집힌다) */
-export async function insertIngestFixture(pool: Pool, storageDir: string, text: string): Promise<IngestFixture> {
+/**
+ * text/plain 수집 작업 하나 — 공간을 indexId(ensureFakeIndex)에 고정하고, 원본을 storageDir/<versionId> 에 쓰고,
+ * 시스템 actor·하루 전 due 로 넣는다(가장 먼저 집힌다)
+ */
+export async function insertIngestFixture(pool: Pool, storageDir: string, text: string, indexId: string): Promise<IngestFixture> {
     const f = { space: randomUUID(), doc: randomUUID(), version: randomUUID(), job: randomUUID() };
-    await pool.query(`INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name) VALUES ($1, 'user', 'proc-test', 'proc-test', 'proc')`, [f.space]);
+    await pool.query(
+        `INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name, embedding_index_id) VALUES ($1, 'user', 'proc-test', 'proc-test', 'proc', $2)`,
+        [f.space, indexId],
+    );
     await pool.query(`INSERT INTO knowledge_documents (id, space_id, logical_name, created_by) VALUES ($1, $2, 'proc.txt', 'proc-test')`, [f.doc, f.space]);
     await writeFile(join(storageDir, f.version), text, 'utf8');
     await pool.query(

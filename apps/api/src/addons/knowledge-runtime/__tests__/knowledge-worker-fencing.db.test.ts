@@ -54,7 +54,7 @@ type WorkerInternals = { owner: string; claim(limit: number, leaseMs: number): P
 const internals = (w: KnowledgeWorker) => w as unknown as WorkerInternals;
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>((r) => { resolve = r; }); return { promise, resolve }; };
 
-let unlock: () => Promise<void>;
+let unlock: (() => Promise<void>) | undefined;
 
 let index: KnowledgeIndex;
 const jobIds: string[] = [];
@@ -123,7 +123,7 @@ describeOrSkip('knowledge worker fencing (실 DB)', () => {
         if (jobIds.length) await pool.query(`DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])`, [jobIds]);
         if (spaceIds.length) await pool.query(`DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])`, [spaceIds]); // cascade: 문서·버전·청크·임베딩
         await pool.query(`DELETE FROM knowledge_embedding_indexes WHERE id = $1`, [index.id]);
-        await unlock();
+        await unlock?.();
         await pool.end();
     });
 
