@@ -1,5 +1,6 @@
 /**
  * 접수 지점 — 업로드·재시도는 Space actor(user|org), 문서·Space 삭제의 정리는 system(요청자 기록), 관리자 재청킹은 관리자 user.
+ * 업로드·재시도·관리자 재청킹은 작업 전에 공간 색인 모델을 그 행위자 키로 선검사한다(412).
  * 서비스만 태우고 큐·DB·저장소·인가는 mock.
  */
 const enqueueJob = jest.fn(async (..._a: unknown[]) => 'job-1');
@@ -77,6 +78,21 @@ describe('임베딩 키 선검사(412)', () => {
         await expect(retryDocument('u-1', 's1', 'd1')).rejects.toMatchObject({ statusCode: 412, code: 'EMBEDDING_KEY_REJECTED' });
         expect(enqueueJob).not.toHaveBeenCalled();
     });
+
+    it('관리자 재청킹: 공간 색인을 요청한 관리자 키로 선검사하고, 412 면 작업을 만들지 않는다', async () => {
+        fakeClient.query.mockResolvedValueOnce({ rows: [{ id: 's1', embedding_index_id: 'idx-ext' }], rowCount: 1 } as never);
+        assertSpaceEmbeddingReady.mockRejectedValueOnce(new AppError('키 없음', 412, true, 'EMBEDDING_KEY_MISSING'));
+        await expect(rechunkSpace('s1', 'admin-1')).rejects.toMatchObject({ statusCode: 412, code: 'EMBEDDING_KEY_MISSING' });
+        expect(assertSpaceEmbeddingReady).toHaveBeenCalledWith({ id: 's1', embedding_index_id: 'idx-ext' }, 'admin-1');
+        expect(enqueueJob).not.toHaveBeenCalled();
+    });
+
+    it('관리자 재청킹: 없는(삭제된) 공간은 404 — 선검사도 하지 않는다', async () => {
+        fakeClient.query.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never);
+        await expect(rechunkSpace('gone', 'admin-1')).rejects.toMatchObject({ statusCode: 404 });
+        expect(assertSpaceEmbeddingReady).not.toHaveBeenCalled();
+        expect(enqueueJob).not.toHaveBeenCalled();
+    });
 });
 
 describe('접수 지점 actor', () => {
@@ -100,6 +116,7 @@ describe('접수 지점 actor', () => {
     });
 
     it('관리자 재청킹은 그 관리자의 user actor', async () => {
+        fakeClient.query.mockResolvedValueOnce({ rows: [{ id: 's1', embedding_index_id: 'idx-1' }], rowCount: 1 } as never);
         await rechunkSpace('s1', 'admin-1');
         expect(actorOf(0)).toMatchObject({ kind: 'rechunk', spaceId: 's1', actor: { kind: 'user', userId: 'admin-1', orgId: null } });
     });

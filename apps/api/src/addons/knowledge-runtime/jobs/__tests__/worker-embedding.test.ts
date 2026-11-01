@@ -1,6 +1,6 @@
 // apps/api/src/addons/knowledge-runtime/jobs/__tests__/worker-embedding.test.ts
 /**
- * worker 의 임베딩 키 정책 배선 — ingest 는 작업 행위자를 파이프라인에 넘기고, 키 실패 코드 둘은 재시도하지 않는다(done).
+ * worker 의 임베딩 키 정책 배선 — ingest·rechunk 는 작업 행위자를 파이프라인에 넘기고, 키 실패 코드 둘은 재시도하지 않는다(done).
  * KnowledgeJobPermanentError 는 시도 횟수와 무관하게 즉시 최종 실패. reindex 는 space_id·embedding_index_id 둘 다 있어야 한다
  * (006 이전 전역 reindex 잔재는 명시 실패). DB 는 SQL 문자열로 분기하는 가짜 kdb.
  */
@@ -23,7 +23,8 @@ const ingestVersion = jest.fn();
 jest.mock('../../ingestion/pipeline', () => ({ ingestVersion: (...a: unknown[]) => ingestVersion(...a) }));
 const runSpaceReindexJob = jest.fn();
 jest.mock('../../embedding/space-reindex', () => ({ runSpaceReindexJob: (...a: unknown[]) => runSpaceReindexJob(...a) }));
-jest.mock('../rechunk', () => ({ rechunkSpace: jest.fn() }));
+const rechunkSpace = jest.fn();
+jest.mock('../rechunk', () => ({ rechunkSpace: (...a: unknown[]) => rechunkSpace(...a) }));
 jest.mock('../cleanup', () => ({ runCleanup: jest.fn() }));
 jest.mock('../../documents/storage', () => ({ deleteStoredFile: jest.fn() }));
 jest.mock('../../../../runtime-ports/addon-admission', () => ({
@@ -39,12 +40,14 @@ import { KnowledgeJobPermanentError } from '../errors';
 const BASE = { attempts: 1, fencing_token: '7', actor_kind: 'user', actor_user_id: 'u1', org_id: null, policy_revision: 1, cancel_requested_at: null };
 const INGEST = { ...BASE, id: 'job-1', kind: 'ingest', document_version_id: 'v1', space_id: null, embedding_index_id: null };
 const REINDEX = { ...BASE, id: 'job-2', kind: 'reindex', document_version_id: null, space_id: 's1', embedding_index_id: 'idx-new' };
+const RECHUNK = { ...BASE, id: 'job-3', kind: 'rechunk', document_version_id: null, space_id: 's1', embedding_index_id: null, actor_user_id: 'admin-1' };
 const sqlWith = (s: string) => queries.filter((q) => q.sql.includes(s));
 
 beforeEach(() => {
     queries.length = 0;
     ingestVersion.mockReset();
     runSpaceReindexJob.mockReset();
+    rechunkSpace.mockReset();
 });
 
 describe('worker — 임베딩 키 정책', () => {
@@ -65,6 +68,16 @@ describe('worker — 임베딩 키 정책', () => {
         await new KnowledgeWorker().tick();
         expect(sqlWith("SET state = 'done'")).toHaveLength(1);
         expect(sqlWith("SET state = 'queued'")).toHaveLength(0);
+    });
+
+    it('rechunk 는 job.actor_user_id(요청한 관리자)를 actorUserId 로 넘긴다 — 외부 색인 공간도 그 키로 재수집', async () => {
+        claimRows = [RECHUNK];
+        await new KnowledgeWorker().tick();
+        expect(rechunkSpace).toHaveBeenCalledWith('s1', expect.objectContaining({ actorUserId: 'admin-1', lease: expect.anything() }));
+
+        claimRows = [{ ...RECHUNK, actor_user_id: null, actor_kind: 'system' }];
+        await new KnowledgeWorker().tick();
+        expect(rechunkSpace.mock.calls[1][1].actorUserId).toBeUndefined();
     });
 
     it('FAILED_EMBEDDING 은 종전대로 백오프 재시도', async () => {
