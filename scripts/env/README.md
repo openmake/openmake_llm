@@ -95,6 +95,8 @@ omk env verify staging --list
 
 새 pipeline은 운영 게이트를 강제합니다. 기존 `env update`·`autoupdate`는 호환/복구용 명령이며 8단계 완료 근거로 대신 사용하지 않습니다. 기본 설치·기존 설치본 이관은 아래 별도 절차이며, 첫 운영 설치도 검증된 릴리스인지 확인한 후 수행합니다. 백업 실패·검증 부재·태그/설치 SHA 불일치·스모크 실패는 완료로 처리하지 않습니다. 운영 자동 갱신의 OS 자동기동 권한·재부팅 검증은 별도 실제 호스트 검증입니다.
 
+staging·online pipeline의 갱신 단계가 실패하면 `env update --report`와 같은 표식(`<환경 디렉터리>/.omk-update-failed`)을 남기고, 다음 주기에는 HEAD가 같아도 `--redeploy`로 다시 빌드·배포합니다(성공하면 표식을 지웁니다).
+
 ## 설치 — 아무것도 없는 PC 에서 한 줄
 
 ```bash
