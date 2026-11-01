@@ -16,8 +16,6 @@ export const JOB_STATES = [
 ] as const;
 export type JobState = typeof JOB_STATES[number];
 
-export const TERMINAL_JOB_STATES: ReadonlySet<JobState> = new Set(['completed', 'cancelled', 'failed']);
-
 const TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> = {
     queued: ['submitting', 'cancelled'],
     submitting: ['running', 'submission_unknown', 'failed'],

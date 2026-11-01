@@ -1,7 +1,7 @@
 /**
  * Job Runtime 포트(P07) — 제출 의도 선저장·중복 제출 방지·응답 유실(T13)·소유자 scope(T11)·상태 전이표.
  */
-import { canTransition, legacyStatusFor, sourcesFor, TERMINAL_JOB_STATES } from '../../capability-contract/job-state';
+import { canTransition, legacyStatusFor, sourcesFor } from '../../capability-contract/job-state';
 import { scopedJobRuntime, isDefinitelyNotSubmitted } from '../job-runtime';
 import { HttpCallError } from '../../services/orchestrator/http-call';
 import type { JobRecord, JobRuntimeRepository } from '../../data/repositories/job-runtime-repo';
@@ -22,7 +22,7 @@ function fakeRepo(intent: 'created' | 'existing' | 'conflict' = 'created') {
 
 describe('job-state 전이표', () => {
     it('종료 상태는 단조 — 어디로도 가지 않는다', () => {
-        for (const s of TERMINAL_JOB_STATES) for (const to of ['running', 'collecting', 'failed', 'completed'] as const) expect(canTransition(s, to)).toBe(false);
+        for (const s of ['completed', 'cancelled', 'failed'] as const) for (const to of ['running', 'collecting', 'failed', 'completed'] as const) expect(canTransition(s, to)).toBe(false);
     });
     it('취소 요청 중 provider 완료는 completed 로(성공을 취소로 덮지 않는다) · submission_unknown 은 자동으로 submitting 으로 돌아가지 않는다', () => {
         expect(canTransition('cancel_requested', 'completed')).toBe(true);
