@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.118.0](https://github.com/openmake/openmake_llm/compare/v1.117.2...v1.118.0) (2026-11-01)
+
+
+### ✨ 기능
+
+* **capabilities:** capability 키 정책 선언 — text.embed 는 actor-byok ([4323cf6](https://github.com/openmake/openmake_llm/commit/4323cf6db0c86648de54d0aca4a39c745829774d))
+* **capability-resolver:** actor-byok 키 정책·외부 기본값·복호화 없는 상태 검사 ([67bebdb](https://github.com/openmake/openmake_llm/commit/67bebdba2dd989deff84f15b8a0e7eceaec75278))
+* **http-call:** HttpCallError.keyRejected — provider 키 거절을 플래그로 ([fd25a0f](https://github.com/openmake/openmake_llm/commit/fd25a0ffb48b83249cf3b88d90e7d40ea1569768))
+* **web/i18n:** 임베딩 배정 슬롯 설명 — 사용자 키로 실행·로컬 선택 가능 ([2828330](https://github.com/openmake/openmake_llm/commit/28283302be6ab670391cd364849b0b5f2439af69))
+
 ## [1.117.2](https://github.com/openmake/openmake_llm/compare/v1.117.1...v1.117.2) (2026-10-31)
 
 
