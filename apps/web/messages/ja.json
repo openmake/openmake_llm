@@ -3062,6 +3062,7 @@
     "defaultOption": "既定（自動）",
     "assignedBadge": "割り当て済み",
     "unavailableBadge": "利用不可",
+    "actorByokBadge": "各ユーザーのキーで実行",
     "resetLabel": "既定値に戻す",
     "notInList": "（一覧にありません）",
     "paramsApply": "パラメータ適用",

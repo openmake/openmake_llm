@@ -3062,6 +3062,7 @@
     "defaultOption": "기본(자동)",
     "assignedBadge": "배정됨",
     "unavailableBadge": "사용 불가",
+    "actorByokBadge": "사용자 키로 실행",
     "resetLabel": "기본값으로 되돌리기",
     "notInList": "(목록에 없음)",
     "paramsApply": "인자 적용",
