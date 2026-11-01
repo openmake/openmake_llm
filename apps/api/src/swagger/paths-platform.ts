@@ -448,7 +448,20 @@ export const platformPaths = {
                                 type: 'object',
                                 properties: {
                                     status: { type: 'string', example: 'ok' },
-                                    timestamp: { type: 'string', format: 'date-time' }
+                                    timestamp: { type: 'string', format: 'date-time' },
+                                    version: { type: 'string', example: '1.120.0', description: '관리자 요청에만 포함' },
+                                    build: {
+                                        type: 'object',
+                                        description: '관리자 요청에만 포함',
+                                        properties: {
+                                            buildTime: { type: 'string' },
+                                            gitHash: { type: 'string' },
+                                            gitDate: { type: 'string' },
+                                            version: { type: 'string' },
+                                            gitTag: { type: 'string' }
+                                        },
+                                        required: ['buildTime', 'gitHash', 'gitDate']
+                                    }
                                 }
                             }
                         }
