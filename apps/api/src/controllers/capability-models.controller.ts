@@ -24,7 +24,7 @@ import {
     normalizeCapability, sanitizeCapabilityParams, type Capability,
 } from '../config/capabilities';
 import {
-    resolveCapabilityTarget, validateCapabilityAssignment, CapabilityUnavailableError,
+    describeEffectiveCapabilityTarget, validateCapabilityAssignment, CapabilityUnavailableError,
 } from '../services/orchestrator/capability-resolver';
 import { getAuditService } from '../services/AuditService';
 import type { AuditAction } from '../config/audit-actions';
@@ -64,13 +64,13 @@ async function auditChange(userId: string, action: AuditAction, details: Record<
 
 /** 실효 해석 — 각 capability가 지금 어느 모델로 가는지(키 노출 없음). 실패는 code 로 노출. */
 export async function describeEffectiveCapabilities(userId: string | undefined): Promise<Array<{
-    capability: Capability; fullId?: string; source?: string; error?: string; code?: string;
+    capability: Capability; fullId?: string; source?: string; error?: string; code?: string; keyPolicy?: 'actor-byok';
 }>> {
     // 배정 대상(ASSIGNABLE)만 — text.synthesize(채팅 모델)·web.search(검색 오케스트레이터)는 모델 배정이 없다
     return Promise.all(ASSIGNABLE_CAPABILITIES.map(async (capability) => {
         try {
-            const t = await resolveCapabilityTarget(capability, userId);
-            return { capability, fullId: t.fullId, source: t.source };
+            // actor-byok 는 사용자 문맥이 없으면(관리자 전역) 키 검사 없이 배정 + keyPolicy
+            return { capability, ...(await describeEffectiveCapabilityTarget(capability, userId)) };
         } catch (err) {
             if (err instanceof CapabilityUnavailableError) return { capability, error: err.message, code: err.code };
             return { capability, error: err instanceof Error ? err.message : String(err) };

@@ -293,17 +293,14 @@ function defaultDeps(): ResolveDeps {
     };
 }
 
-/**
- * capability의 실행 대상을 해석한다. 미배정·키 없음은 throw(CapabilityUnavailableError) —
- * 호출부는 message 를 그대로 사용자 안내로 쓴다.
- */
-export async function resolveCapabilityTarget(
-    capability: Capability,
-    userId?: string,
-    deps: Partial<ResolveDeps> = {},
-): Promise<CapabilityTarget> {
-    const d: ResolveDeps = { ...defaultDeps(), ...deps };
+interface PickedAssignment {
+    fullId: string;
+    params: Record<string, string>;
+    source: CapabilityTarget['source'];
+}
 
+/** 배정 우선순위(① 사용자 → ② 전역 → ③ 코드 기본값)로 fullId·params 를 고른다 — 키는 보지 않는다. 미배정이면 null */
+async function pickAssignment(capability: Capability, userId: string | undefined, d: Pick<ResolveDeps, 'models'>): Promise<PickedAssignment | null> {
     // ① 사용자 오버라이드
     if (userId) {
         let row: CapabilityModelRow | null = null;
@@ -315,33 +312,91 @@ export async function resolveCapabilityTarget(
                 `${capability} 사용자 배정 조회 실패: ${err instanceof Error ? err.message : String(err)}`, 'CAPABILITY_LOOKUP_FAILED',
             );
         }
-        if (row) {
-            return isExternalFullId(row.fullId)
-                ? externalTarget(capability, row.fullId, row.params, 'user', userId, d)
-                : localTarget(capability, row.fullId, row.params, 'user');
-        }
+        if (row) return { fullId: row.fullId, params: row.params, source: 'user' };
     }
 
     // ② 전역 DB
     const global = await getGlobalRow(d.models, capability);
-    if (global) {
-        return isExternalFullId(global.fullId)
-            ? externalTarget(capability, global.fullId, global.params, 'global', userId, d)
-            : localTarget(capability, global.fullId, global.params, 'global');
-    }
+    if (global) return { fullId: global.fullId, params: global.params, source: 'global' };
 
     // ③ 코드 기본값 — 외부 fullId(env)는 키 정책을 따른다(actor-byok 면 사용자 키, 그 밖은 서버 키 분기에서 명시 실패)
     const fallback = CAPABILITY_DEFAULTS[capability];
-    if (fallback) {
-        return isExternalFullId(fallback)
-            ? externalTarget(capability, fallback, {}, 'default', userId, d)
-            : localTarget(capability, fallback, {}, 'default');
+    return fallback ? { fullId: fallback, params: {}, source: 'default' } : null;
+}
+
+/**
+ * capability의 실행 대상을 해석한다. 미배정·키 없음은 throw(CapabilityUnavailableError) —
+ * 호출부는 message 를 그대로 사용자 안내로 쓴다.
+ */
+export async function resolveCapabilityTarget(
+    capability: Capability,
+    userId?: string,
+    deps: Partial<ResolveDeps> = {},
+): Promise<CapabilityTarget> {
+    const d: ResolveDeps = { ...defaultDeps(), ...deps };
+    const picked = await pickAssignment(capability, userId, d);
+    if (picked) {
+        return isExternalFullId(picked.fullId)
+            ? externalTarget(capability, picked.fullId, picked.params, picked.source, userId, d)
+            : localTarget(capability, picked.fullId, picked.params, picked.source);
     }
 
     throw new CapabilityUnavailableError(
         `${capability} 모델이 배정되어 있지 않습니다. 설정 → 모델 & 응답 → 모델 배정에서 배정하세요.`,
         'CAPABILITY_UNASSIGNED',
     );
+}
+
+export interface CapabilityAssignment {
+    fullId: string;
+    providerId: string;
+    /** 게이트웨이에 보내는 model 값(해석기와 같은 규칙 — 로컬 태그 또는 `<provider>/<model>`) */
+    model: string;
+    /** 배정 params(외부면 provider 기본 params 를 먼저 깐다 — externalTarget 과 같다) */
+    params: Record<string, string>;
+    source: CapabilityTarget['source'];
+}
+
+/**
+ * 지금 배정된 모델만 알려 준다 — 키 행 조회·복호화를 하지 않는다(실행 가능 여부는 checkCapabilityTargetAvailability).
+ * 목록 화면·사용자 문맥 없는 관리자 실효 표시가 쓴다. 미배정이면 null, 사용자 배정 조회 장애는 CAPABILITY_LOOKUP_FAILED.
+ * direct transport(provider 직결)의 model 표기는 반영하지 않는다(게이트웨이 경로 기준).
+ */
+export async function describeCapabilityAssignment(
+    capability: Capability,
+    userId?: string,
+    deps: Partial<ResolveDeps> = {},
+): Promise<CapabilityAssignment | null> {
+    const picked = await pickAssignment(capability, userId, { models: deps.models ?? new CapabilityModelsRepository(getPool()) });
+    if (!picked) return null;
+    if (!isExternalFullId(picked.fullId)) {
+        return { ...picked, providerId: 'local-llm', model: toLocalModelTag(picked.fullId) ?? picked.fullId };
+    }
+    const { providerId, modelId } = splitFullId(picked.fullId);
+    return {
+        ...picked, providerId, model: `${providerId}/${modelId}`,
+        params: { ...providerParamDefaults(providerId, capability), ...picked.params },
+    };
+}
+
+/**
+ * 설정 화면의 실효 줄 — 사용자 문맥이 없는데(관리자 전역 화면) actor-byok capability 면 실행 주체가 각 사용자라
+ * 키를 검사하지 않고 배정만 `keyPolicy: 'actor-byok'` 로 돌려준다. 그 밖은 resolveCapabilityTarget 과 같다(실패는 throw).
+ */
+export async function describeEffectiveCapabilityTarget(
+    capability: Capability,
+    userId?: string,
+    deps: Partial<ResolveDeps> = {},
+): Promise<{ fullId: string; source: CapabilityTarget['source']; keyPolicy?: 'actor-byok' }> {
+    if (!userId && capabilityKeyPolicy(capability) === 'actor-byok') {
+        const a = await describeCapabilityAssignment(capability, undefined, deps);
+        if (!a) {
+            throw new CapabilityUnavailableError(`${capability} 모델이 배정되어 있지 않습니다. 설정 → 모델 & 응답 → 모델 배정에서 배정하세요.`, 'CAPABILITY_UNASSIGNED');
+        }
+        return { fullId: a.fullId, source: a.source, keyPolicy: 'actor-byok' };
+    }
+    const t = await resolveCapabilityTarget(capability, userId, deps);
+    return { fullId: t.fullId, source: t.source };
 }
 
 /**

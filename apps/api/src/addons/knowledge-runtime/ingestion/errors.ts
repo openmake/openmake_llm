@@ -16,8 +16,12 @@ export const FAILURE_CODES = {
     EXTRACTION: 'FAILED_EXTRACTION',
     /** 청크 생성 실패 */
     CHUNKING: 'FAILED_CHUNKING',
-    /** 임베딩 호출·저장 실패 */
+    /** 임베딩 호출·저장 실패(429·5xx·시간 초과·응답 불일치 — 재시도 대상) */
     EMBEDDING: 'FAILED_EMBEDDING',
+    /** 공간 색인 모델의 공급자 키가 없다(미등록·비활성·OAuth·미배정·사용자 문맥 없음) — 재시도하지 않는다(키를 고친 뒤 사용자가 재시도) */
+    EMBEDDING_KEY_MISSING: 'EMBEDDING_KEY_MISSING',
+    /** 공급자가 사용자 키를 거절했다(401·무효 키 본문) — 재시도하지 않는다(거절 메모가 TTL 동안 재호출을 막는다) */
+    EMBEDDING_KEY_REJECTED: 'EMBEDDING_KEY_REJECTED',
     /** 임베딩 수가 청크 수와 맞지 않는다(부분 성공은 검색 불가) */
     VERIFICATION: 'FAILED_VERIFICATION',
     /** 접수 뒤 조직 사용권이 철회됨 — claim 때 재검사에서 거절(재시도하지 않는다) */

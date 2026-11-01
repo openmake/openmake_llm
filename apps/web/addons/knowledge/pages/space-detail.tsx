@@ -2,7 +2,8 @@
 
 /**
  * /knowledge/[spaceId] 상세 — 이름·설명(canEdit 시 인라인 편집), 새 대화·자료 추가·기존 대화 연결,
- * 문서 상태(처리 중일 때만 폴링)·재시도·삭제, 대화 목록(열기·연결 해제), Space 삭제.
+ * 문서 상태(처리 중·재색인 중일 때만 폴링)·재시도·삭제, 대화 목록(열기·연결 해제), Space 삭제.
+ * 색인 모델·상태(서버 판정 embedding)를 한 줄로 보이고, 서버 상태가 허락하면 "현재 설정 모델로 다시 색인" 을 연다.
  * ?doc=&chunk= 가 있으면 우측에 인용 미리보기 패널을 연다.
  * 레이아웃 계약: main(flex-col) 안에서 flex-1 행 — 왼쪽 스크롤 컬럼 + 오른쪽 인용 패널.
  */
@@ -22,13 +23,15 @@ import {
   Loader2,
   FileText,
   MessageSquare,
+  RefreshCw,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Button } from "@/components/ui/primitives";
+import { Badge, Button, Dialog } from "@/components/ui/primitives";
 import { knowledgeApi } from "../api";
 import { qk, PROCESSING_POLL_MS } from "../constants";
-import { isProcessing } from "../helpers";
+import { canOfferReindex, embeddingStatusKey, isProcessing, splitBlockedReasons } from "../helpers";
+import { EmbeddingErrorText, toCodedError, type CodedError } from "../components/embedding-notice";
 import { useSessionActions } from "../session-actions";
 import { DocumentList } from "../components/document-list";
 import { BindConversationDialog } from "../components/bind-picker";
@@ -54,8 +57,11 @@ export function SpaceDetail({
   const [editName, setEditName] = useState<string | null>(null);
   const [editDesc, setEditDesc] = useState<string | null>(null);
   const [editInstructions, setEditInstructions] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<CodedError | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [reindexOpen, setReindexOpen] = useState(false);
+  const [reindexBusy, setReindexBusy] = useState(false);
+  const [reindexError, setReindexError] = useState<CodedError | null>(null);
   const [citationOpen, setCitationOpen] = useState<boolean>(!!(docId && chunkId));
 
   const { data: caps } = useQuery({
@@ -70,7 +76,8 @@ export function SpaceDetail({
     retry: false,
     refetchInterval: (q) => {
       const d = q.state.data;
-      return d && d.documents.some((doc) => isProcessing(doc.status)) ? PROCESSING_POLL_MS : false;
+      const busy = d && (d.embedding.status === "reindexing" || d.documents.some((doc) => isProcessing(doc.status)));
+      return busy ? PROCESSING_POLL_MS : false;
     },
   });
 
@@ -108,7 +115,7 @@ export function SpaceDetail({
     if (!file) return;
     setUploadError(null);
     if (caps && caps.maxFileBytes > 0 && file.size > caps.maxFileBytes) {
-      setUploadError(t("upload.tooLarge"));
+      setUploadError({ message: t("upload.tooLarge") });
       return;
     }
     setUploading(true);
@@ -116,11 +123,26 @@ export function SpaceDetail({
       await knowledgeApi.uploadDocument(spaceId, file);
       void invalidate();
     } catch (err) {
-      const e2 = err as Error & { status?: number; code?: string };
-      if (e2.status === 409 || e2.code === "DUPLICATE_DOCUMENT") setUploadError(t("upload.duplicate"));
-      else setUploadError(e2.message || t("serverError"));
+      const e2 = toCodedError(err, t("serverError"));
+      // 412(임베딩 키·미배정)는 코드별 안내 + 설정 열기 — EmbeddingErrorText 가 code 로 고른다
+      setUploadError(e2.status === 409 || e2.code === "DUPLICATE_DOCUMENT" ? { message: t("upload.duplicate") } : e2);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const runReindex = async () => {
+    setReindexBusy(true);
+    setReindexError(null);
+    try {
+      await knowledgeApi.reindexSpace(spaceId);
+      setReindexOpen(false);
+      void invalidate();
+      void queryClient.invalidateQueries({ queryKey: qk.spaces() });
+    } catch (err) {
+      setReindexError(toCodedError(err, t("serverError")));
+    } finally {
+      setReindexBusy(false);
     }
   };
 
@@ -139,6 +161,8 @@ export function SpaceDetail({
 
   const canEdit = space?.canEdit ?? false;
   const accept = caps?.supportedMimeTypes?.join(",");
+  const embedding = space?.embedding;
+  const offerReindex = !!space && canOfferReindex(space);
 
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -279,8 +303,37 @@ export function SpaceDetail({
             )}
           </section>
 
-          {uploadError && <p className="text-sm text-danger">{uploadError}</p>}
-          {caps && !caps.ready && (
+          {/* 색인 모델·상태 — 서버 판정(embedding)을 그대로 그린다 */}
+          {embedding && (
+            <section className="space-y-1.5 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-muted">
+                <span className="break-all font-mono">
+                  {embedding.index
+                    ? t("embedding.indexModel", { model: embedding.index.modelId, dimension: embedding.index.dimension })
+                    : t("embedding.notPinned")}
+                </span>
+                {embedding.status !== "ready" && (
+                  <Badge tone={embedding.status === "reindexing" ? "accent" : "warn"} className="shrink-0 whitespace-nowrap">
+                    {embedding.status === "reindexing" && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {t(embeddingStatusKey(embedding.status))}
+                  </Badge>
+                )}
+                {offerReindex && (
+                  <Button size="sm" variant="outline" onClick={() => { setReindexError(null); setReindexOpen(true); }}>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    {t("embedding.reindex")}
+                  </Button>
+                )}
+              </div>
+              {embedding.mismatch && embedding.effective && (
+                <p className="text-warn">{t("embedding.mismatch", { model: embedding.effective.modelId })}</p>
+              )}
+            </section>
+          )}
+
+          {uploadError && <EmbeddingErrorText error={uploadError} className="text-sm text-danger" />}
+          {/* 플랫폼 사유만 — 임베딩 설정·키 사유는 위 공간 embedding 절이 공간 색인 기준으로 보인다 */}
+          {caps && !caps.ready && splitBlockedReasons(caps.blockedReasons).platform.length > 0 && (
             <p className="rounded-md border border-warn/40 bg-warn-soft/30 px-3 py-2 text-xs text-warn">
               {t("notReadyNotice")}
             </p>
@@ -364,6 +417,25 @@ export function SpaceDetail({
       )}
 
       <BindConversationDialog spaceId={spaceId} open={bindOpen} onClose={() => setBindOpen(false)} />
+
+      <Dialog open={reindexOpen} onClose={() => setReindexOpen(false)} title={t("embedding.reindexConfirmTitle")}>
+        <p className="text-sm text-muted">
+          {t("embedding.reindexConfirmBody", {
+            count: space?.documentCount ?? 0,
+            model: embedding?.effective?.modelId ?? "",
+          })}
+        </p>
+        {reindexError && <EmbeddingErrorText error={reindexError} className="mt-2 text-xs text-danger" />}
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setReindexOpen(false)} disabled={reindexBusy}>
+            {t("cancel")}
+          </Button>
+          <Button onClick={() => void runReindex()} disabled={reindexBusy}>
+            {reindexBusy && <Loader2 className="h-4 w-4 animate-spin" />}
+            {t("embedding.reindex")}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

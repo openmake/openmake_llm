@@ -14,8 +14,9 @@ import { kdb } from '../db';
 import { KNOWLEDGE_ADDON_ID, KNOWLEDGE_RUNTIME } from '../constants';
 import { getDefaultLimits, type LimitsProfile } from '../config/profiles';
 import { ingestVersion, type IngestDeps } from '../ingestion/pipeline';
-import { runReindexJob } from '../embedding/index-manager';
+import { runSpaceReindexJob } from '../embedding/space-reindex';
 import { FAILURE_CODES, type FailureCode } from '../ingestion/errors';
+import { KnowledgeJobPermanentError } from './errors';
 import { deleteStoredFile } from '../documents/storage';
 import { rechunkSpace } from './rechunk';
 import { runCleanup } from './cleanup';
@@ -26,7 +27,7 @@ import type { JobActorKind, KnowledgeWorkerMode } from './job-schema';
 
 const logger = createLogger('KnowledgeWorker');
 
-/** 재시도해 볼 수 있는 수집 실패(인프라성) — 검증·형식 실패는 영구라 재시도하지 않는다 */
+/** 재시도해 볼 수 있는 수집 실패(인프라성) — 검증·형식·임베딩 키(EMBEDDING_KEY_*) 실패는 영구라 재시도하지 않는다 */
 const RETRYABLE_FAILURES: ReadonlySet<FailureCode> = new Set([FAILURE_CODES.EMBEDDING, FAILURE_CODES.VERIFICATION]);
 
 export interface JobRow {
@@ -61,18 +62,23 @@ type Handler = (job: JobRow, deps: WorkerDeps) => Promise<void>;
 const HANDLERS: Readonly<Record<JobRow['kind'], Handler>> = {
     ingest: async (job, deps) => {
         if (!job.document_version_id) throw new Error('ingest 작업에 document_version_id 없음');
-        const res = await ingestVersion(job.document_version_id, deps);
+        // 외부 임베딩은 작업 행위자(업로드·재시도한 사용자)의 키로만 — NULL(004 이전·시스템) 이면 로컬 모델만 된다
+        const res = await ingestVersion(job.document_version_id, { ...deps, actorUserId: job.actor_user_id ?? undefined });
         if (res.status === 'failed' && res.failureCode && RETRYABLE_FAILURES.has(res.failureCode)) {
             throw new Error(`재시도 가능한 수집 실패: ${res.failureCode}`);
         }
     },
     reindex: async (job, deps) => {
-        if (!job.embedding_index_id) throw new Error('reindex 작업에 embedding_index_id 없음');
-        await runReindexJob(job.embedding_index_id, deps);
+        // 공간 단위 재색인만 — 006 이전 전역 reindex 잔재(space_id 없음)는 실행하지 않고 명시 실패로 마감한다
+        if (!job.space_id || !job.embedding_index_id) {
+            throw new KnowledgeJobPermanentError('구 전역 reindex 작업 — 공간 단위로 다시 요청하세요(space_id·embedding_index_id 필요)');
+        }
+        await runSpaceReindexJob({ spaceId: job.space_id, indexId: job.embedding_index_id, actorUserId: job.actor_user_id }, deps);
     },
     rechunk: async (job, deps) => {
         if (!job.space_id) throw new Error('rechunk 작업에 space_id 없음');
-        await rechunkSpace(job.space_id, deps);
+        // 재수집도 작업 행위자(요청한 관리자)의 키로 — ingest 와 같다
+        await rechunkSpace(job.space_id, { ...deps, actorUserId: job.actor_user_id ?? undefined });
     },
     cleanup: async (job, deps) => {
         await runCleanup(job.space_id, { deleteStoredFile, ...deps });
@@ -363,7 +369,8 @@ export class KnowledgeWorker {
                 logger.warn(`작업 중단(lease 상실 — 결과 쓰기 거절): ${job.kind} ${job.id} token=${token} — ${err instanceof Error ? err.message : String(err)}`);
                 return;
             }
-            await this.failOrRetry(job, token, maxAttempts, err instanceof Error ? err.message : String(err));
+            // 영구 실패(키 없음·키 거절·대상 없음·구 작업 잔재)는 시도 횟수와 무관하게 바로 최종 실패 — 공급자를 다시 두드리지 않는다
+            await this.failOrRetry(job, token, maxAttempts, err instanceof Error ? err.message : String(err), err instanceof KnowledgeJobPermanentError);
         } finally {
             clearInterval(beat);
             lease.signal.removeEventListener('abort', stopBeat);
@@ -409,10 +416,10 @@ export class KnowledgeWorker {
         );
     }
 
-    private async failOrRetry(job: JobRow, token: string, maxAttempts: number, error: string): Promise<void> {
+    private async failOrRetry(job: JobRow, token: string, maxAttempts: number, error: string, permanent = false): Promise<void> {
         const plan = retryPlan(Number(job.attempts), maxAttempts);
         const attempts = plan.attempts;
-        if (plan.final) {
+        if (plan.final || permanent) {
             await kdb().query(
                 `UPDATE knowledge_ingestion_jobs SET state = 'failed', lease_owner = NULL, lease_expires_at = NULL, last_error = $3, updated_at = NOW()
                   WHERE id = $1 AND fencing_token = $2`,

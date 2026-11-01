@@ -9,6 +9,8 @@ import {
     resolveCapabilityTargetForModel,
     validateCapabilityAssignment,
     checkCapabilityTargetAvailability,
+    describeCapabilityAssignment,
+    describeEffectiveCapabilityTarget,
     clearGlobalCapabilityCache,
 } from '../capability-resolver';
 import { CAPABILITY_DEFAULTS } from '../../../config/capabilities';
@@ -157,5 +159,52 @@ describe('resolveCapabilityTargetForModel — params 선택 인자', () => {
 
     it('text.embed 외부 모델은 userId 없이 서버 키로 가지 않는다', async () => {
         await expect(resolveCapabilityTargetForModel('text.embed', 'openrouter:emb-1', undefined, deps({ serverKey: 'srv' }))).rejects.toMatchObject({ code: 'CAPABILITY_KEY_MISSING' });
+    });
+});
+
+describe('describeCapabilityAssignment — 키 검사·복호화 없이 배정만', () => {
+    it('사용자 배정 → source user, params 보존, 외부 model 은 게이트웨이 값', async () => {
+        const d = deps();
+        (d.models.get as jest.Mock).mockResolvedValueOnce(row('u1', 'text.embed', 'openrouter:emb-1', { dimensions: '1024' }));
+        expect(await describeCapabilityAssignment('text.embed', 'u1', d)).toEqual({
+            fullId: 'openrouter:emb-1', providerId: 'openrouter', model: 'openrouter/emb-1', params: { dimensions: '1024' }, source: 'user',
+        });
+        expect(d.userKeys.getByUserAndProvider).not.toHaveBeenCalled();
+        expect(d.userKeys.decryptKey).not.toHaveBeenCalled();
+    });
+
+    it('전역 외부 배정 + userId 없음 → 키 없이도 배정을 돌려준다(관리자 실효 표시용)', async () => {
+        const d = deps({ global: [row('__global__', 'text.embed', 'openrouter:emb-1')] });
+        expect(await describeCapabilityAssignment('text.embed', undefined, d)).toMatchObject({ fullId: 'openrouter:emb-1', source: 'global' });
+        expect(d.serverKeys.get).not.toHaveBeenCalled();
+    });
+
+    it('로컬 기본값 → local-llm 태그, 미배정이면 null', async () => {
+        defaults['text.embed'] = 'local-llm:emb-local';
+        expect(await describeCapabilityAssignment('text.embed', 'u1', deps())).toEqual({
+            fullId: 'local-llm:emb-local', providerId: 'local-llm', model: 'emb-local', params: {}, source: 'default',
+        });
+        delete defaults['text.embed'];
+        expect(await describeCapabilityAssignment('text.embed', 'u1', deps())).toBeNull();
+    });
+
+    it('실효 표시: 사용자 문맥 없는 actor-byok 는 키 검사 없이 배정 + keyPolicy, 그 밖은 종전 해석', async () => {
+        const g = [row('__global__', 'text.embed', 'openrouter:emb-1'), row('__global__', 'audio.speech', 'openrouter:tts-1')];
+        const d = deps({ global: g });
+        expect(await describeEffectiveCapabilityTarget('text.embed', undefined, d)).toEqual({ fullId: 'openrouter:emb-1', source: 'global', keyPolicy: 'actor-byok' });
+        expect(d.userKeys.getByUserAndProvider).not.toHaveBeenCalled();
+        // 사용자 문맥이 있으면 그 사용자의 키로 실제 해석(키 없으면 명시 실패)
+        await expect(describeEffectiveCapabilityTarget('text.embed', 'u1', deps({ global: g, keyRow: null }))).rejects.toMatchObject({ code: 'CAPABILITY_KEY_MISSING' });
+        // assignment-scope 는 종전 — 서버 키 없으면 실패
+        await expect(describeEffectiveCapabilityTarget('audio.speech', undefined, d)).rejects.toMatchObject({ code: 'CAPABILITY_KEY_MISSING' });
+        delete defaults['text.embed'];
+        clearGlobalCapabilityCache();
+        await expect(describeEffectiveCapabilityTarget('text.embed', undefined, deps())).rejects.toMatchObject({ code: 'CAPABILITY_UNASSIGNED' });
+    });
+
+    it('사용자 배정 조회 장애는 CAPABILITY_LOOKUP_FAILED(조용히 전역으로 넘어가지 않는다)', async () => {
+        const d = deps({ global: [row('__global__', 'text.embed', 'openrouter:emb-1')] });
+        (d.models.get as jest.Mock).mockRejectedValueOnce(new Error('db down'));
+        await expect(describeCapabilityAssignment('text.embed', 'u1', d)).rejects.toMatchObject({ code: 'CAPABILITY_LOOKUP_FAILED' });
     });
 });

@@ -85,7 +85,7 @@ async function snapshot(f: Fixture) {
 }
 
 describeOrSkip('knowledge 작업 취소 (실 DB)', () => {
-    let unlock: () => Promise<void>;
+    let unlock: (() => Promise<void>) | undefined;
     beforeAll(async () => {
         unlock = await lockKnowledgeQueueTests(pool);
         await applyKnowledgeSchema(pool);
@@ -94,7 +94,7 @@ describeOrSkip('knowledge 작업 취소 (실 DB)', () => {
     afterAll(async () => {
         if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
         if (spaceIds.length) await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [spaceIds]);
-        await unlock();
+        await unlock?.();
         await pool.end();
     });
 
