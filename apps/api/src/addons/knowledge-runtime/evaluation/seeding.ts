@@ -15,7 +15,6 @@ import * as spaces from '../spaces/service';
 import * as documents from '../documents/service';
 import * as binding from '../conversations/binding-service';
 import { KnowledgeWorker } from '../jobs/worker';
-import { clearEmbeddingProviderCache } from '../embedding/provider';
 import { contentHash, storeOriginal } from '../documents/storage';
 import { enqueueJob } from '../jobs/queue';
 import { systemJobActor } from '../jobs/actor';
@@ -135,7 +134,8 @@ async function directIngest(
 }
 
 export async function seed(prefix: string): Promise<SeedContext> {
-    clearEmbeddingProviderCache();
+    // 시딩 전부터 있던 색인 — 다른 공간이 쓰는 색인일 수 있어 teardown 이 지우지 않는다(공간이 색인을 FK 로 가리킨다, 006)
+    const preexistingIndexIds = new Set((await kdb().query<{ id: string }>(`SELECT id FROM knowledge_embedding_indexes`)).rows.map((r) => r.id));
     const storageDir = await mkdtemp(join(tmpdir(), 'k08-store-'));
     process.env.KNOWLEDGE_STORAGE_DIR = storageDir;
 
@@ -205,7 +205,9 @@ export async function seed(prefix: string): Promise<SeedContext> {
         unboundSessionByPersona[p] = sid;
     }
 
-    const activeIndexIds = (await kdb().query<{ id: string }>(`SELECT id FROM knowledge_embedding_indexes`)).rows.map((r) => r.id);
+    // 시딩이 새로 만든 색인만(공간 생성·첫 수집이 라이브 배정으로 만든 것) — teardown 대상
+    const activeIndexIds = (await kdb().query<{ id: string }>(`SELECT id FROM knowledge_embedding_indexes`)).rows
+        .map((r) => r.id).filter((id) => !preexistingIndexIds.has(id));
 
     const teardown = async (): Promise<{ leftovers: number; detail: Record<string, number> }> => {
         const userIds = Object.values(personaIds);

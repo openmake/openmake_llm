@@ -5,7 +5,7 @@
  *  - lease_expiry: 죽은 실행자가 lease 를 쥔 채 만료된 상황을 만들고(job 을 stale running 으로),
  *    worker 가 재선점(fencing_token +1)해 완료하게 한다 — 옛 실행자의 완료는 fencing 으로 거절된다.
  *
- * 판정: 각 버전의 (version, sequence) 중복 수 = 0, 활성 index 임베딩 수 == 청크 수.
+ * 판정: 각 버전의 (version, sequence) 중복 수 = 0, 그 문서 공간의 색인 임베딩 수 == 청크 수.
  *
  * @module addons/knowledge-runtime/evaluation/restart-eval
  */
@@ -14,7 +14,7 @@ import { ingestVersion } from '../ingestion/pipeline';
 import { enqueueJob } from '../jobs/queue';
 import { systemJobActor } from '../jobs/actor';
 import { KnowledgeWorker } from '../jobs/worker';
-import { getActiveIndex } from '../embedding/index-manager';
+import { getSpaceIndex } from '../embedding/index-catalog';
 import type { EvalCase, EvalDataset } from './types';
 import type { SeedContext } from './seeding';
 
@@ -41,7 +41,10 @@ async function measureVersion(versionId: string): Promise<{ dups: number; chunks
          ) t`, [versionId])).rows[0].n);
     const chunks = Number((await kdb().query<{ n: string }>(
         `SELECT COUNT(*)::text AS n FROM knowledge_chunks WHERE document_version_id = $1`, [versionId])).rows[0].n);
-    const index = await getActiveIndex();
+    const space = (await kdb().query<{ space_id: string }>(
+        `SELECT d.space_id FROM knowledge_document_versions v JOIN knowledge_documents d ON d.id = v.document_id WHERE v.id = $1`,
+        [versionId])).rows[0];
+    const index = space ? await getSpaceIndex(space.space_id) : null;
     const embeddings = index ? Number((await kdb().query<{ n: string }>(
         `SELECT COUNT(*)::text AS n FROM knowledge_chunk_embeddings e
          JOIN knowledge_chunks c ON c.id = e.chunk_id
