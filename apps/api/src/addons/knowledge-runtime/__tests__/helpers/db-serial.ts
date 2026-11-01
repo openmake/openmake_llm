@@ -1,6 +1,6 @@
 /**
  * 실 DB 테스트 공용 — 작업 큐·모드 행을 만지는 describe 를 한 advisory lock 으로 직렬화하고(jest 워커 2개가
- * 서로의 모드 전환·claim 을 보지 않게), Knowledge 스키마(001 + 004)를 멱등 적용한다.
+ * 서로의 모드 전환·claim 을 보지 않게), Knowledge 스키마(001 + 004 + 006)를 멱등 적용한다.
  * 테스트 전용 파일이다(파일 이름에 .test 가 없어 jest 가 테스트로 돌리지 않는다).
  */
 import { readFileSync } from 'node:fs';
@@ -40,14 +40,20 @@ export async function lockKnowledgeQueueTests(pool: Pool): Promise<() => Promise
     };
 }
 
+/** 이 헬퍼가 적용하고 migration_versions 에 기록하는 add-on 마이그레이션(순서대로) */
+const APPLIED_MIGRATIONS: ReadonlyArray<readonly [version: string, filename: string]> = [
+    ['addon:knowledge-runtime:004', '004_jobs_actor_cancel_mode.sql'],
+    ['addon:knowledge-runtime:006', '006_space_embedding_index.sql'],
+];
+
 /**
- * 001 + 004 를 그대로 적용하고 004 를 migration_versions 에 기록한다(별도 worker 의 스키마 확인용). 전부 멱등.
+ * 001 + 004 + 006 을 그대로 적용하고 004·006 을 migration_versions 에 기록한다(별도 worker 의 스키마 확인용). 전부 멱등.
  * 002·003 은 users 표 FK 가 있어 최소 테스트 DB 에서 실패할 수 있으므로 적용하지 않는다(이 테스트들은 그 열을 쓰지 않는다).
  */
 export async function applyKnowledgeSchema(pool: Pool): Promise<void> {
     await pool.query('CREATE TABLE IF NOT EXISTS conversation_sessions (id TEXT PRIMARY KEY)');
     await pool.query(readFileSync(resolve(MIGRATIONS, '001_knowledge_spaces.sql'), 'utf8'));
-    await pool.query(readFileSync(resolve(MIGRATIONS, '004_jobs_actor_cancel_mode.sql'), 'utf8'));
+    for (const [, filename] of APPLIED_MIGRATIONS) await pool.query(readFileSync(resolve(MIGRATIONS, filename), 'utf8'));
     await pool.query(`
         CREATE TABLE IF NOT EXISTS migration_versions (
             id SERIAL PRIMARY KEY,
@@ -56,10 +62,12 @@ export async function applyKnowledgeSchema(pool: Pool): Promise<void> {
             applied_at TIMESTAMPTZ DEFAULT NOW(),
             checksum VARCHAR(64)
         )`);
-    await pool.query(
-        `INSERT INTO migration_versions (version, filename) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING`,
-        ['addon:knowledge-runtime:004', '004_jobs_actor_cancel_mode.sql'],
-    );
+    for (const [version, filename] of APPLIED_MIGRATIONS) {
+        await pool.query(
+            `INSERT INTO migration_versions (version, filename) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING`,
+            [version, filename],
+        );
+    }
 }
 
 /** 모드를 기본(inprocess)으로 되돌린다 — 모드를 바꾼 테스트의 afterAll·각 테스트 시작에서 부른다 */
