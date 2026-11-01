@@ -15,6 +15,7 @@ import type {
   KnowledgeSpaceCreateInput,
   KnowledgeSpaceDetail,
   KnowledgeSpaceMemory,
+  KnowledgeSpaceReindexResponse,
   KnowledgeSpaceSummary,
   KnowledgeSpaceUpdateInput,
 } from "@openmake/shared-types";
@@ -22,6 +23,19 @@ import type {
 export type { KnowledgeAdminStatus, KnowledgeChunkPreview, KnowledgeProfile };
 
 type Envelope<T> = { success: boolean; data: T };
+
+/** 서버 오류 코드(DUPLICATE_DOCUMENT·EMBEDDING_KEY_MISSING·REINDEX_NOT_NEEDED …)를 status·code 로 올려 던진다 — 호출부가 코드로 안내를 고른다 */
+async function withCode<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (e) {
+    if (e instanceof ApiError) {
+      const code = (e.body as { error?: { code?: string } } | undefined)?.error?.code;
+      throw Object.assign(new Error(e.message), { status: e.status, code });
+    }
+    throw e;
+  }
+}
 
 /** 서버가 바인딩에 쓰는 최근 대화(공용 /api/chat/conversations) */
 export interface RecentChat {
@@ -41,8 +55,9 @@ export const knowledgeApi = {
       (r) => r.data.spaces,
     ),
 
+  /** 412(임베딩 미배정·키)·502(차원 측정 실패)는 status·code 를 단 Error 로 던진다 */
   createSpace: (input: KnowledgeSpaceCreateInput) =>
-    ApiClient.post<Envelope<{ space: KnowledgeSpaceSummary }>>(`${base}/spaces`, input).then(
+    withCode(() => ApiClient.post<Envelope<{ space: KnowledgeSpaceSummary }>>(`${base}/spaces`, input)).then(
       (r) => r.data.space,
     ),
 
@@ -58,28 +73,23 @@ export const knowledgeApi = {
 
   deleteSpace: (id: string) => ApiClient.del<Envelope<unknown>>(`${base}/spaces/${id}`),
 
-  /** 멀티파트 업로드 — 409 는 ApiError(status 409, code DUPLICATE_DOCUMENT)로 던진다(호출부가 분기). */
+  /** 멀티파트 업로드 — 409(DUPLICATE_DOCUMENT)·412(임베딩 키) 는 status·code 를 단 Error 로 던진다(호출부가 분기). */
   uploadDocument: async (id: string, file: File): Promise<KnowledgeDocument> => {
     const fd = new FormData();
     fd.append("file", file);
-    try {
-      const r = await ApiClient.post<Envelope<{ document: KnowledgeDocument }>>(`${base}/spaces/${id}/documents`, fd);
-      return r.data.document;
-    } catch (e) {
-      // 호출부는 status·code(DUPLICATE_DOCUMENT 등)로 분기한다 — ApiError 본문의 error.code 를 올려 준다
-      if (e instanceof ApiError) {
-        const code = (e.body as { error?: { code?: string } } | undefined)?.error?.code;
-        throw Object.assign(new Error(e.message), { status: e.status, code });
-      }
-      throw e;
-    }
+    const r = await withCode(() => ApiClient.post<Envelope<{ document: KnowledgeDocument }>>(`${base}/spaces/${id}/documents`, fd));
+    return r.data.document;
   },
 
   deleteDocument: (id: string, docId: string) =>
     ApiClient.del<Envelope<unknown>>(`${base}/spaces/${id}/documents/${docId}`),
 
   retryDocument: (id: string, docId: string) =>
-    ApiClient.post<Envelope<unknown>>(`${base}/spaces/${id}/documents/${docId}/retry`),
+    withCode(() => ApiClient.post<Envelope<unknown>>(`${base}/spaces/${id}/documents/${docId}/retry`)),
+
+  /** 현재 설정 모델로 다시 색인 — 202 { jobId, indexId }, 409·412·502 는 status·code 를 단 Error */
+  reindexSpace: (id: string) =>
+    withCode(() => ApiClient.post<Envelope<KnowledgeSpaceReindexResponse>>(`${base}/spaces/${id}/reindex`)).then((r) => r.data),
 
   newConversation: (id: string) =>
     ApiClient.post<Envelope<{ sessionId: string }>>(`${base}/spaces/${id}/conversations`).then(
@@ -135,8 +145,6 @@ export const knowledgeApi = {
     const body: KnowledgeProfileUpdateInput = { config };
     return ApiClient.put<Envelope<{ profile: KnowledgeProfile }>>(`${base}/admin/profiles/${profileId}`, body);
   },
-
-  adminReindex: () => ApiClient.post<Envelope<unknown>>(`${base}/admin/reindex`),
 
   adminRechunk: (spaceId: string) =>
     ApiClient.post<Envelope<unknown>>(`${base}/admin/spaces/${spaceId}/rechunk`),

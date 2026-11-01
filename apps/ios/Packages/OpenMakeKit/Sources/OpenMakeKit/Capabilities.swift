@@ -80,7 +80,7 @@ public enum ModelSlotCatalog {
         "music.analyze": ("음악 분석", "음악을 분석하는 모델"),
         "video.generate": ("영상 생성", "영상을 생성하는 모델(작업 제출 후 완료 시 결과 수령)"),
         "video.analyze": ("영상 이해", "영상 내용을 분석하는 모델"),
-        "text.embed": ("임베딩", "검색·임베딩용 인프라 모델"),
+        "text.embed": ("임베딩", "문서(프로젝트) 색인·검색에 쓰는 임베딩 모델 — 외부 모델은 사용자 본인의 API 키로 실행되며, 로컬 모델도 선택할 수 있습니다. 바꾼 모델은 새 프로젝트부터 쓰이고, 기존 프로젝트는 “다시 색인” 해야 바뀝니다"),
     ]
 
     public static func title(_ slot: String) -> String { slots[slot]?.title ?? slot }

@@ -2978,6 +2978,9 @@
       "embedding": "Embedding fehlgeschlagen",
       "cancelled": "Verarbeitung wurde abgebrochen",
       "notEntitled": "Nicht verarbeitet — keine Berechtigung für Knowledge",
+      "verification": "Prüfung der Embeddings fehlgeschlagen",
+      "embeddingKeyMissing": "Kein API-Schlüssel für das Embedding-Modell dieses Projekts — Schlüssel hinterlegen und erneut versuchen",
+      "embeddingKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt — Schlüssel ersetzen und erneut versuchen",
       "unknown": "Verarbeitung fehlgeschlagen"
     },
     "doc": {
@@ -3015,9 +3018,6 @@
     },
     "admin": {
       "title": "Verwaltung",
-      "reindex": "Neu indexieren",
-      "reindexConfirmTitle": "Neu indexieren",
-      "reindexConfirmBody": "Der Embedding-Index wird neu aufgebaut. Das kann eine Weile dauern.",
       "ready": "Verfügbar",
       "notReady": "Nicht verfügbar",
       "embeddingIndex": "Embedding-Index",
@@ -3026,7 +3026,48 @@
       "profiles": "Profile",
       "active": "Aktiv",
       "saveProfile": "Speichern",
-      "invalidJson": "Ungültiges JSON"
+      "invalidJson": "Ungültiges JSON",
+      "indexModel": "Modell",
+      "indexDimension": "Dimension",
+      "indexStatus": "Status",
+      "indexSpaces": "Projekte",
+      "noIndexes": "Noch keine Embedding-Indizes"
+    },
+    "blocked": {
+      "PGVECTOR_MISSING": "Die Vektor-Erweiterung (pgvector) ist nicht installiert",
+      "EMBEDDING_UNASSIGNED": "Kein Embedding-Modell zugewiesen",
+      "EMBEDDING_KEY_MISSING": "Kein API-Schlüssel für das Embedding-Modell",
+      "EMBEDDING_KEY_REJECTED": "Der Anbieter hat den Embedding-API-Schlüssel abgelehnt",
+      "EMBEDDING_PROVIDER_UNAVAILABLE": "Das Embedding-Modell ist derzeit nicht verfügbar",
+      "NO_SUPPORTED_MIME_TYPES": "Es können keine Dateitypen hochgeladen werden",
+      "PARSER_REGISTRY_UNAVAILABLE": "Dokument-Parser konnten nicht geladen werden"
+    },
+    "embedding": {
+      "indexModel": "Index-Modell: {model} · {dimension}d",
+      "notPinned": "Noch kein Index-Modell (wird beim ersten Upload festgelegt)",
+      "mismatch": "Mit einem anderen Modell indexiert als in Ihrer Embedding-Einstellung ({model})",
+      "reindex": "Mit aktuellem Modell neu indexieren",
+      "reindexConfirmTitle": "Neu indexieren",
+      "reindexConfirmBody": "{count} Dokumente werden mit Ihrem aktuellen Modell ({model}) neu indexiert. Externe Modelle laufen mit Ihrem eigenen API-Schlüssel und können Kosten verursachen. Bis zum Abschluss wird weiter im bisherigen Index gesucht.",
+      "createNotice": "Dieses Projekt wird mit {model} indexiert",
+      "createWarn": "Mit Ihrer aktuellen Embedding-Einstellung lässt sich das Projekt eventuell nicht anlegen — prüfen Sie die Einstellungen",
+      "openSettings": "Einstellungen öffnen",
+      "status": {
+        "ready": "Index in Ordnung",
+        "unpinned": "Index nicht festgelegt",
+        "unassigned": "Kein Embedding-Modell",
+        "key_missing": "Embedding-Schlüssel fehlt",
+        "key_rejected": "Embedding-Schlüssel abgelehnt",
+        "reindexing": "Wird neu indexiert"
+      },
+      "error": {
+        "keyMissing": "Kein API-Schlüssel für das Embedding-Modell dieses Projekts. Hinterlegen Sie den Schlüssel dieses Anbieters unter Einstellungen → Externe API-Schlüssel oder indexieren Sie mit einem anderen Embedding-Modell neu.",
+        "keyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt. Ersetzen Sie ihn unter Einstellungen → Externe API-Schlüssel.",
+        "unassigned": "Kein Embedding-Modell zugewiesen. Wählen Sie eines unter Einstellungen → Modellzuweisung → Embeddings.",
+        "providerUnavailable": "Das Embedding-Modell ist derzeit nicht verfügbar (Dimensionsmessung fehlgeschlagen). Prüfen Sie, ob es ein Embedding-Modell ist, und den Status des Anbieters.",
+        "reindexNotNeeded": "Dieses Projekt ist bereits mit Ihrem aktuellen Modell indexiert.",
+        "reindexInProgress": "Dieses Projekt wird bereits neu indexiert."
+      }
     },
     "sidebar": {
       "expandSpace": "{name} aufklappen",
@@ -3158,7 +3199,7 @@
       },
       "text_embed": {
         "title": "Embeddings",
-        "description": "Embedding-Modell zum Indexieren und Durchsuchen von Dokumenten (Projekten) — externe Modelle laufen mit dem eigenen API-Schlüssel des Nutzers, lokale Modelle sind ebenfalls wählbar"
+        "description": "Embedding-Modell zum Indexieren und Durchsuchen von Dokumenten (Projekten) — externe Modelle laufen mit dem eigenen API-Schlüssel des Nutzers, lokale Modelle sind ebenfalls wählbar. Ein geändertes Modell gilt für neue Projekte; bestehende Projekte wechseln erst nach „Neu indexieren“"
       }
     }
   }

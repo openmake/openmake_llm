@@ -1,13 +1,18 @@
 "use client";
 
-/** Knowledge 생성 대화상자 — 이름(필수)·설명(선택). 성공 시 목록/사이드바를 무효화하고 콜백에 새 id 를 준다. */
+/**
+ * Knowledge 생성 대화상자 — 이름(필수)·설명(선택). 성공 시 목록/사이드바를 무효화하고 콜백에 새 id 를 준다.
+ * 색인 모델은 내 실효 임베딩 설정으로 고정된다 — capabilities.embedding(서버 판정)을 한 줄로 보이고,
+ * 실행할 수 없는 상태면 경고만 한다(생성 버튼은 막지 않는다 — 서버가 412 로 판정한다).
+ */
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Dialog } from "@/components/ui/primitives";
 import { knowledgeApi } from "../api";
 import { qk } from "../constants";
+import { EmbeddingErrorText, EmbeddingSettingsLink, toCodedError, type CodedError } from "./embedding-notice";
 
 export function CreateSpaceDialog({
   open,
@@ -24,7 +29,15 @@ export function CreateSpaceDialog({
   const [description, setDescription] = useState("");
   const [instructions, setInstructions] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<CodedError | null>(null);
+  const { data: caps } = useQuery({
+    queryKey: qk.capabilities(),
+    queryFn: knowledgeApi.capabilities,
+    retry: false,
+    enabled: open,
+  });
+  const embedding = caps?.embedding ?? null;
+  const embeddingBlocked = !!caps && (!embedding || embedding.status !== "ready");
 
   const reset = () => {
     setName("");
@@ -35,7 +48,7 @@ export function CreateSpaceDialog({
 
   const submit = async () => {
     if (!name.trim()) {
-      setError(t("create.nameRequired"));
+      setError({ message: t("create.nameRequired") });
       return;
     }
     setBusy(true);
@@ -51,7 +64,7 @@ export function CreateSpaceDialog({
       onClose();
       onCreated?.(space.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("serverError"));
+      setError(toCodedError(e, t("serverError")));
     } finally {
       setBusy(false);
     }
@@ -93,7 +106,18 @@ export function CreateSpaceDialog({
             className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent"
           />
         </label>
-        {error && <p className="text-xs text-danger">{error}</p>}
+        {embedding && (
+          <p className="text-xs text-muted">
+            {t("embedding.createNotice", { model: embedding.modelId })}
+          </p>
+        )}
+        {embeddingBlocked && (
+          <p className="text-xs text-warn">
+            {t("embedding.createWarn")}
+            <EmbeddingSettingsLink />
+          </p>
+        )}
+        {error && <EmbeddingErrorText error={error} />}
         <div className="flex justify-end gap-2 pt-1">
           <Button variant="outline" onClick={onClose} disabled={busy}>
             {t("cancel")}

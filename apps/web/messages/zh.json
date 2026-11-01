@@ -2978,6 +2978,9 @@
       "embedding": "嵌入失败",
       "cancelled": "处理已取消",
       "notEntitled": "没有 Knowledge 使用权限，无法处理",
+      "verification": "嵌入校验失败",
+      "embeddingKeyMissing": "没有可运行此项目嵌入模型的 API 密钥 — 请登记密钥后重试",
+      "embeddingKeyRejected": "提供方拒绝了 API 密钥 — 请更换密钥后重试",
       "unknown": "处理失败"
     },
     "doc": {
@@ -3015,9 +3018,6 @@
     },
     "admin": {
       "title": "管理",
-      "reindex": "重建索引",
-      "reindexConfirmTitle": "重建索引",
-      "reindexConfirmBody": "将重建嵌入索引，可能需要一些时间。",
       "ready": "可用",
       "notReady": "不可用",
       "embeddingIndex": "嵌入索引",
@@ -3026,7 +3026,48 @@
       "profiles": "配置",
       "active": "启用",
       "saveProfile": "保存",
-      "invalidJson": "JSON 格式无效"
+      "invalidJson": "JSON 格式无效",
+      "indexModel": "模型",
+      "indexDimension": "维度",
+      "indexStatus": "状态",
+      "indexSpaces": "项目数",
+      "noIndexes": "暂无嵌入索引"
+    },
+    "blocked": {
+      "PGVECTOR_MISSING": "未安装向量扩展(pgvector)",
+      "EMBEDDING_UNASSIGNED": "未分配嵌入模型",
+      "EMBEDDING_KEY_MISSING": "没有可运行嵌入模型的 API 密钥",
+      "EMBEDDING_KEY_REJECTED": "提供方拒绝了嵌入 API 密钥",
+      "EMBEDDING_PROVIDER_UNAVAILABLE": "嵌入模型当前不可用",
+      "NO_SUPPORTED_MIME_TYPES": "没有可上传的文件类型",
+      "PARSER_REGISTRY_UNAVAILABLE": "无法加载文档解析器"
+    },
+    "embedding": {
+      "indexModel": "索引模型: {model} · {dimension} 维",
+      "notPinned": "尚未确定索引模型(上传第一份资料时确定)",
+      "mismatch": "当前索引所用模型与我的嵌入设置({model})不同",
+      "reindex": "用当前设置的模型重新索引",
+      "reindexConfirmTitle": "重新索引",
+      "reindexConfirmBody": "将用当前设置的模型({model})重新索引 {count} 个文档。外部模型使用我的 API 密钥运行，可能产生费用。完成前仍使用现有索引检索。",
+      "createNotice": "此项目将使用 {model} 建立索引",
+      "createWarn": "按当前嵌入设置可能无法创建项目 — 请检查设置",
+      "openSettings": "打开设置",
+      "status": {
+        "ready": "索引正常",
+        "unpinned": "索引未确定",
+        "unassigned": "未分配嵌入",
+        "key_missing": "缺少嵌入密钥",
+        "key_rejected": "嵌入密钥被拒绝",
+        "reindexing": "正在重新索引"
+      },
+      "error": {
+        "keyMissing": "没有可运行此项目嵌入模型的 API 密钥。请在 设置 → 外部 API 密钥 中登记该提供方的密钥，或改用其他嵌入模型重新索引。",
+        "keyRejected": "提供方拒绝了 API 密钥。请在 设置 → 外部 API 密钥 中更换密钥。",
+        "unassigned": "未分配嵌入模型。请在 设置 → 模型分配 → 嵌入 中选择模型。",
+        "providerUnavailable": "嵌入模型当前不可用(维度测量失败)。请确认它是嵌入模型并检查提供方状态。",
+        "reindexNotNeeded": "此项目已使用当前设置的模型建立索引。",
+        "reindexInProgress": "此项目正在重新索引。"
+      }
     },
     "sidebar": {
       "expandSpace": "展开 {name}",
@@ -3158,7 +3199,7 @@
       },
       "text_embed": {
         "title": "嵌入",
-        "description": "用于文档(项目)索引与检索的嵌入模型 — 外部模型使用用户本人的 API 密钥运行，也可以选择本地模型"
+        "description": "用于文档(项目)索引与检索的嵌入模型 — 外部模型使用用户本人的 API 密钥运行，也可以选择本地模型。更改后的模型用于新项目，已有项目需“重新索引”后才会切换"
       }
     }
   }
