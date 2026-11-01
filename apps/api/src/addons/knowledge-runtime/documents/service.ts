@@ -13,6 +13,7 @@ import { spaceJobActor, systemJobActor } from '../jobs/actor';
 import { actorFor } from '../config/scope-policy';
 import { resolveSpaceProfiles, getDefaultLimits } from '../config/profiles';
 import { getSpaceScopeRow, touchSpace } from '../spaces/repository';
+import { assertSpaceEmbeddingReady } from '../embedding/readiness';
 import { contentHash, storeOriginal } from './storage';
 import { MAGIC_HEAD_BYTES, sniffMimeMismatch } from './magic-bytes';
 import * as repo from './repository';
@@ -74,6 +75,9 @@ export async function uploadDocument(userId: string, spaceId: string, file: Uplo
         throw new AppError('같은 내용의 문서가 이미 있습니다', 409, true, 'DUPLICATE_DOCUMENT');
     }
 
+    // ④-2 공간 색인 모델을 이 사용자의 키로 지금 쓸 수 있는가 — 파일 저장·작업 생성 전, 공급자 호출 없음(412 코드)
+    await assertSpaceEmbeddingReady(space, userId);
+
     // ⑤ 원본을 비공개 디렉터리에 저장 → 문서+버전 삽입+수집 큐를 한 트랜잭션에
     const logicalName = path.basename(file.originalname) || 'document';
     const documentId = randomUUID();
@@ -113,6 +117,8 @@ export async function retryDocument(userId: string, spaceId: string, documentId:
     if (target.status !== 'failed') {
         throw new AppError('실패한 문서만 재시도할 수 있습니다', 409, true, 'NOT_RETRYABLE');
     }
+    // 키를 고친 뒤 누르는 재시도 — 아직 못 쓰면 작업을 만들지 않고 412
+    await assertSpaceEmbeddingReady(space, userId);
     await inTransaction(async (client) => {
         await repo.resetVersionForRetry(client, target.documentId, target.versionId);
         await enqueueJob({ kind: 'ingest', documentVersionId: target.versionId, actor: spaceJobActor(userId, space) }, client);

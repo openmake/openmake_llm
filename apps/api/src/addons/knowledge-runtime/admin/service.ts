@@ -1,5 +1,6 @@
 /**
- * Knowledge 관리자 서비스 — 상태·프로필·재색인·재청킹. 라우트에서 관리자 게이트 뒤에만 호출한다.
+ * Knowledge 관리자 서비스 — 상태(색인 카탈로그)·프로필·재청킹. 라우트에서 관리자 게이트 뒤에만 호출한다.
+ * 재색인은 관리자 전역이 아니라 공간 쓰기 권한자가 공간 단위로 한다(embedding/space-reindex — 요청자 키로 임베딩).
  *
  * @module addons/knowledge-runtime/admin/service
  */
@@ -12,26 +13,27 @@ import { PROFILE_CONFIG_SCHEMAS } from '../schemas';
 import type { KnowledgeAdminStatus, KnowledgeProfile } from '@openmake/shared-types';
 import { getCapabilities, pgvectorVersion } from '../capabilities';
 
-export async function getAdminStatus(): Promise<KnowledgeAdminStatus> {
+/** 관리자 상태 — capabilities 는 요청한 관리자 기준, 색인 카탈로그는 모델·차원·상태와 그 색인을 쓰는(미삭제) 공간 수 */
+export async function getAdminStatus(userId: string): Promise<KnowledgeAdminStatus> {
     const idx = await kdb().query<{
         id: string; provider_ref: string; model_id: string; dimension: number;
-        distance_metric: string; status: string; activated_at: string | null;
-    }>(`SELECT id, provider_ref, model_id, dimension, distance_metric, status, activated_at
-        FROM knowledge_embedding_indexes WHERE is_active = TRUE LIMIT 1`);
+        distance_metric: string; status: string; created_at: Date | string; space_count: string;
+    }>(`SELECT i.id, i.provider_ref, i.model_id, i.dimension, i.distance_metric, i.status, i.created_at,
+               (SELECT COUNT(*) FROM knowledge_spaces s WHERE s.embedding_index_id = i.id AND s.deleted_at IS NULL)::text AS space_count
+          FROM knowledge_embedding_indexes i
+         ORDER BY i.created_at DESC`);
     const jobs = await kdb().query<{ state: string; n: string }>(
         `SELECT state, COUNT(*)::text AS n FROM knowledge_ingestion_jobs GROUP BY state`,
     );
     const jobCounts: Record<string, number> = {};
     for (const r of jobs.rows) jobCounts[r.state] = parseInt(r.n, 10);
-    const row = idx.rows[0];
     return {
-        capabilities: await getCapabilities(),
-        embeddingIndex: row
-            ? {
-                id: row.id, providerRef: row.provider_ref, modelId: row.model_id, dimension: row.dimension,
-                distanceMetric: row.distance_metric, status: row.status, activatedAt: row.activated_at,
-            }
-            : null,
+        capabilities: await getCapabilities(userId),
+        embeddingIndexes: idx.rows.map((row) => ({
+            id: row.id, providerRef: row.provider_ref, modelId: row.model_id, dimension: row.dimension,
+            distanceMetric: row.distance_metric, status: row.status, spaceCount: parseInt(row.space_count, 10),
+            createdAt: new Date(row.created_at).toISOString(),
+        })),
         jobCounts,
         pgvectorVersion: await pgvectorVersion().catch(() => null),
     };
