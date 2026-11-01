@@ -14,7 +14,7 @@ const fakeQuery = async (sql: string, params: unknown[] = []) => {
         return { rows: [{ id: 'v1', document_id: 'd1', storage_ref: 'ref', mime_type: 'text/plain', source_size: '5', space_id: 's1', config_profile_id: null }], rowCount: 1 };
     }
     if (sql.includes('SELECT id, content FROM knowledge_chunks')) return { rows: [{ id: 'c1', content: 'hello' }], rowCount: 1 };
-    if (sql.includes('SELECT id FROM knowledge_embedding_indexes WHERE is_active')) return { rows: [{ id: 'idx' }], rowCount: 1 };
+    if (sql.includes('SELECT embedding_index_id FROM knowledge_spaces')) return { rows: [{ embedding_index_id: 'idx' }], rowCount: 1 };
     return { rows: [], rowCount: 1 };
 };
 jest.mock('../db', () => ({
@@ -27,12 +27,12 @@ jest.mock('../config/profiles', () => ({
         chunker: { id: 'p', strategy: 'fixed-token', size: 50, overlap: 0 },
     }),
 }));
-jest.mock('../embedding/index-manager', () => ({
-    ensureActiveIndex: async () => ({ id: 'idx', providerRef: 'fake', modelId: 'fake', dimension: 2, metric: 'cosine', status: 'ready', isActive: true }),
+jest.mock('../embedding/index-catalog', () => ({
+    ensureSpaceIndex: async () => ({ id: 'idx', providerRef: 'fake', modelId: 'fake', dimension: 2, metric: 'cosine', status: 'ready', requestParams: {} }),
     insertEmbeddings: async () => undefined,
     countEmbeddings: async (_i: string, ids: string[]) => ids.length,
 }));
-jest.mock('../embedding/provider', () => ({ makeIndexEmbedder: () => async (t: string[]) => t.map(() => [1, 0]) }));
+jest.mock('../embedding/provider', () => ({ makeIndexEmbedder: () => async (t: string[]) => t.map(() => [1, 0]), classifyEmbedError: () => 'provider' }));
 
 import { ingestVersion } from '../ingestion/pipeline';
 

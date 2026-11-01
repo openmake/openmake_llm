@@ -38,6 +38,17 @@ jest.mock('../../../data/conversation-sessions', () => ({ createSession: jest.fn
 jest.mock('../../../data/models/unified-database', () => ({
     getPool: () => (jest.requireMock('../db') as { __pool: unknown }).__pool,
 }));
+// 공간 생성은 생성자의 실효 임베딩으로 색인을 고정한다(006) — 모델 호출 없이 가짜 로컬 배정·차원으로
+const mockFakeEmbedRef = `local-llm:ktest-embed-${Date.now()}`;
+jest.mock('../embedding/provider', () => ({
+    describeLiveEmbedding: async () => ({
+        live: { fullId: mockFakeEmbedRef, providerId: 'local-llm', model: 'ktest-embed', params: {}, source: 'default' }, failure: null,
+    }),
+    probeDimension: async () => ({ dimension: 8, model: 'ktest-embed' }),
+    checkEmbeddingAvailability: async () => ({ ok: true }),
+    classifyEmbedError: () => 'provider',
+    makeIndexEmbedder: () => { throw new Error('모델 호출 금지'); },
+}));
 
 import { createSession } from '../../../data/conversation-sessions';
 import { AppError } from '../../../utils/error-handler';
@@ -45,6 +56,7 @@ import { contentHash } from '../documents/storage';
 import * as spaces from '../spaces/service';
 import * as documents from '../documents/service';
 import * as binding from '../conversations/binding-service';
+import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests } from './helpers/db-serial';
 
 const dbMock = jest.requireMock('../db') as { __pool: Pool };
 const pool = dbMock.__pool;
@@ -87,8 +99,12 @@ describeOrSkip('Knowledge 실 DB (K01)', () => {
     // 업로드 원본은 임시 디렉터리에 쓴다 — 레포 트리에 파일을 남기지 않는다
     const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'knowledge-test-'));
     const prevStorageDir = process.env.KNOWLEDGE_STORAGE_DIR;
+    let unlock: (() => Promise<void>) | undefined;
     beforeAll(async () => {
         process.env.KNOWLEDGE_STORAGE_DIR = storageDir;
+        // 006(공간 색인 열) 포함 스키마 — 다른 실 DB 파일과 겹치지 않게 같은 lock 아래에서 멱등 적용
+        unlock = await lockKnowledgeQueueTests(pool);
+        await applyKnowledgeSchema(pool);
         await insertUser(userA);
         await insertUser(userB);
         (createSession as jest.Mock).mockImplementation(async (uid: string) => {
@@ -96,12 +112,14 @@ describeOrSkip('Knowledge 실 DB (K01)', () => {
             await insertSession(id, uid);
             return { id };
         });
-    });
+    }, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS);
 
     afterAll(async () => {
         // spaces 삭제가 documents·versions·chunks·bindings·jobs 를 CASCADE, users 삭제가 sessions 를 CASCADE
         await pool.query(`DELETE FROM knowledge_spaces WHERE scope_id = ANY($1::text[]) OR created_by = ANY($1::text[])`, [[userA, userB]]);
+        await pool.query(`DELETE FROM knowledge_embedding_indexes WHERE provider_ref = $1`, [mockFakeEmbedRef]);
         await pool.query(`DELETE FROM users WHERE id = ANY($1::text[])`, [[userA, userB]]);
+        await unlock?.();
         await pool.end();
         if (prevStorageDir === undefined) delete process.env.KNOWLEDGE_STORAGE_DIR; else process.env.KNOWLEDGE_STORAGE_DIR = prevStorageDir;
         fs.rmSync(storageDir, { recursive: true, force: true });
@@ -109,6 +127,8 @@ describeOrSkip('Knowledge 실 DB (K01)', () => {
 
     it('cross-user: B 는 A 의 Space 를 목록·상세·바인딩에서 볼 수 없다(누출 0)', async () => {
         const space = await spaces.createSpace(userA, { name: 'A-secret' });
+        // 생성자의 실효 임베딩 색인으로 고정된다(차원 측정은 색인 행이 없을 때 1회)
+        expect(space.embedding).toMatchObject({ status: 'ready', mismatch: false, index: { providerRef: mockFakeEmbedRef, dimension: 8 } });
 
         const listA = await spaces.listSpaces(userA);
         expect(listA.some((s) => s.id === space.id)).toBe(true);

@@ -16,6 +16,8 @@ export interface SpaceScopeRow {
     scope_type: KnowledgeScopeType;
     scope_id: string;
     config_profile_id: string | null;
+    /** 공간의 벡터가 사는 색인(006) — 아직 고정되지 않았으면 null */
+    embedding_index_id: string | null;
 }
 
 export interface SpaceSummaryRow extends SpaceScopeRow {
@@ -33,7 +35,7 @@ export interface SpaceSummaryRow extends SpaceScopeRow {
 
 /** 요약 카운트 SELECT 목록 — 목록·상세가 공유. deleted/삭제 문서는 세지 않는다. */
 const SUMMARY_COLUMNS = `
-    s.id, s.name, s.description, s.icon, s.instructions, s.scope_type, s.scope_id, s.last_used_at, s.updated_at,
+    s.id, s.name, s.description, s.icon, s.instructions, s.scope_type, s.scope_id, s.last_used_at, s.updated_at, s.config_profile_id, s.embedding_index_id,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status <> 'deleted') AS document_count,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status = 'processing') AS processing_count,
     (SELECT COUNT(*) FROM knowledge_documents d WHERE d.space_id = s.id AND d.deleted_at IS NULL AND d.status = 'failed') AS failed_count,
@@ -64,7 +66,7 @@ export async function getSpaceSummaryRow(actor: KnowledgeActor, id: string, mode
 export async function getSpaceScopeRow(actor: KnowledgeActor, id: string, mode: 'read' | 'write'): Promise<SpaceScopeRow | null> {
     const pred = accessPredicate(actor, mode, 's', 2);
     const r = await kdb().query<SpaceScopeRow>(
-        `SELECT s.id, s.scope_type, s.scope_id, s.config_profile_id FROM knowledge_spaces s WHERE s.id = $1 AND ${pred.sql}`,
+        `SELECT s.id, s.scope_type, s.scope_id, s.config_profile_id, s.embedding_index_id FROM knowledge_spaces s WHERE s.id = $1 AND ${pred.sql}`,
         [id, ...pred.params],
     );
     return r.rows[0] ?? null;
@@ -87,15 +89,17 @@ export interface InsertSpaceInput {
     description: string | null;
     icon: string | null;
     instructions: string | null;
+    /** 생성자의 실효 임베딩 모델 색인 — 공간 벡터가 사는 곳(바꾸는 길은 공간 재색인) */
+    embeddingIndexId: string;
 }
 
-/** Space 생성 — 생성한 id 를 돌려준다. config_profile_id 는 비워 두고 해석 시 기본 프로필을 쓴다. */
+/** Space 생성 — 생성한 id 를 돌려준다. config_profile_id 는 비워 두고 해석 시 기본 프로필을 쓴다. 색인은 한 INSERT 로 고정한다. */
 export async function insertSpace(input: InsertSpaceInput): Promise<string> {
     const id = randomUUID();
     await kdb().query(
-        `INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name, description, icon, instructions, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')`,
-        [id, input.scopeType, input.scopeId, input.createdBy, input.name, input.description, input.icon, input.instructions],
+        `INSERT INTO knowledge_spaces (id, scope_type, scope_id, created_by, name, description, icon, instructions, status, embedding_index_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', $9)`,
+        [id, input.scopeType, input.scopeId, input.createdBy, input.name, input.description, input.icon, input.instructions, input.embeddingIndexId],
     );
     return id;
 }

@@ -20,7 +20,7 @@ describeOrSkip('knowledge 마이그레이션 004 (실 DB)', () => {
     const pool = new Pool({ connectionString: CONN, max: 3 });
     const jobIds: string[] = [];
     const workerIds: string[] = [];
-    let unlock: () => Promise<void>;
+    let unlock: (() => Promise<void>) | undefined;
 
     beforeAll(async () => {
         unlock = await lockKnowledgeQueueTests(pool);
@@ -30,7 +30,7 @@ describeOrSkip('knowledge 마이그레이션 004 (실 DB)', () => {
         if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
         if (workerIds.length) await pool.query('DELETE FROM knowledge_worker_heartbeats WHERE worker_id = ANY($1::text[])', [workerIds]);
         await resetWorkerMode(pool);
-        await unlock();
+        await unlock?.();
         await pool.end();
     });
 

@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { Pool } from 'pg';
 import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 import {
-    activateFakeIndex, assertFullTestSchema, fakeVector, freePort, insertIngestFixture, jobSnapshot, setJobLeaseMs, spawnWorker,
+    assertFullTestSchema, dropFakeIndex, ensureFakeIndex, fakeVector, freePort, insertIngestFixture, jobSnapshot, setJobLeaseMs, spawnWorker,
     startFakeGateway, stopWorker, waitFor, workerEnv, type FakeGateway, type WorkerChild,
 } from './helpers/worker-process-harness';
 
@@ -32,10 +32,11 @@ describeOrSkip('knowledge worker 별도 프로세스 (실 DB)', () => {
     const jobIds: string[] = [];
     const spaceIds: string[] = [];
     const children: WorkerChild[] = [];
-    let unlock: () => Promise<void>;
-    let restoreLease: () => Promise<void>;
+    let unlock: (() => Promise<void>) | undefined;
+    let restoreLease: (() => Promise<void>) | undefined;
     let gateway: FakeGateway;
     let storageDir: string;
+    let indexId: string;
 
     const spawnExternal = (healthPort = 0): WorkerChild => {
         const child = spawnWorker(workerEnv({ databaseUrl: CONN ?? '', gatewayUrl: gateway.url, storageDir, healthPort }));
@@ -43,7 +44,7 @@ describeOrSkip('knowledge worker 별도 프로세스 (실 DB)', () => {
         return child;
     };
     const fixture = async (text: string) => {
-        const f = await insertIngestFixture(pool, storageDir, text);
+        const f = await insertIngestFixture(pool, storageDir, text, indexId);
         jobIds.push(f.job);
         spaceIds.push(f.space);
         return f;
@@ -68,25 +69,30 @@ describeOrSkip('knowledge worker 별도 프로세스 (실 DB)', () => {
         await applyKnowledgeSchema(pool);
         await resetWorkerMode(pool);
         restoreLease = await setJobLeaseMs(pool, 3_000);
-        await activateFakeIndex(pool);
+        indexId = await ensureFakeIndex(pool);
         gateway = await startFakeGateway(fakeVector);
         storageDir = await mkdtemp(join(tmpdir(), 'knowledge-worker-proc-'));
     }, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS);
     beforeEach(() => {
-        gateway.hold(false);
-        gateway.releaseAll();
+        gateway?.hold(false);
+        gateway?.releaseAll();
     });
     afterAll(async () => {
-        for (const c of children) await stopWorker(c, 'SIGKILL', 5_000);
-        gateway.releaseAll();
-        await gateway.close();
-        if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
-        if (spaceIds.length) await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [spaceIds]);
-        await restoreLease();
-        await resetWorkerMode(pool);
-        await rm(storageDir, { recursive: true, force: true });
-        await unlock();
-        await pool.end();
+        // beforeAll 이 중간에 실패해도 정리·lock 해제까지 간다(다음 파일이 lock 대기로 연쇄 실패하지 않게)
+        try {
+            for (const c of children) await stopWorker(c, 'SIGKILL', 5_000);
+            gateway?.releaseAll();
+            await gateway?.close();
+            if (jobIds.length) await pool.query('DELETE FROM knowledge_ingestion_jobs WHERE id = ANY($1::text[])', [jobIds]);
+            if (spaceIds.length) await pool.query('DELETE FROM knowledge_spaces WHERE id = ANY($1::text[])', [spaceIds]);
+            if (indexId) await dropFakeIndex(pool, indexId);
+            await restoreLease?.();
+            await resetWorkerMode(pool);
+            if (storageDir) await rm(storageDir, { recursive: true, force: true });
+        } finally {
+            await unlock?.();
+            await pool.end();
+        }
     });
 
     it('external 모드 — 별도 프로세스가 수집을 끝내고(/health·heartbeat), SIGTERM 에 0 으로 끝나며 heartbeat 행을 지운다', async () => {

@@ -8,7 +8,7 @@
  */
 import { kdb } from '../db';
 import { accessPredicate, type KnowledgeActor } from '../config/scope-policy';
-import { METRIC_OPERATOR, toVectorLiteral, type KnowledgeIndex } from '../embedding/index-manager';
+import { METRIC_OPERATOR, toVectorLiteral, type KnowledgeIndex } from '../embedding/index-catalog';
 
 export interface SearchHit {
     chunkId: string;

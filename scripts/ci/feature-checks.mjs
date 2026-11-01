@@ -93,6 +93,8 @@ export function selectRelatedTests(files, options = {}) {
   // Deleting a test removes coverage. The manifest must name the path with a reason, so the deletion is an
   // explicit, reviewable decision instead of a silent pass.
   const deletedTests = options.deletedTests ?? manifest.deletedTests ?? {};
+  // Deleted API source cannot be resolved by Jest: the manifest "deletedSources" maps it to existing regression tests that must run.
+  const deletedSources = options.deletedSources ?? manifest.deletedSources ?? {};
   const listRelated = options.listRelated || (file => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout));
   // Every module (not only tests) that reaches the file through the same graph — its transitive importers.
   const listImporters = options.listImporters || (file => JSON.parse(execute(process.execPath, [resolve(root, 'node_modules/jest/bin/jest.js'), '--config', 'apps/api/jest.config.js', '--findRelatedTests', resolve(root, file), '--listTests', '--json', '--runInBand', '--testMatch', '<rootDir>/src/**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}'], { cwd: root, env: options.env || process.env, encoding: 'utf8', stdio: 'pipe' }).stdout).filter(path => path !== resolve(root, file)));
@@ -104,14 +106,23 @@ export function selectRelatedTests(files, options = {}) {
   const log = options.log || (line => console.error(line));
   for (const file of selection.api) {
     // A deleted test file was itself the regression test — nothing to map, but only when the manifest records why.
-    // Deleted source cannot be resolved by Jest: fail explicitly until a regression test is mapped.
+    // Deleted source cannot be resolved by Jest: fail explicitly until a regression test is mapped ("deletedSources").
     if (!existsSync(resolve(root, file)) && DELETED_TEST_RE.test(file)) {
       const reason = deletedTests[file];
       if (!reason) throw new Error(`Deleted test file requires a reason in scripts/ci/feature-checks.manifest.json "deletedTests" (a rename lists the old path too): ${file}`);
       log(`Deleted test file (${reason}): ${file}`);
       continue;
     }
-    if (!existsSync(resolve(root, file))) throw new Error(`Deleted source requires explicit regression mapping: ${file}`);
+    if (!existsSync(resolve(root, file))) {
+      const mapped = deletedSources[file];
+      if (!mapped) throw new Error(`Deleted source requires explicit regression mapping: ${file} (scripts/ci/feature-checks.manifest.json "deletedSources")`);
+      const missing = mapped.filter(test => !existsSync(resolve(root, test)));
+      if (missing.length) throw new Error(`Deleted source regression test does not exist: ${missing.join(', ')} (for ${file})`);
+      const paths = requireRelated(file, mapped.map(test => resolve(root, test)));
+      related.set(file, paths);
+      for (const path of paths) tests.add(path);
+      continue;
+    }
     const listed = JEST_BOOTSTRAP.includes(file) ? listAll() : listRelated(file);
     if (!listed.length && file.startsWith('apps/api/src/') && isTypeOnlySource(file, readFileSync(resolve(root, file), 'utf8'))) {
       const declaration = DECLARATION_RE.test(file);

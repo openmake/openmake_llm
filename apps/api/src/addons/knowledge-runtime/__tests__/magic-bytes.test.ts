@@ -32,6 +32,7 @@ jest.mock('../config/profiles', () => ({
     }),
     getDefaultLimits: async () => ({ purgeAfterDays: 30 }),
 }));
+jest.mock('../embedding/readiness', () => ({ assertSpaceEmbeddingReady: async () => undefined }));
 
 import { sniffMimeMismatch } from '../documents/magic-bytes';
 import { uploadDocument } from '../documents/service';

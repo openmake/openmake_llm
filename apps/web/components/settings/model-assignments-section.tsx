@@ -353,6 +353,11 @@ function EffectiveLine({
       <Badge tone={SOURCE_TONE[eff.source]} className="shrink-0 whitespace-nowrap">
         {t(`source.${eff.source}`)}
       </Badge>
+      {eff.keyPolicy === "actor-byok" && (
+        <Badge tone="neutral" className="shrink-0 whitespace-nowrap">
+          {t("actorByokBadge")}
+        </Badge>
+      )}
     </div>
   );
 }
