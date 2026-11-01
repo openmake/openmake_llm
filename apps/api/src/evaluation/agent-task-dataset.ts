@@ -30,7 +30,6 @@ const datasetSchema = z.object({
     browserCases: z.array(browserCaseSchema).optional(),
 }).passthrough();
 
-export type AgentTaskBrowserCase = z.infer<typeof browserCaseSchema>;
 export type AgentTaskDataset = z.infer<typeof datasetSchema>;
 
 /** 과제 묶음 검증 — 형식, 궤적 기대(spec), id 중복, 브라우저 과제의 도구 기대를 본다. 어긋나면 던진다. */
