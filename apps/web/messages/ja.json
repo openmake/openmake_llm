@@ -2938,7 +2938,7 @@
     "empty": "まだプロジェクトがありません",
     "noResults": "結果がありません",
     "notFound": "見つかりません",
-    "notReadyNotice": "埋め込みが未準備のため、新しい資料の処理が遅れる場合があります",
+    "notReadyNotice": "Knowledge の処理機能が未準備のため、新しい資料の処理が遅れる場合があります",
     "noDescription": "説明なし",
     "editDescription": "説明を編集",
     "deleteSpace": "プロジェクトを削除",
@@ -2980,7 +2980,7 @@
       "notEntitled": "Knowledge の利用権限がないため処理できませんでした",
       "verification": "埋め込みの検証に失敗しました",
       "embeddingKeyMissing": "このプロジェクトの埋め込みモデルを実行する API キーがありません — キーを登録してから再試行してください",
-      "embeddingKeyRejected": "プロバイダーが API キーを拒否しました — キーを差し替えてから再試行してください",
+      "embeddingKeyRejected": "プロバイダーが API キーを拒否しました — キーを差し替えてから再試行してください（差し替えた直後の場合は、しばらくしてから再試行してください）",
       "unknown": "処理に失敗しました"
     },
     "doc": {
@@ -3030,8 +3030,14 @@
       "indexModel": "モデル",
       "indexDimension": "次元",
       "indexStatus": "状態",
+      "indexStatusValue": {
+        "ready": "使用中",
+        "retired": "使用終了",
+        "building": "作成中"
+      },
       "indexSpaces": "プロジェクト数",
-      "noIndexes": "埋め込みインデックスはまだありません"
+      "noIndexes": "埋め込みインデックスはまだありません",
+      "embeddingByRequester": "埋め込みの項目は、リクエストした管理者（あなた）の埋め込み設定・キーに基づきます"
     },
     "blocked": {
       "PGVECTOR_MISSING": "ベクトル拡張(pgvector)がインストールされていません",
@@ -3062,7 +3068,7 @@
       },
       "error": {
         "keyMissing": "このプロジェクトの埋め込みモデルを実行する API キーがありません。設定 → 外部 API キーでそのプロバイダーのキーを登録するか、別の埋め込みモデルで再索引してください。",
-        "keyRejected": "プロバイダーが API キーを拒否しました。設定 → 外部 API キーでキーを差し替えてください。",
+        "keyRejected": "プロバイダーが API キーを拒否しました。設定 → 外部 API キーでキーを差し替えてください。差し替えた直後の場合は、しばらくしてから再試行してください。",
         "unassigned": "埋め込みモデルが割り当てられていません。設定 → モデル割り当て → 埋め込みでモデルを選んでください。",
         "providerUnavailable": "埋め込みモデルは現在利用できません(次元の測定に失敗)。埋め込みモデルかどうか、プロバイダーの状態を確認してください。",
         "reindexNotNeeded": "このプロジェクトはすでに現在の設定モデルで索引されています。",

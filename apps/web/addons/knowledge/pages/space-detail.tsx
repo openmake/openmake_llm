@@ -30,7 +30,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, Dialog } from "@/components/ui/primitives";
 import { knowledgeApi } from "../api";
 import { qk, PROCESSING_POLL_MS } from "../constants";
-import { canOfferReindex, embeddingStatusKey, isProcessing } from "../helpers";
+import { canOfferReindex, embeddingStatusKey, isProcessing, splitBlockedReasons } from "../helpers";
 import { EmbeddingErrorText, toCodedError, type CodedError } from "../components/embedding-notice";
 import { useSessionActions } from "../session-actions";
 import { DocumentList } from "../components/document-list";
@@ -332,7 +332,8 @@ export function SpaceDetail({
           )}
 
           {uploadError && <EmbeddingErrorText error={uploadError} className="text-sm text-danger" />}
-          {caps && !caps.ready && (
+          {/* 플랫폼 사유만 — 임베딩 설정·키 사유는 위 공간 embedding 절이 공간 색인 기준으로 보인다 */}
+          {caps && !caps.ready && splitBlockedReasons(caps.blockedReasons).platform.length > 0 && (
             <p className="rounded-md border border-warn/40 bg-warn-soft/30 px-3 py-2 text-xs text-warn">
               {t("notReadyNotice")}
             </p>

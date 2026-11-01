@@ -37,7 +37,7 @@ function SpaceCard({ space }: { space: KnowledgeSpaceSummary }) {
               {space.name}
               {/* 색인 모델 ≠ 내 설정 — 상세에서 "다시 색인" 안내 */}
               {space.embedding.mismatch && (
-                <span aria-label={t("embedding.mismatch", { model: space.embedding.effective?.modelId ?? "" })} className="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" />
+                <span role="img" aria-label={t("embedding.mismatch", { model: space.embedding.effective?.modelId ?? "" })} className="h-1.5 w-1.5 shrink-0 rounded-full bg-warn" />
               )}
             </p>
             {space.description && (

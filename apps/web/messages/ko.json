@@ -2938,7 +2938,7 @@
     "empty": "아직 프로젝트가 없습니다",
     "noResults": "검색 결과가 없습니다",
     "notFound": "찾을 수 없음",
-    "notReadyNotice": "임베딩이 아직 준비되지 않아 새 자료 처리가 지연될 수 있습니다",
+    "notReadyNotice": "Knowledge 처리 기능이 아직 준비되지 않아 새 자료 처리가 지연될 수 있습니다",
     "noDescription": "설명 없음",
     "editDescription": "설명 편집",
     "deleteSpace": "프로젝트 삭제",
@@ -2980,7 +2980,7 @@
       "notEntitled": "Knowledge 사용 권한이 없어 처리하지 못했습니다",
       "verification": "임베딩 검증에 실패했습니다",
       "embeddingKeyMissing": "이 프로젝트의 임베딩 모델을 실행할 API 키가 없습니다 — 키를 등록한 뒤 다시 시도하세요",
-      "embeddingKeyRejected": "공급자가 API 키를 거절했습니다 — 키를 교체한 뒤 다시 시도하세요",
+      "embeddingKeyRejected": "공급자가 API 키를 거절했습니다 — 키를 교체한 뒤 다시 시도하세요(방금 교체했다면 잠시 뒤에 다시 시도하세요)",
       "unknown": "처리에 실패했습니다"
     },
     "doc": {
@@ -3030,8 +3030,14 @@
       "indexModel": "모델",
       "indexDimension": "차원",
       "indexStatus": "상태",
+      "indexStatusValue": {
+        "ready": "사용 중",
+        "retired": "사용 종료",
+        "building": "생성 중"
+      },
       "indexSpaces": "프로젝트 수",
-      "noIndexes": "아직 임베딩 인덱스가 없습니다"
+      "noIndexes": "아직 임베딩 인덱스가 없습니다",
+      "embeddingByRequester": "임베딩 항목은 요청한 관리자(나)의 임베딩 설정·키 기준입니다"
     },
     "blocked": {
       "PGVECTOR_MISSING": "벡터 확장(pgvector)이 설치되어 있지 않습니다",
@@ -3062,7 +3068,7 @@
       },
       "error": {
         "keyMissing": "이 프로젝트의 임베딩 모델을 실행할 API 키가 없습니다. 설정 → 외부 API 키에서 그 공급자 키를 등록하거나, 다른 임베딩 모델로 다시 색인하세요.",
-        "keyRejected": "공급자가 API 키를 거절했습니다. 설정 → 외부 API 키에서 키를 교체하세요.",
+        "keyRejected": "공급자가 API 키를 거절했습니다. 설정 → 외부 API 키에서 키를 교체하세요. 방금 교체했다면 잠시 뒤 다시 시도하세요.",
         "unassigned": "임베딩 모델이 배정되어 있지 않습니다. 설정 → 모델 배정 → 임베딩에서 모델을 고르세요.",
         "providerUnavailable": "임베딩 모델을 지금 쓸 수 없습니다(차원 측정 실패). 임베딩 모델인지, 공급자 상태를 확인하세요.",
         "reindexNotNeeded": "이 프로젝트는 이미 현재 설정 모델로 색인되어 있습니다.",

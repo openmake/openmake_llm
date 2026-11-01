@@ -12,7 +12,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, Card } from "@/components/ui/primitives";
 import { knowledgeApi, type KnowledgeProfile } from "../api";
 import { qk } from "../constants";
-import { blockedReasonKey } from "../helpers";
+import { blockedReasonKey, indexStatusKey, splitBlockedReasons } from "../helpers";
 
 function ProfileEditor({ profile }: { profile: KnowledgeProfile }) {
   const t = useTranslations("knowledge");
@@ -94,6 +94,11 @@ export function KnowledgeAdminPanel() {
   const cap = status?.capabilities;
   const jobEntries = Object.entries(status?.jobCounts ?? {});
   const indexes = status?.embeddingIndexes ?? [];
+  const blocked = splitBlockedReasons(cap?.blockedReasons ?? []);
+  const indexStatusLabel = (value: string): string => {
+    const key = indexStatusKey(value);
+    return key ? t(key) : value;
+  };
 
   return (
     <Card className="border-accent/30 bg-accent-soft/20 p-4">
@@ -106,14 +111,15 @@ export function KnowledgeAdminPanel() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5 text-xs">
+          {/* 배지는 플랫폼 사유만 본다 — 임베딩 사유는 요청한 관리자 개인의 설정·키 기준이라 따로 적는다 */}
           <p className="flex items-center gap-1.5">
-            {cap?.ready ? (
+            {cap && blocked.platform.length === 0 ? (
               <Badge tone="success">{t("admin.ready")}</Badge>
             ) : (
               <Badge tone="warn">{t("admin.notReady")}</Badge>
             )}
           </p>
-          {cap?.blockedReasons?.map((r) => {
+          {blocked.platform.map((r) => {
             const key = blockedReasonKey(r);
             return (
               <p key={r} className="flex items-center gap-1 text-warn">
@@ -122,6 +128,20 @@ export function KnowledgeAdminPanel() {
               </p>
             );
           })}
+          {blocked.embedding.length > 0 && (
+            <div className="space-y-0.5 pt-1">
+              <p className="text-faint">{t("admin.embeddingByRequester")}</p>
+              {blocked.embedding.map((r) => {
+                const key = blockedReasonKey(r);
+                return (
+                  <p key={r} className="flex items-center gap-1 text-muted">
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    {key ? t(key) : r}
+                  </p>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div className="space-y-1 text-xs">
           <p className="font-medium text-fg-2">{t("admin.jobs")}</p>
@@ -159,7 +179,7 @@ export function KnowledgeAdminPanel() {
                   <tr key={i.id} className="border-t border-border text-muted">
                     <td className="break-all py-1 pr-3 font-mono text-fg-2">{i.providerRef}</td>
                     <td className="py-1 pr-3 font-mono">{i.dimension}</td>
-                    <td className="py-1 pr-3">{i.status}</td>
+                    <td className="py-1 pr-3">{indexStatusLabel(i.status)}</td>
                     <td className="py-1 font-mono">{i.spaceCount}</td>
                   </tr>
                 ))}

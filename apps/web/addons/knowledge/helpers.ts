@@ -97,6 +97,29 @@ export function blockedReasonKey(code: string): string | null {
   return BLOCKED_REASON_CODES.has(code) ? `blocked.${code}` : null;
 }
 
+/** 요청 사용자의 임베딩 설정·키에 따른 사유 — 공간 상태(embedding 절)와 같은 기준이라 플랫폼 준비 여부와 따로 보인다 */
+const EMBEDDING_BLOCKED_REASONS: ReadonlySet<string> = new Set([
+  "EMBEDDING_UNASSIGNED",
+  "EMBEDDING_KEY_MISSING",
+  "EMBEDDING_KEY_REJECTED",
+  "EMBEDDING_PROVIDER_UNAVAILABLE",
+]);
+
+/** capabilities.blockedReasons → 플랫폼(전 사용자 공통, 모르는 코드 포함)·요청 사용자 임베딩 사유 */
+export function splitBlockedReasons(reasons: readonly string[]): { platform: string[]; embedding: string[] } {
+  return {
+    platform: reasons.filter((r) => !EMBEDDING_BLOCKED_REASONS.has(r)),
+    embedding: reasons.filter((r) => EMBEDDING_BLOCKED_REASONS.has(r)),
+  };
+}
+
+/** 색인 카탈로그 상태 값 → i18n 키(`admin.indexStatusValue.<status>`). 미등록 값은 null(원문을 보인다) */
+const INDEX_STATUS_VALUES: ReadonlySet<string> = new Set(["ready", "retired", "building"]);
+
+export function indexStatusKey(status: string): string | null {
+  return INDEX_STATUS_VALUES.has(status) ? `admin.indexStatusValue.${status}` : null;
+}
+
 const KB = 1024;
 const UNITS = ["B", "KB", "MB", "GB"] as const;
 

@@ -9,14 +9,17 @@ import {
   embeddingErrorKey,
   embeddingStatusKey,
   failureMessageKey,
+  indexStatusKey,
   isEmbeddingKeyFailure,
   needsEmbeddingSettings,
+  splitBlockedReasons,
 } from '../../apps/web/addons/knowledge/helpers';
 
 // 서버가 주는 값 전부 — apps/api/src/addons/knowledge-runtime (ingestion/errors.ts FAILURE_CODES, embedding/readiness.ts, capabilities.ts)
 const STATUSES: KnowledgeEmbeddingStatus[] = ['ready', 'unpinned', 'unassigned', 'key_missing', 'key_rejected', 'reindexing'];
 const NEW_FAILURES = ['EMBEDDING_KEY_MISSING', 'EMBEDDING_KEY_REJECTED', 'FAILED_VERIFICATION'];
 const ERROR_CODES = ['EMBEDDING_KEY_MISSING', 'EMBEDDING_KEY_REJECTED', 'EMBEDDING_UNASSIGNED', 'EMBEDDING_PROVIDER_UNAVAILABLE', 'REINDEX_NOT_NEEDED', 'REINDEX_IN_PROGRESS'];
+const INDEX_STATUSES = ['ready', 'retired', 'building'];
 const BLOCKED = ['PGVECTOR_MISSING', 'EMBEDDING_UNASSIGNED', 'EMBEDDING_KEY_MISSING', 'EMBEDDING_KEY_REJECTED', 'EMBEDDING_PROVIDER_UNAVAILABLE', 'NO_SUPPORTED_MIME_TYPES', 'PARSER_REGISTRY_UNAVAILABLE'];
 
 function lookup(obj: unknown, dotted: string): unknown {
@@ -42,6 +45,24 @@ test('서버 오류 코드 → 안내 키, 설정 링크는 키·배정 문제�
   assert.equal(blockedReasonKey('SOMETHING_NEW'), null);
 });
 
+test('capabilities 사유는 플랫폼(전 사용자 공통)과 요청 사용자 임베딩으로 나뉜다 — 상세 배너·관리자 배지는 플랫폼 사유만 본다', () => {
+  assert.deepEqual(splitBlockedReasons(BLOCKED), {
+    platform: ['PGVECTOR_MISSING', 'NO_SUPPORTED_MIME_TYPES', 'PARSER_REGISTRY_UNAVAILABLE'],
+    embedding: ['EMBEDDING_UNASSIGNED', 'EMBEDDING_KEY_MISSING', 'EMBEDDING_KEY_REJECTED', 'EMBEDDING_PROVIDER_UNAVAILABLE'],
+  });
+  assert.deepEqual(splitBlockedReasons(['EMBEDDING_KEY_MISSING']), { platform: [], embedding: ['EMBEDDING_KEY_MISSING'] });
+  assert.deepEqual(splitBlockedReasons([]), { platform: [], embedding: [] });
+  // 모르는 코드는 플랫폼 쪽(숨기지 않는다)
+  assert.deepEqual(splitBlockedReasons(['SOMETHING_NEW']), { platform: ['SOMETHING_NEW'], embedding: [] });
+});
+
+test('색인 카탈로그 상태 값 → i18n 키, 미등록 값은 null(원문)', () => {
+  assert.equal(indexStatusKey('ready'), 'admin.indexStatusValue.ready');
+  assert.equal(indexStatusKey('retired'), 'admin.indexStatusValue.retired');
+  assert.equal(indexStatusKey('building'), 'admin.indexStatusValue.building');
+  assert.equal(indexStatusKey('purging'), null);
+});
+
 test('재색인 버튼은 서버 상태로만 — 편집 권한·현재 설정이 있고 mismatch 이거나 키·미고정 상태, 진행 중이면 숨김', () => {
   const embedding = (over: Partial<KnowledgeEmbeddingState>): KnowledgeEmbeddingState => ({
     index: null, status: 'ready', mismatch: false, effective: { providerRef: 'p:m', modelId: 'p/m', source: 'user' }, ...over,
@@ -64,6 +85,7 @@ test('새 knowledge 문구 키가 모든 locale 에 있다', () => {
     'embedding.indexModel', 'embedding.notPinned', 'embedding.mismatch', 'embedding.reindex', 'embedding.reindexConfirmTitle',
     'embedding.reindexConfirmBody', 'embedding.createNotice', 'embedding.createWarn', 'embedding.openSettings',
     'admin.indexModel', 'admin.indexDimension', 'admin.indexStatus', 'admin.indexSpaces', 'admin.noIndexes',
+    ...INDEX_STATUSES.map((v) => indexStatusKey(v)!), 'admin.embeddingByRequester',
   ];
   const dir = join(process.cwd(), 'apps/web/messages');
   for (const file of readdirSync(dir).filter((f) => f.endsWith('.json'))) {

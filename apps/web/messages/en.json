@@ -2938,7 +2938,7 @@
     "empty": "No projects yet",
     "noResults": "No results",
     "notFound": "Not found",
-    "notReadyNotice": "Embedding is not ready yet; processing new materials may be delayed",
+    "notReadyNotice": "Knowledge processing is not ready yet; processing new materials may be delayed",
     "noDescription": "No description",
     "editDescription": "Edit description",
     "deleteSpace": "Delete project",
@@ -2980,7 +2980,7 @@
       "notEntitled": "Not processed — Knowledge access is not available for this account",
       "verification": "Embedding verification failed",
       "embeddingKeyMissing": "No API key to run this project's embedding model — register the key and try again",
-      "embeddingKeyRejected": "The provider rejected the API key — replace the key and try again",
+      "embeddingKeyRejected": "The provider rejected the API key — replace the key and try again (if you just replaced it, try again in a moment)",
       "unknown": "Processing failed"
     },
     "doc": {
@@ -3030,8 +3030,14 @@
       "indexModel": "Model",
       "indexDimension": "Dimension",
       "indexStatus": "Status",
+      "indexStatusValue": {
+        "ready": "In use",
+        "retired": "Retired",
+        "building": "Building"
+      },
       "indexSpaces": "Projects",
-      "noIndexes": "No embedding indexes yet"
+      "noIndexes": "No embedding indexes yet",
+      "embeddingByRequester": "Embedding items reflect the requesting administrator's (your) embedding settings and keys"
     },
     "blocked": {
       "PGVECTOR_MISSING": "The vector extension (pgvector) is not installed",
@@ -3062,7 +3068,7 @@
       },
       "error": {
         "keyMissing": "No API key to run this project's embedding model. Register that provider's key under Settings → External API keys, or re-index with a different embedding model.",
-        "keyRejected": "The provider rejected the API key. Replace the key under Settings → External API keys.",
+        "keyRejected": "The provider rejected the API key. Replace the key under Settings → External API keys. If you just replaced it, try again in a moment.",
         "unassigned": "No embedding model is assigned. Pick one under Settings → Model assignments → Embeddings.",
         "providerUnavailable": "The embedding model is unavailable right now (dimension check failed). Make sure it is an embedding model and check the provider status.",
         "reindexNotNeeded": "This project is already indexed with your current model.",
