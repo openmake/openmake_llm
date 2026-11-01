@@ -53,7 +53,7 @@ const text = 'alpha bravo charlie delta echo foxtrot golf hotel india juliet kil
 
 async function insertIndex(dim: number): Promise<KnowledgeIndex> {
     const id = randomUUID();
-    const providerRef = `${REF_PREFIX}:embed-${dim}`;
+    const providerRef = `${REF_PREFIX}:embed-${dim}-${id.slice(0, 8)}`;
     await pool.query(
         `INSERT INTO knowledge_embedding_indexes (id, provider_ref, model_id, dimension, distance_metric, status, is_active, activated_at)
          VALUES ($1, $2, 'fake', $3, 'cosine', 'ready', FALSE, NOW())`,
