@@ -63,12 +63,16 @@ export async function requestSpaceReindex(userId: string, spaceId: string): Prom
     if (index.id === space.embedding_index_id) {
         throw new AppError('이 프로젝트는 이미 현재 설정 모델로 색인되어 있습니다', 409, true, 'REINDEX_NOT_NEEDED');
     }
-    const running = await kdb().query(
-        `SELECT id FROM knowledge_ingestion_jobs WHERE kind = 'reindex' AND space_id = $1 AND state IN ('queued', 'running') LIMIT 1`,
-        [spaceId],
-    );
-    if (running.rows.length > 0) throw new AppError('이 프로젝트는 이미 다시 색인하는 중입니다', 409, true, 'REINDEX_IN_PROGRESS');
-    const jobId = await enqueueJob({ kind: 'reindex', spaceId, embeddingIndexId: index.id, actor: spaceJobActor(userId, space) });
+    // 진행 중 검사와 작업 넣기를 공간별 잠금 아래 한 트랜잭션으로 — 같은 공간 동시 요청이 둘 다 통과하지 못한다
+    const jobId = await inTransaction(async (client) => {
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext('knowledge-space-reindex:' || $1))`, [spaceId]);
+        const running = await client.query(
+            `SELECT id FROM knowledge_ingestion_jobs WHERE kind = 'reindex' AND space_id = $1 AND state IN ('queued', 'running') LIMIT 1`,
+            [spaceId],
+        );
+        if (running.rows.length > 0) throw new AppError('이 프로젝트는 이미 다시 색인하는 중입니다', 409, true, 'REINDEX_IN_PROGRESS');
+        return enqueueJob({ kind: 'reindex', spaceId, embeddingIndexId: index.id, actor: spaceJobActor(userId, space) }, client);
+    });
     await recordAddonAudit({
         action: KNOWLEDGE_SPACE_REINDEX_AUDIT_ACTION, userId, resourceType: 'knowledge_space', resourceId: spaceId,
         details: { spaceId, fromIndexId: space.embedding_index_id, toIndexId: index.id, providerRef: index.providerRef, jobId },
@@ -144,11 +148,19 @@ export async function runSpaceReindexJob(job: SpaceReindexJob, deps: { embed?: E
         throw new Error(`재색인 검증 실패 — 공간 ${job.spaceId} 청크 ${expected.rows[0].n} vs 임베딩 ${got.rows[0].n}`);
     }
 
-    // 원자 전환 — 게시와 같은 잠금 아래에서 빠진 청크가 없음을 다시 확인한 뒤(검증~전환 사이에 ready 가 된 문서 방지)
-    // 옛 색인을 가리킬 때만 바꾼다. 빠진 게 있으면 작업 재시도가 채운다. 옛 색인 벡터는 그대로 둔다.
-    await inTransaction(async (client) => {
+    // 원자 전환 — 게시와 같은 잠금 아래에서 포인터를 다시 읽고(같은 공간의 다른 작업이 먼저 전환했으면 성공으로 끝),
+    // 빠진 청크가 없음을 다시 확인한 뒤(검증~전환 사이에 ready 가 된 문서 방지) 옛 색인을 가리킬 때만 바꾼다.
+    // 빠진 게 있으면 작업 재시도가 채운다. 옛 색인 벡터는 그대로 둔다.
+    const switchedNow = await inTransaction(async (client) => {
         await assertLeaseHeld(client, deps.lease);
         await client.query('SELECT pg_advisory_xact_lock($1)', [INDEX_PUBLISH_LOCK_KEY]);
+        const current = (await client.query<{ embedding_index_id: string | null }>(
+            `SELECT embedding_index_id FROM knowledge_spaces WHERE id = $1 FOR UPDATE`, [job.spaceId],
+        )).rows[0];
+        if (current?.embedding_index_id === target.id) return false;
+        if (!current || current.embedding_index_id !== before.indexId) {
+            throw new KnowledgeJobPermanentError(`재색인 전환 실패 — 공간 ${job.spaceId} 의 색인이 다른 색인(${current?.embedding_index_id ?? '없음'})으로 바뀜`);
+        }
         const missing = await client.query<{ n: string }>(
             `SELECT COUNT(*)::text AS n
                ${spaceReadyChunks('$2')}
@@ -166,6 +178,11 @@ export async function runSpaceReindexJob(job: SpaceReindexJob, deps: { embed?: E
         if ((switched.rowCount ?? 0) === 0) {
             throw new KnowledgeJobPermanentError(`재색인 전환 실패 — 공간 ${job.spaceId} 의 색인이 이미 다른 전환으로 바뀜`);
         }
+        return true;
     });
+    if (!switchedNow) {
+        logger.info(`재색인 전환 건너뜀 — 공간 ${job.spaceId} 은 이미 색인 ${target.id}(같은 공간의 다른 작업이 먼저 전환)`);
+        return;
+    }
     logger.info(`공간 재색인 완료·전환: space=${job.spaceId} ${before.indexId ?? '(없음)'} → ${target.id} (${target.providerRef}, dim=${target.dimension})`);
 }

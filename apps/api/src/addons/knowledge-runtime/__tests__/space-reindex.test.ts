@@ -10,6 +10,8 @@ let leaseRowCount = 1;
 let batches = 1;
 let switchRowCount = 1;
 let pointer: string | null = 'idx-old';
+/** 전환 트랜잭션이 잠금 뒤 다시 읽는 포인터(FOR UPDATE) — undefined 면 pointer 와 같다 */
+let lockedPointer: string | null | undefined;
 let targetStatus = 'ready';
 let verifyCounts = { expected: '1', got: '1' };
 const fakeQuery = async (sql: string, params: unknown[] = []) => {
@@ -17,6 +19,9 @@ const fakeQuery = async (sql: string, params: unknown[] = []) => {
     if (sql.includes('FROM knowledge_ingestion_jobs')) return { rows: leaseRowCount ? [{ '?column?': 1 }] : [], rowCount: leaseRowCount };
     if (sql.includes('SELECT * FROM knowledge_embedding_indexes WHERE id')) {
         return { rows: [{ id: 'idx-new', provider_ref: 'gemini:emb-1', model_id: 'gemini/emb-1', dimension: 2, distance_metric: 'cosine', status: targetStatus, request_params: {} }], rowCount: 1 };
+    }
+    if (sql.includes('SELECT embedding_index_id FROM knowledge_spaces') && sql.includes('FOR UPDATE')) {
+        return { rows: [{ embedding_index_id: lockedPointer === undefined ? pointer : lockedPointer }], rowCount: 1 };
     }
     if (sql.includes('SELECT embedding_index_id FROM knowledge_spaces')) return { rows: [{ embedding_index_id: pointer }], rowCount: 1 };
     if (sql.includes('SELECT c.id, c.content')) { if (batches > 0) { batches -= 1; return { rows: [{ id: 'c1', content: 'x' }], rowCount: 1 }; } return { rows: [], rowCount: 0 }; }
@@ -51,7 +56,7 @@ const embed = async (t: string[]) => t.map(() => [1, 0]);
 const sqlWith = (s: string) => queries.filter((q) => q.sql.includes(s));
 
 beforeEach(() => {
-    queries.length = 0; leaseRowCount = 1; batches = 1; switchRowCount = 1; pointer = 'idx-old'; targetStatus = 'ready';
+    queries.length = 0; leaseRowCount = 1; batches = 1; switchRowCount = 1; pointer = 'idx-old'; lockedPointer = undefined; targetStatus = 'ready';
     verifyCounts = { expected: '1', got: '1' };
     makeIndexEmbedder.mockReset();
 });
@@ -78,9 +83,25 @@ describe('runSpaceReindexJob', () => {
         expect(sqlWith('UPDATE knowledge_spaces SET embedding_index_id')).toHaveLength(0);
     });
 
-    it('전환 UPDATE 가 0행(다른 전환이 먼저)이면 영구 실패', async () => {
+    it('전환 UPDATE 가 0행이면 영구 실패', async () => {
         switchRowCount = 0;
         await expect(runSpaceReindexJob(JOB, { embed })).rejects.toBeInstanceOf(KnowledgeJobPermanentError);
+    });
+
+    it('잠금 뒤 다시 읽은 포인터가 이미 대상 색인이면(같은 공간의 다른 작업이 먼저 전환) 성공 — UPDATE 없음', async () => {
+        lockedPointer = 'idx-new';
+        await expect(runSpaceReindexJob(JOB, { embed })).resolves.toBeUndefined();
+        const lockIdx = queries.findIndex((q) => q.sql.includes('pg_advisory_xact_lock'));
+        const reread = queries.findIndex((q) => q.sql.includes('FOR UPDATE'));
+        expect(lockIdx).toBeGreaterThanOrEqual(0);
+        expect(reread).toBeGreaterThan(lockIdx);
+        expect(sqlWith('UPDATE knowledge_spaces SET embedding_index_id')).toHaveLength(0);
+    });
+
+    it('잠금 뒤 포인터가 제3의 색인으로 바뀌었으면 영구 실패 — UPDATE 없음', async () => {
+        lockedPointer = 'idx-third';
+        await expect(runSpaceReindexJob(JOB, { embed })).rejects.toBeInstanceOf(KnowledgeJobPermanentError);
+        expect(sqlWith('UPDATE knowledge_spaces SET embedding_index_id')).toHaveLength(0);
     });
 
     it('이미 대상 색인을 가리키면(전환 뒤 재실행) 아무것도 하지 않는다', async () => {
