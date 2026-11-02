@@ -14,7 +14,7 @@ import type { KnowledgeAdminStatus, KnowledgeProfile } from '@openmake/shared-ty
 import { getCapabilities, pgvectorVersion } from '../capabilities';
 import { assertSpaceEmbeddingReady, type SpaceEmbeddingRow } from '../embedding/readiness';
 
-/** 관리자 상태 — capabilities 는 요청한 관리자 기준, 색인 카탈로그는 모델·차원·상태와 그 색인을 쓰는(미삭제) 공간 수 */
+/** 관리자 상태 — capabilities 는 요청한 관리자 기준, 색인 카탈로그는 모델·차원·상태와 그 색인을 쓰는(미삭제) 공간 수, 작업 수는 미삭제 공간(+공간 없는 작업) 기준 — 작업 공간은 space_id, 없으면 문서 버전의 공간으로 본다 */
 export async function getAdminStatus(userId: string): Promise<KnowledgeAdminStatus> {
     const idx = await kdb().query<{
         id: string; provider_ref: string; model_id: string; dimension: number;
@@ -24,7 +24,13 @@ export async function getAdminStatus(userId: string): Promise<KnowledgeAdminStat
           FROM knowledge_embedding_indexes i
          ORDER BY i.created_at DESC`);
     const jobs = await kdb().query<{ state: string; n: string }>(
-        `SELECT state, COUNT(*)::text AS n FROM knowledge_ingestion_jobs GROUP BY state`,
+        `SELECT j.state, COUNT(*)::text AS n
+           FROM knowledge_ingestion_jobs j
+           LEFT JOIN knowledge_document_versions v ON v.id = j.document_version_id
+           LEFT JOIN knowledge_documents d ON d.id = v.document_id
+           LEFT JOIN knowledge_spaces s ON s.id = COALESCE(j.space_id, d.space_id)
+          WHERE COALESCE(j.space_id, d.space_id) IS NULL OR s.deleted_at IS NULL
+          GROUP BY j.state`,
     );
     const jobCounts: Record<string, number> = {};
     for (const r of jobs.rows) jobCounts[r.state] = parseInt(r.n, 10);
