@@ -7,6 +7,8 @@
 
 * **api:** /api/health 관리자 응답에 version·build 포함 ([19f9ed0](https://github.com/openmake/openmake_llm/commit/19f9ed05f95e8cbca26372d01f272bc693f99f87))
 
+> 참고: 이 릴리스 뒤 dev 에 머지된 [#1601](https://github.com/openmake/openmake_llm/pull/1601)(죽은 코드·하드코딩 정리, 동작 변경 없음)은 release-please 가 커밋 날짜 순서 때문에 건너뛰어 1.121.1 로 배포한다.
+
 ## [1.120.0](https://github.com/openmake/openmake_llm/compare/v1.119.0...v1.120.0) (2026-11-01)
 
 
