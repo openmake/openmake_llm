@@ -6,7 +6,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { loadGoldenDataset, filterCasesByCategory, filterCasesByTag } from '../evaluation/dataset-loader';
+import { loadGoldenDataset } from '../evaluation/dataset-loader';
 import { evaluateRoutingCase, runRoutingEvaluation, type RoutingFunction } from '../evaluation/router-evaluator';
 import type { GoldenCase, GoldenDataset } from '../evaluation/types';
 
@@ -66,19 +66,6 @@ describe('dataset-loader', () => {
         });
         expect(() => loadGoldenDataset(file)).toThrow(/expectedAgentId.*expectedCategory/);
         fs.unlinkSync(file);
-    });
-
-    it('카테고리별 필터링', () => {
-        const filtered = filterCasesByCategory(validDataset, 'routing-accuracy');
-        expect(filtered.length).toBe(2);
-        const empty = filterCasesByCategory(validDataset, 'response-pattern');
-        expect(empty.length).toBe(0);
-    });
-
-    it('태그별 필터링', () => {
-        const coding = filterCasesByTag(validDataset, 'coding');
-        expect(coding.length).toBe(1);
-        expect(coding[0].id).toBe('rt-1');
     });
 });
 
@@ -194,6 +181,6 @@ describe('실제 골든셋 파일 무결성', () => {
         expect(dataset.version).toBeTruthy();
         expect(dataset.cases.length).toBeGreaterThan(0);
         // routing-accuracy 케이스가 적어도 1개 있어야 함
-        expect(filterCasesByCategory(dataset, 'routing-accuracy').length).toBeGreaterThan(0);
+        expect(dataset.cases.some((c) => c.category === 'routing-accuracy')).toBe(true);
     });
 });

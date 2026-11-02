@@ -22,7 +22,7 @@ export const ADDON_KINDS = ['content', 'integration', 'runtime'] as const;
  * 코드 진입점 참조 — `<모듈 경로>#<export 이름>`(export 생략 시 default). 모듈 경로는 add-on 코드 디렉토리
  * (`src/addons/<id>/`) 기준이고 소문자·숫자·하이픈·점으로 된 세그먼트만 받는다(`..`·절대 경로 불가).
  * ⚠️ **레포에 코드가 있는 내장 add-on 전용**이다 — 설치형 확장의 매니페스트에 있으면 설치를 거절한다
- * (인프로세스 코드 로딩은 열지 않았다, 아래 `validateInstallableAddonManifest`).
+ * (인프로세스 코드 로딩은 열지 않았다, 아래 `parseInstallableAddonManifest`).
  */
 const entryRefSchema = z.string().max(200).regex(/^[a-z0-9-]+(\.[a-z0-9-]+)*(\/[a-z0-9-]+(\.[a-z0-9-]+)*)*(#[A-Za-z_][A-Za-z0-9_]*)?$/);
 
@@ -152,11 +152,6 @@ export function parseInstallableAddonManifest(jsonText: string, appVersion: stri
         errors.push(`requires.openmake: 현재 버전 ${appVersion} 이 요구 범위 '${parsed.data.requires.openmake}' 밖`);
     }
     return { errors, ...(errors.length === 0 ? { manifest: parsed.data } : {}) };
-}
-
-/** 종전 시그니처 — 거절 사유만 필요할 때. */
-export function validateInstallableAddonManifest(jsonText: string, appVersion: string): string[] {
-    return parseInstallableAddonManifest(jsonText, appVersion).errors;
 }
 
 /**
