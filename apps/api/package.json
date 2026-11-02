@@ -51,7 +51,7 @@
         "@opentelemetry/resources": "^3.0.0",
         "@opentelemetry/sdk-node": "^0.300.0",
         "@opentelemetry/sdk-trace": "^3.0.0",
-        "@opentelemetry/semantic-conventions": "^1.43.0",
+        "@opentelemetry/semantic-conventions": "^1.44.0",
         "@types/pg": "^8.23.1",
         "babel-jest": "^30.4.1",
         "bcryptjs": "^3.0.3",
