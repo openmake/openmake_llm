@@ -1,7 +1,6 @@
 import {
     resolveAnswerFormatProfile,
     getAnswerFormatGuard,
-    applyAnswerFormat,
 } from './answer-format';
 
 describe('answer-format: resolveAnswerFormatProfile', () => {
@@ -51,21 +50,6 @@ describe('answer-format: getAnswerFormatGuard', () => {
         const en = getAnswerFormatGuard('structured', 'en');
         expect(en.toLowerCase()).toContain('conclusion');
         expect(en.toLowerCase()).toContain('table');
-    });
-});
-
-describe('answer-format: applyAnswerFormat', () => {
-    const base = 'SYSTEM BASE PROMPT';
-
-    it('prose 는 systemPrompt 를 그대로 반환', () => {
-        expect(applyAnswerFormat(base, 'prose', 'ko')).toBe(base);
-    });
-
-    it('structured 는 가드를 prepend 하고 base 를 보존', () => {
-        const out = applyAnswerFormat(base, 'structured', 'ko');
-        expect(out).toContain('답변 형식');
-        expect(out).toContain(base);
-        expect(out.indexOf('답변 형식')).toBeLessThan(out.indexOf(base));
     });
 });
 

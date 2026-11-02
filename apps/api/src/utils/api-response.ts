@@ -5,28 +5,24 @@ import { objectParticle } from './korean-particle';
  * ============================================================
  *
  * 모든 REST API 엔드포인트에서 사용하는 표준화된 응답 생성 헬퍼입니다.
- * 성공/에러/페이지네이션 응답을 일관된 구조로 제공합니다.
+ * 성공/에러 응답을 일관된 구조로 제공합니다.
  *
  * @module utils/api-response
  * @description
  * - success(): 표준 성공 응답 { success: true, data, meta }
  * - error(): 표준 에러 응답 { success: false, error: { code, message } }
- * - paginated(): 페이지네이션 포함 응답
  * - HTTP 상태 코드별 헬퍼: badRequest, unauthorized, forbidden, notFound, conflict, rateLimited, internalError, serviceUnavailable
  * - ErrorCodes: 사전 정의된 에러 코드 상수
  *
  * @example
  * ```typescript
- * import { success, error, paginated, notFound } from '../utils/api-response';
+ * import { success, error, notFound } from '../utils/api-response';
  *
  * // 성공 응답
  * res.json(success({ user: foundUser }));
  *
  * // 에러 응답
  * res.status(404).json(notFound('사용자'));
- *
- * // 페이지네이션 응답
- * res.json(paginated(items, { page: 1, pageSize: 20, total: 100 }));
  * ```
  */
 
@@ -57,21 +53,6 @@ export interface ApiErrorResponse {
 export interface ResponseMeta {
     timestamp: string;
     requestId?: string;
-}
-
-/** 페이지네이션 정보 */
-interface PaginationMeta {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-    hasNext: boolean;
-    hasPrev: boolean;
-}
-
-/** 페이지네이션 포함 응답 */
-interface PaginatedResponse<T> extends ApiSuccessResponse<T[]> {
-    pagination: PaginationMeta;
 }
 
 // ===== Common Error Codes =====
@@ -137,33 +118,6 @@ export function error(
         response.error.details = details;
     }
     return response;
-}
-
-/**
- * 페이지네이션 응답 생성
- */
-export function paginated<T>(
-    items: T[],
-    params: { page: number; pageSize: number; total: number }
-): PaginatedResponse<T> {
-    const { page, pageSize, total } = params;
-    const totalPages = Math.ceil(total / pageSize);
-
-    return {
-        success: true,
-        data: items,
-        pagination: {
-            page,
-            pageSize,
-            total,
-            totalPages,
-            hasNext: page < totalPages,
-            hasPrev: page > 1
-        },
-        meta: {
-            timestamp: new Date().toISOString()
-        }
-    };
 }
 
 // ===== HTTP Status Code Helpers =====

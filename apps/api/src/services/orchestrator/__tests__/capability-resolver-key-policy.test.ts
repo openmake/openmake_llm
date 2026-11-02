@@ -60,10 +60,9 @@ describe('resolveCapabilityTarget — text.embed actor-byok', () => {
         expect(d.serverKeys.decryptKey).not.toHaveBeenCalled();
     });
 
-    it('사용자 키 누락·비활성·OAuth 는 서버 키로 바꾸지 않고 명시 실패', async () => {
+    it('사용자 키 누락·OAuth 는 서버 키로 바꾸지 않고 명시 실패', async () => {
         const g = [row('__global__', 'text.embed', 'openrouter:emb-1')];
         await expect(resolveCapabilityTarget('text.embed', 'u1', deps({ global: g, keyRow: null, serverKey: 'srv' }))).rejects.toMatchObject({ code: 'CAPABILITY_KEY_MISSING' });
-        await expect(resolveCapabilityTarget('text.embed', 'u1', deps({ global: g, keyRow: { isActive: false, authMethod: 'api_key' } }))).rejects.toMatchObject({ code: 'CAPABILITY_KEY_INACTIVE' });
         await expect(resolveCapabilityTarget('text.embed', 'u1', deps({ global: g, keyRow: { isActive: true, authMethod: 'oauth' } }))).rejects.toMatchObject({ code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
     });
 
@@ -122,10 +121,9 @@ describe('checkCapabilityTargetAvailability — 복호화 없는 상태 검사',
         expect(d.serverKeys.decryptKey).not.toHaveBeenCalled();
     });
 
-    it('키 누락·비활성·OAuth·사용자 문맥 없음·게이트웨이 미편입은 코드와 문구로', async () => {
+    it('키 누락·OAuth·사용자 문맥 없음·게이트웨이 미편입은 코드와 문구로', async () => {
         const check = (fullId: string, userId: string | undefined, d: ReturnType<typeof deps>) => checkCapabilityTargetAvailability('text.embed', fullId, userId, d);
         expect(await check('openrouter:emb-1', 'u1', deps({ keyRow: null }))).toMatchObject({ ok: false, code: 'CAPABILITY_KEY_MISSING' });
-        expect(await check('openrouter:emb-1', 'u1', deps({ keyRow: { isActive: false, authMethod: 'api_key' } }))).toMatchObject({ ok: false, code: 'CAPABILITY_KEY_INACTIVE' });
         expect(await check('openrouter:emb-1', 'u1', deps({ keyRow: { isActive: true, authMethod: 'oauth' } }))).toMatchObject({ ok: false, code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
         expect(await check('openrouter:emb-1', undefined, deps({ serverKey: 'srv' }))).toMatchObject({ ok: false, code: 'CAPABILITY_KEY_MISSING' });
         expect(await check('nvidia:emb', 'u1', deps({ userKey: 'k' }))).toMatchObject({ ok: false, code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });

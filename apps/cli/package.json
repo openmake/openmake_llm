@@ -12,6 +12,7 @@
         "start": "node dist/index.js"
     },
     "dependencies": {
+        "@openmake/config": "*",
         "@openmake/local-bridge-core": "*"
     }
 }

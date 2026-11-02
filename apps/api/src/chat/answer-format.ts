@@ -87,16 +87,3 @@ export function getAnswerFormatGuard(
 function compactText(locale: string): string {
     return locale === 'ko' ? COMPACT_SCREEN_TEXTS.ko : COMPACT_SCREEN_TEXTS.en;
 }
-
-/**
- * systemPrompt 앞에 answer-format 가드를 prepend. style.ts 의 applyStyle 과 동일 규약.
- * 'prose' 일 때는 그대로 반환.
- */
-export function applyAnswerFormat(
-    systemPrompt: string,
-    profile: AnswerFormatProfile,
-    userLanguage: string,
-): string {
-    const guard = getAnswerFormatGuard(profile, userLanguage);
-    return guard ? `${guard}---\n\n${systemPrompt}` : systemPrompt;
-}
