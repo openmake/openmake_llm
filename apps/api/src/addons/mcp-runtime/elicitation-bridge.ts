@@ -22,9 +22,6 @@ import { MCP_ELICITATION_BOOLEAN_WORDS, MCP_ELICITATION_LIMITS } from '../../con
 
 const logger = createLogger('McpElicitation');
 
-/** 승인함에 올라가는 질문의 도구 이름 — config/tool-policy 의 등급표·HITL_ALWAYS_WAIT_TOOLS 와 짝. */
-export const MCP_ELICIT_TOOL_NAME = 'mcp_elicit';
-
 export interface ElicitationAskResult {
     decision: 'approved' | 'rejected';
     /** rejected 사유 — 'user' 만 명시 거절(decline), 나머지(timeout·abort)는 cancel */

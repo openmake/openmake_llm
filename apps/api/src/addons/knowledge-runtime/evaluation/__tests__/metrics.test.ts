@@ -5,7 +5,7 @@
  */
 import {
     mean, rate, round4, recallAtK, extractCitationNumbers, evidenceHeaderNumbers,
-    citationIntegrity, answerCitationMismatch, injectionEscalated, statesNoAnswer, duplicateSequenceCount,
+    citationIntegrity, answerCitationMismatch, injectionEscalated, statesNoAnswer,
 } from '../metrics';
 import { evaluateGates } from '../gates';
 import { buildKnowledgeContext } from '../../retrieval/context-builder';
@@ -106,15 +106,6 @@ describe('K08 metrics — 인젝션/비답변/중복', () => {
         expect(statesNoAnswer('해당 질문에 답할 수 없습니다.')).toBe(true);
         expect(statesNoAnswer('The material does not mention the answer.')).toBe(true);
         expect(statesNoAnswer('수도는 미레손입니다 [1].')).toBe(false);
-    });
-
-    it('duplicateSequenceCount: (version, sequence) 중복 수', () => {
-        expect(duplicateSequenceCount([
-            { versionId: 'v', sequence: 0 }, { versionId: 'v', sequence: 1 },
-        ])).toBe(0);
-        expect(duplicateSequenceCount([
-            { versionId: 'v', sequence: 0 }, { versionId: 'v', sequence: 0 },
-        ])).toBe(1);
     });
 });
 

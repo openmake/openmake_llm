@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 import { createLogger } from '../utils/logger';
-import type { GoldenDataset, GoldenCase, EvaluationCategory } from './types';
+import type { GoldenDataset, GoldenCase } from './types';
 import { LONG_CONTEXT_FIXTURES } from './long-context-fixtures';
 
 const logger = createLogger('DatasetLoader');
@@ -135,21 +135,4 @@ function validateCaseSemantics(dataset: GoldenDataset): void {
     if (errors.length > 0) {
         throw new Error(`골든셋 의미 검증 실패:\n${errors.map((e) => `  - ${e}`).join('\n')}`);
     }
-}
-
-/**
- * 카테고리별 케이스 필터링 (CLI/테스트 편의)
- */
-export function filterCasesByCategory(
-    dataset: GoldenDataset,
-    category: EvaluationCategory
-): GoldenCase[] {
-    return dataset.cases.filter((c) => c.category === category);
-}
-
-/**
- * 태그별 케이스 필터링
- */
-export function filterCasesByTag(dataset: GoldenDataset, tag: string): GoldenCase[] {
-    return dataset.cases.filter((c) => c.tags?.includes(tag));
 }

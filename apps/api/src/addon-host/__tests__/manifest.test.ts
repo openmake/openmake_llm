@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { addonManifestSchema, satisfiesOpenmakeRange, validateInstallableAddonManifest } from '../manifest';
+import { addonManifestSchema, satisfiesOpenmakeRange, parseInstallableAddonManifest } from '../manifest';
 import { builtinAddonIds, builtinAddonDir, invalidBuiltinAddons } from '../builtin-registry';
 
 const APP_VERSION: string = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', '..', '..', 'package.json'), 'utf-8')).version;
@@ -61,18 +61,18 @@ describe('설치형 add-on 매니페스트 (확장 설치 경로)', () => {
     const base = { id: 'com.example.pack', name: 'x', version: '1.0.0', requires: { openmake: '>=1.0.0 <2.0.0' }, scope: 'user', components: { skills: './skills' } };
 
     it('내장과 같은 스키마를 통과하면 설치를 막지 않는다', () => {
-        expect(validateInstallableAddonManifest(JSON.stringify(base), '1.75.0')).toEqual([]);
+        expect(parseInstallableAddonManifest(JSON.stringify(base), '1.75.0').errors).toEqual([]);
     });
 
     it('인프로세스 코드 진입점·system 범위·호환 범위 밖은 거절한다', () => {
-        const errors = validateInstallableAddonManifest(JSON.stringify({ ...base, scope: 'system', entry: { chatMode: 'mode#x' } }), '2.0.0');
+        const { errors } = parseInstallableAddonManifest(JSON.stringify({ ...base, scope: 'system', entry: { chatMode: 'mode#x' } }), '2.0.0');
         expect(errors.some(e => e.startsWith('entry'))).toBe(true);
         expect(errors.some(e => e.startsWith('scope'))).toBe(true);
         expect(errors.some(e => e.startsWith('requires.openmake'))).toBe(true);
     });
 
     it('깨진 JSON·스키마 위반(server 구성요소)은 사유와 함께 거절한다', () => {
-        expect(validateInstallableAddonManifest('{', '1.75.0')).toEqual(['JSON 파싱 실패']);
-        expect(validateInstallableAddonManifest(JSON.stringify({ ...base, components: { server: './server' } }), '1.75.0').length).toBeGreaterThan(0);
+        expect(parseInstallableAddonManifest('{', '1.75.0').errors).toEqual(['JSON 파싱 실패']);
+        expect(parseInstallableAddonManifest(JSON.stringify({ ...base, components: { server: './server' } }), '1.75.0').errors.length).toBeGreaterThan(0);
     });
 });

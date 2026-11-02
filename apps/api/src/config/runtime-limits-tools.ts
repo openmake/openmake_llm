@@ -256,29 +256,6 @@ export const LOOP_DETECTION = {
 //  2026-07-18 strategy 계층 폐기 2단계로 삭제 — 유일 소비자였던
 //  agent-loop-strategy / strategy-executor 와 함께 제거됨.)
 
-// ============================================
-// Routing Post-hoc Verification (라우팅 사후 검증)
-// ============================================
-
-/**
- * 라우팅 결정의 적절성을 응답 완료 후 사후 검증하는 설정
- *
- * Harness Engineering 원칙: Verify — 라우팅 결정이 실제로 적절했는지
- * 응답 품질 신호(지연, 토큰 사용량, 에러)로 자동 판단
- *
- * chat/routing-verifier.ts에서 참조
- */
-export const ROUTING_VERIFICATION = {
-    /** 사후 검증 활성화 여부 */
-    ENABLED: process.env.ROUTING_VERIFICATION_ENABLED !== 'false',
-    /** 비정상 지연으로 판단할 임계값 (ms) */
-    HIGH_LATENCY_THRESHOLD_MS: Number(process.env.ROUTING_HIGH_LATENCY_MS || '10000'),
-    /** 토큰 예산 대비 초과 사용 비율 임계값 (1.0 = 예산과 동일) */
-    TOKEN_OVERUSE_RATIO: parseFloat(process.env.ROUTING_TOKEN_OVERUSE_RATIO || '1.5'),
-    /** 검증 결과를 구조화 로그에 포함할지 여부 */
-    INCLUDE_IN_METRICS: process.env.ROUTING_VERIFICATION_INCLUDE_METRICS !== 'false',
-} as const;
-
 // (GV_METRICS 상수는 2026-07-18 strategy 계층 폐기 2단계로 삭제 —
 //  유일 소비자였던 generate-verify-strategy 와 함께 제거됨.)
 

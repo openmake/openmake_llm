@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import { PORTS } from "@openmake/config";
 
 /**
  * 포트 단일 출처 — 루트 scripts/resolve-ports.cjs (우선순위: 셸 환경 > 루트 .env > 기본값).
@@ -44,7 +45,7 @@ const publicSetting = (key: string): string => process.env[key] || rootEnv[key] 
  *   same-site 라 SameSite=Lax 쿠키가 전송되고, origin(localhost:3000)은 백엔드 CORS_ORIGINS 에 등록돼 있다.
  *   운영은 same-origin(location.host)로 연결 → Nginx 가 업그레이드 프록시.
  */
-const API_PROXY_TARGET = process.env.API_PROXY_TARGET || "http://localhost:52416";
+const API_PROXY_TARGET = process.env.API_PROXY_TARGET || `http://localhost:${PORTS.API}`;
 
 /**
  * 예약 리포트 게시물(`/generated/reports/*`, LLM 생성 HTML) CSP — apps/api `REPORTS_CSP` 와 같은 값을 유지한다

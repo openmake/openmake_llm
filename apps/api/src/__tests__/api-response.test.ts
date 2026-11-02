@@ -6,7 +6,6 @@
 import {
     success,
     error,
-    paginated,
     badRequest,
     unauthorized,
     forbidden,
@@ -100,70 +99,6 @@ describe('error', () => {
     test('details에 배열도 허용', () => {
         const res = error('CODE', 'msg', ['err1', 'err2']);
         expect(res.error.details).toEqual(['err1', 'err2']);
-    });
-});
-
-// ===== paginated =====
-
-describe('paginated', () => {
-    test('success: true 포함', () => {
-        const res = paginated([1, 2], { page: 1, pageSize: 10, total: 2 });
-        expect(res.success).toBe(true);
-    });
-
-    test('data는 전달한 items', () => {
-        const items = ['a', 'b', 'c'];
-        const res = paginated(items, { page: 1, pageSize: 10, total: 3 });
-        expect(res.data).toEqual(['a', 'b', 'c']);
-    });
-
-    test('totalPages 계산: ceil(total / pageSize)', () => {
-        const res = paginated([], { page: 1, pageSize: 10, total: 25 });
-        expect(res.pagination.totalPages).toBe(3);
-    });
-
-    test('totalPages 계산: 딱 나누어지는 경우', () => {
-        const res = paginated([], { page: 1, pageSize: 10, total: 20 });
-        expect(res.pagination.totalPages).toBe(2);
-    });
-
-    test('hasNext: 다음 페이지 있을 때 true', () => {
-        const res = paginated([], { page: 1, pageSize: 10, total: 25 });
-        expect(res.pagination.hasNext).toBe(true);
-    });
-
-    test('hasNext: 마지막 페이지일 때 false', () => {
-        const res = paginated([], { page: 3, pageSize: 10, total: 25 });
-        expect(res.pagination.hasNext).toBe(false);
-    });
-
-    test('hasPrev: 첫 페이지일 때 false', () => {
-        const res = paginated([], { page: 1, pageSize: 10, total: 25 });
-        expect(res.pagination.hasPrev).toBe(false);
-    });
-
-    test('hasPrev: 두 번째 이후 페이지일 때 true', () => {
-        const res = paginated([], { page: 2, pageSize: 10, total: 25 });
-        expect(res.pagination.hasPrev).toBe(true);
-    });
-
-    test('pagination에 page, pageSize, total 포함', () => {
-        const res = paginated([], { page: 2, pageSize: 5, total: 100 });
-        expect(res.pagination.page).toBe(2);
-        expect(res.pagination.pageSize).toBe(5);
-        expect(res.pagination.total).toBe(100);
-    });
-
-    test('meta.timestamp 포함', () => {
-        const res = paginated([], { page: 1, pageSize: 10, total: 0 });
-        expect(res.meta?.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
-    });
-
-    test('빈 items + total=0 → totalPages=0, hasNext=false, hasPrev=false', () => {
-        const res = paginated([], { page: 1, pageSize: 10, total: 0 });
-        expect(res.pagination.totalPages).toBe(0);
-        expect(res.pagination.hasNext).toBe(false);
-        expect(res.pagination.hasPrev).toBe(false);
     });
 });
 

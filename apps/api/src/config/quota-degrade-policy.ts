@@ -11,8 +11,6 @@
  */
 import { globToRegExp } from './external-model-policy';
 
-export type QuotaExceededAction = 'reject' | 'degrade';
-
 export type DegradeMap = Array<{ pattern: RegExp; source: string; target: string }>;
 
 /** PURE: 원문(JSON 객체) → 규칙 목록. 형태가 어긋나면 빈 목록(강등 없음). */

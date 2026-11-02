@@ -17,7 +17,6 @@
  * @module services/agent-task/context-fold
  */
 import type { ChatMessage } from '../../llm/types';
-import { runCompactionHooks } from './compaction-hooks';
 import { digestToolCall, findToolCallArgs } from './tool-digest';
 import { CONTEXT_FOLD_BATCH } from '../../config/agent-task-context';
 import { getFoldedSpillRef, spilledResultPathOf } from '../../prompts/agent-task-context';
@@ -115,6 +114,5 @@ export function foldOldToolResults(conversation: ChatMessage[], opts: FoldOption
     for (const p of pending) conversation[p.index].content = p.stub;
     stats.folded = pending.length;
     stats.savedChars = reclaim;
-    if (stats.folded > 0) runCompactionHooks({ conversation, folded: stats.folded, savedChars: stats.savedChars });
     return stats;
 }

@@ -143,15 +143,3 @@ const REFUSAL_PATTERNS: readonly RegExp[] = [
 export function statesNoAnswer(answer: string): boolean {
     return REFUSAL_PATTERNS.some((re) => re.test(answer));
 }
-
-/** (version, sequence) 쌍 배열에서 중복 개수 — 재수집·재시작에도 0 이어야 한다 */
-export function duplicateSequenceCount(pairs: Array<{ versionId: string; sequence: number }>): number {
-    const seen = new Set<string>();
-    let dup = 0;
-    for (const p of pairs) {
-        const key = `${p.versionId}#${p.sequence}`;
-        if (seen.has(key)) dup++;
-        else seen.add(key);
-    }
-    return dup;
-}

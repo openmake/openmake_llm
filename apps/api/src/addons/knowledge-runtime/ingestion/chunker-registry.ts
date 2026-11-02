@@ -150,7 +150,3 @@ const STRATEGIES: Readonly<Record<string, ChunkStrategy>> = {
 export function chunkerFor(name: string): ChunkStrategy | undefined {
     return STRATEGIES[name];
 }
-
-export function chunkStrategyNames(): string[] {
-    return Object.keys(STRATEGIES);
-}
