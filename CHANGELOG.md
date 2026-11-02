@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.121.1](https://github.com/openmake/openmake_llm/compare/v1.121.0...v1.121.1) (2026-11-02)
+
+
+### 🔧 기타
+
+* **release:** 1.121.1 — [#1601](https://github.com/openmake/openmake_llm/issues/1601) 죽은 코드·하드코딩 정리 릴리스 유도 ([0de0a87](https://github.com/openmake/openmake_llm/commit/0de0a8722890e620106302c3127521681fd8d991))
+
 ## [1.121.0](https://github.com/openmake/openmake_llm/compare/v1.120.0...v1.121.0) (2026-11-01)
 
 
