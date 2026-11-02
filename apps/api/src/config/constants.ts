@@ -11,6 +11,7 @@
  *   - config/external-services.ts (외부 URL)
  *   - config/model-defaults.ts (엔진/모델 프리셋)
  */
+import { PORTS } from '@openmake/config';
 
 /**
  * 파일 업로드 제한 설정
@@ -44,7 +45,7 @@ export const FILE_LIMITS = {
  */
 export const SERVER_CONFIG = {
     /** 기본 포트 */
-    DEFAULT_PORT: 52416,
+    DEFAULT_PORT: PORTS.API,
     /** 요청 타임아웃 (밀리초) */
     REQUEST_TIMEOUT_MS: 30 * 1000,
     /** WebSocket 하트비트 간격 (밀리초) */

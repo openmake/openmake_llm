@@ -27,12 +27,6 @@ export type AddonPermission = typeof ADDON_PERMISSIONS[keyof typeof ADDON_PERMIS
 
 export const ADDON_PERMISSION_VALUES = Object.values(ADDON_PERMISSIONS) as [AddonPermission, ...AddonPermission[]];
 
-/** 관리자 화면·설치 리포트용 설명 */
-export const ADDON_PERMISSION_LABELS: Readonly<Record<AddonPermission, string>> = {
-    'network:internet': '네트워크 사용 (MCP 서버의 외부 통신)',
-    'database:addon': 'add-on 전용 DB 스키마 적용',
-};
-
 export function hasAddonPermission(permissions: readonly string[] | undefined, perm: AddonPermission): boolean {
     return !!permissions?.includes(perm);
 }

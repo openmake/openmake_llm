@@ -5,6 +5,7 @@ import { WEB_CHAT_MODES } from "@/addons/registry";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile, WsStreamEnvelope } from "@openmake/shared-types";
+import { PORTS } from "@openmake/config";
 import { nextFollowup } from "./followup-queue";
 import { acceptStreamEvent, cursorAfterResume, resumeCursorFields, EMPTY_STREAM_CURSOR, type StreamCursor } from "./ws-seq";
 import { createWsLiveness } from "./ws-liveness";
@@ -93,7 +94,7 @@ export function resolveWsUrl(): string {
   // 포트는 빌드 시점에 주입된다 — install.sh 가 포트 충돌로 3000/52416 을 옮겨도
   // (예: 웹 :13000) 직접 연결 판정과 백엔드 포트가 함께 따라온다.
   const webPort = process.env.NEXT_PUBLIC_WEB_PORT || "3000";
-  const wsPort = process.env.NEXT_PUBLIC_WS_PORT || "52416";
+  const wsPort = process.env.NEXT_PUBLIC_WS_PORT || String(PORTS.API);
   if (location.port === webPort) {
     return `${proto}//${location.hostname}:${wsPort}`;
   }

@@ -164,15 +164,7 @@ describe('resolveRoleClient — 3단 폴백', () => {
         expect(r.degraded).toMatch(/키 미등록/);
     });
 
-    it('외부 매핑 + 키 비활성/복호화 실패 → 폴백', async () => {
-        const inactive = makeRepo({
-            getByUserAndProvider: jest.fn().mockResolvedValue(makeKeyRow({ isActive: false })),
-        } as Partial<ExternalKeysRepository>);
-        const r1 = await resolveRoleClient('judge', {
-            userId: 'u1', userMappingLookup: makeLookup('openrouter:m'), externalKeysRepo: inactive,
-        });
-        expect(r1.degraded).toMatch(/비활성/);
-
+    it('외부 매핑 + 키 복호화 실패 → 폴백', async () => {
         const noDecrypt = makeRepo({ decryptKey: jest.fn().mockResolvedValue(null) } as Partial<ExternalKeysRepository>);
         const r2 = await resolveRoleClient('judge', {
             userId: 'u1', userMappingLookup: makeLookup('openrouter:m'), externalKeysRepo: noDecrypt,

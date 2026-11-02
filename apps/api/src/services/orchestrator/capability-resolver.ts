@@ -121,7 +121,6 @@ export async function validateCapabilityAssignment(
         const repo = deps.userKeys ?? new ExternalKeysRepository(getPool());
         const row = await repo.getByUserAndProvider(scope, providerId);
         if (!row) return `'${providerId}' API 키를 먼저 등록하세요`;
-        if (!row.isActive) return `'${providerId}' API 키가 비활성 상태입니다`;
         if (row.authMethod === 'oauth') return `'${providerId}' OAuth 연결은 게이트웨이를 거치지 않아 배정할 수 없습니다`;
     }
     return null;
@@ -207,10 +206,9 @@ async function checkExternal(
                 `${capability} 외부 모델은 사용자 키로만 실행됩니다 — 사용자 문맥 없이 '${providerId}' 모델을 부를 수 없습니다`, 'CAPABILITY_KEY_MISSING',
             );
         }
-        // 실행 직전 BYOK 상태 검증 — 누락·비활성·OAuth(direct 전용) 는 각각 명시 실패. 전역/서버 키로 전환하지 않는다.
+        // 실행 직전 BYOK 상태 검증 — 누락·OAuth(direct 전용) 는 각각 명시 실패. 전역/서버 키로 전환하지 않는다.
         const keyRow = await deps.userKeys.getByUserAndProvider(userId, providerId);
         if (!keyRow) throw new CapabilityUnavailableError(`'${providerId}' API 키가 등록되어 있지 않아 ${capability} 를 실행할 수 없습니다`, 'CAPABILITY_KEY_MISSING');
-        if (!keyRow.isActive) throw new CapabilityUnavailableError(`'${providerId}' API 키가 비활성 상태입니다 (${capability})`, 'CAPABILITY_KEY_INACTIVE');
         if (keyRow.authMethod === 'oauth') throw new CapabilityUnavailableError(`'${providerId}' OAuth 연결은 게이트웨이를 거치지 않아 ${capability} 에 쓸 수 없습니다`, 'CAPABILITY_PROVIDER_NOT_GATEWAY');
         return { providerId, modelId, entry, key: { kind: 'user', userId, baseUrl: keyRow.baseUrl ?? null } };
     }

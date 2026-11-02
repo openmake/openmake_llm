@@ -26,19 +26,3 @@ export function subjectParticle(word: string): string {
 export function objectParticle(word: string): string {
     return hasFinalConsonant(word) ? '을' : '를';
 }
-
-/** 보조사 — '은'/'는' */
-export function topicParticle(word: string): string {
-    return hasFinalConsonant(word) ? '은' : '는';
-}
-
-/** 도구격 조사 — '으로'/'로' (ㄹ 받침은 '로') */
-export function instrumentalParticle(word: string): string {
-    const trimmed = word.trim();
-    const code = trimmed.charCodeAt(trimmed.length - 1);
-    if (code >= 0xac00 && code <= 0xd7a3) {
-        const jong = (code - 0xac00) % 28;
-        return jong === 0 || jong === 8 ? '로' : '으로';
-    }
-    return '로';
-}

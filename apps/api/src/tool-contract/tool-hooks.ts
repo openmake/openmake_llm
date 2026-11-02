@@ -42,10 +42,6 @@ export function registerToolHook(hook: ToolHook): () => void {
     };
 }
 
-export function listToolHookIds(): string[] {
-    return hooks.map((h) => h.id);
-}
-
 /** 테스트 전용 */
 export function __resetToolHooksForTest(): void {
     hooks.length = 0;

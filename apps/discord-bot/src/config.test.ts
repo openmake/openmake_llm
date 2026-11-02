@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, test } from 'node:test';
+import { PORTS } from '@openmake/config';
 import { config, loadRemoteSettings } from './config';
 
 /** 테스트가 수십 초 걸리지 않게 짧은 간격·한도를 주입한다. */
@@ -50,6 +51,12 @@ beforeEach(() => {
 
 afterEach(async () => {
     await closeServer();
+});
+
+// 아래 테스트들이 apiBaseUrl 을 덮어쓰므로 가장 먼저 둔다.
+test('API 주소 기본값은 공용 포트(PORTS.API)로 만든다', { skip: process.env.DISCORD_BOT_API_BASE_URL ? 'DISCORD_BOT_API_BASE_URL 지정됨' : false }, () => {
+    assert.equal(config.apiBaseUrl, `http://127.0.0.1:${PORTS.API}`);
+    assert.equal(config.apiBaseUrl, 'http://127.0.0.1:52416');
 });
 
 test('포트가 닫혀 있다가 서버가 뜨면 재시도 끝에 설정이 적용된다', async (t) => {

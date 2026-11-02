@@ -4,7 +4,7 @@
  * ============================================================
  * 
  * context-engineering.ts에서 사용하는 XML 태그 래핑 함수를 분리한 모듈입니다.
- * xmlTag, systemRulesSection, contextSection, examplesSection, thinkingSection을 제공합니다.
+ * xmlTag, examplesSection을 제공합니다.
  * 
  * @module chat/context-xml-helpers
  * @see chat/context-engineering - 이 헬퍼들을 사용하는 메인 모듈
@@ -44,22 +44,6 @@ export function xmlTag(
 }
 
 /**
- * 시스템 규칙 섹션 생성 (내부 콘텐츠 — 이스케이프 불필요)
- */
-export function systemRulesSection(rules: string[]): string {
-    const content = rules.map((rule, i) => `${i + 1}. ${rule}`).join('\n');
-    return xmlTag('system_rules', content, undefined, false);
-}
-
-/**
- * 컨텍스트 섹션 생성
- * 🔒 사용자 입력이 포함될 수 있으므로 이스케이프 적용
- */
-export function contextSection(context: string): string {
-    return xmlTag('context', context);
-}
-
-/**
  * 예시 섹션 생성 (Few-shot, 내부 콘텐츠 — 이스케이프 불필요)
  */
 export function examplesSection(examples: Array<{ input: string; output: string }>): string {
@@ -67,17 +51,4 @@ export function examplesSection(examples: Array<{ input: string; output: string 
         `### 예시 ${i + 1}\n입력: ${ex.input}\n출력: ${ex.output}`
     ).join('\n\n');
     return xmlTag('examples', content, undefined, false);
-}
-
-/**
- * 사고 과정 섹션 (Soft Interlock)
- */
-export function thinkingSection(): string {
-    return `<thinking>
-[이 섹션에서 문제를 분석하고 답변 전략을 수립하세요]
-1. 문제 분석: 사용자가 무엇을 요구하는가?
-2. 접근 전략: 어떤 방법으로 해결할 것인가?
-3. 안전성 검증: 이 답변이 안전한가?
-4. 출력 계획: 어떤 형식으로 제공할 것인가?
-</thinking>`;
 }

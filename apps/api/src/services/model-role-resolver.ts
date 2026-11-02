@@ -170,7 +170,6 @@ async function tryBuildExternalResolution(
 
     const keyRow = await externalKeysRepo.getByUserAndProvider(userId, providerId);
     if (!keyRow) return `'${providerId}' API 키 미등록`;
-    if (!keyRow.isActive) return `'${providerId}' API 키 비활성`;
 
     const plaintextKey = await externalKeysRepo.decryptKey(userId, providerId);
     if (!plaintextKey) return `'${providerId}' 키 복호화 실패`;

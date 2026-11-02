@@ -1,5 +1,5 @@
 /** 한국어 조사 선택 — 사용자 노출 문구의 '이(가)' 표기를 없애기 위한 순수 함수 */
-import { hasFinalConsonant, subjectParticle, objectParticle, topicParticle, instrumentalParticle } from '../korean-particle';
+import { hasFinalConsonant, subjectParticle, objectParticle } from '../korean-particle';
 
 describe('korean-particle', () => {
     it('받침 판정', () => {
@@ -19,14 +19,8 @@ describe('korean-particle', () => {
         expect(`법률 전문${subjectParticle('법률 전문')}`).toBe('법률 전문이');
     });
 
-    it('목적격·보조사·도구격', () => {
+    it('목적격', () => {
         expect(objectParticle('스킬')).toBe('을');
         expect(objectParticle('에이전트')).toBe('를');
-        expect(topicParticle('작업')).toBe('은');
-        expect(topicParticle('세션')).toBe('은');
-        expect(topicParticle('메모리')).toBe('는');
-        expect(instrumentalParticle('파일')).toBe('로');   // ㄹ 받침
-        expect(instrumentalParticle('문서')).toBe('로');
-        expect(instrumentalParticle('확장')).toBe('으로');
     });
 });
