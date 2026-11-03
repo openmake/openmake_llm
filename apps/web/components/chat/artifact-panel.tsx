@@ -285,7 +285,7 @@ export function ArtifactPanel() {
   // 패널 부모 행(채팅 + 패널) 폭 기준으로 채팅 영역 최소 400px 보장 위해 폭 클램프.
   // 패널이 아직 그려지지 않았으면(ref 없음) 창 폭으로 대신한다.
   const clampWidth = useCallback((w: number) => {
-    const containerWidth = asideRef.current?.parentElement?.clientWidth ?? window.innerWidth;
+    const containerWidth = asideRef.current?.parentElement?.clientWidth || window.innerWidth;
     const maxW = Math.max(PANEL_MIN, containerWidth - 400);
     return Math.min(maxW, Math.max(PANEL_MIN, w));
   }, []);
