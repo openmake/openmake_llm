@@ -115,12 +115,13 @@ setup() { # $1=config 원본 $2=.env 추가 줄(\n 구분) — 게이트웨이 c
     printf 'LLM_BASE_URL=%s\nLLM_API_KEY=%s\nOMK_LITELLM_CONFIG=%s\nOMK_LITELLM_PM2_APP=gw\n%b' "$GWURL" "$GKEY" "$CFG" "${2:-}" > "$APP/.env"
 }
 run() { # deploy --yes → 종료 코드 출력. 환경변수(OMK_DGX_MODEL·FAKE_*)는 호출자가 앞에 붙인다.
+    # 인자(NAME=값 …)는 unset 뒤 배포 셸 env 로 준다 — unset 목록의 이름(VLLM_API_KEY 등)을 일부러 줄 때만 쓴다.
     : > "$LOG"
     ( cd "$APP" || exit 99
-      unset COMPOSE_FILE OMK_INSTANCE PORT POSTGRES_PORT REDIS_PORT OMK_DEPLOY_SKIP_CONFIRM QWEN_VLLM_API_BASE_X
+      unset COMPOSE_FILE OMK_INSTANCE PORT POSTGRES_PORT REDIS_PORT OMK_DEPLOY_SKIP_CONFIRM QWEN_VLLM_API_BASE_X VLLM_API_KEY QWEN_VLLM_API_BASE
       PATH="$BIN:$PATH" PM2_HOME="$PM2H" OMK_ROOT="$TMP/omkroot" FAKE_LOG="$LOG" FAKE_APP="$APP" FAKE_CFG="$CFG" \
       FAKE_CFG_FIRST="$TMP/cfg-first.yaml" FAKE_VKEY="$VKEY" FAKE_GKEY="$GKEY" FAKE_GWURL="$GWURL" \
-      "$BASH" "$APP/openmake_llm.sh" deploy --yes </dev/null >"$OUT" 2>&1 )
+      env ${1+"$@"} "$BASH" "$APP/openmake_llm.sh" deploy --yes </dev/null >"$OUT" 2>&1 )
     local rc=$?; cat "$OUT" >> "$ALL"; echo "$rc"
 }
 envv() { grep -E "^$1=" "$APP/.env" | tail -1 | cut -d= -f2-; }
@@ -273,8 +274,68 @@ eq "dump 손실: 모델은 바뀌었지만 pm2 save 없음" "$(envv LLM_DEFAULT_
 ok "dump 손실: 경고" 'grep -q "WARN.*저장된 PM2 앱이 지금 실행 중이 아닙니다: other-app" "$OUT"'
 rm -f "$PM2H/dump.pm2"
 
+# ── E. api_key 가 os.environ/… — 배포 셸 env, 없으면 .env OMK_LITELLM_ENV 파일, 둘 다 없으면 경고·무변경(vLLM 미호출) ──
+ENV_CFG="$TMP/envkey-form.yaml"   # 주소만 literal, 키는 os.environ/VLLM_API_KEY
+sed "s#os.environ/QWEN_VLLM_API_BASE#$VBASE#" "$ROOT/scripts/vllm/litellm.config.yaml" > "$ENV_CFG"
+ENV2_CFG="$ROOT/scripts/vllm/litellm.config.yaml"   # 주소·키 모두 os.environ/
+GWENV="$GW/litellm.env"
+gwenv() { printf '%b' "$1" > "$GWENV"; chmod 600 "$GWENV"; }
+switched() { printf '%s|%s|%s|%s|%s' "$(grep -c "^curl $VBASE/models auth=vllm" "$LOG" | tr -d ' ')" "$(envv OMK_DGX_MODEL)" "$(envv OMK_DGX_MODEL_PINNED)" \
+    "$(envv LLM_DEFAULT_MODEL)" "$(grep -cxF '  - model_name: "chat-next"' "$CFG")"; }
+SW="1|chat-next|0|chat-next|1"
+KEYWARN='WARN.*api_key 가 os.environ/VLLM_API_KEY 인데 값을 알 수 없어.*OMK_LITELLM_ENV'
+
+# E1. 배포 셸 env 에 키 → 전환(셸 env 경로 회귀)
+setup "$ENV_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-27b\n'
+eq "E1 셸 env 키: 배포 성공" "$(FAKE_VLLM='qwen3.8-27b chat-next' run VLLM_API_KEY="$VKEY")" "0"
+eq "E1 셸 env 키: 그 키로 감지·전환" "$(switched)" "$SW"
+
+# E2. 셸 env·파일 모두 없음 → 경고 1줄, vLLM 미호출, 무변경, 배포 계속
+setup "$ENV_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-27b\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "E2 키 미해석: 배포 계속" "$(FAKE_VLLM='qwen3.8-27b chat-next' run)" "0"
+eq "E2 키 미해석: 경고 1줄(api_key·OMK_LITELLM_ENV)" "$(grep -c "$KEYWARN" "$OUT" | tr -d ' ')" "1"
+ok "E2 키 미해석: 401 fallback 경고 없음" '! grep -q "vLLM 모델 목록을 읽지 못해" "$OUT"'
+eq "E2 키 미해석: 무변경·vLLM 미호출·빌드 있음" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of "^curl $VBASE")|$(n_of '^build')" "$S_CFG|$S_ENV|0|1"
+
+# E3. .env OMK_LITELLM_ENV 파일(따옴표 값, 다른 키 포함) → 전환, 파일 값은 출력에 없음
+gwenv "LITELLM_MASTER_KEY=sk-other-zzz\nVLLM_API_KEY=\"$VKEY\"\n"
+setup "$ENV_CFG" "LLM_DEFAULT_MODEL=qwen3.8-27b\nOMK_LITELLM_ENV=$GWENV\n"
+eq "E3 파일 키: 배포 성공" "$(FAKE_VLLM='qwen3.8-27b chat-next' run)" "0"
+eq "E3 파일 키: 그 키로 감지·전환" "$(switched)" "$SW"
+
+# E4. OMK_LITELLM_ENV 가 없는 파일 → 읽기 경고 + 키 경고, 무변경
+setup "$ENV_CFG" "LLM_DEFAULT_MODEL=qwen3.8-27b\nOMK_LITELLM_ENV=$TMP/no-such.env\n"; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "E4 파일 없음: 배포 계속" "$(FAKE_VLLM='qwen3.8-27b chat-next' run)" "0"
+eq "E4 파일 없음: 읽기 경고 1줄 + 키 경고 1줄" "$(grep -c "WARN.*게이트웨이 env 파일(.env OMK_LITELLM_ENV)을 읽을 수 없습니다: $TMP/no-such.env" "$OUT" | tr -d ' ')|$(grep -c "$KEYWARN" "$OUT" | tr -d ' ')" "1|1"
+eq "E4 파일 없음: 무변경·vLLM 미호출" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of "^curl $VBASE")" "$S_CFG|$S_ENV|0"
+
+# E5. 주소·키 모두 os.environ/ — 둘 다 파일에서 → 전환
+gwenv "QWEN_VLLM_API_BASE=$VBASE\nVLLM_API_KEY=$VKEY\n"
+setup "$ENV2_CFG" "LLM_DEFAULT_MODEL=qwen3.8-27b\nOMK_LITELLM_ENV=$GWENV\n"
+eq "E5 파일 주소·키: 배포 성공" "$(FAKE_VLLM='qwen3.8-27b chat-next' run)" "0"
+eq "E5 파일 주소·키: 그 주소·키로 감지·전환" "$(switched)" "$SW"
+
+# E6. 주소·키 모두 os.environ/, 파일에 키만 → 기존 api_base 경고(rc 3), 무변경
+gwenv "VLLM_API_KEY=$VKEY\n"
+setup "$ENV2_CFG" "LLM_DEFAULT_MODEL=qwen3.8-27b\nOMK_LITELLM_ENV=$GWENV\n"; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "E6 파일에 주소 없음: 배포 계속" "$(FAKE_VLLM='qwen3.8-27b chat-next' run)" "0"
+ok "E6 파일에 주소 없음: api_base 경고" 'grep -q "WARN.*api_base 가 os.environ/QWEN_VLLM_API_BASE 인데 값을 알 수 없어" "$OUT"'
+eq "E6 파일에 주소 없음: 무변경·curl 없음" "$(sum "$CFG")|$(sum "$APP/.env")|$(n_of '^curl')" "$S_CFG|$S_ENV|0"
+
+# E7. 셸 env 와 파일 둘 다 → 셸 env 우선
+gwenv "VLLM_API_KEY=wrong-key\n"
+setup "$ENV_CFG" "LLM_DEFAULT_MODEL=qwen3.8-27b\nOMK_LITELLM_ENV=$GWENV\n"
+eq "E7 셸 env 우선: 배포 성공" "$(FAKE_VLLM='qwen3.8-27b chat-next' run VLLM_API_KEY="$VKEY")" "0"
+eq "E7 셸 env 우선: 셸 키로 감지·전환" "$(switched)" "$SW"
+
+# E8. 명시값이 있어도 키 미해석은 경고 + 계속(종료 2 아님)
+setup "$ENV_CFG" 'LLM_DEFAULT_MODEL=qwen3.8-27b\n'; S_CFG="$(sum "$CFG")"; S_ENV="$(sum "$APP/.env")"
+eq "E8 명시값 + 키 미해석: 배포 계속" "$(OMK_DGX_MODEL=chat-next FAKE_VLLM='qwen3.8-27b chat-next' run)" "0"
+eq "E8 명시값 + 키 미해석: 경고 1줄·무변경·빌드 있음" "$(grep -c "$KEYWARN" "$OUT" | tr -d ' ')|$(sum "$CFG")|$(sum "$APP/.env")|$(n_of '^build')" "1|$S_CFG|$S_ENV|1"
+
 # ── 12. 키는 어떤 출력에도 없다 ──
 eq "키 미출력: vLLM 키·게이트웨이 키" "$(grep -cF -e "$VKEY" -e "$GKEY" "$ALL" | tr -d ' ')" "0"
+eq "키 미출력: 게이트웨이 env 파일의 다른 값" "$(grep -cF -e sk-other-zzz -e wrong-key "$ALL" | tr -d ' ')" "0"
 
 printf 'deploy-dgx-sync: %d passed, %d failed\n' "$PASS" "$FAIL"
 [[ $FAIL -eq 0 ]]
