@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.122.0](https://github.com/openmake/openmake_llm/compare/v1.121.3...v1.122.0) (2026-11-03)
+
+
+### ✨ 기능
+
+* **web:** 채팅 스크롤 영역을 본문 기둥 폭으로 좁히고 여백의 휠을 전달한다 ([dac234c](https://github.com/openmake/openmake_llm/commit/dac234c0a5a6a3a50bec3b204aa9d29844e29d4b))
+
+
+### 🐛 버그 수정
+
+* **web:** 아티팩트 패널 저장 폭을 복원할 때도 창 폭에 맞춰 클램프한다 ([2e8b628](https://github.com/openmake/openmake_llm/commit/2e8b628a15ce74f730fd3cf5c9c98f4b7fd3da8d))
+
 ## [1.121.3](https://github.com/openmake/openmake_llm/compare/v1.121.2...v1.121.3) (2026-11-03)
 
 
