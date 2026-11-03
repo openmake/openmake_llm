@@ -5,6 +5,7 @@ import { Composer } from "@/components/chat/composer";
 import { ArtifactPanel } from "@/components/chat/artifact-panel";
 import { ArtifactToggle } from "@/components/chat/artifact-toggle";
 import { ChatContextBanners } from "@/components/chat/chat-context-banners";
+import { ChatScrollArea } from "@/components/chat/chat-scroll-area";
 
 export default async function ChatPage() {
   const t = await getTranslations();
@@ -26,9 +27,9 @@ export default async function ChatPage() {
 
         <ChatContextBanners />
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <ChatScrollArea>
           <MessageList />
-        </div>
+        </ChatScrollArea>
 
         <ActiveContext />
         <Composer />
