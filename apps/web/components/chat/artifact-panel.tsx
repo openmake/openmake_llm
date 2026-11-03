@@ -280,10 +280,13 @@ export function ArtifactPanel() {
   const PANEL_STORAGE_KEY = "omk_artifact_panel_w";
   const [panelWidth, setPanelWidth] = useState<number>(PANEL_DEFAULT);
   const draggingRef = useRef(false);
+  const asideRef = useRef<HTMLElement>(null);
 
-  // 뷰포트가 좁아지면 채팅 영역(최소 400px) 보장 위해 폭 클램프.
+  // 패널 부모 행(채팅 + 패널) 폭 기준으로 채팅 영역 최소 400px 보장 위해 폭 클램프.
+  // 패널이 아직 그려지지 않았으면(ref 없음) 창 폭으로 대신한다.
   const clampWidth = useCallback((w: number) => {
-    const maxW = Math.max(PANEL_MIN, window.innerWidth - 400);
+    const containerWidth = asideRef.current?.parentElement?.clientWidth || window.innerWidth;
+    const maxW = Math.max(PANEL_MIN, containerWidth - 400);
     return Math.min(maxW, Math.max(PANEL_MIN, w));
   }, []);
 
@@ -365,6 +368,12 @@ export function ArtifactPanel() {
   }, [currentSessionId, setArtifacts]);
 
   const active = artifacts.find((a) => a.id === activeArtifactId) ?? artifacts[artifacts.length - 1];
+
+  // 마운트 복원은 패널이 닫힌 채(ref 없음) 실행될 수 있다 — 패널이 그려지면 부모 행 폭으로 다시 클램프.
+  const visible = open && !!active;
+  useEffect(() => {
+    if (visible) setPanelWidth((w) => clampWidth(w));
+  }, [visible, clampWidth]);
 
   // 활성 artifact 변경 시 버전 목록 로드 + override 초기화.
   // Agent Task 산출물(taskId)은 세션 artifacts 테이블에 없어 버전 조회가 404 — 요청 자체를 생략.
@@ -452,6 +461,7 @@ export function ArtifactPanel() {
 
   return (
     <aside
+      ref={asideRef}
       style={{ ["--panel-w" as string]: `${panelWidth}px` }}
       className="fixed inset-0 z-40 flex w-full flex-col border-border bg-surface lg:relative lg:inset-auto lg:z-auto lg:w-[var(--panel-w)] lg:border-l"
     >
