@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.121.3](https://github.com/openmake/openmake_llm/compare/v1.121.2...v1.121.3) (2026-11-03)
+
+
+### 🐛 버그 수정
+
+* **deploy:** DGX 감지가 config 의 os.environ 참조를 게이트웨이 env 파일(OMK_LITELLM_ENV)에서도 읽고 키 미해석은 경고 후 건너뛴다 ([5a1d7df](https://github.com/openmake/openmake_llm/commit/5a1d7df480be5e3574c47d325dcb821a16301c61))
+
 ## [1.121.2](https://github.com/openmake/openmake_llm/compare/v1.121.1...v1.121.2) (2026-11-02)
 
 
