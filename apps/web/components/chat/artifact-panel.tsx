@@ -281,10 +281,16 @@ export function ArtifactPanel() {
   const [panelWidth, setPanelWidth] = useState<number>(PANEL_DEFAULT);
   const draggingRef = useRef(false);
 
+  // 뷰포트가 좁아지면 채팅 영역(최소 400px) 보장 위해 폭 클램프.
+  const clampWidth = useCallback((w: number) => {
+    const maxW = Math.max(PANEL_MIN, window.innerWidth - 400);
+    return Math.min(maxW, Math.max(PANEL_MIN, w));
+  }, []);
+
   useEffect(() => {
     const saved = Number(localStorage.getItem(PANEL_STORAGE_KEY));
-    if (Number.isFinite(saved) && saved >= PANEL_MIN) setPanelWidth(saved);
-  }, []);
+    if (Number.isFinite(saved) && saved >= PANEL_MIN) setPanelWidth(clampWidth(saved));
+  }, [clampWidth]);
 
   useEffect(() => {
     try {
@@ -293,12 +299,6 @@ export function ArtifactPanel() {
       /* 저장소 접근 불가 — 무시 */
     }
   }, [panelWidth]);
-
-  // 뷰포트가 좁아지면 채팅 영역(최소 400px) 보장 위해 폭 클램프.
-  const clampWidth = useCallback((w: number) => {
-    const maxW = Math.max(PANEL_MIN, window.innerWidth - 400);
-    return Math.min(maxW, Math.max(PANEL_MIN, w));
-  }, []);
 
   useEffect(() => {
     const onResize = () => setPanelWidth((w) => clampWidth(w));
