@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.121.2](https://github.com/openmake/openmake_llm/compare/v1.121.1...v1.121.2) (2026-11-02)
+
+
+### 🐛 버그 수정
+
+* **knowledge:** jobCounts 에서 삭제 공간의 문서 수집 작업도 제외 ([7865c16](https://github.com/openmake/openmake_llm/commit/7865c168e2a9de59c6f4cb9ae3eff6b167e6f12e))
+* **knowledge:** 관리자 jobCounts 에서 소프트 삭제된 공간의 작업 제외 ([48a4b88](https://github.com/openmake/openmake_llm/commit/48a4b88e609d93f5ce9604438540cc425e19d7ac))
+
 ## [1.121.1](https://github.com/openmake/openmake_llm/compare/v1.121.0...v1.121.1) (2026-11-02)
 
 
