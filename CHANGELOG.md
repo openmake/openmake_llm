@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.122.1](https://github.com/openmake/openmake_llm/compare/v1.122.0...v1.122.1) (2026-11-03)
+
+
+### 🐛 버그 수정
+
+* **web:** 부모 행 폭이 0 이면 창 폭으로 패널 상한을 계산한다 ([9460d2b](https://github.com/openmake/openmake_llm/commit/9460d2bb0a1a2bc20893ace29b837156a91e5cad))
+* **web:** 아티팩트 패널 폭 상한을 부모 행 폭 기준으로 계산한다 ([0a54450](https://github.com/openmake/openmake_llm/commit/0a544503b60a752c3d0d387e3c6735be6800661d))
+
 ## [1.122.0](https://github.com/openmake/openmake_llm/compare/v1.121.3...v1.122.0) (2026-11-03)
 
 
