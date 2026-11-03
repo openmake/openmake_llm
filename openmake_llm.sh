@@ -783,11 +783,14 @@ cmd_update() {
 # 라우트는 그대로)으로 뜬 뒤 앱이 새 이름으로 재시작돼 기본 모델이 게이트웨이에 없는 구간이 없다.
 # 자동 감지의 이상(미도달·후보 둘 이상·앱 기본값이 DGX 이름 아님·config 형태 불인식 등)은 경고만 하고 아무것도 바꾸지 않으며 배포는
 # 계속한다. 실행할 때 준 OMK_DGX_MODEL(명시값)이 잘못됐거나 고정값을 vLLM 이 더는 서빙하지 않으면 빌드 전에 멈춘다(종료 2).
+# config 의 os.environ/<이름> 참조는 배포 셸 env, 없으면 .env 의 OMK_LITELLM_ENV(게이트웨이 env 파일)에서 읽는다.
 # 키는 config 안에서 읽어 curl 헤더로만 쓰고 어떤 출력에도 싣지 않는다.
 
 # 게이트웨이 config 에서 DGX 채팅 항목(litellm_params.model == openai/<앵커>, 앵커는 준 순서대로)의 주소·키를 읽는다(js-yaml, 읽기만).
-# 값이 os.environ/<이름> 이면 이 셸의 그 환경변수. 출력 "앵커\napi_base\napi_key\n." — 호출자의 변수로만 받는다.
-# rc 1=항목 없음(또는 읽을 수 없음), 2=node·js-yaml 없음, 3=api_base 값을 알 수 없음(출력은 config 에 적힌 값).
+# 값이 os.environ/<이름> 이면 이 셸의 그 환경변수, 없으면 환경변수 DGX_ENV_FILE(있으면)이 가리키는 파일의 마지막 <이름>= 줄
+# (scripts/env/omk.sh dotenv_get 과 같은 규칙 — 값 전체를 감싼 따옴표 한 쌍만 벗긴다). 출력 "앵커\napi_base\napi_key\n." — 호출자의 변수로만 받는다.
+# rc 1=항목 없음(또는 읽을 수 없음), 2=node·js-yaml 없음, 3=api_base 값을 알 수 없음(출력은 config 에 적힌 값),
+# 4=api_key 값을 알 수 없음(출력은 config 에 적힌 값).
 gateway_dgx_entry() { # $1=config $2…=앵커 후보
     command -v node >/dev/null 2>&1 || return 2
     ( cd "$SCRIPT_DIR" && node -e '
@@ -795,13 +798,20 @@ gateway_dgx_entry() { # $1=config $2…=앵커 후보
         let yaml; try { yaml = require("module").createRequire(path.resolve("apps/api/package.json"))("js-yaml"); } catch { process.exit(2); }
         let doc; try { doc = yaml.load(fs.readFileSync(process.argv[1], "utf8")); } catch { process.exit(1); }
         const list = doc && Array.isArray(doc.model_list) ? doc.model_list : [];
-        const val = (v) => { const s = v == null ? "" : String(v), m = /^os\.environ\/(.+)$/.exec(s); return m ? (process.env[m[1]] || "") : s; };
+        const file = Object.create(null);
+        if (process.env.DGX_ENV_FILE) {
+            let text = ""; try { text = fs.readFileSync(process.env.DGX_ENV_FILE, "utf8"); } catch {}
+            for (const l of text.split("\n")) { const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(l); if (m) file[m[1]] = m[2]; }
+        }
+        const unquote = (s) => { if (s == null) return ""; const m = /^"(.*)"$/.exec(s) || /^\x27(.*)\x27$/.exec(s); return m ? m[1] : s; };
+        const val = (v) => { const s = v == null ? "" : String(v), m = /^os\.environ\/(.+)$/.exec(s); return m ? (process.env[m[1]] || unquote(file[m[1]]) || "") : s; };
         for (const a of process.argv.slice(2)) {
             const e = a && list.find((x) => x && x.litellm_params && x.litellm_params.model === "openai/" + a);
             if (!e) continue;
-            const p = e.litellm_params, base = val(p.api_base);
+            const p = e.litellm_params, base = val(p.api_base), rawKey = String(p.api_key == null ? "" : p.api_key), key = val(p.api_key);
             if (!base) { process.stdout.write(String(p.api_base == null ? "" : p.api_base)); process.exit(3); }
-            process.stdout.write([a, base, val(p.api_key), "."].join("\n")); process.exit(0);
+            if (!key && /^os\.environ\//.test(rawKey)) { process.stdout.write(rawKey); process.exit(4); }
+            process.stdout.write([a, base, key, "."].join("\n")); process.exit(0);
         }
         process.exit(1);' "$@" )
 }
@@ -878,7 +888,7 @@ gateway_wait_model() { # $1=모델 이름
 
 # 판정 — 빌드 전, 아무것도 쓰지 않는다. 맞출 값이 있으면 DGX_OPS_TARGET·DGX_OPS_PIN·DGX_OPS_OLD·DGX_OPS_ANCHOR·DGX_OPS_APP 를 채운다.
 dgx_ops_sync() {
-    local cfg gw app dgx pin entry rc=0 anchor base key rest err r model src newpin served vsv="" svrc=0 list is_dgx=0 why old="" v exp="$DGX_EXPLICIT"
+    local cfg gw envf app dgx pin entry rc=0 anchor base key rest err r model src newpin served vsv="" svrc=0 list is_dgx=0 why old="" v exp="$DGX_EXPLICIT"
     cfg="$(env_val OMK_LITELLM_CONFIG)"; [[ -n "$cfg" ]] || return 0
     [[ "$exp" != auto ]] || exp=""   # auto 는 고정 해제일 뿐 명시값이 아니다
     declare -F dgx_resolve_model >/dev/null 2>&1 \
@@ -888,13 +898,16 @@ dgx_ops_sync() {
         log_warn "게이트웨이 PM2 앱(${gw:-.env 의 OMK_LITELLM_PM2_APP 없음})이 등록돼 있지 않아 DGX 모델 이름을 맞추지 않습니다"; return 0
     fi
     [[ -f "$cfg" ]] || { log_warn "게이트웨이 config 가 없어 DGX 모델 이름을 맞추지 않습니다: $cfg"; return 0; }
+    envf="$(env_val OMK_LITELLM_ENV)"
+    [[ -z "$envf" || -r "$envf" ]] || { log_warn "게이트웨이 env 파일(.env OMK_LITELLM_ENV)을 읽을 수 없습니다: $envf — 배포 셸 환경변수만 봅니다"; envf=""; }
     [[ -n "$(env_val LLM_BASE_URL)" ]] || { log_warn "게이트웨이 주소(.env LLM_BASE_URL)가 없어 DGX 모델 이름을 맞추지 않습니다"; return 0; }
     app="$(env_val LLM_DEFAULT_MODEL)"; dgx="$(env_val OMK_DGX_MODEL)"; pin="$(env_val OMK_DGX_MODEL_PINNED)"; pin="${pin:-0}"
-    entry="$(gateway_dgx_entry "$cfg" "$app" "$dgx" "$OMK_DGX_LEGACY_MODEL")" || rc=$?
+    entry="$(DGX_ENV_FILE="$envf" gateway_dgx_entry "$cfg" "$app" "$dgx" "$OMK_DGX_LEGACY_MODEL")" || rc=$?
     case $rc in
         0) ;;
         2) log_warn "node 또는 js-yaml 을 찾지 못해 게이트웨이 config 를 검증할 수 없습니다 — 모델 이름을 바꾸지 않았습니다"; return 0 ;;
         3) log_warn "DGX 항목의 api_base 가 $entry 인데 값을 알 수 없어 DGX 모델 이름을 맞추지 않습니다(배포 셸에 그 환경변수가 없음)"; return 0 ;;
+        4) log_warn "DGX 항목의 api_key 가 $entry 인데 값을 알 수 없어 DGX 모델 이름을 맞추지 않습니다(배포 셸에 그 환경변수가 없음 — .env 의 OMK_LITELLM_ENV=<게이트웨이 env 파일> 로 줄 수 있습니다)"; return 0 ;;
         *) log_warn "게이트웨이 config 에서 DGX 항목(openai/$(printf '%s\n' "$app" "$dgx" "$OMK_DGX_LEGACY_MODEL" | awk 'NF && !s[$0]++' | paste -sd '|' -))을 찾지 못해 DGX 모델 이름을 맞추지 않습니다: $cfg"; return 0 ;;
     esac
     anchor="${entry%%$'\n'*}"; rest="${entry#*$'\n'}"; base="${rest%%$'\n'*}"; rest="${rest#*$'\n'}"; key="${rest%$'\n'.}"
