@@ -71,6 +71,26 @@ describe('runMatrix', () => {
         ]);
     });
 
+    it('repeat 미지정이면 케이스별 반복 결과(caseRuns)를 싣지 않는다 — 기존 출력 그대로', async () => {
+        const { cells } = await runMatrix({ dataset, models: ['m'], variants: ['base'], generatorFactory: () => async () => 'ok' });
+        expect(cells[0]).not.toHaveProperty('caseRuns');
+        expect(cells[0]).toMatchObject({ totalCases: 1, passedCases: 1, passRate: 1 });
+    });
+
+    it('repeat N 이면 같은 케이스를 N회 돌려 셀에 케이스별 통과 횟수를 싣고 통과율은 전체 판정 평균', async () => {
+        const two: GoldenDataset = { ...dataset, cases: [...dataset.cases, { id: 'r2', category: 'response-pattern', query: 'bye', mustContain: ['ok'] }] };
+        let calls = 0;
+        const { cells } = await runMatrix({
+            dataset: two, models: ['m'], variants: ['base'], repeat: 3,
+            // r1 은 늘 통과, r2 는 첫 회만 통과
+            generatorFactory: (_cell, onMetrics) => async (q) => { onMetrics({ totalMs: 10 }); calls++; return q === 'hello' || calls === 2 ? 'ok' : 'nope'; },
+        });
+        expect(calls).toBe(6);
+        expect(cells[0].caseRuns).toEqual({ repeat: 3, passes: { r1: 3, r2: 1 } });
+        expect(cells[0]).toMatchObject({ totalCases: 6, passedCases: 4 });
+        expect(cells[0].passRate).toBeCloseTo(4 / 6);
+    });
+
     it('알 수 없는 variant 는 실행 전에 거부', async () => {
         await expect(runMatrix({ dataset, models: ['m'], variants: ['nope'], generatorFactory: () => async () => '' })).rejects.toThrow(/알 수 없는 variant: nope/);
     });
