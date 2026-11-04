@@ -3,10 +3,13 @@
  *
  * 서버 샌드박스의 브라우저 러너(infra/task-runtime/browser-runner.mjs)와 **같은 액션 형식·같은 결과 형식**을 쓴다 —
  * 서버의 `browser` 도구가 실행 위치만 바꿔 그대로 쓸 수 있어야 한다. 다른 점:
- *   - 호출이 끝나도 탭과 로그인 상태가 남는다(작업마다 탭 하나). 서버 러너는 호출마다 새 브라우저다.
+ *   - 호출이 끝나도 창과 로그인 상태가 남는다(작업마다 창 하나). 서버 러너는 호출마다 새 브라우저다.
  *   - 실행 직전에 **실제 탭의 주소**로 사이트 정책을 다시 판정한다(@openmake/config checkBrowserAction).
  *     서버가 본 주소와 다를 수 있다 — 리다이렉트, 페이지가 연 새 창, 사용자의 직접 조작.
- *   - 사용자가 넘겨받은 동안(setUserControl)에는 아무것도 실행하지 않는다. 한 번에 한 요청만 실행한다.
+ *   - 사용자가 넘겨받은 동안(setUserControl)에는 아무것도 실행하지 않는다(실행 중인 모든 작업이 멈춘다).
+ *   - 같은 작업의 요청은 순서대로, 다른 작업은 BROWSER_MAX_CONCURRENT 까지 동시에 실행한다(2026-11-04). 작업마다 뒤쪽 창 하나.
+ *     다운로드 폴더는 브라우저 전역 설정이라(CDP Browser.setDownloadBehavior 는 컨텍스트 단위, Page.setDownloadBehavior 는 폐기·세션 구분 없음)
+ *     다운로드 폴더가 다른 작업끼리는 동시에 돌리지 않는다.
  *   - 쿠키·저장된 비밀번호·프로필 파일을 돌려주는 동작은 없다.
  *
  * 보안 불변식(변경 금지): http(s)·about:blank 밖으로 이동하지 않는다 · 사이트 정책 판정을 건너뛰는 경로가 없다 ·
@@ -16,7 +19,7 @@ import type { ChildProcess } from 'child_process';
 import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, validateBrowserFlow, type BrowserSitePolicy } from '@openmake/config';
 import {
     BROWSER_ACTION_TIMEOUT_MS, BROWSER_CLICK_SETTLE_MS, BROWSER_EXIT_WAIT_MS, BROWSER_DIALOG_MESSAGE_MAX, BROWSER_DIALOG_RECORD_MAX,
-    BROWSER_EXTRACT_MAX_CHARS, BROWSER_EXTRACT_READY_MS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_TABS, BROWSER_POLL_MS,
+    BROWSER_EXTRACT_MAX_CHARS, BROWSER_EXTRACT_READY_MS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_CONCURRENT, BROWSER_MAX_TABS, BROWSER_POLL_MS,
     BROWSER_SNAPSHOT_MAX_ELEMENTS, BROWSER_SNAPSHOT_NAME_MAX, BROWSER_WAIT_MAX_MS, BROWSER_FILL_ECHO_MAX_CHARS,
 } from '../constants';
 import { condExpression, runBrowserFlow } from './browser-flow';
@@ -48,9 +51,18 @@ export class LocalBrowser {
     private proc: ChildProcess | null = null;
     private readonly tabs = new Map<string, Tab>();
     private userControl = false;
-    /** 중지 요청마다 오른다 — 실행 중인 요청이 시작 때의 값과 달라지면 멈춘다 */
+    /** 중지 요청마다 오른다 — 실행 중인 요청이 시작 때의 값과 달라지면 멈춘다(전체 중지·제어권) */
     private stopGeneration = 0;
-    private chain: Promise<unknown> = Promise.resolve();
+    /** 작업별 중지 — requestStop(taskId) 마다 그 작업의 값이 오른다 */
+    private readonly taskStops = new Map<string, number>();
+    /** 작업별 실행 줄 — 같은 작업은 앞 요청이 끝난 뒤에 실행한다 */
+    private readonly chains = new Map<string, Promise<unknown>>();
+    /** 지금 실행 중인 작업 → 그 다운로드 폴더 */
+    private readonly running = new Map<string, string>();
+    /** 실행 자리·탭 자리를 기다리는 요청 — 자리가 나면 모두 깨워 다시 확인한다 */
+    private waiters: Array<() => void> = [];
+    /** 진행 중인 연결 — 동시에 들어온 첫 요청들이 Chrome 을 둘 띄우지 않게 공유한다 */
+    private connecting: Promise<CdpClient> | null = null;
 
     private constructor(private readonly profileDir: string) {}
 
@@ -63,19 +75,46 @@ export class LocalBrowser {
         if (on) this.stopGeneration++;
     }
 
-    /** 실행 중인 요청을 멈춘다(다음 액션부터 실행하지 않는다). */
-    requestStop(): void { this.stopGeneration++; }
+    /** 실행 중인 요청을 멈춘다(다음 액션부터 실행하지 않는다). taskId 를 주면 그 작업만, 없으면 모두. */
+    requestStop(taskId?: string): void {
+        if (taskId === undefined) { this.stopGeneration++; return; }
+        this.taskStops.set(taskId, (this.taskStops.get(taskId) ?? 0) + 1);
+    }
 
-    /** 요청 1건 실행 — 한 번에 하나씩(같은 세션에 두 실행 주체가 명령을 보내지 않는다). */
+    /** 요청 1건 실행 — 같은 작업은 순서대로(같은 탭에 두 실행 주체가 명령을 보내지 않는다), 다른 작업은 동시 실행 상한까지 함께. */
     run(spec: BrowserSpec, opts: BrowserRunOptions): Promise<BrowserRunResult> {
-        const p = this.chain.then(() => this.runNow(spec, opts));
-        this.chain = p.catch(() => undefined);
+        const key = opts.taskId || DEFAULT_TAB;
+        const p = (this.chains.get(key) ?? Promise.resolve()).then(async () => {
+            await this.acquire(key, opts.downloadDir);
+            try { return await this.runNow(spec, opts); } finally { this.release(key); }
+        });
+        const tail = p.catch(() => undefined);
+        this.chains.set(key, tail);
+        void tail.then(() => { if (this.chains.get(key) === tail) this.chains.delete(key); });
         return p;
     }
+
+    /** 실행 자리를 얻을 때까지 기다린다 — 동시 실행 상한 안이고, 실행 중인 작업이 모두 같은 다운로드 폴더일 때. */
+    private async acquire(key: string, downloadDir: string): Promise<void> {
+        while (this.running.size >= BROWSER_MAX_CONCURRENT || [...this.running.values()].some((d) => d !== downloadDir)) {
+            await this.nextRelease();
+        }
+        this.running.set(key, downloadDir);
+    }
+
+    private release(key: string): void {
+        this.running.delete(key);
+        const waiters = this.waiters;
+        this.waiters = [];
+        for (const w of waiters) w();
+    }
+
+    private nextRelease(): Promise<void> { return new Promise((r) => { this.waiters.push(r); }); }
 
     /** 작업이 끝났다 — 그 작업의 탭을 닫는다. */
     async closeTask(taskId: string | undefined): Promise<void> {
         const key = taskId || DEFAULT_TAB;
+        this.taskStops.delete(key);
         const tab = this.tabs.get(key);
         if (!tab) return;
         this.tabs.delete(key);
@@ -102,8 +141,13 @@ export class LocalBrowser {
 
     // ── 연결·탭 ────────────────────────────────────────────────
 
-    private async connect(): Promise<CdpClient> {
-        if (this.cdp?.isOpen) return this.cdp;
+    private connect(): Promise<CdpClient> {
+        if (this.cdp?.isOpen) return Promise.resolve(this.cdp);
+        this.connecting ??= this.openConnection().finally(() => { this.connecting = null; });
+        return this.connecting;
+    }
+
+    private async openConnection(): Promise<CdpClient> {
         this.tabs.clear();
         // 이미 떠 있는 전용 프로필 Chrome 이 있으면 거기에 붙는다(헬퍼만 다시 뜬 경우).
         const existing = readDevToolsEndpoint(this.profileDir);
@@ -147,13 +191,17 @@ export class LocalBrowser {
         const key = taskId || DEFAULT_TAB;
         const found = this.tabs.get(key);
         if (found) { found.lastUsed = Date.now(); return found; }
-        // 탭 수 상한 — 가장 오래 쓰지 않은 작업의 탭을 닫는다.
+        // 탭 수 상한 — 실행 중이 아닌 작업 중 가장 오래 쓰지 않은 작업의 창을 닫는다. 모두 실행 중이면 하나가 끝날 때까지 기다린다.
         while (this.tabs.size >= BROWSER_MAX_TABS) {
-            const [oldKey, old] = [...this.tabs.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed)[0];
+            const idle = [...this.tabs.entries()].filter(([k]) => !this.running.has(k)).sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+            if (idle.length === 0) { await this.nextRelease(); continue; }
+            const [oldKey, old] = idle[0];
             this.tabs.delete(oldKey);
             await cdp.send('Target.closeTarget', { targetId: old.targetId }).catch(() => undefined);
         }
-        const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' }) as { targetId: string };
+        // 작업마다 뒤쪽 창 하나 — 숨은 탭의 화면 캡처·타이머 지연을 피하고 사용자 창의 초점을 빼앗지 않는다. 안 되면 탭으로.
+        const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank', newWindow: true, background: true })
+            .catch(() => cdp.send('Target.createTarget', { url: 'about:blank' })) as { targetId: string };
         const tab: Tab = { targetId, sessionId: await this.attach(cdp, targetId), acceptDialogs: false, dialogs: [], lastUsed: Date.now() };
         this.tabs.set(key, tab);
         return tab;
@@ -299,6 +347,9 @@ export class LocalBrowser {
         const approvedHosts = Array.isArray(spec.approvedHosts) ? spec.approvedHosts.filter((h): h is string => typeof h === 'string') : [];
         const approvedUploads = parseApprovedUploads(spec.approvedUploads);
         const generation = this.stopGeneration;
+        const taskKey = opts.taskId || DEFAULT_TAB;
+        const taskGeneration = this.taskStops.get(taskKey) ?? 0;
+        const stopped = (): boolean => this.stopGeneration !== generation || (this.taskStops.get(taskKey) ?? 0) !== taskGeneration;
         const results: BrowserActionResult[] = [];
         let policyBlock: BrowserPolicyBlock | undefined;
         // 제어 흐름(if·repeat) 형태가 어긋나면 브라우저에 붙지 않고 이유를 돌려준다.
@@ -318,7 +369,7 @@ export class LocalBrowser {
             tab.dialogs = [];
             let r: BrowserActionResult;
             try {
-                if (this.stopGeneration !== generation) {
+                if (stopped()) {
                     if (this.userControl) policyBlock = userControlPolicyBlock(a);
                     throw new Error(this.userControl ? BROWSER_USER_CONTROL_ERROR : STOPPED_ERROR);
                 }
