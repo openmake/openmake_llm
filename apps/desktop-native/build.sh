@@ -40,8 +40,47 @@ cp helper/dist/helper.cjs "$APP/Contents/Resources/helper.cjs"
 require_node_version "$ROOT" || exit 1
 NODE_BIN="$(command -v node)"
 NODE_BIN="$(node -e 'console.log(process.execPath)')"
+NODE_PINNED="$(node_version_pinned "$ROOT")"
+# 자기완결 검사 — otool -L 첫 줄(파일 경로)을 빼고 /usr/lib/·/System/ 밖 라이브러리가 있으면 다른 Mac 에서 dyld 오류로 죽는다.
+node_is_self_contained() {
+  local libs
+  libs="$(otool -L "$1" | tail -n +2)" || return 1
+  ! printf '%s\n' "$libs" | awk 'NF { print $1 }' | grep -qvE '^(/usr/lib/|/System/)'
+}
+# 공식 배포본 받기 — Homebrew node 는 libnode·libuv 동적 링크본이라 앱에 넣을 수 없다(2026-11-04 운영 Mac 재현).
+fetch_official_node() {
+  local ver="$1" arch dir tmp name base
+  case "$(uname -m)" in
+    arm64) arch=arm64 ;;
+    x86_64) arch=x64 ;;
+    *) echo "지원하지 않는 아키텍처: $(uname -m)" >&2; return 1 ;;
+  esac
+  dir="$HOME/Library/Caches/openmake-companion-node/v$ver-$arch"
+  if [[ ! -x "$dir/node" ]]; then
+    name="node-v$ver-darwin-$arch"
+    base="https://nodejs.org/dist/v$ver"
+    tmp="$(mktemp -d)" || return 1
+    curl -fsSL -o "$tmp/$name.tar.gz" "$base/$name.tar.gz" || return 1
+    curl -fsSL -o "$tmp/SHASUMS256.txt" "$base/SHASUMS256.txt" || return 1
+    (cd "$tmp" && grep "  $name.tar.gz\$" SHASUMS256.txt | shasum -a 256 -c -) >/dev/null \
+      || { echo "node 배포본 sha256 검증 실패: $name.tar.gz" >&2; return 1; }
+    tar -xzf "$tmp/$name.tar.gz" -C "$tmp" "$name/bin/node" || return 1
+    mkdir -p "$dir" && mv "$tmp/$name/bin/node" "$dir/node" || return 1
+    rm -rf "$tmp"
+  fi
+  echo "$dir/node"
+}
+if ! node_is_self_contained "$NODE_BIN"; then
+  echo "PATH 의 node 가 동적 링크본입니다($NODE_BIN) — 공식 배포본 v$NODE_PINNED 을 씁니다."
+  NODE_BIN="$(fetch_official_node "$NODE_PINNED")" || { echo "공식 node 배포본을 준비하지 못했습니다."; exit 1; }
+fi
 cp "$NODE_BIN" "$APP/Contents/Resources/node"
 chmod +x "$APP/Contents/Resources/node"
+# 동봉본 재검사 — 캐시가 깨졌거나 판이 다르면 여기서 멈춘다.
+node_is_self_contained "$APP/Contents/Resources/node" \
+  || { echo "동봉한 node 가 자기완결형이 아닙니다 — 다른 Mac 에서 실행되지 않습니다."; otool -L "$APP/Contents/Resources/node"; exit 1; }
+[[ "$("$APP/Contents/Resources/node" --version)" == "v$NODE_PINNED" ]] \
+  || { echo "동봉한 node 버전이 .node-version($NODE_PINNED)과 다릅니다."; exit 1; }
 # 앱 아이콘 — 구 Electron 앱에서 이설한 자산 (2026-08-23, apps/desktop 제거)
 cp "$ROOT/apps/desktop-native/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
 # 다국어 표 — ko(개발 언어)·en·ja·zh-Hans·de (웹 LOCALES 와 같은 언어)
