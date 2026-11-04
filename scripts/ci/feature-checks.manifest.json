@@ -42,6 +42,9 @@
     ]
   },
   "exactFiles": {
+    "apps/desktop-native/build.sh": "desktopBuild",
+    "apps/desktop-native/lib/node-bundle.sh": "desktopBuild",
+    "apps/desktop-native/lib/node-bundle.test.mjs": "desktopBuild",
     "db/init/004-admin-user.sh": "infra",
     "eslint.config.mjs": "pipeline",
     "install_linux.sh": "pipeline",

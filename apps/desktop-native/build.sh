@@ -40,8 +40,21 @@ cp helper/dist/helper.cjs "$APP/Contents/Resources/helper.cjs"
 require_node_version "$ROOT" || exit 1
 NODE_BIN="$(command -v node)"
 NODE_BIN="$(node -e 'console.log(process.execPath)')"
+NODE_PINNED="$(node_version_pinned "$ROOT")"
+# node_is_self_contained(otool -L 자기완결 검사)·fetch_official_node(공식 배포본 sha256 검증·캐시)
+# shellcheck source=lib/node-bundle.sh
+. lib/node-bundle.sh
+if ! node_is_self_contained "$NODE_BIN"; then
+  echo "PATH 의 node 가 동적 링크본입니다($NODE_BIN) — 공식 배포본 v$NODE_PINNED 을 씁니다."
+  NODE_BIN="$(fetch_official_node "$NODE_PINNED")" || { echo "공식 node 배포본을 준비하지 못했습니다."; exit 1; }
+fi
 cp "$NODE_BIN" "$APP/Contents/Resources/node"
 chmod +x "$APP/Contents/Resources/node"
+# 동봉본 재검사 — 캐시가 깨졌거나 판이 다르면 여기서 멈춘다.
+node_is_self_contained "$APP/Contents/Resources/node" \
+  || { echo "동봉한 node 가 자기완결형이 아닙니다 — 다른 Mac 에서 실행되지 않습니다."; otool -L "$APP/Contents/Resources/node"; exit 1; }
+[[ "$("$APP/Contents/Resources/node" --version)" == "v$NODE_PINNED" ]] \
+  || { echo "동봉한 node 버전이 .node-version($NODE_PINNED)과 다릅니다."; exit 1; }
 # 앱 아이콘 — 구 Electron 앱에서 이설한 자산 (2026-08-23, apps/desktop 제거)
 cp "$ROOT/apps/desktop-native/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
 # 다국어 표 — ko(개발 언어)·en·ja·zh-Hans·de (웹 LOCALES 와 같은 언어)
