@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.124.0](https://github.com/openmake/openmake_llm/compare/v1.123.1...v1.124.0) (2026-11-04)
+
+
+### ✨ 기능
+
+* **eval:** 전환 게이트가 반복 실행 짝검정 구간으로 통과율 하락을 판정한다 ([1a2c93d](https://github.com/openmake/openmake_llm/commit/1a2c93de0a69e9532bbbe91be84688b04bf4cdd9))
+
+
+### 🐛 버그 수정
+
+* **eval:** 반복 실행 기록에 repeat 를 남기고 반복 수·부트스트랩 반복 수를 검증한다 ([f140012](https://github.com/openmake/openmake_llm/commit/f140012c35b6ae61d0dd630377958b5aadc8e6d4))
+
 ## [1.123.1](https://github.com/openmake/openmake_llm/compare/v1.123.0...v1.123.1) (2026-11-04)
 
 
