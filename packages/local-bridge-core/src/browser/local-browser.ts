@@ -19,12 +19,13 @@ import type { ChildProcess } from 'child_process';
 import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, validateBrowserFlow, type BrowserSitePolicy } from '@openmake/config';
 import {
     BROWSER_ACTION_TIMEOUT_MS, BROWSER_CLICK_SETTLE_MS, BROWSER_EXIT_WAIT_MS, BROWSER_DIALOG_MESSAGE_MAX, BROWSER_DIALOG_RECORD_MAX,
-    BROWSER_EXTRACT_MAX_CHARS, BROWSER_EXTRACT_READY_MS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_CONCURRENT, BROWSER_MAX_TABS, BROWSER_POLL_MS,
+    BROWSER_EXTRACT_MAX_CHARS, BROWSER_EXTRACT_READY_MS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_TABS, BROWSER_POLL_MS,
     BROWSER_SNAPSHOT_MAX_ELEMENTS, BROWSER_SNAPSHOT_NAME_MAX, BROWSER_WAIT_MAX_MS, BROWSER_FILL_ECHO_MAX_CHARS,
 } from '../constants';
 import { condExpression, runBrowserFlow } from './browser-flow';
 import { CdpClient } from './cdp';
 import { launchChrome, readDevToolsEndpoint } from './chrome';
+import { BrowserScheduler } from './local-browser-scheduler';
 import { browserPolicyBlockOf, uploadRejectedPolicyBlock, userControlPolicyBlock } from './policy-block';
 import type { BrowserPolicyBlock } from '../types';
 import {
@@ -51,16 +52,8 @@ export class LocalBrowser {
     private proc: ChildProcess | null = null;
     private readonly tabs = new Map<string, Tab>();
     private userControl = false;
-    /** 중지 요청마다 오른다 — 실행 중인 요청이 시작 때의 값과 달라지면 멈춘다(전체 중지·제어권) */
-    private stopGeneration = 0;
-    /** 작업별 중지 — requestStop(taskId) 마다 그 작업의 값이 오른다 */
-    private readonly taskStops = new Map<string, number>();
-    /** 작업별 실행 줄 — 같은 작업은 앞 요청이 끝난 뒤에 실행한다 */
-    private readonly chains = new Map<string, Promise<unknown>>();
-    /** 지금 실행 중인 작업 → 그 다운로드 폴더 */
-    private readonly running = new Map<string, string>();
-    /** 실행 자리·탭 자리를 기다리는 요청 — 자리가 나면 모두 깨워 다시 확인한다 */
-    private waiters: Array<() => void> = [];
+    /** 작업별 실행 줄·동시 실행 자리·중지 요청(local-browser-scheduler.ts) */
+    private readonly scheduler = new BrowserScheduler();
     /** 진행 중인 연결 — 동시에 들어온 첫 요청들이 Chrome 을 둘 띄우지 않게 공유한다 */
     private connecting: Promise<CdpClient> | null = null;
 
@@ -72,49 +65,21 @@ export class LocalBrowser {
     /** 제어권 전환. 넘겨받을 때는 실행 중인 요청도 멈춘다. */
     setUserControl(on: boolean): void {
         this.userControl = on;
-        if (on) this.stopGeneration++;
+        if (on) this.scheduler.requestStop();
     }
 
     /** 실행 중인 요청을 멈춘다(다음 액션부터 실행하지 않는다). taskId 를 주면 그 작업만, 없으면 모두. */
-    requestStop(taskId?: string): void {
-        if (taskId === undefined) { this.stopGeneration++; return; }
-        this.taskStops.set(taskId, (this.taskStops.get(taskId) ?? 0) + 1);
-    }
+    requestStop(taskId?: string): void { this.scheduler.requestStop(taskId); }
 
     /** 요청 1건 실행 — 같은 작업은 순서대로(같은 탭에 두 실행 주체가 명령을 보내지 않는다), 다른 작업은 동시 실행 상한까지 함께. */
     run(spec: BrowserSpec, opts: BrowserRunOptions): Promise<BrowserRunResult> {
-        const key = opts.taskId || DEFAULT_TAB;
-        const p = (this.chains.get(key) ?? Promise.resolve()).then(async () => {
-            await this.acquire(key, opts.downloadDir);
-            try { return await this.runNow(spec, opts); } finally { this.release(key); }
-        });
-        const tail = p.catch(() => undefined);
-        this.chains.set(key, tail);
-        void tail.then(() => { if (this.chains.get(key) === tail) this.chains.delete(key); });
-        return p;
+        return this.scheduler.run(opts.taskId || DEFAULT_TAB, opts.downloadDir, () => this.runNow(spec, opts));
     }
-
-    /** 실행 자리를 얻을 때까지 기다린다 — 동시 실행 상한 안이고, 실행 중인 작업이 모두 같은 다운로드 폴더일 때. */
-    private async acquire(key: string, downloadDir: string): Promise<void> {
-        while (this.running.size >= BROWSER_MAX_CONCURRENT || [...this.running.values()].some((d) => d !== downloadDir)) {
-            await this.nextRelease();
-        }
-        this.running.set(key, downloadDir);
-    }
-
-    private release(key: string): void {
-        this.running.delete(key);
-        const waiters = this.waiters;
-        this.waiters = [];
-        for (const w of waiters) w();
-    }
-
-    private nextRelease(): Promise<void> { return new Promise((r) => { this.waiters.push(r); }); }
 
     /** 작업이 끝났다 — 그 작업의 탭을 닫는다. */
     async closeTask(taskId: string | undefined): Promise<void> {
         const key = taskId || DEFAULT_TAB;
-        this.taskStops.delete(key);
+        this.scheduler.forgetTask(key);
         const tab = this.tabs.get(key);
         if (!tab) return;
         this.tabs.delete(key);
@@ -193,8 +158,8 @@ export class LocalBrowser {
         if (found) { found.lastUsed = Date.now(); return found; }
         // 탭 수 상한 — 실행 중이 아닌 작업 중 가장 오래 쓰지 않은 작업의 창을 닫는다. 모두 실행 중이면 하나가 끝날 때까지 기다린다.
         while (this.tabs.size >= BROWSER_MAX_TABS) {
-            const idle = [...this.tabs.entries()].filter(([k]) => !this.running.has(k)).sort((a, b) => a[1].lastUsed - b[1].lastUsed);
-            if (idle.length === 0) { await this.nextRelease(); continue; }
+            const idle = [...this.tabs.entries()].filter(([k]) => !this.scheduler.isRunning(k)).sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+            if (idle.length === 0) { await this.scheduler.nextRelease(); continue; }
             const [oldKey, old] = idle[0];
             this.tabs.delete(oldKey);
             await cdp.send('Target.closeTarget', { targetId: old.targetId }).catch(() => undefined);
@@ -346,10 +311,7 @@ export class LocalBrowser {
         const policy: BrowserSitePolicy = parseBrowserSitePolicy(spec.sitePolicy);
         const approvedHosts = Array.isArray(spec.approvedHosts) ? spec.approvedHosts.filter((h): h is string => typeof h === 'string') : [];
         const approvedUploads = parseApprovedUploads(spec.approvedUploads);
-        const generation = this.stopGeneration;
-        const taskKey = opts.taskId || DEFAULT_TAB;
-        const taskGeneration = this.taskStops.get(taskKey) ?? 0;
-        const stopped = (): boolean => this.stopGeneration !== generation || (this.taskStops.get(taskKey) ?? 0) !== taskGeneration;
+        const stopped = this.scheduler.stopCheck(opts.taskId || DEFAULT_TAB);
         const results: BrowserActionResult[] = [];
         let policyBlock: BrowserPolicyBlock | undefined;
         // 제어 흐름(if·repeat) 형태가 어긋나면 브라우저에 붙지 않고 이유를 돌려준다.
