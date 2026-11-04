@@ -21,6 +21,7 @@ import { createGuardProxy, parseAllowedHosts } from './guard-proxy.mjs';
 import { createDialogPolicy } from './dialog-policy.mjs';
 import { filledValue, readTextOrValue } from './field-value.mjs';
 import { createLiveFrameWriter } from './live-frame.mjs';
+import { condExpression, runBrowserFlow, validateBrowserFlow } from './browser-flow.mjs';
 
 const WORKSPACE = '/workspace';
 const MAX_ACTIONS = 40;
@@ -79,6 +80,9 @@ try {
 }
 
 const actions = Array.isArray(spec.actions) ? spec.actions.slice(0, MAX_ACTIONS) : [];
+// 제어 흐름(if·repeat) 형태가 어긋나면 브라우저를 띄우지 않고 이유를 돌려준다.
+const flowError = validateBrowserFlow(actions);
+if (flowError) { out({ ok: false, error: flowError, results: [] }); process.exit(1); }
 const timeout = Number(spec.timeoutMs) > 0 ? Number(spec.timeoutMs) : DEFAULT_TIMEOUT;
 // 빈 배열은 "제한 없음"으로 본다 — 선택 인자를 [] 로 채운 호출이 허용 0개로 해석돼 모든 접속이 막혔고,
 // 모델은 원인을 몰라 같은 호출을 반복했다(2026-09-15 라이브: 7회 반복 후 goal_incomplete).
@@ -171,84 +175,92 @@ try {
         } catch { writer = null; /* 화면 전송 없이 진행 */ }
     }
 
-    for (let i = 0; i < actions.length; i++) {
-        const a = actions[i];
+    // 단순 액션 하나 — 결과 객체를 돌려준다(실패면 ok:false). 이 액션 동안 뜬 확인창은 그 결과에 싣는다.
+    // key 는 기본 스크린샷 이름에 쓴다 — 중첩 액션은 같은 i 를 공유하므로 step("2.then.0")으로 구분한다.
+    const runSimple = async (a, i, step) => {
         denied.length = 0;
-        let failed = false;
+        let r;
         try {
-            if (PAGE_ACTIONS.has(a?.type) && page.url() === 'about:blank') throw new Error(BLANK_PAGE_ERROR);
-            switch (a.type) {
-                case 'goto':
-                    if (!hostAllowed(a.url)) throw new Error(`allowlist 차단: ${a.url} — 허용 목록(${allowlist.join(', ')})에 없는 호스트입니다. 목록에 도메인을 추가하거나 allowlist 인자를 생략하세요`);
-                    {
-                        const res = await page.goto(a.url, { waitUntil: a.waitUntil || 'domcontentloaded', timeout });
-                        // 평문 HTTP 는 프록시의 403 본문이 페이지로 뜬다 — 성공으로 돌리지 않는다.
-                        if (res?.headers()['x-guard-proxy'] === 'denied') throw new Error(`이동하지 못했습니다: ${page.url()}`);
-                    }
-                    results.push({ i, type: a.type, ok: true, url: page.url() }); break;
-                case 'click':
-                    await page.click(a.selector, { timeout });
-                    results.push({ i, type: a.type, ok: true }); break;
-                case 'fill':
-                    await page.fill(a.selector, String(a.text ?? ''), { timeout });
-                    // 실제 값을 돌려준다 — 확인하려고 같은 입력을 되풀이하지 않게(field-value.mjs).
-                    results.push({ i, type: a.type, ok: true, ...(await filledValue(page.locator(a.selector).first())) }); break;
-                case 'snapshot': {
-                    // 2단 폴백 발견: 상호작용 요소를 {role,name,index} 목록으로 반환 →
-                    // 에이전트가 CSS 대신 안정적인 role/name 으로 smartClick/smartFill 지정.
-                    const yaml = await page.locator('body').ariaSnapshot();
-                    const elements = parseAriaSnapshot(yaml).slice(0, 100).map((e, idx) => ({ index: idx, ...e }));
-                    results.push({ i, type: a.type, ok: true, elements }); break;
-                }
-                case 'smartClick':
-                    // role/name 으로 요소 재해석 후 클릭(CSS 무관). nth 로 동명 요소 구분.
-                    await page.getByRole(a.role, { name: a.name }).nth(Number(a.nth) || 0).click({ timeout });
-                    results.push({ i, type: a.type, ok: true }); break;
-                case 'smartFill': {
-                    const field = page.getByRole(a.role, { name: a.name }).nth(Number(a.nth) || 0);
-                    await field.fill(String(a.text ?? ''), { timeout });
-                    results.push({ i, type: a.type, ok: true, ...(await filledValue(field)) }); break;
-                }
-                case 'dialog':
-                    dialogPolicy.set(a);
-                    results.push({ i, type: a.type, ok: true }); break;
-                case 'press':
-                    await page.keyboard.press(a.key);
-                    results.push({ i, type: a.type, ok: true }); break;
-                case 'wait':
-                    await page.waitForTimeout(Math.min(Number(a.ms) || 0, 10000));
-                    results.push({ i, type: a.type, ok: true }); break;
-                case 'waitFor':
-                    await page.waitForSelector(a.selector, { timeout });
-                    results.push({ i, type: a.type, ok: true }); break;
-                case 'screenshot': {
-                    const p = screenshotName(a.path, i);
-                    await page.screenshot({ path: resolve(WORKSPACE, p), fullPage: !!a.fullPage });
-                    results.push({ i, type: a.type, ok: true, path: p }); break;
-                }
-                case 'extractText': {
-                    const text = a.selector
-                        ? await page.locator(a.selector).first().evaluate(readTextOrValue, undefined, { timeout }) // 입력 칸은 현재 값
-                        : await page.evaluate(() => document.body.innerText);
-                    results.push({ i, type: a.type, ok: true, text: String(text).slice(0, 8000) }); break;
-                }
-                case 'extractHtml': {
-                    const html = a.selector
-                        ? await page.locator(a.selector).first().innerHTML({ timeout })
-                        : await page.content();
-                    results.push({ i, type: a.type, ok: true, html: String(html).slice(0, 8000) }); break;
-                }
-                default:
-                    results.push({ i, type: a.type, ok: false, error: '알 수 없는 action' });
-            }
+            r = await runAction(a, i, step ?? i);
         } catch (e) {
-            results.push({ i, type: a?.type, ok: false, error: withDenied(e.message, denied) });
-            failed = true;
+            r = { i, type: a?.type, ok: false, error: withDenied(e.message, denied) };
         }
         const dialogs = dialogPolicy.drain();
-        if (dialogs.length) results[results.length - 1].dialogs = dialogs;
-        if (failed) break; // 액션 실패 시 중단
-    }
+        if (dialogs.length) r.dialogs = dialogs;
+        return r;
+    };
+    const runAction = async (a, i, key) => {
+        if (PAGE_ACTIONS.has(a?.type) && page.url() === 'about:blank') throw new Error(BLANK_PAGE_ERROR);
+        switch (a.type) {
+            case 'goto':
+                if (!hostAllowed(a.url)) throw new Error(`allowlist 차단: ${a.url} — 허용 목록(${allowlist.join(', ')})에 없는 호스트입니다. 목록에 도메인을 추가하거나 allowlist 인자를 생략하세요`);
+                {
+                    const res = await page.goto(a.url, { waitUntil: a.waitUntil || 'domcontentloaded', timeout });
+                    // 평문 HTTP 는 프록시의 403 본문이 페이지로 뜬다 — 성공으로 돌리지 않는다.
+                    if (res?.headers()['x-guard-proxy'] === 'denied') throw new Error(`이동하지 못했습니다: ${page.url()}`);
+                }
+                return { i, type: a.type, ok: true, url: page.url() };
+            case 'click':
+                await page.click(a.selector, { timeout });
+                return { i, type: a.type, ok: true };
+            case 'fill':
+                await page.fill(a.selector, String(a.text ?? ''), { timeout });
+                // 실제 값을 돌려준다 — 확인하려고 같은 입력을 되풀이하지 않게(field-value.mjs).
+                return { i, type: a.type, ok: true, ...(await filledValue(page.locator(a.selector).first())) };
+            case 'snapshot': {
+                // 2단 폴백 발견: 상호작용 요소를 {role,name,index} 목록으로 반환 →
+                // 에이전트가 CSS 대신 안정적인 role/name 으로 smartClick/smartFill 지정.
+                const yaml = await page.locator('body').ariaSnapshot();
+                const elements = parseAriaSnapshot(yaml).slice(0, 100).map((e, idx) => ({ index: idx, ...e }));
+                return { i, type: a.type, ok: true, elements };
+            }
+            case 'smartClick':
+                // role/name 으로 요소 재해석 후 클릭(CSS 무관). nth 로 동명 요소 구분.
+                await page.getByRole(a.role, { name: a.name }).nth(Number(a.nth) || 0).click({ timeout });
+                return { i, type: a.type, ok: true };
+            case 'smartFill': {
+                const field = page.getByRole(a.role, { name: a.name }).nth(Number(a.nth) || 0);
+                await field.fill(String(a.text ?? ''), { timeout });
+                return { i, type: a.type, ok: true, ...(await filledValue(field)) };
+            }
+            case 'dialog':
+                dialogPolicy.set(a);
+                return { i, type: a.type, ok: true };
+            case 'press':
+                await page.keyboard.press(a.key);
+                return { i, type: a.type, ok: true };
+            case 'wait':
+                await page.waitForTimeout(Math.min(Number(a.ms) || 0, 10000));
+                return { i, type: a.type, ok: true };
+            case 'waitFor':
+                await page.waitForSelector(a.selector, { timeout });
+                return { i, type: a.type, ok: true };
+            case 'screenshot': {
+                const p = screenshotName(a.path, key);
+                await page.screenshot({ path: resolve(WORKSPACE, p), fullPage: !!a.fullPage });
+                return { i, type: a.type, ok: true, path: p };
+            }
+            case 'extractText': {
+                const text = a.selector
+                    ? await page.locator(a.selector).first().evaluate(readTextOrValue, undefined, { timeout }) // 입력 칸은 현재 값
+                    : await page.evaluate(() => document.body.innerText);
+                return { i, type: a.type, ok: true, text: String(text).slice(0, 8000) };
+            }
+            case 'extractHtml': {
+                const html = a.selector
+                    ? await page.locator(a.selector).first().innerHTML({ timeout })
+                    : await page.content();
+                return { i, type: a.type, ok: true, html: String(html).slice(0, 8000) };
+            }
+            default:
+                return { i, type: a.type, ok: false, error: '알 수 없는 action' };
+        }
+    };
+    // if·repeat 를 포함해 실행한다 — 실패·조건 오류·실행 수 상한(MAX_ACTIONS)에서 멈춘다(browser-flow.mjs).
+    results.push(...await runBrowserFlow(actions, {
+        runSimple,
+        evalCond: async (cond) => !!(await page.evaluate(condExpression(cond))),
+    }, MAX_ACTIONS));
     finalUrl = page.url();
     // 세션 상태 저장(로그인 등) — 액션 일부 실패로 중단됐어도 이전까지의 상태는 보존.
     if (statePath) { try { await context.storageState({ path: statePath }); } catch { /* 저장 실패는 무시 */ } }

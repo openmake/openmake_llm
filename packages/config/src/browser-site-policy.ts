@@ -13,6 +13,8 @@
  * 다시 판정한다(checkBrowserAction) — 리다이렉트·페이지가 연 새 창·사용자의 직접 조작으로 주소가 달라질 수 있다.
  */
 
+import { flattenBrowserActions } from "./browser-flow";
+
 // 이 패키지는 DOM·Node 타입 없이 빌드한다 — 런타임(Node·브라우저)이 모두 제공하는 URL 의 쓰는 부분만 선언한다.
 declare const URL: { new (url: string): { protocol: string; hostname: string; search: string } };
 
@@ -180,11 +182,13 @@ export function browserActionNeedsApproval(action: unknown, currentHost: string 
 /**
  * 서버용 — 액션 배열을 순서대로 훑어 막을 이동과 승인이 필요한 쓰기를 찾는다. startUrl 은 서버가 아는 마지막 주소.
  * 누르기로 일어나는 이동은 서버가 알 수 없다 — 그 뒤의 쓰기는 기기가 실제 주소로 다시 판정한다.
+ * if·repeat 는 펼쳐서 훑는다(flattenBrowserActions — 분기 안 goto 도 모두 지나간다고 본다). index 는 펼친 목록에서의 위치다.
+ * 형태가 어긋난 제어 흐름이면 BrowserFlowError — 호출부가 validateBrowserFlow 로 먼저 거른다.
  */
 export function planBrowserActions(actions: readonly unknown[], startUrl: string | null, policy: BrowserSitePolicy): BrowserSitePlan {
   const plan: BrowserSitePlan = { blocked: [], offListWrites: [], uploads: [] };
   let host = browserHostOf(startUrl);
-  actions.forEach((action, index) => {
+  flattenBrowserActions(actions).forEach((action, index) => {
     const a = asAction(action);
     if (a.type === "goto" && !isNavigableBrowserUrl(a.url)) {
       plan.blocked.push({ index, url: clip(a.url) });
