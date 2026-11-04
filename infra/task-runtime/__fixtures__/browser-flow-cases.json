@@ -1,0 +1,112 @@
+{
+  "_comment": "browser 제어 흐름(if·repeat) 공용 사례 — @openmake/config·local-bridge-core(TS)와 infra/task-runtime/browser-flow.mjs 가 같은 결과를 내야 한다. structure: 검사·평탄화(flat 은 펼친 단순 액션의 type 순서, error 는 거절). run: 가짜 조건 값(conds — 조건 JSON 별 평가 순서대로의 값, 다 쓰면 마지막 값 반복, \"throw\" 는 평가 오류)과 가짜 실행(fail:true 면 실패)으로 돌린 결과. 결과의 error 는 있는지만 비교한다.",
+  "structure": [
+    { "name": "단순 액션은 그대로", "actions": [{ "type": "goto", "url": "https://example.com" }, { "type": "extractText" }], "flat": ["goto", "extractText"] },
+    { "name": "if 는 then 다음 else 를 펼친다", "actions": [{ "type": "if", "cond": { "exists": "h1" }, "then": [{ "type": "click", "selector": "a" }], "else": [{ "type": "fill", "selector": "#q", "text": "x" }] }, { "type": "extractText" }], "flat": ["click", "fill", "extractText"] },
+    { "name": "else 없는 if", "actions": [{ "type": "if", "cond": { "visible": "#popup" }, "then": [{ "type": "click", "selector": "#close" }] }], "flat": ["click"] },
+    { "name": "repeat 본문", "actions": [{ "type": "repeat", "times": 3, "actions": [{ "type": "click", "selector": "#next" }, { "type": "wait", "ms": 100 }], "until": { "not": { "exists": "#next" } } }], "flat": ["click", "wait"] },
+    { "name": "2단계 겹침은 허용", "actions": [{ "type": "if", "cond": { "urlIncludes": "example.com" }, "then": [{ "type": "repeat", "times": 2, "actions": [{ "type": "press", "key": "PageDown" }], "while": { "textIncludes": "더 보기", "selector": "#more" } }] }], "flat": ["press"] },
+    { "name": "3단계 겹침은 거절", "actions": [{ "type": "if", "cond": { "exists": "a" }, "then": [{ "type": "if", "cond": { "exists": "b" }, "then": [{ "type": "repeat", "times": 2, "actions": [{ "type": "click", "selector": "c" }] }] }] }], "error": true },
+    { "name": "cond 없음", "actions": [{ "type": "if", "then": [] }], "error": true },
+    { "name": "cond 키가 둘", "actions": [{ "type": "if", "cond": { "exists": "a", "visible": "b" }, "then": [] }], "error": true },
+    { "name": "모르는 cond", "actions": [{ "type": "if", "cond": { "js": "1" }, "then": [] }], "error": true },
+    { "name": "빈 셀렉터", "actions": [{ "type": "if", "cond": { "exists": "" }, "then": [] }], "error": true },
+    { "name": "textIncludes 의 selector 가 문자열 아님", "actions": [{ "type": "if", "cond": { "textIncludes": "a", "selector": 3 }, "then": [] }], "error": true },
+    { "name": "not 안의 잘못된 cond", "actions": [{ "type": "if", "cond": { "not": { "urlIncludes": 1 } }, "then": [] }], "error": true },
+    { "name": "then 이 배열 아님", "actions": [{ "type": "if", "cond": { "exists": "a" }, "then": { "type": "click" } }], "error": true },
+    { "name": "else 가 배열 아님", "actions": [{ "type": "if", "cond": { "exists": "a" }, "then": [], "else": "x" }], "error": true },
+    { "name": "times 없음", "actions": [{ "type": "repeat", "actions": [{ "type": "wait", "ms": 1 }] }], "error": true },
+    { "name": "times 0", "actions": [{ "type": "repeat", "times": 0, "actions": [{ "type": "wait", "ms": 1 }] }], "error": true },
+    { "name": "times 상한 초과", "actions": [{ "type": "repeat", "times": 21, "actions": [{ "type": "wait", "ms": 1 }] }], "error": true },
+    { "name": "times 정수 아님", "actions": [{ "type": "repeat", "times": 1.5, "actions": [{ "type": "wait", "ms": 1 }] }], "error": true },
+    { "name": "times 상한은 허용", "actions": [{ "type": "repeat", "times": 20, "actions": [{ "type": "wait", "ms": 1 }] }], "flat": ["wait"] },
+    { "name": "repeat 본문이 비었음", "actions": [{ "type": "repeat", "times": 2, "actions": [] }], "error": true },
+    { "name": "until 이 잘못됨", "actions": [{ "type": "repeat", "times": 2, "actions": [{ "type": "wait", "ms": 1 }], "until": "done" }], "error": true }
+  ],
+  "run": [
+    {
+      "name": "if 가 참이면 then",
+      "actions": [{ "type": "goto", "url": "https://example.com" }, { "type": "if", "cond": { "exists": "h1" }, "then": [{ "type": "extractText", "selector": "h1" }], "else": [{ "type": "snapshot" }] }],
+      "conds": { "{\"exists\":\"h1\"}": [true] },
+      "results": [
+        { "i": 0, "type": "goto", "ok": true },
+        { "i": 1, "type": "if", "ok": true, "branch": "then" },
+        { "i": 1, "type": "extractText", "ok": true, "step": "1.then.0" }
+      ]
+    },
+    {
+      "name": "if 가 거짓이면 else, else 가 없으면 none",
+      "actions": [{ "type": "if", "cond": { "exists": "h1" }, "then": [{ "type": "click", "selector": "a" }], "else": [{ "type": "snapshot" }] }, { "type": "if", "cond": { "not": { "exists": "h1" } }, "then": [] }, { "type": "if", "cond": { "exists": "h1" }, "then": [{ "type": "click", "selector": "a" }] }],
+      "conds": { "{\"exists\":\"h1\"}": [false], "{\"not\":{\"exists\":\"h1\"}}": [true] },
+      "results": [
+        { "i": 0, "type": "if", "ok": true, "branch": "else" },
+        { "i": 0, "type": "snapshot", "ok": true, "step": "0.else.0" },
+        { "i": 1, "type": "if", "ok": true, "branch": "then" },
+        { "i": 2, "type": "if", "ok": true, "branch": "none" }
+      ]
+    },
+    {
+      "name": "repeat 는 until 이 참이 되면 멈춘다",
+      "actions": [{ "type": "repeat", "times": 5, "actions": [{ "type": "click", "selector": "#next" }], "until": { "urlIncludes": "page=3" } }],
+      "conds": { "{\"urlIncludes\":\"page=3\"}": [false, true] },
+      "results": [
+        { "i": 0, "type": "repeat", "ok": true, "rounds": 2, "stoppedBy": "until" },
+        { "i": 0, "type": "click", "ok": true, "step": "0.r1.0" },
+        { "i": 0, "type": "click", "ok": true, "step": "0.r2.0" }
+      ]
+    },
+    {
+      "name": "repeat 는 회차 시작 전 while 이 거짓이면 멈춘다(0회 포함)",
+      "actions": [{ "type": "repeat", "times": 3, "actions": [{ "type": "click", "selector": "#more" }], "while": { "exists": "#more" } }, { "type": "repeat", "times": 3, "actions": [{ "type": "click", "selector": "#more" }], "while": { "visible": "#gone" } }],
+      "conds": { "{\"exists\":\"#more\"}": [true, false], "{\"visible\":\"#gone\"}": [false] },
+      "results": [
+        { "i": 0, "type": "repeat", "ok": true, "rounds": 1, "stoppedBy": "while" },
+        { "i": 0, "type": "click", "ok": true, "step": "0.r1.0" },
+        { "i": 1, "type": "repeat", "ok": true, "rounds": 0, "stoppedBy": "while" }
+      ]
+    },
+    {
+      "name": "조건이 없으면 times 만큼",
+      "actions": [{ "type": "repeat", "times": 2, "actions": [{ "type": "wait", "ms": 1 }, { "type": "if", "cond": { "exists": "x" }, "then": [{ "type": "click", "selector": "x" }] }] }],
+      "conds": { "{\"exists\":\"x\"}": [false, true] },
+      "results": [
+        { "i": 0, "type": "repeat", "ok": true, "rounds": 2, "stoppedBy": "times" },
+        { "i": 0, "type": "wait", "ok": true, "step": "0.r1.0" },
+        { "i": 0, "type": "if", "ok": true, "branch": "none", "step": "0.r1.1" },
+        { "i": 0, "type": "wait", "ok": true, "step": "0.r2.0" },
+        { "i": 0, "type": "if", "ok": true, "branch": "then", "step": "0.r2.1" },
+        { "i": 0, "type": "click", "ok": true, "step": "0.r2.1.then.0" }
+      ]
+    },
+    {
+      "name": "본문 액션이 실패하면 그 자리에서 전체가 멈춘다",
+      "actions": [{ "type": "repeat", "times": 3, "actions": [{ "type": "click", "selector": "#a", "fail": true }] }, { "type": "extractText" }],
+      "conds": {},
+      "results": [
+        { "i": 0, "type": "repeat", "ok": false, "rounds": 1 },
+        { "i": 0, "type": "click", "ok": false, "error": true, "step": "0.r1.0" }
+      ]
+    },
+    {
+      "name": "조건 평가 오류는 그 제어 액션의 실패로 멈춘다",
+      "actions": [{ "type": "if", "cond": { "exists": "[[bad" }, "then": [{ "type": "click", "selector": "a" }] }, { "type": "extractText" }],
+      "conds": { "{\"exists\":\"[[bad\"}": ["throw"] },
+      "results": [
+        { "i": 0, "type": "if", "ok": false, "error": true }
+      ]
+    },
+    {
+      "name": "실행한 단순 액션 수가 상한에 닿으면 실패로 멈춘다",
+      "maxSimple": 3,
+      "actions": [{ "type": "goto", "url": "https://example.com" }, { "type": "repeat", "times": 5, "actions": [{ "type": "click", "selector": "#next" }] }],
+      "conds": {},
+      "results": [
+        { "i": 0, "type": "goto", "ok": true },
+        { "i": 1, "type": "repeat", "ok": false, "rounds": 3 },
+        { "i": 1, "type": "click", "ok": true, "step": "1.r1.0" },
+        { "i": 1, "type": "click", "ok": true, "step": "1.r2.0" },
+        { "i": 1, "type": "click", "ok": false, "error": true, "step": "1.r3.0" }
+      ]
+    }
+  ]
+}

@@ -45,3 +45,5 @@ export const SENSITIVE_FILE_PATTERNS: readonly string[] = [
 
 /** 브라우저 사이트 정책 (서버·기기 공용 판정). */
 export * from "./browser-site-policy";
+/** 브라우저 제한된 제어 흐름(if·repeat) 검사·평탄화 (서버·기기 공용). */
+export * from "./browser-flow";

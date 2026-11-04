@@ -23,6 +23,14 @@ describe('findStructureProblems', () => {
         const p = findStructureProblems({ kind: 'browser', actions: [null, {}, { type: 'goto' }, { type: 'click', selector: '  ' }] });
         expect(p).toHaveLength(4);
     });
+    it('if·repeat 는 펼친 단계를 검사하고, 형태가 어긋나면 그 이유를 돌려준다', () => {
+        const flow = (inner: unknown) => [{ type: 'goto', url: 'https://example.com' }, { type: 'if', cond: { exists: '#a' }, then: [inner] }];
+        expect(findStructureProblems({ kind: 'browser', actions: flow({ type: 'click', selector: '#a' }) })).toEqual([]);
+        expect(findStructureProblems({ kind: 'browser', actions: flow({ type: 'hover', selector: '#a' }) })[0]).toContain('hover');
+        const bad = findStructureProblems({ kind: 'browser', actions: [{ type: 'if', cond: { js: 'x' }, then: [] }] });
+        expect(bad).toHaveLength(1);
+        expect(bad[0]).toContain('제어 흐름 오류');
+    });
     it('스크립트 본문이 공백뿐이면 문제', () => {
         expect(findStructureProblems({ kind: 'script', code: '  \n ' })).toHaveLength(1);
         expect(findStructureProblems({ kind: 'script', code: 'echo hi' })).toEqual([]);
@@ -33,5 +41,9 @@ describe('staticGotoActions', () => {
     it('{{param}} 이 들어간 주소는 저장 때 검사하지 않는다(재생 때 치환 뒤 검사)', () => {
         const actions = [{ type: 'goto', url: 'http://169.254.169.254/' }, { type: 'goto', url: 'https://{{host}}/x' }, { type: 'click', selector: '#a' }];
         expect(staticGotoActions(actions)).toEqual([actions[0]]);
+    });
+    it('분기·반복 본문의 goto 도 검사 대상이다', () => {
+        const inner = { type: 'goto', url: 'http://169.254.169.254/' };
+        expect(staticGotoActions([{ type: 'repeat', times: 2, actions: [inner] }])).toEqual([inner]);
     });
 });
