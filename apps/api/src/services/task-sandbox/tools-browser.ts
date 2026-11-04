@@ -4,7 +4,8 @@
  *
  * @module services/task-sandbox/tools-browser
  */
-import { getBrowserLocalBlockedMessage, getBrowserSiteApprovalRequiredMessage, getLocalBrowserToolDescription } from '../../prompts/agent-task-prompt';
+import { BROWSER_FLOW_TOOL_NOTE, getBrowserLocalBlockedMessage, getBrowserSiteApprovalRequiredMessage, getLocalBrowserToolDescription } from '../../prompts/agent-task-prompt';
+import { validateBrowserFlow } from '@openmake/config';
 import { liveFrameSpec } from '../../config/agent-task-live-view';
 import { approvedHostsOf, approvedUploadsOf, areSiteWritesApproved, browserUploadRefusal, sitePlanNeedsApproval } from './browser-site-approval';
 import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
@@ -33,6 +34,7 @@ export function createBrowserTool(
             description: sandbox.runBrowserSpec ? getLocalBrowserToolDescription(sandbox.supportsBrowserUpload === true) : '일회성 컨테이너의 chromium 으로 웹 브라우저를 자동화합니다(G2). 호출마다 빈 페이지(about:blank)에서 새로 시작하므로(쿠키·로그인만 유지) goto 와 이어지는 액션을 한 actions 배열에 함께 넣으세요. actions 배열을 순서대로 실행: ' +
                 'goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · ' +
                 'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. ' +
+                BROWSER_FLOW_TOOL_NOTE +
                 '페이지가 띄운 확인창은 그 액션 결과의 dialogs 에 실립니다 — confirm·prompt 는 기본으로 취소되고, 수락하려면 ' +
                 '확인창을 띄우는 액션 앞에 dialog{accept:true,promptText?} 를 넣으세요. ' +
                 'CSS 셀렉터(click/fill)가 실패하면 snapshot 으로 상호작용 요소를 {role,name,index} 목록으로 얻은 뒤 ' +
@@ -72,6 +74,9 @@ export function createBrowserTool(
                     true,
                 );
             }
+            // 제어 흐름(if·repeat) 형태 — 어긋나면 실행하지 않는다. 아래 정책·업로드·주소 검사는 펼친 액션을 훑는다.
+            const flowError = validateBrowserFlow(actions);
+            if (flowError) return h.textResult(flowError, true);
             const uploadRefusal = browserUploadRefusal(actions, sandbox); // 업로드는 업로드를 아는 로컬 기기에서만(런타임도 묻기 전에 거른다)
             if (uploadRefusal) return h.textResult(uploadRefusal, true);
             // 로컬 브라우저(P2) — 사용자 PC 의 전용 프로필 Chrome 에서 실행한다. 서버용 주소 검사(사설망 차단)는 쓰지 않는다:

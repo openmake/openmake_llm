@@ -221,6 +221,18 @@ describe('task-sandbox tools', () => {
         expect(sb.lastBrowser).toBe('');
     });
 
+    it('browser: 주소 검사는 if·repeat 본문의 goto 까지 펼쳐서 보고, 형태가 어긋난 흐름은 실행하지 않는다', async () => {
+        const sb = fakeSandbox();
+        const inner = { type: 'goto', url: 'https://example.com/next' };
+        await byName(createTaskTools(sb), 'browser').handler({ actions: [{ type: 'goto', url: 'https://example.com' }, { type: 'repeat', times: 2, actions: [inner] }] });
+        expect(findBlockedBrowserUrls).toHaveBeenLastCalledWith([{ type: 'goto', url: 'https://example.com' }, inner]);
+        const sb2 = fakeSandbox();
+        const r = await byName(createTaskTools(sb2), 'browser').handler({ actions: [{ type: 'if', cond: { exists: '' }, then: [] }] });
+        expect(r.isError).toBe(true);
+        expect(txt(r)).toContain('제어 흐름 오류');
+        expect(sb2.lastBrowser).toBe('');
+    });
+
     describe('bash 종료 코드 해석', () => {
         const withExit = (exitCode: number): FakeSandbox => {
             const sb = fakeSandbox();

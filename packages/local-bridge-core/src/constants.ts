@@ -225,6 +225,8 @@ export const BROWSER_POLL_MS = 100;
 export const BROWSER_CLICK_SETTLE_MS = 250;
 /** 작업별 탭 수 상한 — 넘으면 가장 오래된 작업의 탭을 닫는다 */
 export const BROWSER_MAX_TABS = 4;
+/** 로컬 브라우저에서 동시에 실행하는 작업 수 — 같은 작업은 순서대로, 다른 작업은 이 수까지 함께(넘으면 대기). BROWSER_MAX_TABS 보다 작아야 회수할 탭이 남는다 */
+export const BROWSER_MAX_CONCURRENT = 3;
 /** 확인창 기록 문구 길이·개수 상한(한 액션) */
 export const BROWSER_DIALOG_MESSAGE_MAX = 300;
 export const BROWSER_DIALOG_RECORD_MAX = 20;
