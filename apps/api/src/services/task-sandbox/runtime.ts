@@ -34,6 +34,7 @@ import { APPROVAL_PREVIEW } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskParked } from '../agent-task/types';
 import type { DeviceLoss } from '../local-bridge/device-errors';
+import { validateBrowserFlow } from '@openmake/config';
 import { browserUploadRefusal, markSiteWritesApproved, sitePlanNeedsApproval, withSitePlan } from './browser-site-approval';
 import { getApprovalRejectedNotice } from '../../prompts/agent-task-approval';
 
@@ -281,6 +282,9 @@ export class TaskRuntime {
 
         // skill_run — 승인 전에 절차를 불러 인자에 체크섬을 묶는다. 승인 카드에는 절차 본문을 싣고, 실행 단계가 같은 절차인지 확인한다.
         const skillPreview = name === 'skill_run' && this.loadProcedure ? await bindSkillRunApproval(args, this.loadProcedure) : null;
+        // 제어 흐름(if·repeat) 형태가 어긋나면 묻지 않고 거절한다 — 실행 위치가 실행하지 않고, 아래 검사는 펼친 액션을 훑는다.
+        const flowError = name === 'browser' ? validateBrowserFlow(args.actions) : null;
+        if (flowError) return `Error: ${flowError}`;
         // 업로드를 실행할 수 없는 곳(서버 샌드박스·구버전 기기)이면 묻지 않고 거절한다 — 승인해도 실행되지 않는다.
         const uploadRefusal = name === 'browser' ? browserUploadRefusal(args.actions, this.executor) : null;
         if (uploadRefusal) return `Error: ${uploadRefusal}`;

@@ -3,24 +3,29 @@
  *
  * 서버 샌드박스의 브라우저 러너(infra/task-runtime/browser-runner.mjs)와 **같은 액션 형식·같은 결과 형식**을 쓴다 —
  * 서버의 `browser` 도구가 실행 위치만 바꿔 그대로 쓸 수 있어야 한다. 다른 점:
- *   - 호출이 끝나도 탭과 로그인 상태가 남는다(작업마다 탭 하나). 서버 러너는 호출마다 새 브라우저다.
+ *   - 호출이 끝나도 창과 로그인 상태가 남는다(작업마다 창 하나). 서버 러너는 호출마다 새 브라우저다.
  *   - 실행 직전에 **실제 탭의 주소**로 사이트 정책을 다시 판정한다(@openmake/config checkBrowserAction).
  *     서버가 본 주소와 다를 수 있다 — 리다이렉트, 페이지가 연 새 창, 사용자의 직접 조작.
- *   - 사용자가 넘겨받은 동안(setUserControl)에는 아무것도 실행하지 않는다. 한 번에 한 요청만 실행한다.
+ *   - 사용자가 넘겨받은 동안(setUserControl)에는 아무것도 실행하지 않는다(실행 중인 모든 작업이 멈춘다).
+ *   - 같은 작업의 요청은 순서대로, 다른 작업은 BROWSER_MAX_CONCURRENT 까지 동시에 실행한다(2026-11-04). 작업마다 뒤쪽 창 하나.
+ *     다운로드 폴더는 브라우저 전역 설정이라(CDP Browser.setDownloadBehavior 는 컨텍스트 단위, Page.setDownloadBehavior 는 폐기·세션 구분 없음)
+ *     다운로드 폴더가 다른 작업끼리는 동시에 돌리지 않는다.
  *   - 쿠키·저장된 비밀번호·프로필 파일을 돌려주는 동작은 없다.
  *
  * 보안 불변식(변경 금지): http(s)·about:blank 밖으로 이동하지 않는다 · 사이트 정책 판정을 건너뛰는 경로가 없다 ·
  * 스크린샷·다운로드는 호출부가 준 폴더 안에만 쓴다 · 업로드는 승인된 호스트·파일 목록과 같고 호출부의 파일 검사를 통과한 것만 넣는다.
  */
 import type { ChildProcess } from 'child_process';
-import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, type BrowserSitePolicy } from '@openmake/config';
+import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, validateBrowserFlow, type BrowserSitePolicy } from '@openmake/config';
 import {
     BROWSER_ACTION_TIMEOUT_MS, BROWSER_CLICK_SETTLE_MS, BROWSER_EXIT_WAIT_MS, BROWSER_DIALOG_MESSAGE_MAX, BROWSER_DIALOG_RECORD_MAX,
     BROWSER_EXTRACT_MAX_CHARS, BROWSER_EXTRACT_READY_MS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_TABS, BROWSER_POLL_MS,
     BROWSER_SNAPSHOT_MAX_ELEMENTS, BROWSER_SNAPSHOT_NAME_MAX, BROWSER_WAIT_MAX_MS, BROWSER_FILL_ECHO_MAX_CHARS,
 } from '../constants';
+import { condExpression, runBrowserFlow } from './browser-flow';
 import { CdpClient } from './cdp';
 import { launchChrome, readDevToolsEndpoint } from './chrome';
+import { BrowserScheduler } from './local-browser-scheduler';
 import { browserPolicyBlockOf, uploadRejectedPolicyBlock, userControlPolicyBlock } from './policy-block';
 import type { BrowserPolicyBlock } from '../types';
 import {
@@ -47,9 +52,10 @@ export class LocalBrowser {
     private proc: ChildProcess | null = null;
     private readonly tabs = new Map<string, Tab>();
     private userControl = false;
-    /** 중지 요청마다 오른다 — 실행 중인 요청이 시작 때의 값과 달라지면 멈춘다 */
-    private stopGeneration = 0;
-    private chain: Promise<unknown> = Promise.resolve();
+    /** 작업별 실행 줄·동시 실행 자리·중지 요청(local-browser-scheduler.ts) */
+    private readonly scheduler = new BrowserScheduler();
+    /** 진행 중인 연결 — 동시에 들어온 첫 요청들이 Chrome 을 둘 띄우지 않게 공유한다 */
+    private connecting: Promise<CdpClient> | null = null;
 
     private constructor(private readonly profileDir: string) {}
 
@@ -59,22 +65,21 @@ export class LocalBrowser {
     /** 제어권 전환. 넘겨받을 때는 실행 중인 요청도 멈춘다. */
     setUserControl(on: boolean): void {
         this.userControl = on;
-        if (on) this.stopGeneration++;
+        if (on) this.scheduler.requestStop();
     }
 
-    /** 실행 중인 요청을 멈춘다(다음 액션부터 실행하지 않는다). */
-    requestStop(): void { this.stopGeneration++; }
+    /** 실행 중인 요청을 멈춘다(다음 액션부터 실행하지 않는다). taskId 를 주면 그 작업만, 없으면 모두. */
+    requestStop(taskId?: string): void { this.scheduler.requestStop(taskId); }
 
-    /** 요청 1건 실행 — 한 번에 하나씩(같은 세션에 두 실행 주체가 명령을 보내지 않는다). */
+    /** 요청 1건 실행 — 같은 작업은 순서대로(같은 탭에 두 실행 주체가 명령을 보내지 않는다), 다른 작업은 동시 실행 상한까지 함께. */
     run(spec: BrowserSpec, opts: BrowserRunOptions): Promise<BrowserRunResult> {
-        const p = this.chain.then(() => this.runNow(spec, opts));
-        this.chain = p.catch(() => undefined);
-        return p;
+        return this.scheduler.run(opts.taskId || DEFAULT_TAB, opts.downloadDir, () => this.runNow(spec, opts));
     }
 
     /** 작업이 끝났다 — 그 작업의 탭을 닫는다. */
     async closeTask(taskId: string | undefined): Promise<void> {
         const key = taskId || DEFAULT_TAB;
+        this.scheduler.forgetTask(key);
         const tab = this.tabs.get(key);
         if (!tab) return;
         this.tabs.delete(key);
@@ -101,8 +106,13 @@ export class LocalBrowser {
 
     // ── 연결·탭 ────────────────────────────────────────────────
 
-    private async connect(): Promise<CdpClient> {
-        if (this.cdp?.isOpen) return this.cdp;
+    private connect(): Promise<CdpClient> {
+        if (this.cdp?.isOpen) return Promise.resolve(this.cdp);
+        this.connecting ??= this.openConnection().finally(() => { this.connecting = null; });
+        return this.connecting;
+    }
+
+    private async openConnection(): Promise<CdpClient> {
         this.tabs.clear();
         // 이미 떠 있는 전용 프로필 Chrome 이 있으면 거기에 붙는다(헬퍼만 다시 뜬 경우).
         const existing = readDevToolsEndpoint(this.profileDir);
@@ -146,13 +156,17 @@ export class LocalBrowser {
         const key = taskId || DEFAULT_TAB;
         const found = this.tabs.get(key);
         if (found) { found.lastUsed = Date.now(); return found; }
-        // 탭 수 상한 — 가장 오래 쓰지 않은 작업의 탭을 닫는다.
+        // 탭 수 상한 — 실행 중이 아닌 작업 중 가장 오래 쓰지 않은 작업의 창을 닫는다. 모두 실행 중이면 하나가 끝날 때까지 기다린다.
         while (this.tabs.size >= BROWSER_MAX_TABS) {
-            const [oldKey, old] = [...this.tabs.entries()].sort((a, b) => a[1].lastUsed - b[1].lastUsed)[0];
+            const idle = [...this.tabs.entries()].filter(([k]) => !this.scheduler.isRunning(k)).sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+            if (idle.length === 0) { await this.scheduler.nextRelease(); continue; }
+            const [oldKey, old] = idle[0];
             this.tabs.delete(oldKey);
             await cdp.send('Target.closeTarget', { targetId: old.targetId }).catch(() => undefined);
         }
-        const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' }) as { targetId: string };
+        // 작업마다 뒤쪽 창 하나 — 숨은 탭의 화면 캡처·타이머 지연을 피하고 사용자 창의 초점을 빼앗지 않는다. 안 되면 탭으로.
+        const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank', newWindow: true, background: true })
+            .catch(() => cdp.send('Target.createTarget', { url: 'about:blank' })) as { targetId: string };
         const tab: Tab = { targetId, sessionId: await this.attach(cdp, targetId), acceptDialogs: false, dialogs: [], lastUsed: Date.now() };
         this.tabs.set(key, tab);
         return tab;
@@ -297,9 +311,12 @@ export class LocalBrowser {
         const policy: BrowserSitePolicy = parseBrowserSitePolicy(spec.sitePolicy);
         const approvedHosts = Array.isArray(spec.approvedHosts) ? spec.approvedHosts.filter((h): h is string => typeof h === 'string') : [];
         const approvedUploads = parseApprovedUploads(spec.approvedUploads);
-        const generation = this.stopGeneration;
+        const stopped = this.scheduler.stopCheck(opts.taskId || DEFAULT_TAB);
         const results: BrowserActionResult[] = [];
         let policyBlock: BrowserPolicyBlock | undefined;
+        // 제어 흐름(if·repeat) 형태가 어긋나면 브라우저에 붙지 않고 이유를 돌려준다.
+        const flowError = validateBrowserFlow(actions);
+        if (flowError) return { ok: false, results, error: flowError };
         let cdp: CdpClient;
         let tab: Tab;
         try {
@@ -309,39 +326,46 @@ export class LocalBrowser {
         } catch (e) {
             return { ok: false, results, error: e instanceof Error ? e.message : String(e) };
         }
-        try {
-            for (let i = 0; i < actions.length; i++) {
-                const a: Action = actions[i] && typeof actions[i] === 'object' ? actions[i] : {};
-                tab.dialogs = [];
-                let failed = false;
-                try {
-                    if (this.stopGeneration !== generation) {
-                        if (this.userControl) policyBlock = userControlPolicyBlock(a);
-                        throw new Error(this.userControl ? BROWSER_USER_CONTROL_ERROR : STOPPED_ERROR);
-                    }
-                    const url = await this.currentUrl(cdp, tab);
-                    // 사이트 정책 — 실제 탭의 주소로 판정한다. 통과하지 못하면 실행하지 않는다.
-                    const host = browserHostOf(url);
-                    const denied = checkBrowserAction(a, host, policy, approvedHosts, approvedUploads);
-                    if (denied) {
-                        policyBlock = browserPolicyBlockOf(a, host, policy);
-                        throw new Error(denied);
-                    }
-                    if (PAGE_ACTIONS.has(str(a.type)) && url === 'about:blank') throw new Error(BLANK_PAGE_ERROR);
-                    // 업로드 — 승인을 통과한 뒤 파일을 검사한다(폴더 밖·숨김·크기·개수). 걸리면 감사 기록용 표식을 남긴다.
-                    const upload = { paths: [] as string[], host };
-                    if (a.type === 'uploadFile') {
-                        if (!opts.resolveUploadFiles) throw new Error(UPLOAD_UNSUPPORTED_ERROR);
-                        try { upload.paths = await opts.resolveUploadFiles(a.files); } catch (e) { policyBlock = uploadRejectedPolicyBlock(host); throw e; }
-                    }
-                    results.push(await this.runAction(cdp, tab, a, i, opts, upload));
-                } catch (e) {
-                    results.push({ i, type: a.type, ok: false, error: e instanceof Error ? e.message : String(e) });
-                    failed = true;
+        // 단순 액션 하나 — 중지·사이트 정책·빈 페이지·업로드 검사를 if·repeat 안에서도 액션마다 그대로 거친다.
+        const runSimple = async (a: Action, i: number, step: string | undefined): Promise<BrowserActionResult> => {
+            tab.dialogs = [];
+            let r: BrowserActionResult;
+            try {
+                if (stopped()) {
+                    if (this.userControl) policyBlock = userControlPolicyBlock(a);
+                    throw new Error(this.userControl ? BROWSER_USER_CONTROL_ERROR : STOPPED_ERROR);
                 }
-                if (tab.dialogs.length) results[results.length - 1].dialogs = tab.dialogs;
-                if (failed) break;
+                const url = await this.currentUrl(cdp, tab);
+                // 사이트 정책 — 실제 탭의 주소로 판정한다. 통과하지 못하면 실행하지 않는다.
+                const host = browserHostOf(url);
+                const denied = checkBrowserAction(a, host, policy, approvedHosts, approvedUploads);
+                if (denied) {
+                    policyBlock = browserPolicyBlockOf(a, host, policy);
+                    throw new Error(denied);
+                }
+                if (PAGE_ACTIONS.has(str(a.type)) && url === 'about:blank') throw new Error(BLANK_PAGE_ERROR);
+                // 업로드 — 승인을 통과한 뒤 파일을 검사한다(폴더 밖·숨김·크기·개수). 걸리면 감사 기록용 표식을 남긴다.
+                const upload = { paths: [] as string[], host };
+                if (a.type === 'uploadFile') {
+                    if (!opts.resolveUploadFiles) throw new Error(UPLOAD_UNSUPPORTED_ERROR);
+                    try { upload.paths = await opts.resolveUploadFiles(a.files); } catch (e) { policyBlock = uploadRejectedPolicyBlock(host); throw e; }
+                }
+                r = await this.runAction(cdp, tab, a, i, opts, upload, step);
+            } catch (e) {
+                r = { i, type: a.type, ok: false, error: e instanceof Error ? e.message : String(e) };
             }
+            if (tab.dialogs.length) r.dialogs = tab.dialogs;
+            return r;
+        };
+        try {
+            // if·repeat 를 포함해 실행한다 — 실패·조건 오류·실행 수 상한에서 멈춘다(browser-flow.ts). 조건은 읽기 전용이라 정책 판정 대상이 아니다.
+            results.push(...await runBrowserFlow(actions, {
+                runSimple,
+                evalCond: async (c) => {
+                    if (stopped()) throw new Error(this.userControl ? BROWSER_USER_CONTROL_ERROR : STOPPED_ERROR);
+                    return !!(await this.evaluate<boolean>(cdp, tab, condExpression(c)));
+                },
+            }, BROWSER_MAX_ACTIONS));
             return { ok: results.every((r) => r.ok), finalUrl: await this.currentUrl(cdp, tab), results, ...(policyBlock ? { policyBlock } : {}) };
         } catch (e) {
             return { ok: false, results, error: e instanceof Error ? e.message : String(e), ...(policyBlock ? { policyBlock } : {}) };
@@ -367,7 +391,7 @@ export class LocalBrowser {
         await cdp.send('DOM.setFileInputFiles', { files: paths, objectId: result.objectId }, tab.sessionId);
     }
 
-    private async runAction(cdp: CdpClient, tab: Tab, a: Action, i: number, opts: BrowserRunOptions, upload: { paths: string[]; host: string | null }): Promise<BrowserActionResult> {
+    private async runAction(cdp: CdpClient, tab: Tab, a: Action, i: number, opts: BrowserRunOptions, upload: { paths: string[]; host: string | null }, step?: string): Promise<BrowserActionResult> {
         const sel = JSON.stringify(str(a.selector));
         switch (a.type) {
             case 'goto':
@@ -427,7 +451,7 @@ export class LocalBrowser {
                     `요소가 나타나지 않았습니다: ${str(a.selector)}`);
                 return { i, type: a.type, ok: true };
             case 'screenshot': {
-                const name = screenshotName(a.path, i);
+                const name = screenshotName(a.path, step ?? i); // 중첩 액션은 같은 i 를 공유한다 — 기본 이름은 step 으로 구분
                 const { data } = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: !!a.fullPage }, tab.sessionId) as { data: string };
                 await opts.saveFile(name, Buffer.from(data, 'base64'));
                 return { i, type: a.type, ok: true, path: name };

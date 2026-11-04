@@ -15,7 +15,7 @@
  *
  * @module services/task-sandbox/browser-site-approval
  */
-import type { BrowserSitePlan, BrowserSiteUpload, BrowserSiteWrite, BrowserUploadApproval } from '@openmake/config';
+import { flattenBrowserActions, type BrowserSitePlan, type BrowserSiteUpload, type BrowserSiteWrite, type BrowserUploadApproval } from '@openmake/config';
 import { getBrowserUploadSandboxMessage, getBrowserUploadUnsupportedMessage } from '../../prompts/agent-task-prompt';
 
 /** 승인 판정용 인자에 싣는 필드 이름 */
@@ -59,10 +59,9 @@ export function approvedUploadsOf(uploads: readonly BrowserSiteUpload[]): Browse
     return uploads.filter((u) => u.host !== '').map((u) => ({ host: u.host, files: u.files }));
 }
 
-/** PURE: 액션 배열에 업로드가 있는가. */
+/** PURE: 액션 배열에 업로드가 있는가 — if·repeat 본문까지 펼쳐 본다(형태가 어긋난 흐름은 호출부가 먼저 거른다). */
 export function hasUploadAction(actions: unknown): boolean {
-    const list = Array.isArray(actions) ? actions : [actions];
-    return list.some((a) => !!a && typeof a === 'object' && (a as { type?: unknown }).type === UPLOAD_ACTION);
+    return flattenBrowserActions(actions).some((a) => !!a && typeof a === 'object' && (a as { type?: unknown }).type === UPLOAD_ACTION);
 }
 
 /**
