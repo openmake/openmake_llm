@@ -55,6 +55,7 @@ export function comparePaired(
     candidate: Readonly<Record<string, number>>,
     opts: { iterations?: number; seed?: number } = {},
 ): PairedComparison {
+    if (opts.iterations !== undefined && opts.iterations < 1) throw new Error(`iterations 는 1 이상이어야 합니다: ${opts.iterations}`);
     const shared = Object.keys(baseline).filter((id) => id in candidate).sort();
     const excluded = [...Object.keys(baseline).filter((id) => !(id in candidate)), ...Object.keys(candidate).filter((id) => !(id in baseline))].sort();
     if (shared.length === 0) return { cases: 0, meanDiff: 0, ci: [0, 0], verdict: 'no-change', excluded, note: '공통 케이스가 없어 비교할 수 없습니다' };
