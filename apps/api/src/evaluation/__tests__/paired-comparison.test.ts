@@ -58,6 +58,12 @@ describe('comparePaired', () => {
         expect(r.note).toContain('공통 케이스가 없');
     });
 
+    it('반복 수가 1 미만이면 구간을 낼 수 없어 거부한다', () => {
+        const a = rates([1, 0, 1]);
+        expect(() => comparePaired(a, a, { iterations: 0 })).toThrow(/iterations/);
+        expect(() => comparePaired(a, a, { iterations: -5 })).toThrow(/iterations/);
+    });
+
     it('반복 수는 env 로 덮는다 — 빈 값·잘못된 값은 기본 2000', () => {
         const prev = process.env.OMK_EVAL_BOOTSTRAP_ITERS;
         try {

@@ -1,6 +1,6 @@
 import { percentile, buildEvalRunRecord } from '../eval-run-recorder';
 import { renderMatrixTable, parseListArg, formatMatrixCell } from '../matrix-reporter';
-import { runMatrix } from '../run-matrix-evaluation';
+import { parseRepeatArg, runMatrix } from '../run-matrix-evaluation';
 import type { EvaluationSummary, GoldenDataset } from '../types';
 
 const summary = (passed: number, total: number, durations: number[]): EvaluationSummary => ({
@@ -89,6 +89,19 @@ describe('runMatrix', () => {
         expect(cells[0].caseRuns).toEqual({ repeat: 3, passes: { r1: 3, r2: 1 } });
         expect(cells[0]).toMatchObject({ totalCases: 6, passedCases: 4 });
         expect(cells[0].passRate).toBeCloseTo(4 / 6);
+    });
+
+    it('repeat N≥2 면 eval_runs summary 에 repeat 를 적고, N=1 이면 적지 않는다', async () => {
+        const one = await runMatrix({ dataset, models: ['m'], variants: ['base'], generatorFactory: () => async () => 'ok' });
+        expect(one.cells[0].summary).not.toHaveProperty('repeat');
+        const three = await runMatrix({ dataset, models: ['m'], variants: ['base'], repeat: 3, generatorFactory: () => async () => 'ok' });
+        expect(three.cells[0].summary).toMatchObject({ repeat: 3 });
+    });
+
+    it('parseRepeatArg — 미지정은 1, 1 이상 정수만 받고 그 밖은 null', () => {
+        expect(parseRepeatArg(undefined)).toBe(1);
+        expect(parseRepeatArg('3')).toBe(3);
+        for (const bad of ['abc', '0', '-2', '1.5', '']) expect(parseRepeatArg(bad)).toBeNull();
     });
 
     it('알 수 없는 variant 는 실행 전에 거부', async () => {

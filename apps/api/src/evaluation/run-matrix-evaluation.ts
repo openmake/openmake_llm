@@ -36,6 +36,13 @@ function argValue(flag: string): string | undefined {
     return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
+/** PURE: `--repeat` 값 — 미지정은 1, 1 이상 정수가 아니면 null(사용 오류) */
+export function parseRepeatArg(raw: string | undefined): number | null {
+    if (raw === undefined) return 1;
+    const n = Number(raw);
+    return raw.trim() !== '' && Number.isInteger(n) && n >= 1 ? n : null;
+}
+
 export interface MatrixCellGeneratorFactory {
     (cell: { model: string; variant: string }, onCaseMetrics: (m: CaseTiming) => void): ResponseGenerator;
 }
@@ -76,6 +83,7 @@ export async function runMatrix(params: {
             const record: MatrixCell = buildEvalRunRecord(summary, {
                 runner: 'matrix', mode: 'real', model, variant, matrixRunId, gitHash: params.gitHash ?? null,
                 ...(timings.length ? { timings } : {}),
+                ...(repeat > 1 ? { extra: { repeat } } : {}),
             });
             if (repeat > 1) {
                 const passes: Record<string, number> = {};
@@ -96,7 +104,11 @@ async function main(): Promise<void> {
     const limit = Number(argValue('--limit') ?? process.env.OMK_EVAL_REAL_DEFAULT_LIMIT ?? '5');
     const models = parseListArg(argValue('--models'), [process.env.LLM_DEFAULT_MODEL ?? 'default']);
     const variants = parseListArg(argValue('--variants'), MATRIX_DEFAULT_VARIANTS);
-    const repeat = Number(argValue('--repeat') ?? '1');
+    const repeat = parseRepeatArg(argValue('--repeat'));
+    if (repeat === null) {
+        console.error(`--repeat 는 1 이상의 정수여야 합니다: ${argValue('--repeat')}`);
+        process.exit(1);
+    }
     const gateCandidate = argValue('--gate');
     // 현행 미지정이면 운영 기본 모델 — 후보와 같으면(=기본 모델 자체를 검증) 절대 하한만 본다
     const defaultIncumbent = process.env.LLM_DEFAULT_MODEL && process.env.LLM_DEFAULT_MODEL !== gateCandidate ? process.env.LLM_DEFAULT_MODEL : undefined;
