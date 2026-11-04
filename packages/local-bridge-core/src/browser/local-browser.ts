@@ -399,7 +399,10 @@ export class LocalBrowser {
             // if·repeat 를 포함해 실행한다 — 실패·조건 오류·실행 수 상한에서 멈춘다(browser-flow.ts). 조건은 읽기 전용이라 정책 판정 대상이 아니다.
             results.push(...await runBrowserFlow(actions, {
                 runSimple,
-                evalCond: async (c) => !!(await this.evaluate<boolean>(cdp, tab, condExpression(c))),
+                evalCond: async (c) => {
+                    if (stopped()) throw new Error(this.userControl ? BROWSER_USER_CONTROL_ERROR : STOPPED_ERROR);
+                    return !!(await this.evaluate<boolean>(cdp, tab, condExpression(c)));
+                },
             }, BROWSER_MAX_ACTIONS));
             return { ok: results.every((r) => r.ok), finalUrl: await this.currentUrl(cdp, tab), results, ...(policyBlock ? { policyBlock } : {}) };
         } catch (e) {

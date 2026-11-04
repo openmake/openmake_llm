@@ -6,6 +6,8 @@
  * @module prompts/agent-task-prompt
  */
 
+import { BROWSER_FLOW_MAX_DEPTH, BROWSER_REPEAT_MAX } from '@openmake/config';
+
 /**
  * 목표 미달성 최종 답변 마커 — 시스템 프롬프트 지시와 AgentTaskService 종료 판정이 공유하는 계약.
  * 모델이 최종 답변에 이 마커를 포함하면 completed 대신 failed(goal_incomplete)로 종료한다.
@@ -346,14 +348,14 @@ function localBrowserUploadNote(uploadSupported: boolean): string {
         : '이 기기의 앱은 파일 업로드(uploadFile)를 지원하지 않습니다. ';
 }
 
-/** 로컬 브라우저(사용자 PC 의 전용 Chrome) 도구 설명 — 서버 샌드박스 브라우저와 달리 탭이 유지되고 사이트 정책이 적용된다. */
-/** browser 도구 설명의 제어 흐름(if·repeat) 안내 — 서버 샌드박스·로컬 브라우저 공용. 상한은 @openmake/config browser-flow 와 같다. */
-export const BROWSER_FLOW_TOOL_NOTE = '조건 분기·반복은 한 호출 안에서: if{cond,then:[...],else?:[...]} · repeat{times(1~20),actions:[...],until?:cond,while?:cond} '
-    + '(cond = {exists:css}·{visible:css}·{textIncludes:"글",selector?:css}·{urlIncludes:"글"}·{not:cond}, 2단계까지 겹침). '
+/** browser 도구 설명의 제어 흐름(if·repeat) 안내 — 서버 샌드박스·로컬 브라우저 공용. 상한은 @openmake/config browser-flow 에서 가져온다. */
+export const BROWSER_FLOW_TOOL_NOTE = `조건 분기·반복은 한 호출 안에서: if{cond,then:[...],else?:[...]} · repeat{times(1~${BROWSER_REPEAT_MAX}),actions:[...],until?:cond,while?:cond} `
+    + `(cond = {exists:css}·{visible:css}·{textIncludes:"글",selector?:css}·{urlIncludes:"글"}·{not:cond}, ${BROWSER_FLOW_MAX_DEPTH}단계까지 겹침). `
     + '예: {"type":"if","cond":{"visible":"#popup"},"then":[{"type":"click","selector":"#close"}]} · '
     + '{"type":"repeat","times":5,"actions":[{"type":"click","selector":"a.next"}],"until":{"not":{"exists":"a.next"}}}. '
     + '중첩 액션 결과에는 위치 step(예 "1.then.0"·"2.r3.0"), if 결과에는 branch, repeat 결과에는 rounds·stoppedBy 가 실립니다. ';
 
+/** 로컬 브라우저(사용자 PC 의 전용 Chrome) 도구 설명 — 서버 샌드박스 브라우저와 달리 탭이 유지되고 사이트 정책이 적용된다. */
 export function getLocalBrowserToolDescription(uploadSupported = false): string {
     return '사용자 PC 의 전용 Chrome 창에서 웹 브라우저를 조작합니다. 탭과 로그인 상태가 호출 사이에 유지되므로 이전 호출의 페이지에서 이어서 작업할 수 있습니다(처음에는 goto 로 페이지를 여세요). '
         + 'actions 배열을 순서대로 실행: goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · '
