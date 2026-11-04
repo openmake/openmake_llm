@@ -143,9 +143,6 @@
     "knowledge-runtime/conversations/binding-service.ts": [
       "data/conversation-sessions"
     ],
-    "knowledge-runtime/db.ts": [
-      "data/models/unified-database"
-    ],
     "knowledge-runtime/embedding/provider.ts": [
       "services/cost/cost-ledger-service",
       "services/orchestrator/capability-resolver",
