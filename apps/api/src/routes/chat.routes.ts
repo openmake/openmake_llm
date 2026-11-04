@@ -128,8 +128,8 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validateWithSecu
             strategy: result.executionPlan.executionStrategy,
             thinking: result.executionPlan.thinkingLevel,
             discussion: result.executionPlan.useDiscussion, // 구 필드(항상 false) — PR-H1-4 에서 제거
-            // 중립 필드(PR-H1-1) — 요청에서 켜진 활성 모드 id(등록 순서상 첫 번째), 없으면 null
-            mode: Object.keys(collectActiveModes(req.body as Record<string, unknown>, 'rest') ?? {})[0] ?? null,
+            // 중립 필드(PR-H1-1) — 이 라우트는 모드를 실행하지 않는다(/stream 만)
+            mode: null,
         } : undefined;
 
         // §10 OpenAI 호환 tool_calls 응답

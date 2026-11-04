@@ -1,6 +1,6 @@
 /**
- * POST /api/chat 디버그 pipeline_info(관리자 + x-omk-debug) — 호환 기간(PR-H1-1)에는 중립 필드 `mode`
- * (요청에서 켜진 활성 모드 id, 없으면 null)를 더하고 구 필드 `discussion` 은 그대로 둔다.
+ * POST /api/chat 디버그 pipeline_info(관리자 + x-omk-debug) — 호환 기간(PR-H1-1)에는 중립 필드 `mode` 를 더하고
+ * 구 필드 `discussion` 은 그대로 둔다. 이 라우트는 모드를 실행하지 않으므로(/stream 만) 요청에 모드가 켜져 있어도 `mode` 는 null 이다.
  * 인증·rate limit 미들웨어를 거치지 않도록 라우터 스택에서 핸들러를 꺼내 가짜 req/res 로 직접 호출한다.
  */
 import type { Request, Response } from 'express';
@@ -42,18 +42,8 @@ beforeEach(() => __setChatModesForTest([MODE]));
 afterEach(() => { __setChatModesForTest(null); jest.restoreAllMocks(); });
 
 describe('POST /api/chat — 디버그 pipeline_info.mode', () => {
-    it('modes 로 켠 모드 id 가 mode 로 나오고 discussion 은 그대로다', async () => {
-        const data = await invoke({ modes: { 'mode-r': true } });
-        expect(data.pipeline_info).toMatchObject({ mode: 'mode-r', discussion: false });
-    });
-
-    it('구 불리언 필드로 켜도 같은 mode 가 나온다', async () => {
-        const data = await invoke({ modeRFlag: true });
-        expect(data.pipeline_info.mode).toBe('mode-r');
-    });
-
-    it('켜진 모드가 없으면 mode 는 null 이다', async () => {
-        const data = await invoke({});
+    it('요청에 모드를 켜도 mode 는 null·discussion 은 false 다(이 라우트는 모드를 실행하지 않는다)', async () => {
+        const data = await invoke({ modes: { 'mode-r': true }, modeRFlag: true });
         expect(data.pipeline_info).toHaveProperty('mode', null);
         expect(data.pipeline_info.discussion).toBe(false);
     });
