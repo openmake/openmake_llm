@@ -123,9 +123,15 @@ export interface WsChatRequest {
   /** 첨부 텍스트 파일 — 백엔드가 fileContext 채널로 LLM 에 주입 */
   files?: WsAttachedFile[];
   webSearch?: boolean;
-  /** 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다 */
+  /**
+   * 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다(PR-H1-4 에서 제거)
+   * @deprecated
+   */
   deepResearchMode?: boolean;
-  /** 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다 */
+  /**
+   * 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다(PR-H1-4 에서 제거)
+   * @deprecated
+   */
   discussionMode?: boolean;
   /** Sequential Thinking 모드 (UI thinkingEnabled 토글) */
   thinkingMode?: boolean;
@@ -381,7 +387,10 @@ export type WsServerEvent =
       summary?: { ok: boolean; durationMs: number; args?: string; preview?: string };
       messageId?: string;
     }
-  // 토론 모드 진행 (백엔드 ws-chat-handler onDiscussionProgress → DiscussionProgress)
+  // 채팅 모드 진행 — 중립 이벤트(PR-H1-1). 서버는 모드 진행 1틱마다 구 이벤트(모드가 정한 type) 다음에 이것을 보낸다.
+  // progress 모양은 그 모드가 정한다. modeId 는 add-on id
+  | { type: "chat_mode_progress"; modeId: string; progress: Record<string, unknown>; messageId?: string }
+  // @deprecated 토론 모드 진행 (백엔드 ws-chat-handler onModeProgress) — chat_mode_progress 로 대체, PR-H1-4 에서 제거
   | {
       type: "discussion_progress";
       progress: {
@@ -418,7 +427,7 @@ export type WsServerEvent =
       /** 서버가 이벤트를 낸 시각(epoch ms) */
       ts?: number;
     }
-  // 딥리서치 진행상황 (백엔드 ws-chat-handler onResearchProgress)
+  // @deprecated 딥리서치 진행상황 (백엔드 ws-chat-handler onModeProgress) — chat_mode_progress 로 대체, PR-H1-4 에서 제거
   | {
       type: "research_progress";
       progress: {

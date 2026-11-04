@@ -1,6 +1,12 @@
 /**
  * 채팅 모드 확장점 — 요청에서 모드를 모으는 규칙과 우선순위. 실제 모드 구성(addon-host)으로 검증한다.
  */
+const mockModeLog = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+jest.mock('../../../utils/logger', () => {
+    const actual = jest.requireActual('../../../utils/logger');
+    return { ...actual, createLogger: (category: string) => (category === 'chat-modes' ? mockModeLog : actual.createLogger(category)) };
+});
+
 import { __setChatModesForTest, collectActiveModes, getChatModes, resolveActiveMode, restLegacyModeFlags, DEFAULT_INPUT_POLICY } from '../chat-modes';
 
 afterEach(() => __setChatModesForTest(null));
@@ -43,6 +49,31 @@ describe('collectActiveModes', () => {
         __setChatModesForTest([]);
         expect(collectActiveModes(Object.fromEntries(flags.map((f) => [f, true])))).toBeUndefined();
         expect(restLegacyModeFlags()).toEqual([]);
+    });
+});
+
+describe('구 필드 사용 관측 로그 (PR-H1-1)', () => {
+    beforeEach(() => mockModeLog.info.mockClear());
+
+    it('구 불리언 필드로 켜지면 info 로그 1줄 — 필드·모드 id·전송만 싣는다', () => {
+        const mode = getChatModes()[0];
+        const flag = mode.legacyRequestFlag as string;
+        collectActiveModes({ [flag]: true, message: '본문은 싣지 않는다', userId: 'u-1' });
+        expect(mockModeLog.info).toHaveBeenCalledTimes(1);
+        expect(mockModeLog.info.mock.calls[0]).toEqual([`legacy flag ${flag} → ${mode.id} (ws)`]);
+    });
+
+    it('modes 로 켜지면 로그가 없다', () => {
+        const mode = getChatModes()[0];
+        collectActiveModes({ modes: { [mode.id]: true } }, 'rest');
+        expect(mockModeLog.info).not.toHaveBeenCalled();
+    });
+
+    it('둘 다 있으면 modes 가 우선하고 로그가 없다(회귀)', () => {
+        const mode = getChatModes()[0];
+        expect(collectActiveModes({ modes: { [mode.id]: true }, [mode.legacyRequestFlag as string]: true })).toEqual({ [mode.id]: true });
+        expect(collectActiveModes({ modes: { [mode.id]: false }, [mode.legacyRequestFlag as string]: true })).toBeUndefined();
+        expect(mockModeLog.info).not.toHaveBeenCalled();
     });
 });
 
