@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.123.1](https://github.com/openmake/openmake_llm/compare/v1.123.0...v1.123.1) (2026-11-04)
+
+
+### 🐛 버그 수정
+
+* **desktop-native:** 앱에 동봉하는 node 가 Homebrew 동적 링크본이면 공식 정적 배포본을 받아 쓴다 ([8304ff8](https://github.com/openmake/openmake_llm/commit/8304ff8eab88bd6135adca8677904a6e8e167fa5))
+
 ## [1.123.0](https://github.com/openmake/openmake_llm/compare/v1.122.1...v1.123.0) (2026-11-04)
 
 
