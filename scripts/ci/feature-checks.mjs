@@ -14,7 +14,7 @@ const manifest = JSON.parse(readFileSync(new URL('./feature-checks.manifest.json
 // The dependency extractor decides which tests are "related" at all, so it is bootstrap too.
 const JEST_BOOTSTRAP = ['apps/api/jest.config.js', 'apps/api/jest.setup.ts', 'apps/api/jest.setup-after-env.ts', 'apps/api/jest.dependency-extractor.mjs'];
 export function selectFeatures(files) {
-  const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, discordBot: false, desktopWindows: false, desktopHelper: false, cli: false, hostSetup: false, e2e: selectE2E(files) };
+  const result = { api: [], web: false, pipeline: false, infra: false, bridge: false, discordBot: false, desktopWindows: false, desktopHelper: false, desktopBuild: false, cli: false, hostSetup: false, e2e: selectE2E(files) };
   for (const file of files) {
     if (result.e2e.some(spec => spec.file === file)) continue;
     if (JEST_BOOTSTRAP.includes(file)) { result.api.push(file); continue; }
@@ -175,6 +175,9 @@ export function runFeatures(files, options = {}) {
     const harness = 'apps/desktop-native/helper/harness.cjs';
     desktopHelper = { platform, bundled: true, executed: platform === 'darwin' ? [harness] : [], delegatedToMacJob: platform === 'darwin' ? [] : [harness] };
   }
+  // build.sh's node bundling functions (lib/node-bundle.sh): fake otool/curl/uname on PATH, so it runs on any platform.
+  // The rest of build.sh (swift, codesign, hdiutil) is exercised by the desktop-native workflow's mac build.
+  if (selection.desktopBuild) run(process.execPath, ['--test', 'apps/desktop-native/lib/node-bundle.test.mjs']);
   // The CLI workspace has no Jest project: its tsc build, then the fixtures that drive the built CLI.
   if (selection.cli) {
     run('npm', ['run', 'build', '--workspace=@openmake/cli']);
