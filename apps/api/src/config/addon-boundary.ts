@@ -67,10 +67,10 @@ export const ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = 
     'services/chat-service/orchestration-shadow-recorder.ts': 'DB 컬럼 orchestration_dispatch_log.discussion_intent (086) — PR-H1-1 이중 기록 중, PR-H1-4 에서 제거',
     'data/repositories/routing-metrics-repository.ts': 'DB 컬럼 discussion_intent 집계 SQL (086) — PR-H1-1 이중 기록 중, PR-H1-4 에서 제거',
     'routes/metrics.routes.ts': '관리자 지표 API 응답 필드 discussionIntentTurns (웹 admin 이 읽는다) — PR-H1-1 이중 기록 중, PR-H1-4 에서 제거',
-    'chat/profile-resolver.ts': '공개 REST 응답의 실행 계획 필드 useDiscussion (항상 false, 계약 유지) — PR-H1-1 이중 기록 중, PR-H1-4 에서 제거',
-    'routes/chat.routes.ts': '공개 REST 응답 필드 discussion (항상 false, 계약 유지) — PR-H1-1 이중 기록 중, PR-H1-4 에서 제거',
-    'routes/model.routes.ts': '공개 REST 응답의 모델 capability 필드 discussion (항상 false, 계약 유지) — PR-H1-1 이중 기록 중, PR-H1-4 에서 제거',
-    'swagger/schemas-core.ts': '위 REST 응답 필드의 OpenAPI 스키마 (iOS Kit 생성 입력) — PR-H1-1 이중 기록 중, PR-H1-4 에서 제거',
+    'chat/profile-resolver.ts': '공개 REST 응답의 실행 계획 필드 useDiscussion (항상 false, 계약 유지) — 구 필드 유지 중, PR-H1-4 에서 제거',
+    'routes/chat.routes.ts': '공개 REST 응답 필드 discussion (항상 false, 계약 유지) — 구 필드 유지 중, PR-H1-4 에서 제거',
+    'routes/model.routes.ts': '공개 REST 응답의 모델 capability 필드 discussion (항상 false, 계약 유지) — 구 필드 유지 중, PR-H1-4 에서 제거',
+    'swagger/schemas-core.ts': '위 REST 응답 필드의 OpenAPI 스키마 (iOS Kit 생성 입력) — 구 필드 유지 중, PR-H1-4 에서 제거',
 };
 
 /**

@@ -3,6 +3,7 @@
  *
  * recorder 와 지표 저장소는 실제로 로드하고, Base 풀 제공자(unified-database 의 getPool)만 TEST_DATABASE_URL 풀로 대체한다.
  * 풀은 연결 1개·유휴 종료 없음이라 TEMP 표(086·087·110·196 열 구조)가 같은 연결에서 실제 표를 가린다 — 실제 표는 건드리지 않는다.
+ * 전제: TEMP 표는 세션(연결) 범위라 풀을 `max:1`·`idleTimeoutMillis:0`(pg-pool 에서 0 = 유휴 종료 없음)으로 한 연결에 고정해야 보인다.
  *  ① recordOrchestrationDispatch 가 구 열과 중립 열에 같은 값을 쓴다(fire-and-forget 이라 폴링 대기)
  *  ② getOrchestrationToggleRecall 이 두 별칭을 같은 값으로 집계하고, 구 열만 true 인 행(롤백 창)도 센다
  */
@@ -18,6 +19,7 @@ jest.mock('../../../data/models/unified-database', () => {
         : null;
     return { __esModule: true, __pool: pool, getPool: () => pool };
 });
+// BaseRepository.query(지표 저장소 경유)가 쓰는 재시도 래퍼 — 재시도 없이 한 번만 실행
 jest.mock('../../../data/retry-wrapper', () => ({ withRetry: (fn: () => unknown) => fn() }));
 
 import { recordOrchestrationDispatch } from '../orchestration-shadow-recorder';
