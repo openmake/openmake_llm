@@ -29,7 +29,8 @@ import { randomUUID } from 'crypto';
 
 require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 
-import { ablatePrompt, summarizeAblation, gateAgentTaskSuite, selectCases, type AblationRun } from './prompt-ablation';
+import { ablatePrompt, summarizeAblation, gateAgentTaskSuite, selectCases, compareAblationVariants, type AblationRun } from './prompt-ablation';
+import { formatPaired } from './paired-comparison';
 import { judgeExpectedAnswer } from './agent-task-dataset';
 import { evaluateTrajectory, parseTrajectorySpec, stepsToTrajectory, type TrajectorySpec, type TrajectoryStepRow } from './trajectory-evaluator';
 
@@ -127,9 +128,15 @@ async function main(): Promise<void> {
         console.log(`  ${s.variant}: 완료 ${(s.completedRate * 100).toFixed(0)}% · 과정 통과 ${(s.processPassRate * 100).toFixed(0)}% · `
             + `평균 ${Math.round(s.meanTokens)}토큰 · ${s.meanTurns.toFixed(1)}턴 · 도구 ${s.meanToolCalls.toFixed(1)}회 (n=${s.runs})`);
     }
+    // 제거 전후 차이 — 과제별 짝 비교(보고만, 관문 판정 불변). 구간이 0 을 포함하면 차이를 결론으로 읽지 말 것.
+    const paired = compareAblationVariants(runs);
+    for (const p of paired) {
+        console.log(`  ${p.variant} − ${p.baseline}: 완료 ${formatPaired(p.completed)} ${p.completed.verdict} · 과정 ${formatPaired(p.process)} ${p.process.verdict}`
+            + ` (과제 ${p.completed.cases}개${p.completed.note ? `, ${p.completed.note}` : ''})`);
+    }
     fs.mkdirSync(LOGS_DIR, { recursive: true });
     const out = path.join(LOGS_DIR, `prompt-ablation-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-    fs.writeFileSync(out, JSON.stringify({ datasetVersion: dataset.version, repeats, model: process.env.LLM_DEFAULT_MODEL ?? null, summary, runs }, null, 2));
+    fs.writeFileSync(out, JSON.stringify({ datasetVersion: dataset.version, repeats, model: process.env.LLM_DEFAULT_MODEL ?? null, summary, ...(paired.length ? { paired } : {}), runs }, null, 2));
     console.log(`→ ${path.relative(process.cwd(), out)}`);
     if (process.argv.includes('--gate')) {
         const gate = gateAgentTaskSuite(summary, {

@@ -1,7 +1,7 @@
 /**
  * 프롬프트 규칙 제거(ablation) — 시스템 프롬프트에서 지정한 규칙 묶음만 빼고 나머지는 그대로 두는지.
  */
-import { ablatePrompt, summarizeAblation, gateAgentTaskSuite, selectCases, type AblationRun } from '../prompt-ablation';
+import { ablatePrompt, summarizeAblation, gateAgentTaskSuite, selectCases, compareAblationVariants, type AblationRun } from '../prompt-ablation';
 
 const PROMPT = [
     'You are an agent.',
@@ -96,5 +96,34 @@ describe('selectCases', () => {
     });
     it('없는 id 를 지목하면 던진다 — 오타로 아무것도 돌지 않는 일을 막는다', () => {
         expect(() => selectCases(cases, { only: ['a', 'zzz'] })).toThrow('zzz');
+    });
+});
+
+describe('compareAblationVariants — 제거 전후 짝 비교(보고만)', () => {
+    const run = (variant: string, caseId: string, over: Partial<AblationRun> = {}): AblationRun => ({
+        variant, caseId, taskId: 't', status: 'completed', processPassed: true, rootFailures: [], turns: 1, totalTokens: 1, toolCalls: 1, durationMs: 1, ...over,
+    });
+
+    it('조건이 하나뿐이면 비교가 없다', () => {
+        expect(compareAblationVariants([run('baseline', 'a')])).toEqual([]);
+    });
+
+    it('첫 조건(기준) 대비 조건마다 과제별 완료·과정 통과 비율 차이를 짝지어 낸다', () => {
+        const runs = [
+            run('baseline', 'a'), run('baseline', 'a'), run('baseline', 'b'), run('baseline', 'b'),
+            run('drop', 'a', { status: 'failed', processPassed: false }), run('drop', 'a'),
+            run('drop', 'b', { answerPassed: false }), run('drop', 'b', { answerPassed: false }),
+        ];
+        const [c] = compareAblationVariants(runs);
+        expect(c).toMatchObject({ variant: 'drop', baseline: 'baseline' });
+        expect(c.completed.cases).toBe(2);
+        expect(c.completed.meanDiff).toBeCloseTo(-0.75); // a: 1→0.5, b: 1→0
+        expect(c.process.meanDiff).toBeCloseTo(-0.25); // a: 1→0.5, b: 1→1
+    });
+
+    it('한 조건에만 있는 과제는 빼고 사유를 남긴다', () => {
+        const [c] = compareAblationVariants([run('baseline', 'a'), run('baseline', 'b'), run('drop', 'a')]);
+        expect(c.completed.excluded).toEqual(['b']);
+        expect(c.completed.note).toContain('교집합 1건');
     });
 });
