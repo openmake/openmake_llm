@@ -911,7 +911,10 @@ public enum Components {
             }
             /// - Remark: Generated from `#/components/schemas/ModelCapabilities/thinking`.
             public var thinking: Components.Schemas.ModelCapabilities.thinkingPayload
+            /// 사용 중단 — 항상 false. 기능이 없는 필드라 대체 필드는 없다. 호환을 위해 required 로 남기며 이후 required 해제 뒤 제거한다.
+            ///
             /// - Remark: Generated from `#/components/schemas/ModelCapabilities/discussion`.
+            @available(*, deprecated)
             public var discussion: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/ModelCapabilities/vision`.
             public var vision: Swift.Bool
@@ -924,7 +927,7 @@ public enum Components {
             /// - Parameters:
             ///   - executionStrategy:
             ///   - thinking:
-            ///   - discussion:
+            ///   - discussion: 사용 중단 — 항상 false. 기능이 없는 필드라 대체 필드는 없다. 호환을 위해 required 로 남기며 이후 required 해제 뒤 제거한다.
             ///   - vision:
             ///   - toolCalling:
             ///   - streaming:
