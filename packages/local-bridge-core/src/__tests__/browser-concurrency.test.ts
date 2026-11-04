@@ -180,4 +180,20 @@ describe('LocalBrowser 동시 실행(가짜 CDP)', () => {
         expect(rb.ok).toBe(false);
         await browser.dispose();
     });
+
+    it('조건 평가 중 requestStop 이면 남은 조건을 평가하지 않고 중지 오류로 끝난다', async () => {
+        const { browser } = setup();
+        let conds = 0;
+        jest.spyOn(LocalBrowser.prototype as never, 'evaluate' as never).mockImplementation((async (_cdp: unknown, _tab: unknown, expression: string) => {
+            if (expression === 'location.href') return 'about:blank';
+            if (++conds === 3) browser.requestStop('A');
+            return true;
+        }) as never);
+        const flow = [{ type: 'repeat', times: 20, while: { exists: '#more' }, actions: [{ type: 'if', cond: { exists: '#x' }, then: [] }] }];
+        const r = await browser.run({ actions: flow, sitePolicy: { allow: [], deny: [] } }, opts('A'));
+        expect(r.ok).toBe(false);
+        expect(conds).toBe(3);
+        expect(String(r.results.find((x) => x.error)?.error)).toContain('중지');
+        await browser.dispose();
+    });
 });
