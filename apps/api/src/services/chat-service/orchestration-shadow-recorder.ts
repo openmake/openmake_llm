@@ -17,7 +17,10 @@ const logger = createLogger('OrchestrationShadow');
 
 /** 외부 스트림이 ctx 에 되돌려주는 오케스트레이션 텔레메트리. */
 export interface OrchestrationTelemetry {
-    /** add-on 기여 오케스트레이션 도구의 의도가 잡혔는가 — DB 컬럼은 086 스키마의 discussion_intent 에 적재한다 */
+    /**
+     * add-on 기여 오케스트레이션 도구의 의도가 잡혔는가 — 호환 기간(PR-H1-1)엔 086 의 구 열과 196 의 중립 열
+     * addon_tool_intent 에 같은 값을 이중 기록한다(구 열 기록은 PR-H1-4 에서 제거).
+     */
     addonToolIntent: boolean;
     taskDelegateIntent: boolean;
     /** 병렬 위임 의도(SPAWN_INTENT_PATTERNS) — 110. 미지정=false(토글 셰도우 등). */
@@ -64,8 +67,8 @@ export function recordOrchestrationDispatch(params: {
             await pool.query(
                 `INSERT INTO orchestration_dispatch_decisions
                    (request_id, user_id, query_length, discussion_intent, task_delegate_intent,
-                    tools_exposed, tool_called, tool_success, user_mode, query_preview, spawn_intent)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                    tools_exposed, tool_called, tool_success, user_mode, query_preview, spawn_intent, addon_tool_intent)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
                 [
                     requestId ?? null,
                     userId && userId !== 'guest' ? userId : null,
@@ -78,6 +81,7 @@ export function recordOrchestrationDispatch(params: {
                     userMode,
                     preview,
                     telemetry.spawnIntent ?? false,
+                    telemetry.addonToolIntent,
                 ],
             );
         } catch (e) {

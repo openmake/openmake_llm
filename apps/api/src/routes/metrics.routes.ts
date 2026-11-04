@@ -383,6 +383,8 @@ router.get('/routing/gates', asyncHandler(async (req: Request, res: Response) =>
             toggles: toggleRows.map((r) => ({
                 userMode: r.user_mode,
                 turns: Number(r.turns),
+                addonToolIntentTurns: Number(r.addon_tool_intent_turns),
+                // 구 필드 — 같은 값. 웹 관리자 화면이 PR-H1-2 에서 addonToolIntentTurns 로 옮긴 뒤 PR-H1-4 에서 제거
                 discussionIntentTurns: Number(r.discussion_intent_turns),
                 taskDelegateIntentTurns: Number(r.task_delegate_intent_turns),
             })),
