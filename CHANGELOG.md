@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.123.0](https://github.com/openmake/openmake_llm/compare/v1.122.1...v1.123.0) (2026-11-04)
+
+
+### ✨ 기능
+
+* **browser:** 액션 배열에 제한된 제어 흐름 if·repeat 를 더한다 ([15f0f30](https://github.com/openmake/openmake_llm/commit/15f0f30a54c59c7216ea6fa868ffe7af498dfc84))
+* **local-bridge:** 로컬 브라우저를 작업별 창에서 작업 간 동시에 실행한다 ([b80a6b5](https://github.com/openmake/openmake_llm/commit/b80a6b582091dd0da9a7aae297e1c175f41fb981))
+
+
+### 🐛 버그 수정
+
+* **browser:** 조건 평가도 중지·제어권을 따르고 config 변경의 CI 매핑을 더한다 ([754b739](https://github.com/openmake/openmake_llm/commit/754b739af3e66f4d33f7471a85d20c520ce89b6b))
+
+
+### ♻️ 리팩터링
+
+* **local-bridge:** 로컬 브라우저의 실행 조정 계층을 별도 파일로 나눈다 ([38ecc44](https://github.com/openmake/openmake_llm/commit/38ecc44cb79ef8bb42faef451be3c10dbde680c9))
+
 ## [1.122.1](https://github.com/openmake/openmake_llm/compare/v1.122.0...v1.122.1) (2026-11-03)
 
 
