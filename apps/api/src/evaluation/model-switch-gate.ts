@@ -7,10 +7,13 @@
  *   npm run eval:matrix -- --real --models <현행>,<후보> --gate <후보> [--incumbent <현행>]
  *
  * variant 마다 따로 본다(스타일·thinking 에서만 무너지는 모델을 평균이 가린다). 한 variant 라도 떨어지면 전환 불가.
+ * `--repeat N`(N≥2) 으로 양쪽 셀에 케이스별 반복 결과(caseRuns)가 있으면 통과율 하락은 짝검정(paired-comparison)의
+ * 95% 구간 상한이 -허용폭보다 낮을 때만 회귀로 본다 — 1건 차이(3~12%p)인 잡음을 회귀로 읽지 않게. 없거나 N=1 이면 기존 단일 비교.
  *
  * @module evaluation/model-switch-gate
  */
 import type { EvalRunRecord } from '../data/repositories/eval-run-repository';
+import { comparePaired, formatPaired, type PairedComparison } from './paired-comparison';
 
 export interface ModelSwitchThresholds {
     /** 후보의 절대 통과율 하한 (0~1) */
@@ -44,6 +47,8 @@ export interface ModelSwitchRow {
     incumbentP95Ms: number | null;
     candidateP95Ms: number | null;
     failures: string[];
+    /** 양쪽 셀이 N≥2 케이스별 결과를 가질 때만 — 짝검정 결과 */
+    paired?: PairedComparison;
 }
 
 export interface ModelSwitchVerdict {
@@ -55,7 +60,19 @@ export interface ModelSwitchVerdict {
     reason?: string;
 }
 
-type Cell = Pick<EvalRunRecord, 'model' | 'variant' | 'passRate' | 'totalCases' | 'totalP95Ms'>;
+/** 셀의 케이스별 반복 결과 — caseId → 통과 횟수(0~repeat). 로그 JSON 에만 남는다(DB 스키마 불변) */
+export interface CaseRuns { repeat: number; passes: Record<string, number> }
+
+type Cell = Pick<EvalRunRecord, 'model' | 'variant' | 'passRate' | 'totalCases' | 'totalP95Ms'> & { caseRuns?: CaseRuns };
+
+const caseRates = (r: CaseRuns): Record<string, number> => Object.fromEntries(Object.entries(r.passes).map(([id, n]) => [id, n / r.repeat]));
+
+/** 양쪽 모두 N≥2 이고 공통 케이스가 있을 때만 짝검정 — 아니면 undefined(기존 판정) */
+function pairedFor(inc: Cell | undefined, c: Cell): PairedComparison | undefined {
+    if (!inc?.caseRuns || !c.caseRuns || inc.caseRuns.repeat < 2 || c.caseRuns.repeat < 2) return undefined;
+    const p = comparePaired(caseRates(inc.caseRuns), caseRates(c.caseRuns));
+    return p.cases > 0 ? p : undefined;
+}
 
 export function judgeModelSwitch(
     cells: readonly Cell[],
@@ -75,7 +92,10 @@ export function judgeModelSwitch(
         const failures: string[] = [];
         if (c.passRate < t.minPassRate) failures.push(`통과율 ${(c.passRate * 100).toFixed(1)}% < 하한 ${(t.minPassRate * 100).toFixed(1)}%`);
         if (incumbent && !inc) failures.push(`현행 '${incumbent}' 의 같은 variant 셀이 없어 비교 불가`);
-        if (inc && inc.passRate - c.passRate > t.maxPassRateDrop) {
+        const paired = pairedFor(inc, c);
+        if (paired) {
+            if (paired.ci[1] < -t.maxPassRateDrop) failures.push(`현행 대비 통과율 ${formatPaired(paired)} — 구간 상한 < -허용 ${(t.maxPassRateDrop * 100).toFixed(1)}%p`);
+        } else if (inc && inc.passRate - c.passRate > t.maxPassRateDrop) {
             failures.push(`현행 대비 통과율 -${((inc.passRate - c.passRate) * 100).toFixed(1)}%p > 허용 ${(t.maxPassRateDrop * 100).toFixed(1)}%p`);
         }
         const ip95 = inc?.totalP95Ms ?? null;
@@ -87,7 +107,7 @@ export function judgeModelSwitch(
                 failures.push(`p95 지연 +${pct.toFixed(0)}% (${(ip95 / 1000).toFixed(1)}s → ${(cp95 / 1000).toFixed(1)}s) > 허용 ${t.maxLatencyRegressionPct}%`);
             }
         }
-        return { variant, incumbentPassRate: inc?.passRate ?? null, candidatePassRate: c.passRate, incumbentP95Ms: ip95, candidateP95Ms: cp95, failures };
+        return { variant, incumbentPassRate: inc?.passRate ?? null, candidatePassRate: c.passRate, incumbentP95Ms: ip95, candidateP95Ms: cp95, failures, ...(paired ? { paired } : {}) };
     });
     return { ...base, ok: rows.every((r) => r.failures.length === 0), rows };
 }
@@ -98,7 +118,8 @@ export function renderModelSwitchVerdict(v: ModelSwitchVerdict): string {
     const lines = v.rows.map((r) => {
         const inc = r.incumbentPassRate === null ? '—' : `${(r.incumbentPassRate * 100).toFixed(1)}%`;
         const verdict = r.failures.length ? `불가 — ${r.failures.join(' / ')}` : '통과';
-        return `  - ${r.variant}: 현행 ${inc} → 후보 ${(r.candidatePassRate * 100).toFixed(1)}% · ${verdict}`;
+        const diff = r.paired ? ` · 짝 차이 ${formatPaired(r.paired)} (${r.paired.cases}건${r.paired.note ? `, ${r.paired.note}` : ''})` : '';
+        return `  - ${r.variant}: 현행 ${inc} → 후보 ${(r.candidatePassRate * 100).toFixed(1)}%${diff} · ${verdict}`;
     });
     return [head, ...lines].join('\n');
 }
