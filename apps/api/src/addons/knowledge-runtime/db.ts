@@ -1,10 +1,10 @@
 /**
- * knowledge-runtime 공용 DB 접근 — Base 의 풀을 그대로 쓴다(별도 연결 없음).
+ * knowledge-runtime 공용 DB 접근 — 포트(runtime-ports/db-access) 경유로 Base 의 풀을 그대로 쓴다(별도 연결 없음).
  *
  * @module addons/knowledge-runtime/db
  */
 import type { Pool, PoolClient } from 'pg';
-import { getPool } from '../../data/models/unified-database';
+import { getPool } from '../../runtime-ports/db-access';
 
 export function kdb(): Pool {
     return getPool();
