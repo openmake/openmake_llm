@@ -78,3 +78,43 @@ describe('judgeModelSwitch', () => {
         expect(text).toContain('base');
     });
 });
+
+describe('judgeModelSwitch — 케이스별 반복 결과(짝검정, RSI-A)', () => {
+    /** 케이스 n건, 각 repeat 회 — fails 에 든 케이스만 passes 를 낮춘다 */
+    const runs = (n: number, repeat: number, low: Record<number, number> = {}) => ({
+        repeat, passes: Object.fromEntries(Array.from({ length: n }, (_, i) => [`c${i}`, low[i] ?? repeat])),
+    });
+    const pcell = (model: string, caseRuns: ReturnType<typeof runs>) => {
+        const total = Object.keys(caseRuns.passes).length * caseRuns.repeat;
+        const passed = Object.values(caseRuns.passes).reduce((s, x) => s + x, 0);
+        return { model, variant: 'base', passRate: passed / total, totalCases: total, totalP95Ms: null, caseRuns };
+    };
+
+    it('N=1 이면 케이스별 데이터가 있어도 기존 판정 그대로(하위 호환)', () => {
+        const v = judgeModelSwitch([pcell('old', runs(10, 1)), pcell('new', runs(10, 1, { 0: 0 }))], { candidate: 'new', incumbent: 'old' }, T);
+        expect(v.ok).toBe(false); // 1.0 → 0.9, -10%p > 5%p
+        expect(v.rows[0].paired).toBeUndefined();
+    });
+
+    it('N≥2 에서 잡음 안의 하락(단일 비교로는 -6.7%p)은 통과하고 구간을 적는다', () => {
+        const v = judgeModelSwitch([pcell('old', runs(30, 3)), pcell('new', runs(30, 3, { 4: 1, 11: 1, 25: 1 }))], { candidate: 'new', incumbent: 'old' }, T);
+        expect(v.rows[0].incumbentPassRate! - v.rows[0].candidatePassRate).toBeGreaterThan(T.maxPassRateDrop);
+        expect(v.ok).toBe(true);
+        expect(v.rows[0].paired?.verdict).toBe('no-change');
+        expect(renderModelSwitchVerdict(v)).toContain('[95%');
+    });
+
+    it('N≥2 에서 구간 상한까지 허용폭 밖으로 떨어지면 불가', () => {
+        const low = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [i, 0]));
+        const v = judgeModelSwitch([pcell('old', runs(30, 3)), pcell('new', runs(30, 3, low))], { candidate: 'new', incumbent: 'old' }, { ...T, minPassRate: 0.5 });
+        expect(v.ok).toBe(false);
+        expect(v.rows[0].failures.join()).toContain('구간 상한');
+        expect(v.rows[0].paired?.verdict).toBe('regressed');
+    });
+
+    it('한쪽만 N≥2 면 기존 판정', () => {
+        const v = judgeModelSwitch([pcell('old', runs(30, 1)), pcell('new', runs(30, 3, { 4: 1, 11: 1, 25: 1 }))], { candidate: 'new', incumbent: 'old' }, T);
+        expect(v.rows[0].paired).toBeUndefined();
+        expect(v.ok).toBe(false);
+    });
+});
