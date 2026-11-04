@@ -139,6 +139,33 @@ describe('TaskRuntime — 로컬 브라우저 사이트 정책', () => {
         expect(out).toContain('이동할 수 없습니다');
         expect(runBrowserSpec).not.toHaveBeenCalled();
     });
+
+    it('if·repeat 안의 목록 밖 쓰기도 실행 전에 승인을 묻는다', async () => {
+        const { executor, runBrowserSpec } = localExecutor();
+        const actions = [
+            { type: 'goto', url: 'https://translate.example.com/' },
+            { type: 'if', cond: { exists: 'textarea' }, then: [{ type: 'extractText' }], else: [
+                { type: 'repeat', times: 2, actions: [{ type: 'fill', selector: 'textarea', text: '사내 문서 문장' }] },
+            ] },
+        ];
+        let pending: PendingApproval | undefined;
+        const exec = runtime('t-site-flow', 'none', executor).executeTaskTool('browser', { actions }, { onApprovalPending: (p) => { pending = p; } });
+        await waitFor(() => pending, '승인 대기 등록');
+        expect((pending?.args as { offListWrites: unknown[] }).offListWrites).toEqual([expect.objectContaining({ host: 'translate.example.com', type: 'fill' })]);
+        expect(runBrowserSpec).not.toHaveBeenCalled();
+        await getApprovalRegistry().approve(pending!.approvalId);
+        await exec;
+        expect(runBrowserSpec).toHaveBeenCalledWith({ actions, approvedHosts: ['translate.example.com'] });
+    });
+
+    it('형태가 어긋난 제어 흐름은 묻지 않고 거절한다', async () => {
+        const { executor, runBrowserSpec } = localExecutor();
+        const out = await runtime('t-site-flow-bad', 'all', executor).executeTaskTool('browser', {
+            actions: [{ type: 'repeat', times: 50, actions: [{ type: 'fill', selector: '#q', text: 'x' }] }],
+        }, { onApprovalPending: () => { throw new Error('묻지 않아야 한다'); } });
+        expect(out).toMatch(/^Error: browser 제어 흐름 오류/);
+        expect(runBrowserSpec).not.toHaveBeenCalled();
+    });
 });
 
 describe('승인 바닥·결속 (PURE)', () => {

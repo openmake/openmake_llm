@@ -5,6 +5,7 @@
  *
  * @module services/agent-task/procedural-structure
  */
+import { flattenBrowserActions, validateBrowserFlow } from '@openmake/config';
 import { PROCEDURAL_STRUCTURE } from '../../config/agent-task-skill-memory';
 import { PROCEDURAL_STRUCTURE_PROBLEMS as P } from '../../prompts/agent-task-skill-memory';
 
@@ -17,8 +18,11 @@ interface StructureInput {
 /** PURE: 구조 문제 목록(비어 있으면 저장해도 된다). */
 export function findStructureProblems(spec: StructureInput): string[] {
     if (spec.kind === 'script') return (spec.code ?? '').trim() ? [] : [P.emptyCode()];
-    const actions = spec.actions ?? [];
-    if (actions.length === 0) return [P.noActions()];
+    if ((spec.actions ?? []).length === 0) return [P.noActions()];
+    // if·repeat 는 형태를 먼저 보고, 단계 검사는 펼친 액션으로 한다(위치는 펼친 목록 기준).
+    const flowError = validateBrowserFlow(spec.actions);
+    if (flowError) return [flowError];
+    const actions = flattenBrowserActions(spec.actions);
     const known = PROCEDURAL_STRUCTURE.ACTION_REQUIRED_FIELDS;
     const problems: string[] = [];
     actions.forEach((a, i) => {
@@ -32,9 +36,9 @@ export function findStructureProblems(spec: StructureInput): string[] {
     return problems;
 }
 
-/** PURE: 저장 때 주소를 검사할 goto 액션 — {{param}} 이 든 주소는 값이 정해지는 재생 때 검사한다. */
+/** PURE: 저장 때 주소를 검사할 goto 액션(if·repeat 본문 포함) — {{param}} 이 든 주소는 값이 정해지는 재생 때 검사한다. 형태 검사를 통과한 액션만 받는다. */
 export function staticGotoActions(actions: readonly unknown[]): unknown[] {
-    return actions.filter((a) => {
+    return flattenBrowserActions(actions).filter((a) => {
         const o = a && typeof a === 'object' ? a as { type?: unknown; url?: unknown } : null;
         return o?.type === 'goto' && typeof o.url === 'string' && !o.url.includes('{{');
     });

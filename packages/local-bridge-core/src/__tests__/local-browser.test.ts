@@ -204,6 +204,47 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
         expect(String(r.results[0].error)).toContain('about:blank');
     }, 60000);
 
+    describe('제어 흐름(if·repeat)', () => {
+        it('if 는 조건에 맞는 분기만 실행하고, repeat 은 until 이 참이 되면 멈춘다 — 결과에 branch·rounds·stoppedBy·step', async () => {
+            const r = await browser.run({ actions: [
+                { type: 'goto', url: `${origin}/` },
+                { type: 'if', cond: { exists: 'h1#t' }, then: [{ type: 'extractText', selector: '#t' }], else: [{ type: 'snapshot' }] },
+                { type: 'repeat', times: 3, actions: [{ type: 'click', selector: '#next' }], until: { urlIncludes: '/form' } },
+                { type: 'if', cond: { textIncludes: '보내기', selector: '#send' }, then: [{ type: 'screenshot' }] },
+            ], sitePolicy: allowAll() }, opts('flow-task'));
+            expect(r.ok).toBe(true);
+            expect(r.results).toEqual([
+                expect.objectContaining({ i: 0, type: 'goto', ok: true }),
+                { i: 1, type: 'if', ok: true, branch: 'then' },
+                expect.objectContaining({ i: 1, type: 'extractText', ok: true, text: '첫 페이지', step: '1.then.0' }),
+                { i: 2, type: 'repeat', ok: true, rounds: 1, stoppedBy: 'until' },
+                expect.objectContaining({ i: 2, type: 'click', ok: true, step: '2.r1.0' }),
+                { i: 3, type: 'if', ok: true, branch: 'then' },
+                // screenshot 의 path 는 파일 이름 그대로 — 중첩 위치는 step 이 따로 싣는다
+                expect.objectContaining({ i: 3, type: 'screenshot', ok: true, path: 'screenshot-3.then.0.png', step: '3.then.0' }),
+            ]);
+            expect(fs.existsSync(path.join(outDir, 'screenshot-3.then.0.png'))).toBe(true);
+            await browser.closeTask('flow-task');
+        }, 60000);
+
+        it('분기 안 입력도 실행 직전에 사이트 정책을 거친다', async () => {
+            const r = await browser.run({ actions: [
+                { type: 'goto', url: `${origin}/form` },
+                { type: 'if', cond: { exists: '#name' }, then: [{ type: 'fill', selector: '#name', text: '새면 안 되는 자료' }] },
+            ], sitePolicy: { allow: [], deny: [] } }, opts('flow-task'));
+            expect(r.ok).toBe(false);
+            expect(r.results[1]).toEqual({ i: 1, type: 'if', ok: false, branch: 'then' });
+            expect(String(r.results[2].error)).toContain('사용자 승인이 필요');
+            expect(r.policyBlock).toEqual({ kind: 'site_off_list', host: '127.0.0.1', action: 'fill' });
+            await browser.closeTask('flow-task');
+        }, 60000);
+
+        it('형태가 어긋난 흐름은 실행하지 않는다', async () => {
+            const r = await browser.run({ actions: [{ type: 'repeat', times: 0, actions: [{ type: 'wait', ms: 1 }] }], sitePolicy: allowAll() }, opts('flow-task'));
+            expect(r).toEqual({ ok: false, results: [], error: expect.stringContaining('repeat 의 times') });
+        }, 60000);
+    });
+
     describe('사이트 정책', () => {
         it('허용 목록 밖 사이트의 읽기는 되고 입력은 실행하지 않는다', async () => {
             hits.length = 0;

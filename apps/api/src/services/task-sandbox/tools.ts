@@ -13,6 +13,7 @@
  *
  * @module services/task-sandbox/tools
  */
+import { flattenBrowserActions, validateBrowserFlow } from '@openmake/config';
 import { findBlockedBrowserUrls } from './browser-url-guard';
 import { BROWSER_URL_GUARD_ENABLED } from '../../config/task-sandbox';
 import { getBrowserUrlBlockedMessage } from '../../prompts/agent-task-prompt';
@@ -55,11 +56,14 @@ function textResult(text: string, isError = false): MCPToolResult {
 
 /**
  * 브라우저가 이동하려는 주소 중 막아야 할 것이 있으면 오류 문구, 없으면 null(browser-url-guard).
+ * if·repeat 는 펼쳐서 분기·반복 본문의 goto 도 본다. 제어 흐름 형태가 어긋나면 그 이유를 돌려준다(가드 설정과 무관 — 러너도 실행하지 않는다).
  * TASK_SANDBOX_BROWSER_URL_GUARD=false 로 끈다.
  */
 async function browserUrlBlock(actions: readonly unknown[]): Promise<string | null> {
+    const flowError = validateBrowserFlow(actions);
+    if (flowError) return flowError;
     if (!BROWSER_URL_GUARD_ENABLED) return null;
-    const blocked = await findBlockedBrowserUrls(actions);
+    const blocked = await findBlockedBrowserUrls(flattenBrowserActions(actions));
     return blocked.length > 0 ? getBrowserUrlBlockedMessage(blocked.map((b) => b.url)) : null;
 }
 

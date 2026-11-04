@@ -107,7 +107,7 @@ export function parseApprovedUploads(raw: unknown): BrowserUploadApproval[] {
 export const str = (v: unknown): string => (typeof v === 'string' ? v : v === undefined || v === null ? '' : String(v));
 
 /** 스크린샷 파일 이름 — 서버 러너와 같은 규칙(컨테이너 표기·./ 접두를 벗기고 안전한 문자만). */
-export function screenshotName(path: unknown, i: number): string {
+export function screenshotName(path: unknown, i: number | string): string {
     let name = str(path);
     if (name.startsWith('/workspace/')) name = name.slice('/workspace/'.length);
     return name.replace(/^(\.\/)+/, '').replace(/[^A-Za-z0-9._-]/g, '_') || `screenshot-${i}.png`;
