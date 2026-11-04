@@ -246,6 +246,8 @@ npm run eval:matrix -- --real --models qwen3.8-27b,<후보> --gate <후보> --li
 - ⚠️ 프로브는 앱의 provider 어댑터를 거치지 않는다 — 어댑터가 프로필을 읽어 강도를 정규화하므로 그 경로로 재면 순환이다. 대신 로컬은 LiteLLM 통과 힌트(`allowed_openai_params`)를 직접 싣는다: 없으면 게이트웨이가 파라미터 자체를 400 으로 막아 "모델이 전부 거절" 로 읽힌다(첫 실행에서 실제로 그렇게 나왔다 — 지금은 사유와 함께 미확정으로 남는다).
 - 무료 티어는 연속 호출을 429 로 막는다 — `OMK_EVAL_PROBE_DELAY_MS`(기본 3000, hasa 는 7000 에서 깨끗했다), 타임아웃 `OMK_EVAL_PROBE_TIMEOUT_MS`(120000).
 - **전환 게이트**(`model-switch-gate.ts`)는 variant 마다 따로 본다(평균이 thinking 에서만 무너지는 모델을 가린다): 절대 하한 `OMK_EVAL_SWITCH_MIN_PASS_RATE`(0.8) · 현행 대비 하락 `OMK_EVAL_SWITCH_MAX_PASS_DROP`(0.05) · p95 지연 `OMK_EVAL_SWITCH_MAX_LATENCY_REGRESSION_PCT`(50, 절대 +`OMK_EVAL_SWITCH_MIN_LATENCY_ABS_DELTA_MS` 4000 도 넘어야). `--incumbent` 미지정이면 `LLM_DEFAULT_MODEL`, 후보가 곧 기본 모델이면 절대 하한만.
+- **잡음 하한(짝검정, RSI-A)**: `--repeat N`(기본 1) 이면 셀마다 같은 케이스를 N회 돌려 케이스별 통과 횟수(`caseRuns`)를 결과 JSON 에만 남긴다(eval_runs 스키마 불변). 양쪽 셀이 N≥2 면 하락은 `paired-comparison.ts` 의 케이스 짝 부트스트랩 95% 구간(시드 고정, 반복 `OMK_EVAL_BOOTSTRAP_ITERS` 2000) **상한이 -허용폭보다 낮을 때만** 회귀다 — 30건 중 1건(3.3%p) 차이 같은 잡음을 회귀로 읽지 않는다. N=1 이면 기존 단일 비교. `eval:ablation` 도 같은 함수로 기준 조건 대비 과제별 완료·과정 차이를 보고만 한다(관문 불변).
+- ⚠️ `--repeat N` 은 호출이 N배다 — 서빙 슬롯(8)을 그만큼 오래 점유하므로 전환 판정처럼 명시한 선택 단계에서만 쓴다(야간 기본값은 1).
 - 매트릭스는 케이스를 순차로 보낸다 — 운영 vLLM 은 새 요청 여러 개가 한 스텝에 prefill 될 때 죽은 선례가 있다(2026-09-19). 병렬화하지 말 것.
 
 ## PoC 상태 (마지막 업데이트)
