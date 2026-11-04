@@ -16,6 +16,7 @@
     "apps/discord-bot/": "discordBot",
     "apps/desktop-windows/": "desktopWindows",
     "apps/desktop-native/helper/": "desktopHelper",
+    "apps/desktop-native/build.sh": "desktopHelper",
     "apps/cli/": "cli",
     "scripts/release/": "infra"
   },
