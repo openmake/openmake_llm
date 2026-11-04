@@ -347,10 +347,18 @@ function localBrowserUploadNote(uploadSupported: boolean): string {
 }
 
 /** 로컬 브라우저(사용자 PC 의 전용 Chrome) 도구 설명 — 서버 샌드박스 브라우저와 달리 탭이 유지되고 사이트 정책이 적용된다. */
+/** browser 도구 설명의 제어 흐름(if·repeat) 안내 — 서버 샌드박스·로컬 브라우저 공용. 상한은 @openmake/config browser-flow 와 같다. */
+export const BROWSER_FLOW_TOOL_NOTE = '조건 분기·반복은 한 호출 안에서: if{cond,then:[...],else?:[...]} · repeat{times(1~20),actions:[...],until?:cond,while?:cond} '
+    + '(cond = {exists:css}·{visible:css}·{textIncludes:"글",selector?:css}·{urlIncludes:"글"}·{not:cond}, 2단계까지 겹침). '
+    + '예: {"type":"if","cond":{"visible":"#popup"},"then":[{"type":"click","selector":"#close"}]} · '
+    + '{"type":"repeat","times":5,"actions":[{"type":"click","selector":"a.next"}],"until":{"not":{"exists":"a.next"}}}. '
+    + '중첩 액션 결과에는 위치 step(예 "1.then.0"·"2.r3.0"), if 결과에는 branch, repeat 결과에는 rounds·stoppedBy 가 실립니다. ';
+
 export function getLocalBrowserToolDescription(uploadSupported = false): string {
     return '사용자 PC 의 전용 Chrome 창에서 웹 브라우저를 조작합니다. 탭과 로그인 상태가 호출 사이에 유지되므로 이전 호출의 페이지에서 이어서 작업할 수 있습니다(처음에는 goto 로 페이지를 여세요). '
         + 'actions 배열을 순서대로 실행: goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · '
         + 'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. '
+        + BROWSER_FLOW_TOOL_NOTE
         + '페이지가 띄운 확인창은 그 액션 결과의 dialogs 에 실립니다 — confirm·prompt 는 기본으로 취소되고, 수락하려면 확인창을 띄우는 액션 앞에 dialog{accept:true,promptText?} 를 넣으세요. '
         + 'CSS 셀렉터(click/fill)가 실패하면 snapshot 으로 상호작용 요소를 {role,name,index} 목록으로 얻은 뒤 smartClick{role,name,nth?}·smartFill{role,name,text,nth?} 로 재시도하세요. '
         + 'fill·smartFill 결과의 value 가 칸에 실제로 들어간 값입니다 — 그것으로 확인하고 같은 입력을 되풀이하지 마세요(입력 칸에 extractText 를 쓰면 현재 값이 나옵니다. 비밀번호 칸의 값은 돌려주지 않습니다). '
