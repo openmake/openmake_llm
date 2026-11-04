@@ -1,6 +1,6 @@
 import { percentile, buildEvalRunRecord } from '../eval-run-recorder';
 import { renderMatrixTable, parseListArg, formatMatrixCell } from '../matrix-reporter';
-import { runMatrix } from '../run-matrix-evaluation';
+import { parseRepeatArg, runMatrix } from '../run-matrix-evaluation';
 import type { EvaluationSummary, GoldenDataset } from '../types';
 
 const summary = (passed: number, total: number, durations: number[]): EvaluationSummary => ({
@@ -69,6 +69,39 @@ describe('runMatrix', () => {
         expect(cells.map((c) => [c.model, c.variant, c.passRate, c.ttftP50Ms, c.matrixRunId])).toEqual([
             ['m1', 'base', 1, 100, matrixRunId], ['m1', 'concise', 0, 100, matrixRunId], ['m2', 'base', 1, 100, matrixRunId], ['m2', 'concise', 0, 100, matrixRunId],
         ]);
+    });
+
+    it('repeat 미지정이면 케이스별 반복 결과(caseRuns)를 싣지 않는다 — 기존 출력 그대로', async () => {
+        const { cells } = await runMatrix({ dataset, models: ['m'], variants: ['base'], generatorFactory: () => async () => 'ok' });
+        expect(cells[0]).not.toHaveProperty('caseRuns');
+        expect(cells[0]).toMatchObject({ totalCases: 1, passedCases: 1, passRate: 1 });
+    });
+
+    it('repeat N 이면 같은 케이스를 N회 돌려 셀에 케이스별 통과 횟수를 싣고 통과율은 전체 판정 평균', async () => {
+        const two: GoldenDataset = { ...dataset, cases: [...dataset.cases, { id: 'r2', category: 'response-pattern', query: 'bye', mustContain: ['ok'] }] };
+        let calls = 0;
+        const { cells } = await runMatrix({
+            dataset: two, models: ['m'], variants: ['base'], repeat: 3,
+            // r1 은 늘 통과, r2 는 첫 회만 통과
+            generatorFactory: (_cell, onMetrics) => async (q) => { onMetrics({ totalMs: 10 }); calls++; return q === 'hello' || calls === 2 ? 'ok' : 'nope'; },
+        });
+        expect(calls).toBe(6);
+        expect(cells[0].caseRuns).toEqual({ repeat: 3, passes: { r1: 3, r2: 1 } });
+        expect(cells[0]).toMatchObject({ totalCases: 6, passedCases: 4 });
+        expect(cells[0].passRate).toBeCloseTo(4 / 6);
+    });
+
+    it('repeat N≥2 면 eval_runs summary 에 repeat 를 적고, N=1 이면 적지 않는다', async () => {
+        const one = await runMatrix({ dataset, models: ['m'], variants: ['base'], generatorFactory: () => async () => 'ok' });
+        expect(one.cells[0].summary).not.toHaveProperty('repeat');
+        const three = await runMatrix({ dataset, models: ['m'], variants: ['base'], repeat: 3, generatorFactory: () => async () => 'ok' });
+        expect(three.cells[0].summary).toMatchObject({ repeat: 3 });
+    });
+
+    it('parseRepeatArg — 미지정은 1, 1 이상 정수만 받고 그 밖은 null', () => {
+        expect(parseRepeatArg(undefined)).toBe(1);
+        expect(parseRepeatArg('3')).toBe(3);
+        for (const bad of ['abc', '0', '-2', '1.5', '']) expect(parseRepeatArg(bad)).toBeNull();
     });
 
     it('알 수 없는 variant 는 실행 전에 거부', async () => {

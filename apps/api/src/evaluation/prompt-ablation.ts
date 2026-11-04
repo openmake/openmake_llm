@@ -6,6 +6,7 @@
  *
  * @module evaluation/prompt-ablation
  */
+import { comparePaired, type PairedComparison } from './paired-comparison';
 
 /**
  * PURE: 프롬프트에서 패턴(대소문자 무시 부분 문자열)에 맞는 규칙을 통째로 뺀다.
@@ -70,6 +71,9 @@ export interface AblationVariantSummary {
     meanToolCalls: number;
 }
 
+/** 정답 판정이 있는 과제는 정답이 맞아야 완료다 */
+const isCompleted = (r: AblationRun): boolean => r.status === 'completed' && r.answerPassed !== false;
+
 /** PURE: 조건별 요약 — 완료율, 과정 검사 통과율, 평균 토큰·턴·도구 호출. 정답 판정이 있는 과제는 정답이 맞아야 완료다. */
 export function summarizeAblation(runs: readonly AblationRun[]): AblationVariantSummary[] {
     const variants = [...new Set(runs.map((r) => r.variant))];
@@ -78,7 +82,7 @@ export function summarizeAblation(runs: readonly AblationRun[]): AblationVariant
         const rs = runs.filter((r) => r.variant === variant);
         return {
             variant, runs: rs.length,
-            completedRate: mean(rs.map((r) => (r.status === 'completed' && r.answerPassed !== false ? 1 : 0))),
+            completedRate: mean(rs.map((r) => (isCompleted(r) ? 1 : 0))),
             processPassRate: mean(rs.map((r) => (r.processPassed ? 1 : 0))),
             meanTokens: mean(rs.map((r) => r.totalTokens)),
             meanTurns: mean(rs.map((r) => r.turns)),
@@ -104,3 +108,31 @@ export function gateAgentTaskSuite(
     return { ok: failures.length === 0, failures };
 }
 
+
+export interface AblationPairedComparison {
+    variant: string;
+    baseline: string;
+    /** 과제별 완료 비율의 (조건 − 기준) 짝 비교 */
+    completed: PairedComparison;
+    /** 과제별 과정 검사 통과 비율의 (조건 − 기준) 짝 비교 */
+    process: PairedComparison;
+}
+
+/**
+ * PURE: 첫 조건(기준) 대비 조건마다 "제거 전후 차이" — 과제별 비율을 짝지어 평균 차·95% 구간을 낸다(paired-comparison).
+ * 보고만 한다 — 관문(gateAgentTaskSuite) 판정은 바꾸지 않는다.
+ */
+export function compareAblationVariants(runs: readonly AblationRun[]): AblationPairedComparison[] {
+    const variants = [...new Set(runs.map((r) => r.variant))];
+    const rates = (variant: string, pass: (r: AblationRun) => boolean): Record<string, number> => {
+        const byCase = new Map<string, number[]>();
+        for (const r of runs) if (r.variant === variant) byCase.set(r.caseId, [...(byCase.get(r.caseId) ?? []), pass(r) ? 1 : 0]);
+        return Object.fromEntries([...byCase].map(([id, xs]) => [id, xs.reduce((a, b) => a + b, 0) / xs.length]));
+    };
+    const [baseline, ...rest] = variants;
+    return rest.map((variant) => ({
+        variant, baseline,
+        completed: comparePaired(rates(baseline, isCompleted), rates(variant, isCompleted)),
+        process: comparePaired(rates(baseline, (r) => r.processPassed), rates(variant, (r) => r.processPassed)),
+    }));
+}
