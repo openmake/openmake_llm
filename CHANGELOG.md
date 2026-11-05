@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.125.1](https://github.com/openmake/openmake_llm/compare/v1.125.0...v1.125.1) (2026-11-05)
+
+
+### ♻️ 리팩터링
+
+* **web:** consume neutral chat_mode_progress and addonToolIntentTurns ([1cefb57](https://github.com/openmake/openmake_llm/commit/1cefb57cf84afdf1939a4731342aeb9a305f73f5))
+
 ## [1.125.0](https://github.com/openmake/openmake_llm/compare/v1.124.1...v1.125.0) (2026-11-05)
 
 
