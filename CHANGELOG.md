@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.126.0](https://github.com/openmake/openmake_llm/compare/v1.125.1...v1.126.0) (2026-11-05)
+
+
+### ✨ 기능
+
+* **ios:** send neutral modes and consume chat_mode_progress (app 0.2.0) ([#1642](https://github.com/openmake/openmake_llm/issues/1642)) ([37f9b9b](https://github.com/openmake/openmake_llm/commit/37f9b9bf4fc40356c69f9962a1b67a3c8b53ff8f))
+
 ## [1.125.1](https://github.com/openmake/openmake_llm/compare/v1.125.0...v1.125.1) (2026-11-05)
 
 
