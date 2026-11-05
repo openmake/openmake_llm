@@ -29,7 +29,8 @@ describe('RoutingMetricsRepository', () => {
         const row = await repo.getOrchestrationDispatchSummary(30);
         expect(row.exposed_turns).toBe('58');
         const [sql, params] = (pool.query as jest.Mock).mock.calls[0];
-        expect(sql).toMatch(/discussion_intent OR task_delegate_intent/);
+        // 호환 기간(PR-H1-1): 중립 열(196)과 구 열(086)을 OR 로 센다 — 롤백 창에 구 코드만 쓴 행도 놓치지 않는다
+        expect(sql).toMatch(/\(addon_tool_intent OR discussion_intent\) OR task_delegate_intent/);
         expect(sql).toMatch(/cardinality\(tools_exposed\) > 0/);
         expect(sql).toMatch(/tool_called IS NOT NULL/);
         expect(sql).toMatch(/\$1 \|\| ' days'/);
@@ -66,13 +67,18 @@ describe('RoutingMetricsRepository', () => {
             rows: [{
                 user_mode: 'discussion',
                 turns: '24',
+                addon_tool_intent_turns: '18',
                 discussion_intent_turns: '18',
                 task_delegate_intent_turns: '1',
             }],
         });
         const rows = await repo.getOrchestrationToggleRecall(30);
+        expect(rows[0].addon_tool_intent_turns).toBe('18');
         expect(rows[0].discussion_intent_turns).toBe('18');
         const sql = (pool.query as jest.Mock).mock.calls[0][0];
+        // 중립 별칭과 구 별칭은 같은 집계식(두 열 OR)이다
+        expect(sql).toMatch(/FILTER \(WHERE addon_tool_intent OR discussion_intent\) AS addon_tool_intent_turns/);
+        expect(sql).toMatch(/FILTER \(WHERE addon_tool_intent OR discussion_intent\) AS discussion_intent_turns/);
         expect(sql).toMatch(/user_mode <> 'none'/);
         expect(sql).toMatch(/GROUP BY user_mode/);
     });
