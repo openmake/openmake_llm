@@ -62,8 +62,6 @@ export interface ChatModeExtension {
   toggleOrder: number;
   /** 분석 이벤트의 chat_mode 값 */
   analyticsName: string;
-  /** 진행 이벤트의 WS type (서버의 그 모드가 선언한 이름과 같다) */
-  progressEventType: string;
   /** WS 진행 이벤트의 progress → 배너에 넘길 값 (범위 보정 등) */
   toProgress(raw: Record<string, unknown>): unknown;
   /** 생성 중 메시지 목록 아래에 뜨는 진행 배너 */

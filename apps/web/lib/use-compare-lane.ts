@@ -445,7 +445,7 @@ export function useCompareLane(lane: CompareLaneId): CompareLane {
           break;
         }
         default:
-          // build_id / artifact_* / research_progress / agent_task_* 등 비교 모드에서
+          // build_id / artifact_* / chat_mode_progress / agent_task_* 등 비교 모드에서
           // 쓰지 않는 이벤트는 조용히 무시한다.
           break;
       }
