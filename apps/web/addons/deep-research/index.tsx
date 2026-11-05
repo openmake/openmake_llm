@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import type { WebAddon } from "../types";
 import { ModeProgressFrame, clampPercent } from "../progress-banner";
 
-/** 백엔드 research_progress 이벤트의 progress (ResearchProgress 대응) */
+/** 백엔드 chat_mode_progress(modeId=deep-research) 의 progress (ResearchProgress 대응) */
 interface ResearchProgressInfo {
   currentStep: string;
   progress: number;
@@ -43,7 +43,6 @@ export const deepResearchAddon: WebAddon = {
     labelKey: "toggle.deepResearch",
     toggleOrder: 40,
     analyticsName: "deep_research",
-    progressEventType: "research_progress",
     toProgress: (p): ResearchProgressInfo => ({
       currentStep: typeof p.currentStep === "string" ? p.currentStep : "",
       progress: clampPercent(p.progress),

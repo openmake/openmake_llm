@@ -1835,7 +1835,7 @@
       "th": {
         "mode": "ユーザートグル",
         "turns": "ターン数",
-        "discussionHits": "討論意図の的中",
+        "addonToolIntentHits": "アドオンツール意図の的中",
         "delegateHits": "委任意図の的中"
       },
       "spawnAdoption": "並列委任の採用率",
