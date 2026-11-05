@@ -10,6 +10,9 @@
 import type { LLMClient } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import { loadEnabledChatModes } from '../../addon-host/chat-modes';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('chat-modes');
 
 /** 모드가 입력 전처리에 요구하는 것 — 일반 채팅은 전부 true·거절 없음 */
 export interface ChatModeInputPolicy {
@@ -68,6 +71,7 @@ export function __setChatModesForTest(list: ChatModeExtension[] | null): void {
 /**
  * 요청 본문(WS chat 메시지·REST body)에서 켜진 모드를 모은다 — 등록된 모드의 것만 받는다.
  * 새 필드 `modes[<id>]` 가 우선이고, 없으면 모드가 선언한 구 불리언 필드를 본다.
+ * 구 필드로 켜진 턴은 info 로그 1줄을 남긴다(구 계약 지원 종료 판단용 관측, PR-H1-1) — 사용자·본문은 싣지 않는다.
  */
 export function collectActiveModes(body: Record<string, unknown>, transport: 'ws' | 'rest' = 'ws'): Record<string, boolean> | undefined {
     const incoming = (body.modes && typeof body.modes === 'object' ? body.modes : {}) as Record<string, unknown>;
@@ -75,10 +79,12 @@ export function collectActiveModes(body: Record<string, unknown>, transport: 'ws
     for (const mode of getChatModes()) {
         if (transport === 'rest' && !mode.availableOverRest) continue;
         const explicit = incoming[mode.id];
-        const on = typeof explicit === 'boolean'
-            ? explicit
-            : (mode.legacyRequestFlag ? body[mode.legacyRequestFlag] === true : false);
-        if (on) out[mode.id] = true;
+        if (typeof explicit === 'boolean') {
+            if (explicit) out[mode.id] = true;
+        } else if (mode.legacyRequestFlag && body[mode.legacyRequestFlag] === true) {
+            logger.info(`legacy flag ${mode.legacyRequestFlag} → ${mode.id} (${transport})`);
+            out[mode.id] = true;
+        }
     }
     return Object.keys(out).length > 0 ? out : undefined;
 }

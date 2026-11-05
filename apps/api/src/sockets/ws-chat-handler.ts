@@ -331,10 +331,13 @@ export async function handleChatMessage(
             format: msg.format as import('../llm').FormatOption,
             onAgentSelected: (agent) => out({ type: 'agent_selected', agent }),
             onServedModel: createServedModelEmitter(out), // 실제 응답 모델 — 바뀔 때만(폴백 시 재발행)
-            // 진행 이벤트의 type 은 그 모드가 정한다(클라이언트의 모드 UI 가 구독하는 이름)
+            // 진행 이벤트 이중 송출(PR-H1-1) — 구 이벤트(type 은 그 모드가 정한 이름)를 먼저, 이어서 중립 chat_mode_progress.
+            // 구 소비자(웹·iOS)는 미지 type 을 무시한다. 구 이벤트는 소비자 전환(PR-H1-2·3) 뒤 PR-H1-4 에서 제거
             onModeProgress: (modeId, progress) => {
                 const mode = getChatModes().find((m) => m.id === modeId);
-                if (mode) out({ type: mode.progressEventType, progress } as never);
+                if (!mode) return;
+                out({ type: mode.progressEventType, progress } as never);
+                out({ type: 'chat_mode_progress', modeId, progress: progress as Record<string, unknown>, messageId });
             },
             onSkillsActivated: (skillNames) => {
                 const names = mergeActivatedSkillNames(explicitSkillNames, skillNames);
