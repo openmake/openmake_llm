@@ -308,17 +308,29 @@ ok "dump lacks other env"  '! pm2_dump_has_any "$(pm2_names qa)"'
 rm -f "$PM2_HOME/dump.pm2"; ok "no dump → false" '! pm2_dump_has_any "$(pm2_names staging)"'
 unset PM2_HOME
 
-# ── dev 호스트: CORS_ORIGINS 에 호스트별 웹·API origin 을 더한다(멱등, 기존 값 보존) ──
+# ── dev 호스트: CORS_ORIGINS 에 로컬 API origin(네이티브 앱용)과 호스트별 웹·API origin 을 더한다(멱등, 기존 값 보존) ──
 eq "csv union keeps order" "$(csv_union "a,b" "b,c")" "a,b,c"
 eq "csv union empty left"  "$(csv_union "" "x,y")" "x,y"
 DL="$TMP/devllm"; mkdir -p "$DL"; printf 'PORT=52417\nOMK_WEB_PORT=3010\nCORS_ORIGINS=http://localhost:3010\n' > "$DL/.env"
+dev_apply_hosts "$DL" ""
+eq "no hosts adds local api origins" "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "http://localhost:3010,http://localhost:52417,http://127.0.0.1:52417"
+ok "no hosts writes no OMK_DEV_HOSTS" '! grep -q "^OMK_DEV_HOSTS=" "$DL/.env"'
+C0="$(dotenv_get "$DL/.env" CORS_ORIGINS)"; dev_apply_hosts "$DL" ""
+eq "no hosts idempotent"    "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "$C0"
 dev_apply_hosts "$DL" "stage-box,100.1.2.3"
-eq "cors gets host origins" "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "http://localhost:3010,http://stage-box:3010,http://stage-box:52417,http://100.1.2.3:3010,http://100.1.2.3:52417"
+eq "cors gets host origins" "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "http://localhost:3010,http://localhost:52417,http://127.0.0.1:52417,http://stage-box:3010,http://stage-box:52417,http://100.1.2.3:3010,http://100.1.2.3:52417"
 eq "hosts remembered"       "$(dotenv_get "$DL/.env" OMK_DEV_HOSTS)" "stage-box,100.1.2.3"
 C1="$(dotenv_get "$DL/.env" CORS_ORIGINS)"; dev_apply_hosts "$DL" "stage-box,100.1.2.3"
 eq "cors idempotent"        "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "$C1"
-C0="$(dotenv_get "$DL/.env" CORS_ORIGINS)"; dev_apply_hosts "$DL" ""
-eq "no hosts is no-op"      "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "$C0"
+dev_apply_hosts "$DL" ""
+eq "no hosts adds no host origins" "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "$C1"
+eq "no hosts keeps remembered hosts" "$(dotenv_get "$DL/.env" OMK_DEV_HOSTS)" "stage-box,100.1.2.3"
+DL2="$TMP/devllm2"; mkdir -p "$DL2"; printf 'PORT=52418\nCORS_ORIGINS=https://x.example,http://127.0.0.1:52418\n' > "$DL2/.env"
+dev_apply_hosts "$DL2" ""
+eq "local api origins keep existing" "$(dotenv_get "$DL2/.env" CORS_ORIGINS)" "https://x.example,http://127.0.0.1:52418,http://localhost:52418"
+DL3="$TMP/devllm3"; mkdir -p "$DL3"; printf 'PORT=52419\n' > "$DL3/.env"
+dev_apply_hosts "$DL3" ""
+eq "local api origins on empty cors" "$(dotenv_get "$DL3/.env" CORS_ORIGINS)" "http://localhost:52419,http://127.0.0.1:52419"
 
 # ── .env 읽기/쓰기 ──
 F="$TMP/a.env"; printf 'A=1\nB="two words"\n# C=no\nD=x=y\n' > "$F"
