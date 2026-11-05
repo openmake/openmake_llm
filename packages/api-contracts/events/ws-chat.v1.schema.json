@@ -226,11 +226,13 @@
         },
         "deepResearchMode": {
           "type": "boolean",
-          "description": "구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다"
+          "description": "구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다(PR-H1-4 에서 제거)",
+          "deprecated": true
         },
         "discussionMode": {
           "type": "boolean",
-          "description": "구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다"
+          "description": "구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다(PR-H1-4 에서 제거)",
+          "deprecated": true
         },
         "thinkingMode": {
           "type": "boolean",
@@ -1044,6 +1046,30 @@
           "required": [
             "type",
             "toolName"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "chat_mode_progress"
+            },
+            "modeId": {
+              "type": "string"
+            },
+            "progress": {
+              "type": "object",
+              "additionalProperties": {}
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "modeId",
+            "progress"
           ]
         },
         {
