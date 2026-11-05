@@ -155,8 +155,7 @@ public extension WsChatRequest {
         thinkingMode: Bool? = nil,
         imageMode: Bool? = nil,
         artifactMode: Bool? = nil,
-        discussionMode: Bool? = nil,
-        deepResearchMode: Bool? = nil,
+        modes: [String: Bool]? = nil,
         style: Style? = nil,
         saveHistory: Bool? = nil,
         memoryLearning: Bool? = nil,
@@ -176,8 +175,8 @@ public extension WsChatRequest {
             clientRequestID: UUID().uuidString,
             // add-on 컨텍스트 참조(웹 컴포저의 노트북 선택 등) — iOS 는 선택 UI 가 없어 보내지 않는다.
             contextRefs: nil,
-            deepResearchMode: deepResearchMode,
-            discussionMode: discussionMode,
+            deepResearchMode: nil,
+            discussionMode: nil,
             enabledTools: nil,
             files: files,
             history: history.isEmpty ? nil : history,
@@ -187,8 +186,8 @@ public extension WsChatRequest {
             memoryLearning: memoryLearning,
             message: message,
             model: model,
-            // 채팅 모드의 일반 필드 — iOS 는 아직 구 불리언 필드(discussionMode·deepResearchMode)로 보낸다(서버가 둘 다 받는다).
-            modes: nil,
+            // 채팅 모드의 일반 필드 — 중립 필드 modes 로 보낸다(PR-H1-3). 구 불리언 필드(discussionMode·deepResearchMode)는 보내지 않는다.
+            modes: modes,
             notebook: nil,
             saveHistory: saveHistory,
             sessionID: sessionId,

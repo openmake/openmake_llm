@@ -37,6 +37,22 @@ final class ContractRoundTripTests: XCTestCase {
         XCTAssertEqual(payload.data.refreshToken, "rt")
     }
 
+    func testModelCapabilitiesDecodesWithDeprecatedDiscussion() throws {
+        // 서버는 PR-H1-4 까지 discussion=false 를 계속 보낸다
+        let json = #"{"executionStrategy":"single","thinking":"off","discussion":false,"vision":false,"toolCalling":true,"streaming":true}"#.data(using: .utf8)!
+        let caps = try OpenMakeJSON.decoder().decode(Components.Schemas.ModelCapabilities.self, from: json)
+        XCTAssertEqual(caps.discussion, false)
+        XCTAssertTrue(caps.toolCalling)
+    }
+
+    func testModelCapabilitiesDecodesWithoutDiscussion() throws {
+        // PR-H1-3 에서 required 해제 — 필드가 없어도 디코딩된다
+        let json = #"{"executionStrategy":"single","thinking":"off","vision":false,"toolCalling":true,"streaming":true}"#.data(using: .utf8)!
+        let caps = try OpenMakeJSON.decoder().decode(Components.Schemas.ModelCapabilities.self, from: json)
+        XCTAssertNil(caps.discussion)
+        XCTAssertTrue(caps.streaming)
+    }
+
     // MARK: WS (quicktype)
 
     func testWsServerEventRoundTrip() throws {
