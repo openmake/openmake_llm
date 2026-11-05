@@ -2190,13 +2190,14 @@ tailscale_hosts() { # → "짧은이름,FQDN,IPv4" (MagicDNS 기준. OS 호스�
 csv_union() { # $1,$2 = CSV → 순서 유지 합집합
     printf '%s,%s' "$1" "$2" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -
 }
-dev_apply_hosts() { # $1=llm dir $2=hosts CSV — CORS_ORIGINS 에 호스트별 웹·API origin 을 더한다(있는 것은 그대로)
-    local envf="$1/.env" hosts="$2" api web h add=""
-    [[ -n "$hosts" ]] || return 0
+dev_apply_hosts() { # $1=llm dir $2=hosts CSV — CORS_ORIGINS 에 로컬 API origin 과 호스트별 웹·API origin 을 더한다(있는 것은 그대로)
+    local envf="$1/.env" hosts="$2" api web h add
     api="$(llm_api_port "$1")"; web="$(llm_web_port "$1")"
-    for h in $(printf '%s' "$hosts" | tr ',' ' '); do add="${add:+$add,}http://$h:$web,http://$h:$api"; done
+    # 네이티브 앱(iOS 시뮬레이터 등)은 웹 프록시가 아닌 API 포트에 직접 붙는다 — 호스트 인자와 무관하게 허용한다.
+    add="http://localhost:$api,http://127.0.0.1:$api"
+    for h in $(printf '%s' "$hosts" | tr ',' ' '); do add="$add,http://$h:$web,http://$h:$api"; done
     dotenv_set "$envf" CORS_ORIGINS "$(csv_union "$(dotenv_get "$envf" CORS_ORIGINS)" "$add")"
-    dotenv_set "$envf" OMK_DEV_HOSTS "$hosts"
+    [[ -z "$hosts" ]] || dotenv_set "$envf" OMK_DEV_HOSTS "$hosts"
 }
 dev_instance() { local v; v="$(dotenv_get "$DEV_LLM/.env" OMK_INSTANCE)"; printf '%s' "${v:-$OMK_LOCAL_INSTANCE}"; }
 dev_warn_legacy() { # 예전에 'dev' 로 준비한 작업 클론 — 동작은 하지만 환경 dev 와 이름이 겹친다
