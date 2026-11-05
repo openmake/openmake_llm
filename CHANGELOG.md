@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.124.1](https://github.com/openmake/openmake_llm/compare/v1.124.0...v1.124.1) (2026-11-04)
+
+
+### ♻️ 리팩터링
+
+* **knowledge:** route db access through runtime-ports db-access ([fc42f2d](https://github.com/openmake/openmake_llm/commit/fc42f2d37cb61b08f554e7640c142d323df0c9d9))
+
 ## [1.124.0](https://github.com/openmake/openmake_llm/compare/v1.123.1...v1.124.0) (2026-11-04)
 
 
