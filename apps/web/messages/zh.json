@@ -1835,7 +1835,7 @@
       "th": {
         "mode": "用户切换",
         "turns": "轮次数",
-        "discussionHits": "讨论意图命中",
+        "addonToolIntentHits": "插件工具意图命中",
         "delegateHits": "委派意图命中"
       },
       "spawnAdoption": "并行委托采用率",

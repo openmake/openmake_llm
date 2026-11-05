@@ -1835,7 +1835,7 @@
       "th": {
         "mode": "Benutzer-Umschalter",
         "turns": "Runden",
-        "discussionHits": "Diskussionsabsicht-Treffer",
+        "addonToolIntentHits": "Add-on-Werkzeugabsicht-Treffer",
         "delegateHits": "Delegationsabsicht-Treffer"
       },
       "spawnAdoption": "Nutzung paralleler Delegation",

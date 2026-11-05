@@ -178,7 +178,7 @@ interface RoutingGatesData {
     toggles: {
       userMode: string;
       turns: number;
-      discussionIntentTurns: number;
+      addonToolIntentTurns: number;
       taskDelegateIntentTurns: number;
     }[];
   };
@@ -626,7 +626,7 @@ export default function AdminMetricsPage() {
                     <tr>
                       <Th>{t("routing.th.mode")}</Th>
                       <Th className="text-right">{t("routing.th.turns")}</Th>
-                      <Th className="text-right">{t("routing.th.discussionHits")}</Th>
+                      <Th className="text-right">{t("routing.th.addonToolIntentHits")}</Th>
                       <Th className="text-right">{t("routing.th.delegateHits")}</Th>
                     </tr>
                   </thead>
@@ -638,7 +638,7 @@ export default function AdminMetricsPage() {
                           {row.turns.toLocaleString()}
                         </Td>
                         <Td className="text-right font-mono text-fg-2">
-                          {row.discussionIntentTurns.toLocaleString()}
+                          {row.addonToolIntentTurns.toLocaleString()}
                         </Td>
                         <Td className="text-right font-mono text-fg-2">
                           {row.taskDelegateIntentTurns.toLocaleString()}

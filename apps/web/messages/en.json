@@ -1835,7 +1835,7 @@
       "th": {
         "mode": "User Toggle",
         "turns": "Turns",
-        "discussionHits": "Discussion Intent Hits",
+        "addonToolIntentHits": "Add-on Tool Intent Hits",
         "delegateHits": "Delegate Intent Hits"
       },
       "spawnAdoption": "Parallel delegation adoption",
