@@ -106,14 +106,14 @@ export const coreSchemas = {
     },
     ModelCapabilities: {
         type: 'object',
-        required: ['executionStrategy', 'thinking', 'discussion', 'vision', 'toolCalling', 'streaming'],
+        required: ['executionStrategy', 'thinking', 'vision', 'toolCalling', 'streaming'],
         properties: {
             executionStrategy: { type: 'string', enum: ['single'] },
             thinking: { type: 'string', enum: ['off', 'medium'] },
             discussion: {
                 type: 'boolean',
                 deprecated: true,
-                description: '사용 중단 — 항상 false. 기능이 없는 필드라 대체 필드는 없다. 호환을 위해 required 로 남기며 이후 required 해제 뒤 제거한다.',
+                description: '사용 중단 — 항상 false(서버는 계속 보낸다). 기능이 없는 필드라 대체 필드는 없다. PR-H1-3 에서 required 해제, PR-H1-4 에서 제거한다.',
             },
             vision: { type: 'boolean' },
             toolCalling: { type: 'boolean' },
