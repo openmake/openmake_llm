@@ -430,13 +430,14 @@ export function useChatSocket() {
         if (!accepted.apply) return; // 이미 받은 이벤트(재생 중복)
         streamCursorRef.current = accepted.cursor;
       }
-      // 채팅 모드(add-on)의 진행 이벤트 — 이벤트 이름과 값의 모양은 그 모드의 웹 add-on 이 정한다.
-      {
-        const progressMode = WEB_CHAT_MODES.find((m) => m.progressEventType === data.type);
+      // 채팅 모드(add-on)의 진행 이벤트 — 중립 이벤트의 modeId 로 웹 add-on 을 찾고, 값의 모양은 그 add-on 이 정한다.
+      // 빌드에서 빠진 add-on 의 modeId 면 배너를 그릴 곳이 없으므로 무시한다.
+      if (data.type === "chat_mode_progress") {
+        const progressMode = WEB_CHAT_MODES.find((m) => m.id === data.modeId);
         if (progressMode) {
-          setModeProgress({ modeId: progressMode.id, progress: progressMode.toProgress((data as { progress?: Record<string, unknown> }).progress ?? {}) });
-          return;
+          setModeProgress({ modeId: progressMode.id, progress: progressMode.toProgress(data.progress ?? {}) });
         }
+        return;
       }
       switch (data.type) {
         case "token":

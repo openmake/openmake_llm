@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import type { WebAddon } from "../types";
 import { ModeProgressFrame, clampPercent } from "../progress-banner";
 
-/** 백엔드 discussion_progress 이벤트의 progress (DiscussionProgress 대응) */
+/** 백엔드 chat_mode_progress(modeId=discussion) 의 progress (DiscussionProgress 대응) */
 interface DiscussionProgressInfo {
   phase?: string;
   currentAgent?: string;
@@ -49,7 +49,6 @@ export const discussionAddon: WebAddon = {
     labelKey: "toggle.discussion",
     toggleOrder: 10,
     analyticsName: "discussion",
-    progressEventType: "discussion_progress",
     toProgress: (p): DiscussionProgressInfo => ({
       phase: typeof p.phase === "string" ? p.phase : undefined,
       currentAgent: typeof p.currentAgent === "string" ? p.currentAgent : undefined,

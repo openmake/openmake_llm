@@ -66,7 +66,7 @@ export const ADDON_NAME_ALLOWED_PREFIXES: readonly string[] = ['addons/', 'addon
 export const ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = {
     'services/chat-service/orchestration-shadow-recorder.ts': 'DB 컬럼 orchestration_dispatch_log.discussion_intent (086) — PR-H1-1 이중 기록 중, PR-H1-4 에서 제거',
     'data/repositories/routing-metrics-repository.ts': 'DB 컬럼 discussion_intent 집계 SQL (086) — PR-H1-1 이중 기록 중, PR-H1-4 에서 제거',
-    'routes/metrics.routes.ts': '관리자 지표 API 응답 필드 discussionIntentTurns (웹 admin 이 읽는다) — PR-H1-1 이중 기록 중, PR-H1-4 에서 제거',
+    'routes/metrics.routes.ts': '관리자 지표 API 응답 필드 discussionIntentTurns — 웹은 PR-H1-2 에서 addonToolIntentTurns 로 옮김, PR-H1-4 에서 제거',
     'chat/profile-resolver.ts': '공개 REST 응답의 실행 계획 필드 useDiscussion (항상 false, 계약 유지) — 구 필드 유지 중, PR-H1-4 에서 제거',
     'routes/chat.routes.ts': '공개 REST 응답 필드 discussion (항상 false, 계약 유지) — 구 필드 유지 중, PR-H1-4 에서 제거',
     'routes/model.routes.ts': '공개 REST 응답의 모델 capability 필드 discussion (항상 false, 계약 유지) — 구 필드 유지 중, PR-H1-4 에서 제거',
@@ -82,11 +82,11 @@ export const ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = 
 export const SHARED_ASSET_ADDON_NAME_BASELINE: Readonly<Record<string, number>> = {
     'packages/shared-types/src/index.ts': 3,      // WS 채팅 구 필드·진행 이벤트 type(토론·딥리서치)
     'packages/shared-types/src/knowledge.ts': 11, // Knowledge Space API 응답 계약(웹 add-on ↔ API add-on)
-    'apps/web/messages/de.json': 25,
-    'apps/web/messages/en.json': 26,
-    'apps/web/messages/ja.json': 14,
-    'apps/web/messages/ko.json': 14,
-    'apps/web/messages/zh.json': 14,
+    'apps/web/messages/de.json': 24,
+    'apps/web/messages/en.json': 25,
+    'apps/web/messages/ja.json': 13,
+    'apps/web/messages/ko.json': 13,
+    'apps/web/messages/zh.json': 13,
 };
 
 /**
@@ -104,6 +104,4 @@ export const ADDON_OWNED_CORE_TABLES: Readonly<Record<string, readonly string[]>
 };
 
 /** 웹(`apps/web` 기준)의 계약 예외 — 서버 API 응답 필드 이름을 그대로 읽는 화면 */
-export const WEB_ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = {
-    'app/(workspace)/admin/metrics/page.tsx': '관리자 지표 API 응답 필드 discussionIntentTurns (routes/metrics.routes.ts)',
-};
+export const WEB_ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = {};

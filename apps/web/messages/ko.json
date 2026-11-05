@@ -1835,7 +1835,7 @@
       "th": {
         "mode": "사용자 토글",
         "turns": "턴 수",
-        "discussionHits": "토론 의도 적중",
+        "addonToolIntentHits": "Add-on 도구 의도 적중",
         "delegateHits": "위임 의도 적중"
       },
       "spawnAdoption": "병렬 위임 채택률",
