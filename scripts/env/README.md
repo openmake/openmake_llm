@@ -547,7 +547,7 @@ scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.en
 - 작업 클론이 여럿이면 게이트웨이 하나(`local`)를 같이 쓴다. 게이트웨이의 config 는 마지막으로 `dev setup` 을 돌린 클론의 것이다.
 - 옛 인스턴스 이름(`dev`)의 작업 클론에는 게이트웨이·기본 모델·런타임 이미지를 준비하지 않는다(환경 dev 의 것과 자리가 겹친다) — `omk dev reset` 으로 이름을 옮긴 뒤 다시 돌린다.
 
-**다른 기기에서 보기.** 웹은 채팅 소켓을 "접속한 호스트명:API 포트"로 붙이고, 서버는 Origin 이 `CORS_ORIGINS` 와 정확히 일치할 때만 받는다(REST·WS 공통). 그래서 접속에 쓸 호스트를 알려줘야 한다 — `--tailscale` 은 `tailscale status` 에서 MagicDNS 짧은 이름·FQDN·IPv4 를 읽고, `--host` 는 직접 준다. omk 는 그 호스트를 세 곳에 넣는다: API 의 `CORS_ORIGINS`(호스트별 웹·API origin), Next dev 의 `allowedDevOrigins`(모르면 HMR 이 막혀 hydration 이 죽는다), bench vite 의 `allowedHosts`. 목록은 `.env` 의 `OMK_DEV_HOSTS` 에 기억되어 다음 `dev up` 부터는 옵션 없이도 유지된다. 허용하지 않은 호스트·Origin 은 계속 거부된다.
+**다른 기기에서 보기.** 웹은 채팅 소켓을 "접속한 호스트명:API 포트"로 붙이고, 서버는 Origin 이 `CORS_ORIGINS` 와 정확히 일치할 때만 받는다(REST·WS 공통). 그래서 접속에 쓸 호스트를 알려줘야 한다 — `--tailscale` 은 `tailscale status` 에서 MagicDNS 짧은 이름·FQDN·IPv4 를 읽고, `--host` 는 직접 준다. omk 는 그 호스트를 세 곳에 넣는다: API 의 `CORS_ORIGINS`(호스트별 웹·API origin), Next dev 의 `allowedDevOrigins`(모르면 HMR 이 막혀 hydration 이 죽는다), bench vite 의 `allowedHosts`. 목록은 `.env` 의 `OMK_DEV_HOSTS` 에 기억되어 다음 `dev up` 부터는 옵션 없이도 유지된다. 허용하지 않은 호스트·Origin 은 계속 거부된다. 네이티브 앱(iOS 시뮬레이터 등)은 웹 포트가 아닌 API 포트에 직접 붙어 `http://localhost:<API 포트>`·`http://127.0.0.1:<API 포트>` origin 이 필요한데, `dev up` 이 호스트 옵션과 무관하게 이 둘을 `CORS_ORIGINS` 에 자동으로 더한다.
 
 로컬 개발의 앱은 PM2 를 쓰지 않는다 — `npm run dev:api`(`ts-node`)·`next dev`·bench 의 `vite` 가 `concurrently` 아래 포그라운드에서 돈다.
 웹과 bench 화면은 고치면 바로 반영되고, **API 는 감시 재시작이 없어** 고친 뒤 `dev up` 을 다시 띄운다. 인스턴스 이름은 **`local`**(컨테이너 `openmake-local-*`)이라
