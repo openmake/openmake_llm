@@ -57,7 +57,7 @@ export function classifyVerifiability(
 const VERIFIABILITY_STRATEGY_MAP: Record<Verifiability, string> = {
     executable: 'generate-verify',
     factual: 'conditional-verify',
-    decomposable: 'deep-research',
+    decomposable: 'multi-source-research',
     none: 'single',
 };
 

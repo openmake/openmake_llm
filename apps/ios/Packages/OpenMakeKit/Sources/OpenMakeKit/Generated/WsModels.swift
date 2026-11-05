@@ -120,6 +120,7 @@ public struct WsServerEvent: Codable {
     /// 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다
     public let reason: ApprovalRejectReason?
     public let resources: [MCPToolResource]?
+    public let modeID: String?
     public let progress: ProgressUnion?
     public let artifact: ArtifactMeta?
     public let delta: String?
@@ -181,6 +182,7 @@ public struct WsServerEvent: Codable {
         case decision = "decision"
         case reason = "reason"
         case resources = "resources"
+        case modeID = "modeId"
         case progress = "progress"
         case artifact = "artifact"
         case delta = "delta"
@@ -194,7 +196,7 @@ public struct WsServerEvent: Codable {
         case waitReason = "waitReason"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: ExpiresAt?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, streamID: String?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, thinking: String?, t: Double?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, capabilities: WsServerCapabilities?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, approvalID: String?, args: [String: JSONAny]?, riskClass: ToolRiskClass?, decision: Decision?, reason: ApprovalRejectReason?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: SummaryUnion?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: ExpiresAt?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, taskSuggestion: TaskSuggestion?, streamID: String?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, thinking: String?, t: Double?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, capabilities: WsServerCapabilities?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, approvalID: String?, args: [String: JSONAny]?, riskClass: ToolRiskClass?, decision: Decision?, reason: ApprovalRejectReason?, resources: [MCPToolResource]?, modeID: String?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, seq: Double?, status: String?, step: Step?, taskID: String?, ts: Double?, waitReason: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -238,6 +240,7 @@ public struct WsServerEvent: Codable {
         self.decision = decision
         self.reason = reason
         self.resources = resources
+        self.modeID = modeID
         self.progress = progress
         self.artifact = artifact
         self.delta = delta
@@ -314,6 +317,7 @@ public extension WsServerEvent {
         decision: Decision?? = nil,
         reason: ApprovalRejectReason?? = nil,
         resources: [MCPToolResource]?? = nil,
+        modeID: String?? = nil,
         progress: ProgressUnion?? = nil,
         artifact: ArtifactMeta?? = nil,
         delta: String?? = nil,
@@ -370,6 +374,7 @@ public extension WsServerEvent {
             decision: decision ?? self.decision,
             reason: reason ?? self.reason,
             resources: resources ?? self.resources,
+            modeID: modeID ?? self.modeID,
             progress: progress ?? self.progress,
             artifact: artifact ?? self.artifact,
             delta: delta ?? self.delta,
@@ -1239,6 +1244,7 @@ public enum WsServerEventType: String, Codable {
     case buildID = "build_id"
     case chatApprovalDecided = "chat_approval_decided"
     case chatApprovalPending = "chat_approval_pending"
+    case chatModeProgress = "chat_mode_progress"
     case debugRetained = "debug_retained"
     case discussionProgress = "discussion_progress"
     case done = "done"
@@ -1277,9 +1283,11 @@ public struct WsChatRequest: Codable {
     public let clientRequestID: String?
     /// 통합(add-on)별 외부 컨텍스트 참조 — add-on id → 참조. 컴포저의 컨텍스트 선택기가 보낸다(백엔드가 LLM 전용 채널에 접두 주입)
     public let contextRefs: [String: ContextRef]?
-    /// 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다
+    /// 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다(PR-H1-4 에서
+    /// 제거)
     public let deepResearchMode: Bool?
-    /// 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다
+    /// 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다(PR-H1-4 에서
+    /// 제거)
     public let discussionMode: Bool?
     public let enabledTools: [String: Bool]?
     /// 첨부 텍스트 파일 — 백엔드가 fileContext 채널로 LLM 에 주입

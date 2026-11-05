@@ -12,6 +12,9 @@
  *   가 기본 OFF 라 "언제까지 적재됐는가"(신선도) 자체가 관측 대상이므로 전기간 마지막
  *   적재 시각을 함께 반환한다.
  *
+ * add-on 도구 의도는 호환 기간(PR-H1-1~3)에 중립 열 addon_tool_intent(196)와 구 열 discussion_intent(086)를 OR 로 센다 —
+ * 롤백 창에 구 코드만 기록한 행(새 열 false)도 놓치지 않는다. PR-H1-4 에서 새 열 단독 읽기로 바꾼다.
+ *
  * 전부 파라미터화 쿼리, read-only. 숫자 파싱(COUNT 는 문자열로 옴)은 응답 조립부에 남긴다.
  */
 import { BaseRepository } from './base-repository';
@@ -38,6 +41,9 @@ interface OrchestrationByToolRow {
 interface OrchestrationToggleRow {
     user_mode: string;
     turns: string;
+    /** 중립 별칭(PR-H1-1) — discussion_intent_turns 와 같은 값 */
+    addon_tool_intent_turns: string;
+    /** 구 별칭 — PR-H1-4 에서 제거 */
     discussion_intent_turns: string;
     task_delegate_intent_turns: string;
 }
@@ -68,7 +74,7 @@ export class RoutingMetricsRepository extends BaseRepository {
     async getOrchestrationDispatchSummary(days: number): Promise<OrchestrationDispatchSummaryRow> {
         const result = await this.query<OrchestrationDispatchSummaryRow>(
             `SELECT COUNT(*) AS total_turns,
-                    COUNT(*) FILTER (WHERE discussion_intent OR task_delegate_intent) AS intent_turns,
+                    COUNT(*) FILTER (WHERE (addon_tool_intent OR discussion_intent) OR task_delegate_intent) AS intent_turns,
                     COUNT(*) FILTER (WHERE cardinality(tools_exposed) > 0) AS exposed_turns,
                     COUNT(*) FILTER (WHERE tool_called IS NOT NULL) AS called_turns,
                     COUNT(*) FILTER (WHERE tool_success = true) AS success_turns,
@@ -113,7 +119,8 @@ export class RoutingMetricsRepository extends BaseRepository {
         const result = await this.query<OrchestrationToggleRow>(
             `SELECT user_mode,
                     COUNT(*) AS turns,
-                    COUNT(*) FILTER (WHERE discussion_intent) AS discussion_intent_turns,
+                    COUNT(*) FILTER (WHERE addon_tool_intent OR discussion_intent) AS addon_tool_intent_turns,
+                    COUNT(*) FILTER (WHERE addon_tool_intent OR discussion_intent) AS discussion_intent_turns,
                     COUNT(*) FILTER (WHERE task_delegate_intent) AS task_delegate_intent_turns
              FROM orchestration_dispatch_decisions
              WHERE user_mode <> 'none'
