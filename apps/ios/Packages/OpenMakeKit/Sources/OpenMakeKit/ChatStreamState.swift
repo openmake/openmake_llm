@@ -178,10 +178,12 @@ public struct ChatStreamState: Sendable {
             setActivity(toolActivity(event.toolName), kind: .tool)
         case .mcpToolResult:
             setActivity("도구 결과를 검토하고 있어요", kind: .finalizing)
-        case .researchProgress:
-            setActivity(event.message ?? "딥리서치를 진행하고 있어요", kind: .research)
-        case .discussionProgress:
-            setActivity(event.message ?? "에이전트 토론을 진행하고 있어요", kind: .agent)
+        case .chatModeProgress:
+            if case .progressClass(let p)? = event.progress, let message = p.message, !message.isEmpty {
+                setActivity(message, kind: .agent)
+            } else {
+                setActivity("요청한 모드로 처리하고 있어요", kind: .agent)
+            }
         case .artifactStart:
             if let meta = event.artifact {
                 artifacts.removeAll { $0.id == meta.id }

@@ -70,7 +70,7 @@ export const ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = 
     'chat/profile-resolver.ts': '공개 REST 응답의 실행 계획 필드 useDiscussion (항상 false, 계약 유지) — 구 필드 유지 중, PR-H1-4 에서 제거',
     'routes/chat.routes.ts': '공개 REST 응답 필드 discussion (항상 false, 계약 유지) — 구 필드 유지 중, PR-H1-4 에서 제거',
     'routes/model.routes.ts': '공개 REST 응답의 모델 capability 필드 discussion (항상 false, 계약 유지) — 구 필드 유지 중, PR-H1-4 에서 제거',
-    'swagger/schemas-core.ts': '위 REST 응답 필드의 OpenAPI 스키마 (iOS Kit 생성 입력) — 구 필드 유지 중, PR-H1-4 에서 제거',
+    'swagger/schemas-core.ts': '위 REST 응답 필드의 OpenAPI 스키마 (iOS Kit 생성 입력) — 구 필드 유지 중(PR-H1-3 에서 required 해제), PR-H1-4 에서 제거',
 };
 
 /**

@@ -142,9 +142,34 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertEqual(state.statusText, "Researcher 에이전트가 작업을 준비하고 있어요")
         XCTAssertEqual(state.activityKind, .agent)
 
-        state.apply(event(#"{"type":"research_progress","message":"자료를 찾는 중\n  2 / 5"}"#))
+        state.apply(event(#"{"type":"chat_mode_progress","modeId":"deep-research","progress":{"message":"자료를 찾는 중\n  2 / 5","progress":40,"currentLoop":2,"totalLoops":5}}"#))
         XCTAssertEqual(state.statusText, "자료를 찾는 중 2 / 5")
-        XCTAssertEqual(state.activityKind, .research)
+        XCTAssertEqual(state.activityKind, .agent)
+    }
+
+    func testChatModeProgressUsesServerProgressMessage() {
+        var state = ChatStreamState()
+        state.apply(event(#"{"type":"chat_mode_progress","modeId":"discussion","progress":{"phase":"discussing","message":"라운드 1/3","progress":30,"roundNumber":1,"totalRounds":3}}"#))
+        XCTAssertEqual(state.statusText, "라운드 1/3")
+        XCTAssertEqual(state.activityKind, .agent)
+    }
+
+    func testChatModeProgressWithoutMessageFallsBackToNeutralText() {
+        var state = ChatStreamState()
+        state.apply(event(#"{"type":"chat_mode_progress","modeId":"discussion","progress":{"progress":10}}"#))
+        XCTAssertEqual(state.statusText, "요청한 모드로 처리하고 있어요")
+        XCTAssertEqual(state.activityKind, .agent)
+    }
+
+    func testLegacyModeProgressEventsAreIgnored() {
+        // 앱은 구 이벤트 이름을 모른다 — 서버 이중 송출 중에도 같은 문구가 두 번 쌓이지 않는다(PR-H1-3)
+        var state = ChatStreamState()
+        state.apply(event(#"{"type":"chat_mode_progress","modeId":"discussion","progress":{"message":"라운드 1/3"}}"#))
+        state.apply(event(#"{"type":"research_progress","progress":{"message":"x"}}"#))
+        XCTAssertEqual(state.statusText, "라운드 1/3")
+        state.apply(event(#"{"type":"discussion_progress","progress":{"message":"y","phase":"discussing","progress":10}}"#))
+        XCTAssertEqual(state.statusText, "라운드 1/3")
+        XCTAssertEqual(state.activityLog.count, 1)
     }
 
     func testActivatedSkillsAreVisibleUntilNextQuestion() {
