@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.125.0](https://github.com/openmake/openmake_llm/compare/v1.124.1...v1.125.0) (2026-11-05)
+
+
+### 🔧 기타
+
+* **release:** 1.125.0 — [#1634](https://github.com/openmake/openmake_llm/issues/1634) 중립 chat-mode 계약(PR-H1-1) 릴리스 유도 ([df12a91](https://github.com/openmake/openmake_llm/commit/df12a91a2caa836a8da21c9ea459157e23b3c343))
+
 ## [1.124.1](https://github.com/openmake/openmake_llm/compare/v1.124.0...v1.124.1) (2026-11-04)
 
 
