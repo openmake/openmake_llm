@@ -7,6 +7,8 @@
 
 * **knowledge:** route db access through runtime-ports db-access ([fc42f2d](https://github.com/openmake/openmake_llm/commit/fc42f2d37cb61b08f554e7640c142d323df0c9d9))
 
+> 참고: 이 릴리스 뒤 dev 에 머지된 [#1634](https://github.com/openmake/openmake_llm/pull/1634)(중립 chat-mode 계약 추가, 구 계약 호환 유지, 마이그레이션 196)는 release-please 가 커밋 날짜 순서 때문에 건너뛰어 1.125.0 으로 배포한다.
+
 ## [1.124.0](https://github.com/openmake/openmake_llm/compare/v1.123.1...v1.124.0) (2026-11-04)
 
 
