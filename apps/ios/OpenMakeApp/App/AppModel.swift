@@ -51,6 +51,14 @@ final class AppModel {
             if agentTask { labels.append("에이전트 작업") }
             return labels
         }
+
+        /// WS 요청의 중립 모드 필드 — add-on id 문자열은 앱에서 이 한 곳에만 둔다(PR-H1-3). 둘 다 꺼져 있으면 nil(키를 보내지 않는다).
+        var wsModes: [String: Bool]? {
+            var m: [String: Bool] = [:]
+            if discussion { m["discussion"] = true }
+            if deepResearch { m["deep-research"] = true }
+            return m.isEmpty ? nil : m
+        }
     }
 
     init(client: OpenMakeClient? = nil) {

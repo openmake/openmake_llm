@@ -127,8 +127,7 @@ final class ChatSessionModel {
                 thinkingMode: modes.thinking ? true : nil,
                 imageMode: modes.imageGen ? true : nil,
                 artifactMode: modes.artifact ? true : nil,
-                discussionMode: modes.discussion ? true : nil,
-                deepResearchMode: modes.deepResearch ? true : nil,
+                modes: modes.wsModes,
                 style: modes.style == .styleDefault ? nil : modes.style,
                 userAgentId: userAgentId,
                 userLocation: userLocation))

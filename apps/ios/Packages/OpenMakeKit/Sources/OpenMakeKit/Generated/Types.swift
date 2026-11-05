@@ -911,11 +911,11 @@ public enum Components {
             }
             /// - Remark: Generated from `#/components/schemas/ModelCapabilities/thinking`.
             public var thinking: Components.Schemas.ModelCapabilities.thinkingPayload
-            /// 사용 중단 — 항상 false. 기능이 없는 필드라 대체 필드는 없다. 호환을 위해 required 로 남기며 이후 required 해제 뒤 제거한다.
+            /// 사용 중단 — 항상 false(서버는 계속 보낸다). 기능이 없는 필드라 대체 필드는 없다. PR-H1-3 에서 required 해제, PR-H1-4 에서 제거한다.
             ///
             /// - Remark: Generated from `#/components/schemas/ModelCapabilities/discussion`.
             @available(*, deprecated)
-            public var discussion: Swift.Bool
+            public var discussion: Swift.Bool?
             /// - Remark: Generated from `#/components/schemas/ModelCapabilities/vision`.
             public var vision: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/ModelCapabilities/toolCalling`.
@@ -927,14 +927,14 @@ public enum Components {
             /// - Parameters:
             ///   - executionStrategy:
             ///   - thinking:
-            ///   - discussion: 사용 중단 — 항상 false. 기능이 없는 필드라 대체 필드는 없다. 호환을 위해 required 로 남기며 이후 required 해제 뒤 제거한다.
+            ///   - discussion: 사용 중단 — 항상 false(서버는 계속 보낸다). 기능이 없는 필드라 대체 필드는 없다. PR-H1-3 에서 required 해제, PR-H1-4 에서 제거한다.
             ///   - vision:
             ///   - toolCalling:
             ///   - streaming:
             public init(
                 executionStrategy: Components.Schemas.ModelCapabilities.executionStrategyPayload,
                 thinking: Components.Schemas.ModelCapabilities.thinkingPayload,
-                discussion: Swift.Bool,
+                discussion: Swift.Bool? = nil,
                 vision: Swift.Bool,
                 toolCalling: Swift.Bool,
                 streaming: Swift.Bool
