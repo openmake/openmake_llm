@@ -247,6 +247,9 @@ export async function collectTurnContexts(
     let offset = input.sourceOffset ?? 0;
     for (const integration of getChatTurnIntegrations()) {
         if (!integration.prepareTurnContext) continue;
+        // 시간 상한이 먼저 끝나면 표시 — 버려진 준비(IIFE)는 계속 돌지만, 게이트가 늦게 풀려도 prepareTurnContext 를 부르지 않는다.
+        // 이미 시작된 prepareTurnContext 를 멈추는 것은 범위 밖이다(통합 계약에 취소 신호가 없다)
+        let timedOut = false;
         try {
             const r = await withTurnContextTimeout((async () => {
                 // 기능 훅 게이트 — 관리자가 끈·조직 허용 목록 밖·상태 확인 불가 add-on 은 이 턴에 기여하지 않는다(통합 0개와 같은 결과, 채팅은 계속). 게이트의 DB 조회도 이 통합의 시간 상한 안에서 돈다
@@ -255,8 +258,12 @@ export async function collectTurnContexts(
                     turnContextLog.info(`[TurnContext] '${integration.id}' 컨텍스트 준비 건너뜀(${gate.reason}${gate.detail ? `: ${gate.detail}` : ''})`);
                     return undefined;
                 }
+                if (timedOut) {
+                    turnContextLog.info(`[TurnContext] '${integration.id}' 시간 상한 뒤 게이트 통과 — 컨텍스트 준비를 부르지 않음`);
+                    return undefined;
+                }
                 return integration.prepareTurnContext!({ ...input, sourceOffset: offset });
-            })(), integration.id);
+            })(), integration.id, () => { timedOut = true; });
             if (r?.contextBlock) blocks.push(r.contextBlock);
             if (r?.systemPromptPart) systemPromptParts.push(r.systemPromptPart);
             const own = (r?.sources ?? []).filter((s) => s.n > offset);
@@ -321,9 +328,13 @@ export async function collectHiddenSessionIds(userId: string | undefined): Promi
     return out;
 }
 
-function withTurnContextTimeout<T>(p: Promise<T>, id: string): Promise<T> {
+/** 시간 상한 — 넘으면 reject 직전에 `onTimeout` 을 불러 호출처가 늦게 이어지는 작업을 막을 수 있게 한다 */
+function withTurnContextTimeout<T>(p: Promise<T>, id: string, onTimeout: () => void): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error(`시간 초과(${TURN_CONTEXT_TIMEOUT_MS}ms, ${id})`)), TURN_CONTEXT_TIMEOUT_MS);
+        const timer = setTimeout(() => {
+            onTimeout();
+            reject(new Error(`시간 초과(${TURN_CONTEXT_TIMEOUT_MS}ms, ${id})`));
+        }, TURN_CONTEXT_TIMEOUT_MS);
         p.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
     });
 }

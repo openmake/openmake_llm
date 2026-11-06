@@ -124,6 +124,25 @@ describe('collectTurnContexts', () => {
             jest.useRealTimers();
         }
     });
+
+    it('시간 상한 뒤에 게이트가 늦게 통과돼도 버려진 준비는 prepareTurnContext 를 부르지 않는다', async () => {
+        jest.useFakeTimers();
+        try {
+            let releaseGate!: (v: { allowed: true }) => void;
+            integrationGate.mockImplementation(() => new Promise((r) => { releaseGate = r; }));
+            const prepare = jest.fn(async () => ({ contextBlock: 'LATE' }));
+            __setChatTurnIntegrationsForTest([{ id: 'slow', prepareTurnContext: prepare }]);
+            const p = collectTurnContexts({ message: 'q', userLang: 'ko' });
+            await jest.advanceTimersByTimeAsync(TURN_CONTEXT_TIMEOUT_MS + 1);
+            const r = await p;
+            expect(r.contextBlock).toBe('');
+            releaseGate({ allowed: true }); // 턴이 끝난 뒤 게이트 조회가 풀린다
+            await jest.advanceTimersByTimeAsync(0);
+            expect(prepare).not.toHaveBeenCalled();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
 });
 
 describe('isSessionMemoryIsolated — 데이터 모듈(env 로 꺼진 add-on 도 유지, 외부 검토 A2)', () => {
