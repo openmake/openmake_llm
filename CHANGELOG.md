@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.126.1](https://github.com/openmake/openmake_llm/compare/v1.126.0...v1.126.1) (2026-11-06)
+
+
+### 🐛 버그 수정
+
+* **omk:** dev up 이 호스트 옵션 없이도 로컬 API origin 을 CORS 에 허용 ([307e53f](https://github.com/openmake/openmake_llm/commit/307e53f670005eecef9736ddaebb7bd0dc349b13))
+
 ## [1.126.0](https://github.com/openmake/openmake_llm/compare/v1.125.1...v1.126.0) (2026-11-05)
 
 
