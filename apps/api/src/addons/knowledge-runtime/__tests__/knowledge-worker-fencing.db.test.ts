@@ -6,10 +6,12 @@
  *  ② 게시 트랜잭션이 FOR SHARE 로 잡은 행은 다른 claim 이 건너뛴다
  *  ③ 실제 worker 둘: A 가 readFile 에서 기다리는 동안 B 가 완료 → A 의 늦은 청크·ready 쓰기 거절, B 결과 유지
  *  ④ 재선점 뒤 A 의 readFile 오류 → failed 를 쓰지 않는다(B 의 ready 유지)
+ *  ⑤ 다중 행 쓰기(한 문장 상한 2행): 배치 경계를 넘는 청크·임베딩이 한 번씩만 저장(중복 0)
+ *  ⑥ 같은 청크에 insertEmbeddings 를 다시 하면 ON CONFLICT 로 갱신(행 수 불변)
  * 끝나면 만든 job·space 를 id 로 지운다.
  */
 import { randomUUID } from 'node:crypto';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { applyKnowledgeSchema, KNOWLEDGE_DB_LOCK_HOOK_TIMEOUT_MS, lockKnowledgeQueueTests, resetWorkerMode } from './helpers/db-serial';
 
 const CONN = process.env.TEST_DATABASE_URL;
@@ -34,6 +36,11 @@ jest.mock('../config/profiles', () => ({
     ...jest.requireActual('../config/profiles'),
     getDefaultLimits: async () => ({ ingestConcurrency: 1, jobLeaseMs: 60_000, jobMaxAttempts: 3 }),
 }));
+// 한 문장당 행 수 상한을 작게 — 다중 행 INSERT 가 배치 경계를 넘는 경우를 실 DB 로 본다
+jest.mock('../constants', () => {
+    const actual = jest.requireActual('../constants');
+    return { ...actual, KNOWLEDGE_RUNTIME: { ...actual.KNOWLEDGE_RUNTIME, WRITE_BATCH_ROWS: 2 } };
+});
 // 외부 모델·파일 저장소는 부르지 않는다 — deps 로 주입한 readFile·embed 만 쓴다
 jest.mock('../embedding/provider', () => ({ makeIndexEmbedder: () => { throw new Error('모델 호출 금지'); }, classifyEmbedError: () => 'provider' }));
 jest.mock('../documents/storage', () => ({ readStoredFile: () => { throw new Error('파일 읽기 금지'); }, deleteStoredFile: jest.fn() }));
@@ -46,9 +53,9 @@ jest.mock('../../../runtime-ports/addon-admission', () => ({
 
 import { KnowledgeWorker, type JobRow } from '../jobs/worker';
 import { createJobLease, assertLeaseHeld, LeaseLostError, type JobLease } from '../jobs/lease';
-import type { KnowledgeIndex } from '../embedding/index-catalog';
+import { insertEmbeddings, type KnowledgeIndex } from '../embedding/index-catalog';
 
-const dbMock = jest.requireMock('../db') as { __pool: Pool };
+const dbMock = jest.requireMock('../db') as { __pool: Pool; inTransaction: <T>(fn: (c: PoolClient) => Promise<T>) => Promise<T> };
 const pool = dbMock.__pool;
 type WorkerInternals = { owner: string; claim(limit: number, leaseMs: number): Promise<JobRow[]>; renew(lease: JobLease, ms: number): Promise<void> };
 const internals = (w: KnowledgeWorker) => w as unknown as WorkerInternals;
@@ -214,5 +221,51 @@ describeOrSkip('knowledge worker fencing (실 DB)', () => {
         const after = await state(f);
         expect(after).toMatchObject({ state: 'done', fencing_token: '2', version_status: 'ready', document_status: 'ready' });
         expect(after.content).toContain('CURRENT_B');
+    });
+
+    /** 이 버전의 청크 수·색인 임베딩 수·(청크, 색인) 중복 수 */
+    async function writeCounts(f: IngestFixture) {
+        return (await pool.query<{ chunks: number; embeddings: number; dup: number; seqs: number }>(
+            `SELECT (SELECT COUNT(*)::int FROM knowledge_chunks WHERE document_version_id = $1) AS chunks,
+                    (SELECT COUNT(DISTINCT sequence)::int FROM knowledge_chunks WHERE document_version_id = $1) AS seqs,
+                    (SELECT COUNT(*)::int FROM knowledge_chunk_embeddings e JOIN knowledge_chunks c ON c.id = e.chunk_id
+                      WHERE c.document_version_id = $1 AND e.embedding_index_id = $2) AS embeddings,
+                    (SELECT COUNT(*)::int FROM (
+                       SELECT e.chunk_id FROM knowledge_chunk_embeddings e JOIN knowledge_chunks c ON c.id = e.chunk_id
+                        WHERE c.document_version_id = $1 GROUP BY e.chunk_id, e.embedding_index_id HAVING COUNT(*) > 1) d) AS dup`,
+            [f.version, index.id],
+        )).rows[0];
+    }
+    const longText = () => Buffer.from(Array.from({ length: 6000 }, (_, i) => `w${i}`).join(' '));
+
+    it('다중 행 쓰기: 배치 경계(2행)를 넘는 청크·임베딩이 한 번씩만 저장된다(중복 0)', async () => {
+        const f = await ingestFixture();
+        const W = new KnowledgeWorker(deps(async () => longText()));
+        expect(await W.tick()).toBe(1);
+        expect(await state(f)).toMatchObject({ state: 'done', version_status: 'ready', document_status: 'ready' });
+        const n = await writeCounts(f);
+        expect(n.chunks).toBeGreaterThan(2); // 분할이 실제로 일어날 만큼
+        expect(n.seqs).toBe(n.chunks);
+        expect(n.embeddings).toBe(n.chunks);
+        expect(n.dup).toBe(0);
+    });
+
+    it('같은 청크에 insertEmbeddings 를 다시 하면 ON CONFLICT 로 벡터만 갱신된다(행 수 불변·중복 0)', async () => {
+        const f = await ingestFixture();
+        expect(await new KnowledgeWorker(deps(async () => longText())).tick()).toBe(1);
+        const before = await writeCounts(f);
+        const chunkIds = (await pool.query<{ id: string }>(
+            `SELECT id FROM knowledge_chunks WHERE document_version_id = $1 ORDER BY sequence`, [f.version],
+        )).rows.map((r) => r.id);
+        const vec = [0, 1, 0, 0, 0, 0, 0, 0];
+        await dbMock.inTransaction((c) => insertEmbeddings(c, index.id, chunkIds.map((chunkId) => ({ chunkId, vector: vec }))));
+        const after = await writeCounts(f);
+        expect(after).toEqual(before);
+        const vectors = (await pool.query<{ v: string }>(
+            `SELECT DISTINCT e.embedding::text AS v FROM knowledge_chunk_embeddings e JOIN knowledge_chunks c ON c.id = e.chunk_id
+              WHERE c.document_version_id = $1 AND e.embedding_index_id = $2`,
+            [f.version, index.id],
+        )).rows.map((r) => r.v);
+        expect(vectors).toEqual(['[0,1,0,0,0,0,0,0]']);
     });
 });

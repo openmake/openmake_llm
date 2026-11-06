@@ -19,8 +19,14 @@ jest.mock('../embedding/provider', () => {
     class EmbeddingError extends Error { constructor(public readonly reason: string, m: string) { super(m); } }
     return { EmbeddingError, describeLiveEmbedding: jest.fn(), probeDimension: jest.fn() };
 });
+// 한 문장당 행 수 상한을 작게 — 배치 분할을 본다
+jest.mock('../constants', () => {
+    const actual = jest.requireActual('../constants');
+    return { ...actual, KNOWLEDGE_RUNTIME: { ...actual.KNOWLEDGE_RUNTIME, WRITE_BATCH_ROWS: 2 } };
+});
 
-import { ensureIndexForTarget, ensureSpaceIndex, findReadyIndex, DEFAULT_METRIC } from '../embedding/index-catalog';
+import { ensureIndexForTarget, ensureSpaceIndex, findReadyIndex, insertEmbeddings, DEFAULT_METRIC } from '../embedding/index-catalog';
+import type { PoolClient } from 'pg';
 import type { LiveEmbedding } from '../embedding/provider';
 
 const indexRow = (over: Row = {}): Row => ({
@@ -132,5 +138,32 @@ describe('ensureSpaceIndex', () => {
         await expect(ensureSpaceIndex('s1', 'u1')).rejects.toMatchObject({ reason: 'key_missing' });
         expect(sqlWith('INSERT')).toHaveLength(0);
         expect(sqlWith('UPDATE')).toHaveLength(0);
+    });
+});
+
+describe('insertEmbeddings — 다중 행 upsert', () => {
+    const client = { query: fakeQuery } as unknown as PoolClient;
+
+    it('행마다가 아니라 상한(2행)씩 unnest 배열 한 문장으로 넣고 ON CONFLICT 갱신을 유지한다', async () => {
+        const rows = [1, 2, 3, 4, 5].map((n) => ({ chunkId: `c${n}`, vector: [n, 0.5] }));
+        await insertEmbeddings(client, 'idx-1', rows);
+        const ins = sqlWith('INSERT INTO knowledge_chunk_embeddings');
+        expect(ins).toHaveLength(3);
+        for (const q of ins) {
+            expect(q.sql).toMatch(/unnest\(/);
+            expect(q.sql).toMatch(/::vector/);
+            expect(q.sql).toMatch(/ON CONFLICT \(chunk_id, embedding_index_id\) DO UPDATE SET embedding = EXCLUDED\.embedding/);
+        }
+        // [indexId, ids[], chunkIds[], vectors[]] — 행 순서 유지, id 는 행마다 새 값
+        expect(ins.map((q) => q.params[0])).toEqual(['idx-1', 'idx-1', 'idx-1']);
+        expect(ins.map((q) => q.params[2])).toEqual([['c1', 'c2'], ['c3', 'c4'], ['c5']]);
+        expect(ins[0].params[3]).toEqual(['[1,0.5]', '[2,0.5]']);
+        const ids = ins.flatMap((q) => q.params[1] as string[]);
+        expect(new Set(ids).size).toBe(5);
+    });
+
+    it('빈 입력이면 쿼리를 보내지 않는다', async () => {
+        await insertEmbeddings(client, 'idx-1', []);
+        expect(calls).toHaveLength(0);
     });
 });
