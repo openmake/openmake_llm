@@ -5,6 +5,10 @@
  * 삭제 커밋이 곧 검색 제외이므로 이 작업은 저장공간 회수만 한다(검색 정합성과 무관).
  * 멱등(tombstone 대상의 물리 삭제)이라 트랜잭션 검사 대신 경계 검사만 둔다 — lease 를 잃으면 다음 경계에서 멈추고 나머지는 새 실행자가 이어서 지운다.
  *
+ * 잠금 순서: 문서 DELETE 의 cascade(버전→청크→임베딩)는 같은 문서를 쓰는 수집의 fenced 쓰기(job 행 FOR SHARE 뒤 버전·청크 쓰기)와
+ * 행 잠금을 반대 순서로 잡을 수 있다. 그때는 PG 교착 감지가 한쪽 트랜잭션을 롤백한다 — cleanup 이면 작업 재시도가 다시 지우고,
+ * 수집이면 worker 재시도 경로를 탄다(삭제된 문서는 검색 대상이 아니다). 데이터 손상은 없으므로 잠금 순서를 강제하지 않는다.
+ *
  * @module addons/knowledge-runtime/jobs/cleanup
  */
 import { createLogger } from '../../../utils/logger';

@@ -32,6 +32,11 @@ jest.mock('../embedding/index-catalog', () => ({
     insertEmbeddings: async () => undefined,
     countEmbeddings: async (_i: string, ids: string[]) => ids.length,
 }));
+// 한 문장당 행 수 상한을 작게 — 청크 다중 행 INSERT 분할을 본다
+jest.mock('../constants', () => {
+    const actual = jest.requireActual('../constants');
+    return { ...actual, KNOWLEDGE_RUNTIME: { ...actual.KNOWLEDGE_RUNTIME, WRITE_BATCH_ROWS: 3 } };
+});
 jest.mock('../embedding/provider', () => ({ makeIndexEmbedder: () => async (t: string[]) => t.map(() => [1, 0]), classifyEmbedError: () => 'provider' }));
 
 import { ingestVersion } from '../ingestion/pipeline';
@@ -103,5 +108,24 @@ describe('ingestVersion + lease', () => {
         const r = await ingestVersion('v1', { ...deps, readFile });
         expect(r.status).toBe('failed');
         expect(sqlWith("status = 'failed'")).toHaveLength(2); // 버전·문서 두 행
+    });
+
+    it('청크 교체는 행마다가 아니라 상한(3행)씩 unnest 배열 한 문장으로 넣는다(lease 검사·DELETE 와 같은 트랜잭션)', async () => {
+        const lease = createJobLease({ jobId: 'j', token: '2', owner: 'o' });
+        const long = Array.from({ length: 400 }, (_, i) => `w${i}`).join(' ');
+        const r = await ingestVersion('v1', { ...deps, readFile: async () => Buffer.from(long), lease });
+        expect(r.status).toBe('ready');
+        const ins = sqlWith('INSERT INTO knowledge_chunks');
+        const seqs = ins.flatMap((q) => q.params[2] as number[]);
+        expect(seqs.length).toBeGreaterThan(3); // 분할이 실제로 일어날 만큼의 청크
+        expect(ins).toHaveLength(Math.ceil(seqs.length / 3));
+        expect(seqs).toEqual(seqs.map((_, i) => i)); // sequence 순서 유지
+        for (const q of ins) {
+            expect(q.sql).toMatch(/unnest\(/);
+            expect(q.params[0]).toBe('v1');
+        }
+        const del = queries.findIndex((q) => q.sql.includes('DELETE FROM knowledge_chunks'));
+        expect(queries[del - 1].sql).toMatch(/FROM knowledge_ingestion_jobs/);
+        expect(queries.findIndex((q) => q.sql.includes('INSERT INTO knowledge_chunks'))).toBe(del + 1);
     });
 });
