@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { createLogger } from '../../../utils/logger';
 import { kdb } from '../db';
+import { KNOWLEDGE_RUNTIME } from '../constants';
 import { describeLiveEmbedding, EmbeddingError, probeDimension, type LiveEmbedding } from './provider';
 
 const logger = createLogger('KnowledgeIndex');
@@ -163,18 +164,24 @@ export async function ensureSpaceIndex(spaceId: string, actorUserId?: string | n
     return other;
 }
 
-/** 임베딩 행 upsert — 재시도에도 (chunk, index) 유니크로 중복 0 */
+/**
+ * 임베딩 행 upsert — 재시도에도 (chunk, index) 유니크로 중복 0.
+ * `WRITE_BATCH_ROWS` 행씩 unnest 배열 한 문장으로 넣는다(같은 트랜잭션 안에서 반복). 벡터는 텍스트 배열로 보내 행마다 `::vector` 캐스트.
+ * 한 문장 안에 같은 chunkId 가 두 번 오면 ON CONFLICT DO UPDATE 가 오류를 낸다 — 호출처(수집·재색인)는 청크 id 가 유일하다.
+ */
 export async function insertEmbeddings(
     client: PoolClient,
     indexId: string,
     rows: Array<{ chunkId: string; vector: number[] }>,
 ): Promise<void> {
-    for (const row of rows) {
+    for (let i = 0; i < rows.length; i += KNOWLEDGE_RUNTIME.WRITE_BATCH_ROWS) {
+        const batch = rows.slice(i, i + KNOWLEDGE_RUNTIME.WRITE_BATCH_ROWS);
         await client.query(
             `INSERT INTO knowledge_chunk_embeddings (id, chunk_id, embedding_index_id, embedding)
-             VALUES ($1, $2, $3, $4::vector)
+             SELECT u.id, u.chunk_id, $1, u.embedding::vector
+               FROM unnest($2::text[], $3::text[], $4::text[]) AS u(id, chunk_id, embedding)
              ON CONFLICT (chunk_id, embedding_index_id) DO UPDATE SET embedding = EXCLUDED.embedding`,
-            [randomUUID(), row.chunkId, indexId, toVectorLiteral(row.vector)],
+            [indexId, batch.map(() => randomUUID()), batch.map((r) => r.chunkId), batch.map((r) => toVectorLiteral(r.vector))],
         );
     }
 }
