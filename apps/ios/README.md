@@ -80,3 +80,7 @@ DEVELOPMENT_TEAM=<TEAMID> ./apps/ios/scripts/archive-testflight.sh
 
 아카이브(Release, Automatic signing + `-allowProvisioningUpdates`) 후
 `ExportOptions.plist(destination=upload)` 로 App Store Connect 에 직접 업로드된다.
+
+저장소의 `project.pbxproj` 에는 팀 ID 를 두지 않는다(`DEVELOPMENT_TEAM = ""`). 실기기 Debug 실행은 Xcode
+타깃 > Signing & Capabilities 에서 팀을 골라 쓰되 그 변경은 커밋하지 않고, TestFlight 는 위처럼
+`DEVELOPMENT_TEAM=<TEAMID>` 환경변수로 준다.
