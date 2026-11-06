@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.126.2](https://github.com/openmake/openmake_llm/compare/v1.126.1...v1.126.2) (2026-11-06)
+
+
+### 🐛 버그 수정
+
+* **chat:** 턴 컨텍스트 시간 초과 뒤 늦게 풀린 게이트가 prepareTurnContext 를 부르지 않게 한다 ([eac2462](https://github.com/openmake/openmake_llm/commit/eac2462add50e3425898db4b4a1f3f0a98cda326))
+* **knowledge:** WRITE_BATCH_ROWS 를 양의 정수만 받고 cleanup 교착 주석을 코드에 맞춘다 ([1c5b09a](https://github.com/openmake/openmake_llm/commit/1c5b09a6ac587a377996b48a792de55a35684087))
+* **knowledge:** 청크·임베딩 쓰기를 다중 행 INSERT 로 바꿔 lease 트랜잭션을 줄인다 ([82d0b03](https://github.com/openmake/openmake_llm/commit/82d0b032071378840f99dd1f39d1fde348e25896))
+
 ## [1.126.1](https://github.com/openmake/openmake_llm/compare/v1.126.0...v1.126.1) (2026-11-06)
 
 
