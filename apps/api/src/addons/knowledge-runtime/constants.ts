@@ -43,6 +43,12 @@ export const KNOWLEDGE_RUNTIME = {
     WORKER_SCHEMA_POLL_MS: Number(process.env.KNOWLEDGE_WORKER_SCHEMA_POLL_MS) || 2_000,
     /** /api/health 의 inflight 합산에 넣는 heartbeat 나이 상한(ms) — heartbeat 주기의 세 배 */
     WORKER_HEARTBEAT_STALE_MS: Number(process.env.KNOWLEDGE_WORKER_HEARTBEAT_STALE_MS) || 15_000,
+    /**
+     * 청크·임베딩 쓰기 한 문장(다중 행 INSERT)에 넣는 행 수 상한 — 같은 트랜잭션 안에서 이만큼씩 나눠 반복한다.
+     * 행마다 INSERT 하면 lease 검사(job 행 FOR SHARE)를 잡은 트랜잭션이 길어져 같은 행의 heartbeat UPDATE 가 막힌다.
+     * 루프 step 으로 쓰므로 양의 정수만 받는다(음수면 루프가 끝나지 않는다) — 아니면 기본값.
+     */
+    WRITE_BATCH_ROWS: ((n) => (Number.isInteger(n) && n > 0 ? n : 500))(Number(process.env.KNOWLEDGE_WRITE_BATCH_ROWS)),
 } as const;
 
 /**

@@ -124,18 +124,26 @@ async function markFailed(versionId: string, code: FailureCode, lease: JobLease 
     });
 }
 
-/** 청크를 원자적으로 교체 — 기존 청크(및 cascade 임베딩)를 지우고 새로 넣는다. lease 가 있으면 첫 문장에서 검사한다 */
+/**
+ * 청크를 원자적으로 교체 — 기존 청크(및 cascade 임베딩)를 지우고 새로 넣는다. lease 가 있으면 첫 문장에서 검사한다.
+ * 삽입은 `WRITE_BATCH_ROWS` 행씩 unnest 배열 한 문장 — 트랜잭션이 lease 행을 잡고 있는 시간을 줄여 heartbeat 가 막히지 않게 한다.
+ */
 async function replaceChunks(versionId: string, chunks: ProducedChunk[], lease: JobLease | undefined): Promise<void> {
     await inTransaction(async (client) => {
         await assertLeaseHeld(client, lease);
         await client.query(`DELETE FROM knowledge_chunks WHERE document_version_id = $1`, [versionId]);
-        for (const c of chunks) {
+        for (let i = 0; i < chunks.length; i += KNOWLEDGE_RUNTIME.WRITE_BATCH_ROWS) {
+            const batch = chunks.slice(i, i + KNOWLEDGE_RUNTIME.WRITE_BATCH_ROWS);
             await client.query(
                 `INSERT INTO knowledge_chunks
                    (id, document_version_id, sequence, content, content_hash, token_count, page_start, page_end, char_start, char_end, heading_path)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-                [randomUUID(), versionId, c.sequence, c.content, c.contentHash, c.tokenCount,
-                    c.pageStart ?? null, c.pageEnd ?? null, c.charStart, c.charEnd, c.headingPath ?? null],
+                 SELECT u.id, $1, u.sequence, u.content, u.content_hash, u.token_count, u.page_start, u.page_end, u.char_start, u.char_end, u.heading_path
+                   FROM unnest($2::text[], $3::int[], $4::text[], $5::text[], $6::int[], $7::int[], $8::int[], $9::int[], $10::int[], $11::text[])
+                     AS u(id, sequence, content, content_hash, token_count, page_start, page_end, char_start, char_end, heading_path)`,
+                [versionId, batch.map(() => randomUUID()), batch.map((c) => c.sequence), batch.map((c) => c.content),
+                    batch.map((c) => c.contentHash), batch.map((c) => c.tokenCount),
+                    batch.map((c) => c.pageStart ?? null), batch.map((c) => c.pageEnd ?? null),
+                    batch.map((c) => c.charStart), batch.map((c) => c.charEnd), batch.map((c) => c.headingPath ?? null)],
             );
         }
     });
