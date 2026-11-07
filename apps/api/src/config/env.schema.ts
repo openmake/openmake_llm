@@ -71,6 +71,8 @@ export const envSchema = z
         NODE_ENV: nodeEnvSchema.default('development'),
         PORT: positiveIntWithDefault(SERVER_CONFIG.DEFAULT_PORT),
         SERVER_HOST: z.string().default('0.0.0.0'),
+        // API 수신 바인드 주소(2026-11-07 점검) — 미설정이면 env-defaults 의 0.0.0.0. SERVER_HOST(표시용)와 별개.
+        LISTEN_HOST: z.string().optional(),
         DATABASE_URL: z.string().default('postgresql://localhost:5432/openmake_llm'),
 
         // Auth

@@ -46,6 +46,7 @@
     "apps/desktop-native/lib/node-bundle.sh": "desktopBuild",
     "apps/desktop-native/lib/node-bundle.test.mjs": "desktopBuild",
     "db/init/004-admin-user.sh": "infra",
+    "ecosystem.config.js": "pipeline",
     "eslint.config.mjs": "pipeline",
     "install_linux.sh": "pipeline",
     "openmake_llm.sh": "pipeline",
@@ -58,7 +59,8 @@
     "packages/shared-types/src/knowledge.ts": "web",
     "packages/shared-types/src/model-assignments.ts": "web",
     "packages/shared-types/src/mcp-monitoring.ts": "web",
-    "scripts/export-openapi.ts": "pipeline"
+    "scripts/export-openapi.ts": "pipeline",
+    "scripts/resolve-ports.cjs": "pipeline"
   },
   "hostSetup": [
     "scripts/setup/colima-boot-guard.cjs",

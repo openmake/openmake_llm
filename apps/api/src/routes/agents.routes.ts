@@ -3,7 +3,7 @@
  * Agent Routes - AI 에이전트 관리 API 라우트
  * ============================================================
  *
- * 시스템/커스텀 에이전트 CRUD, RLHF 피드백 수집, 품질 분석, A/B 테스트를 담당하는 REST API입니다.
+ * 시스템/커스텀 에이전트 CRUD, RLHF 피드백 수집, 품질 분석(관리자), A/B 테스트(관리자)를 담당하는 REST API입니다.
  * 스킬 CRUD 와 에이전트-스킬 연결 라우트는 skill-runtime add-on 으로 분리되었습니다 (2026-09-19).
  *
  * @module routes/agents.routes
@@ -15,7 +15,7 @@ import { getAgentLearningSystem } from '../agents/learning';
 import { getCustomAgentBuilder } from '../agents/custom-builder';
 import { success, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
-import { requireAuth } from '../auth';
+import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { unauthorized } from '../utils/api-response';
 import { validate } from '../middlewares/validation';
 import {
@@ -85,9 +85,9 @@ router.get('/stats', asyncHandler(async (req: Request, res: Response) => {
 
 /**
  * GET /api/agents/feedback/stats
- * 전체 피드백 통계
+ * 전체 피드백 통계 (관리자)
  */
-router.get('/feedback/stats', asyncHandler(async (req: Request, res: Response) => {
+router.get('/feedback/stats', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const learningSystem = getAgentLearningSystem();
     res.json(success(learningSystem.getOverallStats()));
 }));
@@ -120,9 +120,9 @@ router.post('/:id/feedback', requireAuth, validate(agentFeedbackSchema), asyncHa
 
 /**
  * GET /api/agents/:id/quality
- * 에이전트 품질 점수
+ * 에이전트 품질 점수 (관리자)
  */
-router.get('/:id/quality', asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id/quality', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const agentId = req.params.id;
     const learningSystem = getAgentLearningSystem();
     res.json(success(learningSystem.calculateQualityScore(agentId)));
@@ -130,9 +130,9 @@ router.get('/:id/quality', asyncHandler(async (req: Request, res: Response) => {
 
 /**
  * GET /api/agents/:id/failures
- * 에이전트 실패 패턴 분석
+ * 에이전트 실패 패턴 분석 (관리자)
  */
-router.get('/:id/failures', asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id/failures', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const agentId = req.params.id;
     const learningSystem = getAgentLearningSystem();
     res.json(success(learningSystem.analyzeFailurePatterns(agentId)));
@@ -140,9 +140,9 @@ router.get('/:id/failures', asyncHandler(async (req: Request, res: Response) => 
 
 /**
  * GET /api/agents/:id/improvements
- * 프롬프트 개선 제안
+ * 프롬프트 개선 제안 (관리자)
  */
-router.get('/:id/improvements', asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id/improvements', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const agentId = req.params.id;
     const currentPrompt = req.query.prompt as string || '';
 
@@ -156,9 +156,9 @@ router.get('/:id/improvements', asyncHandler(async (req: Request, res: Response)
 
 /**
  * POST /api/agents/abtest/start
- * A/B 테스트 시작
+ * A/B 테스트 시작 (관리자)
  */
-router.post('/abtest/start', requireAuth, validate(abTestStartSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/abtest/start', requireAuth, requireAdmin, validate(abTestStartSchema), asyncHandler(async (req: Request, res: Response) => {
     const { agentA, agentB } = req.body;
 
     const customBuilder = getCustomAgentBuilder();
@@ -169,18 +169,18 @@ router.post('/abtest/start', requireAuth, validate(abTestStartSchema), asyncHand
 
 /**
  * GET /api/agents/abtest
- * A/B 테스트 목록
+ * A/B 테스트 목록 (관리자)
  */
-router.get('/abtest', asyncHandler(async (req: Request, res: Response) => {
+router.get('/abtest', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const customBuilder = getCustomAgentBuilder();
     res.json(success(customBuilder.getAllABTests()));
 }));
 
 /**
  * GET /api/agents/abtest/:testId
- * A/B 테스트 결과 조회
+ * A/B 테스트 결과 조회 (관리자)
  */
-router.get('/abtest/:testId', asyncHandler(async (req: Request, res: Response) => {
+router.get('/abtest/:testId', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const testId = req.params.testId;
     const customBuilder = getCustomAgentBuilder();
     const result = customBuilder.getABTestResult(testId);
@@ -195,9 +195,9 @@ router.get('/abtest/:testId', asyncHandler(async (req: Request, res: Response) =
 
 /**
  * GET /api/agents/:id
- * 특정 에이전트 조회
+ * 특정 에이전트 조회 — 소유자가 있는 커스텀 에이전트는 소유자·관리자만 (인증 보강, 2026-11-07 점검)
  */
-router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
     const agentId = req.params.id;
 
     // 시스템 에이전트 먼저 확인
@@ -207,7 +207,11 @@ router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
     if (!agent) {
         const customBuilder = getCustomAgentBuilder();
         const customAgent = customBuilder.getCustomAgent(agentId);
-        if (customAgent) {
+        const requesterId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
+        const canView = !customAgent?.createdBy
+            || customAgent.createdBy === requesterId
+            || isAdminRole(req.user?.role);
+        if (customAgent && canView) {
             agent = {
                 id: customAgent.id,
                 name: customAgent.name,
