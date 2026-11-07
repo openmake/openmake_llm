@@ -15,78 +15,14 @@ import {
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 
-/* ── 타입 ────────────────────────────────────────────────── */
-type CatalogKind = "server" | "skill";
-
-/** 설치 시 입력받는 자격증명·설정(env) 필드. env_schema 에서 파생(required + 선택 항목). */
-interface EnvField {
-  key: string;
-  title: string;
-  description?: string;
-  secret: boolean;
-  /** env_schema.required 에 있으면 true — 빈 값이면 설치 버튼이 잠긴다. */
-  required: boolean;
-}
-
-interface CatalogEntry {
-  id: string;
-  name: string;
-  provider: string;
-  description: string;
-  toolCount: number;
-  kind: CatalogKind;
-  installed?: boolean;
-  /** 설치 폼에 노출할 env 필드 — 필수 먼저, 선택(채널 제한·베이스 URL 등)이 뒤. */
-  envFields: EnvField[];
-}
-
-/* ── 백엔드 응답 타입 (GET /api/mcp/catalog) ──────────────── */
-interface ApiEnvSchema {
-  required?: string[];
-  properties?: Record<
-    string,
-    { title?: string; description?: string; secret?: boolean }
-  >;
-}
-
-interface ApiCatalogTemplate {
-  id: string;
-  display_name: string;
-  description?: string;
-  transport_type: "stdio" | "sse" | "streamable-http";
-  is_enabled?: boolean;
-  env_schema?: ApiEnvSchema;
-}
-
-function mapTemplate(t: ApiCatalogTemplate): CatalogEntry {
-  // env_schema 의 모든 속성을 설치 폼에 노출한다 — required 는 필수 입력, 나머지는 선택
-  // (Slack 채널 제한·CircleCI 베이스 URL 처럼 설치 시점에만 넣을 수 있던 값이 화면에서 빠져 있었다).
-  const props = t.env_schema?.properties ?? {};
-  const required = t.env_schema?.required ?? [];
-  const toField = (key: string, isRequired: boolean): EnvField => ({
-    key,
-    title: props[key]?.title || key,
-    description: props[key]?.description,
-    secret: props[key]?.secret === true,
-    required: isRequired,
-  });
-  const envFields: EnvField[] = [
-    ...required.map((key) => toField(key, true)),
-    ...Object.keys(props).filter((key) => !required.includes(key)).map((key) => toField(key, false)),
-  ];
-  return {
-    id: t.id,
-    name: t.display_name,
-    // 카탈로그 템플릿은 provider/도구수/skill 구분 필드를 제공하지 않음.
-    // provider 는 transport_type, 종류는 항상 server 로 표기.
-    provider: t.transport_type,
-    description: t.description || "",
-    toolCount: 0,
-    kind: "server",
-    envFields,
-  };
-}
-
+import {
+  buildInstallPayload,
+  hasMissingRequired,
+  mapTemplate,
+  type ApiCatalogTemplate,
+  type CatalogEntry,
+  type InstallField,
+} from "./mcp-catalog-fields";
 
 export function McpCatalogPage() {
   const t = useTranslations("mcpCatalog");
@@ -100,6 +36,8 @@ export function McpCatalogPage() {
   // 설치 전 자격증명(env) 입력이 필요한 항목의 인라인 폼 상태.
   const [configuringId, setConfiguringId] = useState<string | null>(null);
   const [envDraft, setEnvDraft] = useState<Record<string, string>>({});
+  // 서버 실행 인자(args_schema) 입력 — env 와 키가 겹칠 수 있어 따로 둔다.
+  const [argDraft, setArgDraft] = useState<Record<string, string>>({});
   // 설치 이름 — 같은 템플릿을 여러 접속처에 설치할 수 있으므로 인스턴스마다 이름을 받는다.
   const [nameDraft, setNameDraft] = useState("");
   // 이미 설치된 인스턴스 이름 — 기본 이름 제안 시 충돌 회피에 쓴다.
@@ -156,24 +94,24 @@ export function McpCatalogPage() {
     setConfiguringId(e.id);
     setNameDraft(suggestName(e));
     setEnvDraft(Object.fromEntries(e.envFields.map((f) => [f.key, ""])));
+    setArgDraft(Object.fromEntries(e.argFields.map((f) => [f.key, ""])));
   }
 
-  async function doInstall(e: CatalogEntry, env: Record<string, string>, name: string) {
+  async function doInstall(
+    e: CatalogEntry,
+    args: Record<string, string>,
+    env: Record<string, string>,
+    name: string,
+  ) {
     setInstalling((prev) => ({ ...prev, [e.id]: true }));
     setInstallError((prev) => ({ ...prev, [e.id]: "" }));
     try {
       // 카탈로그 설치 전용 라우트 — 백엔드가 template_id 로 command/args/env 를 채운다.
       // (일반 POST /servers 는 stdio 시 command 필수라 400 — from-catalog 가 정답)
       // env 의 secret 필드는 백엔드 createFromCatalog 가 AES-256-GCM 으로 암호화 저장.
-      // 빈 칸은 보내지 않는다 — 선택 항목을 비워두면 서버 기본값(스키마 default)이 적용된다.
-      const filledEnv = Object.fromEntries(
-        Object.entries(env).filter(([, v]) => v.trim().length > 0),
-      );
-      await ApiClient.post("/api/mcp/servers/from-catalog", {
-        template_id: e.id,
-        name, // 인스턴스 이름 = 도구 네임스페이스. 영숫자/_/- 만 허용.
-        ...(Object.keys(filledEnv).length > 0 ? { env: filledEnv } : {}),
-      });
+      // args(args_schema 필수 항목 — 예: Filesystem 의 root_path)도 함께 보낸다. 빠지면 서버가 400.
+      // 빈 칸은 보내지 않고, args 는 스키마 type 으로 변환한다(buildInstallPayload).
+      await ApiClient.post("/api/mcp/servers/from-catalog", buildInstallPayload(e, args, env, name));
       setEntries((prev) =>
         prev.map((item) =>
           item.id === e.id ? { ...item, installed: true } : item,
@@ -190,6 +128,10 @@ export function McpCatalogPage() {
       setInstalling((prev) => ({ ...prev, [e.id]: false }));
     }
   }
+
+  // 필드 종류(arg/env)에 맞는 입력 상태
+  const draftOf = (f: InstallField) => (f.kind === "arg" ? argDraft : envDraft);
+  const setDraftOf = (f: InstallField) => (f.kind === "arg" ? setArgDraft : setEnvDraft);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -285,7 +227,7 @@ export function McpCatalogPage() {
                       </Button>
                     </div>
 
-                    {/* 필수 자격증명 입력 폼 — env_schema.required 가 있는 서버(Notion·GitHub 등) */}
+                    {/* 설치 입력 폼 — 실행 인자(args_schema, 예: Filesystem 루트 경로) 다음에 자격증명(env_schema, Notion·GitHub 등) */}
                     {configuringId === e.id && (
                       <div className="flex flex-col gap-2 rounded-md border border-border bg-surface-2 p-3">
                         <p className="text-xs font-medium text-fg">
@@ -302,8 +244,8 @@ export function McpCatalogPage() {
                           />
                           <span className="text-[11px] text-muted">{t("nameHint")}</span>
                         </label>
-                        {e.envFields.map((f) => (
-                          <label key={f.key} className="flex flex-col gap-1">
+                        {[...e.argFields, ...e.envFields].map((f) => (
+                          <label key={`${f.kind}:${f.key}`} className="flex flex-col gap-1">
                             <span className="text-xs text-fg-2">
                               {f.title}
                               {!f.required && (
@@ -313,9 +255,9 @@ export function McpCatalogPage() {
                             <input
                               type={f.secret ? "password" : "text"}
                               autoComplete="off"
-                              value={envDraft[f.key] ?? ""}
+                              value={draftOf(f)[f.key] ?? ""}
                               onChange={(ev) =>
-                                setEnvDraft((prev) => ({
+                                setDraftOf(f)((prev) => ({
                                   ...prev,
                                   [f.key]: ev.target.value,
                                 }))
@@ -338,9 +280,10 @@ export function McpCatalogPage() {
                             disabled={
                               installing[e.id] ||
                               !/^[A-Za-z0-9_-]+$/.test(nameDraft) ||
-                              e.envFields.some((f) => f.required && !envDraft[f.key]?.trim())
+                              hasMissingRequired(e.argFields, argDraft) ||
+                              hasMissingRequired(e.envFields, envDraft)
                             }
-                            onClick={() => doInstall(e, envDraft, nameDraft)}
+                            onClick={() => doInstall(e, argDraft, envDraft, nameDraft)}
                           >
                             {installing[e.id] ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
