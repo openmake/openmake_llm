@@ -25,6 +25,9 @@ import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import { isLockoutActive, recordFailedLogin, recordSuccessfulLogin, selectLoginRow } from './user-login-lockout';
 import { updateUsersInvalidatingTokens } from './user-manager-token-invalidation';
 import { emitRevokedIfUpdated, emitUserAuthRevoked, prepareUpdateUserRevocations } from './user-manager-auth-revocation';
+import { withTransaction } from './retry-wrapper';
+import { assertNotLastActiveAdmin } from './last-admin-guard';
+import { buildUpdateUserStatement } from './user-manager-update';
 
 const logger = createLogger('UserManager');
 
@@ -438,13 +441,18 @@ class UserManagerImpl {
 
     async changeRole(userId: string, newRole: UserRole): Promise<PublicUser | null> {
         const pool = getPool();
+        // 마지막 활성 관리자 보호(2026-11-07 점검) — 가드와 UPDATE 를 한 트랜잭션으로, 발행은 COMMIT 뒤.
         // 같은 역할 재저장은 행을 바꾸지 않는다 — role_changed 는 실제 변경 때만(열린 채팅 소켓을 괜히 닫지 않게).
         // 반환은 그대로: 사용자가 있으면 그 사용자(같은 값 저장도 성공), 없으면 null.
-        const result = await pool.query(
-            'UPDATE users SET role = $1, updated_at = $2 WHERE id = $3 AND role IS DISTINCT FROM $1',
-            [newRole, new Date().toISOString(), userId]
-        );
-        emitRevokedIfUpdated(result.rowCount, userId, 'role_changed');
+        const rowCount = await withTransaction(pool, async (client) => {
+            await assertNotLastActiveAdmin(client, userId, { role: newRole });
+            const result = await client.query(
+                'UPDATE users SET role = $1, updated_at = $2 WHERE id = $3 AND role IS DISTINCT FROM $1',
+                [newRole, new Date().toISOString(), userId]
+            );
+            return result.rowCount;
+        });
+        emitRevokedIfUpdated(rowCount, userId, 'role_changed');
 
         const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
         const row = userResult.rows[0] as UserRow | undefined;
@@ -453,36 +461,16 @@ class UserManagerImpl {
 
     async updateUser(userId: string, updates: { email?: string; role?: UserRole; is_active?: boolean; password?: string }): Promise<PublicUser | null> {
         const pool = getPool();
-        const sets: string[] = ['updated_at = $1'];
-        const params: (string | number | boolean | Date)[] = [new Date().toISOString()];
-        let paramIdx = 2;
-
-        if (updates.email !== undefined) {
-            sets.push(`username = $${paramIdx++}`);
-            params.push(updates.email);
-            sets.push(`email = $${paramIdx++}`);
-            params.push(updates.email);
-        }
-        if (updates.role !== undefined) {
-            sets.push(`role = $${paramIdx++}`);
-            params.push(updates.role);
-        }
-        if (updates.is_active !== undefined) {
-            sets.push(`is_active = $${paramIdx++}`);
-            params.push(updates.is_active);
-        }
-        if (updates.password !== undefined) {
-            sets.push(`password_hash = $${paramIdx++}`);
-            params.push(await bcrypt.hash(updates.password, BCRYPT_ROUNDS));
-            // 보안 점검 A2 — 관리자 재설정도 같은 UPDATE 로 이전 토큰을 끊는다.
-            sets.push(`tokens_valid_after = $${paramIdx++}`);
-            params.push(new Date());
-        }
+        const passwordHash = updates.password !== undefined ? await bcrypt.hash(updates.password, BCRYPT_ROUNDS) : undefined;
+        const { sql, params } = buildUpdateUserStatement(userId, updates, passwordHash);
 
         const emitRevocations = await prepareUpdateUserRevocations(userId, updates);
-        params.push(userId);
-        const result = await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
-        if ((result.rowCount || 0) === 0) return null;
+        // 마지막 활성 관리자 보호(2026-11-07 점검) — 가드와 UPDATE 를 한 트랜잭션으로, 부수효과는 COMMIT 뒤.
+        const rowCount = await withTransaction(pool, async (client) => {
+            await assertNotLastActiveAdmin(client, userId, { role: updates.role, is_active: updates.is_active });
+            return (await client.query(sql, params)).rowCount;
+        });
+        if ((rowCount || 0) === 0) return null;
         // 브리지 연결은 연결할 때만 계정을 검증한다 — 비활성화하면 이미 붙어 있는 연결을 여기서 닫는다.
         if (updates.is_active === false) getLocalBridgeRegistry().disconnectByUser(userId, 'account_disabled');
         emitRevocations();
