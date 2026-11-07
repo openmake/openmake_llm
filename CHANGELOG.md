@@ -7,6 +7,8 @@
 
 * **llm:** 429 Retry-After 를 ProviderError.cause 의 응답 헤더에서도 읽는다 ([e322e20](https://github.com/openmake/openmake_llm/commit/e322e2040d820147790d50d9096d627bee8f04da))
 
+> 참고: 이 릴리스 뒤 dev 에 머지된 [#1675](https://github.com/openmake/openmake_llm/pull/1675)(답변 뒤 앱 셸이 화면 밖으로 밀리는 결함 — 채팅 자동 스크롤을 컨테이너 한정으로)는 release-please 가 커밋 날짜 순서 때문에 건너뛰어 1.127.3 으로 배포한다.
+
 ## [1.127.1](https://github.com/openmake/openmake_llm/compare/v1.127.0...v1.127.1) (2026-11-07)
 
 
