@@ -4,12 +4,14 @@
  * 왜: 토론(전문가 5명 병렬)·딥리서치(검색/종합 fan-out)가 외부 BYOK 모델로 돌면 무료/개발 키의
  * 분당 한도에 걸려 전문가가 전멸하거나(B.AI 5/5 429) 절반이 빠진다(hasa 3/5 429) — 2026-09-03 실측.
  * OpenAI SDK 의 내장 재시도(짧은 백오프)만으론 부족하다. 호출부(토론 엔진·딥리서치·역할 클라이언트)는
- * 그대로 두고 model-role-resolver 가 만드는 외부 LLMClient 를 이 프록시로 감싼다.
+ * 그대로 두고 createClient(llm/client.ts)가 외부 LLMClient(quotaExempt+providerId — model-role-resolver 가 만든다, derive() 파생 포함)를
+ * 이 프록시로 감싼다. 감싸는 곳은 createClient 한 곳뿐이다(다시 감싸면 같은 세마포어 중첩 acquire → 동시성 1 provider 교착).
  * 로컬(local-llm)은 LOCAL_LLM_MAX_CONCURRENT>0 일 때만 슬롯을 잡는다(429 재시도 없음) — 그 슬롯을 거치는 운영 호출은
  * 오케스트레이터 capability 호출(withProviderSlot)과 createClient(llm/client.ts)가 만드는 로컬 LLMClient(derive() 파생 포함 — 채팅 본 루프,
  * 에이전트 작업·서브에이전트 턴, 생각 요약·답변 검증 등 보조 호출)다. 슬롯은 chat·generate 한 번 동안만 잡힌다(도구 실행·서브에이전트
  * 동안은 놓는다). `new LLMClient` 직접 생성(라우터·semantic-compactor·인제스트·eval 등)은 거치지 않는다.
- * 슬롯 대기 시간은 에이전트 턴의 무응답 감시·호출 상한에 넣지 않는다(onSlotWait·onSlotAcquired 훅 — role-client).
+ * 슬롯 대기 시간은 에이전트 턴의 무응답 감시·호출 상한에 넣지 않는다(onSlotWait·onSlotAcquired 훅 — role-client). 외부 provider 슬롯도
+ * 같은 훅을 부른다. 429 백오프 대기는 슬롯을 받은 뒤 호출 안의 일이라 훅 대상이 아니다.
  *
  * 세마포어는 프로세스 전역·provider 단위(rate limit 은 키 단위지만 배포당 키가 사실상 1개).
  */
@@ -155,6 +157,11 @@ function signalOf(method: 'chat' | 'generate', args: unknown[]): AbortSignal | u
     return adv?.signal;
 }
 
+/** advancedOptions 의 슬롯 대기 훅 — signalOf 와 같은 인덱스(chat args[3], generate args[4]) */
+function slotHooksOf(method: 'chat' | 'generate', args: unknown[]): { onSlotWait?: () => void; onSlotAcquired?: () => void } | undefined {
+    return args[method === 'chat' ? 3 : 4] as { onSlotWait?: () => void; onSlotAcquired?: () => void } | undefined;
+}
+
 /** 프록시가 노출하는 실행 힌트 — 호출부(딥리서치 fan-out)가 배치 동시성·타임아웃을 맞추는 데 쓴다 */
 interface ExternalClientHints {
     providerId: string;
@@ -184,8 +191,11 @@ export function throttleExternalClient<T extends LLMClient>(client: T, providerI
 
     const wrap = (method: 'chat' | 'generate') => async (...args: unknown[]) => {
         const signal = signalOf(method, args);
+        const hooks = slotHooksOf(method, args);
+        hooks?.onSlotWait?.();
         const release = await sem.acquire(signal);
         try {
+            hooks?.onSlotAcquired?.();
             for (let attempt = 0; ; attempt++) {
                 try {
                     return await (client[method] as (...a: unknown[]) => Promise<unknown>).apply(client, args);

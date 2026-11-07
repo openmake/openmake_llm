@@ -96,6 +96,39 @@ describe('throttleExternalClient', () => {
     });
 });
 
+describe('throttleExternalClient — 슬롯 대기 훅(onSlotWait·onSlotAcquired)', () => {
+    beforeEach(() => __resetExternalThrottleForTest());
+
+    it('동시성 1(bai)에서 두 번째 호출은 onSlotWait(대기 시작, 동기) → 앞 호출이 끝난 뒤 onSlotAcquired → 원본 호출 순서다', async () => {
+        const order: string[] = [];
+        const finishers: Array<() => void> = [];
+        let n = 0;
+        const client = throttleExternalClient(fakeClient(async () => {
+            const id = ++n;
+            order.push(`start${id}`);
+            await new Promise<void>((r) => finishers.push(r));
+            return `ok${id}`;
+        }), 'bai');
+        const flush = () => new Promise((r) => setImmediate(r));
+        const hooks = (tag: string) => ({ onSlotWait: () => order.push(`wait${tag}`), onSlotAcquired: () => order.push(`acq${tag}`) });
+        const a = client.chat([], undefined, undefined, hooks('A') as never);
+        const b = client.chat([], undefined, undefined, hooks('B') as never);
+        expect(order).toEqual(['waitA', 'waitB']); // 둘 다 acquire 직전에 동기로 불린다
+        await flush();
+        expect(order).toEqual(['waitA', 'waitB', 'acqA', 'start1']); // B 는 슬롯을 아직 못 받았다
+        finishers[0]();
+        await expect(a).resolves.toBe('ok1');
+        await flush();
+        expect(order).toEqual(['waitA', 'waitB', 'acqA', 'start1', 'acqB', 'start2']);
+        finishers[1]();
+        await expect(b).resolves.toBe('ok2');
+        // generate 는 advancedOptions 가 args[4] — 같은 훅을 부른다
+        const g = jest.fn();
+        await Promise.all([client.generate('p', undefined, undefined, undefined, { onSlotAcquired: g } as never), (async () => { await flush(); finishers[2]?.(); })()]);
+        expect(g).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe('ExternalClientHints', () => {
     it('스로틀 프록시는 provider 동시성·타임아웃 배수 힌트를 노출하고, 로컬은 null', () => {
         const { getExternalClientHints } = require('../external-throttle') as typeof import('../external-throttle');

@@ -1,10 +1,12 @@
 /**
  * 로컬 LLM 동시성 손잡이를 LLMClient 생성 지점까지(#1656) — createClient 가 만드는 로컬 클라이언트(채팅 본 루프·에이전트 작업 본 루프가 쓴다)는
  * LOCAL_LLM_MAX_CONCURRENT>0 일 때 chat·generate 한 번 동안만 local-llm 슬롯을 잡는다. 0(기본)이면 감싸지 않는다.
- * 외부 클라이언트(quotaExempt)는 model-role-resolver 가 자기 provider 슬롯으로 감싸므로 여기서 local-llm 슬롯을 잡지 않는다.
+ * 외부 클라이언트(quotaExempt)는 local-llm 슬롯을 잡지 않는다 — providerId 가 있으면 createClient 가 그 provider 스로틀로 감싸고
+ * (derive() 파생도 유지), 없으면 원본 그대로다. resolver 는 따로 감싸지 않는다(이중 감싸기 = 같은 세마포어 중첩 acquire → 교착).
  */
 import { types } from 'node:util';
 import type * as ClientModule from '../client';
+import type * as ThrottleModule from '../external-throttle';
 
 const started: number[] = [];
 const finishers: Array<() => void> = [];
@@ -83,7 +85,7 @@ describe('createClient — 로컬 LLM 슬롯', () => {
         expect(started).toEqual([1, 2]);
         finishers[1]();
         await b;
-        // 외부 클라이언트의 파생은 종전대로 원본(외부 슬롯은 resolver 정책)
+        // providerId 없는 quotaExempt 의 파생은 종전대로 원본
         expect(types.isProxy(createClient({ model: 'm', quotaExempt: true }).derive({ timeout: 1 }))).toBe(false);
     });
 
@@ -116,6 +118,40 @@ describe('createClient — 로컬 LLM 슬롯', () => {
         expect(started).toEqual([1, 2]);
         finishers.forEach((f) => f());
         await Promise.all([a, b]);
+    });
+
+    it('외부 클라이언트(quotaExempt+providerId)는 그 provider 스로틀로 감싸고, derive() 파생도 스로틀을 유지한다', () => {
+        const { createClient } = load('1');
+        const { getExternalClientHints } = require('../external-throttle') as typeof ThrottleModule;
+        const ext = createClient({ model: 'm', quotaExempt: true, providerId: 'openrouter' });
+        expect(getExternalClientHints(ext)?.providerId).toBe('openrouter');
+        const derived = ext.derive({ timeout: 1 });
+        expect(getExternalClientHints(derived)?.providerId).toBe('openrouter');
+        // 파생은 한 겹만 감싼다 — 원본 위에 새 프록시 하나(프록시의 프록시가 아님)
+        expect(getExternalClientHints(derived.derive({ timeout: 2 }))?.providerId).toBe('openrouter');
+        expect(derived.requestTimeout).toBe(1);
+        // providerId 없는 quotaExempt 는 힌트 없음(원본)
+        expect(getExternalClientHints(createClient({ model: 'm', quotaExempt: true }).derive({ timeout: 1 }))).toBeNull();
+    });
+
+    it('외부 provider 스로틀은 한 겹이다 — 동시성 1 provider 에서 파생 클라이언트 chat 두 개가 교착 없이 차례로 실행된다', async () => {
+        const { createClient } = load('0');
+        // 동시성 1 provider 를 고르기 위해 카탈로그 값을 그대로 쓴다
+        const t = require('../external-throttle') as typeof ThrottleModule;
+        const { EXTERNAL_PROVIDER_CATALOG } = require('../../config/external-providers') as { EXTERNAL_PROVIDER_CATALOG: Array<{ id: string }> };
+        const one = EXTERNAL_PROVIDER_CATALOG.map((e) => e.id).find((id) => t.providerConcurrency(id) === 1);
+        expect(one).toBeDefined();
+        const base = createClient({ model: 'm', quotaExempt: true, providerId: one });
+        const a = base.derive({ timeout: 1000 }).chat(msgs);
+        const b = base.derive({ timeout: 1000 }).chat(msgs);
+        await flush();
+        expect(started).toEqual([1]);
+        finishers[0]();
+        await expect(a).resolves.toMatchObject({ content: 'ok1' });
+        await flush();
+        expect(started).toEqual([1, 2]);
+        finishers[1]();
+        await expect(b).resolves.toMatchObject({ content: 'ok2' });
     });
 
     it('0(기본)이면 감싸지 않는다 — 원본 LLMClient 그대로, 동시에 시작한다', async () => {

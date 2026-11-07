@@ -19,6 +19,7 @@ import { ProviderError } from './provider-errors';
 import { LocalLLMProvider } from './local-llm-provider';
 import { OpenAICompatProvider, GatewayRouteOptions } from './openai-compat-provider';
 import { getConfig } from '../config';
+import { getProviderCatalogEntry } from '../config/external-providers';
 import { ChatGPTOAuthProvider } from './chatgpt-oauth/provider';
 import {
     parseSessionPayload,
@@ -63,19 +64,49 @@ interface ExternalProviderInstanceDeps {
  * 구조로는 사용자별 격리가 불가하다(2026-07-31 스파이크 No-Go).
  *
  * ⚠️ 불변식: 게이트웨이 `api_base` 는 **서버 통제 값**만 쓴다(SSRF 우회 방지). 사용자별 동적
- * endpoint 를 받는 provider 는 게이트웨이로 표현할 수 없다 — 구 ollama-local 이 이 이유로
- * 예외 목록에 있었고, 그 provider 폐기(2026-08-23)로 목록 자체가 비어 제거됐다. 같은 성격의
- * provider 를 다시 도입한다면 여기서 direct 로 분기시켜야 한다.
+ * endpoint 는 게이트웨이로 표현할 수 없으므로, 사용자 행의 base_url 이 카탈로그 기본값과
+ * 다르면(끝 `/`·host 대소문자 차이는 같은 값으로 본다) 목록에 있는 provider 라도 direct 로 분기한다.
  */
-function resolveGatewayRoute(providerId: string, authMethod: string): GatewayRouteOptions | undefined {
+function resolveGatewayRoute(
+    providerId: string,
+    authMethod: string,
+    baseUrl: string,
+): GatewayRouteOptions | undefined {
     if (authMethod === 'oauth') return undefined;
     const cfg = getConfig();
     if (!cfg.llmGatewayProviders.includes(providerId)) return undefined;
+    const defaultBaseUrl = getProviderCatalogEntry(providerId)?.defaultBaseUrl;
+    if (defaultBaseUrl && normalizeBaseUrl(baseUrl) !== normalizeBaseUrl(defaultBaseUrl)) {
+        logger.debug(
+            `'${providerId}' base_url 이 카탈로그 기본값과 달라 게이트웨이를 우회(direct) — host=${baseUrlHost(baseUrl)}`,
+        );
+        return undefined;
+    }
     return {
         url: cfg.llmBaseUrl,
         masterKey: cfg.llmApiKey,
         modelPrefix: providerId,
     };
+}
+
+/** base_url 비교용 정규화 — 끝 `/` 제거, scheme·host 소문자(URL 파싱 실패 시 원문 trim). */
+function normalizeBaseUrl(raw: string): string {
+    const trimmed = raw.trim();
+    try {
+        const u = new URL(trimmed);
+        return `${u.origin}${u.pathname.replace(/\/+$/, '')}${u.search}`;
+    } catch {
+        return trimmed.replace(/\/+$/, '');
+    }
+}
+
+/** 로그용 host 만 추출 — 경로·쿼리(키가 섞일 수 있음)는 남기지 않는다. */
+function baseUrlHost(raw: string): string {
+    try {
+        return new URL(raw.trim()).host;
+    } catch {
+        return '(invalid)';
+    }
 }
 
 /**
@@ -117,7 +148,7 @@ const EXTERNAL_PROVIDER_FACTORIES: Record<
             providerId,
             apiKey: plaintextKey,
             baseUrl: keyRow.baseUrl,
-            gateway: resolveGatewayRoute(providerId, keyRow.authMethod),
+            gateway: resolveGatewayRoute(providerId, keyRow.authMethod, keyRow.baseUrl),
         });
     },
 };
