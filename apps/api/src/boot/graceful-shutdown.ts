@@ -22,8 +22,8 @@
  *
  * 실행 중인 에이전트 작업은 ②에서 멈춘다(services/agent-task/shutdown-drain): 사용자 취소가 아니라 부팅 복구가 집는
  * 표식(failed + 'server restarted')으로 남기고, 실행 소유권을 반납하고 샌드박스 컨테이너를 내린다(workspace 는 남긴다).
- * 다음 부팅의 복구(services/agent-task/boot-recovery)가 체크포인트에서 이어 실행한다. 상한 안에 정리가 끝나지 않은 작업과
- * 비정상 종료(SIGKILL·크래시)는 종전처럼 부팅 때의 좀비 정리·복구와 지난 소유권 점검이 맡는다.
+ * 체크포인트가 있으면 다음 부팅의 복구(services/agent-task/boot-recovery)가 이어 실행하고, 없으면 종료 알림 점검이 정리한다.
+ * 상한 안에 정리가 끝나지 않은 작업과 비정상 종료(SIGKILL·크래시)는 종전처럼 부팅 때의 좀비 정리·복구와 지난 소유권 점검이 맡는다.
  * 질문 응답 대기로 주차된 작업은 이 프로세스에 실행이 없어 건드리지 않는다.
  *
  * @module boot/graceful-shutdown
