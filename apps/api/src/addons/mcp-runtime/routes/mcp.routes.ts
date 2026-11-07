@@ -11,7 +11,7 @@
  * @description
  * - POST   /api/mcp/terminal              - 터미널 실행 (비활성화, HTTP 410)
  * - POST   /api/mcp/terminal              - 터미널 실행 (비활성화, HTTP 410)
- * - GET    /api/mcp/tools                 - 사용 가능한 도구 목록 (전체 노출)
+ * - GET    /api/mcp/tools                 - 사용 가능한 도구 목록 (인증)
  * - POST   /api/mcp/tools/:name/execute   - 도구 실행 (인증, 컨텍스트 기반 권한)
  * - GET    /api/mcp/servers               - 외부 MCP 서버 목록 + 연결 상태 (인증)
  * - POST   /api/mcp/servers               - 새 외부 서버 등록 (관리자)
@@ -27,7 +27,7 @@
 
 import { Router, Request, Response } from 'express';
 import { getUnifiedMCPClient } from '../index';
-import { requireAuth, optionalAuth } from '../../../auth';
+import { requireAuth } from '../../../auth';
 import { success, badRequest, unauthorized, forbidden, notFound, internalError } from '../../../utils/api-response';
 import { asyncHandler } from '../../../utils/error-handler';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
@@ -66,8 +66,8 @@ export const mcpRouter = Router();
  // 도구 목록 및 실행 API
  // ============================================
 
- // 사용 가능한 도구 목록 조회 (GET) - 전체 노출 (제한 없음)
- mcpRouter.get('/tools', optionalAuth, (_req: Request, res: Response) => {
+ // 사용 가능한 도구 목록 조회 (GET) - 인증 필요 (인증 보강 2026-11-07 점검)
+ mcpRouter.get('/tools', requireAuth, (_req: Request, res: Response) => {
      try {
          const mcpClient = getUnifiedMCPClient();
          const tools = mcpClient.getToolList();
