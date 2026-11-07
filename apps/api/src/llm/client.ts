@@ -94,9 +94,10 @@ export class LLMClient {
      * 파생 클라이언트를 만든다. role 해석된 외부 endpoint 클라이언트에
      * 전용 timeout 만 바꿔 쓰는 용도 (report-generator, review 류) —
      * createClient({ model: client.model }) 재파생은 외부 baseUrl 을 잃는다.
+     * createClient 를 거치므로 로컬 파생은 local-llm 슬롯 규칙(#1656)을 그대로 따른다 — 에이전트 작업 턴이 이 경로다.
      */
     derive(overrides: Partial<LLMConfig>): LLMClient {
-        return new LLMClient({ ...this.config, ...overrides });
+        return createClient({ ...this.config, ...overrides });
     }
 
     setModel(model: string): void {
@@ -406,9 +407,9 @@ export class LLMClient {
 }
 
 /**
- * LLMClient 생성 단일 진입점. 로컬 클라이언트(외부 provider 표식 quotaExempt 없음 — 채팅 본 루프·에이전트 작업 본 루프가 여기서 만든다)는
- * LOCAL_LLM_MAX_CONCURRENT>0 일 때 chat·generate 한 번 동안만 local-llm 슬롯을 잡도록 감싼다(#1656). 0(기본)이면 원본 그대로.
- * 외부 클라이언트는 model-role-resolver 가 자기 provider 슬롯으로 감싼다.
+ * LLMClient 생성 단일 진입점(derive() 파생도 여기를 거친다). 로컬 클라이언트(외부 provider 표식 quotaExempt 없음 — 채팅 본 루프,
+ * 에이전트 작업·서브에이전트 턴(derive), 역할 보조 호출이 여기서 만든다)는 LOCAL_LLM_MAX_CONCURRENT>0 일 때 chat·generate 한 번 동안만
+ * local-llm 슬롯을 잡도록 감싼다(#1656). 0(기본)이면 원본 그대로. 외부 클라이언트는 model-role-resolver 가 자기 provider 슬롯으로 감싼다.
  */
 export const createClient = (config?: Partial<LLMConfig>): LLMClient => {
     const client = new LLMClient(config);

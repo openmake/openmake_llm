@@ -6,8 +6,9 @@
  * OpenAI SDK 의 내장 재시도(짧은 백오프)만으론 부족하다. 호출부(토론 엔진·딥리서치·역할 클라이언트)는
  * 그대로 두고 model-role-resolver 가 만드는 외부 LLMClient 를 이 프록시로 감싼다.
  * 로컬(local-llm)은 LOCAL_LLM_MAX_CONCURRENT>0 일 때만 슬롯을 잡는다(429 재시도 없음) — 그 슬롯을 거치는 운영 호출은
- * 오케스트레이터 capability 호출(withProviderSlot)과 createClient(llm/client.ts)가 만드는 로컬 LLMClient(채팅·에이전트 작업 본 루프 포함)다.
- * 슬롯은 chat·generate 한 번 동안만 잡힌다(도구 실행·서브에이전트 동안은 놓는다). `new LLMClient` 직접 생성·derive() 파생은 거치지 않는다.
+ * 오케스트레이터 capability 호출(withProviderSlot)과 createClient(llm/client.ts)가 만드는 로컬 LLMClient(derive() 파생 포함 — 채팅 본 루프,
+ * 에이전트 작업·서브에이전트 턴, 생각 요약·답변 검증 등 보조 호출)다. 슬롯은 chat·generate 한 번 동안만 잡힌다(도구 실행·서브에이전트
+ * 동안은 놓는다). `new LLMClient` 직접 생성(라우터·semantic-compactor·인제스트·eval 등)은 거치지 않는다.
  *
  * 세마포어는 프로세스 전역·provider 단위(rate limit 은 키 단위지만 배포당 키가 사실상 1개).
  */

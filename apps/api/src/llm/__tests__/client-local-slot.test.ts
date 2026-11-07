@@ -70,6 +70,23 @@ describe('createClient — 로컬 LLM 슬롯', () => {
         await b;
     });
 
+    it('derive() 파생 클라이언트도 같은 슬롯을 쓴다 — 에이전트 작업 턴(role-client)이 이 경로다', async () => {
+        const { createClient } = load('1');
+        const base = createClient({ model: 'm' });
+        const a = base.derive({ timeout: 1000 }).chat(msgs);
+        const b = base.derive({ timeout: 1000 }).chat(msgs);
+        await flush();
+        expect(started).toEqual([1]);
+        finishers[0]();
+        await a;
+        await flush();
+        expect(started).toEqual([1, 2]);
+        finishers[1]();
+        await b;
+        // 외부 클라이언트의 파생은 종전대로 원본(외부 슬롯은 resolver 정책)
+        expect(types.isProxy(createClient({ model: 'm', quotaExempt: true }).derive({ timeout: 1 }))).toBe(false);
+    });
+
     it('외부 클라이언트(quotaExempt)는 local-llm 슬롯을 잡지 않는다', async () => {
         const { createClient } = load('1');
         const ext = createClient({ model: 'm', quotaExempt: true });
@@ -89,6 +106,7 @@ describe('createClient — 로컬 LLM 슬롯', () => {
             const client = createClient({ model: 'm' });
             expect(types.isProxy(client)).toBe(false);
             expect(client).toBeInstanceOf(LLMClient);
+            expect(types.isProxy(client.derive({ timeout: 1 }))).toBe(false);
             const a = client.chat(msgs);
             const b = createClient({ model: 'm' }).chat(msgs);
             await flush();
