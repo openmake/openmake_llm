@@ -19,7 +19,7 @@ import { ProviderError } from './provider-errors';
 import { LocalLLMProvider } from './local-llm-provider';
 import { OpenAICompatProvider, GatewayRouteOptions } from './openai-compat-provider';
 import { getConfig } from '../config';
-import { getProviderCatalogEntry } from '../config/external-providers';
+import { baseUrlHost, isCustomBaseUrl } from './base-url';
 import { ChatGPTOAuthProvider } from './chatgpt-oauth/provider';
 import {
     parseSessionPayload,
@@ -75,8 +75,7 @@ function resolveGatewayRoute(
     if (authMethod === 'oauth') return undefined;
     const cfg = getConfig();
     if (!cfg.llmGatewayProviders.includes(providerId)) return undefined;
-    const defaultBaseUrl = getProviderCatalogEntry(providerId)?.defaultBaseUrl;
-    if (defaultBaseUrl && normalizeBaseUrl(baseUrl) !== normalizeBaseUrl(defaultBaseUrl)) {
+    if (isCustomBaseUrl(providerId, baseUrl)) {
         logger.debug(
             `'${providerId}' base_url 이 카탈로그 기본값과 달라 게이트웨이를 우회(direct) — host=${baseUrlHost(baseUrl)}`,
         );
@@ -87,26 +86,6 @@ function resolveGatewayRoute(
         masterKey: cfg.llmApiKey,
         modelPrefix: providerId,
     };
-}
-
-/** base_url 비교용 정규화 — 끝 `/` 제거, scheme·host 소문자(URL 파싱 실패 시 원문 trim). */
-function normalizeBaseUrl(raw: string): string {
-    const trimmed = raw.trim();
-    try {
-        const u = new URL(trimmed);
-        return `${u.origin}${u.pathname.replace(/\/+$/, '')}${u.search}`;
-    } catch {
-        return trimmed.replace(/\/+$/, '');
-    }
-}
-
-/** 로그용 host 만 추출 — 경로·쿼리(키가 섞일 수 있음)는 남기지 않는다. */
-function baseUrlHost(raw: string): string {
-    try {
-        return new URL(raw.trim()).host;
-    } catch {
-        return '(invalid)';
-    }
 }
 
 /**
