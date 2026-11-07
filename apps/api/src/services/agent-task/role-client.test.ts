@@ -290,6 +290,38 @@ describe('추론 수준(184)', () => {
         expect(calls[0][3]).toMatchObject({ think: 'high' });
         expect(calls[2][3]).toMatchObject({ think: false });
     });
+    describe('슬롯 대기(#1656) — 슬롯을 받은 뒤부터 첫 청크 감시·호출 상한을 잰다', () => {
+        type Opts = { signal: AbortSignal; onChunk?: () => void; onSlotWait?: () => void; onSlotAcquired?: () => void };
+        /** 슬롯 Proxy 흉내 — 60ms 슬롯을 기다린 뒤(callHook 이면 대기 시작·획득 훅) 10ms 뒤 첫 청크와 함께 끝나는 호출. abort 되면 거절한다. */
+        const queued = (callHook: boolean) => jest.fn((_c: unknown, _o: unknown, _t: unknown, opts: Opts) => new Promise((res, rej) => {
+            opts.signal.addEventListener('abort', () => rej(new Error('취소됨')), { once: true });
+            if (callHook) opts.onSlotWait?.();
+            setTimeout(() => {
+                if (callHook) opts.onSlotAcquired?.();
+                setTimeout(() => { opts.onChunk?.(); res({ content: 'ok' }); }, 10);
+            }, 60);
+        }));
+        const stateOf = (chat: jest.Mock): AgentRoleState => ({ client: { derive: () => ({ chat }) } as unknown as LLMClient, external: false, fallbackDone: true });
+
+        it('무응답 감시: 슬롯 대기는 첫 청크 기한(40ms)에 넣지 않는다 — 대조: 훅이 없으면 감시가 끊어 다시 부른다', async () => {
+            const ok = queued(true);
+            await expect(chatTurnWithRoleFallback(stateOf(ok), { ...params(), idle: { firstChunkMs: 40, gapMs: 30 } })).resolves.toEqual({ content: 'ok' });
+            expect(ok).toHaveBeenCalledTimes(1);
+            expect((ok.mock.calls[0] as unknown as [unknown, unknown, unknown, Opts])[3]).toMatchObject({ onSlotWait: expect.any(Function), onSlotAcquired: expect.any(Function) });
+            const noHook = queued(false);
+            await chatTurnWithRoleFallback(stateOf(noHook), { ...params(), idle: { firstChunkMs: 40, gapMs: 30 } }).catch(() => undefined);
+            expect(noHook.mock.calls.length).toBeGreaterThan(1);
+        });
+
+        it('호출 상한: 슬롯 대기는 상한(40ms)에 넣지 않는다 — 대조: 훅이 없으면 상한 초과로 다시 부른다', async () => {
+            const ok = queued(true);
+            await expect(chatTurnWithRoleFallback(stateOf(ok), { ...params(), callTimeoutMs: 40 })).resolves.toEqual({ content: 'ok' });
+            expect(ok).toHaveBeenCalledTimes(1);
+            const noHook = queued(false);
+            await chatTurnWithRoleFallback(stateOf(noHook), { ...params(), callTimeoutMs: 40 }).catch(() => undefined);
+            expect(noHook.mock.calls.length).toBeGreaterThan(1);
+        });
+    });
     it('off 작업의 호출 상한 초과는 종전처럼 TurnCallCapExceeded 로 끝난다', async () => {
         // fakeState 의 impl 은 signal 을 받지 않는다 — 상한(20ms)이 끊은 뒤 스스로 거절해 끝나지 않는 호출을 흉내 낸다.
         const hang = () => new Promise<never>((_res, rej) => { setTimeout(() => rej(new Error('aborted')), 50); });

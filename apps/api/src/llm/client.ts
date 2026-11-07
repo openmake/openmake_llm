@@ -137,6 +137,13 @@ export class LLMClient {
             onChunk?: () => void;
             /** 요청 클래스(F06.2·F04.6) — 셰도우 계측·우선순위 부여 분류. 미지정은 unspecified */
             requestClass?: LlmRequestClass;
+            /**
+             * local-llm 슬롯(LOCAL_LLM_MAX_CONCURRENT>0) 훅 — 슬롯 Proxy(external-throttle)만 부르고 이 메서드는 읽지 않는다. 한도 0 이면 불리지 않는다.
+             * onSlotWait: 슬롯을 기다리기 시작할 때(호출 직후 동기로 1회), onSlotAcquired: 슬롯을 받아 모델을 부르기 직전 1회.
+             * 호출자가 그 사이(슬롯 대기)를 첫 청크 감시·호출 상한에서 빼는 데 쓴다(#1656).
+             */
+            onSlotWait?: () => void;
+            onSlotAcquired?: () => void;
         },
     ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
         const reservation = await this.reserveQuota(messages, options?.num_predict);

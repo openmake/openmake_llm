@@ -87,6 +87,25 @@ describe('createClient — 로컬 LLM 슬롯', () => {
         expect(types.isProxy(createClient({ model: 'm', quotaExempt: true }).derive({ timeout: 1 }))).toBe(false);
     });
 
+    it('대기 시작에 onSlotWait(동기), 슬롯을 받은 직후 onSlotAcquired — 대기 중인 호출은 앞 호출이 끝나야 받는다(턴 감시가 대기를 빼는 데 쓴다)', async () => {
+        const { createClient } = load('1');
+        const hookA = jest.fn();
+        const hookB = jest.fn();
+        const waitB = jest.fn();
+        const a = createClient({ model: 'm' }).chat(msgs, undefined, undefined, { onSlotAcquired: hookA });
+        const b = createClient({ model: 'm' }).chat(msgs, undefined, undefined, { onSlotWait: waitB, onSlotAcquired: hookB });
+        expect(waitB).toHaveBeenCalledTimes(1);
+        await flush();
+        expect(hookA).toHaveBeenCalledTimes(1);
+        expect(hookB).not.toHaveBeenCalled();
+        finishers[0]();
+        await a;
+        await flush();
+        expect(hookB).toHaveBeenCalledTimes(1);
+        finishers[1]();
+        await b;
+    });
+
     it('외부 클라이언트(quotaExempt)는 local-llm 슬롯을 잡지 않는다', async () => {
         const { createClient } = load('1');
         const ext = createClient({ model: 'm', quotaExempt: true });

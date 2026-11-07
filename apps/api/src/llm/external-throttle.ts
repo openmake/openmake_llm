@@ -9,6 +9,7 @@
  * 오케스트레이터 capability 호출(withProviderSlot)과 createClient(llm/client.ts)가 만드는 로컬 LLMClient(derive() 파생 포함 — 채팅 본 루프,
  * 에이전트 작업·서브에이전트 턴, 생각 요약·답변 검증 등 보조 호출)다. 슬롯은 chat·generate 한 번 동안만 잡힌다(도구 실행·서브에이전트
  * 동안은 놓는다). `new LLMClient` 직접 생성(라우터·semantic-compactor·인제스트·eval 등)은 거치지 않는다.
+ * 슬롯 대기 시간은 에이전트 턴의 무응답 감시·호출 상한에 넣지 않는다(onSlotWait·onSlotAcquired 훅 — role-client).
  *
  * 세마포어는 프로세스 전역·provider 단위(rate limit 은 키 단위지만 배포당 키가 사실상 1개).
  */
@@ -216,10 +217,20 @@ export function throttleExternalClient<T extends LLMClient>(client: T, providerI
     }) as T;
 }
 
-/** 로컬 LLM 용 — chat·generate 를 슬롯만 잡고 그대로 실행(429 재시도·힌트 없음). 나머지는 원본에 위임. */
+/**
+ * 로컬 LLM 용 — chat·generate 를 슬롯만 잡고 그대로 실행(429 재시도·힌트 없음). 나머지는 원본에 위임.
+ * advancedOptions 의 onSlotWait(대기 시작, 동기)·onSlotAcquired(슬롯을 받아 원본을 부르기 직전)를 부른다 — 호출자가 대기 시간을
+ * 턴 감시·호출 상한에서 뺀다.
+ */
 function slotOnlyClient<T extends LLMClient>(client: T): T {
-    const wrap = (method: 'chat' | 'generate') => (...args: unknown[]) =>
-        withProviderSlot('local-llm', () => (client[method] as (...a: unknown[]) => Promise<unknown>).apply(client, args), signalOf(method, args));
+    const wrap = (method: 'chat' | 'generate') => (...args: unknown[]) => {
+        const hooks = args[method === 'chat' ? 3 : 4] as { onSlotWait?: () => void; onSlotAcquired?: () => void } | undefined;
+        hooks?.onSlotWait?.();
+        return withProviderSlot('local-llm', () => {
+            hooks?.onSlotAcquired?.();
+            return (client[method] as (...a: unknown[]) => Promise<unknown>).apply(client, args);
+        }, signalOf(method, args));
+    };
     return new Proxy(client, {
         get(target, prop) {
             if (prop === 'chat' || prop === 'generate') return wrap(prop);
