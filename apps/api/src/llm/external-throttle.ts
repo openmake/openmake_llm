@@ -118,9 +118,14 @@ export function is429(err: unknown): boolean {
     return typeof e.message === 'string' && /^429 status code\b/.test(e.message);
 }
 
-/** Retry-After(초 또는 HTTP-date) → ms. 없거나 파싱 불가면 undefined */
+/**
+ * Retry-After(초 또는 HTTP-date) → ms. 없거나 파싱 불가면 undefined.
+ * ProviderError 로 감싸인 공급자 오류(OAuth role 경로)는 원본 응답이 `cause` 에 있다 — 한 단계만 본다.
+ */
 function retryAfterMs(err: unknown): number | undefined {
-    const headers = (err as { headers?: Record<string, string> | { get?: (k: string) => string | null } } | null)?.headers;
+    type HeaderSource = { headers?: Record<string, string> | { get?: (k: string) => string | null } };
+    const e = err as (HeaderSource & { cause?: HeaderSource | null }) | null;
+    const headers = e?.headers ?? e?.cause?.headers;
     if (!headers) return undefined;
     const raw = typeof (headers as { get?: unknown }).get === 'function'
         ? (headers as { get: (k: string) => string | null }).get('retry-after')
