@@ -413,6 +413,7 @@ export class AgentTaskService {
                     role: 'assistant',
                     content: result.content,
                     ...(result.tool_calls && { tool_calls: result.tool_calls }),
+                    ...(result.reasoning_details && { reasoning_details: result.reasoning_details }), // OpenRouter 추론 블록 — 다음 요청에 그대로(#1657)
                 });
 
                 // stuck 감지 — 동일 응답(내용+도구호출)이 STUCK_THRESHOLD 회 연속되면 전략변경 유도(turn-guards).

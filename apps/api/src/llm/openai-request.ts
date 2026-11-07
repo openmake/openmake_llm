@@ -73,11 +73,14 @@ export function toOpenAIMessages(messages: ChatMessage[], modelId?: string): unk
         // 도구 루프 reasoning 보존 — Qwen3.8 template(preserve_thinking) 이 다음 턴에 재주입한다.
         const reasoning = LOCAL_PRESERVE_THINKING_ENABLED && m.role === 'assistant' && m.thinking
             ? { reasoning_content: m.thinking } : {};
+        // 응답이 준 추론 블록(OpenRouter reasoning_details)을 그대로 되돌린다 — 값이 있을 때만, 없으면 키도 없다(#1657).
+        const details = m.role === 'assistant' && m.reasoning_details?.length ? { reasoning_details: m.reasoning_details } : {};
         if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
             return {
                 role: 'assistant',
                 content: m.content || '',
                 ...reasoning,
+                ...details,
                 tool_calls: m.tool_calls.map((tc, i) => ({
                     // 진짜 id (vLLM 발급) 우선, 누락 시에만 합성 fallback.
                     id: tc.id ?? `call_${tc.function.name}_${i}`,
@@ -91,7 +94,7 @@ export function toOpenAIMessages(messages: ChatMessage[], modelId?: string): unk
                 })),
             };
         }
-        return { role: m.role, content: m.content, ...reasoning };
+        return { role: m.role, content: m.content, ...reasoning, ...details };
     });
 }
 

@@ -310,6 +310,11 @@ export interface ChatMessage {
     thinking?: string;
     /** LLM이 요청한 도구 호출 목록 (assistant 역할에서만 사용) */
     tool_calls?: ToolCall[];
+    /**
+     * OpenRouter 가 assistant 응답에 실어 준 추론 블록(`reasoning_details` — 암호화·요약 추론 등, assistant 에서만).
+     * 다음 요청의 같은 assistant 메시지에 그대로 되돌려야 추론이 이어진다(#1657). 해석·로그 금지. 응답에 없으면 키도 없다.
+     */
+    reasoning_details?: unknown[];
     /** 도구 실행 결과의 출처 도구 이름 (tool 역할에서만 사용, 디버깅·로깅용) */
     tool_name?: string;
     /**

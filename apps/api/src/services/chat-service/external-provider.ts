@@ -311,6 +311,8 @@ export async function runExternalStream(
                 content: result.content || '',
                 // 직전 추론을 다음 턴에 보존 — 로컬 wire(toOpenAIMessages)만 reasoning_content 로 싣는다.
                 ...(result.thinking ? { thinking: result.thinking } : {}),
+                // OpenRouter 추론 블록 — 다음 턴 요청의 이 assistant 메시지에 그대로 되돌린다(#1657).
+                ...(result.reasoningDetails ? { reasoning_details: result.reasoningDetails } : {}),
                 tool_calls: result.toolCalls.map((tc) => ({
                     type: 'function' as const,
                     id: tc.id,
