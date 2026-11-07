@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.127.1](https://github.com/openmake/openmake_llm/compare/v1.127.0...v1.127.1) (2026-11-07)
+
+
+### 🐛 버그 수정
+
+* **capability:** 사용자 지정 endpoint 키는 capability 배정·해석에서 명시 오류(CAPABILITY_CUSTOM_ENDPOINT) ([8ec3967](https://github.com/openmake/openmake_llm/commit/8ec396776a0709db7e7924f8ba49f9eb58b9ccf0))
+* **llm:** 외부 429 백오프 대기를 슬롯 대기처럼 턴 호출 상한에서 제외하고 identity derive 를 스로틀 프록시로 유지 ([f1f9306](https://github.com/openmake/openmake_llm/commit/f1f930671638d3f68a9f599fde0b58a5b8ba2300))
+* **roles:** OAuth 공급자 role 클라이언트도 provider 스로틀(세마포어·429 백오프)로 감싼다 ([2eaf94f](https://github.com/openmake/openmake_llm/commit/2eaf94f0c11f7b8f74e8d0c2e40701a943a76176))
+
+
+### ♻️ 리팩터링
+
+* **providers:** base_url 정규화·비교 헬퍼를 base-url.ts 로 분리 ([f788820](https://github.com/openmake/openmake_llm/commit/f7888203da84c3e04f13d95c5583dafa31035de4))
+
 ## [1.127.0](https://github.com/openmake/openmake_llm/compare/v1.126.4...v1.127.0) (2026-11-07)
 
 
