@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.126.4](https://github.com/openmake/openmake_llm/compare/v1.126.3...v1.126.4) (2026-11-07)
+
+
+### 🐛 버그 수정
+
+* **db:** pg-pool 연결 timeout 오류를 재시도 가능으로 판정 ([28553dd](https://github.com/openmake/openmake_llm/commit/28553ddab4fc769dbf2c7666c31fff11853294f6))
+* **llm:** 외부 BYOK 클라이언트의 derive 파생이 provider 스로틀을 유지하도록 createClient 에서 감싼다 ([b838b4a](https://github.com/openmake/openmake_llm/commit/b838b4a90413f0a7d4f9df1a3c97b85df994f0bf))
+* **llm:** 외부 provider 슬롯 대기도 에이전트 턴 감시·호출 상한에서 제외 ([0fc67c9](https://github.com/openmake/openmake_llm/commit/0fc67c966a664997dbecddf76201c389ffd80dbe))
+* **providers:** 사용자 지정 base_url 공급자는 LiteLLM 게이트웨이를 우회해 direct 호출 ([1b0dba5](https://github.com/openmake/openmake_llm/commit/1b0dba5cc0e61c36b26520d381279383a43dd6ed))
+* **web:** MCP 카탈로그 설치 폼이 args_schema 항목(Filesystem root_path)을 받아 함께 보낸다 ([d9daef7](https://github.com/openmake/openmake_llm/commit/d9daef7824e63194ecea79dee75be27a9a482674))
+
 ## [1.126.3](https://github.com/openmake/openmake_llm/compare/v1.126.2...v1.126.3) (2026-11-07)
 
 
