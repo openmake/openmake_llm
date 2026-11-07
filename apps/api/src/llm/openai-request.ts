@@ -41,7 +41,10 @@ export function toResponseFormat(f: FormatOption | undefined): Record<string, un
     };
 }
 
-export function toOpenAIMessages(messages: ChatMessage[], modelId?: string): unknown[] {
+/** reasoning_details 를 되돌려 보내는 공급자 — 그 밖(로컬·다른 외부)은 모르는 메시지 필드를 거절할 수 있어 싣지 않는다(#1657) */
+export const REASONING_DETAILS_PROVIDER = 'openrouter';
+
+export function toOpenAIMessages(messages: ChatMessage[], modelId?: string, opts?: { providerId?: string }): unknown[] {
     // 로컬 vLLM `--limit-mm-per-prompt` 페어 — history 포함 총량을 상한에 맞춘다(초과 시 400).
     // 상한은 서빙 설정과 짝이라 모델 프로필이 적었으면 그 값, 아니면 전역 기본값.
     // 운영자가 env 로 명시했으면 그 값이 이긴다(서빙 설정을 임시로 바꾼 경우의 즉시 대응 수단).
@@ -73,8 +76,9 @@ export function toOpenAIMessages(messages: ChatMessage[], modelId?: string): unk
         // 도구 루프 reasoning 보존 — Qwen3.8 template(preserve_thinking) 이 다음 턴에 재주입한다.
         const reasoning = LOCAL_PRESERVE_THINKING_ENABLED && m.role === 'assistant' && m.thinking
             ? { reasoning_content: m.thinking } : {};
-        // 응답이 준 추론 블록(OpenRouter reasoning_details)을 그대로 되돌린다 — 값이 있을 때만, 없으면 키도 없다(#1657).
-        const details = m.role === 'assistant' && m.reasoning_details?.length ? { reasoning_details: m.reasoning_details } : {};
+        // 응답이 준 추론 블록(OpenRouter reasoning_details)을 그대로 되돌린다 — 대상이 openrouter 이고 값이 있을 때만(#1657).
+        const details = opts?.providerId === REASONING_DETAILS_PROVIDER && m.role === 'assistant' && m.reasoning_details?.length
+            ? { reasoning_details: m.reasoning_details } : {};
         if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
             return {
                 role: 'assistant',

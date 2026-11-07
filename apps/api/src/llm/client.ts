@@ -213,6 +213,7 @@ export class LLMClient {
         const request: ChatRequest = {
             model: poolDecision.model,
             messages: effectiveMessages,
+            ...(this.config.providerId && { providerId: this.config.providerId }),
             stream: !!onToken,
             options: effectiveOptions,
             ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
