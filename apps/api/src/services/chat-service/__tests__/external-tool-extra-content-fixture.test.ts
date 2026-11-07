@@ -38,7 +38,7 @@ function run() {
     return streamFromExternalProvider(deps, resolved(external), req as never, () => undefined);
 }
 
-type WireMessage = { role: string; tool_calls?: Array<Record<string, unknown>> };
+type WireMessage = { role: string; tool_calls?: Array<Record<string, unknown>>; reasoning_details?: unknown };
 
 beforeAll(async () => { external = await startLlmFixture((i) => externalReply(i)); });
 afterAll(async () => { await external.close(); });
@@ -70,5 +70,22 @@ describe('외부 provider 도구 루프 — extra_content 왕복', () => {
 
         const assistant = (external.requests[1].messages as WireMessage[]).find((m) => m.role === 'assistant' && m.tool_calls);
         expect(assistant?.tool_calls?.[0]).not.toHaveProperty('extra_content');
+    });
+});
+
+describe('외부 provider 도구 루프 — reasoning_details 왕복(#1657)', () => {
+    it('1턴 응답 delta.reasoning_details 가 2턴 요청 assistant 메시지에 그대로 실린다', async () => {
+        const D = [{ type: 'reasoning.encrypted', id: 'enc', format: 'openai-responses-v1', data: 'b3BhcXVl', index: 0 }];
+        externalReply = (i) => i === 0
+            ? { kind: 'stream', chunks: [
+                sseChunk({ role: 'assistant', reasoning_details: D }),
+                sseChunk({ tool_calls: [{ index: 0, id: 'call_a', type: 'function', function: { name: 'mcp_call', arguments: '{}' } }] }, { finish_reason: 'tool_calls' }),
+            ] }
+            : { kind: 'stream', chunks: [sseChunk({ role: 'assistant', content: '완료' }, { finish_reason: 'stop' })] };
+
+        await expect(run()).resolves.toContain('완료');
+
+        const assistant = (external.requests[1].messages as WireMessage[]).find((m) => m.role === 'assistant' && m.tool_calls);
+        expect(assistant?.reasoning_details).toEqual(D);
     });
 });
