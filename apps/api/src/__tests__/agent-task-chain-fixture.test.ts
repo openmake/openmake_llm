@@ -386,7 +386,7 @@ describe('장기 실행 체인 — 이어가기·복구·취소·폭주 가드 (
         await expect(restartServer()).resolves.toEqual({ aborted: 1, remaining: 0 });
         expect(rowOf(s1Id)).toMatchObject({ status: 'failed', error: 'server restarted', chain_root_task_id: ROOT, continued_from_task_id: ROOT });
 
-        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0, skipped: 0, parked: 0 });
         await waitFor('복구된 s1 완료', () => rowOf(s1Id).status === 'completed' && queueIdle());
 
         const s1 = rowOf(s1Id);
