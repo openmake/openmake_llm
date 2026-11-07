@@ -4,6 +4,7 @@
  * 2026-07-31 LiteLLM Mac 이전 계약:
  * - 목록에 있는 API key provider → inference client 가 게이트웨이(baseURL=llmBaseUrl/v1)
  *   + x-litellm-api-key 헤더 + model prefix
+ *   (목록에 있는 API key provider 이고 base_url 이 카탈로그 기본값이면 게이트웨이, 기본값과 다르면 direct)
  * - 목록에 없는 provider → 기존 direct 동작 무변경
  * - 카탈로그/검증 client 는 게이트웨이 여부와 무관하게 provider endpoint direct
  */
@@ -93,6 +94,28 @@ describe('LLM_GATEWAY_PROVIDERS 게이트웨이 라우팅', () => {
         expect(p.client).toBe(p.catalogClient);
         expect(p.client.baseURL).toBe('https://api.groq.com/openai/v1');
         expect(p.modelPrefix).toBeUndefined();
+    });
+
+    it('목록에 있어도 사용자 base_url 이 카탈로그 기본값과 다르면 direct (client === catalogClient)', () => {
+        const provider = createExternalProviderInstance(
+            makeKeyRow({ baseUrl: 'https://compat-gateway.example.test/v1' }),
+            'sk-user-key',
+        );
+        const p = inner(provider as OpenAICompatProvider);
+        expect(p.client).toBe(p.catalogClient);
+        expect(p.client.baseURL).toBe('https://compat-gateway.example.test/v1');
+        expect(p.modelPrefix).toBeUndefined();
+    });
+
+    it('끝 슬래시·host 대소문자만 다른 기본값 → 게이트웨이 유지', () => {
+        const provider = createExternalProviderInstance(
+            makeKeyRow({ baseUrl: 'https://OpenRouter.ai/api/v1/' }),
+            'sk-or-user-key',
+        );
+        const p = inner(provider as OpenAICompatProvider);
+        expect(p.client.baseURL).toBe('http://127.0.0.1:13401/v1');
+        expect(p.client).not.toBe(p.catalogClient);
+        expect(p.modelPrefix).toBe('openrouter');
     });
 
 });

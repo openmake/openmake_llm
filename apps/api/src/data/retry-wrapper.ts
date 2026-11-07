@@ -28,6 +28,15 @@ const RETRYABLE_ERROR_CODES = new Set([
 ]);
 
 /**
+ * 재시도 가능한 code 없는 에러 메시지 — pg-pool 연결 timeout 문구(라이브러리 고정 문구).
+ * pg-pool 은 연결 timeout 을 `code` 없는 일반 Error 로 던지므로 메시지로만 구분할 수 있다.
+ */
+const RETRYABLE_MESSAGE_PATTERNS: readonly RegExp[] = [
+    /^timeout exceeded when trying to connect$/,
+    /^Connection terminated due to connection timeout$/,
+];
+
+/**
  * 에러가 재시도 가능한지 판단
  */
 function isRetryableError(err: unknown): boolean {
@@ -42,6 +51,12 @@ function isRetryableError(err: unknown): boolean {
 
     // PostgreSQL 에러 코드 (error.code가 5자리 문자열인 경우)
     if (typeof error.code === 'string' && error.code.length === 5 && RETRYABLE_ERROR_CODES.has(error.code)) {
+        return true;
+    }
+
+    // code 없는 pg-pool 연결 timeout 에러
+    if (error.code === undefined && typeof error.message === 'string'
+        && RETRYABLE_MESSAGE_PATTERNS.some(pattern => pattern.test(error.message as string))) {
         return true;
     }
 
