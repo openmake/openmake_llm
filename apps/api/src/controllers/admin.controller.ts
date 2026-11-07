@@ -9,13 +9,21 @@ import { Request, Response, Router } from 'express';
 import { getUserManager, UserRole, USER_ROLES, isUserRole } from '../data/user-manager';
 import { requireAuth, requireAdmin, clearSessionsForUser } from '../auth';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, notFound, internalError } from '../utils/api-response';
+import { success, badRequest, notFound, internalError, error as apiError, ErrorCodes } from '../utils/api-response';
+import { AppError } from '../utils/error-handler';
 import { validatePasswordComplexity } from '../services/AuthService';
 import { listAlertHistory, exportAlertHistoryCsv, getAlertStats, getLlmPoolStats, acknowledgeAlert } from './admin-alerts.controller';
 import { getConversations, getStats, exportConversations } from './admin-conversations.controller';
 import type { AuditAction } from '../config/audit-actions';
 
 const log = createLogger('AdminController');
+
+/** 도메인 AppError(마지막 관리자 보호 409 등)는 그 상태·메시지로 응답한다 — 500 으로 삼키지 않는다. */
+function sendAppError(res: Response, err: unknown): boolean {
+    if (!(err instanceof AppError)) return false;
+    res.status(err.statusCode).json(apiError(err.code ?? ErrorCodes.INTERNAL_ERROR, err.message));
+    return true;
+}
 
 /**
  * 관리자 전용 사용자 관리 컨트롤러
@@ -206,6 +214,7 @@ class AdminController {
             }
             res.json(success({ user }));
         } catch (error) {
+            if (sendAppError(res, error)) return;
             log.error('[Admin Update User] 오류:', error);
             res.status(500).json(internalError('사용자 정보 수정 실패'));
         }
@@ -281,6 +290,7 @@ class AdminController {
             })();
             res.json(success({ user }));
         } catch (error) {
+            if (sendAppError(res, error)) return;
             log.error('[Admin Change Role] 오류:', error);
             res.status(500).json(internalError('사용자 역할 변경 실패'));
         }

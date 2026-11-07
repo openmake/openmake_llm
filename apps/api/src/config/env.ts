@@ -23,6 +23,8 @@ export interface EnvConfig {
     // Server
     port: number;
     serverHost: string;
+    /** API 수신 바인드 주소 (LISTEN_HOST, 기본 0.0.0.0) */
+    listenHost: string;
 
     // Database
     databaseUrl: string;
@@ -224,6 +226,7 @@ export function loadConfig(): EnvConfig {
         NODE_ENV: env('NODE_ENV'),
         PORT: env('PORT'),
         SERVER_HOST: env('SERVER_HOST'),
+        LISTEN_HOST: env('LISTEN_HOST'),
         DATABASE_URL: env('DATABASE_URL'),
         JWT_SECRET: env('JWT_SECRET'),
         ADMIN_PASSWORD: env('ADMIN_PASSWORD'),
@@ -340,6 +343,7 @@ export function loadConfig(): EnvConfig {
         // Server
         port: parsed.PORT ?? DEFAULT_CONFIG.port,
         serverHost: parsed.SERVER_HOST ?? DEFAULT_CONFIG.serverHost,
+        listenHost: parsed.LISTEN_HOST ?? DEFAULT_CONFIG.listenHost,
 
         // Database
         databaseUrl: parsed.DATABASE_URL ?? DEFAULT_CONFIG.databaseUrl,

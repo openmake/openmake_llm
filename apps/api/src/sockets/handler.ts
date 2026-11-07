@@ -37,6 +37,7 @@ import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { IncomingMessage } from 'http';
 import crypto from 'node:crypto';
 import { ClusterManager } from '../cluster/manager';
+import { buildInitPayload } from './init-payload';
 import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
@@ -226,11 +227,7 @@ export class WebSocketHandler {
             // 초기 상태 전송
             ws.send(JSON.stringify({
                 type: 'init',
-                data: {
-                    name: this.cluster.clusterName,
-                    stats: this.cluster.getStats(),
-                    nodes: this.cluster.getNodes()
-                },
+                data: buildInitPayload(this.cluster, extWs._authenticatedUserRole),
                 capabilities: WS_CHAT_CAPABILITIES, // 이 연결이 지원하는 새 계약(정확 이어받기 등) — ws-stream-control
             }));
 

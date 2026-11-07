@@ -31,8 +31,13 @@ function mockPool(updateRowCount: number, opts: { deleteRowCount?: number; curre
         if (sql.startsWith('SELECT * FROM users')) return { rowCount: 1, rows: [ROW] };
         return { rowCount: 0, rows: [] };
     });
+    // 트랜잭션 client — 제어문·관리자 가드 잠금은 여기서 답하고, changeRole·updateUser 의 UPDATE 는 pool query 로 넘긴다.
     const client = {
-        query: jest.fn(async (sql: string) => (sql.includes('DELETE FROM users') ? { rowCount: opts.deleteRowCount ?? 1 } : { rowCount: 0 })),
+        query: jest.fn(async (sql: string) => {
+            if (sql.includes('DELETE FROM users')) return { rowCount: opts.deleteRowCount ?? 1 };
+            if (sql.startsWith('UPDATE users')) return query(sql);
+            return { rowCount: 0, rows: [] };
+        }),
         release: jest.fn(),
     };
     (getPool as jest.Mock).mockReturnValue({ query, connect: jest.fn().mockResolvedValue(client) });
