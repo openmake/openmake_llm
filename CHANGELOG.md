@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.127.3](https://github.com/openmake/openmake_llm/compare/v1.127.2...v1.127.3) (2026-11-07)
+
+
+### 🔧 기타
+
+* **release:** 1.127.3 — [#1675](https://github.com/openmake/openmake_llm/issues/1675) 답변 뒤 앱 셸 밀림 수정 릴리스 유도 ([30d2af7](https://github.com/openmake/openmake_llm/commit/30d2af73a1609359a89ef54068fa5bac655d7ef2))
+
 ## [1.127.2](https://github.com/openmake/openmake_llm/compare/v1.127.1...v1.127.2) (2026-11-07)
 
 
