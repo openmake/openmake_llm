@@ -211,7 +211,8 @@ export function setupStaticFiles(app: Application, dirname: string): void {
     app.use(GENERATED_PATH_PREFIX, generatedDownloadHeader);
     // 소유권 판정 핸들러(P04) — static 보다 앞. 레코드 없는 종전 파일은 격리(403), reports/ 는 static 으로 통과
     app.use(GENERATED_PATH_PREFIX, generatedArtifactsRouter);
-    app.use(express.static(legacyAssetsPath, {
+    // 정적 서빙은 /generated 마운트 아래로 한정한다(2026-11-07 점검) — 루트 static 은 두지 않는다.
+    app.use(GENERATED_PATH_PREFIX, express.static(path.join(legacyAssetsPath, 'generated'), {
         etag: true,
         lastModified: true,
         setHeaders: staticHeaders,
