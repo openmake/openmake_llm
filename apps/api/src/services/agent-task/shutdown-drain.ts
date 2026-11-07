@@ -80,7 +80,7 @@ export async function trackAgentTaskRun(svc: AbortableRun, taskId: string, run: 
 export async function recordShutdownInterrupt(taskId: string, usage: { totalTokens: number; cachedPromptTokens?: number; cacheReportedPromptTokens?: number }): Promise<void> {
     await getUnifiedDatabase().updateAgentTask(taskId, { status: 'failed', error: AGENT_TASK_RESTART_ERROR, terminalNotifyPending: true, ...usage })
         .catch((e) => logger.warn(`[${taskId}] 종료 중단 기록 실패(다음 부팅의 좀비 정리가 맡는다): ${e instanceof Error ? e.message : e}`));
-    logger.info(`[${taskId}] 서버 종료로 실행 중단 — 다음 부팅의 복구가 체크포인트에서 이어 실행한다`);
+    logger.info(`[${taskId}] 서버 종료로 실행 중단 — 체크포인트가 있으면 다음 부팅의 복구가 이어 실행하고, 없으면 종료 알림 점검이 정리한다`);
 }
 
 /**
