@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.126.3](https://github.com/openmake/openmake_llm/compare/v1.126.2...v1.126.3) (2026-11-07)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** local-llm 슬롯 대기를 턴 무응답 감시·호출 상한에 넣지 않는다 ([161110f](https://github.com/openmake/openmake_llm/commit/161110f34d7c0ae99f294aaca13058790ee6d9bd)), closes [#1656](https://github.com/openmake/openmake_llm/issues/1656)
+* **agent-task:** model-wait 스윕이 끝나기 전 다음 주기는 건너뛴다 ([0ad4530](https://github.com/openmake/openmake_llm/commit/0ad453045e89479a2a0d9da467835a6eb6979d3c)), closes [#1656](https://github.com/openmake/openmake_llm/issues/1656)
+* **agent-task:** 종료 경로 모듈 주석과 부팅 요약 줄도 체크포인트 유무·네 항목대로 맞춘다 ([59844e0](https://github.com/openmake/openmake_llm/commit/59844e005ad32c66469aef0c8cf81347266354f4)), closes [#1654](https://github.com/openmake/openmake_llm/issues/1654)
+* **agent-task:** 종료 로그를 체크포인트 유무대로 쓰고 부팅 복구 요약에 건너뜀·기기대기를 센다 ([9637e0f](https://github.com/openmake/openmake_llm/commit/9637e0fbbfeae480234d66245dea61aa350c6976)), closes [#1654](https://github.com/openmake/openmake_llm/issues/1654)
+* **llm:** derive() 파생 클라이언트도 createClient 를 거쳐 local-llm 슬롯을 따른다 ([1b015e4](https://github.com/openmake/openmake_llm/commit/1b015e4e0af2ae9e055c7e2f9638a3d7704d539b)), closes [#1656](https://github.com/openmake/openmake_llm/issues/1656)
+* **llm:** LOCAL_LLM_MAX_CONCURRENT 슬롯을 createClient 가 만드는 로컬 LLMClient 까지 적용한다 ([b8ac51e](https://github.com/openmake/openmake_llm/commit/b8ac51e612db24fa0d3d21a18395b1139ef9687c)), closes [#1656](https://github.com/openmake/openmake_llm/issues/1656)
+* **llm:** OpenRouter reasoning_details 를 assistant 메시지에 보존해 다음 요청에 되돌린다 ([1b5b715](https://github.com/openmake/openmake_llm/commit/1b5b715bdd3f87770546bb9bbb7407fe2c46e30e)), closes [#1657](https://github.com/openmake/openmake_llm/issues/1657)
+* **llm:** reasoning_details 는 대상 공급자가 openrouter 일 때만 요청에 싣는다 ([6df95b7](https://github.com/openmake/openmake_llm/commit/6df95b7cfe7bf72e7297c3890a2e9012fdde33c6)), closes [#1657](https://github.com/openmake/openmake_llm/issues/1657)
+* **web:** dev 프록시 응답 대기 상한을 API_PROXY_TIMEOUT_MS(기본 120초)로 늘린다 ([0765ee8](https://github.com/openmake/openmake_llm/commit/0765ee8f866b14679dcda4fb9c691f41b0d28fb6)), closes [#1655](https://github.com/openmake/openmake_llm/issues/1655)
+* **web:** next.config 주석의 운영 프록시를 Caddy 로 고친다 ([808aad9](https://github.com/openmake/openmake_llm/commit/808aad9620f83773f1cc3064f9af7b2dbe67ed28)), closes [#1655](https://github.com/openmake/openmake_llm/issues/1655)
+* **web:** proxyTimeout 주석을 실제 영향 범위(/generated 는 운영도)대로 고친다 ([a8ef43e](https://github.com/openmake/openmake_llm/commit/a8ef43e5e0cca386a9491ba8dc8d946e8253f212)), closes [#1655](https://github.com/openmake/openmake_llm/issues/1655)
+
 ## [1.126.2](https://github.com/openmake/openmake_llm/compare/v1.126.1...v1.126.2) (2026-11-06)
 
 
