@@ -111,7 +111,7 @@ export async function streamChat(
     const requestStartedAt = Date.now();
     const stream = await openai.chat.completions.create({
         model: request.model,
-        messages: toOpenAIMessages(request.messages, request.model),
+        messages: toOpenAIMessages(request.messages, request.model, { providerId: request.providerId }),
         stream: true,
         stream_options: { include_usage: true },
         ...applyOptionsToRequest(request.options),
@@ -401,7 +401,7 @@ export async function nonStreamChat(
     const responseFormat = toResponseFormat(request.format);
     const response = await openai.chat.completions.create({
         model: request.model,
-        messages: toOpenAIMessages(request.messages, request.model),
+        messages: toOpenAIMessages(request.messages, request.model, { providerId: request.providerId }),
         stream: false,
         ...applyOptionsToRequest(request.options),
         ...(tools ? { tools, ...(request.tool_choice !== undefined && { tool_choice: request.tool_choice }) } : {}),

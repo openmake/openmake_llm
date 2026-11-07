@@ -343,7 +343,7 @@ export class OpenAICompatProvider implements IProvider {
         // 응답 tool call 을 원래 이름으로 복원한다(NVIDIA NIM 이 요청 전체를 400 거절하던 실측).
         const codec = new ToolNameCodec();
         const tools = opts.tools && opts.tools.length > 0 ? toOpenAITools(opts.tools, codec) : undefined;
-        const messages = toOpenAIMessages(opts.messages, { cacheSystemPrompt, codec });
+        const messages = toOpenAIMessages(opts.messages, { cacheSystemPrompt, codec, providerId: this.id });
         const renamed = codec.renamed();
         if (renamed.length > 0) {
             logger.debug(`${this.id} 도구명 정규화 ${renamed.length}건: ${renamed.slice(0, 5).map((r) => `${r.from}→${r.to}`).join(', ')}`);

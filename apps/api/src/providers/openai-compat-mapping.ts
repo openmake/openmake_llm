@@ -10,6 +10,7 @@
  */
 import type { ChatMessage, ToolDefinition } from '../llm';
 import type { ToolNameCodec } from './tool-name-codec';
+import { REASONING_DETAILS_PROVIDER } from '../llm/openai-request';
 
 /**
  * OpenAI 형식 메시지로 변환.
@@ -70,7 +71,7 @@ import { inferImageMime } from '../utils/image-mime';
 
 export function toOpenAIMessages(
     messages: ChatMessage[],
-    opts?: { cacheSystemPrompt?: boolean; codec?: ToolNameCodec },
+    opts?: { cacheSystemPrompt?: boolean; codec?: ToolNameCodec; /** 요청을 받을 공급자 — reasoning_details 를 실을지 정한다 */ providerId?: string },
 ): OpenAIMessage[] {
     const codec = opts?.codec;
     return messages.map((msg, idx): OpenAIMessage => {
@@ -105,8 +106,10 @@ export function toOpenAIMessages(
             };
         }
 
-        // 응답이 준 추론 블록(OpenRouter reasoning_details)을 그대로 되돌린다 — 값이 있을 때만, 없으면 키도 없다(#1657).
-        const details = msg.role === 'assistant' && msg.reasoning_details?.length ? { reasoning_details: msg.reasoning_details } : {};
+        // 응답이 준 추론 블록(OpenRouter reasoning_details)을 그대로 되돌린다 — 대상이 openrouter 이고 값이 있을 때만(#1657).
+        // 다른 공급자는 모르는 메시지 필드를 거절할 수 있다(Google OpenAI 호환은 모르는 필드에 400).
+        const details = opts?.providerId === REASONING_DETAILS_PROVIDER && msg.role === 'assistant' && msg.reasoning_details?.length
+            ? { reasoning_details: msg.reasoning_details } : {};
         if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
             return {
                 role: 'assistant',

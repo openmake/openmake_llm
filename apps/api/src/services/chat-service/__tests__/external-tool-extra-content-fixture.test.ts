@@ -16,17 +16,17 @@ const EXTRA = { google: { thought_signature: 'c2lnbmF0dXJlLW9wYXF1ZQ==' } };
 let external: LlmFixture;
 let externalReply: (index: number) => FixtureReply;
 
-function resolved(fixture: LlmFixture): ResolvedProvider {
+function resolved(fixture: LlmFixture, providerId = 'gemini', modelId = 'gemini-3.6-flash'): ResolvedProvider {
     return {
-        providerId: 'gemini', modelId: 'gemini-3.6-flash', fullId: 'gemini:gemini-3.6-flash',
+        providerId, modelId, fullId: `${providerId}:${modelId}`,
         provider: new OpenAICompatProvider({
-            providerId: 'gemini', apiKey: 'user-key', baseUrl: 'https://unused.example/v1',
-            gateway: { url: fixture.baseURL.replace(/\/v1$/, ''), masterKey: 'gateway-master', modelPrefix: 'gemini' },
+            providerId, apiKey: 'user-key', baseUrl: 'https://unused.example/v1',
+            gateway: { url: fixture.baseURL.replace(/\/v1$/, ''), masterKey: 'gateway-master', modelPrefix: providerId },
         }),
     } as unknown as ResolvedProvider;
 }
 
-function run() {
+function run(providerId?: string, modelId?: string) {
     const deps = {
         currentUserContext: null,
         allowedTools: [],
@@ -35,7 +35,7 @@ function run() {
     } as never;
     // 도구는 실행하지 않고(dry-run) 관찰만 — 루프가 assistant(tool_calls)+tool 결과를 쌓고 다음 턴을 부르는 이음새만 본다.
     const req = { message: '도구를 써서 알려줘', userId: 'u1', userRole: 'user' as const, evalToolObserver: { dryRun: true, onToolCalls: jest.fn() } };
-    return streamFromExternalProvider(deps, resolved(external), req as never, () => undefined);
+    return streamFromExternalProvider(deps, resolved(external, providerId, modelId), req as never, () => undefined);
 }
 
 type WireMessage = { role: string; tool_calls?: Array<Record<string, unknown>>; reasoning_details?: unknown };
@@ -73,19 +73,28 @@ describe('외부 provider 도구 루프 — extra_content 왕복', () => {
     });
 });
 
-describe('외부 provider 도구 루프 — reasoning_details 왕복(#1657)', () => {
-    it('1턴 응답 delta.reasoning_details 가 2턴 요청 assistant 메시지에 그대로 실린다', async () => {
-        const D = [{ type: 'reasoning.encrypted', id: 'enc', format: 'openai-responses-v1', data: 'b3BhcXVl', index: 0 }];
+describe('외부 provider 도구 루프 — reasoning_details 왕복(#1657, openrouter 만)', () => {
+    const D = [{ type: 'reasoning.encrypted', id: 'enc', format: 'openai-responses-v1', data: 'b3BhcXVl', index: 0 }];
+    const replyWithDetails = () => {
         externalReply = (i) => i === 0
             ? { kind: 'stream', chunks: [
                 sseChunk({ role: 'assistant', reasoning_details: D }),
                 sseChunk({ tool_calls: [{ index: 0, id: 'call_a', type: 'function', function: { name: 'mcp_call', arguments: '{}' } }] }, { finish_reason: 'tool_calls' }),
             ] }
             : { kind: 'stream', chunks: [sseChunk({ role: 'assistant', content: '완료' }, { finish_reason: 'stop' })] };
+    };
 
-        await expect(run()).resolves.toContain('완료');
-
+    it('openrouter: 1턴 응답 delta.reasoning_details 가 2턴 요청 assistant 메시지에 그대로 실린다', async () => {
+        replyWithDetails();
+        await expect(run('openrouter', 'anthropic/claude-sonnet')).resolves.toContain('완료');
         const assistant = (external.requests[1].messages as WireMessage[]).find((m) => m.role === 'assistant' && m.tool_calls);
         expect(assistant?.reasoning_details).toEqual(D);
+    });
+
+    it('openrouter 가 아니면(gemini) 응답에 와도 2턴 요청에 싣지 않는다', async () => {
+        replyWithDetails();
+        await expect(run()).resolves.toContain('완료');
+        const assistant = (external.requests[1].messages as WireMessage[]).find((m) => m.role === 'assistant' && m.tool_calls);
+        expect(assistant).not.toHaveProperty('reasoning_details');
     });
 });

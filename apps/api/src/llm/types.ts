@@ -313,6 +313,7 @@ export interface ChatMessage {
     /**
      * OpenRouter 가 assistant 응답에 실어 준 추론 블록(`reasoning_details` — 암호화·요약 추론 등, assistant 에서만).
      * 다음 요청의 같은 assistant 메시지에 그대로 되돌려야 추론이 이어진다(#1657). 해석·로그 금지. 응답에 없으면 키도 없다.
+     * 요청으로 내보내는 것은 대상 공급자가 openrouter 일 때뿐이다 — 로컬 폴백·다른 공급자에는 싣지 않는다.
      */
     reasoning_details?: unknown[];
     /** 도구 실행 결과의 출처 도구 이름 (tool 역할에서만 사용, 디버깅·로깅용) */
@@ -358,6 +359,8 @@ export interface ChatRequest {
     logprobs?: boolean;
     /** logprobs 활성화 시 각 토큰 위치에서 반환할 상위 토큰 수 */
     top_logprobs?: number;
+    /** 요청을 받을 공급자(LLMConfig.providerId, 로컬이면 없음) — 공급자 전용 필드(reasoning_details)를 실을지 정한다(#1657). 요청 본문에는 넣지 않는다 */
+    providerId?: string;
 }
 
 /**
