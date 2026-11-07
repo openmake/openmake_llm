@@ -55,7 +55,13 @@ describe('UserManager 계정 조회·비밀번호 변경', () => {
             if (sql.startsWith('SELECT * FROM users')) return { rowCount: 1, rows: [USER_ROW] };
             return { rowCount: 0, rows: [] };
         });
-        (getPool as jest.Mock).mockReturnValue({ query: mockQuery });
+        // updateUser 는 트랜잭션 client 로 UPDATE 한다 — 제어문만 client 가 답하고 나머지는 mockQuery 로 넘긴다.
+        const client = {
+            query: jest.fn(async (sql: string, params?: unknown[]) =>
+                (/^(BEGIN|COMMIT|ROLLBACK)/.test(sql) ? { rowCount: 0, rows: [] } : mockQuery(sql, params))),
+            release: jest.fn(),
+        };
+        (getPool as jest.Mock).mockReturnValue({ query: mockQuery, connect: jest.fn().mockResolvedValue(client) });
         manager = getUserManager();
     });
 
