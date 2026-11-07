@@ -161,6 +161,8 @@ export interface ChatStreamResult {
      * 다음 턴 assistant.tool_calls 에 그대로 되돌린다(ChatMessage ToolCall.extra_content).
      */
     toolCalls?: Array<{ id: string; name: string; args: unknown; extra_content?: Record<string, unknown> }>;
+    /** OpenRouter 추론 블록(delta.reasoning_details 를 받은 순서대로 이어 붙인 것) — 다음 턴 assistant 메시지에 그대로 되돌린다(ChatMessage.reasoning_details) */
+    reasoningDetails?: unknown[];
     /** 사용량 메트릭 */
     usage: UsageMetrics;
     /** 종료 사유 — 'stop' 정상, 'length' 토큰 한도, 'tool_calls' 툴 호출 대기, 'aborted' 사용자 중단, 'error' 오류 */

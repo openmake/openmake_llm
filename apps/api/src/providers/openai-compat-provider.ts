@@ -343,7 +343,7 @@ export class OpenAICompatProvider implements IProvider {
         // 응답 tool call 을 원래 이름으로 복원한다(NVIDIA NIM 이 요청 전체를 400 거절하던 실측).
         const codec = new ToolNameCodec();
         const tools = opts.tools && opts.tools.length > 0 ? toOpenAITools(opts.tools, codec) : undefined;
-        const messages = toOpenAIMessages(opts.messages, { cacheSystemPrompt, codec });
+        const messages = toOpenAIMessages(opts.messages, { cacheSystemPrompt, codec, providerId: this.id });
         const renamed = codec.renamed();
         if (renamed.length > 0) {
             logger.debug(`${this.id} 도구명 정규화 ${renamed.length}건: ${renamed.slice(0, 5).map((r) => `${r.from}→${r.to}`).join(', ')}`);
@@ -404,6 +404,7 @@ export class OpenAICompatProvider implements IProvider {
             let content = '';
             const pseudoGate = new PseudoToolCallGate();
             const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string; extra?: Record<string, unknown> }>();
+            const reasoningDetails: unknown[] = [];
             let promptTokens = 0;
             let completionTokens = 0;
 
@@ -422,6 +423,8 @@ export class OpenAICompatProvider implements IProvider {
                          * 응답도 동일 필드명 사용.
                          */
                         reasoning?: string;
+                        /** OpenRouter 추론 블록 조각 — 받은 순서대로 이어 붙여 그대로 보존 */
+                        reasoning_details?: unknown[];
                         tool_calls?: Array<{
                             index: number;
                             id?: string;
@@ -449,6 +452,7 @@ export class OpenAICompatProvider implements IProvider {
                     // reasoning chunk — i-provider 의 onThinking 콜백으로 전달
                     callbacks.onThinking?.(choice.delta.reasoning);
                 }
+                if (Array.isArray(choice?.delta?.reasoning_details)) reasoningDetails.push(...choice.delta.reasoning_details);
                 if (choice?.delta?.tool_calls) {
                     for (const tc of choice.delta.tool_calls) {
                         let buf = toolBuffers.get(tc.index);
@@ -522,6 +526,7 @@ export class OpenAICompatProvider implements IProvider {
             return {
                 content,
                 ...(toolCalls.length > 0 ? { toolCalls } : {}),
+                ...(reasoningDetails.length > 0 ? { reasoningDetails } : {}),
                 usage,
                 finishReason: aborted
                     ? 'aborted'

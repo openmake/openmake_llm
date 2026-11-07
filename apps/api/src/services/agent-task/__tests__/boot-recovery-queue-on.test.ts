@@ -64,7 +64,7 @@ it('운영 기본(큐 ON)·전역 상한 1 에서 중단 작업 3개를 복구�
         interrupted.push({ id, user_id: `u-${id}`, goal: '목표', max_turns: 10, executor: 'server', input_files: null, input_images: null, status: 'running', checkpoint });
     }
 
-    await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 3, failed: 0 });
+    await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 3, failed: 0, skipped: 0, parked: 0 });
     expect(claim).toHaveBeenCalledTimes(3);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'boot-on-1' }));

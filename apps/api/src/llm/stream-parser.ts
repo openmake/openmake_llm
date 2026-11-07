@@ -46,6 +46,8 @@ type OpenAIChatChunk = {
             reasoning?: string;
             /** vLLM 0.21+ Qwen3 reasoning 모델의 thinking 토큰 필드 */
             reasoning_content?: string;
+            /** OpenRouter 추론 블록 조각 — 받은 순서대로 이어 붙인 것이 전체(ChatMessage.reasoning_details) */
+            reasoning_details?: unknown[];
             tool_calls?: Array<{
                 index: number;
                 id?: string;
@@ -67,6 +69,8 @@ type OpenAIChatResponse = {
             reasoning?: string;
             /** vLLM 0.21+ Qwen3 reasoning 모델의 thinking 필드 */
             reasoning_content?: string;
+            /** OpenRouter 추론 블록 — 불투명 값 그대로 보존(ChatMessage.reasoning_details) */
+            reasoning_details?: unknown[];
             tool_calls?: Array<{
                 id: string;
                 function: { name: string; arguments: string };
@@ -107,7 +111,7 @@ export async function streamChat(
     const requestStartedAt = Date.now();
     const stream = await openai.chat.completions.create({
         model: request.model,
-        messages: toOpenAIMessages(request.messages, request.model),
+        messages: toOpenAIMessages(request.messages, request.model, { providerId: request.providerId }),
         stream: true,
         stream_options: { include_usage: true },
         ...applyOptionsToRequest(request.options),
@@ -119,6 +123,7 @@ export async function streamChat(
     let content = '';
     let thinking = '';
     const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string; extra?: Record<string, unknown> }>();
+    const reasoningDetails: unknown[] = [];
 
     // Artifact parser — callbacks 제공 시 token 스트림을 본문/artifact 채널로 분리.
     // parser.onContent → 기존 onToken 으로 위임 (UI 가 즉시 보는 일반 토큰)
@@ -233,6 +238,7 @@ export async function streamChat(
                 emitContent(incoming);
             }
         }
+        if (Array.isArray(choice?.delta?.reasoning_details)) reasoningDetails.push(...choice.delta.reasoning_details);
         if (choice?.delta?.tool_calls) {
             for (const tc of choice.delta.tool_calls) {
                 let buf = toolBuffers.get(tc.index);
@@ -375,6 +381,7 @@ export async function streamChat(
         content: finalContent,
         ...(finalThinking && { thinking: finalThinking }),
         ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
+        ...(reasoningDetails.length > 0 && { reasoning_details: reasoningDetails }),
         metrics: {
             prompt_tokens: promptTokens,
             completion_tokens: completionTokens,
@@ -394,7 +401,7 @@ export async function nonStreamChat(
     const responseFormat = toResponseFormat(request.format);
     const response = await openai.chat.completions.create({
         model: request.model,
-        messages: toOpenAIMessages(request.messages, request.model),
+        messages: toOpenAIMessages(request.messages, request.model, { providerId: request.providerId }),
         stream: false,
         ...applyOptionsToRequest(request.options),
         ...(tools ? { tools, ...(request.tool_choice !== undefined && { tool_choice: request.tool_choice }) } : {}),
@@ -474,6 +481,7 @@ export async function nonStreamChat(
         content: finalContent,
         ...(finalThinking && { thinking: finalThinking }),
         ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
+        ...(Array.isArray(msg.reasoning_details) && msg.reasoning_details.length > 0 && { reasoning_details: msg.reasoning_details }),
         metrics: {
             prompt_tokens: r.usage?.prompt_tokens,
             completion_tokens: r.usage?.completion_tokens,

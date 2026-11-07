@@ -120,7 +120,7 @@ export class TurnCallIdle extends Error {
  * 호출당 상한(callTimeoutMs)은 정상적인 긴 생성을 끊지 않도록 길게 둘 수밖에 없어, 응답이 유실된 호출이 그 상한을 다 채웠다
  * (2026-10-05 실측: 모델 서버는 정상 완료, 응답만 유실 → 5분 뒤에야 재시도).
  */
-function idleWatch(idle: { firstChunkMs: number; gapMs: number }): { signal: AbortSignal; onChunk: () => void; stop: () => void; firedMs: () => number | null; maxGapMs: () => number } {
+function idleWatch(idle: { firstChunkMs: number; gapMs: number }): { signal: AbortSignal; onChunk: () => void; pause: () => void; rearm: () => void; stop: () => void; firedMs: () => number | null; maxGapMs: () => number } {
     const ac = new AbortController();
     let fired: number | null = null;
     let last: number | null = null;
@@ -135,9 +135,29 @@ function idleWatch(idle: { firstChunkMs: number; gapMs: number }): { signal: Abo
             last = now;
             clearTimeout(timer); if (fired === null) timer = arm(idle.gapMs);
         },
+        // local-llm 슬롯 대기(#1656) — 대기에 들어가면 첫 청크 기한을 멈추고, 슬롯을 받으면 처음부터 다시 잰다(대기를 무응답으로 보지 않게)
+        pause: () => { if (last === null && fired === null) clearTimeout(timer); },
+        rearm: () => { if (last === null && fired === null) { clearTimeout(timer); timer = arm(idle.firstChunkMs); } },
         stop: () => clearTimeout(timer),
         firedMs: () => fired,
         maxGapMs: () => maxGap,
+    };
+}
+
+/** 호출 상한 — AbortSignal.timeout 과 같되, local-llm 슬롯 대기 동안 멈췄다가 슬롯을 받으면 처음부터 다시 잰다(대기를 상한에 넣지 않게, #1656). */
+function callCap(ms: number): { signal: AbortSignal; pause: () => void; rearm: () => void; stop: () => void } {
+    const ac = new AbortController();
+    const arm = (): NodeJS.Timeout => {
+        const t = setTimeout(() => ac.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError')), ms);
+        t.unref?.();
+        return t;
+    };
+    let timer = arm();
+    return {
+        signal: ac.signal,
+        pause: () => clearTimeout(timer),
+        rearm: () => { if (!ac.signal.aborted) { clearTimeout(timer); timer = arm(); } },
+        stop: () => clearTimeout(timer),
     };
 }
 
@@ -206,10 +226,12 @@ export async function chatTurnWithRoleFallback(
     // 원장 귀속(F25): 비용 행에 작업 id 를 실어 작업 단위로 모을 수 있게 한다. 로컬 토큰은 costContext 로,
     // 외부 role 모델(resolver 의 onUsage 가 `role:agent` 로 기록)은 비용 귀속 문맥으로 같은 id 가 붙는다.
     // 무응답 감시는 스트리밍이어야 청크를 볼 수 있다 — 호출자가 토큰 훅을 주지 않았으면 빈 훅으로 스트리밍만 켠다.
-    const call = (signal: AbortSignal, onChunk?: () => void) => runWithCostSession(p.taskId, () => state.client
+    // local-llm 슬롯 대기(LOCAL_LLM_MAX_CONCURRENT>0)는 모델 무응답이 아니다 — 대기 동안 첫 청크 감시·호출 상한을 멈추고 슬롯을 받으면 다시 건다(#1656).
+    const call = (signal: AbortSignal, onChunk?: () => void, slot?: { onSlotWait: () => void; onSlotAcquired: () => void }) => runWithCostSession(p.taskId, () => state.client
         .derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS, costContext: { feature: 'agent_task', sessionId: p.taskId } })
         .chat(p.conversation, undefined, p.onToken ?? (onChunk ? () => { /* 스트리밍 강제 */ } : undefined), {
             tools: p.tools, signal, think: thinkOptionFor(runStateOf(state)), requestClass: 'agent_turn', ...(onChunk && { onChunk }),
+            ...slot,
         }));
     const maxRetries = Math.max(0, AGENT_TASK_LIMITS.TURN_RETRY_MAX);
     let attempt = 0;
@@ -222,11 +244,15 @@ export async function chatTurnWithRoleFallback(
         const watch = p.idle && p.idle.gapMs > 0 && p.idle.firstChunkMs > 0 && !state.external ? idleWatch(p.idle) : null;
         // 무응답 감시가 멈춘 호출을 잡으므로 그때는 호출 상한을 걸지 않는다 — 청크가 오는 긴 생성을 상한이 끊지 않게
         // (2026-10-05 실측: 5,145토큰 파일 쓰기 호출이 290초로 상한 300초에 닿았다). 길이는 출력 토큰 상한과 작업 시간 예산(p.signal)이 막는다.
-        const cap = !watch && p.callTimeoutMs && p.callTimeoutMs > 0 ? AbortSignal.timeout(p.callTimeoutMs) : null;
+        const capCtl = !watch && p.callTimeoutMs && p.callTimeoutMs > 0 ? callCap(p.callTimeoutMs) : null;
+        const cap = capCtl?.signal ?? null;
         const signals = [p.signal, ...(cap ? [cap] : []), ...(watch ? [watch.signal] : [])];
+        const slot = watch || capCtl
+            ? { onSlotWait: () => { watch?.pause(); capCtl?.pause(); }, onSlotAcquired: () => { watch?.rearm(); capCtl?.rearm(); } }
+            : undefined;
         let chatErr: unknown;
         try {
-            const out = await call(signals.length > 1 ? AbortSignal.any(signals) : p.signal, watch?.onChunk);
+            const out = await call(signals.length > 1 ? AbortSignal.any(signals) : p.signal, watch?.onChunk, slot);
             // 끊기지는 않았지만 기한의 절반을 넘긴 간격 — 기한(AGENT_TASK_TURN_STREAM_IDLE_MS)을 조정할 근거로 남긴다.
             if (watch && watch.maxGapMs() > p.idle!.gapMs / 2) logger.warn(`[AgentTask] ${p.taskId} 청크 간격 ${watch.maxGapMs()}ms — 무응답 기한 ${p.idle!.gapMs}ms 의 절반 초과`);
             // 성공 처리(연속 실패 수 되돌리기)는 서비스가 본문·도구 호출이 있는 턴에서만 한다 — 빈 본문 응답도 여기로 온다.
@@ -235,6 +261,7 @@ export async function chatTurnWithRoleFallback(
             chatErr = err;
         } finally {
             watch?.stop();
+            capCtl?.stop();
         }
         {
             const idleMs = watch?.firedMs() ?? null;
