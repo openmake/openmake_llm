@@ -77,7 +77,7 @@ function resolveGatewayRoute(
     if (!cfg.llmGatewayProviders.includes(providerId)) return undefined;
     const defaultBaseUrl = getProviderCatalogEntry(providerId)?.defaultBaseUrl;
     if (defaultBaseUrl && normalizeBaseUrl(baseUrl) !== normalizeBaseUrl(defaultBaseUrl)) {
-        logger.info(
+        logger.debug(
             `'${providerId}' base_url 이 카탈로그 기본값과 달라 게이트웨이를 우회(direct) — host=${baseUrlHost(baseUrl)}`,
         );
         return undefined;

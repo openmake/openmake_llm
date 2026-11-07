@@ -4,6 +4,7 @@
  * 2026-07-31 LiteLLM Mac 이전 계약:
  * - 목록에 있는 API key provider → inference client 가 게이트웨이(baseURL=llmBaseUrl/v1)
  *   + x-litellm-api-key 헤더 + model prefix
+ *   (목록에 있는 API key provider 이고 base_url 이 카탈로그 기본값이면 게이트웨이, 기본값과 다르면 direct)
  * - 목록에 없는 provider → 기존 direct 동작 무변경
  * - 카탈로그/검증 client 는 게이트웨이 여부와 무관하게 provider endpoint direct
  */
