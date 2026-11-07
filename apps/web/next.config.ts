@@ -50,7 +50,8 @@ const API_PROXY_TARGET = process.env.API_PROXY_TARGET || `http://localhost:${POR
 /**
  * 위 rewrites 프록시의 응답 대기 상한(ms). Next 기본값 30초로는 긴 동기 요청(파일 업로드 뒤 색인, 비스트림 생성 등)이
  * dev 에서만 끊겼다(#1655). 셸 환경 > 루트 .env 의 `API_PROXY_TIMEOUT_MS`, 양의 정수가 아니면 기본 120000.
- * 운영은 Caddy 가 `/api/*`·`/generated/*` 를 백엔드로 직결하므로(scripts/caddy/Caddyfile) 이 값의 영향을 받지 않는다.
+ * 운영은 Caddy 가 `/api/*` 를 백엔드로 직결하므로(scripts/caddy/Caddyfile) API 요청은 영향이 없다. `/generated/*` 는 운영(next start)
+ * 에서도 이 rewrites 를 타므로 생성 이미지 응답 대기 상한도 함께 늘어난다.
  */
 const API_PROXY_TIMEOUT_MS = (() => {
   const n = Number(process.env.API_PROXY_TIMEOUT_MS || rootEnv.API_PROXY_TIMEOUT_MS);
@@ -84,7 +85,7 @@ const nextConfig: NextConfig = {
   // Next 가 서빙하는 HTML 응답엔 기본 노출된다(정보 노출, CWE-200).
   poweredByHeader: false,
   experimental: {
-    proxyTimeout: API_PROXY_TIMEOUT_MS, // rewrites 프록시 응답 대기 상한 — 위 주석 참고(dev 전용 영향)
+    proxyTimeout: API_PROXY_TIMEOUT_MS, // rewrites 프록시 응답 대기 상한 — 위 주석 참고(/api 는 dev 만, /generated 는 운영도)
   },
   // Next 16 dev: 외부 origin 에서 /_next/* (HMR 등) 접근을 기본 차단 → HMR WS 실패로
   // 클라이언트 hydration 이 죽어 게스트로 표시됨. 외부 공개 dev 접속을 허용한다.
