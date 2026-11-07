@@ -73,7 +73,7 @@ describe('setupStaticFiles — /generated 정적 서빙 범위', () => {
     it('소유권 판정이 거부하면 static 으로 새지 않는다', async () => {
         const res = await request(app).get('/generated/a.png');
         expect(res.status).toBe(404);
-        expect(res.body).not.toEqual('PNGDATA');
+        expect(res.text ?? '').not.toContain('PNGDATA');
     });
 
     it.each(['//generated/a.png', '/%67enerated/a.png'])('마운트 밖 경로 %s 로는 산출물이 내려가지 않는다', async (url) => {
