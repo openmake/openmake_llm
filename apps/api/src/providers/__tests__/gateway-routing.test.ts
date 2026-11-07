@@ -95,4 +95,26 @@ describe('LLM_GATEWAY_PROVIDERS 게이트웨이 라우팅', () => {
         expect(p.modelPrefix).toBeUndefined();
     });
 
+    it('목록에 있어도 사용자 base_url 이 카탈로그 기본값과 다르면 direct (client === catalogClient)', () => {
+        const provider = createExternalProviderInstance(
+            makeKeyRow({ baseUrl: 'https://compat-gateway.example.test/v1' }),
+            'sk-user-key',
+        );
+        const p = inner(provider as OpenAICompatProvider);
+        expect(p.client).toBe(p.catalogClient);
+        expect(p.client.baseURL).toBe('https://compat-gateway.example.test/v1');
+        expect(p.modelPrefix).toBeUndefined();
+    });
+
+    it('끝 슬래시·host 대소문자만 다른 기본값 → 게이트웨이 유지', () => {
+        const provider = createExternalProviderInstance(
+            makeKeyRow({ baseUrl: 'https://OpenRouter.ai/api/v1/' }),
+            'sk-or-user-key',
+        );
+        const p = inner(provider as OpenAICompatProvider);
+        expect(p.client.baseURL).toBe('http://127.0.0.1:13401/v1');
+        expect(p.client).not.toBe(p.catalogClient);
+        expect(p.modelPrefix).toBe('openrouter');
+    });
+
 });
