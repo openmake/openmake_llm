@@ -66,8 +66,16 @@ export async function probeAgentModel(): Promise<boolean> {
     }
 }
 
+let sweeping = false;
 /** 모델 대기 스윕(주기) — 모델이 응답하면 재개, 상한을 넘기면 실패. 대기 중인 작업이 없으면 모델을 확인하지 않는다. 절대 throw 하지 않는다. */
 export async function sweepModelWaitTasks(): Promise<{ resumed: number; expired: number }> {
+    // 앞 스윕이 끝나지 않았으면 건너뛴다 — 확인 호출이 local-llm 슬롯을 기다리는 동안 주기마다 쌓이지 않게(#1656)
+    if (sweeping) return { resumed: 0, expired: 0 };
+    sweeping = true;
+    try { return await sweepModelWaitTasksOnce(); } finally { sweeping = false; }
+}
+
+async function sweepModelWaitTasksOnce(): Promise<{ resumed: number; expired: number }> {
     const out = { resumed: 0, expired: 0 };
     let rows;
     try {
