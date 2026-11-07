@@ -104,4 +104,17 @@ describe('resolveRoleClient — OAuth role 클라이언트 provider 스로틀', 
         await expect(client.derive({}).chat(msgs)).resolves.toMatchObject({ content: 'ok' });
         expect(mockStreamChat).toHaveBeenCalledTimes(2);
     });
+
+    it('QUOTA_EXCEEDED(429) 의 cause 에 Retry-After 가 있으면 그만큼 기다린 뒤 재시도한다', async () => {
+        Object.assign(mutable, { RETRY_AFTER_HEADER_MAX_MS: 100 }); // 지수 상한 RETRY_429_MAX_MS=10
+        mockStreamChat
+            .mockRejectedValueOnce(new ProviderError('QUOTA_EXCEEDED', 'rate limited',
+                Object.assign(new Error('429'), { status: 429, headers: { 'retry-after': '0.03' } })))
+            .mockResolvedValueOnce({ content: 'ok', usage: undefined });
+        const { client } = await resolve();
+        const t0 = Date.now();
+        await expect(client.derive({}).chat(msgs)).resolves.toMatchObject({ content: 'ok' });
+        expect(mockStreamChat).toHaveBeenCalledTimes(2);
+        expect(Date.now() - t0).toBeGreaterThanOrEqual(28); // 30ms 헤더 > 10ms 지수 상한
+    });
 });

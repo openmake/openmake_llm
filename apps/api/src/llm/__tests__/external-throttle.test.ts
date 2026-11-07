@@ -87,6 +87,15 @@ describe('throttleExternalClient', () => {
         expect(Date.now() - t0).toBeGreaterThanOrEqual(25); // 30ms 헤더 > 2ms 지수 상한
     });
 
+    it('ProviderError 로 감싸인 오류는 cause 의 Retry-After 헤더를 존중한다 (OAuth role 경로)', async () => {
+        Object.assign(mutable, { RETRY_AFTER_HEADER_MAX_MS: 100, RETRY_429_MAX: 1 }); // 지수 상한 RETRY_429_MAX_MS=20
+        let calls = 0; const t0 = Date.now();
+        const client = throttleExternalClient(fakeClient(async () => { calls++; if (calls === 1) throw Object.assign(new Error('rate limited'), { status: 429, cause: { headers: { 'retry-after': '0.03' } } }); return 'ok'; }), 'bai');
+        await expect(client.chat([], undefined)).resolves.toBe('ok');
+        expect(calls).toBe(2);
+        expect(Date.now() - t0).toBeGreaterThanOrEqual(28); // 30ms 헤더 > 20ms 지수 상한
+    });
+
     it('generate 의 abort signal 은 5번째 인자에서 읽는다', async () => {
         const ac = new AbortController();
         let calls = 0;
