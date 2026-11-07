@@ -6,12 +6,14 @@
  * OpenAI SDK 의 내장 재시도(짧은 백오프)만으론 부족하다. 호출부(토론 엔진·딥리서치·역할 클라이언트)는
  * 그대로 두고 createClient(llm/client.ts)가 외부 LLMClient(quotaExempt+providerId — model-role-resolver 가 만든다, derive() 파생 포함)를
  * 이 프록시로 감싼다. 감싸는 곳은 createClient 한 곳뿐이다(다시 감싸면 같은 세마포어 중첩 acquire → 동시성 1 provider 교착).
+ * 예외: OAuth provider role 어댑터(ProviderRoleClient)는 createClient 를 거치지 않으므로 model-role-resolver 가 직접 감싼다(중첩 아님).
  * 로컬(local-llm)은 LOCAL_LLM_MAX_CONCURRENT>0 일 때만 슬롯을 잡는다(429 재시도 없음) — 그 슬롯을 거치는 운영 호출은
  * 오케스트레이터 capability 호출(withProviderSlot)과 createClient(llm/client.ts)가 만드는 로컬 LLMClient(derive() 파생 포함 — 채팅 본 루프,
  * 에이전트 작업·서브에이전트 턴, 생각 요약·답변 검증 등 보조 호출)다. 슬롯은 chat·generate 한 번 동안만 잡힌다(도구 실행·서브에이전트
  * 동안은 놓는다). `new LLMClient` 직접 생성(라우터·semantic-compactor·인제스트·eval 등)은 거치지 않는다.
  * 슬롯 대기 시간은 에이전트 턴의 무응답 감시·호출 상한에 넣지 않는다(onSlotWait·onSlotAcquired 훅 — role-client). 외부 provider 슬롯도
- * 같은 훅을 부른다. 429 백오프 대기는 슬롯을 받은 뒤 호출 안의 일이라 훅 대상이 아니다.
+ * 같은 훅을 부른다. 429 백오프 대기도 모델이 일하지 않는 시간이라 같은 훅으로 알린다(sleep 전 onSlotWait, 깨어난 뒤 onSlotAcquired) —
+ * 백오프(최악 Retry-After 90s × 3)가 턴 호출 상한(기본 5분)을 먹어 재시도 호출이 상한에 걸리지 않게. 전체 한계는 작업 signal 이 막는다.
  *
  * 세마포어는 프로세스 전역·provider 단위(rate limit 은 키 단위지만 배포당 키가 사실상 1개).
  */
@@ -157,7 +159,10 @@ function signalOf(method: 'chat' | 'generate', args: unknown[]): AbortSignal | u
     return adv?.signal;
 }
 
-/** advancedOptions 의 슬롯 대기 훅 — signalOf 와 같은 인덱스(chat args[3], generate args[4]) */
+/**
+ * advancedOptions 의 대기 훅 — signalOf 와 같은 인덱스(chat args[3], generate args[4]).
+ * 의미는 "슬롯·429 백오프 대기(모델이 일하지 않는 시간)" 의 시작(onSlotWait)·끝(onSlotAcquired) — 호출자가 이 구간을 호출 상한에서 뺀다.
+ */
 function slotHooksOf(method: 'chat' | 'generate', args: unknown[]): { onSlotWait?: () => void; onSlotAcquired?: () => void } | undefined {
     return args[method === 'chat' ? 3 : 4] as { onSlotWait?: () => void; onSlotAcquired?: () => void } | undefined;
 }
@@ -203,7 +208,10 @@ export function throttleExternalClient<T extends LLMClient>(client: T, providerI
                     if (!is429(err) || attempt >= RETRY_429_MAX || signal?.aborted) throw err;
                     const wait = backoffMs(attempt, err);
                     logger.warn(`[${providerId}] 429 — ${wait}ms 후 재시도 (${attempt + 1}/${RETRY_429_MAX}, 대기열 ${sem.waiting})`);
+                    // 백오프 대기는 슬롯 대기와 같은 취급 — 호출자의 호출 상한을 멈췄다가 깨어나면 다시 건다
+                    hooks?.onSlotWait?.();
                     await sleep(wait, signal);
+                    hooks?.onSlotAcquired?.();
                 }
             }
         } finally {
@@ -217,14 +225,27 @@ export function throttleExternalClient<T extends LLMClient>(client: T, providerI
         timeoutMultiplier: Math.max(1, EXTERNAL_PROVIDER_THROTTLE.TIMEOUT_MULTIPLIER || 1),
     };
 
-    return new Proxy(client, {
+    const proxy: T = new Proxy(client, {
         get(target, prop) {
             if (prop === EXTERNAL_CLIENT_HINTS) return hints;
             if (prop === 'chat' || prop === 'generate') return wrap(prop);
+            if (prop === 'derive') return identityDerive(target, () => proxy);
             const v = Reflect.get(target, prop, target);
             return typeof v === 'function' ? v.bind(target) : v;
         },
     }) as T;
+    return proxy;
+}
+
+/**
+ * derive 가 같은 인스턴스를 돌려주는 어댑터(OAuth role 클라이언트)면 원본 대신 프록시를 돌려준다 — 안 그러면 에이전트 턴(derive)에서
+ * 스로틀이 벗겨진다. 새 인스턴스(LLMClient.derive → createClient 가 이미 감싸 돌려준다)는 그대로 둔다(이중 감싸기 없음).
+ */
+function identityDerive<T extends LLMClient>(target: T, proxy: () => T): LLMClient['derive'] {
+    return (overrides) => {
+        const d = target.derive(overrides);
+        return d === target ? proxy() : d;
+    };
 }
 
 /**
@@ -241,11 +262,13 @@ function slotOnlyClient<T extends LLMClient>(client: T): T {
             return (client[method] as (...a: unknown[]) => Promise<unknown>).apply(client, args);
         }, signalOf(method, args));
     };
-    return new Proxy(client, {
+    const proxy: T = new Proxy(client, {
         get(target, prop) {
             if (prop === 'chat' || prop === 'generate') return wrap(prop);
+            if (prop === 'derive') return identityDerive(target, () => proxy);
             const v = Reflect.get(target, prop, target);
             return typeof v === 'function' ? v.bind(target) : v;
         },
     }) as T;
+    return proxy;
 }
