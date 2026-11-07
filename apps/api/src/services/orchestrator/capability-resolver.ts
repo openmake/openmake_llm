@@ -41,6 +41,7 @@ import { getPool } from '../../data/models/unified-database';
 import { CapabilityModelsRepository, type CapabilityModelRow } from '../../data/repositories/capability-models-repo';
 import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { ServerExternalKeysRepository } from '../../data/repositories/server-external-keys-repo';
+import { isCustomBaseUrl } from '../../providers/base-url';
 import { checkServerKeyBudget } from '../server-key-quota';
 import { AppError } from '../../utils/error-handler';
 import { createLogger } from '../../utils/logger';
@@ -56,7 +57,8 @@ export type CapabilityUnavailableCode =
     | 'CAPABILITY_KEY_INACTIVE'
     | 'CAPABILITY_KEY_BUDGET'
     | 'CAPABILITY_LOOKUP_FAILED'
-    | 'CAPABILITY_UNSUPPORTED';
+    | 'CAPABILITY_UNSUPPORTED'
+    | 'CAPABILITY_CUSTOM_ENDPOINT';
 
 export class CapabilityUnavailableError extends AppError {
     constructor(message: string, code: CapabilityUnavailableCode) {
@@ -111,17 +113,25 @@ export async function validateCapabilityAssignment(
     if (!getConfig().llmGatewayProviders.includes(providerId)) {
         return `provider '${providerId}' 는 LiteLLM 게이트웨이에 편입되지 않아 배정할 수 없습니다 (LLM_GATEWAY_PROVIDERS)`;
     }
+    let baseUrl: string | null;
     if (scope === GLOBAL_CAPABILITY_SCOPE) {
         // actor-byok 는 전역 배정도 행위자 사용자의 키로 실행한다 — 서버 공용 키를 요구하지 않는다
         if (capability && capabilityKeyPolicy(capability) === 'actor-byok') return null;
         const repo = deps.serverKeys ?? new ServerExternalKeysRepository(getPool());
         const row = await repo.get(providerId);
         if (!row || !row.isActive) return `'${providerId}' 서버 공용 키가 등록·활성 상태여야 전역 배정할 수 있습니다`;
+        baseUrl = row.baseUrl ?? null;
     } else {
         const repo = deps.userKeys ?? new ExternalKeysRepository(getPool());
         const row = await repo.getByUserAndProvider(scope, providerId);
         if (!row) return `'${providerId}' API 키를 먼저 등록하세요`;
         if (row.authMethod === 'oauth') return `'${providerId}' OAuth 연결은 게이트웨이를 거치지 않아 배정할 수 없습니다`;
+        baseUrl = row.baseUrl ?? null;
+    }
+    // 게이트웨이 api_base 는 서버 통제 값만 쓴다 — 사용자 지정 endpoint 는 direct transport capability 만 받는다
+    const direct = capability ? await directTransportFor(capability, fullId, providerId) : null;
+    if (!direct && isCustomBaseUrl(providerId, baseUrl)) {
+        return `'${providerId}' 키의 사용자 지정 endpoint 는 capability 배정을 지원하지 않습니다 — 카탈로그 기본 주소로 되돌리거나 다른 모델을 배정하세요`;
     }
     return null;
 }
@@ -180,6 +190,15 @@ interface CheckedExternal {
     modelId: string;
     entry: (typeof EXTERNAL_PROVIDER_CATALOG)[number];
     key: { kind: 'user'; userId: string; baseUrl: string | null } | { kind: 'server'; row: ServerKeyRow };
+    /** 소유 handler 가 선언한 direct transport — 없으면 게이트웨이 경로 */
+    direct: DirectTransport | null;
+}
+
+function customEndpointError(providerId: string, capability: Capability): CapabilityUnavailableError {
+    return new CapabilityUnavailableError(
+        `'${providerId}' 키에 사용자 지정 endpoint 가 설정되어 있어 ${capability} 에 쓸 수 없습니다 — capability 호출은 카탈로그 기본 주소(게이트웨이)만 지원합니다`,
+        'CAPABILITY_CUSTOM_ENDPOINT',
+    );
 }
 
 /**
@@ -199,6 +218,8 @@ async function checkExternal(
     if (!getConfig().llmGatewayProviders.includes(providerId)) {
         throw new CapabilityUnavailableError(`provider '${providerId}' 는 LiteLLM 게이트웨이 미편입 — capability 호출 불가`, 'CAPABILITY_PROVIDER_NOT_GATEWAY');
     }
+    // direct transport 는 키 행 주소(userBaseUrl)를 그대로 쓴다 — 사용자 지정 endpoint 검사는 게이트웨이 경로에만
+    const direct = await directTransportFor(capability, fullId, providerId);
     // 사용자 배정이거나 actor-byok capability 면 행위자 BYOK — 서버 공용 키로 전환하지 않는다
     if (source === 'user' || capabilityKeyPolicy(capability) === 'actor-byok') {
         if (!userId) {
@@ -210,13 +231,15 @@ async function checkExternal(
         const keyRow = await deps.userKeys.getByUserAndProvider(userId, providerId);
         if (!keyRow) throw new CapabilityUnavailableError(`'${providerId}' API 키가 등록되어 있지 않아 ${capability} 를 실행할 수 없습니다`, 'CAPABILITY_KEY_MISSING');
         if (keyRow.authMethod === 'oauth') throw new CapabilityUnavailableError(`'${providerId}' OAuth 연결은 게이트웨이를 거치지 않아 ${capability} 에 쓸 수 없습니다`, 'CAPABILITY_PROVIDER_NOT_GATEWAY');
-        return { providerId, modelId, entry, key: { kind: 'user', userId, baseUrl: keyRow.baseUrl ?? null } };
+        if (!direct && isCustomBaseUrl(providerId, keyRow.baseUrl)) throw customEndpointError(providerId, capability);
+        return { providerId, modelId, entry, key: { kind: 'user', userId, baseUrl: keyRow.baseUrl ?? null }, direct };
     }
     // 서버 공용 키 — 역할 경로(model-role-resolver)와 같은 정책: 등록·활성·일/월 상한을 실행 전에 검사(Codex 검토 1, 2026-09-12)
     const row = await deps.serverKeys.get(providerId);
     if (!row) throw new CapabilityUnavailableError(`'${providerId}' 서버 공용 키가 등록되어 있지 않아 ${capability} 를 실행할 수 없습니다`, 'CAPABILITY_KEY_MISSING');
     if (!row.isActive) throw new CapabilityUnavailableError(`'${providerId}' 서버 공용 키가 비활성 상태입니다 (${capability})`, 'CAPABILITY_KEY_INACTIVE');
-    return { providerId, modelId, entry, key: { kind: 'server', row } };
+    if (!direct && isCustomBaseUrl(providerId, row.baseUrl)) throw customEndpointError(providerId, capability);
+    return { providerId, modelId, entry, key: { kind: 'server', row }, direct };
 }
 
 async function externalTarget(
@@ -229,7 +252,7 @@ async function externalTarget(
 ): Promise<CapabilityTarget> {
     const cfg = getConfig();
     params = { ...providerParamDefaults(splitFullId(fullId).providerId, capability), ...params };
-    const { providerId, modelId, entry, key } = await checkExternal(capability, fullId, source, userId, deps);
+    const { providerId, modelId, entry, key, direct } = await checkExternal(capability, fullId, source, userId, deps);
 
     let apiKey: string | null = null;
     let userBaseUrl: string | null = null;
@@ -252,7 +275,6 @@ async function externalTarget(
             'CAPABILITY_KEY_MISSING',
         );
     }
-    const direct = await directTransportFor(capability, fullId, providerId);
     if (direct) {
         // 게이트웨이가 프록시 못 하는 provider API(소유 handler 가 선언) — 사용자/서버 키로 provider 직결(SSRF 고정 fetch)
         // native: 카탈로그에 고정된 네이티브 주소·인증 헤더만 쓴다(등록 base URL 은 OpenAI 호환 주소용이라 쓰지 않는다)
