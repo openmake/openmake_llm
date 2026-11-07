@@ -152,3 +152,70 @@ describe('externalClientTiming', () => {
         } finally { Object.assign(mutable2, { TIMEOUT_MULTIPLIER: orig }); }
     });
 });
+
+describe('throttleExternalClient — 429 백오프 대기도 슬롯 대기 훅으로 알린다(턴 호출 상한에서 뺀다)', () => {
+    beforeEach(() => { __resetExternalThrottleForTest(); Object.assign(mutable, original, { RETRY_429_BASE_MS: 5, RETRY_429_MAX_MS: 20, RETRY_429_MAX: 3 }); });
+    afterEach(() => Object.assign(mutable, original));
+
+    it('429 → 백오프 전 onSlotWait, 깨어난 뒤 onSlotAcquired 를 한 번씩 더 부르고 재시도한다', async () => {
+        const order: string[] = [];
+        let calls = 0;
+        const client = throttleExternalClient(fakeClient(async () => {
+            order.push('call');
+            if (++calls === 1) throw Object.assign(new Error('429 status code (no body)'), { status: 429 });
+            return 'ok';
+        }), 'bai');
+        const hooks = { onSlotWait: () => order.push('wait'), onSlotAcquired: () => order.push('acq') };
+        await expect(client.chat([], undefined, undefined, hooks as never)).resolves.toBe('ok');
+        expect(order).toEqual(['wait', 'acq', 'call', 'wait', 'acq', 'call']);
+    });
+
+    it('재시도 상한을 넘긴 마지막 429 뒤에는 대기 훅을 더 부르지 않는다', async () => {
+        Object.assign(mutable, { RETRY_429_MAX: 1 });
+        const order: string[] = [];
+        const client = throttleExternalClient(fakeClient(async () => { order.push('call'); throw Object.assign(new Error('429 status code (no body)'), { status: 429 }); }), 'bai');
+        const hooks = { onSlotWait: () => order.push('wait'), onSlotAcquired: () => order.push('acq') };
+        await expect(client.chat([], undefined, undefined, hooks as never)).rejects.toThrow(/429/);
+        expect(order).toEqual(['wait', 'acq', 'call', 'wait', 'acq', 'call']);
+    });
+});
+
+describe('throttleExternalClient — derive', () => {
+    beforeEach(() => __resetExternalThrottleForTest());
+    const { getExternalClientHints } = require('../external-throttle') as typeof import('../external-throttle');
+
+    it('derive 가 같은 인스턴스를 돌려주는 어댑터(OAuth role 클라이언트)면 프록시를 돌려준다 — 파생 chat 도 세마포어를 거친다', async () => {
+        let inFlight = 0, peak = 0;
+        const raw = fakeClient(async () => { inFlight++; peak = Math.max(peak, inFlight); await new Promise((r) => setTimeout(r, 10)); inFlight--; return 'ok'; });
+        (raw as unknown as { derive: () => unknown }).derive = function (this: unknown) { return this; };
+        const wrapped = throttleExternalClient(raw, 'bai');
+        const derived = wrapped.derive({});
+        expect(derived).toBe(wrapped);
+        expect(getExternalClientHints(derived)?.providerId).toBe('bai');
+        await Promise.all([derived.chat([], undefined), derived.chat([], undefined), wrapped.chat([], undefined)]);
+        expect(peak).toBe(1);
+    });
+
+    it('derive 가 새 인스턴스를 돌려주면(createClient 경로 — 이미 감싸져 나온다) 그 결과를 그대로 돌려준다(이중 감싸기 없음)', () => {
+        const fresh = throttleExternalClient(fakeClient(async () => 'fresh'), 'bai');
+        const raw = fakeClient(async () => 'x');
+        (raw as unknown as { derive: () => unknown }).derive = () => fresh;
+        const derived = throttleExternalClient(raw, 'bai').derive({});
+        expect(derived).toBe(fresh);
+        expect(getExternalClientHints(derived)?.providerId).toBe('bai');
+    });
+
+    it('회귀 고정: createClient(quotaExempt+providerId).derive() 는 스로틀 힌트를 유지하고 한 겹이다 — 동시성 1 에서 교착 없이 끝난다', async () => {
+        const { createClient, LLMClient } = require('../client') as typeof import('../client');
+        const spy = jest.spyOn(LLMClient.prototype, 'chat').mockResolvedValue({ role: 'assistant', content: 'ok' });
+        try {
+            const ext = createClient({ model: 'm', quotaExempt: true, providerId: 'bai' });
+            const derived = ext.derive({ timeout: 1000 });
+            expect(getExternalClientHints(derived)?.providerId).toBe('bai');
+            expect(derived.requestTimeout).toBe(1000);
+            const deadlock = new Promise((r) => setTimeout(() => r('deadlock'), 200));
+            await expect(Promise.race([derived.derive({ timeout: 2000 }).chat([]), deadlock])).resolves.toMatchObject({ content: 'ok' });
+            expect(spy).toHaveBeenCalledTimes(1);
+        } finally { spy.mockRestore(); }
+    });
+});

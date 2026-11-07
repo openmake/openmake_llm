@@ -42,7 +42,7 @@ import {
 } from '../config/model-roles';
 import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
 import { createClient, LLMClient } from '../llm';
-import { externalClientTiming } from '../llm/external-throttle';
+import { externalClientTiming, throttleExternalClient } from '../llm/external-throttle';
 import {
     createExternalProviderInstance,
     buildOAuthSessionPersist,
@@ -185,7 +185,9 @@ async function tryBuildExternalResolution(
                 buildOAuthSessionPersist(externalKeysRepo, userId, providerId),
             );
             return {
-                client: createProviderRoleClient({
+                // provider 스로틀(세마포어·429 백오프·실행 힌트) — 이 어댑터는 createClient 를 거치지 않으므로 여기서 감싼다
+                // ("감싸는 곳은 createClient 한 곳" 원칙의 명시 예외, 중첩 아님). 어댑터 derive() 는 자신을 돌려주고 프록시가 그것을 프록시로 바꾼다.
+                client: throttleExternalClient(createProviderRoleClient({
                     provider, modelId, userId,
                     // BYOK 사용량 귀속 — API 키 provider(아래 createClient 분기)와 동일 규약.
                     // 이 어댑터는 LLMClient 본체를 우회하므로 훅을 명시 전달해야 기록된다.
@@ -196,7 +198,7 @@ async function tryBuildExternalResolution(
                             inputTokens: u.promptTokens, outputTokens: u.completionTokens,
                         }).catch(() => { /* 관측 실패 무시 */ });
                     },
-                }),
+                }), providerId),
                 role,
                 fullId,
                 providerId,
