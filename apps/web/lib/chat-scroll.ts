@@ -13,3 +13,21 @@ export function isNearBottom(
 ): boolean {
   return m.scrollHeight - m.scrollTop - m.clientHeight <= thresholdPx;
 }
+
+/**
+ * start 의 조상 중 overflow-y 가 auto|scroll 인 첫 요소(메시지 스크롤 컨테이너).
+ * overflow hidden 인 앱 셸·main 은 스크롤러로 보지 않는다.
+ */
+export function findScroller(start: HTMLElement | null): HTMLElement | null {
+  let el: HTMLElement | null = start?.parentElement ?? null;
+  while (el && !/(auto|scroll)/.test(getComputedStyle(el).overflowY)) el = el.parentElement;
+  return el;
+}
+
+/**
+ * 스크롤러만 맨 아래로 — scrollIntoView 는 overflow hidden 조상(앱 셸)까지 밀어 올려
+ * 사이드바·입력창이 화면 밖으로 밀린 채 남았다(2026-11-08).
+ */
+export function scrollToBottomOf(scroller: HTMLElement | null): void {
+  if (scroller) scroller.scrollTop = scroller.scrollHeight;
+}
