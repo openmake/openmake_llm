@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.127.2](https://github.com/openmake/openmake_llm/compare/v1.127.1...v1.127.2) (2026-11-07)
+
+
+### 🐛 버그 수정
+
+* **llm:** 429 Retry-After 를 ProviderError.cause 의 응답 헤더에서도 읽는다 ([e322e20](https://github.com/openmake/openmake_llm/commit/e322e2040d820147790d50d9096d627bee8f04da))
+
 ## [1.127.1](https://github.com/openmake/openmake_llm/compare/v1.127.0...v1.127.1) (2026-11-07)
 
 
