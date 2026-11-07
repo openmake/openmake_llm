@@ -48,6 +48,8 @@ const UNAVAILABLE_REASON: Readonly<Partial<Record<CapabilityUnavailableCode, Emb
     CAPABILITY_KEY_INACTIVE: 'key_missing',
     // OAuth 연결은 게이트웨이를 거치지 않는다 — API 키 등록이 필요하다(설계 D7)
     CAPABILITY_PROVIDER_NOT_GATEWAY: 'key_missing',
+    // 사용자 지정 endpoint 는 키가 있어도 게이트웨이로 못 부른다 — key_missing 으로 오인하지 않게 명시
+    CAPABILITY_CUSTOM_ENDPOINT: 'provider',
 };
 
 /** 임의 오류 → 실패 사유 */
