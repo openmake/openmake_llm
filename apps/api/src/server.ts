@@ -321,7 +321,7 @@ export class DashboardServer {
                 console.error('WebSocket 서버 오류:', error);
             });
 
-            this.server.listen(this.port, '0.0.0.0', () => {
+            this.server.listen(this.port, getConfig().listenHost, () => {
                 // 도구 런타임의 프로세스 감독 시작 — listen 완료 후 1회.
                 // cli.ts (cluster) 와 server.ts (직접 실행) 모두 동작 보장.
                 void this.notifyToolRuntimeReady();

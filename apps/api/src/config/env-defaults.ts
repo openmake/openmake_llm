@@ -14,6 +14,7 @@ export const DEFAULT_CONFIG: EnvConfig = {
     // Server
     port: SERVER_CONFIG.DEFAULT_PORT,
     serverHost: '0.0.0.0',
+    listenHost: '0.0.0.0',
 
     // Database
     databaseUrl: 'postgresql://localhost:5432/openmake_llm',
