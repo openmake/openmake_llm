@@ -35,7 +35,7 @@ const path = require('path');
  * 기본값(3000)으로 떨어져 다른 서비스와 EADDRINUSE 로 충돌했다. 이제 .env 를 직접 읽어
  * 어떤 셸에서 `pm2 start ecosystem.config.js` 를 해도 같은 포트로 뜬다.
  */
-const { apiPort: API_PORT, webPort: WEB_PORT, instanceSuffix: INSTANCE_SUFFIX } = require('./scripts/resolve-ports.cjs');
+const { apiPort: API_PORT, webPort: WEB_PORT, instanceSuffix: INSTANCE_SUFFIX, webListenHost: WEB_LISTEN_HOST } = require('./scripts/resolve-ports.cjs');
 /**
  * 로그 디렉터리. 기본은 기존 동작 유지(/tmp)지만, 여러 사용자가 쓰는 리눅스 호스트에서는
  * /tmp/openmake-*.log 소유자 충돌로 PM2 가 EACCES 로 죽는다 → OMK_LOG_DIR 로 분리 가능.
@@ -202,7 +202,8 @@ const apps = [{
         script: resolveNextBin(WEB_DIR),
         ...INTERPRETER,
         // keep-alive 를 Caddy 유휴 상한(90s)보다 길게 — API 서버와 같은 근거(config/timeouts HTTP_SERVER_TIMEOUTS).
-        args: `start -p ${WEB_PORT} --keepAliveTimeout ${process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS || '100000'}`,
+        // WEB_LISTEN_HOST 가 있으면 수신 바인드 주소를 지정한다(2026-11-07 점검). 없으면 next 기본 동작.
+        args: `start -p ${WEB_PORT} --keepAliveTimeout ${process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS || '100000'}${WEB_LISTEN_HOST ? ` -H ${WEB_LISTEN_HOST}` : ''}`,
         env: {
             NODE_ENV: 'production',
             PORT: WEB_PORT,

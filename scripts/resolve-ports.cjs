@@ -66,4 +66,9 @@ const webPort = resolveWebPort();
 const instance = (pick('OMK_INSTANCE') || '').trim();
 const instanceSuffix = instance ? `-${instance}` : '';
 
-module.exports = { apiPort, webPort, instance, instanceSuffix };
+/**
+ * 프론트(Next) 수신 바인드 주소(2026-11-07 점검). 미설정이면 '' — `next start` 기본 동작 그대로.
+ */
+const webListenHost = pick('WEB_LISTEN_HOST').trim();
+
+module.exports = { apiPort, webPort, instance, instanceSuffix, webListenHost };
