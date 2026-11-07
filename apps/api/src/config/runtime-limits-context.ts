@@ -170,8 +170,8 @@ export const EXTERNAL_PROVIDER_THROTTLE = {
     BASE_TIMEOUT_FALLBACK_MS: parseInt(process.env.LLM_TIMEOUT || '120000', 10),
     /**
      * 로컬 LLM(local-llm) 동시 요청 상한 — 0 이면 무제한(종전). 양수면 같은 세마포어로 슬롯만 잡는다(429 재시도 없음).
-     * 현재 적용 범위: 오케스트레이터 capability 호출(withProviderSlot)뿐 — 채팅·에이전트 작업 본 루프의 로컬 호출은
-     * 거치지 않는다(에이전트 작업 동시성은 작업 큐가 묶는다).
+     * 적용 범위: 오케스트레이터 capability 호출(withProviderSlot)과 createClient 가 만드는 로컬 LLMClient(채팅·에이전트 작업 본 루프 포함)의
+     * chat·generate 한 번 — 도구 실행·서브에이전트 동안은 슬롯을 놓는다(#1656). `new LLMClient` 직접 생성·derive() 파생은 거치지 않는다.
      */
     LOCAL_CONCURRENCY: parseInt(process.env.LOCAL_LLM_MAX_CONCURRENT || '0', 10),
 } as const;

@@ -34,6 +34,7 @@ import { applyLocalToolStrict } from './tool-strict';
 import { selectModelByCapacityExact, estimateTokens } from './model-pool';
 import { QUOTA_RESERVE } from '../config/runtime-limits';
 import { MODEL_POOL_CONFIG } from '../config/model-pool';
+import { throttleExternalClient } from './external-throttle';
 import {
     webSearch as webSearchAdapter,
     webFetch as webFetchAdapter,
@@ -404,4 +405,12 @@ export class LLMClient {
     }
 }
 
-export const createClient = (config?: Partial<LLMConfig>): LLMClient => new LLMClient(config);
+/**
+ * LLMClient 생성 단일 진입점. 로컬 클라이언트(외부 provider 표식 quotaExempt 없음 — 채팅 본 루프·에이전트 작업 본 루프가 여기서 만든다)는
+ * LOCAL_LLM_MAX_CONCURRENT>0 일 때 chat·generate 한 번 동안만 local-llm 슬롯을 잡도록 감싼다(#1656). 0(기본)이면 원본 그대로.
+ * 외부 클라이언트는 model-role-resolver 가 자기 provider 슬롯으로 감싼다.
+ */
+export const createClient = (config?: Partial<LLMConfig>): LLMClient => {
+    const client = new LLMClient(config);
+    return config?.quotaExempt ? client : throttleExternalClient(client, 'local-llm');
+};
