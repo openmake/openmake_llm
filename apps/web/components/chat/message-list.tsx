@@ -27,7 +27,7 @@ import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resou
 import { cn } from "@/lib/utils";
 import { ApprovalArgsFull, ApprovalPreview, ApprovalSiteUploads, ApprovalSiteWrites, summarizeApprovalArgs } from "@/components/approvals/approval-args";
 import { QuestionChoices } from "@/components/approvals/question-choices";
-import { isNearBottom } from "@/lib/chat-scroll";
+import { findScroller, isNearBottom, scrollToBottomOf } from "@/lib/chat-scroll";
 import { COPY_FEEDBACK_RESET_MS, REJECT_REASON_MAX_CHARS } from "@/lib/constants/ui-limits";
 import { shouldSubmitOnEnter, keepStillPending } from "@/lib/approval-input";
 
@@ -742,7 +742,7 @@ export function MessageList() {
   const [showJump, setShowJump] = useState(false);
 
   const scrollToBottom = useCallback(() => {
-    bottomRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
+    scrollToBottomOf(findScroller(bottomRef.current));
   }, []);
   const followBottom = useCallback(() => {
     if (stickRef.current) scrollToBottom();
@@ -756,10 +756,8 @@ export function MessageList() {
   // 스크롤 영역(이 목록을 감싼 overflow 컨테이너)의 위치를 따라가기 상태로 옮긴다.
   const isEmpty = chatHistory.length === 0;
   useEffect(() => {
-    let el: HTMLElement | null = bottomRef.current?.parentElement ?? null;
-    while (el && !/(auto|scroll)/.test(getComputedStyle(el).overflowY)) el = el.parentElement;
-    if (!el) return;
-    const scroller = el;
+    const scroller = findScroller(bottomRef.current);
+    if (!scroller) return;
     const onScroll = () => {
       const near = isNearBottom(scroller);
       stickRef.current = near;
