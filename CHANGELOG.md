@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.127.0](https://github.com/openmake/openmake_llm/compare/v1.126.4...v1.127.0) (2026-11-07)
+
+
+### ✨ 기능
+
+* **config:** LISTEN_HOST·WEB_LISTEN_HOST 로 수신 주소 선택(기본 불변) ([d710562](https://github.com/openmake/openmake_llm/commit/d710562322bc422c9cc95831f62a535767ed6652))
+
+
+### 🐛 버그 수정
+
+* **admin:** 마지막 활성 관리자 강등·비활성화 차단 ([10fc618](https://github.com/openmake/openmake_llm/commit/10fc61899fc280d7a852fbe8bf432373697b759c))
+* **agents:** 분석·A/B 라우트 관리자 전용·에이전트 조회 소유권 확인 ([16841f5](https://github.com/openmake/openmake_llm/commit/16841f575e516a1232080151717fc05f4fb46aa6))
+* **mcp:** 도구 목록 조회 인증 필수 ([1486bd8](https://github.com/openmake/openmake_llm/commit/1486bd8e5149693cf14d5a236134b0fd24dd5f19))
+* **static:** /generated 정적 서빙을 마운트 아래로 한정 ([c645a62](https://github.com/openmake/openmake_llm/commit/c645a6214f0896b086584e7054ddbb61565f8e46))
+* **ws:** 클러스터 노드 목록은 관리자 연결에만 ([9bdfc43](https://github.com/openmake/openmake_llm/commit/9bdfc431c94d9514c3134a2fcb0bf889c8cd68b1))
+
 ## [1.126.4](https://github.com/openmake/openmake_llm/compare/v1.126.3...v1.126.4) (2026-11-07)
 
 
