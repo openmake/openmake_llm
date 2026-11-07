@@ -7,7 +7,8 @@
  * - 종료가 시작되면 새 실행을 시작하지 않는다(AgentTaskService.execute 의 입구 — 라우트·큐 대기열·예약·트리거·주차 재개·
  *   소유권 점검이 모두 여기를 지난다). 호출부가 이미 잡아 둔 행(pending)은 queued 로 돌려 둔다 — 부팅 복구가 집는 상태다.
  * - 실행 중인 작업에는 종료 사유를 실어 중단 신호를 보낸다. 사용자 취소(cancelled)와 달리 `failed` + 'server restarted' 로
- *   남긴다 — 비정상 종료 뒤 schema-initializer 가 남기는 것과 같은 표식이라 부팅 복구가 체크포인트에서 이어 실행한다.
+ *   남긴다 — 비정상 종료 뒤 schema-initializer 가 남기는 것과 같은 표식이라 체크포인트가 있으면 부팅 복구가 이어 실행하고,
+ *   없으면 종료 알림 점검이 정리한다.
  * - 각 실행의 종료 정리(소유권 반납·컨테이너 정리)가 끝나기를 상한까지 기다린다. 넘으면 그대로 두고 돌아온다 —
  *   그 작업은 종전처럼 다음 부팅의 좀비 정리·복구가 맡는다.
  *
@@ -80,7 +81,7 @@ export async function trackAgentTaskRun(svc: AbortableRun, taskId: string, run: 
 export async function recordShutdownInterrupt(taskId: string, usage: { totalTokens: number; cachedPromptTokens?: number; cacheReportedPromptTokens?: number }): Promise<void> {
     await getUnifiedDatabase().updateAgentTask(taskId, { status: 'failed', error: AGENT_TASK_RESTART_ERROR, terminalNotifyPending: true, ...usage })
         .catch((e) => logger.warn(`[${taskId}] 종료 중단 기록 실패(다음 부팅의 좀비 정리가 맡는다): ${e instanceof Error ? e.message : e}`));
-    logger.info(`[${taskId}] 서버 종료로 실행 중단 — 다음 부팅의 복구가 체크포인트에서 이어 실행한다`);
+    logger.info(`[${taskId}] 서버 종료로 실행 중단 — 체크포인트가 있으면 다음 부팅의 복구가 이어 실행하고, 없으면 종료 알림 점검이 정리한다`);
 }
 
 /**

@@ -220,6 +220,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 role: 'assistant',
                 content: result.content,
                 ...(result.tool_calls && { tool_calls: result.tool_calls }),
+                ...(result.reasoning_details && { reasoning_details: result.reasoning_details }), // OpenRouter 추론 블록 — 다음 요청에 그대로(#1657)
             });
             if (correcting || !result.tool_calls || result.tool_calls.length === 0) {
                 const finalText = stripRawToolCallXml(result.content || '');

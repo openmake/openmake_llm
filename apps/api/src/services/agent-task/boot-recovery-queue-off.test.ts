@@ -30,13 +30,13 @@ it('큐가 꺼져 있어도, 조회 뒤 먼저 시작해 실행 중인 작업은
     await expect(dispatchAgentTask({ taskId: task.id, userId: 'u1', run: () => running })).resolves.toBe('started');
     interrupted.push(task);
 
-    await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 0 });
+    await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 0, skipped: 1, parked: 0 });
     expect(claim).not.toHaveBeenCalled();
     expect(execute).not.toHaveBeenCalled();
 
     finish();
     await new Promise((r) => setImmediate(r));
-    await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
+    await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0, skipped: 0, parked: 0 });
     // claim 이 소유권도 같은 문장에서 쓴다(2026-10-22 R2)
     expect(claim).toHaveBeenCalledWith(task.id, 'running', AGENT_TASK_LIMITS.LEASE_ENABLED ? { owner: expect.any(String), leaseMs: AGENT_TASK_LIMITS.LEASE_MS } : undefined);
     expect(execute).toHaveBeenCalledTimes(1);

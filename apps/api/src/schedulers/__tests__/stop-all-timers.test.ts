@@ -54,7 +54,7 @@ jest.mock('../../monitoring/alerts', () => ({ getAlertSystem: () => ({ sendAlert
 jest.mock('../../services/agent-task/hitl-park', () => ({ sweepParkedTasks: async () => undefined, expireParkedTasks: async () => undefined }));
 jest.mock('../../services/agent-task/boot-recovery', () => ({
     sweepExpiredTaskLeases: async () => undefined,
-    recoverInterruptedAgentTasks: async () => ({ resumed: 0, failed: 0 }),
+    recoverInterruptedAgentTasks: async () => ({ resumed: 0, failed: 0, skipped: 0, parked: 0 }),
 }));
 jest.mock('../../services/agent-task/schedule-runner', () => ({ startAgentTaskScheduleScheduler: () => setInterval(() => undefined, 60_000) }));
 jest.mock('../../services/agent-task/upload-retention', () => ({ sweepExpiredTaskUploads: async () => ({ sweptTasks: 0, orphanDirs: 0, tmpFiles: 0 }) }));

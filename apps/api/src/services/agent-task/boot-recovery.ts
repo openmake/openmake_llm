@@ -161,10 +161,11 @@ async function recoveryLimitReached(taskId: string): Promise<boolean> {
 
 /**
  * 부팅 시 중단된 task 복구. 실패해도 서버 기동을 막지 않도록 절대 throw 하지 않는다.
- * @returns { resumed, failed } 처리 건수
+ * @returns { resumed, failed, skipped, parked } 처리 건수 — skipped: 복구하지 않고 둔 것(체크포인트 없는 재시작 마킹·이미 큐에 있음·claim 경합 등),
+ *          parked: 로컬 실행 작업을 기기 대기로 주차한 것
  */
-export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number; failed: number }> {
-    if (!AGENT_TASK_LIMITS.BOOT_RECOVERY_ENABLED) return { resumed: 0, failed: 0 };
+export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number; failed: number; skipped: number; parked: number }> {
+    if (!AGENT_TASK_LIMITS.BOOT_RECOVERY_ENABLED) return { resumed: 0, failed: 0, skipped: 0, parked: 0 };
     const db = getUnifiedDatabase();
     const taskRepo = new AgentTaskRepository(getPool());
 
@@ -178,11 +179,13 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
             : await taskRepo.getInterruptedAgentTasks(windowMs);
     } catch (e) {
         logger.warn(`[BootRecovery] 중단 task 조회 실패 — 건너뜀: ${e instanceof Error ? e.message : e}`);
-        return { resumed: 0, failed: 0 };
+        return { resumed: 0, failed: 0, skipped: 0, parked: 0 };
     }
     let resumed = await recoverUnleasedSuccessors(db);
     let failed = 0;
-    if (interrupted.length === 0) return { resumed, failed };
+    let skipped = 0;
+    let parked = 0;
+    if (interrupted.length === 0) return { resumed, failed, skipped, parked };
     logger.info(`[BootRecovery] 중단된 task ${interrupted.length}건 발견 — 복구 시작`);
 
     for (const task of interrupted) {
@@ -190,12 +193,14 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
             const outcome = await recoverTask(task, db, taskRepo, lease);
             if (outcome === 'resumed') resumed++;
             else if (outcome === 'failed') failed++;
+            else if (outcome === 'skipped') skipped++;
+            else parked++;
         } catch (e) {
             logger.warn(`[BootRecovery] task 복구 실패(건너뜀): ${task.id} — ${e instanceof Error ? e.message : e}`);
         }
     }
-    logger.info(`[BootRecovery] 복구 완료 — 재개 ${resumed}건, 실패정리 ${failed}건`);
-    return { resumed, failed };
+    logger.info(`[BootRecovery] 복구 완료 — 재개 ${resumed}건, 실패정리 ${failed}건, 건너뜀 ${skipped}건, 기기대기 ${parked}건`);
+    return { resumed, failed, skipped, parked };
 }
 
 /**
