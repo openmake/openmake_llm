@@ -94,7 +94,8 @@ export class LLMClient {
      * 파생 클라이언트를 만든다. role 해석된 외부 endpoint 클라이언트에
      * 전용 timeout 만 바꿔 쓰는 용도 (report-generator, review 류) —
      * createClient({ model: client.model }) 재파생은 외부 baseUrl 을 잃는다.
-     * createClient 를 거치므로 로컬 파생은 local-llm 슬롯 규칙(#1656)을 그대로 따른다 — 에이전트 작업 턴이 이 경로다.
+     * createClient 를 거치므로 로컬 파생은 local-llm 슬롯 규칙(#1656)을, 외부 파생(quotaExempt+providerId)은 같은 provider 스로틀을
+     * 그대로 따른다 — 에이전트 작업 턴이 이 경로다. 스로틀 프록시에서 불려도 this 는 원본이라 감싸기는 한 겹만 생긴다.
      */
     derive(overrides: Partial<LLMConfig>): LLMClient {
         return createClient({ ...this.config, ...overrides });
@@ -417,9 +418,13 @@ export class LLMClient {
 /**
  * LLMClient 생성 단일 진입점(derive() 파생도 여기를 거친다). 로컬 클라이언트(외부 provider 표식 quotaExempt 없음 — 채팅 본 루프,
  * 에이전트 작업·서브에이전트 턴(derive), 역할 보조 호출이 여기서 만든다)는 LOCAL_LLM_MAX_CONCURRENT>0 일 때 chat·generate 한 번 동안만
- * local-llm 슬롯을 잡도록 감싼다(#1656). 0(기본)이면 원본 그대로. 외부 클라이언트는 model-role-resolver 가 자기 provider 슬롯으로 감싼다.
+ * local-llm 슬롯을 잡도록 감싼다(#1656). 0(기본)이면 원본 그대로.
+ * 외부 클라이언트(quotaExempt + providerId — model-role-resolver 가 만든다)는 여기서 그 provider 스로틀(세마포어·429 백오프·실행 힌트)로
+ * 감싼다 — derive() 파생(에이전트 작업 턴·서브에이전트)도 스로틀을 잃지 않게. 감싸는 곳은 여기 한 곳뿐이다
+ * (호출부가 다시 감싸면 같은 세마포어를 중첩 acquire 해 동시성 1 provider 에서 교착). providerId 없는 quotaExempt 는 원본 그대로.
  */
 export const createClient = (config?: Partial<LLMConfig>): LLMClient => {
     const client = new LLMClient(config);
-    return config?.quotaExempt ? client : throttleExternalClient(client, 'local-llm');
+    if (!config?.quotaExempt) return throttleExternalClient(client, 'local-llm');
+    return config.providerId ? throttleExternalClient(client, config.providerId) : client;
 };
