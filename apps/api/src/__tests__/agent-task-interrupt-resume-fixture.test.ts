@@ -238,7 +238,7 @@ describe('실행 중 끊김 → 부팅 복구 → 재개 (실제 루프·종료 
         expect(cp.conversation[2].tool_calls?.[0]?.id).toBe('call_1');
         expect(store.steps.filter((s) => s.stepType === 'tool_result')).toHaveLength(0); // 끊긴 호출의 결과는 남기지 않는다
 
-        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0, skipped: 0, parked: 0 });
         await waitFor('재개된 실행 완료', () => store.task.status === 'completed');
 
         // 모델은 턴마다 한 번씩만 — 끊긴 턴을 처음부터 다시 묻지 않았다
@@ -272,7 +272,7 @@ describe('실행 중 끊김 → 부팅 복구 → 재개 (실제 루프·종료 
         expect((store.task.checkpoint as { conversation: Msg[] }).conversation.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'tool']);
 
         hang = false;
-        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0, skipped: 0, parked: 0 });
         await waitFor('재개된 실행 완료', () => store.task.status === 'completed');
 
         expect(executeTool).toHaveBeenCalledTimes(1); // 이미 끝난 도구는 다시 실행하지 않는다
@@ -295,7 +295,7 @@ describe('실행 중 끊김 → 부팅 복구 → 재개 (실제 루프·종료 
         expect(store.inFlight).toBe('call_1'); // 실행 직전에 "실행 중" 표식을 남겼다
 
         await restartServer();
-        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0 });
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 1, failed: 0, skipped: 0, parked: 0 });
 
         // 재개된 실행은 같은 호출을 바로 다시 보내지 않고 질문을 올린 채 멈춘다
         const registry = getApprovalRegistry();
@@ -317,7 +317,7 @@ describe('실행 중 끊김 → 부팅 복구 → 재개 (실제 루프·종료 
 
     it('복구할 것이 없으면(끊긴 작업 없음) 아무것도 시작하지 않는다', async () => {
         store.task.status = 'completed';
-        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 0 });
+        await expect(recoverInterruptedAgentTasks()).resolves.toEqual({ resumed: 0, failed: 0, skipped: 0, parked: 0 });
         expect(fixture.requests).toHaveLength(0);
     });
 });

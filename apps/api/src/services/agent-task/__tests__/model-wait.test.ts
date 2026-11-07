@@ -104,6 +104,18 @@ describe('sweepModelWaitTasks', () => {
         expect(resumeParkedTask.mock.calls.map(([id]) => id)).toEqual(['t1', 't2']);
     });
 
+    it('앞 스윕이 끝나지 않았으면(확인 호출이 슬롯을 기다리는 중) 이번 주기는 건너뛴다 — 확인 호출이 쌓이지 않게', async () => {
+        let release!: (v: unknown) => void;
+        chat.mockImplementationOnce(() => new Promise((r) => { release = r; }));
+        listParkedTasks.mockResolvedValue([row({})]);
+        const first = sweepModelWaitTasks();
+        await new Promise((r) => setImmediate(r));
+        await expect(sweepModelWaitTasks()).resolves.toEqual({ resumed: 0, expired: 0 });
+        expect(chat).toHaveBeenCalledTimes(1);
+        release({ content: 'ok' });
+        await expect(first).resolves.toEqual({ resumed: 1, expired: 0 });
+    });
+
     it('모델이 아직 응답하지 않고 상한 안이면 그대로 둔다', async () => {
         chat.mockRejectedValue(outage);
         listParkedTasks.mockResolvedValue([row({})]);

@@ -223,8 +223,8 @@ export async function startAllSchedulers(): Promise<void> {
     //      reapOrphanTaskSandboxes() 이후 — 먼저 돌면 resume 이 만든 컨테이너를 reap 이 죽인다.
     try {
         const { recoverInterruptedAgentTasks } = await import('../services/agent-task/boot-recovery');
-        const { resumed, failed } = await recoverInterruptedAgentTasks();
-        if (resumed || failed) logger.info(`Agent Task 부팅 복구: 재개 ${resumed} / 실패정리 ${failed}`);
+        const { resumed, failed, skipped, parked } = await recoverInterruptedAgentTasks();
+        if (resumed || failed || skipped || parked) logger.info(`Agent Task 부팅 복구: 재개 ${resumed} / 실패정리 ${failed} / 건너뜀 ${skipped} / 기기대기 ${parked}`);
     } catch (err) {
         logger.warn('Agent Task 부팅 복구 실패(무시):', err);
     }
