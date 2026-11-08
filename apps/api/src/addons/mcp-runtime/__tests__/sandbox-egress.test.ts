@@ -29,6 +29,7 @@ describe('prepareSandboxConfig', () => {
         ['userEgress:false', USER, { userEgress: false }],
         ['enabled:false', USER, { enabled: false }],
         ['dockerPath:null', USER, { dockerPath: null }],
+        ['사용자+full+bridgeAllowed', { ...USER, bridgeAllowed: true }, {}],
     ])('%s → undefined, ensure 호출 없음', async (_n, input, over) => {
         const ensure = jest.fn().mockResolvedValue('http://omk-egress-proxy:8888');
         await expect(prepareSandboxConfig(input, cfg(over as Partial<SandboxConfig>), ensure)).resolves.toBeUndefined();

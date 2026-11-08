@@ -103,6 +103,11 @@ export interface TaskSandboxConfig {
     /** 새로 띄운 egress 프록시가 listen 할 때까지 기다리는 상한(ms). 넘기면 보장 실패(fail-closed). */
     egressReadyTimeoutMs: number;
     /**
+     * egress internal 망을 gateway isolated 로 만든다(브리지에 주소를 주지 않아 컨테이너→호스트 경로가 없다, Docker 28+).
+     * 미지원 데몬은 경고 뒤 종전 internal 망. 기본 true — 끄려면 TASK_SANDBOX_EGRESS_GATEWAY_ISOLATED=false.
+     */
+    egressGatewayIsolated: boolean;
+    /**
      * 코드 작업 diff 캡처(openmake_code v1) 활성 여부(기본 true — 샌드박스 ON 일 때만 유효).
      * ON: 실행 시작 시 workspace 를 git baseline 으로 스냅샷하고, 완료 시 에이전트 변경분을
      * `git diff` 로 캡처해 step_type='diff' 스텝으로 영속화한다(빈 diff 는 미기록). fail-open.
@@ -174,6 +179,7 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         egressAllowedPorts: (process.env.TASK_SANDBOX_EGRESS_ALLOWED_PORTS || '80,443')
             .split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0 && n <= 65535),
         egressReadyTimeoutMs: intEnv(process.env.TASK_SANDBOX_EGRESS_READY_TIMEOUT_MS, 10_000),
+        egressGatewayIsolated: process.env.TASK_SANDBOX_EGRESS_GATEWAY_ISOLATED !== 'false',
         codeDiffEnabled: process.env.TASK_SANDBOX_CODE_DIFF_ENABLED !== 'false',
         writeViaContainer: resolveWriteViaContainer(process.env),
         extraTools: (process.env.TASK_SANDBOX_EXTRA_TOOLS ?? 'web_search')

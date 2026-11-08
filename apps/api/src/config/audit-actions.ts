@@ -155,6 +155,8 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     'mcp_server.register_denied': null,
     // 운영에서 격리 불가한 사용자 MCP 서버 spawn 거부(W3 S2)
     'mcp_server.spawn_refused': 'warning',
+    // 관리자가 사용자 서버의 bridge 네트워크 허용을 바꿈(관리자 bridge 허용 옵션, 2026-11-08 점검 후속)
+    'mcp_server.sandbox_bridge_changed': 'warning',
 } as const satisfies Record<string, AuditSeverity | null>;
 
 /**

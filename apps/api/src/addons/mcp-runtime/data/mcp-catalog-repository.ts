@@ -73,7 +73,7 @@ export class McpCatalogRepository {
     async listUserServers(userId: string): Promise<UserMcpServerRow[]> {
         const result = await this.pool.query<UserMcpServerRow>(
             `SELECT id, user_id, name, transport_type, command, args, env, url,
-                    visibility, catalog_template_id, auto_spawn, enabled, sandbox_network,
+                    visibility, catalog_template_id, auto_spawn, enabled, sandbox_network, sandbox_bridge_allowed,
                     created_at::text, updated_at::text
              FROM mcp_servers
              WHERE user_id = $1 OR visibility = 'global'
@@ -219,7 +219,7 @@ export class McpCatalogRepository {
             `UPDATE mcp_servers SET env = $2::jsonb, updated_at = NOW()
              WHERE id = $1
              RETURNING id, user_id, name, transport_type, command, args, env, url,
-                       visibility, catalog_template_id, auto_spawn, enabled, sandbox_network,
+                       visibility, catalog_template_id, auto_spawn, enabled, sandbox_network, sandbox_bridge_allowed,
                        created_at::text, updated_at::text`,
             [serverId, JSON.stringify(merged)],
         );
@@ -229,7 +229,7 @@ export class McpCatalogRepository {
     async getServerById(serverId: string): Promise<UserMcpServerRow | null> {
         const result = await this.pool.query<UserMcpServerRow>(
             `SELECT id, user_id, name, transport_type, command, args, env, url,
-                    visibility, catalog_template_id, auto_spawn, enabled, sandbox_network,
+                    visibility, catalog_template_id, auto_spawn, enabled, sandbox_network, sandbox_bridge_allowed,
                     created_at::text, updated_at::text
              FROM mcp_servers WHERE id = $1`,
             [serverId],

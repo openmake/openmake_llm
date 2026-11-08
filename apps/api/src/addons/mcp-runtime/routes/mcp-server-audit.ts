@@ -59,3 +59,11 @@ export function auditMcpUrlBlocked(req: Request, rawUrl: string, err: unknown): 
         details: { target: 'mcp_server', reason: (err as Error).message },
     });
 }
+
+/** 관리자 bridge 허용 옵션 변경(2026-11-08 점검 후속) — 서버 이름·소유자·허용 여부만 남긴다. */
+export function auditMcpServerBridgeChanged(req: Request, server: { id: string; name: string; ownerUserId: string; allowed: boolean }): void {
+    void recordSecurityAudit({
+        action: 'mcp_server.sandbox_bridge_changed', ...actor(req), resourceType: 'mcp_server', resourceId: server.id,
+        details: { name: server.name, ownerUserId: server.ownerUserId, allowed: server.allowed },
+    }).catch(() => undefined);
+}

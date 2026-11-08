@@ -1449,7 +1449,23 @@
     "colLastCrash": "마지막 크래시",
     "crashTrend": "시간별 라이프사이클·크래시 기록 — 현재 시간대와 이전 23시간",
     "trendRecords": "기록 {count}",
-    "trendCrashed": "크래시 {count}"
+    "trendCrashed": "크래시 {count}",
+    "userServersTitle": "사용자 서버 네트워크",
+    "userServersHint": "사용자가 등록한 stdio 서버는 기본적으로 egress 프록시를 거칩니다. 내부망 접근이 필요한 서버만 bridge 를 허용하세요.",
+    "colOwner": "소유자",
+    "colName": "이름",
+    "colTransport": "전송",
+    "colNetwork": "네트워크",
+    "colBridge": "bridge 허용",
+    "bridgeAllow": "bridge 허용",
+    "bridgeRevoke": "허용 해제",
+    "bridgeConfirm": "확인",
+    "bridgeApplied": "다음 연결부터 적용(자동 재연결)",
+    "networkEgress": "egress 프록시",
+    "networkBridge": "bridge",
+    "networkNone": "없음",
+    "userServersEmpty": "사용자가 등록한 서버가 없습니다",
+    "userServersError": "사용자 서버 목록을 불러오지 못했습니다"
   },
   "auth": {
     "login": {
