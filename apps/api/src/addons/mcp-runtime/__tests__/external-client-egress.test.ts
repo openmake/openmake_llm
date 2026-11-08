@@ -40,7 +40,7 @@ describe('ExternalMCPClient — egress 설정 준비', () => {
         const prepared = { marker: 'prepared' };
         mockPrepare.mockResolvedValue(prepared);
         await new ExternalMCPClient({ ...BASE, id: 'mcp_7_u', user_id: '7' } as unknown as MCPServerConfig).connect();
-        expect(mockPrepare).toHaveBeenCalledWith({ network: 'full', ownerScope: 'user' });
+        expect(mockPrepare).toHaveBeenCalledWith({ network: 'full', ownerScope: 'user', bridgeAllowed: false });
         expect(mockBuildSandboxedCommand).toHaveBeenCalledTimes(1);
         expect(mockBuildSandboxedCommand.mock.calls[0][1]).toBe(prepared);
     });
