@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.127.6](https://github.com/openmake/openmake_llm/compare/v1.127.5...v1.127.6) (2026-11-08)
+
+
+### 🐛 버그 수정
+
+* **chat:** 이미지 주소 수신에 요청당 상한·중단 전파·형식 검증 ([306ed86](https://github.com/openmake/openmake_llm/commit/306ed865e7a13f7d4b963e683f0764b73b309414))
+* **chat:** 이미지 주소 입력은 서버가 받아 전달 (2026-11-08 점검) ([93a3210](https://github.com/openmake/openmake_llm/commit/93a3210c6c9f29251c828538ae413c0d7d4b63c5))
+
 ## [1.127.5](https://github.com/openmake/openmake_llm/compare/v1.127.4...v1.127.5) (2026-11-08)
 
 
