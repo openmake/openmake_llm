@@ -9,6 +9,8 @@
  */
 
 export * from './runtime-limits-context';
+export * from './runtime-limits-attach';
+export * from './runtime-limits-search';
 export * from './runtime-limits-tools';
 export * from './runtime-limits-agent-task';
 export * from './runtime-limits-services';
