@@ -28,7 +28,7 @@ const logger = createLogger('LifecycleSupervisor');
 
 type McpLifecycle = 'per_chat' | 'per_session' | 'long_lived';
 
-interface ServerSpawnConfig {
+export interface ServerSpawnConfig {
     id: string;
     user_id: string;
     name: string;
