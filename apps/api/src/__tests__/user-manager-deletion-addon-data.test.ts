@@ -21,7 +21,7 @@ beforeEach(() => {
     client = {
         query: jest.fn(async (sql: string) => {
             queries.push(sql);
-            return { rowCount: sql.includes('DELETE FROM users') ? 1 : 0 };
+            return { rowCount: sql.includes('DELETE FROM users') ? 1 : 0, rows: [] };
         }),
         release: jest.fn(),
     };

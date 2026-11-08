@@ -1,6 +1,6 @@
 /**
  * 마지막 활성 관리자 보호(권한 보강, 2026-11-07 점검) — 역할 변경·비활성화로 활성 관리자가 0명이 되지 않게 한다.
- * changeRole·updateUser 의 트랜잭션 안에서 UPDATE 전에 부른다.
+ * changeRole·updateUser 의 트랜잭션 안에서 UPDATE 전에, deleteUser 의 트랜잭션 안에서 다른 정리 전에 부른다.
  *
  * @module data/last-admin-guard
  */
@@ -9,7 +9,7 @@ import { AppError } from '../utils/error-handler';
 import { USER_ROLES, isAdminRole, type UserRole } from './user-manager';
 
 export const LAST_ADMIN_ERROR_CODE = 'LAST_ADMIN';
-export const LAST_ADMIN_ERROR_MESSAGE = '마지막 관리자는 강등·비활성화할 수 없습니다';
+export const LAST_ADMIN_ERROR_MESSAGE = '마지막 관리자는 강등·비활성화·삭제할 수 없습니다';
 
 interface LockedUserRow {
     id: string;

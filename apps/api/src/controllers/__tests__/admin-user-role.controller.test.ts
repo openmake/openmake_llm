@@ -12,7 +12,7 @@ jest.mock('../../auth', () => ({
     requireAdmin: (_req: express.Request, _res: express.Response, next: express.NextFunction) => next(),
     clearSessionsForUser: jest.fn(),
 }));
-const mockManager = { changeRole: jest.fn(), updateUser: jest.fn(), getUserById: jest.fn() };
+const mockManager = { changeRole: jest.fn(), updateUser: jest.fn(), getUserById: jest.fn(), deleteUser: jest.fn() };
 jest.mock('../../data/user-manager', () => ({
     ...jest.requireActual('../../data/user-manager'),
     getUserManager: () => mockManager,
@@ -52,6 +52,26 @@ describe('admin 사용자 역할·상태 변경 — 마지막 관리자 보호',
         const res = await request(app).put('/api/admin/users/admin-1').send({ is_active: false });
         expect(res.status).toBe(409);
         expect(res.body.error).toMatchObject({ code: LAST_ADMIN_ERROR_CODE, message: LAST_ADMIN_ERROR_MESSAGE });
+    });
+
+    test('DELETE /users/:id — deleteUser 가 AppError(409) 를 던지면 409 와 그 메시지', async () => {
+        mockManager.deleteUser.mockRejectedValue(lastAdminError());
+        const res = await request(app).delete('/api/admin/users/admin-2');
+        expect(res.status).toBe(409);
+        expect(res.body.error).toMatchObject({ code: LAST_ADMIN_ERROR_CODE, message: LAST_ADMIN_ERROR_MESSAGE });
+    });
+
+    test('DELETE /users/:id — 존재하지 않는 사용자는 400 과 사실대로의 문구', async () => {
+        mockManager.deleteUser.mockResolvedValue(false);
+        const res = await request(app).delete('/api/admin/users/nope');
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toBe('삭제할 수 없습니다 (존재하지 않는 사용자)');
+    });
+
+    test('DELETE /users/:id — AppError 가 아닌 오류는 종전대로 500', async () => {
+        mockManager.deleteUser.mockRejectedValue(new Error('db down'));
+        const res = await request(app).delete('/api/admin/users/admin-2');
+        expect(res.status).toBe(500);
     });
 
     test('AppError 가 아닌 오류는 종전대로 500', async () => {
