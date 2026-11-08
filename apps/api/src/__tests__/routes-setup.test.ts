@@ -244,6 +244,15 @@ describe('라우트 설정 — 기본 엔드포인트', () => {
         expect([200, 401, 403]).toContain(res.status);
     });
 
+    // 게스트 식별자는 암호학적 난수 UUID 로 만든다(인증 보강, 2026-11-08 점검).
+    test('POST /api/auth/guest → anon_<UUID v4> 와 role guest', async () => {
+        // 쿠키 없는 Bearer 요청은 CSRF 검사 대상이 아니다 — 핸들러 자체는 인증을 보지 않는다
+        const res = await request(app).post('/api/auth/guest').set('Authorization', 'Bearer test');
+        expect(res.status).toBe(200);
+        expect(res.body.data.role).toBe('guest');
+        expect(res.body.data.guestId).toMatch(/^anon_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    });
+
     test('GET /apple-touch-icon.png → 204', async () => {
         const res = await request(app).get('/apple-touch-icon.png');
         expect(res.status).toBe(204);
