@@ -53,7 +53,6 @@
         "@opentelemetry/sdk-trace": "^3.0.0",
         "@opentelemetry/semantic-conventions": "^1.44.0",
         "@types/pg": "^8.23.1",
-        "babel-jest": "^30.4.1",
         "bcryptjs": "^3.0.3",
         "chalk": "^6.0.0",
         "commander": "^15.0.0",
@@ -97,6 +96,7 @@
         "@types/turndown": "^5.0.6",
         "@types/web-push": "^3.6.4",
         "@types/ws": "^8.18.2",
+        "babel-jest": "^30.4.1",
         "ts-jest": "^29.4.15",
         "ts-node": "^10.9.2",
         "typescript": "^6.0.3"
