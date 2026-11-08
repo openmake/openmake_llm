@@ -82,7 +82,7 @@ export function environmentTests(root = repoRoot) {
 // Host setup fixtures: the portable ones run everywhere; the rest need macOS (lockf, plutil, launchd fakes) and run on
 // darwin here — elsewhere the required CI mac-host-repair job runs them on the same commit with bash 3.2 and 5.
 export function hostSetupTests(root = repoRoot) {
-  const portable = ['scripts/ci/docker-config-reconcile.test.mjs', 'scripts/setup/mac-toolchain.test.sh', 'scripts/setup/colima-selection.test.sh', 'scripts/setup/gen-env.test.mjs'];
+  const portable = ['scripts/ci/docker-config-reconcile.test.mjs', 'scripts/setup/mac-toolchain.test.sh', 'scripts/setup/colima-selection.test.sh', 'scripts/setup/gen-env.test.mjs', 'scripts/setup/linux-install-verify.test.sh'];
   const macOnly = ['scripts/setup/colima-boot-guard.test.sh', 'scripts/setup/mac-host-repair.test.sh', 'scripts/setup/mac-pm2-boot.test.sh'];
   for (const file of [...portable, ...macOnly]) if (!existsSync(resolve(root, file))) throw new Error(`Missing required host setup test: ${file}`);
   return { portable, macOnly };

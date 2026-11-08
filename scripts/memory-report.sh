@@ -52,7 +52,7 @@ echo
 
 echo "## 4. 로그 (자동 저장·토큰 cap)"
 OMK_LOG_DIR="${OMK_LOG_DIR:-$(grep -E "^OMK_LOG_DIR=" "$REPO/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"')}"
-LOG="${OMK_LOG_DIR:-/tmp}/openmake-llm-out.log"
+LOG="${OMK_LOG_DIR:-$REPO/logs}/openmake-llm-out.log"
 if [[ -r "$LOG" ]]; then
     echo "  자동 저장(MemoryExtract) $(grep -c '\[MemoryExtract\] 자동 저장' "$LOG" || true)회"
     echo "  토큰 cap 발동          $(grep -c 'user_memories 토큰 cap 적용' "$LOG" || true)회  (검색 도입 게이트: > 0)"

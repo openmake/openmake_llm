@@ -59,7 +59,12 @@
     "packages/shared-types/src/knowledge.ts": "web",
     "packages/shared-types/src/model-assignments.ts": "web",
     "packages/shared-types/src/mcp-monitoring.ts": "web",
+    "scripts/analyze-agent-routing.sh": "pipeline",
+    "scripts/analyze-chat-timing.sh": "pipeline",
+    "scripts/compare-routing-effect.sh": "pipeline",
+    "scripts/daily-routing-report.sh": "pipeline",
     "scripts/export-openapi.ts": "pipeline",
+    "scripts/memory-report.sh": "pipeline",
     "scripts/resolve-ports.cjs": "pipeline"
   },
   "hostSetup": [
@@ -70,12 +75,14 @@
     "scripts/setup/fake-launchctl.test-lib.sh",
     "scripts/setup/gen-env.mjs",
     "scripts/setup/gen-env.test.mjs",
+    "scripts/setup/linux-install-verify.test.sh",
     "scripts/setup/mac-host-repair.sh",
     "scripts/setup/mac-host-repair.test.sh",
     "scripts/setup/mac-pm2-boot.sh",
     "scripts/setup/mac-pm2-boot.test.sh",
     "scripts/setup/mac-toolchain.test.sh",
     "scripts/setup/mac/30-toolchain.sh",
+    "scripts/setup/mac/60-app.sh",
     "scripts/setup/mac/80-finish.sh",
     "scripts/setup/pm2-boot-guard.sh",
     "scripts/lib/pm2-save.sh"

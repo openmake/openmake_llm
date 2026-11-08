@@ -51,6 +51,9 @@ export const SCRAPER_CONFIG = {
     /** 차단 우회 타임아웃 (ms) */
     IMPERSONATE_TIMEOUT_MS: parseInt(process.env.SCRAPER_IMPERSONATE_TIMEOUT_MS || '15000', 10),
 
+    /** Playwright 폴백 브라우저 동시 실행 상한 — 넘치면 이 단계를 건너뛰고 다음 폴백으로 간다 (기본 2) */
+    PLAYWRIGHT_MAX_CONCURRENT: parseInt(process.env.SCRAPER_PLAYWRIGHT_MAX_CONCURRENT || '2', 10),
+
     /** python3 실행 경로 (curl_cffi 호출용) */
     PYTHON_BIN: process.env.SCRAPER_PYTHON_BIN || 'python3',
 
