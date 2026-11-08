@@ -20,6 +20,7 @@ jest.mock('@modelcontextprotocol/client', () => ({
 jest.mock('@modelcontextprotocol/client/stdio', () => ({
     StdioClientTransport: class { stderr = null; },
 }));
+jest.mock('../sandbox-egress', () => ({ prepareSandboxConfig: async () => undefined }));
 jest.mock('../sandbox-docker', () => ({
     buildSandboxedCommand: (p: { command: string; args: string[] }) => mockBuildSandboxedCommand(p),
 }));
