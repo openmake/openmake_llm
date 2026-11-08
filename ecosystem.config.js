@@ -19,7 +19,7 @@
  *   pm2 set pm2-logrotate:retain 30
  *   pm2 set pm2-logrotate:compress true
  *   pm2 set pm2-logrotate:rotateInterval '0 0 * * *'
- *   # /tmp/openmake-llm-*.log 가 10MB 도달 시 회전, 30일 보관, gzip 압축
+ *   # <OMK_LOG_DIR 또는 저장소 logs/>/openmake-llm-*.log 가 10MB 도달 시 회전, 30일 보관, gzip 압축
  *   # 미설정 시 단일 로그 파일이 무한 증가 → 디스크 가득 위험
  */
 const { execSync } = require('child_process');
@@ -37,15 +37,17 @@ const path = require('path');
  */
 const { apiPort: API_PORT, webPort: WEB_PORT, instanceSuffix: INSTANCE_SUFFIX, webListenHost: WEB_LISTEN_HOST } = require('./scripts/resolve-ports.cjs');
 /**
- * 로그 디렉터리. 기본은 기존 동작 유지(/tmp)지만, 여러 사용자가 쓰는 리눅스 호스트에서는
- * /tmp/openmake-*.log 소유자 충돌로 PM2 가 EACCES 로 죽는다 → OMK_LOG_DIR 로 분리 가능.
+ * 로그 디렉터리. 기본은 저장소의 logs/(.gitignore 대상)이고 OMK_LOG_DIR 로 바꿀 수 있다.
+ * 예전 기본값 /tmp 는 여러 사용자가 쓰는 호스트에서 다른 계정도 읽고 쓸 수 있는 공용 폴더였다
+ * (2026-11-08 점검 후속 보강).
  */
 // .env 의 OMK_LOG_DIR 를 존중한다 — `pm2 start` 를 호출한 셸이 .env 를 export 하지 않으므로
-// (openmake_llm.sh 도 안 함) 여기서 직접 읽지 않으면 설정이 있어도 /tmp 로 떨어진다.
+// (openmake_llm.sh 도 안 함) 여기서 직접 읽지 않으면 설정이 있어도 기본 경로로 떨어진다.
 // /tmp 는 재부팅·주기 정리로 사라져 장애 후 원인 로그가 없을 수 있다(2026-08-27 점검).
 try { require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true }); } catch { /* dotenv 없으면 셸 env 만 */ }
 const DOCKER_ENV = require('./scripts/resolve-docker.cjs').resolveDockerEnv();
-const LOG_DIR = process.env.OMK_LOG_DIR || '/tmp';
+const LOG_DIR = process.env.OMK_LOG_DIR || path.join(__dirname, 'logs');
+try { fs.mkdirSync(LOG_DIR, { recursive: true }); } catch { /* 만들지 못하면 PM2 가 직접 만들어 본다 */ }
 const logFile = (name) => path.join(LOG_DIR, name);
 
 /**

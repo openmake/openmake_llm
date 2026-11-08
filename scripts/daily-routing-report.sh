@@ -19,9 +19,9 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # 로그 디렉터리는 .env 의 OMK_LOG_DIR 을 따른다 — pm2 cron 은 앱 env 를 상속하지 않으므로
-# 여기서 직접 읽는다(미설정이면 종전 /tmp).
+# 여기서 직접 읽는다(미설정이면 ecosystem.config.js 기본값과 같은 저장소 logs/).
 OMK_LOG_DIR="${OMK_LOG_DIR:-$(grep -E "^OMK_LOG_DIR=" "$REPO/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"')}"
-export OMK_LOG_DIR="${OMK_LOG_DIR:-/tmp}"
+export OMK_LOG_DIR="${OMK_LOG_DIR:-$REPO/logs}"
 OUT_DIR="$REPO/logs/routing-reports"          # logs/ 는 .gitignore 대상
 mkdir -p "$OUT_DIR"
 OUT="$OUT_DIR/$(date +%Y-%m-%d).txt"

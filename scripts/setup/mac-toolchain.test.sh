@@ -313,5 +313,14 @@ eq "ports: 이 클론의 dev 서버면 그대로" "$(pt_run "52417:$PC/apps/api"
 eq "ports: 남의 프로세스면 옮긴다"      "$(pt_run "52417:/elsewhere/api" "3010:/elsewhere/web")"     "52418|13000"
 eq "ports: 이름만 비슷한 폴더는 남의 것" "$(pt_run "52417:${PC}-other/apps/api")"                     "52418|3010"
 
+# ── Redis 주소 포트 갱신: 비밀번호가 든 주소도 포트만 바뀐다(2026-11-08 점검 후속 보강) ──
+ENV_FILE="$TMP/redis.env"
+printf 'REDIS_PORT=6379\nREDIS_URL=redis://:abc123@127.0.0.1:6379\n' > "$ENV_FILE"
+update_env_port REDIS_PORT 6380
+eq "redis url: 비밀번호 주소 포트" "$(grep '^REDIS_URL=' "$ENV_FILE")" "REDIS_URL=redis://:abc123@127.0.0.1:6380"
+printf 'REDIS_PORT=6379\nREDIS_URL=redis://127.0.0.1:6379\n' > "$ENV_FILE"
+update_env_port REDIS_PORT 6381
+eq "redis url: 비밀번호 없는 주소 포트" "$(grep '^REDIS_URL=' "$ENV_FILE")" "REDIS_URL=redis://127.0.0.1:6381"
+
 echo ""; echo "toolchain.test: $PASS passed, $FAIL failed (bash $BASH_VERSION)"
 [[ $FAIL -eq 0 ]]

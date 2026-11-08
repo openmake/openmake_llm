@@ -326,6 +326,17 @@ export function isAllowlistedHost(hostname: string, address: string, port?: stri
 }
 
 export async function validateOutboundUrl(rawUrl: string, resolver: DnsResolver = dns.lookup): Promise<URL> {
+    return (await resolveOutboundUrl(rawUrl, resolver)).url;
+}
+
+/**
+ * validateOutboundUrl 과 같은 검사를 하고 검사에 쓴 주소를 함께 돌려준다 — 호출자가 그 주소로 연결을
+ * 고정할 수 있게 한다(예: 스크래퍼 브라우저의 대상 호스트 고정).
+ */
+export async function resolveOutboundUrl(
+    rawUrl: string,
+    resolver: DnsResolver = dns.lookup,
+): Promise<{ url: URL; address: string }> {
     const url = new URL(rawUrl);
 
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
@@ -345,7 +356,7 @@ export async function validateOutboundUrl(rawUrl: string, resolver: DnsResolver 
         }
     }
 
-    return url;
+    return { url, address };
 }
 
 /**
