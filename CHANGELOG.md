@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.128.0](https://github.com/openmake/openmake_llm/compare/v1.127.7...v1.128.0) (2026-11-08)
+
+
+### ✨ 기능
+
+* **mcp:** 관리자 bridge 허용 옵션과 egress 내부망 gateway 격리 (2026-11-08 점검 후속) ([c02cd4f](https://github.com/openmake/openmake_llm/commit/c02cd4f0571ad3e79a603f7c43ffdbd18b037b80))
+
+
+### 🐛 버그 수정
+
+* **chat:** 멀티턴 대화에서 이전 턴 첨부 이미지를 다음 턴에도 모델에 전달 ([149f490](https://github.com/openmake/openmake_llm/commit/149f4900b716742b3e18703f9901ffd520ed4246))
+* **ios:** history 메시지에 이전 턴 이미지를 함께 보낸다 (생성 코드 시그니처 반영) ([7f42041](https://github.com/openmake/openmake_llm/commit/7f420414c5108de03b24a02e77823d3b76f085f0))
+* **mcp:** 관리자 사용자 서버 목록의 소유자 이메일을 Base 데이터 포트로 조회 (리뷰 반영) ([885e597](https://github.com/openmake/openmake_llm/commit/885e597a3ddfff08440e9f43e46251ff7b937429))
+* **mcp:** 유저풀 클라이언트 설정에 관리자 bridge 허용 값을 전달 ([0e7dff6](https://github.com/openmake/openmake_llm/commit/0e7dff6adfbdd8b3999f8fa3751b44ed745e1b46))
+* **security:** 점검 후속 보강 — 스크래퍼 브라우저·시크릿 파일 권한·설치 검증 (2026-11-08 점검) ([ae70f52](https://github.com/openmake/openmake_llm/commit/ae70f523209e1abe59d0261c7993171c249097d8))
+
+
+### ♻️ 리팩터링
+
+* **config:** runtime-limits-context 를 첨부·검색 제한 파일로 분할 ([94898f9](https://github.com/openmake/openmake_llm/commit/94898f91f9ac103fca5ef31ea683c90bcef5a07a))
+
 ## [1.127.7](https://github.com/openmake/openmake_llm/compare/v1.127.6...v1.127.7) (2026-11-08)
 
 
