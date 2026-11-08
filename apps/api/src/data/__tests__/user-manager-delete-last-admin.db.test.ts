@@ -77,14 +77,17 @@ describeOrSkip('UserManager.deleteUser — 마지막 활성 관리자 동시 삭
             await blocker.query('BEGIN');
             await blocker.query(`SELECT id FROM ${SCHEMA}.users WHERE id IN ('a', 'b') FOR UPDATE`);
             const results = Promise.allSettled([getUserManager().deleteUser('a'), getUserManager().deleteUser('b')]);
+            let waiting = 0;
             for (let i = 0; i < 100; i++) {
                 const { rows } = await admin.query(
                     `SELECT COUNT(*)::int AS n FROM pg_stat_activity
                       WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE '%FOR UPDATE%'`,
                 );
-                if (rows[0].n >= 2) break;
+                waiting = rows[0].n;
+                if (waiting >= 2) break;
                 await new Promise((r) => setTimeout(r, 50));
             }
+            expect(waiting).toBeGreaterThanOrEqual(2); // 두 삭제가 모두 잠금 대기에 들어갔다는 전제
             await blocker.query('COMMIT');
 
             const settled = await results;
@@ -96,6 +99,8 @@ describeOrSkip('UserManager.deleteUser — 마지막 활성 관리자 동시 삭
             expect(rejected[0].reason).toMatchObject({ statusCode: 409, code: LAST_ADMIN_ERROR_CODE });
             expect(await activeAdmins()).toHaveLength(1);
         } finally {
+            // 단언 실패 시 열린 트랜잭션을 풀어 대기 중인 deleteUser 가 afterAll 까지 멈추지 않게 한다(이미 COMMIT 했으면 경고뿐).
+            await blocker.query('ROLLBACK').catch(() => undefined);
             blocker.release();
         }
     });
