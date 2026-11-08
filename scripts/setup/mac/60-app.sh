@@ -33,7 +33,11 @@ compose_up() {
         [[ $i -eq $HEALTH_RETRIES ]] && die "PostgreSQL 기동 실패 — docker logs $PG_CONTAINER 확인"
         sleep "$HEALTH_INTERVAL"
     done
-    docker exec "$RD_CONTAINER" redis-cli ping >/dev/null 2>&1 \
+    # REDIS_PASSWORD 가 있으면 redis-cli 에 환경변수로 넘긴다 — 명령줄에 비밀번호를 남기지 않는다.
+    local rd_pw; rd_pw="$(env_value REDIS_PASSWORD)"
+    local -a rd_auth=()
+    if [[ -n "$rd_pw" ]]; then rd_auth=(-e REDISCLI_AUTH); fi
+    REDISCLI_AUTH="$rd_pw" docker exec ${rd_auth[@]+"${rd_auth[@]}"} "$RD_CONTAINER" redis-cli ping 2>/dev/null | grep -q PONG \
         && log_ok "Redis 준비 완료" || log_warn "Redis ping 실패 — docker logs $RD_CONTAINER 확인"
 }
 

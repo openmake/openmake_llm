@@ -85,7 +85,7 @@ extract() {
     echo
 
     echo "## 운영 로그의 실제 스킵 발동"
-    LOG=/tmp/openmake-llm-out.log
+    LOG="${OMK_LOG_DIR:-$REPO/logs}/openmake-llm-out.log"
     if [[ -f "$LOG" ]]; then
         skip=$(grep -c 'URL 단독 직행' "$LOG" 2>/dev/null || true)
         hint=$(grep -c 'URL 단독 직행.*도메인 힌트' "$LOG" 2>/dev/null || true)

@@ -20,6 +20,21 @@ import * as crypto from 'crypto';
 const BOOT_SECRET_KEYS = ['JWT_SECRET', 'API_KEY_PEPPER', 'TOKEN_ENCRYPTION_KEY'] as const;
 
 /**
+ * 시크릿이 든 기존 파일을 소유자 전용(0600)으로 맞춘다. 실패해도 부팅은 계속한다 — 권한은 운영자가 고칠 수 있지만
+ * 시크릿 영속 실패는 되돌릴 수 없어서다(2026-11-08 점검 후속 보강).
+ */
+function restrictToOwner(envPath: string): void {
+    try {
+        fs.chmodSync(envPath, 0o600);
+    } catch (err) {
+        // logger 는 앱 모듈이라 여기서 못 쓴다 (호출 시점 제약) — console 로 남긴다
+        console.warn(
+            `[EnsureSecrets] ${envPath} 권한 보정(0600) 실패: ${err instanceof Error ? err.message : String(err)} — 직접 chmod 600 하세요.`,
+        );
+    }
+}
+
+/**
  * 부재 시크릿을 생성해 envPath 에 영속하고 process.env 에 주입합니다.
  * 3키가 모두 이미 있으면 no-op (기존 배포 무영향).
  *
@@ -44,6 +59,7 @@ export function ensureBootSecrets(envPath: string): string[] {
     try {
         if (fs.existsSync(envPath)) {
             fs.appendFileSync(envPath, block, 'utf-8');
+            restrictToOwner(envPath);
         } else {
             fs.writeFileSync(envPath, block, { encoding: 'utf-8', mode: 0o600 });
         }
