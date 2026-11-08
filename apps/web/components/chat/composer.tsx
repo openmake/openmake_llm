@@ -30,13 +30,13 @@ import { detectReportTaskIntent } from "@/lib/report-task-intent";
 import { SLASH_COMMAND_DEBOUNCE_MS } from "@/lib/constants/ui-limits";
 import { uuid } from "@/lib/local-id";
 import { groupBridgeDevicesByHost } from "@/lib/bridge-devices";
+import { CHAT_MAX_IMAGES } from "@/lib/chat-history-wire";
 
 // 슬래시 스킬 호출: "/" + 공백없는 단일 토큰일 때만 드롭다운 표시.
 const SLASH_PATTERN = /^\/(\S*)$/;
 
 // 클라이언트 첨부 캡 — 백엔드 FILE_ATTACH_LIMITS 기본값과 일치(서버가 재절단하므로 advisory).
 const MAX_FILES = 50;
-const MAX_IMAGES = 20;
 const MAX_CHARS_PER_FILE = 2_000_000;
 const MAX_TOTAL_CHARS = 10_000_000;
 // base64 인라인(채팅 WS 경로 호환) 상한 — 백엔드 DOC_EXTRACT MAX_BYTES_PER_FILE 기본값과 일치.
@@ -145,7 +145,7 @@ export function Composer() {
     let total = nextFiles.reduce((n, f) => n + (f.content?.length ?? 0), 0);
     for (const file of Array.from(list)) {
       if (file.type.startsWith("image/")) {
-        if (nextImages.length >= MAX_IMAGES) continue;
+        if (nextImages.length >= CHAT_MAX_IMAGES) continue;
         const dataUrl = await readFileDataURL(file);
         if (!dataUrl) continue;
         nextImages.push({ id: uuid(), name: file.name.slice(0, 200), dataUrl });

@@ -114,7 +114,7 @@ final class ChatSessionModel {
             }
 
             let history = messages.dropLast().suffix(20).map {
-                History(content: $0.content, role: ChatRole(rawValue: $0.role.rawValue) ?? .user)
+                History(content: $0.content, images: $0.images, role: ChatRole(rawValue: $0.role.rawValue) ?? .user)
             }
             try await socket.send(.chat(
                 message: text,
