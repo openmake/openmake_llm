@@ -42,6 +42,8 @@ import { validateBranchMeta } from './request-branch-meta';
 import { handleToolCallingPath } from './tool-calling-path';
 import { createThinkingSummarySession } from '../services/chat-service/thinking-summarizer';
 import { getConversationDB } from '../data/conversation-db';
+import { resolveInboundImages, resolveHistoryImages, InboundImageError } from './inbound-images';
+import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import type {
     ChatUserContext,
     ExecutionPlanResult,
@@ -170,8 +172,8 @@ export class ChatRequestHandler {
             message: rawMessage,
             model,
             nodeId,
-            history,
-            images,
+            history: rawHistory,
+            images: rawImages,
             sessionId,
             webSearchContext,
             fileContext,
@@ -221,6 +223,11 @@ export class ChatRequestHandler {
         /** 사용자가 실제로 친 문장 — 제목·대화기록 저장용(확장문 아님).
          *  WS 는 확장 전 원문을 originalMessage 로 넘기고, REST 는 여기서 확장하므로 rawMessage 가 원문이다. */
         const userFacingMessage = (originalMessage ?? rawMessage ?? '').trim() || message;
+
+        // 0. 이미지 입력 정규화 — 주소 형태는 서버가 받아 data URL 로(2026-11-08 점검). 세션·저장 전에 실패시킨다.
+        const imageOpts = { signal: abortSignal, budget: { remaining: FILE_ATTACH_LIMITS.MAX_IMAGES } };
+        const [images, history] = await Promise.all([resolveInboundImages(rawImages, imageOpts), resolveHistoryImages(rawHistory, imageOpts)])
+            .catch((e) => { throw e instanceof InboundImageError ? new ChatRequestError(e.message, 400) : e; });
 
         // 1. ExecutionPlan 해석
         const { plan, engineModel } = ChatRequestHandler.buildPlan(model || '');

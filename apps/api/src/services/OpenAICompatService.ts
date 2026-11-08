@@ -149,7 +149,7 @@ export class OpenAICompatService {
                 if (url) {
                     // 내부 images 배열 보관 규칙:
                     //   - `data:image/...;base64,XXX` → base64 부분만 추출 (buildImageDataUrl 이 재첨가)
-                    //   - `https://...` / `http://...` / `file://...` → 그대로 보관 (buildImageDataUrl 이 통과)
+                    //   - URL(`https://...` 등) → 그대로 보관 (request-handler 유입 단계가 data URL 로 바꾸거나 거부한다)
                     //   - raw base64 → 그대로 보관 (buildImageDataUrl 이 MIME 추론 후 wrapping)
                     const m = url.match(/^data:[^;]+;base64,(.*)$/);
                     images.push(m ? m[1] : url);
