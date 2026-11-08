@@ -37,25 +37,20 @@ export function inferImageMime(b64: string): string {
 }
 
 /**
- * 입력에 대해 OpenAI Vision payload 형식의 URL 을 반환.
+ * 입력에 대해 OpenAI Vision payload 형식의 data URL 을 반환.
  *
- * vLLM Multimodal spec (features/multimodal_inputs/) 가 허용하는 URL 형태:
+ * 유입 지점(chat/inbound-images)이 주소 형태 이미지를 data URL 로 바꾼 뒤이므로
+ * 여기서는 data·raw base64 만 받는다(이미지 입력 처리 보강, 2026-11-08 점검):
  *   1. `data:<mime>;base64,...` — 인라인 base64 (그대로 통과)
- *   2. `https://...` / `http://...` — 외부 URL (vLLM 이 fetch — `--allowed-media-domains` 제약)
- *   3. `file:///path` — 로컬 파일 (vLLM `--allowed-local-media-path` 활성 시)
- *   4. raw base64 — magic number 로 MIME 추론 후 `data:` URI 로 wrapping
+ *   2. 스킴이 있는 문자열(http·https·file 등) — undefined (호출부가 블록을 만들지 않는다)
+ *   3. raw base64 — magic number 로 MIME 추론 후 `data:` URI 로 wrapping
  *
- * 이전 (2026-05-19 patch 1차) 은 (2)(3) 도 base64 로 잘못 wrapping 해
- * `data:image/png;base64,https://...` 같은 corrupt URL 생성 → 수정.
- *
- * @param img - base64, data: URI, http(s):// URL, 또는 file:// URL
- * @returns OpenAI Vision spec 의 image_url 에 들어갈 URL 문자열
+ * @param img - base64 또는 data: URI
+ * @returns OpenAI Vision spec 의 image_url 에 들어갈 data URL, 받지 않는 형태면 undefined
  */
-export function buildImageDataUrl(img: string): string {
-    // 이미 완전한 URI 형태면 그대로 통과 — wrapping 금지.
+export function buildImageDataUrl(img: string): string | undefined {
     if (img.startsWith('data:')) return img;
-    if (img.startsWith('http://') || img.startsWith('https://')) return img;
-    if (img.startsWith('file://')) return img;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(img)) return undefined;
     // raw base64 — magic number 로 MIME 추론.
     return `data:${inferImageMime(img)};base64,${img}`;
 }
