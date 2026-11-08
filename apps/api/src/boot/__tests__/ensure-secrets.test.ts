@@ -6,6 +6,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { ensureBootSecrets } from '../ensure-secrets';
 
+// import * as fs 는 재정의할 수 없는 getter 묶음이라 spyOn 이 막힌다 — 실제 구현을 펼친 객체로 바꾸고 그 객체를 감시한다.
+jest.mock('fs', () => ({ ...jest.requireActual('fs') }));
+const mockedFs = jest.requireMock<typeof fs>('fs');
+
 const KEYS = ['JWT_SECRET', 'API_KEY_PEPPER', 'TOKEN_ENCRYPTION_KEY'] as const;
 
 describe('ensureBootSecrets', () => {
@@ -64,6 +68,32 @@ describe('ensureBootSecrets', () => {
         const content = fs.readFileSync(envPath, 'utf-8');
         expect(content).toContain('PORT=52416');
         expect(content).toContain('JWT_SECRET=');
+    });
+
+    it('기존 .env 에 append 하면 파일 권한을 0600 으로 맞춘다', () => {
+        fs.writeFileSync(envPath, 'PORT=52416\n', { mode: 0o644 });
+        fs.chmodSync(envPath, 0o644);
+        ensureBootSecrets(envPath);
+        expect(fs.statSync(envPath).mode & 0o777).toBe(0o600);
+    });
+
+    it('새 .env 도 0600 으로 만든다', () => {
+        ensureBootSecrets(envPath);
+        expect(fs.statSync(envPath).mode & 0o777).toBe(0o600);
+    });
+
+    it('권한 보정이 실패해도 부팅을 막지 않는다', () => {
+        fs.writeFileSync(envPath, 'PORT=52416\n');
+        const chmod = jest.spyOn(mockedFs, 'chmodSync').mockImplementation(() => { throw new Error('EPERM'); });
+        const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            expect(ensureBootSecrets(envPath).sort()).toEqual([...KEYS].sort());
+            expect(chmod).toHaveBeenCalledWith(envPath, 0o600);
+            expect(warn).toHaveBeenCalled();
+        } finally {
+            chmod.mockRestore();
+            warn.mockRestore();
+        }
     });
 
     it('영속 실패 시 throw 하고 process.env 를 오염시키지 않는다 (fail-fast)', () => {

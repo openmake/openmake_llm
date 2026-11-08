@@ -42,6 +42,14 @@ if (process.env.TEST_DATABASE_URL) {
     delete process.env.DATABASE_URL;
 }
 
+// 단위 테스트는 실 Redis 에 쓰지 않는다 — .env 의 STORAGE_BACKEND=redis 누출 차단.
+//
+// 리미터·쿼터 등이 getKeyValueStore() 로 실 Redis 에 쓰면 카운터가 실행 사이에 남아,
+// metrics-exposition.test.ts 같은 한도 테스트가 1분 안에 다시 돌리면 한도 전에 429 를 받는다.
+// 실 Redis 통합은 __tests__/redis-store.test.ts 가 TEST_REDIS_URL 가드로 따로 돈다.
+// REDIS_URL 은 건드리지 않는다(storage-factory.test.ts 는 스스로 env 를 설정해 Redis 분기를 검사한다).
+process.env.STORAGE_BACKEND = 'memory';
+
 // RL_MCP_INGEST 테스트 한도 상향 (supertest 반복 호출 대응)
 process.env.RL_MCP_INGEST_FREE = process.env.RL_MCP_INGEST_FREE && process.env.RL_MCP_INGEST_FREE !== '5'
     ? process.env.RL_MCP_INGEST_FREE
