@@ -198,6 +198,8 @@ export const FILE_ATTACH_LIMITS = {
     MAX_IMAGES: parseInt(process.env.FILE_ATTACH_MAX_IMAGES || '20', 10),
     /** 이미지 dataURL 최대 글자 수 (base64 는 원본의 4/3 — 기본 20M ≈ 15MB 이미지) */
     MAX_IMAGE_DATAURL_CHARS: parseInt(process.env.FILE_ATTACH_MAX_IMAGE_DATAURL_CHARS || '20000000', 10),
+    /** 주소 형태 이미지 입력을 서버가 받을 때 타임아웃(ms) — chat/inbound-images */
+    IMAGE_URL_FETCH_TIMEOUT_MS: parseInt(process.env.FILE_ATTACH_IMAGE_URL_FETCH_TIMEOUT_MS || '15000', 10),
 } as const;
 
 /**

@@ -15,6 +15,9 @@ import { capPromptImages } from './prompt-image-cap';
 import { LLM_PROMPT_IMAGE_LIMITS } from '../config/runtime-limits';
 import { resolveModelProfile } from '../config/model-profiles';
 import { LOCAL_PRESERVE_THINKING_ENABLED } from '../config/llm-parameters';
+import { createLogger } from '../utils/logger';
+
+const log = createLogger('OpenAIRequest');
 
 /**
  * FormatOption → vLLM/OpenAI response_format 변환.
@@ -69,7 +72,10 @@ export function toOpenAIMessages(messages: ChatMessage[], modelId?: string, opts
                 // MIME 하드코드 제거 (2026-05-19): magic number 기반 추론으로 통일.
                 // 이전 'data:image/png;base64,...' hardcode 가 JPEG/WebP/GIF 첨부 시
                 // vLLM Vision payload 부정확 → buildImageDataUrl 공용 helper 사용.
-                blocks.push({ type: 'image_url', image_url: { url: buildImageDataUrl(img) } });
+                const url = buildImageDataUrl(img);
+                // 2차 방어 — 유입 지점이 data URL 로 바꾸므로 정상 경로에서는 일어나지 않는다
+                if (!url) { log.warn('지원하지 않는 이미지 입력 형식을 건너뜀'); continue; }
+                blocks.push({ type: 'image_url', image_url: { url } });
             }
             return { role: m.role, content: blocks };
         }
