@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.127.4](https://github.com/openmake/openmake_llm/compare/v1.127.3...v1.127.4) (2026-11-08)
+
+
+### 🐛 버그 수정
+
+* **admin:** 마지막 활성 관리자 삭제를 409 LAST_ADMIN 으로 막는다 ([bb346fb](https://github.com/openmake/openmake_llm/commit/bb346fb209934efb85c4fb5f42b26fde4f24535d))
+* **admin:** 삭제 거부 로그를 warn 으로 낮추고 동시 삭제 DB 테스트 전제를 단언한다 ([2f196be](https://github.com/openmake/openmake_llm/commit/2f196beed60874ccdd64f1cfe3722539640c6e0b))
+
 ## [1.127.3](https://github.com/openmake/openmake_llm/compare/v1.127.2...v1.127.3) (2026-11-07)
 
 
