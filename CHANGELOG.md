@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.127.7](https://github.com/openmake/openmake_llm/compare/v1.127.6...v1.127.7) (2026-11-08)
+
+
+### 🐛 버그 수정
+
+* **mcp:** 사용자 MCP 서버 실행 격리 보강 (2026-11-08 점검) ([0f55015](https://github.com/openmake/openmake_llm/commit/0f5501553c8d2b8606a53932e381e1805e66987a))
+* **task-sandbox:** egress 프록시 listen 준비 확인을 항상 수행하고 종료된 컨테이너는 즉시 실패 (2026-11-08 점검 리뷰 반영) ([e927f08](https://github.com/openmake/openmake_llm/commit/e927f0881a5a7752a55688d12b3a9753afaa069e))
+* **task-sandbox:** 준비 시간을 넘긴 egress 프록시는 로그 없이도 준비된 것으로 본다 (2026-11-08 점검 리뷰 반영) ([7c656c3](https://github.com/openmake/openmake_llm/commit/7c656c382877d2ae1519c8d8a5b80d4bf4ca83ee))
+
 ## [1.127.6](https://github.com/openmake/openmake_llm/compare/v1.127.5...v1.127.6) (2026-11-08)
 
 
