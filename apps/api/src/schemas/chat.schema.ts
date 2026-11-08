@@ -147,5 +147,11 @@ export const chatRequestSchema = z.object({
         lat: z.number().min(-90).max(90),
         lng: z.number().min(-180).max(180),
     }).optional(),
+}).superRefine((req, ctx) => {
+    // 요청 전체(현재 턴 + history) 이미지 수 상한 — WS(ws-chat-history-images)와 같은 계약(2026-11-08 멀티턴 vision)
+    const total = (req.images?.length ?? 0) + (req.history ?? []).reduce((n, m) => n + (m.images?.length ?? 0), 0);
+    if (total > FILE_ATTACH_LIMITS.MAX_IMAGES) {
+        ctx.addIssue({ code: 'custom', path: ['images'], message: `이미지는 최대 ${FILE_ATTACH_LIMITS.MAX_IMAGES}개까지 첨부할 수 있습니다` });
+    }
 });
 
