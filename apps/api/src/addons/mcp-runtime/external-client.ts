@@ -26,6 +26,7 @@ import { Client, StreamableHTTPClientTransport, SSEClientTransport } from '@mode
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from '../../tool-contract/types';
 import { buildSandboxedCommand } from './sandbox-docker';
+import { prepareSandboxConfig } from './sandbox-egress';
 import { needsPlaywrightBrowser } from './sandbox-playwright';
 import { stripControlEnv } from '../../security/spawn-env-policy';
 import { isConnectionDeathError } from '../../tool-contract/tool-error-classifier';
@@ -146,7 +147,7 @@ export class ExternalMCPClient extends EventEmitter {
         this.lastError = undefined;
 
         try {
-            this.transport = this.createTransport();
+            this.transport = await this.createTransport();
             this.stderrTail = '';
             this.captureStderr(this.transport);
 
@@ -460,7 +461,7 @@ export class ExternalMCPClient extends EventEmitter {
         return new McpOAuthProvider({ serverId: this.config.id, userId: this.config.user_id });
     }
 
-    private createTransport(): TransportInstance {
+    private async createTransport(): Promise<TransportInstance> {
         switch (this.config.transport_type) {
             case 'stdio': {
                 if (!this.config.command) {
@@ -468,16 +469,20 @@ export class ExternalMCPClient extends EventEmitter {
                 }
                 // 🔒 OS 격리: docker 컨테이너로 command/args 를 감싼다(게이트 미충족 시 원본 no-op).
                 //   sandboxed 시 인자엔 `-e KEY`(이름만) 만 들어가고 값은 sb.env 로 온다.
+                //   사용자 소유 서버는 egress 프록시를 먼저 보장한다(못 하면 거부 — 2026-11-08 점검).
+                const network = this.config.sandbox_network ?? 'full';
+                const ownerScope = this.config.user_id ? 'user' : 'global';
+                const sandboxCfg = await prepareSandboxConfig({ network, ownerScope });
                 const sb = buildSandboxedCommand({
                     command: this.config.command,
                     args: this.config.args || [],
                     serverId: this.config.id,
-                    network: this.config.sandbox_network ?? 'full',
+                    network,
                     env: this.config.env,
-                    ownerScope: this.config.user_id ? 'user' : 'global',
-                });
+                    ownerScope,
+                }, sandboxCfg);
                 if (sb.sandboxed) {
-                    logger.info(`MCP 서버 "${this.config.name}" docker 격리 적용 (net=${this.config.sandbox_network ?? 'full'})`);
+                    logger.info(`MCP 서버 "${this.config.name}" docker 격리 적용 (net=${sb.network ?? network})`);
                     if (needsPlaywrightBrowser({ command: this.config.command, args: this.config.args || [], env: this.config.env })) {
                         logger.info(`[McpSandbox] ${this.config.id}: playwright 브라우저 사전 설치 래핑`);
                     }
