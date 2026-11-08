@@ -12,7 +12,7 @@ jest.mock('../../../security/security-audit', () => ({
 import type { Request } from 'express';
 import {
     auditMcpServerCreated, auditMcpServerDeleted, auditMcpDeleteDenied,
-    auditMcpRegisterDenied, auditMcpUrlBlocked,
+    auditMcpRegisterDenied, auditMcpUrlBlocked, auditMcpServerBridgeChanged,
 } from '../routes/mcp-server-audit';
 
 function req(user?: { id: string | number; role?: string }): Request {
@@ -79,5 +79,12 @@ describe('mcp-server-audit', () => {
         auditMcpUrlBlocked(req({ id: 'u-5' }), 'https://x.invalid/', new Error('getaddrinfo ENOTFOUND x'));
         auditMcpUrlBlocked(req({ id: 'u-5' }), 'not a url', new TypeError('Invalid URL'));
         expect(audit).not.toHaveBeenCalled();
+    });
+    it('관리자 bridge 허용 변경 → mcp_server.sandbox_bridge_changed, 이름·소유자·허용 여부만', () => {
+        auditMcpServerBridgeChanged(req({ id: 'a-1', role: 'admin' }), { id: 'mcp_9', name: 'docs', ownerUserId: 'u-5', allowed: true });
+        expect(only()).toEqual({
+            action: 'mcp_server.sandbox_bridge_changed', userId: 'a-1', resourceType: 'mcp_server', resourceId: 'mcp_9',
+            details: { name: 'docs', ownerUserId: 'u-5', allowed: true }, ipAddress: '10.1.2.3', userAgent: 'jest-ua',
+        });
     });
 });

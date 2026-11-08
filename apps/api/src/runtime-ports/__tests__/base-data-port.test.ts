@@ -7,12 +7,14 @@ jest.mock('../../data/conversation-session-lookup', () => ({
     getSessionOwnerId: jest.fn(),
     getSessionSummaries: jest.fn(),
 }));
+jest.mock('../../data/user-email-lookup', () => ({ getUserEmails: jest.fn() }));
 jest.mock('../../data/migrations/runner', () => ({ isMigrationApplied: jest.fn() }));
 jest.mock('../../data/models/unified-database', () => ({ getPool: () => 'pool' }));
 
 import { baseDataPort } from '../base-data-port';
 import * as lookup from '../../data/conversation-session-lookup';
 import * as runner from '../../data/migrations/runner';
+import * as userEmails from '../../data/user-email-lookup';
 
 const listSessionIdsByOwner = lookup.listSessionIdsByOwner as jest.Mock;
 const getSessionOwnerId = lookup.getSessionOwnerId as jest.Mock;
@@ -106,5 +108,15 @@ describe('migrations.isApplied', () => {
     it('조회 실패는 삼키지 않고 던진다 — 호출부가 "없음"과 나눈다', async () => {
         isMigrationApplied.mockRejectedValueOnce(new Error('connect ECONNREFUSED'));
         await expect(baseDataPort.migrations.isApplied('addon:x:001')).rejects.toThrow('ECONNREFUSED');
+    });
+});
+
+describe('users.emailsByIds', () => {
+    const getUserEmails = userEmails.getUserEmails as jest.Mock;
+
+    it('id 를 중복 없이 넘기고 Base 가 준 Map 을 그대로 돌려준다', async () => {
+        getUserEmails.mockResolvedValueOnce(new Map([['u1', 'a@example.com']]));
+        await expect(baseDataPort.users.emailsByIds(['u1', 'u1', 'u2'])).resolves.toEqual(new Map([['u1', 'a@example.com']]));
+        expect(getUserEmails).toHaveBeenCalledWith(['u1', 'u2']);
     });
 });

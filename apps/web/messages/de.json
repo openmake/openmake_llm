@@ -1449,7 +1449,23 @@
     "colLastCrash": "Letzter Absturz",
     "crashTrend": "Lebenszyklus- und Absturzeinträge pro Stunde — aktuelle Stunde und die 23 Stunden davor",
     "trendRecords": "Einträge {count}",
-    "trendCrashed": "Abstürze {count}"
+    "trendCrashed": "Abstürze {count}",
+    "userServersTitle": "Netzwerk der Benutzerserver",
+    "userServersHint": "Von Benutzern registrierte stdio-Server laufen standardmäßig über den Egress-Proxy. Erlauben Sie Bridge nur für Server, die Zugriff auf das interne Netzwerk benötigen.",
+    "colOwner": "Eigentümer",
+    "colName": "Name",
+    "colTransport": "Transport",
+    "colNetwork": "Netzwerk",
+    "colBridge": "Bridge-Zugriff",
+    "bridgeAllow": "Bridge erlauben",
+    "bridgeRevoke": "Widerrufen",
+    "bridgeConfirm": "Bestätigen",
+    "bridgeApplied": "Gilt ab der nächsten Verbindung (automatische Neuverbindung)",
+    "networkEgress": "Egress-Proxy",
+    "networkBridge": "bridge",
+    "networkNone": "keins",
+    "userServersEmpty": "Keine von Benutzern registrierten Server",
+    "userServersError": "Benutzerserver konnten nicht geladen werden"
   },
   "auth": {
     "login": {
