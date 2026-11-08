@@ -1,9 +1,9 @@
 /**
- * Base 데이터 포트 — add-on 이 Base 소유 테이블(대화 세션·마이그레이션 기록)을 읽는 문 (설계 3차 §3 C2, 로드맵 작업 7).
+ * Base 데이터 포트 — add-on 이 Base 소유 테이블(대화 세션·마이그레이션 기록·사용자)을 읽는 문 (설계 3차 §3 C2, 로드맵 작업 7).
  *
  * add-on 소스는 Base 테이블 이름을 SQL 로 쓰지 않는다(`__tests__/addons-no-base-table-sql.test.ts`). 대신 이 포트를 부른다.
  * actor 를 받는 함수는 **그 actor 의 것만** 돌려준다 — 세션은 user actor 만 소유하므로 org·system actor 는 빈 목록·false.
- * `ownerOf`·`summaries` 는 인가를 하지 않는다 — 호출부가 이미 상위 자원(예: add-on 의 작업공간)으로 인가를 끝낸 경우에만 쓴다.
+ * `ownerOf`·`summaries`·`users.emailsByIds` 는 인가를 하지 않는다 — 호출부가 이미 상위 자원(예: add-on 의 작업공간)으로 인가를 끝낸 경우에만 쓴다.
  * 같은 DB·같은 풀의 **코드 경계**이며 물리 SQL 권한 격리를 뜻하지 않는다.
  *
  * @module runtime-ports/base-data-port
@@ -12,6 +12,7 @@ import type { Actor } from '@openmake/plugin-contracts';
 import { getSessionOwnerId, getSessionSummaries, listSessionIdsByOwner } from '../data/conversation-session-lookup';
 import { isMigrationApplied } from '../data/migrations/runner';
 import { getPool } from '../data/models/unified-database';
+import { getUserEmails } from '../data/user-email-lookup';
 import { getUserExtensionNames } from '../data/user-extension-lookup';
 
 export interface ConversationSessionSummary {
@@ -42,10 +43,16 @@ export interface UserExtensionsPort {
     namesByIds(ids: readonly string[]): Promise<Map<string, string>>;
 }
 
+export interface UsersPort {
+    /** 사용자 id → 이메일(없는 id·이메일 없는 사용자는 빠짐) — 인가 없음: 관리자 전용 라우트에서만 부른다 */
+    emailsByIds(ids: readonly string[]): Promise<Map<string, string>>;
+}
+
 export interface BaseDataPort {
     conversationSessions: ConversationSessionsPort;
     migrations: MigrationRecordsPort;
     userExtensions: UserExtensionsPort;
+    users: UsersPort;
 }
 
 export const baseDataPort: BaseDataPort = {
@@ -74,6 +81,11 @@ export const baseDataPort: BaseDataPort = {
     userExtensions: {
         async namesByIds(ids) {
             return getUserExtensionNames([...new Set(ids)]);
+        },
+    },
+    users: {
+        async emailsByIds(ids) {
+            return getUserEmails([...new Set(ids)]);
         },
     },
 };

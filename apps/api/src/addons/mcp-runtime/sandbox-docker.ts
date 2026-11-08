@@ -17,6 +17,7 @@
  *  - 네트워크(유효값 effectiveNetwork): none → --network none · 사용자 소유 서버의 full·host → egress
  *    (internal 망 + egress 프록시 경유, MCP_SANDBOX_USER_EGRESS — 기본 on, 프록시 없으면 거부) ·
  *    관리자 전역 서버의 full → bridge. DB 값(sandbox_network)은 그대로 둔다(2026-11-08 점검).
+ *    관리자가 허용한 사용자 서버(sandbox_bridge_allowed)는 bridge — host-gateway·loopback 치환은 주지 않는다.
  *  - 권한: --cap-drop ALL + no-new-privileges + 비-root user + pids/memory 상한(cgroups).
  *  - 내부 loopback(127.0.0.1/localhost) → host.docker.internal 자동 치환
  *    (컨테이너의 127.0.0.1 은 호스트가 아니므로 DB 등 내부 서비스 접속 인자 보정).
@@ -43,6 +44,8 @@ interface SandboxInput {
     env?: Record<string, string>;
     /** 서버 소유 범위 — 'user'(사용자 소유)는 환경과 무관하게 비격리 실행을 거부한다(W3 S2·E1). 미지정은 종전 판정. */
     ownerScope?: 'user' | 'global';
+    /** 관리자가 bridge 네트워크를 허용한 사용자 소유 서버(DB sandbox_bridge_allowed) — 관리자 bridge 허용 옵션(2026-11-08 점검 후속). */
+    bridgeAllowed?: boolean;
 }
 
 interface SandboxResult {
@@ -134,14 +137,15 @@ export function defaultSandboxConfig(): SandboxConfig {
 
 /**
  * PURE: 유효 네트워크 — none 은 none, 사용자 소유 서버의 full·host·미지정은 userEgress 면 egress(아니면 bridge),
+ * 관리자가 bridge 를 허용한 사용자 서버는 bridge.
  * 전역 서버는 bridge(전역 host 는 buildSandboxedCommand 가 먼저 비격리로 돌려보낸다).
  */
 export function effectiveNetwork(
-    input: Pick<SandboxInput, 'network' | 'ownerScope'>,
+    input: Pick<SandboxInput, 'network' | 'ownerScope' | 'bridgeAllowed'>,
     cfg: Pick<SandboxConfig, 'userEgress'>,
 ): EffectiveSandboxNetwork {
     if (input.network === 'none') return 'none';
-    if (input.ownerScope === 'user') return cfg.userEgress ? 'egress' : 'bridge';
+    if (input.ownerScope === 'user') return input.bridgeAllowed === true || !cfg.userEgress ? 'bridge' : 'egress';
     return 'bridge';
 }
 
