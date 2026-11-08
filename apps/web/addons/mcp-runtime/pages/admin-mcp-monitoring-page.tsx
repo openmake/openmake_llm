@@ -27,6 +27,7 @@ import type {
 } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { AdminTabs } from "@/components/hub-tabs";
+import { AdminUserServersPanel } from "../components/admin-user-servers-panel";
 
 /* 요약 카드 — 값마다 모집단이 다르다(실행 중 (서버, 사용자) 쌍 · 등록 서버 정의 · 라이프사이클 기록) */
 interface SummaryView {
@@ -402,6 +403,9 @@ export function McpMonitoringPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* 관리자 bridge 허용 옵션(2026-11-08 점검 후속) — 사용자 소유 서버의 샌드박스 네트워크 */}
+        <AdminUserServersPanel />
       </PageBody>
     </>
   );

@@ -222,4 +222,19 @@ describe('MCPLifecycleSupervisor', () => {
             's-crash', 'u-1', 'crashed', undefined, expect.stringContaining('exit'),
         );
     });
+    test.each([
+        ['true', { sandbox_bridge_allowed: true }, true],
+        ['false', { sandbox_bridge_allowed: false }, false],
+        ['미지정', {}, false],
+    ])('spawn config 에 관리자 bridge 허용 옵션 전달 — 행 %s', async (_n, over, expected) => {
+        const userPool = new UserMCPPool();
+        const repo = mkRepo();
+        repo.getServerById.mockResolvedValue(mkRow({ id: 's-b', user_id: 'u-1', ...over }));
+        const { factory } = mkClientFactory();
+        const sv = new MCPLifecycleSupervisor({ userPool, repo, clientFactory: factory });
+
+        await sv.spawnUserServer('u-1', 's-b');
+        expect(factory).toHaveBeenCalledTimes(1);
+        expect(factory.mock.calls[0][0].sandbox_bridge_allowed).toBe(expected);
+    });
 });

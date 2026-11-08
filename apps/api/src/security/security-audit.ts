@@ -29,7 +29,8 @@ export type SecurityAuditAction =
     | 'mcp_server.create'
     | 'mcp_server.delete'
     | 'mcp_server.register_denied'
-    | 'mcp_server.spawn_refused';
+    | 'mcp_server.spawn_refused'
+    | 'mcp_server.sandbox_bridge_changed';
 
 export type SecurityAuditInput = {
     action: SecurityAuditAction;

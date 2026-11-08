@@ -6,6 +6,7 @@
  * 브라우저 전용 task 컨테이너를 internal Docker 네트워크(인터넷 차단)에만 연결하고, 양쪽
  * (internal + bridge)에 붙은 egress 프록시를 통해서만 allowlist 도메인에 도달하게 한다.
  * ensureEgressProxy 가 internal 네트워크 + 프록시 컨테이너를 멱등 생성한다.
+ * internal 망은 gateway isolated 로 만들고 기존 망은 비어 있을 때 옮긴다(egress 내부망 gateway 격리, 2026-11-08 점검 후속).
  *
  * @module services/task-sandbox/egress-proxy
  */
@@ -78,17 +79,96 @@ async function waitProxyReady(cfg: TaskSandboxConfig, exec: DockerRun): Promise<
     }
 }
 
+/** Docker bridge 드라이버의 IPv4 gateway 모드 옵션 키(Docker Engine 28.0.0+, `--internal` 망의 isolated). */
+export const EGRESS_GATEWAY_MODE_OPT = 'com.docker.network.bridge.gateway_mode_ipv4';
+const GATEWAY_MODE_MIN_MAJOR = 28;
+const GATEWAY_UNSUPPORTED_WARN = 'egress 내부망 gateway isolated 미지원 데몬(Docker 28 미만) — 종전 internal 망으로 생성';
+
+/** PURE: internal 망 생성 인자 — 격리면 gateway isolated 옵션을 붙인다. */
+export function isolatedNetworkCreateArgs(cfg: TaskSandboxConfig, isolated: boolean): string[] {
+    return ['network', 'create', '--internal', ...(isolated ? ['-o', `${EGRESS_GATEWAY_MODE_OPT}=isolated`] : []), cfg.egressNetwork];
+}
+
+/** PURE: `network inspect -f '{{index .Options "<OPT>"}}'` 출력이 isolated 인가. */
+export function isGatewayIsolated(inspectStdout: string): boolean {
+    return inspectStdout.trim() === 'isolated';
+}
+
+/**
+ * PURE: 서버 버전 문자열로 gateway 모드 지원 여부 — 28 이상 true, 미만 false, 읽지 못하면 null.
+ * 28 미만 bridge 드라이버는 모르는 -o 옵션을 오류 없이 저장만 하므로 생성 결과로는 미지원을 알 수 없다.
+ */
+export function daemonSupportsGatewayMode(serverVersion: string): boolean | null {
+    const m = /^(\d+)\./.exec(serverVersion.trim());
+    return m ? Number(m[1]) >= GATEWAY_MODE_MIN_MAJOR : null;
+}
+
+function gatewayModeInspectArgs(cfg: TaskSandboxConfig): string[] {
+    return ['network', 'inspect', '-f', `{{index .Options "${EGRESS_GATEWAY_MODE_OPT}"}}`, cfg.egressNetwork];
+}
+
+async function gatewaySupported(cfg: TaskSandboxConfig, exec: DockerRun): Promise<boolean | null> {
+    const v = await exec(cfg.dockerPath, ['version', '-f', '{{.Server.Version}}']);
+    return v.code === 0 ? daemonSupportsGatewayMode(v.stdout) : null;
+}
+
+/** internal 망 생성 — 격리 옵션을 거부하면 옵션 없이 1회 재시도, 그것도 실패하면 오류. */
+async function createInternalNetwork(cfg: TaskSandboxConfig, exec: DockerRun): Promise<void> {
+    const d = cfg.dockerPath;
+    let isolated = cfg.egressGatewayIsolated;
+    if (isolated && (await gatewaySupported(cfg, exec)) === false) {
+        logger.warn(GATEWAY_UNSUPPORTED_WARN);
+        isolated = false;
+    }
+    let c = await exec(d, isolatedNetworkCreateArgs(cfg, isolated));
+    if (c.code !== 0 && /already exists/i.test(c.stderr)) return;
+    if (c.code !== 0 && isolated) {
+        logger.warn(GATEWAY_UNSUPPORTED_WARN);
+        isolated = false;
+        c = await exec(d, isolatedNetworkCreateArgs(cfg, false));
+        if (c.code !== 0 && /already exists/i.test(c.stderr)) return;
+    }
+    if (c.code !== 0) throw new Error(`egress internal 네트워크 생성 실패: ${c.stderr}`);
+    logger.info(`internal 네트워크 생성: ${cfg.egressNetwork}${isolated ? ' (gateway isolated)' : ''}`);
+    if (isolated && !isGatewayIsolated((await exec(d, gatewayModeInspectArgs(cfg))).stdout)) logger.warn(GATEWAY_UNSUPPORTED_WARN);
+}
+
+/**
+ * 기존(격리 아님) 망을 gateway isolated 로 옮긴다 — 프록시 말고 붙은 컨테이너가 없을 때만.
+ * 쓰는 컨테이너가 있거나 망을 지우지 못하면 기존 망으로 계속하고 다음 기동 때 다시 시도한다.
+ */
+async function migrateToIsolated(cfg: TaskSandboxConfig, exec: DockerRun): Promise<void> {
+    const d = cfg.dockerPath;
+    if ((await gatewaySupported(cfg, exec)) === false) return;
+    const members = await exec(d, ['network', 'inspect', '-f', '{{range .Containers}}{{.Name}} {{end}}', cfg.egressNetwork]);
+    if (members.code !== 0) {
+        logger.warn('egress 내부망 gateway 격리 이행 보류(연결 컨테이너 inspect 실패) — 다음 기동 때 재시도');
+        return;
+    }
+    const others = members.stdout.split(/\s+/).filter((n) => n && n !== cfg.egressProxyContainer);
+    if (others.length > 0) {
+        logger.warn('egress 내부망 gateway 격리 이행 보류(사용 중인 컨테이너 있음) — 다음 기동 때 재시도');
+        return;
+    }
+    await exec(d, ['rm', '-f', cfg.egressProxyContainer]);
+    const r = await exec(d, ['network', 'rm', cfg.egressNetwork]);
+    if (r.code !== 0) {
+        logger.warn('egress 내부망 gateway 격리 이행 보류(사용 중인 컨테이너 있음) — 다음 기동 때 재시도');
+        return;
+    }
+    logger.info(`egress 내부망 gateway 격리 이행: ${cfg.egressNetwork}`);
+    await createInternalNetwork(cfg, exec);
+}
+
 /** internal 네트워크 + 프록시 컨테이너를 보장하고 프록시 base URL 을 반환. 멱등. */
 export async function ensureEgressProxy(cfg: TaskSandboxConfig, exec: DockerRun = run): Promise<string> {
     const d = cfg.dockerPath;
-    // 1) internal 네트워크 (외부 연결 없음) — 없으면 생성.
-    const netExists = await exec(d, ['network', 'inspect', cfg.egressNetwork]);
-    if (netExists.code !== 0) {
-        const c = await exec(d, ['network', 'create', '--internal', cfg.egressNetwork]);
-        if (c.code !== 0 && !/already exists/i.test(c.stderr)) {
-            throw new Error(`egress internal 네트워크 생성 실패: ${c.stderr}`);
-        }
-        logger.info(`internal 네트워크 생성: ${cfg.egressNetwork}`);
+    // 1) internal 네트워크 (외부 연결 없음) — 없으면 생성, 있는데 gateway 격리가 아니면 이행.
+    const net = await exec(d, gatewayModeInspectArgs(cfg));
+    if (net.code !== 0) {
+        await createInternalNetwork(cfg, exec);
+    } else if (cfg.egressGatewayIsolated && !isGatewayIsolated(net.stdout)) {
+        await migrateToIsolated(cfg, exec);
     }
 
     // 2) 프록시 컨테이너 — 실행 중이면 재사용, 아니면 생성.
