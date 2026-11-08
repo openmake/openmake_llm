@@ -28,6 +28,7 @@ import { createAuditSchema } from '../schemas/audit.schema';
 import { requireAuth, requireAdmin } from '../auth';
 import { getAuditService } from '../services/AuditService';
 import { PAGINATION } from '../config/http-data-limits';
+import { csvCell } from '../utils/csv';
 
 const router = Router();
 const auditService = getAuditService();
@@ -118,24 +119,18 @@ router.get('/export', asyncHandler(async (req: Request, res: Response) => {
         offset: 0,
     });
 
-    // RFC 4180: 큰따옴표는 "" 로 escape, 모든 필드를 "" 로 감쌈
-    const esc = (v: unknown): string => {
-        if (v === null || v === undefined) return '""';
-        const s = typeof v === 'string' ? v : JSON.stringify(v);
-        return `"${s.replace(/"/g, '""')}"`;
-    };
-
+    // RFC 4180 + 수식 선행 문자 무력화 — 다른 내보내기와 같은 csvCell(인증 보강, 2026-11-08 점검)
     const header = ['id', 'timestamp', 'action', 'user_id', 'resource_type', 'resource_id', 'ip_address', 'user_agent', 'details'].join(',');
     const rows = (logs as Array<Record<string, unknown>>).map(row => [
-        esc(row.id),
-        esc(row.timestamp instanceof Date ? row.timestamp.toISOString() : row.timestamp),
-        esc(row.action),
-        esc(row.user_id),
-        esc(row.resource_type),
-        esc(row.resource_id),
-        esc(row.ip_address),
-        esc(row.user_agent),
-        esc(row.details),
+        csvCell(row.id),
+        csvCell(row.timestamp),
+        csvCell(row.action),
+        csvCell(row.user_id),
+        csvCell(row.resource_type),
+        csvCell(row.resource_id),
+        csvCell(row.ip_address),
+        csvCell(row.user_agent),
+        csvCell(row.details),
     ].join(','));
     const csv = '﻿' + [header, ...rows].join('\n');  // UTF-8 BOM
 
