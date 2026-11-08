@@ -485,6 +485,7 @@ class UserManagerImpl {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+            await assertNotLastActiveAdmin(client, userId, { is_active: false });
 
             // ── 1. 커스텀 에이전트 정리 ──
             await client.query('DELETE FROM custom_agents WHERE created_by = $1', [userId]);

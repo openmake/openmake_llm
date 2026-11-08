@@ -314,7 +314,7 @@ class AdminController {
             const deleteSuccess = await userManager.deleteUser(userId);
 
             if (!deleteSuccess) {
-                res.status(400).json(badRequest('삭제할 수 없습니다 (마지막 관리자이거나 존재하지 않음)'));
+                res.status(400).json(badRequest('삭제할 수 없습니다 (존재하지 않는 사용자)'));
                 return;
             }
 
@@ -339,6 +339,7 @@ class AdminController {
             })();
             res.json(success({ deleted: true }));
         } catch (error) {
+            if (sendAppError(res, error)) return;
             log.error('[Admin Delete User] 오류:', error);
             res.status(500).json(internalError('사용자 삭제 실패'));
         }
