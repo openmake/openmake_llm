@@ -542,10 +542,14 @@ try_node_version_manager() {
 }
 
 # 마지막 수단: nodejs.org 공식 tarball 을 홈 디렉터리에 푼다 (sudo 불필요).
+# 받은 파일은 같은 배포 폴더의 SHASUMS256.txt 로 확인한 뒤에만 푼다(2026-11-08 점검 후속 보강).
 install_node_tarball() {
     local plat="linux-$ARCH"
-    local url="https://nodejs.org/dist/v$NODE_PINNED_VERSION/node-v$NODE_PINNED_VERSION-$plat.tar.gz"
+    local name="node-v$NODE_PINNED_VERSION-$plat"
+    local base="https://nodejs.org/dist/v$NODE_PINNED_VERSION"
+    local url="$base/$name.tar.gz"
     local dest="$HOME/.openmake/node"
+    local tmp sumcmd
 
     if [[ -x "$dest/bin/node" ]]; then
         export PATH="$dest/bin:$PATH"; persist_path "$dest/bin"
@@ -553,12 +557,27 @@ install_node_tarball() {
     fi
 
     has curl || die "curl 이 필요합니다 (Node 자동 설치용). 패키지 관리자로 curl 을 먼저 설치하세요."
+    if has sha256sum; then sumcmd="sha256sum"
+    elif has shasum; then sumcmd="shasum -a 256"
+    else die "sha256sum 또는 shasum 이 필요합니다 (Node 배포본 확인용)."; fi
     log_info "Node $NODE_PINNED_VERSION 다운로드: $url"
+    tmp="$(mktemp -d)" || die "임시 폴더를 만들 수 없습니다."
+    if ! curl -fsSL -o "$tmp/$name.tar.gz" "$url" || ! curl -fsSL -o "$tmp/SHASUMS256.txt" "$base/SHASUMS256.txt"; then
+        rm -rf "$tmp"
+        die "Node 다운로드 실패 — 네트워크를 확인하거나 Node $NODE_PINNED_VERSION 을 직접 설치한 뒤 재실행하세요."
+    fi
+    # shellcheck disable=SC2086  # sumcmd 는 "shasum -a 256" 처럼 인자를 포함한다
+    if ! (cd "$tmp" && grep "  $name.tar.gz\$" SHASUMS256.txt | $sumcmd -c -) >/dev/null 2>&1; then
+        rm -rf "$tmp"
+        die "Node 배포본 체크섬 검증 실패 ($name.tar.gz) — 받은 파일을 쓰지 않습니다. 잠시 뒤 다시 실행하세요."
+    fi
     rm -rf "$dest"; mkdir -p "$dest"
     # --strip-components=1 로 node-v24.x-plat/ 껍데기를 벗긴다.
-    if ! curl -fsSL "$url" | tar -xz -C "$dest" --strip-components=1; then
-        die "Node 다운로드/압축해제 실패 — 네트워크를 확인하거나 Node $NODE_PINNED_VERSION 을 직접 설치한 뒤 재실행하세요."
+    if ! tar -xzf "$tmp/$name.tar.gz" -C "$dest" --strip-components=1; then
+        rm -rf "$tmp"
+        die "Node 압축해제 실패 — Node $NODE_PINNED_VERSION 을 직접 설치한 뒤 재실행하세요."
     fi
+    rm -rf "$tmp"
     export PATH="$dest/bin:$PATH"; persist_path "$dest/bin"
     node_is_pinned || die "Node 설치 후에도 버전이 .node-version($NODE_PINNED_VERSION)과 다릅니다 (지금 $(node -v 2>/dev/null || echo 없음))"
 }
@@ -771,7 +790,7 @@ update_env_port() { # $1=POSTGRES_PORT|REDIS_PORT $2=새 포트
     if [[ "$1" == "POSTGRES_PORT" ]]; then
         sed -E "s|^POSTGRES_PORT=.*|POSTGRES_PORT=$2|; s|^(DATABASE_URL=.*@[^:/]+:)[0-9]+|\1$2|" "$envf" > "$tmp"
     else
-        sed -E "s|^REDIS_PORT=.*|REDIS_PORT=$2|; s|^(REDIS_URL=redis://[^:/]+:)[0-9]+|\1$2|" "$envf" > "$tmp"
+        sed -E "s|^REDIS_PORT=.*|REDIS_PORT=$2|; s|^(REDIS_URL=redis://(:[^@]*@)?[^:/]+:)[0-9]+|\1$2|" "$envf" > "$tmp"
     fi
     mv "$tmp" "$envf"
 }
@@ -974,7 +993,11 @@ compose_up() {
         sleep "$HEALTH_INTERVAL"
     done
 
-    docker exec "$RD_CONTAINER" redis-cli ping >/dev/null 2>&1 \
+    # REDIS_PASSWORD 가 있으면 redis-cli 에 환경변수로 넘긴다 — 명령줄에 비밀번호를 남기지 않는다.
+    local rd_pw; rd_pw="$(env_value REDIS_PASSWORD)"
+    local -a rd_auth=()
+    if [[ -n "$rd_pw" ]]; then rd_auth=(-e REDISCLI_AUTH); fi
+    REDISCLI_AUTH="$rd_pw" docker exec ${rd_auth[@]+"${rd_auth[@]}"} "$RD_CONTAINER" redis-cli ping 2>/dev/null | grep -q PONG \
         && log_ok "Redis 준비 완료" \
         || log_warn "Redis ping 실패 — docker logs $RD_CONTAINER 확인"
 }

@@ -16,7 +16,8 @@ set -euo pipefail
 
 # 로그 위치는 pm2 의 OMK_LOG_DIR 을 따른다(#650 으로 /tmp 에서 영속 볼륨으로 이전).
 # 기본값을 /tmp 로 고정해 두면 이전 이후 매일 "로그 없음" 으로 집계가 조용히 실패한다.
-LOG="${1:-${OMK_LOG_DIR:-/tmp}/openmake-llm-out.log}"
+# 미설정이면 ecosystem.config.js 기본값과 같은 저장소 logs/.
+LOG="${1:-${OMK_LOG_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/logs}/openmake-llm-out.log}"
 [ -f "$LOG" ] || { echo "로그 없음: $LOG"; exit 1; }
 
 echo "로그: $LOG"

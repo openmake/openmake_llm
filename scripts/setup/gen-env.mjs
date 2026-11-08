@@ -82,9 +82,12 @@ const PG_DB = 'openmake_llm';
  * 필수 키 정의. value 는 파일 생성 시점에 1회 평가된다.
  * `section` 이 같은 항목끼리 묶여 출력된다.
  */
-function buildEntries() {
+function buildEntries({ fresh }) {
     const pgPass = dbPassword();
     const adminPass = adminPassword();
+    // Redis 비밀번호는 새 .env 에만 만든다 — 보수 모드에서 기존 설치본에 덧붙이면 compose Redis 만
+    // 비밀번호를 요구하게 되고 기존 REDIS_URL 로는 연결이 끊긴다(2026-11-08 점검 후속 보강).
+    const redisPass = fresh ? dbPassword() : '';
 
     return [
         ['server', 'NODE_ENV', 'production', '실행 모드. dev 로 띄우려면 npm run dev 사용'],
@@ -128,7 +131,12 @@ function buildEntries() {
         ['infra', 'POSTGRES_PORT', PG_PORT, ''],
         ['infra', 'DATABASE_URL', `postgresql://${PG_USER}:${pgPass}@127.0.0.1:${PG_PORT}/${PG_DB}`, ''],
         ['infra', 'REDIS_PORT', REDIS_PORT, ''],
-        ['infra', 'REDIS_URL', `redis://127.0.0.1:${REDIS_PORT}`, ''],
+        ...(redisPass ? [
+            ['infra', 'REDIS_PASSWORD', redisPass, 'compose Redis 의 requirepass — 비우면 비밀번호 없이 뜬다'],
+            ['infra', 'REDIS_URL', `redis://:${redisPass}@127.0.0.1:${REDIS_PORT}`, 'REDIS_PASSWORD 와 반드시 동일해야 함'],
+        ] : [
+            ['infra', 'REDIS_URL', `redis://127.0.0.1:${REDIS_PORT}`, ''],
+        ]),
         ['infra', 'STORAGE_BACKEND', 'redis', 'memory | redis. cluster 모드에서는 redis 필요'],
 
         ['llm', 'LLM_BASE_URL', LLM_BASE_URL, 'OpenAI 호환 엔드포인트 (LiteLLM/vLLM/Ollama/OpenRouter …)'],
@@ -200,7 +208,7 @@ function main() {
     }
 
     if (!exists || FORCE) {
-        fs.writeFileSync(ENV_PATH, render(buildEntries()), { mode: 0o600 });
+        fs.writeFileSync(ENV_PATH, render(buildEntries({ fresh: true })), { mode: 0o600 });
         say(`.env 생성 완료 (권한 600)`);
         process.stdout.write('GENERATED=1\n');
         return;
@@ -210,7 +218,7 @@ function main() {
     const text = fs.readFileSync(ENV_PATH, 'utf8');
     const present = declaredKeys(text);
     // 'instance' 섹션은 부팅 필수가 아니라 보수 대상에서 제외한다 (위 buildEntries 주석 참고).
-    const missing = buildEntries().filter(([section, key]) => section !== 'instance' && !present.has(key));
+    const missing = buildEntries({ fresh: false }).filter(([section, key]) => section !== 'instance' && !present.has(key));
 
     if (missing.length === 0) {
         say('.env 에 필수 키가 모두 있습니다 — 변경 없음');
@@ -225,6 +233,11 @@ function main() {
     if (pgPair.some((k) => missingKeys.includes(k)) && !pgPair.every((k) => missingKeys.includes(k))) {
         say('⚠ POSTGRES_PASSWORD 와 DATABASE_URL 중 하나만 없습니다.');
         say('  자동 생성 값이 기존 값과 다를 수 있으니 두 값의 비밀번호가 같은지 직접 확인하세요.');
+    }
+
+    if (missingKeys.includes('REDIS_URL') && present.has('REDIS_PASSWORD')) {
+        say('⚠ REDIS_PASSWORD 는 있는데 REDIS_URL 이 없어 비밀번호 없는 주소로 채웁니다.');
+        say('  REDIS_URL 을 redis://:<REDIS_PASSWORD>@호스트:포트 로 직접 고치세요.');
     }
 
     const appended = [

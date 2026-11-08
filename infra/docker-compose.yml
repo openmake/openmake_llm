@@ -65,13 +65,18 @@ services:
     image: redis:7-alpine
     container_name: openmake${OMK_INSTANCE:+-${OMK_INSTANCE}}-redis
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    # REDIS_PASSWORD 는 선택 — 있으면 requirepass 로 뜨고 REDIS_URL 에 `:비밀번호@` 가 있어야 한다.
+    # 비어 있으면 종전처럼 비밀번호 없이 뜬다(기존 설치본 무중단). `$$` 는 컨테이너 셸에서 풀린다.
+    # 이미지 entrypoint 는 첫 인자가 redis-server 일 때만 redis 사용자로 낮추므로 셸에서 다시 거쳐 간다.
+    environment:
+      - "REDIS_PASSWORD=${REDIS_PASSWORD:-}"
+    command: ["sh", "-c", "if [ -n \"$$REDIS_PASSWORD\" ]; then exec docker-entrypoint.sh redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\"; else exec docker-entrypoint.sh redis-server --appendonly yes; fi"]
     ports:
       - "${REDIS_BIND:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
     volumes:
       - openmake_redisdata:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping; else redis-cli ping; fi | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5

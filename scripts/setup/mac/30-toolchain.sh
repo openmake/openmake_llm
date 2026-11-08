@@ -393,7 +393,7 @@ update_env_port() { # $1=POSTGRES_PORT|REDIS_PORT $2=새 포트
     if [[ "$1" == "POSTGRES_PORT" ]]; then
         sed -E "s|^POSTGRES_PORT=.*|POSTGRES_PORT=$2|; s|^(DATABASE_URL=.*@[^:/]+:)[0-9]+|\1$2|" "$ENV_FILE" > "$tmp"
     else
-        sed -E "s|^REDIS_PORT=.*|REDIS_PORT=$2|; s|^(REDIS_URL=redis://[^:/]+:)[0-9]+|\1$2|" "$ENV_FILE" > "$tmp"
+        sed -E "s|^REDIS_PORT=.*|REDIS_PORT=$2|; s|^(REDIS_URL=redis://(:[^@]*@)?[^:/]+:)[0-9]+|\1$2|" "$ENV_FILE" > "$tmp"
     fi
     cat "$tmp" > "$ENV_FILE"; rm -f "$tmp"
 }

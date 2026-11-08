@@ -9,6 +9,7 @@
  *
  * @module utils/web-scraper
  * @see security/ssrf-guard.ts - SSRF 방어 (safeFetch)
+ * @see utils/web-scraper-playwright.ts - 2단계 브라우저 렌더링
  */
 
 import * as crypto from 'crypto';
@@ -24,7 +25,7 @@ import { SCRAPER_CONFIG, browserHeaders } from '../config/web-scraper';
 import { WEB_SCRAPE_LIMITS } from '../config/core-runtime-limits';
 import { resolveStructuredSource, resolveBlockedSource, tryRssFallback } from './web-scraper-handlers';
 import { impersonateFetch } from './impersonate-fetch';
-import { createRouteGuard } from './web-scraper-route-guard';
+import { renderPageHtml } from './web-scraper-playwright';
 
 /** Cloudflare 등 봇 챌린지 안내 페이지 여부 — 제목 패턴 부분일치 (config 관리). */
 export function isBotChallengeResult(result: Pick<ScrapeResult, 'title'>): boolean {
@@ -341,38 +342,8 @@ async function scrapeWithPlaywright(
     timeoutMs: number,
     onlyMainContent: boolean
 ): Promise<ScrapeResult> {
-    let chromium;
-    try {
-        const pw = await import('playwright-core');
-        chromium = pw.chromium;
-    } catch {
-        throw new Error('playwright-core가 설치되지 않았습니다. SPA 스크래핑을 사용하려면 npm install playwright-core를 실행하세요.');
-    }
-
-    const browser = await chromium.launch({ headless: true });
-    try {
-        const page = await browser.newPage();
-        // SSRF 방어: Playwright 는 자체 네트워크 스택을 써서 safeFetch 의 redirect 재검증·DNS 핀을
-        // 우회한다. 문서 네비게이션(초기 goto + 서버 redirect)뿐 아니라 하위 리소스(img/css/script/fetch)까지
-        // 모든 요청을 validateOutboundUrl 로 검사해 내부/메타데이터 엔드포인트 접근을 차단한다(같은 origin 은 한 번만).
-        const guard = createRouteGuard(validateOutboundUrl);
-        await page.route('**/*', async (route) => {
-            const request = route.request();
-            if (!(await guard(request.url()))) {
-                logger.warn(`[${url}] Playwright 네비게이션 SSRF 차단: ${request.url()}`);
-                await route.abort('blockedbyclient');
-                return;
-            }
-            await route.continue();
-        });
-        await page.goto(url, { waitUntil: 'networkidle', timeout: timeoutMs });
-        // 안전망: route 가 못 잡은 클라이언트측(JS/meta) redirect 대비 최종 URL 재검증.
-        await validateOutboundUrl(page.url());
-        const html = await page.content();
-        return parseHtmlToMarkdown(html, url, onlyMainContent);
-    } finally {
-        await browser.close();
-    }
+    const html = await renderPageHtml(url, timeoutMs);
+    return parseHtmlToMarkdown(html, url, onlyMainContent);
 }
 
 // ============================================
