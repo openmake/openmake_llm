@@ -18,6 +18,7 @@ export function scheduleHistoryPresummary(
     cleanedResponse: string,
     maskedModel: string,
     currentSessionId: string,
+    images?: string[],
 ): void {
     // 8. 다음 턴을 위한 사전 요약 (백그라운드, fire-and-forget)
     // 새 history = 기존 + user message + cleanedResponse (placeholder 포함).
@@ -27,7 +28,8 @@ export function scheduleHistoryPresummary(
     if (newHistoryLength >= HISTORY_SUMMARIZER.MIN_MESSAGES_TO_SUMMARIZE) {
         const newHistory = [
             ...(history ?? []),
-            { role: 'user', content: message },
+            // 현재 턴 이미지도 싣는다 — 다음 턴이 캐시본을 쓰면 직전 턴 이미지가 사라졌다(2026-11-08 멀티턴 vision)
+            { role: 'user', content: message, ...(images?.length ? { images } : {}) },
             { role: 'assistant', content: cleanedResponse },
         ];
         void summarizeHistory(newHistory, maskedModel)

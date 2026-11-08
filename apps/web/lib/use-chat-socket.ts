@@ -20,6 +20,7 @@ import { CLIENT_TIMING } from "./config";
 import { announceAgentTaskChange } from "./agent-task-change";
 import { AUTH_RESTORED_EVENT } from "./auth-sync";
 import { uuid } from "./local-id";
+import { toWireHistory } from "./chat-history-wire";
 import { encodeMcpResources, type McpResourcePayload } from "@/components/chat/mcp-resource-card";
 
 // 배포 감지·토큰 갱신 상태는 소켓 재연결/훅 재마운트 간에도 유지되어야 하므로 모듈 레벨에 둔다.
@@ -825,10 +826,8 @@ export function useChatSocket() {
         message,
         model: s.selectedModel,
         // 표시 전용 안내(notice)는 히스토리에서 제외 — system 메시지가 중간 위치로 새어
-        // 외부 provider 400(위치 위반)을 유발하는 것을 방지.
-        history: s.chatHistory
-          .filter((m) => !m.notice)
-          .map((m) => ({ role: m.role, content: m.content })),
+        // 외부 provider 400(위치 위반)을 유발하는 것을 방지. 이전 턴 이미지는 요청 전체 상한 안에서 함께 보낸다.
+        history: toWireHistory(s.chatHistory, images?.length ?? 0),
         sessionId: s.currentSessionId,
         anonSessionId: getAnonSessionId(),
         images: images ?? [],

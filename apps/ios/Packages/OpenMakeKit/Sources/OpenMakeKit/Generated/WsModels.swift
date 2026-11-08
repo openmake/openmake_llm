@@ -1292,6 +1292,7 @@ public struct WsChatRequest: Codable {
     public let enabledTools: [String: Bool]?
     /// 첨부 텍스트 파일 — 백엔드가 fileContext 채널로 LLM 에 주입
     public let files: [WsAttachedFile]?
+    /// images: 이전 턴의 이미지(data URL) — 멀티턴 vision 용, 요청 전체 이미지 수는 images 와 합쳐 MAX_IMAGES 이하
     public let history: [History]?
     /// 이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성
     public let imageMode: Bool?
@@ -1620,15 +1621,18 @@ public extension WsAttachedFile {
 // MARK: - History
 public struct History: Codable {
     public let content: String
+    public let images: [String]?
     public let role: ChatRole
 
     public enum CodingKeys: String, CodingKey {
         case content = "content"
+        case images = "images"
         case role = "role"
     }
 
-    public init(content: String, role: ChatRole) {
+    public init(content: String, images: [String]?, role: ChatRole) {
         self.content = content
+        self.images = images
         self.role = role
     }
 }
@@ -1653,10 +1657,12 @@ public extension History {
 
     func with(
         content: String? = nil,
+        images: [String]?? = nil,
         role: ChatRole? = nil
     ) -> History {
         return History(
             content: content ?? self.content,
+            images: images ?? self.images,
             role: role ?? self.role
         )
     }
