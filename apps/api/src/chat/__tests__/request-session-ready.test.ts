@@ -147,6 +147,15 @@ describe('processChat onSessionReady', () => {
         expect(mockProcessMessage).not.toHaveBeenCalled();
     });
 
+    it('지원하지 않는 이미지 주소 형식은 저장·모델 실행 전에 400 으로 거부한다', async () => {
+        await expect(ChatRequestHandler.processChat(params({ images: ['file:///x'] })))
+            .rejects.toMatchObject({ name: 'ChatRequestError', statusCode: 400 });
+        expect(mockEnsureSession).not.toHaveBeenCalled();
+        expect(mockSaveUser).not.toHaveBeenCalled();
+        expect(mockProcessMessage).not.toHaveBeenCalled();
+        expect(ready).not.toHaveBeenCalled();
+    });
+
     it('자체 tools 경로도 도구 실행 전에 알린다', async () => {
         mockToolPath.mockResolvedValue({ response: '', sessionId: 's-new-0001', finish_reason: 'stop' });
         await ChatRequestHandler.processChat(params({ tools: [{ type: 'function', function: { name: 'f', parameters: {} } }] }));
