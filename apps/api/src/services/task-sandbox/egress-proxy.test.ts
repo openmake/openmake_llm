@@ -104,11 +104,16 @@ describe('ensureEgressProxy 준비 대기 (리뷰 Minor 반영, 2026-11-08 점�
     const ok = (stdout = ''): Res => ({ code: 0, stdout, stderr: '' });
     const base = { ...getTaskSandboxConfig(), dockerPath: 'docker', egressReadyTimeoutMs: 2000 };
     const listening = `[egress-proxy] listening :${base.egressProxyPort} allowlist=[] ports=[443]`;
+    /** docker inspect 의 StartedAt 모양(나노초 9자리) — msAgo 전 시각. */
+    const startedAt = (msAgo: number) => new Date(Date.now() - msAgo).toISOString().replace(/Z$/, '456789Z');
+    const denyLogs = Array.from({ length: 50 }, () => 'DENY a.example:443 (blocked)').join('\n');
 
     /** 명령 종류별 응답 큐 — 마지막 응답은 계속 반복한다. 호출 기록을 남긴다. */
     function fakeExec(queues: Record<string, Res[]>) {
         const calls: string[][] = [];
-        const kindOf = (a: string[]) => (a[0] === 'network' || a[0] === 'run' && a[1] === '-d' ? `${a[0]}:${a[1]}` : a[0]);
+        // 준비 대기의 inspect(Running + StartedAt)는 ensure 의 Running 전용 inspect 와 따로 센다.
+        const kindOf = (a: string[]) => (a[0] === 'inspect' && /StartedAt/.test(a[2] ?? '') ? 'inspect:started'
+            : a[0] === 'network' || a[0] === 'run' && a[1] === '-d' ? `${a[0]}:${a[1]}` : a[0]);
         const exec = async (_d: string, args: string[]): Promise<Res> => {
             calls.push(args);
             const q = queues[kindOf(args)];
@@ -127,14 +132,14 @@ describe('ensureEgressProxy 준비 대기 (리뷰 Minor 반영, 2026-11-08 점�
     });
 
     it('(b) 떠 있지만 아직 listen 전이면 listening 이 보일 때까지 기다린다', async () => {
-        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('true')], logs: [ok(''), ok(listening)] });
+        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('true')], 'inspect:started': [ok(`true ${startedAt(0)}`)], logs: [ok(''), ok(listening)] });
         await expect(ensureEgressProxy(base, f.exec)).resolves.toContain(`:${base.egressProxyPort}`);
         expect(f.count('run:-d')).toBe(0);
         expect(f.count('logs')).toBe(2);
     });
 
     it('(c) 새로 띄운 컨테이너가 실행 중이 아니면 시간 초과를 기다리지 않고 바로 실패한다', async () => {
-        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('false')], logs: [ok('')] });
+        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('false')], 'inspect:started': [ok(`false ${startedAt(0)}`)], logs: [ok('')] });
         const t0 = Date.now();
         await expect(ensureEgressProxy(base, f.exec)).rejects.toThrow('실행 중이 아닙니다');
         expect(Date.now() - t0).toBeLessThan(1000);
@@ -143,8 +148,27 @@ describe('ensureEgressProxy 준비 대기 (리뷰 Minor 반영, 2026-11-08 점�
     });
 
     it('(d) 실행 중이지만 끝내 listen 하지 않으면 시간 초과 오류', async () => {
-        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('true')], logs: [ok('')] });
+        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('true')], 'inspect:started': [ok(`true ${startedAt(0)}`)], logs: [ok('')] });
         await expect(ensureEgressProxy({ ...base, egressReadyTimeoutMs: 300 }, f.exec)).rejects.toThrow('준비되지 않았습니다(300ms)');
         expect(f.count('logs')).toBeGreaterThanOrEqual(2);
+    });
+
+    it('(e) 오래 떠 있던 프록시는 로그가 밀려 listening 줄이 없어도 기다리지 않고 URL 을 돌려준다', async () => {
+        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('true')], 'inspect:started': [ok(`true ${startedAt(60_000)}`)], logs: [ok(denyLogs)] });
+        const t0 = Date.now();
+        await expect(ensureEgressProxy(base, f.exec)).resolves.toBe(`http://${base.egressProxyContainer}:${base.egressProxyPort}`);
+        expect(Date.now() - t0).toBeLessThan(1000);
+        expect(f.count('run:-d')).toBe(0);
+        expect(f.count('logs')).toBe(1);
+    });
+
+    it('(f) 방금 기동한 컨테이너가 listen 하지 않으면 그대로 시간 초과 오류', async () => {
+        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('true')], 'inspect:started': [ok(`true ${startedAt(100)}`)], logs: [ok(denyLogs)] });
+        await expect(ensureEgressProxy({ ...base, egressReadyTimeoutMs: 300 }, f.exec)).rejects.toThrow('준비되지 않았습니다(300ms)');
+    });
+
+    it('(g) 기동 시각을 읽지 못하면 방금 기동한 것으로 보고 시간 초과 오류', async () => {
+        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('true')], 'inspect:started': [ok('true not-a-time')], logs: [ok(denyLogs)] });
+        await expect(ensureEgressProxy({ ...base, egressReadyTimeoutMs: 300 }, f.exec)).rejects.toThrow('준비되지 않았습니다(300ms)');
     });
 });
