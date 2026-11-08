@@ -257,7 +257,10 @@ export interface MCPServerConfig {
     updated_at: string;
     /** 카탈로그 템플릿 ID (mcp_server_catalog.id 참조) */
     catalog_template_id?: string;
-    /** stdio docker 샌드박스 정책 ('full'=bridge | 'none'=--network none | 'host'=비격리 호스트 실행). DB sandbox_network 컬럼. */
+    /**
+     * stdio docker 샌드박스 정책 ('full'=bridge | 'none'=--network none | 'host'=비격리 호스트 실행). DB sandbox_network 컬럼.
+     * 사용자 소유 서버의 full/host 는 런타임이 egress 프록시 경유로 집행한다(MCP_SANDBOX_USER_EGRESS).
+     */
     sandbox_network?: 'full' | 'none' | 'host';
     /** 채팅 자동 노출 도구 화이트리스트(순서=우선순위, 카탈로그 tool_allowlist 유래). 미정의=전체 노출. REST 직접 실행 미적용 */
     tool_allowlist?: string[];
