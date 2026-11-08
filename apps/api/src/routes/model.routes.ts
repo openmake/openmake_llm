@@ -38,7 +38,7 @@ const logger = createLogger('ModelRoutes');
  * 현재 모델 정보 API (프론트엔드 settings.js 호출용)
  * model-roles 레지스트리의 chat 역할 모델을 반환합니다.
  */
-router.get('/model', asyncHandler(async (_req: Request, res: Response) => {
+router.get('/model', requireAuth, asyncHandler(async (_req: Request, res: Response) => {
     const modelId = getModelForRole('chat');
     res.json(success({
         model: modelId,

@@ -90,6 +90,18 @@ describe('agents.routes 인증·권한', () => {
         });
     });
 
+    // 목록·분류·통계 조회는 로그인 필수(인증 보강, 2026-11-08 점검).
+    describe.each(['/api/agents', '/api/agents/categories', '/api/agents/stats'])('GET %s', (url) => {
+        test('비인증 → 401', async () => {
+            expect((await request(app).get(url)).status).toBe(401);
+        });
+        test('일반 사용자 → 200', async () => {
+            const res = await request(app).get(url).set('x-test-user', 'u1');
+            expect(res.status).toBe(200);
+            expect(res.body.success).toBe(true);
+        });
+    });
+
     test('POST /abtest/start — 일반 사용자 403, 관리자 201', async () => {
         const body = { agentA: 'a', agentB: 'b' };
         expect((await request(app).post('/api/agents/abtest/start').send(body)).status).toBe(401);
