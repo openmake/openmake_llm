@@ -27,6 +27,7 @@ import { updateUsersInvalidatingTokens } from './user-manager-token-invalidation
 import { emitRevokedIfUpdated, emitUserAuthRevoked, prepareUpdateUserRevocations } from './user-manager-auth-revocation';
 import { withTransaction } from './retry-wrapper';
 import { assertNotLastActiveAdmin } from './last-admin-guard';
+import { AppError } from '../utils/error-handler';
 import { buildUpdateUserStatement } from './user-manager-update';
 
 const logger = createLogger('UserManager');
@@ -485,6 +486,7 @@ class UserManagerImpl {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+            await assertNotLastActiveAdmin(client, userId, { is_active: false });
 
             // ── 1. 커스텀 에이전트 정리 ──
             await client.query('DELETE FROM custom_agents WHERE created_by = $1', [userId]);
@@ -522,7 +524,8 @@ class UserManagerImpl {
             return deleted;
         } catch (err) {
             await client.query('ROLLBACK');
-            logger.error(`[UserManager] 사용자 삭제 실패 (userId=${userId}):`, err);
+            if (err instanceof AppError && err.isOperational) logger.warn(`[UserManager] 사용자 삭제 거부 (userId=${userId}): ${err.message}`);
+            else logger.error(`[UserManager] 사용자 삭제 실패 (userId=${userId}):`, err);
             throw err;
         } finally {
             client.release();
