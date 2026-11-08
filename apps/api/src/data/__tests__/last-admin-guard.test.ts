@@ -10,6 +10,7 @@ const mockDisconnectByUser = jest.fn();
 jest.mock('../../services/local-bridge/registry', () => ({
     getLocalBridgeRegistry: () => ({ disconnectByUser: (...a: unknown[]) => mockDisconnectByUser(...a) }),
 }));
+jest.mock('../../addon-host/addon-data', () => ({ getAddonDataModules: () => [] }));
 
 import { assertNotLastActiveAdmin, LAST_ADMIN_ERROR_CODE } from '../last-admin-guard';
 import { AppError } from '../../utils/error-handler';
@@ -97,6 +98,7 @@ describe('UserManager — 마지막 활성 관리자 보호 연결', () => {
         const clientQuery = jest.fn(async (sql: string) => {
             if (sql.includes('FOR UPDATE')) return { rowCount: lockedRows.length, rows: lockedRows };
             if (sql.startsWith('UPDATE users')) return { rowCount: 1, rows: [] };
+            if (sql.startsWith('DELETE FROM users')) return { rowCount: 1, rows: [] };
             return { rowCount: 0, rows: [] };
         });
         (getPool as jest.Mock).mockReturnValue({
@@ -137,5 +139,34 @@ describe('UserManager — 마지막 활성 관리자 보호 연결', () => {
         expect(seq.findIndex((s) => s.includes('FOR UPDATE'))).toBeLessThan(seq.findIndex((s) => s.startsWith('UPDATE users')));
         expect(seq[seq.length - 1]).toBe('COMMIT');
         expect(events).toEqual([{ userId: 'a', reason: 'role_changed' }]);
+    });
+
+    test('deleteUser 로 마지막 활성 관리자 삭제 → 409, 다른 정리·DELETE 없이 ROLLBACK, 발행 없음', async () => {
+        const { clientQuery } = mockPoolWith([ADMIN_A]);
+        await expect(manager.deleteUser('a')).rejects.toMatchObject({ statusCode: 409, code: LAST_ADMIN_ERROR_CODE });
+        const seq = sqls(clientQuery);
+        expect(seq[0]).toBe('BEGIN');
+        expect(seq[1]).toContain('FOR UPDATE');
+        expect(seq.some((s) => s.startsWith('DELETE'))).toBe(false);
+        expect(seq).toContain('ROLLBACK');
+        expect(seq).not.toContain('COMMIT');
+        expect(mockDisconnectByUser).not.toHaveBeenCalled();
+        expect(events).toEqual([]);
+    });
+
+    test('deleteUser — 다른 활성 관리자가 있으면 잠금 뒤 삭제가 COMMIT 된다', async () => {
+        const { clientQuery } = mockPoolWith([ADMIN_A, ADMIN_B]);
+        await expect(manager.deleteUser('a')).resolves.toBe(true);
+        const seq = sqls(clientQuery);
+        expect(seq.findIndex((s) => s.includes('FOR UPDATE'))).toBe(1);
+        expect(seq.findIndex((s) => s.startsWith('DELETE FROM users'))).toBeGreaterThan(1);
+        expect(seq[seq.length - 1]).toBe('COMMIT');
+        expect(events).toEqual([{ userId: 'a', reason: 'account_deleted' }]);
+    });
+
+    test('deleteUser — 일반 사용자 삭제는 가드가 막지 않는다', async () => {
+        const { clientQuery } = mockPoolWith([ADMIN_A, USER_U]);
+        await expect(manager.deleteUser('u')).resolves.toBe(true);
+        expect(sqls(clientQuery)).toContain('COMMIT');
     });
 });
