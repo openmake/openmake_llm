@@ -115,7 +115,8 @@ export interface WsChatRequest {
   /** 클라이언트 발급 멱등 키(140) — 같은 id 재전송은 새 생성 없이 이전 messageId 로 done 만 다시 온다 */
   clientRequestId?: string;
   model?: string;
-  history?: Array<{ role: ChatRole; content: string }>;
+  /** images: 이전 턴의 이미지(data URL) — 멀티턴 vision 용, 요청 전체 이미지 수는 images 와 합쳐 MAX_IMAGES 이하 */
+  history?: Array<{ role: ChatRole; content: string; images?: string[] }>;
   sessionId?: string | null;
   /** Browser-scoped anonymous owner id for guest sessions. */
   anonSessionId?: string;
