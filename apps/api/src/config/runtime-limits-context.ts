@@ -1,12 +1,13 @@
 /**
- * 런타임 제한값 — 컨텍스트·토큰 예산, 절단, 첨부·문서 처리, 웹검색 주입, 캐시·재시도·비밀번호 정책.
+ * 런타임 제한값 — 컨텍스트·토큰 예산, 절단, 외부 provider 스로틀, 라우팅·언어 판정, 캐시·재시도·비밀번호 정책.
+ * 첨부·문서 처리는 runtime-limits-attach, 웹검색 주입은 runtime-limits-search 에 있다.
  * 공개 진입점은 config/runtime-limits(이 파일을 re-export) — 소비처는 그쪽에서 import 한다.
  *
  * @module config/runtime-limits-context
  */
 
 // ============================================
-// 토큰 예산 (Discussion/Context Engineering)
+// Deep Research 스크랩 안전마진
 // ============================================
 
 /** Deep Research 스크랩 abort 안전마진 (scrapeTimeoutMs 에 더함, ms) */
@@ -113,18 +114,6 @@ export const CAPACITY = {
 } as const;
 
 // ============================================
-// Deep Research 기본 파라미터
-// ============================================
-
-// ============================================
-// Deep Research Strategy 파라미터 (Chat 파이프라인 전용)
-// ============================================
-
-// ============================================
-// Deep Research 깊이별 루프 설정
-// ============================================
-
-// ============================================
 // 모델 컨텍스트 윈도우 기본값
 // ============================================
 
@@ -143,7 +132,7 @@ export const MODEL_CONTEXT_DEFAULTS = {
 } as const;
 
 // ============================================
-// 신뢰도/중요도 기본값
+// 외부 provider 실행 스로틀
 // ============================================
 
 /**
@@ -178,245 +167,9 @@ export const EXTERNAL_PROVIDER_THROTTLE = {
     LOCAL_CONCURRENCY: parseInt(process.env.LOCAL_LLM_MAX_CONCURRENT || '0', 10),
 } as const;
 
-/**
- * 채팅 파일 첨부 한도 (2026-06-12 전체 파일 타입 허용)
- * 이미지는 기존 images(vision) 경로, 텍스트 파일은 내용을 fileContext 로 LLM 에 주입.
- * 바이너리(텍스트 디코드 불가)는 파일명/형식 메타만 전달.
- *
- * sockets/ws-chat-handler.ts에서 참조
- */
-export const FILE_ATTACH_LIMITS = {
-    /** 메시지당 첨부 파일 최대 개수 */
-    MAX_FILES: parseInt(process.env.FILE_ATTACH_MAX_FILES || '50', 10),
-    /** 파일당 주입 텍스트 최대 글자 수 (초과분 절단) */
-    MAX_CHARS_PER_FILE: parseInt(process.env.FILE_ATTACH_MAX_CHARS_PER_FILE || '2000000', 10),
-    /** 전체 첨부 합산 주입 텍스트 최대 글자 수 (최종 컨텍스트 적합화는 LLMClient context-fit 안전망이 담당) */
-    MAX_TOTAL_CHARS: parseInt(process.env.FILE_ATTACH_MAX_TOTAL_CHARS || '10000000', 10),
-    /** 파일명 표시 최대 길이 (프롬프트 주입 시 절단) */
-    MAX_NAME_LENGTH: 200,
-    /** 메시지/작업당 첨부 이미지 최대 개수 (composer MAX_IMAGES 와 페어) */
-    MAX_IMAGES: parseInt(process.env.FILE_ATTACH_MAX_IMAGES || '20', 10),
-    /** 이미지 dataURL 최대 글자 수 (base64 는 원본의 4/3 — 기본 20M ≈ 15MB 이미지) */
-    MAX_IMAGE_DATAURL_CHARS: parseInt(process.env.FILE_ATTACH_MAX_IMAGE_DATAURL_CHARS || '20000000', 10),
-    /** 주소 형태 이미지 입력을 서버가 받을 때 타임아웃(ms) — chat/inbound-images */
-    IMAGE_URL_FETCH_TIMEOUT_MS: parseInt(process.env.FILE_ATTACH_IMAGE_URL_FETCH_TIMEOUT_MS || '15000', 10),
-} as const;
-
-/**
- * 문서 첨부 텍스트 추출 한도 (2026-06-24)
- * PDF 는 opendataloader-pdf(Java CLI, JVM spawn), 그 외 office 포맷(docx/xlsx/pptx/odt 등)은
- * officeparser(순수 Node) 로 base64 원본을 텍스트로 추출해 fileContext 채널에 주입한다.
- * JVM spawn 은 느리므로 PDF 는 별도 타임아웃을 둔다.
- *
- * services/chat-service/doc-extractor.ts 에서 참조
- */
-export const DOC_EXTRACT_LIMITS = {
-    /** 기능 on/off (기본 on — 'false' 명시 시에만 비활성) */
-    ENABLED: process.env.DOC_EXTRACT_ENABLED !== 'false',
-    /** 추출 입력 1개 최대 바이트 (base64 디코드 후 원본 크기). 초과 시 추출 생략 → 메타만 */
-    MAX_BYTES_PER_FILE: parseInt(process.env.DOC_EXTRACT_MAX_BYTES_PER_FILE || String(30 * 1024 * 1024), 10),
-    /** PDF(opendataloader, JVM) 추출 타임아웃 (ms) */
-    PDF_TIMEOUT_MS: parseInt(process.env.DOC_EXTRACT_PDF_TIMEOUT_MS || '60000', 10),
-    /** office(officeparser) 추출 타임아웃 (ms) */
-    OFFICE_TIMEOUT_MS: parseInt(process.env.DOC_EXTRACT_OFFICE_TIMEOUT_MS || '30000', 10),
-    /** opendataloader 로 처리할 확장자 (PDF 전용 — 고품질 레이아웃 인식) */
-    PDF_EXTS: ['pdf'] as readonly string[],
-    /** officeparser 로 처리할 확장자 */
-    OFFICE_EXTS: ['docx', 'xlsx', 'pptx', 'odt', 'odp', 'ods', 'rtf'] as readonly string[],
-    /**
-     * kordoc 으로 처리할 한국 공문서 확장자.
-     *
-     * `.hwp`·`.hwpx` 는 업로드 화이트리스트(`ALLOWED_DOCUMENT_EXTENSIONS`)에 오래 있었지만
-     * 추출기 어느 목록에도 없어 **받아만 두고 본문을 못 읽었다**(확장자 허용 ≠ 파싱 지원).
-     * kordoc(순수 JS, 한컴오피스·JVM 불요)이 HWP 3.x/5.x·HWPX·HWPML 을 마크다운으로 낸다.
-     */
-    HWP_EXTS: ['hwp', 'hwpx', 'hml'] as readonly string[],
-    /**
-     * 텍스트로 풀어 쓸 확장자(base64 data → UTF-8 → content).
-     * REST 클라이언트(봇 등)는 텍스트 파일도 base64 로 보내는데, 위 목록에 없어 data 가 버려지고
-     * "바이너리 메타"로만 들어갔다. 실제 판정은 NUL 바이트·UTF-8 디코딩 검사를 함께 통과해야 한다.
-     */
-    TEXT_EXTS: ['txt', 'csv', 'tsv', 'md', 'markdown', 'json', 'jsonl', 'xml', 'yaml', 'yml', 'log', 'ini', 'cfg',
-        'conf', 'toml', 'html', 'htm', 'css', 'js', 'ts', 'py', 'sh', 'sql'] as readonly string[],
-    /** kordoc 추출 타임아웃 (ms) — 순수 JS 파서라 JVM 경로보다 짧게 잡는다 */
-    HWP_TIMEOUT_MS: parseInt(process.env.DOC_EXTRACT_HWP_TIMEOUT_MS || '30000', 10),
-    /** 스캔본 PDF OCR 폴백 on/off (기본 on — opendataloader 가 텍스트를 못 뽑으면 officeparser+tesseract 로 재시도) */
-    OCR_ENABLED: process.env.DOC_EXTRACT_OCR_ENABLED !== 'false',
-    /** opendataloader 추출 텍스트가 이 글자 수 미만이면 스캔본(이미지 PDF)으로 보고 OCR 폴백 */
-    PDF_MIN_TEXT_CHARS: parseInt(process.env.DOC_EXTRACT_PDF_MIN_TEXT_CHARS || '16', 10),
-    /** OCR(tesseract) 타임아웃 (ms) — 페이지 렌더+인식이 느리므로 길게 */
-    OCR_TIMEOUT_MS: parseInt(process.env.DOC_EXTRACT_OCR_TIMEOUT_MS || '120000', 10),
-    /** OCR 언어 (tesseract 코드, '+' 로 다중 — 기본 영어+한국어) */
-    OCR_LANGS: process.env.DOC_EXTRACT_OCR_LANGS || 'eng+kor',
-    /**
-     * 네이티브 OCR (pdftoppm+tesseract, 2026-08-04) — 구 sips+tesseract.js 폴백은 첫
-     * 페이지만 인식하는 1페이지 한계가 있었다. 호스트에 poppler/tesseract 가 있으면
-     * 다중 페이지 병렬 OCR 로 대체하고, 없으면 구 경로로 자동 폴백(graceful).
-     * 생성 시점 동기 추출이므로 페이지·시간 예산으로 상한을 건다 — 예산 밖 잔여
-     * 페이지는 원본이 샌드박스로 전달돼 에이전트가 컨테이너 내 tesseract 로 직접 처리.
-     */
-    /** 생성 시점 OCR 최대 페이지 수 (한국어 OCR 실측 약 2~7초/페이지 — 예산 내 상한) */
-    OCR_MAX_PAGES: parseInt(process.env.DOC_EXTRACT_OCR_MAX_PAGES || '50', 10),
-    /** OCR 래스터화 해상도 (dpi) — 인쇄물 텍스트는 200 이면 충분, 300 은 2배 이상 느림 */
-    OCR_DPI: parseInt(process.env.DOC_EXTRACT_OCR_DPI || '200', 10),
-    /** OCR 페이지 병렬도 (tesseract 프로세스 동시 실행 수) */
-    OCR_PARALLEL: parseInt(process.env.DOC_EXTRACT_OCR_PARALLEL || '4', 10),
-    /** PDF OCR 경로 전용 크기 상한 — MAX_BYTES_PER_FILE(JVM 보호용 30MB) 초과 스캔본도
-     *  이 상한까지는 OCR 를 시도한다(opendataloader 만 생략, 디스크 경유라 메모리 안전) */
-    OCR_MAX_BYTES: parseInt(process.env.DOC_EXTRACT_OCR_MAX_BYTES || String(300 * 1024 * 1024), 10),
-} as const;
-
-/**
- * 로컬 vLLM 요청당 프롬프트 이미지 총 상한 (2026-09-03)
- * vLLM `--limit-mm-per-prompt '{"image": N}'` 와 페어 — 초과 요청은 업스트림 400
- * ("At most N image(s) may be provided in one prompt"). LLMClient wire 변환 직전
- * (llm/prompt-image-cap.ts) 이 history 포함 총량을 이 값에 맞춘다. 0 이면 비활성.
- */
-export const LLM_PROMPT_IMAGE_LIMITS = {
-    MAX_PER_REQUEST: parseInt(process.env.LLM_PROMPT_IMAGE_CAP || '8', 10),
-} as const;
-
-/**
- * PDF 첨부 vision 페이지 주입 한도 (2026-08-19)
- * 채팅 PDF 첨부를 하이브리드로 처리 — 기존 doc-extractor 텍스트 추출에 더해 앞쪽
- * 페이지를 pdftoppm 으로 JPEG 렌더해 vision(images) 채널에 병행 주입한다
- * (표·차트 등 텍스트 추출로 소실되는 레이아웃 보강). pdftoppm 미설치 시 graceful skip.
- *
- * services/chat-service/pdf-vision.ts 에서 참조
- */
-export const PDF_VISION_LIMITS = {
-    /** 기능 on/off (기본 on — 'false' 명시 시에만 비활성) */
-    ENABLED: process.env.PDF_VISION_ENABLED !== 'false',
-    /** 요청당 프롬프트 이미지 총 상한 — 기본은 LLM_PROMPT_IMAGE_LIMITS(vLLM 페어)를 따른다.
-     *  사용자 첨부 이미지가 이 값을 채우면 페이지 주입은 잔여분만 사용 */
-    TOTAL_IMAGE_CAP: parseInt(process.env.PDF_VISION_TOTAL_IMAGE_CAP || String(LLM_PROMPT_IMAGE_LIMITS.MAX_PER_REQUEST), 10),
-    /** 요청당 렌더 페이지 최대 수 (PDF 여러 개면 순서대로 예산 소진) */
-    MAX_PAGES: parseInt(process.env.PDF_VISION_MAX_PAGES || '4', 10),
-    /** 렌더 해상도 dpi — 문서 판독 라이브 실측(2026-08-19) 120 이면 충분, 상향은 비전 토큰 비례 증가 */
-    DPI: parseInt(process.env.PDF_VISION_DPI || '120', 10),
-    /**
-     * 렌더 이미지 긴 변 픽셀 상한 — dpi 만으로는 판형이 큰 문서(대형 슬라이드·도면·포스터)에서
-     * 초대형 이미지가 나온다. 실측(2026-08-20): A0급 스캔 슬라이드가 120dpi 에서 4134×5847px
-     * (24MP)로 렌더돼 vision prefill 이 LiteLLM 소켓 읽기 타임아웃을 넘겨 요청 자체가 실패했다.
-     * 예상 픽셀이 이 값을 넘으면 dpi 대신 pdftoppm -scale-to 로 긴 변을 맞춘다.
-     */
-    MAX_EDGE_PX: parseInt(process.env.PDF_VISION_MAX_EDGE_PX || '1600', 10),
-    /** 렌더(pdftoppm)·페이지 수 조회(pdfinfo) 타임아웃 ms */
-    RENDER_TIMEOUT_MS: parseInt(process.env.PDF_VISION_RENDER_TIMEOUT_MS || '20000', 10),
-} as const;
-
-/**
- * 채팅 메시지 내 URL 자동 분석 한도 (2026-06-13)
- * 사용자 메시지에서 URL 감지 시 LLM 호출 전 scrapePage 로 본문을 가져와
- * fileContext 채널로 주입한다 (결정적 사전 분석 — 환각 방지).
- * 실패/시간 초과 시 안내 문구만 주입하고 모델 tool loop(web_scrape)에 위임.
- *
- * sockets/ws-chat-handler.ts에서 참조
- */
-export const URL_ANALYZE_LIMITS = {
-    /** 기능 on/off (기본 on — 'false' 명시 시에만 비활성) */
-    ENABLED: process.env.URL_ANALYZE_ENABLED !== 'false',
-    /** 메시지당 분석할 URL 최대 개수 (초과분은 무시) */
-    MAX_URLS: parseInt(process.env.URL_ANALYZE_MAX_URLS || '3', 10),
-    /** URL당 주입 본문 최대 글자 수 (초과분 절단) */
-    MAX_CHARS_PER_URL: parseInt(process.env.URL_ANALYZE_MAX_CHARS_PER_URL || '50000', 10),
-    /** URL당 스크래핑 대기 상한 (ms) — 초과 시 해당 URL 은 실패 처리 (TTFB 보호) */
-    TIMEOUT_MS: parseInt(process.env.URL_ANALYZE_TIMEOUT_MS || '8000', 10),
-} as const;
-
-/**
- * 세션 단위 첨부 컨텍스트 캐시 한도 (2026-06-13 멀티턴 재주입)
- * fileContext(첨부 파일 + URL 사전 분석)는 DB 미저장(transient)이므로,
- * 세션별 메모리 캐시로 후속 턴에 재주입해 근거 소실로 인한 환각 재발을 막는다.
- *
- * services/chat-service/attach-context.ts에서 참조
- */
-export const ATTACH_CACHE_LIMITS = {
-    /** 캐시 보관 시간 (ms) — 마지막 접근 기준 갱신 */
-    TTL_MS: parseInt(process.env.ATTACH_CACHE_TTL_MS || '3600000', 10),
-    /** 동시 보관 세션 수 (LRU 초과분 제거) */
-    MAX_SESSIONS: parseInt(process.env.ATTACH_CACHE_MAX_SESSIONS || '500', 10),
-    /** 세션당 누적 컨텍스트 최대 글자 수 (초과 시 오래된 블록부터 제거) */
-    MAX_CHARS: parseInt(process.env.ATTACH_CACHE_MAX_CHARS || '400000', 10),
-} as const;
-
-/**
- * 채팅 웹검색 결과의 LLM 컨텍스트 주입 한도 (2026-06-25 TTFT 개선)
- * 검색은 다소스 수집(랭킹 풀)을 위해 넉넉히 하되, LLM 에 실제 주입하는 양은 캡한다.
- * 큰 검색 컨텍스트가 prompt prefill 을 키워 TTFT(첫 토큰)를 늘리는 것을 막는다 —
- * SearXNG·위키 디랭크로 상위 결과 품질이 좋아져 적은 수로도 정답을 유지한다.
- *
- * sockets/ws-chat-handler.ts 에서 참조
- */
-/**
- * 주입 캡 env 파싱 — 음수·NaN(잘못된 값)은 기본값으로, 0 은 "무제한"(캡 미적용) sentinel.
- * 가드 없는 parseInt 는 0/NaN 시 snippet 을 전부 비워 grounding 을 무너뜨릴 수 있어 명시 정규화한다.
- */
-export function parseInjectLimit(raw: string | undefined, def: number): number {
-    const n = parseInt(raw ?? '', 10);
-    return Number.isFinite(n) && n >= 0 ? n : def;
-}
-
-export const WEB_SEARCH_INJECTION = {
-    /**
-     * 검색 수집(랭킹 풀) 결과 수 — SearXNG·위키 디랭크 포함 넉넉히 수집한 뒤 MAX_RESULTS 로 주입 캡.
-     * WS 채팅·구조화(/structured) 경로가 공유한다.
-     */
-    COLLECT_MAX_RESULTS: parseInjectLimit(process.env.WEB_SEARCH_COLLECT_MAX_RESULTS, 12),
-    /**
-     * LLM 컨텍스트에 주입할 상위 결과 수 (수집은 더 많이 하되 주입은 캡). 0 = 무제한.
-     * 6 → 10: 시사 쿼리에서 정답 포함 결과가 랭킹 하위(예: namu.wiki 현직 인물)로 밀려
-     * top-6 컷오프에 잘리던 그라운딩 누락을 줄인다(수집 풀 12 의 대부분 주입).
-     */
-    MAX_RESULTS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_RESULTS, 10),
-    /** 결과당 주입 snippet 최대 글자 수 (초과 절단). 0 = 무제한(절단 안 함). 300→500: 결정적 사실이 스니펫 뒤쪽에 있어도 포함되게. */
-    MAX_SNIPPET_CHARS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_SNIPPET, 500),
-    /**
-     * 검색 쿼리 최대 글자 수 — 장문 프롬프트 전체가 웹검색 쿼리로 흘러가 provider URI 한도에
-     * 걸리던 414(네이버 hub·Daum, 2026-08-21 라이브) 차단. 검색엔진 실효 질의는 앞부분 수십
-     * 자로 충분하며, 초과분은 단어 경계에서 절단한다. 0 = 무제한.
-     */
-    QUERY_MAX_CHARS: parseInjectLimit(process.env.WEB_SEARCH_QUERY_MAX_CHARS, 200),
-} as const;
-
-/** 모델이 답변에 직접 쓴 출처 섹션의 인식 규칙 (services/chat-service/external-deterministic-append) */
-export const MODEL_SOURCE_SECTION = {
-    /** 평문 머리줄(`검색 결과 출처:`)에서 출처 라벨 앞에 올 수 있는 수식어의 최대 글자 수 — 넘으면 문장으로 본다 */
-    LABEL_PREFIX_MAX_CHARS: 20,
-} as const;
-
-/**
- * SearXNG 카테고리 스코프 — 질의 성격에 맞는 카테고리를 추가 요청해 권위 소스를 보강한다.
- * (기본 general 은 google cse+ddg 뿐이라 블로그 위주 — `it` 은 github/mdn/docker hub,
- *  `science` 는 arxiv/pubmed/scholar 가 유입됨. 2026-08-14 인스턴스 실측.)
- * 감지는 결정적 regex 만 사용 (LLM 판단 경계 A형 금지 — CLAUDE.md).
- */
-/**
- * 검색 escalation (Tier 1) — 무료 Tier 0 수집이 부족할 때만 공식 API(Exa)로 보강한다.
- * 판단은 결정적 개수 비교뿐 (LLM 판단 아님). Exa 무료 크레딧(월 $10 ≈ 1,400회) 절약을 위해
- * 평시(수집 충분)에는 절대 호출하지 않는다. EXA_API_KEY 미설정 시 전체 비활성.
- */
-export const SEARCH_ESCALATION = {
-    /** dedupe 후 수집 결과가 이 값 미만이면 Exa 보강. 0 = 비활성. env: SEARCH_ESCALATION_MIN_RESULTS */
-    MIN_RESULTS: parseInjectLimit(process.env.SEARCH_ESCALATION_MIN_RESULTS, 5),
-    /** escalation 시 Exa 요청 결과 수. env: SEARCH_ESCALATION_EXA_RESULTS */
-    EXA_NUM_RESULTS: parseInjectLimit(process.env.SEARCH_ESCALATION_EXA_RESULTS, 10),
-    /**
-     * escalation Exa 호출 지연 상한(ms) — 병렬 배치 이후의 **직렬** 호출이라 채팅 TTFT 에
-     * 그대로 가산되므로 provider fetch timeout(~12s)보다 훨씬 짧게 캡한다. 초과 시 보강 포기
-     * (Tier 0 결과만으로 진행). 0 = 상한 없음. env: SEARCH_ESCALATION_TIMEOUT_MS
-     */
-    TIMEOUT_MS: parseInjectLimit(process.env.SEARCH_ESCALATION_TIMEOUT_MS, 4000),
-} as const;
-
-export const SEARXNG_CATEGORY_SCOPE = {
-    /** 기술/개발 질의 → `it` 카테고리 (github·stackoverflow·mdn·pypi·docker hub).
-     *  ⚠️ 단독 `코드` 같은 일반어 토큰 금지 — '할인 코드' 류 비기술 질의가 매칭돼 카테고리를 오염시킨다. */
-    IT_PATTERN: /(에러|오류|버그|디버깅|코드\s?리뷰|코딩|라이브러리|프레임워크|컴파일|리액트|백엔드|프론트엔드|데이터베이스|프로그래밍|소스\s?코드|개발\s?환경|\bapi\b|\bsdk\b|\bnpm\b|\bpip\b|docker|kubernetes|github|typescript|javascript|python|\bjava\b|\brust\b|golang|react|next\.?js|node\.?js|\bsql\b)/i,
-    /** 학술/논문 질의 → `science` 카테고리 (arxiv·pubmed·google scholar·semantic scholar).
-     *  ⚠️ 단독 `paper`/`study` 금지 — 'paper towel'·'study cafe' 류 일반 질의 오매칭. */
-    SCIENCE_PATTERN: /(논문|학술|저널|피인용|임상|의학\s?연구|arxiv|pubmed|scholar|preprint|research\s+paper|academic\s+paper|clinical\s+(trial|study))/i,
-} as const;
+// ============================================
+// LLM 라우터·judge 증거·언어 감지 기본값
+// ============================================
 
 /**
  * LLM 라우터 신뢰도 기본값
@@ -425,15 +178,15 @@ export const SEARXNG_CATEGORY_SCOPE = {
 export const ROUTER_CONFIDENCE_FALLBACK = 0.85;
 
 /**
- * 언어 감지 임계값
- * chat/language-policy.ts에서 참조
- */
-/**
  * goal judge 증거 창에서 제외할 도구 — 결과가 ANSWER(terminate) 나 계획 스냅샷(plan_*) 과 중복이라
  * 마지막 N개 창을 차지하면 실제 수행 증거가 밀려난다. (goal-judge.ts buildJudgeToolEvidence)
  */
 export const JUDGE_EVIDENCE_EXCLUDED_TOOLS: ReadonlySet<string> = new Set(['terminate', 'plan_create', 'plan_update', 'plan_view']);
 
+/**
+ * 언어 감지 임계값
+ * chat/language-policy.ts에서 참조
+ */
 export const LANGUAGE_THRESHOLDS = {
     /** 비라틴 알파벳 비율 임계값 */
     NON_LATIN_RATIO: 0.3,
@@ -524,10 +277,6 @@ export const IDF_NORMALIZATION = {
     /** IDF 상한값 */
     CEILING: 1.0,
 } as const;
-
-// ============================================
-// 도메인 카테고리 분류 (Discussion 보완 에이전트)
-// ============================================
 
 // ============================================
 // 키워드 라우터 페이즈 감지
