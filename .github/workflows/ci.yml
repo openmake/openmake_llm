@@ -64,13 +64,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.node-version'
           cache: 'npm'
@@ -148,11 +148,12 @@ jobs:
           bash -n uninstall.sh
           bash -n scripts/setup/uninstall.test.sh
           bash -n scripts/setup/linux-web-port.test.sh
+          bash -n scripts/setup/linux-install-verify.test.sh
           for f in scripts/backups/*.sh scripts/airgap/*.sh; do bash -n "$f"; done
           shellcheck -S warning install.sh install_mac.sh install_linux.sh \
             scripts/setup/common/*.sh scripts/setup/mac/*.sh scripts/setup/linux/*.sh \
             openmake_llm.sh scripts/env/*.sh scripts/lib/*.sh \
-            scripts/setup/mac-toolchain.test.sh scripts/setup/uninstall.test.sh scripts/setup/linux-web-port.test.sh \
+            scripts/setup/mac-toolchain.test.sh scripts/setup/uninstall.test.sh scripts/setup/linux-web-port.test.sh scripts/setup/linux-install-verify.test.sh \
             scripts/setup/mac-host-repair.sh scripts/setup/mac-host-repair.test.sh scripts/setup/fake-launchctl.test-lib.sh \
             scripts/setup/mac-pm2-boot.sh scripts/setup/pm2-boot-guard.sh scripts/setup/mac-pm2-boot.test.sh \
             scripts/setup/colima-boot-guard.test.sh \
@@ -164,6 +165,7 @@ jobs:
           bash scripts/setup/colima-boot-guard.test.sh
           bash scripts/setup/uninstall.test.sh
           bash scripts/setup/linux-web-port.test.sh </dev/null
+          bash scripts/setup/linux-install-verify.test.sh </dev/null
           bash scripts/backups/backup-retention.test.sh </dev/null
           bash scripts/airgap/build-artifacts.test.sh </dev/null
           echo "인스톨러 lint 통과 (bash -n + shellcheck + omk.test)"
@@ -223,7 +225,7 @@ jobs:
 
       - name: Upload merged-dev check evidence
         if: always() && github.event_name == 'push' && github.ref == 'refs/heads/dev'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dev-checks-${{ github.sha }}
           path: logs/dev-checks.json
@@ -332,7 +334,7 @@ jobs:
       # 평가 결과 아티팩트 업로드 (PR 회귀 추적용)
       - name: Upload evaluation artifacts
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: evaluation-results-${{ github.sha }}
           path: apps/api/logs/*-evaluation-*.json
@@ -349,11 +351,11 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.node-version'
       - name: Host repair fixtures (system bash 3.2)

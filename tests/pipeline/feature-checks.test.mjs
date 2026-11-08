@@ -58,9 +58,9 @@ test('pipeline mapping requires all five fixed environment shell suites', async 
 // Host setup (macOS installer · Colima/PM2 boot recovery): exact changed files only, fixed fixture runner.
 const HOST_SETUP_FILES = [
   'scripts/setup/colima-boot-guard.cjs', 'scripts/setup/colima-boot-guard.test.sh', 'scripts/setup/colima-selection.test.sh',
-  'scripts/setup/docker-config-reconcile.cjs', 'scripts/setup/fake-launchctl.test-lib.sh', 'scripts/setup/gen-env.mjs', 'scripts/setup/gen-env.test.mjs', 'scripts/setup/mac-host-repair.sh', 'scripts/setup/mac-host-repair.test.sh',
+  'scripts/setup/docker-config-reconcile.cjs', 'scripts/setup/fake-launchctl.test-lib.sh', 'scripts/setup/gen-env.mjs', 'scripts/setup/gen-env.test.mjs', 'scripts/setup/linux-install-verify.test.sh', 'scripts/setup/mac-host-repair.sh', 'scripts/setup/mac-host-repair.test.sh',
   'scripts/setup/mac-pm2-boot.sh', 'scripts/setup/mac-pm2-boot.test.sh', 'scripts/setup/mac-toolchain.test.sh',
-  'scripts/setup/mac/30-toolchain.sh', 'scripts/setup/mac/80-finish.sh', 'scripts/setup/pm2-boot-guard.sh',
+  'scripts/setup/mac/30-toolchain.sh', 'scripts/setup/mac/60-app.sh', 'scripts/setup/mac/80-finish.sh', 'scripts/setup/pm2-boot-guard.sh',
   'scripts/lib/pm2-save.sh',
 ];
 test('each changed host setup file selects the host setup suite; unknown setup sources still fail closed', () => {
@@ -72,7 +72,7 @@ test('each changed host setup file selects the host setup suite; unknown setup s
 });
 
 const HOST_FIXTURES = ['scripts/ci/docker-config-reconcile.test.mjs', 'scripts/setup/mac-toolchain.test.sh',
-  'scripts/setup/colima-selection.test.sh', 'scripts/setup/gen-env.test.mjs',
+  'scripts/setup/colima-selection.test.sh', 'scripts/setup/gen-env.test.mjs', 'scripts/setup/linux-install-verify.test.sh',
   'scripts/setup/colima-boot-guard.test.sh', 'scripts/setup/mac-host-repair.test.sh', 'scripts/setup/mac-pm2-boot.test.sh'];
 // Tiny stand-in fixtures that only record that they ran (and can be told to fail).
 // The child `node --test` must not inherit this runner's test context, or it reports instead of running.
@@ -99,8 +99,8 @@ test('host setup runs the fixed portable fixtures on Linux and does not claim th
   const { readFileSync } = await import('node:fs');
   const { root, log } = await fakeHostRoot(t);
   const report = runFeatures(['scripts/setup/mac-host-repair.sh'], { cwd: root, platform: 'linux', stdio: 'ignore', env: childEnv });
-  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), HOST_FIXTURES.slice(0, 4));
-  assert.deepEqual(report.hostSetup, { platform: 'linux', executed: HOST_FIXTURES.slice(0, 4), delegatedToMacJob: HOST_FIXTURES.slice(4) });
+  assert.deepEqual(readFileSync(log, 'utf8').trim().split('\n'), HOST_FIXTURES.slice(0, 5));
+  assert.deepEqual(report.hostSetup, { platform: 'linux', executed: HOST_FIXTURES.slice(0, 5), delegatedToMacJob: HOST_FIXTURES.slice(5) });
 });
 
 test('host setup on macOS also runs the Colima guard, host repair and PM2 boot suites', async t => {

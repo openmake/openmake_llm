@@ -16,4 +16,10 @@ describe('chatRequestSchema.history[].images', () => {
         const many = Array.from({ length: FILE_ATTACH_LIMITS.MAX_IMAGES + 1 }, () => img);
         expect(() => chatRequestSchema.parse({ message: 'x', history: [{ role: 'user', content: '', images: many }] })).toThrow();
     });
+    it('요청 전체(현재 턴 + history) 이미지 수도 MAX_IMAGES 이하 — 넘으면 실패, 같으면 통과(2026-11-08)', () => {
+        const n = FILE_ATTACH_LIMITS.MAX_IMAGES;
+        const hist = (k: number) => [{ role: 'user', content: '앞', images: Array.from({ length: k }, () => img) }];
+        expect(() => chatRequestSchema.parse({ message: 'x', images: [img], history: hist(n) })).toThrow();
+        expect(() => chatRequestSchema.parse({ message: 'x', images: [img], history: hist(n - 1) })).not.toThrow();
+    });
 });

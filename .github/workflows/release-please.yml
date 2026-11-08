@@ -40,7 +40,7 @@ jobs:
             echo "::error::Set OMK_AUTOMATION_TOKEN (GitHub App or PAT); release PRs need a separate credential to trigger CI. OMK_PROMOTE_TOKEN is accepted for migration."
             exit 1
           fi
-      - uses: googleapis/release-please-action@v5
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
           token: ${{ secrets.OMK_AUTOMATION_TOKEN || secrets.OMK_PROMOTE_TOKEN }}
@@ -63,11 +63,11 @@ jobs:
     env:
       TAG: ${{ needs.release-please.outputs.tag_name }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.node-version'
 
@@ -81,12 +81,12 @@ jobs:
         run: npx --yes @cyclonedx/cyclonedx-npm@6.0.1 --package-lock-only --omit dev --ignore-npm-errors --output-file "sbom-${TAG}.cdx.json"
 
       - name: Attest build provenance
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: openmake_llm-${{ env.TAG }}.tar.gz
 
       - name: Attest SBOM
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: openmake_llm-${{ env.TAG }}.tar.gz
           sbom-path: sbom-${{ env.TAG }}.cdx.json

@@ -5,7 +5,7 @@ jest.mock('undici', () => ({
     fetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args),
 }));
 
-import { safeFetch } from '../security/ssrf-guard';
+import { resolveOutboundUrl, safeFetch } from '../security/ssrf-guard';
 
 describe('safeFetch — DNS Rebinding defense (undici Agent 기반)', () => {
     const originalFetch = globalThis.fetch;
@@ -77,5 +77,26 @@ describe('safeFetch — DNS Rebinding defense (undici Agent 기반)', () => {
         expect(response.status).toBe(200);
         // 원본 + 1 redirect = 2 DNS 조회
         expect(resolverCalls).toBe(2);
+    });
+});
+
+describe('resolveOutboundUrl — 검증한 주소를 함께 돌려준다', () => {
+    test('공개 주소로 풀리면 URL 과 그 주소를 돌려준다', async () => {
+        const resolver = jest.fn(async () => ({ address: '93.184.216.34' }));
+        const { url, address } = await resolveOutboundUrl('https://example.com/path', resolver);
+        expect(url.hostname).toBe('example.com');
+        expect(address).toBe('93.184.216.34');
+        expect(resolver).toHaveBeenCalledTimes(1);
+    });
+
+    test('차단 대역으로 풀리면 던진다', async () => {
+        const resolver = async (): Promise<{ address: string }> => ({ address: '127.0.0.1' });
+        await expect(resolveOutboundUrl('https://example.com/', resolver)).rejects.toThrow('SSRF blocked');
+    });
+
+    test('http(s) 외 스킴은 조회 없이 던진다', async () => {
+        const resolver = jest.fn(async () => ({ address: '93.184.216.34' }));
+        await expect(resolveOutboundUrl('file:///etc/hosts', resolver)).rejects.toThrow('scheme not allowed');
+        expect(resolver).not.toHaveBeenCalled();
     });
 });

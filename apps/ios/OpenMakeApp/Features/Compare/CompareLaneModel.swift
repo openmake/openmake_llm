@@ -42,7 +42,7 @@ final class CompareLaneModel {
         // (외부 provider 가 빈 assistant 로 400 을 낸다 — 웹과 동일)
         let history = messages
             .filter { $0.error == nil && !($0.role == "assistant" && $0.content.trimmingCharacters(in: .whitespaces).isEmpty) }
-            .map { History(content: $0.content, role: ChatRole(rawValue: $0.role) ?? .user) }
+            .map { History(content: $0.content, images: nil, role: ChatRole(rawValue: $0.role) ?? .user) }
         messages.append(Message(role: "user", content: prompt))
         messages.append(Message(role: "assistant", content: "", isStreaming: true))
         isStreaming = true

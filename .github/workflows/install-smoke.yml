@@ -24,6 +24,9 @@ on:
         options: [minimal, full]
         default: minimal
 
+permissions:
+  contents: read
+
 concurrency:
   group: install-smoke
   cancel-in-progress: true
@@ -36,13 +39,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # 러너에 이미 있는 Node 가 24가 아니어도 인스톨러가 스스로 확보해야 하지만,
       # 러너의 npm 글로벌 권한·버전 관리자 상호작용 변수를 줄이기 위해 24를 미리 둔다
       # (인스톨러의 ensure_node 는 "이미 24면 통과" 경로 — 자체 설치 경로는 lint 가 지킨다).
       - name: Setup Node.js 24
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.node-version'
 
