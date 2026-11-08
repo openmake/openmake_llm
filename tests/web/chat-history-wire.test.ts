@@ -43,6 +43,13 @@ test('예산을 넘는 오래된 메시지는 이미지를 통째로 뺀다(쪼�
   assert.deepEqual(out[2].images, newer);
 });
 
+test('남은 예산과 정확히 같은 장수는 싣고, 한 장 넘으면 뺀다', () => {
+  const fit = toWireHistory([{ role: 'user', content: 'q1', images: imgs(18, 'f') }], 2, 20);
+  assert.equal(fit[0].images?.length, 18, '현재 2 + history 18 = 20 — 포함');
+  const over = toWireHistory([{ role: 'user', content: 'q1', images: imgs(19, 'o') }], 2, 20);
+  assert.ok(!('images' in over[0]), '현재 2 + history 19 = 21 — 제외');
+});
+
 test('현재 턴이 상한만큼이면 history 이미지는 모두 빠진다', () => {
   const out = toWireHistory([{ role: 'user', content: 'q1', images: imgs(1, 'p') }], CHAT_MAX_IMAGES);
   assert.ok(!('images' in out[0]));
