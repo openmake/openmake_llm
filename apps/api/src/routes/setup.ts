@@ -17,6 +17,7 @@ import { agentTaskSubagentRouter } from './agent-task-subagent.routes';
 import { marketplacePublishRouter } from './marketplace-publish.routes';
 import * as path from 'path';
 import * as fs from 'fs';
+import { randomUUID } from 'node:crypto';
 
 import v1Router from './v1';
 import { tokenMonitoringRouter } from './token-monitoring.routes';
@@ -262,7 +263,7 @@ export function setupApiRoutes(
     // Guest 세션 엔드포인트 — 로그인 불필요, 임시 식별자 발급
     // 프론트엔드 구버전 호환 (POST /api/auth/guest, /login/guest, /register/guest)
     const guestHandler = (_req: Request, res: Response) => {
-        const anonId = `anon_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        const anonId = `anon_${randomUUID()}`;  // 인증 보강(2026-11-08 점검)
         res.json(success({ guestId: anonId, role: 'guest' }));
     };
     app.post('/api/auth/guest', guestHandler);

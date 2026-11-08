@@ -16,7 +16,7 @@ export function getAnonSessionId(): string {
     }
     return id;
   } catch {
-    return `anon-${Date.now()}`;
+    return uuid(); // storage 불가 시에도 같은 UUID 생성기 사용(인증 보강, 2026-11-08 점검)
   }
 }
 
