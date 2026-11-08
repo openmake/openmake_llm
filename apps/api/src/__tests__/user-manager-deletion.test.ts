@@ -33,9 +33,9 @@ describe('UserManager.deleteUser — GDPR Phase A Fix 1', () => {
             query: jest.fn(async (sql: string, params?: unknown[]) => {
                 queries.push({ sql, params });
                 if (typeof sql === 'string' && sql.includes('DELETE FROM users')) {
-                    return { rowCount: 1 };
+                    return { rowCount: 1, rows: [] };
                 }
-                return { rowCount: 0 };
+                return { rowCount: 0, rows: [] };
             }),
             release: jest.fn(),
         };
@@ -79,7 +79,7 @@ describe('UserManager.deleteUser — GDPR Phase A Fix 1', () => {
             if (sql.includes('UPDATE skill_manifests')) {
                 throw new Error('simulated DB failure');
             }
-            return { rowCount: 0 };
+            return { rowCount: 0, rows: [] };
         });
         await expect(manager.deleteUser('user-fail')).rejects.toThrow('simulated DB failure');
         const rollbackIdx = queries.findIndex(q => q.sql === 'ROLLBACK');
