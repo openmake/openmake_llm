@@ -42,7 +42,7 @@ const router = Router();
  * 전체 에이전트 목록 — 시스템 산업 agent (industry-agents.json) 만.
  * (2026-05-26: CustomAgentBuilder 제거. draft 목록은 /custom/drafts 사용)
  */
-router.get('/', asyncHandler(async (req: Request, res: Response) => {
+router.get('/', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const agents = getAllAgents();
     res.json(success({
         agents,
@@ -55,7 +55,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
  * GET /api/agents/categories
  * 카테고리별 에이전트
  */
-router.get('/categories', asyncHandler(async (req: Request, res: Response) => {
+router.get('/categories', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     res.json(success(getAgentCategories()));
 }));
 
@@ -63,7 +63,7 @@ router.get('/categories', asyncHandler(async (req: Request, res: Response) => {
  * GET /api/agents/stats
  * 에이전트 통계
  */
-router.get('/stats', asyncHandler(async (req: Request, res: Response) => {
+router.get('/stats', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     res.json(success(getAgentStats()));
 }));
 
