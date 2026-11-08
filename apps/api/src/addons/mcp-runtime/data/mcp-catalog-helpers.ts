@@ -24,6 +24,8 @@ export interface UserMcpServerRow {
     updated_at: string;
     /** stdio docker 샌드박스 네트워크 정책 ('full'|'none'). 042 마이그레이션. */
     sandbox_network?: 'full' | 'none' | 'host' | null;
+    /** 관리자가 bridge 네트워크를 허용한 사용자 소유 서버 (197 마이그레이션, 기본 false). */
+    sandbox_bridge_allowed?: boolean | null;
 }
 
 const MAX_CATALOG_ARG_VALUE_LENGTH = 512;

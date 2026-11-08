@@ -1449,7 +1449,23 @@
     "colLastCrash": "最終クラッシュ",
     "crashTrend": "時間別ライフサイクル・クラッシュ記録 — 現在の時間帯と直前23時間",
     "trendRecords": "記録 {count}",
-    "trendCrashed": "クラッシュ {count}"
+    "trendCrashed": "クラッシュ {count}",
+    "userServersTitle": "ユーザーサーバーのネットワーク",
+    "userServersHint": "ユーザーが登録した stdio サーバーは既定で egress プロキシを経由します。内部ネットワークへのアクセスが必要なサーバーだけ bridge を許可してください。",
+    "colOwner": "所有者",
+    "colName": "名前",
+    "colTransport": "トランスポート",
+    "colNetwork": "ネットワーク",
+    "colBridge": "bridge 許可",
+    "bridgeAllow": "bridge を許可",
+    "bridgeRevoke": "許可を解除",
+    "bridgeConfirm": "確認",
+    "bridgeApplied": "次の接続から適用(自動再接続)",
+    "networkEgress": "egress プロキシ",
+    "networkBridge": "bridge",
+    "networkNone": "なし",
+    "userServersEmpty": "ユーザーが登録したサーバーはありません",
+    "userServersError": "ユーザーサーバー一覧を読み込めませんでした"
   },
   "auth": {
     "login": {

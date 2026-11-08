@@ -10,6 +10,8 @@ import { getPool } from '../../runtime-ports/db-access';
 import { McpServerRepository } from './data/mcp-server-repository';
 import { createLogger } from '../../utils/logger';
 import { USER_POOL_IDLE_SWEEP_MS, USER_POOL_IDLE_TTL_MS } from '../../config/timeouts';
+import type { ExternalMCPClient } from './external-client';
+import type { ServerSpawnConfig } from './lifecycle-supervisor';
 
 const logger = createLogger('ToolRuntime');
 
@@ -37,6 +39,27 @@ export async function startToolRuntime(): Promise<void> {
     }
 }
 
+/** 사용자 MCP 풀 spawn 설정 → 외부 클라이언트 설정. 필드를 옮겨 담는 곳이라 새 필드는 여기서 빠지기 쉽다(테스트로 고정). */
+export function toUserPoolClientConfig(config: ServerSpawnConfig): ConstructorParameters<typeof ExternalMCPClient>[0] {
+    return {
+        id: config.id,
+        name: config.name ?? config.id,
+        transport_type: config.transport_type,
+        command: config.command ?? undefined,
+        args: config.args as string[] | undefined,
+        env: config.env ?? undefined,
+        url: config.url ?? undefined,
+        enabled: true,
+        created_at: '',
+        updated_at: '',
+        catalog_template_id: config.catalog_template_id ?? undefined,
+        sandbox_network: config.sandbox_network ?? 'full',
+        sandbox_bridge_allowed: config.sandbox_bridge_allowed === true,
+        tool_allowlist: config.tool_allowlist,
+        user_id: config.user_id,
+    };
+}
+
 /**
  * 사용자별 MCP 프로세스 풀 supervisor — listen 완료 후 1회. 이미 있으면 아무것도 하지 않는다(멱등).
  * 실패해도 서버는 계속 뜬다(graceful skip) — 알아채는 방법은 이 오류 로그와 user MCP 도구 부재.
@@ -60,22 +83,7 @@ export async function startMcpLifecycleSupervisor(): Promise<void> {
         const supervisor = new MCPLifecycleSupervisor({
             userPool: getUserMCPPool(),
             repo: new McpCatalogRepository(getUnifiedDatabase().getPool()),
-            clientFactory: (config) => new ExternalMCPClient({
-                id: config.id,
-                name: config.name ?? config.id,
-                transport_type: config.transport_type,
-                command: config.command ?? undefined,
-                args: config.args as string[] | undefined,
-                env: config.env ?? undefined,
-                url: config.url ?? undefined,
-                enabled: true,
-                created_at: '',
-                updated_at: '',
-                catalog_template_id: config.catalog_template_id ?? undefined,
-                sandbox_network: config.sandbox_network ?? 'full',
-                tool_allowlist: config.tool_allowlist,
-                user_id: config.user_id,
-            }),
+            clientFactory: (config) => new ExternalMCPClient(toUserPoolClientConfig(config)),
         });
         setLifecycleSupervisor(supervisor);
         logger.info('MCP Lifecycle Supervisor 초기화 완료');
