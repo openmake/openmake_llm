@@ -6,6 +6,7 @@ const listUserOwned = jest.fn();
 const setBridgeAllowed = jest.fn();
 const getServerById = jest.fn();
 const killUserServer = jest.fn(async (_u: string, _s: string) => undefined);
+const emailsByIds = jest.fn(async (_ids: readonly string[]) => new Map<string, string>());
 jest.mock('../../../auth', () => {
     const { requireAdmin } = jest.requireActual('../../../auth/middleware');
     return {
@@ -18,6 +19,9 @@ jest.mock('../../../auth', () => {
 });
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ getPool: () => ({}) }) }));
 jest.mock('../../../runtime-ports/db-access', () => ({ getPool: () => ({}) }));
+jest.mock('../../../runtime-ports/base-data-port', () => ({
+    baseDataPort: { users: { emailsByIds: (ids: readonly string[]) => emailsByIds(ids) } },
+}));
 jest.mock('../data/mcp-admin-servers-repository', () => ({
     McpAdminServersRepository: jest.fn().mockImplementation(() => ({
         listUserOwned: (...a: unknown[]) => listUserOwned(...a),
@@ -47,7 +51,7 @@ app.use(express.json());
 app.use('/api/admin/mcp', mcpAdminMonitoringRouter);
 
 const row = (over: Record<string, unknown> = {}) => ({
-    id: 'mcp_1', name: 'docs', transport_type: 'stdio', owner_user_id: 'u-5', owner_email: 'u5@example.com',
+    id: 'mcp_1', name: 'docs', transport_type: 'stdio', owner_user_id: 'u-5',
     sandbox_network: 'full', sandbox_bridge_allowed: false, enabled: true, created_at: '2026-11-08', ...over,
 });
 const server = (over: Record<string, unknown> = {}) => ({
@@ -78,8 +82,23 @@ describe('GET /api/admin/mcp/servers/user-owned', () => {
         expect(res.status).toBe(200);
         const byId = Object.fromEntries((res.body.data.items as Array<{ id: string; effective_network: unknown }>).map((i) => [i.id, i.effective_network]));
         expect(byId).toEqual({ a: 'egress', b: 'bridge', c: 'none', d: null, e: 'egress' });
-        expect(res.body.data.items[0]).toMatchObject({ owner_email: 'u5@example.com', sandbox_bridge_allowed: false, enabled: true });
+        expect(res.body.data.items[0]).toMatchObject({ sandbox_bridge_allowed: false, enabled: true });
         expect(listUserOwned).toHaveBeenCalledWith(500);
+    });
+
+    it('owner_email 은 Base 데이터 포트로 채운다 — 소유자 id 는 중복 없이 한 번에, 없으면 null', async () => {
+        listUserOwned.mockResolvedValue([
+            row({ id: 'a', owner_user_id: 'u-5' }),
+            row({ id: 'b', owner_user_id: 'u-5' }),
+            row({ id: 'c', owner_user_id: 'u-9' }),
+        ]);
+        emailsByIds.mockResolvedValueOnce(new Map([['u-5', 'u5@example.com']]));
+        const res = await request(app).get('/api/admin/mcp/servers/user-owned').set('x-test-role', 'admin');
+        expect(res.status).toBe(200);
+        const byId = Object.fromEntries((res.body.data.items as Array<{ id: string; owner_email: unknown }>).map((i) => [i.id, i.owner_email]));
+        expect(byId).toEqual({ a: 'u5@example.com', b: 'u5@example.com', c: null });
+        expect(emailsByIds).toHaveBeenCalledTimes(1);
+        expect(emailsByIds).toHaveBeenCalledWith(['u-5', 'u-9']);
     });
 });
 

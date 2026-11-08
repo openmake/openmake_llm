@@ -141,8 +141,12 @@ async function migrateToIsolated(cfg: TaskSandboxConfig, exec: DockerRun): Promi
     const d = cfg.dockerPath;
     if ((await gatewaySupported(cfg, exec)) === false) return;
     const members = await exec(d, ['network', 'inspect', '-f', '{{range .Containers}}{{.Name}} {{end}}', cfg.egressNetwork]);
+    if (members.code !== 0) {
+        logger.warn('egress 내부망 gateway 격리 이행 보류(연결 컨테이너 inspect 실패) — 다음 기동 때 재시도');
+        return;
+    }
     const others = members.stdout.split(/\s+/).filter((n) => n && n !== cfg.egressProxyContainer);
-    if (members.code !== 0 || others.length > 0) {
+    if (others.length > 0) {
         logger.warn('egress 내부망 gateway 격리 이행 보류(사용 중인 컨테이너 있음) — 다음 기동 때 재시도');
         return;
     }

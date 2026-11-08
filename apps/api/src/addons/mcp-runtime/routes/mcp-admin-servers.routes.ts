@@ -13,6 +13,7 @@ import { asyncHandler } from '../../../utils/error-handler';
 import { success, badRequest, notFound } from '../../../utils/api-response';
 import { createLogger } from '../../../utils/logger';
 import { getPool } from '../../../runtime-ports/db-access';
+import { baseDataPort } from '../../../runtime-ports/base-data-port';
 import { McpAdminServersRepository } from '../data/mcp-admin-servers-repository';
 import { McpCatalogRepository } from '../data/mcp-catalog-repository';
 import { getLifecycleSupervisor } from '../lifecycle-supervisor';
@@ -41,9 +42,11 @@ export const mcpAdminServersRouter = Router();
 
 mcpAdminServersRouter.get('/servers/user-owned', asyncHandler(async (_req: Request, res: Response) => {
     const rows = await new McpAdminServersRepository(getPool()).listUserOwned(LIST_LIMIT);
+    // 소유자 이메일은 Base 데이터 포트로 채운다(add-on 은 users 를 SQL 로 읽지 않는다). 없으면 null.
+    const emails = await baseDataPort.users.emailsByIds([...new Set(rows.map((r) => r.owner_user_id))]);
     const { userEgress } = defaultSandboxConfig();
     const items = rows.map((r) => ({
-        id: r.id, name: r.name, transport_type: r.transport_type, owner_user_id: r.owner_user_id, owner_email: r.owner_email,
+        id: r.id, name: r.name, transport_type: r.transport_type, owner_user_id: r.owner_user_id, owner_email: emails.get(r.owner_user_id) ?? null,
         sandbox_network: r.sandbox_network, sandbox_bridge_allowed: r.sandbox_bridge_allowed === true,
         effective_network: userServerNetwork(r, userEgress), enabled: r.enabled, created_at: r.created_at,
     }));
