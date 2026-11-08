@@ -13,6 +13,7 @@ import { resolveInboundImages, resolveHistoryImages, InboundImageError } from '.
 
 const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUg==';
 const DATA_URL = `data:image/png;base64,${PNG_B64}`;
+const freshOpts = () => ({ budget: { remaining: 20 } });
 
 beforeEach(() => {
     mockDownload.mockReset();
@@ -20,20 +21,20 @@ beforeEach(() => {
 
 describe('resolveInboundImages', () => {
     it('data URL·raw base64 는 내려받지 않고 그대로 둔다', async () => {
-        const out = await resolveInboundImages([DATA_URL, PNG_B64]);
+        const out = await resolveInboundImages([DATA_URL, PNG_B64], freshOpts());
         expect(out).toEqual([DATA_URL, PNG_B64]);
         expect(mockDownload).not.toHaveBeenCalled();
     });
 
     it('비었거나 없으면 그대로 돌려준다', async () => {
-        expect(await resolveInboundImages(undefined)).toBeUndefined();
-        expect(await resolveInboundImages([])).toEqual([]);
+        expect(await resolveInboundImages(undefined, freshOpts())).toBeUndefined();
+        expect(await resolveInboundImages([], freshOpts())).toEqual([]);
         expect(mockDownload).not.toHaveBeenCalled();
     });
 
     it('https 주소는 서버가 받아 data URL 로 바꾼다', async () => {
         mockDownload.mockResolvedValue({ bytes: Buffer.from('abc'), contentType: 'image/png' });
-        const out = await resolveInboundImages(['https://example.com/a.png', DATA_URL]);
+        const out = await resolveInboundImages(['https://example.com/a.png', DATA_URL], freshOpts());
         expect(out).toEqual([`data:image/png;base64,${Buffer.from('abc').toString('base64')}`, DATA_URL]);
         expect(mockDownload).toHaveBeenCalledTimes(1);
         const [url, opts] = mockDownload.mock.calls[0];
@@ -44,13 +45,25 @@ describe('resolveInboundImages', () => {
     });
 
     it.each(['file:///x', 'ftp://example.com/a.png', 'javascript:alert(1)'])('그 밖의 스킴(%s)은 거부한다', async (img) => {
-        await expect(resolveInboundImages([img])).rejects.toBeInstanceOf(InboundImageError);
+        await expect(resolveInboundImages([img], freshOpts())).rejects.toBeInstanceOf(InboundImageError);
         expect(mockDownload).not.toHaveBeenCalled();
+    });
+
+    it('받은 형식이 이미지 형식이 아니면 거부한다', async () => {
+        mockDownload.mockResolvedValue({ bytes: Buffer.from('abc'), contentType: 'image/png,x' });
+        await expect(resolveInboundImages(['https://example.com/1.png'], freshOpts())).rejects.toThrow('이미지 주소를 가져올 수 없습니다');
+    });
+
+    it('중단 신호를 내려받기에 그대로 넘긴다', async () => {
+        mockDownload.mockResolvedValue({ bytes: Buffer.from('abc'), contentType: 'image/png' });
+        const signal = new AbortController().signal;
+        await resolveInboundImages(['https://example.com/1.png'], { signal, budget: { remaining: 20 } });
+        expect(mockDownload.mock.calls[0][1].signal).toBe(signal);
     });
 
     it('가져오기 실패는 InboundImageError 이고 메시지에 주소가 없다', async () => {
         mockDownload.mockRejectedValue(new Error('blocked: https://example.com/a.png?token=1'));
-        const err = await resolveInboundImages(['https://example.com/a.png?token=1']).catch((e) => e);
+        const err = await resolveInboundImages(['https://example.com/a.png?token=1'], freshOpts()).catch((e) => e);
         expect(err).toBeInstanceOf(InboundImageError);
         expect(err.message).not.toContain('example.com');
         expect(err.message).not.toContain('token');
@@ -63,7 +76,7 @@ describe('resolveHistoryImages', () => {
         type H = { role: string; content: string; images?: string[] };
         const plain: H = { role: 'assistant', content: '답' };
         const withImg: H = { role: 'user', content: '봐', images: ['https://example.com/a.png'] };
-        const out = await resolveHistoryImages([plain, withImg]);
+        const out = await resolveHistoryImages([plain, withImg], freshOpts());
         expect(out![0]).toBe(plain);
         expect(out![1]).not.toBe(withImg);
         expect(out![1]).toEqual({ ...withImg, images: [`data:image/jpeg;base64,${Buffer.from('xyz').toString('base64')}`] });
@@ -71,10 +84,30 @@ describe('resolveHistoryImages', () => {
     });
 
     it('없으면 undefined', async () => {
-        expect(await resolveHistoryImages(undefined)).toBeUndefined();
+        expect(await resolveHistoryImages(undefined, freshOpts())).toBeUndefined();
     });
 
     it('history 항목의 거부 스킴도 InboundImageError', async () => {
-        await expect(resolveHistoryImages([{ images: ['file:///x'] }])).rejects.toBeInstanceOf(InboundImageError);
+        await expect(resolveHistoryImages([{ images: ['file:///x'] }], freshOpts())).rejects.toBeInstanceOf(InboundImageError);
+    });
+});
+
+describe('요청당 주소 이미지 예산', () => {
+    it('현재 턴과 history 를 합쳐 21개째에서 거부하고 내려받기는 20회 이하', async () => {
+        mockDownload.mockResolvedValue({ bytes: Buffer.from('abc'), contentType: 'image/png' });
+        const urls = (from: number, n: number) => Array.from({ length: n }, (_, i) => `https://example.com/${from + i}.png`);
+        const budget = { remaining: 20 };
+        const run = Promise.all([
+            resolveInboundImages(urls(1, 15), { budget }),
+            resolveHistoryImages([{ images: urls(16, 6) }], { budget }),
+        ]);
+        await expect(run).rejects.toThrow('이미지 주소가 너무 많습니다');
+        expect(mockDownload.mock.calls.length).toBeLessThanOrEqual(20);
+    });
+
+    it('data URL·raw base64 는 예산을 쓰지 않는다', async () => {
+        const budget = { remaining: 0 };
+        await expect(resolveInboundImages([DATA_URL, PNG_B64], { budget })).resolves.toEqual([DATA_URL, PNG_B64]);
+        expect(budget.remaining).toBe(0);
     });
 });
