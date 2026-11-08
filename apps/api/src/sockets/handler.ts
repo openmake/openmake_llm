@@ -37,7 +37,7 @@ import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { IncomingMessage } from 'http';
 import crypto from 'node:crypto';
 import { ClusterManager } from '../cluster/manager';
-import { buildInitPayload } from './init-payload';
+import { buildInitPayload, buildUpdatePayload, selectAdminConnections } from './init-payload';
 import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
@@ -111,11 +111,11 @@ export class WebSocketHandler {
 
     /**
      * 클러스터 이벤트 리스너를 설정합니다.
-     * 클러스터에서 발생하는 이벤트를 모든 연결된 클라이언트에 브로드캐스트합니다.
+     * 클러스터 이벤트는 관리자 연결에만 전송합니다(인증 보강, 2026-11-08 점검).
      */
     private setupClusterEvents(): void {
         this.cluster.on('event', (event: Record<string, unknown>) => {
-            this.broadcast({
+            this.broadcastToAdmins({
                 type: 'cluster_event',
                 event
             });
@@ -357,10 +357,7 @@ export class WebSocketHandler {
                     await this.handleRefresh(ws, typedMsg);
                     ws.send(JSON.stringify({
                         type: 'update',
-                        data: {
-                            stats: this.cluster.getStats(),
-                            nodes: this.cluster.getNodes()
-                        }
+                        data: buildUpdatePayload(this.cluster, (ws as ExtendedWebSocket)._authenticatedUserRole)
                     }));
                     break;
 
@@ -540,6 +537,11 @@ export class WebSocketHandler {
      */
     public broadcast(data: Record<string, unknown>): void {
         broadcastWithBackpressure(this.clients, this.slowClientCounters, data);
+    }
+
+    /** 관리자 연결에만 backpressure 정책으로 전송한다(인증 보강, 2026-11-08 점검). */
+    private broadcastToAdmins(data: Record<string, unknown>): void {
+        sendToConnections(selectAdminConnections(this.clients as Set<ExtendedWebSocket>), data, this.slowClientCounters);
     }
 
     /**
