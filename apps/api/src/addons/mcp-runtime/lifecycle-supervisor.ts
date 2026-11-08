@@ -40,6 +40,8 @@ interface ServerSpawnConfig {
     lifecycle?: McpLifecycle;
     catalog_template_id?: string;
     sandbox_network?: 'full' | 'none' | 'host';
+    /** 관리자 bridge 허용 옵션(2026-11-08 점검 후속) — DB sandbox_bridge_allowed */
+    sandbox_bridge_allowed?: boolean;
     /** 채팅 자동 노출 도구 화이트리스트 — 카탈로그 템플릿(tool_allowlist)에서 spawn 시 복사 */
     tool_allowlist?: string[];
 }
@@ -352,6 +354,7 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
             lifecycle,
             catalog_template_id: server.catalog_template_id ?? undefined,
             sandbox_network: (() => { const n = (server as ServerWithLifecycle).sandbox_network; return n === 'none' || n === 'host' ? n : 'full'; })(),
+            sandbox_bridge_allowed: server.sandbox_bridge_allowed === true,
             tool_allowlist: toolAllowlist,
         };
 

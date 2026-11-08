@@ -1449,7 +1449,23 @@
     "colLastCrash": "最后崩溃",
     "crashTrend": "每小时生命周期与崩溃记录 — 当前小时及之前 23 小时",
     "trendRecords": "记录 {count}",
-    "trendCrashed": "崩溃 {count}"
+    "trendCrashed": "崩溃 {count}",
+    "userServersTitle": "用户服务器网络",
+    "userServersHint": "用户注册的 stdio 服务器默认经由 egress 代理。仅为需要访问内部网络的服务器允许 bridge。",
+    "colOwner": "所有者",
+    "colName": "名称",
+    "colTransport": "传输",
+    "colNetwork": "网络",
+    "colBridge": "bridge 权限",
+    "bridgeAllow": "允许 bridge",
+    "bridgeRevoke": "撤销允许",
+    "bridgeConfirm": "确认",
+    "bridgeApplied": "从下次连接起生效(自动重新连接)",
+    "networkEgress": "egress 代理",
+    "networkBridge": "bridge",
+    "networkNone": "无",
+    "userServersEmpty": "没有用户注册的服务器",
+    "userServersError": "无法加载用户服务器列表"
   },
   "auth": {
     "login": {

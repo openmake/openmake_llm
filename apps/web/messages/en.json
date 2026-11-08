@@ -1449,7 +1449,23 @@
     "colLastCrash": "Last crash",
     "crashTrend": "Hourly lifecycle and crash records — current hour and previous 23 hours",
     "trendRecords": "records {count}",
-    "trendCrashed": "crashes {count}"
+    "trendCrashed": "crashes {count}",
+    "userServersTitle": "User server networks",
+    "userServersHint": "User-registered stdio servers go through the egress proxy by default. Allow bridge only for servers that need internal network access.",
+    "colOwner": "Owner",
+    "colName": "Name",
+    "colTransport": "Transport",
+    "colNetwork": "Network",
+    "colBridge": "Bridge access",
+    "bridgeAllow": "Allow bridge",
+    "bridgeRevoke": "Revoke",
+    "bridgeConfirm": "Confirm",
+    "bridgeApplied": "Applies from the next connection (auto reconnect)",
+    "networkEgress": "egress proxy",
+    "networkBridge": "bridge",
+    "networkNone": "none",
+    "userServersEmpty": "No user-registered servers",
+    "userServersError": "Could not load user servers"
   },
   "auth": {
     "login": {
