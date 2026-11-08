@@ -100,6 +100,8 @@ export interface TaskSandboxConfig {
     egressProxyPort: number;
     /** egress 프록시가 연결을 허용하는 목적지 포트. 허용 도메인이라도 이 밖의 포트는 거절한다. */
     egressAllowedPorts: number[];
+    /** 새로 띄운 egress 프록시가 listen 할 때까지 기다리는 상한(ms). 넘기면 보장 실패(fail-closed). */
+    egressReadyTimeoutMs: number;
     /**
      * 코드 작업 diff 캡처(openmake_code v1) 활성 여부(기본 true — 샌드박스 ON 일 때만 유효).
      * ON: 실행 시작 시 workspace 를 git baseline 으로 스냅샷하고, 완료 시 에이전트 변경분을
@@ -171,6 +173,7 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         egressProxyPort: intEnv(process.env.TASK_SANDBOX_EGRESS_PROXY_PORT, 8888),
         egressAllowedPorts: (process.env.TASK_SANDBOX_EGRESS_ALLOWED_PORTS || '80,443')
             .split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n) && n > 0 && n <= 65535),
+        egressReadyTimeoutMs: intEnv(process.env.TASK_SANDBOX_EGRESS_READY_TIMEOUT_MS, 10_000),
         codeDiffEnabled: process.env.TASK_SANDBOX_CODE_DIFF_ENABLED !== 'false',
         writeViaContainer: resolveWriteViaContainer(process.env),
         extraTools: (process.env.TASK_SANDBOX_EXTRA_TOOLS ?? 'web_search')

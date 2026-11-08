@@ -19,6 +19,7 @@ class FakeClient {
 
 jest.mock('@modelcontextprotocol/client', () => ({ Client: FakeClient, StreamableHTTPClientTransport: class {}, SSEClientTransport: class {} }));
 jest.mock('@modelcontextprotocol/client/stdio', () => ({ StdioClientTransport: FakeStdioTransport }));
+jest.mock('../sandbox-egress', () => ({ prepareSandboxConfig: async () => undefined }));
 jest.mock('../sandbox-docker', () => ({ buildSandboxedCommand: (p: { command: string; args: string[] }) => ({ sandboxed: false, command: p.command, args: p.args }) }));
 jest.mock('../oauth-provider', () => ({ McpOAuthProvider: class {} }));
 jest.mock('../../../security/ssrf-guard', () => ({ createPinnedFetch: () => fetch }));

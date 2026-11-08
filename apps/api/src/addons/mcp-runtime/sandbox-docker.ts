@@ -14,7 +14,9 @@
  *    값은 `-e KEY=값` 으로 인자에 넣지 않고 `-e KEY`(이름만) + docker 프로세스 env 로 전달한다.
  *    커맨드라인 인자는 같은 호스트의 모든 사용자가 `ps` 로 읽을 수 있어 API 키·세션 쿠키가
  *    평문 노출되기 때문(프로세스 env 는 소유자만 접근 가능).
- *  - 네트워크: full(bridge) | none(--unshare 대신 --network none). 서버별 정책.
+ *  - 네트워크(유효값 effectiveNetwork): none → --network none · 사용자 소유 서버의 full·host → egress
+ *    (internal 망 + egress 프록시 경유, MCP_SANDBOX_USER_EGRESS — 기본 on, 프록시 없으면 거부) ·
+ *    관리자 전역 서버의 full → bridge. DB 값(sandbox_network)은 그대로 둔다(2026-11-08 점검).
  *  - 권한: --cap-drop ALL + no-new-privileges + 비-root user + pids/memory 상한(cgroups).
  *  - 내부 loopback(127.0.0.1/localhost) → host.docker.internal 자동 치환
  *    (컨테이너의 127.0.0.1 은 호스트가 아니므로 DB 등 내부 서비스 접속 인자 보정).
@@ -28,6 +30,9 @@
 
 /** 'full'=bridge, 'none'=--network none, 'host'=컨테이너 없이 호스트 직접 실행(opt-out) */
 type SandboxNetwork = 'full' | 'none' | 'host';
+
+/** 컨테이너에 실제로 주는 네트워크 — 'egress' 는 internal 망 + egress 프록시 경유. */
+export type EffectiveSandboxNetwork = 'bridge' | 'none' | 'egress';
 
 interface SandboxInput {
     command: string;
@@ -45,6 +50,8 @@ interface SandboxResult {
     args: string[];
     /** 실제 docker 로 감쌌는지 (false = no-op 통과) */
     sandboxed: boolean;
+    /** sandboxed=true 일 때 컨테이너에 준 유효 네트워크(로그용). */
+    network?: EffectiveSandboxNetwork;
     /**
      * sandboxed=true 일 때 docker 프로세스에 넘길 env — 컨테이너는 `-e KEY`(이름만) 로
      * 여기서 값을 상속받는다. env 값은 인자에 없으므로 `ps` 에 노출되지 않는다.
@@ -78,6 +85,10 @@ export interface SandboxConfig {
     ownerPid: number;
     /** docker 접속처(DOCKER_HOST). macOS 의 전용 Colima 처럼 기본 컨텍스트가 아닌 데몬을 쓸 때 설치기가 .env 에 적는다. */
     dockerHost?: string;
+    /** 사용자 소유 서버를 egress 프록시 경유로 실행할지(MCP_SANDBOX_USER_EGRESS, 모든 환경 기본 true). */
+    userEgress: boolean;
+    /** egress 프록시가 보장된 뒤 호출자(sandbox-egress)가 넣는 값 — 없으면 egress 대상 서버는 거부한다. */
+    egress?: { network: string; proxyUrl: string };
 }
 
 /** MCP 샌드박스 컨테이너 식별 라벨 — ⚠️ task-sandbox(영속)·artifact-exec 와 절대 겹치면 안 됨 */
@@ -95,6 +106,9 @@ export { resolveDocker };
 export const MCP_SANDBOX_REQUIRED_MESSAGE = '사용자 MCP 서버는 격리 없이 실행하지 않습니다 — MCP_SANDBOX_ENABLED 와 Docker 를 확인하세요(관리자 전역 서버만 비격리 허용)';
 /** 위 거부의 오류 code — lifecycle-supervisor 가 감사 기록(mcp_server.spawn_refused) 판별에 쓴다. */
 export const MCP_SANDBOX_REQUIRED_CODE = 'MCP_SANDBOX_REQUIRED';
+/** 사용자 MCP 서버를 egress 프록시 없이 실행하지 않을 때의 거부 문구·code (사용자 MCP 서버 실행 격리 보강, 2026-11-08 점검). */
+export const MCP_SANDBOX_EGRESS_REQUIRED_MESSAGE = '사용자 MCP 서버는 egress 프록시 없이 실행하지 않습니다 — MCP_SANDBOX_USER_EGRESS 와 egress 프록시 이미지(infra/egress-proxy)·Docker 를 확인하세요';
+export const MCP_SANDBOX_EGRESS_REQUIRED_CODE = 'MCP_SANDBOX_EGRESS_REQUIRED';
 
 /** 환경에서 SandboxConfig 조립 (No-Hardcoding — env override). */
 export function defaultSandboxConfig(): SandboxConfig {
@@ -114,7 +128,28 @@ export function defaultSandboxConfig(): SandboxConfig {
         readonly: process.env.MCP_SANDBOX_READONLY !== 'false',
         ownerPid: process.pid,
         dockerHost: process.env.DOCKER_HOST || undefined,
+        userEgress: process.env.MCP_SANDBOX_USER_EGRESS !== 'false',
     };
+}
+
+/**
+ * PURE: 유효 네트워크 — none 은 none, 사용자 소유 서버의 full·host·미지정은 userEgress 면 egress(아니면 bridge),
+ * 전역 서버는 bridge(전역 host 는 buildSandboxedCommand 가 먼저 비격리로 돌려보낸다).
+ */
+export function effectiveNetwork(
+    input: Pick<SandboxInput, 'network' | 'ownerScope'>,
+    cfg: Pick<SandboxConfig, 'userEgress'>,
+): EffectiveSandboxNetwork {
+    if (input.network === 'none') return 'none';
+    if (input.ownerScope === 'user') return cfg.userEgress ? 'egress' : 'bridge';
+    return 'bridge';
+}
+
+/** 컨테이너 안 프로세스가 따르는 표준 프록시 env — 값은 프록시 컨테이너 이름·포트뿐이라 argv 에 실어도 무해. */
+function egressProxyEnvArgs(proxyUrl: string): string[] {
+    return ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']
+        .flatMap((k) => ['-e', `${k}=${proxyUrl}`])
+        .concat('-e', 'NODE_USE_ENV_PROXY=1');
 }
 
 /** docker 볼륨/식별자 안전화. */
@@ -173,7 +208,13 @@ export function sandboxCacheVolumeName(serverId: string, cacheVolumePrefix: stri
 
 /** PURE: docker run 인자 조립 (유닛테스트 대상). */
 export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string[] {
-    const net = (input.network ?? 'full') === 'none' ? 'none' : 'bridge';
+    const effective = effectiveNetwork(input, cfg);
+    const egress = effective === 'egress' ? cfg.egress : undefined;
+    if (effective === 'egress' && !egress) {
+        // fail-closed: egress 대상인데 프록시가 보장되지 않았으면 bridge 로 내려가지 않는다.
+        throw Object.assign(new Error(MCP_SANDBOX_EGRESS_REQUIRED_MESSAGE), { code: MCP_SANDBOX_EGRESS_REQUIRED_CODE });
+    }
+    const net = egress ? egress.network : effective;
     // per-server 캐시 볼륨 — 컨테이너 간 캐시(공급망) 상호 오염 차단.
     const cacheVol = sandboxCacheVolumeName(input.serverId, cfg.cacheVolume);
     // 내부 서비스(127.0.0.1/localhost) 를 참조하는 서버에만 host.docker.internal 부여 —
@@ -212,6 +253,8 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     for (const k of Object.keys(serverEnv(input))) {
         a.push('-e', k);
     }
+    // 프록시 env 는 서버 env 뒤에 — 서버 config 의 *_PROXY 는 제어 키라 이미 빠졌고, 런타임 값만 유효하다.
+    if (egress) a.push(...egressProxyEnvArgs(egress.proxyUrl));
     a.push(cfg.image);
     const rewrite = loopbackRewriter(input);
     const command = rewrite(input.command);
@@ -254,5 +297,5 @@ export function buildSandboxedCommand(input: SandboxInput, cfg: SandboxConfig = 
     // DOCKER_HOST 는 docker 프로세스까지만 간다 — 인자에는 `-e KEY` 로 이름을 준 변수만 있으므로 컨테이너에는 들어가지 않는다.
     // 서버 설정의 DOCKER_* 는 buildSandboxedEnv 가 이미 버렸다 — 접속처는 호스트만 정한다.
     const env = { ...buildSandboxedEnv(input), ...(cfg.dockerHost ? { DOCKER_HOST: cfg.dockerHost } : {}) };
-    return { command: cfg.dockerPath, args: dockerArgs, sandboxed: true, env };
+    return { command: cfg.dockerPath, args: dockerArgs, sandboxed: true, env, network: effectiveNetwork(input, cfg) };
 }
