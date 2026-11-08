@@ -1,4 +1,4 @@
-import { buildEgressProxyRunArgs, isProxyListening } from './egress-proxy';
+import { buildEgressProxyRunArgs, ensureEgressProxy, isProxyListening } from './egress-proxy';
 import { getTaskSandboxConfig } from '../../config/task-sandbox';
 
 describe('buildEgressProxyRunArgs', () => {
@@ -96,5 +96,55 @@ describe('egressReadyTimeoutMs 설정', () => {
         expect(getTaskSandboxConfig().egressReadyTimeoutMs).toBe(10_000);
         process.env.TASK_SANDBOX_EGRESS_READY_TIMEOUT_MS = '2500';
         expect(getTaskSandboxConfig().egressReadyTimeoutMs).toBe(2500);
+    });
+});
+
+describe('ensureEgressProxy 준비 대기 (리뷰 Minor 반영, 2026-11-08 점검)', () => {
+    type Res = { code: number; stdout: string; stderr: string };
+    const ok = (stdout = ''): Res => ({ code: 0, stdout, stderr: '' });
+    const base = { ...getTaskSandboxConfig(), dockerPath: 'docker', egressReadyTimeoutMs: 2000 };
+    const listening = `[egress-proxy] listening :${base.egressProxyPort} allowlist=[] ports=[443]`;
+
+    /** 명령 종류별 응답 큐 — 마지막 응답은 계속 반복한다. 호출 기록을 남긴다. */
+    function fakeExec(queues: Record<string, Res[]>) {
+        const calls: string[][] = [];
+        const kindOf = (a: string[]) => (a[0] === 'network' || a[0] === 'run' && a[1] === '-d' ? `${a[0]}:${a[1]}` : a[0]);
+        const exec = async (_d: string, args: string[]): Promise<Res> => {
+            calls.push(args);
+            const q = queues[kindOf(args)];
+            if (!q || q.length === 0) return ok();
+            return q.length > 1 ? q.shift()! : q[0];
+        };
+        const count = (kind: string) => calls.filter((a) => kindOf(a) === kind).length;
+        return { exec, calls, count };
+    }
+
+    it('(a) 이미 떠 있고 listening 이면 새로 띄우지 않고 logs 1회로 URL 을 돌려준다', async () => {
+        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('true')], logs: [ok(listening)] });
+        await expect(ensureEgressProxy(base, f.exec)).resolves.toBe(`http://${base.egressProxyContainer}:${base.egressProxyPort}`);
+        expect(f.count('run:-d')).toBe(0);
+        expect(f.count('logs')).toBe(1);
+    });
+
+    it('(b) 떠 있지만 아직 listen 전이면 listening 이 보일 때까지 기다린다', async () => {
+        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('true')], logs: [ok(''), ok(listening)] });
+        await expect(ensureEgressProxy(base, f.exec)).resolves.toContain(`:${base.egressProxyPort}`);
+        expect(f.count('run:-d')).toBe(0);
+        expect(f.count('logs')).toBe(2);
+    });
+
+    it('(c) 새로 띄운 컨테이너가 실행 중이 아니면 시간 초과를 기다리지 않고 바로 실패한다', async () => {
+        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('false')], logs: [ok('')] });
+        const t0 = Date.now();
+        await expect(ensureEgressProxy(base, f.exec)).rejects.toThrow('실행 중이 아닙니다');
+        expect(Date.now() - t0).toBeLessThan(1000);
+        expect(f.count('run:-d')).toBe(1);
+        expect(f.count('logs')).toBe(1);
+    });
+
+    it('(d) 실행 중이지만 끝내 listen 하지 않으면 시간 초과 오류', async () => {
+        const f = fakeExec({ 'network:inspect': [ok('[]')], inspect: [ok('true')], logs: [ok('')] });
+        await expect(ensureEgressProxy({ ...base, egressReadyTimeoutMs: 300 }, f.exec)).rejects.toThrow('준비되지 않았습니다(300ms)');
+        expect(f.count('logs')).toBeGreaterThanOrEqual(2);
     });
 });
