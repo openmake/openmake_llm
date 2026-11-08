@@ -1,6 +1,6 @@
 {
     "name": "openmake",
-    "version": "1.127.5",
+    "version": "1.127.6",
     "description": "OpenMake - AI Assistant Platform",
     "main": "apps/api/dist/server.js",
     "scripts": {
