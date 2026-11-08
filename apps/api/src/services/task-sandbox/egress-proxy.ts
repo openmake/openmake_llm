@@ -45,6 +45,24 @@ export function buildEgressProxyRunArgs(cfg: TaskSandboxConfig): string[] {
     ];
 }
 
+/** PURE: 프록시 기동 로그에 해당 포트의 listening 줄이 있는가(infra/egress-proxy/proxy.mjs 의 기동 로그). */
+export function isProxyListening(logs: string, port: number): boolean {
+    return new RegExp(`listening :${port}(?!\\d)`).test(logs);
+}
+
+const READY_POLL_MS = 250;
+
+/** 새로 띄운 프록시가 listen 할 때까지 기다린다 — 시간을 넘기면 오류(fail-closed, 첫 연결 ECONNREFUSED 대신). */
+async function waitProxyReady(cfg: TaskSandboxConfig): Promise<void> {
+    const deadline = Date.now() + cfg.egressReadyTimeoutMs;
+    for (;;) {
+        const logs = await run(cfg.dockerPath, ['logs', '--tail', '50', cfg.egressProxyContainer]);
+        if (isProxyListening(`${logs.stdout}\n${logs.stderr}`, cfg.egressProxyPort)) return;
+        if (Date.now() >= deadline) throw new Error(`egress 프록시가 준비되지 않았습니다(${cfg.egressReadyTimeoutMs}ms)`);
+        await new Promise((r) => setTimeout(r, READY_POLL_MS));
+    }
+}
+
 /** internal 네트워크 + 프록시 컨테이너를 보장하고 프록시 base URL 을 반환. 멱등. */
 export async function ensureEgressProxy(cfg: TaskSandboxConfig): Promise<string> {
     const d = cfg.dockerPath;
@@ -69,6 +87,8 @@ export async function ensureEgressProxy(cfg: TaskSandboxConfig): Promise<string>
         if (connect.code !== 0 && !/already exists|endpoint/i.test(connect.stderr)) {
             logger.warn(`egress 프록시 bridge 연결 경고: ${connect.stderr}`);
         }
+        // 새로 띄운 경우에만 준비를 기다린다 — 이미 떠 있던 프록시는 종전대로 바로 쓴다(2026-11-08 점검).
+        await waitProxyReady(cfg);
         logger.info(`egress 프록시 기동 (${cfg.egressProxyContainer}, allowlist=${cfg.egressAllowlist.length}개${isPublicMode(cfg) ? ', mode=public' : ''})`);
     }
     return `http://${cfg.egressProxyContainer}:${cfg.egressProxyPort}`;

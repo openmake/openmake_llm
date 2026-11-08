@@ -24,6 +24,7 @@ jest.mock('@modelcontextprotocol/client/stdio', () => ({
         constructor(opts: { env?: Record<string, string> }) { transportOptions.push(opts); }
     },
 }));
+jest.mock('../sandbox-egress', () => ({ prepareSandboxConfig: async () => undefined }));
 jest.mock('../sandbox-docker', () => ({
     buildSandboxedCommand: (p: { command: string; args: string[] }) => ({ sandboxed: false, command: p.command, args: p.args }),
 }));

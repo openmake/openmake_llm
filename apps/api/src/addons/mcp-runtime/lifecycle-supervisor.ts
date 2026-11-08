@@ -20,7 +20,7 @@ import type { ExternalMCPClient } from './external-client';
 import type { McpCatalogRepository, UserMcpServerRow } from './data/mcp-catalog-repository';
 import { createLogger } from '../../utils/logger';
 import { classifyConnectError, serializeConnectError } from './connect-error';
-import { MCP_SANDBOX_REQUIRED_CODE } from './sandbox-docker';
+import { MCP_SANDBOX_EGRESS_REQUIRED_CODE, MCP_SANDBOX_REQUIRED_CODE } from './sandbox-docker';
 import { recordSecurityAudit } from '../../runtime-ports/audit-port';
 import { USER_POOL_IDLE_TTL_MS } from '../../config/timeouts';
 
@@ -383,8 +383,10 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
             await this.repo
                 .recordInstanceTransition(serverId, userId, 'crashed', undefined, serializeConnectError(classified))
                 .catch(() => { /* 기록 실패가 원인 전파를 막지 않게 한다 */ });
-            if ((e as { code?: string }).code === MCP_SANDBOX_REQUIRED_CODE) {
-                void recordSecurityAudit({ action: 'mcp_server.spawn_refused', userId, resourceType: 'mcp_server', resourceId: serverId, details: { reason: 'sandbox_required' } });
+            const code = (e as { code?: string }).code;
+            if (code === MCP_SANDBOX_REQUIRED_CODE || code === MCP_SANDBOX_EGRESS_REQUIRED_CODE) {
+                const reason = code === MCP_SANDBOX_REQUIRED_CODE ? 'sandbox_required' : 'egress_proxy_required';
+                void recordSecurityAudit({ action: 'mcp_server.spawn_refused', userId, resourceType: 'mcp_server', resourceId: serverId, details: { reason } });
             }
             throw e;
         }
