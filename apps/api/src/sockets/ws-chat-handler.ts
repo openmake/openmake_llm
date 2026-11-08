@@ -24,6 +24,7 @@ import { systemSkillNamesEn } from '../agents/system-skill-names';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { applySlashCommand, mergeActivatedSkillNames, languageDetectionInput } from '../chat/slash-command';
 import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
+import { validateHistoryImages } from './ws-chat-history-images';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext, collectMediaFiles } from '../services/chat-service/attach-context';
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { buildTurnAttachments } from '../services/chat-service/turn-attachments';
@@ -63,6 +64,9 @@ export async function handleChatMessage(
         ws.send(JSON.stringify({ type: 'error', message: `이미지는 최대 ${FILE_ATTACH_LIMITS.MAX_IMAGES}개까지 첨부할 수 있습니다` }));
         return;
     }
+    // history 이미지(멀티턴 vision) — 항목별 형식·길이와 요청 전체(현재 턴 + history) 개수 상한
+    const historyImages = validateHistoryImages(msg.history, hasImages ? (msg.images as unknown[]).length : 0);
+    if (!historyImages.ok) { ws.send(JSON.stringify({ type: 'error', message: historyImages.message })); return; }
     if (hasFiles && (msg.files as unknown[]).length > FILE_ATTACH_LIMITS.MAX_FILES) {
         ws.send(JSON.stringify({ type: 'error', message: `파일은 최대 ${FILE_ATTACH_LIMITS.MAX_FILES}개까지 첨부할 수 있습니다` }));
         return;

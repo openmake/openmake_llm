@@ -439,7 +439,7 @@ export class ChatRequestHandler {
         const taskSuggestion = taskGate.finish({ sessionId: currentSessionId, messageId: savedMessageId });
 
         // 8. 다음 턴을 위한 사전 요약 (백그라운드, fire-and-forget) — history-presummary.ts
-        scheduleHistoryPresummary(history, message, cleanedResponse, maskedModel, currentSessionId);
+        scheduleHistoryPresummary(history, message, cleanedResponse, maskedModel, currentSessionId, images);
 
         // routingMeta.agentBypass 는 ChatService.handleChat 의 agentBypassed 조건과
         // 동기화되어야 함 — drift 시 ChatMetrics 의 agent_bypass= 가 거짓 N 으로 표시됨.
