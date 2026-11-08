@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.127.5](https://github.com/openmake/openmake_llm/compare/v1.127.4...v1.127.5) (2026-11-08)
+
+
+### 🐛 버그 수정
+
+* **api:** 모델·에이전트 목록 조회 인증 필수 ([d890afc](https://github.com/openmake/openmake_llm/commit/d890afc190a9d665593fdd11149fa01376f8a391))
+* **audit:** 감사 로그 CSV 셀 인코딩 통일 ([be75e99](https://github.com/openmake/openmake_llm/commit/be75e9940107be37264aa93e4b307865e31b61fb))
+* **auth:** 게스트 식별자 생성 보강 ([e780dc2](https://github.com/openmake/openmake_llm/commit/e780dc2f44cea175cff051283c77352d23efebc9))
+* **ws:** 클러스터 노드 정보는 관리자 연결에만 ([e2ebf5e](https://github.com/openmake/openmake_llm/commit/e2ebf5ea6aa525117460ccd78bc53daad8540bad))
+
 ## [1.127.4](https://github.com/openmake/openmake_llm/compare/v1.127.3...v1.127.4) (2026-11-08)
 
 
