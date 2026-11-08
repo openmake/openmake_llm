@@ -2,7 +2,7 @@
  * W3 S2 — 운영(NODE_ENV=production)에서 MCP 샌드박스 기본 ON.
  * E1 — 사용자 MCP 서버는 환경과 무관하게 비격리 spawn 거부. E9 — 사용자 서버엔 host-gateway 미부여.
  */
-import { buildSandboxedCommand, defaultSandboxConfig, MCP_SANDBOX_REQUIRED_MESSAGE, type SandboxConfig } from '../sandbox-docker';
+import { buildSandboxedCommand, defaultSandboxConfig, MCP_SANDBOX_EGRESS_REQUIRED_MESSAGE, MCP_SANDBOX_REQUIRED_MESSAGE, type SandboxConfig } from '../sandbox-docker';
 import { MCPLifecycleSupervisor } from '../lifecycle-supervisor';
 import { UserMCPPool } from '../user-pool';
 import { recordSecurityAudit } from '../../../runtime-ports/audit-port';
@@ -20,6 +20,8 @@ const cfg = (over: Partial<SandboxConfig> = {}): SandboxConfig => ({
     user: '1000:1000',
     readonly: false,
     ownerPid: 12345,
+    userEgress: true,
+    egress: { network: 'omk-egress-internal', proxyUrl: 'http://omk-egress-proxy:8888' },
     ...over,
 });
 
@@ -57,8 +59,8 @@ describe('MCP 샌드박스 운영 기본값·사용자 서버 격리 (S2)', () =
         const r = buildSandboxedCommand({ ...input, network: 'host', ownerScope: 'user' }, cfg());
         expect(r.sandboxed).toBe(true);
         expect(r.command).toBe('/usr/local/bin/docker');
-        // host opt-out 은 bridge 로 격리(호스트 네트워크를 주지 않는다)
-        expect(r.args.join(' ')).toContain('--network bridge');
+        // host opt-out 은 egress 프록시 경유로 격리(호스트 네트워크를 주지 않는다)
+        expect(r.args.join(' ')).toContain('--network omk-egress-internal');
         // 전역 서버의 host opt-out 은 종전대로 비격리
         expect(buildSandboxedCommand({ ...input, network: 'host', ownerScope: 'global' }, cfg()).sandboxed).toBe(false);
     });
@@ -73,6 +75,12 @@ describe('MCP 샌드박스 운영 기본값·사용자 서버 격리 (S2)', () =
             .toThrow(MCP_SANDBOX_REQUIRED_MESSAGE);
         // network=host opt-out 도 사용자 서버에는 적용되지 않는다
         const r = buildSandboxedCommand({ ...input, network: 'host', ownerScope: 'user' }, cfg());
+        expect(r.sandboxed).toBe(true);
+        expect(r.args.join(' ')).toContain('--network omk-egress-internal');
+    });
+
+    it('(d1) userEgress:false 면 사용자 서버도 종전 bridge 로 격리한다', () => {
+        const r = buildSandboxedCommand({ ...input, network: 'host', ownerScope: 'user' }, cfg({ userEgress: false, egress: undefined }));
         expect(r.sandboxed).toBe(true);
         expect(r.args.join(' ')).toContain('--network bridge');
     });
@@ -135,6 +143,26 @@ describe('MCP 샌드박스 운영 기본값·사용자 서버 격리 (S2)', () =
         expect(recordSecurityAudit).toHaveBeenCalledWith({
             action: 'mcp_server.spawn_refused', userId: 'u-1', resourceType: 'mcp_server', resourceId: 's-9',
             details: { reason: 'sandbox_required' },
+        });
+    });
+
+    it('(g) 사용자 서버 spawn 이 MCP_SANDBOX_EGRESS_REQUIRED 로 거부되면 spawn_refused 감사(reason egress_proxy_required) 1건', async () => {
+        (recordSecurityAudit as jest.Mock).mockClear();
+        const repo = {
+            getServerById: jest.fn().mockResolvedValue({
+                id: 's-9', user_id: 'u-1', name: 's', transport_type: 'stdio', command: 'echo', args: [],
+            }),
+            decryptEnvForSpawn: jest.fn().mockResolvedValue({}),
+            recordInstanceTransition: jest.fn().mockResolvedValue(undefined),
+        };
+        const refused = Object.assign(new Error(MCP_SANDBOX_EGRESS_REQUIRED_MESSAGE), { code: 'MCP_SANDBOX_EGRESS_REQUIRED' });
+        const factory = jest.fn().mockReturnValue({ connect: jest.fn().mockRejectedValue(refused), on: jest.fn() });
+        const sv = new MCPLifecycleSupervisor({ userPool: new UserMCPPool(), repo: repo as never, clientFactory: factory as never });
+        await expect(sv.spawnUserServer('u-1', 's-9')).rejects.toBe(refused);
+        expect(recordSecurityAudit).toHaveBeenCalledTimes(1);
+        expect(recordSecurityAudit).toHaveBeenCalledWith({
+            action: 'mcp_server.spawn_refused', userId: 'u-1', resourceType: 'mcp_server', resourceId: 's-9',
+            details: { reason: 'egress_proxy_required' },
         });
     });
 });

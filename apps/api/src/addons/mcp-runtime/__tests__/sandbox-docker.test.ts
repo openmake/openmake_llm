@@ -15,6 +15,7 @@ const cfg = (over: Partial<SandboxConfig> = {}): SandboxConfig => ({
     user: '1000:1000',
     readonly: false,
     ownerPid: 12345,
+    userEgress: true,
     ...over,
 });
 
