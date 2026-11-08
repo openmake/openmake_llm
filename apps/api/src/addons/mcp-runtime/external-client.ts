@@ -472,7 +472,8 @@ export class ExternalMCPClient extends EventEmitter {
                 //   사용자 소유 서버는 egress 프록시를 먼저 보장한다(못 하면 거부 — 2026-11-08 점검).
                 const network = this.config.sandbox_network ?? 'full';
                 const ownerScope = this.config.user_id ? 'user' : 'global';
-                const sandboxCfg = await prepareSandboxConfig({ network, ownerScope });
+                const bridgeAllowed = this.config.sandbox_bridge_allowed === true;
+                const sandboxCfg = await prepareSandboxConfig({ network, ownerScope, bridgeAllowed });
                 const sb = buildSandboxedCommand({
                     command: this.config.command,
                     args: this.config.args || [],
@@ -480,6 +481,7 @@ export class ExternalMCPClient extends EventEmitter {
                     network,
                     env: this.config.env,
                     ownerScope,
+                    bridgeAllowed,
                 }, sandboxCfg);
                 if (sb.sandboxed) {
                     logger.info(`MCP 서버 "${this.config.name}" docker 격리 적용 (net=${sb.network ?? network})`);
