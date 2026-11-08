@@ -190,13 +190,20 @@
               },
               "content": {
                 "type": "string"
+              },
+              "images": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "required": [
               "role",
               "content"
             ]
-          }
+          },
+          "description": "images: 이전 턴의 이미지(data URL) — 멀티턴 vision 용, 요청 전체 이미지 수는 images 와 합쳐 MAX_IMAGES 이하"
         },
         "sessionId": {
           "type": [
