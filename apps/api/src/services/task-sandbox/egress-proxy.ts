@@ -58,14 +58,21 @@ const READY_POLL_MS = 250;
 /**
  * 프록시가 listen 할 때까지 기다린다 — 시간을 넘기면 오류(fail-closed, 첫 연결 ECONNREFUSED 대신).
  * 컨테이너가 실행 중이 아니면 시간 초과까지 기다리지 않고 바로 실패한다.
+ * 기동 후 준비 시간을 이미 넘긴 컨테이너는 준비된 것으로 본다 — 오래 떠 있던 프록시는 로그가 밀려
+ * listening 줄이 없을 수 있다. 기동 시각을 읽지 못하면 방금 기동한 것으로 본다(fail-closed).
  */
 async function waitProxyReady(cfg: TaskSandboxConfig, exec: DockerRun): Promise<void> {
     const deadline = Date.now() + cfg.egressReadyTimeoutMs;
-    for (;;) {
+    for (let first = true; ; first = false) {
         const logs = await exec(cfg.dockerPath, ['logs', '--tail', '50', cfg.egressProxyContainer]);
         if (isProxyListening(`${logs.stdout}\n${logs.stderr}`, cfg.egressProxyPort)) return;
-        const state = await exec(cfg.dockerPath, ['inspect', '-f', '{{.State.Running}}', cfg.egressProxyContainer]);
-        if (state.stdout !== 'true') throw new Error('egress 프록시 컨테이너가 실행 중이 아닙니다');
+        const state = await exec(cfg.dockerPath, ['inspect', '-f', '{{.State.Running}} {{.State.StartedAt}}', cfg.egressProxyContainer]);
+        const [runningTok, startedTok = ''] = state.stdout.split(' ');
+        if (runningTok !== 'true') throw new Error('egress 프록시 컨테이너가 실행 중이 아닙니다');
+        // 진입 시 한 번만 — 매 반복 검사하면 새 컨테이너도 준비 시간이 지나는 순간 통과해 버린다.
+        // docker 의 StartedAt 은 소수점 아래 9자리라 3자리로 잘라 읽는다.
+        const startedMs = Date.parse(startedTok.replace(/(\.\d{3})\d+/, '$1'));
+        if (first && Date.now() - startedMs >= cfg.egressReadyTimeoutMs) return;
         if (Date.now() >= deadline) throw new Error(`egress 프록시가 준비되지 않았습니다(${cfg.egressReadyTimeoutMs}ms)`);
         await new Promise((r) => setTimeout(r, READY_POLL_MS));
     }
