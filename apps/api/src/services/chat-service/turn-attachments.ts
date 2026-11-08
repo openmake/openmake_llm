@@ -43,7 +43,7 @@ export function buildTurnAttachments(
     const outImages = (images ?? [])
         .filter((s) => typeof s === 'string' && s.length > 0)
         .map(buildImageDataUrl)
-        .filter((s) => s.startsWith('data:image/'));
+        .filter((s): s is string => typeof s === 'string' && s.startsWith('data:image/'));
     if (outFiles.length === 0 && outImages.length === 0) return undefined;
     return {
         ...(outFiles.length > 0 ? { files: outFiles } : {}),
