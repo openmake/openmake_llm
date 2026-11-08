@@ -43,6 +43,7 @@ import { handleToolCallingPath } from './tool-calling-path';
 import { createThinkingSummarySession } from '../services/chat-service/thinking-summarizer';
 import { getConversationDB } from '../data/conversation-db';
 import { resolveInboundImages, resolveHistoryImages, InboundImageError } from './inbound-images';
+import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import type {
     ChatUserContext,
     ExecutionPlanResult,
@@ -224,7 +225,8 @@ export class ChatRequestHandler {
         const userFacingMessage = (originalMessage ?? rawMessage ?? '').trim() || message;
 
         // 0. 이미지 입력 정규화 — 주소 형태는 서버가 받아 data URL 로(2026-11-08 점검). 세션·저장 전에 실패시킨다.
-        const [images, history] = await Promise.all([resolveInboundImages(rawImages), resolveHistoryImages(rawHistory)])
+        const imageOpts = { signal: abortSignal, budget: { remaining: FILE_ATTACH_LIMITS.MAX_IMAGES } };
+        const [images, history] = await Promise.all([resolveInboundImages(rawImages, imageOpts), resolveHistoryImages(rawHistory, imageOpts)])
             .catch((e) => { throw e instanceof InboundImageError ? new ChatRequestError(e.message, 400) : e; });
 
         // 1. ExecutionPlan 해석
