@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@openmake/config": "*",
-    "ws": "^8.21.3"
+    "ws": "^8.22.1"
   },
   "devDependencies": {
     "@types/ws": "^8.18.2"
