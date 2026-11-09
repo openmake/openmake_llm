@@ -116,6 +116,16 @@ async function runRetention(): Promise<void> {
             logger.info(`[DbRetention] 외부 모델 캐시 stale ${cacheResult.rowCount}건 정리 완료`);
         }
 
+        // 5-b. 만료된 대화 공유 미리보기(198) — 게시는 만료 draft 를 이미 거절한다. 여기서는 행 누적만 막는다.
+        try {
+            const previewResult = await pool.query(`DELETE FROM conversation_share_previews WHERE expires_at <= NOW()`);
+            if ((previewResult.rowCount ?? 0) > 0) {
+                logger.info(`[DbRetention] 만료 대화 공유 미리보기 ${previewResult.rowCount}건 정리 완료`);
+            }
+        } catch (e) {
+            logger.warn(`[DbRetention] 대화 공유 미리보기 정리 건너뜀: ${e instanceof Error ? e.message : e}`);
+        }
+
         // 6. GDPR Phase C Fix 9 — consent_logs PII 익명화 (Article 5(1)(c) data minimization)
         // granted/version/granted_at 은 보존 (Article 7(1) consent demonstrability 유지),
         // ip_address/user_agent 만 NULL 처리. row 삭제 안 함 — 동의 이력 사실 자체는 영구 보존,

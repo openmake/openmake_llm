@@ -10,7 +10,9 @@ describe('buildConversationShareDocument', () => {
             id: 7, session_id: 'sess-1', role: 'assistant', content: '답변', model: 'secret-model', agent_id: 'a',
             thinking: '사고 과정', reasoning_summary: '요약', sources: [{ url: 'https://x' }], tokens: 3, metadata: { k: 1 },
         };
-        const doc = buildConversationShareDocument('제목', [{ id: 6, role: 'user', content: '질문', thinking: 'x' }, row]);
+        // DB 행 그대로(추가 필드 포함) 넘겨도 role·content 만 읽는다
+        const rows = [{ id: 6, role: 'user', content: '질문', thinking: 'x' }, row];
+        const doc = buildConversationShareDocument('제목', rows);
         expect(doc).toEqual({
             schemaVersion: 1,
             title: '제목',
