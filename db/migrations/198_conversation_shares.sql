@@ -79,9 +79,8 @@ BEGIN
                'reason', 'owner_membership_removed', 'removedUserId', OLD.user_id)
       FROM changed;
 
-    DELETE FROM conversation_share_previews
-     WHERE visibility = 'org' AND org_id = OLD.org_id AND owner_user_id = OLD.user_id;
-
+    -- 미리보기는 지우지 않는다 — 게시가 멤버십을 다시 검사하고, 여기서 미리보기 행까지 잠그면 게시(미리보기→멤버 순)와
+    -- 잠금 순서가 엇갈려 deadlock 고리가 생긴다.
     IF TG_OP = 'UPDATE' THEN
         RETURN NEW;
     END IF;
