@@ -3224,5 +3224,62 @@
         "description": "Embedding-Modell zum Indexieren und Durchsuchen von Dokumenten (Projekten) — externe Modelle laufen mit dem eigenen API-Schlüssel des Nutzers, lokale Modelle sind ebenfalls wählbar. Ein geändertes Modell gilt für neue Projekte; bestehende Projekte wechseln erst nach „Neu indexieren“"
       }
     }
+  },
+  "conversationShare": {
+    "button": "Teilen",
+    "unavailable": "Diese Unterhaltung kann nicht geteilt werden.",
+    "noSession": "Öffnen Sie eine gespeicherte Unterhaltung, um sie zu teilen.",
+    "title": "Unterhaltung teilen",
+    "loading": "Wird geladen…",
+    "scopeLabel": "Sichtbarkeit",
+    "scope": {
+      "private": "Nur ich",
+      "authenticated": "Angemeldete Nutzer",
+      "link": "Link",
+      "org": "Organisation"
+    },
+    "scopeHint": {
+      "private": "Nur Sie können sie ansehen.",
+      "authenticated": "Alle bei diesem Dienst angemeldeten Nutzer können sie ansehen.",
+      "link": "Wer den Link hat, kann sie ohne Anmeldung ansehen.",
+      "org": "Nur aktuelle Mitglieder der gewählten Organisation können sie ansehen. Nach dem Austritt endet der Zugriff sofort."
+    },
+    "orgLabel": "Organisation",
+    "orgPlaceholder": "Organisation auswählen",
+    "preview": "Vorschau",
+    "previewing": "Vorschau wird erstellt…",
+    "previewNote": "Dies ist die gespeicherte Unterhaltung zum Zeitpunkt der Vorschau. Beim Veröffentlichen wird dieser Inhalt festgeschrieben; spätere Nachrichten ändern die geteilte Kopie nicht.",
+    "limitsNote": "Anhänge, Tool-Ergebnisse, Schlüssel und Freigabedaten sind nicht enthalten. Sensible Inhalte, die Sie selbst in Nachrichten geschrieben haben, werden nicht vollständig automatisch entfernt – prüfen Sie daher alles unten.",
+    "confirm": "Ich habe den Titel und alle Nachrichten geprüft, die geteilt werden",
+    "publish": "Veröffentlichen",
+    "republish": "Erneut veröffentlichen",
+    "publishing": "Wird veröffentlicht…",
+    "current": "Aktuell geteilt: {scope} · Stand {date}",
+    "published": "Veröffentlicht.",
+    "copyLink": "Link kopieren",
+    "copied": "Kopiert",
+    "revoke": "Teilen beenden",
+    "revoked": "Teilen beendet.",
+    "close": "Schließen",
+    "untitled": "Unbenannte Unterhaltung",
+    "roleUser": "Nutzer",
+    "roleAssistant": "Assistent",
+    "imageOmitted": "[Bild ausgelassen]",
+    "error": {
+      "stale": "Die Vorschau ist abgelaufen oder die Freigabe wurde inzwischen geändert. Erstellen Sie eine neue Vorschau.",
+      "empty": "Es gibt keine gespeicherten Nachrichten zum Teilen.",
+      "tooLarge": "Die Unterhaltung überschreitet das Freigabelimit (500 Nachrichten · 1 MiB).",
+      "notFound": "Diese Unterhaltung kann nicht geteilt werden, oder Sie sind kein Mitglied der gewählten Organisation.",
+      "generic": "Die Anfrage konnte nicht verarbeitet werden. Bitte versuchen Sie es gleich erneut."
+    }
+  },
+  "sharedConversation": {
+    "readOnly": "Schreibgeschützte Freigabe",
+    "loading": "Wird geladen…",
+    "denied": "Sie können diese Freigabe nicht ansehen.",
+    "deniedHint": "Der Link ist möglicherweise abgelaufen, außerhalb der Sichtbarkeit oder erfordert eine Anmeldung.",
+    "login": "Anmelden",
+    "snapshotNote": "Unterhaltung mit Stand {date} – diese Seite ändert sich nicht, wenn die ursprüngliche Unterhaltung weitergeht.",
+    "scope": "Sichtbarkeit: {scope}"
   }
 }

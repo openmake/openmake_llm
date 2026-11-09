@@ -3224,5 +3224,62 @@
         "description": "Embedding model for indexing and searching documents (projects) — external models run on the user's own API key, and local models can also be selected. A changed model applies to new projects; existing projects change only after “Re-index”"
       }
     }
+  },
+  "conversationShare": {
+    "button": "Share",
+    "unavailable": "This conversation cannot be shared.",
+    "noSession": "Open a saved conversation to share it.",
+    "title": "Share conversation",
+    "loading": "Loading…",
+    "scopeLabel": "Visibility",
+    "scope": {
+      "private": "Only me",
+      "authenticated": "Signed-in users",
+      "link": "Link",
+      "org": "Organization"
+    },
+    "scopeHint": {
+      "private": "Only you can view it.",
+      "authenticated": "Anyone signed in to this service can view it.",
+      "link": "Anyone with the link can view it without signing in.",
+      "org": "Only current members of the selected organization can view it. Access ends as soon as someone leaves."
+    },
+    "orgLabel": "Organization",
+    "orgPlaceholder": "Select an organization",
+    "preview": "Preview",
+    "previewing": "Creating preview…",
+    "previewNote": "This is the saved conversation as of the preview. Publishing freezes this content; continuing the conversation will not change the shared copy.",
+    "limitsNote": "Attachments, tool results, keys and approval details are not included. Sensitive text you typed into messages is not fully removed automatically, so review everything below.",
+    "confirm": "I have reviewed the title and every message that will be shared",
+    "publish": "Publish",
+    "republish": "Publish again",
+    "publishing": "Publishing…",
+    "current": "Currently shared: {scope} · as of {date}",
+    "published": "Published.",
+    "copyLink": "Copy link",
+    "copied": "Copied",
+    "revoke": "Stop sharing",
+    "revoked": "Sharing stopped.",
+    "close": "Close",
+    "untitled": "Untitled conversation",
+    "roleUser": "User",
+    "roleAssistant": "Assistant",
+    "imageOmitted": "[image omitted]",
+    "error": {
+      "stale": "The preview expired or the share changed in the meantime. Create a new preview.",
+      "empty": "There are no saved messages to share.",
+      "tooLarge": "The conversation exceeds the sharing limit (500 messages · 1 MiB).",
+      "notFound": "This conversation cannot be shared, or you are not a member of the selected organization.",
+      "generic": "The request could not be completed. Try again shortly."
+    }
+  },
+  "sharedConversation": {
+    "readOnly": "Read-only share",
+    "loading": "Loading…",
+    "denied": "You cannot view this share.",
+    "deniedHint": "The link may have expired, be outside its visibility, or require signing in.",
+    "login": "Sign in",
+    "snapshotNote": "Conversation as of {date} — this page does not change when the original conversation continues.",
+    "scope": "Visibility: {scope}"
   }
 }
