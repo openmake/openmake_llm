@@ -4,6 +4,7 @@ import { ActiveContext } from "@/components/chat/active-context";
 import { Composer } from "@/components/chat/composer";
 import { ArtifactPanel } from "@/components/chat/artifact-panel";
 import { ArtifactToggle } from "@/components/chat/artifact-toggle";
+import { ConversationShareButton } from "@/components/chat/conversation-share-button";
 import { ChatContextBanners } from "@/components/chat/chat-context-banners";
 import { ChatScrollArea } from "@/components/chat/chat-scroll-area";
 
@@ -18,6 +19,7 @@ export default async function ChatPage() {
             <p className="truncate text-xs text-faint">{t("nav.items.chat")}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <ConversationShareButton />
             <ArtifactToggle />
             <span className="rounded-md bg-surface-2 px-2 py-1 font-mono text-xs text-muted">
               Instrument

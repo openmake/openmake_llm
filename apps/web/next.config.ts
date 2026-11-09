@@ -133,6 +133,15 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: `${REPORTS_CSP}; frame-ancestors 'self'` },
         ],
       },
+      // 공유된 대화(198) — 본문이 담긴 HTML 이라 캐시·레퍼러 전송·색인을 막는다(전역 Referrer-Policy 를 덮는다).
+      {
+        source: "/shared/conversation/:path*",
+        headers: [
+          { key: "Cache-Control", value: "private, no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "X-Robots-Tag", value: "noindex, nofollow" },
+        ],
+      },
       // manifest 는 항상 재검증시킨다(기본 max-age=14400 이면 아이콘 목록 교체가 4시간 늦게 반영).
       // ⚠️ favicon.ico·icon.svg·apple-icon.png 에는 이 헤더가 먹지 않는다 — metadata **이미지**
       // 라우트는 Next 가 응답에 Cache-Control 을 직접 실어 config 헤더가 덮어쓰지 못한다(실측).
