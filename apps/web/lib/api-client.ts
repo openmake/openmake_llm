@@ -10,3 +10,4 @@ export { ApiClient, ApiError } from "@openmake/api-client";
 export { csrfHeaders } from "@openmake/api-client";
 // 401 인터셉트와 같은 single-flight refresh — 따로 fetch 하면 토큰 로테이션이 경합해 세션이 지워진다.
 export { refreshOnce } from "@openmake/api-client";
+export { ConversationShareApi } from "@openmake/api-client";

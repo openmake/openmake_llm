@@ -3224,5 +3224,62 @@
         "description": "用于文档(项目)索引与检索的嵌入模型 — 外部模型使用用户本人的 API 密钥运行，也可以选择本地模型。更改后的模型用于新项目，已有项目需“重新索引”后才会切换"
       }
     }
+  },
+  "conversationShare": {
+    "button": "分享",
+    "unavailable": "此对话无法分享。",
+    "noSession": "打开已保存的对话后即可分享。",
+    "title": "分享对话",
+    "loading": "加载中…",
+    "scopeLabel": "公开范围",
+    "scope": {
+      "private": "仅自己",
+      "authenticated": "已登录用户",
+      "link": "链接",
+      "org": "组织"
+    },
+    "scopeHint": {
+      "private": "只有你可以查看。",
+      "authenticated": "登录本服务的所有用户都可以查看。",
+      "link": "持有链接的人无需登录即可查看。",
+      "org": "只有所选组织的当前成员可以查看。成员退出后立即无法查看。"
+    },
+    "orgLabel": "组织",
+    "orgPlaceholder": "请选择组织",
+    "preview": "预览",
+    "previewing": "正在生成预览…",
+    "previewNote": "这是预览时已保存的对话。发布后内容将被固定，之后继续对话也不会改变分享内容。",
+    "limitsNote": "不包含附件、工具执行结果、密钥和审批信息。你在消息中直接写下的敏感内容不会被全部自动删除，请完整检查下面的内容。",
+    "confirm": "我已检查将要公开的标题和所有消息",
+    "publish": "发布",
+    "republish": "重新发布",
+    "publishing": "发布中…",
+    "current": "当前分享：{scope} · 截至 {date}",
+    "published": "已发布。",
+    "copyLink": "复制链接",
+    "copied": "已复制",
+    "revoke": "取消分享",
+    "revoked": "已取消分享。",
+    "close": "关闭",
+    "untitled": "无标题对话",
+    "roleUser": "用户",
+    "roleAssistant": "助手",
+    "imageOmitted": "[已省略图片]",
+    "error": {
+      "stale": "预览已过期或分享在此期间已更改。请重新生成预览。",
+      "empty": "没有可分享的已保存消息。",
+      "tooLarge": "对话超出分享上限（500 条消息 · 1 MiB）。",
+      "notFound": "此对话无法分享，或你不是所选组织的成员。",
+      "generic": "无法处理请求，请稍后重试。"
+    }
+  },
+  "sharedConversation": {
+    "readOnly": "只读分享",
+    "loading": "加载中…",
+    "denied": "无法查看此分享。",
+    "deniedHint": "链接可能已过期、超出公开范围或需要登录。",
+    "login": "登录",
+    "snapshotNote": "截至 {date} 的对话 — 原对话继续进行时此页面不会改变。",
+    "scope": "公开范围：{scope}"
   }
 }

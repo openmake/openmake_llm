@@ -10,6 +10,7 @@ import Image from "next/image";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { gaEvent, GA_EVENTS, markOAuthLoginPending } from "@/lib/analytics";
 import { syncAuthFromServer } from "@/lib/auth-sync";
+import { rememberShareReturnPath, safeShareReturnPath } from "@/lib/conversation-share";
 import { Button } from "@/components/ui/primitives";
 
 export default function LoginPage() {
@@ -27,11 +28,21 @@ export default function LoginPage() {
     setSsoClient(c && /^[a-z][a-z0-9_-]{0,31}$/.test(c) ? c : null);
   }, []);
   const ssoQuery = ssoClient ? `?client=${encodeURIComponent(ssoClient)}` : "";
+  // 공유 대화 거절 화면에서 온 로그인: 같은 origin 의 공유 대화 경로만 돌아간다(그 밖의 값은 무시).
+  const [returnPath, setReturnPath] = useState<string | null>(null);
+  useEffect(() => {
+    setReturnPath(safeShareReturnPath(new URLSearchParams(window.location.search).get("next")));
+  }, []);
+  // OAuth 는 전체 페이지 이동이라 next 가 사라진다 — 복귀 화면(AuthSync)이 꺼내 쓰도록 보관(SSO 클라이언트 로그인 제외).
+  const startOAuth = (method: "google" | "github" | "kakao") => {
+    markOAuthLoginPending(method);
+    if (!ssoClient) rememberShareReturnPath(returnPath);
+  };
   const afterLogin = () => {
     // API 리다이렉트(SSO exchange code 발급) 주소라 Next 페이지 이동이 아니다 — 전체 이동이 필요하다.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     if (ssoClient) window.location.assign(`/api/auth/sso/authorize${ssoQuery}`);
-    else router.push("/");
+    else router.push(returnPath ?? "/");
   };
 
   // 첫 실행(admin 0명)이면 셋업 마법사로 유도 — 실패 시 로그인 폼 그대로 (fail-open)
@@ -149,21 +160,21 @@ export default function LoginPage() {
           <div className="grid grid-cols-3 gap-2">
             <a
               href={`/api/auth/login/google${ssoQuery}`}
-              onClick={() => markOAuthLoginPending("google")}
+              onClick={() => startOAuth("google")}
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-surface text-sm font-medium text-fg transition hover:bg-surface-2"
             >
               Google
             </a>
             <a
               href={`/api/auth/login/github${ssoQuery}`}
-              onClick={() => markOAuthLoginPending("github")}
+              onClick={() => startOAuth("github")}
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-surface text-sm font-medium text-fg transition hover:bg-surface-2"
             >
               GitHub
             </a>
             <a
               href={`/api/auth/login/kakao${ssoQuery}`}
-              onClick={() => markOAuthLoginPending("kakao")}
+              onClick={() => startOAuth("kakao")}
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-[#FEE500] text-sm font-medium text-[#191600] transition hover:brightness-95"
             >
               Kakao
