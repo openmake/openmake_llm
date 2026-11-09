@@ -39,14 +39,15 @@ const ASSIGNMENT_PATTERNS: { re: RegExp; to: string }[] = [
         to: '$1=<redacted>',
     },
     // JSON/객체 표기: "apiKey": "값"
+    // 식별자 시작에서만 시도한다(lookbehind) — 없으면 긴 단어 하나에서 위치마다 역추적해 O(n²)이 된다.
     {
-        re: /(["']?[A-Za-z_][A-Za-z0-9_]*(?:[Kk]ey|[Tt]oken|[Ss]ecret|[Pp]assword)["']?\s*[:=]\s*)["'][^"']{6,}["']/g,
+        re: /((?<![A-Za-z0-9_])["']?[A-Za-z_][A-Za-z0-9_]*(?:[Kk]ey|[Tt]oken|[Ss]ecret|[Pp]assword)["']?\s*[:=]\s*)["'][^"']{6,}["']/g,
         to: '$1"<redacted>"',
     },
 ];
 
-/** 이메일 — 소유자 본인 것도 공유본에 남길 이유가 없다. */
-const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+/** 이메일 — 소유자 본인 것도 공유본에 남길 이유가 없다. 로컬 부분 연속 구간의 처음에서만 시도한다(O(n²) 역추적 방지). */
+const EMAIL_RE = /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 
 /** 홈 디렉토리 절대경로 — macOS/Linux. */
 const HOME_RE = /\/(?:Users|home)\/[^/\s"']+/g;

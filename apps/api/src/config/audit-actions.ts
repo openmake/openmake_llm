@@ -131,6 +131,12 @@ const BASE_AUDIT_ACTION_SEVERITY = {
     'artifact_unpublish': null,
     'marketplace.publish': null,
 
+    // ── 대화 공유(198) ── 생성·변경·해제·조회. update 는 DB trigger(탈퇴·조직 삭제의 private 전환)도 같은 문자열을 쓴다.
+    'conversation_share.create': null,
+    'conversation_share.update': null,
+    'conversation_share.revoke': null,
+    'conversation_share.view': null,
+
     // ── 로컬 브리지 ──
     'local_bridge.device_disconnect': null,
     'local_bridge.browser_policy_block': null,
