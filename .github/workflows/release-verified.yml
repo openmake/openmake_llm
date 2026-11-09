@@ -4,13 +4,17 @@ on:
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
 permissions:
   contents: read
 concurrency:
-  group: pipeline-release-verified
+  group: ${{ (github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'release-please--'))) && 'pipeline-release-verified' || format('pipeline-release-verified-skip-{0}', github.run_id) }}
   cancel-in-progress: false
 jobs:
   orchestrate:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'release-please--'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
