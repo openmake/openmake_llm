@@ -169,7 +169,7 @@ describeOrSkip('마이그레이션 198 — 대화 공유 표·탈퇴 trigger (�
         expect(await audits(shareId)).toHaveLength(0);
     });
 
-    it('② 소유자 탈퇴 시 그 조직 대상 미리보기도 지운다', async () => {
+    it('② 소유자 탈퇴는 미리보기를 지우지 않는다(게시가 멤버십을 다시 검사 — 잠금 순서 고리 방지)', async () => {
         const { owner, orgId } = await orgShareFixture();
         const sid = await session(owner);
         await pool.query(
@@ -179,7 +179,7 @@ describeOrSkip('마이그레이션 198 — 대화 공유 표·탈퇴 trigger (�
         );
         await pool.query(`DELETE FROM organization_members WHERE org_id = $1 AND user_id = $2`, [orgId, owner]);
         const pv = await pool.query(`SELECT 1 FROM conversation_share_previews WHERE session_id = $1`, [sid]);
-        expect(pv.rowCount).toBe(0);
+        expect(pv.rowCount).toBe(1);
     });
 
     it('③ 조직 삭제 → private 전환, 감사는 organization_deleted 1행뿐(멤버 cascade 중복 없음)', async () => {
