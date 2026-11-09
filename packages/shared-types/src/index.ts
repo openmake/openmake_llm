@@ -474,3 +474,4 @@ export * from "./model-assignments";
 export * from "./admin-local-bridge";
 export * from "./agent-task-metrics";
 export * from "./mcp-monitoring";
+export * from "./conversation-share";
