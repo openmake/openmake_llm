@@ -18,6 +18,17 @@ test('CI-completion runs only for successful release-please PR runs', () => {
     assert.ok(condition.includes("startsWith(github.event.workflow_run.head_branch, 'release-please--')"));
 });
 
+test('runs that will be skipped get their own concurrency group so they cannot cancel a pending orchestration run', () => {
+    const group = workflow.match(/^\s{2}group: (.+)$/m)?.[1] ?? '';
+    assert.ok(group.includes("github.event_name != 'workflow_run'"));
+    assert.ok(group.includes("github.event.workflow_run.event == 'pull_request'"));
+    assert.ok(group.includes("github.event.workflow_run.conclusion == 'success'"));
+    assert.ok(group.includes("startsWith(github.event.workflow_run.head_branch, 'release-please--')"));
+    assert.ok(group.includes("&& 'pipeline-release-verified' ||"), 'orchestrating runs share one group');
+    assert.ok(group.includes("format('pipeline-release-verified-skip-{0}', github.run_id)"), 'skipped runs are isolated per run');
+    assert.match(workflow, /^\s{2}cancel-in-progress: false$/m);
+});
+
 test('orchestration still checks out only the default branch', () => {
     assert.match(workflow, /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
     assert.doesNotMatch(workflow, /workflow_run\.head_(sha|repository)/);
