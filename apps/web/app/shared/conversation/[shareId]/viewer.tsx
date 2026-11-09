@@ -4,7 +4,8 @@
  * 공유 대화 뷰어 — 서버가 허용한 snapshot 하나만 그대로 렌더한다. 입력창·도구 실행·첨부·대화 재개가 없다.
  *
  * 원본 세션 API 를 호출하지 않는다. 거절(없음·토큰 오류·비멤버·비로그인)은 서버가 모두 같은 404 로 주므로
- * 화면도 구분하지 않는다(존재·조직명 비노출). 요청(shareId·token)이 바뀌거나 거절되면 이전 본문은 보이지 않는다.
+ * 화면도 구분하지 않는다(존재·조직명 비노출). 요청(shareId·token·계정)이 바뀌거나 거절되면 이전 본문은 보이지 않는다.
+ * 인증 동기화(AuthSync — 만료 접근 토큰 갱신 포함)가 끝난 뒤에 조회한다. 먼저 나가면 로그인한 열람자가 게스트로 거절된다.
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -12,6 +13,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { LoaderCircle, Lock } from "lucide-react";
 import type { SharedConversationView } from "@openmake/shared-types";
 import { ConversationShareApi } from "@/lib/api-client";
+import { useAppStore } from "@/lib/store";
 import { shareLoginHref } from "@/lib/conversation-share";
 import { ConversationShareDocumentView } from "@/components/chat/conversation-share-document";
 
@@ -19,16 +21,19 @@ export function SharedConversationViewer({ shareId, token }: { shareId: string; 
   const t = useTranslations("sharedConversation");
   const tc = useTranslations("conversationShare");
   const format = useFormatter();
-  const requestKey = `${shareId}\n${token ?? ""}`;
+  const authResolved = useAppStore((s) => s.authResolved);
+  const viewerId = useAppStore((s) => s.auth.currentUser?.id ?? null);
+  const requestKey = `${shareId}\n${token ?? ""}\n${viewerId ?? ""}`;
   const [result, setResult] = useState<{ key: string; view: SharedConversationView | null } | null>(null);
 
   useEffect(() => {
+    if (!authResolved) return;
     let cancelled = false;
     ConversationShareApi.read(shareId, token)
       .then((res) => { if (!cancelled) setResult({ key: requestKey, view: res?.data?.document ? res.data : null }); })
       .catch(() => { if (!cancelled) setResult({ key: requestKey, view: null }); });
     return () => { cancelled = true; };
-  }, [shareId, token, requestKey]);
+  }, [shareId, token, requestKey, authResolved]);
 
   const current = result?.key === requestKey ? result : null;
   const view = current?.view ?? null;
