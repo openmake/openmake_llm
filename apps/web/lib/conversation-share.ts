@@ -11,6 +11,30 @@ export function safeShareReturnPath(raw: string | null | undefined): string | nu
   return typeof raw === "string" && SHARE_RETURN_PATH_RE.test(raw) ? raw : null;
 }
 
+/** OAuth 로그인은 전체 페이지 이동이라 next 를 잃는다 — 클릭 때 보관하고 복귀 첫 화면에서 한 번 꺼낸다. */
+const SHARE_RETURN_KEY = "omk:share-return-path";
+
+export function rememberShareReturnPath(raw: string | null | undefined): void {
+  const path = safeShareReturnPath(raw);
+  if (!path) return;
+  try {
+    window.sessionStorage.setItem(SHARE_RETURN_KEY, path);
+  } catch {
+    /* storage 불가 — 복귀만 포기 */
+  }
+}
+
+/** 꺼내면 지운다. 저장값은 변조될 수 있어 같은 규칙으로 다시 검증한다. */
+export function takeShareReturnPath(): string | null {
+  try {
+    const raw = window.sessionStorage.getItem(SHARE_RETURN_KEY);
+    window.sessionStorage.removeItem(SHARE_RETURN_KEY);
+    return safeShareReturnPath(raw);
+  } catch {
+    return null;
+  }
+}
+
 export function sharedConversationPath(shareId: string): string {
   return `/shared/conversation/${encodeURIComponent(shareId)}`;
 }

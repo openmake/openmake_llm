@@ -3,10 +3,12 @@
 import { ThemeProvider } from "next-themes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { syncAuthFromServer } from "@/lib/auth-sync";
 import { refreshOnce } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { CLIENT_TIMING } from "@/lib/config";
+import { takeShareReturnPath } from "@/lib/conversation-share";
 
 /**
  * 앱 마운트 시 /api/auth/me 로 현재 로그인 사용자를 store 에 동기화.
@@ -19,10 +21,17 @@ import { CLIENT_TIMING } from "@/lib/config";
  * 체감됐다. 만료 전 주기 갱신으로 세션을 리프레시 토큰 수명(7일)까지 유지.
  */
 function AuthSync() {
+  const router = useRouter();
   const isLoggedIn = useAppStore((s) => !!s.auth.currentUser);
   useEffect(() => {
-    void syncAuthFromServer();
-  }, []);
+    // 로그인 화면이 OAuth 직전에 보관한 공유 대화 경로 — 매 마운트에 꺼내 지우고, OAuth 복귀 화면에서
+    // 로그인이 확인됐을 때만 이동한다(남은 값이 나중 새로고침에서 엉뚱하게 이동시키지 않게).
+    const shareReturn = takeShareReturnPath();
+    const oauthReturn = new URLSearchParams(window.location.search).get("auth") === "callback";
+    void syncAuthFromServer().then((signedIn) => {
+      if (signedIn && oauthReturn && shareReturn) router.replace(shareReturn);
+    });
+  }, [router]);
   useEffect(() => {
     if (!isLoggedIn) return;
     const timer = setInterval(() => {

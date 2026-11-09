@@ -10,7 +10,9 @@ import { ConversationShareModal } from '../../apps/web/components/chat/conversat
 import { ConversationShareButton } from '../../apps/web/components/chat/conversation-share-button';
 import { ConversationShareDocumentView } from '../../apps/web/components/chat/conversation-share-document';
 import { SharedConversationViewer } from '../../apps/web/app/shared/conversation/[shareId]/viewer';
-import { safeShareReturnPath, shareLoginHref } from '../../apps/web/lib/conversation-share';
+import { rememberShareReturnPath, safeShareReturnPath, shareLoginHref, takeShareReturnPath } from '../../apps/web/lib/conversation-share';
+import LoginPage from '../../apps/web/app/login/page';
+import { Providers } from '../../apps/web/app/providers';
 import { useAppStore } from '../../apps/web/lib/store';
 
 const PREVIEW_ID = '0b7f0a0e-1111-4222-8333-944445555666';
@@ -33,6 +35,7 @@ function setup(url = 'http://localhost/') {
     Node: dom.window.Node, Event: dom.window.Event, CustomEvent: dom.window.CustomEvent, MouseEvent: dom.window.MouseEvent,
 
     getComputedStyle: dom.window.getComputedStyle.bind(dom.window), IS_REACT_ACT_ENVIRONMENT: true,
+    localStorage: dom.window.localStorage, sessionStorage: dom.window.sessionStorage,
   });
   const calls: Call[] = [];
   const original = globalThis.fetch;
@@ -46,8 +49,9 @@ function setup(url = 'http://localhost/') {
   };
   const root: Root = createRoot(document.getElementById('root')!);
   const flush = () => act(async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0)); });
+  const nav: string[] = [];
   const render = (node: React.ReactNode) => act(async () => {
-    const router = { push: () => {}, replace: () => {}, refresh: () => {}, back: () => {}, forward: () => {}, prefetch: () => {} };
+    const router = { push: (h: string) => { nav.push(h); }, replace: (h: string) => { nav.push(h); }, refresh: () => {}, back: () => {}, forward: () => {}, prefetch: () => {} };
     root.render(
       <AppRouterContext.Provider value={router as any}>
         <NextIntlClientProvider locale="ko" messages={messages} timeZone="Asia/Seoul">{node}</NextIntlClientProvider>
@@ -57,7 +61,7 @@ function setup(url = 'http://localhost/') {
   const click = (el: Element | null) => act(async () => { (el as HTMLElement).dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
   const byText = (text: string) => [...document.querySelectorAll('button')].find((b) => b.textContent?.includes(text)) ?? null;
   const cleanup = async () => { await act(async () => root.unmount()); globalThis.fetch = original; };
-  return { dom, calls, setHandler: (h: typeof handler) => { handler = h; }, flush, render, click, byText, cleanup };
+  return { dom, calls, nav, setHandler: (h: typeof handler) => { handler = h; }, flush, render, click, byText, cleanup };
 }
 
 const ok = (data: unknown) => Response.json({ success: true, data });
@@ -241,4 +245,64 @@ test('safeShareReturnPath — 같은 origin 의 공유 대화 경로만', () => 
     assert.equal(safeShareReturnPath(bad), null, String(bad));
   }
   assert.equal(shareLoginHref(SHARE_ID), `/login?next=${encodeURIComponent(`/shared/conversation/${SHARE_ID}`)}`);
+});
+
+const SHARE_PATH = `/shared/conversation/${SHARE_ID}`;
+const SHARE_RETURN_KEY = 'omk:share-return-path';
+
+test('공유 복귀 경로 보관 — 검증된 값만 저장하고, 꺼낼 때 지우며 같은 규칙으로 다시 검증한다', async () => {
+  const s = setup();
+  try {
+    rememberShareReturnPath('//evil.example');
+    assert.equal(sessionStorage.getItem(SHARE_RETURN_KEY), null, '검증 실패 값은 저장하지 않는다');
+    rememberShareReturnPath(SHARE_PATH);
+    assert.equal(takeShareReturnPath(), SHARE_PATH);
+    assert.equal(takeShareReturnPath(), null, '한 번만 소비');
+    sessionStorage.setItem(SHARE_RETURN_KEY, 'https://evil.example/shared/conversation/x');
+    assert.equal(takeShareReturnPath(), null, '변조된 저장값은 거절');
+    assert.equal(sessionStorage.getItem(SHARE_RETURN_KEY), null, '거절해도 지운다');
+  } finally {
+    await s.cleanup();
+  }
+});
+
+test('로그인 화면 — OAuth 버튼을 누르면 next 의 공유 경로를 보관한다(SSO 클라이언트 로그인은 제외)', async () => {
+  for (const [search, expected] of [[`?next=${encodeURIComponent(SHARE_PATH)}`, SHARE_PATH], [`?client=bench&next=${encodeURIComponent(SHARE_PATH)}`, null]] as const) {
+    const s = setup(`http://localhost/login${search}`);
+    try {
+      s.setHandler(() => ok({ setupNeeded: false }));
+      document.addEventListener('click', (e) => e.preventDefault()); // jsdom 은 링크 이동을 구현하지 않는다
+      await s.render(<LoginPage />);
+      await s.flush();
+      await s.click(document.querySelector('a[href^="/api/auth/login/google"]'));
+      assert.equal(sessionStorage.getItem(SHARE_RETURN_KEY), expected, search);
+    } finally {
+      await s.cleanup();
+    }
+  }
+});
+
+test('OAuth 복귀(/?auth=callback) 뒤 로그인이 확인되면 보관한 공유 경로로 한 번 이동한다', async () => {
+  const me = () => ok({ user: { id: 7, email: 'u@example.com', username: 'u', role: 'user' }, activeOrganization: null });
+  const cases: Array<[string, string | null, boolean, string[]]> = [
+    ['http://localhost/?auth=callback', SHARE_PATH, true, [SHARE_PATH]],
+    ['http://localhost/?auth=callback', '//evil.example', true, []],
+    ['http://localhost/?auth=callback', SHARE_PATH, false, []],
+    ['http://localhost/', SHARE_PATH, true, []],
+  ];
+  for (const [url, stored, signedIn, expected] of cases) {
+    const s = setup(url);
+    try {
+      (s.dom.window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }); // next-themes
+      useAppStore.setState({ auth: { currentUser: null, isGuestMode: true } });
+      if (stored) sessionStorage.setItem(SHARE_RETURN_KEY, stored);
+      s.setHandler((c) => (c.path === '/api/auth/me' ? (signedIn ? me() : ok({ user: null })) : ok({})));
+      await s.render(<Providers><div /></Providers>);
+      await s.flush();
+      assert.deepEqual(s.nav, expected, `${url} ${stored} ${signedIn}`);
+      assert.equal(sessionStorage.getItem(SHARE_RETURN_KEY), null, '어느 경우든 보관값은 지운다');
+    } finally {
+      await s.cleanup();
+    }
+  }
 });
