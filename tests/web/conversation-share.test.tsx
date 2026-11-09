@@ -187,6 +187,7 @@ test('저장된 세션이 없으면 공유 버튼은 비활성이고 서버를 �
 test('공유 뷰어 — 읽기 전용, 404 면 본문을 지우고 같은 거절 문구 + 공유 경로로 돌아오는 로그인 링크', async () => {
   const s = setup(`http://localhost/shared/conversation/${SHARE_ID}`);
   try {
+    useAppStore.setState({ authResolved: true, auth: { currentUser: null, isGuestMode: false } });
     let allow = true;
     s.setHandler(() => (allow ? ok({ shareId: SHARE_ID, visibility: 'org', capturedAt: '2026-11-09T00:00:00Z', updatedAt: 'x', document: DOC }) : fail(404, 'NOT_FOUND')));
     await s.render(<SharedConversationViewer shareId={SHARE_ID} token={null} />);
@@ -203,6 +204,32 @@ test('공유 뷰어 — 읽기 전용, 404 면 본문을 지우고 같은 거절
     const login = document.querySelector('a[href^="/login"]') as HTMLAnchorElement;
     assert.equal(login.getAttribute('href'), shareLoginHref(SHARE_ID));
     assert.equal(login.getAttribute('href')?.includes('tok'), false, '토큰은 로그인 이동에 싣지 않는다');
+  } finally {
+    await s.cleanup();
+  }
+});
+
+test('공유 뷰어 — 인증 판정 전엔 조회하지 않고(만료 토큰 갱신 대기), 계정이 바뀌면 이전 본문을 숨기고 다시 조회', async () => {
+  const s = setup(`http://localhost/shared/conversation/${SHARE_ID}`);
+  try {
+    useAppStore.setState({ authResolved: false, auth: { currentUser: null, isGuestMode: false } });
+    let allowFor: string | null = 'u-b';
+    let seen = 0;
+    s.setHandler(() => { seen += 1; return allowFor ? ok({ shareId: SHARE_ID, visibility: 'org', capturedAt: 'x', updatedAt: 'x', document: DOC }) : fail(404, 'NOT_FOUND'); });
+    await s.render(<SharedConversationViewer shareId={SHARE_ID} token={null} />);
+    await s.flush();
+    assert.equal(seen, 0, '인증 판정 전 조회 없음');
+
+    await act(async () => { useAppStore.setState({ authResolved: true, auth: { currentUser: { id: 'u-b', email: 'b', role: 'user' }, isGuestMode: false } }); });
+    await s.flush();
+    assert.equal(seen, 1);
+    assert.ok(document.body.textContent?.includes('테스트 대화'));
+
+    allowFor = null;
+    await act(async () => { useAppStore.setState({ auth: { currentUser: { id: 'u-c', email: 'c', role: 'user' }, isGuestMode: false } }); });
+    await s.flush();
+    assert.equal(seen, 2, '계정 전환 시 다시 조회');
+    assert.equal(document.body.textContent?.includes('테스트 대화'), false);
   } finally {
     await s.cleanup();
   }
