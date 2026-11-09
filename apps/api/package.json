@@ -72,7 +72,7 @@
         "nodemailer": "^10.3.1",
         "officeparser": "^8.6.0",
         "openai": "^7.53.0",
-        "ora": "^9.4.1",
+        "ora": "^10.0.0",
         "pg": "^8.23.1",
         "turndown": "^7.2.5",
         "turndown-plugin-gfm": "^1.0.2",
