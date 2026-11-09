@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.129.0](https://github.com/openmake/openmake_llm/compare/v1.128.0...v1.129.0) (2026-11-09)
+
+
+### ✨ 기능
+
+* **share:** 대화 공유 API·Swagger·retention 을 연결한다 ([bcde7fb](https://github.com/openmake/openmake_llm/commit/bcde7fb31c0d373aaed596daf0786dac01f7e618))
+* **share:** 대화 공유 snapshot·인가 서비스를 추가한다 ([f332d53](https://github.com/openmake/openmake_llm/commit/f332d53f4f9db8fbb21a26c8148a9bfbcb717212))
+* **share:** 대화 공유 계약·DB 표·탈퇴 trigger 를 추가한다 (198) ([46fa8db](https://github.com/openmake/openmake_llm/commit/46fa8db3d8c0d978debcc35a9af86d60a13a1e40))
+* **share:** 대화 공유 모달과 읽기 전용 공유 페이지를 추가한다 ([da0f6be](https://github.com/openmake/openmake_llm/commit/da0f6be4149b43831165c9484766d300d86eed0d))
+
+
+### 🐛 버그 수정
+
+* **redact:** 키 대입·이메일 규칙의 O(n²) 역추적을 막는다 ([6fd0c5b](https://github.com/openmake/openmake_llm/commit/6fd0c5bce41f535756a8fdf82f0ee1f2bb7e58d1))
+* **share:** OAuth 로그인도 공유 대화 페이지로 돌아온다 ([1de8abc](https://github.com/openmake/openmake_llm/commit/1de8abc1b14c296eed13abe094ea03c856db5499))
+* **share:** 공유 경로 GA page_view 에서 query(token)를 뺀다 ([a7dfe7a](https://github.com/openmake/openmake_llm/commit/a7dfe7af0a99733788f1863c49819ee3613e7bf3))
+* **share:** 공유 뷰어는 인증 동기화가 끝난 뒤 조회하고 계정이 바뀌면 다시 조회한다 ([2877d1b](https://github.com/openmake/openmake_llm/commit/2877d1b7d3a44381619bbbece6ca62e397715b41))
+* **share:** 탈퇴 trigger 는 미리보기를 지우지 않는다 — 게시와 잠금 순서 고리 방지 ([23794f2](https://github.com/openmake/openmake_llm/commit/23794f22127f7ed34f753ba12801ecc5ac692673))
+
 ## [1.128.0](https://github.com/openmake/openmake_llm/compare/v1.127.7...v1.128.0) (2026-11-08)
 
 
