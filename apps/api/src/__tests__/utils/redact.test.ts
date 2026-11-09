@@ -156,3 +156,24 @@ describe('redactSecrets — 로그 한 줄(F24.6)', () => {
             .toBe('Bearer <redacted> ~/x/y/z.txt <email>');
     });
 });
+
+describe('redactText — 긴 입력에서 선형 시간 (대화 공유 1MiB 본문, 2026-11-09)', () => {
+    // 식별자 대입·이메일 규칙이 시작 위치를 고정하지 않으면 긴 단어 하나에서 O(n²) 역추적으로 이벤트 루프가 멈춘다.
+    test.each([
+        ['긴 단어', 'x'.repeat(40000)],
+        ['대시로 이은 단어', 'a-'.repeat(20000)],
+        ['점으로 이은 단어', 'a.'.repeat(20000)],
+        ['대문자 단어', 'X'.repeat(40000)],
+        ['경로 조각', '/.'.repeat(20000)],
+    ])('%s 40K자를 200ms 안에 처리한다', (_name, input) => {
+        const t = Date.now();
+        redactText(input);
+        expect(Date.now() - t).toBeLessThan(200);
+    });
+
+    test('시작 위치 고정 뒤에도 키 대입·이메일은 그대로 가린다', () => {
+        expect(redactText('xapiKey: "abcdefgh"')).toBe('xapiKey: "<redacted>"');
+        expect(redactText('{"api_key": "abcdefgh"}')).toBe('{"api_key": "<redacted>"}');
+        expect(redactText('mail a.b-c@ex.com now')).toBe('mail <email> now');
+    });
+});
