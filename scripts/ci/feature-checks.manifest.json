@@ -59,6 +59,7 @@
     "packages/shared-types/src/knowledge.ts": "web",
     "packages/shared-types/src/model-assignments.ts": "web",
     "packages/shared-types/src/mcp-monitoring.ts": "web",
+    "packages/shared-types/src/conversation-share.ts": "web",
     "scripts/analyze-agent-routing.sh": "pipeline",
     "scripts/analyze-chat-timing.sh": "pipeline",
     "scripts/compare-routing-effect.sh": "pipeline",
