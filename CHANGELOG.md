@@ -2,6 +2,8 @@
 
 ## [1.129.0](https://github.com/openmake/openmake_llm/compare/v1.128.0...v1.129.0) (2026-11-09)
 
+> 참고: 이 릴리스 뒤 dev 에 머지된 dependabot 의존성 갱신 4건([#1700](https://github.com/openmake/openmake_llm/pull/1700) opentelemetry 그룹 · [#1702](https://github.com/openmake/openmake_llm/pull/1702) ora 10 · [#1703](https://github.com/openmake/openmake_llm/pull/1703) jsdom 31 · [#1706](https://github.com/openmake/openmake_llm/pull/1706) minor-and-patch 그룹)은 `chore(deps)` 커밋이라 release-please 가 사용자 노출 변경 없음으로 건너뛰어 1.129.1 로 배포한다.
+
 
 ### ✨ 기능
 
