@@ -10,6 +10,7 @@ import Image from "next/image";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { gaEvent, GA_EVENTS, markOAuthLoginPending } from "@/lib/analytics";
 import { syncAuthFromServer } from "@/lib/auth-sync";
+import { safeShareReturnPath } from "@/lib/conversation-share";
 import { Button } from "@/components/ui/primitives";
 
 export default function LoginPage() {
@@ -27,11 +28,16 @@ export default function LoginPage() {
     setSsoClient(c && /^[a-z][a-z0-9_-]{0,31}$/.test(c) ? c : null);
   }, []);
   const ssoQuery = ssoClient ? `?client=${encodeURIComponent(ssoClient)}` : "";
+  // 공유 대화 거절 화면에서 온 로그인: 같은 origin 의 공유 대화 경로만 돌아간다(그 밖의 값은 무시).
+  const [returnPath, setReturnPath] = useState<string | null>(null);
+  useEffect(() => {
+    setReturnPath(safeShareReturnPath(new URLSearchParams(window.location.search).get("next")));
+  }, []);
   const afterLogin = () => {
     // API 리다이렉트(SSO exchange code 발급) 주소라 Next 페이지 이동이 아니다 — 전체 이동이 필요하다.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     if (ssoClient) window.location.assign(`/api/auth/sso/authorize${ssoQuery}`);
-    else router.push("/");
+    else router.push(returnPath ?? "/");
   };
 
   // 첫 실행(admin 0명)이면 셋업 마법사로 유도 — 실패 시 로그인 폼 그대로 (fail-open)

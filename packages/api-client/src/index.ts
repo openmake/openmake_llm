@@ -7,7 +7,16 @@
  * 외부 LLM/DB 는 백엔드(apps/api)가 통제하므로, 이 클라이언트는 항상 /api 만 호출한다.
  */
 import { CSRF, MUTATING_METHODS } from "@openmake/config";
-import type { ApiResponse } from "@openmake/shared-types";
+import type {
+  ApiResponse,
+  ApiSuccess,
+  ConversationSharePreviewRequest,
+  ConversationSharePreviewResponse,
+  ConversationSharePublishResponse,
+  ConversationShareRevokeResponse,
+  ConversationShareStatusResponse,
+  SharedConversationView,
+} from "@openmake/shared-types";
 
 function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -284,4 +293,27 @@ export const ApiClient = {
     }),
   del: <T>(endpoint: string, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, { ...options, method: "DELETE" }),
+};
+
+const enc = encodeURIComponent;
+
+/**
+ * 대화 읽기 전용 공유(198). 접근 판정은 서버가 한다 — 이 클라이언트는 응답을 그대로 돌려줄 뿐이다.
+ * 게시는 서버 보관 미리보기 ID 와 명시 확인만 보낸다(본문을 보내지 않는다).
+ */
+export const ConversationShareApi = {
+  status: (sessionId: string) =>
+    ApiClient.get<ApiSuccess<ConversationShareStatusResponse>>(`/api/sessions/${enc(sessionId)}/share`),
+  preview: (sessionId: string, body: ConversationSharePreviewRequest) =>
+    ApiClient.post<ApiSuccess<ConversationSharePreviewResponse>>(`/api/sessions/${enc(sessionId)}/share/preview`, body),
+  publish: (sessionId: string, previewId: string) =>
+    ApiClient.post<ApiSuccess<ConversationSharePublishResponse>>(`/api/sessions/${enc(sessionId)}/share`, { previewId, confirmed: true }),
+  revoke: (sessionId: string) =>
+    ApiClient.del<ApiSuccess<ConversationShareRevokeResponse>>(`/api/sessions/${enc(sessionId)}/share`),
+  /** 공개 조회 — 비로그인 방문자도 쓰므로 401 리다이렉트를 끈다(서버는 거절을 모두 404 로 응답). */
+  read: (shareId: string, token: string | null) =>
+    ApiClient.get<ApiSuccess<SharedConversationView>>(
+      `/api/shared-conversations/${enc(shareId)}${token ? `?token=${enc(token)}` : ""}`,
+      { redirectOnUnauthorized: false },
+    ),
 };
