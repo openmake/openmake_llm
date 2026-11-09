@@ -96,4 +96,11 @@ describe('audit action registry', () => {
         expect(found.size).toBeGreaterThan(30);
         expect([...found].filter((a) => !isAuditAction(a))).toEqual([]);
     });
+
+    it('대화 공유 trigger(198)가 audit_logs 에 쓰는 action 도 등록돼 있다', () => {
+        const sql = fs.readFileSync(path.resolve(SRC_ROOT, '../../../db/migrations/198_conversation_shares.sql'), 'utf8');
+        const used = [...new Set([...sql.matchAll(/'(conversation_share\.[a-z_]+)'/g)].map((m) => m[1]))];
+        expect(used).toEqual(['conversation_share.update']);
+        expect(used.filter((a) => !isAuditAction(a))).toEqual([]);
+    });
 });
