@@ -1944,7 +1944,8 @@ cmd_env_update_unlocked() {
     # 새로 받은 Dockerfile 로 빌드한다(안 바뀌었으면 캐시로 수 초). .env 가 바뀐 경우에만 한 번 더 재시작.
     runtime_images_ensure "$ldir" "$env"
     ops_sandbox_guard "$ldir"
-    # 이미 게이트웨이가 있는 환경만 갱신한다(새 config 복사 + 재기동, litellm.env 는 그대로) — update 가 기존 환경의
+    # 이미 게이트웨이가 있는 환경만 갱신한다(새 config 복사 + 재기동, litellm.env 는 있는 값은 그대로 두고 없는 기본 키만
+    # 채운다 — DEFAULT_MAX_RETRIES=0 등) — update 가 기존 환경의
     # LLM_BASE_URL 을 가로채지 않게. 새로 붙이려면 'omk env install <env>' 를 다시 실행한다(멱등).
     dgx_update_apply "$ldir" "$env"
     LITELLM_CHANGED=0; [[ ! -d "$(litellm_dir "$env")" ]] || litellm_ensure "$ldir" "$env"

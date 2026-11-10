@@ -1,7 +1,7 @@
 /**
  * hasa 이미지 직결 — 실제 연결(resolver → 제한 포트 model-invoker → http-call)로 한 번 호출 = provider 한 번을 고정한다.
  * 게이트웨이(LiteLLM)는 이미지 경로의 SDK 재시도를 2 로 고정해 provider 가 5xx·429 를 주면 upstream 에 3회 보낸다 —
- * 헤더·본문·모델 등록·환경 변수 어느 것으로도 못 끈다(2026-11-11 실측, output/gateway-retry-measure-r3-20261111).
+ * 헤더·본문·모델 등록·환경 변수 어느 것으로도 못 끈다(LiteLLM 1.100.1~1.108.4, 가짜 upstream 으로 도달 횟수 확인).
  * provider 호출은 가짜 safeFetch·fetch 로만 본다(실호출 없음).
  */
 const mockConfig = { llmBaseUrl: 'http://127.0.0.1:13401', llmApiKey: 'master', llmGatewayProviders: ['openrouter', 'hasa'] };
