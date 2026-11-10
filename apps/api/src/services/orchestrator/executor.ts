@@ -71,6 +71,8 @@ function classify(err: unknown): { error: string; kind: string } {
     if (err instanceof CapabilityUnavailableError) return { error: err.message, kind: err.code === 'CAPABILITY_UNASSIGNED' ? 'unassigned' : 'failed' };
     if (err instanceof HttpCallError && err.kind === 'aborted') return { error: '취소됨', kind: 'cancelled' };
     const msg = err instanceof Error ? err.message : String(err);
+    // AbortSignal.timeout(작업·호출 타임아웃)은 사용자 취소가 아니다 — 메시지에 'aborted' 가 있어 아래 패턴에 걸리므로 먼저 구분한다
+    if ((err as { name?: unknown } | null)?.name === 'TimeoutError') return { error: msg, kind: 'timeout' };
     return { error: msg, kind: /취소됨|aborted/i.test(msg) ? 'cancelled' : 'failed' };
 }
 

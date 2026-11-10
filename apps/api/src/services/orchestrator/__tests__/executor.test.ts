@@ -127,6 +127,15 @@ describe('실패 TaskResult.model — 실행을 시도한 배정 대상(task_res
         expect([s.results[0].status, s.results[0].model]).toEqual(['failed', 'hasa:flux-2']);
     });
 
+    it('타임아웃(TimeoutError)은 [timeout], 사용자 취소(AbortError)는 [cancelled] 로 구분한다', async () => {
+        behaviors.g = async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); };
+        behaviors.c = async () => { throw new DOMException('This operation was aborted', 'AbortError'); };
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }, { id: 'c', capability: 'web.search' }] });
+        const s = await executePlan(p, ctx());
+        expect(s.results.find((r) => r.taskId === 'g')!.text).toMatch(/^\[timeout\] /);
+        expect(s.results.find((r) => r.taskId === 'c')!.text).toMatch(/^\[cancelled\] /);
+    });
+
     it('호출하지 않은 작업(preflight 거절·선행 실패 skipped)은 model 을 비운다', async () => {
         behaviors.p = async () => { throw new Error('boom'); };
         const p = plan({ complexity: 'multi', tasks: [
