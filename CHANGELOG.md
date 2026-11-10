@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.129.2](https://github.com/openmake/openmake_llm/compare/v1.129.1...v1.129.2) (2026-11-09)
+
+
+### 🐛 버그 수정
+
+* **pipeline:** release-verified 건너뛸 workflow_run 실행을 별도 concurrency 그룹으로 분리 ([ce9477d](https://github.com/openmake/openmake_llm/commit/ce9477d71163340392ad6dd4009686bc81db09dd))
+* **pipeline:** release-verified 를 릴리스 PR CI 완료 시에도 실행 ([029e2a4](https://github.com/openmake/openmake_llm/commit/029e2a4f0005bd9846a035206e7b608a83b1b374))
+
 ## [1.129.1](https://github.com/openmake/openmake_llm/compare/v1.129.0...v1.129.1) (2026-11-09)
 
 
