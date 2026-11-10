@@ -35,6 +35,11 @@ interface ExecutionSummary {
     cancelled: boolean;
 }
 
+/** 대기 중단 오류 — 작업·턴 타임아웃이면 signal 의 TimeoutError 그대로(classify 가 [timeout] 으로), 사용자 취소면 '취소됨' */
+function abortError(signal: AbortSignal): Error {
+    return (signal.reason as { name?: unknown } | undefined)?.name === 'TimeoutError' ? signal.reason as Error : new Error('취소됨');
+}
+
 /** 프로세스 전체 동시 실행 상한 — 단순 카운팅 세마포어 */
 class Gate {
     private inflight = 0;
@@ -43,12 +48,12 @@ class Gate {
     /** 대기열에서도 취소된다(항목 제거 + reject), 깨어난 뒤 aborted 재검사 */
     async acquire(signal?: AbortSignal): Promise<() => void> {
         for (;;) {
-            if (signal?.aborted) throw new Error('취소됨');
+            if (signal?.aborted) throw abortError(signal);
             if (this.inflight < this.limit) break;
             await new Promise<void>((resolve, reject) => {
                 const entry: { resolve: () => void; reject: (e: Error) => void; onAbort?: () => void; signal?: AbortSignal } = { resolve, reject, signal };
                 if (signal) {
-                    entry.onAbort = () => { const k = this.waiters.indexOf(entry); if (k >= 0) this.waiters.splice(k, 1); reject(new Error('취소됨')); };
+                    entry.onAbort = () => { const k = this.waiters.indexOf(entry); if (k >= 0) this.waiters.splice(k, 1); reject(abortError(signal)); };
                     signal.addEventListener('abort', entry.onAbort, { once: true });
                 }
                 this.waiters.push(entry);

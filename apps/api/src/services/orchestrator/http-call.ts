@@ -124,22 +124,35 @@ function httpFailure(target: CapabilityTarget, status: number, buf: Buffer): Htt
     return new HttpCallError(`HTTP ${status} ${text.slice(0, 160).replace(/\s+/g, ' ')}`, status);
 }
 
+/**
+ * provider 슬롯 안에서 실행. 슬롯 대기·호출 전 검사는 중단 사유를 보지 않고 '취소됨' 을 던지므로(공유 Semaphore — 채팅 경로와 같이 써서 무변경),
+ * 타임아웃으로 중단됐으면 signal 의 TimeoutError 로 바꿔 던진다 — executor 가 사용자 취소([cancelled])와 구분해 [timeout] 으로 기록한다.
+ */
+async function inProviderSlot<T>(target: CapabilityTarget, signal: AbortSignal, fn: () => Promise<T>): Promise<T> {
+    try {
+        return await withProviderSlot(target.providerId, fn, signal);
+    } catch (err) {
+        if (signal.aborted && (signal.reason as { name?: unknown } | undefined)?.name === 'TimeoutError') throw signal.reason;
+        throw err;
+    }
+}
+
 /** JSON 응답 호출 — 슬롯 안에서 본문까지 읽는다. 실패는 HttpCallError(status·앞 160자, 키 거절은 전용 문구) */
 export async function callJson<T>(target: CapabilityTarget, opts: CallOptions): Promise<T> {
     const signal = combineSignals(opts.signal, AbortSignal.timeout(opts.timeoutMs));
-    return measured(target, () => withProviderSlot(target.providerId, async () => {
+    return measured(target, () => inProviderSlot(target, signal, async () => {
         if (signal.aborted) throw new HttpCallError('취소됨', undefined, 'aborted');
         const res = await fetchFor(target)(opts.url ?? `${target.baseUrl}${target.endpoint}`, buildInit(target, opts, signal));
         const buf = await readCapped(res, HTTP_CALL_LIMITS.JSON_MAX_BYTES);
         if (!res.ok) throw httpFailure(target, res.status, buf);
         try { return JSON.parse(buf.toString('utf8')) as T; } catch { throw new HttpCallError('JSON 파싱 실패', res.status, 'type'); }
-    }, signal));
+    }));
 }
 
 /** 바이너리 응답 호출(TTS 등) — content-type 과 함께 반환 */
 export async function callBinary(target: CapabilityTarget, opts: CallOptions): Promise<{ bytes: Buffer; contentType: string }> {
     const signal = combineSignals(opts.signal, AbortSignal.timeout(opts.timeoutMs));
-    return measured(target, () => withProviderSlot(target.providerId, async () => {
+    return measured(target, () => inProviderSlot(target, signal, async () => {
         if (signal.aborted) throw new HttpCallError('취소됨', undefined, 'aborted');
         const res = await fetchFor(target)(opts.url ?? `${target.baseUrl}${target.endpoint}`, buildInit(target, opts, signal));
         if (!res.ok) {
@@ -148,7 +161,7 @@ export async function callBinary(target: CapabilityTarget, opts: CallOptions): P
         }
         const bytes = await readCapped(res, HTTP_CALL_LIMITS.BINARY_MAX_BYTES);
         return { bytes, contentType: (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase() };
-    }, signal));
+    }));
 }
 
 /**
