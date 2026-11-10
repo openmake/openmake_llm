@@ -18,10 +18,11 @@ const getResponse = {
     assignments: [{ slot: 'code', fullId: 'local-llm:qwen3.8-27b', params: { temperature: '0.2' }, updatedAt: '2026-09-24T00:00:00.000Z' }],
     effective: [{ slot: 'code', fullId: 'local-llm:qwen3.8-27b', source: 'user' }],
 };
+const mockBuildAssignmentsResponse = jest.fn(async (_opts: unknown): Promise<unknown> => getResponse);
 const mockPutAssignment = jest.fn(async (_opts: unknown) => ({ assignment: { slot: 'code', fullId: 'local-llm:qwen3.8-27b', params: {}, updatedAt: '2026-09-24T00:00:00.000Z' }, previous: null }));
 const mockDeleteAssignment = jest.fn(async (_opts: unknown) => ({ previous: 'local-llm:qwen3.8-27b' }));
 jest.mock('../../services/model-assignments-service', () => ({
-    buildAssignmentsResponse: jest.fn(async () => getResponse),
+    buildAssignmentsResponse: mockBuildAssignmentsResponse,
     putAssignment: mockPutAssignment,
     deleteAssignment: mockDeleteAssignment,
 }));
@@ -64,5 +65,20 @@ describe('model-assignments 라우트 응답 계약', () => {
         expect(put.body.data).toHaveProperty('assignment.slot', 'code');
         expect(mockPutAssignment).toHaveBeenLastCalledWith(expect.objectContaining({ scope: '__global__', admin: true }));
         expect((await request(app).delete('/api/admin/model-assignments/code')).body.data).toEqual({ deleted: true });
+    });
+
+    it('임베딩 미배정 실효는 개인/관리자 모두 { fullId: null, source: none, code } 봉투를 그대로 싣는다', async () => {
+        const unassigned = { slot: 'text.embed', fullId: null, source: 'none', error: '미배정', code: 'CAPABILITY_UNASSIGNED' };
+        mockBuildAssignmentsResponse.mockImplementation(async () => ({ ...getResponse, effective: [unassigned] }));
+        try {
+            const user = await request(app).get('/api/users/me/model-assignments');
+            expect(user.body.data.effective).toEqual([unassigned]);
+            expect(mockBuildAssignmentsResponse).toHaveBeenLastCalledWith({ scope: '3', resolutionUserId: '3' });
+            const admin = await request(app).get('/api/admin/model-assignments');
+            expect(admin.body.data.effective).toEqual([unassigned]);
+            expect(mockBuildAssignmentsResponse).toHaveBeenLastCalledWith({ scope: '__global__', resolutionUserId: undefined });
+        } finally {
+            mockBuildAssignmentsResponse.mockImplementation(async () => getResponse);
+        }
     });
 });

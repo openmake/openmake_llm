@@ -72,6 +72,14 @@ describe('makeIndexEmbedder', () => {
         expect(mockCallJson.mock.calls[0][1].body).toMatchObject({ model: 'gemini/emb-1', dimensions: 2 });
     });
 
+    it('현재 배정이 없어도(개인·전역 미배정) 기록 모델·params 로 임베딩하고 현재 배정을 조회하지 않는다', async () => {
+        mockAssignment.mockResolvedValue(null);
+        mockForModel.mockResolvedValue(extTarget);
+        expect(await makeIndexEmbedder(extIndex, { userId: 'u1' })(['질의'])).toEqual([[0.1, 0.1]]);
+        expect(mockForModel).toHaveBeenCalledWith('text.embed', 'gemini:emb-1', 'u1', {}, { dimensions: '2' });
+        expect(mockAssignment).not.toHaveBeenCalled();
+    });
+
     it('응답 벡터 차원이 index.dimension 과 다르면 throw(방어적 검증)', async () => {
         mockForModel.mockResolvedValue({ model: 'index-model', params: {}, costOwner: 'local' });
         respondDim(3);
