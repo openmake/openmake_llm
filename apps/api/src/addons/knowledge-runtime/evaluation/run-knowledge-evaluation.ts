@@ -10,7 +10,6 @@
  *   ... --out /tmp/k08.json                                                           # 리포트 경로
  *
  * 대상 DB 는 **K01 복제본뿐**이다(포트 5432=운영이면 실행 거부). 만든 합성 데이터는 끝에 전부 지운다.
- * 전제: K01 DB 에 전역(`__global__`) `text.embed` 배정(게이트웨이에서 호출 가능한 로컬 임베딩 모델)이 있어야 한다 — 시딩 페르소나는 개인 API 키가 없고, 러너는 배정을 자동 생성하지 않는다(없으면 시딩의 공간 생성이 EMBEDDING_UNASSIGNED 로 실패).
  * 임계값·게이트는 eval-profile.json 에서만 온다(코드 리터럴 금지). blocking 게이트 실패 시 exit 1.
  *
  * @module addons/knowledge-runtime/evaluation/run-knowledge-evaluation

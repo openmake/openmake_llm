@@ -2,6 +2,7 @@
  * K08 시딩 — 합성 사용자·조직·Space·세션을 고유 접두사로 만들고 코퍼스를 실 파이프라인으로 수집한다.
  * 대상 DB 는 K01 복제본뿐이다(러너가 DATABASE_URL 을 K01 로 고정한 뒤 이 모듈을 로드한다 → kdb()=getPool()=K01).
  * teardown 은 만든 것(사용자·조직·Space·세션·임베딩 index·원본 파일)을 전부 지우고 잔여 0 을 검증한다.
+ * 전제: K01 DB 에 전역(`__global__`) `text.embed` 배정(게이트웨이에서 호출 가능한 로컬 임베딩 모델)이 있어야 한다 — 시딩 페르소나는 개인 API 키가 없고, 러너·시딩은 배정을 자동 생성하지 않는다(없으면 공간 생성이 EMBEDDING_UNASSIGNED 로 실패).
  *
  * @module addons/knowledge-runtime/evaluation/seeding
  */
