@@ -102,3 +102,88 @@ describe('orchestrator_task.model — 작업을 처리한 모델', () => {
         expect(events.every((e) => !('model' in e))).toBe(true);
     });
 });
+
+describe('실패 TaskResult.model — 실행을 시도한 배정 대상(task_results 기록)', () => {
+    const target = (capability: string, providerId: string, fullId: string, model: string) => ({ capability, fullId, providerId, model } as never);
+
+    it('handler 가 throw(타임아웃·403)해도 승인된 대상의 fullId 를 남긴다 — 외부·로컬 모두', async () => {
+        behaviors.g = async () => { throw new Error('image.generate: 시간 초과'); };
+        behaviors.t = async () => { throw new Error('HTTP 403 security_policy_blocked'); };
+        const p = plan({ complexity: 'multi', tasks: [
+            { id: 'g', capability: 'image.generate', input: { instruction: 'x' } }, { id: 't', capability: 'text.reason' },
+        ] });
+        const targets = new Map([['g', target('image.generate', 'hasa', 'hasa:flux-2', 'hasa/flux-2')], ['t', target('text.reason', 'local-llm', 'qwen3.8-27b', 'qwen3.8-27b')]]);
+        const s = await executePlan(p, ctx({ targets }));
+        const by = (id: string) => s.results.find((r) => r.taskId === id)!;
+        expect([by('g').status, by('g').model]).toEqual(['failed', 'hasa:flux-2']);
+        expect([by('t').status, by('t').model]).toEqual(['failed', 'qwen3.8-27b']);
+    });
+
+    it('runTask 자체가 reject 된 경우(allSettled rejected)도 대상 fullId 를 남긴다', async () => {
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }] });
+        const targets = new Map([['g', target('image.generate', 'hasa', 'hasa:flux-2', 'hasa/flux-2')]]);
+        const onProgress = (e: { status?: string }) => { if (e.status === 'running') throw new Error('progress sink down'); };
+        const s = await executePlan(p, ctx({ targets, onProgress: onProgress as never }));
+        expect([s.results[0].status, s.results[0].model]).toEqual(['failed', 'hasa:flux-2']);
+    });
+
+    it('타임아웃(TimeoutError)은 [timeout], 사용자 취소(AbortError)는 [cancelled] 로 구분한다', async () => {
+        behaviors.g = async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); };
+        behaviors.c = async () => { throw new DOMException('This operation was aborted', 'AbortError'); };
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }, { id: 'c', capability: 'web.search' }] });
+        const s = await executePlan(p, ctx());
+        expect(s.results.find((r) => r.taskId === 'g')!.text).toMatch(/^\[timeout\] /);
+        expect(s.results.find((r) => r.taskId === 'c')!.text).toMatch(/^\[cancelled\] /);
+    });
+
+    it('provider 슬롯 대기 중 호출 타임아웃이 만료돼도 [timeout] 이다(사용자 취소 아님)', async () => {
+        const { withProviderSlot, providerConcurrency } = jest.requireActual('../../../llm/external-throttle') as typeof import('../../../llm/external-throttle');
+        const { callJson } = jest.requireActual('../http-call') as typeof import('../http-call');
+        let release!: () => void;
+        const held = new Promise<void>((r) => { release = r; });
+        const holders = Array.from({ length: providerConcurrency('hasa') }, () => withProviderSlot('hasa', () => held));
+        const fetchSpy = jest.spyOn(global, 'fetch');
+        const t = { capability: 'image.generate', fullId: 'hasa:Qwen-Image', providerId: 'hasa', model: 'hasa/Qwen-Image', baseUrl: 'http://gw', endpoint: '/v1/images/generations', headers: {}, params: {}, source: 'user', transport: 'gateway' };
+        behaviors.g = async () => callJson(t as never, { body: { prompt: 'x' }, timeoutMs: 30 });
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }] });
+        try {
+            const s = await executePlan(p, ctx());
+            expect(s.results[0].text).toMatch(/^\[timeout\] /);
+            expect(fetchSpy).not.toHaveBeenCalled();
+        } finally {
+            release(); await Promise.all(holders); fetchSpy.mockRestore();
+        }
+    });
+
+    it('전역 동시 실행 Gate 대기 중 작업 타임아웃이 만료돼도 [timeout] 이다', async () => {
+        const saved = { g: process.env.ORCHESTRATOR_GLOBAL_MAX_INFLIGHT, t: process.env.ORCHESTRATOR_TASK_TIMEOUT_MS };
+        process.env.ORCHESTRATOR_GLOBAL_MAX_INFLIGHT = '1'; process.env.ORCHESTRATOR_TASK_TIMEOUT_MS = '30';
+        try {
+            await jest.isolateModulesAsync(async () => {
+                const { executePlan: run } = await import('../executor');
+                behaviors.a = async () => { await new Promise((r) => setTimeout(r, 100)); return { ok: true, text: 'A', media: [] }; };
+                const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }] });
+                const s = await run(p, ctx());
+                expect(s.results.find((r) => r.taskId === 'b')!.text).toMatch(/^\[timeout\] /);
+                expect(calls).toEqual(['a']);
+            });
+        } finally {
+            for (const [k, v] of [['ORCHESTRATOR_GLOBAL_MAX_INFLIGHT', saved.g], ['ORCHESTRATOR_TASK_TIMEOUT_MS', saved.t]] as const) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+        }
+    });
+
+    it('호출하지 않은 작업(preflight 거절·선행 실패 skipped)은 model 을 비운다', async () => {
+        behaviors.p = async () => { throw new Error('boom'); };
+        const p = plan({ complexity: 'multi', tasks: [
+            { id: 'p', capability: 'text.reason' }, { id: 'child', capability: 'text.code', depends_on: ['p'] }, { id: 'r', capability: 'image.generate', input: { instruction: 'x' } },
+        ] });
+        const targets = new Map([['p', target('text.reason', 'hasa', 'hasa:gpt-oss-120b', 'gpt-oss-120b')], ['child', target('text.code', 'hasa', 'hasa:gpt-oss-120b', 'gpt-oss-120b')]]);
+        const c = ctx({ targets });
+        c.results.set('r', { taskId: 'r', capability: 'image.generate', ok: false, status: 'failed', text: '[unassigned] 없음', media: [], ms: 0, error: 'unassigned' });
+        const s = await executePlan(p, c);
+        const by = (id: string) => s.results.find((r) => r.taskId === id)!;
+        expect(by('p').model).toBe('hasa:gpt-oss-120b');
+        expect([by('child').status, by('child').model]).toEqual(['skipped', undefined]);
+        expect(by('r').model).toBeUndefined();
+    });
+});

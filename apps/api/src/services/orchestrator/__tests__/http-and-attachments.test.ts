@@ -224,3 +224,22 @@ describe('statedDurationSec·계획 인자 hook — Planner 가 duration 을 비
         expect(music('발라드 만들어줘', { duration: '60' })).toEqual({ duration: '60' });
     });
 });
+
+describe('게이트웨이 재시도 끄기 — 한 번 호출 = upstream 한 번(2026-11-11 hasa concurrent_limit 경고 누적 회귀)', () => {
+    const headerOf = (init: RequestInit | undefined, name: string) => new Headers(init?.headers).get(name);
+    it('gateway 경로는 JSON·FormData·binary 모두 x-litellm-num-retries: 0 을 싣는다', async () => {
+        const seen: Array<RequestInit | undefined> = [];
+        global.fetch = (async (_u: string, init?: RequestInit) => { seen.push(init); return resp('{"ok":1}'); }) as unknown as typeof fetch;
+        await callJson(target as never, { body: { a: 1 }, timeoutMs: 1000 });
+        const form = new FormData(); form.append('prompt', 'x');
+        await callJson(target as never, { body: form, timeoutMs: 1000 });
+        await callBinary(target as never, { body: { a: 1 }, timeoutMs: 1000 });
+        expect(seen.map((i) => headerOf(i, 'x-litellm-num-retries'))).toEqual(['0', '0', '0']);
+        expect(headerOf(seen[0], 'x-api-key')).toBe('k');
+    });
+    it('provider 직결(direct)에는 게이트웨이 전용 헤더를 보내지 않는다', async () => {
+        safeFetchMock.mockResolvedValue(resp('{"ok":1}'));
+        await callJson({ ...target, transport: 'direct' } as never, { body: { a: 1 }, timeoutMs: 1000 });
+        expect(headerOf(safeFetchMock.mock.calls[0][1] as RequestInit, 'x-litellm-num-retries')).toBeNull();
+    });
+});

@@ -94,6 +94,9 @@ describe('LLM_GATEWAY_PROVIDERS 게이트웨이 라우팅', () => {
         expect(p.client).toBe(p.catalogClient);
         expect(p.client.baseURL).toBe('https://api.groq.com/openai/v1');
         expect(p.modelPrefix).toBeUndefined();
+        // 게이트웨이 재시도 끄기 헤더는 게이트웨이 요청에만 — provider 직결에는 싣지 않는다
+        const direct = p.client as unknown as { _options?: { defaultHeaders?: Record<string, string> } };
+        expect(direct._options?.defaultHeaders?.['x-litellm-num-retries']).toBeUndefined();
     });
 
     it('목록에 있어도 사용자 base_url 이 카탈로그 기본값과 다르면 direct (client === catalogClient)', () => {
