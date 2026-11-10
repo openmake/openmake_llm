@@ -106,8 +106,8 @@ function envDefault(name: string, fallback?: string): string | undefined {
 export const CAPABILITY_DEFAULTS: Partial<Record<Capability, string>> = {
     'text.reason': envDefault('CAPABILITY_DEFAULT_TEXT_REASON', 'local-llm:qwen3.8-27b'),
     'text.code': envDefault('CAPABILITY_DEFAULT_TEXT_CODE', 'local-llm:qwen3.8-27b'),
-    // text.embed 는 외부 fullId(`<provider>:<model>`)도 허용 — 키 정책이 actor-byok 라 행위자 사용자의 키로 실행된다
-    'text.embed': envDefault('CAPABILITY_DEFAULT_TEXT_EMBED', 'local-llm:bge-m3'),
+    // text.embed 는 코드·env 기본값이 없다(2026-11-10) — 개인 → 전역 배정만 쓰고, 둘 다 없으면 미배정(명시 실패).
+    // 종전 CAPABILITY_DEFAULT_TEXT_EMBED 는 읽지 않는다(폐기).
     'vision.describe': envDefault('CAPABILITY_DEFAULT_VISION_DESCRIBE', 'local-llm:qwen3.8-27b'),
     'vision.ocr': envDefault('CAPABILITY_DEFAULT_VISION_OCR', 'local-llm:qwen3.8-27b'),
     // image.generate 는 코드 기본값 없음(2026-09-18) — 종전 로컬 기본값이 비상업 라이선스(최종 사용자와의 직접

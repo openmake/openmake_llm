@@ -7,6 +7,9 @@ import type { ModelSlotGroup } from "@openmake/shared-types";
 /** 배정 미지정 select 값 — 전역/기본값으로 자동 해석됨 */
 export const DEFAULT_VALUE = "";
 
+/** 임베딩 슬롯 id — 코드 기본값이 없어(개인 → 전역만) 빈 선택·초기화 문구를 scope 별로 다르게 보인다 */
+export const EMBED_SLOT_ID = "text.embed";
+
 /** 그룹 렌더 순서(서버 slots 는 이미 화면 순서지만 그룹 묶음 순서는 이 배열로 고정) */
 export const GROUP_ORDER: readonly ModelSlotGroup[] = ["agents", "quality", "multimodal"];
 
