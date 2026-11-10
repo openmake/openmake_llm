@@ -10,6 +10,7 @@
  * 이 헤더가 끄는 것은 LiteLLM Router 재시도뿐이다(1.100.1·1.103.0·1.108.4 소스, 1.103.0 은 가짜 upstream 실측 2026-11-11).
  * 게이트웨이 안 OpenAI SDK 재시도는 경로마다 다르다 — 채팅·음성은 0 이라 헤더로 upstream 1회, 임베딩은 게이트웨이 프로세스
  * 환경 DEFAULT_MAX_RETRIES=0 이 있어야 1회(scripts/env/omk.sh 가 litellm.env 에 넣는다), 이미지 생성은 LiteLLM 이 2 로 고정해
- * 헤더·본문·모델 등록·환경 변수 어느 것으로도 끌 수 없다(5xx·429 면 upstream 3회).
+ * 헤더·본문·모델 등록·환경 변수 어느 것으로도 끌 수 없다(5xx·429 면 upstream 3회) — 그래서 hasa 이미지는 게이트웨이를 거치지 않고
+ * 직결한다(addons/image-runtime/providers/hasa).
  */
 export const GATEWAY_NO_RETRY_HEADERS: Readonly<Record<string, string>> = Object.freeze({ 'x-litellm-num-retries': '0' });
