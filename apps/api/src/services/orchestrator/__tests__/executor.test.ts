@@ -136,6 +136,42 @@ describe('실패 TaskResult.model — 실행을 시도한 배정 대상(task_res
         expect(s.results.find((r) => r.taskId === 'c')!.text).toMatch(/^\[cancelled\] /);
     });
 
+    it('provider 슬롯 대기 중 호출 타임아웃이 만료돼도 [timeout] 이다(사용자 취소 아님)', async () => {
+        const { withProviderSlot, providerConcurrency } = jest.requireActual('../../../llm/external-throttle') as typeof import('../../../llm/external-throttle');
+        const { callJson } = jest.requireActual('../http-call') as typeof import('../http-call');
+        let release!: () => void;
+        const held = new Promise<void>((r) => { release = r; });
+        const holders = Array.from({ length: providerConcurrency('hasa') }, () => withProviderSlot('hasa', () => held));
+        const fetchSpy = jest.spyOn(global, 'fetch');
+        const t = { capability: 'image.generate', fullId: 'hasa:Qwen-Image', providerId: 'hasa', model: 'hasa/Qwen-Image', baseUrl: 'http://gw', endpoint: '/v1/images/generations', headers: {}, params: {}, source: 'user', transport: 'gateway' };
+        behaviors.g = async () => callJson(t as never, { body: { prompt: 'x' }, timeoutMs: 30 });
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }] });
+        try {
+            const s = await executePlan(p, ctx());
+            expect(s.results[0].text).toMatch(/^\[timeout\] /);
+            expect(fetchSpy).not.toHaveBeenCalled();
+        } finally {
+            release(); await Promise.all(holders); fetchSpy.mockRestore();
+        }
+    });
+
+    it('전역 동시 실행 Gate 대기 중 작업 타임아웃이 만료돼도 [timeout] 이다', async () => {
+        const saved = { g: process.env.ORCHESTRATOR_GLOBAL_MAX_INFLIGHT, t: process.env.ORCHESTRATOR_TASK_TIMEOUT_MS };
+        process.env.ORCHESTRATOR_GLOBAL_MAX_INFLIGHT = '1'; process.env.ORCHESTRATOR_TASK_TIMEOUT_MS = '30';
+        try {
+            await jest.isolateModulesAsync(async () => {
+                const { executePlan: run } = await import('../executor');
+                behaviors.a = async () => { await new Promise((r) => setTimeout(r, 100)); return { ok: true, text: 'A', media: [] }; };
+                const p = plan({ complexity: 'multi', tasks: [{ id: 'a', capability: 'web.search' }, { id: 'b', capability: 'web.search' }] });
+                const s = await run(p, ctx());
+                expect(s.results.find((r) => r.taskId === 'b')!.text).toMatch(/^\[timeout\] /);
+                expect(calls).toEqual(['a']);
+            });
+        } finally {
+            for (const [k, v] of [['ORCHESTRATOR_GLOBAL_MAX_INFLIGHT', saved.g], ['ORCHESTRATOR_TASK_TIMEOUT_MS', saved.t]] as const) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+        }
+    });
+
     it('호출하지 않은 작업(preflight 거절·선행 실패 skipped)은 model 을 비운다', async () => {
         behaviors.p = async () => { throw new Error('boom'); };
         const p = plan({ complexity: 'multi', tasks: [
