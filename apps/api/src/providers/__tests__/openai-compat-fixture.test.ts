@@ -33,6 +33,12 @@ describe('게이트웨이 계약', () => {
         expect(fixture.headers[0].authorization).toBe('Bearer gateway-master');
         expect(fixture.headers[0]['x-api-key']).toBe('byok-user-key');
     });
+
+    it('게이트웨이 재시도를 끈다 — x-litellm-num-retries: 0 (재시도가 provider 동시 요청 한도 경고를 쌓는다, 2026-11-11 hasa)', async () => {
+        reply = () => ({ kind: 'stream', chunks: [sseChunk({ content: 'ok' }, { finish_reason: 'stop' })] });
+        await provider().streamChat({ messages, modelId: 'qwen3-coder' }, {});
+        expect(fixture.headers[0]['x-litellm-num-retries']).toBe('0');
+    });
 });
 
 describe('정상 스트림', () => {
