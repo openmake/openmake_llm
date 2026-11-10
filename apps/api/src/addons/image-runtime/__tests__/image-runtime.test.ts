@@ -58,9 +58,9 @@ describe('imageEditHandler', () => {
         c.attachments.set('a1', { id: 'a1', kind: 'image', name: 'in.png', mime: 'image/png', base64: `data:image/png;base64,${Buffer.from('IN').toString('base64')}` });
         return c;
     };
-    it('hasa 는 generations+reference JSON, 그 외는 multipart edits', async () => {
+    it('hasa 는 generations+reference JSON(직결 연산), 그 외는 multipart edits', async () => {
         await imageEditHandler.execute(task({ capability: 'image.edit', attachments: ['a1'] }), withImage('hasa'));
-        expect(invokes[0].operation).toBe('images.generate_with_reference');
+        expect(invokes[0].operation).toBe('images.direct.generate');
         expect((invokes[0].payload as { reference: string }).reference).toMatch(/^data:image\/png;base64,/);
         await imageEditHandler.execute(task({ capability: 'image.edit', attachments: ['a1'] }), withImage('openrouter'));
         expect(invokes[1].operation).toBe('images.edit');
@@ -70,6 +70,23 @@ describe('imageEditHandler', () => {
     it('원본 이미지가 없으면 호출 전에 거절', async () => {
         await expect(imageEditHandler.execute(task({ capability: 'image.edit' }), ctx())).rejects.toThrow(/원본 이미지/);
         expect(invokes).toHaveLength(0);
+    });
+});
+
+describe('hasa 이미지 직결 — 게이트웨이가 이미지 SDK 재시도를 끌 수 없어(5xx·429 면 upstream 3회) 영상처럼 provider 에 직결한다(2026-11-11)', () => {
+    it('외부 hasa 만 direct 를 선언하고, 그 밖의 provider·로컬은 게이트웨이(direct 없음)', () => {
+        for (const h of [imageGenerateHandler, imageEditHandler]) {
+            expect(h.describeProviderSupport!({ fullId: 'hasa:Qwen-Image', providerId: 'hasa', isExternal: true })).toEqual({ supported: true, direct: { endpoint: '/images/generations' } });
+            expect(h.describeProviderSupport!({ fullId: 'openrouter:img', providerId: 'openrouter', isExternal: true })).toEqual({ supported: true });
+            expect(h.describeProviderSupport!({ fullId: 'local-llm:img', providerId: 'local-llm', isExternal: false })).toEqual({ supported: true });
+            // 직결 주소는 키 행 주소(…/v1) 기준이라 /v1 을 붙이지 않는다
+            expect(h.operations?.['images.direct.generate']).toEqual({ method: 'POST', path: '/images/generations', body: 'json', response: 'json' });
+        }
+    });
+    it('생성: hasa 는 직결 연산, 그 밖은 게이트웨이 연산', async () => {
+        await imageGenerateHandler.execute(task(), ctx('hasa'));
+        await imageGenerateHandler.execute(task(), ctx('openrouter'));
+        expect(invokes.map((i) => i.operation)).toEqual(['images.direct.generate', 'images.generate']);
     });
 });
 

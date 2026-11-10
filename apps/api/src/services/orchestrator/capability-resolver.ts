@@ -19,6 +19,8 @@
  *  - direct 전용 provider(chatgpt OAuth 등)는 배정 자체를 거부한다.
  *  - 예외: jobs-v1 영상(video-runtime 이 describeProviderSupport().direct 로 선언 — hasa)은 게이트웨이가 프록시하지
  *    못하는 커스텀 API 라 사용자 키로 provider 직결(`transport: 'direct'`, 도구가 SSRF 고정 fetch 사용).
+ *  - 예외: hasa 이미지 생성·편집(image-runtime 이 같은 방식으로 선언) — 게이트웨이가 이미지 경로의 SDK 재시도를 2 로 고정해
+ *    5xx·429 면 upstream 3회를 보내고 끌 방법이 없어(2026-11-11 실측) 직결한다. 한 번 호출 = provider 한 번.
  *  - 로컬 음악 생성(ACE-Step)은 2026-09-23 부터 다른 로컬 capability 와 같은 LiteLLM 경로다(전용 주소 없음).
  *    외부는 Gemini 의 Lyria 만 받는다 — 네이티브 API(`direct.api: 'native'`, 카탈로그 `nativeApi` 의 고정 주소·헤더)로 직결한다.
  *
