@@ -1275,6 +1275,9 @@ litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key $6=
     chmod 600 "$lenv"
     dotenv_ensure "$lenv" LITELLM_MASTER_KEY "sk-$(gen_secret)"
     dotenv_ensure "$lenv" DUMMY_UPSTREAM_KEY "sk-byok-forwarded-per-request"
+    # 게이트웨이 안 OpenAI SDK 재시도 끄기 — 임베딩은 요청의 max_retries 0 을 기본값(2)으로 되돌려 이 환경 변수만 통한다
+    # (LiteLLM 1.100.1~1.108.4 `max_retries or DEFAULT_MAX_RETRIES`). Router 재시도는 앱의 x-litellm-num-retries: 0 이 끈다.
+    dotenv_ensure "$lenv" DEFAULT_MAX_RETRIES 0
     [[ -z "${3:-}" ]] || dotenv_set "$lenv" QWEN_VLLM_API_BASE "$3"
     [[ -z "${4:-}" ]] || dotenv_set "$lenv" BGE_VLLM_API_BASE "$4"
     [[ -z "${5:-}" ]] || dotenv_set "$lenv" VLLM_API_KEY "$5"
