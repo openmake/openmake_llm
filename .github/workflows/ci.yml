@@ -296,7 +296,7 @@ jobs:
 
       # ─── Gate 8: Tool Selection (mock) ───
       # 운영과 같은 결정적 판정(selectTurnTools → buildExternalToolPlan)으로 골든셋 40건의 "이 턴 노출 도구"를 검사한다(F26.2).
-      # 의도 게이트·역할 게이트 변경으로 기대 도구가 빠지거나 금지 도구가 새면 실패. 실모델 호출 판정(--real)은 nightly.
+      # 의도 게이트·역할 게이트 변경으로 기대 도구가 빠지거나 금지 도구가 새면 실패. 실모델 호출 판정(--real)은 scripts/nightly-eval.sh(PM2 cron 등록 시 매일, 아니면 수동 실행).
       - name: "Gate 8: Tool Selection (mock)"
         working-directory: apps/api
         env:
@@ -305,7 +305,7 @@ jobs:
 
       # ─── Gate 9: Runtime Red Team (mock) ───
       # 게이트 함수를 직접 친다(F26.6): 실행 역할 게이트·관리자 도구 노출·SSRF(가짜 DNS)·작업공간 경로 탈출·로그 마스킹.
-      # 전부 통과해야 한다(임계 1.0). 실모델 응답 판정(프롬프트·비밀값 유출, 간접 인젝션)은 nightly --real.
+      # 전부 통과해야 한다(임계 1.0). 실모델 응답 판정(프롬프트·비밀값 유출, 간접 인젝션)은 scripts/nightly-eval.sh 의 --real(PM2 cron 등록 시 매일, 아니면 수동 실행).
       - name: "Gate 9: Runtime Red Team (mock)"
         working-directory: apps/api
         run: npm run eval:redteam
