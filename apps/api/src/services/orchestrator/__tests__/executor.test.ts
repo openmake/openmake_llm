@@ -102,3 +102,43 @@ describe('orchestrator_task.model — 작업을 처리한 모델', () => {
         expect(events.every((e) => !('model' in e))).toBe(true);
     });
 });
+
+describe('실패 TaskResult.model — 실행을 시도한 배정 대상(task_results 기록)', () => {
+    const target = (capability: string, providerId: string, fullId: string, model: string) => ({ capability, fullId, providerId, model } as never);
+
+    it('handler 가 throw(타임아웃·403)해도 승인된 대상의 fullId 를 남긴다 — 외부·로컬 모두', async () => {
+        behaviors.g = async () => { throw new Error('image.generate: 시간 초과'); };
+        behaviors.t = async () => { throw new Error('HTTP 403 security_policy_blocked'); };
+        const p = plan({ complexity: 'multi', tasks: [
+            { id: 'g', capability: 'image.generate', input: { instruction: 'x' } }, { id: 't', capability: 'text.reason' },
+        ] });
+        const targets = new Map([['g', target('image.generate', 'hasa', 'hasa:flux-2', 'hasa/flux-2')], ['t', target('text.reason', 'local-llm', 'qwen3.8-27b', 'qwen3.8-27b')]]);
+        const s = await executePlan(p, ctx({ targets }));
+        const by = (id: string) => s.results.find((r) => r.taskId === id)!;
+        expect([by('g').status, by('g').model]).toEqual(['failed', 'hasa:flux-2']);
+        expect([by('t').status, by('t').model]).toEqual(['failed', 'qwen3.8-27b']);
+    });
+
+    it('runTask 자체가 reject 된 경우(allSettled rejected)도 대상 fullId 를 남긴다', async () => {
+        const p = plan({ complexity: 'multi', tasks: [{ id: 'g', capability: 'image.generate', input: { instruction: 'x' } }] });
+        const targets = new Map([['g', target('image.generate', 'hasa', 'hasa:flux-2', 'hasa/flux-2')]]);
+        const onProgress = (e: { status?: string }) => { if (e.status === 'running') throw new Error('progress sink down'); };
+        const s = await executePlan(p, ctx({ targets, onProgress: onProgress as never }));
+        expect([s.results[0].status, s.results[0].model]).toEqual(['failed', 'hasa:flux-2']);
+    });
+
+    it('호출하지 않은 작업(preflight 거절·선행 실패 skipped)은 model 을 비운다', async () => {
+        behaviors.p = async () => { throw new Error('boom'); };
+        const p = plan({ complexity: 'multi', tasks: [
+            { id: 'p', capability: 'text.reason' }, { id: 'child', capability: 'text.code', depends_on: ['p'] }, { id: 'r', capability: 'image.generate', input: { instruction: 'x' } },
+        ] });
+        const targets = new Map([['p', target('text.reason', 'hasa', 'hasa:gpt-oss-120b', 'gpt-oss-120b')], ['child', target('text.code', 'hasa', 'hasa:gpt-oss-120b', 'gpt-oss-120b')]]);
+        const c = ctx({ targets });
+        c.results.set('r', { taskId: 'r', capability: 'image.generate', ok: false, status: 'failed', text: '[unassigned] 없음', media: [], ms: 0, error: 'unassigned' });
+        const s = await executePlan(p, c);
+        const by = (id: string) => s.results.find((r) => r.taskId === id)!;
+        expect(by('p').model).toBe('hasa:gpt-oss-120b');
+        expect([by('child').status, by('child').model]).toEqual(['skipped', undefined]);
+        expect(by('r').model).toBeUndefined();
+    });
+});
