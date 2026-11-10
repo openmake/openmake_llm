@@ -37,6 +37,7 @@ import { PseudoToolCallGate } from '../llm/pseudo-tool-call-parser';
 import { pingCredential } from './credential-ping';
 import { readCachedPromptTokens } from '../llm/cached-prompt-tokens';
 import { mapOpenAIError } from './openai-compat-errors';
+import { GATEWAY_NO_RETRY_HEADERS } from '../llm/gateway-headers';
 
 // 오류 분류는 openai-compat-errors.ts 로 분리 — 기존 import 경로 호환을 위해 re-export.
 export { mapOpenAIError };
@@ -209,8 +210,13 @@ export class OpenAICompatProvider implements IProvider {
             this.client = new OpenAI({
                 apiKey: opts.gateway.masterKey,
                 baseURL: `${opts.gateway.url.replace(/\/+$/, '')}/v1`,
+                // 앱 SDK 재시도도 끈다 — 기본 2회면 게이트웨이가 5xx·429 를 줄 때마다 다시 보내 upstream 에 한 번씩 더 간다.
+                // 한 번 호출 = upstream 한 번(429 는 오류로 드러나 채팅 폴백 판정을 탄다). 직결(catalogClient)은 종전대로.
+                maxRetries: 0,
+                // 게이트웨이 재시도 끄기(llm/gateway-headers) — 채팅·배정 probe 가 provider 거절 뒤 게이트웨이 재시도로 경고를 쌓지 않게.
                 defaultHeaders: {
                     ...(defaultHeaders ?? {}),
+                    ...GATEWAY_NO_RETRY_HEADERS,
                     'x-api-key': opts.apiKey,
                 },
             });

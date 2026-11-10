@@ -162,6 +162,15 @@ eq "litellm ensure: 새 업스트림 = 기억된 DGX ID → 실패·설정 그�
 printf 'OMK_UPSTREAM_MODEL=old-up\nOMK_DGX_MODEL=bad/id\n' > "$PL"; S1="$(pf_state)"
 ( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$PF" pf >/dev/null 2>&1 ); rc=$?
 eq "litellm ensure: 저장된 값 렌더 실패 → 호출자 중단·config 보존" "$rc|$(cat "$(litellm_dir pf)/litellm.config.yaml")" "2|previous"
+# 게이트웨이 SDK 재시도 끄기 — LiteLLM 은 임베딩에 넘긴 max_retries 0 을 기본값(2)으로 되돌린다(`max_retries or DEFAULT_MAX_RETRIES`).
+# 프로세스 환경 DEFAULT_MAX_RETRIES=0 만 통한다(2026-11-11 가짜 upstream 실측: 임베딩 504 3회 → 1회). 이미 적힌 값은 그대로 둔다.
+RT="$TMP/rt"; mkdir -p "$RT/scripts/vllm" "$(litellm_dir rt)/venv/bin"; cp "$RC" "$RT/scripts/vllm/"; printf 'OMK_LITELLM_PORT=19999\n' > "$RT/.env"
+printf '#!/bin/sh\n' > "$(litellm_dir rt)/venv/bin/litellm"; chmod 755 "$(litellm_dir rt)/venv/bin/litellm"
+( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$RT" rt >/dev/null 2>&1 ); rc=$?
+eq "litellm ensure: litellm.env 에 DEFAULT_MAX_RETRIES=0" "$rc|$(dotenv_get "$(litellm_dir rt)/litellm.env" DEFAULT_MAX_RETRIES)" "0|0"
+dotenv_set "$(litellm_dir rt)/litellm.env" DEFAULT_MAX_RETRIES 2
+( litellm_pm2_start() { return 0; }; curl() { printf 200; }; litellm_ensure "$RT" rt >/dev/null 2>&1 ); rc=$?
+eq "litellm ensure: 적힌 DEFAULT_MAX_RETRIES 는 그대로" "$rc|$(dotenv_get "$(litellm_dir rt)/litellm.env" DEFAULT_MAX_RETRIES)" "0|2"
 # 이번 실행이 업스트림을 다른 이름으로 바꾸면 기억된 옛 업스트림과는 겹쳐도 된다 — 사전 검사와 dgx_apply 가 같은 값을 본다.
 printf 'OMK_UPSTREAM_MODEL=old-up\n' > "$PL"
 ( OMK_DGX_MODEL=old-up dgx_preflight "$PF" pf 1 http://u new-up >/dev/null 2>&1 ); rc=$?

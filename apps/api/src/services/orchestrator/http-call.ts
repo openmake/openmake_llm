@@ -8,6 +8,7 @@
  *  - provider 가 돌려준 외부 URL 재다운로드는 SSRF 고정 fetch(safeFetch) + content-type·크기 검증
  */
 import { withProviderSlot } from '../../llm/external-throttle';
+import { GATEWAY_NO_RETRY_HEADERS } from '../../llm/gateway-headers';
 import { safeFetch } from '../../security/ssrf-guard';
 import type { CapabilityTarget } from './capability-resolver';
 import { classifyLlmError, recordLlmRequestMetric } from '../../llm/request-metrics';
@@ -75,9 +76,11 @@ function fetchFor(target: CapabilityTarget): (url: string, init: RequestInit) =>
 
 function buildInit(target: CapabilityTarget, opts: CallOptions, signal: AbortSignal): RequestInit {
     const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+    // 게이트웨이 재시도 끄기 — capability 호출은 조용히 재시도하지 않는다(llm/gateway-headers)
+    const base = target.transport === 'gateway' ? { ...GATEWAY_NO_RETRY_HEADERS, ...target.headers } : { ...target.headers };
     return {
         method: opts.method ?? (opts.body ? 'POST' : 'GET'),
-        headers: isForm ? { ...target.headers } : { 'Content-Type': 'application/json', ...target.headers },
+        headers: isForm ? base : { 'Content-Type': 'application/json', ...base },
         body: opts.body === undefined ? undefined : (isForm ? (opts.body as FormData) : JSON.stringify(opts.body)),
         signal,
     };
@@ -116,22 +119,35 @@ function httpFailure(target: CapabilityTarget, status: number, buf: Buffer): Htt
     return new HttpCallError(`HTTP ${status} ${text.slice(0, 160).replace(/\s+/g, ' ')}`, status);
 }
 
+/**
+ * provider 슬롯 안에서 실행. 슬롯 대기·호출 전 검사는 중단 사유를 보지 않고 '취소됨' 을 던지므로(공유 Semaphore — 채팅 경로와 같이 써서 무변경),
+ * 타임아웃으로 중단됐으면 signal 의 TimeoutError 로 바꿔 던진다 — executor 가 사용자 취소([cancelled])와 구분해 [timeout] 으로 기록한다.
+ */
+async function inProviderSlot<T>(target: CapabilityTarget, signal: AbortSignal, fn: () => Promise<T>): Promise<T> {
+    try {
+        return await withProviderSlot(target.providerId, fn, signal);
+    } catch (err) {
+        if (signal.aborted && (signal.reason as { name?: unknown } | undefined)?.name === 'TimeoutError') throw signal.reason;
+        throw err;
+    }
+}
+
 /** JSON 응답 호출 — 슬롯 안에서 본문까지 읽는다. 실패는 HttpCallError(status·앞 160자, 키 거절은 전용 문구) */
 export async function callJson<T>(target: CapabilityTarget, opts: CallOptions): Promise<T> {
     const signal = combineSignals(opts.signal, AbortSignal.timeout(opts.timeoutMs));
-    return measured(target, () => withProviderSlot(target.providerId, async () => {
+    return measured(target, () => inProviderSlot(target, signal, async () => {
         if (signal.aborted) throw new HttpCallError('취소됨', undefined, 'aborted');
         const res = await fetchFor(target)(opts.url ?? `${target.baseUrl}${target.endpoint}`, buildInit(target, opts, signal));
         const buf = await readCapped(res, HTTP_CALL_LIMITS.JSON_MAX_BYTES);
         if (!res.ok) throw httpFailure(target, res.status, buf);
         try { return JSON.parse(buf.toString('utf8')) as T; } catch { throw new HttpCallError('JSON 파싱 실패', res.status, 'type'); }
-    }, signal));
+    }));
 }
 
 /** 바이너리 응답 호출(TTS 등) — content-type 과 함께 반환 */
 export async function callBinary(target: CapabilityTarget, opts: CallOptions): Promise<{ bytes: Buffer; contentType: string }> {
     const signal = combineSignals(opts.signal, AbortSignal.timeout(opts.timeoutMs));
-    return measured(target, () => withProviderSlot(target.providerId, async () => {
+    return measured(target, () => inProviderSlot(target, signal, async () => {
         if (signal.aborted) throw new HttpCallError('취소됨', undefined, 'aborted');
         const res = await fetchFor(target)(opts.url ?? `${target.baseUrl}${target.endpoint}`, buildInit(target, opts, signal));
         if (!res.ok) {
@@ -140,7 +156,7 @@ export async function callBinary(target: CapabilityTarget, opts: CallOptions): P
         }
         const bytes = await readCapped(res, HTTP_CALL_LIMITS.BINARY_MAX_BYTES);
         return { bytes, contentType: (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase() };
-    }, signal));
+    }));
 }
 
 /**
