@@ -35,6 +35,11 @@ interface ExecutionSummary {
     cancelled: boolean;
 }
 
+/** 대기 중단 오류 — 작업·턴 타임아웃이면 signal 의 TimeoutError 그대로(classify 가 [timeout] 으로), 사용자 취소면 '취소됨' */
+function abortError(signal: AbortSignal): Error {
+    return (signal.reason as { name?: unknown } | undefined)?.name === 'TimeoutError' ? signal.reason as Error : new Error('취소됨');
+}
+
 /** 프로세스 전체 동시 실행 상한 — 단순 카운팅 세마포어 */
 class Gate {
     private inflight = 0;
@@ -43,12 +48,12 @@ class Gate {
     /** 대기열에서도 취소된다(항목 제거 + reject), 깨어난 뒤 aborted 재검사 */
     async acquire(signal?: AbortSignal): Promise<() => void> {
         for (;;) {
-            if (signal?.aborted) throw new Error('취소됨');
+            if (signal?.aborted) throw abortError(signal);
             if (this.inflight < this.limit) break;
             await new Promise<void>((resolve, reject) => {
                 const entry: { resolve: () => void; reject: (e: Error) => void; onAbort?: () => void; signal?: AbortSignal } = { resolve, reject, signal };
                 if (signal) {
-                    entry.onAbort = () => { const k = this.waiters.indexOf(entry); if (k >= 0) this.waiters.splice(k, 1); reject(new Error('취소됨')); };
+                    entry.onAbort = () => { const k = this.waiters.indexOf(entry); if (k >= 0) this.waiters.splice(k, 1); reject(abortError(signal)); };
                     signal.addEventListener('abort', entry.onAbort, { once: true });
                 }
                 this.waiters.push(entry);
@@ -71,6 +76,8 @@ function classify(err: unknown): { error: string; kind: string } {
     if (err instanceof CapabilityUnavailableError) return { error: err.message, kind: err.code === 'CAPABILITY_UNASSIGNED' ? 'unassigned' : 'failed' };
     if (err instanceof HttpCallError && err.kind === 'aborted') return { error: '취소됨', kind: 'cancelled' };
     const msg = err instanceof Error ? err.message : String(err);
+    // AbortSignal.timeout(작업·호출 타임아웃)은 사용자 취소가 아니다 — 메시지에 'aborted' 가 있어 아래 패턴에 걸리므로 먼저 구분한다
+    if ((err as { name?: unknown } | null)?.name === 'TimeoutError') return { error: msg, kind: 'timeout' };
     return { error: msg, kind: /취소됨|aborted/i.test(msg) ? 'cancelled' : 'failed' };
 }
 
@@ -105,6 +112,16 @@ function taskModelField(task: PlanTask, ctx: ExecContext): { model?: string } {
     return { model: target.providerId === 'local-llm' ? target.model : target.fullId };
 }
 
+/**
+ * 실행을 시도했다가 실패한 작업의 TaskResult — 실패 경로가 어디든(handler throw·타임아웃·runTask reject) 여기서 만든다.
+ * model 은 preflight 가 승인한 실행 대상의 fullId(성공 결과·task_results 와 같은 표기). 대상이 없는 작업(web.search·저장본 재조회)은 생략.
+ * 호출 자체를 하지 않은 작업(preflight 거절·선행 미완료 skipped·턴 시간 초과)은 여기를 거치지 않으므로 model 이 비어 있다.
+ */
+function failedRunResult(task: PlanTask, ctx: ExecContext, text: string, error: string, ms: number): TaskResult {
+    const target = ctx.targets?.get(task.id);
+    return { taskId: task.id, capability: task.capability, ok: false, status: 'failed', text, media: [], ms, error, ...(target ? { model: target.fullId } : {}) };
+}
+
 async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal): Promise<TaskResult> {
     const startedAt = Date.now();
     const modelField = taskModelField(task, ctx);
@@ -134,7 +151,7 @@ async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal
         return result;
     } catch (err) {
         const c = classify(err);
-        const result: TaskResult = { taskId: task.id, capability: task.capability, ok: false, status: 'failed', text: `[${c.kind}] ${c.error}`, media: [], ms: Date.now() - startedAt, error: c.error };
+        const result = failedRunResult(task, ctx, `[${c.kind}] ${c.error}`, c.error, Date.now() - startedAt);
         logger.warn(`[Executor] ${task.id} ${task.capability} ${c.kind}: ${c.error.slice(0, 200)}`);
         ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: c.error.slice(0, 120), ms: result.ms, ...modelField });
         return result;
@@ -172,7 +189,7 @@ export async function executePlan(plan: ValidatedPlan, ctx: ExecContext): Promis
             const task = runnable[i];
             const r: TaskResult = s.status === 'fulfilled'
                 ? s.value
-                : { taskId: task.id, capability: task.capability, ok: false, status: 'failed', text: `[failed] ${String(s.reason)}`, media: [], ms: 0, error: String(s.reason) };
+                : failedRunResult(task, ctx, `[failed] ${String(s.reason)}`, String(s.reason), 0);
             results.push(r); ctx.results.set(task.id, r);
             if (!r.ok) failedOrSkipped.add(task.id);
         });

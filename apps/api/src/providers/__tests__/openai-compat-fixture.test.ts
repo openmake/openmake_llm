@@ -33,6 +33,20 @@ describe('게이트웨이 계약', () => {
         expect(fixture.headers[0].authorization).toBe('Bearer gateway-master');
         expect(fixture.headers[0]['x-api-key']).toBe('byok-user-key');
     });
+
+    it('게이트웨이 재시도를 끈다 — x-litellm-num-retries: 0 (재시도가 provider 동시 요청 한도 경고를 쌓는다, 2026-11-11 hasa)', async () => {
+        reply = () => ({ kind: 'stream', chunks: [sseChunk({ content: 'ok' }, { finish_reason: 'stop' })] });
+        await provider().streamChat({ messages, modelId: 'qwen3-coder' }, {});
+        expect(fixture.headers[0]['x-litellm-num-retries']).toBe('0');
+    });
+
+    // 앱 SDK 기본 재시도(2회)도 끈다 — 게이트웨이가 504·429 를 돌려줄 때마다 다시 보내면 upstream 에 한 번씩 더 간다
+    it.each([504, 429])('게이트웨이 %i → 요청 1회(앱 SDK 재시도 없음)', async (status) => {
+        reply = () => ({ kind: 'error', status });
+        const err = await provider().streamChat({ messages, modelId: 'm' }, {}).then(() => null, (e) => e);
+        expect(err).toBeInstanceOf(ProviderError);
+        expect(fixture.requests).toHaveLength(1);
+    }, 30_000);
 });
 
 describe('정상 스트림', () => {

@@ -217,6 +217,9 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
 - **vLLM 이 없는 호스트**(Ollama 만 있는 개발 PC 등)도 자기 게이트웨이를 거친다: `--llm-base-url U --llm-api-key K --llm-model M` 은
   "게이트웨이 뒤의 업스트림"이다. 값은 `litellm.env` 의 `OMK_UPSTREAM_*` 에 기억되고, 환경의 config 사본에 그 모델 한 항목이 추가된다
   (레포 config 는 그대로, 주소·키는 `os.environ` 참조). 앱의 `LLM_BASE_URL` 은 언제나 자기 환경의 게이트웨이다.
+- `litellm.env` 에 `DEFAULT_MAX_RETRIES=0` 이 기본으로 들어간다(이미 적힌 값은 그대로) — 게이트웨이 안 OpenAI SDK 재시도를 끈다.
+  임베딩은 요청에 실은 재시도 0 을 LiteLLM 이 기본값 2 로 되돌려 이 환경 변수만 통한다. 이미지 생성은 이 값도 듣지 않는다(LiteLLM 고정값 2) — hasa 이미지는 앱이 provider 에 직결한다.
+  Router 재시도는 앱이 요청마다 `x-litellm-num-retries: 0` 으로 끈다(`apps/api/src/llm/gateway-headers.ts`).
 - 빼려면 `--no-litellm` (`.env` 의 `OMK_LITELLM=off`).
 - `env update` 는 **이미 게이트웨이가 있는 환경만** 갱신한다 — 기존 환경의 `LLM_BASE_URL` 을 가로채지 않는다.
 - python 은 `uv` 가 있으면 `uv venv --python 3.12`, 없으면 `python3 -m venv`. 버전 고정은 `OMK_LITELLM_SPEC='litellm[proxy]==X.Y.Z'`.

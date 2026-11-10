@@ -1275,6 +1275,9 @@ litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key $6=
     chmod 600 "$lenv"
     dotenv_ensure "$lenv" LITELLM_MASTER_KEY "sk-$(gen_secret)"
     dotenv_ensure "$lenv" DUMMY_UPSTREAM_KEY "sk-byok-forwarded-per-request"
+    # 게이트웨이 안 OpenAI SDK 재시도 끄기 — 임베딩은 요청의 max_retries 0 을 기본값(2)으로 되돌려 이 환경 변수만 통한다
+    # (LiteLLM 1.100.1~1.108.4 `max_retries or DEFAULT_MAX_RETRIES`). Router 재시도는 앱의 x-litellm-num-retries: 0 이 끈다.
+    dotenv_ensure "$lenv" DEFAULT_MAX_RETRIES 0
     [[ -z "${3:-}" ]] || dotenv_set "$lenv" QWEN_VLLM_API_BASE "$3"
     [[ -z "${4:-}" ]] || dotenv_set "$lenv" BGE_VLLM_API_BASE "$4"
     [[ -z "${5:-}" ]] || dotenv_set "$lenv" VLLM_API_KEY "$5"
@@ -1941,7 +1944,8 @@ cmd_env_update_unlocked() {
     # 새로 받은 Dockerfile 로 빌드한다(안 바뀌었으면 캐시로 수 초). .env 가 바뀐 경우에만 한 번 더 재시작.
     runtime_images_ensure "$ldir" "$env"
     ops_sandbox_guard "$ldir"
-    # 이미 게이트웨이가 있는 환경만 갱신한다(새 config 복사 + 재기동, litellm.env 는 그대로) — update 가 기존 환경의
+    # 이미 게이트웨이가 있는 환경만 갱신한다(새 config 복사 + 재기동, litellm.env 는 있는 값은 그대로 두고 없는 기본 키만
+    # 채운다 — DEFAULT_MAX_RETRIES=0 등) — update 가 기존 환경의
     # LLM_BASE_URL 을 가로채지 않게. 새로 붙이려면 'omk env install <env>' 를 다시 실행한다(멱등).
     dgx_update_apply "$ldir" "$env"
     LITELLM_CHANGED=0; [[ ! -d "$(litellm_dir "$env")" ]] || litellm_ensure "$ldir" "$env"

@@ -6,11 +6,11 @@
  * @module addons/image-runtime/generate
  */
 import { CAPABILITY_LIMITS } from '../../config/capabilities';
-import type { CapabilityContext, CapabilityHandler } from '../../capability-contract/types';
+import type { CapabilityContext, CapabilityHandler, ModelDescriptor, SupportVerdict } from '../../capability-contract/types';
 import { loadAttachment } from '../../services/orchestrator/media-io';
 import { refsRawText, resolveTaskAttachments, type TaskMedia } from '../../services/orchestrator/types';
 import type { PlanTask } from '../../services/orchestrator/plan-schema';
-import { buildEditRequest, pickSize, type ImagesResponse } from './providers/hasa';
+import { buildEditRequest, generateOperationFor, IMAGE_DIRECT_ENDPOINT, IMAGE_OPERATIONS, isDirectImageProvider, pickSize, type ImagesResponse } from './providers/hasa';
 import { IMAGE_REFS_MAX_CHARS } from './constants';
 
 async function imageBytes(json: ImagesResponse, ctx: CapabilityContext): Promise<Buffer> {
@@ -29,7 +29,16 @@ async function saveImage(ctx: CapabilityContext, bytes: Buffer, alt: string, pre
     return { kind: 'image', urlPath: ref.urlPath, markdown: `![${alt.slice(0, 80).replace(/[[\]]/g, '')}](${ref.urlPath})` };
 }
 
+/** 직결 provider(hasa)만 direct 를 선언한다 — 그 밖은 게이트웨이(providers/hasa 의 직결 사유 참고) */
+function describeImageProviderSupport(model: ModelDescriptor): SupportVerdict {
+    return model.isExternal && isDirectImageProvider(model.providerId)
+        ? { supported: true, direct: { endpoint: IMAGE_DIRECT_ENDPOINT } }
+        : { supported: true };
+}
+
 export const imageGenerateHandler: CapabilityHandler = {
+    operations: IMAGE_OPERATIONS,
+    describeProviderSupport: describeImageProviderSupport,
     async execute(task: PlanTask, ctx: CapabilityContext) {
         const refs = refsRawText(task, ctx, IMAGE_REFS_MAX_CHARS);
         const prompt = [task.text || task.instruction, refs ? `Context: ${refs}` : ''].filter(Boolean).join('\n').trim();
@@ -37,13 +46,15 @@ export const imageGenerateHandler: CapabilityHandler = {
         const target = ctx.model.describe();
         const size = pickSize(task.extra, target.params);
         // response_format 미전송 — LiteLLM 이 커스텀 image 모델에서 거부(UnsupportedParamsError), vLLM-Omni 는 b64_json 기본
-        const json = await ctx.model.invokeJson<ImagesResponse>({ operation: 'images.generate', payload: { model: target.model, prompt, n: 1, size }, timeoutMs: CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, signal: ctx.signal });
+        const json = await ctx.model.invokeJson<ImagesResponse>({ operation: generateOperationFor(target.providerId), payload: { model: target.model, prompt, n: 1, size }, timeoutMs: CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, signal: ctx.signal });
         const media = await saveImage(ctx, await imageBytes(json, ctx), prompt, 'img');
         return { ok: true, text: ctx.lang === 'ko' ? `이미지 생성 완료 (${size}): ${media.urlPath}` : `Image generated (${size}): ${media.urlPath}`, media: [media], model: target.fullId, usage: { units: { kind: 'images', count: 1 } } };
     },
 };
 
 export const imageEditHandler: CapabilityHandler = {
+    operations: IMAGE_OPERATIONS,
+    describeProviderSupport: describeImageProviderSupport,
     async execute(task: PlanTask, ctx: CapabilityContext) {
         const prompt = task.instruction.trim();
         if (!prompt) throw new Error('image.edit: instruction(수정 지시)이 비어 있습니다');
