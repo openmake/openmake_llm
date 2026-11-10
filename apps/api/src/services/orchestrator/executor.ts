@@ -105,6 +105,16 @@ function taskModelField(task: PlanTask, ctx: ExecContext): { model?: string } {
     return { model: target.providerId === 'local-llm' ? target.model : target.fullId };
 }
 
+/**
+ * 실행을 시도했다가 실패한 작업의 TaskResult — 실패 경로가 어디든(handler throw·타임아웃·runTask reject) 여기서 만든다.
+ * model 은 preflight 가 승인한 실행 대상의 fullId(성공 결과·task_results 와 같은 표기). 대상이 없는 작업(web.search·저장본 재조회)은 생략.
+ * 호출 자체를 하지 않은 작업(preflight 거절·선행 미완료 skipped·턴 시간 초과)은 여기를 거치지 않으므로 model 이 비어 있다.
+ */
+function failedRunResult(task: PlanTask, ctx: ExecContext, text: string, error: string, ms: number): TaskResult {
+    const target = ctx.targets?.get(task.id);
+    return { taskId: task.id, capability: task.capability, ok: false, status: 'failed', text, media: [], ms, error, ...(target ? { model: target.fullId } : {}) };
+}
+
 async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal): Promise<TaskResult> {
     const startedAt = Date.now();
     const modelField = taskModelField(task, ctx);
@@ -134,7 +144,7 @@ async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal
         return result;
     } catch (err) {
         const c = classify(err);
-        const result: TaskResult = { taskId: task.id, capability: task.capability, ok: false, status: 'failed', text: `[${c.kind}] ${c.error}`, media: [], ms: Date.now() - startedAt, error: c.error };
+        const result = failedRunResult(task, ctx, `[${c.kind}] ${c.error}`, c.error, Date.now() - startedAt);
         logger.warn(`[Executor] ${task.id} ${task.capability} ${c.kind}: ${c.error.slice(0, 200)}`);
         ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: c.error.slice(0, 120), ms: result.ms, ...modelField });
         return result;
@@ -172,7 +182,7 @@ export async function executePlan(plan: ValidatedPlan, ctx: ExecContext): Promis
             const task = runnable[i];
             const r: TaskResult = s.status === 'fulfilled'
                 ? s.value
-                : { taskId: task.id, capability: task.capability, ok: false, status: 'failed', text: `[failed] ${String(s.reason)}`, media: [], ms: 0, error: String(s.reason) };
+                : failedRunResult(task, ctx, `[failed] ${String(s.reason)}`, String(s.reason), 0);
             results.push(r); ctx.results.set(task.id, r);
             if (!r.ok) failedOrSkipped.add(task.id);
         });
