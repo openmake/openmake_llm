@@ -8,6 +8,7 @@
  *  - provider 가 돌려준 외부 URL 재다운로드는 SSRF 고정 fetch(safeFetch) + content-type·크기 검증
  */
 import { withProviderSlot } from '../../llm/external-throttle';
+import { GATEWAY_NO_RETRY_HEADERS } from '../../llm/gateway-headers';
 import { safeFetch } from '../../security/ssrf-guard';
 import type { CapabilityTarget } from './capability-resolver';
 import { classifyLlmError, recordLlmRequestMetric } from '../../llm/request-metrics';
@@ -73,15 +74,9 @@ function fetchFor(target: CapabilityTarget): (url: string, init: RequestInit) =>
     return target.transport === 'direct' ? (u, i) => safeFetch(u, i) : (u, i) => fetch(u, i);
 }
 
-/**
- * 게이트웨이(LiteLLM) 재시도 끄기 — capability 호출은 조용히 재시도하지 않는다(withProviderSlot 과 같은 원칙).
- * LiteLLM 기본 재시도(2회)는 앱이 타임아웃으로 끊은 뒤에도 upstream 에 다시 보내 provider 동시 요청 한도를 넘긴다
- * (2026-11-11 hasa Qwen-Image: 504 뒤 재시도가 다음 요청과 겹쳐 concurrent_limit 경고 1→4 누적).
- */
-const GATEWAY_NO_RETRY_HEADERS = { 'x-litellm-num-retries': '0' } as const;
-
 function buildInit(target: CapabilityTarget, opts: CallOptions, signal: AbortSignal): RequestInit {
     const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+    // 게이트웨이 재시도 끄기 — capability 호출은 조용히 재시도하지 않는다(llm/gateway-headers)
     const base = target.transport === 'gateway' ? { ...GATEWAY_NO_RETRY_HEADERS, ...target.headers } : { ...target.headers };
     return {
         method: opts.method ?? (opts.body ? 'POST' : 'GET'),
