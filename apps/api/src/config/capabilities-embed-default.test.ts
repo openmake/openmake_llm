@@ -3,6 +3,8 @@
  * 종전에는 배정이 없어도 `local-llm:bge-m3`(또는 CAPABILITY_DEFAULT_TEXT_EMBED)가 조용히 실행 대상이 됐다.
  * CAPABILITY_DEFAULTS 는 모듈 로딩 시 env 를 읽으므로 사례마다 env 를 먼저 넣고 모듈을 격리해 다시 불러온다.
  */
+export {};
+
 type Defaults = Partial<Record<string, string>>;
 
 const ENV_KEYS = ['CAPABILITY_DEFAULT_TEXT_EMBED', 'CAPABILITY_DEFAULT_TEXT_REASON'] as const;
