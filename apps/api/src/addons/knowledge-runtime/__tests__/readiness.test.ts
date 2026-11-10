@@ -23,7 +23,7 @@ jest.mock('../embedding/index-catalog', () => ({
     ensureIndexForTarget: jest.fn(),
 }));
 
-import { describeSpaceEmbeddings, assertSpaceEmbeddingReady } from '../embedding/readiness';
+import { describeSpaceEmbeddings, assertSpaceEmbeddingReady, ensureLiveIndex } from '../embedding/readiness';
 
 const idx = (id: string, providerRef: string, dimension = 3) => ({ id, providerRef, modelId: providerRef.replace(':', '/'), dimension, metric: 'cosine', status: 'ready', requestParams: {} });
 const liveOf = (fullId: string, params: Record<string, string> = {}) => ({ fullId, providerId: fullId.split(':')[0], model: fullId.replace(':', '/'), params, source: 'user' });
@@ -111,5 +111,30 @@ describe('assertSpaceEmbeddingReady', () => {
         describeLiveEmbedding.mockResolvedValueOnce({ live: null, failure: { reason: 'unassigned', message: '미배정' } });
         await expect(assertSpaceEmbeddingReady({ id: 's', embedding_index_id: null }, 'u1')).rejects.toMatchObject({ statusCode: 412, code: 'EMBEDDING_UNASSIGNED' });
         await expect(assertSpaceEmbeddingReady({ id: 's', embedding_index_id: null }, 'u1')).resolves.toBeUndefined();
+    });
+});
+
+describe('개인·전역 모두 미배정(코드 기본값 없음, 2026-11-10)', () => {
+    const unassigned = { live: null, failure: { reason: 'unassigned', message: '미배정' } };
+    const provider = jest.requireMock('../embedding/provider') as { probeDimension: jest.Mock };
+    const catalog = jest.requireMock('../embedding/index-catalog') as { ensureIndexForTarget: jest.Mock };
+    beforeEach(() => {
+        provider.probeDimension.mockReset();
+        catalog.ensureIndexForTarget.mockReset();
+    });
+
+    it('새 색인 보장(ensureLiveIndex)은 412 EMBEDDING_UNASSIGNED — 차원 측정·색인 쓰기 없음', async () => {
+        describeLiveEmbedding.mockResolvedValueOnce(unassigned);
+        await expect(ensureLiveIndex('u1')).rejects.toMatchObject({ statusCode: 412, code: 'EMBEDDING_UNASSIGNED' });
+        expect(catalog.ensureIndexForTarget).not.toHaveBeenCalled();
+        expect(provider.probeDimension).not.toHaveBeenCalled();
+    });
+
+    it('색인이 고정된 기존 공간은 현재 배정이 없어도 기록 모델 키만 보고 통과한다', async () => {
+        indexes.set('i-g', idx('i-g', 'gemini:emb-1'));
+        describeLiveEmbedding.mockResolvedValue(unassigned);
+        await expect(assertSpaceEmbeddingReady({ id: 's', embedding_index_id: 'i-g' }, 'u1')).resolves.toBeUndefined();
+        expect(checkEmbeddingAvailability).toHaveBeenCalledWith('gemini:emb-1', 'u1');
+        expect(describeLiveEmbedding).not.toHaveBeenCalled();
     });
 });
