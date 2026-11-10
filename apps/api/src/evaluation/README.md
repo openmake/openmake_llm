@@ -172,7 +172,7 @@ npm run eval:tools -- --real --limit 10    # real — ChatService evalToolObserv
 
 ## nightly 지연 회귀 기준선 (2026-09-17, F26.8)
 
-CI 는 LLM 에 닿지 못해 지연을 **예산(프롬프트·도구 스키마 크기, Gate 7)** 으로만 막고, 실측 회귀는 nightly 가 본다.
+CI 는 LLM 에 닿지 못해 지연을 **예산(프롬프트·도구 스키마 크기, Gate 7)** 으로만 막고, 실측 회귀는 `scripts/nightly-eval.sh`(PM2 cron 으로 등록했을 때 매일 실행, 아니면 수동 실행)가 본다.
 
 ```bash
 npm run eval:response -- --real --limit 30                    # 기준선과 비교 — +20% 초과 회귀면 exit 1
