@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.130.0](https://github.com/openmake/openmake_llm/compare/v1.129.2...v1.130.0) (2026-11-10)
+
+
+### ✨ 기능
+
+* **embedding:** 임베딩 코드 기본값 폴백 제거 — 개인·전역 배정만 사용 ([2f3a2b4](https://github.com/openmake/openmake_llm/commit/2f3a2b4682d27acb706704d55c089456f9458f43))
+
+
+### 🐛 버그 수정
+
+* **eval:** K01 전역 임베딩 배정 전제 주석을 테스트가 있는 seeding.ts 로 이동 ([2611fb5](https://github.com/openmake/openmake_llm/commit/2611fb5c1160b8e4991205366249863e20d55d67))
+* **test:** capabilities-embed-default 테스트를 모듈로 만들어 tsc 전역 이름 충돌 해소 ([81f2a6f](https://github.com/openmake/openmake_llm/commit/81f2a6fb252c972f7748edf7358bca5ac12c6918))
+
 ## [1.129.2](https://github.com/openmake/openmake_llm/compare/v1.129.1...v1.129.2) (2026-11-09)
 
 
