@@ -1,5 +1,5 @@
 /**
- * 임베딩 provider — 모델은 OpenMake capability 설정 `text.embed` 로 고르고(사용자 → 전역 → 기본값),
+ * 임베딩 provider — 모델은 OpenMake capability 설정 `text.embed` 로 고르고(사용자 → 전역, 코드 기본값 없음),
  * 외부 모델은 키 정책 actor-byok 에 따라 **행위자 사용자(업로드·재색인·검색한 사람)의 키**로만 실행한다.
  * 벡터는 공간에 고정된 색인 단위로 산다 — 색인에 넣거나 검색할 때는 색인에 **기록된 모델**로 임베딩한다(makeIndexEmbedder).
  * 키 문제는 조용히 바꾸지 않고 EmbeddingError(reason) 로 드러내며, 공급자가 키를 거절하면 거절 메모가 재호출을 막는다.
@@ -219,7 +219,7 @@ export async function checkEmbeddingAvailability(fullId: string, userId?: string
 }
 
 /**
- * 사용자의 실효 임베딩 — 배정(사용자 → 전역 → 기본값)과 그 키 상태. 공급자 호출·차원 측정·복호화 없음.
+ * 사용자의 실효 임베딩 — 배정(사용자 → 전역, 둘 다 없으면 미배정)과 그 키 상태. 공급자 호출·차원 측정·복호화 없음.
  * live 는 배정이 있으면 키 상태와 무관하게 채운다(화면이 "어느 모델인지" 를 보이도록), failure 는 지금 실행할 수 없는 이유.
  */
 export async function describeLiveEmbedding(userId?: string | null): Promise<{

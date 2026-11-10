@@ -133,6 +133,14 @@ describe('ensureSpaceIndex', () => {
         expect((await ensureSpaceIndex('s1', 'u1')).id).toBe('theirs');
     });
 
+    it('개인·전역 모두 미배정(live null)이면 EmbeddingError unassigned — 차원 측정·색인·고정 쓰기 없음', async () => {
+        provider.describeLiveEmbedding.mockResolvedValue({ live: null, failure: { reason: 'unassigned', message: '미배정' } });
+        await expect(ensureSpaceIndex('s1', 'u1')).rejects.toMatchObject({ reason: 'unassigned' });
+        expect(provider.probeDimension).not.toHaveBeenCalled();
+        expect(sqlWith('INSERT')).toHaveLength(0);
+        expect(sqlWith('UPDATE')).toHaveLength(0);
+    });
+
     it('라이브 배정이 실행 불가면 EmbeddingError(reason) — 색인·고정 쓰기 없음', async () => {
         provider.describeLiveEmbedding.mockResolvedValue({ live, failure: { reason: 'key_missing', message: '키 없음' } });
         await expect(ensureSpaceIndex('s1', 'u1')).rejects.toMatchObject({ reason: 'key_missing' });
