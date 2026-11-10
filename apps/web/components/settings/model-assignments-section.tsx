@@ -23,6 +23,7 @@ import { ApiClient } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
 import {
   DEFAULT_VALUE,
+  EMBED_SLOT_ID,
   GROUP_ORDER,
   PARAM_VALUE_MAX_CHARS,
   SELECT_MIN_WIDTH_CLASS,
@@ -161,6 +162,7 @@ export function ModelAssignmentsSection({ scope }: { scope: "user" | "global" })
                   {slots.map((slot) => (
                     <SlotRow
                       key={slot.id}
+                      scope={scope}
                       slot={slot}
                       models={slot.kind === "modality" ? modalityModels : textModels}
                       assigned={assignments.get(slot.id)?.fullId ?? DEFAULT_VALUE}
@@ -203,7 +205,23 @@ function slotKey(id: string): string {
   return id.replace(/\./g, "_");
 }
 
+/**
+ * 임베딩 슬롯은 코드 기본값이 없다(개인 → 전역만) — 빈 선택·초기화 문구를 scope 별 의미로 바꾼다.
+ * 관리자: 해제 = 미배정, 개인: 해제 = 전역 배정 사용(실행 가능 여부는 서버 effective 가 판정한다). 다른 슬롯은 종전 문구.
+ */
+function emptyChoiceLabels(
+  slotId: string,
+  scope: "user" | "global",
+  t: ReturnType<typeof useTranslations>,
+): { option: string; reset: string } {
+  if (slotId !== EMBED_SLOT_ID) return { option: t("defaultOption"), reset: t("resetLabel") };
+  return scope === "global"
+    ? { option: t("embedGlobalOption"), reset: t("embedGlobalResetLabel") }
+    : { option: t("embedUserOption"), reset: t("embedUserResetLabel") };
+}
+
 function SlotRow({
+  scope,
   slot,
   models,
   assigned,
@@ -217,6 +235,7 @@ function SlotRow({
   onParamApply,
   t,
 }: {
+  scope: "user" | "global";
   slot: ModelSlotInfo;
   models: ModelEntry[];
   assigned: string;
@@ -232,6 +251,7 @@ function SlotRow({
 }) {
   const key = slotKey(slot.id);
   const label = t(`slots.${key}.title`);
+  const empty = emptyChoiceLabels(slot.id, scope, t);
   const unavailable = !slot.available;
   const selectDisabled = disabledAll || unavailable;
   const dirty =
@@ -298,7 +318,7 @@ function SlotRow({
           aria-label={label}
           onChange={(e) => onAssign(e.target.value)}
         >
-          <option value={DEFAULT_VALUE}>{t("defaultOption")}</option>
+          <option value={DEFAULT_VALUE}>{empty.option}</option>
           {/* 저장된 배정이 필터된 목록 밖이면 값을 보존하는 옵션을 덧붙인다(구 model-roles 규칙) */}
           {assigned !== DEFAULT_VALUE && !models.some((m) => m.modelId === assigned) && (
             <option value={assigned}>
@@ -316,8 +336,8 @@ function SlotRow({
           <Button
             variant="ghost"
             size="sm"
-            aria-label={t("resetLabel")}
-            title={t("resetLabel")}
+            aria-label={empty.reset}
+            title={empty.reset}
             onClick={() => onAssign(DEFAULT_VALUE)}
           >
             <RotateCcw className="h-4 w-4" aria-hidden />

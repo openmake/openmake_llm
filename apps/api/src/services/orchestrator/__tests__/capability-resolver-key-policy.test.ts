@@ -66,17 +66,47 @@ describe('resolveCapabilityTarget — text.embed actor-byok', () => {
         await expect(resolveCapabilityTarget('text.embed', 'u1', deps({ global: g, keyRow: { isActive: true, authMethod: 'oauth' } }))).rejects.toMatchObject({ code: 'CAPABILITY_PROVIDER_NOT_GATEWAY' });
     });
 
-    it('③ 외부 기본값(env 로 준 외부 fullId) → 사용자 키, source default', async () => {
-        defaults['text.embed'] = 'openrouter:emb-1';
-        const t = await resolveCapabilityTarget('text.embed', 'u1', deps({ userKey: 'byok' }));
-        expect(t).toMatchObject({ source: 'default', costOwner: 'user', model: 'openrouter/emb-1' });
+    it('개인 외부 배정이 전역 배정보다 우선 → 사용자 키, source user', async () => {
+        const d = deps({ global: [row('__global__', 'text.embed', 'local-llm:emb-global')], userKey: 'byok' });
+        (d.models.get as jest.Mock).mockResolvedValueOnce(row('u1', 'text.embed', 'openrouter:emb-1'));
+        const t = await resolveCapabilityTarget('text.embed', 'u1', d);
+        expect(t).toMatchObject({ source: 'user', costOwner: 'user', model: 'openrouter/emb-1' });
         expect(t.headers['x-api-key']).toBe('byok');
     });
 
-    it('③ 로컬 기본값은 종전대로 로컬', async () => {
-        defaults['text.embed'] = 'local-llm:emb-local';
-        const t = await resolveCapabilityTarget('text.embed', 'u1', deps());
-        expect(t).toMatchObject({ source: 'default', costOwner: 'local', model: 'emb-local', providerId: 'local-llm' });
+    it('개인 미배정 → 전역 로컬 배정을 상속, source global', async () => {
+        const t = await resolveCapabilityTarget('text.embed', 'u1', deps({ global: [row('__global__', 'text.embed', 'local-llm:emb-local')] }));
+        expect(t).toMatchObject({ source: 'global', costOwner: 'local', model: 'emb-local', providerId: 'local-llm' });
+    });
+
+    it('개인·전역 모두 없음 → 실제 config 에 코드 기본값이 없어 CAPABILITY_UNASSIGNED, 키 조회 없음', async () => {
+        expect(CAPABILITY_DEFAULTS['text.embed']).toBeUndefined();
+        const d = deps({ userKey: 'byok', serverKey: 'srv' });
+        await expect(resolveCapabilityTarget('text.embed', 'u1', d)).rejects.toMatchObject({ code: 'CAPABILITY_UNASSIGNED' });
+        await expect(resolveCapabilityTarget('text.embed', undefined, d)).rejects.toMatchObject({ code: 'CAPABILITY_UNASSIGNED' });
+        expect(d.userKeys.getByUserAndProvider).not.toHaveBeenCalled();
+        expect(d.userKeys.decryptKey).not.toHaveBeenCalled();
+        expect(d.serverKeys.decryptKey).not.toHaveBeenCalled();
+    });
+
+    it('개인 배정의 키 누락은 전역 배정으로 넘어가지 않고 그 키 오류로 실패', async () => {
+        const d = deps({ global: [row('__global__', 'text.embed', 'local-llm:emb-global')], keyRow: null, serverKey: 'srv' });
+        (d.models.get as jest.Mock).mockResolvedValueOnce(row('u1', 'text.embed', 'openrouter:emb-1'));
+        await expect(resolveCapabilityTarget('text.embed', 'u1', d)).rejects.toMatchObject({ code: 'CAPABILITY_KEY_MISSING' });
+        expect(d.serverKeys.decryptKey).not.toHaveBeenCalled();
+    });
+
+    it('개인 배정 조회 장애는 전역 배정이 있어도 CAPABILITY_LOOKUP_FAILED', async () => {
+        const d = deps({ global: [row('__global__', 'text.embed', 'local-llm:emb-global')] });
+        (d.models.get as jest.Mock).mockRejectedValueOnce(new Error('db down'));
+        await expect(resolveCapabilityTarget('text.embed', 'u1', d)).rejects.toMatchObject({ code: 'CAPABILITY_LOOKUP_FAILED' });
+    });
+
+    it('전역 배정 해제 뒤 캐시를 비우면 미배정 — 이전 전역 값이나 기본값이 남지 않는다', async () => {
+        const g = [row('__global__', 'text.embed', 'local-llm:emb-global')];
+        await expect(resolveCapabilityTarget('text.embed', 'u1', deps({ global: g }))).resolves.toMatchObject({ source: 'global' });
+        clearGlobalCapabilityCache();
+        await expect(resolveCapabilityTarget('text.embed', 'u1', deps({ global: [] }))).rejects.toMatchObject({ code: 'CAPABILITY_UNASSIGNED' });
     });
 });
 
@@ -177,13 +207,13 @@ describe('describeCapabilityAssignment — 키 검사·복호화 없이 배정�
         expect(d.serverKeys.get).not.toHaveBeenCalled();
     });
 
-    it('로컬 기본값 → local-llm 태그, 미배정이면 null', async () => {
-        defaults['text.embed'] = 'local-llm:emb-local';
-        expect(await describeCapabilityAssignment('text.embed', 'u1', deps())).toEqual({
-            fullId: 'local-llm:emb-local', providerId: 'local-llm', model: 'emb-local', params: {}, source: 'default',
+    it('전역 로컬 배정 → local-llm 태그, 개인·전역 모두 없으면 null(실제 config — 코드 기본값 없음)', async () => {
+        expect(await describeCapabilityAssignment('text.embed', 'u1', deps({ global: [row('__global__', 'text.embed', 'local-llm:emb-local')] }))).toEqual({
+            fullId: 'local-llm:emb-local', providerId: 'local-llm', model: 'emb-local', params: {}, source: 'global',
         });
-        delete defaults['text.embed'];
+        clearGlobalCapabilityCache();
         expect(await describeCapabilityAssignment('text.embed', 'u1', deps())).toBeNull();
+        expect(await describeCapabilityAssignment('text.embed', undefined, deps())).toBeNull();
     });
 
     it('실효 표시: 사용자 문맥 없는 actor-byok 는 키 검사 없이 배정 + keyPolicy, 그 밖은 종전 해석', async () => {
@@ -195,7 +225,6 @@ describe('describeCapabilityAssignment — 키 검사·복호화 없이 배정�
         await expect(describeEffectiveCapabilityTarget('text.embed', 'u1', deps({ global: g, keyRow: null }))).rejects.toMatchObject({ code: 'CAPABILITY_KEY_MISSING' });
         // assignment-scope 는 종전 — 서버 키 없으면 실패
         await expect(describeEffectiveCapabilityTarget('audio.speech', undefined, d)).rejects.toMatchObject({ code: 'CAPABILITY_KEY_MISSING' });
-        delete defaults['text.embed'];
         clearGlobalCapabilityCache();
         await expect(describeEffectiveCapabilityTarget('text.embed', undefined, deps())).rejects.toMatchObject({ code: 'CAPABILITY_UNASSIGNED' });
     });

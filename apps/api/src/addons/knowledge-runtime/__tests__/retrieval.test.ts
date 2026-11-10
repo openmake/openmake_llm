@@ -84,6 +84,19 @@ describe('retrieve (근거 없음 경로)', () => {
         expect(res.contextBlock.length).toBeGreaterThan(0);
     });
 
+    it('색인 없는 공간 검색은 현재 배정과 무관하게 noEvidence — 질의 임베딩·임베더 생성 없음', async () => {
+        mockMakeIndexEmbedder.mockReset();
+        const embed = jest.fn(async (t: string[]) => t.map(() => [1, 0]));
+        const res = await retrieve(
+            { actor, spaceIds: ['s1'], query: 'q', sourceOffset: 0, userLang: 'en' },
+            { embed, getSpaceIndex: async () => null },
+        );
+        expect(res).toMatchObject({ hadEvidence: false, sources: [] });
+        expect(res).not.toHaveProperty('unavailableReason');
+        expect(embed).not.toHaveBeenCalled();
+        expect(mockMakeIndexEmbedder).not.toHaveBeenCalled();
+    });
+
     it('spaceIds 가 비면 검색하지 않는다', async () => {
         const embed = jest.fn(async (t: string[]) => t.map(() => [1, 0]));
         const res = await retrieve(
