@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.130.1](https://github.com/openmake/openmake_llm/compare/v1.130.0...v1.130.1) (2026-11-10)
+
+
+### 🐛 버그 수정
+
+* **env:** 게이트웨이 litellm.env 에 DEFAULT_MAX_RETRIES=0 을 넣는다 ([4c6061d](https://github.com/openmake/openmake_llm/commit/4c6061d5f96385fe032720a8af0d238f14c97c79))
+* **image-runtime:** hasa 이미지 생성·편집을 provider 직결로 바꾼다 ([519cae3](https://github.com/openmake/openmake_llm/commit/519cae344715bff46079182c73b6d541d263cbf3))
+* **orchestrator:** capability 게이트웨이 호출의 LiteLLM 재시도를 끈다 ([26bb5f9](https://github.com/openmake/openmake_llm/commit/26bb5f9cc37f594ed04565dee8fa68e7f9906382))
+* **orchestrator:** 슬롯·Gate 대기 중 타임아웃도 [timeout] 으로 기록한다 ([0f20e67](https://github.com/openmake/openmake_llm/commit/0f20e67ba326225f35e8550b2b93dd92b5608a3a))
+* **orchestrator:** 실패 작업 결과에도 실행 대상 모델을 남긴다 ([3802ec5](https://github.com/openmake/openmake_llm/commit/3802ec5702d72ef82bfa888789dc2d52b7b50412))
+* **orchestrator:** 작업 타임아웃을 사용자 취소와 구분해 [timeout] 으로 기록한다 ([8b2727d](https://github.com/openmake/openmake_llm/commit/8b2727d3ae4fa8524b3b763a18268b57b6492ad8))
+* **providers:** 외부 채팅 게이트웨이 client 의 앱 SDK 재시도를 끈다 ([d792cca](https://github.com/openmake/openmake_llm/commit/d792cca0b65bff893ac67395291c4fb453200a02))
+* **providers:** 외부 채팅·배정 probe 의 게이트웨이 요청도 재시도를 끈다 ([aced358](https://github.com/openmake/openmake_llm/commit/aced358ac7b4c7eab50323b9541ed82ae2d506cd))
+
+
+### ♻️ 리팩터링
+
+* **llm:** 게이트웨이 재시도 끄기 헤더를 공용 상수로 옮긴다 ([7b2a800](https://github.com/openmake/openmake_llm/commit/7b2a800b5eb4cbebb3403eb9cde3c3b843ebb231))
+
 ## [1.130.0](https://github.com/openmake/openmake_llm/compare/v1.129.2...v1.130.0) (2026-11-10)
 
 
