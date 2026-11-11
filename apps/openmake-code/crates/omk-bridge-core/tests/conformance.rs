@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use omk_bridge_core::platform::Platform;
 use serde_json::Value;
 
 const FIXTURE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../packages/local-bridge-core/conformance");
@@ -73,10 +74,47 @@ fn constants() {
     assert_eq!(fixture_keys, seen, "constants: Rust 가 모르는 값 또는 빠진 값");
 }
 
+fn platform_of(v: &Value, ctx: &str) -> Platform {
+    match v.as_str() {
+        Some("darwin") => Platform::Darwin,
+        Some("linux") => Platform::Linux,
+        Some("win32") => Platform::Win32,
+        other => panic!("{ctx}: 모르는 platform {other:?}"),
+    }
+}
+
+/// suite 안 한 묶음의 사례를 돌린다. 실패 메시지에 `suite/묶음/id` 를 넣는다.
+fn each_case(doc: &Value, suite: &str, group: &str, mut f: impl FnMut(&str, &Value, &Value)) {
+    let cases = doc[group].as_array().unwrap_or_else(|| panic!("{suite}/{group}: 배열 아님"));
+    assert!(!cases.is_empty(), "{suite}/{group}: 사례 0개");
+    for c in cases {
+        let ctx = format!("{suite}/{group}/{}", c["id"].as_str().unwrap());
+        f(&ctx, &c["input"], &c["expect"]);
+    }
+}
+
 #[test]
 fn platform() {
-    let _doc = load("platform");
-    todo!("platform suite");
+    use omk_bridge_core::platform::*;
+    let doc = load("platform");
+    let groups: Vec<&str> = doc.as_object().unwrap().keys().map(String::as_str).filter(|k| !["suite", "version"].contains(k)).collect();
+    let mut sorted = groups.clone();
+    sorted.sort_unstable();
+    assert_eq!(sorted, ["bulkApprovalAllowed", "folderNameOf", "pathListSeparator", "shellInvocation"], "platform: 모르는 함수 묶음");
+    each_case(&doc, "platform", "shellInvocation", |ctx, i, e| {
+        let got = shell_invocation(i["command"].as_str().unwrap(), platform_of(&i["platform"], ctx), i["comSpec"].as_str());
+        assert_eq!(got.file, e["file"].as_str().unwrap(), "{ctx}");
+        assert_eq!(got.args, strs(&e["args"], ctx), "{ctx}");
+    });
+    each_case(&doc, "platform", "pathListSeparator", |ctx, i, e| {
+        assert_eq!(path_list_separator(platform_of(&i["platform"], ctx)), e.as_str().unwrap(), "{ctx}");
+    });
+    each_case(&doc, "platform", "folderNameOf", |ctx, i, e| {
+        assert_eq!(folder_name_of(i["root"].as_str().unwrap()), e.as_str().unwrap(), "{ctx}");
+    });
+    each_case(&doc, "platform", "bulkApprovalAllowed", |ctx, i, e| {
+        assert_eq!(bulk_approval_allowed(platform_of(&i["platform"], ctx)), e.as_bool().unwrap(), "{ctx}");
+    });
 }
 
 #[test]

@@ -4,3 +4,4 @@
 //! `packages/local-bridge-core/conformance` 의 fixture 를 두 구현이 함께 통과해야 한다.
 
 pub mod constants;
+pub mod platform;
