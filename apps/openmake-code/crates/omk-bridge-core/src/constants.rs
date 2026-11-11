@@ -20,11 +20,29 @@ pub const CACHE_SUBPATHS: &[&str] = &[
     "go/pkg",
 ];
 /// 읽기를 막는 비밀 경로.
-pub const SECRET_SUBPATHS: &[&str] = &[".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config/gcloud", "Library/Keychains"];
+pub const SECRET_SUBPATHS: &[&str] = &[
+    ".ssh",
+    ".aws",
+    ".gnupg",
+    ".kube",
+    ".docker",
+    ".config/gcloud",
+    "Library/Keychains",
+];
 
 /// exec 자식에 넘기는 env 허용 목록 — 호스트 env 를 통째로 물려주면 헬퍼의 API 키 등 비밀이 도구 결과로 샌다.
-pub const EXEC_ENV_ALLOWLIST_POSIX: &[&str] =
-    &["HOME", "USER", "LOGNAME", "SHELL", "TERM", "COLORTERM", "LANG", "LANGUAGE", "TMPDIR", "TZ"];
+pub const EXEC_ENV_ALLOWLIST_POSIX: &[&str] = &[
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    "TERM",
+    "COLORTERM",
+    "LANG",
+    "LANGUAGE",
+    "TMPDIR",
+    "TZ",
+];
 pub const EXEC_ENV_ALLOWLIST_PREFIX_POSIX: &[&str] = &["LC_"];
 /// 셸 경로 탐색 자식에만 더 넘기는 위치 변수. `MISE_GITHUB_TOKEN` 같은 비밀이 같은 접두를 써서 접두 매칭 없이 하나씩 적는다.
 pub const PATH_PROBE_ENV_EXTRA_POSIX: &[&str] = &[

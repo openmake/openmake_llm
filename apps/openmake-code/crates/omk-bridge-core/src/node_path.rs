@@ -3,7 +3,12 @@
 
 /// `path.posix.join` — 빈 인자는 건너뛰고 `/` 로 이은 뒤 정규화한다. 결과가 비면 `"."`.
 pub fn join(parts: &[&str]) -> String {
-    let joined = parts.iter().filter(|p| !p.is_empty()).copied().collect::<Vec<_>>().join("/");
+    let joined = parts
+        .iter()
+        .filter(|p| !p.is_empty())
+        .copied()
+        .collect::<Vec<_>>()
+        .join("/");
     if joined.is_empty() {
         return ".".to_owned();
     }
@@ -45,4 +50,56 @@ pub fn normalize(path: &str) -> String {
         out.push('/');
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{join, normalize};
+
+    /// 기대값은 Node `path.posix.join`·`normalize` 실행 결과다(sandbox-profile fixture 에 넣기 어려운 경계).
+    #[test]
+    fn join_matches_node() {
+        let cases: [(&[&str], &str); 19] = [
+            (&[], "."),
+            (&[""], "."),
+            (&["", ""], "."),
+            (&["a", "b"], "a/b"),
+            (&["/a/", "/b/"], "/a/b/"),
+            (&["a", ".."], "."),
+            (&["a", "..", ".."], ".."),
+            (&["../a", "../b"], "../b"),
+            (&["/", ".."], "/"),
+            (&["/a/b", "../../.."], "/"),
+            (&["./"], "./"),
+            (&["a/"], "a/"),
+            (&["a", "./"], "a/"),
+            (&["/"], "/"),
+            (&["//"], "/"),
+            (&["a//b/./c/"], "a/b/c/"),
+            (&[".."], ".."),
+            (&["...", "b"], ".../b"),
+            (&["a", "..", "/"], "./"),
+        ];
+        for (parts, want) in cases {
+            assert_eq!(join(parts), want, "join {parts:?}");
+        }
+    }
+
+    #[test]
+    fn normalize_matches_node() {
+        let cases = [
+            ("", "."),
+            ("/", "/"),
+            ("//a", "/a"),
+            ("./", "./"),
+            ("a/..", "."),
+            ("a/../", "./"),
+            ("/..", "/"),
+            ("../..", "../.."),
+            ("a/./b/.", "a/b"),
+        ];
+        for (input, want) in cases {
+            assert_eq!(normalize(input), want, "normalize {input:?}");
+        }
+    }
 }
