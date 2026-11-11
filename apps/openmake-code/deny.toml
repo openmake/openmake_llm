@@ -1,0 +1,14 @@
+# cargo deny check advisories licenses — 의존성 보안 권고와 라이선스만 본다.
+
+[graph]
+all-features = false
+
+[advisories]
+# 보안 권고(취약점)는 항상 실패. 유지 중단·철회 권고도 실패로 다룬다.
+unmaintained = "all"
+yanked = "deny"
+
+[licenses]
+# 실제 의존성 트리(regress·serde_json 계열)에 맞춘 허용 목록. 의존성을 더할 때 여기서 걸리면 검토한다.
+allow = ["MIT", "Apache-2.0", "Unicode-3.0"]
+confidence-threshold = 0.9
