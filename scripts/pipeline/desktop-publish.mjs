@@ -18,6 +18,7 @@ const TAG_PREFIX = 'desktop-native-v';
 const MANIFEST_ASSET = 'desktop-native.json';
 const MANIFEST_TIMEOUT_MS = 30_000;
 const DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
+const MAX_MANIFEST_BYTES = 64 * 1024;             // 자산 매니페스트는 수백 바이트 — 넘으면 읽다 말고 중단
 const MAX_DMG_BYTES = 512 * 1024 * 1024;         // 기본 상한(publish 의 maxDmgBytes) — 지금 dmg 는 이보다 한참 작다, 넘으면 받다 말고 중단
 export const EXIT = { OK: 0, FAILED: 1, PENDING: 75 };
 
@@ -95,6 +96,19 @@ function readPublished(manifestPath) {
     };
 }
 
+/** 응답 본문을 상한까지만 읽어 문자열로(content-length 선검사 + 읽은 길이 검사). 넘으면 throw. */
+async function readTextLimited(response, maxBytes) {
+    if (Number(response.headers.get('content-length')) > maxBytes) throw new Error('release manifest exceeds the size limit');
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of response.body ?? []) {
+        size += chunk.length;
+        if (size > maxBytes) throw new Error('release manifest exceeds the size limit');   // for-await 를 벗어나며 스트림을 취소한다
+        chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString('utf8');
+}
+
 /** dmg 를 스트림으로 받으며 sha256·크기를 잰다. 다르거나 넘치면 throw(파일 정리는 부르는 쪽). */
 async function download(fetchImpl, url, target, expectedSha256, maxBytes) {
     const response = await fetchImpl(url, { redirect: 'follow', signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
@@ -160,7 +174,7 @@ export async function publish(options, deps = {}) {
         const response = await fetch(`${base}/${MANIFEST_ASSET}`, { redirect: 'follow', signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) });
         if (response.status === 404) return finish('pending', EXIT.PENDING, `release asset ${TAG_PREFIX}${version} not available yet`);
         if (!response.ok) throw new Error(`release manifest download failed: HTTP ${response.status}`);
-        const asset = parseReleaseManifest(await response.text(), version);
+        const asset = parseReleaseManifest(await readTextLimited(response, MAX_MANIFEST_BYTES), version);
         Object.assign(receipt, { file: asset.file, sha256: asset.sha256, gitSha: asset.gitSha });
         const lineage = git(['merge-base', '--is-ancestor', asset.gitSha, sha], cwd);
         if (lineage !== 0) throw new Error(lineage === 1 ? 'build commit is not an ancestor of the installed commit' : `cannot check build commit lineage (git exit ${lineage})`);
