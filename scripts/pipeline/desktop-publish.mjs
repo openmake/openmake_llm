@@ -18,7 +18,7 @@ const TAG_PREFIX = 'desktop-native-v';
 const MANIFEST_ASSET = 'desktop-native.json';
 const MANIFEST_TIMEOUT_MS = 30_000;
 const DOWNLOAD_TIMEOUT_MS = 10 * 60_000;
-const MAX_DMG_BYTES = 512 * 1024 * 1024;         // 지금 dmg 는 이보다 한참 작다 — 넘으면 받다 말고 중단
+const MAX_DMG_BYTES = 512 * 1024 * 1024;         // 기본 상한(publish 의 maxDmgBytes) — 지금 dmg 는 이보다 한참 작다, 넘으면 받다 말고 중단
 export const EXIT = { OK: 0, FAILED: 1, PENDING: 75 };
 
 /** 점으로 나눈 수 비교(모자란 자리는 0) — 앱 Updater.swift 의 isNewer 와 같은 규칙. */
@@ -96,16 +96,16 @@ function readPublished(manifestPath) {
 }
 
 /** dmg 를 스트림으로 받으며 sha256·크기를 잰다. 다르거나 넘치면 throw(파일 정리는 부르는 쪽). */
-async function download(fetchImpl, url, target, expectedSha256) {
+async function download(fetchImpl, url, target, expectedSha256, maxBytes) {
     const response = await fetchImpl(url, { redirect: 'follow', signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
     if (!response.ok || !response.body) throw new Error(`dmg download failed: HTTP ${response.status}`);
-    if (Number(response.headers.get('content-length')) > MAX_DMG_BYTES) throw new Error('dmg exceeds the size limit');
+    if (Number(response.headers.get('content-length')) > maxBytes) throw new Error('dmg exceeds the size limit');
     const hash = createHash('sha256');
     let size = 0;
     const meter = new Transform({
         transform(chunk, _encoding, callback) {
             size += chunk.length;
-            if (size > MAX_DMG_BYTES) { callback(new Error('dmg exceeds the size limit')); return; }
+            if (size > maxBytes) { callback(new Error('dmg exceeds the size limit')); return; }
             hash.update(chunk);
             callback(null, chunk);
         },
@@ -130,7 +130,7 @@ const defaultDeps = {
  */
 export async function publish(options, deps = {}) {
     const { fetch, git, runPublishScript } = { ...defaultDeps, ...deps };
-    const { cwd, sha, repo, output } = options;
+    const { cwd, sha, repo, output, maxDmgBytes = MAX_DMG_BYTES } = options;
     const web = (options.web || DEFAULT_WEB).replace(/\/+$/, '');
     const receipt = { schemaVersion: 1, stage: 'desktop-publish', sha };
     const finish = (status, code, reason) => {
@@ -170,7 +170,7 @@ export async function publish(options, deps = {}) {
         mkdirSync(incoming, { recursive: true });
         try {
             const received = path.join(incoming, asset.file);
-            await download(fetch, `${base}/${asset.file}`, received, asset.sha256);
+            await download(fetch, `${base}/${asset.file}`, received, asset.sha256, maxDmgBytes);
             const hadManifest = existsSync(manifestPath);
             if (hadManifest) copyFileSync(manifestPath, prevPath);
             const restore = () => { if (hadManifest) copyFileSync(prevPath, manifestPath); else rmSync(manifestPath, { force: true }); };

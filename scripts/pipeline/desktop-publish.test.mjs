@@ -118,7 +118,7 @@ async function fixture(t) {
     const dir = path.join(llm, 'data/desktop-updates'), latest = path.join(dir, 'latest.json');
     const receiptPath = path.join(root, 'env/.pipeline/desktop-publish.json');
     const setPublished = (text) => { mkdirSync(dir, { recursive: true }); writeFileSync(latest, text); };
-    const run = (deps) => publish({ cwd: llm, sha: installed, dir: 'data/desktop-updates', repo: 'acme/app', output: receiptPath, web }, deps);
+    const run = (deps, extra = {}) => publish({ cwd: llm, sha: installed, dir: 'data/desktop-updates', repo: 'acme/app', output: receiptPath, web, ...extra }, deps);
     const receipt = () => JSON.parse(readFileSync(receiptPath, 'utf8'));
     return { root, llm, built, installed, side, routes, requests, serve, dir, latest, receiptPath, setPublished, run, receipt, web };
 }
@@ -229,6 +229,33 @@ test('publish: 게시 스크립트가 실패하면 latest.json 을 직전 내용
     assert.equal(manifestOf(f.latest), PREVIOUS);
     assert.equal(f.receipt().status, 'failed');
     assert.ok(!existsSync(path.join(f.dir, '.incoming')));
+});
+
+test('publish: 첫 게시에서 게시 스크립트가 실패하면 새로 생긴 latest.json 을 지운다', async (t) => {
+    const f = await fixture(t);
+    f.serve();
+    const runPublishScript = ({ dir }) => { writeFileSync(path.join(dir, 'latest.json'), JSON.stringify({ native: { version: '0.3.8', file: FILE, sha256: DMG_SHA } })); return 1; };
+    assert.equal(await f.run({ runPublishScript }), 1);
+    assert.ok(!existsSync(f.latest), 'no manifest left behind');
+    assert.ok(!existsSync(`${f.latest}.prev`));
+    assert.equal(f.receipt().status, 'failed');
+});
+
+test('publish: dmg 가 크기 상한을 넘으면(content-length·스트림 모두) 실패, latest.json 그대로 — 상한과 같으면 통과', async (t) => {
+    const f = await fixture(t);
+    f.setPublished(PREVIOUS);
+    f.serve();
+    const limit = { maxDmgBytes: DMG.length - 1 };
+    assert.equal(await f.run(undefined, limit), 1);
+    assert.match(f.receipt().reason, /size limit/);
+    // content-length 없이 흘려보내도 받는 도중 멈춘다.
+    f.routes.set('/objects/dmg', { headers: { 'transfer-encoding': 'chunked' }, body: DMG });
+    assert.equal(await f.run(undefined, limit), 1);
+    assert.match(f.receipt().reason, /size limit/);
+    assert.equal(manifestOf(f.latest), PREVIOUS);
+    assert.ok(!existsSync(path.join(f.dir, '.incoming')));
+    assert.equal(await f.run(undefined, { maxDmgBytes: DMG.length }), 0);
+    assert.equal(f.receipt().status, 'published');
 });
 
 test('publish: 게시 뒤 매니페스트가 기대값이 아니면 되돌리고 실패', async (t) => {
