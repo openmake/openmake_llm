@@ -266,7 +266,7 @@ fn denylist() {
 }
 
 /// `{{HOME}}` 자리에 넣는 임의 홈 — 실제 홈에 의존하지 않는다.
-const FAKE_HOME: &str = "/Users/conformance-home";
+const FAKE_HOME: &str = "/synthetic/home";
 
 #[test]
 fn sandbox_profile() {
