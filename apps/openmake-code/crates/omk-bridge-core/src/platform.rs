@@ -47,8 +47,7 @@ pub fn path_list_separator(platform: Platform) -> &'static str {
 /// 경로의 마지막 구간 — 두 구분자를 모두 본다. 구간이 없으면(루트·빈 문자열) 경로 그대로.
 pub fn folder_name_of(root: &str) -> &str {
     root.split(['\\', '/'])
-        .filter(|s| !s.is_empty())
-        .next_back()
+        .rfind(|s| !s.is_empty())
         .unwrap_or(root)
 }
 
