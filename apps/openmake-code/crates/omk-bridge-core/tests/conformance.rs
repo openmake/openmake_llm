@@ -134,10 +134,43 @@ fn exec_env() {
     });
 }
 
+const KNOWN_DIVERGENCE: &str = "regress-nonunicode-i-fold";
+
 #[test]
 fn denylist() {
-    let _doc = load("denylist");
-    todo!("denylist suite");
+    use omk_bridge_core::denylist::*;
+    let doc = load("denylist");
+    let rules = doc["rules"].as_array().unwrap();
+    assert_eq!(rules.len(), EXEC_DENYLIST.len(), "denylist/rules: 규칙 수");
+    for (n, (r, ours)) in rules.iter().zip(EXEC_DENYLIST).enumerate() {
+        let ctx = format!("denylist/rules/{n}");
+        assert_eq!(r["source"], ours.source, "{ctx}: source");
+        assert_eq!(r["flags"], ours.flags, "{ctx}: flags");
+        assert_eq!(r["why"], ours.why, "{ctx}: why");
+    }
+    for c in doc["normalize"].as_array().unwrap() {
+        let ctx = format!("denylist/normalize/{}", c["id"].as_str().unwrap());
+        assert_eq!(normalize_for_denylist(c["input"].as_str().unwrap()), c["expect"].as_str().unwrap(), "{ctx}");
+    }
+    let cases = doc["cases"].as_array().unwrap();
+    assert!(!cases.is_empty(), "denylist/cases: 사례 0개");
+    for c in cases {
+        let ctx = format!("denylist/cases/{}", c["id"].as_str().unwrap());
+        let command = c["input"]["command"].as_str().unwrap();
+        let want = match (c.get("divergence"), c.get("rustExpect")) {
+            (None, None) => &c["expect"],
+            (Some(d), Some(rust)) => {
+                // 남용 방지 — 알려진 차이(ſ·K 접기)로만, TS 허용 → Rust 차단 방향으로만 받아들인다.
+                assert_eq!(d, KNOWN_DIVERGENCE, "{ctx}: 모르는 divergence");
+                assert!(command.contains(['\u{017F}', '\u{212A}']), "{ctx}: 입력에 U+017F·U+212A 가 없다");
+                assert!(c["expect"]["why"].is_null(), "{ctx}: TS 기대값이 허용(null)이 아니다");
+                assert!(rust["why"].is_string(), "{ctx}: rustExpect 가 TS 보다 엄격하지 않다");
+                rust
+            }
+            _ => panic!("{ctx}: divergence 와 rustExpect 는 함께만 쓴다"),
+        };
+        assert_eq!(match_denylist(command), want["why"].as_str(), "{ctx}");
+    }
 }
 
 #[test]
