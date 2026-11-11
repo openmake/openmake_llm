@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareVersions, decide, parseReleaseManifest } from './desktop-publish.mjs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { buildManifest, compareVersions, decide, parseReleaseManifest } from './desktop-publish.mjs';
 
 test('compareVersions: 점으로 나눈 수 비교, 모자란 자리는 0', () => {
     assert.equal(compareVersions('0.3.8', '0.3.8'), 0);
@@ -44,4 +48,22 @@ test('parseReleaseManifest: 형식·버전이 어긋나면 throw', () => {
     for (const [name, patch] of bad) assert.throws(() => parseReleaseManifest(text(patch), '0.3.8'), undefined, name);
     assert.throws(() => parseReleaseManifest('not json', '0.3.8'));
     assert.throws(() => parseReleaseManifest('null', '0.3.8'));
+});
+
+test('buildManifest: 파일명에서 버전, 내용에서 sha256 을 만든다', async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'desktop-manifest-'));
+    try {
+        const dmg = path.join(dir, 'OpenMake-Companion-0.3.8-arm64.dmg');
+        writeFileSync(dmg, 'dmg bytes');
+        const sha = 'c'.repeat(40);
+        assert.deepEqual(await buildManifest({ dmgPath: dmg, sha }), {
+            schemaVersion: 1, version: '0.3.8', file: 'OpenMake-Companion-0.3.8-arm64.dmg',
+            sha256: createHash('sha256').update('dmg bytes').digest('hex'), gitSha: sha,
+        });
+        for (const name of ['OpenMake-Companion-0.3.8.dmg', 'Other-0.3.8-arm64.dmg', 'OpenMake-Companion-v0.3.8-arm64.dmg']) {
+            writeFileSync(path.join(dir, name), 'x');
+            await assert.rejects(buildManifest({ dmgPath: path.join(dir, name), sha }), undefined, name);
+        }
+        await assert.rejects(buildManifest({ dmgPath: dmg, sha: 'short' }));
+    } finally { rmSync(dir, { recursive: true, force: true }); }
 });
