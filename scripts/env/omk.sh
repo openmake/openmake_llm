@@ -72,6 +72,8 @@
 #   OMK_SEARXNG_IMAGE(searxng/searxng:latest)  OMK_SEARXNG_PORT_BASE(8888)  OMK_NET_PROBE_URLS  OMK_SEARCH_PROBE_QUERY
 #   OMK_VERIFY_PUSH_URL(origin)   'omk env verify' 가 기록을 push 할 원격 (클론이 https 면 ssh 주소)
 #   OMK_SMOKE_TIMEOUT(120)  OMK_SMOKE_READY_WAIT(60)  OMK_GITHUB_API(https://api.github.com)
+#   OMK_GITHUB_WEB(https://github.com)   파이프라인이 데스크톱 앱 릴리스 자산을 받는 곳 (토큰 없이)
+#   OMK_DESKTOP_PUBLISH=1 (환경 .env)    'omk env pipeline' 이 데스크톱 앱(dmg)을 게시한다 — 기본 꺼짐 (scripts/env/README.md)
 #   OMK_LOG(켜짐)   설치·갱신·리셋의 출력을 $OMK_ROOT/logs/omk/ 에도 남긴다. 끄려면 off
 #   OMK_FORCE_FOREIGN=1   같은 인스턴스 이름을 쓰는 다른 설치본의 컨테이너·PM2 앱도 건드린다 (기본: 거부)
 #
@@ -101,6 +103,7 @@ OMK_AUTOUPDATE_CRON="${OMK_AUTOUPDATE_CRON:-*/10 * * * *}"
 OMK_SMOKE_TIMEOUT="${OMK_SMOKE_TIMEOUT:-120}"             # 스모크 요청 하나의 제한 시간(초) — 채팅 1회가 가장 길다
 OMK_SMOKE_READY_WAIT="${OMK_SMOKE_READY_WAIT:-60}"        # /ready 가 200 이 될 때까지 기다리는 최대 시간(초) — 재기동 직후 LLM 노드 첫 확인
 OMK_GITHUB_API="${OMK_GITHUB_API:-https://api.github.com}"   # 결과 표지(커밋 상태)를 올릴 API
+export OMK_GITHUB_WEB="${OMK_GITHUB_WEB:-https://github.com}"   # 데스크톱 앱 릴리스 자산을 받을 곳 — desktop-publish.mjs 가 환경에서 읽는다
 OMK_SEARXNG_IMAGE="${OMK_SEARXNG_IMAGE:-searxng/searxng:latest}"
 OMK_SEARXNG_PORT_BASE="${OMK_SEARXNG_PORT_BASE:-8888}"   # .env.example 의 SEARXNG_URL 예시 포트. 점유 시 다음 빈 포트
 OMK_BACKUP_CRON="${OMK_BACKUP_CRON:-30 3 * * *}"          # omk env backup --schedule 의 기본 주기 (매일 03:30)
