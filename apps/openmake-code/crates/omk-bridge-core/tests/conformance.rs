@@ -119,8 +119,19 @@ fn platform() {
 
 #[test]
 fn exec_env() {
-    let _doc = load("exec-env");
-    todo!("exec-env suite");
+    use omk_bridge_core::exec_env::build_exec_env;
+    use std::collections::BTreeMap;
+    let doc = load("exec-env");
+    each_case(&doc, "exec-env", "cases", |ctx, i, e| {
+        let source: Vec<(String, String)> =
+            i["source"].as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned())).collect();
+        let extra = strs(&i["extraPosixKeys"], ctx);
+        let extra: Vec<&str> = extra.iter().map(String::as_str).collect();
+        let got = build_exec_env(source, i["execPath"].as_str().unwrap(), platform_of(&i["platform"], ctx), &extra);
+        let want: BTreeMap<String, String> =
+            e["env"].as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned())).collect();
+        assert_eq!(got, want, "{ctx}");
+    });
 }
 
 #[test]
