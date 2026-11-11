@@ -118,12 +118,18 @@ fn compile(source: &str, flags: &str) -> Regex {
 }
 
 /// 규칙 정규식 — 처음 쓸 때 한 번만 컴파일한다.
-static COMPILED_RULES: LazyLock<Vec<Regex>> = LazyLock::new(|| EXEC_DENYLIST.iter().map(|d| compile(d.source, d.flags)).collect());
+static COMPILED_RULES: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    EXEC_DENYLIST
+        .iter()
+        .map(|d| compile(d.source, d.flags))
+        .collect()
+});
 
 /// ANSI 이스케이프(CSI) — 제어 문자만 지우면 `[0m` 같은 꼬리가 남아 토큰 경계를 가린다.
 static ANSI_CSI_RE: LazyLock<Regex> = LazyLock::new(|| compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]", ""));
 /// 공백(탭·개행·CR)을 뺀 제어 문자.
-static CONTROL_CHARS_RE: LazyLock<Regex> = LazyLock::new(|| compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", ""));
+static CONTROL_CHARS_RE: LazyLock<Regex> =
+    LazyLock::new(|| compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", ""));
 /// 줄 이음 — 셸은 백슬래시+개행을 지우고 앞뒤를 붙여 읽는다.
 static LINE_CONTINUATION_RE: LazyLock<Regex> = LazyLock::new(|| compile(r"\\\r?\n", ""));
 /// `$IFS`·`${IFS}`·`${IFS:0:1}` — 기본값이 공백이라 토큰 사이 공백 대신 쓸 수 있다.
@@ -158,8 +164,30 @@ pub fn normalize_for_denylist(cmd: &str) -> String {
 /// 처음 걸린 규칙의 사유를 돌려준다.
 pub fn match_denylist(cmd: &str) -> Option<&'static str> {
     let normalized = normalize_for_denylist(cmd);
-    let candidates: &[&str] = if normalized == cmd { &[cmd] } else { &[cmd, &normalized] };
+    let candidates: &[&str] = if normalized == cmd {
+        &[cmd]
+    } else {
+        &[cmd, &normalized]
+    };
     candidates.iter().find_map(|c| {
-        COMPILED_RULES.iter().zip(EXEC_DENYLIST).find(|(re, _)| re.find(c).is_some()).map(|(_, d)| d.why)
+        COMPILED_RULES
+            .iter()
+            .zip(EXEC_DENYLIST)
+            .find(|(re, _)| re.find(c).is_some())
+            .map(|(_, d)| d.why)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{COMPILED_RULES, EXEC_DENYLIST, match_denylist};
+
+    #[test]
+    fn rules_compile_once_and_all_compile() {
+        let first: *const Vec<_> = &*COMPILED_RULES;
+        assert!(match_denylist("sudo ls").is_some());
+        let second: *const Vec<_> = &*COMPILED_RULES;
+        assert!(std::ptr::eq(first, second));
+        assert_eq!(COMPILED_RULES.len(), EXEC_DENYLIST.len());
+    }
 }

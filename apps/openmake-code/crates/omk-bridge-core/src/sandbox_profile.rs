@@ -14,7 +14,10 @@ pub fn sbq(p: &str) -> String {
 
 /// 홈 하위 경로 목록을 SBPL subpath 절로.
 pub fn sb_sub(base: &str, list: &[&str]) -> String {
-    list.iter().map(|d| format!("(subpath {})", sbq(&node_path::join(&[base, d])))).collect::<Vec<_>>().join(" ")
+    list.iter()
+        .map(|d| format!("(subpath {})", sbq(&node_path::join(&[base, d]))))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// 프로파일 텍스트. `home` 은 호출 쪽이 realpath 로 넘긴다. 빈 `git_dir` 은 TS(빈 문자열은 거짓)처럼 없음으로 본다.
@@ -32,8 +35,14 @@ pub fn build_sandbox_profile(root: &str, git_dir: Option<&str>, home: &str) -> S
         lines.push(format!("(allow file-write* (subpath {}))", sbq(g)));
     }
     lines.push(r#"(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders") (subpath "/dev"))"#.to_owned());
-    lines.push(format!("(allow file-write* {})", sb_sub(home, CACHE_SUBPATHS)));
-    lines.push(format!("(deny file-read* {})", sb_sub(home, SECRET_SUBPATHS)));
+    lines.push(format!(
+        "(allow file-write* {})",
+        sb_sub(home, CACHE_SUBPATHS)
+    ));
+    lines.push(format!(
+        "(deny file-read* {})",
+        sb_sub(home, SECRET_SUBPATHS)
+    ));
     // 훅·config 는 커밋에 필요 없으면서 샌드박스 밖에서 실행되는 영구 코드 주입 경로다.
     // last-match-wins 라 이 deny 가 맨 끝이어야 상위 allow 경로 안의 레포에서도 확실히 이긴다.
     if let Some(g) = git_dir {
@@ -45,4 +54,28 @@ pub fn build_sandbox_profile(root: &str, git_dir: Option<&str>, home: &str) -> S
     }
     lines.push(String::new());
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_sandbox_profile;
+
+    #[test]
+    fn empty_git_dir_is_no_git_dir() {
+        let none = build_sandbox_profile("/work/repo", None, "/h");
+        assert_eq!(build_sandbox_profile("/work/repo", Some(""), "/h"), none);
+        assert!(!none.contains("hooks"));
+    }
+
+    #[test]
+    fn hooks_deny_is_last_line_and_text_ends_with_one_newline() {
+        let p = build_sandbox_profile("/work/repo", Some("/work/repo/.git"), "/h");
+        assert!(p.ends_with(")\n") && !p.ends_with("\n\n"));
+        let last = p.trim_end().lines().last().unwrap_or_default();
+        assert!(
+            last.starts_with("(deny file-write*")
+                && last.contains("/hooks")
+                && last.contains("/config")
+        );
+    }
 }

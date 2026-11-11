@@ -17,7 +17,11 @@ pub struct ShellInvocation {
 }
 
 /// Windows 는 cmd.exe, 그 밖은 bash. `com_spec` 이 비어 있으면 TS(`comSpec || 'cmd.exe'`)처럼 기본값을 쓴다.
-pub fn shell_invocation(command: &str, platform: Platform, com_spec: Option<&str>) -> ShellInvocation {
+pub fn shell_invocation(
+    command: &str,
+    platform: Platform,
+    com_spec: Option<&str>,
+) -> ShellInvocation {
     if platform == Platform::Win32 {
         let file = com_spec.filter(|s| !s.is_empty()).unwrap_or("cmd.exe");
         return ShellInvocation {
@@ -33,12 +37,19 @@ pub fn shell_invocation(command: &str, platform: Platform, com_spec: Option<&str
 
 /// PATH 환경변수의 구분자.
 pub fn path_list_separator(platform: Platform) -> &'static str {
-    if platform == Platform::Win32 { ";" } else { ":" }
+    if platform == Platform::Win32 {
+        ";"
+    } else {
+        ":"
+    }
 }
 
 /// 경로의 마지막 구간 — 두 구분자를 모두 본다. 구간이 없으면(루트·빈 문자열) 경로 그대로.
 pub fn folder_name_of(root: &str) -> &str {
-    root.split(['\\', '/']).filter(|s| !s.is_empty()).next_back().unwrap_or(root)
+    root.split(['\\', '/'])
+        .filter(|s| !s.is_empty())
+        .next_back()
+        .unwrap_or(root)
 }
 
 /// 일괄 승인을 받을 수 있는가 — 명령을 OS 샌드박스로 가두지 못하는 Windows 에서는 받지 않는다.

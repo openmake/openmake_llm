@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use crate::constants::{EXEC_ENV_ALLOWLIST_POSIX, EXEC_ENV_ALLOWLIST_PREFIX_POSIX, EXEC_ENV_ALLOWLIST_WIN32};
+use crate::constants::{
+    EXEC_ENV_ALLOWLIST_POSIX, EXEC_ENV_ALLOWLIST_PREFIX_POSIX, EXEC_ENV_ALLOWLIST_WIN32,
+};
 use crate::platform::Platform;
 
 /// Windows 는 env 키가 대소문자를 가리지 않아 허용 목록과 대소문자 무시로 맞추되 원래 표기를 유지한다.
@@ -23,10 +25,14 @@ where
         let k = k.as_ref();
         let keep = if platform == Platform::Win32 {
             let lower = k.to_lowercase();
-            EXEC_ENV_ALLOWLIST_WIN32.iter().any(|w| w.to_lowercase() == lower)
+            EXEC_ENV_ALLOWLIST_WIN32
+                .iter()
+                .any(|w| w.to_lowercase() == lower)
         } else {
             EXEC_ENV_ALLOWLIST_POSIX.contains(&k)
-                || EXEC_ENV_ALLOWLIST_PREFIX_POSIX.iter().any(|p| k.starts_with(p))
+                || EXEC_ENV_ALLOWLIST_PREFIX_POSIX
+                    .iter()
+                    .any(|p| k.starts_with(p))
                 || extra_posix_keys.contains(&k)
         };
         if keep {
