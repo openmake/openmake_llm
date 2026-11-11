@@ -21,3 +21,26 @@ export function decide({ repoVersion, publishedVersion }) {
     const order = compareVersions(repoVersion, publishedVersion);
     return order === 0 ? 'unchanged' : order < 0 ? 'ahead' : 'publish';
 }
+
+const VERSION_RE = /^[0-9]+(\.[0-9]+)*$/;                                  // build.sh 와 같은 규칙
+const FILE_RE = /^OpenMake-[A-Za-z]+-([0-9]+(?:\.[0-9]+)*)-[A-Za-z0-9.-]+\.dmg$/; // 경로 구분자 없음 — 좁은 검사는 publish-desktop.sh
+const SHA256_RE = /^[a-f0-9]{64}$/, GIT_SHA_RE = /^[a-f0-9]{40}$/;
+
+/** dmg 파일명 → 버전(규칙 밖이면 undefined). publish-desktop.sh 가 같은 자리에서 버전을 뽑는다. */
+function fileVersion(file) {
+    return typeof file === 'string' ? FILE_RE.exec(file)?.[1] : undefined;
+}
+
+/** 릴리스 자산 desktop-native.json 검증 → { schemaVersion, version, file, sha256, gitSha }. 하나라도 어긋나면 throw. */
+export function parseReleaseManifest(text, repoVersion) {
+    const value = JSON.parse(text);
+    if (!value || typeof value !== 'object') throw new Error('release manifest is not an object');
+    const { schemaVersion, version, file, sha256, gitSha } = value;
+    if (schemaVersion !== 1) throw new Error('release manifest schemaVersion is not 1');
+    if (typeof version !== 'string' || !VERSION_RE.test(version)) throw new Error('release manifest version is malformed');
+    if (version !== repoVersion) throw new Error(`release manifest version ${version} differs from checkout ${repoVersion}`);
+    if (fileVersion(file) !== version) throw new Error('release manifest file name is malformed or names another version');
+    if (typeof sha256 !== 'string' || !SHA256_RE.test(sha256)) throw new Error('release manifest sha256 is malformed');
+    if (typeof gitSha !== 'string' || !GIT_SHA_RE.test(gitSha)) throw new Error('release manifest gitSha is malformed');
+    return { schemaVersion, version, file, sha256, gitSha };
+}
