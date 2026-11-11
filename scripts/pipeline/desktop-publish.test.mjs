@@ -164,6 +164,20 @@ test('publish: 자산 매니페스트를 받다가 404 외 HTTP 오류면 실패
     assert.equal(manifestOf(f.latest), PREVIOUS);
 });
 
+test('publish: 자산 매니페스트 본문이 64KiB 를 넘으면(content-length·스트림 모두) 실패, dmg 를 받지 않는다', async (t) => {
+    const f = await fixture(t);
+    f.setPublished(PREVIOUS);
+    f.serve();
+    const big = JSON.stringify({ schemaVersion: 1, version: '0.3.8', file: FILE, sha256: DMG_SHA, gitSha: f.built, pad: 'x'.repeat(64 * 1024) });
+    for (const headers of [{}, { 'transfer-encoding': 'chunked' }]) {
+        f.routes.set('/objects/manifest', { headers, body: big });
+        assert.equal(await f.run(), 1);
+        assert.match(f.receipt().reason, /manifest exceeds the size limit/);
+    }
+    assert.equal(manifestOf(f.latest), PREVIOUS);
+    assert.ok(!f.requests.includes('/objects/dmg'), 'dmg is not downloaded');
+});
+
 test('publish: 빌드 커밋이 설치된 계보에 없으면(다른 가지·모르는 커밋) 실패, latest.json 그대로', async (t) => {
     const f = await fixture(t);
     f.setPublished(PREVIOUS);
