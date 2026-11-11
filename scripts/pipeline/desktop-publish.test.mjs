@@ -131,9 +131,16 @@ test('publish: 게시본과 같거나 더 높으면 네트워크를 부르지 �
     f.setPublished(JSON.stringify({ native: { version: '0.3.8', file: FILE, sha256: DMG_SHA } }));
     assert.equal(await f.run(), 0);
     assert.equal(f.receipt().status, 'unchanged');
-    f.setPublished(JSON.stringify({ native: { version: '0.3.9', file: 'OpenMake-Companion-0.3.9-arm64.dmg', sha256: DMG_SHA } }));
+    // 사후 대조용 — 게시된 바이트가 릴리스 자산과 같은지 영수증만으로 볼 수 있다.
+    assert.deepEqual(f.receipt().published, { file: FILE, sha256: DMG_SHA });
+    f.setPublished(JSON.stringify({ native: { version: '0.3.9', file: 'OpenMake-Companion-0.3.9-arm64.dmg', sha256: 'e'.repeat(64) } }));
     assert.equal(await f.run(), 0);
     assert.equal(f.receipt().status, 'ahead');
+    assert.deepEqual(f.receipt().published, { file: 'OpenMake-Companion-0.3.9-arm64.dmg', sha256: 'e'.repeat(64) });
+    // 규칙 밖 값은 영수증에 옮기지 않는다.
+    f.setPublished(JSON.stringify({ native: { version: '0.3.8', file: 'https://x/y.dmg', sha256: 'nope' } }));
+    assert.equal(await f.run(), 0);
+    assert.deepEqual(f.receipt().published, {});
     assert.equal(f.requests.length, 0);
 });
 
