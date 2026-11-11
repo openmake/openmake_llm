@@ -1,0 +1,37 @@
+{
+  "suite": "platform",
+  "version": 1,
+  "shellInvocation": [
+    { "id": "win32-comspec", "input": { "command": "dir", "platform": "win32", "comSpec": "C:\\Windows\\System32\\cmd.exe" }, "expect": { "file": "C:\\Windows\\System32\\cmd.exe", "args": ["/d", "/s", "/c", "dir"] } },
+    { "id": "win32-no-comspec", "input": { "command": "dir", "platform": "win32", "comSpec": null }, "expect": { "file": "cmd.exe", "args": ["/d", "/s", "/c", "dir"] } },
+    { "id": "win32-empty-comspec", "input": { "command": "dir", "platform": "win32", "comSpec": "" }, "expect": { "file": "cmd.exe", "args": ["/d", "/s", "/c", "dir"] } },
+    { "id": "darwin", "input": { "command": "ls", "platform": "darwin", "comSpec": null }, "expect": { "file": "/bin/bash", "args": ["-c", "ls"] } },
+    { "id": "linux", "input": { "command": "ls", "platform": "linux", "comSpec": null }, "expect": { "file": "/bin/bash", "args": ["-c", "ls"] } },
+    { "id": "darwin-ignores-comspec", "input": { "command": "ls -la", "platform": "darwin", "comSpec": "C:\\cmd.exe" }, "expect": { "file": "/bin/bash", "args": ["-c", "ls -la"] } },
+    { "id": "command-kept-verbatim", "input": { "command": "echo \"a b\" && ls", "platform": "linux", "comSpec": null }, "expect": { "file": "/bin/bash", "args": ["-c", "echo \"a b\" && ls"] } }
+  ],
+  "pathListSeparator": [
+    { "id": "win32", "input": { "platform": "win32" }, "expect": ";" },
+    { "id": "darwin", "input": { "platform": "darwin" }, "expect": ":" },
+    { "id": "linux", "input": { "platform": "linux" }, "expect": ":" }
+  ],
+  "folderNameOf": [
+    { "id": "posix", "input": { "root": "/Users/me/work" }, "expect": "work" },
+    { "id": "win-korean-space", "input": { "root": "C:\\Users\\me\\업무 폴더" }, "expect": "업무 폴더" },
+    { "id": "win-trailing-sep", "input": { "root": "C:\\Users\\me\\work\\" }, "expect": "work" },
+    { "id": "win-drive-root", "input": { "root": "C:\\" }, "expect": "C:" },
+    { "id": "posix-root", "input": { "root": "/" }, "expect": "/" },
+    { "id": "empty", "input": { "root": "" }, "expect": "" },
+    { "id": "double-slash", "input": { "root": "/a//b" }, "expect": "b" },
+    { "id": "unc", "input": { "root": "\\\\server\\share" }, "expect": "share" },
+    { "id": "mixed-seps", "input": { "root": "C:/Users\\me/proj" }, "expect": "proj" },
+    { "id": "relative", "input": { "root": "proj" }, "expect": "proj" },
+    { "id": "trailing-slashes", "input": { "root": "/a/b//" }, "expect": "b" },
+    { "id": "drive-only", "input": { "root": "C:" }, "expect": "C:" }
+  ],
+  "bulkApprovalAllowed": [
+    { "id": "win32", "input": { "platform": "win32" }, "expect": false },
+    { "id": "darwin", "input": { "platform": "darwin" }, "expect": true },
+    { "id": "linux", "input": { "platform": "linux" }, "expect": true }
+  ]
+}
