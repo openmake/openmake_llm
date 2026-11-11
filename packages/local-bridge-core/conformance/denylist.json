@@ -115,6 +115,11 @@
     { "id": "ansi-only-normalized-allowed", "input": { "command": "\u001b[31mls\u001b[0m" }, "expect": { "why": null } },
     { "id": "tab-is-whitespace", "input": { "command": "sudo\u0009ls" }, "expect": { "why": "권한 상승(sudo)" } },
     { "id": "ifs-substr-sudo", "input": { "command": "sudo${IFS:0:1}ls" }, "expect": { "why": "권한 상승(sudo)" } },
+    { "id": "boundary-long-s-before-format", "input": { "command": "\u017fformat c:" }, "expect": { "why": "디스크 포맷" } },
+    { "id": "boundary-long-s-after-diskpart", "input": { "command": "diskpart\u017f" }, "expect": { "why": "디스크·부팅 설정 변경" } },
+    { "id": "boundary-kelvin-before-format", "input": { "command": "\u212aformat c:" }, "expect": { "why": "디스크 포맷" } },
+    { "id": "boundary-kelvin-after-diskpart", "input": { "command": "diskpart\u212a" }, "expect": { "why": "디스크·부팅 설정 변경" } },
+    { "id": "boundary-long-s-rd-switch", "input": { "command": "rd /\u017f /q c:\\" }, "expect": { "why": null } },
     { "id": "diverge-long-s-diskpart", "input": { "command": "di\u017fkpart /s x" }, "expect": { "why": null }, "rustExpect": { "why": "디스크·부팅 설정 변경" }, "divergence": "regress-nonunicode-i-fold" },
     { "id": "diverge-kelvin-format", "input": { "command": "format \u212a: /q" }, "expect": { "why": null }, "rustExpect": { "why": "디스크 포맷" }, "divergence": "regress-nonunicode-i-fold" }
   ]
