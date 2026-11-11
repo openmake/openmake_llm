@@ -38,10 +38,39 @@ fn suites_are_all_known() {
     }
 }
 
+fn strs(v: &Value, ctx: &str) -> Vec<String> {
+    v.as_array().unwrap_or_else(|| panic!("{ctx}: 배열 아님")).iter().map(|x| x.as_str().unwrap().to_owned()).collect()
+}
+
 #[test]
 fn constants() {
-    let _doc = load("constants");
-    todo!("constants suite");
+    use omk_bridge_core::constants as c;
+    let doc = load("constants");
+    let values = doc["values"].as_object().unwrap();
+    let lists: [(&str, &[&str]); 7] = [
+        ("EXEC_ENV_ALLOWLIST_POSIX", c::EXEC_ENV_ALLOWLIST_POSIX),
+        ("EXEC_ENV_ALLOWLIST_PREFIX_POSIX", c::EXEC_ENV_ALLOWLIST_PREFIX_POSIX),
+        ("EXEC_ENV_ALLOWLIST_WIN32", c::EXEC_ENV_ALLOWLIST_WIN32),
+        ("PATH_PROBE_ENV_EXTRA_POSIX", c::PATH_PROBE_ENV_EXTRA_POSIX),
+        ("CACHE_SUBPATHS", c::CACHE_SUBPATHS),
+        ("SECRET_SUBPATHS", c::SECRET_SUBPATHS),
+        ("BRIDGE_KINDS", c::BRIDGE_KINDS),
+    ];
+    let mut seen = Vec::new();
+    for (name, ours) in lists {
+        let ctx = format!("constants/{name}");
+        let theirs = values.get(name).unwrap_or_else(|| panic!("{ctx}: fixture 에 없음"));
+        assert_eq!(strs(theirs, &ctx), ours, "{ctx}");
+        seen.push(name);
+    }
+    assert_eq!(values["SANDBOX_BIN"], c::SANDBOX_BIN, "constants/SANDBOX_BIN");
+    assert_eq!(values["EXEC_TIMEOUT_MS"], c::EXEC_TIMEOUT_MS, "constants/EXEC_TIMEOUT_MS");
+    assert_eq!(values["MAX_BUFFER"], c::MAX_BUFFER, "constants/MAX_BUFFER");
+    seen.extend(["SANDBOX_BIN", "EXEC_TIMEOUT_MS", "MAX_BUFFER"]);
+    let mut fixture_keys: Vec<&str> = values.keys().map(String::as_str).collect();
+    fixture_keys.sort_unstable();
+    seen.sort_unstable();
+    assert_eq!(fixture_keys, seen, "constants: Rust 가 모르는 값 또는 빠진 값");
 }
 
 #[test]
