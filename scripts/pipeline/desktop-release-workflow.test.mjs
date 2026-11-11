@@ -44,3 +44,13 @@ test('release steps pin actions to commit SHAs and pass expressions through env/
         assert.doesNotMatch(line, /^\s+run: /, `expression inside run: ${line}`);
     }
 });
+
+test('the gate fails on a leftover draft release instead of skipping it, and never deletes it', () => {
+    const gate = release.slice(release.indexOf('id: gate'), release.indexOf('- name: Download dmg'));
+    assert.match(gate, /gh release view "desktop-native-v\$VERSION" --json isDraft --jq \.isDraft/);
+    const draft = gate.match(/if \[\[ "\$DRAFT" == "true" \]\]; then\n([\s\S]*?)\n\s*fi\n/)?.[1] ?? '';
+    assert.match(draft, /::error::.*초안/, draft);
+    assert.match(draft, /exit 1/, draft);
+    assert.ok(gate.indexOf('"$DRAFT" == "true"') < gate.indexOf('이미 있음'), 'draft check runs before the skip');
+    assert.doesNotMatch(workflow, /gh release delete|gh release edit/);
+});
