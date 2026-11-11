@@ -227,7 +227,9 @@ fn denylist() {
         assert_eq!(r["flags"], ours.flags, "{ctx}: flags");
         assert_eq!(r["why"], ours.why, "{ctx}: why");
     }
-    for c in doc["normalize"].as_array().unwrap() {
+    let normalize = doc["normalize"].as_array().unwrap();
+    assert!(!normalize.is_empty(), "denylist/normalize: 사례 0개");
+    for c in normalize {
         let ctx = format!("denylist/normalize/{}", c["id"].as_str().unwrap());
         assert_eq!(
             normalize_for_denylist(c["input"].as_str().unwrap()),
