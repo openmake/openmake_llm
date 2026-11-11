@@ -83,12 +83,16 @@ function writeJsonAtomic(file, value, mode) {
     renameSync(temporary, file);
 }
 
-/** 서버에 게시된 macOS 앱 버전(latest.json 의 native.version). 없거나 깨졌으면 undefined = 게시본 없음. */
-function readPublishedVersion(manifestPath) {
-    try {
-        const version = JSON.parse(readFileSync(manifestPath, 'utf8'))?.native?.version;
-        return typeof version === 'string' && VERSION_RE.test(version) ? version : undefined;
-    } catch { return undefined; }
+/** 서버에 게시된 macOS 앱(latest.json 의 native). 버전이 없거나 깨졌으면 undefined = 게시본 없음. file·sha256 은 규칙에 맞을 때만. */
+function readPublished(manifestPath) {
+    let native;
+    try { native = JSON.parse(readFileSync(manifestPath, 'utf8'))?.native; } catch { return undefined; }
+    if (typeof native?.version !== 'string' || !VERSION_RE.test(native.version)) return undefined;
+    return {
+        version: native.version,
+        ...(typeof native.file === 'string' && FILE_RE.test(native.file) ? { file: native.file } : {}),
+        ...(typeof native.sha256 === 'string' && SHA256_RE.test(native.sha256) ? { sha256: native.sha256 } : {}),
+    };
 }
 
 /** dmg 를 스트림으로 받으며 sha256·크기를 잰다. 다르거나 넘치면 throw(파일 정리는 부르는 쪽). */
@@ -142,8 +146,10 @@ export async function publish(options, deps = {}) {
         if (!VERSION_RE.test(version)) throw new Error('apps/desktop-native/VERSION is malformed');
         receipt.version = version;
         const manifestPath = path.join(dir, 'latest.json'), prevPath = `${manifestPath}.prev`;
-        const publishedVersion = readPublishedVersion(manifestPath);
+        const published = readPublished(manifestPath), publishedVersion = published?.version;
         const decision = decide({ repoVersion: version, publishedVersion });
+        // 게시하지 않을 때도 지금 게시된 바이트를 남긴다 — 손 게시 등으로 릴리스 자산과 달라졌는지 사후 대조용.
+        if (decision !== 'publish') receipt.published = { file: published.file, sha256: published.sha256 };
         if (decision === 'unchanged') return finish('unchanged', EXIT.OK);
         if (decision === 'ahead') {
             console.warn(`desktop-publish: published ${publishedVersion} is higher than checkout ${version}; not downgrading`);
