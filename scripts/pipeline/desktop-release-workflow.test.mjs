@@ -54,3 +54,11 @@ test('the gate fails on a leftover draft release instead of skipping it, and nev
     assert.ok(gate.indexOf('"$DRAFT" == "true"') < gate.indexOf('이미 있음'), 'draft check runs before the skip');
     assert.doesNotMatch(workflow, /gh release delete|gh release edit/);
 });
+
+test('every step after the gate runs only when the gate says publish', () => {
+    const steps = new Map(release.split(/^ {6}- name: /m).slice(1).map((s) => [s.slice(0, s.indexOf('\n')), s]));
+    for (const name of ['Download dmg', 'Release manifest', 'Attest build provenance', 'Create pre-release']) {
+        assert.ok(steps.has(name), `step ${name} present`);
+        assert.match(steps.get(name), /^ {8}if: steps\.gate\.outputs\.publish == 'true'$/m, name);
+    }
+});
