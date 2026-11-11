@@ -122,7 +122,12 @@ jobs:
             echo "VERSION 변화 없음 — 릴리스하지 않습니다"
             echo "publish=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          if gh release view "desktop-native-v$VERSION" >/dev/null 2>&1; then
+          # gh release view 는 초안도 찾는다 — 자산을 올리다 취소된 실행이 남긴 초안은 서버가 받을 수 없으니 건너뛰지 않고 멈춘다.
+          if DRAFT="$(gh release view "desktop-native-v$VERSION" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [[ "$DRAFT" == "true" ]]; then
+              echo "::error::릴리스 desktop-native-v$VERSION 이 초안(draft)으로 남아 있습니다(자산을 올리다 중단된 실행) — 그 초안을 지운 뒤 이 실행을 다시 돌리세요"
+              exit 1
+            fi
             echo "릴리스 desktop-native-v$VERSION 이 이미 있음 — 덮어쓰지 않습니다"
             echo "publish=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
