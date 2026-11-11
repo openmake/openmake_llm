@@ -37,9 +37,12 @@ build.sh                 # helper 번들(esbuild) → 하네스 → l10n 게이�
 ```bash
 npm run build:packages                      # local-bridge-core dist 선행
 bash apps/desktop-native/build.sh           # dist/OpenMake-Companion-<v>-arm64.dmg — 버전은 VERSION 파일(인자로 덮어쓸 수 있다)
-bash scripts/publish-desktop.sh apps/desktop-native/dist/OpenMake-Companion-<v>-arm64.dmg
+bash scripts/publish-desktop.sh apps/desktop-native/dist/OpenMake-Companion-<v>-arm64.dmg   # 로컬(localhost) 시험용 수동 게시
 # → latest.json 을 { native } 로 다시 쓴다 (컴패니언 dmg 가 아니면 거부)
 ```
+
+- **서버 게시는 자동이다.** PR 에서 `VERSION` 을 올리면, main 에 들어간 뒤 `desktop-native.yml` 의 `release` job 이 그 실행의 dmg 를 사전 릴리스 `desktop-native-v<버전>` 자산으로 한 번 올리고, 스테이징·운영 파이프라인(`OMK_DESKTOP_PUBLISH=1`)이 계보·sha256 확인 뒤 같은 자산을 게시한다 — 스테이징이 먼저, 사용자 verify 뒤 운영. 서버에서 `publish-desktop.sh` 를 손으로 돌리지 않는다. 자세한 흐름·종료 코드는 [`scripts/env/README.md`](../../scripts/env/README.md) "데스크톱 앱 게시".
+- `VERSION` 을 올리지 않은 앱 변경은 게시되지 않는다. 릴리스 자산은 덮어쓰지 않으므로 잘못 만든 버전은 버리고 `VERSION` 을 다시 올린다. 릴리스 job 이 실패하거나 main 의 다음 push 로 취소되면 그 실행을 다시 돌린다.
 
 - **버전**: `VERSION` 파일이 기준이다. 앱은 서버에 게시된 버전이 자기보다 높으면 업데이트를 권하므로, 기능을 더한 빌드는 게시본보다 높은 버전이어야 한다(낮으면 업데이트가 구버전으로 되돌린다).
 - 업데이트는 앱이 놓인 폴더에 새 버전을 복사해 교체한다. 디스크 이미지(dmg)에서 바로 실행한 앱처럼 그 폴더에 쓸 수 없으면 받지 않고 "응용 프로그램 폴더로 옮긴 뒤 다시 시도"를 안내한다.
