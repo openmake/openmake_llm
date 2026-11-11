@@ -1,0 +1,69 @@
+# ==============================================================
+# openmake_code Rust 코어 CI (설계 2026-11-12 §2.5)
+# ==============================================================
+# path-filter: Rust workspace(apps/openmake-code) 또는 공용 적합성 fixture 변경 시에만 실행.
+# 코어의 검증 대상(sandbox-exec·/private/tmp realpath 등)이 macOS 고유라 macOS 러너에서 돈다.
+# TS 러너(conformance.test.ts)는 ci.yml Gate 1(bridge 선정)이 맡고, 여기서는 Rust 쪽만 본다.
+# 툴체인은 apps/openmake-code/rust-toolchain.toml 로 고정한다(러너 이미지의 rustup 이 그 판을 받는다).
+# ==============================================================
+
+name: openmake-code
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'apps/openmake-code/**'
+      - 'packages/local-bridge-core/conformance/**'
+      - '.github/workflows/openmake-code.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'apps/openmake-code/**'
+      - 'packages/local-bridge-core/conformance/**'
+      - '.github/workflows/openmake-code.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openmake-code-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-core:
+    name: Rust core (fmt → clippy → test → deny)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/openmake-code
+    env:
+      CARGO_TERM_COLOR: never
+      # cargo-deny 는 버전을 고정해 자체 Cargo.lock 으로 빌드한다(--locked).
+      CARGO_DENY_VERSION: 0.20.2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # rust-toolchain.toml 의 판·구성 요소(rustfmt·clippy)를 받는다.
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install
+          rustup show active-toolchain
+          cargo --version
+
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Test (conformance + unit)
+        run: cargo test --locked
+
+      - name: Dependency advisories and licenses
+        run: |
+          cargo install cargo-deny --version "=${CARGO_DENY_VERSION}" --locked
+          cargo deny check advisories licenses
