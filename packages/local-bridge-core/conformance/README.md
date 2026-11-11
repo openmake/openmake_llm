@@ -32,4 +32,5 @@ Rust 는 차단 패턴을 ECMAScript 정규식 크레이트 `regress` 로 컴파
 
 - 이런 사례는 `"divergence": "regress-nonunicode-i-fold"` 와 Rust 기대값 `"rustExpect"` 를 함께 적는다. TS 러너는 `expect` 만 보고, Rust 러너는 `rustExpect` 를 본다.
 - 남용 방지: Rust 러너는 입력에 U+017F 또는 U+212A 가 있고, `expect` 가 허용(`null`)이며 `rustExpect` 가 차단 사유일 때만 받아들인다. TS 러너는 `divergence` 값이 위 이름뿐인지 본다.
+- 두 구현이 모두 차단해도 사유가 달라질 수 있다 — Rust 는 원문에서 `i` 규칙에 먼저 걸리고, TS 는 정리본에서 다른 규칙에 걸리는 경우다(예: `"\u001b[0mc:di\u017fkpart|\u0000sh"` → TS "파이프-투-셸 실행", Rust "디스크·부팅 설정 변경"). 차단 여부는 같고, 이 경우는 `rustExpect` 로 나타내지 않는다.
 - 이 차이는 TS 코어를 지우는 PR-5.3 에서 사라진다(그 뒤 fixture 는 Rust 의 회귀 테스트로 남는다).
