@@ -173,8 +173,16 @@ fn denylist() {
     }
 }
 
+/// `{{HOME}}` 자리에 넣는 임의 홈 — 실제 홈에 의존하지 않는다.
+const FAKE_HOME: &str = "/Users/conformance-home";
+
 #[test]
 fn sandbox_profile() {
-    let _doc = load("sandbox-profile");
-    todo!("sandbox-profile suite");
+    use omk_bridge_core::sandbox_profile::build_sandbox_profile;
+    let doc = load("sandbox-profile");
+    each_case(&doc, "sandbox-profile", "cases", |ctx, i, e| {
+        let got = build_sandbox_profile(i["root"].as_str().unwrap(), i["gitDir"].as_str(), FAKE_HOME);
+        let want = e["profile"].as_str().unwrap().replace("{{HOME}}", FAKE_HOME);
+        assert_eq!(got, want, "{ctx}");
+    });
 }
