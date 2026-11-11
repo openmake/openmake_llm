@@ -13,6 +13,7 @@
     ".github/workflows/": "pipeline",
     "infra/": "infra",
     "packages/local-bridge-core/": "bridge",
+    "apps/openmake-code/": "bridge",
     "apps/discord-bot/": "discordBot",
     "apps/desktop-windows/": "desktopWindows",
     "apps/desktop-native/helper/": "desktopHelper",

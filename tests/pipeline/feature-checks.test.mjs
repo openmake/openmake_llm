@@ -39,6 +39,10 @@ test('the contract export script selects the pipeline suite', () => {
   const r = selectFeatures(['scripts/export-openapi.ts']);
   assert.equal(r.pipeline, true); assert.deepEqual(r.api, []); assert.equal(r.web, false);
 });
+test('Rust core sources select the bridge suite so the TS conformance runner re-checks the shared fixture', () => {
+  const r = selectFeatures(['apps/openmake-code/crates/omk-bridge-core/src/denylist.rs', 'apps/openmake-code/Cargo.toml']);
+  assert.equal(r.bridge, true); assert.deepEqual(r.api, []); assert.equal(r.pipeline, false);
+});
 test('an unmapped root shell script still throws', () => {
   assert.throws(() => selectFeatures(['never-mapped.sh']), /Unmapped changed source: never-mapped\.sh/);
 });

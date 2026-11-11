@@ -19,6 +19,7 @@ data/mcp/
 dist/
 build/
 *.tsbuildinfo
+apps/openmake-code/target/
 
 # Logs
 *.log

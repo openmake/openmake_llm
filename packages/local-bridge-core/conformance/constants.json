@@ -1,0 +1,16 @@
+{
+  "suite": "constants",
+  "version": 1,
+  "values": {
+    "EXEC_ENV_ALLOWLIST_POSIX": ["HOME", "USER", "LOGNAME", "SHELL", "TERM", "COLORTERM", "LANG", "LANGUAGE", "TMPDIR", "TZ"],
+    "EXEC_ENV_ALLOWLIST_PREFIX_POSIX": ["LC_"],
+    "EXEC_ENV_ALLOWLIST_WIN32": ["SystemRoot", "windir", "SystemDrive", "ComSpec", "PATHEXT", "TEMP", "TMP", "USERPROFILE", "USERNAME", "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "ProgramData", "ProgramFiles", "ProgramFiles(x86)", "NUMBER_OF_PROCESSORS", "OS"],
+    "PATH_PROBE_ENV_EXTRA_POSIX": ["ZDOTDIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "MISE_DATA_DIR", "MISE_CONFIG_DIR", "MISE_CACHE_DIR", "MISE_STATE_DIR", "MISE_INSTALLS_DIR", "MISE_INSTALL_STORE_DIR", "MISE_PLUGINS_DIR", "MISE_SHIMS_DIR", "MISE_SHARED_INSTALL_DIRS", "MISE_GLOBAL_CONFIG_FILE", "MISE_GLOBAL_CONFIG_ROOT", "MISE_SYSTEM_CONFIG_DIR", "MISE_SYSTEM_DIR", "MISE_SYSTEM_CONFIG_FILE", "MISE_SYSTEM_DATA_DIR", "MISE_SYSTEM_INSTALLS_DIR", "MISE_SYSTEM_SHIMS_DIR"],
+    "CACHE_SUBPATHS": [".npm", ".cache", "Library/Caches", ".cargo", ".gradle", ".m2", ".yarn", ".pnpm-store", "go/pkg"],
+    "SECRET_SUBPATHS": [".ssh", ".aws", ".gnupg", ".kube", ".docker", ".config/gcloud", "Library/Keychains"],
+    "SANDBOX_BIN": "/usr/bin/sandbox-exec",
+    "BRIDGE_KINDS": ["exec", "read", "write", "list", "listAll", "delete", "task_end", "worktree", "folders", "lsp_diagnostics", "code_nav", "test_runner"],
+    "EXEC_TIMEOUT_MS": 120000,
+    "MAX_BUFFER": 1048576
+  }
+}
