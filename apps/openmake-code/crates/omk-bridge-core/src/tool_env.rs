@@ -20,6 +20,7 @@ pub enum ToolSandbox {
     Missing,
 }
 
+#[derive(Debug, Clone)]
 pub struct ToolEnv {
     /// 호스트 환경 사본 — 자식에는 허용 목록만 간다.
     pub env: Vec<(String, String)>,

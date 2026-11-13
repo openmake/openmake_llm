@@ -12,6 +12,7 @@
 use std::time::{Duration, Instant};
 
 use crate::code_nav;
+use crate::diagnostics;
 use crate::constants::{BRIDGE_KINDS, CODE_NAV_MAX_CONCURRENT, CODE_NAV_TIMEOUT_MS, DIAG_TIMEOUT_MS};
 use crate::exec::{self, ExecHost, ExecState};
 use crate::fs_kinds;
@@ -19,6 +20,7 @@ use crate::msg::{BridgeMsg, BridgeResult, Kind};
 use crate::node_error;
 use crate::scope::safe_from;
 use crate::timed_fs::FsGate;
+use crate::tool_env::NO_HOST;
 use crate::worktree;
 
 /// `task_end` 때 부르는 호스트 정리 훅(데스크톱 = 브라우저 패널 닫기).
@@ -64,8 +66,9 @@ fn handles(kind: Kind) -> bool {
         | Kind::Folders
         | Kind::Exec
         | Kind::Worktree
-        | Kind::CodeNav => true,
-        Kind::LspDiagnostics | Kind::TestRunner | Kind::Browser => false,
+        | Kind::CodeNav
+        | Kind::LspDiagnostics => true,
+        Kind::TestRunner | Kind::Browser => false,
     }
 }
 
@@ -255,7 +258,31 @@ impl BridgeCore {
                     ..ok
                 })
             }
-            Kind::LspDiagnostics | Kind::TestRunner | Kind::Browser => Err(unsupported(kind.as_str())),
+            Kind::LspDiagnostics => {
+                // 자식에 줄 환경 사본이 없는 코어는 거절한다(worktree 와 같은 이유). 폴더 확인 뒤, 스코프 확인 앞.
+                let Some(st) = self.exec.as_ref() else {
+                    return Err(NO_HOST.to_owned());
+                };
+                let (b, rels) = (base.clone(), m.paths.clone());
+                let abs = self
+                    .gate
+                    .run("lsp_diagnostics", move || {
+                        rels.iter()
+                            .map(|r| safe_from(&b, r.as_deref()))
+                            .collect::<Result<Vec<_>, _>>()
+                    })
+                    .await?;
+                let tool = st.tool_env(&self.folder_root).await;
+                let ms = self.timeouts.diag_ms;
+                let r = diagnostics::collect(&base, &abs, &tool, ms, &self.gate).await?;
+                Ok(BridgeResult {
+                    diagnostics: Some(r.diagnostics),
+                    truncated: Some(r.truncated),
+                    server_kind: Some(r.server_kind),
+                    ..ok
+                })
+            }
+            Kind::TestRunner | Kind::Browser => Err(unsupported(kind.as_str())),
         }
     }
 }
@@ -291,7 +318,7 @@ mod tests {
 
     /// 아직 옮기지 않은 kind — 뒤 PR 이 kind 를 옮길 때 이 목록을 줄이지 않으면 실패한다.
     /// 목록이 비는 PR(1.4)에서 `capabilities() == BRIDGE_KINDS` 로 바꾼다.
-    const NOT_PORTED: [&str; 2] = ["lsp_diagnostics", "test_runner"];
+    const NOT_PORTED: [&str; 1] = ["test_runner"];
 
     #[test]
     fn capabilities_lists_only_handled_kinds_in_bridge_kinds_order() {
@@ -301,7 +328,7 @@ mod tests {
             caps,
             [
                 "exec", "read", "write", "list", "listAll", "delete", "task_end", "worktree",
-                "folders", "code_nav"
+                "folders", "lsp_diagnostics", "code_nav"
             ]
         );
         let missing: Vec<&str> = BRIDGE_KINDS
