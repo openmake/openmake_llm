@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.132.0](https://github.com/openmake/openmake_llm/compare/v1.131.0...v1.132.0) (2026-11-13)
+
+
+### ✨ 기능
+
+* **openmake-code:** bridge_notice 검증(conn-notice 초록) ([8e7b22c](https://github.com/openmake/openmake_llm/commit/8e7b22c24438367899e98896934e2120dd5c1ace))
+* **openmake-code:** deviceId — Node 동기 realpath 이식·base id(conn-device-id 초록) ([1ddd680](https://github.com/openmake/openmake_llm/commit/1ddd6805edca4ecd501c78d987e4ee94ad82bb07))
+* **openmake-code:** exec 3단 방어·일괄 승인·prepare 를 코어에 (PR-1.3 단계 8) ([fa390e9](https://github.com/openmake/openmake_llm/commit/fa390e927410b64fdb49c7c709e8995a71d9ccd1))
+* **openmake-code:** exec_path — PATH 병합(순수)·로그인 셸·mise 탐지 (PR-1.3 단계 6) ([f44b5a0](https://github.com/openmake/openmake_llm/commit/f44b5a04b2fc49538e3489eb33bd736d83365f9a))
+* **openmake-code:** exec·worktree 이식 뼈대 — tokio process·io-util, 모듈 6개, 러너에 suite 3개 (PR-1.3 단계 2) ([98369fa](https://github.com/openmake/openmake_llm/commit/98369fa384409c868fb8ec6c537b341b59c4dcd8))
+* **openmake-code:** JS trim·UTF-16 절단과 재연결 대기 계산(conn-reconnect-delay·conn-notice/trim 초록) ([ba12ab7](https://github.com/openmake/openmake_llm/commit/ba12ab7056bfaff295ebf8c2d4722c47f5a673c7))
+* **openmake-code:** msg — command·op 필드와 JS 표기, exec·worktree 결과 필드 (PR-1.3 단계 5) ([8ad9989](https://github.com/openmake/openmake_llm/commit/8ad99890381d4b6ad502d044d31f9b95edb30ba4))
+* **openmake-code:** Node Buffer.from(s, 'base64') 와 같은 관대한 base64 해석 ([9d92262](https://github.com/openmake/openmake_llm/commit/9d922625fa66c52fd8d0f99811baa631c76d4b25))
+* **openmake-code:** node_path 에 Node path.posix 의 resolve·dirname·relative 를 더한다 ([22f6d2e](https://github.com/openmake/openmake_llm/commit/22f6d2e92186e094807da6cbf3a2efab439fd126))
+* **openmake-code:** omk-bridge-conn 크레이트 뼈대와 연결 fixture 러너(빨강) ([351b4b5](https://github.com/openmake/openmake_llm/commit/351b4b5e6bc90c0fea88baff181cdab2f2c52543))
+* **openmake-code:** proc::run — 자식 프로세스 하나(시간 제한·출력 상한·환경 교체) (PR-1.3 단계 4) ([c10733b](https://github.com/openmake/openmake_llm/commit/c10733b171ecdad4608f01c58a6f69f718e98059))
+* **openmake-code:** sandbox — sandbox_enabled·detect_git_dir·write_sandbox_profile (PR-1.3 단계 7) ([94618d5](https://github.com/openmake/openmake_llm/commit/94618d55f5eb29a7aa083f37f9b39f1806e693fd))
+* **openmake-code:** worktree add·diff·remove 를 코어에 (PR-1.3 단계 9) ([1cee695](https://github.com/openmake/openmake_llm/commit/1cee69570ec19966026332a4f40154c4334b5b52))
+* **openmake-code:** WS 연결 상태기계 — 접속부·소켓 세션·연결 수명(conn-frames 초록) ([1434713](https://github.com/openmake/openmake_llm/commit/1434713107c2cb0c56f04941867c9458e0464aad))
+* **openmake-code:** 경로 스코프(lexical_resolve·safe_from)와 Node 형식 오류 문구(node_error) ([64d770d](https://github.com/openmake/openmake_llm/commit/64d770d86accb5d5dd0c9c9528ba460ef320a9e6))
+* **openmake-code:** 브리지 프레임 만들기·서버 프레임 분류 ([fc7ca1a](https://github.com/openmake/openmake_llm/commit/fc7ca1ad272d1a1561a9a3408886d54b32032828))
+* **openmake-code:** 상수 대조·js_text(JS trim·UTF-16 slice) (PR-1.3 단계 3) ([b8af374](https://github.com/openmake/openmake_llm/commit/b8af3743f97ec9453261cb71c27b26d97a5112a0))
+* **openmake-code:** 서버 주소 찾기(conn-endpoints 초록) ([5756a92](https://github.com/openmake/openmake_llm/commit/5756a92797b2909868e3d2b7c4b821338d6c2d04))
+* **openmake-code:** 시간 제한 관문(FsGate)과 요청 디스패처(BridgeCore::handle_exec) ([ae1b275](https://github.com/openmake/openmake_llm/commit/ae1b27559c0b11f17a477d08b9357d5c3d30ef92))
+* **openmake-code:** 실제 접속부(TCP·TLS)와 주소 조회 GET ([3164de8](https://github.com/openmake/openmake_llm/commit/3164de8450bb6afed43164a25a7f7d0b0cb2d94b))
+* **openmake-code:** 연결 상수(conn-constants 초록) ([77764a4](https://github.com/openmake/openmake_llm/commit/77764a4e3d12667c48dec6309521cea8b25b69d5))
+* **openmake-code:** 연결 시 코어 prepare·해제 시 일괄 승인 회수 — PR-1.3 합류 ([3af29bd](https://github.com/openmake/openmake_llm/commit/3af29bdef6c7bae77bc57158fd9f00d2d313de57))
+* **openmake-code:** 요청 검사·파일 kind 상수(만료 허용 폭·reqId 상한·folders·listAll 상한·FS 시간 제한) ([3baf02b](https://github.com/openmake/openmake_llm/commit/3baf02b82bba76a864bb06d17aa4b0323ab3fd76))
+* **openmake-code:** 요청 만료·중복 판정(RequestGuard)과 요청·결과 모양(msg) ([038ae5a](https://github.com/openmake/openmake_llm/commit/038ae5a2884fe7e88a3437f16731fc7ef78e7f7f))
+* **openmake-code:** 파일 kind 동기 처리(resolve_base·read·write·list·list_all·delete·folders) ([e970501](https://github.com/openmake/openmake_llm/commit/e970501b26e96203b6679401342669febf4e42e2))
+* **openmake-code:** 파일 kind 이식 뼈대 — tokio(rt·time·sync)·serde_json 의존, 러너에 suite 3개 ([c46d11f](https://github.com/openmake/openmake_llm/commit/c46d11fd5f6192953be5a198bb4603ebe6fdff59))
+* **openmake-code:** 호스트 런타임(blocking 스레드 상한 64)과 코어 수명 테스트(I2) ([4ca8096](https://github.com/openmake/openmake_llm/commit/4ca80964e9e1e650cf89ff93896cf4edc0d6927f))
+
+
+### 🐛 버그 수정
+
+* **local-bridge-core:** 샌드박스 프로파일 파일을 코어마다 따로 쓴다 ([c305e7b](https://github.com/openmake/openmake_llm/commit/c305e7b488a2616a20bab28cace69d4b72e429fa))
+* **openmake-code:** node_error errno 표를 Node(libuv)가 아는 macOS errno 65개 전부로 채운다 ([ac5cf72](https://github.com/openmake/openmake_llm/commit/ac5cf7268e193db397bd278e4edc1efb096cc6f3))
+* **openmake-code:** write 의 중간 폴더 생성을 Node mkdir recursive 순서로 — 실패한 구간 경로를 문구에 적는다 ([ca83c79](https://github.com/openmake/openmake_llm/commit/ca83c7913d127f4b408541ae89e14d6fc5fd56ce))
+* **openmake-code:** 끝난 자식의 시간 초과는 그 종료 코드로 — Node execFile 과 같게 (PR-1.3 리뷰 M1) ([cf7e59a](https://github.com/openmake/openmake_llm/commit/cf7e59a6bda45d835dd7921df357c800d3eb1a74))
+* **openmake-code:** 보내기를 연결 태스크에서 기다리지 않게 — 세션 보낼 큐(H1) ([8c0e88a](https://github.com/openmake/openmake_llm/commit/8c0e88a4c918ebd9ed390ca112c338cc3eac0acd))
+* **openmake-code:** 연결의 prepare 를 접속 단계 future 맨 앞으로 — 그동안 해제·채널 닫힘을 바로 처리 (PR-1.3 리뷰 L1) ([b9eb5ca](https://github.com/openmake/openmake_llm/commit/b9eb5ca425ab6ab9a079696459fab3f3cc48bdb0))
+
 ## [1.131.0](https://github.com/openmake/openmake_llm/compare/v1.130.1...v1.131.0) (2026-11-11)
 
 
