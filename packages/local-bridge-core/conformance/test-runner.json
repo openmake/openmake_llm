@@ -40,6 +40,20 @@
         {"msg":{"kind":"test_runner","folder":"../x"},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../x"}},
         {"msg":{"kind":"test_runner","folder":"nope"},"expect":{"ok":false,"error":"실행 폴더가 존재하지 않습니다: nope"}}
       ]
+    },
+    {
+      "id": "marker-symlink-not-read",
+      "setup": [
+        {"file":"real/package.json","content":"{\"scripts\":{\"test\":\"jest\"}}"},
+        {"file":"real/pyproject.toml","content":"[tool.pytest.ini_options]\n"},
+        {"dir":"root/node_modules"},
+        {"symlink":"root/package.json","target":"{{TMP}}/real/package.json"},
+        {"symlink":"root/pyproject.toml","target":"{{TMP}}/real/pyproject.toml"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"test_runner"},"expect":{"ok":true,"testRunner":"none"}}
+      ]
     }
   ],
   "direct": [

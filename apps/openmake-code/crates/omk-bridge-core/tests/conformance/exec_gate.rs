@@ -377,21 +377,23 @@ fn exec_gate_fail_closed() {
     each_case(&doc, "exec-gate", "failClosed", |ctx, i, e| {
         let tmp = new_tmp();
         std::fs::create_dir_all(tmp.join("root")).unwrap();
-        std::fs::write(tmp.join("prof-file"), b"").unwrap();
-        let unwritable = match i["prepare"].as_str() {
+        // home-missing: 홈 realpath 가 실패해 프로파일 텍스트를 만들지 못한다(프로파일은 파일로 쓰지 않는다 — 리뷰 F1).
+        let home_missing = match i["prepare"].as_str() {
             Some("none") => false,
-            Some("unwritable") => true,
+            Some("home-missing") => true,
             other => panic!("{ctx}: 모르는 prepare {other:?}"),
         };
-        let prof = tmp.join(if unwritable { "prof-file" } else { "prof" });
         let script = Arc::new(Script::default());
         *script.answer.lock().unwrap() = Some(ConfirmAnswer::Yes);
-        let mut h = host(&tmp, confirm_fn(&script), &prof);
+        let mut h = host(&tmp, confirm_fn(&script), &tmp.join("prof"));
         h.sandbox_enabled = true;
+        if home_missing {
+            h.home = tmp.join("no-home");
+        }
         let core = BridgeCore::new(core_opts(tmp.join("root")))
             .unwrap()
             .with_exec_host(h);
-        if unwritable {
+        if home_missing {
             rt.block_on(core.prepare());
         }
         let msg = BridgeMsg::from_json(&json!({"kind": "exec", "command": "touch ran"}));
