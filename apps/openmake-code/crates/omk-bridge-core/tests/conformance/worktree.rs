@@ -18,13 +18,23 @@ use crate::support::{TmpDir, apply_op_step, apply_setup, fill, runner_env, runti
 #[test]
 fn worktree_shapes() {
     let doc = load("worktree");
-    let top = ["suite", "version", "taskIdPattern", "cases", "taskId", "gitDir"];
+    let top = [
+        "suite",
+        "version",
+        "taskIdPattern",
+        "cases",
+        "taskId",
+        "gitDir",
+    ];
     shape(&doc, &top, &[], "worktree");
     for c in non_empty(&doc["cases"], "worktree/cases") {
         let at = format!("worktree/cases/{}", c["id"].as_str().unwrap_or("?"));
         shape(c, &["id", "setup", "root", "steps"], &[], &at);
         shape_setup(&c["setup"], &at);
-        for (n, s) in non_empty(&c["steps"], &format!("{at}/steps")).iter().enumerate() {
+        for (n, s) in non_empty(&c["steps"], &format!("{at}/steps"))
+            .iter()
+            .enumerate()
+        {
             let at = format!("{at}/steps/{n}");
             if s.get("msg").is_some() {
                 let optional = ["compare", "after", "divergence", "rustExpect"];
@@ -52,7 +62,10 @@ fn worktree_shapes() {
 #[test]
 fn worktree_task_id_pattern() {
     let doc = load("worktree");
-    assert_eq!(doc["taskIdPattern"], json!({"source": TASK_ID_RE, "flags": ""}));
+    assert_eq!(
+        doc["taskIdPattern"],
+        json!({"source": TASK_ID_RE, "flags": ""})
+    );
 }
 
 /// 확인 콜백이 불리면 실패한다 — worktree 는 서버 문자열을 실행하지 않는다.
@@ -67,7 +80,9 @@ fn core_at(tmp: &TmpDir, folder: String) -> BridgeCore {
         on_task_end: None,
     };
     let prof = tmp.join("prof");
-    BridgeCore::new(opts).unwrap().with_exec_host(host(tmp, no_confirm(), &prof))
+    BridgeCore::new(opts)
+        .unwrap()
+        .with_exec_host(host(tmp, no_confirm(), &prof))
 }
 
 #[test]
@@ -88,7 +103,11 @@ fn worktree_cases() {
             let (want, _) = want_of(s, &tmp.path, &ctx);
             let msg = BridgeMsg::from_json(&fill(&s["msg"], &tmp.path));
             let got = rt.block_on(core.handle_exec(&msg)).to_json();
-            assert_eq!(view(&got, s["compare"].as_str(), &want, &ctx), want, "{ctx}");
+            assert_eq!(
+                view(&got, s["compare"].as_str(), &want, &ctx),
+                want,
+                "{ctx}"
+            );
             if let Some(after) = s.get("after") {
                 check_after(&tmp, after, &ctx);
             }
@@ -108,7 +127,9 @@ fn worktree_task_id() {
         for (k, v) in c["input"].as_object().unwrap() {
             msg[k] = v.clone();
         }
-        let got = rt.block_on(core.handle_exec(&BridgeMsg::from_json(&msg))).to_json();
+        let got = rt
+            .block_on(core.handle_exec(&BridgeMsg::from_json(&msg)))
+            .to_json();
         let want: Value = if c["expect"] == "accepted" {
             json!({"ok": false, "error": "git 레포가 아닙니다"})
         } else {
@@ -128,8 +149,16 @@ fn worktree_git_dir() {
         apply_setup(&tmp, &c["setup"]);
         let root = fill(&c["input"]["root"], &tmp.path);
         let env = runner_env(&tmp);
-        let got = rt.block_on(detect_git_dir(root.as_str().unwrap(), &env, Platform::Darwin));
-        assert_eq!(json!({"gitDir": got}), fill(&c["expect"], &tmp.path), "{ctx}");
+        let got = rt.block_on(detect_git_dir(
+            root.as_str().unwrap(),
+            &env,
+            Platform::Darwin,
+        ));
+        assert_eq!(
+            json!({"gitDir": got}),
+            fill(&c["expect"], &tmp.path),
+            "{ctx}"
+        );
     }
     rt.shutdown_timeout(Duration::from_secs(5));
 }

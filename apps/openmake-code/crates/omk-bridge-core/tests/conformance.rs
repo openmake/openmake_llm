@@ -330,9 +330,16 @@ fn constants() {
     for (name, ours) in probes {
         assert_eq!(values[name], ours, "constants/{name}");
     }
-    assert_eq!(values["WORKTREE_DIR"], c::WORKTREE_DIR, "constants/WORKTREE_DIR");
+    assert_eq!(
+        values["WORKTREE_DIR"],
+        c::WORKTREE_DIR,
+        "constants/WORKTREE_DIR"
+    );
     let prefix = c::WORKTREE_BRANCH_PREFIX;
-    assert_eq!(values["WORKTREE_BRANCH_PREFIX"], prefix, "constants/WORKTREE_BRANCH_PREFIX");
+    assert_eq!(
+        values["WORKTREE_BRANCH_PREFIX"], prefix,
+        "constants/WORKTREE_BRANCH_PREFIX"
+    );
     seen.extend(["PATH_PROBE_TIMEOUT_MS", "GIT_PROBE_TIMEOUT_MS"]);
     seen.extend(["WORKTREE_DIR", "WORKTREE_BRANCH_PREFIX"]);
     let mut fixture_keys: Vec<&str> = values.keys().map(String::as_str).collect();

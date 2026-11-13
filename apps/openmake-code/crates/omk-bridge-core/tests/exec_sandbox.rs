@@ -26,12 +26,23 @@ struct Work {
 impl Work {
     fn new() -> Work {
         let n = SEQ.fetch_add(1, Ordering::Relaxed);
-        let raw = format!("{}/omk-sbx-{}-{n}", env!("CARGO_TARGET_TMPDIR"), std::process::id());
+        let raw = format!(
+            "{}/omk-sbx-{}-{n}",
+            env!("CARGO_TARGET_TMPDIR"),
+            std::process::id()
+        );
         let _ = std::fs::remove_dir_all(&raw);
         std::fs::create_dir_all(format!("{raw}/home")).unwrap();
-        let path = std::fs::canonicalize(&raw).unwrap().to_string_lossy().into_owned();
+        let path = std::fs::canonicalize(&raw)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
         let home = format!("{path}/home");
-        let mut open = vec!["/private/tmp".to_owned(), "/private/var/folders".to_owned(), "/dev".to_owned()];
+        let mut open = vec![
+            "/private/tmp".to_owned(),
+            "/private/var/folders".to_owned(),
+            "/dev".to_owned(),
+        ];
         open.extend(CACHE_SUBPATHS.iter().map(|c| format!("{home}/{c}")));
         assert!(
             !open.iter().any(|p| path.starts_with(p.as_str())),
@@ -62,7 +73,10 @@ fn core(work: &Work, folder: &str, sandbox: bool, profile_dir: &str) -> BridgeCo
     let host = ExecHost {
         confirm: Box::new(|_| Box::pin(async { ConfirmAnswer::Yes })),
         env: vec![
-            ("PATH".to_owned(), "/usr/bin:/bin:/usr/sbin:/sbin".to_owned()),
+            (
+                "PATH".to_owned(),
+                "/usr/bin:/bin:/usr/sbin:/sbin".to_owned(),
+            ),
             ("HOME".to_owned(), home.clone()),
             ("SHELL".to_owned(), "/bin/sh".to_owned()),
         ],
@@ -93,7 +107,9 @@ fn prepared(work: &Work, folder: &str, sandbox: bool) -> (BridgeCore, TmpDir) {
 }
 
 fn send(c: &BridgeCore, msg: Value) -> Value {
-    runtime().block_on(c.handle_exec(&BridgeMsg::from_json(&msg))).to_json()
+    runtime()
+        .block_on(c.handle_exec(&BridgeMsg::from_json(&msg)))
+        .to_json()
 }
 
 fn exec(c: &BridgeCore, command: &str) -> Value {
@@ -106,7 +122,12 @@ fn ran_ok(r: &Value) -> bool {
 
 fn git(dir: &str, args: &[&str]) {
     let ok = std::process::Command::new("git")
-        .args(["-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false"])
+        .args([
+            "-c",
+            "init.defaultBranch=main",
+            "-c",
+            "commit.gpgsign=false",
+        ])
         .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])
         .args(args)
         .current_dir(dir)
@@ -138,7 +159,11 @@ fn write_outside_folder_is_blocked() {
         let (c, _p) = prepared(&w, &a, sandbox);
         let r = exec(&c, "echo x > ../outside.txt");
         let made = std::fs::metadata(w.join("outside.txt")).is_ok();
-        assert_eq!((ran_ok(&r), made), (!sandbox, !sandbox), "sandbox={sandbox}: {r}");
+        assert_eq!(
+            (ran_ok(&r), made),
+            (!sandbox, !sandbox),
+            "sandbox={sandbox}: {r}"
+        );
     }
 }
 
@@ -148,15 +173,27 @@ fn secret_reads_are_blocked() {
     for sandbox in [true, false] {
         let w = Work::new();
         let a = w.mkdir("A");
-        for (dir, file) in [(".ssh", "key"), (".aws", "config"), ("Library/Keychains", "k.db")] {
+        for (dir, file) in [
+            (".ssh", "key"),
+            (".aws", "config"),
+            ("Library/Keychains", "k.db"),
+        ] {
             w.mkdir(&format!("home/{dir}"));
             std::fs::write(w.join(&format!("home/{dir}/{file}")), "SECRET").unwrap();
         }
         std::fs::write(w.join("home/plain.txt"), "PLAIN").unwrap();
         let (c, _p) = prepared(&w, &a, sandbox);
-        for cmd in [r#"d=ssh; cat "$HOME/.$d/key""#, r#"d=aws; cat "$HOME/.$d/config""#, r#"cat "$HOME/Library/Keychains/k.db""#] {
+        for cmd in [
+            r#"d=ssh; cat "$HOME/.$d/key""#,
+            r#"d=aws; cat "$HOME/.$d/config""#,
+            r#"cat "$HOME/Library/Keychains/k.db""#,
+        ] {
             let r = exec(&c, cmd);
-            assert_eq!(r["stdout"] == "SECRET", !sandbox, "sandbox={sandbox} {cmd}: {r}");
+            assert_eq!(
+                r["stdout"] == "SECRET",
+                !sandbox,
+                "sandbox={sandbox} {cmd}: {r}"
+            );
             assert_eq!(ran_ok(&r), !sandbox, "sandbox={sandbox} {cmd}: {r}");
         }
         let r = exec(&c, r#"cat "$HOME/plain.txt""#);
@@ -191,11 +228,18 @@ fn repo_subfolder_can_commit_but_not_write_elsewhere() {
         repo_at(&repo);
         let web = w.mkdir("repo/apps/web");
         let (c, _p) = prepared(&w, &web, sandbox);
-        let r = exec(&c, &format!("echo y > n.txt && git add n.txt && {COMMIT} commit -q -m y"));
+        let r = exec(
+            &c,
+            &format!("echo y > n.txt && git add n.txt && {COMMIT} commit -q -m y"),
+        );
         assert!(ran_ok(&r), "sandbox={sandbox} commit: {r}");
         let r = exec(&c, "echo z > ../../other.txt");
         let made = std::fs::metadata(w.join("repo/other.txt")).is_ok();
-        assert_eq!((ran_ok(&r), made), (!sandbox, !sandbox), "sandbox={sandbox} other: {r}");
+        assert_eq!(
+            (ran_ok(&r), made),
+            (!sandbox, !sandbox),
+            "sandbox={sandbox} other: {r}"
+        );
     }
 }
 
@@ -206,12 +250,21 @@ fn worktree_edit_and_commit_inside_sandbox() {
     let repo = w.join("repo");
     repo_at(&repo);
     let (c, _p) = prepared(&w, &repo, true);
-    let add = send(&c, json!({"kind": "worktree", "op": "add", "taskId": "sbxtask1-wt"}));
-    let rel = add["worktreeRel"].as_str().unwrap_or_else(|| panic!("{add}")).to_owned();
+    let add = send(
+        &c,
+        json!({"kind": "worktree", "op": "add", "taskId": "sbxtask1-wt"}),
+    );
+    let rel = add["worktreeRel"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{add}"))
+        .to_owned();
     let cmd = format!("echo agent > a.txt && git add a.txt && {COMMIT} commit -q -m agent");
     let r = send(&c, json!({"kind": "exec", "command": cmd, "folder": rel}));
     assert!(ran_ok(&r), "{r}");
-    let d = send(&c, json!({"kind": "worktree", "op": "diff", "taskId": "sbxtask1-wt"}));
+    let d = send(
+        &c,
+        json!({"kind": "worktree", "op": "diff", "taskId": "sbxtask1-wt"}),
+    );
     assert!(d["stdout"].as_str().unwrap_or("").contains("+agent"), "{d}");
 }
 
@@ -229,8 +282,13 @@ fn two_cores_each_write_only_their_own_folder() {
         rt.block_on(cb.prepare());
         let files = std::fs::read_dir(&prof.path).unwrap().count();
         assert_eq!(files, if sandbox { 2 } else { 0 }, "sandbox={sandbox}");
-        let write = |c: &BridgeCore, dir: &str, name: &str| ran_ok(&exec(c, &format!("echo x > '{dir}/{name}'")));
-        assert!(write(&ca, &a, "a-in-a") && write(&cb, &b, "b-in-b"), "sandbox={sandbox}");
+        let write = |c: &BridgeCore, dir: &str, name: &str| {
+            ran_ok(&exec(c, &format!("echo x > '{dir}/{name}'")))
+        };
+        assert!(
+            write(&ca, &a, "a-in-a") && write(&cb, &b, "b-in-b"),
+            "sandbox={sandbox}"
+        );
         assert_eq!(write(&ca, &b, "a-in-b"), !sandbox, "sandbox={sandbox}");
         assert_eq!(write(&cb, &a, "b-in-a"), !sandbox, "sandbox={sandbox}");
         // 다시 준비해도 자기 파일을 다시 쓴다. 코어가 사라지면 자기 파일을 지운다.
@@ -266,7 +324,11 @@ fn fail_closed_without_profile() {
     let c = core(&w, &a, true, &w.join("prof-file"));
     runtime().block_on(c.prepare());
     let r = exec(&c, "touch ran");
-    assert_eq!((r["ok"].clone(), r["exitCode"].clone()), (json!(false), json!(126)), "{r}");
+    assert_eq!(
+        (r["ok"].clone(), r["exitCode"].clone()),
+        (json!(false), json!(126)),
+        "{r}"
+    );
     assert!(std::fs::metadata(w.join("A/ran")).is_err());
     let (c, prof) = prepared(&w, &a, false);
     assert!(ran_ok(&exec(&c, "touch ran")));

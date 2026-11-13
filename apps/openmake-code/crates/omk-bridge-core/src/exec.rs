@@ -4,6 +4,7 @@
 //! - 차단 목록은 확인 없이 즉시 거부한다(가드레일 — 보안 경계 아님).
 //! - 나머지는 실행 전 사용자 확인(비우회). 'all' 은 그 작업 동안만 유효하고 `task_end`·해제 때 회수한다. 서버는 켤 수 없다.
 //! - macOS 는 sandbox-exec 로 감싼다. 프로파일을 준비하지 못했으면 실행을 거부한다(fail-closed).
+//!
 //! 코어는 프로세스 환경을 읽지 않는다 — 호스트가 [`ExecHost`] 로 한 번 준다(D-33).
 
 use std::collections::HashSet;
@@ -41,8 +42,9 @@ pub struct ConfirmRequest {
 
 /// 사용자 확인(비우회 관문)의 호스트 구현. 시간 제한이 없다(사용자가 답할 때까지 기다린다 — TS 와 같다).
 /// 돌려준 future 가 panic 하거나 취소되면 거부로 본다.
-pub type ConfirmFn =
-    Box<dyn Fn(ConfirmRequest) -> Pin<Box<dyn Future<Output = ConfirmAnswer> + Send>> + Send + Sync>;
+pub type ConfirmFn = Box<
+    dyn Fn(ConfirmRequest) -> Pin<Box<dyn Future<Output = ConfirmAnswer> + Send>> + Send + Sync,
+>;
 
 /// exec·worktree 를 처리하는 호스트가 주는 것.
 pub struct ExecHost {
@@ -140,8 +142,19 @@ impl ExecState {
         *self.path_cache.lock().await = None;
         let profile = if self.host.sandbox_enabled {
             let git_dir = detect_git_dir(root, &self.host.env, self.host.platform).await;
-            let (root, home, out) = (root.to_owned(), self.host.home.clone(), self.profile_file.clone());
-            let write = move || Ok(write_sandbox_profile(&root, git_dir.as_deref(), &home, &out));
+            let (root, home, out) = (
+                root.to_owned(),
+                self.host.home.clone(),
+                self.profile_file.clone(),
+            );
+            let write = move || {
+                Ok(write_sandbox_profile(
+                    &root,
+                    git_dir.as_deref(),
+                    &home,
+                    &out,
+                ))
+            };
             gate.run("샌드박스 준비", write).await.ok().flatten()
         } else {
             None
@@ -229,7 +242,9 @@ pub(crate) async fn run_exec(
     let command = m.command_text.clone();
     let (file, args) = match profile.filter(|_| h.sandbox_enabled) {
         Some(p) => {
-            let args = ["-f", &p, "/bin/bash", "-c", &command].map(str::to_owned).to_vec();
+            let args = ["-f", &p, "/bin/bash", "-c", &command]
+                .map(str::to_owned)
+                .to_vec();
             (SANDBOX_BIN.to_owned(), args)
         }
         None => {

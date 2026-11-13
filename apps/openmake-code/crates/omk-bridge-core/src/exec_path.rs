@@ -24,7 +24,12 @@ pub(crate) fn env_get<'a>(env: &'a [(String, String)], key: &str) -> Option<&'a 
 
 /// 병합(순수) — 로그인 셸 출력(`trim` 후 `:` 로 나눔)·프로세스 PATH·고정 4곳을 처음 나온 순서로 중복 없이 합치고,
 /// mise 출력(`trim` 후 줄마다, 빈 줄 제외)이 있으면 그것을 앞에 둔다(겹치면 mise 자리가 이긴다).
-pub fn merge_exec_path(login: Option<&str>, process_path: &str, home: &str, mise: Option<&str>) -> String {
+pub fn merge_exec_path(
+    login: Option<&str>,
+    process_path: &str,
+    home: &str,
+    mise: Option<&str>,
+) -> String {
     let local_bin = node_path::join(&[home, ".local/bin"]);
     let shims = node_path::join(&[home, ".local/share/mise/shims"]);
     let mut parts: Vec<&str> = Vec::new();
@@ -66,7 +71,9 @@ fn probe(file: &str, args: &[&str], cwd: Option<&str>, env: BTreeMap<String, Str
 
 /// 로그인 셸 — `SHELL` 이 없거나 비면 `/bin/zsh`(TS `process.env.SHELL || '/bin/zsh'`).
 fn login_shell(env: &[(String, String)]) -> &str {
-    env_get(env, "SHELL").filter(|s| !s.is_empty()).unwrap_or("/bin/zsh")
+    env_get(env, "SHELL")
+        .filter(|s| !s.is_empty())
+        .unwrap_or("/bin/zsh")
 }
 
 /// 성공(코드 0)일 때만 출력 — `execFileSync` 는 그 밖(코드·신호·시간 초과·상한·띄우기 실패)에 던진다.
@@ -84,14 +91,22 @@ pub async fn resolve_exec_path(
 ) -> String {
     if platform == Platform::Win32 {
         let pick = |k| env_get(env, k).filter(|v| !v.is_empty());
-        return pick("PATH").or_else(|| pick("Path")).unwrap_or("").to_owned();
+        return pick("PATH")
+            .or_else(|| pick("Path"))
+            .unwrap_or("")
+            .to_owned();
     }
     let process_path = env_get(env, "PATH").unwrap_or("");
     let probe_env = |path: &str| {
         let pairs = env.iter().map(|(k, v)| (k.as_str(), v.as_str()));
         build_exec_env(pairs, path, platform, PATH_PROBE_ENV_EXTRA_POSIX)
     };
-    let login = probe(login_shell(env), &["-lc", "echo -n \"$PATH\""], None, probe_env(process_path));
+    let login = probe(
+        login_shell(env),
+        &["-lc", "echo -n \"$PATH\""],
+        None,
+        probe_env(process_path),
+    );
     let login = run_ok(login).await;
     let base = merge_exec_path(login.as_deref(), process_path, home, None);
     let mise_cwd = folder_root.unwrap_or(home);
@@ -109,7 +124,10 @@ mod tests {
     /// fixture 에 넣지 않는다 — macOS 는 실제 zsh 가 돌고 Linux CI 에는 없다.
     #[test]
     fn shell_falls_back_to_zsh() {
-        let env = |v: Option<&str>| v.map(|v| vec![("SHELL".to_owned(), v.to_owned())]).unwrap_or_default();
+        let env = |v: Option<&str>| {
+            v.map(|v| vec![("SHELL".to_owned(), v.to_owned())])
+                .unwrap_or_default()
+        };
         assert_eq!(login_shell(&env(None)), "/bin/zsh");
         assert_eq!(login_shell(&env(Some(""))), "/bin/zsh");
         assert_eq!(login_shell(&env(Some("/bin/fish"))), "/bin/fish");

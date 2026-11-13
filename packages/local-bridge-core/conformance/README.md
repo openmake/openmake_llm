@@ -26,7 +26,7 @@
 - `file-kinds.cases` 는 사례마다 `root` 를 연결 폴더로 코어 하나를 만들고 `requests` 를 순서대로 보낸다. `expect` 는 결과 객체 전체이고 키 집합까지 같아야 한다. TS 의 예외는 연결부와 같이 `{ok:false, error: 메시지}` 로 바꿔 비교한다.
   - `compare: "sorted-entries"` — `entries` 를 정렬해 비교한다. `compare: "capped"` — `expect` 에 `entriesCount`(와 `truncated`)만 적고, 러너는 개수와 "모든 항목이 `many` 로 만든 이름"인지 본다.
   - `after` — 요청 뒤 디스크 상태. `{"exists": "root/a.txt", "content"|"contentB64": …}` · `{"absent": "outside/planted"}`.
-  - `exec`·`worktree`·`lsp_diagnostics`·`code_nav`·`test_runner`·`browser` 요청은 넣지 않는다(TS 는 실제로 실행하고 Rust 는 아직 거절한다 — TS 러너가 막는다).
+  - `lsp_diagnostics`·`code_nav`·`test_runner`·`browser` 요청은 넣지 않는다(TS 는 실제로 실행하고 Rust 는 아직 거절한다 — TS 러너가 막는다). `exec`·`worktree` 는 아래 suite 가 본다.
 - 두 러너는 다른 OS 에서 돈다(TS 는 CI 의 Linux, Rust 는 macOS). 대소문자 무시(APFS)·FIFO·권한(chmod)에 기대는 사례는 넣지 않는다. 블록되는 FS 호출은 Rust `tests/fs_timeout.rs`·TS `fs-timeout.test.ts` 가 따로 본다.
 
 ## suite
@@ -41,10 +41,21 @@
 | `scope.json` | `nodePath`(Node `path.posix` 의 `resolve`·`dirname`·`relative`) · `lexical`(어휘 스코프 검사 — TS 러너는 FS 를 항등으로 바꾼 `safeFromAsync`) · `fs`(심링크·dangling·최근접 조상) |
 | `file-kinds.json` | `cases`(파일 kind·`folder` 필드·디스패처) · `timeout`(시간 초과 문구) · `fsTimeoutEnv`(`OMK_BRIDGE_FS_TIMEOUT_MS` 해석) |
 | `request-guard.json` | 요청 만료·중복 판정. 사례마다 새 guard 에 `steps` 를 순서대로 넣는다. `{"fill": {prefix, from, count}}` 은 그 수만큼 통과해야 한다 |
+| `exec-gate.json` | `cases`(차단 → 확인 → 실행, 거부 불변식, 일괄 승인·회수, 실행 결과, `command`·`folder` 필드) · `sandboxEnabled` · `autoApproveEnv` · `failClosed` |
+| `exec-path.json` | `resolve`(로그인 셸·프로세스 PATH·고정 4곳·mise 병합, 자식 환경·cwd — 가짜 실행 파일) · `win32` |
+| `worktree.json` | `cases`(`add`·`diff`·`remove`·모르는 op) · `taskId`(형식) · `gitDir`(샌드박스용 git 디렉터리 탐지) · `taskIdPattern`(TS `TASK_ID_RE` 의 source·flags) |
+
+### exec·worktree suite (`exec-gate`·`exec-path`·`worktree`)
+
+- 사례마다 `{{TMP}}/home` 을 가짜 홈으로 만든다 — `{{HOME}}` 은 그 경로, `{{BIN}}` 은 `{{TMP}}/bin`. 러너가 주는 환경: 러너 프로세스의 `PATH`, `HOME`, `SHELL=/bin/sh`, `LANG=C` + 가짜 비밀 `OMK_COMPANION_API_KEY`·`GITHUB_TOKEN`·`OMK_BRIDGE_AUTO_APPROVE=0`(자식에 넘어가지 않는 것만 본다). TS 러너는 `process.env` 를 사례 동안 바꿨다가 되돌리고, jest 의 환경 사본 때문에 `os.homedir()` 를 `HOME` 을 따르게 모의한다. Rust 러너는 `ExecHost` 로 넘긴다.
+- setup 종류 추가: `{"git": [...], "cwd": "repo"}`(격리된 git — 사용자·시스템 설정 없음, 작성자·날짜 고정, `init.defaultBranch=main`) · `{"file": …, "repeat": {"line", "count"}}`(그 줄을 count 번).
+- `steps` 의 요청 단계: `exec-gate` 는 `{msg, confirm?, asked, askedWith?, expect, compare?, after?, autoApproved}` — `confirm` 은 물음이 오면 줄 답, `asked` 는 물음이 왔는지(오지 않아야 하는데 오거나 그 반대면 실패), `autoApproved` 는 단계 뒤 일괄 승인 수. `{"clearAutoApprove": true, "autoApproved": n}` 은 연결 해제 흉내, `{"parallel": [요청…], "answerOrder": [...], "autoApproved": n}` 은 요청을 함께 보내 물음이 다 모인 뒤 그 차례로 답한다(물음은 명령 글자로 짝짓는다 — 명령이 겹치면 실패). 사례의 `changes` 는 변화 알림마다의 일괄 승인 수. `worktree` 는 `{msg, expect, compare?, after?}` 와 요청이 아닌 단계 `{"git", "cwd", "stdout"?}`·`{"file", "content"|"repeat"}`·`{"remove"}`.
+- `compare`: `no-stderr`(stderr 를 빼고) · `stdout-length`(`stdoutLength` — UTF-16 길이) · `stdout-lines`(`stdoutHas`·`stdoutLacks` — 그 글자로 시작하는 줄이 있다/없다) · `stdout-contains`(`stdoutContains`·`stdoutLacks`) · `error-prefix`(`errorPrefix`). `after` 에 `{"fileHas", "line", "count"}`(그 줄이 정확히 count 번)를 더 쓸 수 있다.
+- 샌드박스: Rust 러너는 macOS 에서 켜고(실제 `sandbox-exec`), TS 러너는 그 OS 의 값대로 돈다. 사례 폴더는 프로파일이 쓰기를 열어 둔 임시 폴더라 `cases` 는 켜도 꺼도 결과가 같은 명령만 담는다 — 샌드박스가 막는 것은 Rust `tests/exec_sandbox.rs` 가 본다.
 
 ## 알려진 차이
 
-알려진 차이는 정해진 자리에만 쓸 수 있다 — `denylist/cases` ↔ `regress-nonunicode-i-fold`, `file-kinds/cases/requests` ↔ `non-string-field`. 다른 자리에 `divergence`·`rustExpect` 가 있으면 두 러너 모두 실패한다.
+알려진 차이는 정해진 자리에만 쓸 수 있다 — `denylist/cases` ↔ `regress-nonunicode-i-fold`, `file-kinds/cases/requests`·`exec-gate/cases/steps`·`worktree/cases/steps` ↔ `non-string-field`. 다른 자리에 `divergence`·`rustExpect` 가 있으면 두 러너 모두 실패한다.
 
 ### `regress-nonunicode-i-fold`
 
@@ -57,15 +68,24 @@ Rust 는 차단 패턴을 ECMAScript 정규식 크레이트 `regress` 로 컴파
 
 ### `non-string-field`
 
-서버는 `kind`·`path`·`folder`·`contentB64` 를 항상 문자열로 보낸다. TS 는 JSON 을 느슨하게 읽어 문자열이 아닌 값이 오면 Node 의 TypeError 문구가 나가거나(`path: 5`), 뜻밖에 통과한다(`contentB64: [1,2]` 는 바이트 2개를 쓴다).
+서버는 `kind`·`path`·`folder`·`contentB64`·`command`·`op`·`taskId` 를 항상 문자열로 보낸다. TS 는 JSON 을 느슨하게 읽어 문자열이 아닌 값이 오면 Node 의 TypeError 문구가 나가거나(`path: 5`), 뜻밖에 통과한다(`contentB64: [1,2]` 는 바이트 2개를 쓴다).
 
 - JS 에서 거짓인 값(`null`·`false`·`0`·`""`·없음)은 두 구현 모두 "없음"으로 본다(일반 사례).
-- JS 에서 참인 비문자열(0 이 아닌 수·`true`·배열·객체)이 네 필드에 오면 Rust 는 처리하지 않고 `{ok:false, error:"요청 필드 형식이 올바르지 않습니다: <필드>"}` 를 낸다(더 엄격한 쪽). 이런 사례는 `"divergence": "non-string-field"` 와 `rustExpect` 를 함께 적는다.
-- 남용 방지: Rust 러너는 입력의 네 필드 중 하나가 참인 비문자열이고 `rustExpect.ok` 가 `false` 이며 `after` 가 없을 때만 받아들인다.
+- `command`·`op` 의 거짓 값은 TS 표기 그대로 옮긴다 — `command` 가 없으면 확인 창에는 빈 명령, 실행은 `String(m.command)`(`undefined`·`null`·`false`·`0`), 모르는 op 문구는 `${m.op}`.
+- JS 에서 참인 비문자열(0 이 아닌 수·`true`·배열·객체)이 일곱 필드에 오면 Rust 는 처리하지 않고 `{ok:false, error:"요청 필드 형식이 올바르지 않습니다: <필드>"}` 를 낸다(더 엄격한 쪽). 이런 사례는 `"divergence": "non-string-field"` 와 `rustExpect` 를 함께 적는다.
+- TS 는 `command: ["ls"]` 를 `ls` 로 묻고 실행하며, `taskId: 5` 를 일괄 승인 집합의 키로 쓰고, worktree 의 `taskId: 12345678` 을 형식 검사에 통과시킨다. Rust 는 묻지도 실행하지도 않는다(exec-gate 러너는 알려진 차이 단계에서 물음이 없음을 본다).
+- 남용 방지: Rust 러너는 입력의 일곱 필드 중 하나가 참인 비문자열이고 `rustExpect.ok` 가 `false` 이며 `after` 가 없을 때만 받아들인다.
 
 ### fixture 에 넣지 않는 차이
 
 - `OMK_BRIDGE_FS_TIMEOUT_MS` 가 정수가 아닐 때(`abc`·`1e3`·`1500.5`·음수·공백뿐): TS 는 NaN·실수·음수 타이머가 되어 1ms 로 돌거나 문구에 `NaNs` 가 찍힌다. Rust 는 기본값 15000 으로 돈다(개발·테스트 훅의 잘못된 입력). Rust 단위 테스트가 고정한다.
 - 동시 FS 작업 상한: TS 는 프로세스 공용 libuv 스레드 풀(4)이 사실상의 상한이고, Rust 는 코어(연결 폴더)마다 4개다 — 한 폴더의 볼륨이 막혀도 다른 폴더 요청이 굶지 않는다.
 - 시간 초과 뒤: TS 는 줄에 있던 호출이 나중에 실행될 수 있다(이미 "실패"라고 답한 `write`·`delete` 포함). Rust 는 아직 시작하지 않은 작업을 실행하지 않는다.
+- exec 의 시간 초과·출력 상한: TS 는 직접 자식에 SIGTERM, Rust 는 SIGKILL(D-31). 서버가 받는 결과는 같다(`exitCode 1` + 그때까지의 출력). 다른 것은 TERM 을 받아 스스로 정리하던 자식이 정리 없이 끝나는 것, 그리고 TERM 을 무시하는 명령(`trap '' TERM; sleep 300`) — TS 는 시간 초과 뒤에도 끝날 때까지 기다리고 그 종료 코드(0 이면 성공)를 내지만 Rust 는 시간 제한에 1 로 끝난다. 손자 프로세스는 두 구현 모두 남는다.
+- exec 출력 상한의 단위: 둘 다 바이트로 세지만 TS 는 마지막 조각을 "남은 바이트 수만큼의 글자"로 잘라 여러 바이트 글자가 섞이면 길이가 파이프 조각 크기에 따라 달라진다. Rust 는 1,048,576 바이트 이하의 가장 긴 UTF-8 글자 경계까지 남긴다(D-32). ASCII 는 같아 fixture 는 ASCII 만 담는다.
+- 환경·홈·플랫폼: TS 는 실행할 때마다 `process.env`·`os.homedir()` 를 읽고, Rust 는 호스트가 코어를 만들 때 준 사본을 쓴다(D-33). 헬퍼는 실행 중에 자기 환경을 바꾸지 않아 관찰되지 않는다.
+- `prepare`·PATH 탐지·git 탐지: TS 는 동기(`execFileSync`)라 최대 5초씩 프로세스 전체가 멈춘다. Rust 는 비동기라 그 연결만 기다리고, 로그인 셸·mise 의 stderr 는 버린다(TS 는 헬퍼의 stderr 로 흘려보낸다)(D-35).
+- worktree 의 파일 작업이 막힌 볼륨에서 멈출 때: TS 는 동기 호출이라 응답하지 못하고, Rust 는 `worktree 시간 초과 (15s) — …` 로 끝난다(D-36).
+- git 출력의 오류 꼬리(`worktree 생성 실패: `·`diff 실패: `)를 UTF-16 단위로 자를 때 대리 쌍 한가운데면 TS 는 짝 없는 반쪽을 남기고 Rust 는 그 글자를 뺀다.
+- 샌드박스 프로파일 파일은 코어마다 하나(`omk-exec-sandbox-<pid>-<n>.sb`, 두 구현 같다). Rust 는 코어가 사라질 때 그 파일을 지우고 TS 는 남긴다.
 - 폴더 `delete` 가 하위 항목에서 막힐 때(예: 하위 폴더가 0555): TS(`fsp.rm` recursive)는 막힌 항목의 syscall·경로를 적고(`EACCES: permission denied, unlink '<폴더>/q/f'`), Rust(`remove_dir_all`)는 지우려던 폴더를 적는다(`EACCES: permission denied, rmdir '<폴더>'`). 오류 코드와 실패 여부는 같다. chmod 사례라 fixture 에 넣지 않는다.

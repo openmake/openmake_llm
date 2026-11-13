@@ -119,7 +119,8 @@ pub fn write_file(tmp: &TmpDir, s: &Value) {
     mkparent(&p);
     let bytes = if let Some(r) = s.get("repeat") {
         let line = format!("{}\n", r["line"].as_str().unwrap());
-        line.repeat(r["count"].as_u64().unwrap() as usize).into_bytes()
+        line.repeat(r["count"].as_u64().unwrap() as usize)
+            .into_bytes()
     } else {
         match s["contentB64"].as_str() {
             Some(b) => omk_bridge_core::base64_lenient::decode(b),
@@ -139,7 +140,12 @@ pub fn git_isolated(tmp: &TmpDir, args: &Value, cwd: &str) -> String {
         .map(|a| a.as_str().unwrap())
         .collect();
     let out = std::process::Command::new("git")
-        .args(["-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"])
+        .args([
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "init.defaultBranch=main",
+        ])
         .args(&args)
         .current_dir(tmp.join(cwd))
         .env_clear()
@@ -193,7 +199,9 @@ pub fn fill(v: &Value, tmp: &str) -> Value {
                 .replace("{{TMP}}", tmp),
         ),
         Value::Array(a) => Value::Array(a.iter().map(|x| fill(x, tmp)).collect()),
-        Value::Object(o) => Value::Object(o.iter().map(|(k, x)| (k.clone(), fill(x, tmp))).collect()),
+        Value::Object(o) => {
+            Value::Object(o.iter().map(|(k, x)| (k.clone(), fill(x, tmp))).collect())
+        }
         other => other.clone(),
     }
 }

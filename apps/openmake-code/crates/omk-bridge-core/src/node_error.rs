@@ -118,7 +118,10 @@ pub fn null_bytes(path: &str) -> String {
 
 /// 자식 프로세스 인자에 NUL 이 있을 때 Node `execFile` 이 던지는 `ERR_INVALID_ARG_VALUE` 문구(`arg` 는 `args[4]` 꼴).
 pub fn null_bytes_arg(arg: &str, value: &str) -> String {
-    format!("The argument '{arg}' must be a string without null bytes. Received {}", received(value))
+    format!(
+        "The argument '{arg}' must be a string without null bytes. Received {}",
+        received(value)
+    )
 }
 
 /// `Received` 뒤의 글자 — `util.inspect` 결과를 UTF-16 128 단위에서 자른다.
