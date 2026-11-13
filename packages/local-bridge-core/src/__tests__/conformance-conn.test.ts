@@ -165,7 +165,8 @@ describe('conn-endpoints', () => {
         const fetchImpl = async (u: string): Promise<{ ok: boolean; json: () => Promise<unknown> }> => {
             url = u;
             if ('fail' in r) throw new Error('ECONNREFUSED');
-            return { ok: r.status >= 200 && r.status <= 299, json: async () => JSON.parse(r.body) as unknown };
+            // fetch 의 res.json() 처럼 본문을 UTF-8 로 풀고(앞의 BOM 하나를 뗀다) JSON 으로 읽는다.
+            return { ok: r.status >= 200 && r.status <= 299, json: async () => JSON.parse(new TextDecoder().decode(Buffer.from(r.body))) as unknown };
         };
         let got: Obj;
         try {

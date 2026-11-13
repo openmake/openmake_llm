@@ -6,6 +6,7 @@ mod support;
 
 use serde_json::{Value, json};
 
+use omk_bridge_conn::endpoints::{ConfigFetcher, FetchResponse};
 use support::fixture::{KNOWN_CONN_SUITES, conn_files, load};
 
 #[test]
@@ -321,9 +322,75 @@ fn conn_notice_cases() {
     }
 }
 
+/// 가짜 조회기 — 요청 주소를 기록하고 fixture 의 응답을 준다.
+struct FakeFetcher {
+    response: Value,
+    url: std::sync::Mutex<Option<String>>,
+}
+
+impl ConfigFetcher for FakeFetcher {
+    fn get(
+        &self,
+        url: &str,
+    ) -> impl std::future::Future<Output = Result<FetchResponse, String>> + Send {
+        *self.url.lock().unwrap() = Some(url.to_owned());
+        let r = &self.response;
+        let out = if r.get("fail").is_some() {
+            Err("ECONNREFUSED".to_owned())
+        } else {
+            Ok(FetchResponse {
+                status: u16::try_from(r["status"].as_u64().unwrap()).unwrap(),
+                body: r["body"].as_str().unwrap().as_bytes().to_vec(),
+            })
+        };
+        std::future::ready(out)
+    }
+}
+
 #[test]
 fn conn_endpoints() {
-    panic!("미구현: conn-endpoints");
+    use omk_bridge_conn::endpoints as e;
+    let doc = load("conn-endpoints");
+    for c in doc["normalize"].as_array().unwrap() {
+        let got = e::normalize_server_address(c["input"]["address"].as_str().unwrap());
+        let got = got.map_or(Value::Null, |o| json!({ "origin": o }));
+        assert_eq!(got, c["expect"], "conn-endpoints/normalize/{}", c["id"]);
+    }
+    for c in doc["plainRemoteHttp"].as_array().unwrap() {
+        let got = e::is_plain_remote_http(c["input"]["address"].as_str().unwrap());
+        assert_eq!(
+            json!({ "value": got }),
+            c["expect"],
+            "conn-endpoints/plainRemoteHttp/{}",
+            c["id"]
+        );
+    }
+    for c in doc["resolve"].as_array().unwrap() {
+        let i = &c["input"];
+        let got = match e::resolve_endpoints(i["address"].as_str().unwrap(), &i["config"]) {
+            Ok(r) => r.to_json(),
+            Err(msg) => json!({ "error": msg }),
+        };
+        assert_eq!(got, c["expect"], "conn-endpoints/resolve/{}", c["id"]);
+    }
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    for c in doc["discover"].as_array().unwrap() {
+        let i = &c["input"];
+        let fetcher = FakeFetcher {
+            response: i["response"].clone(),
+            url: std::sync::Mutex::new(None),
+        };
+        let got = match rt.block_on(e::discover_endpoints(
+            i["address"].as_str().unwrap(),
+            &fetcher,
+        )) {
+            Ok(r) => json!({ "url": *fetcher.url.lock().unwrap(), "result": r.to_json() }),
+            Err(msg) => json!({ "error": msg }),
+        };
+        assert_eq!(got, c["expect"], "conn-endpoints/discover/{}", c["id"]);
+    }
 }
 
 #[test]

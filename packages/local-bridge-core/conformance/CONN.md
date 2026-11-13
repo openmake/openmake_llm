@@ -21,7 +21,7 @@
 | `conn-constants` | `values` | 연결 상수. 정규식은 `{source, flags}`. TS 는 `constants.ts`·`endpoints.ts` 에서 찾는다 |
 | `conn-reconnect-delay` | `cases` | `input: {attempt, baseMs, maxMs, random}` → `{ms}`. `attempt` 는 0 이상의 정수 |
 | `conn-notice` | `cases` · `trim` | `cases`: `input` 은 서버 프레임 필드, `expect` 는 알림 또는 `null`. `trim`: JS `String.prototype.trim` |
-| `conn-endpoints` | `normalize` · `plainRemoteHttp` · `resolve` · `discover` | 주소 입력은 문자열만. `resolve.expect` 는 결과 또는 `{error}`. `discover.input.response` 는 `{status, body}`(body 는 응답 본문 글자) 또는 `{fail: true}`(조회가 던짐), `expect` 는 `{url, result}`(url = 요청한 주소) 또는 `{error}` |
+| `conn-endpoints` | `normalize` · `plainRemoteHttp` · `resolve` · `discover` | 주소 입력은 문자열만. `resolve.expect` 는 결과 또는 `{error}`. `discover.input.response` 는 `{status, body}`(body 는 응답 본문 글자 — `fetch` 의 `res.json()` 처럼 UTF-8 로 풀며 앞의 BOM 하나를 떼고 JSON 으로 읽는다, 2xx 만 읽는다) 또는 `{fail: true}`(조회가 던짐), `expect` 는 `{url, result}`(url = 요청한 주소) 또는 `{error}` |
 | `conn-device-id` | `rootDeviceId` · `realpathSync` · `baseId` | `realpathSync` 는 Node `fs.realpathSync`(JS 구현) — 오류는 Node 문구 그대로. `baseId` 의 지원 폴더는 `{{TMP}}/support`, 파일은 그 안의 `device-id`. `expect` 는 `{id}`(파일을 읽은 값) 또는 `{generated: true, written}`(UUID v4 를 만들었고, `written` = 파일에 그 값이 쓰였는가) |
 | `conn-frames` | `cases` | 아래 |
 

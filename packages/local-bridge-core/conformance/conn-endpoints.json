@@ -463,7 +463,7 @@
       "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": "\ufeff{\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
       "expect": {
         "url": "http://localhost:3010/api/desktop/config",
-        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+        "result": {"bridgeUrl": "http://localhost:52418", "webUrl": "http://localhost:3010", "discovered": true}
       }
     },
     {
