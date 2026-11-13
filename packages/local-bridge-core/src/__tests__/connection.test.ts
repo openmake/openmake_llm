@@ -61,8 +61,14 @@ class FakeServer {
     async stop(): Promise<void> { this.dropAll(); await new Promise<void>((r) => this.wss.close(() => r())); }
 }
 
-/** 실 소켓 왕복 대기 한도(실시간) — 루프백 왕복이라 보통 수 ms. 가짜 시간과 무관하게 벽시계로 잰다. */
-const IO_DEADLINE_MS = 4000;
+/**
+ * 실 소켓 왕복 대기 한도(실시간) — 루프백 왕복이라 보통 수 ms. 가짜 시간과 무관하게 벽시계로 잰다.
+ * 조건이 서면 바로 끝나는 최대 대기라 평소 실행 시간은 늘지 않는다. 운영 서비스·Jest 여러 작업자가 함께 도는
+ * 스테이징 검증 호스트에서 4초를 넘긴 일이 있어(11-13) 20초로 둔다.
+ */
+const IO_DEADLINE_MS = 20_000;
+// 이 한도를 다 기다리기 전에 Jest 기본 제한(5초)이 테스트를 끊지 않게 한다(한도 + 여유).
+jest.setTimeout(IO_DEADLINE_MS + 10_000);
 
 /** 실 I/O 가 끝나 조건이 설 때까지 이벤트 루프를 돌린다(가짜 시간은 움직이지 않는다). */
 async function until(what: string, cond: () => boolean): Promise<void> {
@@ -348,7 +354,7 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
             reconnectMs: 50, handshakeTimeoutMs: 100,
         });
         // 이 테스트만 실시간이다 — ws 는 handshakeTimeout 을 http.request({ timeout }) → socket.setTimeout 으로 넘기는데,
-        // 그 타이머는 Node 내부 타이머 목록에서 돌아 Jest 가짜 시계로 밀 수 없다. 그래서 상한 있는 폴링(4초, Jest 기본 5초 안)으로 기다린다.
+        // 그 타이머는 Node 내부 타이머 목록에서 돌아 Jest 가짜 시계로 밀 수 없다. 그래서 상한 있는 폴링(4초, 이 파일의 Jest 제한 안)으로 기다린다.
         // 결정적으로 만들려면 소스에 접속 시간 제한 타이머를 주입할 이음매가 필요하다.
         try {
             await conn.connect();
