@@ -9,7 +9,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { SANDBOX_ENABLED } from '../constants';
 import { detectGit } from '../git-trust';
-import { writeSandboxProfile } from '../sandbox';
+import { buildSandboxProfile } from '../sandbox';
 import { handleWorktree, type WorktreeCtx } from '../worktree';
 import type { BridgeMsg, BridgeResult } from '../types';
 
@@ -19,15 +19,11 @@ function git(args: string[], cwd: string): string {
     return execFileSync('git', args, { cwd, encoding: 'utf8' });
 }
 
-let profDir = '';
-beforeAll(() => { profDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-wt-prof-')); });
-afterAll(() => { fs.rmSync(profDir, { recursive: true, force: true }); });
-
 /** 코어가 연결 때 고정하는 것 — 믿기로 한 git 디렉터리와 도구 프로파일(macOS 면 실제 sandbox-exec 안에서 돈다). */
 function ctxFor(base: string): WorktreeCtx {
-    const root = fs.realpathSync(base);
+    const root = fs.realpathSync.native(base);
     const git = detectGit(root);
-    const profile = SANDBOX_ENABLED ? writeSandboxProfile(root, git, path.join(profDir, `${path.basename(root)}-${Math.random()}.sb`), true) : undefined;
+    const profile = SANDBOX_ENABLED ? buildSandboxProfile(root, git, true) : undefined;
     return { root, git, profile };
 }
 

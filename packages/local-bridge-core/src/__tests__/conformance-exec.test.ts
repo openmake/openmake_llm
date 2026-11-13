@@ -228,7 +228,7 @@ describe('exec-gate', () => {
         cases: GateCase[];
         sandboxEnabled: Case<{ platform: NodeJS.Platform; env: string | null }, boolean>[];
         autoApproveEnv: Case<{ env: string | null }, boolean>[];
-        failClosed: Case<{ prepare: 'none' | 'unwritable' }, BridgeResult>[];
+        failClosed: Case<{ prepare: 'none' | 'home-missing' }, BridgeResult>[];
     }>('exec-gate');
 
     it.each(doc.cases.map((c) => [c.id, c] as const))('cases/%s', async (_id, c) => {
@@ -264,16 +264,16 @@ describe('exec-gate', () => {
     it.each(doc.failClosed.map((c) => [c.id, c] as const))('failClosed/%s', async (_id, c) => {
         const tmp = makeTmp();
         try {
-            fs.writeFileSync(path.join(tmp, 'prof-file'), '');
-            await withEnv({ ...runnerEnv(tmp), OMK_BRIDGE_SANDBOX: null }, () => withPlatform('darwin', async () => {
+            // home-missing: 홈 realpath 가 실패해 프로파일 텍스트를 만들지 못한다(프로파일은 파일로 쓰지 않는다 — 리뷰 F1).
+            const homeMissing = c.input.prepare === 'home-missing';
+            await withEnv({ ...runnerEnv(tmp), ...(homeMissing ? { HOME: path.join(tmp, 'no-home') } : {}), OMK_BRIDGE_SANDBOX: null }, () => withPlatform('darwin', async () => {
                 let Core!: typeof BridgeCore;
                 jest.isolateModules(() => { Core = (require('../core') as typeof import('../core')).BridgeCore; });
                 const script = new Script();
                 script.answer = 'yes';
                 fs.mkdirSync(path.join(tmp, 'root'));
-                const prof = c.input.prepare === 'unwritable' ? path.join(tmp, 'prof-file') : path.join(tmp, 'prof');
-                const core = new Core({ folder: path.join(tmp, 'root'), confirm: script.confirm, sandboxProfileDir: prof });
-                if (c.input.prepare === 'unwritable') core.prepare();
+                const core = new Core({ folder: path.join(tmp, 'root'), confirm: script.confirm, sandboxProfileDir: path.join(tmp, 'prof') });
+                if (homeMissing) core.prepare();
                 expect(await exec(core, { kind: 'exec', command: 'touch ran' })).toStrictEqual(c.expect);
                 expect(script.calls.length).toBe(1);
                 expect(fs.existsSync(path.join(tmp, 'root', 'ran'))).toBe(false);

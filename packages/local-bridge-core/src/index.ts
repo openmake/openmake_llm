@@ -10,7 +10,7 @@ export * from './types';
 export * from './constants';
 export { EXEC_DENYLIST, matchDenylist } from './denylist';
 export { safeFrom } from './scope';
-export { sandboxProfileText, writeSandboxProfile } from './sandbox';
+export { buildSandboxProfile, sandboxProfileText } from './sandbox';
 export { detectGit, type GitPaths } from './git-trust';
 export { resolveExecPath } from './exec-path';
 export { buildExecEnv } from './exec-env';
