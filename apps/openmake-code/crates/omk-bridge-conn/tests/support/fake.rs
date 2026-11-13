@@ -62,6 +62,10 @@ impl<T> Watched<T> {
 #[derive(Default)]
 pub struct ServerState {
     pub frames: Vec<Value>,
+    /// 프레임을 받은 시각(멈춘 시계).
+    pub frame_at: Vec<tokio::time::Instant>,
+    /// 연결이 열린 시각.
+    pub opened_at: Vec<tokio::time::Instant>,
     pub by_conn: Vec<Vec<Value>>,
     /// 접속 시도 수(핸드셰이크 전 포함).
     pub attempts: usize,
@@ -184,6 +188,7 @@ impl FakeServer {
             s.by_conn.push(Vec::new());
             s.open.push(true);
             s.pings.push(0);
+            s.opened_at.push(tokio::time::Instant::now());
             s.connections - 1
         });
         self.conns.lock().unwrap().push(tx);
@@ -201,6 +206,7 @@ impl FakeServer {
                         let hello = f["type"] == "bridge_hello";
                         self.state.update(|s| {
                             s.frames.push(f.clone());
+                            s.frame_at.push(tokio::time::Instant::now());
                             s.by_conn[idx].push(f);
                         });
                         if hello && opts.reply_ready {
@@ -227,6 +233,12 @@ impl FakeServer {
     pub fn send_text(&self, text: impl Into<String>) {
         if let Some(c) = self.last() {
             let _ = c.send(ServerCmd::Send(Message::text(text.into())));
+        }
+    }
+
+    pub fn send_ping(&self) {
+        if let Some(c) = self.last() {
+            let _ = c.send(ServerCmd::Send(Message::Ping(Vec::new().into())));
         }
     }
 
