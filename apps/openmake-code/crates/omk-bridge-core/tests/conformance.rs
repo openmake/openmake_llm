@@ -112,6 +112,126 @@ fn case_ids_unique_and_divergence_sites() {
     }
 }
 
+/// 키 모양 — `required` 는 모두 있어야 하고, 그 밖의 키는 `optional` 만 쓸 수 있다.
+/// 키 오타(`after`→`After` 등)로 확인이 조용히 빠지는 것을 막는다(TS 러너 "fixture 모양" 과 같은 규칙).
+fn shape(v: &Value, required: &[&str], optional: &[&str], at: &str) {
+    let o = v.as_object().unwrap_or_else(|| panic!("{at}: 객체 아님"));
+    let missing: Vec<&str> = required
+        .iter()
+        .copied()
+        .filter(|k| !o.contains_key(*k))
+        .collect();
+    let unknown: Vec<&str> = o
+        .keys()
+        .map(String::as_str)
+        .filter(|k| !required.contains(k) && !optional.contains(k))
+        .collect();
+    assert!(
+        missing.is_empty() && unknown.is_empty(),
+        "{at}: 빠진 키 {missing:?}, 모르는 키 {unknown:?}"
+    );
+}
+
+/// 사례·요청·단계 목록 — 0개면 실패한다.
+fn non_empty<'a>(v: &'a Value, at: &str) -> &'a Vec<Value> {
+    let items = v.as_array().unwrap_or_else(|| panic!("{at}: 배열 아님"));
+    assert!(!items.is_empty(), "{at}: 0개");
+    items
+}
+
+const CASE_KEYS: [&str; 3] = ["id", "input", "expect"];
+
+fn id_of(c: &Value) -> &str {
+    c["id"].as_str().unwrap_or("?")
+}
+
+#[test]
+fn fixture_shapes() {
+    let doc = load("scope");
+    shape(
+        &doc,
+        &["suite", "version", "nodePath", "lexical", "fs"],
+        &[],
+        "scope",
+    );
+    shape(
+        &doc["nodePath"],
+        &["resolve", "dirname", "relative"],
+        &[],
+        "scope/nodePath",
+    );
+    for g in ["resolve", "dirname", "relative"] {
+        let at = format!("scope/nodePath/{g}");
+        for c in non_empty(&doc["nodePath"][g], &at) {
+            shape(c, &CASE_KEYS, &[], &format!("{at}/{}", id_of(c)));
+        }
+    }
+    for c in non_empty(&doc["lexical"], "scope/lexical") {
+        shape(c, &CASE_KEYS, &[], &format!("scope/lexical/{}", id_of(c)));
+    }
+    for c in non_empty(&doc["fs"], "scope/fs") {
+        let keys = ["id", "input", "expect", "setup"];
+        shape(c, &keys, &[], &format!("scope/fs/{}", id_of(c)));
+    }
+
+    let doc = load("file-kinds");
+    let top = ["suite", "version", "cases", "timeout", "fsTimeoutEnv"];
+    shape(&doc, &top, &[], "file-kinds");
+    for c in non_empty(&doc["cases"], "file-kinds/cases") {
+        let at = format!("file-kinds/cases/{}", id_of(c));
+        shape(c, &["id", "setup", "root", "requests"], &[], &at);
+        for (n, r) in non_empty(&c["requests"], &format!("{at}/requests"))
+            .iter()
+            .enumerate()
+        {
+            let at = format!("{at}/requests/{n}");
+            let optional = ["compare", "after", "divergence", "rustExpect"];
+            shape(r, &["msg", "expect"], &optional, &at);
+            for a in r
+                .get("after")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                if a.get("absent").is_some() {
+                    shape(a, &["absent"], &[], &format!("{at}/after"));
+                } else {
+                    shape(
+                        a,
+                        &["exists"],
+                        &["content", "contentB64"],
+                        &format!("{at}/after"),
+                    );
+                }
+            }
+        }
+    }
+    for g in ["timeout", "fsTimeoutEnv"] {
+        let at = format!("file-kinds/{g}");
+        for c in non_empty(&doc[g], &at) {
+            shape(c, &CASE_KEYS, &[], &format!("{at}/{}", id_of(c)));
+        }
+    }
+
+    let doc = load("request-guard");
+    shape(&doc, &["suite", "version", "cases"], &[], "request-guard");
+    for c in non_empty(&doc["cases"], "request-guard/cases") {
+        let at = format!("request-guard/cases/{}", id_of(c));
+        shape(c, &["id", "steps"], &[], &at);
+        for (n, s) in non_empty(&c["steps"], &format!("{at}/steps"))
+            .iter()
+            .enumerate()
+        {
+            let keys: &[&str] = if s.get("fill").is_some() {
+                &["fill", "now"]
+            } else {
+                &["input", "now", "expect"]
+            };
+            shape(s, keys, &[], &format!("{at}/steps/{n}"));
+        }
+    }
+}
+
 /// 묶음의 사례 목록 — 0개면 실패한다. 돌려주는 ctx 는 `suite/묶음/id`.
 fn case_list<'a>(doc: &'a Value, suite: &str, group: &str) -> Vec<(String, &'a Value)> {
     let cases = doc[group]

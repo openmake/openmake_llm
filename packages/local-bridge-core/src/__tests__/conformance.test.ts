@@ -62,6 +62,63 @@ describe('conformance fixture 목록', () => {
     });
 });
 
+// 키 오타(`after`→`After` 등)로 확인이 조용히 빠지지 않게, 묶음 이름·사례 키·빈 목록을 본다(Rust 러너 fixture_shapes 와 같은 규칙).
+/** required 는 모두 있어야 하고, 그 밖의 키는 optional 만 쓸 수 있다. */
+function shape(o: unknown, required: string[], optional: string[], at: string): void {
+    const keys = o !== null && typeof o === 'object' && !Array.isArray(o) ? Object.keys(o) : null;
+    expect({ at, object: keys !== null }).toEqual({ at, object: true });
+    expect({ at, missing: required.filter((k) => !keys!.includes(k)), unknown: keys!.filter((k) => !required.includes(k) && !optional.includes(k)) })
+        .toEqual({ at, missing: [], unknown: [] });
+}
+/** 사례·요청·단계 목록 — 0개면 실패한다. */
+function nonEmpty(v: unknown, at: string): Record<string, unknown>[] {
+    expect({ at, nonEmptyArray: Array.isArray(v) && v.length > 0 }).toEqual({ at, nonEmptyArray: true });
+    return v as Record<string, unknown>[];
+}
+const CASE_KEYS = ['id', 'input', 'expect'];
+
+describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () => {
+    it('scope', () => {
+        const doc = load<Record<string, Record<string, unknown>>>('scope');
+        shape(doc, ['suite', 'version', 'nodePath', 'lexical', 'fs'], [], 'scope');
+        shape(doc.nodePath, ['resolve', 'dirname', 'relative'], [], 'scope/nodePath');
+        for (const g of ['resolve', 'dirname', 'relative']) {
+            for (const c of nonEmpty(doc.nodePath[g], `scope/nodePath/${g}`)) shape(c, CASE_KEYS, [], `scope/nodePath/${g}/${String(c.id)}`);
+        }
+        for (const c of nonEmpty(doc.lexical, 'scope/lexical')) shape(c, CASE_KEYS, [], `scope/lexical/${String(c.id)}`);
+        for (const c of nonEmpty(doc.fs, 'scope/fs')) shape(c, [...CASE_KEYS, 'setup'], [], `scope/fs/${String(c.id)}`);
+    });
+    it('file-kinds', () => {
+        const doc = load<Record<string, unknown>>('file-kinds');
+        shape(doc, ['suite', 'version', 'cases', 'timeout', 'fsTimeoutEnv'], [], 'file-kinds');
+        for (const c of nonEmpty(doc.cases, 'file-kinds/cases')) {
+            const at = `file-kinds/cases/${String(c.id)}`;
+            shape(c, ['id', 'setup', 'root', 'requests'], [], at);
+            nonEmpty(c.requests, `${at}/requests`).forEach((r, n) => {
+                shape(r, ['msg', 'expect'], ['compare', 'after', 'divergence', 'rustExpect'], `${at}/requests/${n}`);
+                for (const a of (r.after ?? []) as Record<string, unknown>[]) {
+                    if ('absent' in a) shape(a, ['absent'], [], `${at}/requests/${n}/after`);
+                    else shape(a, ['exists'], ['content', 'contentB64'], `${at}/requests/${n}/after`);
+                }
+            });
+        }
+        for (const g of ['timeout', 'fsTimeoutEnv']) {
+            for (const c of nonEmpty(doc[g], `file-kinds/${g}`)) shape(c, CASE_KEYS, [], `file-kinds/${g}/${String(c.id)}`);
+        }
+    });
+    it('request-guard', () => {
+        const doc = load<Record<string, unknown>>('request-guard');
+        shape(doc, ['suite', 'version', 'cases'], [], 'request-guard');
+        for (const c of nonEmpty(doc.cases, 'request-guard/cases')) {
+            const at = `request-guard/cases/${String(c.id)}`;
+            shape(c, ['id', 'steps'], [], at);
+            nonEmpty(c.steps, `${at}/steps`).forEach((s, n) => {
+                shape(s, 'fill' in s ? ['fill', 'now'] : ['input', 'now', 'expect'], [], `${at}/steps/${n}`);
+            });
+        }
+    });
+});
+
 describe('constants', () => {
     const doc = load<{ values: Record<string, unknown> }>('constants');
     it.each(Object.entries(doc.values))('%s 가 TS export 와 같다', (name, value) => {
