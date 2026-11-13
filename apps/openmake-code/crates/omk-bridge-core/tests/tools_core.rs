@@ -248,6 +248,58 @@ fn direct_env(tmp: &TmpDir) -> ToolEnv {
     }
 }
 
+/// 프로파일 없음 + python3 가 PATH 에 없음 — python3 를 찾기 전에 거절한다(TS #1745 는 감싸기가 먼저 던진다, 리뷰 M1).
+/// "깨끗함/테스트 없음"으로 보이지 않게. 자식이 필요 없는 경우(npm·대상 파일 없음)는 그대로 답한다.
+#[test]
+fn missing_profile_is_refused_before_looking_for_python() {
+    let tmp = TmpDir::new();
+    write(&tmp.join("d/conftest.py"), "");
+    write(&tmp.join("d/b.py"), "x = 1\n");
+    write(
+        &tmp.join("n/package.json"),
+        r#"{"scripts":{"test":"node t.js"}}"#,
+    );
+    let tool = ToolEnv {
+        exec_path: "/nonexistent-omk-path".to_owned(),
+        sandbox: ToolSandbox::Missing,
+        ..direct_env(&tmp)
+    };
+    let gate = FsGate::new(15_000);
+    let rt = runtime();
+    let refused =
+        |r: Result<String, String>| r.err().is_some_and(|e| e.starts_with(FAIL_CLOSED_HEAD));
+    let detect = |d: &str| {
+        rt.block_on(omk_bridge_core::test_runner::detect(
+            &tmp.join(d),
+            &tool,
+            &gate,
+        ))
+        .map(str::to_owned)
+    };
+    assert!(refused(detect("d")), "pytest 표식 + python3 없음");
+    assert_eq!(detect("n"), Ok("npm".to_owned()));
+    let py = vec![tmp.join("d/b.py")];
+    let collect = rt.block_on(diagnostics::collect(
+        &tmp.join("d"),
+        &py,
+        &tool,
+        15_000,
+        &gate,
+    ));
+    assert!(
+        refused(collect.map(|c| c.server_kind.to_owned())),
+        ".py + python3 없음"
+    );
+    let none = rt.block_on(diagnostics::collect(
+        &tmp.join("d"),
+        &[tmp.join("d/a.md")],
+        &tool,
+        15_000,
+        &gate,
+    ));
+    assert_eq!(none.map(|c| c.server_kind), Ok("none"));
+}
+
 /// tsc 가 시간 제한을 넘거나 출력 상한(1MiB)을 넘으면 그때까지의 출력으로 해석하고 다음 프로젝트로 간다.
 #[test]
 fn slow_or_noisy_tsc_is_cut_and_parsed() {

@@ -232,6 +232,7 @@ pub async fn collect(
         all.extend(parse_tsc(&out, base, &cwd));
     }
     if !plan.py.is_empty() {
+        tool.ensure_profile()?;
         // python3 는 감싸기 전에 PATH 에서 직접 찾는다 — 없으면 띄우지 않는다(sandbox-exec 의 실패 문구가 해석에 섞이지 않게).
         let finder = tool.clone();
         let python = gate
