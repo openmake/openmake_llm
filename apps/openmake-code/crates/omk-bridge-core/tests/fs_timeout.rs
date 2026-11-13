@@ -16,7 +16,8 @@ use serde_json::{Value, json};
 use support::{TmpDir, runtime};
 
 const TIMEOUT_MS: u64 = 300;
-const TIMEOUT_TEXT: &str = "시간 초과 (0s) — 폴더 접근이 차단됐을 수 있습니다(디스크 접근 권한 확인)";
+const TIMEOUT_TEXT: &str =
+    "시간 초과 (0s) — 폴더 접근이 차단됐을 수 있습니다(디스크 접근 권한 확인)";
 
 #[cfg(target_os = "macos")]
 const O_NONBLOCK: i32 = 0x0004;
@@ -33,7 +34,10 @@ fn core_at(dir: &str) -> Arc<BridgeCore> {
 }
 
 fn mkfifo(path: &str) {
-    let ok = std::process::Command::new("mkfifo").arg(path).status().unwrap();
+    let ok = std::process::Command::new("mkfifo")
+        .arg(path)
+        .status()
+        .unwrap();
     assert!(ok.success(), "mkfifo {path}");
 }
 
@@ -82,9 +86,11 @@ fn blocked_read_times_out_while_other_requests_proceed() {
 
     let started = Instant::now();
     let r = rt.block_on(blocked).unwrap();
-    assert_eq!(r.to_json(), json!({"ok": false, "error": format!("read {TIMEOUT_TEXT}")}));
+    assert_eq!(
+        r.to_json(),
+        json!({"ok": false, "error": format!("read {TIMEOUT_TEXT}")})
+    );
     assert!(started.elapsed() < Duration::from_secs(2));
-
 }
 
 /// ③ 블록 4개(동시 작업 상한)를 넘는 요청은 시작하지 않고 시간 초과로 끝나며, 블록이 풀린 뒤에도
@@ -119,19 +125,28 @@ fn requests_beyond_the_concurrency_cap_never_start_and_other_cores_are_unaffecte
     let fifth = rt.block_on(core_a.handle_exec(&msg(
         json!({"kind": "write", "path": "late.txt", "contentB64": "bGF0ZQ=="}),
     )));
-    assert_eq!(fifth.to_json(), json!({"ok": false, "error": format!("write {TIMEOUT_TEXT}")}));
+    assert_eq!(
+        fifth.to_json(),
+        json!({"ok": false, "error": format!("write {TIMEOUT_TEXT}")})
+    );
 
     let other = rt.block_on(core_b.handle_exec(&msg(json!({"kind": "read", "path": "hello.txt"}))));
     assert_eq!(other.to_json(), json!({"ok": true, "content": "world"}));
 
     for h in blocked {
         let r = rt.block_on(h).unwrap();
-        assert_eq!(r.to_json(), json!({"ok": false, "error": format!("read {TIMEOUT_TEXT}")}));
+        assert_eq!(
+            r.to_json(),
+            json!({"ok": false, "error": format!("read {TIMEOUT_TEXT}")})
+        );
     }
     drop(release_all);
     // 블록이 풀려 허가가 돌아온 뒤 — 시간 초과로 답한 다섯 번째 write 는 끝내 일어나지 않는다.
     let probe = rt.block_on(core_a.handle_exec(&msg(json!({"kind": "list"}))));
     assert!(probe.ok, "{probe:?}");
     std::thread::sleep(Duration::from_millis(100));
-    assert!(std::fs::metadata(tmp.join("a/late.txt")).is_err(), "시간 초과로 답한 write 가 나중에 실행됐다");
+    assert!(
+        std::fs::metadata(tmp.join("a/late.txt")).is_err(),
+        "시간 초과로 답한 write 가 나중에 실행됐다"
+    );
 }

@@ -234,13 +234,23 @@ mod tests {
 
     #[test]
     fn falsy_values_are_absent_and_truthy_non_strings_are_invalid() {
-        let m = BridgeMsg::from_json(&json!({"kind": "read", "path": 0, "folder": false, "contentB64": null}));
-        assert_eq!((m.path, m.folder, m.content_b64, m.invalid_field), (None, None, None, None));
-        let m = BridgeMsg::from_json(&json!({"kind": "read", "path": "a", "folder": [], "contentB64": 1}));
+        let m = BridgeMsg::from_json(
+            &json!({"kind": "read", "path": 0, "folder": false, "contentB64": null}),
+        );
+        assert_eq!(
+            (m.path, m.folder, m.content_b64, m.invalid_field),
+            (None, None, None, None)
+        );
+        let m = BridgeMsg::from_json(
+            &json!({"kind": "read", "path": "a", "folder": [], "contentB64": 1}),
+        );
         assert_eq!(m.invalid_field, Some("folder"));
         let m = BridgeMsg::from_json(&json!({"kind": true}));
         assert_eq!(m.invalid_field, Some("kind"));
         let m = BridgeMsg::from_json(&json!("not an object"));
-        assert_eq!((m.kind, m.kind_text.as_str(), m.invalid_field), (None, "undefined", None));
+        assert_eq!(
+            (m.kind, m.kind_text.as_str(), m.invalid_field),
+            (None, "undefined", None)
+        );
     }
 }

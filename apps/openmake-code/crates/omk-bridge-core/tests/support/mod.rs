@@ -19,7 +19,10 @@ impl TmpDir {
         let n = SEQ.fetch_add(1, Ordering::Relaxed);
         let raw = std::env::temp_dir().join(format!("omk-conformance-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&raw).unwrap();
-        let path = std::fs::canonicalize(&raw).unwrap().to_string_lossy().into_owned();
+        let path = std::fs::canonicalize(&raw)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
         TmpDir { path }
     }
 
@@ -40,7 +43,11 @@ pub fn fill_tmp(v: &Value, tmp: &str) -> Value {
     match v {
         Value::String(s) => Value::String(s.replace("{{TMP}}", tmp)),
         Value::Array(a) => Value::Array(a.iter().map(|x| fill_tmp(x, tmp)).collect()),
-        Value::Object(o) => Value::Object(o.iter().map(|(k, x)| (k.clone(), fill_tmp(x, tmp))).collect()),
+        Value::Object(o) => Value::Object(
+            o.iter()
+                .map(|(k, x)| (k.clone(), fill_tmp(x, tmp)))
+                .collect(),
+        ),
         other => other.clone(),
     }
 }
@@ -91,7 +98,11 @@ pub fn many_paths(setup: &Value) -> Vec<String> {
     for s in setup.as_array().unwrap() {
         if let Some(m) = s.get("many") {
             for i in 0..m["count"].as_u64().unwrap() {
-                out.push(format!("{}/{}{i}", m["dir"].as_str().unwrap(), m["prefix"].as_str().unwrap()));
+                out.push(format!(
+                    "{}/{}{i}",
+                    m["dir"].as_str().unwrap(),
+                    m["prefix"].as_str().unwrap()
+                ));
             }
         }
     }
@@ -100,5 +111,8 @@ pub fn many_paths(setup: &Value) -> Vec<String> {
 
 /// 테스트 런타임 — 코어는 시간 기능이 켜진 tokio 런타임 안에서 불러야 한다.
 pub fn runtime() -> tokio::runtime::Runtime {
-    tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap()
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
 }

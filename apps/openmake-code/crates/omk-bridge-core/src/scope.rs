@@ -13,7 +13,10 @@ fn rel_text(rel: Option<&str>) -> &str {
 }
 
 fn within(abs: &str, base: &str) -> bool {
-    abs == base || abs.strip_prefix(base).is_some_and(|rest| rest.starts_with('/'))
+    abs == base
+        || abs
+            .strip_prefix(base)
+            .is_some_and(|rest| rest.starts_with('/'))
 }
 
 /// 어휘 검사만 한다(파일 시스템을 보지 않는다). 통과하면 어휘적 절대 경로를 돌려준다.

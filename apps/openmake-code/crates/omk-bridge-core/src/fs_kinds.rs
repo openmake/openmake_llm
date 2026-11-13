@@ -96,7 +96,13 @@ pub fn list(base: &str, path: Option<&str>) -> Result<Vec<String>, String> {
     let entries = read_dir_sorted(&abs)?;
     Ok(entries
         .into_iter()
-        .map(|e| if e.is_dir { format!("{}/", e.name) } else { e.name })
+        .map(|e| {
+            if e.is_dir {
+                format!("{}/", e.name)
+            } else {
+                e.name
+            }
+        })
         .collect())
 }
 
@@ -146,7 +152,9 @@ pub fn delete(base: &str, path: Option<&str>) -> Result<(), String> {
         (fs::remove_file(&abs), "unlink")
     };
     match removed {
-        Err(e) if e.kind() != ErrorKind::NotFound => Err(node_error::format(&e, syscall, Some(&abs))),
+        Err(e) if e.kind() != ErrorKind::NotFound => {
+            Err(node_error::format(&e, syscall, Some(&abs)))
+        }
         _ => Ok(()),
     }
 }
@@ -166,7 +174,10 @@ pub fn folders(root: &str, path: Option<&str>) -> Result<(Vec<String>, bool), St
             truncated = true;
             break;
         }
-        entries.push(node_path::relative(root, &node_path::join(&[&dir_abs, &e.name])));
+        entries.push(node_path::relative(
+            root,
+            &node_path::join(&[&dir_abs, &e.name]),
+        ));
     }
     Ok((entries, truncated))
 }
@@ -185,7 +196,10 @@ mod tests {
     fn tmp(tag: &str) -> Tmp {
         let raw = std::env::temp_dir().join(format!("omk-fs-kinds-{tag}-{}", std::process::id()));
         std::fs::create_dir_all(&raw).unwrap();
-        Tmp(std::fs::canonicalize(raw).unwrap().to_string_lossy().into_owned())
+        Tmp(std::fs::canonicalize(raw)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned())
     }
 
     /// Node readdir 와 같이 이름 바이트순 — 만든 순서와 무관하다.
@@ -199,7 +213,10 @@ mod tests {
             std::fs::write(format!("{}/{f}", t.0), b"").unwrap();
         }
         assert_eq!(list(&t.0, None).unwrap(), ["B.txt", "a/", "b/", "c.txt"]);
-        assert_eq!(list_all(&t.0).unwrap(), ["B.txt", "a/0", "a/c/1", "a/z/2", "b/9", "c.txt"]);
+        assert_eq!(
+            list_all(&t.0).unwrap(),
+            ["B.txt", "a/0", "a/c/1", "a/z/2", "b/9", "c.txt"]
+        );
     }
 
     /// 상한을 넘으면 이름순으로 앞의 것만 남는다(TS 와 같은 항목).
@@ -218,6 +235,9 @@ mod tests {
             std::fs::write(format!("{}/f{i:04}", t2.0), b"").unwrap();
         }
         let all = list_all(&t2.0).unwrap();
-        assert_eq!((all.len(), all.last().map(String::as_str)), (1000, Some("f0999")));
+        assert_eq!(
+            (all.len(), all.last().map(String::as_str)),
+            (1000, Some("f0999"))
+        );
     }
 }
