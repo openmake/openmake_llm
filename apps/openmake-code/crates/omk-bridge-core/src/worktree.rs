@@ -86,7 +86,11 @@ where
 }
 
 /// `.git/info/exclude` 에 `.openmake/` 등록 — 이미 있으면(앞뒤 공백 무시) 두지 않는다. 실패는 무시한다(치명적이지 않다).
+/// `.git/info`·`info/exclude` 도 에이전트가 바꿀 수 있다 — 폴더 밖 심링크면(최근접 조상 realpath 가 git_dir 밖) 등록하지 않는다(TS 같음).
 fn exclude_worktree_dir(git_dir: &str) {
+    if scope::safe_from(git_dir, Some("info/exclude")).is_err() {
+        return;
+    }
     let info = node_path::join(&[git_dir, "info"]);
     if std::fs::create_dir_all(&info).is_err() {
         return;
