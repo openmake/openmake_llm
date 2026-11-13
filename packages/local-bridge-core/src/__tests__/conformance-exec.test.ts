@@ -9,7 +9,7 @@ import * as path from 'path';
 import { BridgeCore } from '../core';
 import { TASK_ID_RE } from '../constants';
 import { resolveExecPath } from '../exec-path';
-import { detectGitDir } from '../sandbox';
+import { detectGit, type GitPaths } from '../git-trust';
 import type { BridgeMsg, BridgeResult } from '../types';
 import {
     COMPARES, SETUP_KINDS, applyOpStep, applySetup, checkAfter, childEnv, exec, fakeBin, fill, load, makeTmp, nonEmpty,
@@ -326,7 +326,7 @@ describe('worktree', () => {
         taskIdPattern: { source: string; flags: string };
         cases: { id: string; setup: Setup[]; root: string; steps: (WtReq | OpStep)[] }[];
         taskId: Case<{ taskId?: unknown }, BridgeResult | 'accepted'>[];
-        gitDir: (Case<{ root: string }, { gitDir: string | null }> & { setup: Setup[] })[];
+        gitDir: (Case<{ root: string }, { git: GitPaths | null }> & { setup: Setup[] })[];
     }>('worktree');
     /** worktree 는 묻지 않는다 — 확인 콜백이 불리면 실패한다. */
     const noConfirm = (): Promise<'no'> => { throw new Error('worktree 가 확인을 물었다'); };
@@ -341,10 +341,12 @@ describe('worktree', () => {
             applySetup(tmp, c.setup);
             await withEnv(runnerEnv(tmp), async () => {
                 const core = new BridgeCore({ folder: path.join(tmp, c.root), confirm: noConfirm, sandboxProfileDir: path.join(tmp, 'prof') });
+                core.prepare(); // 연결 — git 디렉터리 신뢰 판정·도구 프로파일(worktree git 은 그 안에서 돈다)
                 for (const [n, s] of c.steps.entries()) {
                     const at = `worktree/cases/${c.id}/steps/${n}`;
                     if (!('msg' in s)) { applyOpStep(tmp, s, at); continue; }
-                    expect(s.msg.kind).toBe('worktree');
+                    // worktree 와 git 금지 경로 가드(D-4)를 함께 보는 파일 kind 쓰기·지우기만 넣는다.
+                    expect(['worktree', 'write', 'delete']).toContain(s.msg.kind);
                     const got = await exec(core, fill(s.msg, tmp));
                     expect({ at, result: view(got, s.compare, fill(s.expect, tmp), at) }).toStrictEqual({ at, result: fill(s.expect, tmp) });
                     if (s.after) checkAfter(tmp, s.after, at);
@@ -358,6 +360,7 @@ describe('worktree', () => {
         try {
             await withEnv(runnerEnv(tmp), async () => {
                 const core = new BridgeCore({ folder: tmp, confirm: noConfirm, sandboxProfileDir: path.join(tmp, 'prof') });
+                core.prepare();
                 const got = await exec(core, { kind: 'worktree', op: 'add', ...c.input } as BridgeMsg);
                 expect(got).toStrictEqual(c.expect === 'accepted' ? { ok: false, error: 'git 레포가 아닙니다' } : c.expect);
             });
@@ -368,8 +371,8 @@ describe('worktree', () => {
         const tmp = makeTmp();
         try {
             applySetup(tmp, c.setup);
-            const got = await withEnv(runnerEnv(tmp), () => detectGitDir(fill(c.input.root, tmp)));
-            expect({ gitDir: got }).toEqual(fill(c.expect, tmp));
+            const got = await withEnv(runnerEnv(tmp), () => detectGit(fill(c.input.root, tmp)));
+            expect({ git: got }).toEqual(fill(c.expect, tmp));
         } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
     });
 });

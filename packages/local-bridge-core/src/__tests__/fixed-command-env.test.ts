@@ -9,7 +9,7 @@ import { resolveExecPath } from '../exec-path';
 import { detectTestRunner } from '../test-runner';
 import { collectDiagnostics } from '../diagnostics';
 import { gitRun, handleWorktree } from '../worktree';
-import { detectGitDir } from '../sandbox';
+import { detectGit } from '../git-trust';
 import { execFileSync } from 'child_process';
 import type { BridgeMsg, BridgeResult } from '../types';
 
@@ -133,24 +133,14 @@ posix('고정 명령의 자식 환경', () => {
     it('worktree git: git 자식에 비밀이 없고 PATH·HOME 은 있다', async () => {
         fakeBin('git');
         process.env.PATH = `${bin}:${saved.PATH ?? ''}`;
-        expect((await gitRun(['status', '--porcelain'], base)).code).toBe(0);
+        expect((await gitRun(['status', '--porcelain'], base, undefined)).code).toBe(0);
         const env = childEnv('git');
         expectNoSecrets(env);
         expect(env.PATH).toBe(process.env.PATH);
         expect(env.HOME).toBe(process.env.HOME);
     });
 
-    it('샌드박스 git 탐지: git 자식에 비밀이 없고 PATH·HOME 은 있다', () => {
-        fakeBin('git', '/some/repo/.git');
-        process.env.PATH = `${bin}:${saved.PATH ?? ''}`;
-        expect(detectGitDir(base)).toBe('/some/repo/.git');
-        const env = childEnv('git');
-        expectNoSecrets(env);
-        expect(env.PATH).toBe(process.env.PATH);
-        expect(env.HOME).toBe(process.env.HOME);
-    });
-
-    it('worktree add: 레포의 post-checkout 훅에 비밀이 넘어가지 않는다', async () => {
+    it('worktree add: 레포의 post-checkout 훅은 돌지 않는다(core.hooksPath=/dev/null — 설계 D-2)', async () => {
         const repo = path.join(base, 'repo');
         fs.mkdirSync(repo);
         const git = (...a: string[]): void => { execFileSync('git', a, { cwd: repo, stdio: 'ignore' }); };
@@ -160,10 +150,9 @@ posix('고정 명령의 자식 환경', () => {
         fs.writeFileSync(hook, `#!/bin/sh\n/usr/bin/env > "${path.join(base, 'hook.env')}"\n`);
         fs.chmodSync(hook, 0o755);
 
-        const r = await new Promise<BridgeResult>((resolve) => { void handleWorktree({ op: 'add', taskId: 'abcdef12-hook' } as unknown as BridgeMsg, resolve, repo); });
+        const ctx = { git: detectGit(repo), profile: undefined };
+        const r = await new Promise<BridgeResult>((resolve) => { void handleWorktree({ op: 'add', taskId: 'abcdef12-hook' } as unknown as BridgeMsg, resolve, repo, ctx); });
         expect(r.ok).toBe(true);
-        const env = childEnv('hook');
-        expectNoSecrets(env);
-        expect(env.HOME).toBe(process.env.HOME);
+        expect(fs.existsSync(path.join(base, 'hook.env'))).toBe(false);
     });
 });

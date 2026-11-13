@@ -123,16 +123,37 @@ describe('writeSandboxProfile — SBPL 규칙', () => {
     it('git hooks/config deny 가 프로파일 맨 끝이다 (last-match-wins — 위치가 곧 보안)', () => {
         const out = path.join(dir, 'p1.sb');
         const gitDir = path.join(dir, 'repo', '.git');
-        expect(writeSandboxProfile(path.join(dir, 'repo'), gitDir, out)).toBe(out);
+        expect(writeSandboxProfile(path.join(dir, 'repo'), { gitDir, commonDir: gitDir }, out)).toBe(out);
         const lines = fs.readFileSync(out, 'utf8').trim().split('\n');
         const last = lines[lines.length - 1];
         expect(last).toContain('deny file-write*');
         expect(last).toContain('hooks');
         expect(last).toContain('config');
+        expect(last).toContain(`(literal ${JSON.stringify(gitDir)})`); // git 디렉터리 자신(옮겨서 config 금지를 피하는 길, E2)
         // 폴더 allow 는 hooks deny 보다 앞이어야 한다(뒤면 deny 를 덮어쓴다).
         const allowIdx = lines.findIndex((l) => l.includes('allow file-write*') && l.includes('repo'));
         expect(allowIdx).toBeGreaterThan(-1);
         expect(allowIdx).toBeLessThan(lines.length - 1);
+    });
+
+    it('도구 프로파일 = exec 프로파일 + (deny network*), git 금지 줄은 여전히 맨 끝', () => {
+        const git = { gitDir: path.join(dir, 'repo', '.git'), commonDir: path.join(dir, 'repo', '.git') };
+        writeSandboxProfile(path.join(dir, 'repo'), git, path.join(dir, 'e.sb'));
+        writeSandboxProfile(path.join(dir, 'repo'), git, path.join(dir, 't.sb'), true);
+        const e = fs.readFileSync(path.join(dir, 'e.sb'), 'utf8').trim().split('\n');
+        const t = fs.readFileSync(path.join(dir, 't.sb'), 'utf8').trim().split('\n');
+        expect(e).not.toContain('(deny network*)');
+        expect(t).toEqual([...e.slice(0, -1), '(deny network*)', e[e.length - 1]]);
+    });
+
+    it('linked worktree: common dir 쓰기를 열고, 금지는 common dir 의 hooks·config·자신 + git dir 자신', () => {
+        const common = path.join(dir, 'main', '.git');
+        const gitDir = path.join(common, 'worktrees', 'lw');
+        writeSandboxProfile(path.join(dir, 'lw'), { gitDir, commonDir: common }, path.join(dir, 'l.sb'));
+        const lines = fs.readFileSync(path.join(dir, 'l.sb'), 'utf8').trim().split('\n');
+        expect(lines).toContain(`(allow file-write* (subpath ${JSON.stringify(gitDir)}))`);
+        expect(lines).toContain(`(allow file-write* (subpath ${JSON.stringify(common)}))`);
+        expect(lines[lines.length - 1]).toBe(`(deny file-write* (subpath ${JSON.stringify(`${common}/hooks`)}) (literal ${JSON.stringify(`${common}/config`)}) (literal ${JSON.stringify(common)}) (literal ${JSON.stringify(gitDir)}))`);
     });
 
     it('비 git 폴더 프로파일에는 gitDir allow·hooks deny 가 없다', () => {

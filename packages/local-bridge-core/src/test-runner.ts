@@ -48,7 +48,7 @@ function hasPytestMarker(dir: string): boolean {
  * `-c` 는 그 폴더를 모듈 검색 맨 앞에 둔다 — `-I`(격리 모드)로 cwd·PYTHON* 환경을 빼, 폴더의 pytest.py 를 찾지도
  * 실행하지도 않는다. `-I` 는 사용자 site 도 빼므로(pip --user 로만 깐 pytest — macOS 시스템 python3 의 보통 경우)
  * 그 경로만 찾는 대상으로 뒤에 더한다(`.pth` 처리·import 없음 — find_spec 은 위치만 찾는다).
- * 자식은 exec 와 같은 샌드박스 프로파일 안에서, 환경은 exec 와 같은 allowlist 로 띄운다.
+ * 자식은 도구 프로파일(exec 프로파일 + 네트워크 차단) 안에서, 환경은 exec 와 같은 allowlist 로 띄운다.
  */
 const PYTEST_PROBE = "import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)";
 
@@ -70,7 +70,7 @@ function canImportPytest(dir: string, execPath: string, sandbox: string | null |
 
 /**
  * dirAbs 는 호출측이 스코프를 확정한 절대경로, execPath 는 exec 와 같은 보강 PATH.
- * sandbox 는 python3 를 감쌀 exec 프로파일 — undefined 면 감싸지 않고, null 이면 python3 를 띄워야 할 때 거절한다.
+ * sandbox 는 python3 를 감쌀 도구 프로파일 — undefined 면 감싸지 않고, null 이면 python3 를 띄워야 할 때 거절한다.
  */
 export async function detectTestRunner(dirAbs: string, execPath: string, sandbox?: string | null): Promise<TestRunnerToken> {
     if (hasNpmTest(dirAbs)) return 'npm';

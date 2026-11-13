@@ -9,6 +9,7 @@
  * 임시·캐시 경로 밖이라, 검증 스크립트가 HOME 을 임시 폴더로 바꿔도(캐시 허용 구역이 그쪽으로 옮겨 간다) 탈출 단언이 성립한다.
  */
 import * as fs from 'fs';
+import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
@@ -56,8 +57,9 @@ function expectNoEscape(name: string): void {
     expect(fs.existsSync(path.join(outside, name))).toBe(false);
 }
 
+/** 코어가 도구 자식에 쓰는 도구 프로파일 파일(exec 프로파일 옆에 하나 더 쓴다 — 설계 D-1). */
 const coreProfile = (): string => {
-    const files = fs.readdirSync(prof);
+    const files = fs.readdirSync(prof).filter((f) => f.startsWith('omk-tool-sandbox-'));
     expect(files).toHaveLength(1);
     return path.join(prof, files[0]);
 };
@@ -99,6 +101,30 @@ sbDescribe('도구 자식 샌드박스 — 폴더의 코드가 샌드박스 밖�
         expect(r).toMatchObject({ ok: true, serverKind: 'tsc' });
         expect(fs.existsSync(path.join(base, 'tsc-ran-inside'))).toBe(true); // 돌기는 돈다
         expectNoEscape('tsc-ran');
+    }, 30000);
+});
+
+sbDescribe('도구 자식 샌드박스 — 도구 프로파일은 네트워크를 막는다(exec 프로파일과 다르다)', () => {
+    it('lsp_diagnostics: 폴더의 tsc 가 로컬 TCP 에도 붙지 못한다', async () => {
+        let connections = 0;
+        const server = net.createServer((sock) => { connections++; sock.destroy(); });
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+        const port = (server.address() as net.AddressInfo).port;
+        try {
+            write('tsconfig.json', '{}');
+            write('a.ts', 'export const n = 1;\n');
+            write('node_modules/.bin/tsc', `#!/bin/bash\n(exec 3<>/dev/tcp/127.0.0.1/${port}) && echo x > ${JSON.stringify(path.join(base, 'net-ok'))}\nexit 0\n`, 0o755);
+            const core = makeCore();
+            core.prepare();
+            expect(await run(core, { kind: 'lsp_diagnostics', paths: ['a.ts'] })).toMatchObject({ ok: true, serverKind: 'tsc' });
+            expect(fs.existsSync(path.join(base, 'net-ok'))).toBe(false);
+            expect(connections).toBe(0);
+            // 같은 연결의 exec(승인된 명령)는 네트워크를 쓴다 — 막는 것은 도구 프로파일뿐이다.
+            const approved = new BridgeCore({ folder: base, confirm: async () => 'yes', sandboxProfileDir: prof });
+            approved.prepare();
+            expect(await run(approved, { kind: 'exec', command: `(exec 3<>/dev/tcp/127.0.0.1/${port}) && echo connected` }))
+                .toMatchObject({ ok: true, exitCode: 0, stdout: 'connected\n' });
+        } finally { server.close(); }
     }, 30000);
 });
 

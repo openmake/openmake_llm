@@ -123,9 +123,11 @@ describe('BridgeCore', () => {
             coreA.prepare();
             coreB.prepare();
 
-            const profiles = fs.readdirSync(prof).sort();
-            expect(profiles).toHaveLength(2);
-            for (const f of profiles) expect(f).toMatch(new RegExp(`^omk-exec-sandbox-${process.pid}-\\d+\\.sb$`));
+            // 코어마다 exec·도구 프로파일 두 개(설계 D-1).
+            const all = fs.readdirSync(prof).sort();
+            expect(all).toHaveLength(4);
+            for (const f of all) expect(f).toMatch(new RegExp(`^omk-(exec|tool)-sandbox-${process.pid}-\\d+\\.sb$`));
+            const profiles = all.filter((f) => f.startsWith('omk-exec-'));
             const read = () => profiles.map((f) => fs.readFileSync(path.join(prof, f), 'utf8'));
             const checkProfiles = () => {
                 const contents = read();
@@ -157,7 +159,7 @@ describe('BridgeCore', () => {
 
             // 같은 코어가 다시 준비하면 자기 파일을 다시 쓴다(새 파일을 만들지 않는다).
             coreA.prepare();
-            expect(fs.readdirSync(prof).sort()).toEqual(profiles);
+            expect(fs.readdirSync(prof).sort()).toEqual(all);
             checkProfiles();
             if (shared.length === 0) expect((await write(coreA, b, 'a-in-b-2')).exitCode).not.toBe(0);
         } finally {
