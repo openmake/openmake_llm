@@ -12,6 +12,7 @@ pub mod http_get;
 pub mod js_string;
 pub mod notice;
 pub mod reconnect;
+pub mod runtime;
 mod session;
 pub mod status;
 pub mod transport;
