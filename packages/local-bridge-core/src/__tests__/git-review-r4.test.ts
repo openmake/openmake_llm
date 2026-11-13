@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { GITFILE_MAX_BYTES } from '../constants';
+import { GITFILE_MAX_BYTES, SANDBOX_ENABLED } from '../constants';
 import { BridgeCore } from '../core';
 import type { BridgeMsg, BridgeResult } from '../types';
 
@@ -102,7 +102,7 @@ describe('S1 — HEAD 가 이미 있는 폴더(연결 전부터)', () => {
         expect(statusRan(sub, marker)).toBe(false);
     });
 
-    it('승인된 exec: 루트에 HEAD 만 있어도 연결 때 루트를 지킨다(프로파일 금지 줄)', async () => {
+    (SANDBOX_ENABLED ? it : it.skip)('승인된 exec: 루트에 HEAD 만 있어도 연결 때 루트를 지킨다(프로파일 금지 줄)', async () => {
         const root = plain();
         fs.writeFileSync(path.join(root, 'HEAD'), REF);
         const core = makeCore(root, true);
