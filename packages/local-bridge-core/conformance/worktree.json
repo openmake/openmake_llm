@@ -1,0 +1,362 @@
+{
+  "suite": "worktree",
+  "version": 1,
+  "taskIdPattern": {"source":"^[a-zA-Z0-9-]{8,64}$","flags":""},
+  "cases": [
+    {
+      "id": "add-repo-root",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd001-root"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd001-root","branch":"omk-task/wtadd001"},"after":[{"exists":"repo/.openmake/worktrees/wtadd001-root/a.txt","content":"base\n"},{"fileHas":"repo/.git/info/exclude","line":".openmake/","count":1}]},
+        {"git":["status","--porcelain"],"cwd":"repo","stdout":""},
+        {"git":["branch","--list","--format=%(refname:short)","omk-task/*"],"cwd":"repo","stdout":"omk-task/wtadd001\n"},
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd001-root"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd001-root","branch":"omk-task/wtadd001"},"after":[{"fileHas":"repo/.git/info/exclude","line":".openmake/","count":1}]}
+      ]
+    },
+    {
+      "id": "add-exclude-without-trailing-newline",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"file":"repo/.git/info/exclude","content":"# mine"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd002-nonl"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd002-nonl","branch":"omk-task/wtadd002"},"after":[{"exists":"repo/.git/info/exclude","content":"# mine\n.openmake/\n"}]}
+      ]
+    },
+    {
+      "id": "add-exclude-already-present-padded",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"file":"repo/.git/info/exclude","content":"  .openmake/  \n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd003-padd"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd003-padd","branch":"omk-task/wtadd003"},"after":[{"exists":"repo/.git/info/exclude","content":"  .openmake/  \n"}]}
+      ]
+    },
+    {
+      "id": "add-exclude-file-missing",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"remove":"repo/.git/info"},
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd004-miss"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd004-miss","branch":"omk-task/wtadd004"},"after":[{"exists":"repo/.git/info/exclude","content":".openmake/\n"}]}
+      ]
+    },
+    {
+      "id": "add-tracked-subfolder",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"file":"repo/apps/web/x.txt","content":"x\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo/apps/web",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd005-subf"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd005-subf/apps/web","branch":"omk-task/wtadd005"},"after":[{"exists":"repo/apps/web/.openmake/worktrees/wtadd005-subf/apps/web/x.txt","content":"x\n"},{"fileHas":"repo/.git/info/exclude","line":".openmake/","count":1}]},
+        {"git":["status","--porcelain"],"cwd":"repo","stdout":""}
+      ]
+    },
+    {
+      "id": "add-untracked-subfolder",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"dir":"repo/newdir"}
+      ],
+      "root": "repo/newdir",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd006-untr"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd006-untr/newdir","branch":"omk-task/wtadd006"},"after":[{"exists":"repo/newdir/.openmake/worktrees/wtadd006-untr/newdir"}]},
+        {"remove":"repo/newdir/.openmake/worktrees/wtadd006-untr/newdir"},
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd006-untr"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd006-untr/newdir","branch":"omk-task/wtadd006"},"after":[{"exists":"repo/newdir/.openmake/worktrees/wtadd006-untr/newdir"}]}
+      ]
+    },
+    {
+      "id": "add-not-a-repo",
+      "setup": [
+        {"dir":"plain"}
+      ],
+      "root": "plain",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd007-norp"},"expect":{"ok":false,"error":"git 레포가 아닙니다"},"after":[{"absent":"plain/.openmake"}]}
+      ]
+    },
+    {
+      "id": "add-branch-name-collision",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"samepref-first"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/samepref-first","branch":"omk-task/samepref"}},
+        {"msg":{"kind":"worktree","op":"add","taskId":"samepref-second"},"compare":"error-prefix","expect":{"ok":false,"errorPrefix":"worktree 생성 실패: "}}
+      ]
+    },
+    {
+      "id": "add-repo-without-commits",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtadd009-emty"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtadd009-emty","branch":"omk-task/wtadd009"},"after":[{"exists":"repo/.openmake/worktrees/wtadd009-emty"}]}
+      ]
+    },
+    {
+      "id": "diff-committed-and-new-files",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtdif001-both"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtdif001-both","branch":"omk-task/wtdif001"}},
+        {"file":"repo/.openmake/worktrees/wtdif001-both/a.txt","content":"changed by agent\n"},
+        {"git":["add","."],"cwd":"repo/.openmake/worktrees/wtdif001-both"},
+        {"git":["commit","-q","-m","agent"],"cwd":"repo/.openmake/worktrees/wtdif001-both"},
+        {"file":"repo/.openmake/worktrees/wtdif001-both/new.txt","content":"brand new\n"},
+        {"msg":{"kind":"worktree","op":"diff","taskId":"wtdif001-both"},"compare":"stdout-contains","expect":{"ok":true,"branch":"omk-task/wtdif001","stdoutContains":["+changed by agent","+brand new","b/new.txt"],"stdoutLacks":[]}}
+      ]
+    },
+    {
+      "id": "diff-without-worktree",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"diff","taskId":"wtdif002-none"},"expect":{"ok":false,"error":"worktree 없음"}}
+      ]
+    },
+    {
+      "id": "diff-no-change",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtdif003-same"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtdif003-same","branch":"omk-task/wtdif003"}},
+        {"msg":{"kind":"worktree","op":"diff","taskId":"wtdif003-same"},"expect":{"ok":true,"stdout":"","branch":"omk-task/wtdif003"}}
+      ]
+    },
+    {
+      "id": "diff-base-file-removed-falls-back-to-head",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtdif004-nobs"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtdif004-nobs","branch":"omk-task/wtdif004"}},
+        {"file":"repo/.openmake/worktrees/wtdif004-nobs/a.txt","content":"committed\n"},
+        {"git":["add","."],"cwd":"repo/.openmake/worktrees/wtdif004-nobs"},
+        {"git":["commit","-q","-m","agent"],"cwd":"repo/.openmake/worktrees/wtdif004-nobs"},
+        {"remove":"repo/.git/worktrees/wtdif004-nobs/omk-base"},
+        {"msg":{"kind":"worktree","op":"diff","taskId":"wtdif004-nobs"},"expect":{"ok":true,"stdout":"","branch":"omk-task/wtdif004"}}
+      ]
+    },
+    {
+      "id": "diff-base-file-garbage-falls-back-to-head",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtdif005-junk"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtdif005-junk","branch":"omk-task/wtdif005"}},
+        {"file":"repo/.openmake/worktrees/wtdif005-junk/a.txt","content":"committed\n"},
+        {"git":["add","."],"cwd":"repo/.openmake/worktrees/wtdif005-junk"},
+        {"git":["commit","-q","-m","agent"],"cwd":"repo/.openmake/worktrees/wtdif005-junk"},
+        {"file":"repo/.git/worktrees/wtdif005-junk/omk-base","content":"not-a-sha\n"},
+        {"file":"repo/.openmake/worktrees/wtdif005-junk/b.txt","content":"uncommitted\n"},
+        {"msg":{"kind":"worktree","op":"diff","taskId":"wtdif005-junk"},"compare":"stdout-contains","expect":{"ok":true,"branch":"omk-task/wtdif005","stdoutContains":["+uncommitted"],"stdoutLacks":["+committed"]}}
+      ]
+    },
+    {
+      "id": "diff-over-max-buffer",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtdif006-huge"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtdif006-huge","branch":"omk-task/wtdif006"}},
+        {"file":"repo/.openmake/worktrees/wtdif006-huge/big.txt","repeat":{"line":"0123456789","count":110000}},
+        {"msg":{"kind":"worktree","op":"diff","taskId":"wtdif006-huge"},"expect":{"ok":false,"error":"diff 실패: "}}
+      ]
+    },
+    {
+      "id": "remove-clean",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtrem001-cln"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtrem001-cln","branch":"omk-task/wtrem001"}},
+        {"msg":{"kind":"worktree","op":"remove","taskId":"wtrem001-cln"},"expect":{"ok":true,"kept":false,"branch":"omk-task/wtrem001"},"after":[{"absent":"repo/.openmake/worktrees/wtrem001-cln"}]},
+        {"git":["branch","--list","--format=%(refname:short)","omk-task/*"],"cwd":"repo","stdout":""}
+      ]
+    },
+    {
+      "id": "remove-keeps-uncommitted",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtrem002-unc"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtrem002-unc","branch":"omk-task/wtrem002"}},
+        {"file":"repo/.openmake/worktrees/wtrem002-unc/a.txt","content":"edited\n"},
+        {"msg":{"kind":"worktree","op":"remove","taskId":"wtrem002-unc"},"expect":{"ok":true,"kept":true,"branch":"omk-task/wtrem002"},"after":[{"exists":"repo/.openmake/worktrees/wtrem002-unc/a.txt","content":"edited\n"}]}
+      ]
+    },
+    {
+      "id": "remove-keeps-agent-commit",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtrem003-cmt"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtrem003-cmt","branch":"omk-task/wtrem003"}},
+        {"file":"repo/.openmake/worktrees/wtrem003-cmt/a.txt","content":"committed\n"},
+        {"git":["add","."],"cwd":"repo/.openmake/worktrees/wtrem003-cmt"},
+        {"git":["commit","-q","-m","agent"],"cwd":"repo/.openmake/worktrees/wtrem003-cmt"},
+        {"msg":{"kind":"worktree","op":"remove","taskId":"wtrem003-cmt"},"expect":{"ok":true,"kept":true,"branch":"omk-task/wtrem003"},"after":[{"exists":"repo/.openmake/worktrees/wtrem003-cmt/a.txt"}]}
+      ]
+    },
+    {
+      "id": "remove-without-worktree",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"remove","taskId":"wtrem004-non"},"expect":{"ok":true,"kept":false}}
+      ]
+    },
+    {
+      "id": "remove-base-file-missing-keeps",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtrem005-nob"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtrem005-nob","branch":"omk-task/wtrem005"}},
+        {"remove":"repo/.git/worktrees/wtrem005-nob/omk-base"},
+        {"msg":{"kind":"worktree","op":"remove","taskId":"wtrem005-nob"},"expect":{"ok":true,"kept":true,"branch":"omk-task/wtrem005"},"after":[{"exists":"repo/.openmake/worktrees/wtrem005-nob"}]}
+      ]
+    },
+    {
+      "id": "op-and-folder",
+      "setup": [
+        {"dir":"plain"},
+        {"dir":"outside"}
+      ],
+      "root": "plain",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"rename","taskId":"wtopx001-unk"},"expect":{"ok":false,"error":"지원하지 않는 worktree op: rename"}},
+        {"msg":{"kind":"worktree","taskId":"wtopx001-unk"},"expect":{"ok":false,"error":"지원하지 않는 worktree op: undefined"}},
+        {"msg":{"kind":"worktree","op":null,"taskId":"wtopx001-unk"},"expect":{"ok":false,"error":"지원하지 않는 worktree op: null"}},
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtopx001-unk","folder":"../outside"},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../outside"}},
+        {"msg":{"kind":"worktree","op":"add","taskId":"bad id","folder":"../outside"},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../outside"}},
+        {"msg":{"kind":"worktree","op":"add","taskId":"bad id"},"expect":{"ok":false,"error":"잘못된 taskId 형식"}},
+        {"msg":{"kind":"worktree","op":5,"taskId":"wtopx001-unk"},"expect":{"ok":false,"error":"지원하지 않는 worktree op: 5"},"divergence":"non-string-field","rustExpect":{"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: op"}},
+        {"msg":{"kind":"worktree","op":"add","taskId":12345678},"expect":{"ok":false,"error":"git 레포가 아닙니다"},"divergence":"non-string-field","rustExpect":{"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: taskId"}}
+      ]
+    }
+  ],
+  "taskId": [
+    {"id":"path-traversal","input":{"taskId":"../evil"},"expect":{"ok":false,"error":"잘못된 taskId 형식"}},
+    {"id":"seven-chars","input":{"taskId":"abcdefg"},"expect":{"ok":false,"error":"잘못된 taskId 형식"}},
+    {"id":"eight-chars","input":{"taskId":"abcdefgh"},"expect":"accepted"},
+    {"id":"sixty-four","input":{"taskId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"expect":"accepted"},
+    {"id":"sixty-five","input":{"taskId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"expect":{"ok":false,"error":"잘못된 taskId 형식"}},
+    {"id":"trailing-newline","input":{"taskId":"abcdefgh\n"},"expect":{"ok":false,"error":"잘못된 taskId 형식"}},
+    {"id":"fullwidth-digits","input":{"taskId":"１２３４５６７８"},"expect":{"ok":false,"error":"잘못된 taskId 형식"}},
+    {"id":"inner-space","input":{"taskId":"abcd efgh"},"expect":{"ok":false,"error":"잘못된 taskId 형식"}},
+    {"id":"leading-dashes","input":{"taskId":"--force--x"},"expect":"accepted"},
+    {"id":"upper-and-dash","input":{"taskId":"ABC-def-123"},"expect":"accepted"},
+    {"id":"dot","input":{"taskId":"abcdefgh."},"expect":{"ok":false,"error":"잘못된 taskId 형식"}},
+    {"id":"missing","input":{},"expect":{"ok":false,"error":"잘못된 taskId 형식"}},
+    {"id":"empty","input":{"taskId":""},"expect":{"ok":false,"error":"잘못된 taskId 형식"}},
+    {"id":"null","input":{"taskId":null},"expect":{"ok":false,"error":"잘못된 taskId 형식"}}
+  ],
+  "gitDir": [
+    {"id":"not-a-repo","setup":[{"dir":"plain"}],"input":{"root":"{{TMP}}/plain"},"expect":{"gitDir":null}},
+    {"id":"repo-root","setup":[{"dir":"repo"},{"git":["init","-q"],"cwd":"repo"},{"file":"repo/a.txt","content":"base\n"},{"git":["add","."],"cwd":"repo"},{"git":["commit","-q","-m","base"],"cwd":"repo"}],"input":{"root":"{{TMP}}/repo"},"expect":{"gitDir":"{{TMP}}/repo/.git"}},
+    {"id":"repo-subfolder","setup":[{"dir":"repo"},{"git":["init","-q"],"cwd":"repo"},{"file":"repo/a.txt","content":"base\n"},{"file":"repo/apps/web/x.txt","content":"x\n"},{"git":["add","."],"cwd":"repo"},{"git":["commit","-q","-m","base"],"cwd":"repo"}],"input":{"root":"{{TMP}}/repo/apps/web"},"expect":{"gitDir":"{{TMP}}/repo/.git"}},
+    {"id":"linked-worktree","setup":[{"dir":"repo"},{"git":["init","-q"],"cwd":"repo"},{"file":"repo/a.txt","content":"base\n"},{"git":["add","."],"cwd":"repo"},{"git":["commit","-q","-m","base"],"cwd":"repo"},{"git":["worktree","add","-q","../wt","-b","side"],"cwd":"repo"}],"input":{"root":"{{TMP}}/wt"},"expect":{"gitDir":"{{TMP}}/repo/.git/worktrees/wt"}},
+    {"id":"missing-folder","setup":[],"input":{"root":"{{TMP}}/nope"},"expect":{"gitDir":null}}
+  ]
+}
