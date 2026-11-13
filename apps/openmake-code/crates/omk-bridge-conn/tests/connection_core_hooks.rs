@@ -19,6 +19,10 @@ use support::tmp::TmpDir;
 
 /// exec 호스트를 얹은 코어의 시나리오 환경 — 확인 창은 언제나 'all', 변화 알림 수를 센다.
 fn env_with_host(sandbox: bool, changes: &Arc<AtomicUsize>) -> (Env, String) {
+    env_with_host_path(sandbox, changes, "/usr/bin:/bin")
+}
+
+fn env_with_host_path(sandbox: bool, changes: &Arc<AtomicUsize>, path: &str) -> (Env, String) {
     let tmp = TmpDir::new();
     for d in ["root", "home", "prof"] {
         std::fs::create_dir_all(tmp.join(d)).unwrap();
@@ -27,7 +31,7 @@ fn env_with_host(sandbox: bool, changes: &Arc<AtomicUsize>) -> (Env, String) {
     let host = ExecHost {
         confirm: Box::new(|_| Box::pin(async { ConfirmAnswer::All })),
         env: vec![
-            ("PATH".to_owned(), "/usr/bin:/bin".to_owned()),
+            ("PATH".to_owned(), path.replace("{TMP}", &tmp.path)),
             ("HOME".to_owned(), tmp.join("home")),
             ("SHELL".to_owned(), "/bin/sh".to_owned()),
         ],
@@ -136,5 +140,59 @@ fn disconnect_clears_bulk_approval() {
         assert_eq!(e.core.auto_approved_count(), 0);
         assert_eq!(changes.load(Ordering::SeqCst), 2);
         drop(conn);
+    });
+}
+
+/// prepare 가 느린 동안에도 해제·채널 닫힘을 바로 처리한다(리뷰 L1). 샌드박스 git 탐지가 3초 걸리는 가짜 `git` 으로
+/// prepare 를 붙잡는다(코어 API 를 늘리지 않는 훅). 시계는 실제 시간 — 멈춘 시계는 탐지 시간 제한을 바로 넘긴다.
+#[test]
+fn slow_prepare_does_not_hold_disconnect_or_channel_close() {
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::Duration;
+    let changes = Arc::new(AtomicUsize::new(0));
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let (e, _) = env_with_host_path(true, &changes, "{TMP}/bin:/usr/bin:/bin");
+        std::fs::create_dir_all(e.tmp.join("bin")).unwrap();
+        let git = e.tmp.join("bin/git");
+        std::fs::write(&git, "#!/bin/sh\nexec sleep 3\n").unwrap();
+        std::fs::set_permissions(&git, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let fast = Duration::from_secs(1);
+
+        // ① 해제 — 소켓을 만들지 않고 바로 '종료'.
+        let mut o = options(&e);
+        let rec = record_into(&mut o);
+        let conn = BridgeConnection::new(o);
+        conn.connect();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        conn.disconnect();
+        let closed = rec.until("종료", |r| r.has_code("closed"));
+        assert!(
+            tokio::time::timeout(fast, closed).await.is_ok(),
+            "prepare 가 해제를 붙잡았다: {:?}",
+            rec.read(|r| r.texts())
+        );
+        assert_eq!(e.server.state.read(|s| s.connections), 0);
+        drop(conn);
+        let released = || async {
+            while Arc::strong_count(&e.core) > 1 {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        };
+        assert!(tokio::time::timeout(fast, released()).await.is_ok());
+
+        // ② 채널 닫힘 — 준비 중에 핸들을 버리면 actor 가 바로 끝나 코어를 놓는다.
+        let conn = BridgeConnection::new(options(&e));
+        conn.connect();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        drop(conn);
+        assert!(
+            tokio::time::timeout(fast, released()).await.is_ok(),
+            "prepare 가 채널 닫힘을 붙잡았다"
+        );
+        assert_eq!(e.server.state.read(|s| s.connections), 0);
     });
 }

@@ -219,8 +219,10 @@ async fn phase_event(phase: &mut Phase) -> PhaseEvent {
 mod core_hooks {
     use omk_bridge_core::core::BridgeCore;
 
-    /// 연결할 때마다 — PATH 캐시를 비우고 샌드박스 프로파일을 쓴다. 소켓을 만들기 전에 끝낸다(TS 는 동기 호출이라
-    /// 첫 exec 가 언제나 새 프로파일을 본다). 그동안 이 연결의 actor 만 기다린다 — TS 는 프로세스 전체가 멈췄다(D-35).
+    /// 연결할 때마다 — PATH 캐시를 비우고 샌드박스 프로파일을 쓴다. 접속 단계 future 의 맨 앞(핸드셰이크 시간 제한
+    /// 밖)에서 소켓을 만들기 전에 끝낸다(TS 는 동기 호출이라 첫 exec 가 언제나 새 프로파일을 본다). 그동안 actor 는
+    /// 명령을 계속 받는다 — 해제·다시 연결·채널 닫힘이 이 future 를 버리면 준비도 멈춘다(TS 는 프로세스 전체가
+    /// 멈췄다, D-35). 헤더 실패·잘못된 주소처럼 소켓을 만들지 않는 연결은 준비하지 않는다.
     pub(super) async fn on_connect(core: &BridgeCore) {
         core.prepare().await;
     }
@@ -248,7 +250,7 @@ impl Actor {
                 p = phase_event(&mut self.phase) => Ev::Phase(p),
             };
             match ev {
-                Ev::Cmd(Cmd::Connect) => self.connect().await,
+                Ev::Cmd(Cmd::Connect) => self.connect(),
                 Ev::Cmd(Cmd::Disconnect) => self.disconnect(),
                 Ev::Cmd(Cmd::BrowserControl(user)) => {
                     self.send(&frames::browser_control(user));
@@ -262,7 +264,7 @@ impl Actor {
                 Ev::Phase(PhaseEvent::Session(SessionEvent::Closed { code, reason })) => {
                     self.on_close(code, &reason);
                 }
-                Ev::Phase(PhaseEvent::Timer) => self.connect().await,
+                Ev::Phase(PhaseEvent::Timer) => self.connect(),
             }
         }
     }
@@ -296,9 +298,8 @@ impl Actor {
         }
     }
 
-    async fn connect(&mut self) {
+    fn connect(&mut self) {
         self.closed = false;
-        core_hooks::on_connect(&self.opts.core).await;
         self.drop_phase();
         // 헤더 실패(예: 키 없음)는 소켓을 만들기 전이라 재연결을 걸지 않고 멈춘다.
         let headers = match (self.opts.headers)() {
@@ -316,6 +317,7 @@ impl Actor {
             return;
         };
         let connector = Arc::clone(&self.opts.connector);
+        let core = Arc::clone(&self.opts.core);
         let limit = Duration::from_millis(self.opts.handshake_timeout_ms);
         let handshake = async move {
             let mut req = target.url.as_str().into_client_request().ok()?;
@@ -330,6 +332,7 @@ impl Actor {
             Some(ws)
         };
         self.phase = Phase::Connecting(Box::pin(async move {
+            core_hooks::on_connect(&core).await;
             tokio::time::timeout(limit, handshake).await.ok().flatten()
         }));
         self.status("연결 중…", StatusCode::Connecting, None);
