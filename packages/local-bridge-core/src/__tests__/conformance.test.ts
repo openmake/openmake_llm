@@ -50,7 +50,11 @@ describe('conformance fixture 목록', () => {
                 v.forEach((x) => walk(x, at));
             } else if (v && typeof v === 'object') {
                 const o = v as Record<string, unknown>;
-                if ('divergence' in o || 'rustExpect' in o) expect(at in KNOWN_DIVERGENCES ? at : `알 수 없는 자리 ${at}`).toBe(at);
+                if ('divergence' in o || 'rustExpect' in o) {
+                    expect(at in KNOWN_DIVERGENCES ? at : `알 수 없는 자리 ${at}`).toBe(at);
+                    // 이 자리의 이름이어야 하고, rustExpect 와 짝으로만 쓴다(남용 방지).
+                    expect({ at, divergence: o.divergence, rustExpect: 'rustExpect' in o }).toEqual({ at, divergence: KNOWN_DIVERGENCES[at], rustExpect: true });
+                }
                 for (const [k, x] of Object.entries(o)) walk(x, Array.isArray(x) ? `${at}/${k}` : at);
             }
         };
