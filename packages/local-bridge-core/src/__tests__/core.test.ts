@@ -100,6 +100,45 @@ describe('BridgeCore', () => {
         expect(r.stdout).toBe('done-2');
     });
 
+    // 헬퍼는 연결 폴더마다 코어를 만들고 모두 같은 프로파일 폴더를 넘긴다. 파일 이름이 pid 하나뿐이면
+    // 나중에 준비한 폴더의 프로파일이 모든 코어의 exec 에 적용됐다(A 의 명령이 A 에는 못 쓰고 B 에 썼다).
+    // 폴더는 샌드박스가 쓰기를 여는 임시 폴더(/private/tmp·/private/var/folders) 밖, 홈 아래에 만든다.
+    (SANDBOX_ENABLED ? it : it.skip)('exec: 폴더가 둘이어도 각 코어는 자기 폴더에만 쓴다(프로파일 파일이 코어마다 따로)', async () => {
+        const home = fs.realpathSync(os.homedir());
+        const a = fs.mkdtempSync(path.join(home, '.omk-sbtest-a-'));
+        const b = fs.mkdtempSync(path.join(home, '.omk-sbtest-b-'));
+        const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-prof-'));
+        try {
+            const coreA = makeCore(a, { sandboxProfileDir: prof });
+            const coreB = makeCore(b, { sandboxProfileDir: prof });
+            coreA.prepare();
+            coreB.prepare();
+            const write = (core: BridgeCore, dir: string, name: string) => run(core, { kind: 'exec', command: `echo x > '${path.join(dir, name)}'` });
+            expect(await write(coreA, a, 'a-in-a')).toMatchObject({ ok: true, exitCode: 0 });
+            expect((await write(coreA, b, 'a-in-b')).exitCode).not.toBe(0);
+            expect(await write(coreB, b, 'b-in-b')).toMatchObject({ ok: true, exitCode: 0 });
+            expect((await write(coreB, a, 'b-in-a')).exitCode).not.toBe(0);
+            expect(fs.existsSync(path.join(a, 'a-in-a'))).toBe(true);
+            expect(fs.existsSync(path.join(b, 'a-in-b'))).toBe(false);
+            expect(fs.existsSync(path.join(b, 'b-in-b'))).toBe(true);
+            expect(fs.existsSync(path.join(a, 'b-in-a'))).toBe(false);
+
+            const profiles = fs.readdirSync(prof).sort();
+            expect(profiles).toHaveLength(2);
+            for (const f of profiles) expect(f).toMatch(new RegExp(`^omk-exec-sandbox-${process.pid}-\\d+\\.sb$`));
+            const contents = profiles.map((f) => fs.readFileSync(path.join(prof, f), 'utf8'));
+            expect(contents.filter((c) => c.includes(`(subpath "${a}")`))).toHaveLength(1);
+            expect(contents.filter((c) => c.includes(`(subpath "${b}")`))).toHaveLength(1);
+
+            // 같은 코어가 다시 준비하면 자기 파일을 다시 쓴다(새 파일을 만들지 않는다).
+            coreA.prepare();
+            expect(fs.readdirSync(prof).sort()).toEqual(profiles);
+            expect((await write(coreA, b, 'a-in-b-2')).exitCode).not.toBe(0);
+        } finally {
+            for (const d of [a, b, prof]) fs.rmSync(d, { recursive: true, force: true });
+        }
+    });
+
     it('exec: 자식 환경에 호스트 비밀이 상속되지 않는다(allowlist)', async () => {
         process.env.OMK_COMPANION_API_KEY = 'omk_live_leak_probe';
         process.env.OMK_TEST_SECRET_PROBE = 'leak';
