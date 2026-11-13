@@ -44,10 +44,12 @@ function hasPytestMarker(dir: string): boolean {
 
 /**
  * pytest 가 설치돼 있는가 — import 하지 않고 find_spec 으로 찾기만 한다(모듈을 실행하지 않는다). cwd 가 사용자 폴더라
- * `-c` 는 그 폴더를 모듈 검색 맨 앞에 둔다 — `-I`(격리 모드)로 cwd·사용자 site·PYTHON* 환경을 빼, 폴더의 pytest.py 를
- * 찾지도 실행하지도 않는다. 자식은 exec 와 같은 샌드박스 프로파일 안에서, 환경은 exec 와 같은 allowlist 로 띄운다.
+ * `-c` 는 그 폴더를 모듈 검색 맨 앞에 둔다 — `-I`(격리 모드)로 cwd·PYTHON* 환경을 빼, 폴더의 pytest.py 를 찾지도
+ * 실행하지도 않는다. `-I` 는 사용자 site 도 빼므로(pip --user 로만 깐 pytest — macOS 시스템 python3 의 보통 경우)
+ * 그 경로만 찾는 대상으로 뒤에 더한다(`.pth` 처리·import 없음 — find_spec 은 위치만 찾는다).
+ * 자식은 exec 와 같은 샌드박스 프로파일 안에서, 환경은 exec 와 같은 allowlist 로 띄운다.
  */
-const PYTEST_PROBE = "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)";
+const PYTEST_PROBE = "import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)";
 
 function canImportPytest(dir: string, execPath: string, sandbox: string | null | undefined): Promise<boolean> {
     const cmd = wrapInSandbox('python3', ['-I', '-c', PYTEST_PROBE], sandbox); // 프로파일 없음이면 throw — 띄우지 않는다
