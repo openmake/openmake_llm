@@ -114,8 +114,9 @@ function excludeWorktreeDir(gitDir: string): void {
         const p = path.join(infoDir, 'exclude');
         if (isSymlink(infoDir) || isSymlink(p)) return;
         fs.mkdirSync(infoDir, { recursive: true });
-        // 일반 파일만 읽는다 — FIFO·소켓·장치면 동기 읽기가 이벤트 루프를 멈췄다(리뷰 N3). 그때는 등록을 건너뛴다.
-        const cur = fs.lstatSync(p, { throwIfNoEntry: false }) ? readRegularFile(p) : '';
+        // 일반 파일만·MAX_BUFFER 이하만 읽는다 — FIFO·소켓·장치면 동기 읽기가 이벤트 루프를 멈췄다(리뷰 N3), 큰 파일도 그만큼
+        // 잡는다(리뷰 R4). 그때는 등록을 건너뛴다.
+        const cur = fs.lstatSync(p, { throwIfNoEntry: false }) ? readRegularFile(p, MAX_BUFFER) : '';
         if (cur === null) return;
         if (!cur.split('\n').some((l) => l.trim() === '.openmake/')) {
             writeNoFollow(infoDir, 'exclude', `${cur}${cur.endsWith('\n') || cur === '' ? '' : '\n'}.openmake/\n`);
