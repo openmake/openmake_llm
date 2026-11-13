@@ -5,6 +5,8 @@
 mod exec_gate;
 #[path = "conformance/exec_path.rs"]
 mod exec_path;
+#[path = "conformance/exec_shape.rs"]
+mod exec_shape;
 #[path = "conformance/file_kinds.rs"]
 mod file_kinds;
 #[path = "conformance/request_guard.rs"]

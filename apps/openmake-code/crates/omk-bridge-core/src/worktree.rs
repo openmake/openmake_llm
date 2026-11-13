@@ -5,6 +5,11 @@
 //! git 인자는 서버 문자열을 쓰지 않고 여기서 배열로 조립한다 — 서버 값은 형식 검사를 통과한 taskId 만 경로·브랜치
 //! 이름에 들어간다. 그래서 사용자 확인 없이 돈다. 셸을 거치지 않는다. 파일 작업은 `FsGate`(라벨 `worktree`)를
 //! 거친다(D-36 — TS 는 동기 호출이라 막힌 볼륨에서 멈췄다).
+//!
+//! git 은 샌드박스 밖에서 돈다 — 그래서 경로는 글자로 이어 붙인 뒤 **파일 kind 와 같은 realpath 스코프**(`scope::safe_from`)로
+//! 검사한다. 연결 폴더 안 파일은 에이전트가 쓸 수 있어, `.openmake`·`worktrees`·`<taskId>`(또는 worktree 안의 하위 폴더)를
+//! 폴더 밖 심링크로 바꿔 두면 add·remove 가 폴더 밖에 만들고 지울 수 있었다(2026-11-13). 요청 첫머리와 `git worktree add`·
+//! `worktree remove` 바로 앞에서 두 번 검사한다 — 남는 틈(TOCTOU)은 검사 직후 git 호출 하나로, 파일 kind 와 같은 수준이다.
 
 use std::io::Write;
 use std::sync::LazyLock;
@@ -17,6 +22,7 @@ use crate::js_text::{js_trim, utf16_prefix};
 use crate::msg::{BridgeMsg, BridgeResult};
 use crate::node_path;
 use crate::proc::{self, ProcSpec, Stderr, Stdin};
+use crate::scope;
 use crate::timed_fs::FsGate;
 
 const NO_HOST: &str = "exec 호스트가 설정되지 않았습니다";
@@ -80,7 +86,11 @@ where
 }
 
 /// `.git/info/exclude` 에 `.openmake/` 등록 — 이미 있으면(앞뒤 공백 무시) 두지 않는다. 실패는 무시한다(치명적이지 않다).
+/// `.git/info`·`info/exclude` 도 에이전트가 바꿀 수 있다 — 폴더 밖 심링크면(최근접 조상 realpath 가 git_dir 밖) 등록하지 않는다(TS 같음).
 fn exclude_worktree_dir(git_dir: &str) {
+    if scope::safe_from(git_dir, Some("info/exclude")).is_err() {
+        return;
+    }
     let info = node_path::join(&[git_dir, "info"]);
     if std::fs::create_dir_all(&info).is_err() {
         return;
@@ -151,6 +161,16 @@ async fn read_base_sha(st: &ExecState, wt: &str, gate: &FsGate) -> String {
         .unwrap_or_else(|| FALLBACK.to_owned())
 }
 
+/// worktree 루트와 대상이 연결 폴더 realpath 안인지 — TS 의 `safeFromAsync` 두 번(루트 → 대상)과 같다. 안쪽 심링크는 허용한다.
+async fn check_scope(base: &str, rel: &str, gate: &FsGate) -> Result<(), String> {
+    let (b, r) = (base.to_owned(), rel.to_owned());
+    fs_op(gate, move || {
+        scope::safe_from(&b, Some(WORKTREE_DIR))?;
+        scope::safe_from(&b, Some(&r)).map(drop)
+    })
+    .await?
+}
+
 fn ok_with(f: impl FnOnce(&mut BridgeResult)) -> BridgeResult {
     let mut r = BridgeResult::success();
     f(&mut r);
@@ -176,10 +196,15 @@ pub(crate) async fn handle(
     let rel = format!("{WORKTREE_DIR}/{task_id}");
     let abs = node_path::join(&[base, &rel]);
     let branch = format!("{WORKTREE_BRANCH_PREFIX}{}", utf16_prefix(task_id, 8));
+    if matches!(m.op.as_deref(), Some("add" | "diff" | "remove"))
+        && let Err(e) = check_scope(base, &rel, gate).await
+    {
+        return BridgeResult::failure(e);
+    }
     match m.op.as_deref() {
         Some("add") => add(st, base, &rel, &abs, branch, gate).await,
         Some("diff") => diff(st, &abs, branch, gate).await,
-        Some("remove") => remove(st, base, &abs, branch, gate).await,
+        Some("remove") => remove(st, base, &rel, &abs, branch, gate).await,
         _ => Ok(BridgeResult::failure(format!(
             "지원하지 않는 worktree op: {}",
             m.op_text
@@ -215,9 +240,10 @@ async fn add(
         format!("{rel}/{sub}")
     };
     // untracked 하위 폴더는 체크아웃에 없다 — exec cwd 가 없어 실패하지 않게 빈 폴더로 보장한다(실패는 exec 가 드러낸다).
-    let sub_abs = (!sub.is_empty()).then(|| node_path::join(&[abs, &sub]));
+    // worktree 안은 에이전트가 쓸 수 있다 — 하위 경로가 폴더 밖 심링크면 만들지 않는다(스코프 거부도 exec 가 드러낸다).
+    let sub_rel = (!sub.is_empty()).then(|| (base.to_owned(), work_rel.clone()));
     let ensure_sub = move || {
-        if let Some(p) = sub_abs {
+        if let Some(p) = sub_rel.and_then(|(b, r)| scope::safe_from(&b, Some(&r)).ok()) {
             let _ = std::fs::create_dir_all(p);
         }
     };
@@ -237,6 +263,8 @@ async fn add(
         fs_op(gate, ensure_sub).await?;
         return Ok(done(work_rel, branch));
     }
+    // 첫 검사 뒤 git 3회·exclude 쓰기가 끼었다 — 바로 앞에서 다시 본다(TS 같음).
+    check_scope(base, rel, gate).await?;
     let r = git(st, &["worktree", "add", abs, "-b", &branch], base).await;
     if !r.ok {
         let why = if r.stderr.is_empty() {
@@ -281,6 +309,7 @@ async fn diff(
 async fn remove(
     st: &ExecState,
     base: &str,
+    rel: &str,
     abs: &str,
     branch: String,
     gate: &FsGate,
@@ -301,6 +330,7 @@ async fn remove(
     if (status.ok && !js_trim(&status.stdout).is_empty()) || moved {
         return Ok(kept(branch));
     }
+    check_scope(base, rel, gate).await?; // 첫 검사 뒤 git 3회가 끼었다 — 바로 앞에서 다시 본다(TS 같음).
     let r = git(st, &["worktree", "remove", "--force", abs], base).await;
     if !r.ok {
         // 제거 실패도 보존으로 본다.
