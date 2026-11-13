@@ -20,7 +20,7 @@
     {"id": "empty-root", "input": {"base": "base", "root": ""}, "expect": {"deviceId": "base-r-e3b0c44298fc"}},
     {"id": "upper-case", "input": {"base": "base", "root": "/Work/Repo"}, "expect": {"deviceId": "base-r-7fc8ca55385c"}},
     {"id": "private-tmp", "input": {"base": "base", "root": "/private/tmp/x"}, "expect": {"deviceId": "base-r-bdc4aea33d38"}},
-    {"id": "users-me", "input": {"base": "base", "root": "/Users/me/project"}, "expect": {"deviceId": "base-r-8779b387e6b0"}}
+    {"id": "nested", "input": {"base": "base", "root": "/work/me/project"}, "expect": {"deviceId": "base-r-144925a0530a"}}
   ],
   "realpathSync": [
     {
