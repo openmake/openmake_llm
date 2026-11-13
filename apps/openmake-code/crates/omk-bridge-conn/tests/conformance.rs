@@ -2,6 +2,8 @@
 //! (`conformance-conn.test.ts`)와 함께 통과해야 한다. 형식은 `conformance/CONN.md`.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "conformance/frames.rs"]
+mod frames;
 mod support;
 
 use serde_json::{Value, json};
@@ -456,5 +458,8 @@ fn conn_device_id() {
 
 #[test]
 fn conn_frames() {
-    panic!("미구현: conn-frames");
+    let doc = load("conn-frames");
+    for c in doc["cases"].as_array().unwrap() {
+        frames::run_case(c);
+    }
 }
