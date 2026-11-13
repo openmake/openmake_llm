@@ -244,7 +244,7 @@ fn t1_bare_root_reconnect() {
     assert!(!w.status_ran(&format!("{ws}/{user_cwd}")));
 }
 
-/// T1 — HEAD 가 있는 폴더: HEAD 내용 쓰기는 되고 HEAD 지우기(대소문자 무관)는 거절, HEAD 를 품은 폴더째 지우기는 된다.
+/// T1 — HEAD 가 있는 폴더: HEAD 내용 쓰기는 되고 HEAD 지우기(대소문자 무관)와 HEAD 를 품은 폴더째 지우기는 거절(6차 U1).
 #[test]
 fn t1_head_folder_delete() {
     let w = Work::new();
@@ -257,6 +257,6 @@ fn t1_head_folder_delete() {
         assert_eq!(del(&c, p), denied(p), "{p}");
     }
     assert!(Path::new(&format!("{root}/sub/HEAD")).exists());
-    assert_eq!(del(&c, "sub"), ok());
-    assert!(!Path::new(&format!("{root}/sub")).exists());
+    assert_eq!(del(&c, "sub"), denied("sub"));
+    assert!(Path::new(&format!("{root}/sub/HEAD")).exists());
 }
