@@ -74,6 +74,15 @@ export class SandboxProfileMissingError extends Error {
  * profile: undefined = 샌드박스 꺼짐(감싸지 않음, OMK_BRIDGE_SANDBOX=0·비 macOS), null = 켜졌지만 프로파일 없음
  * → 띄우지 않고 SandboxProfileMissingError(fail-closed). 셸을 거치지 않는다.
  */
+/**
+ * 감싼 자식에서 sandbox-exec **자체**가 실패했나 — 프로파일 파일 유실·문법 오류(종료 코드 65), 실행 파일 execvp 실패(71).
+ * 그때 stderr 는 `sandbox-exec:` 로 시작한다. 진단·탐지가 이를 "깨끗함/없음"으로 삼키지 않게 호출측이 프로파일 없음과
+ * 같은 거절로 바꾼다(실행 파일이 PATH 에 없는 71 은 호출측이 감싸기 전에 걸러 낸다 — python3 찾기).
+ */
+export function sandboxExecFailed(wrapped: boolean, code: unknown, stderr: string): boolean {
+    return wrapped && (code === 65 || code === 71) && stderr.startsWith('sandbox-exec:');
+}
+
 export function wrapInSandbox(file: string, args: string[], profile: string | null | undefined): { file: string; args: string[] } {
     if (profile === undefined) return { file, args };
     if (profile === null) throw new SandboxProfileMissingError();

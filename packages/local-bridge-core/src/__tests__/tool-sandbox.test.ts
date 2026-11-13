@@ -145,6 +145,46 @@ sbDescribe('도구 자식 샌드박스 — 프로파일이 없으면 자식을 �
     }, 30000);
 });
 
+sbDescribe('도구 자식 샌드박스 — sandbox-exec 자체가 실패하면 "진단 없음/none" 으로 삼키지 않고 거절한다', () => {
+    const MISSING = 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.';
+    /** 준비는 됐지만 프로파일 **파일**이 사라진 코어(경로 문자열은 남아 있다 — 임시 폴더 정리 등). */
+    function coreWithLostProfile(): BridgeCore {
+        const core = makeCore();
+        core.prepare();
+        fs.rmSync(coreProfile());
+        return core;
+    }
+
+    it('lsp_diagnostics(.py): 거절', async () => {
+        write('a.py', 'def f(:\n');
+        expect(await run(coreWithLostProfile(), { kind: 'lsp_diagnostics', paths: ['a.py'] }))
+            .toEqual({ ok: false, error: MISSING, exitCode: 126 });
+    }, 30000);
+
+    it('lsp_diagnostics(tsc): 거절', async () => {
+        write('tsconfig.json', '{}');
+        write('a.ts', 'export const n = 1;\n');
+        write('node_modules/.bin/tsc', '#!/bin/sh\necho "a.ts(1,1): error TS1000: x"\nexit 1\n', 0o755);
+        expect(await run(coreWithLostProfile(), { kind: 'lsp_diagnostics', paths: ['a.ts'] }))
+            .toEqual({ ok: false, error: MISSING, exitCode: 126 });
+    }, 30000);
+
+    it('test_runner(pytest 탐지): 거절', async () => {
+        write('conftest.py', '');
+        expect(await run(coreWithLostProfile(), { kind: 'test_runner', path: '.' }))
+            .toEqual({ ok: false, error: MISSING, exitCode: 126 });
+    }, 30000);
+
+    it('python3 가 PATH 에 없으면 거절이 아니라 종전대로 "띄우지 못함"(sandbox-exec 의 execvp 실패와 섞지 않는다)', async () => {
+        const p = writeSandboxProfile(base, null, path.join(prof, 'p.sb')) as string;
+        const f = write('a.py', 'def f(:\n');
+        write('conftest.py', '');
+        expect(await detectTestRunner(base, '/nonexistent-omk-path', p)).toBe('none');
+        expect(await collectDiagnostics(base, [f], '/nonexistent-omk-path', p))
+            .toEqual({ diagnostics: [], truncated: false, serverKind: 'py_compile' });
+    }, 30000);
+});
+
 sbDescribe('도구 자식 샌드박스 — 모듈 단위(가짜 python3 로 인자·감싸기 확인)', () => {
     /** 인자를 폴더 안에 남기고, 폴더 밖에도 쓰려 하는 가짜 python3. */
     function fakePython(exitCode = 0): string {
