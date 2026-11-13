@@ -1,0 +1,179 @@
+{
+  "suite": "conn-device-id",
+  "version": 1,
+  "rootDeviceId": [
+    {
+      "id": "synthetic",
+      "input": {"base": "00000000-0000-4000-8000-000000000000", "root": "/work/repo"},
+      "expect": {"deviceId": "00000000-0000-4000-8000-000000000000-r-ddc5e473a09b"}
+    },
+    {
+      "id": "trailing-slash-kept",
+      "input": {"base": "00000000-0000-4000-8000-000000000000", "root": "/work/repo/"},
+      "expect": {"deviceId": "00000000-0000-4000-8000-000000000000-r-c6ef24aa675b"}
+    },
+    {"id": "hangul-nfc", "input": {"base": "base", "root": "/work/한글"}, "expect": {"deviceId": "base-r-a1e19c049111"}},
+    {"id": "hangul-nfd", "input": {"base": "base", "root": "/work/\u1112\u1161\u11ab\u1100\u1173\u11af"}, "expect": {"deviceId": "base-r-b8757bed1368"}},
+    {"id": "emoji", "input": {"base": "base", "root": "/work/😀"}, "expect": {"deviceId": "base-r-960249f5b38a"}},
+    {"id": "spaces", "input": {"base": "base", "root": "/work/my repo"}, "expect": {"deviceId": "base-r-b965adebfe7f"}},
+    {"id": "empty-base", "input": {"base": "", "root": "/work/repo"}, "expect": {"deviceId": "-r-ddc5e473a09b"}},
+    {"id": "empty-root", "input": {"base": "base", "root": ""}, "expect": {"deviceId": "base-r-e3b0c44298fc"}},
+    {"id": "upper-case", "input": {"base": "base", "root": "/Work/Repo"}, "expect": {"deviceId": "base-r-7fc8ca55385c"}},
+    {"id": "private-tmp", "input": {"base": "base", "root": "/private/tmp/x"}, "expect": {"deviceId": "base-r-bdc4aea33d38"}},
+    {"id": "nested", "input": {"base": "base", "root": "/work/me/project"}, "expect": {"deviceId": "base-r-144925a0530a"}}
+  ],
+  "realpathSync": [
+    {
+      "id": "plain-dir",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}],
+      "input": {"path": "{{TMP}}/a/b"},
+      "expect": {"path": "{{TMP}}/a/b"}
+    },
+    {
+      "id": "plain-file",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}],
+      "input": {"path": "{{TMP}}/a/f.txt"},
+      "expect": {"path": "{{TMP}}/a/f.txt"}
+    },
+    {
+      "id": "dot-dot",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}],
+      "input": {"path": "{{TMP}}/a/b/../b/./"},
+      "expect": {"path": "{{TMP}}/a/b"}
+    },
+    {
+      "id": "double-slash-trailing",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}],
+      "input": {"path": "{{TMP}}//a//b//"},
+      "expect": {"path": "{{TMP}}/a/b"}
+    },
+    {
+      "id": "symlink-absolute",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}, {"symlink": "l", "target": "{{TMP}}/a/b"}],
+      "input": {"path": "{{TMP}}/l"},
+      "expect": {"path": "{{TMP}}/a/b"}
+    },
+    {
+      "id": "symlink-relative",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}, {"symlink": "a/l", "target": "b"}],
+      "input": {"path": "{{TMP}}/a/l"},
+      "expect": {"path": "{{TMP}}/a/b"}
+    },
+    {
+      "id": "symlink-middle",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}, {"symlink": "l", "target": "a"}],
+      "input": {"path": "{{TMP}}/l/b"},
+      "expect": {"path": "{{TMP}}/a/b"}
+    },
+    {
+      "id": "symlink-chain",
+      "setup": [
+        {"dir": "a/b"},
+        {"file": "a/f.txt", "content": "x"},
+        {"symlink": "l1", "target": "l2"},
+        {"symlink": "l2", "target": "{{TMP}}/l3"},
+        {"symlink": "l3", "target": "a/b"}
+      ],
+      "input": {"path": "{{TMP}}/l1"},
+      "expect": {"path": "{{TMP}}/a/b"}
+    },
+    {
+      "id": "symlink-target-dot-dot",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}, {"dir": "x/y"}, {"symlink": "a/l", "target": "../x/y/.."}],
+      "input": {"path": "{{TMP}}/a/l/y"},
+      "expect": {"path": "{{TMP}}/x/y"}
+    },
+    {
+      "id": "symlink-then-dot-dot",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}, {"dir": "x/y"}, {"symlink": "l", "target": "x/y"}],
+      "input": {"path": "{{TMP}}/l/../b"},
+      "expect": {"error": "ENOENT: no such file or directory, lstat '{{TMP}}/b'"}
+    },
+    {
+      "id": "symlink-to-file",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}, {"symlink": "l", "target": "a/f.txt"}],
+      "input": {"path": "{{TMP}}/l"},
+      "expect": {"path": "{{TMP}}/a/f.txt"}
+    },
+    {
+      "id": "symlink-same-twice",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}, {"symlink": "a/l", "target": "."}],
+      "input": {"path": "{{TMP}}/a/l/l/l/b"},
+      "expect": {"path": "{{TMP}}/a/b"}
+    },
+    {
+      "id": "broken-link",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}, {"symlink": "l", "target": "missing"}],
+      "input": {"path": "{{TMP}}/l"},
+      "expect": {"error": "ENOENT: no such file or directory, stat '{{TMP}}/l'"}
+    },
+    {
+      "id": "broken-link-middle",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}, {"symlink": "l", "target": "missing"}],
+      "input": {"path": "{{TMP}}/l/x"},
+      "expect": {"error": "ENOENT: no such file or directory, stat '{{TMP}}/l'"}
+    },
+    {
+      "id": "loop",
+      "setup": [{"symlink": "p", "target": "q"}, {"symlink": "q", "target": "p"}],
+      "input": {"path": "{{TMP}}/p"},
+      "expect": {"error": "ELOOP: too many symbolic links encountered, stat '{{TMP}}/p'"}
+    },
+    {
+      "id": "self-loop",
+      "setup": [{"symlink": "p", "target": "p"}],
+      "input": {"path": "{{TMP}}/p/x"},
+      "expect": {"error": "ELOOP: too many symbolic links encountered, stat '{{TMP}}/p'"}
+    },
+    {
+      "id": "missing",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}],
+      "input": {"path": "{{TMP}}/a/missing"},
+      "expect": {"error": "ENOENT: no such file or directory, lstat '{{TMP}}/a/missing'"}
+    },
+    {
+      "id": "missing-deep",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}],
+      "input": {"path": "{{TMP}}/a/missing/deeper"},
+      "expect": {"error": "ENOENT: no such file or directory, lstat '{{TMP}}/a/missing'"}
+    },
+    {
+      "id": "file-as-dir",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}],
+      "input": {"path": "{{TMP}}/a/f.txt/x"},
+      "expect": {"error": "ENOTDIR: not a directory, lstat '{{TMP}}/a/f.txt/x'"}
+    },
+    {
+      "id": "dot-dot-over-missing",
+      "setup": [{"dir": "a/b"}, {"file": "a/f.txt", "content": "x"}],
+      "input": {"path": "{{TMP}}/a/missing/../b"},
+      "expect": {"path": "{{TMP}}/a/b"}
+    },
+    {"id": "hangul-name", "setup": [{"dir": "한글 폴더"}], "input": {"path": "{{TMP}}/한글 폴더"}, "expect": {"path": "{{TMP}}/한글 폴더"}},
+    {"id": "space-name", "setup": [{"dir": "my repo"}], "input": {"path": "{{TMP}}/my repo/"}, "expect": {"path": "{{TMP}}/my repo"}}
+  ],
+  "baseId": [
+    {
+      "id": "file-uuid",
+      "setup": [{"file": "support/device-id", "content": "11111111-2222-4333-8444-555555555555"}],
+      "expect": {"id": "11111111-2222-4333-8444-555555555555"}
+    },
+    {
+      "id": "file-trimmed",
+      "setup": [{"file": "support/device-id", "content": " \t11111111-2222-4333-8444-555555555555\n\n"}],
+      "expect": {"id": "11111111-2222-4333-8444-555555555555"}
+    },
+    {
+      "id": "file-bom",
+      "setup": [{"file": "support/device-id", "content": "\ufeff11111111-2222-4333-8444-555555555555\r\n"}],
+      "expect": {"id": "11111111-2222-4333-8444-555555555555"}
+    },
+    {"id": "file-empty", "setup": [{"file": "support/device-id", "content": ""}], "expect": {"id": ""}},
+    {"id": "file-spaces-only", "setup": [{"file": "support/device-id", "content": " \n\u3000"}], "expect": {"id": ""}},
+    {"id": "file-not-uuid", "setup": [{"file": "support/device-id", "content": "my device"}], "expect": {"id": "my device"}},
+    {"id": "file-bad-utf8", "setup": [{"file": "support/device-id", "contentB64": "Yf9iwyjiggo="}], "expect": {"id": "a\ufffdb\ufffd(\ufffd"}},
+    {"id": "file-missing", "setup": [{"dir": "support"}], "expect": {"generated": true, "written": true}},
+    {"id": "support-missing", "setup": [], "expect": {"generated": true, "written": false}},
+    {"id": "path-is-dir", "setup": [{"dir": "support/device-id"}], "expect": {"generated": true, "written": false}}
+  ]
+}

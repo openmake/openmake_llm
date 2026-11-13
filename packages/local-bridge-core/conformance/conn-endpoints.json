@@ -1,0 +1,537 @@
+{
+  "suite": "conn-endpoints",
+  "version": 1,
+  "normalize": [
+    {"id": "ts-trim-slash", "input": {"address": " https://chat.example.com/ "}, "expect": {"origin": "https://chat.example.com"}},
+    {"id": "ts-path-query", "input": {"address": "http://example.com:3010/chat?x=1"}, "expect": {"origin": "http://example.com:3010"}},
+    {"id": "ts-no-scheme-host", "input": {"address": "chat.example.com"}, "expect": null},
+    {"id": "ts-ftp", "input": {"address": "ftp://example.com"}, "expect": null},
+    {"id": "ts-empty", "input": {"address": ""}, "expect": null},
+    {"id": "localhost-port", "input": {"address": "http://localhost:52416"}, "expect": {"origin": "http://localhost:52416"}},
+    {"id": "upper-scheme-host", "input": {"address": "HTTP://LOCALHOST:52416"}, "expect": {"origin": "http://localhost:52416"}},
+    {"id": "mixed-case-host", "input": {"address": "https://Chat.Example.COM"}, "expect": {"origin": "https://chat.example.com"}},
+    {"id": "userinfo", "input": {"address": "http://u:p@example.com/x"}, "expect": {"origin": "http://example.com"}},
+    {"id": "userinfo-no-pass", "input": {"address": "http://u@example.com"}, "expect": {"origin": "http://example.com"}},
+    {"id": "fragment", "input": {"address": "http://example.com/p?q=1#frag"}, "expect": {"origin": "http://example.com"}},
+    {"id": "default-port-80", "input": {"address": "http://example.com:80"}, "expect": {"origin": "http://example.com"}},
+    {"id": "default-port-443", "input": {"address": "https://example.com:443/"}, "expect": {"origin": "https://example.com"}},
+    {"id": "swapped-default-ports", "input": {"address": "https://example.com:80"}, "expect": {"origin": "https://example.com:80"}},
+    {"id": "http-443", "input": {"address": "http://example.com:443"}, "expect": {"origin": "http://example.com:443"}},
+    {"id": "port-0", "input": {"address": "http://example.com:0"}, "expect": {"origin": "http://example.com:0"}},
+    {"id": "port-65535", "input": {"address": "http://example.com:65535"}, "expect": {"origin": "http://example.com:65535"}},
+    {"id": "port-65536", "input": {"address": "http://example.com:65536"}, "expect": null},
+    {"id": "port-leading-zero", "input": {"address": "http://localhost:052416"}, "expect": {"origin": "http://localhost:52416"}},
+    {"id": "port-empty", "input": {"address": "http://example.com:"}, "expect": {"origin": "http://example.com"}},
+    {"id": "port-plus", "input": {"address": "http://example.com:+1"}, "expect": null},
+    {"id": "trailing-dot", "input": {"address": "http://example.com."}, "expect": {"origin": "http://example.com."}},
+    {"id": "ipv4-short", "input": {"address": "http://127.1"}, "expect": {"origin": "http://127.0.0.1"}},
+    {"id": "ipv4-hex", "input": {"address": "http://0x7f.1"}, "expect": {"origin": "http://127.0.0.1"}},
+    {"id": "ipv4-octal", "input": {"address": "http://0177.0.0.1"}, "expect": {"origin": "http://127.0.0.1"}},
+    {"id": "ipv4-overflow", "input": {"address": "http://256.0.0.1"}, "expect": null},
+    {"id": "ipv6", "input": {"address": "http://[::1]:52416"}, "expect": {"origin": "http://[::1]:52416"}},
+    {"id": "ipv6-long", "input": {"address": "http://[0:0:0:0:0:0:0:1]"}, "expect": {"origin": "http://[::1]"}},
+    {"id": "ipv6-upper", "input": {"address": "http://[::FFFF:127.0.0.1]"}, "expect": {"origin": "http://[::ffff:7f00:1]"}},
+    {"id": "ipv6-bad", "input": {"address": "http://[::1"}, "expect": null},
+    {"id": "backslash-path", "input": {"address": "http://example.com\\path"}, "expect": {"origin": "http://example.com"}},
+    {"id": "backslash-slashes", "input": {"address": "http:\\\\example.com\\x"}, "expect": {"origin": "http://example.com"}},
+    {"id": "no-slashes", "input": {"address": "http:example.com"}, "expect": {"origin": "http://example.com"}},
+    {"id": "one-slash", "input": {"address": "http:/example.com"}, "expect": {"origin": "http://example.com"}},
+    {"id": "three-slashes", "input": {"address": "http:///example.com"}, "expect": {"origin": "http://example.com"}},
+    {"id": "no-scheme-port", "input": {"address": "localhost:52416"}, "expect": null},
+    {"id": "ws-scheme", "input": {"address": "ws://localhost:52416"}, "expect": null},
+    {"id": "wss-scheme", "input": {"address": "wss://example.com"}, "expect": null},
+    {"id": "file-scheme", "input": {"address": "file:///work/x"}, "expect": null},
+    {"id": "spaces-around", "input": {"address": "  http://localhost:52416  "}, "expect": {"origin": "http://localhost:52416"}},
+    {"id": "newlines-around", "input": {"address": "\nhttp://localhost:52416\n"}, "expect": {"origin": "http://localhost:52416"}},
+    {"id": "bom-front", "input": {"address": "\ufeffhttp://localhost"}, "expect": {"origin": "http://localhost"}},
+    {"id": "nbsp-around", "input": {"address": "\u00a0http://localhost\u00a0"}, "expect": {"origin": "http://localhost"}},
+    {"id": "ideographic-space-around", "input": {"address": "\u3000http://localhost\u3000"}, "expect": {"origin": "http://localhost"}},
+    {"id": "nel-front", "input": {"address": "\u0085http://localhost"}, "expect": null},
+    {"id": "tab-inside-host", "input": {"address": "http://local\thost"}, "expect": {"origin": "http://localhost"}},
+    {"id": "newline-inside", "input": {"address": "http://example\n.com"}, "expect": {"origin": "http://example.com"}},
+    {"id": "space-inside-host", "input": {"address": "http://exa mple.com"}, "expect": null},
+    {"id": "hangul-host", "input": {"address": "https://한글.example.com"}, "expect": {"origin": "https://xn--bj0bj06e.example.com"}},
+    {"id": "hangul-upper-mix", "input": {"address": "http://한글.EXAMPLE.com:8080"}, "expect": {"origin": "http://xn--bj0bj06e.example.com:8080"}},
+    {"id": "fullwidth-host", "input": {"address": "http://ｅｘａｍｐｌｅ.com"}, "expect": {"origin": "http://example.com"}},
+    {"id": "percent-host", "input": {"address": "http://%6c%6f%63%61%6c%68%6f%73%74"}, "expect": {"origin": "http://localhost"}},
+    {"id": "bad-percent-host", "input": {"address": "http://ex%zzample.com"}, "expect": null},
+    {"id": "underscore-host", "input": {"address": "http://my_host.example.com"}, "expect": {"origin": "http://my_host.example.com"}},
+    {"id": "not-a-url", "input": {"address": "not a url"}, "expect": null},
+    {"id": "scheme-only", "input": {"address": "http://"}, "expect": null},
+    {"id": "host-empty-port", "input": {"address": "http://:80"}, "expect": null},
+    {"id": "at-in-host", "input": {"address": "http://a@b@example.com"}, "expect": {"origin": "http://example.com"}},
+    {"id": "xn-host", "input": {"address": "http://xn--bj0bj06e.com"}, "expect": {"origin": "http://xn--bj0bj06e.com"}},
+    {"id": "single-label", "input": {"address": "http://intranet"}, "expect": {"origin": "http://intranet"}},
+    {"id": "numeric-host-big", "input": {"address": "http://4294967295"}, "expect": {"origin": "http://255.255.255.255"}},
+    {"id": "numeric-host-too-big", "input": {"address": "http://4294967296"}, "expect": null}
+  ],
+  "plainRemoteHttp": [
+    {"id": "ts-trim-slash", "input": {"address": " https://chat.example.com/ "}, "expect": {"value": false}},
+    {"id": "ts-path-query", "input": {"address": "http://example.com:3010/chat?x=1"}, "expect": {"value": true}},
+    {"id": "ts-no-scheme-host", "input": {"address": "chat.example.com"}, "expect": {"value": false}},
+    {"id": "ts-ftp", "input": {"address": "ftp://example.com"}, "expect": {"value": false}},
+    {"id": "ts-empty", "input": {"address": ""}, "expect": {"value": false}},
+    {"id": "localhost-port", "input": {"address": "http://localhost:52416"}, "expect": {"value": false}},
+    {"id": "upper-scheme-host", "input": {"address": "HTTP://LOCALHOST:52416"}, "expect": {"value": false}},
+    {"id": "mixed-case-host", "input": {"address": "https://Chat.Example.COM"}, "expect": {"value": false}},
+    {"id": "userinfo", "input": {"address": "http://u:p@example.com/x"}, "expect": {"value": true}},
+    {"id": "userinfo-no-pass", "input": {"address": "http://u@example.com"}, "expect": {"value": true}},
+    {"id": "fragment", "input": {"address": "http://example.com/p?q=1#frag"}, "expect": {"value": true}},
+    {"id": "default-port-80", "input": {"address": "http://example.com:80"}, "expect": {"value": true}},
+    {"id": "default-port-443", "input": {"address": "https://example.com:443/"}, "expect": {"value": false}},
+    {"id": "swapped-default-ports", "input": {"address": "https://example.com:80"}, "expect": {"value": false}},
+    {"id": "http-443", "input": {"address": "http://example.com:443"}, "expect": {"value": true}},
+    {"id": "port-0", "input": {"address": "http://example.com:0"}, "expect": {"value": true}},
+    {"id": "port-65535", "input": {"address": "http://example.com:65535"}, "expect": {"value": true}},
+    {"id": "port-65536", "input": {"address": "http://example.com:65536"}, "expect": {"value": false}},
+    {"id": "port-leading-zero", "input": {"address": "http://localhost:052416"}, "expect": {"value": false}},
+    {"id": "port-empty", "input": {"address": "http://example.com:"}, "expect": {"value": true}},
+    {"id": "port-plus", "input": {"address": "http://example.com:+1"}, "expect": {"value": false}},
+    {"id": "trailing-dot", "input": {"address": "http://example.com."}, "expect": {"value": true}},
+    {"id": "ipv4-short", "input": {"address": "http://127.1"}, "expect": {"value": false}},
+    {"id": "ipv4-hex", "input": {"address": "http://0x7f.1"}, "expect": {"value": false}},
+    {"id": "ipv4-octal", "input": {"address": "http://0177.0.0.1"}, "expect": {"value": false}},
+    {"id": "ipv4-overflow", "input": {"address": "http://256.0.0.1"}, "expect": {"value": false}},
+    {"id": "ipv6", "input": {"address": "http://[::1]:52416"}, "expect": {"value": false}},
+    {"id": "ipv6-long", "input": {"address": "http://[0:0:0:0:0:0:0:1]"}, "expect": {"value": false}},
+    {"id": "ipv6-upper", "input": {"address": "http://[::FFFF:127.0.0.1]"}, "expect": {"value": true}},
+    {"id": "ipv6-bad", "input": {"address": "http://[::1"}, "expect": {"value": false}},
+    {"id": "backslash-path", "input": {"address": "http://example.com\\path"}, "expect": {"value": true}},
+    {"id": "backslash-slashes", "input": {"address": "http:\\\\example.com\\x"}, "expect": {"value": true}},
+    {"id": "no-slashes", "input": {"address": "http:example.com"}, "expect": {"value": true}},
+    {"id": "one-slash", "input": {"address": "http:/example.com"}, "expect": {"value": true}},
+    {"id": "three-slashes", "input": {"address": "http:///example.com"}, "expect": {"value": true}},
+    {"id": "no-scheme-port", "input": {"address": "localhost:52416"}, "expect": {"value": false}},
+    {"id": "ws-scheme", "input": {"address": "ws://localhost:52416"}, "expect": {"value": false}},
+    {"id": "wss-scheme", "input": {"address": "wss://example.com"}, "expect": {"value": false}},
+    {"id": "file-scheme", "input": {"address": "file:///work/x"}, "expect": {"value": false}},
+    {"id": "spaces-around", "input": {"address": "  http://localhost:52416  "}, "expect": {"value": false}},
+    {"id": "newlines-around", "input": {"address": "\nhttp://localhost:52416\n"}, "expect": {"value": false}},
+    {"id": "bom-front", "input": {"address": "\ufeffhttp://localhost"}, "expect": {"value": false}},
+    {"id": "nbsp-around", "input": {"address": "\u00a0http://localhost\u00a0"}, "expect": {"value": false}},
+    {"id": "ideographic-space-around", "input": {"address": "\u3000http://localhost\u3000"}, "expect": {"value": false}},
+    {"id": "nel-front", "input": {"address": "\u0085http://localhost"}, "expect": {"value": false}},
+    {"id": "tab-inside-host", "input": {"address": "http://local\thost"}, "expect": {"value": false}},
+    {"id": "newline-inside", "input": {"address": "http://example\n.com"}, "expect": {"value": true}},
+    {"id": "space-inside-host", "input": {"address": "http://exa mple.com"}, "expect": {"value": false}},
+    {"id": "hangul-host", "input": {"address": "https://한글.example.com"}, "expect": {"value": false}},
+    {"id": "hangul-upper-mix", "input": {"address": "http://한글.EXAMPLE.com:8080"}, "expect": {"value": true}},
+    {"id": "fullwidth-host", "input": {"address": "http://ｅｘａｍｐｌｅ.com"}, "expect": {"value": true}},
+    {"id": "percent-host", "input": {"address": "http://%6c%6f%63%61%6c%68%6f%73%74"}, "expect": {"value": false}},
+    {"id": "bad-percent-host", "input": {"address": "http://ex%zzample.com"}, "expect": {"value": false}},
+    {"id": "underscore-host", "input": {"address": "http://my_host.example.com"}, "expect": {"value": true}},
+    {"id": "not-a-url", "input": {"address": "not a url"}, "expect": {"value": false}},
+    {"id": "scheme-only", "input": {"address": "http://"}, "expect": {"value": false}},
+    {"id": "host-empty-port", "input": {"address": "http://:80"}, "expect": {"value": false}},
+    {"id": "at-in-host", "input": {"address": "http://a@b@example.com"}, "expect": {"value": true}},
+    {"id": "xn-host", "input": {"address": "http://xn--bj0bj06e.com"}, "expect": {"value": true}},
+    {"id": "single-label", "input": {"address": "http://intranet"}, "expect": {"value": true}},
+    {"id": "numeric-host-big", "input": {"address": "http://4294967295"}, "expect": {"value": true}},
+    {"id": "numeric-host-too-big", "input": {"address": "http://4294967296"}, "expect": {"value": false}},
+    {"id": "loopback-127-2", "input": {"address": "http://127.0.0.2"}, "expect": {"value": true}},
+    {"id": "localhost-dot", "input": {"address": "http://localhost."}, "expect": {"value": true}},
+    {"id": "localhost-upper", "input": {"address": "http://LOCALHOST:1"}, "expect": {"value": false}},
+    {"id": "ipv6-expanded-loopback", "input": {"address": "http://[0:0::1]"}, "expect": {"value": false}},
+    {"id": "https-remote", "input": {"address": "https://example.com"}, "expect": {"value": false}},
+    {"id": "http-remote", "input": {"address": "http://example.com:3010"}, "expect": {"value": true}},
+    {"id": "ipv4-short-loopback", "input": {"address": "http://127.1:3000"}, "expect": {"value": false}}
+  ],
+  "resolve": [
+    {
+      "id": "ts-web-port",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:52418", "webUrl": "http://example.com:3010", "discovered": true}
+    },
+    {
+      "id": "ts-api-port",
+      "input": {"address": "http://example.com:52418", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:52418", "webUrl": "http://example.com:3010", "discovered": true}
+    },
+    {
+      "id": "ts-proxy-https",
+      "input": {"address": "https://chat.example.com", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "https://chat.example.com", "webUrl": "https://chat.example.com", "discovered": true}
+    },
+    {
+      "id": "ts-proxy-8080",
+      "input": {"address": "http://example.com:8080", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:8080", "webUrl": "http://example.com:8080", "discovered": true}
+    },
+    {
+      "id": "ts-default-port-web",
+      "input": {"address": "http://example.com", "config": {"apiPort": 52418, "webPort": 80}},
+      "expect": {"bridgeUrl": "http://example.com:52418", "webUrl": "http://example.com", "discovered": true}
+    },
+    {
+      "id": "ts-same-port",
+      "input": {"address": "http://example.com:8000", "config": {"apiPort": 8000, "webPort": 8000}},
+      "expect": {"bridgeUrl": "http://example.com:8000", "webUrl": "http://example.com:8000", "discovered": true}
+    },
+    {
+      "id": "ts-ipv6",
+      "input": {"address": "http://[::1]:3010", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://[::1]:52418", "webUrl": "http://[::1]:3010", "discovered": true}
+    },
+    {
+      "id": "ts-config-null",
+      "input": {"address": "http://example.com:3010", "config": null},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "ts-config-empty",
+      "input": {"address": "http://example.com:3010", "config": {}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "ts-api-port-string",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": "x", "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "ts-ports-out-of-range",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": 0, "webPort": 70000}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "port-float-integral",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:52418", "webUrl": "http://example.com:3010", "discovered": true}
+    },
+    {
+      "id": "port-float-fraction",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": 52418.5, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "port-string-number",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": "52418", "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "port-zero",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": 0, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "port-65535",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": 65535, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:65535", "webUrl": "http://example.com:3010", "discovered": true}
+    },
+    {
+      "id": "port-65536",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": 65536, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "port-negative",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": -1, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "port-null",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": null, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "port-bool",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": true, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "port-exp-notation",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:52418", "webUrl": "http://example.com:3010", "discovered": true}
+    },
+    {
+      "id": "web-port-missing",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": 52418}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "extra-keys-ignored",
+      "input": {"address": "http://example.com:3010", "config": {"apiPort": 52418, "webPort": 3010, "host": "evil.example.com"}},
+      "expect": {"bridgeUrl": "http://example.com:52418", "webUrl": "http://example.com:3010", "discovered": true}
+    },
+    {
+      "id": "config-string",
+      "input": {"address": "http://example.com:3010", "config": "apiPort"},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "config-array",
+      "input": {"address": "http://example.com:3010", "config": [52418, 3010]},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "config-number",
+      "input": {"address": "http://example.com:3010", "config": 52418},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "config-nested-data",
+      "input": {"address": "http://example.com:3010", "config": {"data": {"apiPort": 52418, "webPort": 3010}}},
+      "expect": {"bridgeUrl": "http://example.com:3010", "webUrl": "http://example.com:3010", "discovered": false}
+    },
+    {
+      "id": "https-default-api",
+      "input": {"address": "https://example.com", "config": {"apiPort": 443, "webPort": 3010}},
+      "expect": {"bridgeUrl": "https://example.com", "webUrl": "https://example.com:3010", "discovered": true}
+    },
+    {
+      "id": "https-to-default",
+      "input": {"address": "https://example.com:8443", "config": {"apiPort": 8443, "webPort": 443}},
+      "expect": {"bridgeUrl": "https://example.com:8443", "webUrl": "https://example.com", "discovered": true}
+    },
+    {
+      "id": "http-to-80",
+      "input": {"address": "http://example.com:52418", "config": {"apiPort": 52418, "webPort": 80}},
+      "expect": {"bridgeUrl": "http://example.com:52418", "webUrl": "http://example.com", "discovered": true}
+    },
+    {
+      "id": "http-api-443",
+      "input": {"address": "http://example.com", "config": {"apiPort": 443, "webPort": 80}},
+      "expect": {"bridgeUrl": "http://example.com:443", "webUrl": "http://example.com", "discovered": true}
+    },
+    {
+      "id": "upper-host-kept-lower",
+      "input": {"address": "HTTP://EXAMPLE.COM:3010/x", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:52418", "webUrl": "http://example.com:3010", "discovered": true}
+    },
+    {
+      "id": "userinfo-dropped",
+      "input": {"address": "http://u:p@example.com:3010", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com:52418", "webUrl": "http://example.com:3010", "discovered": true}
+    },
+    {
+      "id": "ipv4-short-host",
+      "input": {"address": "http://127.1:3010", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://127.0.0.1:52418", "webUrl": "http://127.0.0.1:3010", "discovered": true}
+    },
+    {
+      "id": "trailing-dot-host",
+      "input": {"address": "http://example.com.:3010", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://example.com.:52418", "webUrl": "http://example.com.:3010", "discovered": true}
+    },
+    {
+      "id": "hangul-host",
+      "input": {"address": "http://한글.example.com:3010", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://xn--bj0bj06e.example.com:52418", "webUrl": "http://xn--bj0bj06e.example.com:3010", "discovered": true}
+    },
+    {
+      "id": "ipv6-api",
+      "input": {"address": "http://[::1]:52418", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://[::1]:52418", "webUrl": "http://[::1]:3010", "discovered": true}
+    },
+    {
+      "id": "localhost-web",
+      "input": {"address": "http://localhost:3010", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://localhost:52418", "webUrl": "http://localhost:3010", "discovered": true}
+    },
+    {
+      "id": "trim-address",
+      "input": {"address": " http://localhost:3010 ", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"bridgeUrl": "http://localhost:52418", "webUrl": "http://localhost:3010", "discovered": true}
+    },
+    {
+      "id": "bad-address",
+      "input": {"address": "example.com:3010", "config": {"apiPort": 52418, "webPort": 3010}},
+      "expect": {"error": "서버 주소가 올바르지 않습니다: example.com:3010"}
+    },
+    {"id": "bad-address-empty", "input": {"address": "", "config": {"apiPort": 52418, "webPort": 3010}}, "expect": {"error": "서버 주소가 올바르지 않습니다: "}},
+    {"id": "bad-address-ftp", "input": {"address": "ftp://example.com", "config": null}, "expect": {"error": "서버 주소가 올바르지 않습니다: ftp://example.com"}}
+  ],
+  "discover": [
+    {
+      "id": "ts-asks-config-path",
+      "input": {"address": "http://example.com:3010/", "response": {"status": 200, "body": "{\"success\":true,\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "http://example.com:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://example.com:52418", "webUrl": "http://example.com:3010", "discovered": true}
+      }
+    },
+    {
+      "id": "ts-404",
+      "input": {"address": "https://old.example.com", "response": {"status": 404, "body": "{}"}},
+      "expect": {
+        "url": "https://old.example.com/api/desktop/config",
+        "result": {"bridgeUrl": "https://old.example.com", "webUrl": "https://old.example.com", "discovered": false}
+      }
+    },
+    {
+      "id": "ts-fail",
+      "input": {"address": "https://old.example.com", "response": {"fail": true}},
+      "expect": {
+        "url": "https://old.example.com/api/desktop/config",
+        "result": {"bridgeUrl": "https://old.example.com", "webUrl": "https://old.example.com", "discovered": false}
+      }
+    },
+    {
+      "id": "ts-not-json",
+      "input": {"address": "https://old.example.com", "response": {"status": 200, "body": "not json"}},
+      "expect": {
+        "url": "https://old.example.com/api/desktop/config",
+        "result": {"bridgeUrl": "https://old.example.com", "webUrl": "https://old.example.com", "discovered": false}
+      }
+    },
+    {
+      "id": "ts-bad-address",
+      "input": {"address": "example.com:3010", "response": {"status": 200, "body": "{\"data\":{}}"}},
+      "expect": {"error": "서버 주소가 올바르지 않습니다: example.com:3010"}
+    },
+    {
+      "id": "api-port-entered",
+      "input": {"address": "http://localhost:52418", "response": {"status": 200, "body": "{\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "http://localhost:52418/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:52418", "webUrl": "http://localhost:3010", "discovered": true}
+      }
+    },
+    {
+      "id": "proxy",
+      "input": {"address": "https://chat.example.com/x?y", "response": {"status": 200, "body": "{\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "https://chat.example.com/api/desktop/config",
+        "result": {"bridgeUrl": "https://chat.example.com", "webUrl": "https://chat.example.com", "discovered": true}
+      }
+    },
+    {
+      "id": "data-missing",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": "{\"success\":true}"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+      }
+    },
+    {
+      "id": "data-null",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": "{\"data\":null}"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+      }
+    },
+    {
+      "id": "body-null",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": "null"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+      }
+    },
+    {
+      "id": "body-number",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": "5"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+      }
+    },
+    {
+      "id": "body-string",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": "\"x\""}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+      }
+    },
+    {
+      "id": "body-array",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": "[1]"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+      }
+    },
+    {
+      "id": "body-empty",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": ""}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+      }
+    },
+    {
+      "id": "body-ws-around-json",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": " \n{\"data\":{\"apiPort\":52418,\"webPort\":3010}}\n "}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:52418", "webUrl": "http://localhost:3010", "discovered": true}
+      }
+    },
+    {
+      "id": "body-bom-json",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": "\ufeff{\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:52418", "webUrl": "http://localhost:3010", "discovered": true}
+      }
+    },
+    {
+      "id": "status-204",
+      "input": {"address": "http://localhost:3010", "response": {"status": 204, "body": "{\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:52418", "webUrl": "http://localhost:3010", "discovered": true}
+      }
+    },
+    {
+      "id": "status-299",
+      "input": {"address": "http://localhost:3010", "response": {"status": 299, "body": "{\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:52418", "webUrl": "http://localhost:3010", "discovered": true}
+      }
+    },
+    {
+      "id": "status-300",
+      "input": {"address": "http://localhost:3010", "response": {"status": 300, "body": "{\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+      }
+    },
+    {
+      "id": "status-500",
+      "input": {"address": "http://localhost:3010", "response": {"status": 500, "body": "{\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+      }
+    },
+    {
+      "id": "data-ports-bad",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": "{\"data\":{\"apiPort\":0,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": false}
+      }
+    },
+    {
+      "id": "data-same-port",
+      "input": {"address": "http://localhost:3010", "response": {"status": 200, "body": "{\"data\":{\"apiPort\":3010,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:3010", "webUrl": "http://localhost:3010", "discovered": true}
+      }
+    },
+    {
+      "id": "ipv6",
+      "input": {"address": "http://[::1]:3010", "response": {"status": 200, "body": "{\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
+      "expect": {"url": "http://[::1]:3010/api/desktop/config", "result": {"bridgeUrl": "http://[::1]:52418", "webUrl": "http://[::1]:3010", "discovered": true}}
+    },
+    {
+      "id": "trim-and-upper",
+      "input": {"address": " HTTP://LOCALHOST:3010/x ", "response": {"status": 200, "body": "{\"data\":{\"apiPort\":52418,\"webPort\":3010}}"}},
+      "expect": {
+        "url": "http://localhost:3010/api/desktop/config",
+        "result": {"bridgeUrl": "http://localhost:52418", "webUrl": "http://localhost:3010", "discovered": true}
+      }
+    },
+    {"id": "bad-address-empty", "input": {"address": "", "response": {"status": 200, "body": "{}"}}, "expect": {"error": "서버 주소가 올바르지 않습니다: "}},
+    {
+      "id": "bad-address-ftp",
+      "input": {"address": "ftp://example.com", "response": {"status": 200, "body": "{}"}},
+      "expect": {"error": "서버 주소가 올바르지 않습니다: ftp://example.com"}
+    }
+  ]
+}

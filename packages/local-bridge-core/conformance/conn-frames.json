@@ -1,0 +1,743 @@
+{
+  "suite": "conn-frames",
+  "version": 1,
+  "cases": [
+    {
+      "id": "hello-without-host-id",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"client": "disconnect"}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["종료", "closed", null]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "hello-with-host-id",
+      "opts": {"deviceId": "pc-1-r-abc", "hostId": "pc-1", "label": "unit · test"},
+      "steps": [{"client": "disconnect"}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "pc-1-r-abc",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true,
+            "hostId": "pc-1"
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["종료", "closed", null]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "hello-empty-host-id-omitted",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test", "hostId": ""},
+      "steps": [{"client": "disconnect"}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["종료", "closed", null]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "hello-hangul-root",
+      "root": "한글 폴더",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"client": "disconnect"}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "한글 폴더",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: 한글 폴더", "connected", "한글 폴더"], ["종료", "closed", null]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "exec-read-result",
+      "setup": [{"file": "root/f.txt", "content": "data"}],
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"server": {"type": "bridge_exec", "kind": "read", "path": "f.txt", "reqId": "r-42"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          },
+          {"type": "bridge_result", "reqId": "r-42", "result": {"durationMs": "{{DURATION}}", "ok": true, "content": "data"}}
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "exec-scope-escape-error",
+      "setup": [{"file": "root/f.txt", "content": "data"}],
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"server": {"type": "bridge_exec", "kind": "read", "path": "../../etc/hosts", "reqId": "r-esc"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          },
+          {"type": "bridge_result", "reqId": "r-esc", "result": {"durationMs": "{{DURATION}}", "ok": false, "error": "폴더 스코프 밖 경로 거부: ../../etc/hosts"}}
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "exec-expired-rejected",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [
+        {"server": {"type": "bridge_exec", "kind": "write", "path": "late.txt", "contentB64": "eA==", "reqId": "r-late", "expiresAt": {"{{NOW}}": -121000}}}
+      ],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          },
+          {
+            "type": "bridge_result",
+            "reqId": "r-late",
+            "result": {"durationMs": "{{DURATION}}", "ok": false, "rejected": "expired", "error": "만료된 요청이라 실행하지 않았습니다"}
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      },
+      "after": [{"absent": "root/late.txt"}]
+    },
+    {
+      "id": "exec-duplicate-req-id",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [
+        {"server": {"type": "bridge_exec", "kind": "write", "path": "once.txt", "contentB64": "Zmlyc3Q=", "reqId": "r-dup"}},
+        {"server": {"type": "bridge_exec", "kind": "write", "path": "once.txt", "contentB64": "c2Vjb25k", "reqId": "r-dup"}}
+      ],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          },
+          {"type": "bridge_result", "reqId": "r-dup", "result": {"durationMs": "{{DURATION}}", "ok": true}},
+          {
+            "type": "bridge_result",
+            "reqId": "r-dup",
+            "result": {"durationMs": "{{DURATION}}", "ok": false, "rejected": "duplicate", "error": "이미 처리한 요청이라 다시 실행하지 않았습니다"}
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      },
+      "after": [{"exists": "root/once.txt", "content": "first"}]
+    },
+    {
+      "id": "exec-req-id-number-not-deduped",
+      "setup": [{"file": "root/f.txt", "content": "data"}],
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [
+        {"server": {"type": "bridge_exec", "kind": "read", "path": "f.txt", "reqId": 5}},
+        {"server": {"type": "bridge_exec", "kind": "read", "path": "f.txt", "reqId": 5}}
+      ],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          },
+          {"type": "bridge_result", "reqId": 5, "result": {"durationMs": "{{DURATION}}", "ok": true, "content": "data"}},
+          {"type": "bridge_result", "reqId": 5, "result": {"durationMs": "{{DURATION}}", "ok": true, "content": "data"}}
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "exec-req-id-null-kept",
+      "setup": [{"file": "root/f.txt", "content": "data"}],
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"server": {"type": "bridge_exec", "kind": "read", "path": "f.txt", "reqId": null}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          },
+          {"type": "bridge_result", "reqId": null, "result": {"durationMs": "{{DURATION}}", "ok": true, "content": "data"}}
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "exec-req-id-missing-omitted",
+      "setup": [{"file": "root/f.txt", "content": "data"}],
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"server": {"type": "bridge_exec", "kind": "list", "path": "."}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          },
+          {"type": "bridge_result", "result": {"durationMs": "{{DURATION}}", "ok": true, "entries": ["f.txt"]}}
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "error-frame-status",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"server": {"type": "error", "message": "기기 등록 실패"}}, {"server": {"type": "error"}}, {"server": {"type": "error", "message": null}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [
+          ["연결 중…", "connecting", null],
+          ["연결됨: root", "connected", "root"],
+          ["서버 오류: 기기 등록 실패", "server_error", "기기 등록 실패"],
+          ["서버 오류: ", "server_error", ""],
+          ["서버 오류: ", "server_error", ""]
+        ],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "ignored-frames-then-exec",
+      "setup": [{"file": "root/f.txt", "content": "data"}],
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [
+        {"server": {"type": "mystery"}},
+        {"server": {"kind": "read", "path": "f.txt", "reqId": "no-type"}},
+        {"serverText": "not json"},
+        {"serverText": "[]"},
+        {"serverText": "\"bridge_exec\""},
+        {"server": {"type": "bridge_ready_x"}},
+        {"serverBinary": "{\"type\":\"bridge_exec\",\"kind\":\"read\",\"path\":\"f.txt\",\"reqId\":\"r-bin\"}"},
+        {"server": {"type": "bridge_exec", "kind": "read", "path": "f.txt", "reqId": "after"}}
+      ],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          },
+          {"type": "bridge_result", "reqId": "r-bin", "result": {"durationMs": "{{DURATION}}", "ok": true, "content": "data"}},
+          {"type": "bridge_result", "reqId": "after", "result": {"durationMs": "{{DURATION}}", "ok": true, "content": "data"}}
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "ready-again-status",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"server": {"type": "bridge_ready"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "notice-passes-one-way",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [
+        {"server": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"}},
+        {"server": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": " ask\u0000_human\n"}}
+      ],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [
+          {"notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"},
+          {"notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "ask_human"}
+        ],
+        "delays": []
+      }
+    },
+    {
+      "id": "notice-rejected-silently",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [
+        {"server": {"type": "bridge_notice", "notice": "run_command", "taskId": "task-aaaaaaaa-0001", "toolName": "x"}},
+        {"server": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "../../etc", "toolName": "x"}},
+        {"server": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001"}},
+        {"server": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "   "}}
+      ],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "browser-control-events",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"client": "browserControl", "user": true}, {"client": "browserControl", "user": false}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          },
+          {"type": "bridge_event", "kind": "browser_control", "user": true},
+          {"type": "bridge_event", "kind": "browser_control", "user": false}
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "close-auth-api_key_revoked",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {"code": 1008, "reason": "api_key_revoked"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["API key 가 폐기되었습니다 — 새 키를 발급해 설정에 넣으세요", "api_key_revoked", null]],
+        "notices": [],
+        "delays": [600000]
+      }
+    },
+    {
+      "id": "close-auth-api_key_invalid",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {"code": 1008, "reason": "api_key_invalid"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["API key 가 없거나 올바르지 않습니다 — 새 키를 발급해 설정에 넣으세요", "api_key_invalid", null]],
+        "notices": [],
+        "delays": [600000]
+      }
+    },
+    {
+      "id": "close-auth-api_key_expired",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {"code": 1008, "reason": "api_key_expired"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["API key 가 만료되었습니다 — 새 키를 발급해 설정에 넣으세요", "api_key_expired", null]],
+        "notices": [],
+        "delays": [600000]
+      }
+    },
+    {
+      "id": "close-auth-api_key_inactive",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {"code": 1008, "reason": "api_key_inactive"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["API key 가 비활성화되었습니다 — 키를 다시 켜거나 새 키를 설정에 넣으세요", "api_key_inactive", null]],
+        "notices": [],
+        "delays": [600000]
+      }
+    },
+    {
+      "id": "close-auth-account_disabled",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {"code": 1008, "reason": "account_disabled"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["계정이 비활성화되었습니다 — 관리자에게 문의하세요", "account_disabled", null]],
+        "notices": [],
+        "delays": [600000]
+      }
+    },
+    {
+      "id": "close-auth-account_deleted",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {"code": 1008, "reason": "account_deleted"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["계정이 삭제되었습니다 — 관리자에게 문의하세요", "account_deleted", null]],
+        "notices": [],
+        "delays": [600000]
+      }
+    },
+    {
+      "id": "close-auth-bridge_scope_required",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {"code": 1008, "reason": "bridge_scope_required"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [
+          ["연결 중…", "connecting", null],
+          ["연결됨: root", "connected", "root"],
+          ["이 API key 에는 'bridge' 스코프가 없습니다 — bridge 스코프 키를 발급해 설정에 넣으세요", "bridge_scope_required", null]
+        ],
+        "notices": [],
+        "delays": [600000]
+      }
+    },
+    {
+      "id": "close-auth-retry-option",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test", "authRetryMs": 7777},
+      "steps": [{"serverClose": {"code": 1008, "reason": "api_key_expired"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["API key 가 만료되었습니다 — 새 키를 발급해 설정에 넣으세요", "api_key_expired", null]],
+        "notices": [],
+        "delays": [7777]
+      }
+    },
+    {
+      "id": "close-1008-device-limit",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {"code": 1008, "reason": "bridge_device_limit"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["끊김 — 재연결 대기", "reconnecting", null]],
+        "notices": [],
+        "delays": [10000]
+      }
+    },
+    {
+      "id": "close-1013-auth-unavailable",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {"code": 1013, "reason": "auth_unavailable"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["끊김 — 재연결 대기", "reconnecting", null]],
+        "notices": [],
+        "delays": [10000]
+      }
+    },
+    {
+      "id": "close-other-code-auth-reason",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {"code": 4000, "reason": "api_key_revoked"}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["끊김 — 재연결 대기", "reconnecting", null]],
+        "notices": [],
+        "delays": [10000]
+      }
+    },
+    {
+      "id": "close-without-code",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverClose": {}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["끊김 — 재연결 대기", "reconnecting", null]],
+        "notices": [],
+        "delays": [10000]
+      }
+    },
+    {
+      "id": "close-1000-reconnect-option",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test", "reconnectMs": 2000},
+      "steps": [{"serverClose": {"code": 1000, "reason": ""}}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["끊김 — 재연결 대기", "reconnecting", null]],
+        "notices": [],
+        "delays": [2000]
+      }
+    },
+    {
+      "id": "server-drop-reconnects",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"serverDrop": true}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["끊김 — 재연결 대기", "reconnecting", null]],
+        "notices": [],
+        "delays": [10000]
+      }
+    },
+    {
+      "id": "should-reconnect-false-idle",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test", "shouldReconnect": false},
+      "steps": [{"serverDrop": true}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          }
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["미연결", "idle", null]],
+        "notices": [],
+        "delays": []
+      }
+    },
+    {
+      "id": "headers-error-no-socket",
+      "opts": {"deviceId": "test-device-1", "label": "unit · test", "headersError": "로그인 필요 — 앱에서 로그인 후 다시 연결"},
+      "steps": [{"client": "browserControl", "user": true}, {"client": "disconnect"}],
+      "expect": {"frames": [], "statuses": [["로그인 필요 — 앱에서 로그인 후 다시 연결", "auth_error", "로그인 필요 — 앱에서 로그인 후 다시 연결"]], "notices": [], "delays": []}
+    },
+    {
+      "id": "disconnect-after-exec",
+      "setup": [{"file": "root/f.txt", "content": "data"}],
+      "opts": {"deviceId": "test-device-1", "label": "unit · test"},
+      "steps": [{"server": {"type": "bridge_exec", "kind": "read", "path": "f.txt", "reqId": "r-1"}}, {"client": "disconnect"}],
+      "expect": {
+        "frames": [
+          {
+            "type": "bridge_hello",
+            "deviceId": "test-device-1",
+            "label": "unit · test",
+            "folderName": "root",
+            "capabilities": "{{CAPABILITIES}}",
+            "authClose": true
+          },
+          {"type": "bridge_result", "reqId": "r-1", "result": {"durationMs": "{{DURATION}}", "ok": true, "content": "data"}}
+        ],
+        "statuses": [["연결 중…", "connecting", null], ["연결됨: root", "connected", "root"], ["종료", "closed", null]],
+        "notices": [],
+        "delays": []
+      }
+    }
+  ]
+}
