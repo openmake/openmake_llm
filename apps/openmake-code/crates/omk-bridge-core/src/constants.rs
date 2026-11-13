@@ -133,3 +133,43 @@ pub const WORKTREE_DIR: &str = ".openmake/worktrees";
 pub const WORKTREE_BRANCH_PREFIX: &str = "omk-task/";
 /// taskId 형식 — TS `TASK_ID_RE.source`(플래그 없음). 경로·브랜치 이름에 들어가는 유일한 서버 문자열이다.
 pub const TASK_ID_RE: &str = "^[a-zA-Z0-9-]{8,64}$";
+
+// 읽기 전용 도구 (PR-1.4)
+
+/// 탐색에서 제외하는 자격증명 글롭 — TS 는 `@openmake/config` `SENSITIVE_FILE_PATTERNS` 를 다시 내보낸다.
+/// fixture `code-nav.json` `excludedFiles` 와 순서까지 같아야 한다. 같은 이름의 폴더도 건너뛴다.
+pub const CODE_NAV_EXCLUDED_FILES: &[&str] = &[
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "*.jks",
+    "*.keystore",
+    "id_rsa",
+    "id_rsa.*",
+    "id_ed25519",
+    "id_ed25519.*",
+    ".npmrc",
+    ".netrc",
+    ".pgpass",
+    ".htpasswd",
+    "credentials",
+    "credentials.*",
+    "service-account*.json",
+    "*.kdbx",
+];
+/// 탐색에서 제외하는 이름(폴더·파일 모두) — 서버 `TASK_CODE_NAV.EXCLUDED_DIRS` 와 같은 목록.
+pub const CODE_NAV_EXCLUDED_DIRS: &[&str] = &[
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    ".next",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "coverage",
+    ".openmake",
+];
