@@ -4,7 +4,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BRIDGE_KINDS, BROWSER_KIND, SANDBOX_ENABLED } from '../constants';
+import { BRIDGE_KINDS, BROWSER_KIND, SANDBOX_ENABLED, sbq } from '../constants';
 import { BridgeCore } from '../core';
 import type { BridgeMsg, BridgeResult, ConfirmFn } from '../types';
 
@@ -102,38 +102,64 @@ describe('BridgeCore', () => {
 
     // 헬퍼는 연결 폴더마다 코어를 만들고 모두 같은 프로파일 폴더를 넘긴다. 파일 이름이 pid 하나뿐이면
     // 나중에 준비한 폴더의 프로파일이 모든 코어의 exec 에 적용됐다(A 의 명령이 A 에는 못 쓰고 B 에 썼다).
-    // 폴더는 샌드박스가 쓰기를 여는 임시 폴더(/private/tmp·/private/var/folders) 밖, 홈 아래에 만든다.
+    // 프로파일 텍스트 검사(코어마다 자기 파일·자기 루트만)는 항상 한다 — 이것만으로 파일 공유 회귀를 잡는다.
+    // 서로의 폴더 실제 쓰기 실패 단언은 폴더가 프로파일이 늘 여는 쓰기 경로(임시·캐시 등) 밖일 때만 한다:
+    // 검증 스크립트가 HOME 을 임시 폴더(/private/var/folders 아래)로 바꾸면 홈 아래 폴더가 처음부터 쓰기 허용
+    // 구역 안이라 A 가 B 에 쓸 수 있다(제품 결함이 아니라 환경 — 2026-11-12 스테이징 검증).
     (SANDBOX_ENABLED ? it : it.skip)('exec: 폴더가 둘이어도 각 코어는 자기 폴더에만 쓴다(프로파일 파일이 코어마다 따로)', async () => {
         const home = fs.realpathSync(os.homedir());
         const a = fs.mkdtempSync(path.join(home, '.omk-sbtest-a-'));
         const b = fs.mkdtempSync(path.join(home, '.omk-sbtest-b-'));
         const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-prof-'));
+        const rootLine = (root: string) => `(allow file-write* (subpath ${sbq(root)}))`;
+        // 프로파일에서 자기 루트 줄을 뺀 나머지 쓰기 허용 subpath(코어의 생성 규칙이 늘 여는 경로).
+        const otherWritable = (profile: string, own: string) => profile.split('\n')
+            .filter((l) => l.startsWith('(allow file-write*') && l !== rootLine(own))
+            .flatMap((l) => [...l.matchAll(/\(subpath "((?:[^"\\]|\\.)*)"\)/g)].map((m) => m[1].replace(/\\(.)/g, '$1')));
+        const isUnder = (p: string, dir: string) => p === dir || p.startsWith(dir.endsWith('/') ? dir : `${dir}/`);
         try {
             const coreA = makeCore(a, { sandboxProfileDir: prof });
             const coreB = makeCore(b, { sandboxProfileDir: prof });
             coreA.prepare();
             coreB.prepare();
-            const write = (core: BridgeCore, dir: string, name: string) => run(core, { kind: 'exec', command: `echo x > '${path.join(dir, name)}'` });
-            expect(await write(coreA, a, 'a-in-a')).toMatchObject({ ok: true, exitCode: 0 });
-            expect((await write(coreA, b, 'a-in-b')).exitCode).not.toBe(0);
-            expect(await write(coreB, b, 'b-in-b')).toMatchObject({ ok: true, exitCode: 0 });
-            expect((await write(coreB, a, 'b-in-a')).exitCode).not.toBe(0);
-            expect(fs.existsSync(path.join(a, 'a-in-a'))).toBe(true);
-            expect(fs.existsSync(path.join(b, 'a-in-b'))).toBe(false);
-            expect(fs.existsSync(path.join(b, 'b-in-b'))).toBe(true);
-            expect(fs.existsSync(path.join(a, 'b-in-a'))).toBe(false);
 
             const profiles = fs.readdirSync(prof).sort();
             expect(profiles).toHaveLength(2);
             for (const f of profiles) expect(f).toMatch(new RegExp(`^omk-exec-sandbox-${process.pid}-\\d+\\.sb$`));
-            const contents = profiles.map((f) => fs.readFileSync(path.join(prof, f), 'utf8'));
-            expect(contents.filter((c) => c.includes(`(subpath "${a}")`))).toHaveLength(1);
-            expect(contents.filter((c) => c.includes(`(subpath "${b}")`))).toHaveLength(1);
+            const read = () => profiles.map((f) => fs.readFileSync(path.join(prof, f), 'utf8'));
+            const checkProfiles = () => {
+                const contents = read();
+                const ofA = contents.filter((c) => c.includes(rootLine(a)));
+                const ofB = contents.filter((c) => c.includes(rootLine(b)));
+                expect(ofA).toHaveLength(1);
+                expect(ofB).toHaveLength(1);
+                expect(ofA[0]).not.toContain(`(subpath ${sbq(b)})`);
+                expect(ofB[0]).not.toContain(`(subpath ${sbq(a)})`);
+                return { profA: ofA[0], profB: ofB[0] };
+            };
+            const { profA, profB } = checkProfiles();
+
+            const write = (core: BridgeCore, dir: string, name: string) => run(core, { kind: 'exec', command: `echo x > '${path.join(dir, name)}'` });
+            expect(await write(coreA, a, 'a-in-a')).toMatchObject({ ok: true, exitCode: 0 });
+            expect(await write(coreB, b, 'b-in-b')).toMatchObject({ ok: true, exitCode: 0 });
+            expect(fs.existsSync(path.join(a, 'a-in-a'))).toBe(true);
+            expect(fs.existsSync(path.join(b, 'b-in-b'))).toBe(true);
+
+            const shared = [...otherWritable(profA, a).filter((d) => isUnder(b, d)), ...otherWritable(profB, b).filter((d) => isUnder(a, d))];
+            if (shared.length === 0) {
+                expect((await write(coreA, b, 'a-in-b')).exitCode).not.toBe(0);
+                expect((await write(coreB, a, 'b-in-a')).exitCode).not.toBe(0);
+                expect(fs.existsSync(path.join(b, 'a-in-b'))).toBe(false);
+                expect(fs.existsSync(path.join(a, 'b-in-a'))).toBe(false);
+            } else {
+                console.warn(`서로의 폴더 쓰기 실패 단언 건너뜀: 테스트 폴더(${home} 아래)가 프로파일이 늘 여는 쓰기 경로 안(${[...new Set(shared)].join(', ')})`);
+            }
 
             // 같은 코어가 다시 준비하면 자기 파일을 다시 쓴다(새 파일을 만들지 않는다).
             coreA.prepare();
             expect(fs.readdirSync(prof).sort()).toEqual(profiles);
-            expect((await write(coreA, b, 'a-in-b-2')).exitCode).not.toBe(0);
+            checkProfiles();
+            if (shared.length === 0) expect((await write(coreA, b, 'a-in-b-2')).exitCode).not.toBe(0);
         } finally {
             for (const d of [a, b, prof]) fs.rmSync(d, { recursive: true, force: true });
         }
