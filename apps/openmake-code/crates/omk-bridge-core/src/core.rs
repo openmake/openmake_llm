@@ -9,11 +9,15 @@
 //! `spawn_blocking` 작업이 끝나기를 기다리므로, 영영 블록된 FS 호출이 있으면 종료가 멈춘다 — 호스트는
 //! `shutdown_background()` 또는 `shutdown_timeout()` 으로 끝낸다.
 
-use crate::constants::BRIDGE_KINDS;
+use std::time::{Duration, Instant};
+
+use crate::code_nav;
+use crate::constants::{BRIDGE_KINDS, CODE_NAV_MAX_CONCURRENT, CODE_NAV_TIMEOUT_MS, DIAG_TIMEOUT_MS};
 use crate::exec::{self, ExecHost, ExecState};
 use crate::fs_kinds;
 use crate::msg::{BridgeMsg, BridgeResult, Kind};
 use crate::node_error;
+use crate::scope::safe_from;
 use crate::timed_fs::FsGate;
 use crate::worktree;
 
@@ -28,9 +32,22 @@ pub struct BridgeCoreOptions {
     pub on_task_end: Option<TaskEndHook>,
 }
 
+/// 읽기 전용 도구의 시간 제한(ms) — 호스트가 `timed_fs::ms_from_env` 로 `OMK_BRIDGE_CODE_NAV_TIMEOUT_MS`·
+/// `OMK_BRIDGE_DIAG_TIMEOUT_MS` 를 채운다(D-63). 얹지 않으면 둘 다 15000.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ToolTimeouts {
+    /// code_nav 시간 예산 — 요청을 받은 때부터 센다.
+    pub code_nav_ms: u64,
+    /// tsc·py_compile 자식 1회 시간 제한.
+    pub diag_ms: u64,
+}
+
 pub struct BridgeCore {
     folder_root: String,
     gate: FsGate,
+    /// code_nav 전용 관문(D-62) — 끝나지 않는 정규식 판정은 이 칸만 쥔다. 파일 kind 의 칸은 그대로 돈다.
+    nav_gate: FsGate,
+    timeouts: ToolTimeouts,
     on_task_end: Option<TaskEndHook>,
     exec: Option<ExecState>,
 }
@@ -46,8 +63,9 @@ fn handles(kind: Kind) -> bool {
         | Kind::TaskEnd
         | Kind::Folders
         | Kind::Exec
-        | Kind::Worktree => true,
-        Kind::LspDiagnostics | Kind::CodeNav | Kind::TestRunner | Kind::Browser => false,
+        | Kind::Worktree
+        | Kind::CodeNav => true,
+        Kind::LspDiagnostics | Kind::TestRunner | Kind::Browser => false,
     }
 }
 
@@ -63,6 +81,11 @@ impl BridgeCore {
             // UTF-8 이 아닌 이름은 APFS 에서 생기지 않는다.
             folder_root: root.to_string_lossy().into_owned(),
             gate: FsGate::new(opts.fs_timeout_ms),
+            nav_gate: FsGate::with_permits(opts.fs_timeout_ms, CODE_NAV_MAX_CONCURRENT),
+            timeouts: ToolTimeouts {
+                code_nav_ms: CODE_NAV_TIMEOUT_MS,
+                diag_ms: DIAG_TIMEOUT_MS,
+            },
             on_task_end: opts.on_task_end,
             exec: None,
         })
@@ -72,6 +95,12 @@ impl BridgeCore {
     /// `BridgeCoreOptions` 는 그대로 두고 얹는다 — 병행 PR 의 구조체 리터럴이 어느 쪽이 먼저 머지돼도 컴파일된다(§10-3).
     pub fn with_exec_host(mut self, host: ExecHost) -> BridgeCore {
         self.exec = Some(ExecState::new(host));
+        self
+    }
+
+    /// 읽기 전용 도구의 시간 제한을 얹는다 — `with_exec_host` 와 같은 방식(`BridgeCoreOptions` 는 그대로).
+    pub fn with_tool_timeouts(mut self, timeouts: ToolTimeouts) -> BridgeCore {
+        self.timeouts = timeouts;
         self
     }
 
@@ -116,6 +145,8 @@ impl BridgeCore {
     }
 
     async fn dispatch(&self, m: &BridgeMsg) -> Result<BridgeResult, String> {
+        // code_nav 시간 예산의 시작점 — TS 와 같이 요청을 받은 때(관문 자리를 기다린 시간도 센다).
+        let received = Instant::now();
         if let Some(field) = m.invalid_field {
             return Err(format!("요청 필드 형식이 올바르지 않습니다: {field}"));
         }
@@ -207,9 +238,24 @@ impl BridgeCore {
             }
             Kind::Exec => exec::run_exec(self.exec.as_ref(), &self.folder_root, &base, m).await,
             Kind::Worktree => Ok(worktree::handle(self.exec.as_ref(), &base, m, &self.gate).await),
-            Kind::LspDiagnostics | Kind::CodeNav | Kind::TestRunner | Kind::Browser => {
-                Err(unsupported(kind.as_str()))
+            Kind::CodeNav => {
+                // 예산이 Instant 범위를 넘으면 끝나지 않는 예산이다.
+                let deadline = received.checked_add(Duration::from_millis(self.timeouts.code_nav_ms));
+                let req = m.clone();
+                let nav = self
+                    .nav_gate
+                    .run("code_nav", move || {
+                        let start = safe_from(&base, req.path.as_deref())?;
+                        let expired = || deadline.is_some_and(|d| Instant::now() >= d);
+                        code_nav::run(&base, &start, &req, &expired)
+                    })
+                    .await?;
+                Ok(BridgeResult {
+                    code_nav: Some(nav),
+                    ..ok
+                })
             }
+            Kind::LspDiagnostics | Kind::TestRunner | Kind::Browser => Err(unsupported(kind.as_str())),
         }
     }
 }
@@ -245,7 +291,7 @@ mod tests {
 
     /// 아직 옮기지 않은 kind — 뒤 PR 이 kind 를 옮길 때 이 목록을 줄이지 않으면 실패한다.
     /// 목록이 비는 PR(1.4)에서 `capabilities() == BRIDGE_KINDS` 로 바꾼다.
-    const NOT_PORTED: [&str; 3] = ["lsp_diagnostics", "code_nav", "test_runner"];
+    const NOT_PORTED: [&str; 2] = ["lsp_diagnostics", "test_runner"];
 
     #[test]
     fn capabilities_lists_only_handled_kinds_in_bridge_kinds_order() {
@@ -255,7 +301,7 @@ mod tests {
             caps,
             [
                 "exec", "read", "write", "list", "listAll", "delete", "task_end", "worktree",
-                "folders"
+                "folders", "code_nav"
             ]
         );
         let missing: Vec<&str> = BRIDGE_KINDS

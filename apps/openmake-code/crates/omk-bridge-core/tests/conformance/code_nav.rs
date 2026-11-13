@@ -20,9 +20,9 @@ use crate::support::{TmpDir, apply_setup, fill, read_tool_calls, runtime, tool_c
 
 const TOOL_SETUP_KINDS: [&str; 5] = ["dir", "file", "symlink", "many", "fakeTool"];
 const TOOL_COMPARES: [&str; 2] = ["counts", "error-prefix"];
-/// 형식 검사 필드(D-66) — 기존 7개 + 이 suite 들이 더한 넷.
-const CHECKED_FIELDS: [&str; 10] = [
-    "kind", "path", "folder", "contentB64", "command", "op", "taskId", "pattern", "glob", "maxResults",
+/// 문자열 형식 검사 필드(D-66) — 기존 7개 + pattern·glob. `maxResults`(수 필드)·`paths`(원소)는 따로 본다.
+const CHECKED_FIELDS: [&str; 9] = [
+    "kind", "path", "folder", "contentB64", "command", "op", "taskId", "pattern", "glob",
 ];
 /// `paths` 는 앞 60개만 본다(TS `slice(0, DIAG_MAX_TOTAL)`).
 const PATHS_CHECKED: usize = 60;
@@ -180,9 +180,11 @@ fn tools_fixture_shapes() {
     }
 }
 
-/// 입력에 참인 비문자열 필드가 있는가 — `paths` 는 앞 60개 원소를 본다.
+/// 입력에 형식이 틀린 필드가 있는가 — 문자열 자리의 참인 비문자열, `maxResults` 의 참인 비수, `paths` 앞 60개 원소의 참인 비문자열.
 fn has_non_string_field(msg: &Value) -> bool {
+    let max = &msg["maxResults"];
     CHECKED_FIELDS.iter().any(|f| truthy_non_string(&msg[*f]))
+        || (!max.is_number() && (truthy_non_string(max) || max.as_str().is_some_and(|t| !t.is_empty())))
         || msg["paths"]
             .as_array()
             .is_some_and(|a| a.iter().take(PATHS_CHECKED).any(truthy_non_string))
