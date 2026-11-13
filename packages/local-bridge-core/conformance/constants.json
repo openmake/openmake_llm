@@ -16,6 +16,10 @@
     "SEEN_REQ_MAX": 2000,
     "FOLDERS_MAX_ENTRIES": 200,
     "LIST_ALL_MAX": 1000,
-    "MAX_BUFFER": 1048576
+    "MAX_BUFFER": 1048576,
+    "PATH_PROBE_TIMEOUT_MS": 5000,
+    "GIT_PROBE_TIMEOUT_MS": 5000,
+    "WORKTREE_DIR": ".openmake/worktrees",
+    "WORKTREE_BRANCH_PREFIX": "omk-task/"
   }
 }

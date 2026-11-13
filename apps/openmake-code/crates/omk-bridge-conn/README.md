@@ -26,7 +26,7 @@
 
 - 연결은 받은 `Arc<BridgeCore>` 를 끝까지 쓴다. 재연결은 코어를 새로 만들지 않으므로 코어의 동시 파일 작업 허가(4개)도 늘지 않는다.
 - 호스트(PR-1.7)는 같은 루트를 다시 연결할 때도 루트별 코어를 재사용한다(해제 때는 일괄 승인 회수만).
-- 코어와 닿는 자리: `folder_root()` · `capabilities()` · `handle_exec()` · `RequestGuard`. PR-1.3 합류 자리(연결 시 `prepare`, 해제 시 일괄 승인 회수)는 `connection.rs` 의 `core_hooks` 다.
+- 코어와 닿는 자리: `folder_root()` · `capabilities()` · `handle_exec()` · `RequestGuard`. `connection.rs` 의 `core_hooks` 가 연결할 때마다 `prepare().await`(소켓을 만들기 전에 끝낸다), 해제할 때 `clear_auto_approve()` 를 부른다(PR-1.3 합류).
 
 ## TLS
 
