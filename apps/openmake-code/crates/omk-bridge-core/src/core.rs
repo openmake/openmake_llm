@@ -254,7 +254,10 @@ impl BridgeCore {
                 Ok(ok)
             }
             Kind::Exec => exec::run_exec(self.exec.as_ref(), &self.folder_root, &base, m).await,
-            Kind::Worktree => Ok(worktree::handle(self.exec.as_ref(), &base, m, &self.gate).await),
+            Kind::Worktree => {
+                let st = self.exec.as_ref();
+                Ok(worktree::handle(st, &self.folder_root, &base, m, &self.gate).await)
+            }
             Kind::CodeNav => {
                 // 예산이 Instant 범위를 넘으면 끝나지 않는 예산이다.
                 let deadline =
