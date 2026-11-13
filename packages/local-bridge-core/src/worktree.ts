@@ -41,9 +41,13 @@ async function isGitRepo(cwd: string): Promise<boolean> {
     return r.code === 0 && r.stdout.trim() === 'true';
 }
 
-/** worktree 디렉토리를 로컬 전용 제외 목록에 등록 — 사용자의 .gitignore 는 건드리지 않는다. */
+/**
+ * worktree 디렉토리를 로컬 전용 제외 목록에 등록 — 사용자의 .gitignore 는 건드리지 않는다.
+ * `.git/info`·`info/exclude` 도 에이전트가 바꿀 수 있다 — 폴더 밖 심링크면(최근접 조상 realpath 가 gitDir 밖) 등록하지 않는다.
+ */
 function excludeWorktreeDir(gitDir: string): void {
     try {
+        safeFrom(gitDir, 'info/exclude');
         const infoDir = path.join(gitDir, 'info');
         fs.mkdirSync(infoDir, { recursive: true });
         const p = path.join(infoDir, 'exclude');

@@ -43,7 +43,7 @@
 | `request-guard.json` | 요청 만료·중복 판정. 사례마다 새 guard 에 `steps` 를 순서대로 넣는다. `{"fill": {prefix, from, count}}` 은 그 수만큼 통과해야 한다 |
 | `exec-gate.json` | `cases`(차단 → 확인 → 실행, 거부 불변식, 일괄 승인·회수, 실행 결과, `command`·`folder` 필드) · `sandboxEnabled` · `autoApproveEnv` · `failClosed` |
 | `exec-path.json` | `resolve`(로그인 셸·프로세스 PATH·고정 4곳·mise 병합, 자식 환경·cwd — 가짜 실행 파일) · `win32` |
-| `worktree.json` | `cases`(`add`·`diff`·`remove`·모르는 op, `.openmake`·`worktrees`·`<taskId>`·worktree 안 하위 폴더가 폴더 밖 심링크일 때의 거부 — 안쪽 심링크는 허용) · `taskId`(형식) · `gitDir`(샌드박스용 git 디렉터리 탐지) · `taskIdPattern`(TS `TASK_ID_RE` 의 source·flags) |
+| `worktree.json` | `cases`(`add`·`diff`·`remove`·모르는 op, `.openmake`·`worktrees`·`<taskId>`·worktree 안 하위 폴더가 폴더 밖 심링크일 때의 거부 — 안쪽 심링크는 허용. `.git/info`·`info/exclude` 가 gitDir 밖 심링크면 제외 등록만 건너뛴다) · `taskId`(형식) · `gitDir`(샌드박스용 git 디렉터리 탐지) · `taskIdPattern`(TS `TASK_ID_RE` 의 source·flags) |
 
 ### exec·worktree suite (`exec-gate`·`exec-path`·`worktree`)
 

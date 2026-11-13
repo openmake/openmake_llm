@@ -456,6 +456,41 @@
       ]
     },
     {
+      "id": "add-git-info-symlink-out",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"dir":"outside"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"remove":"repo/.git/info"},
+        {"symlink":"repo/.git/info","target":"{{TMP}}/outside"},
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtexc001-info"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtexc001-info","branch":"omk-task/wtexc001"},"after":[{"absent":"outside/exclude"},{"exists":"repo/.openmake/worktrees/wtexc001-info/a.txt","content":"base\n"}]}
+      ]
+    },
+    {
+      "id": "add-git-exclude-symlink-out",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"dir":"repo/.git/info"},
+        {"file":"outside/keep","content":"keep\n"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"remove":"repo/.git/info/exclude"},
+        {"symlink":"repo/.git/info/exclude","target":"{{TMP}}/outside/keep"},
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtexc002-file"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtexc002-file","branch":"omk-task/wtexc002"},"after":[{"exists":"outside/keep","content":"keep\n"},{"exists":"repo/.openmake/worktrees/wtexc002-file/a.txt","content":"base\n"}]}
+      ]
+    },
+    {
       "id": "op-and-folder",
       "setup": [
         {"dir":"plain"},
