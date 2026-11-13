@@ -275,12 +275,41 @@ fn conn_constants() {
 
 #[test]
 fn conn_reconnect_delay() {
-    panic!("미구현: conn-reconnect-delay");
+    let doc = load("conn-reconnect-delay");
+    for c in doc["cases"].as_array().unwrap() {
+        let i = &c["input"];
+        let ms = omk_bridge_conn::reconnect::reconnect_delay_ms(
+            u32::try_from(i["attempt"].as_u64().unwrap()).unwrap(),
+            i["baseMs"].as_u64().unwrap(),
+            i["maxMs"].as_u64().unwrap(),
+            i["random"].as_f64().unwrap(),
+        );
+        assert_eq!(
+            json!({ "ms": ms }),
+            c["expect"],
+            "conn-reconnect-delay/cases/{}",
+            c["id"]
+        );
+    }
 }
 
 #[test]
-fn conn_notice() {
-    panic!("미구현: conn-notice");
+fn conn_notice_trim() {
+    let doc = load("conn-notice");
+    for c in doc["trim"].as_array().unwrap() {
+        let s = omk_bridge_conn::js_string::trim(c["input"]["s"].as_str().unwrap());
+        assert_eq!(
+            json!({ "s": s }),
+            c["expect"],
+            "conn-notice/trim/{}",
+            c["id"]
+        );
+    }
+}
+
+#[test]
+fn conn_notice_cases() {
+    panic!("미구현: conn-notice/cases");
 }
 
 #[test]

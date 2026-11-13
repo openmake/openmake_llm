@@ -4,3 +4,5 @@
 //! 현재 동작이며, `packages/local-bridge-core/conformance/conn-*.json` 을 두 구현이 함께 통과해야 한다(`CONN.md`).
 
 pub mod constants;
+pub mod js_string;
+pub mod reconnect;
