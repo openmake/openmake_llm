@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import { SANDBOX_ENABLED, sbq } from '../constants';
 import { BridgeCore } from '../core';
 import { collectDiagnostics } from '../diagnostics';
@@ -19,7 +20,7 @@ import { detectTestRunner } from '../test-runner';
 import type { BridgeMsg, BridgeResult } from '../types';
 
 const repoTsc = path.resolve(__dirname, '../../../../node_modules/.bin/tsc');
-const PYTEST_PROBE = "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)";
+const PYTEST_PROBE = "import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)";
 
 let base = '';
 let outside = '';
@@ -195,6 +196,25 @@ sbDescribe('도구 자식 샌드박스 — 모듈 단위(가짜 python3 로 인�
         expect(await detectTestRunner(base, fakePython())).toBe('pytest');
         expect(args()).toEqual(['-I', '-c', PYTEST_PROBE]);
     });
+
+    it('실제 python3: 폴더의 pytest.py 는 실행되지 않고, 사용자 site 의 pytest 는 샌드박스 안에서 찾는다', async () => {
+        write('conftest.py', '');
+        write('pytest.py', `open(${JSON.stringify(path.join(base, 'pytest-ran-inside'))}, 'w').write('x')\nopen(${JSON.stringify(path.join(outside, 'pytest-ran'))}, 'w').write('x')\n`);
+        const execPath = process.env.PATH ?? '';
+        // 이 환경의 사용자 site 에 pytest 가 있는가(pip --user — macOS 시스템 python3 의 보통 경우). 호스트에서 위치만 본다.
+        let userPytest = false;
+        try {
+            const usp = execFileSync('python3', ['-I', '-c', 'import site; print(site.getusersitepackages())'],
+                { encoding: 'utf8', env: { PATH: execPath, HOME: process.env.HOME ?? '' } }).trim();
+            userPytest = !!usp && fs.existsSync(path.join(usp, 'pytest'));
+        } catch { /* python3 없음 */ }
+        const p = profile();
+        const got = await detectTestRunner(base, execPath, p);
+        expect(fs.existsSync(path.join(base, 'pytest-ran-inside'))).toBe(false);
+        expectNoEscape(p, 'pytest-ran');
+        if (userPytest) expect(got).toBe('pytest');
+        else console.warn('사용자 site 에 pytest 가 없어 "pytest 로 탐지" 단언을 건너뜀');
+    }, 30000);
 
     it('실제 python3: 샌드박스 안 py_compile 이 문법 오류를 잡는다', async () => {
         const f = write('bad.py', 'def f(:\n');
