@@ -1,13 +1,13 @@
 //! 적합성 fixture Rust 러너 — `packages/local-bridge-core/conformance/*.json` 을 TS 러너와 함께 통과해야 한다.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-mod support;
 #[path = "conformance/file_kinds.rs"]
 mod file_kinds;
 #[path = "conformance/request_guard.rs"]
 mod request_guard;
 #[path = "conformance/scope.rs"]
 mod scope;
+mod support;
 
 use std::path::PathBuf;
 
@@ -85,11 +85,19 @@ fn walk_fixture(v: &Value, at: &str) {
         Value::Object(o) => {
             if o.contains_key("divergence") || o.contains_key("rustExpect") {
                 let site = DIVERGENCE_SITES.iter().find(|(s, _)| *s == at);
-                let (_, name) = site.unwrap_or_else(|| panic!("{at}: 알려진 차이를 쓸 수 없는 자리"));
-                assert_eq!(o["divergence"], *name, "{at}: 이 자리의 알려진 차이 이름이 아니다");
+                let (_, name) =
+                    site.unwrap_or_else(|| panic!("{at}: 알려진 차이를 쓸 수 없는 자리"));
+                assert_eq!(
+                    o["divergence"], *name,
+                    "{at}: 이 자리의 알려진 차이 이름이 아니다"
+                );
             }
             for (k, x) in o {
-                let next = if x.is_array() { format!("{at}/{k}") } else { at.to_owned() };
+                let next = if x.is_array() {
+                    format!("{at}/{k}")
+                } else {
+                    at.to_owned()
+                };
                 walk_fixture(x, &next);
             }
         }
@@ -162,7 +170,11 @@ fn constants() {
     );
     assert_eq!(values["MAX_BUFFER"], c::MAX_BUFFER, "constants/MAX_BUFFER");
     seen.extend(["SANDBOX_BIN", "EXEC_TIMEOUT_MS", "MAX_BUFFER"]);
-    assert_eq!(values["BROWSER_KIND"], c::BROWSER_KIND, "constants/BROWSER_KIND");
+    assert_eq!(
+        values["BROWSER_KIND"],
+        c::BROWSER_KIND,
+        "constants/BROWSER_KIND"
+    );
     let numbers: [(&str, u64); 4] = [
         ("EXPIRY_SKEW_TOLERANCE_MS", c::EXPIRY_SKEW_TOLERANCE_MS),
         ("SEEN_REQ_MAX", c::SEEN_REQ_MAX as u64),

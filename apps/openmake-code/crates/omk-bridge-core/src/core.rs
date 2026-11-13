@@ -195,25 +195,48 @@ mod tests {
 
     fn core(hook: Option<super::TaskEndHook>) -> BridgeCore {
         let dir = std::env::temp_dir().to_string_lossy().into_owned();
-        let opts = BridgeCoreOptions { folder: dir, fs_timeout_ms: 15_000, on_task_end: hook };
+        let opts = BridgeCoreOptions {
+            folder: dir,
+            fs_timeout_ms: 15_000,
+            on_task_end: hook,
+        };
         BridgeCore::new(opts).unwrap()
     }
 
     fn run(c: &BridgeCore, v: serde_json::Value) -> serde_json::Value {
-        let rt = tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap();
-        rt.block_on(c.handle_exec(&BridgeMsg::from_json(&v))).to_json()
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        rt.block_on(c.handle_exec(&BridgeMsg::from_json(&v)))
+            .to_json()
     }
 
     /// 아직 옮기지 않은 kind — 뒤 PR 이 kind 를 옮길 때 이 목록을 줄이지 않으면 실패한다.
     /// 목록이 비는 PR(1.4)에서 `capabilities() == BRIDGE_KINDS` 로 바꾼다.
-    const NOT_PORTED: [&str; 5] = ["exec", "worktree", "lsp_diagnostics", "code_nav", "test_runner"];
+    const NOT_PORTED: [&str; 5] = [
+        "exec",
+        "worktree",
+        "lsp_diagnostics",
+        "code_nav",
+        "test_runner",
+    ];
 
     #[test]
     fn capabilities_lists_only_handled_kinds_in_bridge_kinds_order() {
         let c = core(None);
         let caps = c.capabilities();
-        assert_eq!(caps, ["read", "write", "list", "listAll", "delete", "task_end", "folders"]);
-        let missing: Vec<&str> = BRIDGE_KINDS.iter().copied().filter(|k| !caps.contains(k)).collect();
+        assert_eq!(
+            caps,
+            [
+                "read", "write", "list", "listAll", "delete", "task_end", "folders"
+            ]
+        );
+        let missing: Vec<&str> = BRIDGE_KINDS
+            .iter()
+            .copied()
+            .filter(|k| !caps.contains(k))
+            .collect();
         assert_eq!(missing, NOT_PORTED);
         assert!(!handles(Kind::Browser));
     }
@@ -223,12 +246,21 @@ mod tests {
     fn unported_kinds_are_rejected_as_unsupported() {
         let c = core(None);
         for kind in NOT_PORTED.iter().chain(["browser"].iter()) {
-            let got = run(&c, json!({"kind": kind, "command": "touch should-not-exist"}));
-            assert_eq!(got, json!({"ok": false, "error": format!("지원하지 않는 kind: {kind}")}));
+            let got = run(
+                &c,
+                json!({"kind": kind, "command": "touch should-not-exist"}),
+            );
+            assert_eq!(
+                got,
+                json!({"ok": false, "error": format!("지원하지 않는 kind: {kind}")})
+            );
         }
         for k in Kind::ALL {
             let got = run(&c, json!({"kind": k.as_str(), "folder": "../.."}));
-            assert_eq!(got["error"], "폴더 스코프 밖 경로 거부: ../..", "{k:?}: folder 를 먼저 푼다");
+            assert_eq!(
+                got["error"], "폴더 스코프 밖 경로 거부: ../..",
+                "{k:?}: folder 를 먼저 푼다"
+            );
         }
     }
 
@@ -238,7 +270,10 @@ mod tests {
         let sink = Arc::clone(&seen);
         let hook = Box::new(move |t: Option<&str>| sink.lock().unwrap().push(t.map(str::to_owned)));
         let c = core(Some(hook));
-        assert_eq!(run(&c, json!({"kind": "task_end", "taskId": "t-1"})), json!({"ok": true}));
+        assert_eq!(
+            run(&c, json!({"kind": "task_end", "taskId": "t-1"})),
+            json!({"ok": true})
+        );
         assert_eq!(run(&c, json!({"kind": "task_end"})), json!({"ok": true}));
         assert_eq!(*seen.lock().unwrap(), [Some("t-1".to_owned()), None]);
     }

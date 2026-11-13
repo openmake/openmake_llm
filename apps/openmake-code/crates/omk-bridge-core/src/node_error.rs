@@ -37,7 +37,10 @@ const PLATFORM: [(i32, &str, &str); 0] = [];
 /// 표에 없는 errno 는 Node 가 모르는 errno 에 쓰는 `Unknown system error -N` 꼴이다.
 pub fn format(err: &io::Error, syscall: &str, path: Option<&str>) -> String {
     let errno = err.raw_os_error().unwrap_or(0);
-    let known = COMMON.iter().chain(PLATFORM.iter()).find(|(n, _, _)| *n == errno);
+    let known = COMMON
+        .iter()
+        .chain(PLATFORM.iter())
+        .find(|(n, _, _)| *n == errno);
     let (code, desc) = match known {
         Some((_, code, desc)) => ((*code).to_owned(), (*desc).to_owned()),
         None => {
@@ -74,8 +77,8 @@ pub fn null_bytes(path: &str) -> String {
 
 /// `util.inspect(문자열)` — 따옴표 고르기, 제어 문자 이스케이프, 긴 문자열의 줄 나눔(`+\n  `)까지 Node 와 같게.
 fn inspect_string(s: &str) -> String {
-    let len = s.encode_utf16().count();
-    if len > 16 && len > 76 && s.contains('\n') {
+    // Node: 길이 > kMinLineWidth(16) 이고 > breakLength(80) - 4 일 때 줄마다 나눈다 — 뒤 조건이 앞을 포함한다.
+    if s.encode_utf16().count() > 76 && s.contains('\n') {
         let mut lines = Vec::new();
         let mut rest = s;
         while let Some(i) = rest.find('\n') {
@@ -133,9 +136,15 @@ mod tests {
     #[test]
     fn known_errno_with_and_without_path() {
         let e = Error::from_raw_os_error(2);
-        assert_eq!(format(&e, "open", Some("/w/a")), "ENOENT: no such file or directory, open '/w/a'");
+        assert_eq!(
+            format(&e, "open", Some("/w/a")),
+            "ENOENT: no such file or directory, open '/w/a'"
+        );
         let e = Error::from_raw_os_error(21);
-        assert_eq!(format(&e, "read", None), "EISDIR: illegal operation on a directory, read");
+        assert_eq!(
+            format(&e, "read", None),
+            "EISDIR: illegal operation on a directory, read"
+        );
     }
 
     #[test]
@@ -154,12 +163,25 @@ mod tests {
         assert_eq!(null_bytes("/w/a\0b"), format!("{pre}'/w/a\\x00b'"));
         assert_eq!(null_bytes("/w/it's\0"), format!("{pre}\"/w/it's\\x00\""));
         assert_eq!(null_bytes("/w/a\"b'c\0"), format!("{pre}`/w/a\"b'c\\x00`"));
-        assert_eq!(null_bytes("/w/a\"b'c`\0"), format!("{pre}'/w/a\"b\\'c`\\x00'"));
-        assert_eq!(null_bytes("/w/\u{1b}\u{7f}\u{85}\\\t\0"), format!("{pre}'/w/\\x1B\\x7F\\x85\\\\\\t\\x00'"));
+        assert_eq!(
+            null_bytes("/w/a\"b'c`\0"),
+            format!("{pre}'/w/a\"b\\'c`\\x00'")
+        );
+        assert_eq!(
+            null_bytes("/w/\u{1b}\u{7f}\u{85}\\\t\0"),
+            format!("{pre}'/w/\\x1B\\x7F\\x85\\\\\\t\\x00'")
+        );
         let long = format!("/w/{}\0", "x".repeat(150));
-        assert_eq!(null_bytes(&long), format!("{pre}'/w/{}...", "x".repeat(124)));
+        assert_eq!(
+            null_bytes(&long),
+            format!("{pre}'/w/{}...", "x".repeat(124))
+        );
         let lines = format!("/w/{}\n{}\0/q", "y".repeat(40), "z".repeat(40));
-        let want = format!("{pre}'/w/{}\\n' +\n  '{}\\x00/q'", "y".repeat(40), "z".repeat(40));
+        let want = format!(
+            "{pre}'/w/{}\\n' +\n  '{}\\x00/q'",
+            "y".repeat(40),
+            "z".repeat(40)
+        );
         assert_eq!(null_bytes(&lines), want);
     }
 }

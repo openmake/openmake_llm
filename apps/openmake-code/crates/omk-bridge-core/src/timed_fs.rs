@@ -89,7 +89,17 @@ mod tests {
     /// fixture 에 넣지 않는 차이(D-18) — TS 는 NaN·실수·음수·0 타이머가 된다. Rust 는 기본값이다.
     #[test]
     fn invalid_env_values_fall_back_to_default() {
-        for v in ["abc", "1e3", "1500.5", "-1", "-0", "0x10", "   ", "\u{a0}300", "99999999999999999999"] {
+        for v in [
+            "abc",
+            "1e3",
+            "1500.5",
+            "-1",
+            "-0",
+            "0x10",
+            "   ",
+            "\u{a0}300",
+            "99999999999999999999",
+        ] {
             assert_eq!(fs_timeout_from_env(Some(v)), 15_000, "{v:?}");
         }
         assert_eq!(fs_timeout_from_env(Some("\t300\n")), 300);
@@ -98,8 +108,20 @@ mod tests {
 
     #[test]
     fn seconds_round_like_math_round() {
-        let secs = |ms| timeout_message("x", ms).split(['(', ')']).nth(1).map(str::to_owned);
-        for (ms, want) in [(0, "0s"), (499, "0s"), (500, "1s"), (1499, "1s"), (1500, "2s"), (u64::MAX, "18446744073709552s")] {
+        let secs = |ms| {
+            timeout_message("x", ms)
+                .split(['(', ')'])
+                .nth(1)
+                .map(str::to_owned)
+        };
+        for (ms, want) in [
+            (0, "0s"),
+            (499, "0s"),
+            (500, "1s"),
+            (1499, "1s"),
+            (1500, "2s"),
+            (u64::MAX, "18446744073709552s"),
+        ] {
             assert_eq!(secs(ms).as_deref(), Some(want), "{ms}");
         }
     }
@@ -117,10 +139,16 @@ mod gate_tests {
     /// 작업 클로저가 panic 하면 고정 문구 하나로 끝난다(D-19).
     #[test]
     fn panicking_job_becomes_internal_error() {
-        let rt = tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
         let gate = FsGate::new(5_000);
         let got: Result<(), String> = rt.block_on(gate.run("read", || panic!("boom")));
-        assert_eq!(got, Err("내부 오류로 요청을 처리하지 못했습니다".to_owned()));
+        assert_eq!(
+            got,
+            Err("내부 오류로 요청을 처리하지 못했습니다".to_owned())
+        );
     }
 
     /// 시간 초과 때 blocking 큐에서 아직 시작하지 않은 작업은 나중에 스레드가 생겨도 실행하지 않는다(D-14).
@@ -148,6 +176,9 @@ mod gate_tests {
         assert!(second.unwrap_err().starts_with("write 시간 초과"));
         release.send(()).unwrap();
         rt.shutdown_timeout(Duration::from_secs(5));
-        assert!(!ran.load(Ordering::SeqCst), "시간 초과로 답한 작업이 나중에 실행됐다");
+        assert!(
+            !ran.load(Ordering::SeqCst),
+            "시간 초과로 답한 작업이 나중에 실행됐다"
+        );
     }
 }

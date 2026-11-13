@@ -32,11 +32,16 @@ fn want_of(r: &Value, tmp: &str, ctx: &str) -> Value {
         (Some(d), Some(rust)) => {
             assert_eq!(d, NON_STRING_FIELD, "{ctx}: 모르는 divergence");
             assert!(
-                CHECKED_FIELDS.iter().any(|f| truthy_non_string(&r["msg"][*f])),
+                CHECKED_FIELDS
+                    .iter()
+                    .any(|f| truthy_non_string(&r["msg"][*f])),
                 "{ctx}: 입력에 참인 비문자열 필드가 없다"
             );
             assert_eq!(rust["ok"], false, "{ctx}: rustExpect 가 거절이 아니다");
-            assert!(r.get("after").is_none(), "{ctx}: 알려진 차이 사례에는 after 를 두지 않는다");
+            assert!(
+                r.get("after").is_none(),
+                "{ctx}: 알려진 차이 사례에는 after 를 두지 않는다"
+            );
             rust.clone()
         }
         _ => panic!("{ctx}: divergence 와 rustExpect 는 함께만 쓴다"),
@@ -46,17 +51,31 @@ fn want_of(r: &Value, tmp: &str, ctx: &str) -> Value {
 fn check_after(tmp: &TmpDir, after: &Value, ctx: &str) {
     for a in after.as_array().unwrap() {
         if let Some(p) = a["absent"].as_str() {
-            assert!(std::fs::symlink_metadata(tmp.join(p)).is_err(), "{ctx}: {p} 가 남아 있다");
+            assert!(
+                std::fs::symlink_metadata(tmp.join(p)).is_err(),
+                "{ctx}: {p} 가 남아 있다"
+            );
             continue;
         }
         let p = a["exists"].as_str().unwrap();
         let full = tmp.join(p);
-        assert!(std::fs::symlink_metadata(&full).is_ok(), "{ctx}: {p} 가 없다");
+        assert!(
+            std::fs::symlink_metadata(&full).is_ok(),
+            "{ctx}: {p} 가 없다"
+        );
         if let Some(text) = a["content"].as_str() {
-            assert_eq!(std::fs::read_to_string(&full).unwrap(), text, "{ctx}: {p} 내용");
+            assert_eq!(
+                std::fs::read_to_string(&full).unwrap(),
+                text,
+                "{ctx}: {p} 내용"
+            );
         }
         if let Some(b) = a["contentB64"].as_str() {
-            assert_eq!(std::fs::read(&full).unwrap(), base64_lenient::decode(b), "{ctx}: {p} 바이트");
+            assert_eq!(
+                std::fs::read(&full).unwrap(),
+                base64_lenient::decode(b),
+                "{ctx}: {p} 바이트"
+            );
         }
     }
 }
@@ -130,6 +149,10 @@ fn file_kinds_timeout() {
 fn file_kinds_fs_timeout_env() {
     let doc = load("file-kinds");
     each_case(&doc, "file-kinds", "fsTimeoutEnv", |ctx, i, e| {
-        assert_eq!(fs_timeout_from_env(i["env"].as_str()), e["ms"].as_u64().unwrap(), "{ctx}");
+        assert_eq!(
+            fs_timeout_from_env(i["env"].as_str()),
+            e["ms"].as_u64().unwrap(),
+            "{ctx}"
+        );
     });
 }

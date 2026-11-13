@@ -22,13 +22,21 @@ fn scope_node_path() {
     let doc = load("scope");
     let np = &doc["nodePath"];
     each_case(np, "scope/nodePath", "resolve", |ctx, i, e| {
-        assert_eq!(node_path::resolve(s(&i["base"]), s(&i["rel"])), s(e), "{ctx}");
+        assert_eq!(
+            node_path::resolve(s(&i["base"]), s(&i["rel"])),
+            s(e),
+            "{ctx}"
+        );
     });
     each_case(np, "scope/nodePath", "dirname", |ctx, i, e| {
         assert_eq!(node_path::dirname(s(i)), s(e), "{ctx}");
     });
     each_case(np, "scope/nodePath", "relative", |ctx, i, e| {
-        assert_eq!(node_path::relative(s(&i["from"]), s(&i["to"])), s(e), "{ctx}");
+        assert_eq!(
+            node_path::relative(s(&i["from"]), s(&i["to"])),
+            s(e),
+            "{ctx}"
+        );
     });
 }
 
