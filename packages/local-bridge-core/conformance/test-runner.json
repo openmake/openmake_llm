@@ -230,7 +230,7 @@
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
       "expect": "pytest",
       "toolCalls": [
-        {"tool":"python3","args":["-I","-c","import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
       ]
     },
     {
@@ -338,7 +338,7 @@
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
       "expect": "none",
       "toolCalls": [
-        {"tool":"python3","args":["-I","-c","import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
       ]
     },
     {
@@ -429,7 +429,7 @@
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
       "expect": "go",
       "toolCalls": [
-        {"tool":"python3","args":["-I","-c","import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
       ]
     },
     {
