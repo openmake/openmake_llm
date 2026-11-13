@@ -1,0 +1,136 @@
+{
+  "suite": "request-guard",
+  "version": 1,
+  "cases": [
+    {"id":"no-expires","steps":[{"input":{"reqId":"a"},"now":1800000000000,"expect":null}]},
+    {
+      "id": "expired",
+      "steps": [
+        {
+          "input": {"reqId":"a","expiresAt":1799999879999},
+          "now": 1800000000000,
+          "expect": {"ok":false,"rejected":"expired","error":"만료된 요청이라 실행하지 않았습니다"}
+        }
+      ]
+    },
+    {
+      "id": "within-skew",
+      "steps": [
+        {"input":{"reqId":"a","expiresAt":1799999881000},"now":1800000000000,"expect":null},
+        {"input":{"reqId":"b","expiresAt":1800000060000},"now":1800000000000,"expect":null}
+      ]
+    },
+    {
+      "id": "non-number-expires",
+      "steps": [
+        {"input":{"reqId":"a","expiresAt":"soon"},"now":1800000000000,"expect":null},
+        {"input":{"reqId":"b","expiresAt":null},"now":1800000000000,"expect":null},
+        {"input":{"reqId":"c","expiresAt":true},"now":1800000000000,"expect":null},
+        {"input":{"reqId":"d","expiresAt":"1799999879999"},"now":1800000000000,"expect":null},
+        {"input":{"reqId":"e","expiresAt":[1]},"now":1800000000000,"expect":null},
+        {"input":{"reqId":"f","expiresAt":{}},"now":1800000000000,"expect":null}
+      ]
+    },
+    {
+      "id": "duplicate",
+      "steps": [
+        {"input":{"reqId":"same"},"now":1800000000000,"expect":null},
+        {"input":{"reqId":"same"},"now":1800000000005,"expect":{"ok":false,"rejected":"duplicate","error":"이미 처리한 요청이라 다시 실행하지 않았습니다"}}
+      ]
+    },
+    {
+      "id": "expired-not-remembered",
+      "steps": [
+        {
+          "input": {"reqId":"x","expiresAt":1799999879999},
+          "now": 1800000000000,
+          "expect": {"ok":false,"rejected":"expired","error":"만료된 요청이라 실행하지 않았습니다"}
+        },
+        {"input":{"reqId":"x"},"now":1800000000000,"expect":null}
+      ]
+    },
+    {"id":"no-reqid","steps":[{"input":{},"now":1800000000000,"expect":null},{"input":{},"now":1800000000000,"expect":null}]},
+    {
+      "id": "cap",
+      "steps": [
+        {"fill":{"prefix":"r","from":0,"count":2001},"now":1800000000000},
+        {"input":{"reqId":"r0"},"now":1800000000000,"expect":null},
+        {"input":{"reqId":"r2000"},"now":1800000000000,"expect":{"ok":false,"rejected":"duplicate","error":"이미 처리한 요청이라 다시 실행하지 않았습니다"}}
+      ]
+    },
+    {
+      "id": "cap-2001-then-front",
+      "steps": [
+        {"fill":{"prefix":"r","from":0,"count":2001},"now":1800000000000},
+        {"input":{"reqId":"r1"},"now":1800000000000,"expect":{"ok":false,"rejected":"duplicate","error":"이미 처리한 요청이라 다시 실행하지 않았습니다"}},
+        {"input":{"reqId":"r2000"},"now":1800000000000,"expect":{"ok":false,"rejected":"duplicate","error":"이미 처리한 요청이라 다시 실행하지 않았습니다"}},
+        {"input":{"reqId":"r0"},"now":1800000000000,"expect":null},
+        {"input":{"reqId":"r2"},"now":1800000000000,"expect":{"ok":false,"rejected":"duplicate","error":"이미 처리한 요청이라 다시 실행하지 않았습니다"}}
+      ]
+    },
+    {
+      "id": "boundary",
+      "steps": [
+        {"input":{"reqId":"a","expiresAt":1799999880000},"now":1800000000000,"expect":null},
+        {
+          "input": {"reqId":"b","expiresAt":1799999879999},
+          "now": 1800000000000,
+          "expect": {"ok":false,"rejected":"expired","error":"만료된 요청이라 실행하지 않았습니다"}
+        }
+      ]
+    },
+    {
+      "id": "fractional-expires",
+      "steps": [
+        {"input":{"reqId":"a","expiresAt":1.5},"now":120001,"expect":null},
+        {"input":{"reqId":"b","expiresAt":1.5},"now":120002,"expect":{"ok":false,"rejected":"expired","error":"만료된 요청이라 실행하지 않았습니다"}},
+        {"input":{"reqId":"c","expiresAt":0.25},"now":120000,"expect":null}
+      ]
+    },
+    {
+      "id": "zero-and-negative-expires",
+      "steps": [
+        {"input":{"reqId":"a","expiresAt":0},"now":120000,"expect":null},
+        {"input":{"reqId":"b","expiresAt":0},"now":120001,"expect":{"ok":false,"rejected":"expired","error":"만료된 요청이라 실행하지 않았습니다"}},
+        {"input":{"reqId":"c","expiresAt":-1},"now":119999,"expect":null}
+      ]
+    },
+    {
+      "id": "reqid-falsy-or-number",
+      "steps": [
+        {"input":{"reqId":5},"now":1800000000000,"expect":null},
+        {"input":{"reqId":5},"now":1800000000000,"expect":null},
+        {"input":{"reqId":""},"now":1800000000000,"expect":null},
+        {"input":{"reqId":""},"now":1800000000000,"expect":null},
+        {"input":{"reqId":null},"now":1800000000000,"expect":null},
+        {"input":{"reqId":null},"now":1800000000000,"expect":null},
+        {"input":{"reqId":true},"now":1800000000000,"expect":null},
+        {"input":{"reqId":true},"now":1800000000000,"expect":null}
+      ]
+    },
+    {
+      "id": "expired-before-duplicate",
+      "steps": [
+        {"input":{"reqId":"k"},"now":1800000000000,"expect":null},
+        {
+          "input": {"reqId":"k","expiresAt":1799999879999},
+          "now": 1800000000000,
+          "expect": {"ok":false,"rejected":"expired","error":"만료된 요청이라 실행하지 않았습니다"}
+        },
+        {"input":{"reqId":"k"},"now":1800000000000,"expect":{"ok":false,"rejected":"duplicate","error":"이미 처리한 요청이라 다시 실행하지 않았습니다"}}
+      ]
+    },
+    {
+      "id": "expired-without-reqid",
+      "steps": [{"input":{"expiresAt":1799999879999},"now":1800000000000,"expect":{"ok":false,"rejected":"expired","error":"만료된 요청이라 실행하지 않았습니다"}}]
+    },
+    {
+      "id": "reqid-korean",
+      "steps": [
+        {"input":{"reqId":"요청-1"},"now":1800000000000,"expect":null},
+        {"input":{"reqId":"요청-1"},"now":1800000000000,"expect":{"ok":false,"rejected":"duplicate","error":"이미 처리한 요청이라 다시 실행하지 않았습니다"}},
+        {"input":{"reqId":"요청-2"},"now":1800000000000,"expect":null}
+      ]
+    }
+  ]
+}
