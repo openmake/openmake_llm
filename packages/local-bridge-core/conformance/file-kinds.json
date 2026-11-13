@@ -1139,6 +1139,69 @@
       ]
     },
     {
+      "id": "nul-bytes",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"read","path":"a\u0000b"},
+          "expect": {
+            "ok": false,
+            "error": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received '{{TMP}}/root/a\\x00b'"
+          }
+        },
+        {
+          "msg": {"kind":"write","path":"a\u0000b","contentB64":"eA=="},
+          "expect": {
+            "ok": false,
+            "error": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received '{{TMP}}/root/a\\x00b'"
+          }
+        },
+        {
+          "msg": {"kind":"write","path":"d\u0000/x","contentB64":"eA=="},
+          "expect": {"ok":false,"error":"The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received '{{TMP}}/root/d\\x00'"}
+        },
+        {
+          "msg": {"kind":"list","path":"a\u0000b"},
+          "expect": {
+            "ok": false,
+            "error": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received '{{TMP}}/root/a\\x00b'"
+          }
+        },
+        {
+          "msg": {"kind":"delete","path":"a\u0000b"},
+          "expect": {
+            "ok": false,
+            "error": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received '{{TMP}}/root/a\\x00b'"
+          }
+        },
+        {
+          "msg": {"kind":"folders","path":"a\u0000b"},
+          "expect": {
+            "ok": false,
+            "error": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received '{{TMP}}/root/a\\x00b'"
+          }
+        },
+        {
+          "msg": {"kind":"read","path":"it's\u0000"},
+          "expect": {
+            "ok": false,
+            "error": "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received \"{{TMP}}/root/it's\\x00\""
+          }
+        },
+        {"msg":{"kind":"read","path":"x","folder":"s\u0000ub"},"expect":{"ok":false,"error":"실행 폴더가 존재하지 않습니다: s\u0000ub"}}
+      ]
+    },
+    {
       "id": "dispatch-task-end",
       "setup": [
         {"dir":"root/sub"},
