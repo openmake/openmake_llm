@@ -1,0 +1,28 @@
+{
+  "suite": "conn-constants",
+  "version": 1,
+  "values": {
+    "RECONNECT_MS": 10000,
+    "RECONNECT_MAX_MS": 60000,
+    "HANDSHAKE_TIMEOUT_MS": 30000,
+    "HELLO_DELAY_MS": 300,
+    "LIVENESS_PING_MS": 30000,
+    "LIVENESS_TIMEOUT_MS": 75000,
+    "AUTH_RETRY_MS": 600000,
+    "AUTH_CLOSE_REASONS": ["api_key_revoked", "api_key_invalid", "api_key_expired", "api_key_inactive", "account_disabled", "account_deleted", "bridge_scope_required"],
+    "AUTH_CLOSE_TEXT": {
+      "api_key_revoked": "API key 가 폐기되었습니다 — 새 키를 발급해 설정에 넣으세요",
+      "api_key_invalid": "API key 가 없거나 올바르지 않습니다 — 새 키를 발급해 설정에 넣으세요",
+      "api_key_expired": "API key 가 만료되었습니다 — 새 키를 발급해 설정에 넣으세요",
+      "api_key_inactive": "API key 가 비활성화되었습니다 — 키를 다시 켜거나 새 키를 설정에 넣으세요",
+      "account_disabled": "계정이 비활성화되었습니다 — 관리자에게 문의하세요",
+      "account_deleted": "계정이 삭제되었습니다 — 관리자에게 문의하세요",
+      "bridge_scope_required": "이 API key 에는 'bridge' 스코프가 없습니다 — bridge 스코프 키를 발급해 설정에 넣으세요"
+    },
+    "NOTICE_KINDS": ["approval_pending"],
+    "NOTICE_TOOL_NAME_MAX": 100,
+    "TASK_ID_RE": {"source": "^[a-zA-Z0-9-]{8,64}$", "flags": ""},
+    "DESKTOP_CONFIG_PATH": "/api/desktop/config",
+    "DESKTOP_CONFIG_TIMEOUT_MS": 5000
+  }
+}
