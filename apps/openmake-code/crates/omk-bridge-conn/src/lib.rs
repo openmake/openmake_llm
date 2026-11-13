@@ -6,6 +6,7 @@
 pub mod constants;
 pub mod device_id;
 pub mod endpoints;
+pub mod frames;
 pub mod js_string;
 pub mod notice;
 pub mod reconnect;
