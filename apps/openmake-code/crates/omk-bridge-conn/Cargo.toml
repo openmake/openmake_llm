@@ -1,0 +1,37 @@
+[package]
+name = "omk-bridge-conn"
+description = "OpenMake 로컬 브리지 연결부 — WS 상태기계·서버 주소 찾기·deviceId(TS connection.ts·endpoints.ts 이식)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+omk-bridge-core = { path = "../omk-bridge-core" }
+regress = "0.12.0"
+# sha256·난수(UUID·jitter) — TLS 때문에 어차피 트리에 있다(D-47). sha2·uuid·rand 를 따로 더하지 않는다.
+ring = "0.17.14"
+serde_json = "1.0.154"
+# select! 때문에 macros 를 켠다. #[tokio::main]·#[tokio::test] 는 쓰지 않는다(D-50).
+tokio = { version = "1.54.1", default-features = false, features = ["rt", "rt-multi-thread", "time", "sync", "net", "io-util", "macros"] }
+url = "2.5.8"
+# 우리가 연 스트림 위에서 핸드셰이크만 한다 — 접속·TLS 는 transport 가 정한다(D-41).
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["sink", "std"] }
+# TLS — 암호 제공자는 ring(aws-lc-rs 는 빌드가 무겁다), 신뢰 판단은 OS(macOS Security.framework)가 한다(D-42).
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
+rustls-platform-verifier = "0.7.1"
+# 주소 조회 GET 한 번 — 연결 풀·HTTP/2·프록시 없이 연결 단위 API 만 쓴다(D-43).
+hyper = { version = "1.12.0", default-features = false, features = ["client", "http1"] }
+hyper-util = { version = "0.1.21", default-features = false, features = ["tokio"] }
+http-body-util = "0.1.5"
+
+[dev-dependencies]
+# 테스트 때 자체 서명 인증서를 만든다 — 키를 저장소에 두지 않는다.
+rcgen = { version = "0.14.10", default-features = false, features = ["crypto", "ring"] }
+tokio = { version = "1.54.1", default-features = false, features = ["test-util"] }
+
+[lints]
+workspace = true

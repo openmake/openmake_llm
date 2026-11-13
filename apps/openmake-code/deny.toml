@@ -10,5 +10,15 @@ yanked = "deny"
 
 [licenses]
 # 실제 의존성 트리(regress·serde_json 계열)에 맞춘 허용 목록. 의존성을 더할 때 여기서 걸리면 검토한다.
-allow = ["MIT", "Apache-2.0", "Unicode-3.0"]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Unicode-3.0",
+    # omk-bridge-conn(PR-1.5): ring(Apache-2.0 AND ISC)·rustls-webpki·untrusted(TLS 인증서 해석)
+    "ISC",
+    # omk-bridge-conn(PR-1.5): subtle(rustls 의 상수 시간 비교)
+    "BSD-3-Clause",
+    # omk-bridge-conn(PR-1.5): webpki-root-certs — rustls-platform-verifier 의 wasm32 대상 전용 의존(macOS 빌드에는 들어가지 않는다)
+    "CDLA-Permissive-2.0",
+]
 confidence-threshold = 0.9
