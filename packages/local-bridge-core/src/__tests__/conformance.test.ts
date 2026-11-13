@@ -188,15 +188,15 @@ describe('platform', () => {
 });
 
 describe('sandbox-profile', () => {
-    type In = { root: string; gitDir: string | null; commonDir?: string; tool?: boolean; protect?: { gitDir: string; commonDir: string } | null };
+    type In = { root: string; gitDir: string | null; commonDir?: string; tool?: boolean; protect?: { gitDir: string; commonDir: string }[] };
     const doc = load<{ cases: Case<In, { profile: string }>[] }>('sandbox-profile');
 
     it.each(doc.cases.map((c) => [c.id, c] as const))('%s — 프로파일 전체 텍스트가 같다', (_id, c) => {
         const { root, gitDir, commonDir, tool, protect } = c.input;
-        // commonDir 를 적지 않으면 git dir 와 같다(일반 레포). 빈 gitDir 은 git 없음(종전 규칙). protect 를 적지 않으면 git.
+        // commonDir 를 적지 않으면 git dir 와 같다(일반 레포). 빈 gitDir 은 git 없음(종전 규칙). protect(목록)를 적지 않으면 [git].
         const git = gitDir ? { gitDir, commonDir: commonDir ?? gitDir } : null;
         const home = fs.realpathSync.native(os.homedir());
-        const got = buildSandboxProfile(root, git, tool === true, protect === undefined ? git : protect);
+        const got = buildSandboxProfile(root, git, tool === true, protect ?? (git ? [git] : []));
         expect(got).toBe(c.expect.profile.split('{{HOME}}').join(home));
     });
 });

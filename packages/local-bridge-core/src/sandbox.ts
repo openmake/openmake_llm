@@ -23,9 +23,10 @@ function literalPath(p: string): string {
  * `(deny network*)`(설계 D-1). exec 프로파일은 승인된 명령용이라 네트워크를 연다(npm·git push).
  * git: 연결 때 믿기로 한 git 디렉터리(git-trust.ts) — **쓰기 허용**. 레포 하위 폴더·linked worktree 를 연결하면 git
  * 디렉터리가 폴더 밖이라 git(커밋·인덱스) 쓰기를 열어 준다 — linked worktree 는 객체·참조가 common dir 에 있어 그쪽도 연다(E5).
- * protect: 끝 금지 줄을 걸 git 디렉터리 — 기본은 git. 믿지 않아도(탐지 실패) 연결 폴더의 `.git` 디렉터리는 지킨다(리뷰 F2).
+ * protect: 끝 금지 줄을 걸 git 디렉터리들(하나에 한 줄) — 기본은 git. 믿지 않아도(탐지 실패) 연결 폴더의 `.git` 디렉터리와, 폴더 안을
+ * 가리키는 gitfile·심링크의 대상은 지킨다(리뷰 F2·N2, `protectedGitDirs`).
  */
-export function sandboxProfileText(root: string, git: GitPaths | null, home: string, tool: boolean, protect: GitPaths | null = git): string {
+export function sandboxProfileText(root: string, git: GitPaths | null, home: string, tool: boolean, protect: GitPaths[] = git ? [git] : []): string {
     const g = git?.gitDir ? git : null; // 빈 문자열은 git 없음(종전 규칙)
     const common = g ? g.commonDir || g.gitDir : '';
     const separate = !!g && literalPath(common) !== literalPath(g.gitDir);
@@ -40,7 +41,7 @@ export function sandboxProfileText(root: string, git: GitPaths | null, home: str
         `(allow file-write* ${sbSub(home, CACHE_SUBPATHS)})`,
         `(deny file-read* ${sbSub(home, SECRET_SUBPATHS)})`,
         ...(tool ? ['(deny network*)'] : []),
-        ...gitDenyLine(protect),
+        ...protect.flatMap(gitDenyLine),
         '',
     ].join('\n');
 }
@@ -54,9 +55,8 @@ export function sandboxProfileText(root: string, git: GitPaths | null, home: str
  * 막는다 — linked 배치는 `worktrees` 가 이미 있어 `worktree add` 가 만들 일이 없다(일반 레포는 첫 add 가 만들므로 넣지 않는다).
  * SBPL 은 last-match-wins 라 이 deny 를 **프로파일 맨 끝**에 둔다(레포가 상위 allow 경로 안에 있어도 확실히 이기도록).
  */
-function gitDenyLine(protect: GitPaths | null): string[] {
-    const p = protect?.gitDir ? protect : null;
-    if (!p) return [];
+function gitDenyLine(p: GitPaths): string[] {
+    if (!p.gitDir) return [];
     const c = p.commonDir || p.gitDir;
     const separate = literalPath(c) !== literalPath(p.gitDir);
     const lit = (x: string): string => ` (literal ${sbq(x)})`;
@@ -69,7 +69,7 @@ function gitDenyLine(protect: GitPaths | null): string[] {
  * 파일이면 샌드박스 안의 자식이 고칠 수 있는 자리(CLI 는 `os.tmpdir()` — 프로파일이 쓰기를 연 `/private/var/folders`)에
  * 놓일 때 확인 없는 자식이 `(allow default)` 로 덮어써 다음 실행이 샌드박스 밖에서 돌았다(리뷰 F1). 호스트가 어디를 주든 같다.
  */
-export function buildSandboxProfile(root: string, git: GitPaths | null, tool: boolean, protect: GitPaths | null = git): string | null {
+export function buildSandboxProfile(root: string, git: GitPaths | null, tool: boolean, protect: GitPaths[] = git ? [git] : []): string | null {
     try {
         return sandboxProfileText(root, git, fs.realpathSync.native(os.homedir()), tool, protect);
     } catch {

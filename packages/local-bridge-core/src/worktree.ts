@@ -23,7 +23,7 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { EXEC_TIMEOUT_MS, GIT_DIR_MISMATCH_ERROR, GIT_FIXED_ARGS, MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR } from './constants';
 import { buildExecEnv } from './exec-env';
-import type { GitPaths } from './git-trust';
+import { readRegularFile, type GitPaths } from './git-trust';
 import { SandboxProfileMissingError, sandboxExecFailed, wrapInSandbox } from './sandbox';
 import { safeFrom, safeFromAsync } from './scope';
 import type { BridgeMsg, BridgeResult } from './types';
@@ -114,7 +114,9 @@ function excludeWorktreeDir(gitDir: string): void {
         const p = path.join(infoDir, 'exclude');
         if (isSymlink(infoDir) || isSymlink(p)) return;
         fs.mkdirSync(infoDir, { recursive: true });
-        const cur = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+        // 일반 파일만 읽는다 — FIFO·소켓·장치면 동기 읽기가 이벤트 루프를 멈췄다(리뷰 N3). 그때는 등록을 건너뛴다.
+        const cur = fs.lstatSync(p, { throwIfNoEntry: false }) ? readRegularFile(p) : '';
+        if (cur === null) return;
         if (!cur.split('\n').some((l) => l.trim() === '.openmake/')) {
             writeNoFollow(infoDir, 'exclude', `${cur}${cur.endsWith('\n') || cur === '' ? '' : '\n'}.openmake/\n`);
         }

@@ -72,6 +72,8 @@ export const GIT_PROBE_PROFILE = '(version 1)(allow default)(deny file-write*)(a
 export const GIT_DIR_MISMATCH_ERROR = 'git 디렉터리가 연결할 때와 달라 worktree 연산을 거부했습니다(폴더 재연결 필요).';
 /** 파일 kind 가 git 디렉터리의 금지 경로(자신·config·hooks, worktree 의 .git)를 쓰거나 지우려 할 때의 거절 문구 머리. */
 export const GIT_PATH_DENIED_PREFIX = 'git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: ';
+/** 코어가 직접 읽는 gitfile(`gitdir: <경로>`) 크기 상한(바이트) — 경로 한 줄이면 충분하다(PATH_MAX 1024). 넘으면 gitfile 이 아니다. */
+export const GITFILE_MAX_BYTES = 4096;
 
 /** 워크스페이스 밖이지만 쓰기를 허용해야 하는 툴 캐시 — 없으면 npm/pip/cargo 계열이 깨진다. */
 export const CACHE_SUBPATHS = ['.npm', '.cache', 'Library/Caches', '.cargo', '.gradle', '.m2', '.yarn', '.pnpm-store', 'go/pkg'];
