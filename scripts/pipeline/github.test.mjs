@@ -161,7 +161,7 @@ test('promotion merges immediately only for current dev head and both latest CI 
                 if (path.includes('/pulls?')) return JSON.stringify([pr]);
                 if (path.endsWith('/pulls/1')) return JSON.stringify(pr);
                 throw new Error(`Unexpected ${args}`);
-            });
+            }, async () => {});
             const merges = calls.filter(args => args[0] === 'pr' && args[1] === 'merge');
             assert.equal(merges.length, scenario === 'ready' ? 1 : 0, scenario);
             if (merges.length) {
@@ -169,6 +169,62 @@ test('promotion merges immediately only for current dev head and both latest CI 
                 assert.deepEqual(merges[0].slice(-5), ['--merge', '--match-head-commit', 'a', '--body', 'Merged head a']);
                 // 머지 커밋 본문이 PR 제목(fix(..): ..)이면 release-please 가 같은 변경을 두 번 적는다.
                 assert.doesNotMatch(merges[0].at(-1), /^[a-z]+(\(.+\))?!?: /);
+            }
+        }
+    } finally {
+        for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+        Object.assign(process.env, saved);
+    }
+});
+
+test('promotion re-reads a lagging mergeable_state but never merges without clean and PR CI', async () => {
+    const saved = {...process.env};
+    const dir = mkdtempSync(join(tmpdir(), 'pipeline-promote-retry-'));
+    const eventPath = join(dir, 'event.json');
+    writeFileSync(eventPath, JSON.stringify({workflow_run: {event: 'push', conclusion: 'success', head_branch: 'dev', head_sha: 'a'}}));
+    Object.assign(process.env, {OMK_AUTOMATION_TOKEN: 'test-token', GITHUB_REPOSITORY: 'o/r', GITHUB_EVENT_PATH: eventPath});
+    const cases = {
+        'unknown-then-clean': {states: ['unknown', 'clean'], merges: 1, waits: 1},
+        'stays-blocked': {states: ['blocked'], merges: 0, waits: 6},
+        'delayed-pr-ci': {states: ['unknown'], merges: 0, waits: 0, prCI: null},
+        'head-changed-during-retry': {states: ['unknown', 'clean'], heads: ['a', 'b'], merges: 0, waits: 1, error: /head changed/},
+        'dirty': {states: ['dirty'], merges: 0, waits: 0},
+    };
+    try {
+        for (const [name, c] of Object.entries(cases)) {
+            const calls = [];
+            let reads = 0, waits = 0;
+            const pick = (list, i) => list[Math.min(i, list.length - 1)];
+            const logs = [];
+            const log = console.log;
+            console.log = (...args) => logs.push(args.join(' '));
+            try {
+                await orchestrate('promote', args => {
+                    calls.push(args);
+                    if (args[0] === 'pr') return '';
+                    const path = args[1];
+                    if (path.endsWith('/branches/dev')) return JSON.stringify({commit: {sha: 'a'}});
+                    if (path.endsWith('/branches/main')) return JSON.stringify({commit: {sha: 'base'}});
+                    if (path.includes('/runs?')) return JSON.stringify({workflow_runs: [{id: 2, head_sha: 'a', conclusion: path.includes('event=pull_request') && 'prCI' in c ? c.prCI : 'success'}]});
+                    if (path.endsWith('/protection')) return JSON.stringify({required_status_checks: {strict: true, contexts: ['CI Gate (Test → Build → Size → Lint)']}});
+                    if (path.endsWith('/compare/main...dev')) return '{"ahead_by":1}';
+                    if (path.includes('/pulls?')) return JSON.stringify([{number: 1, head: {sha: 'a'}, base: {ref: 'main'}}]);
+                    if (path.endsWith('/pulls/1')) {
+                        const i = reads++;
+                        return JSON.stringify({number: 1, head: {sha: pick(c.heads || ['a'], i)}, base: {ref: 'main'}, mergeable_state: pick(c.states, i)});
+                    }
+                    throw new Error(`Unexpected ${args}`);
+                }, async () => { waits++; }).then(() => assert.equal(c.error, undefined, name), error => {
+                    if (!c.error) throw error;
+                    assert.match(error.message, c.error, name);
+                });
+            } finally {
+                console.log = log;
+            }
+            assert.equal(calls.filter(args => args[0] === 'pr' && args[1] === 'merge').length, c.merges, name);
+            assert.equal(waits, c.waits, name);
+            if (!c.merges && !c.error) {
+                assert.ok(logs.some(line => line.includes(`mergeable_state=${pick(c.states, reads - 1)}`) && line.includes(`PR CI=${c.prCI === null ? 'false' : 'true'}`)), `${name}: ${logs.join(' | ')}`);
             }
         }
     } finally {
