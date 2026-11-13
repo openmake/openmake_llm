@@ -190,6 +190,32 @@ pub fn shape_request(r: &Value, at: &str, required: &[&str], optional: &[&str], 
     if let Some(after) = r.get("after") {
         shape_after(after, at);
     }
+    shape_compare_values(r, at);
+}
+
+/// compare 가 보는 기대값은 비어 있지 않아야 한다 — 빈 목록·빈 글자는 무엇이 와도 통과한다(`stdoutLacks` 의 빈 목록은
+/// "없어야 할 것이 없음" 이라 정당하다).
+fn shape_compare_values(r: &Value, at: &str) {
+    let non_empty_str = |v: &Value| v.as_str().is_some_and(|t| !t.is_empty());
+    for key in ["expect", "rustExpect"] {
+        let Some(w) = r.get(key).and_then(Value::as_object) else {
+            continue;
+        };
+        for k in ["stdoutHas", "stdoutContains"] {
+            if let Some(v) = w.get(k) {
+                let ok = v
+                    .as_array()
+                    .is_some_and(|a| !a.is_empty() && a.iter().all(non_empty_str));
+                assert!(
+                    ok,
+                    "{at}/{key}: {k} 는 비어 있지 않은 글자의 비어 있지 않은 목록"
+                );
+            }
+        }
+        if let Some(p) = w.get("errorPrefix") {
+            assert!(non_empty_str(p), "{at}/{key}: errorPrefix 가 비었다");
+        }
+    }
 }
 
 /// `answerOrder` 는 `asked: true` 인 번호를 정확히 한 번씩 담는다 — 빠지면 그 물음은 답을 못 받아 러너가 멈춘다.

@@ -54,6 +54,23 @@ function shapeReq(r: Record<string, unknown>, at: string, withCount: boolean): v
     if (r.after !== undefined) shapeAfter(r.after, at);
     if (r.confirm !== undefined) expect(['yes', 'all', 'no']).toContain(r.confirm);
     if (r.askedWith !== undefined) shape(r.askedWith, ['command', 'taskId', 'base'], [], `${at}/askedWith`);
+    shapeCompareValues(r, at);
+}
+/** compare 가 보는 기대값은 비어 있지 않아야 한다 — 빈 목록·빈 글자는 무엇이 와도 통과한다(`stdoutLacks` 의 빈 목록은 정당). */
+function shapeCompareValues(r: Record<string, unknown>, at: string): void {
+    const nonEmptyStr = (v: unknown): boolean => typeof v === 'string' && v !== '';
+    for (const key of ['expect', 'rustExpect']) {
+        const w = r[key];
+        if (typeof w !== 'object' || w === null || Array.isArray(w)) continue;
+        const o = w as Record<string, unknown>;
+        for (const k of ['stdoutHas', 'stdoutContains']) {
+            if (!(k in o)) continue;
+            const v = o[k];
+            const ok = Array.isArray(v) && v.length > 0 && v.every(nonEmptyStr);
+            expect({ at: `${at}/${key}`, [k]: ok }).toEqual({ at: `${at}/${key}`, [k]: true });
+        }
+        if ('errorPrefix' in o) expect({ at: `${at}/${key}`, errorPrefix: nonEmptyStr(o.errorPrefix) }).toEqual({ at: `${at}/${key}`, errorPrefix: true });
+    }
 }
 /** answerOrder 는 asked: true 인 번호를 정확히 한 번씩 담는다 — 빠지면 그 물음은 답을 못 받아 러너가 멈춘다. */
 function shapeAnswerOrder(s: { parallel: ReqStep[]; answerOrder: unknown }, at: string): void {
@@ -114,6 +131,7 @@ describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () =
                     shape(s, ['msg', 'expect'], ['compare', 'after', 'divergence', 'rustExpect'], sat);
                     if (s.compare !== undefined) expect(['stdout-contains', 'error-prefix']).toContain(s.compare);
                     if (s.after !== undefined) shapeAfter(s.after, sat);
+                    shapeCompareValues(s, sat);
                 } else if ('git' in s) shape(s, ['git', 'cwd'], ['stdout'], sat);
                 else if ('file' in s) shape(s, ['file'], ['content', 'repeat'], sat);
                 else shape(s, ['remove'], [], sat);
