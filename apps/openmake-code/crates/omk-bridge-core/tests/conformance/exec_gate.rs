@@ -29,7 +29,7 @@ const CHECKED_FIELDS: [&str; 7] = [
     "op",
     "taskId",
 ];
-const SETUP_KINDS: [&str; 3] = ["dir", "file", "git"];
+const SETUP_KINDS: [&str; 4] = ["dir", "file", "git", "symlink"];
 const REQ_OPTIONAL: [&str; 6] = [
     "confirm",
     "askedWith",
@@ -173,6 +173,7 @@ pub fn shape_setup(setup: &Value, at: &str) {
             Some(&"dir") => shape(s, &["dir"], &[], &at),
             Some(&"file") => shape(s, &["file"], &["content", "contentB64", "repeat"], &at),
             Some(&"git") => shape(s, &["git", "cwd"], &[], &at),
+            Some(&"symlink") => shape(s, &["symlink", "target"], &[], &at),
             _ => panic!("{at}: 모르는 setup {s}"),
         }
     }
