@@ -6,29 +6,83 @@
 
 use std::io;
 
-/// 번호가 macOS·Linux 에서 같은 errno.
-const COMMON: [(i32, &str, &str); 13] = [
+/// 번호가 macOS·Linux 에서 같은 errno(1~34, 11 제외 — macOS 는 EDEADLK·Linux 는 EAGAIN).
+/// 이름·설명은 Node 24.22.2 `util.getSystemErrorName`·`getSystemErrorMessage` 로 생성해 대조했다(libuv `uv-errno` 가 아는 것만).
+const COMMON: [(i32, &str, &str); 30] = [
     (1, "EPERM", "operation not permitted"),
     (2, "ENOENT", "no such file or directory"),
+    (3, "ESRCH", "no such process"),
+    (4, "EINTR", "interrupted system call"),
     (5, "EIO", "i/o error"),
+    (6, "ENXIO", "no such device or address"),
+    (7, "E2BIG", "argument list too long"),
+    (8, "ENOEXEC", "exec format error"),
+    (9, "EBADF", "bad file descriptor"),
+    (12, "ENOMEM", "not enough memory"),
     (13, "EACCES", "permission denied"),
+    (14, "EFAULT", "bad address in system call argument"),
     (16, "EBUSY", "resource busy or locked"),
     (17, "EEXIST", "file already exists"),
     (18, "EXDEV", "cross-device link not permitted"),
+    (19, "ENODEV", "no such device"),
     (20, "ENOTDIR", "not a directory"),
     (21, "EISDIR", "illegal operation on a directory"),
     (22, "EINVAL", "invalid argument"),
+    (23, "ENFILE", "file table overflow"),
     (24, "EMFILE", "too many open files"),
+    (25, "ENOTTY", "inappropriate ioctl for device"),
+    (26, "ETXTBSY", "text file is busy"),
+    (27, "EFBIG", "file too large"),
     (28, "ENOSPC", "no space left on device"),
+    (29, "ESPIPE", "invalid seek"),
     (30, "EROFS", "read-only file system"),
+    (31, "EMLINK", "too many links"),
+    (32, "EPIPE", "broken pipe"),
+    (34, "ERANGE", "result too large"),
 ];
 
-/// 플랫폼마다 번호가 다른 errno — Linux·Windows 표는 Windows 이전(PR-5.1)에서 더한다.
+/// 플랫폼마다 번호가 다른 errno(macOS 35 이상) — Linux·Windows 표는 Windows 이전(PR-5.1)에서 더한다.
 #[cfg(target_os = "macos")]
-const PLATFORM: [(i32, &str, &str); 3] = [
+const PLATFORM: [(i32, &str, &str); 35] = [
+    (35, "EAGAIN", "resource temporarily unavailable"),
+    (37, "EALREADY", "connection already in progress"),
+    (38, "ENOTSOCK", "socket operation on non-socket"),
+    (39, "EDESTADDRREQ", "destination address required"),
+    (40, "EMSGSIZE", "message too long"),
+    (41, "EPROTOTYPE", "protocol wrong type for socket"),
+    (42, "ENOPROTOOPT", "protocol not available"),
+    (43, "EPROTONOSUPPORT", "protocol not supported"),
+    (44, "ESOCKTNOSUPPORT", "socket type not supported"),
+    (45, "ENOTSUP", "operation not supported on socket"),
+    (47, "EAFNOSUPPORT", "address family not supported"),
+    (48, "EADDRINUSE", "address already in use"),
+    (49, "EADDRNOTAVAIL", "address not available"),
+    (50, "ENETDOWN", "network is down"),
+    (51, "ENETUNREACH", "network is unreachable"),
+    (53, "ECONNABORTED", "software caused connection abort"),
+    (54, "ECONNRESET", "connection reset by peer"),
+    (55, "ENOBUFS", "no buffer space available"),
+    (56, "EISCONN", "socket is already connected"),
+    (57, "ENOTCONN", "socket is not connected"),
+    (
+        58,
+        "ESHUTDOWN",
+        "cannot send after transport endpoint shutdown",
+    ),
+    (60, "ETIMEDOUT", "connection timed out"),
+    (61, "ECONNREFUSED", "connection refused"),
     (62, "ELOOP", "too many symbolic links encountered"),
     (63, "ENAMETOOLONG", "name too long"),
+    (64, "EHOSTDOWN", "host is down"),
+    (65, "EHOSTUNREACH", "host is unreachable"),
     (66, "ENOTEMPTY", "directory not empty"),
+    (78, "ENOSYS", "function not implemented"),
+    (79, "EFTYPE", "inappropriate file type or format"),
+    (84, "EOVERFLOW", "value too large for defined data type"),
+    (89, "ECANCELED", "operation canceled"),
+    (92, "EILSEQ", "illegal byte sequence"),
+    (96, "ENODATA", "no data available"),
+    (100, "EPROTO", "protocol error"),
 ];
 #[cfg(not(target_os = "macos"))]
 const PLATFORM: [(i32, &str, &str); 0] = [];
@@ -183,5 +237,48 @@ mod tests {
             "z".repeat(40)
         );
         assert_eq!(null_bytes(&lines), want);
+    }
+
+    /// Node 24.22.2(macOS)에서 `util.getSystemErrorName(-n)` 이 이름을 아는 errno 전부(1..=200 을 훑어 얻음).
+    #[cfg(target_os = "macos")]
+    const NODE_KNOWN_MACOS: [i32; 65] = [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28,
+        29, 30, 31, 32, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 47, 48, 49, 50, 51, 53, 54, 55,
+        56, 57, 58, 60, 61, 62, 63, 64, 65, 66, 78, 79, 84, 89, 92, 96, 100,
+    ];
+
+    /// Node 가 이름을 아는 errno 는 `Unknown system error` 가 나오지 않고, 모르는 번호는 Node 와 같이 그 꼴이다.
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn table_matches_node_known_errno_on_macos() {
+        let unknown =
+            |n: i32| format(&Error::from_raw_os_error(n), "x", None).starts_with("Unknown");
+        let missing: Vec<i32> = NODE_KNOWN_MACOS
+            .iter()
+            .copied()
+            .filter(|n| unknown(*n))
+            .collect();
+        assert_eq!(missing, Vec::<i32>::new());
+        let extra: Vec<i32> = (1..=200)
+            .filter(|n| !NODE_KNOWN_MACOS.contains(n) && !unknown(*n))
+            .collect();
+        assert_eq!(extra, Vec::<i32>::new());
+        // 글자 대조(Node 24.22.2 `util.getSystemErrorName`·`getSystemErrorMessage`).
+        for (n, want) in [
+            (35, "EAGAIN: resource temporarily unavailable, x"),
+            (45, "ENOTSUP: operation not supported on socket, x"),
+            (19, "ENODEV: no such device, x"),
+            (60, "ETIMEDOUT: connection timed out, x"),
+            (79, "EFTYPE: inappropriate file type or format, x"),
+            (100, "EPROTO: protocol error, x"),
+            (11, "Unknown system error -11: Unknown system error -11, x"),
+            (70, "Unknown system error -70: Unknown system error -70, x"),
+            (
+                102,
+                "Unknown system error -102: Unknown system error -102, x",
+            ),
+        ] {
+            assert_eq!(format(&Error::from_raw_os_error(n), "x", None), want);
+        }
     }
 }
