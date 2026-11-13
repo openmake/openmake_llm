@@ -87,7 +87,8 @@ export function gitIsolated(tmp: string, args: string[], cwd: string): string {
 
 export type Repeat = { line: string; count: number };
 export type FileSpec = { file: string; content?: string; contentB64?: string; repeat?: Repeat };
-export type Setup = { dir: string } | FileSpec | { git: string[]; cwd: string };
+export type Symlink = { symlink: string; target: string };
+export type Setup = { dir: string } | FileSpec | { git: string[]; cwd: string } | Symlink;
 
 function writeFile(tmp: string, s: FileSpec): void {
     const p = path.join(tmp, s.file);
@@ -96,24 +97,29 @@ function writeFile(tmp: string, s: FileSpec): void {
     else fs.writeFileSync(p, s.contentB64 !== undefined ? Buffer.from(s.contentB64, 'base64') : (s.content ?? ''));
 }
 
-export const SETUP_KINDS = ['dir', 'file', 'git'];
+/** `{"symlink", "target"}` — target 은 `{{TMP}}` 를 채워 그대로 링크에 적는다(상대 target 가능). */
+function symlink(tmp: string, s: Symlink): void { fs.symlinkSync(fill(s.target, tmp), path.join(tmp, s.symlink)); }
+
+export const SETUP_KINDS = ['dir', 'file', 'git', 'symlink'];
 export function applySetup(tmp: string, setup: Setup[]): void {
     for (const s of setup) {
         if ('dir' in s) fs.mkdirSync(path.join(tmp, s.dir), { recursive: true });
         else if ('file' in s) writeFile(tmp, s);
         else if ('git' in s) gitIsolated(tmp, s.git, path.join(tmp, s.cwd));
+        else if ('symlink' in s) symlink(tmp, s);
         else throw new Error(`모르는 setup: ${JSON.stringify(s)}`);
     }
 }
 
 /** 요청이 아닌 단계 — 에이전트가 worktree 안에서 한 일을 흉내 낸다. git 단계의 stdout 을 적었으면 그 글자와 같아야 한다. */
-export type OpStep = { git: string[]; cwd: string; stdout?: string } | FileSpec | { remove: string };
+export type OpStep = { git: string[]; cwd: string; stdout?: string } | FileSpec | { remove: string } | Symlink;
 export function applyOpStep(tmp: string, s: OpStep, at: string): void {
     if ('git' in s) {
         const out = gitIsolated(tmp, s.git, path.join(tmp, s.cwd));
         if (s.stdout !== undefined) expect({ at, stdout: out }).toEqual({ at, stdout: s.stdout });
     } else if ('file' in s) writeFile(tmp, s);
     else if ('remove' in s) fs.rmSync(path.join(tmp, s.remove), { recursive: true, force: true });
+    else if ('symlink' in s) symlink(tmp, s);
     else throw new Error(`${at}: 모르는 단계 ${JSON.stringify(s)}`);
 }
 
