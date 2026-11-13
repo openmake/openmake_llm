@@ -55,6 +55,12 @@ function shapeReq(r: Record<string, unknown>, at: string, withCount: boolean): v
     if (r.confirm !== undefined) expect(['yes', 'all', 'no']).toContain(r.confirm);
     if (r.askedWith !== undefined) shape(r.askedWith, ['command', 'taskId', 'base'], [], `${at}/askedWith`);
 }
+/** answerOrder 는 asked: true 인 번호를 정확히 한 번씩 담는다 — 빠지면 그 물음은 답을 못 받아 러너가 멈춘다. */
+function shapeAnswerOrder(s: { parallel: ReqStep[]; answerOrder: unknown }, at: string): void {
+    const asked = s.parallel.flatMap((r, i) => (r.asked === true ? [i] : []));
+    const order = Array.isArray(s.answerOrder) ? [...(s.answerOrder as unknown[])].sort((a, b) => Number(a) - Number(b)) : s.answerOrder;
+    expect({ at, answerOrder: order }).toEqual({ at, answerOrder: asked });
+}
 
 describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () => {
     it('exec-gate', () => {
@@ -70,6 +76,7 @@ describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () =
                 else if ('parallel' in s) {
                     shape(s, ['parallel', 'answerOrder', 'autoApproved'], [], sat);
                     nonEmpty(s.parallel, `${sat}/parallel`).forEach((r, i) => shapeReq(r, `${sat}/parallel/${i}`, false));
+                    shapeAnswerOrder(s as { parallel: ReqStep[]; answerOrder: unknown }, sat);
                 } else shapeReq(s, sat, true);
             });
         }

@@ -192,6 +192,29 @@ pub fn shape_request(r: &Value, at: &str, required: &[&str], optional: &[&str], 
     }
 }
 
+/// `answerOrder` 는 `asked: true` 인 번호를 정확히 한 번씩 담는다 — 빠지면 그 물음은 답을 못 받아 러너가 멈춘다.
+fn shape_answer_order(s: &Value, at: &str) {
+    let asked: Vec<u64> = (0u64..)
+        .zip(s["parallel"].as_array().unwrap())
+        .filter(|(_, r)| r["asked"] == true)
+        .map(|(i, _)| i)
+        .collect();
+    let mut order: Vec<u64> = s["answerOrder"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{at}: answerOrder 배열 아님"))
+        .iter()
+        .map(|v| {
+            v.as_u64()
+                .unwrap_or_else(|| panic!("{at}: answerOrder {v}"))
+        })
+        .collect();
+    order.sort_unstable();
+    assert_eq!(
+        order, asked,
+        "{at}: answerOrder 는 asked 인 번호를 정확히 한 번씩 담는다"
+    );
+}
+
 fn shape_gate_request(r: &Value, at: &str, with_count: bool) {
     let mut optional = REQ_OPTIONAL.to_vec();
     if with_count {
@@ -255,6 +278,7 @@ fn exec_gate_shapes() {
                 {
                     shape_gate_request(r, &format!("{at}/parallel/{i}"), false);
                 }
+                shape_answer_order(s, &at);
             } else {
                 shape_gate_request(s, &at, true);
             }
