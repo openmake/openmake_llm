@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { CACHE_SUBPATHS, GIT_PROBE_TIMEOUT_MS, SECRET_SUBPATHS, sbq, sbSub } from './constants';
+import { CACHE_SUBPATHS, GIT_PROBE_TIMEOUT_MS, SANDBOX_BIN, SANDBOX_PROFILE_MISSING_ERROR, SECRET_SUBPATHS, sbq, sbSub } from './constants';
 import { buildExecEnv } from './exec-env';
 
 /**
@@ -60,4 +60,31 @@ export function writeSandboxProfile(root: string, gitDir: string | null, outFile
     } catch {
         return null;
     }
+}
+
+/** 샌드박스가 켜졌는데 프로파일이 없어 도구 자식을 띄우지 않았다 — 코어가 exec 와 같은 문구로 그 요청을 거절한다. */
+export class SandboxProfileMissingError extends Error {
+    constructor() { super(SANDBOX_PROFILE_MISSING_ERROR); }
+}
+
+/**
+ * 확인 없이 처리하는 도구(test_runner 탐지·lsp_diagnostics)가 띄우는 자식을 exec 와 같은 프로파일로 감싼다.
+ * 그 자식(폴더의 node_modules/.bin/tsc, cwd 가 폴더인 python3)은 폴더의 코드를 실행할 수 있다 — 에이전트가 파일
+ * 쓰기만으로 확인·차단 목록을 지나므로, 적어도 exec 와 같은 OS 경계(폴더 밖 쓰기·비밀 읽기 차단) 안에 둔다.
+ * profile: undefined = 샌드박스 꺼짐(감싸지 않음, OMK_BRIDGE_SANDBOX=0·비 macOS), null = 켜졌지만 프로파일 없음
+ * → 띄우지 않고 SandboxProfileMissingError(fail-closed). 셸을 거치지 않는다.
+ */
+/**
+ * 감싼 자식에서 sandbox-exec **자체**가 실패했나 — 프로파일 파일 유실·문법 오류(종료 코드 65), 실행 파일 execvp 실패(71).
+ * 그때 stderr 는 `sandbox-exec:` 로 시작한다. 진단·탐지가 이를 "깨끗함/없음"으로 삼키지 않게 호출측이 프로파일 없음과
+ * 같은 거절로 바꾼다(실행 파일이 PATH 에 없는 71 은 호출측이 감싸기 전에 걸러 낸다 — python3 찾기).
+ */
+export function sandboxExecFailed(wrapped: boolean, code: unknown, stderr: string): boolean {
+    return wrapped && (code === 65 || code === 71) && stderr.startsWith('sandbox-exec:');
+}
+
+export function wrapInSandbox(file: string, args: string[], profile: string | null | undefined): { file: string; args: string[] } {
+    if (profile === undefined) return { file, args };
+    if (profile === null) throw new SandboxProfileMissingError();
+    return { file: SANDBOX_BIN, args: ['-f', profile, file, ...args] };
 }

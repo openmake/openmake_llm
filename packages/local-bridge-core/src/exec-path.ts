@@ -6,11 +6,19 @@
  * 폴더 연결 시 1회 계산하고, 각 단계 실패는 다음 폴백으로 넘어간다(exec 자체를 막지 않음).
  * 두 자식(로그인 셸·mise)에는 호스트 env 를 통째로 주지 않는다 — exec 와 같은 allowlist + 위치 변수만(사용자 rc·프로젝트 mise 설정이 비밀을 읽지 못하게).
  */
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { PATH_PROBE_ENV_EXTRA_POSIX, PATH_PROBE_TIMEOUT_MS } from './constants';
 import { buildExecEnv } from './exec-env';
+
+/** execPath(`:` 구분) 안에 실행 가능한 bin 이 있는가. */
+export function onPath(bin: string, execPath: string): boolean {
+    return execPath.split(':').filter(Boolean).some((d) => {
+        try { fs.accessSync(path.join(d, bin), fs.constants.X_OK); return true; } catch { return false; }
+    });
+}
 
 export function resolveExecPath(folderRoot: string | null): string {
     // Windows — 로그인 셸·Homebrew·mise 관행이 없다. 프로세스의 PATH 를 그대로 쓴다.
