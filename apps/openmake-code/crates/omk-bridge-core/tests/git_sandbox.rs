@@ -200,8 +200,9 @@ fn e1c_file_kind_cannot_replace_worktree_gitfile() {
     let repo = w.repo("repo");
     let c = core(&w, &repo);
     assert_eq!(wt(&c, "add")["ok"], true);
+    // HEAD 는 새로 만들 수 없다(D-11) — 나머지는 HEAD 없는 폴더라 쓰인다.
     for (p, content) in fake_git_dir(&w) {
-        assert_eq!(write(&c, &p, &content), json!({"ok": true}), "{p}");
+        assert_eq!(write(&c, &p, &content)["ok"], !p.ends_with("/HEAD"), "{p}");
     }
     let r = write(&c, &format!("{WT}/.git"), "gitdir: ./fake\n");
     assert_eq!(r["ok"], false, "{r}");
@@ -314,16 +315,17 @@ fn e2_file_kinds_respect_git_denies() {
     assert_eq!(write(&c, "b.txt", "b"), json!({"ok": true}));
 }
 
-/// git 이 없는(레포 아님) 폴더도 루트 `.git` 의 config 는 이름으로 막고 그 밖은 쓴다(리뷰 N1, TS 같음).
+/// git 이 없는(레포 아님) 폴더도 `.git` 아래는 루트·하위 폴더 모두 파일 kind 로 쓰지 못한다(리뷰 N1, D-11, TS 같음).
 #[test]
 fn root_dotgit_name_guard_without_git() {
     let w = Work::new();
     let plain = w.join("plain");
     std::fs::create_dir_all(&plain).unwrap();
     let c = core(&w, &plain);
-    assert_eq!(write(&c, ".git/config", "x")["ok"], false);
-    assert_eq!(write(&c, ".git/HEAD", "x"), json!({"ok": true}));
-    assert_eq!(write(&c, "sub/.git/config", "x"), json!({"ok": true}));
+    for p in [".git/config", ".git/HEAD", "sub/.git/config"] {
+        assert_eq!(write(&c, p, "x")["ok"], false, "{p}");
+    }
+    assert_eq!(write(&c, "sub/a.txt", "x"), json!({"ok": true}));
 }
 
 /// D-3 — linked worktree 를 연결해도 worktree add·exec git commit 이 된다(E5). common dir 의 config 는 여전히 못 쓴다.

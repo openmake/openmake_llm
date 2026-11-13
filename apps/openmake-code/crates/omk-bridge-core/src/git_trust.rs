@@ -12,13 +12,13 @@
 
 use crate::constants::{
     GIT_FIXED_ARGS, GIT_PATH_DENIED_PREFIX, GIT_PROBE_PROFILE, GIT_PROBE_TIMEOUT_MS,
-    GITFILE_MAX_BYTES, SANDBOX_BIN, WORKTREE_DIR,
+    GITFILE_MAX_BYTES, SANDBOX_BIN,
 };
 use crate::exec_env::build_exec_env;
 use crate::exec_path::env_get;
 use crate::js_text::js_trim;
 use crate::node_error;
-use crate::node_path::{basename, dirname, join, resolve};
+use crate::node_path::{basename, dirname, join, relative, resolve};
 use crate::platform::Platform;
 use crate::proc::{self, ProcEnd, ProcSpec, Stderr, Stdin};
 use crate::timed_fs::FsGate;
@@ -182,34 +182,27 @@ pub async fn detect_git(
     gate.run("샌드박스 준비", judge).await.ok().flatten()
 }
 
-/// 존재하는 최근접 조상의 realpath + 나머지 — 없는 파일을 쓰는 경우도 실제 위치로 본다.
-fn resolve_real(abs: &str) -> Result<String, String> {
-    let mut rest = Vec::new();
+/// 존재하는 최근접 조상의 realpath + 나머지 — 없는 파일을 쓰는 경우도 실제 위치로 본다. 둘째 값은 새로 생길 이름들(위에서 아래로).
+fn resolve_real(abs: &str) -> Result<(String, Vec<String>), String> {
+    let mut created = Vec::new();
     let mut at = abs.to_owned();
     while std::fs::symlink_metadata(&at).is_err() {
-        rest.push(basename(&at));
+        created.push(basename(&at));
         at = dirname(&at);
     }
+    created.reverse();
     let base = std::fs::canonicalize(&at)
         .map_err(|e| node_error::format(&e, "realpath", Some(&at)))?
         .to_string_lossy()
         .into_owned();
-    let mut parts = vec![base];
-    parts.extend(rest.into_iter().rev());
-    let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
-    Ok(join(&refs))
+    let mut parts = vec![base.as_str()];
+    parts.extend(created.iter().map(String::as_str));
+    Ok((join(&parts), created))
 }
 
-/// `<…>/.openmake/worktrees/<id>/.git` 또는 그 아래 — worktree 의 gitfile 을 바꾸면 worktree git 이 가짜 git 디렉터리를 쓴다(E1c).
-fn is_worktree_git(p: &str) -> bool {
-    let p = fold_case(p);
-    let seg: Vec<&str> = p.split('/').collect();
-    let wt: Vec<&str> = WORKTREE_DIR.split('/').collect();
-    (0..seg.len()).any(|i| {
-        i + wt.len() + 1 < seg.len()
-            && wt.iter().enumerate().all(|(j, w)| seg[i + j] == *w)
-            && seg[i + wt.len() + 1] == ".git"
-    })
+/// 항목이 있는가(lstat — 파일·디렉터리·심링크·끊긴 심링크).
+fn lexists(p: &str) -> bool {
+    std::fs::symlink_metadata(p).is_ok()
 }
 
 /// ASCII 대소문자 접기 — macOS 기본 볼륨은 대소문자를 무시해 `.git/COMMONDIR` 가 `commondir` 로 읽힌다(리뷰 F3). 없는 이름은
@@ -246,20 +239,17 @@ pub fn root_git_dir(root: &str) -> Option<GitPaths> {
     (within(&target, root) && is_dir).then(|| found(target))
 }
 
-/// 연결 폴더 루트가 이미 bare 꼴(`HEAD` 파일 + `objects`·`refs` 디렉터리)이면 루트 자신 — `.git` 이 없으면 사용자 git 은 루트를
-/// git 디렉터리로 읽는다(리뷰 R2). `gitdir: .` 배치처럼 루트의 config·hooks 를 지킨다(TS `bareRoot`). root 는 realpath.
+/// 연결 폴더 루트에 `HEAD` 항목이 있으면(lstat — 끊긴 심링크 포함) 루트 자신 — `.git` 이 없으면 사용자 git 은 루트를 git 디렉터리로
+/// 읽을 수 있다(리뷰 R2·S1, `objects`·`refs` 는 파일 kind 로 만들 수 있어 조건에 넣지 않는다). 연결 때 목록에 넣어 프로파일 금지 줄을
+/// 건다. 파일 kind 가드는 요청마다 다시 본다(D-11, TS `bareRoot`). root 는 realpath.
 fn bare_root(root: &str) -> Option<GitPaths> {
-    let meta = |name: &str| std::fs::metadata(join(&[root, name])).ok();
-    let bare = meta("HEAD").is_some_and(|m| m.is_file())
-        && meta("objects").is_some_and(|m| m.is_dir())
-        && meta("refs").is_some_and(|m| m.is_dir());
-    bare.then(|| GitPaths {
+    lexists(&join(&[root, "HEAD"])).then(|| GitPaths {
         git_dir: root.to_owned(),
         common_dir: root.to_owned(),
     })
 }
 
-/// 지킬 git 디렉터리 목록 — 믿는 git·`root_git_dir`·bare 꼴 루트(겹치면 하나). 금지 줄·파일 kind 가드가 모두 건다(TS `protectedGitDirs`).
+/// 지킬 git 디렉터리 목록 — 믿는 git·`root_git_dir`·`HEAD` 가 있는 루트(겹치면 하나). 프로파일 금지 줄과 파일 kind 가드가 건다(TS `protectedGitDirs`).
 pub fn protected_git_dirs(git: Option<&GitPaths>, root: &str) -> Vec<GitPaths> {
     let mut out: Vec<GitPaths> = git.cloned().into_iter().collect();
     for r in [root_git_dir(root), bare_root(root)].into_iter().flatten() {
@@ -270,7 +260,7 @@ pub fn protected_git_dirs(git: Option<&GitPaths>, root: &str) -> Vec<GitPaths> {
     out
 }
 
-/// 파일 kind 가드가 보는 것 — 연결 폴더 realpath(그 `.git` 은 없어도 이름으로 지킨다)와 지킬 git 디렉터리들.
+/// 파일 kind 가드가 보는 것 — 연결 폴더 realpath 와 연결 때 정한 지킬 git 디렉터리들.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitGuard {
     pub root: String,
@@ -293,23 +283,35 @@ fn denied_under(r: &str, d: &str, del: bool) -> bool {
         || (del && within(d, r))
 }
 
-/// 파일 kind(write·delete) 가드 — 대상의 실제 위치가 지키는 git dir·common dir 자신·`config`·`commondir`·`config.worktree`·
-/// `hooks` 아래이거나, linked 배치의 `<common>/worktrees`, worktree 의 `.git` 이면 거절한다(exec 프로파일과 같은 금지).
-/// 연결 폴더 루트의 `.git` 은 **없어도 이름으로** 같은 자리를 막는다(리뷰 N1). 이름 비교는 실제 위치와 함께 "부모의 실제 위치 +
-/// 마지막 이름"으로도 해서 `.git` 심링크 자리 자체도 막는다. delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. 비교는
-/// 대소문자를 접어서 한다. 루트가 지키는 git 디렉터리가 아니면 루트의 `HEAD` 를 만들지 못한다 — `.git` 없는 루트를 bare 꼴로
-/// 만들면 사용자 git 이 루트의 config 를 읽었다(리뷰 R2). `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
-/// 지우기는 막지 않는다. FS 를 보므로 관문 안에서 부른다.
+/// 파일 kind(write·delete·브라우저 저장) 가드 — git 이 저장소로 인식하는 구조를 만들거나 고치지 못한다(설계 D-11, 깊이 무관·요청
+/// 시점 판정). git 은 목록이 아니라 구조(`.git` 항목, `HEAD` 가 있는 git 디렉터리 꼴)로 저장소를 찾으므로 가드도 구조를 본다:
+///  1. 연결 폴더 기준 경로에 `.git` 구성 요소가 있으면 거절 — `.git` 자신(만들기·지우기)과 그 아래 전부(worktree 의 `.git` 포함, D-4).
+///  2. 대상의 조상 폴더(연결 폴더까지) 중 `HEAD` 항목이 지금 있는(lstat) 폴더와 연결 때 정한 목록의 git 디렉터리(HEAD 유무 무관 —
+///     탐지 실패·깨진 HEAD 에서도 남는다)마다, 그 바로 아래 금지 이름·`hooks` 아래·비ASCII 첫 이름이면 거절(delete 는 목록의 git
+///     디렉터리 자신·상위 폴더도). linked 배치의 `<common>/worktrees` 도 거절한다.
+///  3. 아직 없는 `HEAD` 항목을 새로 만드는 쓰기는 거절(이미 있으면 종전대로 쓴다, 지우기는 막지 않는다) — 2 와 합쳐 "`config` 먼저,
+///     `HEAD` 나중" 순서도 닫는다. `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
+///
+/// 비교는 대상의 realpath 와 "부모의 realpath + 마지막 이름" 둘로 하고(심링크 자리 자체도 막는다), 대소문자를 접어서 한다(TS
+/// `assertGitPathAllowed`). FS 를 보므로 관문 안에서 부른다.
 pub fn assert_git_path_allowed(
     guard: &GitGuard,
     abs: &str,
     rel: Option<&str>,
     del: bool,
 ) -> Result<(), String> {
-    let r = fold_case(&resolve_real(abs)?);
-    let lex = fold_case(&join(&[&resolve_real(&dirname(abs))?, &basename(abs)]));
-    let root = fold_case(&guard.root);
-    let mut dirs = vec![fold_case(&join(&[&guard.root, ".git"]))];
+    let (real, created) = resolve_real(abs)?;
+    let lex_real = join(&[&resolve_real(&dirname(abs))?.0, &basename(abs)]);
+    let (r, lex, root) = (
+        fold_case(&real),
+        fold_case(&lex_real),
+        fold_case(&guard.root),
+    );
+    let dot_git = [&r, &lex]
+        .iter()
+        .any(|p| relative(&root, p).split('/').any(|n| n == ".git"));
+    let new_head = !del && created.iter().any(|n| fold_case(n) == "head");
+    let mut dirs: Vec<String> = Vec::new();
     let mut parent_rename = false;
     for git in &guard.dirs {
         let (g, c) = (fold_case(&git.git_dir), fold_case(&git.common_dir));
@@ -317,12 +319,22 @@ pub fn assert_git_path_allowed(
         parent_rename |= g != c && (r == parent || lex == parent);
         dirs.extend([g, c]);
     }
+    for p in [&real, &lex_real] {
+        let mut d = dirname(p);
+        while within(&d, &guard.root) {
+            if lexists(&join(&[&d, "HEAD"])) {
+                dirs.push(fold_case(&d));
+            }
+            if d == guard.root {
+                break;
+            }
+            d = dirname(&d);
+        }
+    }
     let denied = dirs
         .iter()
         .any(|d| denied_under(&r, d, del) || denied_under(&lex, d, del));
-    let head = join(&[&root, "head"]);
-    let root_head = !del && !dirs.contains(&root) && (r == head || lex == head);
-    if denied || root_head || parent_rename || is_worktree_git(&r) || is_worktree_git(&lex) {
+    if dot_git || new_head || denied || parent_rename {
         return Err(format!(
             "{GIT_PATH_DENIED_PREFIX}{}",
             rel.unwrap_or("undefined")
@@ -333,16 +345,7 @@ pub fn assert_git_path_allowed(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_worktree_git, within};
-
-    #[test]
-    fn worktree_git_segments() {
-        assert!(is_worktree_git("/r/.openmake/worktrees/t1/.git"));
-        assert!(is_worktree_git("/r/.openmake/worktrees/t1/.git/x"));
-        assert!(!is_worktree_git("/r/.openmake/worktrees/t1/a/.git"));
-        assert!(!is_worktree_git("/r/.openmake/worktrees/.git"));
-        assert!(!is_worktree_git("/r/.git"));
-    }
+    use super::within;
 
     #[test]
     fn within_is_segment_based() {
