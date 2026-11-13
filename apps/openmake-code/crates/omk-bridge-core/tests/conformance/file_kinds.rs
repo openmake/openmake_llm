@@ -16,7 +16,7 @@ pub const NON_STRING_FIELD: &str = "non-string-field";
 const CHECKED_FIELDS: [&str; 4] = ["kind", "path", "folder", "contentB64"];
 
 /// JS 에서 참인 비문자열(0 이 아닌 수·true·배열·객체).
-fn truthy_non_string(v: &Value) -> bool {
+pub fn truthy_non_string(v: &Value) -> bool {
     match v {
         Value::Bool(b) => *b,
         Value::Number(n) => n.as_f64().is_some_and(|x| x != 0.0),

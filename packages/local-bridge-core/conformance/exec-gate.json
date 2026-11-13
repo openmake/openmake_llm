@@ -1,0 +1,263 @@
+{
+  "suite": "exec-gate",
+  "version": 1,
+  "cases": [
+    {
+      "id": "deny-sudo",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "sudo ls", "taskId": "task-deny"}, "asked": false, "expect": {"ok": false, "error": "위험 명령으로 차단됨: 권한 상승(sudo)", "exitCode": 126}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "echo -n after-deny", "taskId": "task-deny"}, "confirm": "yes", "asked": true, "expect": {"ok": true, "stdout": "after-deny", "stderr": "", "exitCode": 0}, "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "deny-during-bulk",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "echo -n one", "taskId": "task-bulk"}, "confirm": "all", "asked": true, "expect": {"ok": true, "stdout": "one", "stderr": "", "exitCode": 0}, "autoApproved": 1},
+        {"msg": {"kind": "exec", "command": "sudo touch planted", "taskId": "task-bulk"}, "asked": false, "expect": {"ok": false, "error": "위험 명령으로 차단됨: 권한 상승(sudo)", "exitCode": 126}, "after": [{"absent": "root/planted"}], "autoApproved": 1},
+        {"msg": {"kind": "exec", "command": "echo -n two", "taskId": "task-bulk"}, "asked": false, "expect": {"ok": true, "stdout": "two", "stderr": "", "exitCode": 0}, "autoApproved": 1}
+      ],
+      "changes": [1]
+    },
+    {
+      "id": "deny-auto-approve-all",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "autoApproveAll": true,
+      "steps": [
+        {"msg": {"kind": "exec", "command": "sudo ls"}, "asked": false, "expect": {"ok": false, "error": "위험 명령으로 차단됨: 권한 상승(sudo)", "exitCode": 126}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "echo -n ok"}, "asked": false, "expect": {"ok": true, "stdout": "ok", "stderr": "", "exitCode": 0}, "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "confirm-yes",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "echo -n done-$((1+1))", "taskId": "task-yes-1"}, "confirm": "yes", "asked": true, "askedWith": {"command": "echo -n done-$((1+1))", "taskId": "task-yes-1", "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "done-2", "stderr": "", "exitCode": 0}, "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "confirm-no",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "touch denied.txt"}, "confirm": "no", "asked": true, "askedWith": {"command": "touch denied.txt", "taskId": null, "base": "{{TMP}}/root"}, "expect": {"ok": false, "error": "사용자가 명령 실행을 거부했습니다", "exitCode": 126}, "after": [{"absent": "root/denied.txt"}], "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "confirm-folder-base",
+      "setup": [{"dir": "root/sub"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "pwd", "taskId": "task-folder", "folder": "sub"}, "confirm": "yes", "asked": true, "askedWith": {"command": "pwd", "taskId": "task-folder", "base": "{{TMP}}/root/sub"}, "expect": {"ok": true, "stdout": "{{TMP}}/root/sub\n", "stderr": "", "exitCode": 0}, "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "deny-then-ask-again",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "touch a", "taskId": "task-again"}, "confirm": "no", "asked": true, "expect": {"ok": false, "error": "사용자가 명령 실행을 거부했습니다", "exitCode": 126}, "after": [{"absent": "root/a"}], "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "touch b", "taskId": "task-again"}, "confirm": "yes", "asked": true, "askedWith": {"command": "touch b", "taskId": "task-again", "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 0}, "after": [{"absent": "root/a"}, {"exists": "root/b"}], "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "no-keeps-other-bulk",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "echo -n a1", "taskId": "task-a"}, "confirm": "all", "asked": true, "expect": {"ok": true, "stdout": "a1", "stderr": "", "exitCode": 0}, "autoApproved": 1},
+        {"msg": {"kind": "exec", "command": "touch b-denied", "taskId": "task-b"}, "confirm": "no", "asked": true, "expect": {"ok": false, "error": "사용자가 명령 실행을 거부했습니다", "exitCode": 126}, "after": [{"absent": "root/b-denied"}], "autoApproved": 1},
+        {"msg": {"kind": "exec", "command": "touch a2", "taskId": "task-a"}, "asked": false, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 0}, "after": [{"exists": "root/a2"}], "autoApproved": 1},
+        {"msg": {"kind": "exec", "command": "touch b2", "taskId": "task-b"}, "confirm": "yes", "asked": true, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 0}, "after": [{"exists": "root/b2"}], "autoApproved": 1}
+      ],
+      "changes": [1]
+    },
+    {
+      "id": "parallel-two-tasks",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {
+          "parallel": [
+            {"msg": {"kind": "exec", "command": "touch pa", "taskId": "task-a"}, "confirm": "no", "asked": true, "askedWith": {"command": "touch pa", "taskId": "task-a", "base": "{{TMP}}/root"}, "expect": {"ok": false, "error": "사용자가 명령 실행을 거부했습니다", "exitCode": 126}, "after": [{"absent": "root/pa"}]},
+            {"msg": {"kind": "exec", "command": "touch pb", "taskId": "task-b"}, "confirm": "yes", "asked": true, "askedWith": {"command": "touch pb", "taskId": "task-b", "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 0}, "after": [{"exists": "root/pb"}]}
+          ],
+          "answerOrder": [1, 0],
+          "autoApproved": 0
+        }
+      ],
+      "changes": []
+    },
+    {
+      "id": "parallel-same-task",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {
+          "parallel": [
+            {"msg": {"kind": "exec", "command": "touch q1", "taskId": "task-q"}, "confirm": "no", "asked": true, "expect": {"ok": false, "error": "사용자가 명령 실행을 거부했습니다", "exitCode": 126}, "after": [{"absent": "root/q1"}]},
+            {"msg": {"kind": "exec", "command": "touch q2", "taskId": "task-q"}, "confirm": "yes", "asked": true, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 0}, "after": [{"exists": "root/q2"}]}
+          ],
+          "answerOrder": [0, 1],
+          "autoApproved": 0
+        },
+        {"msg": {"kind": "exec", "command": "touch q3", "taskId": "task-q"}, "confirm": "no", "asked": true, "expect": {"ok": false, "error": "사용자가 명령 실행을 거부했습니다", "exitCode": 126}, "after": [{"absent": "root/q3"}], "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "bulk-same-task-then-task-end",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "echo -n 1", "taskId": "task-a"}, "confirm": "all", "asked": true, "expect": {"ok": true, "stdout": "1", "stderr": "", "exitCode": 0}, "autoApproved": 1},
+        {"msg": {"kind": "exec", "command": "echo -n 2", "taskId": "task-a"}, "asked": false, "expect": {"ok": true, "stdout": "2", "stderr": "", "exitCode": 0}, "autoApproved": 1},
+        {"msg": {"kind": "exec", "command": "echo -n 3", "taskId": "task-b"}, "confirm": "yes", "asked": true, "expect": {"ok": true, "stdout": "3", "stderr": "", "exitCode": 0}, "autoApproved": 1},
+        {"msg": {"kind": "exec", "command": "echo -n 4"}, "confirm": "yes", "asked": true, "askedWith": {"command": "echo -n 4", "taskId": null, "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "4", "stderr": "", "exitCode": 0}, "autoApproved": 1},
+        {"msg": {"kind": "task_end", "taskId": "task-a"}, "asked": false, "expect": {"ok": true}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "echo -n 5", "taskId": "task-a"}, "confirm": "yes", "asked": true, "expect": {"ok": true, "stdout": "5", "stderr": "", "exitCode": 0}, "autoApproved": 0}
+      ],
+      "changes": [1, 0]
+    },
+    {
+      "id": "bulk-clear",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "echo -n a", "taskId": "task-a"}, "confirm": "all", "asked": true, "expect": {"ok": true, "stdout": "a", "stderr": "", "exitCode": 0}, "autoApproved": 1},
+        {"msg": {"kind": "exec", "command": "echo -n b", "taskId": "task-b"}, "confirm": "all", "asked": true, "expect": {"ok": true, "stdout": "b", "stderr": "", "exitCode": 0}, "autoApproved": 2},
+        {"clearAutoApprove": true, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "touch after-clear", "taskId": "task-a"}, "confirm": "no", "asked": true, "expect": {"ok": false, "error": "사용자가 명령 실행을 거부했습니다", "exitCode": 126}, "after": [{"absent": "root/after-clear"}], "autoApproved": 0},
+        {"clearAutoApprove": true, "autoApproved": 0}
+      ],
+      "changes": [1, 2, 0, 0]
+    },
+    {
+      "id": "bulk-without-task-id",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "touch all-without-task"}, "confirm": "all", "asked": true, "expect": {"ok": false, "error": "사용자가 명령 실행을 거부했습니다", "exitCode": 126}, "after": [{"absent": "root/all-without-task"}], "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "touch again"}, "confirm": "no", "asked": true, "expect": {"ok": false, "error": "사용자가 명령 실행을 거부했습니다", "exitCode": 126}, "after": [{"absent": "root/again"}], "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "bulk-twice-parallel",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {
+          "parallel": [
+            {"msg": {"kind": "exec", "command": "echo -n x1", "taskId": "task-x"}, "confirm": "all", "asked": true, "expect": {"ok": true, "stdout": "x1", "stderr": "", "exitCode": 0}},
+            {"msg": {"kind": "exec", "command": "echo -n x2", "taskId": "task-x"}, "confirm": "all", "asked": true, "expect": {"ok": true, "stdout": "x2", "stderr": "", "exitCode": 0}}
+          ],
+          "answerOrder": [0, 1],
+          "autoApproved": 1
+        },
+        {"msg": {"kind": "task_end", "taskId": "task-x"}, "asked": false, "expect": {"ok": true}, "autoApproved": 0}
+      ],
+      "changes": [1, 1, 0]
+    },
+    {
+      "id": "task-end-unapproved",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "echo -n y", "taskId": "task-y"}, "confirm": "yes", "asked": true, "expect": {"ok": true, "stdout": "y", "stderr": "", "exitCode": 0}, "autoApproved": 0},
+        {"msg": {"kind": "task_end", "taskId": "task-y"}, "asked": false, "expect": {"ok": true}, "autoApproved": 0},
+        {"msg": {"kind": "task_end"}, "asked": false, "expect": {"ok": true}, "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "auto-approve-all",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "autoApproveAll": true,
+      "steps": [
+        {"msg": {"kind": "exec", "command": "touch auto", "taskId": "task-auto"}, "asked": false, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 0}, "after": [{"exists": "root/auto"}], "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "results",
+      "setup": [{"dir": "root/sub"}],
+      "root": "root",
+      "autoApproveAll": true,
+      "steps": [
+        {"msg": {"kind": "exec", "command": "echo a; echo b >&2; exit 3"}, "asked": false, "expect": {"ok": true, "stdout": "a\n", "stderr": "b\n", "exitCode": 3}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "exit 300"}, "asked": false, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 44}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "echo -n before; kill -9 $$"}, "asked": false, "expect": {"ok": true, "stdout": "before", "stderr": "", "exitCode": 1}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "pwd"}, "asked": false, "expect": {"ok": true, "stdout": "{{TMP}}/root\n", "stderr": "", "exitCode": 0}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "pwd", "folder": "sub"}, "asked": false, "expect": {"ok": true, "stdout": "{{TMP}}/root/sub\n", "stderr": "", "exitCode": 0}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "echo -n 한글 출력; echo -n 오류 >&2"}, "asked": false, "expect": {"ok": true, "stdout": "한글 출력", "stderr": "오류", "exitCode": 0}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "printf 'a\\xffb\\xe3\\x81'"}, "asked": false, "expect": {"ok": true, "stdout": "a�b�", "stderr": "", "exitCode": 0}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "head -c 1048576 /dev/zero | tr '\\0' a"}, "asked": false, "compare": "stdout-length", "expect": {"ok": true, "stdoutLength": 1048576, "stderr": "", "exitCode": 0}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "head -c 1048577 /dev/zero | tr '\\0' a"}, "asked": false, "compare": "stdout-length", "expect": {"ok": true, "stdoutLength": 1048576, "stderr": "", "exitCode": 1}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "echo keep; head -c 1048577 /dev/zero | tr '\\0' a >&2"}, "asked": false, "compare": "no-stderr", "expect": {"ok": true, "stdout": "keep\n", "exitCode": 1}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "env"}, "asked": false, "compare": "stdout-lines", "expect": {"ok": true, "stdoutHas": ["HOME={{HOME}}", "PATH="], "stdoutLacks": ["OMK_COMPANION_API_KEY=", "GITHUB_TOKEN=", "OMK_BRIDGE_AUTO_APPROVE="], "stderr": "", "exitCode": 0}, "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "command-field",
+      "setup": [{"dir": "root"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "taskId": "task-cmd"}, "confirm": "yes", "asked": true, "askedWith": {"command": "", "taskId": "task-cmd", "base": "{{TMP}}/root"}, "compare": "no-stderr", "expect": {"ok": true, "stdout": "", "exitCode": 127}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "", "taskId": "task-cmd"}, "confirm": "yes", "asked": true, "askedWith": {"command": "", "taskId": "task-cmd", "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 0}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": null}, "confirm": "yes", "asked": true, "askedWith": {"command": "", "taskId": null, "base": "{{TMP}}/root"}, "compare": "no-stderr", "expect": {"ok": true, "stdout": "", "exitCode": 127}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": false}, "confirm": "yes", "asked": true, "askedWith": {"command": "", "taskId": null, "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 1}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": 0}, "confirm": "yes", "asked": true, "askedWith": {"command": "", "taskId": null, "base": "{{TMP}}/root"}, "compare": "no-stderr", "expect": {"ok": true, "stdout": "", "exitCode": 127}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": ["ls"]}, "confirm": "yes", "asked": true, "askedWith": {"command": "ls", "taskId": null, "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "", "stderr": "", "exitCode": 0}, "divergence": "non-string-field", "rustExpect": {"ok": false, "error": "요청 필드 형식이 올바르지 않습니다: command"}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": 7}, "confirm": "yes", "asked": true, "askedWith": {"command": "7", "taskId": null, "base": "{{TMP}}/root"}, "compare": "no-stderr", "expect": {"ok": true, "stdout": "", "exitCode": 127}, "divergence": "non-string-field", "rustExpect": {"ok": false, "error": "요청 필드 형식이 올바르지 않습니다: command"}, "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "echo -n t5", "taskId": 5}, "confirm": "yes", "asked": true, "askedWith": {"command": "echo -n t5", "taskId": 5, "base": "{{TMP}}/root"}, "expect": {"ok": true, "stdout": "t5", "stderr": "", "exitCode": 0}, "divergence": "non-string-field", "rustExpect": {"ok": false, "error": "요청 필드 형식이 올바르지 않습니다: taskId"}, "autoApproved": 0}
+      ],
+      "changes": []
+    },
+    {
+      "id": "folder-field",
+      "setup": [{"dir": "root"}, {"dir": "outside"}],
+      "root": "root",
+      "steps": [
+        {"msg": {"kind": "exec", "command": "touch x", "folder": "nope"}, "asked": false, "expect": {"ok": false, "error": "실행 폴더가 존재하지 않습니다: nope"}, "after": [{"absent": "root/nope"}], "autoApproved": 0},
+        {"msg": {"kind": "exec", "command": "touch x", "folder": "../outside"}, "asked": false, "expect": {"ok": false, "error": "폴더 스코프 밖 경로 거부: ../outside"}, "after": [{"absent": "outside/x"}], "autoApproved": 0}
+      ],
+      "changes": []
+    }
+  ],
+  "sandboxEnabled": [
+    {"id": "darwin-unset", "input": {"platform": "darwin", "env": null}, "expect": true},
+    {"id": "darwin-0", "input": {"platform": "darwin", "env": "0"}, "expect": false},
+    {"id": "darwin-1", "input": {"platform": "darwin", "env": "1"}, "expect": true},
+    {"id": "darwin-empty", "input": {"platform": "darwin", "env": ""}, "expect": true},
+    {"id": "darwin-false-word", "input": {"platform": "darwin", "env": "false"}, "expect": true},
+    {"id": "darwin-0-padded", "input": {"platform": "darwin", "env": " 0"}, "expect": true},
+    {"id": "linux-unset", "input": {"platform": "linux", "env": null}, "expect": false},
+    {"id": "win32-unset", "input": {"platform": "win32", "env": null}, "expect": false}
+  ],
+  "autoApproveEnv": [
+    {"id": "one", "input": {"env": "1"}, "expect": true},
+    {"id": "unset", "input": {"env": null}, "expect": false},
+    {"id": "empty", "input": {"env": ""}, "expect": false},
+    {"id": "zero", "input": {"env": "0"}, "expect": false},
+    {"id": "true-word", "input": {"env": "true"}, "expect": false},
+    {"id": "one-padded", "input": {"env": " 1"}, "expect": false}
+  ],
+  "failClosed": [
+    {"id": "not-prepared", "input": {"prepare": "none"}, "expect": {"ok": false, "error": "exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.", "exitCode": 126}},
+    {"id": "profile-dir-is-file", "input": {"prepare": "unwritable"}, "expect": {"ok": false, "error": "exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.", "exitCode": 126}}
+  ]
+}

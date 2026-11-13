@@ -121,3 +121,15 @@ pub const FS_OP_TIMEOUT_DEFAULT_MS: u64 = 15_000;
 /// 코어 하나가 동시에 돌리는 FS 작업 수 — TS 에는 대응 값이 없고, libuv 스레드 풀 기본값(4)이
 /// 사실상의 상한이었다. 블록된 볼륨에 요청이 쌓여도 스레드가 늘지 않게 한다(설계 D-13).
 pub const FS_MAX_CONCURRENT: usize = 4;
+
+// exec·worktree (PR-1.3)
+
+/// 로그인 셸·mise PATH 탐지 1회 시간 제한(ms).
+pub const PATH_PROBE_TIMEOUT_MS: u64 = 5_000;
+/// 샌드박스 git 디렉터리 탐지 시간 제한(ms).
+pub const GIT_PROBE_TIMEOUT_MS: u64 = 5_000;
+/// worktree 를 만드는 자리(연결 폴더 기준).
+pub const WORKTREE_DIR: &str = ".openmake/worktrees";
+pub const WORKTREE_BRANCH_PREFIX: &str = "omk-task/";
+/// taskId 형식 — TS `TASK_ID_RE.source`(플래그 없음). 경로·브랜치 이름에 들어가는 유일한 서버 문자열이다.
+pub const TASK_ID_RE: &str = "^[a-zA-Z0-9-]{8,64}$";
