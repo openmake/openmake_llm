@@ -185,16 +185,38 @@ function deniedUnder(r: string, d: string, del: boolean): boolean {
 }
 
 /**
+ * 규칙 3 의 폴더째 지우기 — 지울 대상이 (심링크 아닌) 디렉터리면 하위 트리에 `HEAD` 항목(ASCII 접기, 파일·심링크·디렉터리 무엇이든)이
+ * 있는가. `.git` 구성 요소(ASCII 접기) 안은 들어가지 않고(규칙 1 은 `HEAD` 유무에 기대지 않는다 — 중첩 레포 폴더는 지운다), 심링크는
+ * 따라가지 않으며, 첫 `HEAD` 에서 멈춘다. 폴더를 읽지 못하면 있다고 본다(막는 쪽 — 지우기도 그 폴더에서 실패한다). 상한은 두지 않는다:
+ * 심링크를 따라가지 않아 트리는 유한하고, 훑기는 지우기가 어차피 하는 나열보다 적으며, 둘 다 파일 kind 시간 제한 안에서 돈다.
+ */
+async function headBelow(target: string): Promise<boolean> {
+    if (!(await fsp.lstat(target).then((s) => s.isDirectory(), () => false))) return false;
+    const stack = [target];
+    for (let dir = stack.pop(); dir !== undefined; dir = stack.pop()) {
+        let entries: fs.Dirent[];
+        try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return true; }
+        for (const e of entries) {
+            const n = foldCase(e.name);
+            if (n === 'head') return true;
+            if (n !== '.git' && e.isDirectory()) stack.push(path.join(dir, e.name));
+        }
+    }
+    return false;
+}
+
+/**
  * 파일 kind(write·delete·브라우저 저장) 가드 — git 이 저장소로 인식하는 구조를 만들거나 고치지 못한다(설계 D-11, 깊이 무관·요청
  * 시점 판정). git 은 목록이 아니라 구조(`.git` 항목, `HEAD` 가 있는 git 디렉터리 꼴)로 저장소를 찾으므로 가드도 구조를 본다:
  *  1. 연결 폴더 기준 경로에 `.git` 구성 요소가 있으면 거절 — `.git` 자신(만들기·지우기)과 그 아래 전부(worktree 의 `.git` 포함, D-4).
  *  2. 대상의 조상 폴더(연결 폴더까지) 중 `HEAD` 항목이 지금 있는(lstat) 폴더와 연결 때 정한 목록의 git 디렉터리(HEAD 유무 무관 —
  *     탐지 실패·깨진 HEAD 에서도 남는다)마다, 그 바로 아래 금지 이름·`hooks` 아래·비ASCII 첫 이름이면 거절(delete 는 목록의 git
  *     디렉터리 자신·상위 폴더도). linked 배치의 `<common>/worktrees` 도 거절한다.
- *  3. 파일 kind 는 `HEAD` 항목의 유무를 바꾸지 못한다 — 아직 없는 `HEAD` 를 새로 만드는 쓰기와 `HEAD` 자신을 지우는 것을 거절
- *     (이미 있는 `HEAD` 의 내용 쓰기는 종전대로, `HEAD` 를 품은 폴더째 지우기는 구조가 함께 사라지므로 연다). 2 의 표식을 파일
- *     kind 가 움직이지 못하게 한다 — 만들기는 "`config` 먼저, `HEAD` 나중", 지우기는 "linked worktree 의 common dir 에서 `HEAD`
- *     를 지운 뒤 `config`"(리뷰 5차 T1) 순서를 닫는다. `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
+ *  3. 파일 kind 는 `HEAD` 항목의 유무를 바꾸지 못한다 — 아직 없는 `HEAD` 를 새로 만드는 쓰기와, `HEAD` 자신 또는 하위 트리
+ *     (`.git` 구성 요소 밖)에 `HEAD` 항목이 있는 폴더를 지우는 것을 거절(이미 있는 `HEAD` 의 내용 쓰기는 종전대로). 지우기는
+ *     원자적이지 않아 폴더째 지우기가 도중에 멈추면 `HEAD` 만 없어지고 구조가 남는다(리뷰 6차 U1). 2 의 표식을 파일 kind 가
+ *     움직이지 못하게 한다 — 만들기는 "`config` 먼저, `HEAD` 나중", 지우기는 "linked worktree 의 common dir 에서 `HEAD` 를 지운
+ *     뒤 `config`"(리뷰 5차 T1) 순서를 닫는다. `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
  * 비교는 대상의 realpath 와 "부모의 realpath + 마지막 이름" 둘로 하고(심링크 자리 자체도 막는다), 대소문자를 접어서 한다.
  */
 export async function assertGitPathAllowed(guard: GitGuard, abs: string, rel: string | undefined, del: boolean): Promise<void> {
@@ -202,7 +224,9 @@ export async function assertGitPathAllowed(guard: GitGuard, abs: string, rel: st
     const lexReal = path.join((await resolveReal(path.dirname(abs))).real, path.basename(abs));
     const [r, lex, root] = [real, lexReal, guard.root].map(foldCase);
     const dotGit = [r, lex].some((p) => path.relative(root, p).split(path.sep).includes('.git'));
-    const headEntry = del ? foldCase(path.basename(lexReal)) === 'head' : created.some((n) => foldCase(n) === 'head');
+    const headEntry = del
+        ? foldCase(path.basename(lexReal)) === 'head' || await headBelow(lexReal)
+        : created.some((n) => foldCase(n) === 'head');
     const dirs: string[] = [];
     let parentRename = false;
     for (const git of guard.dirs) {
