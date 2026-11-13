@@ -161,7 +161,7 @@ test('promotion merges immediately only for current dev head and both latest CI 
                 if (path.includes('/pulls?')) return JSON.stringify([pr]);
                 if (path.endsWith('/pulls/1')) return JSON.stringify(pr);
                 throw new Error(`Unexpected ${args}`);
-            });
+            }, async () => {});
             const merges = calls.filter(args => args[0] === 'pr' && args[1] === 'merge');
             assert.equal(merges.length, scenario === 'ready' ? 1 : 0, scenario);
             if (merges.length) {
@@ -169,6 +169,69 @@ test('promotion merges immediately only for current dev head and both latest CI 
                 assert.deepEqual(merges[0].slice(-5), ['--merge', '--match-head-commit', 'a', '--body', 'Merged head a']);
                 // 머지 커밋 본문이 PR 제목(fix(..): ..)이면 release-please 가 같은 변경을 두 번 적는다.
                 assert.doesNotMatch(merges[0].at(-1), /^[a-z]+(\(.+\))?!?: /);
+            }
+        }
+    } finally {
+        for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+        Object.assign(process.env, saved);
+    }
+});
+
+test('promotion re-reads a lagging mergeable_state but never merges without clean and PR CI', async () => {
+    const saved = {...process.env};
+    const dir = mkdtempSync(join(tmpdir(), 'pipeline-promote-retry-'));
+    const eventPath = join(dir, 'event.json');
+    writeFileSync(eventPath, JSON.stringify({workflow_run: {event: 'push', conclusion: 'success', head_branch: 'dev', head_sha: 'a'}}));
+    Object.assign(process.env, {OMK_AUTOMATION_TOKEN: 'test-token', GITHUB_REPOSITORY: 'o/r', GITHUB_EVENT_PATH: eventPath});
+    const cases = {
+        'unknown-then-clean': {states: ['unknown', 'clean'], merges: 1, waits: 1},
+        'stays-blocked': {states: ['blocked'], merges: 0, waits: 6},
+        'delayed-pr-ci': {states: ['unknown'], merges: 0, waits: 0, prCI: null},
+        'head-changed-during-retry': {states: ['unknown', 'clean'], heads: ['a', 'b'], merges: 0, waits: 1, error: /head changed/},
+        'dirty': {states: ['dirty'], merges: 0, waits: 0},
+        'draft': {states: ['draft'], merges: 0, waits: 0},
+        // main 조회 순서: expectedBase(호출부) → 1회차 → 2회차.
+        'base-changed-during-retry': {states: ['unknown', 'clean'], mains: ['base', 'base', 'moved'], merges: 0, waits: 1, log: /Base changed for PR #1/},
+    };
+    try {
+        for (const [name, c] of Object.entries(cases)) {
+            const calls = [];
+            let reads = 0, mainReads = 0, waits = 0;
+            const pick = (list, i) => list[Math.min(i, list.length - 1)];
+            const logs = [];
+            const log = console.log;
+            console.log = (...args) => logs.push(args.join(' '));
+            // setImmediate 로 미뤄야 호출부의 await 가 빠졌을 때 머지가 검사 뒤에 일어나 테스트가 깨진다.
+            const deferredWait = () => new Promise(resolve => setImmediate(() => { waits++; resolve(); }));
+            try {
+                await orchestrate('promote', args => {
+                    calls.push(args);
+                    if (args[0] === 'pr') return '';
+                    const path = args[1];
+                    if (path.endsWith('/branches/dev')) return JSON.stringify({commit: {sha: 'a'}});
+                    if (path.endsWith('/branches/main')) return JSON.stringify({commit: {sha: pick(c.mains || ['base'], mainReads++)}});
+                    if (path.includes('/runs?')) return JSON.stringify({workflow_runs: [{id: 2, head_sha: 'a', conclusion: path.includes('event=pull_request') && 'prCI' in c ? c.prCI : 'success'}]});
+                    if (path.endsWith('/protection')) return JSON.stringify({required_status_checks: {strict: true, contexts: ['CI Gate (Test → Build → Size → Lint)']}});
+                    if (path.endsWith('/compare/main...dev')) return '{"ahead_by":1}';
+                    if (path.includes('/pulls?')) return JSON.stringify([{number: 1, head: {sha: 'a'}, base: {ref: 'main'}}]);
+                    if (path.endsWith('/pulls/1')) {
+                        const i = reads++;
+                        return JSON.stringify({number: 1, head: {sha: pick(c.heads || ['a'], i)}, base: {ref: 'main'}, mergeable_state: pick(c.states, i)});
+                    }
+                    throw new Error(`Unexpected ${args}`);
+                }, deferredWait).then(() => assert.equal(c.error, undefined, name), error => {
+                    if (!c.error) throw error;
+                    assert.match(error.message, c.error, name);
+                });
+            } finally {
+                console.log = log;
+            }
+            assert.equal(calls.filter(args => args[0] === 'pr' && args[1] === 'merge').length, c.merges, name);
+            assert.equal(waits, c.waits, name);
+            if (c.log) {
+                assert.ok(logs.some(line => c.log.test(line)), `${name}: ${logs.join(' | ')}`);
+            } else if (!c.merges && !c.error) {
+                assert.ok(logs.some(line => line.includes(`mergeable_state=${pick(c.states, reads - 1)}`) && line.includes(`PR CI=${c.prCI === null ? 'false' : 'true'}`)), `${name}: ${logs.join(' | ')}`);
             }
         }
     } finally {
@@ -244,5 +307,85 @@ test('release gate accepts lockfile workspace versions listed in extra-files and
     }
     finally {
         process.chdir(cwd);
+    }
+});
+
+// 재시도는 merge() 공통이다 — feature·release 호출부의 await 가 빠지면 머지가 검사 뒤로 밀려 아래 두 테스트가 깨진다.
+const deferredCounter = () => {
+    const counter = {waits: 0};
+    counter.wait = () => new Promise(resolve => setImmediate(() => { counter.waits++; resolve(); }));
+    return counter;
+};
+const protectionJson = JSON.stringify({required_status_checks: {strict: true, contexts: ['CI Gate (Test → Build → Size → Lint)']}});
+
+test('feature auto-merge re-reads a lagging mergeable_state and merges once it is clean', async () => {
+    const saved = {...process.env};
+    const dir = mkdtempSync(join(tmpdir(), 'pipeline-feature-retry-')), eventPath = join(dir, 'event.json');
+    writeFileSync(eventPath, JSON.stringify({workflow_run: {event: 'pull_request', conclusion: 'success', head_repository: {full_name: 'o/r'}, head_sha: 'a', pull_requests: [{number: 1}], id: 42}}));
+    Object.assign(process.env, {OMK_AUTOMATION_TOKEN: 'test-token', GITHUB_REPOSITORY: 'o/r', GITHUB_EVENT_PATH: eventPath});
+    const calls = [], counter = deferredCounter();
+    // PR 조회 순서: 대상 확인 → 리뷰 뒤 head 확인 → merge 1회차(unknown) → 2회차(clean).
+    const states = ['unknown', 'unknown', 'unknown', 'clean'];
+    let reads = 0;
+    try {
+        await orchestrate('feature', args => {
+            calls.push(args);
+            if (args[0] === 'pr') return '';
+            const path = args[1];
+            if (path.endsWith('/pulls/1')) {
+                return JSON.stringify({number: 1, state: 'open', draft: false, head: {sha: 'a', ref: 'feat/foo', repo: {full_name: 'o/r'}}, base: {ref: 'dev'}, mergeable_state: states[Math.min(reads++, states.length - 1)]});
+            }
+            if (path.includes('/runs?')) return JSON.stringify({workflow_runs: [{id: 2, head_sha: 'a', conclusion: 'success'}]});
+            if (args.includes('--slurp')) return JSON.stringify([[{filename: 'a.js', status: 'modified', changes: 1}]]);
+            if (path.endsWith('/protection')) return protectionJson;
+            throw new Error(`Unexpected ${args}`);
+        }, counter.wait);
+        assert.equal(calls.filter(args => args[0] === 'pr' && args[1] === 'merge').length, 1);
+        assert.equal(counter.waits, 1);
+    } finally {
+        for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+        Object.assign(process.env, saved);
+    }
+});
+
+test('release merge re-reads a lagging mergeable_state and merges once it is clean', async () => {
+    const saved = {...process.env}, cwd = process.cwd();
+    const dir = mkdtempSync(join(tmpdir(), 'pipeline-release-retry-'));
+    const git = (...args) => execFileSync('git', args, {cwd: dir, encoding: 'utf8'}).trim();
+    git('init', '-q', '-b', 'main'); git('config', 'user.email', 'test@example.com'); git('config', 'user.name', 'test');
+    git('remote', 'add', 'origin', dir);
+    writeFileSync(join(dir, 'release-please-config.json'), '{"packages":{".":{"extra-files":[]}}}');
+    writeFileSync(join(dir, 'package.json'), '{"version":"1.0.0"}'); git('add', '.'); git('commit', '-qm', 'verified');
+    const verified = git('rev-parse', 'HEAD'); git('update-ref', `refs/omk/verified/${verified}`, verified);
+    git('checkout', '-qb', 'release-please--branches--main');
+    writeFileSync(join(dir, 'package.json'), '{"version":"1.0.1"}'); git('commit', '-qam', 'release');
+    const head = git('rev-parse', 'HEAD'); git('checkout', '-q', 'main');
+    Object.assign(process.env, {OMK_AUTOMATION_TOKEN: 'test-token', GITHUB_REPOSITORY: 'o/r'});
+    const calls = [], counter = deferredCounter();
+    // PR 조회 순서: 검증 뒤 head 확인 → merge 1회차(unknown) → 2회차(clean).
+    const states = ['unknown', 'unknown', 'clean'];
+    let reads = 0;
+    try {
+        process.chdir(dir);
+        await orchestrate('release', args => {
+            calls.push(args);
+            if (args[0] === 'pr') return '';
+            const path = args[1];
+            if (path.endsWith('/branches/main')) return JSON.stringify({commit: {sha: verified}});
+            if (path.includes('/git/matching-refs/')) return JSON.stringify([{ref: `refs/omk/verified/${verified}`, object: {sha: verified}}]);
+            if (path.includes('/pulls?')) return JSON.stringify([{number: 1, head: {sha: head, ref: 'release-please--branches--main', repo: {full_name: 'o/r'}}, base: {ref: 'main'}, labels: [{name: 'autorelease: pending'}], draft: false}]);
+            if (path.includes('/runs?')) return JSON.stringify({workflow_runs: [{id: 1, head_sha: head, conclusion: 'success'}]});
+            if (path.endsWith('/protection')) return protectionJson;
+            if (path.endsWith('/pulls/1')) return JSON.stringify({number: 1, head: {sha: head}, base: {ref: 'main'}, mergeable_state: states[Math.min(reads++, states.length - 1)]});
+            throw new Error(`Unexpected ${args}`);
+        }, counter.wait);
+        const merges = calls.filter(args => args[0] === 'pr' && args[1] === 'merge');
+        assert.equal(merges.length, 1);
+        assert.ok(merges[0].includes(head));
+        assert.equal(counter.waits, 1);
+    } finally {
+        process.chdir(cwd);
+        for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+        Object.assign(process.env, saved);
     }
 });
