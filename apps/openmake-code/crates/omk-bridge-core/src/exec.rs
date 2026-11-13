@@ -22,7 +22,7 @@ use crate::msg::{BridgeMsg, BridgeResult};
 use crate::node_error;
 use crate::node_path;
 use crate::platform::{Platform, bulk_approval_allowed, shell_invocation};
-use crate::proc::{self, ProcEnd, ProcSpec, Stderr, Stdin};
+use crate::proc::{self, ProcSpec, Stderr, Stdin};
 use crate::sandbox::{detect_git_dir, profile_file_name, write_sandbox_profile};
 use crate::timed_fs::FsGate;
 
@@ -61,7 +61,7 @@ pub struct ExecHost {
     pub auto_approve_all: bool,
     /// 일괄 승인 집합이 바뀔 때(메뉴 표시용). 자물쇠 밖에서 부른다 — 안에서 `auto_approved_count()` 를 불러도 된다.
     pub on_auto_approve_change: Option<Box<dyn Fn() + Send + Sync>>,
-    /// exec 1회 시간 제한 — 기본 `EXEC_TIMEOUT_MS`. 테스트가 줄인다.
+    /// exec·worktree git 1회 시간 제한 — 기본 `EXEC_TIMEOUT_MS`(TS 는 둘 다 이 상수). 테스트가 줄인다.
     pub exec_timeout_ms: u64,
 }
 
@@ -274,10 +274,7 @@ pub(crate) async fn run_exec(
         stderr: Stderr::Capture,
     })
     .await;
-    let exit_code = match out.end {
-        ProcEnd::Exited(n) => n,
-        _ => 1,
-    };
+    let exit_code = out.end.exec_file_code();
     Ok(BridgeResult {
         stdout: Some(out.stdout),
         stderr: Some(out.stderr),

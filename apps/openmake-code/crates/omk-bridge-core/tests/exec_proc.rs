@@ -58,7 +58,11 @@ fn timeout_returns_output_so_far() {
     let mut s = spec("echo partial; sleep 5");
     s.timeout_ms = 300;
     let (o, took) = go(s);
-    assert!(matches!(o.end, ProcEnd::TimedOut), "{:?}", o.end);
+    assert!(
+        matches!(o.end, ProcEnd::TimedOut { exited: None }),
+        "{:?}",
+        o.end
+    );
     assert_eq!(o.stdout, "partial\n");
     assert!(took < Duration::from_secs(2), "{took:?}");
     // TERM 을 무시하는 셸도 끝난다(Node 는 SIGTERM 이라 끝까지 기다렸다 — README "fixture 에 넣지 않는 차이").
@@ -66,7 +70,7 @@ fn timeout_returns_output_so_far() {
     s.timeout_ms = 300;
     let (o, took) = go(s);
     assert!(
-        matches!(o.end, ProcEnd::TimedOut) && took < Duration::from_secs(2),
+        matches!(o.end, ProcEnd::TimedOut { exited: None }) && took < Duration::from_secs(2),
         "{took:?}"
     );
 }
@@ -118,7 +122,11 @@ fn stdin_held_open_or_null() {
     let mut s = spec("cat; echo done");
     s.timeout_ms = 300;
     let (o, _) = go(s);
-    assert!(matches!(o.end, ProcEnd::TimedOut), "{:?}", o.end);
+    assert!(
+        matches!(o.end, ProcEnd::TimedOut { exited: None }),
+        "{:?}",
+        o.end
+    );
     let mut s = spec("cat; printf ok");
     s.stdin = Stdin::Null;
     let (o, _) = go(s);
@@ -136,11 +144,38 @@ fn background_process_holding_pipe() {
     let mut s = spec("(sleep 3; echo gc) & sleep 5");
     s.timeout_ms = 300;
     let (o, took) = go(s);
-    assert!(matches!(o.end, ProcEnd::TimedOut), "{:?}", o.end);
+    assert!(
+        matches!(o.end, ProcEnd::TimedOut { exited: None }),
+        "{:?}",
+        o.end
+    );
     assert!(
         took < Duration::from_millis(1500),
         "손자가 쥔 파이프를 기다렸다: {took:?}"
     );
+}
+
+/// 직접 자식은 끝났는데 뒤에 남긴 프로세스가 파이프를 쥔 채 시간 초과 — 그 종료 코드를 싣는다(Node `execFile` 실측
+/// 24.22.2, timeout 400ms: `sleep 3 & echo fg` → 0·`fg\n`, `…; exit 3` → 3, 자기 신호 → 1). 판정은 부르는 자리 몫.
+#[test]
+fn timeout_after_child_exited_carries_exit_code() {
+    for (cmd, exited, file_code) in [
+        ("sleep 3 & echo fg", Some(0), 0),
+        ("sleep 3 & echo fg; exit 3", Some(3), 3),
+        ("sleep 3 & echo fg; kill -9 $$", None, 1),
+    ] {
+        let mut s = spec(cmd);
+        s.timeout_ms = 400;
+        let (o, took) = go(s);
+        assert!(
+            matches!(o.end, ProcEnd::TimedOut { exited: e } if e == exited),
+            "{cmd}: {:?}",
+            o.end
+        );
+        assert_eq!(o.end.exec_file_code(), file_code, "{cmd}");
+        assert_eq!(o.stdout, "fg\n", "{cmd}");
+        assert!(took < Duration::from_millis(1500), "{cmd}: {took:?}");
+    }
 }
 
 #[test]
