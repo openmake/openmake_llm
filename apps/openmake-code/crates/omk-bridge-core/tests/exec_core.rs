@@ -75,7 +75,7 @@ fn core_without_host() {
         r,
         json!({"ok": false, "error": "exec 호스트가 설정되지 않았습니다"})
     );
-    assert_eq!(c.capabilities().len(), 9);
+    assert_eq!(c.capabilities().len(), 12);
     c.clear_auto_approve();
     assert_eq!(c.auto_approved_count(), 0);
 }

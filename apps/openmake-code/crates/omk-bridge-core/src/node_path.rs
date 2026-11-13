@@ -148,9 +148,60 @@ pub fn relative(from: &str, to: &str) -> String {
     format!("{out}{}", &to[rest_start..])
 }
 
+/// `path.posix.extname` — 마지막 구간의 마지막 `.` 부터 끝까지. 구간이 `.` 로 시작하고 다른 `.` 가 없으면(`.env`) 빈 글자,
+/// `..` 도 빈 글자. 끝의 `/` 는 무시한다.
+pub fn extname(path: &str) -> String {
+    // Node 의 뒤에서 훑는 상태 기계 그대로 — `/`·`.` 는 ASCII 라 바이트로 본다.
+    let p = path.as_bytes();
+    let (mut start_dot, mut start_part, mut end) = (None, 0, None);
+    let mut matched_slash = true;
+    // 0 = 아직 `.` 앞 글자 없음, 1 = `.` 가 연달아 둘 이상, -1 = `.` 앞에 다른 글자가 있다.
+    let mut pre_dot_state = 0;
+    for i in (0..p.len()).rev() {
+        if p[i] == b'/' {
+            if !matched_slash {
+                start_part = i + 1;
+                break;
+            }
+            continue;
+        }
+        if end.is_none() {
+            matched_slash = false;
+            end = Some(i + 1);
+        }
+        if p[i] == b'.' {
+            if start_dot.is_none() {
+                start_dot = Some(i);
+            } else if pre_dot_state != 1 {
+                pre_dot_state = 1;
+            }
+        } else if start_dot.is_some() {
+            pre_dot_state = -1;
+        }
+    }
+    match (start_dot, end) {
+        (Some(dot), Some(end))
+            if pre_dot_state != 0
+                && !(pre_dot_state == 1 && dot + 1 == end && dot == start_part + 1) =>
+        {
+            path[dot..end].to_owned()
+        }
+        _ => String::new(),
+    }
+}
+
+/// `path.posix.basename(p)` — 끝의 `/` 를 무시한 마지막 구간.
+pub fn basename(path: &str) -> String {
+    let trimmed = path.trim_end_matches('/');
+    match trimmed.rfind('/') {
+        Some(i) => trimmed[i + 1..].to_owned(),
+        None => trimmed.to_owned(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{join, normalize};
+    use super::{basename, extname, join, normalize};
 
     /// 기대값은 Node `path.posix.join`·`normalize` 실행 결과다(sandbox-profile fixture 에 넣기 어려운 경계).
     #[test]
@@ -196,6 +247,47 @@ mod tests {
         ];
         for (input, want) in cases {
             assert_eq!(normalize(input), want, "normalize {input:?}");
+        }
+    }
+
+    /// 기대값은 Node 24.22.2 `path.posix.extname`·`basename` 실행 결과다(PR-1.4 단계 0 ⑤).
+    #[test]
+    fn extname_and_basename_match_node() {
+        let cases = [
+            (".ts", "", ".ts"),
+            ("a.", ".", "a."),
+            ("a..ts", ".ts", "a..ts"),
+            ("a.ts/", ".ts", "a.ts"),
+            ("..", "", ".."),
+            (".", "", "."),
+            ("a.b.c", ".c", "a.b.c"),
+            ("/x/.env", "", ".env"),
+            ("a/b.TS", ".TS", "b.TS"),
+            ("", "", ""),
+            (".a.b", ".b", ".a.b"),
+            ("x/..ts", ".ts", "..ts"),
+            ("a.d.ts", ".ts", "a.d.ts"),
+            ("/", "", ""),
+            ("a//", "", "a"),
+            ("a/b//", "", "b"),
+            ("/a.ts", ".ts", "a.ts"),
+            ("..ts", ".ts", "..ts"),
+            ("...", ".", "..."),
+            ("a.ts.", ".", "a.ts."),
+            ("x/.", "", "."),
+            ("x/..", "", ".."),
+            (".a", "", ".a"),
+            ("..a", ".a", "..a"),
+            ("a/.b.c", ".c", ".b.c"),
+            ("한글.파일", ".파일", "한글.파일"),
+            ("😀.ts", ".ts", "😀.ts"),
+        ];
+        for (input, ext, base) in cases {
+            assert_eq!(
+                (extname(input), basename(input)),
+                (ext.to_owned(), base.to_owned()),
+                "{input:?}"
+            );
         }
     }
 }

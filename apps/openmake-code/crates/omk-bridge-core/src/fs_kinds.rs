@@ -22,15 +22,17 @@ fn no_nul(p: &str) -> Result<(), String> {
     Ok(())
 }
 
-struct Entry {
+pub(crate) struct Entry {
     /// UTF-8 이 아닌 이름은 APFS 에서 생기지 않는다.
-    name: String,
-    is_dir: bool,
-    is_symlink: bool,
+    pub(crate) name: String,
+    pub(crate) is_dir: bool,
+    pub(crate) is_symlink: bool,
+    /// 일반 파일(심링크를 따라가지 않는다) — code_nav 훑기가 쓴다.
+    pub(crate) is_file: bool,
 }
 
 /// `fs.promises.readdir(dir, { withFileTypes: true })` — 심링크는 따라가지 않는다.
-fn read_dir_sorted(dir: &str) -> Result<Vec<Entry>, String> {
+pub(crate) fn read_dir_sorted(dir: &str) -> Result<Vec<Entry>, String> {
     let scandir = |e: std::io::Error| node_error::format(&e, "scandir", Some(dir));
     let mut out = Vec::new();
     for e in fs::read_dir(dir).map_err(scandir)? {
@@ -44,6 +46,7 @@ fn read_dir_sorted(dir: &str) -> Result<Vec<Entry>, String> {
             name,
             is_dir: ft.is_dir(),
             is_symlink: ft.is_symlink(),
+            is_file: ft.is_file(),
         });
     }
     out.sort_by(|a, b| a.name.as_bytes().cmp(b.name.as_bytes()));

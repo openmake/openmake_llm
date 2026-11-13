@@ -58,6 +58,12 @@ fn mkparent(p: &str) {
     }
 }
 
+/// `{"symlink", "target"}` — target 은 `{{TMP}}` 를 채워 그대로 링크에 적는다(상대 target 가능).
+fn symlink(tmp: &TmpDir, s: &Value) {
+    let target = s["target"].as_str().unwrap().replace("{{TMP}}", &tmp.path);
+    std::os::unix::fs::symlink(target, tmp.join(s["symlink"].as_str().unwrap())).unwrap();
+}
+
 /// fixture `setup` 을 적힌 순서대로 만든다.
 pub fn apply_setup(tmp: &TmpDir, setup: &Value) {
     for s in setup.as_array().expect("setup 배열") {
@@ -67,9 +73,8 @@ pub fn apply_setup(tmp: &TmpDir, setup: &Value) {
             write_file(tmp, s);
         } else if let Some(args) = s.get("git") {
             git_isolated(tmp, args, s["cwd"].as_str().unwrap());
-        } else if let Some(link) = s["symlink"].as_str() {
-            let target = s["target"].as_str().unwrap().replace("{{TMP}}", &tmp.path);
-            std::os::unix::fs::symlink(target, tmp.join(link)).unwrap();
+        } else if s.get("symlink").is_some() {
+            symlink(tmp, s);
         } else if s.get("many").is_some() {
             let m = &s["many"];
             let dir = tmp.join(m["dir"].as_str().unwrap());
@@ -78,14 +83,104 @@ pub fn apply_setup(tmp: &TmpDir, setup: &Value) {
                 let p = format!("{dir}/{}{i}", m["prefix"].as_str().unwrap());
                 match m["kind"].as_str() {
                     Some("dir") => std::fs::create_dir(&p).unwrap(),
-                    Some("file") => std::fs::write(&p, b"").unwrap(),
+                    Some("file") => {
+                        std::fs::write(&p, m["content"].as_str().unwrap_or("")).unwrap()
+                    }
                     other => panic!("many.kind 를 모름: {other:?}"),
                 }
             }
+        } else if s.get("fakeTool").is_some() {
+            fake_tool(tmp, s);
         } else {
             panic!("모르는 setup: {s}");
         }
     }
+}
+
+/// 가짜 도구 스크립트(TS `conformance-tools-support.ts` 와 같은 글자) — 셸 내장 명령과 절대경로만 쓴다. 불릴 때마다
+/// `<tmp>/calls/<n>` 에 기록 이름·인자 수·인자·cwd·환경을 남기고 정해 준 stdout·stderr 를 찍은 뒤 끝난다.
+fn fake_tool(tmp: &TmpDir, s: &Value) {
+    use std::os::unix::fs::PermissionsExt;
+    let t = &tmp.path;
+    let record = s["record"].as_str().unwrap();
+    std::fs::create_dir_all(tmp.join("tools")).unwrap();
+    std::fs::create_dir_all(tmp.join("calls")).unwrap();
+    let out = tmp.join(&format!("tools/{record}.stdout"));
+    let err = tmp.join(&format!("tools/{record}.stderr"));
+    std::fs::write(&out, fill(&s["stdout"], t).as_str().unwrap()).unwrap();
+    std::fs::write(&err, fill(&s["stderr"], t).as_str().unwrap()).unwrap();
+    let exit = s["exit"].as_i64().unwrap();
+    let script = [
+        "#!/bin/sh".to_owned(),
+        format!("d=\"{t}/calls\""),
+        "n=0".to_owned(),
+        "while [ -e \"$d/$n\" ]; do n=$((n+1)); done".to_owned(),
+        format!("{{ printf '%s\\n' \"{record}\" \"$#\"; for a in \"$@\"; do printf '%s\\n' \"$a\"; done; pwd -P; /usr/bin/env; }} > \"$d/$n\""),
+        format!("/bin/cat \"{out}\""),
+        format!("/bin/cat \"{err}\" >&2"),
+        format!("exit {exit}"),
+        String::new(),
+    ]
+    .join("\n");
+    let p = tmp.join(s["fakeTool"].as_str().unwrap());
+    mkparent(&p);
+    std::fs::write(&p, script).unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// 가짜 도구가 남긴 기록 하나.
+pub struct ToolCall {
+    pub tool: String,
+    pub args: Vec<String>,
+    pub cwd: String,
+    pub env: std::collections::BTreeMap<String, String>,
+}
+
+/// 기록을 부른 순서대로 읽는다. 폴더가 없으면 빈 목록.
+pub fn read_tool_calls(tmp: &TmpDir) -> Vec<ToolCall> {
+    let mut out = Vec::new();
+    for n in 0.. {
+        let Ok(text) = std::fs::read_to_string(tmp.join(&format!("calls/{n}"))) else {
+            break;
+        };
+        let lines: Vec<&str> = text.split('\n').collect();
+        let argc: usize = lines[1].parse().unwrap();
+        let env = lines[3 + argc..]
+            .iter()
+            .filter_map(|l| l.split_once('='))
+            .filter(|(k, _)| !k.is_empty())
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect();
+        out.push(ToolCall {
+            tool: lines[0].to_owned(),
+            args: lines[2..2 + argc].iter().map(|a| (*a).to_owned()).collect(),
+            cwd: lines[2 + argc].to_owned(),
+            env,
+        });
+    }
+    out
+}
+
+/// 기록을 기대값 모양으로 — envHas 는 있는 키만, envLacks 는 없는 키만 남긴다(맞으면 기대값과 같다).
+pub fn tool_calls_view(calls: &[ToolCall], want: &Value) -> Value {
+    let want = want.as_array().unwrap();
+    let keys = |i: usize, k: &str| -> Vec<String> {
+        want.get(i)
+            .and_then(|w| w[k].as_array())
+            .map(|a| a.iter().map(|x| x.as_str().unwrap().to_owned()).collect())
+            .unwrap_or_default()
+    };
+    Value::Array(
+        calls
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let has: Vec<String> = keys(i, "envHas").into_iter().filter(|k| c.env.contains_key(k)).collect();
+                let lacks: Vec<String> = keys(i, "envLacks").into_iter().filter(|k| !c.env.contains_key(k)).collect();
+                serde_json::json!({"tool": c.tool, "args": c.args, "cwd": c.cwd, "envHas": has, "envLacks": lacks})
+            })
+            .collect(),
+    )
 }
 
 /// `many` 로 만든 경로들(`{{TMP}}` 기준 상대경로).
@@ -185,6 +280,8 @@ pub fn apply_op_step(tmp: &TmpDir, s: &Value, ctx: &str) {
         } else {
             let _ = std::fs::remove_file(&full);
         }
+    } else if s.get("symlink").is_some() {
+        symlink(tmp, s);
     } else {
         panic!("{ctx}: 모르는 단계 {s}");
     }

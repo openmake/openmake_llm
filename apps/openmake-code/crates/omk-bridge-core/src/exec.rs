@@ -25,6 +25,7 @@ use crate::platform::{Platform, bulk_approval_allowed, shell_invocation};
 use crate::proc::{self, ProcSpec, Stderr, Stdin};
 use crate::sandbox::{detect_git_dir, profile_file_name, write_sandbox_profile};
 use crate::timed_fs::FsGate;
+use crate::tool_env::{ToolEnv, ToolSandbox};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAnswer {
@@ -71,7 +72,7 @@ pub fn auto_approve_from_env(v: Option<&str>) -> bool {
 }
 
 pub(crate) const REJECTED: &str = "사용자가 명령 실행을 거부했습니다";
-const FAIL_CLOSED: &str = "exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.";
+pub(crate) const FAIL_CLOSED: &str = "exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.";
 const EXIT_REFUSED: i32 = 126;
 
 /// 프로파일 파일 일련번호(프로세스 공용, 1부터 — TS 와 같다).
@@ -193,7 +194,23 @@ impl ExecState {
         }
     }
 
-    async fn exec_path(&self, root: &str) -> String {
+    /// 읽기 전용 도구 자식의 실행 조건 — exec 와 같은 PATH 캐시·같은 프로파일(D-64·D-65).
+    pub(crate) async fn tool_env(&self, root: &str) -> ToolEnv {
+        let exec_path = self.exec_path(root).await;
+        let sandbox = match lock(&self.profile).clone() {
+            _ if !self.host.sandbox_enabled => ToolSandbox::Off,
+            Some(p) => ToolSandbox::Profile(p),
+            None => ToolSandbox::Missing,
+        };
+        ToolEnv {
+            env: self.host.env.clone(),
+            platform: self.host.platform,
+            exec_path,
+            sandbox,
+        }
+    }
+
+    pub(crate) async fn exec_path(&self, root: &str) -> String {
         let mut cache = self.path_cache.lock().await;
         if let Some(p) = cache.as_ref().filter(|p| !p.is_empty()) {
             return p.clone();

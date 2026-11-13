@@ -1,0 +1,432 @@
+{
+  "suite": "diagnostics-parse",
+  "version": 1,
+  "cases": [
+    {
+      "id": "no-paths",
+      "setup": [
+        {"file":"root/a.ts","content":""}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"lsp_diagnostics"},"expect":{"ok":true,"diagnostics":[],"truncated":false,"serverKind":"none"}},
+        {"msg":{"kind":"lsp_diagnostics","paths":"a.ts"},"expect":{"ok":true,"diagnostics":[],"truncated":false,"serverKind":"none"}},
+        {"msg":{"kind":"lsp_diagnostics","paths":[]},"expect":{"ok":true,"diagnostics":[],"truncated":false,"serverKind":"none"}},
+        {"msg":{"kind":"lsp_diagnostics","paths":{"a":1}},"expect":{"ok":true,"diagnostics":[],"truncated":false,"serverKind":"none"}},
+        {"msg":{"kind":"lsp_diagnostics","paths":null},"expect":{"ok":true,"diagnostics":[],"truncated":false,"serverKind":"none"}},
+        {"msg":{"kind":"lsp_diagnostics","paths":["a.md","b.txt","c"]},"expect":{"ok":true,"diagnostics":[],"truncated":false,"serverKind":"none"}}
+      ]
+    },
+    {
+      "id": "no-tsc",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"lsp_diagnostics","paths":["a.ts"]},"expect":{"ok":true,"diagnostics":[],"truncated":false,"serverKind":"none"}}
+      ]
+    },
+    {
+      "id": "scope",
+      "setup": [
+        {"file":"root/a.ts","content":""}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"lsp_diagnostics","paths":["../x.ts"]},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../x.ts"}},
+        {"msg":{"kind":"lsp_diagnostics","paths":["a.md","../y.ts"]},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../y.ts"}},
+        {"msg":{"kind":"lsp_diagnostics","paths":["a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","a.md","../x.ts"]},"expect":{"ok":true,"diagnostics":[],"truncated":false,"serverKind":"none"}},
+        {"msg":{"kind":"lsp_diagnostics","paths":["a.ts"],"folder":"../z"},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../z"}}
+      ]
+    },
+    {
+      "id": "falsy-elements",
+      "setup": [
+        {"file":"root/a.ts","content":""}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"lsp_diagnostics","paths":[null,0,"",false]},"expect":{"ok":true,"diagnostics":[],"truncated":false,"serverKind":"none"}}
+      ]
+    },
+    {
+      "id": "tsc-via-core",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,7): error TS2322: bad\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"lsp_diagnostics","paths":["a.ts"]},"expect":{"ok":true,"diagnostics":[{"path":"a.ts","line":1,"col":7,"severity":"error","code":"TS2322","message":"bad","source":"tsc"}],"truncated":false,"serverKind":"tsc"},"toolCalls":[{"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/tsconfig.json"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}]}
+      ]
+    },
+    {
+      "id": "non-string",
+      "setup": [
+        {"file":"root/a.ts","content":""},
+        {"file":"root/b.py","content":""}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"lsp_diagnostics","paths":[5]},"expect":{"ok":false,"error":"The \"paths[1]\" argument must be of type string. Received type number (5)"},"divergence":"non-string-field","rustExpect":{"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: paths"}},
+        {"msg":{"kind":"lsp_diagnostics","paths":["a.md",["x"]]},"expect":{"ok":false,"error":"The \"paths[1]\" argument must be of type string. Received an instance of Array"},"divergence":"non-string-field","rustExpect":{"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: paths"}},
+        {"msg":{"kind":"lsp_diagnostics","paths":[{"p":1}]},"expect":{"ok":false,"error":"The \"paths[1]\" argument must be of type string. Received an instance of Object"},"divergence":"non-string-field","rustExpect":{"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: paths"}}
+      ]
+    }
+  ],
+  "direct": [
+    {
+      "id": "tsc-basic",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(12,5): error TS2322: msg here\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":12,"col":5,"severity":"error","code":"TS2322","message":"msg here","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
+      "toolCalls": [
+        {"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/tsconfig.json"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "tsc-warning",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): warning TS6133: unused\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"warning","code":"TS6133","message":"unused","source":"tsc"}],"truncated":false,"serverKind":"tsc"}
+    },
+    {
+      "id": "tsc-both-streams",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: out\n","stderr":"a.ts(2,2): error TS2: err\n","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"out","source":"tsc"},{"path":"a.ts","line":2,"col":2,"severity":"error","code":"TS2","message":"err","source":"tsc"}],"truncated":false,"serverKind":"tsc"}
+    },
+    {
+      "id": "tsc-noise",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"random text\nerror TS1: x\na.ts(1,1): error ts1: lower\na.ts(1,1): info TS1: x\na.ts(x,1): error TS1: x\nFound 1 error.\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[],"truncated":false,"serverKind":"tsc"}
+    },
+    {
+      "id": "tsc-spaces",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"   a.ts(2,3): error TS1005: ';' expected.   \n\t\ta.ts(4,1):   error   TS1:   gap  \r\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":2,"col":3,"severity":"error","code":"TS1005","message":"';' expected.","source":"tsc"},{"path":"a.ts","line":4,"col":1,"severity":"error","code":"TS1","message":"gap","source":"tsc"}],"truncated":false,"serverKind":"tsc"}
+    },
+    {
+      "id": "tsc-long-message",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\na.ts(2,1): error TS1: 가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가😀z\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm","source":"tsc"},{"path":"a.ts","line":2,"col":1,"severity":"error","code":"TS1","message":"가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가😀","source":"tsc"}],"truncated":false,"serverKind":"tsc"}
+    },
+    {
+      "id": "tsc-paths",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"src/a.ts(1,1): error TS1: rel\n{{TMP}}/root/src/b.ts(1,1): error TS1: abs\n../x.ts(1,1): error TS1: outside\n./c.ts(1,1): error TS1: dot\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"src/a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"rel","source":"tsc"},{"path":"src/b.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"abs","source":"tsc"},{"path":"../x.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"outside","source":"tsc"},{"path":"c.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"dot","source":"tsc"}],"truncated":false,"serverKind":"tsc"}
+    },
+    {
+      "id": "tsc-parens",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a(1).ts(3,1): error TS1: p\nb (x).ts(4,2): error TS2: q\nc.ts(5,6)(7,8): error TS3: r\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a(1).ts","line":3,"col":1,"severity":"error","code":"TS1","message":"p","source":"tsc"},{"path":"b (x).ts","line":4,"col":2,"severity":"error","code":"TS2","message":"q","source":"tsc"},{"path":"c.ts(5,6)","line":7,"col":8,"severity":"error","code":"TS3","message":"r","source":"tsc"}],"truncated":false,"serverKind":"tsc"}
+    },
+    {
+      "id": "tsc-empty-message",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: \na.ts(2,1): error TS1:\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[],"truncated":false,"serverKind":"tsc"}
+    },
+    {
+      "id": "tsc-nearest-config",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/pkg/tsconfig.json","content":"{}"},
+        {"file":"root/pkg/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: x\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/pkg/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"pkg/a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"x","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
+      "toolCalls": [
+        {"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/pkg/tsconfig.json"],"cwd":"{{TMP}}/root/pkg","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "tsc-one-call-per-project",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"file":"root/b.ts","content":""},
+        {"file":"root/c.tsx","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: x\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts","{{TMP}}/root/b.ts","{{TMP}}/root/c.tsx"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"x","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
+      "toolCalls": [
+        {"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/tsconfig.json"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "tsc-two-projects",
+      "setup": [
+        {"file":"root/p1/tsconfig.json","content":"{}"},
+        {"file":"root/p2/tsconfig.json","content":"{}"},
+        {"file":"root/p1/a.ts","content":""},
+        {"file":"root/p2/b.ts","content":""},
+        {"file":"root/p1/c.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: x\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/p1/a.ts","{{TMP}}/root/p2/b.ts","{{TMP}}/root/p1/c.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"p1/a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"x","source":"tsc"},{"path":"p2/a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"x","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
+      "toolCalls": [
+        {"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/p1/tsconfig.json"],"cwd":"{{TMP}}/root/p1","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]},
+        {"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/p2/tsconfig.json"],"cwd":"{{TMP}}/root/p2","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "tsc-upward",
+      "setup": [
+        {"file":"root/pkg/tsconfig.json","content":"{}"},
+        {"file":"root/pkg/sub/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"sub/a.ts(1,1): error TS1: x\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/pkg/sub/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"pkg/sub/a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"x","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
+      "toolCalls": [
+        {"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/pkg/tsconfig.json"],"cwd":"{{TMP}}/root/pkg","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "tsc-local-wins",
+      "setup": [
+        {"file":"root/pkg/tsconfig.json","content":"{}"},
+        {"file":"root/pkg/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"","stderr":"","exit":2,"record":"tsc-root"},
+        {"fakeTool":"root/pkg/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: x\n","stderr":"","exit":2,"record":"tsc-pkg"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/pkg/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"pkg/a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"x","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
+      "toolCalls": [
+        {"tool":"tsc-pkg","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/pkg/tsconfig.json"],"cwd":"{{TMP}}/root/pkg","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "tsc-no-config",
+      "setup": [
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: x\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[],"truncated":false,"serverKind":"none"},
+      "toolCalls": []
+    },
+    {
+      "id": "ext-all",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts","{{TMP}}/root/b.tsx","{{TMP}}/root/c.mts","{{TMP}}/root/d.cts","{{TMP}}/root/e.js","{{TMP}}/root/f.jsx","{{TMP}}/root/g.mjs","{{TMP}}/root/h.cjs","{{TMP}}/root/j.d.ts","{{TMP}}/root/k.json"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[],"truncated":false,"serverKind":"tsc"},
+      "toolCalls": [
+        {"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/tsconfig.json"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "ext-upper",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: x\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/i.TS","{{TMP}}/root/k.JS","{{TMP}}/root/l.Py","{{TMP}}/root/m","{{TMP}}/root/.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[],"truncated":false,"serverKind":"none"},
+      "toolCalls": []
+    },
+    {
+      "id": "ext-dts",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: x\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/j.d.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"x","source":"tsc"}],"truncated":false,"serverKind":"tsc"},
+      "toolCalls": [
+        {"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/tsconfig.json"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "py-error",
+      "setup": [
+        {"file":"root/b.py","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"  File \"{{TMP}}/root/b.py\", line 3\n    def f(:\n          ^\nSyntaxError: invalid syntax\n","exit":1,"record":"python3"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/b.py"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"b.py","line":3,"col":1,"severity":"error","message":"SyntaxError: invalid syntax","source":"py_compile"}],"truncated":false,"serverKind":"py_compile"},
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-m","py_compile","{{TMP}}/root/b.py"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "py-no-line",
+      "setup": [
+        {"file":"root/b.py","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"SomeError: boom\n","exit":1,"record":"python3"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/b.py"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"b.py","line":1,"col":1,"severity":"error","message":"SomeError: boom","source":"py_compile"}],"truncated":false,"serverKind":"py_compile"}
+    },
+    {
+      "id": "py-no-error-word",
+      "setup": [
+        {"file":"root/b.py","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"warning: deprecated\n","exit":1,"record":"python3"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/b.py"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[],"truncated":false,"serverKind":"py_compile"}
+    },
+    {
+      "id": "py-lowercase-error",
+      "setup": [
+        {"file":"root/b.py","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"fatal error here\n\n","exit":1,"record":"python3"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/b.py"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"b.py","line":1,"col":1,"severity":"error","message":"fatal error here","source":"py_compile"}],"truncated":false,"serverKind":"py_compile"}
+    },
+    {
+      "id": "py-stdout-only",
+      "setup": [
+        {"file":"root/b.py","content":""},
+        {"fakeTool":"bin/python3","stdout":"Error: on stdout, line 9\n","stderr":"","exit":1,"record":"python3"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/b.py"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"b.py","line":9,"col":1,"severity":"error","message":"Error: on stdout, line 9","source":"py_compile"}],"truncated":false,"serverKind":"py_compile"}
+    },
+    {
+      "id": "py-first-line-number",
+      "setup": [
+        {"file":"root/b.py","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"line 4 then line 5\nValueError: x\n","exit":1,"record":"python3"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/b.py"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"b.py","line":4,"col":1,"severity":"error","message":"ValueError: x","source":"py_compile"}],"truncated":false,"serverKind":"py_compile"}
+    },
+    {
+      "id": "py-missing",
+      "setup": [
+        {"file":"root/b.py","content":""},
+        {"dir":"bin"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/b.py"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[],"truncated":false,"serverKind":"py_compile"},
+      "toolCalls": []
+    },
+    {
+      "id": "py-per-file",
+      "setup": [
+        {"file":"root/b.py","content":""},
+        {"file":"root/sub/c.py","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":1,"record":"python3"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/b.py","{{TMP}}/root/sub/c.py"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[],"truncated":false,"serverKind":"py_compile"},
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-m","py_compile","{{TMP}}/root/b.py"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]},
+        {"tool":"python3","args":["-I","-m","py_compile","{{TMP}}/root/sub/c.py"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "mixed",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"file":"root/b.py","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS1: x\n","stderr":"","exit":2,"record":"tsc"},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"SyntaxError: bad\n","exit":1,"record":"python3"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/b.py","{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS1","message":"x","source":"tsc"},{"path":"b.py","line":1,"col":1,"severity":"error","message":"SyntaxError: bad","source":"py_compile"}],"truncated":false,"serverKind":"tsc+py_compile"},
+      "toolCalls": [
+        {"tool":"tsc","args":["--noEmit","--pretty","false","-p","{{TMP}}/root/tsconfig.json"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]},
+        {"tool":"python3","args":["-I","-m","py_compile","{{TMP}}/root/b.py"],"cwd":"{{TMP}}/root","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "cap-per-file",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS2322: m1\na.ts(2,1): error TS2322: m2\na.ts(3,1): error TS2322: m3\na.ts(4,1): error TS2322: m4\na.ts(5,1): error TS2322: m5\na.ts(6,1): error TS2322: m6\na.ts(7,1): error TS2322: m7\na.ts(8,1): error TS2322: m8\na.ts(9,1): error TS2322: m9\na.ts(10,1): error TS2322: m10\na.ts(11,1): error TS2322: m11\na.ts(12,1): error TS2322: m12\na.ts(13,1): error TS2322: m13\na.ts(14,1): error TS2322: m14\na.ts(15,1): error TS2322: m15\na.ts(16,1): error TS2322: m16\na.ts(17,1): error TS2322: m17\na.ts(18,1): error TS2322: m18\na.ts(19,1): error TS2322: m19\na.ts(20,1): error TS2322: m20\na.ts(21,1): error TS2322: m21\na.ts(22,1): error TS2322: m22\na.ts(23,1): error TS2322: m23\na.ts(24,1): error TS2322: m24\na.ts(25,1): error TS2322: m25\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS2322","message":"m1","source":"tsc"},{"path":"a.ts","line":2,"col":1,"severity":"error","code":"TS2322","message":"m2","source":"tsc"},{"path":"a.ts","line":3,"col":1,"severity":"error","code":"TS2322","message":"m3","source":"tsc"},{"path":"a.ts","line":4,"col":1,"severity":"error","code":"TS2322","message":"m4","source":"tsc"},{"path":"a.ts","line":5,"col":1,"severity":"error","code":"TS2322","message":"m5","source":"tsc"},{"path":"a.ts","line":6,"col":1,"severity":"error","code":"TS2322","message":"m6","source":"tsc"},{"path":"a.ts","line":7,"col":1,"severity":"error","code":"TS2322","message":"m7","source":"tsc"},{"path":"a.ts","line":8,"col":1,"severity":"error","code":"TS2322","message":"m8","source":"tsc"},{"path":"a.ts","line":9,"col":1,"severity":"error","code":"TS2322","message":"m9","source":"tsc"},{"path":"a.ts","line":10,"col":1,"severity":"error","code":"TS2322","message":"m10","source":"tsc"},{"path":"a.ts","line":11,"col":1,"severity":"error","code":"TS2322","message":"m11","source":"tsc"},{"path":"a.ts","line":12,"col":1,"severity":"error","code":"TS2322","message":"m12","source":"tsc"},{"path":"a.ts","line":13,"col":1,"severity":"error","code":"TS2322","message":"m13","source":"tsc"},{"path":"a.ts","line":14,"col":1,"severity":"error","code":"TS2322","message":"m14","source":"tsc"},{"path":"a.ts","line":15,"col":1,"severity":"error","code":"TS2322","message":"m15","source":"tsc"},{"path":"a.ts","line":16,"col":1,"severity":"error","code":"TS2322","message":"m16","source":"tsc"},{"path":"a.ts","line":17,"col":1,"severity":"error","code":"TS2322","message":"m17","source":"tsc"},{"path":"a.ts","line":18,"col":1,"severity":"error","code":"TS2322","message":"m18","source":"tsc"},{"path":"a.ts","line":19,"col":1,"severity":"error","code":"TS2322","message":"m19","source":"tsc"},{"path":"a.ts","line":20,"col":1,"severity":"error","code":"TS2322","message":"m20","source":"tsc"}],"truncated":true,"serverKind":"tsc"}
+    },
+    {
+      "id": "cap-total",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS2322: m1\na.ts(2,1): error TS2322: m2\na.ts(3,1): error TS2322: m3\na.ts(4,1): error TS2322: m4\na.ts(5,1): error TS2322: m5\na.ts(6,1): error TS2322: m6\na.ts(7,1): error TS2322: m7\na.ts(8,1): error TS2322: m8\na.ts(9,1): error TS2322: m9\na.ts(10,1): error TS2322: m10\na.ts(11,1): error TS2322: m11\na.ts(12,1): error TS2322: m12\na.ts(13,1): error TS2322: m13\na.ts(14,1): error TS2322: m14\na.ts(15,1): error TS2322: m15\na.ts(16,1): error TS2322: m16\na.ts(17,1): error TS2322: m17\na.ts(18,1): error TS2322: m18\na.ts(19,1): error TS2322: m19\na.ts(20,1): error TS2322: m20\nb.ts(1,1): error TS2322: m1\nb.ts(2,1): error TS2322: m2\nb.ts(3,1): error TS2322: m3\nb.ts(4,1): error TS2322: m4\nb.ts(5,1): error TS2322: m5\nb.ts(6,1): error TS2322: m6\nb.ts(7,1): error TS2322: m7\nb.ts(8,1): error TS2322: m8\nb.ts(9,1): error TS2322: m9\nb.ts(10,1): error TS2322: m10\nb.ts(11,1): error TS2322: m11\nb.ts(12,1): error TS2322: m12\nb.ts(13,1): error TS2322: m13\nb.ts(14,1): error TS2322: m14\nb.ts(15,1): error TS2322: m15\nb.ts(16,1): error TS2322: m16\nb.ts(17,1): error TS2322: m17\nb.ts(18,1): error TS2322: m18\nb.ts(19,1): error TS2322: m19\nb.ts(20,1): error TS2322: m20\nc.ts(1,1): error TS2322: m1\nc.ts(2,1): error TS2322: m2\nc.ts(3,1): error TS2322: m3\nc.ts(4,1): error TS2322: m4\nc.ts(5,1): error TS2322: m5\nc.ts(6,1): error TS2322: m6\nc.ts(7,1): error TS2322: m7\nc.ts(8,1): error TS2322: m8\nc.ts(9,1): error TS2322: m9\nc.ts(10,1): error TS2322: m10\nc.ts(11,1): error TS2322: m11\nc.ts(12,1): error TS2322: m12\nc.ts(13,1): error TS2322: m13\nc.ts(14,1): error TS2322: m14\nc.ts(15,1): error TS2322: m15\nc.ts(16,1): error TS2322: m16\nc.ts(17,1): error TS2322: m17\nc.ts(18,1): error TS2322: m18\nc.ts(19,1): error TS2322: m19\nc.ts(20,1): error TS2322: m20\nd.ts(1,1): error TS2322: m1\nd.ts(2,1): error TS2322: m2\nd.ts(3,1): error TS2322: m3\nd.ts(4,1): error TS2322: m4\nd.ts(5,1): error TS2322: m5\nd.ts(6,1): error TS2322: m6\nd.ts(7,1): error TS2322: m7\nd.ts(8,1): error TS2322: m8\nd.ts(9,1): error TS2322: m9\nd.ts(10,1): error TS2322: m10\nd.ts(11,1): error TS2322: m11\nd.ts(12,1): error TS2322: m12\nd.ts(13,1): error TS2322: m13\nd.ts(14,1): error TS2322: m14\nd.ts(15,1): error TS2322: m15\nd.ts(16,1): error TS2322: m16\nd.ts(17,1): error TS2322: m17\nd.ts(18,1): error TS2322: m18\nd.ts(19,1): error TS2322: m19\nd.ts(20,1): error TS2322: m20\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS2322","message":"m1","source":"tsc"},{"path":"a.ts","line":2,"col":1,"severity":"error","code":"TS2322","message":"m2","source":"tsc"},{"path":"a.ts","line":3,"col":1,"severity":"error","code":"TS2322","message":"m3","source":"tsc"},{"path":"a.ts","line":4,"col":1,"severity":"error","code":"TS2322","message":"m4","source":"tsc"},{"path":"a.ts","line":5,"col":1,"severity":"error","code":"TS2322","message":"m5","source":"tsc"},{"path":"a.ts","line":6,"col":1,"severity":"error","code":"TS2322","message":"m6","source":"tsc"},{"path":"a.ts","line":7,"col":1,"severity":"error","code":"TS2322","message":"m7","source":"tsc"},{"path":"a.ts","line":8,"col":1,"severity":"error","code":"TS2322","message":"m8","source":"tsc"},{"path":"a.ts","line":9,"col":1,"severity":"error","code":"TS2322","message":"m9","source":"tsc"},{"path":"a.ts","line":10,"col":1,"severity":"error","code":"TS2322","message":"m10","source":"tsc"},{"path":"a.ts","line":11,"col":1,"severity":"error","code":"TS2322","message":"m11","source":"tsc"},{"path":"a.ts","line":12,"col":1,"severity":"error","code":"TS2322","message":"m12","source":"tsc"},{"path":"a.ts","line":13,"col":1,"severity":"error","code":"TS2322","message":"m13","source":"tsc"},{"path":"a.ts","line":14,"col":1,"severity":"error","code":"TS2322","message":"m14","source":"tsc"},{"path":"a.ts","line":15,"col":1,"severity":"error","code":"TS2322","message":"m15","source":"tsc"},{"path":"a.ts","line":16,"col":1,"severity":"error","code":"TS2322","message":"m16","source":"tsc"},{"path":"a.ts","line":17,"col":1,"severity":"error","code":"TS2322","message":"m17","source":"tsc"},{"path":"a.ts","line":18,"col":1,"severity":"error","code":"TS2322","message":"m18","source":"tsc"},{"path":"a.ts","line":19,"col":1,"severity":"error","code":"TS2322","message":"m19","source":"tsc"},{"path":"a.ts","line":20,"col":1,"severity":"error","code":"TS2322","message":"m20","source":"tsc"},{"path":"b.ts","line":1,"col":1,"severity":"error","code":"TS2322","message":"m1","source":"tsc"},{"path":"b.ts","line":2,"col":1,"severity":"error","code":"TS2322","message":"m2","source":"tsc"},{"path":"b.ts","line":3,"col":1,"severity":"error","code":"TS2322","message":"m3","source":"tsc"},{"path":"b.ts","line":4,"col":1,"severity":"error","code":"TS2322","message":"m4","source":"tsc"},{"path":"b.ts","line":5,"col":1,"severity":"error","code":"TS2322","message":"m5","source":"tsc"},{"path":"b.ts","line":6,"col":1,"severity":"error","code":"TS2322","message":"m6","source":"tsc"},{"path":"b.ts","line":7,"col":1,"severity":"error","code":"TS2322","message":"m7","source":"tsc"},{"path":"b.ts","line":8,"col":1,"severity":"error","code":"TS2322","message":"m8","source":"tsc"},{"path":"b.ts","line":9,"col":1,"severity":"error","code":"TS2322","message":"m9","source":"tsc"},{"path":"b.ts","line":10,"col":1,"severity":"error","code":"TS2322","message":"m10","source":"tsc"},{"path":"b.ts","line":11,"col":1,"severity":"error","code":"TS2322","message":"m11","source":"tsc"},{"path":"b.ts","line":12,"col":1,"severity":"error","code":"TS2322","message":"m12","source":"tsc"},{"path":"b.ts","line":13,"col":1,"severity":"error","code":"TS2322","message":"m13","source":"tsc"},{"path":"b.ts","line":14,"col":1,"severity":"error","code":"TS2322","message":"m14","source":"tsc"},{"path":"b.ts","line":15,"col":1,"severity":"error","code":"TS2322","message":"m15","source":"tsc"},{"path":"b.ts","line":16,"col":1,"severity":"error","code":"TS2322","message":"m16","source":"tsc"},{"path":"b.ts","line":17,"col":1,"severity":"error","code":"TS2322","message":"m17","source":"tsc"},{"path":"b.ts","line":18,"col":1,"severity":"error","code":"TS2322","message":"m18","source":"tsc"},{"path":"b.ts","line":19,"col":1,"severity":"error","code":"TS2322","message":"m19","source":"tsc"},{"path":"b.ts","line":20,"col":1,"severity":"error","code":"TS2322","message":"m20","source":"tsc"},{"path":"c.ts","line":1,"col":1,"severity":"error","code":"TS2322","message":"m1","source":"tsc"},{"path":"c.ts","line":2,"col":1,"severity":"error","code":"TS2322","message":"m2","source":"tsc"},{"path":"c.ts","line":3,"col":1,"severity":"error","code":"TS2322","message":"m3","source":"tsc"},{"path":"c.ts","line":4,"col":1,"severity":"error","code":"TS2322","message":"m4","source":"tsc"},{"path":"c.ts","line":5,"col":1,"severity":"error","code":"TS2322","message":"m5","source":"tsc"},{"path":"c.ts","line":6,"col":1,"severity":"error","code":"TS2322","message":"m6","source":"tsc"},{"path":"c.ts","line":7,"col":1,"severity":"error","code":"TS2322","message":"m7","source":"tsc"},{"path":"c.ts","line":8,"col":1,"severity":"error","code":"TS2322","message":"m8","source":"tsc"},{"path":"c.ts","line":9,"col":1,"severity":"error","code":"TS2322","message":"m9","source":"tsc"},{"path":"c.ts","line":10,"col":1,"severity":"error","code":"TS2322","message":"m10","source":"tsc"},{"path":"c.ts","line":11,"col":1,"severity":"error","code":"TS2322","message":"m11","source":"tsc"},{"path":"c.ts","line":12,"col":1,"severity":"error","code":"TS2322","message":"m12","source":"tsc"},{"path":"c.ts","line":13,"col":1,"severity":"error","code":"TS2322","message":"m13","source":"tsc"},{"path":"c.ts","line":14,"col":1,"severity":"error","code":"TS2322","message":"m14","source":"tsc"},{"path":"c.ts","line":15,"col":1,"severity":"error","code":"TS2322","message":"m15","source":"tsc"},{"path":"c.ts","line":16,"col":1,"severity":"error","code":"TS2322","message":"m16","source":"tsc"},{"path":"c.ts","line":17,"col":1,"severity":"error","code":"TS2322","message":"m17","source":"tsc"},{"path":"c.ts","line":18,"col":1,"severity":"error","code":"TS2322","message":"m18","source":"tsc"},{"path":"c.ts","line":19,"col":1,"severity":"error","code":"TS2322","message":"m19","source":"tsc"},{"path":"c.ts","line":20,"col":1,"severity":"error","code":"TS2322","message":"m20","source":"tsc"}],"truncated":true,"serverKind":"tsc"}
+    },
+    {
+      "id": "cap-exact",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS2322: m1\na.ts(2,1): error TS2322: m2\na.ts(3,1): error TS2322: m3\na.ts(4,1): error TS2322: m4\na.ts(5,1): error TS2322: m5\na.ts(6,1): error TS2322: m6\na.ts(7,1): error TS2322: m7\na.ts(8,1): error TS2322: m8\na.ts(9,1): error TS2322: m9\na.ts(10,1): error TS2322: m10\na.ts(11,1): error TS2322: m11\na.ts(12,1): error TS2322: m12\na.ts(13,1): error TS2322: m13\na.ts(14,1): error TS2322: m14\na.ts(15,1): error TS2322: m15\na.ts(16,1): error TS2322: m16\na.ts(17,1): error TS2322: m17\na.ts(18,1): error TS2322: m18\na.ts(19,1): error TS2322: m19\na.ts(20,1): error TS2322: m20\nb.ts(1,1): error TS2322: m1\nb.ts(2,1): error TS2322: m2\nb.ts(3,1): error TS2322: m3\nb.ts(4,1): error TS2322: m4\nb.ts(5,1): error TS2322: m5\nb.ts(6,1): error TS2322: m6\nb.ts(7,1): error TS2322: m7\nb.ts(8,1): error TS2322: m8\nb.ts(9,1): error TS2322: m9\nb.ts(10,1): error TS2322: m10\nb.ts(11,1): error TS2322: m11\nb.ts(12,1): error TS2322: m12\nb.ts(13,1): error TS2322: m13\nb.ts(14,1): error TS2322: m14\nb.ts(15,1): error TS2322: m15\nb.ts(16,1): error TS2322: m16\nb.ts(17,1): error TS2322: m17\nb.ts(18,1): error TS2322: m18\nb.ts(19,1): error TS2322: m19\nb.ts(20,1): error TS2322: m20\nc.ts(1,1): error TS2322: m1\nc.ts(2,1): error TS2322: m2\nc.ts(3,1): error TS2322: m3\nc.ts(4,1): error TS2322: m4\nc.ts(5,1): error TS2322: m5\nc.ts(6,1): error TS2322: m6\nc.ts(7,1): error TS2322: m7\nc.ts(8,1): error TS2322: m8\nc.ts(9,1): error TS2322: m9\nc.ts(10,1): error TS2322: m10\nc.ts(11,1): error TS2322: m11\nc.ts(12,1): error TS2322: m12\nc.ts(13,1): error TS2322: m13\nc.ts(14,1): error TS2322: m14\nc.ts(15,1): error TS2322: m15\nc.ts(16,1): error TS2322: m16\nc.ts(17,1): error TS2322: m17\nc.ts(18,1): error TS2322: m18\nc.ts(19,1): error TS2322: m19\nc.ts(20,1): error TS2322: m20\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS2322","message":"m1","source":"tsc"},{"path":"a.ts","line":2,"col":1,"severity":"error","code":"TS2322","message":"m2","source":"tsc"},{"path":"a.ts","line":3,"col":1,"severity":"error","code":"TS2322","message":"m3","source":"tsc"},{"path":"a.ts","line":4,"col":1,"severity":"error","code":"TS2322","message":"m4","source":"tsc"},{"path":"a.ts","line":5,"col":1,"severity":"error","code":"TS2322","message":"m5","source":"tsc"},{"path":"a.ts","line":6,"col":1,"severity":"error","code":"TS2322","message":"m6","source":"tsc"},{"path":"a.ts","line":7,"col":1,"severity":"error","code":"TS2322","message":"m7","source":"tsc"},{"path":"a.ts","line":8,"col":1,"severity":"error","code":"TS2322","message":"m8","source":"tsc"},{"path":"a.ts","line":9,"col":1,"severity":"error","code":"TS2322","message":"m9","source":"tsc"},{"path":"a.ts","line":10,"col":1,"severity":"error","code":"TS2322","message":"m10","source":"tsc"},{"path":"a.ts","line":11,"col":1,"severity":"error","code":"TS2322","message":"m11","source":"tsc"},{"path":"a.ts","line":12,"col":1,"severity":"error","code":"TS2322","message":"m12","source":"tsc"},{"path":"a.ts","line":13,"col":1,"severity":"error","code":"TS2322","message":"m13","source":"tsc"},{"path":"a.ts","line":14,"col":1,"severity":"error","code":"TS2322","message":"m14","source":"tsc"},{"path":"a.ts","line":15,"col":1,"severity":"error","code":"TS2322","message":"m15","source":"tsc"},{"path":"a.ts","line":16,"col":1,"severity":"error","code":"TS2322","message":"m16","source":"tsc"},{"path":"a.ts","line":17,"col":1,"severity":"error","code":"TS2322","message":"m17","source":"tsc"},{"path":"a.ts","line":18,"col":1,"severity":"error","code":"TS2322","message":"m18","source":"tsc"},{"path":"a.ts","line":19,"col":1,"severity":"error","code":"TS2322","message":"m19","source":"tsc"},{"path":"a.ts","line":20,"col":1,"severity":"error","code":"TS2322","message":"m20","source":"tsc"},{"path":"b.ts","line":1,"col":1,"severity":"error","code":"TS2322","message":"m1","source":"tsc"},{"path":"b.ts","line":2,"col":1,"severity":"error","code":"TS2322","message":"m2","source":"tsc"},{"path":"b.ts","line":3,"col":1,"severity":"error","code":"TS2322","message":"m3","source":"tsc"},{"path":"b.ts","line":4,"col":1,"severity":"error","code":"TS2322","message":"m4","source":"tsc"},{"path":"b.ts","line":5,"col":1,"severity":"error","code":"TS2322","message":"m5","source":"tsc"},{"path":"b.ts","line":6,"col":1,"severity":"error","code":"TS2322","message":"m6","source":"tsc"},{"path":"b.ts","line":7,"col":1,"severity":"error","code":"TS2322","message":"m7","source":"tsc"},{"path":"b.ts","line":8,"col":1,"severity":"error","code":"TS2322","message":"m8","source":"tsc"},{"path":"b.ts","line":9,"col":1,"severity":"error","code":"TS2322","message":"m9","source":"tsc"},{"path":"b.ts","line":10,"col":1,"severity":"error","code":"TS2322","message":"m10","source":"tsc"},{"path":"b.ts","line":11,"col":1,"severity":"error","code":"TS2322","message":"m11","source":"tsc"},{"path":"b.ts","line":12,"col":1,"severity":"error","code":"TS2322","message":"m12","source":"tsc"},{"path":"b.ts","line":13,"col":1,"severity":"error","code":"TS2322","message":"m13","source":"tsc"},{"path":"b.ts","line":14,"col":1,"severity":"error","code":"TS2322","message":"m14","source":"tsc"},{"path":"b.ts","line":15,"col":1,"severity":"error","code":"TS2322","message":"m15","source":"tsc"},{"path":"b.ts","line":16,"col":1,"severity":"error","code":"TS2322","message":"m16","source":"tsc"},{"path":"b.ts","line":17,"col":1,"severity":"error","code":"TS2322","message":"m17","source":"tsc"},{"path":"b.ts","line":18,"col":1,"severity":"error","code":"TS2322","message":"m18","source":"tsc"},{"path":"b.ts","line":19,"col":1,"severity":"error","code":"TS2322","message":"m19","source":"tsc"},{"path":"b.ts","line":20,"col":1,"severity":"error","code":"TS2322","message":"m20","source":"tsc"},{"path":"c.ts","line":1,"col":1,"severity":"error","code":"TS2322","message":"m1","source":"tsc"},{"path":"c.ts","line":2,"col":1,"severity":"error","code":"TS2322","message":"m2","source":"tsc"},{"path":"c.ts","line":3,"col":1,"severity":"error","code":"TS2322","message":"m3","source":"tsc"},{"path":"c.ts","line":4,"col":1,"severity":"error","code":"TS2322","message":"m4","source":"tsc"},{"path":"c.ts","line":5,"col":1,"severity":"error","code":"TS2322","message":"m5","source":"tsc"},{"path":"c.ts","line":6,"col":1,"severity":"error","code":"TS2322","message":"m6","source":"tsc"},{"path":"c.ts","line":7,"col":1,"severity":"error","code":"TS2322","message":"m7","source":"tsc"},{"path":"c.ts","line":8,"col":1,"severity":"error","code":"TS2322","message":"m8","source":"tsc"},{"path":"c.ts","line":9,"col":1,"severity":"error","code":"TS2322","message":"m9","source":"tsc"},{"path":"c.ts","line":10,"col":1,"severity":"error","code":"TS2322","message":"m10","source":"tsc"},{"path":"c.ts","line":11,"col":1,"severity":"error","code":"TS2322","message":"m11","source":"tsc"},{"path":"c.ts","line":12,"col":1,"severity":"error","code":"TS2322","message":"m12","source":"tsc"},{"path":"c.ts","line":13,"col":1,"severity":"error","code":"TS2322","message":"m13","source":"tsc"},{"path":"c.ts","line":14,"col":1,"severity":"error","code":"TS2322","message":"m14","source":"tsc"},{"path":"c.ts","line":15,"col":1,"severity":"error","code":"TS2322","message":"m15","source":"tsc"},{"path":"c.ts","line":16,"col":1,"severity":"error","code":"TS2322","message":"m16","source":"tsc"},{"path":"c.ts","line":17,"col":1,"severity":"error","code":"TS2322","message":"m17","source":"tsc"},{"path":"c.ts","line":18,"col":1,"severity":"error","code":"TS2322","message":"m18","source":"tsc"},{"path":"c.ts","line":19,"col":1,"severity":"error","code":"TS2322","message":"m19","source":"tsc"},{"path":"c.ts","line":20,"col":1,"severity":"error","code":"TS2322","message":"m20","source":"tsc"}],"truncated":false,"serverKind":"tsc"}
+    },
+    {
+      "id": "cap-order",
+      "setup": [
+        {"file":"root/tsconfig.json","content":"{}"},
+        {"file":"root/a.ts","content":""},
+        {"fakeTool":"root/node_modules/.bin/tsc","stdout":"a.ts(1,1): error TS2322: m1\na.ts(2,1): error TS2322: m2\na.ts(3,1): error TS2322: m3\na.ts(4,1): error TS2322: m4\na.ts(5,1): error TS2322: m5\na.ts(6,1): error TS2322: m6\na.ts(7,1): error TS2322: m7\na.ts(8,1): error TS2322: m8\na.ts(9,1): error TS2322: m9\na.ts(10,1): error TS2322: m10\na.ts(11,1): error TS2322: m11\na.ts(12,1): error TS2322: m12\na.ts(13,1): error TS2322: m13\na.ts(14,1): error TS2322: m14\na.ts(15,1): error TS2322: m15\na.ts(16,1): error TS2322: m16\na.ts(17,1): error TS2322: m17\na.ts(18,1): error TS2322: m18\na.ts(19,1): error TS2322: m19\na.ts(20,1): error TS2322: m20\na.ts(21,1): error TS2322: m21\na.ts(22,1): error TS2322: m22\na.ts(23,1): error TS2322: m23\na.ts(24,1): error TS2322: m24\na.ts(25,1): error TS2322: m25\nb.ts(1,1): error TS2322: m1\nb.ts(2,1): error TS2322: m2\nb.ts(3,1): error TS2322: m3\nb.ts(4,1): error TS2322: m4\nb.ts(5,1): error TS2322: m5\nb.ts(6,1): error TS2322: m6\nb.ts(7,1): error TS2322: m7\nb.ts(8,1): error TS2322: m8\nb.ts(9,1): error TS2322: m9\nb.ts(10,1): error TS2322: m10\nb.ts(11,1): error TS2322: m11\nb.ts(12,1): error TS2322: m12\nb.ts(13,1): error TS2322: m13\nb.ts(14,1): error TS2322: m14\nb.ts(15,1): error TS2322: m15\nb.ts(16,1): error TS2322: m16\nb.ts(17,1): error TS2322: m17\nb.ts(18,1): error TS2322: m18\nb.ts(19,1): error TS2322: m19\nb.ts(20,1): error TS2322: m20\nc.ts(1,1): error TS2322: m1\nc.ts(2,1): error TS2322: m2\nc.ts(3,1): error TS2322: m3\nc.ts(4,1): error TS2322: m4\nc.ts(5,1): error TS2322: m5\nc.ts(6,1): error TS2322: m6\nc.ts(7,1): error TS2322: m7\nc.ts(8,1): error TS2322: m8\nc.ts(9,1): error TS2322: m9\nc.ts(10,1): error TS2322: m10\nc.ts(11,1): error TS2322: m11\nc.ts(12,1): error TS2322: m12\nc.ts(13,1): error TS2322: m13\nc.ts(14,1): error TS2322: m14\nc.ts(15,1): error TS2322: m15\nc.ts(16,1): error TS2322: m16\nc.ts(17,1): error TS2322: m17\nc.ts(18,1): error TS2322: m18\nc.ts(19,1): error TS2322: m19\nc.ts(20,1): error TS2322: m20\na.ts(1,1): error TS2322: m1\na.ts(2,1): error TS2322: m2\na.ts(3,1): error TS2322: m3\na.ts(4,1): error TS2322: m4\na.ts(5,1): error TS2322: m5\n","stderr":"","exit":2,"record":"tsc"}
+      ],
+      "input": {"base":"{{TMP}}/root","paths":["{{TMP}}/root/a.ts"],"execPath":"{{BIN}}"},
+      "expect": {"diagnostics":[{"path":"a.ts","line":1,"col":1,"severity":"error","code":"TS2322","message":"m1","source":"tsc"},{"path":"a.ts","line":2,"col":1,"severity":"error","code":"TS2322","message":"m2","source":"tsc"},{"path":"a.ts","line":3,"col":1,"severity":"error","code":"TS2322","message":"m3","source":"tsc"},{"path":"a.ts","line":4,"col":1,"severity":"error","code":"TS2322","message":"m4","source":"tsc"},{"path":"a.ts","line":5,"col":1,"severity":"error","code":"TS2322","message":"m5","source":"tsc"},{"path":"a.ts","line":6,"col":1,"severity":"error","code":"TS2322","message":"m6","source":"tsc"},{"path":"a.ts","line":7,"col":1,"severity":"error","code":"TS2322","message":"m7","source":"tsc"},{"path":"a.ts","line":8,"col":1,"severity":"error","code":"TS2322","message":"m8","source":"tsc"},{"path":"a.ts","line":9,"col":1,"severity":"error","code":"TS2322","message":"m9","source":"tsc"},{"path":"a.ts","line":10,"col":1,"severity":"error","code":"TS2322","message":"m10","source":"tsc"},{"path":"a.ts","line":11,"col":1,"severity":"error","code":"TS2322","message":"m11","source":"tsc"},{"path":"a.ts","line":12,"col":1,"severity":"error","code":"TS2322","message":"m12","source":"tsc"},{"path":"a.ts","line":13,"col":1,"severity":"error","code":"TS2322","message":"m13","source":"tsc"},{"path":"a.ts","line":14,"col":1,"severity":"error","code":"TS2322","message":"m14","source":"tsc"},{"path":"a.ts","line":15,"col":1,"severity":"error","code":"TS2322","message":"m15","source":"tsc"},{"path":"a.ts","line":16,"col":1,"severity":"error","code":"TS2322","message":"m16","source":"tsc"},{"path":"a.ts","line":17,"col":1,"severity":"error","code":"TS2322","message":"m17","source":"tsc"},{"path":"a.ts","line":18,"col":1,"severity":"error","code":"TS2322","message":"m18","source":"tsc"},{"path":"a.ts","line":19,"col":1,"severity":"error","code":"TS2322","message":"m19","source":"tsc"},{"path":"a.ts","line":20,"col":1,"severity":"error","code":"TS2322","message":"m20","source":"tsc"},{"path":"b.ts","line":1,"col":1,"severity":"error","code":"TS2322","message":"m1","source":"tsc"},{"path":"b.ts","line":2,"col":1,"severity":"error","code":"TS2322","message":"m2","source":"tsc"},{"path":"b.ts","line":3,"col":1,"severity":"error","code":"TS2322","message":"m3","source":"tsc"},{"path":"b.ts","line":4,"col":1,"severity":"error","code":"TS2322","message":"m4","source":"tsc"},{"path":"b.ts","line":5,"col":1,"severity":"error","code":"TS2322","message":"m5","source":"tsc"},{"path":"b.ts","line":6,"col":1,"severity":"error","code":"TS2322","message":"m6","source":"tsc"},{"path":"b.ts","line":7,"col":1,"severity":"error","code":"TS2322","message":"m7","source":"tsc"},{"path":"b.ts","line":8,"col":1,"severity":"error","code":"TS2322","message":"m8","source":"tsc"},{"path":"b.ts","line":9,"col":1,"severity":"error","code":"TS2322","message":"m9","source":"tsc"},{"path":"b.ts","line":10,"col":1,"severity":"error","code":"TS2322","message":"m10","source":"tsc"},{"path":"b.ts","line":11,"col":1,"severity":"error","code":"TS2322","message":"m11","source":"tsc"},{"path":"b.ts","line":12,"col":1,"severity":"error","code":"TS2322","message":"m12","source":"tsc"},{"path":"b.ts","line":13,"col":1,"severity":"error","code":"TS2322","message":"m13","source":"tsc"},{"path":"b.ts","line":14,"col":1,"severity":"error","code":"TS2322","message":"m14","source":"tsc"},{"path":"b.ts","line":15,"col":1,"severity":"error","code":"TS2322","message":"m15","source":"tsc"},{"path":"b.ts","line":16,"col":1,"severity":"error","code":"TS2322","message":"m16","source":"tsc"},{"path":"b.ts","line":17,"col":1,"severity":"error","code":"TS2322","message":"m17","source":"tsc"},{"path":"b.ts","line":18,"col":1,"severity":"error","code":"TS2322","message":"m18","source":"tsc"},{"path":"b.ts","line":19,"col":1,"severity":"error","code":"TS2322","message":"m19","source":"tsc"},{"path":"b.ts","line":20,"col":1,"severity":"error","code":"TS2322","message":"m20","source":"tsc"},{"path":"c.ts","line":1,"col":1,"severity":"error","code":"TS2322","message":"m1","source":"tsc"},{"path":"c.ts","line":2,"col":1,"severity":"error","code":"TS2322","message":"m2","source":"tsc"},{"path":"c.ts","line":3,"col":1,"severity":"error","code":"TS2322","message":"m3","source":"tsc"},{"path":"c.ts","line":4,"col":1,"severity":"error","code":"TS2322","message":"m4","source":"tsc"},{"path":"c.ts","line":5,"col":1,"severity":"error","code":"TS2322","message":"m5","source":"tsc"},{"path":"c.ts","line":6,"col":1,"severity":"error","code":"TS2322","message":"m6","source":"tsc"},{"path":"c.ts","line":7,"col":1,"severity":"error","code":"TS2322","message":"m7","source":"tsc"},{"path":"c.ts","line":8,"col":1,"severity":"error","code":"TS2322","message":"m8","source":"tsc"},{"path":"c.ts","line":9,"col":1,"severity":"error","code":"TS2322","message":"m9","source":"tsc"},{"path":"c.ts","line":10,"col":1,"severity":"error","code":"TS2322","message":"m10","source":"tsc"},{"path":"c.ts","line":11,"col":1,"severity":"error","code":"TS2322","message":"m11","source":"tsc"},{"path":"c.ts","line":12,"col":1,"severity":"error","code":"TS2322","message":"m12","source":"tsc"},{"path":"c.ts","line":13,"col":1,"severity":"error","code":"TS2322","message":"m13","source":"tsc"},{"path":"c.ts","line":14,"col":1,"severity":"error","code":"TS2322","message":"m14","source":"tsc"},{"path":"c.ts","line":15,"col":1,"severity":"error","code":"TS2322","message":"m15","source":"tsc"},{"path":"c.ts","line":16,"col":1,"severity":"error","code":"TS2322","message":"m16","source":"tsc"},{"path":"c.ts","line":17,"col":1,"severity":"error","code":"TS2322","message":"m17","source":"tsc"},{"path":"c.ts","line":18,"col":1,"severity":"error","code":"TS2322","message":"m18","source":"tsc"},{"path":"c.ts","line":19,"col":1,"severity":"error","code":"TS2322","message":"m19","source":"tsc"},{"path":"c.ts","line":20,"col":1,"severity":"error","code":"TS2322","message":"m20","source":"tsc"}],"truncated":true,"serverKind":"tsc"}
+    }
+  ]
+}

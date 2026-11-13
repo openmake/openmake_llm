@@ -8,37 +8,50 @@
  * 1단계는 **언어 서버 없이도 도는 폴백만** 쓴다 — 프로젝트에 이미 있는 도구만 쓰므로 사용자가
  * 무엇도 설치할 필요가 없다:
  *   - TS/JS : 레포의 `node_modules/.bin/tsc --noEmit -p <가장 가까운 tsconfig>`
- *   - Python: `python3 -m py_compile <file>`
+ *   - Python: `python3 -I -m py_compile <file>`(격리 모드 — cwd 의 `py_compile.py` 를 import 하지 않는다)
  *   - 그 외 : no-op(`serverKind:'none'`) — 조용히 빈 결과
  * 도구가 없으면 실행하지 않는다(설치 시도 금지). 결과는 캡·타임아웃으로 제한하고, 실패는
  * 호출측에서 fail-open 으로 흡수한다.
  *
  * 보안: 실행 파일·인자는 **코어가 고정 조립**한다(모델·서버 입력이 명령줄에 들어가지 않는다).
- * 경로는 호출측이 `safeFromAsync` 로 스코프를 확정한 절대경로만 넘긴다.
+ * 경로는 호출측이 `safeFromAsync` 로 스코프를 확정한 절대경로만 넘긴다. tsc 는 폴더가 주는 실행 파일이므로
+ * 자식은 exec 와 같은 샌드박스 프로파일 안에서 띄운다(`wrapInSandbox`, 프로파일이 없으면 띄우지 않고 거절).
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX, DIAG_TIMEOUT_MS, MAX_BUFFER } from './constants';
 import { buildExecEnv } from './exec-env';
+import { onPath } from './exec-path';
+import { SandboxProfileMissingError, sandboxExecFailed, wrapInSandbox } from './sandbox';
 import type { BridgeDiagnostic } from './types';
 
 const TS_EXT = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
 const PY_EXT = new Set(['.py']);
 
-function run(file: string, args: string[], cwd: string, extraPath?: string): Promise<{ stdout: string; stderr: string }> {
-    return new Promise((resolve) => {
+function run(file: string, args: string[], cwd: string, extraPath: string | undefined, sandbox: string | null | undefined): Promise<{ stdout: string; stderr: string }> {
+    const cmd = wrapInSandbox(file, args, sandbox); // 프로파일 없음이면 여기서 throw — 자식을 띄우지 않는다
+    const wrapped = typeof sandbox === 'string';
+    const envPath = extraPath || process.env.PATH || process.env.Path || '';
+    // 감쌀 때 이름으로 띄우는 실행 파일(python3)은 먼저 찾는다 — 없으면 sandbox-exec 의 execvp 실패(71)가 아니라
+    // 종전과 같은 "띄우지 못함"(빈 출력)이다.
+    if (wrapped && !file.includes('/') && !onPath(file, envPath)) return Promise.resolve({ stdout: '', stderr: '' });
+    return new Promise((resolve, reject) => {
         execFile(
-            file, args,
+            cmd.file, cmd.args,
             {
                 cwd,
                 timeout: DIAG_TIMEOUT_MS,
                 maxBuffer: MAX_BUFFER,
                 encoding: 'utf8',
                 // 레포의 tsc·python3 가 도는 자리 — 호스트 env 전체가 아니라 exec 와 같은 allowlist 만 넘긴다.
-                env: buildExecEnv(process.env, extraPath || process.env.PATH || process.env.Path || ''),
+                env: buildExecEnv(process.env, envPath),
             },
-            (_err, stdout, stderr) => resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }),
+            (err, stdout, stderr) => {
+                // sandbox-exec 자체 실패(프로파일 파일 유실 등)는 "진단 없음"으로 삼키지 않고 프로파일 없음과 같이 거절한다.
+                if (err && sandboxExecFailed(wrapped, err.code, String(stderr ?? ''))) reject(new SandboxProfileMissingError());
+                else resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
+            },
         );
     });
 }
@@ -122,11 +135,13 @@ function capDiagnostics(all: BridgeDiagnostic[]): { diagnostics: BridgeDiagnosti
  * 지정한 파일들의 진단을 모은다. 실행할 도구가 없으면 빈 결과 + `serverKind:'none'`.
  * @param base 스코프 루트(연결/선택 폴더의 실경로)
  * @param absPaths 이미 스코프 검증된 절대경로들
+ * @param sandbox 자식을 감쌀 exec 프로파일 — undefined 면 감싸지 않고, null 이면 자식을 띄워야 할 때 거절한다(`wrapInSandbox`)
  */
 export async function collectDiagnostics(
     base: string,
     absPaths: string[],
     execPath?: string,
+    sandbox?: string | null,
 ): Promise<{ diagnostics: BridgeDiagnostic[]; truncated: boolean; serverKind: string }> {
     const ts = absPaths.filter((p) => TS_EXT.has(path.extname(p)));
     const py = absPaths.filter((p) => PY_EXT.has(path.extname(p)));
@@ -143,7 +158,7 @@ export async function collectDiagnostics(
         }
         for (const [cfg, tsc] of byProject) {
             const cwd = path.dirname(cfg);
-            const { stdout, stderr } = await run(tsc, ['--noEmit', '--pretty', 'false', '-p', cfg], cwd, execPath);
+            const { stdout, stderr } = await run(tsc, ['--noEmit', '--pretty', 'false', '-p', cfg], cwd, execPath, sandbox);
             all.push(...parseTsc(`${stdout}\n${stderr}`, base, cwd));
             kinds.push('tsc');
         }
@@ -151,7 +166,7 @@ export async function collectDiagnostics(
 
     // Python — 파일 단위 문법 검사(py_compile 은 표준 라이브러리라 별도 설치가 없다).
     for (const f of py) {
-        const { stdout, stderr } = await run('python3', ['-m', 'py_compile', f], base, execPath);
+        const { stdout, stderr } = await run('python3', ['-I', '-m', 'py_compile', f], base, execPath, sandbox);
         const out = `${stdout}\n${stderr}`;
         if (/Error|error/.test(out)) all.push(...parsePyCompile(out, base, f));
         kinds.push('py_compile');
