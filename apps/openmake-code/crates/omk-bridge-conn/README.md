@@ -18,6 +18,7 @@
 - 호스트는 `runtime::host_runtime()` 으로 런타임을 만든다 — 다중 스레드(작업 스레드 2), blocking 스레드 상한 64. 막힌 볼륨에서 블록된 파일 작업이 늘어도 스레드가 이 수를 넘지 않고, 넘는 요청은 시간 초과로 끝난다.
 - `BridgeConnection::new` 는 런타임 안에서 부른다(연결 태스크를 띄운다). 핸들을 버리면 태스크가 끝나고 소켓은 상태 알림 없이 끊긴다.
 - 종료는 `Runtime::shutdown_timeout` 으로 한다. 그냥 drop 하면 영영 블록된 파일 호출이 있을 때 종료가 멈춘다(코어 README 와 같다).
+- 보내기는 기다리지 않는다(TS `ws.send` 처럼). 결과·hello·ping·닫힘 프레임은 세션의 보낼 큐에 넣고, 실제 쓰기는 읽기·생존 확인·닫기 한도와 같은 `select!` 에서 진행한다. 상대가 읽지 않아 소켓이 막혀도 생존 확인이 끊고, `disconnect()`·`connect()` 는 바로 처리된다(막힌 소켓의 `disconnect()` 는 닫기 한도 30초 뒤 `종료`). 큐가 16MiB 를 넘으면 생존 확인을 기다리지 않고 끊고 재연결한다(TS 는 상한 없이 쌓는다 — `tests/blocked_send.rs`).
 - 시간은 `tokio::time` 만 쓴다. 벽시계는 요청 만료 판정과 `durationMs` 에만 쓰고 `ConnectionOptions::clock` 으로 바꿀 수 있다.
 
 ## 코어 수명
@@ -41,5 +42,6 @@ cargo test --locked -p omk-bridge-conn
 
 - `tests/conformance.rs` — `conn-*` fixture 6개(TS 러너 `conformance-conn.test.ts` 와 같은 사례).
 - `tests/connection_scenarios.rs` — TS `connection.test.ts`·`reconnect-delay.test.ts` 의 연결 시나리오. 메모리 안 duplex 가짜 서버 + 멈춘 시계로 결정적으로 돈다. Rust 에서 더한 시나리오는 `tests/connection_scenarios_rust.rs`, 공용 환경은 `tests/support/scenario.rs`.
+- `tests/blocked_send.rs` — 상대가 읽지 않아 보내기가 막힌 연결(생존 확인·해제·재연결·큐 상한).
 - `tests/real_socket.rs` — 실 TCP·TLS·HTTP 몇 건. `tests/core_lifetime.rs` — 막힌 폴더(FIFO)로 코어 수명·blocking 상한.
 - TS 와 일부러 다르게 한 자리는 fixture 에 넣지 않고 단위 테스트로 고정한다(`CONN.md` "fixture 에 넣지 않는 차이").
