@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: pipeline-auto-merge
+  group: ${{ (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success') && 'pipeline-auto-merge' || format('pipeline-auto-merge-skip-{0}', github.run_id) }}
   cancel-in-progress: false
 jobs:
   orchestrate:
