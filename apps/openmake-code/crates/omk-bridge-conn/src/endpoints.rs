@@ -136,7 +136,17 @@ pub async fn discover_endpoints(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_plain_remote_http, normalize_server_address};
+    use super::{body_json, is_plain_remote_http, normalize_server_address};
+
+    /// 알려진 차이(리뷰 I2): 조회 본문에 f64 범위 밖 수(`1e999`)가 있으면 JS `res.json()` 은 `Infinity` 로 읽고 진행하지만
+    /// serde_json 은 본문 전체를 거부한다 — 조회 실패로 보고 넣은 주소를 그대로 쓴다. 서버 응답은 고정 꼴이라 기록만 한다(CONN.md).
+    #[test]
+    fn out_of_range_number_fails_whole_body() {
+        let ok = br#"{"data":{"apiPort":52416,"webPort":3000}}"#;
+        assert!(body_json(ok).is_some_and(|v| v["data"]["apiPort"] == 52416));
+        let big = br#"{"data":{"apiPort":52416,"webPort":3000,"x":1e999}}"#;
+        assert_eq!(body_json(big), None);
+    }
 
     /// 알려진 차이(단계 13 차등 실험): 잘못된 punycode 라벨(`xn--`·`xn--a`·`xn---` 등)을 Node 24 `URL`(ada)은 받고
     /// `url` 크레이트는 WHATWG 의 IDNA 규칙대로 거부한다. 사용자가 넣을 일이 드문 입력이라 기록만 한다(CONN.md).
