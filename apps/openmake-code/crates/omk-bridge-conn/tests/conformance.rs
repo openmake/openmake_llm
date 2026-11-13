@@ -4,7 +4,7 @@
 
 mod support;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use support::fixture::{KNOWN_CONN_SUITES, conn_files, load};
 
@@ -235,7 +235,42 @@ fn fixture_shapes() {
 
 #[test]
 fn conn_constants() {
-    panic!("미구현: conn-constants");
+    use omk_bridge_conn::constants as c;
+    let reasons: Vec<&str> = c::AUTH_CLOSE_REASONS.iter().map(|r| r.as_str()).collect();
+    let texts: serde_json::Map<String, Value> = c::AUTH_CLOSE_REASONS
+        .iter()
+        .map(|r| (r.as_str().to_owned(), json!(r.text())))
+        .collect();
+    let actual = json!({
+        "RECONNECT_MS": c::RECONNECT_MS,
+        "RECONNECT_MAX_MS": c::RECONNECT_MAX_MS,
+        "HANDSHAKE_TIMEOUT_MS": c::HANDSHAKE_TIMEOUT_MS,
+        "HELLO_DELAY_MS": c::HELLO_DELAY_MS,
+        "LIVENESS_PING_MS": c::LIVENESS_PING_MS,
+        "LIVENESS_TIMEOUT_MS": c::LIVENESS_TIMEOUT_MS,
+        "AUTH_RETRY_MS": c::AUTH_RETRY_MS,
+        "AUTH_CLOSE_REASONS": reasons,
+        "AUTH_CLOSE_TEXT": texts,
+        "NOTICE_KINDS": c::NOTICE_KINDS,
+        "NOTICE_TOOL_NAME_MAX": c::NOTICE_TOOL_NAME_MAX,
+        "TASK_ID_RE": {"source": c::TASK_ID_RE_SOURCE, "flags": c::TASK_ID_RE_FLAGS},
+        "DESKTOP_CONFIG_PATH": c::DESKTOP_CONFIG_PATH,
+        "DESKTOP_CONFIG_TIMEOUT_MS": c::DESKTOP_CONFIG_TIMEOUT_MS,
+    });
+    let doc = load("conn-constants");
+    let expected = doc["values"].as_object().unwrap();
+    let actual = actual.as_object().unwrap();
+    for (k, v) in expected {
+        assert_eq!(actual.get(k), Some(v), "conn-constants/values/{k}");
+    }
+    let extra: Vec<&String> = actual
+        .keys()
+        .filter(|k| !expected.contains_key(*k))
+        .collect();
+    assert!(extra.is_empty(), "fixture 에 없는 상수 {extra:?}");
+    for r in c::AUTH_CLOSE_REASONS {
+        assert_eq!(c::AuthCloseReason::parse(r.as_str()), Some(r));
+    }
 }
 
 #[test]
