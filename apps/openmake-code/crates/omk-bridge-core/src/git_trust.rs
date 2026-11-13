@@ -289,8 +289,10 @@ fn denied_under(r: &str, d: &str, del: bool) -> bool {
 ///  2. 대상의 조상 폴더(연결 폴더까지) 중 `HEAD` 항목이 지금 있는(lstat) 폴더와 연결 때 정한 목록의 git 디렉터리(HEAD 유무 무관 —
 ///     탐지 실패·깨진 HEAD 에서도 남는다)마다, 그 바로 아래 금지 이름·`hooks` 아래·비ASCII 첫 이름이면 거절(delete 는 목록의 git
 ///     디렉터리 자신·상위 폴더도). linked 배치의 `<common>/worktrees` 도 거절한다.
-///  3. 아직 없는 `HEAD` 항목을 새로 만드는 쓰기는 거절(이미 있으면 종전대로 쓴다, 지우기는 막지 않는다) — 2 와 합쳐 "`config` 먼저,
-///     `HEAD` 나중" 순서도 닫는다. `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
+///  3. 파일 kind 는 `HEAD` 항목의 유무를 바꾸지 못한다 — 아직 없는 `HEAD` 를 새로 만드는 쓰기와 `HEAD` 자신을 지우는 것을 거절
+///     (이미 있는 `HEAD` 의 내용 쓰기는 종전대로, `HEAD` 를 품은 폴더째 지우기는 구조가 함께 사라지므로 연다). 2 의 표식을 파일
+///     kind 가 움직이지 못하게 한다 — 만들기는 "`config` 먼저, `HEAD` 나중", 지우기는 "linked worktree 의 common dir 에서 `HEAD`
+///     를 지운 뒤 `config`"(리뷰 5차 T1) 순서를 닫는다. `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
 ///
 /// 비교는 대상의 realpath 와 "부모의 realpath + 마지막 이름" 둘로 하고(심링크 자리 자체도 막는다), 대소문자를 접어서 한다(TS
 /// `assertGitPathAllowed`). FS 를 보므로 관문 안에서 부른다.
@@ -310,7 +312,11 @@ pub fn assert_git_path_allowed(
     let dot_git = [&r, &lex]
         .iter()
         .any(|p| relative(&root, p).split('/').any(|n| n == ".git"));
-    let new_head = !del && created.iter().any(|n| fold_case(n) == "head");
+    let head_entry = if del {
+        fold_case(&basename(&lex_real)) == "head"
+    } else {
+        created.iter().any(|n| fold_case(n) == "head")
+    };
     let mut dirs: Vec<String> = Vec::new();
     let mut parent_rename = false;
     for git in &guard.dirs {
@@ -334,7 +340,7 @@ pub fn assert_git_path_allowed(
     let denied = dirs
         .iter()
         .any(|d| denied_under(&r, d, del) || denied_under(&lex, d, del));
-    if dot_git || new_head || denied || parent_rename {
+    if dot_git || head_entry || denied || parent_rename {
         return Err(format!(
             "{GIT_PATH_DENIED_PREFIX}{}",
             rel.unwrap_or("undefined")
