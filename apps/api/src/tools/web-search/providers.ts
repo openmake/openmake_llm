@@ -143,6 +143,62 @@ export async function searchGoogle(query: string, maxResults: number = 10, globa
     return results;
 }
 
+
+const KEENABLE_ENABLED = /^(1|true|yes|on)$/i;
+const KEENABLE_PUBLIC_URL = 'https://api.keenable.ai/v1/search/public';
+const KEENABLE_KEYED_URL = 'https://api.keenable.ai/v1/search';
+
+/** true when the operator enabled Keenable (flag or API key). Off by default. */
+export function isKeenableEnabled(): boolean {
+    const { keenableSearch, keenableApiKey } = getConfig();
+    return KEENABLE_ENABLED.test((keenableSearch || '').trim()) || Boolean(keenableApiKey?.trim());
+}
+
+/**
+ * Keenable Search API. Off unless KEENABLE_SEARCH or KEENABLE_API_KEY is set.
+ * Keyless: POST /v1/search/public with X-Keenable-Title. Keyed: POST /v1/search with X-API-Key.
+ */
+export async function searchKeenable(query: string, maxResults: number = 10, signal?: AbortSignal): Promise<SearchResult[]> {
+    const results: SearchResult[] = [];
+    if (!isKeenableEnabled()) return results;
+
+    const { keenableApiKey } = getConfig();
+    const key = keenableApiKey?.trim();
+    const url = key ? KEENABLE_KEYED_URL : KEENABLE_PUBLIC_URL;
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'X-Keenable-Title': 'OpenMake',
+    };
+    if (key) headers['X-API-Key'] = key;
+
+    try {
+        const response = await searchFetch(url, signal, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ query, max_results: maxResults }),
+        });
+        if (!response.ok) {
+            logger.warn(`Keenable 검색 실패: HTTP ${response.status}`);
+            return results;
+        }
+        const data = await response.json() as { results?: Array<{ title?: string; url?: string; snippet?: string; published_at?: string }> };
+        for (const item of (data.results || [])) {
+            if (!item.url) continue;
+            results.push({
+                title: item.title || '',
+                url: item.url,
+                snippet: item.snippet || '',
+                source: 'keenable.ai',
+                ...(item.published_at ? { date: item.published_at } : {}),
+            });
+        }
+        logger.info(`Keenable: ${results.length}개`);
+    } catch (e) {
+        logger.warn(`Keenable 검색 실패: ${describeFetchError(e)}`);
+    }
+    return results;
+}
+
 /**
  * Wikipedia API 검색 (한국어, 무료, 안정적)
  *

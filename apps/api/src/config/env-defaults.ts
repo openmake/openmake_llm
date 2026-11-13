@@ -75,6 +75,8 @@ export const DEFAULT_CONFIG: EnvConfig = {
     // External services
     googleApiKey: '',
     googleCseId: '',
+    keenableSearch: '',
+    keenableApiKey: '',
     githubToken: '',
 
     // Documents

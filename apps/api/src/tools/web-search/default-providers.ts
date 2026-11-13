@@ -5,7 +5,7 @@
  * @module tools/web-search/default-providers
  */
 import { registerSearchProvider } from './provider-registry';
-import { searchDuckDuckGoAPI, searchGoogle, searchGoogleNews, searchSearxng, searchWikipedia } from './providers';
+import { isKeenableEnabled, searchDuckDuckGoAPI, searchGoogle, searchGoogleNews, searchKeenable, searchSearxng, searchWikipedia } from './providers';
 import { detectSearxngCategories } from './searxng-categories';
 import { WEB_SEARCH_TOOL_LIMITS } from '../../config/addon-tool-limits';
 
@@ -17,6 +17,7 @@ export function ensureDefaultSearchProviders(): void {
     registerSearchProvider({ id: 'searxng', group: 'meta', logLabel: 'SearXNG', search: (c) => searchSearxng(c.query, WEB_SEARCH_TOOL_LIMITS.SEARXNG_MAX_RESULTS, c.language, c.signal, detectSearxngCategories(c.query)) });
     registerSearchProvider({ id: 'google-news', group: 'news', logLabel: 'News', countsAsNews: true, search: (c) => searchGoogleNews(c.query, c.language, c.signal) });
     registerSearchProvider({ id: 'google', group: 'web', logLabel: 'Google', search: (c) => searchGoogle(c.query, 10, c.globalSearch, c.language, c.signal) });
+    registerSearchProvider({ id: 'keenable', group: 'web', logLabel: 'Keenable', applies: () => isKeenableEnabled(), search: (c) => searchKeenable(c.query, 10, c.signal) });
     registerSearchProvider({ id: 'wikipedia', group: 'reference', logLabel: 'Wiki', search: (c) => searchWikipedia(c.query, c.language, c.signal) });
     registerSearchProvider({ id: 'duckduckgo', group: 'fallback', logLabel: 'DDG', search: (c) => searchDuckDuckGoAPI(c.query, c.signal) });
 }

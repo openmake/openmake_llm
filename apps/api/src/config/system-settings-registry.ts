@@ -36,6 +36,7 @@ interface SystemSettingDef {
 const nonEmpty = z.string().trim().min(1, '값이 비어 있습니다').max(2000, '2000자 이하여야 합니다');
 /** API 키 필드용 — 발급 페이지 URL 을 키로 착각해 붙여넣는 실수 차단 (실사례: EXA_API_KEY 에 URL 등록 → 조용한 0건) */
 const apiKeyLike = nonEmpty.refine((v) => !/^https?:\/\//i.test(v), 'URL 이 아니라 발급받은 API 키 값을 입력하세요');
+const keenableFlag = z.string().trim().refine((v) => /^(1|true|yes|on)$/i.test(v), 'true, 1, yes, on 중 하나여야 합니다');
 const httpUrl = nonEmpty.refine((v) => /^https?:\/\//.test(v), 'http(s):// URL 이어야 합니다');
 const httpsUrl = nonEmpty.refine((v) => /^https:\/\//.test(v), 'https:// URL 이어야 합니다');
 const nonNegativeIntString = z
@@ -64,6 +65,7 @@ const mailtoOrHttps = nonEmpty.refine(
 const ISSUE_URLS = {
     googleCloud: 'https://console.cloud.google.com/apis/credentials',
     googleCse: 'https://programmablesearchengine.google.com/controlpanel/all',
+    keenable: 'https://docs.keenable.ai/api-reference/search',
     github: 'https://github.com/settings/developers',
     kakao: 'https://developers.kakao.com/console/app',
     openrouter: 'https://openrouter.ai/settings/keys',
@@ -84,6 +86,8 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     // ── 웹 검색 (Google CSE) — 미설정 시 해당 검색 소스만 비활성. 지역·유료 공급원의 키는 그 add-on 이 기여한다 ──
     { key: 'GOOGLE_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.googleCloud },
     { key: 'GOOGLE_CSE_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCse },
+    { key: 'KEENABLE_SEARCH', group: 'search', secret: false, requiresRestart: false, validate: keenableFlag, issueUrl: ISSUE_URLS.keenable },
+    { key: 'KEENABLE_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.keenable },
 
     // ── 운영 알림 webhook — URL 자체가 발송 자격증명이라 전부 secret ──
     { key: 'OPERATOR_WEBHOOK_URL', group: 'alerts', secret: true, requiresRestart: false, validate: httpsUrl },

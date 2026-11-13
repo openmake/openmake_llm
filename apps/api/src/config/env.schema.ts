@@ -208,6 +208,8 @@ export const envSchema = z
         // External
         GOOGLE_API_KEY: z.string().default(''),
         GOOGLE_CSE_ID: z.string().default(''),
+        KEENABLE_SEARCH: z.string().default(''),
+        KEENABLE_API_KEY: z.string().default(''),
         GITHUB_TOKEN: z.string().default(''),
         VAPID_PUBLIC_KEY: z.string().default(''),
         VAPID_PRIVATE_KEY: z.string().default(''),

@@ -116,6 +116,9 @@ export interface EnvConfig {
     // External services
     googleApiKey: string;
     googleCseId: string;
+    /** 'true'/'1'/'yes'/'on' enables the optional Keenable web search provider */
+    keenableSearch: string;
+    keenableApiKey: string;
     /** 네이버 검색 API 일일 호출 한도(무료 한도 가드, 0=무제한) */
     githubToken: string;
 
@@ -278,6 +281,8 @@ export function loadConfig(): EnvConfig {
         LOG_LEVEL: env('LOG_LEVEL'),
         GOOGLE_API_KEY: env('GOOGLE_API_KEY'),
         GOOGLE_CSE_ID: env('GOOGLE_CSE_ID'),
+        KEENABLE_SEARCH: env('KEENABLE_SEARCH'),
+        KEENABLE_API_KEY: env('KEENABLE_API_KEY'),
         GITHUB_TOKEN: env('GITHUB_TOKEN'),
         DOCUMENT_TTL_HOURS: env('DOCUMENT_TTL_HOURS'),
         MAX_UPLOADED_DOCUMENTS: env('MAX_UPLOADED_DOCUMENTS'),
@@ -411,6 +416,8 @@ export function loadConfig(): EnvConfig {
         // External services
         googleApiKey: parsed.GOOGLE_API_KEY ?? DEFAULT_CONFIG.googleApiKey,
         googleCseId: parsed.GOOGLE_CSE_ID ?? DEFAULT_CONFIG.googleCseId,
+        keenableSearch: parsed.KEENABLE_SEARCH ?? DEFAULT_CONFIG.keenableSearch,
+        keenableApiKey: parsed.KEENABLE_API_KEY ?? DEFAULT_CONFIG.keenableApiKey,
         githubToken: parsed.GITHUB_TOKEN ?? DEFAULT_CONFIG.githubToken,
 
         // Documents
