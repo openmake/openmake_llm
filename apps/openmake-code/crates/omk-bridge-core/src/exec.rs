@@ -11,20 +11,18 @@ use std::collections::HashSet;
 use std::future::Future;
 use std::panic::AssertUnwindSafe;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::constants::{MAX_BUFFER, SANDBOX_BIN};
 use crate::denylist::match_denylist;
 use crate::exec_env::build_exec_env;
 use crate::exec_path::resolve_exec_path;
-use crate::git_trust::{GitPaths, detect_git};
+use crate::git_trust::{GitPaths, detect_git, root_git_dir};
 use crate::msg::{BridgeMsg, BridgeResult};
 use crate::node_error;
-use crate::node_path;
 use crate::platform::{Platform, bulk_approval_allowed, shell_invocation};
 use crate::proc::{self, ProcSpec, Stderr, Stdin};
-use crate::sandbox::{profile_file_name, write_sandbox_profile};
+use crate::sandbox::sandbox_profile;
 use crate::timed_fs::FsGate;
 use crate::tool_env::{ToolEnv, ToolSandbox};
 
@@ -76,9 +74,6 @@ pub(crate) const REJECTED: &str = "사용자가 명령 실행을 거부했습니
 pub(crate) const FAIL_CLOSED: &str = "exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.";
 const EXIT_REFUSED: i32 = 126;
 
-/// 프로파일 파일 일련번호(프로세스 공용, 1부터 — TS 와 같다).
-static PROFILE_SEQ: AtomicUsize = AtomicUsize::new(0);
-
 /// 자물쇠가 오염돼도 안쪽 값을 그대로 쓴다 — 집합은 한 줄 연산만 하므로 깨진 상태가 남지 않는다.
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
@@ -97,32 +92,26 @@ pub(crate) struct ExecState {
     auto_tasks: Mutex<HashSet<String>>,
     /// 첫 exec 가 자물쇠를 쥔 채 계산한다 — 동시에 온 요청은 기다렸다가 같은 값을 쓴다(탐지를 두 번 돌리지 않는다).
     path_cache: tokio::sync::Mutex<Option<String>>,
+    /// exec 프로파일 **텍스트** — 파일로 쓰지 않고 `sandbox-exec -p` 로 넘긴다(리뷰 F1: 파일은 샌드박스 안 자식이 덮어쓸 수 있었다).
     profile: Mutex<Option<String>>,
-    profile_file: String,
-    /// 확인 없이 뜨는 자식(worktree git·tsc·py_compile·pytest 탐지)용 도구 프로파일 — exec 프로파일 + 네트워크 차단(D-1).
+    /// 확인 없이 뜨는 자식(worktree git·tsc·py_compile·pytest 탐지)용 도구 프로파일 텍스트 — exec 프로파일 + 네트워크 차단(D-1).
     tool_profile: Mutex<Option<String>>,
-    tool_profile_file: String,
-    /// 연결 때 믿기로 한 git 디렉터리(`git_trust`) — 없으면 git 없음(worktree 거절, 파일 kind 가드 없음).
+    /// 연결 때 믿기로 한 git 디렉터리(`git_trust`) — 없으면 git 없음(쓰기 허용 줄 없음, worktree 거절).
     git: Mutex<Option<GitPaths>>,
+    /// 금지 줄·파일 kind 가드를 걸 git 디렉터리 — 믿는 git, 없으면 연결 폴더의 `.git` 디렉터리(리뷰 F2).
+    protect: Mutex<Option<GitPaths>>,
 }
 
 impl ExecState {
     pub(crate) fn new(host: ExecHost) -> ExecState {
-        let seq = PROFILE_SEQ.fetch_add(1, Ordering::Relaxed) + 1;
-        let file = |kind: &str| {
-            let name = profile_file_name(kind, std::process::id(), seq);
-            node_path::join(&[&host.sandbox_profile_dir, &name])
-        };
-        let (profile_file, tool_profile_file) = (file("exec"), file("tool"));
         ExecState {
             host,
             auto_tasks: Mutex::new(HashSet::new()),
             path_cache: tokio::sync::Mutex::new(None),
             profile: Mutex::new(None),
-            profile_file,
             tool_profile: Mutex::new(None),
-            tool_profile_file,
             git: Mutex::new(None),
+            protect: Mutex::new(None),
         }
     }
 
@@ -151,26 +140,28 @@ impl ExecState {
     }
 
     /// 연결 때 — PATH 캐시를 비우고, git 디렉터리를 판정하고(샌드박스가 꺼져도 — worktree 대조·파일 kind 가드),
-    /// 프로파일 두 개(exec·도구)를 쓴다. 실패·시간 초과는 프로파일 없음(exec·도구가 fail-closed).
+    /// 지킬 git 디렉터리를 정하고, 프로파일 텍스트 두 개(exec·도구)를 만든다(파일로 쓰지 않는다). 실패·시간 초과는 프로파일
+    /// 없음(exec·도구가 fail-closed). 호스트의 `sandbox_profile_dir` 은 더 쓰지 않는다.
     pub(crate) async fn prepare(&self, root: &str, gate: &FsGate) {
         *self.path_cache.lock().await = None;
         let h = &self.host;
         let git = detect_git(root, &h.env, h.platform, h.sandbox_enabled, gate).await;
         *lock(&self.git) = git.clone();
-        let (profile, tool) = if h.sandbox_enabled {
-            let (root, home) = (root.to_owned(), h.home.clone());
-            let (out, tool_out) = (self.profile_file.clone(), self.tool_profile_file.clone());
-            let write = move || {
-                let exec = write_sandbox_profile(&root, git.as_ref(), &home, &out, false);
-                let tool = write_sandbox_profile(&root, git.as_ref(), &home, &tool_out, true);
-                Ok((exec, tool))
+        let (root, home, sandbox) = (root.to_owned(), h.home.clone(), h.sandbox_enabled);
+        let build = move || {
+            let protect = git.clone().or_else(|| root_git_dir(&root));
+            let text = |tool| {
+                sandbox
+                    .then(|| sandbox_profile(&root, git.as_ref(), protect.as_ref(), &home, tool))
+                    .flatten()
             };
-            gate.run("샌드박스 준비", write)
-                .await
-                .unwrap_or((None, None))
-        } else {
-            (None, None)
+            Ok((protect.clone(), text(false), text(true)))
         };
+        let (protect, profile, tool) = gate
+            .run("샌드박스 준비", build)
+            .await
+            .unwrap_or((None, None, None));
+        *lock(&self.protect) = protect;
         *lock(&self.profile) = profile;
         *lock(&self.tool_profile) = tool;
     }
@@ -178,6 +169,16 @@ impl ExecState {
     /// 연결 때 믿기로 한 git 디렉터리.
     pub(crate) fn git_paths(&self) -> Option<GitPaths> {
         lock(&self.git).clone()
+    }
+
+    /// 연결 때 만든 exec 프로파일 텍스트.
+    pub(crate) fn exec_profile(&self) -> Option<String> {
+        lock(&self.profile).clone()
+    }
+
+    /// 금지 줄·파일 kind 가드를 거는 git 디렉터리(믿는 git, 없으면 연결 폴더의 `.git` 디렉터리).
+    pub(crate) fn protect_paths(&self) -> Option<GitPaths> {
+        lock(&self.protect).clone()
     }
 
     /// 확인 없이 뜨는 자식을 감쌀 도구 프로파일 — 꺼짐, 프로파일, 켜졌는데 없음(fail-closed).
@@ -244,18 +245,6 @@ impl ExecState {
     }
 }
 
-impl Drop for ExecState {
-    /// 자기 프로파일 파일을 지운다(실행 중인 sandbox-exec 는 시작할 때 이미 읽었다). 실패는 무시한다.
-    fn drop(&mut self) {
-        if lock(&self.profile).is_some() {
-            let _ = std::fs::remove_file(&self.profile_file);
-        }
-        if lock(&self.tool_profile).is_some() {
-            let _ = std::fs::remove_file(&self.tool_profile_file);
-        }
-    }
-}
-
 /// exec 요청 하나 — 순서: (폴더는 코어가 먼저) → 차단 → 확인 → fail-closed → PATH → 실행.
 /// 호스트가 없는 코어는 확인을 "거부"로 본다(D-37, 비대화형 fail-safe). 실행 결과는 언제나 `ok: true` 이고
 /// 종료 코드로만 성패를 알린다(띄우기 실패·시간 초과·상한 초과·신호는 1 — TS 그대로).
@@ -284,7 +273,7 @@ pub(crate) async fn run_exec(
     let command = m.command_text.clone();
     let (file, args) = match profile.filter(|_| h.sandbox_enabled) {
         Some(p) => {
-            let args = ["-f", &p, "/bin/bash", "-c", &command]
+            let args = ["-p", &p, "/bin/bash", "-c", &command]
                 .map(str::to_owned)
                 .to_vec();
             (SANDBOX_BIN.to_owned(), args)

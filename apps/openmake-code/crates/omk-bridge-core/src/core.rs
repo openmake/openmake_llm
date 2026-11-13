@@ -132,9 +132,16 @@ impl BridgeCore {
         self.exec.as_ref().map_or(0, ExecState::count)
     }
 
-    /// 연결 때 믿기로 한 git 디렉터리 — 호스트가 없거나 준비 전·git 없음이면 `None`(파일 kind 가드 없음).
+    /// 파일 kind 가드를 거는 git 디렉터리 — 믿는 git, 없으면 연결 폴더의 `.git` 디렉터리(리뷰 F2). 호스트가 없거나 준비 전이면
+    /// `None`(가드 없음).
     fn git_paths(&self) -> Option<GitPaths> {
-        self.exec.as_ref().and_then(ExecState::git_paths)
+        self.exec.as_ref().and_then(ExecState::protect_paths)
+    }
+
+    /// 연결 때 만든 exec 프로파일 텍스트 — 샌드박스 꺼짐·준비 전·만들지 못함이면 `None`. 프로파일은 파일로 쓰지 않으므로
+    /// (리뷰 F1) 호스트·테스트가 준비 여부와 경계를 이것으로 본다.
+    pub fn sandbox_profile(&self) -> Option<String> {
+        self.exec.as_ref().and_then(ExecState::exec_profile)
     }
 
     pub fn folder_root(&self) -> &str {

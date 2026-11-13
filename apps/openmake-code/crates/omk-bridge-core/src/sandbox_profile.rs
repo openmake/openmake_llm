@@ -1,4 +1,4 @@
-//! exec OS 샌드박스(macOS sandbox-exec) 프로파일 텍스트 — TS `sandbox.ts` `writeSandboxProfile` 의 텍스트 부분과
+//! exec OS 샌드박스(macOS sandbox-exec) 프로파일 텍스트 — TS `sandbox.ts` `sandboxProfileText` 와
 //! `constants.ts` 의 `sbq`·`sbSub` 이식. 파일 쓰기·git 디렉터리 탐지는 하지 않는다.
 //!
 //! 정책: 기본 allow → 쓰기는 폴더·임시·툴 캐시로 제한, 비밀 경로는 읽기 차단.
@@ -34,9 +34,16 @@ fn literal_path(p: &str) -> String {
 
 /// 프로파일 텍스트. `home` 은 호출 쪽이 realpath 로 넘긴다. 빈 `git_dir` 은 TS(빈 문자열은 거짓)처럼 없음으로 본다.
 /// `tool`: 확인 없이 뜨는 자식용 **도구 프로파일** — exec 프로파일의 모든 줄 + `(deny network*)`(설계 D-1).
-/// git 쓰기 허용 줄은 받은 표기 그대로, 마지막 금지 줄은 `path.join` 정규화 결과를 쓴다(TS 와 같다). linked worktree
-/// (common dir 가 따로)는 common dir 쓰기도 열고, 금지는 common dir 의 hooks·config·자신 + git dir 자신이다.
-pub fn build_sandbox_profile(root: &str, git: Option<&GitPaths>, home: &str, tool: bool) -> String {
+/// `git`(믿는 git 디렉터리)은 **쓰기 허용** — 받은 표기 그대로. linked worktree(common dir 가 따로)는 common dir 쓰기도 연다.
+/// `protect` 는 끝 금지 줄을 걸 git 디렉터리 — 보통 `git` 과 같고, 믿지 않아도 연결 폴더의 `.git` 디렉터리는 지킨다(리뷰 F2).
+/// 금지 줄은 `path.join` 정규화 결과를 쓴다(TS 와 같다).
+pub fn build_sandbox_profile(
+    root: &str,
+    git: Option<&GitPaths>,
+    protect: Option<&GitPaths>,
+    home: &str,
+    tool: bool,
+) -> String {
     let git = git.filter(|g| !g.git_dir.is_empty());
     let common = git.map(|g| {
         if g.common_dir.is_empty() {
@@ -73,30 +80,36 @@ pub fn build_sandbox_profile(root: &str, git: Option<&GitPaths>, home: &str, too
     if tool {
         lines.push("(deny network*)".to_owned());
     }
-    // 훅·config 는 커밋에 필요 없으면서 샌드박스 밖에서 실행되는 영구 코드 주입 경로다. git 디렉터리 자신도 막는다 —
-    // 금지는 경로 글자 기준이라 `.git` 을 옮겼다 되돌리면 config 금지가 빗나갔다(E2).
-    // last-match-wins 라 이 deny 가 맨 끝이어야 상위 allow 경로 안의 레포에서도 확실히 이긴다.
-    if let (Some(g), Some(c)) = (git, common) {
-        // commondir 도 막는다 — 바꿔 두면 사용자의 후속 git 이 다른(폴더 안 가짜) common dir 의 config 를 읽는다.
-        let own = if separate {
-            format!(
-                " (literal {}) (literal {})",
-                sbq(&literal_path(&g.git_dir)),
-                sbq(&node_path::join(&[&g.git_dir, "commondir"]))
-            )
-        } else {
-            String::new()
-        };
-        lines.push(format!(
-            "(deny file-write* (subpath {}) (literal {}) (literal {}) (literal {}){own})",
-            sbq(&node_path::join(&[c, "hooks"])),
-            sbq(&node_path::join(&[c, "config"])),
-            sbq(&literal_path(c)),
-            sbq(&node_path::join(&[c, "commondir"]))
-        ));
-    }
+    lines.extend(git_deny_line(protect));
     lines.push(String::new());
     lines.join("\n")
+}
+
+/// 끝 금지 줄 — 훅·config 는 커밋에 필요 없으면서 샌드박스 밖에서 실행되는 영구 코드 주입 경로다. `config.worktree`
+/// (extensions.worktreeConfig 레포에서 config 와 같은 급)·`commondir`(바꿔 두면 후속 git 이 다른 common dir 의 config 를
+/// 읽는다)도 같다. git 디렉터리 자신도 막는다 — 금지는 경로 글자 기준이라 `.git` 을 옮겼다 되돌리면 빗나갔다(E2). linked 배치는
+/// `<common>/worktrees`(이름을 바꿔 자기 메타 금지를 비키는 길, 리뷰 F4)와 자기 git dir 의 자신·commondir·config.worktree 도
+/// 막는다 — 그 배치는 `worktrees` 가 이미 있어 `worktree add` 가 만들 일이 없다. last-match-wins 라 맨 끝이어야 한다.
+fn git_deny_line(protect: Option<&GitPaths>) -> Option<String> {
+    let p = protect.filter(|p| !p.git_dir.is_empty())?;
+    let c = if p.common_dir.is_empty() {
+        p.git_dir.as_str()
+    } else {
+        p.common_dir.as_str()
+    };
+    let lit = |x: &str| format!(" (literal {})", sbq(x));
+    let mut items = lit(&node_path::join(&[c, "config"]));
+    items.push_str(&lit(&literal_path(c)));
+    items.push_str(&lit(&node_path::join(&[c, "commondir"])));
+    items.push_str(&lit(&node_path::join(&[c, "config.worktree"])));
+    if literal_path(c) != literal_path(&p.git_dir) {
+        items.push_str(&lit(&node_path::join(&[c, "worktrees"])));
+        items.push_str(&lit(&literal_path(&p.git_dir)));
+        items.push_str(&lit(&node_path::join(&[&p.git_dir, "commondir"])));
+        items.push_str(&lit(&node_path::join(&[&p.git_dir, "config.worktree"])));
+    }
+    let hooks = sbq(&node_path::join(&[c, "hooks"]));
+    Some(format!("(deny file-write* (subpath {hooks}){items})"))
 }
 
 #[cfg(test)]
@@ -113,10 +126,10 @@ mod tests {
 
     #[test]
     fn empty_git_dir_is_no_git_dir() {
-        let none = build_sandbox_profile("/work/repo", None, "/h", false);
+        let none = build_sandbox_profile("/work/repo", None, None, "/h", false);
         let empty = git("", "");
         assert_eq!(
-            build_sandbox_profile("/work/repo", Some(&empty), "/h", false),
+            build_sandbox_profile("/work/repo", Some(&empty), Some(&empty), "/h", false),
             none
         );
         assert!(!none.contains("hooks"));
@@ -126,12 +139,12 @@ mod tests {
     fn git_deny_is_last_line_and_text_ends_with_one_newline() {
         let g = git("/work/repo/.git", "/work/repo/.git");
         for tool in [false, true] {
-            let p = build_sandbox_profile("/work/repo", Some(&g), "/h", tool);
+            let p = build_sandbox_profile("/work/repo", Some(&g), Some(&g), "/h", tool);
             assert!(p.ends_with(")\n") && !p.ends_with("\n\n"));
             let last = p.trim_end().lines().last().unwrap_or_default();
             assert_eq!(
                 last,
-                r#"(deny file-write* (subpath "/work/repo/.git/hooks") (literal "/work/repo/.git/config") (literal "/work/repo/.git") (literal "/work/repo/.git/commondir"))"#
+                r#"(deny file-write* (subpath "/work/repo/.git/hooks") (literal "/work/repo/.git/config") (literal "/work/repo/.git") (literal "/work/repo/.git/commondir") (literal "/work/repo/.git/config.worktree"))"#
             );
             assert_eq!(p.contains("(deny network*)"), tool);
         }

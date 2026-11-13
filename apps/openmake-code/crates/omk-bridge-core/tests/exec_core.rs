@@ -219,9 +219,9 @@ fn path_cache_probes_once_and_resets_on_prepare() {
     assert_eq!(probes(), 2);
 }
 
-/// 프로파일 파일은 코어마다 하나, 코어가 사라지면 지운다(D-34). sandbox-exec 없이도 도는 부분.
+/// 프로파일은 파일로 쓰지 않는다 — 코어마다 텍스트를 들고 `sandbox-exec -p` 로 넘긴다(리뷰 F1). 프로파일 폴더는 비어 있다.
 #[test]
-fn profile_file_per_core_removed_on_drop() {
+fn no_profile_files_are_written() {
     let tmp = TmpDir::new();
     let mk = || {
         let mut h = host(&tmp, answer(ConfirmAnswer::Yes));
@@ -232,26 +232,8 @@ fn profile_file_per_core_removed_on_drop() {
     let rt = runtime();
     rt.block_on(a.prepare());
     rt.block_on(b.prepare());
-    let mut names: Vec<String> = std::fs::read_dir(tmp.join("prof"))
-        .unwrap()
-        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-    names.sort();
-    // 코어마다 exec·도구 프로파일 두 개(설계 2026-11-14 D-1).
-    let pid = std::process::id();
-    assert_eq!(names.len(), 4);
-    assert!(
-        names
-            .iter()
-            .all(|n| (n.starts_with(&format!("omk-exec-sandbox-{pid}-"))
-                || n.starts_with(&format!("omk-tool-sandbox-{pid}-")))
-                && n.ends_with(".sb")),
-        "{names:?}"
-    );
-    drop(a);
-    assert_eq!(std::fs::read_dir(tmp.join("prof")).unwrap().count(), 2);
-    drop(b);
-    assert_eq!(std::fs::read_dir(tmp.join("prof")).unwrap().count(), 0);
+    let n = std::fs::read_dir(tmp.join("prof")).map_or(0, Iterator::count);
+    assert_eq!(n, 0);
 }
 
 /// NUL 이 든 명령 — 확인은 받은 뒤 Node 의 인자 오류 문구(비샌드박스 args[1], 샌드박스 args[4] — 단계 0 실측).
