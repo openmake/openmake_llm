@@ -318,6 +318,144 @@
       ]
     },
     {
+      "id": "add-openmake-symlink-out",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"dir":"outside"},
+        {"symlink":"repo/.openmake","target":"{{TMP}}/outside"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtsym001-dotm"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: .openmake/worktrees"},"after":[{"absent":"outside/worktrees"}]},
+        {"git":["branch","--list","--format=%(refname:short)","omk-task/*"],"cwd":"repo","stdout":""}
+      ]
+    },
+    {
+      "id": "add-worktrees-symlink-out",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"dir":"outside"},
+        {"dir":"repo/.openmake"},
+        {"symlink":"repo/.openmake/worktrees","target":"{{TMP}}/outside"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtsym002-wtdr"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: .openmake/worktrees"},"after":[{"absent":"outside/wtsym002-wtdr"}]},
+        {"git":["branch","--list","--format=%(refname:short)","omk-task/*"],"cwd":"repo","stdout":""}
+      ]
+    },
+    {
+      "id": "add-task-dir-symlink-out",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"dir":"outside"},
+        {"dir":"repo/.openmake/worktrees"},
+        {"symlink":"repo/.openmake/worktrees/wtsym003-task","target":"{{TMP}}/outside"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtsym003-task"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: .openmake/worktrees/wtsym003-task"}},
+        {"git":["branch","--list","--format=%(refname:short)","omk-task/*"],"cwd":"repo","stdout":""}
+      ]
+    },
+    {
+      "id": "add-task-dir-dangling-symlink",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"dir":"repo/.openmake/worktrees"},
+        {"symlink":"repo/.openmake/worktrees/wtsym004-dang","target":"{{TMP}}/outside/planted"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtsym004-dang"},"expect":{"ok":false,"error":"ENOENT: no such file or directory, realpath '{{TMP}}/repo/.openmake/worktrees/wtsym004-dang'"},"after":[{"absent":"outside"}]},
+        {"git":["branch","--list","--format=%(refname:short)","omk-task/*"],"cwd":"repo","stdout":""}
+      ]
+    },
+    {
+      "id": "add-openmake-symlink-inside",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"dir":"repo/inner"},
+        {"symlink":"repo/.openmake","target":"{{TMP}}/repo/inner"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtsym005-insd"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtsym005-insd","branch":"omk-task/wtsym005"},"after":[{"exists":"repo/inner/worktrees/wtsym005-insd/a.txt","content":"base\n"}]}
+      ]
+    },
+    {
+      "id": "add-resume-subfolder-symlink-out",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"file":"repo/apps/web/x.txt","content":"x\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"dir":"outside"}
+      ],
+      "root": "repo/apps/web",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtsym006-subl"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtsym006-subl/apps/web","branch":"omk-task/wtsym006"}},
+        {"remove":"repo/apps/web/.openmake/worktrees/wtsym006-subl/apps"},
+        {"symlink":"repo/apps/web/.openmake/worktrees/wtsym006-subl/apps","target":"{{TMP}}/outside"},
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtsym006-subl"},"expect":{"ok":true,"worktreeRel":".openmake/worktrees/wtsym006-subl/apps/web","branch":"omk-task/wtsym006"},"after":[{"absent":"outside/web"}]}
+      ]
+    },
+    {
+      "id": "diff-openmake-symlink-out",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"file":"outside/worktrees/wtsym007-diff/a.txt","content":"outside\n"},
+        {"symlink":"repo/.openmake","target":"{{TMP}}/outside"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"diff","taskId":"wtsym007-diff"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: .openmake/worktrees"},"after":[{"exists":"outside/worktrees/wtsym007-diff/a.txt","content":"outside\n"}]}
+      ]
+    },
+    {
+      "id": "remove-task-dir-symlink-out",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"file":"outside/a.txt","content":"outside\n"},
+        {"dir":"repo/.openmake/worktrees"},
+        {"symlink":"repo/.openmake/worktrees/wtsym008-remv","target":"{{TMP}}/outside"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"remove","taskId":"wtsym008-remv"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: .openmake/worktrees/wtsym008-remv"},"after":[{"exists":"outside/a.txt","content":"outside\n"}]}
+      ]
+    },
+    {
       "id": "op-and-folder",
       "setup": [
         {"dir":"plain"},

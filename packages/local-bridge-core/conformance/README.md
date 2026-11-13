@@ -43,13 +43,13 @@
 | `request-guard.json` | 요청 만료·중복 판정. 사례마다 새 guard 에 `steps` 를 순서대로 넣는다. `{"fill": {prefix, from, count}}` 은 그 수만큼 통과해야 한다 |
 | `exec-gate.json` | `cases`(차단 → 확인 → 실행, 거부 불변식, 일괄 승인·회수, 실행 결과, `command`·`folder` 필드) · `sandboxEnabled` · `autoApproveEnv` · `failClosed` |
 | `exec-path.json` | `resolve`(로그인 셸·프로세스 PATH·고정 4곳·mise 병합, 자식 환경·cwd — 가짜 실행 파일) · `win32` |
-| `worktree.json` | `cases`(`add`·`diff`·`remove`·모르는 op) · `taskId`(형식) · `gitDir`(샌드박스용 git 디렉터리 탐지) · `taskIdPattern`(TS `TASK_ID_RE` 의 source·flags) |
+| `worktree.json` | `cases`(`add`·`diff`·`remove`·모르는 op, `.openmake`·`worktrees`·`<taskId>`·worktree 안 하위 폴더가 폴더 밖 심링크일 때의 거부 — 안쪽 심링크는 허용) · `taskId`(형식) · `gitDir`(샌드박스용 git 디렉터리 탐지) · `taskIdPattern`(TS `TASK_ID_RE` 의 source·flags) |
 
 ### exec·worktree suite (`exec-gate`·`exec-path`·`worktree`)
 
 - 사례마다 `{{TMP}}/home` 을 가짜 홈으로 만든다 — `{{HOME}}` 은 그 경로, `{{BIN}}` 은 `{{TMP}}/bin`. 러너가 주는 환경: 러너 프로세스의 `PATH`, `HOME`, `SHELL=/bin/sh`, `LANG=C` + 가짜 비밀 `OMK_COMPANION_API_KEY`·`GITHUB_TOKEN`·`OMK_BRIDGE_AUTO_APPROVE=0`(자식에 넘어가지 않는 것만 본다). TS 러너는 `process.env` 를 사례 동안 바꿨다가 되돌리고, jest 의 환경 사본 때문에 `os.homedir()` 를 `HOME` 을 따르게 모의한다. Rust 러너는 `ExecHost` 로 넘긴다.
-- setup 종류 추가: `{"git": [...], "cwd": "repo"}`(격리된 git — 사용자·시스템 설정 없음, 작성자·날짜 고정, `init.defaultBranch=main`) · `{"file": …, "repeat": {"line", "count"}}`(그 줄을 count 번).
-- `steps` 의 요청 단계: `exec-gate` 는 `{msg, confirm?, asked, askedWith?, expect, compare?, after?, autoApproved}` — `confirm` 은 물음이 오면 줄 답, `asked` 는 물음이 왔는지(오지 않아야 하는데 오거나 그 반대면 실패), `autoApproved` 는 단계 뒤 일괄 승인 수. `{"clearAutoApprove": true, "autoApproved": n}` 은 연결 해제 흉내, `{"parallel": [요청…], "answerOrder": [...], "autoApproved": n}` 은 요청을 함께 보내 물음이 다 모인 뒤 그 차례로 답한다(물음은 명령 글자로 짝짓는다 — 명령이 겹치면 실패). 사례의 `changes` 는 변화 알림마다의 일괄 승인 수. `worktree` 는 `{msg, expect, compare?, after?}` 와 요청이 아닌 단계 `{"git", "cwd", "stdout"?}`·`{"file", "content"|"repeat"}`·`{"remove"}`.
+- setup 종류 추가: `{"symlink", "target"}`(위 `scope.fs` 와 같다) · `{"git": [...], "cwd": "repo"}`(격리된 git — 사용자·시스템 설정 없음, 작성자·날짜 고정, `init.defaultBranch=main`) · `{"file": …, "repeat": {"line", "count"}}`(그 줄을 count 번).
+- `steps` 의 요청 단계: `exec-gate` 는 `{msg, confirm?, asked, askedWith?, expect, compare?, after?, autoApproved}` — `confirm` 은 물음이 오면 줄 답, `asked` 는 물음이 왔는지(오지 않아야 하는데 오거나 그 반대면 실패), `autoApproved` 는 단계 뒤 일괄 승인 수. `{"clearAutoApprove": true, "autoApproved": n}` 은 연결 해제 흉내, `{"parallel": [요청…], "answerOrder": [...], "autoApproved": n}` 은 요청을 함께 보내 물음이 다 모인 뒤 그 차례로 답한다(물음은 명령 글자로 짝짓는다 — 명령이 겹치면 실패). 사례의 `changes` 는 변화 알림마다의 일괄 승인 수. `worktree` 는 `{msg, expect, compare?, after?}` 와 요청이 아닌 단계 `{"git", "cwd", "stdout"?}`·`{"file", "content"|"repeat"}`·`{"remove"}`·`{"symlink", "target"}`.
 - `compare`: `no-stderr`(stderr 를 빼고) · `stdout-length`(`stdoutLength` — UTF-16 길이) · `stdout-lines`(`stdoutHas`·`stdoutLacks` — 그 글자로 시작하는 줄이 있다/없다) · `stdout-contains`(`stdoutContains`·`stdoutLacks`) · `error-prefix`(`errorPrefix`). `after` 에 `{"fileHas", "line", "count"}`(그 줄이 정확히 count 번)를 더 쓸 수 있다.
 - 샌드박스: Rust 러너는 macOS 에서 켜고(실제 `sandbox-exec`), TS 러너는 그 OS 의 값대로 돈다. 사례 폴더는 프로파일이 쓰기를 열어 둔 임시 폴더라 `cases` 는 켜도 꺼도 결과가 같은 명령만 담는다 — 샌드박스가 막는 것은 Rust `tests/exec_sandbox.rs` 가 본다.
 
