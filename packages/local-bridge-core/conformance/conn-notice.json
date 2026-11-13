@@ -1,0 +1,318 @@
+{
+  "suite": "conn-notice",
+  "version": 1,
+  "cases": [
+    {
+      "id": "ts-pass",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"},
+      "expect": {"notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"}
+    },
+    {
+      "id": "ts-kind-run-command",
+      "input": {"type": "bridge_notice", "notice": "run_command", "taskId": "task-aaaaaaaa-0001", "toolName": "x"},
+      "expect": null
+    },
+    {
+      "id": "ts-task-id-traversal",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "../../etc", "toolName": "x"},
+      "expect": null
+    },
+    {"id": "ts-tool-name-missing", "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001"}, "expect": null},
+    {
+      "id": "ts-tool-name-spaces",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "   "},
+      "expect": null
+    },
+    {
+      "id": "ts-control-stripped",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "ask\u0000_human\n"},
+      "expect": {"notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "ask_human"}
+    },
+    {
+      "id": "ts-long-cut",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expect": {
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "task-id-len-7",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "abcdefg", "toolName": "file_ops"},
+      "expect": null
+    },
+    {
+      "id": "task-id-len-8",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "abcdefgh", "toolName": "file_ops"},
+      "expect": {"notice": "approval_pending", "taskId": "abcdefgh", "toolName": "file_ops"}
+    },
+    {
+      "id": "task-id-len-64",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA--------------------------------",
+        "toolName": "file_ops"
+      },
+      "expect": {"notice": "approval_pending", "taskId": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA--------------------------------", "toolName": "file_ops"}
+    },
+    {
+      "id": "task-id-len-65",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "toolName": "file_ops"
+      },
+      "expect": null
+    },
+    {
+      "id": "task-id-underscore",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task_aaaaaaaa", "toolName": "file_ops"},
+      "expect": null
+    },
+    {
+      "id": "task-id-trailing-newline",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa\n", "toolName": "file_ops"},
+      "expect": null
+    },
+    {
+      "id": "task-id-leading-space",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": " task-aaaaaaaa", "toolName": "file_ops"},
+      "expect": null
+    },
+    {
+      "id": "task-id-fullwidth-digits",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "１２３４５６７８", "toolName": "file_ops"},
+      "expect": null
+    },
+    {
+      "id": "task-id-number",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": 12345678, "toolName": "file_ops"},
+      "expect": null
+    },
+    {"id": "task-id-missing", "input": {"type": "bridge_notice", "notice": "approval_pending", "toolName": "file_ops"}, "expect": null},
+    {"id": "notice-missing", "input": {"type": "bridge_notice", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"}, "expect": null},
+    {"id": "notice-null", "input": {"type": "bridge_notice", "notice": null, "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"}, "expect": null},
+    {
+      "id": "notice-other",
+      "input": {"type": "bridge_notice", "notice": "approval_done", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"},
+      "expect": null
+    },
+    {
+      "id": "notice-array",
+      "input": {"type": "bridge_notice", "notice": ["approval_pending"], "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"},
+      "expect": null
+    },
+    {
+      "id": "notice-case",
+      "input": {"type": "bridge_notice", "notice": "Approval_Pending", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"},
+      "expect": null
+    },
+    {
+      "id": "tool-name-c0-and-del-stripped",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "a\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f\u007fb"
+      },
+      "expect": {"notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "ab"}
+    },
+    {
+      "id": "tool-name-c1-kept",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "x\u0080\u0085\u009fy"},
+      "expect": {"notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "x\u0080\u0085\u009fy"}
+    },
+    {
+      "id": "tool-name-unicode-space-trimmed",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "\u00a0\ufeff\u2028\u3000tool name\u3000\u2029 "},
+      "expect": {"notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "tool name"}
+    },
+    {
+      "id": "tool-name-tab-inside-stripped",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "tool\tname"},
+      "expect": {"notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "toolname"}
+    },
+    {
+      "id": "tool-name-only-unicode-space",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "\u3000\u00a0\ufeff"},
+      "expect": null
+    },
+    {
+      "id": "tool-name-only-control",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "\u0001\u0002"},
+      "expect": null
+    },
+    {
+      "id": "tool-name-empty",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": ""},
+      "expect": null
+    },
+    {
+      "id": "tool-name-number",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": 5},
+      "expect": null
+    },
+    {
+      "id": "tool-name-null",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": null},
+      "expect": null
+    },
+    {
+      "id": "tool-name-100",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "expect": {
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "id": "tool-name-101",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "expect": {
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "id": "tool-name-hangul-cut",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한"
+      },
+      "expect": {
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한한"
+      }
+    },
+    {
+      "id": "tool-name-emoji-within-100",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      },
+      "expect": {
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      }
+    },
+    {
+      "id": "tool-name-emoji-mixed-within-100",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "x😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀y"
+      },
+      "expect": {
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "x😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀y"
+      }
+    },
+    {
+      "id": "tool-name-trim-before-cut",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc d"
+      },
+      "expect": {
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc "
+      }
+    },
+    {
+      "id": "tool-name-control-then-cut",
+      "input": {
+        "type": "bridge_notice",
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "expect": {
+        "notice": "approval_pending",
+        "taskId": "task-aaaaaaaa-0001",
+        "toolName": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      }
+    },
+    {
+      "id": "extra-fields-ignored",
+      "input": {"type": "bridge_notice", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops", "reqId": "r1", "kind": "read"},
+      "expect": {"notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"}
+    },
+    {
+      "id": "type-not-checked",
+      "input": {"type": "bridge_exec", "notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"},
+      "expect": {"notice": "approval_pending", "taskId": "task-aaaaaaaa-0001", "toolName": "file_ops"}
+    }
+  ],
+  "trim": [
+    {"id": "js-space-0009", "input": {"s": "\tx\ty\t"}, "expect": {"s": "x\ty"}},
+    {"id": "js-space-000a", "input": {"s": "\nx\ny\n"}, "expect": {"s": "x\ny"}},
+    {"id": "js-space-000b", "input": {"s": "\u000bx\u000by\u000b"}, "expect": {"s": "x\u000by"}},
+    {"id": "js-space-000c", "input": {"s": "\fx\fy\f"}, "expect": {"s": "x\fy"}},
+    {"id": "js-space-000d", "input": {"s": "\rx\ry\r"}, "expect": {"s": "x\ry"}},
+    {"id": "js-space-0020", "input": {"s": " x y "}, "expect": {"s": "x y"}},
+    {"id": "js-space-00a0", "input": {"s": "\u00a0x\u00a0y\u00a0"}, "expect": {"s": "x\u00a0y"}},
+    {"id": "js-space-1680", "input": {"s": "\u1680x\u1680y\u1680"}, "expect": {"s": "x\u1680y"}},
+    {"id": "js-space-2000", "input": {"s": "\u2000x\u2000y\u2000"}, "expect": {"s": "x\u2000y"}},
+    {"id": "js-space-2001", "input": {"s": "\u2001x\u2001y\u2001"}, "expect": {"s": "x\u2001y"}},
+    {"id": "js-space-2002", "input": {"s": "\u2002x\u2002y\u2002"}, "expect": {"s": "x\u2002y"}},
+    {"id": "js-space-2003", "input": {"s": "\u2003x\u2003y\u2003"}, "expect": {"s": "x\u2003y"}},
+    {"id": "js-space-2004", "input": {"s": "\u2004x\u2004y\u2004"}, "expect": {"s": "x\u2004y"}},
+    {"id": "js-space-2005", "input": {"s": "\u2005x\u2005y\u2005"}, "expect": {"s": "x\u2005y"}},
+    {"id": "js-space-2006", "input": {"s": "\u2006x\u2006y\u2006"}, "expect": {"s": "x\u2006y"}},
+    {"id": "js-space-2007", "input": {"s": "\u2007x\u2007y\u2007"}, "expect": {"s": "x\u2007y"}},
+    {"id": "js-space-2008", "input": {"s": "\u2008x\u2008y\u2008"}, "expect": {"s": "x\u2008y"}},
+    {"id": "js-space-2009", "input": {"s": "\u2009x\u2009y\u2009"}, "expect": {"s": "x\u2009y"}},
+    {"id": "js-space-200a", "input": {"s": "\u200ax\u200ay\u200a"}, "expect": {"s": "x\u200ay"}},
+    {"id": "js-space-2028", "input": {"s": "\u2028x\u2028y\u2028"}, "expect": {"s": "x\u2028y"}},
+    {"id": "js-space-2029", "input": {"s": "\u2029x\u2029y\u2029"}, "expect": {"s": "x\u2029y"}},
+    {"id": "js-space-202f", "input": {"s": "\u202fx\u202fy\u202f"}, "expect": {"s": "x\u202fy"}},
+    {"id": "js-space-205f", "input": {"s": "\u205fx\u205fy\u205f"}, "expect": {"s": "x\u205fy"}},
+    {"id": "js-space-3000", "input": {"s": "\u3000x\u3000y\u3000"}, "expect": {"s": "x\u3000y"}},
+    {"id": "js-space-feff", "input": {"s": "\ufeffx\ufeffy\ufeff"}, "expect": {"s": "x\ufeffy"}},
+    {"id": "not-space-0085", "input": {"s": "\u0085x\u0085"}, "expect": {"s": "\u0085x\u0085"}},
+    {"id": "not-space-200b", "input": {"s": "\u200bx\u200b"}, "expect": {"s": "\u200bx\u200b"}},
+    {"id": "not-space-180e", "input": {"s": "\u180ex\u180e"}, "expect": {"s": "\u180ex\u180e"}},
+    {"id": "not-space-0000", "input": {"s": "\u0000x\u0000"}, "expect": {"s": "\u0000x\u0000"}},
+    {"id": "not-space-001f", "input": {"s": "\u001fx\u001f"}, "expect": {"s": "\u001fx\u001f"}},
+    {"id": "not-space-00ad", "input": {"s": "\u00adx\u00ad"}, "expect": {"s": "\u00adx\u00ad"}},
+    {"id": "empty", "input": {"s": ""}, "expect": {"s": ""}},
+    {
+      "id": "all-space",
+      "input": {"s": "\t\n\u000b\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"},
+      "expect": {"s": ""}
+    },
+    {"id": "mixed-ends", "input": {"s": " \ufeff\n한 글\u3000\u0085"}, "expect": {"s": "한 글\u3000\u0085"}},
+    {"id": "emoji-kept", "input": {"s": "\u2003😀\u2003"}, "expect": {"s": "😀"}}
+  ]
+}
