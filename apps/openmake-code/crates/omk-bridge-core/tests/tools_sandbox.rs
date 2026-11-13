@@ -271,11 +271,7 @@ fn missing_python_is_not_refused() {
         ))
         .unwrap();
     assert_eq!(
-        (
-            got.diagnostics.len(),
-            got.truncated,
-            got.server_kind.as_str()
-        ),
+        (got.diagnostics.len(), got.truncated, got.server_kind),
         (0, false, "py_compile")
     );
 }
