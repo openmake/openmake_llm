@@ -19,7 +19,8 @@ use std::io::Write;
 use std::sync::LazyLock;
 
 use crate::constants::{
-    GIT_DIR_MISMATCH_ERROR, GIT_FIXED_ARGS, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR,
+    GIT_DIR_MISMATCH_ERROR, GIT_FIXED_ARGS, MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX,
+    WORKTREE_DIR,
 };
 use crate::exec::ExecState;
 use crate::git_trust::{GitPaths, read_regular_file};
@@ -225,9 +226,10 @@ fn exclude_worktree_dir(git_dir: &str) {
     if std::fs::create_dir_all(&info).is_err() {
         return;
     }
-    // 일반 파일만 읽는다 — FIFO·소켓·장치면 읽기가 멈췄다(리뷰 N3). 그때는 등록을 건너뛴다(TS 같음).
+    // 일반 파일만·MAX_BUFFER 이하만 읽는다 — FIFO·소켓·장치면 읽기가 멈췄다(리뷰 N3), 큰 파일도 그만큼 잡는다(리뷰 R4).
+    // 그때는 등록을 건너뛴다(TS 같음).
     let cur = if std::fs::symlink_metadata(&p).is_ok() {
-        match read_regular_file(&p, u64::MAX) {
+        match read_regular_file(&p, MAX_BUFFER) {
             Some(t) => t,
             None => return,
         }
