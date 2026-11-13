@@ -9,16 +9,14 @@
 use std::io::Write;
 use std::sync::LazyLock;
 
-use crate::constants::{
-    EXEC_TIMEOUT_MS, MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR,
-};
+use crate::constants::{MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR};
 use crate::exec::ExecState;
 use crate::exec_env::build_exec_env;
 use crate::exec_path::env_get;
 use crate::js_text::{js_trim, utf16_prefix};
 use crate::msg::{BridgeMsg, BridgeResult};
 use crate::node_path;
-use crate::proc::{self, ProcEnd, ProcSpec, Stderr, Stdin};
+use crate::proc::{self, ProcSpec, Stderr, Stdin};
 use crate::timed_fs::FsGate;
 
 const NO_HOST: &str = "exec 호스트가 설정되지 않았습니다";
@@ -44,7 +42,8 @@ struct Git {
 }
 
 /// git 하나 — exec 와 같은 허용 목록 환경 + **프로세스** PATH(PATH 캐시가 아니다 — TS 그대로). `execFile` 이라 stdin 은
-/// 열린 채, 시간 제한 120초, 출력 상한 1MiB(넘치면 실패).
+/// 열린 채, 시간 제한 `exec_timeout_ms`(기본 120초 — TS `EXEC_TIMEOUT_MS`), 출력 상한 1MiB(넘치면 실패). 끝난 뒤의
+/// 시간 초과는 그 종료 코드로 판정한다(`execFile`).
 async fn git(st: &ExecState, args: &[&str], cwd: &str) -> Git {
     let h = &st.host;
     let pairs = h.env.iter().map(|(k, v)| (k.as_str(), v.as_str()));
@@ -58,14 +57,14 @@ async fn git(st: &ExecState, args: &[&str], cwd: &str) -> Git {
             h.platform,
             &[],
         ),
-        timeout_ms: EXEC_TIMEOUT_MS,
+        timeout_ms: h.exec_timeout_ms,
         max_buffer: MAX_BUFFER as usize,
         stdin: Stdin::HeldOpen,
         stderr: Stderr::Capture,
     })
     .await;
     Git {
-        ok: matches!(out.end, ProcEnd::Exited(0)),
+        ok: out.end.exec_file_code() == 0,
         stdout: out.stdout,
         stderr: out.stderr,
     }

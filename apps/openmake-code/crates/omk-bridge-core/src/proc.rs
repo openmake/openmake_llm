@@ -3,7 +3,9 @@
 //! 끝나는 조건은 Node 와 같다: 자식이 끝나고 **두 파이프가 모두 닫혀야** 끝난다(뒤에 남긴 프로세스가 stdout 을
 //! 쥐고 있으면 그것을 기다린다). 시간 초과·출력 상한이면 직접 자식만 끝내고(SIGKILL — Node 는 SIGTERM, 설계 D-31),
 //! 파이프가 닫히기를 기다리지 않고 그때까지 읽은 것으로 답한다. 프로세스 그룹은 건드리지 않는다(TS 와 같다).
-//! 판정(종료 코드를 무엇으로 볼지)은 부르는 자리가 한다. tokio 런타임(시간 + I/O)이 켜져 있어야 한다.
+//! 시간 초과 때 직접 자식이 이미 끝나 있었으면 그 종료 코드를 [`ProcEnd::TimedOut`] 에 싣는다 — `execFile` 은 그것을
+//! 결과로 내고 `execFileSync` 는 실패로 던지므로, 판정(종료 코드를 무엇으로 볼지)은 부르는 자리가 한다.
+//! tokio 런타임(시간 + I/O)이 켜져 있어야 한다.
 
 use std::collections::BTreeMap;
 use std::future::{Future, poll_fn};
@@ -45,7 +47,11 @@ pub enum ProcEnd {
     Exited(i32),
     /// 신호로 끝났거나 종료 상태를 알 수 없다.
     Signaled,
-    TimedOut,
+    /// 시간 초과. `exited` 는 그 전에 직접 자식이 종료 코드로 끝나 있었을 때 그 코드(뒤에 남긴 프로세스가 파이프를
+    /// 쥐어 끝나지 못한 경우) — Node `execFile` 은 이때 그 코드를 낸다(실측: `sleep 3 & echo fg; exit 3` → 3).
+    TimedOut {
+        exited: Option<i32>,
+    },
     Overflow,
     SpawnFailed(std::io::Error),
 }
@@ -118,14 +124,29 @@ fn cut_at_char_boundary(buf: &mut Vec<u8>, max: usize) {
 
 enum Outcome {
     Done(std::io::Result<ExitStatus>),
-    TimedOut,
+    TimedOut(Option<i32>),
     Overflow,
 }
 
+fn exit_code(status: std::io::Result<ExitStatus>) -> Option<i32> {
+    status.ok().and_then(|s| s.code())
+}
+
 fn exit_end(status: std::io::Result<ExitStatus>) -> ProcEnd {
-    match status.ok().and_then(|s| s.code()) {
+    match exit_code(status) {
         Some(n) => ProcEnd::Exited(n),
         None => ProcEnd::Signaled,
+    }
+}
+
+impl ProcEnd {
+    /// `execFile` 콜백의 종료 코드 판정(TS `err ? (typeof err.code === 'number' ? err.code : 1) : 0`) — 끝난 코드,
+    /// 끝난 뒤의 시간 초과면 그 코드, 그 밖(신호·시간 초과·상한 초과·띄우기 실패)은 1.
+    pub fn exec_file_code(&self) -> i32 {
+        match self {
+            ProcEnd::Exited(n) | ProcEnd::TimedOut { exited: Some(n) } => *n,
+            _ => 1,
+        }
     }
 }
 
@@ -182,7 +203,7 @@ pub async fn run(spec: ProcSpec) -> ProcOutput {
                 return Poll::Ready(Outcome::Done(s));
             }
             if timer.as_mut().poll(cx).is_ready() {
-                return Poll::Ready(Outcome::TimedOut);
+                return Poll::Ready(Outcome::TimedOut(status.take().and_then(exit_code)));
             }
             Poll::Pending
         })
@@ -193,10 +214,9 @@ pub async fn run(spec: ProcSpec) -> ProcOutput {
         cut_short => {
             let _ = child.start_kill();
             let _ = tokio::time::timeout(REAP_WAIT, child.wait()).await;
-            if matches!(cut_short, Outcome::TimedOut) {
-                ProcEnd::TimedOut
-            } else {
-                ProcEnd::Overflow
+            match cut_short {
+                Outcome::TimedOut(exited) => ProcEnd::TimedOut { exited },
+                _ => ProcEnd::Overflow,
             }
         }
     };

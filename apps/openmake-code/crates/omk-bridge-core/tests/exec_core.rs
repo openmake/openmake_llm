@@ -431,3 +431,89 @@ fn post_checkout_hook_gets_no_secrets() {
         "post-checkout 훅",
     );
 }
+
+/// 시간 초과 때 직접 자식이 이미 끝났으면(뒤에 남긴 프로세스가 파이프를 쥠) 그 종료 코드와 그때까지의 출력 — Node
+/// `execFile` 실측(24.22.2, timeout 400ms): `sleep 3 & echo fg` → 0·`fg\n`, `…; exit 3` → 3, `…; kill -9 $$` → 1.
+/// 직접 자식이 살아 있는 시간 초과는 1.
+#[test]
+fn exec_timeout_after_child_exited_keeps_exit_code() {
+    let tmp = TmpDir::new();
+    let mut h = host(&tmp, answer(ConfirmAnswer::Yes));
+    h.exec_timeout_ms = 400;
+    let c = bare(&tmp.path, None).with_exec_host(h);
+    for (cmd, stdout, code) in [
+        ("sleep 3 & echo fg", "fg\n", 0),
+        ("sleep 3 & echo fg; exit 3", "fg\n", 3),
+        ("sleep 3 & echo fg; kill -9 $$", "fg\n", 1),
+        ("echo p; sleep 3", "p\n", 1),
+    ] {
+        let t = std::time::Instant::now();
+        let r = send(&c, json!({"kind": "exec", "command": cmd}));
+        assert_eq!(
+            r,
+            json!({"ok": true, "stdout": stdout, "stderr": "", "exitCode": code}),
+            "{cmd}"
+        );
+        assert!(t.elapsed() < std::time::Duration::from_secs(2), "{cmd}");
+    }
+}
+
+/// worktree 의 git 도 `execFile` — post-checkout 훅이 파이프를 쥔 데몬을 남겨 시간 초과가 되어도 git 이 0 으로
+/// 끝났으면 성공(TS 그대로).
+#[test]
+fn worktree_git_timeout_after_exit_zero_is_success() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = TmpDir::new();
+    let repo = tmp.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["commit", "-q", "--allow-empty", "-m", "init"][..],
+    ] {
+        let ok = std::process::Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])
+            .args(["-c", "commit.gpgsign=false"])
+            .args(args)
+            .current_dir(&repo)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+    let hook = format!("{repo}/.git/hooks/post-checkout");
+    std::fs::write(&hook, "#!/bin/sh\nsleep 3 &\n").unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut h = host(&tmp, answer(ConfirmAnswer::No));
+    h.env.retain(|(k, _)| k != "PATH");
+    h.env
+        .push(("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()));
+    h.exec_timeout_ms = 500;
+    let c = bare(&repo, None).with_exec_host(h);
+    let t = std::time::Instant::now();
+    let r = send(
+        &c,
+        json!({"kind": "worktree", "op": "add", "taskId": "abcdef12-daemon"}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(t.elapsed() < std::time::Duration::from_secs(3));
+}
+
+/// 탐지는 `execFileSync` — 직접 자식이 0 으로 끝났어도 시간 초과면 실패(실측: `execFileSync('/bin/bash',
+/// ['-c','sleep 3 >&1 & echo fg'],{timeout:400})` 는 `ETIMEDOUT` 을 던진다). git 탐지 시간 제한 5초를 그대로 기다린다.
+#[test]
+fn git_probe_timeout_after_exit_zero_is_failure() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = TmpDir::new();
+    std::fs::create_dir_all(tmp.join("bin")).unwrap();
+    let p = tmp.join("bin/git");
+    std::fs::write(&p, "#!/bin/sh\nsleep 8 &\necho /some/repo/.git\n").unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let h = secret_host(&tmp, answer(ConfirmAnswer::No));
+    let got = runtime().block_on(omk_bridge_core::sandbox::detect_git_dir(
+        &tmp.path,
+        &h.env,
+        Platform::Darwin,
+    ));
+    assert_eq!(got, None);
+}
