@@ -322,6 +322,19 @@ fn constants() {
     }
     seen.extend(["BROWSER_KIND", "EXPIRY_SKEW_TOLERANCE_MS", "SEEN_REQ_MAX"]);
     seen.extend(["FOLDERS_MAX_ENTRIES", "LIST_ALL_MAX"]);
+    // exec·worktree (PR-1.3) — TASK_ID_RE 는 worktree.json taskIdPattern 이 본다(TS 값이 RegExp 라 여기 둘 수 없다).
+    let probes: [(&str, u64); 2] = [
+        ("PATH_PROBE_TIMEOUT_MS", c::PATH_PROBE_TIMEOUT_MS),
+        ("GIT_PROBE_TIMEOUT_MS", c::GIT_PROBE_TIMEOUT_MS),
+    ];
+    for (name, ours) in probes {
+        assert_eq!(values[name], ours, "constants/{name}");
+    }
+    assert_eq!(values["WORKTREE_DIR"], c::WORKTREE_DIR, "constants/WORKTREE_DIR");
+    let prefix = c::WORKTREE_BRANCH_PREFIX;
+    assert_eq!(values["WORKTREE_BRANCH_PREFIX"], prefix, "constants/WORKTREE_BRANCH_PREFIX");
+    seen.extend(["PATH_PROBE_TIMEOUT_MS", "GIT_PROBE_TIMEOUT_MS"]);
+    seen.extend(["WORKTREE_DIR", "WORKTREE_BRANCH_PREFIX"]);
     let mut fixture_keys: Vec<&str> = values.keys().map(String::as_str).collect();
     fixture_keys.sort_unstable();
     seen.sort_unstable();
