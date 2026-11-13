@@ -8,8 +8,8 @@
 //!
 //! git 은 샌드박스 밖에서 돈다 — 그래서 경로는 글자로 이어 붙인 뒤 **파일 kind 와 같은 realpath 스코프**(`scope::safe_from`)로
 //! 검사한다. 연결 폴더 안 파일은 에이전트가 쓸 수 있어, `.openmake`·`worktrees`·`<taskId>`(또는 worktree 안의 하위 폴더)를
-//! 폴더 밖 심링크로 바꿔 두면 add·remove 가 폴더 밖에 만들고 지울 수 있었다(2026-11-13). 검사와 git 실행 사이의 틈(TOCTOU)은
-//! 파일 kind 와 같은 수준이다.
+//! 폴더 밖 심링크로 바꿔 두면 add·remove 가 폴더 밖에 만들고 지울 수 있었다(2026-11-13). 요청 첫머리와 `git worktree add`·
+//! `worktree remove` 바로 앞에서 두 번 검사한다 — 남는 틈(TOCTOU)은 검사 직후 git 호출 하나로, 파일 kind 와 같은 수준이다.
 
 use std::io::Write;
 use std::sync::LazyLock;
@@ -204,7 +204,7 @@ pub(crate) async fn handle(
     match m.op.as_deref() {
         Some("add") => add(st, base, &rel, &abs, branch, gate).await,
         Some("diff") => diff(st, &abs, branch, gate).await,
-        Some("remove") => remove(st, base, &abs, branch, gate).await,
+        Some("remove") => remove(st, base, &rel, &abs, branch, gate).await,
         _ => Ok(BridgeResult::failure(format!(
             "지원하지 않는 worktree op: {}",
             m.op_text
@@ -263,6 +263,8 @@ async fn add(
         fs_op(gate, ensure_sub).await?;
         return Ok(done(work_rel, branch));
     }
+    // 첫 검사 뒤 git 3회·exclude 쓰기가 끼었다 — 바로 앞에서 다시 본다(TS 같음).
+    check_scope(base, rel, gate).await?;
     let r = git(st, &["worktree", "add", abs, "-b", &branch], base).await;
     if !r.ok {
         let why = if r.stderr.is_empty() {
@@ -307,6 +309,7 @@ async fn diff(
 async fn remove(
     st: &ExecState,
     base: &str,
+    rel: &str,
     abs: &str,
     branch: String,
     gate: &FsGate,
@@ -327,6 +330,7 @@ async fn remove(
     if (status.ok && !js_trim(&status.stdout).is_empty()) || moved {
         return Ok(kept(branch));
     }
+    check_scope(base, rel, gate).await?; // 첫 검사 뒤 git 3회가 끼었다 — 바로 앞에서 다시 본다(TS 같음).
     let r = git(st, &["worktree", "remove", "--force", abs], base).await;
     if !r.ok {
         // 제거 실패도 보존으로 본다.
