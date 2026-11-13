@@ -62,12 +62,14 @@ export function readRegularFile(p: string, max = Infinity): string | null {
 
 /**
  * gitfile(`gitdir: <경로>`) 이 가리키는 곳의 realpath — 상대 경로는 gitfile 이 있는 폴더 기준. 코어가 직접 읽어 해석한다:
- * 일반 파일·크기 상한 안·`gitdir: ` 로 시작하는 한 줄(끝 줄바꿈 하나 허용)만 받는다(리뷰 N2·N3).
+ * 일반 파일·크기 상한 안·`gitdir: ` 로 시작하는 한 줄만 받는다(리뷰 N2·N3). git(`read_gitfile_gently`)처럼 끝의 `\r`·`\n` 은
+ * 모두 떼고, `file` 이 심링크면 따라가 그 대상(일반 파일)을 읽는다 — 상대 경로는 대상이 아니라 `file` 자리 기준이다(git 실측, 리뷰 R3).
  */
 function gitfileTarget(file: string): string | null {
-    const text = readRegularFile(file, GITFILE_MAX_BYTES);
+    const at = real(file);
+    const text = at === null ? null : readRegularFile(at, GITFILE_MAX_BYTES);
     if (!text?.startsWith('gitdir: ')) return null;
-    const v = text.slice('gitdir: '.length).replace(/\r?\n$/, '');
+    const v = text.slice('gitdir: '.length).replace(/[\r\n]+$/, '');
     return v.includes('\n') || !v.trim() ? null : real(path.resolve(path.dirname(file), v.trim()));
 }
 
@@ -116,15 +118,27 @@ export function rootGitDir(root: string): GitPaths | null {
     let st: fs.Stats;
     try { st = fs.lstatSync(dotGit); } catch { return null; }
     if (st.isDirectory()) return { gitDir: dotGit, commonDir: dotGit };
-    const target = st.isSymbolicLink() ? real(dotGit) : gitfileTarget(dotGit);
+    // gitfile(심링크가 가리키는 gitfile 포함, 리뷰 R3)이면 그 대상, 디렉터리를 가리키는 심링크면 그 디렉터리.
+    const target = gitfileTarget(dotGit) ?? (st.isSymbolicLink() ? real(dotGit) : null);
     if (!target || !within(target, root)) return null;
     try { return fs.statSync(target).isDirectory() ? { gitDir: target, commonDir: target } : null; } catch { return null; }
 }
 
-/** 지킬 git 디렉터리 목록 — 믿는 git 과 `rootGitDir`(겹치면 하나). 금지 줄·파일 kind 가드가 모두 건다. */
+/**
+ * 연결 폴더 루트가 이미 bare 꼴(`HEAD` 파일 + `objects`·`refs` 디렉터리)이면 루트 자신 — `.git` 이 없으면 사용자 git 은 루트를
+ * git 디렉터리로 읽는다(리뷰 R2). `gitdir: .` 배치처럼 루트의 config·hooks 를 지킨다. root 는 realpath.
+ */
+function bareRoot(root: string): GitPaths | null {
+    const is = (name: string, kind: 'file' | 'dir'): boolean => {
+        try { const st = fs.statSync(path.join(root, name)); return kind === 'file' ? st.isFile() : st.isDirectory(); } catch { return false; }
+    };
+    return is('HEAD', 'file') && is('objects', 'dir') && is('refs', 'dir') ? { gitDir: root, commonDir: root } : null;
+}
+
+/** 지킬 git 디렉터리 목록 — 믿는 git·`rootGitDir`·bare 꼴 루트(겹치면 하나). 금지 줄·파일 kind 가드가 모두 건다. */
 export function protectedGitDirs(git: GitPaths | null, root: string): GitPaths[] {
-    const r = rootGitDir(root);
-    return [git, r].filter((x, i, a): x is GitPaths => !!x && a.findIndex((y) => y?.gitDir === x.gitDir && y?.commonDir === x.commonDir) === i);
+    return [git, rootGitDir(root), bareRoot(root)]
+        .filter((x, i, a): x is GitPaths => !!x && a.findIndex((y) => y?.gitDir === x.gitDir && y?.commonDir === x.commonDir) === i);
 }
 
 /** 존재하는 최근접 조상의 realpath + 나머지 — 없는 파일을 쓰는 경우도 실제 위치로 본다. */
@@ -163,9 +177,18 @@ const GIT_DENIED_NAMES = ['config', 'commondir', 'config.worktree'];
 /** 파일 kind 가드가 보는 것 — 연결 폴더 realpath(그 `.git` 은 없어도 이름으로 지킨다)와 지킬 git 디렉터리들. */
 export interface GitGuard { root: string; dirs: GitPaths[] }
 
-/** git 디렉터리 하나(접은 표기)에 대해 막는 자리인가 — 자신·금지 이름·`hooks` 아래, delete 는 그것을 품은 상위 폴더도. */
+/**
+ * git 디렉터리 바로 아래 첫 이름에 ASCII 가 아닌 글자가 있는가 — APFS 는 유니코드 대소문자 접기로 이름을 찾아 아직 없는
+ * `conﬁg`(U+FB01)·`config.worKtree`(U+212A)를 git 이 `config`·`config.worktree` 로 읽었다(리뷰 R1). git 디렉터리 최상위 이름은
+ * 모두 ASCII 라 접기 표 없이 막는다. 둘째 이름부터(`refs/heads/한글` 등)는 보지 않는다.
+ */
+function nonAsciiFirstName(r: string, d: string): boolean {
+    return r !== d && within(r, d) && /[^\x00-\x7f]/.test(r.slice(d.length + 1).split(path.sep)[0]);
+}
+
+/** git 디렉터리 하나(접은 표기)에 대해 막는 자리인가 — 자신·금지 이름·`hooks` 아래·비ASCII 첫 이름, delete 는 그것을 품은 상위 폴더도. */
 function deniedUnder(r: string, d: string, del: boolean): boolean {
-    return r === d || GIT_DENIED_NAMES.some((n) => r === path.join(d, n)) || within(r, path.join(d, 'hooks')) || (del && within(d, r));
+    return r === d || GIT_DENIED_NAMES.some((n) => r === path.join(d, n)) || within(r, path.join(d, 'hooks')) || nonAsciiFirstName(r, d) || (del && within(d, r));
 }
 
 /**
@@ -174,10 +197,13 @@ function deniedUnder(r: string, d: string, del: boolean): boolean {
  * 연결 폴더 루트의 `.git` 은 **없어도 이름으로** 같은 자리를 막는다(리뷰 N1 — 하위 폴더 연결·연결 뒤 `git init` 에서 새로 생기는
  * `.git` 에 config·hooks 를 심을 수 있었다). 이름 비교는 실제 위치와 함께 "부모의 실제 위치 + 마지막 이름"으로도 해서 `.git`
  * 심링크 자리 자체도 막는다. delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. 비교는 대소문자를 접어서 한다.
+ * 루트가 지키는 git 디렉터리가 아니면 루트의 `HEAD` 를 만들지 못한다 — `.git` 없는 루트를 bare 꼴로 만들면 사용자 git 이 루트의
+ * config 를 읽었다(리뷰 R2). `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다. 지우기는 막지 않는다.
  */
 export async function assertGitPathAllowed(guard: GitGuard, abs: string, rel: string | undefined, del: boolean): Promise<void> {
     const r = foldCase(await resolveReal(abs));
     const lex = foldCase(path.join(await resolveReal(path.dirname(abs)), path.basename(abs)));
+    const root = foldCase(guard.root);
     const dirs = [foldCase(path.join(guard.root, '.git'))];
     let parentRename = false;
     for (const git of guard.dirs) {
@@ -186,5 +212,6 @@ export async function assertGitPathAllowed(guard: GitGuard, abs: string, rel: st
         parentRename ||= g !== c && (r === path.join(c, 'worktrees') || lex === path.join(c, 'worktrees'));
     }
     const denied = [...new Set(dirs)].some((d) => deniedUnder(r, d, del) || deniedUnder(lex, d, del));
-    if (denied || parentRename || isWorktreeGit(r) || isWorktreeGit(lex)) throw new Error(`${GIT_PATH_DENIED_PREFIX}${rel}`);
+    const rootHead = !del && !dirs.includes(root) && (r === path.join(root, 'head') || lex === path.join(root, 'head'));
+    if (denied || rootHead || parentRename || isWorktreeGit(r) || isWorktreeGit(lex)) throw new Error(`${GIT_PATH_DENIED_PREFIX}${rel}`);
 }
