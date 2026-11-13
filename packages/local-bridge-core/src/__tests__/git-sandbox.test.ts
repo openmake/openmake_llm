@@ -90,7 +90,8 @@ sbDescribe('E1c — 파일 쓰기로 만든 가짜 git 디렉터리가 worktree 
         const repo = makeRepo('repo');
         const core = makeCore(repo);
         expect(await run(core, wt('add'))).toMatchObject({ ok: true });
-        for (const [p, c] of Object.entries(plantFakeGitDir())) expect(await run(core, write(p, c))).toEqual({ ok: true });
+        // HEAD 는 새로 만들 수 없다(D-11) — 나머지는 HEAD 없는 폴더라 쓰인다.
+        for (const [p, c] of Object.entries(plantFakeGitDir())) expect((await run(core, write(p, c))).ok).toBe(!p.endsWith('/HEAD'));
         const r = await run(core, write(`${WT}/.git`, 'gitdir: ./fake\n'));
         expect(r.ok).toBe(false);
         expect(fs.readFileSync(path.join(repo, WT, '.git'), 'utf8')).toContain('.git/worktrees/');
@@ -194,13 +195,12 @@ sbDescribe('E2 — git 디렉터리 금지 경로', () => {
         expect(c).toMatchObject({ ok: true, exitCode: 0, stdout: 'committed\n' });
     }, 30000);
 
-    it('git 이 없는(레포 아님) 폴더도 루트 .git 의 config 는 이름으로 막고 그 밖은 쓴다(리뷰 N1)', async () => {
+    it('git 이 없는(레포 아님) 폴더도 .git 아래는 루트·하위 폴더 모두 파일 kind 로 쓰지 못한다(리뷰 N1, D-11)', async () => {
         const plain = path.join(tmp, 'plain');
         fs.mkdirSync(plain);
         const core = makeCore(plain);
-        expect(await run(core, write('.git/config', 'x'))).toMatchObject({ ok: false });
-        expect(await run(core, write('.git/HEAD', 'x'))).toEqual({ ok: true });
-        expect(await run(core, write('sub/.git/config', 'x'))).toEqual({ ok: true });
+        for (const p of ['.git/config', '.git/HEAD', 'sub/.git/config']) expect(await run(core, write(p, 'x'))).toMatchObject({ ok: false });
+        expect(await run(core, write('sub/a.txt', 'x'))).toEqual({ ok: true });
     });
 });
 

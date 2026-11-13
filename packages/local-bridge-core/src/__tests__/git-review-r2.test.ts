@@ -96,9 +96,10 @@ describe('N1 — 연결 폴더 루트의 .git 은 없어도 이름으로 지킨�
         git(repo, 'commit', '-q', '-m', 'web');
         const core = makeCore(sub);
         const marker = path.join(outside, 'fsmon');
-        expect(await run(core, write('.git/HEAD', 'ref: refs/heads/main\n'))).toEqual({ ok: true });
-        expect(await run(core, write('.git/objects/.keep', ''))).toEqual({ ok: true });
-        expect(await run(core, write('.git/refs/heads/.keep', ''))).toEqual({ ok: true });
+        // D-11: .git 아래는 무엇이든 거절
+        expect(await run(core, write('.git/HEAD', 'ref: refs/heads/main\n'))).toEqual(denied('.git/HEAD'));
+        expect(await run(core, write('.git/objects/.keep', ''))).toEqual(denied('.git/objects/.keep'));
+        expect(await run(core, write('.git/refs/heads/.keep', ''))).toEqual(denied('.git/refs/heads/.keep'));
         for (const p of ['.git/config', '.git/Config', '.GIT/config', '.git/hooks/pre-commit', '.git/HOOKS/x', '.git/commondir', '.git/config.worktree']) {
             expect(await run(core, write(p, `[core]\n\tfsmonitor = "touch ${marker}; true #"\n`))).toEqual(denied(p));
         }
@@ -107,15 +108,15 @@ describe('N1 — 연결 폴더 루트의 .git 은 없어도 이름으로 지킨�
         expect(fs.existsSync(path.join(sub, '.git', 'config'))).toBe(false);
     });
 
-    it('레포 아닌 폴더: .git 자신(파일)을 쓰거나 지울 수 없고 .git/HEAD 는 종전대로 쓴다', async () => {
+    it('레포 아닌 폴더: .git 자신(파일)과 그 아래를 쓰거나 지울 수 없다(D-11)', async () => {
         const plain = path.join(tmp, 'plain');
         fs.mkdirSync(plain);
         const core = makeCore(plain);
         expect(await run(core, write('.git', 'gitdir: ./x\n'))).toEqual(denied('.git'));
         expect(fs.existsSync(path.join(plain, '.git'))).toBe(false);
-        expect(await run(core, write('.git/HEAD', 'ref: refs/heads/main\n'))).toEqual({ ok: true });
+        expect(await run(core, write('.git/HEAD', 'ref: refs/heads/main\n'))).toEqual(denied('.git/HEAD'));
         expect(await run(core, del('.git'))).toEqual(denied('.git'));
-        expect(await run(core, del('.git/HEAD'))).toEqual({ ok: true });
+        expect(fs.existsSync(path.join(plain, '.git'))).toBe(false);
     });
 
     sbDescribe('샌드박스', () => {
