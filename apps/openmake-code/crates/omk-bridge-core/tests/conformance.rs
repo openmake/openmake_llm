@@ -1,6 +1,14 @@
 //! 적합성 fixture Rust 러너 — `packages/local-bridge-core/conformance/*.json` 을 TS 러너와 함께 통과해야 한다.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+mod support;
+#[path = "conformance/file_kinds.rs"]
+mod file_kinds;
+#[path = "conformance/request_guard.rs"]
+mod request_guard;
+#[path = "conformance/scope.rs"]
+mod scope;
+
 use std::path::PathBuf;
 
 use omk_bridge_core::platform::Platform;
@@ -10,12 +18,15 @@ const FIXTURE_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../../packages/local-bridge-core/conformance"
 );
-const KNOWN_SUITES: [&str; 5] = [
+const KNOWN_SUITES: [&str; 8] = [
     "constants",
     "denylist",
     "exec-env",
+    "file-kinds",
     "platform",
+    "request-guard",
     "sandbox-profile",
+    "scope",
 ];
 
 fn fixture_files() -> Vec<PathBuf> {
@@ -50,6 +61,59 @@ fn suites_are_all_known() {
     for n in KNOWN_SUITES {
         load(n);
     }
+}
+
+/// 알려진 차이를 쓸 수 있는 자리(suite/묶음)와 그 자리의 이름 — conformance/README.md "알려진 차이".
+const DIVERGENCE_SITES: [(&str, &str); 2] = [
+    ("denylist/cases", KNOWN_DIVERGENCE),
+    ("file-kinds/cases/requests", file_kinds::NON_STRING_FIELD),
+];
+
+/// 배열 안 사례 id 는 겹치지 않는다. `divergence`·`rustExpect` 는 정해진 자리에만 쓴다.
+fn walk_fixture(v: &Value, at: &str) {
+    match v {
+        Value::Array(items) => {
+            let mut ids: Vec<&str> = items.iter().filter_map(|x| x["id"].as_str()).collect();
+            ids.sort_unstable();
+            if let Some(w) = ids.windows(2).find(|w| w[0] == w[1]) {
+                panic!("{at}: 사례 id 중복 {}", w[0]);
+            }
+            for x in items {
+                walk_fixture(x, at);
+            }
+        }
+        Value::Object(o) => {
+            if o.contains_key("divergence") || o.contains_key("rustExpect") {
+                let site = DIVERGENCE_SITES.iter().find(|(s, _)| *s == at);
+                let (_, name) = site.unwrap_or_else(|| panic!("{at}: 알려진 차이를 쓸 수 없는 자리"));
+                assert_eq!(o["divergence"], *name, "{at}: 이 자리의 알려진 차이 이름이 아니다");
+            }
+            for (k, x) in o {
+                let next = if x.is_array() { format!("{at}/{k}") } else { at.to_owned() };
+                walk_fixture(x, &next);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn case_ids_unique_and_divergence_sites() {
+    for suite in KNOWN_SUITES {
+        walk_fixture(&load(suite), suite);
+    }
+}
+
+/// 묶음의 사례 목록 — 0개면 실패한다. 돌려주는 ctx 는 `suite/묶음/id`.
+fn case_list<'a>(doc: &'a Value, suite: &str, group: &str) -> Vec<(String, &'a Value)> {
+    let cases = doc[group]
+        .as_array()
+        .unwrap_or_else(|| panic!("{suite}/{group}: 배열 아님"));
+    assert!(!cases.is_empty(), "{suite}/{group}: 사례 0개");
+    cases
+        .iter()
+        .map(|c| (format!("{suite}/{group}/{}", c["id"].as_str().unwrap()), c))
+        .collect()
 }
 
 fn strs(v: &Value, ctx: &str) -> Vec<String> {
@@ -98,6 +162,18 @@ fn constants() {
     );
     assert_eq!(values["MAX_BUFFER"], c::MAX_BUFFER, "constants/MAX_BUFFER");
     seen.extend(["SANDBOX_BIN", "EXEC_TIMEOUT_MS", "MAX_BUFFER"]);
+    assert_eq!(values["BROWSER_KIND"], c::BROWSER_KIND, "constants/BROWSER_KIND");
+    let numbers: [(&str, u64); 4] = [
+        ("EXPIRY_SKEW_TOLERANCE_MS", c::EXPIRY_SKEW_TOLERANCE_MS),
+        ("SEEN_REQ_MAX", c::SEEN_REQ_MAX as u64),
+        ("FOLDERS_MAX_ENTRIES", c::FOLDERS_MAX_ENTRIES as u64),
+        ("LIST_ALL_MAX", c::LIST_ALL_MAX as u64),
+    ];
+    for (name, ours) in numbers {
+        assert_eq!(values[name], ours, "constants/{name}");
+    }
+    seen.extend(["BROWSER_KIND", "EXPIRY_SKEW_TOLERANCE_MS", "SEEN_REQ_MAX"]);
+    seen.extend(["FOLDERS_MAX_ENTRIES", "LIST_ALL_MAX"]);
     let mut fixture_keys: Vec<&str> = values.keys().map(String::as_str).collect();
     fixture_keys.sort_unstable();
     seen.sort_unstable();
