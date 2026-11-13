@@ -5,4 +5,5 @@
 
 pub mod constants;
 pub mod js_string;
+pub mod notice;
 pub mod reconnect;

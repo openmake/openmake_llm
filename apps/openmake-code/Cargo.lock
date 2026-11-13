@@ -19,6 +19,7 @@ name = "omk-bridge-conn"
 version = "0.1.0"
 dependencies = [
  "omk-bridge-core",
+ "regress",
  "serde_json",
 ]
 
