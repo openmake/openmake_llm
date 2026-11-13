@@ -168,6 +168,32 @@ sbDescribe('E2 — git 디렉터리 금지 경로', () => {
         expect(await run(core, write('b.txt', 'b'))).toEqual({ ok: true });
     }, 30000);
 
+    it('commondir 를 쓸 수 없다 — exec·파일 kind 둘 다(사용자의 후속 git 이 가짜 common dir 설정을 읽게 하는 길)', async () => {
+        const repo = makeRepo('repo');
+        const core = makeCore(repo);
+        const r = await run(core, { kind: 'exec', command: 'echo ../evil > .git/commondir && echo wrote' } as BridgeMsg);
+        expect(r.exitCode).not.toBe(0);
+        expect(r.stdout).not.toContain('wrote');
+        expect((await run(core, write('.git/commondir', '../evil\n'))).ok).toBe(false);
+        expect(fs.existsSync(path.join(repo, '.git', 'commondir'))).toBe(false);
+    }, 30000);
+
+    it('linked worktree 연결: 자기 git dir 의 commondir 도 못 쓰고, worktree add·exec commit 은 그대로 된다', async () => {
+        const repo = makeRepo('repo');
+        const lw = path.join(tmp, 'lw');
+        git(repo, 'worktree', 'add', '-q', lw, '-b', 'lw');
+        const own = path.join(repo, '.git', 'worktrees', 'lw', 'commondir');
+        const before = fs.readFileSync(own, 'utf8');
+        const core = makeCore(lw);
+        const e = await run(core, { kind: 'exec', command: `echo x > ${JSON.stringify(own)} && echo wrote` } as BridgeMsg);
+        expect(e.stdout).not.toContain('wrote');
+        expect(fs.readFileSync(own, 'utf8')).toBe(before);
+        expect(await run(core, wt('add'))).toMatchObject({ ok: true });
+        fs.writeFileSync(path.join(lw, 'a.txt'), 'lw change\n');
+        const c = await run(core, { kind: 'exec', command: 'git -c user.email=t@example.invalid -c user.name=t -c commit.gpgsign=false commit -qam lw2 && echo committed' } as BridgeMsg);
+        expect(c).toMatchObject({ ok: true, exitCode: 0, stdout: 'committed\n' });
+    }, 30000);
+
     it('git 이 없는(레포 아님) 폴더는 가드가 없다(기존 동작)', async () => {
         const plain = path.join(tmp, 'plain');
         fs.mkdirSync(plain);

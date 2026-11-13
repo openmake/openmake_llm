@@ -45,8 +45,9 @@ export function sandboxProfileText(root: string, git: GitPaths | null, home: str
         // common dir 에 있어 그쪽 기준이고, 자기 git dir 자신도 막는다.
         // SBPL 은 last-match-wins 라 이 deny 를 **프로파일 맨 끝**에 둔다(레포가 상위 allow 경로 안에 있어도 확실히 이기도록).
         // identity 설정이 필요하면 `git -c user.email=...` 인라인을 쓰면 된다.
-        ...(g ? [`(deny file-write* (subpath ${sbq(path.join(common, 'hooks'))}) (literal ${sbq(path.join(common, 'config'))}) (literal ${sbq(literalPath(common))})${
-            separate ? ` (literal ${sbq(literalPath(g.gitDir))})` : ''})`] : []),
+        // commondir 도 막는다 — 바꿔 두면 사용자의 후속 git 이 다른(폴더 안 가짜) common dir 의 config 를 읽는다.
+        ...(g ? [`(deny file-write* (subpath ${sbq(path.join(common, 'hooks'))}) (literal ${sbq(path.join(common, 'config'))}) (literal ${sbq(literalPath(common))}) (literal ${sbq(path.join(common, 'commondir'))})${
+            separate ? ` (literal ${sbq(literalPath(g.gitDir))}) (literal ${sbq(path.join(g.gitDir, 'commondir'))})` : ''})`] : []),
         '',
     ].join('\n');
 }

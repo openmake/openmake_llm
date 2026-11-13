@@ -150,7 +150,7 @@ posix('고정 명령의 자식 환경', () => {
         fs.writeFileSync(hook, `#!/bin/sh\n/usr/bin/env > "${path.join(base, 'hook.env')}"\n`);
         fs.chmodSync(hook, 0o755);
 
-        const ctx = { git: detectGit(repo), profile: undefined };
+        const ctx = { root: fs.realpathSync(repo), git: detectGit(repo), profile: undefined };
         const r = await new Promise<BridgeResult>((resolve) => { void handleWorktree({ op: 'add', taskId: 'abcdef12-hook' } as unknown as BridgeMsg, resolve, repo, ctx); });
         expect(r.ok).toBe(true);
         expect(fs.existsSync(path.join(base, 'hook.env'))).toBe(false);
