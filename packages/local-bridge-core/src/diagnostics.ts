@@ -22,7 +22,8 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX, DIAG_TIMEOUT_MS, MAX_BUFFER } from './constants';
 import { buildExecEnv } from './exec-env';
-import { wrapInSandbox } from './sandbox';
+import { onPath } from './exec-path';
+import { SandboxProfileMissingError, sandboxExecFailed, wrapInSandbox } from './sandbox';
 import type { BridgeDiagnostic } from './types';
 
 const TS_EXT = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
@@ -30,7 +31,12 @@ const PY_EXT = new Set(['.py']);
 
 function run(file: string, args: string[], cwd: string, extraPath: string | undefined, sandbox: string | null | undefined): Promise<{ stdout: string; stderr: string }> {
     const cmd = wrapInSandbox(file, args, sandbox); // 프로파일 없음이면 여기서 throw — 자식을 띄우지 않는다
-    return new Promise((resolve) => {
+    const wrapped = typeof sandbox === 'string';
+    const envPath = extraPath || process.env.PATH || process.env.Path || '';
+    // 감쌀 때 이름으로 띄우는 실행 파일(python3)은 먼저 찾는다 — 없으면 sandbox-exec 의 execvp 실패(71)가 아니라
+    // 종전과 같은 "띄우지 못함"(빈 출력)이다.
+    if (wrapped && !file.includes('/') && !onPath(file, envPath)) return Promise.resolve({ stdout: '', stderr: '' });
+    return new Promise((resolve, reject) => {
         execFile(
             cmd.file, cmd.args,
             {
@@ -39,9 +45,13 @@ function run(file: string, args: string[], cwd: string, extraPath: string | unde
                 maxBuffer: MAX_BUFFER,
                 encoding: 'utf8',
                 // 레포의 tsc·python3 가 도는 자리 — 호스트 env 전체가 아니라 exec 와 같은 allowlist 만 넘긴다.
-                env: buildExecEnv(process.env, extraPath || process.env.PATH || process.env.Path || ''),
+                env: buildExecEnv(process.env, envPath),
             },
-            (_err, stdout, stderr) => resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }),
+            (err, stdout, stderr) => {
+                // sandbox-exec 자체 실패(프로파일 파일 유실 등)는 "진단 없음"으로 삼키지 않고 프로파일 없음과 같이 거절한다.
+                if (err && sandboxExecFailed(wrapped, err.code, String(stderr ?? ''))) reject(new SandboxProfileMissingError());
+                else resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
+            },
         );
     });
 }

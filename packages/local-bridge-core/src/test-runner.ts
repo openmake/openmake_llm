@@ -13,7 +13,8 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { TEST_RUNNER_PROBE_TIMEOUT_MS } from './constants';
 import { buildExecEnv } from './exec-env';
-import { wrapInSandbox } from './sandbox';
+import { onPath } from './exec-path';
+import { SandboxProfileMissingError, sandboxExecFailed, wrapInSandbox } from './sandbox';
 
 export type TestRunnerToken = 'npm' | 'pytest' | 'go' | 'none';
 
@@ -53,16 +54,17 @@ const PYTEST_PROBE = "import importlib.util,site,sys; sys.path.append(site.getus
 
 function canImportPytest(dir: string, execPath: string, sandbox: string | null | undefined): Promise<boolean> {
     const cmd = wrapInSandbox('python3', ['-I', '-c', PYTEST_PROBE], sandbox); // 프로파일 없음이면 throw — 띄우지 않는다
-    return new Promise((resolve) => {
+    const wrapped = typeof sandbox === 'string';
+    // 감쌀 때는 python3 를 먼저 찾는다 — 없으면 sandbox-exec 의 execvp 실패(71)가 아니라 종전대로 "못 찾음"이다.
+    if (wrapped && !onPath('python3', execPath)) return Promise.resolve(false);
+    return new Promise((resolve, reject) => {
         execFile(cmd.file, cmd.args,
             { cwd: dir, timeout: TEST_RUNNER_PROBE_TIMEOUT_MS, env: buildExecEnv(process.env, execPath) },
-            (err) => resolve(!err));
-    });
-}
-
-function onPath(bin: string, execPath: string): boolean {
-    return execPath.split(':').filter(Boolean).some((d) => {
-        try { fs.accessSync(path.join(d, bin), fs.constants.X_OK); return true; } catch { return false; }
+            (err, _stdout, stderr) => {
+                // sandbox-exec 자체 실패(프로파일 파일 유실 등)는 "없음"으로 삼키지 않고 프로파일 없음과 같이 거절한다.
+                if (err && sandboxExecFailed(wrapped, err.code, String(stderr ?? ''))) reject(new SandboxProfileMissingError());
+                else resolve(!err);
+            });
     });
 }
 
