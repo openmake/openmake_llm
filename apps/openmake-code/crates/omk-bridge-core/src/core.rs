@@ -66,6 +66,26 @@ impl BridgeCore {
         })
     }
 
+    /// exec·worktree 를 처리하는 호스트를 얹는다(D-33·D-37). 없으면 exec 는 거부, worktree 는 거절한다.
+    pub fn with_exec_host(self, _host: crate::exec::ExecHost) -> BridgeCore {
+        todo!("PR-1.3 단계 8")
+    }
+
+    /// 연결 때 1회 — PATH 캐시를 비우고 샌드박스 프로파일을 쓴다(D-35).
+    pub async fn prepare(&self) {
+        todo!("PR-1.3 단계 8")
+    }
+
+    /// 일괄 승인 전체 회수 — 연결 해제·사용자 명시 해제 때.
+    pub fn clear_auto_approve(&self) {
+        todo!("PR-1.3 단계 8")
+    }
+
+    /// 일괄 승인 중인 작업 수.
+    pub fn auto_approved_count(&self) -> usize {
+        todo!("PR-1.3 단계 8")
+    }
+
     pub fn folder_root(&self) -> &str {
         &self.folder_root
     }
