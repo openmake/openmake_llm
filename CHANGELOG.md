@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.131.0](https://github.com/openmake/openmake_llm/compare/v1.130.1...v1.131.0) (2026-11-11)
+
+
+### ✨ 기능
+
+* **openmake-code:** exec 자식 환경 허용 목록 조립을 옮긴다 ([e63a7ab](https://github.com/openmake/openmake_llm/commit/e63a7abb0e48b38f3d851dcd13243502a0bcf697))
+* **openmake-code:** exec 차단 목록과 차단 전 정리를 regress 로 옮긴다 ([4a6eb4d](https://github.com/openmake/openmake_llm/commit/4a6eb4d01300fc82f5f0ff768d04b25ccf7063ca))
+* **openmake-code:** Rust workspace 와 omk-bridge-core 뼈대, 적합성 러너 틀 ([c93cf7d](https://github.com/openmake/openmake_llm/commit/c93cf7dac8b468b12d7602692e34074220bbc769))
+* **openmake-code:** sandbox-exec 프로파일 텍스트와 path.join 어휘적 정규화를 옮긴다 ([3f0ff2b](https://github.com/openmake/openmake_llm/commit/3f0ff2b7a965859ddaf26303ad68f37a34e9fc5b))
+* **openmake-code:** 브리지 상수 표를 옮긴다 ([de6c2ab](https://github.com/openmake/openmake_llm/commit/de6c2abf0242ced107a03ee38949556b2ee42801))
+* **openmake-code:** 플랫폼별 셸·PATH 구분자·폴더 이름·일괄 승인 판정을 옮긴다 ([1b6e4f9](https://github.com/openmake/openmake_llm/commit/1b6e4f9a547b05f09083c1919ee3e96383dd9906))
+
+
+### 🐛 버그 수정
+
+* **openmake-code:** folder_name_of 를 rfind 로 바꿔 clippy filter_next 경고를 없앤다 ([7665d92](https://github.com/openmake/openmake_llm/commit/7665d921abc94cd5ea129e5327bb5f59df45988b))
+
 ## [1.130.1](https://github.com/openmake/openmake_llm/compare/v1.130.0...v1.130.1) (2026-11-10)
 
 
