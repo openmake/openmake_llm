@@ -314,14 +314,16 @@ fn e2_file_kinds_respect_git_denies() {
     assert_eq!(write(&c, "b.txt", "b"), json!({"ok": true}));
 }
 
-/// git 이 없는(레포 아님) 폴더는 가드가 없다(기존 동작).
+/// git 이 없는(레포 아님) 폴더도 루트 `.git` 의 config 는 이름으로 막고 그 밖은 쓴다(리뷰 N1, TS 같음).
 #[test]
-fn no_guard_without_git() {
+fn root_dotgit_name_guard_without_git() {
     let w = Work::new();
     let plain = w.join("plain");
     std::fs::create_dir_all(&plain).unwrap();
     let c = core(&w, &plain);
-    assert_eq!(write(&c, ".git/config", "x"), json!({"ok": true}));
+    assert_eq!(write(&c, ".git/config", "x")["ok"], false);
+    assert_eq!(write(&c, ".git/HEAD", "x"), json!({"ok": true}));
+    assert_eq!(write(&c, "sub/.git/config", "x"), json!({"ok": true}));
 }
 
 /// D-3 — linked worktree 를 연결해도 worktree add·exec git commit 이 된다(E5). common dir 의 config 는 여전히 못 쓴다.

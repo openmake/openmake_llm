@@ -18,7 +18,7 @@ use crate::constants::{
 use crate::diagnostics;
 use crate::exec::{self, ExecHost, ExecState};
 use crate::fs_kinds;
-use crate::git_trust::GitPaths;
+use crate::git_trust::GitGuard;
 use crate::msg::{BridgeMsg, BridgeResult, Kind, ToolOutput};
 use crate::node_error;
 use crate::scope::safe_from;
@@ -132,10 +132,17 @@ impl BridgeCore {
         self.exec.as_ref().map_or(0, ExecState::count)
     }
 
-    /// 파일 kind 가드를 거는 git 디렉터리 — 믿는 git, 없으면 연결 폴더의 `.git` 디렉터리(리뷰 F2). 호스트가 없거나 준비 전이면
-    /// `None`(가드 없음).
-    fn git_paths(&self) -> Option<GitPaths> {
-        self.exec.as_ref().and_then(ExecState::protect_paths)
+    /// 파일 kind 가드 — 연결 폴더 루트의 `.git` 은 호스트가 없어도·준비 전에도·없어도 이름으로 지킨다(리뷰 N1). 지킬 git
+    /// 디렉터리(믿는 git 과 연결 폴더의 `.git` 쪽, 리뷰 F2·N2)는 준비 뒤에 붙는다.
+    fn git_guard(&self) -> GitGuard {
+        GitGuard {
+            root: self.folder_root.clone(),
+            dirs: self
+                .exec
+                .as_ref()
+                .map(ExecState::protect_paths)
+                .unwrap_or_default(),
+        }
     }
 
     /// 연결 때 만든 exec 프로파일 텍스트 — 샌드박스 꺼짐·준비 전·만들지 못함이면 `None`. 프로파일은 파일로 쓰지 않으므로
@@ -200,10 +207,10 @@ impl BridgeCore {
             }
             Kind::Write => {
                 let b64 = m.content_b64.clone();
-                let git = self.git_paths();
+                let git = self.git_guard();
                 self.gate
                     .run("write", move || {
-                        fs_kinds::write(&base, path.as_deref(), b64.as_deref(), git.as_ref())
+                        fs_kinds::write(&base, path.as_deref(), b64.as_deref(), &git)
                     })
                     .await?;
                 Ok(ok)
@@ -229,10 +236,10 @@ impl BridgeCore {
                 })
             }
             Kind::Delete => {
-                let git = self.git_paths();
+                let git = self.git_guard();
                 self.gate
                     .run("delete", move || {
-                        fs_kinds::delete(&base, path.as_deref(), git.as_ref())
+                        fs_kinds::delete(&base, path.as_deref(), &git)
                     })
                     .await?;
                 Ok(ok)

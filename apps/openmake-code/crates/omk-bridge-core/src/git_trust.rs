@@ -11,8 +11,8 @@
 //! 탐지 git 은 프로파일 파일을 쓰기 전에 돌므로 고정 인라인 프로파일(쓰기·네트워크 금지)로 감싼다.
 
 use crate::constants::{
-    GIT_FIXED_ARGS, GIT_PATH_DENIED_PREFIX, GIT_PROBE_PROFILE, GIT_PROBE_TIMEOUT_MS, SANDBOX_BIN,
-    WORKTREE_DIR,
+    GIT_FIXED_ARGS, GIT_PATH_DENIED_PREFIX, GIT_PROBE_PROFILE, GIT_PROBE_TIMEOUT_MS,
+    GITFILE_MAX_BYTES, SANDBOX_BIN, WORKTREE_DIR,
 };
 use crate::exec_env::build_exec_env;
 use crate::exec_path::env_get;
@@ -79,20 +79,34 @@ fn within(p: &str, dir: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('/'))
 }
 
-/// gitfile(`gitdir: <경로>`)이 가리키는 곳의 realpath — 상대 경로는 gitfile 이 있는 폴더 기준.
+/// 샌드박스 밖(이 프로세스)에서 git 메타 파일을 읽는다 — **일반 파일만**(lstat), `max` 바이트 이하만. FIFO·소켓·장치를 열면
+/// 읽기가 멈췄다(리뷰 N3). 심링크·없음·초과·실패는 `None`(TS `readRegularFile`).
+pub fn read_regular_file(p: &str, max: u64) -> Option<String> {
+    let meta = std::fs::symlink_metadata(p).ok()?;
+    if !meta.is_file() || meta.len() > max {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&std::fs::read(p).ok()?).into_owned())
+}
+
+/// gitfile(`gitdir: <경로>`)이 가리키는 곳의 realpath — 상대 경로는 gitfile 이 있는 폴더 기준. 코어가 직접 읽어 해석한다:
+/// 일반 파일·크기 상한 안·`gitdir: ` 로 시작하는 한 줄(끝 줄바꿈 하나 허용)만 받는다(리뷰 N2·N3, TS 같음).
 fn gitfile_target(file: &str) -> Option<String> {
-    let text = String::from_utf8_lossy(&std::fs::read(file).ok()?).into_owned();
-    let v = text.split('\n').find_map(|l| {
-        l.strip_prefix("gitdir: ")
-            .filter(|r| !js_trim(r).is_empty())
-    })?;
+    let text = read_regular_file(file, GITFILE_MAX_BYTES)?;
+    let rest = text.strip_prefix("gitdir: ")?;
+    let v = rest
+        .strip_suffix("\r\n")
+        .or_else(|| rest.strip_suffix('\n'))
+        .unwrap_or(rest);
+    if v.contains('\n') || js_trim(v).is_empty() {
+        return None;
+    }
     real(&resolve(&dirname(file), js_trim(v)))
 }
 
-/// linked worktree 메타의 `gitdir`(worktree 의 .git) — 상대 경로(worktree.useRelativePaths)는 메타 폴더 기준.
+/// linked worktree 메타의 `gitdir`(worktree 의 .git) — 상대 경로(worktree.useRelativePaths)는 메타 폴더 기준. 일반 파일만.
 fn backlink(git_dir: &str) -> Option<String> {
-    let text =
-        String::from_utf8_lossy(&std::fs::read(join(&[git_dir, "gitdir"])).ok()?).into_owned();
+    let text = read_regular_file(&join(&[git_dir, "gitdir"]), GITFILE_MAX_BYTES)?;
     let v = js_trim(&text);
     if v.is_empty() {
         return None;
@@ -208,46 +222,78 @@ fn fold_case(s: &str) -> String {
 /// git 디렉터리 하나 아래에서 막는 이름 — 프로파일 끝 금지 줄과 같다.
 const GIT_DENIED_NAMES: [&str; 3] = ["config", "commondir", "config.worktree"];
 
-/// 믿지 않아도(탐지 실패·불신) 지킬 git 디렉터리 — 연결 폴더의 `.git` 이 (심링크 아닌) 디렉터리면 그것(TS `rootGitDir`).
-/// 쓰기 허용은 하지 않고 프로파일 금지 줄·파일 kind 가드만 건다(리뷰 F2). root 는 realpath. FS 를 보므로 관문 안에서 부른다.
+/// 믿지 않아도(탐지 실패·불신) 지킬 git 디렉터리 — 연결 폴더의 `.git` 이 (심링크 아닌) 디렉터리면 그것(리뷰 F2), gitfile·심링크면
+/// 가리키는 디렉터리의 realpath 가 연결 폴더 안일 때 그것(리뷰 N2). 폴더 밖을 가리키면 대상은 어차피 쓰기가 열리지 않는다
+/// (`.git` 자신은 파일 kind 의 이름 가드가 막는다). 쓰기 허용은 하지 않고 금지 줄·가드만 건다(TS `rootGitDir`). root 는 realpath.
+/// FS 를 보므로 관문 안에서 부른다.
 pub fn root_git_dir(root: &str) -> Option<GitPaths> {
     let dot_git = join(&[root, ".git"]);
-    std::fs::symlink_metadata(&dot_git)
-        .ok()
-        .filter(std::fs::Metadata::is_dir)
-        .map(|_| GitPaths {
-            git_dir: dot_git.clone(),
-            common_dir: dot_git,
-        })
+    let meta = std::fs::symlink_metadata(&dot_git).ok()?;
+    let found = |d: String| GitPaths {
+        git_dir: d.clone(),
+        common_dir: d,
+    };
+    if meta.is_dir() {
+        return Some(found(dot_git));
+    }
+    let target = if meta.file_type().is_symlink() {
+        real(&dot_git)
+    } else {
+        gitfile_target(&dot_git)
+    }?;
+    let is_dir = std::fs::metadata(&target).is_ok_and(|m| m.is_dir());
+    (within(&target, root) && is_dir).then(|| found(target))
+}
+
+/// 지킬 git 디렉터리 목록 — 믿는 git 과 `root_git_dir`(겹치면 하나). 금지 줄·파일 kind 가드가 모두 건다(TS `protectedGitDirs`).
+pub fn protected_git_dirs(git: Option<&GitPaths>, root: &str) -> Vec<GitPaths> {
+    let mut out: Vec<GitPaths> = git.cloned().into_iter().collect();
+    if let Some(r) = root_git_dir(root).filter(|r| !out.contains(r)) {
+        out.push(r);
+    }
+    out
+}
+
+/// 파일 kind 가드가 보는 것 — 연결 폴더 realpath(그 `.git` 은 없어도 이름으로 지킨다)와 지킬 git 디렉터리들.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitGuard {
+    pub root: String,
+    pub dirs: Vec<GitPaths>,
+}
+
+/// git 디렉터리 하나(접은 표기)에 대해 막는 자리인가 — 자신·금지 이름·`hooks` 아래, delete 는 그것을 품은 상위 폴더도.
+fn denied_under(r: &str, d: &str, del: bool) -> bool {
+    r == d
+        || GIT_DENIED_NAMES.iter().any(|n| r == join(&[d, n]))
+        || within(r, &join(&[d, "hooks"]))
+        || (del && within(d, r))
 }
 
 /// 파일 kind(write·delete) 가드 — 대상의 실제 위치가 지키는 git dir·common dir 자신·`config`·`commondir`·`config.worktree`·
 /// `hooks` 아래이거나, linked 배치의 `<common>/worktrees`, worktree 의 `.git` 이면 거절한다(exec 프로파일과 같은 금지).
-/// delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. 비교는 대소문자를 접어서 한다. 지킬 git 이 없으면 가드가 없다(기존 동작).
-/// FS 를 보므로 관문 안에서 부른다.
+/// 연결 폴더 루트의 `.git` 은 **없어도 이름으로** 같은 자리를 막는다(리뷰 N1). 이름 비교는 실제 위치와 함께 "부모의 실제 위치 +
+/// 마지막 이름"으로도 해서 `.git` 심링크 자리 자체도 막는다. delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. 비교는
+/// 대소문자를 접어서 한다. FS 를 보므로 관문 안에서 부른다.
 pub fn assert_git_path_allowed(
-    git: Option<&GitPaths>,
+    guard: &GitGuard,
     abs: &str,
     rel: Option<&str>,
     del: bool,
 ) -> Result<(), String> {
-    let Some(git) = git else {
-        return Ok(());
-    };
     let r = fold_case(&resolve_real(abs)?);
-    let (g, c) = (fold_case(&git.git_dir), fold_case(&git.common_dir));
-    let mut dirs = vec![g.as_str()];
-    if c != g {
-        dirs.push(&c);
+    let lex = fold_case(&join(&[&resolve_real(&dirname(abs))?, &basename(abs)]));
+    let mut dirs = vec![fold_case(&join(&[&guard.root, ".git"]))];
+    let mut parent_rename = false;
+    for git in &guard.dirs {
+        let (g, c) = (fold_case(&git.git_dir), fold_case(&git.common_dir));
+        let parent = join(&[&c, "worktrees"]);
+        parent_rename |= g != c && (r == parent || lex == parent);
+        dirs.extend([g, c]);
     }
-    let denied = dirs.iter().any(|d| {
-        r == *d
-            || GIT_DENIED_NAMES.iter().any(|n| r == join(&[d, n]))
-            || within(&r, &join(&[d, "hooks"]))
-            || (del && within(d, &r))
-    });
-    let parent_rename = c != g && r == join(&[&c, "worktrees"]);
-    if denied || parent_rename || is_worktree_git(&r) {
+    let denied = dirs
+        .iter()
+        .any(|d| denied_under(&r, d, del) || denied_under(&lex, d, del));
+    if denied || parent_rename || is_worktree_git(&r) || is_worktree_git(&lex) {
         return Err(format!(
             "{GIT_PATH_DENIED_PREFIX}{}",
             rel.unwrap_or("undefined")

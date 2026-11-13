@@ -8,7 +8,7 @@ use std::fs;
 use std::io::{ErrorKind, Read, Write};
 
 use crate::constants::{FOLDERS_MAX_ENTRIES, LIST_ALL_MAX};
-use crate::git_trust::{GitPaths, assert_git_path_allowed};
+use crate::git_trust::{GitGuard, assert_git_path_allowed};
 use crate::scope::safe_from;
 use crate::{base64_lenient, node_error, node_path};
 
@@ -118,12 +118,12 @@ fn mkdir_recursive(dir: &str) -> Result<(), String> {
 }
 
 /// 중간 폴더를 만들고 덮어쓴다. `content_b64` 가 없으면 빈 파일이다.
-/// `git`: 연결 때 믿기로 한 git 디렉터리 — 있으면 exec 프로파일과 같은 git 금지 경로를 지킨다(설계 D-4).
+/// `git`: 파일 kind 가드 — exec 프로파일과 같은 git 금지 경로 + 연결 폴더 루트 `.git` 의 이름 가드(설계 D-4, 리뷰 N1).
 pub fn write(
     base: &str,
     path: Option<&str>,
     content_b64: Option<&str>,
-    git: Option<&GitPaths>,
+    git: &GitGuard,
 ) -> Result<(), String> {
     let abs = safe_from(base, path)?;
     assert_git_path_allowed(git, &abs, path, false)?;
@@ -189,7 +189,7 @@ pub fn list_all(base: &str) -> Result<Vec<String>, String> {
 /// 파일·폴더(재귀) 삭제. 없는 경로는 성공이다. 연결 폴더 루트(= base)는 지우지 않는다.
 /// 심링크는 링크만 지운다 — 밖을 가리키는 링크는 스코프 검사가 대상을 보므로 지울 수 없다(TS 그대로).
 /// `git`: `write` 와 같은 git 금지 경로 + git 디렉터리를 품은 상위 폴더.
-pub fn delete(base: &str, path: Option<&str>, git: Option<&GitPaths>) -> Result<(), String> {
+pub fn delete(base: &str, path: Option<&str>, git: &GitGuard) -> Result<(), String> {
     let abs = safe_from(base, path)?;
     if abs == base {
         return Err("연결 폴더 루트는 삭제할 수 없습니다".to_owned());
@@ -348,8 +348,12 @@ mod tests {
                     .err()
             })
             .collect();
+        let guard = crate::git_trust::GitGuard {
+            root: t.0.clone(),
+            dirs: Vec::new(),
+        };
         let ro_write =
-            write(&t.0, Some("ro/a/b/x.txt"), None, None).map_err(|e| e.replace(&t.0, "<T>"));
+            write(&t.0, Some("ro/a/b/x.txt"), None, &guard).map_err(|e| e.replace(&t.0, "<T>"));
         std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
         let want: Vec<_> = cases.into_iter().map(|(_, w)| w).collect();
         assert_eq!(got, want);

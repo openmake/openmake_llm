@@ -23,7 +23,7 @@ pub fn profile_file_name(kind: &str, pid: u32, seq: usize) -> String {
 pub fn sandbox_profile(
     root: &str,
     git: Option<&GitPaths>,
-    protect: Option<&GitPaths>,
+    protect: &[GitPaths],
     home: &str,
     tool: bool,
 ) -> Option<String> {
@@ -59,20 +59,20 @@ mod tests {
         let got = sandbox_profile(
             "/work/repo",
             Some(&git),
-            Some(&git),
+            std::slice::from_ref(&git),
             &format!("{t}/home"),
             true,
         );
         let want = build_sandbox_profile(
             "/work/repo",
             Some(&git),
-            Some(&git),
+            std::slice::from_ref(&git),
             &format!("{t}/home"),
             true,
         );
         assert_eq!(got.as_deref(), Some(want.as_str()));
         assert_eq!(
-            sandbox_profile("/w", None, None, &format!("{t}/no-home"), false),
+            sandbox_profile("/w", None, &[], &format!("{t}/no-home"), false),
             None
         );
         assert!(profile_file_name("tool", 7, 3).ends_with("omk-tool-sandbox-7-3.sb"));
