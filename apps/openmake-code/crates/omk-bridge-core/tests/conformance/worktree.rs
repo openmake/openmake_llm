@@ -11,7 +11,8 @@ use omk_bridge_core::platform::Platform;
 use omk_bridge_core::sandbox::detect_git_dir;
 use serde_json::{Value, json};
 
-use super::exec_gate::{check_after, host, new_tmp, shape_request, shape_setup, view, want_of};
+use super::exec_gate::{host, new_tmp};
+use super::exec_shape::{check_after, shape_request, shape_setup, view, want_of};
 use super::{case_list, load, non_empty, shape};
 use crate::support::{TmpDir, apply_op_step, apply_setup, fill, runner_env, runtime};
 
