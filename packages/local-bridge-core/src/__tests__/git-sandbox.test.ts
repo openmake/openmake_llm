@@ -194,11 +194,13 @@ sbDescribe('E2 — git 디렉터리 금지 경로', () => {
         expect(c).toMatchObject({ ok: true, exitCode: 0, stdout: 'committed\n' });
     }, 30000);
 
-    it('git 이 없는(레포 아님) 폴더는 가드가 없다(기존 동작)', async () => {
+    it('git 이 없는(레포 아님) 폴더도 루트 .git 의 config 는 이름으로 막고 그 밖은 쓴다(리뷰 N1)', async () => {
         const plain = path.join(tmp, 'plain');
         fs.mkdirSync(plain);
         const core = makeCore(plain);
-        expect(await run(core, write('.git/config', 'x'))).toEqual({ ok: true });
+        expect(await run(core, write('.git/config', 'x'))).toMatchObject({ ok: false });
+        expect(await run(core, write('.git/HEAD', 'x'))).toEqual({ ok: true });
+        expect(await run(core, write('sub/.git/config', 'x'))).toEqual({ ok: true });
     });
 });
 

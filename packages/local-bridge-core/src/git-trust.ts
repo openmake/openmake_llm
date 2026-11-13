@@ -15,7 +15,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { GIT_FIXED_ARGS, GIT_PATH_DENIED_PREFIX, GIT_PROBE_PROFILE, GIT_PROBE_TIMEOUT_MS, SANDBOX_BIN, SANDBOX_ENABLED, WORKTREE_DIR } from './constants';
+import { GIT_FIXED_ARGS, GIT_PATH_DENIED_PREFIX, GIT_PROBE_PROFILE, GITFILE_MAX_BYTES, GIT_PROBE_TIMEOUT_MS, SANDBOX_BIN, SANDBOX_ENABLED, WORKTREE_DIR } from './constants';
 import { buildExecEnv } from './exec-env';
 
 const fsp = fs.promises;
@@ -49,20 +49,32 @@ function within(p: string, dir: string): boolean {
     return p === dir || p.startsWith(dir + path.sep);
 }
 
-/** gitfile(`gitdir: <경로>`) 이 가리키는 곳의 realpath — 상대 경로는 gitfile 이 있는 폴더 기준. */
-function gitfileTarget(file: string): string | null {
+/**
+ * 샌드박스 밖(이 프로세스)에서 git 메타 파일을 읽는다 — **일반 파일만**(lstat), max 바이트 이하만. FIFO·소켓·장치를 열면
+ * 동기 읽기가 이벤트 루프를 멈춰 그 헬퍼의 모든 연결이 끊겼다(리뷰 N3). 심링크·없음·초과·실패는 null.
+ */
+export function readRegularFile(p: string, max = Infinity): string | null {
     try {
-        const m = /^gitdir: (.+)$/m.exec(fs.readFileSync(file, 'utf8'));
-        return m ? real(path.resolve(path.dirname(file), m[1].trim())) : null;
+        const st = fs.lstatSync(p);
+        return st.isFile() && st.size <= max ? fs.readFileSync(p, 'utf8') : null;
     } catch { return null; }
 }
 
-/** linked worktree 메타의 `gitdir`(worktree 의 .git 을 가리킨다) — 상대 경로(worktree.useRelativePaths)는 메타 폴더 기준. */
+/**
+ * gitfile(`gitdir: <경로>`) 이 가리키는 곳의 realpath — 상대 경로는 gitfile 이 있는 폴더 기준. 코어가 직접 읽어 해석한다:
+ * 일반 파일·크기 상한 안·`gitdir: ` 로 시작하는 한 줄(끝 줄바꿈 하나 허용)만 받는다(리뷰 N2·N3).
+ */
+function gitfileTarget(file: string): string | null {
+    const text = readRegularFile(file, GITFILE_MAX_BYTES);
+    if (!text?.startsWith('gitdir: ')) return null;
+    const v = text.slice('gitdir: '.length).replace(/\r?\n$/, '');
+    return v.includes('\n') || !v.trim() ? null : real(path.resolve(path.dirname(file), v.trim()));
+}
+
+/** linked worktree 메타의 `gitdir`(worktree 의 .git 을 가리킨다) — 상대 경로(worktree.useRelativePaths)는 메타 폴더 기준. 일반 파일만. */
 function backlink(gitDir: string): string | null {
-    try {
-        const v = fs.readFileSync(path.join(gitDir, 'gitdir'), 'utf8').trim();
-        return v ? real(path.resolve(gitDir, v)) : null;
-    } catch { return null; }
+    const v = readRegularFile(path.join(gitDir, 'gitdir'), GITFILE_MAX_BYTES)?.trim();
+    return v ? real(path.resolve(gitDir, v)) : null;
 }
 
 /** git dir 의 config 의 core.worktree — 상대 경로는 git dir 기준. */
@@ -94,15 +106,25 @@ export function detectGit(root: string): GitPaths | null {
 }
 
 /**
- * 믿지 않아도(탐지 실패·불신) 지킬 git 디렉터리 — 연결 폴더의 `.git` 이 (심링크 아닌) 디렉터리면 그것. 쓰기 허용은 하지 않고
- * 프로파일 금지 줄·파일 kind 가드만 건다(리뷰 F2: `.git/HEAD` 를 깨 탐지를 실패시키면 다음 연결에서 보호가 통째로 빠졌다).
- * root 는 realpath. git 을 띄우지 않고 lstat 만 본다.
+ * 믿지 않아도(탐지 실패·불신) 지킬 git 디렉터리 — 연결 폴더의 `.git` 이 (심링크 아닌) 디렉터리면 그것(리뷰 F2), gitfile·심링크면
+ * 가리키는 디렉터리의 realpath 가 연결 폴더 안일 때 그것(리뷰 N2 — `.git/HEAD` 를 깨 탐지를 실패시키면 보호가 빠졌다). 폴더 밖을
+ * 가리키면 대상은 어차피 쓰기가 열리지 않는다(`.git` 자신은 파일 kind 의 이름 가드가 막는다). 쓰기 허용은 하지 않고 프로파일 금지
+ * 줄·파일 kind 가드만 건다. root 는 realpath. git 을 띄우지 않고 파일만 본다.
  */
 export function rootGitDir(root: string): GitPaths | null {
     const dotGit = path.join(root, '.git');
-    try {
-        return fs.lstatSync(dotGit).isDirectory() ? { gitDir: dotGit, commonDir: dotGit } : null;
-    } catch { return null; }
+    let st: fs.Stats;
+    try { st = fs.lstatSync(dotGit); } catch { return null; }
+    if (st.isDirectory()) return { gitDir: dotGit, commonDir: dotGit };
+    const target = st.isSymbolicLink() ? real(dotGit) : gitfileTarget(dotGit);
+    if (!target || !within(target, root)) return null;
+    try { return fs.statSync(target).isDirectory() ? { gitDir: target, commonDir: target } : null; } catch { return null; }
+}
+
+/** 지킬 git 디렉터리 목록 — 믿는 git 과 `rootGitDir`(겹치면 하나). 금지 줄·파일 kind 가드가 모두 건다. */
+export function protectedGitDirs(git: GitPaths | null, root: string): GitPaths[] {
+    const r = rootGitDir(root);
+    return [git, r].filter((x, i, a): x is GitPaths => !!x && a.findIndex((y) => y?.gitDir === x.gitDir && y?.commonDir === x.commonDir) === i);
 }
 
 /** 존재하는 최근접 조상의 realpath + 나머지 — 없는 파일을 쓰는 경우도 실제 위치로 본다. */
@@ -138,17 +160,31 @@ function foldCase(s: string): string {
 /** git 디렉터리 하나 아래에서 막는 이름 — 프로파일 끝 금지 줄과 같다. */
 const GIT_DENIED_NAMES = ['config', 'commondir', 'config.worktree'];
 
+/** 파일 kind 가드가 보는 것 — 연결 폴더 realpath(그 `.git` 은 없어도 이름으로 지킨다)와 지킬 git 디렉터리들. */
+export interface GitGuard { root: string; dirs: GitPaths[] }
+
+/** git 디렉터리 하나(접은 표기)에 대해 막는 자리인가 — 자신·금지 이름·`hooks` 아래, delete 는 그것을 품은 상위 폴더도. */
+function deniedUnder(r: string, d: string, del: boolean): boolean {
+    return r === d || GIT_DENIED_NAMES.some((n) => r === path.join(d, n)) || within(r, path.join(d, 'hooks')) || (del && within(d, r));
+}
+
 /**
  * 파일 kind(write·delete) 가드 — 대상의 실제 위치가 지키는 git dir·common dir 자신·`config`·`commondir`·`config.worktree`·
  * `hooks` 아래이거나, linked 배치의 `<common>/worktrees`, worktree 의 `.git` 이면 거절한다(exec 프로파일과 같은 금지).
- * delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. 비교는 대소문자를 접어서 한다. 지킬 git 이 없으면 가드가 없다(기존 동작).
+ * 연결 폴더 루트의 `.git` 은 **없어도 이름으로** 같은 자리를 막는다(리뷰 N1 — 하위 폴더 연결·연결 뒤 `git init` 에서 새로 생기는
+ * `.git` 에 config·hooks 를 심을 수 있었다). 이름 비교는 실제 위치와 함께 "부모의 실제 위치 + 마지막 이름"으로도 해서 `.git`
+ * 심링크 자리 자체도 막는다. delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. 비교는 대소문자를 접어서 한다.
  */
-export async function assertGitPathAllowed(git: GitPaths | null, abs: string, rel: string | undefined, del: boolean): Promise<void> {
-    if (!git) return;
+export async function assertGitPathAllowed(guard: GitGuard, abs: string, rel: string | undefined, del: boolean): Promise<void> {
     const r = foldCase(await resolveReal(abs));
-    const [g, c] = [foldCase(git.gitDir), foldCase(git.commonDir)];
-    const denied = [...new Set([g, c])].some((d) => r === d || GIT_DENIED_NAMES.some((n) => r === path.join(d, n))
-        || within(r, path.join(d, 'hooks')) || (del && within(d, r)));
-    const parentRename = g !== c && r === path.join(c, 'worktrees');
-    if (denied || parentRename || isWorktreeGit(r)) throw new Error(`${GIT_PATH_DENIED_PREFIX}${rel}`);
+    const lex = foldCase(path.join(await resolveReal(path.dirname(abs)), path.basename(abs)));
+    const dirs = [foldCase(path.join(guard.root, '.git'))];
+    let parentRename = false;
+    for (const git of guard.dirs) {
+        const [g, c] = [foldCase(git.gitDir), foldCase(git.commonDir)];
+        dirs.push(g, c);
+        parentRename ||= g !== c && (r === path.join(c, 'worktrees') || lex === path.join(c, 'worktrees'));
+    }
+    const denied = [...new Set(dirs)].some((d) => deniedUnder(r, d, del) || deniedUnder(lex, d, del));
+    if (denied || parentRename || isWorktreeGit(r) || isWorktreeGit(lex)) throw new Error(`${GIT_PATH_DENIED_PREFIX}${rel}`);
 }

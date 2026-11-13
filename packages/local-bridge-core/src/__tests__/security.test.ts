@@ -152,7 +152,7 @@ describe('buildSandboxProfile — SBPL 규칙(텍스트, 파일로 쓰지 않는
 
     it('믿지 않는 연결 폴더의 .git(protect): 쓰기 허용 줄 없이 금지 줄만', () => {
         const dotGit = path.join(dir, 'repo', '.git');
-        const l = lines(buildSandboxProfile(path.join(dir, 'repo'), null, false, { gitDir: dotGit, commonDir: dotGit }));
+        const l = lines(buildSandboxProfile(path.join(dir, 'repo'), null, false, [{ gitDir: dotGit, commonDir: dotGit }]));
         expect(l.filter((x) => x.includes(q(dotGit)) && x.startsWith('(allow'))).toEqual([]);
         expect(l[l.length - 1]).toContain(`(literal ${q(`${dotGit}/config`)})`);
     });

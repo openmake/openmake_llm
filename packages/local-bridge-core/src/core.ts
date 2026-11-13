@@ -25,7 +25,7 @@ import { detectTestRunner } from './test-runner';
 import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { buildExecEnv } from './exec-env';
-import { assertGitPathAllowed, detectGit, rootGitDir, type GitPaths } from './git-trust';
+import { assertGitPathAllowed, detectGit, protectedGitDirs, type GitGuard, type GitPaths } from './git-trust';
 import { buildSandboxProfile, SandboxProfileMissingError } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
@@ -48,8 +48,8 @@ export class BridgeCore {
     private toolProfile: string | null = null;
     /** 연결 때 믿기로 한 git 디렉터리(git-trust.ts) — 없으면 git 없음(쓰기 허용 줄 없음, worktree 거절). */
     private git: GitPaths | null = null;
-    /** 금지 줄·파일 kind 가드를 걸 git 디렉터리 — 믿는 git, 없으면 연결 폴더의 `.git` 디렉터리(리뷰 F2). */
-    private protect: GitPaths | null = null;
+    /** 금지 줄·파일 kind 가드를 걸 git 디렉터리 — 믿는 git 과 연결 폴더의 `.git`(디렉터리, 또는 폴더 안을 가리키는 gitfile·심링크의 대상)(리뷰 F2·N2). */
+    private protect: GitPaths[] = [];
     private execPathCache: string | null = null;
     private readonly autoApproveTasks = new Set<string>();
 
@@ -81,9 +81,14 @@ export class BridgeCore {
     prepare(): void {
         this.execPathCache = null;
         this.git = detectGit(this.folderRoot);
-        this.protect = this.git ?? rootGitDir(this.folderRoot);
+        this.protect = protectedGitDirs(this.git, this.folderRoot);
         this.sandboxProfile = SANDBOX_ENABLED ? buildSandboxProfile(this.folderRoot, this.git, false, this.protect) : null;
         this.toolProfile = SANDBOX_ENABLED ? buildSandboxProfile(this.folderRoot, this.git, true, this.protect) : null;
+    }
+
+    /** 파일 kind 가드 — 연결 폴더 루트의 `.git` 은 준비 전에도·없어도 이름으로 지킨다(리뷰 N1). */
+    private get gitGuard(): GitGuard {
+        return { root: this.folderRoot, dirs: this.protect };
     }
 
     /** 확인 없이 뜨는 자식을 감쌀 도구 프로파일 — 샌드박스 꺼짐이면 undefined, 켜졌는데 없으면 null(fail-closed). */
@@ -214,7 +219,7 @@ export class BridgeCore {
             case 'write': {
                 await this.timedFs('write', async () => {
                     const abs = await safeFromAsync(base, m.path);
-                    await assertGitPathAllowed(this.protect, abs, m.path, false); // exec 프로파일과 같은 git 금지 경로(D-4)
+                    await assertGitPathAllowed(this.gitGuard, abs, m.path, false); // exec 프로파일과 같은 git 금지 경로(D-4)
                     await fsp.mkdir(path.dirname(abs), { recursive: true });
                     await fsp.writeFile(abs, Buffer.from(m.contentB64 || '', 'base64'));
                 });
@@ -233,7 +238,7 @@ export class BridgeCore {
                 await this.timedFs('delete', async () => {
                     const abs = await safeFromAsync(base, m.path);
                     if (abs === base) throw new Error('연결 폴더 루트는 삭제할 수 없습니다');
-                    await assertGitPathAllowed(this.protect, abs, m.path, true);
+                    await assertGitPathAllowed(this.gitGuard, abs, m.path, true);
                     await fsp.rm(abs, { recursive: true, force: true });
                 });
                 done({ ok: true }); return;
@@ -295,7 +300,7 @@ export class BridgeCore {
                         // 폴더 안 심링크로 .git/config 를 가리켜 두면 덮어쓰므로 write 와 같은 git 가드를 지난다(리뷰 F7).
                         saveFile: async (name, data) => {
                             const abs = await safeFromAsync(base, name);
-                            await assertGitPathAllowed(this.protect, abs, name, false);
+                            await assertGitPathAllowed(this.gitGuard, abs, name, false);
                             await fsp.writeFile(abs, data);
                         },
                         // 업로드는 실행 폴더 안의 파일만(폴더 밖·숨김·크기·개수 거절)
