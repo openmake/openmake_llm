@@ -90,14 +90,13 @@ pub fn read_regular_file(p: &str, max: u64) -> Option<String> {
 }
 
 /// gitfile(`gitdir: <경로>`)이 가리키는 곳의 realpath — 상대 경로는 gitfile 이 있는 폴더 기준. 코어가 직접 읽어 해석한다:
-/// 일반 파일·크기 상한 안·`gitdir: ` 로 시작하는 한 줄(끝 줄바꿈 하나 허용)만 받는다(리뷰 N2·N3, TS 같음).
+/// 일반 파일·크기 상한 안·`gitdir: ` 로 시작하는 한 줄만 받는다(리뷰 N2·N3). git(`read_gitfile_gently`)처럼 끝의 `\r`·`\n` 은
+/// 모두 떼고, `file` 이 심링크면 따라가 그 대상(일반 파일)을 읽는다 — 상대 경로는 대상이 아니라 `file` 자리 기준이다(git 실측,
+/// 리뷰 R3, TS 같음).
 fn gitfile_target(file: &str) -> Option<String> {
-    let text = read_regular_file(file, GITFILE_MAX_BYTES)?;
+    let text = read_regular_file(&real(file)?, GITFILE_MAX_BYTES)?;
     let rest = text.strip_prefix("gitdir: ")?;
-    let v = rest
-        .strip_suffix("\r\n")
-        .or_else(|| rest.strip_suffix('\n'))
-        .unwrap_or(rest);
+    let v = rest.trim_end_matches(['\r', '\n']);
     if v.contains('\n') || js_trim(v).is_empty() {
         return None;
     }
@@ -236,20 +235,37 @@ pub fn root_git_dir(root: &str) -> Option<GitPaths> {
     if meta.is_dir() {
         return Some(found(dot_git));
     }
-    let target = if meta.file_type().is_symlink() {
-        real(&dot_git)
-    } else {
-        gitfile_target(&dot_git)
-    }?;
+    // gitfile(심링크가 가리키는 gitfile 포함, 리뷰 R3)이면 그 대상, 디렉터리를 가리키는 심링크면 그 디렉터리.
+    let target = gitfile_target(&dot_git).or_else(|| {
+        meta.file_type()
+            .is_symlink()
+            .then(|| real(&dot_git))
+            .flatten()
+    })?;
     let is_dir = std::fs::metadata(&target).is_ok_and(|m| m.is_dir());
     (within(&target, root) && is_dir).then(|| found(target))
 }
 
-/// 지킬 git 디렉터리 목록 — 믿는 git 과 `root_git_dir`(겹치면 하나). 금지 줄·파일 kind 가드가 모두 건다(TS `protectedGitDirs`).
+/// 연결 폴더 루트가 이미 bare 꼴(`HEAD` 파일 + `objects`·`refs` 디렉터리)이면 루트 자신 — `.git` 이 없으면 사용자 git 은 루트를
+/// git 디렉터리로 읽는다(리뷰 R2). `gitdir: .` 배치처럼 루트의 config·hooks 를 지킨다(TS `bareRoot`). root 는 realpath.
+fn bare_root(root: &str) -> Option<GitPaths> {
+    let meta = |name: &str| std::fs::metadata(join(&[root, name])).ok();
+    let bare = meta("HEAD").is_some_and(|m| m.is_file())
+        && meta("objects").is_some_and(|m| m.is_dir())
+        && meta("refs").is_some_and(|m| m.is_dir());
+    bare.then(|| GitPaths {
+        git_dir: root.to_owned(),
+        common_dir: root.to_owned(),
+    })
+}
+
+/// 지킬 git 디렉터리 목록 — 믿는 git·`root_git_dir`·bare 꼴 루트(겹치면 하나). 금지 줄·파일 kind 가드가 모두 건다(TS `protectedGitDirs`).
 pub fn protected_git_dirs(git: Option<&GitPaths>, root: &str) -> Vec<GitPaths> {
     let mut out: Vec<GitPaths> = git.cloned().into_iter().collect();
-    if let Some(r) = root_git_dir(root).filter(|r| !out.contains(r)) {
-        out.push(r);
+    for r in [root_git_dir(root), bare_root(root)].into_iter().flatten() {
+        if !out.contains(&r) {
+            out.push(r);
+        }
     }
     out
 }
@@ -261,11 +277,19 @@ pub struct GitGuard {
     pub dirs: Vec<GitPaths>,
 }
 
-/// git 디렉터리 하나(접은 표기)에 대해 막는 자리인가 — 자신·금지 이름·`hooks` 아래, delete 는 그것을 품은 상위 폴더도.
+/// git 디렉터리 바로 아래 첫 이름에 ASCII 가 아닌 글자가 있는가 — APFS 는 유니코드 대소문자 접기로 이름을 찾아 아직 없는
+/// `conﬁg`(U+FB01)·`config.worKtree`(U+212A)를 git 이 `config`·`config.worktree` 로 읽었다(리뷰 R1). git 디렉터리 최상위 이름은
+/// 모두 ASCII 라 접기 표 없이 막는다. 둘째 이름부터(`refs/heads/한글` 등)는 보지 않는다(TS `nonAsciiFirstName`).
+fn non_ascii_first_name(r: &str, d: &str) -> bool {
+    r != d && within(r, d) && !r[d.len() + 1..].split('/').next().unwrap_or("").is_ascii()
+}
+
+/// git 디렉터리 하나(접은 표기)에 대해 막는 자리인가 — 자신·금지 이름·`hooks` 아래·비ASCII 첫 이름, delete 는 그것을 품은 상위 폴더도.
 fn denied_under(r: &str, d: &str, del: bool) -> bool {
     r == d
         || GIT_DENIED_NAMES.iter().any(|n| r == join(&[d, n]))
         || within(r, &join(&[d, "hooks"]))
+        || non_ascii_first_name(r, d)
         || (del && within(d, r))
 }
 
@@ -273,7 +297,9 @@ fn denied_under(r: &str, d: &str, del: bool) -> bool {
 /// `hooks` 아래이거나, linked 배치의 `<common>/worktrees`, worktree 의 `.git` 이면 거절한다(exec 프로파일과 같은 금지).
 /// 연결 폴더 루트의 `.git` 은 **없어도 이름으로** 같은 자리를 막는다(리뷰 N1). 이름 비교는 실제 위치와 함께 "부모의 실제 위치 +
 /// 마지막 이름"으로도 해서 `.git` 심링크 자리 자체도 막는다. delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. 비교는
-/// 대소문자를 접어서 한다. FS 를 보므로 관문 안에서 부른다.
+/// 대소문자를 접어서 한다. 루트가 지키는 git 디렉터리가 아니면 루트의 `HEAD` 를 만들지 못한다 — `.git` 없는 루트를 bare 꼴로
+/// 만들면 사용자 git 이 루트의 config 를 읽었다(리뷰 R2). `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
+/// 지우기는 막지 않는다. FS 를 보므로 관문 안에서 부른다.
 pub fn assert_git_path_allowed(
     guard: &GitGuard,
     abs: &str,
@@ -282,6 +308,7 @@ pub fn assert_git_path_allowed(
 ) -> Result<(), String> {
     let r = fold_case(&resolve_real(abs)?);
     let lex = fold_case(&join(&[&resolve_real(&dirname(abs))?, &basename(abs)]));
+    let root = fold_case(&guard.root);
     let mut dirs = vec![fold_case(&join(&[&guard.root, ".git"]))];
     let mut parent_rename = false;
     for git in &guard.dirs {
@@ -293,7 +320,9 @@ pub fn assert_git_path_allowed(
     let denied = dirs
         .iter()
         .any(|d| denied_under(&r, d, del) || denied_under(&lex, d, del));
-    if denied || parent_rename || is_worktree_git(&r) || is_worktree_git(&lex) {
+    let head = join(&[&root, "head"]);
+    let root_head = !del && !dirs.contains(&root) && (r == head || lex == head);
+    if denied || root_head || parent_rename || is_worktree_git(&r) || is_worktree_git(&lex) {
         return Err(format!(
             "{GIT_PATH_DENIED_PREFIX}{}",
             rel.unwrap_or("undefined")

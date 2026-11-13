@@ -11,7 +11,8 @@ use std::fs;
 
 use serde_json::Value;
 
-use crate::constants::TEST_RUNNER_PROBE_TIMEOUT_MS;
+use crate::constants::{MAX_BUFFER, TEST_RUNNER_PROBE_TIMEOUT_MS};
+use crate::git_trust::read_regular_file;
 use crate::node_path;
 use crate::timed_fs::FsGate;
 use crate::tool_env::ToolEnv;
@@ -25,11 +26,10 @@ fn exists(p: &str) -> bool {
     fs::metadata(p).is_ok()
 }
 
-/// `readFileSync(p, 'utf8')` — 깨진 바이트는 U+FFFD.
+/// 표식 파일 읽기 — 일반 파일만·MAX_BUFFER 이하만(FIFO 면 읽기가 멈췄다, 리뷰 R5). 그 밖(심링크·FIFO·큰 파일·없음)은
+/// "표식 없음". 깨진 바이트는 U+FFFD(TS `readMarker`).
 fn read_lossy(p: &str) -> Option<String> {
-    fs::read(p)
-        .ok()
-        .map(|b| String::from_utf8_lossy(&b).into_owned())
+    read_regular_file(p, MAX_BUFFER)
 }
 
 /// `/^node\b/` — `node` 다음 단위가 `[A-Za-z0-9_]` 가 아니거나 끝.
