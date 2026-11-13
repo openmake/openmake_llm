@@ -366,7 +366,26 @@
       ],
       "root": "repo",
       "steps": [
-        {"msg":{"kind":"worktree","op":"add","taskId":"wtsym003-task"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: .openmake/worktrees/wtsym003-task"}},
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtsym003-task"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: .openmake/worktrees/wtsym003-task"},"after":[{"absent":"outside/a.txt"},{"absent":"outside/.git"}]},
+        {"git":["branch","--list","--format=%(refname:short)","omk-task/*"],"cwd":"repo","stdout":""}
+      ]
+    },
+    {
+      "id": "add-inside-then-outside-chain",
+      "setup": [
+        {"dir":"repo"},
+        {"git":["init","-q"],"cwd":"repo"},
+        {"file":"repo/a.txt","content":"base\n"},
+        {"git":["add","."],"cwd":"repo"},
+        {"git":["commit","-q","-m","base"],"cwd":"repo"},
+        {"dir":"outside"},
+        {"dir":"repo/inner"},
+        {"symlink":"repo/.openmake","target":"{{TMP}}/repo/inner"},
+        {"symlink":"repo/inner/worktrees","target":"{{TMP}}/outside"}
+      ],
+      "root": "repo",
+      "steps": [
+        {"msg":{"kind":"worktree","op":"add","taskId":"wtsym009-chan"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: .openmake/worktrees"},"after":[{"absent":"outside/wtsym009-chan"}]},
         {"git":["branch","--list","--format=%(refname:short)","omk-task/*"],"cwd":"repo","stdout":""}
       ]
     },
