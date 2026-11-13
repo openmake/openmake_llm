@@ -109,7 +109,7 @@ describe('T1 — 파일 kind 는 HEAD 항목의 유무를 바꾸지 못한다(D-
         expect(statusRan(path.join(ws, userCwd), marker)).toBe(false);
     }, 30000);
 
-    it('HEAD 가 있는 폴더: HEAD 내용 쓰기는 되고 HEAD 지우기(대소문자 무관)는 거절, HEAD 를 품은 폴더째 지우기는 된다', async () => {
+    it('HEAD 가 있는 폴더: HEAD 내용 쓰기는 되고 HEAD 지우기(대소문자 무관)와 HEAD 를 품은 폴더째 지우기는 거절(6차 U1)', async () => {
         const root = path.join(tmp, 'plain');
         fs.mkdirSync(path.join(root, 'sub'), { recursive: true });
         fs.writeFileSync(path.join(root, 'sub', 'HEAD'), REF);
@@ -117,7 +117,7 @@ describe('T1 — 파일 kind 는 HEAD 항목의 유무를 바꾸지 못한다(D-
         expect(await run(core, write('sub/HEAD', 'ref: refs/heads/x\n'))).toEqual(ok);
         for (const p of ['sub/HEAD', 'sub/head']) expect(await run(core, del(p))).toEqual(denied(p));
         expect(fs.existsSync(path.join(root, 'sub', 'HEAD'))).toBe(true);
-        expect(await run(core, del('sub'))).toEqual(ok);
-        expect(fs.existsSync(path.join(root, 'sub'))).toBe(false);
+        expect(await run(core, del('sub'))).toEqual(denied('sub'));
+        expect(fs.existsSync(path.join(root, 'sub', 'HEAD'))).toBe(true);
     });
 });
