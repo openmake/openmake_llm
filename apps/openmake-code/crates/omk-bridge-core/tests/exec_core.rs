@@ -294,3 +294,140 @@ fn vanished_cwd_is_exit_code_one() {
         json!({"ok": true, "stdout": "", "stderr": "", "exitCode": 1})
     );
 }
+
+const SECRETS: [(&str, &str); 3] = [
+    ("OMK_COMPANION_API_KEY", "omk-conformance-secret-1"),
+    ("GITHUB_TOKEN", "omk-conformance-secret-2"),
+    ("OMK_BRIDGE_AUTO_APPROVE", "1"),
+];
+
+/// 자기 환경을 `<tmp>/<name>.env` 에 남기고 stdout 을 찍은 뒤 code 로 끝나는 가짜 실행 파일.
+fn fake(tmp: &TmpDir, name: &str, stdout: &str, code: i32) {
+    use std::os::unix::fs::PermissionsExt;
+    let p = tmp.join(&format!("bin/{name}"));
+    std::fs::create_dir_all(tmp.join("bin")).unwrap();
+    let env_file = tmp.join(&format!("{name}.env"));
+    std::fs::write(
+        &p,
+        format!("#!/bin/sh\n/usr/bin/env > '{env_file}'\nprintf '%s' '{stdout}'\nexit {code}\n"),
+    )
+    .unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+fn env_of(path: &str) -> Vec<(String, String)> {
+    std::fs::read_to_string(path)
+        .unwrap()
+        .lines()
+        .filter_map(|l| l.split_once('='))
+        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        .collect()
+}
+
+fn assert_no_secrets(env: &[(String, String)], home: &str, what: &str) {
+    for (k, _) in SECRETS {
+        assert!(!env.iter().any(|(e, _)| e == k), "{what}: {k} 가 넘어갔다");
+    }
+    assert!(
+        env.iter().any(|(k, v)| k == "HOME" && v == home),
+        "{what}: HOME"
+    );
+    assert!(env.iter().any(|(k, _)| k == "PATH"), "{what}: PATH");
+}
+
+/// 비밀을 심은 호스트 환경 — PATH 맨 앞에 가짜 실행 파일 폴더.
+fn secret_host(tmp: &TmpDir, confirm: ConfirmFn) -> ExecHost {
+    let mut h = host(tmp, confirm);
+    h.env.retain(|(k, _)| k != "PATH");
+    h.env.push((
+        "PATH".to_owned(),
+        format!("{}:/usr/bin:/bin", tmp.join("bin")),
+    ));
+    h.env
+        .extend(SECRETS.map(|(k, v)| (k.to_owned(), v.to_owned())));
+    h
+}
+
+/// worktree 의 git 자식 — 허용 목록 환경만(fixed-command-env.test.ts "worktree git").
+#[test]
+fn worktree_git_child_gets_no_secrets() {
+    let tmp = TmpDir::new();
+    fake(&tmp, "git", "", 1);
+    let c = bare(&tmp.path, None).with_exec_host(secret_host(&tmp, answer(ConfirmAnswer::No)));
+    let r = send(
+        &c,
+        json!({"kind": "worktree", "op": "add", "taskId": "secret-env-1"}),
+    );
+    assert_eq!(r["error"], "git 레포가 아닙니다");
+    assert_no_secrets(
+        &env_of(&tmp.join("git.env")),
+        &tmp.join("home"),
+        "worktree git",
+    );
+}
+
+/// 샌드박스 git 탐지 — 허용 목록 환경만(fixed-command-env.test.ts "샌드박스 git 탐지").
+#[test]
+fn sandbox_git_probe_child_gets_no_secrets() {
+    let tmp = TmpDir::new();
+    fake(&tmp, "git", "/some/repo/.git", 0);
+    let h = secret_host(&tmp, answer(ConfirmAnswer::No));
+    let got = runtime().block_on(omk_bridge_core::sandbox::detect_git_dir(
+        &tmp.path,
+        &h.env,
+        Platform::Darwin,
+    ));
+    assert_eq!(got.as_deref(), Some("/some/repo/.git"));
+    assert_no_secrets(&env_of(&tmp.join("git.env")), &tmp.join("home"), "git 탐지");
+}
+
+/// worktree add 가 실행하는 사용자 레포의 post-checkout 훅에도 비밀이 넘어가지 않는다.
+#[test]
+fn post_checkout_hook_gets_no_secrets() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = TmpDir::new();
+    let repo = tmp.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(&repo)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    };
+    git(&["init", "-q"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "init"]);
+    let hook = format!("{repo}/.git/hooks/post-checkout");
+    std::fs::write(
+        &hook,
+        format!("#!/bin/sh\n/usr/bin/env > '{}'\n", tmp.join("hook.env")),
+    )
+    .unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let mut h = secret_host(&tmp, answer(ConfirmAnswer::No));
+    h.env.retain(|(k, _)| k != "PATH");
+    h.env
+        .push(("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()));
+    let c = bare(&repo, None).with_exec_host(h);
+    let r = send(
+        &c,
+        json!({"kind": "worktree", "op": "add", "taskId": "abcdef12-hook"}),
+    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert_no_secrets(
+        &env_of(&tmp.join("hook.env")),
+        &tmp.join("home"),
+        "post-checkout 훅",
+    );
+}
