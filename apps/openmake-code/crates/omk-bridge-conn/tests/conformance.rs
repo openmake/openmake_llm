@@ -309,7 +309,16 @@ fn conn_notice_trim() {
 
 #[test]
 fn conn_notice_cases() {
-    panic!("미구현: conn-notice/cases");
+    let doc = load("conn-notice");
+    for c in doc["cases"].as_array().unwrap() {
+        let got = omk_bridge_conn::notice::parse_notice(&c["input"]).map(|n| n.to_json());
+        assert_eq!(
+            got.unwrap_or(Value::Null),
+            c["expect"],
+            "conn-notice/cases/{}",
+            c["id"]
+        );
+    }
 }
 
 #[test]
