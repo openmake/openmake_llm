@@ -244,17 +244,16 @@ impl Actor {
             };
             match ev {
                 Ev::Cmd(Cmd::Connect) => self.connect(),
-                Ev::Cmd(Cmd::Disconnect) => self.disconnect().await,
+                Ev::Cmd(Cmd::Disconnect) => self.disconnect(),
                 Ev::Cmd(Cmd::BrowserControl(user)) => {
-                    self.send(&frames::browser_control(user)).await;
+                    self.send(&frames::browser_control(user));
                 }
                 Ev::Done((req_id, ms, r)) => {
-                    self.send(&frames::result_envelope(req_id.as_ref(), ms, &r))
-                        .await;
+                    self.send(&frames::result_envelope(req_id.as_ref(), ms, &r));
                 }
                 Ev::Phase(PhaseEvent::Opened(Some(ws))) => self.opened(*ws),
                 Ev::Phase(PhaseEvent::Opened(None)) => self.on_close(ABNORMAL_CLOSE, ""),
-                Ev::Phase(PhaseEvent::Session(SessionEvent::Frame(v))) => self.on_frame(v).await,
+                Ev::Phase(PhaseEvent::Session(SessionEvent::Frame(v))) => self.on_frame(v),
                 Ev::Phase(PhaseEvent::Session(SessionEvent::Closed { code, reason })) => {
                     self.on_close(code, &reason);
                 }
@@ -277,12 +276,12 @@ impl Actor {
         folder_name_of(self.opts.core.folder_root()).to_owned()
     }
 
-    /// 열린 소켓으로 보낸다. 없거나 닫는 중이면 버린다.
-    async fn send(&mut self, v: &Value) {
+    /// 열린 소켓의 보낼 큐에 넣는다(기다리지 않는다 — 쓰기는 세션이 읽기·생존 확인과 함께 진행한다). 없거나 닫는 중이면 버린다.
+    fn send(&mut self, v: &Value) {
         if let Phase::Open(s) = &mut self.phase
             && !s.is_closing()
         {
-            s.send(v).await;
+            s.send(v);
         }
     }
 
@@ -348,14 +347,14 @@ impl Actor {
         )));
     }
 
-    async fn disconnect(&mut self) {
+    fn disconnect(&mut self) {
         self.closed = true;
         self.attempt = 0;
         core_hooks::on_disconnect(&self.opts.core);
         match std::mem::replace(&mut self.phase, Phase::Idle) {
             // 닫기 절차를 시작하고, 서버가 답하면 닫힘 처리에서 '종료' 를 알린다.
             Phase::Open(mut s) => {
-                s.start_close().await;
+                s.start_close();
                 self.phase = Phase::Open(s);
             }
             // 접속 중인 소켓을 닫으면 TS 는 닫힘 이벤트를 받아 '종료' 를 알린다.
@@ -365,7 +364,7 @@ impl Actor {
         }
     }
 
-    async fn on_frame(&mut self, v: Value) {
+    fn on_frame(&mut self, v: Value) {
         match frames::classify(&v) {
             ServerFrame::Ready => {
                 self.attempt = 0;
@@ -386,21 +385,20 @@ impl Actor {
                     f(&n);
                 }
             }
-            ServerFrame::Exec => self.exec(v).await,
+            ServerFrame::Exec => self.exec(v),
             ServerFrame::Ignored => {}
         }
     }
 
     /// 요청마다 태스크를 띄워 동시에 처리한다. 결과는 끝난 시점의 현재 소켓으로 간다.
-    async fn exec(&mut self, v: Value) {
+    fn exec(&mut self, v: Value) {
         let clock = self.opts.clock;
         let t0 = clock();
         let msg = BridgeMsg::from_json(&v);
         let req_id = v.get("reqId").cloned();
         if let Some(rejected) = self.guard.check(&msg, clock()) {
             let ms = clock().saturating_sub(t0);
-            self.send(&frames::result_envelope(req_id.as_ref(), ms, &rejected))
-                .await;
+            self.send(&frames::result_envelope(req_id.as_ref(), ms, &rejected));
             return;
         }
         let core = Arc::clone(&self.opts.core);
