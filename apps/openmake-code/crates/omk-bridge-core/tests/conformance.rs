@@ -1,6 +1,10 @@
 //! 적합성 fixture Rust 러너 — `packages/local-bridge-core/conformance/*.json` 을 TS 러너와 함께 통과해야 한다.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "conformance/code_nav.rs"]
+mod code_nav;
+#[path = "conformance/diagnostics.rs"]
+mod diagnostics;
 #[path = "conformance/exec_gate.rs"]
 mod exec_gate;
 #[path = "conformance/exec_path.rs"]
@@ -14,6 +18,8 @@ mod request_guard;
 #[path = "conformance/scope.rs"]
 mod scope;
 mod support;
+#[path = "conformance/test_runner.rs"]
+mod test_runner;
 #[path = "conformance/worktree.rs"]
 mod worktree;
 
@@ -26,17 +32,21 @@ const FIXTURE_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../../packages/local-bridge-core/conformance"
 );
-const KNOWN_SUITES: [&str; 11] = [
+const KNOWN_SUITES: [&str; 15] = [
+    "code-nav",
     "constants",
     "denylist",
+    "diagnostics-parse",
     "exec-env",
     "exec-gate",
     "exec-path",
     "file-kinds",
+    "glob",
     "platform",
     "request-guard",
     "sandbox-profile",
     "scope",
+    "test-runner",
     "worktree",
 ];
 
@@ -80,11 +90,16 @@ fn suites_are_all_known() {
 }
 
 /// 알려진 차이를 쓸 수 있는 자리(suite/묶음)와 그 자리의 이름 — conformance/README.md "알려진 차이".
-const DIVERGENCE_SITES: [(&str, &str); 4] = [
+const DIVERGENCE_SITES: [(&str, &str); 6] = [
     ("denylist/cases", KNOWN_DIVERGENCE),
     ("file-kinds/cases/requests", file_kinds::NON_STRING_FIELD),
     ("exec-gate/cases/steps", file_kinds::NON_STRING_FIELD),
     ("worktree/cases/steps", file_kinds::NON_STRING_FIELD),
+    ("code-nav/cases/requests", file_kinds::NON_STRING_FIELD),
+    (
+        "diagnostics-parse/cases/requests",
+        file_kinds::NON_STRING_FIELD,
+    ),
 ];
 
 /// 배열 안 사례 id 는 겹치지 않는다. `divergence`·`rustExpect` 는 정해진 자리에만 쓴다.
@@ -344,6 +359,31 @@ fn constants() {
     );
     seen.extend(["PATH_PROBE_TIMEOUT_MS", "GIT_PROBE_TIMEOUT_MS"]);
     seen.extend(["WORKTREE_DIR", "WORKTREE_BRANCH_PREFIX"]);
+    // 읽기 전용 도구 (PR-1.4) — 두 시간 제한은 기본값(TS 는 환경 변수가 없을 때의 값).
+    let tools: [(&str, u64); 12] = [
+        ("CODE_NAV_TIMEOUT_MS", c::CODE_NAV_TIMEOUT_MS),
+        ("CODE_NAV_MAX_FILES", c::CODE_NAV_MAX_FILES as u64),
+        ("CODE_NAV_MAX_FILE_BYTES", c::CODE_NAV_MAX_FILE_BYTES),
+        ("CODE_NAV_MAX_MATCHES", c::CODE_NAV_MAX_MATCHES as u64),
+        ("CODE_NAV_MAX_PER_FILE", c::CODE_NAV_MAX_PER_FILE as u64),
+        ("CODE_NAV_LINE_MAX_CHARS", c::CODE_NAV_LINE_MAX_CHARS as u64),
+        (
+            "CODE_NAV_PATTERN_MAX_CHARS",
+            c::CODE_NAV_PATTERN_MAX_CHARS as u64,
+        ),
+        ("DIAG_TIMEOUT_MS", c::DIAG_TIMEOUT_MS),
+        ("DIAG_MAX_PER_FILE", c::DIAG_MAX_PER_FILE as u64),
+        ("DIAG_MAX_TOTAL", c::DIAG_MAX_TOTAL as u64),
+        ("DIAG_MSG_MAX", c::DIAG_MSG_MAX as u64),
+        (
+            "TEST_RUNNER_PROBE_TIMEOUT_MS",
+            c::TEST_RUNNER_PROBE_TIMEOUT_MS,
+        ),
+    ];
+    for (name, ours) in tools {
+        assert_eq!(values[name], ours, "constants/{name}");
+        seen.push(name);
+    }
     let mut fixture_keys: Vec<&str> = values.keys().map(String::as_str).collect();
     fixture_keys.sort_unstable();
     seen.sort_unstable();

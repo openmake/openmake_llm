@@ -1,0 +1,258 @@
+{
+  "suite": "glob",
+  "version": 1,
+  "cases": [
+    {
+      "id": "star-ext",
+      "glob": "*.ts",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"a.ts","expect":true},
+        {"text":"a.tsx","expect":false},
+        {"text":".ts","expect":true},
+        {"text":"a/b.ts","expect":false},
+        {"text":"","expect":false},
+        {"text":"n\nx.ts","expect":true}
+      ]
+    },
+    {
+      "id": "dir-star",
+      "glob": "src/*.ts",
+      "basenameOnly": false,
+      "tests": [
+        {"text":"src/a.ts","expect":true},
+        {"text":"src/x/a.ts","expect":false},
+        {"text":"a.ts","expect":false}
+      ]
+    },
+    {
+      "id": "dir-dstar",
+      "glob": "src/**/*.ts",
+      "basenameOnly": false,
+      "tests": [
+        {"text":"src/a.ts","expect":true},
+        {"text":"src/x/y/a.ts","expect":true},
+        {"text":"srcx/a.ts","expect":false},
+        {"text":"src/a.js","expect":false},
+        {"text":"src/\n/a.ts","expect":false}
+      ]
+    },
+    {
+      "id": "dstar-only",
+      "glob": "**",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"","expect":true},
+        {"text":"a/b/c","expect":true},
+        {"text":"a\nb","expect":false},
+        {"text":"a\rb","expect":false},
+        {"text":"a b","expect":false},
+        {"text":"a b","expect":false},
+        {"text":"ab","expect":true}
+      ]
+    },
+    {
+      "id": "dstar-inner",
+      "glob": "a**b",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"ab","expect":true},
+        {"text":"a/x/b","expect":true},
+        {"text":"a\nb","expect":false}
+      ]
+    },
+    {
+      "id": "triple-star",
+      "glob": "***",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"","expect":true},
+        {"text":"a/b","expect":true},
+        {"text":"a\n","expect":true},
+        {"text":"\n/a","expect":false}
+      ]
+    },
+    {
+      "id": "dstar-slash",
+      "glob": "a**/b",
+      "basenameOnly": false,
+      "tests": [
+        {"text":"ab","expect":true},
+        {"text":"a/x/b","expect":true},
+        {"text":"axb","expect":true},
+        {"text":"a/b/","expect":false}
+      ]
+    },
+    {
+      "id": "question",
+      "glob": "?",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"Ａ","expect":true},
+        {"text":"😀","expect":false},
+        {"text":"/","expect":false},
+        {"text":"","expect":false},
+        {"text":"ab","expect":false},
+        {"text":"\n","expect":true}
+      ]
+    },
+    {
+      "id": "question-two",
+      "glob": "??",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"😀","expect":true},
+        {"text":"ab","expect":true},
+        {"text":"a","expect":false}
+      ]
+    },
+    {
+      "id": "question-ext",
+      "glob": "?.txt",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"Ａ.txt","expect":true},
+        {"text":"😀.txt","expect":false},
+        {"text":"a.txt","expect":true}
+      ]
+    },
+    {
+      "id": "star-newline",
+      "glob": "n*",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"n\nx","expect":true},
+        {"text":"n/x","expect":false}
+      ]
+    },
+    {
+      "id": "lit-dot",
+      "glob": "a.b",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"a.b","expect":true},
+        {"text":"axb","expect":false}
+      ]
+    },
+    {
+      "id": "lit-plus",
+      "glob": "a+b",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"a+b","expect":true},
+        {"text":"aab","expect":false}
+      ]
+    },
+    {
+      "id": "lit-class",
+      "glob": "[ab]",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"[ab]","expect":true},
+        {"text":"a","expect":false}
+      ]
+    },
+    {
+      "id": "lit-brace",
+      "glob": "{a,b}",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"{a,b}","expect":true},
+        {"text":"a","expect":false}
+      ]
+    },
+    {
+      "id": "lit-paren",
+      "glob": "(x)",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"(x)","expect":true},
+        {"text":"x","expect":false}
+      ]
+    },
+    {
+      "id": "lit-pipe",
+      "glob": "a|b",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"a|b","expect":true},
+        {"text":"a","expect":false},
+        {"text":"b","expect":false}
+      ]
+    },
+    {
+      "id": "lit-anchor",
+      "glob": "^a$",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"^a$","expect":true},
+        {"text":"a","expect":false}
+      ]
+    },
+    {
+      "id": "lit-backslash",
+      "glob": "a\\b",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"a\\b","expect":true},
+        {"text":"ab","expect":false},
+        {"text":"a\b","expect":false}
+      ]
+    },
+    {
+      "id": "lit-dollar-brace",
+      "glob": "$x}",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"$x}","expect":true}
+      ]
+    },
+    {
+      "id": "empty",
+      "glob": "",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"","expect":true},
+        {"text":"a","expect":false}
+      ]
+    },
+    {
+      "id": "hangul",
+      "glob": "한*.ts",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"한글.ts","expect":true},
+        {"text":"글.ts","expect":false}
+      ]
+    },
+    {
+      "id": "case-sensitive",
+      "glob": "*.TS",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"a.ts","expect":false},
+        {"text":"a.TS","expect":true}
+      ]
+    },
+    {
+      "id": "astral-literal",
+      "glob": "😀*",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"😀a","expect":true},
+        {"text":"😎a","expect":false}
+      ]
+    },
+    {
+      "id": "many-stars",
+      "glob": "*a*a*a*b",
+      "basenameOnly": true,
+      "tests": [
+        {"text":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","expect":false},
+        {"text":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab","expect":true},
+        {"text":"aaab","expect":true},
+        {"text":"aab","expect":false}
+      ]
+    }
+  ]
+}

@@ -37,9 +37,14 @@ pub fn utf16_prefix(s: &str, n: usize) -> &str {
     s
 }
 
+/// JS `Array.prototype.sort` 기본 비교(문자열) — UTF-16 단위 순서. 바이트순과 다르다(U+E000 이상 BMP 글자가 보충 문자 뒤).
+pub fn utf16_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    a.encode_utf16().cmp(b.encode_utf16())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{is_js_whitespace, js_trim, utf16_prefix};
+    use super::{is_js_whitespace, js_trim, utf16_cmp, utf16_prefix};
 
     /// Node 24.22.2 실측: `("a" + String.fromCharCode(c)).trim() === "a"` 인 코드 단위.
     const NODE_WS: [u32; 25] = [
@@ -70,5 +75,20 @@ mod tests {
         assert_eq!(utf16_prefix("😀abc", 1), "");
         assert_eq!(utf16_prefix("😀abc", 2), "😀");
         assert_eq!(utf16_prefix("x", 0), "");
+    }
+
+    /// 기대값은 Node 24.22.2 `[...].sort()` 실행 결과다.
+    #[test]
+    fn utf16_order_matches_node_sort() {
+        let mut v = vec![
+            "Ａ.txt", "😀.txt", "b", "B", "가", "", "a", "ab", "a-b", "a/b", "a.txt", "\u{ffff}",
+            "\u{d7ff}", "_", "~",
+        ];
+        v.sort_by(|a, b| utf16_cmp(a, b));
+        let want = [
+            "", "B", "_", "a", "a-b", "a.txt", "a/b", "ab", "b", "~", "가", "\u{d7ff}", "😀.txt",
+            "Ａ.txt", "\u{ffff}",
+        ];
+        assert_eq!(v, want);
     }
 }
