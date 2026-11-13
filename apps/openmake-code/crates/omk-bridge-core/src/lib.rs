@@ -30,3 +30,4 @@ pub mod glob;
 pub mod js_regex;
 pub mod test_runner;
 pub mod tool_env;
+pub mod tool_output;
