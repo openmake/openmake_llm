@@ -1,0 +1,455 @@
+{
+  "suite": "test-runner",
+  "version": 1,
+  "cases": [
+    {
+      "id": "empty",
+      "setup": [
+        {"dir":"root"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"test_runner"},"expect":{"ok":true,"testRunner":"none"}},
+        {"msg":{"kind":"test_runner","path":"."},"expect":{"ok":true,"testRunner":"none"}},
+        {"msg":{"kind":"test_runner","path":"nope"},"expect":{"ok":true,"testRunner":"none"}},
+        {"msg":{"kind":"test_runner","path":""},"expect":{"ok":true,"testRunner":"none"}}
+      ]
+    },
+    {
+      "id": "npm",
+      "setup": [
+        {"file":"root/package.json","content":"{\"scripts\":{\"test\":\"jest\"}}"},
+        {"dir":"root/node_modules"},
+        {"file":"root/sub/package.json","content":"{\"scripts\":{\"test\":\"node t.js\"}}"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"test_runner"},"expect":{"ok":true,"testRunner":"npm"}},
+        {"msg":{"kind":"test_runner","path":"sub"},"expect":{"ok":true,"testRunner":"npm"}},
+        {"msg":{"kind":"test_runner","path":"sub/package.json"},"expect":{"ok":true,"testRunner":"none"}}
+      ]
+    },
+    {
+      "id": "scope",
+      "setup": [
+        {"dir":"root"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"test_runner","path":"../x"},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../x"}},
+        {"msg":{"kind":"test_runner","folder":"../x"},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../x"}},
+        {"msg":{"kind":"test_runner","folder":"nope"},"expect":{"ok":false,"error":"실행 폴더가 존재하지 않습니다: nope"}}
+      ]
+    }
+  ],
+  "direct": [
+    {
+      "id": "npm-node-no-modules",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node x.js\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "npm"
+    },
+    {
+      "id": "npm-node-exact",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "npm"
+    },
+    {
+      "id": "npm-node-tab",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node\\t-e 1\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "npm"
+    },
+    {
+      "id": "npm-node-dash",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node-gyp test\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "npm"
+    },
+    {
+      "id": "npm-nodemon",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"nodemon x\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-node-underscore",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node_x\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-space-node",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\" node x\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-jest-modules",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"jest\"}}"},
+        {"dir":"d/node_modules"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "npm"
+    },
+    {
+      "id": "npm-jest-no-modules",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"jest\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-modules-file",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"jest\"}}"},
+        {"file":"d/node_modules","content":"x"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "npm"
+    },
+    {
+      "id": "npm-placeholder",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"echo \\\"Error: no test specified\\\" && exit 1\"}}"},
+        {"dir":"d/node_modules"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-empty-script",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"\"}}"},
+        {"dir":"d/node_modules"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-number-script",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":5}}"},
+        {"dir":"d/node_modules"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-scripts-array",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":[\"test\"]}"},
+        {"dir":"d/node_modules"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-null-top",
+      "setup": [
+        {"file":"d/package.json","content":"null"},
+        {"dir":"d/node_modules"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-array-top",
+      "setup": [
+        {"file":"d/package.json","content":"[1]"},
+        {"dir":"d/node_modules"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-broken-json",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\": {"},
+        {"dir":"d/node_modules"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-bom",
+      "setup": [
+        {"file":"d/package.json","content":"﻿{\"scripts\":{\"test\":\"node x\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "npm-duplicate-key",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"echo no test specified\",\"test\":\"node t.js\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "npm"
+    },
+    {
+      "id": "npm-unicode-escape",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"\\u006eode x\"}}"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "npm"
+    },
+    {
+      "id": "npm-dir-package",
+      "setup": [
+        {"dir":"d/package.json"},
+        {"dir":"d/node_modules"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "pytest-ini",
+      "setup": [
+        {"file":"d/pytest.ini","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "pytest",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "pytest-conftest",
+      "setup": [
+        {"file":"d/conftest.py","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "pytest"
+    },
+    {
+      "id": "pytest-pyproject",
+      "setup": [
+        {"file":"d/pyproject.toml","content":"[tool.pytest.ini_options]\n"},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "pytest"
+    },
+    {
+      "id": "pytest-pyproject-other",
+      "setup": [
+        {"file":"d/pyproject.toml","content":"[tool.black]\n"},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none",
+      "toolCalls": []
+    },
+    {
+      "id": "pytest-setup-cfg",
+      "setup": [
+        {"file":"d/setup.cfg","content":"[tool:pytest]\n"},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "pytest"
+    },
+    {
+      "id": "pytest-tests-dir",
+      "setup": [
+        {"dir":"d/tests"},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "pytest"
+    },
+    {
+      "id": "pytest-tests-file",
+      "setup": [
+        {"file":"d/tests","content":"x"},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none",
+      "toolCalls": []
+    },
+    {
+      "id": "pytest-test-file",
+      "setup": [
+        {"file":"d/test_x.py","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "pytest"
+    },
+    {
+      "id": "pytest-test-underscore",
+      "setup": [
+        {"file":"d/test_.py","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "pytest"
+    },
+    {
+      "id": "pytest-not-test-files",
+      "setup": [
+        {"file":"d/test_x.pyc","content":""},
+        {"file":"d/xtest_a.py","content":""},
+        {"file":"d/Test_a.py","content":""},
+        {"file":"d/test_a.PY","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none",
+      "toolCalls": []
+    },
+    {
+      "id": "pytest-test-dir-named",
+      "setup": [
+        {"dir":"d/test_a.py"},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "pytest"
+    },
+    {
+      "id": "pytest-import-fails",
+      "setup": [
+        {"file":"d/pytest.ini","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":1,"record":"python3"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "pytest-no-python",
+      "setup": [
+        {"file":"d/pytest.ini","content":""},
+        {"dir":"bin"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none",
+      "toolCalls": []
+    },
+    {
+      "id": "go-found",
+      "setup": [
+        {"file":"d/go.mod","content":"module x\n"},
+        {"fakeTool":"bin/go","stdout":"","stderr":"","exit":0,"record":"go"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "go"
+    },
+    {
+      "id": "go-missing",
+      "setup": [
+        {"file":"d/go.mod","content":"module x\n"},
+        {"dir":"bin"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "go-no-mod",
+      "setup": [
+        {"fakeTool":"bin/go","stdout":"","stderr":"","exit":0,"record":"go"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    },
+    {
+      "id": "go-dir-on-path",
+      "setup": [
+        {"file":"d/go.mod","content":"module x\n"},
+        {"dir":"bin/go"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "go"
+    },
+    {
+      "id": "go-empty-segments",
+      "setup": [
+        {"file":"d/go.mod","content":"module x\n"},
+        {"fakeTool":"bin/go","stdout":"","stderr":"","exit":0,"record":"go"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"::{{BIN}}:"},
+      "expect": "go"
+    },
+    {
+      "id": "go-second-dir",
+      "setup": [
+        {"file":"d/go.mod","content":"module x\n"},
+        {"fakeTool":"bin2/go","stdout":"","stderr":"","exit":0,"record":"go"},
+        {"dir":"bin"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}:{{TMP}}/bin2"},
+      "expect": "go"
+    },
+    {
+      "id": "order-npm-first",
+      "setup": [
+        {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node t\"}}"},
+        {"file":"d/pytest.ini","content":""},
+        {"file":"d/go.mod","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"},
+        {"fakeTool":"bin/go","stdout":"","stderr":"","exit":0,"record":"go"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "npm",
+      "toolCalls": []
+    },
+    {
+      "id": "order-pytest-then-go",
+      "setup": [
+        {"file":"d/pytest.ini","content":""},
+        {"file":"d/go.mod","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":1,"record":"python3"},
+        {"fakeTool":"bin/go","stdout":"","stderr":"","exit":0,"record":"go"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "go",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
+    },
+    {
+      "id": "order-pytest-over-go",
+      "setup": [
+        {"file":"d/conftest.py","content":""},
+        {"file":"d/go.mod","content":""},
+        {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"},
+        {"fakeTool":"bin/go","stdout":"","stderr":"","exit":0,"record":"go"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "pytest"
+    },
+    {
+      "id": "missing-dir",
+      "setup": [
+        {"dir":"bin"}
+      ],
+      "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
+      "expect": "none"
+    }
+  ]
+}
