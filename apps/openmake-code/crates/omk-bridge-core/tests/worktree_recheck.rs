@@ -1,6 +1,7 @@
 //! worktree — `git worktree add`·`worktree remove` 바로 앞 재검사(TS `worktree.test.ts` 의 같은 사례).
 //! 요청 첫머리 검사와 그 git 사이에 git 3회가 낀다 — 그 사이에 `.openmake` 를 폴더 밖 심링크로 바꾸면 밖에 만들고
-//! 지울 수 있다. 가짜 git 이 마지막 `rev-parse --absolute-git-dir` 때 한 번 바꿔 그 틈을 흉내 낸다.
+//! 지울 수 있다. 가짜 git 이 첫 `rev-parse --absolute-git-dir`(git 디렉터리 대조) 때 한 번 바꿔 그 틈을 흉내 낸다.
+//! 앞 네 인자는 고정 인자(`-c core.fsmonitor=false -c core.hooksPath=/dev/null`)다.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -39,7 +40,7 @@ fn setup(tmp: &TmpDir) -> BridgeCore {
     let real = String::from_utf8(real.stdout).unwrap().trim().to_owned();
     let swap = tmp.join("swap.sh");
     let script = format!(
-        "#!/bin/sh\nif [ \"$1\" = rev-parse ] && [ \"$2\" = --absolute-git-dir ] && [ -e '{swap}' ]; then sh '{swap}'; rm -f '{swap}'; fi\nexec '{real}' \"$@\"\n"
+        "#!/bin/sh\nif [ \"$5\" = rev-parse ] && [ \"$6\" = --absolute-git-dir ] && [ -e '{swap}' ]; then sh '{swap}'; rm -f '{swap}'; fi\nexec '{real}' \"$@\"\n"
     );
     let git = tmp.join("bin/git");
     std::fs::write(&git, script).unwrap();
@@ -66,7 +67,9 @@ fn setup(tmp: &TmpDir) -> BridgeCore {
         fs_timeout_ms: 15_000,
         on_task_end: None,
     };
-    BridgeCore::new(opts).unwrap().with_exec_host(host)
+    let core = BridgeCore::new(opts).unwrap().with_exec_host(host);
+    runtime().block_on(core.prepare()); // 연결 — git 디렉터리 신뢰 판정(바꿔치기 대본은 아직 없다)
+    core
 }
 
 fn send(rt: &tokio::runtime::Runtime, core: &BridgeCore, op: &str) -> Value {

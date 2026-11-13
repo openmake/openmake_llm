@@ -89,11 +89,16 @@ fn every_connect_prepares_core_before_socket() {
             .await;
         seen_at_open.lock().unwrap().push(profiles(&prof));
         rec.until("연결됨", |r| r.has_code("connected")).await;
+        // exec·도구 프로파일 두 개(설계 2026-11-14 D-1).
         let first = profiles(&prof);
-        assert_eq!(first.len(), 1, "{first:?}");
-        assert!(first[0].starts_with(&format!("omk-exec-sandbox-{}-", std::process::id())));
+        assert_eq!(first.len(), 2, "{first:?}");
+        let pid = std::process::id();
+        assert!(first[0].starts_with(&format!("omk-exec-sandbox-{pid}-")));
+        assert!(first[1].starts_with(&format!("omk-tool-sandbox-{pid}-")));
         // 지운 뒤 끊으면 재연결의 prepare 가 같은 이름으로 다시 쓴다.
-        std::fs::remove_file(format!("{prof}/{}", first[0])).unwrap();
+        for f in &first {
+            std::fs::remove_file(format!("{prof}/{f}")).unwrap();
+        }
         e.server.drop_all();
         e.server
             .state
@@ -106,7 +111,7 @@ fn every_connect_prepares_core_before_socket() {
     let at_open = seen_at_open.lock().unwrap().clone();
     assert_eq!(
         at_open.iter().map(Vec::len).collect::<Vec<_>>(),
-        [1, 1],
+        [2, 2],
         "소켓을 열 때 이미 준비돼 있어야 한다"
     );
     assert_eq!(

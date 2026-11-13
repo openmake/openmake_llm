@@ -5,6 +5,7 @@ use crate::constants::{MAX_BUFFER, SANDBOX_BIN};
 use crate::exec::FAIL_CLOSED;
 use crate::exec_env::build_exec_env;
 use crate::exec_path::env_get;
+use crate::msg::BridgeResult;
 use crate::node_path;
 use crate::platform::{Platform, path_list_separator};
 use crate::proc::{self, ProcOutput, ProcSpec, Stderr, Stdin};
@@ -12,7 +13,17 @@ use crate::proc::{self, ProcOutput, ProcSpec, Stderr, Stdin};
 /// exec 호스트가 없는 코어의 거절 — worktree(D-38)와 같은 문구·같은 이유(자식에 줄 환경 사본이 없다).
 pub(crate) const NO_HOST: &str = "exec 호스트가 설정되지 않았습니다";
 
-/// 자식을 감쌀 샌드박스 — 꺼짐, exec 와 같은 프로파일, 켜졌는데 프로파일이 없음(fail-closed).
+/// 도구 실패 — 샌드박스 거절(프로파일 없음·sandbox-exec 자체 실패)은 exec 와 같은 모양(문구 + exitCode 126).
+/// lsp_diagnostics·test_runner·worktree 가 쓴다.
+pub(crate) fn tool_failure(error: String) -> BridgeResult {
+    let refused = error == FAIL_CLOSED;
+    BridgeResult {
+        exit_code: refused.then_some(126),
+        ..BridgeResult::failure(error)
+    }
+}
+
+/// 자식을 감쌀 샌드박스 — 꺼짐, 도구 프로파일(exec 프로파일 + 네트워크 차단, 설계 2026-11-14 D-1), 켜졌는데 프로파일이 없음(fail-closed).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ToolSandbox {
     Off,
@@ -41,7 +52,7 @@ impl ToolEnv {
             .unwrap_or("")
     }
 
-    /// 자식 하나 — 인자·cwd·환경은 TS 와 같고, 샌드박스가 켜졌으면 `sandbox-exec -f <프로파일>` 앞머리만 더한다
+    /// 자식 하나 — 인자·cwd·환경은 TS 와 같고, 샌드박스가 켜졌으면 `sandbox-exec -f <도구 프로파일>` 앞머리만 더한다
     /// (셸을 거치지 않는다). 프로파일이 없으면 exec 와 같은 fail-closed 문구로 거절한다 — 띄워야 할 때만 부른다.
     pub fn spec(
         &self,

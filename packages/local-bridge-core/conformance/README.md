@@ -37,13 +37,13 @@
 | `denylist.json` | `rules`(규칙 표) · `normalize`(차단 전 정리) · `cases`(판정) |
 | `exec-env.json` | exec 자식 환경 조립. 결과는 순서 없는 맵으로 비교한다 |
 | `platform.json` | 셸 호출·PATH 구분자·폴더 이름·일괄 승인 가능 여부 |
-| `sandbox-profile.json` | macOS sandbox-exec 프로파일 텍스트(바이트 단위 일치) |
+| `sandbox-profile.json` | macOS sandbox-exec 프로파일 텍스트(바이트 단위 일치). 입력 `{root, gitDir, commonDir?, tool?}` — `commonDir` 를 적지 않으면 `gitDir` 와 같고(일반 레포), `tool: true` 는 확인 없이 뜨는 자식용 도구 프로파일(exec 프로파일 + `(deny network*)`, git 금지 줄은 그 뒤 맨 끝) |
 | `scope.json` | `nodePath`(Node `path.posix` 의 `resolve`·`dirname`·`relative`) · `lexical`(어휘 스코프 검사 — TS 러너는 FS 를 항등으로 바꾼 `safeFromAsync`) · `fs`(심링크·dangling·최근접 조상) |
 | `file-kinds.json` | `cases`(파일 kind·`folder` 필드·디스패처) · `timeout`(시간 초과 문구) · `fsTimeoutEnv`(`OMK_BRIDGE_FS_TIMEOUT_MS` 해석) |
 | `request-guard.json` | 요청 만료·중복 판정. 사례마다 새 guard 에 `steps` 를 순서대로 넣는다. `{"fill": {prefix, from, count}}` 은 그 수만큼 통과해야 한다 |
 | `exec-gate.json` | `cases`(차단 → 확인 → 실행, 거부 불변식, 일괄 승인·회수, 실행 결과, `command`·`folder` 필드) · `sandboxEnabled` · `autoApproveEnv` · `failClosed` |
 | `exec-path.json` | `resolve`(로그인 셸·프로세스 PATH·고정 4곳·mise 병합, 자식 환경·cwd — 가짜 실행 파일) · `win32` |
-| `worktree.json` | `cases`(`add`·`diff`·`remove`·모르는 op, `.openmake`·`worktrees`·`<taskId>`·worktree 안 하위 폴더가 폴더 밖 심링크일 때의 거부 — 안쪽 심링크는 허용. `.git/info`·`info/exclude` 가 gitDir 밖 심링크면 제외 등록만 건너뛴다) · `taskId`(형식) · `gitDir`(샌드박스용 git 디렉터리 탐지) · `taskIdPattern`(TS `TASK_ID_RE` 의 source·flags) |
+| `worktree.json` | `cases`(`add`·`diff`·`remove`·모르는 op, `.openmake`·`worktrees`·`<taskId>`·worktree 안 하위 폴더가 폴더 밖 심링크일 때의 거부 — 안쪽 심링크는 허용. `.git/info`·`info/exclude` 가 심링크면(git 디렉터리 안쪽을 가리켜도) 제외 등록만 건너뛴다. worktree 연산 직전 git 디렉터리 대조 — 다르면 git 을 띄우지 않고 거절. 실패한 add 의 정리. git 금지 경로를 지키는 파일 kind `write`·`delete` 단계) · `taskId`(형식) · `gitDir`(연결 때의 git 디렉터리 신뢰 판정 — 믿는 네 배치는 `{git: {gitDir, commonDir}}`, 그 밖은 `{git: null}`) · `taskIdPattern`(TS `TASK_ID_RE` 의 source·flags) |
 | `glob.json` | `cases`(글롭 → 판정: `basenameOnly` 와 `tests`(이름마다 맞는지)) — TS `globToRegExp`, Rust `Glob` |
 | `code-nav.json` | `cases`(코어 경유 `code_nav` grep·files) · `walk`(`walkFiles` 직접, 예산 지남/먼 시각) · `secretFiles`(민감 이름 판정) · `excludedFiles`·`excludedDirs`(표 — 순서까지) |
 | `diagnostics-parse.json` | `cases`(코어 경유 `lsp_diagnostics` — PATH 와 무관한 사례) · `direct`(`collectDiagnostics` 직접, PATH = `{{BIN}}`, 가짜 tsc·python3) |
@@ -53,9 +53,9 @@
 
 - 사례마다 `{{TMP}}/home` 을 가짜 홈으로 만든다 — `{{HOME}}` 은 그 경로, `{{BIN}}` 은 `{{TMP}}/bin`. 러너가 주는 환경: 러너 프로세스의 `PATH`, `HOME`, `SHELL=/bin/sh`, `LANG=C` + 가짜 비밀 `OMK_COMPANION_API_KEY`·`GITHUB_TOKEN`·`OMK_BRIDGE_AUTO_APPROVE=0`(자식에 넘어가지 않는 것만 본다). TS 러너는 `process.env` 를 사례 동안 바꿨다가 되돌리고, jest 의 환경 사본 때문에 `os.homedir()` 를 `HOME` 을 따르게 모의한다. Rust 러너는 `ExecHost` 로 넘긴다.
 - setup 종류 추가: `{"symlink", "target"}`(위 `scope.fs` 와 같다) · `{"git": [...], "cwd": "repo"}`(격리된 git — 사용자·시스템 설정 없음, 작성자·날짜 고정, `init.defaultBranch=main`) · `{"file": …, "repeat": {"line", "count"}}`(그 줄을 count 번).
-- `steps` 의 요청 단계: `exec-gate` 는 `{msg, confirm?, asked, askedWith?, expect, compare?, after?, autoApproved}` — `confirm` 은 물음이 오면 줄 답, `asked` 는 물음이 왔는지(오지 않아야 하는데 오거나 그 반대면 실패), `autoApproved` 는 단계 뒤 일괄 승인 수. `{"clearAutoApprove": true, "autoApproved": n}` 은 연결 해제 흉내, `{"parallel": [요청…], "answerOrder": [...], "autoApproved": n}` 은 요청을 함께 보내 물음이 다 모인 뒤 그 차례로 답한다(물음은 명령 글자로 짝짓는다 — 명령이 겹치면 실패). 사례의 `changes` 는 변화 알림마다의 일괄 승인 수. `worktree` 는 `{msg, expect, compare?, after?}` 와 요청이 아닌 단계 `{"git", "cwd", "stdout"?}`·`{"file", "content"|"repeat"}`·`{"remove"}`·`{"symlink", "target"}`.
+- `steps` 의 요청 단계: `exec-gate` 는 `{msg, confirm?, asked, askedWith?, expect, compare?, after?, autoApproved}` — `confirm` 은 물음이 오면 줄 답, `asked` 는 물음이 왔는지(오지 않아야 하는데 오거나 그 반대면 실패), `autoApproved` 는 단계 뒤 일괄 승인 수. `{"clearAutoApprove": true, "autoApproved": n}` 은 연결 해제 흉내, `{"parallel": [요청…], "answerOrder": [...], "autoApproved": n}` 은 요청을 함께 보내 물음이 다 모인 뒤 그 차례로 답한다(물음은 명령 글자로 짝짓는다 — 명령이 겹치면 실패). 사례의 `changes` 는 변화 알림마다의 일괄 승인 수. `worktree` 는 `{msg, expect, compare?, after?}`(`msg.kind` 는 `worktree`·`write`·`delete` 만 — 러너가 사례마다 코어를 `prepare` 한다) 와 요청이 아닌 단계 `{"git", "cwd", "stdout"?}`·`{"file", "content"|"repeat"}`·`{"remove"}`·`{"symlink", "target"}`.
 - `compare`: `no-stderr`(stderr 를 빼고) · `stdout-length`(`stdoutLength` — UTF-16 길이) · `stdout-lines`(`stdoutHas`·`stdoutLacks` — 그 글자로 시작하는 줄이 있다/없다) · `stdout-contains`(`stdoutContains`·`stdoutLacks`) · `error-prefix`(`errorPrefix`). `after` 에 `{"fileHas", "line", "count"}`(그 줄이 정확히 count 번)를 더 쓸 수 있다.
-- 샌드박스: Rust 러너는 macOS 에서 켜고(실제 `sandbox-exec`), TS 러너는 그 OS 의 값대로 돈다. 사례 폴더는 프로파일이 쓰기를 열어 둔 임시 폴더라 `cases` 는 켜도 꺼도 결과가 같은 명령만 담는다 — 샌드박스가 막는 것은 Rust `tests/exec_sandbox.rs` 가 본다.
+- 샌드박스: Rust 러너는 macOS 에서 켜고(실제 `sandbox-exec`), TS 러너는 그 OS 의 값대로 돈다. 사례 폴더는 프로파일이 쓰기를 열어 둔 임시 폴더라 `cases` 는 켜도 꺼도 결과가 같은 명령만 담는다 — 샌드박스가 막는 것은 Rust `tests/exec_sandbox.rs`·`tests/git_sandbox.rs`, TS `git-sandbox.test.ts` 가 본다(작업 폴더를 열어 둔 경로 밖에 둔다).
 
 ### 읽기 전용 도구 suite (`glob`·`code-nav`·`diagnostics-parse`·`test-runner`)
 
@@ -98,7 +98,7 @@ Rust 는 차단 패턴을 ECMAScript 정규식 크레이트 `regress` 로 컴파
 - exec 의 시간 초과·출력 상한: TS 는 직접 자식에 SIGTERM, Rust 는 SIGKILL(D-31). 시간 초과 때 직접 자식이 아직 살아 있으면 서버가 받는 결과는 같다(`exitCode 1` + 그때까지의 출력). 직접 자식은 이미 끝났는데 뒤에 남긴 프로세스가 파이프를 쥐어 시간 초과가 되면 두 구현 모두 그 자식의 종료 코드와 그때까지의 출력을 낸다(`sleep 300 & echo fg` → `exitCode 0`·`fg\n`, `…; exit 3` → 3 — Node `execFile` 그대로, worktree 의 git 도 같다. `execFileSync` 인 PATH·git 탐지는 두 구현 모두 실패). 시간에 기대 fixture 대신 Rust `tests/exec_proc.rs`·`tests/exec_core.rs` 가 본다. 출력 상한은 언제나 1 이다. 다른 것은 TERM 을 받아 스스로 정리하던 자식이 정리 없이 끝나는 것, 그리고 TERM 을 무시하는 명령(`trap '' TERM; sleep 300`) — TS 는 시간 초과 뒤에도 끝날 때까지 기다리고 그 종료 코드(0 이면 성공)를 내지만 Rust 는 시간 제한에 1 로 끝난다. 손자 프로세스는 두 구현 모두 남는다.
 - exec 출력 상한의 단위: 둘 다 바이트로 세지만 TS 는 마지막 조각을 "남은 바이트 수만큼의 글자"로 잘라 여러 바이트 글자가 섞이면 길이가 파이프 조각 크기에 따라 달라진다. Rust 는 1,048,576 바이트 이하의 가장 긴 UTF-8 글자 경계까지 남긴다(D-32). ASCII 는 같아 fixture 는 ASCII 만 담는다.
 - 환경·홈·플랫폼: TS 는 실행할 때마다 `process.env`·`os.homedir()` 를 읽고, Rust 는 호스트가 코어를 만들 때 준 사본을 쓴다(D-33). 헬퍼는 실행 중에 자기 환경을 바꾸지 않아 관찰되지 않는다.
-- `prepare`·PATH 탐지·git 탐지: TS 는 동기(`execFileSync`)라 최대 5초씩 프로세스 전체가 멈춘다. Rust 는 비동기라 그 연결만 기다리고, 로그인 셸·mise 의 stderr 는 버린다(TS 는 헬퍼의 stderr 로 흘려보낸다)(D-35). 연결의 `prepare` 는 접속 단계의 맨 앞(핸드셰이크 시간 제한 밖, 소켓을 만들기 전)에서 돌아 그동안에도 해제·채널 닫힘을 바로 처리하고, 헤더 실패·잘못된 주소처럼 소켓을 만들지 않는 연결에서는 돌지 않는다(TS 는 `connect()` 첫 줄에서 언제나 부른다 — 소켓이 없어 서버가 볼 수 없는 차이).
+- `prepare`·PATH 탐지·git 탐지(신뢰 판정 포함): TS 는 동기(`execFileSync`·`fs.*Sync`)라 최대 5초씩 프로세스 전체가 멈춘다. Rust 는 판정의 FS 를 관문 안에서 보고(막히면 git 없음), `core.worktree` 조회 git 을 언제나 한 번 더 띄운다(TS 는 서브모듈 배치를 볼 때만 — 결과는 같다). Rust 는 비동기라 그 연결만 기다리고, 로그인 셸·mise 의 stderr 는 버린다(TS 는 헬퍼의 stderr 로 흘려보낸다)(D-35). 연결의 `prepare` 는 접속 단계의 맨 앞(핸드셰이크 시간 제한 밖, 소켓을 만들기 전)에서 돌아 그동안에도 해제·채널 닫힘을 바로 처리하고, 헤더 실패·잘못된 주소처럼 소켓을 만들지 않는 연결에서는 돌지 않는다(TS 는 `connect()` 첫 줄에서 언제나 부른다 — 소켓이 없어 서버가 볼 수 없는 차이).
 - worktree 의 파일 작업이 막힌 볼륨에서 멈출 때: TS 는 동기 호출이라 응답하지 못하고, Rust 는 `worktree 시간 초과 (15s) — …` 로 끝난다(D-36).
 - git 출력의 오류 꼬리(`worktree 생성 실패: `·`diff 실패: `)를 UTF-16 단위로 자를 때 대리 쌍 한가운데면 TS 는 짝 없는 반쪽을 남기고 Rust 는 그 글자를 뺀다.
 - 샌드박스 프로파일 파일은 코어마다 하나(`omk-exec-sandbox-<pid>-<n>.sb`, 두 구현 같다). Rust 는 코어가 사라질 때 그 파일을 지우고 TS 는 남긴다.

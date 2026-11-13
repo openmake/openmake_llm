@@ -16,15 +16,15 @@ use crate::constants::{
     BRIDGE_KINDS, CODE_NAV_MAX_CONCURRENT, CODE_NAV_TIMEOUT_MS, DIAG_TIMEOUT_MS,
 };
 use crate::diagnostics;
-use crate::exec::FAIL_CLOSED;
 use crate::exec::{self, ExecHost, ExecState};
 use crate::fs_kinds;
+use crate::git_trust::GitPaths;
 use crate::msg::{BridgeMsg, BridgeResult, Kind, ToolOutput};
 use crate::node_error;
 use crate::scope::safe_from;
 use crate::test_runner;
 use crate::timed_fs::FsGate;
-use crate::tool_env::NO_HOST;
+use crate::tool_env::{NO_HOST, tool_failure};
 use crate::worktree;
 
 /// `task_end` 때 부르는 호스트 정리 훅(데스크톱 = 브라우저 패널 닫기).
@@ -74,15 +74,6 @@ fn handles(kind: Kind) -> bool {
         | Kind::LspDiagnostics
         | Kind::TestRunner => true,
         Kind::Browser => false,
-    }
-}
-
-/// 도구 실패 — 샌드박스 거절(프로파일 없음·sandbox-exec 자체 실패)은 exec 와 같은 모양(문구 + exitCode 126).
-fn tool_failure(error: String) -> BridgeResult {
-    let refused = error == FAIL_CLOSED;
-    BridgeResult {
-        exit_code: refused.then_some(126),
-        ..BridgeResult::failure(error)
     }
 }
 
@@ -141,6 +132,11 @@ impl BridgeCore {
         self.exec.as_ref().map_or(0, ExecState::count)
     }
 
+    /// 연결 때 믿기로 한 git 디렉터리 — 호스트가 없거나 준비 전·git 없음이면 `None`(파일 kind 가드 없음).
+    fn git_paths(&self) -> Option<GitPaths> {
+        self.exec.as_ref().and_then(ExecState::git_paths)
+    }
+
     pub fn folder_root(&self) -> &str {
         &self.folder_root
     }
@@ -197,9 +193,10 @@ impl BridgeCore {
             }
             Kind::Write => {
                 let b64 = m.content_b64.clone();
+                let git = self.git_paths();
                 self.gate
                     .run("write", move || {
-                        fs_kinds::write(&base, path.as_deref(), b64.as_deref())
+                        fs_kinds::write(&base, path.as_deref(), b64.as_deref(), git.as_ref())
                     })
                     .await?;
                 Ok(ok)
@@ -225,8 +222,11 @@ impl BridgeCore {
                 })
             }
             Kind::Delete => {
+                let git = self.git_paths();
                 self.gate
-                    .run("delete", move || fs_kinds::delete(&base, path.as_deref()))
+                    .run("delete", move || {
+                        fs_kinds::delete(&base, path.as_deref(), git.as_ref())
+                    })
                     .await?;
                 Ok(ok)
             }
