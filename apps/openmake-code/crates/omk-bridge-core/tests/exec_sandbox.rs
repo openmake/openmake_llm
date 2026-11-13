@@ -102,7 +102,8 @@ fn prepared(work: &Work, folder: &str, sandbox: bool) -> (BridgeCore, TmpDir) {
     let c = core(work, folder, sandbox, &prof.path);
     runtime().block_on(c.prepare());
     let files = std::fs::read_dir(&prof.path).unwrap().count();
-    assert_eq!(files, usize::from(sandbox), "프로파일 파일 수");
+    // 코어마다 exec·도구 프로파일 두 개(설계 2026-11-14 D-1).
+    assert_eq!(files, 2 * usize::from(sandbox), "프로파일 파일 수");
     (c, prof)
 }
 
@@ -281,7 +282,7 @@ fn two_cores_each_write_only_their_own_folder() {
         rt.block_on(ca.prepare());
         rt.block_on(cb.prepare());
         let files = std::fs::read_dir(&prof.path).unwrap().count();
-        assert_eq!(files, if sandbox { 2 } else { 0 }, "sandbox={sandbox}");
+        assert_eq!(files, if sandbox { 4 } else { 0 }, "sandbox={sandbox}");
         let write = |c: &BridgeCore, dir: &str, name: &str| {
             ran_ok(&exec(c, &format!("echo x > '{dir}/{name}'")))
         };

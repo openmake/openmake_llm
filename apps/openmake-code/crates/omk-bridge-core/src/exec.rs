@@ -18,12 +18,13 @@ use crate::constants::{MAX_BUFFER, SANDBOX_BIN};
 use crate::denylist::match_denylist;
 use crate::exec_env::build_exec_env;
 use crate::exec_path::resolve_exec_path;
+use crate::git_trust::{GitPaths, detect_git};
 use crate::msg::{BridgeMsg, BridgeResult};
 use crate::node_error;
 use crate::node_path;
 use crate::platform::{Platform, bulk_approval_allowed, shell_invocation};
 use crate::proc::{self, ProcSpec, Stderr, Stdin};
-use crate::sandbox::{detect_git_dir, profile_file_name, write_sandbox_profile};
+use crate::sandbox::{profile_file_name, write_sandbox_profile};
 use crate::timed_fs::FsGate;
 use crate::tool_env::{ToolEnv, ToolSandbox};
 
@@ -98,19 +99,30 @@ pub(crate) struct ExecState {
     path_cache: tokio::sync::Mutex<Option<String>>,
     profile: Mutex<Option<String>>,
     profile_file: String,
+    /// 확인 없이 뜨는 자식(worktree git·tsc·py_compile·pytest 탐지)용 도구 프로파일 — exec 프로파일 + 네트워크 차단(D-1).
+    tool_profile: Mutex<Option<String>>,
+    tool_profile_file: String,
+    /// 연결 때 믿기로 한 git 디렉터리(`git_trust`) — 없으면 git 없음(worktree 거절, 파일 kind 가드 없음).
+    git: Mutex<Option<GitPaths>>,
 }
 
 impl ExecState {
     pub(crate) fn new(host: ExecHost) -> ExecState {
         let seq = PROFILE_SEQ.fetch_add(1, Ordering::Relaxed) + 1;
-        let name = profile_file_name(std::process::id(), seq);
-        let profile_file = node_path::join(&[&host.sandbox_profile_dir, &name]);
+        let file = |kind: &str| {
+            let name = profile_file_name(kind, std::process::id(), seq);
+            node_path::join(&[&host.sandbox_profile_dir, &name])
+        };
+        let (profile_file, tool_profile_file) = (file("exec"), file("tool"));
         ExecState {
             host,
             auto_tasks: Mutex::new(HashSet::new()),
             path_cache: tokio::sync::Mutex::new(None),
             profile: Mutex::new(None),
             profile_file,
+            tool_profile: Mutex::new(None),
+            tool_profile_file,
+            git: Mutex::new(None),
         }
     }
 
@@ -138,29 +150,43 @@ impl ExecState {
         }
     }
 
-    /// 연결 때 — PATH 캐시를 비우고 프로파일을 쓴다. 실패·시간 초과는 프로파일 없음(exec 가 fail-closed).
+    /// 연결 때 — PATH 캐시를 비우고, git 디렉터리를 판정하고(샌드박스가 꺼져도 — worktree 대조·파일 kind 가드),
+    /// 프로파일 두 개(exec·도구)를 쓴다. 실패·시간 초과는 프로파일 없음(exec·도구가 fail-closed).
     pub(crate) async fn prepare(&self, root: &str, gate: &FsGate) {
         *self.path_cache.lock().await = None;
-        let profile = if self.host.sandbox_enabled {
-            let git_dir = detect_git_dir(root, &self.host.env, self.host.platform).await;
-            let (root, home, out) = (
-                root.to_owned(),
-                self.host.home.clone(),
-                self.profile_file.clone(),
-            );
+        let h = &self.host;
+        let git = detect_git(root, &h.env, h.platform, h.sandbox_enabled, gate).await;
+        *lock(&self.git) = git.clone();
+        let (profile, tool) = if h.sandbox_enabled {
+            let (root, home) = (root.to_owned(), h.home.clone());
+            let (out, tool_out) = (self.profile_file.clone(), self.tool_profile_file.clone());
             let write = move || {
-                Ok(write_sandbox_profile(
-                    &root,
-                    git_dir.as_deref(),
-                    &home,
-                    &out,
-                ))
+                let exec = write_sandbox_profile(&root, git.as_ref(), &home, &out, false);
+                let tool = write_sandbox_profile(&root, git.as_ref(), &home, &tool_out, true);
+                Ok((exec, tool))
             };
-            gate.run("샌드박스 준비", write).await.ok().flatten()
+            gate.run("샌드박스 준비", write)
+                .await
+                .unwrap_or((None, None))
         } else {
-            None
+            (None, None)
         };
         *lock(&self.profile) = profile;
+        *lock(&self.tool_profile) = tool;
+    }
+
+    /// 연결 때 믿기로 한 git 디렉터리.
+    pub(crate) fn git_paths(&self) -> Option<GitPaths> {
+        lock(&self.git).clone()
+    }
+
+    /// 확인 없이 뜨는 자식을 감쌀 도구 프로파일 — 꺼짐, 프로파일, 켜졌는데 없음(fail-closed).
+    pub(crate) fn tool_sandbox(&self) -> ToolSandbox {
+        match lock(&self.tool_profile).clone() {
+            _ if !self.host.sandbox_enabled => ToolSandbox::Off,
+            Some(p) => ToolSandbox::Profile(p),
+            None => ToolSandbox::Missing,
+        }
     }
 
     async fn confirm(&self, command: &str, task_id: Option<&str>, base: &str) -> bool {
@@ -194,14 +220,10 @@ impl ExecState {
         }
     }
 
-    /// 읽기 전용 도구 자식의 실행 조건 — exec 와 같은 PATH 캐시·같은 프로파일(D-64·D-65).
+    /// 읽기 전용 도구 자식의 실행 조건 — exec 와 같은 PATH 캐시, 도구 프로파일(D-64·D-65, 설계 2026-11-14 D-1).
     pub(crate) async fn tool_env(&self, root: &str) -> ToolEnv {
         let exec_path = self.exec_path(root).await;
-        let sandbox = match lock(&self.profile).clone() {
-            _ if !self.host.sandbox_enabled => ToolSandbox::Off,
-            Some(p) => ToolSandbox::Profile(p),
-            None => ToolSandbox::Missing,
-        };
+        let sandbox = self.tool_sandbox();
         ToolEnv {
             env: self.host.env.clone(),
             platform: self.host.platform,
@@ -227,6 +249,9 @@ impl Drop for ExecState {
     fn drop(&mut self) {
         if lock(&self.profile).is_some() {
             let _ = std::fs::remove_file(&self.profile_file);
+        }
+        if lock(&self.tool_profile).is_some() {
+            let _ = std::fs::remove_file(&self.tool_profile_file);
         }
     }
 }

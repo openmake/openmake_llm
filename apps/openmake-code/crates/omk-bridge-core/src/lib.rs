@@ -11,6 +11,7 @@ pub mod exec;
 pub mod exec_env;
 pub mod exec_path;
 pub mod fs_kinds;
+pub mod git_trust;
 pub mod js_text;
 pub mod msg;
 pub mod node_error;

@@ -86,9 +86,18 @@ impl Drop for Work {
 }
 
 fn core(w: &Work, sandbox: bool) -> BridgeCore {
+    core_inner(w, sandbox, ConfirmAnswer::No)
+}
+
+/// 샌드박스 켠 코어 — exec 확인에 `answer` 로 답한다.
+fn core_with_answer(w: &Work, answer: ConfirmAnswer) -> BridgeCore {
+    core_inner(w, true, answer)
+}
+
+fn core_inner(w: &Work, sandbox: bool, answer: ConfirmAnswer) -> BridgeCore {
     let home = w.join("home");
     let host = ExecHost {
-        confirm: Box::new(|_| Box::pin(async { ConfirmAnswer::No })),
+        confirm: Box::new(move |_| Box::pin(async move { answer })),
         env: vec![
             (
                 "PATH".to_owned(),
@@ -163,8 +172,13 @@ fn python_tools_run_inside_profile() {
         w.tool("bin/python3", "py", "Error: ");
         std::fs::write(w.join("root/conftest.py"), "").unwrap();
         std::fs::write(w.join("root/b.py"), "").unwrap();
-        let profile =
-            write_sandbox_profile(&w.join("root"), None, &w.join("home"), &w.join("prof/p.sb"));
+        let profile = write_sandbox_profile(
+            &w.join("root"),
+            None,
+            &w.join("home"),
+            &w.join("prof/p.sb"),
+            true,
+        );
         let tool = ToolEnv {
             env: vec![("HOME".to_owned(), w.join("home"))],
             platform: Platform::Darwin,
@@ -246,9 +260,14 @@ fn missing_python_is_not_refused() {
     let w = Work::new();
     std::fs::write(w.join("root/conftest.py"), "").unwrap();
     std::fs::write(w.join("root/b.py"), "def f(:\n").unwrap();
-    let profile =
-        write_sandbox_profile(&w.join("root"), None, &w.join("home"), &w.join("prof/p.sb"))
-            .unwrap();
+    let profile = write_sandbox_profile(
+        &w.join("root"),
+        None,
+        &w.join("home"),
+        &w.join("prof/p.sb"),
+        true,
+    )
+    .unwrap();
     let tool = ToolEnv {
         env: vec![("HOME".to_owned(), w.join("home"))],
         platform: Platform::Darwin,
@@ -274,4 +293,40 @@ fn missing_python_is_not_refused() {
         (got.diagnostics.len(), got.truncated, got.server_kind),
         (0, false, "py_compile")
     );
+}
+
+/// 도구 프로파일은 네트워크를 막는다(설계 2026-11-14 D-1) — 폴더의 tsc 가 로컬 TCP 에도 붙지 못한다. 같은 연결의 exec 는 붙는다.
+#[test]
+fn tool_profile_blocks_network_exec_does_not() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let w = Work::new();
+    std::fs::write(w.join("root/tsconfig.json"), "{}").unwrap();
+    let tsc = w.join("root/node_modules/.bin/tsc");
+    std::fs::create_dir_all(w.join("root/node_modules/.bin")).unwrap();
+    let net_ok = w.join("root/net-ok");
+    let body = format!(
+        "#!/bin/bash\n(exec 3<>/dev/tcp/127.0.0.1/{port}) && echo x > '{net_ok}'\nexit 0\n"
+    );
+    std::fs::write(&tsc, body).unwrap();
+    std::fs::set_permissions(&tsc, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let c = core(&w, true);
+    let r = runtime()
+        .block_on(c.handle_exec(&BridgeMsg::from_json(
+            &json!({"kind": "lsp_diagnostics", "paths": ["a.ts"]}),
+        )))
+        .to_json();
+    assert_eq!(r["serverKind"], "tsc", "{r}");
+    assert!(!w.exists("root/net-ok"), "도구 자식이 네트워크에 붙었다");
+    assert!(listener.accept().is_err(), "연결이 들어왔다");
+    // 승인된 exec 는 exec 프로파일(네트워크 허용) — 막는 것은 도구 프로파일뿐이다.
+    let approved = core_with_answer(&w, ConfirmAnswer::Yes);
+    let cmd = format!("(exec 3<>/dev/tcp/127.0.0.1/{port}) && echo connected");
+    let r = runtime()
+        .block_on(approved.handle_exec(&BridgeMsg::from_json(
+            &json!({"kind": "exec", "command": cmd}),
+        )))
+        .to_json();
+    assert_eq!(r["stdout"], "connected\n", "{r}");
 }

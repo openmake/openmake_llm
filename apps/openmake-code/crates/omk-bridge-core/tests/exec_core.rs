@@ -12,6 +12,7 @@ use omk_bridge_core::core::{BridgeCore, BridgeCoreOptions, TaskEndHook};
 use omk_bridge_core::exec::{ConfirmAnswer, ConfirmFn, ExecHost};
 use omk_bridge_core::msg::BridgeMsg;
 use omk_bridge_core::platform::Platform;
+use omk_bridge_core::timed_fs::FsGate;
 use serde_json::{Value, json};
 use support::{TmpDir, runtime};
 
@@ -236,16 +237,19 @@ fn profile_file_per_core_removed_on_drop() {
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
         .collect();
     names.sort();
-    let prefix = format!("omk-exec-sandbox-{}-", std::process::id());
-    assert_eq!(names.len(), 2);
+    // 코어마다 exec·도구 프로파일 두 개(설계 2026-11-14 D-1).
+    let pid = std::process::id();
+    assert_eq!(names.len(), 4);
     assert!(
         names
             .iter()
-            .all(|n| n.starts_with(&prefix) && n.ends_with(".sb")),
+            .all(|n| (n.starts_with(&format!("omk-exec-sandbox-{pid}-"))
+                || n.starts_with(&format!("omk-tool-sandbox-{pid}-")))
+                && n.ends_with(".sb")),
         "{names:?}"
     );
     drop(a);
-    assert_eq!(std::fs::read_dir(tmp.join("prof")).unwrap().count(), 1);
+    assert_eq!(std::fs::read_dir(tmp.join("prof")).unwrap().count(), 2);
     drop(b);
     assert_eq!(std::fs::read_dir(tmp.join("prof")).unwrap().count(), 0);
 }
@@ -348,22 +352,57 @@ fn secret_host(tmp: &TmpDir, confirm: ConfirmFn) -> ExecHost {
     h
 }
 
+/// 빈 커밋 하나가 있는 레포 — 사용자 설정이 끼어들지 않는 git.
+fn init_repo(repo: &str) {
+    std::fs::create_dir_all(repo).unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["commit", "-q", "--allow-empty", "-m", "init"][..],
+    ] {
+        let ok = std::process::Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])
+            .args(["-c", "commit.gpgsign=false"])
+            .args(args)
+            .current_dir(repo)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+}
+
+/// 실제 git 앞에 끼우는 가짜 git — `body` 를 먼저 돌리고 실제 git 으로 넘어간다.
+fn wrap_git(tmp: &TmpDir, body: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    let real = std::process::Command::new("sh")
+        .args(["-c", "command -v git"])
+        .output()
+        .unwrap();
+    let real = String::from_utf8(real.stdout).unwrap().trim().to_owned();
+    std::fs::create_dir_all(tmp.join("bin")).unwrap();
+    let p = tmp.join("bin/git");
+    std::fs::write(&p, format!("#!/bin/sh\n{body}\nexec '{real}' \"$@\"\n")).unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
 /// worktree 의 git 자식 — 허용 목록 환경만(fixed-command-env.test.ts "worktree git").
 #[test]
 fn worktree_git_child_gets_no_secrets() {
     let tmp = TmpDir::new();
-    fake(&tmp, "git", "", 1);
-    let c = bare(&tmp.path, None).with_exec_host(secret_host(&tmp, answer(ConfirmAnswer::No)));
+    let repo = tmp.join("repo");
+    init_repo(&repo);
+    let env_file = tmp.join("git.env");
+    wrap_git(&tmp, &format!("/usr/bin/env > '{env_file}'"));
+    let c = bare(&repo, None).with_exec_host(secret_host(&tmp, answer(ConfirmAnswer::No)));
+    runtime().block_on(c.prepare());
+    std::fs::remove_file(&env_file).unwrap(); // 탐지 git 의 기록은 지우고 worktree git 만 본다
     let r = send(
         &c,
         json!({"kind": "worktree", "op": "add", "taskId": "secret-env-1"}),
     );
-    assert_eq!(r["error"], "git 레포가 아닙니다");
-    assert_no_secrets(
-        &env_of(&tmp.join("git.env")),
-        &tmp.join("home"),
-        "worktree git",
-    );
+    assert_eq!(r["ok"], true, "{r}");
+    assert_no_secrets(&env_of(&env_file), &tmp.join("home"), "worktree git");
 }
 
 /// 샌드박스 git 탐지 — 허용 목록 환경만(fixed-command-env.test.ts "샌드박스 git 탐지").
@@ -372,42 +411,25 @@ fn sandbox_git_probe_child_gets_no_secrets() {
     let tmp = TmpDir::new();
     fake(&tmp, "git", "/some/repo/.git", 0);
     let h = secret_host(&tmp, answer(ConfirmAnswer::No));
-    let got = runtime().block_on(omk_bridge_core::sandbox::detect_git_dir(
+    // 샌드박스를 끄고 본다 — 탐지 프로파일은 쓰기를 막아 가짜 git 이 환경을 남기지 못한다.
+    let got = runtime().block_on(omk_bridge_core::git_trust::detect_git(
         &tmp.path,
         &h.env,
         Platform::Darwin,
+        false,
+        &FsGate::new(15_000),
     ));
-    assert_eq!(got.as_deref(), Some("/some/repo/.git"));
+    assert_eq!(got, None); // 줄이 셋이 아니다
     assert_no_secrets(&env_of(&tmp.join("git.env")), &tmp.join("home"), "git 탐지");
 }
 
-/// worktree add 가 실행하는 사용자 레포의 post-checkout 훅에도 비밀이 넘어가지 않는다.
+/// worktree add 는 사용자 레포의 post-checkout 훅을 돌리지 않는다(core.hooksPath=/dev/null — 설계 2026-11-14 D-2).
 #[test]
-fn post_checkout_hook_gets_no_secrets() {
+fn post_checkout_hook_does_not_run() {
     use std::os::unix::fs::PermissionsExt;
     let tmp = TmpDir::new();
     let repo = tmp.join("repo");
-    std::fs::create_dir_all(&repo).unwrap();
-    let git = |args: &[&str]| {
-        let ok = std::process::Command::new("git")
-            .args([
-                "-c",
-                "user.name=t",
-                "-c",
-                "user.email=t@example.invalid",
-                "-c",
-                "commit.gpgsign=false",
-            ])
-            .args(args)
-            .current_dir(&repo)
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .status()
-            .unwrap()
-            .success();
-        assert!(ok, "git {args:?}");
-    };
-    git(&["init", "-q"]);
-    git(&["commit", "-q", "--allow-empty", "-m", "init"]);
+    init_repo(&repo);
     let hook = format!("{repo}/.git/hooks/post-checkout");
     std::fs::write(
         &hook,
@@ -420,16 +442,13 @@ fn post_checkout_hook_gets_no_secrets() {
     h.env
         .push(("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()));
     let c = bare(&repo, None).with_exec_host(h);
+    runtime().block_on(c.prepare());
     let r = send(
         &c,
         json!({"kind": "worktree", "op": "add", "taskId": "abcdef12-hook"}),
     );
     assert_eq!(r["ok"], true, "{r}");
-    assert_no_secrets(
-        &env_of(&tmp.join("hook.env")),
-        &tmp.join("home"),
-        "post-checkout 훅",
-    );
+    assert!(!std::path::Path::new(&tmp.join("hook.env")).exists());
 }
 
 /// 시간 초과 때 직접 자식이 이미 끝났으면(뒤에 남긴 프로세스가 파이프를 쥠) 그 종료 코드와 그때까지의 출력 — Node
@@ -458,39 +477,26 @@ fn exec_timeout_after_child_exited_keeps_exit_code() {
     }
 }
 
-/// worktree 의 git 도 `execFile` — post-checkout 훅이 파이프를 쥔 데몬을 남겨 시간 초과가 되어도 git 이 0 으로
-/// 끝났으면 성공(TS 그대로).
+/// worktree 의 git 도 `execFile` — git 이 파이프를 쥔 데몬을 남겨 시간 초과가 되어도 git 이 0 으로 끝났으면 성공(TS 그대로).
+/// 훅은 더 돌지 않으므로(D-2) `worktree add` 때만 데몬을 남기는 가짜 git 으로 흉내 낸다(앞 네 인자는 고정 인자).
 #[test]
 fn worktree_git_timeout_after_exit_zero_is_success() {
-    use std::os::unix::fs::PermissionsExt;
     let tmp = TmpDir::new();
     let repo = tmp.join("repo");
-    std::fs::create_dir_all(&repo).unwrap();
-    for args in [
-        &["init", "-q"][..],
-        &["commit", "-q", "--allow-empty", "-m", "init"][..],
-    ] {
-        let ok = std::process::Command::new("git")
-            .args(["-c", "user.name=t", "-c", "user.email=t@example.invalid"])
-            .args(["-c", "commit.gpgsign=false"])
-            .args(args)
-            .current_dir(&repo)
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .status()
-            .unwrap()
-            .success();
-        assert!(ok, "git {args:?}");
-    }
-    let hook = format!("{repo}/.git/hooks/post-checkout");
-    std::fs::write(&hook, "#!/bin/sh\nsleep 8 &\n").unwrap();
-    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    init_repo(&repo);
+    wrap_git(
+        &tmp,
+        "if [ \"$5\" = worktree ] && [ \"$6\" = add ]; then sleep 8 & fi",
+    );
     let mut h = host(&tmp, answer(ConfirmAnswer::No));
     h.env.retain(|(k, _)| k != "PATH");
+    let path = std::env::var("PATH").unwrap_or_default();
     h.env
-        .push(("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()));
+        .push(("PATH".to_owned(), format!("{}:{path}", tmp.join("bin"))));
     // add 안의 git 호출마다 이 제한을 받는다 — 느린 러너에서도 평소 git 은 넘지 않을 만큼.
     h.exec_timeout_ms = 2_000;
     let c = bare(&repo, None).with_exec_host(h);
+    runtime().block_on(c.prepare());
     let t = std::time::Instant::now();
     let r = send(
         &c,
@@ -515,10 +521,12 @@ fn git_probe_timeout_after_exit_zero_is_failure() {
     std::fs::write(&p, "#!/bin/sh\nsleep 8 &\necho /some/repo/.git\n").unwrap();
     std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
     let h = secret_host(&tmp, answer(ConfirmAnswer::No));
-    let got = runtime().block_on(omk_bridge_core::sandbox::detect_git_dir(
+    let got = runtime().block_on(omk_bridge_core::git_trust::detect_git(
         &tmp.path,
         &h.env,
         Platform::Darwin,
+        false,
+        &FsGate::new(15_000),
     ));
     assert_eq!(got, None);
 }
