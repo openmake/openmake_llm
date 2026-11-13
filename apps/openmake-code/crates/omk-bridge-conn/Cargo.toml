@@ -1,0 +1,15 @@
+[package]
+name = "omk-bridge-conn"
+description = "OpenMake 로컬 브리지 연결부 — WS 상태기계·서버 주소 찾기·deviceId(TS connection.ts·endpoints.ts 이식)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+omk-bridge-core = { path = "../omk-bridge-core" }
+serde_json = "1.0.154"
+
+[lints]
+workspace = true
