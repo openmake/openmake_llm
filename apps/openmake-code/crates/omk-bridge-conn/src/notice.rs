@@ -62,6 +62,7 @@ pub fn parse_notice(frame: &Value) -> Option<Notice> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
     use serde_json::json;
 
     use super::parse_notice;
