@@ -90,14 +90,18 @@ impl BridgeCore {
         if let Some(field) = m.invalid_field {
             return Err(format!("요청 필드 형식이 올바르지 않습니다: {field}"));
         }
-        let root = self.folder_root.clone();
-        let folder = m.folder.clone();
-        let base = self
-            .gate
-            .run("실행 폴더 확인", move || {
-                fs_kinds::resolve_base(&root, folder.as_deref())
-            })
-            .await?;
+        // folder 가 없으면 TS 는 FS 를 건드리지 않고 루트를 쓴다 — 관문(허가)도 거치지 않는다.
+        let base = match m.folder.clone() {
+            None => self.folder_root.clone(),
+            Some(folder) => {
+                let root = self.folder_root.clone();
+                self.gate
+                    .run("실행 폴더 확인", move || {
+                        fs_kinds::resolve_base(&root, Some(&folder))
+                    })
+                    .await?
+            }
+        };
         let Some(kind) = m.kind else {
             return Err(unsupported(&m.kind_text));
         };
