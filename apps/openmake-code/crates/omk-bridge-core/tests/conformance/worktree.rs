@@ -44,6 +44,8 @@ fn worktree_shapes() {
                 shape(s, &["git", "cwd"], &["stdout"], &at);
             } else if s.get("file").is_some() {
                 shape(s, &["file"], &["content", "repeat"], &at);
+            } else if s.get("symlink").is_some() {
+                shape(s, &["symlink", "target"], &[], &at);
             } else {
                 shape(s, &["remove"], &[], &at);
             }
