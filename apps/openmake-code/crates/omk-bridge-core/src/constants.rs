@@ -133,3 +133,70 @@ pub const WORKTREE_DIR: &str = ".openmake/worktrees";
 pub const WORKTREE_BRANCH_PREFIX: &str = "omk-task/";
 /// taskId 형식 — TS `TASK_ID_RE.source`(플래그 없음). 경로·브랜치 이름에 들어가는 유일한 서버 문자열이다.
 pub const TASK_ID_RE: &str = "^[a-zA-Z0-9-]{8,64}$";
+
+// 읽기 전용 도구 (PR-1.4)
+
+/// 탐색에서 제외하는 자격증명 글롭 — TS 는 `@openmake/config` `SENSITIVE_FILE_PATTERNS` 를 다시 내보낸다.
+/// fixture `code-nav.json` `excludedFiles` 와 순서까지 같아야 한다. 같은 이름의 폴더도 건너뛴다.
+pub const CODE_NAV_EXCLUDED_FILES: &[&str] = &[
+    ".env",
+    ".env.*",
+    "*.pem",
+    "*.key",
+    "*.p12",
+    "*.pfx",
+    "*.jks",
+    "*.keystore",
+    "id_rsa",
+    "id_rsa.*",
+    "id_ed25519",
+    "id_ed25519.*",
+    ".npmrc",
+    ".netrc",
+    ".pgpass",
+    ".htpasswd",
+    "credentials",
+    "credentials.*",
+    "service-account*.json",
+    "*.kdbx",
+];
+/// 탐색에서 제외하는 이름(폴더·파일 모두) — 서버 `TASK_CODE_NAV.EXCLUDED_DIRS` 와 같은 목록.
+pub const CODE_NAV_EXCLUDED_DIRS: &[&str] = &[
+    "node_modules",
+    ".git",
+    "dist",
+    "build",
+    ".next",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "coverage",
+    ".openmake",
+];
+
+/// code_nav 시간 예산 기본값(ms) — TS 는 `OMK_BRIDGE_CODE_NAV_TIMEOUT_MS || 15000`. 호스트가 `with_tool_timeouts` 로 바꾼다.
+pub const CODE_NAV_TIMEOUT_MS: u64 = 15_000;
+/// 1회 요청에서 훑을 최대 파일 수.
+pub const CODE_NAV_MAX_FILES: usize = 4000;
+/// 내용을 읽을 파일 크기 상한(bytes).
+pub const CODE_NAV_MAX_FILE_BYTES: u64 = 512 * 1024;
+/// grep 매치 상한.
+pub const CODE_NAV_MAX_MATCHES: usize = 400;
+/// 한 파일에서 가져올 최대 매치 수.
+pub const CODE_NAV_MAX_PER_FILE: usize = 20;
+/// 매치 줄 1건 길이 상한(UTF-16 단위).
+pub const CODE_NAV_LINE_MAX_CHARS: usize = 300;
+/// 정규식 소스 길이 상한(UTF-16 단위).
+pub const CODE_NAV_PATTERN_MAX_CHARS: usize = 500;
+/// 코어 하나의 code_nav 동시 작업 수 — TS 에는 대응 값이 없다. 끝나지 않는 판정이 이 칸만 쥔다(설계 D-62).
+pub const CODE_NAV_MAX_CONCURRENT: usize = 2;
+/// 진단 도구 1회 시간 제한 기본값(ms) — TS 는 `OMK_BRIDGE_DIAG_TIMEOUT_MS || 15000`.
+pub const DIAG_TIMEOUT_MS: u64 = 15_000;
+/// 파일당 진단 상한.
+pub const DIAG_MAX_PER_FILE: usize = 20;
+/// 전체 진단 상한(요청 `paths` 도 앞의 이만큼만 본다).
+pub const DIAG_MAX_TOTAL: usize = 60;
+/// 진단 메시지 1건 길이 상한(UTF-16 단위).
+pub const DIAG_MSG_MAX: usize = 300;
+/// pytest 탐지 자식 시간 제한(ms) — TS 도 상수다.
+pub const TEST_RUNNER_PROBE_TIMEOUT_MS: u64 = 5_000;

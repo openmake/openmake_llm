@@ -7,7 +7,9 @@
 
 use serde_json::{Map, Value};
 
-use crate::constants::BROWSER_KIND;
+use crate::constants::{BROWSER_KIND, DIAG_MAX_TOTAL};
+use crate::diagnostics::Diagnostic;
+pub use crate::tool_output::{CodeNavResult, ToolOutput};
 
 /// 요청 종류 — TS `BRIDGE_KINDS` + `BROWSER_KIND`. 종류를 더하면 `as_str` 의 `match` 가 컴파일을 막는다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -79,7 +81,8 @@ pub struct BridgeMsg {
     pub task_id: Option<String>,
     pub req_id: Option<String>,
     pub expires_at: Option<f64>,
-    /// 참인 비문자열이 온 첫 필드(`kind`·`path`·`folder`·`contentB64`·`command`·`op`·`taskId` 순). 있으면 코어는 처리하지 않는다.
+    /// 참인 비문자열이 온 첫 필드(`kind`·`path`·`folder`·`contentB64`·`command`·`op`·`taskId`·`pattern`·`glob`·`maxResults`·
+    /// `paths` 순). 있으면 코어는 처리하지 않는다.
     pub invalid_field: Option<&'static str>,
     /// exec 명령 — 참인 문자열일 때만 `Some`. 차단 검사·확인 창은 없으면 빈 문자열을 쓴다(TS `String(m.command || '')`).
     pub command: Option<String>,
@@ -89,6 +92,16 @@ pub struct BridgeMsg {
     pub op: Option<String>,
     /// 모르는 연산을 거절할 때 쓰는 TS 의 `${m.op}` 표기.
     pub op_text: String,
+    /// code_nav grep 패턴 — TS `String(m.pattern ?? '')`: 없음·`null` 은 빈 글자, `false`·`0` 은 그 글자(D-66).
+    pub pattern: String,
+    /// code_nav 글롭 — 참인 문자열일 때만 `Some`.
+    pub glob: Option<String>,
+    /// JS 참·거짓(`"false"` 도 참).
+    pub ignore_case: bool,
+    /// code_nav 매치 상한 — 참인 수만(`0`·`null` 은 없음). 해석(올림·400 상한·음수는 기본)은 code_nav 가 한다.
+    pub max_results: Option<f64>,
+    /// lsp_diagnostics 파일들 — 배열이면 앞 `DIAG_MAX_TOTAL` 개, 아니면 빈 목록(TS 그대로). 거짓 원소는 `None`(= `.`).
+    pub paths: Vec<Option<String>>,
 }
 
 fn js_falsy(v: &Value) -> bool {
@@ -158,6 +171,41 @@ impl BridgeMsg {
         let op = str_field(o, "op", &mut invalid);
         // 1.2 는 문자열이 아닌 taskId 를 "없음"으로 읽었다 — 참인 비문자열은 이제 거절한다(D-39).
         let task_id = str_field(o, "taskId", &mut invalid);
+        // 읽기 전용 도구 (PR-1.4, D-66) — 검사 순서는 기존 필드 뒤.
+        let pattern = match o.get("pattern") {
+            None | Some(Value::Null) => String::new(),
+            Some(Value::String(s)) => s.clone(),
+            Some(v) if js_falsy(v) => js_falsy_text(v),
+            Some(_) => {
+                invalid.get_or_insert("pattern");
+                String::new()
+            }
+        };
+        let glob = str_field(o, "glob", &mut invalid);
+        let max_results = match o.get("maxResults") {
+            Some(v) if js_falsy(v) => None,
+            Some(Value::Number(n)) => n.as_f64(),
+            Some(_) => {
+                invalid.get_or_insert("maxResults");
+                None
+            }
+            None => None,
+        };
+        let paths = match o.get("paths") {
+            Some(Value::Array(items)) => items
+                .iter()
+                .take(DIAG_MAX_TOTAL)
+                .map(|v| match v {
+                    Value::String(s) if !s.is_empty() => Some(s.clone()),
+                    v if js_falsy(v) => None,
+                    _ => {
+                        invalid.get_or_insert("paths");
+                        None
+                    }
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
         BridgeMsg {
             kind,
             kind_text,
@@ -176,6 +224,11 @@ impl BridgeMsg {
             command,
             op_text: js_text_of(o.get("op"), op.as_deref()),
             op,
+            pattern,
+            glob,
+            ignore_case: o.get("ignoreCase").is_some_and(|v| !js_falsy(v)),
+            max_results,
+            paths,
         }
     }
 }
@@ -202,6 +255,8 @@ pub struct BridgeResult {
     pub worktree_rel: Option<String>,
     pub branch: Option<String>,
     pub kept: Option<bool>,
+    /// 읽기 전용 도구 결과 — 상자 하나로 둔다(결과가 연결 크레이트의 이벤트 enum 에 그대로 실려 크기를 늘리지 않게).
+    pub tool: Option<Box<ToolOutput>>,
 }
 
 impl BridgeResult {
@@ -258,6 +313,23 @@ impl BridgeResult {
         }
         if let Some(k) = self.kept {
             o.insert("kept".to_owned(), Value::Bool(k));
+        }
+        match self.tool.as_deref() {
+            None => {}
+            Some(ToolOutput::Diagnostics {
+                diagnostics,
+                server_kind,
+            }) => {
+                let list = diagnostics.iter().map(Diagnostic::to_json).collect();
+                o.insert("diagnostics".to_owned(), Value::Array(list));
+                o.insert("serverKind".to_owned(), Value::from(*server_kind));
+            }
+            Some(ToolOutput::CodeNav(c)) => {
+                o.insert("codeNav".to_owned(), c.to_json());
+            }
+            Some(ToolOutput::TestRunner(t)) => {
+                o.insert("testRunner".to_owned(), Value::from(*t));
+            }
         }
         Value::Object(o)
     }
@@ -333,5 +405,145 @@ mod tests {
         }
         let m = BridgeMsg::from_json(&json!({"taskId": ""}));
         assert_eq!(m.task_id, None, "빈 taskId 는 없음(JS 거짓)");
+    }
+
+    /// 읽기 전용 도구 필드(D-66) — TS 글자 그대로 읽는 거짓 값과, 거절하는 참인 비문자열.
+    #[test]
+    fn tool_fields_follow_d66() {
+        let m = BridgeMsg::from_json(&json!({"kind": "code_nav"}));
+        assert_eq!(
+            (
+                m.pattern.as_str(),
+                m.glob.clone(),
+                m.ignore_case,
+                m.max_results
+            ),
+            ("", None, false, None)
+        );
+        assert!(m.paths.is_empty());
+        for (v, want) in [
+            (json!(null), ""),
+            (json!(false), "false"),
+            (json!(0), "0"),
+            (json!(""), ""),
+            (json!("a+"), "a+"),
+        ] {
+            let m = BridgeMsg::from_json(&json!({"pattern": v}));
+            assert_eq!((m.pattern.as_str(), m.invalid_field), (want, None), "{v}");
+        }
+        for (v, want) in [
+            (json!(true), true),
+            (json!("false"), true),
+            (json!(0), false),
+            (json!(null), false),
+            (json!([]), true),
+        ] {
+            assert_eq!(
+                BridgeMsg::from_json(&json!({"ignoreCase": v})).ignore_case,
+                want,
+                "{v}"
+            );
+        }
+        for (v, want) in [
+            (json!(2), Some(2.0)),
+            (json!(1.5), Some(1.5)),
+            (json!(-1), Some(-1.0)),
+            (json!(0), None),
+            (json!(null), None),
+            (json!(false), None),
+            (json!(""), None),
+        ] {
+            let m = BridgeMsg::from_json(&json!({"maxResults": v}));
+            assert_eq!((m.max_results, m.invalid_field), (want, None), "{v}");
+        }
+        let m = BridgeMsg::from_json(&json!({"glob": 0, "paths": ["a.ts", null, 0, "", false]}));
+        assert_eq!(m.glob, None);
+        assert_eq!(m.paths, [Some("a.ts".to_owned()), None, None, None, None]);
+        for v in [json!("a.ts"), json!({"a": 1}), json!(5), json!(null)] {
+            let m = BridgeMsg::from_json(&json!({"paths": v}));
+            assert_eq!(
+                (m.paths.len(), m.invalid_field),
+                (0, None),
+                "배열이 아니면 빈 목록: {v}"
+            );
+        }
+        let mut long: Vec<serde_json::Value> = vec![json!("a.md"); 60];
+        long.push(json!(5));
+        let m = BridgeMsg::from_json(&json!({"paths": long}));
+        assert_eq!(
+            (m.paths.len(), m.invalid_field),
+            (60, None),
+            "61번째 원소는 보지 않는다"
+        );
+    }
+
+    #[test]
+    fn tool_fields_reject_truthy_non_strings_in_order() {
+        for (v, field) in [
+            (json!({"pattern": 5}), "pattern"),
+            (json!({"pattern": ["a"]}), "pattern"),
+            (json!({"pattern": true}), "pattern"),
+            (json!({"glob": 7}), "glob"),
+            (json!({"maxResults": "1"}), "maxResults"),
+            (json!({"maxResults": true}), "maxResults"),
+            (json!({"maxResults": [3]}), "maxResults"),
+            (json!({"paths": [5]}), "paths"),
+            (json!({"paths": ["a", ["x"]]}), "paths"),
+            (json!({"paths": [{"p": 1}]}), "paths"),
+            (
+                json!({"pattern": 5, "glob": 7, "maxResults": "1", "paths": [5]}),
+                "pattern",
+            ),
+            (json!({"taskId": 1, "pattern": 5}), "taskId"),
+            (json!({"glob": 7, "paths": [5]}), "glob"),
+        ] {
+            assert_eq!(BridgeMsg::from_json(&v).invalid_field, Some(field), "{v}");
+        }
+    }
+
+    #[test]
+    fn tool_results_serialize_like_ts() {
+        use super::{BridgeResult, CodeNavResult, ToolOutput};
+        let r = BridgeResult {
+            tool: Some(Box::new(ToolOutput::CodeNav(CodeNavResult::Grep {
+                matches: vec!["a:1:x".to_owned()],
+                truncated: false,
+                skipped: 0,
+            }))),
+            ..BridgeResult::success()
+        };
+        assert_eq!(
+            r.to_json(),
+            json!({"ok": true, "codeNav": {"matches": ["a:1:x"], "truncated": false}})
+        );
+        let r = BridgeResult {
+            tool: Some(Box::new(ToolOutput::CodeNav(CodeNavResult::Files {
+                files: vec![("a".to_owned(), 2)],
+                truncated: true,
+                skipped: 3,
+            }))),
+            ..BridgeResult::success()
+        };
+        assert_eq!(
+            r.to_json(),
+            json!({"ok": true, "codeNav": {"files": [{"path": "a", "lines": 2}], "truncated": true, "skipped": 3}})
+        );
+        let r = BridgeResult {
+            tool: Some(Box::new(ToolOutput::Diagnostics {
+                diagnostics: Vec::new(),
+                server_kind: "none",
+            })),
+            truncated: Some(false),
+            ..BridgeResult::success()
+        };
+        assert_eq!(
+            r.to_json(),
+            json!({"ok": true, "diagnostics": [], "truncated": false, "serverKind": "none"})
+        );
+        let r = BridgeResult {
+            tool: Some(Box::new(ToolOutput::TestRunner("npm"))),
+            ..BridgeResult::success()
+        };
+        assert_eq!(r.to_json(), json!({"ok": true, "testRunner": "npm"}));
     }
 }
