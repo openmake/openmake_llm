@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.131.0](https://github.com/openmake/openmake_llm/compare/v1.130.1...v1.131.0) (2026-11-11)
+
+
+### ✨ 기능
+
+* **openmake-code:** exec 자식 환경 허용 목록 조립을 옮긴다 ([e63a7ab](https://github.com/openmake/openmake_llm/commit/e63a7abb0e48b38f3d851dcd13243502a0bcf697))
+* **openmake-code:** exec 차단 목록과 차단 전 정리를 regress 로 옮긴다 ([4a6eb4d](https://github.com/openmake/openmake_llm/commit/4a6eb4d01300fc82f5f0ff768d04b25ccf7063ca))
+* **openmake-code:** Rust workspace 와 omk-bridge-core 뼈대, 적합성 러너 틀 ([c93cf7d](https://github.com/openmake/openmake_llm/commit/c93cf7dac8b468b12d7602692e34074220bbc769))
+* **openmake-code:** sandbox-exec 프로파일 텍스트와 path.join 어휘적 정규화를 옮긴다 ([3f0ff2b](https://github.com/openmake/openmake_llm/commit/3f0ff2b7a965859ddaf26303ad68f37a34e9fc5b))
+* **openmake-code:** 브리지 상수 표를 옮긴다 ([de6c2ab](https://github.com/openmake/openmake_llm/commit/de6c2abf0242ced107a03ee38949556b2ee42801))
+* **openmake-code:** 플랫폼별 셸·PATH 구분자·폴더 이름·일괄 승인 판정을 옮긴다 ([1b6e4f9](https://github.com/openmake/openmake_llm/commit/1b6e4f9a547b05f09083c1919ee3e96383dd9906))
+
+
+### 🐛 버그 수정
+
+* **openmake-code:** folder_name_of 를 rfind 로 바꿔 clippy filter_next 경고를 없앤다 ([7665d92](https://github.com/openmake/openmake_llm/commit/7665d921abc94cd5ea129e5327bb5f59df45988b))
+
+## [1.130.1](https://github.com/openmake/openmake_llm/compare/v1.130.0...v1.130.1) (2026-11-10)
+
+
+### 🐛 버그 수정
+
+* **env:** 게이트웨이 litellm.env 에 DEFAULT_MAX_RETRIES=0 을 넣는다 ([4c6061d](https://github.com/openmake/openmake_llm/commit/4c6061d5f96385fe032720a8af0d238f14c97c79))
+* **image-runtime:** hasa 이미지 생성·편집을 provider 직결로 바꾼다 ([519cae3](https://github.com/openmake/openmake_llm/commit/519cae344715bff46079182c73b6d541d263cbf3))
+* **orchestrator:** capability 게이트웨이 호출의 LiteLLM 재시도를 끈다 ([26bb5f9](https://github.com/openmake/openmake_llm/commit/26bb5f9cc37f594ed04565dee8fa68e7f9906382))
+* **orchestrator:** 슬롯·Gate 대기 중 타임아웃도 [timeout] 으로 기록한다 ([0f20e67](https://github.com/openmake/openmake_llm/commit/0f20e67ba326225f35e8550b2b93dd92b5608a3a))
+* **orchestrator:** 실패 작업 결과에도 실행 대상 모델을 남긴다 ([3802ec5](https://github.com/openmake/openmake_llm/commit/3802ec5702d72ef82bfa888789dc2d52b7b50412))
+* **orchestrator:** 작업 타임아웃을 사용자 취소와 구분해 [timeout] 으로 기록한다 ([8b2727d](https://github.com/openmake/openmake_llm/commit/8b2727d3ae4fa8524b3b763a18268b57b6492ad8))
+* **providers:** 외부 채팅 게이트웨이 client 의 앱 SDK 재시도를 끈다 ([d792cca](https://github.com/openmake/openmake_llm/commit/d792cca0b65bff893ac67395291c4fb453200a02))
+* **providers:** 외부 채팅·배정 probe 의 게이트웨이 요청도 재시도를 끈다 ([aced358](https://github.com/openmake/openmake_llm/commit/aced358ac7b4c7eab50323b9541ed82ae2d506cd))
+
+
+### ♻️ 리팩터링
+
+* **llm:** 게이트웨이 재시도 끄기 헤더를 공용 상수로 옮긴다 ([7b2a800](https://github.com/openmake/openmake_llm/commit/7b2a800b5eb4cbebb3403eb9cde3c3b843ebb231))
+
 ## [1.130.0](https://github.com/openmake/openmake_llm/compare/v1.129.2...v1.130.0) (2026-11-10)
 
 
