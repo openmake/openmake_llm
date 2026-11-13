@@ -110,7 +110,23 @@ pub fn format(err: &io::Error, syscall: &str, path: Option<&str>) -> String {
 
 /// Node 는 NUL 이 든 경로를 시스템 호출 전에 거절한다(`ERR_INVALID_ARG_VALUE`). 그 문구를 만든다.
 pub fn null_bytes(path: &str) -> String {
-    let mut inspected = inspect_string(path);
+    format!(
+        "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received {}",
+        received(path)
+    )
+}
+
+/// 자식 프로세스 인자에 NUL 이 있을 때 Node `execFile` 이 던지는 `ERR_INVALID_ARG_VALUE` 문구(`arg` 는 `args[4]` 꼴).
+pub fn null_bytes_arg(arg: &str, value: &str) -> String {
+    format!(
+        "The argument '{arg}' must be a string without null bytes. Received {}",
+        received(value)
+    )
+}
+
+/// `Received` 뒤의 글자 — `util.inspect` 결과를 UTF-16 128 단위에서 자른다.
+fn received(value: &str) -> String {
+    let mut inspected = inspect_string(value);
     // Node 는 inspect 결과를 UTF-16 128 단위에서 자른다. 대리 쌍 한가운데는 자를 수 없어 그 글자를 뺀다.
     if inspected.encode_utf16().count() > 128 {
         let mut units = 0;
@@ -124,9 +140,7 @@ pub fn null_bytes(path: &str) -> String {
         inspected.truncate(cut);
         inspected.push_str("...");
     }
-    format!(
-        "The argument 'path' must be a string, Uint8Array, or URL without null bytes. Received {inspected}"
-    )
+    inspected
 }
 
 /// `util.inspect(문자열)` — 따옴표 고르기, 제어 문자 이스케이프, 긴 문자열의 줄 나눔(`+\n  `)까지 Node 와 같게.
