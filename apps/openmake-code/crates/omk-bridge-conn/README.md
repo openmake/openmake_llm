@@ -46,3 +46,4 @@ cargo test --locked -p omk-bridge-conn
 - `tests/blocked_send.rs` — 상대가 읽지 않아 보내기가 막힌 연결(생존 확인·해제·재연결·큐 상한).
 - `tests/real_socket.rs` — 실 TCP·TLS·HTTP 몇 건. `tests/core_lifetime.rs` — 막힌 폴더(FIFO)로 코어 수명·blocking 상한.
 - TS 와 일부러 다르게 한 자리는 fixture 에 넣지 않고 단위 테스트로 고정한다(`CONN.md` "fixture 에 넣지 않는 차이").
+- 알려진 차이(기록만, `CONN.md` 표): 받는 프레임 상한은 `tungstenite` 기본값(프레임 16MiB·메시지 64MiB)이라 TS `ws`(100MiB)보다 작다 — 서버 요청은 1MiB 규모라 닿지 않는다. 주소 조회 본문에 범위 밖 수(`1e999`)가 있으면 Rust 만 조회 실패로 본다 — 서버 응답은 고정 꼴이다.

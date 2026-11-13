@@ -47,10 +47,13 @@ Rust 가 일부러 다르게 하는 자리다 — 모두 더 엄격하거나 서
 
 | 자리 | TS | Rust | Rust 테스트 |
 |---|---|---|---|
-| 연결 주소가 ws URL 이 될 수 없을 때 | `new WebSocket` 이 던져 처리되지 않은 거부 | 상태 `서버 주소가 올바르지 않습니다: <주소>`(`server_error`) 뒤 멈춤 | `connection_scenarios.rs` |
+| 연결 주소가 ws URL 이 될 수 없을 때 | `new WebSocket` 이 던져 처리되지 않은 거부 | 상태 `서버 주소가 올바르지 않습니다: <주소>`(`server_error`) 뒤 멈춤 | `connection_scenarios_rust.rs` |
 | `error` 프레임의 `message` 가 문자열·`null`·없음이 아닐 때 | JS 문자열 변환 | 빈 문구 | `frames.rs` |
 | 짝 없는 대리 문자가 든 프레임 | 받는다 | JSON 해석 실패 → 무시 | `frames.rs` |
 | `toolName` 100 단위 절단이 대리 쌍 한가운데 | 반쪽이 남는다 | 그 글자를 뺀다 | `notice.rs` |
 | `random` 이 NaN | 대기 1ms | 1.0 으로 본다 | `reconnect.rs` |
 | 주소 조회 리디렉션·64KiB 넘는 본문 | 따른다·받는다 | 조회 실패 | `real_socket.rs` |
 | 잘못된 punycode 호스트 라벨(`xn--`·`xn--a` 등 — 차등 실험에서 찾음) | Node `URL`(ada)은 받는다 | WHATWG IDNA 규칙대로 주소 오류 | `endpoints.rs` |
+| 주소 조회 본문에 f64 범위 밖 수(`1e999`) — 서버 응답은 고정 꼴이라 실영향 없음 | `Infinity` 로 읽고 진행 | 본문 전체 해석 실패 → 조회 실패(넣은 주소 그대로) | `endpoints.rs` |
+| 상대가 읽지 않아 보내지 못한 프레임 | 상한 없이 메모리에 쌓다가 생존 확인(75초)이 끊는다 | 보낼 큐 16MiB 를 넘으면 그때 1006 으로 끊고 재연결 | `blocked_send.rs` |
+| 받는 프레임 크기 상한 — 서버 요청은 코어 `MAX_BUFFER`(1MiB) 규모라 닿지 않는다 | `ws` 기본 `maxPayload` 100MiB | `tungstenite` 기본 프레임 16MiB·메시지 64MiB, 넘으면 끊고 재연결 | (기록만) |
