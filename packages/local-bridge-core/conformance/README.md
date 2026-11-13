@@ -63,7 +63,7 @@
 - setup 종류 추가: `{"symlink", "target"}` · `{"many": {dir, count, prefix, kind, content?}}`(파일마다 그 내용) · `{"fakeTool": "root/node_modules/.bin/tsc", "stdout", "stderr", "exit", "record"}` — 실행 권한 0755 의 `#!/bin/sh` 스크립트. 불릴 때마다 `{{TMP}}/calls/<n>`(도구를 가리지 않는 일련번호)에 기록 이름·인자 수·인자(한 줄에 하나)·cwd(`pwd -P`)·환경(`/usr/bin/env`)을 남기고 stdout·stderr 를 찍은 뒤 `exit` 로 끝난다. 셸 내장 명령과 절대경로만 쓴다.
 - `toolCalls`: 요청(또는 `direct` 사례) 동안 가짜 도구가 불린 기록을 순서대로 — `{tool, args, cwd, envHas, envLacks}`. 빈 배열 = 한 번도 안 불렸다. 샌드박스를 켠 Rust 에서도 도구가 받는 인자는 같다(앞머리는 `sandbox-exec` 가 먹는다).
 - `compare`: `counts`(`codeNav` 의 `matches`·`files` 대신 `matchesCount`·`filesCount` 중 정확히 하나 — 상한·예산에 걸린 부분집합은 폴더 열거 순서에 달렸다) · `error-prefix`(`errorPrefix`, 비어 있지 않게).
-- python3 인자는 별건 TS 보안 수정(`fix/bridge-tools-in-sandbox`)과 같은 강화형이다 — `-I -m py_compile <파일>`, 탐지는 `-I -c "import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"`. 그 PR 이 머지되기 전 TS 러너는 이 인자를 보는 6건이 실패한다.
+- python3 인자는 두 구현 같은 강화형이다(TS 는 도구 샌드박스 수정 #1745) — `-I -m py_compile <파일>`, 탐지는 `-I -c "import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"`.
 
 ## 알려진 차이
 
@@ -108,6 +108,6 @@ Rust 는 차단 패턴을 ECMAScript 정규식 크레이트 `regress` 로 컴파
   - regress 의 판정 결함(차등 실험 — 실제 쓰이는 꼴 300 패턴에서는 0건): 중첩 수량자 역추적에서 JS 가 맞는 것을 놓친다(최소 재현 `((?:x{1,2})+){2}` 대 `xx` — JS 참, regress 거짓). 빈 매치를 반복하는 중첩 수량자(`\s*?((가?){2})+$`·`((/*){1,2}){1,2}a{2}`)는 짧은 줄에서도 끝나지 않거나 메모리를 크게 쓴다(V8 은 즉시 끝난다). 끝나지 않는 판정은 code_nav 전용 관문(2칸)이 가둔다 — 요청은 `code_nav 시간 초과` 로 답한다.
   - 끝나지 않는 정규식(ReDoS): TS 는 이벤트 루프가 멎어 그 헬퍼의 모든 연결이 끊긴다. Rust 는 code_nav 전용 관문의 스레드 하나가 묶이고(폴더마다 최대 2개, 코어 하나씩 100%), 같은 폴더의 다른 kind·다른 폴더는 계속 돈다. 시간 예산은 파일 사이에 더해 줄마다도 본다.
   - 막힌 볼륨: TS 는 `lsp_diagnostics`·`test_runner` 의 파일 확인과 `code_nav` 의 스코프 확인이 시간 제한 밖이라 응답하지 못한다. Rust 는 `<라벨> 시간 초과 (15s) — …` 로 끝난다.
-  - 도구 자식(tsc·python3)은 Rust 에서 exec 와 같은 프로파일의 샌드박스 안에서 돈다(TS 는 별건 수정 전까지 밖). 프로파일이 없거나 감싼 자식에서 sandbox-exec 자체가 실패하면(종료 코드 65·71 + stderr `sandbox-exec:`) exec 와 같은 문구 + `exitCode 126` 으로 거절한다 — 자식을 띄워야 할 때만. python3 는 띄우기 전에 PATH 에서 찾고(없으면 빈 진단·`none`), Rust 는 PATH 의 **절대경로 항목만** 본다(TS 는 상대 항목도 본다).
+  - 도구 자식(tsc·python3)은 두 구현 모두 exec 와 같은 프로파일의 샌드박스 안에서 돈다(TS #1745). 프로파일이 없거나 감싼 자식에서 sandbox-exec 자체가 실패하면(종료 코드 65·71 + stderr `sandbox-exec:`) exec 와 같은 문구 + `exitCode 126` 으로 거절한다 — 자식을 띄워야 할 때만. python3 는 띄우기 전에 PATH 에서 찾고(없으면 빈 진단·`none`), Rust 는 PATH 의 **절대경로 항목만** 본다(TS 는 상대 항목도 본다).
   - 폴더 열거는 이름 바이트순(TS 는 OS 순서) — 상한(4000)·예산에 걸렸을 때 남는 집합만 다를 수 있다. 줄을 300 단위에서 대리 쌍 한가운데로 자르면 TS 는 반쪽을 남기고 Rust 는 그 글자를 뺀다.
   - `go` 의 실행 권한: TS 는 `access(X_OK)`, Rust 는 "모드에 실행 비트가 하나라도"(심링크는 따라가고 폴더도 통과). `package.json` 의 짝 없는 대리 쌍 이스케이프·128단 넘는 중첩은 Rust 만 해석 실패(→ npm 아님). tsc 줄·열이 u64 를 넘으면 Rust 는 그 줄을 버리고, py_compile 의 첫 `line N` 이 넘치면 1 이다(TS 는 정밀도를 잃은 실수).
