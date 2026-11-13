@@ -36,9 +36,18 @@ import type { BridgeCoreOptions, BridgeMsg, BridgeResult } from './types';
 
 const fsp = fs.promises;
 
+/**
+ * 샌드박스 프로파일 파일 일련번호(프로세스 공용). 헬퍼는 연결 폴더마다 코어를 만들고 모두 같은
+ * 프로파일 폴더를 넘긴다 — 파일 이름이 pid 하나뿐이면 나중에 준비한 폴더의 프로파일이 모든 코어의
+ * exec 에 적용됐다(샌드박스 경계가 다른 폴더로 바뀌었다). Rust 코어(D-34)와 같은 `<pid>-<n>` 형식.
+ */
+let sandboxProfileSeq = 0;
+
 export class BridgeCore {
     readonly folderRoot: string;
     private sandboxProfilePath: string | null = null;
+    /** 이 코어의 프로파일 파일 번호 — 다시 prepare() 해도 같은 파일을 다시 쓴다. */
+    private readonly sandboxProfileSeq = ++sandboxProfileSeq;
     private execPathCache: string | null = null;
     private readonly autoApproveTasks = new Set<string>();
 
@@ -69,7 +78,7 @@ export class BridgeCore {
         this.execPathCache = null;
         this.sandboxProfilePath = SANDBOX_ENABLED
             ? writeSandboxProfile(this.folderRoot, detectGitDir(this.folderRoot),
-                path.join(this.opts.sandboxProfileDir, `omk-exec-sandbox-${process.pid}.sb`))
+                path.join(this.opts.sandboxProfileDir, `omk-exec-sandbox-${process.pid}-${this.sandboxProfileSeq}.sb`))
             : null;
     }
 
