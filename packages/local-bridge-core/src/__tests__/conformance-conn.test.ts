@@ -16,9 +16,13 @@ import type { BridgeMsg, BridgeNotice } from '../types';
 const DIR = path.join(__dirname, '..', '..', 'conformance');
 const HELPER = path.join(__dirname, '..', '..', '..', '..', 'apps', 'desktop-native', 'helper', 'src', 'helper.mjs');
 const KNOWN_CONN_SUITES = ['conn-constants', 'conn-device-id', 'conn-endpoints', 'conn-frames', 'conn-notice', 'conn-reconnect-delay'];
-/** conn-frames 한 사례의 실시간 한도 — hello 지연(300ms)과 루프백 왕복만 기다린다. */
-const CASE_TIMEOUT_MS = 10_000;
-const IO_DEADLINE_MS = 5_000;
+/**
+ * 실 소켓 대기 한도(벽시계) — 조건이 서면 바로 끝나는 최대 대기라 평소 실행 시간은 늘지 않는다. 운영 서비스·Jest 여러
+ * 작업자가 함께 도는 스테이징 검증 호스트에서 5초를 넘긴 일이 있어(11-13) 20초로 둔다.
+ */
+const IO_DEADLINE_MS = 20_000;
+/** conn-frames 한 사례의 실시간 한도 — hello 지연(300ms)과 루프백 왕복을 기다린다. 대기 한도를 끊지 않게 한도 + 여유. */
+const CASE_TIMEOUT_MS = IO_DEADLINE_MS + 10_000;
 
 type Obj = Record<string, unknown>;
 const load = (suite: string): Obj => JSON.parse(fs.readFileSync(path.join(DIR, `${suite}.json`), 'utf8')) as Obj;
