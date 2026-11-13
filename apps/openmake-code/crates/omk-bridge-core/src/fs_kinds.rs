@@ -12,6 +12,9 @@ use crate::scope::safe_from;
 use crate::{base64_lenient, node_error, node_path};
 
 /// Node 는 NUL 이 든 경로를 시스템 호출 전에 거절한다 — 호출 자리마다 같은 순서로 본다.
+const EEXIST: i32 = 17;
+const ENOTDIR: i32 = 20;
+
 fn no_nul(p: &str) -> Result<(), String> {
     if p.contains('\0') {
         return Err(node_error::null_bytes(p));
@@ -71,12 +74,51 @@ pub fn read(base: &str, path: Option<&str>) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
+/// `fsp.mkdir(dir, { recursive: true })` — Node `MKDirpAsync` 의 순서를 따른다. 문구의 경로는 **실패한 구간**이다.
+/// `mkdir` 이 ENOENT 면 부모로 올라갔다 내려온다. EACCES·EPERM·ENOTDIR·ENOSPC 는 바로 실패,
+/// 그 밖의 오류는 `stat` 해서 폴더면 통과·폴더가 아니면 EEXIST(아래 구간이 남았으면 ENOTDIR)·`stat` 실패면 그 오류다.
+fn mkdir_recursive(dir: &str) -> Result<(), String> {
+    let fail = |e: &std::io::Error, p: &str| node_error::format(e, "mkdir", Some(p));
+    let mut stack = vec![dir.to_owned()];
+    while let Some(next) = stack.pop() {
+        let Err(err) = fs::create_dir(&next) else {
+            continue;
+        };
+        match err.kind() {
+            ErrorKind::PermissionDenied | ErrorKind::NotADirectory | ErrorKind::StorageFull => {
+                return Err(fail(&err, &next));
+            }
+            ErrorKind::NotFound => {
+                let parent = node_path::dirname(&next);
+                if parent == next {
+                    return Err(fail(&err, &next));
+                }
+                stack.push(next);
+                stack.push(parent);
+            }
+            _ => match fs::metadata(&next) {
+                Ok(m) if m.is_dir() => {}
+                Ok(_) => {
+                    let code = if err.kind() == ErrorKind::AlreadyExists && !stack.is_empty() {
+                        std::io::Error::from_raw_os_error(ENOTDIR)
+                    } else {
+                        std::io::Error::from_raw_os_error(EEXIST)
+                    };
+                    return Err(fail(&code, &next));
+                }
+                Err(e) => return Err(fail(&e, &next)),
+            },
+        }
+    }
+    Ok(())
+}
+
 /// 중간 폴더를 만들고 덮어쓴다. `content_b64` 가 없으면 빈 파일이다.
 pub fn write(base: &str, path: Option<&str>, content_b64: Option<&str>) -> Result<(), String> {
     let abs = safe_from(base, path)?;
     let dir = node_path::dirname(&abs);
     no_nul(&dir)?;
-    fs::create_dir_all(&dir).map_err(|e| node_error::format(&e, "mkdir", Some(&dir)))?;
+    mkdir_recursive(&dir)?;
     let bytes = base64_lenient::decode(content_b64.unwrap_or(""));
     no_nul(&abs)?;
     let mut f = fs::OpenOptions::new()
@@ -185,7 +227,8 @@ pub fn folders(root: &str, path: Option<&str>) -> Result<(Vec<String>, bool), St
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
-    use super::{folders, list, list_all};
+    use super::{folders, list, list_all, mkdir_recursive, write};
+    use std::os::unix::fs::PermissionsExt;
 
     struct Tmp(String);
     impl Drop for Tmp {
@@ -238,6 +281,67 @@ mod tests {
         assert_eq!(
             (all.len(), all.last().map(String::as_str)),
             (1000, Some("f0999"))
+        );
+    }
+
+    /// 기대값은 Node 24.22.2 `fsp.mkdir(<T>/<경로>, { recursive: true })` 실측 — 실패한 **구간** 경로를 적는다.
+    #[test]
+    fn mkdir_recursive_reports_failed_segment_like_node() {
+        let t = tmp("mkdirp");
+        let ro = format!("{}/ro", t.0);
+        std::fs::create_dir_all(format!("{ro}/ex")).unwrap();
+        std::fs::write(format!("{}/f", t.0), b"").unwrap();
+        std::fs::create_dir(format!("{}/d", t.0)).unwrap();
+        std::os::unix::fs::symlink(format!("{}/loop", t.0), format!("{}/loop", t.0)).unwrap();
+        std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let long = "y".repeat(300);
+        let cases: [(String, Option<String>); 9] = [
+            (
+                "ro/a/b".into(),
+                Some("EACCES: permission denied, mkdir '<T>/ro/a'".into()),
+            ),
+            (
+                "ro/a".into(),
+                Some("EACCES: permission denied, mkdir '<T>/ro/a'".into()),
+            ),
+            ("ro/ex".into(), None),
+            (
+                "f".into(),
+                Some("EEXIST: file already exists, mkdir '<T>/f'".into()),
+            ),
+            (
+                "f/x/y".into(),
+                Some("ENOTDIR: not a directory, mkdir '<T>/f/x/y'".into()),
+            ),
+            ("d/x/y".into(), None),
+            (
+                "loop".into(),
+                Some("ELOOP: too many symbolic links encountered, mkdir '<T>/loop'".into()),
+            ),
+            (
+                "loop/x".into(),
+                Some("ELOOP: too many symbolic links encountered, mkdir '<T>/loop/x'".into()),
+            ),
+            (
+                format!("x/{long}/z"),
+                Some(format!("ENAMETOOLONG: name too long, mkdir '<T>/x/{long}'")),
+            ),
+        ];
+        let got: Vec<_> = cases
+            .iter()
+            .map(|(rel, _)| {
+                mkdir_recursive(&format!("{}/{rel}", t.0))
+                    .map_err(|e| e.replace(&t.0, "<T>"))
+                    .err()
+            })
+            .collect();
+        let ro_write = write(&t.0, Some("ro/a/b/x.txt"), None).map_err(|e| e.replace(&t.0, "<T>"));
+        std::fs::set_permissions(&ro, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let want: Vec<_> = cases.into_iter().map(|(_, w)| w).collect();
+        assert_eq!(got, want);
+        assert_eq!(
+            ro_write,
+            Err("EACCES: permission denied, mkdir '<T>/ro/a'".to_owned())
         );
     }
 }
