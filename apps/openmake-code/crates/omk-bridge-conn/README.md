@@ -40,6 +40,6 @@ cargo test --locked -p omk-bridge-conn
 ```
 
 - `tests/conformance.rs` — `conn-*` fixture 6개(TS 러너 `conformance-conn.test.ts` 와 같은 사례).
-- `tests/connection_scenarios.rs` — TS `connection.test.ts`·`reconnect-delay.test.ts` 의 연결 시나리오. 메모리 안 duplex 가짜 서버 + 멈춘 시계로 결정적으로 돈다.
+- `tests/connection_scenarios.rs` — TS `connection.test.ts`·`reconnect-delay.test.ts` 의 연결 시나리오. 메모리 안 duplex 가짜 서버 + 멈춘 시계로 결정적으로 돈다. Rust 에서 더한 시나리오는 `tests/connection_scenarios_rust.rs`, 공용 환경은 `tests/support/scenario.rs`.
 - `tests/real_socket.rs` — 실 TCP·TLS·HTTP 몇 건. `tests/core_lifetime.rs` — 막힌 폴더(FIFO)로 코어 수명·blocking 상한.
 - TS 와 일부러 다르게 한 자리는 fixture 에 넣지 않고 단위 테스트로 고정한다(`CONN.md` "fixture 에 넣지 않는 차이").
