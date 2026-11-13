@@ -8,7 +8,7 @@ import * as path from 'path';
 import { EXEC_DENYLIST, matchDenylist, normalizeForDenylist } from '../denylist';
 import { buildExecEnv } from '../exec-env';
 import { bulkApprovalAllowed, folderNameOf, pathListSeparator, shellInvocation } from '../platform';
-import { writeSandboxProfile } from '../sandbox';
+import { buildSandboxProfile } from '../sandbox';
 import { safeFrom, safeFromAsync } from '../scope';
 import { RequestGuard } from '../request-guard';
 import { BridgeCore } from '../core';
@@ -188,18 +188,16 @@ describe('platform', () => {
 });
 
 describe('sandbox-profile', () => {
-    const doc = load<{ cases: Case<{ root: string; gitDir: string | null; commonDir?: string; tool?: boolean }, { profile: string }>[] }>('sandbox-profile');
-    let dir = '';
-    beforeAll(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-conformance-')); });
-    afterAll(() => { fs.rmSync(dir, { recursive: true, force: true }); });
+    type In = { root: string; gitDir: string | null; commonDir?: string; tool?: boolean; protect?: { gitDir: string; commonDir: string } | null };
+    const doc = load<{ cases: Case<In, { profile: string }>[] }>('sandbox-profile');
 
-    it.each(doc.cases.map((c, i) => [c.id, c, i] as const))('%s — 프로파일 전체 텍스트가 같다', (_id, c, i) => {
-        const out = path.join(dir, `p${i}.sb`);
-        const { root, gitDir, commonDir, tool } = c.input;
-        // commonDir 를 적지 않으면 git dir 와 같다(일반 레포). 빈 gitDir 은 git 없음(종전 규칙).
-        expect(writeSandboxProfile(root, gitDir ? { gitDir, commonDir: commonDir ?? gitDir } : null, out, tool === true)).toBe(out);
-        const home = fs.realpathSync(os.homedir());
-        expect(fs.readFileSync(out, 'utf8')).toBe(c.expect.profile.split('{{HOME}}').join(home));
+    it.each(doc.cases.map((c) => [c.id, c] as const))('%s — 프로파일 전체 텍스트가 같다', (_id, c) => {
+        const { root, gitDir, commonDir, tool, protect } = c.input;
+        // commonDir 를 적지 않으면 git dir 와 같다(일반 레포). 빈 gitDir 은 git 없음(종전 규칙). protect 를 적지 않으면 git.
+        const git = gitDir ? { gitDir, commonDir: commonDir ?? gitDir } : null;
+        const home = fs.realpathSync.native(os.homedir());
+        const got = buildSandboxProfile(root, git, tool === true, protect === undefined ? git : protect);
+        expect(got).toBe(c.expect.profile.split('{{HOME}}').join(home));
     });
 });
 

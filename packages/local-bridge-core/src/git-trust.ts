@@ -36,8 +36,13 @@ function probe(args: string[], cwd: string): string | null {
     } catch { return null; }
 }
 
+/**
+ * realpath — **디스크의 실제 표기**(대소문자·유니코드 정규화)로. Node 의 `fs.realpathSync` 는 심링크만 풀고 입력 글자를 그대로
+ * 두어, 연결 경로의 대소문자가 디스크와 다르면 git 이 답한 경로와 어긋났다(리뷰 F6). `.native` 와 `fs.promises.realpath`·Rust
+ * `canonicalize` 는 실제 표기를 돌려준다.
+ */
 function real(p: string): string | null {
-    try { return fs.realpathSync(p); } catch { return null; }
+    try { return fs.realpathSync.native(p); } catch { return null; }
 }
 
 function within(p: string, dir: string): boolean {
@@ -88,6 +93,18 @@ export function detectGit(root: string): GitPaths | null {
     return commonDir === gitDir && coreWorktree(gitDir, rootReal) === top ? found : null; // 3
 }
 
+/**
+ * 믿지 않아도(탐지 실패·불신) 지킬 git 디렉터리 — 연결 폴더의 `.git` 이 (심링크 아닌) 디렉터리면 그것. 쓰기 허용은 하지 않고
+ * 프로파일 금지 줄·파일 kind 가드만 건다(리뷰 F2: `.git/HEAD` 를 깨 탐지를 실패시키면 다음 연결에서 보호가 통째로 빠졌다).
+ * root 는 realpath. git 을 띄우지 않고 lstat 만 본다.
+ */
+export function rootGitDir(root: string): GitPaths | null {
+    const dotGit = path.join(root, '.git');
+    try {
+        return fs.lstatSync(dotGit).isDirectory() ? { gitDir: dotGit, commonDir: dotGit } : null;
+    } catch { return null; }
+}
+
 /** 존재하는 최근접 조상의 realpath + 나머지 — 없는 파일을 쓰는 경우도 실제 위치로 본다. */
 async function resolveReal(abs: string): Promise<string> {
     const rest: string[] = [];
@@ -101,7 +118,7 @@ async function resolveReal(abs: string): Promise<string> {
 
 /** `<…>/.openmake/worktrees/<id>/.git` 또는 그 아래 — worktree 의 gitfile 을 바꾸면 worktree git 이 가짜 git 디렉터리를 쓴다(E1c). */
 function isWorktreeGit(p: string): boolean {
-    const seg = p.split(path.sep);
+    const seg = foldCase(p).split(path.sep);
     const wt = WORKTREE_DIR.split('/');
     for (let i = 0; i + wt.length + 1 < seg.length; i++) {
         if (wt.every((w, j) => seg[i + j] === w) && seg[i + wt.length + 1] === '.git') return true;
@@ -110,16 +127,28 @@ function isWorktreeGit(p: string): boolean {
 }
 
 /**
- * 파일 kind(write·delete) 가드 — 대상의 실제 위치가 보관한 git dir·common dir 자신·`config`·`commondir`·`hooks` 아래이거나 worktree 의
- * `.git` 이면 거절한다(exec 프로파일과 같은 금지를 지킨다). delete 는 git 디렉터리를 품은 상위 폴더도 거절한다.
- * git 없음(git === null)이면 가드가 없다(기존 동작).
+ * ASCII 대소문자 접기 — macOS 기본 볼륨은 대소문자를 무시해 `.git/COMMONDIR` 가 `commondir` 로 읽힌다(리뷰 F3). 없는 이름은
+ * realpath 가 실제 표기로 바꿔 주지 못하므로 비교를 접어서 한다. 보호 이름이 모두 ASCII 라 ASCII 만 접는다(TS·Rust 같은 결과).
+ * 대소문자를 구분하는 볼륨에서 `.git/CONFIG` 같은 이름까지 막는 것은 감수한다.
+ */
+function foldCase(s: string): string {
+    return s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+}
+
+/** git 디렉터리 하나 아래에서 막는 이름 — 프로파일 끝 금지 줄과 같다. */
+const GIT_DENIED_NAMES = ['config', 'commondir', 'config.worktree'];
+
+/**
+ * 파일 kind(write·delete) 가드 — 대상의 실제 위치가 지키는 git dir·common dir 자신·`config`·`commondir`·`config.worktree`·
+ * `hooks` 아래이거나, linked 배치의 `<common>/worktrees`, worktree 의 `.git` 이면 거절한다(exec 프로파일과 같은 금지).
+ * delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. 비교는 대소문자를 접어서 한다. 지킬 git 이 없으면 가드가 없다(기존 동작).
  */
 export async function assertGitPathAllowed(git: GitPaths | null, abs: string, rel: string | undefined, del: boolean): Promise<void> {
     if (!git) return;
-    const r = await resolveReal(abs);
-    const denied = [...new Set([git.gitDir, git.commonDir])].some((d) => {
-        const hooks = path.join(d, 'hooks');
-        return r === d || r === path.join(d, 'config') || r === path.join(d, 'commondir') || within(r, hooks) || (del && within(d, r));
-    });
-    if (denied || isWorktreeGit(r)) throw new Error(`${GIT_PATH_DENIED_PREFIX}${rel}`);
+    const r = foldCase(await resolveReal(abs));
+    const [g, c] = [foldCase(git.gitDir), foldCase(git.commonDir)];
+    const denied = [...new Set([g, c])].some((d) => r === d || GIT_DENIED_NAMES.some((n) => r === path.join(d, n))
+        || within(r, path.join(d, 'hooks')) || (del && within(d, r)));
+    const parentRename = g !== c && r === path.join(c, 'worktrees');
+    if (denied || parentRename || isWorktreeGit(r)) throw new Error(`${GIT_PATH_DENIED_PREFIX}${rel}`);
 }

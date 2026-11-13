@@ -90,9 +90,22 @@ async function worktreeTrusted(git: Git, abs: string, trusted: GitPaths): Promis
 const isSymlink = (p: string): boolean => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
 
 /**
+ * 이 프로세스(샌드박스 밖)가 git 디렉터리 안에 파일을 쓴다 — 그 자리는 샌드박스 안의 자식(필터·exec)이 쓸 수 있어 심링크로 바꿔
+ * 둘 수 있다. 따라가면 폴더 밖 파일을 덮어쓴다(리뷰 F5, M3). 그래서 **새 이름으로 만들고(O_CREAT|O_EXCL — 심링크면 실패한다)
+ * rename 으로 바꿔 넣는다**(rename 은 대상 자리의 심링크를 따라가지 않고 그 항목을 바꾼다). 실패는 던진다(호출측이 삼킨다).
+ */
+function writeNoFollow(dir: string, name: string, content: string): void {
+    const tmp = path.join(dir, `${name}.omk-${process.pid}`);
+    fs.rmSync(tmp, { force: true }); // 남은 임시 이름(심링크여도 링크만 지운다)
+    fs.writeFileSync(tmp, content, { flag: 'wx' });
+    try { fs.renameSync(tmp, path.join(dir, name)); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; }
+}
+
+/**
  * worktree 디렉토리를 로컬 전용 제외 목록에 등록 — 사용자의 .gitignore 는 건드리지 않는다. 제외 목록은 common dir 에 있다
  * (linked worktree 도 `$GIT_COMMON_DIR/info/exclude` 를 읽는다). `info`·`info/exclude` 는 에이전트가 바꿀 수 있다 —
- * 폴더 밖 심링크는 물론 git 디렉터리 안쪽 심링크(→ config 등, M3)도 따라가면 그 파일 끝에 줄이 붙으므로 심링크면 등록하지 않는다.
+ * 폴더 밖 심링크는 물론 git 디렉터리 안쪽 심링크(→ config 등, M3)도 따라가면 그 파일 끝에 줄이 붙으므로 심링크면 등록하지 않고,
+ * 쓰기는 따라가지 않는 바꿔 넣기로 한다.
  */
 function excludeWorktreeDir(gitDir: string): void {
     try {
@@ -103,7 +116,7 @@ function excludeWorktreeDir(gitDir: string): void {
         fs.mkdirSync(infoDir, { recursive: true });
         const cur = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
         if (!cur.split('\n').some((l) => l.trim() === '.openmake/')) {
-            fs.appendFileSync(p, `${cur.endsWith('\n') || cur === '' ? '' : '\n'}.openmake/\n`);
+            writeNoFollow(infoDir, 'exclude', `${cur}${cur.endsWith('\n') || cur === '' ? '' : '\n'}.openmake/\n`);
         }
     } catch { /* 제외 등록 실패는 치명적이지 않다(사용자 status 에 보일 뿐) */ }
 }
@@ -114,10 +127,13 @@ function excludeWorktreeDir(gitDir: string): void {
  * worktree 메타 디렉토리(`.git/worktrees/<name>/`)에 둔다 — 작업트리 밖이라 diff·status 에
  * 잡히지 않고, `git worktree remove` 시 함께 정리된다. 읽기 실패 시 'HEAD' 로 폴백한다
  * (커밋이 있었다면 그 변경은 놓치지만, diff 캡처 자체가 죽지는 않는다).
+ * 메타 폴더는 그 레포의 `<common>/worktrees/` 바로 아래일 때만 쓴다(git 이 답한 값을 대조 없이 쓰지 않는다).
  */
-async function worktreeMetaDir(git: Git, wtAbs: string): Promise<string | null> {
+async function worktreeMetaDir(git: Git, wtAbs: string, repo: GitPaths): Promise<string | null> {
     const r = await git(['rev-parse', '--absolute-git-dir'], wtAbs);
-    return r.code === 0 ? r.stdout.trim() : null;
+    if (r.code !== 0) return null;
+    const meta = await fs.promises.realpath(r.stdout.trim()).catch(() => null);
+    return meta && path.dirname(meta) === path.join(repo.commonDir, 'worktrees') ? meta : null;
 }
 
 /** 프로파일 없음은 삼키지 않는다 — 그 밖의 실패는 치명적이지 않다(HEAD 폴백). */
@@ -125,19 +141,20 @@ function rethrowSandbox(e: unknown): void {
     if (e instanceof SandboxProfileMissingError) throw e;
 }
 
-async function writeBaseSha(git: Git, wtAbs: string): Promise<void> {
+async function writeBaseSha(git: Git, wtAbs: string, repo: GitPaths): Promise<void> {
     try {
-        const meta = await worktreeMetaDir(git, wtAbs);
+        const meta = await worktreeMetaDir(git, wtAbs, repo);
         const head = await git(['rev-parse', 'HEAD'], wtAbs);
-        if (meta && head.code === 0) fs.writeFileSync(path.join(meta, 'omk-base'), head.stdout.trim());
+        if (meta && head.code === 0) writeNoFollow(meta, 'omk-base', head.stdout.trim());
     } catch (e) { rethrowSandbox(e); }
 }
 
-async function readBaseSha(git: Git, wtAbs: string): Promise<string> {
+/** 기준점 읽기 — 심링크는 읽지 않는다(일반 파일만). */
+async function readBaseSha(git: Git, wtAbs: string, repo: GitPaths): Promise<string> {
     try {
-        const meta = await worktreeMetaDir(git, wtAbs);
+        const meta = await worktreeMetaDir(git, wtAbs, repo);
         const p = meta && path.join(meta, 'omk-base');
-        if (p && fs.existsSync(p)) {
+        if (p && fs.lstatSync(p, { throwIfNoEntry: false })?.isFile()) {
             const sha = fs.readFileSync(p, 'utf8').trim();
             if (/^[0-9a-f]{7,40}$/.test(sha)) return sha;
         }
@@ -155,13 +172,15 @@ async function scopeError(base: string, rel: string): Promise<string | null> {
 }
 
 /**
- * 실패한 `worktree add` 가 남긴 것을 치운다 — 폴더가 남으면 다음 요청이 "재개"로 오인하고, 브랜치가 남으면 같은 작업의
- * 다음 add 가 "이미 있다"로 실패한다(필수 필터가 실패하면 git 은 폴더·메타는 지우지만 브랜치는 남긴다 — 2026-11-14 실측).
+ * 실패한 `worktree add` 가 남긴 것을 치운다 — 폴더가 남으면 다음 요청이 "재개"로 오인하고, 등록(메타)이 남으면 같은 자리의
+ * 다음 add 가 "missing but already registered" 로, 브랜치가 남으면 "이미 있다"로 실패한다(필수 필터가 실패하면 git 은 폴더·
+ * 메타는 지우지만 브랜치는 남긴다 — 2026-11-14 실측). **이 worktree 만** 치운다 — `git worktree prune` 은 레포 전체의 폴더 없는
+ * 등록(분리된 볼륨의 worktree 등)을 즉시 지웠다(리뷰 F8). `worktree remove --force` 는 폴더가 없는 등록도 지운다(실측).
  * 브랜치는 이번 add 가 만든 것만 지운다(이미 있던 같은 이름 브랜치는 사용자 것일 수 있다).
  */
 async function cleanupFailedAdd(git: Git, base: string, rel: string, abs: string, branch: string, hadBranch: boolean): Promise<void> {
+    await git(['worktree', 'remove', '--force', abs], base);
     if (fs.existsSync(abs) && !(await scopeError(base, rel))) fs.rmSync(abs, { recursive: true, force: true });
-    await git(['worktree', 'prune'], base);
     if (!hadBranch) await git(['branch', '-D', branch], base);
 }
 
@@ -209,7 +228,7 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
             await cleanupFailedAdd(git, base, rel, abs, branch, hadBranch);
             done({ ok: false, error: `worktree 생성 실패: ${(r.stderr || r.stdout).trim().slice(0, 300)}` }); return;
         }
-        await writeBaseSha(git, abs);
+        await writeBaseSha(git, abs, repo);
         ensureSub();
         done({ ok: true, worktreeRel: workRel, branch });
         return;
@@ -225,7 +244,7 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
         // 기준점은 **worktree 생성 시점의 커밋**이다. HEAD 를 쓰면 에이전트가 중간에 커밋했을 때
         // 그 변경이 diff 에서 사라진다(2026-08-09 라이브 E2E 에서 실제 발생 — 모델이 작업을 커밋해
         // diff 에 마지막 미커밋 파일 하나만 남았다).
-        const r = await git(['diff', await readBaseSha(git, abs)], abs);
+        const r = await git(['diff', await readBaseSha(git, abs, repo)], abs);
         if (r.code !== 0) { done({ ok: false, error: `diff 실패: ${(r.stderr || '').trim().slice(0, 200)}` }); return; }
         done({ ok: true, stdout: r.stdout, branch });
         return;
@@ -240,7 +259,7 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
         // 미커밋 변경뿐 아니라 **에이전트가 만든 커밋**도 보존 대상이다(HEAD 가 기준점에서 움직였는지).
         const st = await git(['status', '--porcelain'], abs);
         const head = await git(['rev-parse', 'HEAD'], abs);
-        const moved = head.code === 0 && head.stdout.trim() !== (await readBaseSha(git, abs));
+        const moved = head.code === 0 && head.stdout.trim() !== (await readBaseSha(git, abs, repo));
         if ((st.code === 0 && st.stdout.trim() !== '') || moved) { done({ ok: true, kept: true, branch }); return; }
         const late = await scopeError(base, rel); // 첫 검사 뒤 git 여러 번이 끼었다 — 바로 앞에서 다시 본다.
         if (late) { done({ ok: false, error: late }); return; }
