@@ -17,7 +17,7 @@ use crate::constants::{MAX_BUFFER, SANDBOX_BIN};
 use crate::denylist::match_denylist;
 use crate::exec_env::build_exec_env;
 use crate::exec_path::resolve_exec_path;
-use crate::git_trust::{GitPaths, detect_git, root_git_dir};
+use crate::git_trust::{GitPaths, detect_git, protected_git_dirs};
 use crate::msg::{BridgeMsg, BridgeResult};
 use crate::node_error;
 use crate::platform::{Platform, bulk_approval_allowed, shell_invocation};
@@ -98,8 +98,9 @@ pub(crate) struct ExecState {
     tool_profile: Mutex<Option<String>>,
     /// 연결 때 믿기로 한 git 디렉터리(`git_trust`) — 없으면 git 없음(쓰기 허용 줄 없음, worktree 거절).
     git: Mutex<Option<GitPaths>>,
-    /// 금지 줄·파일 kind 가드를 걸 git 디렉터리 — 믿는 git, 없으면 연결 폴더의 `.git` 디렉터리(리뷰 F2).
-    protect: Mutex<Option<GitPaths>>,
+    /// 금지 줄·파일 kind 가드를 걸 git 디렉터리 — 믿는 git 과 연결 폴더의 `.git`(디렉터리, 또는 폴더 안을 가리키는 gitfile·
+    /// 심링크의 대상)(리뷰 F2·N2).
+    protect: Mutex<Vec<GitPaths>>,
 }
 
 impl ExecState {
@@ -111,7 +112,7 @@ impl ExecState {
             profile: Mutex::new(None),
             tool_profile: Mutex::new(None),
             git: Mutex::new(None),
-            protect: Mutex::new(None),
+            protect: Mutex::new(Vec::new()),
         }
     }
 
@@ -149,18 +150,18 @@ impl ExecState {
         *lock(&self.git) = git.clone();
         let (root, home, sandbox) = (root.to_owned(), h.home.clone(), h.sandbox_enabled);
         let build = move || {
-            let protect = git.clone().or_else(|| root_git_dir(&root));
+            let protect = protected_git_dirs(git.as_ref(), &root);
             let text = |tool| {
                 sandbox
-                    .then(|| sandbox_profile(&root, git.as_ref(), protect.as_ref(), &home, tool))
+                    .then(|| sandbox_profile(&root, git.as_ref(), &protect, &home, tool))
                     .flatten()
             };
             Ok((protect.clone(), text(false), text(true)))
         };
-        let (protect, profile, tool) = gate
-            .run("샌드박스 준비", build)
-            .await
-            .unwrap_or((None, None, None));
+        let (protect, profile, tool) =
+            gate.run("샌드박스 준비", build)
+                .await
+                .unwrap_or((Vec::new(), None, None));
         *lock(&self.protect) = protect;
         *lock(&self.profile) = profile;
         *lock(&self.tool_profile) = tool;
@@ -176,8 +177,8 @@ impl ExecState {
         lock(&self.profile).clone()
     }
 
-    /// 금지 줄·파일 kind 가드를 거는 git 디렉터리(믿는 git, 없으면 연결 폴더의 `.git` 디렉터리).
-    pub(crate) fn protect_paths(&self) -> Option<GitPaths> {
+    /// 금지 줄·파일 kind 가드를 거는 git 디렉터리들(믿는 git 과 연결 폴더의 `.git` 쪽).
+    pub(crate) fn protect_paths(&self) -> Vec<GitPaths> {
         lock(&self.protect).clone()
     }
 

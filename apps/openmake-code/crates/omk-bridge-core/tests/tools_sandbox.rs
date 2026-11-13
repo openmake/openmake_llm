@@ -172,7 +172,7 @@ fn python_tools_run_inside_profile() {
         w.tool("bin/python3", "py", "Error: ");
         std::fs::write(w.join("root/conftest.py"), "").unwrap();
         std::fs::write(w.join("root/b.py"), "").unwrap();
-        let profile = sandbox_profile(&w.join("root"), None, None, &w.join("home"), true);
+        let profile = sandbox_profile(&w.join("root"), None, &[], &w.join("home"), true);
         let tool = ToolEnv {
             env: vec![("HOME".to_owned(), w.join("home"))],
             platform: Platform::Darwin,
@@ -260,7 +260,7 @@ fn missing_python_is_not_refused() {
     let w = Work::new();
     std::fs::write(w.join("root/conftest.py"), "").unwrap();
     std::fs::write(w.join("root/b.py"), "def f(:\n").unwrap();
-    let profile = sandbox_profile(&w.join("root"), None, None, &w.join("home"), true).unwrap();
+    let profile = sandbox_profile(&w.join("root"), None, &[], &w.join("home"), true).unwrap();
     let tool = ToolEnv {
         env: vec![("HOME".to_owned(), w.join("home"))],
         platform: Platform::Darwin,

@@ -22,7 +22,7 @@ use crate::constants::{
     GIT_DIR_MISMATCH_ERROR, GIT_FIXED_ARGS, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR,
 };
 use crate::exec::ExecState;
-use crate::git_trust::GitPaths;
+use crate::git_trust::{GitPaths, read_regular_file};
 use crate::js_text::{js_trim, utf16_prefix};
 use crate::msg::{BridgeMsg, BridgeResult};
 use crate::node_path;
@@ -225,10 +225,11 @@ fn exclude_worktree_dir(git_dir: &str) {
     if std::fs::create_dir_all(&info).is_err() {
         return;
     }
-    let cur = if exists(&p) {
-        match std::fs::read(&p) {
-            Ok(b) => String::from_utf8_lossy(&b).into_owned(),
-            Err(_) => return,
+    // 일반 파일만 읽는다 — FIFO·소켓·장치면 읽기가 멈췄다(리뷰 N3). 그때는 등록을 건너뛴다(TS 같음).
+    let cur = if std::fs::symlink_metadata(&p).is_ok() {
+        match read_regular_file(&p, u64::MAX) {
+            Some(t) => t,
+            None => return,
         }
     } else {
         String::new()

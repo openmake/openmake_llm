@@ -15,6 +15,8 @@ mod exec_shape;
 mod file_kinds;
 #[path = "conformance/request_guard.rs"]
 mod request_guard;
+#[path = "conformance/sandbox_profile.rs"]
+mod sandbox_profile;
 #[path = "conformance/scope.rs"]
 mod scope;
 mod support;
@@ -374,7 +376,12 @@ fn constants() {
         "GIT_PROBE_PROFILE",
         "GIT_DIR_MISMATCH_ERROR",
     ]);
-    seen.push("GIT_PATH_DENIED_PREFIX");
+    assert_eq!(
+        values["GITFILE_MAX_BYTES"],
+        c::GITFILE_MAX_BYTES,
+        "constants/GITFILE_MAX_BYTES"
+    );
+    seen.extend(["GIT_PATH_DENIED_PREFIX", "GITFILE_MAX_BYTES"]);
     seen.extend(["WORKTREE_DIR", "WORKTREE_BRANCH_PREFIX"]);
     // 읽기 전용 도구 (PR-1.4) — 두 시간 제한은 기본값(TS 는 환경 변수가 없을 때의 값).
     let tools: [(&str, u64); 12] = [
@@ -568,37 +575,4 @@ fn denylist() {
         };
         assert_eq!(match_denylist(command), want["why"].as_str(), "{ctx}");
     }
-}
-
-/// `{{HOME}}` 자리에 넣는 임의 홈 — 실제 홈에 의존하지 않는다.
-const FAKE_HOME: &str = "/synthetic/home";
-
-#[test]
-fn sandbox_profile() {
-    use omk_bridge_core::git_trust::GitPaths;
-    use omk_bridge_core::sandbox_profile::build_sandbox_profile;
-    let doc = load("sandbox-profile");
-    each_case(&doc, "sandbox-profile", "cases", |ctx, i, e| {
-        // commonDir 를 적지 않으면 git dir 와 같다(일반 레포). 빈 gitDir 은 git 없음 — 코어가 판정한다.
-        let git = i["gitDir"].as_str().map(|g| GitPaths {
-            git_dir: g.to_owned(),
-            common_dir: i["commonDir"].as_str().unwrap_or(g).to_owned(),
-        });
-        let tool = i["tool"].as_bool().unwrap_or(false);
-        let root = i["root"].as_str().unwrap();
-        // protect 를 적지 않으면 git 쪽(TS 러너와 같다). null 이면 지킬 것 없음.
-        let protect = match i.get("protect") {
-            None => git.clone(),
-            Some(p) => p["gitDir"].as_str().map(|g| GitPaths {
-                git_dir: g.to_owned(),
-                common_dir: p["commonDir"].as_str().unwrap_or(g).to_owned(),
-            }),
-        };
-        let got = build_sandbox_profile(root, git.as_ref(), protect.as_ref(), FAKE_HOME, tool);
-        let want = e["profile"]
-            .as_str()
-            .unwrap()
-            .replace("{{HOME}}", FAKE_HOME);
-        assert_eq!(got, want, "{ctx}");
-    });
 }

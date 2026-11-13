@@ -35,12 +35,13 @@ fn literal_path(p: &str) -> String {
 /// 프로파일 텍스트. `home` 은 호출 쪽이 realpath 로 넘긴다. 빈 `git_dir` 은 TS(빈 문자열은 거짓)처럼 없음으로 본다.
 /// `tool`: 확인 없이 뜨는 자식용 **도구 프로파일** — exec 프로파일의 모든 줄 + `(deny network*)`(설계 D-1).
 /// `git`(믿는 git 디렉터리)은 **쓰기 허용** — 받은 표기 그대로. linked worktree(common dir 가 따로)는 common dir 쓰기도 연다.
-/// `protect` 는 끝 금지 줄을 걸 git 디렉터리 — 보통 `git` 과 같고, 믿지 않아도 연결 폴더의 `.git` 디렉터리는 지킨다(리뷰 F2).
+/// `protect` 는 끝 금지 줄을 걸 git 디렉터리들(하나에 한 줄) — 보통 `[git]` 이고, 믿지 않아도 연결 폴더의 `.git` 디렉터리와 폴더
+/// 안을 가리키는 gitfile·심링크의 대상은 지킨다(리뷰 F2·N2, `git_trust::protected_git_dirs`).
 /// 금지 줄은 `path.join` 정규화 결과를 쓴다(TS 와 같다).
 pub fn build_sandbox_profile(
     root: &str,
     git: Option<&GitPaths>,
-    protect: Option<&GitPaths>,
+    protect: &[GitPaths],
     home: &str,
     tool: bool,
 ) -> String {
@@ -80,7 +81,7 @@ pub fn build_sandbox_profile(
     if tool {
         lines.push("(deny network*)".to_owned());
     }
-    lines.extend(git_deny_line(protect));
+    lines.extend(protect.iter().filter_map(git_deny_line));
     lines.push(String::new());
     lines.join("\n")
 }
@@ -90,8 +91,10 @@ pub fn build_sandbox_profile(
 /// 읽는다)도 같다. git 디렉터리 자신도 막는다 — 금지는 경로 글자 기준이라 `.git` 을 옮겼다 되돌리면 빗나갔다(E2). linked 배치는
 /// `<common>/worktrees`(이름을 바꿔 자기 메타 금지를 비키는 길, 리뷰 F4)와 자기 git dir 의 자신·commondir·config.worktree 도
 /// 막는다 — 그 배치는 `worktrees` 가 이미 있어 `worktree add` 가 만들 일이 없다. last-match-wins 라 맨 끝이어야 한다.
-fn git_deny_line(protect: Option<&GitPaths>) -> Option<String> {
-    let p = protect.filter(|p| !p.git_dir.is_empty())?;
+fn git_deny_line(p: &GitPaths) -> Option<String> {
+    if p.git_dir.is_empty() {
+        return None;
+    }
     let c = if p.common_dir.is_empty() {
         p.git_dir.as_str()
     } else {
@@ -126,10 +129,16 @@ mod tests {
 
     #[test]
     fn empty_git_dir_is_no_git_dir() {
-        let none = build_sandbox_profile("/work/repo", None, None, "/h", false);
+        let none = build_sandbox_profile("/work/repo", None, &[], "/h", false);
         let empty = git("", "");
         assert_eq!(
-            build_sandbox_profile("/work/repo", Some(&empty), Some(&empty), "/h", false),
+            build_sandbox_profile(
+                "/work/repo",
+                Some(&empty),
+                std::slice::from_ref(&empty),
+                "/h",
+                false
+            ),
             none
         );
         assert!(!none.contains("hooks"));
@@ -139,7 +148,8 @@ mod tests {
     fn git_deny_is_last_line_and_text_ends_with_one_newline() {
         let g = git("/work/repo/.git", "/work/repo/.git");
         for tool in [false, true] {
-            let p = build_sandbox_profile("/work/repo", Some(&g), Some(&g), "/h", tool);
+            let p =
+                build_sandbox_profile("/work/repo", Some(&g), std::slice::from_ref(&g), "/h", tool);
             assert!(p.ends_with(")\n") && !p.ends_with("\n\n"));
             let last = p.trim_end().lines().last().unwrap_or_default();
             assert_eq!(
