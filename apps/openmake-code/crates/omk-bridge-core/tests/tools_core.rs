@@ -35,7 +35,10 @@ fn host(tmp: &TmpDir, sandbox: bool, shell: Option<String>) -> ExecHost {
         env: vec![
             ("PATH".to_owned(), real_path()),
             ("HOME".to_owned(), tmp.join("home")),
-            ("SHELL".to_owned(), shell.unwrap_or_else(|| "/bin/sh".to_owned())),
+            (
+                "SHELL".to_owned(),
+                shell.unwrap_or_else(|| "/bin/sh".to_owned()),
+            ),
         ],
         home: tmp.join("home"),
         platform: Platform::Darwin,
@@ -92,7 +95,14 @@ fn budget_is_checked_per_line_and_between_files() {
     let (_, expired) = expires_at(6);
     let got = code_nav::run(&tmp.path, &tmp.path, &grep_msg("hit"), &expired).unwrap();
     let want = (1..=3).map(|i| format!("a.txt:{i}:hit")).collect();
-    assert_eq!(got, CodeNavResult::Grep { matches: want, truncated: true, skipped: 0 });
+    assert_eq!(
+        got,
+        CodeNavResult::Grep {
+            matches: want,
+            truncated: true,
+            skipped: 0
+        }
+    );
 
     let tmp = TmpDir::new();
     write(&tmp.join("a.txt"), "hit");
@@ -102,7 +112,11 @@ fn budget_is_checked_per_line_and_between_files() {
     let got = code_nav::run(&tmp.path, &tmp.path, &grep_msg("hit"), &expired).unwrap();
     assert_eq!(
         got,
-        CodeNavResult::Grep { matches: vec!["a.txt:1:hit".to_owned()], truncated: true, skipped: 0 }
+        CodeNavResult::Grep {
+            matches: vec!["a.txt:1:hit".to_owned()],
+            truncated: true,
+            skipped: 0
+        }
     );
     assert_eq!(calls.load(Ordering::SeqCst), 4);
 }
@@ -112,9 +126,15 @@ fn budget_is_checked_per_line_and_between_files() {
 fn zero_budget_truncates_at_first_check() {
     let tmp = TmpDir::new();
     write(&tmp.join("a.txt"), "hit\n");
-    let c = bare(&tmp.path).with_tool_timeouts(ToolTimeouts { code_nav_ms: 0, diag_ms: 15_000 });
+    let c = bare(&tmp.path).with_tool_timeouts(ToolTimeouts {
+        code_nav_ms: 0,
+        diag_ms: 15_000,
+    });
     assert_eq!(
-        send(&c, json!({"kind": "code_nav", "op": "grep", "pattern": "hit"})),
+        send(
+            &c,
+            json!({"kind": "code_nav", "op": "grep", "pattern": "hit"})
+        ),
         json!({"ok": true, "codeNav": {"matches": [], "truncated": true}})
     );
 }
@@ -126,11 +146,17 @@ fn core_without_host() {
     write(&tmp.join("a.txt"), "hit\n");
     let c = bare(&tmp.path);
     assert_eq!(
-        send(&c, json!({"kind": "code_nav", "op": "grep", "pattern": "hit"}))["codeNav"]["matches"],
+        send(
+            &c,
+            json!({"kind": "code_nav", "op": "grep", "pattern": "hit"})
+        )["codeNav"]["matches"],
         json!(["a.txt:1:hit"])
     );
     for kind in ["lsp_diagnostics", "test_runner"] {
-        assert_eq!(send(&c, json!({"kind": kind, "paths": ["../x"], "path": "../x"})), json!({"ok": false, "error": NO_HOST}));
+        assert_eq!(
+            send(&c, json!({"kind": kind, "paths": ["../x"], "path": "../x"})),
+            json!({"ok": false, "error": NO_HOST})
+        );
         assert_eq!(
             send(&c, json!({"kind": kind, "folder": "../x"}))["error"],
             "폴더 스코프 밖 경로 거부: ../x"
@@ -149,13 +175,28 @@ fn tools_share_exec_path_cache() {
     let tmp = TmpDir::new();
     let shell = tmp.join("loginshell");
     let count = tmp.join("probes");
-    script(&shell, &format!("echo x >> '{count}'\nprintf /usr/bin:/bin"));
+    script(
+        &shell,
+        &format!("echo x >> '{count}'\nprintf /usr/bin:/bin"),
+    );
     std::fs::create_dir_all(tmp.join("root")).unwrap();
     let c = bare(&tmp.join("root")).with_exec_host(host(&tmp, false, Some(shell)));
-    assert_eq!(send(&c, json!({"kind": "test_runner"})), json!({"ok": true, "testRunner": "none"}));
-    assert_eq!(send(&c, json!({"kind": "exec", "command": "true"}))["exitCode"], 0);
-    assert_eq!(send(&c, json!({"kind": "lsp_diagnostics", "paths": ["a.md"]}))["serverKind"], "none");
-    let probes = std::fs::read_to_string(&count).unwrap_or_default().lines().count();
+    assert_eq!(
+        send(&c, json!({"kind": "test_runner"})),
+        json!({"ok": true, "testRunner": "none"})
+    );
+    assert_eq!(
+        send(&c, json!({"kind": "exec", "command": "true"}))["exitCode"],
+        0
+    );
+    assert_eq!(
+        send(&c, json!({"kind": "lsp_diagnostics", "paths": ["a.md"]}))["serverKind"],
+        "none"
+    );
+    let probes = std::fs::read_to_string(&count)
+        .unwrap_or_default()
+        .lines()
+        .count();
     assert_eq!(probes, 1);
 }
 
@@ -165,16 +206,33 @@ fn missing_profile_fails_closed_only_when_spawning() {
     let tmp = TmpDir::new();
     let root = tmp.join("root");
     write(&format!("{root}/py/conftest.py"), "");
-    write(&format!("{root}/npm/package.json"), r#"{"scripts":{"test":"node t.js"}}"#);
+    write(
+        &format!("{root}/npm/package.json"),
+        r#"{"scripts":{"test":"node t.js"}}"#,
+    );
     write(&format!("{root}/b.py"), "x = 1\n");
     let c = bare(&root).with_exec_host(host(&tmp, true, None));
     // exec 와 같은 거절 모양(문구 + exitCode 126) — TS 별건 수정과 같다.
     let refused = |v: Value| {
-        v["ok"] == false && v["exitCode"] == 126 && v["error"].as_str().unwrap_or("").starts_with(FAIL_CLOSED_HEAD)
+        v["ok"] == false
+            && v["exitCode"] == 126
+            && v["error"]
+                .as_str()
+                .unwrap_or("")
+                .starts_with(FAIL_CLOSED_HEAD)
     };
-    assert!(refused(send(&c, json!({"kind": "test_runner", "path": "py"}))));
-    assert!(refused(send(&c, json!({"kind": "lsp_diagnostics", "paths": ["b.py"]}))));
-    assert_eq!(send(&c, json!({"kind": "test_runner", "path": "npm"})), json!({"ok": true, "testRunner": "npm"}));
+    assert!(refused(send(
+        &c,
+        json!({"kind": "test_runner", "path": "py"})
+    )));
+    assert!(refused(send(
+        &c,
+        json!({"kind": "lsp_diagnostics", "paths": ["b.py"]})
+    )));
+    assert_eq!(
+        send(&c, json!({"kind": "test_runner", "path": "npm"})),
+        json!({"ok": true, "testRunner": "npm"})
+    );
     assert_eq!(
         send(&c, json!({"kind": "lsp_diagnostics", "paths": ["a.md"]})),
         json!({"ok": true, "diagnostics": [], "truncated": false, "serverKind": "none"})
@@ -199,16 +257,31 @@ fn slow_or_noisy_tsc_is_cut_and_parsed() {
         write(&format!("{root}/{p}/tsconfig.json"), "{}");
         write(&format!("{root}/{p}/a.ts"), "");
     }
-    script(&format!("{root}/p1/node_modules/.bin/tsc"), "echo 'a.ts(1,1): error TS1: slow'\nexec /bin/sleep 30");
+    script(
+        &format!("{root}/p1/node_modules/.bin/tsc"),
+        "echo 'a.ts(1,1): error TS1: slow'\nexec /bin/sleep 30",
+    );
     script(
         &format!("{root}/p2/node_modules/.bin/tsc"),
         "echo 'a.ts(2,1): error TS2: noisy'\nwhile :; do echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; done",
     );
-    script(&format!("{root}/p3/node_modules/.bin/tsc"), "echo 'a.ts(3,1): error TS3: next'");
-    let paths: Vec<String> = ["p1", "p2", "p3"].iter().map(|p| format!("{root}/{p}/a.ts")).collect();
+    script(
+        &format!("{root}/p3/node_modules/.bin/tsc"),
+        "echo 'a.ts(3,1): error TS3: next'",
+    );
+    let paths: Vec<String> = ["p1", "p2", "p3"]
+        .iter()
+        .map(|p| format!("{root}/{p}/a.ts"))
+        .collect();
     let t = Instant::now();
     let got = runtime()
-        .block_on(diagnostics::collect(&root, &paths, &direct_env(&tmp), 1_000, &FsGate::new(15_000)))
+        .block_on(diagnostics::collect(
+            &root,
+            &paths,
+            &direct_env(&tmp),
+            1_000,
+            &FsGate::new(15_000),
+        ))
         .unwrap();
     assert!(t.elapsed() < Duration::from_secs(10), "{:?}", t.elapsed());
     let msgs: Vec<&str> = got.diagnostics.iter().map(|d| d.message.as_str()).collect();

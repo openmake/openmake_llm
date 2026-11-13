@@ -34,9 +34,12 @@ fn read_lossy(p: &str) -> Option<String> {
 
 /// `/^node\b/` — `node` 다음 단위가 `[A-Za-z0-9_]` 가 아니거나 끝.
 fn starts_with_node_word(script: &str) -> bool {
-    script
-        .strip_prefix("node")
-        .is_some_and(|rest| !rest.chars().next().is_some_and(|c| c.is_ascii_alphanumeric() || c == '_'))
+    script.strip_prefix("node").is_some_and(|rest| {
+        !rest
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
+    })
 }
 
 /// scripts.test 가 있고 기본 자리표시자가 아니며, node_modules 가 있거나(무엇이든) `node …` 스크립트인가.
@@ -69,7 +72,8 @@ fn has_pytest_marker(dir: &str) -> bool {
     if exists(&at("pytest.ini")) || exists(&at("conftest.py")) {
         return true;
     }
-    let contains = |name: &str, needle: &str| read_lossy(&at(name)).is_some_and(|t| t.contains(needle));
+    let contains =
+        |name: &str, needle: &str| read_lossy(&at(name)).is_some_and(|t| t.contains(needle));
     if contains("pyproject.toml", "tool.pytest") || contains("setup.cfg", "tool:pytest") {
         return true;
     }
@@ -106,10 +110,14 @@ pub async fn detect(dir: &str, tool: &ToolEnv, gate: &FsGate) -> Result<&'static
     }
     if m.pytest {
         let finder = tool.clone();
-        let python = gate.run(LABEL, move || Ok(finder.find_on_path("python3"))).await?;
+        let python = gate
+            .run(LABEL, move || Ok(finder.find_on_path("python3")))
+            .await?;
         if let Some(py) = python {
             let args = ["-I", "-c", PYTEST_PROBE];
-            let out = tool.run(&py, &args, dir, TEST_RUNNER_PROBE_TIMEOUT_MS).await?;
+            let out = tool
+                .run(&py, &args, dir, TEST_RUNNER_PROBE_TIMEOUT_MS)
+                .await?;
             // Node `execFile` 의 `!err` — 종료 코드 0(1.3 의 M1 규칙).
             if out.end.exec_file_code() == 0 {
                 return Ok("pytest");
@@ -118,7 +126,10 @@ pub async fn detect(dir: &str, tool: &ToolEnv, gate: &FsGate) -> Result<&'static
     }
     if m.go_mod {
         let finder = tool.clone();
-        if gate.run(LABEL, move || Ok(finder.find_on_path("go").is_some())).await? {
+        if gate
+            .run(LABEL, move || Ok(finder.find_on_path("go").is_some()))
+            .await?
+        {
             return Ok("go");
         }
     }

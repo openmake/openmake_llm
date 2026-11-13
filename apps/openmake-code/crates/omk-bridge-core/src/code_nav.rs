@@ -23,8 +23,12 @@ use crate::node_path;
 /// 바이너리 추정 범위 — 앞부분에 NUL 이 있으면 텍스트가 아니다(grep -I 과 같은 판정).
 const BINARY_SNIFF: usize = 8192;
 
-static SECRET_GLOBS: LazyLock<Vec<Glob>> =
-    LazyLock::new(|| CODE_NAV_EXCLUDED_FILES.iter().map(|g| Glob::parse(g)).collect());
+static SECRET_GLOBS: LazyLock<Vec<Glob>> = LazyLock::new(|| {
+    CODE_NAV_EXCLUDED_FILES
+        .iter()
+        .map(|g| Glob::parse(g))
+        .collect()
+});
 
 /// 자격증명 파일인지 — 이름(basename)만 본다. 대소문자는 ASCII 만 무시한다(TS `new RegExp(…, 'i')` 와 같다 — 표가 ASCII 뿐이다).
 pub fn is_secret_file(name: &str) -> bool {

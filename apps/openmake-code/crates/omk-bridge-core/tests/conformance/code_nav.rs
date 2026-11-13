@@ -22,7 +22,15 @@ const TOOL_SETUP_KINDS: [&str; 5] = ["dir", "file", "symlink", "many", "fakeTool
 const TOOL_COMPARES: [&str; 2] = ["counts", "error-prefix"];
 /// 문자열 형식 검사 필드(D-66) — 기존 7개 + pattern·glob. `maxResults`(수 필드)·`paths`(원소)는 따로 본다.
 const CHECKED_FIELDS: [&str; 9] = [
-    "kind", "path", "folder", "contentB64", "command", "op", "taskId", "pattern", "glob",
+    "kind",
+    "path",
+    "folder",
+    "contentB64",
+    "command",
+    "op",
+    "taskId",
+    "pattern",
+    "glob",
 ];
 /// `paths` 는 앞 60개만 본다(TS `slice(0, DIAG_MAX_TOTAL)`).
 const PATHS_CHECKED: usize = 60;
@@ -70,7 +78,10 @@ fn shape_compare(r: &Value, at: &str) {
         return;
     };
     let compare = compare.as_str().unwrap_or("");
-    assert!(TOOL_COMPARES.contains(&compare), "{at}: 모르는 compare {compare}");
+    assert!(
+        TOOL_COMPARES.contains(&compare),
+        "{at}: 모르는 compare {compare}"
+    );
     for key in ["expect", "rustExpect"] {
         let Some(w) = r.get(key).filter(|w| w.is_object()) else {
             continue;
@@ -149,7 +160,12 @@ fn tools_fixture_shapes() {
         let at = format!("code-nav/walk/{}", c["id"].as_str().unwrap_or("?"));
         shape(c, &["id", "setup", "input", "expect"], &[], &at);
         shape_setup(&c["setup"], &at);
-        shape(&c["input"], &["start", "deadline"], &[], &format!("{at}/input"));
+        shape(
+            &c["input"],
+            &["start", "deadline"],
+            &[],
+            &format!("{at}/input"),
+        );
         let deadline = c["input"]["deadline"].as_str().unwrap_or("");
         assert!(["past", "far"].contains(&deadline), "{at}: deadline");
         let keys = ["files", "truncated", "skipped"];
@@ -162,21 +178,42 @@ fn tools_fixture_shapes() {
     non_empty(&doc["excludedDirs"], "code-nav/excludedDirs");
 
     let doc = load("diagnostics-parse");
-    shape(&doc, &["suite", "version", "cases", "direct"], &[], "diagnostics-parse");
+    shape(
+        &doc,
+        &["suite", "version", "cases", "direct"],
+        &[],
+        "diagnostics-parse",
+    );
     shape_core_cases(&doc, "diagnostics-parse");
     shape_direct(&doc, "diagnostics-parse", &["base", "paths", "execPath"]);
     for c in doc["direct"].as_array().unwrap() {
-        let at = format!("diagnostics-parse/direct/{}/expect", c["id"].as_str().unwrap());
-        shape(&c["expect"], &["diagnostics", "truncated", "serverKind"], &[], &at);
+        let at = format!(
+            "diagnostics-parse/direct/{}/expect",
+            c["id"].as_str().unwrap()
+        );
+        shape(
+            &c["expect"],
+            &["diagnostics", "truncated", "serverKind"],
+            &[],
+            &at,
+        );
     }
 
     let doc = load("test-runner");
-    shape(&doc, &["suite", "version", "cases", "direct"], &[], "test-runner");
+    shape(
+        &doc,
+        &["suite", "version", "cases", "direct"],
+        &[],
+        "test-runner",
+    );
     shape_core_cases(&doc, "test-runner");
     shape_direct(&doc, "test-runner", &["dir", "execPath"]);
     for c in doc["direct"].as_array().unwrap() {
         let e = c["expect"].as_str().unwrap_or("");
-        assert!(["npm", "pytest", "go", "none"].contains(&e), "test-runner/direct: {e}");
+        assert!(
+            ["npm", "pytest", "go", "none"].contains(&e),
+            "test-runner/direct: {e}"
+        );
     }
 }
 
@@ -184,7 +221,8 @@ fn tools_fixture_shapes() {
 fn has_non_string_field(msg: &Value) -> bool {
     let max = &msg["maxResults"];
     CHECKED_FIELDS.iter().any(|f| truthy_non_string(&msg[*f]))
-        || (!max.is_number() && (truthy_non_string(max) || max.as_str().is_some_and(|t| !t.is_empty())))
+        || (!max.is_number()
+            && (truthy_non_string(max) || max.as_str().is_some_and(|t| !t.is_empty())))
         || msg["paths"]
             .as_array()
             .is_some_and(|a| a.iter().take(PATHS_CHECKED).any(truthy_non_string))
@@ -273,11 +311,19 @@ pub fn run_core_cases(suite: &str, kind: &str) {
             let before = read_tool_calls(&tmp).len();
             let msg = BridgeMsg::from_json(&fill(&r["msg"], &tmp.path));
             let got = rt.block_on(core.handle_exec(&msg)).to_json();
-            assert_eq!(view(&got, r["compare"].as_str(), &want, &ctx), want, "{ctx}");
+            assert_eq!(
+                view(&got, r["compare"].as_str(), &want, &ctx),
+                want,
+                "{ctx}"
+            );
             if let Some(tc) = r.get("toolCalls") {
                 let want = fill(tc, &tmp.path);
                 let calls = read_tool_calls(&tmp);
-                assert_eq!(tool_calls_view(&calls[before..], &want), want, "{ctx}: toolCalls");
+                assert_eq!(
+                    tool_calls_view(&calls[before..], &want),
+                    want,
+                    "{ctx}: toolCalls"
+                );
             }
         }
         assert!(!asked.load(Ordering::SeqCst), "{ctx}: 확인 창을 물었다");
@@ -308,8 +354,16 @@ fn code_nav_tables() {
             .map(|x| x.as_str().unwrap().to_owned())
             .collect()
     };
-    assert_eq!(strs(&doc["excludedFiles"]), CODE_NAV_EXCLUDED_FILES, "excludedFiles");
-    assert_eq!(strs(&doc["excludedDirs"]), CODE_NAV_EXCLUDED_DIRS, "excludedDirs");
+    assert_eq!(
+        strs(&doc["excludedFiles"]),
+        CODE_NAV_EXCLUDED_FILES,
+        "excludedFiles"
+    );
+    assert_eq!(
+        strs(&doc["excludedDirs"]),
+        CODE_NAV_EXCLUDED_DIRS,
+        "excludedDirs"
+    );
     for c in doc["secretFiles"].as_array().unwrap() {
         let name = c["name"].as_str().unwrap();
         assert_eq!(is_secret_file(name), c["expect"], "secretFiles: {name:?}");

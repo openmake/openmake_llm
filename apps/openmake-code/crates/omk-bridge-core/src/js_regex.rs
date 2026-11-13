@@ -178,7 +178,11 @@ mod tests {
         ];
         for (p, icase, line, want) in cases {
             let re = compile(p, *icase).unwrap();
-            assert_eq!(re.test_units(&units(line)), *want, "{p:?} i={icase} {line:?}");
+            assert_eq!(
+                re.test_units(&units(line)),
+                *want,
+                "{p:?} i={icase} {line:?}"
+            );
         }
     }
 
@@ -206,14 +210,24 @@ mod tests {
         assert!(compile("\\u{61}", false).unwrap().test_units(&a));
         assert!(!compile("\\u{61}", false).unwrap().test_units(&u61));
         assert!(compile("s", true).unwrap().test_units(&units("\u{17f}")));
-        assert!(!compile("k", true).unwrap().test_units(&units("\u{212a}")), "리터럴 k 는 두 엔진 모두 접지 않는다");
-        assert!(compile("[a-z]", true).unwrap().test_units(&units("\u{212a}")));
+        assert!(
+            !compile("k", true).unwrap().test_units(&units("\u{212a}")),
+            "리터럴 k 는 두 엔진 모두 접지 않는다"
+        );
+        assert!(
+            compile("[a-z]", true)
+                .unwrap()
+                .test_units(&units("\u{212a}"))
+        );
         assert!(compile("\\w", true).unwrap().test_units(&units("\u{17f}")));
     }
 
     #[test]
     fn expand_astral_rewrites_only_astral() {
-        assert!(matches!(expand_astral("abc[x]\\d"), Ok(std::borrow::Cow::Borrowed(_))));
+        assert!(matches!(
+            expand_astral("abc[x]\\d"),
+            Ok(std::borrow::Cow::Borrowed(_))
+        ));
         let ok = |p: &str| expand_astral(p).unwrap().into_owned();
         assert_eq!(ok("😀+"), "[\\uD83D][\\uDE00]+");
         assert_eq!(ok("[a😀]"), "[a\\uDE00\\uD83D]");

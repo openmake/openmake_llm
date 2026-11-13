@@ -10,7 +10,9 @@ use serde_json::{Value, json};
 
 use super::code_nav::run_core_cases;
 use super::{case_list, load};
-use crate::support::{TmpDir, apply_setup, fill, read_tool_calls, runner_env, runtime, tool_calls_view};
+use crate::support::{
+    TmpDir, apply_setup, fill, read_tool_calls, runner_env, runtime, tool_calls_view,
+};
 
 pub fn collected_json(c: &Collected) -> Value {
     let list: Vec<Value> = c.diagnostics.iter().map(|d| d.to_json()).collect();
@@ -55,7 +57,11 @@ fn diagnostics_direct() {
         assert_eq!(collected_json(&got), fill(&c["expect"], &tmp.path), "{ctx}");
         if let Some(tc) = c.get("toolCalls") {
             let want = fill(tc, &tmp.path);
-            assert_eq!(tool_calls_view(&read_tool_calls(&tmp), &want), want, "{ctx}: toolCalls");
+            assert_eq!(
+                tool_calls_view(&read_tool_calls(&tmp), &want),
+                want,
+                "{ctx}: toolCalls"
+            );
         }
     }
     rt.shutdown_timeout(Duration::from_secs(5));
