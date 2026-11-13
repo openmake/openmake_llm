@@ -13,7 +13,6 @@ use serde_json::Value;
 
 use crate::constants::TEST_RUNNER_PROBE_TIMEOUT_MS;
 use crate::node_path;
-use crate::proc;
 use crate::timed_fs::FsGate;
 use crate::tool_env::ToolEnv;
 
@@ -109,9 +108,10 @@ pub async fn detect(dir: &str, tool: &ToolEnv, gate: &FsGate) -> Result<&'static
         let finder = tool.clone();
         let python = gate.run(LABEL, move || Ok(finder.find_on_path("python3"))).await?;
         if let Some(py) = python {
-            let spec = tool.spec(&py, &["-I", "-c", PYTEST_PROBE], dir, TEST_RUNNER_PROBE_TIMEOUT_MS)?;
+            let args = ["-I", "-c", PYTEST_PROBE];
+            let out = tool.run(&py, &args, dir, TEST_RUNNER_PROBE_TIMEOUT_MS).await?;
             // Node `execFile` 의 `!err` — 종료 코드 0(1.3 의 M1 규칙).
-            if proc::run(spec).await.end.exec_file_code() == 0 {
+            if out.end.exec_file_code() == 0 {
                 return Ok("pytest");
             }
         }

@@ -168,9 +168,12 @@ fn missing_profile_fails_closed_only_when_spawning() {
     write(&format!("{root}/npm/package.json"), r#"{"scripts":{"test":"node t.js"}}"#);
     write(&format!("{root}/b.py"), "x = 1\n");
     let c = bare(&root).with_exec_host(host(&tmp, true, None));
-    let err = |v: Value| v["error"].as_str().unwrap_or("").to_owned();
-    assert!(err(send(&c, json!({"kind": "test_runner", "path": "py"}))).starts_with(FAIL_CLOSED_HEAD));
-    assert!(err(send(&c, json!({"kind": "lsp_diagnostics", "paths": ["b.py"]}))).starts_with(FAIL_CLOSED_HEAD));
+    // exec 와 같은 거절 모양(문구 + exitCode 126) — TS 별건 수정과 같다.
+    let refused = |v: Value| {
+        v["ok"] == false && v["exitCode"] == 126 && v["error"].as_str().unwrap_or("").starts_with(FAIL_CLOSED_HEAD)
+    };
+    assert!(refused(send(&c, json!({"kind": "test_runner", "path": "py"}))));
+    assert!(refused(send(&c, json!({"kind": "lsp_diagnostics", "paths": ["b.py"]}))));
     assert_eq!(send(&c, json!({"kind": "test_runner", "path": "npm"})), json!({"ok": true, "testRunner": "npm"}));
     assert_eq!(
         send(&c, json!({"kind": "lsp_diagnostics", "paths": ["a.md"]})),
