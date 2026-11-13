@@ -3,6 +3,7 @@
 
 pub mod fake;
 pub mod fixture;
+pub mod scenario;
 pub mod tmp;
 
 use std::sync::Arc;
