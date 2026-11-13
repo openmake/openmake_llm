@@ -356,6 +356,25 @@ fn constants() {
     );
     seen.extend(["PATH_PROBE_TIMEOUT_MS", "GIT_PROBE_TIMEOUT_MS"]);
     seen.extend(["WORKTREE_DIR", "WORKTREE_BRANCH_PREFIX"]);
+    // 읽기 전용 도구 (PR-1.4) — 두 시간 제한은 기본값(TS 는 환경 변수가 없을 때의 값).
+    let tools: [(&str, u64); 12] = [
+        ("CODE_NAV_TIMEOUT_MS", c::CODE_NAV_TIMEOUT_MS),
+        ("CODE_NAV_MAX_FILES", c::CODE_NAV_MAX_FILES as u64),
+        ("CODE_NAV_MAX_FILE_BYTES", c::CODE_NAV_MAX_FILE_BYTES),
+        ("CODE_NAV_MAX_MATCHES", c::CODE_NAV_MAX_MATCHES as u64),
+        ("CODE_NAV_MAX_PER_FILE", c::CODE_NAV_MAX_PER_FILE as u64),
+        ("CODE_NAV_LINE_MAX_CHARS", c::CODE_NAV_LINE_MAX_CHARS as u64),
+        ("CODE_NAV_PATTERN_MAX_CHARS", c::CODE_NAV_PATTERN_MAX_CHARS as u64),
+        ("DIAG_TIMEOUT_MS", c::DIAG_TIMEOUT_MS),
+        ("DIAG_MAX_PER_FILE", c::DIAG_MAX_PER_FILE as u64),
+        ("DIAG_MAX_TOTAL", c::DIAG_MAX_TOTAL as u64),
+        ("DIAG_MSG_MAX", c::DIAG_MSG_MAX as u64),
+        ("TEST_RUNNER_PROBE_TIMEOUT_MS", c::TEST_RUNNER_PROBE_TIMEOUT_MS),
+    ];
+    for (name, ours) in tools {
+        assert_eq!(values[name], ours, "constants/{name}");
+        seen.push(name);
+    }
     let mut fixture_keys: Vec<&str> = values.keys().map(String::as_str).collect();
     fixture_keys.sort_unstable();
     seen.sort_unstable();
