@@ -53,3 +53,4 @@ Rust 가 일부러 다르게 하는 자리다 — 모두 더 엄격하거나 서
 | `toolName` 100 단위 절단이 대리 쌍 한가운데 | 반쪽이 남는다 | 그 글자를 뺀다 | `notice.rs` |
 | `random` 이 NaN | 대기 1ms | 1.0 으로 본다 | `reconnect.rs` |
 | 주소 조회 리디렉션·64KiB 넘는 본문 | 따른다·받는다 | 조회 실패 | `real_socket.rs` |
+| 잘못된 punycode 호스트 라벨(`xn--`·`xn--a` 등 — 차등 실험에서 찾음) | Node `URL`(ada)은 받는다 | WHATWG IDNA 규칙대로 주소 오류 | `endpoints.rs` |

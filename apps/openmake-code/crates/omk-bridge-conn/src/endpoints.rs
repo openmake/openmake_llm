@@ -133,3 +133,26 @@ pub async fn discover_endpoints(
     };
     resolve_endpoints(&entered, &config)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{is_plain_remote_http, normalize_server_address};
+
+    /// 알려진 차이(단계 13 차등 실험): 잘못된 punycode 라벨(`xn--`·`xn--a`·`xn---` 등)을 Node 24 `URL`(ada)은 받고
+    /// `url` 크레이트는 WHATWG 의 IDNA 규칙대로 거부한다. 사용자가 넣을 일이 드문 입력이라 기록만 한다(CONN.md).
+    #[test]
+    fn invalid_punycode_label_is_rejected() {
+        for h in ["xn--", "xn--a", "xn---", "xn--1", "a.xn--"] {
+            assert_eq!(
+                normalize_server_address(&format!("http://{h}")),
+                None,
+                "{h}"
+            );
+            assert!(!is_plain_remote_http(&format!("http://{h}")), "{h}");
+        }
+        assert_eq!(
+            normalize_server_address("http://XN--BJ0BJ06E"),
+            Some("http://xn--bj0bj06e".to_owned())
+        );
+    }
+}
