@@ -283,6 +283,18 @@ impl CodeNavResult {
     }
 }
 
+/// 읽기 전용 도구 결과 — `lsp_diagnostics` 의 `truncated` 는 결과의 최상위 필드다(TS 와 같은 키).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolOutput {
+    Diagnostics {
+        diagnostics: Vec<Diagnostic>,
+        /// `none`·`tsc`·`py_compile`·`tsc+py_compile`.
+        server_kind: &'static str,
+    },
+    CodeNav(CodeNavResult),
+    TestRunner(&'static str),
+}
+
 /// 요청 하나의 결과. JSON 으로 바꿀 때 `None` 인 필드는 키 자체가 없다(TS 결과 객체와 같은 모양).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct BridgeResult {
@@ -298,10 +310,8 @@ pub struct BridgeResult {
     pub worktree_rel: Option<String>,
     pub branch: Option<String>,
     pub kept: Option<bool>,
-    pub diagnostics: Option<Vec<Diagnostic>>,
-    pub server_kind: Option<String>,
-    pub code_nav: Option<CodeNavResult>,
-    pub test_runner: Option<String>,
+    /// 읽기 전용 도구 결과 — 상자 하나로 둔다(결과가 연결 크레이트의 이벤트 enum 에 그대로 실려 크기를 늘리지 않게).
+    pub tool: Option<Box<ToolOutput>>,
 }
 
 impl BridgeResult {
@@ -359,20 +369,22 @@ impl BridgeResult {
         if let Some(k) = self.kept {
             o.insert("kept".to_owned(), Value::Bool(k));
         }
-        if let Some(d) = &self.diagnostics {
-            let list = d.iter().map(Diagnostic::to_json).collect();
-            o.insert("diagnostics".to_owned(), Value::Array(list));
-        }
-        for (k, v) in [
-            ("serverKind", &self.server_kind),
-            ("testRunner", &self.test_runner),
-        ] {
-            if let Some(v) = v {
-                o.insert(k.to_owned(), Value::String(v.clone()));
+        match self.tool.as_deref() {
+            None => {}
+            Some(ToolOutput::Diagnostics {
+                diagnostics,
+                server_kind,
+            }) => {
+                let list = diagnostics.iter().map(Diagnostic::to_json).collect();
+                o.insert("diagnostics".to_owned(), Value::Array(list));
+                o.insert("serverKind".to_owned(), Value::from(*server_kind));
             }
-        }
-        if let Some(c) = &self.code_nav {
-            o.insert("codeNav".to_owned(), c.to_json());
+            Some(ToolOutput::CodeNav(c)) => {
+                o.insert("codeNav".to_owned(), c.to_json());
+            }
+            Some(ToolOutput::TestRunner(t)) => {
+                o.insert("testRunner".to_owned(), Value::from(*t));
+            }
         }
         Value::Object(o)
     }
@@ -546,13 +558,13 @@ mod tests {
 
     #[test]
     fn tool_results_serialize_like_ts() {
-        use super::{BridgeResult, CodeNavResult};
+        use super::{BridgeResult, CodeNavResult, ToolOutput};
         let r = BridgeResult {
-            code_nav: Some(CodeNavResult::Grep {
+            tool: Some(Box::new(ToolOutput::CodeNav(CodeNavResult::Grep {
                 matches: vec!["a:1:x".to_owned()],
                 truncated: false,
                 skipped: 0,
-            }),
+            }))),
             ..BridgeResult::success()
         };
         assert_eq!(
@@ -560,11 +572,11 @@ mod tests {
             json!({"ok": true, "codeNav": {"matches": ["a:1:x"], "truncated": false}})
         );
         let r = BridgeResult {
-            code_nav: Some(CodeNavResult::Files {
+            tool: Some(Box::new(ToolOutput::CodeNav(CodeNavResult::Files {
                 files: vec![("a".to_owned(), 2)],
                 truncated: true,
                 skipped: 3,
-            }),
+            }))),
             ..BridgeResult::success()
         };
         assert_eq!(
@@ -572,9 +584,11 @@ mod tests {
             json!({"ok": true, "codeNav": {"files": [{"path": "a", "lines": 2}], "truncated": true, "skipped": 3}})
         );
         let r = BridgeResult {
-            diagnostics: Some(Vec::new()),
+            tool: Some(Box::new(ToolOutput::Diagnostics {
+                diagnostics: Vec::new(),
+                server_kind: "none",
+            })),
             truncated: Some(false),
-            server_kind: Some("none".to_owned()),
             ..BridgeResult::success()
         };
         assert_eq!(
@@ -582,7 +596,7 @@ mod tests {
             json!({"ok": true, "diagnostics": [], "truncated": false, "serverKind": "none"})
         );
         let r = BridgeResult {
-            test_runner: Some("npm".to_owned()),
+            tool: Some(Box::new(ToolOutput::TestRunner("npm"))),
             ..BridgeResult::success()
         };
         assert_eq!(r.to_json(), json!({"ok": true, "testRunner": "npm"}));

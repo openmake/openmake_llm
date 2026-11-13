@@ -19,7 +19,7 @@ use crate::diagnostics;
 use crate::exec::FAIL_CLOSED;
 use crate::exec::{self, ExecHost, ExecState};
 use crate::fs_kinds;
-use crate::msg::{BridgeMsg, BridgeResult, Kind};
+use crate::msg::{BridgeMsg, BridgeResult, Kind, ToolOutput};
 use crate::node_error;
 use crate::scope::safe_from;
 use crate::test_runner;
@@ -269,7 +269,7 @@ impl BridgeCore {
                     })
                     .await?;
                 Ok(BridgeResult {
-                    code_nav: Some(nav),
+                    tool: Some(Box::new(ToolOutput::CodeNav(nav))),
                     ..ok
                 })
             }
@@ -294,9 +294,11 @@ impl BridgeCore {
                     Err(e) => return Ok(tool_failure(e)),
                 };
                 Ok(BridgeResult {
-                    diagnostics: Some(r.diagnostics),
+                    tool: Some(Box::new(ToolOutput::Diagnostics {
+                        diagnostics: r.diagnostics,
+                        server_kind: r.server_kind,
+                    })),
                     truncated: Some(r.truncated),
-                    server_kind: Some(r.server_kind),
                     ..ok
                 })
             }
@@ -316,7 +318,7 @@ impl BridgeCore {
                     Err(e) => return Ok(tool_failure(e)),
                 };
                 Ok(BridgeResult {
-                    test_runner: Some(found.to_owned()),
+                    tool: Some(Box::new(ToolOutput::TestRunner(found))),
                     ..ok
                 })
             }

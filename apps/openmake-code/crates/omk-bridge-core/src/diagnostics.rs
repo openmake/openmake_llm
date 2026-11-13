@@ -57,7 +57,8 @@ impl Diagnostic {
 pub struct Collected {
     pub diagnostics: Vec<Diagnostic>,
     pub truncated: bool,
-    pub server_kind: String,
+    /// 처음 나온 순서의 중복 없는 `+` 이음 — tsc 가 언제나 앞이라 넷 중 하나다.
+    pub server_kind: &'static str,
 }
 
 fn exists(p: &str) -> bool {
@@ -224,13 +225,11 @@ pub async fn collect(
     let (b, paths) = (base.to_owned(), abs_paths.to_vec());
     let plan = gate.run(LABEL, move || Ok(plan(&b, &paths))).await?;
     let mut all = Vec::new();
-    let mut kinds: Vec<&str> = Vec::new();
     for (cfg, tsc) in &plan.projects {
         let cwd = node_path::dirname(cfg);
         let args = ["--noEmit", "--pretty", "false", "-p", cfg.as_str()];
         let out = run_tool(tool, tsc, &args, &cwd, timeout_ms).await?;
         all.extend(parse_tsc(&out, base, &cwd));
-        kinds.push("tsc");
     }
     if !plan.py.is_empty() {
         // python3 는 감싸기 전에 PATH 에서 직접 찾는다 — 없으면 띄우지 않는다(sandbox-exec 의 실패 문구가 해석에 섞이지 않게).
@@ -249,20 +248,14 @@ pub async fn collect(
             if out.contains("Error") || out.contains("error") {
                 all.extend(parse_py_compile(&out, base, f));
             }
-            kinds.push("py_compile");
         }
     }
     let (diagnostics, truncated) = cap(all);
-    let mut seen: Vec<&str> = Vec::new();
-    for k in kinds {
-        if !seen.contains(&k) {
-            seen.push(k);
-        }
-    }
-    let server_kind = if seen.is_empty() {
-        "none".to_owned()
-    } else {
-        seen.join("+")
+    let server_kind = match (plan.projects.is_empty(), plan.py.is_empty()) {
+        (false, false) => "tsc+py_compile",
+        (false, true) => "tsc",
+        (true, false) => "py_compile",
+        (true, true) => "none",
     };
     Ok(Collected {
         diagnostics,
