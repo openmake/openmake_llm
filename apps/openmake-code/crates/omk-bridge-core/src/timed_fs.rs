@@ -104,3 +104,50 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod gate_tests {
+    #![allow(clippy::unwrap_used)]
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
+
+    use super::FsGate;
+
+    /// 작업 클로저가 panic 하면 고정 문구 하나로 끝난다(D-19).
+    #[test]
+    fn panicking_job_becomes_internal_error() {
+        let rt = tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap();
+        let gate = FsGate::new(5_000);
+        let got: Result<(), String> = rt.block_on(gate.run("read", || panic!("boom")));
+        assert_eq!(got, Err("내부 오류로 요청을 처리하지 못했습니다".to_owned()));
+    }
+
+    /// 시간 초과 때 blocking 큐에서 아직 시작하지 않은 작업은 나중에 스레드가 생겨도 실행하지 않는다(D-14).
+    /// blocking 스레드를 1개로 묶어 "spawn 됐지만 시작 전" 상태를 만든다.
+    #[test]
+    fn queued_job_is_skipped_after_timeout() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap();
+        let gate = FsGate::new(200);
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        let first = rt.block_on(gate.run("read", move || {
+            let _ = wait.recv();
+            Ok(())
+        }));
+        assert!(first.unwrap_err().starts_with("read 시간 초과"));
+        let ran = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&ran);
+        let second = rt.block_on(gate.run("write", move || {
+            flag.store(true, Ordering::SeqCst);
+            Ok(())
+        }));
+        assert!(second.unwrap_err().starts_with("write 시간 초과"));
+        release.send(()).unwrap();
+        rt.shutdown_timeout(Duration::from_secs(5));
+        assert!(!ran.load(Ordering::SeqCst), "시간 초과로 답한 작업이 나중에 실행됐다");
+    }
+}
