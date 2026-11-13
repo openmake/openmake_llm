@@ -17,7 +17,7 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import {
     BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY, DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
-    SANDBOX_BIN, SANDBOX_ENABLED,
+    SANDBOX_BIN, SANDBOX_ENABLED, SANDBOX_PROFILE_MISSING_ERROR,
 } from './constants';
 import { collectDiagnostics } from './diagnostics';
 import { runCodeNav } from './code-nav';
@@ -25,7 +25,7 @@ import { detectTestRunner } from './test-runner';
 import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { buildExecEnv } from './exec-env';
-import { detectGitDir, writeSandboxProfile } from './sandbox';
+import { detectGitDir, SandboxProfileMissingError, writeSandboxProfile } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
 import { findChrome } from './browser/chrome';
@@ -80,6 +80,22 @@ export class BridgeCore {
             ? writeSandboxProfile(this.folderRoot, detectGitDir(this.folderRoot),
                 path.join(this.opts.sandboxProfileDir, `omk-exec-sandbox-${process.pid}-${this.sandboxProfileSeq}.sb`))
             : null;
+    }
+
+    /** 도구 자식(test_runner·lsp_diagnostics)을 감쌀 프로파일 — 샌드박스 꺼짐이면 undefined, 켜졌는데 없으면 null(fail-closed). */
+    private toolSandbox(): string | null | undefined {
+        return SANDBOX_ENABLED ? this.sandboxProfilePath : undefined;
+    }
+
+    /** 도구 실행 — 프로파일이 없어 자식을 띄우지 않았으면 exec 와 같은 문구로 거절하고 null. */
+    private async toolSandboxed<T>(done: (r: BridgeResult) => void, fn: () => Promise<T>): Promise<T | null> {
+        try {
+            return await fn();
+        } catch (e) {
+            if (!(e instanceof SandboxProfileMissingError)) throw e;
+            done({ ok: false, error: e.message, exitCode: 126 });
+            return null;
+        }
     }
 
     /** 일괄 승인 중인 작업 수 — 호스트 UI(메뉴 등) 표시용. */
@@ -166,7 +182,7 @@ export class BridgeCore {
                 // ③ OS 샌드박스로 감싸 실행 — 폴더 밖 쓰기·비밀 읽기를 커널이 차단한다.
                 //    프로파일 준비 실패 시 fail-closed(비격리 실행 거부). 해제는 OMK_BRIDGE_SANDBOX=0.
                 if (SANDBOX_ENABLED && !this.sandboxProfilePath) {
-                    done({ ok: false, error: 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.', exitCode: 126 });
+                    done({ ok: false, error: SANDBOX_PROFILE_MISSING_ERROR, exitCode: 126 });
                     return;
                 }
                 if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
@@ -235,19 +251,24 @@ export class BridgeCore {
             case 'lsp_diagnostics': {
                 // 읽기 전용 검사라 confirmExec 대상이 아니다 — 실행 파일·인자는 코어가 고정 조립하고
                 // (모델/서버 입력이 명령줄에 들어가지 않음) 경로는 safe() 로 스코프를 확정한 뒤 넘긴다.
+                // tsc·python3 는 폴더의 코드를 실행할 수 있어 exec 와 같은 샌드박스 안에서 돈다(프로파일 없으면 fail-closed).
                 const rel = Array.isArray(m.paths) ? m.paths.slice(0, DIAG_MAX_TOTAL) : [];
                 const abs: string[] = [];
                 for (const p of rel) abs.push(await safeFromAsync(base, p));
                 if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
-                const r = await collectDiagnostics(base, abs, this.execPathCache);
-                done({ ok: true, ...r }); return;
+                const r = await this.toolSandboxed(done, () => collectDiagnostics(base, abs, this.execPathCache!, this.toolSandbox()));
+                if (r) done({ ok: true, ...r });
+                return;
             }
             case 'test_runner': {
                 // 테스트 러너 탐지 — 읽기 전용이라 confirmExec 대상이 아니다(서버 문자열을 실행하지 않는다, test-runner.ts).
                 // 탐지된 테스트의 실행은 exec 로 따로 오고 사용자 확인을 거친다.
+                // pytest 탐지의 python3 도 lsp_diagnostics 와 같은 샌드박스 안에서 돈다.
                 const dirAbs = await safeFromAsync(base, m.path || '.');
                 if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
-                done({ ok: true, testRunner: await detectTestRunner(dirAbs, this.execPathCache) }); return;
+                const testRunner = await this.toolSandboxed(done, () => detectTestRunner(dirAbs, this.execPathCache!, this.toolSandbox()));
+                if (testRunner) done({ ok: true, testRunner });
+                return;
             }
             case 'code_nav': {
                 // 읽기 전용 코드 탐색(grep_code·repo_map) — lsp_diagnostics 와 같은 이유로
