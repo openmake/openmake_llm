@@ -112,6 +112,49 @@ describe('handleWorktree', () => {
         expect(fs.existsSync(path.join(sub, again.worktreeRel!))).toBe(true);
     });
 
+    // 검사(요청 첫머리)와 git worktree add·remove 사이에 git 3회가 낀다 — 그 사이에 .openmake 를 폴더 밖 심링크로
+    // 바꾸면 밖에 만들고 지울 수 있다. 가짜 git 이 마지막 rev-parse --absolute-git-dir 때 한 번 바꿔 그 틈을 흉내 낸다.
+    describe('git 실행 바로 앞 재검사', () => {
+        let out: string;
+        let swap: string;
+        let savedPath: string | undefined;
+        beforeEach(() => {
+            out = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'omk-wt-out-')));
+            const bin = path.join(out, 'bin');
+            fs.mkdirSync(bin);
+            swap = path.join(out, 'swap.sh');
+            const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+            fs.writeFileSync(path.join(bin, 'git'), [
+                '#!/bin/sh',
+                `if [ "$1" = rev-parse ] && [ "$2" = --absolute-git-dir ] && [ -e '${swap}' ]; then sh '${swap}'; rm -f '${swap}'; fi`,
+                `exec '${realGit}' "$@"`, '',
+            ].join('\n'), { mode: 0o755 });
+            savedPath = process.env.PATH;
+            process.env.PATH = `${bin}${path.delimiter}${savedPath ?? ''}`;
+        });
+        afterEach(() => {
+            process.env.PATH = savedPath;
+            fs.rmSync(out, { recursive: true, force: true });
+        });
+
+        it('add: 검사 뒤 .openmake 가 밖 심링크로 바뀌면 worktree add 를 하지 않는다', async () => {
+            fs.writeFileSync(swap, `ln -s '${out}' '${repo}/.openmake'\n`);
+            const r = await run({ kind: 'worktree', op: 'add', taskId: TASK }, repo);
+            expect(fs.existsSync(swap)).toBe(false); // 바꿔치기가 실제로 일어났다
+            expect(r).toEqual({ ok: false, error: '심링크 스코프 탈출 거부: .openmake/worktrees' });
+            expect(fs.existsSync(path.join(out, 'worktrees'))).toBe(false);
+        });
+
+        it('remove: 검사 뒤 .openmake 가 밖 심링크로 바뀌면 worktree remove 를 하지 않는다', async () => {
+            expect((await run({ kind: 'worktree', op: 'add', taskId: TASK }, repo)).ok).toBe(true);
+            fs.writeFileSync(swap, `mv '${repo}/.openmake' '${out}/om' && ln -s '${out}/om' '${repo}/.openmake'\n`);
+            const r = await run({ kind: 'worktree', op: 'remove', taskId: TASK }, repo);
+            expect(fs.existsSync(swap)).toBe(false);
+            expect(r).toEqual({ ok: false, error: '심링크 스코프 탈출 거부: .openmake/worktrees' });
+            expect(fs.existsSync(path.join(out, 'om', 'worktrees', TASK, 'a.txt'))).toBe(true);
+        });
+    });
+
     it('git 레포가 아니면 add 를 거부한다', async () => {
         const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-plain-'));
         try {

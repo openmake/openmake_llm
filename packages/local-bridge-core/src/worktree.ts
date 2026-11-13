@@ -9,12 +9,19 @@
  *
  * git 명령은 **서버 문자열을 쓰지 않고 여기서 인자 배열로 조립**한다(명령 주입 차단).
  * 그래서 confirmExec(사용자 확인) 없이 수행해도 안전하다 — 실행 대상이 고정된 git 연산뿐이다.
+ *
+ * git 은 샌드박스 밖에서 돈다 — 그래서 경로는 글자로 이어 붙인 뒤 **파일 kind 와 같은 realpath 스코프**로
+ * 검사한다. 연결 폴더 안 파일은 에이전트가 쓸 수 있어, `.openmake`·`worktrees`·`<taskId>`(또는 worktree 안의
+ * 하위 폴더)를 폴더 밖 심링크로 바꿔 두면 add·remove 가 폴더 밖에 만들고 지울 수 있었다(2026-11-13).
+ * 요청 첫머리와 `git worktree add`·`worktree remove` 바로 앞에서 두 번 검사한다 — 남는 틈(TOCTOU)은 검사 직후
+ * git 호출 하나로, 파일 kind(검사 직후 fs 호출 하나)와 같은 수준이다.
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { EXEC_TIMEOUT_MS, MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR } from './constants';
 import { buildExecEnv } from './exec-env';
+import { safeFrom, safeFromAsync } from './scope';
 import type { BridgeMsg, BridgeResult } from './types';
 
 export function gitRun(args: string[], cwd: string): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -35,9 +42,13 @@ async function isGitRepo(cwd: string): Promise<boolean> {
     return r.code === 0 && r.stdout.trim() === 'true';
 }
 
-/** worktree 디렉토리를 로컬 전용 제외 목록에 등록 — 사용자의 .gitignore 는 건드리지 않는다. */
+/**
+ * worktree 디렉토리를 로컬 전용 제외 목록에 등록 — 사용자의 .gitignore 는 건드리지 않는다.
+ * `.git/info`·`info/exclude` 도 에이전트가 바꿀 수 있다 — 폴더 밖 심링크면(최근접 조상 realpath 가 gitDir 밖) 등록하지 않는다.
+ */
 function excludeWorktreeDir(gitDir: string): void {
     try {
+        safeFrom(gitDir, 'info/exclude');
         const infoDir = path.join(gitDir, 'info');
         fs.mkdirSync(infoDir, { recursive: true });
         const p = path.join(infoDir, 'exclude');
@@ -80,6 +91,15 @@ async function readBaseSha(wtAbs: string): Promise<string> {
     return 'HEAD';
 }
 
+/** worktree 루트와 대상 모두 연결 폴더 realpath 안이어야 한다(최근접 조상 realpath — 안쪽 심링크는 허용). 밖이면 거부 문구. */
+async function scopeError(base: string, rel: string): Promise<string | null> {
+    try {
+        await safeFromAsync(base, WORKTREE_DIR);
+        await safeFromAsync(base, rel);
+        return null;
+    } catch (e) { return (e as Error).message; }
+}
+
 export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => void, base: string): Promise<void> {
     const taskId = String(m.taskId || '');
     if (!TASK_ID_RE.test(taskId)) { done({ ok: false, error: '잘못된 taskId 형식' }); return; }
@@ -88,6 +108,11 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
     const rel = `${WORKTREE_DIR}/${taskId}`;
     const abs = path.join(base, rel);
     const branch = `${WORKTREE_BRANCH_PREFIX}${taskId.slice(0, 8)}`;
+
+    if (m.op === 'add' || m.op === 'diff' || m.op === 'remove') {
+        const err = await scopeError(base, rel);
+        if (err) { done({ ok: false, error: err }); return; }
+    }
 
     if (m.op === 'add') {
         if (!(await isGitRepo(base))) { done({ ok: false, error: 'git 레포가 아닙니다' }); return; }
@@ -100,12 +125,16 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
         // 연결/선택 폴더가 **untracked**(HEAD 에 없는) 하위 디렉토리면 worktree 체크아웃에
         // 해당 경로가 없어 exec cwd 가 ENOENT 로 실패한다 — 빈 디렉토리로 보장한다.
         // (worktree 는 어차피 tracked 내용만 담으므로 격리 의미는 동일: 빈 폴더에서 시작.)
+        // worktree 안은 에이전트가 쓸 수 있다 — 하위 경로가 폴더 밖 심링크면 만들지 않는다(스코프 거부도 exec 가 드러낸다).
         const ensureSub = (): void => {
-            if (sub) { try { fs.mkdirSync(path.join(abs, sub), { recursive: true }); } catch { /* exec 가 후속 실패로 노출 */ } }
+            if (sub) { try { fs.mkdirSync(safeFrom(base, workRel), { recursive: true }); } catch { /* exec 가 후속 실패로 노출 */ } }
         };
         const gitDirR = await gitRun(['rev-parse', '--absolute-git-dir'], base);
         if (gitDirR.code === 0) excludeWorktreeDir(gitDirR.stdout.trim());
         if (fs.existsSync(abs)) { ensureSub(); done({ ok: true, worktreeRel: workRel, branch }); return; } // 재개 시 재사용
+        // 첫 검사 뒤 git 3회·exclude 쓰기가 끼었다 — 바로 앞에서 다시 본다.
+        const late = await scopeError(base, rel);
+        if (late) { done({ ok: false, error: late }); return; }
         const r = await gitRun(['worktree', 'add', abs, '-b', branch], base);
         if (r.code !== 0) { done({ ok: false, error: `worktree 생성 실패: ${(r.stderr || r.stdout).trim().slice(0, 300)}` }); return; }
         await writeBaseSha(abs);
@@ -135,6 +164,8 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
         const head = await gitRun(['rev-parse', 'HEAD'], abs);
         const moved = head.code === 0 && head.stdout.trim() !== (await readBaseSha(abs));
         if ((st.code === 0 && st.stdout.trim() !== '') || moved) { done({ ok: true, kept: true, branch }); return; }
+        const late = await scopeError(base, rel); // 첫 검사 뒤 git 3회가 끼었다 — 바로 앞에서 다시 본다.
+        if (late) { done({ ok: false, error: late }); return; }
         const r = await gitRun(['worktree', 'remove', '--force', abs], base);
         if (r.code !== 0) { done({ ok: true, kept: true, branch }); return; } // 제거 실패도 보존으로 취급
         await gitRun(['branch', '-D', branch], base); // 변경 없는 빈 브랜치 정리(실패 무시)

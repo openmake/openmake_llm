@@ -58,6 +58,12 @@ fn mkparent(p: &str) {
     }
 }
 
+/// `{"symlink", "target"}` — target 은 `{{TMP}}` 를 채워 그대로 링크에 적는다(상대 target 가능).
+fn symlink(tmp: &TmpDir, s: &Value) {
+    let target = s["target"].as_str().unwrap().replace("{{TMP}}", &tmp.path);
+    std::os::unix::fs::symlink(target, tmp.join(s["symlink"].as_str().unwrap())).unwrap();
+}
+
 /// fixture `setup` 을 적힌 순서대로 만든다.
 pub fn apply_setup(tmp: &TmpDir, setup: &Value) {
     for s in setup.as_array().expect("setup 배열") {
@@ -67,9 +73,8 @@ pub fn apply_setup(tmp: &TmpDir, setup: &Value) {
             write_file(tmp, s);
         } else if let Some(args) = s.get("git") {
             git_isolated(tmp, args, s["cwd"].as_str().unwrap());
-        } else if let Some(link) = s["symlink"].as_str() {
-            let target = s["target"].as_str().unwrap().replace("{{TMP}}", &tmp.path);
-            std::os::unix::fs::symlink(target, tmp.join(link)).unwrap();
+        } else if s.get("symlink").is_some() {
+            symlink(tmp, s);
         } else if s.get("many").is_some() {
             let m = &s["many"];
             let dir = tmp.join(m["dir"].as_str().unwrap());
@@ -185,6 +190,8 @@ pub fn apply_op_step(tmp: &TmpDir, s: &Value, ctx: &str) {
         } else {
             let _ = std::fs::remove_file(&full);
         }
+    } else if s.get("symlink").is_some() {
+        symlink(tmp, s);
     } else {
         panic!("{ctx}: 모르는 단계 {s}");
     }
