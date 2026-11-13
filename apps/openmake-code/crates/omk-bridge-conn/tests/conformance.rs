@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 
 use omk_bridge_conn::endpoints::{ConfigFetcher, FetchResponse};
 use support::fixture::{KNOWN_CONN_SUITES, conn_files, load};
+use support::tmp::{TmpDir, apply_setup};
 
 #[test]
 fn conn_suites_are_all_known() {
@@ -393,9 +394,64 @@ fn conn_endpoints() {
     }
 }
 
+fn is_uuid_v4(s: &str) -> bool {
+    let b = s.as_bytes();
+    s.len() == 36
+        && s.char_indices().all(|(i, c)| match i {
+            8 | 13 | 18 | 23 => c == '-',
+            _ => c.is_ascii_digit() || ('a'..='f').contains(&c),
+        })
+        && b[14] == b'4'
+        && matches!(b[19], b'8' | b'9' | b'a' | b'b')
+}
+
 #[test]
 fn conn_device_id() {
-    panic!("미구현: conn-device-id");
+    use omk_bridge_conn::device_id::{DeviceIdentity, node_realpath_sync, root_device_id};
+    let doc = load("conn-device-id");
+    for c in doc["rootDeviceId"].as_array().unwrap() {
+        let i = &c["input"];
+        let got = root_device_id(i["base"].as_str().unwrap(), i["root"].as_str().unwrap());
+        assert_eq!(
+            json!({ "deviceId": got }),
+            c["expect"],
+            "conn-device-id/rootDeviceId/{}",
+            c["id"]
+        );
+    }
+    for c in doc["realpathSync"].as_array().unwrap() {
+        let tmp = TmpDir::new();
+        apply_setup(&tmp, &c["setup"]);
+        let got = match node_realpath_sync(&tmp.fill(c["input"]["path"].as_str().unwrap())) {
+            Ok(p) => json!({ "path": tmp.unfill(&p) }),
+            Err(e) => json!({ "error": tmp.unfill(&e) }),
+        };
+        assert_eq!(got, c["expect"], "conn-device-id/realpathSync/{}", c["id"]);
+    }
+    for c in doc["baseId"].as_array().unwrap() {
+        let tmp = TmpDir::new();
+        apply_setup(&tmp, &c["setup"]);
+        let dir = std::path::PathBuf::from(tmp.join("support"));
+        let base = DeviceIdentity::load_or_create(&dir)
+            .unwrap()
+            .base()
+            .to_owned();
+        let at = format!("conn-device-id/baseId/{}", c["id"]);
+        if c["expect"].get("generated").is_some() {
+            assert!(is_uuid_v4(&base), "{at}: UUID v4 꼴이 아님 {base}");
+            let written = std::fs::read_to_string(dir.join("device-id"))
+                .ok()
+                .as_deref()
+                == Some(base.as_str());
+            assert_eq!(
+                json!({ "generated": true, "written": written }),
+                c["expect"],
+                "{at}"
+            );
+        } else {
+            assert_eq!(json!({ "id": base }), c["expect"], "{at}");
+        }
+    }
 }
 
 #[test]

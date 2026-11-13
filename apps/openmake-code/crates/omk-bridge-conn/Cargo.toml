@@ -10,6 +10,8 @@ publish.workspace = true
 [dependencies]
 omk-bridge-core = { path = "../omk-bridge-core" }
 regress = "0.12.0"
+# sha256·난수(UUID·jitter) — TLS 때문에 어차피 트리에 있다(D-47). sha2·uuid·rand 를 따로 더하지 않는다.
+ring = "0.17.14"
 serde_json = "1.0.154"
 # select! 때문에 macros 를 켠다. #[tokio::main]·#[tokio::test] 는 쓰지 않는다(D-50).
 tokio = { version = "1.54.1", default-features = false, features = ["rt", "rt-multi-thread", "time", "sync", "net", "io-util", "macros"] }
