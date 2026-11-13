@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.133.0](https://github.com/openmake/openmake_llm/compare/v1.132.0...v1.133.0) (2026-11-13)
+
+
+### ✨ 기능
+
+* **openmake-code:** code_nav(grep·files)와 전용 관문 ([e59cc1b](https://github.com/openmake/openmake_llm/commit/e59cc1b80d89816a8e65969d9e0c95715695f229))
+* **openmake-code:** grep 패턴을 regress UCS-2 판정으로 — 보충 문자 풀어 쓰기 ([7f021cc](https://github.com/openmake/openmake_llm/commit/7f021ccd5524ba6d005e6dcf912bc721428e8ea7))
+* **openmake-code:** lsp_diagnostics — tsc·py_compile 진단을 샌드박스 안에서 ([60d108e](https://github.com/openmake/openmake_llm/commit/60d108eba48d1972576ce723d559025de816c1d8))
+* **openmake-code:** Rust 브리지 코어 읽기 전용 도구 — code_nav·lsp_diagnostics·test_runner, capabilities 12종 (PR-1.4) ([8e3dfad](https://github.com/openmake/openmake_llm/commit/8e3dfadd312065a8621f6d5985c330414c61d537))
+* **openmake-code:** test_runner 탐지와 capabilities 12종 ([ade72ac](https://github.com/openmake/openmake_llm/commit/ade72acf6582eec75113c2c162c94e8e265e2440))
+* **openmake-code:** 글롭 판정을 정규식 없이 UTF-16 단위 표로 ([8aa2aa0](https://github.com/openmake/openmake_llm/commit/8aa2aa03eeb1f245f760660bfeea37217d4f62cb))
+* **openmake-code:** 도구 자식 조립 tool_env — exec 와 같은 샌드박스·환경 허용 목록 ([6f886be](https://github.com/openmake/openmake_llm/commit/6f886be6e83d46ff8d85c9c8f5a341e6b7912e18))
+* **openmake-code:** 요청 pattern·glob·ignoreCase·maxResults·paths 와 결과 codeNav·diagnostics 필드 ([5221db7](https://github.com/openmake/openmake_llm/commit/5221db71f7e49a18be028ae3df82ef1a73a9a085))
+* **openmake-code:** 읽기 전용 도구 모듈 뼈대와 적합성 러너 suite 4개(미구현) ([f01d744](https://github.com/openmake/openmake_llm/commit/f01d744f7d9cde4a67b37759365c7a2267943c5b))
+* **openmake-code:** 읽기 전용 도구 상수·path extname/basename·UTF-16 정렬·관문 허가 수 ([b13e8f5](https://github.com/openmake/openmake_llm/commit/b13e8f5d95557f080246ddfee9bc6474d7e925b3))
+
+
+### 🐛 버그 수정
+
+* **bridge:** worktree 경로를 realpath 스코프로 검사해 심링크로 연결 폴더 밖에 만들거나 지우지 않게 한다 ([b9c54cd](https://github.com/openmake/openmake_llm/commit/b9c54cd0b75ae729a3b72306de2cea9138a53c74))
+* **local-bridge-core:** pytest 탐지가 사용자 site 의 pytest 를 찾게 ([336bf6a](https://github.com/openmake/openmake_llm/commit/336bf6a3d5879d08091040894a61f92133b3a53e))
+* **local-bridge-core:** test_runner·lsp_diagnostics 자식을 exec 샌드박스 안에서 띄운다 ([c0903c1](https://github.com/openmake/openmake_llm/commit/c0903c176e436c037e93c9b02f1f21c3b08efef8))
+* **local-bridge-core:** 감싼 도구 자식에서 sandbox-exec 자체 실패를 거절로 ([f2d05ef](https://github.com/openmake/openmake_llm/commit/f2d05ef5ce49788278e74e18676f3f0e81ac96e5))
+* **openmake-code:** py_compile 줄 번호는 첫 `line N` 만 — 넘치면 1 ([effca40](https://github.com/openmake/openmake_llm/commit/effca406911a94862650cf17d2a9e3aaac8d3eac))
+* **openmake-code:** 감싼 도구 자식의 sandbox-exec 자체 실패를 거절로, PATH 찾기는 절대경로만 ([5665069](https://github.com/openmake/openmake_llm/commit/5665069ebd10e19fb6ade5155443e9b66470c456))
+* **openmake-code:** 프로파일 없음을 python3 찾기보다 먼저 거절 ([cafd5fc](https://github.com/openmake/openmake_llm/commit/cafd5fc4cad9b50e4cab3fcd7a9752301ae4999c))
+
+
+### ♻️ 리팩터링
+
+* **openmake-code:** 도구 결과 형을 tool_output.rs 로 — msg.rs 600줄 이하 ([51cab7c](https://github.com/openmake/openmake_llm/commit/51cab7c057558f3782caff277b3e8e2691e3e829))
+* **openmake-code:** 도구 결과를 상자 하나(ToolOutput)로 — 연결 이벤트 크기 유지 ([def74ed](https://github.com/openmake/openmake_llm/commit/def74ed273b59e6a278e0c7a58dbce90e5cda6e7))
+
 ## [1.132.0](https://github.com/openmake/openmake_llm/compare/v1.131.0...v1.132.0) (2026-11-13)
 
 
