@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: pipeline-promote
+  group: ${{ ((github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'pull_request') && github.event.workflow_run.head_branch == 'dev' && github.event.workflow_run.conclusion == 'success') && 'pipeline-promote' || format('pipeline-promote-skip-{0}', github.run_id) }}
   cancel-in-progress: false
 jobs:
   orchestrate:

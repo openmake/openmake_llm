@@ -85,7 +85,11 @@ export function metadataRange(base, head) {
     }
     return true;
 }
-export async function orchestrate(mode, commandGh) {
+// GitHub 은 병합 상태를 조회 시점에 늦게 계산한다 — 직후 조회는 unknown(잠깐 blocked)일 수 있다.
+const MERGEABLE_RETRIES = 6;
+const MERGEABLE_RETRY_MS = 10_000;
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+export async function orchestrate(mode, commandGh, wait = sleep) {
     const token = requireToken();
     // Authenticate object fetches without storing credentials in the checkout.
     process.env.GIT_CONFIG_COUNT = '1';
@@ -100,23 +104,31 @@ export async function orchestrate(mode, commandGh) {
     const branch = (name) => api(`branches/${name}`).commit.sha;
     const ci = (sha, event) => latestCI(api(`actions/workflows/ci.yml/runs?head_sha=${sha}&event=${event}&per_page=100`).workflow_runs, sha);
     const pulls = (base, head) => api(`pulls?state=open&base=${base}${head ? `&head=${repo.split('/')[0]}:${head}` : ''}&per_page=100`);
-    const merge = (pr, sha, expectedBase) => {
-        const fresh = api(`pulls/${pr.number}`);
-        if (fresh.head.sha !== sha) {
-            throw new Error('PR head changed before merge');
-        }
-        if (expectedBase && branch(pr.base.ref) !== expectedBase) {
-            console.log(`Base changed for PR #${pr.number}; waiting for a new proof`);
-            return;
-        }
-        if (fresh.mergeable_state === 'behind') {
-            gh(['api', '--method', 'PUT', `repos/${repo}/pulls/${pr.number}/update-branch`, '-f', `expected_head_sha=${sha}`]);
-            console.log(`Updated PR #${pr.number} base at head ${sha}; waiting for fresh CI`);
-            return;
-        }
-        if (fresh.mergeable_state !== 'clean' || !ci(sha, 'pull_request')) {
-            console.log(`Waiting for latest PR CI at ${sha}`);
-            return;
+    const merge = async (pr, sha, expectedBase) => {
+        for (let attempt = 0; ; attempt++) {
+            const fresh = api(`pulls/${pr.number}`);
+            if (fresh.head.sha !== sha) {
+                throw new Error('PR head changed before merge');
+            }
+            if (expectedBase && branch(pr.base.ref) !== expectedBase) {
+                console.log(`Base changed for PR #${pr.number}; waiting for a new proof`);
+                return;
+            }
+            if (fresh.mergeable_state === 'behind') {
+                gh(['api', '--method', 'PUT', `repos/${repo}/pulls/${pr.number}/update-branch`, '-f', `expected_head_sha=${sha}`]);
+                console.log(`Updated PR #${pr.number} base at head ${sha}; waiting for fresh CI`);
+                return;
+            }
+            const prCI = ci(sha, 'pull_request');
+            if (fresh.mergeable_state === 'clean' && prCI) {
+                break;
+            }
+            // PR CI 미완료는 다음 CI 완료 이벤트가 다시 부른다. dirty·draft 는 기다려도 clean 이 되지 않는다.
+            if (!prCI || ['dirty', 'draft'].includes(fresh.mergeable_state) || attempt >= MERGEABLE_RETRIES) {
+                console.log(`Waiting for PR #${pr.number} at ${sha}: mergeable_state=${fresh.mergeable_state}, PR CI=${prCI}`);
+                return;
+            }
+            await wait(MERGEABLE_RETRY_MS);
         }
         if (expectedBase && branch(pr.base.ref) !== expectedBase) {
             console.log(`Base changed before merge of PR #${pr.number}; waiting for a new proof`);
@@ -154,7 +166,7 @@ export async function orchestrate(mode, commandGh) {
             if (api(`pulls/${pr.number}`).head.sha !== run.head_sha) {
                 throw new Error('PR head changed during review');
             }
-            merge(pr, run.head_sha);
+            await merge(pr, run.head_sha);
         }
     }
     else if (mode === 'promote') {
@@ -179,7 +191,7 @@ export async function orchestrate(mode, commandGh) {
         if (pr.head.sha !== sha || branch('dev') !== sha) {
             throw new Error('dev changed during promotion');
         }
-        merge(pr, sha, branch('main'));
+        await merge(pr, sha, branch('main'));
     }
     else if (mode === 'release') {
         const main = branch('main');
@@ -216,7 +228,7 @@ export async function orchestrate(mode, commandGh) {
                 throw new Error('Release base or head changed during verification');
             }
             console.log(`Release proof verified ${verified}, main ${main}, PR #${pr.number} head ${pr.head.sha}`);
-            merge(pr, pr.head.sha, main);
+            await merge(pr, pr.head.sha, main);
         }
     }
     else {
