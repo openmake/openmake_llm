@@ -1,6 +1,10 @@
 //! 적합성 fixture Rust 러너 — `packages/local-bridge-core/conformance/*.json` 을 TS 러너와 함께 통과해야 한다.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+#[path = "conformance/exec_gate.rs"]
+mod exec_gate;
+#[path = "conformance/exec_path.rs"]
+mod exec_path;
 #[path = "conformance/file_kinds.rs"]
 mod file_kinds;
 #[path = "conformance/request_guard.rs"]
@@ -8,6 +12,8 @@ mod request_guard;
 #[path = "conformance/scope.rs"]
 mod scope;
 mod support;
+#[path = "conformance/worktree.rs"]
+mod worktree;
 
 use std::path::PathBuf;
 
@@ -18,15 +24,18 @@ const FIXTURE_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../../packages/local-bridge-core/conformance"
 );
-const KNOWN_SUITES: [&str; 8] = [
+const KNOWN_SUITES: [&str; 11] = [
     "constants",
     "denylist",
     "exec-env",
+    "exec-gate",
+    "exec-path",
     "file-kinds",
     "platform",
     "request-guard",
     "sandbox-profile",
     "scope",
+    "worktree",
 ];
 
 fn fixture_files() -> Vec<PathBuf> {
@@ -69,9 +78,11 @@ fn suites_are_all_known() {
 }
 
 /// 알려진 차이를 쓸 수 있는 자리(suite/묶음)와 그 자리의 이름 — conformance/README.md "알려진 차이".
-const DIVERGENCE_SITES: [(&str, &str); 2] = [
+const DIVERGENCE_SITES: [(&str, &str); 4] = [
     ("denylist/cases", KNOWN_DIVERGENCE),
     ("file-kinds/cases/requests", file_kinds::NON_STRING_FIELD),
+    ("exec-gate/cases/steps", file_kinds::NON_STRING_FIELD),
+    ("worktree/cases/steps", file_kinds::NON_STRING_FIELD),
 ];
 
 /// 배열 안 사례 id 는 겹치지 않는다. `divergence`·`rustExpect` 는 정해진 자리에만 쓴다.
@@ -311,6 +322,26 @@ fn constants() {
     }
     seen.extend(["BROWSER_KIND", "EXPIRY_SKEW_TOLERANCE_MS", "SEEN_REQ_MAX"]);
     seen.extend(["FOLDERS_MAX_ENTRIES", "LIST_ALL_MAX"]);
+    // exec·worktree (PR-1.3) — TASK_ID_RE 는 worktree.json taskIdPattern 이 본다(TS 값이 RegExp 라 여기 둘 수 없다).
+    let probes: [(&str, u64); 2] = [
+        ("PATH_PROBE_TIMEOUT_MS", c::PATH_PROBE_TIMEOUT_MS),
+        ("GIT_PROBE_TIMEOUT_MS", c::GIT_PROBE_TIMEOUT_MS),
+    ];
+    for (name, ours) in probes {
+        assert_eq!(values[name], ours, "constants/{name}");
+    }
+    assert_eq!(
+        values["WORKTREE_DIR"],
+        c::WORKTREE_DIR,
+        "constants/WORKTREE_DIR"
+    );
+    let prefix = c::WORKTREE_BRANCH_PREFIX;
+    assert_eq!(
+        values["WORKTREE_BRANCH_PREFIX"], prefix,
+        "constants/WORKTREE_BRANCH_PREFIX"
+    );
+    seen.extend(["PATH_PROBE_TIMEOUT_MS", "GIT_PROBE_TIMEOUT_MS"]);
+    seen.extend(["WORKTREE_DIR", "WORKTREE_BRANCH_PREFIX"]);
     let mut fixture_keys: Vec<&str> = values.keys().map(String::as_str).collect();
     fixture_keys.sort_unstable();
     seen.sort_unstable();

@@ -1,18 +1,21 @@
 //! 브리지 실행 코어 — TS `core.ts` `BridgeCore` 의 생성자·`capabilities`·`handleExec`.
 //!
 //! 고정 kind 화이트리스트만 처리한다(임의 RPC 거부). 파일 kind 경로는 연결 폴더 realpath 스코프 안에서만 푼다.
-//! 이 PR 은 파일 kind·`folders`·`task_end` 까지 옮겼다. 아직 옮기지 않은 kind 는 TS 의 `default` 가지와 같은
+//! 파일 kind·`folders`·`task_end`·`exec`·`worktree` 를 옮겼다. 아직 옮기지 않은 kind 는 TS 의 `default` 가지와 같은
 //! "지원하지 않는 kind" 로 거절하고(서버에서 보면 그 kind 를 모르는 옛 기기와 같다), 능력 목록에도 넣지 않는다.
+//! exec·worktree 는 호스트가 [`BridgeCore::with_exec_host`] 로 확인 창·환경을 얹어야 실제로 돈다.
 //!
-//! **런타임**: `handle_exec` 는 시간 기능이 켜진 tokio 런타임 안에서 불러야 한다. 런타임은 drop 때
+//! **런타임**: `handle_exec`·`prepare` 는 시간 + I/O 가 켜진(`enable_all()`) tokio 런타임 안에서 불러야 한다(자식 프로세스). 런타임은 drop 때
 //! `spawn_blocking` 작업이 끝나기를 기다리므로, 영영 블록된 FS 호출이 있으면 종료가 멈춘다 — 호스트는
 //! `shutdown_background()` 또는 `shutdown_timeout()` 으로 끝낸다.
 
 use crate::constants::BRIDGE_KINDS;
+use crate::exec::{self, ExecHost, ExecState};
 use crate::fs_kinds;
 use crate::msg::{BridgeMsg, BridgeResult, Kind};
 use crate::node_error;
 use crate::timed_fs::FsGate;
+use crate::worktree;
 
 /// `task_end` 때 부르는 호스트 정리 훅(데스크톱 = 브라우저 패널 닫기).
 pub type TaskEndHook = Box<dyn Fn(Option<&str>) + Send + Sync>;
@@ -29,6 +32,7 @@ pub struct BridgeCore {
     folder_root: String,
     gate: FsGate,
     on_task_end: Option<TaskEndHook>,
+    exec: Option<ExecState>,
 }
 
 /// 이 크레이트가 처리하는 kind. 와일드카드 없이 적는다 — 종류를 더하면 컴파일이 막힌다.
@@ -40,13 +44,10 @@ fn handles(kind: Kind) -> bool {
         | Kind::ListAll
         | Kind::Delete
         | Kind::TaskEnd
-        | Kind::Folders => true,
-        Kind::Exec
-        | Kind::Worktree
-        | Kind::LspDiagnostics
-        | Kind::CodeNav
-        | Kind::TestRunner
-        | Kind::Browser => false,
+        | Kind::Folders
+        | Kind::Exec
+        | Kind::Worktree => true,
+        Kind::LspDiagnostics | Kind::CodeNav | Kind::TestRunner | Kind::Browser => false,
     }
 }
 
@@ -63,7 +64,35 @@ impl BridgeCore {
             folder_root: root.to_string_lossy().into_owned(),
             gate: FsGate::new(opts.fs_timeout_ms),
             on_task_end: opts.on_task_end,
+            exec: None,
         })
+    }
+
+    /// exec·worktree 를 처리하는 호스트를 얹는다(D-33·D-37). 없으면 exec 는 거부, worktree 는 거절한다.
+    /// `BridgeCoreOptions` 는 그대로 두고 얹는다 — 병행 PR 의 구조체 리터럴이 어느 쪽이 먼저 머지돼도 컴파일된다(§10-3).
+    pub fn with_exec_host(mut self, host: ExecHost) -> BridgeCore {
+        self.exec = Some(ExecState::new(host));
+        self
+    }
+
+    /// 연결할 때마다 — PATH 캐시를 비우고(폴더가 바뀌면 mise 프로젝트 버전도 바뀐다) 샌드박스 프로파일을 쓴다(D-35).
+    /// TS 는 동기라 그동안 프로세스 전체가 멈췄다. 부르는 쪽은 소켓을 열기 전에 기다린다.
+    pub async fn prepare(&self) {
+        if let Some(e) = &self.exec {
+            e.prepare(&self.folder_root, &self.gate).await;
+        }
+    }
+
+    /// 일괄 승인 전체 회수 — 연결 해제·사용자 명시 해제 때. 집합이 비어 있어도 변화를 알린다(TS 그대로).
+    pub fn clear_auto_approve(&self) {
+        if let Some(e) = &self.exec {
+            e.clear();
+        }
+    }
+
+    /// 일괄 승인 중인 작업 수 — 호스트 UI 표시용.
+    pub fn auto_approved_count(&self) -> usize {
+        self.exec.as_ref().map_or(0, ExecState::count)
     }
 
     pub fn folder_root(&self) -> &str {
@@ -167,18 +196,20 @@ impl BridgeCore {
                 })
             }
             Kind::TaskEnd => {
-                // 일괄 승인 회수는 PR-1.3, 브라우저 탭 닫기는 PR-1.6 이 이 가지에 더한다.
+                // 호스트 정리를 먼저, 그다음 그 작업의 일괄 승인 회수. 브라우저 탭 닫기는 PR-1.6 이 더한다.
                 if let Some(hook) = &self.on_task_end {
                     hook(m.task_id.as_deref());
                 }
+                if let (Some(e), Some(t)) = (&self.exec, &m.task_id) {
+                    e.revoke(t);
+                }
                 Ok(ok)
             }
-            Kind::Exec
-            | Kind::Worktree
-            | Kind::LspDiagnostics
-            | Kind::CodeNav
-            | Kind::TestRunner
-            | Kind::Browser => Err(unsupported(kind.as_str())),
+            Kind::Exec => exec::run_exec(self.exec.as_ref(), &self.folder_root, &base, m).await,
+            Kind::Worktree => Ok(worktree::handle(self.exec.as_ref(), &base, m, &self.gate).await),
+            Kind::LspDiagnostics | Kind::CodeNav | Kind::TestRunner | Kind::Browser => {
+                Err(unsupported(kind.as_str()))
+            }
         }
     }
 }
@@ -205,7 +236,7 @@ mod tests {
 
     fn run(c: &BridgeCore, v: serde_json::Value) -> serde_json::Value {
         let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_time()
+            .enable_all()
             .build()
             .unwrap();
         rt.block_on(c.handle_exec(&BridgeMsg::from_json(&v)))
@@ -214,13 +245,7 @@ mod tests {
 
     /// 아직 옮기지 않은 kind — 뒤 PR 이 kind 를 옮길 때 이 목록을 줄이지 않으면 실패한다.
     /// 목록이 비는 PR(1.4)에서 `capabilities() == BRIDGE_KINDS` 로 바꾼다.
-    const NOT_PORTED: [&str; 5] = [
-        "exec",
-        "worktree",
-        "lsp_diagnostics",
-        "code_nav",
-        "test_runner",
-    ];
+    const NOT_PORTED: [&str; 3] = ["lsp_diagnostics", "code_nav", "test_runner"];
 
     #[test]
     fn capabilities_lists_only_handled_kinds_in_bridge_kinds_order() {
@@ -229,7 +254,8 @@ mod tests {
         assert_eq!(
             caps,
             [
-                "read", "write", "list", "listAll", "delete", "task_end", "folders"
+                "exec", "read", "write", "list", "listAll", "delete", "task_end", "worktree",
+                "folders"
             ]
         );
         let missing: Vec<&str> = BRIDGE_KINDS
@@ -241,7 +267,7 @@ mod tests {
         assert!(!handles(Kind::Browser));
     }
 
-    /// 미구현 kind 는 TS 의 default 가지와 같은 글자로 거절한다(브라우저 포함 6종).
+    /// 미구현 kind 는 TS 의 default 가지와 같은 글자로 거절한다(브라우저 포함 4종).
     #[test]
     fn unported_kinds_are_rejected_as_unsupported() {
         let c = core(None);

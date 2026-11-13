@@ -1,0 +1,90 @@
+{
+  "suite": "exec-path",
+  "version": 1,
+  "resolve": [
+    {
+      "id": "login-shell-trimmed",
+      "input": {"shell": {"stdout": "  /s/a:/s/b\n", "exit": 0}, "mise": "absent", "processPath": "{{BIN}}:/usr/bin", "folder": "root"},
+      "expect": {"path": "/s/a:/s/b:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
+    },
+    {
+      "id": "empty-segments-dropped",
+      "input": {"shell": {"stdout": "/a::/b:", "exit": 0}, "mise": "absent", "processPath": "{{BIN}}::/usr/bin", "folder": "root"},
+      "expect": {"path": "/a:/b:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
+    },
+    {
+      "id": "duplicates-first-wins",
+      "input": {"shell": {"stdout": "/usr/bin:/s/a:/usr/bin:/opt/homebrew/bin", "exit": 0}, "mise": "absent", "processPath": "/s/a:{{BIN}}:/usr/bin", "folder": "root"},
+      "expect": {"path": "/usr/bin:/s/a:/opt/homebrew/bin:{{BIN}}:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
+    },
+    {
+      "id": "login-shell-fails-output-dropped",
+      "input": {"shell": {"stdout": "/s/should-not-appear", "exit": 1}, "mise": "absent", "processPath": "{{BIN}}:/usr/bin", "folder": "root"},
+      "expect": {"path": "{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
+    },
+    {
+      "id": "login-shell-missing",
+      "input": {"shell": "missing", "mise": "absent", "processPath": "{{BIN}}:/usr/bin", "folder": "root"},
+      "expect": {"path": "{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
+    },
+    {
+      "id": "mise-first-lines-and-blank-lines",
+      "input": {"shell": {"stdout": "/s/a", "exit": 0}, "mise": {"stdout": "/m/one\n\n/m/two\n", "exit": 0}, "processPath": "{{BIN}}:/usr/bin", "folder": "root"},
+      "expect": {"path": "/m/one:/m/two:/s/a:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"},
+      "miseCwd": "{{TMP}}/root"
+    },
+    {
+      "id": "mise-overlaps-base-mise-position-wins",
+      "input": {"shell": {"stdout": "/s/a", "exit": 0}, "mise": {"stdout": "/usr/bin\n/m/a\n/s/a", "exit": 0}, "processPath": "{{BIN}}:/usr/bin", "folder": "root"},
+      "expect": {"path": "/usr/bin:/m/a:/s/a:{{BIN}}:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
+    },
+    {
+      "id": "mise-fails",
+      "input": {"shell": {"stdout": "/s/a", "exit": 0}, "mise": {"stdout": "/m/should-not-appear", "exit": 1}, "processPath": "{{BIN}}:/usr/bin", "folder": "root"},
+      "expect": {"path": "/s/a:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
+    },
+    {
+      "id": "mise-found-only-on-login-shell-path",
+      "input": {"shell": {"stdout": "{{TMP}}/lbin", "exit": 0}, "mise": {"stdout": "/m/from-login-path", "exit": 0, "at": "lbin"}, "processPath": "{{BIN}}:/usr/bin", "folder": "root"},
+      "expect": {"path": "/m/from-login-path:{{TMP}}/lbin:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
+    },
+    {
+      "id": "no-folder-mise-runs-in-home",
+      "input": {"shell": {"stdout": "/s/a", "exit": 0}, "mise": {"stdout": "/m/one", "exit": 0}, "processPath": "{{BIN}}:/usr/bin", "folder": null},
+      "expect": {"path": "/m/one:/s/a:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"},
+      "miseCwd": "{{HOME}}"
+    },
+    {
+      "id": "process-path-empty",
+      "input": {"shell": {"stdout": "/s/a", "exit": 0}, "mise": "absent", "processPath": "", "folder": "root"},
+      "expect": {"path": "/s/a:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"}
+    },
+    {
+      "id": "child-env-allowlist-and-locations",
+      "input": {
+        "shell": {"stdout": "/s/a", "exit": 0},
+        "mise": {"stdout": "/m/one", "exit": 0},
+        "processPath": "{{BIN}}:/usr/bin",
+        "folder": "root",
+        "env": {"ZDOTDIR": "/custom/zdot", "XDG_CONFIG_HOME": "/custom/xdg", "MISE_DATA_DIR": "/custom/mise", "MISE_GITHUB_TOKEN": "omk-conformance-secret-mise", "LC_ALL": "C"}
+      },
+      "expect": {"path": "/m/one:/s/a:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims"},
+      "shellEnv": {
+        "has": {"HOME": "{{HOME}}", "SHELL": "{{BIN}}/loginshell", "PATH": "{{BIN}}:/usr/bin", "ZDOTDIR": "/custom/zdot", "XDG_CONFIG_HOME": "/custom/xdg", "MISE_DATA_DIR": "/custom/mise", "LANG": "C", "LC_ALL": "C"},
+        "lacks": ["OMK_COMPANION_API_KEY", "GITHUB_TOKEN", "OMK_BRIDGE_AUTO_APPROVE", "MISE_GITHUB_TOKEN"]
+      },
+      "miseEnv": {
+        "has": {"HOME": "{{HOME}}", "PATH": "/s/a:{{BIN}}:/usr/bin:/opt/homebrew/bin:/usr/local/bin:{{HOME}}/.local/bin:{{HOME}}/.local/share/mise/shims", "ZDOTDIR": "/custom/zdot", "MISE_DATA_DIR": "/custom/mise"},
+        "lacks": ["OMK_COMPANION_API_KEY", "GITHUB_TOKEN", "OMK_BRIDGE_AUTO_APPROVE", "MISE_GITHUB_TOKEN"]
+      },
+      "miseCwd": "{{TMP}}/root"
+    }
+  ],
+  "win32": [
+    {"id": "path-only", "input": {"env": {"PATH": "C:\\a;C:\\b"}}, "expect": "C:\\a;C:\\b"},
+    {"id": "mixed-case-only", "input": {"env": {"Path": "C:\\p"}}, "expect": "C:\\p"},
+    {"id": "path-wins-over-mixed-case", "input": {"env": {"PATH": "C:\\upper", "Path": "C:\\mixed"}}, "expect": "C:\\upper"},
+    {"id": "empty-path-falls-to-mixed-case", "input": {"env": {"PATH": "", "Path": "C:\\mixed"}}, "expect": "C:\\mixed"},
+    {"id": "neither", "input": {"env": {}}, "expect": ""}
+  ]
+}

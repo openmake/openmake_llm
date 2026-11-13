@@ -215,15 +215,22 @@ async fn phase_event(phase: &mut Phase) -> PhaseEvent {
     }
 }
 
-/// PR-1.3 합류 자리(TS `connection.ts:114,247`). 두 PR 중 뒤에 머지되는 쪽이 몸통을 채운다.
+/// 코어 준비·회수(TS `connection.ts:114,247`).
 mod core_hooks {
     use omk_bridge_core::core::BridgeCore;
 
-    /// 연결할 때마다 — PR-1.3 합류: `core.prepare()`.
-    pub(super) fn on_connect(_core: &BridgeCore) {}
+    /// 연결할 때마다 — PATH 캐시를 비우고 샌드박스 프로파일을 쓴다. 접속 단계 future 의 맨 앞(핸드셰이크 시간 제한
+    /// 밖)에서 소켓을 만들기 전에 끝낸다(TS 는 동기 호출이라 첫 exec 가 언제나 새 프로파일을 본다). 그동안 actor 는
+    /// 명령을 계속 받는다 — 해제·다시 연결·채널 닫힘이 이 future 를 버리면 준비도 멈춘다(TS 는 프로세스 전체가
+    /// 멈췄다, D-35). 헤더 실패·잘못된 주소처럼 소켓을 만들지 않는 연결은 준비하지 않는다.
+    pub(super) async fn on_connect(core: &BridgeCore) {
+        core.prepare().await;
+    }
 
-    /// 해제할 때 — PR-1.3 합류: `core.clear_auto_approve()`(일괄 승인 회수).
-    pub(super) fn on_disconnect(_core: &BridgeCore) {}
+    /// 해제할 때 — 일괄 승인 전체 회수.
+    pub(super) fn on_disconnect(core: &BridgeCore) {
+        core.clear_auto_approve();
+    }
 }
 
 impl Actor {
@@ -293,7 +300,6 @@ impl Actor {
 
     fn connect(&mut self) {
         self.closed = false;
-        core_hooks::on_connect(&self.opts.core);
         self.drop_phase();
         // 헤더 실패(예: 키 없음)는 소켓을 만들기 전이라 재연결을 걸지 않고 멈춘다.
         let headers = match (self.opts.headers)() {
@@ -311,6 +317,7 @@ impl Actor {
             return;
         };
         let connector = Arc::clone(&self.opts.connector);
+        let core = Arc::clone(&self.opts.core);
         let limit = Duration::from_millis(self.opts.handshake_timeout_ms);
         let handshake = async move {
             let mut req = target.url.as_str().into_client_request().ok()?;
@@ -325,6 +332,7 @@ impl Actor {
             Some(ws)
         };
         self.phase = Phase::Connecting(Box::pin(async move {
+            core_hooks::on_connect(&core).await;
             tokio::time::timeout(limit, handshake).await.ok().flatten()
         }));
         self.status("연결 중…", StatusCode::Connecting, None);
