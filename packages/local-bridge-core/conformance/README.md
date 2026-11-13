@@ -1,6 +1,7 @@
 # 적합성 fixture (conformance)
 
 브리지 코어의 판정을 TS 구현(`packages/local-bridge-core/src`)과 Rust 구현(`apps/openmake-code/crates/omk-bridge-core`)이 똑같이 내는지 확인하는 공용 사례다.
+연결부(`conn-*.json`)의 형식과 러너는 [`CONN.md`](CONN.md) 에 따로 적는다.
 
 | 러너 | 위치 | 실행 |
 |---|---|---|

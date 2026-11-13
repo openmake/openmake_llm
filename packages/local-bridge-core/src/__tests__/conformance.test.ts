@@ -32,7 +32,7 @@ function load<T>(suite: string): T {
 
 describe('conformance fixture 목록', () => {
     it('suite 파일은 이 러너가 아는 것뿐이고, 파일 이름과 suite 이름이 같다', () => {
-        const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.json')).sort();
+        const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.json') && !f.startsWith('conn-')).sort(); // conn-* 는 conformance-conn.test.ts 몫
         expect(files.map((f) => f.replace(/\.json$/, ''))).toEqual(KNOWN_SUITES);
         for (const f of files) {
             const doc = JSON.parse(fs.readFileSync(path.join(DIR, f), 'utf8')) as { suite: string; version: number };
