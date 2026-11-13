@@ -482,13 +482,14 @@ fn worktree_git_timeout_after_exit_zero_is_success() {
         assert!(ok, "git {args:?}");
     }
     let hook = format!("{repo}/.git/hooks/post-checkout");
-    std::fs::write(&hook, "#!/bin/sh\nsleep 3 &\n").unwrap();
+    std::fs::write(&hook, "#!/bin/sh\nsleep 8 &\n").unwrap();
     std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
     let mut h = host(&tmp, answer(ConfirmAnswer::No));
     h.env.retain(|(k, _)| k != "PATH");
     h.env
         .push(("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()));
-    h.exec_timeout_ms = 500;
+    // add 안의 git 호출마다 이 제한을 받는다 — 느린 러너에서도 평소 git 은 넘지 않을 만큼.
+    h.exec_timeout_ms = 2_000;
     let c = bare(&repo, None).with_exec_host(h);
     let t = std::time::Instant::now();
     let r = send(
@@ -496,7 +497,11 @@ fn worktree_git_timeout_after_exit_zero_is_success() {
         json!({"kind": "worktree", "op": "add", "taskId": "abcdef12-daemon"}),
     );
     assert_eq!(r["ok"], true, "{r}");
-    assert!(t.elapsed() < std::time::Duration::from_secs(3));
+    assert!(
+        t.elapsed() < std::time::Duration::from_secs(6),
+        "{:?}",
+        t.elapsed()
+    );
 }
 
 /// 탐지는 `execFileSync` — 직접 자식이 0 으로 끝났어도 시간 초과면 실패(실측: `execFileSync('/bin/bash',
