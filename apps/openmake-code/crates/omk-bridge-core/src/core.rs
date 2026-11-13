@@ -21,6 +21,7 @@ use crate::node_error;
 use crate::scope::safe_from;
 use crate::test_runner;
 use crate::timed_fs::FsGate;
+use crate::exec::FAIL_CLOSED;
 use crate::tool_env::NO_HOST;
 use crate::worktree;
 
@@ -71,6 +72,15 @@ fn handles(kind: Kind) -> bool {
         | Kind::LspDiagnostics
         | Kind::TestRunner => true,
         Kind::Browser => false,
+    }
+}
+
+/// 도구 실패 — 샌드박스 거절(프로파일 없음·sandbox-exec 자체 실패)은 exec 와 같은 모양(문구 + exitCode 126).
+fn tool_failure(error: String) -> BridgeResult {
+    let refused = error == FAIL_CLOSED;
+    BridgeResult {
+        exit_code: refused.then_some(126),
+        ..BridgeResult::failure(error)
     }
 }
 
@@ -276,7 +286,10 @@ impl BridgeCore {
                     .await?;
                 let tool = st.tool_env(&self.folder_root).await;
                 let ms = self.timeouts.diag_ms;
-                let r = diagnostics::collect(&base, &abs, &tool, ms, &self.gate).await?;
+                let r = match diagnostics::collect(&base, &abs, &tool, ms, &self.gate).await {
+                    Ok(r) => r,
+                    Err(e) => return Ok(tool_failure(e)),
+                };
                 Ok(BridgeResult {
                     diagnostics: Some(r.diagnostics),
                     truncated: Some(r.truncated),
@@ -295,7 +308,10 @@ impl BridgeCore {
                     .await?;
                 // npm 으로 끝날 탐지에서도 exec PATH 를 먼저 계산한다(TS 그대로 — 첫 요청이면 로그인 셸이 돈다).
                 let tool = st.tool_env(&self.folder_root).await;
-                let found = test_runner::detect(&dir, &tool, &self.gate).await?;
+                let found = match test_runner::detect(&dir, &tool, &self.gate).await {
+                    Ok(f) => f,
+                    Err(e) => return Ok(tool_failure(e)),
+                };
                 Ok(BridgeResult {
                     test_runner: Some(found.to_owned()),
                     ..ok

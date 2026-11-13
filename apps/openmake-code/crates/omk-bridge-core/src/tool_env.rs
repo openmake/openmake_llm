@@ -7,7 +7,7 @@ use crate::exec_env::build_exec_env;
 use crate::exec_path::env_get;
 use crate::node_path;
 use crate::platform::{Platform, path_list_separator};
-use crate::proc::{ProcSpec, Stderr, Stdin};
+use crate::proc::{self, ProcOutput, ProcSpec, Stderr, Stdin};
 
 /// exec 호스트가 없는 코어의 거절 — worktree(D-38)와 같은 문구·같은 이유(자식에 줄 환경 사본이 없다).
 pub(crate) const NO_HOST: &str = "exec 호스트가 설정되지 않았습니다";
@@ -67,13 +67,28 @@ impl ToolEnv {
         })
     }
 
+    /// 자식 하나를 띄운다. 감싼 자식에서 sandbox-exec **자체**가 실패하면(프로파일 파일 유실·문법 오류 65, 실행 파일
+    /// execvp 실패 71 — stderr 가 `sandbox-exec:` 로 시작) "진단 없음/none" 으로 삼키지 않고 프로파일 없음과 같이 거절한다
+    /// (TS 별건 수정 M1 과 같은 규칙). 이름으로 띄우는 실행 파일은 부르는 쪽이 먼저 찾아 절대경로로 넘긴다(71 과 섞이지 않게).
+    pub async fn run(&self, file: &str, args: &[&str], cwd: &str, timeout_ms: u64) -> Result<ProcOutput, String> {
+        let out = proc::run(self.spec(file, args, cwd, timeout_ms)?).await;
+        let wrapped = matches!(self.sandbox, ToolSandbox::Profile(_));
+        let code = out.end.exec_file_code();
+        if wrapped && (code == 65 || code == 71) && out.stderr.starts_with("sandbox-exec:") {
+            return Err(FAIL_CLOSED.to_owned());
+        }
+        Ok(out)
+    }
+
     /// PATH 에서 실행 파일 찾기 — TS `onPath`(`access(X_OK)`). `unsafe` 없이 부를 수 없어 "모드에 실행 비트가 하나라도
     /// 있다"로 본다(심링크는 따라간다, 폴더도 통과 — D-69). FS 를 보므로 관문 안에서 부른다.
+    /// 절대경로 항목만 본다 — 상대 항목(`bin`·`.`)은 자식 cwd(연결 폴더) 기준으로 풀려 폴더의 실행 파일을 고를 수 있다
+    /// (도구 샌드박스 리뷰 R2-1, TS 는 아직 본다 — Rust 가 더 엄격). 찾은 절대경로로 띄운다.
     pub fn find_on_path(&self, bin: &str) -> Option<String> {
         let sep = path_list_separator(self.platform);
         self.path_value()
             .split(sep)
-            .filter(|d| !d.is_empty())
+            .filter(|d| std::path::Path::new(d).is_absolute())
             .map(|d| node_path::join(&[d, bin]))
             .find(|p| executable(p))
     }
@@ -165,6 +180,8 @@ mod tests {
         assert_eq!(find(&format!("{d}/dir")), Some(format!("{d}/dir/go")));
         assert_eq!(find(&format!("{d}/dangling")), None);
         assert_eq!(find(""), None);
+        // 상대 항목은 보지 않는다(이 프로세스 cwd 를 그 폴더로 두지 않아도 같은 결과여야 한다).
+        assert_eq!(find("b"), None);
         let _ = std::fs::remove_dir_all(&d);
     }
 }

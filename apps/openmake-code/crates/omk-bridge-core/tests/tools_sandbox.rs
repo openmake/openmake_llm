@@ -158,3 +158,51 @@ fn python_tools_run_inside_profile() {
         }
     }
 }
+
+const MISSING: &str = "exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.";
+
+/// 준비는 됐지만 프로파일 **파일**이 사라진 코어 — sandbox-exec 자체가 65 로 실패한다. "진단 없음/none" 으로 삼키지 않고
+/// 프로파일 없음과 같이 거절한다(TS 별건 수정 M1 과 같은 규칙).
+#[test]
+fn lost_profile_file_is_refused_not_swallowed() {
+    let w = Work::new();
+    std::fs::write(w.join("root/tsconfig.json"), "{}").unwrap();
+    std::fs::write(w.join("root/conftest.py"), "").unwrap();
+    std::fs::write(w.join("root/b.py"), "def f(:\n").unwrap();
+    w.tool("root/node_modules/.bin/tsc", "tsc", "a.ts(1,1): error TS1: ");
+    let c = core(&w, true);
+    for f in std::fs::read_dir(w.join("prof")).unwrap() {
+        std::fs::remove_file(f.unwrap().path()).unwrap();
+    }
+    let want = json!({"ok": false, "error": MISSING, "exitCode": 126});
+    for msg in [
+        json!({"kind": "lsp_diagnostics", "paths": ["b.py"]}),
+        json!({"kind": "lsp_diagnostics", "paths": ["a.ts"]}),
+        json!({"kind": "test_runner"}),
+    ] {
+        let got = runtime().block_on(c.handle_exec(&BridgeMsg::from_json(&msg))).to_json();
+        assert_eq!(got, want, "{msg}");
+    }
+}
+
+/// python3 가 PATH 에 없으면 거절(71)이 아니라 종전대로 "띄우지 못함" — 빈 진단·none.
+#[test]
+fn missing_python_is_not_refused() {
+    let w = Work::new();
+    std::fs::write(w.join("root/conftest.py"), "").unwrap();
+    std::fs::write(w.join("root/b.py"), "def f(:\n").unwrap();
+    let profile = write_sandbox_profile(&w.join("root"), None, &w.join("home"), &w.join("prof/p.sb")).unwrap();
+    let tool = ToolEnv {
+        env: vec![("HOME".to_owned(), w.join("home"))],
+        platform: Platform::Darwin,
+        exec_path: "/nonexistent-omk-path".to_owned(),
+        sandbox: ToolSandbox::Profile(profile),
+    };
+    let gate = FsGate::new(15_000);
+    let rt = runtime();
+    assert_eq!(rt.block_on(test_runner::detect(&w.join("root"), &tool, &gate)), Ok("none"));
+    let got = rt
+        .block_on(diagnostics::collect(&w.join("root"), &[w.join("root/b.py")], &tool, 15_000, &gate))
+        .unwrap();
+    assert_eq!((got.diagnostics.len(), got.truncated, got.server_kind.as_str()), (0, false, "py_compile"));
+}

@@ -14,7 +14,6 @@ use crate::constants::{DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX};
 use crate::js_regex::{self, JsRegex};
 use crate::js_text::{js_trim, utf16_prefix};
 use crate::node_path;
-use crate::proc;
 use crate::timed_fs::FsGate;
 use crate::tool_env::ToolEnv;
 
@@ -191,9 +190,9 @@ fn cap(all: Vec<Diagnostic>) -> (Vec<Diagnostic>, bool) {
     (kept, truncated)
 }
 
-/// 끝난 이유와 무관하게 `stdout + "\n" + stderr`(띄우지 못하면 빈 출력).
+/// 끝난 이유와 무관하게 `stdout + "\n" + stderr`(띄우지 못하면 빈 출력). sandbox-exec 자체 실패는 거절(`ToolEnv::run`).
 async fn run_tool(tool: &ToolEnv, file: &str, args: &[&str], cwd: &str, ms: u64) -> Result<String, String> {
-    let out = proc::run(tool.spec(file, args, cwd, ms)?).await;
+    let out = tool.run(file, args, cwd, ms).await?;
     Ok(format!("{}\n{}", out.stdout, out.stderr))
 }
 
