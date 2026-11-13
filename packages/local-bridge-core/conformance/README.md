@@ -66,3 +66,4 @@ Rust 는 차단 패턴을 ECMAScript 정규식 크레이트 `regress` 로 컴파
 - `OMK_BRIDGE_FS_TIMEOUT_MS` 가 정수가 아닐 때(`abc`·`1e3`·`1500.5`·음수·공백뿐): TS 는 NaN·실수·음수 타이머가 되어 1ms 로 돌거나 문구에 `NaNs` 가 찍힌다. Rust 는 기본값 15000 으로 돈다(개발·테스트 훅의 잘못된 입력). Rust 단위 테스트가 고정한다.
 - 동시 FS 작업 상한: TS 는 프로세스 공용 libuv 스레드 풀(4)이 사실상의 상한이고, Rust 는 코어(연결 폴더)마다 4개다 — 한 폴더의 볼륨이 막혀도 다른 폴더 요청이 굶지 않는다.
 - 시간 초과 뒤: TS 는 줄에 있던 호출이 나중에 실행될 수 있다(이미 "실패"라고 답한 `write`·`delete` 포함). Rust 는 아직 시작하지 않은 작업을 실행하지 않는다.
+- 폴더 `delete` 가 하위 항목에서 막힐 때(예: 하위 폴더가 0555): TS(`fsp.rm` recursive)는 막힌 항목의 syscall·경로를 적고(`EACCES: permission denied, unlink '<폴더>/q/f'`), Rust(`remove_dir_all`)는 지우려던 폴더를 적는다(`EACCES: permission denied, rmdir '<폴더>'`). 오류 코드와 실패 여부는 같다. chmod 사례라 fixture 에 넣지 않는다.
