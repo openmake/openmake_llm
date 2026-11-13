@@ -21,7 +21,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
-import { EXEC_TIMEOUT_MS, GIT_DIR_MISMATCH_ERROR, GIT_FIXED_ARGS, MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR } from './constants';
+import { EXEC_TIMEOUT_MS, GIT_DIR_MISMATCH_ERROR, GIT_FIXED_ARGS, GITFILE_MAX_BYTES, MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR } from './constants';
 import { buildExecEnv } from './exec-env';
 import { readRegularFile, type GitPaths } from './git-trust';
 import { SandboxProfileMissingError, sandboxExecFailed, wrapInSandbox } from './sandbox';
@@ -152,15 +152,12 @@ async function writeBaseSha(git: Git, wtAbs: string, repo: GitPaths): Promise<vo
     } catch (e) { rethrowSandbox(e); }
 }
 
-/** 기준점 읽기 — 심링크는 읽지 않는다(일반 파일만). */
+/** 기준점 읽기 — 일반 파일만·GITFILE_MAX_BYTES 이하만 읽는다(심링크·FIFO·큰 파일은 기준점 없음, 리뷰 S2). */
 async function readBaseSha(git: Git, wtAbs: string, repo: GitPaths): Promise<string> {
     try {
         const meta = await worktreeMetaDir(git, wtAbs, repo);
-        const p = meta && path.join(meta, 'omk-base');
-        if (p && fs.lstatSync(p, { throwIfNoEntry: false })?.isFile()) {
-            const sha = fs.readFileSync(p, 'utf8').trim();
-            if (/^[0-9a-f]{7,40}$/.test(sha)) return sha;
-        }
+        const sha = meta && readRegularFile(path.join(meta, 'omk-base'), GITFILE_MAX_BYTES)?.trim();
+        if (sha && /^[0-9a-f]{7,40}$/.test(sha)) return sha;
     } catch (e) { rethrowSandbox(e); }
     return 'HEAD';
 }

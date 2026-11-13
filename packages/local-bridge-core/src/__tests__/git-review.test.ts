@@ -116,7 +116,8 @@ sbDescribe('F2 — 탐지가 null 이어도 연결 폴더의 .git 디렉터리�
     it('.git/HEAD 를 깨 탐지를 실패시킨 뒤 재연결해도 config·hooks 를 못 쓴다(파일 kind·exec)', async () => {
         const repo = makeRepo('repo');
         const before = fs.readFileSync(path.join(repo, '.git', 'config'), 'utf8');
-        expect(await run(makeCore(repo), write('.git/HEAD', 'garbage\n'))).toEqual({ ok: true });
+        expect(await run(makeCore(repo), write('.git/HEAD', 'garbage\n'))).toMatchObject({ ok: false }); // D-11: 파일 kind 로는 못 깬다
+        fs.writeFileSync(path.join(repo, '.git', 'HEAD'), 'garbage\n'); // 승인된 exec 등 다른 길로 깨진 경우
         expect(detectGit(repo)).toBeNull();
         const core = makeCore(repo, true);
         expect((await run(core, write('.git/config', '[core]\n\tfsmonitor = x\n'))).ok).toBe(false);

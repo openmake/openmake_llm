@@ -97,13 +97,13 @@ describe('R1 — 지키는 git 디렉터리 바로 아래 첫 이름에 ASCII �
         const sub = subfolder();
         const core = makeCore(sub);
         const marker = path.join(outside, 'fsmon');
-        for (const p of ['.git/HEAD', '.git/objects/.keep', '.git/refs/heads/.keep']) expect(await run(core, write(p, p.endsWith('HEAD') ? 'ref: refs/heads/main\n' : ''))).toEqual({ ok: true });
+        // D-11: .git 아래는 무엇이든 거절 — 가짜 git 디렉터리를 만들 수 없다.
+        for (const p of ['.git/HEAD', '.git/objects/.keep', '.git/refs/heads/.keep']) expect(await run(core, write(p, p.endsWith('HEAD') ? 'ref: refs/heads/main\n' : ''))).toEqual(denied(p));
         for (const p of ['.git/con\uFB01g', '.git/config.wor\u212Atree', '.git/hoo\u212As/pre-commit', '.git/hook\u017F/pre-commit', '.git/\uFF43onfig']) {
             expect(await run(core, write(p, fsmonitor(marker)))).toEqual(denied(p));
         }
         expect(statusRan(sub, marker)).toBe(false);
-        // 둘째 이름부터는 종전대로(브랜치 이름 등)
-        expect(await run(core, write('.git/refs/heads/한글', '0'.repeat(40)))).toEqual({ ok: true });
+        expect(await run(core, write('.git/refs/heads/한글', '0'.repeat(40)))).toEqual(denied('.git/refs/heads/한글')); // D-11
     });
 
     it('믿는 일반 레포 + extensions.worktreeConfig: 아직 없는 config.worKtree 를 못 쓰고 후속 git status 가 돌지 않는다', async () => {
@@ -114,7 +114,7 @@ describe('R1 — 지키는 git 디렉터리 바로 아래 첫 이름에 ASCII �
         expect(await run(core, write('.git/config.wor\u212Atree', fsmonitor(marker)))).toEqual(denied('.git/config.wor\u212Atree'));
         expect(await run(core, del('.git/\uFF58'))).toEqual(denied('.git/\uFF58'));
         expect(statusRan(repo, marker)).toBe(false);
-        expect(await run(core, write('.git/refs/heads/브랜치', '0'.repeat(40)))).toEqual({ ok: true });
+        expect(await run(core, write('.git/refs/heads/브랜치', '0'.repeat(40)))).toEqual(denied('.git/refs/heads/브랜치')); // D-11
         expect(await run(core, write('한글.txt'))).toEqual({ ok: true });
     });
 });
@@ -132,7 +132,7 @@ describe('R2 — 연결 폴더 루트가 지키는 git 디렉터리가 아니면
             expect(await run(core, write('config', fsmonitor(marker)))).toEqual({ ok: true }); // 루트 config 는 막지 않는다
             expect(fs.existsSync(path.join(root, 'HEAD'))).toBe(false);
             expect(statusRan(root, marker)).toBe(false);
-            expect(await run(core, write('src/HEAD'))).toEqual({ ok: true }); // 하위 폴더는 넓히지 않는다
+            expect(await run(core, write('src/HEAD'))).toEqual(denied('src/HEAD')); // D-11: HEAD 는 어느 폴더에서든 새로 만들 수 없다
         });
     }
 
