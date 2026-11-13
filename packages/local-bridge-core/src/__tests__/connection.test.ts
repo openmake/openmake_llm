@@ -9,7 +9,7 @@ import * as path from 'path';
 import { WebSocket, WebSocketServer, type WebSocket as ServerWs } from 'ws';
 import { BridgeConnection, parseNotice } from '../connection';
 import { BridgeCore } from '../core';
-import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, HELLO_DELAY_MS, NOTICE_TOOL_NAME_MAX } from '../constants';
+import { AUTH_CLOSE_REASONS, AUTH_CLOSE_TEXT, BRIDGE_KINDS, EXPIRY_SKEW_TOLERANCE_MS, HANDSHAKE_TIMEOUT_MS, HELLO_DELAY_MS, NOTICE_TOOL_NAME_MAX } from '../constants';
 import type { BridgeNotice } from '../types';
 
 interface Frame { type?: string; reqId?: string; result?: Record<string, unknown>; deviceId?: string; label?: string; folderName?: string }
@@ -50,7 +50,7 @@ class FakeServer {
     dropAll(): void { for (const s of this.sockets) s.terminate(); this.sockets = []; }
     /** 서버가 사유를 실어 닫는다(키 폐기·계정 비활성 등). */
     closeAll(code: number, reason: string): void { for (const s of this.sockets) s.close(code, reason); this.sockets = []; }
-    waitFor(pred: (f: Frame) => boolean, ms = 5000): Promise<Frame> {
+    waitFor(pred: (f: Frame) => boolean, ms = IO_DEADLINE_MS): Promise<Frame> {
         const hit = this.received.find(pred);
         if (hit) return Promise.resolve(hit);
         return new Promise((resolve, reject) => {
@@ -61,8 +61,14 @@ class FakeServer {
     async stop(): Promise<void> { this.dropAll(); await new Promise<void>((r) => this.wss.close(() => r())); }
 }
 
-/** 실 소켓 왕복 대기 한도(실시간) — 루프백 왕복이라 보통 수 ms. 가짜 시간과 무관하게 벽시계로 잰다. */
-const IO_DEADLINE_MS = 4000;
+/**
+ * 실 소켓 왕복 대기 한도(실시간) — 루프백 왕복이라 보통 수 ms. 가짜 시간과 무관하게 벽시계로 잰다.
+ * 조건이 서면 바로 끝나는 최대 대기라 평소 실행 시간은 늘지 않는다. 운영 서비스·Jest 여러 작업자가 함께 도는
+ * 스테이징 검증 호스트에서 4초를 넘긴 일이 있어(11-13) 20초로 둔다.
+ */
+const IO_DEADLINE_MS = 20_000;
+// 이 한도를 다 기다리기 전에 Jest 기본 제한(5초)이 테스트를 끊지 않게 한다(한도 + 여유).
+jest.setTimeout(IO_DEADLINE_MS + 10_000);
 
 /** 실 I/O 가 끝나 조건이 설 때까지 이벤트 루프를 돌린다(가짜 시간은 움직이지 않는다). */
 async function until(what: string, cond: () => boolean): Promise<void> {
@@ -348,11 +354,14 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
             reconnectMs: 50, handshakeTimeoutMs: 100,
         });
         // 이 테스트만 실시간이다 — ws 는 handshakeTimeout 을 http.request({ timeout }) → socket.setTimeout 으로 넘기는데,
-        // 그 타이머는 Node 내부 타이머 목록에서 돌아 Jest 가짜 시계로 밀 수 없다. 그래서 상한 있는 폴링(4초, Jest 기본 5초 안)으로 기다린다.
+        // 그 타이머는 Node 내부 타이머 목록에서 돌아 Jest 가짜 시계로 밀 수 없다. 그래서 상한 있는 폴링(IO_DEADLINE_MS, 이 파일의 Jest 제한 안)으로 기다린다.
+        // 상한은 기본 핸드셰이크 제한(HANDSHAKE_TIMEOUT_MS)보다 짧아야 한다 — 그래야 handshakeTimeoutMs(100) 가 전달되지 않아
+        // 기본값으로 끊겨 재시도하는 경우를 통과로 잘못 보지 않는다.
         // 결정적으로 만들려면 소스에 접속 시간 제한 타이머를 주입할 이음매가 필요하다.
+        expect(IO_DEADLINE_MS).toBeLessThan(HANDSHAKE_TIMEOUT_MS);
         try {
             await conn.connect();
-            const deadline = Date.now() + 4000;
+            const deadline = Date.now() + IO_DEADLINE_MS;
             while (held.length < 2 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
             expect(held.length).toBeGreaterThanOrEqual(2);
             expect(statuses).toContain('끊김 — 재연결 대기');
