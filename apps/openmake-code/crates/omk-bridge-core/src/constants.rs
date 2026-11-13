@@ -105,3 +105,19 @@ pub const BRIDGE_KINDS: &[&str] = &[
     "code_nav",
     "test_runner",
 ];
+
+/// 브라우저 요청 종류 — 능력 목록에는 조건부로만 들어간다.
+pub const BROWSER_KIND: &str = "browser";
+/// 요청 만료 판정에서 서버·PC 시계 어긋남을 봐주는 폭(ms).
+pub const EXPIRY_SKEW_TOLERANCE_MS: u64 = 120_000;
+/// 중복 판정을 위해 기억하는 reqId 수.
+pub const SEEN_REQ_MAX: usize = 2000;
+/// `folders` 1회 상한 — 서버 `BRIDGE_FOLDERS_MAX_ENTRIES` 와 같은 축.
+pub const FOLDERS_MAX_ENTRIES: usize = 200;
+/// `listAll` 1회 상한.
+pub const LIST_ALL_MAX: usize = 1000;
+/// 파일 kind FS 처리 시간 제한 기본값(ms). TS 는 `OMK_BRIDGE_FS_TIMEOUT_MS || 15000` 이다.
+pub const FS_OP_TIMEOUT_DEFAULT_MS: u64 = 15_000;
+/// 코어 하나가 동시에 돌리는 FS 작업 수 — TS 에는 대응 값이 없고, libuv 스레드 풀 기본값(4)이
+/// 사실상의 상한이었다. 블록된 볼륨에 요청이 쌓여도 스레드가 늘지 않게 한다(설계 D-13).
+pub const FS_MAX_CONCURRENT: usize = 4;
