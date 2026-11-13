@@ -2,11 +2,15 @@
 
 로컬 브리지 코어를 Rust 로 옮기는 Cargo workspace 다. 지금 `omk-bridge-core` 에는 판정 순수 함수(차단 목록·exec 환경·플랫폼 분기·샌드박스 프로파일 텍스트·상수)와
 파일 kind 처리(경로 스코프·`read` `write` `list` `listAll` `delete` `folders`·`task_end`·시간 제한·요청 만료/중복 판정),
-`exec`(차단 → 사용자 확인 → macOS 샌드박스의 3단 방어·일괄 승인·exec PATH 계산·샌드박스 프로파일 파일)와 `worktree`(`add`·`diff`·`remove`)가 있다.
+`exec`(차단 → 사용자 확인 → macOS 샌드박스의 3단 방어·일괄 승인·exec PATH 계산·샌드박스 프로파일 파일)와 `worktree`(`add`·`diff`·`remove`),
+읽기 전용 도구 `code_nav`(grep·files)·`lsp_diagnostics`(tsc·py_compile)·`test_runner`(탐지)가 있다.
 기준은 TS 구현(`packages/local-bridge-core`)의 현재 동작이며, 두 구현이 같은 적합성 fixture 를 통과해야 한다.
-진단·코드 탐색·테스트 러너 탐지·브라우저는 이후 PR 에서 더한다 — 그때까지 코어는 그 kind 를 "지원하지 않는 kind" 로 거절하고 능력 목록에서 뺀다.
-`exec`·`worktree` 는 호스트가 `BridgeCore::with_exec_host(ExecHost { … })` 로 확인 창·환경 사본·홈·플랫폼·샌드박스 설정을 얹어야 돈다
-(코어는 프로세스 환경을 읽지 않는다). 호스트가 없는 코어는 exec 를 "거부"(126)로, worktree 를 거절로 끝낸다.
+능력 목록은 `BRIDGE_KINDS` 12종 전부다. 브라우저는 이후 PR 에서 더한다 — 그때까지 코어는 `browser` 를 "지원하지 않는 kind" 로 거절한다.
+`exec`·`worktree`·`lsp_diagnostics`·`test_runner` 는 호스트가 `BridgeCore::with_exec_host(ExecHost { … })` 로 확인 창·환경 사본·홈·플랫폼·샌드박스 설정을 얹어야 돈다
+(코어는 프로세스 환경을 읽지 않는다). 호스트가 없는 코어는 exec 를 "거부"(126)로, worktree·lsp_diagnostics·test_runner 를 거절로 끝낸다
+(code_nav 는 호스트 없이 돈다). 도구 자식(tsc·python3)은 exec 와 같은 샌드박스 안에서 돈다.
+읽기 전용 도구의 시간 제한은 호스트가 `with_tool_timeouts(ToolTimeouts { code_nav_ms, diag_ms })` 로 얹는다
+(`timed_fs::ms_from_env` 로 `OMK_BRIDGE_CODE_NAV_TIMEOUT_MS`·`OMK_BRIDGE_DIAG_TIMEOUT_MS` 를 채운다, 기본 15초).
 
 ## 런타임과 종료
 
@@ -15,6 +19,14 @@
 파일 작업은 `spawn_blocking` 으로 돌고 시간 제한(`OMK_BRIDGE_FS_TIMEOUT_MS`, 기본 15초)과 코어마다 동시 작업 4개 상한을 받는다.
 블록된 FS 호출은 취소할 수 없어 스레드가 남는다. tokio 런타임은 drop 때 `spawn_blocking` 작업이 끝나기를 기다리므로,
 호스트는 런타임을 `shutdown_background()` 또는 `shutdown_timeout()` 으로 끝낸다 — 그냥 drop 하면 영영 블록된 호출이 있을 때 종료가 멈춘다.
+
+**남는 위험(ReDoS) — CPU 만 막는다, 메모리는 못 막는다**: grep 정규식은 모델이 준 값이고 `regress` 에는 단계·시간·메모리 제한이 없어,
+한 줄 안에서 끝나지 않는 판정은 멈출 수 없다. `code_nav` 는 코어마다 전용 관문(2칸)에서 돌아, 시간만 오래 걸리는 판정은 스레드가 묶이고
+(프로세스가 끝날 때까지 코어 하나 100%, 폴더마다 최대 2개) 그 요청은 시간 제한에 답하며 파일 kind·다른 폴더는 계속 돈다.
+**메모리는 막지 못한다** — 패턴 `((/*){1,2}){1,2}a{2}`(20자) 대 줄 `/`×20 + `b`(21자, 구분선 주석으로 흔하다)에서 RSS 가 0.8초 안에
+1.2GB 를 넘는다(슬래시 16개는 6초에 1.0GB — 리뷰 실측, 차등 실험에서도 2초 안 1GB). 관문 시간 제한(15초)에 닿기 전에 **헬퍼 프로세스 전체가
+죽거나 스왑으로 멎을 수 있고**, 그러면 그 헬퍼의 모든 폴더 연결이 끊긴다(TS 의 이벤트 루프 멎음과 같은 범위). PR-1.7(헬퍼) 전에 닫는
+별건이다 — 메모리 상한이 있는 grep 작업자 프로세스 또는 단계·메모리 예산이 있는 엔진으로 교체.
 
 ## 검사
 
@@ -34,3 +46,5 @@ cargo deny check advisories licenses   # cargo-deny 필요(CI 는 버전 고정 
 - Rust 러너: `crates/omk-bridge-core/tests/conformance.rs`
 - TS 러너: `packages/local-bridge-core/src/__tests__/conformance.test.ts`(exec·worktree 계열은 `conformance-exec.test.ts`)
 - 시간·크기에 기대는 프로세스 동작은 `tests/exec_proc.rs`, 샌드박스가 실제로 막는 것은 `tests/exec_sandbox.rs`(macOS, 실제 `sandbox-exec`)가 본다.
+- 읽기 전용 도구: 러너 `tests/conformance/code_nav.rs`·`diagnostics.rs`·`test_runner.rs`(TS 는 `conformance-tools.test.ts`), fixture 밖은
+  `tests/tools_core.rs`, 끝나지 않는 판정의 CPU 묶기는 `tests/tools_redos.rs`(CPU 2개를 묶어 따로 둔다 — 메모리 폭주는 시험하지 않는다), 도구 자식 샌드박스는 `tests/tools_sandbox.rs`(macOS).

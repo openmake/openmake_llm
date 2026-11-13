@@ -1,0 +1,467 @@
+{
+  "suite": "code-nav",
+  "version": 1,
+  "cases": [
+    {
+      "id": "grep-basic",
+      "setup": [
+        {"file":"root/a.txt","content":"one\ntwo\nthree\n"},
+        {"file":"root/src/b.ts","content":"const one = 1;\nconst two = 2;\n"},
+        {"file":"root/src/c.ts","content":"// none\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"one"},"expect":{"ok":true,"codeNav":{"matches":["a.txt:1:one","src/b.ts:1:const one = 1;","src/c.ts:1:// none"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"one","path":"src"},"expect":{"ok":true,"codeNav":{"matches":["src/b.ts:1:const one = 1;","src/c.ts:1:// none"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"two","path":"src/b.ts"},"expect":{"ok":true,"codeNav":{"matches":["src/b.ts:2:const two = 2;"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"one","path":"nope"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"two","glob":"*.ts"},"expect":{"ok":true,"codeNav":{"matches":["src/b.ts:2:const two = 2;"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"const","glob":"src/**/*.ts"},"expect":{"ok":true,"codeNav":{"matches":["src/b.ts:1:const one = 1;","src/b.ts:2:const two = 2;"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"one","glob":"*.md"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"ONE","ignoreCase":true},"expect":{"ok":true,"codeNav":{"matches":["a.txt:1:one","src/b.ts:1:const one = 1;","src/c.ts:1:// none"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"ONE","ignoreCase":"false"},"expect":{"ok":true,"codeNav":{"matches":["a.txt:1:one","src/b.ts:1:const one = 1;","src/c.ts:1:// none"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"ONE","ignoreCase":0},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"ONE"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "grep-folder",
+      "setup": [
+        {"file":"root/sub/x.txt","content":"hello\n"},
+        {"file":"root/y.txt","content":"hello\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hello","folder":"sub"},"expect":{"ok":true,"codeNav":{"matches":["x.txt:1:hello"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hello","folder":"sub","path":"x.txt"},"expect":{"ok":true,"codeNav":{"matches":["x.txt:1:hello"],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "grep-text",
+      "setup": [
+        {"file":"root/k.txt","content":"가나다\n한글 줄\n"},
+        {"file":"root/end.txt","content":"a\nb\n"},
+        {"file":"root/mid.txt","content":"a\n\nb"},
+        {"file":"root/crlf.txt","content":"one\r\ntwo\r\n"},
+        {"file":"root/bom.txt","contentB64":"77u/Zmlyc3QK"},
+        {"file":"root/broken.txt","contentB64":"b2v//m9rCuOBCg=="},
+        {"file":"root/astral.txt","content":"x😀y\n😀😀\n😀\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"한글","path":"k.txt"},"expect":{"ok":true,"codeNav":{"matches":["k.txt:2:한글 줄"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"^$","path":"end.txt"},"expect":{"ok":true,"codeNav":{"matches":["end.txt:3:"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"^$","path":"mid.txt"},"expect":{"ok":true,"codeNav":{"matches":["mid.txt:2:"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"e$","path":"crlf.txt"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"one","path":"crlf.txt"},"expect":{"ok":true,"codeNav":{"matches":["crlf.txt:1:one"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"o\\r$","path":"crlf.txt"},"expect":{"ok":true,"codeNav":{"matches":["crlf.txt:2:two"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"^first","path":"bom.txt"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"first","path":"bom.txt"},"expect":{"ok":true,"codeNav":{"matches":["bom.txt:1:﻿first"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"ok","path":"broken.txt"},"expect":{"ok":true,"codeNav":{"matches":["broken.txt:1:ok��ok"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"�$","path":"broken.txt"},"expect":{"ok":true,"codeNav":{"matches":["broken.txt:2:�"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"😀","path":"astral.txt"},"expect":{"ok":true,"codeNav":{"matches":["astral.txt:1:x😀y","astral.txt:2:😀😀","astral.txt:3:😀"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"^😀+$","path":"astral.txt"},"expect":{"ok":true,"codeNav":{"matches":["astral.txt:3:😀"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"x[^a]+y","path":"astral.txt"},"expect":{"ok":true,"codeNav":{"matches":["astral.txt:1:x😀y"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"^..$","path":"astral.txt"},"expect":{"ok":true,"codeNav":{"matches":["astral.txt:3:😀"],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "cap-max-results",
+      "setup": [
+        {"file":"root/m.txt","content":"x1\nx2\nx3\nx4\nx5\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"x","maxResults":2},"expect":{"ok":true,"codeNav":{"matches":["m.txt:1:x1","m.txt:2:x2"],"truncated":true}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"x","maxResults":1.5},"expect":{"ok":true,"codeNav":{"matches":["m.txt:1:x1","m.txt:2:x2"],"truncated":true}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"x","maxResults":0},"expect":{"ok":true,"codeNav":{"matches":["m.txt:1:x1","m.txt:2:x2","m.txt:3:x3","m.txt:4:x4","m.txt:5:x5"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"x","maxResults":-1},"expect":{"ok":true,"codeNav":{"matches":["m.txt:1:x1","m.txt:2:x2","m.txt:3:x3","m.txt:4:x4","m.txt:5:x5"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"x","maxResults":null},"expect":{"ok":true,"codeNav":{"matches":["m.txt:1:x1","m.txt:2:x2","m.txt:3:x3","m.txt:4:x4","m.txt:5:x5"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"x","maxResults":false},"expect":{"ok":true,"codeNav":{"matches":["m.txt:1:x1","m.txt:2:x2","m.txt:3:x3","m.txt:4:x4","m.txt:5:x5"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"x","maxResults":401},"expect":{"ok":true,"codeNav":{"matches":["m.txt:1:x1","m.txt:2:x2","m.txt:3:x3","m.txt:4:x4","m.txt:5:x5"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"x","maxResults":5},"expect":{"ok":true,"codeNav":{"matches":["m.txt:1:x1","m.txt:2:x2","m.txt:3:x3","m.txt:4:x4","m.txt:5:x5"],"truncated":true}}}
+      ]
+    },
+    {
+      "id": "cap-exact",
+      "setup": [
+        {"file":"root/e.txt","content":"hit\nhit"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit","maxResults":2},"expect":{"ok":true,"codeNav":{"matches":["e.txt:1:hit","e.txt:2:hit"],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "cap-per-file",
+      "setup": [
+        {"file":"root/p.txt","repeat":{"line":"hit","count":25}},
+        {"file":"root/q.txt","content":"hit\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit"},"expect":{"ok":true,"codeNav":{"matches":["p.txt:1:hit","p.txt:2:hit","p.txt:3:hit","p.txt:4:hit","p.txt:5:hit","p.txt:6:hit","p.txt:7:hit","p.txt:8:hit","p.txt:9:hit","p.txt:10:hit","p.txt:11:hit","p.txt:12:hit","p.txt:13:hit","p.txt:14:hit","p.txt:15:hit","p.txt:16:hit","p.txt:17:hit","p.txt:18:hit","p.txt:19:hit","p.txt:20:hit","q.txt:1:hit"],"truncated":true}}}
+      ]
+    },
+    {
+      "id": "cap-total",
+      "setup": [
+        {"many":{"dir":"root/m","count":21,"prefix":"f","kind":"file","content":"hit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\nhit\n"}}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit"},"expect":{"ok":true,"codeNav":{"truncated":true,"matchesCount":400}},"compare":"counts"}
+      ]
+    },
+    {
+      "id": "cap-line",
+      "setup": [
+        {"file":"root/long.txt","content":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"^"},"expect":{"ok":true,"codeNav":{"matches":["long.txt:1:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…","long.txt:2:가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가","long.txt:3:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy","long.txt:4:"],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "cap-file-bytes",
+      "setup": [
+        {"file":"root/big.txt","repeat":{"line":"hit","count":131073}},
+        {"file":"root/edge.txt","repeat":{"line":"hit","count":131072}}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit","path":"big.txt"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit","path":"edge.txt"},"expect":{"ok":true,"codeNav":{"matches":["edge.txt:1:hit","edge.txt:2:hit","edge.txt:3:hit","edge.txt:4:hit","edge.txt:5:hit","edge.txt:6:hit","edge.txt:7:hit","edge.txt:8:hit","edge.txt:9:hit","edge.txt:10:hit","edge.txt:11:hit","edge.txt:12:hit","edge.txt:13:hit","edge.txt:14:hit","edge.txt:15:hit","edge.txt:16:hit","edge.txt:17:hit","edge.txt:18:hit","edge.txt:19:hit","edge.txt:20:hit"],"truncated":true}}},
+        {"msg":{"kind":"code_nav","op":"files"},"expect":{"ok":true,"codeNav":{"files":[{"path":"big.txt","lines":0},{"path":"edge.txt","lines":131072}],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "cap-pattern-length",
+      "setup": [
+        {"file":"root/a.txt","content":"a\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},"expect":{"ok":false,"error":"pattern 이 너무 깁니다 (500자 이하)"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가😀"},"expect":{"ok":false,"error":"pattern 이 너무 깁니다 (500자 이하)"}}
+      ]
+    },
+    {
+      "id": "cap-files",
+      "setup": [
+        {"many":{"dir":"root/m","count":4001,"prefix":"f","kind":"file"}}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"files"},"expect":{"ok":true,"codeNav":{"truncated":true,"filesCount":4000}},"compare":"counts"},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"x"},"expect":{"ok":true,"codeNav":{"truncated":true,"matchesCount":0}},"compare":"counts"}
+      ]
+    },
+    {
+      "id": "exclude-names",
+      "setup": [
+        {"file":"root/node_modules/in.txt","content":"hit\n"},
+        {"file":"root/.git/in.txt","content":"hit\n"},
+        {"file":"root/dist/in.txt","content":"hit\n"},
+        {"file":"root/build/in.txt","content":"hit\n"},
+        {"file":"root/.next/in.txt","content":"hit\n"},
+        {"file":"root/__pycache__/in.txt","content":"hit\n"},
+        {"file":"root/.venv/in.txt","content":"hit\n"},
+        {"file":"root/venv/in.txt","content":"hit\n"},
+        {"file":"root/coverage/in.txt","content":"hit\n"},
+        {"file":"root/.openmake/in.txt","content":"hit\n"},
+        {"file":"root/sub/.git","content":"gitdir: x\nhit\n"},
+        {"file":"root/keep.txt","content":"hit\n"},
+        {"file":"root/sub/keep.txt","content":"hit\n"},
+        {"file":"root/dist.txt","content":"hit\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit"},"expect":{"ok":true,"codeNav":{"matches":["dist.txt:1:hit","keep.txt:1:hit","sub/keep.txt:1:hit"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"files"},"expect":{"ok":true,"codeNav":{"files":[{"path":"dist.txt","lines":1},{"path":"keep.txt","lines":1},{"path":"sub/keep.txt","lines":1}],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit","path":"node_modules"},"expect":{"ok":true,"codeNav":{"matches":["node_modules/in.txt:1:hit"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit","path":"node_modules/in.txt"},"expect":{"ok":true,"codeNav":{"matches":["node_modules/in.txt:1:hit"],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "exclude-symlinks",
+      "setup": [
+        {"file":"root/keep.txt","content":"hit\n"},
+        {"file":"root/realdir/in.txt","content":"hit\n"},
+        {"dir":"outside"},
+        {"file":"outside/o.txt","content":"hit\n"},
+        {"symlink":"root/link-file","target":"{{TMP}}/root/keep.txt"},
+        {"symlink":"root/link-dir","target":"{{TMP}}/root/realdir"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit"},"expect":{"ok":true,"codeNav":{"matches":["keep.txt:1:hit","realdir/in.txt:1:hit"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"files"},"expect":{"ok":true,"codeNav":{"files":[{"path":"keep.txt","lines":1},{"path":"realdir/in.txt","lines":1}],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "exclude-binary",
+      "setup": [
+        {"file":"root/nul.txt","contentB64":"aGl0AAo="},
+        {"file":"root/t.txt","content":"hit\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit"},"expect":{"ok":true,"codeNav":{"matches":["t.txt:1:hit"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"files"},"expect":{"ok":true,"codeNav":{"files":[{"path":"nul.txt","lines":0},{"path":"t.txt","lines":1}],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "secret-files",
+      "setup": [
+        {"file":"root/.env","content":"hit\n"},
+        {"file":"root/id_rsa","content":"hit\n"},
+        {"file":"root/x.pem","content":"hit\n"},
+        {"file":"root/up/.ENV","content":"hit\n"},
+        {"file":"root/credentials/src.ts","content":"hit\n"},
+        {"file":"root/a.txt","content":"hit\n"},
+        {"file":"root/.envrc","content":"hit\n"},
+        {"file":"root/a.key.txt","content":"hit\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit"},"expect":{"ok":true,"codeNav":{"matches":[".envrc:1:hit","a.key.txt:1:hit","a.txt:1:hit"],"truncated":false,"skipped":5}}},
+        {"msg":{"kind":"code_nav","op":"files"},"expect":{"ok":true,"codeNav":{"files":[{"path":".envrc","lines":1},{"path":"a.key.txt","lines":1},{"path":"a.txt","lines":1}],"truncated":false,"skipped":5}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit","path":".env"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false,"skipped":1}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"hit","path":"up"},"expect":{"ok":true,"codeNav":{"matches":[],"truncated":false,"skipped":1}}},
+        {"msg":{"kind":"code_nav","op":"files","path":"credentials"},"expect":{"ok":true,"codeNav":{"files":[{"path":"credentials/src.ts","lines":1}],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "files-lines",
+      "setup": [
+        {"file":"root/a.txt","content":"a\nb\n"},
+        {"file":"root/b.txt","content":"a\nb"},
+        {"file":"root/c.txt","content":""},
+        {"file":"root/d.txt","content":"\n"},
+        {"file":"root/e.txt","content":"\n\n"},
+        {"file":"root/nul.bin","contentB64":"YQA="},
+        {"file":"root/big.txt","repeat":{"line":"x","count":262145}}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"files"},"expect":{"ok":true,"codeNav":{"files":[{"path":"a.txt","lines":2},{"path":"b.txt","lines":2},{"path":"big.txt","lines":0},{"path":"c.txt","lines":0},{"path":"d.txt","lines":1},{"path":"e.txt","lines":2},{"path":"nul.bin","lines":0}],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"files","path":"b.txt"},"expect":{"ok":true,"codeNav":{"files":[{"path":"b.txt","lines":2}],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"files","path":"nope"},"expect":{"ok":true,"codeNav":{"files":[],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "files-order",
+      "setup": [
+        {"file":"root/Z.txt","content":""},
+        {"file":"root/a.txt","content":""},
+        {"file":"root/가.txt","content":""},
+        {"file":"root/😀.txt","content":""},
+        {"file":"root/Ａ.txt","content":""},
+        {"file":"root/_.txt","content":""},
+        {"file":"root/a/b.txt","content":""},
+        {"file":"root/a-b.txt","content":""}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"files"},"expect":{"ok":true,"codeNav":{"files":[{"path":"Z.txt","lines":0},{"path":"_.txt","lines":0},{"path":"a-b.txt","lines":0},{"path":"a.txt","lines":0},{"path":"a/b.txt","lines":0},{"path":"가.txt","lines":0},{"path":"😀.txt","lines":0},{"path":"Ａ.txt","lines":0}],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"^$"},"expect":{"ok":true,"codeNav":{"matches":["Z.txt:1:","_.txt:1:","a-b.txt:1:","a.txt:1:","a/b.txt:1:","가.txt:1:","😀.txt:1:","Ａ.txt:1:"],"truncated":false}}}
+      ]
+    },
+    {
+      "id": "fields-pattern",
+      "setup": [
+        {"file":"root/n.txt","content":"a0\nis false\nnull\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep"},"expect":{"ok":false,"error":"pattern 이 필요합니다"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":null},"expect":{"ok":false,"error":"pattern 이 필요합니다"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":""},"expect":{"ok":false,"error":"pattern 이 필요합니다"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"   "},"expect":{"ok":false,"error":"pattern 이 필요합니다"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"　﻿"},"expect":{"ok":false,"error":"pattern 이 필요합니다"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":0},"expect":{"ok":true,"codeNav":{"matches":["n.txt:1:a0"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":false},"expect":{"ok":true,"codeNav":{"matches":["n.txt:2:is false"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"("},"expect":{"ok":false,"errorPrefix":"정규식이 올바르지 않습니다: "},"compare":"error-prefix"},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"[z-a]"},"expect":{"ok":false,"errorPrefix":"정규식이 올바르지 않습니다: "},"compare":"error-prefix"}
+      ]
+    },
+    {
+      "id": "fields-op",
+      "setup": [
+        {"file":"root/a.txt","content":"a\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"x","pattern":"a"},"expect":{"ok":false,"error":"지원하지 않는 code_nav op: x"}},
+        {"msg":{"kind":"code_nav","pattern":"a"},"expect":{"ok":false,"error":"지원하지 않는 code_nav op: undefined"}},
+        {"msg":{"kind":"code_nav","op":null},"expect":{"ok":false,"error":"지원하지 않는 code_nav op: null"}},
+        {"msg":{"kind":"code_nav","op":"GREP","pattern":"a"},"expect":{"ok":false,"error":"지원하지 않는 code_nav op: GREP"}},
+        {"msg":{"kind":"code_nav","op":"x","path":"../x"},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../x"}},
+        {"msg":{"kind":"code_nav","op":"grep","path":"../x"},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../x"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"a","folder":"../x"},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../x"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"a","folder":"missing"},"expect":{"ok":false,"error":"실행 폴더가 존재하지 않습니다: missing"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"a","folder":"a.txt"},"expect":{"ok":false,"error":"실행 폴더가 존재하지 않습니다: a.txt"}}
+      ]
+    },
+    {
+      "id": "fields-non-string",
+      "setup": [
+        {"file":"root/a.txt","content":"5\na\n"},
+        {"file":"root/7","content":"a\n"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"code_nav","op":"grep","pattern":5},"expect":{"ok":true,"codeNav":{"matches":["a.txt:1:5"],"truncated":false}},"divergence":"non-string-field","rustExpect":{"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: pattern"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":["a"]},"expect":{"ok":true,"codeNav":{"matches":["7:1:a","a.txt:2:a"],"truncated":false}},"divergence":"non-string-field","rustExpect":{"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: pattern"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"a","glob":7},"expect":{"ok":true,"codeNav":{"matches":["7:1:a"],"truncated":false}},"divergence":"non-string-field","rustExpect":{"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: glob"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"a","maxResults":"1"},"expect":{"ok":true,"codeNav":{"matches":["7:1:a"],"truncated":true}},"divergence":"non-string-field","rustExpect":{"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: maxResults"}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"a","glob":""},"expect":{"ok":true,"codeNav":{"matches":["7:1:a","a.txt:2:a"],"truncated":false}}},
+        {"msg":{"kind":"code_nav","op":"grep","pattern":"a","glob":0},"expect":{"ok":true,"codeNav":{"matches":["7:1:a","a.txt:2:a"],"truncated":false}}}
+      ]
+    }
+  ],
+  "walk": [
+    {
+      "id": "far",
+      "setup": [
+        {"file":"root/a.txt","content":""},
+        {"file":"root/src/b.ts","content":""},
+        {"file":"root/.env","content":""},
+        {"file":"root/node_modules/x.js","content":""},
+        {"file":"root/credentials/k","content":""}
+      ],
+      "input": {"start":".","deadline":"far"},
+      "expect": {"files":["a.txt","src/b.ts"],"truncated":false,"skipped":2}
+    },
+    {
+      "id": "past",
+      "setup": [
+        {"file":"root/a.txt","content":""},
+        {"file":"root/src/b.ts","content":""},
+        {"file":"root/.env","content":""},
+        {"file":"root/node_modules/x.js","content":""},
+        {"file":"root/credentials/k","content":""}
+      ],
+      "input": {"start":".","deadline":"past"},
+      "expect": {"files":[],"truncated":true,"skipped":0}
+    },
+    {
+      "id": "subdir",
+      "setup": [
+        {"file":"root/a.txt","content":""},
+        {"file":"root/src/b.ts","content":""},
+        {"file":"root/.env","content":""},
+        {"file":"root/node_modules/x.js","content":""},
+        {"file":"root/credentials/k","content":""}
+      ],
+      "input": {"start":"src","deadline":"far"},
+      "expect": {"files":["src/b.ts"],"truncated":false,"skipped":0}
+    },
+    {
+      "id": "file",
+      "setup": [
+        {"file":"root/a.txt","content":""},
+        {"file":"root/src/b.ts","content":""},
+        {"file":"root/.env","content":""},
+        {"file":"root/node_modules/x.js","content":""},
+        {"file":"root/credentials/k","content":""}
+      ],
+      "input": {"start":"src/b.ts","deadline":"far"},
+      "expect": {"files":["src/b.ts"],"truncated":false,"skipped":0}
+    },
+    {
+      "id": "file-past",
+      "setup": [
+        {"file":"root/a.txt","content":""},
+        {"file":"root/src/b.ts","content":""},
+        {"file":"root/.env","content":""},
+        {"file":"root/node_modules/x.js","content":""},
+        {"file":"root/credentials/k","content":""}
+      ],
+      "input": {"start":"src/b.ts","deadline":"past"},
+      "expect": {"files":["src/b.ts"],"truncated":false,"skipped":0}
+    },
+    {
+      "id": "secret-file",
+      "setup": [
+        {"file":"root/a.txt","content":""},
+        {"file":"root/src/b.ts","content":""},
+        {"file":"root/.env","content":""},
+        {"file":"root/node_modules/x.js","content":""},
+        {"file":"root/credentials/k","content":""}
+      ],
+      "input": {"start":".env","deadline":"far"},
+      "expect": {"files":[],"truncated":false,"skipped":1}
+    },
+    {
+      "id": "missing",
+      "setup": [
+        {"file":"root/a.txt","content":""},
+        {"file":"root/src/b.ts","content":""},
+        {"file":"root/.env","content":""},
+        {"file":"root/node_modules/x.js","content":""},
+        {"file":"root/credentials/k","content":""}
+      ],
+      "input": {"start":"nope","deadline":"far"},
+      "expect": {"files":[],"truncated":false,"skipped":0}
+    },
+    {
+      "id": "missing-past",
+      "setup": [
+        {"file":"root/a.txt","content":""},
+        {"file":"root/src/b.ts","content":""},
+        {"file":"root/.env","content":""},
+        {"file":"root/node_modules/x.js","content":""},
+        {"file":"root/credentials/k","content":""}
+      ],
+      "input": {"start":"nope","deadline":"past"},
+      "expect": {"files":[],"truncated":false,"skipped":0}
+    }
+  ],
+  "secretFiles": [
+    {"name":".env","expect":true},
+    {"name":".env.local","expect":true},
+    {"name":".envrc","expect":false},
+    {"name":"env","expect":false},
+    {"name":"x.pem","expect":true},
+    {"name":"x.pem.bak","expect":false},
+    {"name":"a.key","expect":true},
+    {"name":"a.key.txt","expect":false},
+    {"name":"a.Key","expect":false},
+    {"name":"a.p12","expect":true},
+    {"name":"a.pfx","expect":true},
+    {"name":"a.jks","expect":true},
+    {"name":"a.keystore","expect":true},
+    {"name":"id_rsa","expect":true},
+    {"name":"id_rsa.pub","expect":true},
+    {"name":"id_rsa2","expect":false},
+    {"name":"id_ed25519","expect":true},
+    {"name":"id_ed25519.pub","expect":true},
+    {"name":".npmrc","expect":true},
+    {"name":".netrc","expect":true},
+    {"name":".pgpass","expect":true},
+    {"name":".htpasswd","expect":true},
+    {"name":"credentials","expect":true},
+    {"name":"credentials.json","expect":true},
+    {"name":"credentialſ","expect":false},
+    {"name":"CREDENTIALS","expect":true},
+    {"name":"service-account-x.json","expect":true},
+    {"name":"service-account.json","expect":true},
+    {"name":"service-account-x.yaml","expect":false},
+    {"name":"Service-Account-1.JSON","expect":true},
+    {"name":"db.kdbx","expect":true},
+    {"name":".ENV","expect":true},
+    {"name":"ID_RSA","expect":true},
+    {"name":"X.PEM","expect":true},
+    {"name":"README.md","expect":false},
+    {"name":"","expect":false},
+    {"name":"a/.env","expect":false},
+    {"name":".Env.Prod","expect":true}
+  ],
+  "excludedFiles": [".env",".env.*","*.pem","*.key","*.p12","*.pfx","*.jks","*.keystore","id_rsa","id_rsa.*","id_ed25519","id_ed25519.*",".npmrc",".netrc",".pgpass",".htpasswd","credentials","credentials.*","service-account*.json","*.kdbx"],
+  "excludedDirs": ["node_modules",".git","dist","build",".next","__pycache__",".venv","venv","coverage",".openmake"]
+}

@@ -22,9 +22,15 @@ const INTERNAL_ERROR: &str = "내부 오류로 요청을 처리하지 못했습�
 /// 없음·빈 문자열은 기본값, 앞뒤 ASCII 공백을 뗀 10진 정수는 그 값이다. 그 밖(`abc`·`1e3`·`1500.5`·음수 등)은
 /// TS 가 NaN·실수·음수 타이머가 되는 잘못된 입력이라 옮기지 않고 기본값으로 돌린다.
 pub fn fs_timeout_from_env(v: Option<&str>) -> u64 {
+    ms_from_env(v, FS_OP_TIMEOUT_DEFAULT_MS)
+}
+
+/// 시간 제한 환경 값 해석 — [`fs_timeout_from_env`] 와 같은 규칙에 기본값만 다르다. 호스트가
+/// `OMK_BRIDGE_CODE_NAV_TIMEOUT_MS`·`OMK_BRIDGE_DIAG_TIMEOUT_MS` 를 이것으로 채운다(PR-1.4 D-63).
+pub fn ms_from_env(v: Option<&str>, default_ms: u64) -> u64 {
     v.map(|s| s.trim_matches(|c: char| c.is_ascii_whitespace()))
         .and_then(|s| s.parse().ok())
-        .unwrap_or(FS_OP_TIMEOUT_DEFAULT_MS)
+        .unwrap_or(default_ms)
 }
 
 /// 시간 초과 문구 — 초는 `Math.round(ms / 1000)` 와 같다.
@@ -43,6 +49,14 @@ impl FsGate {
     pub fn new(timeout_ms: u64) -> FsGate {
         FsGate {
             permits: Arc::new(Semaphore::new(FS_MAX_CONCURRENT)),
+            timeout_ms,
+        }
+    }
+
+    /// 허가 수를 정한 관문 — code_nav 전용 관문(2칸, D-62)이 쓴다. 끝나지 않는 판정이 파일 kind 의 칸을 쥐지 않게 한다.
+    pub fn with_permits(timeout_ms: u64, permits: usize) -> FsGate {
+        FsGate {
+            permits: Arc::new(Semaphore::new(permits)),
             timeout_ms,
         }
     }
@@ -84,7 +98,16 @@ impl FsGate {
 
 #[cfg(test)]
 mod tests {
-    use super::{fs_timeout_from_env, timeout_message};
+    use super::{fs_timeout_from_env, ms_from_env, timeout_message};
+
+    #[test]
+    fn ms_from_env_uses_given_default() {
+        assert_eq!(ms_from_env(None, 7), 7);
+        assert_eq!(ms_from_env(Some(""), 7), 7);
+        assert_eq!(ms_from_env(Some("abc"), 7), 7);
+        assert_eq!(ms_from_env(Some(" 250 "), 7), 250);
+        assert_eq!(ms_from_env(Some("0"), 7), 0);
+    }
 
     /// fixture 에 넣지 않는 차이(D-18) — TS 는 NaN·실수·음수·0 타이머가 된다. Rust 는 기본값이다.
     #[test]

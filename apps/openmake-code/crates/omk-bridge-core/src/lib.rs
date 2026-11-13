@@ -23,3 +23,11 @@ pub mod sandbox_profile;
 pub mod scope;
 pub mod timed_fs;
 pub mod worktree;
+// 읽기 전용 도구 (PR-1.4)
+pub mod code_nav;
+pub mod diagnostics;
+pub mod glob;
+pub mod js_regex;
+pub mod test_runner;
+pub mod tool_env;
+pub mod tool_output;

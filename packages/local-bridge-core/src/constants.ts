@@ -49,12 +49,14 @@ export const AUTH_CLOSE_TEXT: Record<BridgeAuthCloseReason, string> = {
 export const PATH_PROBE_TIMEOUT_MS = 5000;
 /** git 디렉터리 탐지(rev-parse) 프로브 타임아웃(ms). */
 export const GIT_PROBE_TIMEOUT_MS = 5000;
-/** 테스트 러너 탐지에서 `python3 -c "import pytest"` 한 번에 주는 시간. */
+/** 테스트 러너 탐지에서 pytest 탐지 `python3 -I -c …` 한 번에 주는 시간. */
 export const TEST_RUNNER_PROBE_TIMEOUT_MS = 5000;
 
 export const SANDBOX_BIN = '/usr/bin/sandbox-exec';
 /** sandbox-exec 는 macOS 전용 — 타 플랫폼은 게이트 자체가 꺼진다(데스크톱은 mac 전용 앱이라 등가). */
 export const SANDBOX_ENABLED = process.platform === 'darwin' && process.env.OMK_BRIDGE_SANDBOX !== '0';
+/** 샌드박스가 켜졌는데 프로파일이 없을 때의 거부 문구(fail-closed) — exec 와 도구 자식(test_runner·lsp_diagnostics)이 같이 쓴다. */
+export const SANDBOX_PROFILE_MISSING_ERROR = 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.';
 
 /** 워크스페이스 밖이지만 쓰기를 허용해야 하는 툴 캐시 — 없으면 npm/pip/cargo 계열이 깨진다. */
 export const CACHE_SUBPATHS = ['.npm', '.cache', 'Library/Caches', '.cargo', '.gradle', '.m2', '.yarn', '.pnpm-store', 'go/pkg'];

@@ -16,13 +16,15 @@ import type { BridgeMsg, BridgeResult } from '../types';
 import * as constants from '../constants';
 
 const DIR = path.join(__dirname, '..', '..', 'conformance');
-const KNOWN_SUITES = ['constants', 'denylist', 'exec-env', 'exec-gate', 'exec-path', 'file-kinds', 'platform', 'request-guard', 'sandbox-profile', 'scope', 'worktree'];
+const KNOWN_SUITES = ['code-nav', 'constants', 'denylist', 'diagnostics-parse', 'exec-env', 'exec-gate', 'exec-path', 'file-kinds', 'glob', 'platform', 'request-guard', 'sandbox-profile', 'scope', 'test-runner', 'worktree'];
 /** Rust 만 다른 판정을 내도 되는 차이 — conformance/README.md "알려진 차이". 자리(suite/묶음)마다 쓸 수 있는 이름이 하나다. */
 const KNOWN_DIVERGENCES: Record<string, string> = {
     'denylist/cases': 'regress-nonunicode-i-fold',
     'file-kinds/cases/requests': 'non-string-field',
     'exec-gate/cases/steps': 'non-string-field',
     'worktree/cases/steps': 'non-string-field',
+    'code-nav/cases/requests': 'non-string-field',
+    'diagnostics-parse/cases/requests': 'non-string-field',
 };
 
 type Platform = 'darwin' | 'linux' | 'win32';
@@ -295,7 +297,7 @@ describe('file-kinds', () => {
         fsTimeoutEnv: Case<{ env: string | null }, { ms: number }>[];
     }>('file-kinds');
     /** TS 는 실제로 실행하고 Rust 는 아직 거절하는 종류 — fixture 로 맞출 수 없어 넣지 못하게 막는다. */
-    const NOT_PORTED = ['lsp_diagnostics', 'code_nav', 'test_runner', 'browser'];
+    const NOT_PORTED = ['browser'];
 
     /** 연결부(connection.ts)와 같이 예외를 {ok:false, error} 로 바꾼다 — 프로토콜에서는 구분이 없다. */
     function exec(core: BridgeCore, m: BridgeMsg): Promise<BridgeResult> {

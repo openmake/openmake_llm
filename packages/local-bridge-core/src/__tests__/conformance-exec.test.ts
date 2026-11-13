@@ -45,6 +45,7 @@ function shapeSetup(setup: unknown, at: string): void {
         if (kind === 'dir') shape(s, ['dir'], [], `${at}/setup`);
         if (kind === 'file') shape(s, ['file'], ['content', 'contentB64', 'repeat'], `${at}/setup`);
         if (kind === 'git') shape(s, ['git', 'cwd'], [], `${at}/setup`);
+        if (kind === 'symlink') shape(s, ['symlink', 'target'], [], `${at}/setup`);
     }
 }
 function shapeReq(r: Record<string, unknown>, at: string, withCount: boolean): void {
@@ -134,6 +135,7 @@ describe('fixture 모양 — 묶음 이름·키 허용 목록·빈 목록', () =
                     shapeCompareValues(s, sat);
                 } else if ('git' in s) shape(s, ['git', 'cwd'], ['stdout'], sat);
                 else if ('file' in s) shape(s, ['file'], ['content', 'repeat'], sat);
+                else if ('symlink' in s) shape(s, ['symlink', 'target'], [], sat);
                 else shape(s, ['remove'], [], sat);
             });
         }
