@@ -188,14 +188,16 @@ describe('platform', () => {
 });
 
 describe('sandbox-profile', () => {
-    const doc = load<{ cases: Case<{ root: string; gitDir: string | null }, { profile: string }>[] }>('sandbox-profile');
+    const doc = load<{ cases: Case<{ root: string; gitDir: string | null; commonDir?: string; tool?: boolean }, { profile: string }>[] }>('sandbox-profile');
     let dir = '';
     beforeAll(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-conformance-')); });
     afterAll(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 
     it.each(doc.cases.map((c, i) => [c.id, c, i] as const))('%s — 프로파일 전체 텍스트가 같다', (_id, c, i) => {
         const out = path.join(dir, `p${i}.sb`);
-        expect(writeSandboxProfile(c.input.root, c.input.gitDir, out)).toBe(out);
+        const { root, gitDir, commonDir, tool } = c.input;
+        // commonDir 를 적지 않으면 git dir 와 같다(일반 레포). 빈 gitDir 은 git 없음(종전 규칙).
+        expect(writeSandboxProfile(root, gitDir ? { gitDir, commonDir: commonDir ?? gitDir } : null, out, tool === true)).toBe(out);
         const home = fs.realpathSync(os.homedir());
         expect(fs.readFileSync(out, 'utf8')).toBe(c.expect.profile.split('{{HOME}}').join(home));
     });

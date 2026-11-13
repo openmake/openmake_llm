@@ -58,6 +58,21 @@ export const SANDBOX_ENABLED = process.platform === 'darwin' && process.env.OMK_
 /** 샌드박스가 켜졌는데 프로파일이 없을 때의 거부 문구(fail-closed) — exec 와 도구 자식(test_runner·lsp_diagnostics)이 같이 쓴다. */
 export const SANDBOX_PROFILE_MISSING_ERROR = 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.';
 
+/**
+ * 확인 없이 띄우는 git(worktree·연결 시점 탐지)에 늘 붙이는 인자 — 레포 설정의 fsmonitor·훅을 끈다(설계 D-2).
+ * 경계는 도구 프로파일(샌드박스)이 맡고, 이것은 값싼 겹방어다. 위험한 키를 전부 나열해 끄는 방식은 빠지는 키가 생겨 택하지 않는다.
+ */
+export const GIT_FIXED_ARGS: readonly string[] = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null'];
+/**
+ * 연결 시점 git 탐지(rev-parse·config 조회)를 감싸는 인라인 프로파일 — 프로파일 파일을 쓰기 전이라 고정 글자를 `sandbox-exec -p` 로 넘긴다.
+ * git 은 표준 입출력을 /dev/null 로 다시 열어 그 쓰기만 연다(없으면 "could not open '/dev/null'" 로 실패 — 2026-11-14 실측).
+ */
+export const GIT_PROBE_PROFILE = '(version 1)(allow default)(deny file-write*)(allow file-write* (literal "/dev/null"))(deny network*)';
+/** worktree 연산 직전 대조에서 git 디렉터리가 연결 때 고정한 값과 다를 때의 거절 문구(git 을 띄우지 않는다). */
+export const GIT_DIR_MISMATCH_ERROR = 'git 디렉터리가 연결할 때와 달라 worktree 연산을 거부했습니다(폴더 재연결 필요).';
+/** 파일 kind 가 git 디렉터리의 금지 경로(자신·config·hooks, worktree 의 .git)를 쓰거나 지우려 할 때의 거절 문구 머리. */
+export const GIT_PATH_DENIED_PREFIX = 'git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: ';
+
 /** 워크스페이스 밖이지만 쓰기를 허용해야 하는 툴 캐시 — 없으면 npm/pip/cargo 계열이 깨진다. */
 export const CACHE_SUBPATHS = ['.npm', '.cache', 'Library/Caches', '.cargo', '.gradle', '.m2', '.yarn', '.pnpm-store', 'go/pkg'];
 /** 읽기를 차단할 비밀 경로. */

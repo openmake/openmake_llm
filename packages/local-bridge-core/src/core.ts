@@ -25,7 +25,8 @@ import { detectTestRunner } from './test-runner';
 import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { buildExecEnv } from './exec-env';
-import { detectGitDir, SandboxProfileMissingError, writeSandboxProfile } from './sandbox';
+import { assertGitPathAllowed, detectGit, type GitPaths } from './git-trust';
+import { SandboxProfileMissingError, writeSandboxProfile } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
 import { findChrome } from './browser/chrome';
@@ -46,6 +47,10 @@ let sandboxProfileSeq = 0;
 export class BridgeCore {
     readonly folderRoot: string;
     private sandboxProfilePath: string | null = null;
+    /** 확인 없이 뜨는 자식(worktree git·tsc·py_compile·pytest 탐지)용 도구 프로파일 — exec 프로파일 + 네트워크 차단(설계 D-1). */
+    private toolProfilePath: string | null = null;
+    /** 연결 때 믿기로 한 git 디렉터리(git-trust.ts) — 없으면 git 없음(worktree 거절, 파일 kind 가드 없음). */
+    private git: GitPaths | null = null;
     /** 이 코어의 프로파일 파일 번호 — 다시 prepare() 해도 같은 파일을 다시 쓴다. */
     private readonly sandboxProfileSeq = ++sandboxProfileSeq;
     private execPathCache: string | null = null;
@@ -71,20 +76,20 @@ export class BridgeCore {
     stopBrowser(): void { this.browser?.requestStop(); }
 
     /**
-     * 연결(폴더 확정) 시 1회 준비 — 샌드박스 프로파일 생성 + PATH 캐시 리셋.
-     * 폴더가 바뀌면 mise 프로젝트 버전·샌드박스 스코프도 바뀐다.
+     * 연결(폴더 확정) 시 1회 준비 — git 디렉터리 신뢰 판정 + 샌드박스 프로파일 두 개(exec·도구) 생성 + PATH 캐시 리셋.
+     * 폴더가 바뀌면 mise 프로젝트 버전·샌드박스 스코프도 바뀐다. git 판정은 샌드박스가 꺼져도 한다(worktree 대조·파일 kind 가드).
      */
     prepare(): void {
         this.execPathCache = null;
-        this.sandboxProfilePath = SANDBOX_ENABLED
-            ? writeSandboxProfile(this.folderRoot, detectGitDir(this.folderRoot),
-                path.join(this.opts.sandboxProfileDir, `omk-exec-sandbox-${process.pid}-${this.sandboxProfileSeq}.sb`))
-            : null;
+        this.git = detectGit(this.folderRoot);
+        const file = (kind: string): string => path.join(this.opts.sandboxProfileDir, `omk-${kind}-sandbox-${process.pid}-${this.sandboxProfileSeq}.sb`);
+        this.sandboxProfilePath = SANDBOX_ENABLED ? writeSandboxProfile(this.folderRoot, this.git, file('exec')) : null;
+        this.toolProfilePath = SANDBOX_ENABLED ? writeSandboxProfile(this.folderRoot, this.git, file('tool'), true) : null;
     }
 
-    /** 도구 자식(test_runner·lsp_diagnostics)을 감쌀 프로파일 — 샌드박스 꺼짐이면 undefined, 켜졌는데 없으면 null(fail-closed). */
+    /** 확인 없이 뜨는 자식을 감쌀 도구 프로파일 — 샌드박스 꺼짐이면 undefined, 켜졌는데 없으면 null(fail-closed). */
     private toolSandbox(): string | null | undefined {
-        return SANDBOX_ENABLED ? this.sandboxProfilePath : undefined;
+        return SANDBOX_ENABLED ? this.toolProfilePath : undefined;
     }
 
     /** 도구 실행 — 프로파일이 없어 자식을 띄우지 않았으면 exec 와 같은 문구로 거절하고 null. */
@@ -210,6 +215,7 @@ export class BridgeCore {
             case 'write': {
                 await this.timedFs('write', async () => {
                     const abs = await safeFromAsync(base, m.path);
+                    await assertGitPathAllowed(this.git, abs, m.path, false); // exec 프로파일과 같은 git 금지 경로(D-4)
                     await fsp.mkdir(path.dirname(abs), { recursive: true });
                     await fsp.writeFile(abs, Buffer.from(m.contentB64 || '', 'base64'));
                 });
@@ -228,6 +234,7 @@ export class BridgeCore {
                 await this.timedFs('delete', async () => {
                     const abs = await safeFromAsync(base, m.path);
                     if (abs === base) throw new Error('연결 폴더 루트는 삭제할 수 없습니다');
+                    await assertGitPathAllowed(this.git, abs, m.path, true);
                     await fsp.rm(abs, { recursive: true, force: true });
                 });
                 done({ ok: true }); return;
@@ -251,7 +258,7 @@ export class BridgeCore {
             case 'lsp_diagnostics': {
                 // 읽기 전용 검사라 confirmExec 대상이 아니다 — 실행 파일·인자는 코어가 고정 조립하고
                 // (모델/서버 입력이 명령줄에 들어가지 않음) 경로는 safe() 로 스코프를 확정한 뒤 넘긴다.
-                // tsc·python3 는 폴더의 코드를 실행할 수 있어 exec 와 같은 샌드박스 안에서 돈다(프로파일 없으면 fail-closed).
+                // tsc·python3 는 폴더의 코드를 실행할 수 있어 도구 프로파일(exec 프로파일 + 네트워크 차단) 안에서 돈다(없으면 fail-closed).
                 const rel = Array.isArray(m.paths) ? m.paths.slice(0, DIAG_MAX_TOTAL) : [];
                 const abs: string[] = [];
                 for (const p of rel) abs.push(await safeFromAsync(base, p));
@@ -263,7 +270,7 @@ export class BridgeCore {
             case 'test_runner': {
                 // 테스트 러너 탐지 — 읽기 전용이라 confirmExec 대상이 아니다(서버 문자열을 실행하지 않는다, test-runner.ts).
                 // 탐지된 테스트의 실행은 exec 로 따로 오고 사용자 확인을 거친다.
-                // pytest 탐지의 python3 도 lsp_diagnostics 와 같은 샌드박스 안에서 돈다.
+                // pytest 탐지의 python3 도 lsp_diagnostics 와 같은 도구 프로파일 안에서 돈다.
                 const dirAbs = await safeFromAsync(base, m.path || '.');
                 if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
                 const testRunner = await this.toolSandboxed(done, () => detectTestRunner(dirAbs, this.execPathCache!, this.toolSandbox()));
@@ -300,7 +307,9 @@ export class BridgeCore {
                 }); return;
             }
             case 'worktree':
-                await handleWorktree(m, done, base); return;
+                // git 은 도구 프로파일 안에서 돈다 — 프로파일이 없으면 띄우지 않고 도구와 같은 126 으로 거절한다.
+                await this.toolSandboxed(done, () => handleWorktree(m, done, base, { git: this.git, profile: this.toolSandbox() }));
+                return;
             case 'task_end':
                 this.opts.onTaskEnd?.(m.taskId); // 호스트 정리(데스크톱=브라우저 패널 닫기)
                 // 일괄 승인은 그 작업에만 유효 — 종료 즉시 회수한다.

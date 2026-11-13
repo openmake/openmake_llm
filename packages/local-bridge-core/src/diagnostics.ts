@@ -15,7 +15,7 @@
  *
  * 보안: 실행 파일·인자는 **코어가 고정 조립**한다(모델·서버 입력이 명령줄에 들어가지 않는다).
  * 경로는 호출측이 `safeFromAsync` 로 스코프를 확정한 절대경로만 넘긴다. tsc 는 폴더가 주는 실행 파일이므로
- * 자식은 exec 와 같은 샌드박스 프로파일 안에서 띄운다(`wrapInSandbox`, 프로파일이 없으면 띄우지 않고 거절).
+ * 자식은 도구 프로파일(exec 프로파일 + 네트워크 차단) 안에서 띄운다(`wrapInSandbox`, 프로파일이 없으면 띄우지 않고 거절).
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -135,7 +135,7 @@ function capDiagnostics(all: BridgeDiagnostic[]): { diagnostics: BridgeDiagnosti
  * 지정한 파일들의 진단을 모은다. 실행할 도구가 없으면 빈 결과 + `serverKind:'none'`.
  * @param base 스코프 루트(연결/선택 폴더의 실경로)
  * @param absPaths 이미 스코프 검증된 절대경로들
- * @param sandbox 자식을 감쌀 exec 프로파일 — undefined 면 감싸지 않고, null 이면 자식을 띄워야 할 때 거절한다(`wrapInSandbox`)
+ * @param sandbox 자식을 감쌀 도구 프로파일 — undefined 면 감싸지 않고, null 이면 자식을 띄워야 할 때 거절한다(`wrapInSandbox`)
  */
 export async function collectDiagnostics(
     base: string,

@@ -8,52 +8,53 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execFileSync } from 'child_process';
-import { CACHE_SUBPATHS, GIT_PROBE_TIMEOUT_MS, SANDBOX_BIN, SANDBOX_PROFILE_MISSING_ERROR, SECRET_SUBPATHS, sbq, sbSub } from './constants';
-import { buildExecEnv } from './exec-env';
+import { CACHE_SUBPATHS, SANDBOX_BIN, SANDBOX_PROFILE_MISSING_ERROR, SECRET_SUBPATHS, sbq, sbSub } from './constants';
+import type { GitPaths } from './git-trust';
 
-/**
- * 연결 폴더가 git 레포(하위 폴더 포함)면 레포의 .git 절대경로, 아니면 null.
- * 레포 **하위 폴더**를 연결하면 .git 이 폴더 밖에 있어 샌드박스가 git 쓰기를 막았다 —
- * 레포 루트를 연결했을 때는 이미 허용되던 쓰기라, 허용해도 권한이 새로 넓어지지 않는다
- * (같은 레포인데 연결 지점에 따라 동작이 갈리던 비일관성 해소. worktree 커밋의 index.lock 이
- * `.git/worktrees/<name>/` 에 생겨 2026-08-09 GUI 검증에서 실제 실패로 드러났다).
- */
-export function detectGitDir(root: string): string | null {
-    try {
-        return execFileSync('git', ['rev-parse', '--absolute-git-dir'],
-            // stderr 를 버린다 — 기본값은 부모 터미널로 물려줘 레포가 아닌 폴더에서 git 의 "fatal: not a git repository" 가 찍혔다.
-            // 자식 환경은 exec 와 같은 allowlist 로 제한한다(호스트 env 의 비밀을 넘기지 않는다).
-            { cwd: root, encoding: 'utf8', timeout: GIT_PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'], env: buildExecEnv(process.env, process.env.PATH ?? '') }).trim() || null;
-    } catch { return null; }
+/** SBPL literal 용 정규화 — `path.join` 결과에서 끝 구분자를 뗀다(literal 은 글자 그대로 비교한다). */
+function literalPath(p: string): string {
+    return path.join(p).replace(/\/+$/, '') || '/';
 }
 
 /**
- * 연결 폴더 기준 sandbox-exec 프로파일을 생성해 경로를 반환한다(실패 시 null).
- * 정책: 기본 allow → 쓰기는 폴더·임시·툴캐시로 제한, 비밀 경로는 읽기 차단.
+ * 프로파일 텍스트. 정책: 기본 allow → 쓰기는 폴더·임시·툴캐시로 제한, 비밀 경로는 읽기 차단.
  * (SBPL 은 last-match-wins 이라 deny 뒤에 allow 를 두어야 예외가 성립한다.)
+ * tool: 확인 없이 뜨는 자식(worktree git·tsc·py_compile·pytest 탐지)용 **도구 프로파일** — exec 프로파일의 모든 줄 +
+ * `(deny network*)`(설계 D-1). exec 프로파일은 승인된 명령용이라 네트워크를 연다(npm·git push).
+ * git: 연결 때 믿기로 한 git 디렉터리(git-trust.ts). 레포 하위 폴더·linked worktree 를 연결하면 git 디렉터리가 폴더 밖이라
+ * git(커밋·인덱스) 쓰기를 열어 준다 — linked worktree 는 객체·참조가 common dir 에 있어 그쪽도 연다(E5).
  */
-export function writeSandboxProfile(root: string, gitDir: string | null, outFile: string): string | null {
+export function sandboxProfileText(root: string, git: GitPaths | null, home: string, tool: boolean): string {
+    const g = git?.gitDir ? git : null; // 빈 문자열은 git 없음(종전 규칙)
+    const common = g ? g.commonDir || g.gitDir : '';
+    const separate = !!g && literalPath(common) !== literalPath(g.gitDir);
+    return [
+        '(version 1)',
+        '(allow default)',
+        '(deny file-write*)',
+        `(allow file-write* (subpath ${sbq(root)}))`,
+        ...(g ? [`(allow file-write* (subpath ${sbq(g.gitDir)}))`] : []),
+        ...(separate ? [`(allow file-write* (subpath ${sbq(common)}))`] : []),
+        '(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders") (subpath "/dev"))',
+        `(allow file-write* ${sbSub(home, CACHE_SUBPATHS)})`,
+        `(deny file-read* ${sbSub(home, SECRET_SUBPATHS)})`,
+        ...(tool ? ['(deny network*)'] : []),
+        // 훅·config 는 커밋에 불필요하면서 영구 코드주입 벡터다 — 에이전트가 hooks 나 core.hooksPath 를 심으면 사용자가
+        // 나중에 git 을 쓸 때 **샌드박스 밖에서** 실행된다. git 디렉터리 **자신**도 막는다 — 금지는 경로 글자 기준이라
+        // `.git` 을 옮겼다 되돌리면 config 금지가 빗나갔다(E2, 2026-11-14 실측). linked worktree 는 hooks·config 가
+        // common dir 에 있어 그쪽 기준이고, 자기 git dir 자신도 막는다.
+        // SBPL 은 last-match-wins 라 이 deny 를 **프로파일 맨 끝**에 둔다(레포가 상위 allow 경로 안에 있어도 확실히 이기도록).
+        // identity 설정이 필요하면 `git -c user.email=...` 인라인을 쓰면 된다.
+        ...(g ? [`(deny file-write* (subpath ${sbq(path.join(common, 'hooks'))}) (literal ${sbq(path.join(common, 'config'))}) (literal ${sbq(literalPath(common))})${
+            separate ? ` (literal ${sbq(literalPath(g.gitDir))})` : ''})`] : []),
+        '',
+    ].join('\n');
+}
+
+/** 프로파일을 outFile 에 쓰고 그 경로를 돌려준다(실패 시 null — 호출측이 fail-closed). */
+export function writeSandboxProfile(root: string, git: GitPaths | null, outFile: string, tool = false): string | null {
     try {
-        const home = fs.realpathSync(os.homedir());
-        const profile = [
-            '(version 1)',
-            '(allow default)',
-            '(deny file-write*)',
-            `(allow file-write* (subpath ${sbq(root)}))`,
-            // 레포 하위 폴더 연결 시 .git 은 폴더 밖 — git(커밋·인덱스) 쓰기를 열어준다(위 detectGitDir 주석).
-            ...(gitDir ? [`(allow file-write* (subpath ${sbq(gitDir)}))`] : []),
-            '(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders") (subpath "/dev"))',
-            `(allow file-write* ${sbSub(home, CACHE_SUBPATHS)})`,
-            `(deny file-read* ${sbSub(home, SECRET_SUBPATHS)})`,
-            // 훅·config 는 커밋에 불필요하면서 영구 코드주입 벡터다 — 에이전트가 .git/hooks 나
-            // core.hooksPath 를 심으면 사용자가 나중에 git 을 쓸 때 **샌드박스 밖에서** 실행된다.
-            // SBPL 은 last-match-wins 라 이 deny 를 **프로파일 맨 끝**에 둔다(레포가 상위 allow
-            // 경로 안에 있어도 확실히 이기도록 — /private/tmp 아래 레포로 실측 검증).
-            // identity 설정이 필요하면 `git -c user.email=...` 인라인을 쓰면 된다.
-            ...(gitDir ? [`(deny file-write* (subpath ${sbq(path.join(gitDir, 'hooks'))}) (literal ${sbq(path.join(gitDir, 'config'))}))`] : []),
-            '',
-        ].join('\n');
+        const profile = sandboxProfileText(root, git, fs.realpathSync(os.homedir()), tool);
         fs.mkdirSync(path.dirname(outFile), { recursive: true });
         fs.writeFileSync(outFile, profile);
         return outFile;
