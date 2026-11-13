@@ -10,10 +10,10 @@
 | 2 | GitHub | PR 최신 변경의 CI·자동 구조 검사를 충족하면 dev로 일반 병합. 사람 PR 승인 단계는 없습니다. |
 | 3 | GitHub runner | **실제로 병합된 dev SHA**의 소스·DB·빌드·lint와 임시 앱의 **기본 스모크+변경 기능/관련 소스 테스트**. 전체 브라우저 테스트를 무조건 실행하지 않습니다. |
 | 4 | GitHub | 현재 dev의 push CI 통과 후 dev→main PR 생성·자동 병합. 최신 main 조합의 PR CI도 필요합니다. 실패·SHA 변경 시 중단/재검사합니다. |
-| 5 | staging | main 설치 → 스모크 → 구성된 필수 고강도 검증 → 정확한 SHA의 결과 저장 → 사람 실사용을 위해 설치본 고정. |
+| 5 | staging | main 설치 → 스모크 → (켰으면) 데스크톱 앱 게시 → 구성된 필수 고강도 검증 → 정확한 SHA의 결과 저장 → 사람 실사용을 위해 설치본 고정. |
 | 6 | 사람 + staging 명령 | 사람이 staging을 직접 사용해 OK하면 `omk env approve staging --sha FULL_SHA --yes`. 고정 SHA·실행 빌드·통과 근거를 다시 확인하고 verify ref를 기록합니다. |
 | 7 | GitHub | verify한 코드에 연결된 release-please PR만 자동 병합 → 버전 태그·릴리스·공급망 증명 발행. verify 이후 기능 변경은 허용하지 않습니다. |
-| 8 | online | 한 번 선택한 릴리스 태그의 SHA 고정 → verify 계보 검사 → 백업 → 관리형 갱신 → 설치 SHA 일치·운영 스모크 확인. |
+| 8 | online | 한 번 선택한 릴리스 태그의 SHA 고정 → verify 계보 검사 → 백업 → 관리형 갱신 → 설치 SHA 일치·운영 스모크 확인 → (켰으면) 데스크톱 앱 게시. |
 
 ```text
 local: 개발·관련 테스트·PR
@@ -96,6 +96,23 @@ omk env verify staging --list
 새 pipeline은 운영 게이트를 강제합니다. 기존 `env update`·`autoupdate`는 호환/복구용 명령이며 8단계 완료 근거로 대신 사용하지 않습니다. 기본 설치·기존 설치본 이관은 아래 별도 절차이며, 첫 운영 설치도 검증된 릴리스인지 확인한 후 수행합니다. 백업 실패·검증 부재·태그/설치 SHA 불일치·스모크 실패는 완료로 처리하지 않습니다. 운영 자동 갱신의 OS 자동기동 권한·재부팅 검증은 별도 실제 호스트 검증입니다.
 
 staging·online pipeline의 갱신 단계가 실패하면 `env update --report`와 같은 표식(`<환경 디렉터리>/.omk-update-failed`)을 남기고, 다음 주기에는 HEAD가 같아도 `--redeploy`로 다시 빌드·배포합니다(성공하면 표식을 지웁니다).
+
+### 데스크톱 앱 게시
+
+macOS 앱(dmg)은 **앱 버전마다 한 번** 만든 빌드를 스테이징이 먼저, 운영이 나중에 같은 바이트로 게시합니다. 서버에서 손으로 도는 단계는 없습니다(Windows 설치 파일은 그대로 수동 `scripts/publish-desktop-windows.sh`).
+
+1. `apps/desktop-native/VERSION` 을 올린 커밋이 main 에 들어가면 `desktop-native.yml` 의 `release` job 이 그 실행의 dmg 를 사전 릴리스 `desktop-native-v<버전>`(최신 표시 아님) 자산으로 올립니다 — dmg, `desktop-native.json`(`version`·`file`·`sha256`·빌드 커밋 `gitSha`), 빌드 출처 증명. 같은 버전의 릴리스가 이미 있으면 아무것도 하지 않고, 자산을 덮어쓰지 않습니다. VERSION 을 올리지 않은 앱 변경은 게시되지 않습니다.
+2. `omk env pipeline staging|online` 은 환경 `.env` 에 `OMK_DESKTOP_PUBLISH=1` 이 있을 때만 게시 단계를 돕니다(기본 꺼짐 — 없으면 순서·종료 코드가 종전과 같습니다). 체크아웃의 VERSION 이 게시본(`latest.json` 의 `native.version`)보다 높으면 릴리스 자산을 토큰 없이 받아, 빌드 커밋이 설치된 SHA 의 조상인지·sha256 이 같은지 확인한 뒤 `latest.json` 을 `latest.json.prev` 로 남기고 `scripts/publish-desktop.sh` 로 게시합니다. 게시 폴더는 API 와 같은 규칙(`.env` 의 `DESKTOP_UPDATE_DIR`, 없으면 `<llm>/data/desktop-updates`)이고 API 재시작은 필요 없습니다.
+3. 위치: staging 은 스모크 뒤·필수 검증 앞(대기·실패면 hold 가 걸리지 않아 verify 할 수 없습니다), online 은 설치 SHA 확인 뒤(실패해도 제품은 올라가 있고 파이프라인만 0 이 아닌 코드로 끝납니다). 게시 실패는 갱신 실패 표식을 남기지 않습니다 — 다음 주기에 게시만 다시 시도합니다.
+
+| 결과 | 종료 코드 | 뜻 |
+|---|---|---|
+| 꺼짐 · 게시본과 같음 · 게시본이 더 높음(내리지 않는다) | 0 | 할 일 없음 |
+| 게시됨 | 0 | `latest.json` 이 새 버전·sha256 |
+| 대기 | 75 | 그 버전의 릴리스 자산이 아직 없다(릴리스 job 진행 중·실패) — 다음 주기에 다시 |
+| 실패 | 1 | 자산 형식·버전 불일치, 계보 밖 빌드, sha256 불일치, 게시 스크립트 실패 — `latest.json` 은 직전 내용 그대로 |
+
+결과는 `<환경 디렉터리>/.pipeline/desktop-publish.json` 영수증(설치 SHA·버전·파일·sha256·빌드 커밋·상태·시각, 게시하지 않은 주기에는 지금 게시된 `published.file`·`sha256`)에 남습니다. 자동 게시를 켠 서버에서는 손 게시(`scripts/publish-desktop.sh` 직접 실행)를 하지 않습니다 — 같은 버전이면 파이프라인은 바이트를 다시 보지 않고 넘어갑니다. 릴리스 job 이 실패하거나 main 의 다음 push 로 취소되면(워크플로 `concurrency`) 그 실행을 다시 돌립니다(같은 SHA). 자산을 올리다 끊긴 실행은 초안(draft) 릴리스를 남길 수 있는데, 그러면 gate 가 오류로 멈추니 그 초안을 지운 뒤 다시 돌립니다. 게시한 앱에 결함이 있으면 **더 높은 VERSION** 으로 고친 앱을 냅니다(업데이터는 높은 버전으로만 간다). 아직 받지 않은 사용자를 멈추려면 **먼저 그 서버 `.env` 의 `OMK_DESKTOP_PUBLISH` 를 내리고**(켜 둔 채 되돌리면 다음 주기에 체크아웃 VERSION 이 게시본보다 높아 같은 자산을 다시 게시합니다) `latest.json.prev` 를 되돌립니다. 더 높은 VERSION 이 게시 준비되면 다시 켭니다. `pipeline.sh` 는 실행 시작 때 읽히므로 이 단계를 바꾼 판은 설치된 **다음 주기**부터 적용됩니다.
 
 ## 설치 — 아무것도 없는 PC 에서 한 줄
 
@@ -597,6 +614,8 @@ omk env status online
 | `OMK_BACKUP_CRON` | `30 3 * * *` | `omk env backup --schedule` 의 기본 주기 |
 | `OMK_SMOKE_TIMEOUT` / `OMK_GITHUB_API` | `120` / `https://api.github.com` | 스모크 요청 하나의 제한 시간(초) · 결과 표지를 올릴 API |
 | `OMK_DISPATCH_TOKEN` (`.env`) | 없음 | staging approve 뒤 `release-verified` 워크플로를 깨우는 토큰, 저장소 Actions 쓰기 권한만 |
+| `OMK_DESKTOP_PUBLISH` (`.env`) | 없음(꺼짐) | `1` 이면 staging·online pipeline 이 데스크톱 앱 릴리스 자산을 게시한다(위 "데스크톱 앱 게시") |
+| `OMK_GITHUB_WEB` | `https://github.com` | 데스크톱 앱 릴리스 자산을 받는 곳(토큰 없이) |
 | `OMK_SMOKE_READY_WAIT` | `60` | 스모크의 `/ready` 가 200 이 될 때까지 기다리는 최대 시간(초) — 재기동 직후 LLM 노드 첫 확인 |
 | `OMK_CADDY_VERSION` | 최신 릴리스 | caddy 버전 고정 (폐쇄망) |
 | `OMK_CADDY_ADMIN` | `localhost:2019` | caddy admin 주소 |
