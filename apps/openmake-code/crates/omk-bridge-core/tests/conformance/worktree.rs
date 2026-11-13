@@ -6,9 +6,10 @@ use std::time::Duration;
 use omk_bridge_core::constants::TASK_ID_RE;
 use omk_bridge_core::core::{BridgeCore, BridgeCoreOptions};
 use omk_bridge_core::exec::{ConfirmFn, ConfirmRequest};
+use omk_bridge_core::git_trust::detect_git;
 use omk_bridge_core::msg::BridgeMsg;
 use omk_bridge_core::platform::Platform;
-use omk_bridge_core::sandbox::detect_git_dir;
+use omk_bridge_core::timed_fs::FsGate;
 use serde_json::{Value, json};
 
 use super::exec_gate::{host, new_tmp};
@@ -83,9 +84,12 @@ fn core_at(tmp: &TmpDir, folder: String) -> BridgeCore {
         on_task_end: None,
     };
     let prof = tmp.join("prof");
-    BridgeCore::new(opts)
+    let core = BridgeCore::new(opts)
         .unwrap()
-        .with_exec_host(host(tmp, no_confirm(), &prof))
+        .with_exec_host(host(tmp, no_confirm(), &prof));
+    // 연결 — git 디렉터리 신뢰 판정·도구 프로파일(worktree git 은 그 안에서 돈다).
+    runtime().block_on(core.prepare());
+    core
 }
 
 #[test]
@@ -102,7 +106,12 @@ fn worktree_cases() {
                 apply_op_step(&tmp, s, &ctx);
                 continue;
             }
-            assert_eq!(s["msg"]["kind"], "worktree", "{ctx}: kind");
+            // worktree 와 git 금지 경로 가드(D-4)를 함께 보는 파일 kind 쓰기·지우기만 넣는다.
+            let kind = s["msg"]["kind"].as_str().unwrap_or("");
+            assert!(
+                ["worktree", "write", "delete"].contains(&kind),
+                "{ctx}: kind {kind}"
+            );
             let (want, _) = want_of(s, &tmp.path, &ctx);
             let msg = BridgeMsg::from_json(&fill(&s["msg"], &tmp.path));
             let got = rt.block_on(core.handle_exec(&msg)).to_json();
@@ -152,16 +161,16 @@ fn worktree_git_dir() {
         apply_setup(&tmp, &c["setup"]);
         let root = fill(&c["input"]["root"], &tmp.path);
         let env = runner_env(&tmp);
-        let got = rt.block_on(detect_git_dir(
+        let gate = FsGate::new(15_000);
+        let got = rt.block_on(detect_git(
             root.as_str().unwrap(),
             &env,
             Platform::Darwin,
+            cfg!(target_os = "macos"),
+            &gate,
         ));
-        assert_eq!(
-            json!({"gitDir": got}),
-            fill(&c["expect"], &tmp.path),
-            "{ctx}"
-        );
+        let got = got.map(|g| json!({"gitDir": g.git_dir, "commonDir": g.common_dir}));
+        assert_eq!(json!({"git": got}), fill(&c["expect"], &tmp.path), "{ctx}");
     }
     rt.shutdown_timeout(Duration::from_secs(5));
 }

@@ -69,7 +69,11 @@ impl Drop for Work {
 }
 
 fn core(work: &Work, folder: &str, sandbox: bool, profile_dir: &str) -> BridgeCore {
-    let home = work.join("home");
+    core_with_home(folder, sandbox, profile_dir, &work.join("home"))
+}
+
+fn core_with_home(folder: &str, sandbox: bool, profile_dir: &str, home: &str) -> BridgeCore {
+    let home = home.to_owned();
     let host = ExecHost {
         confirm: Box::new(|_| Box::pin(async { ConfirmAnswer::Yes })),
         env: vec![
@@ -101,8 +105,12 @@ fn prepared(work: &Work, folder: &str, sandbox: bool) -> (BridgeCore, TmpDir) {
     let prof = TmpDir::new();
     let c = core(work, folder, sandbox, &prof.path);
     runtime().block_on(c.prepare());
-    let files = std::fs::read_dir(&prof.path).unwrap().count();
-    assert_eq!(files, usize::from(sandbox), "프로파일 파일 수");
+    // 프로파일은 파일로 쓰지 않는다(`sandbox-exec -p`, 리뷰 F1).
+    assert_eq!(
+        std::fs::read_dir(&prof.path).unwrap().count(),
+        0,
+        "프로파일 파일 수"
+    );
     (c, prof)
 }
 
@@ -268,7 +276,7 @@ fn worktree_edit_and_commit_inside_sandbox() {
     assert!(d["stdout"].as_str().unwrap_or("").contains("+agent"), "{d}");
 }
 
-/// 6. 두 코어가 같은 프로파일 폴더를 써도 각자 자기 폴더에만 쓴다(D-34 — 파일이 코어마다 따로).
+/// 6. 두 코어가 같은 프로파일 폴더를 받아도 각자 자기 폴더에만 쓴다(D-34 — 프로파일 텍스트가 코어마다 따로, 파일은 없다).
 #[test]
 fn two_cores_each_write_only_their_own_folder() {
     for sandbox in [true, false] {
@@ -280,8 +288,11 @@ fn two_cores_each_write_only_their_own_folder() {
         let rt = runtime();
         rt.block_on(ca.prepare());
         rt.block_on(cb.prepare());
-        let files = std::fs::read_dir(&prof.path).unwrap().count();
-        assert_eq!(files, if sandbox { 2 } else { 0 }, "sandbox={sandbox}");
+        assert_eq!(
+            std::fs::read_dir(&prof.path).unwrap().count(),
+            0,
+            "sandbox={sandbox}"
+        );
         let write = |c: &BridgeCore, dir: &str, name: &str| {
             ran_ok(&exec(c, &format!("echo x > '{dir}/{name}'")))
         };
@@ -291,12 +302,10 @@ fn two_cores_each_write_only_their_own_folder() {
         );
         assert_eq!(write(&ca, &b, "a-in-b"), !sandbox, "sandbox={sandbox}");
         assert_eq!(write(&cb, &a, "b-in-a"), !sandbox, "sandbox={sandbox}");
-        // 다시 준비해도 자기 파일을 다시 쓴다. 코어가 사라지면 자기 파일을 지운다.
+        // 다시 준비해도 파일을 만들지 않고 경계는 그대로다.
         rt.block_on(ca.prepare());
-        assert_eq!(std::fs::read_dir(&prof.path).unwrap().count(), files);
-        drop(ca);
-        drop(cb);
         assert_eq!(std::fs::read_dir(&prof.path).unwrap().count(), 0);
+        assert_eq!(write(&ca, &b, "a-in-b-2"), !sandbox, "sandbox={sandbox}");
     }
 }
 
@@ -315,13 +324,13 @@ fn home_cache_writable_documents_not() {
     }
 }
 
-/// 8. 프로파일을 쓰지 못하면 승인해도 실행하지 않는다(fail-closed). 샌드박스를 끄면 실행되고 프로파일을 만들지 않는다.
+/// 8번 — 프로파일 텍스트를 만들지 못하면(홈 realpath 실패) 승인해도 실행하지 않는다(fail-closed). 샌드박스를 끄면
+/// 실행되고 프로파일을 만들지 않는다.
 #[test]
 fn fail_closed_without_profile() {
     let w = Work::new();
     let a = w.mkdir("A");
-    std::fs::write(w.join("prof-file"), b"").unwrap();
-    let c = core(&w, &a, true, &w.join("prof-file"));
+    let c = core_with_home(&a, true, &w.join("prof"), &w.join("no-home"));
     runtime().block_on(c.prepare());
     let r = exec(&c, "touch ran");
     assert_eq!(

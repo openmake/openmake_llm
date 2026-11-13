@@ -71,43 +71,43 @@ fn profiles(dir: &str) -> Vec<String> {
     v
 }
 
-/// 연결할 때마다 prepare — 샌드박스 프로파일이 소켓보다 먼저 쓰이고, 재연결하면 다시 쓰인다(같은 파일 이름).
+/// 연결할 때마다 prepare — 샌드박스 프로파일이 소켓보다 먼저 준비되고, 재연결하면 다시 만든다. 프로파일은 파일로 쓰지
+/// 않으므로(리뷰 F1) 코어가 들고 있는 텍스트로 본다 — 사이에 연결 폴더에 `.git` 디렉터리를 만들면 다음 연결의 프로파일에
+/// 그 금지 줄이 들어가야 한다(다시 준비했다는 증거).
 #[test]
 fn every_connect_prepares_core_before_socket() {
     let changes = Arc::new(AtomicUsize::new(0));
     let seen_at_open = Arc::new(Mutex::new(Vec::new()));
     run(async {
         let (e, prof) = env_with_host(true, &changes);
+        let dot_git_config = format!("{}/.git/config", e.core.folder_root());
+        let guarded = |c: &BridgeCore| c.sandbox_profile().map(|p| p.contains(&dot_git_config));
         let mut o = options(&e);
         let rec = record_into(&mut o);
         let conn = BridgeConnection::new(o);
-        assert!(profiles(&prof).is_empty());
+        assert_eq!(e.core.sandbox_profile(), None);
         conn.connect();
         e.server
             .state
             .until("1번째 연결", |s| s.connections == 1)
             .await;
-        seen_at_open.lock().unwrap().push(profiles(&prof));
+        seen_at_open.lock().unwrap().push(guarded(&e.core));
         rec.until("연결됨", |r| r.has_code("connected")).await;
-        let first = profiles(&prof);
-        assert_eq!(first.len(), 1, "{first:?}");
-        assert!(first[0].starts_with(&format!("omk-exec-sandbox-{}-", std::process::id())));
-        // 지운 뒤 끊으면 재연결의 prepare 가 같은 이름으로 다시 쓴다.
-        std::fs::remove_file(format!("{prof}/{}", first[0])).unwrap();
+        std::fs::create_dir(format!("{}/.git", e.core.folder_root())).unwrap();
         e.server.drop_all();
         e.server
             .state
             .until("2번째 연결", |s| s.connections == 2)
             .await;
-        seen_at_open.lock().unwrap().push(profiles(&prof));
-        assert_eq!(profiles(&prof), first);
+        seen_at_open.lock().unwrap().push(guarded(&e.core));
+        assert!(profiles(&prof).is_empty(), "프로파일 파일을 쓰지 않는다");
         drop(conn);
     });
     let at_open = seen_at_open.lock().unwrap().clone();
     assert_eq!(
-        at_open.iter().map(Vec::len).collect::<Vec<_>>(),
-        [1, 1],
-        "소켓을 열 때 이미 준비돼 있어야 한다"
+        at_open,
+        [Some(false), Some(true)],
+        "소켓을 열 때 이미 (다시) 준비돼 있어야 한다"
     );
     assert_eq!(
         changes.load(Ordering::SeqCst),

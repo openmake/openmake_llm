@@ -16,15 +16,15 @@ use crate::constants::{
     BRIDGE_KINDS, CODE_NAV_MAX_CONCURRENT, CODE_NAV_TIMEOUT_MS, DIAG_TIMEOUT_MS,
 };
 use crate::diagnostics;
-use crate::exec::FAIL_CLOSED;
 use crate::exec::{self, ExecHost, ExecState};
 use crate::fs_kinds;
+use crate::git_trust::GitGuard;
 use crate::msg::{BridgeMsg, BridgeResult, Kind, ToolOutput};
 use crate::node_error;
 use crate::scope::safe_from;
 use crate::test_runner;
 use crate::timed_fs::FsGate;
-use crate::tool_env::NO_HOST;
+use crate::tool_env::{NO_HOST, tool_failure};
 use crate::worktree;
 
 /// `task_end` 때 부르는 호스트 정리 훅(데스크톱 = 브라우저 패널 닫기).
@@ -74,15 +74,6 @@ fn handles(kind: Kind) -> bool {
         | Kind::LspDiagnostics
         | Kind::TestRunner => true,
         Kind::Browser => false,
-    }
-}
-
-/// 도구 실패 — 샌드박스 거절(프로파일 없음·sandbox-exec 자체 실패)은 exec 와 같은 모양(문구 + exitCode 126).
-fn tool_failure(error: String) -> BridgeResult {
-    let refused = error == FAIL_CLOSED;
-    BridgeResult {
-        exit_code: refused.then_some(126),
-        ..BridgeResult::failure(error)
     }
 }
 
@@ -141,6 +132,25 @@ impl BridgeCore {
         self.exec.as_ref().map_or(0, ExecState::count)
     }
 
+    /// 파일 kind 가드 — 연결 폴더 루트의 `.git` 은 호스트가 없어도·준비 전에도·없어도 이름으로 지킨다(리뷰 N1). 지킬 git
+    /// 디렉터리(믿는 git 과 연결 폴더의 `.git` 쪽, 리뷰 F2·N2)는 준비 뒤에 붙는다.
+    fn git_guard(&self) -> GitGuard {
+        GitGuard {
+            root: self.folder_root.clone(),
+            dirs: self
+                .exec
+                .as_ref()
+                .map(ExecState::protect_paths)
+                .unwrap_or_default(),
+        }
+    }
+
+    /// 연결 때 만든 exec 프로파일 텍스트 — 샌드박스 꺼짐·준비 전·만들지 못함이면 `None`. 프로파일은 파일로 쓰지 않으므로
+    /// (리뷰 F1) 호스트·테스트가 준비 여부와 경계를 이것으로 본다.
+    pub fn sandbox_profile(&self) -> Option<String> {
+        self.exec.as_ref().and_then(ExecState::exec_profile)
+    }
+
     pub fn folder_root(&self) -> &str {
         &self.folder_root
     }
@@ -197,9 +207,10 @@ impl BridgeCore {
             }
             Kind::Write => {
                 let b64 = m.content_b64.clone();
+                let git = self.git_guard();
                 self.gate
                     .run("write", move || {
-                        fs_kinds::write(&base, path.as_deref(), b64.as_deref())
+                        fs_kinds::write(&base, path.as_deref(), b64.as_deref(), &git)
                     })
                     .await?;
                 Ok(ok)
@@ -225,8 +236,11 @@ impl BridgeCore {
                 })
             }
             Kind::Delete => {
+                let git = self.git_guard();
                 self.gate
-                    .run("delete", move || fs_kinds::delete(&base, path.as_deref()))
+                    .run("delete", move || {
+                        fs_kinds::delete(&base, path.as_deref(), &git)
+                    })
                     .await?;
                 Ok(ok)
             }
@@ -254,7 +268,10 @@ impl BridgeCore {
                 Ok(ok)
             }
             Kind::Exec => exec::run_exec(self.exec.as_ref(), &self.folder_root, &base, m).await,
-            Kind::Worktree => Ok(worktree::handle(self.exec.as_ref(), &base, m, &self.gate).await),
+            Kind::Worktree => {
+                let st = self.exec.as_ref();
+                Ok(worktree::handle(st, &self.folder_root, &base, m, &self.gate).await)
+            }
             Kind::CodeNav => {
                 // 예산이 Instant 범위를 넘으면 끝나지 않는 예산이다.
                 let deadline =

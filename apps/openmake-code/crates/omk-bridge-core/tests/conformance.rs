@@ -15,6 +15,8 @@ mod exec_shape;
 mod file_kinds;
 #[path = "conformance/request_guard.rs"]
 mod request_guard;
+#[path = "conformance/sandbox_profile.rs"]
+mod sandbox_profile;
 #[path = "conformance/scope.rs"]
 mod scope;
 mod support;
@@ -358,6 +360,28 @@ fn constants() {
         "constants/WORKTREE_BRANCH_PREFIX"
     );
     seen.extend(["PATH_PROBE_TIMEOUT_MS", "GIT_PROBE_TIMEOUT_MS"]);
+    // 확인 없이 뜨는 git(설계 2026-11-14 D-2·D-3·D-4).
+    let theirs = strs(&values["GIT_FIXED_ARGS"], "constants/GIT_FIXED_ARGS");
+    assert_eq!(theirs, c::GIT_FIXED_ARGS, "constants/GIT_FIXED_ARGS");
+    let texts = [
+        ("GIT_PROBE_PROFILE", c::GIT_PROBE_PROFILE),
+        ("GIT_DIR_MISMATCH_ERROR", c::GIT_DIR_MISMATCH_ERROR),
+        ("GIT_PATH_DENIED_PREFIX", c::GIT_PATH_DENIED_PREFIX),
+    ];
+    for (name, ours) in texts {
+        assert_eq!(values[name], ours, "constants/{name}");
+    }
+    seen.extend([
+        "GIT_FIXED_ARGS",
+        "GIT_PROBE_PROFILE",
+        "GIT_DIR_MISMATCH_ERROR",
+    ]);
+    assert_eq!(
+        values["GITFILE_MAX_BYTES"],
+        c::GITFILE_MAX_BYTES,
+        "constants/GITFILE_MAX_BYTES"
+    );
+    seen.extend(["GIT_PATH_DENIED_PREFIX", "GITFILE_MAX_BYTES"]);
     seen.extend(["WORKTREE_DIR", "WORKTREE_BRANCH_PREFIX"]);
     // 읽기 전용 도구 (PR-1.4) — 두 시간 제한은 기본값(TS 는 환경 변수가 없을 때의 값).
     let tools: [(&str, u64); 12] = [
@@ -551,22 +575,4 @@ fn denylist() {
         };
         assert_eq!(match_denylist(command), want["why"].as_str(), "{ctx}");
     }
-}
-
-/// `{{HOME}}` 자리에 넣는 임의 홈 — 실제 홈에 의존하지 않는다.
-const FAKE_HOME: &str = "/synthetic/home";
-
-#[test]
-fn sandbox_profile() {
-    use omk_bridge_core::sandbox_profile::build_sandbox_profile;
-    let doc = load("sandbox-profile");
-    each_case(&doc, "sandbox-profile", "cases", |ctx, i, e| {
-        let got =
-            build_sandbox_profile(i["root"].as_str().unwrap(), i["gitDir"].as_str(), FAKE_HOME);
-        let want = e["profile"]
-            .as_str()
-            .unwrap()
-            .replace("{{HOME}}", FAKE_HOME);
-        assert_eq!(got, want, "{ctx}");
-    });
 }

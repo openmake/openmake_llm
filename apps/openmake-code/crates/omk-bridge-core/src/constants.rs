@@ -128,6 +128,23 @@ pub const FS_MAX_CONCURRENT: usize = 4;
 pub const PATH_PROBE_TIMEOUT_MS: u64 = 5_000;
 /// 샌드박스 git 디렉터리 탐지 시간 제한(ms).
 pub const GIT_PROBE_TIMEOUT_MS: u64 = 5_000;
+/// 확인 없이 띄우는 git(worktree·연결 시점 탐지)에 늘 붙이는 인자 — 레포 설정의 fsmonitor·훅을 끈다(설계 D-2).
+/// 경계는 도구 프로파일이 맡고 이것은 겹방어다.
+pub const GIT_FIXED_ARGS: &[&str] = &[
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+];
+/// 연결 시점 git 탐지를 감싸는 인라인 프로파일(`sandbox-exec -p`) — git 은 표준 입출력을 /dev/null 로 다시 열어 그 쓰기만 연다.
+pub const GIT_PROBE_PROFILE: &str = r#"(version 1)(allow default)(deny file-write*)(allow file-write* (literal "/dev/null"))(deny network*)"#;
+/// worktree 연산 직전 대조에서 git 디렉터리가 연결 때 고정한 값과 다를 때의 거절(git 을 띄우지 않는다).
+pub const GIT_DIR_MISMATCH_ERROR: &str =
+    "git 디렉터리가 연결할 때와 달라 worktree 연산을 거부했습니다(폴더 재연결 필요).";
+/// 파일 kind 가 git 금지 경로(git 디렉터리 자신·config·hooks, worktree 의 .git)를 쓰거나 지우려 할 때의 거절 머리.
+pub const GIT_PATH_DENIED_PREFIX: &str = "git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: ";
+/// 코어가 직접 읽는 gitfile(`gitdir: <경로>`) 크기 상한(바이트) — 경로 한 줄이면 충분하다. 넘으면 gitfile 이 아니다(TS 같음).
+pub const GITFILE_MAX_BYTES: u64 = 4096;
 /// worktree 를 만드는 자리(연결 폴더 기준).
 pub const WORKTREE_DIR: &str = ".openmake/worktrees";
 pub const WORKTREE_BRANCH_PREFIX: &str = "omk-task/";
