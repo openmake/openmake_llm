@@ -1,0 +1,1243 @@
+{
+  "suite": "file-kinds",
+  "version": 1,
+  "cases": [
+    {
+      "id": "read-basic",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"hello.txt"},"expect":{"ok":true,"content":"world"}}]
+    },
+    {
+      "id": "read-korean",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"file":"root/한글 이름.txt","content":"안녕하세요 — 내용"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"한글 이름.txt"},"expect":{"ok":true,"content":"안녕하세요 — 내용"}}]
+    },
+    {
+      "id": "read-empty",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"file":"root/empty.txt","content":""}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"empty.txt"},"expect":{"ok":true,"content":""}}]
+    },
+    {
+      "id": "read-bom",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"file":"root/bom.txt","contentB64":"77u/aGk="}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"bom.txt"},"expect":{"ok":true,"content":"\ufeffhi"}}]
+    },
+    {
+      "id": "read-invalid-utf8",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"file":"root/bad.bin","contentB64":"YYBi//5j4oJkwK9l7aCAZvSQgIBn4oKs8J+Y"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"bad.bin"},"expect":{"ok":true,"content":"a\ufffdb\ufffd\ufffdc\ufffdd\ufffd\ufffde\ufffd\ufffd\ufffdf\ufffd\ufffd\ufffd\ufffdg€\ufffd"}}]
+    },
+    {
+      "id": "read-missing",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"read","path":"nope.txt"},
+          "expect": {"ok":false,"error":"ENOENT: no such file or directory, open '{{TMP}}/root/nope.txt'"}
+        }
+      ]
+    },
+    {
+      "id": "read-folder",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"sub"},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read"}}]
+    },
+    {
+      "id": "read-path-falsy",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"read"},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read"}},
+        {"msg":{"kind":"read","path":""},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read"}},
+        {"msg":{"kind":"read","path":null},"expect":{"ok":false,"error":"EISDIR: illegal operation on a directory, read"}}
+      ]
+    },
+    {
+      "id": "read-scope-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"read","path":"../.."},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../.."}},
+        {
+          "msg": {"kind":"read","path":"{{TMP}}/outside/secret.txt"},
+          "expect": {"ok":false,"error":"폴더 스코프 밖 경로 거부: {{TMP}}/outside/secret.txt"}
+        }
+      ]
+    },
+    {
+      "id": "read-abs-inside",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"{{TMP}}/root/hello.txt"},"expect":{"ok":true,"content":"world"}}]
+    },
+    {
+      "id": "read-symlink-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"link-out/secret.txt"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: link-out/secret.txt"}}]
+    },
+    {
+      "id": "read-symlink-in",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"link-in/a.txt"},"expect":{"ok":true,"content":"a"}}]
+    },
+    {
+      "id": "read-dangling",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"symlink":"root/dangling","target":"{{TMP}}/outside/planted.plist"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"read","path":"dangling"},
+          "expect": {"ok":false,"error":"ENOENT: no such file or directory, realpath '{{TMP}}/root/dangling'"}
+        }
+      ]
+    },
+    {
+      "id": "write-new-nested",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"write","path":"new/deep/x.txt","contentB64":"642w7J207YSw"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/new/deep/x.txt","content":"데이터"}]
+        }
+      ]
+    },
+    {
+      "id": "write-overwrite",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"write","path":"hello.txt","contentB64":"Y2hhbmdlZA=="},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/hello.txt","content":"changed"}]
+        }
+      ]
+    },
+    {
+      "id": "write-content-falsy",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"write","path":"e1.txt"},"expect":{"ok":true},"after":[{"exists":"root/e1.txt","contentB64":""}]},
+        {"msg":{"kind":"write","path":"e2.txt","contentB64":""},"expect":{"ok":true},"after":[{"exists":"root/e2.txt","contentB64":""}]},
+        {"msg":{"kind":"write","path":"e3.txt","contentB64":null},"expect":{"ok":true},"after":[{"exists":"root/e3.txt","contentB64":""}]}
+      ]
+    },
+    {
+      "id": "write-base64-variants",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"write","path":"b64-no-padding.bin","contentB64":"aGVsbG8"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-no-padding.bin","contentB64":"aGVsbG8="}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-url-safe.bin","contentB64":"-_-_"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-url-safe.bin","contentB64":"+/+/"}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-std-chars.bin","contentB64":"+/+/"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-std-chars.bin","contentB64":"+/+/"}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-spaces-newlines.bin","contentB64":"aGVs bG8\n=\r\n"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-spaces-newlines.bin","contentB64":"aGVsbG8="}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-invalid-chars.bin","contentB64":"aGV$sb!G8"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-invalid-chars.bin","contentB64":"aGVsbG8="}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-middle-padding.bin","contentB64":"aGVs=bG8"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-middle-padding.bin","contentB64":"aGVs"}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-dangling-char.bin","contentB64":"aGVsbG8xY"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-dangling-char.bin","contentB64":"aGVsbG8x"}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-non-ascii.bin","contentB64":"한YW글Jj"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-non-ascii.bin","contentB64":"YWJj"}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-all-invalid.bin","contentB64":"!!!!"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-all-invalid.bin","contentB64":""}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-padding-only.bin","contentB64":"===="},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-padding-only.bin","contentB64":""}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-nonzero-trailing-bits.bin","contentB64":"Zh=="},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-nonzero-trailing-bits.bin","contentB64":"Zg=="}]
+        },
+        {
+          "msg": {"kind":"write","path":"b64-tab-lead.bin","contentB64":"\taGVs"},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/b64-tab-lead.bin","contentB64":"aGVs"}]
+        }
+      ]
+    },
+    {
+      "id": "write-dangling",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"symlink":"root/dangling","target":"{{TMP}}/outside/planted.plist"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"write","path":"dangling","contentB64":"cHdu"},
+          "expect": {"ok":false,"error":"ENOENT: no such file or directory, realpath '{{TMP}}/root/dangling'"},
+          "after": [{"absent":"outside/planted.plist"}]
+        }
+      ]
+    },
+    {
+      "id": "write-symlink-out-dir",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"write","path":"link-out/new.txt","contentB64":"cHdu"},
+          "expect": {"ok":false,"error":"심링크 스코프 탈출 거부: link-out/new.txt"},
+          "after": [{"absent":"outside/new.txt"}]
+        }
+      ]
+    },
+    {
+      "id": "write-parent-is-file",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"write","path":"hello.txt/x.txt","contentB64":"eA=="},
+          "expect": {"ok":false,"error":"EEXIST: file already exists, mkdir '{{TMP}}/root/hello.txt'"}
+        },
+        {
+          "msg": {"kind":"write","path":"hello.txt/deep/x.txt","contentB64":"eA=="},
+          "expect": {"ok":false,"error":"ENOTDIR: not a directory, mkdir '{{TMP}}/root/hello.txt/deep'"}
+        }
+      ]
+    },
+    {
+      "id": "write-folder-itself",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"write","path":".","contentB64":"eA=="},
+          "expect": {"ok":false,"error":"EISDIR: illegal operation on a directory, open '{{TMP}}/root'"}
+        },
+        {
+          "msg": {"kind":"write","contentB64":"eA=="},
+          "expect": {"ok":false,"error":"EISDIR: illegal operation on a directory, open '{{TMP}}/root'"}
+        }
+      ]
+    },
+    {
+      "id": "write-into-existing-dir-name",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"write","path":"sub","contentB64":"eA=="},
+          "expect": {"ok":false,"error":"EISDIR: illegal operation on a directory, open '{{TMP}}/root/sub'"}
+        }
+      ]
+    },
+    {
+      "id": "write-symlink-in",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"write","path":"link-in/new.txt","contentB64":"dmlhIGxpbms="},
+          "expect": {"ok":true},
+          "after": [{"exists":"root/sub/new.txt","content":"via link"}]
+        }
+      ]
+    },
+    {
+      "id": "list-root",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"file":"root/.dotfile","content":""}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"list","path":"."},
+          "expect": {"ok":true,"entries":[".dotfile",".hidden/","hello.txt","link-in","link-out","sub/"]},
+          "compare": "sorted-entries"
+        },
+        {
+          "msg": {"kind":"list"},
+          "expect": {"ok":true,"entries":[".dotfile",".hidden/","hello.txt","link-in","link-out","sub/"]},
+          "compare": "sorted-entries"
+        }
+      ]
+    },
+    {
+      "id": "list-sub",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"dir":"root/sub/inner"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"list","path":"sub"},"expect":{"ok":true,"entries":["a.txt","inner/"]},"compare":"sorted-entries"}]
+    },
+    {
+      "id": "list-empty",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"dir":"root/empty"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"list","path":"empty"},"expect":{"ok":true,"entries":[]}}]
+    },
+    {
+      "id": "list-file",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"list","path":"hello.txt"},
+          "expect": {"ok":false,"error":"ENOTDIR: not a directory, scandir '{{TMP}}/root/hello.txt'"}
+        }
+      ]
+    },
+    {
+      "id": "list-missing",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"list","path":"nope"},"expect":{"ok":false,"error":"ENOENT: no such file or directory, scandir '{{TMP}}/root/nope'"}}]
+    },
+    {
+      "id": "list-symlink-in",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"list","path":"link-in"},"expect":{"ok":true,"entries":["a.txt"]}}]
+    },
+    {
+      "id": "list-scope-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"list","path":".."},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: .."}},
+        {"msg":{"kind":"list","path":"link-out"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: link-out"}}
+      ]
+    },
+    {
+      "id": "listAll-nested",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"dir":"root/sub/deep"},
+        {"file":"root/sub/deep/b.txt","content":"b"},
+        {"file":"root/.hidden/h.txt","content":"h"},
+        {"dir":"root/emptydir"},
+        {"symlink":"root/file-link","target":"{{TMP}}/root/hello.txt"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"listAll"},
+          "expect": {"ok":true,"entries":[".hidden/h.txt","hello.txt","sub/a.txt","sub/deep/b.txt"]},
+          "compare": "sorted-entries"
+        },
+        {
+          "msg": {"kind":"listAll","path":"sub"},
+          "expect": {"ok":true,"entries":[".hidden/h.txt","hello.txt","sub/a.txt","sub/deep/b.txt"]},
+          "compare": "sorted-entries"
+        },
+        {
+          "msg": {"kind":"listAll","path":"../.."},
+          "expect": {"ok":true,"entries":[".hidden/h.txt","hello.txt","sub/a.txt","sub/deep/b.txt"]},
+          "compare": "sorted-entries"
+        }
+      ]
+    },
+    {
+      "id": "listAll-folder",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"dir":"root/sub/deep"},
+        {"file":"root/sub/deep/b.txt","content":"b"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"listAll","folder":"sub"},"expect":{"ok":true,"entries":["a.txt","deep/b.txt"]},"compare":"sorted-entries"}]
+    },
+    {"id":"listAll-empty","setup":[{"dir":"root"}],"root":"root","requests":[{"msg":{"kind":"listAll"},"expect":{"ok":true,"entries":[]}}]},
+    {
+      "id": "listAll-cap",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"many":{"dir":"root","count":1001,"prefix":"f","kind":"file"}}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"listAll"},"expect":{"ok":true,"entriesCount":1000},"compare":"capped"}]
+    },
+    {
+      "id": "delete-file",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"delete","path":"hello.txt"},"expect":{"ok":true},"after":[{"absent":"root/hello.txt"}]}]
+    },
+    {
+      "id": "delete-dir-recursive",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"dir":"root/sub/deep"},
+        {"file":"root/sub/deep/b.txt","content":"b"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"delete","path":"sub"},"expect":{"ok":true},"after":[{"absent":"root/sub"}]}]
+    },
+    {
+      "id": "delete-missing",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"delete","path":"nope/x"},"expect":{"ok":true}}]
+    },
+    {
+      "id": "delete-root",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"delete","path":"."},"expect":{"ok":false,"error":"연결 폴더 루트는 삭제할 수 없습니다"}},
+        {"msg":{"kind":"delete","path":"sub/.."},"expect":{"ok":false,"error":"연결 폴더 루트는 삭제할 수 없습니다"}},
+        {"msg":{"kind":"delete"},"expect":{"ok":false,"error":"연결 폴더 루트는 삭제할 수 없습니다"}},
+        {
+          "msg": {"kind":"delete","path":"{{TMP}}/root"},
+          "expect": {"ok":false,"error":"연결 폴더 루트는 삭제할 수 없습니다"},
+          "after": [{"exists":"root/hello.txt","content":"world"}]
+        }
+      ]
+    },
+    {
+      "id": "delete-folder-root",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"delete","folder":"sub","path":"."},
+          "expect": {"ok":false,"error":"연결 폴더 루트는 삭제할 수 없습니다"},
+          "after": [{"exists":"root/sub/a.txt","content":"a"}]
+        },
+        {"msg":{"kind":"delete","path":"sub"},"expect":{"ok":true},"after":[{"absent":"root/sub"}]}
+      ]
+    },
+    {
+      "id": "delete-symlink-in",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"delete","path":"link-in"},
+          "expect": {"ok":true},
+          "after": [{"absent":"root/link-in"},{"exists":"root/sub/a.txt","content":"a"}]
+        }
+      ]
+    },
+    {
+      "id": "delete-symlink-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"delete","path":"link-out"},
+          "expect": {"ok":false,"error":"심링크 스코프 탈출 거부: link-out"},
+          "after": [{"exists":"root/link-out"},{"exists":"outside/secret.txt","content":"secret"}]
+        }
+      ]
+    },
+    {
+      "id": "delete-through-file",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"delete","path":"hello.txt/x"},
+          "expect": {"ok":false,"error":"ENOTDIR: not a directory, lstat '{{TMP}}/root/hello.txt/x'"}
+        }
+      ]
+    },
+    {
+      "id": "delete-dangling",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"symlink":"root/dangling","target":"{{TMP}}/outside/planted.plist"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"delete","path":"dangling"},
+          "expect": {"ok":false,"error":"ENOENT: no such file or directory, realpath '{{TMP}}/root/dangling'"},
+          "after": [{"exists":"root/dangling"}]
+        }
+      ]
+    },
+    {
+      "id": "folders-root",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"file":"root/file.txt","content":""},
+        {"dir":"root/zeta"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"folders"},"expect":{"ok":true,"entries":["sub","zeta"],"truncated":false},"compare":"sorted-entries"},
+        {"msg":{"kind":"folders","path":"."},"expect":{"ok":true,"entries":["sub","zeta"],"truncated":false},"compare":"sorted-entries"}
+      ]
+    },
+    {
+      "id": "folders-sub",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"dir":"root/sub/inner"},
+        {"dir":"root/sub/.secret"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"folders","path":"sub"},"expect":{"ok":true,"entries":["sub/inner"],"truncated":false},"compare":"sorted-entries"}]
+    },
+    {
+      "id": "folders-ignores-folder",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"dir":"root/sub/inner"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"folders","folder":"sub"},"expect":{"ok":true,"entries":["sub"],"truncated":false},"compare":"sorted-entries"},
+        {
+          "msg": {"kind":"folders","folder":"sub","path":"sub"},
+          "expect": {"ok":true,"entries":["sub/inner"],"truncated":false},
+          "compare": "sorted-entries"
+        }
+      ]
+    },
+    {
+      "id": "folders-200",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"many":{"dir":"root/big","count":200,"prefix":"d","kind":"dir"}}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"folders","path":"big"},"expect":{"ok":true,"truncated":false,"entriesCount":200},"compare":"capped"}]
+    },
+    {
+      "id": "folders-201",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"many":{"dir":"root/big","count":201,"prefix":"d","kind":"dir"}}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"folders","path":"big"},"expect":{"ok":true,"truncated":true,"entriesCount":200},"compare":"capped"}]
+    },
+    {
+      "id": "folders-scope-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"folders","path":"../.."},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../.."}},
+        {"msg":{"kind":"folders","path":"link-out"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: link-out"}}
+      ]
+    },
+    {
+      "id": "folders-file",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"folders","path":"hello.txt"},
+          "expect": {"ok":false,"error":"ENOTDIR: not a directory, scandir '{{TMP}}/root/hello.txt'"}
+        }
+      ]
+    },
+    {
+      "id": "folders-symlink-in",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"dir":"root/sub/inner"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"folders","path":"link-in"},"expect":{"ok":true,"entries":["link-in/inner"],"truncated":false}}]
+    },
+    {
+      "id": "folder-sub",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"read","path":"a.txt","folder":"sub"},"expect":{"ok":true,"content":"a"}},
+        {"msg":{"kind":"list","folder":"sub"},"expect":{"ok":true,"entries":["a.txt"]}},
+        {"msg":{"kind":"read","path":"../hello.txt","folder":"sub"},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../hello.txt"}}
+      ]
+    },
+    {
+      "id": "folder-scope-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"read","path":"x","folder":"../.."},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../.."}},
+        {"msg":{"kind":"task_end","folder":"../.."},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../.."}}
+      ]
+    },
+    {
+      "id": "folder-not-dir",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"read","path":"x","folder":"hello.txt"},"expect":{"ok":false,"error":"실행 폴더가 존재하지 않습니다: hello.txt"}},
+        {"msg":{"kind":"read","path":"x","folder":"nope"},"expect":{"ok":false,"error":"실행 폴더가 존재하지 않습니다: nope"}},
+        {"msg":{"kind":"task_end","folder":"nope"},"expect":{"ok":false,"error":"실행 폴더가 존재하지 않습니다: nope"}}
+      ]
+    },
+    {
+      "id": "folder-symlink-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"secret.txt","folder":"link-out"},"expect":{"ok":false,"error":"심링크 스코프 탈출 거부: link-out"}}]
+    },
+    {
+      "id": "folder-symlink-in",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"read","path":"a.txt","folder":"link-in"},"expect":{"ok":true,"content":"a"}}]
+    },
+    {
+      "id": "folder-falsy",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"read","path":"hello.txt","folder":""},"expect":{"ok":true,"content":"world"}},
+        {"msg":{"kind":"read","path":"hello.txt","folder":null},"expect":{"ok":true,"content":"world"}},
+        {"msg":{"kind":"read","path":"hello.txt","folder":0},"expect":{"ok":true,"content":"world"}},
+        {"msg":{"kind":"read","path":"hello.txt","folder":false},"expect":{"ok":true,"content":"world"}}
+      ]
+    },
+    {
+      "id": "folder-dangling",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"},
+        {"symlink":"root/dangling","target":"{{TMP}}/outside/planted.plist"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"read","path":"x","folder":"dangling"},
+          "expect": {"ok":false,"error":"ENOENT: no such file or directory, realpath '{{TMP}}/root/dangling'"}
+        }
+      ]
+    },
+    {
+      "id": "dispatch-task-end",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [{"msg":{"kind":"task_end"},"expect":{"ok":true}},{"msg":{"kind":"task_end","taskId":"t-1"},"expect":{"ok":true}}]
+    },
+    {
+      "id": "dispatch-unknown",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {"msg":{"kind":"evil_rpc"},"expect":{"ok":false,"error":"지원하지 않는 kind: evil_rpc"}},
+        {"msg":{},"expect":{"ok":false,"error":"지원하지 않는 kind: undefined"}},
+        {"msg":{"kind":null},"expect":{"ok":false,"error":"지원하지 않는 kind: null"}},
+        {"msg":{"kind":""},"expect":{"ok":false,"error":"지원하지 않는 kind: "}},
+        {"msg":{"kind":"READ"},"expect":{"ok":false,"error":"지원하지 않는 kind: READ"}},
+        {"msg":{"kind":false},"expect":{"ok":false,"error":"지원하지 않는 kind: false"}},
+        {"msg":{"kind":0},"expect":{"ok":false,"error":"지원하지 않는 kind: 0"}},
+        {"msg":{"kind":"evil_rpc","folder":"../.."},"expect":{"ok":false,"error":"폴더 스코프 밖 경로 거부: ../.."}},
+        {"msg":{"kind":"evil_rpc","folder":"sub"},"expect":{"ok":false,"error":"지원하지 않는 kind: evil_rpc"}}
+      ]
+    },
+    {
+      "id": "dispatch-non-string",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/hello.txt","content":"world"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"root/.hidden"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "root": "root",
+      "requests": [
+        {
+          "msg": {"kind":"read","path":5},
+          "expect": {"ok":false,"error":"The \"paths[1]\" argument must be of type string. Received type number (5)"},
+          "divergence": "non-string-field",
+          "rustExpect": {"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: path"}
+        },
+        {
+          "msg": {"kind":"read","path":"hello.txt","folder":{}},
+          "expect": {"ok":false,"error":"The \"paths[1]\" argument must be of type string. Received an instance of Object"},
+          "divergence": "non-string-field",
+          "rustExpect": {"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: folder"}
+        },
+        {
+          "msg": {"kind":"write","path":"arr.bin","contentB64":[1,2]},
+          "expect": {"ok":true},
+          "divergence": "non-string-field",
+          "rustExpect": {"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: contentB64"}
+        },
+        {
+          "msg": {"kind":5},
+          "expect": {"ok":false,"error":"지원하지 않는 kind: 5"},
+          "divergence": "non-string-field",
+          "rustExpect": {"ok":false,"error":"요청 필드 형식이 올바르지 않습니다: kind"}
+        }
+      ]
+    }
+  ],
+  "timeout": [
+    {
+      "id": "folders-300ms",
+      "input": {"kind":"folders","timeoutMs":300},
+      "expect": {"error":"folders 시간 초과 (0s) — 폴더 접근이 차단됐을 수 있습니다(디스크 접근 권한 확인)"}
+    },
+    {
+      "id": "listAll-500ms",
+      "input": {"kind":"listAll","timeoutMs":500},
+      "expect": {"error":"listAll 시간 초과 (1s) — 폴더 접근이 차단됐을 수 있습니다(디스크 접근 권한 확인)"}
+    },
+    {"id":"read-1500ms","input":{"kind":"read","timeoutMs":1500},"expect":{"error":"read 시간 초과 (2s) — 폴더 접근이 차단됐을 수 있습니다(디스크 접근 권한 확인)"}}
+  ],
+  "fsTimeoutEnv": [
+    {"id":"missing","input":{"env":null},"expect":{"ms":15000}},
+    {"id":"empty","input":{"env":""},"expect":{"ms":15000}},
+    {"id":"300","input":{"env":"300"},"expect":{"ms":300}},
+    {"id":"15000","input":{"env":"15000"},"expect":{"ms":15000}},
+    {"id":"zero","input":{"env":"0"},"expect":{"ms":0}},
+    {"id":"spaces","input":{"env":" 300 "},"expect":{"ms":300}}
+  ]
+}

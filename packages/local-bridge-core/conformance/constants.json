@@ -11,6 +11,11 @@
     "SANDBOX_BIN": "/usr/bin/sandbox-exec",
     "BRIDGE_KINDS": ["exec", "read", "write", "list", "listAll", "delete", "task_end", "worktree", "folders", "lsp_diagnostics", "code_nav", "test_runner"],
     "EXEC_TIMEOUT_MS": 120000,
+    "BROWSER_KIND": "browser",
+    "EXPIRY_SKEW_TOLERANCE_MS": 120000,
+    "SEEN_REQ_MAX": 2000,
+    "FOLDERS_MAX_ENTRIES": 200,
+    "LIST_ALL_MAX": 1000,
     "MAX_BUFFER": 1048576
   }
 }
