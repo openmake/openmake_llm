@@ -19,6 +19,7 @@
 - `BridgeConnection::new` 는 런타임 안에서 부른다(연결 태스크를 띄운다). 핸들을 버리면 태스크가 끝나고 소켓은 상태 알림 없이 끊긴다.
 - 종료는 `Runtime::shutdown_timeout` 으로 한다. 그냥 drop 하면 영영 블록된 파일 호출이 있을 때 종료가 멈춘다(코어 README 와 같다).
 - 보내기는 기다리지 않는다(TS `ws.send` 처럼). 결과·hello·ping·닫힘 프레임은 세션의 보낼 큐에 넣고, 실제 쓰기는 읽기·생존 확인·닫기 한도와 같은 `select!` 에서 진행한다. 상대가 읽지 않아 소켓이 막혀도 생존 확인이 끊고, `disconnect()`·`connect()` 는 바로 처리된다(막힌 소켓의 `disconnect()` 는 닫기 한도 30초 뒤 `종료`). 큐가 16MiB 를 넘으면 생존 확인을 기다리지 않고 끊고 재연결한다(TS 는 상한 없이 쌓는다 — `tests/blocked_send.rs`).
+- 로그: 이 크레이트는 로거를 설치하지 않는다. 의존 크레이트 `tungstenite` 의 `log` trace 를 켜면 핸드셰이크 요청 전문(Authorization 헤더 — API key 포함)과 프레임 내용이 찍힌다. 호스트는 이 대상의 trace 를 켜지 않는다 — 로거를 설치할 때 trace 기록은 `runtime::trace_allowed(target)` 로 거른다.
 - 시간은 `tokio::time` 만 쓴다. 벽시계는 요청 만료 판정과 `durationMs` 에만 쓰고 `ConnectionOptions::clock` 으로 바꿀 수 있다.
 
 ## 코어 수명
