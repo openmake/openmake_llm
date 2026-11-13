@@ -347,7 +347,7 @@ fn d11_trusted_repo_dotgit_is_closed() {
     }
 }
 
-/// D-11 — `HEAD` 는 어느 폴더에서든 새로 만들 수 없다(이미 있으면 쓴다, 지우기는 된다).
+/// D-11 — `HEAD` 는 어느 폴더에서든 새로 만들거나 지울 수 없다(이미 있으면 내용은 쓴다 — 5차 T1).
 #[test]
 fn d11_new_head_anywhere() {
     let w = Work::new();
@@ -359,7 +359,7 @@ fn d11_new_head_anywhere() {
         assert_eq!(write(&c, p), denied(p), "{p}");
     }
     assert_eq!(write_with(&c, "docs/HEAD", "new\n"), ok());
-    assert_eq!(del(&c, "docs/HEAD"), ok());
+    assert_eq!(del(&c, "docs/HEAD"), denied("docs/HEAD"));
 }
 
 /// D-11 — 과한 차단 없음: HEAD 없는 폴더의 config·hooks·비ASCII·.github·.gitignore·.git2 는 그대로 된다.
