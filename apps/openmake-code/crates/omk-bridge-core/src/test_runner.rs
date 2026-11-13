@@ -109,6 +109,7 @@ pub async fn detect(dir: &str, tool: &ToolEnv, gate: &FsGate) -> Result<&'static
         return Ok("npm");
     }
     if m.pytest {
+        tool.ensure_profile()?;
         let finder = tool.clone();
         let python = gate
             .run(LABEL, move || Ok(finder.find_on_path("python3")))

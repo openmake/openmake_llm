@@ -73,6 +73,15 @@ impl ToolEnv {
         })
     }
 
+    /// 샌드박스가 켜졌는데 프로파일이 없으면 exec 와 같은 fail-closed 문구 — 자식을 띄울 자리에서 실행 파일을 찾기 **전에**
+    /// 부른다(TS 는 감싸기가 PATH 확인보다 먼저 던진다 — 없는 python3 가 "깨끗함/없음"으로 보이지 않게).
+    pub fn ensure_profile(&self) -> Result<(), String> {
+        match self.sandbox {
+            ToolSandbox::Missing => Err(FAIL_CLOSED.to_owned()),
+            ToolSandbox::Off | ToolSandbox::Profile(_) => Ok(()),
+        }
+    }
+
     /// 자식 하나를 띄운다. 감싼 자식에서 sandbox-exec **자체**가 실패하면(프로파일 파일 유실·문법 오류 65, 실행 파일
     /// execvp 실패 71 — stderr 가 `sandbox-exec:` 로 시작) "진단 없음/none" 으로 삼키지 않고 프로파일 없음과 같이 거절한다
     /// (TS 별건 수정 M1 과 같은 규칙). 이름으로 띄우는 실행 파일은 부르는 쪽이 먼저 찾아 절대경로로 넘긴다(71 과 섞이지 않게).
