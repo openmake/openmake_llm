@@ -137,12 +137,14 @@ fn parse_tsc(out: &str, base: &str, cwd: &str) -> Vec<Diagnostic> {
     diags
 }
 
-/// `/line (\d+)/` 의 첫 일치 — `\d` 는 ASCII 숫자.
+/// `/line (\d+)/` 의 첫 일치 — `\d` 는 ASCII 숫자. 그 값이 u64 를 넘으면 없음(→ 1)으로 본다(TS 는 정밀도를 잃은 실수 —
+/// py_compile 은 그런 값을 내지 않는다, D-69 와 같은 종류).
 fn first_line_number(out: &str) -> Option<u64> {
-    out.match_indices("line ").find_map(|(i, _)| {
+    let digits = out.match_indices("line ").find_map(|(i, _)| {
         let digits: String = out[i + 5..].chars().take_while(char::is_ascii_digit).collect();
-        (!digits.is_empty()).then(|| digits.parse().ok()).flatten()
-    })
+        (!digits.is_empty()).then_some(digits)
+    })?;
+    digits.parse().ok()
 }
 
 /// py_compile 출력 해석 — 줄 번호는 처음 나오는 `line N`(없으면 1), 메시지는 마지막 줄.
@@ -286,5 +288,7 @@ mod tests {
         assert_eq!(first_line_number("inline 4"), Some(4));
         assert_eq!(first_line_number("Line 4"), None);
         assert_eq!(first_line_number("line \u{0663}"), None);
+        // 첫 일치만 본다 — u64 를 넘으면 다음 `line N` 으로 넘어가지 않고 없음(→ 1)이다.
+        assert_eq!(first_line_number("line 99999999999999999999 line 7"), None);
     }
 }
