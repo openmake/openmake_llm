@@ -6,7 +6,9 @@ use std::time::{Duration, Instant};
 
 use omk_bridge_core::constants::EXEC_TIMEOUT_MS;
 use omk_bridge_core::core::{BridgeCore, BridgeCoreOptions};
-use omk_bridge_core::exec::{ConfirmAnswer, ConfirmFn, ConfirmRequest, ExecHost, auto_approve_from_env};
+use omk_bridge_core::exec::{
+    ConfirmAnswer, ConfirmFn, ConfirmRequest, ExecHost, auto_approve_from_env,
+};
 use omk_bridge_core::msg::BridgeMsg;
 use omk_bridge_core::platform::Platform;
 use omk_bridge_core::sandbox::sandbox_enabled;
@@ -129,7 +131,11 @@ pub fn check_after(tmp: &TmpDir, after: &Value, ctx: &str) {
             let text = std::fs::read_to_string(tmp.join(p)).unwrap();
             let line = a["line"].as_str().unwrap();
             let n = text.split('\n').filter(|l| *l == line).count();
-            assert_eq!(n as u64, a["count"].as_u64().unwrap(), "{ctx}: {p} 의 {line:?} 줄 수");
+            assert_eq!(
+                n as u64,
+                a["count"].as_u64().unwrap(),
+                "{ctx}: {p} 의 {line:?} 줄 수"
+            );
         } else {
             let p = a["exists"].as_str().unwrap();
             let full = tmp.join(p);
@@ -157,7 +163,10 @@ fn shape_after(after: &Value, at: &str) {
 }
 
 pub fn shape_setup(setup: &Value, at: &str) {
-    for s in setup.as_array().unwrap_or_else(|| panic!("{at}: setup 배열 아님")) {
+    for s in setup
+        .as_array()
+        .unwrap_or_else(|| panic!("{at}: setup 배열 아님"))
+    {
         let kind = SETUP_KINDS.iter().find(|k| s.get(**k).is_some());
         let at = format!("{at}/setup");
         match kind {
@@ -173,7 +182,10 @@ pub fn shape_setup(setup: &Value, at: &str) {
 pub fn shape_request(r: &Value, at: &str, required: &[&str], optional: &[&str], compares: &[&str]) {
     shape(r, required, optional, at);
     if let Some(c) = r.get("compare") {
-        assert!(compares.contains(&c.as_str().unwrap_or("")), "{at}: 모르는 compare {c}");
+        assert!(
+            compares.contains(&c.as_str().unwrap_or("")),
+            "{at}: 모르는 compare {c}"
+        );
     }
     if let Some(after) = r.get("after") {
         shape_after(after, at);
@@ -184,34 +196,63 @@ fn shape_gate_request(r: &Value, at: &str, with_count: bool) {
     let mut optional = REQ_OPTIONAL.to_vec();
     if with_count {
         optional.push("autoApproved");
-        assert!(r["autoApproved"].is_u64(), "{at}: autoApproved 가 수가 아니다");
+        assert!(
+            r["autoApproved"].is_u64(),
+            "{at}: autoApproved 가 수가 아니다"
+        );
     }
     let compares = ["no-stderr", "stdout-length", "stdout-lines"];
     shape_request(r, at, &["msg", "asked", "expect"], &optional, &compares);
     if let Some(c) = r.get("confirm") {
-        assert!(["yes", "all", "no"].contains(&c.as_str().unwrap_or("")), "{at}: confirm {c}");
+        assert!(
+            ["yes", "all", "no"].contains(&c.as_str().unwrap_or("")),
+            "{at}: confirm {c}"
+        );
     }
     if let Some(w) = r.get("askedWith") {
-        shape(w, &["command", "taskId", "base"], &[], &format!("{at}/askedWith"));
+        shape(
+            w,
+            &["command", "taskId", "base"],
+            &[],
+            &format!("{at}/askedWith"),
+        );
     }
 }
 
 #[test]
 fn exec_gate_shapes() {
     let doc = load("exec-gate");
-    let top = ["suite", "version", "cases", "sandboxEnabled", "autoApproveEnv", "failClosed"];
+    let top = [
+        "suite",
+        "version",
+        "cases",
+        "sandboxEnabled",
+        "autoApproveEnv",
+        "failClosed",
+    ];
     shape(&doc, &top, &[], "exec-gate");
     for c in non_empty(&doc["cases"], "exec-gate/cases") {
         let at = format!("exec-gate/cases/{}", c["id"].as_str().unwrap_or("?"));
-        shape(c, &["id", "setup", "root", "steps", "changes"], &["autoApproveAll"], &at);
+        shape(
+            c,
+            &["id", "setup", "root", "steps", "changes"],
+            &["autoApproveAll"],
+            &at,
+        );
         shape_setup(&c["setup"], &at);
-        for (n, s) in non_empty(&c["steps"], &format!("{at}/steps")).iter().enumerate() {
+        for (n, s) in non_empty(&c["steps"], &format!("{at}/steps"))
+            .iter()
+            .enumerate()
+        {
             let at = format!("{at}/steps/{n}");
             if s.get("clearAutoApprove").is_some() {
                 shape(s, &["clearAutoApprove", "autoApproved"], &[], &at);
             } else if s.get("parallel").is_some() {
                 shape(s, &["parallel", "answerOrder", "autoApproved"], &[], &at);
-                for (i, r) in non_empty(&s["parallel"], &format!("{at}/parallel")).iter().enumerate() {
+                for (i, r) in non_empty(&s["parallel"], &format!("{at}/parallel"))
+                    .iter()
+                    .enumerate()
+                {
                     shape_gate_request(r, &format!("{at}/parallel/{i}"), false);
                 }
             } else {
@@ -293,7 +334,14 @@ fn core_opts(folder: String) -> BridgeCoreOptions {
     }
 }
 
-fn request(rt: &tokio::runtime::Runtime, core: &BridgeCore, script: &Script, r: &Value, tmp: &TmpDir, ctx: &str) {
+fn request(
+    rt: &tokio::runtime::Runtime,
+    core: &BridgeCore,
+    script: &Script,
+    r: &Value,
+    tmp: &TmpDir,
+    ctx: &str,
+) {
     let (want, diverged) = want_of(r, &tmp.path, ctx);
     script.calls.lock().unwrap().clear();
     *script.answer.lock().unwrap() = answer_of(&r["confirm"]);
@@ -303,7 +351,10 @@ fn request(rt: &tokio::runtime::Runtime, core: &BridgeCore, script: &Script, r: 
     // 알려진 차이 사례는 Rust 가 형식 검사에서 먼저 거절한다 — 묻지 않는다.
     let asked = !diverged && r["asked"].as_bool().unwrap();
     assert_eq!(calls.len(), usize::from(asked), "{ctx}: 물음 수 {calls:?}");
-    assert!(!asked || r.get("confirm").is_some(), "{ctx}: 물음에 줄 답이 없다");
+    assert!(
+        !asked || r.get("confirm").is_some(),
+        "{ctx}: 물음에 줄 답이 없다"
+    );
     if let (false, Some(w)) = (diverged, r.get("askedWith")) {
         assert_eq!(calls[0], fill(w, &tmp.path), "{ctx}: 물음 인자");
     }
@@ -314,7 +365,14 @@ fn request(rt: &tokio::runtime::Runtime, core: &BridgeCore, script: &Script, r: 
 }
 
 /// 요청들을 함께 보내고, 물음이 asked 인 수만큼 모두 모인 뒤 answerOrder 차례로 답한다. 물음은 명령 글자로 짝짓는다.
-fn parallel(rt: &tokio::runtime::Runtime, core: &Arc<BridgeCore>, script: &Script, s: &Value, tmp: &TmpDir, ctx: &str) {
+fn parallel(
+    rt: &tokio::runtime::Runtime,
+    core: &Arc<BridgeCore>,
+    script: &Script,
+    s: &Value,
+    tmp: &TmpDir,
+    ctx: &str,
+) {
     let items = s["parallel"].as_array().unwrap();
     let commands: Vec<String> = items
         .iter()
@@ -340,13 +398,18 @@ fn parallel(rt: &tokio::runtime::Runtime, core: &Arc<BridgeCore>, script: &Scrip
         while script.held.lock().unwrap().len() < want && Instant::now() < deadline {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
-        assert_eq!(script.held.lock().unwrap().len(), want, "{ctx}: 모인 물음 수");
+        assert_eq!(
+            script.held.lock().unwrap().len(),
+            want,
+            "{ctx}: 모인 물음 수"
+        );
         for i in s["answerOrder"].as_array().unwrap() {
             let i = i.as_u64().unwrap() as usize;
             let tx = {
                 let mut held = script.held.lock().unwrap();
                 let at = held.iter().position(|(c, _)| *c == commands[i]);
-                held.remove(at.unwrap_or_else(|| panic!("{ctx}: {i} 번의 물음이 없다"))).1
+                held.remove(at.unwrap_or_else(|| panic!("{ctx}: {i} 번의 물음이 없다")))
+                    .1
             };
             let _ = tx.send(answer_of(&items[i]["confirm"]).unwrap_or(ConfirmAnswer::No));
             tokio::time::sleep(Duration::from_millis(1)).await;
@@ -367,7 +430,11 @@ fn parallel(rt: &tokio::runtime::Runtime, core: &Arc<BridgeCore>, script: &Scrip
         if let Some(w) = r.get("askedWith") {
             assert_eq!(call, Some(&fill(w, &tmp.path)), "{ctx}: 물음 인자");
         }
-        assert_eq!(view(&got[i], r["compare"].as_str(), &want, &ctx), want, "{ctx}");
+        assert_eq!(
+            view(&got[i], r["compare"].as_str(), &want, &ctx),
+            want,
+            "{ctx}"
+        );
         if let Some(after) = r.get("after") {
             check_after(tmp, after, &ctx);
         }
@@ -409,7 +476,11 @@ fn exec_gate_cases() {
                 request(&rt, &core, &script, s, &tmp, &ctx);
             }
             let count = core.auto_approved_count() as u64;
-            assert_eq!(count, s["autoApproved"].as_u64().unwrap(), "{ctx}: 일괄 승인 수");
+            assert_eq!(
+                count,
+                s["autoApproved"].as_u64().unwrap(),
+                "{ctx}: 일괄 승인 수"
+            );
         }
         let changes = changes.lock().unwrap().clone();
         assert_eq!(json!(changes), c["changes"], "{ctx}: 변화 알림");
@@ -430,7 +501,11 @@ fn exec_gate_sandbox_enabled() {
 fn exec_gate_auto_approve_env() {
     let doc = load("exec-gate");
     each_case(&doc, "exec-gate", "autoApproveEnv", |ctx, i, e| {
-        assert_eq!(auto_approve_from_env(i["env"].as_str()), e.as_bool().unwrap(), "{ctx}");
+        assert_eq!(
+            auto_approve_from_env(i["env"].as_str()),
+            e.as_bool().unwrap(),
+            "{ctx}"
+        );
     });
 }
 
@@ -453,7 +528,9 @@ fn exec_gate_fail_closed() {
         *script.answer.lock().unwrap() = Some(ConfirmAnswer::Yes);
         let mut h = host(&tmp, confirm_fn(&script), &prof);
         h.sandbox_enabled = true;
-        let core = BridgeCore::new(core_opts(tmp.join("root"))).unwrap().with_exec_host(h);
+        let core = BridgeCore::new(core_opts(tmp.join("root")))
+            .unwrap()
+            .with_exec_host(h);
         if unwritable {
             rt.block_on(core.prepare());
         }
@@ -461,7 +538,10 @@ fn exec_gate_fail_closed() {
         let got = rt.block_on(core.handle_exec(&msg)).to_json();
         assert_eq!(&got, e, "{ctx}");
         assert_eq!(script.calls.lock().unwrap().len(), 1, "{ctx}: 물음 수");
-        assert!(std::fs::metadata(tmp.join("root/ran")).is_err(), "{ctx}: 실행됐다");
+        assert!(
+            std::fs::metadata(tmp.join("root/ran")).is_err(),
+            "{ctx}: 실행됐다"
+        );
     });
     rt.shutdown_timeout(Duration::from_secs(5));
 }

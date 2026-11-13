@@ -100,8 +100,16 @@ fn every_connect_prepares_core_before_socket() {
         drop(conn);
     });
     let at_open = seen_at_open.lock().unwrap().clone();
-    assert_eq!(at_open.iter().map(Vec::len).collect::<Vec<_>>(), [1, 1], "소켓을 열 때 이미 준비돼 있어야 한다");
-    assert_eq!(changes.load(Ordering::SeqCst), 0, "연결은 일괄 승인을 건드리지 않는다");
+    assert_eq!(
+        at_open.iter().map(Vec::len).collect::<Vec<_>>(),
+        [1, 1],
+        "소켓을 열 때 이미 준비돼 있어야 한다"
+    );
+    assert_eq!(
+        changes.load(Ordering::SeqCst),
+        0,
+        "연결은 일괄 승인을 건드리지 않는다"
+    );
 }
 
 /// 해제하면 일괄 승인을 모두 회수하고 변화를 알린다.

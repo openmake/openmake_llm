@@ -323,7 +323,11 @@ mod tests {
             (json!({"command": "ls -a", "op": "ls -a"}), "ls -a"),
         ] {
             let m = BridgeMsg::from_json(&v);
-            assert_eq!((m.command_text.as_str(), m.op_text.as_str()), (want, want), "{v}");
+            assert_eq!(
+                (m.command_text.as_str(), m.op_text.as_str()),
+                (want, want),
+                "{v}"
+            );
             assert_eq!(m.command.is_some(), want == "ls -a");
             assert_eq!(m.invalid_field, None);
         }

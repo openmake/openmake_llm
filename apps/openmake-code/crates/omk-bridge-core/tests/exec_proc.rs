@@ -41,7 +41,10 @@ fn code(end: &ProcEnd) -> Option<i32> {
 #[test]
 fn exit_codes_and_signals() {
     let (o, _) = go(spec("echo a; echo b >&2; exit 3"));
-    assert_eq!((o.stdout.as_str(), o.stderr.as_str(), code(&o.end)), ("a\n", "b\n", Some(3)));
+    assert_eq!(
+        (o.stdout.as_str(), o.stderr.as_str(), code(&o.end)),
+        ("a\n", "b\n", Some(3))
+    );
     let (o, _) = go(spec("exit 300"));
     assert_eq!(code(&o.end), Some(44));
     let (o, _) = go(spec("echo -n before; kill -9 $$"));
@@ -62,7 +65,10 @@ fn timeout_returns_output_so_far() {
     let mut s = spec("trap '' TERM; sleep 5");
     s.timeout_ms = 300;
     let (o, took) = go(s);
-    assert!(matches!(o.end, ProcEnd::TimedOut) && took < Duration::from_secs(2), "{took:?}");
+    assert!(
+        matches!(o.end, ProcEnd::TimedOut) && took < Duration::from_secs(2),
+        "{took:?}"
+    );
 }
 
 /// 출력 상한 — 정확히는 정상, 하나 넘으면 넘친 스트림을 상한까지 남기고 끝낸다. 다른 스트림은 그대로.
@@ -81,7 +87,10 @@ fn max_buffer_exact_and_over() {
     s.max_buffer = 10;
     let (o, _) = go(s);
     assert!(matches!(o.end, ProcEnd::Overflow), "{:?}", o.end);
-    assert_eq!((o.stdout.as_str(), o.stderr.as_str()), ("keep", "0123456789"));
+    assert_eq!(
+        (o.stdout.as_str(), o.stderr.as_str()),
+        ("keep", "0123456789")
+    );
 }
 
 /// 여러 바이트 글자 — 상한 이하의 가장 긴 글자 경계까지 남긴다(D-32).
@@ -128,7 +137,10 @@ fn background_process_holding_pipe() {
     s.timeout_ms = 300;
     let (o, took) = go(s);
     assert!(matches!(o.end, ProcEnd::TimedOut), "{:?}", o.end);
-    assert!(took < Duration::from_millis(1500), "손자가 쥔 파이프를 기다렸다: {took:?}");
+    assert!(
+        took < Duration::from_millis(1500),
+        "손자가 쥔 파이프를 기다렸다: {took:?}"
+    );
 }
 
 #[test]
@@ -153,8 +165,16 @@ fn env_is_replaced_and_path_lookup_uses_it() {
     let mut lines: Vec<&str> = o.stdout.lines().filter(|l| !l.starts_with("_=")).collect();
     lines.sort_unstable();
     // bash 가 스스로 넣는 PWD·SHLVL 은 본다 — 부모의 HOME·USER 가 없다는 것이 요점이다.
-    assert!(lines.contains(&"OMK_PROC_ONLY=1") && lines.contains(&"PATH=/usr/bin:/bin"), "{lines:?}");
-    assert!(!lines.iter().any(|l| l.starts_with("HOME=") || l.starts_with("USER=")), "{lines:?}");
+    assert!(
+        lines.contains(&"OMK_PROC_ONLY=1") && lines.contains(&"PATH=/usr/bin:/bin"),
+        "{lines:?}"
+    );
+    assert!(
+        !lines
+            .iter()
+            .any(|l| l.starts_with("HOME=") || l.starts_with("USER=")),
+        "{lines:?}"
+    );
 
     let tmp = TmpDir::new();
     let probe = tmp.join("omkprobe");
@@ -176,5 +196,8 @@ fn stderr_null_is_discarded_and_cwd_is_used() {
     s.stderr = Stderr::Null;
     s.cwd = Some(tmp.path.clone());
     let (o, _) = go(s);
-    assert_eq!((o.stdout, o.stderr), (format!("{}\n", tmp.path), String::new()));
+    assert_eq!(
+        (o.stdout, o.stderr),
+        (format!("{}\n", tmp.path), String::new())
+    );
 }

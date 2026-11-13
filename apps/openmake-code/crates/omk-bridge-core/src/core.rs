@@ -47,10 +47,7 @@ fn handles(kind: Kind) -> bool {
         | Kind::Folders
         | Kind::Exec
         | Kind::Worktree => true,
-        Kind::LspDiagnostics
-        | Kind::CodeNav
-        | Kind::TestRunner
-        | Kind::Browser => false,
+        Kind::LspDiagnostics | Kind::CodeNav | Kind::TestRunner | Kind::Browser => false,
     }
 }
 
@@ -210,10 +207,9 @@ impl BridgeCore {
             }
             Kind::Exec => exec::run_exec(self.exec.as_ref(), &self.folder_root, &base, m).await,
             Kind::Worktree => Ok(worktree::handle(self.exec.as_ref(), &base, m, &self.gate).await),
-            Kind::LspDiagnostics
-            | Kind::CodeNav
-            | Kind::TestRunner
-            | Kind::Browser => Err(unsupported(kind.as_str())),
+            Kind::LspDiagnostics | Kind::CodeNav | Kind::TestRunner | Kind::Browser => {
+                Err(unsupported(kind.as_str()))
+            }
         }
     }
 }

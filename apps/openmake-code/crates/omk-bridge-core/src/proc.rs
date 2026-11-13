@@ -175,7 +175,8 @@ pub async fn run(spec: ProcSpec) -> ProcOutput {
             {
                 status = Some(s);
             }
-            if out.reader.is_none() && err.reader.is_none()
+            if out.reader.is_none()
+                && err.reader.is_none()
                 && let Some(s) = status.take()
             {
                 return Poll::Ready(Outcome::Done(s));
@@ -224,6 +225,9 @@ mod tests {
         assert_eq!(cut(b"abc", 2), b"ab");
         assert_eq!(cut(b"abc", 5), b"abc");
         // 깨진 열(이어지는 바이트만 이어짐) — 상한 그대로.
-        assert_eq!(cut(&[b'a', 0x80, 0x80, 0x80, 0x80, 0x80], 5), [b'a', 0x80, 0x80, 0x80, 0x80]);
+        assert_eq!(
+            cut(&[b'a', 0x80, 0x80, 0x80, 0x80, 0x80], 5),
+            [b'a', 0x80, 0x80, 0x80, 0x80]
+        );
     }
 }

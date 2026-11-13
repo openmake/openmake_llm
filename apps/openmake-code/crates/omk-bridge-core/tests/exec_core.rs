@@ -48,7 +48,9 @@ fn bare(folder: &str, on_task_end: Option<TaskEndHook>) -> BridgeCore {
 }
 
 fn send(c: &BridgeCore, v: Value) -> Value {
-    runtime().block_on(c.handle_exec(&BridgeMsg::from_json(&v))).to_json()
+    runtime()
+        .block_on(c.handle_exec(&BridgeMsg::from_json(&v)))
+        .to_json()
 }
 
 const REJECTED: &str = "사용자가 명령 실행을 거부했습니다";
@@ -58,12 +60,21 @@ const REJECTED: &str = "사용자가 명령 실행을 거부했습니다";
 fn core_without_host() {
     let tmp = TmpDir::new();
     let c = bare(&tmp.path, None);
-    assert_eq!(send(&c, json!({"kind": "exec", "command": "touch ran"})), json!({"ok": false, "error": REJECTED, "exitCode": 126}));
+    assert_eq!(
+        send(&c, json!({"kind": "exec", "command": "touch ran"})),
+        json!({"ok": false, "error": REJECTED, "exitCode": 126})
+    );
     assert!(std::fs::metadata(tmp.join("ran")).is_err());
     let r = send(&c, json!({"kind": "exec", "command": "sudo ls"}));
     assert_eq!(r["error"], "위험 명령으로 차단됨: 권한 상승(sudo)");
-    let r = send(&c, json!({"kind": "worktree", "op": "add", "taskId": "nohost-task"}));
-    assert_eq!(r, json!({"ok": false, "error": "exec 호스트가 설정되지 않았습니다"}));
+    let r = send(
+        &c,
+        json!({"kind": "worktree", "op": "add", "taskId": "nohost-task"}),
+    );
+    assert_eq!(
+        r,
+        json!({"ok": false, "error": "exec 호스트가 설정되지 않았습니다"})
+    );
     assert_eq!(c.capabilities().len(), 9);
     c.clear_auto_approve();
     assert_eq!(c.auto_approved_count(), 0);
@@ -84,10 +95,16 @@ fn windows_all_is_once() {
     let c = bare(&tmp.path, None).with_exec_host(h);
     for _ in 0..2 {
         // cmd.exe 가 없는 장비에서는 띄우기 실패(1) — 승인됐다는 것(ok:true)만 본다.
-        let r = send(&c, json!({"kind": "exec", "command": "echo x", "taskId": "task-win"}));
+        let r = send(
+            &c,
+            json!({"kind": "exec", "command": "echo x", "taskId": "task-win"}),
+        );
         assert_eq!(r["ok"], true, "{r}");
     }
-    assert_eq!((asked.load(Ordering::SeqCst), c.auto_approved_count()), (2, 0));
+    assert_eq!(
+        (asked.load(Ordering::SeqCst), c.auto_approved_count()),
+        (2, 0)
+    );
 }
 
 /// 변화 훅은 자물쇠 밖에서 불린다 — 훅 안에서 count·clear 를 불러도 멈추지 않는다.
@@ -105,7 +122,10 @@ fn hook_runs_outside_lock() {
     }));
     let core = Arc::new(bare(&tmp.path, None).with_exec_host(h));
     let _ = cell.set(Arc::downgrade(&core));
-    send(&core, json!({"kind": "exec", "command": "true", "taskId": "task-hook"}));
+    send(
+        &core,
+        json!({"kind": "exec", "command": "true", "taskId": "task-hook"}),
+    );
     core.clear_auto_approve();
     send(&core, json!({"kind": "task_end", "taskId": "task-none"}));
     assert_eq!(*seen.lock().unwrap(), [1, 0]);
@@ -119,14 +139,25 @@ fn task_end_calls_host_hook_before_revoking() {
     let at_hook = Arc::new(Mutex::new(Vec::new()));
     let (c2, s2) = (Arc::clone(&cell), Arc::clone(&at_hook));
     let hook: TaskEndHook = Box::new(move |t| {
-        let n = c2.get().and_then(Weak::upgrade).map(|c| c.auto_approved_count());
+        let n = c2
+            .get()
+            .and_then(Weak::upgrade)
+            .map(|c| c.auto_approved_count());
         s2.lock().unwrap().push((t.map(str::to_owned), n));
     });
-    let core = Arc::new(bare(&tmp.path, Some(hook)).with_exec_host(host(&tmp, answer(ConfirmAnswer::All))));
+    let core = Arc::new(
+        bare(&tmp.path, Some(hook)).with_exec_host(host(&tmp, answer(ConfirmAnswer::All))),
+    );
     let _ = cell.set(Arc::downgrade(&core));
-    send(&core, json!({"kind": "exec", "command": "true", "taskId": "task-end-1"}));
+    send(
+        &core,
+        json!({"kind": "exec", "command": "true", "taskId": "task-end-1"}),
+    );
     send(&core, json!({"kind": "task_end", "taskId": "task-end-1"}));
-    assert_eq!(*at_hook.lock().unwrap(), [(Some("task-end-1".to_owned()), Some(1))]);
+    assert_eq!(
+        *at_hook.lock().unwrap(),
+        [(Some("task-end-1".to_owned()), Some(1))]
+    );
     assert_eq!(core.auto_approved_count(), 0);
 }
 
@@ -151,19 +182,29 @@ fn path_cache_probes_once_and_resets_on_prepare() {
     let tmp = TmpDir::new();
     let shell = tmp.join("loginshell");
     let count = tmp.join("probes");
-    std::fs::write(&shell, format!("#!/bin/sh\necho x >> '{count}'\nsleep 0.2\nprintf /usr/bin:/bin\n")).unwrap();
+    std::fs::write(
+        &shell,
+        format!("#!/bin/sh\necho x >> '{count}'\nsleep 0.2\nprintf /usr/bin:/bin\n"),
+    )
+    .unwrap();
     std::fs::set_permissions(&shell, std::fs::Permissions::from_mode(0o755)).unwrap();
     let mut h = host(&tmp, answer(ConfirmAnswer::Yes));
     h.env.retain(|(k, _)| k != "SHELL");
     h.env.push(("SHELL".to_owned(), shell));
     let core = Arc::new(bare(&tmp.path, None).with_exec_host(h));
-    let probes = || std::fs::read_to_string(&count).unwrap_or_default().lines().count();
+    let probes = || {
+        std::fs::read_to_string(&count)
+            .unwrap_or_default()
+            .lines()
+            .count()
+    };
     let rt = runtime();
     rt.block_on(async {
         let jobs: Vec<_> = (0..2)
             .map(|i| {
                 let core = Arc::clone(&core);
-                let m = BridgeMsg::from_json(&json!({"kind": "exec", "command": format!("echo {i}")}));
+                let m =
+                    BridgeMsg::from_json(&json!({"kind": "exec", "command": format!("echo {i}")}));
                 tokio::spawn(async move { core.handle_exec(&m).await.to_json() })
             })
             .collect();
@@ -197,7 +238,12 @@ fn profile_file_per_core_removed_on_drop() {
     names.sort();
     let prefix = format!("omk-exec-sandbox-{}-", std::process::id());
     assert_eq!(names.len(), 2);
-    assert!(names.iter().all(|n| n.starts_with(&prefix) && n.ends_with(".sb")), "{names:?}");
+    assert!(
+        names
+            .iter()
+            .all(|n| n.starts_with(&prefix) && n.ends_with(".sb")),
+        "{names:?}"
+    );
     drop(a);
     assert_eq!(std::fs::read_dir(tmp.join("prof")).unwrap().count(), 1);
     drop(b);
@@ -216,7 +262,8 @@ fn nul_command_is_node_arg_error_after_confirm() {
     });
     let c = bare(&tmp.path, None).with_exec_host(host(&tmp, confirm));
     let r = send(&c, json!({"kind": "exec", "command": "echo a\u{0}b"}));
-    let want = "The argument 'args[1]' must be a string without null bytes. Received 'echo a\\x00b'";
+    let want =
+        "The argument 'args[1]' must be a string without null bytes. Received 'echo a\\x00b'";
     assert_eq!(r, json!({"ok": false, "error": want}));
     assert_eq!(asked.load(Ordering::SeqCst), 1);
     let mut h = host(&tmp, answer(ConfirmAnswer::Yes));
@@ -238,6 +285,12 @@ fn vanished_cwd_is_exit_code_one() {
         Box::pin(async { ConfirmAnswer::Yes })
     });
     let c = bare(&tmp.path, None).with_exec_host(host(&tmp, confirm));
-    let r = send(&c, json!({"kind": "exec", "command": "echo hi", "folder": "sub"}));
-    assert_eq!(r, json!({"ok": true, "stdout": "", "stderr": "", "exitCode": 1}));
+    let r = send(
+        &c,
+        json!({"kind": "exec", "command": "echo hi", "folder": "sub"}),
+    );
+    assert_eq!(
+        r,
+        json!({"ok": true, "stdout": "", "stderr": "", "exitCode": 1})
+    );
 }

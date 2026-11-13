@@ -13,12 +13,27 @@ use crate::support::{child_env, fake_bin, fill, runner_env, runtime};
 #[test]
 fn exec_path_shapes() {
     let doc = load("exec-path");
-    shape(&doc, &["suite", "version", "resolve", "win32"], &[], "exec-path");
+    shape(
+        &doc,
+        &["suite", "version", "resolve", "win32"],
+        &[],
+        "exec-path",
+    );
     for c in non_empty(&doc["resolve"], "exec-path/resolve") {
         let at = format!("exec-path/resolve/{}", c["id"].as_str().unwrap_or("?"));
-        shape(c, &["id", "input", "expect"], &["shellEnv", "miseEnv", "miseCwd"], &at);
+        shape(
+            c,
+            &["id", "input", "expect"],
+            &["shellEnv", "miseEnv", "miseCwd"],
+            &at,
+        );
         let input = &c["input"];
-        shape(input, &["shell", "mise", "processPath", "folder"], &["env"], &format!("{at}/input"));
+        shape(
+            input,
+            &["shell", "mise", "processPath", "folder"],
+            &["env"],
+            &format!("{at}/input"),
+        );
         shape(&c["expect"], &["path"], &[], &format!("{at}/expect"));
         for k in ["shellEnv", "miseEnv"] {
             if let Some(v) = c.get(k) {
@@ -26,12 +41,22 @@ fn exec_path_shapes() {
             }
         }
         if input["shell"].is_object() {
-            shape(&input["shell"], &["stdout", "exit"], &[], &format!("{at}/input/shell"));
+            shape(
+                &input["shell"],
+                &["stdout", "exit"],
+                &[],
+                &format!("{at}/input/shell"),
+            );
         } else {
             assert_eq!(input["shell"], "missing", "{at}: shell");
         }
         if input["mise"].is_object() {
-            shape(&input["mise"], &["stdout", "exit"], &["at"], &format!("{at}/input/mise"));
+            shape(
+                &input["mise"],
+                &["stdout", "exit"],
+                &["at"],
+                &format!("{at}/input/mise"),
+            );
         } else {
             assert_eq!(input["mise"], "absent", "{at}: mise");
         }
@@ -71,31 +96,63 @@ fn exec_path_resolve() {
         std::fs::create_dir_all(tmp.join("root")).unwrap();
         let shell = if i["shell"].is_object() {
             let code = i["shell"]["exit"].as_i64().unwrap();
-            fake_bin(&tmp, "bin", "loginshell", i["shell"]["stdout"].as_str().unwrap(), code)
+            fake_bin(
+                &tmp,
+                "bin",
+                "loginshell",
+                i["shell"]["stdout"].as_str().unwrap(),
+                code,
+            )
         } else {
             tmp.join("bin/no-such-shell")
         };
         if i["mise"].is_object() {
             let m = &i["mise"];
             let dir = m["at"].as_str().unwrap_or("bin");
-            fake_bin(&tmp, dir, "mise", m["stdout"].as_str().unwrap(), m["exit"].as_i64().unwrap());
+            fake_bin(
+                &tmp,
+                dir,
+                "mise",
+                m["stdout"].as_str().unwrap(),
+                m["exit"].as_i64().unwrap(),
+            );
         }
         let mut env = runner_env(&tmp);
         if let Some(extra) = i["env"].as_object() {
-            env.extend(extra.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned())));
+            env.extend(
+                extra
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned())),
+            );
         }
         env.retain(|(k, _)| k != "PATH" && k != "SHELL");
-        env.push(("PATH".to_owned(), i["processPath"].as_str().unwrap().to_owned()));
+        env.push((
+            "PATH".to_owned(),
+            i["processPath"].as_str().unwrap().to_owned(),
+        ));
         env.push(("SHELL".to_owned(), shell));
         let folder = i["folder"].as_str().map(|_| tmp.join("root"));
         let home = tmp.join("home");
-        let got = rt.block_on(resolve_exec_path(&env, &home, Platform::Darwin, folder.as_deref()));
+        let got = rt.block_on(resolve_exec_path(
+            &env,
+            &home,
+            Platform::Darwin,
+            folder.as_deref(),
+        ));
         assert_eq!(json!({"path": got}), c["expect"], "{ctx}");
         if let Some(want) = c.get("shellEnv") {
-            assert_eq!(&env_view(&child_env(&tmp, "loginshell"), want), want, "{ctx}: 로그인 셸 환경");
+            assert_eq!(
+                &env_view(&child_env(&tmp, "loginshell"), want),
+                want,
+                "{ctx}: 로그인 셸 환경"
+            );
         }
         if let Some(want) = c.get("miseEnv") {
-            assert_eq!(&env_view(&child_env(&tmp, "mise"), want), want, "{ctx}: mise 환경");
+            assert_eq!(
+                &env_view(&child_env(&tmp, "mise"), want),
+                want,
+                "{ctx}: mise 환경"
+            );
         }
         if let Some(cwd) = c["miseCwd"].as_str() {
             let got = std::fs::read_to_string(tmp.join("mise.cwd")).unwrap();
@@ -116,7 +173,12 @@ fn exec_path_win32() {
             .iter()
             .map(|(k, v)| (k.clone(), v.as_str().unwrap().to_owned()))
             .collect();
-        let got = rt.block_on(resolve_exec_path(&env, "/synthetic/home", Platform::Win32, None));
+        let got = rt.block_on(resolve_exec_path(
+            &env,
+            "/synthetic/home",
+            Platform::Win32,
+            None,
+        ));
         assert_eq!(got, e.as_str().unwrap(), "{ctx}");
     });
 }
