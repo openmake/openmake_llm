@@ -110,7 +110,7 @@ function isWorktreeGit(p: string): boolean {
 }
 
 /**
- * 파일 kind(write·delete) 가드 — 대상의 실제 위치가 보관한 git dir·common dir 자신·`config`·`hooks` 아래이거나 worktree 의
+ * 파일 kind(write·delete) 가드 — 대상의 실제 위치가 보관한 git dir·common dir 자신·`config`·`commondir`·`hooks` 아래이거나 worktree 의
  * `.git` 이면 거절한다(exec 프로파일과 같은 금지를 지킨다). delete 는 git 디렉터리를 품은 상위 폴더도 거절한다.
  * git 없음(git === null)이면 가드가 없다(기존 동작).
  */
@@ -119,7 +119,7 @@ export async function assertGitPathAllowed(git: GitPaths | null, abs: string, re
     const r = await resolveReal(abs);
     const denied = [...new Set([git.gitDir, git.commonDir])].some((d) => {
         const hooks = path.join(d, 'hooks');
-        return r === d || r === path.join(d, 'config') || within(r, hooks) || (del && within(d, r));
+        return r === d || r === path.join(d, 'config') || r === path.join(d, 'commondir') || within(r, hooks) || (del && within(d, r));
     });
     if (denied || isWorktreeGit(r)) throw new Error(`${GIT_PATH_DENIED_PREFIX}${rel}`);
 }

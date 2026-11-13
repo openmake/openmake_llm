@@ -308,7 +308,7 @@ export class BridgeCore {
             }
             case 'worktree':
                 // git 은 도구 프로파일 안에서 돈다 — 프로파일이 없으면 띄우지 않고 도구와 같은 126 으로 거절한다.
-                await this.toolSandboxed(done, () => handleWorktree(m, done, base, { git: this.git, profile: this.toolSandbox() }));
+                await this.toolSandboxed(done, () => handleWorktree(m, done, base, { root: this.folderRoot, git: this.git, profile: this.toolSandbox() }));
                 return;
             case 'task_end':
                 this.opts.onTaskEnd?.(m.taskId); // 호스트 정리(데스크톱=브라우저 패널 닫기)

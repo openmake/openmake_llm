@@ -28,7 +28,7 @@ function ctxFor(base: string): WorktreeCtx {
     const root = fs.realpathSync(base);
     const git = detectGit(root);
     const profile = SANDBOX_ENABLED ? writeSandboxProfile(root, git, path.join(profDir, `${path.basename(root)}-${Math.random()}.sb`), true) : undefined;
-    return { git, profile };
+    return { root, git, profile };
 }
 
 function run(m: BridgeMsg, base: string): Promise<BridgeResult> {

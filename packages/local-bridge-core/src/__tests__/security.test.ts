@@ -146,14 +146,14 @@ describe('writeSandboxProfile — SBPL 규칙', () => {
         expect(t).toEqual([...e.slice(0, -1), '(deny network*)', e[e.length - 1]]);
     });
 
-    it('linked worktree: common dir 쓰기를 열고, 금지는 common dir 의 hooks·config·자신 + git dir 자신', () => {
+    it('linked worktree: common dir 쓰기를 열고, 금지는 common dir 의 hooks·config·자신·commondir + git dir 자신·commondir', () => {
         const common = path.join(dir, 'main', '.git');
         const gitDir = path.join(common, 'worktrees', 'lw');
         writeSandboxProfile(path.join(dir, 'lw'), { gitDir, commonDir: common }, path.join(dir, 'l.sb'));
         const lines = fs.readFileSync(path.join(dir, 'l.sb'), 'utf8').trim().split('\n');
         expect(lines).toContain(`(allow file-write* (subpath ${JSON.stringify(gitDir)}))`);
         expect(lines).toContain(`(allow file-write* (subpath ${JSON.stringify(common)}))`);
-        expect(lines[lines.length - 1]).toBe(`(deny file-write* (subpath ${JSON.stringify(`${common}/hooks`)}) (literal ${JSON.stringify(`${common}/config`)}) (literal ${JSON.stringify(common)}) (literal ${JSON.stringify(gitDir)}))`);
+        expect(lines[lines.length - 1]).toBe(`(deny file-write* (subpath ${JSON.stringify(`${common}/hooks`)}) (literal ${JSON.stringify(`${common}/config`)}) (literal ${JSON.stringify(common)}) (literal ${JSON.stringify(`${common}/commondir`)}) (literal ${JSON.stringify(gitDir)}) (literal ${JSON.stringify(`${gitDir}/commondir`)}))`);
     });
 
     it('비 git 폴더 프로파일에는 gitDir allow·hooks deny 가 없다', () => {

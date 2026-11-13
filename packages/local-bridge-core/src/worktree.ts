@@ -30,8 +30,11 @@ import type { BridgeMsg, BridgeResult } from './types';
 
 const NOT_A_REPO = 'git 레포가 아닙니다';
 
-/** 코어가 연결 때 고정한 것 — 믿기로 한 git 디렉터리(없으면 git 없음)와 도구 프로파일(undefined = 샌드박스 꺼짐, null = 없음). */
-export interface WorktreeCtx { git: GitPaths | null; profile: string | null | undefined }
+/**
+ * 코어가 연결 때 고정한 것 — 연결 폴더 realpath, 믿기로 한 git 디렉터리(없으면 git 없음), 도구 프로파일
+ * (undefined = 샌드박스 꺼짐, null = 없음).
+ */
+export interface WorktreeCtx { root: string; git: GitPaths | null; profile: string | null | undefined }
 
 type GitOut = { code: number; stdout: string; stderr: string };
 
@@ -64,14 +67,21 @@ async function gitDirsOf(git: Git, cwd: string): Promise<GitPaths | null> {
     try { return { gitDir: await fs.promises.realpath(g), commonDir: await fs.promises.realpath(c) }; } catch { return null; }
 }
 
-/** base 가 연결 때 믿기로 한 레포 그대로인가 — 맞으면 null, 아니면 거절 문구. */
-async function baseError(git: Git, base: string, trusted: GitPaths): Promise<string | null> {
+const within = (p: string, dir: string): boolean => p === dir || p.startsWith(dir + path.sep);
+
+/**
+ * base 의 레포 — 연결 때 믿기로 한 것과 같으면 그것, 다르거나(폴더 선택으로 고른 중첩 레포) 보관한 git 이 없으면 base 의
+ * git dir·common dir 가 **둘 다 연결 폴더 안**일 때만 그 값(design.md D-3 의 4번 배치 — 어차피 쓰기 가능한 곳이고, git 은
+ * 도구 프로파일 안에서 돈다). 하나라도 폴더 밖이면 거절 문구. 탐지 git 도 도구 프로파일 + 고정 인자 안에서 돈다.
+ */
+async function repoFor(git: Git, base: string, ctx: WorktreeCtx, op: string): Promise<GitPaths | string> {
     const d = await gitDirsOf(git, base);
-    if (!d) return NOT_A_REPO;
-    return d.gitDir === trusted.gitDir && d.commonDir === trusted.commonDir ? null : GIT_DIR_MISMATCH_ERROR;
+    if (d && ctx.git && d.gitDir === ctx.git.gitDir && d.commonDir === ctx.git.commonDir) return ctx.git;
+    if (d && within(d.gitDir, ctx.root) && within(d.commonDir, ctx.root)) return d;
+    return op === 'add' && (!ctx.git || !d) ? NOT_A_REPO : GIT_DIR_MISMATCH_ERROR;
 }
 
-/** worktree 안의 git dir 가 `<보관 common>/worktrees/` 바로 아래인가 — worktree 의 gitfile 을 가짜로 바꿔 두면 아니다(E1c). */
+/** worktree 안의 git dir 가 `<base 레포의 common>/worktrees/` 바로 아래인가 — worktree 의 gitfile 을 가짜로 바꿔 두면 아니다(E1c). */
 async function worktreeTrusted(git: Git, abs: string, trusted: GitPaths): Promise<boolean> {
     const d = await gitDirsOf(git, abs);
     return !!d && d.commonDir === trusted.commonDir && path.dirname(d.gitDir) === path.join(trusted.commonDir, 'worktrees');
@@ -164,7 +174,6 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
     const abs = path.join(base, rel);
     const branch = `${WORKTREE_BRANCH_PREFIX}${taskId.slice(0, 8)}`;
     const git: Git = (args, cwd) => gitRun(args, cwd, ctx.profile);
-    const trusted = ctx.git;
 
     if (m.op === 'add' || m.op === 'diff' || m.op === 'remove') {
         const err = await scopeError(base, rel);
@@ -172,9 +181,8 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
     }
 
     if (m.op === 'add') {
-        if (!trusted) { done({ ok: false, error: NOT_A_REPO }); return; }
-        const bad = await baseError(git, base, trusted);
-        if (bad) { done({ ok: false, error: bad }); return; }
+        const repo = await repoFor(git, base, ctx, 'add');
+        if (typeof repo === 'string') { done({ ok: false, error: repo }); return; }
         const inside = await git(['rev-parse', '--is-inside-work-tree'], base);
         if (inside.code !== 0 || inside.stdout.trim() !== 'true') { done({ ok: false, error: NOT_A_REPO }); return; }
         // worktree 는 **레포 전체**를 체크아웃한다. 연결 폴더가 레포 루트가 아니라 하위 디렉토리면
@@ -190,7 +198,7 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
         const ensureSub = (): void => {
             if (sub) { try { fs.mkdirSync(safeFrom(base, workRel), { recursive: true }); } catch { /* exec 가 후속 실패로 노출 */ } }
         };
-        excludeWorktreeDir(trusted.commonDir);
+        excludeWorktreeDir(repo.commonDir);
         if (fs.existsSync(abs)) { ensureSub(); done({ ok: true, worktreeRel: workRel, branch }); return; } // 재개 시 재사용
         const hadBranch = (await git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], base)).code === 0;
         // 첫 검사 뒤 git 여러 번·exclude 쓰기가 끼었다 — 바로 앞에서 다시 본다.
@@ -209,9 +217,9 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
 
     if (m.op === 'diff') {
         if (!fs.existsSync(abs)) { done({ ok: false, error: 'worktree 없음' }); return; }
-        const bad = trusted ? await baseError(git, base, trusted) : GIT_DIR_MISMATCH_ERROR;
-        if (bad) { done({ ok: false, error: bad }); return; }
-        if (!(await worktreeTrusted(git, abs, trusted!))) { done({ ok: false, error: GIT_DIR_MISMATCH_ERROR }); return; }
+        const repo = await repoFor(git, base, ctx, String(m.op));
+        if (typeof repo === 'string') { done({ ok: false, error: repo }); return; }
+        if (!(await worktreeTrusted(git, abs, repo))) { done({ ok: false, error: GIT_DIR_MISMATCH_ERROR }); return; }
         // -N: 새 파일을 인덱스에 '의도만' 등록해 diff 에 포함시킨다(실제 스테이징·커밋은 하지 않음).
         await git(['add', '-A', '-N', '.'], abs);
         // 기준점은 **worktree 생성 시점의 커밋**이다. HEAD 를 쓰면 에이전트가 중간에 커밋했을 때
@@ -225,9 +233,9 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
 
     if (m.op === 'remove') {
         if (!fs.existsSync(abs)) { done({ ok: true, kept: false }); return; }
-        const bad = trusted ? await baseError(git, base, trusted) : GIT_DIR_MISMATCH_ERROR;
-        if (bad) { done({ ok: false, error: bad }); return; }
-        if (!(await worktreeTrusted(git, abs, trusted!))) { done({ ok: false, error: GIT_DIR_MISMATCH_ERROR }); return; }
+        const repo = await repoFor(git, base, ctx, String(m.op));
+        if (typeof repo === 'string') { done({ ok: false, error: repo }); return; }
+        if (!(await worktreeTrusted(git, abs, repo))) { done({ ok: false, error: GIT_DIR_MISMATCH_ERROR }); return; }
         // 변경분이 남아 있으면 **지우지 않는다** — 사용자 디스크의 작업 결과를 임의 삭제하지 않는다.
         // 미커밋 변경뿐 아니라 **에이전트가 만든 커밋**도 보존 대상이다(HEAD 가 기준점에서 움직였는지).
         const st = await git(['status', '--porcelain'], abs);
