@@ -19,8 +19,8 @@ use std::io::Write;
 use std::sync::LazyLock;
 
 use crate::constants::{
-    GIT_DIR_MISMATCH_ERROR, GIT_FIXED_ARGS, MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX,
-    WORKTREE_DIR,
+    GIT_DIR_MISMATCH_ERROR, GIT_FIXED_ARGS, GITFILE_MAX_BYTES, MAX_BUFFER, TASK_ID_RE,
+    WORKTREE_BRANCH_PREFIX, WORKTREE_DIR,
 };
 use crate::exec::ExecState;
 use crate::git_trust::{GitPaths, read_regular_file};
@@ -290,7 +290,8 @@ async fn write_base_sha(
     Ok(())
 }
 
-/// 기준점 읽기 — 없거나 심링크거나(일반 파일만 읽는다) 읽지 못하거나 형식(`[0-9a-f]{7,40}`)이 아니면 `HEAD`.
+/// 기준점 읽기 — 없거나 일반 파일이 아니거나(심링크·FIFO) `GITFILE_MAX_BYTES` 를 넘거나(리뷰 S2) 읽지 못하거나 형식
+/// (`[0-9a-f]{7,40}`)이 아니면 `HEAD`(TS `readBaseSha`).
 async fn read_base_sha(
     cx: &Ctx<'_>,
     wt: &str,
@@ -302,14 +303,7 @@ async fn read_base_sha(
         return Ok(FALLBACK.to_owned());
     };
     let p = node_path::join(&[&meta, "omk-base"]);
-    let read = fs_op(gate, move || {
-        if !std::fs::symlink_metadata(&p).is_ok_and(|m| m.is_file()) {
-            return None;
-        }
-        std::fs::read(&p)
-            .ok()
-            .map(|b| String::from_utf8_lossy(&b).into_owned())
-    });
+    let read = fs_op(gate, move || read_regular_file(&p, GITFILE_MAX_BYTES));
     let sha = read.await.ok().flatten().map(|s| js_trim(&s).to_owned());
     let is_sha = |s: &str| {
         (7..=40).contains(&s.len()) && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))

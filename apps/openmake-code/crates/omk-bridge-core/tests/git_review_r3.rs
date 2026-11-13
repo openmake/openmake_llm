@@ -215,9 +215,13 @@ fn r1_subfolder_non_ascii_first_name_is_guarded() {
     let w = Work::new();
     let sub = w.subfolder();
     let c = w.core(&sub);
-    assert_eq!(write_with(&c, ".git/HEAD", "ref: refs/heads/main\n"), ok());
+    // D-11: .git 아래는 무엇이든 거절 — 가짜 git 디렉터리를 만들 수 없다.
+    assert_eq!(
+        write_with(&c, ".git/HEAD", "ref: refs/heads/main\n"),
+        denied(".git/HEAD")
+    );
     for p in [".git/objects/.keep", ".git/refs/heads/.keep"] {
-        assert_eq!(write_with(&c, p, ""), ok(), "{p}");
+        assert_eq!(write_with(&c, p, ""), denied(p), "{p}");
     }
     for p in [
         ".git/con\u{FB01}g",
@@ -229,11 +233,10 @@ fn r1_subfolder_non_ascii_first_name_is_guarded() {
         assert_eq!(write_with(&c, p, &w.fsmonitor()), denied(p), "{p}");
     }
     assert!(!w.status_ran(&sub));
-    // 둘째 이름부터는 종전대로(브랜치 이름 등)
     assert_eq!(
         write_with(&c, ".git/refs/heads/한글", &"0".repeat(40)),
-        ok()
-    );
+        denied(".git/refs/heads/한글")
+    ); // D-11
 }
 
 /// R1 — 믿는 일반 레포 + extensions.worktreeConfig: 아직 없는 config.worKtree 를 못 쓰고 후속 git status 가 돌지 않는다.
@@ -250,8 +253,8 @@ fn r1_trusted_repo_worktree_config_alias_is_guarded() {
     assert!(!w.status_ran(&repo));
     assert_eq!(
         write_with(&c, ".git/refs/heads/브랜치", &"0".repeat(40)),
-        ok()
-    );
+        denied(".git/refs/heads/브랜치")
+    ); // D-11
     assert_eq!(write(&c, "한글.txt"), ok());
 }
 
@@ -281,7 +284,8 @@ fn r2_root_head_is_guarded_by_name() {
         assert_eq!(write_with(&c, "config", &w.fsmonitor()), ok(), "{layout}");
         assert!(!Path::new(&format!("{root}/HEAD")).exists(), "{layout}");
         assert!(!w.status_ran(&root), "{layout}");
-        assert_eq!(write(&c, "src/HEAD"), ok(), "{layout}");
+        // D-11: HEAD 는 어느 폴더에서든 새로 만들 수 없다
+        assert_eq!(write(&c, "src/HEAD"), denied("src/HEAD"), "{layout}");
     }
 }
 

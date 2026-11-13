@@ -171,10 +171,6 @@ fn denied(path: &str) -> Value {
     json!({"ok": false, "error": format!("{DENIED}{path}")})
 }
 
-fn ok() -> Value {
-    json!({"ok": true})
-}
-
 fn detect(root: &str, home: &str) -> Option<GitPaths> {
     let env = vec![
         ("PATH".to_owned(), std::env::var("PATH").unwrap_or_default()),
@@ -195,8 +191,9 @@ fn n1_subfolder_new_dotgit_is_guarded_by_name() {
     w.git(&repo, &["add", "."]);
     w.git(&repo, &["commit", "-q", "-m", "web"]);
     let c = w.core(&sub, false);
+    // D-11: .git 아래는 무엇이든 거절
     for p in [".git/HEAD", ".git/objects/.keep", ".git/refs/heads/.keep"] {
-        assert_eq!(write(&c, p), ok(), "{p}");
+        assert_eq!(write(&c, p), denied(p), "{p}");
     }
     for p in [
         ".git/config",
@@ -213,7 +210,7 @@ fn n1_subfolder_new_dotgit_is_guarded_by_name() {
     assert!(!std::path::Path::new(&format!("{sub}/.git/config")).exists());
 }
 
-/// N1 — 레포 아닌 폴더: `.git` 자신을 쓰거나 지울 수 없고 `.git/HEAD` 는 종전대로. 승인된 git init 뒤 같은 연결에서도 config 를 못 쓴다.
+/// N1 — 레포 아닌 폴더: `.git` 자신과 그 아래를 쓰거나 지울 수 없다(D-11). 승인된 git init 뒤 같은 연결에서도 config 를 못 쓴다.
 #[test]
 fn n1_plain_folder_and_git_init_after_connect() {
     let w = Work::new();
@@ -222,9 +219,9 @@ fn n1_plain_folder_and_git_init_after_connect() {
     let c = w.core(&plain, true);
     assert_eq!(write(&c, ".git"), denied(".git"));
     assert!(!std::path::Path::new(&format!("{plain}/.git")).exists());
-    assert_eq!(write(&c, ".git/HEAD"), ok());
+    assert_eq!(write(&c, ".git/HEAD"), denied(".git/HEAD"));
     assert_eq!(delete(&c, ".git"), denied(".git"));
-    assert_eq!(delete(&c, ".git/HEAD"), ok());
+    assert!(!std::path::Path::new(&format!("{plain}/.git")).exists());
     let r = exec(&c, "git init -q && echo inited");
     assert_eq!(r["exitCode"], 0, "{r}");
     assert_eq!(write(&c, ".git/config"), denied(".git/config"));
