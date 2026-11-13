@@ -14,7 +14,7 @@ use omk_bridge_core::diagnostics;
 use omk_bridge_core::exec::{ConfirmAnswer, ExecHost};
 use omk_bridge_core::msg::BridgeMsg;
 use omk_bridge_core::platform::Platform;
-use omk_bridge_core::sandbox::write_sandbox_profile;
+use omk_bridge_core::sandbox::sandbox_profile;
 use omk_bridge_core::test_runner;
 use omk_bridge_core::timed_fs::FsGate;
 use omk_bridge_core::tool_env::{ToolEnv, ToolSandbox};
@@ -172,13 +172,7 @@ fn python_tools_run_inside_profile() {
         w.tool("bin/python3", "py", "Error: ");
         std::fs::write(w.join("root/conftest.py"), "").unwrap();
         std::fs::write(w.join("root/b.py"), "").unwrap();
-        let profile = write_sandbox_profile(
-            &w.join("root"),
-            None,
-            &w.join("home"),
-            &w.join("prof/p.sb"),
-            true,
-        );
+        let profile = sandbox_profile(&w.join("root"), None, None, &w.join("home"), true);
         let tool = ToolEnv {
             env: vec![("HOME".to_owned(), w.join("home"))],
             platform: Platform::Darwin,
@@ -224,34 +218,40 @@ fn python_tools_run_inside_profile() {
 
 const MISSING: &str = "exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.";
 
-/// 준비는 됐지만 프로파일 **파일**이 사라진 코어 — sandbox-exec 자체가 65 로 실패한다. "진단 없음/none" 으로 삼키지 않고
-/// 프로파일 없음과 같이 거절한다(TS 별건 수정 M1 과 같은 규칙).
+/// sandbox-exec 가 프로파일을 받지 못하는 경우 — 프로파일은 파일 없이 `-p` 텍스트로 넘기므로(리뷰 F1) 예전의 "파일 유실"
+/// 대신 문법이 깨진 텍스트로 흉내 낸다(`-p` 도 종료 코드 65 + `sandbox-exec:` — 2026-11-14 실측). "진단 없음/none" 으로 삼키지
+/// 않고 프로파일 없음과 같이 거절한다(TS 별건 수정 M1 과 같은 규칙).
 #[test]
-fn lost_profile_file_is_refused_not_swallowed() {
+fn broken_profile_is_refused_not_swallowed() {
     let w = Work::new();
     std::fs::write(w.join("root/tsconfig.json"), "{}").unwrap();
     std::fs::write(w.join("root/conftest.py"), "").unwrap();
     std::fs::write(w.join("root/b.py"), "def f(:\n").unwrap();
+    std::fs::write(w.join("root/a.ts"), "export const n = 1;\n").unwrap();
     w.tool(
         "root/node_modules/.bin/tsc",
         "tsc",
         "a.ts(1,1): error TS1: ",
     );
-    let c = core(&w, true);
-    for f in std::fs::read_dir(w.join("prof")).unwrap() {
-        std::fs::remove_file(f.unwrap().path()).unwrap();
+    let tool = ToolEnv {
+        env: vec![("HOME".to_owned(), w.join("home"))],
+        platform: Platform::Darwin,
+        exec_path: "/usr/bin:/bin".to_owned(),
+        sandbox: ToolSandbox::Profile("(version 1)(allow default".to_owned()),
+    };
+    let (gate, rt) = (FsGate::new(15_000), runtime());
+    for f in ["root/b.py", "root/a.ts"] {
+        let got = rt.block_on(diagnostics::collect(
+            &w.join("root"),
+            &[w.join(f)],
+            &tool,
+            15_000,
+            &gate,
+        ));
+        assert_eq!(got.err().as_deref(), Some(MISSING), "{f}");
     }
-    let want = json!({"ok": false, "error": MISSING, "exitCode": 126});
-    for msg in [
-        json!({"kind": "lsp_diagnostics", "paths": ["b.py"]}),
-        json!({"kind": "lsp_diagnostics", "paths": ["a.ts"]}),
-        json!({"kind": "test_runner"}),
-    ] {
-        let got = runtime()
-            .block_on(c.handle_exec(&BridgeMsg::from_json(&msg)))
-            .to_json();
-        assert_eq!(got, want, "{msg}");
-    }
+    let got = rt.block_on(test_runner::detect(&w.join("root"), &tool, &gate));
+    assert_eq!(got.err().as_deref(), Some(MISSING));
 }
 
 /// python3 가 PATH 에 없으면 거절(71)이 아니라 종전대로 "띄우지 못함" — 빈 진단·none.
@@ -260,14 +260,7 @@ fn missing_python_is_not_refused() {
     let w = Work::new();
     std::fs::write(w.join("root/conftest.py"), "").unwrap();
     std::fs::write(w.join("root/b.py"), "def f(:\n").unwrap();
-    let profile = write_sandbox_profile(
-        &w.join("root"),
-        None,
-        &w.join("home"),
-        &w.join("prof/p.sb"),
-        true,
-    )
-    .unwrap();
+    let profile = sandbox_profile(&w.join("root"), None, None, &w.join("home"), true).unwrap();
     let tool = ToolEnv {
         env: vec![("HOME".to_owned(), w.join("home"))],
         platform: Platform::Darwin,

@@ -586,7 +586,15 @@ fn sandbox_profile() {
         });
         let tool = i["tool"].as_bool().unwrap_or(false);
         let root = i["root"].as_str().unwrap();
-        let got = build_sandbox_profile(root, git.as_ref(), FAKE_HOME, tool);
+        // protect 를 적지 않으면 git 쪽(TS 러너와 같다). null 이면 지킬 것 없음.
+        let protect = match i.get("protect") {
+            None => git.clone(),
+            Some(p) => p["gitDir"].as_str().map(|g| GitPaths {
+                git_dir: g.to_owned(),
+                common_dir: p["commonDir"].as_str().unwrap_or(g).to_owned(),
+            }),
+        };
+        let got = build_sandbox_profile(root, git.as_ref(), protect.as_ref(), FAKE_HOME, tool);
         let want = e["profile"]
             .as_str()
             .unwrap()

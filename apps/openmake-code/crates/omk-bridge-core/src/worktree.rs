@@ -160,18 +160,22 @@ async fn worktree_trusted(
     }))
 }
 
-/// diff·remove 의 대조 — base 의 레포를 못 정하거나 worktree 가 그 레포의 것이 아니면 거절 문구.
+/// diff·remove 의 대조 — base 의 레포를 정하고 worktree 가 그 레포의 것인지 본다. 아니면 거절 문구.
 async fn verify_worktree(
     cx: &Ctx<'_>,
     base: &str,
     abs: &str,
     gate: &FsGate,
-) -> Result<Option<&'static str>, String> {
+) -> Result<Result<GitPaths, &'static str>, String> {
     let repo = match repo_for(cx, base, false, gate).await? {
         Ok(r) => r,
-        Err(bad) => return Ok(Some(bad)),
+        Err(bad) => return Ok(Err(bad)),
     };
-    Ok((!worktree_trusted(cx, abs, &repo, gate).await?).then_some(GIT_DIR_MISMATCH_ERROR))
+    if worktree_trusted(cx, abs, &repo, gate).await? {
+        Ok(Ok(repo))
+    } else {
+        Ok(Err(GIT_DIR_MISMATCH_ERROR))
+    }
 }
 
 /// 파일 작업 묶음 하나를 관문으로 — 시간 초과는 `worktree 시간 초과 (15s) — …` 로 요청을 끝낸다.
@@ -188,10 +192,27 @@ fn is_symlink(p: &str) -> bool {
     std::fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink())
 }
 
+/// 이 프로세스(샌드박스 밖)가 git 디렉터리 안에 파일을 쓴다 — 그 자리는 샌드박스 안의 자식(필터·exec)이 쓸 수 있어 심링크로
+/// 바꿔 둘 수 있다. 따라가면 폴더 밖 파일을 덮어쓴다(리뷰 F5, M3). 그래서 **새 이름으로 만들고(`create_new` = O_CREAT|O_EXCL —
+/// 심링크면 실패한다) rename 으로 바꿔 넣는다**(rename 은 대상 자리의 심링크를 따라가지 않고 그 항목을 바꾼다). TS `writeNoFollow`.
+fn write_no_follow(dir: &str, name: &str, content: &[u8]) -> std::io::Result<()> {
+    let tmp = node_path::join(&[dir, &format!("{name}.omk-{}", std::process::id())]);
+    let _ = std::fs::remove_file(&tmp); // 남은 임시 이름(심링크여도 링크만 지운다)
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)?;
+    f.write_all(content)?;
+    drop(f);
+    std::fs::rename(&tmp, node_path::join(&[dir, name])).inspect_err(|_| {
+        let _ = std::fs::remove_file(&tmp);
+    })
+}
+
 /// `info/exclude` 에 `.openmake/` 등록 — 이미 있으면(앞뒤 공백 무시) 두지 않는다. 실패는 무시한다(치명적이지 않다).
 /// 제외 목록은 common dir 에 있다(linked worktree 도 `$GIT_COMMON_DIR/info/exclude` 를 읽는다). `info`·`info/exclude` 는
 /// 에이전트가 바꿀 수 있다 — 폴더 밖 심링크는 물론 git 디렉터리 안쪽 심링크(→ config 등, M3)도 따라가면 그 파일 끝에 줄이
-/// 붙으므로 심링크면 등록하지 않는다(TS 같음).
+/// 붙으므로 심링크면 등록하지 않고, 쓰기는 따라가지 않는 바꿔 넣기로 한다(TS 같음).
 fn exclude_worktree_dir(git_dir: &str) {
     if scope::safe_from(git_dir, Some("info/exclude")).is_err() {
         return;
@@ -220,42 +241,66 @@ fn exclude_worktree_dir(git_dir: &str) {
     } else {
         "\n"
     };
-    let file = std::fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(&p);
-    if let Ok(mut f) = file {
-        let _ = f.write_all(format!("{lead}.openmake/\n").as_bytes());
-    }
+    let _ = write_no_follow(
+        &info,
+        "exclude",
+        format!("{cur}{lead}.openmake/\n").as_bytes(),
+    );
 }
 
 /// worktree 메타 폴더(`.git/worktrees/<이름>`) — 작업트리 밖이라 diff·status 에 잡히지 않고 remove 때 함께 지워진다.
-async fn meta_dir(cx: &Ctx<'_>, wt: &str) -> Result<Option<String>, String> {
+/// 그 레포의 `<common>/worktrees/` 바로 아래일 때만 쓴다(git 이 답한 값을 대조 없이 쓰지 않는다, 리뷰 F5).
+async fn meta_dir(
+    cx: &Ctx<'_>,
+    wt: &str,
+    repo: &GitPaths,
+    gate: &FsGate,
+) -> Result<Option<String>, String> {
     let r = git(cx, &["rev-parse", "--absolute-git-dir"], wt).await?;
-    Ok(r.ok.then(|| js_trim(&r.stdout).to_owned()))
+    if !r.ok {
+        return Ok(None);
+    }
+    let raw = js_trim(&r.stdout).to_owned();
+    let parent = node_path::join(&[&repo.common_dir, "worktrees"]);
+    let real = fs_op(gate, move || std::fs::canonicalize(raw).ok()).await?;
+    Ok(real
+        .map(|m| m.to_string_lossy().into_owned())
+        .filter(|m| node_path::dirname(m) == parent))
 }
 
-/// diff 기준점(생성 시점 커밋) 기록. 실패는 무시한다(HEAD 폴백) — 프로파일 없음만 올려 보낸다.
-async fn write_base_sha(cx: &Ctx<'_>, wt: &str, gate: &FsGate) -> Result<(), String> {
-    let meta = meta_dir(cx, wt).await?;
+/// diff 기준점(생성 시점 커밋) 기록 — 심링크를 따라가지 않는다. 실패는 무시한다(HEAD 폴백) — 프로파일 없음만 올려 보낸다.
+async fn write_base_sha(
+    cx: &Ctx<'_>,
+    wt: &str,
+    repo: &GitPaths,
+    gate: &FsGate,
+) -> Result<(), String> {
+    let meta = meta_dir(cx, wt, repo, gate).await?;
     let head = git(cx, &["rev-parse", "HEAD"], wt).await?;
-    if let (Some(meta), true) = (meta.filter(|m| !m.is_empty()), head.ok) {
+    if let (Some(meta), true) = (meta, head.ok) {
         let sha = js_trim(&head.stdout).to_owned();
-        let p = node_path::join(&[&meta, "omk-base"]);
-        let _ = fs_op(gate, move || std::fs::write(p, sha)).await;
+        let _ = fs_op(gate, move || {
+            write_no_follow(&meta, "omk-base", sha.as_bytes())
+        })
+        .await;
     }
     Ok(())
 }
 
-/// 기준점 읽기 — 없거나 읽지 못하거나 형식(`[0-9a-f]{7,40}`)이 아니면 `HEAD`.
-async fn read_base_sha(cx: &Ctx<'_>, wt: &str, gate: &FsGate) -> Result<String, String> {
+/// 기준점 읽기 — 없거나 심링크거나(일반 파일만 읽는다) 읽지 못하거나 형식(`[0-9a-f]{7,40}`)이 아니면 `HEAD`.
+async fn read_base_sha(
+    cx: &Ctx<'_>,
+    wt: &str,
+    repo: &GitPaths,
+    gate: &FsGate,
+) -> Result<String, String> {
     const FALLBACK: &str = "HEAD";
-    let Some(meta) = meta_dir(cx, wt).await?.filter(|m| !m.is_empty()) else {
+    let Some(meta) = meta_dir(cx, wt, repo, gate).await? else {
         return Ok(FALLBACK.to_owned());
     };
     let p = node_path::join(&[&meta, "omk-base"]);
     let read = fs_op(gate, move || {
-        if !exists(&p) {
+        if !std::fs::symlink_metadata(&p).is_ok_and(|m| m.is_file()) {
             return None;
         }
         std::fs::read(&p)
@@ -338,9 +383,10 @@ pub(crate) async fn handle(
     .unwrap_or_else(tool_failure)
 }
 
-/// 실패한 `worktree add` 가 남긴 것을 치운다 — 폴더가 남으면 다음 요청이 "재개"로 오인하고, 브랜치가 남으면 같은 작업의
-/// 다음 add 가 "이미 있다"로 실패한다(필수 필터 실패 실측: 폴더·메타는 git 이 지우지만 브랜치는 남는다). 브랜치는 이번 add 가
-/// 만든 것만 지운다(이미 있던 같은 이름 브랜치는 사용자 것일 수 있다). TS `cleanupFailedAdd` 와 같다.
+/// 실패한 `worktree add` 가 남긴 것을 치운다 — 폴더가 남으면 다음 요청이 "재개"로 오인하고, 등록(메타)이 남으면 같은 자리의
+/// 다음 add 가 "missing but already registered" 로, 브랜치가 남으면 "이미 있다"로 실패한다. **이 worktree 만** 치운다 —
+/// `git worktree prune` 은 레포 전체의 폴더 없는 등록(분리된 볼륨의 worktree 등)을 즉시 지웠다(리뷰 F8). `worktree remove
+/// --force` 는 폴더가 없는 등록도 지운다(실측). 브랜치는 이번 add 가 만든 것만 지운다. TS `cleanupFailedAdd` 와 같다.
 async fn cleanup_failed_add(
     cx: &Ctx<'_>,
     (base, rel, abs): (&str, &str, &str),
@@ -348,6 +394,7 @@ async fn cleanup_failed_add(
     had_branch: bool,
     gate: &FsGate,
 ) -> Result<(), String> {
+    git(cx, &["worktree", "remove", "--force", abs], base).await?;
     let left = abs.to_owned();
     if fs_op(gate, move || exists(&left)).await? && check_scope(base, rel, gate).await.is_ok() {
         let left = abs.to_owned();
@@ -355,7 +402,6 @@ async fn cleanup_failed_add(
             .await?
             .ok();
     }
-    git(cx, &["worktree", "prune"], base).await?;
     if !had_branch {
         git(cx, &["branch", "-D", branch], base).await?;
     }
@@ -430,7 +476,7 @@ async fn add(
         let why = utf16_prefix(js_trim(why), 300);
         return Ok(BridgeResult::failure(format!("worktree 생성 실패: {why}")));
     }
-    write_base_sha(cx, abs, gate).await?;
+    write_base_sha(cx, abs, &found, gate).await?;
     fs_op(gate, ensure_sub).await?;
     Ok(done(work_rel, branch))
 }
@@ -447,12 +493,13 @@ async fn diff(
     if !fs_op(gate, move || exists(&wt)).await? {
         return Ok(BridgeResult::failure("worktree 없음"));
     }
-    if let Some(bad) = verify_worktree(cx, base, abs, gate).await? {
-        return Ok(BridgeResult::failure(bad));
-    }
+    let repo = match verify_worktree(cx, base, abs, gate).await? {
+        Ok(r) => r,
+        Err(bad) => return Ok(BridgeResult::failure(bad)),
+    };
     // -N: 새 파일을 '의도만' 등록해 diff 에 넣는다(스테이징·커밋은 하지 않는다). 실패는 무시한다(TS 그대로).
     git(cx, &["add", "-A", "-N", "."], abs).await?;
-    let base_sha = read_base_sha(cx, abs, gate).await?;
+    let base_sha = read_base_sha(cx, abs, &repo, gate).await?;
     let r = git(cx, &["diff", &base_sha], abs).await?;
     if !r.ok {
         let why = utf16_prefix(js_trim(&r.stderr), 200);
@@ -477,9 +524,10 @@ async fn remove(
     if !fs_op(gate, move || exists(&wt)).await? {
         return Ok(ok_with(|o| o.kept = Some(false)));
     }
-    if let Some(bad) = verify_worktree(cx, base, abs, gate).await? {
-        return Ok(BridgeResult::failure(bad));
-    }
+    let repo = match verify_worktree(cx, base, abs, gate).await? {
+        Ok(r) => r,
+        Err(bad) => return Ok(BridgeResult::failure(bad)),
+    };
     let kept = |branch: String| {
         ok_with(|o| {
             o.kept = Some(true);
@@ -488,7 +536,7 @@ async fn remove(
     };
     let status = git(cx, &["status", "--porcelain"], abs).await?;
     let head = git(cx, &["rev-parse", "HEAD"], abs).await?;
-    let moved = head.ok && js_trim(&head.stdout) != read_base_sha(cx, abs, gate).await?;
+    let moved = head.ok && js_trim(&head.stdout) != read_base_sha(cx, abs, &repo, gate).await?;
     if (status.ok && !js_trim(&status.stdout).is_empty()) || moved {
         return Ok(kept(branch));
     }

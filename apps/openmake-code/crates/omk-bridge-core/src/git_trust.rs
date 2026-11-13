@@ -189,6 +189,7 @@ fn resolve_real(abs: &str) -> Result<String, String> {
 
 /// `<…>/.openmake/worktrees/<id>/.git` 또는 그 아래 — worktree 의 gitfile 을 바꾸면 worktree git 이 가짜 git 디렉터리를 쓴다(E1c).
 fn is_worktree_git(p: &str) -> bool {
+    let p = fold_case(p);
     let seg: Vec<&str> = p.split('/').collect();
     let wt: Vec<&str> = WORKTREE_DIR.split('/').collect();
     (0..seg.len()).any(|i| {
@@ -198,8 +199,31 @@ fn is_worktree_git(p: &str) -> bool {
     })
 }
 
-/// 파일 kind(write·delete) 가드 — 대상의 실제 위치가 보관한 git dir·common dir 자신·`config`·`commondir`·`hooks` 아래이거나 worktree 의
-/// `.git` 이면 거절한다. delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. git 없음이면 가드가 없다(기존 동작).
+/// ASCII 대소문자 접기 — macOS 기본 볼륨은 대소문자를 무시해 `.git/COMMONDIR` 가 `commondir` 로 읽힌다(리뷰 F3). 없는 이름은
+/// realpath 가 실제 표기로 바꿔 주지 못하므로 비교를 접어서 한다. 보호 이름이 모두 ASCII 라 ASCII 만 접는다(TS 와 같은 결과).
+fn fold_case(s: &str) -> String {
+    s.to_ascii_lowercase()
+}
+
+/// git 디렉터리 하나 아래에서 막는 이름 — 프로파일 끝 금지 줄과 같다.
+const GIT_DENIED_NAMES: [&str; 3] = ["config", "commondir", "config.worktree"];
+
+/// 믿지 않아도(탐지 실패·불신) 지킬 git 디렉터리 — 연결 폴더의 `.git` 이 (심링크 아닌) 디렉터리면 그것(TS `rootGitDir`).
+/// 쓰기 허용은 하지 않고 프로파일 금지 줄·파일 kind 가드만 건다(리뷰 F2). root 는 realpath. FS 를 보므로 관문 안에서 부른다.
+pub fn root_git_dir(root: &str) -> Option<GitPaths> {
+    let dot_git = join(&[root, ".git"]);
+    std::fs::symlink_metadata(&dot_git)
+        .ok()
+        .filter(std::fs::Metadata::is_dir)
+        .map(|_| GitPaths {
+            git_dir: dot_git.clone(),
+            common_dir: dot_git,
+        })
+}
+
+/// 파일 kind(write·delete) 가드 — 대상의 실제 위치가 지키는 git dir·common dir 자신·`config`·`commondir`·`config.worktree`·
+/// `hooks` 아래이거나, linked 배치의 `<common>/worktrees`, worktree 의 `.git` 이면 거절한다(exec 프로파일과 같은 금지).
+/// delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. 비교는 대소문자를 접어서 한다. 지킬 git 이 없으면 가드가 없다(기존 동작).
 /// FS 를 보므로 관문 안에서 부른다.
 pub fn assert_git_path_allowed(
     git: Option<&GitPaths>,
@@ -210,19 +234,20 @@ pub fn assert_git_path_allowed(
     let Some(git) = git else {
         return Ok(());
     };
-    let r = resolve_real(abs)?;
-    let mut dirs = vec![git.git_dir.as_str()];
-    if git.common_dir != git.git_dir {
-        dirs.push(&git.common_dir);
+    let r = fold_case(&resolve_real(abs)?);
+    let (g, c) = (fold_case(&git.git_dir), fold_case(&git.common_dir));
+    let mut dirs = vec![g.as_str()];
+    if c != g {
+        dirs.push(&c);
     }
     let denied = dirs.iter().any(|d| {
         r == *d
-            || r == join(&[d, "config"])
-            || r == join(&[d, "commondir"])
+            || GIT_DENIED_NAMES.iter().any(|n| r == join(&[d, n]))
             || within(&r, &join(&[d, "hooks"]))
             || (del && within(d, &r))
     });
-    if denied || is_worktree_git(&r) {
+    let parent_rename = c != g && r == join(&[&c, "worktrees"]);
+    if denied || parent_rename || is_worktree_git(&r) {
         return Err(format!(
             "{GIT_PATH_DENIED_PREFIX}{}",
             rel.unwrap_or("undefined")
