@@ -283,16 +283,48 @@ fn denied_under(r: &str, d: &str, del: bool) -> bool {
         || (del && within(d, r))
 }
 
+/// 규칙 3 의 폴더째 지우기 — 지울 대상이 (심링크 아닌) 디렉터리면 하위 트리에 `HEAD` 항목(ASCII 접기, 파일·심링크·디렉터리 무엇이든)이
+/// 있는가. `.git` 구성 요소(ASCII 접기) 안은 들어가지 않고(규칙 1 은 `HEAD` 유무에 기대지 않는다 — 중첩 레포 폴더는 지운다), 심링크는
+/// 따라가지 않으며, 첫 `HEAD` 에서 멈춘다. 폴더를 읽지 못하면 있다고 본다(막는 쪽 — 지우기도 그 폴더에서 실패한다). 상한은 두지 않는다:
+/// 심링크를 따라가지 않아 트리는 유한하고, 훑기는 지우기가 어차피 하는 나열보다 적으며, 둘 다 파일 kind 시간 제한 안에서 돈다(TS `headBelow`).
+fn head_below(target: &str) -> bool {
+    if !std::fs::symlink_metadata(target).is_ok_and(|m| m.is_dir()) {
+        return false;
+    }
+    let mut stack = vec![target.to_owned()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            return true;
+        };
+        for e in entries {
+            let Ok(e) = e else { return true };
+            // UTF-8 이 아닌 이름은 APFS 에서 생기지 않는다.
+            let name = e.file_name().to_string_lossy().into_owned();
+            let n = fold_case(&name);
+            if n == "head" {
+                return true;
+            }
+            match e.file_type() {
+                Err(_) => return true,
+                Ok(t) if t.is_dir() && n != ".git" => stack.push(join(&[&dir, &name])),
+                Ok(_) => {}
+            }
+        }
+    }
+    false
+}
+
 /// 파일 kind(write·delete·브라우저 저장) 가드 — git 이 저장소로 인식하는 구조를 만들거나 고치지 못한다(설계 D-11, 깊이 무관·요청
 /// 시점 판정). git 은 목록이 아니라 구조(`.git` 항목, `HEAD` 가 있는 git 디렉터리 꼴)로 저장소를 찾으므로 가드도 구조를 본다:
 ///  1. 연결 폴더 기준 경로에 `.git` 구성 요소가 있으면 거절 — `.git` 자신(만들기·지우기)과 그 아래 전부(worktree 의 `.git` 포함, D-4).
 ///  2. 대상의 조상 폴더(연결 폴더까지) 중 `HEAD` 항목이 지금 있는(lstat) 폴더와 연결 때 정한 목록의 git 디렉터리(HEAD 유무 무관 —
 ///     탐지 실패·깨진 HEAD 에서도 남는다)마다, 그 바로 아래 금지 이름·`hooks` 아래·비ASCII 첫 이름이면 거절(delete 는 목록의 git
 ///     디렉터리 자신·상위 폴더도). linked 배치의 `<common>/worktrees` 도 거절한다.
-///  3. 파일 kind 는 `HEAD` 항목의 유무를 바꾸지 못한다 — 아직 없는 `HEAD` 를 새로 만드는 쓰기와 `HEAD` 자신을 지우는 것을 거절
-///     (이미 있는 `HEAD` 의 내용 쓰기는 종전대로, `HEAD` 를 품은 폴더째 지우기는 구조가 함께 사라지므로 연다). 2 의 표식을 파일
-///     kind 가 움직이지 못하게 한다 — 만들기는 "`config` 먼저, `HEAD` 나중", 지우기는 "linked worktree 의 common dir 에서 `HEAD`
-///     를 지운 뒤 `config`"(리뷰 5차 T1) 순서를 닫는다. `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
+///  3. 파일 kind 는 `HEAD` 항목의 유무를 바꾸지 못한다 — 아직 없는 `HEAD` 를 새로 만드는 쓰기와, `HEAD` 자신 또는 하위 트리
+///     (`.git` 구성 요소 밖)에 `HEAD` 항목이 있는 폴더를 지우는 것을 거절(이미 있는 `HEAD` 의 내용 쓰기는 종전대로). 지우기는
+///     원자적이지 않아 폴더째 지우기가 도중에 멈추면 `HEAD` 만 없어지고 구조가 남는다(리뷰 6차 U1). 2 의 표식을 파일 kind 가
+///     움직이지 못하게 한다 — 만들기는 "`config` 먼저, `HEAD` 나중", 지우기는 "linked worktree 의 common dir 에서 `HEAD` 를 지운
+///     뒤 `config`"(리뷰 5차 T1) 순서를 닫는다. `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
 ///
 /// 비교는 대상의 realpath 와 "부모의 realpath + 마지막 이름" 둘로 하고(심링크 자리 자체도 막는다), 대소문자를 접어서 한다(TS
 /// `assertGitPathAllowed`). FS 를 보므로 관문 안에서 부른다.
@@ -313,7 +345,7 @@ pub fn assert_git_path_allowed(
         .iter()
         .any(|p| relative(&root, p).split('/').any(|n| n == ".git"));
     let head_entry = if del {
-        fold_case(&basename(&lex_real)) == "head"
+        fold_case(&basename(&lex_real)) == "head" || head_below(&lex_real)
     } else {
         created.iter().any(|n| fold_case(n) == "head")
     };
