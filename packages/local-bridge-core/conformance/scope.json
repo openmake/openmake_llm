@@ -1,0 +1,292 @@
+{
+  "suite": "scope",
+  "version": 1,
+  "nodePath": {
+    "resolve": [
+      {"id":"rel","input":{"base":"/work/repo","rel":"sub/a.txt"},"expect":"/work/repo/sub/a.txt"},
+      {"id":"abs-rel","input":{"base":"/work/repo","rel":"/etc/hosts"},"expect":"/etc/hosts"},
+      {"id":"dotdot","input":{"base":"/work/repo","rel":"../other"},"expect":"/work/other"},
+      {"id":"dot","input":{"base":"/work/repo","rel":"."},"expect":"/work/repo"},
+      {"id":"dup-slash","input":{"base":"/work/repo","rel":"a//b///c"},"expect":"/work/repo/a/b/c"},
+      {"id":"trailing-slash","input":{"base":"/work/repo","rel":"a/b/"},"expect":"/work/repo/a/b"},
+      {"id":"above-root","input":{"base":"/work","rel":"../../../x"},"expect":"/x"},
+      {"id":"empty-rel","input":{"base":"/work/repo","rel":""},"expect":"/work/repo"},
+      {"id":"base-trailing","input":{"base":"/work/repo/","rel":"a"},"expect":"/work/repo/a"},
+      {"id":"base-root","input":{"base":"/","rel":"a"},"expect":"/a"},
+      {"id":"root-only","input":{"base":"/","rel":""},"expect":"/"},
+      {"id":"abs-trailing","input":{"base":"/work/repo","rel":"/work/repo/"},"expect":"/work/repo"},
+      {"id":"dot-segments","input":{"base":"/work/repo","rel":"./a/./b/../c"},"expect":"/work/repo/a/c"},
+      {"id":"dotdot-only","input":{"base":"/work/repo","rel":".."},"expect":"/work"},
+      {"id":"base-dup","input":{"base":"//work//repo","rel":"x"},"expect":"/work/repo/x"},
+      {"id":"dots-name","input":{"base":"/work/repo","rel":"..."},"expect":"/work/repo/..."},
+      {"id":"korean","input":{"base":"/work/repo","rel":"한글/파일.txt"},"expect":"/work/repo/한글/파일.txt"},
+      {"id":"backslash","input":{"base":"/work/repo","rel":"a\\b"},"expect":"/work/repo/a\\b"},
+      {"id":"abs-root","input":{"base":"/work/repo","rel":"/"},"expect":"/"},
+      {"id":"abs-dotdot","input":{"base":"/work/repo","rel":"/a/../../b"},"expect":"/b"}
+    ],
+    "dirname": [
+      {"id":"two","input":"/a/b","expect":"/a"},
+      {"id":"one","input":"/a","expect":"/"},
+      {"id":"root","input":"/","expect":"/"},
+      {"id":"trailing","input":"/a/b/","expect":"/a"},
+      {"id":"empty","input":"","expect":"."},
+      {"id":"relative","input":"a","expect":"."},
+      {"id":"relative-two","input":"a/b","expect":"a"},
+      {"id":"double-root","input":"//a","expect":"//"},
+      {"id":"inner-double","input":"/a//b","expect":"/a/"},
+      {"id":"many-trailing","input":"/a/b///","expect":"/a"},
+      {"id":"dot","input":".","expect":"."},
+      {"id":"korean","input":"/작업/폴더/파일.txt","expect":"/작업/폴더"}
+    ],
+    "relative": [
+      {"id":"child","input":{"from":"/a","to":"/a/b/c"},"expect":"b/c"},
+      {"id":"same","input":{"from":"/a/b","to":"/a/b"},"expect":""},
+      {"id":"sibling","input":{"from":"/a/b","to":"/a/c"},"expect":"../c"},
+      {"id":"from-root","input":{"from":"/","to":"/a/b"},"expect":"a/b"},
+      {"id":"to-root","input":{"from":"/a/b","to":"/"},"expect":"../.."},
+      {"id":"prefix-name","input":{"from":"/a/b","to":"/a/bc"},"expect":"../bc"},
+      {"id":"prefix-name-rev","input":{"from":"/a/bc","to":"/a/b"},"expect":"../b"},
+      {"id":"trailing","input":{"from":"/a/b/","to":"/a/b/c/"},"expect":"c"},
+      {"id":"deep-up","input":{"from":"/a/b/c/d","to":"/a/x"},"expect":"../../../x"},
+      {"id":"root-root","input":{"from":"/","to":"/"},"expect":""},
+      {"id":"parent","input":{"from":"/a/b/c","to":"/a"},"expect":"../.."},
+      {"id":"korean","input":{"from":"/작업/폴더","to":"/작업/폴더/하위/파일"},"expect":"하위/파일"},
+      {"id":"unnormalized","input":{"from":"/a/./b/../b","to":"/a/b/c"},"expect":"c"}
+    ]
+  },
+  "lexical": [
+    {"id":"normal","input":{"base":"/work/repo","rel":"sub/a.txt"},"expect":{"abs":"/work/repo/sub/a.txt"}},
+    {
+      "id": "dotdot-escape",
+      "input": {"base":"/work/repo","rel":"../other/secret.txt"},
+      "expect": {"error":"폴더 스코프 밖 경로 거부: ../other/secret.txt"}
+    },
+    {"id":"abs-outside","input":{"base":"/work/repo","rel":"/etc/hosts"},"expect":{"error":"폴더 스코프 밖 경로 거부: /etc/hosts"}},
+    {"id":"abs-inside","input":{"base":"/work/repo","rel":"/work/repo/sub/x"},"expect":{"abs":"/work/repo/sub/x"}},
+    {"id":"sub-dotdot-dotdot","input":{"base":"/work/repo","rel":"sub/../.."},"expect":{"error":"폴더 스코프 밖 경로 거부: sub/../.."}},
+    {"id":"sibling-prefix-abs","input":{"base":"/work/repo","rel":"/work/repo2/x"},"expect":{"error":"폴더 스코프 밖 경로 거부: /work/repo2/x"}},
+    {"id":"sibling-prefix-rel","input":{"base":"/work/repo","rel":"../repo2"},"expect":{"error":"폴더 스코프 밖 경로 거부: ../repo2"}},
+    {"id":"back-inside","input":{"base":"/work/repo","rel":"../repo/sub"},"expect":{"abs":"/work/repo/sub"}},
+    {"id":"base-trailing-rel","input":{"base":"/work/repo/","rel":"a"},"expect":{"error":"폴더 스코프 밖 경로 거부: a"}},
+    {"id":"base-trailing-dot","input":{"base":"/work/repo/","rel":"."},"expect":{"error":"폴더 스코프 밖 경로 거부: ."}},
+    {"id":"base-trailing-empty","input":{"base":"/work/repo/","rel":""},"expect":{"error":"폴더 스코프 밖 경로 거부: "}},
+    {"id":"base-trailing-missing","input":{"base":"/work/repo/"},"expect":{"error":"폴더 스코프 밖 경로 거부: undefined"}},
+    {"id":"base-root-child","input":{"base":"/","rel":"etc"},"expect":{"error":"폴더 스코프 밖 경로 거부: etc"}},
+    {"id":"base-root-dot","input":{"base":"/","rel":"."},"expect":{"abs":"/"}},
+    {"id":"dot","input":{"base":"/work/repo","rel":"."},"expect":{"abs":"/work/repo"}},
+    {"id":"empty","input":{"base":"/work/repo","rel":""},"expect":{"abs":"/work/repo"}},
+    {"id":"missing","input":{"base":"/work/repo"},"expect":{"abs":"/work/repo"}},
+    {"id":"space","input":{"base":"/work/repo","rel":"my file.txt"},"expect":{"abs":"/work/repo/my file.txt"}},
+    {"id":"korean","input":{"base":"/work/repo","rel":"한글/파일.txt"},"expect":{"abs":"/work/repo/한글/파일.txt"}},
+    {"id":"backslash","input":{"base":"/work/repo","rel":"a\\b"},"expect":{"abs":"/work/repo/a\\b"}},
+    {"id":"dotdot-only","input":{"base":"/work/repo","rel":".."},"expect":{"error":"폴더 스코프 밖 경로 거부: .."}},
+    {"id":"abs-root","input":{"base":"/work/repo","rel":"/"},"expect":{"error":"폴더 스코프 밖 경로 거부: /"}},
+    {"id":"abs-base","input":{"base":"/work/repo","rel":"/work/repo"},"expect":{"abs":"/work/repo"}},
+    {"id":"abs-base-trailing","input":{"base":"/work/repo","rel":"/work/repo/"},"expect":{"abs":"/work/repo"}},
+    {"id":"messy","input":{"base":"/work/repo","rel":"sub//x/./y/"},"expect":{"abs":"/work/repo/sub/x/y"}},
+    {"id":"dots-name","input":{"base":"/work/repo","rel":"..."},"expect":{"abs":"/work/repo/..."}}
+  ],
+  "fs": [
+    {
+      "id": "symlink-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"link-out/secret.txt"},
+      "expect": {"error":"심링크 스코프 탈출 거부: link-out/secret.txt"}
+    },
+    {
+      "id": "missing-nearest-ancestor",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"sub/new-dir/new.txt"},
+      "expect": {"abs":"{{TMP}}/root/sub/new-dir/new.txt"}
+    },
+    {
+      "id": "missing-under-symlink-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"link-out/new/new.txt"},
+      "expect": {"error":"심링크 스코프 탈출 거부: link-out/new/new.txt"}
+    },
+    {
+      "id": "dangling",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/dangling","target":"{{TMP}}/outside/planted.plist"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"dangling"},
+      "expect": {"error":"ENOENT: no such file or directory, realpath '{{TMP}}/root/dangling'"}
+    },
+    {
+      "id": "dangling-child",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/dangling","target":"{{TMP}}/outside/planted.plist"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"dangling/x"},
+      "expect": {"error":"ENOENT: no such file or directory, realpath '{{TMP}}/root/dangling'"}
+    },
+    {
+      "id": "symlink-in",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/link-in","target":"{{TMP}}/root/sub"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"link-in/a.txt"},
+      "expect": {"abs":"{{TMP}}/root/link-in/a.txt"}
+    },
+    {
+      "id": "symlink-relative-in",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/rel-in","target":"sub"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"rel-in/a.txt"},
+      "expect": {"abs":"{{TMP}}/root/rel-in/a.txt"}
+    },
+    {
+      "id": "symlink-relative-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/rel-out","target":"../outside"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"rel-out/secret.txt"},
+      "expect": {"error":"심링크 스코프 탈출 거부: rel-out/secret.txt"}
+    },
+    {
+      "id": "base-via-symlink",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"alias","target":"{{TMP}}/root"}
+      ],
+      "input": {"base":"{{TMP}}/alias","rel":"sub/a.txt"},
+      "expect": {"abs":"{{TMP}}/alias/sub/a.txt"}
+    },
+    {
+      "id": "symlink-loop",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/loop1","target":"loop2"},
+        {"symlink":"root/loop2","target":"loop1"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"loop1"},
+      "expect": {"error":"ELOOP: too many symbolic links encountered, realpath '{{TMP}}/root/loop1'"}
+    },
+    {
+      "id": "base-missing",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"}
+      ],
+      "input": {"base":"{{TMP}}/nope","rel":"x"},
+      "expect": {"error":"ENOENT: no such file or directory, realpath '{{TMP}}/nope'"}
+    },
+    {
+      "id": "through-file",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"sub/a.txt/x"},
+      "expect": {"abs":"{{TMP}}/root/sub/a.txt/x"}
+    },
+    {
+      "id": "abs-inside",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"{{TMP}}/root/sub"},
+      "expect": {"abs":"{{TMP}}/root/sub"}
+    },
+    {
+      "id": "file-symlink-out",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"},
+        {"symlink":"root/file-out","target":"{{TMP}}/outside/secret.txt"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"file-out"},
+      "expect": {"error":"심링크 스코프 탈출 거부: file-out"}
+    },
+    {
+      "id": "existing-file",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"sub/a.txt"},
+      "expect": {"abs":"{{TMP}}/root/sub/a.txt"}
+    },
+    {
+      "id": "dot",
+      "setup": [
+        {"dir":"root/sub"},
+        {"file":"root/sub/a.txt","content":"a"},
+        {"dir":"outside"},
+        {"file":"outside/secret.txt","content":"secret"},
+        {"symlink":"root/link-out","target":"{{TMP}}/outside"}
+      ],
+      "input": {"base":"{{TMP}}/root","rel":"."},
+      "expect": {"abs":"{{TMP}}/root"}
+    }
+  ]
+}
