@@ -35,6 +35,11 @@ fn fixture_files() -> Vec<PathBuf> {
     let mut files: Vec<PathBuf> = dir
         .map(|e| e.unwrap().path())
         .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        // conn-* 는 연결 크레이트(omk-bridge-conn) 러너 몫이다.
+        .filter(|p| {
+            !p.file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with("conn-"))
+        })
         .collect();
     files.sort();
     files
