@@ -77,16 +77,22 @@ pub fn build_sandbox_profile(root: &str, git: Option<&GitPaths>, home: &str, too
     // 금지는 경로 글자 기준이라 `.git` 을 옮겼다 되돌리면 config 금지가 빗나갔다(E2).
     // last-match-wins 라 이 deny 가 맨 끝이어야 상위 allow 경로 안의 레포에서도 확실히 이긴다.
     if let (Some(g), Some(c)) = (git, common) {
+        // commondir 도 막는다 — 바꿔 두면 사용자의 후속 git 이 다른(폴더 안 가짜) common dir 의 config 를 읽는다.
         let own = if separate {
-            format!(" (literal {})", sbq(&literal_path(&g.git_dir)))
+            format!(
+                " (literal {}) (literal {})",
+                sbq(&literal_path(&g.git_dir)),
+                sbq(&node_path::join(&[&g.git_dir, "commondir"]))
+            )
         } else {
             String::new()
         };
         lines.push(format!(
-            "(deny file-write* (subpath {}) (literal {}) (literal {}){own})",
+            "(deny file-write* (subpath {}) (literal {}) (literal {}) (literal {}){own})",
             sbq(&node_path::join(&[c, "hooks"])),
             sbq(&node_path::join(&[c, "config"])),
-            sbq(&literal_path(c))
+            sbq(&literal_path(c)),
+            sbq(&node_path::join(&[c, "commondir"]))
         ));
     }
     lines.push(String::new());
@@ -125,7 +131,7 @@ mod tests {
             let last = p.trim_end().lines().last().unwrap_or_default();
             assert_eq!(
                 last,
-                r#"(deny file-write* (subpath "/work/repo/.git/hooks") (literal "/work/repo/.git/config") (literal "/work/repo/.git"))"#
+                r#"(deny file-write* (subpath "/work/repo/.git/hooks") (literal "/work/repo/.git/config") (literal "/work/repo/.git") (literal "/work/repo/.git/commondir"))"#
             );
             assert_eq!(p.contains("(deny network*)"), tool);
         }

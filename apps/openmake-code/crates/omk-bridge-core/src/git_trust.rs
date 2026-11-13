@@ -198,7 +198,7 @@ fn is_worktree_git(p: &str) -> bool {
     })
 }
 
-/// 파일 kind(write·delete) 가드 — 대상의 실제 위치가 보관한 git dir·common dir 자신·`config`·`hooks` 아래이거나 worktree 의
+/// 파일 kind(write·delete) 가드 — 대상의 실제 위치가 보관한 git dir·common dir 자신·`config`·`commondir`·`hooks` 아래이거나 worktree 의
 /// `.git` 이면 거절한다. delete 는 git 디렉터리를 품은 상위 폴더도 거절한다. git 없음이면 가드가 없다(기존 동작).
 /// FS 를 보므로 관문 안에서 부른다.
 pub fn assert_git_path_allowed(
@@ -218,6 +218,7 @@ pub fn assert_git_path_allowed(
     let denied = dirs.iter().any(|d| {
         r == *d
             || r == join(&[d, "config"])
+            || r == join(&[d, "commondir"])
             || within(&r, &join(&[d, "hooks"]))
             || (del && within(d, &r))
     });

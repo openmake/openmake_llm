@@ -58,6 +58,8 @@ struct Ctx<'a> {
     st: &'a ExecState,
     tool: ToolEnv,
     trusted: Option<GitPaths>,
+    /// 연결 폴더 realpath — 폴더 선택으로 고른 중첩 레포는 git 디렉터리가 이 안일 때만 쓴다.
+    root: String,
 }
 
 /// git 하나 — `GIT_FIXED_ARGS` 를 붙이고 도구 프로파일로 감싼다. 프로파일이 없거나 sandbox-exec 자체가 실패하면(65·71)
@@ -110,48 +112,66 @@ async fn git_dirs_of(cx: &Ctx<'_>, cwd: &str, gate: &FsGate) -> Result<Option<Gi
     .await
 }
 
-/// base 가 연결 때 믿기로 한 레포 그대로인가 — 맞으면 `None`, 아니면 거절 문구.
-async fn base_error(
-    cx: &Ctx<'_>,
-    base: &str,
-    trusted: &GitPaths,
-    gate: &FsGate,
-) -> Result<Option<&'static str>, String> {
-    Ok(match git_dirs_of(cx, base, gate).await? {
-        None => Some(NOT_A_REPO),
-        Some(d) if d == *trusted => None,
-        Some(_) => Some(GIT_DIR_MISMATCH_ERROR),
-    })
+fn within(p: &str, dir: &str) -> bool {
+    p == dir
+        || p.strip_prefix(dir)
+            .is_some_and(|rest| rest.starts_with('/'))
 }
 
-/// worktree 안의 git dir 가 `<보관 common>/worktrees/` 바로 아래인가 — worktree 의 gitfile 을 가짜로 바꿔 두면 아니다(E1c).
-async fn worktree_trusted(
+/// base 의 레포 — 연결 때 믿기로 한 것과 같으면 그것, 다르거나(폴더 선택으로 고른 중첩 레포) 보관한 git 이 없으면 base 의
+/// git dir·common dir 가 **둘 다 연결 폴더 안**일 때만 그 값(design.md D-3 의 4번 배치 — 어차피 쓰기 가능한 곳이고, git 은
+/// 도구 프로파일 안에서 돈다). 하나라도 폴더 밖이면 거절 문구(TS `repoFor` 와 같다).
+async fn repo_for(
     cx: &Ctx<'_>,
-    abs: &str,
-    trusted: &GitPaths,
+    base: &str,
+    add: bool,
     gate: &FsGate,
-) -> Result<bool, String> {
-    let d = git_dirs_of(cx, abs, gate).await?;
-    let meta_parent = node_path::join(&[&trusted.common_dir, "worktrees"]);
-    Ok(d.is_some_and(|d| {
-        d.common_dir == trusted.common_dir && node_path::dirname(&d.git_dir) == meta_parent
+) -> Result<Result<GitPaths, &'static str>, String> {
+    let d = git_dirs_of(cx, base, gate).await?;
+    if let (Some(d), Some(t)) = (&d, &cx.trusted)
+        && d == t
+    {
+        return Ok(Ok(t.clone()));
+    }
+    if let Some(d) = d
+        .as_ref()
+        .filter(|d| within(&d.git_dir, &cx.root) && within(&d.common_dir, &cx.root))
+    {
+        return Ok(Ok(d.clone()));
+    }
+    Ok(Err(if add && (cx.trusted.is_none() || d.is_none()) {
+        NOT_A_REPO
+    } else {
+        GIT_DIR_MISMATCH_ERROR
     }))
 }
 
-/// diff·remove 의 대조 — 믿는 git 이 없거나 base·worktree 가 어긋나면 거절 문구.
+/// worktree 안의 git dir 가 `<base 레포의 common>/worktrees/` 바로 아래인가 — worktree 의 gitfile 을 가짜로 바꿔 두면 아니다(E1c).
+async fn worktree_trusted(
+    cx: &Ctx<'_>,
+    abs: &str,
+    repo: &GitPaths,
+    gate: &FsGate,
+) -> Result<bool, String> {
+    let d = git_dirs_of(cx, abs, gate).await?;
+    let meta_parent = node_path::join(&[&repo.common_dir, "worktrees"]);
+    Ok(d.is_some_and(|d| {
+        d.common_dir == repo.common_dir && node_path::dirname(&d.git_dir) == meta_parent
+    }))
+}
+
+/// diff·remove 의 대조 — base 의 레포를 못 정하거나 worktree 가 그 레포의 것이 아니면 거절 문구.
 async fn verify_worktree(
     cx: &Ctx<'_>,
     base: &str,
     abs: &str,
     gate: &FsGate,
 ) -> Result<Option<&'static str>, String> {
-    let Some(trusted) = cx.trusted.as_ref() else {
-        return Ok(Some(GIT_DIR_MISMATCH_ERROR));
+    let repo = match repo_for(cx, base, false, gate).await? {
+        Ok(r) => r,
+        Err(bad) => return Ok(Some(bad)),
     };
-    if let Some(bad) = base_error(cx, base, trusted, gate).await? {
-        return Ok(Some(bad));
-    }
-    Ok((!worktree_trusted(cx, abs, trusted, gate).await?).then_some(GIT_DIR_MISMATCH_ERROR))
+    Ok((!worktree_trusted(cx, abs, &repo, gate).await?).then_some(GIT_DIR_MISMATCH_ERROR))
 }
 
 /// 파일 작업 묶음 하나를 관문으로 — 시간 초과는 `worktree 시간 초과 (15s) — …` 로 요청을 끝낸다.
@@ -273,6 +293,7 @@ fn ok_with(f: impl FnOnce(&mut BridgeResult)) -> BridgeResult {
 /// 도구 프로파일이 없어 git 을 띄우지 않았으면 도구와 같은 126 거절이다.
 pub(crate) async fn handle(
     state: Option<&ExecState>,
+    root: &str,
     base: &str,
     m: &BridgeMsg,
     gate: &FsGate,
@@ -303,6 +324,7 @@ pub(crate) async fn handle(
             sandbox: st.tool_sandbox(),
         },
         trusted: st.git_paths(),
+        root: root.to_owned(),
     };
     match m.op.as_deref() {
         Some("add") => add(&cx, base, &rel, &abs, branch, gate).await,
@@ -350,12 +372,10 @@ async fn add(
     branch: String,
     gate: &FsGate,
 ) -> Result<BridgeResult, String> {
-    let Some(trusted) = cx.trusted.as_ref() else {
-        return Ok(BridgeResult::failure(NOT_A_REPO));
+    let found = match repo_for(cx, base, true, gate).await? {
+        Ok(r) => r,
+        Err(bad) => return Ok(BridgeResult::failure(bad)),
     };
-    if let Some(bad) = base_error(cx, base, trusted, gate).await? {
-        return Ok(BridgeResult::failure(bad));
-    }
     let repo = git(cx, &["rev-parse", "--is-inside-work-tree"], base).await?;
     if !(repo.ok && js_trim(&repo.stdout) == "true") {
         return Ok(BridgeResult::failure(NOT_A_REPO));
@@ -380,7 +400,7 @@ async fn add(
             let _ = std::fs::create_dir_all(p);
         }
     };
-    let common = trusted.common_dir.clone();
+    let common = found.common_dir.clone();
     fs_op(gate, move || exclude_worktree_dir(&common)).await?;
     let done = |work_rel: String, branch: String| {
         ok_with(|r| {

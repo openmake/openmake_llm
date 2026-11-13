@@ -3,7 +3,7 @@
 //! 실측 결함: ① 파일 쓰기만으로 worktree 의 `.git` 을 가짜 git 디렉터리로 돌려 두면 `worktree diff` 의 `git add -A -N .` 이 가짜
 //! 설정(core.fsmonitor)을 샌드박스 밖에서 실행했다(E1c). ② exec 로 `.git` 을 옮겼다 되돌리면 config 금지가 빗나갔다(E2).
 //! ③ 파일 kind 는 `.git/config` 를 그대로 고칠 수 있었다. 작업 폴더는 프로파일이 쓰기를 열어 두지 않은 곳
-//! (`CARGO_TARGET_TMPDIR` 아래)이고, 폴더 밖 표식은 그 옆 `outside` 다.
+//! (실제 홈 아래 숨은 임시 폴더)이고, 폴더 밖 표식은 그 옆 `outside` 다.
 #![cfg(target_os = "macos")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -33,11 +33,10 @@ struct Work {
 impl Work {
     fn new() -> Work {
         let n = SEQ.fetch_add(1, Ordering::Relaxed);
-        let raw = format!(
-            "{}/omk-git-sbx-{}-{n}",
-            env!("CARGO_TARGET_TMPDIR"),
-            std::process::id()
-        );
+        // 실제 홈 아래 — `CARGO_TARGET_TMPDIR` 는 이 프로젝트의 git worktree 안이라 "레포가 아닌 폴더"를 만들 수 없고,
+        // 임시 폴더(/private/var/folders)는 프로파일이 쓰기를 열어 경계를 시험하지 못한다(TS 테스트와 같은 자리).
+        let home = std::env::var("HOME").unwrap();
+        let raw = format!("{home}/.omk-git-sbx-{}-{n}", std::process::id());
         let _ = std::fs::remove_dir_all(&raw);
         for d in ["home", "outside"] {
             std::fs::create_dir_all(format!("{raw}/{d}")).unwrap();
@@ -428,4 +427,40 @@ fn m3_exclude_symlinks_are_skipped() {
     let c2 = core(&w, &repo2);
     assert_eq!(wt(&c2, "add")["ok"], true);
     assert!(std::fs::metadata(format!("{repo2}/.git/i2/exclude")).is_err());
+}
+
+/// commondir 를 쓸 수 없다 — exec·파일 kind 둘 다(사용자의 후속 git 이 가짜 common dir 설정을 읽게 하는 길).
+#[test]
+fn commondir_is_not_writable() {
+    let w = Work::new();
+    let repo = w.repo("repo");
+    let c = core(&w, &repo);
+    let cmd = "echo ../evil > .git/commondir && echo wrote";
+    let r = send(&c, json!({"kind": "exec", "command": cmd}));
+    assert_ne!(r["exitCode"], 0, "{r}");
+    assert_eq!(write(&c, ".git/commondir", "../evil\n")["ok"], false);
+    assert!(std::fs::metadata(format!("{repo}/.git/commondir")).is_err());
+}
+
+/// linked worktree 연결: 자기 git dir 의 commondir 도 못 쓰고, worktree add·exec commit 은 그대로 된다.
+#[test]
+fn linked_worktree_commondir_denied_but_add_and_commit_work() {
+    let w = Work::new();
+    let repo = w.repo("repo");
+    let lw = w.join("lw");
+    w.git(&repo, &["worktree", "add", "-q", &lw, "-b", "lw"]);
+    let own = format!("{repo}/.git/worktrees/lw/commondir");
+    let before = std::fs::read_to_string(&own).unwrap();
+    let c = core(&w, &lw);
+    let r = send(
+        &c,
+        json!({"kind": "exec", "command": format!("echo x > '{own}' && echo wrote")}),
+    );
+    assert_ne!(r["exitCode"], 0, "{r}");
+    assert_eq!(std::fs::read_to_string(&own).unwrap(), before);
+    assert_eq!(wt(&c, "add")["ok"], true);
+    std::fs::write(format!("{lw}/a.txt"), "lw change\n").unwrap();
+    let cmd = "git -c user.email=t@example.invalid -c user.name=t -c commit.gpgsign=false commit -qam lw2 && echo committed";
+    let r = send(&c, json!({"kind": "exec", "command": cmd}));
+    assert_eq!(r["stdout"], "committed\n", "{r}");
 }
