@@ -5,14 +5,14 @@
  * 두면 pytest 탐지가, `py_compile.py` 를 두면 .py 진단이 그 코드를 실행했다. tsc 는 폴더의 `node_modules/.bin/tsc` 다.
  * 에이전트는 폴더에 파일을 쓸 수 있으므로 확인·차단 목록·샌드박스를 모두 거치지 않는 실행 경로였다.
  *
- * "폴더 밖" 대상은 홈 아래 임시 폴더다(프로파일이 늘 여는 임시·캐시 경로 밖). 검증 스크립트가 HOME 을 임시 폴더로
- * 바꾸면 그 폴더가 처음부터 쓰기 허용 구역이라 탈출 단언을 건너뛴다(core.test 의 두 폴더 사례와 같은 이유).
+ * "폴더 밖" 대상은 실제 홈(`os.userInfo().homedir` — HOME 환경 변수와 무관) 아래 임시 폴더다. 프로파일이 늘 여는
+ * 임시·캐시 경로 밖이라, 검증 스크립트가 HOME 을 임시 폴더로 바꿔도(캐시 허용 구역이 그쪽으로 옮겨 간다) 탈출 단언이 성립한다.
  */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { SANDBOX_ENABLED, sbq } from '../constants';
+import { SANDBOX_ENABLED } from '../constants';
 import { BridgeCore } from '../core';
 import { collectDiagnostics } from '../diagnostics';
 import { writeSandboxProfile } from '../sandbox';
@@ -28,7 +28,7 @@ let prof = '';
 
 beforeEach(() => {
     base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'omk-toolsb-')));
-    outside = fs.mkdtempSync(path.join(fs.realpathSync(os.homedir()), '.omk-toolsb-out-'));
+    outside = fs.mkdtempSync(path.join(fs.realpathSync(os.userInfo().homedir), '.omk-toolsb-out-'));
     prof = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-toolsb-prof-'));
 });
 afterEach(() => {
@@ -51,22 +51,8 @@ function makeCore(): BridgeCore {
     return new BridgeCore({ folder: base, confirm: async () => 'no', sandboxProfileDir: prof });
 }
 
-/** 프로파일이 연결 폴더 말고도 늘 여는 쓰기 경로 중 outside 를 덮는 것 — 있으면 탈출 단언이 성립하지 않는다. */
-function outsideWritableBy(profile: string): string[] {
-    const isUnder = (p: string, dir: string): boolean => p === dir || p.startsWith(dir.endsWith('/') ? dir : `${dir}/`);
-    return profile.split('\n')
-        .filter((l) => l.startsWith('(allow file-write*') && l !== `(allow file-write* (subpath ${sbq(base)}))`)
-        .flatMap((l) => [...l.matchAll(/\(subpath "((?:[^"\\]|\\.)*)"\)/g)].map((m) => m[1].replace(/\\(.)/g, '$1')))
-        .filter((d) => isUnder(outside, d));
-}
-
-/** 탈출 단언 — outside 가 프로파일의 쓰기 허용 구역 안이면 경고 후 건너뛴다. */
-function expectNoEscape(profilePath: string, name: string): void {
-    const shared = outsideWritableBy(fs.readFileSync(profilePath, 'utf8'));
-    if (shared.length > 0) {
-        console.warn(`폴더 밖 쓰기 차단 단언 건너뜀: ${outside} 가 프로파일이 늘 여는 쓰기 경로 안(${shared.join(', ')})`);
-        return;
-    }
+/** 탈출 단언 — 감싼 자식이 폴더 밖(outside)에 쓰지 못했다. */
+function expectNoEscape(name: string): void {
     expect(fs.existsSync(path.join(outside, name))).toBe(false);
 }
 
@@ -88,7 +74,7 @@ sbDescribe('도구 자식 샌드박스 — 폴더의 코드가 샌드박스 밖�
         expect(r.ok).toBe(true);
         // 폴더의 pytest.py 는 import 되지 않는다(-I + find_spec) — 폴더 안 흔적도 없어야 한다.
         expect(fs.existsSync(path.join(base, 'pytest-ran-inside'))).toBe(false);
-        expectNoEscape(coreProfile(), 'pytest-ran');
+        expectNoEscape('pytest-ran');
     }, 30000);
 
     it('lsp_diagnostics: 폴더의 py_compile.py 가 실행되지 않는다(.py 진단)', async () => {
@@ -99,7 +85,7 @@ sbDescribe('도구 자식 샌드박스 — 폴더의 코드가 샌드박스 밖�
         const r = await run(core, { kind: 'lsp_diagnostics', paths: ['a.py'] });
         expect(r).toMatchObject({ ok: true, serverKind: 'py_compile' });
         expect(fs.existsSync(path.join(base, 'pyc-ran-inside'))).toBe(false);
-        expectNoEscape(coreProfile(), 'pyc-ran');
+        expectNoEscape('pyc-ran');
     }, 30000);
 
     it('lsp_diagnostics: 폴더의 node_modules/.bin/tsc 는 샌드박스 안에서 돈다(폴더 안 쓰기 O, 폴더 밖 쓰기 X)', async () => {
@@ -112,7 +98,7 @@ sbDescribe('도구 자식 샌드박스 — 폴더의 코드가 샌드박스 밖�
         const r = await run(core, { kind: 'lsp_diagnostics', paths: ['a.ts'] });
         expect(r).toMatchObject({ ok: true, serverKind: 'tsc' });
         expect(fs.existsSync(path.join(base, 'tsc-ran-inside'))).toBe(true); // 돌기는 돈다
-        expectNoEscape(coreProfile(), 'tsc-ran');
+        expectNoEscape('tsc-ran');
     }, 30000);
 });
 
@@ -179,7 +165,7 @@ sbDescribe('도구 자식 샌드박스 — 모듈 단위(가짜 python3 로 인�
         const p = profile();
         expect(await detectTestRunner(base, fakePython(), p)).toBe('pytest');
         expect(args()).toEqual(['-I', '-c', PYTEST_PROBE]);
-        expectNoEscape(p, 'py-ran');
+        expectNoEscape('py-ran');
     });
 
     it('py_compile 진단: python3 -I -m py_compile <파일> 을 샌드박스 안에서 띄운다', async () => {
@@ -188,7 +174,7 @@ sbDescribe('도구 자식 샌드박스 — 모듈 단위(가짜 python3 로 인�
         const r = await collectDiagnostics(base, [f], fakePython(), p);
         expect(r).toEqual({ diagnostics: [], truncated: false, serverKind: 'py_compile' });
         expect(args()).toEqual(['-I', '-m', 'py_compile', f]);
-        expectNoEscape(p, 'py-ran');
+        expectNoEscape('py-ran');
     });
 
     it('샌드박스를 넘기지 않으면(꺼짐) 감싸지 않는다 — 인자 강화는 그대로', async () => {
@@ -211,7 +197,7 @@ sbDescribe('도구 자식 샌드박스 — 모듈 단위(가짜 python3 로 인�
         const p = profile();
         const got = await detectTestRunner(base, execPath, p);
         expect(fs.existsSync(path.join(base, 'pytest-ran-inside'))).toBe(false);
-        expectNoEscape(p, 'pytest-ran');
+        expectNoEscape('pytest-ran');
         if (userPytest) expect(got).toBe('pytest');
         else console.warn('사용자 site 에 pytest 가 없어 "pytest 로 탐지" 단언을 건너뜀');
     }, 30000);
