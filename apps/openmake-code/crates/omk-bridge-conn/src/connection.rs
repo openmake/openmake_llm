@@ -215,15 +215,20 @@ async fn phase_event(phase: &mut Phase) -> PhaseEvent {
     }
 }
 
-/// PR-1.3 합류 자리(TS `connection.ts:114,247`). 두 PR 중 뒤에 머지되는 쪽이 몸통을 채운다.
+/// 코어 준비·회수(TS `connection.ts:114,247`).
 mod core_hooks {
     use omk_bridge_core::core::BridgeCore;
 
-    /// 연결할 때마다 — PR-1.3 합류: `core.prepare()`.
-    pub(super) fn on_connect(_core: &BridgeCore) {}
+    /// 연결할 때마다 — PATH 캐시를 비우고 샌드박스 프로파일을 쓴다. 소켓을 만들기 전에 끝낸다(TS 는 동기 호출이라
+    /// 첫 exec 가 언제나 새 프로파일을 본다). 그동안 이 연결의 actor 만 기다린다 — TS 는 프로세스 전체가 멈췄다(D-35).
+    pub(super) async fn on_connect(core: &BridgeCore) {
+        core.prepare().await;
+    }
 
-    /// 해제할 때 — PR-1.3 합류: `core.clear_auto_approve()`(일괄 승인 회수).
-    pub(super) fn on_disconnect(_core: &BridgeCore) {}
+    /// 해제할 때 — 일괄 승인 전체 회수.
+    pub(super) fn on_disconnect(core: &BridgeCore) {
+        core.clear_auto_approve();
+    }
 }
 
 impl Actor {
@@ -243,7 +248,7 @@ impl Actor {
                 p = phase_event(&mut self.phase) => Ev::Phase(p),
             };
             match ev {
-                Ev::Cmd(Cmd::Connect) => self.connect(),
+                Ev::Cmd(Cmd::Connect) => self.connect().await,
                 Ev::Cmd(Cmd::Disconnect) => self.disconnect(),
                 Ev::Cmd(Cmd::BrowserControl(user)) => {
                     self.send(&frames::browser_control(user));
@@ -257,7 +262,7 @@ impl Actor {
                 Ev::Phase(PhaseEvent::Session(SessionEvent::Closed { code, reason })) => {
                     self.on_close(code, &reason);
                 }
-                Ev::Phase(PhaseEvent::Timer) => self.connect(),
+                Ev::Phase(PhaseEvent::Timer) => self.connect().await,
             }
         }
     }
@@ -291,9 +296,9 @@ impl Actor {
         }
     }
 
-    fn connect(&mut self) {
+    async fn connect(&mut self) {
         self.closed = false;
-        core_hooks::on_connect(&self.opts.core);
+        core_hooks::on_connect(&self.opts.core).await;
         self.drop_phase();
         // 헤더 실패(예: 키 없음)는 소켓을 만들기 전이라 재연결을 걸지 않고 멈춘다.
         let headers = match (self.opts.headers)() {
