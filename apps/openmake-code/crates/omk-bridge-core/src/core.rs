@@ -1,9 +1,9 @@
 //! 브리지 실행 코어 — TS `core.ts` `BridgeCore` 의 생성자·`capabilities`·`handleExec`.
 //!
 //! 고정 kind 화이트리스트만 처리한다(임의 RPC 거부). 파일 kind 경로는 연결 폴더 realpath 스코프 안에서만 푼다.
-//! 파일 kind·`folders`·`task_end`·`exec`·`worktree` 를 옮겼다. 아직 옮기지 않은 kind 는 TS 의 `default` 가지와 같은
-//! "지원하지 않는 kind" 로 거절하고(서버에서 보면 그 kind 를 모르는 옛 기기와 같다), 능력 목록에도 넣지 않는다.
-//! exec·worktree 는 호스트가 [`BridgeCore::with_exec_host`] 로 확인 창·환경을 얹어야 실제로 돈다.
+//! `BRIDGE_KINDS` 12종을 모두 옮겼다(PR-1.4). 브라우저는 아직이라 TS 의 `default` 가지와 같은 "지원하지 않는 kind" 로
+//! 거절하고 능력 목록에도 넣지 않는다. exec·worktree·lsp_diagnostics·test_runner 는 호스트가
+//! [`BridgeCore::with_exec_host`] 로 확인 창·환경을 얹어야 실제로 돈다. code_nav 는 호스트 없이도 돈다.
 //!
 //! **런타임**: `handle_exec`·`prepare` 는 시간 + I/O 가 켜진(`enable_all()`) tokio 런타임 안에서 불러야 한다(자식 프로세스). 런타임은 drop 때
 //! `spawn_blocking` 작업이 끝나기를 기다리므로, 영영 블록된 FS 호출이 있으면 종료가 멈춘다 — 호스트는
@@ -19,6 +19,7 @@ use crate::fs_kinds;
 use crate::msg::{BridgeMsg, BridgeResult, Kind};
 use crate::node_error;
 use crate::scope::safe_from;
+use crate::test_runner;
 use crate::timed_fs::FsGate;
 use crate::tool_env::NO_HOST;
 use crate::worktree;
@@ -67,8 +68,9 @@ fn handles(kind: Kind) -> bool {
         | Kind::Exec
         | Kind::Worktree
         | Kind::CodeNav
-        | Kind::LspDiagnostics => true,
-        Kind::TestRunner | Kind::Browser => false,
+        | Kind::LspDiagnostics
+        | Kind::TestRunner => true,
+        Kind::Browser => false,
     }
 }
 
@@ -282,7 +284,24 @@ impl BridgeCore {
                     ..ok
                 })
             }
-            Kind::TestRunner | Kind::Browser => Err(unsupported(kind.as_str())),
+            Kind::TestRunner => {
+                let Some(st) = self.exec.as_ref() else {
+                    return Err(NO_HOST.to_owned());
+                };
+                let b = base.clone();
+                let dir = self
+                    .gate
+                    .run("test_runner", move || safe_from(&b, path.as_deref()))
+                    .await?;
+                // npm 으로 끝날 탐지에서도 exec PATH 를 먼저 계산한다(TS 그대로 — 첫 요청이면 로그인 셸이 돈다).
+                let tool = st.tool_env(&self.folder_root).await;
+                let found = test_runner::detect(&dir, &tool, &self.gate).await?;
+                Ok(BridgeResult {
+                    test_runner: Some(found.to_owned()),
+                    ..ok
+                })
+            }
+            Kind::Browser => Err(unsupported(kind.as_str())),
         }
     }
 }
@@ -316,44 +335,23 @@ mod tests {
             .to_json()
     }
 
-    /// 아직 옮기지 않은 kind — 뒤 PR 이 kind 를 옮길 때 이 목록을 줄이지 않으면 실패한다.
-    /// 목록이 비는 PR(1.4)에서 `capabilities() == BRIDGE_KINDS` 로 바꾼다.
-    const NOT_PORTED: [&str; 1] = ["test_runner"];
-
+    /// 능력 목록은 BRIDGE_KINDS 12종 그대로(PR-1.4 에서 모두 옮겼다). 브라우저는 처리하지 않는다.
     #[test]
-    fn capabilities_lists_only_handled_kinds_in_bridge_kinds_order() {
+    fn capabilities_are_all_bridge_kinds() {
         let c = core(None);
-        let caps = c.capabilities();
-        assert_eq!(
-            caps,
-            [
-                "exec", "read", "write", "list", "listAll", "delete", "task_end", "worktree",
-                "folders", "lsp_diagnostics", "code_nav"
-            ]
-        );
-        let missing: Vec<&str> = BRIDGE_KINDS
-            .iter()
-            .copied()
-            .filter(|k| !caps.contains(k))
-            .collect();
-        assert_eq!(missing, NOT_PORTED);
+        assert_eq!(c.capabilities(), BRIDGE_KINDS);
         assert!(!handles(Kind::Browser));
     }
 
-    /// 미구현 kind 는 TS 의 default 가지와 같은 글자로 거절한다(브라우저 포함 4종).
+    /// 브라우저는 TS 의 default 가지와 같은 글자로 거절한다. 어떤 kind 든 folder 를 먼저 푼다.
     #[test]
-    fn unported_kinds_are_rejected_as_unsupported() {
+    fn browser_is_rejected_and_folder_comes_first() {
         let c = core(None);
-        for kind in NOT_PORTED.iter().chain(["browser"].iter()) {
-            let got = run(
-                &c,
-                json!({"kind": kind, "command": "touch should-not-exist"}),
-            );
-            assert_eq!(
-                got,
-                json!({"ok": false, "error": format!("지원하지 않는 kind: {kind}")})
-            );
-        }
+        let got = run(&c, json!({"kind": "browser", "command": "touch should-not-exist"}));
+        assert_eq!(
+            got,
+            json!({"ok": false, "error": "지원하지 않는 kind: browser"})
+        );
         for k in Kind::ALL {
             let got = run(&c, json!({"kind": k.as_str(), "folder": "../.."}));
             assert_eq!(
