@@ -43,7 +43,13 @@ impl ToolEnv {
 
     /// 자식 하나 — 인자·cwd·환경은 TS 와 같고, 샌드박스가 켜졌으면 `sandbox-exec -f <프로파일>` 앞머리만 더한다
     /// (셸을 거치지 않는다). 프로파일이 없으면 exec 와 같은 fail-closed 문구로 거절한다 — 띄워야 할 때만 부른다.
-    pub fn spec(&self, file: &str, args: &[&str], cwd: &str, timeout_ms: u64) -> Result<ProcSpec, String> {
+    pub fn spec(
+        &self,
+        file: &str,
+        args: &[&str],
+        cwd: &str,
+        timeout_ms: u64,
+    ) -> Result<ProcSpec, String> {
         let args: Vec<String> = args.iter().map(|a| (*a).to_owned()).collect();
         let (file, args) = match &self.sandbox {
             ToolSandbox::Missing => return Err(FAIL_CLOSED.to_owned()),
@@ -70,7 +76,13 @@ impl ToolEnv {
     /// 자식 하나를 띄운다. 감싼 자식에서 sandbox-exec **자체**가 실패하면(프로파일 파일 유실·문법 오류 65, 실행 파일
     /// execvp 실패 71 — stderr 가 `sandbox-exec:` 로 시작) "진단 없음/none" 으로 삼키지 않고 프로파일 없음과 같이 거절한다
     /// (TS 별건 수정 M1 과 같은 규칙). 이름으로 띄우는 실행 파일은 부르는 쪽이 먼저 찾아 절대경로로 넘긴다(71 과 섞이지 않게).
-    pub async fn run(&self, file: &str, args: &[&str], cwd: &str, timeout_ms: u64) -> Result<ProcOutput, String> {
+    pub async fn run(
+        &self,
+        file: &str,
+        args: &[&str],
+        cwd: &str,
+        timeout_ms: u64,
+    ) -> Result<ProcOutput, String> {
         let out = proc::run(self.spec(file, args, cwd, timeout_ms)?).await;
         let wrapped = matches!(self.sandbox, ToolSandbox::Profile(_));
         let code = out.end.exec_file_code();
@@ -116,9 +128,16 @@ mod tests {
     fn env(exec_path: &str, sandbox: ToolSandbox, extra: &[(&str, &str)]) -> ToolEnv {
         let mut env = vec![
             ("HOME".to_owned(), "/synthetic/home".to_owned()),
-            ("GITHUB_TOKEN".to_owned(), "omk-conformance-secret-2".to_owned()),
+            (
+                "GITHUB_TOKEN".to_owned(),
+                "omk-conformance-secret-2".to_owned(),
+            ),
         ];
-        env.extend(extra.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())));
+        env.extend(
+            extra
+                .iter()
+                .map(|(k, v)| ((*k).to_owned(), (*v).to_owned())),
+        );
         ToolEnv {
             env,
             platform: Platform::Darwin,
@@ -130,32 +149,73 @@ mod tests {
     /// 감싸기 — `-f <프로파일>` 뒤에 실행 파일·인자가 그대로(셸을 거치지 않는다). 환경은 허용 목록 + PATH.
     #[test]
     fn profile_wraps_with_sandbox_exec() {
-        let t = env("/work/bin", ToolSandbox::Profile("/work/p.sb".to_owned()), &[]);
-        let s = t.spec("/work/node_modules/.bin/tsc", &["-p", "a b"], "/work", 900).unwrap();
+        let t = env(
+            "/work/bin",
+            ToolSandbox::Profile("/work/p.sb".to_owned()),
+            &[],
+        );
+        let s = t
+            .spec("/work/node_modules/.bin/tsc", &["-p", "a b"], "/work", 900)
+            .unwrap();
         assert_eq!(s.file, "/usr/bin/sandbox-exec");
-        assert_eq!(s.args, ["-f", "/work/p.sb", "/work/node_modules/.bin/tsc", "-p", "a b"]);
-        assert_eq!((s.cwd.as_deref(), s.timeout_ms, s.max_buffer), (Some("/work"), 900, 1024 * 1024));
+        assert_eq!(
+            s.args,
+            [
+                "-f",
+                "/work/p.sb",
+                "/work/node_modules/.bin/tsc",
+                "-p",
+                "a b"
+            ]
+        );
+        assert_eq!(
+            (s.cwd.as_deref(), s.timeout_ms, s.max_buffer),
+            (Some("/work"), 900, 1024 * 1024)
+        );
         assert_eq!(s.env.get("PATH").map(String::as_str), Some("/work/bin"));
-        assert_eq!(s.env.get("HOME").map(String::as_str), Some("/synthetic/home"));
+        assert_eq!(
+            s.env.get("HOME").map(String::as_str),
+            Some("/synthetic/home")
+        );
         assert!(!s.env.contains_key("GITHUB_TOKEN"));
-        let off = env("/work/bin", ToolSandbox::Off, &[]).spec("python3", &["-I"], "/work", 1).unwrap();
-        assert_eq!((off.file.as_str(), off.args.as_slice()), ("python3", ["-I".to_owned()].as_slice()));
+        let off = env("/work/bin", ToolSandbox::Off, &[])
+            .spec("python3", &["-I"], "/work", 1)
+            .unwrap();
+        assert_eq!(
+            (off.file.as_str(), off.args.as_slice()),
+            ("python3", ["-I".to_owned()].as_slice())
+        );
     }
 
     #[test]
     fn missing_profile_is_fail_closed() {
-        let e = env("/work/bin", ToolSandbox::Missing, &[]).spec("python3", &[], "/work", 1).err().unwrap();
-        assert!(e.starts_with("exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다"), "{e}");
+        let e = env("/work/bin", ToolSandbox::Missing, &[])
+            .spec("python3", &[], "/work", 1)
+            .err()
+            .unwrap();
+        assert!(
+            e.starts_with("exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다"),
+            "{e}"
+        );
     }
 
     /// TS `extraPath || process.env.PATH || process.env.Path || ''`.
     #[test]
     fn path_falls_back_to_env_path_then_path_case() {
         let path_of = |t: ToolEnv| t.spec("x", &[], "/", 1).unwrap().env["PATH"].clone();
-        assert_eq!(path_of(env("", ToolSandbox::Off, &[("PATH", "/a"), ("Path", "/b")])), "/a");
-        assert_eq!(path_of(env("", ToolSandbox::Off, &[("PATH", ""), ("Path", "/b")])), "/b");
+        assert_eq!(
+            path_of(env("", ToolSandbox::Off, &[("PATH", "/a"), ("Path", "/b")])),
+            "/a"
+        );
+        assert_eq!(
+            path_of(env("", ToolSandbox::Off, &[("PATH", ""), ("Path", "/b")])),
+            "/b"
+        );
         assert_eq!(path_of(env("", ToolSandbox::Off, &[])), "");
-        assert_eq!(path_of(env("/e", ToolSandbox::Off, &[("PATH", "/a")])), "/e");
+        assert_eq!(
+            path_of(env("/e", ToolSandbox::Off, &[("PATH", "/a")])),
+            "/e"
+        );
     }
 
     /// 실행 비트(D-69) — 모드에 실행 비트가 하나라도 있으면(심링크는 따라간다), 폴더도 통과. 빈 구간은 건너뛴다.
@@ -163,7 +223,10 @@ mod tests {
     fn find_on_path_checks_exec_bits() {
         let raw = std::env::temp_dir().join(format!("omk-tool-env-{}", std::process::id()));
         std::fs::create_dir_all(&raw).unwrap();
-        let d = std::fs::canonicalize(&raw).unwrap().to_string_lossy().into_owned();
+        let d = std::fs::canonicalize(&raw)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
         for (sub, mode) in [("a", 0o644), ("b", 0o755), ("c", 0o010)] {
             std::fs::create_dir_all(format!("{d}/{sub}")).unwrap();
             let p = format!("{d}/{sub}/go");

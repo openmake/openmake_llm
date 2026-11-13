@@ -24,7 +24,8 @@ const PY_EXT: &str = ".py";
 /// `path/to/a.ts(12,5): error TS2322: msg` — TS `TSC_LINE.source` 와 같은 글자. 게으른 수량자·역추적에 기대는 패턴이라
 /// 손으로 옮기지 않고 regress 로 컴파일한다(D-69).
 pub const TSC_LINE: &str = r"^(.+?)\((\d+),(\d+)\):\s+(error|warning)\s+([A-Z]+\d+):\s+(.*)$";
-static TSC_RE: LazyLock<Option<JsRegex>> = LazyLock::new(|| js_regex::compile(TSC_LINE, false).ok());
+static TSC_RE: LazyLock<Option<JsRegex>> =
+    LazyLock::new(|| js_regex::compile(TSC_LINE, false).ok());
 
 /// 진단 한 건 — TS `BridgeDiagnostic`. `code` 는 tsc 만 있다.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,7 +124,11 @@ fn parse_tsc(out: &str, base: &str, cwd: &str) -> Vec<Diagnostic> {
             continue;
         };
         let abs = node_path::resolve(cwd, &group(1));
-        let severity = if group(4) == "warning" { "warning" } else { "error" };
+        let severity = if group(4) == "warning" {
+            "warning"
+        } else {
+            "error"
+        };
         diags.push(Diagnostic {
             path: node_path::relative(base, &abs),
             line,
@@ -141,7 +146,10 @@ fn parse_tsc(out: &str, base: &str, cwd: &str) -> Vec<Diagnostic> {
 /// py_compile 은 그런 값을 내지 않는다, D-69 와 같은 종류).
 fn first_line_number(out: &str) -> Option<u64> {
     let digits = out.match_indices("line ").find_map(|(i, _)| {
-        let digits: String = out[i + 5..].chars().take_while(char::is_ascii_digit).collect();
+        let digits: String = out[i + 5..]
+            .chars()
+            .take_while(char::is_ascii_digit)
+            .collect();
         (!digits.is_empty()).then_some(digits)
     })?;
     digits.parse().ok()
@@ -193,7 +201,13 @@ fn cap(all: Vec<Diagnostic>) -> (Vec<Diagnostic>, bool) {
 }
 
 /// 끝난 이유와 무관하게 `stdout + "\n" + stderr`(띄우지 못하면 빈 출력). sandbox-exec 자체 실패는 거절(`ToolEnv::run`).
-async fn run_tool(tool: &ToolEnv, file: &str, args: &[&str], cwd: &str, ms: u64) -> Result<String, String> {
+async fn run_tool(
+    tool: &ToolEnv,
+    file: &str,
+    args: &[&str],
+    cwd: &str,
+    ms: u64,
+) -> Result<String, String> {
     let out = tool.run(file, args, cwd, ms).await?;
     Ok(format!("{}\n{}", out.stdout, out.stderr))
 }
@@ -221,7 +235,9 @@ pub async fn collect(
     if !plan.py.is_empty() {
         // python3 는 감싸기 전에 PATH 에서 직접 찾는다 — 없으면 띄우지 않는다(sandbox-exec 의 실패 문구가 해석에 섞이지 않게).
         let finder = tool.clone();
-        let python = gate.run(LABEL, move || Ok(finder.find_on_path("python3"))).await?;
+        let python = gate
+            .run(LABEL, move || Ok(finder.find_on_path("python3")))
+            .await?;
         for f in &plan.py {
             let out = match &python {
                 Some(py) => {
@@ -243,7 +259,11 @@ pub async fn collect(
             seen.push(k);
         }
     }
-    let server_kind = if seen.is_empty() { "none".to_owned() } else { seen.join("+") };
+    let server_kind = if seen.is_empty() {
+        "none".to_owned()
+    } else {
+        seen.join("+")
+    };
     Ok(Collected {
         diagnostics,
         truncated,
@@ -259,13 +279,26 @@ mod tests {
     #[test]
     fn tsc_line_matches_node_captures() {
         let re = TSC_RE.as_ref();
-        let cap = |s: &str| re.and_then(|r| r.exec(s)).map(|g| g[1..].iter().map(|x| x.clone().unwrap_or_default()).collect::<Vec<_>>());
+        let cap = |s: &str| {
+            re.and_then(|r| r.exec(s)).map(|g| {
+                g[1..]
+                    .iter()
+                    .map(|x| x.clone().unwrap_or_default())
+                    .collect::<Vec<_>>()
+            })
+        };
         assert_eq!(
             cap("a(1).ts(3,1): error TS1: p").as_deref(),
-            Some(["a(1).ts", "3", "1", "error", "TS1", "p"].map(str::to_owned).as_slice())
+            Some(
+                ["a(1).ts", "3", "1", "error", "TS1", "p"]
+                    .map(str::to_owned)
+                    .as_slice()
+            )
         );
         assert_eq!(
-            cap("c.ts(5,6)(7,8): error TS3: r").map(|g| g[0].clone()).as_deref(),
+            cap("c.ts(5,6)(7,8): error TS3: r")
+                .map(|g| g[0].clone())
+                .as_deref(),
             Some("c.ts(5,6)")
         );
         assert_eq!(cap("a.ts(1,1): error ts1: x"), None);

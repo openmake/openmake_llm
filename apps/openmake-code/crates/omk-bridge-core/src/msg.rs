@@ -258,10 +258,16 @@ pub enum CodeNavResult {
 impl CodeNavResult {
     pub fn to_json(&self) -> Value {
         let (mut o, truncated, skipped) = match self {
-            CodeNavResult::Grep { matches, truncated, skipped } => {
-                (serde_json::json!({"matches": matches}), truncated, skipped)
-            }
-            CodeNavResult::Files { files, truncated, skipped } => {
+            CodeNavResult::Grep {
+                matches,
+                truncated,
+                skipped,
+            } => (serde_json::json!({"matches": matches}), truncated, skipped),
+            CodeNavResult::Files {
+                files,
+                truncated,
+                skipped,
+            } => {
                 let list: Vec<Value> = files
                     .iter()
                     .map(|(path, lines)| serde_json::json!({"path": path, "lines": lines}))
@@ -357,7 +363,10 @@ impl BridgeResult {
             let list = d.iter().map(Diagnostic::to_json).collect();
             o.insert("diagnostics".to_owned(), Value::Array(list));
         }
-        for (k, v) in [("serverKind", &self.server_kind), ("testRunner", &self.test_runner)] {
+        for (k, v) in [
+            ("serverKind", &self.server_kind),
+            ("testRunner", &self.test_runner),
+        ] {
             if let Some(v) = v {
                 o.insert(k.to_owned(), Value::String(v.clone()));
             }
@@ -445,16 +454,48 @@ mod tests {
     #[test]
     fn tool_fields_follow_d66() {
         let m = BridgeMsg::from_json(&json!({"kind": "code_nav"}));
-        assert_eq!((m.pattern.as_str(), m.glob.clone(), m.ignore_case, m.max_results), ("", None, false, None));
+        assert_eq!(
+            (
+                m.pattern.as_str(),
+                m.glob.clone(),
+                m.ignore_case,
+                m.max_results
+            ),
+            ("", None, false, None)
+        );
         assert!(m.paths.is_empty());
-        for (v, want) in [(json!(null), ""), (json!(false), "false"), (json!(0), "0"), (json!(""), ""), (json!("a+"), "a+")] {
+        for (v, want) in [
+            (json!(null), ""),
+            (json!(false), "false"),
+            (json!(0), "0"),
+            (json!(""), ""),
+            (json!("a+"), "a+"),
+        ] {
             let m = BridgeMsg::from_json(&json!({"pattern": v}));
             assert_eq!((m.pattern.as_str(), m.invalid_field), (want, None), "{v}");
         }
-        for (v, want) in [(json!(true), true), (json!("false"), true), (json!(0), false), (json!(null), false), (json!([]), true)] {
-            assert_eq!(BridgeMsg::from_json(&json!({"ignoreCase": v})).ignore_case, want, "{v}");
+        for (v, want) in [
+            (json!(true), true),
+            (json!("false"), true),
+            (json!(0), false),
+            (json!(null), false),
+            (json!([]), true),
+        ] {
+            assert_eq!(
+                BridgeMsg::from_json(&json!({"ignoreCase": v})).ignore_case,
+                want,
+                "{v}"
+            );
         }
-        for (v, want) in [(json!(2), Some(2.0)), (json!(1.5), Some(1.5)), (json!(-1), Some(-1.0)), (json!(0), None), (json!(null), None), (json!(false), None), (json!(""), None)] {
+        for (v, want) in [
+            (json!(2), Some(2.0)),
+            (json!(1.5), Some(1.5)),
+            (json!(-1), Some(-1.0)),
+            (json!(0), None),
+            (json!(null), None),
+            (json!(false), None),
+            (json!(""), None),
+        ] {
             let m = BridgeMsg::from_json(&json!({"maxResults": v}));
             assert_eq!((m.max_results, m.invalid_field), (want, None), "{v}");
         }
@@ -463,12 +504,20 @@ mod tests {
         assert_eq!(m.paths, [Some("a.ts".to_owned()), None, None, None, None]);
         for v in [json!("a.ts"), json!({"a": 1}), json!(5), json!(null)] {
             let m = BridgeMsg::from_json(&json!({"paths": v}));
-            assert_eq!((m.paths.len(), m.invalid_field), (0, None), "배열이 아니면 빈 목록: {v}");
+            assert_eq!(
+                (m.paths.len(), m.invalid_field),
+                (0, None),
+                "배열이 아니면 빈 목록: {v}"
+            );
         }
         let mut long: Vec<serde_json::Value> = vec![json!("a.md"); 60];
         long.push(json!(5));
         let m = BridgeMsg::from_json(&json!({"paths": long}));
-        assert_eq!((m.paths.len(), m.invalid_field), (60, None), "61번째 원소는 보지 않는다");
+        assert_eq!(
+            (m.paths.len(), m.invalid_field),
+            (60, None),
+            "61번째 원소는 보지 않는다"
+        );
     }
 
     #[test]
@@ -484,7 +533,10 @@ mod tests {
             (json!({"paths": [5]}), "paths"),
             (json!({"paths": ["a", ["x"]]}), "paths"),
             (json!({"paths": [{"p": 1}]}), "paths"),
-            (json!({"pattern": 5, "glob": 7, "maxResults": "1", "paths": [5]}), "pattern"),
+            (
+                json!({"pattern": 5, "glob": 7, "maxResults": "1", "paths": [5]}),
+                "pattern",
+            ),
             (json!({"taskId": 1, "pattern": 5}), "taskId"),
             (json!({"glob": 7, "paths": [5]}), "glob"),
         ] {
@@ -496,23 +548,43 @@ mod tests {
     fn tool_results_serialize_like_ts() {
         use super::{BridgeResult, CodeNavResult};
         let r = BridgeResult {
-            code_nav: Some(CodeNavResult::Grep { matches: vec!["a:1:x".to_owned()], truncated: false, skipped: 0 }),
+            code_nav: Some(CodeNavResult::Grep {
+                matches: vec!["a:1:x".to_owned()],
+                truncated: false,
+                skipped: 0,
+            }),
             ..BridgeResult::success()
         };
-        assert_eq!(r.to_json(), json!({"ok": true, "codeNav": {"matches": ["a:1:x"], "truncated": false}}));
+        assert_eq!(
+            r.to_json(),
+            json!({"ok": true, "codeNav": {"matches": ["a:1:x"], "truncated": false}})
+        );
         let r = BridgeResult {
-            code_nav: Some(CodeNavResult::Files { files: vec![("a".to_owned(), 2)], truncated: true, skipped: 3 }),
+            code_nav: Some(CodeNavResult::Files {
+                files: vec![("a".to_owned(), 2)],
+                truncated: true,
+                skipped: 3,
+            }),
             ..BridgeResult::success()
         };
-        assert_eq!(r.to_json(), json!({"ok": true, "codeNav": {"files": [{"path": "a", "lines": 2}], "truncated": true, "skipped": 3}}));
+        assert_eq!(
+            r.to_json(),
+            json!({"ok": true, "codeNav": {"files": [{"path": "a", "lines": 2}], "truncated": true, "skipped": 3}})
+        );
         let r = BridgeResult {
             diagnostics: Some(Vec::new()),
             truncated: Some(false),
             server_kind: Some("none".to_owned()),
             ..BridgeResult::success()
         };
-        assert_eq!(r.to_json(), json!({"ok": true, "diagnostics": [], "truncated": false, "serverKind": "none"}));
-        let r = BridgeResult { test_runner: Some("npm".to_owned()), ..BridgeResult::success() };
+        assert_eq!(
+            r.to_json(),
+            json!({"ok": true, "diagnostics": [], "truncated": false, "serverKind": "none"})
+        );
+        let r = BridgeResult {
+            test_runner: Some("npm".to_owned()),
+            ..BridgeResult::success()
+        };
         assert_eq!(r.to_json(), json!({"ok": true, "testRunner": "npm"}));
     }
 }

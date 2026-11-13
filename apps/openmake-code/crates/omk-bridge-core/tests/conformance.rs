@@ -96,7 +96,10 @@ const DIVERGENCE_SITES: [(&str, &str); 6] = [
     ("exec-gate/cases/steps", file_kinds::NON_STRING_FIELD),
     ("worktree/cases/steps", file_kinds::NON_STRING_FIELD),
     ("code-nav/cases/requests", file_kinds::NON_STRING_FIELD),
-    ("diagnostics-parse/cases/requests", file_kinds::NON_STRING_FIELD),
+    (
+        "diagnostics-parse/cases/requests",
+        file_kinds::NON_STRING_FIELD,
+    ),
 ];
 
 /// 배열 안 사례 id 는 겹치지 않는다. `divergence`·`rustExpect` 는 정해진 자리에만 쓴다.
@@ -364,12 +367,18 @@ fn constants() {
         ("CODE_NAV_MAX_MATCHES", c::CODE_NAV_MAX_MATCHES as u64),
         ("CODE_NAV_MAX_PER_FILE", c::CODE_NAV_MAX_PER_FILE as u64),
         ("CODE_NAV_LINE_MAX_CHARS", c::CODE_NAV_LINE_MAX_CHARS as u64),
-        ("CODE_NAV_PATTERN_MAX_CHARS", c::CODE_NAV_PATTERN_MAX_CHARS as u64),
+        (
+            "CODE_NAV_PATTERN_MAX_CHARS",
+            c::CODE_NAV_PATTERN_MAX_CHARS as u64,
+        ),
         ("DIAG_TIMEOUT_MS", c::DIAG_TIMEOUT_MS),
         ("DIAG_MAX_PER_FILE", c::DIAG_MAX_PER_FILE as u64),
         ("DIAG_MAX_TOTAL", c::DIAG_MAX_TOTAL as u64),
         ("DIAG_MSG_MAX", c::DIAG_MSG_MAX as u64),
-        ("TEST_RUNNER_PROBE_TIMEOUT_MS", c::TEST_RUNNER_PROBE_TIMEOUT_MS),
+        (
+            "TEST_RUNNER_PROBE_TIMEOUT_MS",
+            c::TEST_RUNNER_PROBE_TIMEOUT_MS,
+        ),
     ];
     for (name, ours) in tools {
         assert_eq!(values[name], ours, "constants/{name}");

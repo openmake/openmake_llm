@@ -81,8 +81,8 @@ mod tests {
     #[test]
     fn utf16_order_matches_node_sort() {
         let mut v = vec![
-            "Ａ.txt", "😀.txt", "b", "B", "가", "", "a", "ab", "a-b", "a/b", "a.txt", "\u{ffff}", "\u{d7ff}",
-            "_", "~",
+            "Ａ.txt", "😀.txt", "b", "B", "가", "", "a", "ab", "a-b", "a/b", "a.txt", "\u{ffff}",
+            "\u{d7ff}", "_", "~",
         ];
         v.sort_by(|a, b| utf16_cmp(a, b));
         let want = [

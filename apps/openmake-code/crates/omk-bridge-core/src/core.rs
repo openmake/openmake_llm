@@ -12,8 +12,11 @@
 use std::time::{Duration, Instant};
 
 use crate::code_nav;
+use crate::constants::{
+    BRIDGE_KINDS, CODE_NAV_MAX_CONCURRENT, CODE_NAV_TIMEOUT_MS, DIAG_TIMEOUT_MS,
+};
 use crate::diagnostics;
-use crate::constants::{BRIDGE_KINDS, CODE_NAV_MAX_CONCURRENT, CODE_NAV_TIMEOUT_MS, DIAG_TIMEOUT_MS};
+use crate::exec::FAIL_CLOSED;
 use crate::exec::{self, ExecHost, ExecState};
 use crate::fs_kinds;
 use crate::msg::{BridgeMsg, BridgeResult, Kind};
@@ -21,7 +24,6 @@ use crate::node_error;
 use crate::scope::safe_from;
 use crate::test_runner;
 use crate::timed_fs::FsGate;
-use crate::exec::FAIL_CLOSED;
 use crate::tool_env::NO_HOST;
 use crate::worktree;
 
@@ -255,7 +257,8 @@ impl BridgeCore {
             Kind::Worktree => Ok(worktree::handle(self.exec.as_ref(), &base, m, &self.gate).await),
             Kind::CodeNav => {
                 // 예산이 Instant 범위를 넘으면 끝나지 않는 예산이다.
-                let deadline = received.checked_add(Duration::from_millis(self.timeouts.code_nav_ms));
+                let deadline =
+                    received.checked_add(Duration::from_millis(self.timeouts.code_nav_ms));
                 let req = m.clone();
                 let nav = self
                     .nav_gate
@@ -363,7 +366,10 @@ mod tests {
     #[test]
     fn browser_is_rejected_and_folder_comes_first() {
         let c = core(None);
-        let got = run(&c, json!({"kind": "browser", "command": "touch should-not-exist"}));
+        let got = run(
+            &c,
+            json!({"kind": "browser", "command": "touch should-not-exist"}),
+        );
         assert_eq!(
             got,
             json!({"ok": false, "error": "지원하지 않는 kind: browser"})

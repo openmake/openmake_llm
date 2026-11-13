@@ -83,7 +83,9 @@ pub fn apply_setup(tmp: &TmpDir, setup: &Value) {
                 let p = format!("{dir}/{}{i}", m["prefix"].as_str().unwrap());
                 match m["kind"].as_str() {
                     Some("dir") => std::fs::create_dir(&p).unwrap(),
-                    Some("file") => std::fs::write(&p, m["content"].as_str().unwrap_or("")).unwrap(),
+                    Some("file") => {
+                        std::fs::write(&p, m["content"].as_str().unwrap_or("")).unwrap()
+                    }
                     other => panic!("many.kind 를 모름: {other:?}"),
                 }
             }
