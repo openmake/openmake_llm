@@ -10,6 +10,14 @@ import { BridgeConnection, reconnectDelayMs } from '../connection';
 import { BridgeCore } from '../core';
 import { RECONNECT_MAX_MS, RECONNECT_MS } from '../constants';
 
+/**
+ * 실 소켓 대기 폴링 상한(벽시계) — 조건이 서면 바로 끝나는 최대 대기라 평소 실행 시간은 늘지 않는다. 운영 서비스·Jest 여러
+ * 작업자가 함께 도는 스테이징 검증 호스트에서 같은 패키지의 WS 대기가 4~5초를 넘긴 일이 있어(11-13) 20초로 둔다.
+ */
+const IO_DEADLINE_MS = 20_000;
+// 이 한도를 다 기다리기 전에 Jest 기본 제한(5초)이 테스트를 끊지 않게 한다(한도 + 여유).
+jest.setTimeout(IO_DEADLINE_MS + 10_000);
+
 describe('reconnectDelayMs', () => {
     it('첫 시도는 기준 간격의 절반~전체 구간에 흩어진다', () => {
         expect(reconnectDelayMs(0, 10000, 60000, () => 0)).toBe(5000);
@@ -60,7 +68,7 @@ describe('BridgeConnection 재연결 백오프', () => {
         const conn = makeConn(port, delays, []);
         await conn.connect();
         // 고정 시간만 기다리면 느린 CI 러너에서 접속 실패 처리가 늦어 4번째 예약 전에 끝난다 — 4번 예약될 때까지 기다린다
-        const deadline = Date.now() + 5000;
+        const deadline = Date.now() + IO_DEADLINE_MS;
         while (delays.length < 4 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20));
         conn.disconnect();
         expect(delays.slice(0, 4)).toEqual([20, 40, 80, 160]);
@@ -80,17 +88,17 @@ describe('BridgeConnection 재연결 백오프', () => {
         const conn = makeConn(port, delays, statuses);
         await conn.connect();
         // 20 → 40 까지 실패 — 고정 시간만 기다리면 부하가 걸린 러너에서 두 번째 예약 전에 끝난다(위 테스트와 같은 이유)
-        const until0 = Date.now() + 5000;
+        const until0 = Date.now() + IO_DEADLINE_MS;
         while (delays.length < 2 && Date.now() < until0) await new Promise((r) => setTimeout(r, 10));
         expect(delays.length).toBeGreaterThanOrEqual(2);
         expect(delays[1]).toBe(40);
         accept = true;
-        const until = Date.now() + 5000;
+        const until = Date.now() + IO_DEADLINE_MS;
         while (!statuses.some((s) => s.startsWith('연결됨')) && Date.now() < until) await new Promise((r) => setTimeout(r, 20));
         expect(statuses.some((s) => s.startsWith('연결됨'))).toBe(true);
         const before = delays.length;
         for (const c of wss.clients) c.terminate();
-        const until2 = Date.now() + 2000;
+        const until2 = Date.now() + IO_DEADLINE_MS;
         while (delays.length === before && Date.now() < until2) await new Promise((r) => setTimeout(r, 10));
         expect(delays[before]).toBe(20); // 리셋됨
         conn.disconnect();
