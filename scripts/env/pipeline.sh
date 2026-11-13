@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Managed pipeline: staging update → smoke → configured validation → human hold;
-# online captured release → verification gate → backup/update → smoke/identity.
+# Managed pipeline: staging update → smoke → [desktop publish] → configured validation → human hold;
+# online captured release → verification gate → backup/update → smoke/identity → [desktop publish].
+# [desktop publish] runs only with OMK_DESKTOP_PUBLISH=1 in the environment .env (scripts/pipeline/desktop-publish.mjs).
 # Configuration is local: OMK_VALIDATION_CONFIG or <env-dir>/.pipeline/checks.json.
 pipeline_dir() { printf '%s/.pipeline' "$(env_dir "$1")"; }
 pipeline_locked() ( # A single host-local lock covers every mutating pipeline command.
@@ -54,6 +55,15 @@ pipeline_verify_proof() {
     node -e 'const v=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));if(v.schemaVersion!==1||v.stage!=="staging-validation"||v.sha!==process.argv[2]||v.status!=="passed"||!v.startedAt||!v.finishedAt||!Array.isArray(v.checks)||!v.checks.length||v.checks.some(c=>c.status!=="passed"))process.exit(1)' "$dir/validation.json" "$sha" || die 'Missing, failed or stale strong validation evidence'
     pipeline_identity "$env" "$sha"
 }
+# Publishes the release-asset dmg of the checkout's apps/desktop-native/VERSION when it is ahead of the served one.
+# Its failure never records an update failure: that marker would redeploy the product.
+pipeline_desktop_publish() { # $1=env $2=installed SHA → 0 done/off, 75 release asset pending, else failed
+    local ldir dir; ldir="$(llm_dir "$1")"
+    [[ "$(dotenv_get "$ldir/.env" OMK_DESKTOP_PUBLISH)" == 1 ]] || return 0
+    dir="$(dotenv_get "$ldir/.env" DESKTOP_UPDATE_DIR)"; [[ -n "$dir" ]] || dir="$ldir/data/desktop-updates"
+    node "$SCRIPT_DIR/../pipeline/desktop-publish.mjs" publish --cwd "$ldir" --sha "$2" --dir "$dir" \
+        --repo "$(status_repo_slug "$ldir")" --output "$(pipeline_dir "$1")/desktop-publish.json"
+}
 # A fresh Bash process preserves updater errexit even in conditional callers.
 # The parent retains the shared lock while the child uses that exact ownership.
 # A failed update is remembered so the next run redeploys even when HEAD already matches.
@@ -87,6 +97,7 @@ pipeline_run() {
         pipeline_update_step "$env" || return $?
         sha="$(git -C "$ldir" rev-parse HEAD)"
         cmd_env_smoke "$env" || return $?
+        pipeline_desktop_publish "$env" "$sha" || return $?
         pipeline_validate "$env" || return $?
         [[ "$sha" == "$(git -C "$ldir" rev-parse HEAD)" ]] || die 'Staging SHA changed'
         pipeline_hold "$env"
@@ -103,7 +114,8 @@ pipeline_run() {
         pipeline_update_step "$env" "$captured" || return $?
         [[ "$(git -C "$ldir" rev-parse HEAD)" == "$captured" ]] || die 'Installed release differs from captured tag'
         cmd_env_smoke "$env" || return $?
-        pipeline_identity "$env" "$captured"
+        pipeline_identity "$env" "$captured" || return $?
+        pipeline_desktop_publish "$env" "$captured"
     fi
 }
 
