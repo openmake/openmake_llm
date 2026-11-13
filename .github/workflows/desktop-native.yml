@@ -3,7 +3,9 @@
 # ==============================================================
 # path-filter: apps/desktop-native 또는 브리지 코어(packages/local-bridge-core) 변경 시에만 실행.
 # 코어가 바뀌었는데 헬퍼 번들/하네스가 깨지는 커밋을 여기서 잡는다 (iOS ci 패턴 준용).
-# CI 는 빌드 검증 뒤 ad-hoc 서명 dmg 를 만들어 실행 결과로 남긴다. 서버 게시는 수동(scripts/publish-desktop.sh).
+# CI 는 빌드 검증 뒤 ad-hoc 서명 dmg 를 만들어 실행 결과로 남긴다.
+# main push 중 apps/desktop-native/VERSION 이 바뀐 것만 release job 이 그 dmg 를 사전 릴리스 desktop-native-v<버전>
+# 자산으로 한 번 올린다 — 서버 파이프라인(omk env pipeline, OMK_DESKTOP_PUBLISH=1)이 계보·sha256 확인 뒤 게시한다.
 # ==============================================================
 
 name: Desktop Native
@@ -63,7 +65,7 @@ jobs:
         run: swift build -c release --package-path apps/desktop-native/OpenMakeCompanion
 
       # ─── Gate 3: .app 조립 + ad-hoc 서명 + dmg ───
-      # build.sh 가 Gate 1·2 를 다시 돌린 뒤 dmg 까지 만든다(이미 빌드돼 있어 빠르다). 서버 게시는 수동(scripts/publish-desktop.sh).
+      # build.sh 가 Gate 1·2 를 다시 돌린 뒤 dmg 까지 만든다(이미 빌드돼 있어 빠르다). 서버 게시는 아래 release job → 서버 파이프라인.
       - name: "Gate 3: dmg"
         run: bash apps/desktop-native/build.sh
 
@@ -74,3 +76,101 @@ jobs:
           path: apps/desktop-native/dist/OpenMake-Companion-*.dmg
           if-no-files-found: error
           retention-days: 30
+
+  # ─── 릴리스: 앱 버전마다 한 번 (원칙: 한 버전 = 한 빌드 = 한 sha256) ───
+  # 같은 실행의 companion dmg 를 다시 빌드하지 않고 올린다. 이미 릴리스가 있으면 아무것도 하지 않는다(자산을 덮어쓰지 않는다).
+  # 위 concurrency(cancel-in-progress)로 main 의 다음 push 가 이 실행을 취소할 수 있다 — 취소·실패한 실행은 다시 돌린다(같은 SHA).
+  release:
+    name: Release dmg (main push 중 VERSION 이 바뀐 것만)
+    needs: companion
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Gate (VERSION changed in this push, release absent)
+        id: gate
+        env:
+          BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < apps/desktop-native/VERSION)"
+          [[ "$VERSION" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "::error::VERSION 형식이 잘못됐습니다: $VERSION"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "::warning::push 이전 커밋을 찾을 수 없어(강제 push·새 브랜치) 릴리스하지 않습니다 — 필요하면 VERSION 을 다시 올린다"
+            echo "publish=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --quiet "$BEFORE" "$GITHUB_SHA" -- apps/desktop-native/VERSION; then
+            echo "VERSION 변화 없음 — 릴리스하지 않습니다"
+            echo "publish=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # gh release view 는 초안도 찾는다 — 자산을 올리다 취소된 실행이 남긴 초안은 서버가 받을 수 없으니 건너뛰지 않고 멈춘다.
+          if DRAFT="$(gh release view "desktop-native-v$VERSION" --json isDraft --jq .isDraft 2>/dev/null)"; then
+            if [[ "$DRAFT" == "true" ]]; then
+              echo "::error::릴리스 desktop-native-v$VERSION 이 초안(draft)으로 남아 있습니다(자산을 올리다 중단된 실행) — 그 초안을 지운 뒤 이 실행을 다시 돌리세요"
+              exit 1
+            fi
+            echo "릴리스 desktop-native-v$VERSION 이 이미 있음 — 덮어쓰지 않습니다"
+            echo "publish=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Download dmg
+        if: steps.gate.outputs.publish == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: OpenMake-Companion-dmg
+          path: release-assets
+
+      - name: Release manifest
+        id: manifest
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          VERSION: ${{ steps.gate.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          dmgs=(release-assets/OpenMake-*.dmg)
+          [[ ${#dmgs[@]} -eq 1 ]] || { echo "::error::dmg 가 하나가 아닙니다: ${dmgs[*]}"; exit 1; }
+          node scripts/pipeline/desktop-publish.mjs manifest --dmg "${dmgs[0]}" --sha "$GITHUB_SHA" --output release-assets/desktop-native.json
+          [[ "$(node -p 'require("./release-assets/desktop-native.json").version')" == "$VERSION" ]] || { echo "::error::dmg 버전이 VERSION($VERSION)과 다릅니다"; exit 1; }
+          cat release-assets/desktop-native.json
+          echo "dmg=${dmgs[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        if: steps.gate.outputs.publish == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.manifest.outputs.dmg }}
+
+      - name: Create pre-release
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.gate.outputs.version }}
+          DMG: ${{ steps.manifest.outputs.dmg }}
+        run: |
+          set -euo pipefail
+          gh release create "desktop-native-v$VERSION" --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "Desktop app $VERSION" \
+            --notes "데스크톱 앱 $VERSION — 빌드 커밋 $GITHUB_SHA. 서버 파이프라인이 계보·sha256 검증 뒤 게시하는 빌드다. 직접 받아 설치하지 말 것." \
+            "$DMG" release-assets/desktop-native.json
