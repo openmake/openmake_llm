@@ -157,14 +157,14 @@ describe('D-11 — 연결 뒤에 생긴 구조도 요청 시점에 본다', () =
         for (const p of ['.git', '.git/description']) expect(await run(core, del(p))).toEqual(denied(p));
     });
 
-    it('HEAD 는 어느 폴더에서든 새로 만들 수 없다(이미 있으면 쓴다, 지우기는 된다)', async () => {
+    it('HEAD 는 어느 폴더에서든 새로 만들거나 지울 수 없다(이미 있으면 내용은 쓴다 — 5차 T1)', async () => {
         const root = plain();
         fs.mkdirSync(path.join(root, 'docs'));
         fs.writeFileSync(path.join(root, 'docs', 'HEAD'), 'old\n');
         const core = makeCore(root);
         for (const p of ['src/HEAD', 'src/head', 'src/HEAD/x']) expect(await run(core, write(p))).toEqual(denied(p));
         expect(await run(core, write('docs/HEAD', 'new\n'))).toEqual(ok);
-        expect(await run(core, del('docs/HEAD'))).toEqual(ok);
+        expect(await run(core, del('docs/HEAD'))).toEqual(denied('docs/HEAD'));
     });
 });
 

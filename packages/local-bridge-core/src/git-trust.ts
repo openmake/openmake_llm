@@ -191,8 +191,10 @@ function deniedUnder(r: string, d: string, del: boolean): boolean {
  *  2. 대상의 조상 폴더(연결 폴더까지) 중 `HEAD` 항목이 지금 있는(lstat) 폴더와 연결 때 정한 목록의 git 디렉터리(HEAD 유무 무관 —
  *     탐지 실패·깨진 HEAD 에서도 남는다)마다, 그 바로 아래 금지 이름·`hooks` 아래·비ASCII 첫 이름이면 거절(delete 는 목록의 git
  *     디렉터리 자신·상위 폴더도). linked 배치의 `<common>/worktrees` 도 거절한다.
- *  3. 아직 없는 `HEAD` 항목을 새로 만드는 쓰기는 거절(이미 있으면 종전대로 쓴다, 지우기는 막지 않는다) — 2 와 합쳐 "`config` 먼저,
- *     `HEAD` 나중" 순서도 닫는다. `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
+ *  3. 파일 kind 는 `HEAD` 항목의 유무를 바꾸지 못한다 — 아직 없는 `HEAD` 를 새로 만드는 쓰기와 `HEAD` 자신을 지우는 것을 거절
+ *     (이미 있는 `HEAD` 의 내용 쓰기는 종전대로, `HEAD` 를 품은 폴더째 지우기는 구조가 함께 사라지므로 연다). 2 의 표식을 파일
+ *     kind 가 움직이지 못하게 한다 — 만들기는 "`config` 먼저, `HEAD` 나중", 지우기는 "linked worktree 의 common dir 에서 `HEAD`
+ *     를 지운 뒤 `config`"(리뷰 5차 T1) 순서를 닫는다. `HEAD` 는 APFS 에 다른 표기가 없어(실측) ASCII 접기로 충분하다.
  * 비교는 대상의 realpath 와 "부모의 realpath + 마지막 이름" 둘로 하고(심링크 자리 자체도 막는다), 대소문자를 접어서 한다.
  */
 export async function assertGitPathAllowed(guard: GitGuard, abs: string, rel: string | undefined, del: boolean): Promise<void> {
@@ -200,7 +202,7 @@ export async function assertGitPathAllowed(guard: GitGuard, abs: string, rel: st
     const lexReal = path.join((await resolveReal(path.dirname(abs))).real, path.basename(abs));
     const [r, lex, root] = [real, lexReal, guard.root].map(foldCase);
     const dotGit = [r, lex].some((p) => path.relative(root, p).split(path.sep).includes('.git'));
-    const newHead = !del && created.some((n) => foldCase(n) === 'head');
+    const headEntry = del ? foldCase(path.basename(lexReal)) === 'head' : created.some((n) => foldCase(n) === 'head');
     const dirs: string[] = [];
     let parentRename = false;
     for (const git of guard.dirs) {
@@ -215,5 +217,5 @@ export async function assertGitPathAllowed(guard: GitGuard, abs: string, rel: st
         }
     }
     const denied = [...new Set(dirs)].some((d) => deniedUnder(r, d, del) || deniedUnder(lex, d, del));
-    if (dotGit || newHead || denied || parentRename) throw new Error(`${GIT_PATH_DENIED_PREFIX}${rel}`);
+    if (dotGit || headEntry || denied || parentRename) throw new Error(`${GIT_PATH_DENIED_PREFIX}${rel}`);
 }
