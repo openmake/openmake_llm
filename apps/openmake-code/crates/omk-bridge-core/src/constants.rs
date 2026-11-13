@@ -173,3 +173,30 @@ pub const CODE_NAV_EXCLUDED_DIRS: &[&str] = &[
     "coverage",
     ".openmake",
 ];
+
+/// code_nav 시간 예산 기본값(ms) — TS 는 `OMK_BRIDGE_CODE_NAV_TIMEOUT_MS || 15000`. 호스트가 `with_tool_timeouts` 로 바꾼다.
+pub const CODE_NAV_TIMEOUT_MS: u64 = 15_000;
+/// 1회 요청에서 훑을 최대 파일 수.
+pub const CODE_NAV_MAX_FILES: usize = 4000;
+/// 내용을 읽을 파일 크기 상한(bytes).
+pub const CODE_NAV_MAX_FILE_BYTES: u64 = 512 * 1024;
+/// grep 매치 상한.
+pub const CODE_NAV_MAX_MATCHES: usize = 400;
+/// 한 파일에서 가져올 최대 매치 수.
+pub const CODE_NAV_MAX_PER_FILE: usize = 20;
+/// 매치 줄 1건 길이 상한(UTF-16 단위).
+pub const CODE_NAV_LINE_MAX_CHARS: usize = 300;
+/// 정규식 소스 길이 상한(UTF-16 단위).
+pub const CODE_NAV_PATTERN_MAX_CHARS: usize = 500;
+/// 코어 하나의 code_nav 동시 작업 수 — TS 에는 대응 값이 없다. 끝나지 않는 판정이 이 칸만 쥔다(설계 D-62).
+pub const CODE_NAV_MAX_CONCURRENT: usize = 2;
+/// 진단 도구 1회 시간 제한 기본값(ms) — TS 는 `OMK_BRIDGE_DIAG_TIMEOUT_MS || 15000`.
+pub const DIAG_TIMEOUT_MS: u64 = 15_000;
+/// 파일당 진단 상한.
+pub const DIAG_MAX_PER_FILE: usize = 20;
+/// 전체 진단 상한(요청 `paths` 도 앞의 이만큼만 본다).
+pub const DIAG_MAX_TOTAL: usize = 60;
+/// 진단 메시지 1건 길이 상한(UTF-16 단위).
+pub const DIAG_MSG_MAX: usize = 300;
+/// pytest 탐지 자식 시간 제한(ms) — TS 도 상수다.
+pub const TEST_RUNNER_PROBE_TIMEOUT_MS: u64 = 5_000;
