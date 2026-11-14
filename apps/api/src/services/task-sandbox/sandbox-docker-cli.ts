@@ -5,7 +5,7 @@
  * @module services/task-sandbox/sandbox-docker-cli
  */
 import { spawn } from 'child_process';
-import { StringDecoder } from 'string_decoder';
+import { cappedUtf8Text } from '../../utils/capped-utf8-text';
 import { randomUUID } from 'crypto';
 import { browserDestGuardEnv, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { BROWSER_RUN } from '../../config/agent-task-browser-web';
@@ -114,28 +114,13 @@ export function runProcess(
     return new Promise((resolvePromise) => {
         const started = Date.now();
         const child = tapOutput(spawn(dockerPath, args, { stdio: ['pipe', 'pipe', 'pipe'] }), opts.onOutput);
-        let stdout = '';
-        let stderr = '';
-        let truncated = false, timedOut = false;
+        let timedOut = false;
 
-        // 조각마다 따로 문자열로 바꾸면 경계에 걸린 다바이트 글자가 U+FFFD 로 깨진다 — 스트림마다 이어 디코드한다(tapOutput 과 같은 방식).
-        // 상한은 디코드된 문자열 길이(UTF-16 단위). 한 번 넘으면 그 스트림에는 더 붙이지 않는다(가운데가 빠진 출력 금지).
-        const decoders = { out: new StringDecoder('utf8'), err: new StringDecoder('utf8') };
-        const full = { out: false, err: false };
-        const append = (text: string, which: 'out' | 'err') => {
-            if (full[which] || !text) return;
-            const cur = which === 'out' ? stdout.length : stderr.length;
-            if (cur + text.length > opts.outputCap) {
-                full[which] = truncated = true;
-                let end = Math.max(0, opts.outputCap - cur);
-                const last = text.charCodeAt(end - 1);
-                if (end > 0 && last >= 0xd800 && last <= 0xdbff) end -= 1; // 대리 쌍 한가운데에서 자르지 않는다
-                text = text.slice(0, end);
-            }
-            if (which === 'out') stdout += text; else stderr += text;
-        };
-        child.stdout.on('data', (b: Buffer) => append(decoders.out.write(b), 'out'));
-        child.stderr.on('data', (b: Buffer) => append(decoders.err.write(b), 'err'));
+        // 스트림마다 이어 디코드하고 글자 수(UTF-16 단위) 상한까지만 모은다(cappedUtf8Text — 대리 쌍 보호, 넘친 뒤 조각 미첨부).
+        const out = cappedUtf8Text(opts.outputCap);
+        const err = cappedUtf8Text(opts.outputCap);
+        child.stdout.on('data', (b: Buffer) => out.write(b));
+        child.stderr.on('data', (b: Buffer) => err.write(b));
 
         const stop = (): void => {
             void Promise.resolve(opts.onStop?.()).catch(() => { /* 정리 실패해도 CLI 는 끝낸다 */ }).finally(() => child.kill('SIGKILL'));
@@ -149,20 +134,20 @@ export function runProcess(
         child.on('close', (code) => {
             clearTimeout(timer);
             opts.signal?.removeEventListener('abort', stop);
-            append(decoders.out.end(), 'out');
-            append(decoders.err.end(), 'err');
+            out.end();
+            err.end();
             resolvePromise({
-                stdout, stderr,
+                stdout: out.text, stderr: err.text,
                 exitCode: code ?? -1,
-                truncated, timedOut,
+                truncated: out.truncated || err.truncated, timedOut,
                 durationMs: Date.now() - started,
             });
         });
-        child.on('error', (err) => {
+        child.on('error', (e) => {
             clearTimeout(timer);
             resolvePromise({
-                stdout, stderr: stderr + String(err),
-                exitCode: -1, truncated, timedOut,
+                stdout: out.text, stderr: err.text + String(e),
+                exitCode: -1, truncated: out.truncated || err.truncated, timedOut,
                 durationMs: Date.now() - started,
             });
         });
