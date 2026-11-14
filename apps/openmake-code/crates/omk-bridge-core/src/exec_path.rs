@@ -106,10 +106,11 @@ pub async fn resolve_exec_path(
         let pairs = env.iter().map(|(k, v)| (k.as_str(), v.as_str()));
         build_exec_env(pairs, path, platform, PATH_PROBE_ENV_EXTRA_POSIX)
     };
+    // 홈에서 띄운다 — 사용자 로그인 rc 의 cwd 훅(mise activate·direnv)이 연결 폴더 설정을 샌드박스 밖에서 돌리지 않게(설계 D-13).
     let login = probe(
         login_shell(env),
         &["-lc", "echo -n \"$PATH\""],
-        None,
+        Some(home),
         probe_env(process_path),
     );
     let login = run_ok(login).await;
