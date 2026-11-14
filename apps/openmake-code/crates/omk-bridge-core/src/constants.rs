@@ -239,8 +239,12 @@ pub const CODE_NAV_MAX_PER_FILE: usize = 20;
 pub const CODE_NAV_LINE_MAX_CHARS: usize = 300;
 /// 정규식 소스 길이 상한(UTF-16 단위).
 pub const CODE_NAV_PATTERN_MAX_CHARS: usize = 500;
-/// 코어 하나의 code_nav 동시 작업 수 — TS 에는 대응 값이 없다. 끝나지 않는 판정이 이 칸만 쥔다(설계 D-62).
+/// 코어 하나의 code_nav 동시 작업 수 — TS 에는 대응 값이 없다. 느린 판정은 예산까지만 이 칸을 쥔다(설계 D-62).
 pub const CODE_NAV_MAX_CONCURRENT: usize = 2;
+/// grep 판정 한 번의 역추적 스택 항목 수 상한(regress 사본의 `ExecLimits::max_backtrack`). 2^20−1 — 스택 `Vec` 용량이 2^20 항목,
+/// 약 40MB(항목 약 40바이트)를 넘지 않는다. 넘으면 그 요청은 오류다. V8 의 정규식 스택 상한과 같은 종류의 한도다
+/// (TS 는 `RangeError: Maximum call stack size exceeded` 로 요청 오류).
+pub const CODE_NAV_REGEX_MAX_BACKTRACK: usize = 1_048_575;
 /// 진단 도구 1회 시간 제한 기본값(ms) — TS 는 `OMK_BRIDGE_DIAG_TIMEOUT_MS || 15000`.
 pub const DIAG_TIMEOUT_MS: u64 = 15_000;
 /// 파일당 진단 상한.
