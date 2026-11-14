@@ -5,6 +5,7 @@
  * @module services/task-sandbox/sandbox-docker-cli
  */
 import { spawn } from 'child_process';
+import { cappedUtf8Text } from '../../utils/capped-utf8-text';
 import { randomUUID } from 'crypto';
 import { browserDestGuardEnv, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { BROWSER_RUN } from '../../config/agent-task-browser-web';
@@ -113,19 +114,13 @@ export function runProcess(
     return new Promise((resolvePromise) => {
         const started = Date.now();
         const child = tapOutput(spawn(dockerPath, args, { stdio: ['pipe', 'pipe', 'pipe'] }), opts.onOutput);
-        let stdout = '';
-        let stderr = '';
-        let truncated = false, timedOut = false;
+        let timedOut = false;
 
-        const onData = (buf: Buffer, which: 'out' | 'err') => {
-            const cur = which === 'out' ? stdout.length : stderr.length;
-            if (cur >= opts.outputCap) { truncated = true; return; }
-            const chunk = buf.toString('utf8', 0, Math.max(0, opts.outputCap - cur));
-            if (which === 'out') stdout += chunk; else stderr += chunk;
-            if (cur + buf.length > opts.outputCap) truncated = true;
-        };
-        child.stdout.on('data', (b) => onData(b, 'out'));
-        child.stderr.on('data', (b) => onData(b, 'err'));
+        // 스트림마다 이어 디코드하고 글자 수(UTF-16 단위) 상한까지만 모은다(cappedUtf8Text — 대리 쌍 보호, 넘친 뒤 조각 미첨부).
+        const out = cappedUtf8Text(opts.outputCap);
+        const err = cappedUtf8Text(opts.outputCap);
+        child.stdout.on('data', (b: Buffer) => out.write(b));
+        child.stderr.on('data', (b: Buffer) => err.write(b));
 
         const stop = (): void => {
             void Promise.resolve(opts.onStop?.()).catch(() => { /* 정리 실패해도 CLI 는 끝낸다 */ }).finally(() => child.kill('SIGKILL'));
@@ -139,18 +134,20 @@ export function runProcess(
         child.on('close', (code) => {
             clearTimeout(timer);
             opts.signal?.removeEventListener('abort', stop);
+            out.end();
+            err.end();
             resolvePromise({
-                stdout, stderr,
+                stdout: out.text, stderr: err.text,
                 exitCode: code ?? -1,
-                truncated, timedOut,
+                truncated: out.truncated || err.truncated, timedOut,
                 durationMs: Date.now() - started,
             });
         });
-        child.on('error', (err) => {
+        child.on('error', (e) => {
             clearTimeout(timer);
             resolvePromise({
-                stdout, stderr: stderr + String(err),
-                exitCode: -1, truncated, timedOut,
+                stdout: out.text, stderr: err.text + String(e),
+                exitCode: -1, truncated: out.truncated || err.truncated, timedOut,
                 durationMs: Date.now() - started,
             });
         });
