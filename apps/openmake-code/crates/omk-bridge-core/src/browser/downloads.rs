@@ -2,8 +2,9 @@
 //!
 //! Chrome 은 `Browser.setDownloadBehavior({behavior:'allowAndName'})` 로 대기 폴더(연결 폴더 밖)에 `<guid>` 이름으로만 받는다.
 //! 이벤트는 두 채널(`Page.*` — 붙은 탭의 sessionId, `Browser.*` — 붙지 않은 새 창)로 오고 guid 로 합친다 — 같은 guid 의 시작은
-//! 처음 것만, 완료 처리(옮기기)는 guid 당 한 번. 시작 순간의 저장 함수와 귀속 작업을 guid 에 묶는다 — 완료가 호출이 끝난 뒤에
-//! 와도 묶인 함수로 옮긴다. CDP 설정은 연결에 묶여 연결이 닫히면 Chrome 기본값으로 돌아가므로, Chrome 을 새로 띄울 때 프로필
+//! 처음 것만, 완료 처리(옮기기)는 guid 당 한 번. 저장 함수는 작업별로 기억하고(작업 키 → 저장 함수, 호출마다 그 작업의 값만
+//! 바꾼다), 시작 순간 귀속 작업을 정해 **그 작업의** 저장 함수를 guid 에 묶는다 — 완료가 호출이 끝난 뒤에 와도 묶인 함수로
+//! 옮긴다. 귀속하지 못한 다운로드는 저장 함수가 없어 옮기지 않는다(D-1·D-3). CDP 설정은 연결에 묶여 연결이 닫히면 Chrome 기본값으로 돌아가므로, Chrome 을 새로 띄울 때 프로필
 //! (`Default`)의 기본 다운로드 폴더도 대기 폴더로 맞추고 설정이 실패하면 호출을 실행하지 않는다.
 //! 대기 폴더·프로필 파일은 연결 폴더 밖(앱 지원 폴더)이라 `FsGate` 밖에서 바로 쓴다(TS 와 같다).
 
@@ -86,7 +87,7 @@ impl DownloadReport {
 }
 
 struct Download {
-    /// 귀속 작업 — 없으면 보고하지 않는다(가드·옮기기는 그대로 한다)
+    /// 귀속 작업 — 없으면 보고하지 않는다(시작 때 없었으면 저장 함수도 없다, `forget` 으로 풀렸으면 옮기기는 그대로 한다)
     task: Option<String>,
     place: Option<PlaceDownload>,
     report: DownloadReport,
@@ -99,8 +100,8 @@ struct Download {
 
 #[derive(Default)]
 struct Inner {
-    /// 지금 시작하는 다운로드를 옮길 저장 함수 — 가장 최근 호출이 설정한 것
-    place: Option<PlaceDownload>,
+    /// 작업 키 → 그 작업의 마지막 호출이 준 저장 함수(없음도 기록 — 그 작업은 받지 않는다)
+    places: Vec<(String, Option<PlaceDownload>)>,
     /// guid → 기록(시작 순서 — 보고 순서)
     items: Vec<(String, Download)>,
 }
@@ -159,10 +160,12 @@ impl DownloadTracker {
     }
 
     /// 호출마다 — 저장 함수가 있으면 대기 폴더(0700)에 guid 이름으로만(allowAndName), 없으면 받지 않게(deny). 설정이 거절·
-    /// 시간 초과면 오류 — 호출부는 액션을 하나도 실행하지 않는다. 저장 함수는 설정에 성공한 뒤에만 바꾼다.
+    /// 시간 초과면 오류 — 호출부는 액션을 하나도 실행하지 않는다. 그 작업(`task`)의 저장 함수는 설정에 성공한 뒤에만 바꾼다.
+    /// Chrome 쪽 설정은 브라우저 전역이고 값은 늘 같은 대기 폴더다.
     pub async fn configure(
         &self,
         cdp: &CdpClient,
+        task: &str,
         place: Option<PlaceDownload>,
     ) -> Result<(), String> {
         if place.is_some() {
@@ -177,7 +180,9 @@ impl DownloadTracker {
         cdp.send("Browser.setDownloadBehavior", params, None)
             .await
             .map_err(|e| format!("다운로드 설정에 실패해 실행하지 않았습니다: {e}"))?;
-        self.lock().place = place;
+        let mut g = self.lock();
+        g.places.retain(|(k, _)| k != task);
+        g.places.push((task.to_owned(), place));
         Ok(())
     }
 
@@ -261,9 +266,11 @@ impl DownloadTracker {
         g.items = keep;
     }
 
-    /// 작업이 끝났다 — 끝난 기록은 버리고, 받는 중인 것은 귀속만 푼다(옮기기는 그대로).
+    /// 작업이 끝났다 — 저장 함수와 끝난 기록은 버리고, 받는 중인 것은 귀속만 푼다(옮기기는 묶인 함수로 그대로).
     pub fn forget(&self, task: &str) {
-        self.lock().items.retain_mut(|(_, d)| {
+        let mut g = self.lock();
+        g.places.retain(|(k, _)| k != task);
+        g.items.retain_mut(|(_, d)| {
             if d.task.as_deref() != Some(task) {
                 return true;
             }
@@ -275,14 +282,19 @@ impl DownloadTracker {
         });
     }
 
-    /// 시작 이벤트 — guid 가 없거나 이미 있으면 버린다. 지금의 저장 함수와 귀속 작업을 묶는다.
+    /// 시작 이벤트 — guid 가 없거나 이미 있으면 버린다. 귀속 작업과 그 작업의 저장 함수를 묶는다(작업이 없으면 저장 함수도 없다).
     pub fn begin(&self, params: &Value, task: Option<String>) {
         let guid = str_of(params.get("guid"));
         let mut g = self.lock();
         if guid.is_empty() || g.items.iter().any(|(k, _)| *k == guid) {
             return;
         }
-        let place = g.place.clone();
+        let place = task.as_deref().and_then(|t| {
+            g.places
+                .iter()
+                .find(|(k, _)| k == t)
+                .and_then(|(_, p)| p.clone())
+        });
         let name = str_of(params.get("suggestedFilename"));
         g.items.push((
             guid,
