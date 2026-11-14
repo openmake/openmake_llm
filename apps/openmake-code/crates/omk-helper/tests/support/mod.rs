@@ -2,6 +2,7 @@
 #![allow(dead_code, clippy::unwrap_used, clippy::expect_used)]
 
 pub mod child;
+pub mod flow;
 pub mod server;
 
 use std::path::{Path, PathBuf};
