@@ -88,8 +88,15 @@ struct Plan {
 }
 
 fn plan(base: &str, abs_paths: &[String]) -> Plan {
+    // base 의 엄격한 하위만 — 대상이 연결 폴더 자신이면(`paths: ['.']`, 이름이 `.ts` 로 끝나는 폴더) 위로 찾기가 폴더 **밖**에서
+    // 시작해 조상의 tsconfig·tsc 를 실행했다(설계 D-9). 그 밖은 조용히 건너뛴다(디렉터리는 진단 대상이 아니다).
+    let under = format!("{base}/");
+    let abs_paths: Vec<&String> = abs_paths
+        .iter()
+        .filter(|p| p.as_str() != base && p.starts_with(&under))
+        .collect();
     let mut projects: Vec<(String, String)> = Vec::new();
-    for f in abs_paths {
+    for f in abs_paths.iter().copied() {
         if !TS_EXT.contains(&node_path::extname(f).as_str()) {
             continue;
         }
@@ -102,7 +109,7 @@ fn plan(base: &str, abs_paths: &[String]) -> Plan {
         }
     }
     let py = abs_paths
-        .iter()
+        .into_iter()
         .filter(|f| node_path::extname(f) == PY_EXT)
         .cloned()
         .collect();

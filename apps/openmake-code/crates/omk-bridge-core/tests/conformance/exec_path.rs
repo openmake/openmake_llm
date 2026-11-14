@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use omk_bridge_core::exec_path::resolve_exec_path;
 use omk_bridge_core::platform::Platform;
+use omk_bridge_core::tool_env::ToolSandbox;
 use serde_json::{Value, json};
 
 use super::exec_gate::new_tmp;
@@ -138,6 +139,7 @@ fn exec_path_resolve() {
             &home,
             Platform::Darwin,
             folder.as_deref(),
+            &ToolSandbox::Off,
         ));
         assert_eq!(json!({"path": got}), c["expect"], "{ctx}");
         if let Some(want) = c.get("shellEnv") {
@@ -178,6 +180,7 @@ fn exec_path_win32() {
             "/synthetic/home",
             Platform::Win32,
             None,
+            &ToolSandbox::Off,
         ));
         assert_eq!(got, e.as_str().unwrap(), "{ctx}");
     });

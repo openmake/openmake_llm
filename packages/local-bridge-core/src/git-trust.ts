@@ -17,6 +17,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { GIT_FIXED_ARGS, GIT_PATH_DENIED_PREFIX, GIT_PROBE_PROFILE, GITFILE_MAX_BYTES, GIT_PROBE_TIMEOUT_MS, SANDBOX_BIN, SANDBOX_ENABLED } from './constants';
 import { buildExecEnv } from './exec-env';
+import { absPathEntries } from './exec-path';
 
 const fsp = fs.promises;
 
@@ -31,7 +32,7 @@ function probe(args: string[], cwd: string): string | null {
         // 자식 환경은 exec 와 같은 allowlist 로 제한한다(호스트 env 의 비밀을 넘기지 않는다).
         return execFileSync(file, full, {
             cwd, encoding: 'utf8', timeout: GIT_PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'],
-            env: buildExecEnv(process.env, process.env.PATH ?? ''),
+            env: buildExecEnv(process.env, absPathEntries(process.env.PATH ?? '')),
         });
     } catch { return null; }
 }
