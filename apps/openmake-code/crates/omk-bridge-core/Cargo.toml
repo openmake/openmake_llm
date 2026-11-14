@@ -15,8 +15,16 @@ regress = { version = "0.12.0", features = ["utf16"] }
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 # 브라우저 주소 해석 — WHATWG URL(Node `new URL` 과 같은 규칙, PR-1.6 D-75). 연결 크레이트와 같은 버전.
 url = "2.5.8"
-# 파일 kind 의 시간 제한 + exec·git·탐지 자식 프로세스(설계 D-12·D-30). net·macros·fs·signal 은 넣지 않는다.
-tokio = { version = "1.54.1", default-features = false, features = ["rt", "time", "sync", "process", "io-util"] }
+# 파일 kind 의 시간 제한 + exec·git·탐지 자식 프로세스(설계 D-12·D-30), 브라우저 CDP 소켓(net — 루프백 접속만, PR-1.6 D-73).
+# macros·fs·signal 은 넣지 않는다.
+tokio = { version = "1.54.1", default-features = false, features = ["rt", "time", "sync", "process", "io-util", "net"] }
+# 브라우저 CDP — 우리가 연 루프백 스트림 위에서 핸드셰이크만 한다(PR-1.6 D-72). 연결 크레이트와 같은 버전·기능.
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["sink", "std"] }
+
+[dev-dependencies]
+# 가짜 CDP 시나리오의 멈춘 시계(PR-1.6 D-73).
+tokio = { version = "1.54.1", default-features = false, features = ["test-util"] }
 
 [lints]
 workspace = true
