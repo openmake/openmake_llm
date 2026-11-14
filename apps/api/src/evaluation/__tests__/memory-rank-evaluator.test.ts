@@ -43,8 +43,13 @@ describe('채점기', () => {
         const fs = require('fs') as typeof import('fs');
         const os = require('os') as typeof import('os');
         const path = require('path') as typeof import('path');
-        const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'memrank-')), 'g.json');
-        fs.writeFileSync(file, JSON.stringify({ ...golden, goals: [{ id: 'g', goal: '목표', expected: ['없는-id'] }] }));
-        expect(() => loadMemoryRankGolden(file)).toThrow(/없는 메모리 id/);
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memrank-'));
+        try {
+            const file = path.join(dir, 'g.json');
+            fs.writeFileSync(file, JSON.stringify({ ...golden, goals: [{ id: 'g', goal: '목표', expected: ['없는-id'] }] }));
+            expect(() => loadMemoryRankGolden(file)).toThrow(/없는 메모리 id/);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
     });
 });

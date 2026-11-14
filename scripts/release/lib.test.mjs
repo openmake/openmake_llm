@@ -1,6 +1,6 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,9 @@ import {
     classify, validateAcceptances, decideVerdict, renderReleaseCandidate, candidateVerdict,
 } from './lib.mjs';
 import { createChunkMasker, runCommand } from './runner.mjs';
+
+const made = []; // 테스트가 만든 임시 폴더 — 끝나면 지운다
+after(() => { for (const d of made) rmSync(d, { recursive: true, force: true }); });
 
 const JEST = { anchor: '^Tests:.*$', keysOn: 'anchor', passed: '(\\d+) passed', failed: '(\\d+) failed', skipped: '(\\d+) skipped' };
 const NODE = { anchor: '^ℹ tests \\d+', keysOn: 'output', passed: '^ℹ pass (\\d+)', failed: '^ℹ fail (\\d+)', skipped: '^ℹ skipped (\\d+)' };
@@ -128,6 +131,7 @@ test('renderReleaseCandidate: receipt 의 git SHA 가 섞이면 머리말에 모
 const RC_SCRIPT = fileURLToPath(new URL('./release-candidate.mjs', import.meta.url));
 function runReleaseCandidate(setup, extraArgs = []) {
     const root = mkdtempSync(join(tmpdir(), 'release-rc-'));
+    made.push(root);
     const taskDir = join(root, 'r1', 'task-11');
     mkdirSync(join(taskDir, 'receipts'), { recursive: true });
     setup(taskDir, root);
@@ -140,6 +144,7 @@ test('release-candidate: task-11/commands.json 이 없거나 acceptances JSON �
     assert.match(missing.stderr, /commands\.json 없음/);
     const one = doc([cmd()]);
     const root2 = mkdtempSync(join(tmpdir(), 'release-rc-acc-'));
+    made.push(root2);
     writeFileSync(join(root2, 'acc.json'), '{ 깨진 JSON');
     const bad = runReleaseCandidate((taskDir) => {
         writeFileSync(join(taskDir, 'commands.json'), JSON.stringify(one));
@@ -164,6 +169,7 @@ test('createChunkMasker: 두 청크로 갈린 URL 의 비밀번호도 가린다'
 
 test('runCommand: 두 번의 write 로 갈린 URL 비밀번호가 출력·로그에 남지 않는다', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    made.push(dir);
     const logPath = join(dir, 'split.log');
     const res = await runCommand({ cmd: "printf 'url=postgresql://u:sec'; sleep 0.3; printf 'ret@h:5433/db\\n'", cwd: dir, env: process.env, timeoutSec: 10, logPath });
     assert.equal(res.exitCode, 0);
@@ -173,6 +179,7 @@ test('runCommand: 두 번의 write 로 갈린 URL 비밀번호가 출력·로그
 
 test('runCommand: 출력·exit 를 남기고, 시간 초과는 죽이고 timedOut', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    made.push(dir);
     const ok = await runCommand({ cmd: 'echo hello; exit 3', cwd: dir, env: process.env, timeoutSec: 10, logPath: join(dir, 'ok.log') });
     assert.equal(ok.exitCode, 3);
     assert.equal(ok.timedOut, false);
@@ -184,6 +191,7 @@ test('runCommand: 출력·exit 를 남기고, 시간 초과는 죽이고 timedOu
 
 test('runCommand: 끝나면 로그 파일이 출력 전부를 담고 있다(WriteStream finish 대기)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    made.push(dir);
     const logPath = join(dir, 'big.log');
     const res = await runCommand({ cmd: 'for i in $(seq 1 20000); do echo "line-$i"; done', cwd: dir, env: process.env, timeoutSec: 30, logPath });
     assert.equal(res.exitCode, 0);
@@ -320,6 +328,7 @@ test('createChunkMasker: 청크 경계에서 갈린 한글 멀티바이트 문�
 test('runCommand: spawn 실패(없는 cwd → ENOENT)는 예외 없이 실패 결과로 돌아온다', async () => {
     // bash 는 늘 있으므로 없는 cwd 로 spawn 자체를 실패시킨다 — 어느 환경에서나 ENOENT 로 결정적이다
     const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    made.push(dir);
     const res = await runCommand({ cmd: 'echo never', cwd: join(dir, 'no-such-dir'), env: process.env, timeoutSec: 10, logPath: join(dir, 'err.log') });
     assert.equal(res.exitCode, null);
     assert.equal(res.signal, null);
@@ -331,6 +340,7 @@ test('runCommand: spawn 실패(없는 cwd → ENOENT)는 예외 없이 실패 �
 
 test('runCommand: spawn 뒤에 온 \'error\'(kill 실패 등)는 프로세스 그룹을 끝낸 뒤 실패 결과로 한 번만 돌아온다', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    made.push(dir);
     let child;
     // spawn 은 그대로 쓰고 자식만 붙잡는다 — 'spawn' 이 온 뒤 'error' 를 흉내 낸다
     const spawnImpl = (...args) => {
@@ -376,6 +386,7 @@ const readyPid = (output) => Number(/READY (\d+)/.exec(output)?.[1]);
 
 test('runCommand: 시간 초과 때 bash 가 먼저 끝나도 SIGTERM 을 무시한 손자까지 SIGKILL 로 끝낸다', { timeout: 30_000 }, async () => {
     const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    made.push(dir);
     let child;
     const spawnImpl = (...args) => (child = spawn(...args));
     let grandchild;
@@ -397,6 +408,7 @@ test('runCommand: 시간 초과 때 bash 가 먼저 끝나도 SIGTERM 을 무시
 
 test('runCommand: spawn 뒤 \'error\' 때 bash 가 먼저 끝나도 SIGTERM 을 무시한 손자까지 SIGKILL 로 끝낸다', { timeout: 30_000 }, async () => {
     const dir = mkdtempSync(join(tmpdir(), 'release-run-'));
+    made.push(dir);
     let child;
     let grandchild;
     // 실제 spawn 을 쓰고, 손자가 준비됐다는 줄(READY)을 본 뒤에 'error' 를 흉내 낸다

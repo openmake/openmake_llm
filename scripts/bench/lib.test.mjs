@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -127,8 +127,9 @@ test('renderComparison: 표 한 줄에 기준선·현재·한계·판정이 있�
     assert.ok(md.includes('| health | p95Ms | 10 | 10 | ≤ 12 | 통과 |'));
 });
 
-test('compare.mjs CLI: exit 0·1·2', () => {
+test('compare.mjs CLI: exit 0·1·2', (t) => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-compare-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
     const write = (name, obj) => { const p = join(dir, name); writeFileSync(p, JSON.stringify(obj)); return p; };
     const base = write('b.json', receipt());
     const run = (cur) => spawnSync(process.execPath, [new URL('./compare.mjs', import.meta.url).pathname, '--baseline', base, '--current', cur], { encoding: 'utf8' }).status;
@@ -199,8 +200,9 @@ test('compareReceipts: 어느 쪽이든 오류율이 상한 이상이거나 처�
     assert.equal(compareReceipts(receipt(), withScenario('health', { errorRate: 0.49 })).verdict, 'regressed');
 });
 
-test('compare.mjs CLI: 깨진 기준선(2xx 0건)과 비교하면 exit 2', () => {
+test('compare.mjs CLI: 깨진 기준선(2xx 0건)과 비교하면 exit 2', (t) => {
     const dir = mkdtempSync(join(tmpdir(), 'bench-compare-broken-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
     const write = (name, obj) => { const p = join(dir, name); writeFileSync(p, JSON.stringify(obj)); return p; };
     const broken = withScenario('knowledge-spaces', { errorRate: 1, throughputRps: 0 });
     const r = spawnSync(process.execPath, [new URL('./compare.mjs', import.meta.url).pathname, '--baseline', write('b.json', broken), '--current', write('c.json', broken)], { encoding: 'utf8' });

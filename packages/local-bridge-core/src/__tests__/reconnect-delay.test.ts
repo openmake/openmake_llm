@@ -44,6 +44,7 @@ describe('reconnectDelayMs', () => {
 describe('BridgeConnection 재연결 백오프', () => {
     let base: string;
     beforeEach(() => { base = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-backoff-')); });
+    afterEach(() => { fs.rmSync(base, { recursive: true, force: true }); });
 
     function makeConn(port: number, delays: number[], statuses: string[]): BridgeConnection {
         const core = new BridgeCore({ folder: base, confirm: async () => 'all', sandboxProfileDir: os.tmpdir() });

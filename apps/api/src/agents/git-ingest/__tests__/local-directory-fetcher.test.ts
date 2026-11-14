@@ -22,6 +22,10 @@ beforeEach(() => {
     fs.writeFileSync(path.join(root, 'pack', 'skills', 'a.md'), '# skill a');
     fs.writeFileSync(path.join(outside, 'secret.txt'), 'TOP SECRET');
 });
+afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+});
 
 const limits = () => ({ root, maxEntries: 100, maxTotalBytes: 1_000_000 });
 

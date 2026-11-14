@@ -18,8 +18,12 @@ jest.mock('../../../utils/logger', () => ({
 
 import { MigrationRunner } from '../runner';
 
+const made: string[] = []; // 아래 도우미가 만든 임시 폴더 — 끝나면 지운다
+afterAll(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+
 function migrationsDir(files: Record<string, string>): string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-mig-notice-'));
+    made.push(dir);
     for (const [file, sql] of Object.entries(files)) fs.writeFileSync(path.join(dir, file), sql);
     return dir;
 }
