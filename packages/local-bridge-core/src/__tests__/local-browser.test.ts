@@ -495,7 +495,22 @@ describeIfChrome('BridgeCore — 다운로드 (실제 Chrome)', () => {
         const r = await run({ kind: 'browser', taskId: `dl-${sub}`, folder: sub, sitePolicy: { allow: ['127.0.0.1'] }, approvedHosts: ['127.0.0.1'], actions } as BridgeMsg);
         return JSON.parse(r.stdout ?? '{}') as Out;
     };
-    const staged = () => fs.readdirSync(`${profile}-downloads`);
+    // 대기 폴더 목록 — Chrome 이 스스로 받는 구성 요소(CRX3, 'Cr24' 로 시작)와 그사이 사라진 파일은 뺀다. 새 프로필 Chrome 은 기동 후
+    // 10여 초에 Optimization Guide 모델을 Download Service 로 받는데, 다운로드 설정(allowAndName)이 브라우저 전역이라 이 폴더에 guid
+    // 이름으로 왔다가 Chrome 이 가져가 지운다 — CDP 다운로드 이벤트가 없어 브리지는 귀속·저장하지 않는다(디버그 2026-11-15).
+    const chromeOwn = (file: string): boolean => {
+        try {
+            const fd = fs.openSync(file, 'r');
+            try {
+                const head = Buffer.alloc(4);
+                return fs.readSync(fd, head, 0, 4, 0) === 4 && head.toString('latin1') === 'Cr24';
+            } finally { fs.closeSync(fd); }
+        } catch (e) {
+            if ((e as NodeJS.ErrnoException).code === 'ENOENT') return true;
+            throw e;
+        }
+    };
+    const staged = () => fs.readdirSync(`${profile}-downloads`).filter((n) => !chromeOwn(path.join(`${profile}-downloads`, n)));
 
     beforeAll(async () => {
         server = http.createServer((req, res) => {
