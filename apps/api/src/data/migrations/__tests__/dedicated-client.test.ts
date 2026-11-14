@@ -53,8 +53,12 @@ function recordingPool(opts: { failOn?: RegExp } = {}): {
     return { pool, calls, releases, texts: (who) => calls.filter(c => c.who === who).map(c => c.text) };
 }
 
+const made: string[] = []; // 아래 도우미가 만든 임시 폴더 — 끝나면 지운다
+afterAll(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+
 function writeMigrations(files: Record<string, string>): string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-mig-dedicated-'));
+    made.push(dir);
     for (const [file, sql] of Object.entries(files)) fs.writeFileSync(path.join(dir, file), sql);
     return dir;
 }
@@ -62,6 +66,7 @@ function writeMigrations(files: Record<string, string>): string {
 /** applyPendingWithLock 은 코어 경로(cwd/db/migrations)를 읽는다 — cwd 를 임시 디렉터리로 돌린다 */
 function useCoreMigrations(files: Record<string, string>): void {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-mig-core-'));
+    made.push(root);
     const dir = path.join(root, 'db', 'migrations');
     fs.mkdirSync(dir, { recursive: true });
     for (const [file, sql] of Object.entries(files)) fs.writeFileSync(path.join(dir, file), sql);

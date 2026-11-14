@@ -15,9 +15,13 @@ describe('tool-selection-evaluator', () => {
 
     it('의미 검증 — 기대/금지 없는 케이스·expectedTool 없는 expectedArgs 거부', () => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tools-ds-'));
-        const f = path.join(dir, 'ds.json');
-        fs.writeFileSync(f, JSON.stringify({ version: '1', description: '', cases: [{ id: 'a', query: 'q' }, { id: 'b', query: 'q', forbiddenTools: ['x'], expectedArgs: { q: 'y' } }] }));
-        expect(() => loadToolSelectionDataset(f)).toThrow(/a: expectedTool[\s\S]*b: expectedArgs/);
+        try {
+            const f = path.join(dir, 'ds.json');
+            fs.writeFileSync(f, JSON.stringify({ version: '1', description: '', cases: [{ id: 'a', query: 'q' }, { id: 'b', query: 'q', forbiddenTools: ['x'], expectedArgs: { q: 'y' } }] }));
+            expect(() => loadToolSelectionDataset(f)).toThrow(/a: expectedTool[\s\S]*b: expectedArgs/);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
     });
 
     it('matchExpectedArgs — 문자열은 대소문자 무시 포함, regex, 없는 키는 실패', () => {

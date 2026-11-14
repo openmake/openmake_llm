@@ -41,6 +41,7 @@ fs.mkdirSync(path.join(tmp, 'reports'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'reports', 'r.html'), '<h1>r</h1>');
 fs.mkdirSync(path.join(tmp, 'reports', 'x'), { recursive: true });
 fs.writeFileSync(path.join(tmp, 'reports', 'x', 'latest.html'), '<h1>x</h1><script>1</script>');
+afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 function app() {
     const a = express();
