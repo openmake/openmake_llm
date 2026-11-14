@@ -182,7 +182,9 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         // 2026-10-02 실측(AI Studio 키, gemini-2.5-flash): 채팅 스트리밍·도구 호출·이미지 입력(512px PNG)·thinking 지정 호출
         // 모두 200, 게이트웨이(LiteLLM openai/* → Google) 경유 채팅·임베딩(gemini-embedding-001, 3072차원)도 200.
         // /models 는 61개를 'models/…' 접두사로 준다(어댑터가 뗀다) — 목록 조회가 되면 이 폴백은 쓰이지 않는다.
-        // ⚠️ pro·flash-lite 는 실호출하지 않았다(같은 계열 기준). thinking 은 응답의 별도 채널로 오지 않는다(본문에도 섞이지 않음).
+        // ⚠️ pro 는 실호출하지 않았다(같은 계열 기준). thinking 은 응답의 별도 채널로 오지 않는다 — 2026-11-15 실측: 요청에
+        // thinking_config.include_thoughts 를 실으면 사고 요약이 delta.content 맨 앞 <thought>…</thought> 로 오고(2.5-flash·3-flash-preview),
+        // 싣지 않으면 오지 않는다. flash-lite 는 같은 요청에 200·사고 없음(providers/openai-compat-gemini-thinking).
         fallbackModels: [
             { id: 'gemini-2.5-pro',        displayName: 'Gemini 2.5 Pro',        isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true } },
             { id: 'gemini-2.5-flash',      displayName: 'Gemini 2.5 Flash',      isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true } },
