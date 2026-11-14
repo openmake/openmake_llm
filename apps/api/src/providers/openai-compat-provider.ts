@@ -429,6 +429,8 @@ export class OpenAICompatProvider implements IProvider {
                          * 응답도 동일 필드명 사용.
                          */
                         reasoning?: string;
+                        /** DeepSeek·Qwen 계열 등 외부 OpenAI 호환 provider 의 추론 필드명 */
+                        reasoning_content?: string;
                         /** OpenRouter 추론 블록 조각 — 받은 순서대로 이어 붙여 그대로 보존 */
                         reasoning_details?: unknown[];
                         tool_calls?: Array<{
@@ -454,9 +456,11 @@ export class OpenAICompatProvider implements IProvider {
                         callbacks.onToken?.(visible);
                     }
                 }
-                if (choice?.delta?.reasoning) {
-                    // reasoning chunk — i-provider 의 onThinking 콜백으로 전달
-                    callbacks.onThinking?.(choice.delta.reasoning);
+                // reasoning chunk — i-provider 의 onThinking 콜백으로 전달. 로컬 stream-parser 와 같은 순서로
+                // reasoning 우선, 없으면 reasoning_content(둘 다 오면 한 번만).
+                const reasoningDelta = choice?.delta?.reasoning ?? choice?.delta?.reasoning_content;
+                if (typeof reasoningDelta === 'string' && reasoningDelta) {
+                    callbacks.onThinking?.(reasoningDelta);
                 }
                 if (Array.isArray(choice?.delta?.reasoning_details)) reasoningDetails.push(...choice.delta.reasoning_details);
                 if (choice?.delta?.tool_calls) {
