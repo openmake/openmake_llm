@@ -9,11 +9,16 @@ import { BridgeCore } from '../core';
 import { buildSandboxProfile } from '../sandbox';
 import type { BridgeMsg, BridgeResult, ConfirmFn } from '../types';
 
+const profDirs: string[] = []; // makeCore 가 만드는 프로파일 폴더 — 끝나면 지운다
+afterAll(() => { for (const d of profDirs) fs.rmSync(d, { recursive: true, force: true }); });
+
 function makeCore(folder: string, overrides?: Partial<ConstructorParameters<typeof BridgeCore>[0]>): BridgeCore {
+    const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-prof-'));
+    profDirs.push(prof);
     return new BridgeCore({
         folder,
         confirm: async () => 'yes',
-        sandboxProfileDir: fs.mkdtempSync(path.join(os.tmpdir(), 'omk-prof-')),
+        sandboxProfileDir: prof,
         ...overrides,
     });
 }

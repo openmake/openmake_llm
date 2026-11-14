@@ -387,6 +387,7 @@ test('the org-specific removal change set selects a real suite for every non-API
     'db/init/004-admin-user.sh': 'infra',
     'infra/db-init-admin-user.test.mjs': 'infra',
     'scripts/release/lib.test.mjs': 'infra',
+    'scripts/bench/lib.test.mjs': 'infra',
     'scripts/setup/colima-selection.test.sh': 'hostSetup',
     'scripts/setup/gen-env.mjs': 'hostSetup',
     'scripts/setup/gen-env.test.mjs': 'hostSetup',

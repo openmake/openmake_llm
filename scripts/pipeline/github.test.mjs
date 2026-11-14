@@ -26,7 +26,7 @@ test('latest CI attempt must succeed at exact SHA', () => {
 });
 test('missing automation credential fails actionably', () => assert.throws(() => requireToken({}), /OMK_AUTOMATION_TOKEN/));
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { metadataRange } from './github.mjs';
@@ -55,6 +55,7 @@ test('per-commit gate rejects code edits even when later reverted and trusts bas
     }
     finally {
         process.chdir(cwd);
+        rmSync(dir, { recursive: true, force: true });
     }
 });
 import { orchestrate } from './github.mjs';
@@ -110,6 +111,7 @@ test('trusted orchestration never enables merge after latest CI fails or head ch
             }
         }
         Object.assign(process.env, saved);
+        rmSync(dir, { recursive: true, force: true });
     }
 });
 test('metadata-only release branch and its ordinary main merge retain verified ancestry', () => {
@@ -136,6 +138,7 @@ test('metadata-only release branch and its ordinary main merge retain verified a
     }
     finally {
         process.chdir(cwd);
+        rmSync(dir, { recursive: true, force: true });
     }
 });
 
@@ -174,6 +177,7 @@ test('promotion merges immediately only for current dev head and both latest CI 
     } finally {
         for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
         Object.assign(process.env, saved);
+        rmSync(dir, { recursive: true, force: true });
     }
 });
 
@@ -237,6 +241,7 @@ test('promotion re-reads a lagging mergeable_state but never merges without clea
     } finally {
         for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
         Object.assign(process.env, saved);
+        rmSync(dir, { recursive: true, force: true });
     }
 });
 
@@ -277,6 +282,7 @@ test('release polling does not retain merge approval while main gains functional
         process.chdir(cwd);
         for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
         Object.assign(process.env, saved);
+        rmSync(dir, { recursive: true, force: true });
     }
 });
 test('release gate accepts lockfile workspace versions listed in extra-files and nothing else', () => {
@@ -307,6 +313,7 @@ test('release gate accepts lockfile workspace versions listed in extra-files and
     }
     finally {
         process.chdir(cwd);
+        rmSync(dir, { recursive: true, force: true });
     }
 });
 
@@ -345,6 +352,7 @@ test('feature auto-merge re-reads a lagging mergeable_state and merges once it i
     } finally {
         for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
         Object.assign(process.env, saved);
+        rmSync(dir, { recursive: true, force: true });
     }
 });
 
@@ -387,5 +395,6 @@ test('release merge re-reads a lagging mergeable_state and merges once it is cle
         process.chdir(cwd);
         for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
         Object.assign(process.env, saved);
+        rmSync(dir, { recursive: true, force: true });
     }
 });

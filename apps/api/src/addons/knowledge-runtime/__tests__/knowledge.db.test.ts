@@ -97,10 +97,12 @@ async function insertSession(id: string, userId: string): Promise<void> {
 
 describeOrSkip('Knowledge 실 DB (K01)', () => {
     // 업로드 원본은 임시 디렉터리에 쓴다 — 레포 트리에 파일을 남기지 않는다
-    const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'knowledge-test-'));
+    // beforeAll 에서 만든다 — describe.skip(DB 없음)이어도 본문은 돌아 폴더만 남기 때문
+    let storageDir = '';
     const prevStorageDir = process.env.KNOWLEDGE_STORAGE_DIR;
     let unlock: (() => Promise<void>) | undefined;
     beforeAll(async () => {
+        storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'knowledge-test-'));
         process.env.KNOWLEDGE_STORAGE_DIR = storageDir;
         // 006(공간 색인 열) 포함 스키마 — 다른 실 DB 파일과 겹치지 않게 같은 lock 아래에서 멱등 적용
         unlock = await lockKnowledgeQueueTests(pool);

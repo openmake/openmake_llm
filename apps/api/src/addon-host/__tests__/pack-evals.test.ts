@@ -13,8 +13,12 @@ jest.mock('../builtin-registry', () => ({ enabledBuiltinAddons: () => enabled })
 
 import { loadEnabledPackEvalCases } from '../pack-evals';
 
+const made: string[] = []; // pack() 이 만든 폴더 — 끝나면 지운다
+afterAll(() => { for (const d of made) fs.rmSync(d, { recursive: true, force: true }); });
+
 function pack(id: string, body: string | null): void {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), `omk-pack-eval-${id}-`));
+    made.push(dir);
     if (body !== null) fs.writeFileSync(path.join(dir, 'evals.json'), body);
     enabled.push({ id, dir, manifest: { components: { evals: './evals.json' } } });
 }
