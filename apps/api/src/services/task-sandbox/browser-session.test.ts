@@ -205,6 +205,12 @@ describe('browser-session (사용자가 넘겨받는 브라우저)', () => {
         let out = '';
         child.stdout.setEncoding('utf8');
         child.stdout.on('data', (d: string) => { out += d; });
+        // 진단 — 스크립트가 시작에 실패하면 재시도 뒤 ECONNREFUSED 만 남지 않게 stderr 를 모으고 일찍 끝난 것을 감지한다
+        let errOut = '';
+        child.stderr.setEncoding('utf8');
+        child.stderr.on('data', (d: string) => { errOut += d; });
+        let exited: string | null = null;
+        child.on('exit', (code, signal) => { exited = `code ${code} signal ${signal}`; });
         const post = (parts: Buffer[]) => new Promise<string>((ok, fail) => {
             const req = http.request({ host: '127.0.0.1', port, path: '/cmd', method: 'POST' }, (res) => {
                 const got: Buffer[] = [];
@@ -217,7 +223,11 @@ describe('browser-session (사용자가 넘겨받는 브라우저)', () => {
         });
         try {
             for (let i = 0; ; i++) { // 스크립트가 듣기 시작할 때까지
-                try { await post([Buffer.from('{"op":'), Buffer.from('"ping"}')]); break; } catch (e) { if (i > 100) throw e; await new Promise((r) => setTimeout(r, 100)); }
+                if (exited) throw new Error(`세션 스크립트가 시작 중 끝났다(${exited})\n--- stderr ---\n${errOut}`);
+                try { await post([Buffer.from('{"op":'), Buffer.from('"ping"}')]); break; } catch (e) {
+                    if (i > 100) throw new Error(`세션 스크립트 대기 초과: ${String(e)}\n--- stderr ---\n${errOut}`);
+                    await new Promise((r) => setTimeout(r, 100));
+                }
             }
             const body = Buffer.from(JSON.stringify({ op: 'type', text: '한글 입력' }));
             const at = body.indexOf(Buffer.from('한')) + 1; // '한' 의 첫 바이트 뒤에서 가른다
