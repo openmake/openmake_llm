@@ -22,8 +22,6 @@ export interface BrowserRunOptions {
     taskId?: string;
     /** 스크린샷 저장 — 호출부가 허용 폴더 안의 경로로 풀어 쓴다(스코프 검사는 호출부 책임) */
     saveFile: (name: string, data: Buffer) => Promise<void>;
-    /** 다운로드가 떨어질 폴더(절대 경로) — 허용 폴더 안 */
-    downloadDir: string;
     /**
      * 다운로드 저장 — 대기 폴더의 `<guid>` 파일(stagedPath)을 제안 이름으로 허용 폴더에 옮기고 저장된 이름을 돌려준다(download-place.ts,
      * `write` 와 같은 가드). 없으면 다운로드를 받지 않는다(deny).

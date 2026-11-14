@@ -268,6 +268,8 @@ export const BROWSER_DIALOG_MESSAGE_MAX = 300;
 export const BROWSER_DIALOG_RECORD_MAX = 20;
 /** 호출이 끝날 때 이 작업의 받는 중인 다운로드를 기다리는 상한(ms) — 넘으면 inProgress 로 싣고 끝난 결과는 다음 호출에 싣는다 */
 export const BROWSER_DOWNLOAD_WAIT_MS = Number(process.env.OMK_BRIDGE_BROWSER_DOWNLOAD_WAIT_MS || 5000);
+/** 다운로드 귀속용 새 창 표(새 창 targetId → 연 탭의 작업) 크기 상한 — 넘으면 가장 오래된 것부터 버린다(닫힘 이벤트로는 지우지 않는다) */
+export const BROWSER_POPUP_TRACK_MAX = 64;
 /** 다운로드 저장 이름이 겹칠 때 " (n)" 을 붙여 보는 횟수 상한 */
 export const BROWSER_DOWNLOAD_NAME_TRIES = 100;
 /** 다운로드 대기 폴더 = 전용 프로필 폴더 + 이 접미사(연결 폴더 밖, Chrome 은 여기에 `<guid>` 이름으로만 받는다) */

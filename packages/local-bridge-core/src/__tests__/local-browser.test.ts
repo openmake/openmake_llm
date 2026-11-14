@@ -53,7 +53,7 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
     const slowResponses: http.ServerResponse[] = [];
 
     const opts = (taskId = 't1'): BrowserRunOptions => ({
-        taskId, downloadDir: outDir,
+        taskId,
         saveFile: async (name, data) => { await fs.promises.writeFile(path.join(outDir, name), data); },
     });
     const allowAll = () => ({ allow: ['127.0.0.1', 'localhost'], deny: [] });
@@ -495,7 +495,22 @@ describeIfChrome('BridgeCore — 다운로드 (실제 Chrome)', () => {
         const r = await run({ kind: 'browser', taskId: `dl-${sub}`, folder: sub, sitePolicy: { allow: ['127.0.0.1'] }, approvedHosts: ['127.0.0.1'], actions } as BridgeMsg);
         return JSON.parse(r.stdout ?? '{}') as Out;
     };
-    const staged = () => fs.readdirSync(`${profile}-downloads`);
+    // 대기 폴더 목록 — Chrome 이 스스로 받는 구성 요소(CRX3, 'Cr24' 로 시작)와 그사이 사라진 파일은 뺀다. 새 프로필 Chrome 은 기동 후
+    // 10여 초에 Optimization Guide 모델을 Download Service 로 받는데, 다운로드 설정(allowAndName)이 브라우저 전역이라 이 폴더에 guid
+    // 이름으로 왔다가 Chrome 이 가져가 지운다 — CDP 다운로드 이벤트가 없어 브리지는 귀속·저장하지 않는다(디버그 2026-11-15).
+    const chromeOwn = (file: string): boolean => {
+        try {
+            const fd = fs.openSync(file, 'r');
+            try {
+                const head = Buffer.alloc(4);
+                return fs.readSync(fd, head, 0, 4, 0) === 4 && head.toString('latin1') === 'Cr24';
+            } finally { fs.closeSync(fd); }
+        } catch (e) {
+            if ((e as NodeJS.ErrnoException).code === 'ENOENT') return true;
+            throw e;
+        }
+    };
+    const staged = () => fs.readdirSync(`${profile}-downloads`).filter((n) => !chromeOwn(path.join(`${profile}-downloads`, n)));
 
     beforeAll(async () => {
         server = http.createServer((req, res) => {
@@ -516,7 +531,7 @@ describeIfChrome('BridgeCore — 다운로드 (실제 Chrome)', () => {
         await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
         origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
         folder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'omk-core-dl-')));
-        for (const sub of ['link', 'goto', 'popup', 'head', 'closed']) fs.mkdirSync(path.join(folder, sub));
+        for (const sub of ['link', 'goto', 'popup', 'head', 'pairA', 'pairB', 'closed']) fs.mkdirSync(path.join(folder, sub));
         profile = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-core-dl-profile-'));
         // 프로필 기본 다운로드 폴더를 연결 폴더로 둔다(~/Downloads 를 연결한 경우를 흉내 — 리뷰 r1 A1) — 코어가 기동 때 대기 폴더로 다시 맞춰야 한다
         fs.mkdirSync(path.join(profile, 'Default'));
@@ -561,6 +576,19 @@ describeIfChrome('BridgeCore — 다운로드 (실제 Chrome)', () => {
         expect(out.ok).toBe(true);
         expect(out.downloads).toEqual([{ name: 'HEAD', state: 'rejected', error: 'git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: HEAD' }]);
         expect(fs.readdirSync(path.join(folder, 'head'))).toEqual([]);
+        expect(staged()).toEqual([]);
+    }, 60000);
+
+    it('두 작업이 함께 도는 중 새 창(target=_blank)에서 받으면 연 탭의 작업 폴더에만 저장하고 그 작업 결과에만 싣는다(D-1·D-2)', async () => {
+        // A 가 먼저 설정하고 B 가 뒤에 설정한다 — 마지막 호출의 저장 함수(B)가 아니라 연 탭의 작업(A)의 것으로 옮겨야 한다
+        const a = browse('pairA', [{ type: 'goto', url: `${origin}/` }, { type: 'wait', ms: 1500 }, { type: 'click', selector: '#pop' }, { type: 'wait', ms: 1000 }]);
+        await new Promise((r) => setTimeout(r, 300));
+        const b = browse('pairB', [{ type: 'goto', url: `${origin}/` }, { type: 'wait', ms: 3500 }]);
+        const [outA, outB] = await Promise.all([a, b]);
+        expect(outA.downloads).toEqual([{ name: 'report.txt', state: 'saved', savedAs: 'report.txt' }]);
+        expect(outB.downloads).toBeUndefined();
+        expect(fs.readFileSync(path.join(folder, 'pairA', 'report.txt'), 'utf8')).toBe('보고서');
+        expect(fs.readdirSync(path.join(folder, 'pairB'))).toEqual([]);
         expect(staged()).toEqual([]);
     }, 60000);
 

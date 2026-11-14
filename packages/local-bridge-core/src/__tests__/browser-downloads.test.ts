@@ -11,6 +11,7 @@ import { LocalBrowser, type BrowserRunOptions } from '../browser/local-browser';
 import { CdpClient } from '../browser/cdp';
 import { DownloadRejectedError } from '../browser/download-place';
 import * as chrome from '../browser/chrome';
+import { BROWSER_POPUP_TRACK_MAX } from '../constants';
 
 jest.mock('../constants', () => ({ ...jest.requireActual('../constants'), BROWSER_DOWNLOAD_WAIT_MS: 150 }));
 jest.mock('../browser/chrome', () => ({ ...jest.requireActual('../browser/chrome'), readDevToolsEndpoint: jest.fn(), launchChrome: jest.fn() }));
@@ -91,7 +92,7 @@ function setup(navigate?: Record<string, unknown>, mockActions = true) {
 
 const act = (extra: Record<string, unknown> = {}) => ({ actions: [{ type: 'wait', ms: 0, ...extra }], sitePolicy: { allow: [], deny: [] } });
 const opts = (taskId: string, placeDownload?: BrowserRunOptions['placeDownload']): BrowserRunOptions => ({
-    taskId, downloadDir: '/tmp/out', saveFile: async () => undefined, ...(placeDownload ? { placeDownload } : {}),
+    taskId, saveFile: async () => undefined, ...(placeDownload ? { placeDownload } : {}),
 });
 /** 대기 폴더에 Chrome 이 받은 것처럼 `<guid>` 파일을 둔다. */
 const stage = (guid: string) => fs.writeFileSync(path.join(staging, guid), 'data');
@@ -490,6 +491,108 @@ describe('LocalBrowser 다운로드 — 생명주기(B-8 Low)', () => {
         const r = await browser.run(act({ hook: 'dl' }), opts('A'));
         expect(r.downloads).toEqual([{ name: 'f.txt', state: 'failed', error: '다운로드를 저장할 곳이 없습니다' }]);
         expect(fs.readdirSync(staging)).toEqual([]);
+        await browser.dispose();
+    });
+});
+
+describe('LocalBrowser 다운로드 — 작업별 저장 함수·귀속(D-1·D-2·D-3)', () => {
+    type Emit = ReturnType<typeof fakeCdp>['emit'];
+    /** 시작·완료 — sessionId 가 있으면 Page.*(붙은 탭), 없으면 Browser.*(붙지 않은 새 창) */
+    const dl = async (emit: Emit, guid: string, frameId: string, sessionId?: string) => {
+        stage(guid);
+        const ch = sessionId ? 'Page' : 'Browser'; emit(`${ch}.downloadWillBegin`, begin(guid, `${guid}.txt`, frameId), sessionId);
+        emit(`${ch}.downloadProgress`, { guid, state: 'completed' }, sessionId);
+        await tick();
+    };
+    const popup = (emit: Emit, targetId: string, openerId: string) =>
+        emit('Target.targetCreated', { targetInfo: { targetId, type: 'page', openerId, url: 'about:blank' } });
+    const saved = (name: string, savedAs: string) => [{ name, state: 'saved', savedAs }];
+
+    it('쉬는 작업 탭의 다운로드는 실행 중인 다른 작업이 아니라 그 탭 작업의 저장 함수로 옮긴다', async () => {
+        const { browser, emit, release } = setup();
+        const x = jest.fn(async () => 'x'), y = jest.fn(async () => 'y');
+        await browser.run(act(), opts('A', x));
+        const b = browser.run(act({ gate: 'B' }), opts('B', y));
+        await tick(); await tick();
+        await dl(emit, 'g1', 'target-1', 'session-target-1');
+        release('B'); expect((await b).downloads).toBeUndefined();
+        expect([x.mock.calls.length, y.mock.calls.length]).toEqual([1, 0]);
+        expect((await browser.run(act(), opts('A', x))).downloads).toEqual(saved('g1.txt', 'x'));
+        await browser.dispose();
+    });
+
+    it('실행 중인 작업이 없을 때도 마지막 호출이 아니라 그 탭 작업의 저장 함수로 옮긴다', async () => {
+        const { browser, emit } = setup();
+        const x = jest.fn(async () => 'x'), y = jest.fn(async () => 'y');
+        await browser.run(act(), opts('A', x));
+        await browser.run(act(), opts('B', y));
+        await dl(emit, 'g2', 'target-1', 'session-target-1');
+        expect([x.mock.calls.length, y.mock.calls.length]).toEqual([1, 0]);
+        expect((await browser.run(act(), opts('A', x))).downloads).toEqual(saved('g2.txt', 'x'));
+        await browser.dispose();
+    });
+
+    it('탭이 연 새 창의 다운로드는 다른 작업만 실행 중이어도 연 탭의 작업에 귀속한다', async () => {
+        const { browser, emit, release } = setup();
+        const x = jest.fn(async () => 'x'), y = jest.fn(async () => 'y');
+        await browser.run(act(), opts('A', x));
+        const b = browser.run(act({ gate: 'B' }), opts('B', y));
+        await tick(); await tick();
+        popup(emit, 'popup-1', 'target-1');
+        await dl(emit, 'g3', 'popup-1');
+        release('B'); expect((await b).downloads).toBeUndefined();
+        expect([x.mock.calls.length, y.mock.calls.length]).toEqual([1, 0]);
+        expect((await browser.run(act(), opts('A', x))).downloads).toEqual(saved('g3.txt', 'x'));
+        await browser.dispose();
+    });
+
+    it('저장 함수 없는 작업의 탭이 받으면 다른 작업의 저장 함수를 쓰지 않고 failed', async () => {
+        const { browser, emit, release } = setup();
+        const y = jest.fn(async () => 'y');
+        await browser.run(act(), opts('A'));
+        const b = browser.run(act({ gate: 'B' }), opts('B', y));
+        await tick(); await tick();
+        await dl(emit, 'g4', 'target-1', 'session-target-1');
+        release('B'); await b;
+        expect(y).not.toHaveBeenCalled();
+        expect((await browser.run(act(), opts('A'))).downloads).toEqual([{ name: 'g4.txt', state: 'failed', error: '다운로드를 저장할 곳이 없습니다' }]);
+        expect(fs.readdirSync(staging)).toEqual([]);
+        await browser.dispose();
+    });
+
+    it('closeTask 뒤 그 작업의 새 창은 귀속되지 않는다 — 같은 작업 키로 다시 와도', async () => {
+        const { browser, emit } = setup();
+        const x = jest.fn(async () => 'x'), x2 = jest.fn(async () => 'x2');
+        await browser.run(act(), opts('A', x));
+        popup(emit, 'popup-1', 'target-1');
+        await browser.closeTask('A');
+        await browser.run(act(), opts('A', x2));
+        await dl(emit, 'g5', 'popup-1');
+        expect([x.mock.calls.length, x2.mock.calls.length]).toEqual([0, 0]);
+        expect((await browser.run(act(), opts('A', x2))).downloads).toBeUndefined();
+        expect(fs.readdirSync(staging)).toEqual([]);
+        await browser.dispose();
+    });
+
+    it('창이 연 창의 다운로드도 처음 탭의 작업에 귀속한다', async () => {
+        const { browser, emit } = setup();
+        const x = jest.fn(async () => 'x'), y = jest.fn(async () => 'y');
+        await browser.run(act(), opts('A', x));
+        await browser.run(act(), opts('B', y));
+        popup(emit, 'popup-1', 'target-1'); popup(emit, 'popup-2', 'popup-1');
+        await dl(emit, 'g6', 'popup-2');
+        expect([x.mock.calls.length, y.mock.calls.length]).toEqual([1, 0]);
+        await browser.dispose();
+    });
+
+    it('새 창 표는 상한을 넘으면 가장 오래된 것부터 버린다', async () => {
+        const { browser, emit } = setup();
+        const x = jest.fn(async (name: string) => name);
+        await browser.run(act(), opts('A', x));
+        for (let i = 0; i <= BROWSER_POPUP_TRACK_MAX; i++) popup(emit, `popup-${i}`, 'target-1');
+        await dl(emit, 'old', 'popup-0');
+        await dl(emit, 'new', 'popup-1');
+        expect(x.mock.calls.map(([name]) => name)).toEqual(['new.txt']);
         await browser.dispose();
     });
 });

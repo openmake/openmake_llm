@@ -94,7 +94,6 @@ export async function runBrowserCase(defaults: Rule[], setup: FsSetup[], input: 
         const o = input.opts;
         const opts: BrowserRunOptions = {
             ...(o.taskId !== undefined ? { taskId: o.taskId } : {}),
-            downloadDir: root,
             saveFile: async (name, data) => {
                 saved.push({ name, hex: data.toString('hex') });
                 if (o.saveError !== undefined) throw new Error(o.saveError);

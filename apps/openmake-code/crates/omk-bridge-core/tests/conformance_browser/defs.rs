@@ -2,7 +2,7 @@
 
 use omk_bridge_core::browser::defs::{
     TabIds, click_point_js, download_task_of, fill_prepare_js, key_event_of,
-    parse_approved_uploads, screenshot_name, str_of,
+    parse_approved_uploads, popup_task_of, screenshot_name, str_of,
 };
 use omk_bridge_core::browser::js_value::json_string;
 use serde_json::{Value, json};
@@ -31,35 +31,53 @@ fn run(group: &str, i: &Value) -> Value {
         "clickPointJs" => json!(click_point_js(i["sel"].as_str().unwrap())),
         "fillPrepareJs" => json!(fill_prepare_js(i["sel"].as_str().unwrap())),
         "downloadTaskOf" => {
-            let tabs: Vec<(String, TabIds)> = i["tabs"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|t| {
-                    let ids = TabIds {
-                        target_id: t[1]["targetId"].as_str().unwrap().to_owned(),
-                        session_id: t[1]["sessionId"].as_str().unwrap().to_owned(),
-                    };
-                    (t[0].as_str().unwrap().to_owned(), ids)
-                })
-                .collect();
-            let running: Vec<&str> = i["running"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|k| k.as_str().unwrap())
-                .collect();
             let session = arg(i, "sessionId").map(|s| s.as_str().unwrap());
             json!(download_task_of(
-                &tabs,
-                |k| running.contains(&k),
+                &tabs_of(i),
+                &popups_of(i),
                 session,
                 i["frameId"].as_str().unwrap()
             ))
         }
+        "popupTaskOf" => json!(popup_task_of(
+            &tabs_of(i),
+            &popups_of(i),
+            i["openerId"].as_str().unwrap()
+        )),
         "jsonString" => json!(json_string(i["s"].as_str().unwrap())),
         other => panic!("모르는 묶음 {other}"),
     }
+}
+
+/// `tabs`: `[키, {targetId, sessionId}]`
+fn tabs_of(i: &Value) -> Vec<(String, TabIds)> {
+    i["tabs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| {
+            let ids = TabIds {
+                target_id: t[1]["targetId"].as_str().unwrap().to_owned(),
+                session_id: t[1]["sessionId"].as_str().unwrap().to_owned(),
+            };
+            (t[0].as_str().unwrap().to_owned(), ids)
+        })
+        .collect()
+}
+
+/// `popups`: `[새 창 targetId, 작업 키]`
+fn popups_of(i: &Value) -> Vec<(String, String)> {
+    i["popups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            (
+                p[0].as_str().unwrap().to_owned(),
+                p[1].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect()
 }
 
 #[test]

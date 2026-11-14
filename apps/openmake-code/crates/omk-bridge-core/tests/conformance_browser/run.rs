@@ -141,7 +141,6 @@ fn options(o: &Value, root: &str, saved: Arc<Mutex<Vec<Value>>>) -> BrowserRunOp
             let r = save_error.clone().map_or(Ok(()), Err);
             Box::pin(async move { r })
         }),
-        download_dir: root.to_owned(),
         place_download: (o.get("place") == Some(&Value::Bool(true))).then(
             || -> omk_bridge_core::browser::downloads::PlaceDownload {
                 Arc::new(|name, _| Box::pin(async move { Ok(name) }))

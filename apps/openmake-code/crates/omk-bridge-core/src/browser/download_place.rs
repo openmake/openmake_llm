@@ -2,14 +2,13 @@
 //! 완료 뒤 저장 이름을 `write` 와 **같은 가드**(`scope::safe_from` + `git_trust::assert_git_path_allowed`)로 판정해 연결 폴더로
 //! 옮긴다. 제안 이름은 믿지 않는다. 덮어쓰지 않는다 — 대상이 있으면 `이름 (n).확장자` 로 다음 후보, 가드가 거절하면 다른 이름을
 //! 찾지 않고 버린다. 옮기기는 `hard_link`(배타적 — 대상 자리의 심링크를 따라가지 않는다), 하드링크가 안 되는 자리
-//! (`EXDEV`·`EPERM`·`ENOTSUP`)면 `create_new` 로 열어 복사. rename 은 대상을 덮어쓰므로 쓰지 않는다. FS 를 보므로 호출부가
-//! 관문 안에서 부른다(D-81-4).
+//! (`EXDEV`·`EPERM`·`ENOTSUP`)면 연 대기 파일에서 `create_new` 로 연 대상에 복사. rename 은 대상을 덮어쓰므로 쓰지 않는다. FS 를
+//! 보므로 호출부가 관문 안에서 부른다(D-81-4).
 //!
-//! 대기 파일 쪽 심링크는 TS `fs.link`(macOS `link(2)` — 원본 심링크를 따라간다)처럼 따라가 **대상 파일**의 하드링크를 만든다.
-//! `std::fs::hard_link` 는 `linkat(…, 0)` 이라 심링크 자체를 링크하므로(연결 폴더 안에 심링크가 생긴다) 원본을 먼저
-//! `canonicalize` 한다 — 실패(끊긴 링크 `ENOENT`·순환 `ELOOP`)는 `link` 의 실패와 같은 코드다.
-//! `canonicalize` 와 `hard_link` 는 두 호출이라 그 사이에 대상이 바뀔 틈이 남는다(TS `link` 와 같은 수준) — 한 호출로 끝나는
-//! `linkat(AT_SYMLINK_FOLLOW)` 은 unsafe 금지라 쓰지 않는다.
+//! 대기 자리는 옮기기 전에 `symlink_metadata`(lstat) 한다 — 보통 파일이고 링크 수가 1 일 때만 옮긴다(심링크·폴더·하드링크면 폴더 밖
+//! 파일이 같은 inode 로 들어올 수 있다). 옮긴 뒤 대상(link)·연 핸들(복사)이 그때 본 파일(`dev`·`ino`)인지 다시 확인해 검사와 사용
+//! 사이 틈을 닫는다 — 검사한 파일이 살아 있는 동안의 바꿔 치기는 거절로 끝난다. inode 번호를 다시 쓰는 파일시스템(Linux ext4
+//! 등)에서 지우고 다시 만드는 경우는 남는 한계다(unix 가 아니면 보통 파일 검사만).
 
 use std::io;
 
@@ -21,6 +20,10 @@ use crate::scope;
 
 /// link 가 이 코드로 실패하면 복사로 옮긴다 — 다른 볼륨·하드링크 없는 파일시스템
 const COPY_FALLBACK_CODES: [&str; 3] = ["EXDEV", "EPERM", "ENOTSUP"];
+const NOT_PLAIN: &str =
+    "다운로드 대기 파일이 보통 파일이 아니거나 다른 곳에 연결돼 있어 저장하지 않았습니다";
+/// 복사 갈래에서 한 번에 읽는 크기(TS 와 같다)
+const COPY_CHUNK: usize = 1 << 20;
 
 /// 저장 실패 — `Rejected` 는 가드 거절(문구는 가드 문구 그대로, 결과의 `rejected`), `Failed` 는 그 밖(Node 문구, `failed`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,58 +55,99 @@ fn two_path_error(e: &io::Error, syscall: &str, from: &str, to: &str) -> String 
     format!("{} -> '{to}'", node_error::format(e, syscall, Some(from)))
 }
 
-/// macOS `copyfile(3)`(libuv `copyFile`)가 폴더 원본에 내는 코드 — 대상 EEXIST 판정 뒤에 난다(TS 실측).
-#[cfg(target_os = "macos")]
-fn reject_dir_source(from: &std::fs::File) -> io::Result<()> {
-    const ENOTSUP: i32 = 45;
-    if from.metadata()?.is_dir() {
-        return Err(io::Error::from_raw_os_error(ENOTSUP));
-    }
-    Ok(())
+/// 대기 자리를 lstat 에서 본 파일 — `(dev, ino)`. 옮긴 뒤 같은 파일인지 이것으로 확인한다.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct StagedId(u64, u64);
+
+#[cfg(unix)]
+fn staged_id(m: &std::fs::Metadata) -> StagedId {
+    use std::os::unix::fs::MetadataExt;
+    StagedId(m.dev(), m.ino())
 }
-#[cfg(not(target_os = "macos"))]
-fn reject_dir_source(_from: &std::fs::File) -> io::Result<()> {
-    Ok(())
+#[cfg(not(unix))]
+fn staged_id(_m: &std::fs::Metadata) -> StagedId {
+    StagedId(0, 0)
+}
+#[cfg(unix)]
+fn link_count(m: &std::fs::Metadata) -> u64 {
+    std::os::unix::fs::MetadataExt::nlink(m)
+}
+#[cfg(not(unix))]
+fn link_count(_m: &std::fs::Metadata) -> u64 {
+    1
 }
 
-/// `copyFile(COPYFILE_EXCL)` — 대상이 있으면 EEXIST. 도중에 실패하면 만든 대상을 지운다(libuv 와 같다). 모드는 원본을 따른다.
-fn copy_exclusive(staged: &str, dest: &str) -> io::Result<()> {
-    let mut from = std::fs::File::open(staged)?;
-    let mut to = std::fs::OpenOptions::new()
+fn same_file(m: &std::fs::Metadata, id: StagedId) -> bool {
+    m.file_type().is_file() && staged_id(m) == id
+}
+
+/// 연 대기 파일이 검사한 파일이면 그 핸들에서 배타적으로 만든 대상으로 복사한다 — 대상이 이미 있으면 `Ok(false)`. 도중에
+/// 실패하면 만든 대상을 지운다. 모드는 원본을 따른다. 문구는 TS(`FileHandle` 의 `open`·`read`·`write`·`fchmod`)와 같다.
+fn copy_exclusive(staged: &str, dest: &str, id: StagedId) -> Result<bool, String> {
+    use std::io::{Read, Write};
+    let mut from =
+        std::fs::File::open(staged).map_err(|e| node_error::format(&e, "open", Some(staged)))?;
+    let meta = from
+        .metadata()
+        .map_err(|e| node_error::format(&e, "fstat", None))?;
+    if !same_file(&meta, id) {
+        return Err(NOT_PLAIN.to_owned());
+    }
+    let mut to = match std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(dest)?;
-    let copied = reject_dir_source(&from)
-        .and_then(|()| io::copy(&mut from, &mut to))
-        .and_then(|_| from.metadata())
-        .and_then(|m| to.set_permissions(m.permissions()));
-    if copied.is_err() {
+        .open(dest)
+    {
+        Ok(f) => f,
+        Err(e) if node_error::code(&e) == Some("EEXIST") => return Ok(false),
+        Err(e) => return Err(node_error::format(&e, "open", Some(dest))),
+    };
+    let mut buf = vec![0u8; COPY_CHUNK];
+    let copied = (|| loop {
+        let n = from
+            .read(&mut buf)
+            .map_err(|e| node_error::format(&e, "read", None))?;
+        if n == 0 {
+            return to
+                .set_permissions(meta.permissions())
+                .map_err(|e| node_error::format(&e, "fchmod", None));
+        }
+        to.write_all(buf.get(..n).unwrap_or_default())
+            .map_err(|e| node_error::format(&e, "write", None))?;
+    })();
+    if let Err(e) = copied {
+        drop(to);
         let _ = std::fs::remove_file(dest);
+        return Err(e);
     }
-    copied
+    Ok(true)
 }
 
-/// 배타적으로 옮긴다 — 대상이 이미 있으면 `Ok(false)`. `link` 는 테스트가 오류 코드를 주입하는 자리다.
+/// 배타적으로 옮긴다 — 대상이 이미 있으면 `Ok(false)`. 옮긴 대상이 검사한 파일이 아니면 지우고 실패한다. `link` 는 테스트가
+/// 오류 코드·바꿔 치기를 주입하는 자리다.
 fn move_exclusive(
     staged: &str,
     dest: &str,
+    id: StagedId,
     link: &dyn Fn(&str, &str) -> io::Result<()>,
 ) -> Result<bool, String> {
-    let Err(e) = link(staged, dest) else {
-        return Ok(true);
-    };
-    let code = node_error::code(&e);
-    if code == Some("EEXIST") {
-        return Ok(false);
+    if let Err(e) = link(staged, dest) {
+        let code = node_error::code(&e);
+        if code == Some("EEXIST") {
+            return Ok(false);
+        }
+        if !code.is_some_and(|c| COPY_FALLBACK_CODES.contains(&c)) {
+            return Err(two_path_error(&e, "link", staged, dest));
+        }
+        return copy_exclusive(staged, dest, id);
     }
-    if !code.is_some_and(|c| COPY_FALLBACK_CODES.contains(&c)) {
-        return Err(two_path_error(&e, "link", staged, dest));
+    let placed =
+        std::fs::symlink_metadata(dest).map_err(|e| node_error::format(&e, "lstat", Some(dest)))?;
+    if !same_file(&placed, id) {
+        let _ = std::fs::remove_file(dest);
+        return Err(NOT_PLAIN.to_owned());
     }
-    match copy_exclusive(staged, dest) {
-        Ok(()) => Ok(true),
-        Err(c) if node_error::code(&c) == Some("EEXIST") => Ok(false),
-        Err(c) => Err(two_path_error(&c, "copyfile", staged, dest)),
-    }
+    Ok(true)
 }
 
 fn place_with(
@@ -114,12 +158,18 @@ fn place_with(
     link: &dyn Fn(&str, &str) -> io::Result<()>,
 ) -> Result<String, PlaceError> {
     let name = download_name(suggested);
+    let st = std::fs::symlink_metadata(staged)
+        .map_err(|e| PlaceError::Failed(node_error::format(&e, "lstat", Some(staged))))?;
+    if !st.file_type().is_file() || link_count(&st) != 1 {
+        return Err(PlaceError::Failed(NOT_PLAIN.to_owned()));
+    }
+    let id = staged_id(&st);
     for n in 0..BROWSER_DOWNLOAD_NAME_TRIES {
         let rel = candidate(name, n);
         let abs = scope::safe_from(base, Some(&rel))
             .and_then(|abs| assert_git_path_allowed(guard, &abs, Some(&rel), false).map(|()| abs))
             .map_err(PlaceError::Rejected)?;
-        if move_exclusive(staged, &abs, link).map_err(PlaceError::Failed)? {
+        if move_exclusive(staged, &abs, id, link).map_err(PlaceError::Failed)? {
             return Ok(rel);
         }
     }
@@ -136,7 +186,7 @@ pub fn place_download(
     staged: &str,
 ) -> Result<String, PlaceError> {
     let out = place_with(base, guard, suggested, staged, &|a, b| {
-        std::fs::hard_link(std::fs::canonicalize(a)?, b)
+        std::fs::hard_link(a, b)
     });
     let _ = std::fs::remove_file(staged);
     out
@@ -243,11 +293,12 @@ mod tests {
         assert!(std::fs::symlink_metadata(format!("{root}/d")).is_err());
     }
 
-    /// 대기 파일이 심링크면 따라가 대상 파일을 링크한다 — 연결 폴더에 심링크가 생기지 않는다(리뷰 L1). 기대값은 TS `placeDownload`
-    /// 를 macOS Node 24 에서 돌린 값(`link(2)` 가 원본 심링크를 따라간다 — Linux 의 `link(2)` 는 따라가지 않아 TS 결과가 OS 마다
-    /// 달라 fixture 에 넣지 못한다, `conformance/BROWSER.md`).
+    const NOT_PLAIN: &str =
+        "다운로드 대기 파일이 보통 파일이 아니거나 다른 곳에 연결돼 있어 저장하지 않았습니다";
+
+    /// 대기 자리가 심링크면(폴더 밖 파일·상대 경로·링크의 링크) 옮기지 않는다 — 링크만 지우고 대상 파일은 그대로(D-5).
     #[test]
-    fn staged_symlink_links_target_file() {
+    fn staged_symlink_is_not_placed() {
         let t = tmp("stlink");
         let (root, staged) = (format!("{}/root", t.0), format!("{}/staging/guid-1", t.0));
         let guard = GitGuard {
@@ -266,17 +317,11 @@ mod tests {
             std::os::unix::fs::symlink(&target, &staged).unwrap();
             assert_eq!(
                 place_download(&root, &guard, "got.txt", &staged),
-                Ok("got.txt".to_owned()),
+                Err(PlaceError::Failed(NOT_PLAIN.to_owned())),
                 "{target}"
             );
-            let got = format!("{root}/got.txt");
-            assert!(
-                std::fs::symlink_metadata(&got).unwrap().is_file(),
-                "{target}"
-            );
-            assert_eq!(std::fs::read_to_string(&got).unwrap(), "secret");
             assert!(std::fs::symlink_metadata(&staged).is_err());
-            std::fs::remove_file(got).unwrap();
+            assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
         }
         assert_eq!(
             std::fs::read_to_string(format!("{}/outside/s", t.0)).unwrap(),
@@ -284,74 +329,89 @@ mod tests {
         );
     }
 
-    /// 끊긴·순환 심링크는 `link` 문구로 실패하고 아무것도 만들지 않는다(TS macOS 실측과 같은 글자).
-    #[cfg(target_os = "macos")]
+    /// 끊긴·순환 심링크도 같은 문구로 실패하고 아무것도 만들지 않는다.
     #[test]
-    fn staged_symlink_dangling_or_loop_fails_like_link() {
+    fn staged_symlink_dangling_or_loop_is_not_placed() {
         let t = tmp("stbad");
         let (root, staged) = (format!("{}/root", t.0), format!("{}/staging/guid-1", t.0));
         let guard = GitGuard {
             root: root.clone(),
             dirs: vec![],
         };
-        for (target, err) in [
-            (
-                format!("{}/outside-none", t.0),
-                "ENOENT: no such file or directory",
-            ),
-            (staged.clone(), "ELOOP: too many symbolic links encountered"),
-        ] {
+        for target in [format!("{}/outside-none", t.0), staged.clone()] {
             std::os::unix::fs::symlink(&target, &staged).unwrap();
             assert_eq!(
                 place_download(&root, &guard, "got.txt", &staged),
-                Err(PlaceError::Failed(format!(
-                    "{err}, link '{staged}' -> '{root}/got.txt'"
-                )))
+                Err(PlaceError::Failed(NOT_PLAIN.to_owned()))
             );
             assert!(std::fs::symlink_metadata(&staged).is_err());
             assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
         }
     }
 
-    /// 대기 자리가 폴더(또는 폴더로 가는 심링크)면 link 는 EPERM → 복사 갈래에서 macOS `copyfile(3)` 처럼 ENOTSUP. 대상이 있으면
-    /// EEXIST 가 먼저라 다음 이름으로 넘어간 뒤 실패한다(TS macOS 실측). 폴더는 지우지 못하고 남는다.
-    #[cfg(target_os = "macos")]
+    /// 대기 자리가 폴더(또는 폴더로 가는 심링크)면 같은 문구로 실패한다 — 대상이 있어도 다음 이름을 보지 않는다. 폴더는 남는다.
     #[test]
-    fn staged_dir_fails_enotsup_after_eexist() {
+    fn staged_dir_is_not_placed() {
         let t = tmp("stdir");
         let (root, staged) = (format!("{}/root", t.0), format!("{}/staging/guid-1", t.0));
         let guard = GitGuard {
             root: root.clone(),
             dirs: vec![],
         };
-        let enotsup = |dest: &str| {
-            Err(PlaceError::Failed(format!(
-                "ENOTSUP: operation not supported on socket, copyfile '{staged}' -> '{root}/{dest}'"
-            )))
-        };
+        let not_plain = Err(PlaceError::Failed(NOT_PLAIN.to_owned()));
         std::fs::create_dir_all(format!("{}/outside", t.0)).unwrap();
         std::os::unix::fs::symlink(format!("{}/outside", t.0), &staged).unwrap();
-        assert_eq!(
-            place_download(&root, &guard, "got.txt", &staged),
-            enotsup("got.txt")
-        );
+        assert_eq!(place_download(&root, &guard, "got.txt", &staged), not_plain);
         assert!(std::fs::symlink_metadata(&staged).is_err());
         std::fs::create_dir(&staged).unwrap();
-        assert_eq!(
-            place_download(&root, &guard, "got.txt", &staged),
-            enotsup("got.txt")
-        );
         std::fs::write(format!("{root}/got.txt"), "old").unwrap();
-        assert_eq!(
-            place_download(&root, &guard, "got.txt", &staged),
-            enotsup("got (1).txt")
-        );
+        assert_eq!(place_download(&root, &guard, "got.txt", &staged), not_plain);
         assert!(std::fs::symlink_metadata(&staged).unwrap().is_dir());
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+    }
+
+    /// 검사 뒤 link 가 대기 자리 대신 폴더 밖 파일을 링크하면(바꿔 치기) 만든 대상을 지우고 실패한다(D-6).
+    #[test]
+    fn swapped_after_check_link_is_undone() {
+        let t = tmp("swaplink");
+        let (root, staged) = (format!("{}/root", t.0), format!("{}/staging/guid-1", t.0));
+        let victim = format!("{}/staging/victim", t.0);
+        let guard = GitGuard {
+            root: root.clone(),
+            dirs: vec![],
+        };
+        std::fs::write(&victim, "keep").unwrap();
+        std::fs::write(&staged, "mine").unwrap();
+        let other = |_: &str, dest: &str| std::fs::hard_link(&victim, dest);
         assert_eq!(
-            std::fs::read_to_string(format!("{root}/got.txt")).unwrap(),
-            "old"
+            place_with(&root, &guard, "report.txt", &staged, &other),
+            Err(PlaceError::Failed(NOT_PLAIN.to_owned()))
         );
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+        assert_eq!(std::fs::read_to_string(&victim).unwrap(), "keep");
+    }
+
+    /// 복사 갈래에서 연 대기 파일이 검사한 파일과 다르면(EXDEV 직전 바꿔 치기) 대상을 만들지 않는다(D-7).
+    #[test]
+    fn swapped_before_copy_is_not_copied() {
+        let t = tmp("swapcopy");
+        let (root, staged) = (format!("{}/root", t.0), format!("{}/staging/guid-1", t.0));
+        let guard = GitGuard {
+            root: root.clone(),
+            dirs: vec![],
+        };
+        std::fs::write(&staged, "mine").unwrap();
+        let swap = |from: &str, _: &str| {
+            // 원본을 살려 둔다 — 지우면 Linux 는 같은 inode 번호를 새 파일에 다시 준다
+            std::fs::rename(from, format!("{from}.orig"))?;
+            std::fs::write(from, "swapped")?;
+            Err(errno(18))
+        };
+        assert_eq!(
+            place_with(&root, &guard, "report.txt", &staged, &swap),
+            Err(PlaceError::Failed(NOT_PLAIN.to_owned()))
+        );
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
     }
 
     #[test]
