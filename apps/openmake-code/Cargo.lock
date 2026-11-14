@@ -655,6 +655,7 @@ dependencies = [
  "regress",
  "serde_json",
  "tokio",
+ "url",
 ]
 
 [[package]]
