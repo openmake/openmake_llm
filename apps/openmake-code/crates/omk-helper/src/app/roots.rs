@@ -309,10 +309,14 @@ mod tests {
             });
             app.key.set("omk_live_unit".into());
             app.connect(&real);
-            assert_eq!(app.roots.keys(), [real.clone()]);
+            assert_eq!(app.roots.keys(), std::slice::from_ref(&real));
             app.fail_core = Some("ENOENT: 사라짐".into());
             app.connect(&real);
-            assert_eq!(app.roots.keys(), [real.clone()], "옛 루트가 남는다");
+            assert_eq!(
+                app.roots.keys(),
+                std::slice::from_ref(&real),
+                "옛 루트가 남는다"
+            );
             let (_, old) = &app.roots.0[0];
             assert!(old.alive.load(std::sync::atomic::Ordering::SeqCst));
             // 쓰기 스레드가 따로 돈다 — 폴더 열기 실패 줄이 올 때까지 받는다
