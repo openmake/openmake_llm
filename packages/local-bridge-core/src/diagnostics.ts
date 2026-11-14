@@ -22,8 +22,8 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { DIAG_MAX_PER_FILE, DIAG_MAX_TOTAL, DIAG_MSG_MAX, DIAG_TIMEOUT_MS, MAX_BUFFER } from './constants';
 import { buildExecEnv } from './exec-env';
-import { onPath } from './exec-path';
-import { SandboxProfileMissingError, sandboxExecFailed, wrapInSandbox } from './sandbox';
+import { absPathEntries, onPath } from './exec-path';
+import { sandboxExecError, sandboxExecFailed, wrapInSandbox } from './sandbox';
 import type { BridgeDiagnostic } from './types';
 
 const TS_EXT = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs']);
@@ -32,7 +32,7 @@ const PY_EXT = new Set(['.py']);
 function run(file: string, args: string[], cwd: string, extraPath: string | undefined, sandbox: string | null | undefined): Promise<{ stdout: string; stderr: string }> {
     const cmd = wrapInSandbox(file, args, sandbox); // 프로파일 없음이면 여기서 throw — 자식을 띄우지 않는다
     const wrapped = typeof sandbox === 'string';
-    const envPath = extraPath || process.env.PATH || process.env.Path || '';
+    const envPath = extraPath || absPathEntries(process.env.PATH || process.env.Path || '');
     // 감쌀 때 이름으로 띄우는 실행 파일(python3)은 먼저 찾는다 — 없으면 sandbox-exec 의 execvp 실패(71)가 아니라
     // 종전과 같은 "띄우지 못함"(빈 출력)이다.
     if (wrapped && !file.includes('/') && !onPath(file, envPath)) return Promise.resolve({ stdout: '', stderr: '' });
@@ -49,7 +49,7 @@ function run(file: string, args: string[], cwd: string, extraPath: string | unde
             },
             (err, stdout, stderr) => {
                 // sandbox-exec 자체 실패(프로파일 파일 유실 등)는 "진단 없음"으로 삼키지 않고 프로파일 없음과 같이 거절한다.
-                if (err && sandboxExecFailed(wrapped, err.code, String(stderr ?? ''))) reject(new SandboxProfileMissingError());
+                if (err && sandboxExecFailed(wrapped, err.code, String(stderr ?? ''))) reject(sandboxExecError(err.code, file));
                 else resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
             },
         );
@@ -143,8 +143,11 @@ export async function collectDiagnostics(
     execPath?: string,
     sandbox?: string | null,
 ): Promise<{ diagnostics: BridgeDiagnostic[]; truncated: boolean; serverKind: string }> {
-    const ts = absPaths.filter((p) => TS_EXT.has(path.extname(p)));
-    const py = absPaths.filter((p) => PY_EXT.has(path.extname(p)));
+    // base 의 엄격한 하위만 — 대상이 연결 폴더 자신이면(`paths: ['.']`, 이름이 `.ts` 로 끝나는 폴더) 위로 찾기가 폴더 **밖**에서
+    // 시작해 조상의 tsconfig·tsc 를 실행했다(설계 D-9). 그 밖은 조용히 건너뛴다(디렉터리는 진단 대상이 아니다).
+    const inBase = absPaths.filter((p) => p !== base && p.startsWith(base + path.sep));
+    const ts = inBase.filter((p) => TS_EXT.has(path.extname(p)));
+    const py = inBase.filter((p) => PY_EXT.has(path.extname(p)));
     const all: BridgeDiagnostic[] = [];
     const kinds: string[] = [];
 

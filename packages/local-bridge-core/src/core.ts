@@ -26,7 +26,7 @@ import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { buildExecEnv } from './exec-env';
 import { assertGitPathAllowed, detectGit, protectedGitDirs, type GitGuard, type GitPaths } from './git-trust';
-import { buildSandboxProfile, SandboxProfileMissingError } from './sandbox';
+import { buildSandboxProfile, SandboxProfileMissingError, SandboxSpawnError } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
 import { findChrome } from './browser/chrome';
@@ -97,12 +97,12 @@ export class BridgeCore {
         return SANDBOX_ENABLED ? this.toolProfile : undefined;
     }
 
-    /** 도구 실행 — 프로파일이 없어 자식을 띄우지 않았으면 exec 와 같은 문구로 거절하고 null. */
+    /** 도구 실행 — 프로파일이 없어 자식을 띄우지 않았거나 감싼 실행 파일을 띄우지 못했으면(71, 설계 D-8) 126 으로 거절하고 null. */
     private async toolSandboxed<T>(done: (r: BridgeResult) => void, fn: () => Promise<T>): Promise<T | null> {
         try {
             return await fn();
         } catch (e) {
-            if (!(e instanceof SandboxProfileMissingError)) throw e;
+            if (!(e instanceof SandboxProfileMissingError || e instanceof SandboxSpawnError)) throw e;
             done({ ok: false, error: e.message, exitCode: 126 });
             return null;
         }
@@ -195,7 +195,7 @@ export class BridgeCore {
                     done({ ok: false, error: SANDBOX_PROFILE_MISSING_ERROR, exitCode: 126 });
                     return;
                 }
-                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
+                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot, this.toolSandbox());
                 const opts = {
                     cwd: base, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, encoding: 'utf8' as const,
                     // allowlist(exec-env) — 비밀 상속 차단
@@ -267,7 +267,7 @@ export class BridgeCore {
                 const rel = Array.isArray(m.paths) ? m.paths.slice(0, DIAG_MAX_TOTAL) : [];
                 const abs: string[] = [];
                 for (const p of rel) abs.push(await safeFromAsync(base, p));
-                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
+                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot, this.toolSandbox());
                 const r = await this.toolSandboxed(done, () => collectDiagnostics(base, abs, this.execPathCache!, this.toolSandbox()));
                 if (r) done({ ok: true, ...r });
                 return;
@@ -277,7 +277,7 @@ export class BridgeCore {
                 // 탐지된 테스트의 실행은 exec 로 따로 오고 사용자 확인을 거친다.
                 // pytest 탐지의 python3 도 lsp_diagnostics 와 같은 도구 프로파일 안에서 돈다.
                 const dirAbs = await safeFromAsync(base, m.path || '.');
-                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
+                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot, this.toolSandbox());
                 const testRunner = await this.toolSandboxed(done, () => detectTestRunner(dirAbs, this.execPathCache!, this.toolSandbox()));
                 if (testRunner) done({ ok: true, testRunner });
                 return;

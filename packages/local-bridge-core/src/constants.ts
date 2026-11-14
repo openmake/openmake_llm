@@ -49,6 +49,11 @@ export const AUTH_CLOSE_TEXT: Record<BridgeAuthCloseReason, string> = {
 export const PATH_PROBE_TIMEOUT_MS = 5000;
 /** git 디렉터리 탐지(rev-parse) 프로브 타임아웃(ms). */
 export const GIT_PROBE_TIMEOUT_MS = 5000;
+/**
+ * 자식에게 넘길 PATH 를 절대경로 항목만 남겼더니 비었을 때의 값 — POSIX 의 빈 PATH 는 현재 폴더(연결 폴더) 한 항목이라
+ * 폴더의 `git`·`python3` 가 떴다(설계 D-14 보완, 리뷰 r2 F4).
+ */
+export const FALLBACK_CHILD_PATH = '/usr/bin:/bin';
 /** 테스트 러너 탐지에서 pytest 탐지 `python3 -I -c …` 한 번에 주는 시간. */
 export const TEST_RUNNER_PROBE_TIMEOUT_MS = 5000;
 
@@ -57,6 +62,8 @@ export const SANDBOX_BIN = '/usr/bin/sandbox-exec';
 export const SANDBOX_ENABLED = process.platform === 'darwin' && process.env.OMK_BRIDGE_SANDBOX !== '0';
 /** 샌드박스가 켜졌는데 프로파일이 없을 때의 거부 문구(fail-closed) — exec 와 도구 자식(test_runner·lsp_diagnostics)이 같이 쓴다. */
 export const SANDBOX_PROFILE_MISSING_ERROR = 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.';
+/** 감싼 자식에서 sandbox-exec 가 실행 파일을 띄우지 못했다(종료 코드 71) — 뒤에 `(<파일 이름>).` 가 붙는다, 종료 코드는 같은 126(설계 D-8). */
+export const SANDBOX_SPAWN_ERROR_PREFIX = '샌드박스 안에서 실행 파일을 띄우지 못해 실행을 거부했습니다';
 
 /**
  * 확인 없이 띄우는 git(worktree·연결 시점 탐지)에 늘 붙이는 인자 — 레포 설정의 fsmonitor·훅을 끈다(설계 D-2).
@@ -79,6 +86,16 @@ export const GITFILE_MAX_BYTES = 4096;
 export const CACHE_SUBPATHS = ['.npm', '.cache', 'Library/Caches', '.cargo', '.gradle', '.m2', '.yarn', '.pnpm-store', 'go/pkg'];
 /** 읽기를 차단할 비밀 경로. */
 export const SECRET_SUBPATHS = ['.ssh', '.aws', '.gnupg', '.kube', '.docker', '.config/gcloud', 'Library/Keychains'];
+/**
+ * 도구 프로파일에서만 더 막는 자격 파일 — 확인 없이 뜨는 자식(폴더의 tsc 등)은 이 파일이 필요 없다(설계 D-7).
+ * exec 프로파일에는 넣지 않는다 — 승인된 `npm install`·`gh` 가 쓴다. 목록이라 빠지는 이름이 생긴다(닫는 길은 허용 목록, PR-C).
+ */
+export const TOOL_SECRET_SUBPATHS = [
+    '.npmrc', '.yarnrc.yml', '.netrc', '.git-credentials', '.config/git/credentials', '.config/gh', '.config/hub', '.config/glab-cli',
+    '.pypirc', '.cargo/credentials', '.cargo/credentials.toml', '.gem/credentials', '.m2/settings.xml', '.gradle/gradle.properties',
+    '.composer/auth.json', '.config/composer/auth.json', '.config/op', '.terraform.d', '.azure', '.vault-token', '.pgpass', '.my.cnf',
+    '.boto', '.s3cfg',
+];
 
 /**
  * exec 자식 프로세스에 넘기는 env allowlist(2026-10-09 점검 ⑤) — 호스트 env 를 통째로 상속하면
