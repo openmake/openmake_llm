@@ -40,6 +40,7 @@
 - `expect`: `{savedAs}` · `{rejected}`(가드 거절 — 다른 이름을 찾지 않는다) · `{failed}`(그 밖의 오류, Node 문구 그대로).
 - `after`: 호출 뒤 `{{TMP}}` 전체 — 경로 → 글(UTF-8) · `{"symlink": 대상}` · `{"dir": true}`. 대기 파일은 어느 결과든 지워진다.
 - `setup`: `{"dir"}` · `{"file", "content"}` · `{"file", "size"}`(성긴 파일) · `{"symlink", "target"}` · `{"series": "root/report ({n}).txt", "from", "to", "content"}`.
+- **기대값 재현**: 새 사례는 `id`·`input`(파일 suite 는 `setup`)만 적고, `npm run build:packages` 뒤 TS 구현(`packages/config/dist`·`packages/local-bridge-core/dist`)을 jest 밖 Node 에서 러너와 같은 절차(호출·`walk`, `{{TMP}}` 치환)로 불러 `expect`·`after` 를 채운 다음 TS 러너로 확인한다(생성 스크립트는 저장소에 두지 않는다 — 아래 "러너에만 있는 보정" 참고).
 - `link` 가 `EXDEV`·`EPERM`·`ENOTSUP` 일 때의 복사 갈래는 fixture 로 만들 수 없어(다른 볼륨·주입) TS `download-place.test.ts` 와 Rust 단위 테스트(오류 코드 주입)가 본다.
 
 ### 러너에만 있는 보정
