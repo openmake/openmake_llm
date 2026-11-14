@@ -7185,6 +7185,177 @@
       }
     },
     {
+      "id": "upload-realpath-via-link",
+      "setup": [
+        {
+          "file": "root/a.txt",
+          "content": "A"
+        },
+        {
+          "file": "root/docs/b.txt",
+          "content": "B"
+        },
+        {
+          "file": "root/.env",
+          "content": "S"
+        },
+        {
+          "symlink": "root/link.txt",
+          "target": "{{TMP}}/root/docs/b.txt"
+        }
+      ],
+      "input": {
+        "spec": {
+          "actions": [
+            {
+              "type": "uploadFile",
+              "selector": "#f",
+              "files": [
+                "link.txt"
+              ]
+            }
+          ],
+          "sitePolicy": {
+            "allow": [
+              "example.com"
+            ]
+          },
+          "approvedUploads": [
+            {
+              "host": "example.com",
+              "files": [
+                "link.txt"
+              ]
+            }
+          ]
+        },
+        "opts": {
+          "taskId": "t1",
+          "upload": true
+        },
+        "cdp": [
+          {
+            "on": "Runtime.evaluate",
+            "where": {
+              "expression": "location.href"
+            },
+            "reply": {
+              "result": {
+                "type": "string",
+                "value": "http://example.com/"
+              }
+            }
+          },
+          {
+            "on": "Runtime.evaluate",
+            "where": {
+              "expression": "!!document.querySelector(\"#f\") || null"
+            },
+            "reply": {
+              "result": {
+                "type": "boolean",
+                "value": true
+              }
+            }
+          },
+          {
+            "on": "Runtime.evaluate",
+            "where": {
+              "expression": "document.querySelector(\"#f\")"
+            },
+            "reply": {
+              "result": {
+                "type": "object",
+                "className": "HTMLInputElement",
+                "objectId": "O7"
+              }
+            }
+          },
+          {
+            "on": "Runtime.callFunctionOn",
+            "match": "HTMLInputElement",
+            "reply": {
+              "result": {
+                "type": "string",
+                "value": "multiple"
+              }
+            }
+          },
+          {
+            "on": "DOM.setFileInputFiles"
+          }
+        ]
+      },
+      "expect": {
+        "stdout": "{\"ok\":true,\"finalUrl\":\"http://example.com/\",\"results\":[{\"i\":0,\"type\":\"uploadFile\",\"ok\":true,\"files\":[\"link.txt\"]}]}",
+        "sent": [
+          {
+            "method": "Runtime.evaluate",
+            "params": {
+              "expression": "location.href",
+              "returnByValue": true,
+              "awaitPromise": true
+            },
+            "session": "S1"
+          },
+          {
+            "method": "Runtime.evaluate",
+            "params": {
+              "expression": "!!document.querySelector(\"#f\") || null",
+              "returnByValue": true,
+              "awaitPromise": true
+            },
+            "session": "S1"
+          },
+          {
+            "method": "Runtime.evaluate",
+            "params": {
+              "expression": "document.querySelector(\"#f\")"
+            },
+            "session": "S1"
+          },
+          {
+            "method": "Runtime.evaluate",
+            "params": {
+              "expression": "location.href",
+              "returnByValue": true,
+              "awaitPromise": true
+            },
+            "session": "S1"
+          },
+          {
+            "method": "Runtime.callFunctionOn",
+            "params": {
+              "objectId": "O7",
+              "returnByValue": true,
+              "functionDeclaration": "function () { return this instanceof HTMLInputElement && this.type === \"file\" ? (this.multiple ? \"multiple\" : \"single\") : \"other\"; }"
+            },
+            "session": "S1"
+          },
+          {
+            "method": "DOM.setFileInputFiles",
+            "params": {
+              "files": [
+                "{{TMP}}/root/docs/b.txt"
+              ],
+              "objectId": "O7"
+            },
+            "session": "S1"
+          },
+          {
+            "method": "Runtime.evaluate",
+            "params": {
+              "expression": "location.href",
+              "returnByValue": true,
+              "awaitPromise": true
+            },
+            "session": "S1"
+          }
+        ],
+        "saved": []
+      }
+    },
+    {
       "id": "upload-single-two",
       "setup": [
         {
