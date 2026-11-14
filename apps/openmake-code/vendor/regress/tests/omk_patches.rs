@@ -32,3 +32,15 @@ fn patch1_empty_iterations_do_not_pile_up() {
 fn patch1_nested_empty_loop_then_word_boundary() {
     assert!(is_match(r"(?:( *){1,2})+(\ba+?)", "", "  a"));
 }
+
+// ② EndCaptureGroup — 그룹 안으로 역추적해 돌아가면 그룹 끝도 되돌린다(자기 그룹 역참조).
+
+#[test]
+fn patch2_self_backreference_after_backtrack_into_group() {
+    assert!(is_match(r"(x{1,2}\1){2}", "", "xx"));
+}
+
+#[test]
+fn patch2_self_backreference_with_lazy_inner_loop() {
+    assert!(is_match(r"((.(/??)*)\1){2}", "", "_//"));
+}
