@@ -117,6 +117,26 @@ impl Emitter {
         let _ = self.tx.send(Out::Line(line));
     }
 
+    /// 단위 테스트 — stdout 대신 받는 쪽으로 줄을 모은다.
+    #[cfg(test)]
+    pub(crate) fn capture() -> (Emitter, std_mpsc::Receiver<String>) {
+        let (tx, rx) = std_mpsc::channel::<Out>();
+        let (lines_tx, lines) = std_mpsc::channel();
+        std::thread::spawn(move || {
+            for o in rx {
+                match o {
+                    Out::Line(l) => {
+                        let _ = lines_tx.send(l);
+                    }
+                    Out::Flushed(done) => {
+                        let _ = done.send(());
+                    }
+                }
+            }
+        });
+        (Emitter { tx }, lines)
+    }
+
     /// 지금까지 넣은 줄이 다 쓰일 때까지 최대 `limit` 기다린다(종료 직전).
     pub fn flush(&self, limit: Duration) {
         let (done_tx, done_rx) = std_mpsc::sync_channel(1);

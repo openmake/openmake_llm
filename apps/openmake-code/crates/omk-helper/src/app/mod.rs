@@ -74,6 +74,9 @@ pub(crate) struct App {
     stopping: Option<Pin<Box<Sleep>>>,
     /// 브라우저를 쥔 코어(하나면 된다 — 프로필마다 인스턴스 하나를 나눠 쓴다). 종료 때 띄운 Chrome 을 끈다.
     browser_core: Option<Arc<BridgeCore>>,
+    /// 단위 테스트 — 다음 코어 생성을 이 문구로 실패시킨다(그 사이 폴더가 사라진 경주를 흉내 낸다).
+    #[cfg(test)]
+    fail_core: Option<String>,
 }
 
 /// 일반 실행 — 끝나면 종료 코드(언제나 0).
@@ -88,21 +91,7 @@ pub async fn run(server: String, host: Host, emit: Emitter) -> i32 {
     });
     let t = tx.clone();
     stdio::spawn_stdin_reader(move |i| t.send(Msg::Input(i)).is_ok());
-    let app = App {
-        emit,
-        tx,
-        host: Arc::new(host),
-        key: Arc::default(),
-        connector: NetConnector::new().map(|c| Arc::new(c) as Arc<dyn Connector>),
-        roots: roots::Roots::default(),
-        confirms: HashMap::new(),
-        confirm_seq: 0,
-        ready: None,
-        queued: VecDeque::new(),
-        stopping: None,
-        browser_core: None,
-    };
-    app.run_loop(rx).await
+    App::new(emit, tx, host).run_loop(rx).await
 }
 
 async fn stop_due(t: &mut Option<Pin<Box<Sleep>>>) {
@@ -113,6 +102,25 @@ async fn stop_due(t: &mut Option<Pin<Box<Sleep>>>) {
 }
 
 impl App {
+    fn new(emit: Emitter, tx: Tx, host: Host) -> App {
+        App {
+            emit,
+            tx,
+            host: Arc::new(host),
+            key: Arc::default(),
+            connector: NetConnector::new().map(|c| Arc::new(c) as Arc<dyn Connector>),
+            roots: roots::Roots::default(),
+            confirms: HashMap::new(),
+            confirm_seq: 0,
+            ready: None,
+            queued: VecDeque::new(),
+            stopping: None,
+            browser_core: None,
+            #[cfg(test)]
+            fail_core: None,
+        }
+    }
+
     async fn run_loop(mut self, mut rx: mpsc::UnboundedReceiver<Msg>) -> i32 {
         loop {
             tokio::select! {
