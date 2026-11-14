@@ -28,8 +28,9 @@ export function resolveExecPath(folderRoot: string | null): string {
     const parts: string[] = [];
     const probeEnv = (p: string): Record<string, string> => buildExecEnv(process.env, p, process.platform, PATH_PROBE_ENV_EXTRA_POSIX);
     try {
+        // 홈에서 띄운다 — 사용자 로그인 rc 의 cwd 훅(mise activate·direnv)이 연결 폴더 설정을 샌드박스 밖에서 돌리지 않게(설계 D-13).
         parts.push(...execFileSync(process.env.SHELL || '/bin/zsh', ['-lc', 'echo -n "$PATH"'],
-            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, env: probeEnv(process.env.PATH || '') }).trim().split(':'));
+            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, cwd: os.homedir(), env: probeEnv(process.env.PATH || '') }).trim().split(':'));
     } catch { /* 로그인 셸 실패 → 아래 폴백만 사용 */ }
     parts.push(...(process.env.PATH || '').split(':'));
     parts.push('/opt/homebrew/bin', '/usr/local/bin',
