@@ -1,12 +1,15 @@
 import { reapStaleWorkspaces } from './sandbox';
 import { getTaskSandboxConfig } from '../../config/task-sandbox';
-import { mkdtempSync, mkdirSync, existsSync, writeFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, existsSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 describe('reapStaleWorkspaces', () => {
+    const roots: string[] = []; // setup() 이 만든 루트 — 끝나면 지운다
+    afterAll(() => { for (const r of roots) rmSync(r, { recursive: true, force: true }); });
     function setup() {
         const root = mkdtempSync(join(tmpdir(), 'omk-reap-'));
+        roots.push(root);
         mkdirSync(join(root, 'task-a'));
         mkdirSync(join(root, 'task-b'));
         writeFileSync(join(root, 'task-a', 'out.txt'), 'x');

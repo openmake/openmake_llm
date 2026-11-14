@@ -31,12 +31,16 @@ describe('FS 타임아웃 가드 (FS_OP_TIMEOUT_MS)', () => {
         jest.restoreAllMocks();
         fs.rmSync(base, { recursive: true, force: true });
     });
+    const profDirs: string[] = []; // makeCore 가 만드는 프로파일 폴더 — 끝나면 지운다
+    afterAll(() => { for (const d of profDirs) fs.rmSync(d, { recursive: true, force: true }); });
 
     function makeCore(): Core {
+        const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-prof-'));
+        profDirs.push(prof);
         return new BridgeCore({
             folder: base,
             confirm: async () => 'yes',
-            sandboxProfileDir: fs.mkdtempSync(path.join(os.tmpdir(), 'omk-prof-')),
+            sandboxProfileDir: prof,
         });
     }
 

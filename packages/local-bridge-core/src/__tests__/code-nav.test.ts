@@ -20,11 +20,16 @@ function mk(rel: string, body = ''): void {
     fs.writeFileSync(abs, body);
 }
 
+const profDirs: string[] = []; // core() 가 만드는 프로파일 폴더 — 끝나면 지운다
+afterAll(() => { for (const d of profDirs) fs.rmSync(d, { recursive: true, force: true }); });
+
 function core(): BridgeCore {
+    const prof = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-sb-'));
+    profDirs.push(prof);
     const c = new BridgeCore({
         folder: root,
         confirm: async () => { confirmCalls++; return 'no'; },
-        sandboxProfileDir: fs.mkdtempSync(path.join(os.tmpdir(), 'omk-sb-')),
+        sandboxProfileDir: prof,
     });
     c.prepare();
     return c;

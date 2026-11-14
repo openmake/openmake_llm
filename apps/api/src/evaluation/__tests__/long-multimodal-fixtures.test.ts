@@ -59,12 +59,16 @@ describe('golden-dataset 첨부 케이스(F26.5)', () => {
 
     it('로더 — 없는 이미지·모르는 픽스처·real-only 누락을 거부', () => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'golden-'));
-        const f = path.join(dir, 'ds.json');
-        fs.writeFileSync(f, JSON.stringify({ version: 't', description: '', cases: [
-            { id: 'a', category: 'response-pattern', query: 'q', mustContain: ['x'], tags: ['real-only'], attachments: [{ kind: 'image', fixture: 'missing.png' }] },
-            { id: 'b', category: 'response-pattern', query: 'q', mustContain: ['x'], tags: ['real-only'], contextFixture: 'long-1m' },
-            { id: 'c', category: 'response-pattern', query: 'q', mustContain: ['x'], contextFixture: 'long-8k' },
-        ] }));
-        expect(() => loadGoldenDataset(f)).toThrow(/a: 이미지 픽스처 없음[\s\S]*b: 알 수 없는 contextFixture[\s\S]*c: 첨부 케이스는 tags 에 real-only/);
+        try {
+            const f = path.join(dir, 'ds.json');
+            fs.writeFileSync(f, JSON.stringify({ version: 't', description: '', cases: [
+                { id: 'a', category: 'response-pattern', query: 'q', mustContain: ['x'], tags: ['real-only'], attachments: [{ kind: 'image', fixture: 'missing.png' }] },
+                { id: 'b', category: 'response-pattern', query: 'q', mustContain: ['x'], tags: ['real-only'], contextFixture: 'long-1m' },
+                { id: 'c', category: 'response-pattern', query: 'q', mustContain: ['x'], contextFixture: 'long-8k' },
+            ] }));
+            expect(() => loadGoldenDataset(f)).toThrow(/a: 이미지 픽스처 없음[\s\S]*b: 알 수 없는 contextFixture[\s\S]*c: 첨부 케이스는 tags 에 real-only/);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
     });
 });
