@@ -145,7 +145,7 @@ export interface TaskExecutor {
      *
      * 로컬 브리지가 이걸 구현하는 이유: exec 로 내보내면 읽기 전용 탐색인데도 디바이스의
      * confirmExec(비우회 승인 창)이 매번 뜬다. 전용 kind 는 셸을 거치지 않아 승인 없이 돈다.
-     * 전달 실패·구 디바이스(kind 미지원)는 **null** 을 돌려 호출측이 셸 경로로 폴백하고(fail-open),
+     * 전달 실패·구 디바이스(kind 미지원)·서버 능력 검사 미지원은 **null** 을 돌려 호출측이 셸 경로로 폴백하고(fail-open),
      * 요청 오류(디바이스가 요청을 받아 거절)는 `error` 로 돌려 폴백하지 않는다.
      */
     codeNav?(spec: CodeNavSpec): Promise<CodeNavData | null>;

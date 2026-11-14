@@ -183,7 +183,8 @@ export class RemoteExecutor implements TaskExecutor {
      * 코드 탐색(grep_code·repo_map) — 디바이스가 셸 없이 파일을 훑어 결과만 돌려준다.
      * exec 로 내보내면 읽기 전용인데도 confirmExec 승인 창이 매 호출 떠서 실사용이 불가능하다
      * (lsp_diagnostics 와 같은 취지의 전용 kind). 구 디바이스는 "지원하지 않는 kind" 오류를
-     * 돌려주므로 **null** → 호출측(tools-code-nav)이 셸 경로로 폴백한다. 전달 실패(transport)도 null 이다.
+     * 돌려주므로 **null** → 호출측(tools-code-nav)이 셸 경로로 폴백한다. 전달 실패(transport)와
+     * 서버 능력 검사 미지원(능력 목록에 code_nav 없음 → `unsupported`)도 null 이다.
      * 디바이스가 요청을 받아 거절한 요청 오류(정규식 오류·역추적 한도 등)는 `{ error }` 로 돌려 폴백하지 않는다 —
      * 셸로 다시 돌리면 같은 패턴이 승인 창을 띄우고 원래 안내 문구가 사라진다.
      */
@@ -197,7 +198,7 @@ export class RemoteExecutor implements TaskExecutor {
             ...(spec.ignoreCase ? { ignoreCase: true } : {}),
             ...(spec.maxResults ? { maxResults: spec.maxResults } : {}),
         }).catch(() => ({ ok: false }) as BridgeResult);
-        const requestError = !r.ok && !r.transport && r.error?.trim() ? r.error : undefined;
+        const requestError = !r.ok && !r.transport && !r.unsupported && r.error?.trim() ? r.error : undefined;
         if (requestError && !isUnsupportedKindError(requestError)) {
             logger.info(`[${this.taskId}] code_nav 요청 오류 — 폴백 없음: ${requestError}`);
             return { error: requestError };
