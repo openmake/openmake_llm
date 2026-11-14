@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/*"]
+exclude = ["vendor/regress"]
 resolver = "3"
 
 [workspace.package]
@@ -15,3 +16,6 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 unwrap_used = "warn"
 expect_used = "warn"
+
+[patch.crates-io]
+regress = { path = "vendor/regress" }
