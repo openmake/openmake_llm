@@ -95,6 +95,30 @@ describe('정상 스트림', () => {
         expect(r.content).toBe('답');
     });
 
+    // 외부 provider(DeepSeek·Qwen 계열 등)는 reasoning 대신 reasoning_content 로 추론을 보낸다 — 로컬 stream-parser 와 같게 읽는다
+    it('reasoning_content 델타만 와도 thinking 으로 전달한다', async () => {
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ reasoning_content: '생각 중' }),
+            sseChunk({ content: '답' }, { finish_reason: 'stop' }),
+        ] });
+        const tokens: string[] = [];
+        const thinking: string[] = [];
+        const r = await provider().streamChat({ messages, modelId: 'm' }, { onToken: (t) => tokens.push(t), onThinking: (t) => thinking.push(t) });
+        expect(thinking).toEqual(['생각 중']);
+        expect(tokens.join('')).toBe('답');
+        expect(r.content).toBe('답');
+    });
+
+    it('reasoning 과 reasoning_content 가 함께 오면 reasoning 만 한 번 전달한다', async () => {
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ reasoning: '생각 중', reasoning_content: '생각 중' }),
+            sseChunk({ content: '답' }, { finish_reason: 'stop' }),
+        ] });
+        const thinking: string[] = [];
+        await provider().streamChat({ messages, modelId: 'm' }, { onThinking: (t) => thinking.push(t) });
+        expect(thinking).toEqual(['생각 중']);
+    });
+
     it('여러 청크로 쪼개진 tool_call 인자를 이어 붙여 한 번 알린다', async () => {
         reply = () => ({ kind: 'stream', chunks: [
             sseChunk({ tool_calls: [{ index: 0, id: 'call_a', function: { name: 'web_search', arguments: '{"que' } }] }),
