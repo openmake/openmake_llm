@@ -65,6 +65,10 @@ jobs:
       - name: Test (conformance + unit)
         run: cargo test --locked
 
+      # regress 저장소 안 사본(워크스페이스 밖) — 상류 테스트 + 우리 패치 테스트(vendor/regress/OMK-PATCHES.md).
+      - name: Test (vendored regress)
+        run: cargo test --locked --manifest-path vendor/regress/Cargo.toml --features utf16
+
       - name: Dependency advisories and licenses
         run: |
           cargo install cargo-deny --version "=${CARGO_DENY_VERSION}" --locked

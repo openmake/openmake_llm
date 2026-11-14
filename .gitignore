@@ -20,6 +20,7 @@ dist/
 build/
 *.tsbuildinfo
 apps/openmake-code/target/
+apps/openmake-code/vendor/regress/target/
 
 # Logs
 *.log
