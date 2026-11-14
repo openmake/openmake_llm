@@ -24,7 +24,7 @@ import { execFile } from 'child_process';
 import { EXEC_TIMEOUT_MS, GIT_DIR_MISMATCH_ERROR, GIT_FIXED_ARGS, GITFILE_MAX_BYTES, MAX_BUFFER, TASK_ID_RE, WORKTREE_BRANCH_PREFIX, WORKTREE_DIR } from './constants';
 import { buildExecEnv } from './exec-env';
 import { readRegularFile, type GitPaths } from './git-trust';
-import { SandboxProfileMissingError, sandboxExecFailed, wrapInSandbox } from './sandbox';
+import { SandboxProfileMissingError, SandboxSpawnError, sandboxExecError, sandboxExecFailed, wrapInSandbox } from './sandbox';
 import { safeFrom, safeFromAsync } from './scope';
 import type { BridgeMsg, BridgeResult } from './types';
 
@@ -40,7 +40,7 @@ type GitOut = { code: number; stdout: string; stderr: string };
 
 /**
  * git 하나 — `GIT_FIXED_ARGS` 를 붙이고 도구 프로파일로 감싼다. 프로파일이 없으면 띄우지 않고, sandbox-exec 자체가
- * 실패하면(65·71) 결과를 삼키지 않고 SandboxProfileMissingError 를 던진다(코어가 도구와 같은 126 거절로 바꾼다).
+ * 실패하면(65·71) 결과를 삼키지 않고 SandboxProfileMissingError·SandboxSpawnError 를 던진다(코어가 도구와 같은 126 거절로 바꾼다).
  */
 export async function gitRun(args: string[], cwd: string, profile: string | null | undefined): Promise<GitOut> {
     const cmd = wrapInSandbox('git', [...GIT_FIXED_ARGS, ...args], profile);
@@ -53,7 +53,7 @@ export async function gitRun(args: string[], cwd: string, profile: string | null
             });
         });
     });
-    if (r.code !== 0 && sandboxExecFailed(profile !== undefined, r.code, r.stderr)) throw new SandboxProfileMissingError();
+    if (r.code !== 0 && sandboxExecFailed(profile !== undefined, r.code, r.stderr)) throw sandboxExecError(r.code, 'git');
     return r;
 }
 
@@ -141,7 +141,7 @@ async function worktreeMetaDir(git: Git, wtAbs: string, repo: GitPaths): Promise
 
 /** 프로파일 없음은 삼키지 않는다 — 그 밖의 실패는 치명적이지 않다(HEAD 폴백). */
 function rethrowSandbox(e: unknown): void {
-    if (e instanceof SandboxProfileMissingError) throw e;
+    if (e instanceof SandboxProfileMissingError || e instanceof SandboxSpawnError) throw e;
 }
 
 async function writeBaseSha(git: Git, wtAbs: string, repo: GitPaths): Promise<void> {

@@ -1,7 +1,7 @@
 //! 읽기 전용 도구가 띄우는 자식 하나의 실행 조건 — TS `diagnostics.ts` `run`·`test-runner.ts` `canImportPytest` 의
 //! `execFile` 자리(설계 D-64·D-65).
 
-use crate::constants::{MAX_BUFFER, SANDBOX_BIN};
+use crate::constants::{MAX_BUFFER, SANDBOX_BIN, SANDBOX_SPAWN_ERROR_PREFIX};
 use crate::exec::FAIL_CLOSED;
 use crate::exec_env::build_exec_env;
 use crate::exec_path::env_get;
@@ -16,11 +16,20 @@ pub(crate) const NO_HOST: &str = "exec 호스트가 설정되지 않았습니다
 /// 도구 실패 — 샌드박스 거절(프로파일 없음·sandbox-exec 자체 실패)은 exec 와 같은 모양(문구 + exitCode 126).
 /// lsp_diagnostics·test_runner·worktree 가 쓴다.
 pub(crate) fn tool_failure(error: String) -> BridgeResult {
-    let refused = error == FAIL_CLOSED;
+    let refused =
+        error == FAIL_CLOSED || error.starts_with(&format!("{SANDBOX_SPAWN_ERROR_PREFIX}("));
     BridgeResult {
         exit_code: refused.then_some(126),
         ..BridgeResult::failure(error)
     }
+}
+
+/// 감싼 실행 파일을 띄우지 못함(sandbox-exec 71) — 프로파일 문제가 아니라 재연결로 풀리지 않는다(설계 D-8). 이름은 basename.
+fn spawn_refused(file: &str) -> String {
+    format!(
+        "{SANDBOX_SPAWN_ERROR_PREFIX}({}).",
+        node_path::basename(file)
+    )
 }
 
 /// 자식을 감쌀 샌드박스 — 꺼짐, 도구 프로파일(exec 프로파일 + 네트워크 차단, 설계 2026-11-14 D-1), 켜졌는데 프로파일이 없음(fail-closed).
@@ -95,8 +104,8 @@ impl ToolEnv {
     }
 
     /// 자식 하나를 띄운다. 감싼 자식에서 sandbox-exec **자체**가 실패하면(프로파일 문법 오류 65 — `-p` 도 같다, 실행 파일
-    /// execvp 실패 71 — stderr 가 `sandbox-exec:` 로 시작) "진단 없음/none" 으로 삼키지 않고 프로파일 없음과 같이 거절한다
-    /// (TS 별건 수정 M1 과 같은 규칙). 이름으로 띄우는 실행 파일은 부르는 쪽이 먼저 찾아 절대경로로 넘긴다(71 과 섞이지 않게).
+    /// execvp 실패 71 — stderr 가 `sandbox-exec:` 로 시작) "진단 없음/none" 으로 삼키지 않고 거절한다 — 65 는 프로파일 없음과
+    /// 같은 문구, 71 은 띄우지 못한 실행 파일 이름으로(TS 별건 수정 M1·설계 D-8 과 같은 규칙). 이름으로 띄우는 실행 파일은 부르는 쪽이 먼저 찾아 절대경로로 넘긴다(71 과 섞이지 않게).
     pub async fn run(
         &self,
         file: &str,
@@ -108,7 +117,11 @@ impl ToolEnv {
         let wrapped = matches!(self.sandbox, ToolSandbox::Profile(_));
         let code = out.end.exec_file_code();
         if wrapped && (code == 65 || code == 71) && out.stderr.starts_with("sandbox-exec:") {
-            return Err(FAIL_CLOSED.to_owned());
+            return Err(if code == 71 {
+                spawn_refused(file)
+            } else {
+                FAIL_CLOSED.to_owned()
+            });
         }
         Ok(out)
     }

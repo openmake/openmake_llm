@@ -368,6 +368,7 @@ fn constants() {
         ("GIT_PROBE_PROFILE", c::GIT_PROBE_PROFILE),
         ("GIT_DIR_MISMATCH_ERROR", c::GIT_DIR_MISMATCH_ERROR),
         ("GIT_PATH_DENIED_PREFIX", c::GIT_PATH_DENIED_PREFIX),
+        ("SANDBOX_SPAWN_ERROR_PREFIX", c::SANDBOX_SPAWN_ERROR_PREFIX),
     ];
     for (name, ours) in texts {
         assert_eq!(values[name], ours, "constants/{name}");
@@ -383,6 +384,7 @@ fn constants() {
         "constants/GITFILE_MAX_BYTES"
     );
     seen.extend(["GIT_PATH_DENIED_PREFIX", "GITFILE_MAX_BYTES"]);
+    seen.push("SANDBOX_SPAWN_ERROR_PREFIX");
     seen.extend(["WORKTREE_DIR", "WORKTREE_BRANCH_PREFIX"]);
     // 읽기 전용 도구 (PR-1.4) — 두 시간 제한은 기본값(TS 는 환경 변수가 없을 때의 값).
     let tools: [(&str, u64); 12] = [

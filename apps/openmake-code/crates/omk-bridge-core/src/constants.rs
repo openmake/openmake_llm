@@ -171,6 +171,9 @@ pub const GIT_DIR_MISMATCH_ERROR: &str =
     "git 디렉터리가 연결할 때와 달라 worktree 연산을 거부했습니다(폴더 재연결 필요).";
 /// 파일 kind 가 git 금지 경로(git 디렉터리 자신·config·hooks, worktree 의 .git)를 쓰거나 지우려 할 때의 거절 머리.
 pub const GIT_PATH_DENIED_PREFIX: &str = "git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: ";
+/// 감싼 자식에서 sandbox-exec 가 실행 파일을 띄우지 못했다(종료 코드 71) — 뒤에 `(<파일 이름>).` 가 붙는다, 종료 코드는 같은 126(설계 D-8).
+pub const SANDBOX_SPAWN_ERROR_PREFIX: &str =
+    "샌드박스 안에서 실행 파일을 띄우지 못해 실행을 거부했습니다";
 /// 코어가 직접 읽는 gitfile(`gitdir: <경로>`) 크기 상한(바이트) — 경로 한 줄이면 충분하다. 넘으면 gitfile 이 아니다(TS 같음).
 pub const GITFILE_MAX_BYTES: u64 = 4096;
 /// worktree 를 만드는 자리(연결 폴더 기준).

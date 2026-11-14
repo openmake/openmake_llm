@@ -26,7 +26,7 @@ import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { buildExecEnv } from './exec-env';
 import { assertGitPathAllowed, detectGit, protectedGitDirs, type GitGuard, type GitPaths } from './git-trust';
-import { buildSandboxProfile, SandboxProfileMissingError } from './sandbox';
+import { buildSandboxProfile, SandboxProfileMissingError, SandboxSpawnError } from './sandbox';
 import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
 import { findChrome } from './browser/chrome';
@@ -97,12 +97,12 @@ export class BridgeCore {
         return SANDBOX_ENABLED ? this.toolProfile : undefined;
     }
 
-    /** 도구 실행 — 프로파일이 없어 자식을 띄우지 않았으면 exec 와 같은 문구로 거절하고 null. */
+    /** 도구 실행 — 프로파일이 없어 자식을 띄우지 않았거나 감싼 실행 파일을 띄우지 못했으면(71, 설계 D-8) 126 으로 거절하고 null. */
     private async toolSandboxed<T>(done: (r: BridgeResult) => void, fn: () => Promise<T>): Promise<T | null> {
         try {
             return await fn();
         } catch (e) {
-            if (!(e instanceof SandboxProfileMissingError)) throw e;
+            if (!(e instanceof SandboxProfileMissingError || e instanceof SandboxSpawnError)) throw e;
             done({ ok: false, error: e.message, exitCode: 126 });
             return null;
         }
