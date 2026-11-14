@@ -143,8 +143,11 @@ export async function collectDiagnostics(
     execPath?: string,
     sandbox?: string | null,
 ): Promise<{ diagnostics: BridgeDiagnostic[]; truncated: boolean; serverKind: string }> {
-    const ts = absPaths.filter((p) => TS_EXT.has(path.extname(p)));
-    const py = absPaths.filter((p) => PY_EXT.has(path.extname(p)));
+    // base 의 엄격한 하위만 — 대상이 연결 폴더 자신이면(`paths: ['.']`, 이름이 `.ts` 로 끝나는 폴더) 위로 찾기가 폴더 **밖**에서
+    // 시작해 조상의 tsconfig·tsc 를 실행했다(설계 D-9). 그 밖은 조용히 건너뛴다(디렉터리는 진단 대상이 아니다).
+    const inBase = absPaths.filter((p) => p !== base && p.startsWith(base + path.sep));
+    const ts = inBase.filter((p) => TS_EXT.has(path.extname(p)));
+    const py = inBase.filter((p) => PY_EXT.has(path.extname(p)));
     const all: BridgeDiagnostic[] = [];
     const kinds: string[] = [];
 
