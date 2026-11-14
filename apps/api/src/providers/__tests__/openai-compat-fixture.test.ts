@@ -196,17 +196,167 @@ describe('Google AI(gemini) 요청 본문', () => {
         expect(body).not.toHaveProperty('thinking');
     });
 
-    it('thinking 을 지정해도 거절되는 필드는 없다', async () => {
+    // 2026-11-15 실측: LiteLLM 은 extra_body 를 한 겹 풀어 올린다 — 한 겹 더 감싸야 Google 에 extra_body.google 로 닿는다
+    it('게이트웨이 + thinking 켬 → 사고 요약 요청을 이중 중첩으로만 보낸다(거절되는 필드·reasoning_effort 없음)', async () => {
         reply = () => ({ kind: 'stream', chunks: [sseChunk({ content: 'ok' }, { finish_reason: 'stop' })] });
-        await gemini().streamChat({ messages, modelId: 'gemini-2.5-flash', thinking: true }, {});
+        await gemini().streamChat({ messages, modelId: 'gemini-2.5-flash', thinking: 'high' }, {});
         const body = fixture.requests[0];
+        expect(body.extra_body).toEqual({ extra_body: { google: { thinking_config: { include_thoughts: true } } } });
         expect(body).not.toHaveProperty('reasoning');
-        expect(body).not.toHaveProperty('extra_body');
+        expect(body).not.toHaveProperty('reasoning_effort');
+        expect(body).not.toHaveProperty('allowed_openai_params');
     });
 
     it('다른 provider 를 거쳐 가는 gemini-* 모델은 종전대로 thinking 차단 필드를 보낸다', async () => {
         reply = () => ({ kind: 'stream', chunks: [sseChunk({ content: 'ok' }, { finish_reason: 'stop' })] });
         await provider().streamChat({ messages, modelId: 'gemini-2.5-flash' }, {});
         expect(fixture.requests[0]).toHaveProperty('reasoning');
+    });
+
+    it('다른 provider 를 거쳐 가는 gemini-* 모델은 thinking 을 켜도 종전 차단 필드 그대로(사고 요약 요청 없음)', async () => {
+        reply = () => ({ kind: 'stream', chunks: [sseChunk({ content: 'ok' }, { finish_reason: 'stop' })] });
+        await provider().streamChat({ messages, modelId: 'gemini-2.5-flash', thinking: true }, {});
+        expect(fixture.requests[0]).toMatchObject({
+            reasoning: { exclude: true, max_tokens: 0 },
+            extra_body: { google: { thinking_config: { thinking_budget: 0, include_thoughts: false } } },
+        });
+    });
+});
+
+/**
+ * Google 직접 provider 사고 요약 — 실측(2026-11-15) 스트림 모양: 사고는 delta.content 맨 앞 `<thought>…</thought>`,
+ * 사고 조각마다 extra_content.google.thought:true(게이트웨이는 지움), 답의 첫 조각이 `</thought>` 로 시작.
+ */
+describe('Google AI(gemini) 사고 요약 스트림', () => {
+    const ORIGINAL_ALLOWED = process.env.SSRF_ALLOWED_HOSTS;
+    beforeAll(() => { process.env.SSRF_ALLOWED_HOSTS = new URL(fixture.baseURL).host; });
+    afterAll(() => {
+        if (ORIGINAL_ALLOWED === undefined) delete process.env.SSRF_ALLOWED_HOSTS;
+        else process.env.SSRF_ALLOWED_HOSTS = ORIGINAL_ALLOWED;
+    });
+
+    /** 직접 경로 — 게이트웨이 없이 baseUrl(fixture 가 Google 자리)로 바로 간다 */
+    function direct(): OpenAICompatProvider {
+        return new OpenAICompatProvider({ providerId: 'gemini', apiKey: 'AIza-test', baseUrl: fixture.baseURL });
+    }
+    const thought = { extra_content: { google: { thought: true } } };
+    const measuredChunks = [
+        sseChunk({ role: 'assistant', content: '<thought>**덧셈 계획**\n', ...thought }),
+        sseChunk({ content: '2와 3을 더한다.', ...thought }),
+        sseChunk({ content: '</thought>2 더하기 3은 ' }),
+        sseChunk({ content: '5입니다.' }, { finish_reason: 'stop' }),
+        sseChunk({ extra_content: { google: { thought_signature: 'sig' } } }),
+        { ...sseChunk({}), choices: [], usage: { prompt_tokens: 9, completion_tokens: 20 } },
+    ];
+
+    async function collect(p: OpenAICompatProvider, thinking: boolean | undefined) {
+        const tokens: string[] = [];
+        const thinkingParts: string[] = [];
+        const r = await p.streamChat(
+            { messages, modelId: 'gemini-2.5-flash', ...(thinking !== undefined ? { thinking } : {}) },
+            { onToken: (t) => tokens.push(t), onThinking: (t) => thinkingParts.push(t) },
+        );
+        return { r, tokens: tokens.join(''), thinking: thinkingParts.join('') };
+    }
+
+    it('직접 + thinking 켬 → extra_body.google 요청, 사고는 onThinking·본문엔 태그·사고 없음', async () => {
+        reply = () => ({ kind: 'stream', chunks: measuredChunks });
+        const { r, tokens, thinking } = await collect(direct(), true);
+        const body = fixture.requests[0];
+        expect(body).toMatchObject({ model: 'gemini-2.5-flash' });
+        expect(body.extra_body).toEqual({ google: { thinking_config: { include_thoughts: true } } });
+        expect(body).not.toHaveProperty('reasoning_effort');
+        expect(body).not.toHaveProperty('reasoning');
+        expect(thinking).toBe('**덧셈 계획**\n2와 3을 더한다.');
+        expect(tokens).toBe('2 더하기 3은 5입니다.');
+        expect(r.content).toBe('2 더하기 3은 5입니다.');
+        expect(r.finishReason).toBe('stop');
+    });
+
+    it('게이트웨이 + thinking 켬 → 표시 없이 태그만 와도 가른다', async () => {
+        const gw = new OpenAICompatProvider({
+            providerId: 'gemini', apiKey: 'AIza-test', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+            gateway: { url: fixture.baseURL.replace(/\/v1$/, ''), masterKey: 'gateway-master', modelPrefix: 'gemini' },
+        });
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ role: 'assistant', content: '<thought>생각' }),
+            sseChunk({ content: '</thou' }),
+            sseChunk({ content: 'ght>답' }, { finish_reason: 'stop' }),
+        ] });
+        const { r, tokens, thinking } = await collect(gw, true);
+        expect(fixture.requests[0].extra_body).toEqual({ extra_body: { google: { thinking_config: { include_thoughts: true } } } });
+        expect(thinking).toBe('생각');
+        expect(tokens).toBe('답');
+        expect(r.content).toBe('답');
+    });
+
+    it('직접 + thinking 꺼짐 → extra_body 없음, 본문의 <thought> 도 그대로', async () => {
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ content: '<thought>태그</thought>' }),
+            sseChunk({ content: ' 그대로' }, { finish_reason: 'stop' }),
+        ] });
+        for (const off of [false, undefined]) {
+            fixture.requests.length = 0;
+            const { r, tokens, thinking } = await collect(direct(), off);
+            expect(fixture.requests[0]).not.toHaveProperty('extra_body');
+            expect(thinking).toBe('');
+            expect(tokens).toBe('<thought>태그</thought> 그대로');
+            expect(r.content).toBe('<thought>태그</thought> 그대로');
+        }
+    });
+
+    it('직접 + thinking 켬 + 닫힘 없이 끝 → 전부 사고, 본문 빈 값', async () => {
+        reply = () => ({ kind: 'stream', chunks: [sseChunk({ content: '<thought>생각 중</th' }, { finish_reason: 'length' })] });
+        const { r, tokens, thinking } = await collect(direct(), true);
+        expect(thinking).toBe('생각 중</th');
+        expect(tokens).toBe('');
+        expect(r.content).toBe('');
+    });
+
+    it('직접 + thinking 켬 + 미완 여는 태그 접두로 끝 → 본문으로 낸다', async () => {
+        reply = () => ({ kind: 'stream', chunks: [sseChunk({ content: '<thou' }, { finish_reason: 'stop' })] });
+        const { r, tokens, thinking } = await collect(direct(), true);
+        expect(thinking).toBe('');
+        expect(tokens).toBe('<thou');
+        expect(r.content).toBe('<thou');
+    });
+
+    it('가른 본문만 가짜 도구 호출 게이트로 넘긴다 — 사고 안의 <tool_call> 은 도구 호출이 아니다', async () => {
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ content: '<thought><tool_call>{"name":"web_search","arguments":{}}</tool_call> 는 쓰지 않는다' }),
+            sseChunk({ content: '</thought>답' }, { finish_reason: 'stop' }),
+        ] });
+        const { r, tokens, thinking } = await collect(direct(), true);
+        expect(thinking).toContain('<tool_call>');
+        expect(tokens).toBe('답');
+        expect(r.toolCalls).toBeUndefined();
+    });
+
+    // 리뷰 R1 N-3 — 도구 호출만 하고 끝나는 턴: 사고가 닫히지 않은 채 네이티브 tool_calls 로 끝나도 사고·도구 호출이 섞이지 않는다
+    it('직접 + thinking 켬 + tools → 닫힘 없는 사고 뒤 네이티브 tool_calls 로 끝 → 전부 사고, 본문 빈 값, 도구 호출 1건', async () => {
+        reply = () => ({ kind: 'stream', chunks: [
+            sseChunk({ role: 'assistant', content: '<thought>사고: 날씨는 ', ...thought }),
+            sseChunk({ content: '검색해야 한다.', ...thought }),
+            sseChunk({ tool_calls: [{ index: 0, id: 'call_g', function: { name: 'web_search', arguments: '{"query":' } }] }),
+            sseChunk({ tool_calls: [{ index: 0, function: { arguments: '"서울 날씨"}' } }] }, { finish_reason: 'tool_calls' }),
+        ] });
+        const tokens: string[] = [];
+        const thinkingParts: string[] = [];
+        const r = await direct().streamChat(
+            {
+                messages, modelId: 'gemini-2.5-flash', thinking: true,
+                tools: [{ type: 'function', function: { name: 'web_search', description: 'search', parameters: { type: 'object', properties: {} } } }],
+            },
+            { onToken: (t) => tokens.push(t), onThinking: (t) => thinkingParts.push(t) },
+        );
+        const thinking = thinkingParts.join('');
+        expect(thinking).toBe('사고: 날씨는 검색해야 한다.');
+        expect(tokens).toEqual([]);
+        expect(r.content).toBe('');
+        expect(r.toolCalls).toHaveLength(1);
+        expect(r.toolCalls?.[0]).toMatchObject({ name: 'web_search', args: { query: '서울 날씨' } });
+        expect(r.finishReason).toBe('tool_calls');
+        expect(thinking).not.toContain('<thought');
+        expect(r.content).not.toContain('<thought');
     });
 });
