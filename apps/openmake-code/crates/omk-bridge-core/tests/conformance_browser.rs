@@ -93,9 +93,10 @@ fn spec(
                 ("fillPrepareJs", &["sel"], &[]),
                 (
                     "downloadTaskOf",
-                    &["tabs", "running", "frameId"],
+                    &["tabs", "popups", "frameId"],
                     &["sessionId"],
                 ),
+                ("popupTaskOf", &["tabs", "popups", "openerId"], &[]),
                 ("jsonString", &["s"], &[]),
             ],
             &[],

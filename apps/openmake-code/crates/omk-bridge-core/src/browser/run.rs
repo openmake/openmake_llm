@@ -225,7 +225,7 @@ impl LocalBrowser {
             let tab = self.tab_for(&cdp, key).await?;
             // 대기 폴더에 guid 이름으로만 받는다(저장 함수가 없으면 받지 않는다)
             self.downloads
-                .configure(&cdp, opts.place_download.clone())
+                .configure(&cdp, key, opts.place_download.clone())
                 .await?;
             Ok::<_, String>((cdp, tab))
         };
