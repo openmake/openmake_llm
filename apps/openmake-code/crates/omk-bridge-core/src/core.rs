@@ -57,7 +57,7 @@ pub struct ToolTimeouts {
 pub struct BridgeCore {
     folder_root: String,
     gate: FsGate,
-    /// code_nav 전용 관문(D-62) — 끝나지 않는 정규식 판정은 이 칸만 쥔다. 파일 kind 의 칸은 그대로 돈다.
+    /// code_nav 전용 관문(D-62) — 느린 판정은 예산까지만 이 칸을 쥔다. 파일 kind 의 칸은 그대로 돈다.
     nav_gate: FsGate,
     timeouts: ToolTimeouts,
     on_task_end: Option<TaskEndHook>,
