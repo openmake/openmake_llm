@@ -130,3 +130,124 @@ fn case_mapping_special_rules() {
     assert_eq!(js_to_upper("ß"), "SS");
     assert_eq!(js_to_upper("ǆ"), "Ǆ");
 }
+
+/// 완료 기준 4 — 판정 함수는 어떤 JSON 이 와도 답을 낸다(패닉 없음). 모르면 막는 쪽: 허용 목록 밖 호스트·승인 없음에서
+/// 읽기로 분류되지 않은 액션은 모두 막힌다.
+#[test]
+fn any_json_shape_gets_an_answer() {
+    use omk_bridge_core::browser::constants::ActionClass;
+    use omk_bridge_core::browser::flow::{cond_expression, flatten, validate};
+    use omk_bridge_core::browser::policy_block::policy_block_of;
+    use omk_bridge_core::browser::site_policy::{
+        SitePolicy, check_action, classify, host_of, is_navigable, needs_approval, parse_policy,
+        upload_files_of,
+    };
+    let shapes = [
+        json!(null),
+        json!(true),
+        json!(0),
+        json!(-1.5),
+        json!(1e300),
+        json!(""),
+        json!("x"),
+        json!("goto"),
+        json!([]),
+        json!([1, null]),
+        json!({}),
+        json!({"a": {"b": []}}),
+    ];
+    let policy = SitePolicy {
+        allow: vec!["groupware.example.com".to_owned()],
+        deny: vec![],
+    };
+    for key in ["type", "url", "files", "accept", "selector"] {
+        for base in [
+            json!({}),
+            json!({"type": "goto"}),
+            json!({"type": "uploadFile"}),
+            json!({"type": "dialog"}),
+        ] {
+            for v in &shapes {
+                let mut a = base.clone();
+                a[key] = v.clone();
+                for host in [
+                    None,
+                    Some(""),
+                    Some("www.example.org"),
+                    Some("groupware.example.com"),
+                ] {
+                    let _ = needs_approval(Some(&a), host, &policy);
+                    let _ = policy_block_of(Some(&a), host, &policy);
+                    let blocked = check_action(Some(&a), host, &policy, &[], &[]);
+                    if host != Some("groupware.example.com")
+                        && classify(Some(&a)) != ActionClass::Observe
+                    {
+                        assert!(blocked.is_some(), "{a} @ {host:?} 가 막히지 않았다");
+                    }
+                }
+                let _ = (
+                    upload_files_of(Some(&a)),
+                    host_of(Some(v)),
+                    is_navigable(Some(v)),
+                    parse_policy(Some(v)),
+                );
+                let _ = (validate(Some(&a)), flatten(Some(&a)), validate(Some(v)));
+            }
+        }
+    }
+    // 액션 자체가 임의 값
+    for v in &shapes {
+        assert!(
+            check_action(Some(v), Some("www.example.org"), &policy, &[], &[]).is_some(),
+            "{v}"
+        );
+        let _ = cond_expression(v);
+    }
+    assert!(check_action(None, None, &policy, &[], &[]).is_some());
+}
+
+/// D-81-2 — 조합 키·키 이름이 객체 프로토타입 이름이면 거절(TS 는 표 조회가 참이 돼 통과하거나 `key: undefined`).
+#[test]
+fn prototype_names_are_not_keys() {
+    use omk_bridge_core::browser::defs::key_event_of;
+    assert_eq!(
+        key_event_of("constructor+a").unwrap_err(),
+        "지원하지 않는 조합 키: constructor"
+    );
+    assert_eq!(
+        key_event_of("toString").unwrap_err(),
+        "지원하지 않는 키: toString"
+    );
+    assert_eq!(
+        key_event_of("__proto__").unwrap_err(),
+        "지원하지 않는 키: __proto__"
+    );
+}
+
+/// D-81-9 — 잘못된 punycode 호스트는 주소 오류(TS `URL` 은 받는다) → 쓰기는 호스트 모름으로 승인 대상, 이동은 막힘.
+#[test]
+fn bad_punycode_host_is_unknown() {
+    use omk_bridge_core::browser::site_policy::{SitePolicy, check_action, host_of, is_navigable};
+    let url = json!("https://xn--a.example.com/?q=1");
+    assert_eq!(host_of(Some(&url)), None);
+    assert!(!is_navigable(Some(&url)));
+    let star = SitePolicy {
+        allow: vec!["*".to_owned()],
+        deny: vec![],
+    };
+    let goto = json!({"type": "goto", "url": url});
+    assert!(
+        check_action(Some(&goto), None, &star, &[], &[])
+            .unwrap()
+            .starts_with("이동할 수 없는 주소입니다")
+    );
+}
+
+/// clip 이 대리 쌍 한가운데서 자르면 TS 는 짝 없는 반쪽을 남기고 Rust 는 그 글자를 뺀다(BROWSER.md "fixture 에 넣지 않는 차이" 4).
+#[test]
+fn clip_drops_split_surrogate_pair() {
+    use omk_bridge_core::browser::site_policy::clip;
+    let s = format!("x{}", "😀".repeat(150)); // 1 + 199 단위에서 이모지 한가운데
+    let c = clip(Some(&json!(s)));
+    assert_eq!(c, format!("x{}…", "😀".repeat(99)));
+}
