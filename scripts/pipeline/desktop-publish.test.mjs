@@ -200,6 +200,11 @@ test('publish: 작업 트리 VERSION 이 --sha 의 VERSION 과 다르면 404 는
     assert.equal(await f.run(undefined, { sha }), 75);
     assert.equal(f.receipt().status, 'pending');
     assert.equal(f.receipt().version, '0.3.9');
+    // 0.3.9 를 커밋해도 --sha 가 옛 자동화 커밋이면 판정은 HEAD 가 아니라 --sha 줄의 VERSION 커밋(0.3.8)을 읽는다.
+    f.commit(VERSION_FILE, '0.3.9\n', 'bump after automation');
+    assert.equal(await f.run(undefined, { sha }), 75);
+    assert.equal(f.receipt().status, 'pending');
+    assert.equal(f.receipt().version, '0.3.9');
 });
 
 test('publish: 자동화 뒤에 VERSION 을 올렸으면 404 는 종전대로 75 pending', async (t) => {
