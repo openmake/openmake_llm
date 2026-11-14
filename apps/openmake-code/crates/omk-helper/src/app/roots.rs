@@ -141,19 +141,17 @@ impl App {
                 return;
             }
         };
-        // 같은 루트 재연결 = 세션 갱신. `disconnected` 는 내지 않는다(TS 그대로).
-        let prev = self.take_root(&real);
         let core = match self.build_core(&real) {
             Ok(c) => Arc::new(c),
             Err(msg) => {
                 // TS 는 생성자가 던져 잡히지 않은 거부로 죽는 자리(그 사이 폴더가 사라진 경우) — 폴더 열기 실패로 알린다.
-                if let Some((_, p)) = prev {
-                    p.retire();
-                }
+                // 같은 루트의 옛 연결은 그대로 둔다(코어를 먼저 만들고 성공한 뒤에 꺼낸다 — 리뷰 r1 L-2).
                 self.emit.emit(events::status_folder_open_failed(&msg));
                 return;
             }
         };
+        // 같은 루트 재연결 = 세션 갱신. `disconnected` 는 내지 않는다(TS 그대로).
+        let prev = self.take_root(&real);
         if core.capabilities().contains(&BROWSER_KIND) && self.browser_core.is_none() {
             self.browser_core = Some(Arc::clone(&core));
         }
@@ -213,6 +211,10 @@ impl App {
     }
 
     fn build_core(&self, real: &str) -> Result<BridgeCore, String> {
+        #[cfg(test)]
+        if let Some(msg) = &self.fail_core {
+            return Err(msg.clone());
+        }
         let tx = self.tx.clone();
         let folder = real.to_owned();
         let confirm: ConfirmFn = Box::new(move |req| {
@@ -265,5 +267,74 @@ impl App {
         if self.roots.is_empty() {
             self.emit.emit(events::status_global(IDLE_TEXT, "idle"));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use omk_bridge_conn::device_id::DeviceIdentity;
+    use tokio::sync::mpsc;
+
+    use super::super::{App, Ready};
+    use crate::host::Host;
+    use crate::stdio::Emitter;
+
+    /// 리뷰 r1 L-2 — 같은 루트 재연결에서 코어 생성이 실패하면 옛 루트는 표에 남는다(조용히 해제하지 않는다 — 부모는 연결된 줄 안다).
+    /// 실패는 폴더 열기 실패로만 알리고 `disconnected`·`idle` 은 내지 않는다.
+    #[test]
+    fn failed_core_on_same_root_reconnect_keeps_the_old_root() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let tmp = std::env::temp_dir().join(format!("omk-helper-roots-{}", std::process::id()));
+        let (root, support) = (tmp.join("root"), tmp.join("support"));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&support).unwrap();
+        let real = std::fs::canonicalize(&root)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        rt.block_on(async {
+            let identity = DeviceIdentity::load_or_create(&support).unwrap();
+            let host = Host::from_env(tmp.to_string_lossy().into_owned(), &support, identity);
+            let (emit, lines) = Emitter::capture();
+            let (tx, _rx) = mpsc::unbounded_channel();
+            let mut app = App::new(emit, tx, host);
+            app.ready = Some(Ready {
+                bridge_url: "ws://127.0.0.1:9".into(),
+                hostname: "h".into(),
+            });
+            app.key.set("omk_live_unit".into());
+            app.connect(&real);
+            assert_eq!(app.roots.keys(), [real.clone()]);
+            app.fail_core = Some("ENOENT: 사라짐".into());
+            app.connect(&real);
+            assert_eq!(app.roots.keys(), [real.clone()], "옛 루트가 남는다");
+            let (_, old) = &app.roots.0[0];
+            assert!(old.alive.load(std::sync::atomic::Ordering::SeqCst));
+            // 쓰기 스레드가 따로 돈다 — 폴더 열기 실패 줄이 올 때까지 받는다
+            let mut evs = Vec::new();
+            while let Ok(l) = lines.recv_timeout(std::time::Duration::from_secs(2)) {
+                let done = l.contains("folder_open_failed");
+                evs.push(l);
+                if done {
+                    break;
+                }
+            }
+            assert!(
+                evs.last().is_some_and(|l| l.contains("folder_open_failed")),
+                "{evs:?}"
+            );
+            assert!(
+                !evs.iter()
+                    .any(|e| e.contains("\"disconnected\"") || e.contains("\"idle\"")),
+                "{evs:?}"
+            );
+            app.disconnect(None);
+        });
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
