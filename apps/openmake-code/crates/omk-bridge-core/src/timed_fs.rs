@@ -39,7 +39,9 @@ fn timeout_message(label: &str, ms: u64) -> String {
     format!("{label} 시간 초과 ({secs}s) — 폴더 접근이 차단됐을 수 있습니다(디스크 접근 권한 확인)")
 }
 
-/// 코어 하나의 FS 작업 관문 — 허가 `FS_MAX_CONCURRENT` 개 + 시간 제한 + 시작 전 취소.
+/// 코어 하나의 FS 작업 관문 — 허가 `FS_MAX_CONCURRENT` 개 + 시간 제한 + 시작 전 취소. 복제본은 같은 허가를 나눈다
+/// (브라우저 저장 함수가 `'static` 클로저로 쥔다).
+#[derive(Clone)]
 pub struct FsGate {
     permits: Arc<Semaphore>,
     timeout_ms: u64,
