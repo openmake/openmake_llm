@@ -402,7 +402,8 @@ mod tests {
         };
         std::fs::write(&staged, "mine").unwrap();
         let swap = |from: &str, _: &str| {
-            std::fs::remove_file(from)?;
+            // 원본을 살려 둔다 — 지우면 Linux 는 같은 inode 번호를 새 파일에 다시 준다
+            std::fs::rename(from, format!("{from}.orig"))?;
             std::fs::write(from, "swapped")?;
             Err(errno(18))
         };
