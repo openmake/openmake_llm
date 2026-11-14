@@ -311,6 +311,57 @@ describe('LocalBrowser 다운로드 — 기본값·설정 실패(B-8)', () => {
         await browser.dispose();
     });
 
+    // B-9(Fable r2 D1) — 같은 폴더 임시 파일 + rename. 새 파일 갈래는 없음·파싱 실패·객체 아님일 때만, 그 밖의 읽기 실패는 띄우지 않는다.
+    const leftovers = () => fs.readdirSync(path.dirname(prefsPath())).filter((n) => n !== 'Preferences');
+
+    it('기존 파일을 자르지 않고 임시 파일 + rename 으로 바꿔 놓는다 — 임시 파일이 남지 않는다', async () => {
+        fs.mkdirSync(path.dirname(prefsPath()), { recursive: true });
+        fs.writeFileSync(prefsPath(), JSON.stringify({ profile: { name: 'p' } }));
+        const before = fs.statSync(prefsPath()).ino;
+        launchMode();
+        const { browser } = setup();
+        await browser.run(act(), opts('A', async () => 'x'));
+        expect(fs.statSync(prefsPath()).ino).not.toBe(before);
+        expect(prefs()).toEqual({ profile: { name: 'p' }, download: { ...DL, default_directory: staging } });
+        expect(leftovers()).toEqual([]);
+        await browser.dispose();
+    });
+
+    it('JSON 이 객체가 아니면 두 키만 든 새 파일', async () => {
+        fs.mkdirSync(path.dirname(prefsPath()), { recursive: true });
+        fs.writeFileSync(prefsPath(), '[1,2]');
+        launchMode();
+        const { browser } = setup();
+        await browser.run(act(), opts('A', async () => 'x'));
+        expect(prefs()).toEqual({ download: { ...DL, default_directory: staging } });
+        await browser.dispose();
+    });
+
+    it.each([
+        ['Preferences 자리가 디렉터리(EISDIR)', () => { fs.mkdirSync(path.join(prefsPath(), 'keep'), { recursive: true }); }],
+        ['Preferences 를 읽을 수 없음(EACCES, 쓰기만 가능)', () => {
+            fs.mkdirSync(path.dirname(prefsPath()), { recursive: true });
+            fs.writeFileSync(prefsPath(), JSON.stringify({ profile: { name: 'p' } }), { mode: 0o200 });
+        }],
+    ])('그 밖의 읽기 실패 — %s 면 띄우지 않고 기존 내용 그대로, 임시 파일 없음', async (_label, arrange) => {
+        arrange();
+        launchMode();
+        const { browser, runAction } = setup();
+        const r = await browser.run(act(), opts('A', async () => 'x'));
+        expect(r.ok).toBe(false);
+        expect(r.error).toMatch(/다운로드 기본 폴더/);
+        expect(chrome.launchChrome).not.toHaveBeenCalled();
+        expect(runAction).not.toHaveBeenCalled();
+        if (fs.statSync(prefsPath()).isDirectory()) {
+            expect(fs.readdirSync(prefsPath())).toEqual(['keep']);
+        } else {
+            fs.chmodSync(prefsPath(), 0o600);
+            expect(prefs()).toEqual({ profile: { name: 'p' } });
+        }
+        expect(leftovers()).toEqual([]);
+        await browser.dispose();
+    });
+
     it('쓰지 못하면 Chrome 을 띄우지 않고 오류 — 액션 0개', async () => {
         fs.mkdirSync(profile, { recursive: true });
         fs.writeFileSync(path.join(profile, 'Default'), 'not a dir'); // Default/Preferences 를 만들 수 없다

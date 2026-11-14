@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn, type ChildProcess } from 'child_process';
-import { BROWSER_HEADLESS, BROWSER_LAUNCH_TIMEOUT_MS, BROWSER_POLL_MS } from '../constants';
+import { BROWSER_HEADLESS, BROWSER_LAUNCH_TIMEOUT_MS, BROWSER_POLL_MS, BROWSER_PROFILE_DIRECTORY } from '../constants';
 
 /** 플랫폼별 Chromium 계열 실행 파일 후보 — 앞의 것부터 찾는다. */
 function candidates(): string[] {
@@ -62,6 +62,8 @@ export async function launchChrome(profileDir: string): Promise<LaunchedChrome> 
     const proc = spawn(bin, [
         '--remote-debugging-port=0',
         `--user-data-dir=${profileDir}`,
+        // 기동 전에 Preferences 를 고친 프로필로 띄운다 — 없으면 Local State 의 마지막 사용 프로필로 뜬다(설계 B-9).
+        `--profile-directory=${BROWSER_PROFILE_DIRECTORY}`,
         '--no-first-run',
         '--no-default-browser-check',
         ...(BROWSER_HEADLESS ? ['--headless=new'] : []),
