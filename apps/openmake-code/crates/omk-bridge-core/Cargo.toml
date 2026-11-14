@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 # 판정을 UTF-16(UCS-2) 단위로 — JS 정규식과 같은 단위(PR-1.4 D-61). 기능만 켠다(하위 의존 그대로).
+# 저장소 안 사본으로 patch — `vendor/regress/OMK-PATCHES.md`(판정 결함 두 개 수정 + 실행 한도).
 regress = { version = "0.12.0", features = ["utf16"] }
 # float_roundtrip — JSON 실수 글자를 정확히(가장 가까운 f64 로) 읽는다. 기본 설정은 1ULP 어긋날 수 있어 JS `String(수)` 와
 # 글자가 갈렸다(PR-1.6a 단계 0 ②, 6,023건 중 705건). 기능만 켠다(새 패키지 없음).
