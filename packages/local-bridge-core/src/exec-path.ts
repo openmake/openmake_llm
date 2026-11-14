@@ -44,7 +44,7 @@ export function resolveExecPath(folderRoot: string | null, toolSandbox?: string 
     try {
         // 홈에서 띄운다 — 사용자 로그인 rc 의 cwd 훅(mise activate·direnv)이 연결 폴더 설정을 샌드박스 밖에서 돌리지 않게(설계 D-13).
         parts.push(...execFileSync(process.env.SHELL || '/bin/zsh', ['-lc', 'echo -n "$PATH"'],
-            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, cwd: os.homedir(), env: probeEnv(absPathEntries(process.env.PATH || '')) }).trim().split(':'));
+            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'], cwd: os.homedir(), env: probeEnv(absPathEntries(process.env.PATH || '')) }).trim().split(':'));
     } catch { /* 로그인 셸 실패 → 아래 폴백만 사용 */ }
     parts.push(...(process.env.PATH || '').split(':'));
     parts.push('/opt/homebrew/bin', '/usr/local/bin',
@@ -56,7 +56,7 @@ export function resolveExecPath(folderRoot: string | null, toolSandbox?: string 
     try {
         const mise = wrapInSandbox('mise', ['bin-paths'], toolSandbox);
         const misePaths = execFileSync(mise.file, mise.args,
-            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, cwd: folderRoot || os.homedir(), env: probeEnv(base) })
+            { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, stdio: ['ignore', 'pipe', 'ignore'], cwd: folderRoot || os.homedir(), env: probeEnv(base) })
             .trim().split('\n').flatMap((l) => l.split(':')).filter(isAbsEntry); // 한 줄 안의 `:` 도 항목 경계다(설계 D-5 보완)
         // 프로젝트 버전이 이기도록 mise 경로를 앞에 둔다.
         merged = [...new Set([...misePaths, ...base.split(':')])].join(':');
