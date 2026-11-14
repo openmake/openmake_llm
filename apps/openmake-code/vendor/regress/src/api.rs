@@ -515,6 +515,29 @@ impl Regex {
         )
     }
 
+    /// [omk] `find_from_ucs2(text, 0).next().is_some()` 과 같되 한도를 넘으면 `Err`.
+    #[cfg(feature = "utf16")]
+    pub fn is_match_ucs2_limited<'r>(
+        &'r self,
+        text: &[u16],
+        limits: ExecLimits<'r>,
+    ) -> Result<bool, LimitExceeded> {
+        use crate::exec::MatchProducer;
+        let input = Ucs2Input::new(text, self.cr.flags.unicode);
+        let mut matcher = MatchAttempter::new(&self.cr, input.left_end());
+        matcher.set_limits(limits);
+        let mut ex = super::classicalbacktrack::BacktrackExecutor::new(input, matcher);
+        let Some(pos) = ex.initial_position(0) else {
+            return Ok(false);
+        };
+        let mut next = None;
+        let found = ex.next_match(pos, &mut next).is_some();
+        match ex.exceeded() {
+            Some(e) => Err(e),
+            None => Ok(found),
+        }
+    }
+
     /// Returns an iterator for matches found in 'text' starting at index `start`.
     #[cfg(feature = "utf16")]
     pub fn find_from_ucs2<'r, 't>(
@@ -1001,4 +1024,30 @@ pub fn escape(text: &str) -> String {
     }
 
     result
+}
+
+/// [omk] 판정 한 번의 실행 한도.
+#[derive(Clone, Copy)]
+pub struct ExecLimits<'a> {
+    /// 역추적 스택 항목 수 상한(둘러보기 안팎 합).
+    pub max_backtrack: usize,
+    /// 검사점 256번마다 묻는다 — true 면 멈춘다(시간 예산 등).
+    pub stop: &'a dyn Fn() -> bool,
+}
+
+impl core::fmt::Debug for ExecLimits<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ExecLimits")
+            .field("max_backtrack", &self.max_backtrack)
+            .finish()
+    }
+}
+
+/// [omk] 한도를 넘어 판정을 끝내지 못했다.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LimitExceeded {
+    /// 역추적 스택이 상한을 넘었다.
+    Backtrack,
+    /// `stop` 이 true 를 돌려줬다.
+    Stopped,
 }
