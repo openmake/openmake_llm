@@ -5,7 +5,9 @@
 `exec`(차단 → 사용자 확인 → macOS 샌드박스의 3단 방어·일괄 승인·exec PATH 계산·샌드박스 프로파일 파일)와 `worktree`(`add`·`diff`·`remove`),
 읽기 전용 도구 `code_nav`(grep·files)·`lsp_diagnostics`(tsc·py_compile)·`test_runner`(탐지)가 있다.
 기준은 TS 구현(`packages/local-bridge-core`)의 현재 동작이며, 두 구현이 같은 적합성 fixture 를 통과해야 한다.
-능력 목록은 `BRIDGE_KINDS` 12종 전부다. 브라우저는 기기 쪽 판정·파일 경계(`browser::` — 사이트 정책·제어 흐름·요청 도우미·차단 표식·업로드 파일 검사·다운로드 저장, PR-1.6a)만 있고 CDP·실행은 PR-1.6b 에서 더한다 — 그때까지 코어는 `browser` 를 "지원하지 않는 kind" 로 거절한다.
+능력 목록은 `BRIDGE_KINDS` 12종이고, 호스트가 전용 프로필 브라우저를 얹고 Chrome 이 있으면 끝에 `browser`·`browser_upload` 가 붙는다(아래 "로컬 브라우저").
+브라우저(`browser::`)는 기기 쪽 판정·파일 경계(사이트 정책·제어 흐름·요청 도우미·차단 표식·업로드 파일 검사·다운로드 저장, PR-1.6a)와
+CDP·Chrome 기동·실행 조정·다운로드 추적·`LocalBrowser`·액션 14종(PR-1.6b)이다.
 `exec`·`worktree`·`lsp_diagnostics`·`test_runner` 는 호스트가 `BridgeCore::with_exec_host(ExecHost { … })` 로 확인 창·환경 사본·홈·플랫폼·샌드박스 설정을 얹어야 돈다
 (코어는 프로세스 환경을 읽지 않는다). 호스트가 없는 코어는 exec 를 "거부"(126)로, worktree·lsp_diagnostics·test_runner 를 거절로 끝낸다
 (code_nav 는 호스트 없이 돈다). 도구 자식(tsc·python3)은 exec 와 같은 샌드박스 안에서 돈다.
@@ -28,6 +30,26 @@
 죽거나 스왑으로 멎을 수 있고**, 그러면 그 헬퍼의 모든 폴더 연결이 끊긴다(TS 의 이벤트 루프 멎음과 같은 범위). PR-1.7(헬퍼) 전에 닫는
 별건이다 — 메모리 상한이 있는 grep 작업자 프로세스 또는 단계·메모리 예산이 있는 엔진으로 교체.
 
+## 로컬 브라우저 (PR-1.6b)
+
+- **얹기**: `BridgeCore::with_browser_profile(프로필 폴더, BrowserEnv::from_env(lookup, platform, home))` — Chrome 을 찾았을 때만 브라우저를 쥔다
+  (TS 생성자와 같은 조건). 프로필마다 `LocalBrowser` 하나(프로세스 전역 표)라 여러 연결 폴더의 코어가 같은 브라우저를 쓴다. 코어는 환경을 읽지 않는다 —
+  호스트가 `OMK_BRIDGE_CHROME`·`OMK_BRIDGE_BROWSER_HEADLESS`·`OMK_BRIDGE_BROWSER_TIMEOUT_MS`·`OMK_BRIDGE_BROWSER_EXTRACT_READY_MS`·
+  `OMK_BRIDGE_BROWSER_DOWNLOAD_WAIT_MS`·`OMK_BRIDGE_UPLOAD_MAX_FILE_BYTES` 와 플랫폼·홈을 넘긴다.
+- **호스트가 이을 것**(PR-1.7): 제어권 넘기기·돌려주기 = `set_browser_user_control(on)` + 연결의 `notify_browser_control(on)`, 중지 = `stop_browser()`.
+  연결은 `bridge_ready` 마다 지금 제어권을 다시 알린다(브라우저 있는 코어만). **헬퍼가 끝날 때 `LocalBrowser::dispose()` 를 불러야 한다** — 인스턴스 표가
+  `static` 이라 프로세스 종료 때 `Drop` 이 돌지 않고, 부르지 못하고 죽으면 Chrome 이 남아 다음 기동이 주소 파일로 거기에 붙는다(TS 와 같다).
+- **런타임**: tokio 하나(`net` 기능 추가). CDP 는 `tokio-tungstenite` 위 최소 클라이언트(읽기·쓰기 태스크, 보내기는 소켓 쓰기를 기다리지 않는다)이고
+  `127.0.0.1` 로만 붙는다. 확인창·다운로드 이벤트는 연결마다 태스크 하나가 실행 줄기와 따로 처리한다. 공유 상태는 `std::sync::Mutex` 를 짧게만 쥔다.
+- **종료**: 띄운 Chrome 에만 `Browser.close`(1초까지) → 종료 5초 대기 → 남아 있으면 SIGKILL(workspace 가 `unsafe` 를 금지해 SIGTERM 을 보낼 안전한 API 가 없다).
+  붙기만 한 Chrome 은 끄지 않는다.
+- **저장**: 스크린샷·다운로드·업로드 파일 검사는 write 와 같은 가드(`safe_from` + `assert_git_path_allowed`)로 코어의 FS 관문 안에서 돈다 — 막힌 볼륨에서는
+  `… 시간 초과` 로 끝난다(TS 는 시간 제한 없음).
+- **시험**: 가짜 CDP(멈춘 시계 + duplex) — `tests/browser_cdp.rs`·`browser_scheduler.rs`·`browser_downloads*.rs`·`browser_local.rs`·`browser_core.rs`·
+  `browser_timeouts.rs`, fixture `browser-run.json`. 실제 Chrome 은 `tests/browser_chrome.rs` — **로컬 전용**(Chrome 없음 또는 `CI=true` 면
+  `SKIP(local-browser)`), 다른 무거운 실행과 겹치지 않게
+  `cargo test -j 2 --locked -p omk-bridge-core --test browser_chrome -- --test-threads=1 --nocapture`.
+
 ## 검사
 
 ```bash
@@ -45,7 +67,7 @@ cargo deny check advisories licenses   # cargo-deny 필요(CI 는 버전 고정 
 - 위치: `packages/local-bridge-core/conformance/*.json` (형식·알려진 차이는 그 폴더의 `README.md`)
 - Rust 러너: `crates/omk-bridge-core/tests/conformance.rs`
 - TS 러너: `packages/local-bridge-core/src/__tests__/conformance.test.ts`(exec·worktree 계열은 `conformance-exec.test.ts`)
-- 브라우저: fixture `browser-*.json`(형식·넣지 않는 차이는 `BROWSER.md`), 러너 `tests/conformance_browser.rs`(TS 는 `conformance-browser.test.ts`), 공용 흐름 사례 `tests/browser_flow_cases.rs`, JS 값 변환·Rust 전용 사례 `tests/browser_js_value.rs`.
+- 브라우저: fixture `browser-*.json`(형식·넣지 않는 차이는 `BROWSER.md`), 러너 `tests/conformance_browser.rs`(TS 는 `conformance-browser.test.ts`·`conformance-browser-run.test.ts`), 공용 흐름 사례 `tests/browser_flow_cases.rs`, JS 값 변환·Rust 전용 사례 `tests/browser_js_value.rs`.
 - 시간·크기에 기대는 프로세스 동작은 `tests/exec_proc.rs`, 샌드박스가 실제로 막는 것은 `tests/exec_sandbox.rs`(macOS, 실제 `sandbox-exec`)가 본다.
 - 읽기 전용 도구: 러너 `tests/conformance/code_nav.rs`·`diagnostics.rs`·`test_runner.rs`(TS 는 `conformance-tools.test.ts`), fixture 밖은
   `tests/tools_core.rs`, 끝나지 않는 판정의 CPU 묶기는 `tests/tools_redos.rs`(CPU 2개를 묶어 따로 둔다 — 메모리 폭주는 시험하지 않는다), 도구 자식 샌드박스는 `tests/tools_sandbox.rs`(macOS).
