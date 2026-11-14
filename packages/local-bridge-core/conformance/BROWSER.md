@@ -39,10 +39,10 @@
 
 - 러너가 사례마다 `{{TMP}}/root`(연결 폴더)·`{{TMP}}/staging`(대기 폴더)·`{{TMP}}/outside` 를 만들고 `setup` 을 적용한다. `input.staged` 가 있으면 그 글로 `{{TMP}}/staging/guid-1` 을 만들고(없으면 대기 파일 없음), `placeDownload(root, {root, dirs: []}, input.name, 대기 파일)` 을 부른다. 가드는 요청 시점 구조 규칙만 본다 — 연결 때 정한 git 디렉터리 목록이 필요한 사례는 코어 경유 테스트(PR-1.6b)가 본다.
 - `expect`: `{savedAs}` · `{rejected}`(가드 거절 — 다른 이름을 찾지 않는다) · `{failed}`(그 밖의 오류, Node 문구 그대로).
-- `after`: 호출 뒤 `{{TMP}}` 전체 — 경로 → 글(UTF-8) · `{"symlink": 대상}` · `{"dir": true}`. 대기 파일은 어느 결과든 지워진다.
-- `setup`: `{"dir"}` · `{"file", "content"}` · `{"file", "size"}`(성긴 파일) · `{"symlink", "target"}` · `{"series": "root/report ({n}).txt", "from", "to", "content"}`.
+- `after`: 호출 뒤 `{{TMP}}` 전체 — 경로 → 글(UTF-8) · `{"symlink": 대상}` · `{"dir": true}`. 대기 파일은 어느 결과든 지워진다(심링크면 링크만, 대기 자리가 폴더면 지우지 못해 남는다).
+- `setup`: `{"dir"}` · `{"file", "content"}` · `{"file", "size"}`(성긴 파일) · `{"symlink", "target"}` · `{"hardlink", "target"}`(`target` 의 하드링크) · `{"series": "root/report ({n}).txt", "from", "to", "content"}`. 대기 자리(`staging/guid-1`)를 `setup` 으로 만드는 사례는 `input.staged` 를 뺀다 — 보통 파일·링크 수 1 이 아니면 옮기지 않는다(`failed`).
 - **기대값 재현**: 새 사례는 `id`·`input`(파일 suite 는 `setup`)만 적고, `npm run build:packages` 뒤 TS 구현(`packages/config/dist`·`packages/local-bridge-core/dist`)을 jest 밖 Node 에서 러너와 같은 절차(호출·`walk`, `{{TMP}}` 치환)로 불러 `expect`·`after` 를 채운 다음 TS 러너로 확인한다(생성 스크립트는 저장소에 두지 않는다 — 아래 "러너에만 있는 보정" 참고).
-- `link` 가 `EXDEV`·`EPERM`·`ENOTSUP` 일 때의 복사 갈래는 fixture 로 만들 수 없어(다른 볼륨·주입) TS `download-place.test.ts` 와 Rust 단위 테스트(오류 코드 주입)가 본다.
+- `link` 가 `EXDEV`·`EPERM`·`ENOTSUP` 일 때의 복사 갈래와 검사 뒤 대기 자리를 바꿔 치는 틈(옮긴 대상·연 핸들이 검사한 파일인지)은 fixture 로 만들 수 없어(다른 볼륨·주입) TS `download-place.test.ts` 와 Rust 단위 테스트(`link` 주입)가 본다.
 
 ### `browser-run`
 
@@ -78,7 +78,7 @@
 4. 문구의 값을 UTF-16 200 단위로 자를 때(`clip`) 끝이 대리 쌍 한가운데면 TS 는 짝 없는 반쪽을 남기고 Rust 는 그 글자를 뺀다(`README.md` 의 git 오류 꼬리와 같은 차이 — 짝 없는 대리 문자는 fixture JSON 에 담을 수 없다).
 5. 잘못된 punycode 호스트(`xn--`) — TS `URL` 은 받고, Rust `url` 은 주소 오류 → 호스트 모름(쓰기는 승인 대상, 이동은 막힘).
 6. 범위 밖 수(`1e999`)가 든 요청 — TS `JSON.parse` 는 `Infinity`, Rust 는 해석 실패.
-7. 대기 파일(`staging/<guid>`)이 심링크·폴더 — TS `fs.link` 는 OS 의 `link(2)` 를 따라 결과가 OS 마다 다르다(macOS 는 원본 심링크를 따라가 대상 파일의 하드링크 = 보통 파일, Linux 는 심링크 자체를 링크). 두 러너의 OS 가 달라 fixture 에 넣지 않는다. Rust 는 원본을 `canonicalize` 해 늘 대상 파일을 링크한다 — macOS TS 와 같고, Linux 에서도 연결 폴더 안에 심링크를 만들지 않는다(더 엄격). 끊긴·순환 링크는 `link` 의 `ENOENT`·`ELOOP` 문구, 폴더 원본은 macOS `copyfile` 의 `ENOTSUP`(대상이 있으면 `EEXIST` 가 먼저라 다음 이름으로 넘어간다). macOS TS 실측값으로 `src/browser/download_place.rs` 단위 테스트가 고정한다.
+7. (없앰 — 대기 자리 검사로 fixture 에 들어갔다)
 8. `serde_json` 이 못 읽는 정책 JSON — 짝 없는 대리 문자 이스케이프(`{"allow":["\ud800"]}`)·128단 넘게 겹친 값·범위 밖 수(`1e999`). TS `JSON.parse` 는 읽어 `allow` 를 쓰고, Rust 는 빈 정책(전부 승인 대상 — 더 엄격, `tests/browser_js_value.rs`).
 9. 대소문자 변환(`toLowerCase`·`toUpperCase`) — Unicode 판이 달라(Node 24.22.2 ICU 18.0, Rust 1.99.1 std 17.0) 41 코드 포인트가 다르다: BMP 8개(U+0277·U+027C·U+AB4B·U+AB4C 의 대문자 U+A7DD·U+A7E2·U+AB6C·U+AB6D 짝)와 U+1DF40~U+1DF7F 의 32개·U+1DF95(→ `SS`). 호스트는 IDNA 뒤 ASCII 라 정책 판정에는 영향이 없고, `parsePolicy` 결과 글자·한 글자 `press` 의 `windowsVirtualKeyCode` 만 달라질 수 있다. 툴체인 판에 따라 바뀌므로 단위 테스트로 고정하지 않는다.
 10. 결과 글을 UTF-16 단위로 자를 때(`extractText`·`extractHtml` 8000, `fill` 되돌림 200, 확인창 문구 300, 요소 이름 120) 끝이 대리 쌍 한가운데면 4 와 같은 차이다.
