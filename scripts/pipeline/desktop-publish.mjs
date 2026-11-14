@@ -3,7 +3,7 @@
 //   manifest (CI):   --dmg PATH --sha FULL_SHA --output PATH
 //   publish (서버):  --cwd LLM_DIR --sha INSTALLED_SHA --dir UPDATE_DIR --repo OWNER/REPO --output RECEIPT_PATH
 // 인자 모양은 고정이다 — 파이프라인(pipeline.sh)은 갱신 전 판이 메모리에 남아 한 주기 동안 새 스크립트를 옛 인자로 부른다.
-// 종료 코드: 0 완료·해당 없음 / 75 릴리스 자산 대기 / 1 실패·사용법.
+// 종료 코드: 0 완료·해당 없음(릴리스가 만들어지지 않는 버전의 건너뜀 포함) / 75 릴리스 자산 대기 / 1 실패·사용법.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -128,10 +128,27 @@ async function download(fetchImpl, url, target, expectedSha256, maxBytes) {
     if (hash.digest('hex') !== expectedSha256) throw new Error('dmg sha256 differs from the release manifest');
 }
 
+/**
+ * 릴리스 자산이 없을 때(404)만: 설치 SHA 의 첫 부모 줄에서 VERSION 을 마지막으로 바꾼 커밋의 트리에 이 스크립트가 없으면
+ * 그 버전은 릴리스 자동화 이전에 정해져 릴리스가 만들어지지 않는다 — 그 커밋을 돌려준다. 있거나 판단할 수 없으면 undefined(대기).
+ */
+function preAutomationVersionCommit(gitOutput, cwd, sha) {
+    const log = gitOutput(['log', '--first-parent', '-1', '--format=%H', sha, '--', 'apps/desktop-native/VERSION'], cwd);
+    const commit = log.status === 0 ? log.stdout.trim() : '';
+    if (!GIT_SHA_RE.test(commit)) return undefined;
+    const tree = gitOutput(['ls-tree', '--name-only', commit, '--', 'scripts/pipeline/desktop-publish.mjs'], cwd);
+    return tree.status === 0 && tree.stdout.trim() === '' ? commit : undefined;
+}
+
 const defaultDeps = {
     fetch: (...args) => globalThis.fetch(...args),
     /** git -C cwd ... 의 종료 코드(신호로 끝나면 128). */
     git: (args, cwd) => spawnSync('git', ['-C', cwd, ...args], { stdio: 'ignore' }).status ?? 128,
+    /** git -C cwd ... 의 { status, stdout }(신호로 끝나거나 못 띄우면 128). */
+    gitOutput: (args, cwd) => {
+        const result = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        return { status: result.status ?? 128, stdout: result.stdout ?? '' };
+    },
     /** 기존 게시 스크립트를 그대로 부른다 — 파일명 검사·windows 블록 보존은 그쪽 몫. */
     runPublishScript: ({ cwd, file, dir }) => spawnSync('bash', [path.join(cwd, 'scripts/publish-desktop.sh'), file], {
         env: { ...process.env, DESKTOP_UPDATE_DIR: dir }, stdio: ['ignore', 'inherit', 'inherit'],
@@ -143,7 +160,7 @@ const defaultDeps = {
  * 결과는 언제나 영수증(--output)에 남긴다 — 주소·토큰류는 넣지 않는다. 돌려주는 값은 종료 코드(EXIT).
  */
 export async function publish(options, deps = {}) {
-    const { fetch, git, runPublishScript } = { ...defaultDeps, ...deps };
+    const { fetch, git, gitOutput, runPublishScript } = { ...defaultDeps, ...deps };
     const { cwd, sha, repo, output, maxDmgBytes = MAX_DMG_BYTES } = options;
     const web = (options.web || DEFAULT_WEB).replace(/\/+$/, '');
     const receipt = { schemaVersion: 1, stage: 'desktop-publish', sha };
@@ -172,7 +189,11 @@ export async function publish(options, deps = {}) {
 
         const base = `${web}/${repo}/releases/download/${TAG_PREFIX}${version}`;
         const response = await fetch(`${base}/${MANIFEST_ASSET}`, { redirect: 'follow', signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) });
-        if (response.status === 404) return finish('pending', EXIT.PENDING, `release asset ${TAG_PREFIX}${version} not available yet`);
+        if (response.status === 404) {
+            const versionCommit = preAutomationVersionCommit(gitOutput, cwd, sha);
+            if (versionCommit) return finish('unreleased', EXIT.OK, `version ${version} was set before release automation (${versionCommit.slice(0, 7)}); no release asset is made for it`);
+            return finish('pending', EXIT.PENDING, `release asset ${TAG_PREFIX}${version} not available yet`);
+        }
         if (!response.ok) throw new Error(`release manifest download failed: HTTP ${response.status}`);
         const asset = parseReleaseManifest(await readTextLimited(response, MAX_MANIFEST_BYTES), version);
         Object.assign(receipt, { file: asset.file, sha256: asset.sha256, gitSha: asset.gitSha });
