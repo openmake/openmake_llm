@@ -327,6 +327,25 @@ describe('LocalBrowser 다운로드 — 기본값·설정 실패(B-8)', () => {
         await browser.dispose();
     });
 
+    // r3 E1 — Chrome 이 0600 으로 두는 Preferences 가 rename 뒤 넓어지지 않게(기존·새 파일 모두 0600).
+    (process.platform === 'win32' ? it.skip : it)('Preferences 권한은 기동 뒤에도 0600 — 기존 0600 파일·새로 만든 파일 모두', async () => {
+        fs.mkdirSync(path.dirname(prefsPath()), { recursive: true });
+        fs.writeFileSync(prefsPath(), JSON.stringify({ profile: { name: 'p' } }), { mode: 0o600 });
+        fs.chmodSync(prefsPath(), 0o600);
+        launchMode();
+        const first = setup();
+        await first.browser.run(act(), opts('A', async () => 'x'));
+        expect(fs.statSync(prefsPath()).mode & 0o777).toBe(0o600);
+        await first.browser.dispose();
+
+        fs.rmSync(prefsPath());
+        launchMode();
+        const second = setup();
+        await second.browser.run(act(), opts('A', async () => 'x'));
+        expect(fs.statSync(prefsPath()).mode & 0o777).toBe(0o600);
+        await second.browser.dispose();
+    });
+
     it('JSON 이 객체가 아니면 두 키만 든 새 파일', async () => {
         fs.mkdirSync(path.dirname(prefsPath()), { recursive: true });
         fs.writeFileSync(prefsPath(), '[1,2]');

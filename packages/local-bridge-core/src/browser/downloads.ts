@@ -98,7 +98,7 @@ export class DownloadTracker {
             // 같은 폴더 임시 파일에 쓰고 rename — 쓰는 도중 죽어도 잘린 파일이 남지 않는다(Chrome 자신의 방식).
             const tmp = `${file}.omk-${process.pid}`;
             try {
-                await fsp.writeFile(tmp, JSON.stringify({ ...prefs, download: { ...download, default_directory: this.dir, prompt_for_download: false } }));
+                await fsp.writeFile(tmp, JSON.stringify({ ...prefs, download: { ...download, default_directory: this.dir, prompt_for_download: false } }), { mode: 0o600 });
                 await fsp.rename(tmp, file);
             } catch (e) {
                 await fsp.rm(tmp, { force: true }).catch(() => undefined);
