@@ -249,6 +249,14 @@ export const BROWSER_MAX_CONCURRENT = 3;
 /** 확인창 기록 문구 길이·개수 상한(한 액션) */
 export const BROWSER_DIALOG_MESSAGE_MAX = 300;
 export const BROWSER_DIALOG_RECORD_MAX = 20;
+/** 호출이 끝날 때 이 작업의 받는 중인 다운로드를 기다리는 상한(ms) — 넘으면 inProgress 로 싣고 끝난 결과는 다음 호출에 싣는다 */
+export const BROWSER_DOWNLOAD_WAIT_MS = Number(process.env.OMK_BRIDGE_BROWSER_DOWNLOAD_WAIT_MS || 5000);
+/** 다운로드 저장 이름이 겹칠 때 " (n)" 을 붙여 보는 횟수 상한 */
+export const BROWSER_DOWNLOAD_NAME_TRIES = 100;
+/** 다운로드 대기 폴더 = 전용 프로필 폴더 + 이 접미사(연결 폴더 밖, Chrome 은 여기에 `<guid>` 이름으로만 받는다) */
+export const BROWSER_DOWNLOAD_STAGING_SUFFIX = '-downloads';
+/** 다운로드 제안 이름이 경로 글자(/ \ NUL)를 품거나 빈·점 이름일 때 쓰는 이름 */
+export const BROWSER_DOWNLOAD_FALLBACK_NAME = 'download';
 /** 화면 없이 띄울지 — 테스트·서버 환경용. 기본은 사용자에게 보이는 창 */
 export const BROWSER_HEADLESS = process.env.OMK_BRIDGE_BROWSER_HEADLESS === '1';
 /** snapshot·smartClick 이 다루는 상호작용 역할 */

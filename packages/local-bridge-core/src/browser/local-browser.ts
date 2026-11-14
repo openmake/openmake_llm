@@ -10,10 +10,12 @@
  *   - 같은 작업의 요청은 순서대로, 다른 작업은 BROWSER_MAX_CONCURRENT 까지 동시에 실행한다(2026-11-04). 작업마다 뒤쪽 창 하나.
  *     다운로드 폴더는 브라우저 전역 설정이라(CDP Browser.setDownloadBehavior 는 컨텍스트 단위, Page.setDownloadBehavior 는 폐기·세션 구분 없음)
  *     다운로드 폴더가 다른 작업끼리는 동시에 돌리지 않는다.
+ *   - 다운로드는 Chrome 이 연결 폴더 밖 대기 폴더(`<프로필>-downloads`)에 `<guid>` 이름으로만 받고, 완료 뒤 호출부의 저장 함수
+ *     (`write` 와 같은 가드)가 이름을 판정해 옮긴다(downloads.ts·download-place.ts, 2026-11-14). 결과에 downloads 로 싣는다.
  *   - 쿠키·저장된 비밀번호·프로필 파일을 돌려주는 동작은 없다.
  *
  * 보안 불변식(변경 금지): http(s)·about:blank 밖으로 이동하지 않는다 · 사이트 정책 판정을 건너뛰는 경로가 없다 ·
- * 스크린샷·다운로드는 호출부가 준 폴더 안에만 쓴다 · 업로드는 승인된 호스트·파일 목록과 같고 호출부의 파일 검사를 통과한 것만 넣는다.
+ * 스크린샷은 호출부가 준 폴더 안에만, 다운로드는 호출부가 준 저장 함수로만 쓴다(없으면 받지 않는다) · 업로드는 승인된 호스트·파일 목록과 같고 호출부의 파일 검사를 통과한 것만 넣는다.
  */
 import type { ChildProcess } from 'child_process';
 import { browserHostOf, checkBrowserAction, parseBrowserSitePolicy, validateBrowserFlow, type BrowserSitePolicy } from '@openmake/config';
@@ -21,10 +23,12 @@ import {
     BROWSER_ACTION_TIMEOUT_MS, BROWSER_CLICK_SETTLE_MS, BROWSER_EXIT_WAIT_MS, BROWSER_DIALOG_MESSAGE_MAX, BROWSER_DIALOG_RECORD_MAX,
     BROWSER_EXTRACT_MAX_CHARS, BROWSER_EXTRACT_READY_MS, BROWSER_INTERACTIVE_ROLES, BROWSER_MAX_ACTIONS, BROWSER_MAX_TABS, BROWSER_POLL_MS,
     BROWSER_SNAPSHOT_MAX_ELEMENTS, BROWSER_SNAPSHOT_NAME_MAX, BROWSER_WAIT_MAX_MS, BROWSER_FILL_ECHO_MAX_CHARS,
+    BROWSER_DOWNLOAD_STAGING_SUFFIX,
 } from '../constants';
 import { condExpression, runBrowserFlow } from './browser-flow';
 import { CdpClient } from './cdp';
 import { launchChrome, readDevToolsEndpoint } from './chrome';
+import { DownloadTracker, downloadTaskOf } from './downloads';
 import { BrowserScheduler } from './local-browser-scheduler';
 import { browserPolicyBlockOf, uploadRejectedPolicyBlock, userControlPolicyBlock } from './policy-block';
 import type { BrowserPolicyBlock } from '../types';
@@ -56,8 +60,13 @@ export class LocalBrowser {
     private readonly scheduler = new BrowserScheduler();
     /** 진행 중인 연결 — 동시에 들어온 첫 요청들이 Chrome 을 둘 띄우지 않게 공유한다 */
     private connecting: Promise<CdpClient> | null = null;
+    /** 다운로드 추적 — 대기 폴더·guid 별 저장 함수·귀속(downloads.ts) */
+    private readonly downloads: DownloadTracker;
 
-    private constructor(private readonly profileDir: string) {}
+    private constructor(private readonly profileDir: string) {
+        this.downloads = new DownloadTracker(`${profileDir}${BROWSER_DOWNLOAD_STAGING_SUFFIX}`,
+            (sid, frameId) => downloadTaskOf([...this.tabs.entries()], (k) => this.scheduler.isRunning(k), sid, frameId));
+    }
 
     /** 사용자가 브라우저를 넘겨받았는가 — 넘겨받은 동안에는 에이전트 요청을 실행하지 않는다. */
     get isUserControl(): boolean { return this.userControl; }
@@ -80,6 +89,7 @@ export class LocalBrowser {
     async closeTask(taskId: string | undefined): Promise<void> {
         const key = taskId || DEFAULT_TAB;
         this.scheduler.forgetTask(key);
+        this.downloads.forget(key);
         const tab = this.tabs.get(key);
         if (!tab) return;
         this.tabs.delete(key);
@@ -119,6 +129,7 @@ export class LocalBrowser {
         let cdp: CdpClient | null = null;
         if (existing) cdp = await CdpClient.connect(existing, 2000).catch(() => null);
         if (!cdp) {
+            await this.downloads.clear(); // 새로 띄울 때만 — 떠 있는 Chrome 은 받는 중일 수 있다
             const launched = await launchChrome(this.profileDir);
             this.proc = launched.proc;
             // 호스트 프로세스가 끝나면 띄운 Chrome 도 끈다 — 자식 프로세스는 저절로 끝나지 않는다.
@@ -127,6 +138,7 @@ export class LocalBrowser {
             cdp = await CdpClient.connect(launched.wsUrl);
         }
         cdp.on('Page.javascriptDialogOpening', (params, sessionId) => { void this.onDialog(cdp!, params, sessionId); });
+        this.downloads.listen(cdp);
         this.cdp = cdp;
         return cdp;
     }
@@ -252,12 +264,15 @@ export class LocalBrowser {
         await this.poll(async () => ((await this.evaluate<string>(cdp, tab, 'document.readyState')) !== 'loading' ? true : null), '페이지 읽기 시간 초과');
     }
 
-    private async goto(cdp: CdpClient, tab: Tab, url: string): Promise<void> {
+    /** 이동 — 다운로드로 끝났으면(isDownload, 문서는 그대로) true. 파일은 다운로드 추적이 가드를 거쳐 저장한다. */
+    private async goto(cdp: CdpClient, tab: Tab, url: string): Promise<boolean> {
         const loaded = cdp.waitFor('Page.domContentEventFired', (_p, sid) => sid === tab.sessionId, BROWSER_ACTION_TIMEOUT_MS);
-        const r = await cdp.send('Page.navigate', { url }, tab.sessionId) as { errorText?: string; loaderId?: string };
+        const r = await cdp.send('Page.navigate', { url }, tab.sessionId) as { errorText?: string; loaderId?: string; isDownload?: boolean };
+        if (r.errorText && r.isDownload) return true;
         if (r.errorText) throw new Error(`이동하지 못했습니다: ${r.errorText}`);
-        if (!r.loaderId) return; // 같은 문서 안 이동(#anchor)
+        if (!r.loaderId) return false; // 같은 문서 안 이동(#anchor)
         if (!(await loaded)) throw new Error('페이지 이동 시간 초과');
+        return false;
     }
 
     /**
@@ -322,7 +337,7 @@ export class LocalBrowser {
         try {
             cdp = await this.connect();
             tab = await this.tabFor(cdp, opts.taskId);
-            await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: opts.downloadDir }).catch(() => undefined);
+            await this.downloads.configure(cdp, opts.placeDownload); // 대기 폴더에 guid 이름으로만 받는다(저장 함수가 없으면 받지 않는다)
         } catch (e) {
             return { ok: false, results, error: e instanceof Error ? e.message : String(e) };
         }
@@ -366,9 +381,9 @@ export class LocalBrowser {
                     return !!(await this.evaluate<boolean>(cdp, tab, condExpression(c)));
                 },
             }, BROWSER_MAX_ACTIONS));
-            return { ok: results.every((r) => r.ok), finalUrl: await this.currentUrl(cdp, tab), results, ...(policyBlock ? { policyBlock } : {}) };
+            return this.downloads.report(opts.taskId || DEFAULT_TAB, { ok: results.every((r) => r.ok), finalUrl: await this.currentUrl(cdp, tab), results, ...(policyBlock ? { policyBlock } : {}) });
         } catch (e) {
-            return { ok: false, results, error: e instanceof Error ? e.message : String(e), ...(policyBlock ? { policyBlock } : {}) };
+            return this.downloads.report(opts.taskId || DEFAULT_TAB, { ok: false, results, error: e instanceof Error ? e.message : String(e), ...(policyBlock ? { policyBlock } : {}) });
         }
     }
 
@@ -395,8 +410,8 @@ export class LocalBrowser {
         const sel = JSON.stringify(str(a.selector));
         switch (a.type) {
             case 'goto':
-                await this.goto(cdp, tab, str(a.url));
-                return { i, type: a.type, ok: true, url: await this.currentUrl(cdp, tab) };
+                // 다운로드로 끝났으면(isDownload) 이동 실패가 아니다 — 파일은 다운로드 추적이 가드를 거쳐 저장하고 결과 downloads 에 싣는다
+                return { i, type: a.type, ok: true, ...(await this.goto(cdp, tab, str(a.url)) ? { download: true } : {}), url: await this.currentUrl(cdp, tab) };
             case 'click': {
                 const p = await this.poll(() => this.evaluate<{ x: number; y: number } | null>(cdp, tab, clickPointJs(sel)), `요소를 찾지 못했습니다: ${str(a.selector)}`);
                 await this.clickAt(cdp, tab, p.x, p.y);
