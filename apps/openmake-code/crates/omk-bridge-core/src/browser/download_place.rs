@@ -8,6 +8,8 @@
 //! 대기 파일 쪽 심링크는 TS `fs.link`(macOS `link(2)` — 원본 심링크를 따라간다)처럼 따라가 **대상 파일**의 하드링크를 만든다.
 //! `std::fs::hard_link` 는 `linkat(…, 0)` 이라 심링크 자체를 링크하므로(연결 폴더 안에 심링크가 생긴다) 원본을 먼저
 //! `canonicalize` 한다 — 실패(끊긴 링크 `ENOENT`·순환 `ELOOP`)는 `link` 의 실패와 같은 코드다.
+//! `canonicalize` 와 `hard_link` 는 두 호출이라 그 사이에 대상이 바뀔 틈이 남는다(TS `link` 와 같은 수준) — 한 호출로 끝나는
+//! `linkat(AT_SYMLINK_FOLLOW)` 은 unsafe 금지라 쓰지 않는다.
 
 use std::io;
 
@@ -283,6 +285,7 @@ mod tests {
     }
 
     /// 끊긴·순환 심링크는 `link` 문구로 실패하고 아무것도 만들지 않는다(TS macOS 실측과 같은 글자).
+    #[cfg(target_os = "macos")]
     #[test]
     fn staged_symlink_dangling_or_loop_fails_like_link() {
         let t = tmp("stbad");
