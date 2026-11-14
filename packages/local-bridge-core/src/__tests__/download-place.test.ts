@@ -150,7 +150,7 @@ describe('placeDownload — 다운로드를 write 와 같은 가드로 저장', 
     it('복사 갈래에서 연 대기 파일이 검사한 파일과 다르면 대상을 만들지 않는다', async () => {
         const s = staged('mine');
         jest.spyOn(fs.promises, 'link').mockImplementation(async () => {
-            fs.unlinkSync(s);
+            fs.renameSync(s, path.join(outside, 'orig')); // 원본을 살려 둔다 — 지우면 Linux 는 같은 inode 번호를 새 파일에 다시 준다
             fs.writeFileSync(s, 'swapped');
             throw Object.assign(new Error('cross-device'), { code: 'EXDEV' });
         });
