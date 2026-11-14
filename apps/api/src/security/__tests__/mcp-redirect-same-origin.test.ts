@@ -19,7 +19,8 @@ const before = process.env.SSRF_ALLOWED_HOSTS;
 function readBody(req: http.IncomingMessage): Promise<string> {
     return new Promise((resolve) => {
         let data = '';
-        req.on('data', (c: Buffer) => { data += c.toString(); });
+        req.setEncoding('utf8'); // 조각을 이어 디코드한다 — 조각마다 문자열로 바꾸면 경계의 다바이트 글자가 깨진다
+        req.on('data', (c: string) => { data += c; });
         req.on('end', () => resolve(data));
     });
 }

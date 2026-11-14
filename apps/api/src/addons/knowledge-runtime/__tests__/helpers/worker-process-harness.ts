@@ -46,7 +46,8 @@ export async function startFakeGateway(embed: (text: string) => number[]): Promi
     const sockets = new Set<Socket>();
     const server = createServer((req, res) => {
         let body = '';
-        req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+        req.setEncoding('utf8'); // 조각을 이어 디코드한다 — 조각마다 문자열로 바꾸면 경계의 다바이트 글자가 깨진다
+        req.on('data', (chunk: string) => { body += chunk; });
         req.on('end', () => {
             count++;
             const respond = (): void => {
@@ -114,8 +115,8 @@ export interface WorkerChild {
 export function spawnWorker(env: NodeJS.ProcessEnv): WorkerChild {
     const proc = spawn(process.execPath, ['-r', 'ts-node/register/transpile-only', WORKER_ENTRY], { cwd: API_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
     const output: string[] = [];
-    proc.stdout?.on('data', (d: Buffer) => output.push(d.toString()));
-    proc.stderr?.on('data', (d: Buffer) => output.push(d.toString()));
+    proc.stdout?.setEncoding('utf8').on('data', (d: string) => output.push(d));
+    proc.stderr?.setEncoding('utf8').on('data', (d: string) => output.push(d));
     const exited = new Promise<number | null>((r) => proc.once('exit', (code) => r(code)));
     return { proc, output, exited };
 }

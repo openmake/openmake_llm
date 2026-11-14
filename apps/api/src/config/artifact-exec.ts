@@ -29,7 +29,7 @@ export const ARTIFACT_EXEC = {
    *  각 컨테이너가 cpus·memory 를 점유하므로 동시 spawn 폭주로부터 호스트를 보호한다.
    *  초과 시 429(TOO_MANY_CONCURRENT). Agent Task 샌드박스의 maxConcurrent 대응물. */
   maxConcurrent: envNum(process.env.ARTIFACT_EXEC_MAX_CONCURRENT, 4),
-  /** stdout/stderr 각각 캡 (병리적 출력 방지). */
+  /** stdout/stderr 각각 캡 — 디코드된 글자 수(UTF-16 단위, 병리적 출력 방지). 키 이름의 Bytes 는 종전 이름 유지. */
   outputMaxBytes: envNum(process.env.ARTIFACT_EXEC_OUTPUT_MAX, 256 * 1024),
   /** 입력 코드 최대 크기. */
   codeMaxBytes: envNum(process.env.ARTIFACT_EXEC_CODE_MAX, 100 * 1024),

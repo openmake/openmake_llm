@@ -24,6 +24,7 @@
 
 import { Client, StreamableHTTPClientTransport, SSEClientTransport } from '@modelcontextprotocol/client';
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { StringDecoder } from 'string_decoder';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from '../../tool-contract/types';
 import { buildSandboxedCommand } from './sandbox-docker';
 import { prepareSandboxConfig } from './sandbox-egress';
@@ -235,8 +236,11 @@ export class ExternalMCPClient extends EventEmitter {
     /** stdio 자식 stderr 를 비워 가며 끝부분만 보관 — 읽지 않으면 종료 사유가 사라지고 파이프 버퍼가 찬다 */
     private captureStderr(transport: TransportInstance): void {
         if (!(transport instanceof StdioClientTransport)) return;
+        // 조각마다 따로 문자열로 바꾸면 경계에 걸린 다바이트 글자가 U+FFFD 로 깨진다 — 이어 디코드한다
+        const decoder = new StringDecoder('utf8');
         transport.stderr?.on('data', (chunk: Buffer | string) => {
-            this.stderrTail = (this.stderrTail + chunk.toString()).slice(-MCP_EXTERNAL_TOOL_LIMITS.STDERR_TAIL_MAX_CHARS);
+            const text = typeof chunk === 'string' ? chunk : decoder.write(chunk);
+            this.stderrTail = (this.stderrTail + text).slice(-MCP_EXTERNAL_TOOL_LIMITS.STDERR_TAIL_MAX_CHARS);
         });
     }
 

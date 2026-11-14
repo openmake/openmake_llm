@@ -95,4 +95,16 @@ describe('ExternalMCPClient — transport 종료 감지', () => {
         expect(r.isError).toBe(true);
         expect(sdk.callTool).not.toHaveBeenCalled();
     });
+
+    it('stderr 다바이트 글자가 조각 경계에 걸려도 종료 사유가 원문과 같다(UTF-8 청크 경계)', async () => {
+        const { c, sdk, transport } = await connected();
+        const b = Buffer.from('한글 오류로 종료');
+        transport.stderr.write(b.subarray(0, 4));
+        await new Promise((r) => setImmediate(r));
+        transport.stderr.write(b.subarray(4));
+        await new Promise((r) => setImmediate(r));
+        sdk.onclose?.();
+
+        expect(c.getStatus().error).toBe('transport closed: 한글 오류로 종료');
+    });
 });

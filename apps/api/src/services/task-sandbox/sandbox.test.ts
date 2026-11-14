@@ -540,6 +540,35 @@ describe('runProcess — 실행 중 출력 조각(onOutput)', () => {
         expect(chunks.join('').length).toBe(5300);
     });
 
+    // 자식이 다바이트 글자를 바이트 중간에서 끊어 따로 쓴다 — 조각마다 문자열로 바꾸면 경계가 U+FFFD 로 깨진다
+    const splitWriter = (text: string, at: number, stream: 'stdout' | 'stderr' = 'stdout'): string =>
+        `{ const b = Buffer.from(${JSON.stringify(text)}); process.${stream}.write(b.subarray(0, ${at}));`
+        + ` setTimeout(() => process.${stream}.write(b.subarray(${at})), 50); }`;
+
+    it('다바이트 글자가 조각 경계에 걸려도 stdout·stderr 가 원문과 같다', async () => {
+        const r = await runProcess(process.execPath, ['-e', `${splitWriter('한글 출력', 4)} ${splitWriter('오류 글', 2, 'stderr')}`],
+            { timeoutMs: 10_000, outputCap: 1000 });
+        expect(r).toMatchObject({ stdout: '한글 출력', stderr: '오류 글', truncated: false, exitCode: 0 });
+    });
+
+    it('상한은 디코드된 글자 수(UTF-16 단위)다 — 직전·딱·직후', async () => {
+        const run = (cap: number) => runProcess(process.execPath, ['-e', splitWriter('가나다라', 5)], { timeoutMs: 10_000, outputCap: cap });
+        expect(await run(5)).toMatchObject({ stdout: '가나다라', truncated: false });
+        expect(await run(4)).toMatchObject({ stdout: '가나다라', truncated: false });
+        expect(await run(3)).toMatchObject({ stdout: '가나다', truncated: true });
+    });
+
+    it('상한이 대리 쌍 한가운데면 그 글자를 통째로 뺀다', async () => {
+        const r = await runProcess(process.execPath, ['-e', splitWriter('😀😀', 2)], { timeoutMs: 10_000, outputCap: 3 });
+        expect(r).toMatchObject({ stdout: '😀', truncated: true });
+    });
+
+    it('한 스트림이 상한에 닿으면 그 뒤 조각은 붙이지 않는다(가운데가 빠진 출력 금지)', async () => {
+        const r = await runProcess(process.execPath, ['-e', 'process.stdout.write("가나"); setTimeout(() => process.stdout.write("a"), 50)'],
+            { timeoutMs: 10_000, outputCap: 1 });
+        expect(r).toMatchObject({ stdout: '가', truncated: true });
+    });
+
     it('onOutput 콜백이 throw 해도 결과는 그대로다', async () => {
         const r = await runProcess(process.execPath, ['-e', 'process.stdout.write("ok")'],
             { timeoutMs: 10_000, outputCap: 100, onOutput: () => { throw new Error('boom'); } });
