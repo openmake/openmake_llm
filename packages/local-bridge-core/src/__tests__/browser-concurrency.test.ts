@@ -147,12 +147,12 @@ describe('LocalBrowser 동시 실행(가짜 CDP)', () => {
     });
 
     it('탭 상한 — 만드는 중인 탭도 세어, 새 작업 둘이 함께 와도 열린 창이 상한을 넘지 않는다', async () => {
-        let gate: Promise<void> | undefined;
-        const { browser, sent } = setup({ createGate: () => gate });
+        const hold: { gate?: Promise<void> } = {};
+        const { browser, sent } = setup({ createGate: () => hold.gate });
         const plain = { actions: [{ type: 'wait', ms: 0 }] };
         for (let k = 1; k < BROWSER_MAX_TABS; k++) await browser.run(plain, opts(`idle${k}`));
         let open!: () => void;
-        gate = new Promise((r) => { open = r; });
+        hold.gate = new Promise((r) => { open = r; });
         const both = Promise.all([browser.run(plain, opts('A')), browser.run(plain, opts('B'))]);
         await tick(); await tick();
         open();
