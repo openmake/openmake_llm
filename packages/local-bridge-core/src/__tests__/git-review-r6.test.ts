@@ -21,6 +21,7 @@ beforeEach(() => {
 });
 afterEach(() => {
     try { fs.chmodSync(path.join(root, 'D', 'zlocked'), 0o755); } catch { /* zlocked 사례만 */ }
+    try { fs.chmodSync(path.join(root, 'nr', 'closed'), 0o755); } catch { /* 읽지 못하는 폴더 사례만 */ }
     fs.rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -86,5 +87,15 @@ describe('U1 — 파일 kind 는 폴더째 지우기로도 HEAD 항목의 유무
         expect(await run(core, del('D'))).toEqual(denied('D'));
         expect(exists('D/HEAD')).toBe(true);
         expect(await run(core, write('D/config'))).toEqual(denied('D/config'));
+    });
+
+    // 7차 리뷰 D1 — 하위 트리를 읽지 못하면 HEAD 가 있다고 본다(막는 쪽). root 로 돌아 권한 0 폴더도 읽히면 건너뛴다.
+    it('HEAD 가 없어도 읽지 못하는 하위 폴더를 품은 폴더는 지우지 않는다', async () => {
+        file('nr/a.txt', 'x');
+        file('nr/closed/f', 'x');
+        fs.chmodSync(path.join(root, 'nr', 'closed'), 0o000);
+        try { fs.readdirSync(path.join(root, 'nr', 'closed')); return; } catch { /* 읽지 못함 — 사례 성립 */ }
+        expect(await run(makeCore(), del('nr'))).toEqual(denied('nr'));
+        expect(exists('nr/a.txt')).toBe(true);
     });
 });
