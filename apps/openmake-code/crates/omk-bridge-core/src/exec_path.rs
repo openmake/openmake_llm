@@ -7,12 +7,13 @@
 
 use std::collections::BTreeMap;
 
-use crate::constants::{PATH_PROBE_ENV_EXTRA_POSIX, PATH_PROBE_TIMEOUT_MS};
+use crate::constants::{PATH_PROBE_ENV_EXTRA_POSIX, PATH_PROBE_TIMEOUT_MS, SANDBOX_BIN};
 use crate::exec_env::build_exec_env;
 use crate::js_text::js_trim;
 use crate::node_path;
 use crate::platform::Platform;
 use crate::proc::{self, ProcEnd, ProcSpec, Stderr, Stdin};
+use crate::tool_env::ToolSandbox;
 
 /// `execFileSync` 의 기본 출력 상한.
 const SYNC_MAX_BUFFER: usize = 1024 * 1024;
@@ -88,11 +89,14 @@ async fn run_ok(spec: ProcSpec) -> Option<String> {
 }
 
 /// exec PATH. `folder_root` 가 없으면 mise 는 홈에서 돈다. Windows 는 로그인 셸·mise 관행이 없어 프로세스 PATH 그대로.
+/// `sandbox`: mise 를 감쌀 도구 프로파일 — `Off` 는 감싸지 않음, `Missing`(켜졌는데 프로파일 없음)은 mise 를 건너뛴다.
+/// 신뢰된 경로의 mise 설정은 에이전트가 파일 쓰기로 고칠 수 있어, 그 `exec()` 가 샌드박스 밖에서 돌지 않게 한다(설계 D-6).
 pub async fn resolve_exec_path(
     env: &[(String, String)],
     home: &str,
     platform: Platform,
     folder_root: Option<&str>,
+    sandbox: &ToolSandbox,
 ) -> String {
     if platform == Platform::Win32 {
         let pick = |k| env_get(env, k).filter(|v| !v.is_empty());
@@ -116,7 +120,18 @@ pub async fn resolve_exec_path(
     let login = run_ok(login).await;
     let base = merge_exec_path(login.as_deref(), process_path, home, None);
     let mise_cwd = folder_root.unwrap_or(home);
-    let mise = probe("mise", &["bin-paths"], Some(mise_cwd), probe_env(&base));
+    // 감싼 mise 가 실패하면(65·71 포함) 종전처럼 기본 PATH 만 쓴다. PATH 계산은 exec 를 막지 않는다 — 프로파일이 없으면
+    // 그 exec·도구는 뒤에서 126 으로 거절된다.
+    let mise = match sandbox {
+        ToolSandbox::Missing => return base,
+        ToolSandbox::Off => probe("mise", &["bin-paths"], Some(mise_cwd), probe_env(&base)),
+        ToolSandbox::Profile(p) => probe(
+            SANDBOX_BIN,
+            &["-p", p, "mise", "bin-paths"],
+            Some(mise_cwd),
+            probe_env(&base),
+        ),
+    };
     match run_ok(mise).await {
         Some(out) => merge_exec_path(login.as_deref(), process_path, home, Some(&out)),
         None => base,
