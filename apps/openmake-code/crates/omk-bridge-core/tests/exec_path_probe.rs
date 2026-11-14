@@ -159,7 +159,8 @@ fn mise_runs_inside_tool_profile() {
     assert_eq!((w.exists(&mark), first(&got)), (false, "/m/fake"));
 }
 
-/// 실제 mise — PATH 에 없으면 건너뛴다. 테스트 프로세스의 실제 환경(신뢰 기록은 실제 홈의 mise 상태)을 쓴다.
+/// 실제 mise — PATH 에 없으면 건너뛴다. 실제 홈·PATH 를 쓰되 mise 상태(신뢰·추적 기록)는 폴더 밖 임시 폴더에 둔다 — 사용자의
+/// `~/.local/state/mise` 에 남기지 않고, 프로파일이 쓰기를 열지 않은 자리라 감싼 mise 는 실제처럼 상태를 못 쓴다(실측 n4).
 #[cfg(target_os = "macos")]
 fn real_mise_env(w: &Work) -> Option<Vec<(String, String)>> {
     let path = std::env::var("PATH").ok()?;
@@ -171,25 +172,27 @@ fn real_mise_env(w: &Work) -> Option<Vec<(String, String)>> {
                 ("HOME", &home),
                 ("PATH", &path),
                 ("SHELL", &w.join("no-such-shell")),
+                ("MISE_STATE_DIR", &w.join("outside/mise-state")),
             ])
         })
 }
 
-/// `mise trust` 를 되돌린다(실패한 단언 뒤에도).
+/// `mise trust` 를 되돌린다(실패한 단언 뒤에도). 상태 폴더는 `real_mise_env` 와 같은 자리.
 #[cfg(target_os = "macos")]
-struct Trusted(String);
+struct Trusted(String, String);
 
 #[cfg(target_os = "macos")]
 impl Trusted {
-    fn new(cfg: &str) -> Trusted {
+    fn new(cfg: &str, state: &str) -> Trusted {
         let st = std::process::Command::new("mise")
             .args(["trust", cfg])
+            .env("MISE_STATE_DIR", state)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
             .unwrap();
         assert!(st.success(), "mise trust 실패");
-        Trusted(cfg.to_owned())
+        Trusted(cfg.to_owned(), state.to_owned())
     }
 }
 
@@ -198,6 +201,7 @@ impl Drop for Trusted {
     fn drop(&mut self) {
         let _ = std::process::Command::new("mise")
             .args(["trust", "--untrust", &self.0])
+            .env("MISE_STATE_DIR", &self.1)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status();
@@ -219,7 +223,7 @@ fn trusted_mise_exec_cannot_write_outside() {
         format!("[env]\nOMK_PROBE = \"{{{{ exec(command='touch {mark}; echo v') }}}}\"\n"),
     )
     .unwrap();
-    let _trusted = Trusted::new(&cfg);
+    let _trusted = Trusted::new(&cfg, &w.join("outside/mise-state"));
     w.resolve(&env, &ToolSandbox::Off); // 대조 — 설정이 실제로 실행되는 사례인지
     let control = w.exists(&mark);
     let _ = std::fs::remove_file(&mark);

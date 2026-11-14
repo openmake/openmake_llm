@@ -69,6 +69,12 @@ describe('로그인 셸 PATH 조회(D-13)', () => {
     });
 });
 
+/**
+ * 실제 mise 의 상태(신뢰·추적 기록)는 폴더 밖 임시 폴더에 둔다 — 사용자의 `~/.local/state/mise` 에 남기지 않고, 프로파일이 쓰기를
+ * 열지 않은 자리라 감싼 mise 는 실제처럼 상태를 못 쓴다(실측 n4).
+ */
+const miseState = (): Record<string, string> => ({ MISE_STATE_DIR: path.join(outside, 'mise-state') });
+
 describe('mise bin-paths 는 도구 프로파일 안에서(D-6)', () => {
     it('undefined(샌드박스 꺼짐)면 감싸지 않고 띄운다', () => {
         const mark = path.join(outside, 'mise.ran');
@@ -94,21 +100,26 @@ describe('mise bin-paths 는 도구 프로파일 안에서(D-6)', () => {
         const mark = path.join(outside, 'mise.mark');
         const cfg = path.join(root, 'mise.toml');
         fs.writeFileSync(cfg, `[env]\nOMK_PROBE = "{{ exec(command='touch ${mark}; echo v') }}"\n`);
-        execFileSync('mise', ['trust', cfg], { stdio: 'ignore' });
-        try {
-            resolveExecPath(root, undefined); // 대조 — 설정이 실제로 실행되는 사례인지
-            const control = fs.existsSync(mark);
-            fs.rmSync(mark, { force: true });
-            resolveExecPath(root, buildSandboxProfile(root, null, true));
-            expect({ control, wrapped: fs.existsSync(mark) }).toEqual({ control: true, wrapped: false });
-        } finally {
-            execFileSync('mise', ['trust', '--untrust', cfg], { stdio: 'ignore' });
-        }
+        withEnv(miseState(), () => {
+            // env 를 넘긴다 — jest 의 process.env 를 바꿔도 child_process 의 기본 환경(실제 프로세스)에는 닿지 않는다.
+            execFileSync('mise', ['trust', cfg], { stdio: 'ignore', env: process.env });
+            try {
+                resolveExecPath(root, undefined); // 대조 — 설정이 실제로 실행되는 사례인지
+                const control = fs.existsSync(mark);
+                fs.rmSync(mark, { force: true });
+                resolveExecPath(root, buildSandboxProfile(root, null, true));
+                expect({ control, wrapped: fs.existsSync(mark) }).toEqual({ control: true, wrapped: false });
+            } finally {
+                execFileSync('mise', ['trust', '--untrust', cfg], { stdio: 'ignore', env: process.env });
+            }
+        });
     });
 
     // 실측 n3~n5 — 감싼 bin-paths 는 상태 파일을 못 써 경고만 내고 같은 경로를 낸다.
     withMise('감싼 bin-paths 가 감싸지 않은 것과 같은 PATH 를 낸다', () => {
-        expect(resolveExecPath(root, buildSandboxProfile(root, null, true))).toBe(resolveExecPath(root, undefined));
+        withEnv(miseState(), () => {
+            expect(resolveExecPath(root, buildSandboxProfile(root, null, true))).toBe(resolveExecPath(root, undefined));
+        });
     });
 
     // 코어의 세 PATH 계산 자리(exec·lsp_diagnostics·test_runner)가 도구 프로파일을 넘긴다 — 연결 때 만든 그 프로파일이다.
