@@ -4,6 +4,7 @@
 //! 프로필마다 인스턴스 하나(프로세스 전역 표) — 여러 연결 폴더의 코어가 같은 브라우저를 쓴다. 호출이 끝나도 창과 로그인이 남는다
 //! (작업마다 뒤쪽 창 하나). 확인창·다운로드 이벤트는 실행 줄기와 다른 태스크(연결마다 하나)에서 처리한다 — 누르기가 연 `confirm` 은
 //! 처리되기 전까지 마우스 명령의 답을 막는다(D-73). 공유 상태는 `std::sync::Mutex` 를 짧게만 쥔다(잠금 순서: 상태 → 탭).
+//! 다른 작업은 다운로드 폴더가 달라도 함께 돈다(D-8). 탭 상한은 만드는 중인 탭도 센다(D-10).
 //! 다운로드는 그것을 시작한 탭(또는 그 탭이 연 창 — `Target.targetCreated` 의 openerId 로 만들어질 때 새 창 표에 적는다)의 작업에
 //! 귀속하고 그 작업이 준 저장 함수로 옮긴다. 귀속하지 못하면 저장하지 않는다(2026-11-15 D-1~D-3).
 //!
@@ -55,6 +56,22 @@ pub(super) fn lock_tab(t: &TabRef) -> MutexGuard<'_, Tab> {
     t.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// 만드는 중인 탭 하나 — 버려지면(만들기·붙기 실패, 호출부가 future 를 버림) 수를 내린다. 성공하면 `tab_for` 가 표에 넣으며
+/// 같은 잠금에서 내리고 `armed` 를 끈다.
+struct Creating<'a> {
+    browser: &'a LocalBrowser,
+    armed: bool,
+}
+
+impl Drop for Creating<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            let mut s = self.browser.lock();
+            s.creating_tabs = s.creating_tabs.saturating_sub(1);
+        }
+    }
+}
+
 /// 작업 탭들의 CDP 식별자 — 다운로드·새 창 귀속에 쓴다(상태를 쥔 채 부른다 — 잠금 순서 상태 → 탭).
 fn tab_ids(s: &State) -> Vec<(String, TabIds)> {
     s.tabs
@@ -76,6 +93,8 @@ pub(super) struct State {
     /// 이 인스턴스가 띄운 Chrome — 붙기만 했으면 없다
     child: Option<Child>,
     pub tabs: Vec<(String, TabRef)>,
+    /// 상한 검사를 지나 만드는 중인 탭 수 — 동시에 온 새 작업들이 같은 빈자리를 보고 상한을 넘지 않게 검사에 더한다(D-10)
+    creating_tabs: usize,
     /// 새 창 targetId → 연 탭의 작업 키(다운로드 귀속, 넣은 순서 — 상한을 넘으면 가장 오래된 것을 버린다)
     popups: Vec<(String, String)>,
     pub user_control: bool,
@@ -338,7 +357,8 @@ impl LocalBrowser {
             let wake = self.scheduler.next_release();
             let oldest = {
                 let mut s = self.lock();
-                if s.tabs.len() < BROWSER_MAX_TABS {
+                if s.tabs.len() + s.creating_tabs < BROWSER_MAX_TABS {
+                    s.creating_tabs += 1; // 검사와 같은 잠금에서 올린다 — 성공·실패·버려짐 모두 내린다
                     break;
                 }
                 let idle = s
@@ -360,6 +380,10 @@ impl LocalBrowser {
                 None => wake.await,
             }
         }
+        let mut creating = Creating {
+            browser: self,
+            armed: true,
+        };
         // 작업마다 뒤쪽 창 하나 — 숨은 탭의 화면 캡처·타이머 지연을 피하고 사용자 창의 초점을 빼앗지 않는다. 안 되면 탭으로.
         let created = match cdp
             .send(
@@ -378,6 +402,9 @@ impl LocalBrowser {
         let target_id = str_of(created.get("targetId"));
         let session_id = self.attach(cdp, &target_id).await?;
         let mut s = self.lock();
+        // 내리기와 표에 넣기를 한 잠금에서 — 그 사이 다른 검사가 둘 다 세거나 둘 다 놓치지 않는다
+        s.creating_tabs = s.creating_tabs.saturating_sub(1);
+        creating.armed = false;
         s.use_seq += 1;
         let tab = Arc::new(Mutex::new(Tab {
             target_id,

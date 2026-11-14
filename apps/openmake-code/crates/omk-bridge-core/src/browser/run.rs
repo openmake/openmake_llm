@@ -46,8 +46,6 @@ pub struct BrowserRunOptions {
     /// 작업 id — 작업마다 탭을 따로 쓴다. 없으면 공용 탭
     pub task_id: Option<String>,
     pub save_file: SaveFile,
-    /// 다운로드가 떨어질 폴더(연결 폴더) — 다른 작업과 함께 돌 수 있는지 가른다
-    pub download_dir: String,
     /// 없으면 다운로드를 받지 않는다(deny)
     pub place_download: Option<PlaceDownload>,
     /// 없으면 업로드를 실행하지 않는다
@@ -197,7 +195,7 @@ impl LocalBrowser {
     pub async fn run(&self, spec: &BrowserSpec, opts: &BrowserRunOptions) -> Obj {
         let key = task_key(opts.task_id.as_deref());
         self.scheduler
-            .run(&key, &opts.download_dir, self.run_now(spec, opts, &key))
+            .run(&key, self.run_now(spec, opts, &key))
             .await
     }
 

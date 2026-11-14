@@ -1,4 +1,4 @@
-//! 실행 조정(TS `local-browser-scheduler.ts`) — 같은 작업 순서·동시 실행 상한·다운로드 폴더·중지 세대·future 를 버려도 자리 반환.
+//! 실행 조정(TS `local-browser-scheduler.ts`) — 같은 작업 순서·동시 실행 상한(폴더가 달라도 함께·도착 순)·중지 세대·future 를 버려도 자리 반환.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -18,19 +18,12 @@ fn job(
     sched: &Arc<BrowserScheduler>,
     log: &Log,
     key: &str,
-    dir: &str,
     name: &str,
 ) -> (tokio::task::JoinHandle<String>, oneshot::Sender<()>) {
     let (open, gate) = oneshot::channel::<()>();
-    let (s, l, k, d, n) = (
-        sched.clone(),
-        log.clone(),
-        key.to_owned(),
-        dir.to_owned(),
-        name.to_owned(),
-    );
+    let (s, l, k, n) = (sched.clone(), log.clone(), key.to_owned(), name.to_owned());
     let h = tokio::spawn(async move {
-        s.run(&k, &d, async {
+        s.run(&k, async {
             l.lock().unwrap().push(n.clone());
             let _ = gate.await;
             n.clone()
@@ -52,9 +45,9 @@ fn started(log: &Log) -> Vec<String> {
 fn same_task_runs_in_order() {
     paused().block_on(async {
         let (s, log) = (Arc::new(BrowserScheduler::default()), Log::default());
-        let (h1, o1) = job(&s, &log, "A", "/d", "a1");
-        let (h2, o2) = job(&s, &log, "A", "/d", "a2");
-        let (h3, o3) = job(&s, &log, "B", "/d", "b1");
+        let (h1, o1) = job(&s, &log, "A", "a1");
+        let (h2, o2) = job(&s, &log, "A", "a2");
+        let (h3, o3) = job(&s, &log, "B", "b1");
         settle().await;
         assert_eq!(started(&log), ["a1", "b1"], "a2 는 a1 뒤");
         assert!(s.is_running("A") && s.is_running("B"));
@@ -77,7 +70,7 @@ fn at_most_three_at_once() {
         let (s, log) = (Arc::new(BrowserScheduler::default()), Log::default());
         let jobs: Vec<_> = ["A", "B", "C", "D"]
             .iter()
-            .map(|k| job(&s, &log, k, "/d", k))
+            .map(|k| job(&s, &log, k, k))
             .collect();
         settle().await;
         assert_eq!(started(&log).len(), BROWSER_MAX_CONCURRENT);
@@ -95,27 +88,47 @@ fn at_most_three_at_once() {
     });
 }
 
+/// TS "다운로드 폴더(저장 함수)가 다른 작업도 함께 돈다" — 다운로드는 시작한 탭의 작업 것으로 옮긴다(D-8).
 #[test]
-fn different_download_dirs_do_not_overlap() {
+fn different_download_dirs_overlap() {
     paused().block_on(async {
         let (s, log) = (Arc::new(BrowserScheduler::default()), Log::default());
-        let (ha, oa) = job(&s, &log, "A", "/one", "A");
+        let (ha, oa) = job(&s, &log, "A", "A");
+        let (hb, ob) = job(&s, &log, "B", "B");
         settle().await;
-        let (hb, ob) = job(&s, &log, "B", "/two", "B");
-        let (hc, oc) = job(&s, &log, "C", "/one", "C");
-        settle().await;
-        // 같은 폴더(C)는 함께, 다른 폴더(B)는 기다린다 — TS 그대로(먼저 온 B 보다 C 가 먼저 돌 수 있다)
-        assert_eq!(started(&log), ["A", "C"]);
+        assert_eq!(started(&log), ["A", "B"]);
         oa.send(()).unwrap();
-        ha.await.unwrap();
-        settle().await;
-        assert_eq!(started(&log), ["A", "C"], "C 가 남아 있으면 B 는 아직");
-        oc.send(()).unwrap();
-        hc.await.unwrap();
-        settle().await;
-        assert_eq!(started(&log), ["A", "C", "B"]);
         ob.send(()).unwrap();
+        ha.await.unwrap();
         hb.await.unwrap();
+    });
+}
+
+/// TS "자리를 기다리는 요청은 도착 순으로 든다"(D-9).
+#[test]
+fn waiting_for_a_slot_is_first_come_first_served() {
+    paused().block_on(async {
+        let (s, log) = (Arc::new(BrowserScheduler::default()), Log::default());
+        let mut jobs: Vec<_> = ["T0", "T1", "T2"]
+            .iter()
+            .map(|k| job(&s, &log, k, k))
+            .collect();
+        settle().await;
+        jobs.push(job(&s, &log, "W1", "W1"));
+        settle().await;
+        jobs.push(job(&s, &log, "W2", "W2"));
+        settle().await;
+        let (h, o) = jobs.remove(0);
+        o.send(()).unwrap();
+        // 자리가 나는 그 순간 온 W3 이 먼저 깨어 있어도 앞서 기다린 W1 이 든다
+        jobs.push(job(&s, &log, "W3", "W3"));
+        h.await.unwrap();
+        settle().await;
+        assert_eq!(started(&log)[BROWSER_MAX_CONCURRENT..], ["W1"]);
+        for (h, o) in jobs {
+            o.send(()).unwrap();
+            h.await.unwrap();
+        }
     });
 }
 
@@ -146,9 +159,9 @@ fn stop_generations() {
 fn dropped_futures_return_their_place() {
     paused().block_on(async {
         let (s, log) = (Arc::new(BrowserScheduler::default()), Log::default());
-        let (h1, _o1) = job(&s, &log, "A", "/d", "a1");
-        let (h2, _o2) = job(&s, &log, "A", "/d", "a2");
-        let (h3, o3) = job(&s, &log, "A", "/d", "a3");
+        let (h1, _o1) = job(&s, &log, "A", "a1");
+        let (h2, _o2) = job(&s, &log, "A", "a2");
+        let (h3, o3) = job(&s, &log, "A", "a3");
         settle().await;
         assert_eq!(started(&log), ["a1"]);
         h2.abort(); // 줄에서 기다리던 것
@@ -163,7 +176,7 @@ fn dropped_futures_return_their_place() {
         // 상한도 새지 않았다 — 셋이 다시 함께 돈다
         let more: Vec<_> = ["X", "Y", "Z"]
             .iter()
-            .map(|k| job(&s, &log, k, "/d", k))
+            .map(|k| job(&s, &log, k, k))
             .collect();
         settle().await;
         assert_eq!(started(&log).len(), 5);
@@ -178,9 +191,9 @@ fn dropped_futures_return_their_place() {
 fn failed_request_keeps_the_chain() {
     paused().block_on(async {
         let s = Arc::new(BrowserScheduler::default());
-        let r1: Result<(), String> = s.run("A", "/d", async { Err("실패".to_owned()) }).await;
+        let r1: Result<(), String> = s.run("A", async { Err("실패".to_owned()) }).await;
         assert!(r1.is_err());
-        let r2: Result<u8, String> = s.run("A", "/d", async { Ok(2) }).await;
+        let r2: Result<u8, String> = s.run("A", async { Ok(2) }).await;
         assert_eq!(r2, Ok(2));
     });
 }
@@ -189,7 +202,7 @@ fn failed_request_keeps_the_chain() {
 fn next_release_wakes_after_a_run_ends() {
     paused().block_on(async {
         let (s, log) = (Arc::new(BrowserScheduler::default()), Log::default());
-        let (h, o) = job(&s, &log, "A", "/d", "a");
+        let (h, o) = job(&s, &log, "A", "a");
         settle().await;
         let wake = s.next_release();
         let woke = Arc::new(Mutex::new(false));

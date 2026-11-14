@@ -21,7 +21,6 @@ fn opts(out: &str, task: &str) -> BrowserRunOptions {
             let p = format!("{dir}/{name}");
             Box::pin(async move { std::fs::write(p, data).map_err(|e| e.to_string()) })
         }),
-        download_dir: out.to_owned(),
         place_download: None,
         resolve_upload_files: None,
     }
