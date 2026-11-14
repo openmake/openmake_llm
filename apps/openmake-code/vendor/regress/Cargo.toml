@@ -85,6 +85,11 @@ path = "tests/unicode_property_escapes.rs"
 name = "unicodesets"
 path = "tests/unicodesets.rs"
 
+# [omk] 저장소 사본 패치 테스트 — OMK-PATCHES.md
+[[test]]
+name = "omk_patches"
+path = "tests/omk_patches.rs"
+
 [dependencies.hashbrown]
 version = ">=0.16, <0.18"
 optional = true

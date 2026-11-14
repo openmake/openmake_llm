@@ -925,7 +925,18 @@ impl<'a, Input: InputIndexer> MatchAttempter<'a, Input> {
 
                     Insn::EnterLoop(fields) => {
                         // Entering a loop, not re-entering it.
-                        self.s.loops.mat(fields.loop_id as usize).iters = 0;
+                        // [omk] 바깥 반복이 이 루프에 다시 들어올 때 앞선 회차의 횟수·진입 위치를 역추적으로 되돌린다.
+                        {
+                            let ld = self.s.loops.mat(fields.loop_id as usize);
+                            if ld.iters != 0 {
+                                let saved = *ld;
+                                ld.iters = 0;
+                                self.bts.push(BacktrackInsn::SetLoopData {
+                                    id: fields.loop_id,
+                                    data: saved,
+                                });
+                            }
+                        }
                         match self.run_loop(fields, pos, ip) {
                             Some(next_ip) => {
                                 ip = next_ip;
