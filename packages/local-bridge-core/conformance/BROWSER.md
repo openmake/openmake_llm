@@ -4,7 +4,7 @@
 
 | 러너 | 위치 | 실행 |
 |---|---|---|
-| TS | `packages/local-bridge-core/src/__tests__/conformance-browser.test.ts`(+ `conformance-browser-support.ts`) | `npx jest -c packages/local-bridge-core/jest.config.js conformance-browser` |
+| TS | `packages/local-bridge-core/src/__tests__/conformance-browser.test.ts`(+ `conformance-browser-support.ts`), `browser-run` 은 `conformance-browser-run.test.ts`(+ `conformance-browser-run-support.ts`) | `npx jest -c packages/local-bridge-core/jest.config.js conformance-browser` |
 | Rust | `apps/openmake-code/crates/omk-bridge-core/tests/conformance_browser.rs`(+ `tests/conformance_browser/*.rs`) | `cd apps/openmake-code && cargo test --locked -j 2 -p omk-bridge-core --test conformance_browser` |
 
 ## 규칙
@@ -20,12 +20,13 @@
 
 | suite | 묶음 | 사례 |
 |---|---|---|
-| `browser-constants` | `values` · `tables` · `messages` · `env` · `chrome` (사례 목록이 아니라 값) | `values`: `BROWSER_*`(환경으로 바뀌는 값은 기본값)·`BROWSER_KIND`·`BROWSER_UPLOAD_CAPABILITY`·`BROWSER_FLOW_MAX_DEPTH`·`BROWSER_REPEAT_MAX`. `tables`: `interactiveRoles`·`pageActions`(정렬)·`actionClass`(분류표 — TS 는 소스의 표 키 순서도 본다)·`policyBlockKinds`(TS 는 `types.ts` 의 합 타입을 읽는다). `messages`: 오류 문구·페이지 조각. `env`: 환경 이름 → 기본값(TS 는 소스에 `process.env.<이름>` 이 있는지도 본다). `chrome`: 후보 경로(`{{HOME}}`)·Windows 루트와 파일 조각·실행 인자(`{{PROFILE}}`, `headlessOnly` 는 화면 없음일 때만) — TS 는 함수를 내보내지 않으므로 `chrome.ts` 소스에 그 글자가 이 순서로 있는지 본다. **Rust 는 1.6a 에서 `chrome` 을 모양만 보고, PR-1.6b 가 함수 결과와 대조한다** |
+| `browser-constants` | `values` · `tables` · `messages` · `env` · `chrome` (사례 목록이 아니라 값) | `values`: `BROWSER_*`(환경으로 바뀌는 값은 기본값)·`BROWSER_KIND`·`BROWSER_UPLOAD_CAPABILITY`·`BROWSER_FLOW_MAX_DEPTH`·`BROWSER_REPEAT_MAX`. `tables`: `interactiveRoles`·`pageActions`(정렬)·`actionClass`(분류표 — TS 는 소스의 표 키 순서도 본다)·`policyBlockKinds`(TS 는 `types.ts` 의 합 타입을 읽는다). `messages`: 오류 문구·페이지 조각. `env`: 환경 이름 → 기본값(TS 는 소스에 `process.env.<이름>` 이 있는지도 본다). `chrome`: 후보 경로(`{{HOME}}`)·Windows 루트와 파일 조각·실행 인자(`{{PROFILE}}`, `headlessOnly` 는 화면 없음일 때만) — TS 는 함수를 내보내지 않으므로 `chrome.ts` 소스에 그 글자가 이 순서로 있는지 보고, Rust 는 `chrome::candidates`·`launch_args`·`BrowserEnv::from_env` 결과와 대조한다 |
 | `browser-site-policy` | `policies`(이름 → `{allow, deny}`) + `classify` · `hostOf` · `navigable` · `hostMatches` · `allowed` · `needsApproval` · `check` · `parsePolicy` · `uploadFilesOf` · `policyBlock` | `input.policy` 는 `policies` 의 이름. `check.input.approvedUploads` 가 없으면 기본값(`[]`)으로 부른다(이미 `parseApprovedUploads` 를 지난 모양). `policyBlock.input.fn` 은 `of`(`browserPolicyBlockOf`)·`userControl`·`uploadRejected` |
 | `browser-flow` | `validate` · `cond` · `run` | `validate.expect`: `{error}`(문구 전체) 또는 `{error: null, flat}`(펼친 단순 액션 값). `cond.expect.expression`: `condExpression` 글자 전체. `run`: 아래 |
 | `browser-defs` | `str` · `screenshotName` · `keyEventOf` · `approvedUploads` · `clickPointJs` · `fillPrepareJs` · `downloadTaskOf` · `jsonString` | `keyEventOf.expect`: `{text?, common}`(text 가 `undefined` 면 키 없음) 또는 `{error}`. `clickPointJs`·`fillPrepareJs` 의 `sel` 은 호출부가 넘기는 JSON 문자열 그대로. `downloadTaskOf.input`: `tabs`(`[키, {targetId, sessionId}]`)·`running`(실행 중인 작업 키)·`sessionId?`·`frameId`, `expect` 는 키 또는 `null`. `jsonString`: `JSON.stringify(문자열)` 글자 |
 | `browser-upload-files` | `baseSetup` + `cases` | `resolveUploadFiles(input.base, input.files)`. `setup` 은 `baseSetup` 뒤에 더한다. `expect`: `{paths}`(realpath) 또는 `{error}` |
 | `browser-download-place` | `cases` | 아래 |
+| `browser-run` | `defaults`(규칙) + `cases` | 가짜 CDP 대본으로 `LocalBrowser.run` 한 번 — 아래 |
 
 ### `browser-flow/run`
 
@@ -42,6 +43,26 @@
 - `setup`: `{"dir"}` · `{"file", "content"}` · `{"file", "size"}`(성긴 파일) · `{"symlink", "target"}` · `{"series": "root/report ({n}).txt", "from", "to", "content"}`.
 - **기대값 재현**: 새 사례는 `id`·`input`(파일 suite 는 `setup`)만 적고, `npm run build:packages` 뒤 TS 구현(`packages/config/dist`·`packages/local-bridge-core/dist`)을 jest 밖 Node 에서 러너와 같은 절차(호출·`walk`, `{{TMP}}` 치환)로 불러 `expect`·`after` 를 채운 다음 TS 러너로 확인한다(생성 스크립트는 저장소에 두지 않는다 — 아래 "러너에만 있는 보정" 참고).
 - `link` 가 `EXDEV`·`EPERM`·`ENOTSUP` 일 때의 복사 갈래는 fixture 로 만들 수 없어(다른 볼륨·주입) TS `download-place.test.ts` 와 Rust 단위 테스트(오류 코드 주입)가 본다.
+
+### `browser-run`
+
+- 러너가 사례마다 임시 폴더(`{{TMP}}`)에 `setup` 을 적용하고 `{{TMP}}/profile`(전용 프로필)·`{{TMP}}/root`(연결 폴더 = `downloadDir`)를 만든 뒤, **가짜 CDP** 로
+  "떠 있는 Chrome 에 붙기" 길을 탄다. TS 는 `ws` 서버를 루프백에 띄우고 프로필에 `DevToolsActivePort` 를 쓴다(모의 없음, Chrome 없음). Rust 는 `BrowserHost`
+  가짜(메모리 duplex, 멈춘 시계)다. 사례 끝에 `dispose`.
+- `input`: `spec`(`actions`·`sitePolicy`·`approvedHosts`·`approvedUploads` — 값 그대로) · `opts`(`taskId?` · `saveError?`(스크린샷 저장 함수가 이 문구로 실패) ·
+  `upload?`(true 면 `resolveUploadFiles({{TMP}}/root, files)` — 실제 검사) · `place?`(true 면 저장 함수를 준다 → `allowAndName`)) · `cdp`(규칙) ·
+  `sentDefaults?` · `userControl?`(실행 전 넘겨받음).
+- **규칙**: `{"on": "<method>", "where"?: {<params 의 부분 일치>}, "match"?: "<expression·functionDeclaration 에 든 글자>", "session"?: true|false,
+  "reply"?: {…} | "error"?: "<문구>", "times"?: n, "emit"?: [{"method", "params"?, "session"?: true|"<세션>"}]}`. 받은 명령마다 `cdp` → `defaults` 순으로
+  조건이 맞고 횟수가 남은 첫 규칙을 쓴다(`times` 없으면 무한). `reply` 가 없으면 `{}`. **`emit` 은 답보다 먼저 보낸다**(`session: true` 는 그 명령의 세션) —
+  확인창을 연 누르기의 답보다 `Page.handleJavaScriptDialog` 가 먼저 나가는 순서를 두 구현이 같게 본다. 맞는 규칙이 없으면 오류로 답하고 사례가 실패한다.
+- `defaults`: 탭 만들기(`T1`)·붙기(`S1`)·`Page`·`Runtime`·`DOM` 활성화·다운로드 설정·`Target.getTargets`(빈 목록)·`Target.closeTarget`. 주소 읽기(`location.href`)는
+  사례가 적는다 — 그래야 `sent` 에 남는다.
+- `expect`: `stdout`(결과 `JSON.stringify` **글자 전체** — 키 순서까지, 계획 D-76) · `sent`(받은 명령 `{method, params, session}` 순서 전체, `defaults` 에 걸린 것은
+  `sentDefaults` 가 아니면 뺀다) · `saved`(스크린샷 저장 호출 `{name, hex}`). 경로는 `{{TMP}}` 로 바꿔 적는다.
+- TS 러너는 실시간이다 — 사례마다 폴링 1~2회로 묶고, 시간 초과(요소 대기 20초·이동·CDP 30초·`loading`·다운로드 5초·`wait` 상한)는 넣지 않는다.
+  그 자리는 Rust `tests/browser_timeouts.rs`(멈춘 시계)가 본다.
+- 새 사례는 `id`·`setup`·`input` 만 적고 TS 러너와 같은 도우미(`runBrowserCase`)를 jest 안에서 불러 `expect` 를 채운 다음 두 러너로 확인한다(생성 스크립트는 저장소에 두지 않는다).
 
 ### 러너에만 있는 보정
 
@@ -60,3 +81,11 @@
 7. 대기 파일(`staging/<guid>`)이 심링크·폴더 — TS `fs.link` 는 OS 의 `link(2)` 를 따라 결과가 OS 마다 다르다(macOS 는 원본 심링크를 따라가 대상 파일의 하드링크 = 보통 파일, Linux 는 심링크 자체를 링크). 두 러너의 OS 가 달라 fixture 에 넣지 않는다. Rust 는 원본을 `canonicalize` 해 늘 대상 파일을 링크한다 — macOS TS 와 같고, Linux 에서도 연결 폴더 안에 심링크를 만들지 않는다(더 엄격). 끊긴·순환 링크는 `link` 의 `ENOENT`·`ELOOP` 문구, 폴더 원본은 macOS `copyfile` 의 `ENOTSUP`(대상이 있으면 `EEXIST` 가 먼저라 다음 이름으로 넘어간다). macOS TS 실측값으로 `src/browser/download_place.rs` 단위 테스트가 고정한다.
 8. `serde_json` 이 못 읽는 정책 JSON — 짝 없는 대리 문자 이스케이프(`{"allow":["\ud800"]}`)·128단 넘게 겹친 값·범위 밖 수(`1e999`). TS `JSON.parse` 는 읽어 `allow` 를 쓰고, Rust 는 빈 정책(전부 승인 대상 — 더 엄격, `tests/browser_js_value.rs`).
 9. 대소문자 변환(`toLowerCase`·`toUpperCase`) — Unicode 판이 달라(Node 24.22.2 ICU 18.0, Rust 1.99.1 std 17.0) 41 코드 포인트가 다르다: BMP 8개(U+0277·U+027C·U+AB4B·U+AB4C 의 대문자 U+A7DD·U+A7E2·U+AB6C·U+AB6D 짝)와 U+1DF40~U+1DF7F 의 32개·U+1DF95(→ `SS`). 호스트는 IDNA 뒤 ASCII 라 정책 판정에는 영향이 없고, `parsePolicy` 결과 글자·한 글자 `press` 의 `windowsVirtualKeyCode` 만 달라질 수 있다. 툴체인 판에 따라 바뀌므로 단위 테스트로 고정하지 않는다.
+10. 결과 글을 UTF-16 단위로 자를 때(`extractText`·`extractHtml` 8000, `fill` 되돌림 200, 확인창 문구 300, 요소 이름 120) 끝이 대리 쌍 한가운데면 4 와 같은 차이다.
+11. CDP 응답의 짝 없는 대리 문자(페이지 글) — TS 는 받고, Rust 는 그 반쪽을 U+FFFD 로 바꿔 읽는다(안 바꾸면 응답 전체를 못 읽어 30초 시간 초과가 된다, `tests/browser_cdp.rs`).
+12. 스크린샷·다운로드 저장·업로드 파일 검사가 코어의 FS 관문(시간 제한) 안에서 돈다 — 막힌 볼륨에서 `screenshot 시간 초과` 등으로 끝난다(TS 는 시간 제한 없음).
+13. Chrome 종료 — TS 는 SIGTERM, Rust 는 `Browser.close` → 5초 → SIGKILL(띄운 Chrome 만).
+14. 시간·크기 환경 값이 수가 아니면 — TS `Number('abc')` = NaN, Rust 는 기본값(`ms_from_env`).
+15. `Preferences` 다시 쓰기 — TS 는 JS 수 표기(2^53 넘는 정수 반올림)·키 삽입 순서, Rust 는 정수 그대로·키 정렬(Chrome 은 둘 다 읽는다). `serde_json` 이 못 읽는 꼴(128단 넘게 겹친 값·범위 밖 수 `1e999`)은 깨진 파일로 본다 — TS `JSON.parse` 는 읽어 다른 키를 보존하고, Rust 는 두 키만 든 새 파일로 바꾼다(실제 Chrome `Preferences` 는 얕고 그런 수를 쓰지 않는다).
+16. CDP 응답 모양이 Chrome 과 다를 때(가짜 서버·고장난 Chrome 에서만) — `nodes`·`targetInfos` 가 문자열(JS 는 글자로 돌거나 `… is not a function`), `DOM.getBoxModel` 의 `content` 원소가 문자열(JS `+` 는 이어 붙인다), `Page.captureScreenshot` 의 `data` 가 문자열이 아님. Rust 는 값이 없거나 `null` 일 때의 V8 `TypeError` 문구만 같게 내고(`browser-run` 의 `snapshot-no-nodes`·`snapshot-null-node`·`smartClick-no-model`·`smartFill-no-object` 가 고정), 그 밖의 꼴은 실패 문구·`null` 좌표가 다르다(더 엄격 — 실패로 끝난다).
+17. 액션 결과의 `dialogs` — TS 는 탭의 배열을 그대로 달아(`r.dialogs = tab.dialogs`) 액션이 끝난 뒤(다음 액션의 초기화 전·마지막 액션이면 `finalUrl` 읽기 중) 뜬 확인창도 그 결과에 덧붙고, Rust 는 결과를 만들 때 꺼내(`mem::take`) 뒤에 뜬 것은 기록에서 빠진다(확인창 처리는 같다 — 시간에 달린 좁은 경우).

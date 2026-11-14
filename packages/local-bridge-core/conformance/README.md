@@ -27,7 +27,7 @@
 - `file-kinds.cases` 는 사례마다 `root` 를 연결 폴더로 코어 하나를 만들고 `requests` 를 순서대로 보낸다. `expect` 는 결과 객체 전체이고 키 집합까지 같아야 한다. TS 의 예외는 연결부와 같이 `{ok:false, error: 메시지}` 로 바꿔 비교한다.
   - `compare: "sorted-entries"` — `entries` 를 정렬해 비교한다. `compare: "capped"` — `expect` 에 `entriesCount`(와 `truncated`)만 적고, 러너는 개수와 "모든 항목이 `many` 로 만든 이름"인지 본다.
   - `after` — 요청 뒤 디스크 상태. `{"exists": "root/a.txt", "content"|"contentB64": …}` · `{"absent": "outside/planted"}`.
-  - `browser` 요청은 넣지 않는다(TS 는 실제로 실행하고 Rust 는 아직 거절한다 — TS 러너가 막는다). `exec`·`worktree` 와 `lsp_diagnostics`·`code_nav`·`test_runner` 는 아래 suite 가 본다.
+  - `browser` 요청은 넣지 않는다 — 브라우저는 `browser-*.json`(`BROWSER.md`, 가짜 CDP 대본은 `browser-run`)이 보고, 코어 경유 결과 봉투는 Rust `tests/browser_core.rs` 가 본다. `exec`·`worktree` 와 `lsp_diagnostics`·`code_nav`·`test_runner` 는 아래 suite 가 본다.
 - 두 러너는 다른 OS 에서 돈다(TS 는 CI 의 Linux, Rust 는 macOS). 대소문자 무시(APFS)·FIFO·권한(chmod)에 기대는 사례는 넣지 않는다. 블록되는 FS 호출은 Rust `tests/fs_timeout.rs`·TS `fs-timeout.test.ts` 가 따로 본다.
 
 ## suite
