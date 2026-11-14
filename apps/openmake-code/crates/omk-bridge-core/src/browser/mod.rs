@@ -4,6 +4,7 @@
 //!
 //! 기준은 TS 의 현재 동작이고, `conformance/browser-*.json` 을 두 구현이 함께 통과해야 한다(형식은 `BROWSER.md`).
 
+pub mod cdp;
 pub mod chrome;
 pub mod constants;
 pub mod defs;
