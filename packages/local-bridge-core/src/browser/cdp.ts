@@ -71,7 +71,8 @@ export class CdpClient {
                 if (!pred(params, sessionId)) return;
                 clearTimeout(timer); off(); resolve(params);
             });
-            const timer = setTimeout(() => { off(); resolve(null); }, timeoutMs);
+            // 프로세스 종료를 붙잡지 않는다 — goto 가 다운로드로 끝나면(isDownload) 기다리던 문서 이벤트가 오지 않아 시간 초과까지 남는다
+            const timer = setTimeout(() => { off(); resolve(null); }, timeoutMs).unref();
         });
     }
 
