@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.134.3](https://github.com/openmake/openmake_llm/compare/v1.134.2...v1.134.3) (2026-11-14)
+
+
+### 🐛 버그 수정
+
+* **openmake-code:** code_nav 정규식 엔진 regress 사본 — 역추적 결함 2건·실행 한도(PR-1.7 선행) ([9a9bd6a](https://github.com/openmake/openmake_llm/commit/9a9bd6a4ba55bc6577edae5819ebe64287bce7d6))
+* **openmake-code:** 긴 줄에서는 중단 콜백을 더 자주 묻는다 — 예산 시각에 칸을 돌려준다 ([1bf379f](https://github.com/openmake/openmake_llm/commit/1bf379fe52f8d4fdef705ee78d6ddb070347b36c))
+
+## [1.134.2](https://github.com/openmake/openmake_llm/compare/v1.134.1...v1.134.2) (2026-11-14)
+
+
+### 🐛 버그 수정
+
+* **artifact-exec:** 코드 실행 출력을 스트림마다 이어 디코드한다(UTF-8 청크 경계 깨짐) ([42c5fc0](https://github.com/openmake/openmake_llm/commit/42c5fc0e20f6cc21c5502177dfc8ac5666fa6fbc))
+* **local-bridge:** 다운로드 대기 자리가 보통 파일·링크 수 1 일 때만 옮기고 옮긴 뒤 같은 파일인지 확인한다 ([8e5bf90](https://github.com/openmake/openmake_llm/commit/8e5bf9043b2aef4289541a904691eaad43aad58d))
+* **local-bridge:** 다운로드 폴더가 다른 작업도 함께 돌리고 만드는 중인 탭도 탭 상한에 센다 ([2262557](https://github.com/openmake/openmake_llm/commit/226255710d62db1d663a0674905e14de16a2734b))
+* **local-bridge:** 다운로드를 시작한 탭(또는 그 탭이 연 창)의 작업이 준 저장 함수로만 옮긴다 ([bb84453](https://github.com/openmake/openmake_llm/commit/bb84453ee9a92a7238cbbf1fd49dfabb83884621))
+* **mcp-runtime:** stdio 자식 stderr 꼬리를 이어 디코드한다(UTF-8 청크 경계 깨짐) ([25e6420](https://github.com/openmake/openmake_llm/commit/25e6420a9d123e56b68d208a34e40982bc028336))
+* **openmake-code:** 다운로드 귀속·작업별 저장 함수를 TS 와 맞춘다 ([01626aa](https://github.com/openmake/openmake_llm/commit/01626aa76b67be6f618a8744cb6aef6539ae117b))
+* **openmake-code:** 다운로드 대기 자리 검사를 TS 와 맞춘다 ([6843985](https://github.com/openmake/openmake_llm/commit/68439855305988775b7e0e9975a91e2900ee8d74))
+* **openmake-code:** 폴더 조건을 없애고 자리 대기를 도착 순으로, 만드는 중인 탭도 탭 상한에 센다 ([a739f22](https://github.com/openmake/openmake_llm/commit/a739f22d385b2cd92653d4d0114b5b39978dc8a8))
+* **providers:** 외부 호환 어댑터가 delta.reasoning_content 도 thinking 으로 읽는다 ([5ffa5c4](https://github.com/openmake/openmake_llm/commit/5ffa5c42d84f9ebadf1019ac600be95670714872))
+* **report:** 변환 컨테이너 stderr 를 이어 디코드한다(UTF-8 청크 경계 깨짐) ([18da663](https://github.com/openmake/openmake_llm/commit/18da663258c457617ec37f568a97b7b371f2167e))
+* **task-sandbox:** egress 프록시 docker CLI 출력을 이어 디코드하고 상한을 누적으로 적용한다 ([9d18a79](https://github.com/openmake/openmake_llm/commit/9d18a79eccd8c30b239da5215e6f5a7dd0c4d9b0))
+
 ## [1.134.1](https://github.com/openmake/openmake_llm/compare/v1.134.0...v1.134.1) (2026-11-14)
 
 
