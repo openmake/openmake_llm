@@ -32,6 +32,7 @@ function getVia(proxyPort, url) {
     return new Promise((resolve, reject) => {
         const req = http.request({ host: '127.0.0.1', port: proxyPort, method: 'GET', path: url, headers: { host: new URL(url).host } }, (res) => {
             let body = '';
+            res.setEncoding('utf8');
             res.on('data', (b) => { body += b; });
             res.on('end', () => resolve({ status: res.statusCode, body, headers: res.headers }));
         });
