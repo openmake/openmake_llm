@@ -53,7 +53,7 @@ export interface LaunchedChrome {
 }
 
 /** 전용 프로필로 Chrome 을 띄우고 디버깅 주소가 준비될 때까지 기다린다. */
-export async function launchChrome(profileDir: string): Promise<LaunchedChrome> {
+export async function launchChrome(profileDir: string, signal?: AbortSignal): Promise<LaunchedChrome> {
     const bin = findChrome();
     if (!bin) throw new Error('Chrome 을 찾지 못했습니다 — Google Chrome 을 설치하거나 OMK_BRIDGE_CHROME 에 실행 파일 경로를 지정하세요');
     fs.mkdirSync(profileDir, { recursive: true });
@@ -74,6 +74,11 @@ export async function launchChrome(profileDir: string): Promise<LaunchedChrome> 
     proc.once('error', () => { exited = true; });
     const deadline = Date.now() + BROWSER_LAUNCH_TIMEOUT_MS;
     while (Date.now() < deadline) {
+        // 호출부가 기동을 그만뒀다(LocalBrowser.dispose) — 띄우던 자식을 끄고 그만둔다
+        if (signal?.aborted) {
+            try { proc.kill(); } catch { /* noop */ }
+            throw new Error('Chrome 기동을 그만뒀습니다');
+        }
         const wsUrl = readDevToolsEndpoint(profileDir);
         if (wsUrl) return { wsUrl, proc };
         if (exited) throw new Error('Chrome 이 시작 직후 종료됐습니다 — 같은 전용 프로필을 쓰는 Chrome 이 이미 떠 있을 수 있습니다');
