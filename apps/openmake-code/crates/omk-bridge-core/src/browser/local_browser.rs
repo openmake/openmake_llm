@@ -15,8 +15,10 @@
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::Duration;
 
+use futures_util::future::{Either, select};
 use serde_json::{Value, json};
 use tokio::process::Child;
+use tokio::sync::watch;
 
 use super::cdp::{CdpClient, CdpEvent, Events};
 use super::constants::{
@@ -36,6 +38,10 @@ use crate::js_text::utf16_prefix;
 const ATTACH_TIMEOUT_MS: u64 = 2000;
 /// 띄운 Chrome 에 `Browser.close` 를 보내고 답을 기다리는 한도(D-74).
 const BROWSER_CLOSE_REPLY_MS: u64 = 1000;
+/// 정리(`dispose`)가 진행 중인 연결 시도의 끝을 기다리는 한도 — 시도는 정리 신호로 곧 끊기므로 넉넉한 상한일 뿐이다.
+const DISPOSE_CONNECT_WAIT_MS: u64 = 1000;
+/// 정리한 인스턴스로 온 요청(호스트가 끝나는 중) — Chrome 을 띄우지 않는다.
+pub const BROWSER_DISPOSED_ERROR: &str = "브라우저를 정리했습니다 — 호스트가 끝나는 중입니다";
 
 /// 작업의 탭 — 실행 중인 요청이 쥐고 있어도 `close_task` 가 표에서 뺄 수 있다(TS 객체와 같다).
 pub(super) struct Tab {
@@ -112,6 +118,8 @@ pub struct LocalBrowser {
     pub(super) scheduler: Arc<BrowserScheduler>,
     /// 연결 열기는 한 번에 하나 — 동시에 온 첫 요청들이 Chrome 을 둘 띄우지 않는다
     connecting: tokio::sync::Mutex<()>,
+    /// 정리됨 — 세우면 진행 중인 연결 시도가 끊기고 이후 연결은 거부한다(PR-1.7 리뷰 r1 M-1)
+    disposed: watch::Sender<bool>,
     pub(super) downloads: Arc<DownloadTracker>,
     me: Weak<LocalBrowser>,
 }
@@ -154,6 +162,7 @@ impl LocalBrowser {
             state: Mutex::default(),
             scheduler: Arc::default(),
             connecting: tokio::sync::Mutex::new(()),
+            disposed: watch::Sender::new(false),
             downloads: Arc::new(DownloadTracker::new(format!(
                 "{profile_dir}{BROWSER_DOWNLOAD_STAGING_SUFFIX}"
             ))),
@@ -224,7 +233,15 @@ impl LocalBrowser {
 
     /// 연결을 닫고, 이 인스턴스가 띄운 Chrome 을 끈다(로그인 정보는 프로필에 남는다). 붙기만 한 Chrome 은 그대로 둔다.
     /// `Browser.close`(1초까지) → 종료를 5초 기다림 → 남아 있으면 SIGKILL(D-74 — 안전한 SIGTERM API 가 없다).
+    /// 먼저 정리됨 표식을 세운다 — 진행 중인 연결 시도는 끊기고(띄우는 중인 자식은 그 future 와 함께 버려져 `kill_on_drop` 으로
+    /// 꺼진다) 그 끝을 상한까지 기다린 뒤 상태의 자식을 끈다. 이후 이 인스턴스로 온 요청은 Chrome 을 띄우지 않는다(M-1).
     pub async fn dispose(&self) {
+        self.disposed.send_replace(true);
+        let _one = tokio::time::timeout(
+            Duration::from_millis(DISPOSE_CONNECT_WAIT_MS),
+            self.connecting.lock(),
+        )
+        .await;
         let (cdp, child) = {
             let mut s = self.lock();
             s.tabs.clear();
@@ -261,9 +278,16 @@ impl LocalBrowser {
 
     // ── 연결·탭 ────────────────────────────────────────────────
 
+    fn is_disposed(&self) -> bool {
+        *self.disposed.borrow()
+    }
+
     pub(super) async fn connect(&self) -> Result<Arc<CdpClient>, String> {
         let seq = {
             let s = self.lock();
+            if self.is_disposed() {
+                return Err(BROWSER_DISPOSED_ERROR.to_owned());
+            }
             if let Some(c) = s.cdp.as_ref().filter(|c| c.is_open()) {
                 return Ok(c.clone());
             }
@@ -272,6 +296,9 @@ impl LocalBrowser {
         let _one = self.connecting.lock().await;
         {
             let s = self.lock();
+            if self.is_disposed() {
+                return Err(BROWSER_DISPOSED_ERROR.to_owned());
+            }
             if let Some(c) = s.cdp.as_ref().filter(|c| c.is_open()) {
                 return Ok(c.clone());
             }
@@ -282,7 +309,14 @@ impl LocalBrowser {
                 return Err(e.clone());
             }
         }
-        let r = self.open_connection().await;
+        // 정리 신호가 오면 시도를 버린다 — 띄우는 중인 자식은 `launch` future 와 함께 버려져 꺼진다
+        let mut off = self.disposed.subscribe();
+        let opening = std::pin::pin!(self.open_connection());
+        let stopped = std::pin::pin!(off.wait_for(|d| *d));
+        let r = match select(opening, stopped).await {
+            Either::Left((r, _)) => r,
+            Either::Right(_) => Err(BROWSER_DISPOSED_ERROR.to_owned()),
+        };
         let mut s = self.lock();
         s.connect_seq += 1;
         s.connect_error = r.as_ref().err().cloned();
@@ -311,6 +345,10 @@ impl LocalBrowser {
                 self.downloads.clear();
                 self.downloads.set_launch_defaults(&self.profile_dir)?;
                 let launched = self.host.launch(&self.profile_dir, &self.env).await?;
+                // 정리가 기다림 상한을 넘겨 먼저 끝났으면 상태에 넣지 않는다(버리면 `kill_on_drop` 이 끈다)
+                if self.is_disposed() {
+                    return Err(BROWSER_DISPOSED_ERROR.to_owned());
+                }
                 self.lock().child = launched.child;
                 CdpClient::connect(self.host.as_ref(), &launched.ws_url, BROWSER_CDP_TIMEOUT_MS)
                     .await?

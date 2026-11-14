@@ -8,7 +8,7 @@ Plan: `docs/proposals/2026-08-22-desktop-native-companion-plan.md` (로컬 보�
 
 ```
 helper/src/helper.mjs    # Node 헬퍼 — @openmake/local-bridge-core 의 stdio JSON-lines 어댑터
-helper/harness.cjs       # 헬퍼 회귀 하네스 (build.sh 가 게이트로 실행)
+helper/harness.cjs       # 헬퍼 회귀 하네스 (build.sh 가 게이트로 실행). `--helper <실행 파일>` 로 omk-helper 등 다른 헬퍼를 같은 단언으로
 OpenMakeCompanion/       # SwiftPM 앱 (MenuBarExtra + 설정 + HelperManager + Updater)
 Localization/            # <lang>.lproj/Localizable.strings — ko(개발 언어)·en·ja·zh-Hans
 check-l10n.sh            # 다국어 표 게이트 (build.sh·CI 공용)
