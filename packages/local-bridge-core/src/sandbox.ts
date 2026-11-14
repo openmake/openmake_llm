@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { CACHE_SUBPATHS, SANDBOX_BIN, SANDBOX_PROFILE_MISSING_ERROR, SECRET_SUBPATHS, sbq, sbSub } from './constants';
+import { CACHE_SUBPATHS, SANDBOX_BIN, SANDBOX_PROFILE_MISSING_ERROR, SECRET_SUBPATHS, sbq, sbSub, TOOL_SECRET_SUBPATHS } from './constants';
 import type { GitPaths } from './git-trust';
 
 /** SBPL literal 용 정규화 — `path.join` 결과에서 끝 구분자를 뗀다(literal 은 글자 그대로 비교한다). */
@@ -20,7 +20,8 @@ function literalPath(p: string): string {
  * 프로파일 텍스트. 정책: 기본 allow → 쓰기는 폴더·임시·툴캐시로 제한, 비밀 경로는 읽기 차단.
  * (SBPL 은 last-match-wins 이라 deny 뒤에 allow 를 두어야 예외가 성립한다.)
  * tool: 확인 없이 뜨는 자식(worktree git·tsc·py_compile·pytest 탐지)용 **도구 프로파일** — exec 프로파일의 모든 줄 +
- * `(deny network*)`(설계 D-1). exec 프로파일은 승인된 명령용이라 네트워크를 연다(npm·git push).
+ * 자격 파일 읽기 금지(`TOOL_SECRET_SUBPATHS`, 설계 D-7) + `(deny network*)`(설계 D-1). exec 프로파일은 승인된 명령용이라
+ * 네트워크와 그 파일 읽기를 연다(npm·git push).
  * git: 연결 때 믿기로 한 git 디렉터리(git-trust.ts) — **쓰기 허용**. 레포 하위 폴더·linked worktree 를 연결하면 git
  * 디렉터리가 폴더 밖이라 git(커밋·인덱스) 쓰기를 열어 준다 — linked worktree 는 객체·참조가 common dir 에 있어 그쪽도 연다(E5).
  * protect: 끝 금지 줄을 걸 git 디렉터리들(하나에 한 줄) — 기본은 git. 믿지 않아도(탐지 실패) 연결 폴더의 `.git` 디렉터리와, 폴더 안을
@@ -40,6 +41,7 @@ export function sandboxProfileText(root: string, git: GitPaths | null, home: str
         '(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders") (subpath "/dev"))',
         `(allow file-write* ${sbSub(home, CACHE_SUBPATHS)})`,
         `(deny file-read* ${sbSub(home, SECRET_SUBPATHS)})`,
+        ...(tool ? [`(deny file-read* ${sbSub(home, TOOL_SECRET_SUBPATHS)})`] : []),
         ...(tool ? ['(deny network*)'] : []),
         ...protect.flatMap(gitDenyLine),
         '',

@@ -323,3 +323,42 @@ fn tool_profile_blocks_network_exec_does_not() {
         .to_json();
     assert_eq!(r["stdout"], "connected\n", "{r}");
 }
+
+/// 도구 프로파일만 자격 파일 읽기를 막는다(설계 D-7) — 가짜 홈을 `home` 인자로 준다. exec 프로파일은 승인된 npm·gh 가 쓰므로 읽힌다.
+#[test]
+fn tool_profile_denies_credential_reads_exec_does_not() {
+    let w = Work::new();
+    let home = w.join("home");
+    for (rel, body) in [
+        (".netrc", "omk-conformance-secret-netrc\n"),
+        (".config/gh/hosts.yml", "omk-conformance-secret-gh\n"),
+    ] {
+        let p = format!("{home}/{rel}");
+        std::fs::create_dir_all(std::path::Path::new(&p).parent().unwrap()).unwrap();
+        std::fs::write(&p, body).unwrap();
+    }
+    let cat = |tool: bool, rel: &str| {
+        let profile = sandbox_profile(&w.join("root"), None, &[], &home, tool).unwrap();
+        let out = std::process::Command::new("/usr/bin/sandbox-exec")
+            .args(["-p", &profile, "/bin/cat", &format!("{home}/{rel}")])
+            .stderr(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        if out.status.success() {
+            String::from_utf8(out.stdout).unwrap()
+        } else {
+            "denied".to_owned()
+        }
+    };
+    assert_eq!(
+        [cat(true, ".netrc"), cat(true, ".config/gh/hosts.yml")],
+        ["denied", "denied"]
+    );
+    assert_eq!(
+        [cat(false, ".netrc"), cat(false, ".config/gh/hosts.yml")],
+        [
+            "omk-conformance-secret-netrc\n",
+            "omk-conformance-secret-gh\n"
+        ]
+    );
+}

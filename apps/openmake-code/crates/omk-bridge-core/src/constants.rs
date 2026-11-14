@@ -29,6 +29,34 @@ pub const SECRET_SUBPATHS: &[&str] = &[
     ".config/gcloud",
     "Library/Keychains",
 ];
+/// 도구 프로파일에서만 더 막는 자격 파일 — 확인 없이 뜨는 자식(폴더의 tsc 등)은 이 파일이 필요 없다(설계 D-7).
+/// exec 프로파일에는 넣지 않는다 — 승인된 `npm install`·`gh` 가 쓴다. 목록이라 빠지는 이름이 생긴다(닫는 길은 허용 목록, PR-C).
+pub const TOOL_SECRET_SUBPATHS: &[&str] = &[
+    ".npmrc",
+    ".yarnrc.yml",
+    ".netrc",
+    ".git-credentials",
+    ".config/git/credentials",
+    ".config/gh",
+    ".config/hub",
+    ".config/glab-cli",
+    ".pypirc",
+    ".cargo/credentials",
+    ".cargo/credentials.toml",
+    ".gem/credentials",
+    ".m2/settings.xml",
+    ".gradle/gradle.properties",
+    ".composer/auth.json",
+    ".config/composer/auth.json",
+    ".config/op",
+    ".terraform.d",
+    ".azure",
+    ".vault-token",
+    ".pgpass",
+    ".my.cnf",
+    ".boto",
+    ".s3cfg",
+];
 
 /// exec 자식에 넘기는 env 허용 목록 — 호스트 env 를 통째로 물려주면 헬퍼의 API 키 등 비밀이 도구 결과로 샌다.
 pub const EXEC_ENV_ALLOWLIST_POSIX: &[&str] = &[

@@ -16,7 +16,7 @@ import { execFileSync } from 'child_process';
 import { SANDBOX_ENABLED } from '../constants';
 import { BridgeCore } from '../core';
 import { collectDiagnostics } from '../diagnostics';
-import { buildSandboxProfile } from '../sandbox';
+import { buildSandboxProfile, sandboxProfileText } from '../sandbox';
 import { detectTestRunner } from '../test-runner';
 import type { BridgeMsg, BridgeResult } from '../types';
 
@@ -279,4 +279,23 @@ sbDescribe('도구 자식 샌드박스 — 모듈 단위(가짜 python3 로 인�
         expect(boxed.diagnostics.length).toBeGreaterThan(0);
         expect(boxed).toEqual(plain);
     }, 60000);
+});
+
+sbDescribe('도구 프로파일의 자격 파일 읽기 금지(D-7)', () => {
+    // 실제 홈 대신 임시 홈을 home 인자로 준다 — 금지 줄이 그 아래를 가리킨다. exec 프로파일은 승인된 npm·gh 가 쓰므로 읽힌다.
+    it('임시 홈의 .netrc·.config/gh 는 도구 프로파일에서 못 읽고 exec 프로파일에서는 읽는다', () => {
+        const home = path.join(fs.realpathSync(prof), 'home'); // 프로파일 경로는 실제 경로여야 한다(/var → /private/var)
+        for (const [rel, body] of [['.netrc', 'omk-conformance-secret-netrc\n'], ['.config/gh/hosts.yml', 'omk-conformance-secret-gh\n']]) {
+            fs.mkdirSync(path.dirname(path.join(home, rel)), { recursive: true });
+            fs.writeFileSync(path.join(home, rel), body);
+        }
+        const cat = (tool: boolean, rel: string): string => {
+            try {
+                return execFileSync('/usr/bin/sandbox-exec', ['-p', sandboxProfileText(base, null, home, tool), '/bin/cat', path.join(home, rel)],
+                    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+            } catch { return 'denied'; }
+        };
+        expect([cat(true, '.netrc'), cat(true, '.config/gh/hosts.yml')]).toEqual(['denied', 'denied']);
+        expect([cat(false, '.netrc'), cat(false, '.config/gh/hosts.yml')]).toEqual(['omk-conformance-secret-netrc\n', 'omk-conformance-secret-gh\n']);
+    });
 });

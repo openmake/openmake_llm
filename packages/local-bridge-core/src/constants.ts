@@ -79,6 +79,16 @@ export const GITFILE_MAX_BYTES = 4096;
 export const CACHE_SUBPATHS = ['.npm', '.cache', 'Library/Caches', '.cargo', '.gradle', '.m2', '.yarn', '.pnpm-store', 'go/pkg'];
 /** 읽기를 차단할 비밀 경로. */
 export const SECRET_SUBPATHS = ['.ssh', '.aws', '.gnupg', '.kube', '.docker', '.config/gcloud', 'Library/Keychains'];
+/**
+ * 도구 프로파일에서만 더 막는 자격 파일 — 확인 없이 뜨는 자식(폴더의 tsc 등)은 이 파일이 필요 없다(설계 D-7).
+ * exec 프로파일에는 넣지 않는다 — 승인된 `npm install`·`gh` 가 쓴다. 목록이라 빠지는 이름이 생긴다(닫는 길은 허용 목록, PR-C).
+ */
+export const TOOL_SECRET_SUBPATHS = [
+    '.npmrc', '.yarnrc.yml', '.netrc', '.git-credentials', '.config/git/credentials', '.config/gh', '.config/hub', '.config/glab-cli',
+    '.pypirc', '.cargo/credentials', '.cargo/credentials.toml', '.gem/credentials', '.m2/settings.xml', '.gradle/gradle.properties',
+    '.composer/auth.json', '.config/composer/auth.json', '.config/op', '.terraform.d', '.azure', '.vault-token', '.pgpass', '.my.cnf',
+    '.boto', '.s3cfg',
+];
 
 /**
  * exec 자식 프로세스에 넘기는 env allowlist(2026-10-09 점검 ⑤) — 호스트 env 를 통째로 상속하면

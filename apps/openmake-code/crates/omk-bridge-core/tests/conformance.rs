@@ -292,7 +292,7 @@ fn constants() {
     use omk_bridge_core::constants as c;
     let doc = load("constants");
     let values = doc["values"].as_object().unwrap();
-    let lists: [(&str, &[&str]); 7] = [
+    let lists: [(&str, &[&str]); 8] = [
         ("EXEC_ENV_ALLOWLIST_POSIX", c::EXEC_ENV_ALLOWLIST_POSIX),
         (
             "EXEC_ENV_ALLOWLIST_PREFIX_POSIX",
@@ -302,6 +302,7 @@ fn constants() {
         ("PATH_PROBE_ENV_EXTRA_POSIX", c::PATH_PROBE_ENV_EXTRA_POSIX),
         ("CACHE_SUBPATHS", c::CACHE_SUBPATHS),
         ("SECRET_SUBPATHS", c::SECRET_SUBPATHS),
+        ("TOOL_SECRET_SUBPATHS", c::TOOL_SECRET_SUBPATHS),
         ("BRIDGE_KINDS", c::BRIDGE_KINDS),
     ];
     let mut seen = Vec::new();
