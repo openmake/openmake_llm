@@ -32,7 +32,7 @@ pub type ResolveUploadFiles =
     Arc<dyn Fn(Value) -> BoxFut<'static, Result<Vec<String>, String>> + Send + Sync>;
 
 /// 서버가 보내는 브라우저 요청 본문 — 모두 임의 JSON(안에서 고른다).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct BrowserSpec {
     pub actions: Option<Value>,
     pub site_policy: Option<Value>,
