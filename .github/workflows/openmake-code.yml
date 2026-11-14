@@ -5,6 +5,7 @@
 # 코어의 검증 대상(sandbox-exec·/private/tmp realpath 등)이 macOS 고유라 macOS 러너에서 돈다.
 # TS 러너(conformance.test.ts)는 ci.yml Gate 1(bridge 선정)이 맡고, 여기서는 Rust 쪽만 본다.
 # 툴체인은 apps/openmake-code/rust-toolchain.toml 로 고정한다(러너 이미지의 rustup 이 그 판을 받는다).
+# 헬퍼 하네스(apps/desktop-native/helper/harness.cjs)는 Node 헬퍼 쪽을 desktop-native.yml 이, omk-helper 쪽을 여기서 돈다.
 # ==============================================================
 
 name: openmake-code
@@ -16,6 +17,7 @@ on:
       - 'apps/openmake-code/**'
       - 'packages/local-bridge-core/conformance/**'
       - 'infra/task-runtime/__fixtures__/browser-flow-cases.json'
+      - 'apps/desktop-native/helper/harness.cjs'
       - '.github/workflows/openmake-code.yml'
   pull_request:
     branches: [main, dev]
@@ -23,6 +25,7 @@ on:
       - 'apps/openmake-code/**'
       - 'packages/local-bridge-core/conformance/**'
       - 'infra/task-runtime/__fixtures__/browser-flow-cases.json'
+      - 'apps/desktop-native/helper/harness.cjs'
       - '.github/workflows/openmake-code.yml'
 
 permissions:
@@ -34,7 +37,7 @@ concurrency:
 
 jobs:
   rust-core:
-    name: Rust core (fmt → clippy → test → deny)
+    name: Rust core (fmt → clippy → test → helper harness → deny)
     runs-on: macos-latest
     timeout-minutes: 30
     defaults:
@@ -68,6 +71,19 @@ jobs:
       # regress 저장소 안 사본(워크스페이스 밖) — 상류 테스트 + 우리 패치 테스트(vendor/regress/OMK-PATCHES.md).
       - name: Test (vendored regress)
         run: cargo test --locked --manifest-path vendor/regress/Cargo.toml --features utf16
+
+      # omk-helper 를 Node 헬퍼와 같은 stdio 하네스로(PR-1.7 D-102). 하네스는 ws 패키지만 쓴다 — build:packages·esbuild 불필요.
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+
+      - name: Helper harness (omk-helper)
+        working-directory: .
+        run: |
+          npm ci --ignore-scripts
+          (cd apps/openmake-code && cargo build --locked -p omk-helper)
+          node apps/desktop-native/helper/harness.cjs --helper apps/openmake-code/target/debug/omk-helper
 
       - name: Dependency advisories and licenses
         run: |
