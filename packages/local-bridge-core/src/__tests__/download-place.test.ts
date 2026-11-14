@@ -16,6 +16,7 @@ jest.mock('../browser/chrome', () => ({ ...jest.requireActual('../browser/chrome
 
 const DENIED = 'git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: ';
 const REF = 'ref: refs/heads/main\n';
+const NOT_PLAIN = '다운로드 대기 파일이 보통 파일이 아니거나 다른 곳에 연결돼 있어 저장하지 않았습니다';
 
 let tmp = '';
 let root = '';
@@ -128,6 +129,35 @@ describe('placeDownload — 다운로드를 write 와 같은 가드로 저장', 
         expect(await place('report.txt', s)).toBe('report (1).txt');
         expect(read('report.txt')).toBe('old');
         expect(read('report (1).txt')).toBe('copied');
+        expect(exists(s)).toBe(false);
+    });
+
+    it('link 가 대기 자리 대신 다른 파일을 링크하면(검사 뒤 바꿔 치기) 만든 대상을 지우고 저장하지 않는다', async () => {
+        const victim = path.join(outside, 'victim');
+        fs.writeFileSync(victim, 'keep');
+        const real = fs.promises.link.bind(fs.promises);
+        jest.spyOn(fs.promises, 'link').mockImplementation((_from, to) => real(victim, to));
+        const s = staged('mine');
+        const err = await place('report.txt', s).catch((e: unknown) => e);
+        expect(err).not.toBeInstanceOf(DownloadRejectedError);
+        expect((err as Error).message).toBe(NOT_PLAIN);
+        expect(fs.readdirSync(root)).toEqual([]);
+        expect(fs.readFileSync(victim, 'utf8')).toBe('keep');
+        expect(fs.statSync(victim).nlink).toBe(1);
+        expect(exists(s)).toBe(false);
+    });
+
+    it('복사 갈래에서 연 대기 파일이 검사한 파일과 다르면 대상을 만들지 않는다', async () => {
+        const s = staged('mine');
+        jest.spyOn(fs.promises, 'link').mockImplementation(async () => {
+            fs.renameSync(s, path.join(outside, 'orig')); // 원본을 살려 둔다 — 지우면 Linux 는 같은 inode 번호를 새 파일에 다시 준다
+            fs.writeFileSync(s, 'swapped');
+            throw Object.assign(new Error('cross-device'), { code: 'EXDEV' });
+        });
+        const err = await place('report.txt', s).catch((e: unknown) => e);
+        expect(err).not.toBeInstanceOf(DownloadRejectedError);
+        expect((err as Error).message).toBe(NOT_PLAIN);
+        expect(fs.readdirSync(root)).toEqual([]);
         expect(exists(s)).toBe(false);
     });
 

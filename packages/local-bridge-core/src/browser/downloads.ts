@@ -5,7 +5,8 @@
  * 이벤트는 두 채널로 온다(Chrome 157 실측): 브리지가 붙은 탭(Page.enable)의 다운로드는 `Page.downloadWillBegin`·
  * `Page.downloadProgress` 가 그 탭의 sessionId 로, 붙지 않은 프레임(페이지가 연 새 창)은 `Browser.*` 가 sessionId 없이.
  * 넷을 모두 구독하고 guid 로 하나로 합친다 — 같은 guid 의 시작은 처음 것만, 완료 처리(옮기기)는 guid 당 한 번.
- * 시작 순간의 저장 함수와 귀속 작업을 guid 에 묶는다 — 완료가 호출이 끝난 뒤에 와도 묶인 함수로 옮긴다.
+ * 저장 함수는 작업별로 기억한다(작업 키 → 저장 함수, 호출마다 그 작업의 값만 바꾼다). 시작 순간 귀속 작업을 정하고 **그 작업의** 저장 함수를
+ * guid 에 묶는다 — 완료가 호출이 끝난 뒤에 와도 묶인 함수로 옮긴다. 귀속하지 못한 다운로드는 저장 함수가 없어 옮기지 않는다(D-1·D-3).
  * CDP 설정은 연결에 묶여 연결이 닫히면 Chrome 기본값으로 돌아간다 — 그래서 Chrome 을 새로 띄울 때 띄우는 프로필(`Default` 고정 — B-9)의
  * 기본 다운로드 폴더도 대기 폴더로 맞추고(설정이 풀린 틈에 받은 파일은 누구도 옮기지 않고 다음 기동이 지운다), 설정이 실패하면 호출을 실행하지
  * 않는다(설계 B-8). 대기 폴더가 연결 폴더 밖인 것은 배치 전제다 — 홈(또는 프로필 폴더의 상위)을 연결하면 안쪽이 된다(홈 연결은 경계 밖).
@@ -23,7 +24,7 @@ const PREFERENCES_FILE = path.join(BROWSER_PROFILE_DIRECTORY, 'Preferences');
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 interface Download {
-    /** 귀속 작업 — 없으면 보고하지 않는다(가드·옮기기는 그대로 한다) */
+    /** 귀속 작업 — 없으면 보고하지 않는다(시작 때 없었으면 저장 함수도 없다, closeTask 로 풀렸으면 옮기기는 그대로 한다) */
     task: string | undefined;
     place: PlaceDownload | undefined;
     report: DownloadReport;
@@ -39,19 +40,24 @@ interface Download {
 export type AttributeDownload = (sessionId: string | undefined, frameId: string) => string | undefined;
 
 /**
- * 다운로드의 귀속 작업(설계 B-7) — ① 이벤트의 sessionId 가 작업 탭의 것 ② frameId 가 작업 탭의 targetId ③ 그 순간 실행 중인 작업이
- * 하나면 그 작업 ④ 없음. 페이지가 연 새 창(붙지 않은 프레임)의 다운로드는 ②③으로 간다.
+ * 다운로드의 귀속 작업(설계 B-7·D-2) — ① 이벤트의 sessionId 가 작업 탭의 것 ② frameId 가 작업 탭의 targetId ③ frameId 가 적어 둔 새 창
+ * (`popups`: [새 창 targetId, 작업 키]) ④ 없음. 추측(그 순간 실행 중인 작업)은 하지 않는다.
  */
-export function downloadTaskOf(tabs: Array<[string, Tab]>, isRunning: (key: string) => boolean, sessionId: string | undefined, frameId: string): string | undefined {
-    const running = tabs.filter(([k]) => isRunning(k));
+export function downloadTaskOf(tabs: Array<[string, Tab]>, popups: Array<[string, string]>, sessionId: string | undefined, frameId: string): string | undefined {
     return (sessionId !== undefined ? tabs.find(([, t]) => t.sessionId === sessionId)?.[0] : undefined)
         ?? tabs.find(([, t]) => t.targetId === frameId)?.[0]
-        ?? (running.length === 1 ? running[0][0] : undefined);
+        ?? popups.find(([id]) => id === frameId)?.[1];
+}
+
+/** 새 창의 작업(D-2) — 연 쪽(openerId)이 작업 탭이면 그 작업, 적어 둔 새 창이면 그 창의 작업(창이 연 창). 정하지 못하면 undefined. */
+export function popupTaskOf(tabs: Array<[string, Tab]>, popups: Array<[string, string]>, openerId: string): string | undefined {
+    if (!openerId) return undefined;
+    return tabs.find(([, t]) => t.targetId === openerId)?.[0] ?? popups.find(([id]) => id === openerId)?.[1];
 }
 
 export class DownloadTracker {
-    /** 지금 시작하는 다운로드를 옮길 저장 함수 — 가장 최근 호출이 설정한 것 */
-    place: PlaceDownload | undefined;
+    /** 작업 키 → 그 작업의 마지막 호출이 준 저장 함수(없음도 기록 — 그 작업은 받지 않는다) */
+    private readonly places = new Map<string, PlaceDownload | undefined>();
     private readonly items = new Map<string, Download>();
 
     constructor(readonly dir: string, private readonly attribute: AttributeDownload) {}
@@ -59,9 +65,9 @@ export class DownloadTracker {
     /**
      * 호출마다 — 저장 함수가 있으면 대기 폴더(0700)에 guid 이름으로만 받게(allowAndName), 없으면 받지 않게(deny) 설정한다.
      * 저장 이름은 완료 뒤 저장 함수가 정한다. 설정이 거절·시간 초과면 던진다 — 호출부는 액션을 하나도 실행하지 않는다.
-     * 저장 함수는 설정에 성공한 뒤에만 바꾼다.
+     * 그 작업(task)의 저장 함수는 설정에 성공한 뒤에만 바꾼다. Chrome 쪽 설정은 브라우저 전역이고 값은 늘 같은 대기 폴더다.
      */
-    async configure(cdp: CdpClient, place: PlaceDownload | undefined): Promise<void> {
+    async configure(cdp: CdpClient, task: string, place: PlaceDownload | undefined): Promise<void> {
         if (place) await fsp.mkdir(this.dir, { recursive: true, mode: 0o700 });
         try {
             await cdp.send('Browser.setDownloadBehavior', place
@@ -70,7 +76,7 @@ export class DownloadTracker {
         } catch (e) {
             throw new Error(`다운로드 설정에 실패해 실행하지 않았습니다: ${e instanceof Error ? e.message : String(e)}`);
         }
-        this.place = place;
+        this.places.set(task, place);
     }
 
     /**
@@ -134,8 +140,9 @@ export class DownloadTracker {
         }
     }
 
-    /** 작업이 끝났다 — 끝난 기록은 버리고, 받는 중인 것은 귀속만 푼다(옮기기는 그대로). */
+    /** 작업이 끝났다 — 저장 함수와 끝난 기록은 버리고, 받는 중인 것은 귀속만 푼다(옮기기는 묶인 함수로 그대로). */
     forget(task: string): void {
+        this.places.delete(task);
         for (const [guid, d] of this.items) {
             if (d.task !== task) continue;
             if (d.report.state === 'inProgress') d.task = undefined; else this.items.delete(guid);
@@ -175,8 +182,9 @@ export class DownloadTracker {
         if (!guid || this.items.has(guid)) return;
         let finish!: () => void;
         const done = new Promise<void>((r) => { finish = r; });
+        const task = this.attribute(sessionId, str(p.frameId));
         this.items.set(guid, {
-            task: this.attribute(sessionId, str(p.frameId)), place: this.place,
+            task, place: task === undefined ? undefined : this.places.get(task),
             report: { name: str(p.suggestedFilename), state: 'inProgress' }, finishing: false, done, finish,
         });
     }
