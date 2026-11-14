@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.134.1](https://github.com/openmake/openmake_llm/compare/v1.134.0...v1.134.1) (2026-11-14)
+
+
+### 🐛 버그 수정
+
+* **openmake-code:** CDP 쓰기 끝이 깨지면 연결을 닫힌 것으로 본다(PR-1.6b 리뷰 L2) ([eca247c](https://github.com/openmake/openmake_llm/commit/eca247ca3ef9cb8ee4a196d69c66f71202337fb4))
+
 ## [1.134.0](https://github.com/openmake/openmake_llm/compare/v1.133.4...v1.134.0) (2026-11-14)
 
 
