@@ -1,0 +1,21 @@
+{
+  "suite": "browser-constants",
+  "version": 1,
+  "values": {"BROWSER_MAX_ACTIONS":40,"BROWSER_ACTION_TIMEOUT_MS":20000,"BROWSER_EXTRACT_READY_MS":20000,"BROWSER_WAIT_MAX_MS":10000,"BROWSER_EXTRACT_MAX_CHARS":8000,"BROWSER_SNAPSHOT_MAX_ELEMENTS":100,"BROWSER_SNAPSHOT_NAME_MAX":120,"BROWSER_FILL_ECHO_MAX_CHARS":200,"BROWSER_UPLOAD_MAX_FILES":10,"BROWSER_UPLOAD_MAX_FILE_BYTES":8388608,"BROWSER_CDP_TIMEOUT_MS":30000,"BROWSER_LAUNCH_TIMEOUT_MS":20000,"BROWSER_EXIT_WAIT_MS":5000,"BROWSER_POLL_MS":100,"BROWSER_CLICK_SETTLE_MS":250,"BROWSER_MAX_TABS":4,"BROWSER_MAX_CONCURRENT":3,"BROWSER_DIALOG_MESSAGE_MAX":300,"BROWSER_DIALOG_RECORD_MAX":20,"BROWSER_DOWNLOAD_WAIT_MS":5000,"BROWSER_DOWNLOAD_NAME_TRIES":100,"BROWSER_DOWNLOAD_STAGING_SUFFIX":"-downloads","BROWSER_PROFILE_DIRECTORY":"Default","BROWSER_DOWNLOAD_FALLBACK_NAME":"download","BROWSER_HEADLESS":false,"BROWSER_KIND":"browser","BROWSER_UPLOAD_CAPABILITY":"browser_upload","BROWSER_FLOW_MAX_DEPTH":2,"BROWSER_REPEAT_MAX":20},
+  "tables": {
+    "interactiveRoles": ["button","link","textbox","checkbox","radio","combobox","menuitem","tab","switch","searchbox","slider","spinbutton","option"],
+    "pageActions": ["click","extractHtml","extractText","fill","press","screenshot","smartClick","smartFill","snapshot","uploadFile","waitFor"],
+    "actionClass": {"goto":"navigate","click":"click","smartClick":"click","fill":"write","smartFill":"write","press":"write","snapshot":"observe","wait":"observe","waitFor":"observe","screenshot":"observe","extractText":"observe","extractHtml":"observe","uploadFile":"upload"},
+    "policyBlockKinds": ["site_off_list","site_denied","blocked_url","user_control","upload_unapproved","upload_rejected"]
+  },
+  "messages": {"BLANK_PAGE_ERROR":"빈 페이지(about:blank)에서 실행됨 — 먼저 goto 로 페이지를 여세요","BROWSER_USER_CONTROL_ERROR":"사용자가 브라우저를 직접 조작하는 중이라 실행하지 않았습니다. 사용자가 제어권을 돌려주면 현재 페이지를 다시 관찰(snapshot·extractText)한 뒤 이어가세요.","STOPPED_ERROR":"사용자가 브라우저 작업을 중지했습니다","UPLOAD_UNSUPPORTED_ERROR":"이 실행 위치에서는 파일 업로드를 할 수 없습니다","UPLOAD_HOST_CHANGED_ERROR":"파일 칸을 기다리는 동안 다른 사이트로 이동해 업로드하지 않았습니다 — 현재 페이지를 다시 확인한 뒤 요청하세요","FIELD_VALUE_JS":"(el) => { if (!el) return null; if (el instanceof HTMLInputElement && el.type === 'password') return null; return 'value' in el && typeof el.value === 'string' ? el.value : (el.isContentEditable ? el.innerText : null); }","FIELD_IS_FORM_JS":"(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement)","DEFAULT_TAB":"_default"},
+  "env": {"OMK_BRIDGE_CHROME":null,"OMK_BRIDGE_BROWSER_HEADLESS":false,"OMK_BRIDGE_BROWSER_TIMEOUT_MS":20000,"OMK_BRIDGE_BROWSER_EXTRACT_READY_MS":20000,"OMK_BRIDGE_BROWSER_DOWNLOAD_WAIT_MS":5000,"OMK_BRIDGE_UPLOAD_MAX_FILE_BYTES":8388608},
+  "chrome": {
+    "darwin": ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome","{{HOME}}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome","/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge","/Applications/Chromium.app/Contents/MacOS/Chromium"],
+    "win32Roots": ["PROGRAMFILES","PROGRAMFILES(X86)","LOCALAPPDATA"],
+    "win32Files": [["Google","Chrome","Application","chrome.exe"],["Microsoft","Edge","Application","msedge.exe"]],
+    "other": ["/usr/bin/google-chrome","/usr/bin/google-chrome-stable","/usr/bin/chromium","/usr/bin/chromium-browser"],
+    "args": ["--remote-debugging-port=0","--user-data-dir={{PROFILE}}","--profile-directory=Default","--no-first-run","--no-default-browser-check","--headless=new","about:blank"],
+    "headlessOnly": ["--headless=new"]
+  }
+}

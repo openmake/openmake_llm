@@ -63,7 +63,8 @@
         {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node x.js\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "npm"
+      "expect": "npm",
+      "toolCalls": []
     },
     {
       "id": "npm-node-exact",
@@ -71,7 +72,8 @@
         {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "npm"
+      "expect": "npm",
+      "toolCalls": []
     },
     {
       "id": "npm-node-tab",
@@ -79,7 +81,8 @@
         {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node\\t-e 1\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "npm"
+      "expect": "npm",
+      "toolCalls": []
     },
     {
       "id": "npm-node-dash",
@@ -87,7 +90,8 @@
         {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node-gyp test\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "npm"
+      "expect": "npm",
+      "toolCalls": []
     },
     {
       "id": "npm-nodemon",
@@ -95,7 +99,8 @@
         {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"nodemon x\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-node-underscore",
@@ -103,7 +108,8 @@
         {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"node_x\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-space-node",
@@ -111,7 +117,8 @@
         {"file":"d/package.json","content":"{\"scripts\":{\"test\":\" node x\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-jest-modules",
@@ -120,7 +127,8 @@
         {"dir":"d/node_modules"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "npm"
+      "expect": "npm",
+      "toolCalls": []
     },
     {
       "id": "npm-jest-no-modules",
@@ -128,7 +136,8 @@
         {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"jest\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-modules-file",
@@ -137,7 +146,8 @@
         {"file":"d/node_modules","content":"x"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "npm"
+      "expect": "npm",
+      "toolCalls": []
     },
     {
       "id": "npm-placeholder",
@@ -146,7 +156,8 @@
         {"dir":"d/node_modules"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-empty-script",
@@ -155,7 +166,8 @@
         {"dir":"d/node_modules"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-number-script",
@@ -164,7 +176,8 @@
         {"dir":"d/node_modules"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-scripts-array",
@@ -173,7 +186,8 @@
         {"dir":"d/node_modules"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-null-top",
@@ -182,7 +196,8 @@
         {"dir":"d/node_modules"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-array-top",
@@ -191,7 +206,8 @@
         {"dir":"d/node_modules"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-broken-json",
@@ -200,7 +216,8 @@
         {"dir":"d/node_modules"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-bom",
@@ -208,7 +225,8 @@
         {"file":"d/package.json","content":"﻿{\"scripts\":{\"test\":\"node x\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "npm-duplicate-key",
@@ -216,7 +234,8 @@
         {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"echo no test specified\",\"test\":\"node t.js\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "npm"
+      "expect": "npm",
+      "toolCalls": []
     },
     {
       "id": "npm-unicode-escape",
@@ -224,7 +243,8 @@
         {"file":"d/package.json","content":"{\"scripts\":{\"test\":\"\\u006eode x\"}}"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "npm"
+      "expect": "npm",
+      "toolCalls": []
     },
     {
       "id": "npm-dir-package",
@@ -233,7 +253,8 @@
         {"dir":"d/node_modules"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "pytest-ini",
@@ -254,7 +275,10 @@
         {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "pytest"
+      "expect": "pytest",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
     },
     {
       "id": "pytest-pyproject",
@@ -263,7 +287,10 @@
         {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "pytest"
+      "expect": "pytest",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
     },
     {
       "id": "pytest-pyproject-other",
@@ -282,7 +309,10 @@
         {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "pytest"
+      "expect": "pytest",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
     },
     {
       "id": "pytest-tests-dir",
@@ -291,7 +321,10 @@
         {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "pytest"
+      "expect": "pytest",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
     },
     {
       "id": "pytest-tests-file",
@@ -310,7 +343,10 @@
         {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "pytest"
+      "expect": "pytest",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
     },
     {
       "id": "pytest-test-underscore",
@@ -319,7 +355,10 @@
         {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "pytest"
+      "expect": "pytest",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
     },
     {
       "id": "pytest-not-test-files",
@@ -341,7 +380,10 @@
         {"fakeTool":"bin/python3","stdout":"","stderr":"","exit":0,"record":"python3"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "pytest"
+      "expect": "pytest",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
     },
     {
       "id": "pytest-import-fails",
@@ -372,7 +414,8 @@
         {"fakeTool":"bin/go","stdout":"","stderr":"","exit":0,"record":"go"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "go"
+      "expect": "go",
+      "toolCalls": []
     },
     {
       "id": "go-missing",
@@ -381,7 +424,8 @@
         {"dir":"bin"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "go-no-mod",
@@ -389,7 +433,8 @@
         {"fakeTool":"bin/go","stdout":"","stderr":"","exit":0,"record":"go"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     },
     {
       "id": "go-dir-on-path",
@@ -398,7 +443,8 @@
         {"dir":"bin/go"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "go"
+      "expect": "go",
+      "toolCalls": []
     },
     {
       "id": "go-empty-segments",
@@ -407,7 +453,8 @@
         {"fakeTool":"bin/go","stdout":"","stderr":"","exit":0,"record":"go"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"::{{BIN}}:"},
-      "expect": "go"
+      "expect": "go",
+      "toolCalls": []
     },
     {
       "id": "go-second-dir",
@@ -417,7 +464,8 @@
         {"dir":"bin"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}:{{TMP}}/bin2"},
-      "expect": "go"
+      "expect": "go",
+      "toolCalls": []
     },
     {
       "id": "order-npm-first",
@@ -455,7 +503,10 @@
         {"fakeTool":"bin/go","stdout":"","stderr":"","exit":0,"record":"go"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "pytest"
+      "expect": "pytest",
+      "toolCalls": [
+        {"tool":"python3","args":["-I","-c","import importlib.util,site,sys; sys.path.append(site.getusersitepackages()); sys.exit(0 if importlib.util.find_spec('pytest') else 1)"],"cwd":"{{TMP}}/d","envHas":["PATH","HOME"],"envLacks":["OMK_COMPANION_API_KEY","GITHUB_TOKEN","OMK_BRIDGE_AUTO_APPROVE"]}
+      ]
     },
     {
       "id": "missing-dir",
@@ -463,7 +514,8 @@
         {"dir":"bin"}
       ],
       "input": {"dir":"{{TMP}}/d","execPath":"{{BIN}}"},
-      "expect": "none"
+      "expect": "none",
+      "toolCalls": []
     }
   ]
 }

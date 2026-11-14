@@ -13,6 +13,11 @@ use crate::proc::{self, ProcOutput, ProcSpec, Stderr, Stdin};
 /// exec 호스트가 없는 코어의 거절 — worktree(D-38)와 같은 문구·같은 이유(자식에 줄 환경 사본이 없다).
 pub(crate) const NO_HOST: &str = "exec 호스트가 설정되지 않았습니다";
 
+/// `existsSync` — 심링크를 따라가고, 어떤 오류든 "없음". diagnostics·test_runner·worktree 가 쓴다.
+pub(crate) fn exists(p: &str) -> bool {
+    std::fs::metadata(p).is_ok()
+}
+
 /// 도구 실패 — 샌드박스 거절(프로파일 없음·sandbox-exec 자체 실패)은 exec 와 같은 모양(문구 + exitCode 126).
 /// lsp_diagnostics·test_runner·worktree 가 쓴다.
 pub(crate) fn tool_failure(error: String) -> BridgeResult {

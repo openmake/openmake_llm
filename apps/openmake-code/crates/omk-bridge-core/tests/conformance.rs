@@ -58,10 +58,12 @@ fn fixture_files() -> Vec<PathBuf> {
     let mut files: Vec<PathBuf> = dir
         .map(|e| e.unwrap().path())
         .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        // conn-* 는 연결 크레이트(omk-bridge-conn) 러너 몫이다.
+        // conn-* 는 연결 크레이트(omk-bridge-conn) 러너, browser-* 는 conformance_browser.rs 몫이다.
         .filter(|p| {
-            !p.file_name()
-                .is_some_and(|n| n.to_string_lossy().starts_with("conn-"))
+            !p.file_name().is_some_and(|n| {
+                let n = n.to_string_lossy();
+                n.starts_with("conn-") || n.starts_with("browser-")
+            })
         })
         .collect();
     files.sort();
