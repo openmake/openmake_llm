@@ -56,3 +56,4 @@
 4. 문구의 값을 UTF-16 200 단위로 자를 때(`clip`) 끝이 대리 쌍 한가운데면 TS 는 짝 없는 반쪽을 남기고 Rust 는 그 글자를 뺀다(`README.md` 의 git 오류 꼬리와 같은 차이 — 짝 없는 대리 문자는 fixture JSON 에 담을 수 없다).
 5. 잘못된 punycode 호스트(`xn--`) — TS `URL` 은 받고, Rust `url` 은 주소 오류 → 호스트 모름(쓰기는 승인 대상, 이동은 막힘).
 6. 범위 밖 수(`1e999`)가 든 요청 — TS `JSON.parse` 는 `Infinity`, Rust 는 해석 실패.
+7. 대기 파일(`staging/<guid>`)이 심링크·폴더 — TS `fs.link` 는 OS 의 `link(2)` 를 따라 결과가 OS 마다 다르다(macOS 는 원본 심링크를 따라가 대상 파일의 하드링크 = 보통 파일, Linux 는 심링크 자체를 링크). 두 러너의 OS 가 달라 fixture 에 넣지 않는다. Rust 는 원본을 `canonicalize` 해 늘 대상 파일을 링크한다 — macOS TS 와 같고, Linux 에서도 연결 폴더 안에 심링크를 만들지 않는다(더 엄격). 끊긴·순환 링크는 `link` 의 `ENOENT`·`ELOOP` 문구, 폴더 원본은 macOS `copyfile` 의 `ENOTSUP`(대상이 있으면 `EEXIST` 가 먼저라 다음 이름으로 넘어간다). macOS TS 실측값으로 `src/browser/download_place.rs` 단위 테스트가 고정한다.
