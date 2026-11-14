@@ -80,7 +80,6 @@ impl BridgeCore {
         let opts = BrowserRunOptions {
             task_id: m.task_id.clone(),
             save_file: self.save_file(&base),
-            download_dir: base.clone(),
             place_download: Some(self.place_download(&base)),
             resolve_upload_files: Some(self.resolve_upload(&base, browser.upload_max_file_bytes())),
         };

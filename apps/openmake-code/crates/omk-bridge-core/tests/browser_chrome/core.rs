@@ -1,4 +1,4 @@
-//! `BridgeCore — browser 요청`(7건)·`BridgeCore — 다운로드`(5건) — TS 그대로. 코어는 `with_browser_profile` 로 실제 Chrome 을 얹는다.
+//! `BridgeCore — browser 요청`(7건)·`BridgeCore — 다운로드`(6건) — TS 그대로. 코어는 `with_browser_profile` 로 실제 Chrome 을 얹는다.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -161,7 +161,7 @@ pub async fn download_cases(s: &mut Suite) {
     let origin = server.origin();
     let tmp = TmpDir::new();
     let (folder, profile) = (tmp.join("folder"), tmp.join("profile"));
-    for sub in ["link", "goto", "popup", "head", "closed"] {
+    for sub in ["link", "goto", "popup", "head", "pairA", "pairB", "closed"] {
         std::fs::create_dir_all(format!("{folder}/{sub}")).unwrap();
     }
     // 프로필 기본 다운로드 폴더를 연결 폴더로 둔다(~/Downloads 를 연결한 경우) — 코어가 기동 때 대기 폴더로 다시 맞춰야 한다
@@ -170,10 +170,26 @@ pub async fn download_cases(s: &mut Suite) {
     std::fs::write(format!("{profile}/Default/Preferences"), prefs.to_string()).unwrap();
     let core = core_for(&folder, &profile);
     let staging = format!("{profile}-downloads");
+    // 대기 폴더 목록 — Chrome 이 스스로 받는 구성 요소(CRX3, `Cr24` 로 시작)와 그사이 사라진 파일은 뺀다. 새 프로필 Chrome 은 기동 후
+    // 10여 초에 Optimization Guide 모델을 Download Service 로 받는데, 다운로드 설정(allowAndName)이 브라우저 전역이라 이 폴더에 guid
+    // 이름으로 왔다가 Chrome 이 가져가 지운다 — CDP 다운로드 이벤트가 없어 브리지는 귀속·저장하지 않는다(디버그 2026-11-15).
+    let chrome_own = |file: &std::path::Path| -> bool {
+        use std::io::Read;
+        match std::fs::File::open(file) {
+            Ok(mut f) => {
+                let mut head = [0u8; 4];
+                f.read_exact(&mut head).is_ok() && &head == b"Cr24"
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+            Err(e) => panic!("대기 폴더 파일 열기: {e}"),
+        }
+    };
     let staged = || -> Vec<String> {
         let mut v: Vec<String> = std::fs::read_dir(&staging)
             .map(|d| {
-                d.map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                d.map(|e| e.unwrap())
+                    .filter(|e| !chrome_own(&e.path()))
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
                     .collect()
             })
             .unwrap_or_default();
@@ -235,6 +251,22 @@ pub async fn download_cases(s: &mut Suite) {
         eq(&out["ok"], &json!(true), "ok")?;
         eq(&out["downloads"], &json!([{"name": "HEAD", "state": "rejected", "error": "git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: HEAD"}]), "downloads")?;
         eq(listing("head"), Vec::<String>::new(), "폴더")?;
+        eq(staged(), Vec::<String>::new(), "대기 폴더")
+    }).await;
+
+    // A 가 먼저 설정하고 B 가 뒤에 설정한다 — 마지막 호출의 저장 함수(B)가 아니라 연 탭의 작업(A)의 것으로 옮겨야 한다(D-1·D-2)
+    s.case("두 작업이 함께 도는 중 새 창에서 받으면 연 탭의 작업 폴더·결과에만", async {
+        let a = browse("pairA", json!([{"type": "goto", "url": format!("{origin}/")}, {"type": "wait", "ms": 1500},
+            {"type": "click", "selector": "#pop"}, {"type": "wait", "ms": 1000}]));
+        let b = async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            browse("pairB", json!([{"type": "goto", "url": format!("{origin}/")}, {"type": "wait", "ms": 3500}])).await
+        };
+        let (out_a, out_b) = futures_util::future::join(a, b).await;
+        eq(&out_a["downloads"], &saved, "A downloads")?;
+        eq(&out_b["downloads"], &Value::Null, "B downloads")?;
+        eq(read("pairA"), "보고서".to_owned(), "A 내용")?;
+        eq(listing("pairB"), Vec::<String>::new(), "B 폴더")?;
         eq(staged(), Vec::<String>::new(), "대기 폴더")
     }).await;
 

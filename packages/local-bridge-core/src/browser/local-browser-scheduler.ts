@@ -1,8 +1,9 @@
 /**
  * LocalBrowser 의 실행 조정 — 작업별 실행 줄·동시 실행 자리·중지 요청(local-browser.ts 에서 분리, 2026-11-04).
  *
- * 같은 작업의 요청은 순서대로, 다른 작업은 BROWSER_MAX_CONCURRENT 까지 동시에 실행한다.
- * 다운로드 폴더는 브라우저 전역 설정이라 다운로드 폴더가 다른 작업끼리는 동시에 돌리지 않는다.
+ * 같은 작업의 요청은 순서대로, 다른 작업은 BROWSER_MAX_CONCURRENT 까지 동시에 실행한다 — 다운로드 폴더가 달라도 함께 돈다
+ * (Chrome 은 늘 같은 대기 폴더에 받고, 어느 폴더로 옮길지는 다운로드를 시작한 탭의 작업으로 정한다 — downloads.ts). 자리 대기는 도착 순
+ * (깨운 순서대로 다시 확인한다).
  */
 import { BROWSER_MAX_CONCURRENT } from '../constants';
 
@@ -13,8 +14,8 @@ export class BrowserScheduler {
     private readonly taskStops = new Map<string, number>();
     /** 작업별 실행 줄 — 같은 작업은 앞 요청이 끝난 뒤에 실행한다 */
     private readonly chains = new Map<string, Promise<unknown>>();
-    /** 지금 실행 중인 작업 → 그 다운로드 폴더 */
-    private readonly running = new Map<string, string>();
+    /** 지금 실행 중인 작업 */
+    private readonly running = new Set<string>();
     /** 실행 자리·탭 자리를 기다리는 요청 — 자리가 나면 모두 깨워 다시 확인한다 */
     private waiters: Array<() => void> = [];
 
@@ -37,9 +38,9 @@ export class BrowserScheduler {
     isRunning(key: string): boolean { return this.running.has(key); }
 
     /** 요청 1건 실행 — 같은 작업은 순서대로, 다른 작업은 동시 실행 상한까지 함께. */
-    run<T>(key: string, downloadDir: string, fn: () => Promise<T>): Promise<T> {
+    run<T>(key: string, fn: () => Promise<T>): Promise<T> {
         const p = (this.chains.get(key) ?? Promise.resolve()).then(async () => {
-            await this.acquire(key, downloadDir);
+            await this.acquire(key);
             try { return await fn(); } finally { this.release(key); }
         });
         const tail = p.catch(() => undefined);
@@ -48,12 +49,10 @@ export class BrowserScheduler {
         return p;
     }
 
-    /** 실행 자리를 얻을 때까지 기다린다 — 동시 실행 상한 안이고, 실행 중인 작업이 모두 같은 다운로드 폴더일 때. */
-    private async acquire(key: string, downloadDir: string): Promise<void> {
-        while (this.running.size >= BROWSER_MAX_CONCURRENT || [...this.running.values()].some((d) => d !== downloadDir)) {
-            await this.nextRelease();
-        }
-        this.running.set(key, downloadDir);
+    /** 실행 자리를 얻을 때까지 기다린다 — 동시 실행 상한 안일 때. */
+    private async acquire(key: string): Promise<void> {
+        while (this.running.size >= BROWSER_MAX_CONCURRENT) await this.nextRelease();
+        this.running.add(key);
     }
 
     private release(key: string): void {

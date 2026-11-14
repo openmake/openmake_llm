@@ -37,6 +37,9 @@
       "reply": {
         "success": true
       }
+    },
+    {
+      "on": "Target.setDiscoverTargets"
     }
   ],
   "cases": [
@@ -254,6 +257,13 @@
         "stdout": "{\"ok\":true,\"finalUrl\":\"http://example.com/\",\"results\":[{\"i\":0,\"type\":\"goto\",\"ok\":true,\"download\":true,\"url\":\"http://example.com/\"}]}",
         "sent": [
           {
+            "method": "Target.setDiscoverTargets",
+            "params": {
+              "discover": true
+            },
+            "session": null
+          },
+          {
             "method": "Target.createTarget",
             "params": {
               "url": "about:blank",
@@ -307,6 +317,140 @@
             "method": "Page.navigate",
             "params": {
               "url": "http://example.com/file.zip"
+            },
+            "session": "S1"
+          },
+          {
+            "method": "Runtime.evaluate",
+            "params": {
+              "expression": "location.href",
+              "returnByValue": true,
+              "awaitPromise": true
+            },
+            "session": "S1"
+          },
+          {
+            "method": "Runtime.evaluate",
+            "params": {
+              "expression": "location.href",
+              "returnByValue": true,
+              "awaitPromise": true
+            },
+            "session": "S1"
+          }
+        ],
+        "saved": []
+      }
+    },
+    {
+      "id": "popup-download",
+      "setup": [],
+      "input": {
+        "spec": {
+          "actions": [
+            {
+              "type": "goto",
+              "url": "http://example.com/"
+            }
+          ]
+        },
+        "opts": {
+          "taskId": "t1",
+          "place": true
+        },
+        "cdp": [
+          {
+            "on": "Runtime.evaluate",
+            "where": {
+              "expression": "location.href"
+            },
+            "reply": {
+              "result": {
+                "type": "string",
+                "value": "about:blank"
+              }
+            },
+            "times": 1
+          },
+          {
+            "on": "Runtime.evaluate",
+            "where": {
+              "expression": "location.href"
+            },
+            "reply": {
+              "result": {
+                "type": "string",
+                "value": "http://example.com/"
+              }
+            }
+          },
+          {
+            "on": "Page.navigate",
+            "reply": {
+              "frameId": "F1",
+              "loaderId": "L1"
+            },
+            "emit": [
+              {
+                "method": "Target.targetCreated",
+                "params": {
+                  "targetInfo": {
+                    "targetId": "P1",
+                    "type": "page",
+                    "title": "",
+                    "url": "about:blank",
+                    "attached": false,
+                    "openerId": "T1",
+                    "canAccessOpener": false,
+                    "browserContextId": "C1"
+                  }
+                }
+              },
+              {
+                "method": "Browser.downloadWillBegin",
+                "params": {
+                  "frameId": "P1",
+                  "guid": "g1",
+                  "url": "http://example.com/file",
+                  "suggestedFilename": "report.txt"
+                }
+              },
+              {
+                "method": "Browser.downloadProgress",
+                "params": {
+                  "guid": "g1",
+                  "totalBytes": 4,
+                  "receivedBytes": 4,
+                  "state": "completed"
+                }
+              },
+              {
+                "method": "Page.domContentEventFired",
+                "params": {
+                  "timestamp": 1
+                },
+                "session": true
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "stdout": "{\"ok\":true,\"finalUrl\":\"http://example.com/\",\"results\":[{\"i\":0,\"type\":\"goto\",\"ok\":true,\"url\":\"http://example.com/\"}],\"downloads\":[{\"name\":\"report.txt\",\"state\":\"saved\",\"savedAs\":\"report.txt\"}]}",
+        "sent": [
+          {
+            "method": "Runtime.evaluate",
+            "params": {
+              "expression": "location.href",
+              "returnByValue": true,
+              "awaitPromise": true
+            },
+            "session": "S1"
+          },
+          {
+            "method": "Page.navigate",
+            "params": {
+              "url": "http://example.com/"
             },
             "session": "S1"
           },
@@ -1221,6 +1365,13 @@
       "expect": {
         "stdout": "{\"ok\":true,\"finalUrl\":\"http://example.com/\",\"results\":[{\"i\":0,\"type\":\"click\",\"ok\":true},{\"i\":1,\"type\":\"extractText\",\"ok\":true,\"text\":\"새 창\"}]}",
         "sent": [
+          {
+            "method": "Target.setDiscoverTargets",
+            "params": {
+              "discover": true
+            },
+            "session": null
+          },
           {
             "method": "Target.createTarget",
             "params": {
@@ -10141,6 +10292,13 @@
         "stdout": "{\"ok\":true,\"finalUrl\":\"about:blank\",\"results\":[]}",
         "sent": [
           {
+            "method": "Target.setDiscoverTargets",
+            "params": {
+              "discover": true
+            },
+            "session": null
+          },
+          {
             "method": "Target.createTarget",
             "params": {
               "url": "about:blank",
@@ -10272,6 +10430,13 @@
       "expect": {
         "stdout": "{\"ok\":true,\"finalUrl\":\"about:blank\",\"results\":[{\"i\":0,\"type\":\"wait\",\"ok\":true}]}",
         "sent": [
+          {
+            "method": "Target.setDiscoverTargets",
+            "params": {
+              "discover": true
+            },
+            "session": null
+          },
           {
             "method": "Target.createTarget",
             "params": {

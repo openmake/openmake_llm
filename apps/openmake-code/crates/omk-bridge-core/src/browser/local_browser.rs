@@ -4,9 +4,12 @@
 //! 프로필마다 인스턴스 하나(프로세스 전역 표) — 여러 연결 폴더의 코어가 같은 브라우저를 쓴다. 호출이 끝나도 창과 로그인이 남는다
 //! (작업마다 뒤쪽 창 하나). 확인창·다운로드 이벤트는 실행 줄기와 다른 태스크(연결마다 하나)에서 처리한다 — 누르기가 연 `confirm` 은
 //! 처리되기 전까지 마우스 명령의 답을 막는다(D-73). 공유 상태는 `std::sync::Mutex` 를 짧게만 쥔다(잠금 순서: 상태 → 탭).
+//! 다른 작업은 다운로드 폴더가 달라도 함께 돈다(D-8). 탭 상한은 만드는 중인 탭도 센다(D-10).
+//! 다운로드는 그것을 시작한 탭(또는 그 탭이 연 창 — `Target.targetCreated` 의 openerId 로 만들어질 때 새 창 표에 적는다)의 작업에
+//! 귀속하고 그 작업이 준 저장 함수로 옮긴다. 귀속하지 못하면 저장하지 않는다(2026-11-15 D-1~D-3).
 //!
 //! 보안 불변식(변경 금지): http(s)·about:blank 밖으로 이동하지 않는다 · 사이트 정책 판정을 건너뛰는 경로가 없다 ·
-//! 스크린샷은 호출부가 준 저장 함수로만, 다운로드는 호출부가 준 저장 함수로만 쓴다(없으면 받지 않는다, 설정 실패면 실행하지 않는다) ·
+//! 스크린샷은 호출부가 준 저장 함수로만, 다운로드는 그것을 시작한 탭(또는 그 탭이 연 창)의 작업이 준 저장 함수로만 쓴다(없으면 받지 않는다, 설정 실패면 실행하지 않는다) ·
 //! 업로드는 승인된 호스트·파일 목록과 같고 호출부의 파일 검사를 통과한 것만 넣는다 · 쿠키·비밀번호·프로필 파일을 돌려주지 않는다.
 
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
@@ -18,9 +21,10 @@ use tokio::process::Child;
 use super::cdp::{CdpClient, CdpEvent, Events};
 use super::constants::{
     BROWSER_CDP_TIMEOUT_MS, BROWSER_DIALOG_MESSAGE_MAX, BROWSER_DIALOG_RECORD_MAX,
-    BROWSER_DOWNLOAD_STAGING_SUFFIX, BROWSER_EXIT_WAIT_MS, BROWSER_MAX_TABS, DEFAULT_TAB,
+    BROWSER_DOWNLOAD_STAGING_SUFFIX, BROWSER_EXIT_WAIT_MS, BROWSER_MAX_TABS,
+    BROWSER_POPUP_TRACK_MAX, DEFAULT_TAB,
 };
-use super::defs::{TabIds, download_task_of};
+use super::defs::{TabIds, download_task_of, popup_task_of};
 use super::downloads::DownloadTracker;
 use super::host::{BrowserEnv, BrowserHost, ChromeHost};
 use super::js_value::str_of;
@@ -52,12 +56,47 @@ pub(super) fn lock_tab(t: &TabRef) -> MutexGuard<'_, Tab> {
     t.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
+/// 만드는 중인 탭 하나 — 버려지면(만들기·붙기 실패, 호출부가 future 를 버림) 수를 내린다. 성공하면 `tab_for` 가 표에 넣으며
+/// 같은 잠금에서 내리고 `armed` 를 끈다.
+struct Creating<'a> {
+    browser: &'a LocalBrowser,
+    armed: bool,
+}
+
+impl Drop for Creating<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            let mut s = self.browser.lock();
+            s.creating_tabs = s.creating_tabs.saturating_sub(1);
+        }
+    }
+}
+
+/// 작업 탭들의 CDP 식별자 — 다운로드·새 창 귀속에 쓴다(상태를 쥔 채 부른다 — 잠금 순서 상태 → 탭).
+fn tab_ids(s: &State) -> Vec<(String, TabIds)> {
+    s.tabs
+        .iter()
+        .map(|(k, t)| {
+            let t = lock_tab(t);
+            let ids = TabIds {
+                target_id: t.target_id.clone(),
+                session_id: t.session_id.clone(),
+            };
+            (k.clone(), ids)
+        })
+        .collect()
+}
+
 #[derive(Default)]
 pub(super) struct State {
     pub cdp: Option<Arc<CdpClient>>,
     /// 이 인스턴스가 띄운 Chrome — 붙기만 했으면 없다
     child: Option<Child>,
     pub tabs: Vec<(String, TabRef)>,
+    /// 상한 검사를 지나 만드는 중인 탭 수 — 동시에 온 새 작업들이 같은 빈자리를 보고 상한을 넘지 않게 검사에 더한다(D-10)
+    creating_tabs: usize,
+    /// 새 창 targetId → 연 탭의 작업 키(다운로드 귀속, 넣은 순서 — 상한을 넘으면 가장 오래된 것을 버린다)
+    popups: Vec<(String, String)>,
     pub user_control: bool,
     use_seq: u64,
     /// 끝난 연결 시도 수와 마지막 실패 — 동시에 들어온 첫 요청들이 한 시도의 결과를 나눈다
@@ -169,6 +208,7 @@ impl LocalBrowser {
         self.downloads.forget(&key);
         let (tab, cdp) = {
             let mut s = self.lock();
+            s.popups.retain(|(_, k)| *k != key);
             let Some(n) = s.tabs.iter().position(|(k, _)| *k == key) else {
                 return;
             };
@@ -250,7 +290,11 @@ impl LocalBrowser {
     }
 
     async fn open_connection(&self) -> Result<Arc<CdpClient>, String> {
-        self.lock().tabs.clear();
+        {
+            let mut s = self.lock();
+            s.tabs.clear();
+            s.popups.clear();
+        }
         // 옛 연결의 받는 중 다운로드 — 완료 이벤트가 더는 오지 않는다
         self.downloads.abandon();
         // 이미 떠 있는 전용 프로필 Chrome 이 있으면 거기에 붙는다(헬퍼만 다시 뜬 경우).
@@ -274,6 +318,10 @@ impl LocalBrowser {
         };
         let cdp = Arc::new(cdp);
         tokio::spawn(event_loop(self.me.clone(), Arc::downgrade(&cdp), events));
+        // 새 창이 만들어질 때 연 탭을 알려면 필요하다 — 실패하면 새 창의 다운로드를 귀속하지 못해 저장하지 않을 뿐이다
+        let _ = cdp
+            .send("Target.setDiscoverTargets", json!({"discover": true}), None)
+            .await;
         self.lock().cdp = Some(cdp.clone());
         Ok(cdp)
     }
@@ -309,7 +357,8 @@ impl LocalBrowser {
             let wake = self.scheduler.next_release();
             let oldest = {
                 let mut s = self.lock();
-                if s.tabs.len() < BROWSER_MAX_TABS {
+                if s.tabs.len() + s.creating_tabs < BROWSER_MAX_TABS {
+                    s.creating_tabs += 1; // 검사와 같은 잠금에서 올린다 — 성공·실패·버려짐 모두 내린다
                     break;
                 }
                 let idle = s
@@ -331,6 +380,10 @@ impl LocalBrowser {
                 None => wake.await,
             }
         }
+        let mut creating = Creating {
+            browser: self,
+            armed: true,
+        };
         // 작업마다 뒤쪽 창 하나 — 숨은 탭의 화면 캡처·타이머 지연을 피하고 사용자 창의 초점을 빼앗지 않는다. 안 되면 탭으로.
         let created = match cdp
             .send(
@@ -349,6 +402,9 @@ impl LocalBrowser {
         let target_id = str_of(created.get("targetId"));
         let session_id = self.attach(cdp, &target_id).await?;
         let mut s = self.lock();
+        // 내리기와 표에 넣기를 한 잠금에서 — 그 사이 다른 검사가 둘 다 세거나 둘 다 놓치지 않는다
+        s.creating_tabs = s.creating_tabs.saturating_sub(1);
+        creating.armed = false;
         s.use_seq += 1;
         let tab = Arc::new(Mutex::new(Tab {
             target_id,
@@ -367,24 +423,13 @@ impl LocalBrowser {
     fn on_event(&self, cdp: &Weak<CdpClient>, e: CdpEvent) {
         match e.method.as_str() {
             "Page.javascriptDialogOpening" => self.on_dialog(cdp, &e),
+            "Target.targetCreated" => self.on_target_created(&e.params),
             "Page.downloadWillBegin" | "Browser.downloadWillBegin" => {
                 let task = {
                     let s = self.lock();
-                    let ids: Vec<(String, TabIds)> = s
-                        .tabs
-                        .iter()
-                        .map(|(k, t)| {
-                            let t = lock_tab(t);
-                            let ids = TabIds {
-                                target_id: t.target_id.clone(),
-                                session_id: t.session_id.clone(),
-                            };
-                            (k.clone(), ids)
-                        })
-                        .collect();
                     download_task_of(
-                        &ids,
-                        |k| self.scheduler.is_running(k),
+                        &tab_ids(&s),
+                        &s.popups,
                         e.session_id.as_deref(),
                         &str_of(e.params.get("frameId")),
                     )
@@ -398,6 +443,26 @@ impl LocalBrowser {
             }
             _ => {}
         }
+    }
+
+    /// 페이지가 연 새 창 — 연 탭(또는 적어 둔 새 창)의 작업을 적는다. 곧바로 받고 닫히는 창은 나중에 조회할 수 없어 이때만 안다.
+    fn on_target_created(&self, params: &Value) {
+        let info = params.get("targetInfo");
+        let field = |k: &str| str_of(info.and_then(|i| i.get(k)));
+        let target_id = field("targetId");
+        if info.and_then(|i| i.get("type")).and_then(Value::as_str) != Some("page")
+            || target_id.is_empty()
+        {
+            return;
+        }
+        let mut s = self.lock();
+        let Some(key) = popup_task_of(&tab_ids(&s), &s.popups, &field("openerId")) else {
+            return;
+        };
+        s.popups.retain(|(id, _)| *id != target_id);
+        s.popups.push((target_id, key));
+        let over = s.popups.len().saturating_sub(BROWSER_POPUP_TRACK_MAX);
+        s.popups.drain(..over);
     }
 
     /// 확인창 — alert 은 확인뿐이고 beforeunload 를 취소하면 이동이 막히므로 둘은 항상 받는다. 나머지는 dialog 액션이 정한다.
