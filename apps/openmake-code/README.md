@@ -39,7 +39,8 @@ CDP·Chrome 기동·실행 조정·다운로드 추적·`LocalBrowser`·액션 1
 - **호스트가 잇는 것**(PR-1.7, `omk-helper`): 제어권 넘기기·돌려주기 = 모든 루트에 `set_browser_user_control(on)` + 연결의 `notify_browser_control(on)`,
   중지 = `stop_browser()`. 연결은 `bridge_ready` 마다 지금 제어권을 다시 알린다(브라우저 있는 코어만). 헬퍼는 끝날 때 루트를 모두 해제한 **뒤**
   `BridgeCore::dispose_browser()` 를 부른다 — 인스턴스 표가 `static` 이라 프로세스 종료 때 `Drop` 이 돌지 않는다. SIGKILL·패닉으로 죽으면 Chrome 이
-  남아 다음 기동이 주소 파일로 거기에 붙는다(TS 와 같다).
+  남아 다음 기동이 주소 파일로 거기에 붙는다(TS 와 같다). 정리는 먼저 "정리됨" 표식을 세운다 — 띄우는 중인 연결 시도는 끊겨(띄우던 자식은
+  `kill_on_drop`) 1초 상한까지 그 끝을 기다리고, 이후 그 인스턴스로 온 요청은 Chrome 을 띄우지 않고 `BROWSER_DISPOSED_ERROR` 다(TS 코어도 같다).
 - **런타임**: tokio 하나(`net` 기능 추가). CDP 는 `tokio-tungstenite` 위 최소 클라이언트(읽기·쓰기 태스크, 보내기는 소켓 쓰기를 기다리지 않는다)이고
   `127.0.0.1` 로만 붙는다. 확인창·다운로드 이벤트는 연결마다 태스크 하나가 실행 줄기와 따로 처리한다. 공유 상태는 `std::sync::Mutex` 를 짧게만 쥔다.
 - **종료**: 띄운 Chrome 에만 `Browser.close`(1초까지) → 종료 5초 대기 → 남아 있으면 SIGKILL(workspace 가 `unsafe` 를 금지해 SIGTERM 을 보낼 안전한 API 가 없다).
@@ -74,12 +75,14 @@ Node 와 다른 점·그대로 옮긴 점은 `crates/omk-helper/README.md`. 배�
   | `OMK_BRIDGE_CHROME`·`OMK_BRIDGE_BROWSER_*`·`OMK_BRIDGE_UPLOAD_MAX_FILE_BYTES` | 브라우저 환경(위 "로컬 브라우저") |
 
 - **종료**: stdin 끝(부모가 죽었다)·`quit`·SIGTERM·SIGINT 가 같은 길 — ① 확인 대기 전부 거부 ② 100ms(거부 결과가 서버로 나갈 시간) ③ 전체 해제
-  (`disconnected`·`autoApprove`·마지막 `status idle`) ④ 띄운 Chrome 정리(`dispose_browser`, 최악 약 6.6초) ⑤ stdout 비우기(500ms 까지) → exit 0.
-  두 번째 계기는 무시한다(앱은 `quit` 1초 뒤 SIGTERM 을 보낸다).
+  (`disconnected`·`autoApprove`·마지막 `status idle`) ④ 띄운 Chrome 정리(`dispose_browser` — 띄우는 중이면 그 시도를 끊는다) ⑤ stdout 비우기(500ms 까지)
+  ⑥ 런타임 정리(`shutdown_timeout` 1초 — 남은 태스크를 버려 실행 중인 exec 자식·띄우는 중인 Chrome 이 `kill_on_drop` 으로 꺼진다, 블록된 FS 호출은
+  상한에서 포기) → exit 0. 최악 약 8.6초. 두 번째 계기는 무시한다(앱은 `quit` 1초 뒤 SIGTERM 을 보낸다).
 - **로그를 달지 않는다**: 로거를 설치하지 않아 `tungstenite`·`rustls` 의 `log` 기록(핸드셰이크의 Authorization, CDP 프레임의 입력값)이 찍힐 길이 없다.
   stderr 는 고정 문구 셋뿐이다(기동 실패, 키 env 거절, 패닉 위치 — 패닉은 exit 101). `RUST_LOG=trace` 에서도 stderr 가 비어 있음을 테스트가 본다.
 - **시험**: `cargo test --locked -j 2 -p omk-helper` — 실제 프로세스·실 TCP 가짜 서버(`tests/stdio_*.rs`), ReDoS 뒤 같은 연결 유지와 RSS 800MB 감시
-  (`stdio_redos.rs`), 실제 Chrome 종료 정리(`helper_chrome.rs` — **로컬 전용**, `CI=true`·Chrome 없음·GUI 로그인 세션 없음이면 `SKIP(local-browser)`,
+  (`stdio_redos.rs`), 자식이 도는 중의 종료(`stdio_browser_shutdown.rs` — 가짜 Chrome·exec 자식이라 CI 에서도 돈다), 실제 Chrome 종료 정리
+  (`helper_chrome.rs` — **로컬 전용**, `CI=true`·Chrome 없음·GUI 로그인 세션 없음이면 `SKIP(local-browser)`, `RUST_LOG=trace` 로 띄워 stderr 빈 것도 본다,
   `-- --test-threads=1 --nocapture`). 같은 하네스를 두 헬퍼로:
 
   ```bash
