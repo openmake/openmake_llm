@@ -69,3 +69,21 @@ fn shared_run_cases() {
         assert_eq!(Value::Array(got), c["results"], "{name}");
     }
 }
+
+/// 검사를 거치지 않은 `times`(1e300)도 `BROWSER_REPEAT_MAX` 회에서 멈춘다(리뷰 L3 — 검사를 지난 1~20 의 결과는 그대로).
+#[test]
+fn repeat_times_capped_without_validate() {
+    let actions: Value = serde_json::from_str(
+        r#"[{"type":"repeat","times":1e300,"actions":[{"type":"wait","ms":1}]}]"#,
+    )
+    .unwrap();
+    let mut hooks = fake_hooks(&Value::Object(serde_json::Map::new()), "실패");
+    let results =
+        support::runtime().block_on(run_flow(actions.as_array().unwrap(), &mut hooks, 1000));
+    let max = usize::try_from(omk_bridge_core::browser::constants::BROWSER_REPEAT_MAX).unwrap();
+    assert_eq!(results.len(), 1 + max);
+    let head = results[0].to_value();
+    assert_eq!(head["rounds"], max);
+    assert_eq!(head["stoppedBy"], "times");
+    assert!(results.iter().all(|r| r.to_value()["ok"] == true));
+}

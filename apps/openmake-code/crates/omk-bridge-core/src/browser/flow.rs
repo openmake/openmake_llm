@@ -299,7 +299,12 @@ impl<'a> Runner<'_, 'a> {
                 } else if kind == Some("repeat") {
                     let r = self.push_control(i, "repeat", step.as_deref(), Some(0));
                     let mut stopped_by = "times";
-                    let times = a.get("times").and_then(Value::as_f64).unwrap_or(0.0);
+                    // 검사(1~20 정수)를 거치지 않은 횟수도 상한에서 멈춘다 — `round` 넘침 방지(검사를 지난 입력의 결과는 그대로)
+                    let times = a
+                        .get("times")
+                        .and_then(Value::as_f64)
+                        .unwrap_or(0.0)
+                        .min(f64::from(BROWSER_REPEAT_MAX));
                     let body = a
                         .get("actions")
                         .and_then(Value::as_array)
