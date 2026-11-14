@@ -1,19 +1,22 @@
 //! 브리지 실행 코어 — TS `core.ts` `BridgeCore` 의 생성자·`capabilities`·`handleExec`.
 //!
 //! 고정 kind 화이트리스트만 처리한다(임의 RPC 거부). 파일 kind 경로는 연결 폴더 realpath 스코프 안에서만 푼다.
-//! `BRIDGE_KINDS` 12종을 모두 옮겼다(PR-1.4). 브라우저는 아직이라 TS 의 `default` 가지와 같은 "지원하지 않는 kind" 로
-//! 거절하고 능력 목록에도 넣지 않는다. exec·worktree·lsp_diagnostics·test_runner 는 호스트가
-//! [`BridgeCore::with_exec_host`] 로 확인 창·환경을 얹어야 실제로 돈다. code_nav 는 호스트 없이도 돈다.
+//! `BRIDGE_KINDS` 12종(PR-1.4)과 browser(PR-1.6). exec·worktree·lsp_diagnostics·test_runner 는 호스트가
+//! [`BridgeCore::with_exec_host`] 로 확인 창·환경을 얹어야 실제로 돈다. code_nav 는 호스트 없이도 돈다. browser 는 호스트가
+//! [`BridgeCore::with_browser_profile`] 로 전용 프로필을 얹고 Chrome 이 있을 때만 능력 목록에 들고 처리한다(`core_browser.rs`).
 //!
 //! **런타임**: `handle_exec`·`prepare` 는 시간 + I/O 가 켜진(`enable_all()`) tokio 런타임 안에서 불러야 한다(자식 프로세스). 런타임은 drop 때
 //! `spawn_blocking` 작업이 끝나기를 기다리므로, 영영 블록된 FS 호출이 있으면 종료가 멈춘다 — 호스트는
 //! `shutdown_background()` 또는 `shutdown_timeout()` 으로 끝낸다.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::browser::constants::BROWSER_UPLOAD_CAPABILITY;
+use crate::browser::local_browser::LocalBrowser;
 use crate::code_nav;
 use crate::constants::{
-    BRIDGE_KINDS, CODE_NAV_MAX_CONCURRENT, CODE_NAV_TIMEOUT_MS, DIAG_TIMEOUT_MS,
+    BRIDGE_KINDS, BROWSER_KIND, CODE_NAV_MAX_CONCURRENT, CODE_NAV_TIMEOUT_MS, DIAG_TIMEOUT_MS,
 };
 use crate::diagnostics;
 use crate::exec::{self, ExecHost, ExecState};
@@ -26,6 +29,9 @@ use crate::test_runner;
 use crate::timed_fs::FsGate;
 use crate::tool_env::{NO_HOST, tool_failure};
 use crate::worktree;
+
+#[path = "core_browser.rs"]
+mod browser_kind;
 
 /// `task_end` 때 부르는 호스트 정리 훅(데스크톱 = 브라우저 패널 닫기).
 pub type TaskEndHook = Box<dyn Fn(Option<&str>) + Send + Sync>;
@@ -56,9 +62,11 @@ pub struct BridgeCore {
     timeouts: ToolTimeouts,
     on_task_end: Option<TaskEndHook>,
     exec: Option<ExecState>,
+    /// 전용 프로필 브라우저 — 프로필이 없거나 Chrome 이 없으면 없다
+    browser: Option<Arc<LocalBrowser>>,
 }
 
-/// 이 크레이트가 처리하는 kind. 와일드카드 없이 적는다 — 종류를 더하면 컴파일이 막힌다.
+/// 브라우저 없이 처리하는 kind. 와일드카드 없이 적는다 — 종류를 더하면 컴파일이 막힌다. browser 는 브라우저 유무에 달린다.
 fn handles(kind: Kind) -> bool {
     match kind {
         Kind::Read
@@ -96,6 +104,7 @@ impl BridgeCore {
             },
             on_task_end: opts.on_task_end,
             exec: None,
+            browser: None,
         })
     }
 
@@ -155,14 +164,18 @@ impl BridgeCore {
         &self.folder_root
     }
 
-    /// 서버에 알리는 능력 목록 — 실제로 처리하는 kind 만, `BRIDGE_KINDS` 순서로.
-    /// 서버는 목록에 없는 종류를 보내지 않는다는 계약을 옮기는 도중에도 지킨다.
+    /// 서버에 알리는 능력 목록 — 실제로 처리하는 kind 만, `BRIDGE_KINDS` 순서로. 브라우저가 있으면 끝에 `browser`·`browser_upload`
+    /// (TS `[...BRIDGE_KINDS, BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY]`).
     pub fn capabilities(&self) -> Vec<&'static str> {
-        BRIDGE_KINDS
+        let mut caps: Vec<&'static str> = BRIDGE_KINDS
             .iter()
             .copied()
             .filter(|k| Kind::parse(k).is_some_and(handles))
-            .collect()
+            .collect();
+        if self.browser.is_some() {
+            caps.extend([BROWSER_KIND, BROWSER_UPLOAD_CAPABILITY]);
+        }
+        caps
     }
 
     /// 요청 하나를 처리해 결과 하나를 돌려준다. TS 가 예외로 내던 실패도 연결부가 바꾸던 모양
@@ -258,13 +271,14 @@ impl BridgeCore {
                 })
             }
             Kind::TaskEnd => {
-                // 호스트 정리를 먼저, 그다음 그 작업의 일괄 승인 회수. 브라우저 탭 닫기는 PR-1.6 이 더한다.
+                // 호스트 정리를 먼저, 그다음 그 작업의 일괄 승인 회수, 그 작업의 브라우저 탭 닫기(기다리지 않는다 — TS 순서 그대로).
                 if let Some(hook) = &self.on_task_end {
                     hook(m.task_id.as_deref());
                 }
                 if let (Some(e), Some(t)) = (&self.exec, &m.task_id) {
                     e.revoke(t);
                 }
+                self.close_browser_task(m.task_id.as_deref());
                 Ok(ok)
             }
             Kind::Exec => exec::run_exec(self.exec.as_ref(), &self.folder_root, &base, m).await,
@@ -339,7 +353,7 @@ impl BridgeCore {
                     ..ok
                 })
             }
-            Kind::Browser => Err(unsupported(kind.as_str())),
+            Kind::Browser => self.handle_browser(m, base).await,
         }
     }
 }
@@ -373,7 +387,7 @@ mod tests {
             .to_json()
     }
 
-    /// 능력 목록은 BRIDGE_KINDS 12종 그대로(PR-1.4 에서 모두 옮겼다). 브라우저는 처리하지 않는다.
+    /// 브라우저가 없는 코어의 능력 목록은 BRIDGE_KINDS 12종 그대로(브라우저 있는 코어는 tests/browser_core.rs).
     #[test]
     fn capabilities_are_all_bridge_kinds() {
         let c = core(None);
@@ -381,7 +395,7 @@ mod tests {
         assert!(!handles(Kind::Browser));
     }
 
-    /// 브라우저는 TS 의 default 가지와 같은 글자로 거절한다. 어떤 kind 든 folder 를 먼저 푼다.
+    /// 브라우저가 없는 코어는 TS 와 같은 글자로 거절한다. 어떤 kind 든 folder 를 먼저 푼다.
     #[test]
     fn browser_is_rejected_and_folder_comes_first() {
         let c = core(None);
@@ -391,7 +405,14 @@ mod tests {
         );
         assert_eq!(
             got,
-            json!({"ok": false, "error": "지원하지 않는 kind: browser"})
+            json!({"ok": false, "error": "이 디바이스는 브라우저를 쓸 수 없습니다(전용 프로필 미설정 또는 Chrome 없음)"})
+        );
+        assert!(!c.browser_user_control());
+        c.set_browser_user_control(true);
+        c.stop_browser();
+        assert!(
+            !c.browser_user_control(),
+            "브라우저가 없으면 제어권 상태도 없다"
         );
         for k in Kind::ALL {
             let got = run(&c, json!({"kind": k.as_str(), "folder": "../.."}));

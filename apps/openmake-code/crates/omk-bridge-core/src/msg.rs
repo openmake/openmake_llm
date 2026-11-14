@@ -7,6 +7,7 @@
 
 use serde_json::{Map, Value};
 
+use crate::browser::run::BrowserSpec;
 use crate::constants::{BROWSER_KIND, DIAG_MAX_TOTAL};
 use crate::diagnostics::Diagnostic;
 pub use crate::tool_output::{CodeNavResult, ToolOutput};
@@ -102,6 +103,9 @@ pub struct BridgeMsg {
     pub max_results: Option<f64>,
     /// lsp_diagnostics 파일들 — 배열이면 앞 `DIAG_MAX_TOTAL` 개, 아니면 빈 목록(TS 그대로). 거짓 원소는 `None`(= `.`).
     pub paths: Vec<Option<String>>,
+    /// browser 요청 본문(`actions`·`sitePolicy`·`approvedHosts`·`approvedUploads`) — 형식 검사 없이 값 그대로(TS 가 `unknown` 으로
+    /// 받아 LocalBrowser 안에서 고른다).
+    pub browser: BrowserSpec,
 }
 
 fn js_falsy(v: &Value) -> bool {
@@ -229,6 +233,12 @@ impl BridgeMsg {
             ignore_case: o.get("ignoreCase").is_some_and(|v| !js_falsy(v)),
             max_results,
             paths,
+            browser: BrowserSpec {
+                actions: o.get("actions").cloned(),
+                site_policy: o.get("sitePolicy").cloned(),
+                approved_hosts: o.get("approvedHosts").cloned(),
+                approved_uploads: o.get("approvedUploads").cloned(),
+            },
         }
     }
 }
@@ -257,6 +267,10 @@ pub struct BridgeResult {
     pub kept: Option<bool>,
     /// 읽기 전용 도구 결과 — 상자 하나로 둔다(결과가 연결 크레이트의 이벤트 enum 에 그대로 실려 크기를 늘리지 않게).
     pub tool: Option<Box<ToolOutput>>,
+    /// browser — 넘겨받은 상태라 실행하지 않았다(서버는 오류로 돌려주지 않고 작업을 주차한다).
+    pub user_control: Option<bool>,
+    /// browser — 기기가 사이트 정책·사용자 제어로 막은 호출의 표식(`kind, host, action`).
+    pub policy_block: Option<Value>,
 }
 
 impl BridgeResult {
@@ -330,6 +344,12 @@ impl BridgeResult {
             Some(ToolOutput::TestRunner(t)) => {
                 o.insert("testRunner".to_owned(), Value::from(*t));
             }
+        }
+        if let Some(u) = self.user_control {
+            o.insert("userControl".to_owned(), Value::Bool(u));
+        }
+        if let Some(b) = &self.policy_block {
+            o.insert("policyBlock".to_owned(), b.clone());
         }
         Value::Object(o)
     }

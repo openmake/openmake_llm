@@ -143,6 +143,11 @@ impl LocalBrowser {
         }
     }
 
+    /// 업로드 파일 하나의 크기 상한(호스트가 환경으로 정한 값).
+    pub fn upload_max_file_bytes(&self) -> u64 {
+        self.env.upload_max_file_bytes
+    }
+
     /// 실행 중인 요청을 멈춘다(다음 액션부터 실행하지 않는다). 작업을 주면 그 작업만, 없으면 모두.
     pub fn request_stop(&self, task: Option<&str>) {
         self.scheduler.request_stop(task);
