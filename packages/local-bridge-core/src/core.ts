@@ -32,6 +32,7 @@ import { handleWorktree } from './worktree';
 import { findChrome } from './browser/chrome';
 import { bulkApprovalAllowed, shellInvocation } from './platform';
 import { LocalBrowser } from './browser/local-browser';
+import { placeDownload } from './browser/download-place';
 import { resolveUploadFiles } from './browser/upload-files';
 import type { BridgeCoreOptions, BridgeMsg, BridgeResult } from './types';
 
@@ -303,6 +304,8 @@ export class BridgeCore {
                             await assertGitPathAllowed(this.gitGuard, abs, name, false);
                             await fsp.writeFile(abs, data);
                         },
+                        // 다운로드도 같은 가드 — Chrome 은 폴더 밖 대기 폴더에 guid 이름으로 받고, 완료 뒤 이 함수가 이름을 판정해 옮긴다(덮어쓰지 않는다).
+                        placeDownload: (name, staged) => placeDownload(base, this.gitGuard, name, staged),
                         // 업로드는 실행 폴더 안의 파일만(폴더 밖·숨김·크기·개수 거절)
                         resolveUploadFiles: (files) => resolveUploadFiles(base, files),
                     },

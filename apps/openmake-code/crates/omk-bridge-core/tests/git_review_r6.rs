@@ -67,6 +67,8 @@ impl Drop for Work {
     fn drop(&mut self) {
         let locked = format!("{}/D/zlocked", self.root());
         let _ = std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755));
+        let closed = format!("{}/nr/closed", self.root());
+        let _ = std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o755));
         let _ = std::fs::remove_dir_all(&self.path);
     }
 }
@@ -150,4 +152,21 @@ fn u1_partial_delete_keeps_head() {
     assert_eq!(del(&c, "D"), denied("D"));
     assert!(w.exists("D/HEAD"));
     assert_eq!(write(&c, "D/config"), denied("D/config"));
+}
+
+/// 7차 리뷰 D1 — 하위 트리를 읽지 못하면 `HEAD` 가 있다고 본다(막는 쪽): `HEAD` 가 없어도 권한 0 폴더를 품은 폴더는 지우지 않는다.
+/// root 로 돌아 권한 0 폴더도 읽히면 건너뛴다. 권한은 `Work` 의 `Drop` 이 되돌린다.
+#[test]
+fn d1_unreadable_subdir_delete_denied() {
+    let w = Work::new();
+    w.file("nr/a.txt", "x");
+    w.file("nr/closed/f", "x");
+    let closed = format!("{}/nr/closed", w.root());
+    std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read_dir(&closed).is_ok() {
+        return;
+    }
+    let c = w.core();
+    assert_eq!(del(&c, "nr"), denied("nr"));
+    assert!(w.exists("nr/a.txt"));
 }

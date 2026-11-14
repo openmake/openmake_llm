@@ -85,6 +85,7 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
         await browser.dispose();
         await new Promise<void>((r) => server.close(() => r()));
         fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        fs.rmSync(`${profile}-downloads`, { recursive: true, force: true }); // 기동 때 만드는 다운로드 대기 폴더(B-8)
         fs.rmSync(outDir, { recursive: true, force: true });
     }, 30000);
 
@@ -414,6 +415,7 @@ describeIfChrome('BridgeCore — browser 요청 (실제 Chrome)', () => {
         await new Promise<void>((r) => server.close(() => r()));
         fs.rmSync(folder, { recursive: true, force: true });
         fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        fs.rmSync(`${profile}-downloads`, { recursive: true, force: true }); // 다운로드 대기 폴더(코어가 저장 함수를 넘긴다)
     }, 30000);
 
     it('전용 프로필이 있으면 능력 목록에 browser 를 넣는다', () => {
@@ -470,6 +472,101 @@ describeIfChrome('BridgeCore — browser 요청 (실제 Chrome)', () => {
         await new Promise((r) => setTimeout(r, 300));
         const r = await run({ kind: 'browser', taskId: 'core-task-1', actions: [{ type: 'extractText' }] });
         expect(r.stdout).toContain('about:blank');
+    }, 60000);
+});
+
+// 다운로드(설계 2026-11-14 B-1~B-7) — Chrome 은 대기 폴더에 guid 이름으로만 받고, 코어가 write 와 같은 가드로 판정해 연결 폴더로 옮긴다.
+// 세 길: 링크 누르기(Page.* 채널) · goto 로 바로 받기(isDownload) · 페이지가 연 새 창(target=_blank, 붙지 않은 프레임 — Browser.* 채널).
+describeIfChrome('BridgeCore — 다운로드 (실제 Chrome)', () => {
+    let server: http.Server;
+    let origin: string;
+    let folder: string;
+    let profile: string;
+    let core: BridgeCore;
+    const run = (m: BridgeMsg): Promise<BridgeResult> => new Promise((resolve, reject) => { core.handleExec(m, resolve).catch(reject); });
+    const DL_PAGE = '<html><body><a id="dl" href="/dl?name=report.txt">받기</a><a id="pop" target="_blank" href="/dl?name=report.txt">새 창에서 받기</a></body></html>';
+    type Out = { ok: boolean; results: Array<Record<string, unknown>>; downloads?: Array<Record<string, unknown>> };
+    const browse = async (sub: string, actions: unknown[]): Promise<Out> => {
+        const r = await run({ kind: 'browser', taskId: `dl-${sub}`, folder: sub, sitePolicy: { allow: ['127.0.0.1'] }, approvedHosts: ['127.0.0.1'], actions } as BridgeMsg);
+        return JSON.parse(r.stdout ?? '{}') as Out;
+    };
+    const staged = () => fs.readdirSync(`${profile}-downloads`);
+
+    beforeAll(async () => {
+        server = http.createServer((req, res) => {
+            const u = new URL(req.url ?? '/', 'http://x');
+            if (u.pathname === '/dl') {
+                res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="${u.searchParams.get('name') ?? 'x'}"` });
+                res.end(u.searchParams.get('name') === 'HEAD' ? 'ref: refs/heads/main\n' : '보고서');
+                return;
+            }
+            if (u.pathname === '/later') { // ms 뒤 스스로 내려받는 페이지
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                res.end(`<html><body><script>setTimeout(() => { location.href = '/dl?name=report.txt'; }, ${Number(u.searchParams.get('ms')) || 0});</script></body></html>`);
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+            res.end(DL_PAGE);
+        });
+        await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+        origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        folder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'omk-core-dl-')));
+        for (const sub of ['link', 'goto', 'popup', 'head', 'closed']) fs.mkdirSync(path.join(folder, sub));
+        profile = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-core-dl-profile-'));
+        // 프로필 기본 다운로드 폴더를 연결 폴더로 둔다(~/Downloads 를 연결한 경우를 흉내 — 리뷰 r1 A1) — 코어가 기동 때 대기 폴더로 다시 맞춰야 한다
+        fs.mkdirSync(path.join(profile, 'Default'));
+        fs.writeFileSync(path.join(profile, 'Default', 'Preferences'), JSON.stringify({ download: { default_directory: path.join(folder, 'closed'), prompt_for_download: false } }));
+        core = new BridgeCore({ folder, confirm: async () => 'yes', sandboxProfileDir: os.tmpdir(), browserProfileDir: profile });
+        core.prepare();
+    }, 30000);
+    afterAll(async () => {
+        await LocalBrowser.forProfile(profile).dispose();
+        await new Promise<void>((r) => server.close(() => r()));
+        fs.rmSync(folder, { recursive: true, force: true });
+        fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        fs.rmSync(`${profile}-downloads`, { recursive: true, force: true });
+    }, 30000);
+
+    it('링크 누르기 — report.txt 는 연결 폴더에 저장, 결과에 saved, 대기 폴더 비어 있음', async () => {
+        const out = await browse('link', [{ type: 'goto', url: `${origin}/` }, { type: 'click', selector: '#dl' }, { type: 'wait', ms: 1000 }]);
+        expect(out.ok).toBe(true);
+        expect(out.downloads).toEqual([{ name: 'report.txt', state: 'saved', savedAs: 'report.txt' }]);
+        expect(fs.readFileSync(path.join(folder, 'link', 'report.txt'), 'utf8')).toBe('보고서');
+        expect(staged()).toEqual([]);
+    }, 60000);
+
+    it('goto 로 바로 받기 — goto 는 ok·download:true, report.txt 저장, 대기 폴더 비어 있음', async () => {
+        const out = await browse('goto', [{ type: 'goto', url: `${origin}/dl?name=report.txt` }]);
+        expect(out.results[0]).toEqual(expect.objectContaining({ ok: true, download: true }));
+        expect(out.ok).toBe(true);
+        expect(out.downloads).toEqual([{ name: 'report.txt', state: 'saved', savedAs: 'report.txt' }]);
+        expect(fs.readFileSync(path.join(folder, 'goto', 'report.txt'), 'utf8')).toBe('보고서');
+        expect(staged()).toEqual([]);
+    }, 60000);
+
+    it('새 창(target=_blank)에서 받기 — report.txt 는 연결 폴더에 저장, 대기 폴더 비어 있음', async () => {
+        const out = await browse('popup', [{ type: 'goto', url: `${origin}/` }, { type: 'click', selector: '#pop' }, { type: 'wait', ms: 1000 }]);
+        expect(out.downloads).toEqual([{ name: 'report.txt', state: 'saved', savedAs: 'report.txt' }]);
+        expect(fs.readFileSync(path.join(folder, 'popup', 'report.txt'), 'utf8')).toBe('보고서');
+        expect(staged()).toEqual([]);
+    }, 60000);
+
+    it('HEAD 는 거절 — 연결 폴더에 없고 결과에 rejected·가드 문구, 대기 폴더 비어 있음', async () => {
+        const out = await browse('head', [{ type: 'goto', url: `${origin}/dl?name=HEAD` }]);
+        expect(out.ok).toBe(true);
+        expect(out.downloads).toEqual([{ name: 'HEAD', state: 'rejected', error: 'git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: HEAD' }]);
+        expect(fs.readdirSync(path.join(folder, 'head'))).toEqual([]);
+        expect(staged()).toEqual([]);
+    }, 60000);
+
+    // 마지막에 둔다 — 연결을 닫는다. CDP 설정은 연결에 묶여 닫히면 Chrome 기본값으로 돌아간다(설계 B-8).
+    it('내려받는 페이지를 띄워 둔 채 연결이 닫혀도 연결 폴더에 쓰지 않는다 — 기본 폴더도 대기 폴더', async () => {
+        const out = await browse('closed', [{ type: 'goto', url: `${origin}/later?ms=1500` }]);
+        expect(out.ok).toBe(true);
+        (LocalBrowser.forProfile(profile) as unknown as { cdp: { close(): void } }).cdp.close(); // 헬퍼의 연결만 끊긴다 — Chrome·페이지는 남는다
+        await new Promise((r) => setTimeout(r, 4000));
+        expect(fs.readdirSync(path.join(folder, 'closed'))).toEqual([]);
+        expect(staged()).toEqual(['report.txt']); // 서버 이름 그대로 대기 폴더에 남는다 — 누구도 옮기지 않고 다음 기동이 지운다
     }, 60000);
 });
 
