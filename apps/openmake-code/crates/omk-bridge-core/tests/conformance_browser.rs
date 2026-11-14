@@ -121,6 +121,11 @@ pub fn load(suite: &str) -> Value {
     doc
 }
 
+/// suite 의 묶음 이름 — 모양 검사와 사례 실행이 같은 표(`spec`)를 돈다(목록을 따로 적으면 빠진 묶음이 조용히 실행되지 않는다).
+pub fn groups(suite: &str) -> Vec<&'static str> {
+    spec(suite).1.iter().map(|(g, _, _)| *g).collect()
+}
+
 /// 묶음의 사례들 — `(suite/묶음/id, 사례)`.
 pub fn cases<'a>(doc: &'a Value, suite: &str, group: &str) -> Vec<(String, &'a Value)> {
     doc[group]

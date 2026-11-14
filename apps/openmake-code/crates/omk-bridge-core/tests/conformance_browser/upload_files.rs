@@ -4,7 +4,7 @@ use omk_bridge_core::browser::constants::BROWSER_UPLOAD_MAX_FILE_BYTES;
 use omk_bridge_core::browser::upload_files::resolve_upload_files;
 use serde_json::{Value, json};
 
-use super::{cases, load};
+use super::{cases, groups, load};
 use crate::support::browser_fs::{apply_fs_setup, fill_str};
 use crate::support::{TmpDir, fill_tmp};
 
@@ -13,6 +13,8 @@ const SUITE: &str = "browser-upload-files";
 #[test]
 fn upload_files_suite() {
     let doc = load(SUITE);
+    // 묶음은 `cases` 하나 — 표(`spec`)에 묶음을 더하면 여기서 실패한다(조용히 건너뛰지 않는다)
+    assert_eq!(groups(SUITE), ["cases"]);
     let mut failed = Vec::new();
     for (ctx, c) in cases(&doc, SUITE, "cases") {
         let tmp = TmpDir::new();
