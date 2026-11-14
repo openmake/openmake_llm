@@ -10,6 +10,8 @@ mod defs;
 mod download_place;
 #[path = "conformance_browser/flow.rs"]
 mod flow;
+#[path = "conformance_browser/run.rs"]
+mod run;
 #[path = "conformance_browser/site_policy.rs"]
 mod site_policy;
 #[path = "conformance_browser/site_policy_block.rs"]
@@ -24,12 +26,13 @@ const FIXTURE_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../../packages/local-bridge-core/conformance"
 );
-/// 이 러너 몫 — `browser-` 로 시작하는 파일은 정확히 이것뿐이어야 한다(PR-1.6b 가 browser-run 을 더한다).
-const KNOWN_BROWSER_SUITES: [&str; 6] = [
+/// 이 러너 몫 — `browser-` 로 시작하는 파일은 정확히 이것뿐이어야 한다.
+const KNOWN_BROWSER_SUITES: [&str; 7] = [
     "browser-constants",
     "browser-defs",
     "browser-download-place",
     "browser-flow",
+    "browser-run",
     "browser-site-policy",
     "browser-upload-files",
 ];
@@ -108,6 +111,15 @@ fn spec(
             &["setup", "after"],
         ),
         "browser-constants" => (&["values", "tables", "messages", "env", "chrome"], &[], &[]),
+        "browser-run" => (
+            &["defaults"],
+            &[(
+                "cases",
+                &["spec", "opts", "cdp"],
+                &["sentDefaults", "userControl"],
+            )],
+            &["setup"],
+        ),
         other => panic!("모르는 suite {other}"),
     }
 }

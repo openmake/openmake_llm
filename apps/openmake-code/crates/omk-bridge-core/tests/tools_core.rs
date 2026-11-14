@@ -165,7 +165,10 @@ fn core_without_host() {
     assert_eq!(c.capabilities(), BRIDGE_KINDS);
     assert_eq!(
         send(&c, json!({"kind": "browser"})),
-        json!({"ok": false, "error": "지원하지 않는 kind: browser"})
+        json!({
+            "ok": false,
+            "error": "이 디바이스는 브라우저를 쓸 수 없습니다(전용 프로필 미설정 또는 Chrome 없음)"
+        })
     );
 }
 

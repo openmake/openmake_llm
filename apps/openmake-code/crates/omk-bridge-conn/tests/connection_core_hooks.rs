@@ -1,4 +1,5 @@
 //! 연결과 코어의 합류(PR-1.3) — 연결할 때마다 `prepare`, 해제하면 일괄 승인 회수(TS `connection.ts:114,247`).
+//! 브라우저 있는 코어는 `bridge_ready` 뒤 제어권을 한 번 다시 알린다(PR-1.6 D-83, TS `connection.ts:163`).
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 mod support;
@@ -7,12 +8,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use omk_bridge_conn::connection::BridgeConnection;
+use omk_bridge_core::browser::host::BrowserEnv;
 use omk_bridge_core::constants::EXEC_TIMEOUT_MS;
 use omk_bridge_core::core::{BridgeCore, BridgeCoreOptions};
 use omk_bridge_core::exec::{ConfirmAnswer, ExecHost};
 use omk_bridge_core::platform::Platform;
 use serde_json::json;
 
+use serde_json::Value;
 use support::fake::{ServerOpts, pair, record_into};
 use support::scenario::{Env, options, run, settle};
 use support::tmp::TmpDir;
@@ -194,5 +197,95 @@ fn slow_prepare_does_not_hold_disconnect_or_channel_close() {
             "prepare 가 채널 닫힘을 붙잡았다"
         );
         assert_eq!(e.server.state.read(|s| s.connections), 0);
+    });
+}
+
+/// 브라우저 자리 — 프로필 + Chrome(임시 파일: 설치 여부와 무관). `chrome` 이 거짓이면 Chrome 이 없는 코어.
+fn env_with_browser(chrome: bool) -> Env {
+    let tmp = TmpDir::new();
+    std::fs::create_dir_all(tmp.join("root")).unwrap();
+    if chrome {
+        std::fs::write(tmp.join("chrome"), "").unwrap();
+    }
+    let mut benv = BrowserEnv::from_env(&|_| None, "darwin", "/work/home");
+    benv.chrome_override = Some(tmp.join("chrome"));
+    let opts = BridgeCoreOptions {
+        folder: tmp.join("root"),
+        fs_timeout_ms: 15_000,
+        on_task_end: None,
+    };
+    let core = BridgeCore::new(opts)
+        .unwrap()
+        .with_browser_profile(tmp.join("profile"), benv);
+    let (connector, server) = pair(ServerOpts::default());
+    Env {
+        tmp,
+        core: Arc::new(core),
+        server,
+        connector,
+    }
+}
+
+fn control_frames(e: &Env) -> Vec<Value> {
+    e.server.state.read(|s| {
+        s.frames
+            .iter()
+            .filter(|f| f["kind"] == "browser_control")
+            .cloned()
+            .collect()
+    })
+}
+
+/// 브라우저 있는 코어 — 연결(ready)마다 지금 제어권을 한 번 알린다. 재연결해도 다시 한 번.
+#[test]
+fn browser_core_reports_control_after_each_ready() {
+    run(async {
+        let e = env_with_browser(true);
+        assert!(e.core.capabilities().contains(&"browser"));
+        e.core.set_browser_user_control(true);
+        let mut o = options(&e);
+        let rec = record_into(&mut o);
+        let conn = BridgeConnection::new(o);
+        conn.connect();
+        rec.until("연결됨", |r| r.has_code("connected")).await;
+        settle().await;
+        let want = json!({"type": "bridge_event", "kind": "browser_control", "user": true});
+        assert_eq!(control_frames(&e), std::slice::from_ref(&want));
+        e.core.set_browser_user_control(false);
+        e.server.drop_all();
+        e.server
+            .state
+            .until("2번째 연결", |s| s.connections == 2)
+            .await;
+        e.server
+            .state
+            .until("두 번째 알림", |s| {
+                s.frames
+                    .iter()
+                    .filter(|f| f["kind"] == "browser_control")
+                    .count()
+                    == 2
+            })
+            .await;
+        let again = json!({"type": "bridge_event", "kind": "browser_control", "user": false});
+        assert_eq!(control_frames(&e), [want, again]);
+        drop(conn);
+    });
+}
+
+/// Chrome 이 없는 코어는 능력 목록에 browser 가 없고 제어권을 알리지 않는다.
+#[test]
+fn browserless_core_does_not_report_control() {
+    run(async {
+        let e = env_with_browser(false);
+        assert!(!e.core.capabilities().contains(&"browser"));
+        let mut o = options(&e);
+        let rec = record_into(&mut o);
+        let conn = BridgeConnection::new(o);
+        conn.connect();
+        rec.until("연결됨", |r| r.has_code("connected")).await;
+        settle().await;
+        assert!(control_frames(&e).is_empty());
+        drop(conn);
     });
 }
