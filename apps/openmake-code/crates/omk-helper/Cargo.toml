@@ -1,0 +1,26 @@
+[package]
+name = "omk-helper"
+description = "OpenMake Companion 헬퍼 실행 파일 — Node 헬퍼(helper.mjs)와 같은 stdio JSON-lines 계약(PR-1.7)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+omk-bridge-core = { path = "../omk-bridge-core" }
+omk-bridge-conn = { path = "../omk-bridge-conn" }
+serde_json = "1.0.154"
+# 런타임은 연결 크레이트의 host_runtime() 하나 — #[tokio::main] 은 쓰지 않는다(D-92). 로거는 달지 않는다(D-98).
+tokio = { version = "1.54.1", default-features = false, features = ["rt", "rt-multi-thread", "sync", "time", "process", "signal", "macros"] }
+
+[dev-dependencies]
+# 가짜 브리지 서버(tests/support) — 연결 크레이트와 같은 버전·기능.
+tokio = { version = "1.54.1", default-features = false, features = ["net", "io-util"] }
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["sink", "std"] }
+# 로거가 설치되지 않았음을 단위 테스트로 고정한다(D-98) — lock 에 이미 있다.
+log = "0.4.35"
+
+[lints]
+workspace = true
