@@ -87,6 +87,17 @@ const PLATFORM: [(i32, &str, &str); 35] = [
 #[cfg(not(target_os = "macos"))]
 const PLATFORM: [(i32, &str, &str); 0] = [];
 
+/// Node `err.code` — 표에 있는 errno 의 이름(`EXDEV` 등), 없으면 `None`. 브라우저 다운로드 저장이 복사 갈래를 가른다
+/// (`ErrorKind` 는 `EPERM`·`EACCES` 를 함께 `PermissionDenied` 로 묶어 쓰지 않는다).
+pub fn code(err: &io::Error) -> Option<&'static str> {
+    let errno = err.raw_os_error()?;
+    COMMON
+        .iter()
+        .chain(PLATFORM.iter())
+        .find(|(n, _, _)| *n == errno)
+        .map(|(_, code, _)| *code)
+}
+
 /// Node 형식 문구. `path` 가 없는 호출 자리(예: 폴더를 `read`)는 `, syscall` 로 끝난다.
 /// 표에 없는 errno 는 Node 가 모르는 errno 에 쓰는 `Unknown system error -N` 꼴이다.
 pub fn format(err: &io::Error, syscall: &str, path: Option<&str>) -> String {
