@@ -46,7 +46,7 @@
 
 ### `browser-run`
 
-- 러너가 사례마다 임시 폴더(`{{TMP}}`)에 `setup` 을 적용하고 `{{TMP}}/profile`(전용 프로필)·`{{TMP}}/root`(연결 폴더 = `downloadDir`)를 만든 뒤, **가짜 CDP** 로
+- 러너가 사례마다 임시 폴더(`{{TMP}}`)에 `setup` 을 적용하고 `{{TMP}}/profile`(전용 프로필)·`{{TMP}}/root`(연결 폴더)를 만든 뒤, **가짜 CDP** 로
   "떠 있는 Chrome 에 붙기" 길을 탄다. TS 는 `ws` 서버를 루프백에 띄우고 프로필에 `DevToolsActivePort` 를 쓴다(모의 없음, Chrome 없음). Rust 는 `BrowserHost`
   가짜(메모리 duplex, 멈춘 시계)다. 사례 끝에 `dispose`.
 - `input`: `spec`(`actions`·`sitePolicy`·`approvedHosts`·`approvedUploads` — 값 그대로) · `opts`(`taskId?` · `saveError?`(스크린샷 저장 함수가 이 문구로 실패) ·

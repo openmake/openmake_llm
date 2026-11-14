@@ -1,13 +1,16 @@
 /**
  * LocalBrowser 작업별 창·동시 실행 — 가짜 CDP 로 순서를 확인한다(Chrome 불필요).
- * 같은 작업은 순서대로, 다른 작업은 동시 실행 상한까지 함께, 다운로드 폴더가 다르면 순서대로, 실행 중인 작업의 창은 회수하지 않는다.
+ * 같은 작업은 순서대로, 다른 작업은 동시 실행 상한까지 함께(다운로드 폴더가 달라도, 자리 대기는 도착 순), 실행 중인 작업의 창은
+ * 회수하지 않는다, 만드는 중인 탭도 탭 상한에 센다.
  */
 import { LocalBrowser, type BrowserRunOptions } from '../browser/local-browser';
 import { BROWSER_MAX_CONCURRENT, BROWSER_MAX_TABS } from '../constants';
 import type { CdpClient } from '../browser/cdp';
+import { DownloadTracker } from '../browser/downloads';
 
 /** CDP 명령을 기록하고 최소한으로 답한다. */
-function fakeCdp(opts: { newWindowFails?: boolean } = {}) {
+type CdpOpts = { newWindowFails?: boolean; createGate?: () => Promise<void> | undefined; createFails?: { left: number } };
+function fakeCdp(opts: CdpOpts = {}) {
     const sent: Array<{ method: string; params: Record<string, unknown> }> = [];
     let n = 0;
     const cdp = {
@@ -18,6 +21,8 @@ function fakeCdp(opts: { newWindowFails?: boolean } = {}) {
         send: async (method: string, params: Record<string, unknown> = {}) => {
             sent.push({ method, params });
             if (method === 'Target.createTarget') {
+                await opts.createGate?.();
+                if (opts.createFails && opts.createFails.left > 0) { opts.createFails.left--; throw new Error('만들기 실패'); }
                 if (opts.newWindowFails && params.newWindow) throw new Error('newWindow 미지원');
                 return { targetId: `target-${++n}` };
             }
@@ -49,11 +54,11 @@ function gates() {
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 10));
-const opts = (taskId: string, downloadDir = '/tmp/out'): BrowserRunOptions => ({ taskId, downloadDir, saveFile: async () => undefined });
+const opts = (taskId: string): BrowserRunOptions => ({ taskId, saveFile: async () => undefined });
 const held = (gate: string) => ({ actions: [{ type: 'wait', ms: 0, gate }], sitePolicy: { allow: [], deny: [] } });
 let profileSeq = 0;
 
-function setup(cdpOpts?: { newWindowFails?: boolean }) {
+function setup(cdpOpts?: CdpOpts) {
     const { cdp, sent } = fakeCdp(cdpOpts);
     const g = gates();
     const proto = LocalBrowser.prototype as unknown as Record<string, unknown>;
@@ -111,18 +116,60 @@ describe('LocalBrowser 동시 실행(가짜 CDP)', () => {
         await browser.dispose();
     });
 
-    it('다운로드 폴더가 다른 작업끼리는 함께 돌리지 않는다(브라우저 전역 설정)', async () => {
+    it('다운로드 폴더(저장 함수)가 다른 작업도 함께 돈다 — 다운로드는 시작한 탭의 작업 것으로 옮긴다', async () => {
         const { browser, g } = setup();
-        const a = browser.run(held('A'), opts('A', '/tmp/one'));
-        const b = browser.run(held('B'), opts('B', '/tmp/two'));
+        jest.spyOn(DownloadTracker.prototype, 'configure').mockResolvedValue(); // 가짜 프로필 경로에 대기 폴더를 만들지 않는다
+        const a = browser.run(held('A'), { ...opts('A'), placeDownload: async () => 'one' });
+        const b = browser.run(held('B'), { ...opts('B'), placeDownload: async () => 'two' });
         await tick(); await tick();
-        expect(g.started).toEqual(['A']);
-        g.release('A');
-        await a;
+        expect(g.started.sort()).toEqual(['A', 'B']);
+        g.release('A'); g.release('B');
+        await Promise.all([a, b]);
+        await browser.dispose();
+    });
+
+    it('자리를 기다리는 요청은 도착 순으로 든다', async () => {
+        const { browser, g } = setup();
+        const names = Array.from({ length: BROWSER_MAX_CONCURRENT }, (_, k) => `T${k}`);
+        const runs = names.map((n) => browser.run(held(n), opts(n)));
         await tick(); await tick();
-        expect(g.started).toEqual(['A', 'B']);
-        g.release('B');
-        await b;
+        runs.push(browser.run(held('W1'), opts('W1')));
+        await tick();
+        runs.push(browser.run(held('W2'), opts('W2')));
+        await tick(); await tick();
+        g.release('T0');
+        await tick(); await tick();
+        expect(g.started.slice(BROWSER_MAX_CONCURRENT)).toEqual(['W1']);
+        for (const n of [...names, 'W1', 'W2']) g.release(n);
+        await Promise.all(runs);
+        await browser.dispose();
+    });
+
+    it('탭 상한 — 만드는 중인 탭도 세어, 새 작업 둘이 함께 와도 열린 창이 상한을 넘지 않는다', async () => {
+        let gate: Promise<void> | undefined;
+        const { browser, sent } = setup({ createGate: () => gate });
+        const plain = { actions: [{ type: 'wait', ms: 0 }] };
+        for (let k = 1; k < BROWSER_MAX_TABS; k++) await browser.run(plain, opts(`idle${k}`));
+        let open!: () => void;
+        gate = new Promise((r) => { open = r; });
+        const both = Promise.all([browser.run(plain, opts('A')), browser.run(plain, opts('B'))]);
+        await tick(); await tick();
+        open();
+        expect((await both).map((r) => r.ok)).toEqual([true, true]);
+        const count = (m: string) => sent.filter((s) => s.method === m).length;
+        expect(count('Target.createTarget') - count('Target.closeTarget')).toBeLessThanOrEqual(BROWSER_MAX_TABS);
+        await browser.dispose();
+    });
+
+    it('탭 만들기가 실패해도 만드는 중 수가 내려간다 — 다음 작업이 쓸데없이 창을 회수하지 않는다', async () => {
+        const createFails = { left: 0 };
+        const { browser, sent } = setup({ createFails });
+        const plain = { actions: [{ type: 'wait', ms: 0 }] };
+        for (let k = 1; k < BROWSER_MAX_TABS; k++) await browser.run(plain, opts(`idle${k}`));
+        createFails.left = 2; // 새 창·탭 둘 다 실패
+        expect((await browser.run(plain, opts('X'))).ok).toBe(false);
+        expect((await browser.run(plain, opts('Y'))).ok).toBe(true);
+        expect(sent.filter((s) => s.method === 'Target.closeTarget')).toEqual([]);
         await browser.dispose();
     });
 

@@ -8,8 +8,8 @@
  *     서버가 본 주소와 다를 수 있다 — 리다이렉트, 페이지가 연 새 창, 사용자의 직접 조작.
  *   - 사용자가 넘겨받은 동안(setUserControl)에는 아무것도 실행하지 않는다(실행 중인 모든 작업이 멈춘다).
  *   - 같은 작업의 요청은 순서대로, 다른 작업은 BROWSER_MAX_CONCURRENT 까지 동시에 실행한다(2026-11-04). 작업마다 뒤쪽 창 하나.
- *     다운로드 폴더는 브라우저 전역 설정이라(CDP Browser.setDownloadBehavior 는 컨텍스트 단위, Page.setDownloadBehavior 는 폐기·세션 구분 없음)
- *     다운로드 폴더가 다른 작업끼리는 동시에 돌리지 않는다.
+ *     다운로드 폴더가 다른 작업도 함께 돈다 — Chrome 쪽 다운로드 설정은 브라우저 전역이지만 받는 곳은 늘 같은 대기 폴더이고, 어느 폴더로
+ *     옮길지는 다운로드를 시작한 탭의 작업으로 정한다(2026-11-15 D-8). 탭 상한은 만드는 중인 탭도 센다(D-10).
  *   - 다운로드는 Chrome 이 연결 폴더 밖 대기 폴더(`<프로필>-downloads`)에 `<guid>` 이름으로만 받고, 완료 뒤 호출부의 저장 함수
  *     (`write` 와 같은 가드)가 이름을 판정해 옮긴다(downloads.ts·download-place.ts, 2026-11-14). 결과에 downloads 로 싣는다.
  *     다운로드는 그것을 시작한 탭(또는 그 탭이 연 창 — `Target.targetCreated` 의 openerId 로 만들어질 때 적는다)의 작업에 귀속하고
@@ -59,6 +59,8 @@ export class LocalBrowser {
     private cdp: CdpClient | null = null;
     private proc: ChildProcess | null = null;
     private readonly tabs = new Map<string, Tab>();
+    /** 상한 검사를 지나 만드는 중인 탭 수 — 동시에 온 새 작업들이 같은 빈자리를 보고 상한을 넘지 않게 검사에 더한다 */
+    private creatingTabs = 0;
     /** 새 창 targetId → 연 탭의 작업 키(다운로드 귀속, 넣은 순서 — 상한을 넘으면 가장 오래된 것을 버린다) */
     private readonly popups = new Map<string, string>();
     private userControl = false;
@@ -88,7 +90,7 @@ export class LocalBrowser {
 
     /** 요청 1건 실행 — 같은 작업은 순서대로(같은 탭에 두 실행 주체가 명령을 보내지 않는다), 다른 작업은 동시 실행 상한까지 함께. */
     run(spec: BrowserSpec, opts: BrowserRunOptions): Promise<BrowserRunResult> {
-        return this.scheduler.run(opts.taskId || DEFAULT_TAB, opts.downloadDir, () => this.runNow(spec, opts));
+        return this.scheduler.run(opts.taskId || DEFAULT_TAB, () => this.runNow(spec, opts));
     }
 
     /** 작업이 끝났다 — 그 작업의 탭을 닫는다. */
@@ -197,7 +199,7 @@ export class LocalBrowser {
         const found = this.tabs.get(key);
         if (found) { found.lastUsed = Date.now(); return found; }
         // 탭 수 상한 — 실행 중이 아닌 작업 중 가장 오래 쓰지 않은 작업의 창을 닫는다. 모두 실행 중이면 하나가 끝날 때까지 기다린다.
-        while (this.tabs.size >= BROWSER_MAX_TABS) {
+        while (this.tabs.size + this.creatingTabs >= BROWSER_MAX_TABS) {
             const idle = [...this.tabs.entries()].filter(([k]) => !this.scheduler.isRunning(k)).sort((a, b) => a[1].lastUsed - b[1].lastUsed);
             if (idle.length === 0) { await this.scheduler.nextRelease(); continue; }
             const [oldKey, old] = idle[0];
@@ -205,11 +207,16 @@ export class LocalBrowser {
             await cdp.send('Target.closeTarget', { targetId: old.targetId }).catch(() => undefined);
         }
         // 작업마다 뒤쪽 창 하나 — 숨은 탭의 화면 캡처·타이머 지연을 피하고 사용자 창의 초점을 빼앗지 않는다. 안 되면 탭으로.
-        const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank', newWindow: true, background: true })
-            .catch(() => cdp.send('Target.createTarget', { url: 'about:blank' })) as { targetId: string };
-        const tab: Tab = { targetId, sessionId: await this.attach(cdp, targetId), acceptDialogs: false, dialogs: [], lastUsed: Date.now() };
-        this.tabs.set(key, tab);
-        return tab;
+        this.creatingTabs++; // 검사를 지난 그 자리에서 올린다(기다림 없이) — 성공·실패 모두 내린다
+        try {
+            const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank', newWindow: true, background: true })
+                .catch(() => cdp.send('Target.createTarget', { url: 'about:blank' })) as { targetId: string };
+            const tab: Tab = { targetId, sessionId: await this.attach(cdp, targetId), acceptDialogs: false, dialogs: [], lastUsed: Date.now() };
+            this.tabs.set(key, tab);
+            return tab;
+        } finally {
+            this.creatingTabs--;
+        }
     }
 
     /** 페이지가 새 창을 열었으면(target=_blank 등) 그 창으로 옮겨 간다 — 이후 액션과 사이트 판정이 실제로 보이는 페이지를 따른다. */

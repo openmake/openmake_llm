@@ -53,7 +53,7 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
     const slowResponses: http.ServerResponse[] = [];
 
     const opts = (taskId = 't1'): BrowserRunOptions => ({
-        taskId, downloadDir: outDir,
+        taskId,
         saveFile: async (name, data) => { await fs.promises.writeFile(path.join(outDir, name), data); },
     });
     const allowAll = () => ({ allow: ['127.0.0.1', 'localhost'], deny: [] });
