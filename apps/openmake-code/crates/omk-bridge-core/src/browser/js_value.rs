@@ -202,13 +202,14 @@ pub fn js_truthy(v: Option<&Value>) -> bool {
     }
 }
 
-/// JS `toLowerCase` — 유니코드 기본 대소문자 변환(특수 규칙 포함: `İ` → `i̇`, 낱말 끝 `Σ` → `ς`). Rust `to_lowercase` 와
-/// 같다(단계 0 ④·차등 실험으로 확인).
+/// JS `toLowerCase` — 유니코드 기본 대소문자 변환(특수 규칙 포함: `İ` → `i̇`, 낱말 끝 `Σ` → `ς`). 규칙은 Rust `to_lowercase` 와
+/// 같지만 Unicode 판이 달라(Node 24.22.2 ICU 18.0, Rust std 17.0) 새 글자 41 코드 포인트(BMP 의 U+0277·U+027C·U+AB4B·U+AB4C ↔
+/// U+A7DD·U+A7E2·U+AB6C·U+AB6D 와 U+1DF40~U+1DF95 의 33개)는 다르다. 호스트는 IDNA 뒤 ASCII 라 판정 영향 없음(BROWSER.md 9).
 pub fn js_to_lower(s: &str) -> String {
     s.to_lowercase()
 }
 
-/// JS `toUpperCase`(`ß` → `SS`).
+/// JS `toUpperCase`(`ß` → `SS`). Unicode 판 차이는 `js_to_lower` 와 같다.
 pub fn js_to_upper(s: &str) -> String {
     s.to_uppercase()
 }
