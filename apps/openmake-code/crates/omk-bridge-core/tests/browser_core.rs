@@ -297,3 +297,20 @@ fn task_end_closes_the_tab_without_waiting() {
         );
     });
 }
+
+/// 호스트 종료 정리(PR-1.7 D-100) — `dispose_browser` 는 코어가 쥔 인스턴스를 정리해 전역 표에서 뺀다(다음 조회는 새 인스턴스).
+/// 브라우저 없는 코어는 아무것도 하지 않는다.
+#[test]
+fn dispose_browser_releases_the_shared_instance() {
+    let b = bed(true);
+    let before = LocalBrowser::for_profile_with_host(&b.profile, env_with(None), b.host.clone());
+    b.rt.block_on(async {
+        let open = json!({"kind": "browser", "actions": [{"type": "wait", "ms": 0}]});
+        b.core.handle_exec(&BridgeMsg::from_json(&open)).await;
+        b.core.dispose_browser().await;
+    });
+    let after = LocalBrowser::for_profile_with_host(&b.profile, env_with(None), b.host.clone());
+    assert!(!Arc::ptr_eq(&before, &after), "정리 뒤에는 표에 없다");
+    let without = bed(false);
+    without.rt.block_on(without.core.dispose_browser());
+}
