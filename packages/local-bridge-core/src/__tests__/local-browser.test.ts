@@ -85,6 +85,7 @@ describeIfChrome('LocalBrowser (실제 Chrome)', () => {
         await browser.dispose();
         await new Promise<void>((r) => server.close(() => r()));
         fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        fs.rmSync(`${profile}-downloads`, { recursive: true, force: true }); // 기동 때 만드는 다운로드 대기 폴더(B-8)
         fs.rmSync(outDir, { recursive: true, force: true });
     }, 30000);
 
@@ -499,14 +500,22 @@ describeIfChrome('BridgeCore — 다운로드 (실제 Chrome)', () => {
                 res.end(u.searchParams.get('name') === 'HEAD' ? 'ref: refs/heads/main\n' : '보고서');
                 return;
             }
+            if (u.pathname === '/later') { // ms 뒤 스스로 내려받는 페이지
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                res.end(`<html><body><script>setTimeout(() => { location.href = '/dl?name=report.txt'; }, ${Number(u.searchParams.get('ms')) || 0});</script></body></html>`);
+                return;
+            }
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
             res.end(DL_PAGE);
         });
         await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
         origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
         folder = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'omk-core-dl-')));
-        for (const sub of ['link', 'goto', 'popup', 'head']) fs.mkdirSync(path.join(folder, sub));
+        for (const sub of ['link', 'goto', 'popup', 'head', 'closed']) fs.mkdirSync(path.join(folder, sub));
         profile = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-core-dl-profile-'));
+        // 프로필 기본 다운로드 폴더를 연결 폴더로 둔다(~/Downloads 를 연결한 경우를 흉내 — 리뷰 r1 A1) — 코어가 기동 때 대기 폴더로 다시 맞춰야 한다
+        fs.mkdirSync(path.join(profile, 'Default'));
+        fs.writeFileSync(path.join(profile, 'Default', 'Preferences'), JSON.stringify({ download: { default_directory: path.join(folder, 'closed'), prompt_for_download: false } }));
         core = new BridgeCore({ folder, confirm: async () => 'yes', sandboxProfileDir: os.tmpdir(), browserProfileDir: profile });
         core.prepare();
     }, 30000);
@@ -548,6 +557,16 @@ describeIfChrome('BridgeCore — 다운로드 (실제 Chrome)', () => {
         expect(out.downloads).toEqual([{ name: 'HEAD', state: 'rejected', error: 'git 디렉터리 보호 경로는 쓰거나 지울 수 없습니다: HEAD' }]);
         expect(fs.readdirSync(path.join(folder, 'head'))).toEqual([]);
         expect(staged()).toEqual([]);
+    }, 60000);
+
+    // 마지막에 둔다 — 연결을 닫는다. CDP 설정은 연결에 묶여 닫히면 Chrome 기본값으로 돌아간다(설계 B-8).
+    it('내려받는 페이지를 띄워 둔 채 연결이 닫혀도 연결 폴더에 쓰지 않는다 — 기본 폴더도 대기 폴더', async () => {
+        const out = await browse('closed', [{ type: 'goto', url: `${origin}/later?ms=1500` }]);
+        expect(out.ok).toBe(true);
+        (LocalBrowser.forProfile(profile) as unknown as { cdp: { close(): void } }).cdp.close(); // 헬퍼의 연결만 끊긴다 — Chrome·페이지는 남는다
+        await new Promise((r) => setTimeout(r, 4000));
+        expect(fs.readdirSync(path.join(folder, 'closed'))).toEqual([]);
+        expect(staged()).toEqual(['report.txt']); // 서버 이름 그대로 대기 폴더에 남는다 — 누구도 옮기지 않고 다음 기동이 지운다
     }, 60000);
 });
 

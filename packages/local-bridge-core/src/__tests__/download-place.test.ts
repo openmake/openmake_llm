@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { DownloadRejectedError, placeDownload } from '../browser/download-place';
+import { BROWSER_DOWNLOAD_NAME_TRIES } from '../constants';
 import { LocalBrowser, type BrowserRunOptions } from '../browser/local-browser';
 import { BridgeCore } from '../core';
 import type { GitGuard } from '../git-trust';
@@ -117,6 +118,28 @@ describe('placeDownload — 다운로드를 write 와 같은 가드로 저장', 
         expect(await place('report.txt', s)).toBe('report.txt');
         expect(link).toHaveBeenCalledTimes(1);
         expect(read('report.txt')).toBe('copied');
+        expect(exists(s)).toBe(false);
+    });
+
+    it('copyFile 갈래도 덮어쓰지 않는다 — 대상이 있으면 다음 후보', async () => {
+        jest.spyOn(fs.promises, 'link').mockRejectedValue(Object.assign(new Error('cross-device'), { code: 'EXDEV' }));
+        fs.writeFileSync(path.join(root, 'report.txt'), 'old');
+        const s = staged('copied');
+        expect(await place('report.txt', s)).toBe('report (1).txt');
+        expect(read('report.txt')).toBe('old');
+        expect(read('report (1).txt')).toBe('copied');
+        expect(exists(s)).toBe(false);
+    });
+
+    it('후보를 모두 쓰면 저장하지 않는다 — 가드 거절이 아닌 오류(결과에는 failed), 대기 파일 삭제', async () => {
+        fs.writeFileSync(path.join(root, 'report.txt'), 'old');
+        for (let n = 1; n < BROWSER_DOWNLOAD_NAME_TRIES; n++) fs.writeFileSync(path.join(root, `report (${n}).txt`), 'old');
+        const s = staged('new');
+        const err = await place('report.txt', s).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect(err).not.toBeInstanceOf(DownloadRejectedError);
+        expect((err as Error).message).toBe('같은 이름의 파일이 너무 많아 저장하지 않았습니다: report.txt');
+        expect(fs.readdirSync(root)).toHaveLength(BROWSER_DOWNLOAD_NAME_TRIES);
         expect(exists(s)).toBe(false);
     });
 });
