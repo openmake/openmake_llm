@@ -8,8 +8,10 @@
  *  - 다중 루트(0.2.0): 루트당 독립 연결·파생 deviceId·스코프 상호 격리·개별 해제
  *  - stdin 종료 = 즉시 정리 종료 (좀비 방지)
  *
- * 실행: node apps/desktop-native/helper/harness.cjs
+ * 실행: node apps/desktop-native/helper/harness.cjs                       — Node 헬퍼(dist/helper.cjs)
  *      (사전: npm run build:packages + esbuild 번들 — build.sh 참조)
+ *      node apps/desktop-native/helper/harness.cjs --helper <실행 파일>     — 그 실행 파일(예: omk-helper)을 직접 띄운다
+ * 두 헬퍼가 같은 단언을 통과해야 한다 — 헬퍼별 분기는 띄우는 방법(spawnHelper) 한 곳뿐이다.
  * 종료코드 0 = 전 케이스 통과.
  */
 const assert = require('node:assert');
@@ -18,6 +20,64 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawn } = require('node:child_process');
 const { WebSocketServer } = require('ws');
+
+// --helper <실행 파일>: 그 실행 파일을 같은 인자(--server …)로 띄운다. 없으면 Node 헬퍼 번들.
+const HELPER_BIN = (() => {
+    const i = process.argv.indexOf('--helper');
+    return i >= 0 && process.argv[i + 1] ? path.resolve(process.argv[i + 1]) : null;
+})();
+const HELPER_NAME = HELPER_BIN ? path.basename(HELPER_BIN) : 'helper.cjs(Node)';
+
+/** 헬퍼 stdout 의 이벤트를 모은다 — 조건 대기(이미 있으면 바로)·n번째 이후 대기·stdin 명령. */
+function track(child) {
+    const events = [];
+    const evWaiters = [];
+    let buf = '';
+    child.stdout.setEncoding('utf8'); // 조각을 이어 디코드한다 — 조각마다 문자열로 바꾸면 경계의 다바이트 글자가 깨진다
+    child.stdout.on('data', (d) => {
+        buf += d;
+        let nl;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+            const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+            if (!line.trim()) continue;
+            const ev = JSON.parse(line);
+            events.push(ev);
+            for (let i = evWaiters.length - 1; i >= 0; i--) {
+                if (evWaiters[i].pred(ev)) { evWaiters[i].resolve(ev); evWaiters.splice(i, 1); }
+            }
+        }
+    });
+    const waitEv = (pred, ms = 8000) => {
+        const hit = events.find(pred);
+        if (hit) return Promise.resolve(hit);
+        return new Promise((resolve, reject) => {
+            const t = setTimeout(() => reject(new Error('event timeout: ' + events.map((e) => e.ev).join(','))), ms);
+            evWaiters.push({ pred, resolve: (e) => { clearTimeout(t); resolve(e); } });
+        });
+    };
+    const waitEvAfter = (n, pred, ms) => waitEv((e) => events.indexOf(e) >= n && pred(e), ms);
+    const send = (obj) => child.stdin.write(JSON.stringify(obj) + '\n');
+    return { events, waitEv, waitEvAfter, send };
+}
+
+/** 끝날 때까지(stdio 가 닫힐 때까지) — [code, signal]. 한도를 넘으면 실패. */
+function exitOf(child, ms = 8000) {
+    if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve([child.exitCode, child.signalCode]);
+    return new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('helper exit timeout')), ms);
+        child.once('close', (code, signal) => { clearTimeout(t); resolve([code, signal]); });
+    });
+}
+
+/** 헬퍼를 띄우는 곳은 여기 하나. API key 는 argv·env 가 아니라 stdin 의 auth 명령으로 준다. */
+function spawnHelper(args, opts = {}) {
+    const env = { ...process.env, ...(opts.env || {}) };
+    delete env.OMK_COMPANION_API_KEY;
+    const [cmd, argv] = HELPER_BIN
+        ? [HELPER_BIN, args]
+        : [process.execPath, [path.join(__dirname, 'dist/helper.cjs'), ...args]];
+    return spawn(cmd, argv, { env, stdio: opts.stdio || ['pipe', 'pipe', 'inherit'] });
+}
 
 (async () => {
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-cpharness-'));
@@ -63,6 +123,8 @@ const { WebSocketServer } = require('ws');
             waiters.push({ pred, resolve: (f) => { clearTimeout(t); resolve(f); } });
         });
     };
+    const waitForAfter = (n, pred, ms) => waitFor((f, d) => received.findIndex((r) => r.frame === f) >= n && pred(f, d), ms);
+    const serverUrl = `http://127.0.0.1:${port}`;
     const execVia = (deviceId, m) => {
         const reqId = 'h-' + Math.random().toString(36).slice(2, 8);
         socks.get(deviceId).send(JSON.stringify({ type: 'bridge_exec', reqId, ...m }));
@@ -70,37 +132,8 @@ const { WebSocketServer } = require('ws');
     };
 
     // 헬퍼 spawn — API key 는 argv·env 가 아니라 stdin 의 auth 명령으로 준다(시작 인자·환경은 다른 프로세스가 읽을 수 있다)
-    const helperEnv = { ...process.env };
-    delete helperEnv.OMK_COMPANION_API_KEY;
-    const helper = spawn(process.execPath, [
-        path.join(__dirname, 'dist/helper.cjs'), '--server', `http://127.0.0.1:${port}`,
-    ], { env: helperEnv, stdio: ['pipe', 'pipe', 'inherit'] });
-    const events = [];
-    const evWaiters = [];
-    let buf = '';
-    helper.stdout.setEncoding('utf8'); // 조각을 이어 디코드한다 — 조각마다 문자열로 바꾸면 경계의 다바이트 글자가 깨진다
-    helper.stdout.on('data', (d) => {
-        buf += d;
-        let nl;
-        while ((nl = buf.indexOf('\n')) >= 0) {
-            const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
-            if (!line.trim()) continue;
-            const ev = JSON.parse(line);
-            events.push(ev);
-            for (let i = evWaiters.length - 1; i >= 0; i--) {
-                if (evWaiters[i].pred(ev)) { evWaiters[i].resolve(ev); evWaiters.splice(i, 1); }
-            }
-        }
-    });
-    const waitEv = (pred, ms = 8000) => {
-        const hit = events.find(pred);
-        if (hit) return Promise.resolve(hit);
-        return new Promise((resolve, reject) => {
-            const t = setTimeout(() => reject(new Error('event timeout: ' + events.map((e) => e.ev).join(','))), ms);
-            evWaiters.push({ pred, resolve: (e) => { clearTimeout(t); resolve(e); } });
-        });
-    };
-    const send = (obj) => helper.stdin.write(JSON.stringify(obj) + '\n');
+    const helper = spawnHelper(['--server', `http://127.0.0.1:${port}`]);
+    const { events, waitEv, waitEvAfter, send } = track(helper);
     const realFolder = fs.realpathSync(folder);
     const realFolder2 = fs.realpathSync(folder2);
 
@@ -113,6 +146,10 @@ const { WebSocketServer } = require('ws');
     assert.ok(!hellos[0].headers.origin, 'Origin 헤더 없음 (네이티브 클라이언트)');
     const dev1 = hello.deviceId;
     await waitEv((e) => e.ev === 'connected' && e.folder === realFolder);
+    // H1 기동 첫 줄 · H2 endpoints — 가짜 서버는 HTTP 조회에 답하지 않으므로(426) 넣은 주소 그대로, 한 번
+    assert.deepEqual(events[0], { ev: 'status', text: '미연결', code: 'idle' }, 'H1 첫 이벤트 status idle');
+    const eps = events.filter((e) => e.ev === 'endpoints');
+    assert.deepEqual(eps, [{ ev: 'endpoints', bridgeUrl: serverUrl, webUrl: serverUrl, discovered: false }], 'H2 endpoints 한 번');
 
     // ② 파일 kind 왕복 + 스코프
     assert.equal((await execVia(dev1, { kind: 'read', path: 'seed.txt' })).content, 'seed', 'read');
@@ -142,11 +179,13 @@ const { WebSocketServer } = require('ws');
     const c1 = await waitEv((e) => e.ev === 'confirm');
     assert.ok(c1.command.includes('from-companion') && c1.sandbox === true, 'confirm 이벤트 내용');
     assert.equal(c1.folder, realFolder, 'confirm 이벤트 루트 표기');
+    assert.equal(c1.taskId, 'harness-task-000000000001', 'H12 confirm taskId 글자');
     send({ cmd: 'confirm', id: c1.id, result: 'yes' });
     const ran = await runP;
     assert.deepEqual([ran.ok, ran.stdout], [true, 'from-companion'], 'confirm yes → 실행');
     const denyP = execVia(dev1, { kind: 'exec', command: 'echo denied-cmd' });
     const c2 = await waitEv((e) => e.ev === 'confirm' && e.id !== c1.id);
+    assert.strictEqual(c2.taskId, null, 'H12 작업 없는 exec 의 confirm.taskId 는 null');
     send({ cmd: 'confirm', id: c2.id, result: 'no' });
     const deniedR = await denyP;
     assert.deepEqual([deniedR.ok, deniedR.exitCode], [false, 126], 'confirm no → 거부');
@@ -163,6 +202,22 @@ const { WebSocketServer } = require('ws');
     await execVia(dev1, { kind: 'task_end', taskId: 'harness-task-000000000002' });
     await waitEv((e) => e.ev === 'taskEnd');
     await waitEv((e) => e.ev === 'autoApprove' && e.count === 0);
+
+    // H6 clearAutoApprove — all 승인을 회수하면(count 0) 같은 작업의 다음 exec 가 다시 confirm 을 낸다
+    const t6 = 'harness-task-000000000006';
+    const n6 = events.length;
+    const h6P = execVia(dev1, { kind: 'exec', command: 'echo -n h6-first', taskId: t6 });
+    const c6 = await waitEv((e) => e.ev === 'confirm' && e.command.includes('h6-first'));
+    send({ cmd: 'confirm', id: c6.id, result: 'all' });
+    assert.equal((await h6P).stdout, 'h6-first', 'H6 all 승인 실행');
+    await waitEvAfter(n6, (e) => e.ev === 'autoApprove' && e.count === 1);
+    const n6b = events.length;
+    send({ cmd: 'clearAutoApprove' });
+    await waitEvAfter(n6b, (e) => e.ev === 'autoApprove' && e.count === 0);
+    const h6Q = execVia(dev1, { kind: 'exec', command: 'echo -n h6-again', taskId: t6 });
+    const c6b = await waitEv((e) => e.ev === 'confirm' && e.command.includes('h6-again'));
+    send({ cmd: 'confirm', id: c6b.id, result: 'yes' });
+    assert.equal((await h6Q).stdout, 'h6-again', 'H6 회수 뒤 다시 확인');
 
     // ④ folders 열거 / browser 미지원 / worktree
     assert.deepEqual((await execVia(dev1, { kind: 'folders', path: '.' })).entries, ['subdir'], 'folders 열거');
@@ -228,6 +283,13 @@ const { WebSocketServer } = require('ws');
     assert.equal(c4.folder, realFolder2, '루트2 confirm 루트 표기');
     send({ cmd: 'confirm', id: c4.id, result: 'yes' });
     assert.equal((await runP2).stdout, 'in-root2', '루트2 exec');
+    // H7 같은 루트 재연결 — 새 hello(같은 deviceId), disconnected 없음
+    const r7 = received.length;
+    const n7 = events.length;
+    send({ cmd: 'connect', folder: folder2 });
+    await waitForAfter(r7, (f) => f.type === 'bridge_hello' && f.deviceId === dev2);
+    await waitEvAfter(n7, (e) => e.ev === 'status' && e.folder === realFolder2 && e.code === 'connected');
+    assert.ok(!events.some((e) => e.ev === 'disconnected'), 'H7 재연결은 disconnected 를 내지 않는다');
     // 루트1 개별 해제 — 루트2 는 유지
     send({ cmd: 'disconnect', folder });
     await waitEv((e) => e.ev === 'disconnected' && e.folder === realFolder);
@@ -257,9 +319,82 @@ const { WebSocketServer } = require('ws');
     const zombieR = await zombieP;
     assert.deepEqual([zombieR.ok, zombieR.exitCode], [false, 126], '종료 시 pending confirm 거부 해소');
 
+    // ── 따로 띄우는 헬퍼(H3·H4·H5·H11·H8·H9·H10) — 주 헬퍼가 끝난 뒤에(같은 기기 base id 라 deviceId 가 겹친다).
+    //    실패해도 자식이 남지 않게 finally 에서 죽인다.
+    const side = async (args, opts, fn) => {
+        const child = spawnHelper(args, opts);
+        try { return await fn(child); } finally { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); }
+    };
+    const connectedIn = (t, real) => t.waitEv((e) => e.ev === 'status' && e.folder === real && e.code === 'connected');
+
+    // H3 --resolve — stdout 전체가 JSON 한 줄(같은 세 값), exit 0, stdin 을 주지 않아도(/dev/null) 끝난다
+    await side(['--server', serverUrl, '--resolve'], { stdio: ['ignore', 'pipe', 'inherit'] }, async (p) => {
+        let out = '';
+        p.stdout.setEncoding('utf8');
+        p.stdout.on('data', (d) => { out += d; });
+        assert.deepEqual(await exitOf(p), [0, null], 'H3 --resolve exit 0');
+        assert.ok(out.endsWith('\n') && out.indexOf('\n') === out.length - 1, 'H3 --resolve 는 정확히 한 줄: ' + JSON.stringify(out));
+        assert.deepEqual(JSON.parse(out), { bridgeUrl: serverUrl, webUrl: serverUrl, discovered: false }, 'H3 --resolve 값');
+    });
+
+    // H4 키 없는 connect · H5 없는 폴더 · H11 버리는 입력 · H8 폴더 없는 disconnect
+    await side(['--server', serverUrl], {}, async (b) => {
+        const t = track(b);
+        const h0 = hellos.length;
+        t.send({ cmd: 'connect', folder });
+        assert.deepEqual(await t.waitEv((e) => e.code === 'api_key_required'),
+            { ev: 'status', text: 'API key 필요 — 앱 설정에서 입력', code: 'api_key_required' }, 'H4 키 없는 connect');
+        t.send({ cmd: 'auth', apiKey: 'omk_live_harness' });
+        t.send({ cmd: 'connect', folder: path.join(folder, 'no-such-dir') });
+        const fo = await t.waitEv((e) => e.code === 'folder_open_failed');
+        assert.ok(typeof fo.arg === 'string' && fo.arg.length > 0 && fo.text === '폴더 열기 실패: ' + fo.arg && !('folder' in fo), 'H5 폴더 열기 실패');
+        t.send({ cmd: 'connect', folder });
+        t.send({ cmd: 'connect', folder: folder2 });
+        await connectedIn(t, realFolder);
+        await connectedIn(t, realFolder2);
+        assert.equal(hellos.length - h0, 2, 'H4 키 없던 connect 는 붙지 않았다');
+        // H11 — 빈 줄·JSON 아님·모르는 cmd·없는 확인 id·문자열·수(null 줄은 넣지 않는다 — Node 헬퍼가 죽는다)
+        for (const l of ['', 'not json', '{"cmd":"nope"}', '{"cmd":"confirm","id":999,"result":"yes"}', '"문자열"', '123']) b.stdin.write(l + '\n');
+        t.send({ cmd: 'browserStop' });
+        await t.waitEv((e) => e.ev === 'browserStopped');
+        assert.equal((await execVia(dev2, { kind: 'read', path: 'other.txt' })).content, 'other-root', 'H11 버리는 입력 뒤에도 정상');
+        const n8 = t.events.length;
+        t.send({ cmd: 'disconnect' });
+        await t.waitEvAfter(n8, (e) => e.ev === 'status' && !('folder' in e) && e.code === 'idle');
+        const tail = t.events.slice(n8).filter((e) => e.ev === 'disconnected' || (e.ev === 'status' && !('folder' in e)));
+        assert.deepEqual(tail, [{ ev: 'disconnected', folder: realFolder }, { ev: 'disconnected', folder: realFolder2 },
+            { ev: 'status', text: '미연결', code: 'idle' }], 'H8 전체 해제 — disconnected 둘 + 마지막 status idle');
+        b.stdin.end();
+        assert.deepEqual(await exitOf(b), [0, null], 'H8 뒤 stdin 끝 exit 0');
+    });
+
+    // H9 quit — 확인 대기가 [false,126] 으로 풀리고 exit 0
+    await side(['--server', serverUrl], {}, async (c) => {
+        const t = track(c);
+        t.send({ cmd: 'auth', apiKey: 'omk_live_harness' });
+        t.send({ cmd: 'connect', folder: folder2 });
+        await connectedIn(t, realFolder2);
+        const pendingP = execVia(dev2, { kind: 'exec', command: 'echo h9-never-runs' });
+        await t.waitEv((e) => e.ev === 'confirm' && e.command.includes('h9-never-runs'));
+        t.send({ cmd: 'quit' });
+        assert.deepEqual(await exitOf(c), [0, null], 'H9 quit → exit 0');
+        const r = await pendingP;
+        assert.deepEqual([r.ok, r.exitCode], [false, 126], 'H9 quit 시 확인 대기 거부');
+    });
+
+    // H10 SIGTERM — 신호로 죽은 것이 아니라 스스로 끝난다(code 0, signal null)
+    await side(['--server', serverUrl], {}, async (d) => {
+        const t = track(d);
+        t.send({ cmd: 'auth', apiKey: 'omk_live_harness' });
+        t.send({ cmd: 'connect', folder: folder2 });
+        await connectedIn(t, realFolder2);
+        d.kill('SIGTERM');
+        assert.deepEqual(await exitOf(d), [0, null], 'H10 SIGTERM → exit 0, signal null');
+    });
+
     wss.close();
     fs.rmSync(folder, { recursive: true, force: true });
     fs.rmSync(folder2, { recursive: true, force: true });
-    console.log('OK — Companion 헬퍼 하네스 전 케이스 통과 (frames=%d, events=%d, roots=2)', received.length, events.length);
+    console.log('OK — Companion 헬퍼 하네스 전 케이스 통과 (helper=%s, frames=%d, events=%d, roots=2)', HELPER_NAME, received.length, events.length);
     process.exit(0);
 })().catch((e) => { console.error('HARNESS FAIL:', e.message); process.exit(1); });
