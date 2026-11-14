@@ -1,8 +1,9 @@
 //! LocalBrowser 의 실행 조정(TS `local-browser-scheduler.ts`) — 작업별 실행 줄·동시 실행 자리·중지 요청.
 //!
-//! 같은 작업의 요청은 순서대로, 다른 작업은 `BROWSER_MAX_CONCURRENT` 까지 동시에 실행한다. 다운로드 폴더는 브라우저 전역 설정이라
-//! 다운로드 폴더가 다른 작업끼리는 동시에 돌리지 않는다. 줄의 차례·실행 자리는 `Drop` 가드로 돌려준다 — 호출부가 `run` 의 future
-//! 를 버려도 새지 않는다(TS `finally`, D-73).
+//! 같은 작업의 요청은 순서대로, 다른 작업은 `BROWSER_MAX_CONCURRENT` 까지 동시에 실행한다 — 다운로드 폴더가 달라도 함께 돈다(Chrome 은
+//! 늘 같은 대기 폴더에 받고, 어느 폴더로 옮길지는 다운로드를 시작한 탭의 작업으로 정한다 — `downloads.rs`, D-8). 자리 대기는 도착 순 —
+//! 자리 단계에 들어선 차례표의 맨 앞만 자리를 얻는다(`notify_waiters` 로 모두 깨우면 먼저 잠근 쪽이 들어가므로, D-9). 줄의 차례·
+//! 실행 자리는 `Drop` 가드로 돌려준다 — 호출부가 `run` 의 future 를 버려도 새지 않는다(TS `finally`, D-73).
 
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
@@ -23,8 +24,10 @@ struct State {
     /// 작업별 실행 줄 — 앞에 선 차례표가 실행할 차례다
     queues: HashMap<String, VecDeque<u64>>,
     next_ticket: u64,
-    /// 지금 실행 중인 작업과 그 다운로드 폴더
-    running: Vec<(String, String)>,
+    /// 자리를 기다리는 차례표(도착 순) — 맨 앞만 자리를 얻는다
+    slots: VecDeque<u64>,
+    /// 지금 실행 중인 작업
+    running: Vec<String>,
 }
 
 #[derive(Default)]
@@ -68,9 +71,10 @@ impl Drop for Turn<'_> {
                     s.queues.remove(self.key);
                 }
                 if mine {
-                    s.running.retain(|(k, _)| k != self.key);
+                    s.running.retain(|k| k != self.key);
                 }
             }
+            s.slots.retain(|t| *t != self.ticket);
         }
         self.sched.released.notify_waiters();
     }
@@ -109,7 +113,7 @@ impl BrowserScheduler {
     }
 
     pub fn is_running(&self, key: &str) -> bool {
-        self.lock().running.iter().any(|(k, _)| k == key)
+        self.lock().running.iter().any(|k| k == key)
     }
 
     /// 다음 실행이 끝날 때까지 기다린다(실행 자리·탭 자리 공용). **부르는 순간 등록한다** — 조건을 본 뒤 기다리면 그 사이의
@@ -121,7 +125,7 @@ impl BrowserScheduler {
     }
 
     /// 요청 1건 실행 — 같은 작업은 순서대로, 다른 작업은 동시 실행 상한까지 함께.
-    pub async fn run<F: Future>(&self, key: &str, download_dir: &str, f: F) -> F::Output {
+    pub async fn run<F: Future>(&self, key: &str, f: F) -> F::Output {
         let ticket = {
             let mut s = self.lock();
             let t = s.next_ticket;
@@ -142,20 +146,21 @@ impl BrowserScheduler {
             }
             wake.await;
         }
-        // 실행 자리 — 상한 안이고, 실행 중인 작업이 모두 같은 다운로드 폴더일 때
+        // 실행 자리 — 상한 안이고 자리 차례표의 맨 앞일 때. 얻으면 다음 차례를 깨운다(버려지면 `Turn` 이 깨운다).
+        self.lock().slots.push_back(ticket);
         loop {
             let wake = self.next_release();
             {
                 let mut s = self.lock();
-                if s.running.len() < BROWSER_MAX_CONCURRENT
-                    && s.running.iter().all(|(_, d)| d == download_dir)
-                {
-                    s.running.push((key.to_owned(), download_dir.to_owned()));
+                if s.running.len() < BROWSER_MAX_CONCURRENT && s.slots.front() == Some(&ticket) {
+                    s.slots.pop_front();
+                    s.running.push(key.to_owned());
                     break;
                 }
             }
             wake.await;
         }
+        self.released.notify_waiters();
         f.await
     }
 }

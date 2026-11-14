@@ -156,6 +156,79 @@ fn tab_cap_reclaims_oldest_idle_not_running() {
     });
 }
 
+/// TS "탭 상한 — 만드는 중인 탭도 세어, 새 작업 둘이 함께 와도 열린 창이 상한을 넘지 않는다"(D-10).
+#[test]
+fn tab_cap_counts_tabs_being_created() {
+    paused().block_on(async {
+        let held: Arc<Mutex<Vec<u64>>> = Arc::default();
+        let hold = Arc::new(AtomicUsize::new(0));
+        let (h, on) = (held.clone(), hold.clone());
+        let lab = Lab::with_responder(false, move |g, f| {
+            let inner = lab_replies(json!({}), g.clone(), f.clone());
+            Arc::new(move |s: &Sent| {
+                if s.method == "Target.createTarget" && on.load(Ordering::SeqCst) == 1 {
+                    h.lock().unwrap().push(s.id);
+                    return vec![];
+                }
+                inner(s)
+            })
+        });
+        let w = wait_spec();
+        for k in 1..BROWSER_MAX_TABS {
+            lab.browser.run(&w, &opts(&format!("idle{k}"), None)).await;
+        }
+        hold.store(1, Ordering::SeqCst);
+        let (oa, ob) = (opts("A", None), opts("B", None));
+        let both = futures_util::future::join(lab.browser.run(&w, &oa), lab.browser.run(&w, &ob));
+        let free = async {
+            while held.lock().unwrap().len() < 2 {
+                tick().await;
+            }
+            hold.store(0, Ordering::SeqCst);
+            for id in held.lock().unwrap().iter() {
+                let reply = json!({"id": id, "result": {"targetId": format!("held-{id}")}});
+                lab.server().raw(&reply.to_string());
+            }
+        };
+        let ((ra, rb), ()) = futures_util::future::join(both, free).await;
+        assert!(ra.truthy("ok") && rb.truthy("ok"));
+        let log = &lab.server().log;
+        let open =
+            log.params_of("Target.createTarget").len() - log.params_of("Target.closeTarget").len();
+        assert!(open <= BROWSER_MAX_TABS, "열린 창 {open}");
+        lab.browser.dispose().await;
+    });
+}
+
+/// TS "탭 만들기가 실패해도 만드는 중 수가 내려간다 — 다음 작업이 쓸데없이 창을 회수하지 않는다".
+#[test]
+fn failed_tab_creation_releases_the_count() {
+    paused().block_on(async {
+        let fails = Arc::new(AtomicUsize::new(0));
+        let left = fails.clone();
+        let lab = Lab::with_responder(false, move |g, f| {
+            let inner = lab_replies(json!({}), g.clone(), f.clone());
+            Arc::new(move |s: &Sent| {
+                let n = left.load(Ordering::SeqCst);
+                if s.method == "Target.createTarget" && n > 0 {
+                    left.store(n - 1, Ordering::SeqCst);
+                    return vec![Out::Error("만들기 실패".into())];
+                }
+                inner(s)
+            })
+        });
+        let w = wait_spec();
+        for k in 1..BROWSER_MAX_TABS {
+            lab.browser.run(&w, &opts(&format!("idle{k}"), None)).await;
+        }
+        fails.store(2, Ordering::SeqCst); // 새 창·탭 둘 다 실패
+        assert!(!lab.browser.run(&w, &opts("X", None)).await.truthy("ok"));
+        assert!(lab.browser.run(&w, &opts("Y", None)).await.truthy("ok"));
+        assert!(lab.server().log.params_of("Target.closeTarget").is_empty());
+        lab.browser.dispose().await;
+    });
+}
+
 #[test]
 fn reconnect_clears_the_tab_table() {
     paused().block_on(async {
