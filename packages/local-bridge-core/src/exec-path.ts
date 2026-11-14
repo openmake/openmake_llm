@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { PATH_PROBE_ENV_EXTRA_POSIX, PATH_PROBE_TIMEOUT_MS } from './constants';
+import { FALLBACK_CHILD_PATH, PATH_PROBE_ENV_EXTRA_POSIX, PATH_PROBE_TIMEOUT_MS } from './constants';
 import { buildExecEnv } from './exec-env';
 import { wrapInSandbox } from './sandbox';
 
@@ -26,10 +26,10 @@ const isAbsEntry = (p: string): boolean => p.startsWith('/');
 /**
  * 자식에게 넘길 PATH(`:` 구분)에서 절대경로 항목만 남긴다 — 상대 항목(`.`·`bin`)은 자식 cwd(연결 폴더) 기준으로 풀려 폴더의
  * 파일을 고를 수 있다(설계 D-5). 프로세스 PATH 를 자식 PATH 로 넘기는 자리(git 자식·도구의 PATH 폴백)도 이것을 지난다(설계 D-14).
- * Windows 는 그대로 — exec PATH 의 Windows 갈래와 같다.
+ * 거른 결과가 비면 `FALLBACK_CHILD_PATH` — 빈 PATH 는 현재 폴더 한 항목이다(설계 D-14 보완). Windows 는 그대로 — exec PATH 의 Windows 갈래와 같다.
  */
 export function absPathEntries(p: string, platform: NodeJS.Platform = process.platform): string {
-    return platform === 'win32' ? p : p.split(':').filter(isAbsEntry).join(':');
+    return platform === 'win32' ? p : p.split(':').filter(isAbsEntry).join(':') || FALLBACK_CHILD_PATH;
 }
 
 /**

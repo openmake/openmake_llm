@@ -20,6 +20,7 @@
     "MAX_BUFFER": 1048576,
     "PATH_PROBE_TIMEOUT_MS": 5000,
     "GIT_PROBE_TIMEOUT_MS": 5000,
+    "FALLBACK_CHILD_PATH": "/usr/bin:/bin",
     "GIT_FIXED_ARGS": ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null"],
     "GIT_PROBE_PROFILE": "(version 1)(allow default)(deny file-write*)(allow file-write* (literal \"/dev/null\"))(deny network*)",
     "GIT_DIR_MISMATCH_ERROR": "git 디렉터리가 연결할 때와 달라 worktree 연산을 거부했습니다(폴더 재연결 필요).",

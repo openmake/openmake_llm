@@ -147,6 +147,19 @@ fn login_shell_gets_absolute_path_entries_only() {
     assert_eq!(std::fs::read_to_string(&mark).unwrap(), "/usr/bin:/bin");
 }
 
+/// D-14 보완 — 호스트 PATH 에 절대경로 항목이 하나도 없으면(`.`) 빈 값이 아니라 기본값을 넘긴다.
+#[test]
+fn login_shell_gets_fallback_when_no_absolute_entry() {
+    let w = Work::new();
+    let (sh, mark) = (w.join("fakebin/login-sh"), w.join("login.path"));
+    let script = format!("#!/bin/sh\nprintf %s \"$PATH\" > '{mark}'\nprintf %s \"$PATH\"\n");
+    std::fs::write(&sh, script).unwrap();
+    std::fs::set_permissions(&sh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let env = env(&[("HOME", &w.join("home")), ("PATH", "."), ("SHELL", &sh)]);
+    w.resolve(&env, &ToolSandbox::Missing);
+    assert_eq!(std::fs::read_to_string(&mark).unwrap(), "/usr/bin:/bin");
+}
+
 /// D-6 — 샌드박스 꺼짐(`Off`)이면 종전대로 감싸지 않고 띄운다.
 #[test]
 fn mise_off_runs_unwrapped() {

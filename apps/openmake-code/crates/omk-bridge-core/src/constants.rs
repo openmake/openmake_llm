@@ -156,6 +156,9 @@ pub const FS_MAX_CONCURRENT: usize = 4;
 pub const PATH_PROBE_TIMEOUT_MS: u64 = 5_000;
 /// 샌드박스 git 디렉터리 탐지 시간 제한(ms).
 pub const GIT_PROBE_TIMEOUT_MS: u64 = 5_000;
+/// 자식에게 넘길 PATH 를 절대경로 항목만 남겼더니 비었을 때의 값 — POSIX 의 빈 PATH 는 현재 폴더(연결 폴더) 한 항목이라
+/// 폴더의 `git`·`python3` 가 떴다(설계 D-14 보완, 리뷰 r2 F4).
+pub const FALLBACK_CHILD_PATH: &str = "/usr/bin:/bin";
 /// 확인 없이 띄우는 git(worktree·연결 시점 탐지)에 늘 붙이는 인자 — 레포 설정의 fsmonitor·훅을 끈다(설계 D-2).
 /// 경계는 도구 프로파일이 맡고 이것은 겹방어다.
 pub const GIT_FIXED_ARGS: &[&str] = &[

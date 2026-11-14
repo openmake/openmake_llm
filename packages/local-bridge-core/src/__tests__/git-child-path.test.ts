@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 import { SANDBOX_ENABLED } from '../constants';
 import { collectDiagnostics } from '../diagnostics';
 import { detectGit } from '../git-trust';
@@ -61,6 +62,46 @@ posix('git 자식의 PATH 는 절대경로 항목만(D-14)', () => {
     it('도구의 PATH 폴백(exec PATH 없이 부른 진단)이 폴더의 python3 를 띄우지 않는다', async () => {
         fs.writeFileSync(path.join(root, 'x.py'), 'x = 1\n');
         await collectDiagnostics(root, [path.join(root, 'x.py')], undefined, toolProfile());
+        expectFakeNotRun();
+    });
+});
+
+// 프로세스 PATH 에 절대경로 항목이 하나도 없으면 거른 결과가 비고, POSIX 의 빈 PATH 는 현재 폴더(연결 폴더)다 —
+// 고정 기본값 FALLBACK_CHILD_PATH 로 떨어져야 한다(설계 D-14 보완, 리뷰 r2 F4).
+const NO_ABS_ENTRY: Array<[string, string | undefined]> = [['`.`', '.'], ['빈 값', ''], ['미설정', undefined]];
+const setPath = (p: string | undefined): void => { if (p === undefined) delete process.env.PATH; else process.env.PATH = p; };
+
+posix.each(NO_ABS_ENTRY)('프로세스 PATH 가 %s 이면 자식 PATH 는 기본값(D-14 보완)', (_label, p) => {
+    it('연결 시 탐지가 폴더의 git 을 띄우지 않고, 진짜 git 이 레포가 아니라고 답한다', () => {
+        setPath(p);
+        expect(detectGit(root)).toBeNull();
+        expectFakeNotRun();
+    });
+
+    it('레포면 진짜 git 이 그 git 디렉터리를 답한다', () => {
+        execFileSync('git', ['init', '-q'], { cwd: root, stdio: 'ignore', env: { ...process.env, PATH: savedPath } });
+        setPath(p);
+        const dotGit = path.join(root, '.git');
+        expect(detectGit(root)).toEqual({ gitDir: dotGit, commonDir: dotGit });
+        expectFakeNotRun();
+    });
+
+    it('worktree 연산이 폴더의 git 을 띄우지 않는다', async () => {
+        const profile = toolProfile();
+        setPath(p);
+        const r = await new Promise<BridgeResult>((resolve, reject) => {
+            handleWorktree({ kind: 'worktree', op: 'add', taskId: 'gitpath1-1111-2222-3333-444455556666' }, resolve, root, { root, git: null, profile })
+                .catch(reject);
+        });
+        expect(r.ok).toBe(false);
+        expectFakeNotRun();
+    });
+
+    it('도구의 PATH 폴백이 폴더의 python3 를 띄우지 않는다', async () => {
+        fs.writeFileSync(path.join(root, 'x.py'), 'x = 1\n');
+        const profile = toolProfile();
+        setPath(p);
+        await collectDiagnostics(root, [path.join(root, 'x.py')], undefined, profile);
         expectFakeNotRun();
     });
 });
